@@ -73,9 +73,22 @@ void ReferencePath::construct_path(const std::vector<double>& x_list, const std:
 }
 
 
+//void ReferencePath::set_speed_profile(double default_speed) {
+//    for (auto& wp : waypoints) {
+//        wp->v_ref = default_speed;
+//    }
+//}
+
+//void ReferencePath::set_speed_profile(double default_speed) {
 void ReferencePath::set_speed_profile(double default_speed) {
     for (auto& wp : waypoints) {
-        wp->v_ref = default_speed;
+        double k = std::abs(wp->kappa);  // 曲率（絶対値）
+        double v = default_speed / (1.0 + 80.0 * k);  // ← 係数40.0は暫定（調整OK）
+
+        // 速度の下限と上限を制限（安全対策）
+        v = std::clamp(v, 5.0, default_speed);  // 最低5km/h、最大default
+
+        wp->v_ref = v;
     }
 }
 

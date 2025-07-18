@@ -4,52 +4,71 @@
 #include <algorithm>  // for std::min, std::max
 #include <cmath>
 
+// MPC.cpp
+
+#include <Eigen/Dense>
+#include <iostream>
+#include <algorithm>  // std::min, std::max
+
 Eigen::VectorXd MPC::solve(const Eigen::VectorXd& x,
                            const Eigen::MatrixXd& A,
                            const Eigen::MatrixXd& B) {
-    Eigen::VectorXd u(1);
+    Eigen::VectorXd u(1);  // 出力：ステア角のみ
 
-    // ゲイン調整
-    double k_psi = 3.0;  // e_psi
-    double k_y   = 1.5;  // e_y
-
-    // 目標操舵角（経路から）
-    double delta_ref = 0.0;
-    if (ref_waypoint_) {
-        delta_ref = ref_waypoint_->delta_ref_;
-        std::cout << "not null" << std::endl;
-    } else {
-        std::cout << "nullprtr" << std::endl;
-    }
-#if 1    
-    std::cout << "solve 出力 delta_ref = " << delta_ref << std::endl;
-#endif
     // 状態ベクトル x = [e_y, e_psi, t]
     double e_y   = x(0);
     double e_psi = x(1);
+    double v_ref = 10.0;
 
-    // 差分制御（delta_refからの補正）
-    double delta = delta_ref - (k_y * e_y + k_psi * e_psi);
-    // ステア角制限（保険）
-    double max_steer = 1.396;  // 80度 = 約1.396rad
+    if (ref_waypoint_) {
+        v_ref = ref_waypoint_->v_ref;
+    }
+
+    // --- 弱めの差分制御ゲイン ---
+    double base_k_y   = 0.5;   // ← 安定性重視
+    double base_k_psi = 1.0;
+    double scale = 1.0;
+    double k_y   = base_k_y * scale;
+    double k_psi = base_k_psi * scale;
+
+    // --- フィードバック制御（delta_refなし） ---
+    double delta = - (k_y * e_y + k_psi * e_psi);
+
+    // --- ステア角制限 ---
+    double max_steer = 1.396;
     delta = std::max(-max_steer, std::min(max_steer, delta));
 
     u(0) = delta;
-#if 0
-    // デバッグログ
+
+#if 1
     std::cout << "[MPC::solve] e_y=" << e_y
               << ", e_psi=" << e_psi
-              << ", delta_ref=" << delta_ref
-              << ", delta_out=" << delta << std::endl;
-#endif
-
-#if 0
-        std::cout << "solve 出力 delta = " << delta << std::endl;
-#endif
-
-#if 0
-    std::cout << "solve 出力 delta = " << delta << std::endl;
+              << ", delta_out=" << delta
+              << ", v_ref=" << v_ref
+              << ", k_y=" << k_y
+              << ", k_psi=" << k_psi
+              << std::endl;
 #endif
 
     return u;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

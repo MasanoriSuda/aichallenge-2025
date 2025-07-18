@@ -8,12 +8,23 @@
 #include <fstream>
 
 int main() {
-    std::string filename = "../raceline_awsim_15km_py.csv";
-    auto waypoints = load_csv(filename);
-    std::cout << "Loaded " << waypoints.size() << " waypoints from CSV." << std::endl;
+    //std::string filename = "../raceline_awsim_15km.csv";
+    //auto waypoints = load_csv(filename);
+    std::vector<TrajectoryPoint> traj_points = load_autoware_csv("../raceline_awsim_15km.csv");
 
-    auto ref_path = std::make_shared<ReferencePath>();
-    ref_path->set_points(waypoints);     // CSVから読み込んだwaypoints
+    std::shared_ptr<ReferencePath> ref_path = std::make_shared<ReferencePath>();  // ← ★追加
+
+    std::vector<std::shared_ptr<Waypoint>> waypoints;
+    for (const auto& tp : traj_points) {
+        auto wp = std::make_shared<Waypoint>();
+        wp->x = tp.x;
+        wp->y = tp.y;
+        wp->yaw = tp.yaw;
+        wp->v = tp.v;
+        wp->kappa = tp.kappa;
+        waypoints.push_back(wp);
+    }
+
     std::vector<double> xs, ys;
     for (const auto& wp : waypoints) {
         xs.push_back(wp->x);
@@ -21,9 +32,11 @@ int main() {
     }
     std::cout << "xs.size() = " << xs.size() << std::endl;
 
-    ref_path->construct_path(xs, ys);
+    ref_path->construct_path(xs, ys);           // ← スプライン補間で ref_path->waypoints 作成
+    ref_path->set_speed_profile(30.0);          // ← 曲率に応じて速度セット
+    ref_path->set_points(ref_path->waypoints);  // ← それを元に delta_ref_ 平滑化 ← 🔥これが重要！！
 
-    ref_path->set_speed_profile(10.0);  // ← ★ここを変更！
+
 
     BicycleModel model(ref_path, 2.0, 1.0, 0.1);  // length=2.0m, width=1.0m, Ts=0.1s
     MPC mpc;  // ← MPCインスタンス作成
@@ -63,11 +76,16 @@ int main() {
     std::ofstream log_file("mpc_log.csv");
     log_file << "step,x,y,yaw,e_y,e_yaw,t,delta,v_ref\n";
 
-    for (int i = 0; i <  200; ++i) {
+    for (int i = 0; i <   500; ++i) {
         // 空間状態を取得
         auto ss = dynamic_cast<SimpleSpatialState*>(model.spatial_state.get());
         if (!ss) {
             std::cerr << "Error: SpatialState is not a SimpleSpatialState." << std::endl;
+            break;
+        }
+
+        if (ss->t >= ref_path->waypoints.back()->s) {
+            std::cout << "✅ Reached end of path. Breaking simulation." << std::endl;
             break;
         }
 
@@ -83,13 +101,14 @@ int main() {
 
 
         // main.cpp 側でsolve前に追加
+        mpc.set_reference_path(ref_path);  // ← solve前にこれが必要！
         mpc.set_reference_waypoint(wp);
         Eigen::VectorXd u_mpc = mpc.solve(x, A, B);
 
         double delta = u_mpc(0);
 
         // ステア角制限：±1.396 rad
-        double max_steer = 1.396;
+        double max_steer = 1.0;
         delta = std::max(-max_steer, std::min(max_steer, delta));
 
         double safe_v = std::max(wp->v_ref, 1.0);

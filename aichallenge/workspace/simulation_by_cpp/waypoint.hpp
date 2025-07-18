@@ -9,6 +9,7 @@ public:
     // フィールド
     double x, y;
     double yaw = 0.0;  // 進行方向角（rad）
+    double v;
     double v_ref, kappa;
     double t;  // lateral offset基準の位置？
     double s = 0.0;  // 経路上の累積距離（m）

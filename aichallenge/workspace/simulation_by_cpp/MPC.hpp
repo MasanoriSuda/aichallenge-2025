@@ -5,7 +5,7 @@
 #include <iostream>
 #include <memory>             // ← 忘れずに追加！
 #include "waypoint.hpp"       // ← Waypoint定義が必要
-
+#include "reference_path.hpp"
 
 class MPC {
 public:
@@ -25,7 +25,12 @@ public:
     void set_reference_waypoint(std::shared_ptr<Waypoint> wp) {
         ref_waypoint_ = wp;
     }
-    
+
+    std::shared_ptr<ReferencePath> ref_path_;  // ★追加これ！
+    // ★追加：ReferencePathセット用（今回必要）
+    void set_reference_path(std::shared_ptr<ReferencePath> path) {
+        ref_path_ = path;
+    }    
 
 private:
     double max_steer_;

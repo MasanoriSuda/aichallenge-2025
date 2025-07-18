@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <memory>
+#include <cmath>
 #include "waypoint.hpp"  // ← これを忘れずに！
 
 class ReferencePath {
@@ -12,8 +13,27 @@ public:
     std::vector<std::shared_ptr<Waypoint>> waypoints;
 
     void set_points(const std::vector<std::shared_ptr<Waypoint>>& wp) {
+        // ★ 各点に delta_ref_ を初期化（長さ2.0mのバイシクルモデル想定）
+        for (auto& pt : wp) {
+            if (std::abs(pt->kappa) > 1e-6) {
+                pt->delta_ref_ = std::atan(2.0 * pt->kappa);  // L=2.0m
+            } else {
+                pt->delta_ref_ = 0.0;
+            }
+        }
+
+        // ✔️ スムージング処理（オプション）
+        for (int i = 1; i < wp.size() - 1; ++i) {
+            wp[i]->delta_ref_ =
+                0.25 * wp[i - 1]->delta_ref_ +
+                0.5  * wp[i]->delta_ref_ +
+                0.25 * wp[i + 1]->delta_ref_;
+        }
+
         waypoints = wp;
     }
+
+
 
     std::shared_ptr<Waypoint> get_current_waypoint() const {
         if (!waypoints.empty()) {

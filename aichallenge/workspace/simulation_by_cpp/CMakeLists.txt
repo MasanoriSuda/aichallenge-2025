@@ -7,6 +7,12 @@ find_package(Eigen3 REQUIRED)
 
 include_directories(
   ${EIGEN3_INCLUDE_DIRS}
+  /usr/local/include
+  /usr/local/include/osqp
+)
+
+link_directories(
+  /usr/local/lib
 )
 
 add_executable(test_exec
@@ -18,6 +24,9 @@ add_executable(test_exec
   MPC.cpp
 )
 
+# 🔥 osqpをOsqpEigenより後に置くとリンクエラーになる場合があるので順番を変える！
 target_link_libraries(test_exec
   Eigen3::Eigen
+  OsqpEigen
+  osqp  # ← 最後に置くとリンク解決されやすい！
 )

@@ -1,0 +1,981 @@
+#include "MPC.hpp"
+#include <Eigen/Dense>
+#include <Eigen/Sparse>
+#include <OsqpEigen/OsqpEigen.h>
+#include <iostream>
+#include <vector>
+
+Eigen::VectorXd MPC::solve(const Eigen::VectorXd& x,
+                           const Eigen::MatrixXd& A,
+                           const Eigen::MatrixXd& B) {
+    const int nx = x.size();  // 状態次元（= 3）
+    const int nu = B.cols();  // 入力次元（= 1）
+    const int N = N_;         // ホライズン長（= 10など）
+
+    const int n_vars = N * nu;
+    const int n_constraints = N * nx;
+
+    // ----------------------
+    // 1. コスト関数 H, f
+    // ----------------------
+    Eigen::SparseMatrix<double> H(n_vars, n_vars);
+    std::vector<Eigen::Triplet<double>> H_triplets;
+
+    for (int i = 0; i < N; ++i) {
+        for (int j = 0; j < nu; ++j) {
+            int idx = i * nu + j;
+            H_triplets.emplace_back(idx, idx, R_(j, j));
+        }
+    }
+    H.setFromTriplets(H_triplets.begin(), H_triplets.end());
+
+    Eigen::VectorXd f = Eigen::VectorXd::Zero(n_vars);
+
+    // -------------------------------
+    // 2. 等式制約 Aeq * u = A^i x₀
+    // -------------------------------
+    Eigen::SparseMatrix<double> Aeq(n_constraints, n_vars);
+    std::vector<Eigen::Triplet<double>> Aeq_triplets;
+    Eigen::VectorXd leq(n_constraints), ueq(n_constraints);
+
+    for (int i = 0; i < N; ++i) {
+        // 右辺の A^i * x を事前計算
+        Eigen::MatrixXd A_pow = A;
+        for (int k = 1; k < i; ++k) A_pow *= A;
+        if (i == 0) A_pow.setIdentity();
+
+        Eigen::VectorXd rhs = A_pow * x;
+        leq.segment(i * nx, nx) = rhs;
+        ueq.segment(i * nx, nx) = rhs;
+
+        for (int j = 0; j <= i; ++j) {
+            // A^(i-j) * B の係数行列
+            Eigen::MatrixXd Aj = A;
+            for (int k = 1; k < i - j; ++k) Aj *= A;
+            if (i == j) Aj.setIdentity();
+            Eigen::MatrixXd Aij = Aj * B;
+
+            for (int row = 0; row < nx; ++row) {
+                for (int col = 0; col < nu; ++col) {
+                    int row_id = i * nx + row;
+                    int col_id = j * nu + col;
+                    Aeq_triplets.emplace_back(row_id, col_id, -Aij(row, col));
+                }
+            }
+        }
+    }
+    Aeq.setFromTriplets(Aeq_triplets.begin(), Aeq_triplets.end());
+
+    // ----------------------
+    // 3. 入力制約（ステア）
+    // ----------------------
+    Eigen::VectorXd l_var = Eigen::VectorXd::Constant(n_vars, -1.396);
+    Eigen::VectorXd u_var = Eigen::VectorXd::Constant(n_vars,  1.396);
+
+    // ----------------------
+    // 4. OSQP セットアップ
+    // ----------------------
+    OsqpEigen::Solver solver;
+    solver.settings()->setVerbosity(false);
+    solver.settings()->setWarmStart(true);
+
+    solver.data()->setNumberOfVariables(n_vars);
+    solver.data()->setNumberOfConstraints(n_constraints);
+
+    if (!solver.data()->setHessianMatrix(H)) {
+        std::cerr << "[MPC] H設定失敗" << std::endl;
+        return Eigen::VectorXd::Zero(nu);
+    }
+    if (!solver.data()->setGradient(f)) return Eigen::VectorXd::Zero(nu);
+    if (!solver.data()->setLinearConstraintsMatrix(Aeq)) return Eigen::VectorXd::Zero(nu);
+    if (!solver.data()->setLowerBound(leq)) return Eigen::VectorXd::Zero(nu);
+    if (!solver.data()->setUpperBound(ueq)) return Eigen::VectorXd::Zero(nu);
+
+    if (!solver.initSolver()) {
+        std::cerr << "[MPC] OSQP初期化失敗" << std::endl;
+        return Eigen::VectorXd::Zero(nu);
+    }
+
+    if (solver.solveProblem() != OsqpEigen::ErrorExitFlag::NoError) {
+        std::cerr << "[MPC] OSQP最適化失敗" << std::endl;
+        return Eigen::VectorXd::Zero(nu);
+    }
+
+    // ----------------------
+    // 5. 解を取得
+    // ----------------------
+    Eigen::VectorXd sol = solver.getSolution();
+    Eigen::VectorXd u = sol.segment(0, nu);
+
+    std::cout << "[MPC] u0 = " << u.transpose()
+              << " from x = " << x.transpose() << std::endl;
+
+    return u;
+}
+
+
+
+#include "csv_loader.hpp"
+#include <fstream>
+#include <sstream>
+#include <iostream>
+#include <memory>
+
+#include <cmath>
+
+// クォータニオンからyaw（偏角）を計算
+double quaternion_to_yaw(double x, double y, double z, double w) {
+    // オイラー角yaw = atan2(2*(w*z + x*y), 1 - 2*(y^2 + z^2))
+    return std::atan2(2.0 * (w * z + x * y),
+                      1.0 - 2.0 * (y * y + z * z));
+}
+
+// Autoware形式CSVの読み込み
+std::vector<TrajectoryPoint> load_autoware_csv(const std::string& filename) {
+    std::vector<TrajectoryPoint> traj;
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "Could not open file: " << filename << std::endl;
+        return traj;
+    }
+
+    std::string line;
+    std::getline(file, line);  // ヘッダー読み飛ばし
+
+    while (std::getline(file, line)) {
+        std::istringstream ss(line);
+        std::string field;
+        TrajectoryPoint p;
+
+        std::getline(ss, field, ','); p.x = std::stod(field);
+        std::getline(ss, field, ','); p.y = std::stod(field);
+        std::getline(ss, field, ','); p.z = std::stod(field);
+
+        double qx, qy, qz, qw;
+        std::getline(ss, field, ','); qx = std::stod(field);
+        std::getline(ss, field, ','); qy = std::stod(field);
+        std::getline(ss, field, ','); qz = std::stod(field);
+        std::getline(ss, field, ','); qw = std::stod(field);
+
+        std::getline(ss, field, ','); p.v = std::stod(field);  // speed
+
+        p.yaw = quaternion_to_yaw(qx, qy, qz, qw);
+        p.kappa = 0.0;  // 初期化、あとで補完 or 差分計算しても良い
+
+        traj.push_back(p);
+    }
+
+    return traj;
+}
+
+
+std::vector<std::shared_ptr<Waypoint>> load_csv(const std::string& filename) {
+    std::vector<std::shared_ptr<Waypoint>> waypoints;
+    std::ifstream file(filename);
+
+    if (!file.is_open()) {
+        std::cerr << "Could not open CSV file: " << filename << std::endl;
+        return waypoints;
+    }
+
+    std::string line;
+    bool is_header = true;
+
+    while (std::getline(file, line)) {
+        if (is_header) {
+            is_header = false;
+            continue;  // ヘッダー行は読み飛ばす
+        }
+
+        std::stringstream ss(line);
+        std::string token;
+        std::vector<std::string> tokens;
+
+        while (std::getline(ss, token, ',')) {
+            tokens.push_back(token);
+        }
+
+        if (tokens.size() < 5) {
+            continue;  // x, y, yaw, speed, kappa が必要
+        }
+
+        double x = std::stod(tokens[0]);
+        double y = std::stod(tokens[1]);
+        double yaw = std::stod(tokens[2]);
+        double speed = std::stod(tokens[3]);
+        double kappa = std::stod(tokens[4]);  // ← 追加
+
+        auto wp = std::make_shared<Waypoint>(x, y, yaw, speed, kappa);
+        waypoints.push_back(wp);
+    }
+
+    std::cout << "Loaded " << waypoints.size() << " waypoints from CSV." << std::endl;
+    return waypoints;
+}
+#include "spatial_bicycle_models.hpp"
+#include "reference_path.hpp"
+#include "waypoint.hpp"
+#include "csv_loader.hpp"
+#include "MPC.hpp"  // ← MPC追加！
+
+#include <iostream>
+#include <fstream>
+
+int main() {
+    //std::string filename = "../raceline_awsim_15km.csv";
+    //auto waypoints = load_csv(filename);
+    std::vector<TrajectoryPoint> traj_points = load_autoware_csv("../raceline_awsim_15km.csv");
+
+    std::shared_ptr<ReferencePath> ref_path = std::make_shared<ReferencePath>();  // ← ★追加
+
+    std::vector<std::shared_ptr<Waypoint>> waypoints;
+    for (const auto& tp : traj_points) {
+        auto wp = std::make_shared<Waypoint>();
+        wp->x = tp.x;
+        wp->y = tp.y;
+        wp->yaw = tp.yaw;
+        wp->v = tp.v;
+        wp->kappa = tp.kappa;
+        waypoints.push_back(wp);
+    }
+
+    std::vector<double> xs, ys;
+    for (const auto& wp : waypoints) {
+        xs.push_back(wp->x);
+        ys.push_back(wp->y);
+    }
+    std::cout << "xs.size() = " << xs.size() << std::endl;
+
+    ref_path->construct_path(xs, ys);           // ← スプライン補間で ref_path->waypoints 作成
+    ref_path->set_speed_profile(10.0);          // ← 曲率に応じて速度セット
+    ref_path->set_points(ref_path->waypoints);  // ← それを元に delta_ref_ 平滑化 ← 🔥これが重要！！
+
+
+
+    BicycleModel model(ref_path, 2.0, 1.0, 0.1);  // length=2.0m, width=1.0m, Ts=0.1s
+    MPC mpc;  // ← MPCインスタンス作成
+
+    double dt = 0.1;
+
+    int start_index = 0;
+    if (start_index >= waypoints.size()) {
+        std::cerr << "Error: start_index is out of range!" << std::endl;
+        return 1;
+    }
+
+    auto wp_start = ref_path->waypoints[start_index];
+
+    // TemporalState（時系列状態）初期化
+    model.temporal_state->x = wp_start->x;
+    model.temporal_state->y = wp_start->y;
+    model.temporal_state->yaw = wp_start->yaw;  // ←これは維持（走行方向にセット）
+
+    // 初期状態ログ出力（デバッグ用）
+    std::cout << "Initial State:" << std::endl;
+    std::cout << "  x = " << model.temporal_state->x << std::endl;
+    std::cout << "  y = " << model.temporal_state->y << std::endl;
+    std::cout << "  yaw = " << model.temporal_state->yaw << std::endl;
+
+
+    // SpatialState（空間状態）初期化
+    auto ss_start = dynamic_cast<SimpleSpatialState*>(model.spatial_state.get());
+    if (!ss_start) {
+        std::cerr << "Error: SpatialState is not a SimpleSpatialState." << std::endl;
+        return 1;
+    }
+    ss_start->t = wp_start->s;  // 経路上の位置を設定
+    ss_start->update(*model.temporal_state, *wp_start);  // ← e_y, e_psi更新
+
+        // ログファイルを開く（必要なら）
+    std::ofstream log_file("mpc_log.csv");
+    log_file << "step,x,y,yaw,e_y,e_yaw,t,delta,v_ref\n";
+
+    for (int i = 0; i <   500; ++i) {
+        // 空間状態を取得
+        auto ss = dynamic_cast<SimpleSpatialState*>(model.spatial_state.get());
+        if (!ss) {
+            std::cerr << "Error: SpatialState is not a SimpleSpatialState." << std::endl;
+            break;
+        }
+
+        if (ss->t >= ref_path->waypoints.back()->s) {
+            std::cout << "✅ Reached end of path. Breaking simulation." << std::endl;
+            break;
+        }
+
+        double s = ss->t;
+        auto wp = ref_path->get_waypoint(s);
+
+        // 線形化（A, B行列取得）
+        Eigen::MatrixXd A, B;
+        model.linearize(*ss, wp->v_ref, wp->kappa, dt, A, B);
+
+        Eigen::VectorXd x(3);
+        x << ss->e_y, ss->e_yaw, ss->t;
+
+
+        // main.cpp 側でsolve前に追加
+        mpc.set_reference_path(ref_path);  // ← solve前にこれが必要！
+        mpc.set_reference_waypoint(wp);
+        Eigen::VectorXd u_mpc = mpc.solve(x, A, B);
+
+        double delta = u_mpc(0);
+
+        // ステア角制限：±1.396 rad
+        double max_steer = 1.0;
+        delta = std::max(-max_steer, std::min(max_steer, delta));
+
+        double safe_v = std::max(wp->v_ref, 1.0);
+        Eigen::Vector2d u(safe_v, delta);
+
+        model.drive(u);
+
+        auto ts = model.temporal_state.get();
+        ss->update(*ts, *wp);
+        ss->t += dt * safe_v;  // ← ★追加！s方向に進む
+        model.update_current_waypoint();
+
+#if 0        
+        // ✔️ 統一ログ出力（cout）
+        std::cout << i
+                << ", x=" << ts->x
+                << ", y=" << ts->y
+                << ", yaw=" << ts->yaw
+                << ", e_y=" << ss->e_y
+                << ", e_yaw=" << ss->e_yaw
+                << ", t=" << ss->t
+                << ", delta=" << delta
+                << ", v_ref=" << wp->v_ref
+                << ", delta_ref=" << wp->delta_ref_  // ← これ追加！
+                << std::endl;
+#endif
+
+        // ✔️ CSVログ出力
+        log_file << i << "," << ts->x << "," << ts->y << "," << ts->yaw << ","
+                << ss->e_y << "," << ss->e_yaw << "," << ss->t << ","
+                << delta << "," << wp->v_ref << "\n";
+        std::cout << "[step " << i << "] s=" << ss->t << ", delta_ref=" << wp->delta_ref_ << std::endl;
+
+    }
+
+
+    return 0;
+}
+#include "reference_path.hpp"   // ← ReferencePath のクラス定義
+#include "waypoint.hpp"         // ← Waypoint クラス
+#include <vector>               // std::vector
+#include <memory>               // std::make_shared
+#include <cmath>                // std::sqrt, std::atan2
+#include <algorithm>            // std::max, std::min
+#include <iostream>
+
+void ReferencePath::construct_path(const std::vector<double>& x_list, const std::vector<double>& y_list) {
+    double s = 0.0;
+    const double wheelbase = 1.087;  // ← 明示的に定義
+
+    std::cout << "x_list.size() = " << x_list.size() << std::endl;
+
+    for (size_t i = 0; i < x_list.size(); ++i) {
+        double x = x_list[i];
+        double y = y_list[i];
+        double yaw = 0.0;
+        double kappa = 0.0;
+
+        // yawの計算
+        if (i < x_list.size() - 1) {
+            double dx = x_list[i + 1] - x;
+            double dy = y_list[i + 1] - y;
+            yaw = std::atan2(dy, dx);
+        } else if (i > 0) {
+            double dx = x - x_list[i - 1];
+            double dy = y - y_list[i - 1];
+            yaw = std::atan2(dy, dx);
+        }
+
+        // 曲率の推定：3点円弧近似
+        if (i > 0 && i < x_list.size() - 1) {
+            double x0 = x_list[i - 1], y0 = y_list[i - 1];
+            double x1 = x_list[i],     y1 = y_list[i];
+            double x2 = x_list[i + 1], y2 = y_list[i + 1];
+
+            double a = std::hypot(x1 - x0, y1 - y0);
+            double b = std::hypot(x2 - x1, y2 - y1);
+            double c = std::hypot(x2 - x0, y2 - y0);
+
+            double s_tri = (a + b + c) / 2.0;
+            double area = std::sqrt(std::max(s_tri * (s_tri - a) * (s_tri - b) * (s_tri - c), 0.0));
+
+            if (area > 1e-6) {
+                double R = (a * b * c) / (4.0 * area);
+                kappa = 1.0 / R;
+            } else {
+                kappa = 0.0;
+            }
+        }
+
+        // 距離の更新（Waypoint作成前に！）
+        if (i > 0) {
+            double dx = x - x_list[i - 1];
+            double dy = y - y_list[i - 1];
+            s += std::sqrt(dx * dx + dy * dy);
+        }
+
+        // Waypoint 生成
+        double speed = 0.0;
+        double delta_ref = std::atan(wheelbase * kappa);
+
+        Waypoint wp(x, y, yaw, speed, kappa);
+        wp.s = s;  // ✅ これが重要！
+        wp.t = s;  // tも一応セット（t = sと同義運用なら）
+        wp.delta_ref_ = delta_ref;
+
+        std::cout << "[construct] i=" << i << ", s=" << s << ", delta_ref=" << delta_ref << std::endl;
+
+        waypoints.push_back(std::make_shared<Waypoint>(wp));
+    }
+}
+
+
+//void ReferencePath::set_speed_profile(double default_speed) {
+//    for (auto& wp : waypoints) {
+//        wp->v_ref = default_speed;
+//    }
+//}
+
+//void ReferencePath::set_speed_profile(double default_speed) {
+void ReferencePath::set_speed_profile(double default_speed) {
+    for (auto& wp : waypoints) {
+        double k = std::abs(wp->kappa);  // 曲率（絶対値）
+        double v = default_speed / (1.0 + 80.0 * k);  // ← 係数40.0は暫定（調整OK）
+
+        // 速度の下限と上限を制限（安全対策）
+        v = std::clamp(v, 5.0, default_speed);  // 最低5km/h、最大default
+
+        wp->v_ref = v;
+    }
+}
+
+#include "spatial_bicycle_models.hpp"
+#include "reference_path.hpp"   // ← ちゃんと中身を見る必要がある！
+#include "waypoint.hpp"         // ← 中身に .x, .y, .yaw などを使ってるので必要！
+#include <cmath>
+#include <iostream>
+#include <Eigen/Dense>
+
+
+using Eigen::Vector2d;
+using Eigen::Vector3d;
+using std::cout;
+using std::endl;
+
+// --- TemporalState -----------------------------------
+TemporalState& TemporalState::operator+=(const Vector3d& delta) {
+    x += delta[0];
+    y += delta[1];
+    yaw += delta[2];
+    return *this;
+}
+
+// --- SimpleSpatialState -------------------------------
+
+SimpleSpatialState::SimpleSpatialState(double e_y, double e_yaw, double t)
+    : e_y(e_y), e_yaw(e_yaw), t(t) {}
+
+Vector3d SimpleSpatialState::toVector() const {
+    return Vector3d(e_y, e_yaw, t);
+}
+
+SpatialState& SimpleSpatialState::operator+=(const Eigen::VectorXd& delta) {
+    e_y += delta[0];
+    e_yaw += delta[1];
+    t += delta[2];
+
+    return *this;
+}
+
+// --- SpatialBicycleModel -------------------------------
+
+SpatialBicycleModel::SpatialBicycleModel(std::shared_ptr<ReferencePath> ref_path, double len, double wid, double Ts_)
+    : reference_path(ref_path),
+      length(len),
+      width(wid),
+      Ts(Ts_),
+      s(0.0),
+      wp_id(0),
+      eps(1e-12)
+{
+    safety_margin = width / std::sqrt(2.0);
+    current_waypoint = reference_path->get_current_waypoint();  // ここ重要！
+}
+
+// SpatialBicycleModel 内の public に追加
+std::shared_ptr<Waypoint> SpatialBicycleModel::get_current_waypoint_ptr() const {
+    return current_waypoint;
+}
+
+
+// --- BicycleModel ---------------------------------------
+
+// spatial_bicycle_models.cpp
+BicycleModel::BicycleModel(std::shared_ptr<ReferencePath> ref_path, double length, double width, double Ts)
+    : SpatialBicycleModel(ref_path, length, width, Ts)
+{
+    spatial_state = std::make_unique<SimpleSpatialState>(0.0, 0.0, 0.0);
+    this->n_states = 3;
+    Eigen::Vector3d vec;
+    vec << (*spatial_state)[0], (*spatial_state)[1], (*spatial_state)[2];
+    temporal_state = std::make_unique<TemporalState>(s2t(*current_waypoint, vec));
+}
+
+SimpleSpatialState::~SimpleSpatialState() = default;
+BicycleModel::~BicycleModel() = default;
+
+TemporalState BicycleModel::s2t(const Waypoint& wp, const Vector3d& state) {
+    double x = wp.x - state[0] * std::sin(wp.yaw);
+    double y = wp.y + state[0] * std::cos(wp.yaw);
+    double yaw = wp.yaw + state[1];
+    return TemporalState(x, y, yaw);
+}
+
+SimpleSpatialState BicycleModel::t2s(const Waypoint& wp, const TemporalState& ts) {
+    double dx = ts.x - wp.x;
+    double dy = ts.y - wp.y;
+
+    double e_y = std::cos(wp.yaw) * dy - std::sin(wp.yaw) * dx;
+    double e_yaw = std::fmod(ts.yaw - wp.yaw + M_PI, 2 * M_PI) - M_PI;
+
+    return SimpleSpatialState(e_y, e_yaw, 0.0);
+}
+
+void BicycleModel::drive(const Vector2d& u) {
+    double v = u[0];
+    double delta = u[1];
+
+    // 1. Temporal derivative
+    double x_dot = v * std::cos(temporal_state->yaw);
+    double y_dot = v * std::sin(temporal_state->yaw);
+    double yaw_dot = v / length * std::tan(delta);
+
+    Vector3d delta_state(x_dot, y_dot, yaw_dot);
+    (*temporal_state) += delta_state * Ts;
+
+    // 2. Compute s_dot
+    double kappa = current_waypoint->kappa;
+    double e_y = dynamic_cast<SimpleSpatialState*>(spatial_state.get())->e_y;
+    auto s_ptr = dynamic_cast<SimpleSpatialState*>(spatial_state.get());
+    double e_yaw = s_ptr->e_yaw;
+
+    double s_dot = 1.0 / (1.0 - e_y * kappa) * v * std::cos(e_yaw);
+    s += s_dot * Ts;
+}
+
+std::vector<std::string> SimpleSpatialState::list_states() const {
+    return members;
+}
+
+double& SimpleSpatialState::operator[](size_t index) {
+    if (index == 0) return e_y;
+    if (index == 1) return e_yaw;
+    if (index == 2) return t;
+    throw std::out_of_range("SimpleSpatialState index out of range");
+}
+
+Eigen::Vector3d BicycleModel::get_spatial_derivatives(
+    const SpatialState& state, const Eigen::Vector2d& input, double kappa)
+{
+    const SimpleSpatialState& simple_state = dynamic_cast<const SimpleSpatialState&>(state);
+    double e_y = simple_state.e_y;
+    double e_yaw = simple_state.e_yaw;
+
+    double v = input[0];
+    double delta = input[1];
+
+    Eigen::Vector3d d_state;
+    d_state << v * std::sin(e_yaw),
+               v * (std::tan(delta) / length - kappa),
+               1.0;
+    return d_state;
+}
+
+void BicycleModel::linearize(
+    double v_ref, double kappa_ref, double delta_s,
+    Eigen::Vector3d& f_out,
+    Eigen::Matrix3d& A_out,
+    Eigen::Matrix<double, 3, 2>& B_out)
+{
+    double e_psi = 0.0;  // 周囲のcontextでゼロ初期化想定
+    double delta = 0.0;  // 同上
+
+    f_out << v_ref * std::sin(e_psi),
+             v_ref * (std::tan(delta) / length - kappa_ref),
+             1.0;
+
+    A_out.setZero();
+    A_out(0, 1) = v_ref * std::cos(e_psi);
+    A_out(2, 2) = 0.0;
+
+    B_out.setZero();
+    B_out(0, 0) = 0.0;
+    B_out(1, 0) = std::tan(delta) / length;
+    B_out(1, 1) = v_ref / (length * std::pow(std::cos(delta), 2));
+}
+
+void SpatialBicycleModel::update_current_waypoint() {
+    while (wp_id + 1 < reference_path->waypoints.size() &&
+           s > reference_path->waypoints[wp_id + 1]->s) {
+        wp_id++;
+        current_waypoint = reference_path->waypoints[wp_id];
+    }
+}
+
+
+Eigen::MatrixXd BicycleModel::linearize(const SimpleSpatialState& state, double v, double kappa, double dt, Eigen::MatrixXd& A, Eigen::MatrixXd& B) const {
+    A = Eigen::MatrixXd::Identity(3, 3);
+    B = Eigen::MatrixXd::Zero(3, 1);
+
+    // 状態: [e_y, e_psi, t]
+    // 入力: delta（操舵角）
+
+    A(0, 1) = v * dt;
+    A(0, 2) = -v * std::sin(state.e_yaw) * dt;
+    A(1, 1) = 1.0;
+    A(1, 2) = -kappa * v * std::cos(state.e_yaw) * dt;
+    A(2, 2) = 1.0;
+
+    B(0, 0) = 0.0;
+    B(1, 0) = v * dt / wheelbase_;  // wheelbase_ はクラスメンバで定義されている前提
+    B(2, 0) = 0.0;
+
+    return A;  // Aを返すが、参照渡しなのでA,B両方更新される
+}
+
+// どちらか片方だけ残す（多分行175と216両方にある）
+void SimpleSpatialState::update(const TemporalState& ts, const Waypoint& wp) {
+    double dx = ts.x - wp.x;
+    double dy = ts.y - wp.y;
+
+    double yaw_ref = wp.yaw;
+    double yaw_diff = ts.yaw - yaw_ref;
+    while (yaw_diff > M_PI) yaw_diff -= 2.0 * M_PI;
+    while (yaw_diff < -M_PI) yaw_diff += 2.0 * M_PI;
+    e_yaw = yaw_diff;
+
+    e_y = -std::sin(yaw_ref) * dx + std::cos(yaw_ref) * dy;
+
+    // 🔥追加！現在の位置を t に反映！
+    //t = wp.s;
+}
+
+
+#include "waypoint.hpp"
+
+Waypoint::Waypoint(double x, double y, double yaw, double v_ref, double kappa)
+    : x(x), y(y), yaw(yaw), v_ref(v_ref), kappa(kappa), t(0.0) {}
+
+double Waypoint::getX() const { return x; }
+double Waypoint::getY() const { return y; }
+double Waypoint::getYaw() const { return yaw; }
+double Waypoint::getSpeed() const { return v_ref; }
+double Waypoint::getKappa() const { return kappa; }
+double Waypoint::getDeltaRef() const { return delta_ref_; }
+#ifndef MPC_HPP
+#define MPC_HPP
+
+#include <Eigen/Dense>
+#include <iostream>
+#include <memory>             // ← 忘れずに追加！
+#include "waypoint.hpp"       // ← Waypoint定義が必要
+#include "reference_path.hpp"
+
+class MPC {
+public:
+    MPC() {
+        N_ = 10;  // ホライズン長
+        n_ = 3;   // 状態次元
+        m_ = 1;   // 入力次元
+
+        Q_ = Eigen::MatrixXd::Identity(n_, n_) * 1.0;
+        R_ = Eigen::MatrixXd::Identity(m_, m_) * 0.1;
+    }
+    Eigen::VectorXd solve(const Eigen::VectorXd& x0,
+                        const Eigen::MatrixXd& A,
+                        const Eigen::MatrixXd& B);
+    // MPC.hpp のクラスに追加
+    std::shared_ptr<Waypoint> ref_waypoint_;
+    void set_reference_waypoint(std::shared_ptr<Waypoint> wp) {
+        ref_waypoint_ = wp;
+    }
+
+    std::shared_ptr<ReferencePath> ref_path_;  // ★追加これ！
+    // ★追加：ReferencePathセット用（今回必要）
+    void set_reference_path(std::shared_ptr<ReferencePath> path) {
+        ref_path_ = path;
+    }    
+
+private:
+    double max_steer_;
+    int N_;  // ホライズン長
+    int n_;  // 状態次元
+    int m_;  // 入力次元
+
+    Eigen::MatrixXd Q_;
+    Eigen::MatrixXd R_;
+};
+
+#endif
+#pragma once
+
+#include <string>
+#include <vector>
+#include <memory>
+#include "waypoint.hpp"
+#include "trajectory_point.hpp"
+
+std::vector<std::shared_ptr<Waypoint>> load_csv(const std::string& filename);
+std::vector<TrajectoryPoint> load_autoware_csv(const std::string& filename);  // ←★名前変更！
+
+#pragma once
+
+#include <vector>
+#include <memory>
+#include <cmath>
+#include "waypoint.hpp"  // ← これを忘れずに！
+
+class ReferencePath {
+public:
+    ReferencePath() = default;
+    ~ReferencePath() = default;
+
+    std::vector<std::shared_ptr<Waypoint>> waypoints;
+
+    void set_points(const std::vector<std::shared_ptr<Waypoint>>& wp) {
+        // ★ 各点に delta_ref_ を初期化（長さ2.0mのバイシクルモデル想定）
+        for (auto& pt : wp) {
+            if (std::abs(pt->kappa) > 1e-6) {
+                pt->delta_ref_ = std::atan(2.0 * pt->kappa);  // L=2.0m
+            } else {
+                pt->delta_ref_ = 0.0;
+            }
+        }
+
+        // ✔️ スムージング処理（オプション）
+        for (int i = 1; i < wp.size() - 1; ++i) {
+            wp[i]->delta_ref_ =
+                0.25 * wp[i - 1]->delta_ref_ +
+                0.5  * wp[i]->delta_ref_ +
+                0.25 * wp[i + 1]->delta_ref_;
+        }
+
+        waypoints = wp;
+    }
+
+
+
+    std::shared_ptr<Waypoint> get_current_waypoint() const {
+        if (!waypoints.empty()) {
+            return waypoints.front();  // もしくは最初のWayPoint
+        } else {
+            return std::make_shared<Waypoint>();  // 空のWaypointを返す fallback
+        }
+    }
+
+
+    std::shared_ptr<Waypoint> get_waypoint(double s) {
+        if (waypoints.empty()) {
+            return std::make_shared<Waypoint>();
+        }
+
+        if (s >= waypoints.back()->t) {
+            return waypoints.back();
+        }
+
+        for (size_t i = 0; i < waypoints.size() - 1; ++i) {
+            double t0 = waypoints[i]->t;
+            double t1 = waypoints[i + 1]->t;
+            if (s >= t0 && s < t1) {
+                double ratio = (s - t0) / (t1 - t0);
+                auto w0 = waypoints[i];
+                auto w1 = waypoints[i + 1];
+
+                auto interp = std::make_shared<Waypoint>();
+                interp->x = w0->x + ratio * (w1->x - w0->x);
+                interp->y = w0->y + ratio * (w1->y - w0->y);
+                interp->yaw = w0->yaw + ratio * (w1->yaw - w0->yaw);
+                interp->v_ref = w0->v_ref + ratio * (w1->v_ref - w0->v_ref);
+                interp->kappa = w0->kappa + ratio * (w1->kappa - w0->kappa);
+                interp->delta_ref_ = w0->delta_ref_ + ratio * (w1->delta_ref_ - w0->delta_ref_);  // ← 追加
+                interp->t = s;
+                return interp;
+            }
+        }
+
+        return waypoints.back();
+    }
+
+
+    void construct_path(const std::vector<double>& x_list,
+                            const std::vector<double>& y_list);
+
+    void set_speed_profile(double default_speed);
+
+
+                            // 必要ならあとで関数を追加
+};
+#pragma once
+
+#include <vector>
+#include <string>
+#include <cmath>
+#include <memory>
+#include <Eigen/Dense>
+#include "reference_path.hpp"  // ← これがあってもダメ。Waypoint定義が直接必要！
+#include "waypoint.hpp"        // ← これを追加！
+
+// 定数定義（πなど）
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+// ------- TemporalState -------
+struct TemporalState {
+    double x;
+    double y;
+    double yaw;
+
+    TemporalState(double x_, double y_, double yaw_)
+        : x(x_), y(y_), yaw(yaw_) {}
+
+    TemporalState& operator+=(const Eigen::Vector3d& delta);
+};
+
+// ------- SpatialState（抽象クラス） -------
+class SpatialState {
+public:
+    virtual ~SpatialState() {}
+    virtual std::vector<std::string> list_states() const = 0;
+
+    virtual double& operator[](size_t index) = 0;
+    virtual SpatialState& operator+=(const Eigen::VectorXd& delta) = 0;
+};
+
+// ------- SimpleSpatialState -------
+class SimpleSpatialState : public SpatialState {
+public:
+    double e_y;
+    double e_yaw;
+    double t;
+    std::vector<std::string> members;
+
+    SimpleSpatialState(double e_y_=0.0, double e_yawa_=0.0, double t_=0.0);
+    virtual ~SimpleSpatialState();  // 追加！
+    Eigen::Vector3d toVector() const;
+
+    std::vector<std::string> list_states() const override;
+    double& operator[](size_t index) override;
+    SpatialState& operator+=(const Eigen::VectorXd& delta) override;
+    void update(const TemporalState& ts, const Waypoint& wp);  // ← これ追加！
+};
+
+// ------- Forward 宣言 -------
+class ReferencePath;
+class Waypoint;
+
+// ------- SpatialBicycleModel（抽象） -------
+class SpatialBicycleModel {
+protected:
+    double eps = 1e-12;
+    double length;
+    double width;
+    double safety_margin;
+    double s = 0.0;
+    double Ts;
+    int wp_id = 0;
+
+    std::shared_ptr<ReferencePath> reference_path;
+    std::shared_ptr<Waypoint> current_waypoint;
+
+public:
+    std::unique_ptr<SpatialState> spatial_state;
+    std::unique_ptr<TemporalState> temporal_state;
+
+    SpatialBicycleModel(std::shared_ptr<ReferencePath> ref_path, double len, double wid, double Ts_);
+
+    TemporalState s2t(const Waypoint& wp, const SpatialState& state);
+    SimpleSpatialState t2s(const Waypoint& wp, const TemporalState& state);
+    void drive(const Eigen::Vector2d& u);
+    void get_current_waypoint();
+    std::shared_ptr<Waypoint> get_current_waypoint_ptr() const;
+    void update_current_waypoint();  // ← これが不足している
+
+
+    virtual Eigen::Vector3d get_spatial_derivatives(const SpatialState& state, const Eigen::Vector2d& input, double kappa) = 0;
+    virtual void linearize(double v_ref, double kappa_ref, double delta_s,
+                           Eigen::Vector3d& f_out, Eigen::Matrix3d& A_out, Eigen::Matrix<double, 3, 2>& B_out) = 0;
+
+protected:
+    double _compute_safety_margin() const;
+};
+
+// ------- BicycleModel -------
+class BicycleModel : public SpatialBicycleModel {
+private:
+    double wheelbase_ = 1.087;  // 車両ホイールベース    
+public:
+    // spatial_bicycle_models.hpp の class BicycleModel の中に追加
+    int n_states;
+    BicycleModel(std::shared_ptr<ReferencePath> ref_path, double len, double wid, double Ts);
+    virtual ~BicycleModel();  // 追加！
+
+    std::pair<double, double> get_temporal_derivatives(const SpatialState& state, const Eigen::Vector2d& input, double kappa);
+    Eigen::Vector3d get_spatial_derivatives(const SpatialState& state, const Eigen::Vector2d& input, double kappa) override;
+    void linearize(double v_ref, double kappa_ref, double delta_s,
+                   Eigen::Vector3d& f_out, Eigen::Matrix3d& A_out, Eigen::Matrix<double, 3, 2>& B_out) override;
+    TemporalState s2t(const Waypoint& wp, const Eigen::Vector3d& state);
+    SimpleSpatialState t2s(const Waypoint& wp, const TemporalState& state);
+    void drive(const Eigen::Vector2d& u);
+    Eigen::MatrixXd linearize(const SimpleSpatialState& state, double v, double kappa, double dt, Eigen::MatrixXd& A, Eigen::MatrixXd& B) const;
+
+};
+
+#ifndef TRAJECTORY_POINT_HPP
+#define TRAJECTORY_POINT_HPP
+
+struct TrajectoryPoint {
+    double x, y, z;
+    double x_quat, y_quat, z_quat, w_quat;
+    double speed;
+
+    // 🔽 以下を追加！
+    double v = 0.0;       // alias for speed（どちらかに統一してもOK）
+    double yaw = 0.0;     // クォータニオンから変換
+    double kappa = 0.0;   // 曲率（あとで補完 or 差分で計算）
+};
+
+#endif  // TRAJECTORY_POINT_HPP
+#ifndef WAYPOINT_HPP
+#define WAYPOINT_HPP
+
+class Waypoint {
+public:
+    Waypoint() = default;
+    Waypoint(double x, double y, double yaw, double v_ref, double kappa);
+
+    // フィールド
+    double x, y;
+    double yaw = 0.0;  // 進行方向角（rad）
+    double v;
+    double v_ref, kappa;
+    double t;  // lateral offset基準の位置？
+    double s = 0.0;  // 経路上の累積距離（m）
+    double delta_ref_ = 0.0;
+
+    // Getter
+    double getX() const;
+    double getY() const;
+    double getYaw() const;
+    double getSpeed() const;
+    double getKappa() const;
+    double getDeltaRef() const;
+};
+
+#endif

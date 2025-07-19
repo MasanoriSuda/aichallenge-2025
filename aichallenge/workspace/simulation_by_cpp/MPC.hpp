@@ -31,15 +31,19 @@ public:
     void set_reference_path(std::shared_ptr<ReferencePath> path) {
         ref_path_ = path;
     }    
+    Eigen::MatrixXd Q_;
+    Eigen::MatrixXd R_;
+
+    void set_horizon(int N) {
+        N_ = N;
+    }
+
 
 private:
     double max_steer_;
     int N_;  // ホライズン長
     int n_;  // 状態次元
     int m_;  // 入力次元
-
-    Eigen::MatrixXd Q_;
-    Eigen::MatrixXd R_;
 };
 
 #endif

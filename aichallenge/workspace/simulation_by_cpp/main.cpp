@@ -3,6 +3,7 @@
 #include "waypoint.hpp"
 #include "csv_loader.hpp"
 #include "MPC.hpp"  // ← MPC追加！
+#include "mpc_utils.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -33,13 +34,17 @@ int main() {
     std::cout << "xs.size() = " << xs.size() << std::endl;
 
     ref_path->construct_path(xs, ys);           // ← スプライン補間で ref_path->waypoints 作成
-    ref_path->set_speed_profile(30.0);          // ← 曲率に応じて速度セット
+    ref_path->set_speed_profile(10.0);          // ← 曲率に応じて速度セット
     ref_path->set_points(ref_path->waypoints);  // ← それを元に delta_ref_ 平滑化 ← 🔥これが重要！！
 
 
 
     BicycleModel model(ref_path, 2.0, 1.0, 0.1);  // length=2.0m, width=1.0m, Ts=0.1s
     MPC mpc;  // ← MPCインスタンス作成
+
+    // ✅ ホライズン・重みセット（最初にやっておく）
+    mpc.set_horizon(15);
+    set_default_weights(mpc.Q_, mpc.R_);
 
     double dt = 0.1;
 
@@ -74,9 +79,10 @@ int main() {
 
         // ログファイルを開く（必要なら）
     std::ofstream log_file("mpc_log.csv");
-    log_file << "step,x,y,yaw,e_y,e_yaw,t,delta,v_ref\n";
+    log_file << "step,x,y,yaw,e_y,e_yaw,t,delta,v_ref,delta_ref\n";
 
-    for (int i = 0; i <   500; ++i) {
+
+    for (int i = 0; i <  350; ++i) {
         // 空間状態を取得
         auto ss = dynamic_cast<SimpleSpatialState*>(model.spatial_state.get());
         if (!ss) {
@@ -105,12 +111,10 @@ int main() {
         mpc.set_reference_waypoint(wp);
         Eigen::VectorXd u_mpc = mpc.solve(x, A, B);
 
-        double delta = u_mpc(0);
+        // ✅ ステア角 saturate
+        double delta = saturate_delta(u_mpc(0));  // ← ⬅️ ここが重要！
 
-        // ステア角制限：±1.396 rad
-        double max_steer = 1.0;
-        delta = std::max(-max_steer, std::min(max_steer, delta));
-
+        // ✅ v: 安全速度（min 1.0）
         double safe_v = std::max(wp->v_ref, 1.0);
         Eigen::Vector2d u(safe_v, delta);
 
@@ -118,7 +122,11 @@ int main() {
 
         auto ts = model.temporal_state.get();
         ss->update(*ts, *wp);
-        ss->t += dt * safe_v;  // ← ★追加！s方向に進む
+
+        // ✅ 曲率補正付き s方向更新
+        double s_dot = compute_s_dot(*ss, *wp, safe_v);
+        ss->t += dt * s_dot;
+
         model.update_current_waypoint();
 
 #if 0        
@@ -139,8 +147,8 @@ int main() {
         // ✔️ CSVログ出力
         log_file << i << "," << ts->x << "," << ts->y << "," << ts->yaw << ","
                 << ss->e_y << "," << ss->e_yaw << "," << ss->t << ","
-                << delta << "," << wp->v_ref << "\n";
-        std::cout << "[step " << i << "] s=" << ss->t << ", delta_ref=" << wp->delta_ref_ << std::endl;
+                << delta << "," << wp->v_ref << "," << wp->delta_ref_ << "\n";
+
 
     }
 

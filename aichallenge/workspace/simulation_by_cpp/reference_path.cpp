@@ -1,94 +1,93 @@
-#include "reference_path.hpp"   // ← ReferencePath のクラス定義
-#include "waypoint.hpp"         // ← Waypoint クラス
-#include <vector>               // std::vector
-#include <memory>               // std::make_shared
-#include <cmath>                // std::sqrt, std::atan2
-#include <algorithm>            // std::max, std::min
+#include "reference_path.hpp"
+#include <cmath>
 #include <iostream>
 
-void ReferencePath::construct_path(const std::vector<double>& x_list, const std::vector<double>& y_list) {
+void ReferencePath::construct_path(const std::vector<double>& xs,
+                                   const std::vector<double>& ys) {
+    // 簡易な線形補間とs計算（必要に応じてスプラインに置き換え）
+    waypoints.clear();
+
     double s = 0.0;
-    const double wheelbase = 1.087;  // ← 明示的に定義
-
-    std::cout << "x_list.size() = " << x_list.size() << std::endl;
-
-    for (size_t i = 0; i < x_list.size(); ++i) {
-        double x = x_list[i];
-        double y = y_list[i];
-        double yaw = 0.0;
-        double kappa = 0.0;
-
-        // yawの計算
-        if (i < x_list.size() - 1) {
-            double dx = x_list[i + 1] - x;
-            double dy = y_list[i + 1] - y;
-            yaw = std::atan2(dy, dx);
-        } else if (i > 0) {
-            double dx = x - x_list[i - 1];
-            double dy = y - y_list[i - 1];
-            yaw = std::atan2(dy, dx);
-        }
-
-        // 曲率の推定：3点円弧近似
-        if (i > 0 && i < x_list.size() - 1) {
-            double x0 = x_list[i - 1], y0 = y_list[i - 1];
-            double x1 = x_list[i],     y1 = y_list[i];
-            double x2 = x_list[i + 1], y2 = y_list[i + 1];
-
-            double a = std::hypot(x1 - x0, y1 - y0);
-            double b = std::hypot(x2 - x1, y2 - y1);
-            double c = std::hypot(x2 - x0, y2 - y0);
-
-            double s_tri = (a + b + c) / 2.0;
-            double area = std::sqrt(std::max(s_tri * (s_tri - a) * (s_tri - b) * (s_tri - c), 0.0));
-
-            if (area > 1e-6) {
-                double R = (a * b * c) / (4.0 * area);
-                kappa = 1.0 / R;
-            } else {
-                kappa = 0.0;
-            }
-        }
-
-        // 距離の更新（Waypoint作成前に！）
+    for (size_t i = 0; i < xs.size(); ++i) {
+        auto wp = std::make_shared<Waypoint>();
+        wp->x = xs[i];
+        wp->y = ys[i];
         if (i > 0) {
-            double dx = x - x_list[i - 1];
-            double dy = y - y_list[i - 1];
+            double dx = xs[i] - xs[i - 1];
+            double dy = ys[i] - ys[i - 1];
             s += std::sqrt(dx * dx + dy * dy);
         }
+        wp->s = s;
+        waypoints.push_back(wp);
+    }
 
-        // Waypoint 生成
-        double speed = 0.0;
-        double delta_ref = std::atan(wheelbase * kappa);
+    // yaw, kappa を補間（簡易：前後差分）
+    for (size_t i = 1; i < waypoints.size(); ++i) {
+        double dx = waypoints[i]->x - waypoints[i - 1]->x;
+        double dy = waypoints[i]->y - waypoints[i - 1]->y;
+        waypoints[i - 1]->yaw = std::atan2(dy, dx);
+    }
+    waypoints.back()->yaw = waypoints[waypoints.size() - 2]->yaw;  // 最後にも補間
 
-        Waypoint wp(x, y, yaw, speed, kappa);
-        wp.s = s;  // ✅ これが重要！
-        wp.t = s;  // tも一応セット（t = sと同義運用なら）
-        wp.delta_ref_ = delta_ref;
+    for (size_t i = 1; i < waypoints.size() - 1; ++i) {
+        double dx1 = waypoints[i]->x - waypoints[i - 1]->x;
+        double dy1 = waypoints[i]->y - waypoints[i - 1]->y;
+        double dx2 = waypoints[i + 1]->x - waypoints[i]->x;
+        double dy2 = waypoints[i + 1]->y - waypoints[i]->y;
 
-        std::cout << "[construct] i=" << i << ", s=" << s << ", delta_ref=" << delta_ref << std::endl;
+        double len1 = std::sqrt(dx1 * dx1 + dy1 * dy1);
+        double len2 = std::sqrt(dx2 * dx2 + dy2 * dy2);
+        double angle = std::atan2(dy2, dx2) - std::atan2(dy1, dx1);
+        angle = std::atan2(std::sin(angle), std::cos(angle));  // wrap to [-pi, pi]
 
-        waypoints.push_back(std::make_shared<Waypoint>(wp));
+        waypoints[i]->kappa = angle / ((len1 + len2) * 0.5);
+    }
+
+    waypoints.front()->kappa = 0.0;
+    waypoints.back()->kappa = 0.0;
+
+    const double L = 1.087;
+    for (auto& wp : waypoints) {
+        wp->delta_ref_ = std::atan(L * wp->kappa);  // ← リファレンスステア角の追加
+        std::cout << wp->delta_ref_ << std::endl;
     }
 }
 
-
-//void ReferencePath::set_speed_profile(double default_speed) {
-//    for (auto& wp : waypoints) {
-//        wp->v_ref = default_speed;
-//    }
-//}
-
-//void ReferencePath::set_speed_profile(double default_speed) {
 void ReferencePath::set_speed_profile(double default_speed) {
     for (auto& wp : waypoints) {
-        double k = std::abs(wp->kappa);  // 曲率（絶対値）
-        double v = default_speed / (1.0 + 80.0 * k);  // ← 係数40.0は暫定（調整OK）
-
-        // 速度の下限と上限を制限（安全対策）
-        v = std::clamp(v, 5.0, default_speed);  // 最低5km/h、最大default
-
-        wp->v_ref = v;
+        wp->v_ref = default_speed;  // 固定値
     }
+}
+
+double ReferencePath::get_speed(double s) const {
+    // s に最も近い waypoint を探す
+    if (waypoints.empty()) return 0.0;
+
+    double min_dist = std::numeric_limits<double>::max();
+    double v = 0.0;
+    for (const auto& wp : waypoints) {
+        double dist = std::abs(wp->s - s);
+        if (dist < min_dist) {
+            min_dist = dist;
+            v = wp->v_ref;
+        }
+    }
+    return v;
+}
+
+std::shared_ptr<Waypoint> ReferencePath::get_waypoint(double s) const {
+    if (waypoints.empty()) return nullptr;
+
+    double min_dist = std::numeric_limits<double>::max();
+    std::shared_ptr<Waypoint> nearest_wp = nullptr;
+
+    for (const auto& wp : waypoints) {
+        double dist = std::abs(wp->s - s);
+        if (dist < min_dist) {
+            min_dist = dist;
+            nearest_wp = wp;
+        }
+    }
+    return nearest_wp;
 }
 

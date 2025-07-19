@@ -1,0 +1,845 @@
+import numpy as np
+import osqp
+from scipy import sparse
+import matplotlib.pyplot as plt
+
+# Colors
+PREDICTION = '#BA4A00'
+
+##################
+# MPC Controller #
+##################
+
+
+class MPC:
+    def __init__(self, model, N, Q, R, QN, StateConstraints, InputConstraints,
+                 ay_max):
+        self.N = N
+        self.Q = Q
+        self.R = R
+        self.QN = QN
+        self.model = model
+        self.nx = self.model.n_states
+        self.nu = 2
+        self.state_constraints = StateConstraints
+        self.input_constraints = InputConstraints
+        self.ay_max = ay_max
+        self.current_prediction = None
+        self.infeasibility_counter = 0
+        self.current_control = np.zeros((self.nu*self.N))
+        self.optimizer = osqp.OSQP()
+
+    def _init_problem(self):
+        umin = self.input_constraints['umin']
+        umax = self.input_constraints['umax']
+        xmin = self.state_constraints['xmin']
+        xmax = self.state_constraints['xmax']
+
+        A = np.zeros((self.nx * (self.N + 1), self.nx * (self.N + 1)))
+        B = np.zeros((self.nx * (self.N + 1), self.nu * (self.N)))
+        ur = np.zeros(self.nu*self.N)
+        xr = np.zeros(self.nx*(self.N+1))
+        uq = np.zeros(self.N * self.nx)
+        xmin_dyn = np.kron(np.ones(self.N + 1), xmin)
+        xmax_dyn = np.kron(np.ones(self.N + 1), xmax)
+        umax_dyn = np.kron(np.ones(self.N), umax)
+        kappa_pred = np.tan(np.array(self.current_control[3::] +
+                                     self.current_control[-1:])) / self.model.length
+
+        for n in range(self.N):
+            current_waypoint = self.model.reference_path.get_waypoint(self.model.wp_id + n)
+            next_waypoint = self.model.reference_path.get_waypoint(self.model.wp_id + n + 1)
+            delta_s = next_waypoint - current_waypoint
+            kappa_ref = current_waypoint.kappa
+            v_ref = current_waypoint.v_ref
+
+            f, A_lin, B_lin = self.model.linearize(v_ref, kappa_ref, delta_s)
+            A[(n+1) * self.nx: (n+2)*self.nx, n * self.nx:(n+1)*self.nx] = A_lin
+            B[(n+1) * self.nx: (n+2)*self.nx, n * self.nu:(n+1)*self.nu] = B_lin
+            ur[n*self.nu:(n+1)*self.nu] = np.array([v_ref, kappa_ref])
+            uq[n * self.nx:(n+1)*self.nx] = B_lin.dot(np.array([v_ref, kappa_ref])) - f
+
+            vmax_dyn = np.sqrt(self.ay_max / (np.abs(kappa_pred[n]) + 1e-12))
+            if vmax_dyn < umax_dyn[self.nu*n]:
+                umax_dyn[self.nu*n] = vmax_dyn
+
+        ub, lb, _ = self.model.reference_path.update_path_constraints(
+                    self.model.wp_id+1, self.N, 2*self.model.safety_margin,
+            self.model.safety_margin)
+        xmin_dyn[0] = self.model.spatial_state.e_y
+        xmax_dyn[0] = self.model.spatial_state.e_y
+        xmin_dyn[self.nx::self.nx] = lb
+        xmax_dyn[self.nx::self.nx] = ub
+        xr[self.nx::self.nx] = (lb + ub) / 2
+
+        Ax = sparse.kron(sparse.eye(self.N + 1),
+                         -sparse.eye(self.nx)) + sparse.csc_matrix(A)
+        Bu = sparse.csc_matrix(B)
+        Aeq = sparse.hstack([Ax, Bu])
+        Aineq = sparse.eye((self.N + 1) * self.nx + self.N * self.nu)
+        A = sparse.vstack([Aeq, Aineq], format='csc')
+
+        lineq = np.hstack([xmin_dyn, np.kron(np.ones(self.N), umin)])
+        uineq = np.hstack([xmax_dyn, umax_dyn])
+        x0 = np.array(self.model.spatial_state[:])
+        leq = np.hstack([-x0, uq])
+        ueq = leq
+        l = np.hstack([leq, lineq])
+        u = np.hstack([ueq, uineq])
+
+        q = np.hstack([
+            -np.tile(self.Q.diagonal(), self.N) * xr[:-self.nx],
+            -self.QN.dot(xr[-self.nx:]),
+            -np.tile(self.R.diagonal(), self.N) * ur
+        ])
+        P = sparse.block_diag([
+            sparse.kron(sparse.eye(self.N), self.Q),
+            self.QN,
+            sparse.kron(sparse.eye(self.N), self.R)
+        ], format='csc')
+
+        self.optimizer = osqp.OSQP()
+        self.optimizer.setup(P=P, q=q, A=A, l=l, u=u, verbose=False)
+
+    def get_control(self):
+        nx = self.model.n_states
+        nu = 2
+        self.model.get_current_waypoint()
+        self.model.spatial_state = self.model.t2s(reference_state=
+            self.model.temporal_state, reference_waypoint=
+            self.model.current_waypoint)
+        self._init_problem()
+        dec = self.optimizer.solve()
+
+        try:
+            control_signals = np.array(dec.x[-self.N*nu:])
+            control_signals[1::2] = np.arctan(control_signals[1::2] * self.model.length)
+            v = control_signals[0]
+            delta = control_signals[1]
+            self.current_control = control_signals
+            x = np.reshape(dec.x[:(self.N+1)*nx], (self.N+1, nx))
+            self.current_prediction = self.update_prediction(x)
+            u = np.array([v, delta])
+            self.infeasibility_counter = 0
+        except:
+            print('Infeasible problem. Previously predicted control signal used!')
+            id = nu * (self.infeasibility_counter + 1)
+            u = np.array(self.current_control[id:id+2])
+            self.infeasibility_counter += 1
+
+        if self.infeasibility_counter == (self.N - 1):
+            print('No control signal computed!')
+            exit(1)
+
+        return u
+
+    def update_prediction(self, spatial_state_prediction):
+        x_pred, y_pred = [], []
+        for n in range(2, self.N):
+            associated_waypoint = self.model.reference_path.get_waypoint(self.model.wp_id+n)
+            predicted_temporal_state = self.model.s2t(associated_waypoint,
+                                            spatial_state_prediction[n, :])
+            x_pred.append(predicted_temporal_state.x)
+            y_pred.append(predicted_temporal_state.y)
+        return x_pred, y_pred
+
+    def show_prediction(self):
+        if self.current_prediction is not None:
+            plt.scatter(self.current_prediction[0], self.current_prediction[1],
+                    c=PREDICTION, s=30)import numpy as np
+import matplotlib.pyplot as plt
+from skimage.morphology import remove_small_holes
+from PIL import Image
+from skimage.draw import line_aa
+import matplotlib.patches as plt_patches
+
+# Colors
+OBSTACLE = '#2E4053'
+
+############
+# Obstacle #
+############
+
+class Obstacle:
+    def __init__(self, cx, cy, radius):
+        self.cx = cx
+        self.cy = cy
+        self.radius = radius
+
+    def show(self):
+        circle = plt_patches.Circle(xy=(self.cx, self.cy), radius=self.radius,
+                                    color=OBSTACLE, zorder=20)
+        ax = plt.gca()
+        ax.add_patch(circle)
+
+#######
+# Map #
+#######
+
+class Map:
+    def __init__(self, file_path, origin, resolution, threshold_occupied=100):
+        self.threshold_occupied = threshold_occupied
+        self.origin = origin
+        self.resolution = resolution
+        self.obstacles = []
+        self.boundaries = []
+
+        if file_path is not None:
+            self.data = np.array(Image.open(file_path))[:, :, 0]
+            self.process_map()
+            self.height = self.data.shape[0]
+            self.width = self.data.shape[1]
+        else:
+            # AWSIM用ダミーマップ（広域）
+            self.height = 50000
+            self.width = 50000
+            self.data = np.ones((self.height, self.width), dtype=np.int8)
+
+    def w2m(self, x, y):
+        dx = int(np.floor((x - self.origin[0]) / self.resolution))
+        dy = int(np.floor((y - self.origin[1]) / self.resolution))
+        return dx, dy
+
+    def m2w(self, dx, dy):
+        x = (dx + 0.5) * self.resolution + self.origin[0]
+        y = (dy + 0.5) * self.resolution + self.origin[1]
+        return x, y
+
+    def process_map(self):
+        self.data = np.where(self.data >= self.threshold_occupied, 1, 0)
+        self.data = remove_small_holes(self.data, area_threshold=5, connectivity=8).astype(np.int8)
+
+    def add_obstacles(self, obstacles):
+        self.obstacles.extend(obstacles)
+        for obstacle in obstacles:
+            radius_px = int(np.ceil(obstacle.radius / self.resolution))
+            cx_px, cy_px = self.w2m(obstacle.cx, obstacle.cy)
+            y, x = np.ogrid[-radius_px: radius_px, -radius_px: radius_px]
+            index = x**2 + y**2 <= radius_px**2
+            self.data[cy_px-radius_px:cy_px+radius_px, cx_px-radius_px:cx_px+radius_px][index] = 0
+
+    def add_boundary(self, boundaries):
+        self.boundaries.extend(boundaries)
+        for boundary in boundaries:
+            sx = self.w2m(boundary[0][0], boundary[0][1])
+            gx = self.w2m(boundary[1][0], boundary[1][1])
+            path_x, path_y, _ = line_aa(sx[0], sx[1], gx[0], gx[1])
+            for x, y in zip(path_x, path_y):
+                self.data[y, x] = 0import numpy as np
+import matplotlib.pyplot as plt
+from scipy.interpolate import interp1d
+
+class Waypoint:
+    def __init__(self, x, y, yaw=0.0, kappa=0.0, v_ref=0.0):
+        self.x = x
+        self.y = y
+        self.psi = yaw
+        self.kappa = kappa
+        self.v_ref = v_ref
+
+    def __sub__(self, other):
+        return np.sqrt((self.x - other.x)**2 + (self.y - other.y)**2)
+
+
+class ReferencePath:
+    def __init__(self, map_obj, wp_x, wp_y, path_resolution, smoothing_distance, max_width, circular=False):
+        self.map = map_obj
+        self.wp_x = wp_x
+        self.wp_y = wp_y
+        self.resolution = path_resolution
+        self.smoothing_distance = smoothing_distance
+        self.max_width = max_width
+        self.circular = circular
+
+        self.waypoints = self._construct_path(wp_x, wp_y)
+        self.length = len(self.waypoints)
+        self.segment_lengths = self._compute_segment_lengths()
+        self.v_profile = None
+        self.kappa_profile = None  # Optional curvature profile
+
+    def _construct_path(self, wp_x, wp_y):
+        distance = np.cumsum(np.sqrt(np.diff(wp_x, prepend=wp_x[0])**2 + np.diff(wp_y, prepend=wp_y[0])**2))
+        s_interp = np.linspace(distance[0], distance[-1], int((distance[-1] - distance[0]) / self.resolution))
+        fx = interp1d(distance, wp_x, kind='linear')
+        fy = interp1d(distance, wp_y, kind='linear')
+        x_interp = fx(s_interp)
+        y_interp = fy(s_interp)
+
+        waypoints = []
+        for i in range(len(x_interp)):
+            if i == len(x_interp) - 1:
+                yaw = np.arctan2(y_interp[i] - y_interp[i - 1], x_interp[i] - x_interp[i - 1])
+            else:
+                yaw = np.arctan2(y_interp[i + 1] - y_interp[i], x_interp[i + 1] - x_interp[i])
+            waypoints.append(Waypoint(x_interp[i], y_interp[i], yaw))
+        return waypoints
+
+    def _compute_segment_lengths(self):
+        lengths = [0.0]
+        for i in range(1, len(self.waypoints)):
+            dx = self.waypoints[i].x - self.waypoints[i - 1].x
+            dy = self.waypoints[i].y - self.waypoints[i - 1].y
+            lengths.append(np.sqrt(dx ** 2 + dy ** 2))
+        return lengths
+
+    def get_speed(self, s):
+        if self.v_profile is None:
+            return 0.0
+        if s < 0:
+            return self.v_profile[0]
+        if s > self.length:
+            return self.v_profile[-1]
+        idx = np.linspace(0, self.length, len(self.v_profile))
+        return float(np.interp(s, idx, self.v_profile))
+
+    def get_curvature(self, s):
+        if self.kappa_profile is None:
+            return 0.0
+        if s < 0:
+            return self.kappa_profile[0]
+        if s > self.length:
+            return self.kappa_profile[-1]
+        idx = np.linspace(0, self.length, len(self.kappa_profile))
+        return float(np.interp(s, idx, self.kappa_profile))
+
+    def show(self):
+        x = [wp.x for wp in self.waypoints]
+        y = [wp.y for wp in self.waypoints]
+        plt.plot(x, y, 'g--', linewidth=1)
+        plt.plot(x[0], y[0], 'go')
+        plt.plot(x[-1], y[-1], 'ro')
+
+    def get_waypoint(self, idx):
+        """インデックスで waypoint を取得。範囲外は境界にクリップ。"""
+        idx = max(0, min(len(self.waypoints) - 1, idx))
+        return self.waypoints[idx]
+
+    def update_path_constraints(self, waypoint_idx, horizon, upper_bound, lower_bound):
+        """道幅に基づいた制約を horizon 分返す。"""
+        horizon = int(horizon) if horizon else 1
+
+        if waypoint_idx >= len(self.waypoints):
+            waypoint_idx = len(self.waypoints) - 1
+
+        ub = np.full(horizon, upper_bound)
+        lb = np.full(horizon, -lower_bound)
+        width = np.full(horizon, upper_bound + lower_bound)
+        return ub, lb, width
+    def set_speed_profile(self, v_profile):
+        self.v_profile = v_profile
+        # 必要なら各 Waypoint にも反映
+        if len(self.waypoints) == len(v_profile):
+            for i in range(len(self.waypoints)):
+                self.waypoints[i].v_ref = v_profile[i]from map import Map
+from reference_path import ReferencePath
+from spatial_bicycle_models import BicycleModel
+import matplotlib.pyplot as plt
+from MPC import MPC
+from scipy import sparse
+import numpy as np
+import pandas as pd
+
+if __name__ == '__main__':
+    # CSV読み込み（ChatGPT変換済みのwaypoints_converted.csv）
+    df = pd.read_csv("raceline_awsim_15km_py.csv")
+    wp_x = df["x"].values
+    wp_y = df["y"].values
+    wp_speed = df["speed"].values
+
+    # マップはダミー（画像使わない）
+    dummy_map = Map(file_path=None, origin=[wp_x.min(), wp_y.min()], resolution=0.1)
+
+    # リファレンスパス作成
+    reference_path = ReferencePath(
+        dummy_map,
+        wp_x,
+        wp_y,
+        0.2,            # path_resolution
+        5,              # smoothing_distance
+        1.5,            # max_width
+        False           # circular
+    )
+
+    # 補間してリファレンス速度にセット
+    wp_speed_interp = np.interp(
+        np.linspace(0, len(wp_speed) - 1, len(reference_path.waypoints)),
+        np.arange(len(wp_speed)),
+        wp_speed
+    )
+    reference_path.set_speed_profile(wp_speed_interp)
+
+
+
+    # デバッグ確認
+    print("wp_x len:", len(wp_x))
+    print("wp_speed len:", len(wp_speed))
+    print("reference_path.waypoints len:", len(reference_path.waypoints))
+    print("v_profile length:", len(reference_path.v_profile))
+    print("v_profile sample:", reference_path.v_profile[:5])
+    print("v_profile contains NaN:", np.any(pd.isnull(reference_path.v_profile)))
+
+    # モーションモデル初期化（実車パラメータに合わせて調整可）
+    car = BicycleModel(length=1.2, width=0.8,
+                       reference_path=reference_path, Ts=0.05)
+
+    #################
+    # コントローラ設定
+    #################
+    N = 30
+    Q = sparse.diags([1.0, 0.0, 0.0])
+    R = sparse.diags([0.5, 0.0])
+    QN = sparse.diags([1.0, 0.0, 0.0])
+
+    v_max = 35.0 / 3.6  # [km/h] → [m/s]
+    delta_max = 0.66
+    ay_max = 5.0
+    InputConstraints = {
+        'umin': np.array([0.0, -np.tan(delta_max) / car.length]),
+        'umax': np.array([v_max, np.tan(delta_max) / car.length])
+    }
+    StateConstraints = {
+        'xmin': np.array([-np.inf, -np.inf, -np.inf]),
+        'xmax': np.array([np.inf, np.inf, np.inf])
+    }
+
+    mpc = MPC(car, N, Q, R, QN, StateConstraints, InputConstraints, ay_max)
+
+    #################
+    # シミュレーション
+    #################
+    t = 0.0
+    x_log = [car.temporal_state.x]
+    y_log = [car.temporal_state.y]
+    v_log = [0.0]
+
+    while car.s < reference_path.length:
+        u = mpc.get_control()
+        car.drive(u)
+
+        x_log.append(car.temporal_state.x)
+        y_log.append(car.temporal_state.y)
+        v_log.append(u[0])
+        t += car.Ts
+
+        reference_path.show()
+        car.show()
+        mpc.show_prediction()
+        plt.title(f'MPC Simulation: v={u[0]:.2f}, delta={u[1]:.2f}, time={t:.2f}s')
+        plt.axis('off')
+        plt.pause(0.001)import numpy as np
+from abc import abstractmethod
+try:
+    from abc import ABC
+except:
+    # for Python 2.7
+    from abc import ABCMeta
+
+    class ABC(object):
+        __metaclass__ = ABCMeta
+        pass
+import matplotlib.pyplot as plt
+import matplotlib.patches as plt_patches
+import math
+
+# Colors
+CAR = '#F1C40F'
+CAR_OUTLINE = '#B7950B'
+
+
+#########################
+# Temporal State Vector #
+#########################
+
+class TemporalState:
+    def __init__(self, x, y, psi):
+        """
+        Temporal State Vector containing car pose (x, y, psi)
+        :param x: x position in global coordinate system | [m]
+        :param y: y position in global coordinate system | [m]
+        :param psi: yaw angle | [rad]
+        """
+        self.x = x
+        self.y = y
+        self.psi = psi
+
+        self.members = ['x', 'y', 'psi']
+
+    def __iadd__(self, other):
+        """
+        Overload Sum-Add operator.
+        :param other: numpy array to be added to state vector
+        """
+        for state_id in range(len(self.members)):
+            vars(self)[self.members[state_id]] += other[state_id]
+        return self
+
+
+########################
+# Spatial State Vector #
+########################
+
+class SpatialState(ABC):
+    """
+    Spatial State Vector - Abstract Base Class.
+    """
+
+    @abstractmethod
+    def __init__(self):
+        self.members = None
+        self.e_y = None
+        self.e_psi = None
+
+    def __getitem__(self, item):
+        if isinstance(item, int):
+            members = [self.members[item]]
+        else:
+            members = self.members[item]
+        return [vars(self)[key] for key in members]
+
+    def __setitem__(self, key, value):
+        vars(self)[self.members[key]] = value
+
+    def __len__(self):
+        return len(self.members)
+
+    def __iadd__(self, other):
+        """
+        Overload Sum-Add operator.
+        :param other: numpy array to be added to state vector
+        """
+
+        for state_id in range(len(self.members)):
+            vars(self)[self.members[state_id]] += other[state_id]
+        return self
+
+    def list_states(self):
+        """
+        Return list of names of all states.
+        """
+        return self.members
+
+
+class SimpleSpatialState(SpatialState):
+    def __init__(self, e_y=0.0, e_psi=0.0, t=0.0):
+        """
+        Simplified Spatial State Vector containing orthogonal deviation from
+        reference path (e_y), difference in orientation (e_psi) and velocity
+        :param e_y: orthogonal deviation from center-line | [m]
+        :param e_psi: yaw angle relative to path | [rad]
+        :param t: time | [s]
+        """
+        super(SimpleSpatialState, self).__init__()
+
+        self.e_y = e_y
+        self.e_psi = e_psi
+        self.t = t
+
+        self.members = ['e_y', 'e_psi', 't']
+
+
+####################################
+# Spatial Bicycle Model Base Class #
+####################################
+
+class SpatialBicycleModel(ABC):
+    def __init__(self, reference_path, length, width, Ts):
+        """
+        Abstract Base Class for Spatial Reformulation of Bicycle Model.
+        :param reference_path: reference path object to follow
+        :param length: length of car in m
+        :param width: width of car in m
+        :param Ts: sampling time of model
+        """
+
+        # Precision
+        self.eps = 1e-12
+
+        # Car Parameters
+        self.length = length
+        self.width = width
+        self.safety_margin = self._compute_safety_margin()
+
+        # Reference Path
+        self.reference_path = reference_path
+
+        # Set initial distance traveled
+        self.s = 0.0
+
+        # Set sampling time
+        self.Ts = Ts
+
+        # Set initial waypoint ID
+        self.wp_id = 0
+
+        # Set initial waypoint
+        self.current_waypoint = self.reference_path.waypoints[self.wp_id]
+
+        # Declare spatial state variable | Initialization in sub-class
+        self.spatial_state = None
+
+        # Declare temporal state variable | Initialization in sub-class
+        self.temporal_state = None
+
+    def s2t(self, reference_waypoint, reference_state):
+        """
+        Convert spatial state to temporal state given a reference waypoint.
+        :param reference_waypoint: waypoint object to use as reference
+        :param reference_state: state vector as np.array to use as reference
+        :return Temporal State equivalent to reference state
+        """
+
+        # Compute temporal state variables
+        if isinstance(reference_state, np.ndarray):
+            x = reference_waypoint.x - reference_state[0] * np.sin(
+                reference_waypoint.psi)
+            y = reference_waypoint.y + reference_state[0] * np.cos(
+                reference_waypoint.psi)
+            psi = reference_waypoint.psi + reference_state[1]
+        elif isinstance(reference_state, SpatialState):
+            x = reference_waypoint.x - reference_state.e_y * np.sin(
+                reference_waypoint.psi)
+            y = reference_waypoint.y + reference_state.e_y * np.cos(
+                reference_waypoint.psi)
+            psi = reference_waypoint.psi + reference_state.e_psi
+        else:
+            print('Reference State type not supported!')
+            x, y, psi = None, None, None
+            exit(1)
+
+        return TemporalState(x, y, psi)
+
+    def t2s(self, reference_waypoint, reference_state):
+        """
+        Convert spatial state to temporal state. Either convert self.spatial_
+        state with current waypoint as reference or provide reference waypoint
+        and reference_state.
+        :return Spatial State equivalent to reference state
+        """
+
+        # Compute spatial state variables
+        if isinstance(reference_state, np.ndarray):
+            e_y = np.cos(reference_waypoint.psi) * \
+                  (reference_state[1] - reference_waypoint.y) - \
+                  np.sin(reference_waypoint.psi) * (reference_state[0] -
+                                                    reference_waypoint.x)
+            e_psi = reference_state[2] - reference_waypoint.psi
+
+            # Ensure e_psi is kept within range (-pi, pi]
+            e_psi = np.mod(e_psi + math.pi, 2 * math.pi) - math.pi
+        elif isinstance(reference_state, TemporalState):
+            e_y = np.cos(reference_waypoint.psi) * \
+                  (reference_state.y - reference_waypoint.y) - \
+                  np.sin(reference_waypoint.psi) * (reference_state.x -
+                                                    reference_waypoint.x)
+            e_psi = reference_state.psi - reference_waypoint.psi
+
+            # Ensure e_psi is kept within range (-pi, pi]
+            e_psi = np.mod(e_psi + math.pi, 2 * math.pi) - math.pi
+        else:
+            print('Reference State type not supported!')
+            e_y, e_psi = None, None
+            exit(1)
+
+        # time state can be set to zero since it's only relevant for the MPC
+        # prediction horizon
+        t = 0.0
+
+        return SimpleSpatialState(e_y, e_psi, t)
+
+    def drive(self, u):
+        """
+        Drive.
+        :param u: input vector containing [v, delta]
+        """
+
+        # Get input signals
+        v, delta = u
+
+        # Compute temporal state derivatives
+        x_dot = v * np.cos(self.temporal_state.psi)
+        y_dot = v * np.sin(self.temporal_state.psi)
+        psi_dot = v / self.length * np.tan(delta)
+        temporal_derivatives = np.array([x_dot, y_dot, psi_dot])
+
+        # Update spatial state (Forward Euler Approximation)
+        self.temporal_state += temporal_derivatives * self.Ts
+
+        # Compute velocity along path
+        s_dot = 1 / (1 - self.spatial_state.e_y * self.current_waypoint.kappa) \
+                * v * np.cos(self.spatial_state.e_psi)
+
+        # Update distance travelled along reference path
+        self.s += s_dot * self.Ts
+
+    def _compute_safety_margin(self):
+        """
+        Compute safety margin for car if modeled by its center of gravity.
+        """
+
+        # Model ellipsoid around the car
+        safety_margin = self.width / np.sqrt(2)
+
+        return safety_margin
+
+    def get_current_waypoint(self):
+        """
+        Get closest waypoint on reference path based on car's current location.
+        """
+
+        # Compute cumulative path length
+        length_cum = np.cumsum(self.reference_path.segment_lengths)
+        # Get first index with distance larger than distance traveled by car
+        # so far
+        greater_than_threshold = length_cum > self.s
+        next_wp_id = greater_than_threshold.searchsorted(True)
+        # Get previous index
+        prev_wp_id = next_wp_id - 1
+
+        # Get distance traveled for both enclosing waypoints
+        s_next = length_cum[next_wp_id]
+        s_prev = length_cum[prev_wp_id]
+
+        if np.abs(self.s - s_next) < np.abs(self.s - s_prev):
+            self.wp_id = next_wp_id
+            self.current_waypoint = self.reference_path.waypoints[next_wp_id]
+        else:
+            self.wp_id = prev_wp_id
+            self.current_waypoint = self.reference_path.waypoints[prev_wp_id]
+
+    def show(self):
+        """
+        Display car on current axis.
+        """
+
+        # Get car's center of gravity
+        cog = (self.temporal_state.x, self.temporal_state.y)
+        # Get current angle with respect to x-axis
+        yaw = np.rad2deg(self.temporal_state.psi)
+        # Draw rectangle
+        car = plt_patches.Rectangle(cog, width=self.length, height=self.width,
+                                    angle=yaw, facecolor=CAR,
+                                    edgecolor=CAR_OUTLINE, zorder=20)
+
+        # Shift center rectangle to match center of the car
+        car.set_x(car.get_x() - (self.length / 2 *
+                                 np.cos(self.temporal_state.psi) -
+                                 self.width / 2 *
+                                 np.sin(self.temporal_state.psi)))
+        car.set_y(car.get_y() - (self.width / 2 *
+                                 np.cos(self.temporal_state.psi) +
+                                 self.length / 2 *
+                                 np.sin(self.temporal_state.psi)))
+
+        # Add rectangle to current axis
+        ax = plt.gca()
+        ax.add_patch(car)
+
+    @abstractmethod
+    def get_spatial_derivatives(self, state, input, kappa):
+        pass
+
+    @abstractmethod
+    def linearize(self, v_ref, kappa_ref, delta_s):
+        pass
+
+
+#################
+# Bicycle Model #
+#################
+
+class BicycleModel(SpatialBicycleModel):
+    def __init__(self, reference_path, length, width, Ts):
+        """
+        Simplified Spatial Bicycle Model. Spatial Reformulation of Kinematic
+        Bicycle Model. Uses Simplified Spatial State.
+        :param reference_path: reference path model is supposed to follow
+        :param length: length of the car in m
+        :param width: with of the car in m
+        :param Ts: sampling time of model in s
+        """
+
+        # Initialize base class
+        super(BicycleModel, self).__init__(reference_path, length=length,
+                                           width=width, Ts=Ts)
+
+        # Initialize spatial state
+        self.spatial_state = SimpleSpatialState()
+
+        # Number of spatial state variables
+        self.n_states = len(self.spatial_state)
+
+        # Initialize temporal state
+        self.temporal_state = self.s2t(reference_state=self.spatial_state,
+                                       reference_waypoint=self.current_waypoint)
+
+    def get_temporal_derivatives(self, state, input, kappa):
+        """
+        Compute relevant temporal derivatives needed for state update.
+        :param state: state vector for which to compute derivatives
+        :param input: input vector
+        :param kappa: curvature of corresponding waypoint
+        :return: temporal derivatives of distance, angle and velocity
+        """
+
+        # Get state and input variables
+        e_y, e_psi, t = state
+        v, delta = input
+
+        # Compute velocity along path
+        s_dot = 1 / (1 - (e_y * kappa)) * v * np.cos(e_psi)
+
+        # Compute yaw angle rate of change
+        psi_dot = v / self.length * np.tan(delta)
+
+        return s_dot, psi_dot
+
+    def get_spatial_derivatives(self, state, input, kappa):
+        """
+        Compute spatial derivatives of all state variables for update.
+        :param state: state vector for which to compute derivatives
+        :param input: input vector
+        :param kappa: curvature of corresponding waypoint
+        :return: numpy array with spatial derivatives for all state variables
+        """
+
+        # Get state and input variables
+        e_y, e_psi, t = state
+        v, delta = input
+
+        # Compute temporal derivatives
+        s_dot, psi_dot = self.get_temporal_derivatives(state, input, kappa)
+
+        # Compute spatial derivatives
+        d_e_y_d_s = v * np.sin(e_psi) / s_dot
+        d_e_psi_d_s = psi_dot / s_dot - kappa
+        d_t_d_s = 1 / s_dot
+
+        return np.array([d_e_y_d_s, d_e_psi_d_s, d_t_d_s])
+
+    def linearize(self, v_ref, kappa_ref, delta_s):
+        """
+        Linearize the system equations around provided reference values.
+        :param v_ref: velocity reference around which to linearize
+        :param kappa_ref: kappa of waypoint around which to linearize
+        :param delta_s: distance between current waypoint and next waypoint
+         """
+
+        ###################
+        # System Matrices #
+        ###################
+
+        # Construct Jacobian Matrix
+        a_1 = np.array([1, delta_s, 0])
+        a_2 = np.array([-kappa_ref ** 2 * delta_s, 1, 0])
+        a_3 = np.array([-kappa_ref / v_ref * delta_s, 0, 1])
+
+        b_1 = np.array([0, 0])
+        b_2 = np.array([0, delta_s])
+        b_3 = np.array([-1 / (v_ref ** 2) * delta_s, 0])
+
+        f = np.array([0.0, 0.0, 1 / v_ref * delta_s])
+
+        A = np.stack((a_1, a_2, a_3), axis=0)
+        B = np.stack((b_1, b_2, b_3), axis=0)
+
+        return f, A, B

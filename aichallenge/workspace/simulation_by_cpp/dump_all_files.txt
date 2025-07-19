@@ -5,137 +5,84 @@
 #include <iostream>
 #include <vector>
 
-Eigen::VectorXd MPC::solve(const Eigen::VectorXd& x0,
-                           const Eigen::MatrixXd& A,
-                           const Eigen::MatrixXd& B) {
-    const int N = 10;
-    const int nx = x0.size();  // 3
-    const int nu = B.cols();   // 1
+void linearize(Eigen::MatrixXd& A, Eigen::MatrixXd& B, double v, double kappa, double dt) {
+    const double L = 1.087;  // wheelbase (m)
+    const double ds = v * dt;
 
-    const int n_vars = N * nx + N * nu;
-    const int n_constraints = N * nx;
+    A = Eigen::MatrixXd::Identity(3, 3);
+    A(0, 1) = ds;
+    A(0, 2) = -v * sin(kappa * ds) * dt;
+    A(1, 2) = kappa * dt;
+    A(2, 2) = 1.0;
 
-    // H行列（2次コスト項）
-    Eigen::SparseMatrix<double> H(n_vars, n_vars);
-    std::vector<Eigen::Triplet<double>> H_triplets;
-
-    for (int i = 0; i < N; ++i) {
-        for (int r = 0; r < nx; ++r) {
-            int idx = i * nx + r;
-            H_triplets.emplace_back(idx, idx, Q_(r, r));
-        }
-        for (int r = 0; r < nu; ++r) {
-            int idx = N * nx + i * nu + r;
-            H_triplets.emplace_back(idx, idx, R_(r, r));
-        }
-    }
-    H.setFromTriplets(H_triplets.begin(), H_triplets.end());
-
-    // fベクトル（1次コスト項） ← (x - x_ref)^T Q, (u - u_ref)^T R
-    Eigen::VectorXd f = Eigen::VectorXd::Zero(n_vars);
-
-    for (int i = 0; i < N; ++i) {
-        if (!ref_path_ || !ref_waypoint_) break;
-
-        double s_ref = x0(2) + i * ref_waypoint_->v_ref * 0.1;  // dt = 0.1
-        auto wp = ref_path_->get_waypoint(s_ref);
-
-        Eigen::VectorXd x_ref(nx);
-        x_ref << 0.0, 0.0, s_ref;
-
-        Eigen::VectorXd u_ref(nu);
-        u_ref << wp->delta_ref_;
-
-        for (int r = 0; r < nx; ++r) {
-            int idx = i * nx + r;
-            f(idx) = -Q_(r, r) * x_ref(r);
-        }
-
-        for (int r = 0; r < nu; ++r) {
-            int idx = N * nx + i * nu + r;
-            f(idx) = -R_(r, r) * u_ref(r);
-        }
-    }
-
-    // 制約 Aeq * z = beq
-    Eigen::SparseMatrix<double> Aeq(n_constraints, n_vars);
-    std::vector<Eigen::Triplet<double>> Aeq_triplets;
-    Eigen::VectorXd beq = Eigen::VectorXd::Zero(n_constraints);
-
-    for (int i = 0; i < N; ++i) {
-        // x[i+1]
-        for (int r = 0; r < nx; ++r) {
-            int row = i * nx + r;
-            int col = i * nx + r;
-            Aeq_triplets.emplace_back(row, col, 1.0);
-        }
-
-        // x[i]
-        for (int r = 0; r < nx; ++r) {
-            for (int c = 0; c < nx; ++c) {
-                int row = i * nx + r;
-                int col = (i - 1) * nx + c;
-                if (i == 0) {
-                    beq(row) -= A(r, c) * x0(c);
-                } else {
-                    Aeq_triplets.emplace_back(row, col, -A(r, c));
-                }
-            }
-        }
-
-        // u[i]
-        for (int r = 0; r < nx; ++r) {
-            for (int c = 0; c < nu; ++c) {
-                int row = i * nx + r;
-                int col = N * nx + i * nu + c;
-                Aeq_triplets.emplace_back(row, col, -B(r, c));
-            }
-        }
-    }
-    Aeq.setFromTriplets(Aeq_triplets.begin(), Aeq_triplets.end());
-
-    Eigen::VectorXd leq = beq;
-    Eigen::VectorXd ueq = beq;
-
-    // 入力制約
-    double delta_min = -1.396;
-    double delta_max =  1.396;
-    Eigen::VectorXd l_var = Eigen::VectorXd::Constant(n_vars, -1e6);
-    Eigen::VectorXd u_var = Eigen::VectorXd::Constant(n_vars,  1e6);
-    for (int i = 0; i < N; ++i) {
-        int idx = N * nx + i * nu;
-        l_var(idx) = delta_min;
-        u_var(idx) = delta_max;
-    }
-
-    // OSQP solver設定
-    OsqpEigen::Solver solver;
-    solver.settings()->setWarmStart(true);
-    solver.settings()->setVerbosity(false);
-    solver.data()->setNumberOfVariables(n_vars);
-    solver.data()->setNumberOfConstraints(n_constraints);
-
-    if (!solver.data()->setHessianMatrix(H)) return Eigen::VectorXd::Zero(nu);
-    if (!solver.data()->setGradient(f)) return Eigen::VectorXd::Zero(nu);
-    if (!solver.data()->setLinearConstraintsMatrix(Aeq)) return Eigen::VectorXd::Zero(nu);
-    if (!solver.data()->setLowerBound(leq)) return Eigen::VectorXd::Zero(nu);
-    if (!solver.data()->setUpperBound(ueq)) return Eigen::VectorXd::Zero(nu);
-    if (!solver.initSolver()) return Eigen::VectorXd::Zero(nu);
-    if (solver.solveProblem() != OsqpEigen::ErrorExitFlag::NoError) {
-        std::cerr << "[MPC] OSQP solve failed" << std::endl;
-        return Eigen::VectorXd::Zero(nu);
-    }
-
-    Eigen::VectorXd sol = solver.getSolution();
-    Eigen::VectorXd u0 = sol.segment(N * nx, nu);
-
-#if 1
-    std::cout << "[MPC::solve-MPC] u0=" << u0(0)
-              << ", from x=[" << x0.transpose() << "]" << std::endl;
-#endif
-
-    return u0;
+    B = Eigen::MatrixXd::Zero(3, 1);
+    B(0, 0) = 0.0;
+    B(1, 0) = v * dt / L;
+    B(2, 0) = 0.0;
 }
+
+Eigen::VectorXd MPC::solve(const Eigen::VectorXd& x0, const ReferencePath& ref_path) {
+    const int nx = 3;  // 状態次元 [e_y, e_yaw, t]
+    const int nu = 1;  // 入力次元 [delta]
+    const int N = N_;  // ホライズン長
+
+    // === QP設定 ===
+    Eigen::MatrixXd Q(nx, nx); Q.setZero();
+    Q(0, 0) = Q_e_y_;
+    Q(1, 1) = Q_e_yaw_;
+    Q(2, 2) = Q_t_;
+
+    Eigen::MatrixXd R(nu, nu); R.setIdentity();
+    R *= R_delta_;
+
+    const double v_ref = ref_path.get_speed(x0(2));  // s=tに対応した速度
+    const double dt = 0.1;  // 時間ステップ（必要ならパラメータ化）
+
+    // === 各ステップのリファレンス生成 ===
+    std::vector<Eigen::MatrixXd> A_list, B_list;
+    std::vector<Eigen::VectorXd> u_ref_list;
+    std::vector<Eigen::VectorXd> x_ref_list;
+
+    for (int i = 0; i < N; ++i) {
+        double s = x0(2) + i * v_ref * dt;
+
+        // 参照点
+        auto wp = ref_path.get_waypoint(s);
+        double kappa = wp->kappa;
+        double delta_ref = wp->delta_ref_;
+        double v = wp->v_ref;
+
+        // 線形化
+        Eigen::MatrixXd A(nx, nx), B(nx, nu);
+        linearize(A, B, v, kappa, dt);
+        A_list.push_back(A);
+        B_list.push_back(B);
+
+        // u_ref（delta）
+        Eigen::VectorXd u_ref(nu);
+        u_ref << delta_ref;
+        u_ref_list.push_back(u_ref);
+
+        // x_ref（理想状態：e_y = e_yaw = 0, t = s）
+        Eigen::VectorXd x_ref(nx);
+        x_ref << 0.0, 0.0, s;
+        x_ref_list.push_back(x_ref);
+    }
+
+    // === QP行列生成 ===
+    // → ここでQ, R, A_list, B_list, x_ref_list, u_ref_listを使って
+    //    H, f, A_qp, l, u を構築してOsqpEigenに渡す
+    // （これは今のsolve()をベースに書き換え）
+
+    // 最終的に解を得て、u0を返す
+    Eigen::VectorXd u_opt(nu);
+    u_opt << 0.0;  // TODO: QP解から取り出して返す
+
+    return u_opt;
+}
+
+
+
 
 
 #include "csv_loader.hpp"
@@ -248,13 +195,13 @@ std::vector<std::shared_ptr<Waypoint>> load_csv(const std::string& filename) {
 #include <Eigen/Dense>
 
 // std::vector<double> → Eigen::DiagonalMatrix
-Eigen::MatrixXd diag(const std::vector<double>& vec) {
-    Eigen::MatrixXd mat = Eigen::MatrixXd::Zero(vec.size(), vec.size());
-    for (size_t i = 0; i < vec.size(); ++i) {
-        mat(i, i) = vec[i];
-    }
-    return mat;
-}
+//Eigen::MatrixXd diag(const std::vector<double>& vec) {
+//    Eigen::MatrixXd mat = Eigen::MatrixXd::Zero(vec.size(), vec.size());
+//    for (size_t i = 0; i < vec.size(); ++i) {
+//        mat(i, i) = vec[i];
+//    }
+//    return mat;
+//}
 
 
 int main() {
@@ -283,7 +230,7 @@ int main() {
     std::cout << "xs.size() = " << xs.size() << std::endl;
 
     ref_path->construct_path(xs, ys);           // ← スプライン補間で ref_path->waypoints 作成
-    ref_path->set_speed_profile(10.0);          // ← 曲率に応じて速度セット
+    ref_path->set_speed_profile(3.0);          // ← 曲率に応じて速度セット
     ref_path->set_points(ref_path->waypoints);  // ← それを元に delta_ref_ 平滑化 ← 🔥これが重要！！
 
 
@@ -314,10 +261,9 @@ int main() {
 
     Eigen::VectorXd R_vec = Eigen::VectorXd::Map(config["R"].get<std::vector<double>>().data(), 1);
     Eigen::MatrixXd R = R_vec.asDiagonal();
-#endif
-
     mpc.Q_ = Q;
     mpc.R_ = R;
+#endif
 
 
     double dt = 0.1;
@@ -383,7 +329,7 @@ int main() {
         // main.cpp 側でsolve前に追加
         mpc.set_reference_path(ref_path);  // ← solve前にこれが必要！
         mpc.set_reference_waypoint(wp);
-        Eigen::VectorXd u_mpc = mpc.solve(x, A, B);
+        Eigen::VectorXd u_mpc = mpc.solve(x, *ref_path);
 
         // ✅ ステア角 saturate
         double delta = saturate_delta(u_mpc(0));  // ← ⬅️ ここが重要！
@@ -429,98 +375,91 @@ int main() {
 
     return 0;
 }
-#include "reference_path.hpp"   // ← ReferencePath のクラス定義
-#include "waypoint.hpp"         // ← Waypoint クラス
-#include <vector>               // std::vector
-#include <memory>               // std::make_shared
-#include <cmath>                // std::sqrt, std::atan2
-#include <algorithm>            // std::max, std::min
+#include "reference_path.hpp"
+#include <cmath>
 #include <iostream>
 
-void ReferencePath::construct_path(const std::vector<double>& x_list, const std::vector<double>& y_list) {
+void ReferencePath::construct_path(const std::vector<double>& xs,
+                                   const std::vector<double>& ys) {
+    // 簡易な線形補間とs計算（必要に応じてスプラインに置き換え）
+    waypoints.clear();
+
     double s = 0.0;
-    const double wheelbase = 1.087;  // ← 明示的に定義
-
-    std::cout << "x_list.size() = " << x_list.size() << std::endl;
-
-    for (size_t i = 0; i < x_list.size(); ++i) {
-        double x = x_list[i];
-        double y = y_list[i];
-        double yaw = 0.0;
-        double kappa = 0.0;
-
-        // yawの計算
-        if (i < x_list.size() - 1) {
-            double dx = x_list[i + 1] - x;
-            double dy = y_list[i + 1] - y;
-            yaw = std::atan2(dy, dx);
-        } else if (i > 0) {
-            double dx = x - x_list[i - 1];
-            double dy = y - y_list[i - 1];
-            yaw = std::atan2(dy, dx);
-        }
-
-        // 曲率の推定：3点円弧近似
-        if (i > 0 && i < x_list.size() - 1) {
-            double x0 = x_list[i - 1], y0 = y_list[i - 1];
-            double x1 = x_list[i],     y1 = y_list[i];
-            double x2 = x_list[i + 1], y2 = y_list[i + 1];
-
-            double a = std::hypot(x1 - x0, y1 - y0);
-            double b = std::hypot(x2 - x1, y2 - y1);
-            double c = std::hypot(x2 - x0, y2 - y0);
-
-            double s_tri = (a + b + c) / 2.0;
-            double area = std::sqrt(std::max(s_tri * (s_tri - a) * (s_tri - b) * (s_tri - c), 0.0));
-
-            if (area > 1e-6) {
-                double R = (a * b * c) / (4.0 * area);
-                kappa = 1.0 / R;
-            } else {
-                kappa = 0.0;
-            }
-        }
-
-        // 距離の更新（Waypoint作成前に！）
+    for (size_t i = 0; i < xs.size(); ++i) {
+        auto wp = std::make_shared<Waypoint>();
+        wp->x = xs[i];
+        wp->y = ys[i];
         if (i > 0) {
-            double dx = x - x_list[i - 1];
-            double dy = y - y_list[i - 1];
+            double dx = xs[i] - xs[i - 1];
+            double dy = ys[i] - ys[i - 1];
             s += std::sqrt(dx * dx + dy * dy);
         }
+        wp->s = s;
+        waypoints.push_back(wp);
+    }
 
-        // Waypoint 生成
-        double speed = 0.0;
-        double delta_ref = std::atan(wheelbase * kappa);
+    // yaw, kappa を補間（簡易：前後差分）
+    for (size_t i = 1; i < waypoints.size(); ++i) {
+        double dx = waypoints[i]->x - waypoints[i - 1]->x;
+        double dy = waypoints[i]->y - waypoints[i - 1]->y;
+        waypoints[i - 1]->yaw = std::atan2(dy, dx);
+    }
+    waypoints.back()->yaw = waypoints[waypoints.size() - 2]->yaw;  // 最後にも補間
 
-        Waypoint wp(x, y, yaw, speed, kappa);
-        wp.s = s;  // ✅ これが重要！
-        wp.t = s;  // tも一応セット（t = sと同義運用なら）
-        wp.delta_ref_ = delta_ref;
+    for (size_t i = 1; i < waypoints.size() - 1; ++i) {
+        double dx1 = waypoints[i]->x - waypoints[i - 1]->x;
+        double dy1 = waypoints[i]->y - waypoints[i - 1]->y;
+        double dx2 = waypoints[i + 1]->x - waypoints[i]->x;
+        double dy2 = waypoints[i + 1]->y - waypoints[i]->y;
 
-        std::cout << "[construct] i=" << i << ", s=" << s << ", delta_ref=" << delta_ref << std::endl;
+        double len1 = std::sqrt(dx1 * dx1 + dy1 * dy1);
+        double len2 = std::sqrt(dx2 * dx2 + dy2 * dy2);
+        double angle = std::atan2(dy2, dx2) - std::atan2(dy1, dx1);
+        angle = std::atan2(std::sin(angle), std::cos(angle));  // wrap to [-pi, pi]
 
-        waypoints.push_back(std::make_shared<Waypoint>(wp));
+        waypoints[i]->kappa = angle / ((len1 + len2) * 0.5);
+    }
+
+    waypoints.front()->kappa = 0.0;
+    waypoints.back()->kappa = 0.0;
+}
+
+void ReferencePath::set_speed_profile(double default_speed) {
+    for (auto& wp : waypoints) {
+        wp->v_ref = default_speed;  // 固定値
     }
 }
 
+double ReferencePath::get_speed(double s) const {
+    // s に最も近い waypoint を探す
+    if (waypoints.empty()) return 0.0;
 
-//void ReferencePath::set_speed_profile(double default_speed) {
-//    for (auto& wp : waypoints) {
-//        wp->v_ref = default_speed;
-//    }
-//}
-
-//void ReferencePath::set_speed_profile(double default_speed) {
-void ReferencePath::set_speed_profile(double default_speed) {
-    for (auto& wp : waypoints) {
-        double k = std::abs(wp->kappa);  // 曲率（絶対値）
-        double v = default_speed / (1.0 + 80.0 * k);  // ← 係数40.0は暫定（調整OK）
-
-        // 速度の下限と上限を制限（安全対策）
-        v = std::clamp(v, 5.0, default_speed);  // 最低5km/h、最大default
-
-        wp->v_ref = v;
+    double min_dist = std::numeric_limits<double>::max();
+    double v = 0.0;
+    for (const auto& wp : waypoints) {
+        double dist = std::abs(wp->s - s);
+        if (dist < min_dist) {
+            min_dist = dist;
+            v = wp->v_ref;
+        }
     }
+    return v;
+}
+
+std::shared_ptr<Waypoint> ReferencePath::get_waypoint(double s) const {
+    if (waypoints.empty()) return nullptr;
+
+    double min_dist = std::numeric_limits<double>::max();
+    std::shared_ptr<Waypoint> nearest_wp = nullptr;
+
+    for (const auto& wp : waypoints) {
+        double dist = std::abs(wp->s - s);
+        if (dist < min_dist) {
+            min_dist = dist;
+            nearest_wp = wp;
+        }
+    }
+    return nearest_wp;
 }
 
 #include "spatial_bicycle_models.hpp"
@@ -766,8 +705,7 @@ public:
         R_ = Eigen::MatrixXd::Identity(m_, m_) * 0.1;
     }
     Eigen::VectorXd solve(const Eigen::VectorXd& x0,
-                        const Eigen::MatrixXd& A,
-                        const Eigen::MatrixXd& B);
+                          const ReferencePath& ref_path);
     // MPC.hpp のクラスに追加
     std::shared_ptr<Waypoint> ref_waypoint_;
     void set_reference_waypoint(std::shared_ptr<Waypoint> wp) {
@@ -785,6 +723,10 @@ public:
     void set_horizon(int N) {
         N_ = N;
     }
+        double Q_e_y_;
+        double Q_e_yaw_;
+        double Q_t_;
+        double R_delta_;        
 
 
 private:
@@ -826,11 +768,11 @@ inline double compute_s_dot(const SimpleSpatialState& ss, const Waypoint& wp, do
 inline void set_default_weights(Eigen::MatrixXd& Q, Eigen::MatrixXd& R) {
     Q = Eigen::MatrixXd::Identity(3, 3);
     Q(0, 0) = 10.0;  // e_y
-    Q(1, 1) = 5.0;   // e_psi
-    Q(2, 2) = 0.2;   // t（s）
+    Q(1, 1) = 15.0;   // e_psi
+    Q(2, 2) = 1.0;   // t（s）
 
     R = Eigen::MatrixXd::Identity(1, 1);
-    R(0, 0) = 0.01;  // delta
+    R(0, 0) = 0.5;  // delta
 }
 #pragma once
 
@@ -845,29 +787,6 @@ public:
     ~ReferencePath() = default;
 
     std::vector<std::shared_ptr<Waypoint>> waypoints;
-
-    void set_points(const std::vector<std::shared_ptr<Waypoint>>& wp) {
-        // ★ 各点に delta_ref_ を初期化（長さ2.0mのバイシクルモデル想定）
-        for (auto& pt : wp) {
-            if (std::abs(pt->kappa) > 1e-6) {
-                pt->delta_ref_ = std::atan(2.0 * pt->kappa);  // L=2.0m
-            } else {
-                pt->delta_ref_ = 0.0;
-            }
-        }
-
-        // ✔️ スムージング処理（オプション）
-        for (int i = 1; i < wp.size() - 1; ++i) {
-            wp[i]->delta_ref_ =
-                0.25 * wp[i - 1]->delta_ref_ +
-                0.5  * wp[i]->delta_ref_ +
-                0.25 * wp[i + 1]->delta_ref_;
-        }
-
-        waypoints = wp;
-    }
-
-
 
     std::shared_ptr<Waypoint> get_current_waypoint() const {
         if (!waypoints.empty()) {
@@ -914,9 +833,32 @@ public:
     void construct_path(const std::vector<double>& x_list,
                             const std::vector<double>& y_list);
 
-    void set_speed_profile(double default_speed);
+    // set_points はインライン定義をやめて、宣言だけにする
+        void set_points(const std::vector<std::shared_ptr<Waypoint>>& wp) {
+        // ★ 各点に delta_ref_ を初期化（長さ2.0mのバイシクルモデル想定）
+        for (auto& pt : wp) {
+            if (std::abs(pt->kappa) > 1e-6) {
+                pt->delta_ref_ = std::atan(2.0 * pt->kappa);  // L=2.0m
+            } else {
+                pt->delta_ref_ = 0.0;
+            }
+        }
 
+        // ✔️ スムージング処理（オプション）
+        for (int i = 1; i < wp.size() - 1; ++i) {
+            wp[i]->delta_ref_ =
+                0.25 * wp[i - 1]->delta_ref_ +
+                0.5  * wp[i]->delta_ref_ +
+                0.25 * wp[i + 1]->delta_ref_;
+        }
 
+        waypoints = wp;
+    }
+     void set_speed_profile(double default_speed);  // ← ★追加！
+
+    double get_speed(double s) const;  // ★ const 修正済み
+
+    std::shared_ptr<Waypoint> get_waypoint(double s) const;  // ← const をつける
                             // 必要ならあとで関数を追加
 };
 #pragma once

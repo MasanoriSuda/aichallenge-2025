@@ -5,136 +5,86 @@
 #include <iostream>
 #include <vector>
 
-Eigen::VectorXd MPC::solve(const Eigen::VectorXd& x0,
-                           const Eigen::MatrixXd& A,
-                           const Eigen::MatrixXd& B) {
-    const int N = 10;
-    const int nx = x0.size();  // 3
-    const int nu = B.cols();   // 1
+void linearize(Eigen::MatrixXd& A, Eigen::MatrixXd& B, double v, double delta, double dt) {
+    const double L = 1.087;
+    const double eps = 1e-6;
 
-    const int n_vars = N * nx + N * nu;
-    const int n_constraints = N * nx;
+    double beta = std::atan(std::tan(delta));  // small delta 近似
 
-    // H行列（2次コスト項）
-    Eigen::SparseMatrix<double> H(n_vars, n_vars);
-    std::vector<Eigen::Triplet<double>> H_triplets;
+    A = Eigen::MatrixXd::Identity(3, 3);
+    B = Eigen::MatrixXd::Zero(3, 1);
 
-    for (int i = 0; i < N; ++i) {
-        for (int r = 0; r < nx; ++r) {
-            int idx = i * nx + r;
-            H_triplets.emplace_back(idx, idx, Q_(r, r));
-        }
-        for (int r = 0; r < nu; ++r) {
-            int idx = N * nx + i * nu + r;
-            H_triplets.emplace_back(idx, idx, R_(r, r));
-        }
-    }
-    H.setFromTriplets(H_triplets.begin(), H_triplets.end());
+    A(0, 1) = v * dt;
+    A(2, 1) = dt * std::tan(delta) / (v * std::pow(std::cos(delta), 2.0) + eps);
 
-    // fベクトル（1次コスト項） ← (x - x_ref)^T Q, (u - u_ref)^T R
-    Eigen::VectorXd f = Eigen::VectorXd::Zero(n_vars);
-
-    for (int i = 0; i < N; ++i) {
-        if (!ref_path_ || !ref_waypoint_) break;
-
-        double s_ref = x0(2) + i * ref_waypoint_->v_ref * 0.1;  // dt = 0.1
-        auto wp = ref_path_->get_waypoint(s_ref);
-
-        Eigen::VectorXd x_ref(nx);
-        x_ref << 0.0, 0.0, s_ref;
-
-        Eigen::VectorXd u_ref(nu);
-        u_ref << wp->delta_ref_;
-
-        for (int r = 0; r < nx; ++r) {
-            int idx = i * nx + r;
-            f(idx) = -Q_(r, r) * x_ref(r);
-        }
-
-        for (int r = 0; r < nu; ++r) {
-            int idx = N * nx + i * nu + r;
-            f(idx) = -R_(r, r) * u_ref(r);
-        }
-    }
-
-    // 制約 Aeq * z = beq
-    Eigen::SparseMatrix<double> Aeq(n_constraints, n_vars);
-    std::vector<Eigen::Triplet<double>> Aeq_triplets;
-    Eigen::VectorXd beq = Eigen::VectorXd::Zero(n_constraints);
-
-    for (int i = 0; i < N; ++i) {
-        // x[i+1]
-        for (int r = 0; r < nx; ++r) {
-            int row = i * nx + r;
-            int col = i * nx + r;
-            Aeq_triplets.emplace_back(row, col, 1.0);
-        }
-
-        // x[i]
-        for (int r = 0; r < nx; ++r) {
-            for (int c = 0; c < nx; ++c) {
-                int row = i * nx + r;
-                int col = (i - 1) * nx + c;
-                if (i == 0) {
-                    beq(row) -= A(r, c) * x0(c);
-                } else {
-                    Aeq_triplets.emplace_back(row, col, -A(r, c));
-                }
-            }
-        }
-
-        // u[i]
-        for (int r = 0; r < nx; ++r) {
-            for (int c = 0; c < nu; ++c) {
-                int row = i * nx + r;
-                int col = N * nx + i * nu + c;
-                Aeq_triplets.emplace_back(row, col, -B(r, c));
-            }
-        }
-    }
-    Aeq.setFromTriplets(Aeq_triplets.begin(), Aeq_triplets.end());
-
-    Eigen::VectorXd leq = beq;
-    Eigen::VectorXd ueq = beq;
-
-    // 入力制約
-    double delta_min = -1.396;
-    double delta_max =  1.396;
-    Eigen::VectorXd l_var = Eigen::VectorXd::Constant(n_vars, -1e6);
-    Eigen::VectorXd u_var = Eigen::VectorXd::Constant(n_vars,  1e6);
-    for (int i = 0; i < N; ++i) {
-        int idx = N * nx + i * nu;
-        l_var(idx) = delta_min;
-        u_var(idx) = delta_max;
-    }
-
-    // OSQP solver設定
-    OsqpEigen::Solver solver;
-    solver.settings()->setWarmStart(true);
-    solver.settings()->setVerbosity(false);
-    solver.data()->setNumberOfVariables(n_vars);
-    solver.data()->setNumberOfConstraints(n_constraints);
-
-    if (!solver.data()->setHessianMatrix(H)) return Eigen::VectorXd::Zero(nu);
-    if (!solver.data()->setGradient(f)) return Eigen::VectorXd::Zero(nu);
-    if (!solver.data()->setLinearConstraintsMatrix(Aeq)) return Eigen::VectorXd::Zero(nu);
-    if (!solver.data()->setLowerBound(leq)) return Eigen::VectorXd::Zero(nu);
-    if (!solver.data()->setUpperBound(ueq)) return Eigen::VectorXd::Zero(nu);
-    if (!solver.initSolver()) return Eigen::VectorXd::Zero(nu);
-    if (solver.solveProblem() != OsqpEigen::ErrorExitFlag::NoError) {
-        std::cerr << "[MPC] OSQP solve failed" << std::endl;
-        return Eigen::VectorXd::Zero(nu);
-    }
-
-    Eigen::VectorXd sol = solver.getSolution();
-    Eigen::VectorXd u0 = sol.segment(N * nx, nu);
-
-#if 1
-    std::cout << "[MPC::solve-MPC] u0=" << u0(0)
-              << ", from x=[" << x0.transpose() << "]" << std::endl;
-#endif
-
-    return u0;
+    B(1, 0) = v * dt / (L * std::pow(std::cos(delta), 2.0) + eps);
+    B(2, 0) = std::tan(delta) / (v * std::cos(delta) + eps);
 }
+
+
+Eigen::VectorXd MPC::solve(const Eigen::VectorXd& x0, const ReferencePath& ref_path) {
+    const int nx = 3;  // 状態次元 [e_y, e_yaw, t]
+    const int nu = 1;  // 入力次元 [delta]
+    const int N = N_;  // ホライズン長
+
+    // === QP設定 ===
+    Eigen::MatrixXd Q(nx, nx); Q.setZero();
+    Q(0, 0) = Q_e_y_;
+    Q(1, 1) = Q_e_yaw_;
+    Q(2, 2) = Q_t_;
+
+    Eigen::MatrixXd R(nu, nu); R.setIdentity();
+    R *= R_delta_;
+
+    const double v_ref = ref_path.get_speed(x0(2));  // s=tに対応した速度
+    const double dt = 0.1;  // 時間ステップ（必要ならパラメータ化）
+
+    // === 各ステップのリファレンス生成 ===
+    std::vector<Eigen::MatrixXd> A_list, B_list;
+    std::vector<Eigen::VectorXd> u_ref_list;
+    std::vector<Eigen::VectorXd> x_ref_list;
+
+    for (int i = 0; i < N; ++i) {
+        double s = x0(2) + i * v_ref * dt;
+
+        // 参照点
+        auto wp = ref_path.get_waypoint(s);
+        double kappa = wp->kappa;
+        //std::cout << "kappa =" << kappa << std::endl; 
+        double delta_ref = wp->delta_ref_;
+        double v = wp->v_ref;
+
+        // 線形化
+        Eigen::MatrixXd A(nx, nx), B(nx, nu);
+        linearize(A, B, v, kappa, dt);
+        A_list.push_back(A);
+        B_list.push_back(B);
+
+        // u_ref（delta）
+        Eigen::VectorXd u_ref(nu);
+        u_ref << delta_ref;
+        u_ref_list.push_back(u_ref);
+
+        // x_ref（理想状態：e_y = e_yaw = 0, t = s）
+        Eigen::VectorXd x_ref(nx);
+        x_ref << 0.0, 0.0, s;
+        x_ref_list.push_back(x_ref);
+    }
+
+    // === QP行列生成 ===
+    // → ここでQ, R, A_list, B_list, x_ref_list, u_ref_listを使って
+    //    H, f, A_qp, l, u を構築してOsqpEigenに渡す
+    // （これは今のsolve()をベースに書き換え）
+
+    // 最終的に解を得て、u0を返す
+    Eigen::VectorXd u_opt(nu);
+    //u_opt << 0.0;  // TODO: QP解から取り出して返す
+    u_opt << u_ref_list[0];  // TODO: QP解から取り出して返す
+
+    return u_opt;
+}
+
+
+
 
 

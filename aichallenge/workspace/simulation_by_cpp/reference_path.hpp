@@ -12,29 +12,6 @@ public:
 
     std::vector<std::shared_ptr<Waypoint>> waypoints;
 
-    void set_points(const std::vector<std::shared_ptr<Waypoint>>& wp) {
-        // ★ 各点に delta_ref_ を初期化（長さ2.0mのバイシクルモデル想定）
-        for (auto& pt : wp) {
-            if (std::abs(pt->kappa) > 1e-6) {
-                pt->delta_ref_ = std::atan(2.0 * pt->kappa);  // L=2.0m
-            } else {
-                pt->delta_ref_ = 0.0;
-            }
-        }
-
-        // ✔️ スムージング処理（オプション）
-        for (int i = 1; i < wp.size() - 1; ++i) {
-            wp[i]->delta_ref_ =
-                0.25 * wp[i - 1]->delta_ref_ +
-                0.5  * wp[i]->delta_ref_ +
-                0.25 * wp[i + 1]->delta_ref_;
-        }
-
-        waypoints = wp;
-    }
-
-
-
     std::shared_ptr<Waypoint> get_current_waypoint() const {
         if (!waypoints.empty()) {
             return waypoints.front();  // もしくは最初のWayPoint
@@ -80,8 +57,31 @@ public:
     void construct_path(const std::vector<double>& x_list,
                             const std::vector<double>& y_list);
 
-    void set_speed_profile(double default_speed);
+    // set_points はインライン定義をやめて、宣言だけにする
+        void set_points(const std::vector<std::shared_ptr<Waypoint>>& wp) {
+        // ★ 各点に delta_ref_ を初期化（長さ2.0mのバイシクルモデル想定）
+        for (auto& pt : wp) {
+            if (std::abs(pt->kappa) > 1e-6) {
+                pt->delta_ref_ = std::atan(2.0 * pt->kappa);  // L=2.0m
+            } else {
+                pt->delta_ref_ = 0.0;
+            }
+        }
 
+        // ✔️ スムージング処理（オプション）
+        for (int i = 1; i < wp.size() - 1; ++i) {
+            wp[i]->delta_ref_ =
+                0.25 * wp[i - 1]->delta_ref_ +
+                0.5  * wp[i]->delta_ref_ +
+                0.25 * wp[i + 1]->delta_ref_;
+        }
 
+        waypoints = wp;
+    }
+     void set_speed_profile(double default_speed);  // ← ★追加！
+
+    double get_speed(double s) const;  // ★ const 修正済み
+
+    std::shared_ptr<Waypoint> get_waypoint(double s) const;  // ← const をつける
                             // 必要ならあとで関数を追加
 };

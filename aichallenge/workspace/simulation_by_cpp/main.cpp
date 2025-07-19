@@ -6,7 +6,19 @@
 #include "mpc_utils.hpp"
 
 #include <iostream>
-#include <fstream>
+#include <nlohmann/json.hpp>
+#include <fstream>  // ← これも必要
+#include <Eigen/Dense>
+
+// std::vector<double> → Eigen::DiagonalMatrix
+//Eigen::MatrixXd diag(const std::vector<double>& vec) {
+//    Eigen::MatrixXd mat = Eigen::MatrixXd::Zero(vec.size(), vec.size());
+//    for (size_t i = 0; i < vec.size(); ++i) {
+//        mat(i, i) = vec[i];
+//    }
+//    return mat;
+//}
+
 
 int main() {
     //std::string filename = "../raceline_awsim_15km.csv";
@@ -34,7 +46,7 @@ int main() {
     std::cout << "xs.size() = " << xs.size() << std::endl;
 
     ref_path->construct_path(xs, ys);           // ← スプライン補間で ref_path->waypoints 作成
-    ref_path->set_speed_profile(10.0);          // ← 曲率に応じて速度セット
+    ref_path->set_speed_profile(3.0);          // ← 曲率に応じて速度セット
     ref_path->set_points(ref_path->waypoints);  // ← それを元に delta_ref_ 平滑化 ← 🔥これが重要！！
 
 
@@ -43,8 +55,32 @@ int main() {
     MPC mpc;  // ← MPCインスタンス作成
 
     // ✅ ホライズン・重みセット（最初にやっておく）
+
+#if 0
     mpc.set_horizon(15);
     set_default_weights(mpc.Q_, mpc.R_);
+#else
+
+    std::ifstream ifs("config.json");
+    if (!ifs) {
+        std::cerr << "config.json が開けませんでした。" << std::endl;
+        return 1;
+    }
+
+    nlohmann::json config;
+    ifs >> config;
+
+    // 重みとホライズンを設定
+    mpc.set_horizon(config["N"].get<int>());
+    Eigen::Vector3d Q_vec = Eigen::Vector3d::Map(config["Q"].get<std::vector<double>>().data());
+    Eigen::MatrixXd Q = Q_vec.asDiagonal();
+
+    Eigen::VectorXd R_vec = Eigen::VectorXd::Map(config["R"].get<std::vector<double>>().data(), 1);
+    Eigen::MatrixXd R = R_vec.asDiagonal();
+    mpc.Q_ = Q;
+    mpc.R_ = R;
+#endif
+
 
     double dt = 0.1;
 
@@ -109,7 +145,7 @@ int main() {
         // main.cpp 側でsolve前に追加
         mpc.set_reference_path(ref_path);  // ← solve前にこれが必要！
         mpc.set_reference_waypoint(wp);
-        Eigen::VectorXd u_mpc = mpc.solve(x, A, B);
+        Eigen::VectorXd u_mpc = mpc.solve(x, *ref_path);
 
         // ✅ ステア角 saturate
         double delta = saturate_delta(u_mpc(0));  // ← ⬅️ ここが重要！

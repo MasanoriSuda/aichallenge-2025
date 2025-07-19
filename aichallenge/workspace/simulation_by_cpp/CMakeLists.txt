@@ -26,7 +26,12 @@ add_executable(test_exec
 
 # 🔥 osqpをOsqpEigenより後に置くとリンクエラーになる場合があるので順番を変える！
 target_link_libraries(test_exec
-  Eigen3::Eigen
-  OsqpEigen
-  osqp  # ← 最後に置くとリンク解決されやすい！
+  PRIVATE
+    Eigen3::Eigen
+    OsqpEigen
+    osqp
+    nlohmann_json::nlohmann_json
 )
+
+
+find_package(nlohmann_json REQUIRED)

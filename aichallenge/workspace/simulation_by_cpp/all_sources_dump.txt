@@ -5,114 +5,137 @@
 #include <iostream>
 #include <vector>
 
-Eigen::VectorXd MPC::solve(const Eigen::VectorXd& x,
+Eigen::VectorXd MPC::solve(const Eigen::VectorXd& x0,
                            const Eigen::MatrixXd& A,
                            const Eigen::MatrixXd& B) {
-    const int nx = x.size();  // 状態次元（= 3）
-    const int nu = B.cols();  // 入力次元（= 1）
-    const int N = N_;         // ホライズン長（= 10など）
+    const int N = 10;
+    const int nx = x0.size();  // 3
+    const int nu = B.cols();   // 1
 
-    const int n_vars = N * nu;
+    const int n_vars = N * nx + N * nu;
     const int n_constraints = N * nx;
 
-    // ----------------------
-    // 1. コスト関数 H, f
-    // ----------------------
+    // H行列（2次コスト項）
     Eigen::SparseMatrix<double> H(n_vars, n_vars);
     std::vector<Eigen::Triplet<double>> H_triplets;
 
     for (int i = 0; i < N; ++i) {
-        for (int j = 0; j < nu; ++j) {
-            int idx = i * nu + j;
-            H_triplets.emplace_back(idx, idx, R_(j, j));
+        for (int r = 0; r < nx; ++r) {
+            int idx = i * nx + r;
+            H_triplets.emplace_back(idx, idx, Q_(r, r));
+        }
+        for (int r = 0; r < nu; ++r) {
+            int idx = N * nx + i * nu + r;
+            H_triplets.emplace_back(idx, idx, R_(r, r));
         }
     }
     H.setFromTriplets(H_triplets.begin(), H_triplets.end());
 
+    // fベクトル（1次コスト項） ← (x - x_ref)^T Q, (u - u_ref)^T R
     Eigen::VectorXd f = Eigen::VectorXd::Zero(n_vars);
 
-    // -------------------------------
-    // 2. 等式制約 Aeq * u = A^i x₀
-    // -------------------------------
+    for (int i = 0; i < N; ++i) {
+        if (!ref_path_ || !ref_waypoint_) break;
+
+        double s_ref = x0(2) + i * ref_waypoint_->v_ref * 0.1;  // dt = 0.1
+        auto wp = ref_path_->get_waypoint(s_ref);
+
+        Eigen::VectorXd x_ref(nx);
+        x_ref << 0.0, 0.0, s_ref;
+
+        Eigen::VectorXd u_ref(nu);
+        u_ref << wp->delta_ref_;
+
+        for (int r = 0; r < nx; ++r) {
+            int idx = i * nx + r;
+            f(idx) = -Q_(r, r) * x_ref(r);
+        }
+
+        for (int r = 0; r < nu; ++r) {
+            int idx = N * nx + i * nu + r;
+            f(idx) = -R_(r, r) * u_ref(r);
+        }
+    }
+
+    // 制約 Aeq * z = beq
     Eigen::SparseMatrix<double> Aeq(n_constraints, n_vars);
     std::vector<Eigen::Triplet<double>> Aeq_triplets;
-    Eigen::VectorXd leq(n_constraints), ueq(n_constraints);
+    Eigen::VectorXd beq = Eigen::VectorXd::Zero(n_constraints);
 
     for (int i = 0; i < N; ++i) {
-        // 右辺の A^i * x を事前計算
-        Eigen::MatrixXd A_pow = A;
-        for (int k = 1; k < i; ++k) A_pow *= A;
-        if (i == 0) A_pow.setIdentity();
+        // x[i+1]
+        for (int r = 0; r < nx; ++r) {
+            int row = i * nx + r;
+            int col = i * nx + r;
+            Aeq_triplets.emplace_back(row, col, 1.0);
+        }
 
-        Eigen::VectorXd rhs = A_pow * x;
-        leq.segment(i * nx, nx) = rhs;
-        ueq.segment(i * nx, nx) = rhs;
-
-        for (int j = 0; j <= i; ++j) {
-            // A^(i-j) * B の係数行列
-            Eigen::MatrixXd Aj = A;
-            for (int k = 1; k < i - j; ++k) Aj *= A;
-            if (i == j) Aj.setIdentity();
-            Eigen::MatrixXd Aij = Aj * B;
-
-            for (int row = 0; row < nx; ++row) {
-                for (int col = 0; col < nu; ++col) {
-                    int row_id = i * nx + row;
-                    int col_id = j * nu + col;
-                    Aeq_triplets.emplace_back(row_id, col_id, -Aij(row, col));
+        // x[i]
+        for (int r = 0; r < nx; ++r) {
+            for (int c = 0; c < nx; ++c) {
+                int row = i * nx + r;
+                int col = (i - 1) * nx + c;
+                if (i == 0) {
+                    beq(row) -= A(r, c) * x0(c);
+                } else {
+                    Aeq_triplets.emplace_back(row, col, -A(r, c));
                 }
+            }
+        }
+
+        // u[i]
+        for (int r = 0; r < nx; ++r) {
+            for (int c = 0; c < nu; ++c) {
+                int row = i * nx + r;
+                int col = N * nx + i * nu + c;
+                Aeq_triplets.emplace_back(row, col, -B(r, c));
             }
         }
     }
     Aeq.setFromTriplets(Aeq_triplets.begin(), Aeq_triplets.end());
 
-    // ----------------------
-    // 3. 入力制約（ステア）
-    // ----------------------
-    Eigen::VectorXd l_var = Eigen::VectorXd::Constant(n_vars, -1.396);
-    Eigen::VectorXd u_var = Eigen::VectorXd::Constant(n_vars,  1.396);
+    Eigen::VectorXd leq = beq;
+    Eigen::VectorXd ueq = beq;
 
-    // ----------------------
-    // 4. OSQP セットアップ
-    // ----------------------
+    // 入力制約
+    double delta_min = -1.396;
+    double delta_max =  1.396;
+    Eigen::VectorXd l_var = Eigen::VectorXd::Constant(n_vars, -1e6);
+    Eigen::VectorXd u_var = Eigen::VectorXd::Constant(n_vars,  1e6);
+    for (int i = 0; i < N; ++i) {
+        int idx = N * nx + i * nu;
+        l_var(idx) = delta_min;
+        u_var(idx) = delta_max;
+    }
+
+    // OSQP solver設定
     OsqpEigen::Solver solver;
-    solver.settings()->setVerbosity(false);
     solver.settings()->setWarmStart(true);
-
+    solver.settings()->setVerbosity(false);
     solver.data()->setNumberOfVariables(n_vars);
     solver.data()->setNumberOfConstraints(n_constraints);
 
-    if (!solver.data()->setHessianMatrix(H)) {
-        std::cerr << "[MPC] H設定失敗" << std::endl;
-        return Eigen::VectorXd::Zero(nu);
-    }
+    if (!solver.data()->setHessianMatrix(H)) return Eigen::VectorXd::Zero(nu);
     if (!solver.data()->setGradient(f)) return Eigen::VectorXd::Zero(nu);
     if (!solver.data()->setLinearConstraintsMatrix(Aeq)) return Eigen::VectorXd::Zero(nu);
     if (!solver.data()->setLowerBound(leq)) return Eigen::VectorXd::Zero(nu);
     if (!solver.data()->setUpperBound(ueq)) return Eigen::VectorXd::Zero(nu);
-
-    if (!solver.initSolver()) {
-        std::cerr << "[MPC] OSQP初期化失敗" << std::endl;
-        return Eigen::VectorXd::Zero(nu);
-    }
-
+    if (!solver.initSolver()) return Eigen::VectorXd::Zero(nu);
     if (solver.solveProblem() != OsqpEigen::ErrorExitFlag::NoError) {
-        std::cerr << "[MPC] OSQP最適化失敗" << std::endl;
+        std::cerr << "[MPC] OSQP solve failed" << std::endl;
         return Eigen::VectorXd::Zero(nu);
     }
 
-    // ----------------------
-    // 5. 解を取得
-    // ----------------------
     Eigen::VectorXd sol = solver.getSolution();
-    Eigen::VectorXd u = sol.segment(0, nu);
+    Eigen::VectorXd u0 = sol.segment(N * nx, nu);
 
-    std::cout << "[MPC] u0 = " << u.transpose()
-              << " from x = " << x.transpose() << std::endl;
+#if 1
+    std::cout << "[MPC::solve-MPC] u0=" << u0(0)
+              << ", from x=[" << x0.transpose() << "]" << std::endl;
+#endif
 
-    return u;
+    return u0;
 }
-
 
 
 #include "csv_loader.hpp"
@@ -217,9 +240,22 @@ std::vector<std::shared_ptr<Waypoint>> load_csv(const std::string& filename) {
 #include "waypoint.hpp"
 #include "csv_loader.hpp"
 #include "MPC.hpp"  // ← MPC追加！
+#include "mpc_utils.hpp"
 
 #include <iostream>
-#include <fstream>
+#include <nlohmann/json.hpp>
+#include <fstream>  // ← これも必要
+#include <Eigen/Dense>
+
+// std::vector<double> → Eigen::DiagonalMatrix
+Eigen::MatrixXd diag(const std::vector<double>& vec) {
+    Eigen::MatrixXd mat = Eigen::MatrixXd::Zero(vec.size(), vec.size());
+    for (size_t i = 0; i < vec.size(); ++i) {
+        mat(i, i) = vec[i];
+    }
+    return mat;
+}
+
 
 int main() {
     //std::string filename = "../raceline_awsim_15km.csv";
@@ -255,6 +291,35 @@ int main() {
     BicycleModel model(ref_path, 2.0, 1.0, 0.1);  // length=2.0m, width=1.0m, Ts=0.1s
     MPC mpc;  // ← MPCインスタンス作成
 
+    // ✅ ホライズン・重みセット（最初にやっておく）
+
+#if 0
+    mpc.set_horizon(15);
+    set_default_weights(mpc.Q_, mpc.R_);
+#else
+
+    std::ifstream ifs("config.json");
+    if (!ifs) {
+        std::cerr << "config.json が開けませんでした。" << std::endl;
+        return 1;
+    }
+
+    nlohmann::json config;
+    ifs >> config;
+
+    // 重みとホライズンを設定
+    mpc.set_horizon(config["N"].get<int>());
+    Eigen::Vector3d Q_vec = Eigen::Vector3d::Map(config["Q"].get<std::vector<double>>().data());
+    Eigen::MatrixXd Q = Q_vec.asDiagonal();
+
+    Eigen::VectorXd R_vec = Eigen::VectorXd::Map(config["R"].get<std::vector<double>>().data(), 1);
+    Eigen::MatrixXd R = R_vec.asDiagonal();
+#endif
+
+    mpc.Q_ = Q;
+    mpc.R_ = R;
+
+
     double dt = 0.1;
 
     int start_index = 0;
@@ -288,9 +353,10 @@ int main() {
 
         // ログファイルを開く（必要なら）
     std::ofstream log_file("mpc_log.csv");
-    log_file << "step,x,y,yaw,e_y,e_yaw,t,delta,v_ref\n";
+    log_file << "step,x,y,yaw,e_y,e_yaw,t,delta,v_ref,delta_ref\n";
 
-    for (int i = 0; i <   500; ++i) {
+
+    for (int i = 0; i <  350; ++i) {
         // 空間状態を取得
         auto ss = dynamic_cast<SimpleSpatialState*>(model.spatial_state.get());
         if (!ss) {
@@ -319,12 +385,10 @@ int main() {
         mpc.set_reference_waypoint(wp);
         Eigen::VectorXd u_mpc = mpc.solve(x, A, B);
 
-        double delta = u_mpc(0);
+        // ✅ ステア角 saturate
+        double delta = saturate_delta(u_mpc(0));  // ← ⬅️ ここが重要！
 
-        // ステア角制限：±1.396 rad
-        double max_steer = 1.0;
-        delta = std::max(-max_steer, std::min(max_steer, delta));
-
+        // ✅ v: 安全速度（min 1.0）
         double safe_v = std::max(wp->v_ref, 1.0);
         Eigen::Vector2d u(safe_v, delta);
 
@@ -332,7 +396,11 @@ int main() {
 
         auto ts = model.temporal_state.get();
         ss->update(*ts, *wp);
-        ss->t += dt * safe_v;  // ← ★追加！s方向に進む
+
+        // ✅ 曲率補正付き s方向更新
+        double s_dot = compute_s_dot(*ss, *wp, safe_v);
+        ss->t += dt * s_dot;
+
         model.update_current_waypoint();
 
 #if 0        
@@ -353,8 +421,8 @@ int main() {
         // ✔️ CSVログ出力
         log_file << i << "," << ts->x << "," << ts->y << "," << ts->yaw << ","
                 << ss->e_y << "," << ss->e_yaw << "," << ss->t << ","
-                << delta << "," << wp->v_ref << "\n";
-        std::cout << "[step " << i << "] s=" << ss->t << ", delta_ref=" << wp->delta_ref_ << std::endl;
+                << delta << "," << wp->v_ref << "," << wp->delta_ref_ << "\n";
+
 
     }
 
@@ -711,15 +779,19 @@ public:
     void set_reference_path(std::shared_ptr<ReferencePath> path) {
         ref_path_ = path;
     }    
+    Eigen::MatrixXd Q_;
+    Eigen::MatrixXd R_;
+
+    void set_horizon(int N) {
+        N_ = N;
+    }
+
 
 private:
     double max_steer_;
     int N_;  // ホライズン長
     int n_;  // 状態次元
     int m_;  // 入力次元
-
-    Eigen::MatrixXd Q_;
-    Eigen::MatrixXd R_;
 };
 
 #endif
@@ -734,6 +806,32 @@ private:
 std::vector<std::shared_ptr<Waypoint>> load_csv(const std::string& filename);
 std::vector<TrajectoryPoint> load_autoware_csv(const std::string& filename);  // ←★名前変更！
 
+#pragma once
+#include <algorithm>
+#include <Eigen/Dense>
+#include "waypoint.hpp"
+#include "spatial_bicycle_models.hpp"
+
+// ステア角 saturate
+inline double saturate_delta(double delta, double min = -1.396, double max = 1.396) {
+    return std::clamp(delta, min, max);
+}
+
+// s_dot 計算（曲率補正）
+inline double compute_s_dot(const SimpleSpatialState& ss, const Waypoint& wp, double v) {
+    return v * std::cos(ss.e_yaw) / (1.0 - ss.e_y * wp.kappa);
+}
+
+// 重み初期化（チューニング用）
+inline void set_default_weights(Eigen::MatrixXd& Q, Eigen::MatrixXd& R) {
+    Q = Eigen::MatrixXd::Identity(3, 3);
+    Q(0, 0) = 10.0;  // e_y
+    Q(1, 1) = 5.0;   // e_psi
+    Q(2, 2) = 0.2;   // t（s）
+
+    R = Eigen::MatrixXd::Identity(1, 1);
+    R(0, 0) = 0.01;  // delta
+}
 #pragma once
 
 #include <vector>

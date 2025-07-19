@@ -18,8 +18,7 @@ public:
         R_ = Eigen::MatrixXd::Identity(m_, m_) * 0.1;
     }
     Eigen::VectorXd solve(const Eigen::VectorXd& x0,
-                        const Eigen::MatrixXd& A,
-                        const Eigen::MatrixXd& B);
+                          const ReferencePath& ref_path);
     // MPC.hpp のクラスに追加
     std::shared_ptr<Waypoint> ref_waypoint_;
     void set_reference_waypoint(std::shared_ptr<Waypoint> wp) {
@@ -37,6 +36,10 @@ public:
     void set_horizon(int N) {
         N_ = N;
     }
+        double Q_e_y_;
+        double Q_e_yaw_;
+        double Q_t_;
+        double R_delta_;        
 
 
 private:

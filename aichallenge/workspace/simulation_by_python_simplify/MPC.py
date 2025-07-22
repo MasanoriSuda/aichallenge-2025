@@ -142,8 +142,3 @@ class MPC:
             x_pred.append(predicted_temporal_state.x)
             y_pred.append(predicted_temporal_state.y)
         return x_pred, y_pred
-
-    def show_prediction(self):
-        if self.current_prediction is not None:
-            plt.scatter(self.current_prediction[0], self.current_prediction[1],
-                    c=PREDICTION, s=30)

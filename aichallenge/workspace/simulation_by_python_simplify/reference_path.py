@@ -74,13 +74,6 @@ class ReferencePath:
         idx = np.linspace(0, self.length, len(self.kappa_profile))
         return float(np.interp(s, idx, self.kappa_profile))
 
-    def show(self):
-        x = [wp.x for wp in self.waypoints]
-        y = [wp.y for wp in self.waypoints]
-        plt.plot(x, y, 'g--', linewidth=1)
-        plt.plot(x[0], y[0], 'go')
-        plt.plot(x[-1], y[-1], 'ro')
-
     def get_waypoint(self, idx):
         """インデックスで waypoint を取得。範囲外は境界にクリップ。"""
         idx_int = int(max(0, min(len(self.waypoints) - 1, idx)))

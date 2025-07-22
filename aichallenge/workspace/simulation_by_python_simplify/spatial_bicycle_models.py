@@ -278,34 +278,6 @@ class SpatialBicycleModel(ABC):
             self.wp_id = prev_wp_id
             self.current_waypoint = self.reference_path.waypoints[prev_wp_id]
 
-    def show(self):
-        """
-        Display car on current axis.
-        """
-
-        # Get car's center of gravity
-        cog = (self.temporal_state.x, self.temporal_state.y)
-        # Get current angle with respect to x-axis
-        yaw = np.rad2deg(self.temporal_state.psi)
-        # Draw rectangle
-        car = plt_patches.Rectangle(cog, width=self.length, height=self.width,
-                                    angle=yaw, facecolor=CAR,
-                                    edgecolor=CAR_OUTLINE, zorder=20)
-
-        # Shift center rectangle to match center of the car
-        car.set_x(car.get_x() - (self.length / 2 *
-                                 np.cos(self.temporal_state.psi) -
-                                 self.width / 2 *
-                                 np.sin(self.temporal_state.psi)))
-        car.set_y(car.get_y() - (self.width / 2 *
-                                 np.cos(self.temporal_state.psi) +
-                                 self.length / 2 *
-                                 np.sin(self.temporal_state.psi)))
-
-        # Add rectangle to current axis
-        ax = plt.gca()
-        ax.add_patch(car)
-
     @abstractmethod
     def get_spatial_derivatives(self, state, input, kappa):
         pass

@@ -1,4 +1,3 @@
-from map import Map
 from reference_path import ReferencePath
 from spatial_bicycle_models import BicycleModel
 from MPC import MPC
@@ -14,12 +13,8 @@ if __name__ == '__main__':
     wp_y = df["y"].values
     wp_speed = df["speed"].values
 
-    # ダミーマップ（画像不要）
-    dummy_map = Map(file_path=None, origin=[wp_x.min(), wp_y.min()], resolution=0.1)
-
     # リファレンスパス作成
     reference_path = ReferencePath(
-        dummy_map,
         wp_x,
         wp_y,
         0.2,

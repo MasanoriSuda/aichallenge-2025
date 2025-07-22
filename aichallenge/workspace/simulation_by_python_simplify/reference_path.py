@@ -15,8 +15,7 @@ class Waypoint:
 
 
 class ReferencePath:
-    def __init__(self, map_obj, wp_x, wp_y, path_resolution, smoothing_distance, max_width, circular=False):
-        self.map = map_obj
+    def __init__(self, wp_x, wp_y, path_resolution, smoothing_distance, max_width, circular=False):
         self.wp_x = wp_x
         self.wp_y = wp_y
         self.resolution = path_resolution

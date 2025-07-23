@@ -30,9 +30,10 @@ MPC::MPC(std::shared_ptr<SpatialBicycleModel> model_,
 }
 
 void MPC::init_problem() {
-    if (solver.isInitialized()) {
-        return;  // すでに初期化されていれば何もしない
-    }
+    // もし前回のデータが残っていたら、クリアする
+    solver.data()->clearHessianMatrix();  // Hessian行列をクリア
+    solver.data()->clearLinearConstraintsMatrix();  // 線形制約行列をクリア
+    solver.clearSolver();  // ソルバーの状態をクリア
 
     const auto& umin = input_constraints.at("umin");
     const auto& umax = input_constraints.at("umax");
@@ -61,12 +62,15 @@ void MPC::init_problem() {
         double delta_i = (i + 1 < N) ? current_control[2 * (i + 1) + 1] : current_control[2 * (N - 1) + 1];
         kappa_pred[i] = std::tan(delta_i) / model->length;
     }
-
+#if 0
+    for (int i = 0; i < N; ++i) {
+        std::cout << "kappa_pred[" << i << "] = " << kappa_pred[i] << std::endl;
+    }
+#endif
     for (int n = 0; n < N; ++n) {
         auto current_wp = model->reference_path->get_waypoint(model->wp_id + n);
         auto next_wp = model->reference_path->get_waypoint(model->wp_id + n + 1);
         double delta_s = current_wp.distanceTo(next_wp);
-
         double kappa_ref = current_wp.kappa;
         double v_ref = current_wp.v_ref;
 
@@ -186,8 +190,6 @@ Eigen::Vector2d MPC::get_control() {
     model->spatial_state = std::make_shared<SimpleSpatialState>(
         model->t2s(*model->current_waypoint, model->temporal_state->to_vector())
     );
-
-
 
     init_problem();
     if (solver.solveProblem() != OsqpEigen::ErrorExitFlag::NoError) {

@@ -73,13 +73,22 @@ int main() {
 
     // シミュレーションループ
     double t = 0.0;
-    int steps = 300;
+    int steps = 3000;
     std::vector<std::vector<double>> log;
 
     for (int i = 0; i < steps; ++i) {
         Eigen::Vector2d u = mpc->get_control();
+        //std::cout << "Control vector u: [" << u[0] << ", " << u[1] << "]" << std::endl;
         car->drive(u);
         Waypoint wp = reference_path->get_waypoint(car->get_wp_id());
+        // wpの中身を表示
+#if 0
+        std::cout << "wp.x = " << wp.x << std::endl;
+        std::cout << "wp.y = " << wp.y << std::endl;
+        std::cout << "wp.psi = " << wp.psi << std::endl; // yaw angle
+        std::cout << "wp.kappa = " << wp.kappa << std::endl; // curvature
+        std::cout << "wp.v_ref = " << wp.v_ref << std::endl; // reference velocity
+#endif
 
         log.push_back({
             t,

@@ -1,96 +1,113 @@
 #include "reference_path.hpp"
 #include "spatial_bicycle_models.hpp"
 #include "MPC.hpp"
-#include <Eigen/Dense>
-#include <OsqpEigen/OsqpEigen.h>
-#include <fstream>
+#include "csv_loader.hpp"
+
 #include <iostream>
+#include <fstream>
+#include <memory>
 #include <vector>
-#include <string>
-#include <sstream>
-#include <cmath>
+#include <Eigen/Dense>
 
 int main() {
-    // CSV読み込み
-    std::ifstream file("raceline_awsim_15km_py.csv");
-    std::string line;
-    std::vector<double> wp_x, wp_y, wp_speed;
+    std::string filename = "raceline_awsim_15km_py.csv";
+    auto [wp_x, wp_y, wp_speed] = load_csv(filename);
 
-    std::getline(file, line); // ヘッダー読み飛ばし
-    while (std::getline(file, line)) {
-        std::stringstream ss(line);
-        std::string val;
-        std::vector<std::string> tokens;
-        while (std::getline(ss, val, ',')) tokens.push_back(val);
-        wp_x.push_back(std::stod(tokens[0]));
-        wp_y.push_back(std::stod(tokens[1]));
-        wp_speed.push_back(std::stod(tokens[3])); // "speed"列
-    }
+    // リファレンスパス構築
+    std::shared_ptr<ReferencePath> reference_path = std::make_shared<ReferencePath>(
+        wp_x, wp_y,
+        0.2,   // resolution
+        5.0,   // smoothing_distance
+        1.5,   // max_width
+        false  // circular
+    );
 
-    // リファレンスパス生成
-    ReferencePath ref_path(wp_x, wp_y, 0.2, 5, 1.5, false);
-
-    // 速度プロファイル補間
-    std::vector<double> wp_speed_interp(ref_path.size());
-    for (size_t i = 0; i < ref_path.size(); ++i) {
-        double ratio = static_cast<double>(i) * (wp_speed.size() - 1) / (ref_path.size() - 1);
-        size_t idx = static_cast<size_t>(std::floor(ratio));
+    // 補間された速度プロファイル設定
+    std::vector<double> wp_speed_interp(reference_path->get_all_waypoints().size());
+    for (size_t i = 0; i < wp_speed_interp.size(); ++i) {
+        double ratio = static_cast<double>(i) * (wp_speed.size() - 1) / (wp_speed_interp.size() - 1);
+        size_t idx = static_cast<size_t>(ratio);
         double frac = ratio - idx;
-        if (idx + 1 < wp_speed.size()) {
-            wp_speed_interp[i] = (1 - frac) * wp_speed[idx] + frac * wp_speed[idx + 1];
-        } else {
-            wp_speed_interp[i] = wp_speed.back();
-        }
+        double v = (1.0 - frac) * wp_speed[idx] + frac * wp_speed[std::min(idx + 1, wp_speed.size() - 1)];
+        wp_speed_interp[i] = v;
     }
-    ref_path.set_speed_profile(wp_speed_interp);
+    reference_path->set_speed_profile(wp_speed_interp);
 
     // 車両モデル初期化
-    BicycleModel car(std::make_shared<ReferencePath>(ref_path), 1.2, 0.8, 0.05);
-
-    // コントローラ設定
+    std::shared_ptr<BicycleModel> car = std::make_shared<BicycleModel>(
+        reference_path, 1.2, 0.8, 0.05
+    );
+    
+    // MPC 設定
     int N = 30;
-    Eigen::SparseMatrix<double> Q(3, 3), R(2, 2), QN(3, 3);
-    Q.setIdentity(); Q.coeffRef(0, 0) = 1.0;
-    R.setIdentity(); R.coeffRef(0, 0) = 0.5;
-    QN.setIdentity(); QN.coeffRef(0, 0) = 1.0;
+    Eigen::MatrixXd Q = Eigen::MatrixXd::Identity(3, 3);
+    Q(1, 1) = 0.0;
+    Q(2, 2) = 0.0;
+
+    Eigen::MatrixXd R = Eigen::MatrixXd::Zero(2, 2);
+    R(0, 0) = 0.5;
+    R(1, 1) = 0.0;
+
+    Eigen::MatrixXd QN = Q;
 
     double v_max = 35.0 / 3.6;
     double delta_max = 0.66;
     double ay_max = 5.0;
-    Eigen::VectorXd umin(2), umax(2);
-    umin << 0.0, -std::tan(delta_max) / car.length;
-    umax << v_max, std::tan(delta_max) / car.length;
-    Eigen::VectorXd xmin = Eigen::VectorXd::Constant(3, -INFINITY);
-    Eigen::VectorXd xmax = Eigen::VectorXd::Constant(3, INFINITY);
 
-    StateConstraints state_constraints(xmin, xmax);
-    InputConstraints input_constraints(umin, umax);
+    std::map<std::string, Eigen::VectorXd> input_constraints = {
+        {"umin", (Eigen::Vector2d() << 0.0, -std::tan(delta_max) / car->get_length()).finished()},
+        {"umax", (Eigen::Vector2d() << v_max, std::tan(delta_max) / car->get_length()).finished()}
+    };
 
-    MPC mpc(std::make_shared<BicycleModel>(car),
-            N, Q, R, QN,
-            state_constraints, input_constraints,
-            ay_max);
+    std::map<std::string, Eigen::VectorXd> state_constraints = {
+        {"xmin", (Eigen::Vector3d() << -1e6, -1e6, -1e6).finished()},
+        {"xmax", (Eigen::Vector3d() << 1e6, 1e6, 1e6).finished()}
+    };
 
-
-
+    std::shared_ptr<MPC> mpc = std::make_shared<MPC>(
+        car, N, Q, R, QN,
+        state_constraints,
+        input_constraints,
+        ay_max
+    );
 
     // シミュレーションループ
     double t = 0.0;
-    const int steps = 300;
-    std::ofstream log("mpc_log.csv");
-    log << "time,x,y,s,e_y,e_psi,v,delta,ref_x,ref_y\n";
+    int steps = 300;
+    std::vector<std::vector<double>> log;
 
     for (int i = 0; i < steps; ++i) {
-        Eigen::Vector2d u = mpc.get_control();
-        car.drive(u);
-        auto wp = ref_path.get_waypoint(car.s);
+        Eigen::Vector2d u = mpc->get_control();
+        car->drive(u);
+        Waypoint wp = reference_path->get_waypoint(car->get_wp_id());
 
-        log << t << "," << car.temporal_state.x << "," << car.temporal_state.y << ","
-            << car.s << "," << car.spatial_state.e_y << "," << car.spatial_state.e_psi << ","
-            << u[0] << "," << u[1] << "," << wp->x << "," << wp->y << "\n";
+        log.push_back({
+            t,
+            car->get_temporal_state()->x,
+            car->get_temporal_state()->y,
+            car->get_s(),
+            car->get_spatial_state()->e_y,
+            car->get_spatial_state()->e_psi,
+            u(0),
+            u(1),
+            wp.x,
+            wp.y
+        });
 
-        t += car.Ts;
+        t += car->get_Ts();
     }
+
+    // CSV出力
+    std::ofstream file("mpc_log.csv");
+    file << "time,x,y,s,e_y,e_psi,v,delta,ref_x,ref_y\n";
+    for (const auto& row : log) {
+        for (size_t j = 0; j < row.size(); ++j) {
+            file << row[j];
+            if (j < row.size() - 1) file << ",";
+        }
+        file << "\n";
+    }
+    file.close();
 
     std::cout << "✅ mpc_log.csv にログを保存しました。" << std::endl;
     return 0;

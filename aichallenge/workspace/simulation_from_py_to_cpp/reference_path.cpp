@@ -1,24 +1,26 @@
+// reference_path.cpp
 #include "reference_path.hpp"
-#include <cmath>
+#include "interp_utils.hpp"
 #include <algorithm>
 #include <numeric>
-#include <stdexcept>
+#include <iostream>
 
-ReferencePath::ReferencePath(const std::vector<double>& wp_x,
-                             const std::vector<double>& wp_y,
-                             double path_resolution,
-                             double smoothing_distance,
-                             double max_width,
-                             bool circular)
-    : wp_x_(wp_x), wp_y_(wp_y), resolution_(path_resolution),
-      smoothing_distance_(smoothing_distance), max_width_(max_width), circular_(circular) {
-    construct_path(wp_x_, wp_y_);
-    compute_segment_lengths();
+#include <unsupported/Eigen/Splines>
+
+ReferencePath::ReferencePath(const std::vector<double>& wp_x, const std::vector<double>& wp_y,
+                               double path_resolution, double smoothing_distance, double max_width,
+                               bool circular)
+    : resolution(path_resolution),
+      smoothing_distance(smoothing_distance),
+      max_width(max_width),
+      circular(circular) {
+
+    waypoints = construct_path(wp_x, wp_y);
+    segment_lengths = compute_segment_lengths();
 }
 
-void ReferencePath::construct_path(const std::vector<double>& wp_x,
-                                   const std::vector<double>& wp_y) {
-    // Compute cumulative distance
+std::vector<std::shared_ptr<Waypoint>> ReferencePath::construct_path(const std::vector<double>& wp_x,
+                                                                      const std::vector<double>& wp_y) {
     std::vector<double> distance(wp_x.size(), 0.0);
     for (size_t i = 1; i < wp_x.size(); ++i) {
         double dx = wp_x[i] - wp_x[i - 1];
@@ -26,99 +28,89 @@ void ReferencePath::construct_path(const std::vector<double>& wp_x,
         distance[i] = distance[i - 1] + std::sqrt(dx * dx + dy * dy);
     }
 
-    int n_points = static_cast<int>((distance.back() - distance.front()) / resolution_);
-    std::vector<double> s_interp(n_points);
-    for (int i = 0; i < n_points; ++i) {
-        s_interp[i] = distance.front() + i * resolution_;
+    double total_dist = distance.back();
+    int n_interp = static_cast<int>(total_dist / resolution);
+    std::vector<double> s_interp(n_interp);
+    for (int i = 0; i < n_interp; ++i) {
+        s_interp[i] = distance.front() + i * resolution;
     }
 
-    std::vector<double> x_interp(n_points);
-    std::vector<double> y_interp(n_points);
+    Eigen::VectorXd dist_eig = Eigen::Map<const Eigen::VectorXd>(distance.data(), distance.size());
+    Eigen::VectorXd x_eig = Eigen::Map<const Eigen::VectorXd>(wp_x.data(), wp_x.size());
+    Eigen::VectorXd y_eig = Eigen::Map<const Eigen::VectorXd>(wp_y.data(), wp_y.size());
 
-    for (int i = 0; i < n_points; ++i) {
-        x_interp[i] = interpolate(distance, wp_x, s_interp[i]);
-        y_interp[i] = interpolate(distance, wp_y, s_interp[i]);
-    }
+    Eigen::Spline<double, 1> spline_x = Eigen::SplineFitting<Eigen::Spline<double, 1>>::Interpolate(x_eig.transpose(), 1, dist_eig);
+    Eigen::Spline<double, 1> spline_y = Eigen::SplineFitting<Eigen::Spline<double, 1>>::Interpolate(y_eig.transpose(), 1, dist_eig);
 
-    waypoints_.clear();
-    for (int i = 0; i < n_points; ++i) {
+    std::vector<std::shared_ptr<Waypoint>> interp_points;
+    for (int i = 0; i < n_interp; ++i) {
+        double s = s_interp[i];
+        double x = spline_x(s)(0);
+        double y = spline_y(s)(0);
         double yaw;
-        if (i == n_points - 1) {
-            yaw = std::atan2(y_interp[i] - y_interp[i - 1], x_interp[i] - x_interp[i - 1]);
+        if (i == n_interp - 1) {
+            double x_prev = spline_x(s_interp[i - 1])(0);
+            double y_prev = spline_y(s_interp[i - 1])(0);
+            yaw = std::atan2(y - y_prev, x - x_prev);
         } else {
-            yaw = std::atan2(y_interp[i + 1] - y_interp[i], x_interp[i + 1] - x_interp[i]);
+            double x_next = spline_x(s_interp[i + 1])(0);
+            double y_next = spline_y(s_interp[i + 1])(0);
+            yaw = std::atan2(y_next - y, x_next - x);
         }
-        waypoints_.emplace_back(std::make_shared<Waypoint>(x_interp[i], y_interp[i], yaw));
+        interp_points.push_back(std::make_shared<Waypoint>(x, y, yaw));
     }
+    return interp_points;
 }
 
-double ReferencePath::interpolate(const std::vector<double>& s,
-                                  const std::vector<double>& y,
-                                  double query) const{
-    if (query <= s.front()) return y.front();
-    if (query >= s.back()) return y.back();
-
-    auto upper = std::upper_bound(s.begin(), s.end(), query);
-    auto lower = upper - 1;
-    size_t idx = std::distance(s.begin(), lower);
-
-    double ratio = (query - s[idx]) / (s[idx + 1] - s[idx]);
-    return y[idx] * (1 - ratio) + y[idx + 1] * ratio;
+std::vector<double> ReferencePath::compute_segment_lengths() {
+    std::vector<double> lengths = {0.0};
+    for (size_t i = 1; i < waypoints.size(); ++i) {
+        double dx = waypoints[i]->x - waypoints[i - 1]->x;
+        double dy = waypoints[i]->y - waypoints[i - 1]->y;
+        lengths.push_back(std::sqrt(dx * dx + dy * dy));
+    }
+    return lengths;
 }
 
-void ReferencePath::compute_segment_lengths() {
-    segment_lengths_.resize(waypoints_.size(), 0.0);
-    for (size_t i = 1; i < waypoints_.size(); ++i) {
-        double dx = waypoints_[i]->x - waypoints_[i - 1]->x;
-        double dy = waypoints_[i]->y - waypoints_[i - 1]->y;
-        segment_lengths_[i] = std::sqrt(dx * dx + dy * dy);
-    }
+Waypoint ReferencePath::get_waypoint(int idx) const {
+    int idx_clamped = std::max(0, std::min(static_cast<int>(waypoints.size()) - 1, idx));
+    return *waypoints[idx_clamped];
 }
 
 double ReferencePath::get_speed(double s) const {
-    if (v_profile_.empty()) return 0.0;
-    if (s < 0) return v_profile_.front();
-    if (s > length()) return v_profile_.back();
-
-    std::vector<double> idx(v_profile_.size());
+    if (v_profile.empty()) return 0.0;
+    std::vector<double> idx(v_profile.size());
     std::iota(idx.begin(), idx.end(), 0);
-    return interpolate(idx, v_profile_, s);
+    return linear_interp(s, idx, v_profile);
 }
 
 double ReferencePath::get_curvature(double s) const {
-    if (kappa_profile_.empty()) return 0.0;
-    if (s < 0) return kappa_profile_.front();
-    if (s > length()) return kappa_profile_.back();
-
-    std::vector<double> idx(kappa_profile_.size());
+    if (kappa_profile.empty()) return 0.0;
+    std::vector<double> idx(kappa_profile.size());
     std::iota(idx.begin(), idx.end(), 0);
-    return interpolate(idx, kappa_profile_, s);
+    return linear_interp(s, idx, kappa_profile);
 }
 
-std::shared_ptr<Waypoint> ReferencePath::get_waypoint(int idx) const {
-    int safe_idx = std::max(0, std::min(static_cast<int>(waypoints_.size()) - 1, idx));
-    return waypoints_[safe_idx];
-}
 
-std::tuple<std::vector<double>, std::vector<double>, std::vector<double>>
-ReferencePath::update_path_constraints(int waypoint_idx, int horizon,
-                                       double upper_bound, double lower_bound) const {
-    int h = std::max(1, horizon);
-    std::vector<double> ub(h, upper_bound);
-    std::vector<double> lb(h, -lower_bound);
-    std::vector<double> width(h, upper_bound + lower_bound);
-    return {ub, lb, width};
-}
-
-void ReferencePath::set_speed_profile(const std::vector<double>& v_profile) {
-    v_profile_ = v_profile;
-    if (waypoints_.size() == v_profile.size()) {
-        for (size_t i = 0; i < v_profile.size(); ++i) {
-            waypoints_[i]->v_ref = v_profile[i];
+void ReferencePath::set_speed_profile(const std::vector<double>& v_profile_in) {
+    v_profile = v_profile_in;
+    if (v_profile.size() == waypoints.size()) {
+        for (size_t i = 0; i < waypoints.size(); ++i) {
+            waypoints[i]->v_ref = v_profile[i];
         }
     }
 }
 
-double ReferencePath::length() const {
-    return static_cast<double>(waypoints_.size());
+void ReferencePath::update_path_constraints(int waypoint_idx, int horizon,
+                                            double upper_bound, double lower_bound,
+                                            std::vector<double>& ub,
+                                            std::vector<double>& lb,
+                                            std::vector<double>& width) {
+    int H = std::max(1, horizon);
+    if (waypoint_idx >= static_cast<int>(waypoints.size())) {
+        waypoint_idx = static_cast<int>(waypoints.size()) - 1;
+    }
+    ub.assign(H, upper_bound);
+    lb.assign(H, -lower_bound);
+    width.assign(H, upper_bound + lower_bound);
 }

@@ -20,6 +20,7 @@ add_executable(test_exec
   reference_path.cpp
   main.cpp
   MPC.cpp
+  csv_loader.cpp
 )
 
 # 🔥 osqpをOsqpEigenより後に置くとリンクエラーになる場合があるので順番を変える！

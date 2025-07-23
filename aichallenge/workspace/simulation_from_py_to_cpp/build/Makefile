@@ -153,6 +153,30 @@ MPC.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_exec.dir/build.make CMakeFiles/test_exec.dir/MPC.cpp.s
 .PHONY : MPC.cpp.s
 
+csv_loader.o: csv_loader.cpp.o
+.PHONY : csv_loader.o
+
+# target to build an object file
+csv_loader.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_exec.dir/build.make CMakeFiles/test_exec.dir/csv_loader.cpp.o
+.PHONY : csv_loader.cpp.o
+
+csv_loader.i: csv_loader.cpp.i
+.PHONY : csv_loader.i
+
+# target to preprocess a source file
+csv_loader.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_exec.dir/build.make CMakeFiles/test_exec.dir/csv_loader.cpp.i
+.PHONY : csv_loader.cpp.i
+
+csv_loader.s: csv_loader.cpp.s
+.PHONY : csv_loader.s
+
+# target to generate assembly for a file
+csv_loader.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_exec.dir/build.make CMakeFiles/test_exec.dir/csv_loader.cpp.s
+.PHONY : csv_loader.cpp.s
+
 main.o: main.cpp.o
 .PHONY : main.o
 
@@ -237,6 +261,9 @@ help:
 	@echo "... MPC.o"
 	@echo "... MPC.i"
 	@echo "... MPC.s"
+	@echo "... csv_loader.o"
+	@echo "... csv_loader.i"
+	@echo "... csv_loader.s"
 	@echo "... main.o"
 	@echo "... main.i"
 	@echo "... main.s"

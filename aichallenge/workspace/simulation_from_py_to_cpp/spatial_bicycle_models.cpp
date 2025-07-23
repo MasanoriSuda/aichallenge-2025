@@ -1,128 +1,185 @@
+// spatial_bicycle_models.cpp
 #include "spatial_bicycle_models.hpp"
-#include <cmath>
+#include "reference_path.hpp"
+
 #include <iostream>
+#include <numeric>
+#include <cmath>
 
-// ========== SpatialBicycleModel ==========
-
-SpatialBicycleModel::SpatialBicycleModel(std::shared_ptr<ReferencePath> reference_path, double length, double width, double Ts)
-    : reference_path(reference_path), length(length), width(width), Ts(Ts), s(0.0), wp_id(0), eps(1e-12) {
-    safety_margin = compute_safety_margin();
-    current_waypoint = reference_path->waypoints[wp_id];
+// ========= TemporalState =========
+TemporalState::TemporalState(double x_, double y_, double psi_)
+    : x(x_), y(y_), psi(psi_) {
+    members = {"x", "y", "psi"};
 }
 
-double SpatialBicycleModel::compute_safety_margin() const {
+TemporalState& TemporalState::operator+=(const Eigen::Vector3d& delta) {
+    for (size_t i = 0; i < members.size(); ++i) {
+        if (members[i] == "x") x += delta[i];
+        else if (members[i] == "y") y += delta[i];
+        else if (members[i] == "psi") psi += delta[i];
+    }
+    return *this;
+}
+
+// ========= SimpleSpatialState =========
+SimpleSpatialState::SimpleSpatialState(double e_y_, double e_psi_, double t_)
+    : e_y(e_y_), e_psi(e_psi_), t(t_) {
+    members = {"e_y", "e_psi", "t"};
+}
+
+std::vector<std::string> SimpleSpatialState::list_states() const {
+    return members;
+}
+
+double SimpleSpatialState::get(int index) const {
+    if (index == 0) return e_y;
+    if (index == 1) return e_psi;
+    if (index == 2) return t;
+    throw std::out_of_range("SimpleSpatialState get index out of range");
+}
+
+void SimpleSpatialState::set(int index, double value) {
+    if (index == 0) e_y = value;
+    else if (index == 1) e_psi = value;
+    else if (index == 2) t = value;
+    else throw std::out_of_range("SimpleSpatialState set index out of range");
+}
+
+int SimpleSpatialState::size() const {
+    return 3;
+}
+
+SpatialState& SimpleSpatialState::operator+=(const Eigen::VectorXd& delta) {
+    if (delta.size() != 3) throw std::invalid_argument("Delta size must be 3");
+    e_y += delta[0];
+    e_psi += delta[1];
+    t += delta[2];
+    return *this;
+}
+
+Eigen::Vector3d SimpleSpatialState::to_vector() const {
+    return Eigen::Vector3d(e_y, e_psi, t);
+}
+
+// ========= SpatialBicycleModel =========
+SpatialBicycleModel::SpatialBicycleModel(std::shared_ptr<ReferencePath> reference_path_,
+                                         double length_, double width_, double Ts_)
+    : reference_path(reference_path_), length(length_), width(width_), Ts(Ts_) {
+    //eps = 1e-12;
+    safety_margin = _compute_safety_margin();
+    s = 0.0;
+    wp_id = 0;
+    current_waypoint = reference_path->waypoints[wp_id];
+    spatial_state = nullptr;
+    temporal_state = nullptr;
+}
+
+double SpatialBicycleModel::_compute_safety_margin() const {
     return width / std::sqrt(2.0);
 }
 
-TemporalState SpatialBicycleModel::s2t(const Waypoint& ref_wp, const SimpleSpatialState& ref_state) {
-    double x = ref_wp.x - ref_state.e_y * std::sin(ref_wp.psi);
-    double y = ref_wp.y + ref_state.e_y * std::cos(ref_wp.psi);
-    double psi = ref_wp.psi + ref_state.e_psi;
+TemporalState SpatialBicycleModel::s2t(const Waypoint& wp, const Eigen::VectorXd& ref_state) const {
+    double x = wp.x - ref_state[0] * std::sin(wp.psi);
+    double y = wp.y + ref_state[0] * std::cos(wp.psi);
+    double psi = wp.psi + ref_state[1];
     return TemporalState(x, y, psi);
 }
 
-SimpleSpatialState SpatialBicycleModel::t2s(const Waypoint& ref_wp, const TemporalState& ref_state) {
-    double dx = ref_state.x - ref_wp.x;
-    double dy = ref_state.y - ref_wp.y;
-    double e_y = std::cos(ref_wp.psi) * dy - std::sin(ref_wp.psi) * dx;
-    double e_psi = std::fmod(ref_state.psi - ref_wp.psi + M_PI, 2 * M_PI) - M_PI;
+SimpleSpatialState SpatialBicycleModel::t2s(const Waypoint& wp, const Eigen::VectorXd& ref_state) const {
+    double e_y = std::cos(wp.psi) * (ref_state[1] - wp.y) -
+                 std::sin(wp.psi) * (ref_state[0] - wp.x);
+    double e_psi = ref_state[2] - wp.psi;
+    e_psi = std::fmod(e_psi + M_PI, 2.0 * M_PI);
+    if (e_psi < 0) e_psi += 2.0 * M_PI;
+    e_psi -= M_PI;
     return SimpleSpatialState(e_y, e_psi, 0.0);
 }
 
-void BicycleModel::drive(const Eigen::Vector2d& u) {
+void SpatialBicycleModel::drive(const Eigen::Vector2d& u) {
     double v = u[0];
     double delta = u[1];
 
-    double x_dot = v * std::cos(this->temporal_state.psi);
-    double y_dot = v * std::sin(this->temporal_state.psi);
-    double psi_dot = v / this->length * std::tan(delta);
+    double x_dot = v * std::cos(temporal_state->psi);
+    double y_dot = v * std::sin(temporal_state->psi);
+    double psi_dot = v / length * std::tan(delta);
 
-    this->temporal_state.x += x_dot * this->Ts;
-    this->temporal_state.y += y_dot * this->Ts;
-    this->temporal_state.psi += psi_dot * this->Ts;
+    Eigen::Vector3d derivatives(x_dot, y_dot, psi_dot);
+    *temporal_state += derivatives * Ts;
 
-    double s_dot = (1.0 / (1.0 - this->spatial_state.e_y * this->current_waypoint->kappa))
-                   * v * std::cos(this->spatial_state.e_psi);
-
-    this->s += s_dot * this->Ts;
+    double s_dot = 1.0 / (1.0 - spatial_state->e_y * current_waypoint->kappa) *
+                   v * std::cos(spatial_state->e_psi);
+    s += s_dot * Ts;
 }
 
-void SpatialBicycleModel::update_current_waypoint() {
-    auto& segment_lengths = reference_path->get_segment_lengths();
-    std::vector<double> length_cum(segment_lengths.size());
-    length_cum[0] = segment_lengths[0];
-    for (size_t i = 1; i < segment_lengths.size(); ++i) {
-        length_cum[i] = length_cum[i - 1] + segment_lengths[i];
-    }
-    size_t next_wp = 0;
-    while (next_wp < length_cum.size() && length_cum[next_wp] <= s) {
-        ++next_wp;
-    }
-    size_t prev_wp = (next_wp == 0) ? 0 : next_wp - 1;
-    if (next_wp >= reference_path->waypoints.size()) next_wp = reference_path->waypoints.size() - 1;
-    if (prev_wp >= reference_path->waypoints.size()) prev_wp = reference_path->waypoints.size() - 1;
+void SpatialBicycleModel::get_current_waypoint() {
+    std::vector<double> length_cum(reference_path->segment_lengths.size());
+    std::partial_sum(reference_path->segment_lengths.begin(), reference_path->segment_lengths.end(), length_cum.begin());
 
-    if (std::abs(s - length_cum[next_wp]) < std::abs(s - length_cum[prev_wp])) {
-        wp_id = next_wp;
+    auto it = std::find_if(length_cum.begin(), length_cum.end(), [&](double val) { return val > s; });
+    int next_wp_id = std::distance(length_cum.begin(), it);
+    int prev_wp_id = std::max(0, next_wp_id - 1);
+
+    double s_next = length_cum[next_wp_id];
+    double s_prev = length_cum[prev_wp_id];
+
+    if (std::abs(s - s_next) < std::abs(s - s_prev)) {
+        wp_id = next_wp_id;
+        current_waypoint = reference_path->waypoints[wp_id];
     } else {
-        wp_id = prev_wp;
+        wp_id = prev_wp_id;
+        current_waypoint = reference_path->waypoints[wp_id];
     }
-    current_waypoint = reference_path->waypoints[wp_id];
 }
 
-// ========== BicycleModel ==========
-
-BicycleModel::BicycleModel(std::shared_ptr<ReferencePath> reference_path, double length, double width, double Ts)
-    : SpatialBicycleModel(reference_path, length, width, Ts) {
-    spatial_state = SimpleSpatialState();
-    temporal_state = s2t(*current_waypoint, spatial_state);
-    n_states = 3;
+// ========= BicycleModel =========
+BicycleModel::BicycleModel(std::shared_ptr<ReferencePath> reference_path_,
+                           double length_, double width_, double Ts_)
+    : SpatialBicycleModel(reference_path_, length_, width_, Ts_) {
+    spatial_state = std::make_shared<SimpleSpatialState>();
+    n_states = spatial_state->size();
+    temporal_state = std::make_shared<TemporalState>(s2t(*current_waypoint, spatial_state->to_vector()));
 }
 
-std::tuple<double, double> BicycleModel::get_temporal_derivatives(
-    const SimpleSpatialState& state,
-    const Eigen::Vector2d& input,
-    double kappa){
-    double e_y = state.e_y;
-    double e_psi = state.e_psi;
+std::tuple<double, double> BicycleModel::get_temporal_derivatives(const Eigen::Vector3d& state,
+                                                                  const Eigen::Vector2d& input,
+                                                                  double kappa) const {
+    double e_y = state[0];
+    double e_psi = state[1];
     double v = input[0];
     double delta = input[1];
 
-    double s_dot = 1.0 / (1.0 - (e_y * kappa)) * v * std::cos(e_psi);
+    double s_dot = 1.0 / (1.0 - e_y * kappa) * v * std::cos(e_psi);
     double psi_dot = v / length * std::tan(delta);
-
     return {s_dot, psi_dot};
 }
 
-Eigen::Vector3d BicycleModel::get_spatial_derivatives(const SimpleSpatialState& state,
+Eigen::Vector3d BicycleModel::get_spatial_derivatives(const Eigen::Vector3d& state,
                                                       const Eigen::Vector2d& input,
-                                                      double kappa) {
-    double e_y   = state.e_y;
-    double e_psi = state.e_psi;
-
-    double v     = input[0];
+                                                      double kappa) const {
+    double e_y = state[0];
+    double e_psi = state[1];
+    double v = input[0];
     double delta = input[1];
 
-    double s_dot = 1.0 / (1.0 - (e_y * kappa)) * v * std::cos(e_psi);
-    double psi_dot = v / this->length * std::tan(delta);
+    auto [s_dot, psi_dot] = get_temporal_derivatives(state, input, kappa);
 
-    return Eigen::Vector3d{ -v * std::sin(e_psi),
-                             psi_dot,
-                             s_dot };
+    double d_e_y_d_s = v * std::sin(e_psi) / s_dot;
+    double d_e_psi_d_s = psi_dot / s_dot - kappa;
+    double d_t_d_s = 1.0 / s_dot;
+
+    return Eigen::Vector3d(d_e_y_d_s, d_e_psi_d_s, d_t_d_s);
 }
 
-std::tuple<Eigen::Vector3d, Eigen::Matrix3d, Eigen::Matrix<double, 3, 2>> BicycleModel::linearize(double v_ref, double kappa_ref, double delta_s) {
-    Eigen::Vector3d f(0.0, 0.0, 1.0 / v_ref * delta_s);
+void BicycleModel::linearize(double v_ref, double kappa_ref, double delta_s,
+                             Eigen::Vector3d& f, Eigen::Matrix3d& A,
+                             Eigen::Matrix<double, 3, 2>& B) const {
+    A.row(0) = Eigen::Vector3d(1.0, delta_s, 0.0);
+    A.row(1) = Eigen::Vector3d(-kappa_ref * kappa_ref * delta_s, 1.0, 0.0);
+    A.row(2) = Eigen::Vector3d(-kappa_ref / v_ref * delta_s, 0.0, 1.0);
 
-    Eigen::Matrix3d A;
-    A << 1, delta_s, 0,
-        -kappa_ref * kappa_ref * delta_s, 1, 0,
-        -kappa_ref / v_ref * delta_s, 0, 1;
+    B.row(0) = Eigen::Vector2d(0.0, 0.0);
+    B.row(1) = Eigen::Vector2d(0.0, delta_s);
+    B.row(2) = Eigen::Vector2d(-1.0 / (v_ref * v_ref) * delta_s, 0.0);
 
-    Eigen::Matrix<double, 3, 2> B;
-    B << 0, 0,
-        0, delta_s,
-        -1.0 / (v_ref * v_ref) * delta_s, 0;
-
-    return {f, A, B};
+    f = Eigen::Vector3d(0.0, 0.0, 1.0 / v_ref * delta_s);
 }

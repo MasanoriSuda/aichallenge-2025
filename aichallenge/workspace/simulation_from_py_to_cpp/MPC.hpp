@@ -1,48 +1,53 @@
 // MPC.hpp
 #pragma once
 
-#include "spatial_bicycle_models.hpp"
-#include "reference_path.hpp"
-#include "constraints.hpp"
-#include <OsqpEigen/OsqpEigen.h>
 #include <Eigen/Dense>
-#include <vector>
+#include <OsqpEigen/OsqpEigen.h>
 #include <memory>
+#include <vector>
+#include <utility>
+
+class SpatialBicycleModel;
+class ReferencePath;
 
 class MPC {
 public:
-    // MPC.hpp
-    MPC(std::shared_ptr<BicycleModel> model,
+    MPC(std::shared_ptr<SpatialBicycleModel> model,
         int N,
         const Eigen::MatrixXd& Q,
         const Eigen::MatrixXd& R,
         const Eigen::MatrixXd& QN,
-        const StateConstraints& state_constraints,
-        const InputConstraints& input_constraints,
-        double dt);
-
+        const std::map<std::string, Eigen::VectorXd>& state_constraints,
+        const std::map<std::string, Eigen::VectorXd>& input_constraints,
+        double ay_max);
 
     Eigen::Vector2d get_control();
+    Eigen::MatrixXd update_prediction(const Eigen::MatrixXd& spatial_state_prediction);
 
-    std::vector<Eigen::Vector2d> current_prediction;
+    Eigen::MatrixXd current_prediction;
 
 private:
     void init_problem();
-    std::vector<Eigen::Vector2d> update_prediction(const Eigen::MatrixXd& spatial_state_prediction);
 
-    std::shared_ptr<BicycleModel> model;
     int N;
     int nx;
     int nu;
+
     Eigen::MatrixXd Q;
     Eigen::MatrixXd R;
     Eigen::MatrixXd QN;
-    StateConstraints state_constraints;
-    InputConstraints input_constraints;
-    double dt;
 
+    std::map<std::string, Eigen::VectorXd> state_constraints;
+    std::map<std::string, Eigen::VectorXd> input_constraints;
+
+    double ay_max;
+
+    std::shared_ptr<SpatialBicycleModel> model;
+
+    std::vector<double> current_prediction_x;
+    std::vector<double> current_prediction_y;
     Eigen::VectorXd current_control;
-    int infeasibility_counter = 0;
+    int infeasibility_counter;
 
     OsqpEigen::Solver solver;
 };

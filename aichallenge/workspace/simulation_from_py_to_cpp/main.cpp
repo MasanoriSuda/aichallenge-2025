@@ -8,6 +8,7 @@
 #include <memory>
 #include <vector>
 #include <Eigen/Dense>
+#include <chrono>
 
 int main() {
     std::string filename = "raceline_awsim_15km_py.csv";
@@ -73,10 +74,12 @@ int main() {
 
     // シミュレーションループ
     double t = 0.0;
-    int steps = 3000;
+    int steps = 700;
     std::vector<std::vector<double>> log;
 
     for (int i = 0; i < steps; ++i) {
+
+        auto start = std::chrono::steady_clock::now();
         Eigen::Vector2d u = mpc->get_control();
         //std::cout << "Control vector u: [" << u[0] << ", " << u[1] << "]" << std::endl;
         car->drive(u);
@@ -89,6 +92,16 @@ int main() {
         std::cout << "wp.kappa = " << wp.kappa << std::endl; // curvature
         std::cout << "wp.v_ref = " << wp.v_ref << std::endl; // reference velocity
 #endif
+
+        // 処理の終了時間
+        auto end = std::chrono::steady_clock::now();  // endが未定義だったので追加
+
+        // 経過時間をミリ秒で計算
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        
+        // ミリ秒を小数点付きで表示
+        double milliseconds = duration.count() / 1000.0; // ミリ秒 -> 秒に変換
+        std::cout << "処理時間: " << milliseconds * 1000 << "ミリ秒" << std::endl;  // ミリ秒に戻す
 
         log.push_back({
             t,

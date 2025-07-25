@@ -5,6 +5,7 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include "OdometryInput.hpp"
 
 // Forward declaration
 class Waypoint;
@@ -13,6 +14,7 @@ class ReferencePath;
 class TemporalState {
 public:
     double x, y, psi;
+    double v;// 追加：速度、将来用拡張
     std::vector<std::string> members;
 
     TemporalState(double x_ = 0.0, double y_ = 0.0, double psi_ = 0.0);
@@ -108,6 +110,7 @@ public:
     void linearize(double v_ref, double kappa_ref, double delta_s,
                    Eigen::Vector3d& f, Eigen::Matrix3d& A,
                    Eigen::Matrix<double, 3, 2>& B) const override;
+    void set_pose_from_odom(const OdometryInput& odom);  // Declaration
 
 private:
     std::tuple<double, double> get_temporal_derivatives(const Eigen::Vector3d& state,

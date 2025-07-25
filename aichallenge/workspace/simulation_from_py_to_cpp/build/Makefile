@@ -201,6 +201,30 @@ main.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_exec.dir/build.make CMakeFiles/test_exec.dir/main.cpp.s
 .PHONY : main.cpp.s
 
+odom_loader.o: odom_loader.cpp.o
+.PHONY : odom_loader.o
+
+# target to build an object file
+odom_loader.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_exec.dir/build.make CMakeFiles/test_exec.dir/odom_loader.cpp.o
+.PHONY : odom_loader.cpp.o
+
+odom_loader.i: odom_loader.cpp.i
+.PHONY : odom_loader.i
+
+# target to preprocess a source file
+odom_loader.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_exec.dir/build.make CMakeFiles/test_exec.dir/odom_loader.cpp.i
+.PHONY : odom_loader.cpp.i
+
+odom_loader.s: odom_loader.cpp.s
+.PHONY : odom_loader.s
+
+# target to generate assembly for a file
+odom_loader.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_exec.dir/build.make CMakeFiles/test_exec.dir/odom_loader.cpp.s
+.PHONY : odom_loader.cpp.s
+
 reference_path.o: reference_path.cpp.o
 .PHONY : reference_path.o
 
@@ -267,6 +291,9 @@ help:
 	@echo "... main.o"
 	@echo "... main.i"
 	@echo "... main.s"
+	@echo "... odom_loader.o"
+	@echo "... odom_loader.i"
+	@echo "... odom_loader.s"
 	@echo "... reference_path.o"
 	@echo "... reference_path.i"
 	@echo "... reference_path.s"

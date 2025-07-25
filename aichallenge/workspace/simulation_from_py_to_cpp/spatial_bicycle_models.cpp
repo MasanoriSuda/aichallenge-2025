@@ -183,3 +183,10 @@ void BicycleModel::linearize(double v_ref, double kappa_ref, double delta_s,
 
     f = Eigen::Vector3d(0.0, 0.0, 1.0 / v_ref * delta_s);
 }
+
+void BicycleModel::set_pose_from_odom(const OdometryInput& odom) {
+    this->temporal_state->x = odom.x;
+    this->temporal_state->y = odom.y;
+    this->temporal_state->psi = odom.yaw;
+    this->temporal_state->v = odom.v;
+}

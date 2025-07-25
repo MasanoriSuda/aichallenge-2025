@@ -2,6 +2,8 @@
 #include "spatial_bicycle_models.hpp"
 #include "MPC.hpp"
 #include "csv_loader.hpp"
+#include "OdometryInput.hpp"
+#include "odom_loader.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -36,8 +38,11 @@ int main() {
 
     // 車両モデル初期化
     std::shared_ptr<BicycleModel> car = std::make_shared<BicycleModel>(
-        reference_path, 1.2, 0.8, 0.05
+        reference_path, 1.2, 0.8, 0.01
     );
+
+    OdometryInput odom = load_odom_csv("odom.csv");
+    car->set_pose_from_odom(odom);
     
     // MPC 設定
     int N = 30;
@@ -74,7 +79,7 @@ int main() {
 
     // シミュレーションループ
     double t = 0.0;
-    int steps = 700;
+    int steps = 3000;
     std::vector<std::vector<double>> log;
 
     for (int i = 0; i < steps; ++i) {
@@ -83,8 +88,9 @@ int main() {
         Eigen::Vector2d u = mpc->get_control();
         //std::cout << "Control vector u: [" << u[0] << ", " << u[1] << "]" << std::endl;
         car->drive(u);
-        Waypoint wp = reference_path->get_waypoint(car->get_wp_id());
+
         // wpの中身を表示
+        Waypoint wp = reference_path->get_waypoint(car->get_wp_id());
 #if 0
         std::cout << "wp.x = " << wp.x << std::endl;
         std::cout << "wp.y = " << wp.y << std::endl;

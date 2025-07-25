@@ -114,3 +114,31 @@ void ReferencePath::update_path_constraints(int waypoint_idx, int horizon,
     lb.assign(H, -lower_bound);
     width.assign(H, upper_bound + lower_bound);
 }
+
+int ReferencePath::get_closest_index(double s) const {
+    double min_diff = std::numeric_limits<double>::max();
+    int closest_index = 0;
+    for (size_t i = 0; i < waypoints.size(); ++i) {
+        double diff = std::abs(waypoints[i]->s - s);
+        if (diff < min_diff) {
+            min_diff = diff;
+            closest_index = static_cast<int>(i);
+        }
+    }
+    return closest_index;
+}
+
+std::vector<Waypoint> ReferencePath::extract_subpath(double s, int N) const {
+    std::vector<Waypoint> result;
+
+    int center_idx = get_closest_index(s);
+    int start_idx = std::max(0, center_idx - N);
+    int end_idx = std::min(static_cast<int>(waypoints.size()) - 1, center_idx + N);
+
+    for (int i = start_idx; i <= end_idx; ++i) {
+        result.push_back(*waypoints[i]);  // shared_ptr → 実体コピー
+    }
+
+    return result;
+}
+

@@ -142,3 +142,45 @@ std::vector<Waypoint> ReferencePath::extract_subpath(double s, int N) const {
     return result;
 }
 
+double ReferencePath::get_closest_s(double x, double y) const {
+    double min_dist = 1e9;
+    double closest_s = 0.0;
+    for (const auto& wp : waypoints) {
+        double dx = wp->x - x;
+        double dy = wp->y - y;
+        double dist = std::hypot(dx, dy);
+        if (dist < min_dist) {
+            min_dist = dist;
+            closest_s = wp->s;
+        }
+    }
+    return closest_s;
+}
+
+// reference_path.cpp
+Waypoint ReferencePath::get_waypoint_from_s(double s) const {
+    // 境界チェック（最後尾より後ろ）
+    if (s >= waypoints.back()->s) return *waypoints.back();
+    if (s <= waypoints.front()->s) return *waypoints.front();
+
+    // s に一番近い区間を見つけて線形補間
+    for (size_t i = 0; i < waypoints.size() - 1; ++i) {
+        const auto& wp0 = waypoints[i];
+        const auto& wp1 = waypoints[i + 1];
+        if (wp0->s <= s && s < wp1->s) {
+            double ratio = (s - wp0->s) / (wp1->s - wp0->s);
+            Waypoint interp(0.0, 0.0, 0.0, 0.0, 0.0, 0.0);  // ✅ 初期値は上書き前提でOK
+            interp.s = s;
+            interp.x = wp0->x + ratio * (wp1->x - wp0->x);
+            interp.y = wp0->y + ratio * (wp1->y - wp0->y);
+            interp.psi = wp0->psi + ratio * (wp1->psi - wp0->psi);
+            interp.kappa = wp0->kappa + ratio * (wp1->kappa - wp0->kappa);
+            interp.v_ref = wp0->v_ref + ratio * (wp1->v_ref - wp0->v_ref);
+            interp.delta_ref = wp0->delta_ref + ratio * (wp1->delta_ref - wp0->delta_ref);
+            return interp;
+        }
+    }
+
+    // fallback
+    return *waypoints.back();
+}

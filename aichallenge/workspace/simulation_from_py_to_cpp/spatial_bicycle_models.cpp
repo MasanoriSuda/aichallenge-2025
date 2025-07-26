@@ -111,6 +111,34 @@ void SpatialBicycleModel::drive(const Eigen::Vector2d& u) {
     s += s_dot * Ts;
 }
 
+// spatial_bicycle_models.cpp に実装
+void SpatialBicycleModel::set_s(double s_in) {
+    s = s_in;
+    if (reference_path) {
+        current_waypoint = std::make_shared<Waypoint>(reference_path->get_waypoint_from_s(s));
+        spatial_state->update(*temporal_state, *current_waypoint);  // 誤差初期化
+    }
+}
+
+void SimpleSpatialState::update(const TemporalState& ts, const Waypoint& wp) {
+    // e_y（横方向誤差）と e_psi（ヨー誤差）を計算
+    double dx = ts.x - wp.x;
+    double dy = ts.y - wp.y;
+    double yaw_ref = wp.psi;
+
+    e_y = -std::sin(yaw_ref) * dx + std::cos(yaw_ref) * dy;
+
+    double yaw_error = ts.psi - yaw_ref;
+    // ラップアラウンド処理（[-π, π]）
+    while (yaw_error > M_PI) yaw_error -= 2.0 * M_PI;
+    while (yaw_error < -M_PI) yaw_error += 2.0 * M_PI;
+
+    e_psi = yaw_error;
+
+    t = wp.s;  // sの情報をtにコピー（空間MPC用）
+}
+
+
 void SpatialBicycleModel::get_current_waypoint() {
     std::vector<double> length_cum(reference_path->segment_lengths.size());
     std::partial_sum(reference_path->segment_lengths.begin(), reference_path->segment_lengths.end(), length_cum.begin());

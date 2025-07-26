@@ -13,15 +13,14 @@ public:
     double psi;
     double kappa;
     double v_ref;
-    double s;
-
+    double s;           // ✅ ← 必ず追加！
+    double delta_ref = 0.0;  // ✅ ← これを追加！
     // 完全コンストラクタ
     Waypoint(double x_, double y_, double psi_, double kappa_, double v_ref_, double s_)
-        : x(x_), y(y_), psi(psi_), kappa(kappa_), v_ref(v_ref_), s(s_) {}
+        : x(x_), y(y_), psi(psi_), kappa(kappa_), v_ref(v_ref_), s(s_), delta_ref(0.0) {}
 
-    // 簡易版（古いコードとの互換用）
     Waypoint(double x_, double y_, double psi_)
-        : x(x_), y(y_), psi(psi_), kappa(0.0), v_ref(0.0), s(0.0) {}
+        : x(x_), y(y_), psi(psi_), kappa(0.0), v_ref(0.0), s(0.0), delta_ref(0.0) {}
     double distanceTo(const Waypoint& other) const {
         return std::sqrt(std::pow(x - other.x, 2) + std::pow(y - other.y, 2));
     }
@@ -50,6 +49,10 @@ public:
 
     // ReferencePath extension (ReferencePath.hpp or where appropriate)
     std::vector<Waypoint> extract_subpath(double s, int N) const;  // Declaration
+
+    double get_closest_s(double x, double y) const;
+
+    Waypoint get_waypoint_from_s(double s) const;
 
     std::vector<std::shared_ptr<Waypoint>> waypoints;
     std::vector<double> segment_lengths;

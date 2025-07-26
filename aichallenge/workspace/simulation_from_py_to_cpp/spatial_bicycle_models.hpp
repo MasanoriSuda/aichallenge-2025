@@ -50,6 +50,7 @@ public:
     SpatialState& operator+=(const Eigen::VectorXd& delta) override;
 
     Eigen::Vector3d to_vector() const;
+    void update(const TemporalState& ts, const Waypoint& wp);
 };
 
 class SpatialBicycleModel {
@@ -81,7 +82,13 @@ public:
     int get_wp_id() const { return wp_id; }
     std::shared_ptr<TemporalState> get_temporal_state() const { return temporal_state; }
     std::shared_ptr<SimpleSpatialState> get_spatial_state() const { return spatial_state; }
-
+    void set_s(double s);
+    void set_waypoint(std::shared_ptr<Waypoint> wp) {
+        current_waypoint = wp;
+        if (temporal_state && spatial_state) {
+            spatial_state->update(*temporal_state, *wp);  // 誤差初期化
+        }
+    }
 
 public:
     double _compute_safety_margin() const;

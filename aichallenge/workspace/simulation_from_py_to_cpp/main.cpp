@@ -41,9 +41,18 @@ int main() {
         reference_path, 1.2, 0.8, 0.01
     );
 
+    // 1. odom.csv 読み込み → car の初期姿勢に反映
     OdometryInput odom = load_odom_csv("odom.csv");
     car->set_pose_from_odom(odom);
-    
+
+    // 2. 初期 s を ReferencePath 上で推定
+    double init_s = reference_path->get_closest_s(odom.x, odom.y);  // 実装済み？
+    car->set_s(init_s);
+
+    // 3. 初期 waypoint を取得してセット
+    Waypoint wp = reference_path->get_waypoint_from_s(init_s);
+    car->set_waypoint(std::make_shared<Waypoint>(wp));
+
     // MPC 設定
     int N = 30;
     Eigen::MatrixXd Q = Eigen::MatrixXd::Identity(3, 3);

@@ -15,6 +15,7 @@ ReferencePath::ReferencePath(const std::vector<double>& wp_x, const std::vector<
       max_width(max_width),
       circular(circular) {
 
+    set_raw_waypoints_from_xy(wp_x, wp_y);
     waypoints = construct_path(wp_x, wp_y);
     segment_lengths = compute_segment_lengths();
 }
@@ -184,3 +185,112 @@ Waypoint ReferencePath::get_waypoint_from_s(double s) const {
     // fallback
     return *waypoints.back();
 }
+
+void ReferencePath::set_raw_waypoints_from_xy(const std::vector<double>& xs, const std::vector<double>& ys) {
+    raw_waypoints_.clear();
+
+    double accumulated_s = 0.0;
+    for (size_t i = 0; i < xs.size(); ++i) {
+        double s = 0.0;
+        if (i > 0) {
+            double dx = xs[i] - xs[i - 1];
+            double dy = ys[i] - ys[i - 1];
+            s = std::hypot(dx, dy);
+            accumulated_s += s;
+        }
+        auto wp = std::make_shared<Waypoint>(
+            xs[i],      // x
+            ys[i],      // y
+            0.0,        // psi（後で補完）
+            0.0,        // kappa
+            0.0,        // v_ref
+            accumulated_s  // ✅ ここに s をセット
+        );
+        raw_waypoints_.push_back(wp);
+    }
+}
+
+
+
+void ReferencePath::update_path(const std::vector<double>& new_x, const std::vector<double>& new_y) {
+    if (new_x.size() != new_y.size() || new_x.empty()) {
+        std::cerr << "[ERROR] update_path: input size mismatch or empty." << std::endl;
+        return;
+    }
+
+    // 再補間してwaypointsを更新
+    waypoints = construct_path(new_x, new_y);
+
+    // segment_lengths も再計算
+    segment_lengths = compute_segment_lengths();
+}
+
+std::vector<std::shared_ptr<Waypoint>> ReferencePath::extract_raw_subpath(double s, int N) const {
+    std::vector<std::shared_ptr<Waypoint>> result;
+    if (raw_waypoints_.empty()) return result;
+
+    // 前方で最も近い index を探す
+    int closest_index = -1;
+    double min_diff = std::numeric_limits<double>::max();
+    for (int i = 0; i < raw_waypoints_.size(); ++i) {
+        double ds = raw_waypoints_[i]->s - s;
+        if (ds >= 0.0 && ds < min_diff) {
+            min_diff = ds;
+            closest_index = i;
+        }
+    }
+
+    // fallback：最後尾を中心とする（ゴール or オーバーラン時）
+    if (closest_index == -1) {
+        closest_index = raw_waypoints_.size() - 1;
+    }
+
+    // ✅ 先行N点のみ取り出す
+    int end = std::min(static_cast<int>(raw_waypoints_.size()), closest_index + N);
+    for (int i = closest_index; i < end; ++i) {
+        result.push_back(raw_waypoints_[i]);
+    }
+
+    return result;
+}
+
+
+
+std::vector<std::shared_ptr<Waypoint>>& ReferencePath::get_all_waypoints() {
+    return waypoints;
+}
+
+inline double wrapToPi(double angle) {
+    while (angle > M_PI)  angle -= 2.0 * M_PI;
+    while (angle < -M_PI) angle += 2.0 * M_PI;
+    return angle;
+}
+
+void ReferencePath::compute_curvature_profile() {
+    const auto& wps = get_all_waypoints();
+
+    for (size_t i = 1; i + 1 < wps.size(); ++i) {
+        const auto& wp_prev = wps[i - 1];
+        const auto& wp      = wps[i];
+        const auto& wp_next = wps[i + 1];
+
+        double dx1 = wp->x - wp_prev->x;
+        double dy1 = wp->y - wp_prev->y;
+        double dx2 = wp_next->x - wp->x;
+        double dy2 = wp_next->y - wp->y;
+
+        double theta1 = std::atan2(dy1, dx1);
+        double theta2 = std::atan2(dy2, dx2);
+        double dtheta = wrapToPi(theta2 - theta1);
+
+        double ds = std::hypot(wp_next->x - wp_prev->x, wp_next->y - wp_prev->y);
+        wp->kappa = dtheta / ds;
+    }
+
+    // 端点は前後の値で埋める
+    if (wps.size() >= 2) {
+        wps[0]->kappa = wps[1]->kappa;
+        wps.back()->kappa = wps[wps.size() - 2]->kappa;
+    }
+}
+

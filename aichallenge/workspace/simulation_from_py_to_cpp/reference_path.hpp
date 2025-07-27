@@ -45,6 +45,10 @@ public:
         return waypoints;
     }
 
+        // こちらは書き換え可能な参照を返す
+    std::vector<std::shared_ptr<Waypoint>>& get_all_waypoints();
+
+
     int get_closest_index(double s) const;
 
     // ReferencePath extension (ReferencePath.hpp or where appropriate)
@@ -54,6 +58,14 @@ public:
 
     Waypoint get_waypoint_from_s(double s) const;
 
+    void set_raw_waypoints_from_xy(const std::vector<double>& xs, const std::vector<double>& ys); 
+    void update_path(const std::vector<double>& new_x, const std::vector<double>& new_y);
+    std::vector<std::shared_ptr<Waypoint>> extract_raw_subpath(double s, int N) const;
+    // ReferencePath.hpp 内に追記
+    void compute_curvature_profile();
+
+
+    std::vector<std::shared_ptr<Waypoint>> raw_waypoints_;
     std::vector<std::shared_ptr<Waypoint>> waypoints;
     std::vector<double> segment_lengths;
     std::vector<double> v_profile;

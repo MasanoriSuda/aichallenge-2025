@@ -355,10 +355,21 @@ Eigen::Vector2d MPC::get_control(
     const std::vector<std::shared_ptr<Waypoint>>& trajectory)
 {
 #if 1
-    model->get_current_waypoint();
-    model->spatial_state = std::make_shared<SimpleSpatialState>(
-        model->t2s(*model->current_waypoint, model->temporal_state->to_vector())
+    // 1. 先頭のtrajectoryをcurrent waypointとする
+    const auto& wp = trajectory.front();  // or trajectory[0]
+
+    // 2. odomをTemporalStateに変換
+    TemporalState odom_state(odom.x, odom.y, odom.yaw);  // ← v除外
+    odom_state.v = odom.v;  // ← あれば個別セット
+
+    // 3. t2s変換：Reference座標系での誤差表現に変換
+    auto spatial_state_ptr = std::make_shared<SimpleSpatialState>(
+        model->t2s(*wp, odom_state.to_vector())
     );
+
+    // 4. MPCモデルに流し込む
+    model->spatial_state = spatial_state_ptr;
+    model->current_waypoint = wp;
 #endif
     if (trajectory.empty()) {
         std::cerr << "[ERROR] trajectory is empty" << std::endl;

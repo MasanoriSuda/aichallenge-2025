@@ -79,7 +79,7 @@ int main() {
 
     // シミュレーションループ
     double t = 0.0;
-    int steps = 1000;
+    int steps = 6000;
     std::vector<std::vector<double>> log;
 
     for (int i = 0; i < steps; ++i) {

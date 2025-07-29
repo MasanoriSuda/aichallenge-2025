@@ -13,10 +13,6 @@
 #include <chrono>
 
 int main() {
-#if 0
-    std::string filename = "raceline_awsim_15km_py.csv";
-    auto [wp_x, wp_y, wp_speed] = load_csv(filename);
-#else
     // MPC 設定
     int WAYPOINT_NUM = 10;
     int N = 30;
@@ -28,16 +24,17 @@ int main() {
         return 1;
     }
 
+
     // Waypointのリストを取得
-    auto subpath = loader.extractForwardSubpath(0, WAYPOINT_NUM);
-    for (const auto& wp : subpath) {
-        wp_x.push_back(wp.x);
-        wp_y.push_back(wp.y);
-        wp_speed.push_back(wp.v_ref);
+    auto subpath = loader.extractForwardSubpath(0, 2);
+    for (int i=0;i<2;++i) {
+        wp_x.push_back(i);
+        wp_y.push_back(i);
+        wp_speed.push_back(i);
     }
 
 
-#endif
+
     // リファレンスパス構築
     std::shared_ptr<ReferencePath> reference_path = std::make_shared<ReferencePath>(
         wp_x, wp_y,
@@ -46,17 +43,6 @@ int main() {
         1.5,   // max_width
         false  // circular
     );
-
-    // 補間された速度プロファイル設定
-    std::vector<double> wp_speed_interp(reference_path->get_all_waypoints().size());
-    for (size_t i = 0; i < wp_speed_interp.size(); ++i) {
-        double ratio = static_cast<double>(i) * (wp_speed.size() - 1) / (wp_speed_interp.size() - 1);
-        size_t idx = static_cast<size_t>(ratio);
-        double frac = ratio - idx;
-        double v = (1.0 - frac) * wp_speed[idx] + frac * wp_speed[std::min(idx + 1, wp_speed.size() - 1)];
-        wp_speed_interp[i] = v;
-    }
-    reference_path->set_speed_profile(wp_speed_interp);
 
     // 車両モデル初期化
     std::shared_ptr<BicycleModel> car = std::make_shared<BicycleModel>(
@@ -96,6 +82,7 @@ int main() {
         input_constraints,
         ay_max
     );
+
 
     // シミュレーションループ
     double t = 0.0;
@@ -137,22 +124,12 @@ int main() {
         }
         reference_path->set_speed_profile(wp_speed_interp_local);
 
-#if 1
         Eigen::Vector2d u = mpc->get_control(odom, reference_path->get_all_waypoints());
-#else
-        Eigen::Vector2d u = mpc->get_control();
-#endif
+
         car->drive(u);
 
         // wpの中身を表示
         Waypoint wp = reference_path->get_waypoint(car->get_wp_id());
-#if 0
-        std::cout << "wp.x = " << wp.x << std::endl;
-        std::cout << "wp.y = " << wp.y << std::endl;
-        std::cout << "wp.psi = " << wp.psi << std::endl; // yaw angle
-        std::cout << "wp.kappa = " << wp.kappa << std::endl; // curvature
-        std::cout << "wp.v_ref = " << wp.v_ref << std::endl; // reference velocity
-#endif
 
         // 処理の終了時間
         auto end = std::chrono::steady_clock::now();  // endが未定義だったので追加

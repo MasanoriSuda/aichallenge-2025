@@ -39,3 +39,27 @@ bool CSVLoader::load(const std::string & filename) {
     }
     return true;
 }
+
+std::vector<Waypoint> CSVLoader::extractForwardSubpath(double s_current, int N) const {
+    std::vector<Waypoint> result;
+
+    if (waypoints_.empty()) return result;
+
+    // s_current 以上の最初のインデックスを探す
+    int start_idx = -1;
+    for (int i = 0; i < waypoints_.size(); ++i) {
+        if (waypoints_[i].s >= s_current) {
+            start_idx = i;
+            break;
+        }
+    }
+
+    if (start_idx == -1) return result;
+
+    int end_idx = std::min(start_idx + N, static_cast<int>(waypoints_.size()));
+    for (int i = start_idx; i < end_idx; ++i) {
+        result.push_back(waypoints_[i]);
+    }
+
+    return result;
+}

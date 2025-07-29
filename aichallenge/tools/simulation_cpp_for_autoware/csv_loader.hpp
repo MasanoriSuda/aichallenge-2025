@@ -11,5 +11,5 @@ private:
 public:
     bool load(const std::string & filename);
     const std::vector<Waypoint> & getWaypoints() const { return waypoints_; }
-    std::vector<Waypoint> extract_subpath(double current_s, double range) const;
+    std::vector<Waypoint> extractForwardSubpath(double s_current, int N) const;
 };

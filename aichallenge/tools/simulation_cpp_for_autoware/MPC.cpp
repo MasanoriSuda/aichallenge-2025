@@ -375,7 +375,7 @@ Eigen::Vector2d MPC::get_control(
         std::cerr << "[ERROR] trajectory is empty" << std::endl;
         return Eigen::Vector2d::Zero();
     }
-
+#if 0
     for (int i = 0; i < std::min(5, static_cast<int>(trajectory.size())); ++i) {
         const auto& wp = trajectory[i];
         std::cout << "[Waypoint " << i << "] x = " << wp->x
@@ -386,7 +386,7 @@ Eigen::Vector2d MPC::get_control(
                 << ", delta_ref = " << wp->delta_ref
                 << std::endl;
     }
-
+#endif
     // ===== 1. リファレンス生成（x_ref, u_ref） =====
     x_ref_.resize((N + 1) * nx);
     u_ref_.resize(N * nu);
@@ -412,11 +412,11 @@ Eigen::Vector2d MPC::get_control(
 
     Eigen::VectorXd x0(3);
     x0 << e_y, e_psi, t;
-
+#if 0
     for (int i = 0; i < std::min(10, static_cast<int>(u_ref_.size())); ++i) {
         std::cout << "[u_ref] " << i << ": " << u_ref_(i) << std::endl;
     }
-
+#endif
 
     // ===== 3. 問題定義（QP構築） =====
     //init_problem();
@@ -455,7 +455,7 @@ Eigen::Vector2d MPC::get_control_org(const OdometryInput& odom, const std::vecto
     const auto& target = trajectory.front();
     std::cout << "[DEBUG]: target->x = " << target->x << ", target->y = " << target->y << ", odom.x = " << odom.x << ", odom.y = " << odom.y << "odom.yaw = " << odom.yaw << std::endl;
 
-#if 1    
+#if 0    
     for (size_t i = 0; i < std::min<size_t>(5, trajectory.size()); ++i) {
     const auto& wp = trajectory[i];
     std::cout << "[Waypoint " << i << "] "

@@ -13,9 +13,28 @@
 #include <chrono>
 
 int main() {
+#if 0
     std::string filename = "raceline_awsim_15km_py.csv";
     auto [wp_x, wp_y, wp_speed] = load_csv(filename);
+#else
+    CSVLoader loader;
+    const std::string csv_file = "raceline_awsim_15km_py.csv";
+    if (!loader.load(csv_file)) {
+        std::cerr << "CSVのロードに失敗しました" << std::endl;
+        return 1;
+    }
 
+    // Waypointのリストを取得
+    const auto& all_waypoints = loader.getWaypoints();
+
+    std::vector<double> wp_x, wp_y, wp_speed;
+    for (const auto& wp : all_waypoints) {
+        wp_x.push_back(wp.x);
+        wp_y.push_back(wp.y);
+        wp_speed.push_back(wp.v_ref);
+    }
+
+#endif
     // リファレンスパス構築
     std::shared_ptr<ReferencePath> reference_path = std::make_shared<ReferencePath>(
         wp_x, wp_y,

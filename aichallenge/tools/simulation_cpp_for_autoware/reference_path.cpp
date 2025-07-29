@@ -14,10 +14,11 @@ ReferencePath::ReferencePath(const std::vector<double>& wp_x, const std::vector<
       smoothing_distance(smoothing_distance),
       max_width(max_width),
       circular(circular) {
-
+#if 1
     set_raw_waypoints_from_xy(wp_x, wp_y);
     waypoints = construct_path(wp_x, wp_y);
     segment_lengths = compute_segment_lengths();
+#endif
 }
 
 std::vector<std::shared_ptr<Waypoint>> ReferencePath::construct_path(const std::vector<double>& wp_x,
@@ -254,7 +255,11 @@ std::vector<std::shared_ptr<Waypoint>> ReferencePath::extract_raw_subpath(double
     return result;
 }
 
-
+void ReferencePath::update_hoge(const std::vector<double>& wp_x, const std::vector<double>& wp_y) {
+    set_raw_waypoints_from_xy(wp_x, wp_y);
+    waypoints = construct_path(wp_x, wp_y);
+    segment_lengths = compute_segment_lengths();
+}
 
 std::vector<std::shared_ptr<Waypoint>>& ReferencePath::get_all_waypoints() {
     return waypoints;

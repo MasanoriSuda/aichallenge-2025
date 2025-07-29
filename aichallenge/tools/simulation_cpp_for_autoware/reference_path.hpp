@@ -63,6 +63,7 @@ public:
     std::vector<std::shared_ptr<Waypoint>> extract_raw_subpath(double s, int N) const;
     // ReferencePath.hpp 内に追記
     void compute_curvature_profile();
+    void update_hoge(const std::vector<double>& wp_x, const std::vector<double>& wp_y);
 
 
     std::vector<std::shared_ptr<Waypoint>> raw_waypoints_;

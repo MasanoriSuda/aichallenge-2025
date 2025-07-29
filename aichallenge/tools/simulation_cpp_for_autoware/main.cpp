@@ -124,18 +124,10 @@ int main() {
             xs.push_back(wp.x);
             ys.push_back(wp.y);
         }
-
-        std::shared_ptr<ReferencePath> local_ref = std::make_shared<ReferencePath>(
-            xs, ys,
-            0.2,   // resolution
-            5.0,   // smoothing_distance
-            1.5,   // max_width
-            false  // circular
-        );
-
+        reference_path->update_hoge(xs,ys);
 
         // 補間された速度プロファイル設定
-        std::vector<double> wp_speed_interp_local(local_ref->get_all_waypoints().size());
+        std::vector<double> wp_speed_interp_local(reference_path->get_all_waypoints().size());
         for (size_t i = 0; i < wp_speed_interp_local.size(); ++i) {
             double ratio = static_cast<double>(i) * (wp_speed.size() - 1) / (wp_speed_interp_local.size() - 1);
             size_t idx = static_cast<size_t>(ratio);
@@ -143,17 +135,17 @@ int main() {
             double v = (1.0 - frac) * wp_speed[idx] + frac * wp_speed[std::min(idx + 1, wp_speed.size() - 1)];
             wp_speed_interp_local[i] = 9.722222222222221;//
         }
-        local_ref->set_speed_profile(wp_speed_interp_local);
+        reference_path->set_speed_profile(wp_speed_interp_local);
 
 #if 1
-        Eigen::Vector2d u = mpc->get_control(odom, local_ref->get_all_waypoints());
+        Eigen::Vector2d u = mpc->get_control(odom, reference_path->get_all_waypoints());
 #else
         Eigen::Vector2d u = mpc->get_control();
 #endif
         car->drive(u);
 
         // wpの中身を表示
-        Waypoint wp = local_ref->get_waypoint(car->get_wp_id());
+        Waypoint wp = reference_path->get_waypoint(car->get_wp_id());
 #if 0
         std::cout << "wp.x = " << wp.x << std::endl;
         std::cout << "wp.y = " << wp.y << std::endl;

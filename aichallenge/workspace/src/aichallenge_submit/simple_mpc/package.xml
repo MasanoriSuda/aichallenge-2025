@@ -3,16 +3,29 @@
 <package format="3">
   <name>simple_mpc</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
-  <maintainer email="masanori.suda@gmail.com">hisaki</maintainer>
+  <description>Simple MPC controller using OSQP and Autoware interfaces.</description>
+  <maintainer email="your@email.com">your_name</maintainer>
   <license>TODO: License declaration</license>
 
   <buildtool_depend>ament_cmake_auto</buildtool_depend>
 
+  <!-- Core ROS dependencies -->
   <depend>rclcpp</depend>
   <depend>autoware_auto_control_msgs</depend>
   <depend>autoware_auto_planning_msgs</depend>
+
+  <!-- Optional: if you use Odometry -->
+  <depend>nav_msgs</depend>
+
+  <!-- math & utils -->
+  <depend>Eigen3</depend>
+
+  <!-- If you rely on tf2 or motion_utils -->
   <depend>motion_utils</depend>
+
+  <!-- External: OSQP & OsqpEigen -->
+  <depend>osqp</depend>
+  <depend>OsqpEigen</depend>
 
   <export>
     <build_type>ament_cmake</build_type>

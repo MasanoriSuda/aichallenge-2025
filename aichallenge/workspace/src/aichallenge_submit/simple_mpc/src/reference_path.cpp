@@ -1,6 +1,7 @@
 // reference_path.cpp
 #include "reference_path.hpp"
 #include "interp_utils.hpp"
+#include "spline.h"
 #include <algorithm>
 #include <numeric>
 #include <iostream>
@@ -14,53 +15,82 @@ ReferencePath::ReferencePath(const std::vector<double>& wp_x, const std::vector<
       smoothing_distance(smoothing_distance),
       max_width(max_width),
       circular(circular) {
-
+#if 1
     set_raw_waypoints_from_xy(wp_x, wp_y);
-    waypoints = construct_path(wp_x, wp_y);
+    waypoints = construct_path(wp_x, wp_y,1.0,0.0,2.0);
     segment_lengths = compute_segment_lengths();
+#endif
 }
 
-std::vector<std::shared_ptr<Waypoint>> ReferencePath::construct_path(const std::vector<double>& wp_x,
-                                                                      const std::vector<double>& wp_y) {
-    std::vector<double> distance(wp_x.size(), 0.0);
-    for (size_t i = 1; i < wp_x.size(); ++i) {
-        double dx = wp_x[i] - wp_x[i - 1];
-        double dy = wp_y[i] - wp_y[i - 1];
-        distance[i] = distance[i - 1] + std::sqrt(dx * dx + dy * dy);
+std::vector<std::shared_ptr<Waypoint>> ReferencePath::construct_path(
+    const std::vector<double> &x, const std::vector<double> &y,
+    double ds, double v_current, double a_max)
+{
+    std::vector<std::shared_ptr<Waypoint>> path;
+    assert(x.size() == y.size());
+    assert(x.size() >= 2);
+
+    // --- 距離 s を自動生成 ---
+    std::vector<double> s;
+    s.push_back(0.0);
+    for (size_t i = 1; i < x.size(); ++i)
+    {
+        double dx = x[i] - x[i - 1];
+        double dy = y[i] - y[i - 1];
+        s.push_back(s.back() + std::sqrt(dx * dx + dy * dy));
     }
 
-    double total_dist = distance.back();
-    int n_interp = static_cast<int>(total_dist / resolution);
-    std::vector<double> s_interp(n_interp);
-    for (int i = 0; i < n_interp; ++i) {
-        s_interp[i] = distance.front() + i * resolution;
-    }
+    // --- スプライン補間 ---
+    tk::spline sx, sy;
+    sx.set_points(s, x);
+    sy.set_points(s, y);
 
-    Eigen::VectorXd dist_eig = Eigen::Map<const Eigen::VectorXd>(distance.data(), distance.size());
-    Eigen::VectorXd x_eig = Eigen::Map<const Eigen::VectorXd>(wp_x.data(), wp_x.size());
-    Eigen::VectorXd y_eig = Eigen::Map<const Eigen::VectorXd>(wp_y.data(), wp_y.size());
+    // --- 生成 ---
+    const double epsilon = 1e-5;
+    const double lookahead = 1.0; // 3m先の曲率を見る
 
-    Eigen::Spline<double, 1> spline_x = Eigen::SplineFitting<Eigen::Spline<double, 1>>::Interpolate(x_eig.transpose(), 1, dist_eig);
-    Eigen::Spline<double, 1> spline_y = Eigen::SplineFitting<Eigen::Spline<double, 1>>::Interpolate(y_eig.transpose(), 1, dist_eig);
+    for (double s_interp = s.front(); s_interp <= s.back(); s_interp += ds)
+    {
+        double x_val = sx(s_interp);
+        double y_val = sy(s_interp);
 
-    std::vector<std::shared_ptr<Waypoint>> interp_points;
-    for (int i = 0; i < n_interp; ++i) {
-        double s = s_interp[i];
-        double x = spline_x(s)(0);
-        double y = spline_y(s)(0);
-        double yaw;
-        if (i == n_interp - 1) {
-            double x_prev = spline_x(s_interp[i - 1])(0);
-            double y_prev = spline_y(s_interp[i - 1])(0);
-            yaw = std::atan2(y - y_prev, x - x_prev);
-        } else {
-            double x_next = spline_x(s_interp[i + 1])(0);
-            double y_next = spline_y(s_interp[i + 1])(0);
-            yaw = std::atan2(y_next - y, x_next - x);
+        // 1階微分
+        double dx = (sx(s_interp + epsilon) - sx(s_interp - epsilon)) / (2 * epsilon);
+        double dy = (sy(s_interp + epsilon) - sy(s_interp - epsilon)) / (2 * epsilon);
+
+        // 2階微分
+        double ddx = (sx(s_interp + epsilon) - 2 * sx(s_interp) + sx(s_interp - epsilon)) / (epsilon * epsilon);
+        double ddy = (sy(s_interp + epsilon) - 2 * sy(s_interp) + sy(s_interp - epsilon)) / (epsilon * epsilon);
+
+        // ヤウ角
+        double yaw = std::atan2(dy, dx);
+
+        // 曲率
+        double kappa = (dx * ddy - dy * ddx) / std::pow(dx * dx + dy * dy, 1.5);
+
+        // --- Lookahead先の曲率 ---
+        double s_lookahead = std::min(s.back(), s_interp + lookahead);
+
+        double dx_l = (sx(s_lookahead + epsilon) - sx(s_lookahead - epsilon)) / (2 * epsilon);
+        double dy_l = (sy(s_lookahead + epsilon) - sy(s_lookahead - epsilon)) / (2 * epsilon);
+        double ddx_l = (sx(s_lookahead + epsilon) - 2 * sx(s_lookahead) + sx(s_lookahead - epsilon)) / (epsilon * epsilon);
+        double ddy_l = (sy(s_lookahead + epsilon) - 2 * sy(s_lookahead) + sy(s_lookahead - epsilon)) / (epsilon * epsilon);
+
+        double kappa_lookahead = (dx_l * ddy_l - dy_l * ddx_l) / std::pow(dx_l * dx_l + dy_l * dy_l, 1.5);
+
+        // --- 速度制限（現在 + 未来） ---
+        double v_kappa_limit = std::sqrt(std::max(0.0, a_max / (std::abs(kappa_lookahead) + 1e-5)));
+        double v_acc_limit = std::sqrt(std::max(0.0, v_current * v_current + 2 * a_max * ds));
+        
+        double v = std::min(v_kappa_limit, v_acc_limit);
+        if(v < 10){
+            v = 9.722;
         }
-        interp_points.push_back(std::make_shared<Waypoint>(x, y, yaw));
+
+        path.push_back(std::make_shared<Waypoint>(x_val, y_val, yaw, kappa, v, 0));
     }
-    return interp_points;
+
+    return path;
 }
 
 std::vector<double> ReferencePath::compute_segment_lengths() {
@@ -210,21 +240,6 @@ void ReferencePath::set_raw_waypoints_from_xy(const std::vector<double>& xs, con
     }
 }
 
-
-
-void ReferencePath::update_path(const std::vector<double>& new_x, const std::vector<double>& new_y) {
-    if (new_x.size() != new_y.size() || new_x.empty()) {
-        std::cerr << "[ERROR] update_path: input size mismatch or empty." << std::endl;
-        return;
-    }
-
-    // 再補間してwaypointsを更新
-    waypoints = construct_path(new_x, new_y);
-
-    // segment_lengths も再計算
-    segment_lengths = compute_segment_lengths();
-}
-
 std::vector<std::shared_ptr<Waypoint>> ReferencePath::extract_raw_subpath(double s, int N) const {
     std::vector<std::shared_ptr<Waypoint>> result;
     if (raw_waypoints_.empty()) return result;
@@ -232,7 +247,8 @@ std::vector<std::shared_ptr<Waypoint>> ReferencePath::extract_raw_subpath(double
     // 前方で最も近い index を探す
     int closest_index = -1;
     double min_diff = std::numeric_limits<double>::max();
-    for (size_t i = 0; i < raw_waypoints_.size(); ++i) {
+    // 修正後
+    for (size_t i = 0; i < raw_waypoints_.size(); ++i){
         double ds = raw_waypoints_[i]->s - s;
         if (ds >= 0.0 && ds < min_diff) {
             min_diff = ds;
@@ -254,7 +270,11 @@ std::vector<std::shared_ptr<Waypoint>> ReferencePath::extract_raw_subpath(double
     return result;
 }
 
-
+void ReferencePath::update_hoge(const std::vector<double>& wp_x, const std::vector<double>& wp_y,double current_speed_mps, double max_accel) {
+    set_raw_waypoints_from_xy(wp_x, wp_y);
+    waypoints = construct_path(wp_x, wp_y, 0.2,current_speed_mps, max_accel);
+    segment_lengths = compute_segment_lengths();
+}
 
 std::vector<std::shared_ptr<Waypoint>>& ReferencePath::get_all_waypoints() {
     return waypoints;

@@ -21,7 +21,10 @@ public:
 
     Waypoint(double x_, double y_, double psi_)
         : x(x_), y(y_), psi(psi_), kappa(0.0), v_ref(0.0), s(0.0), delta_ref(0.0) {}
-    double distanceTo(const Waypoint& other) const {
+    Waypoint(double x_, double y_, double psi_, double kappa_, double v_ref_, double s_, double delta_ref_)
+        : x(x_), y(y_), psi(psi_), kappa(kappa_), v_ref(v_ref_), s(s_), delta_ref(delta_ref_) {}
+
+        double distanceTo(const Waypoint& other) const {
         return std::sqrt(std::pow(x - other.x, 2) + std::pow(y - other.y, 2));
     }
 };
@@ -59,10 +62,10 @@ public:
     Waypoint get_waypoint_from_s(double s) const;
 
     void set_raw_waypoints_from_xy(const std::vector<double>& xs, const std::vector<double>& ys); 
-    void update_path(const std::vector<double>& new_x, const std::vector<double>& new_y);
     std::vector<std::shared_ptr<Waypoint>> extract_raw_subpath(double s, int N) const;
     // ReferencePath.hpp 内に追記
     void compute_curvature_profile();
+    void update_hoge(const std::vector<double>& wp_x, const std::vector<double>& wp_y, double current_speed_mps, double max_accel);
 
 
     std::vector<std::shared_ptr<Waypoint>> raw_waypoints_;
@@ -76,7 +79,8 @@ public:
     bool circular;
 
 private:
-    std::vector<std::shared_ptr<Waypoint>> construct_path(const std::vector<double>& wp_x,
-                                                           const std::vector<double>& wp_y);
+std::vector<std::shared_ptr<Waypoint>> construct_path(
+    const std::vector<double> &x, const std::vector<double> &y,
+    double ds, double v_current, double a_max);
     std::vector<double> compute_segment_lengths();
 };

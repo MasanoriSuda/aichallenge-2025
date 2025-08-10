@@ -184,7 +184,7 @@ std::tuple<double, double> BicycleModel::get_temporal_derivatives(const Eigen::V
 Eigen::Vector3d BicycleModel::get_spatial_derivatives(const Eigen::Vector3d& state,
                                                       const Eigen::Vector2d& input,
                                                       double kappa) const {
-#if 0//Todo:suda ビルドエラー回避                                                        
+#if 0                                                        
     double e_y = state[0];
     double e_psi = state[1];
     double v = input[0];
@@ -214,7 +214,12 @@ void BicycleModel::linearize(double v_ref, double kappa_ref, double delta_s,
     B.row(1) = Eigen::Vector2d(0.0, delta_s);
     B.row(2) = Eigen::Vector2d(-1.0 / (v_ref * v_ref) * delta_s, 0.0);
 
-    f = Eigen::Vector3d(0.0, 0.0, 1.0 / v_ref * delta_s);
+    // ★ 修正：kappa_ref を使ったバイアス項
+    f = Eigen::Vector3d(
+        0.0,
+        kappa_ref * delta_s,
+        delta_s / v_ref
+    );
 }
 
 void BicycleModel::set_pose_from_odom(const OdometryInput& odom) {

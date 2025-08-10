@@ -1,6 +1,12 @@
 #ifndef SIMPLE_MPC_HPP_
 #define SIMPLE_MPC_HPP_
 
+// mpc_node.cpp（ROS2ノード化・initとspin分割のベース）
+#include "reference_path.hpp"
+#include "spatial_bicycle_models.hpp"
+#include "MPC.hpp"
+#include "OdometryInput.hpp"
+
 #include <autoware_auto_control_msgs/msg/ackermann_control_command.hpp>
 #include <autoware_auto_planning_msgs/msg/trajectory.hpp>
 #include <autoware_auto_planning_msgs/msg/trajectory_point.hpp>
@@ -41,20 +47,33 @@ class SimpleMpc : public rclcpp::Node {
   Trajectory::SharedPtr trajectory_;
   Odometry::SharedPtr odometry_;
 
+    // メンバ変数
+  std::shared_ptr<ReferencePath> reference_path;
+  std::shared_ptr<BicycleModel> car;
+  std::shared_ptr<MPC> mpc;
+  std::vector<std::vector<double>> log_;  // ⬅️ これが必要
+  std::vector<double> wp_speed;
+  int N = 30;
+  int WAYPOINT_NUM = 10;
 
 
-  // mpc parameters
-  const double wheel_base_;
-  const double lookahead_gain_;
-  const double lookahead_min_distance_;
-  const double speed_proportional_gain_;
-  const bool use_external_target_vel_;
-  const double external_target_vel_;
-  const double steering_tire_angle_gain_;
+  // pure pursuit parameters
+  //const double wheel_base_;
+  //const double lookahead_gain_;
+  //const double lookahead_min_distance_;
+  //const double speed_proportional_gain_;
+  //const bool use_external_target_vel_;
+  //const double external_target_vel_;
+  //const double steering_tire_angle_gain_;
 
 
  private:
-  void onTimer();
+  rclcpp::Time prev_time_;
+  rclcpp::Time start_time_;
+  double max_speed_;
+  bool is_initialized;
+  bool is_nearrest_0;
+ void onTimer();
   bool subscribeMessageAvailable();
 };
 

@@ -36,7 +36,7 @@ SimpleMpc::SimpleMpc()
     rclcpp::create_timer(this, get_clock(), 10ms, std::bind(&SimpleMpc::onTimer, this));
 
     std::vector<double> x = {0, 1}, y = {0, 1};
-    reference_path = std::make_shared<ReferencePath>(x, y, 0.2, 1.0, 3.0, false);
+    reference_path = std::make_shared<ReferencePath>(x, y, 0.2, 3.0, 3.0, false);
 
     car = std::make_shared<BicycleModel>(reference_path, 1.087, 1.45, 0.01);
   
@@ -60,8 +60,8 @@ SimpleMpc::SimpleMpc()
     Q(2, 2) = 0.0;   // tまたはsはそのままでOK
 
     Eigen::MatrixXd R = Eigen::MatrixXd::Zero(2, 2);
-    R(0, 0) = 150.0;   // 舵角の変化にコスト（抑制する）
-    R(1, 1) = 2800.0;   // 今回vは固定 or補間なら無視でもOK
+    R(0, 0) = 200.0;   // 舵角の変化にコスト（抑制する）
+    R(1, 1) = 3000.0;   // 今回vは固定 or補間なら無視でもOK
 
     Eigen::MatrixXd QN = Eigen::MatrixXd::Identity(3, 3);
     QN(0, 0) = 40.0;  // 横ずれは見るけど、50は過剰
@@ -137,7 +137,15 @@ if (dir < 0.0 && idx + 1 < trajectory_->points.size()) {
   idx += 1;
 }
 
-idx = (idx+5) % trajectory_->points.size();
+size_t idx_offset; 
+double v_pref = std::hypot(odometry_->twist.twist.linear.x, odometry_->twist.twist.linear.y);
+if(v_pref > 32.0 / 3.6){
+  idx_offset = 7;
+} else {
+  idx_offset = 5;
+}
+
+idx = (idx+idx_offset) % trajectory_->points.size();
   size_t closet_traj_point_idx = idx;
 
   if (closet_traj_point_idx == 0){
@@ -148,7 +156,13 @@ idx = (idx+5) % trajectory_->points.size();
   double x = odometry_->pose.pose.position.x;
   double y = odometry_->pose.pose.position.y;
   double yaw = tf2::getYaw(odometry_->pose.pose.orientation);
-  double pred_dt =0.125;
+  double pred_dt =0.15;
+  double v_pref2 = std::hypot(odometry_->twist.twist.linear.x, odometry_->twist.twist.linear.y);
+
+  if(v_pref2 < 32.0){
+    pred_dt =0.125;
+  }
+
   //current spped
   // 車体座標の並進速度（m/s）
   const double vx = odometry_->twist.twist.linear.x; // 前方向
@@ -246,8 +260,34 @@ double dt = 0.01;  // 制御周期 [s]
   Eigen::Vector2d u = mpc->get_control(odom_input, reference_path->get_all_waypoints());
   //car->drive(u);
 
-  if(u[0] > max_speed_){
-    max_speed_ = u[0];
+  // --- ここに最小構成のkappa計算を埋め込み ---
+  auto hypot2 = [](double a, double b){ return std::sqrt(a*a + b*b); };
+  constexpr double EPS = 1e-9;
+  const size_t n = xs.size();
+  std::vector<double> kappa(n, 0.0);
+
+  if (n >= 3) {
+      for (size_t i = 1; i + 1 < n; ++i) {
+          double x1 = xs[i-1], y1 = ys[i-1];
+          double x2 = xs[i],   y2 = ys[i];
+          double x3 = xs[i+1], y3 = ys[i+1];
+
+          double a = hypot2(x2 - x1, y2 - y1);
+          double b = hypot2(x3 - x2, y3 - y2);
+          double c = hypot2(x3 - x1, y3 - y1);
+
+          double cross = (x2 - x1) * (y3 - y1) - (y2 - y1) * (x3 - x1);
+          double area2 = std::abs(cross);
+          double denom = a * b * c;
+
+          if (denom >= EPS) {
+              double k = 2.0 * (area2 / denom);
+              kappa[i] = (cross >= 0.0) ? +k : -k; // 左:+ 右:-
+          }
+      }
+      // 端点コピー
+      kappa[0] = kappa[1];
+      kappa[n-1] = kappa[n-2];
   }
   //RCLCPP_INFO(this->get_logger(), "最高速度: %.3f m/s",  max_speed_);
 
@@ -259,6 +299,14 @@ double dt = 0.01;  // 制御周期 [s]
   cmd.longitudinal.stamp = stamp;
 
   double v = u[0];
+  if(idx>165 && idx <175){
+    v =31.5 /3.6;
+  }
+  #if 0
+  if(u[1] < 0.1){
+    u[1] = 0.0;
+  }
+  #endif
   double acc = (v - v_current) / dt;
 
   if (acc > acc_max) acc = acc_max;
@@ -269,7 +317,7 @@ double dt = 0.01;  // 制御周期 [s]
 
   #if 0
   double kappa = u[1];
-  if(abs(kappa) < 0.2){
+  if(abs(kappa) < 0.25){
     kappa = 0.0;
   }
   double speed = u[0];

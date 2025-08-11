@@ -84,7 +84,7 @@ std::vector<std::shared_ptr<Waypoint>> ReferencePath::construct_path(
         
         double v = std::min(v_kappa_limit, v_acc_limit);
         if(v< 100){
-             v = 9.63;//ok
+             v = 34.5 / 3.6;//ok
             //v = 9.69;//ok
             //v = 9.695;//ok
             //v = 9.696;//ok or NG

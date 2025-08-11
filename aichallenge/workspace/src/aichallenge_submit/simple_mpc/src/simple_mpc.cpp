@@ -302,8 +302,8 @@ double dt = 0.01;  // 制御周期 [s]
   if(idx>165 && idx <175){
     v =30.0 /3.6;
   }
-  #if 0
-  if(u[1] < 0.1){
+  #if 1
+  if(abs(u[1]) < 0.03){
     u[1] = 0.0;
   }
   #endif
@@ -328,6 +328,7 @@ double dt = 0.01;  // 制御周期 [s]
       speed, kappa, delta);
   #endif
 
+  
   if(total_s< -0.01){
     cmd.longitudinal.speed = v;
     cmd.longitudinal.acceleration = acc;

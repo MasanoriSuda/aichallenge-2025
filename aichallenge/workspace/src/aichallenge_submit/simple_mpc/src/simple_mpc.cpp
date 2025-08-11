@@ -300,7 +300,7 @@ double dt = 0.01;  // 制御周期 [s]
 
   double v = u[0];
   if(idx>165 && idx <175){
-    v =31.0 /3.6;
+    v =30.0 /3.6;
   }
   #if 0
   if(u[1] < 0.1){
@@ -317,7 +317,7 @@ double dt = 0.01;  // 制御周期 [s]
 
   #if 0
   double kappa = u[1];
-  if(abs(kappa) < 0.25){
+  if(abs(kappa) < 0.3){
     kappa = 0.0;
   }
   double speed = u[0];

@@ -61,7 +61,7 @@ SimpleMpc::SimpleMpc()
 
     Eigen::MatrixXd R = Eigen::MatrixXd::Zero(2, 2);
     R(0, 0) = 150.0;   // 舵角の変化にコスト（抑制する）
-    R(1, 1) = 1500.0;   // 今回vは固定 or補間なら無視でもOK
+    R(1, 1) = 2800.0;   // 今回vは固定 or補間なら無視でもOK
 
     Eigen::MatrixXd QN = Eigen::MatrixXd::Identity(3, 3);
     QN(0, 0) = 40.0;  // 横ずれは見るけど、50は過剰
@@ -70,7 +70,7 @@ SimpleMpc::SimpleMpc()
 
     double v_max = 35.0 / 3.6;//todo:debug
     double delta_max = 0.66;
-    double ay_max = 30.0;
+    double ay_max = 10.0;
 
     std::map<std::string, Eigen::VectorXd> input_constraints = {
         {"umin", (Eigen::Vector2d() << 0.0, -std::tan(delta_max) / car->get_length()).finished()},
@@ -91,6 +91,7 @@ SimpleMpc::SimpleMpc()
     is_initialized = false;
     is_nearrest_0 = false;
     max_speed_ = 0.0;
+    total_s = 0.0;
 }
 
 AckermannControlCommand zeroAckermannControlCommand(rclcpp::Time stamp)
@@ -136,30 +137,52 @@ if (dir < 0.0 && idx + 1 < trajectory_->points.size()) {
   idx += 1;
 }
 
+idx = (idx+5) % trajectory_->points.size();
   size_t closet_traj_point_idx = idx;
 
   if (closet_traj_point_idx == 0){
     is_nearrest_0 = true;
   }
 
-  // odometry から OdometryInput を生成して車両にセット
-  OdometryInput odom_input;
-  odom_input.x = odometry_->pose.pose.position.x;
-  odom_input.y = odometry_->pose.pose.position.y;
-  odom_input.yaw = tf2::getYaw(odometry_->pose.pose.orientation);
-  odom_input.v = odometry_->twist.twist.linear.x;
-  car->set_pose_from_odom(odom_input);
-#if 0
-  RCLCPP_INFO(this->get_logger(),
-      "MPC odo: x= %.2f , y = %.2f, yaw= %.2f , v = %.2f",
-      odom_input.x , odom_input.y, odom_input.yaw, odom_input.v);
-#endif
+  //current pos
+  double x = odometry_->pose.pose.position.x;
+  double y = odometry_->pose.pose.position.y;
+  double yaw = tf2::getYaw(odometry_->pose.pose.orientation);
+  double pred_dt =0.125;
+  //current spped
+  // 車体座標の並進速度（m/s）
+  const double vx = odometry_->twist.twist.linear.x; // 前方向
+  //const double vy = odometry_->twist.twist.linear.y; // 横方向（多くの車は≈0）
+  // 回頭角速度（rad/s）
+  const double omega = odometry_->twist.twist.angular.z;
+  const double v_tmp = vx;
 
-  //odoから現在速度を算出
-  double vx = odometry_->twist.twist.linear.x;
-  double vy = odometry_->twist.twist.linear.y;
-  double v_current = std::hypot(vx, vy);
-  //RCLCPP_INFO(this->get_logger(), "現在速度: %.3f m/s", v_current);
+  double pred_x,pred_y,pred_yaw;
+  if (std::abs(omega) < 1e-6) {
+      // ほぼ直進
+      const double dx = v_tmp * pred_dt * std::cos(yaw);
+      const double dy = v_tmp * pred_dt * std::sin(yaw);
+      pred_x = x + dx;
+      pred_y= y + dy;
+      pred_yaw = yaw;
+  } else {
+      // 円弧解（厳密）
+      const double yaw2 = yaw + omega * pred_dt;
+      const double R = v_tmp / omega; // 旋回半径（符号付き）
+      const double dx =  R * (std::sin(yaw2) - std::sin(yaw));
+      const double dy = -R * (std::cos(yaw2) - std::cos(yaw));
+      pred_x = x + dx;
+      pred_y = y + dy;
+      pred_yaw = yaw2;
+  }
+
+  OdometryInput odom_input;
+  odom_input.x = pred_x;
+  odom_input.y = pred_y;
+  odom_input.yaw = pred_yaw;
+  double v_current = std::hypot(odometry_->twist.twist.linear.x, odometry_->twist.twist.linear.y);
+  odom_input.v = v_current;
+  car->set_pose_from_odom(odom_input);
 
   // trajectory から x, y を抽出
   std::vector<double> xs, ys;
@@ -257,8 +280,12 @@ double dt = 0.01;  // 制御周期 [s]
       speed, kappa, delta);
   #endif
 
-  cmd.lateral.steering_tire_angle = std::atan(u[1] * car->get_length());  // κL → δ
-  
+  if(total_s< -0.01){
+    cmd.longitudinal.speed = v;
+    cmd.longitudinal.acceleration = acc;
+    cmd.lateral.steering_tire_angle = std::atan(0.0);  // κL → δ
+    total_s +=0.01;
+  }
   // パブリッシュ
   pub_cmd_->publish(cmd);
   // auto raw_cmd = cmd;

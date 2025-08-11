@@ -55,6 +55,7 @@ class SimpleMpc : public rclcpp::Node {
   std::vector<double> wp_speed;
   int N = 30;
   int WAYPOINT_NUM = 10;
+  double total_s;
 
 
   // pure pursuit parameters

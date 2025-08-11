@@ -83,8 +83,11 @@ std::vector<std::shared_ptr<Waypoint>> ReferencePath::construct_path(
         double v_acc_limit = std::sqrt(std::max(0.0, v_current * v_current + 2 * a_max * ds));
         
         double v = std::min(v_kappa_limit, v_acc_limit);
-        if(v < 10){
-            v = 9.722;
+        if(v< 100){
+            v = 9.695;//ok
+            //v = 9.696;//ok or NG
+            //v = 9.697;//NG
+            //v = 9.698;//NG
         }
 
         path.push_back(std::make_shared<Waypoint>(x_val, y_val, yaw, kappa, v, 0));

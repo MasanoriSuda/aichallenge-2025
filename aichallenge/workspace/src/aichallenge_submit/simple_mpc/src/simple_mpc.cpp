@@ -55,22 +55,22 @@ SimpleMpc::SimpleMpc()
     car->set_pose_from_odom(odom_input);
 
     Eigen::MatrixXd Q = Eigen::MatrixXd::Identity(3, 3);
-    Q(0, 0) = 30.0;  // 横ずれは見るけど、50は過剰
-    Q(1, 1) = 80.0;   // 進行方向ずれも見る（e_psi、これがないと蛇行する）
+    Q(0, 0) = 10.0;  // 横ずれは見るけど、50は過剰
+    Q(1, 1) = 30.0;   // 進行方向ずれも見る（e_psi、これがないと蛇行する）
     Q(2, 2) = 0.0;   // tまたはsはそのままでOK
 
     Eigen::MatrixXd R = Eigen::MatrixXd::Zero(2, 2);
-    R(0, 0) = 200.0;   // 舵角の変化にコスト（抑制する）
-    R(1, 1) = 3000.0;   // 今回vは固定 or補間なら無視でもOK
+    R(0, 0) = 80.0;   // 舵角の変化にコスト（抑制する）
+    R(1, 1) = 800.0;   // 今回vは固定 or補間なら無視でもOK
 
     Eigen::MatrixXd QN = Eigen::MatrixXd::Identity(3, 3);
-    QN(0, 0) = 40.0;  // 横ずれは見るけど、50は過剰
-    QN(1, 1) = 120.0;   // 進行方向ずれも見る（e_psi、これがないと蛇行する）
+    QN(0, 0) = 20.0;  // 横ずれは見るけど、50は過剰
+    QN(1, 1) = 50.0;   // 進行方向ずれも見る（e_psi、これがないと蛇行する）
     QN(2, 2) = 0.0;   // tまたはsはそのままでOK
 
     double v_max = 35.0 / 3.6;//todo:debug
     double delta_max = 0.66;
-    double ay_max = 10.0;
+    double ay_max = 30.0;
 
     std::map<std::string, Eigen::VectorXd> input_constraints = {
         {"umin", (Eigen::Vector2d() << 0.0, -std::tan(delta_max) / car->get_length()).finished()},
@@ -137,31 +137,13 @@ if (dir < 0.0 && idx + 1 < trajectory_->points.size()) {
   idx += 1;
 }
 
-size_t idx_offset; 
-double v_pref = std::hypot(odometry_->twist.twist.linear.x, odometry_->twist.twist.linear.y);
-if(v_pref > 32.0 / 3.6){
-  idx_offset = 7;
-} else {
-  idx_offset = 5;
-}
-
-idx = (idx+idx_offset) % trajectory_->points.size();
-  size_t closet_traj_point_idx = idx;
-
-  if (closet_traj_point_idx == 0){
-    is_nearrest_0 = true;
-  }
+size_t closet_traj_point_idx = idx;
 
   //current pos
   double x = odometry_->pose.pose.position.x;
   double y = odometry_->pose.pose.position.y;
   double yaw = tf2::getYaw(odometry_->pose.pose.orientation);
-  double pred_dt =0.15;
-  double v_pref2 = std::hypot(odometry_->twist.twist.linear.x, odometry_->twist.twist.linear.y);
-
-  if(v_pref2 < 32.0){
-    pred_dt =0.125;
-  }
+  double pred_dt =0.12;
 
   //current spped
   // 車体座標の並進速度（m/s）
@@ -199,25 +181,8 @@ idx = (idx+idx_offset) % trajectory_->points.size();
   car->set_pose_from_odom(odom_input);
 
   // trajectory から x, y を抽出
-  std::vector<double> xs, ys;
-
-  //odoと先頭トラジェクトリの中間を確保する
-#if 0  
-  if (elapsed_sec < warm_time) {
-    const auto & pt = trajectory_->points[adj_index];
-    double mid_x = 0.5 * (pt.pose.position.x + odom_input.x);
-    double mid_y = 0.5 * (pt.pose.position.y + odom_input.y);
-    xs.push_back(mid_x);
-    ys.push_back(mid_y);
-  } else {
-    const auto & pt = trajectory_->points[closet_traj_point_idx];
-    double mid_x = 0.5 * (pt.pose.position.x + odom_input.x);
-    double mid_y = 0.5 * (pt.pose.position.y + odom_input.y);
-    xs.push_back(mid_x);
-    ys.push_back(mid_y);
-  }
-#endif  
-  for (size_t i = 0; i < 20; ++i) {
+  std::vector<double> xs, ys; 
+  for (size_t i = 0; i < 30; ++i) {
     size_t idx = (closet_traj_point_idx + i) % trajectory_->points.size();
     if (idx == 0){
       continue;
@@ -239,26 +204,6 @@ idx = (idx+idx_offset) % trajectory_->points.size();
   double dist = std::sqrt(dx_tmp * dx_tmp + dy_tmp * dy_tmp);
   RCLCPP_INFO(this->get_logger(), "dist to traj.front: %.3f", dist);
 #endif
-
-
-  //RCLCPP_INFO(this->get_logger(), "Trajectory size = %zu", trajectory_->points.size());
-#if 0
-  RCLCPP_INFO(this->get_logger(),
-      "closet_traj_point_idx = %ld",
-      closet_traj_point_idx );
-  RCLCPP_INFO(this->get_logger(),
-      "MPC trajectory start: x= %.2f,y= %.2f",
-      xs[0] , ys[0] );
-#endif
-
-double dt = 0.01;  // 制御周期 [s]
-  const double acc_max =3.2;  // 加速 [m/s²]
-// reference path を更新（仮名 update → 本当は set_points や reset_path など）
-  reference_path->update_hoge(xs, ys,v_current,acc_max);  // ← 実装済み関数名に置き換えてください
-
-  // 制御量計算
-  Eigen::Vector2d u = mpc->get_control(odom_input, reference_path->get_all_waypoints());
-  //car->drive(u);
 
   // --- ここに最小構成のkappa計算を埋め込み ---
   auto hypot2 = [](double a, double b){ return std::sqrt(a*a + b*b); };
@@ -289,6 +234,43 @@ double dt = 0.01;  // 制御周期 [s]
       kappa[0] = kappa[1];
       kappa[n-1] = kappa[n-2];
   }
+  
+  size_t idx_offset; 
+  if(fabs(kappa[6]) >= fabs(kappa[3]) ){
+    idx_offset = 6;
+  } else {
+    idx_offset = 3;
+  }
+  
+  idx_offset = 7;//shoutotsu
+
+  // trajectory から x, y を抽出
+  std::vector<double> xs_adj, ys_adj;
+  for (size_t i = 0; i < 20; ++i) {
+    xs_adj.push_back(xs[i+idx_offset]);
+    ys_adj.push_back(ys[i+idx_offset]);
+  } 
+
+
+  //RCLCPP_INFO(this->get_logger(), "Trajectory size = %zu", trajectory_->points.size());
+#if 0
+  RCLCPP_INFO(this->get_logger(),
+      "closet_traj_point_idx = %ld",
+      closet_traj_point_idx );
+  RCLCPP_INFO(this->get_logger(),
+      "MPC trajectory start: x= %.2f,y= %.2f",
+      xs[0] , ys[0] );
+#endif
+
+double dt = 0.01;  // 制御周期 [s]
+  const double acc_max =3.2;  // 加速 [m/s²]
+// reference path を更新（仮名 update → 本当は set_points や reset_path など）
+  reference_path->update_hoge(xs_adj, ys_adj,v_current,acc_max);  // ← 実装済み関数名に置き換えてください
+
+  // 制御量計算
+  Eigen::Vector2d u = mpc->get_control(odom_input, reference_path->get_all_waypoints());
+  //car->drive(u);
+
   //RCLCPP_INFO(this->get_logger(), "最高速度: %.3f m/s",  max_speed_);
 
   // コマンドメッセージ生成
@@ -299,20 +281,16 @@ double dt = 0.01;  // 制御周期 [s]
   cmd.longitudinal.stamp = stamp;
 
   double v = u[0];
-  if(idx>165 && idx <175){
-    v =30.0 /3.6;
-  }
-  #if 1
-  if(abs(u[1]) < 0.03){
-    u[1] = 0.0;
-  }
-  #endif
+
   double acc = (v - v_current) / dt;
 
   if (acc > acc_max) acc = acc_max;
 
   cmd.longitudinal.speed = v;
   cmd.longitudinal.acceleration = acc;
+  if(fabs(u[1]) == 0.0){
+    u[1] = 0.0;
+  }
   cmd.lateral.steering_tire_angle = std::atan(u[1] * car->get_length());  // κL → δ
 
   #if 0

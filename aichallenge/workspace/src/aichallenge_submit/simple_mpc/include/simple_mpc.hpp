@@ -53,7 +53,7 @@ class SimpleMpc : public rclcpp::Node {
   std::shared_ptr<MPC> mpc;
   std::vector<std::vector<double>> log_;  // ⬅️ これが必要
   std::vector<double> wp_speed;
-  int N = 30;
+  int N = 60;
   int WAYPOINT_NUM = 10;
   double total_s;
 

@@ -60,7 +60,7 @@ SimpleMpc::SimpleMpc()
     Q(2, 2) = 0.0;   // tまたはsはそのままでOK
 
     Eigen::MatrixXd R = Eigen::MatrixXd::Zero(2, 2);
-    R(0, 0) = 80.0;   // 舵角の変化にコスト（抑制する）
+    R(0, 0) = 90.0;   // 舵角の変化にコスト（抑制する）
     R(1, 1) = 800.0;   // 今回vは固定 or補間なら無視でもOK
 
     Eigen::MatrixXd QN = Eigen::MatrixXd::Identity(3, 3);

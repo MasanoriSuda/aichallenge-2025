@@ -38,6 +38,7 @@ SimplePurePursuit::SimplePurePursuit()
   using namespace std::literals::chrono_literals;
   timer_ =
     rclcpp::create_timer(this, get_clock(), 10ms, std::bind(&SimplePurePursuit::onTimer, this));
+  is_reached = false;
 }
 
 AckermannControlCommand zeroAckermannControlCommand(rclcpp::Time stamp)
@@ -59,15 +60,72 @@ void SimplePurePursuit::onTimer()
     return;
   }
 
+  auto odom_pred = odometry_;
+
+    //current pos
+  double x = odometry_->pose.pose.position.x;
+  double y = odometry_->pose.pose.position.y;
+  double yaw = tf2::getYaw(odometry_->pose.pose.orientation);
+  double pred_dt =0.20;
+
+  //current spped
+  // 車体座標の並進速度（m/s）
+  const double vx = odometry_->twist.twist.linear.x; // 前方向
+  //const double vy = odometry_->twist.twist.linear.y; // 横方向（多くの車は≈0）
+  // 回頭角速度（rad/s）
+  const double omega = odometry_->twist.twist.angular.z;
+  const double v_tmp = vx;
+
+  double pred_x,pred_y,pred_yaw;
+  if (std::abs(omega) < 1e-6) {
+      // ほぼ直進
+      const double dx = v_tmp * pred_dt * std::cos(yaw);
+      const double dy = v_tmp * pred_dt * std::sin(yaw);
+      pred_x = x + dx;
+      pred_y= y + dy;
+      pred_yaw = yaw;
+  } else {
+      // 円弧解（厳密）
+      const double yaw2 = yaw + omega * pred_dt;
+      const double R = v_tmp / omega; // 旋回半径（符号付き）
+      const double dx =  R * (std::sin(yaw2) - std::sin(yaw));
+      const double dy = -R * (std::cos(yaw2) - std::cos(yaw));
+      pred_x = x + dx;
+      pred_y = y + dy;
+      pred_yaw = yaw2;
+  }
+
+
+  tf2::Quaternion q_new;
+  q_new.setRPY(0, 0, pred_yaw);
+  odom_pred->pose.pose.position.x = pred_x;
+  odom_pred->pose.pose.position.y = pred_y;
+  odom_pred->pose.pose.orientation = tf2::toMsg(q_new);
+
   size_t closet_traj_point_idx =
-    findNearestIndex(trajectory_->points, odometry_->pose.pose.position);
+    findNearestIndex(trajectory_->points, odom_pred->pose.pose.position);
+    size_t hoge_idx;
+    if(closet_traj_point_idx == 90 && is_reached == false){
+      is_reached = true;
+    }
+
+    if(is_reached == true){
+      hoge_idx = 7;
+    } else {
+      hoge_idx = 7;
+    }
+
+    if(closet_traj_point_idx > 240 && closet_traj_point_idx < 250){
+      hoge_idx = 7;
+    }
+    hoge_idx = 0;
+
+    closet_traj_point_idx = (closet_traj_point_idx + hoge_idx) % trajectory_->points.size();
 
   // publish zero command
   AckermannControlCommand cmd = zeroAckermannControlCommand(get_clock()->now());
 
-  if (
-    (closet_traj_point_idx == trajectory_->points.size() - 1) ||
-    (trajectory_->points.size() <= 2)) {
+  if (0) {
     cmd.longitudinal.speed = 0.0;
     cmd.longitudinal.acceleration = -10.0;
     RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000 /*ms*/, "reached to the goal");
@@ -78,20 +136,26 @@ void SimplePurePursuit::onTimer()
     // calc longitudinal speed and acceleration
     double target_longitudinal_vel =
       use_external_target_vel_ ? external_target_vel_ : closet_traj_point.longitudinal_velocity_mps;
-    double current_longitudinal_vel = odometry_->twist.twist.linear.x;
+    //double current_longitudinal_vel = odom_pred->twist.twist.linear.x;
 
-    cmd.longitudinal.speed = target_longitudinal_vel;
-    cmd.longitudinal.acceleration =
-      speed_proportional_gain_ * (target_longitudinal_vel - current_longitudinal_vel);
+    #if 0
+    cmd.longitudinal.speed = 35.0 * (34.9/32.5) /3.6;
+    double v_current = std::hypot(odometry_->twist.twist.linear.x, odometry_->twist.twist.linear.y);
+    cmd.longitudinal.acceleration =  (34.90 * (35.0/32.5) / 3.6) - v_current;
+    #else
+    cmd.longitudinal.speed = 6.0 / 3.6;
+    double v_current = std::hypot(odometry_->twist.twist.linear.x, odometry_->twist.twist.linear.y);
+    cmd.longitudinal.acceleration =  6.0 / 3.6 - v_current;
+    #endif
+
 
     // calc lateral control
     //// calc lookahead distance
     double lookahead_distance = lookahead_gain_ * target_longitudinal_vel + lookahead_min_distance_;
-    //// calc center coordinate of rear wheel
-    double rear_x = odometry_->pose.pose.position.x -
-                    wheel_base_ / 2.0 * std::cos(odometry_->pose.pose.orientation.z);
-    double rear_y = odometry_->pose.pose.position.y -
-                    wheel_base_ / 2.0 * std::sin(odometry_->pose.pose.orientation.z);
+    const double yaw = tf2::getYaw(odom_pred->pose.pose.orientation);
+    double rear_x = odom_pred->pose.pose.position.x - (wheel_base_/2.0)*std::cos(yaw);
+    double rear_y = odom_pred->pose.pose.position.y - (wheel_base_/2.0)*std::sin(yaw);
+
     //// search lookahead point
     auto lookahead_point_itr = std::find_if(
       trajectory_->points.begin() + closet_traj_point_idx, trajectory_->points.end(),
@@ -115,7 +179,7 @@ void SimplePurePursuit::onTimer()
 
     // calc steering angle for lateral control
     double alpha = std::atan2(lookahead_point_y - rear_y, lookahead_point_x - rear_x) -
-                   tf2::getYaw(odometry_->pose.pose.orientation);
+                   tf2::getYaw(odom_pred->pose.pose.orientation);
     cmd.lateral.steering_tire_angle =
       steering_tire_angle_gain_ * std::atan2(2.0 * wheel_base_ * std::sin(alpha), lookahead_distance);
   }

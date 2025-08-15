@@ -38,7 +38,7 @@ SimpleMpc::SimpleMpc()
     std::vector<double> x = {0, 1}, y = {0, 1};
     reference_path = std::make_shared<ReferencePath>(x, y, 0.2, 3.0, 3.0, false);
 
-    car = std::make_shared<BicycleModel>(reference_path, 1.087, 1.45, 0.01);
+    car = std::make_shared<BicycleModel>(reference_path, 1.15, 1.45, 0.01);
   
     // odometry から OdometryInput を生成して車両にセット、暫定
     geometry_msgs::msg::Quaternion q;
@@ -53,20 +53,36 @@ SimpleMpc::SimpleMpc()
     odom_input.yaw = tf2::getYaw(q);
     odom_input.v = 0.0;
     car->set_pose_from_odom(odom_input);
-
+#if 0
     Eigen::MatrixXd Q = Eigen::MatrixXd::Identity(3, 3);
-    Q(0, 0) = 10.0;  // 横ずれは見るけど、50は過剰
-    Q(1, 1) = 30.0;   // 進行方向ずれも見る（e_psi、これがないと蛇行する）
+    Q(0, 0) = 30.0;  // 横ずれは見るけど、50は過剰
+    Q(1, 1) = 60.0;   // 進行方向ずれも見る（e_psi、これがないと蛇行する）
     Q(2, 2) = 0.0;   // tまたはsはそのままでOK
 
     Eigen::MatrixXd R = Eigen::MatrixXd::Zero(2, 2);
-    R(0, 0) = 90.0;   // 舵角の変化にコスト（抑制する）
-    R(1, 1) = 800.0;   // 今回vは固定 or補間なら無視でもOK
+    R(0, 0) = 200.0;   // 舵角の変化にコスト（抑制する）
+    R(1, 1) = 5000.0;   // 今回vは固定 or補間なら無視でもOK
 
     Eigen::MatrixXd QN = Eigen::MatrixXd::Identity(3, 3);
-    QN(0, 0) = 20.0;  // 横ずれは見るけど、50は過剰
-    QN(1, 1) = 50.0;   // 進行方向ずれも見る（e_psi、これがないと蛇行する）
+    QN(0, 0) = 40.0;  // 横ずれは見るけど、50は過剰
+    QN(1, 1) = 80.0;   // 進行方向ずれも見る（e_psi、これがないと蛇行する）
     QN(2, 2) = 0.0;   // tまたはsはそのままでOK
+#endif
+
+    Eigen::MatrixXd Q = Eigen::MatrixXd::Identity(3, 3);
+    Q(0, 0) = 30.0;  // 横ずれは見るけど、50は過剰
+    Q(1, 1) = 60.0;   // 進行方向ずれも見る（e_psi、これがないと蛇行する）
+    Q(2, 2) = 0.0;   // tまたはsはそのままでOK
+
+    Eigen::MatrixXd R = Eigen::MatrixXd::Zero(2, 2);
+    R(0, 0) = 200.0;   // 舵角の変化にコスト（抑制する）
+    R(1, 1) = 5000.0;   // 今回vは固定 or補間なら無視でもOK
+
+    Eigen::MatrixXd QN = Eigen::MatrixXd::Identity(3, 3);
+    QN(0, 0) = 40.0;  // 横ずれは見るけど、50は過剰
+    QN(1, 1) = 80.0;   // 進行方向ずれも見る（e_psi、これがないと蛇行する）
+    QN(2, 2) = 0.0;   // tまたはsはそのままでOK
+
 
     double v_max = 35.0 / 3.6;//todo:debug
     double delta_max = 0.66;
@@ -292,6 +308,9 @@ double dt = 0.01;  // 制御周期 [s]
     u[1] = 0.0;
   }
   cmd.lateral.steering_tire_angle = std::atan(u[1] * car->get_length());  // κL → δ
+  if(idx > 80 && idx < 130 ){
+    cmd.lateral.steering_tire_angle = std::atan(u[1] * 1.5);  // κL → δ
+  }
 
   #if 0
   double kappa = u[1];

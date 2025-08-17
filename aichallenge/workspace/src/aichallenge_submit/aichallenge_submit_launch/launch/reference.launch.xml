@@ -134,7 +134,7 @@
     <param name="external_target_vel" value="10.0"/>
     <!-- Ld ≈ 8.0 m @35km/h -->
     <param name="lookahead_gain" value="0.45"/>
-    <param name="lookahead_min_distance" value="2.6"/>
+    <param name="lookahead_min_distance" value="2.5"/>
     <!-- あれば -->
     <!-- <param name="lookahead_max_distance" value="9.0"/> -->
 

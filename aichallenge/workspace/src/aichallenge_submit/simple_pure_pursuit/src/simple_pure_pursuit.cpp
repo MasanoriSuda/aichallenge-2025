@@ -137,7 +137,7 @@ void SimplePurePursuit::onTimer()
       }      
 
       if(closet_traj_point_idx > 285 && closet_traj_point_idx < 305){
-        closet_traj_point_idx -= 4;
+        closet_traj_point_idx -= 2;
       }
 
       if(closet_traj_point_idx > 305 && closet_traj_point_idx < 330){
@@ -154,7 +154,7 @@ void SimplePurePursuit::onTimer()
         closet_traj_point_idx -= 0;
       }
       if(closet_traj_point_idx >= 50 && closet_traj_point_idx < 140){
-        closet_traj_point_idx -= 7;
+        closet_traj_point_idx -= 5;
       }
     }
 
@@ -166,7 +166,15 @@ void SimplePurePursuit::onTimer()
     cmd.longitudinal.acceleration = -10.0;
     RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000 /*ms*/, "reached to the goal");
   } else {
-    // get closest trajectory point from current position
+    // get closest trajectory point from current position   
+#if 0
+    if(real_traj_point_idx>= 140 && real_traj_point_idx <= 183){
+      closet_traj_point_idx = 189;
+    }
+    if(real_traj_point_idx>= 100 && real_traj_point_idx <= 120){
+      closet_traj_point_idx = 125;
+    }
+#endif        
     TrajectoryPoint closet_traj_point = trajectory_->points.at(closet_traj_point_idx);
 
     // calc longitudinal speed and acceleration
@@ -239,13 +247,13 @@ void SimplePurePursuit::onTimer()
           if(closet_traj_point_idx <150){
             cmd.lateral.steering_tire_angle = cmd.lateral.steering_tire_angle * 1.05;
           } else if(closet_traj_point_idx > 150){
-            cmd.lateral.steering_tire_angle = cmd.lateral.steering_tire_angle * 1.18;
+            cmd.lateral.steering_tire_angle = cmd.lateral.steering_tire_angle * 1.14;
           }
         }
       } else if(closet_traj_point_idx >= 100 && closet_traj_point_idx < 150){
           //cmd.lateral.steering_tire_angle = cmd.lateral.steering_tire_angle * 1.36;
       } else if(closet_traj_point_idx >= 150 && closet_traj_point_idx < 352 + 15){
-        if(closet_traj_point_idx >= 265 && closet_traj_point_idx < 285){
+        if(closet_traj_point_idx >= 275 && closet_traj_point_idx < 285){
           //cmd.lateral.steering_tire_angle = cmd.lateral.steering_tire_angle;
         } else {
           //cmd.lateral.steering_tire_angle = cmd.lateral.steering_tire_angle * 1.5;

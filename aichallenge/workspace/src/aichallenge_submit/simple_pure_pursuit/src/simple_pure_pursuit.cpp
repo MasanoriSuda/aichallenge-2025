@@ -181,7 +181,7 @@ void SimplePurePursuit::onTimer()
       //cmd.longitudinal.speed = 0.0 * (34.9/32.5) /3.6;
     }
     //double v_current = std::hypot(odometry_->twist.twist.linear.x, odometry_->twist.twist.linear.y);
-    if(odometry_->twist.twist.linear.x>=34.6 * 1.05 / 3.6){
+    if(odometry_->twist.twist.linear.x>=34.6 * 1.053 / 3.6){
       cmd.longitudinal.speed = 34.6  /3.6;
       cmd.longitudinal.acceleration =  -1.0;
     } else {
@@ -237,9 +237,9 @@ void SimplePurePursuit::onTimer()
         if(closet_traj_point_idx >= 255 && closet_traj_point_idx < 275){
         } else {
           if(closet_traj_point_idx <150){
-            //cmd.lateral.steering_tire_angle = cmd.lateral.steering_tire_angle * 1.05;
+            cmd.lateral.steering_tire_angle = cmd.lateral.steering_tire_angle * 1.05;
           } else if(closet_traj_point_idx > 150){
-            cmd.lateral.steering_tire_angle = cmd.lateral.steering_tire_angle * 1.17;
+            cmd.lateral.steering_tire_angle = cmd.lateral.steering_tire_angle * 1.18;
           }
         }
       } else if(closet_traj_point_idx >= 100 && closet_traj_point_idx < 150){

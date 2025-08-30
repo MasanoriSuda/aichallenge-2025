@@ -66,7 +66,7 @@ void SimplePurePursuit::onTimer()
   double x = odometry_->pose.pose.position.x;
   double y = odometry_->pose.pose.position.y;
   double yaw = tf2::getYaw(odometry_->pose.pose.orientation);
-  double pred_dt =0.12;
+  double pred_dt =0.125;
 
   //current spped
   // 車体座標の並進速度（m/s）
@@ -140,18 +140,18 @@ void SimplePurePursuit::onTimer()
       }      
 
       if(closet_traj_point_idx > 285 && closet_traj_point_idx < 300){
-        closet_traj_point_idx -= 4;
+        closet_traj_point_idx -= 0;
       }
 
-      if(closet_traj_point_idx >= 300 && closet_traj_point_idx < 305){
-        closet_traj_point_idx -= 2;
+      if(closet_traj_point_idx >= 300 && closet_traj_point_idx < 310){
+        closet_traj_point_idx -= 3;
       }
 
-      if(closet_traj_point_idx > 305 && closet_traj_point_idx < 330){
-        closet_traj_point_idx -= 2;
+      if(closet_traj_point_idx >= 310 && closet_traj_point_idx < 330){
+        closet_traj_point_idx -= 1;
       }
       if(closet_traj_point_idx > 330 && closet_traj_point_idx < 352 + 15){
-        closet_traj_point_idx -= 2;
+        closet_traj_point_idx -= 1;
       }
 
       if(closet_traj_point_idx >= 235 && closet_traj_point_idx < 250){
@@ -188,8 +188,8 @@ void SimplePurePursuit::onTimer()
     }
 #endif
 #if 1
-    if(real_traj_point_idx>= 180 && real_traj_point_idx <= 199){
-      closet_traj_point_idx = 200;
+    if(real_traj_point_idx>= 180 && real_traj_point_idx <= 195){
+      closet_traj_point_idx = 199;
     }
 #endif
 #if 1
@@ -212,7 +212,7 @@ void SimplePurePursuit::onTimer()
       //cmd.longitudinal.speed = 0.0 * (34.9/32.5) /3.6;
     }
     //double v_current = std::hypot(odometry_->twist.twist.linear.x, odometry_->twist.twist.linear.y);
-    if(odometry_->twist.twist.linear.x>=34.6 * 1.054 / 3.6){
+    if(odometry_->twist.twist.linear.x>=34.6 * 1.053 / 3.6){
       cmd.longitudinal.speed = 34.6  /3.6;
       cmd.longitudinal.acceleration =  -1.0;
     } else {
@@ -264,21 +264,21 @@ void SimplePurePursuit::onTimer()
 
 #if 1
     if(closet_traj_point_idx >= 15){
-      if (fabs(cmd.lateral.steering_tire_angle) > 0.04){
+      if (fabs(cmd.lateral.steering_tire_angle) > 0.05){
         if(closet_traj_point_idx >= 255 && closet_traj_point_idx < 275){
-          cmd.lateral.steering_tire_angle = cmd.lateral.steering_tire_angle * 1.11;
+          cmd.lateral.steering_tire_angle = cmd.lateral.steering_tire_angle * 1.05;
         } else if(closet_traj_point_idx >= 235 && closet_traj_point_idx < 255){
-          cmd.lateral.steering_tire_angle = cmd.lateral.steering_tire_angle * 1.5;
+          cmd.lateral.steering_tire_angle = cmd.lateral.steering_tire_angle * 1.4;
         } else {
           if(closet_traj_point_idx <150){
             if(closet_traj_point_idx >70 && closet_traj_point_idx < 100){
-              cmd.lateral.steering_tire_angle = cmd.lateral.steering_tire_angle * 1.05;
+              cmd.lateral.steering_tire_angle = cmd.lateral.steering_tire_angle * 1.0;
             } else {
-              cmd.lateral.steering_tire_angle = cmd.lateral.steering_tire_angle * 1.05;
+              cmd.lateral.steering_tire_angle = cmd.lateral.steering_tire_angle * 1.0;
             }
 
           } else if(closet_traj_point_idx > 150){
-            cmd.lateral.steering_tire_angle = cmd.lateral.steering_tire_angle * 1.14;
+              cmd.lateral.steering_tire_angle = cmd.lateral.steering_tire_angle * 1.08;
           }
         }
       } else if(closet_traj_point_idx >= 100 && closet_traj_point_idx < 150){
@@ -291,7 +291,7 @@ void SimplePurePursuit::onTimer()
         }
       }
 #if 1
-      if (fabs(cmd.lateral.steering_tire_angle) < 0.04){
+      if (fabs(cmd.lateral.steering_tire_angle) < 0.02){
         //cmd.lateral.steering_tire_angle = 0.0;
       }
 #endif      

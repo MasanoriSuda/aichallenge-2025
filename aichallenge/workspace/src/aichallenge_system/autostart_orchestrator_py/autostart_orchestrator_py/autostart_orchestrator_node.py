@@ -8,6 +8,7 @@ import shlex
 import subprocess
 import queue
 import threading
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -94,6 +95,8 @@ class AutostartOrchestrator(Node):
         self.declare_parameter("enable_motion_analytics", True)
         self.declare_parameter("motion_analytics_cmd", "ros2 run aichallenge_system_launch motion_analytics.py")
         self.declare_parameter("motion_analytics_input_dir", "")
+        # 0 or negative => wait forever (legacy behavior).
+        self.declare_parameter("initial_pose_service_timeout_sec", 120.0)
 
         vehicle_state_topic = str(self.get_parameter("vehicle_state_topic").value).strip()
         if not vehicle_state_topic:
@@ -466,15 +469,29 @@ class AutostartOrchestrator(Node):
             return
 
         if call_initial_pose:
+            timeout_sec = float(self.get_parameter("initial_pose_service_timeout_sec").value)
+            timeout_arg: Optional[float] = timeout_sec if timeout_sec > 0.0 else None
             self._set_workflow_state(
                 self._STATE_WAIT_INITIAL_POSE,
-                f"waiting service and calling {self.get_parameter('initial_pose_service').value}",
+                f"waiting service and calling {self.get_parameter('initial_pose_service').value}"
+                + (f" (timeout {timeout_sec:.0f}s)" if timeout_arg is not None else ""),
             )
-            if self._wait_for_service(self._cli_initial_pose):
-                ok, msg = self._call_trigger(self._cli_initial_pose)
-                self.get_logger().info(f"initial pose: success={ok} msg={msg}")
+            # One deadline bounds the whole step: wait_for_service consumes part of it
+            # and the trigger call only gets the remainder.
+            deadline = None if timeout_arg is None else time.monotonic() + timeout_arg
+            if self._wait_for_service(self._cli_initial_pose, timeout_sec=timeout_arg):
+                remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
+                ok, msg = self._call_trigger(self._cli_initial_pose, timeout_sec=remaining)
+                if ok:
+                    self.get_logger().info(f"initial pose: success={ok} msg={msg}")
+                else:
+                    self.get_logger().warn(
+                        f"skip initial pose (call failed/timed out): {msg}; proceeding to capture/rosbag"
+                    )
             else:
-                self.get_logger().warn("skip initial pose (service not found)")
+                self.get_logger().warn(
+                    "skip initial pose (service not found within timeout); proceeding to capture/rosbag"
+                )
 
         self._set_workflow_state(self._STATE_REQUEST_CONTROL_MODE, "initial pose completed")
 
@@ -491,10 +508,12 @@ class AutostartOrchestrator(Node):
 
         self._set_workflow_state(self._STATE_REQUEST_CONTROL_MODE, "initialization done")
 
-    def _wait_for_service(self, client) -> bool:
-        return client.wait_for_service()
+    def _wait_for_service(self, client, timeout_sec: Optional[float] = None) -> bool:
+        if timeout_sec is None:
+            return client.wait_for_service()
+        return client.wait_for_service(timeout_sec=timeout_sec)
 
-    def _call_trigger(self, client) -> tuple[bool, str]:
+    def _call_trigger(self, client, timeout_sec: Optional[float] = None) -> tuple[bool, str]:
         event = threading.Event()
         result: tuple[bool, str] = (False, "no_response")
 
@@ -511,7 +530,14 @@ class AutostartOrchestrator(Node):
                 event.set()
 
         future.add_done_callback(_done)
-        event.wait()
+        if not event.wait(timeout=timeout_sec):
+            # Drop the unresolved future so we don't leak a pending request,
+            # and report timeout so callers can fall through to next step.
+            try:
+                client.remove_pending_request(future)
+            except Exception:  # noqa: BLE001
+                pass
+            return (False, f"timeout ({timeout_sec}s)")
         return result
 
     def _publish_control_mode(self) -> tuple[bool, str]:
@@ -739,8 +765,14 @@ class AutostartOrchestrator(Node):
             return False
 
     def _ensure_latest_root(self, output_dir: Path) -> Optional[Path]:
-        run_dir = output_dir.parent
-        output_root = run_dir.parent
+        # Derive output_root relative to cwd so we stay portable across mount layouts.
+        # Single mode:   cwd == <run_dir>/d<N>  -> output_root = parent.parent
+        # Parallel mode: cwd == <run_dir>       -> output_root = parent
+        name = output_dir.name
+        if name.startswith("d") and name[1:].isdigit():
+            output_root = output_dir.parent.parent
+        else:
+            output_root = output_dir.parent
 
         latest_path = output_root / "latest"
         try:
@@ -809,8 +841,14 @@ class AutostartOrchestrator(Node):
             run_dir = output_dir.parent
             capture_target = self._latest_file_by_pattern(output_dir / "capture", "cap-*.mp4")
             rosbag_target = self._resolve_rosbag_target(output_dir)
+            # AWSIM writes result-summary.json (shared across vehicles) at its cwd.
+            # In parallel mode that is output_dir; in single mode it is run_dir.
+            result_summary_target = self._latest_existing(
+                [output_dir / "result-summary.json", run_dir / "result-summary.json"]
+            )
             targets: list[tuple[str, Optional[Path]]] = [
                 ("result-details.json", self._resolve_result_details_target(output_dir, run_dir, vehicle_dir_name)),
+                ("result-summary.json", result_summary_target),
                 ("capture.mp4", capture_target),
                 ("rosbag2_autoware.mcap", rosbag_target),
                 ("motion_analytics.html", self._latest_file_by_pattern(output_dir, "motion_analytics-*.html")),

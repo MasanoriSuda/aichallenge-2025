@@ -18,6 +18,14 @@ endif
 TIMESTAMP := $(shell date +%Y%m%d-%H%M%S)
 LOG_DIR := /output/$(TIMESTAMP)
 
+# make simulator-<mode>: <mode> は simulator_scripts/*.sh のファイル名
+SIM_MODES := $(notdir $(basename $(wildcard aichallenge/simulator_scripts/*.sh)))
+# dev<N>（車両数）/ gate<N>（テスト番号）は run_simulator.bash が展開するエイリアス
+SIM_MODES += dev2 dev3 dev4 gate1 gate2 gate3
+.PHONY: $(addprefix simulator-,$(SIM_MODES))
+$(addprefix simulator-,$(SIM_MODES)): simulator-%:
+	@$(MAKE) simulator SIM_MODE=$*
+
 # autowareのbuildのみ
 autoware-build:
 	docker compose run -T --rm --no-deps autoware-build
@@ -49,7 +57,7 @@ awsim-request-reset:
 # run simulator (docker compose up -d simulator)
 simulator:
 	@echo "Start AWSIM (SIM_MODE=$(SIM_MODE))"
-	LOG_DIR=$(LOG_DIR) SIM_MODE=$(SIM_MODE) ROS_DOMAIN_ID=0 docker compose up -d simulator
+	LOG_DIR=$(LOG_DIR) SIM_MODE="$(SIM_MODE)" ROS_DOMAIN_ID=0 docker compose up -d simulator
 
 # racing kart (docker compose up -d driver)
 driver:
@@ -64,24 +72,31 @@ dev: simulator autoware-simulator
 	@echo "Start dev simulation (AWSIM + Autoware)"
 	@echo "To stop: make down  (docker compose down --remove-orphans)"
 
-dev2: SIM_MODE := 2p
-dev3: SIM_MODE := 3p
-dev4: SIM_MODE := 4p
+dev2: SIM_MODE := dev2
+dev3: SIM_MODE := dev3
+dev4: SIM_MODE := dev4
 dev2 dev3 dev4: simulator
 	@N=$(@:dev%=%); \
 	echo "Start $$N-vehicle dev (autoware on ROS_DOMAIN_ID 1..$$N via docker compose -p)"; \
 	for p in $$(seq 1 $$N); do LOG_DIR=$(LOG_DIR) ROS_DOMAIN_ID=$$p docker compose -p $$p up -d autoware; done; \
-	$(MAKE) awsim-request-start; \
 	echo "To Stop: make down"
+
+gate1: SIM_MODE := gate1
+gate2: SIM_MODE := gate2
+gate3: SIM_MODE := gate3
+gate1 gate2 gate3: simulator autoware-simulator
+	@echo "Start safety gate simulation (AWSIM + Autoware)"
+	@echo "To stop: make down  (docker compose down --remove-orphans)"
 
 # Kept for backward compatibility; `make down` already cleans all projects.
 down2 down3 down4: down
 
 eval:
+eval:
 	@echo "Start evaluation simulation (AWSIM + Autoware)"
 	docker compose up -d autoware-simulator-evaluation
+	$(MAKE) awsim-request-start
 	@echo "To stop: make down  (docker compose down --remove-orphans)"
-
 # remote operation (docker compose up -d rviz2)
 rviz2:
 	docker compose stop rviz2

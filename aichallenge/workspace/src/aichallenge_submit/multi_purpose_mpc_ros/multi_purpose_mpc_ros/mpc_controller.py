@@ -566,6 +566,23 @@ class MPCController(Node):
     def _odom_callback(self, msg: Odometry) -> None:
         self._odom = msg
 
+        # --- 検証1: 自己位置遅延の実測 ---
+        now = self.get_clock().now()
+        stamp = rclpy.time.Time.from_msg(msg.header.stamp)
+        delay_ms = (now - stamp).nanoseconds / 1e6
+        v = msg.twist.twist.linear.x
+        v_kmh = v * 3.6
+        lateral_offset_m = v * delay_ms / 1000.0
+
+        if not hasattr(self, '_odom_delay_log_count'):
+            self._odom_delay_log_count = 0
+        self._odom_delay_log_count += 1
+        if self._odom_delay_log_count % 50 == 0:
+            self.get_logger().info(
+                f"[DIAG] odom_delay={delay_ms:.1f}ms, "
+                f"v={v_kmh:.1f}km/h, "
+                f"lateral_offset={lateral_offset_m*100:.1f}cm")
+
     def _obstacles_callback(self, msg: Float64MultiArray) -> None:
         if not self._use_obstacles_topic:
             return
@@ -780,14 +797,31 @@ class MPCController(Node):
 
         pose = odom_to_pose_2d(self._odom) # type: ignore
         v = self._odom.twist.twist.linear.x
+        yaw_rate = self._odom.twist.twist.angular.z
+
+        # 遅延補償: τ分だけ前方外挿
+        tau = 0.3  # seconds (GNSS delay)
+        pose.x += v * np.cos(pose.theta) * tau
+        pose.y += v * np.sin(pose.theta) * tau
+        pose.theta += yaw_rate * tau
 
         self._car.update_states(pose.x, pose.y, pose.theta)
         # print(f"car x: {self._car.temporal_state.x}, y: {self._car.temporal_state.y}, psi: {self._car.temporal_state.psi}")
         # print(f"mpc x: {self._mpc.model.temporal_state.x}, y: {self._mpc.model.temporal_state.y}, psi: {self._mpc.model.temporal_state.psi}")
 
+        # --- 検証2: ソルバ実行時間の実測 ---
+        import time as _time
+        _solver_t0 = _time.monotonic()
         with self._stats.time_block("control"):
             u, max_delta = self._mpc.get_control()
-            # self.get_logger().info(f"u: {u}")
+        _solver_elapsed_ms = (_time.monotonic() - _solver_t0) * 1000.0
+        _control_period_ms = 1000.0 / self._mpc_cfg.control_rate
+        if self._loop % 50 == 0:
+            self.get_logger().info(
+                f"[DIAG] solver={_solver_elapsed_ms:.2f}ms "
+                f"(budget={_control_period_ms:.1f}ms), "
+                f"v={v*3.6:.1f}km/h, "
+                f"steer={np.rad2deg(u[1]):.1f}deg")
 
         if self._ref_vel_configulator is not None:
             ref_vel_mps = self._ref_vel_configulator.get_ref_vel(self._mpc.model.wp_id)

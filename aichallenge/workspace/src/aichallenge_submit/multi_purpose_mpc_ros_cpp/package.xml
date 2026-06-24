@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>multi_purpose_mpc_ros_cpp</name>
+  <version>0.0.0</version>
+  <description>OSQP-based C++ MPC controller package for aichallenge_submit</description>
+
+  <maintainer email="t.sato17123@gmail.com">Takashi Sato</maintainer>
+  <maintainer email="kenta.kato.4321@gmail.com">Kenta Kato</maintainer>
+  <license>TODO</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>eigen3_cmake_module</buildtool_depend>
+
+  <depend>ament_index_cpp</depend>
+  <depend>autoware_auto_control_msgs</depend>
+  <depend>eigen</depend>
+  <depend>geometry_msgs</depend>
+  <depend>multi_purpose_mpc_ros_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>osqp_interface</depend>
+  <depend>rcl_interfaces</depend>
+  <depend>rclcpp</depend>
+  <depend>std_msgs</depend>
+  <depend>yaml_cpp_vendor</depend>
+
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>multi_purpose_mpc_ros</exec_depend>
+
+  <test_depend>ament_cmake_gtest</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

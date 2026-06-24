@@ -1,14 +1,35 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <launch>
   <arg name="use_sim_time" default="true"/>
+  <arg name="use_cpp_mpc" default="false"/>
+  <arg name="config_package" default="multi_purpose_mpc_ros"/>
+  <arg name="config_file" default="config/config.yaml"/>
+  <arg name="ref_vel_file" default="config/ref_vel.yaml"/>
+  <arg name="use_boost_acceleration" default="false"/>
+  <arg name="use_obstacle_avoidance" default="false"/>
+  <arg name="use_stats" default="false"/>
 
-  <node pkg="multi_purpose_mpc_ros" exec="run_mpc_controller.bash"
-        name="mpc_controller" output="screen"
-        args="--config_path $(find-pkg-share multi_purpose_mpc_ros)/config/config.yaml
-              --ref_vel_path $(find-pkg-share multi_purpose_mpc_ros)/config/ref_vel.yaml">
-    <param name="use_sim_time" value="$(var use_sim_time)"/>
-    <param name="use_boost_acceleration" value="false"/>
-    <param name="use_obstacle_avoidance" value="false"/>
-    <param name="use_stats" value="false"/>
-  </node>
+  <group unless="$(var use_cpp_mpc)">
+    <include file="$(find-pkg-share multi_purpose_mpc_ros)/launch/mpc_controller.launch.py">
+      <arg name="use_sim_time" value="$(var use_sim_time)"/>
+      <arg name="config_package" value="$(var config_package)"/>
+      <arg name="config_file" value="$(var config_file)"/>
+      <arg name="ref_vel_file" value="$(var ref_vel_file)"/>
+      <arg name="use_boost_acceleration" value="$(var use_boost_acceleration)"/>
+      <arg name="use_obstacle_avoidance" value="$(var use_obstacle_avoidance)"/>
+      <arg name="use_stats" value="$(var use_stats)"/>
+    </include>
+  </group>
+
+  <group if="$(var use_cpp_mpc)">
+    <include file="$(find-pkg-share aichallenge_submit_launch)/launch/control/mpc_cpp.launch.xml">
+      <arg name="use_sim_time" value="$(var use_sim_time)"/>
+      <arg name="config_package" value="$(var config_package)"/>
+      <arg name="config_file" value="$(var config_file)"/>
+      <arg name="ref_vel_file" value="$(var ref_vel_file)"/>
+      <arg name="use_boost_acceleration" value="$(var use_boost_acceleration)"/>
+      <arg name="use_obstacle_avoidance" value="$(var use_obstacle_avoidance)"/>
+      <arg name="use_stats" value="$(var use_stats)"/>
+    </include>
+  </group>
 </launch>

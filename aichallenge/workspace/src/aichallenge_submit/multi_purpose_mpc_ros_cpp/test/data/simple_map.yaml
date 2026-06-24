@@ -1,0 +1,4 @@
+image: simple_map.pgm
+resolution: 1.0
+origin: [0.0, 0.0, 0.0]
+occupied_thresh: 0.65

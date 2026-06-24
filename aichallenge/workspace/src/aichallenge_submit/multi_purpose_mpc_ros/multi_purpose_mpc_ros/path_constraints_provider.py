@@ -188,6 +188,7 @@ class PathConstraintsProvider(Node):
             input_constraints = {
                 "umin": np.array([0.0, -np.tan(mpc_cfg.delta_max) / car.length]),
                 "umax": np.array([mpc_cfg.v_max, np.tan(mpc_cfg.delta_max) / car.length])}
+            scaled_steer_rate_max = cfg_mpc.steer_rate_max / cfg_mpc.steering_tire_angle_gain_var
             mpc = MPC(
                 car,
                 mpc_cfg.N,
@@ -197,8 +198,11 @@ class PathConstraintsProvider(Node):
                 state_constraints,
                 input_constraints,
                 mpc_cfg.ay_max,
+                scaled_steer_rate_max,
+                cfg_mpc.wp_id_offset,
                 True,
-                True)
+                False,
+                cfg_mpc.use_max_kappa_pred)
             return mpc_cfg, mpc
 
         def compute_speed_profile(car: BicycleModel, mpc_config: MPCConfig) -> None:

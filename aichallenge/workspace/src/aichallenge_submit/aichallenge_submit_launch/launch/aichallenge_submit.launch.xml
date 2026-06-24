@@ -2,12 +2,26 @@
 <launch>
   <arg name="simulation"/>
   <arg name="use_sim_time"/>
+  <arg name="control_method" default="mpc"/>
+  <arg name="use_cpp_mpc" default="true"/>
+  <arg name="vehicle_converter_profile" default="default"/>
+  <arg name="mpc_config_package" default="multi_purpose_mpc_ros"/>
+  <arg name="mpc_config_file" default="config/config.yaml"/>
+  <arg name="mpc_ref_vel_file" default="config/ref_vel.yaml"/>
+  <arg name="pose_additional_delay" default="0.3"/>
   <arg name="sensor_model"/>
   <arg name="launch_vehicle_interface"/>
 
   <log message="The arguments for aichallenge_submit_launch."/>
   <log message=" - simulation: $(var simulation)"/>
   <log message=" - use_sim_time: $(var use_sim_time)"/>
+  <log message=" - control_method: $(var control_method)"/>
+  <log message=" - use_cpp_mpc: $(var use_cpp_mpc)"/>
+  <log message=" - vehicle_converter_profile: $(var vehicle_converter_profile)"/>
+  <log message=" - mpc_config_package: $(var mpc_config_package)"/>
+  <log message=" - mpc_config_file: $(var mpc_config_file)"/>
+  <log message=" - mpc_ref_vel_file: $(var mpc_ref_vel_file)"/>
+  <log message=" - pose_additional_delay: $(var pose_additional_delay)"/>
   <log message=" - sensor_model: $(var sensor_model)"/>
   <log message=" - launch_vehicle_interface: $(var launch_vehicle_interface)"/>
 
@@ -16,6 +30,13 @@
     <arg name="sensor_model" value="$(var sensor_model)"/>
     <arg name="map_path" value="$(find-pkg-share aichallenge_submit_launch)/map"/>
     <arg name="use_sim_time" value="$(var use_sim_time)"/>
+    <arg name="control_method" value="$(var control_method)"/>
+    <arg name="use_cpp_mpc" value="$(var use_cpp_mpc)"/>
+    <arg name="vehicle_converter_profile" value="$(var vehicle_converter_profile)"/>
+    <arg name="mpc_config_package" value="$(var mpc_config_package)"/>
+    <arg name="mpc_config_file" value="$(var mpc_config_file)"/>
+    <arg name="mpc_ref_vel_file" value="$(var mpc_ref_vel_file)"/>
+    <arg name="pose_additional_delay" value="$(var pose_additional_delay)"/>
     <arg name="simulation" value="$(var simulation)"/>
     <arg name="launch_vehicle_interface" value="$(var launch_vehicle_interface)"/>
   </include>

@@ -1,14 +1,10 @@
 from pathlib import Path
-from ament_index_python.packages import get_package_share_directory
 
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
-from launch.actions import (
-    DeclareLaunchArgument,
-    OpaqueFunction,
-)
-
 from launch_ros.actions import Node, SetParameter
 
 
@@ -25,29 +21,21 @@ def launch_setup(context, *args, **kwargs):
         Path(get_package_share_directory(config_package))
         / config_file
     )
-
     ref_vel_path = (
         Path(get_package_share_directory(config_package))
         / ref_vel_file
     )
 
     mpc_controller = Node(
-        package="multi_purpose_mpc_ros",
-        executable="run_mpc_controller.bash",
+        package="multi_purpose_mpc_ros_cpp",
+        executable="mpc_controller_cpp",
         name="mpc_controller",
         output="both",
-        emulate_tty=True,  # https://github.com/ros2/launch/issues/188
+        emulate_tty=True,
         sigterm_timeout="10",
-        arguments=[
-            "--config_path",
-            str(config_path),
-            "--ref_vel_path",
-            str(ref_vel_path),
-            "--ros-args",
-            "--log-level",
-            "info",
-        ],
         parameters=[
+            {"config_path": str(config_path)},
+            {"ref_vel_path": str(ref_vel_path)},
             {"use_boost_acceleration": use_boost_acceleration},
             {"use_obstacle_avoidance": use_obstacle_avoidance},
             {"use_stats": use_stats},
@@ -59,12 +47,8 @@ def launch_setup(context, *args, **kwargs):
         executable="boost_commander",
         name="boost_commander",
         output="both",
-        emulate_tty=True,  # https://github.com/ros2/launch/issues/188
-        arguments=[
-            "--ros-args",
-            "--log-level",
-            "info",
-        ],
+        emulate_tty=True,
+        arguments=["--ros-args", "--log-level", "info"],
         condition=IfCondition(use_boost_acceleration),
     )
 
@@ -73,7 +57,7 @@ def launch_setup(context, *args, **kwargs):
         executable="path_constraints_provider.bash",
         name="path_constraints_provider",
         output="both",
-        emulate_tty=True,  # https://github.com/ros2/launch/issues/188
+        emulate_tty=True,
         arguments=[
             "--config_path",
             str(config_path),
@@ -89,13 +73,15 @@ def launch_setup(context, *args, **kwargs):
     )
 
     return [
-        SetParameter('use_sim_time', use_sim_time),
-        mpc_controller, boost_commander, path_constraints_provider]
+        SetParameter("use_sim_time", use_sim_time),
+        mpc_controller,
+        boost_commander,
+        path_constraints_provider,
+    ]
 
 
 def generate_launch_description():
     arg_configs = [
-        # (arg_name, default_value, description)
         ("use_sim_time", "true", "Use simulation time or not"),
         (
             "config_package",
@@ -122,11 +108,7 @@ def generate_launch_description():
             "false",
             "Use the functionality of obstacle avoidance",
         ),
-        (
-            "use_stats",
-            "false",
-            "Use the execution statistics",
-        ),
+        ("use_stats", "false", "Use the execution statistics"),
     ]
 
     declared_arguments = [

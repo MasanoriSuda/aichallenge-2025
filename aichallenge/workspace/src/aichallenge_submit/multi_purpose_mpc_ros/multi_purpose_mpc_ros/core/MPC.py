@@ -1,4 +1,5 @@
 from typing import Tuple
+import time as _time
 import numpy as np
 import osqp
 from scipy import sparse
@@ -245,10 +246,18 @@ class MPC:
             reference_state=self.model.temporal_state,
             reference_waypoint=self.model.current_waypoint)
 
+        _t0 = _time.monotonic()
         self._init_problem(N, self.model.safety_margin)
+        _t_setup = _time.monotonic()
 
         try:
             dec = self.optimizer.solve()
+            _t_solve = _time.monotonic()
+            if not hasattr(self, '_mpc_diag_count'):
+                self._mpc_diag_count = 0
+            self._mpc_diag_count += 1
+            if self._mpc_diag_count % 50 == 0:
+                print(f"[MPC_DIAG] setup={(_t_setup-_t0)*1000:.2f}ms solve={(_t_solve-_t_setup)*1000:.2f}ms total={(_t_solve-_t0)*1000:.2f}ms")
             control_signals = np.array(dec.x[-N*nu:])
             use_control_signals = control_signals[1::2]
 

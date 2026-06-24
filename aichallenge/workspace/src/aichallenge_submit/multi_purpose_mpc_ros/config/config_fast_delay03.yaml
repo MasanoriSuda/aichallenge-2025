@@ -1,0 +1,47 @@
+common:
+  save_config: true
+
+sim_logger:
+  animation_enabled: false
+
+map:
+  yaml_path: "env/final_ver3/occupancy_grid_map.yaml"
+
+waypoints:
+  csv_path: ""
+
+obstacles:
+  csv_path: ""
+  radius: 1.25
+
+reference_path:
+  update_by_topic: false
+  csv_path: "env/final_ver3/traj_mincurv.csv"
+  resolution: 0.6
+  smoothing_distance: 2
+  max_width: 6.0
+  circular: true
+  use_path_constraints_topic: false
+  use_border_cells_topic: false
+
+bicycle_model:
+  length: 1.087
+  width: 2.30
+
+mpc:
+  N: 20
+  R: [100000.0, 0.0]
+  a_min: -1.6
+  a_max: 0.7
+  delta_max_deg: 32.0
+  steer_rate_max: 0.35
+  control_rate: 40.0
+  steering_tire_angle_gain_var: 1.639
+  accel_low_pass_gain: 1.0
+  steer_low_pass_gain: 1.0
+  wp_id_offset: 2
+  use_max_kappa_pred: true
+  v_max: 30.0
+  ay_max: 9.5
+  Q: [1000000.0, 100000000.0, 850000.0]
+  QN: [1000000.0, 1000.0, 10000.0]

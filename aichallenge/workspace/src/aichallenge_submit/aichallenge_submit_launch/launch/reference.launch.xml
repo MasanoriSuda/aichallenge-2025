@@ -18,7 +18,14 @@
 
   <!-- Control method -->
   <arg name="control_method" default="mpc"
-       description="Select control: mpc, pure_pursuit, tiny_lidar_net, pilot_net, joycon"/>
+       description="Select control: mpc, mpc_cpp, pure_pursuit, tiny_lidar_net, pilot_net, joycon"/>
+  <arg name="use_cpp_mpc" default="false" description="Use the C++ port of MPC when control_method is mpc"/>
+  <arg name="vehicle_converter_profile" default="default"
+       description="Vehicle command conversion profile: default, aggressive"/>
+  <arg name="mpc_config_package" default="multi_purpose_mpc_ros"/>
+  <arg name="mpc_config_file" default="config/config.yaml"/>
+  <arg name="mpc_ref_vel_file" default="config/ref_vel.yaml"/>
+  <arg name="pose_additional_delay" default="0.3"/>
 
   <!-- Global parameters -->
   <group scoped="false">
@@ -66,7 +73,6 @@
   </group>
 
     <!-- Localization -->
-  <let name="pose_additional_delay_var" value="0.0" />
   <group>
     <push-ros-namespace namespace="localization"/>
     <include file="$(find-pkg-share gyro_odometer)/launch/gyro_odometer.launch.xml">
@@ -98,7 +104,7 @@
       <arg name="output_twist_with_covariance_name" value="twist_with_covariance"/>
       <arg name="proc_stddev_vx_c" value="10.0"/>
       <arg name="proc_stddev_wz_c" value="5.0"/>
-      <arg name="pose_additional_delay" value="$(var pose_additional_delay_var)"/>
+      <arg name="pose_additional_delay" value="$(var pose_additional_delay)"/>
       <arg name="extend_state_step" value="100"/>
     </include>
 
@@ -143,6 +149,19 @@
   <group if="$(eval &quot;'$(var control_method)' == 'mpc'&quot;)">
     <include file="$(find-pkg-share aichallenge_submit_launch)/launch/control/mpc.launch.xml">
       <arg name="use_sim_time" value="$(var use_sim_time)"/>
+      <arg name="use_cpp_mpc" value="$(var use_cpp_mpc)"/>
+      <arg name="config_package" value="$(var mpc_config_package)"/>
+      <arg name="config_file" value="$(var mpc_config_file)"/>
+      <arg name="ref_vel_file" value="$(var mpc_ref_vel_file)"/>
+    </include>
+  </group>
+
+  <group if="$(eval &quot;'$(var control_method)' == 'mpc_cpp' or '$(var control_method)' == 'use_cpp_mpc'&quot;)">
+    <include file="$(find-pkg-share aichallenge_submit_launch)/launch/control/mpc_cpp.launch.xml">
+      <arg name="use_sim_time" value="$(var use_sim_time)"/>
+      <arg name="config_package" value="$(var mpc_config_package)"/>
+      <arg name="config_file" value="$(var mpc_config_file)"/>
+      <arg name="ref_vel_file" value="$(var mpc_ref_vel_file)"/>
     </include>
   </group>
 
@@ -199,22 +218,43 @@
 
   <!-- vehicle -->
   <group if="$(var launch_vehicle_interface)">
-    <include file="$(find-pkg-share raw_vehicle_cmd_converter)/launch/raw_vehicle_converter.launch.xml">
-      <arg name="converter_param_path" value="$(find-pkg-share aichallenge_submit_launch)/config/converter.param.yaml"/>
-      <arg name="csv_path_accel_map" value="$(find-pkg-share aichallenge_submit_launch)/data/accel_map.csv"/>
-      <arg name="csv_path_brake_map" value="$(find-pkg-share aichallenge_submit_launch)/data/brake_map.csv"/>
+    <group if="$(eval &quot;'$(var vehicle_converter_profile)' == 'default'&quot;)">
+      <include file="$(find-pkg-share raw_vehicle_cmd_converter)/launch/raw_vehicle_converter.launch.xml">
+        <arg name="converter_param_path" value="$(find-pkg-share aichallenge_submit_launch)/config/converter.param.yaml"/>
+        <arg name="csv_path_accel_map" value="$(find-pkg-share aichallenge_submit_launch)/data/accel_map.csv"/>
+        <arg name="csv_path_brake_map" value="$(find-pkg-share aichallenge_submit_launch)/data/brake_map.csv"/>
 
-      <arg name="max_throttle" value="1.0"/>
-      <arg name="max_brake" value="1.0"/>
-      <arg name="convert_accel_cmd" value="true"/>
-      <arg name="convert_brake_cmd" value="true"/>
-      <arg name="convert_steer_cmd" value="false"/>
+        <arg name="max_throttle" value="1.0"/>
+        <arg name="max_brake" value="1.0"/>
+        <arg name="convert_accel_cmd" value="true"/>
+        <arg name="convert_brake_cmd" value="true"/>
+        <arg name="convert_steer_cmd" value="false"/>
 
-      <arg name="input_control_cmd" value="/control/command/control_cmd"/>
-      <arg name="input_odometry" value="/localization/kinematic_state"/>
-      <arg name="input_steering" value="/vehicle/status/steering_status"/>
-      <arg name="output_actuation_cmd" value="/control/command/actuation_cmd"/>
-    </include>
+        <arg name="input_control_cmd" value="/control/command/control_cmd"/>
+        <arg name="input_odometry" value="/localization/kinematic_state"/>
+        <arg name="input_steering" value="/vehicle/status/steering_status"/>
+        <arg name="output_actuation_cmd" value="/control/command/actuation_cmd"/>
+      </include>
+    </group>
+
+    <group if="$(eval &quot;'$(var vehicle_converter_profile)' == 'aggressive'&quot;)">
+      <include file="$(find-pkg-share raw_vehicle_cmd_converter)/launch/raw_vehicle_converter.launch.xml">
+        <arg name="converter_param_path" value="$(find-pkg-share aichallenge_submit_launch)/config/converter_aggressive.param.yaml"/>
+        <arg name="csv_path_accel_map" value="$(find-pkg-share aichallenge_submit_launch)/data/accel_map_aggressive.csv"/>
+        <arg name="csv_path_brake_map" value="$(find-pkg-share aichallenge_submit_launch)/data/brake_map.csv"/>
+
+        <arg name="max_throttle" value="1.0"/>
+        <arg name="max_brake" value="1.0"/>
+        <arg name="convert_accel_cmd" value="true"/>
+        <arg name="convert_brake_cmd" value="true"/>
+        <arg name="convert_steer_cmd" value="false"/>
+
+        <arg name="input_control_cmd" value="/control/command/control_cmd"/>
+        <arg name="input_odometry" value="/localization/kinematic_state"/>
+        <arg name="input_steering" value="/vehicle/status/steering_status"/>
+        <arg name="output_actuation_cmd" value="/control/command/actuation_cmd"/>
+      </include>
+    </group>
   </group>
 
 </launch>

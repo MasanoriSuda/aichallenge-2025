@@ -93,6 +93,7 @@ eval:
 	docker compose up -d autoware-simulator-evaluation
 	$(MAKE) awsim-request-start
 	@echo "To stop: make down  (docker compose down --remove-orphans)"
+
 # remote operation (docker compose up -d rviz2)
 rviz2:
 	docker compose stop rviz2

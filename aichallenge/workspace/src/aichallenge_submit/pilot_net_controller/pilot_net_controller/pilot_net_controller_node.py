@@ -30,6 +30,10 @@ class PilotNetNode(Node):
         self.declare_parameter('model.ckpt_path', '')
         self.declare_parameter('acceleration', 0.1)
         self.declare_parameter('control_mode', 'ai')
+        self.declare_parameter('model.color_space', 'rgb')
+
+        self.declare_parameter('model.crop_top_ratio', 0.0)
+        self.declare_parameter('model.crop_bottom_ratio', 0.0)
         self.declare_parameter('debug', False)
 
         # --- Initialization ---
@@ -39,6 +43,9 @@ class PilotNetNode(Node):
         ckpt_path = self.get_parameter('model.ckpt_path').value
         acceleration = self.get_parameter('acceleration').value
         control_mode = self.get_parameter('control_mode').value
+        color_space = self.get_parameter('model.color_space').value
+        crop_top_ratio = self.get_parameter('model.crop_top_ratio').value
+        crop_bottom_ratio = self.get_parameter('model.crop_bottom_ratio').value
 
         self.debug = self.get_parameter('debug').value
         self.log_interval = self.get_parameter('log_interval_sec').value
@@ -51,9 +58,15 @@ class PilotNetNode(Node):
                 ckpt_path=ckpt_path,
                 acceleration=acceleration,
                 control_mode=control_mode,
+                color_space=color_space,
+                crop_top_ratio=crop_top_ratio,
+                crop_bottom_ratio=crop_bottom_ratio,
             )
             self.get_logger().info(
-                f"Core initialized. Image: {image_height}x{image_width}, Mode: {control_mode}"
+                f"Core initialized. Image: {image_height}x{image_width}, "
+                f"ColorSpace: {color_space}, "
+                f"Crop: top={crop_top_ratio}/bottom={crop_bottom_ratio}, "
+                f"OutputDim: {output_dim}, Mode: {control_mode}"
             )
         except Exception as e:
             self.get_logger().error(f"Failed to initialize core logic: {e}")
@@ -73,7 +86,7 @@ class PilotNetNode(Node):
             Image, "/image_raw", self.image_callback, qos
         )
         self.pub_control = self.create_publisher(
-            AckermannControlCommand, "/awsim/control_cmd", 1
+            AckermannControlCommand, "/control/command/control_cmd", 1
         )
 
         self.get_logger().info("PilotNetNode is ready.")

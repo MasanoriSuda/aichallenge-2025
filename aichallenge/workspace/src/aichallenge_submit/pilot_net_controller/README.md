@@ -14,10 +14,12 @@ NVIDIA PilotNet (DAVE-2) アーキテクチャに基づくカメラ画像 End-to
 
 | | 原論文 (DAVE-2) | 本実装 |
 |---|---|---|
-| 入力 | YUV 66x200 | RGB 256x384 |
-| 出力 | 1/r (逆旋回半径) | [accel, steer] (2次元) |
+| 入力 | YUV 66x200 | YUV 66x200 (設定で変更可) |
+| 出力 | 1/r (逆旋回半径) | [accel, steer] (2次元、1次元も可) |
 | FC層 | 1164-100-50-10-1 | flatten-100-50-10-2 |
-| 活性化 | 不明 (論文未記載) | ReLU + Tanh (出力層) |
+| 活性化 | 不明 (論文未記載) | ReLU + なし (出力層、tanh も選択可) |
+| クロップ | 上部37.5% + 下部15.6% | 上部37.5% (設定で変更可) |
+| 色空間 | YUV | YUV (RGB も選択可) |
 | 正規化 | ネットワーク内 BatchNorm | 前処理で /255.0 |
 | 推論 | Torch 7 (GPU) | NumPy (CPU) |
 | 学習 | Torch 7 | PyTorch |
@@ -25,24 +27,25 @@ NVIDIA PilotNet (DAVE-2) アーキテクチャに基づくカメラ画像 End-to
 ## Architecture
 
 ```
-Input: RGB Image (batch, 3, 256, 384)
+Input: YUV Image (batch, 3, 66, 200)  [default; configurable]
+  |
+  v  Crop top 37.5% -> Resize -> YUV conversion
+  |
+Conv2d(3, 24, 5x5, stride=2)  + ReLU  -> (24, 31, 98)
+Conv2d(24, 36, 5x5, stride=2) + ReLU  -> (36, 14, 47)
+Conv2d(36, 48, 5x5, stride=2) + ReLU  -> (48, 5, 22)
+Conv2d(48, 64, 3x3, stride=1) + ReLU  -> (64, 3, 20)
+Conv2d(64, 64, 3x3, stride=1) + ReLU  -> (64, 1, 18)
+  |
+  v  Flatten -> 1,152
+  |
+Linear(1152, 100) + ReLU
+Linear(100, 50)   + ReLU
+Linear(50, 10)    + ReLU
+Linear(10, 2)
   |
   v
-Conv2d(3, 24, 5x5, stride=2)  + ReLU  -> (24, 126, 190)
-Conv2d(24, 36, 5x5, stride=2) + ReLU  -> (36, 61, 93)
-Conv2d(36, 48, 5x5, stride=2) + ReLU  -> (48, 29, 45)
-Conv2d(48, 64, 3x3, stride=1) + ReLU  -> (64, 27, 43)
-Conv2d(64, 64, 3x3, stride=1) + ReLU  -> (64, 25, 41)
-  |
-  v  Flatten -> 65,600
-  |
-Linear(65600, 100) + ReLU
-Linear(100, 50)    + ReLU
-Linear(50, 10)     + ReLU
-Linear(10, 2)      + Tanh
-  |
-  v
-Output: [acceleration, steering_angle]  (range: [-1, 1])
+Output: [acceleration, steering_angle]
 ```
 
 ## Package Structure

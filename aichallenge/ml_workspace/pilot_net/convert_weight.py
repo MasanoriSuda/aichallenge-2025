@@ -43,7 +43,7 @@ def save_numpy_dict(params: Dict[str, np.ndarray], output_path: Path) -> None:
 
 
 def load_model(
-    image_height: int, image_width: int, output_dim: int, ckpt_path: Path
+    image_height: int, image_width: int, output_dim: int, ckpt_path: Path,
 ) -> torch.nn.Module:
     """Initializes the model architecture and loads weights from a checkpoint.
 
@@ -59,7 +59,10 @@ def load_model(
     Raises:
         FileNotFoundError: If the checkpoint file does not exist at ckpt_path.
     """
-    model = PilotNet(image_height=image_height, image_width=image_width, output_dim=output_dim)
+    model = PilotNet(
+        image_height=image_height, image_width=image_width,
+        output_dim=output_dim,
+    )
     state_dict = torch.load(ckpt_path, map_location="cpu", weights_only=True)
     model.load_state_dict(state_dict)
     print(f"Loaded checkpoint: {ckpt_path}")
@@ -67,7 +70,7 @@ def load_model(
 
 
 def convert_checkpoint(
-    image_height: int, image_width: int, output_dim: int, ckpt: Path, output: Path
+    image_height: int, image_width: int, output_dim: int, ckpt: Path, output: Path,
 ) -> None:
     """Orchestrates the model conversion process.
 
@@ -100,15 +103,18 @@ def main() -> None:
         description="Convert PilotNet PyTorch weights to NumPy.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
-    parser.add_argument("--image-height", type=int, default=256, help="Input image height")
-    parser.add_argument("--image-width", type=int, default=384, help="Input image width")
+    parser.add_argument("--image-height", type=int, default=66, help="Input image height")
+    parser.add_argument("--image-width", type=int, default=200, help="Input image width")
     parser.add_argument("--output-dim", type=int, default=2, help="Output dimension size")
     parser.add_argument("--ckpt", type=Path, required=True, help="Source .pth checkpoint")
     parser.add_argument("--output", type=Path, default=Path("./weights/pilotnet_weights.npy"), help="Destination .npy path")
 
     args = parser.parse_args()
 
-    convert_checkpoint(args.image_height, args.image_width, args.output_dim, args.ckpt, args.output)
+    convert_checkpoint(
+        args.image_height, args.image_width, args.output_dim,
+        args.ckpt, args.output,
+    )
 
 
 if __name__ == "__main__":

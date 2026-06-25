@@ -2,7 +2,6 @@ from . import (
     conv2d,
     linear,
     relu,
-    tanh,
     flatten,
     kaiming_normal_init,
     zeros_init,
@@ -89,4 +88,4 @@ class PilotNetNp:
         x = relu(linear(x, self.params['fc1_weight'], self.params['fc1_bias']))
         x = relu(linear(x, self.params['fc2_weight'], self.params['fc2_bias']))
         x = relu(linear(x, self.params['fc3_weight'], self.params['fc3_bias']))
-        return tanh(linear(x, self.params['fc4_weight'], self.params['fc4_bias']))
+        return linear(x, self.params['fc4_weight'], self.params['fc4_bias'])

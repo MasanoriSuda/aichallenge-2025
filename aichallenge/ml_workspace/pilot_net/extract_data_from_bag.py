@@ -19,8 +19,9 @@ class ExtractionConfig:
     image_topic: str
     control_msg_type: str = 'autoware_auto_control_msgs/msg/AckermannControlCommand'
     image_msg_type: str = 'sensor_msgs/msg/Image'
-    image_height: int = 256
-    image_width: int = 384
+    image_height: int = 66
+    image_width: int = 200
+    crop_top_ratio: float = 0.375
 
 
 def worker_init(debug_mode: bool) -> None:
@@ -93,6 +94,34 @@ def image_msg_to_numpy(msg) -> np.ndarray:
         raise ValueError(f"Unsupported image encoding: {encoding}")
 
     return img
+
+
+def process_image(img: np.ndarray, config: ExtractionConfig) -> np.ndarray:
+    """Crops the top portion of the image then resizes to the model input size.
+
+    Args:
+        img: (H, W, 3) uint8 RGB image.
+        config: Extraction configuration with crop_top_ratio, image_height, image_width.
+
+    Returns:
+        (image_height, image_width, 3) uint8 RGB image.
+
+    Raises:
+        ValueError: If crop_top_ratio >= 1.0.
+    """
+    if config.crop_top_ratio >= 1.0:
+        raise ValueError(
+            f"crop_top_ratio must be < 1.0, got {config.crop_top_ratio}"
+        )
+    if config.crop_top_ratio > 0:
+        h = img.shape[0]
+        top = int(h * config.crop_top_ratio)
+        img = img[top:, :, :]
+    return cv2.resize(
+        img,
+        (config.image_width, config.image_height),
+        interpolation=cv2.INTER_LINEAR,
+    )
 
 
 def synchronize_data(src_times: np.ndarray, target_times: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -181,12 +210,7 @@ def process_bag(
                         if conn.msgtype == config.image_msg_type:
                             try:
                                 img = image_msg_to_numpy(msg)
-                                # Resize to target dimensions
-                                img = cv2.resize(
-                                    img,
-                                    (config.image_width, config.image_height),
-                                    interpolation=cv2.INTER_LINEAR
-                                )
+                                img = process_image(img, config)
                                 image_data.append(img)
                                 image_times.append(timestamp)
                             except ValueError as ve:
@@ -278,8 +302,12 @@ def main():
     parser.add_argument('--image-topic', type=str, default='/sensing/camera/image_raw', help='Topic name for camera images.')
 
     # Image configuration
-    parser.add_argument('--image-height', type=int, default=256, help='Target image height for resizing.')
-    parser.add_argument('--image-width', type=int, default=384, help='Target image width for resizing.')
+    parser.add_argument('--image-height', type=int, default=66, help='Target image height for resizing.')
+    parser.add_argument('--image-width', type=int, default=200, help='Target image width for resizing.')
+    parser.add_argument(
+        '--crop-top-ratio', type=float, default=0.375,
+        help='Fraction of image height to crop from the top before resizing.',
+    )
 
     # Performance arguments
     default_workers = min(os.cpu_count() or 1, 8)
@@ -319,7 +347,8 @@ def main():
         control_topic=args.control_topic,
         image_topic=args.image_topic,
         image_height=args.image_height,
-        image_width=args.image_width
+        image_width=args.image_width,
+        crop_top_ratio=args.crop_top_ratio,
     )
     tasks = [(p, args.outdir, config, args.debug) for p in bag_dirs]
 

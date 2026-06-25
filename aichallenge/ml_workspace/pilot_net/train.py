@@ -23,16 +23,31 @@ def main(cfg: DictConfig):
     print(f"Using device: {device}")
 
     # === Dataset ===
-    train_dataset = MultiSeqConcatDataset(
-        cfg.data.train_dir,
+    color_space = cfg.model.get("color_space", "rgb")
+    crop_top_ratio = cfg.model.get("crop_top_ratio", 0.0)
+    crop_bottom_ratio = cfg.model.get("crop_bottom_ratio", 0.0)
+    output_dim = cfg.model.output_dim
+    shift_range = cfg.train.get("shift_range", 0.0)
+    steer_correction_per_pixel = cfg.train.get("steer_correction_per_pixel", 0.004)
+
+    dataset_kwargs = dict(
         image_height=cfg.model.image_height,
         image_width=cfg.model.image_width,
-        training=True
+        color_space=color_space,
+        crop_top_ratio=crop_top_ratio,
+        crop_bottom_ratio=crop_bottom_ratio,
+        output_dim=output_dim,
+    )
+    train_dataset = MultiSeqConcatDataset(
+        cfg.data.train_dir,
+        training=True,
+        shift_range=shift_range,
+        steer_correction_per_pixel=steer_correction_per_pixel,
+        **dataset_kwargs,
     )
     val_dataset = MultiSeqConcatDataset(
         cfg.data.val_dir,
-        image_height=cfg.model.image_height,
-        image_width=cfg.model.image_width
+        **dataset_kwargs,
     )
 
     if len(train_dataset) == 0:
@@ -75,7 +90,7 @@ def main(cfg: DictConfig):
     model = PilotNet(
         image_height=cfg.model.image_height,
         image_width=cfg.model.image_width,
-        output_dim=cfg.model.output_dim
+        output_dim=cfg.model.output_dim,
     ).to(device)
 
     if cfg.train.pretrained_path:
@@ -84,17 +99,20 @@ def main(cfg: DictConfig):
 
     # === Loss & Optimizer ===
     loss_type = cfg.train.get("loss_type", "smooth_l1")
-    if loss_type == "mse":
+    if cfg.model.output_dim == 1:
         criterion = torch.nn.MSELoss()
-        print(f"[INFO] Using MSELoss")
+        print("[INFO] Using MSELoss (output_dim=1)")
+    elif loss_type == "mse":
+        criterion = torch.nn.MSELoss()
+        print("[INFO] Using MSELoss")
     else:
         criterion = WeightedSmoothL1Loss(
             steer_weight=cfg.train.loss.steer_weight,
             accel_weight=cfg.train.loss.accel_weight
         )
-        print(f"[INFO] Using WeightedSmoothL1Loss")
+        print("[INFO] Using WeightedSmoothL1Loss")
     optimizer = optim.Adam(model.parameters(), lr=cfg.train.lr, weight_decay=cfg.train.weight_decay)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
 
     # === Logging & Save dirs ===
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

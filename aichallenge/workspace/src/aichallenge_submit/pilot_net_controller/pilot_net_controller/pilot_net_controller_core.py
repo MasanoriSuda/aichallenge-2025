@@ -15,32 +15,42 @@ class PilotNetCore:
     Attributes:
         image_height (int): Target image height for the model.
         image_width (int): Target image width for the model.
-        output_dim (int): Dimension of output (acceleration, steering).
-        acceleration (float): Fixed acceleration for 'fixed' control mode.
+        output_dim (int): Dimension of output (1=steer only, 2=accel+steer).
+        acceleration (float): Fixed acceleration for 'fixed' control mode or output_dim=1.
         control_mode (str): 'ai' or 'fixed'.
         model (PilotNetNp): The neural network model.
     """
 
     def __init__(
         self,
-        image_height: int = 256,
-        image_width: int = 384,
+        image_height: int = 66,
+        image_width: int = 200,
         output_dim: int = 2,
         ckpt_path: str = '',
         acceleration: float = 0.1,
         control_mode: str = 'ai',
+        color_space: str = 'rgb',
+        crop_top_ratio: float = 0.0,
+        crop_bottom_ratio: float = 0.0,
     ):
+        if crop_top_ratio + crop_bottom_ratio >= 1.0:
+            raise ValueError(f"crop_top_ratio + crop_bottom_ratio must be < 1.0, got {crop_top_ratio} + {crop_bottom_ratio}")
+        if color_space.lower() not in ("rgb", "yuv"):
+            raise ValueError(f"Unsupported color_space: {color_space!r}, must be 'rgb' or 'yuv'")
         self.image_height = image_height
         self.image_width = image_width
         self.output_dim = output_dim
         self.acceleration = acceleration
         self.control_mode = control_mode.lower()
+        self.color_space = color_space.lower()
+        self.crop_top_ratio = crop_top_ratio
+        self.crop_bottom_ratio = crop_bottom_ratio
         self.logger = logging.getLogger(__name__)
 
         self.model = PilotNetNp(
             image_height=self.image_height,
             image_width=self.image_width,
-            output_dim=self.output_dim
+            output_dim=self.output_dim,
         )
 
         if ckpt_path:
@@ -68,12 +78,15 @@ class PilotNetCore:
         outputs = self.model(x)[0]
 
         # 4. Post-process
-        if self.control_mode == "ai":
+        if self.output_dim == 1:
+            accel = self.acceleration
+            steer = float(np.clip(outputs[0], -1.0, 1.0))
+        elif self.control_mode == "ai":
             accel = float(np.clip(outputs[0], -1.0, 1.0))
+            steer = float(np.clip(outputs[1], -1.0, 1.0))
         else:
             accel = self.acceleration
-
-        steer = float(np.clip(outputs[1], -1.0, 1.0))
+            steer = float(np.clip(outputs[1], -1.0, 1.0))
 
         return accel, steer
 
@@ -119,9 +132,10 @@ class PilotNetCore:
     def _preprocess_image(self, image: np.ndarray) -> np.ndarray:
         """Resizes and normalizes a camera image.
 
-        1. Resize to (image_height, image_width) using simple bilinear-like interpolation
-        2. Convert to float32
-        3. Normalize to [0, 1]
+        1. Crop top/bottom (original paper removes sky and car body)
+        2. Resize to (image_height, image_width)
+        3. Convert color space if needed
+        4. Normalize to [0, 1]
 
         Args:
             image (np.ndarray): Input image (H, W, 3) uint8.
@@ -129,8 +143,19 @@ class PilotNetCore:
         Returns:
             np.ndarray: Processed image (image_height, image_width, 3) float32 in [0, 1].
         """
+        # Crop
+        if self.crop_top_ratio > 0 or self.crop_bottom_ratio > 0:
+            h = image.shape[0]
+            top = int(h * self.crop_top_ratio)
+            bottom = h - int(h * self.crop_bottom_ratio)
+            image = image[top:bottom, :, :]
+
         # Resize
         resized = cv2.resize(image, (self.image_width, self.image_height), interpolation=cv2.INTER_LINEAR)
+
+        # Color space conversion (original PilotNet paper uses YUV)
+        if self.color_space == "yuv":
+            resized = cv2.cvtColor(resized, cv2.COLOR_RGB2YUV)
 
         # Normalize to [0, 1] in single pass
         return np.multiply(resized, 1.0 / 255.0, dtype=np.float32)

@@ -1,9 +1,9 @@
-##!/bin/bash
+#!/bin/bash
 
 # スクリプトに引数が1つだけ渡されているかチェック
 if [ "$#" -ne 1 ]; then
     echo "エラー: Vechicle IDを指定してください。" >&2
-    echo "使用法: $0 {A2|A3|A6|A7|test-*}" >&2
+    echo "使用法: $0 {A1|A2|A3|A5|A6|A7|A8|test-*}" >&2
     exit 1
 fi
 
@@ -34,6 +34,24 @@ A7)
         -e tls/zenoh.dev.aichallenge-board.jsae.or.jp:7451 \
         -c zenoh-user.json5
     ;;
+A1)
+    echo "Connecting Zenoh. Target Vehicle: '$NAMESPACE' - Port 7452"
+    RUST_BACKTRACE=1 zenoh-bridge-ros2dds client \
+        -e tls/zenoh.dev.aichallenge-board.jsae.or.jp:7452 \
+        -c zenoh-user.json5
+    ;;
+A5)
+    echo "Connecting Zenoh. Target Vehicle: '$NAMESPACE' - Port 7453"
+    RUST_BACKTRACE=1 zenoh-bridge-ros2dds client \
+        -e tls/zenoh.dev.aichallenge-board.jsae.or.jp:7453 \
+        -c zenoh-user.json5
+    ;;
+A8)
+    echo "Connecting Zenoh. Target Vehicle: '$NAMESPACE' - Port 7454"
+    RUST_BACKTRACE=1 zenoh-bridge-ros2dds client \
+        -e tls/zenoh.dev.aichallenge-board.jsae.or.jp:7454 \
+        -c zenoh-user.json5
+    ;;
 test-remote)
     ENDPOINT="${ZENOH_LOCAL_ENDPOINT:-tcp/127.0.0.1:7448}"
     echo "Connecting Zenoh. Target Vehicle: 'local' - Endpoint ${ENDPOINT}"
@@ -53,7 +71,7 @@ test-server)
     ;;
 *)
     echo "エラー: 無効な名前空間です: '$NAMESPACE'" >&2
-    echo "A2, A3, A6, A7, test-* のいずれかを指定してください。" >&2
+    echo "A1, A2, A3, A5, A6, A7, A8, test-* のいずれかを指定してください。" >&2
     exit 1
     ;;
 esac

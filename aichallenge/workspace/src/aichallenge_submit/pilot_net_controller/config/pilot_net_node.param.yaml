@@ -3,12 +3,15 @@
     log_interval_sec: 5.0
 
     model:
-      image_height: 256
-      image_width: 384
+      image_height: 66
+      image_width: 200
       output_dim: 2
-      ckpt_path: "/path/to/pilotnet_weights.npy"
+      color_space: "yuv"        # "rgb" or "yuv"
+      crop_top_ratio: 0.375     # fraction of height to crop from top
+      crop_bottom_ratio: 0.0    # fraction of height to crop from bottom
+      ckpt_path: ""
 
-    control_mode: "fixed"
-    acceleration: 0.3
+    control_mode: "ai"
+    acceleration: 0.6
 
     debug: false

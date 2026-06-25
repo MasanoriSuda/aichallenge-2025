@@ -13,12 +13,12 @@
   <arg name="pointcloud_map_file" default="pointcloud_map.pcd" description="pointcloud map file name"/>
 
   <!-- Vehicle -->
-  <arg name="launch_vehicle_interface" default="false"/>
+  <arg name="launch_vehicle_interface" default="$(eval &quot;'$(var simulation)' == 'false'&quot;)"/>
   <log message="echo launch param use_sim_time: $(var use_sim_time) launch_vehicle_interface: $(var launch_vehicle_interface) sensor_model: $(var sensor_model)"/>
 
   <!-- Control method -->
   <arg name="control_method" default="mpc"
-       description="Select control: mpc, mpc_cpp, pure_pursuit, tiny_lidar_net, pilot_net, joycon"/>
+       description="Select control: mpc, mpc_cpp, pure_pursuit, tiny_lidar_net, pilot_net, joycon, rl_train"/>
   <arg name="use_cpp_mpc" default="false" description="Use the C++ port of MPC when control_method is mpc"/>
   <arg name="vehicle_converter_profile" default="default"
        description="Vehicle command conversion profile: default, aggressive"/>
@@ -179,6 +179,10 @@
 
   <group if="$(eval &quot;'$(var control_method)' == 'joycon'&quot;)">
     <include file="$(find-pkg-share aichallenge_submit_launch)/launch/control/joycon.launch.xml"/>
+  </group>
+
+  <group if="$(eval &quot;'$(var control_method)' == 'rl_train'&quot;)">
+    <include file="$(find-pkg-share aichallenge_submit_launch)/launch/control/rl_train.launch.xml"/>
   </group>
 
   <!-- Map -->

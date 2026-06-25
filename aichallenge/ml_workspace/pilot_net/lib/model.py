@@ -4,12 +4,12 @@ import torch.nn.functional as F
 
 
 class PilotNet(nn.Module):
-    """NVIDIA PilotNet-style CNN for camera-based end-to-end driving.
+    """NVIDIA PilotNet (DAVE-2) CNN for camera-based end-to-end driving.
 
-    Architecture: Conv5 + FC4, input RGB image (256x384), output [accel, steer].
+    Architecture: Conv5 + FC4, linear output (no activation).
     """
 
-    def __init__(self, image_height=256, image_width=384, output_dim=2):
+    def __init__(self, image_height=66, image_width=200, output_dim=2):
         super().__init__()
         self.conv1 = nn.Conv2d(3, 24, kernel_size=5, stride=2)
         self.conv2 = nn.Conv2d(24, 36, kernel_size=5, stride=2)
@@ -34,8 +34,7 @@ class PilotNet(nn.Module):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
-        # Last layer uses tanh: use small init to avoid saturation
-        nn.init.xavier_normal_(self.fc4.weight, gain=0.1)
+        nn.init.xavier_normal_(self.fc4.weight, gain=1.0)
         nn.init.constant_(self.fc4.bias, 0)
 
     def forward(self, x):
@@ -48,4 +47,4 @@ class PilotNet(nn.Module):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = F.relu(self.fc3(x))
-        return torch.tanh(self.fc4(x))
+        return self.fc4(x)

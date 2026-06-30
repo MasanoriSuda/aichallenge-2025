@@ -1,8 +1,8 @@
 # aichallenge-racingkart
 
-本リポジトリでは、自動運転AIチャレンジでご利用いただく開発環境を提供します。参加者の皆様には、Autoware Universe をベースとした自動運転ソフトウェアを開発し、予選大会では End to End シミュレーション空間を走行するレーシングカートにインテグレートしていただきます。開発した自動運転ソフトウェアで、安全に走行しながらタイムアタックに勝利することが目標です。また、決勝大会では本物のレーシングカートへのインテグレーションを行っていただきます。
+本リポジトリでは、自動運転AIチャレンジ 2026 SW 部門に向けた開発環境のベースを提供します。参加者は Autoware Universe をベースとした自動運転ソフトウェアを開発し、AWSIM 上のレーシングカートおよび決勝の実車両へインテグレートします。2026 ルールでは、従来のタイムアタックではなく、複数車両の同時走行、追い抜き、安全ゲート、ペナルティを含むレース形式を前提にします。
 
-This repository provides a development environment use in the Automotive AI Challenge. For the preliminaries, participants will develop autonomous driving software based on Autoware Universe and integrate it into a racing kart that drives in the End to End simulation space. The goal is to win in time attack while driving safely with the developed autonomous driving software. Also, for the finals, qualifiers will integrate it into a real racing kart.
+This repository provides a base development environment for the Automotive AI Challenge 2026 software class. Participants develop autonomous driving software based on Autoware Universe and integrate it into a racing kart in AWSIM and, for finalists, a real racing kart. The 2026 rules are race-oriented: multiple vehicles run together, with overtaking, safety gates, and penalties.
 
 ## ドキュメント / Documentation
 
@@ -12,6 +12,8 @@ Toward the competition, we will update the following pages to provide informatio
 
 - [日本語ページ](https://automotiveaichallenge.github.io/aichallenge-documentation-racingkart/)
 - [English Page](https://automotiveaichallenge.github.io/aichallenge-documentation-racingkart/en/)
+- [SW 部門ルール](https://automotiveaichallenge.github.io/aichallenge-documentation-racingkart/competition/sw-class.html)
+- [ローカルルール要約](docs/spec/competition-rules.md)
 - [スクリプト設計メモ（評価/ビルド/起動）](aichallenge/README.md)
 
 ## リポジトリ構成（トップレベル）
@@ -78,6 +80,9 @@ make down
 
 - [初学者向けセットアップ資料](./docs/spec/how-to-setup.md)
 - [初学者向け説明資料](./docs/spec/introduction.md)
+- [2026 SW 部門ルール要約](./docs/spec/competition-rules.md)
+- [提出ワークフロー](./docs/spec/submission-workflow.md)
+- [未確定事項・運営確認リスト](./docs/spec/open-questions.md)
 - [初学者向けリポジトリ入門スライド (Marp)](./docs/guide/beginner-deck.marp.md)
 
 ## OSS 貢献にあたって

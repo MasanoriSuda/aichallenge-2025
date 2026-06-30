@@ -4,8 +4,11 @@
 
 関連ドキュメント:
 
+- 2026 SW 部門ルール要約: [../spec/competition-rules.md](../spec/competition-rules.md)
+- 2026 未確定事項・運営確認リスト: [../spec/open-questions.md](../spec/open-questions.md)
 - 評価システム側契約（FSM・結果 JSON など）: [evaluation-interface.md](evaluation-interface.md)
 - Compose オーバーレイ設計: [../spec/compose-overlays.md](../spec/compose-overlays.md)
+- V2X / 多車両方針: [../spec/v2x-multivehicle.md](../spec/v2x-multivehicle.md)
 - MPC 統合仕様: [../spec/mpc-integration.md](../spec/mpc-integration.md)
 - リポジトリルート README: [../../README.md](../../README.md)
 - ドキュメント命名・分類規約: [../README.md](../README.md)
@@ -13,6 +16,8 @@
 ---
 
 ## 1. 概要
+
+この文書は現行リポジトリの参加者インターフェース契約を記述する。Automotive AI Challenge 2026 公式仕様との差分はまだ確認中のため、2026 向けに topic 名、message 型、Domain 構成を変更する場合は、先に [../spec/open-questions.md](../spec/open-questions.md) の該当項目を解消してから本契約を更新する。
 
 評価環境は `docker_build.sh eval --submit <tar>` で封入イメージを生成し、そのイメージ内で `evaluation.launch.xml` を起動します。提出する tar.gz はイメージのビルドとランタイムに直接影響するため、以下の契約を守ることが評価の前提条件です。
 

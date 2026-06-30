@@ -14,6 +14,7 @@
 
 - `host-uid-containers.md` — 全 dev サービスをホスト UID/GID で実行する設計（rocker 相当を docker compose の `user:` / `HOME=/tmp` / `group_add` で再現）。実装状況・差異（sound.yml は simulator のみ、group_add は数値 GID）も記載。
 - `architecture.md` — リポジトリ構成 / Compose トポロジ / ドメイン・Launch 階層 / 評価フローのテキスト図。
+- `competition-rules.md` — Automotive AI Challenge 2026 / SW 部門ルールの公式ページ要約と、このリポジトリへの影響。
 - `compose-overlays.md` — `.env` の `COMPOSE_FILE` で GPU / サウンド を切り替えるオーバーレイ設計（複数 compose ファイル構成の正）。
 - `docker-audio.md` — Linux（PipeWire / Pulse）で `simulator` コンテナからホストへ音声を出すための前提と手順。
 - `how-to-setup.md` — 環境構築（Ubuntu 22.04 想定）。`setup.bash` による対話一括セットアップから起動確認まで。
@@ -21,6 +22,10 @@
 - `log-design.md` — `/output` 配下へログを集約する設計（compose / `run_evaluation.bash` の出力レイアウト）。
 - `makefile-target-naming.md` — Makefile ターゲットの `<service>-<command>` 命名ガイドライン。
 - `mpc-integration.md` — `multi_purpose_mpc_ros` のインテグレーション設計。
+- `open-questions.md` — 2026 公式仕様と現行実装の差分、運営確認が必要な事項。
+- `safety-gates.md` — 障害物停止、NPC 追い越し、車線維持の検証方針。
+- `submission-workflow.md` — 提出 tar.gz 作成、ローカル評価、公式提出前チェックの手順。
+- `v2x-multivehicle.md` — V2X と 3〜4 台同時走行の現行方針・未確定事項。
 
 ## docs/guide/ 一覧
 

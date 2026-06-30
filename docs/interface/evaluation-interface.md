@@ -4,6 +4,8 @@
 
 この文書の読者は **評価基盤・システムパッケージ（`aichallenge_system`）の保守担当**です。AWSIM シミュレータ・オーケストレータ FSM（`autostart_orchestrator` / `awsim_state_manager`）・Web/評価パイプライン（`aichallenge-aws`）が共通して依存する**システム側の契約**を 1 本に集約します。参加者が実装するノードの ROS トピック入出力（センサ入力 / 制御出力など）は姉妹文書 [participant-interface.md](./participant-interface.md) を参照してください。
 
+Automotive AI Challenge 2026 公式仕様との差分は確認中です。3〜4 台同時走行、V2X、安全ゲート、ペナルティ、提出システムに関する未確定事項は [../spec/open-questions.md](../spec/open-questions.md) に集約し、確認が取れるまでこの契約へ確定事項として取り込まないでください。
+
 ---
 
 ## 1. 概要（この契約が何を保証するか）
@@ -186,6 +188,8 @@ AWS `result_update` Lambda は `vehicles[].vehicle_number` と `vehicles[].final
 ## 6. 関連ドキュメント
 
 - ログ設計（`/output` 詳細・ローテーション方針・rosbag 安全停止）: [`../spec/log-design.md`](../spec/log-design.md)
+- 2026 SW 部門ルール要約: [`../spec/competition-rules.md`](../spec/competition-rules.md)
+- 2026 未確定事項・運営確認リスト: [`../spec/open-questions.md`](../spec/open-questions.md)
 - Compose オーバーレイ選択（`COMPOSE_FILE` の GPU/CPU/headless）: [`../spec/compose-overlays.md`](../spec/compose-overlays.md)
 - Makefile ターゲット命名規約: [`../spec/makefile-target-naming.md`](../spec/makefile-target-naming.md)
 - 参加者インターフェース契約（センサ入力 / 制御出力 / 提出物フォーマット）: [`participant-interface.md`](./participant-interface.md)

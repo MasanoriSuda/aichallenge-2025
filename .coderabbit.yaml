@@ -3,9 +3,12 @@ language: "ja-JP"
 
 reviews:
   review_status: true
+  review_details: true
+  fail_commit_status: true
 
   auto_review:
     enabled: true
+    auto_incremental_review: true
     base_branches:
-      - "^develop$"   # develop を base にするPRのみ自動レビュー
-    drafts: false
+      - "^(develop|refs/heads/develop)$" # develop を base にするPRのみ自動レビュー
+    drafts: true

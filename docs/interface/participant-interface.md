@@ -122,6 +122,9 @@ AWSIM が publish し参加者ノードが subscribe するトピックです（
 | `/vehicle/status/velocity_status` | `autoware_auto_vehicle_msgs/VelocityReport` | `reference.launch.xml`（vehicle_velocity_converter 入力） |
 | `/vehicle/status/steering_status` | `autoware_auto_vehicle_msgs/SteeringReport` | `reference.launch.xml`（raw_vehicle_cmd_converter 入力、実車経路のみ） |
 | `/clock` | `rosgraph_msgs/Clock` | シミュレーション時間（`use_sim_time=true`） |
+| `/v2x/vehicle_positions` | `v2x_msgs/V2XVehiclePositionArray`（現行ローカル） | 2026 運営回答により、障害物・他車両位置情報の正入力 |
+
+2026 の障害物停止、追走、追い越し判断では `/v2x/vehicle_positions` のみを正入力として扱う。`/scan`、`/image_raw`、CSV 障害物、`/aichallenge/objects` は公式障害物入力ではない。
 
 `tiny_lidar_net` 使用時の追加入力（要確認: AWSIM 側の `/scan` publisher 名は本リポジトリ外）:
 

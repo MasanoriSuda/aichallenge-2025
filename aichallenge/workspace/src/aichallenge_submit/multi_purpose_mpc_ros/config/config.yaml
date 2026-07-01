@@ -45,7 +45,7 @@ mpc:
   # QN: [e_y, e_psi, t]
   R: [100000.0, 0.0]
   a_min: -1.6 # m/s^2
-  a_max: 0.7 # m/s^2
+  a_max: 1.0 # m/s^2
   delta_max_deg: 32.0 # degrees
   steer_rate_max: 0.35 # rad/s
   control_rate: 40.0 # Hz
@@ -78,10 +78,10 @@ mpc:
   ## --- 高速 (gnss delay 0.4) --- ##
   ## Lap1: 55s, Lap2: 49s
 
-  # v_max: 30.0
-  # ay_max: 9.5
-  # Q: [1000000.0, 100000000.0, 1850000.0]
-  # QN: [1000000.0, 1000.0, 10000.0]
+  v_max: 30.0
+  ay_max: 9.5
+  Q: [1000000.0, 100000000.0, 1850000.0]
+  QN: [1000000.0, 1000.0, 10000.0]
 
   ## --- 中高速 --- ##
   ## Lap1: 59s, Lap2: 54s
@@ -93,10 +93,10 @@ mpc:
   ## --------- 中速 -------------- ##
   ## Lap1: 67s, Lap2: 64s
 
-  v_max: 20.0
-  ay_max: 6.5
-  Q: [3000000.0, 90000000.0, 100000.0] # 低速だとインを攻めがちなので、あえて外に膨らむパラメータ
-  QN: [1000000.0, 1000.0, 10000.0]
+  #v_max: 20.0
+  #ay_max: 6.5
+  #Q: [3000000.0, 90000000.0, 100000.0] # 低速だとインを攻めがちなので、あえて外に膨らむパラメータ
+  #QN: [1000000.0, 1000.0, 10000.0]
 
   ## -------- 低速 -------------- ##
   ## Lap1: 86s
@@ -110,3 +110,17 @@ v2x_obstacle_avoidance:
   vehicle_radius: 0.5          # [m]
   v_max_safety: 30.0           # [m/s]
   position_jump_threshold: 5.0 # [m]
+
+v2x_stop:
+  enabled: true
+  detection_range_m: 35.0
+  corridor_half_width_m: 2.0
+  self_ignore_radius_m: 0.75
+  target_stop_gap_m: 3.0
+  stop_hold_gap_m: 3.5
+  release_gap_m: 5.0
+  comfortable_decel_mps2: 1.2
+  stale_timeout_sec: 2.0
+  max_speed_cap_kmph: 30.0
+  circular_path: true
+  log_throttle_sec: 1.0

@@ -9,15 +9,21 @@
 2026 公式仕様と現行 2025 由来実装の差分を、実装へ固定する前に管理する。
 この文書にある項目は、確認が取れるまで `docs/interface/` の確定契約として扱わない。
 
+## Confirmed
+
+| 確認日 | 項目 | 確定内容 | 反映先 |
+|---|---|---|---|
+| 2026-07-01 | 障害物情報の入力 | 運営回答により、障害物情報は `/v2x/vehicle_positions` のみを使用する。LiDAR、Camera、CSV、`/aichallenge/objects` は 2026 公式障害物入力として扱わない。 | `docs/spec/safety-gates.md`, `docs/spec/v2x-multivehicle.md`, `docs/interface/participant-interface.md`, `docs/spec/mpc-integration.md` |
+
 ## High Priority
 
 | 項目 | 現行ローカル | 2026 公式/推定 | 必要な確認 |
 |---|---|---|---|
 | クロスドメイン通信 | `domain_bridge` は廃止、`/v2x/vehicle_positions` のみ | 公式インターフェース側では `domain_bridge` 記載がある可能性 | 2026 評価環境で `domain_bridge` が必要か |
-| LiDAR topic | `/scan` | `/sensing/lidar/scan` の可能性 | 正式 topic 名と型 |
-| Camera topic | `/image_raw` | `/sensing/camera/image_raw` の可能性 | 正式 topic 名と型 |
-| V2X topic | `/v2x/vehicle_positions` | V2X 他車両位置情報 | 正式 topic 名、型、座標系、周期 |
-| Safety gates | `make gate1/2/3` | 障害物停止、NPC 追い越し、車線維持 | gate 対応関係と合否基準 |
+| LiDAR topic | `/scan` | 2026 障害物入力では使わない | `tiny_lidar_net` を継続する場合の正式 topic 名と型 |
+| Camera topic | `/image_raw` | 2026 障害物入力では使わない | `pilot_net` を継続する場合の正式 topic 名と型 |
+| V2X schema | `/v2x/vehicle_positions` | 障害物情報はこの topic のみ | 正式 message 型、座標系、周期、欠損時の扱い |
+| Safety gates | `make gate1/2/3` は `--safety-gate 1/2/3` を起動 | `gate1`: 障害物停止、`gate2`: 追い越し、`gate3`: 車線維持 | 公式合否基準、シナリオ詳細、スタック時復帰 |
 | Result schema | 現行 `result-summary.json` v2 / `dN-result-details.json` v3 | 2026 レース順位・ペナルティ対応 | schema 変更の有無 |
 | Submission | `submit/aichallenge_submit.tar.gz` | 公式プラットフォーム提出 | 提出先、回数制限、評価環境 |
 

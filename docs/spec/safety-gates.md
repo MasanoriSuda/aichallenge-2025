@@ -62,6 +62,8 @@
 
 Gate2 の追い越し判断は `/v2x/vehicle_positions` を入力にし、前方 NPC、左右の V2X 空き、occupancy grid 由来の左右壁距離を見て、追い越し可否と左右方向を決める。追い越し可の場合は MPC の lateral path constraints を一時的に左または右へ寄せる。追い越し不可、危険距離、V2X stale、壁距離不足では Gate1 の停止・減速へ戻す。
 
+Gate2 用の `use_v2x_overtake` は安全ゲート通過に絞った挙動であり、2 台以上の race behavior にはそのまま使わない。レース試走では `make race2` が `use_v2x_race_behavior=true` を渡し、follow / yield / overtake / return / cooldown を持つ別 planner を使う。
+
 確認すること:
 
 - 他車両または NPC の位置を認識している。

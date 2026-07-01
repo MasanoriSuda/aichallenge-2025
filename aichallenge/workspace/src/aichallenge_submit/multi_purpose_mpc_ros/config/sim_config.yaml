@@ -106,3 +106,63 @@ v2x_overtake:
   circular_path: true
   return_offset_threshold_m: 0.2
   log_throttle_sec: 1.0
+
+v2x_race_behavior:
+  enabled: true
+  detection_range_m: 40.0
+  corridor_half_width_m: 2.0
+  front_conflict_lateral_window_m: 2.6
+  front_conflict_gap_m: 10.0
+  self_ignore_radius_m: 0.75
+  min_follow_gap_m: 3.0
+  time_headway_sec: 0.8
+  follow_kp_gap: 0.4
+  follow_kd_closing: 0.8
+  follow_speed_cap_kmph: 12.0
+  emergency_stop_gap_m: 2.0
+  yield_detect_range_m: 12.0
+  yield_start_gap_m: 8.0
+  yield_release_gap_m: 14.0
+  yield_min_closing_speed_mps: 0.4
+  yield_speed_cap_kmph: 8.0
+  yield_timeout_sec: 4.0
+  yield_side_hold_sec: 1.0
+  catchup_detect_range_m: 120.0
+  catchup_start_gap_m: 18.0
+  catchup_release_gap_m: 8.0
+  catchup_speed_cap_kmph: 10.0
+  catchup_timeout_sec: 30.0
+  approach_start_gap_m: 34.0
+  approach_speed_cap_kmph: 18.0
+  min_overtake_start_gap_m: 4.0
+  max_overtake_start_gap_m: 24.0
+  abort_gap_m: 2.5
+  abort_escape_lateral_threshold_m: 0.45
+  return_clearance_m: 8.0
+  return_rear_clearance_m: 4.0
+  preferred_side: "right"
+  side_selection_policy: "largest_margin"
+  side_margin_tie_threshold_m: 0.3
+  lateral_offset_m: 1.4
+  lateral_offset_rate_mps: 1.2
+  constraint_half_width_m: 0.55
+  constraint_transition_horizon_ratio: 0.35
+  constraint_initial_progress: 0.35
+  min_lateral_clearance_m: 1.6
+  min_wall_clearance_m: 0.5
+  wall_safety_margin_m: 0.2
+  wall_check_horizon_m: 16.0
+  overtake_speed_cap_kmph: 12.0
+  prepare_speed_cap_kmph: 9.0
+  overtake_steer_rate_max: 0.8
+  max_overtake_target_speed_kmph: 12.0
+  min_closing_speed_mps: 0.4
+  min_ttc_sec: 0.8
+  stale_timeout_sec: 2.0
+  target_lost_hold_sec: 1.0
+  circular_path: true
+  return_offset_threshold_m: 0.25
+  overtake_cooldown_sec: 2.0
+  side_lock_min_sec: 1.0
+  side_switch_center_threshold_m: 0.45
+  log_throttle_sec: 1.0

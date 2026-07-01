@@ -33,6 +33,7 @@ LiDAR、Camera、CSV 障害物、`/aichallenge/objects` は 2026 公式障害物
 make dev2
 make dev3
 make dev4
+make race2
 ```
 
 確認:
@@ -47,6 +48,21 @@ make ps
 ros2 topic list
 ros2 topic echo --once /v2x/vehicle_positions
 ```
+
+`make race2` は `SIM_MODE=race2` で 2 台の Autoware を起動し、両車に `use_v2x_race_behavior:=true` を渡すローカル試走用ターゲットである。既存 `make dev2` は通常の 2 台起動として残し、race behavior の有効化とは分ける。
+
+## Race Behavior Policy
+
+レース用の初期実装は、同一アルゴリズムの 2 台同時走行を前提に、以下の順で安全側へ倒す。
+
+1. 前方 target が危険距離なら停止 fallback。
+2. 前方 target がいるが追い越し不可なら follow speed cap で追走する。
+3. 後方 target が大きく離れて追いつけない場合、先行側は catch-up wait speed cap に入り、後続が詰められる相対速度を作る。
+4. 後方 target が接近している場合、先行側は yield speed cap に入り、追い越し side へ寄らず中央または現ラインを維持する。
+5. 前方 target が遅く、左右の V2X 空きと壁距離が十分なら overtake lateral offset を出す。
+6. 追い越し後は return blocker を見て通常ラインへ復帰し、cooldown 中は即時の抜き返しを抑制する。
+
+Gate2 用の `use_v2x_overtake` は安全ゲート専用、レース用の `use_v2x_race_behavior` は follow / catchup_wait / yield / overtake / return を統合した多車両用として扱う。
 
 ## Design Guidelines
 

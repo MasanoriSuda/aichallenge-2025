@@ -9,6 +9,7 @@
     <arg name="rosbag" default="false"/>
     <arg name="domain_id" default="0"/>
     <arg name="use_v2x_overtake" default="false"/>
+    <arg name="use_v2x_race_behavior" default="false"/>
 
     <let name="domain_id" value="$(var domain_id)"/>
     <let name="rviz_config" value="$(find-pkg-share aichallenge_system_launch)/config/autoware_vehicle.rviz"/>
@@ -25,6 +26,7 @@
     <log message=" - rosbag: $(var rosbag)"/>
     <log message=" - domain_id: $(var domain_id)"/>
     <log message=" - use_v2x_overtake: $(var use_v2x_overtake)"/>
+    <log message=" - use_v2x_race_behavior: $(var use_v2x_race_behavior)"/>
 
     <!-- Main module of AI challenge 2025. -->
     <include file="$(find-pkg-share aichallenge_submit_launch)/launch/aichallenge_submit.launch.xml" >
@@ -33,6 +35,7 @@
         <arg name="sensor_model" value="$(var sensor_model)"/>
         <arg name="launch_vehicle_interface" value="$(var launch_vehicle_interface)"/>
         <arg name="use_v2x_overtake" value="$(var use_v2x_overtake)"/>
+        <arg name="use_v2x_race_behavior" value="$(var use_v2x_race_behavior)"/>
     </include>
 
     <!-- Visualization. -->

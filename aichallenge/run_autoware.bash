@@ -28,6 +28,10 @@ if [[ "${SIM_MODE:-}" == "gate2" && ( "${mode}" == "awsim" || "${mode}" == "awsi
     opts+=("use_v2x_overtake:=true")
 fi
 
+if [[ "${SIM_MODE:-}" == "race2" && ( "${mode}" == "awsim" || "${mode}" == "awsim-no-viz" ) ]]; then
+    opts+=("use_v2x_race_behavior:=true")
+fi
+
 export ROS_DOMAIN_ID=$id
 
 mkdir -p "${out_dir}"

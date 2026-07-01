@@ -21,7 +21,7 @@ LOG_DIR := /output/$(TIMESTAMP)
 # make simulator-<mode>: <mode> は simulator_scripts/*.sh のファイル名
 SIM_MODES := $(notdir $(basename $(wildcard aichallenge/simulator_scripts/*.sh)))
 # dev<N>（車両数）/ gate<N>（テスト番号）は run_simulator.bash が展開するエイリアス
-SIM_MODES += dev2 dev3 dev4 gate1 gate2 gate3
+SIM_MODES += dev2 dev3 dev4 gate1 gate2 gate3 race2
 .PHONY: $(addprefix simulator-,$(SIM_MODES))
 $(addprefix simulator-,$(SIM_MODES)): simulator-%:
 	@$(MAKE) simulator SIM_MODE=$*
@@ -80,6 +80,12 @@ dev2 dev3 dev4: simulator
 	echo "Start $$N-vehicle dev (autoware on ROS_DOMAIN_ID 1..$$N via docker compose -p)"; \
 	for p in $$(seq 1 $$N); do LOG_DIR=$(LOG_DIR) ROS_DOMAIN_ID=$$p docker compose -p $$p up -d autoware; done; \
 	echo "To Stop: make down"
+
+race2: SIM_MODE := race2
+race2: simulator
+	@echo "Start 2-vehicle race behavior trial (autoware on ROS_DOMAIN_ID 1..2 via docker compose -p)"
+	@for p in $$(seq 1 2); do LOG_DIR=$(LOG_DIR) SIM_MODE=race2 ROS_DOMAIN_ID=$$p docker compose -p $$p up -d autoware; done
+	@echo "To Stop: make down"
 
 gate1: SIM_MODE := gate1
 gate2: SIM_MODE := gate2

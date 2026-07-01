@@ -85,6 +85,22 @@ MPC コントローラは参照パスの取得方法を2種類持つ。
 2. **Trajectory トピック経由**（`reference_path.update_by_topic: true`）
    - `simple_trajectory_generator` と同じ経路を動的に受け取り、内部で参照パスを再構成する
 
+### V2X behavior modes
+
+MPC controller は `/v2x/vehicle_positions` を使う V2X behavior を複数持つ。いずれも V2X は認識入力であり、最終制御出力 `/control/command/control_cmd` は維持する。
+
+| launch param | 用途 | 有効化入口 | 主な出力 |
+|---|---|---|---|
+| `use_v2x_stop` | Gate1 / レース中の安全停止 fallback | 既定 `true` | 前方 target への速度 cap / stop hold |
+| `use_v2x_overtake` | Gate2 専用 NPC 追い越し | `make gate2` | Gate2 用の低速 overtake lateral offset |
+| `use_v2x_race_behavior` | 2 台以上同時走行の追走・yield・追い越し | `make race2` | follow / catchup_wait / yield / overtake / return / cooldown |
+
+`use_v2x_race_behavior` と `use_v2x_overtake` が同時に true の場合、race behavior を優先し、Gate2 専用 overtake は無効化する。Gate2 は安全ゲート通過用の強めの補助を含むため、レース用挙動とは分離する。
+
+race behavior は `v2x_race_behavior` config を使用し、前方車両に対しては距離ベースの follow speed cap、後方が大きく離れた場合は catch-up wait speed cap、後方接近車両に対しては yield speed cap、追い越し可能時は MPC path constraints への lateral offset を出す。横並び・斜め前の接触リスクは `front_conflict_lateral_window_m` / `front_conflict_gap_m` で follow 対象に含めるが、yaw-based relation が明確に後方を示す target は path projection が前方に見えても front target にしない。追い越し開始距離へ入る手前では `approach_start_gap_m` / `approach_speed_cap_kmph` で段階的に減速する。race behavior が front target を処理している間は race 側の emergency / follow / overtake を優先し、Gate1 stop fallback の stale hold で後続側を停止させない。race target がない場合や race が front target を処理していない場合は `use_v2x_stop` による安全停止 fallback を残す。
+
+race2 の試走では前走車との距離が 3m 台で張り付きやすく、Gate2 相当の長い壁 horizon では `no_safe_side` で追い越し開始を逃しやすい。そのため race 用の初期値は `min_overtake_start_gap_m=4.0`、`wall_check_horizon_m=16.0`、`min_wall_clearance_m=0.5` とし、直近から少し先まで抜ける空間がある場合だけ `prepare_overtake` に入る。追い越し側は yield 側より速くするため、`overtake_speed_cap_kmph=12.0`、`prepare_speed_cap_kmph=9.0` を使う。車体が片側へ寄っている間に反対側の追い越しへ切り替えると、狭い corridor 内で壁へ寄りやすいため、`side_switch_center_threshold_m` 以上の横偏差が残っている間は反対側への追い越し指示を follow に戻す。
+
 ## 統合方針
 
 ### アーキテクチャ: control_method による切り替え

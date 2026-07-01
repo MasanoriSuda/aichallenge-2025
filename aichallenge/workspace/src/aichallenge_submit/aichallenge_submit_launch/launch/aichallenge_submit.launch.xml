@@ -5,6 +5,7 @@
   <arg name="sensor_model"/>
   <arg name="launch_vehicle_interface"/>
   <arg name="use_v2x_overtake" default="false"/>
+  <arg name="use_v2x_race_behavior" default="false"/>
 
   <log message="The arguments for aichallenge_submit_launch."/>
   <log message=" - simulation: $(var simulation)"/>
@@ -12,6 +13,7 @@
   <log message=" - sensor_model: $(var sensor_model)"/>
   <log message=" - launch_vehicle_interface: $(var launch_vehicle_interface)"/>
   <log message=" - use_v2x_overtake: $(var use_v2x_overtake)"/>
+  <log message=" - use_v2x_race_behavior: $(var use_v2x_race_behavior)"/>
 
   <include file="$(find-pkg-share aichallenge_submit_launch)/launch/reference.launch.xml" >
     <arg name="vehicle_model" value="racing_kart"/>
@@ -21,5 +23,6 @@
     <arg name="simulation" value="$(var simulation)"/>
     <arg name="launch_vehicle_interface" value="$(var launch_vehicle_interface)"/>
     <arg name="use_v2x_overtake" value="$(var use_v2x_overtake)"/>
+    <arg name="use_v2x_race_behavior" value="$(var use_v2x_race_behavior)"/>
   </include>
 </launch>

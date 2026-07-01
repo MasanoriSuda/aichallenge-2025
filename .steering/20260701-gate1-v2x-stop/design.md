@@ -39,12 +39,13 @@ result = planner.compute_speed_cap(
 ```python
 V2XStopResult(
     active=True,
-    hold_stop=False,
+    holding_stop=False,
+    speed_cap_mps=2.56,
+    reason="braking",
     vehicle_id="d2",
     gap_m=6.4,
     lateral_offset_m=0.8,
-    speed_cap_kmph=9.2,
-    reason="braking",
+    relative_speed_mps=-1.0,
 )
 ```
 

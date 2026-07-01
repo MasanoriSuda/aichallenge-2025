@@ -38,7 +38,7 @@ autoware-vehicle:
 # run autoware for simulator
 autoware-simulator:
 	@echo "Start Autoware for AWSIM"
-	LOG_DIR=$(LOG_DIR) RUN_MODE=awsim docker compose up -d autoware
+	LOG_DIR=$(LOG_DIR) RUN_MODE=awsim SIM_MODE="$(SIM_MODE)" docker compose up -d autoware
 
 # autoware command service use ROS_DOMAIN_ID from .env
 autoware-request-initialpose:

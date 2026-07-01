@@ -58,9 +58,15 @@
 
 ### NPC 追い越し
 
+現行実装では、Gate2 用に MPC controller の `use_v2x_overtake=true` を使う。`make gate2` では `SIM_MODE=gate2` が Autoware 起動にも渡され、`run_autoware.bash` から `use_v2x_overtake:=true` が launch へ中継される。
+
+Gate2 の追い越し判断は `/v2x/vehicle_positions` を入力にし、前方 NPC、左右の V2X 空き、occupancy grid 由来の左右壁距離を見て、追い越し可否と左右方向を決める。追い越し可の場合は MPC の lateral path constraints を一時的に左または右へ寄せる。追い越し不可、危険距離、V2X stale、壁距離不足では Gate1 の停止・減速へ戻す。
+
 確認すること:
 
 - 他車両または NPC の位置を認識している。
+- 追い越し側の壁距離が `min_wall_clearance_m` 以上ある。
+- 右/左の選択理由が V2X 空きと wall clearance から説明できる。
 - 追い越し中に壁接触、コース逸脱、他車衝突を避ける。
 - 追い越し後に走行ラインへ復帰できる。
 - V2X 入力がある場合、遅延や欠損時も危険な制御に倒れない。
@@ -71,6 +77,14 @@
 - `/control/command/control_cmd`
 - `/localization/kinematic_state`
 - `/planning/scenario_planning/trajectory`
+
+見る log:
+
+- `V2X overtake: follow ...`
+- `V2X overtake: prepare_overtake ... side=<left|right> ... wall_l=<m> wall_r=<m>`
+- `V2X overtake: overtaking ... offset=<m> offset_cmd=<m>`
+- `V2X overtake: return_to_line ...`
+- `V2X overtake: abort ... reason=<reason>`
 
 ### 車線維持
 

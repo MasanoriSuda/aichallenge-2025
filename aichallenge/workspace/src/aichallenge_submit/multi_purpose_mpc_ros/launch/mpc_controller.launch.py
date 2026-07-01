@@ -16,6 +16,7 @@ def launch_setup(context, *args, **kwargs):
     use_sim_time = LaunchConfiguration("use_sim_time")
     use_obstacle_avoidance = LaunchConfiguration("use_obstacle_avoidance")
     use_v2x_stop = LaunchConfiguration("use_v2x_stop")
+    use_v2x_overtake = LaunchConfiguration("use_v2x_overtake")
     use_boost_acceleration = LaunchConfiguration("use_boost_acceleration")
     use_stats = LaunchConfiguration("use_stats")
 
@@ -51,6 +52,7 @@ def launch_setup(context, *args, **kwargs):
             {"use_boost_acceleration": use_boost_acceleration},
             {"use_obstacle_avoidance": use_obstacle_avoidance},
             {"use_v2x_stop": use_v2x_stop},
+            {"use_v2x_overtake": use_v2x_overtake},
             {"use_stats": use_stats},
         ],
     )
@@ -112,6 +114,11 @@ def generate_launch_description():
             "use_v2x_stop",
             "true",
             "Use V2X longitudinal stop speed cap",
+        ),
+        (
+            "use_v2x_overtake",
+            "false",
+            "Use V2X Gate2 overtake behavior",
         ),
         (
             "use_stats",

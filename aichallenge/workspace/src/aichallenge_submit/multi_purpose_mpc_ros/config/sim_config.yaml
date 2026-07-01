@@ -65,3 +65,44 @@ v2x_stop:
   max_speed_cap_kmph: 30.0
   circular_path: true
   log_throttle_sec: 1.0
+
+v2x_overtake:
+  enabled: true
+  detection_range_m: 35.0
+  corridor_half_width_m: 2.0
+  self_ignore_radius_m: 0.75
+  min_overtake_start_gap_m: 6.0
+  max_overtake_start_gap_m: 24.0
+  abort_gap_m: 3.5
+  abort_escape_lateral_threshold_m: 0.45
+  return_clearance_m: 4.0
+  preferred_side: "right"
+  side_selection_policy: "largest_margin"
+  side_margin_tie_threshold_m: 0.3
+  lateral_offset_m: 1.65
+  lateral_offset_rate_mps: 2.0
+  constraint_half_width_m: 0.35
+  constraint_transition_horizon_ratio: 0.25
+  constraint_initial_progress: 0.45
+  standby_lateral_offset_m: 0.35
+  standby_side: "right"
+  min_lateral_clearance_m: 1.55
+  min_wall_clearance_m: 0.5
+  wall_safety_margin_m: 0.2
+  wall_check_horizon_m: 24.0
+  overtake_speed_cap_kmph: 5.0
+  prepare_speed_cap_kmph: 3.0
+  follow_speed_cap_kmph: 5.0
+  overtake_steer_rate_max: 1.2
+  lateral_ready_threshold_m: -0.6
+  steer_override_enabled: true
+  steer_override_min_abs_rad: 0.16
+  steer_override_until_ey_m: -0.3
+  max_overtake_target_speed_kmph: 10.0
+  min_closing_speed_mps: 0.3
+  min_ttc_sec: 0.8
+  stale_timeout_sec: 2.0
+  target_lost_hold_sec: 1.2
+  circular_path: true
+  return_offset_threshold_m: 0.2
+  log_throttle_sec: 1.0

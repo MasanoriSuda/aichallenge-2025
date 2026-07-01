@@ -55,6 +55,7 @@ ros2 topic echo --once /v2x/vehicle_positions
 - V2X 欠損、遅延、外れ値で危険制御に倒れないようにする。
 - V2X を使う判断と使わない fallback を分ける。
 - 追い越し判断は壁・車線・速度制限・ペナルティを同時に考慮する。
+- 追い越し左右判断は、V2X の車両配置だけでなく occupancy grid 由来の左右壁距離も使う。
 
 ## Evidence To Keep
 

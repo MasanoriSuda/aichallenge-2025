@@ -423,7 +423,7 @@ MPC 側の実装方針:
 
 - `/v2x/vehicle_positions` から前方対象の相対距離、相対速度、進行方向上の投影距離を算出する。
 - Gate1 では `use_v2x_stop=true` により、追い越し不可を前提に通常走行、追走減速、停止を速度上限で切り替える。
-- Gate2 / race behavior では、同じ V2X 入力から追い越し可否を判断し、回避ラインまたは速度調整へ分岐する。
+- Gate2 では `use_v2x_overtake=true` により、同じ V2X 入力から追い越し可否と左右方向を判断し、MPC の lateral path constraints を一時的に左または右へ寄せる。
 - 欠損、遅延、外れ値、急な座標ジャンプでは安全側に倒す。
 
 `use_v2x_stop` は MPC の横方向障害物回避制約ではなく、MPC に渡す `v_max` / `v_ref` へ上から速度 cap を重ねる縦方向レイヤである。`use_obstacle_avoidance=false` でも `/v2x/vehicle_positions` を購読して動作する。
@@ -464,6 +464,68 @@ reference_path:
 ```
 
 Gate1 の停止だけなら `use_v2x_stop=true` で足りる。`use_obstacle_avoidance=true` は横方向の障害物回避制約を使う場合の追加オプションとして扱う。
+
+Gate2 用の追い越し設定:
+
+```yaml
+v2x_overtake:
+  enabled: true
+  detection_range_m: 35.0
+  corridor_half_width_m: 2.0
+  min_overtake_start_gap_m: 6.0
+  max_overtake_start_gap_m: 24.0
+  abort_gap_m: 3.5
+  abort_escape_lateral_threshold_m: 0.45
+  return_clearance_m: 4.0
+  preferred_side: "right"
+  side_selection_policy: "largest_margin"
+  side_margin_tie_threshold_m: 0.3
+  lateral_offset_m: 1.65
+  lateral_offset_rate_mps: 2.0
+  constraint_half_width_m: 0.35
+  constraint_transition_horizon_ratio: 0.25
+  constraint_initial_progress: 0.45
+  standby_lateral_offset_m: 0.35
+  standby_side: "right"
+  min_lateral_clearance_m: 1.55
+  min_wall_clearance_m: 0.5
+  wall_check_horizon_m: 24.0
+  overtake_speed_cap_kmph: 5.0
+  prepare_speed_cap_kmph: 3.0
+  follow_speed_cap_kmph: 5.0
+  overtake_steer_rate_max: 1.2
+  lateral_ready_threshold_m: -0.6
+  steer_override_enabled: true
+  steer_override_min_abs_rad: 0.16
+  steer_override_until_ey_m: -0.3
+  target_lost_hold_sec: 1.2
+```
+
+`use_v2x_overtake` は既定 false。`make gate2` のときだけ `run_autoware.bash` が `use_v2x_overtake:=true` を launch へ渡す。Gate1、通常 dev、提出評価では明示的に有効化しない限り Gate2 lateral behavior は動かない。
+
+壁距離は OSM を実行時に直接読むのではなく、`map.yaml_path` の occupancy grid map から `ReferencePath._compute_width()` が事前計算した waypoint ごとの `wp.ub`（左側距離）と `wp.lb`（右側距離）を使う。Gate2 planner は horizon 内の `min(wp.ub)` / `min(abs(wp.lb))` と `min_wall_clearance_m` を比較し、unsafe な側への追い越しを許可しない。両側 safe の場合は `side_selection_policy=largest_margin` により wall margin が大きい側を選び、差が `side_margin_tie_threshold_m` 以下のときだけ `preferred_side` を tie-breaker とする。追い越し開始後は選択済み side を維持し、走行中に左右を切り替えない。
+
+追い越し判断は `V2X overtake: ... target=<id> side=<left|right> gap=<m> offset=<m> wall_l=<m> wall_r=<m>` の throttled log で追跡する。
+
+MPC の lateral path constraints は、追い越し開始直後の offset ramp が小さい間でも反対側へ流れないように、右追い越しでは upper bound を `0.0m` 以下、左追い越しでは lower bound を `0.0m` 以上に制限する。実走ログでは右追い越しを選べていても `ey` が `+2.0m` 付近から十分に右へ戻りきれない症状が出たため、Gate2 中だけ `overtake_steer_rate_max` で MPC の操舵レート上限を一時的に上げ、`constraint_transition_horizon_ratio` と `constraint_initial_progress` で horizon 前半から追い越し側の corridor へ遷移させる。
+
+Gate2 では V2X target を検出してから横移動を始めると間に合わない場合があるため、`standby_lateral_offset_m` で target 未検出時から右側へ軽く寄せて待機する。追い越し中に V2X target が一瞬 stale になると state が `follow` に戻り、右 offset が解除されて停止側へ落ちる可能性がある。そのため `target_lost_hold_sec` の間は選択済み side と lateral offset を保持し、低速 cap で追い越し継続を試みる。
+
+実際の `ey` がまだ追い越し側へ入っていない間は、`prepare_speed_cap_kmph` により overtake speed よりさらに低速へ落とす。ログには `ey`、`mpc_steer_rate`、`transition_cols`、`initial_progress`、`corridor=[lower,upper]` も出し、planner の side 判定と MPC が実際に追う横制約を照合できるようにする。
+
+横移動の進捗判定は `abs(ey)` ではなく side-aware に扱う。右追い越しでは `ey < 0` 側、左追い越しでは `ey > 0` 側へ入った場合だけ進捗とみなす。初期状態で `ey` が反対側に大きい場合に、追い越し済みと誤判定して `abort_gap` や復帰判定が早く発火するのを避けるため。
+
+`abort_gap` で停止へ落とすかどうかの横逃げ判定は、`lateral_offset_m` の比率ではなく `abort_escape_lateral_threshold_m` を使う。2 台目の横余裕を確保するために `lateral_offset_m` を大きくすると、比率判定では 1 台目の `gap=3m` 付近で必要横移動量も増えてしまい、追い越し継続中なのに `abort_gap` へ落ちるため。
+
+`standby_lateral_offset_m` は target 未検出時だけの待機 offset として扱う。planner が `return_to_line`、`follow`、`abort` などで `target_lateral_offset_m=0.0` を返している間は、standby offset より planner の 0 指示を優先し、次 target の手前で右側に残り続けないようにする。
+
+`return_to_line` の完了判定は、MPC に入れている offset 指令値ではなく、実際の path lateral error `ey` を使う。offset 指令だけで clear にすると、車体がまだ追い越し側へ残っている状態で次の V2X target を新規障害物として拾い、`abort_gap` と Gate1 stop に落ちるため。
+
+追い越し中に現在 target を抜き切る前後で別 target が前方 corridor 内に入った場合は、同じ side の安全性が維持できる限り `return_to_line` へ入らず、追い越し対象をその target へ切り替える。Gate2 のように複数台が並ぶケースでは、1 台ごとに中央へ戻るのではなく、障害物列を抜け切ってから戻る挙動を正とする。
+
+Gate2 の低速検証では、MPC の corridor 制約だけだと初期横移動が間に合わない場合がある。その場合は `steer_override_enabled=true` により、`prepare_overtake` / `overtaking` 中かつ `ey` が `steer_override_until_ey_m` より左側に残っている間だけ、選択 side へ最低操舵角 `steer_override_min_abs_rad` を入れる。浅すぎると 1 台目へ接触し、2 台目では `lat=0.15m` の target に対して `ey=-1.5m` 付近でも横余裕が不足したため、`lateral_offset_m` は `1.65m`、`min_lateral_clearance_m` は `1.55m` としている。override は `ey=-0.3m` までの補助に留める。これは Gate2 の緊急補助であり、race behavior へ広げる場合は速度、壁距離、他車との横距離を別途検証する。
+
+Gate2 では `bicycle_model.width` を実車幅 `1.45m` として扱う。`2.30m` のような safety 込み幅を入れると、`BicycleModel._compute_safety_margin()` と Gate2 の `min_wall_clearance_m` / `wall_safety_margin_m` が重なり、初期位置が制約外になりやすい。安全余裕は width ではなく、MPC safety margin と Gate2 専用 clearance param で持つ。
 
 ### 提出ファイルへの影響
 

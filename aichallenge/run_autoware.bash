@@ -8,9 +8,15 @@ out_dir="${out_dir:-/output/$(date +%Y%m%d-%H%M%S)/d${id}}"
 case "${mode}" in
 "awsim")
     opts=("simulation:=true" "use_sim_time:=true" "run_rviz:=true")
+    if [[ "${SIM_MODE:-}" == "gate2" ]]; then
+        opts+=("use_v2x_overtake:=true")
+    fi
     ;;
 "awsim-no-viz")
     opts=("simulation:=true" "use_sim_time:=true" "run_rviz:=false")
+    if [[ "${SIM_MODE:-}" == "gate2" ]]; then
+        opts+=("use_v2x_overtake:=true")
+    fi
     ;;
 "vehicle")
     opts=("simulation:=false" "use_sim_time:=false" "run_rviz:=false")

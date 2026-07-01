@@ -80,13 +80,13 @@ make down
 
 現行ターゲット:
 
-```bash
-make gate1
-make gate2
-make gate3
-```
+| コマンド | 対象 |
+|---|---|
+| `make gate1` | 障害物停止 |
+| `make gate2` | 追い越し |
+| `make gate3` | 車線維持 |
 
-各 gate が公式の障害物停止、NPC 追い越し、車線維持にどこまで対応しているかは [`safety-gates.md`](safety-gates.md) を参照する。
+各 gate の確認観点は [`safety-gates.md`](safety-gates.md) を参照する。
 
 ### 4. Eval Image
 

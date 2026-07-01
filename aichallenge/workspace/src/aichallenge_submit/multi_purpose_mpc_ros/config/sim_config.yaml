@@ -10,10 +10,9 @@ waypoints:
   csv_path: "maps/occupancy_grid_map_waypoints.csv"
 
 obstacles:
-  # path from pkg share dir
-  # csv_path: "" # If empty, the obstacles information will be subscribed from the topic
-  # csv_path: "maps/occupancy_grid_map_obstacles.csv"
-  csv_path: "maps/obstacles_rosbag2_2024_09_16-12_17_03_0.csv"
+  # 2026 gate/race obstacle source is /v2x/vehicle_positions only.
+  # Keep empty so obstacle information is subscribed from the topic.
+  csv_path: ""
   radius: 1.25
 
 
@@ -52,3 +51,17 @@ v2x_obstacle_avoidance:
   vehicle_radius: 0.5          # [m]
   v_max_safety: 30.0           # [m/s]
   position_jump_threshold: 5.0 # [m]
+
+v2x_stop:
+  enabled: true
+  detection_range_m: 35.0
+  corridor_half_width_m: 2.0
+  self_ignore_radius_m: 0.75
+  target_stop_gap_m: 3.0
+  stop_hold_gap_m: 3.5
+  release_gap_m: 5.0
+  comfortable_decel_mps2: 1.2
+  stale_timeout_sec: 2.0
+  max_speed_cap_kmph: 30.0
+  circular_path: true
+  log_throttle_sec: 1.0

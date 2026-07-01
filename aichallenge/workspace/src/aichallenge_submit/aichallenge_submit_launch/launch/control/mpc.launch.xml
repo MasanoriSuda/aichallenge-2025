@@ -2,6 +2,7 @@
 <launch>
   <arg name="use_sim_time" default="true"/>
   <arg name="use_obstacle_avoidance" default="false"/>
+  <arg name="use_v2x_stop" default="true"/>
 
   <node pkg="multi_purpose_mpc_ros" exec="run_mpc_controller.bash"
         name="mpc_controller" output="screen"
@@ -10,6 +11,7 @@
     <param name="use_sim_time" value="$(var use_sim_time)"/>
     <param name="use_boost_acceleration" value="false"/>
     <param name="use_obstacle_avoidance" value="$(var use_obstacle_avoidance)"/>
+    <param name="use_v2x_stop" value="$(var use_v2x_stop)"/>
     <param name="use_stats" value="false"/>
   </node>
 </launch>

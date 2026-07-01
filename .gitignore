@@ -17,6 +17,9 @@ aichallenge/capture/
 aichallenge/build/
 aichallenge/install/
 aichallenge/log/
+aichallenge/core.*
+aichallenge/result-summary.json
+aichallenge/safety-gate-result.json
 submit/*.tar.gz
 
 # AI related local notes (do not commit)

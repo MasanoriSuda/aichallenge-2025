@@ -35,6 +35,11 @@ from multi_purpose_mpc_ros.v2x_vehicle_tracker import (
     V2XVehicleTracker,
     predictions_to_obstacles,
 )
+from multi_purpose_mpc_ros.v2x_stop_planner import (
+    V2XStopConfig,
+    V2XStopPlanner,
+    V2XStopResult,
+)
 
 # Multi_Purpose_MPC
 from multi_purpose_mpc_ros.core.map import Map, Obstacle
@@ -133,12 +138,14 @@ class MPCController(Node):
         # declare parameters
         self.declare_parameter("use_boost_acceleration", False)
         self.declare_parameter("use_obstacle_avoidance", False)
+        self.declare_parameter("use_v2x_stop", True)
         self.declare_parameter("use_stats", False)
 
         # get parameters
         self.use_sim_time = self.get_parameter("use_sim_time").get_parameter_value().bool_value
         self.USE_BUG_ACC = self.get_parameter("use_boost_acceleration").get_parameter_value().bool_value
         self.USE_OBSTACLE_AVOIDANCE = self.get_parameter("use_obstacle_avoidance").get_parameter_value().bool_value
+        self.USE_V2X_STOP = self.get_parameter("use_v2x_stop").get_parameter_value().bool_value
         self.use_stats = self.get_parameter("use_stats").get_parameter_value().bool_value
 
         self._config_path = config_path
@@ -161,6 +168,10 @@ class MPCController(Node):
         if self.USE_OBSTACLE_AVOIDANCE:
             self.get_logger().warn("------------------------------------")
             self.get_logger().warn("USE_OBSTACLE_AVOIDANCE is enabled!")
+            self.get_logger().warn("------------------------------------")
+        if self.USE_V2X_STOP:
+            self.get_logger().warn("------------------------------------")
+            self.get_logger().warn("USE_V2X_STOP is enabled!")
             self.get_logger().warn("------------------------------------")
 
     def _load_config(self) -> NamedTuple:
@@ -443,18 +454,29 @@ class MPCController(Node):
 
         self._trajectory: Optional[Trajectory] = None
         self._path_constraints = None
+        self._waypoint_xy = np.asarray(
+            [(wp.x, wp.y) for wp in self._reference_path.waypoints],
+            dtype=np.float64)
+        self._nominal_v_ref = self._get_nominal_v_ref()
+        self._v2x_tracker: Optional[V2XVehicleTracker] = None
+        self._v2x_stop_planner: Optional[V2XStopPlanner] = None
+        self._last_v2x_stop_result: Optional[V2XStopResult] = None
+        self._last_v2x_stop_log_time = -float("inf")
 
         # Obstacles
-        if self.USE_OBSTACLE_AVOIDANCE:
-            self._static_obstacles: List[Obstacle] = create_obstacles()
-            self._dynamic_obstacles: List[Obstacle] = []
-            self._obstacles_updated = bool(self._static_obstacles)
+        if self.USE_OBSTACLE_AVOIDANCE or self.USE_V2X_STOP:
             v2x_cfg = self._cfg.v2x_obstacle_avoidance  # type: ignore
             self._v2x_tracker = V2XVehicleTracker(
                 v_max_safety=float(v2x_cfg.v_max_safety),
                 position_jump_threshold=float(v2x_cfg.position_jump_threshold),
                 warn_callback=self.get_logger().warn,
             )
+
+        if self.USE_OBSTACLE_AVOIDANCE:
+            self._static_obstacles: List[Obstacle] = create_obstacles()
+            self._dynamic_obstacles: List[Obstacle] = []
+            self._obstacles_updated = bool(self._static_obstacles)
+            v2x_cfg = self._cfg.v2x_obstacle_avoidance  # type: ignore
             self._v2x_vehicle_radius = float(v2x_cfg.vehicle_radius)
             mpc_N = int(self._cfg.mpc.N)  # type: ignore
             t_horizon = mpc_N / float(self._cfg.mpc.control_rate)  # type: ignore
@@ -467,9 +489,20 @@ class MPCController(Node):
             self._v2x_corridor_threshold_sq = (
                 ref_max_width / 2.0 + self._v2x_vehicle_radius + 0.5
             ) ** 2
-            wps = self._reference_path.waypoints
-            self._waypoint_xy = np.asarray(
-                [(wp.x, wp.y) for wp in wps], dtype=np.float64)
+
+        if self.USE_V2X_STOP:
+            if not hasattr(self._cfg, "v2x_stop"):
+                self.get_logger().warn("v2x_stop config missing; disabling V2X stop")
+                self.USE_V2X_STOP = False
+            elif not bool(getattr(self._cfg.v2x_stop, "enabled", True)):  # type: ignore
+                self.USE_V2X_STOP = False
+            else:
+                stop_cfg = V2XStopConfig.from_config(
+                    self._cfg.v2x_stop,  # type: ignore
+                    a_min_mps2=self._mpc_cfg.a_min)
+                self._v2x_stop_planner = V2XStopPlanner(stop_cfg)
+                self._v2x_stop_log_throttle_sec = float(
+                    getattr(self._cfg.v2x_stop, "log_throttle_sec", 1.0))  # type: ignore
 
         # Laps
         self._current_laps = 1
@@ -550,6 +583,7 @@ class MPCController(Node):
                 self._border_cells_sub = self.create_subscription(
                     BorderCells, "/path_constraints_provider/border_cells", self._border_cells_callback, 1)
 
+        if self.USE_OBSTACLE_AVOIDANCE or self.USE_V2X_STOP:
             self._v2x_sub = self.create_subscription(
                 V2XVehiclePositionArray,
                 "/v2x/vehicle_positions",
@@ -596,11 +630,18 @@ class MPCController(Node):
             msg.upper_bounds, msg.lower_bounds, msg.rows, msg.cols)
 
     def _v2x_callback(self, msg: V2XVehiclePositionArray) -> None:
-        self._v2x_tracker.update(msg)
-        predictions = self._v2x_tracker.predict_all(self._v2x_t_samples)
-        self._dynamic_obstacles = predictions_to_obstacles(
-            predictions, self._v2x_vehicle_radius)
-        self._obstacles_updated = True
+        now_sec = self.get_clock().now().nanoseconds / 1e9
+        if self._v2x_tracker is not None:
+            self._v2x_tracker.update(msg)
+
+        if self._v2x_stop_planner is not None:
+            self._v2x_stop_planner.update_v2x(msg, now_sec=now_sec)
+
+        if self.USE_OBSTACLE_AVOIDANCE and self._v2x_tracker is not None:
+            predictions = self._v2x_tracker.predict_all(self._v2x_t_samples)
+            self._dynamic_obstacles = predictions_to_obstacles(
+                predictions, self._v2x_vehicle_radius)
+            self._obstacles_updated = True
 
     def _filter_obstacles_to_corridor(self, obstacles: List[Obstacle]) -> List[Obstacle]:
         if not obstacles or self._waypoint_xy.size == 0:
@@ -751,6 +792,63 @@ class MPCController(Node):
         self._ref_path_pub.publish(ref_path_marker_array)
         self._ref_path_pub_dummy.publish(ref_path_marker_array)
 
+    def _get_nominal_v_ref(self) -> List[float]:
+        return [
+            float(wp.v_ref) if wp.v_ref is not None else self._mpc_cfg.v_max
+            for wp in self._reference_path.waypoints
+        ]
+
+    def _apply_speed_limits(self, pose: Pose2D, ego_v_mps: float, now_sec: float) -> None:
+        base_v_mps = self._mpc_cfg.v_max
+        has_ref_vel_config = self._ref_vel_configulator is not None
+        if self._ref_vel_configulator is not None:
+            ref_vel_kmph = self._ref_vel_configulator.get_ref_vel(self._mpc.model.wp_id)
+            base_v_mps = min(kmh_to_m_per_sec(ref_vel_kmph), self._mpc_cfg.v_max)
+
+        effective_v_mps = base_v_mps
+        if self.USE_V2X_STOP and self._v2x_stop_planner is not None:
+            result = self._v2x_stop_planner.compute_speed_cap(
+                ego_x=pose.x,
+                ego_y=pose.y,
+                ego_yaw=pose.theta,
+                ego_v_mps=ego_v_mps,
+                reference_xy=self._waypoint_xy,
+                now_sec=now_sec,
+                base_speed_mps=base_v_mps,
+                velocity_lookup=(
+                    self._v2x_tracker.velocity
+                    if self._v2x_tracker is not None
+                    else None
+                ),
+            )
+            self._last_v2x_stop_result = result
+            effective_v_mps = min(effective_v_mps, result.speed_cap_mps)
+            self._log_v2x_stop_result(result, now_sec)
+
+        effective_v_mps = float(np.clip(effective_v_mps, 0.0, self._mpc_cfg.v_max))
+        self._mpc.update_v_max(effective_v_mps)
+        if has_ref_vel_config:
+            v_ref: List[float] = [effective_v_mps] * len(self._reference_path.waypoints)
+        else:
+            v_ref = [min(v, effective_v_mps) for v in self._nominal_v_ref]
+        self._reference_path.set_v_ref(v_ref)
+
+    def _log_v2x_stop_result(self, result: V2XStopResult, now_sec: float) -> None:
+        throttle_sec = getattr(self, "_v2x_stop_log_throttle_sec", 1.0)
+        if now_sec - self._last_v2x_stop_log_time < throttle_sec:
+            return
+        self._last_v2x_stop_log_time = now_sec
+
+        if result.active:
+            self.get_logger().info(
+                "V2X stop: "
+                f"{result.reason} target={result.vehicle_id} "
+                f"gap={result.gap_m:.2f}m "
+                f"lat={result.lateral_offset_m:.2f}m "
+                f"v_cap={result.speed_cap_mps:.2f}m/s")
+        else:
+            self.get_logger().info("V2X stop: clear")
+
     def _control(self):
         now = self.get_clock().now()
         t = (now - self._t_start).nanoseconds / 1e9
@@ -773,6 +871,11 @@ class MPCController(Node):
                 if new_referece_path is not None:
                     self._car.reference_path = new_referece_path
                     self._car.update_reference_path(self._car.reference_path)
+                    self._reference_path = new_referece_path
+                    self._waypoint_xy = np.asarray(
+                        [(wp.x, wp.y) for wp in self._reference_path.waypoints],
+                        dtype=np.float64)
+                    self._nominal_v_ref = self._get_nominal_v_ref()
 
             def plot_reference_path(car):
                 import matplotlib.pyplot as plt
@@ -803,18 +906,11 @@ class MPCController(Node):
         # print(f"car x: {self._car.temporal_state.x}, y: {self._car.temporal_state.y}, psi: {self._car.temporal_state.psi}")
         # print(f"mpc x: {self._mpc.model.temporal_state.x}, y: {self._mpc.model.temporal_state.y}, psi: {self._mpc.model.temporal_state.psi}")
 
+        self._apply_speed_limits(pose, v, now.nanoseconds / 1e9)
+
         with self._stats.time_block("control"):
             u, max_delta = self._mpc.get_control()
             # self.get_logger().info(f"u: {u}")
-
-        if self._ref_vel_configulator is not None:
-            ref_vel_mps = self._ref_vel_configulator.get_ref_vel(self._mpc.model.wp_id)
-            ref_vel_kmph = min(
-                kmh_to_m_per_sec(ref_vel_mps),
-                self._mpc_cfg.v_max)
-            self._mpc.update_v_max(ref_vel_kmph)
-            v_ref: List[float] = [ref_vel_kmph] * len(self._reference_path.waypoints)
-            self._reference_path.set_v_ref(v_ref)
 
         # override by brake command if control is disabled
         if not self._enable_control:

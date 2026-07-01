@@ -10,6 +10,12 @@
 
 公式ルール: <https://automotiveaichallenge.github.io/aichallenge-documentation-racingkart/competition/sw-class.html>
 
+## Organizer Confirmation
+
+2026-07-01 の運営回答により、障害物情報は `/v2x/vehicle_positions` のみを使用する。安全ゲートとレース挙動の障害物・他車両認識は、この topic を正とする。
+
+LiDAR、Camera、CSV 障害物、`/aichallenge/objects` は 2026 公式障害物入力として扱わない。既存 controller の互換やローカル検証用途で残す場合も、公式 gate 通過ロジックの依存先にしない。
+
 ## Current Local Contract
 
 現行ローカル設計では、車両ごとに ROS_DOMAIN_ID を分ける。
@@ -44,7 +50,7 @@ ros2 topic echo --once /v2x/vehicle_positions
 
 ## Design Guidelines
 
-- 他車両位置情報は主要入力として扱う。
+- 他車両・障害物位置情報は `/v2x/vehicle_positions` を唯一の正入力として扱う。
 - 他車両の raw topic を直接覗く設計にしない。
 - V2X 欠損、遅延、外れ値で危険制御に倒れないようにする。
 - V2X を使う判断と使わない fallback を分ける。
@@ -64,7 +70,6 @@ ros2 topic echo --once /v2x/vehicle_positions
 以下は 2026 公式インターフェースとの整合確認が必要。
 
 - 公式評価環境で `domain_bridge` を使うかどうか。
-- V2X message の正確な型と topic 名。
+- `/v2x/vehicle_positions` の正確な message 型。
 - 他車両位置情報の更新周期、遅延、座標系。
-- 参加者が subscribe してよい V2X topic の範囲。
 - 他車両通信の盗み見・偽データ送信とみなされる境界。

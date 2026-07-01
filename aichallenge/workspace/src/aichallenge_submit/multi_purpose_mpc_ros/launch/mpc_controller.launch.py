@@ -15,6 +15,7 @@ from launch_ros.actions import Node, SetParameter
 def launch_setup(context, *args, **kwargs):
     use_sim_time = LaunchConfiguration("use_sim_time")
     use_obstacle_avoidance = LaunchConfiguration("use_obstacle_avoidance")
+    use_v2x_stop = LaunchConfiguration("use_v2x_stop")
     use_boost_acceleration = LaunchConfiguration("use_boost_acceleration")
     use_stats = LaunchConfiguration("use_stats")
 
@@ -49,6 +50,7 @@ def launch_setup(context, *args, **kwargs):
         parameters=[
             {"use_boost_acceleration": use_boost_acceleration},
             {"use_obstacle_avoidance": use_obstacle_avoidance},
+            {"use_v2x_stop": use_v2x_stop},
             {"use_stats": use_stats},
         ],
     )
@@ -105,6 +107,11 @@ def generate_launch_description():
             "use_obstacle_avoidance",
             "false",
             "Use the functionality of obstacle avoidance",
+        ),
+        (
+            "use_v2x_stop",
+            "true",
+            "Use V2X longitudinal stop speed cap",
         ),
         (
             "use_stats",

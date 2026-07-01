@@ -1,6 +1,7 @@
 """Unit tests for the V2X Gate2 overtake planner."""
 
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import List
 
 import pytest
@@ -104,6 +105,45 @@ def _planner(**kwargs):
     return V2XOvertakePlanner(cfg)
 
 
+def test_config_factory_normalizes_values_and_speed_units():
+    cfg = V2XOvertakeConfig.from_config(
+        SimpleNamespace(
+            preferred_side="invalid",
+            side_selection_policy="invalid",
+            overtake_speed_cap_kmph=18.0,
+            follow_speed_cap_kmph=9.0,
+            max_overtake_target_speed_kmph=3.6,
+        ),
+        vehicle_width_m=1.45,
+    )
+
+    assert cfg.preferred_side == "left"
+    assert cfg.side_selection_policy == "largest_margin"
+    assert cfg.overtake_speed_cap_mps == pytest.approx(5.0)
+    assert cfg.follow_speed_cap_mps == pytest.approx(2.5)
+    assert cfg.max_overtake_target_speed_mps == pytest.approx(1.0)
+    assert cfg.vehicle_width_m == pytest.approx(1.45)
+    assert cfg.circular_path is True
+
+
+def test_force_abort_returns_one_shot_abort_result():
+    planner = _planner()
+    planner.force_abort("mpc_infeasible")
+
+    result = planner.compute_behavior(
+        0.0, 0.0, 0.0, 6.0, _path(), _widths(), 0.1, 8.0)
+
+    assert result.active
+    assert result.state == "abort"
+    assert result.speed_cap_mps == 0.0
+    assert result.reason == "mpc_infeasible"
+
+    next_result = planner.compute_behavior(
+        0.0, 0.0, 0.0, 6.0, _path(), _widths(), 0.2, 8.0)
+    assert not next_result.active
+    assert next_result.state == "clear"
+
+
 def test_front_vehicle_selects_preferred_left_side():
     planner = _planner(preferred_side="left")
     planner.update_v2x(_msg(0.0, [("d2", 12.0, 0.0)]))
@@ -136,6 +176,25 @@ def test_behind_vehicle_is_ignored():
 
     assert not result.active
     assert result.state == "clear"
+
+
+def test_default_circular_path_keeps_ahead_target_positive_across_boundary():
+    planner = _planner(
+        circular_path=True,
+        preferred_side="right",
+        min_overtake_start_gap_m=1.0,
+        max_overtake_start_gap_m=3.0,
+        abort_gap_m=0.5,
+    )
+    planner.update_v2x(_msg(0.0, [("d2", 0.0, 0.0)]))
+
+    result = planner.compute_behavior(
+        2.0, 0.0, 0.0, 6.0, _path(length=2), _widths(length=2), 0.1, 8.0)
+
+    assert result.active
+    assert result.state == "prepare_overtake"
+    assert result.gap_m == pytest.approx(2.0)
+    assert result.signed_gap_m == pytest.approx(2.0)
 
 
 def test_lateral_vehicle_is_ignored():

@@ -1,6 +1,6 @@
 """Unit tests for the V2X Gate1 longitudinal stop planner."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import List
 
 import pytest
@@ -68,21 +68,24 @@ def _path(length=60):
 
 
 def _planner(**kwargs):
-    cfg = V2XStopConfig(
-        detection_range_m=35.0,
-        corridor_half_width_m=2.0,
-        self_ignore_radius_m=0.75,
-        target_stop_gap_m=1.0,
-        stop_hold_gap_m=1.6,
-        release_gap_m=3.0,
-        comfortable_decel_mps2=1.4,
-        stale_timeout_sec=0.8,
-        max_speed_cap_mps=30.0 / 3.6,
-        circular_path=False,
-    )
-    for key, value in kwargs.items():
-        setattr(cfg, key, value)
-    return V2XStopPlanner(cfg)
+    defaults = {
+        "detection_range_m": 35.0,
+        "corridor_half_width_m": 2.0,
+        "self_ignore_radius_m": 0.75,
+        "target_stop_gap_m": 1.0,
+        "stop_hold_gap_m": 1.6,
+        "release_gap_m": 3.0,
+        "comfortable_decel_mps2": 1.4,
+        "stale_timeout_sec": 0.8,
+        "max_speed_cap_mps": 30.0 / 3.6,
+        "circular_path": False,
+    }
+    valid_names = {field.name for field in fields(V2XStopConfig)}
+    unknown_names = sorted(set(kwargs) - valid_names)
+    if unknown_names:
+        raise TypeError(f"unknown V2XStopConfig option(s): {unknown_names}")
+    defaults.update(kwargs)
+    return V2XStopPlanner(V2XStopConfig(**defaults))
 
 
 def test_front_vehicle_caps_speed():
@@ -105,6 +108,25 @@ def test_front_vehicle_caps_speed():
     assert result.gap_m == pytest.approx(10.0)
     assert result.speed_cap_mps < 8.0
     assert result.speed_cap_mps == pytest.approx((2.0 * 1.4 * 9.0) ** 0.5)
+
+
+def test_front_vehicle_speed_cap_is_clamped_to_max_cap():
+    planner = _planner(max_speed_cap_mps=3.0)
+    planner.update_v2x(_msg(0.0, [("d2", 30.0, 0.0)]))
+
+    result = planner.compute_speed_cap(
+        ego_x=0.0,
+        ego_y=0.0,
+        ego_yaw=0.0,
+        ego_v_mps=8.0,
+        reference_xy=_path(),
+        now_sec=0.1,
+        base_speed_mps=8.0,
+    )
+
+    assert result.active
+    assert result.reason == "braking"
+    assert result.speed_cap_mps == pytest.approx(3.0)
 
 
 def test_behind_vehicle_is_ignored():
@@ -176,6 +198,26 @@ def test_hold_stop_uses_release_hysteresis():
     assert third.speed_cap_mps > 0.0
 
 
+def test_hold_stop_persists_through_temporary_candidate_loss():
+    planner = _planner(corridor_half_width_m=1.0, stale_timeout_sec=0.5)
+    planner.update_v2x(_msg(0.0, [("d2", 0.8, 0.0)]))
+    first = planner.compute_speed_cap(
+        0.0, 0.0, 0.0, 0.0, _path(), 0.1, 8.0)
+    assert first.holding_stop
+
+    planner.update_v2x(_msg(0.2, [("d2", 0.8, 2.0)]))
+    missing = planner.compute_speed_cap(
+        0.0, 0.0, 0.0, 0.0, _path(), 0.3, 8.0)
+    assert missing.active
+    assert missing.holding_stop
+    assert missing.speed_cap_mps == pytest.approx(0.0)
+
+    released = planner.compute_speed_cap(
+        0.0, 0.0, 0.0, 0.0, _path(), 0.8, 8.0)
+    assert not released.active
+    assert released.reason == "clear"
+
+
 def test_stale_v2x_is_ignored_after_timeout():
     planner = _planner(stale_timeout_sec=0.5)
     planner.update_v2x(_msg(0.0, [("d2", 10.0, 0.0)]))
@@ -207,3 +249,41 @@ def test_yaw_fallback_works_without_reference_path():
     assert result.active
     assert result.gap_m == pytest.approx(8.0)
     assert result.lateral_offset_m == pytest.approx(1.0)
+
+
+def test_yaw_fallback_works_with_one_point_reference_path():
+    planner = _planner()
+    planner.update_v2x(_msg(0.0, [("d2", 8.0, 1.0)]))
+
+    result = planner.compute_speed_cap(
+        ego_x=0.0,
+        ego_y=0.0,
+        ego_yaw=0.0,
+        ego_v_mps=8.0,
+        reference_xy=[(0.0, 0.0)],
+        now_sec=0.1,
+        base_speed_mps=8.0,
+    )
+
+    assert result.active
+    assert result.gap_m == pytest.approx(8.0)
+    assert result.lateral_offset_m == pytest.approx(1.0)
+
+
+def test_sparse_path_uses_segment_projection_for_lateral_offset():
+    planner = _planner(corridor_half_width_m=2.0)
+    planner.update_v2x(_msg(0.0, [("d2", 5.0, 1.9)]))
+
+    result = planner.compute_speed_cap(
+        ego_x=0.0,
+        ego_y=0.0,
+        ego_yaw=0.0,
+        ego_v_mps=8.0,
+        reference_xy=[(0.0, 0.0), (10.0, 0.0)],
+        now_sec=0.1,
+        base_speed_mps=8.0,
+    )
+
+    assert result.active
+    assert result.gap_m == pytest.approx(5.0)
+    assert result.lateral_offset_m == pytest.approx(1.9)

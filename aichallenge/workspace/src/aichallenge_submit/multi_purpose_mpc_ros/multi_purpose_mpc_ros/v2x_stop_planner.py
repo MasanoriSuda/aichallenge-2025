@@ -153,14 +153,7 @@ class V2XStopPlanner:
         )
 
         if not candidates:
-            self._holding_stop = False
-            self._last_vehicle_id = None
-            return V2XStopResult(
-                active=False,
-                holding_stop=False,
-                speed_cap_mps=base_speed_mps,
-                reason="clear",
-            )
+            return self._empty_candidate_result(base_speed_mps, now_sec)
 
         selected = min(candidates, key=lambda c: c.gap_m)
         holding = self._should_hold_stop(selected, ego_v_mps)
@@ -209,6 +202,38 @@ class V2XStopPlanner:
 
         return False
 
+    def _empty_candidate_result(
+        self,
+        base_speed_mps: float,
+        now_sec: float,
+    ) -> V2XStopResult:
+        snapshot = (
+            self._snapshots.get(self._last_vehicle_id)
+            if self._last_vehicle_id is not None
+            else None
+        )
+        if (
+            self._holding_stop
+            and snapshot is not None
+            and now_sec - snapshot.stamp_sec <= self._cfg.stale_timeout_sec
+        ):
+            return V2XStopResult(
+                active=True,
+                holding_stop=True,
+                speed_cap_mps=0.0,
+                reason="holding_stop",
+                vehicle_id=snapshot.vehicle_id,
+            )
+
+        self._holding_stop = False
+        self._last_vehicle_id = None
+        return V2XStopResult(
+            active=False,
+            holding_stop=False,
+            speed_cap_mps=base_speed_mps,
+            reason="clear",
+        )
+
     def _collect_candidates(
         self,
         ego_x: float,
@@ -232,9 +257,10 @@ class V2XStopPlanner:
 
             if path_xy:
                 relation = self._path_relation(ego_x, ego_y, snapshot, path_xy)
-                if relation is None:
-                    continue
-                gap_m, lateral_offset_m = relation
+                if relation is not None:
+                    gap_m, lateral_offset_m = relation
+                else:
+                    gap_m, lateral_offset_m = self._yaw_relation(dx, dy, ego_yaw)
             else:
                 gap_m, lateral_offset_m = self._yaw_relation(dx, dy, ego_yaw)
 
@@ -269,19 +295,57 @@ class V2XStopPlanner:
         if len(path_xy) < 2:
             return None
 
-        ego_idx = self._nearest_index(ego_x, ego_y, path_xy)
-        target_idx = self._nearest_index(snapshot.x, snapshot.y, path_xy)
-        lateral_offset = math.hypot(
-            snapshot.x - path_xy[target_idx][0],
-            snapshot.y - path_xy[target_idx][1],
-        )
-
         cum_s, total_s = self._cumulative_distance(path_xy)
-        gap = cum_s[target_idx] - cum_s[ego_idx]
+        ego_projection = self._project_to_path(ego_x, ego_y, path_xy, cum_s)
+        target_projection = self._project_to_path(snapshot.x, snapshot.y, path_xy, cum_s)
+        if ego_projection is None or target_projection is None:
+            return None
+
+        ego_s, _ = ego_projection
+        target_s, lateral_offset = target_projection
+        gap = target_s - ego_s
         if self._cfg.circular_path and gap <= 0.0:
             gap += total_s
 
         return gap, lateral_offset
+
+    def _project_to_path(
+        self,
+        x: float,
+        y: float,
+        path_xy: Sequence[Tuple[float, float]],
+        cum_s: Sequence[float],
+    ) -> Optional[Tuple[float, float]]:
+        best_s = 0.0
+        best_lateral = 0.0
+        best_dist_sq = float("inf")
+        n_points = len(path_xy)
+        segment_count = n_points if self._cfg.circular_path else n_points - 1
+
+        for i in range(segment_count):
+            x0, y0 = path_xy[i]
+            next_i = (i + 1) % n_points
+            x1, y1 = path_xy[next_i]
+            dx = x1 - x0
+            dy = y1 - y0
+            seg_len_sq = dx * dx + dy * dy
+            if seg_len_sq <= 1e-12:
+                continue
+
+            t = ((x - x0) * dx + (y - y0) * dy) / seg_len_sq
+            t = min(1.0, max(0.0, t))
+            proj_x = x0 + t * dx
+            proj_y = y0 + t * dy
+            dist_sq = (x - proj_x) * (x - proj_x) + (y - proj_y) * (y - proj_y)
+            if dist_sq < best_dist_sq:
+                segment_s = cum_s[i] + math.sqrt(seg_len_sq) * t
+                best_s = segment_s
+                best_lateral = math.sqrt(dist_sq)
+                best_dist_sq = dist_sq
+
+        if not math.isfinite(best_dist_sq):
+            return None
+        return best_s, best_lateral
 
     @staticmethod
     def _yaw_relation(dx: float, dy: float, ego_yaw: float) -> Tuple[float, float]:

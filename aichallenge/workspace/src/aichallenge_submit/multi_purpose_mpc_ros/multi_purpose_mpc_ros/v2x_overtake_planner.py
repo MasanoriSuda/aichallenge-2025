@@ -171,6 +171,7 @@ class V2XOvertakePlanner:
         self._target_id: Optional[str] = None
         self._side: Optional[str] = None
         self._target_lost_since_sec: Optional[float] = None
+        self._forced_abort_reason: Optional[str] = None
 
     def update_v2x(self, msg, now_sec: Optional[float] = None) -> None:
         msg_stamp = _stamp_to_seconds(_get_attr(_get_attr(msg, "header"), "stamp"))
@@ -202,6 +203,12 @@ class V2XOvertakePlanner:
                 stamp_sec=float(stamp_sec),
             )
 
+    def force_abort(self, reason: str = "external_abort") -> None:
+        self._state = self.ABORT
+        self._side = None
+        self._target_lost_since_sec = None
+        self._forced_abort_reason = str(reason or "external_abort")
+
     def compute_behavior(
         self,
         ego_x: float,
@@ -227,6 +234,19 @@ class V2XOvertakePlanner:
             now_sec=now_sec,
             velocity_lookup=velocity_lookup,
         )
+
+        if self._state == self.ABORT and self._forced_abort_reason is not None:
+            reason = self._forced_abort_reason
+            vehicle_id = self._target_id
+            self._clear_state()
+            return V2XOvertakeResult(
+                active=True,
+                state=self.ABORT,
+                speed_cap_mps=0.0,
+                target_lateral_offset_m=0.0,
+                reason=reason,
+                vehicle_id=vehicle_id,
+            )
 
         active_relation = self._active_target_relation(relations)
         if self._state in (self.PREPARE, self.OVERTAKING, self.RETURN):
@@ -652,6 +672,7 @@ class V2XOvertakePlanner:
         self._target_id = None
         self._side = None
         self._target_lost_since_sec = None
+        self._forced_abort_reason = None
 
     def _active_target_relation(self, relations: List[_Relation]) -> Optional[_Relation]:
         if self._target_id is None:
@@ -731,6 +752,8 @@ class V2XOvertakePlanner:
         forward_gap = signed_gap
         if self._cfg.circular_path and forward_gap <= 0.0:
             forward_gap += total_s
+            if forward_gap <= self._cfg.detection_range_m:
+                signed_gap = forward_gap
 
         left_x, left_y = self._left_normal(target_idx, path_xy)
         lateral_signed = (
@@ -805,8 +828,8 @@ class V2XOvertakePlanner:
                 x = float(point[0])
                 y = float(point[1])
             except (TypeError, IndexError):
-                x = float(getattr(point, "x"))
-                y = float(getattr(point, "y"))
+                x = float(point.x)
+                y = float(point.y)
             if _finite(x) and _finite(y):
                 out.append((x, y))
         return out
@@ -822,8 +845,8 @@ class V2XOvertakePlanner:
                 left = float(item[0])
                 right = float(item[1])
             except (TypeError, IndexError):
-                left = float(getattr(item, "left"))
-                right = float(getattr(item, "right"))
+                left = float(item.left)
+                right = float(item.right)
             if _finite(left) and _finite(right):
                 out.append((max(left, 0.0), max(right, 0.0)))
         return out

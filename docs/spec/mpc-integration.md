@@ -503,7 +503,7 @@ v2x_overtake:
 
 `use_v2x_overtake` は既定 false。`make gate2` のときだけ `run_autoware.bash` が `use_v2x_overtake:=true` を launch へ渡す。Gate1、通常 dev、提出評価では明示的に有効化しない限り Gate2 lateral behavior は動かない。
 
-壁距離は OSM を実行時に直接読むのではなく、`map.yaml_path` の occupancy grid map から `ReferencePath._compute_width()` が事前計算した waypoint ごとの `wp.ub`（左側距離）と `wp.lb`（右側距離）を使う。Gate2 planner は horizon 内の `min(wp.ub)` / `min(abs(wp.lb))` と `min_wall_clearance_m` を比較し、unsafe な側への追い越しを許可しない。両側 safe の場合は `side_selection_policy=largest_margin` により wall margin が大きい側を選び、差が `side_margin_tie_threshold_m` 以下のときだけ `preferred_side` を tie-breaker とする。追い越し開始後は選択済み side を維持し、走行中に左右を切り替えない。
+壁距離は実行時に OSM を直接読み込むのではなく、`map.yaml_path` の occupancy grid map から `ReferencePath._compute_width()` が事前計算した waypoint ごとの `wp.ub`（左側距離）と `wp.lb`（右側距離）を使う。Gate2 planner は horizon 内の `min(wp.ub)` / `min(abs(wp.lb))` と `min_wall_clearance_m` を比較し、unsafe な側への追い越しを許可しない。両側 safe の場合は `side_selection_policy=largest_margin` により wall margin が大きい側を選び、差が `side_margin_tie_threshold_m` 以下のときだけ `preferred_side` を tie-breaker とする。追い越し開始後は選択済み side を維持し、走行中に左右を切り替えない。
 
 追い越し判断は `V2X overtake: ... target=<id> side=<left|right> gap=<m> offset=<m> wall_l=<m> wall_r=<m>` の throttled log で追跡する。
 

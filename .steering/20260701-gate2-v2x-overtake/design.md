@@ -102,6 +102,7 @@ v2x_overtake:
   corridor_half_width_m: 2.0
   preferred_side: "right"
   side_selection_policy: "largest_margin"
+  side_margin_tie_threshold_m: 0.3
   lateral_offset_m: 1.3
   lateral_offset_rate_mps: 2.0
   constraint_half_width_m: 0.35
@@ -111,6 +112,7 @@ v2x_overtake:
   standby_side: "right"
   min_lateral_clearance_m: 1.2
   min_wall_clearance_m: 0.5
+  min_ttc_sec: 0.8
   overtake_speed_cap_kmph: 6.0
   prepare_speed_cap_kmph: 3.0
   follow_speed_cap_kmph: 5.0

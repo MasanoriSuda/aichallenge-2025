@@ -63,7 +63,7 @@
 - [x] V2X target 検出前から右側へ寄せる standby lateral offset を追加する。
 - [x] 実際の `ey` が右側へ入るまで prepare speed cap を適用する。
 - [x] Gate2 低速時だけ選択 side へ最低操舵角を入れる steer override を追加する。
-- [ ] MPC infeasible または制御出力異常時の abort を実装する。
+- [x] MPC infeasible または制御出力異常時の abort を実装する。
 - [x] throttled log を追加する。
 
 ## Phase 4. Config And Launch

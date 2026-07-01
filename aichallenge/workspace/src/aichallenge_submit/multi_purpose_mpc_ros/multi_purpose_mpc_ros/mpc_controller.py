@@ -285,9 +285,10 @@ class MPCController(Node):
 
             for param in parameters:
                 if param.name == "v_max" and param.type_ == Parameter.Type.DOUBLE:
-                    mpc_cfg.v_max = param.value
-                    self._mpc.update_v_max(kmh_to_m_per_sec(param.value))
-                    v_ref: List[float] = [kmh_to_m_per_sec(param.value)] * len(self._reference_path.waypoints)
+                    v_max_mps = kmh_to_m_per_sec(param.value)
+                    mpc_cfg.v_max = v_max_mps
+                    self._mpc.update_v_max(v_max_mps)
+                    v_ref: List[float] = [v_max_mps] * len(self._reference_path.waypoints)
                     self._reference_path.set_v_ref(v_ref)
 
                     self.get_logger().warn(f"v_max was updated to '{param.value}' [km/h]")
@@ -490,6 +491,7 @@ class MPCController(Node):
         self._v2x_overtake_steer_override_min_abs_rad = 0.0
         self._v2x_overtake_steer_override_until_ey_m = 0.0
         self._last_overtake_steer_override_log_time = -float("inf")
+        self._last_overtake_control_fault_log_time = -float("inf")
         self._base_mpc_max_steering_rate = float(self._mpc.max_steering_rate)
         self._overtake_lateral_offset_m = 0.0
         self._last_overtake_constraint_debug = None
@@ -894,9 +896,12 @@ class MPCController(Node):
 
     def _get_nominal_v_ref(self) -> List[float]:
         return [
-            float(wp.v_ref) if wp.v_ref is not None else self._mpc_cfg.v_max
+            float(wp.v_ref) if wp.v_ref is not None else self._configured_v_max_mps()
             for wp in self._reference_path.waypoints
         ]
+
+    def _configured_v_max_mps(self) -> float:
+        return max(0.0, float(self._mpc_cfg.v_max))
 
     def _get_waypoint_widths(self) -> np.ndarray:
         fallback_half_width = float(self._cfg.reference_path.max_width) / 2.0  # type: ignore
@@ -921,11 +926,12 @@ class MPCController(Node):
         )
 
     def _apply_speed_limits(self, pose: Pose2D, ego_v_mps: float, now_sec: float, dt: float) -> None:
-        base_v_mps = self._mpc_cfg.v_max
+        configured_v_max_mps = self._configured_v_max_mps()
+        base_v_mps = configured_v_max_mps
         has_ref_vel_config = self._ref_vel_configulator is not None
         if self._ref_vel_configulator is not None:
             ref_vel_kmph = self._ref_vel_configulator.get_ref_vel(self._mpc.model.wp_id)
-            base_v_mps = min(kmh_to_m_per_sec(ref_vel_kmph), self._mpc_cfg.v_max)
+            base_v_mps = min(kmh_to_m_per_sec(ref_vel_kmph), configured_v_max_mps)
 
         effective_v_mps = base_v_mps
         overtake_bypasses_stop = False
@@ -973,9 +979,21 @@ class MPCController(Node):
         else:
             overtake_target_offset_m = 0.0
 
-        self._update_overtake_lateral_offset(overtake_target_offset_m, dt)
-        self._apply_overtake_steer_rate(overtake_steer_active)
-        self._apply_overtake_lateral_constraints(self._overtake_lateral_offset_m)
+        if self.USE_V2X_OVERTAKE:
+            self._update_overtake_lateral_offset(overtake_target_offset_m, dt)
+            self._apply_overtake_steer_rate(overtake_steer_active)
+            if (
+                overtake_result is not None
+                or overtake_steer_active
+                or abs(self._overtake_lateral_offset_m) > 1e-3
+            ):
+                self._apply_overtake_lateral_constraints(self._overtake_lateral_offset_m)
+            else:
+                self._last_overtake_constraint_debug = None
+        else:
+            self._overtake_lateral_offset_m = 0.0
+            self._apply_overtake_steer_rate(False)
+            self._last_overtake_constraint_debug = None
         if overtake_result is not None:
             self._log_v2x_overtake_result(overtake_result, now_sec)
 
@@ -1002,7 +1020,7 @@ class MPCController(Node):
             effective_v_mps = min(effective_v_mps, result.speed_cap_mps)
             self._log_v2x_stop_result(result, now_sec)
 
-        effective_v_mps = float(np.clip(effective_v_mps, 0.0, self._mpc_cfg.v_max))
+        effective_v_mps = float(np.clip(effective_v_mps, 0.0, configured_v_max_mps))
         self._mpc.update_v_max(effective_v_mps)
         if has_ref_vel_config:
             v_ref: List[float] = [effective_v_mps] * len(self._reference_path.waypoints)
@@ -1066,10 +1084,10 @@ class MPCController(Node):
             reference_state=self._car.temporal_state,
         )
         current_ey = float(spatial_state.e_y)
-        threshold = self._v2x_overtake_lateral_ready_threshold_m
-        if result.side == "right" and current_ey > threshold:
+        threshold = abs(self._v2x_overtake_lateral_ready_threshold_m)
+        if result.side == "right" and current_ey > -threshold:
             return min(effective_v_mps, self._v2x_overtake_prepare_speed_cap_mps)
-        if result.side == "left" and current_ey < -threshold:
+        if result.side == "left" and current_ey < threshold:
             return min(effective_v_mps, self._v2x_overtake_prepare_speed_cap_mps)
         return effective_v_mps
 
@@ -1104,10 +1122,12 @@ class MPCController(Node):
 
         applied = False
         original_steer = float(u[1])
-        if result.side == "right" and current_ey > self._v2x_overtake_steer_override_until_ey_m:
+        until_ey = abs(self._v2x_overtake_steer_override_until_ey_m)
+        signed_until_ey = -until_ey if result.side == "right" else until_ey
+        if result.side == "right" and current_ey > -until_ey:
             u[1] = min(float(u[1]), -steer_abs)
             applied = True
-        elif result.side == "left" and current_ey < -self._v2x_overtake_steer_override_until_ey_m:
+        elif result.side == "left" and current_ey < until_ey:
             u[1] = max(float(u[1]), steer_abs)
             applied = True
 
@@ -1118,7 +1138,7 @@ class MPCController(Node):
                 f"side={result.side} ey={current_ey:.2f}m "
                 f"raw_steer={original_steer:.3f}rad "
                 f"cmd_steer={float(u[1]):.3f}rad "
-                f"until_ey={self._v2x_overtake_steer_override_until_ey_m:.2f}m")
+                f"until_ey={signed_until_ey:.2f}m")
 
         return u
 
@@ -1127,9 +1147,12 @@ class MPCController(Node):
             self._overtake_lateral_offset_m = 0.0
             return
         dt = max(float(dt), 0.0)
-        max_step = self._v2x_overtake_cfg.lateral_offset_rate_mps * dt
+        rate_mps = float(self._v2x_overtake_cfg.lateral_offset_rate_mps)
+        if dt <= 0.0 or rate_mps <= 0.0:
+            return
+        max_step = rate_mps * dt
         diff = target_offset_m - self._overtake_lateral_offset_m
-        if abs(diff) <= max_step or max_step <= 0.0:
+        if abs(diff) <= max_step:
             self._overtake_lateral_offset_m = float(target_offset_m)
         else:
             self._overtake_lateral_offset_m += float(np.sign(diff) * max_step)
@@ -1234,6 +1257,63 @@ class MPCController(Node):
             self._reference_path.border_cells.dynamic_lower_bounds[row_idx] = np.asarray(lower_cells)
         except (AttributeError, IndexError, TypeError):
             pass
+
+    def _abort_overtake_on_control_fault(
+        self,
+        u,
+        max_delta: float,
+        now_sec: float,
+    ) -> bool:
+        result = self._last_v2x_overtake_result
+        if (
+            not self.USE_V2X_OVERTAKE
+            or self._v2x_overtake_planner is None
+            or result is None
+            or result.state not in ("prepare_overtake", "overtaking", "return_to_line")
+        ):
+            return False
+
+        invalid_control = False
+        try:
+            u_array = np.asarray(u, dtype=float)
+            invalid_control = (
+                u_array.size < 2
+                or not np.all(np.isfinite(u_array))
+                or not np.isfinite(float(max_delta))
+            )
+        except (TypeError, ValueError):
+            invalid_control = True
+
+        infeasible = int(getattr(self._mpc, "infeasibility_counter", 0)) > 0
+        if not invalid_control and not infeasible:
+            return False
+
+        reason = "mpc_control_fault" if invalid_control else "mpc_infeasible"
+        self._v2x_overtake_planner.force_abort(reason)
+        self._last_v2x_overtake_result = V2XOvertakeResult(
+            active=True,
+            state="abort",
+            speed_cap_mps=0.0,
+            target_lateral_offset_m=0.0,
+            reason=reason,
+            vehicle_id=result.vehicle_id,
+            side=result.side,
+            gap_m=result.gap_m,
+            signed_gap_m=result.signed_gap_m,
+            lateral_offset_m=result.lateral_offset_m,
+            relative_speed_mps=result.relative_speed_mps,
+            target_speed_mps=result.target_speed_mps,
+            left_wall_margin_m=result.left_wall_margin_m,
+            right_wall_margin_m=result.right_wall_margin_m,
+        )
+        self._overtake_lateral_offset_m = 0.0
+        self._apply_overtake_steer_rate(False)
+        self._last_overtake_constraint_debug = None
+
+        if now_sec - self._last_overtake_control_fault_log_time >= 1.0:
+            self._last_overtake_control_fault_log_time = now_sec
+            self.get_logger().warn(f"V2X overtake abort: {reason}")
+        return True
 
     def _log_v2x_stop_result(self, result: V2XStopResult, now_sec: float) -> None:
         throttle_sec = getattr(self, "_v2x_stop_log_throttle_sec", 1.0)
@@ -1353,6 +1433,10 @@ class MPCController(Node):
             u, max_delta = self._mpc.get_control()
             # self.get_logger().info(f"u: {u}")
 
+        if self._abort_overtake_on_control_fault(u, max_delta, now.nanoseconds / 1e9):
+            u = np.array([0.0, 0.0])
+            max_delta = 0.0
+
         # override by brake command if control is disabled
         if not self._enable_control:
             last_v_cmd = self._last_u[0]
@@ -1360,7 +1444,7 @@ class MPCController(Node):
                 u[0] = 0.0
             else:
                 decel_v = last_v_cmd + self._mpc_cfg.a_min * dt
-                u[0] = np.clip(decel_v, 0.0, self._mpc_cfg.v_max)
+                u[0] = np.clip(decel_v, 0.0, self._configured_v_max_mps())
 
         if len(u) == 0:
             self.get_logger().error("No control signal", throttle_duration_sec=1)

@@ -5,6 +5,7 @@
   <arg name="use_v2x_stop" default="true"/>
   <arg name="use_v2x_overtake" default="false"/>
   <arg name="use_v2x_race_behavior" default="false"/>
+  <arg name="v2x_stop_brake_start_gap_m" default="-1.0"/>
 
   <node pkg="multi_purpose_mpc_ros" exec="run_mpc_controller.bash"
         name="mpc_controller" output="screen"
@@ -16,6 +17,7 @@
     <param name="use_v2x_stop" value="$(var use_v2x_stop)"/>
     <param name="use_v2x_overtake" value="$(var use_v2x_overtake)"/>
     <param name="use_v2x_race_behavior" value="$(var use_v2x_race_behavior)"/>
+    <param name="v2x_stop_brake_start_gap_m" value="$(var v2x_stop_brake_start_gap_m)"/>
     <param name="use_stats" value="false"/>
   </node>
 </launch>

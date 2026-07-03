@@ -30,6 +30,8 @@ LiDAR、Camera、CSV 障害物、`/aichallenge/objects` は 2026 公式障害物
 ## Local Commands
 
 ```bash
+make dev
+make dev1
 make dev2
 make dev3
 make dev4
@@ -49,7 +51,9 @@ ros2 topic list
 ros2 topic echo --once /v2x/vehicle_positions
 ```
 
-`make race2` は `SIM_MODE=race2` で 2 台の Autoware を起動し、両車に `use_v2x_race_behavior:=true` を渡すローカル試走用ターゲットである。既存 `make dev2` は通常の 2 台起動として残し、race behavior の有効化とは分ける。
+`make dev` / `make dev1` / `make dev2` / `make dev3` / `make dev4` は、AWSIM dev scenario 上で各車に `use_v2x_overtake:=true` を渡すローカル試走用ターゲットである。V2X stop は MPC launch の既定 `use_v2x_stop:=true` を使うが、dev 系では `v2x_stop_brake_start_gap_m:=8.0` を渡し、前方 target が 8m 以内に入るまで stop speed cap を掛けない。`use_v2x_race_behavior` は有効化しない。停止中の前方 target が一定時間動かない場合は Gate2 型 overtake の stuck target 条件を満たす範囲で、低速走行中の target に詰まった場合は force overtake 条件を満たす範囲で、近距離からの低速追い越しを許可する。
+
+`make race2` は `SIM_MODE=race2` で 2 台の Autoware を起動し、両車に `use_v2x_race_behavior:=true` を渡すローカル試走用ターゲットである。Gate2 型 overtake と race behavior の有効化は分けるが、race behavior 内の追い越し判定にも force overtake 条件を渡し、3m 台の近距離で低速 target に詰まった場合は force 用に少し緩めた左右・壁の安全判定が通る範囲で `force_overtake_*` reason から `prepare_overtake` へ入れる。
 
 ## Race Behavior Policy
 

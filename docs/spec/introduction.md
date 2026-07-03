@@ -50,7 +50,7 @@ make down
 | `./docker_build.sh dev` | **開発用Dockerイメージ**（`aichallenge-2025-dev`）を作る | 初回、またはDockerfile更新後 | `output/docker/<timestamp>-docker_build-<pid>.log`（最新は `output/latest/docker_build.log`） |
 | `./docker_build.sh eval --submit <tar>` | **評価用Dockerイメージ**（`aichallenge-2025-eval`）を提出物込みで作る | 評価実行前、または提出物を変えた時 | （ビルド中は端末に表示） |
 | `make autoware-build` | コンテナ内で **ROSワークスペースをビルド**（`aichallenge/workspace/install/` を作る） | 初回、または依存/ソース更新後 | （ビルド中は端末に表示。失敗したら直近の出力を確認） |
-| `make dev` | **開発起動**: AWSIM + Autoware を起動して動かしっぱなしにする（1台） | 手元でデバッグ/可視化したい時 | `output/<run_id>/awsim.log`（AWSIM）/ `output/<run_id>/d<id>/autoware.log`（Autoware） |
+| `make dev` / `make dev1` | **開発起動**: AWSIM + Autoware を起動して動かしっぱなしにする（1台） | 手元でデバッグ/可視化したい時 | `output/<run_id>/awsim.log`（AWSIM）/ `output/<run_id>/d<id>/autoware.log`（Autoware） |
 | `make dev2` / `make dev3` / `make dev4` | **多車両開発**: N台の Autoware を ROS_DOMAIN_ID 1..N で並列起動 | 複数提出物を同時に動かしたい時 | 各 Domain のログ（上と同様） |
 | `make gate1` / `gate2` / `gate3` | **安全ゲートシナリオ**での開発起動 | 安全ゲートシナリオを確認したい時 | `output/<run_id>/...` |
 | `make ps` | 起動中コンテナを一覧表示 | 「動いてる？」確認 | （標準出力） |

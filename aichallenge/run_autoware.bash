@@ -24,13 +24,30 @@ case "${mode}" in
     ;;
 esac
 
-if [[ "${SIM_MODE:-}" == "gate2" && ( "${mode}" == "awsim" || "${mode}" == "awsim-no-viz" ) ]]; then
-    opts+=("use_v2x_overtake:=true")
+if [[ "${mode}" == "awsim" || "${mode}" == "awsim-no-viz" ]]; then
+    case "${SIM_MODE:-}" in
+    "gate2")
+        opts+=("use_v2x_overtake:=true")
+        ;;
+    "dev"|"dev1"|"dev2"|"dev3"|"dev4")
+        # dev* trials exercise Gate2-style overtake with the default V2X stop fallback.
+        opts+=(
+            "use_v2x_overtake:=true"
+            "use_v2x_race_behavior:=false"
+            "v2x_stop_brake_start_gap_m:=8.0"
+        )
+        ;;
+    "race2")
+        opts+=("use_v2x_race_behavior:=true")
+        ;;
+    esac
 fi
 
-if [[ "${SIM_MODE:-}" == "race2" && ( "${mode}" == "awsim" || "${mode}" == "awsim-no-viz" ) ]]; then
-    opts+=("use_v2x_race_behavior:=true")
-fi
+case "${USE_MPC_OBSTACLE_AVOIDANCE:-}" in
+"1"|"true"|"TRUE"|"on"|"ON"|"yes"|"YES")
+    opts+=("use_obstacle_avoidance:=true")
+    ;;
+esac
 
 export ROS_DOMAIN_ID=$id
 

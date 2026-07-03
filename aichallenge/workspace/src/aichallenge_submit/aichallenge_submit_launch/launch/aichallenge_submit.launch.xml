@@ -4,16 +4,20 @@
   <arg name="use_sim_time"/>
   <arg name="sensor_model"/>
   <arg name="launch_vehicle_interface"/>
+  <arg name="use_obstacle_avoidance" default="false"/>
   <arg name="use_v2x_overtake" default="false"/>
   <arg name="use_v2x_race_behavior" default="false"/>
+  <arg name="v2x_stop_brake_start_gap_m" default="-1.0"/>
 
   <log message="The arguments for aichallenge_submit_launch."/>
   <log message=" - simulation: $(var simulation)"/>
   <log message=" - use_sim_time: $(var use_sim_time)"/>
   <log message=" - sensor_model: $(var sensor_model)"/>
   <log message=" - launch_vehicle_interface: $(var launch_vehicle_interface)"/>
+  <log message=" - use_obstacle_avoidance: $(var use_obstacle_avoidance)"/>
   <log message=" - use_v2x_overtake: $(var use_v2x_overtake)"/>
   <log message=" - use_v2x_race_behavior: $(var use_v2x_race_behavior)"/>
+  <log message=" - v2x_stop_brake_start_gap_m: $(var v2x_stop_brake_start_gap_m)"/>
 
   <include file="$(find-pkg-share aichallenge_submit_launch)/launch/reference.launch.xml" >
     <arg name="vehicle_model" value="racing_kart"/>
@@ -22,7 +26,9 @@
     <arg name="use_sim_time" value="$(var use_sim_time)"/>
     <arg name="simulation" value="$(var simulation)"/>
     <arg name="launch_vehicle_interface" value="$(var launch_vehicle_interface)"/>
+    <arg name="use_obstacle_avoidance" value="$(var use_obstacle_avoidance)"/>
     <arg name="use_v2x_overtake" value="$(var use_v2x_overtake)"/>
     <arg name="use_v2x_race_behavior" value="$(var use_v2x_race_behavior)"/>
+    <arg name="v2x_stop_brake_start_gap_m" value="$(var v2x_stop_brake_start_gap_m)"/>
   </include>
 </launch>

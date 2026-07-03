@@ -56,11 +56,66 @@ class MPC:
         self.last_solved_wp_id = 0
         self.current_control = np.zeros((self.nu*self.N))
         self.optimizer = osqp.OSQP()
+        self.lateral_constraint = None
 
         if not self.use_obstacle_avoidance:
             self.model.reference_path.update_simple_path_constraints(
                 N,
                 self.model.safety_margin)
+
+    def set_lateral_constraint(
+        self,
+        offset_m: float,
+        half_width_m: float,
+        current_ey_m: float,
+        transition_horizon_ratio: float,
+        initial_progress: float,
+    ):
+        self.lateral_constraint = {
+            "offset_m": float(offset_m),
+            "half_width_m": float(half_width_m),
+            "current_ey_m": float(current_ey_m),
+            "transition_horizon_ratio": float(transition_horizon_ratio),
+            "initial_progress": float(initial_progress),
+        }
+
+    def clear_lateral_constraint(self):
+        self.lateral_constraint = None
+
+    def _apply_lateral_constraint_overlay(self, ub, lb):
+        if self.lateral_constraint is None:
+            return ub, lb
+
+        offset_m = self.lateral_constraint["offset_m"]
+        if abs(offset_m) <= 1e-3:
+            return ub, lb
+
+        ub = np.asarray(ub, dtype=float).copy()
+        lb = np.asarray(lb, dtype=float).copy()
+        half_width_m = max(0.0, self.lateral_constraint["half_width_m"])
+        current_ey_m = self.lateral_constraint["current_ey_m"]
+        transition_ratio = max(0.0, self.lateral_constraint["transition_horizon_ratio"])
+        initial_progress = max(0.0, min(1.0, self.lateral_constraint["initial_progress"]))
+        transition_cols = max(1, int(np.ceil(float(max(len(ub), 1)) * transition_ratio)))
+
+        for n in range(len(ub)):
+            ub_original = ub[n]
+            lb_original = lb[n]
+            progress = max(initial_progress, min(1.0, float(n + 1) / float(transition_cols)))
+            center = current_ey_m + progress * (offset_m - current_ey_m)
+            upper = min(ub_original, center + half_width_m)
+            lower = max(lb_original, center - half_width_m)
+            if offset_m > 0.0 and center >= 0.0:
+                lower = max(lower, 0.0)
+            elif offset_m < 0.0 and center <= 0.0:
+                upper = min(upper, 0.0)
+            if upper < lower:
+                upper = ub_original
+                lower = lb_original
+            ub[n] = upper
+            lb[n] = lower
+
+        return ub, lb
 
     def update_v_max(self, v_max: float):
         self.input_constraints['umax'][0] = v_max
@@ -163,6 +218,8 @@ class MPC:
                 infeasible_index = ub < lb
                 ub[infeasible_index] = 0.0
                 lb[infeasible_index] = 0.0
+
+        ub, lb = self._apply_lateral_constraint_overlay(ub, lb)
 
         # Update dynamic state constraints
         xmin_dyn[0] = xmax_dyn[0] = self.model.spatial_state.e_y

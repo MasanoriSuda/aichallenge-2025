@@ -151,6 +151,7 @@ class MPCController(Node):
         self.declare_parameter("use_v2x_stop", True)
         self.declare_parameter("use_v2x_overtake", False)
         self.declare_parameter("use_v2x_race_behavior", False)
+        self.declare_parameter("v2x_stop_brake_start_gap_m", -1.0)
         self.declare_parameter("use_stats", False)
 
         # get parameters
@@ -160,6 +161,11 @@ class MPCController(Node):
         self.USE_V2X_STOP = self.get_parameter("use_v2x_stop").get_parameter_value().bool_value
         self.USE_V2X_OVERTAKE = self.get_parameter("use_v2x_overtake").get_parameter_value().bool_value
         self.USE_V2X_RACE_BEHAVIOR = self.get_parameter("use_v2x_race_behavior").get_parameter_value().bool_value
+        self._v2x_stop_brake_start_gap_override_m = (
+            self.get_parameter("v2x_stop_brake_start_gap_m")
+            .get_parameter_value()
+            .double_value
+        )
         self.use_stats = self.get_parameter("use_stats").get_parameter_value().bool_value
 
         self._config_path = config_path
@@ -508,6 +514,8 @@ class MPCController(Node):
         self._v2x_overtake_steer_override_until_ey_m = 0.0
         self._last_overtake_steer_override_log_time = -float("inf")
         self._last_overtake_control_fault_log_time = -float("inf")
+        self._last_virtual_force_fallback_log_time = -float("inf")
+        self._last_overtake_wall_clamp_log_time = -float("inf")
         self._base_mpc_max_steering_rate = float(self._mpc.max_steering_rate)
         self._overtake_lateral_offset_m = 0.0
         self._last_overtake_constraint_debug = None
@@ -554,6 +562,8 @@ class MPCController(Node):
                 stop_cfg = V2XStopConfig.from_config(
                     self._cfg.v2x_stop,  # type: ignore
                     a_min_mps2=self._mpc_cfg.a_min)
+                if self._v2x_stop_brake_start_gap_override_m >= 0.0:
+                    stop_cfg.brake_start_gap_m = self._v2x_stop_brake_start_gap_override_m
                 self._v2x_stop_planner = V2XStopPlanner(stop_cfg)
                 self._v2x_stop_log_throttle_sec = float(
                     getattr(self._cfg.v2x_stop, "log_throttle_sec", 1.0))  # type: ignore
@@ -604,6 +614,18 @@ class MPCController(Node):
                 if prepare_speed_cap_kmph > 0.0:
                     self._v2x_overtake_prepare_speed_cap_mps = kmh_to_m_per_sec(
                         prepare_speed_cap_kmph)
+                self._v2x_overtake_steer_override_enabled = bool(getattr(
+                    self._cfg.v2x_race_behavior,  # type: ignore
+                    "steer_override_enabled",
+                    False))
+                self._v2x_overtake_steer_override_min_abs_rad = abs(float(getattr(
+                    self._cfg.v2x_race_behavior,  # type: ignore
+                    "steer_override_min_abs_rad",
+                    0.0)))
+                self._v2x_overtake_steer_override_until_ey_m = float(getattr(
+                    self._cfg.v2x_race_behavior,  # type: ignore
+                    "steer_override_until_ey_m",
+                    0.0))
 
         if self.USE_V2X_OVERTAKE:
             if not hasattr(self._cfg, "v2x_overtake"):
@@ -817,9 +839,32 @@ class MPCController(Node):
 
         if self.USE_OBSTACLE_AVOIDANCE and self._v2x_tracker is not None:
             predictions = self._v2x_tracker.predict_all(self._v2x_t_samples)
+            predictions = {
+                vehicle_id: points
+                for vehicle_id, points in predictions.items()
+                if not self._is_virtual_force_obstacle_id(vehicle_id)
+            }
             self._dynamic_obstacles = predictions_to_obstacles(
                 predictions, self._v2x_vehicle_radius)
             self._obstacles_updated = True
+
+    def _is_virtual_force_obstacle_id(self, vehicle_id: str) -> bool:
+        normalized = str(vehicle_id).lower()
+        if (
+            normalized
+            and self._v2x_overtake_cfg is not None
+            and bool(getattr(
+                self._v2x_overtake_cfg,
+                "treat_all_targets_as_virtual_force",
+                False,
+            ))
+        ):
+            return True
+        return normalized.startswith((
+            "force_obstacle",
+            "virtual_force",
+            "virtual_obstacle",
+        ))
 
     def _filter_obstacles_to_corridor(self, obstacles: List[Obstacle]) -> List[Obstacle]:
         if not obstacles or self._waypoint_xy.size == 0:
@@ -1106,6 +1151,14 @@ class MPCController(Node):
             overtake_target_offset_m = 0.0
 
         if self.USE_V2X_OVERTAKE or self.USE_V2X_RACE_BEHAVIOR:
+            active_overtake_result = (
+                overtake_result if overtake_result is not None else race_result
+            )
+            overtake_target_offset_m = self._wall_limited_overtake_target_offset(
+                overtake_target_offset_m,
+                active_overtake_result,
+                now_sec,
+            )
             self._update_overtake_lateral_offset(overtake_target_offset_m, dt)
             self._apply_overtake_steer_rate(overtake_steer_active)
             if (
@@ -1114,13 +1167,20 @@ class MPCController(Node):
                 or overtake_steer_active
                 or abs(self._overtake_lateral_offset_m) > 1e-3
             ):
-                self._apply_overtake_lateral_constraints(self._overtake_lateral_offset_m)
+                self._apply_overtake_lateral_constraints(
+                    self._overtake_lateral_offset_m,
+                    active_overtake_result,
+                )
             else:
                 self._last_overtake_constraint_debug = None
+                if hasattr(self._mpc, "clear_lateral_constraint"):
+                    self._mpc.clear_lateral_constraint()
         else:
             self._overtake_lateral_offset_m = 0.0
             self._apply_overtake_steer_rate(False)
             self._last_overtake_constraint_debug = None
+            if hasattr(self._mpc, "clear_lateral_constraint"):
+                self._mpc.clear_lateral_constraint()
         if overtake_result is not None:
             self._log_v2x_overtake_result(overtake_result, now_sec)
         if race_result is not None:
@@ -1198,11 +1258,92 @@ class MPCController(Node):
         )
         return available_m >= required_m
 
+    def _overtake_wall_clearance_threshold_m(self, result=None) -> float:
+        if self._v2x_overtake_cfg is None:
+            return 0.0
+        if result is not None and self._is_force_overtake_result(result):
+            force_clearance = float(getattr(
+                self._v2x_overtake_cfg,
+                "force_min_wall_clearance_m",
+                -1.0,
+            ))
+            if force_clearance >= 0.0:
+                return force_clearance
+        return max(0.0, float(getattr(
+            self._v2x_overtake_cfg,
+            "min_wall_clearance_m",
+            0.0,
+        )))
+
+    def _wall_limited_overtake_target_offset(
+        self,
+        target_offset_m: float,
+        result=None,
+        now_sec: float = 0.0,
+    ) -> float:
+        if self._v2x_overtake_cfg is None:
+            return target_offset_m
+        if abs(target_offset_m) <= 1e-3 or self._waypoint_widths.size == 0:
+            return target_offset_m
+
+        side_idx = 0 if target_offset_m > 0.0 else 1
+        side = "left" if target_offset_m > 0.0 else "right"
+        n_widths = len(self._waypoint_widths)
+        if n_widths <= 0:
+            return target_offset_m
+
+        start_idx = int(self._car.wp_id) % n_widths
+        horizon_count = max(1, int(np.ceil(
+            float(self._v2x_overtake_cfg.wall_check_horizon_m)
+            / max(float(self._cfg.reference_path.resolution), 1e-3))))  # type: ignore
+        indices = [(start_idx + i) % n_widths for i in range(min(horizon_count, n_widths))]
+        available_m = min(float(self._waypoint_widths[i][side_idx]) for i in indices)
+        vehicle_half_width_m = 0.5 * float(getattr(
+            self._v2x_overtake_cfg,
+            "vehicle_width_m",
+            float(self._cfg.bicycle_model.width),  # type: ignore
+        ))
+        required_without_offset_m = (
+            vehicle_half_width_m
+            + float(self._v2x_overtake_cfg.wall_safety_margin_m)
+            + self._overtake_wall_clearance_threshold_m(result)
+        )
+        allowed_offset_abs_m = max(0.0, available_m - required_without_offset_m)
+        limited_offset_m = float(np.sign(target_offset_m) * min(
+            abs(target_offset_m),
+            allowed_offset_abs_m,
+        ))
+
+        if (
+            abs(limited_offset_m - target_offset_m) > 0.05
+            and now_sec - self._last_overtake_wall_clamp_log_time >= 1.0
+        ):
+            self._last_overtake_wall_clamp_log_time = now_sec
+            self.get_logger().warn(
+                "V2X overtake wall clamp: "
+                f"side={side} "
+                f"target_offset={target_offset_m:.2f}m "
+                f"limited_offset={limited_offset_m:.2f}m "
+                f"available={available_m:.2f}m "
+                f"required_without_offset={required_without_offset_m:.2f}m")
+
+        return limited_offset_m
+
     def _limit_overtake_prepare_speed(
         self,
         effective_v_mps: float,
         result: V2XOvertakeResult,
     ) -> float:
+        if (
+            self._v2x_overtake_cfg is not None
+            and bool(getattr(
+                self._v2x_overtake_cfg,
+                "virtual_force_disable_speed_cap",
+                False,
+            ))
+            and self._is_virtual_force_overtake_result(result)
+        ):
+            return effective_v_mps
         if self._v2x_overtake_prepare_speed_cap_mps is None:
             return effective_v_mps
         if result.side not in ("left", "right"):
@@ -1233,10 +1374,15 @@ class MPCController(Node):
         if self._v2x_overtake_steer_override_min_abs_rad <= 1e-3:
             return u
 
-        result = self._last_v2x_overtake_result
+        result, _planner_name = self._current_overtake_control_result()
         if result is None or result.state not in ("prepare_overtake", "overtaking"):
             return u
         if result.side not in ("left", "right"):
+            return u
+        if (
+            abs(float(getattr(result, "target_lateral_offset_m", 0.0))) <= 1e-3
+            and abs(self._overtake_lateral_offset_m) <= 1e-3
+        ):
             return u
 
         spatial_state = self._car.t2s(
@@ -1252,6 +1398,8 @@ class MPCController(Node):
         applied = False
         original_steer = float(u[1])
         until_ey = abs(self._v2x_overtake_steer_override_until_ey_m)
+        if abs(self._overtake_lateral_offset_m) > 1e-3:
+            until_ey = min(until_ey, abs(self._overtake_lateral_offset_m))
         signed_until_ey = -until_ey if result.side == "right" else until_ey
         if result.side == "right" and current_ey > -until_ey:
             u[1] = min(float(u[1]), -steer_abs)
@@ -1286,14 +1434,79 @@ class MPCController(Node):
         else:
             self._overtake_lateral_offset_m += float(np.sign(diff) * max_step)
 
-        max_offset = abs(self._v2x_overtake_cfg.lateral_offset_m)
+        max_offset = max(
+            abs(float(getattr(self._v2x_overtake_cfg, "lateral_offset_m", 0.0))),
+            abs(float(target_offset_m)),
+        )
         self._overtake_lateral_offset_m = float(np.clip(
             self._overtake_lateral_offset_m,
             -max_offset,
             max_offset,
         ))
 
-    def _apply_overtake_lateral_constraints(self, offset_m: float) -> None:
+    @staticmethod
+    def _overtake_result_vehicle_id(result) -> str:
+        vehicle_id = getattr(result, "vehicle_id", None)
+        if not vehicle_id:
+            vehicle_id = getattr(result, "target_id", None)
+        return str(vehicle_id or "")
+
+    def _is_virtual_force_overtake_result(self, result) -> bool:
+        return self._is_virtual_force_obstacle_id(
+            self._overtake_result_vehicle_id(result))
+
+    def _is_force_overtake_result(self, result) -> bool:
+        reason = str(getattr(result, "reason", "") or "").lower()
+        return (
+            reason.startswith("force_overtake")
+            or "forced_clear" in reason
+            or self._is_virtual_force_overtake_result(result)
+        )
+
+    def _apply_overtake_lateral_constraints(self, offset_m: float, result=None) -> None:
+        if self._v2x_overtake_cfg is not None:
+            half_width = self._v2x_overtake_cfg.constraint_half_width_m
+        else:
+            half_width = 0.55
+        transition_ratio = self._v2x_overtake_constraint_transition_horizon_ratio
+        initial_progress = self._v2x_overtake_constraint_initial_progress
+        if result is not None and self._is_force_overtake_result(result):
+            force_half_width = float(getattr(
+                self._v2x_overtake_cfg,
+                "force_constraint_half_width_m",
+                -1.0,
+            )) if self._v2x_overtake_cfg is not None else -1.0
+            if force_half_width >= 0.0:
+                half_width = force_half_width
+            force_transition_ratio = float(getattr(
+                self._v2x_overtake_cfg,
+                "force_constraint_transition_horizon_ratio",
+                -1.0,
+            )) if self._v2x_overtake_cfg is not None else -1.0
+            if force_transition_ratio >= 0.0:
+                transition_ratio = force_transition_ratio
+            force_initial_progress = float(getattr(
+                self._v2x_overtake_cfg,
+                "force_constraint_initial_progress",
+                -1.0,
+            )) if self._v2x_overtake_cfg is not None else -1.0
+            if force_initial_progress >= 0.0:
+                initial_progress = force_initial_progress
+
+        current_spatial_state = self._car.t2s(
+            reference_waypoint=self._reference_path.get_waypoint(self._car.wp_id),
+            reference_state=self._car.temporal_state,
+        )
+        current_ey = float(current_spatial_state.e_y)
+        if hasattr(self._mpc, "set_lateral_constraint"):
+            self._mpc.set_lateral_constraint(
+                offset_m,
+                half_width,
+                current_ey,
+                transition_ratio,
+                initial_progress,
+            )
+
         if self._reference_path.path_constraints is None:
             return
         if self._reference_path.path_constraints[0].size == 0:
@@ -1308,23 +1521,11 @@ class MPCController(Node):
             + 1
         ) % n_rows
 
-        if self._v2x_overtake_cfg is not None:
-            half_width = self._v2x_overtake_cfg.constraint_half_width_m
-        else:
-            half_width = 0.55
-
         upper_bounds = []
         lower_bounds = []
         upper_cells = []
         lower_cells = []
-        transition_ratio = self._v2x_overtake_constraint_transition_horizon_ratio
         transition_cols = max(1, int(np.ceil(float(max(n_cols, 1)) * transition_ratio)))
-        initial_progress = self._v2x_overtake_constraint_initial_progress
-        current_spatial_state = self._car.t2s(
-            reference_waypoint=self._reference_path.get_waypoint(self._car.wp_id),
-            reference_state=self._car.temporal_state,
-        )
-        current_ey = float(current_spatial_state.e_y)
 
         for n in range(n_cols):
             wp = self._reference_path.get_waypoint(row_idx + n)
@@ -1387,21 +1588,93 @@ class MPCController(Node):
         except (AttributeError, IndexError, TypeError):
             pass
 
+    def _current_overtake_control_result(self):
+        if self.USE_V2X_RACE_BEHAVIOR and self._v2x_race_planner is not None:
+            return self._last_v2x_race_result, "race"
+        if self.USE_V2X_OVERTAKE and self._v2x_overtake_planner is not None:
+            return self._last_v2x_overtake_result, "overtake"
+        return None, "overtake"
+
+    def _apply_virtual_force_infeasible_fallback(
+        self,
+        u,
+        max_delta: float,
+        now_sec: float,
+    ):
+        result, planner_name = self._current_overtake_control_result()
+        if result is None:
+            return u, max_delta, False
+        if result.state not in ("prepare_overtake", "overtaking", "return_to_line"):
+            return u, max_delta, False
+        if not self._is_virtual_force_overtake_result(result):
+            return u, max_delta, False
+
+        invalid_control = False
+        try:
+            u_array = np.asarray(u, dtype=float).copy()
+            invalid_control = (
+                u_array.size < 2
+                or not np.all(np.isfinite(u_array))
+                or not np.isfinite(float(max_delta))
+            )
+        except (TypeError, ValueError):
+            invalid_control = True
+            u_array = np.zeros(2, dtype=float)
+
+        infeasible = int(getattr(self._mpc, "infeasibility_counter", 0)) > 0
+        if not invalid_control and not infeasible:
+            return u, max_delta, False
+
+        if u_array.size < 2:
+            u_array = np.zeros(2, dtype=float)
+
+        fallback_speed = float(getattr(
+            self._v2x_overtake_cfg,
+            "virtual_force_infeasible_fallback_speed_mps",
+            4.0 / 3.6,
+        )) if self._v2x_overtake_cfg is not None else 4.0 / 3.6
+        speed_cap = float(getattr(result, "speed_cap_mps", fallback_speed) or fallback_speed)
+        if speed_cap > 1e-3:
+            fallback_speed = min(fallback_speed, speed_cap)
+        fallback_speed = max(0.0, fallback_speed)
+        if fallback_speed > 1e-3:
+            effective_cap = speed_cap if speed_cap > 1e-3 else fallback_speed
+            u_array[0] = max(0.0, min(max(float(u_array[0]), fallback_speed), effective_cap))
+
+        side = str(getattr(result, "side", "") or "").lower()
+        steer_sign = -1.0 if side == "right" else 1.0
+        min_steer = max(self._v2x_overtake_steer_override_min_abs_rad, 0.12)
+        if not np.isfinite(float(u_array[1])) or abs(float(u_array[1])) < min_steer:
+            u_array[1] = steer_sign * min_steer
+        try:
+            finite_max_delta = abs(float(max_delta)) if np.isfinite(float(max_delta)) else 0.0
+        except (TypeError, ValueError):
+            finite_max_delta = 0.0
+        max_delta = max(abs(float(u_array[1])), finite_max_delta)
+
+        if now_sec - self._last_virtual_force_fallback_log_time >= 1.0:
+            self._last_virtual_force_fallback_log_time = now_sec
+            target_id = self._overtake_result_vehicle_id(result)
+            self.get_logger().warn(
+                "V2X "
+                f"{planner_name} virtual force fallback: "
+                f"mpc_infeasible target={target_id} "
+                f"speed={u_array[0]:.2f}m/s steer={u_array[1]:.2f}rad"
+            )
+
+        return u_array, max_delta, True
+
     def _abort_overtake_on_control_fault(
         self,
         u,
         max_delta: float,
         now_sec: float,
     ) -> bool:
-        result = None
+        result, planner_name = self._current_overtake_control_result()
         planner = None
-        planner_name = "overtake"
         if self.USE_V2X_RACE_BEHAVIOR and self._v2x_race_planner is not None:
-            result = self._last_v2x_race_result
             planner = self._v2x_race_planner
-            planner_name = "race"
         elif self.USE_V2X_OVERTAKE and self._v2x_overtake_planner is not None:
-            result = self._last_v2x_overtake_result
             planner = self._v2x_overtake_planner
 
         if result is None or planner is None:
@@ -1631,7 +1904,16 @@ class MPCController(Node):
             u, max_delta = self._mpc.get_control()
             # self.get_logger().info(f"u: {u}")
 
-        if self._abort_overtake_on_control_fault(u, max_delta, now.nanoseconds / 1e9):
+        u, max_delta, virtual_force_fallback = self._apply_virtual_force_infeasible_fallback(
+            u,
+            max_delta,
+            now.nanoseconds / 1e9,
+        )
+
+        if (
+            not virtual_force_fallback
+            and self._abort_overtake_on_control_fault(u, max_delta, now.nanoseconds / 1e9)
+        ):
             u = np.array([0.0, 0.0])
             max_delta = 0.0
 

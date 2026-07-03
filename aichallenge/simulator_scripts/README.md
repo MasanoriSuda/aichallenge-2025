@@ -19,10 +19,10 @@ make eval → run_evaluation.bash → evaluation.launch.xml
   （例: `SIM_MODE=dev2` → `dev.sh 2`）。
 - 不明なモードはフォールバックせず、対応モード一覧を出して exit 1。
 - Makefile は `*.sh` を wildcard で拾って `make simulator-<mode>` を自動生成する。
-  `dev2..dev4` / `gate1..gate3` のエイリアスも `SIM_MODES` に追加してあり、
-  `make simulator-dev2` / `make simulator-gate1` のように使える（AWSIM のみ起動）。
+  `dev1..dev4` / `gate1..gate3` のエイリアスも `SIM_MODES` に追加してあり、
+  `make simulator-dev1` / `make simulator-gate1` のように使える（AWSIM のみ起動）。
 - `make dev` / `make gate1..gate3` は AWSIM に加えて Autoware も起動する複合ターゲット。
-  `make dev2..dev4` は N 台分の autoware を別 compose プロジェクト（ROS_DOMAIN_ID=1..N）で起動する。
+  `make dev1` は `make dev` と同じ 1 台起動、`make dev2..dev4` は N 台分の autoware を別 compose プロジェクト（ROS_DOMAIN_ID=1..N）で起動する。
 
 ## モード一覧
 

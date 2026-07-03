@@ -41,13 +41,39 @@ class V2XOvertakeConfig:
     max_overtake_start_gap_m: float = 22.0
     abort_gap_m: float = 3.5
     abort_escape_lateral_threshold_m: float = 0.45
+    stuck_target_enabled: bool = False
+    stuck_overtake_min_gap_m: float = 2.5
+    stuck_target_hold_sec: float = 1.0
+    stuck_target_speed_threshold_mps: float = 1.0 / 3.6
+    stuck_ego_speed_threshold_mps: float = 1.0 / 3.6
+    force_overtake_enabled: bool = False
+    force_overtake_min_gap_m: float = 2.5
+    force_overtake_max_gap_m: float = 6.0
+    force_overtake_hold_sec: float = 0.3
+    force_overtake_target_speed_threshold_mps: float = 5.0 / 3.6
+    force_overtake_ego_speed_threshold_mps: float = 4.0 / 3.6
+    force_overtake_speed_cap_mps: float = -1.0
+    force_pre_stop_enabled: bool = False
+    force_pre_stop_gap_m: float = 8.0
+    force_pre_stop_target_speed_threshold_mps: float = 1.0 / 3.6
+    force_pre_stop_release_ego_speed_mps: float = 1.0 / 3.6
+    force_pre_stop_speed_cap_mps: float = 1.0 / 3.6
+    force_min_lateral_clearance_m: float = -1.0
+    force_min_wall_clearance_m: float = -1.0
     return_clearance_m: float = 8.0
     preferred_side: str = "left"
     side_selection_policy: str = "largest_margin"
     side_margin_tie_threshold_m: float = 0.3
     lateral_offset_m: float = 1.8
+    force_lateral_offset_m: float = -1.0
     lateral_offset_rate_mps: float = 0.8
     constraint_half_width_m: float = 0.55
+    force_constraint_half_width_m: float = -1.0
+    force_constraint_transition_horizon_ratio: float = -1.0
+    force_constraint_initial_progress: float = -1.0
+    virtual_force_infeasible_fallback_speed_mps: float = 4.0 / 3.6
+    treat_all_targets_as_virtual_force: bool = False
+    virtual_force_disable_speed_cap: bool = False
     min_lateral_clearance_m: float = 1.2
     min_wall_clearance_m: float = 0.5
     wall_safety_margin_m: float = 0.2
@@ -86,13 +112,55 @@ class V2XOvertakeConfig:
             abort_gap_m=float(_get_attr(cfg, "abort_gap_m", 3.5)),
             abort_escape_lateral_threshold_m=float(
                 _get_attr(cfg, "abort_escape_lateral_threshold_m", 0.45)),
+            stuck_target_enabled=bool(_get_attr(cfg, "stuck_target_enabled", False)),
+            stuck_overtake_min_gap_m=float(_get_attr(cfg, "stuck_overtake_min_gap_m", 2.5)),
+            stuck_target_hold_sec=float(_get_attr(cfg, "stuck_target_hold_sec", 1.0)),
+            stuck_target_speed_threshold_mps=float(
+                _get_attr(cfg, "stuck_target_speed_threshold_kmph", 1.0)) / 3.6,
+            stuck_ego_speed_threshold_mps=float(
+                _get_attr(cfg, "stuck_ego_speed_threshold_kmph", 1.0)) / 3.6,
+            force_overtake_enabled=bool(_get_attr(cfg, "force_overtake_enabled", False)),
+            force_overtake_min_gap_m=float(_get_attr(cfg, "force_overtake_min_gap_m", 2.5)),
+            force_overtake_max_gap_m=float(_get_attr(cfg, "force_overtake_max_gap_m", 6.0)),
+            force_overtake_hold_sec=float(_get_attr(cfg, "force_overtake_hold_sec", 0.3)),
+            force_overtake_target_speed_threshold_mps=float(
+                _get_attr(cfg, "force_overtake_target_speed_threshold_kmph", 5.0)) / 3.6,
+            force_overtake_ego_speed_threshold_mps=float(
+                _get_attr(cfg, "force_overtake_ego_speed_threshold_kmph", 4.0)) / 3.6,
+            force_overtake_speed_cap_mps=float(
+                _get_attr(cfg, "force_overtake_speed_cap_kmph", -1.0)) / 3.6,
+            force_pre_stop_enabled=bool(_get_attr(cfg, "force_pre_stop_enabled", False)),
+            force_pre_stop_gap_m=float(_get_attr(cfg, "force_pre_stop_gap_m", 8.0)),
+            force_pre_stop_target_speed_threshold_mps=float(
+                _get_attr(cfg, "force_pre_stop_target_speed_threshold_kmph", 1.0)) / 3.6,
+            force_pre_stop_release_ego_speed_mps=float(
+                _get_attr(cfg, "force_pre_stop_release_ego_speed_kmph", 1.0)) / 3.6,
+            force_pre_stop_speed_cap_mps=float(
+                _get_attr(cfg, "force_pre_stop_speed_cap_kmph", 1.0)) / 3.6,
+            force_min_lateral_clearance_m=float(
+                _get_attr(cfg, "force_min_lateral_clearance_m", -1.0)),
+            force_min_wall_clearance_m=float(
+                _get_attr(cfg, "force_min_wall_clearance_m", -1.0)),
             return_clearance_m=float(_get_attr(cfg, "return_clearance_m", 8.0)),
             preferred_side=preferred_side,
             side_selection_policy=side_selection_policy,
             side_margin_tie_threshold_m=float(_get_attr(cfg, "side_margin_tie_threshold_m", 0.3)),
             lateral_offset_m=float(_get_attr(cfg, "lateral_offset_m", 1.8)),
+            force_lateral_offset_m=float(_get_attr(cfg, "force_lateral_offset_m", -1.0)),
             lateral_offset_rate_mps=float(_get_attr(cfg, "lateral_offset_rate_mps", 0.8)),
             constraint_half_width_m=float(_get_attr(cfg, "constraint_half_width_m", 0.55)),
+            force_constraint_half_width_m=float(
+                _get_attr(cfg, "force_constraint_half_width_m", -1.0)),
+            force_constraint_transition_horizon_ratio=float(
+                _get_attr(cfg, "force_constraint_transition_horizon_ratio", -1.0)),
+            force_constraint_initial_progress=float(
+                _get_attr(cfg, "force_constraint_initial_progress", -1.0)),
+            virtual_force_infeasible_fallback_speed_mps=float(
+                _get_attr(cfg, "virtual_force_infeasible_fallback_speed_kmph", 4.0)) / 3.6,
+            treat_all_targets_as_virtual_force=bool(
+                _get_attr(cfg, "treat_all_targets_as_virtual_force", False)),
+            virtual_force_disable_speed_cap=bool(
+                _get_attr(cfg, "virtual_force_disable_speed_cap", False)),
             min_lateral_clearance_m=float(_get_attr(cfg, "min_lateral_clearance_m", 1.2)),
             min_wall_clearance_m=float(_get_attr(cfg, "min_wall_clearance_m", 0.5)),
             wall_safety_margin_m=float(_get_attr(cfg, "wall_safety_margin_m", 0.2)),
@@ -172,6 +240,8 @@ class V2XOvertakePlanner:
         self._side: Optional[str] = None
         self._target_lost_since_sec: Optional[float] = None
         self._forced_abort_reason: Optional[str] = None
+        self._stuck_since_sec: Dict[str, float] = {}
+        self._force_since_sec: Dict[str, float] = {}
 
     def update_v2x(self, msg, now_sec: Optional[float] = None) -> None:
         msg_stamp = _stamp_to_seconds(_get_attr(_get_attr(msg, "header"), "stamp"))
@@ -208,6 +278,8 @@ class V2XOvertakePlanner:
         self._side = None
         self._target_lost_since_sec = None
         self._forced_abort_reason = str(reason or "external_abort")
+        self._stuck_since_sec.clear()
+        self._force_since_sec.clear()
 
     def compute_behavior(
         self,
@@ -234,6 +306,7 @@ class V2XOvertakePlanner:
             now_sec=now_sec,
             velocity_lookup=velocity_lookup,
         )
+        self._prune_stuck_targets(relations)
 
         if self._state == self.ABORT and self._forced_abort_reason is not None:
             reason = self._forced_abort_reason
@@ -278,12 +351,45 @@ class V2XOvertakePlanner:
             )
 
         target = min(candidates, key=lambda r: r.forward_gap_m)
-        if target.forward_gap_m <= self._cfg.abort_gap_m:
+        gap_allows_overtake = self._gap_allows_overtake(target)
+        stuck_allows_overtake = self._stuck_allows_overtake(
+            target, ego_v_mps, now_sec)
+        force_allows_overtake = self._force_allows_overtake(
+            target, ego_v_mps, now_sec)
+        force_relaxed_side_check = (
+            force_allows_overtake
+            and (not gap_allows_overtake or self._is_virtual_force_target(target))
+        )
+        decision = self._choose_side(
+            target,
+            relations,
+            widths,
+            path_xy,
+            force_relaxed=force_relaxed_side_check,
+        )
+        if (
+            decision.side is None
+            and force_allows_overtake
+            and self._is_virtual_force_target(target)
+        ):
+            decision = self._choose_force_side(target, widths, path_xy)
+
+        if force_allows_overtake and self._force_pre_stop_required(target, ego_v_mps):
+            return self._force_pre_stop(base_speed_mps, target, decision)
+
+        if (
+            target.forward_gap_m <= self._cfg.abort_gap_m
+            and not stuck_allows_overtake
+            and not force_allows_overtake
+        ):
             self._target_id = target.snapshot.vehicle_id
             return self._abort(base_speed_mps, "abort_gap", target)
 
-        decision = self._choose_side(target, relations, widths, path_xy)
-        if not self._gap_allows_overtake(target):
+        if (
+            not gap_allows_overtake
+            and not stuck_allows_overtake
+            and not force_allows_overtake
+        ):
             return self._follow(base_speed_mps, target, decision, "gap_or_speed_not_ready")
         if decision.side is None:
             return self._follow(base_speed_mps, target, decision, decision.reason)
@@ -297,7 +403,15 @@ class V2XOvertakePlanner:
             target=target,
             decision=decision,
             base_speed_mps=base_speed_mps,
-            reason=decision.reason,
+            reason=(
+                decision.reason
+                if gap_allows_overtake
+                else (
+                    f"stuck_target_{decision.reason}"
+                    if stuck_allows_overtake
+                    else f"force_overtake_{decision.reason}"
+                )
+            ),
         )
 
     def _compute_active_behavior(
@@ -327,6 +441,8 @@ class V2XOvertakePlanner:
                 current_lateral_offset_m,
                 self._cfg.abort_escape_lateral_threshold_m,
             )
+            and not self._stuck_escape_active(target)
+            and not self._force_escape_active(target)
         ):
             return self._abort(base_speed_mps, "abort_gap", target)
 
@@ -355,7 +471,14 @@ class V2XOvertakePlanner:
             self._state = self.RETURN
             return self._return_result(base_speed_mps, target, "target_passed")
 
-        decision = self._choose_side(target, relations, widths, path_xy, self._side)
+        decision = self._choose_side(
+            target,
+            relations,
+            widths,
+            path_xy,
+            self._side,
+            force_relaxed=self._force_escape_active(target),
+        )
         if decision.side is None:
             return self._abort(base_speed_mps, decision.reason, target, decision)
 
@@ -396,6 +519,166 @@ class V2XOvertakePlanner:
                     return False
 
         return target_is_slow
+
+    def _prune_stuck_targets(self, relations: List[_Relation]) -> None:
+        active_ids = {relation.snapshot.vehicle_id for relation in relations}
+        for vehicle_id in list(self._stuck_since_sec):
+            if vehicle_id not in active_ids:
+                self._stuck_since_sec.pop(vehicle_id, None)
+        for vehicle_id in list(self._force_since_sec):
+            if vehicle_id not in active_ids:
+                self._force_since_sec.pop(vehicle_id, None)
+
+    def _stuck_allows_overtake(
+        self,
+        target: _Relation,
+        ego_v_mps: float,
+        now_sec: float,
+    ) -> bool:
+        vehicle_id = target.snapshot.vehicle_id
+        if not self._stuck_candidate(target, ego_v_mps):
+            self._stuck_since_sec.pop(vehicle_id, None)
+            return False
+
+        since_sec = self._stuck_since_sec.get(vehicle_id)
+        if since_sec is None:
+            self._stuck_since_sec[vehicle_id] = now_sec
+            return self._cfg.stuck_target_hold_sec <= 0.0
+        return now_sec - since_sec >= self._cfg.stuck_target_hold_sec
+
+    def _stuck_candidate(self, target: _Relation, ego_v_mps: float) -> bool:
+        if not self._cfg.stuck_target_enabled:
+            return False
+        if target.forward_gap_m < self._cfg.stuck_overtake_min_gap_m:
+            return False
+        if target.forward_gap_m > self._cfg.min_overtake_start_gap_m:
+            return False
+        if ego_v_mps > self._cfg.stuck_ego_speed_threshold_mps:
+            return False
+        target_speed = target.target_speed_mps
+        if target_speed is None:
+            return False
+        return target_speed <= self._cfg.stuck_target_speed_threshold_mps
+
+    def _stuck_escape_active(self, target: _Relation) -> bool:
+        if not self._cfg.stuck_target_enabled:
+            return False
+        if target.snapshot.vehicle_id not in self._stuck_since_sec:
+            return False
+        if target.forward_gap_m < self._cfg.stuck_overtake_min_gap_m:
+            return False
+        target_speed = target.target_speed_mps
+        if target_speed is None:
+            return False
+        return target_speed <= self._cfg.stuck_target_speed_threshold_mps
+
+    def _force_allows_overtake(
+        self,
+        target: _Relation,
+        ego_v_mps: float,
+        now_sec: float,
+    ) -> bool:
+        vehicle_id = target.snapshot.vehicle_id
+        if not self._force_candidate(target, ego_v_mps):
+            self._force_since_sec.pop(vehicle_id, None)
+            return False
+
+        since_sec = self._force_since_sec.get(vehicle_id)
+        if since_sec is None:
+            self._force_since_sec[vehicle_id] = now_sec
+            return self._cfg.force_overtake_hold_sec <= 0.0
+        return now_sec - since_sec >= self._cfg.force_overtake_hold_sec
+
+    def _force_candidate(self, target: _Relation, ego_v_mps: float) -> bool:
+        if not self._cfg.force_overtake_enabled:
+            return False
+        virtual_force_target = self._is_virtual_force_target(target)
+        min_gap = 0.1 if virtual_force_target else self._cfg.force_overtake_min_gap_m
+        if target.forward_gap_m < min_gap:
+            return False
+
+        if virtual_force_target:
+            # Virtual obstacles are allowed to bypass the close-range
+            # force-overtake gate, but they must not start lateral avoidance
+            # as soon as they enter the long detection range. Keep the far
+            # range for approach speed control and only begin avoidance in the
+            # same window as normal overtake preparation.
+            max_gap = min(
+                self._cfg.detection_range_m,
+                self._cfg.max_overtake_start_gap_m,
+            )
+        else:
+            max_gap = min(
+                self._cfg.force_overtake_max_gap_m,
+                self._cfg.min_overtake_start_gap_m,
+            )
+        if target.forward_gap_m > max_gap:
+            return False
+        if (
+            not virtual_force_target
+            and ego_v_mps > self._cfg.force_overtake_ego_speed_threshold_mps
+        ):
+            return False
+
+        target_speed = target.target_speed_mps
+        if target_speed is None:
+            return virtual_force_target
+        if (
+            not virtual_force_target
+            and target_speed > self._cfg.force_overtake_target_speed_threshold_mps
+        ):
+            return False
+
+        if (
+            not virtual_force_target
+            and target.relative_speed_mps is not None
+            and target.relative_speed_mps < -1e-6
+        ):
+            ttc = target.forward_gap_m / abs(target.relative_speed_mps)
+            if ttc < self._cfg.min_ttc_sec:
+                return False
+
+        return True
+
+    def _is_virtual_force_target(self, target: _Relation) -> bool:
+        return self._is_virtual_force_vehicle_id(target.snapshot.vehicle_id)
+
+    def _is_virtual_force_vehicle_id(self, vehicle_id: str) -> bool:
+        if self._cfg.treat_all_targets_as_virtual_force and str(vehicle_id):
+            return True
+        vehicle_id = str(vehicle_id).lower()
+        return vehicle_id.startswith((
+            "force_obstacle",
+            "virtual_force",
+            "virtual_obstacle",
+        ))
+
+    def _force_escape_active(self, target: _Relation) -> bool:
+        if not self._cfg.force_overtake_enabled:
+            return False
+        if target.snapshot.vehicle_id not in self._force_since_sec:
+            return False
+        return self._force_candidate(target, ego_v_mps=0.0)
+
+    def _force_speed_cap_active(self, target: _Relation) -> bool:
+        if self._is_virtual_force_target(target):
+            return True
+        return target.snapshot.vehicle_id in self._force_since_sec
+
+    def _force_pre_stop_required(self, target: _Relation, ego_v_mps: float) -> bool:
+        if not self._cfg.force_pre_stop_enabled:
+            return False
+        if target.forward_gap_m > self._cfg.force_pre_stop_gap_m:
+            return False
+        if ego_v_mps <= self._cfg.force_pre_stop_release_ego_speed_mps:
+            return False
+        return self._force_pre_stop_target_stopped(target)
+
+    def _force_pre_stop_target_stopped(self, target: _Relation) -> bool:
+        target_speed = target.target_speed_mps
+        if target_speed is None:
+            return self._is_virtual_force_target(target)
+        return target_speed <= self._cfg.force_pre_stop_target_speed_threshold_mps
 
     def _has_side_lateral_progress(
         self,
@@ -439,10 +722,15 @@ class V2XOvertakePlanner:
         widths: Sequence[Tuple[float, float]],
         path_xy: Sequence[Tuple[float, float]],
         forced_side: Optional[str] = None,
+        force_relaxed: bool = False,
     ) -> _SideDecision:
-        left_margin, right_margin = self._wall_margins(target.path_index, widths, path_xy)
-        left_safe = left_margin >= 0.0 and self._side_v2x_safe("left", target, relations)
-        right_safe = right_margin >= 0.0 and self._side_v2x_safe("right", target, relations)
+        lateral_offset_m = self._avoidance_lateral_offset_m(force_relaxed)
+        left_margin, right_margin = self._wall_margins(
+            target.path_index, widths, path_xy, force_relaxed, lateral_offset_m)
+        left_safe = left_margin >= 0.0 and self._side_v2x_safe(
+            "left", target, relations, force_relaxed, lateral_offset_m)
+        right_safe = right_margin >= 0.0 and self._side_v2x_safe(
+            "right", target, relations, force_relaxed, lateral_offset_m)
 
         if forced_side == "left":
             if left_safe:
@@ -476,23 +764,60 @@ class V2XOvertakePlanner:
 
         return _SideDecision(preferred, f"{preferred}_preferred", left_margin, right_margin)
 
+    def _choose_force_side(
+        self,
+        target: _Relation,
+        widths: Sequence[Tuple[float, float]],
+        path_xy: Sequence[Tuple[float, float]],
+    ) -> _SideDecision:
+        lateral_offset_m = self._avoidance_lateral_offset_m(force_relaxed=True)
+        left_margin, right_margin = self._wall_margins(
+            target.path_index,
+            widths,
+            path_xy,
+            force_relaxed=True,
+            lateral_offset_m=lateral_offset_m,
+        )
+        preferred = self._cfg.preferred_side
+        if self._cfg.side_selection_policy == "largest_margin":
+            margin_diff = left_margin - right_margin
+            if abs(margin_diff) > self._cfg.side_margin_tie_threshold_m:
+                side = "left" if margin_diff >= 0.0 else "right"
+            else:
+                side = preferred
+        else:
+            side = preferred
+        return _SideDecision(
+            side,
+            f"virtual_force_{side}",
+            left_margin,
+            right_margin,
+        )
+
     def _wall_margins(
         self,
         start_idx: int,
         widths: Sequence[Tuple[float, float]],
         path_xy: Sequence[Tuple[float, float]],
+        force_relaxed: bool = False,
+        lateral_offset_m: Optional[float] = None,
     ) -> Tuple[float, float]:
         if not widths:
             return -float("inf"), -float("inf")
 
+        offset_m = (
+            self._avoidance_lateral_offset_m(force_relaxed)
+            if lateral_offset_m is None
+            else abs(float(lateral_offset_m))
+        )
         horizon_indices = self._horizon_indices(start_idx, path_xy, len(widths))
         left_available = min(widths[i][0] for i in horizon_indices)
         right_available = min(widths[i][1] for i in horizon_indices)
         required = (
-            abs(self._cfg.lateral_offset_m)
+            offset_m
             + self._cfg.vehicle_width_m * 0.5
             + self._cfg.wall_safety_margin_m
-            + self._cfg.min_wall_clearance_m
+            + self._wall_clearance_threshold(force_relaxed)
         )
         return left_available - required, right_available - required
 
@@ -501,9 +826,17 @@ class V2XOvertakePlanner:
         side: str,
         target: _Relation,
         relations: List[_Relation],
+        force_relaxed: bool = False,
+        lateral_offset_m: Optional[float] = None,
     ) -> bool:
         side_sign = 1.0 if side == "left" else -1.0
-        desired_lateral = side_sign * self._cfg.lateral_offset_m
+        offset_m = (
+            self._avoidance_lateral_offset_m(force_relaxed)
+            if lateral_offset_m is None
+            else abs(float(lateral_offset_m))
+        )
+        desired_lateral = side_sign * offset_m
+        clearance_threshold_m = self._lateral_clearance_threshold(force_relaxed)
         for relation in relations:
             if relation.snapshot.vehicle_id == target.snapshot.vehicle_id:
                 continue
@@ -511,9 +844,24 @@ class V2XOvertakePlanner:
                 continue
             if relation.signed_gap_m > target.forward_gap_m + self._cfg.return_clearance_m:
                 continue
-            if abs(relation.lateral_signed_m - desired_lateral) < self._cfg.min_lateral_clearance_m:
+            if abs(relation.lateral_signed_m - desired_lateral) < clearance_threshold_m:
                 return False
         return True
+
+    def _lateral_clearance_threshold(self, force_relaxed: bool) -> float:
+        if force_relaxed and self._cfg.force_min_lateral_clearance_m >= 0.0:
+            return self._cfg.force_min_lateral_clearance_m
+        return self._cfg.min_lateral_clearance_m
+
+    def _wall_clearance_threshold(self, force_relaxed: bool) -> float:
+        if force_relaxed and self._cfg.force_min_wall_clearance_m >= 0.0:
+            return self._cfg.force_min_wall_clearance_m
+        return self._cfg.min_wall_clearance_m
+
+    def _avoidance_lateral_offset_m(self, force_relaxed: bool = False) -> float:
+        if force_relaxed and self._cfg.force_lateral_offset_m >= 0.0:
+            return abs(self._cfg.force_lateral_offset_m)
+        return abs(self._cfg.lateral_offset_m)
 
     def _horizon_indices(
         self,
@@ -552,9 +900,38 @@ class V2XOvertakePlanner:
         return V2XOvertakeResult(
             active=True,
             state=self.FOLLOW,
-            speed_cap_mps=min(base_speed_mps, self._cfg.follow_speed_cap_mps),
+            speed_cap_mps=self._target_speed_cap(
+                base_speed_mps,
+                self._cfg.follow_speed_cap_mps,
+                target=target,
+            ),
             target_lateral_offset_m=0.0,
             reason=reason,
+            vehicle_id=target.snapshot.vehicle_id,
+            gap_m=target.forward_gap_m,
+            signed_gap_m=target.signed_gap_m,
+            lateral_offset_m=target.lateral_offset_m,
+            relative_speed_mps=target.relative_speed_mps,
+            target_speed_mps=target.target_speed_mps,
+            left_wall_margin_m=decision.left_wall_margin_m,
+            right_wall_margin_m=decision.right_wall_margin_m,
+        )
+
+    def _force_pre_stop(
+        self,
+        base_speed_mps: float,
+        target: _Relation,
+        decision: _SideDecision,
+    ) -> V2XOvertakeResult:
+        self._state = self.FOLLOW
+        self._target_id = target.snapshot.vehicle_id
+        self._side = None
+        return V2XOvertakeResult(
+            active=True,
+            state=self.FOLLOW,
+            speed_cap_mps=min(base_speed_mps, self._cfg.force_pre_stop_speed_cap_mps),
+            target_lateral_offset_m=0.0,
+            reason="force_pre_stop",
             vehicle_id=target.snapshot.vehicle_id,
             gap_m=target.forward_gap_m,
             signed_gap_m=target.signed_gap_m,
@@ -575,7 +952,16 @@ class V2XOvertakePlanner:
         self._state = self.ABORT
         self._side = None
         self._target_lost_since_sec = None
-        speed_cap = 0.0 if reason == "abort_gap" else min(base_speed_mps, self._cfg.follow_speed_cap_mps)
+        speed_cap = (
+            0.0
+            if reason == "abort_gap"
+            else self._target_speed_cap(
+                base_speed_mps,
+                self._cfg.follow_speed_cap_mps,
+                target=target,
+                vehicle_id=self._target_id,
+            )
+        )
         return V2XOvertakeResult(
             active=True,
             state=self.ABORT,
@@ -610,7 +996,11 @@ class V2XOvertakePlanner:
             return V2XOvertakeResult(
                 active=True,
                 state=self._state,
-                speed_cap_mps=min(base_speed_mps, self._cfg.follow_speed_cap_mps),
+                speed_cap_mps=self._target_speed_cap(
+                    base_speed_mps,
+                    self._cfg.follow_speed_cap_mps,
+                    vehicle_id=self._target_id,
+                ),
                 target_lateral_offset_m=target_offset,
                 reason="target_lost_hold",
                 vehicle_id=self._target_id,
@@ -629,11 +1019,19 @@ class V2XOvertakePlanner:
     ) -> V2XOvertakeResult:
         side = decision.side or self._side or self._cfg.preferred_side
         offset_sign = 1.0 if side == "left" else -1.0
+        offset_m = self._avoidance_lateral_offset_m(
+            self._force_escape_active(target)
+            or self._is_virtual_force_target(target)
+        )
         return V2XOvertakeResult(
             active=True,
             state=state,
-            speed_cap_mps=min(base_speed_mps, self._cfg.overtake_speed_cap_mps),
-            target_lateral_offset_m=offset_sign * self._cfg.lateral_offset_m,
+            speed_cap_mps=self._target_speed_cap(
+                base_speed_mps,
+                self._overtake_nominal_speed_cap_mps(target),
+                target=target,
+            ),
+            target_lateral_offset_m=offset_sign * offset_m,
             reason=reason,
             vehicle_id=target.snapshot.vehicle_id,
             side=side,
@@ -655,7 +1053,11 @@ class V2XOvertakePlanner:
         return V2XOvertakeResult(
             active=True,
             state=self.RETURN,
-            speed_cap_mps=min(base_speed_mps, self._cfg.overtake_speed_cap_mps),
+            speed_cap_mps=self._target_speed_cap(
+                base_speed_mps,
+                self._overtake_nominal_speed_cap_mps(target),
+                target=target,
+            ),
             target_lateral_offset_m=0.0,
             reason=reason,
             vehicle_id=target.snapshot.vehicle_id,
@@ -673,6 +1075,30 @@ class V2XOvertakePlanner:
         self._side = None
         self._target_lost_since_sec = None
         self._forced_abort_reason = None
+        self._stuck_since_sec.clear()
+        self._force_since_sec.clear()
+
+    def _target_speed_cap(
+        self,
+        base_speed_mps: float,
+        nominal_cap_mps: float,
+        target: Optional[_Relation] = None,
+        vehicle_id: Optional[str] = None,
+    ) -> float:
+        if self._cfg.virtual_force_disable_speed_cap:
+            if target is not None and self._is_virtual_force_target(target):
+                return base_speed_mps
+            if target is None and vehicle_id and self._is_virtual_force_vehicle_id(vehicle_id):
+                return base_speed_mps
+        return min(base_speed_mps, nominal_cap_mps)
+
+    def _overtake_nominal_speed_cap_mps(self, target: _Relation) -> float:
+        if (
+            self._cfg.force_overtake_speed_cap_mps > 0.0
+            and self._force_speed_cap_active(target)
+        ):
+            return self._cfg.force_overtake_speed_cap_mps
+        return self._cfg.overtake_speed_cap_mps
 
     def _active_target_relation(self, relations: List[_Relation]) -> Optional[_Relation]:
         if self._target_id is None:

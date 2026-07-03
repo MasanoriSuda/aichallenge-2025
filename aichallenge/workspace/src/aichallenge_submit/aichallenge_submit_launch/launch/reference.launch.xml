@@ -17,12 +17,16 @@
   <log message="echo launch param use_sim_time: $(var use_sim_time) launch_vehicle_interface: $(var launch_vehicle_interface) sensor_model: $(var sensor_model)"/>
 
   <!-- Control method -->
-  <arg name="control_method" default="mpc"
+  <arg name="control_method" default="pure_pursuit"
       description="Select control: mpc, pure_pursuit, tiny_lidar_net, pilot_net, joycon, rl_train"/>
+  <arg name="use_obstacle_avoidance" default="false"
+      description="Enable MPC geometric obstacle avoidance"/>
   <arg name="use_v2x_overtake" default="false"
       description="Enable V2X Gate2 overtake behavior for MPC"/>
   <arg name="use_v2x_race_behavior" default="false"
       description="Enable V2X race follow/yield/overtake behavior for MPC"/>
+  <arg name="v2x_stop_brake_start_gap_m" default="-1.0"
+      description="Override V2X stop braking start gap for MPC"/>
 
   <!-- Global parameters -->
   <group scoped="false">
@@ -70,7 +74,8 @@
   </group>
 
     <!-- Localization -->
-  <let name="pose_additional_delay_var" value="0.0" />
+  <let name="pose_additional_delay_var" value="0.3" if="$(eval &quot;'$(var control_method)' == 'pure_pursuit'&quot;)"/>
+  <let name="pose_additional_delay_var" value="0.0" unless="$(eval &quot;'$(var control_method)' == 'pure_pursuit'&quot;)"/>
   <group>
     <push-ros-namespace namespace="localization"/>
     <include file="$(find-pkg-share gyro_odometer)/launch/gyro_odometer.launch.xml">
@@ -147,8 +152,10 @@
   <group if="$(eval &quot;'$(var control_method)' == 'mpc'&quot;)">
     <include file="$(find-pkg-share aichallenge_submit_launch)/launch/control/mpc.launch.xml">
       <arg name="use_sim_time" value="$(var use_sim_time)"/>
+      <arg name="use_obstacle_avoidance" value="$(var use_obstacle_avoidance)"/>
       <arg name="use_v2x_overtake" value="$(var use_v2x_overtake)"/>
       <arg name="use_v2x_race_behavior" value="$(var use_v2x_race_behavior)"/>
+      <arg name="v2x_stop_brake_start_gap_m" value="$(var v2x_stop_brake_start_gap_m)"/>
     </include>
   </group>
 

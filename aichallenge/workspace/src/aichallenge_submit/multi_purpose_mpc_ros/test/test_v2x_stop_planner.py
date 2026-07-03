@@ -78,6 +78,7 @@ def _planner(**kwargs):
         "comfortable_decel_mps2": 1.4,
         "stale_timeout_sec": 0.8,
         "max_speed_cap_mps": 30.0 / 3.6,
+        "brake_start_gap_m": 0.0,
         "circular_path": False,
     }
     valid_names = {field.name for field in fields(V2XStopConfig)}
@@ -110,6 +111,61 @@ def test_front_vehicle_caps_speed():
     assert result.speed_cap_mps == pytest.approx((2.0 * 1.4 * 9.0) ** 0.5)
 
 
+def test_virtual_force_obstacle_does_not_trigger_stop():
+    planner = _planner()
+    planner.update_v2x(_msg(0.0, [("force_obstacle", 0.8, 0.0)]))
+
+    result = planner.compute_speed_cap(
+        ego_x=0.0,
+        ego_y=0.0,
+        ego_yaw=0.0,
+        ego_v_mps=0.0,
+        reference_xy=_path(),
+        now_sec=0.1,
+        base_speed_mps=8.0,
+    )
+
+    assert not result.active
+    assert not result.holding_stop
+    assert result.reason == "clear"
+    assert result.speed_cap_mps == pytest.approx(8.0)
+
+
+def test_ignore_all_targets_clears_stop_hold():
+    planner = _planner()
+    planner.update_v2x(_msg(0.0, [("d2", 0.8, 0.0)]))
+
+    holding = planner.compute_speed_cap(
+        ego_x=0.0,
+        ego_y=0.0,
+        ego_yaw=0.0,
+        ego_v_mps=0.0,
+        reference_xy=_path(),
+        now_sec=0.1,
+        base_speed_mps=8.0,
+    )
+
+    assert holding.active
+    assert holding.holding_stop
+
+    planner._cfg.ignore_all_targets = True
+    planner.update_v2x(_msg(0.2, [("d2", 0.8, 0.0)]))
+    result = planner.compute_speed_cap(
+        ego_x=0.0,
+        ego_y=0.0,
+        ego_yaw=0.0,
+        ego_v_mps=0.0,
+        reference_xy=_path(),
+        now_sec=0.3,
+        base_speed_mps=8.0,
+    )
+
+    assert not result.active
+    assert not result.holding_stop
+    assert result.reason == "clear"
+    assert result.speed_cap_mps == pytest.approx(8.0)
+
+
 def test_front_vehicle_speed_cap_is_clamped_to_max_cap():
     planner = _planner(max_speed_cap_mps=3.0)
     planner.update_v2x(_msg(0.0, [("d2", 30.0, 0.0)]))
@@ -127,6 +183,46 @@ def test_front_vehicle_speed_cap_is_clamped_to_max_cap():
     assert result.active
     assert result.reason == "braking"
     assert result.speed_cap_mps == pytest.approx(3.0)
+
+
+def test_front_vehicle_outside_brake_start_gap_does_not_cap_speed():
+    planner = _planner(brake_start_gap_m=8.0)
+    planner.update_v2x(_msg(0.0, [("d2", 10.0, 0.0)]))
+
+    result = planner.compute_speed_cap(
+        ego_x=0.0,
+        ego_y=0.0,
+        ego_yaw=0.0,
+        ego_v_mps=8.0,
+        reference_xy=_path(),
+        now_sec=0.1,
+        base_speed_mps=8.0,
+    )
+
+    assert result.active
+    assert result.reason == "cruise_until_brake_start"
+    assert result.vehicle_id == "d2"
+    assert result.gap_m == pytest.approx(10.0)
+    assert result.speed_cap_mps == pytest.approx(8.0)
+
+
+def test_front_vehicle_inside_brake_start_gap_still_caps_speed():
+    planner = _planner(brake_start_gap_m=8.0)
+    planner.update_v2x(_msg(0.0, [("d2", 6.0, 0.0)]))
+
+    result = planner.compute_speed_cap(
+        ego_x=0.0,
+        ego_y=0.0,
+        ego_yaw=0.0,
+        ego_v_mps=8.0,
+        reference_xy=_path(),
+        now_sec=0.1,
+        base_speed_mps=8.0,
+    )
+
+    assert result.active
+    assert result.reason == "braking"
+    assert result.speed_cap_mps < 8.0
 
 
 def test_behind_vehicle_is_ignored():

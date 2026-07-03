@@ -23,6 +23,7 @@ x-autoware-base: &autoware-base
     - HOST_GID=${HOST_GID:-}
     - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-1}
     - LOG_DIR=${LOG_DIR:-}
+    - USE_MPC_OBSTACLE_AVOIDANCE=${USE_MPC_OBSTACLE_AVOIDANCE:-}
   volumes:
     - ./output:${OUTPUT_ROOT:-/output}
     - ./aichallenge:/aichallenge

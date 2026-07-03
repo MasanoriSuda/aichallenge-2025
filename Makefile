@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 
 .PHONY: autoware-build autoware-vehicle autoware-simulator autoware-request-initialpose autoware-request-control  awsim-request-start awsim-request-reset autoware-driver-zenoh autoware-driver-zenoh-rosbag \
-	simulator dev dev2 dev3 dev4 driver zenoh download rviz2 down down_all ps autoware-attach autoware-bash eval
+	simulator dev dev1 dev2 dev3 dev4 driver zenoh download rviz2 down down_all ps autoware-attach autoware-bash eval
 
 # Used by docker-compose.yml for build/eval artifact ownership.
 HOST_UID ?= $(shell id -u)
@@ -21,7 +21,7 @@ LOG_DIR := /output/$(TIMESTAMP)
 # make simulator-<mode>: <mode> は simulator_scripts/*.sh のファイル名
 SIM_MODES := $(notdir $(basename $(wildcard aichallenge/simulator_scripts/*.sh)))
 # dev<N>（車両数）/ gate<N>（テスト番号）は run_simulator.bash が展開するエイリアス
-SIM_MODES += dev2 dev3 dev4 gate1 gate2 gate3 race2
+SIM_MODES += dev1 dev2 dev3 dev4 gate1 gate2 gate3 race2
 .PHONY: $(addprefix simulator-,$(SIM_MODES))
 $(addprefix simulator-,$(SIM_MODES)): simulator-%:
 	@$(MAKE) simulator SIM_MODE=$*
@@ -38,7 +38,7 @@ autoware-vehicle:
 # run autoware for simulator
 autoware-simulator:
 	@echo "Start Autoware for AWSIM"
-	LOG_DIR=$(LOG_DIR) RUN_MODE=awsim SIM_MODE="$(SIM_MODE)" docker compose up -d autoware
+	LOG_DIR=$(LOG_DIR) RUN_MODE=awsim SIM_MODE="$(SIM_MODE)" USE_MPC_OBSTACLE_AVOIDANCE="$(USE_MPC_OBSTACLE_AVOIDANCE)" docker compose up -d autoware
 
 # autoware command service use ROS_DOMAIN_ID from .env
 autoware-request-initialpose:
@@ -68,8 +68,9 @@ zenoh:
 	docker compose up -d zenoh
 
 dev: SIM_MODE := dev
-dev: simulator autoware-simulator
-	@echo "Start dev simulation (AWSIM + Autoware)"
+dev1: SIM_MODE := dev1
+dev dev1: simulator autoware-simulator
+	@echo "Start $@ simulation (AWSIM + Autoware)"
 	@echo "To stop: make down  (docker compose down --remove-orphans)"
 
 dev2: SIM_MODE := dev2
@@ -78,13 +79,13 @@ dev4: SIM_MODE := dev4
 dev2 dev3 dev4: simulator
 	@N=$(@:dev%=%); \
 	echo "Start $$N-vehicle dev (autoware on ROS_DOMAIN_ID 1..$$N via docker compose -p)"; \
-	for p in $$(seq 1 $$N); do LOG_DIR=$(LOG_DIR) ROS_DOMAIN_ID=$$p docker compose -p $$p up -d autoware; done; \
+	for p in $$(seq 1 $$N); do LOG_DIR=$(LOG_DIR) SIM_MODE="$(SIM_MODE)" USE_MPC_OBSTACLE_AVOIDANCE="$(USE_MPC_OBSTACLE_AVOIDANCE)" ROS_DOMAIN_ID=$$p docker compose -p $$p up -d autoware; done; \
 	echo "To Stop: make down"
 
 race2: SIM_MODE := race2
 race2: simulator
 	@echo "Start 2-vehicle race behavior trial (autoware on ROS_DOMAIN_ID 1..2 via docker compose -p)"
-	@for p in $$(seq 1 2); do LOG_DIR=$(LOG_DIR) SIM_MODE=race2 ROS_DOMAIN_ID=$$p docker compose -p $$p up -d autoware; done
+	@for p in $$(seq 1 2); do LOG_DIR=$(LOG_DIR) SIM_MODE=race2 USE_MPC_OBSTACLE_AVOIDANCE="$(USE_MPC_OBSTACLE_AVOIDANCE)" ROS_DOMAIN_ID=$$p docker compose -p $$p up -d autoware; done
 	@echo "To Stop: make down"
 
 gate1: SIM_MODE := gate1

@@ -40,7 +40,9 @@ class V2XStopConfig:
     comfortable_decel_mps2: float = 1.2
     stale_timeout_sec: float = 2.0
     max_speed_cap_mps: float = 30.0 / 3.6
+    brake_start_gap_m: float = 0.0
     circular_path: bool = True
+    ignore_all_targets: bool = False
 
     @classmethod
     def from_config(cls, cfg, a_min_mps2: float) -> "V2XStopConfig":
@@ -60,7 +62,9 @@ class V2XStopConfig:
             comfortable_decel_mps2=max(decel, 0.1),
             stale_timeout_sec=float(_get_attr(cfg, "stale_timeout_sec", 2.0)),
             max_speed_cap_mps=max_speed_cap_kmph / 3.6,
+            brake_start_gap_m=float(_get_attr(cfg, "brake_start_gap_m", 0.0)),
             circular_path=bool(_get_attr(cfg, "circular_path", True)),
+            ignore_all_targets=bool(_get_attr(cfg, "ignore_all_targets", False)),
         )
 
 
@@ -100,9 +104,17 @@ class V2XStopPlanner:
         self._last_vehicle_id: Optional[str] = None
 
     def update_v2x(self, msg, now_sec: Optional[float] = None) -> None:
+        if self._cfg.ignore_all_targets:
+            self._snapshots.clear()
+            self._holding_stop = False
+            self._last_vehicle_id = None
+            return
+
         msg_stamp = _stamp_to_seconds(_get_attr(_get_attr(msg, "header"), "stamp"))
         for vehicle in getattr(msg, "vehicles", []):
             vehicle_id = str(getattr(vehicle, "vehicle_id", ""))
+            if self._is_virtual_force_obstacle_id(vehicle_id):
+                continue
             position = getattr(vehicle, "position", None)
             if not vehicle_id or position is None:
                 continue
@@ -128,6 +140,15 @@ class V2XStopPlanner:
                 y=y,
                 stamp_sec=float(stamp_sec),
             )
+
+    @staticmethod
+    def _is_virtual_force_obstacle_id(vehicle_id: str) -> bool:
+        normalized = str(vehicle_id).lower()
+        return normalized.startswith((
+            "force_obstacle",
+            "virtual_force",
+            "virtual_obstacle",
+        ))
 
     def compute_speed_cap(
         self,
@@ -163,6 +184,12 @@ class V2XStopPlanner:
         if holding:
             speed_cap_mps = 0.0
             reason = "holding_stop"
+        elif (
+            self._cfg.brake_start_gap_m > 0.0
+            and selected.gap_m > self._cfg.brake_start_gap_m
+        ):
+            speed_cap_mps = base_speed_mps
+            reason = "cruise_until_brake_start"
         else:
             available_gap = max(
                 selected.gap_m - self._cfg.target_stop_gap_m, 0.0)

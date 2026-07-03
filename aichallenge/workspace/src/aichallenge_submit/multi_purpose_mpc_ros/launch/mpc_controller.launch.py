@@ -18,6 +18,7 @@ def launch_setup(context, *args, **kwargs):
     use_v2x_stop = LaunchConfiguration("use_v2x_stop")
     use_v2x_overtake = LaunchConfiguration("use_v2x_overtake")
     use_v2x_race_behavior = LaunchConfiguration("use_v2x_race_behavior")
+    v2x_stop_brake_start_gap_m = LaunchConfiguration("v2x_stop_brake_start_gap_m")
     use_boost_acceleration = LaunchConfiguration("use_boost_acceleration")
     use_stats = LaunchConfiguration("use_stats")
 
@@ -55,6 +56,7 @@ def launch_setup(context, *args, **kwargs):
             {"use_v2x_stop": use_v2x_stop},
             {"use_v2x_overtake": use_v2x_overtake},
             {"use_v2x_race_behavior": use_v2x_race_behavior},
+            {"v2x_stop_brake_start_gap_m": v2x_stop_brake_start_gap_m},
             {"use_stats": use_stats},
         ],
     )
@@ -126,6 +128,11 @@ def generate_launch_description():
             "use_v2x_race_behavior",
             "false",
             "Use V2X race follow/yield/overtake behavior",
+        ),
+        (
+            "v2x_stop_brake_start_gap_m",
+            "-1.0",
+            "Override V2X stop braking start gap; negative keeps yaml config",
         ),
         (
             "use_stats",

@@ -8,8 +8,10 @@
     <arg name="capture" default="false"/>
     <arg name="rosbag" default="false"/>
     <arg name="domain_id" default="0"/>
+    <arg name="use_obstacle_avoidance" default="false"/>
     <arg name="use_v2x_overtake" default="false"/>
     <arg name="use_v2x_race_behavior" default="false"/>
+    <arg name="v2x_stop_brake_start_gap_m" default="-1.0"/>
 
     <let name="domain_id" value="$(var domain_id)"/>
     <let name="rviz_config" value="$(find-pkg-share aichallenge_system_launch)/config/autoware_vehicle.rviz"/>
@@ -25,8 +27,10 @@
     <log message=" - capture: $(var capture)"/>
     <log message=" - rosbag: $(var rosbag)"/>
     <log message=" - domain_id: $(var domain_id)"/>
+    <log message=" - use_obstacle_avoidance: $(var use_obstacle_avoidance)"/>
     <log message=" - use_v2x_overtake: $(var use_v2x_overtake)"/>
     <log message=" - use_v2x_race_behavior: $(var use_v2x_race_behavior)"/>
+    <log message=" - v2x_stop_brake_start_gap_m: $(var v2x_stop_brake_start_gap_m)"/>
 
     <!-- Main module of AI challenge 2025. -->
     <include file="$(find-pkg-share aichallenge_submit_launch)/launch/aichallenge_submit.launch.xml" >
@@ -34,8 +38,10 @@
         <arg name="use_sim_time" value="$(var use_sim_time)"/>
         <arg name="sensor_model" value="$(var sensor_model)"/>
         <arg name="launch_vehicle_interface" value="$(var launch_vehicle_interface)"/>
+        <arg name="use_obstacle_avoidance" value="$(var use_obstacle_avoidance)"/>
         <arg name="use_v2x_overtake" value="$(var use_v2x_overtake)"/>
         <arg name="use_v2x_race_behavior" value="$(var use_v2x_race_behavior)"/>
+        <arg name="v2x_stop_brake_start_gap_m" value="$(var v2x_stop_brake_start_gap_m)"/>
     </include>
 
     <!-- Visualization. -->

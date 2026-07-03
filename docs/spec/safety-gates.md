@@ -64,6 +64,8 @@ Gate2 の追い越し判断は `/v2x/vehicle_positions` を入力にし、前方
 
 Gate2 用の `use_v2x_overtake` は安全ゲート通過に絞った挙動であり、2 台以上の race behavior にはそのまま使わない。レース試走では `make race2` が `use_v2x_race_behavior=true` を渡し、follow / yield / overtake / return / cooldown を持つ別 planner を使う。
 
+`stuck_target_enabled=true` の場合、前方 target が止まりかけたまま自車も停止保持に入りやすい距離まで詰まったケースでは、一定時間 target と自車が低速しきい値以下であること、最小 gap、左右の V2X 空き、壁距離を満たす場合だけ近距離からの低速 overtake へ移る。`force_overtake_enabled=true` の場合は、target が完全停止ではなく低速走行中でも、自車が詰まって低速かつ gap が force range 内であれば発進側へ倒す。force 用に `force_min_lateral_clearance_m` / `force_min_wall_clearance_m` が設定されている場合は、その近距離脱出に限って通常より緩い左右・壁判定を使う。gap が下限未満、target が速度しきい値を超えて動き出す、横または壁が unsafe の場合は停止・減速側へ戻す。
+
 確認すること:
 
 - 他車両または NPC の位置を認識している。

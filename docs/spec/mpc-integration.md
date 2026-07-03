@@ -92,14 +92,14 @@ MPC controller は `/v2x/vehicle_positions` を使う V2X behavior を複数持�
 | launch param | 用途 | 有効化入口 | 主な出力 |
 |---|---|---|---|
 | `use_v2x_stop` | Gate1 / レース中の安全停止 fallback | 既定 `true` | 前方 target への速度 cap / stop hold |
-| `use_v2x_overtake` | Gate2 専用 NPC 追い越し | `make gate2` | Gate2 用の低速 overtake lateral offset |
+| `use_v2x_overtake` | Gate2 型 NPC / 他車追い越し | `make gate2`, `make dev`, `make dev1`..`make dev4` | Gate2 用の低速 overtake lateral offset |
 | `use_v2x_race_behavior` | 2 台以上同時走行の追走・yield・追い越し | `make race2` | follow / catchup_wait / yield / overtake / return / cooldown |
 
 `use_v2x_race_behavior` と `use_v2x_overtake` が同時に true の場合、race behavior を優先し、Gate2 専用 overtake は無効化する。Gate2 は安全ゲート通過用の強めの補助を含むため、レース用挙動とは分離する。
 
 race behavior は `v2x_race_behavior` config を使用し、前方車両に対しては距離ベースの follow speed cap、後方が大きく離れた場合は catch-up wait speed cap、後方接近車両に対しては yield speed cap、追い越し可能時は MPC path constraints への lateral offset を出す。横並び・斜め前の接触リスクは `front_conflict_lateral_window_m` / `front_conflict_gap_m` で follow 対象に含めるが、yaw-based relation が明確に後方を示す target は path projection が前方に見えても front target にしない。追い越し開始距離へ入る手前では `approach_start_gap_m` / `approach_speed_cap_kmph` で段階的に減速する。race behavior が front target を処理している間は race 側の emergency / follow / overtake を優先し、Gate1 stop fallback の stale hold で後続側を停止させない。race target がない場合や race が front target を処理していない場合は `use_v2x_stop` による安全停止 fallback を残す。
 
-race2 の試走では前走車との距離が 3m 台で張り付きやすく、Gate2 相当の長い壁 horizon では `no_safe_side` で追い越し開始を逃しやすい。そのため race 用の初期値は `min_overtake_start_gap_m=4.0`、`wall_check_horizon_m=16.0`、`min_wall_clearance_m=0.5` とし、直近から少し先まで抜ける空間がある場合だけ `prepare_overtake` に入る。追い越し側は yield 側より速くするため、`overtake_speed_cap_kmph=12.0`、`prepare_speed_cap_kmph=9.0` を使う。車体が片側へ寄っている間に反対側の追い越しへ切り替えると、狭い corridor 内で壁へ寄りやすいため、`side_switch_center_threshold_m` 以上の横偏差が残っている間は反対側への追い越し指示を follow に戻す。
+race2 の試走では前走車との距離が 3m 台で張り付きやすく、Gate2 相当の長い壁 horizon では `no_safe_side` で追い越し開始を逃しやすい。そのため race 用の初期値は `min_overtake_start_gap_m=4.0`、`wall_check_horizon_m=16.0`、`min_wall_clearance_m=0.5` とし、直近から少し先まで抜ける空間がある場合だけ `prepare_overtake` に入る。`min_overtake_start_gap_m` 未満でも、target が低速、自車も低速、gap が `force_overtake_min_gap_m` 以上かつ `force_overtake_max_gap_m` 以下で一定時間続く場合は `force_overtake_*` reason で近距離からの追い越し発進を許可する。この force 発進だけは side 判定を少し緩め、race2 初期値では横方向の他車クリアランスを `force_min_lateral_clearance_m=1.2`、壁余裕を `force_min_wall_clearance_m=0.2` として扱う。通常の追い越し判定は `min_lateral_clearance_m=1.6`、`min_wall_clearance_m=0.5` のまま維持する。追い越し側は yield 側より速くするため、`overtake_speed_cap_kmph=12.0`、`prepare_speed_cap_kmph=9.0` を使う。車体が片側へ寄っている間に反対側の追い越しへ切り替えると、狭い corridor 内で壁へ寄りやすいため、`side_switch_center_threshold_m` 以上の横偏差が残っている間は反対側への追い越し指示を follow に戻す。
 
 ## 統合方針
 
@@ -456,11 +456,12 @@ v2x_stop:
   comfortable_decel_mps2: 1.2
   stale_timeout_sec: 2.0
   max_speed_cap_kmph: 30.0
+  brake_start_gap_m: 0.0
   circular_path: true
   log_throttle_sec: 1.0
 ```
 
-`comfortable_decel_mps2` は `abs(mpc.a_min)` 以下に clamp する。停止判断は `V2X stop: ... target=<id> gap=<m> lat=<m> v_cap=<m/s>` の throttled log で追跡する。
+`comfortable_decel_mps2` は `abs(mpc.a_min)` 以下に clamp する。`brake_start_gap_m` は 0 以下なら無効で、正値なら対象がその距離以内に入るまで制動 cap を掛けず、停止保持は従来どおり `target_stop_gap_m` / `stop_hold_gap_m` / `release_gap_m` で扱う。dev 系では launch 引数で `v2x_stop_brake_start_gap_m:=8.0` を渡し、遠方 target 検出だけで速度が落ち続ける症状を避ける。停止判断は `V2X stop: ... target=<id> gap=<m> lat=<m> v_cap=<m/s>` の throttled log で追跡する。
 
 **さらに高度な回避（オプション）:**
 
@@ -492,6 +493,17 @@ v2x_overtake:
   max_overtake_start_gap_m: 24.0
   abort_gap_m: 3.5
   abort_escape_lateral_threshold_m: 0.45
+  stuck_target_enabled: true
+  stuck_overtake_min_gap_m: 2.2
+  stuck_target_hold_sec: 0.5
+  stuck_target_speed_threshold_kmph: 2.5
+  stuck_ego_speed_threshold_kmph: 2.5
+  force_overtake_enabled: true
+  force_overtake_min_gap_m: 2.2
+  force_overtake_max_gap_m: 6.0
+  force_overtake_hold_sec: 0.3
+  force_overtake_target_speed_threshold_kmph: 5.0
+  force_overtake_ego_speed_threshold_kmph: 4.0
   return_clearance_m: 4.0
   preferred_side: "right"
   side_selection_policy: "largest_margin"
@@ -504,10 +516,10 @@ v2x_overtake:
   standby_lateral_offset_m: 0.35
   standby_side: "right"
   min_lateral_clearance_m: 1.55
-  min_wall_clearance_m: 0.5
-  wall_check_horizon_m: 24.0
-  overtake_speed_cap_kmph: 5.0
-  prepare_speed_cap_kmph: 3.0
+  min_wall_clearance_m: 0.1
+  wall_check_horizon_m: 12.0
+  overtake_speed_cap_kmph: 6.0
+  prepare_speed_cap_kmph: 4.0
   follow_speed_cap_kmph: 5.0
   overtake_steer_rate_max: 1.2
   lateral_ready_threshold_m: -0.6
@@ -517,7 +529,11 @@ v2x_overtake:
   target_lost_hold_sec: 1.2
 ```
 
-`use_v2x_overtake` は既定 false。`make gate2` のときだけ `run_autoware.bash` が `use_v2x_overtake:=true` を launch へ渡す。Gate1、通常 dev、提出評価では明示的に有効化しない限り Gate2 lateral behavior は動かない。
+`use_v2x_overtake` は既定 false。`make gate2` と `make dev` / `make dev1` / `make dev2` / `make dev3` / `make dev4` のときに `run_autoware.bash` が `use_v2x_overtake:=true` を launch へ渡す。dev 系では V2X stop の既定 `true` と Gate2 型 overtake だけを使い、`use_v2x_race_behavior` は有効化しない。Gate1、提出評価では明示的に有効化しない限り Gate2 lateral behavior は動かない。
+
+`stuck_target_enabled=true` の場合、`abort_gap_m` 内で一度停止保持に入りやすい距離でも、target が `stuck_target_hold_sec` 以上 `stuck_target_speed_threshold_kmph` 以下で詰まり、自車も `stuck_ego_speed_threshold_kmph` 以下で、かつ gap が `stuck_overtake_min_gap_m` 以上残っていれば stuck target として `prepare_overtake` への遷移を許可する。
+
+`force_overtake_enabled=true` の場合、target が完全停止ではなく低速走行中でも、自車が詰まって低速、gap が `force_overtake_min_gap_m` 以上かつ `force_overtake_max_gap_m` 以下、target 速度が `force_overtake_target_speed_threshold_kmph` 以下、左右・壁が safe のときに `force_overtake_*` reason で `prepare_overtake` へ入る。これは `min_overtake_start_gap_m` を満たせず stop fallback へ落ちる近距離詰まりを抜けるための例外であり、`force_min_lateral_clearance_m` / `force_min_wall_clearance_m` が設定されていれば force 時だけ通常より緩い side 判定を使う。gap が下限未満、target が速度しきい値を超えて動き出す、または左右・壁の安全判定が満たせない場合は従来どおり abort / follow / stop fallback へ戻す。
 
 壁距離は実行時に OSM を直接読み込むのではなく、`map.yaml_path` の occupancy grid map から `ReferencePath._compute_width()` が事前計算した waypoint ごとの `wp.ub`（左側距離）と `wp.lb`（右側距離）を使う。Gate2 planner は horizon 内の `min(wp.ub)` / `min(abs(wp.lb))` と `min_wall_clearance_m` を比較し、unsafe な側への追い越しを許可しない。両側 safe の場合は `side_selection_policy=largest_margin` により wall margin が大きい側を選び、差が `side_margin_tie_threshold_m` 以下のときだけ `preferred_side` を tie-breaker とする。追い越し開始後は選択済み side を維持し、走行中に左右を切り替えない。
 

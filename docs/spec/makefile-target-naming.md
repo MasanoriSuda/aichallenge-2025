@@ -81,7 +81,7 @@ service は「操作対象のまとまり」を表します（docker compose の
 
 例:
 - `autoware-vehicle` / `autoware-simulator`（mode 固定のショートカット）
-- `simulator-<mode>` は `aichallenge/simulator_scripts/*.sh` のベース名（`dev`/`eval`/`gate`/`multiplay-client`/`multiplay-host`/`multiplay-server`/`parallel`/`sample-scenario`/`simulator`）から自動生成され、さらに `dev2`/`dev3`/`dev4`/`gate1`/`gate2`/`gate3` が追加される
+- `simulator-<mode>` は `aichallenge/simulator_scripts/*.sh` のベース名（`dev`/`eval`/`gate`/`multiplay-client`/`multiplay-host`/`multiplay-server`/`parallel`/`sample-scenario`/`simulator`）から自動生成され、さらに `dev1`/`dev2`/`dev3`/`dev4`/`gate1`/`gate2`/`gate3` が追加される
 - 評価の複数 domain 実行は `DOMAIN_IDS=1,2,3,4` など **変数で表現**する（`*-1-4` のような固定サフィックスは作らない）
 
 避けたい例:
@@ -94,7 +94,7 @@ Good:
 - `autoware-build`
 - `simulator` / `awsim-request-start`
 - `eval`（`DOMAIN_ID` / `DOMAIN_IDS` などは変数で）
-- `dev` / `dev2` / `dev3` / `dev4`
+- `dev` / `dev1` / `dev2` / `dev3` / `dev4`
 - `compose-ps` / `compose-down`
 
 Bad（語順が逆・曖昧・存在しない）:

@@ -20,8 +20,8 @@ reference_path:
   update_by_topic: false # When true, 'circle' must be false
   # path from pkg share dir
   csv_path: "maps/optimized_traj_mincurv.csv"
-  resolution: 0.6
-  smoothing_distance: 3
+  resolution: 1.0
+  smoothing_distance: 1
   max_width: 6.0
   circular: true
   use_path_constraints_topic: false
@@ -39,7 +39,7 @@ mpc:
   R: [0.0, 300.0]      # [v, delta]
   QN: [3.0, 1.5, 5.0]
   v_max: 30.0 # km/h
-  a_min: -3.2 # m/s^2
+  a_min: -1.6 # m/s^2
   a_max: 3.2 # m/s^2
   ay_max: 50.0 # m/s^2, maximum lateral acceleration in curves
   delta_max_deg: 80.0 # degrees
@@ -63,41 +63,68 @@ v2x_stop:
   comfortable_decel_mps2: 1.2
   stale_timeout_sec: 2.0
   max_speed_cap_kmph: 30.0
+  brake_start_gap_m: 0.0
   circular_path: true
+  ignore_all_targets: true
   log_throttle_sec: 1.0
 
 v2x_overtake:
   enabled: true
-  detection_range_m: 35.0
+  detection_range_m: 50.0
   corridor_half_width_m: 2.0
   self_ignore_radius_m: 0.75
   min_overtake_start_gap_m: 6.0
-  max_overtake_start_gap_m: 24.0
+  max_overtake_start_gap_m: 32.0
   abort_gap_m: 3.5
   abort_escape_lateral_threshold_m: 0.45
+  stuck_target_enabled: true
+  stuck_overtake_min_gap_m: 2.2
+  stuck_target_hold_sec: 0.5
+  stuck_target_speed_threshold_kmph: 2.5
+  stuck_ego_speed_threshold_kmph: 2.5
+  force_overtake_enabled: true
+  force_overtake_min_gap_m: 2.2
+  force_overtake_max_gap_m: 6.0
+  force_overtake_hold_sec: 0.0
+  force_overtake_target_speed_threshold_kmph: 5.0
+  force_overtake_ego_speed_threshold_kmph: 4.0
+  force_overtake_speed_cap_kmph: 5.0
+  force_pre_stop_enabled: true
+  force_pre_stop_gap_m: 12.0
+  force_pre_stop_target_speed_threshold_kmph: 1.0
+  force_pre_stop_release_ego_speed_kmph: 1.2
+  force_pre_stop_speed_cap_kmph: 1.0
+  force_min_wall_clearance_m: 0.15
   return_clearance_m: 4.0
   preferred_side: "right"
   side_selection_policy: "largest_margin"
   side_margin_tie_threshold_m: 0.3
-  lateral_offset_m: 1.65
-  lateral_offset_rate_mps: 2.0
+  lateral_offset_m: 1.45
+  force_lateral_offset_m: 0.0
+  lateral_offset_rate_mps: 1.8
   constraint_half_width_m: 0.35
+  force_constraint_half_width_m: 0.30
+  force_constraint_transition_horizon_ratio: 0.30
+  force_constraint_initial_progress: 0.70
+  virtual_force_infeasible_fallback_speed_kmph: 5.0
+  treat_all_targets_as_virtual_force: false
+  virtual_force_disable_speed_cap: false
   constraint_transition_horizon_ratio: 0.25
   constraint_initial_progress: 0.45
-  standby_lateral_offset_m: 0.35
+  standby_lateral_offset_m: 0.00
   standby_side: "right"
   min_lateral_clearance_m: 1.55
-  min_wall_clearance_m: 0.5
+  min_wall_clearance_m: 0.2
   wall_safety_margin_m: 0.2
-  wall_check_horizon_m: 24.0
-  overtake_speed_cap_kmph: 5.0
-  prepare_speed_cap_kmph: 3.0
+  wall_check_horizon_m: 12.0
+  overtake_speed_cap_kmph: 6.0
+  prepare_speed_cap_kmph: 4.0
   follow_speed_cap_kmph: 5.0
-  overtake_steer_rate_max: 1.2
+  overtake_steer_rate_max: 0.8
   lateral_ready_threshold_m: -0.6
   steer_override_enabled: true
-  steer_override_min_abs_rad: 0.16
-  steer_override_until_ey_m: -0.3
+  steer_override_min_abs_rad: 0.20
+  steer_override_until_ey_m: -1.20
   max_overtake_target_speed_kmph: 10.0
   min_closing_speed_mps: 0.3
   min_ttc_sec: 0.8
@@ -109,16 +136,16 @@ v2x_overtake:
 
 v2x_race_behavior:
   enabled: true
-  detection_range_m: 40.0
+  detection_range_m: 50.0
   corridor_half_width_m: 2.0
   front_conflict_lateral_window_m: 2.6
-  front_conflict_gap_m: 10.0
+  front_conflict_gap_m: 14.0
   self_ignore_radius_m: 0.75
   min_follow_gap_m: 3.0
   time_headway_sec: 0.8
   follow_kp_gap: 0.4
   follow_kd_closing: 0.8
-  follow_speed_cap_kmph: 12.0
+  follow_speed_cap_kmph: 10.0
   emergency_stop_gap_m: 2.0
   yield_detect_range_m: 12.0
   yield_start_gap_m: 8.0
@@ -132,29 +159,53 @@ v2x_race_behavior:
   catchup_release_gap_m: 8.0
   catchup_speed_cap_kmph: 10.0
   catchup_timeout_sec: 30.0
-  approach_start_gap_m: 34.0
-  approach_speed_cap_kmph: 18.0
+  approach_start_gap_m: 46.0
+  approach_speed_cap_kmph: 12.0
   min_overtake_start_gap_m: 4.0
-  max_overtake_start_gap_m: 24.0
+  max_overtake_start_gap_m: 32.0
   abort_gap_m: 2.5
   abort_escape_lateral_threshold_m: 0.45
+  force_overtake_enabled: true
+  force_overtake_min_gap_m: 2.2
+  force_overtake_max_gap_m: 4.0
+  force_overtake_hold_sec: 0.0
+  force_overtake_target_speed_threshold_kmph: 5.0
+  force_overtake_ego_speed_threshold_kmph: 4.0
+  force_overtake_speed_cap_kmph: 5.0
+  force_pre_stop_enabled: true
+  force_pre_stop_gap_m: 12.0
+  force_pre_stop_target_speed_threshold_kmph: 1.0
+  force_pre_stop_release_ego_speed_kmph: 1.2
+  force_pre_stop_speed_cap_kmph: 1.0
+  force_min_lateral_clearance_m: 1.4
+  force_min_wall_clearance_m: 0.15
   return_clearance_m: 8.0
   return_rear_clearance_m: 4.0
   preferred_side: "right"
   side_selection_policy: "largest_margin"
   side_margin_tie_threshold_m: 0.3
   lateral_offset_m: 1.4
-  lateral_offset_rate_mps: 1.2
+  force_lateral_offset_m: 0.0
+  lateral_offset_rate_mps: 1.6
   constraint_half_width_m: 0.55
+  force_constraint_half_width_m: 0.30
+  force_constraint_transition_horizon_ratio: 0.30
+  force_constraint_initial_progress: 0.70
+  virtual_force_infeasible_fallback_speed_kmph: 5.0
+  treat_all_targets_as_virtual_force: false
+  virtual_force_disable_speed_cap: false
   constraint_transition_horizon_ratio: 0.35
   constraint_initial_progress: 0.35
   min_lateral_clearance_m: 1.6
   min_wall_clearance_m: 0.5
   wall_safety_margin_m: 0.2
   wall_check_horizon_m: 16.0
-  overtake_speed_cap_kmph: 12.0
-  prepare_speed_cap_kmph: 9.0
+  overtake_speed_cap_kmph: 9.0
+  prepare_speed_cap_kmph: 7.0
   overtake_steer_rate_max: 0.8
+  steer_override_enabled: true
+  steer_override_min_abs_rad: 0.20
+  steer_override_until_ey_m: -1.20
   max_overtake_target_speed_kmph: 12.0
   min_closing_speed_mps: 0.4
   min_ttc_sec: 0.8

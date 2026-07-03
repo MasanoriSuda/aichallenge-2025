@@ -1,0 +1,161 @@
+#!/usr/bin/env python3
+"""Publish virtual V2X vehicle positions for local behavior testing."""
+
+import argparse
+import sys
+from dataclasses import dataclass
+from typing import List
+
+import rclpy
+from rclpy.node import Node
+from rclpy.parameter import Parameter
+from rclpy.utilities import remove_ros_args
+from v2x_msgs.msg import V2XVehiclePosition, V2XVehiclePositionArray
+
+
+@dataclass(frozen=True)
+class VirtualObstacle:
+    vehicle_id: str
+    x: float
+    y: float
+    z: float
+
+
+def _parse_obstacle(value: str) -> VirtualObstacle:
+    parts = value.split(":")
+    if len(parts) not in (3, 4):
+        raise argparse.ArgumentTypeError(
+            "--obstacle must be formatted as id:x:y or id:x:y:z")
+    vehicle_id = parts[0].strip()
+    if not vehicle_id:
+        raise argparse.ArgumentTypeError("obstacle id must not be empty")
+    try:
+        x = float(parts[1])
+        y = float(parts[2])
+        z = float(parts[3]) if len(parts) == 4 else 0.0
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            f"invalid obstacle coordinate in '{value}'") from exc
+    return VirtualObstacle(vehicle_id=vehicle_id, x=x, y=y, z=z)
+
+
+def _parse_args(argv: List[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Publish virtual vehicles to /v2x/vehicle_positions.")
+    parser.add_argument("--vehicle-id", default="force_obstacle")
+    parser.add_argument("--x", type=float)
+    parser.add_argument("--y", type=float)
+    parser.add_argument("--z", type=float, default=0.0)
+    parser.add_argument(
+        "--obstacle",
+        action="append",
+        type=_parse_obstacle,
+        default=[],
+        help="Additional obstacle as id:x:y or id:x:y:z. Can be repeated.")
+    parser.add_argument("--frame-id", default="map")
+    parser.add_argument("--rate", type=float, default=10.0)
+    parser.add_argument("--covariance", type=float, default=0.2)
+    parser.add_argument(
+        "--use-wall-time",
+        action="store_true",
+        help="Use wall time stamps instead of /clock simulation time.")
+    args = parser.parse_args(remove_ros_args(args=argv)[1:])
+
+    obstacles = list(args.obstacle)
+    if args.x is not None or args.y is not None:
+        if args.x is None or args.y is None:
+            parser.error("--x and --y must be specified together")
+        obstacles.insert(
+            0,
+            VirtualObstacle(
+                vehicle_id=args.vehicle_id,
+                x=args.x,
+                y=args.y,
+                z=args.z,
+            ),
+        )
+    if not obstacles:
+        parser.error("specify --x/--y or at least one --obstacle id:x:y")
+    if args.rate <= 0.0:
+        parser.error("--rate must be positive")
+
+    args.obstacles = obstacles
+    return args
+
+
+class VirtualV2XObstaclePublisher(Node):
+    def __init__(self, args: argparse.Namespace) -> None:
+        parameter_overrides = []
+        if not args.use_wall_time:
+            parameter_overrides.append(
+                Parameter("use_sim_time", Parameter.Type.BOOL, True))
+        super().__init__(
+            "virtual_v2x_obstacle_publisher",
+            parameter_overrides=parameter_overrides,
+        )
+        self._obstacles = args.obstacles
+        self._frame_id = args.frame_id
+        self._covariance = float(args.covariance)
+        self._use_wall_time = bool(args.use_wall_time)
+        self._clock_wait_logged = False
+        self._pub = self.create_publisher(
+            V2XVehiclePositionArray,
+            "/v2x/vehicle_positions",
+            1,
+        )
+        self._timer = self.create_timer(1.0 / float(args.rate), self._publish)
+        self.get_logger().info(
+            "publishing virtual V2X obstacles: "
+            + ", ".join(
+                f"{ob.vehicle_id}@({ob.x:.2f},{ob.y:.2f},{ob.z:.2f})"
+                for ob in self._obstacles
+            )
+        )
+
+    def _publish(self) -> None:
+        stamp = self.get_clock().now().to_msg()
+        if (
+            not self._use_wall_time
+            and stamp.sec == 0
+            and stamp.nanosec == 0
+        ):
+            if not self._clock_wait_logged:
+                self._clock_wait_logged = True
+                self.get_logger().info("waiting for /clock before publishing")
+            return
+
+        msg = V2XVehiclePositionArray()
+        msg.header.stamp = stamp
+        msg.header.frame_id = self._frame_id
+
+        for obstacle in self._obstacles:
+            vehicle = V2XVehiclePosition()
+            vehicle.header.stamp = stamp
+            vehicle.header.frame_id = self._frame_id
+            vehicle.vehicle_id = obstacle.vehicle_id
+            vehicle.position.x = obstacle.x
+            vehicle.position.y = obstacle.y
+            vehicle.position.z = obstacle.z
+            vehicle.covariance.x = self._covariance
+            vehicle.covariance.y = self._covariance
+            vehicle.covariance.z = self._covariance
+            msg.vehicles.append(vehicle)
+
+        self._pub.publish(msg)
+
+
+def main(argv: List[str] = sys.argv) -> None:
+    args = _parse_args(argv)
+    rclpy.init(args=argv)
+    node = VirtualV2XObstaclePublisher(args)
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main(sys.argv)

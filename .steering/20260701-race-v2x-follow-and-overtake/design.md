@@ -135,6 +135,14 @@ v2x_race_behavior:
   min_closing_speed_mps: 0.4
   max_overtake_target_speed_kmph: 12.0
   min_ttc_sec: 0.8
+  force_overtake_enabled: true
+  force_overtake_min_gap_m: 2.2
+  force_overtake_max_gap_m: 4.0
+  force_overtake_hold_sec: 0.3
+  force_overtake_target_speed_threshold_kmph: 5.0
+  force_overtake_ego_speed_threshold_kmph: 4.0
+  force_min_lateral_clearance_m: 1.2
+  force_min_wall_clearance_m: 0.2
 
   preferred_side: "right"
   side_selection_policy: "largest_margin"
@@ -160,7 +168,9 @@ v2x_race_behavior:
   log_throttle_sec: 1.0
 ```
 
-初期値は Gate2 より横移動を穏やかにする一方、race2 では前走車との距離が 3m 台で安定しやすいため、`min_overtake_start_gap_m` は 4.0m として追い抜き開始を早める。壁余裕は長い horizon を見るとコーナー手前で `no_safe_side` になり続けるため、race 用は `wall_check_horizon_m=16.0` とし、直近から少し先まで抜ける空間がある場合だけ試行する。2026-07-01 の試走では `wall_l=0.02m` でも `left_forced_clear` になり壁接触したため、`min_wall_clearance_m=0.5` に戻し、車体が片側へ寄っている間の反対側追い越し指示は `side_switch_center_threshold_m` で抑止する。Gate2 で使った `lateral_offset_m=1.65`、`prepare_speed_cap_kmph=3.0`、強制 steer override は安全ゲート用の最後の調整値であり、race の初期値にはしない。
+初期値は Gate2 より横移動を穏やかにする一方、race2 では前走車との距離が 3m 台で安定しやすいため、`min_overtake_start_gap_m` は 4.0m として追い抜き開始を早める。さらに 4.0m 未満でも target が 5km/h 以下、自車が 4km/h 以下、gap が 2.2m 以上 4.0m 以下で 0.3 秒続き、左右・壁の安全判定が通る場合は `force_overtake_*` reason で近距離からの追い越し発進を許可する。force 発進時だけは side 判定を少し緩め、`force_min_lateral_clearance_m=1.2`、`force_min_wall_clearance_m=0.2` を使う。通常追い越しは `min_lateral_clearance_m=1.6`、`min_wall_clearance_m=0.5` のまま維持する。壁余裕は長い horizon を見るとコーナー手前で `no_safe_side` になり続けるため、race 用は `wall_check_horizon_m=16.0` とし、直近から少し先まで抜ける空間がある場合だけ試行する。2026-07-01 の試走では `wall_l=0.02m` でも `left_forced_clear` になり壁接触したため、`min_wall_clearance_m=0.5` に戻し、車体が片側へ寄っている間の反対側追い越し指示は `side_switch_center_threshold_m` で抑止する。Gate2 で使った `lateral_offset_m=1.65`、`prepare_speed_cap_kmph=4.0`、強制 steer override は安全ゲート用の最後の調整値であり、race の初期値にはしない。
+
+Gate2 型 overtake を `make dev` / `make dev1` / `make dev2` / `make dev3` / `make dev4` へ流用する場合は、stop fallback が先に働いて前方停止車の直後で保持し続ける可能性がある。そのため Gate2 用 planner には stuck target 例外と force overtake 例外を持たせる。target が一定時間低速しきい値以下で詰まり、自車も低速、かつ `stuck_overtake_min_gap_m` 以上の gap と左右・壁の安全余裕が残る場合は `abort_gap_m` 内でも `prepare_overtake` へ入る。さらに target が完全停止ではなく低速走行中でも、自車が詰まって低速、gap が force range 内、左右・壁が safe の場合は `force_overtake_*` reason で近距離から発進する。target が速度しきい値を超えて動き出す、gap が下限未満、横/壁が unsafe の場合は従来どおり abort / stop fallback へ戻す。
 
 ## State Machine
 

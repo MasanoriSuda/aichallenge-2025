@@ -42,6 +42,10 @@ install(PROGRAMS
   scripts/publish_initialpose_gnss
   scripts/reference_path_visualizer
   scripts/reference_velocity_configulator
+  scripts/pure_pursuit_trajectory_editor
+  scripts/trajectory_editor
+  scripts/virtual_v2x_obstacle_gui
+  scripts/virtual_v2x_obstacle_publisher
   DESTINATION lib/${PROJECT_NAME}
 )
 

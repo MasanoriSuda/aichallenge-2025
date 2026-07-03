@@ -65,16 +65,37 @@ class V2XRaceBehaviorConfig:
     max_overtake_start_gap_m: float = 24.0
     abort_gap_m: float = 2.5
     abort_escape_lateral_threshold_m: float = 0.45
+    force_overtake_enabled: bool = False
+    force_overtake_min_gap_m: float = 2.2
+    force_overtake_max_gap_m: float = 4.0
+    force_overtake_hold_sec: float = 0.3
+    force_overtake_target_speed_threshold_mps: float = 5.0 / 3.6
+    force_overtake_ego_speed_threshold_mps: float = 4.0 / 3.6
+    force_overtake_speed_cap_mps: float = -1.0
+    force_pre_stop_enabled: bool = False
+    force_pre_stop_gap_m: float = 8.0
+    force_pre_stop_target_speed_threshold_mps: float = 1.0 / 3.6
+    force_pre_stop_release_ego_speed_mps: float = 1.0 / 3.6
+    force_pre_stop_speed_cap_mps: float = 1.0 / 3.6
+    force_min_lateral_clearance_m: float = -1.0
+    force_min_wall_clearance_m: float = -1.0
     return_clearance_m: float = 8.0
     return_rear_clearance_m: float = 4.0
     preferred_side: str = "right"
     side_selection_policy: str = "largest_margin"
     side_margin_tie_threshold_m: float = 0.3
     lateral_offset_m: float = 1.4
+    force_lateral_offset_m: float = -1.0
     lateral_offset_rate_mps: float = 1.2
     constraint_half_width_m: float = 0.55
+    force_constraint_half_width_m: float = -1.0
     constraint_transition_horizon_ratio: float = 0.35
+    force_constraint_transition_horizon_ratio: float = -1.0
     constraint_initial_progress: float = 0.35
+    force_constraint_initial_progress: float = -1.0
+    virtual_force_infeasible_fallback_speed_mps: float = 4.0 / 3.6
+    treat_all_targets_as_virtual_force: bool = False
+    virtual_force_disable_speed_cap: bool = False
     min_lateral_clearance_m: float = 1.6
     min_wall_clearance_m: float = 0.5
     wall_safety_margin_m: float = 0.2
@@ -141,17 +162,52 @@ class V2XRaceBehaviorConfig:
             abort_gap_m=float(_get_attr(cfg, "abort_gap_m", 2.5)),
             abort_escape_lateral_threshold_m=float(
                 _get_attr(cfg, "abort_escape_lateral_threshold_m", 0.45)),
+            force_overtake_enabled=bool(_get_attr(cfg, "force_overtake_enabled", False)),
+            force_overtake_min_gap_m=float(_get_attr(cfg, "force_overtake_min_gap_m", 2.2)),
+            force_overtake_max_gap_m=float(_get_attr(cfg, "force_overtake_max_gap_m", 4.0)),
+            force_overtake_hold_sec=float(_get_attr(cfg, "force_overtake_hold_sec", 0.3)),
+            force_overtake_target_speed_threshold_mps=float(
+                _get_attr(cfg, "force_overtake_target_speed_threshold_kmph", 5.0)) / 3.6,
+            force_overtake_ego_speed_threshold_mps=float(
+                _get_attr(cfg, "force_overtake_ego_speed_threshold_kmph", 4.0)) / 3.6,
+            force_overtake_speed_cap_mps=float(
+                _get_attr(cfg, "force_overtake_speed_cap_kmph", -1.0)) / 3.6,
+            force_pre_stop_enabled=bool(_get_attr(cfg, "force_pre_stop_enabled", False)),
+            force_pre_stop_gap_m=float(_get_attr(cfg, "force_pre_stop_gap_m", 8.0)),
+            force_pre_stop_target_speed_threshold_mps=float(
+                _get_attr(cfg, "force_pre_stop_target_speed_threshold_kmph", 1.0)) / 3.6,
+            force_pre_stop_release_ego_speed_mps=float(
+                _get_attr(cfg, "force_pre_stop_release_ego_speed_kmph", 1.0)) / 3.6,
+            force_pre_stop_speed_cap_mps=float(
+                _get_attr(cfg, "force_pre_stop_speed_cap_kmph", 1.0)) / 3.6,
+            force_min_lateral_clearance_m=float(
+                _get_attr(cfg, "force_min_lateral_clearance_m", -1.0)),
+            force_min_wall_clearance_m=float(
+                _get_attr(cfg, "force_min_wall_clearance_m", -1.0)),
             return_clearance_m=float(_get_attr(cfg, "return_clearance_m", 8.0)),
             return_rear_clearance_m=float(_get_attr(cfg, "return_rear_clearance_m", 4.0)),
             preferred_side=preferred_side,
             side_selection_policy=side_selection_policy,
             side_margin_tie_threshold_m=float(_get_attr(cfg, "side_margin_tie_threshold_m", 0.3)),
             lateral_offset_m=float(_get_attr(cfg, "lateral_offset_m", 1.4)),
+            force_lateral_offset_m=float(_get_attr(cfg, "force_lateral_offset_m", -1.0)),
             lateral_offset_rate_mps=float(_get_attr(cfg, "lateral_offset_rate_mps", 1.2)),
             constraint_half_width_m=float(_get_attr(cfg, "constraint_half_width_m", 0.55)),
+            force_constraint_half_width_m=float(
+                _get_attr(cfg, "force_constraint_half_width_m", -1.0)),
             constraint_transition_horizon_ratio=float(
                 _get_attr(cfg, "constraint_transition_horizon_ratio", 0.35)),
+            force_constraint_transition_horizon_ratio=float(
+                _get_attr(cfg, "force_constraint_transition_horizon_ratio", -1.0)),
             constraint_initial_progress=float(_get_attr(cfg, "constraint_initial_progress", 0.35)),
+            force_constraint_initial_progress=float(
+                _get_attr(cfg, "force_constraint_initial_progress", -1.0)),
+            virtual_force_infeasible_fallback_speed_mps=float(
+                _get_attr(cfg, "virtual_force_infeasible_fallback_speed_kmph", 4.0)) / 3.6,
+            treat_all_targets_as_virtual_force=bool(
+                _get_attr(cfg, "treat_all_targets_as_virtual_force", False)),
+            virtual_force_disable_speed_cap=bool(
+                _get_attr(cfg, "virtual_force_disable_speed_cap", False)),
             min_lateral_clearance_m=float(_get_attr(cfg, "min_lateral_clearance_m", 1.6)),
             min_wall_clearance_m=float(_get_attr(cfg, "min_wall_clearance_m", 0.5)),
             wall_safety_margin_m=float(_get_attr(cfg, "wall_safety_margin_m", 0.2)),
@@ -183,13 +239,40 @@ class V2XRaceBehaviorConfig:
             max_overtake_start_gap_m=self.max_overtake_start_gap_m,
             abort_gap_m=self.abort_gap_m,
             abort_escape_lateral_threshold_m=self.abort_escape_lateral_threshold_m,
+            force_overtake_enabled=self.force_overtake_enabled,
+            force_overtake_min_gap_m=self.force_overtake_min_gap_m,
+            force_overtake_max_gap_m=self.force_overtake_max_gap_m,
+            force_overtake_hold_sec=self.force_overtake_hold_sec,
+            force_overtake_target_speed_threshold_mps=(
+                self.force_overtake_target_speed_threshold_mps),
+            force_overtake_ego_speed_threshold_mps=(
+                self.force_overtake_ego_speed_threshold_mps),
+            force_overtake_speed_cap_mps=self.force_overtake_speed_cap_mps,
+            force_pre_stop_enabled=self.force_pre_stop_enabled,
+            force_pre_stop_gap_m=self.force_pre_stop_gap_m,
+            force_pre_stop_target_speed_threshold_mps=(
+                self.force_pre_stop_target_speed_threshold_mps),
+            force_pre_stop_release_ego_speed_mps=(
+                self.force_pre_stop_release_ego_speed_mps),
+            force_pre_stop_speed_cap_mps=self.force_pre_stop_speed_cap_mps,
+            force_min_lateral_clearance_m=self.force_min_lateral_clearance_m,
+            force_min_wall_clearance_m=self.force_min_wall_clearance_m,
             return_clearance_m=self.return_clearance_m,
             preferred_side=self.preferred_side,
             side_selection_policy=self.side_selection_policy,
             side_margin_tie_threshold_m=self.side_margin_tie_threshold_m,
             lateral_offset_m=self.lateral_offset_m,
+            force_lateral_offset_m=self.force_lateral_offset_m,
             lateral_offset_rate_mps=self.lateral_offset_rate_mps,
             constraint_half_width_m=self.constraint_half_width_m,
+            force_constraint_half_width_m=self.force_constraint_half_width_m,
+            force_constraint_transition_horizon_ratio=(
+                self.force_constraint_transition_horizon_ratio),
+            force_constraint_initial_progress=self.force_constraint_initial_progress,
+            virtual_force_infeasible_fallback_speed_mps=(
+                self.virtual_force_infeasible_fallback_speed_mps),
+            treat_all_targets_as_virtual_force=self.treat_all_targets_as_virtual_force,
+            virtual_force_disable_speed_cap=self.virtual_force_disable_speed_cap,
             min_lateral_clearance_m=self.min_lateral_clearance_m,
             min_wall_clearance_m=self.min_wall_clearance_m,
             wall_safety_margin_m=self.wall_safety_margin_m,
@@ -404,6 +487,7 @@ class V2XRaceBehaviorPlanner:
         if (
             front_target is not None
             and self._effective_front_gap_m(front_target) <= self._cfg.emergency_stop_gap_m
+            and not self._virtual_force_speed_uncapped(front_target)
         ):
             return self._emergency_stop(base_speed_mps, front_target)
 
@@ -517,7 +601,11 @@ class V2XRaceBehaviorPlanner:
                 return self._from_overtake_result(
                     overtake_result,
                     state=self.OVERTAKING,
-                    speed_cap_mps=min(base_speed_mps, self._cfg.overtake_speed_cap_mps),
+                    speed_cap_mps=min(
+                        base_speed_mps,
+                        self._cfg.overtake_speed_cap_mps,
+                        overtake_result.speed_cap_mps,
+                    ),
                     target_lateral_offset_m=sign * self._cfg.lateral_offset_m,
                     reason=f"return_blocked_by_{blocker.snapshot.vehicle_id}",
                 )
@@ -545,6 +633,11 @@ class V2XRaceBehaviorPlanner:
 
         active_yield_relation = self._relation_by_id(relations, self._yield_target_id)
         if active_yield_relation is not None:
+            if self._virtual_force_speed_uncapped(active_yield_relation):
+                self._yield_target_id = None
+                self._yield_started_sec = None
+                self._yield_hold_until_sec = None
+                return None
             if (
                 not self._is_rear_relation(active_yield_relation)
                 and active_yield_relation.forward_gap_m >= self._cfg.yield_release_gap_m
@@ -580,6 +673,10 @@ class V2XRaceBehaviorPlanner:
     ) -> Optional[V2XRaceBehaviorResult]:
         active_relation = self._relation_by_id(relations, self._catchup_target_id)
         if active_relation is not None:
+            if self._virtual_force_speed_uncapped(active_relation):
+                self._catchup_target_id = None
+                self._catchup_started_sec = None
+                return None
             behind_gap = self._rear_gap_m(active_relation)
             timed_out = (
                 self._catchup_started_sec is not None
@@ -610,6 +707,7 @@ class V2XRaceBehaviorPlanner:
         candidates = [
             relation for relation in relations
             if self._catchup_candidate_ready(relation)
+            and not self._virtual_force_speed_uncapped(relation)
             and self._rear_gap_m(relation) >= self._cfg.catchup_start_gap_m
         ]
         if not candidates:
@@ -669,6 +767,8 @@ class V2XRaceBehaviorPlanner:
         candidates = []
         for relation in relations:
             if not self._is_rear_relation(relation):
+                continue
+            if self._virtual_force_speed_uncapped(relation):
                 continue
             behind_gap = self._rear_gap_m(relation)
             if behind_gap > self._cfg.yield_detect_range_m:
@@ -758,7 +858,14 @@ class V2XRaceBehaviorPlanner:
         overtake_result: Optional[V2XOvertakeResult] = None,
     ) -> V2XRaceBehaviorResult:
         front_gap_m = self._effective_front_gap_m(target)
-        if front_gap_m > self._cfg.approach_start_gap_m:
+        if (
+            overtake_result is not None
+            and str(overtake_result.reason).startswith("force_pre_stop")
+        ):
+            speed_cap = min(base_speed_mps, overtake_result.speed_cap_mps)
+        elif self._virtual_force_speed_uncapped(target):
+            speed_cap = base_speed_mps
+        elif front_gap_m > self._cfg.approach_start_gap_m:
             speed_cap = base_speed_mps
             reason = "front_far_chase"
         elif front_gap_m > self._cfg.max_overtake_start_gap_m:
@@ -814,6 +921,21 @@ class V2XRaceBehaviorPlanner:
             self._cfg.follow_speed_cap_mps,
             max(0.0, follow_v),
         )
+
+    def _virtual_force_speed_uncapped(self, relation: _RaceRelation) -> bool:
+        if not self._cfg.virtual_force_disable_speed_cap:
+            return False
+        return self._is_virtual_force_vehicle_id(relation.snapshot.vehicle_id)
+
+    def _is_virtual_force_vehicle_id(self, vehicle_id: str) -> bool:
+        if self._cfg.treat_all_targets_as_virtual_force and str(vehicle_id):
+            return True
+        normalized = str(vehicle_id).lower()
+        return normalized.startswith((
+            "force_obstacle",
+            "virtual_force",
+            "virtual_obstacle",
+        ))
 
     def _yield_result(
         self,

@@ -139,6 +139,32 @@ def _planner(**kwargs):
     return V2XRaceBehaviorPlanner(V2XRaceBehaviorConfig(**defaults))
 
 
+def test_virtual_force_options_pass_to_overtake_config():
+    cfg = V2XRaceBehaviorConfig(
+        force_pre_stop_enabled=True,
+        force_pre_stop_gap_m=7.0,
+        force_pre_stop_target_speed_threshold_mps=0.5,
+        force_pre_stop_release_ego_speed_mps=0.4,
+        force_pre_stop_speed_cap_mps=0.3,
+        force_overtake_speed_cap_mps=5.0 / 3.6,
+        force_lateral_offset_m=1.9,
+        treat_all_targets_as_virtual_force=True,
+        virtual_force_disable_speed_cap=True,
+    )
+
+    overtake_cfg = cfg.to_overtake_config()
+
+    assert overtake_cfg.force_pre_stop_enabled is True
+    assert overtake_cfg.force_pre_stop_gap_m == pytest.approx(7.0)
+    assert overtake_cfg.force_pre_stop_target_speed_threshold_mps == pytest.approx(0.5)
+    assert overtake_cfg.force_pre_stop_release_ego_speed_mps == pytest.approx(0.4)
+    assert overtake_cfg.force_pre_stop_speed_cap_mps == pytest.approx(0.3)
+    assert overtake_cfg.force_overtake_speed_cap_mps == pytest.approx(5.0 / 3.6)
+    assert overtake_cfg.force_lateral_offset_m == pytest.approx(1.9)
+    assert overtake_cfg.treat_all_targets_as_virtual_force is True
+    assert overtake_cfg.virtual_force_disable_speed_cap is True
+
+
 def test_front_vehicle_follows_when_overtake_gap_is_not_ready():
     planner = _planner()
     planner.update_v2x(_msg(0.0, [("d2", 3.0, 0.0)]))
@@ -159,6 +185,153 @@ def test_front_vehicle_follows_when_overtake_gap_is_not_ready():
     assert result.state == "follow"
     assert result.target_role == "front"
     assert result.speed_cap_mps < 4.0
+    assert result.target_lateral_offset_m == pytest.approx(0.0)
+
+
+def test_far_virtual_force_obstacle_approaches_before_lateral_avoidance():
+    planner = _planner(
+        detection_range_m=60.0,
+        approach_start_gap_m=55.0,
+        approach_speed_cap_mps=3.5,
+        max_overtake_start_gap_m=24.0,
+        force_overtake_enabled=True,
+        force_overtake_hold_sec=0.0,
+    )
+    planner.update_v2x(_msg(0.0, [("force_obstacle", 50.0, 0.0)]))
+
+    result = planner.compute_behavior(
+        0.0,
+        0.0,
+        0.0,
+        6.0,
+        _path(),
+        _widths(),
+        0.1,
+        8.0,
+        velocity_lookup=_velocity({"force_obstacle": (0.0, 0.0)}),
+    )
+
+    assert result.active
+    assert result.state == "follow"
+    assert result.reason == "front_approach"
+    assert result.speed_cap_mps == pytest.approx(3.5)
+    assert result.target_lateral_offset_m == pytest.approx(0.0)
+    assert result.gap_m == pytest.approx(50.0)
+
+
+def test_force_overtake_starts_on_slow_close_front_after_hold():
+    planner = _planner(
+        preferred_side="right",
+        force_overtake_enabled=True,
+        force_overtake_min_gap_m=2.2,
+        force_overtake_max_gap_m=4.0,
+        force_overtake_hold_sec=0.3,
+        force_overtake_target_speed_threshold_mps=1.5,
+        force_overtake_ego_speed_threshold_mps=1.2,
+    )
+    planner.update_v2x(_msg(0.0, [("d2", 3.0, 0.0)]))
+
+    first = planner.compute_behavior(
+        0.0,
+        0.0,
+        0.0,
+        0.5,
+        _path(),
+        _widths(),
+        0.1,
+        8.0,
+        velocity_lookup=_velocity({"d2": (1.0, 0.0)}),
+    )
+
+    assert first.active
+    assert first.state == "follow"
+    assert first.reason == "gap_or_speed_not_ready"
+
+    planner.update_v2x(_msg(0.5, [("d2", 3.0, 0.0)]))
+    forced = planner.compute_behavior(
+        0.0,
+        0.0,
+        0.0,
+        0.5,
+        _path(),
+        _widths(),
+        0.5,
+        8.0,
+        velocity_lookup=_velocity({"d2": (1.0, 0.0)}),
+    )
+
+    assert forced.active
+    assert forced.state == "prepare_overtake"
+    assert forced.reason.startswith("force_overtake_")
+    assert forced.side == "right"
+    assert forced.target_role == "front"
+    assert forced.target_lateral_offset_m < 0.0
+
+
+def test_race_force_pre_stop_keeps_low_speed_cap_for_virtual_force():
+    planner = _planner(
+        preferred_side="right",
+        force_overtake_enabled=True,
+        force_overtake_min_gap_m=2.2,
+        force_overtake_max_gap_m=4.0,
+        force_overtake_hold_sec=0.0,
+        force_pre_stop_enabled=True,
+        force_pre_stop_gap_m=8.0,
+        force_pre_stop_target_speed_threshold_mps=0.5,
+        force_pre_stop_release_ego_speed_mps=0.4,
+        force_pre_stop_speed_cap_mps=0.3,
+        treat_all_targets_as_virtual_force=True,
+        virtual_force_disable_speed_cap=True,
+    )
+    planner.update_v2x(_msg(0.0, [("d2", 4.0, 0.0)]))
+
+    result = planner.compute_behavior(
+        0.0,
+        0.0,
+        0.0,
+        2.0,
+        _path(),
+        _widths(),
+        0.1,
+        8.0,
+        velocity_lookup=_velocity({"d2": (0.0, 0.0)}),
+    )
+
+    assert result.active
+    assert result.state == "follow"
+    assert result.reason == "force_pre_stop"
+    assert result.target_role == "front"
+    assert result.speed_cap_mps == pytest.approx(0.3)
+    assert result.target_lateral_offset_m == pytest.approx(0.0)
+
+
+def test_force_overtake_rejects_fast_close_front():
+    planner = _planner(
+        preferred_side="right",
+        force_overtake_enabled=True,
+        force_overtake_min_gap_m=2.2,
+        force_overtake_max_gap_m=4.0,
+        force_overtake_hold_sec=0.0,
+        force_overtake_target_speed_threshold_mps=1.5,
+        force_overtake_ego_speed_threshold_mps=1.2,
+    )
+    planner.update_v2x(_msg(0.0, [("d2", 3.0, 0.0)]))
+
+    result = planner.compute_behavior(
+        0.0,
+        0.0,
+        0.0,
+        0.5,
+        _path(),
+        _widths(),
+        0.1,
+        8.0,
+        velocity_lookup=_velocity({"d2": (2.0, 0.0)}),
+    )
+
+    assert result.active
+    assert result.state == "follow"
+    assert result.reason == "gap_or_speed_not_ready"
     assert result.target_lateral_offset_m == pytest.approx(0.0)
 
 
@@ -395,6 +568,30 @@ def test_rear_vehicle_triggers_yield_speed_cap_without_side_offset():
     assert result.target_lateral_offset_m == pytest.approx(0.0)
 
 
+def test_virtual_force_rear_vehicle_does_not_trigger_yield_speed_cap():
+    planner = _planner(
+        treat_all_targets_as_virtual_force=True,
+        virtual_force_disable_speed_cap=True,
+    )
+    planner.update_v2x(_msg(0.0, [("d2", -6.0, 0.0)]))
+
+    result = planner.compute_behavior(
+        0.0,
+        0.0,
+        0.0,
+        4.0,
+        _path(),
+        _widths(),
+        0.1,
+        8.0,
+        velocity_lookup=_velocity({"d2": (6.0, 0.0)}),
+    )
+
+    assert not result.active
+    assert result.state == "clear"
+    assert result.speed_cap_mps == pytest.approx(8.0)
+
+
 def test_yield_releases_after_target_passes_release_gap():
     planner = _planner(yield_side_hold_sec=1.0)
     planner.update_v2x(_msg(0.0, [("d2", -6.0, 0.0)]))
@@ -450,6 +647,30 @@ def test_far_rear_vehicle_triggers_catchup_wait_speed_cap():
     assert result.target_role == "rear"
     assert result.speed_cap_mps == pytest.approx(2.8)
     assert result.target_lateral_offset_m == pytest.approx(0.0)
+
+
+def test_virtual_force_far_rear_vehicle_does_not_trigger_catchup_speed_cap():
+    planner = _planner(
+        treat_all_targets_as_virtual_force=True,
+        virtual_force_disable_speed_cap=True,
+    )
+    planner.update_v2x(_msg(0.0, [("d2", -35.0, 0.0)]))
+
+    result = planner.compute_behavior(
+        0.0,
+        0.0,
+        0.0,
+        5.0,
+        _path(),
+        _widths(),
+        0.1,
+        8.0,
+        velocity_lookup=_velocity({"d2": (5.0, 0.0)}),
+    )
+
+    assert not result.active
+    assert result.state == "clear"
+    assert result.speed_cap_mps == pytest.approx(8.0)
 
 
 def test_yaw_rear_vehicle_triggers_catchup_even_when_path_relation_is_front():

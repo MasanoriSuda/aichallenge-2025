@@ -113,6 +113,23 @@ def test_config_factory_normalizes_values_and_speed_units():
             overtake_speed_cap_kmph=18.0,
             follow_speed_cap_kmph=9.0,
             max_overtake_target_speed_kmph=3.6,
+            stuck_target_enabled=True,
+            stuck_target_speed_threshold_kmph=1.8,
+            stuck_ego_speed_threshold_kmph=2.7,
+            force_overtake_enabled=True,
+            force_overtake_target_speed_threshold_kmph=5.4,
+            force_overtake_ego_speed_threshold_kmph=3.6,
+            force_overtake_speed_cap_kmph=5.4,
+            force_pre_stop_enabled=True,
+            force_pre_stop_gap_m=7.5,
+            force_pre_stop_target_speed_threshold_kmph=1.8,
+            force_pre_stop_release_ego_speed_kmph=1.44,
+            force_pre_stop_speed_cap_kmph=0.72,
+            force_min_lateral_clearance_m=1.1,
+            force_min_wall_clearance_m=0.2,
+            force_lateral_offset_m=1.9,
+            treat_all_targets_as_virtual_force=True,
+            virtual_force_disable_speed_cap=True,
         ),
         vehicle_width_m=1.45,
     )
@@ -122,6 +139,23 @@ def test_config_factory_normalizes_values_and_speed_units():
     assert cfg.overtake_speed_cap_mps == pytest.approx(5.0)
     assert cfg.follow_speed_cap_mps == pytest.approx(2.5)
     assert cfg.max_overtake_target_speed_mps == pytest.approx(1.0)
+    assert cfg.stuck_target_enabled is True
+    assert cfg.stuck_target_speed_threshold_mps == pytest.approx(0.5)
+    assert cfg.stuck_ego_speed_threshold_mps == pytest.approx(0.75)
+    assert cfg.force_overtake_enabled is True
+    assert cfg.force_overtake_target_speed_threshold_mps == pytest.approx(1.5)
+    assert cfg.force_overtake_ego_speed_threshold_mps == pytest.approx(1.0)
+    assert cfg.force_overtake_speed_cap_mps == pytest.approx(1.5)
+    assert cfg.force_pre_stop_enabled is True
+    assert cfg.force_pre_stop_gap_m == pytest.approx(7.5)
+    assert cfg.force_pre_stop_target_speed_threshold_mps == pytest.approx(0.5)
+    assert cfg.force_pre_stop_release_ego_speed_mps == pytest.approx(0.4)
+    assert cfg.force_pre_stop_speed_cap_mps == pytest.approx(0.2)
+    assert cfg.force_min_lateral_clearance_m == pytest.approx(1.1)
+    assert cfg.force_min_wall_clearance_m == pytest.approx(0.2)
+    assert cfg.force_lateral_offset_m == pytest.approx(1.9)
+    assert cfg.treat_all_targets_as_virtual_force is True
+    assert cfg.virtual_force_disable_speed_cap is True
     assert cfg.vehicle_width_m == pytest.approx(1.45)
     assert cfg.circular_path is True
 
@@ -142,6 +176,25 @@ def test_force_abort_returns_one_shot_abort_result():
         0.0, 0.0, 0.0, 6.0, _path(), _widths(), 0.2, 8.0)
     assert not next_result.active
     assert next_result.state == "clear"
+
+
+def test_far_virtual_force_obstacle_does_not_start_lateral_avoidance():
+    planner = _planner(
+        detection_range_m=60.0,
+        max_overtake_start_gap_m=24.0,
+        force_overtake_enabled=True,
+        force_overtake_hold_sec=0.0,
+    )
+    planner.update_v2x(_msg(0.0, [("force_obstacle", 50.0, 0.0)]))
+
+    result = planner.compute_behavior(
+        0.0, 0.0, 0.0, 6.0, _path(), _widths(), 0.1, 8.0)
+
+    assert result.active
+    assert result.state == "follow"
+    assert result.reason == "gap_or_speed_not_ready"
+    assert result.target_lateral_offset_m == pytest.approx(0.0)
+    assert result.gap_m == pytest.approx(50.0)
 
 
 def test_front_vehicle_selects_preferred_left_side():
@@ -497,6 +550,479 @@ def test_abort_gap_does_not_overtake():
     assert result.state == "abort"
     assert result.speed_cap_mps == pytest.approx(0.0)
     assert result.target_lateral_offset_m == pytest.approx(0.0)
+
+
+def test_stuck_target_can_start_overtake_inside_abort_gap_after_hold():
+    planner = _planner(
+        preferred_side="right",
+        stuck_target_enabled=True,
+        stuck_overtake_min_gap_m=2.5,
+        stuck_target_hold_sec=1.0,
+        stuck_target_speed_threshold_mps=0.5,
+        stuck_ego_speed_threshold_mps=0.5,
+    )
+    planner.update_v2x(_msg(0.0, [("d2", 3.0, 0.0)]))
+
+    first = planner.compute_behavior(
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        _path(),
+        _widths(),
+        0.1,
+        8.0,
+        velocity_lookup=lambda _vehicle_id: (0.0, 0.0),
+    )
+    assert first.state == "abort"
+    assert first.reason == "abort_gap"
+
+    planner.update_v2x(_msg(1.2, [("d2", 3.0, 0.0)]))
+    stuck_escape = planner.compute_behavior(
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        _path(),
+        _widths(),
+        1.2,
+        8.0,
+        velocity_lookup=lambda _vehicle_id: (0.0, 0.0),
+    )
+
+    assert stuck_escape.active
+    assert stuck_escape.state == "prepare_overtake"
+    assert stuck_escape.reason.startswith("stuck_target_")
+    assert stuck_escape.side == "right"
+    assert stuck_escape.target_lateral_offset_m < 0.0
+
+    still_preparing = planner.compute_behavior(
+        0.0,
+        0.0,
+        0.0,
+        0.2,
+        _path(),
+        _widths(),
+        1.3,
+        8.0,
+        current_lateral_offset_m=0.0,
+        velocity_lookup=lambda _vehicle_id: (0.0, 0.0),
+    )
+
+    assert still_preparing.active
+    assert still_preparing.state == "prepare_overtake"
+    assert still_preparing.target_lateral_offset_m < 0.0
+
+
+def test_moving_target_inside_abort_gap_still_aborts_even_with_stuck_enabled():
+    planner = _planner(
+        stuck_target_enabled=True,
+        stuck_overtake_min_gap_m=2.5,
+        stuck_target_hold_sec=0.0,
+        stuck_target_speed_threshold_mps=0.5,
+        stuck_ego_speed_threshold_mps=0.5,
+    )
+    planner.update_v2x(_msg(0.0, [("d2", 3.0, 0.0)]))
+
+    result = planner.compute_behavior(
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        _path(),
+        _widths(),
+        0.1,
+        8.0,
+        velocity_lookup=lambda _vehicle_id: (1.0, 0.0),
+    )
+
+    assert result.active
+    assert result.state == "abort"
+    assert result.reason == "abort_gap"
+    assert result.target_lateral_offset_m == pytest.approx(0.0)
+
+
+def test_force_overtake_can_start_on_slow_moving_target_inside_abort_gap_after_hold():
+    planner = _planner(
+        preferred_side="right",
+        stuck_target_enabled=True,
+        stuck_overtake_min_gap_m=2.5,
+        stuck_target_hold_sec=0.0,
+        stuck_target_speed_threshold_mps=0.3,
+        stuck_ego_speed_threshold_mps=0.3,
+        force_overtake_enabled=True,
+        force_overtake_min_gap_m=2.2,
+        force_overtake_max_gap_m=6.0,
+        force_overtake_hold_sec=0.3,
+        force_overtake_target_speed_threshold_mps=1.5,
+        force_overtake_ego_speed_threshold_mps=1.2,
+    )
+    planner.update_v2x(_msg(0.0, [("d2", 3.0, 0.0)]))
+
+    first = planner.compute_behavior(
+        0.0,
+        0.0,
+        0.0,
+        0.5,
+        _path(),
+        _widths(),
+        0.1,
+        8.0,
+        velocity_lookup=lambda _vehicle_id: (1.0, 0.0),
+    )
+    assert first.state == "abort"
+    assert first.reason == "abort_gap"
+
+    planner.update_v2x(_msg(0.5, [("d2", 3.0, 0.0)]))
+    forced = planner.compute_behavior(
+        0.0,
+        0.0,
+        0.0,
+        0.5,
+        _path(),
+        _widths(),
+        0.5,
+        8.0,
+        velocity_lookup=lambda _vehicle_id: (1.0, 0.0),
+    )
+
+    assert forced.active
+    assert forced.state == "prepare_overtake"
+    assert forced.reason.startswith("force_overtake_")
+    assert forced.side == "right"
+    assert forced.target_lateral_offset_m < 0.0
+
+
+def test_force_pre_stop_slows_before_virtual_force_overtake():
+    planner = _planner(
+        preferred_side="right",
+        force_overtake_enabled=True,
+        force_overtake_min_gap_m=2.2,
+        force_overtake_max_gap_m=6.0,
+        force_overtake_hold_sec=0.0,
+        force_pre_stop_enabled=True,
+        force_pre_stop_gap_m=8.0,
+        force_pre_stop_target_speed_threshold_mps=0.5,
+        force_pre_stop_release_ego_speed_mps=0.4,
+        force_pre_stop_speed_cap_mps=0.3,
+        treat_all_targets_as_virtual_force=True,
+        virtual_force_disable_speed_cap=True,
+    )
+    planner.update_v2x(_msg(0.0, [("d2", 4.0, 0.0)]))
+
+    slowing = planner.compute_behavior(
+        0.0,
+        0.0,
+        0.0,
+        2.0,
+        _path(),
+        _widths(),
+        0.1,
+        8.0,
+        velocity_lookup=lambda _vehicle_id: (0.0, 0.0),
+    )
+
+    assert slowing.active
+    assert slowing.state == "follow"
+    assert slowing.reason == "force_pre_stop"
+    assert slowing.speed_cap_mps == pytest.approx(0.3)
+    assert slowing.target_lateral_offset_m == pytest.approx(0.0)
+
+    planner.update_v2x(_msg(0.2, [("d2", 4.0, 0.0)]))
+    forced = planner.compute_behavior(
+        0.0,
+        0.0,
+        0.0,
+        0.2,
+        _path(),
+        _widths(),
+        0.2,
+        8.0,
+        velocity_lookup=lambda _vehicle_id: (0.0, 0.0),
+    )
+
+    assert forced.active
+    assert forced.state == "prepare_overtake"
+    assert forced.reason.startswith("force_overtake_")
+    assert forced.side == "right"
+    assert forced.target_lateral_offset_m < 0.0
+
+
+def test_force_overtake_rejects_fast_target_inside_abort_gap():
+    planner = _planner(
+        force_overtake_enabled=True,
+        force_overtake_min_gap_m=2.2,
+        force_overtake_max_gap_m=6.0,
+        force_overtake_hold_sec=0.0,
+        force_overtake_target_speed_threshold_mps=1.5,
+        force_overtake_ego_speed_threshold_mps=1.2,
+    )
+    planner.update_v2x(_msg(0.0, [("d2", 3.0, 0.0)]))
+
+    result = planner.compute_behavior(
+        0.0,
+        0.0,
+        0.0,
+        0.5,
+        _path(),
+        _widths(),
+        0.1,
+        8.0,
+        velocity_lookup=lambda _vehicle_id: (2.0, 0.0),
+    )
+
+    assert result.active
+    assert result.state == "abort"
+    assert result.reason == "abort_gap"
+
+
+def test_force_overtake_uses_relaxed_wall_clearance():
+    planner = _planner(
+        preferred_side="right",
+        force_overtake_enabled=True,
+        force_overtake_min_gap_m=2.2,
+        force_overtake_max_gap_m=6.0,
+        force_overtake_hold_sec=0.0,
+        force_overtake_target_speed_threshold_mps=1.5,
+        force_overtake_ego_speed_threshold_mps=1.2,
+        force_min_wall_clearance_m=0.2,
+    )
+    planner.update_v2x(_msg(0.0, [("d2", 3.0, 0.0)]))
+
+    result = planner.compute_behavior(
+        0.0,
+        0.0,
+        0.0,
+        0.5,
+        _path(),
+        _widths(left=2.0, right=3.0),
+        0.1,
+        8.0,
+        velocity_lookup=lambda _vehicle_id: (1.0, 0.0),
+    )
+
+    assert result.active
+    assert result.state == "prepare_overtake"
+    assert result.reason.startswith("force_overtake_")
+    assert result.side == "right"
+    assert result.right_wall_margin_m > 0.0
+
+
+def test_force_overtake_uses_relaxed_lateral_clearance():
+    planner = _planner(
+        preferred_side="right",
+        force_overtake_enabled=True,
+        force_overtake_min_gap_m=2.2,
+        force_overtake_max_gap_m=6.0,
+        force_overtake_hold_sec=0.0,
+        force_overtake_target_speed_threshold_mps=1.5,
+        force_overtake_ego_speed_threshold_mps=1.2,
+        min_lateral_clearance_m=1.6,
+        force_min_lateral_clearance_m=1.2,
+    )
+    planner.update_v2x(_msg(0.0, [
+        ("d2", 3.0, 0.0),
+        ("d3", 4.0, -0.5),
+    ]))
+
+    result = planner.compute_behavior(
+        0.0,
+        0.0,
+        0.0,
+        0.5,
+        _path(),
+        _widths(),
+        0.1,
+        8.0,
+        velocity_lookup=lambda _vehicle_id: (1.0, 0.0),
+    )
+
+    assert result.active
+    assert result.state == "prepare_overtake"
+    assert result.reason.startswith("force_overtake_")
+    assert result.side == "right"
+
+
+def test_virtual_force_obstacle_can_pick_side_even_when_nominal_safety_fails():
+    planner = _planner(
+        preferred_side="left",
+        force_overtake_enabled=True,
+        force_overtake_min_gap_m=2.2,
+        force_overtake_max_gap_m=6.0,
+        force_overtake_hold_sec=0.0,
+        force_overtake_target_speed_threshold_mps=1.5,
+        force_overtake_ego_speed_threshold_mps=1.2,
+        force_lateral_offset_m=1.9,
+    )
+    planner.update_v2x(_msg(0.0, [("force_obstacle", 8.0, 0.0)]))
+
+    result = planner.compute_behavior(
+        0.0,
+        0.0,
+        0.0,
+        5.0,
+        _path(),
+        _widths(left=1.0, right=1.0),
+        0.1,
+        8.0,
+        velocity_lookup=lambda _vehicle_id: (0.0, 0.0),
+    )
+
+    assert result.active
+    assert result.state == "prepare_overtake"
+    assert result.side == "left"
+    assert result.reason == "virtual_force_left"
+    assert result.target_lateral_offset_m == pytest.approx(1.9)
+
+
+def test_virtual_force_zero_lateral_offset_keeps_reference_path():
+    planner = _planner(
+        preferred_side="left",
+        force_overtake_enabled=True,
+        force_overtake_min_gap_m=2.2,
+        force_overtake_max_gap_m=6.0,
+        force_overtake_hold_sec=0.0,
+        force_overtake_speed_cap_mps=5.0 / 3.6,
+        force_lateral_offset_m=0.0,
+    )
+    planner.update_v2x(_msg(0.0, [("force_obstacle", 8.0, 0.0)]))
+
+    result = planner.compute_behavior(
+        0.0,
+        0.0,
+        0.0,
+        5.0,
+        _path(),
+        _widths(),
+        0.1,
+        8.0,
+        velocity_lookup=lambda _vehicle_id: (0.0, 0.0),
+    )
+
+    assert result.active
+    assert result.state == "prepare_overtake"
+    assert result.vehicle_id == "force_obstacle"
+    assert result.speed_cap_mps == pytest.approx(5.0 / 3.6)
+    assert result.target_lateral_offset_m == pytest.approx(0.0)
+
+
+def test_all_targets_virtual_force_treats_normal_vehicle_id_as_force_target():
+    planner = _planner(
+        preferred_side="left",
+        force_overtake_enabled=True,
+        force_overtake_min_gap_m=2.2,
+        force_overtake_max_gap_m=6.0,
+        force_overtake_hold_sec=0.0,
+        force_overtake_target_speed_threshold_mps=1.5,
+        force_overtake_ego_speed_threshold_mps=1.2,
+        treat_all_targets_as_virtual_force=True,
+    )
+    planner.update_v2x(_msg(0.0, [("d2", 8.0, 0.0)]))
+
+    result = planner.compute_behavior(
+        0.0,
+        0.0,
+        0.0,
+        5.0,
+        _path(),
+        _widths(left=1.0, right=1.0),
+        0.1,
+        8.0,
+        velocity_lookup=None,
+    )
+
+    assert result.active
+    assert result.state == "prepare_overtake"
+    assert result.vehicle_id == "d2"
+    assert result.side == "left"
+    assert result.reason == "virtual_force_left"
+    assert result.target_lateral_offset_m > 0.0
+
+
+def test_virtual_force_speed_cap_can_be_disabled():
+    planner = _planner(
+        preferred_side="right",
+        force_overtake_enabled=True,
+        force_overtake_hold_sec=0.0,
+        overtake_speed_cap_mps=2.0,
+        follow_speed_cap_mps=1.0,
+        treat_all_targets_as_virtual_force=True,
+        virtual_force_disable_speed_cap=True,
+    )
+    planner.update_v2x(_msg(0.0, [("d2", 8.0, 0.0)]))
+
+    result = planner.compute_behavior(
+        0.0,
+        0.0,
+        0.0,
+        5.0,
+        _path(),
+        _widths(),
+        0.1,
+        8.0,
+        velocity_lookup=None,
+    )
+
+    assert result.active
+    assert result.state == "prepare_overtake"
+    assert result.speed_cap_mps == pytest.approx(8.0)
+
+
+def test_virtual_force_obstacle_does_not_abort_on_short_ttc_or_close_gap():
+    planner = _planner(
+        preferred_side="right",
+        force_overtake_enabled=True,
+        force_overtake_min_gap_m=2.2,
+        force_overtake_hold_sec=0.0,
+        min_ttc_sec=1.0,
+    )
+    planner.update_v2x(_msg(0.0, [("force_obstacle", 1.2, 0.0)]))
+
+    result = planner.compute_behavior(
+        0.0,
+        0.0,
+        0.0,
+        6.0,
+        _path(),
+        _widths(),
+        0.1,
+        8.0,
+        velocity_lookup=lambda _vehicle_id: (0.0, 0.0),
+    )
+
+    assert result.active
+    assert result.state == "prepare_overtake"
+    assert result.reason.startswith("force_overtake_")
+    assert result.side == "right"
+    assert result.speed_cap_mps > 0.0
+    assert result.target_lateral_offset_m < 0.0
+
+
+def test_stuck_target_too_close_still_aborts():
+    planner = _planner(
+        stuck_target_enabled=True,
+        stuck_overtake_min_gap_m=2.5,
+        stuck_target_hold_sec=0.0,
+        stuck_target_speed_threshold_mps=0.5,
+        stuck_ego_speed_threshold_mps=0.5,
+    )
+    planner.update_v2x(_msg(0.0, [("d2", 2.0, 0.0)]))
+
+    result = planner.compute_behavior(
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        _path(),
+        _widths(),
+        0.1,
+        8.0,
+        velocity_lookup=lambda _vehicle_id: (0.0, 0.0),
+    )
+
+    assert result.active
+    assert result.state == "abort"
+    assert result.reason == "abort_gap"
 
 
 def test_stale_sample_is_ignored():

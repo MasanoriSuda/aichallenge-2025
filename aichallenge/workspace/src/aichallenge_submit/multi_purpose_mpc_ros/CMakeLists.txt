@@ -14,6 +14,10 @@ endif()
 
 include(GNUInstallDirs)
 find_package(ament_cmake_auto REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(OpenCV REQUIRED)
+find_package(osqp REQUIRED)
+find_package(yaml-cpp REQUIRED)
 ament_auto_find_build_dependencies()
 
 ament_auto_add_library(${PROJECT_NAME} SHARED
@@ -22,6 +26,19 @@ ament_auto_add_library(${PROJECT_NAME} SHARED
 
 ament_auto_add_executable(boost_commander
   src/boost_commander_node.cpp
+)
+
+ament_auto_add_executable(mpc_controller_cpp
+  src/mpc_controller_cpp.cpp
+)
+target_include_directories(mpc_controller_cpp PRIVATE
+  ${EIGEN3_INCLUDE_DIRS}
+  ${OpenCV_INCLUDE_DIRS}
+)
+target_link_libraries(mpc_controller_cpp
+  osqp::osqp
+  yaml-cpp
+  ${OpenCV_LIBRARIES}
 )
 
 ament_python_install_package(${PROJECT_NAME}
@@ -42,6 +59,8 @@ install(PROGRAMS
   scripts/publish_initialpose_gnss
   scripts/reference_path_visualizer
   scripts/reference_velocity_configulator
+  scripts/pure_pursuit_trajectory_editor
+  scripts/trajectory_editor
   DESTINATION lib/${PROJECT_NAME}
 )
 

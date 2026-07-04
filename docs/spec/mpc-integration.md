@@ -1,12 +1,12 @@
 # multi_purpose_mpc_ros インテグレーション設計
 
-> 仕様ドキュメント（現仕様の正）。最終確認: 2026-06-14。文書運用方針は [docs/README.md](../README.md) を参照。
+> 仕様ドキュメント（現仕様の正）。最終確認: 2026-07-04。文書運用方針は [docs/README.md](../README.md) を参照。
 
 作成日: 2026-02-10
 
 ## 概要
 
-`multi_purpose_mpc_ros` は `aichallenge_submit` に統合済み。`reference.launch.xml` の `control_method` 引数で `mpc` / `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` を切り替えられる。デフォルトは `mpc`。
+`multi_purpose_mpc_ros` は `aichallenge_submit` に統合済み。`reference.launch.xml` の `control_method` 引数で `mpc` / `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` を切り替えられる。デフォルトは `mpc`。MPC の通常実行ノードは Python 版から C++ 版の `mpc_controller_cpp` に移行済みで、Python 実装と補助スクリプトは比較・生成ツール用途として残している。
 
 ## 現在のアーキテクチャ
 
@@ -151,7 +151,7 @@ MPC コントローラは独自の参照パスと occupancy grid map を持ち�
 |--------|------|
 | `simple_pure_pursuit` | **残す**（`control_method=pure_pursuit` で使用） |
 | `simple_trajectory_generator` | **残す**（`pure_pursuit` モードで使用） |
-| `mpc_controller` | **新規追加**（`control_method=mpc` で使用、デフォルト） |
+| `mpc_controller` | **C++ 実装を使用**（`mpc_controller_cpp` executable、`control_method=mpc` で使用、デフォルト） |
 
 ## 実装済み状態の確認
 
@@ -188,8 +188,9 @@ make autoware-build
 ビルドで行われること:
 1. `multi_purpose_mpc_ros_msgs` のメッセージ型生成（`AckermannControlBoostCommand.msg`, `PathConstraints.msg`, `BorderCells.msg`）
 2. `multi_purpose_mpc_ros` のビルド:
-   - C++ ライブラリ/ノード（`boost_commander`）のビルド
-   - Python venv の作成（`/usr/bin/python3 -m venv`）
+   - C++ ライブラリ/ノード（`boost_commander`, `mpc_controller_cpp`）のビルド
+   - OSQP C API（`osqp_vendor`）、Eigen、OpenCV、yaml-cpp を使った MPC 実行系のビルド
+   - Python 補助スクリプト用 venv の作成（`/usr/bin/python3 -m venv`）
    - `requirements.txt` からの pip install（`numpy`, `pandas`, `matplotlib`, `osqp`, `scikit-image`, `PyYAML`）
    - スクリプトとデータの install
 
@@ -404,7 +405,7 @@ MPC は計算負荷が高いため 40Hz は妥当。問題があれば `control_
 
 ### Python venv
 
-MPC パッケージは CMakeLists.txt 内で Python 仮想環境を作成する（`execute_process` で `/usr/bin/python3 -m venv` + `pip install`）。Docker ビルド内で完結するため追加設定は不要だが、ビルド時間が増加する点に注意。
+MPC の通常実行は C++ の `mpc_controller_cpp` で行う。現時点では `mpc_simulation`、reference path / velocity visualizer、Python 版 MPC との比較用途のため、CMakeLists.txt 内で Python 仮想環境も作成している（`execute_process` で `/usr/bin/python3 -m venv` + `pip install`）。Docker ビルド内で完結するため追加設定は不要だが、ビルド時間が増加する点に注意。
 
 ### 障害物回避
 
@@ -462,6 +463,6 @@ reference_path:
 | 切り替え | `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` |
 | トピック互換 | 入出力ともに一致、リマップ不要 |
 | 経路参照 | MPC: 独自 CSV / Pure Pursuit: `simple_trajectory_generator` |
-| MPC 起動方式 | `<include control/mpc.launch.xml>` 経由（インライン node ではない） |
+| MPC 起動方式 | `<include control/mpc.launch.xml>` 経由で `mpc_controller_cpp` を起動（インライン node ではない） |
 | パッケージ配置 | `aichallenge_submit/` 配下に統合済み（追加作業不要） |
-| ビルド注意 | Python venv 作成（pip install）によるビルド時間増加 |
+| ビルド注意 | C++ MPC は `osqp_vendor` を使用。補助 Python venv 作成（pip install）によるビルド時間増加は残る |

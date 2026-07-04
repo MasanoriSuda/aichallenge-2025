@@ -93,7 +93,7 @@ aichallenge_submit.launch.xml
 
 | `control_method` | 起動するノード（パッケージ） | 主な入力トピック |
 |---|---|---|
-| `mpc`（既定） | `multi_purpose_mpc_ros`（Python） | `/localization/kinematic_state`、`/planning/scenario_planning/trajectory` |
+| `mpc`（既定） | `multi_purpose_mpc_ros`（C++、`mpc_controller_cpp`） | `/localization/kinematic_state`、`/planning/scenario_planning/trajectory` |
 | `pure_pursuit` | `simple_pure_pursuit`（C++） | `/localization/kinematic_state`、`/planning/scenario_planning/trajectory` |
 | `tiny_lidar_net` | `tiny_lidar_net_controller`（Python） | `/scan`（`sensor_msgs/LaserScan`） |
 | `pilot_net` | `pilot_net_controller`（Python） | `/image_raw`（`sensor_msgs/Image`） |
@@ -141,7 +141,7 @@ AWSIM が publish し参加者ノードが subscribe するトピックです（
 
 | トピック | 型 | 確認元 |
 |---|---|---|
-| `/control/command/control_cmd` | `autoware_auto_control_msgs/AckermannControlCommand` | `pure_pursuit.launch.xml`（remap）、`mpc_controller.py`、`boost_commander.cpp`、`tiny_lidar_net_controller_node.py`、`pilot_net_controller_node.py` |
+| `/control/command/control_cmd` | `autoware_auto_control_msgs/AckermannControlCommand` | `pure_pursuit.launch.xml`（remap）、`mpc_controller_cpp.cpp`、`mpc_controller.py`（比較用 Python 版）、`boost_commander.cpp`、`tiny_lidar_net_controller_node.py`、`pilot_net_controller_node.py` |
 
 AWSIM はこのトピックを受けてカートを動かします。全制御方式（mpc / pure_pursuit / tiny_lidar_net / pilot_net）がこのトピックに収束します。
 

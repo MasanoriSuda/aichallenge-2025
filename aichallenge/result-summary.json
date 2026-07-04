@@ -1,0 +1,36 @@
+{
+    "schema_version": "v2",
+    "session": {
+        "required_laps": 2147483647,
+        "timeout": 10000000.0,
+        "total_vehicles": 1
+    },
+    "vehicles": [
+        {
+            "vehicle_number": 1,
+            "vehicle_name": "GoKart1",
+            "final_position": 1,
+            "finished": false,
+            "lap_count": 4,
+            "laps": [
+                51.12671661376953,
+                45.860591888427737,
+                46.100643157958987,
+                46.180660247802737
+            ],
+            "min_lap_time": 45.860591888427737,
+            "max_lap_time": 51.12671661376953,
+            "avg_lap_time": 47.31715393066406,
+            "total_lap_time": 189.26861572265626
+        }
+    ],
+    "laps": [
+        51.12671661376953,
+        45.860591888427737,
+        46.100643157958987,
+        46.180660247802737
+    ],
+    "min_time": 45.860591888427737,
+    "total_lap_time": 189.26861572265626,
+    "num_laps": 4
+}

@@ -213,6 +213,8 @@ MPC の config ファイル: `multi_purpose_mpc_ros/config/config.yaml`
 | `reference_path.csv_path` | `env/final_ver3/traj_mincurv.csv` | 最適化済み経路が存在するか |
 | `reference_path.update_by_topic` | `false` | CSV 直接読み込みモード（推奨） |
 | `mpc.steering_tire_angle_gain_var` | `1.639` | 実機値。sim では `1.50` が必要かも |
+| `mpc.center_bias` | `0.0` | `0.0` = CSV trajectory 追従、`1.0` = 左右制約中央寄せ |
+| `mpc.safety_margin_scale` | `1.0` | `0.0` = 追加 margin なし、`1.0` = 現行 margin |
 | `mpc.v_max` | `20.0` | 速度プリセット（中速）。環境に合わせて調整 |
 | `obstacles.csv_path` | `""` | 空 = トピック購読モード（障害物回避が off なので影響なし） |
 

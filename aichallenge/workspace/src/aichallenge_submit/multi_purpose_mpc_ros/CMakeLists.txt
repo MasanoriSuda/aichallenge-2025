@@ -61,6 +61,7 @@ install(PROGRAMS
   scripts/reference_velocity_configulator
   scripts/pure_pursuit_trajectory_editor
   scripts/trajectory_editor
+  scripts/v2x_position_editor
   DESTINATION lib/${PROJECT_NAME}
 )
 

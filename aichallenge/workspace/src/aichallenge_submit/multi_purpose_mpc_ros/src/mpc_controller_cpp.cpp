@@ -1,5 +1,6 @@
 #include <autoware_auto_control_msgs/msg/ackermann_control_command.hpp>
 #include <autoware_auto_planning_msgs/msg/trajectory.hpp>
+#include <builtin_interfaces/msg/time.hpp>
 #include <geometry_msgs/msg/point.hpp>
 #include <geometry_msgs/msg/pose2_d.hpp>
 #include <geometry_msgs/msg/quaternion.hpp>
@@ -36,6 +37,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -65,6 +67,7 @@ using std_msgs::msg::ColorRGBA;
 using std_msgs::msg::Empty;
 using std_msgs::msg::Float32MultiArray;
 using std_msgs::msg::Int32;
+using v2x_msgs::msg::V2XVehiclePositionArray;
 using visualization_msgs::msg::Marker;
 using visualization_msgs::msg::MarkerArray;
 
@@ -84,6 +87,11 @@ double wrap_to_pi(const double angle)
 double kmh_to_m_per_sec(const double kmh)
 {
   return kmh / 3.6;
+}
+
+double stamp_to_seconds(const builtin_interfaces::msg::Time & stamp)
+{
+  return static_cast<double>(stamp.sec) + static_cast<double>(stamp.nanosec) * 1e-9;
 }
 
 std::vector<std::string> split_csv_line(const std::string & line)
@@ -756,6 +764,62 @@ struct ReferencePath
     }
   }
 
+  bool set_path_constraints(
+    const std::vector<float> & upper_bounds, const std::vector<float> & lower_bounds,
+    const int rows, const int cols)
+  {
+    if (rows <= 0 || cols <= 0) {
+      return false;
+    }
+    if (
+      upper_bounds.size() != static_cast<std::size_t>(rows * cols) ||
+      lower_bounds.size() != static_cast<std::size_t>(rows * cols)) {
+      return false;
+    }
+
+    path_constraints_upper.assign(rows, std::vector<double>(cols, 0.0));
+    path_constraints_lower.assign(rows, std::vector<double>(cols, 0.0));
+    for (int row = 0; row < rows; ++row) {
+      for (int col = 0; col < cols; ++col) {
+        const std::size_t index = static_cast<std::size_t>(row * cols + col);
+        path_constraints_upper[row][col] = static_cast<double>(upper_bounds[index]);
+        path_constraints_lower[row][col] = static_cast<double>(lower_bounds[index]);
+      }
+    }
+    return true;
+  }
+
+  bool set_border_cells(
+    const std::vector<float> & dynamic_upper_bounds,
+    const std::vector<float> & dynamic_lower_bounds, const int rows, const int cols)
+  {
+    if (rows <= 0 || cols <= 0) {
+      return false;
+    }
+    if (
+      dynamic_upper_bounds.size() != static_cast<std::size_t>(rows * cols * 2) ||
+      dynamic_lower_bounds.size() != static_cast<std::size_t>(rows * cols * 2)) {
+      return false;
+    }
+
+    border_cells.dynamic_upper_bounds.assign(
+      rows, std::vector<std::pair<double, double>>(cols, {0.0, 0.0}));
+    border_cells.dynamic_lower_bounds.assign(
+      rows, std::vector<std::pair<double, double>>(cols, {0.0, 0.0}));
+    for (int row = 0; row < rows; ++row) {
+      for (int col = 0; col < cols; ++col) {
+        const std::size_t index = static_cast<std::size_t>((row * cols + col) * 2);
+        border_cells.dynamic_upper_bounds[row][col] = {
+          static_cast<double>(dynamic_upper_bounds[index]),
+          static_cast<double>(dynamic_upper_bounds[index + 1])};
+        border_cells.dynamic_lower_bounds[row][col] = {
+          static_cast<double>(dynamic_lower_bounds[index]),
+          static_cast<double>(dynamic_lower_bounds[index + 1])};
+      }
+    }
+    return true;
+  }
+
   Map * map{};
   std::vector<double> org_wp_x;
   std::vector<double> org_wp_y;
@@ -959,6 +1023,294 @@ struct BicycleModel
   TemporalState temporal_state;
 };
 
+struct V2XGapPlannerConfig
+{
+  bool enabled{false};
+  double vehicle_radius{1.25};
+  double prediction_margin{0.2};
+  double prediction_time{3.0};
+  double timeout_sec{1.0};
+  double position_jump_threshold{5.0};
+  double v_max_safety{30.0};
+  double self_filter_radius{1.5};
+  double min_gap_width{1.8};
+  double target_bias{1.0};
+  double no_gap_target_velocity{0.0};
+};
+
+struct GapPlannerOutput
+{
+  bool active{false};
+  bool feasible{true};
+  std::vector<double> lb;
+  std::vector<double> ub;
+  std::vector<double> target_ey;
+  std::vector<bool> target_active;
+  double target_velocity_limit{std::numeric_limits<double>::infinity()};
+};
+
+struct V2XGapPlanner
+{
+  struct TrackedVehicle
+  {
+    std::string id;
+    double x{};
+    double y{};
+    double covariance_x{};
+    double covariance_y{};
+    double stamp_sec{};
+    double receipt_sec{};
+    double vx{};
+    double vy{};
+    bool has_sample{false};
+  };
+
+  struct LateralInterval
+  {
+    double lower{};
+    double upper{};
+
+    double width() const
+    {
+      return upper - lower;
+    }
+
+    double center() const
+    {
+      return 0.5 * (lower + upper);
+    }
+  };
+
+  explicit V2XGapPlanner(const V2XGapPlannerConfig & cfg_in) : cfg(cfg_in) {}
+
+  void update(const V2XVehiclePositionArray & msg, const double receipt_sec)
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    const double array_stamp = stamp_to_seconds(msg.header.stamp);
+    for (const auto & vehicle : msg.vehicles) {
+      const std::string id = vehicle.vehicle_id.empty() ? "__unknown__" : vehicle.vehicle_id;
+      double sample_stamp = stamp_to_seconds(vehicle.header.stamp);
+      if (sample_stamp <= 0.0) {
+        sample_stamp = array_stamp > 0.0 ? array_stamp : receipt_sec;
+      }
+
+      auto & tracked = vehicles_[id];
+      double vx = 0.0;
+      double vy = 0.0;
+      if (tracked.has_sample) {
+        const double dt = sample_stamp - tracked.stamp_sec;
+        const double dx = vehicle.position.x - tracked.x;
+        const double dy = vehicle.position.y - tracked.y;
+        const double jump = std::hypot(dx, dy);
+        if (dt > kEps && jump <= cfg.position_jump_threshold) {
+          vx = dx / dt;
+          vy = dy / dt;
+          if (std::hypot(vx, vy) > cfg.v_max_safety) {
+            vx = 0.0;
+            vy = 0.0;
+          }
+        }
+      }
+
+      tracked.id = id;
+      tracked.x = vehicle.position.x;
+      tracked.y = vehicle.position.y;
+      tracked.covariance_x = std::max(0.0, static_cast<double>(vehicle.covariance.x));
+      tracked.covariance_y = std::max(0.0, static_cast<double>(vehicle.covariance.y));
+      tracked.stamp_sec = sample_stamp;
+      tracked.receipt_sec = receipt_sec;
+      tracked.vx = vx;
+      tracked.vy = vy;
+      tracked.has_sample = true;
+    }
+  }
+
+  GapPlannerOutput plan(
+    const BicycleModel & model, const int ref_wp_id, const int N, const Eigen::VectorXd & base_lb,
+    const Eigen::VectorXd & base_ub, const double now_sec)
+  {
+    GapPlannerOutput output;
+    if (!cfg.enabled || N <= 0) {
+      return output;
+    }
+
+    std::vector<TrackedVehicle> vehicles;
+    double desired_ey = model.spatial_state.e_y;
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      if (last_target_ey_.has_value()) {
+        desired_ey = last_target_ey_.value();
+      }
+      for (const auto & kv : vehicles_) {
+        const auto & tracked = kv.second;
+        if (!tracked.has_sample) {
+          continue;
+        }
+        if (now_sec - tracked.receipt_sec > cfg.timeout_sec) {
+          continue;
+        }
+        vehicles.push_back(tracked);
+      }
+    }
+
+    if (vehicles.empty()) {
+      return output;
+    }
+
+    output.lb.assign(N, 0.0);
+    output.ub.assign(N, 0.0);
+    output.target_ey.assign(N, 0.0);
+    output.target_active.assign(N, false);
+    bool any_obstacle_in_horizon = false;
+    bool feasible = true;
+    double selected_first_target = desired_ey;
+    bool first_target_selected = false;
+
+    for (int i = 0; i < N; ++i) {
+      const LateralInterval base{base_lb[i], base_ub[i]};
+      output.lb[i] = base.lower;
+      output.ub[i] = base.upper;
+      output.target_ey[i] = base.center();
+      if (base.width() <= kEps) {
+        continue;
+      }
+
+      const auto & waypoint = model.reference_path->get_waypoint(ref_wp_id + i);
+      const double horizon_t = std::min(static_cast<double>(i + 1) * model.Ts, cfg.prediction_time);
+      std::vector<LateralInterval> occupied;
+      for (const auto & vehicle : vehicles) {
+        const double age = std::max(0.0, now_sec - vehicle.stamp_sec);
+        const double pred_x = vehicle.x + vehicle.vx * (age + horizon_t);
+        const double pred_y = vehicle.y + vehicle.vy * (age + horizon_t);
+        const double self_distance =
+          std::hypot(pred_x - model.temporal_state.x, pred_y - model.temporal_state.y);
+        if (self_distance < cfg.self_filter_radius) {
+          continue;
+        }
+
+        const double dx = pred_x - waypoint.x;
+        const double dy = pred_y - waypoint.y;
+        const double longitudinal = std::cos(waypoint.psi) * dx + std::sin(waypoint.psi) * dy;
+        const double lateral = -std::sin(waypoint.psi) * dx + std::cos(waypoint.psi) * dy;
+        const double covariance_margin = std::max(vehicle.covariance_x, vehicle.covariance_y);
+        const double obstacle_radius =
+          std::max(0.0, cfg.vehicle_radius + cfg.prediction_margin + covariance_margin);
+        const double longitudinal_radius = obstacle_radius + 0.5 * model.length;
+        if (std::abs(longitudinal) > longitudinal_radius) {
+          continue;
+        }
+        if (lateral + obstacle_radius < base.lower || lateral - obstacle_radius > base.upper) {
+          continue;
+        }
+        occupied.push_back({lateral - obstacle_radius, lateral + obstacle_radius});
+      }
+
+      if (occupied.empty()) {
+        continue;
+      }
+
+      any_obstacle_in_horizon = true;
+      const auto free_intervals = compute_free_intervals(base, occupied);
+      if (free_intervals.empty()) {
+        feasible = false;
+        break;
+      }
+      const auto selected = select_interval(free_intervals, desired_ey);
+      output.lb[i] = selected.lower;
+      output.ub[i] = selected.upper;
+      output.target_ey[i] = selected.center();
+      output.target_active[i] = true;
+      desired_ey = output.target_ey[i];
+      if (!first_target_selected) {
+        selected_first_target = output.target_ey[i];
+        first_target_selected = true;
+      }
+    }
+
+    if (!any_obstacle_in_horizon) {
+      return GapPlannerOutput{};
+    }
+
+    output.active = true;
+    output.feasible = feasible;
+    if (!feasible) {
+      output.target_velocity_limit = std::max(0.0, cfg.no_gap_target_velocity);
+    }
+
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      if (feasible) {
+        last_target_ey_ = selected_first_target;
+      }
+    }
+    return output;
+  }
+
+  V2XGapPlannerConfig cfg;
+
+private:
+  std::vector<LateralInterval> compute_free_intervals(
+    const LateralInterval & base, std::vector<LateralInterval> occupied) const
+  {
+    std::vector<LateralInterval> merged;
+    for (auto & interval : occupied) {
+      interval.lower = std::max(interval.lower, base.lower);
+      interval.upper = std::min(interval.upper, base.upper);
+      if (interval.upper <= interval.lower) {
+        continue;
+      }
+      merged.push_back(interval);
+    }
+    std::sort(
+      merged.begin(), merged.end(),
+      [](const LateralInterval & lhs, const LateralInterval & rhs) {
+        return lhs.lower < rhs.lower;
+      });
+
+    std::vector<LateralInterval> free_intervals;
+    double cursor = base.lower;
+    for (const auto & interval : merged) {
+      if (interval.lower > cursor) {
+        free_intervals.push_back({cursor, interval.lower});
+      }
+      cursor = std::max(cursor, interval.upper);
+    }
+    if (cursor < base.upper) {
+      free_intervals.push_back({cursor, base.upper});
+    }
+
+    std::vector<LateralInterval> filtered;
+    const double min_width = std::max(0.0, cfg.min_gap_width);
+    for (const auto & interval : free_intervals) {
+      if (interval.width() >= min_width) {
+        filtered.push_back(interval);
+      }
+    }
+    return filtered;
+  }
+
+  LateralInterval select_interval(
+    const std::vector<LateralInterval> & intervals, const double desired_ey) const
+  {
+    auto best = intervals.front();
+    double best_score = std::numeric_limits<double>::infinity();
+    for (const auto & interval : intervals) {
+      const double center = interval.center();
+      const double score =
+        4.0 * std::abs(center - desired_ey) + 0.5 * std::abs(center) - 0.1 * interval.width();
+      if (score < best_score) {
+        best = interval;
+        best_score = score;
+      }
+    }
+    return best;
+  }
+
+  std::mutex mutex_;
+  std::unordered_map<std::string, TrackedVehicle> vehicles_;
+  std::optional<double> last_target_ey_;
+};
+
 struct MpcConfig
 {
   int N{};
@@ -978,6 +1330,7 @@ struct MpcConfig
   int wp_id_offset{};
   double center_bias{1.0};
   double safety_margin_scale{1.0};
+  V2XGapPlannerConfig v2x_gap;
   bool use_max_kappa_pred{};
 };
 
@@ -1002,9 +1355,14 @@ struct MPC
     use_path_constraints_topic(use_path_constraints_topic_in),
     current_control(Eigen::VectorXd::Zero(2 * cfg_in.N))
   {
-    if (!use_obstacle_avoidance) {
-      model->reference_path->update_simple_path_constraints(cfg.N, model->safety_margin);
-    }
+    (void)use_obstacle_avoidance;
+    (void)use_path_constraints_topic;
+    model->reference_path->update_simple_path_constraints(cfg.N, model->safety_margin);
+  }
+
+  void set_gap_planner(V2XGapPlanner * planner)
+  {
+    gap_planner = planner;
   }
 
   void update_v_max(const double v_max)
@@ -1022,7 +1380,7 @@ struct MPC
     cfg.wp_id_offset = wp_id_offset;
   }
 
-  MpcProblem init_problem(const int N, const double safety_margin)
+  MpcProblem init_problem(const int N, const double safety_margin, const double now_sec)
   {
     constexpr int nx = 3;
     constexpr int nu = 2;
@@ -1088,6 +1446,11 @@ struct MPC
     }
 
     int ref_wp_id = 0;
+    if (
+      model->reference_path->path_constraints_upper.empty() ||
+      model->reference_path->path_constraints_lower.empty()) {
+      model->reference_path->update_simple_path_constraints(cfg.N, model->safety_margin);
+    }
     if (!model->reference_path->path_constraints_upper.empty()) {
       ref_wp_id = (model->wp_id + 1) % static_cast<int>(model->reference_path->path_constraints_upper.size());
     }
@@ -1110,6 +1473,28 @@ struct MPC
       }
     }
 
+    const auto gap_output = gap_planner == nullptr ?
+      GapPlannerOutput{} :
+      gap_planner->plan(*model, ref_wp_id, N, lb, ub, now_sec);
+    if (gap_output.active) {
+      if (gap_output.feasible) {
+        for (int i = 0; i < N; ++i) {
+          lb[i] = std::max(lb[i], gap_output.lb[i]);
+          ub[i] = std::min(ub[i], gap_output.ub[i]);
+          if (ub[i] < lb[i]) {
+            ub[i] = 0.0;
+            lb[i] = 0.0;
+          }
+        }
+      } else {
+        const double no_gap_velocity = std::max(0.0, gap_output.target_velocity_limit);
+        for (int n = 0; n < N; ++n) {
+          umax_dyn[nu * n] = std::min(umax_dyn[nu * n], no_gap_velocity);
+          ur[nu * n] = std::min(ur[nu * n], no_gap_velocity);
+        }
+      }
+    }
+
     xmin_dyn[0] = model->spatial_state.e_y;
     xmax_dyn[0] = model->spatial_state.e_y;
     for (int i = 0; i < N; ++i) {
@@ -1117,6 +1502,13 @@ struct MPC
       xmax_dyn[nx + i * nx] = ub[i];
       const double center_ey = (lb[i] + ub[i]) / 2.0;
       xr[nx + i * nx] = cfg.center_bias * center_ey;
+      if (
+        gap_output.active && gap_output.feasible && i < static_cast<int>(gap_output.target_active.size()) &&
+        gap_output.target_active[i]) {
+        xr[nx + i * nx] =
+          (1.0 - cfg.v2x_gap.target_bias) * xr[nx + i * nx] +
+          cfg.v2x_gap.target_bias * gap_output.target_ey[i];
+      }
     }
 
     std::vector<Eigen::Triplet<double>> a_triplets;
@@ -1218,7 +1610,7 @@ struct MPC
     return solution_opt.value();
   }
 
-  std::pair<Eigen::Vector2d, double> get_control()
+  std::pair<Eigen::Vector2d, double> get_control(const double now_sec)
   {
     constexpr int nx = 3;
     constexpr int nu = 2;
@@ -1228,7 +1620,7 @@ struct MPC
       std::min(cfg.N, model->reference_path->n_waypoints - model->wp_id);
 
     model->spatial_state = model->t2s(*model->current_waypoint, model->temporal_state);
-    MpcProblem problem = init_problem(N, model->safety_margin);
+    MpcProblem problem = init_problem(N, model->safety_margin, now_sec);
 
     try {
       auto solution_opt = solve_problem(problem);
@@ -1247,7 +1639,7 @@ struct MPC
       if (!all_steers_non_zero) {
         for (int i = 1; i < 6; ++i) {
           const double relaxed_safety_margin = model->safety_margin * ((5.0 - i) / 5.0);
-          problem = init_problem(N, relaxed_safety_margin);
+          problem = init_problem(N, relaxed_safety_margin, now_sec);
           solution_opt = solve_problem(problem);
           if (!solution_opt.has_value()) {
             continue;
@@ -1317,6 +1709,7 @@ struct MPC
 
   BicycleModel * model{};
   MpcConfig cfg;
+  V2XGapPlanner * gap_planner{};
   bool use_obstacle_avoidance{};
   bool use_path_constraints_topic{};
   double previous_steering{0.0};
@@ -1396,6 +1789,35 @@ Config load_config(const std::string & path)
   cfg.mpc.center_bias = clip(mpc["center_bias"] ? mpc["center_bias"].as<double>() : 1.0, 0.0, 1.0);
   cfg.mpc.safety_margin_scale = std::max(
     0.0, mpc["safety_margin_scale"] ? mpc["safety_margin_scale"].as<double>() : 1.0);
+  const auto legacy_v2x = root["v2x_obstacle_avoidance"];
+  cfg.mpc.v2x_gap.enabled =
+    mpc["use_v2x_gap_planner"] ? mpc["use_v2x_gap_planner"].as<bool>() : false;
+  cfg.mpc.v2x_gap.vehicle_radius = std::max(
+    0.0, mpc["v2x_vehicle_radius"] ? mpc["v2x_vehicle_radius"].as<double>() :
+    (legacy_v2x && legacy_v2x["vehicle_radius"] ? legacy_v2x["vehicle_radius"].as<double>() : 1.25));
+  cfg.mpc.v2x_gap.prediction_margin = std::max(
+    0.0, mpc["v2x_prediction_margin"] ? mpc["v2x_prediction_margin"].as<double>() : 0.2);
+  cfg.mpc.v2x_gap.prediction_time = std::max(
+    0.0, mpc["v2x_prediction_time"] ? mpc["v2x_prediction_time"].as<double>() : 3.0);
+  cfg.mpc.v2x_gap.timeout_sec = std::max(
+    0.0, mpc["v2x_timeout_sec"] ? mpc["v2x_timeout_sec"].as<double>() : 1.0);
+  cfg.mpc.v2x_gap.position_jump_threshold = std::max(
+    0.0,
+    mpc["v2x_position_jump_threshold"] ? mpc["v2x_position_jump_threshold"].as<double>() :
+    (legacy_v2x && legacy_v2x["position_jump_threshold"] ?
+      legacy_v2x["position_jump_threshold"].as<double>() : 5.0));
+  cfg.mpc.v2x_gap.v_max_safety = std::max(
+    0.0, mpc["v2x_v_max_safety"] ? mpc["v2x_v_max_safety"].as<double>() :
+    (legacy_v2x && legacy_v2x["v_max_safety"] ? legacy_v2x["v_max_safety"].as<double>() : 30.0));
+  cfg.mpc.v2x_gap.self_filter_radius = std::max(
+    0.0, mpc["v2x_self_filter_radius"] ? mpc["v2x_self_filter_radius"].as<double>() :
+    std::max(1.0, cfg.bicycle_width));
+  cfg.mpc.v2x_gap.min_gap_width = std::max(
+    0.0, mpc["gap_min_width"] ? mpc["gap_min_width"].as<double>() : 1.8);
+  cfg.mpc.v2x_gap.target_bias = clip(
+    mpc["gap_target_bias"] ? mpc["gap_target_bias"].as<double>() : 1.0, 0.0, 1.0);
+  cfg.mpc.v2x_gap.no_gap_target_velocity = std::max(
+    0.0, mpc["no_gap_target_velocity"] ? mpc["no_gap_target_velocity"].as<double>() : 0.0);
   cfg.mpc.use_max_kappa_pred = mpc["use_max_kappa_pred"].as<bool>();
   return cfg;
 }
@@ -1476,7 +1898,10 @@ public:
     }
 
     using namespace std::literals::chrono_literals;
-    control_timer_ = create_wall_timer(10ms, std::bind(&MPCControllerCpp::control, this));
+    const auto control_period = std::chrono::duration_cast<std::chrono::nanoseconds>(
+      std::chrono::duration<double>(1.0 / std::max(1.0, mpc_cfg_.control_rate)));
+    control_timer_ = create_wall_timer(
+      control_period, std::bind(&MPCControllerCpp::control, this));
     ref_vel_marker_timer_ = create_wall_timer(10ms, [this]() {
       if (ref_vel_marker_pub_) {
         ref_vel_marker_pub_->publish(MarkerArray{});
@@ -1492,6 +1917,9 @@ public:
     }
     if (use_obstacle_avoidance_) {
       RCLCPP_WARN(get_logger(), "USE_OBSTACLE_AVOIDANCE is enabled!");
+    }
+    if (mpc_cfg_.v2x_gap.enabled) {
+      RCLCPP_WARN(get_logger(), "USE_V2X_GAP_PLANNER is enabled!");
     }
   }
 
@@ -1527,6 +1955,10 @@ private:
       1.0 / cfg_.mpc.control_rate);
     mpc_ = std::make_unique<MPC>(
       car_.get(), mpc_cfg_, use_obstacle_avoidance_, cfg_.reference_path.use_path_constraints_topic);
+    if (mpc_cfg_.v2x_gap.enabled) {
+      v2x_gap_planner_ = std::make_unique<V2XGapPlanner>(mpc_cfg_.v2x_gap);
+      mpc_->set_gap_planner(v2x_gap_planner_.get());
+    }
     reference_path_->compute_speed_profile(
       mpc_cfg_.a_min, mpc_cfg_.a_max, 0.0,
       use_bug_acc_ ? kmh_to_m_per_sec(40.0) : mpc_cfg_.v_max, mpc_cfg_.ay_max);
@@ -1652,13 +2084,30 @@ private:
           last_condition_ = msg->data;
         });
     }
-    if (use_obstacle_avoidance_) {
+    if (use_obstacle_avoidance_ && cfg_.reference_path.use_path_constraints_topic) {
       path_constraints_sub_ = create_subscription<PathConstraints>(
-        "/path_constraints_provider/path_constraints", 1, [](const PathConstraints::SharedPtr) {});
+        "/path_constraints_provider/path_constraints", 1, [this](const PathConstraints::SharedPtr msg) {
+          if (!reference_path_->set_path_constraints(msg->upper_bounds, msg->lower_bounds, msg->rows, msg->cols)) {
+            RCLCPP_WARN(get_logger(), "Invalid path constraints message ignored");
+          }
+        });
+    }
+    if (use_obstacle_avoidance_ && cfg_.reference_path.use_border_cells_topic) {
       border_cells_sub_ = create_subscription<BorderCells>(
-        "/path_constraints_provider/border_cells", 1, [](const BorderCells::SharedPtr) {});
-      v2x_sub_ = create_subscription<v2x_msgs::msg::V2XVehiclePositionArray>(
-        "/v2x/vehicle_positions", 1, [](const v2x_msgs::msg::V2XVehiclePositionArray::SharedPtr) {});
+        "/path_constraints_provider/border_cells", 1, [this](const BorderCells::SharedPtr msg) {
+          if (!reference_path_->set_border_cells(
+              msg->dynamic_upper_bounds, msg->dynamic_lower_bounds, msg->rows, msg->cols)) {
+            RCLCPP_WARN(get_logger(), "Invalid border cells message ignored");
+          }
+        });
+    }
+    if (use_obstacle_avoidance_ || mpc_cfg_.v2x_gap.enabled) {
+      v2x_sub_ = create_subscription<V2XVehiclePositionArray>(
+        "/v2x/vehicle_positions", 1, [this](const V2XVehiclePositionArray::SharedPtr msg) {
+          if (v2x_gap_planner_) {
+            v2x_gap_planner_->update(*msg, now().seconds());
+          }
+        });
     }
   }
 
@@ -1837,7 +2286,7 @@ private:
     const double actual_v = odom_->twist.twist.linear.x;
     car_->update_states(pose.x, pose.y, pose.theta);
 
-    auto [u, max_delta] = mpc_->get_control();
+    auto [u, max_delta] = mpc_->get_control(current_time.seconds());
     if (ref_vel_configulator_) {
       const double ref_vel_kmph = ref_vel_configulator_->get_ref_vel(mpc_->model->wp_id);
       const double ref_vel_mps = std::min(kmh_to_m_per_sec(ref_vel_kmph), mpc_cfg_.v_max);
@@ -1936,6 +2385,7 @@ private:
   std::unique_ptr<ReferencePath> reference_path_;
   std::unique_ptr<BicycleModel> car_;
   std::unique_ptr<MPC> mpc_;
+  std::unique_ptr<V2XGapPlanner> v2x_gap_planner_;
   std::unique_ptr<ReferenceVelocityConfigulator> ref_vel_configulator_;
 
   rclcpp::Publisher<AckermannControlCommand>::SharedPtr command_pub_;
@@ -1956,7 +2406,7 @@ private:
   rclcpp::Subscription<Int32>::SharedPtr condition_sub_;
   rclcpp::Subscription<PathConstraints>::SharedPtr path_constraints_sub_;
   rclcpp::Subscription<BorderCells>::SharedPtr border_cells_sub_;
-  rclcpp::Subscription<v2x_msgs::msg::V2XVehiclePositionArray>::SharedPtr v2x_sub_;
+  rclcpp::Subscription<V2XVehiclePositionArray>::SharedPtr v2x_sub_;
   rclcpp::TimerBase::SharedPtr control_timer_;
   rclcpp::TimerBase::SharedPtr ref_vel_marker_timer_;
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_callback_handle_;

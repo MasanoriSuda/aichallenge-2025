@@ -42,6 +42,23 @@ mpc:
 
 まず `center_bias: 0.0`, `safety_margin_scale: 1.0` で中央寄せだけを消し、必要に応じて `safety_margin_scale` を `0.7`, `0.5`, `0.3` の順に下げて確認します。
 
+#### V2X gap planner
+
+C++ MPC には `/v2x/vehicle_positions` から他車位置を受け取り、reference path 上の横方向 gap を選んで `lb/ub` と `xr` に反映する rule-based planner があります。既定では無効です。
+
+```yaml
+mpc:
+  use_v2x_gap_planner: false
+  v2x_vehicle_radius: 1.25
+  v2x_prediction_margin: 0.2
+  v2x_timeout_sec: 1.0
+  gap_min_width: 1.8
+  gap_target_bias: 1.0
+  no_gap_target_velocity: 0.0
+```
+
+`V2XVehiclePositionArray` は位置と covariance のみを持つため、C++ 側では vehicle_id ごとの直近2点から速度を推定します。初回、異常ジャンプ、過大速度時は静止障害物として扱います。gap がない場合は `no_gap_target_velocity` を速度上限として使います。
+
 ### MPC シミュレーション
 ```bash
 ros2 run multi_purpose_mpc_ros run_mpc_simulation.bash
@@ -59,6 +76,16 @@ Pure Pursuit 用の `simple_trajectory_generator/data/raceline_awsim_30km_from_g
 ```bash
 ros2 run multi_purpose_mpc_ros pure_pursuit_trajectory_editor
 ```
+
+### V2X position editor
+
+デバッグ用に仮想車両を地図上へ置き、`/v2x/vehicle_positions` を publish します。C++ MPC の `use_v2x_gap_planner: true` と組み合わせると、配置した車両を避ける方向へ制約が変わるか確認できます。
+
+```bash
+ros2 run multi_purpose_mpc_ros v2x_position_editor
+```
+
+左クリックで車両追加/選択、ドラッグで移動、右ドラッグまたは中ドラッグで pan、ホイールで zoom、Delete で削除します。配置は JSON で保存/読込できます。
 
 ### まとめて起動（コントローラー + シミュレーション）
 ```bash

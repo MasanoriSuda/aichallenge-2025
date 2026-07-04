@@ -39,7 +39,7 @@ bicycle_model:
   width: 1.45   # +safety margin
 
 mpc:
-  N: 15
+  N: 12
   # Q: [e_y, e_psi, t]
   # R: [v, delta]
   # QN: [e_y, e_psi, t]
@@ -60,16 +60,36 @@ mpc:
   center_bias: 0.0
   # 1.0 = current safety margin, 0.0 = no additional safety margin.
   safety_margin_scale: 0.0
+  # V2X-based rule gap planner. Keep disabled for baseline trajectory tracking.
+  use_v2x_gap_planner: true
+  v2x_vehicle_radius: 1.25
+  v2x_prediction_margin: 0.1
+  v2x_prediction_time: 3.0
+  v2x_timeout_sec: 1.0
+  v2x_position_jump_threshold: 5.0
+  v2x_v_max_safety: 30.0
+  v2x_self_filter_radius: 1.5
+  gap_min_width: 1.8
+  gap_target_bias: 1.0
+  no_gap_target_velocity: 0.0
   use_max_kappa_pred: true
 
 
-  ## ---------- 究極 ------------- ##
+  ## ---------- ver3 ------------- ##
   ## Lap1: 53s, Lap2: 47s
 
   v_max: 40.0   # km/h
   ay_max: 30.0  # m/s^2, maximum lateral acceleration in curves
-  Q: [600000.0, 100000000.0, 2000000.0]
-  QN: [1000000.0, 1000000.0, 10000.0]
+  Q:  [150000.0, 5000000.0, 100000.0]
+  QN: [100000.0, 100000.0, 1000.0]
+
+  ## ---------- 究極 ------------- ##
+  ## Lap1: 53s, Lap2: 47s
+
+  #v_max: 40.0   # km/h
+  #ay_max: 30.0  # m/s^2, maximum lateral acceleration in curves
+  #Q: [600000.0, 100000000.0, 2000000.0]
+  #QN: [1000000.0, 1000000.0, 10000.0]
 
   ## --- 高速 (gnss delay 0.3) --- ##
   ## Lap1: 55s, Lap2: 49s

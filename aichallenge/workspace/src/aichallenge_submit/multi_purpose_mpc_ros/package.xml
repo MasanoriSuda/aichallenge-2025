@@ -20,6 +20,7 @@
   <depend>nav_msgs</depend>
   <depend>osqp_vendor</depend>
   <depend>rcl_interfaces</depend>
+  <depend>rclpy</depend>
   <depend>std_msgs</depend>
   <depend>v2x_msgs</depend>
   <depend>visualization_msgs</depend>

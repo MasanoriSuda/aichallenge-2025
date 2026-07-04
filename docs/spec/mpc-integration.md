@@ -215,6 +215,7 @@ MPC の config ファイル: `multi_purpose_mpc_ros/config/config.yaml`
 | `mpc.steering_tire_angle_gain_var` | `1.639` | 実機値。sim では `1.50` が必要かも |
 | `mpc.center_bias` | `0.0` | `0.0` = CSV trajectory 追従、`1.0` = 左右制約中央寄せ |
 | `mpc.safety_margin_scale` | `1.0` | `0.0` = 追加 margin なし、`1.0` = 現行 margin |
+| `mpc.use_v2x_gap_planner` | `false` | `/v2x/vehicle_positions` から rule-based gap を作る暫定拡張。既定無効 |
 | `mpc.v_max` | `20.0` | 速度プリセット（中速）。環境に合わせて調整 |
 | `obstacles.csv_path` | `""` | 空 = トピック購読モード（障害物回避が off なので影響なし） |
 
@@ -451,6 +452,28 @@ reference_path:
 ```xml
 <param name="use_obstacle_avoidance" value="true"/>
 ```
+
+**C++ V2X gap planner（暫定拡張）:**
+
+C++ の `mpc_controller_cpp` には、`/v2x/vehicle_positions` を使って他車位置を横方向 occupied interval に変換し、reference path の `lb/ub` から free gap を選ぶ rule-based planner を追加している。これは 2026 公式仕様として確定した機能ではなく、現行 MPC の実験用拡張である。
+
+```yaml
+mpc:
+  use_v2x_gap_planner: false
+  v2x_vehicle_radius: 1.25
+  v2x_prediction_margin: 0.2
+  v2x_timeout_sec: 1.0
+  gap_min_width: 1.8
+  gap_target_bias: 1.0
+  no_gap_target_velocity: 0.0
+```
+
+- 既定 `false` なので、通常走行では従来の trajectory tracking のまま。
+- 有効時は `/v2x/vehicle_positions` を subscribe し、vehicle_id ごとの直近2点から速度を推定する。
+- 他車は円近似し、horizon waypoint ごとに `lb/ub` を狭める。
+- gap が選べる場合は `xr` を gap 中央へ寄せる。
+- gap がない場合は `no_gap_target_velocity` を速度上限として使う。
+- 実車・遠隔環境では使わず、先にシミュレータで wall / crash / over penalty を確認する。
 
 ### 提出ファイルへの影響
 

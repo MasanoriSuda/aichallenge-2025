@@ -30,6 +30,18 @@ Python 版は比較・検証用に残しています。
 ros2 run multi_purpose_mpc_ros run_mpc_controller.bash
 ```
 
+#### Wall-edge trajectory tuning
+
+`config/config.yaml` の `mpc.center_bias` と `mpc.safety_margin_scale` で、編集済み trajectory への追従と壁際の余白を調整できます。
+
+```yaml
+mpc:
+  center_bias: 0.0          # 0.0 = trajectory追従, 1.0 = 制約中央寄せ
+  safety_margin_scale: 1.0 # 0.0 = 追加marginなし, 1.0 = 現行margin
+```
+
+まず `center_bias: 0.0`, `safety_margin_scale: 1.0` で中央寄せだけを消し、必要に応じて `safety_margin_scale` を `0.7`, `0.5`, `0.3` の順に下げて確認します。
+
 ### MPC シミュレーション
 ```bash
 ros2 run multi_purpose_mpc_ros run_mpc_simulation.bash

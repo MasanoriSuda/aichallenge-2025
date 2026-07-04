@@ -56,6 +56,10 @@ mpc:
   accel_low_pass_gain: 1.0
   steer_low_pass_gain: 1.0
   wp_id_offset: 2
+  # 1.0 = target the center of path constraints, 0.0 = target the edited trajectory.
+  center_bias: 0.0
+  # 1.0 = current safety margin, 0.0 = no additional safety margin.
+  safety_margin_scale: 0.0
   use_max_kappa_pred: true
 
 

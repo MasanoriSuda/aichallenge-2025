@@ -787,8 +787,15 @@ struct SimpleSpatialState
 
 struct BicycleModel
 {
-  BicycleModel(ReferencePath * ref_path, const double length_in, const double width_in, const double Ts_in)
-  : length(length_in), width(width_in), safety_margin(compute_safety_margin()), reference_path(ref_path), Ts(Ts_in)
+  BicycleModel(
+    ReferencePath * ref_path, const double length_in, const double width_in,
+    const double safety_margin_scale_in, const double Ts_in)
+  : length(length_in),
+    width(width_in),
+    safety_margin_scale(std::max(0.0, safety_margin_scale_in)),
+    safety_margin(compute_safety_margin()),
+    reference_path(ref_path),
+    Ts(Ts_in)
   {
     current_waypoint = &reference_path->waypoints.at(wp_id);
     temporal_state = s2t(*current_waypoint, spatial_state);
@@ -796,7 +803,7 @@ struct BicycleModel
 
   double compute_safety_margin() const
   {
-    return width / std::sqrt(2.0);
+    return width / std::sqrt(2.0) * safety_margin_scale;
   }
 
   TemporalState s2t(const Waypoint & reference_waypoint, const SimpleSpatialState & reference_state) const
@@ -941,6 +948,7 @@ struct BicycleModel
 
   double length{};
   double width{};
+  double safety_margin_scale{};
   double safety_margin{};
   ReferencePath * reference_path{};
   double s{0.0};
@@ -968,6 +976,8 @@ struct MpcConfig
   double accel_low_pass_gain{};
   double steer_low_pass_gain{};
   int wp_id_offset{};
+  double center_bias{1.0};
+  double safety_margin_scale{1.0};
   bool use_max_kappa_pred{};
 };
 
@@ -1105,7 +1115,8 @@ struct MPC
     for (int i = 0; i < N; ++i) {
       xmin_dyn[nx + i * nx] = lb[i];
       xmax_dyn[nx + i * nx] = ub[i];
-      xr[nx + i * nx] = (lb[i] + ub[i]) / 2.0;
+      const double center_ey = (lb[i] + ub[i]) / 2.0;
+      xr[nx + i * nx] = cfg.center_bias * center_ey;
     }
 
     std::vector<Eigen::Triplet<double>> a_triplets;
@@ -1382,6 +1393,9 @@ Config load_config(const std::string & path)
   cfg.mpc.accel_low_pass_gain = mpc["accel_low_pass_gain"].as<double>();
   cfg.mpc.steer_low_pass_gain = mpc["steer_low_pass_gain"].as<double>();
   cfg.mpc.wp_id_offset = mpc["wp_id_offset"].as<int>();
+  cfg.mpc.center_bias = clip(mpc["center_bias"] ? mpc["center_bias"].as<double>() : 1.0, 0.0, 1.0);
+  cfg.mpc.safety_margin_scale = std::max(
+    0.0, mpc["safety_margin_scale"] ? mpc["safety_margin_scale"].as<double>() : 1.0);
   cfg.mpc.use_max_kappa_pred = mpc["use_max_kappa_pred"].as<bool>();
   return cfg;
 }
@@ -1509,7 +1523,8 @@ private:
       map_.get(), wp_x, wp_y, cfg_.reference_path.resolution, cfg_.reference_path.smoothing_distance,
       cfg_.reference_path.max_width, cfg_.reference_path.circular);
     car_ = std::make_unique<BicycleModel>(
-      reference_path_.get(), cfg_.bicycle_length, cfg_.bicycle_width, 1.0 / cfg_.mpc.control_rate);
+      reference_path_.get(), cfg_.bicycle_length, cfg_.bicycle_width, mpc_cfg_.safety_margin_scale,
+      1.0 / cfg_.mpc.control_rate);
     mpc_ = std::make_unique<MPC>(
       car_.get(), mpc_cfg_, use_obstacle_avoidance_, cfg_.reference_path.use_path_constraints_topic);
     reference_path_->compute_speed_profile(

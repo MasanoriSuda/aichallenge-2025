@@ -1079,10 +1079,22 @@ struct V2XBehaviorConfig
   double follow_distance{8.0};
   double safety_brake_distance{3.0};
   double safety_brake_margin{2.0};
+  bool follow_speed_limit_enabled{false};
   double follow_velocity{5.0};
   double safety_brake_velocity{0.0};
   double overtake_min_gap_width{2.0};
   double overtake_max_curvature{0.05};
+  bool overtake_guard_enabled{true};
+  double overtake_guard_min_gap_width{2.5};
+  int overtake_guard_min_gap_points{3};
+  double overtake_guard_min_prepare_distance{8.0};
+  double overtake_guard_max_lateral_shift{1.2};
+  double overtake_guard_min_front_distance{3.0};
+  double moving_front_speed_threshold{1.0};
+  double moving_follow_speed_margin{2.0};
+  double moving_safety_brake_distance{1.5};
+  double moving_safety_brake_margin{1.0};
+  double start_grid_grace_time{0.0};
   bool require_gap_for_overtake{true};
   bool low_speed_avoidance_enabled{false};
   bool low_speed_local_path_enabled{false};
@@ -2141,6 +2153,10 @@ struct MpcConfig
   double safety_margin_scale{1.0};
   int ros_domain_id{-1};
   bool domain_v_max_applied{false};
+  double domain_start_v_max{std::numeric_limits<double>::infinity()};
+  double domain_start_v_max_kmh{std::numeric_limits<double>::infinity()};
+  double domain_start_v_max_duration{0.0};
+  bool domain_start_v_max_applied{false};
   V2XGapPlannerConfig v2x_gap;
   V2XBehaviorConfig v2x_behavior;
   bool use_max_kappa_pred{};
@@ -2206,6 +2222,13 @@ struct MPC
       return output;
     }
 
+    if (!std::isfinite(first_v2x_behavior_eval_sec)) {
+      first_v2x_behavior_eval_sec = now_sec;
+    }
+    const bool start_grid_grace_active =
+      cfg.v2x_behavior.start_grid_grace_time > 0.0 &&
+      now_sec - first_v2x_behavior_eval_sec < cfg.v2x_behavior.start_grid_grace_time;
+
     const auto vehicles = gap_planner->active_vehicles(now_sec);
     if (vehicles.empty()) {
       output.reason = "no active vehicles";
@@ -2222,13 +2245,13 @@ struct MPC
       model->length + cfg.v2x_gap.vehicle_radius + cfg.v2x_gap.prediction_margin;
     const double danger_lateral_range = cfg.v2x_gap.vehicle_radius + cfg.v2x_gap.prediction_margin;
     const double brake_decel = std::max(kEps, std::abs(cfg.a_min));
-    const double stop_distance =
+    const double stopped_stop_distance =
       current_speed_mps_ * current_speed_mps_ / (2.0 * brake_decel) +
       std::max(0.0, cfg.v2x_behavior.safety_brake_margin);
-    const double safety_brake_distance =
-      std::max(cfg.v2x_behavior.safety_brake_distance, stop_distance);
+    const double stopped_safety_brake_distance =
+      std::max(cfg.v2x_behavior.safety_brake_distance, stopped_stop_distance);
     const double front_detection_distance =
-      std::max(cfg.v2x_behavior.follow_distance, safety_brake_distance);
+      std::max(cfg.v2x_behavior.follow_distance, stopped_safety_brake_distance);
 
     bool has_front_vehicle = false;
     bool has_danger_vehicle = false;
@@ -2260,13 +2283,27 @@ struct MPC
         longitudinal > -side_longitudinal_range) {
         has_low_speed_clearance_vehicle = true;
       }
-      if (longitudinal > 0.0 && longitudinal < front_detection_distance) {
+      const bool front_overlap = std::abs(lateral) <= danger_lateral_range;
+      if (front_overlap && longitudinal > 0.0 && longitudinal < front_detection_distance) {
+        const double vehicle_speed = std::hypot(vehicle.vx, vehicle.vy);
         has_front_vehicle = true;
         if (longitudinal < nearest_front_distance) {
           nearest_front_distance = longitudinal;
-          nearest_front_speed = std::hypot(vehicle.vx, vehicle.vy);
+          nearest_front_speed = vehicle_speed;
         }
-        if (longitudinal < safety_brake_distance && std::abs(lateral) <= danger_lateral_range) {
+        const bool moving_front =
+          vehicle_speed > cfg.v2x_behavior.moving_front_speed_threshold;
+        const double closing_speed =
+          moving_front ? std::max(0.0, current_speed_mps_ - vehicle_speed) : current_speed_mps_;
+        const double front_stop_distance =
+          closing_speed * closing_speed / (2.0 * brake_decel) +
+          (moving_front ?
+          std::max(0.0, cfg.v2x_behavior.moving_safety_brake_margin) :
+          std::max(0.0, cfg.v2x_behavior.safety_brake_margin));
+        const double front_safety_brake_distance = moving_front ?
+          std::max(cfg.v2x_behavior.moving_safety_brake_distance, front_stop_distance) :
+          std::max(cfg.v2x_behavior.safety_brake_distance, front_stop_distance);
+        if (longitudinal < front_safety_brake_distance) {
           has_danger_vehicle = true;
         }
       }
@@ -2276,10 +2313,13 @@ struct MPC
     }
 
     output.front_distance = nearest_front_distance;
+    const bool suppress_start_grid_stop_behavior =
+      start_grid_grace_active && has_side_vehicle;
     const bool overtake_forbidden =
       is_overtake_forbidden_wp(ref_wp_id) || is_overtake_forbidden_curvature(ref_wp_id, N);
     const bool low_speed_avoidance_candidate =
       cfg.v2x_behavior.low_speed_avoidance_enabled && has_front_vehicle &&
+      !suppress_start_grid_stop_behavior &&
       nearest_front_speed <= cfg.v2x_behavior.low_speed_avoidance_max_front_speed &&
       (!overtake_forbidden || continuing_low_speed_avoidance) &&
       nearest_front_distance <= cfg.v2x_behavior.low_speed_avoidance_distance;
@@ -2314,7 +2354,7 @@ struct MPC
       low_speed_avoidance_gap_blocked = !continuing_low_speed_avoidance;
     }
 
-    if (has_danger_vehicle) {
+    if (has_danger_vehicle && !suppress_start_grid_stop_behavior) {
       output.state = V2XBehaviorState::SafetyBrake;
       output.reason = "inside stopping distance";
       return commit_v2x_behavior_state(output, now_sec);
@@ -2331,24 +2371,41 @@ struct MPC
     if (low_speed_avoidance_gap_blocked) {
       output.state = V2XBehaviorState::Follow;
       output.reason = "low-speed gap unavailable";
-      output.target_velocity_limit = front_distance_velocity_limit(nearest_front_distance);
+      if (cfg.v2x_behavior.follow_speed_limit_enabled) {
+        output.target_velocity_limit =
+          follow_velocity_limit(nearest_front_distance, nearest_front_speed);
+      }
       return commit_v2x_behavior_state(output, now_sec);
     }
 
-    bool overtake_gap_available = !cfg.v2x_behavior.require_gap_for_overtake;
-    if (has_front_vehicle && !overtake_forbidden && cfg.v2x_behavior.require_gap_for_overtake) {
+    bool overtake_gap_available =
+      !cfg.v2x_behavior.require_gap_for_overtake && !cfg.v2x_behavior.overtake_guard_enabled;
+    std::string overtake_block_reason = "no overtake gap";
+    if (
+      has_front_vehicle && !overtake_forbidden &&
+      (cfg.v2x_behavior.require_gap_for_overtake || cfg.v2x_behavior.overtake_guard_enabled)) {
       const auto candidate_gap = gap_planner->plan(*model, ref_wp_id, N, lb, ub, now_sec, false);
-      overtake_gap_available = has_sufficient_overtake_gap(candidate_gap);
+      if (cfg.v2x_behavior.overtake_guard_enabled) {
+        overtake_gap_available = overtake_guard_allows(
+          candidate_gap, ref_wp_id, nearest_front_distance, model->spatial_state.e_y,
+          overtake_block_reason);
+      } else {
+        overtake_gap_available = has_sufficient_overtake_gap(candidate_gap);
+      }
     }
 
     if (has_front_vehicle) {
       if (!overtake_forbidden && overtake_gap_available) {
         output.state = V2XBehaviorState::Overtake;
-        output.reason = "front vehicle and gap available";
+        output.reason = cfg.v2x_behavior.overtake_guard_enabled ?
+          "front vehicle and guarded gap available" : "front vehicle and gap available";
       } else {
         output.state = V2XBehaviorState::Follow;
-        output.reason = overtake_forbidden ? "overtake forbidden" : "no overtake gap";
-        output.target_velocity_limit = front_distance_velocity_limit(nearest_front_distance);
+        output.reason = overtake_forbidden ? "overtake forbidden" : overtake_block_reason;
+        if (cfg.v2x_behavior.follow_speed_limit_enabled) {
+          output.target_velocity_limit =
+            follow_velocity_limit(nearest_front_distance, nearest_front_speed);
+        }
       }
       return commit_v2x_behavior_state(output, now_sec);
     }
@@ -2736,6 +2793,7 @@ struct MPC
   V2XBehaviorState v2x_behavior_state{V2XBehaviorState::Cruise};
   bool v2x_behavior_state_initialized{false};
   double last_v2x_behavior_state_change_sec{-std::numeric_limits<double>::infinity()};
+  double first_v2x_behavior_eval_sec{std::numeric_limits<double>::infinity()};
   double previous_steering{0.0};
   double current_speed_mps_{0.0};
 
@@ -2843,6 +2901,73 @@ private:
     return has_sufficient_gap(gap_output, cfg.v2x_behavior.overtake_min_gap_width);
   }
 
+  double horizon_path_distance_to_index(const int ref_wp_id, const std::size_t target_index) const
+  {
+    double distance = 0.0;
+    for (std::size_t i = 0; i <= target_index; ++i) {
+      const auto & p0 = model->reference_path->get_waypoint(ref_wp_id + static_cast<int>(i));
+      const auto & p1 = model->reference_path->get_waypoint(ref_wp_id + static_cast<int>(i) + 1);
+      distance += p0.distance_to(p1);
+    }
+    return distance;
+  }
+
+  bool overtake_guard_allows(
+    const GapPlannerOutput & gap_output, const int ref_wp_id, const double front_distance,
+    const double current_ey, std::string & block_reason) const
+  {
+    const double min_front_distance =
+      std::max(0.0, cfg.v2x_behavior.overtake_guard_min_front_distance);
+    if (min_front_distance > kEps && front_distance < min_front_distance) {
+      block_reason = "overtake guard front distance";
+      return false;
+    }
+
+    const double required_width = std::max(
+      cfg.v2x_behavior.overtake_min_gap_width,
+      cfg.v2x_behavior.overtake_guard_min_gap_width);
+    const int min_points = std::max(1, cfg.v2x_behavior.overtake_guard_min_gap_points);
+    if (!has_consecutive_sufficient_gap(gap_output, required_width, min_points)) {
+      block_reason = "overtake guard gap width";
+      return false;
+    }
+
+    double first_gap_distance = std::numeric_limits<double>::infinity();
+    double max_lateral_shift = 0.0;
+    for (std::size_t i = 0; i < gap_output.target_active.size(); ++i) {
+      if (!gap_output.target_active[i] || i >= gap_output.lb.size() || i >= gap_output.ub.size()) {
+        continue;
+      }
+      if (gap_output.ub[i] - gap_output.lb[i] < required_width) {
+        continue;
+      }
+      if (!std::isfinite(first_gap_distance)) {
+        first_gap_distance = horizon_path_distance_to_index(ref_wp_id, i);
+      }
+      if (i < gap_output.target_ey.size()) {
+        max_lateral_shift = std::max(
+          max_lateral_shift, std::abs(gap_output.target_ey[i] - current_ey));
+      }
+    }
+
+    const double min_prepare_distance =
+      std::max(0.0, cfg.v2x_behavior.overtake_guard_min_prepare_distance);
+    if (min_prepare_distance > kEps && first_gap_distance < min_prepare_distance) {
+      block_reason = "overtake guard prepare distance";
+      return false;
+    }
+
+    const double max_allowed_shift =
+      std::max(0.0, cfg.v2x_behavior.overtake_guard_max_lateral_shift);
+    if (max_allowed_shift > kEps && max_lateral_shift > max_allowed_shift) {
+      block_reason = "overtake guard lateral shift";
+      return false;
+    }
+
+    block_reason = "front vehicle and guarded gap available";
+    return true;
+  }
+
   double front_distance_velocity_limit(const double front_distance) const
   {
     if (!std::isfinite(front_distance)) {
@@ -2855,6 +2980,17 @@ private:
       return 0.0;
     }
     return std::sqrt(2.0 * brake_decel * available_distance);
+  }
+
+  double follow_velocity_limit(const double front_distance, const double front_speed) const
+  {
+    if (
+      std::isfinite(front_speed) &&
+      front_speed > cfg.v2x_behavior.moving_front_speed_threshold) {
+      return std::min(
+        cfg.v_max, front_speed + std::max(0.0, cfg.v2x_behavior.moving_follow_speed_margin));
+    }
+    return front_distance_velocity_limit(front_distance);
   }
 
   V2XBehaviorOutput commit_v2x_behavior_state(V2XBehaviorOutput output, const double now_sec)
@@ -2875,7 +3011,7 @@ private:
       output.allow_gap_planner = true;
       output.target_velocity_limit = std::min(
         output.target_velocity_limit, std::max(0.0, cfg.v2x_behavior.low_speed_avoidance_velocity));
-    } else if (final_state == V2XBehaviorState::Follow) {
+    } else if (final_state == V2XBehaviorState::Follow && cfg.v2x_behavior.follow_speed_limit_enabled) {
       output.target_velocity_limit = std::min(
         output.target_velocity_limit, std::max(0.0, cfg.v2x_behavior.follow_velocity));
     } else if (final_state == V2XBehaviorState::SafetyBrake) {
@@ -2979,6 +3115,21 @@ Config load_config(const std::string & path)
       break;
     }
   }
+  cfg.mpc.domain_start_v_max_duration = std::max(
+    0.0,
+    mpc["domain_start_v_max_duration"] ?
+    mpc["domain_start_v_max_duration"].as<double>() : 0.0);
+  if (mpc["domain_start_v_max"] && ros_domain_id.has_value()) {
+    for (const auto & item : mpc["domain_start_v_max"]) {
+      if (item.first.as<int>() != ros_domain_id.value()) {
+        continue;
+      }
+      cfg.mpc.domain_start_v_max_kmh = std::max(0.0, item.second.as<double>());
+      cfg.mpc.domain_start_v_max = kmh_to_m_per_sec(cfg.mpc.domain_start_v_max_kmh);
+      cfg.mpc.domain_start_v_max_applied = true;
+      break;
+    }
+  }
   cfg.mpc.a_min = mpc["a_min"].as<double>();
   cfg.mpc.a_max = mpc["a_max"].as<double>();
   cfg.mpc.ay_max = mpc["ay_max"].as<double>();
@@ -3076,6 +3227,9 @@ Config load_config(const std::string & path)
     mpc["v2x_safety_brake_distance"] ? mpc["v2x_safety_brake_distance"].as<double>() : 3.0);
   cfg.mpc.v2x_behavior.safety_brake_margin = std::max(
     0.0, mpc["v2x_safety_brake_margin"] ? mpc["v2x_safety_brake_margin"].as<double>() : 2.0);
+  cfg.mpc.v2x_behavior.follow_speed_limit_enabled =
+    mpc["v2x_follow_speed_limit_enabled"] ?
+    mpc["v2x_follow_speed_limit_enabled"].as<bool>() : false;
   cfg.mpc.v2x_behavior.follow_velocity = std::max(
     0.0, mpc["v2x_follow_velocity"] ? mpc["v2x_follow_velocity"].as<double>() : 5.0);
   cfg.mpc.v2x_behavior.safety_brake_velocity = std::max(
@@ -3086,6 +3240,49 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_max_curvature = std::max(
     0.0,
     mpc["v2x_overtake_max_curvature"] ? mpc["v2x_overtake_max_curvature"].as<double>() : 0.05);
+  cfg.mpc.v2x_behavior.overtake_guard_enabled =
+    mpc["v2x_overtake_guard_enabled"] ?
+    mpc["v2x_overtake_guard_enabled"].as<bool>() : true;
+  cfg.mpc.v2x_behavior.overtake_guard_min_gap_width = std::max(
+    0.0,
+    mpc["v2x_overtake_guard_min_gap_width"] ?
+    mpc["v2x_overtake_guard_min_gap_width"].as<double>() : 2.5);
+  cfg.mpc.v2x_behavior.overtake_guard_min_gap_points = std::max(
+    1,
+    mpc["v2x_overtake_guard_min_gap_points"] ?
+    mpc["v2x_overtake_guard_min_gap_points"].as<int>() : 3);
+  cfg.mpc.v2x_behavior.overtake_guard_min_prepare_distance = std::max(
+    0.0,
+    mpc["v2x_overtake_guard_min_prepare_distance"] ?
+    mpc["v2x_overtake_guard_min_prepare_distance"].as<double>() : 8.0);
+  cfg.mpc.v2x_behavior.overtake_guard_max_lateral_shift = std::max(
+    0.0,
+    mpc["v2x_overtake_guard_max_lateral_shift"] ?
+    mpc["v2x_overtake_guard_max_lateral_shift"].as<double>() : 1.2);
+  cfg.mpc.v2x_behavior.overtake_guard_min_front_distance = std::max(
+    0.0,
+    mpc["v2x_overtake_guard_min_front_distance"] ?
+    mpc["v2x_overtake_guard_min_front_distance"].as<double>() : 3.0);
+  cfg.mpc.v2x_behavior.moving_front_speed_threshold = std::max(
+    0.0,
+    mpc["v2x_moving_front_speed_threshold"] ?
+    mpc["v2x_moving_front_speed_threshold"].as<double>() : 1.0);
+  cfg.mpc.v2x_behavior.moving_follow_speed_margin = std::max(
+    0.0,
+    mpc["v2x_moving_follow_speed_margin"] ?
+    mpc["v2x_moving_follow_speed_margin"].as<double>() : 2.0);
+  cfg.mpc.v2x_behavior.moving_safety_brake_distance = std::max(
+    0.0,
+    mpc["v2x_moving_safety_brake_distance"] ?
+    mpc["v2x_moving_safety_brake_distance"].as<double>() : 1.5);
+  cfg.mpc.v2x_behavior.moving_safety_brake_margin = std::max(
+    0.0,
+    mpc["v2x_moving_safety_brake_margin"] ?
+    mpc["v2x_moving_safety_brake_margin"].as<double>() : 1.0);
+  cfg.mpc.v2x_behavior.start_grid_grace_time = std::max(
+    0.0,
+    mpc["v2x_start_grid_grace_time"] ?
+    mpc["v2x_start_grid_grace_time"].as<double>() : 0.0);
   cfg.mpc.v2x_behavior.require_gap_for_overtake =
     mpc["v2x_require_gap_for_overtake"] ?
     mpc["v2x_require_gap_for_overtake"].as<bool>() : true;
@@ -3259,6 +3456,13 @@ public:
     RCLCPP_INFO(
       get_logger(), "MPC wp_id_offset: normal=%d, low=%d below %.2f km/h",
       mpc_cfg_.wp_id_offset, mpc_cfg_.wp_id_low_offset, mpc_cfg_.wp_id_low_speed_kmh);
+    if (mpc_cfg_.domain_start_v_max_applied) {
+      RCLCPP_INFO(
+        get_logger(),
+        "domain_start_v_max applied: ROS_DOMAIN_ID=%d, v_max=%.2f km/h for %.2f sec",
+        mpc_cfg_.ros_domain_id, mpc_cfg_.domain_start_v_max_kmh,
+        mpc_cfg_.domain_start_v_max_duration);
+    }
     if (mpc_cfg_.v2x_gap.enabled) {
       RCLCPP_WARN(get_logger(), "USE_V2X_GAP_PLANNER is enabled!");
     }
@@ -3661,13 +3865,24 @@ private:
     car_->update_states(pose.x, pose.y, pose.theta);
     mpc_->update_current_speed(std::abs(actual_v));
 
-    auto [u, max_delta] = mpc_->get_control(current_time.seconds());
+    double effective_v_max = mpc_cfg_.v_max;
+    if (
+      mpc_cfg_.domain_start_v_max_applied &&
+      mpc_cfg_.domain_start_v_max_duration > 0.0 &&
+      std::isfinite(mpc_cfg_.domain_start_v_max)) {
+      const double elapsed_sec = (current_time - t_start_).seconds();
+      if (elapsed_sec <= mpc_cfg_.domain_start_v_max_duration) {
+        effective_v_max = std::min(effective_v_max, mpc_cfg_.domain_start_v_max);
+      }
+    }
     if (ref_vel_configulator_) {
       const double ref_vel_kmph = ref_vel_configulator_->get_ref_vel(mpc_->model->wp_id);
-      const double ref_vel_mps = std::min(kmh_to_m_per_sec(ref_vel_kmph), mpc_cfg_.v_max);
-      mpc_->update_v_max(ref_vel_mps);
-      reference_path_->set_v_ref(std::vector<double>(reference_path_->waypoints.size(), ref_vel_mps));
+      effective_v_max = std::min(kmh_to_m_per_sec(ref_vel_kmph), effective_v_max);
     }
+    mpc_->update_v_max(effective_v_max);
+    reference_path_->set_v_ref(std::vector<double>(reference_path_->waypoints.size(), effective_v_max));
+
+    auto [u, max_delta] = mpc_->get_control(current_time.seconds());
 
     if (!enable_control_) {
       const double last_v_cmd = last_u_[0];

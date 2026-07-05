@@ -221,6 +221,8 @@ MPC の config ファイル: `multi_purpose_mpc_ros/config/config.yaml`
 | `mpc.use_v2x_gap_planner` | `false` | `/v2x/vehicle_positions` から rule-based gap を作る暫定拡張。既定無効 |
 | `mpc.v_max` | `20.0` | 速度プリセット（中速）。環境に合わせて調整 |
 | `mpc.domain_v_max` | 未設定 | `ROS_DOMAIN_ID` ごとの最高車速上書き。値は km/h |
+| `mpc.domain_start_v_max` | 未設定 | `ROS_DOMAIN_ID` ごとのスタート限定最高車速上書き。値は km/h |
+| `mpc.domain_start_v_max_duration` | `0.0` | `domain_start_v_max` を適用する開始後秒数 |
 | `obstacles.csv_path` | `""` | 空 = トピック購読モード（障害物回避が off なので影響なし） |
 
 **コースが変更された場合**（例: 新しい lanelet2_map.osm が配布された場合）は、「事前準備」セクションの手順に従って OGM と経路を再生成する。
@@ -502,10 +504,22 @@ mpc:
   v2x_follow_distance: 8.0
   v2x_safety_brake_distance: 3.0
   v2x_safety_brake_margin: 2.0
+  v2x_follow_speed_limit_enabled: false
   v2x_follow_velocity: 5.0
   v2x_safety_brake_velocity: 0.0
   v2x_overtake_min_gap_width: 2.0
   v2x_overtake_max_curvature: 0.05
+  v2x_overtake_guard_enabled: true
+  v2x_overtake_guard_min_gap_width: 2.5
+  v2x_overtake_guard_min_gap_points: 3
+  v2x_overtake_guard_min_prepare_distance: 8.0
+  v2x_overtake_guard_max_lateral_shift: 1.2
+  v2x_overtake_guard_min_front_distance: 3.0
+  v2x_moving_front_speed_threshold: 1.0
+  v2x_moving_follow_speed_margin: 2.0
+  v2x_moving_safety_brake_distance: 1.5
+  v2x_moving_safety_brake_margin: 1.0
+  v2x_start_grid_grace_time: 0.0
   v2x_require_gap_for_overtake: true
   v2x_low_speed_avoidance_enabled: false
   use_v2x_local_path_planner: false
@@ -526,8 +540,8 @@ mpc:
 ```
 
 - `Cruise`: 他車なし。V2X 由来の横目標変更は入れない。
-- `Follow`: 前方車あり、追い抜き禁止または gap 不足。gap planner を使わず、`v2x_follow_velocity` と前方距離から計算した停止可能速度の小さい方に速度制限する。
-- `Overtake`: 低曲率かつ十分な gap がある場合だけ gap planner を許可する。
+- `Follow`: 前方車あり、追い抜き禁止または gap 不足。レース中に競り負けた直後の不要な失速を避けるため、既定では速度制限を入れない。`v2x_follow_speed_limit_enabled=true` の場合だけ、停止/低速車には前方距離から計算した停止可能速度を使い、`v2x_moving_front_speed_threshold` より速い前走車には前走車速度 + `v2x_moving_follow_speed_margin` を上限にする。
+- `Overtake`: 低曲率かつ十分な gap がある場合だけ gap planner を許可する。`v2x_overtake_guard_enabled=true` の場合は、gap 幅だけでなく、連続した gap 点数、gap までの準備距離、現在 lateral から target までの横移動量、前方車との距離を追加確認してから Overtake に入る。これにより、通れない側へ一瞬振ってから反対側へ戻るような近距離 gap 飛び込みを Follow / SafetyBrake 側へ倒す。
 - `LowSpeedAvoidance`: 近距離の低速前方車両に対して通過可能な側がある場合、SafetyBrake より先に `v2x_low_speed_avoidance_velocity` へ速度制限して徐行回避する。開始条件では `v2x_low_speed_avoidance_max_front_speed` 以下の V2X 推定速度を低速車両として扱う。
 - 低速回避では `v2x_low_speed_pass_side` で通過側を `auto` / `left` / `right` から選べる。`right` は reference path 座標系の負の lateral 側、`left` は正の lateral 側である。`auto` の場合は最初に選んだ側を低速回避中の side lock として使う。configured side に通過可能 gap がない場合は逆側へ無理に振らず、Follow / SafetyBrake 側へ倒す。
 - `use_v2x_local_path_planner=true` の場合、`LowSpeedAvoidance` は従来の constraint-only gap planner ではなく、停止/低速車両列を reference path の `s/d` 座標へ射影し、選んだ側の「壁と膨張済み車両の間」を通る `target_ey` 列と横制約 `lb/ub` を生成する。この target は全 horizon 点で active になり、障害物が horizon 上で重なる前から MPC の `xr[e_y]` を通過側へ向ける。
@@ -541,13 +555,16 @@ mpc:
 - MPC の操舵レート制約は、前回出力した実操舵から horizon 先頭の操舵にも掛ける。これにより、MPC 表示が「実際にはまだ切れていない操舵」を前提にした進行方向を描くことを避ける。近距離停止車両の横抜けで操舵が遅い場合は `steer_rate_max` を上げるが、実効値は `steering_tire_angle_gain_var` で割った値になる。
 - 近距離停止車両が `LowSpeedAvoidance` の距離条件に入っているが、連続した安全 gap が確認できない場合は、通常 `Overtake` へ落とさず `Follow` に倒す。これは回避ラインが確定する前に通常追い越しで横へ振り、停止車両の前を横切って接触することを防ぐためである。
 - `LowSpeedAvoidance` 中は、曲率による追い越し禁止区間に入っても gap がある限り低速回避を継続する。さらに `v2x_low_speed_avoidance_clear_distance` 以内に V2X 車両が残る間は通常速度へ戻らず、横抜け後半での早すぎる Cruise 復帰を抑える。新規の通常追い越し開始は引き続き禁止条件に従う。
+- 前方車判定は、進行方向前方にあり、かつ `v2x_vehicle_radius + v2x_prediction_margin` の横方向衝突幅に重なる車両だけに限定する。混走スタートの斜め横車両を前方車として `Follow` に落とすと片方だけ加速が遅れるため、横に並ぶ車両は `side vehicle` として扱う。
+- 動いている前走車に対する SafetyBrake は相対速度ベースで判定する。停止車向けの大きな停止距離をそのまま使うと、競り負けた直後に不要な強制減速が入るため、`v2x_moving_safety_brake_distance` と `v2x_moving_safety_brake_margin` を別に持つ。
+- `v2x_start_grid_grace_time` は、同時走行スタート直後に横車両がいる場合だけ停止車向けの `LowSpeedAvoidance` / `SafetyBrake` 判定を猶予する。スタート前に前走車の V2X 推定速度が 0 と見えることで、最後尾車が gate2 用の停止車回避へ誤って入ることを防ぐ。
 - `LowSpeedAvoidance` に入った後も、最初の `target_ey` を絶対値として固定し続けない。3台以上の停止車列では車両ごとに通れる gap が変わるため、固定するのは通過側だけに留め、horizon 上の障害物に応じて目標を再選択する。
 - `SafetyBrake`: 前方車が近すぎる、または現在速度から見た停止距離内に入っている。gap planner を使わず `v2x_safety_brake_velocity` に速度制限する。
 - SafetyBrake 判定距離は `max(v2x_safety_brake_distance, v^2 / (2 * abs(a_min)) + v2x_safety_brake_margin)` とする。横方向は corridor 全体ではなく、`v2x_vehicle_radius + v2x_prediction_margin` の衝突幅に重なる場合だけ危険判定する。
 - `v2x_require_gap_for_overtake=false` の場合は、追い越し禁止条件に入っていなければ gap 幅の事前判定を必須にせず `Overtake` へ遷移する。
 - `LowSpeedAvoidance` は `front_distance <= v2x_low_speed_avoidance_distance`、かつ `v2x_low_speed_avoidance_min_gap_width` 以上の gap が `v2x_low_speed_avoidance_min_gap_points` 以上連続する場合に使う。
 - `v2x_vehicle_radius` は V2X 車両単体の半幅ではなく、自車中心が入ってはいけない横方向禁止幅として扱う。V2X 車両幅 1.45m の場合、相手半幅 0.725m + 自車半幅 0.725m として 1.45m 程度を基準にし、必要に応じて余白を足す。前後方向の占有判定には `v2x_vehicle_length` と自車長を使う。
-- `v2x_overtake_forbidden_wp_ranges` は `[start, end]` の配列で指定し、ヘアピン入口など追い抜き禁止区間の抑制に使う。
+- `v2x_overtake_forbidden_wp_ranges` は `[start, end]` の配列で指定し、ヘアピン入口など追い抜き禁止区間の抑制に使う。ただし通常はコース位置固定の禁止より `v2x_overtake_guard_*` の条件で抑制する。
 - 既定 `false` のため、通常設定では既存挙動を維持する。
 
 ### 提出ファイルへの影響

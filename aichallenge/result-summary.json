@@ -3,13 +3,13 @@
     "session": {
         "required_laps": 2147483647,
         "timeout": 10000000.0,
-        "total_vehicles": 2
+        "total_vehicles": 3
     },
     "vehicles": [
         {
             "vehicle_number": 1,
             "vehicle_name": "GoKart1",
-            "final_position": 2,
+            "final_position": 3,
             "finished": false,
             "lap_count": 0,
             "laps": [],
@@ -21,7 +21,19 @@
         {
             "vehicle_number": 2,
             "vehicle_name": "GoKart2",
-            "final_position": 2,
+            "final_position": 3,
+            "finished": false,
+            "lap_count": 0,
+            "laps": [],
+            "min_lap_time": 0.0,
+            "max_lap_time": 0.0,
+            "avg_lap_time": 0.0,
+            "total_lap_time": 0.0
+        },
+        {
+            "vehicle_number": 3,
+            "vehicle_name": "GoKart3",
+            "final_position": 3,
             "finished": false,
             "lap_count": 0,
             "laps": [],

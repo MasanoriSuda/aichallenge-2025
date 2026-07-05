@@ -55,9 +55,42 @@ mpc:
   gap_min_width: 1.8
   gap_target_bias: 1.0
   no_gap_target_velocity: 0.0
+  v2x_wall_clearance_margin: 0.0
+  v2x_vehicle_side_target_margin: 0.0
+  v2x_wall_avoidance_bias: 0.0
+  v2x_vehicle_vehicle_gap_enabled: true
+  v2x_vehicle_vehicle_gap_min_distance: 0.0
+  v2x_vehicle_vehicle_gap_min_width: 0.0
+  v2x_multi_front_gap_enabled: true
+  v2x_multi_front_gap_distance: 0.0
 ```
 
 `V2XVehiclePositionArray` は位置と covariance のみを持つため、C++ 側では vehicle_id ごとの直近2点から速度を推定します。初回、異常ジャンプ、過大速度時は静止障害物として扱います。gap がない場合は `no_gap_target_velocity` を速度上限として使います。
+
+free gap が壁と他車に挟まれている場合、`v2x_wall_clearance_margin` で壁側の制約を内側へ削り、`v2x_wall_avoidance_bias` で target を gap 中央から車側へ寄せられます。壁ペナルティを避けたい場合は `v2x_wall_clearance_margin: 0.4`, `v2x_vehicle_side_target_margin: 0.2`, `v2x_wall_avoidance_bias: 0.8` から確認します。
+
+左右が両方とも V2X 車両の free gap は、`v2x_vehicle_vehicle_gap_enabled: false` で候補から外せます。3台同時走行のスタート直後など、前方2台の間をすり抜けようとして操舵が不安定になる場合は、車-車 gap を禁止し、壁-車 gap または no-gap 低速追走へ倒します。
+
+さらに、前方近距離に2台以上いる状況そのものを追い抜き禁止にしたい場合は、`v2x_multi_front_gap_enabled: false` と `v2x_multi_front_gap_distance` を設定します。この条件に入ると gap planner は横目標を作らず、`no_gap_target_velocity` による低速追走へ倒します。
+
+#### V2X behavior FSM
+
+`use_v2x_behavior_fsm: true` にすると、`Cruise` / `Follow` / `Overtake` / `SafetyBrake` の最小状態で `V2XGapPlanner` の使用可否を制御します。`Follow` と `SafetyBrake` では gap planner を使わず、速度上限を下げます。`Overtake` のときだけ gap planner が `lb/ub` と `xr` に反映されます。
+
+```yaml
+mpc:
+  use_v2x_behavior_fsm: false
+  v2x_follow_distance: 8.0
+  v2x_safety_brake_distance: 3.0
+  v2x_follow_velocity: 5.0
+  v2x_safety_brake_velocity: 0.0
+  v2x_overtake_min_gap_width: 2.0
+  v2x_overtake_max_curvature: 0.05
+  v2x_overtake_forbidden_wp_ranges: []
+  v2x_state_hold_time: 0.5
+```
+
+既定では無効です。ヘアピン入口などで追い抜きを禁止したい場合は `v2x_overtake_forbidden_wp_ranges` に wp_id 範囲を追加します。
 
 ### MPC シミュレーション
 ```bash

@@ -62,16 +62,36 @@ mpc:
   safety_margin_scale: 0.0
   # V2X-based rule gap planner. Keep disabled for baseline trajectory tracking.
   use_v2x_gap_planner: true
-  v2x_vehicle_radius: 1.25
+  v2x_vehicle_radius: 0.8
   v2x_prediction_margin: 0.1
-  v2x_prediction_time: 3.0
+  v2x_prediction_time: 1.5
   v2x_timeout_sec: 1.0
   v2x_position_jump_threshold: 5.0
   v2x_v_max_safety: 30.0
   v2x_self_filter_radius: 1.5
   gap_min_width: 1.8
-  gap_target_bias: 1.0
-  no_gap_target_velocity: 0.0
+  gap_target_bias: 0.15
+  no_gap_target_velocity: 2.0
+  # Prefer the vehicle side when a free gap is bounded by a wall and a V2X vehicle.
+  v2x_wall_clearance_margin: 0.3      # [m] shrink the wall side of the selected V2X gap
+  v2x_vehicle_side_target_margin: 0.2 # [m] keep this margin from the inflated vehicle interval
+  v2x_wall_avoidance_bias: 0.5        # 0.0 = gap center, 1.0 = vehicle side
+  # Do not aim for a narrow gap between two moving V2X vehicles at close range.
+  v2x_vehicle_vehicle_gap_enabled: false
+  v2x_vehicle_vehicle_gap_min_distance: 18.0 # [m] only used when vehicle-vehicle gap is enabled
+  v2x_vehicle_vehicle_gap_min_width: 3.2     # [m] only used when vehicle-vehicle gap is enabled
+  v2x_multi_front_gap_enabled: false
+  v2x_multi_front_gap_distance: 18.0 # [m] with 2+ front vehicles, use no-gap velocity instead
+  # V2X behavior FSM. When true, Cruise/Follow/Overtake/SafetyBrake controls when gap planner is allowed.
+  use_v2x_behavior_fsm: true
+  v2x_follow_distance: 12.0        # [m]
+  v2x_safety_brake_distance: 1.5  # [m]
+  v2x_follow_velocity: 5.0        # [m/s]
+  v2x_safety_brake_velocity: 0.0  # [m/s]
+  v2x_overtake_min_gap_width: 1.5 # [m]
+  v2x_overtake_max_curvature: 0.05
+  v2x_overtake_forbidden_wp_ranges: []
+  v2x_state_hold_time: 0.5        # [s]
   use_max_kappa_pred: true
 
 

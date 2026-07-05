@@ -95,6 +95,13 @@ mpc:
   v2x_safety_brake_margin: 3.0    # [m] added to v^2 / (2 * abs(a_min))
   v2x_follow_speed_limit_enabled: false # when false, Follow does not cap velocity
   v2x_follow_velocity: 3.0        # [m/s]
+  v2x_front_decel_guard_enabled: true
+  v2x_front_decel_guard_distance: 9.0     # [m] close moving front vehicle gets a speed cap
+  v2x_front_decel_guard_ttc: 1.5          # [s] also cap when closing time is short
+  v2x_front_decel_guard_speed_margin: 0.5 # [m/s] target <= front speed + margin
+  v2x_front_decel_guard_min_closing_speed: 1.5 # [m/s] avoid capping while merely tucked in
+  v2x_front_decel_guard_curve_distance: 16.0 # [m] earlier cap when overtake is forbidden in curves
+  v2x_front_decel_guard_curve_ttc: 3.0       # [s] earlier TTC cap in curves
   v2x_safety_brake_velocity: 0.0  # [m/s]
   v2x_overtake_min_gap_width: 2.5 # [m]
   v2x_overtake_max_curvature: 0.03
@@ -106,8 +113,9 @@ mpc:
   v2x_overtake_guard_min_front_distance: 3.0  # [m] keep too-close cases in Follow/SafetyBrake
   v2x_moving_front_speed_threshold: 1.0 # [m/s] above this, Follow uses moving-front behavior
   v2x_moving_follow_speed_margin: 4.0   # [m/s] speed margin over the moving front vehicle
-  v2x_moving_safety_brake_distance: 1.5 # [m] minimum brake distance for moving front vehicles
-  v2x_moving_safety_brake_margin: 0.5   # [m] added to relative-speed stopping distance
+  v2x_moving_safety_brake_distance: 3.0 # [m] minimum brake distance for moving front vehicles
+  v2x_moving_safety_brake_margin: 1.0   # [m] added to relative-speed stopping distance
+  v2x_moving_safety_brake_time_headway: 0.3 # [s] speed-dependent emergency margin
   v2x_start_grid_grace_time: 1800.0      # [s] keep stop-vehicle behavior suppressed during race start tests
   v2x_require_gap_for_overtake: true
   v2x_low_speed_avoidance_enabled: true

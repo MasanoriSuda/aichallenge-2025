@@ -1081,6 +1081,13 @@ struct V2XBehaviorConfig
   double safety_brake_margin{2.0};
   bool follow_speed_limit_enabled{false};
   double follow_velocity{5.0};
+  bool front_decel_guard_enabled{true};
+  double front_decel_guard_distance{9.0};
+  double front_decel_guard_ttc{1.5};
+  double front_decel_guard_speed_margin{0.5};
+  double front_decel_guard_min_closing_speed{1.5};
+  double front_decel_guard_curve_distance{16.0};
+  double front_decel_guard_curve_ttc{3.0};
   double safety_brake_velocity{0.0};
   double overtake_min_gap_width{2.0};
   double overtake_max_curvature{0.05};
@@ -1094,6 +1101,7 @@ struct V2XBehaviorConfig
   double moving_follow_speed_margin{2.0};
   double moving_safety_brake_distance{1.5};
   double moving_safety_brake_margin{1.0};
+  double moving_safety_brake_time_headway{0.3};
   double start_grid_grace_time{0.0};
   bool require_gap_for_overtake{true};
   bool low_speed_avoidance_enabled{false};
@@ -2300,8 +2308,12 @@ struct MPC
           (moving_front ?
           std::max(0.0, cfg.v2x_behavior.moving_safety_brake_margin) :
           std::max(0.0, cfg.v2x_behavior.safety_brake_margin));
+        const double moving_headway_distance = current_speed_mps_ *
+          std::max(0.0, cfg.v2x_behavior.moving_safety_brake_time_headway);
         const double front_safety_brake_distance = moving_front ?
-          std::max(cfg.v2x_behavior.moving_safety_brake_distance, front_stop_distance) :
+          std::max({
+            cfg.v2x_behavior.moving_safety_brake_distance, front_stop_distance,
+            moving_headway_distance}) :
           std::max(cfg.v2x_behavior.safety_brake_distance, front_stop_distance);
         if (longitudinal < front_safety_brake_distance) {
           has_danger_vehicle = true;
@@ -2371,9 +2383,9 @@ struct MPC
     if (low_speed_avoidance_gap_blocked) {
       output.state = V2XBehaviorState::Follow;
       output.reason = "low-speed gap unavailable";
-      if (cfg.v2x_behavior.follow_speed_limit_enabled) {
-        output.target_velocity_limit =
-          follow_velocity_limit(nearest_front_distance, nearest_front_speed);
+      if (apply_follow_velocity_limits(
+          output, nearest_front_distance, nearest_front_speed, overtake_forbidden)) {
+        output.reason += " / front decel guard";
       }
       return commit_v2x_behavior_state(output, now_sec);
     }
@@ -2402,9 +2414,9 @@ struct MPC
       } else {
         output.state = V2XBehaviorState::Follow;
         output.reason = overtake_forbidden ? "overtake forbidden" : overtake_block_reason;
-        if (cfg.v2x_behavior.follow_speed_limit_enabled) {
-          output.target_velocity_limit =
-            follow_velocity_limit(nearest_front_distance, nearest_front_speed);
+        if (apply_follow_velocity_limits(
+            output, nearest_front_distance, nearest_front_speed, overtake_forbidden)) {
+          output.reason += " / front decel guard";
         }
       }
       return commit_v2x_behavior_state(output, now_sec);
@@ -2993,6 +3005,60 @@ private:
     return front_distance_velocity_limit(front_distance);
   }
 
+  double front_decel_guard_velocity_limit(
+    const double front_distance, const double front_speed, const bool curve_guard) const
+  {
+    if (
+      !cfg.v2x_behavior.front_decel_guard_enabled ||
+      !std::isfinite(front_distance) ||
+      !std::isfinite(front_speed) ||
+      front_speed <= cfg.v2x_behavior.moving_front_speed_threshold) {
+      return std::numeric_limits<double>::infinity();
+    }
+
+    double guard_distance = std::max(0.0, cfg.v2x_behavior.front_decel_guard_distance);
+    double guard_ttc = std::max(0.0, cfg.v2x_behavior.front_decel_guard_ttc);
+    if (curve_guard) {
+      guard_distance =
+        std::max(guard_distance, std::max(0.0, cfg.v2x_behavior.front_decel_guard_curve_distance));
+      guard_ttc = std::max(guard_ttc, std::max(0.0, cfg.v2x_behavior.front_decel_guard_curve_ttc));
+    }
+    const double speed_margin = std::max(0.0, cfg.v2x_behavior.front_decel_guard_speed_margin);
+    const double closing_speed = current_speed_mps_ - (front_speed + speed_margin);
+    const double min_closing_speed =
+      std::max(0.0, cfg.v2x_behavior.front_decel_guard_min_closing_speed);
+    if (closing_speed < min_closing_speed) {
+      return std::numeric_limits<double>::infinity();
+    }
+    const double ttc = closing_speed > kEps ?
+      front_distance / closing_speed : std::numeric_limits<double>::infinity();
+    const bool close_enough = front_distance <= guard_distance;
+    const bool ttc_low = ttc <= guard_ttc;
+    if (!close_enough && !ttc_low) {
+      return std::numeric_limits<double>::infinity();
+    }
+    return std::min(cfg.v_max, front_speed + speed_margin);
+  }
+
+  bool apply_follow_velocity_limits(
+    V2XBehaviorOutput & output, const double front_distance, const double front_speed,
+    const bool curve_guard) const
+  {
+    bool decel_guard_applied = false;
+    if (cfg.v2x_behavior.follow_speed_limit_enabled) {
+      output.target_velocity_limit =
+        std::min(output.target_velocity_limit, follow_velocity_limit(front_distance, front_speed));
+    }
+
+    const double decel_guard_limit =
+      front_decel_guard_velocity_limit(front_distance, front_speed, curve_guard);
+    if (std::isfinite(decel_guard_limit)) {
+      output.target_velocity_limit = std::min(output.target_velocity_limit, decel_guard_limit);
+      decel_guard_applied = true;
+    }
+    return decel_guard_applied;
+  }
+
   V2XBehaviorOutput commit_v2x_behavior_state(V2XBehaviorOutput output, const double now_sec)
   {
     V2XBehaviorState final_state = output.state;
@@ -3232,6 +3298,33 @@ Config load_config(const std::string & path)
     mpc["v2x_follow_speed_limit_enabled"].as<bool>() : false;
   cfg.mpc.v2x_behavior.follow_velocity = std::max(
     0.0, mpc["v2x_follow_velocity"] ? mpc["v2x_follow_velocity"].as<double>() : 5.0);
+  cfg.mpc.v2x_behavior.front_decel_guard_enabled =
+    mpc["v2x_front_decel_guard_enabled"] ?
+    mpc["v2x_front_decel_guard_enabled"].as<bool>() : true;
+  cfg.mpc.v2x_behavior.front_decel_guard_distance = std::max(
+    0.0,
+    mpc["v2x_front_decel_guard_distance"] ?
+    mpc["v2x_front_decel_guard_distance"].as<double>() : 9.0);
+  cfg.mpc.v2x_behavior.front_decel_guard_ttc = std::max(
+    0.0,
+    mpc["v2x_front_decel_guard_ttc"] ?
+    mpc["v2x_front_decel_guard_ttc"].as<double>() : 1.5);
+  cfg.mpc.v2x_behavior.front_decel_guard_speed_margin = std::max(
+    0.0,
+    mpc["v2x_front_decel_guard_speed_margin"] ?
+    mpc["v2x_front_decel_guard_speed_margin"].as<double>() : 0.5);
+  cfg.mpc.v2x_behavior.front_decel_guard_min_closing_speed = std::max(
+    0.0,
+    mpc["v2x_front_decel_guard_min_closing_speed"] ?
+    mpc["v2x_front_decel_guard_min_closing_speed"].as<double>() : 1.5);
+  cfg.mpc.v2x_behavior.front_decel_guard_curve_distance = std::max(
+    0.0,
+    mpc["v2x_front_decel_guard_curve_distance"] ?
+    mpc["v2x_front_decel_guard_curve_distance"].as<double>() : 16.0);
+  cfg.mpc.v2x_behavior.front_decel_guard_curve_ttc = std::max(
+    0.0,
+    mpc["v2x_front_decel_guard_curve_ttc"] ?
+    mpc["v2x_front_decel_guard_curve_ttc"].as<double>() : 3.0);
   cfg.mpc.v2x_behavior.safety_brake_velocity = std::max(
     0.0,
     mpc["v2x_safety_brake_velocity"] ? mpc["v2x_safety_brake_velocity"].as<double>() : 0.0);
@@ -3279,6 +3372,10 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_moving_safety_brake_margin"] ?
     mpc["v2x_moving_safety_brake_margin"].as<double>() : 1.0);
+  cfg.mpc.v2x_behavior.moving_safety_brake_time_headway = std::max(
+    0.0,
+    mpc["v2x_moving_safety_brake_time_headway"] ?
+    mpc["v2x_moving_safety_brake_time_headway"].as<double>() : 0.3);
   cfg.mpc.v2x_behavior.start_grid_grace_time = std::max(
     0.0,
     mpc["v2x_start_grid_grace_time"] ?

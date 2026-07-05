@@ -506,6 +506,13 @@ mpc:
   v2x_safety_brake_margin: 2.0
   v2x_follow_speed_limit_enabled: false
   v2x_follow_velocity: 5.0
+  v2x_front_decel_guard_enabled: true
+  v2x_front_decel_guard_distance: 9.0
+  v2x_front_decel_guard_ttc: 1.5
+  v2x_front_decel_guard_speed_margin: 0.5
+  v2x_front_decel_guard_min_closing_speed: 1.5
+  v2x_front_decel_guard_curve_distance: 16.0
+  v2x_front_decel_guard_curve_ttc: 3.0
   v2x_safety_brake_velocity: 0.0
   v2x_overtake_min_gap_width: 2.0
   v2x_overtake_max_curvature: 0.05
@@ -519,6 +526,7 @@ mpc:
   v2x_moving_follow_speed_margin: 2.0
   v2x_moving_safety_brake_distance: 1.5
   v2x_moving_safety_brake_margin: 1.0
+  v2x_moving_safety_brake_time_headway: 0.3
   v2x_start_grid_grace_time: 0.0
   v2x_require_gap_for_overtake: true
   v2x_low_speed_avoidance_enabled: false
@@ -541,6 +549,7 @@ mpc:
 
 - `Cruise`: 他車なし。V2X 由来の横目標変更は入れない。
 - `Follow`: 前方車あり、追い抜き禁止または gap 不足。レース中に競り負けた直後の不要な失速を避けるため、既定では速度制限を入れない。`v2x_follow_speed_limit_enabled=true` の場合だけ、停止/低速車には前方距離から計算した停止可能速度を使い、`v2x_moving_front_speed_threshold` より速い前走車には前走車速度 + `v2x_moving_follow_speed_margin` を上限にする。
+- `v2x_front_decel_guard_enabled=true` の場合、通常 Follow の速度制限を無効にしていても、近距離の動く前走車に対しては `front speed + v2x_front_decel_guard_speed_margin` の速度上限を掛ける。これは通常追走で失速させるためではなく、前走車の減速に追従できず追突するケースの緊急ガードである。`v2x_front_decel_guard_min_closing_speed` 未満の閉じ速度では発火させず、前走車の後ろに付いているだけの後続車を不要に失速させない。追い越し禁止カーブ中は `v2x_front_decel_guard_curve_distance` と `v2x_front_decel_guard_curve_ttc` まで判定距離を広げ、速度差を付けた車両がカーブで前走車へ追いつくケースを早めに抑える。
 - `Overtake`: 低曲率かつ十分な gap がある場合だけ gap planner を許可する。`v2x_overtake_guard_enabled=true` の場合は、gap 幅だけでなく、連続した gap 点数、gap までの準備距離、現在 lateral から target までの横移動量、前方車との距離を追加確認してから Overtake に入る。これにより、通れない側へ一瞬振ってから反対側へ戻るような近距離 gap 飛び込みを Follow / SafetyBrake 側へ倒す。
 - `LowSpeedAvoidance`: 近距離の低速前方車両に対して通過可能な側がある場合、SafetyBrake より先に `v2x_low_speed_avoidance_velocity` へ速度制限して徐行回避する。開始条件では `v2x_low_speed_avoidance_max_front_speed` 以下の V2X 推定速度を低速車両として扱う。
 - 低速回避では `v2x_low_speed_pass_side` で通過側を `auto` / `left` / `right` から選べる。`right` は reference path 座標系の負の lateral 側、`left` は正の lateral 側である。`auto` の場合は最初に選んだ側を低速回避中の side lock として使う。configured side に通過可能 gap がない場合は逆側へ無理に振らず、Follow / SafetyBrake 側へ倒す。
@@ -556,7 +565,7 @@ mpc:
 - 近距離停止車両が `LowSpeedAvoidance` の距離条件に入っているが、連続した安全 gap が確認できない場合は、通常 `Overtake` へ落とさず `Follow` に倒す。これは回避ラインが確定する前に通常追い越しで横へ振り、停止車両の前を横切って接触することを防ぐためである。
 - `LowSpeedAvoidance` 中は、曲率による追い越し禁止区間に入っても gap がある限り低速回避を継続する。さらに `v2x_low_speed_avoidance_clear_distance` 以内に V2X 車両が残る間は通常速度へ戻らず、横抜け後半での早すぎる Cruise 復帰を抑える。新規の通常追い越し開始は引き続き禁止条件に従う。
 - 前方車判定は、進行方向前方にあり、かつ `v2x_vehicle_radius + v2x_prediction_margin` の横方向衝突幅に重なる車両だけに限定する。混走スタートの斜め横車両を前方車として `Follow` に落とすと片方だけ加速が遅れるため、横に並ぶ車両は `side vehicle` として扱う。
-- 動いている前走車に対する SafetyBrake は相対速度ベースで判定する。停止車向けの大きな停止距離をそのまま使うと、競り負けた直後に不要な強制減速が入るため、`v2x_moving_safety_brake_distance` と `v2x_moving_safety_brake_margin` を別に持つ。
+- 動いている前走車に対する SafetyBrake は相対速度ベースで判定する。停止車向けの大きな停止距離をそのまま使うと、競り負けた直後に不要な強制減速が入るため、`v2x_moving_safety_brake_distance`、`v2x_moving_safety_brake_margin`、`v2x_moving_safety_brake_time_headway` を別に持つ。
 - `v2x_start_grid_grace_time` は、同時走行スタート直後に横車両がいる場合だけ停止車向けの `LowSpeedAvoidance` / `SafetyBrake` 判定を猶予する。スタート前に前走車の V2X 推定速度が 0 と見えることで、最後尾車が gate2 用の停止車回避へ誤って入ることを防ぐ。
 - `LowSpeedAvoidance` に入った後も、最初の `target_ey` を絶対値として固定し続けない。3台以上の停止車列では車両ごとに通れる gap が変わるため、固定するのは通過側だけに留め、horizon 上の障害物に応じて目標を再選択する。
 - `SafetyBrake`: 前方車が近すぎる、または現在速度から見た停止距離内に入っている。gap planner を使わず `v2x_safety_brake_velocity` に速度制限する。

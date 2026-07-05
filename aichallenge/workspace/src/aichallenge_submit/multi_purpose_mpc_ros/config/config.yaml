@@ -39,7 +39,7 @@ bicycle_model:
   width: 1.45   # +safety margin
 
 mpc:
-  N: 12
+  N: 10
   # Q: [e_y, e_psi, t]
   # R: [v, delta]
   # QN: [e_y, e_psi, t]
@@ -47,14 +47,16 @@ mpc:
   a_min: -1.6 # m/s^2
   a_max: 1.0 # m/s^2
   delta_max_deg: 32.0 # degrees
-  steer_rate_max: 0.35 # rad/s
-  control_rate: 100.0 # Hz
+  steer_rate_max: 1.2 # rad/s
+  control_rate: 40.0 # Hz
   steering_tire_angle_gain_var: 1.5
   # steering_tire_angle_gain_var: 1.0
   # accel_low_pass_gain: 0.1
   # steer_low_pass_gain: 0.3
   accel_low_pass_gain: 1.0
   steer_low_pass_gain: 1.0
+  wp_id_low_offset: 0
+  wp_id_low_speed: 15.0 # km/h
   wp_id_offset: 2
   # 1.0 = target the center of path constraints, 0.0 = target the edited trajectory.
   center_bias: 0.0
@@ -62,20 +64,24 @@ mpc:
   safety_margin_scale: 0.0
   # V2X-based rule gap planner. Keep disabled for baseline trajectory tracking.
   use_v2x_gap_planner: true
-  v2x_vehicle_radius: 0.8
+  # Forbidden lateral radius for ego center around a V2X vehicle.
+  # 1.45m = other vehicle half width 0.725m + ego half width 0.725m.
+  # Add a small buffer for low-speed side pass stability.
+  v2x_vehicle_radius: 1.45
+  v2x_vehicle_length: 2.0
   v2x_prediction_margin: 0.1
-  v2x_prediction_time: 1.5
+  v2x_prediction_time: 1.0
   v2x_timeout_sec: 1.0
   v2x_position_jump_threshold: 5.0
   v2x_v_max_safety: 30.0
-  v2x_self_filter_radius: 1.5
+  v2x_self_filter_radius: 0.3
   gap_min_width: 1.8
-  gap_target_bias: 0.15
+  gap_target_bias: 0.2
   no_gap_target_velocity: 2.0
   # Prefer the vehicle side when a free gap is bounded by a wall and a V2X vehicle.
-  v2x_wall_clearance_margin: 0.3      # [m] shrink the wall side of the selected V2X gap
+  v2x_wall_clearance_margin: 0.8      # [m] shrink the wall side of the selected V2X gap
   v2x_vehicle_side_target_margin: 0.2 # [m] keep this margin from the inflated vehicle interval
-  v2x_wall_avoidance_bias: 0.5        # 0.0 = gap center, 1.0 = vehicle side
+  v2x_wall_avoidance_bias: 0.0        # 0.0 = gap center, 1.0 = vehicle side
   # Do not aim for a narrow gap between two moving V2X vehicles at close range.
   v2x_vehicle_vehicle_gap_enabled: false
   v2x_vehicle_vehicle_gap_min_distance: 18.0 # [m] only used when vehicle-vehicle gap is enabled
@@ -84,14 +90,50 @@ mpc:
   v2x_multi_front_gap_distance: 18.0 # [m] with 2+ front vehicles, use no-gap velocity instead
   # V2X behavior FSM. When true, Cruise/Follow/Overtake/SafetyBrake controls when gap planner is allowed.
   use_v2x_behavior_fsm: true
-  v2x_follow_distance: 12.0        # [m]
-  v2x_safety_brake_distance: 1.5  # [m]
-  v2x_follow_velocity: 5.0        # [m/s]
+  v2x_follow_distance: 14.0        # [m]
+  v2x_safety_brake_distance: 6.0  # [m] minimum distance; dynamic stop distance is also applied
+  v2x_safety_brake_margin: 3.0    # [m] added to v^2 / (2 * abs(a_min))
+  v2x_follow_speed_limit_enabled: false # when false, Follow does not cap velocity
+  v2x_follow_velocity: 3.0        # [m/s]
+  v2x_front_decel_guard_enabled: true
+  v2x_front_decel_guard_distance: 9.0     # [m] close moving front vehicle gets a speed cap
+  v2x_front_decel_guard_ttc: 1.5          # [s] also cap when closing time is short
+  v2x_front_decel_guard_speed_margin: 0.5 # [m/s] target <= front speed + margin
+  v2x_front_decel_guard_min_closing_speed: 1.5 # [m/s] avoid capping while merely tucked in
+  v2x_front_decel_guard_curve_distance: 16.0 # [m] earlier cap when overtake is forbidden in curves
+  v2x_front_decel_guard_curve_ttc: 3.0       # [s] earlier TTC cap in curves
   v2x_safety_brake_velocity: 0.0  # [m/s]
-  v2x_overtake_min_gap_width: 1.5 # [m]
-  v2x_overtake_max_curvature: 0.05
+  v2x_overtake_min_gap_width: 2.5 # [m]
+  v2x_overtake_max_curvature: 0.03
+  v2x_overtake_guard_enabled: true
+  v2x_overtake_guard_min_gap_width: 2.5       # [m] require a full vehicle-width passable gap
+  v2x_overtake_guard_min_gap_points: 3        # require consecutive horizon points before Overtake
+  v2x_overtake_guard_min_prepare_distance: 8.0 # [m] do not dive into gaps that appear too late
+  v2x_overtake_guard_max_lateral_shift: 1.0   # [m] reject abrupt side-step targets
+  v2x_overtake_guard_min_front_distance: 3.0  # [m] keep too-close cases in Follow/SafetyBrake
+  v2x_moving_front_speed_threshold: 1.0 # [m/s] above this, Follow uses moving-front behavior
+  v2x_moving_follow_speed_margin: 4.0   # [m/s] speed margin over the moving front vehicle
+  v2x_moving_safety_brake_distance: 3.0 # [m] minimum brake distance for moving front vehicles
+  v2x_moving_safety_brake_margin: 1.0   # [m] added to relative-speed stopping distance
+  v2x_moving_safety_brake_time_headway: 0.3 # [s] speed-dependent emergency margin
+  v2x_start_grid_grace_time: 1800.0      # [s] keep stop-vehicle behavior suppressed during race start tests
+  v2x_require_gap_for_overtake: true
+  v2x_low_speed_avoidance_enabled: true
+  use_v2x_local_path_planner: true
+  v2x_low_speed_avoidance_distance: 10.0         # [m] close stopped/slow vehicle bypass range
+  v2x_low_speed_avoidance_lookahead_distance: 18.0 # [m] include multiple stopped vehicles in gate2-like layouts
+  v2x_low_speed_avoidance_velocity: 11.1         # [m/s]
+  v2x_low_speed_avoidance_max_front_speed: 1.0   # [m/s]
+  v2x_low_speed_avoidance_min_gap_width: 0.5     # [m] checked after wall clearance shrink
+  v2x_low_speed_avoidance_min_gap_points: 2      # require consecutive safe gap points before entering bypass
+  v2x_low_speed_avoidance_clear_distance: 8.0    # [m] keep low-speed bypass until clear of nearby V2X vehicles
+  v2x_local_path_pass_clearance: 3.0             # [m] stay on pass-side path after the last stopped vehicle
+  v2x_local_path_return_distance: 6.0            # [m] distance used to blend back to base trajectory
+  v2x_local_path_invert_target: false            # invert local-path lateral target before MPC tracking
+  v2x_low_speed_pass_side: "auto"                # auto, left, right. Auto selects the wider feasible pass side.
+  v2x_low_speed_pass_ramp_ratio: 1.0             # lower = reach the side-pass target earlier
   v2x_overtake_forbidden_wp_ranges: []
-  v2x_state_hold_time: 0.5        # [s]
+  v2x_state_hold_time: 0.1        # [s]
   use_max_kappa_pred: true
 
 
@@ -99,7 +141,14 @@ mpc:
   ## Lap1: 53s, Lap2: 47s
 
   v_max: 40.0   # km/h
-  ay_max: 30.0  # m/s^2, maximum lateral acceleration in curves
+  domain_v_max:
+    1: 40.0
+    2: 40.0
+    3: 40.0
+  domain_start_v_max_duration: 15.0 # [s] compensate inner-lane advantage at side-by-side start
+  domain_start_v_max:
+    2: 37.0
+  ay_max: 9.5  # m/s^2, maximum lateral acceleration in curves
   Q:  [150000.0, 5000000.0, 100000.0]
   QN: [100000.0, 100000.0, 1000.0]
 

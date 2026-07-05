@@ -1,6 +1,6 @@
 # multi_purpose_mpc_ros インテグレーション設計
 
-> 仕様ドキュメント（現仕様の正）。最終確認: 2026-07-04。文書運用方針は [docs/README.md](../README.md) を参照。
+> 仕様ドキュメント（現仕様の正）。最終確認: 2026-07-05。文書運用方針は [docs/README.md](../README.md) を参照。
 
 作成日: 2026-02-10
 
@@ -466,14 +466,49 @@ mpc:
   gap_min_width: 1.8
   gap_target_bias: 1.0
   no_gap_target_velocity: 0.0
+  v2x_wall_clearance_margin: 0.0
+  v2x_vehicle_side_target_margin: 0.0
+  v2x_wall_avoidance_bias: 0.0
+  v2x_vehicle_vehicle_gap_enabled: true
+  v2x_vehicle_vehicle_gap_min_distance: 0.0
+  v2x_vehicle_vehicle_gap_min_width: 0.0
+  v2x_multi_front_gap_enabled: true
+  v2x_multi_front_gap_distance: 0.0
 ```
 
 - 既定 `false` なので、通常走行では従来の trajectory tracking のまま。
 - 有効時は `/v2x/vehicle_positions` を subscribe し、vehicle_id ごとの直近2点から速度を推定する。
 - 他車は円近似し、horizon waypoint ごとに `lb/ub` を狭める。
 - gap が選べる場合は `xr` を gap 中央へ寄せる。
+- gap が壁と他車に挟まれている場合は、`v2x_wall_clearance_margin` で壁側制約を内側へ削り、`v2x_wall_avoidance_bias` で target を車側へ寄せられる。
+- 左右が両方とも V2X 車両の gap は `v2x_vehicle_vehicle_gap_enabled=false` で候補から外せる。3台同時走行のスタート直後など、前方2台の間を狙うと操舵が不安定になる場面では、車-車 gap を使わず no-gap 低速追走へ倒す。
+- 前方近距離に2台以上いる状況そのものを追い抜き禁止にしたい場合は、`v2x_multi_front_gap_enabled=false` と `v2x_multi_front_gap_distance` を使う。この条件に入ると gap planner は feasible gap を返さず、`no_gap_target_velocity` へ倒す。
 - gap がない場合は `no_gap_target_velocity` を速度上限として使う。
 - 実車・遠隔環境では使わず、先にシミュレータで wall / crash / over penalty を確認する。
+
+**C++ V2X behavior FSM（暫定拡張）:**
+
+`use_v2x_behavior_fsm=true` の場合は、既存 gap planner を常時使わず、`Cruise` / `Follow` / `Overtake` / `SafetyBrake` の最小状態で使用可否を制御する。これは高度な追い抜き戦略ではなく、ヘアピン入口などで不用意な横回避が単独走行の安定ラインを壊すことを抑えるための暫定層である。
+
+```yaml
+mpc:
+  use_v2x_behavior_fsm: false
+  v2x_follow_distance: 8.0
+  v2x_safety_brake_distance: 3.0
+  v2x_follow_velocity: 5.0
+  v2x_safety_brake_velocity: 0.0
+  v2x_overtake_min_gap_width: 2.0
+  v2x_overtake_max_curvature: 0.05
+  v2x_overtake_forbidden_wp_ranges: []
+  v2x_state_hold_time: 0.5
+```
+
+- `Cruise`: 他車なし。V2X 由来の横目標変更は入れない。
+- `Follow`: 前方車あり、追い抜き禁止または gap 不足。gap planner を使わず `v2x_follow_velocity` に速度制限する。
+- `Overtake`: 低曲率かつ十分な gap がある場合だけ gap planner を許可する。
+- `SafetyBrake`: 前方車が近すぎる。gap planner を使わず `v2x_safety_brake_velocity` に速度制限する。
+- `v2x_overtake_forbidden_wp_ranges` は `[start, end]` の配列で指定し、ヘアピン入口など追い抜き禁止区間の抑制に使う。
+- 既定 `false` のため、通常設定では既存挙動を維持する。
 
 ### 提出ファイルへの影響
 

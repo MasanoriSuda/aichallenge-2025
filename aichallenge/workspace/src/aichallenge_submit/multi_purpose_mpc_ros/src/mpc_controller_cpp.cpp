@@ -1075,6 +1075,22 @@ struct V2XGapPlannerConfig
   double overtake_target_ramp_ratio{0.7};
 };
 
+struct OvertakeLineConfig
+{
+  bool enabled{false};
+  double shift_distance{8.0};
+  double pass_distance{8.0};
+  double return_distance{10.0};
+  double lateral_offset{1.2};
+  double target_bias{0.8};
+  double min_wall_clearance{0.8};
+  double max_lateral_accel{2.5};
+  double max_target_change{0.25};
+  double return_clear_distance{4.0};
+  double phase_hold_time{0.3};
+  bool debug_log_enabled{false};
+};
+
 struct V2XBehaviorConfig
 {
   bool enabled{false};
@@ -1167,6 +1183,7 @@ struct V2XBehaviorConfig
   bool low_speed_local_path_invert_target{false};
   double state_hold_time{0.5};
   std::vector<std::pair<int, int>> overtake_forbidden_wp_ranges;
+  OvertakeLineConfig overtake_line;
 };
 
 enum class V2XBehaviorState
@@ -1191,6 +1208,35 @@ const char * to_string(const V2XBehaviorState state)
       return "LowSpeedAvoidance";
     case V2XBehaviorState::SafetyBrake:
       return "SafetyBrake";
+  }
+  return "Unknown";
+}
+
+enum class OvertakeLinePhase
+{
+  Idle,
+  FollowPrepare,
+  ShiftOut,
+  Pass,
+  Return,
+  Recovery,
+};
+
+const char * to_string(const OvertakeLinePhase phase)
+{
+  switch (phase) {
+    case OvertakeLinePhase::Idle:
+      return "Idle";
+    case OvertakeLinePhase::FollowPrepare:
+      return "FollowPrepare";
+    case OvertakeLinePhase::ShiftOut:
+      return "ShiftOut";
+    case OvertakeLinePhase::Pass:
+      return "Pass";
+    case OvertakeLinePhase::Return:
+      return "Return";
+    case OvertakeLinePhase::Recovery:
+      return "Recovery";
   }
   return "Unknown";
 }
@@ -1299,6 +1345,7 @@ struct V2XBehaviorOutput
   int overtake_plan_N{0};
   double overtake_side_clearance{0.0};
   double front_speed{std::numeric_limits<double>::infinity()};
+  double front_lateral{std::numeric_limits<double>::infinity()};
   double ego_speed{0.0};
   FrontRiskMetrics front_risk;
   FrontRiskLevel front_risk_level{FrontRiskLevel::Clear};
@@ -1306,6 +1353,26 @@ struct V2XBehaviorOutput
   double front_distance{std::numeric_limits<double>::infinity()};
   std::string reason;
   std::string overtake_block_reason;
+};
+
+struct OvertakeLineState
+{
+  OvertakeLinePhase phase{OvertakeLinePhase::Idle};
+  int pass_side_sign{0};
+  double target_ey{0.0};
+  double phase_start_sec{-std::numeric_limits<double>::infinity()};
+  double phase_start_ey{0.0};
+};
+
+struct OvertakeLineOutput
+{
+  bool active{false};
+  std::vector<double> target_ey;
+  std::vector<bool> target_active;
+  double target_velocity_limit{std::numeric_limits<double>::infinity()};
+  double max_required_lateral_accel{0.0};
+  bool lateral_accel_limited{false};
+  bool wall_clearance_limited{false};
 };
 
 struct V2XGapPlanner
@@ -2518,6 +2585,7 @@ struct MPC
 
     output.front_distance = nearest_front_distance;
     output.front_speed = nearest_front_speed;
+    output.front_lateral = nearest_front_lateral;
     output.has_front_vehicle = has_front_vehicle;
     output.has_side_vehicle = has_side_vehicle;
     output.has_danger_vehicle = has_danger_vehicle;
@@ -2570,6 +2638,43 @@ struct MPC
       }
       low_speed_avoidance_gap_blocked = !continuing_low_speed_avoidance;
       output.low_speed_avoidance_gap_blocked = low_speed_avoidance_gap_blocked;
+    }
+
+    const bool low_speed_avoidance_hold_candidate =
+      cfg.v2x_behavior.low_speed_avoidance_enabled && continuing_low_speed_avoidance &&
+      has_front_vehicle && !suppress_start_grid_stop_behavior &&
+      nearest_front_speed <= cfg.v2x_behavior.low_speed_avoidance_max_front_speed &&
+      (!overtake_forbidden ||
+      (cfg.v2x_behavior.low_speed_avoidance_ignore_soft_curve_forbidden &&
+      !overtake_forbidden_wp)) &&
+      nearest_front_distance <=
+      std::max(
+        cfg.v2x_behavior.low_speed_avoidance_clear_distance,
+        cfg.v2x_behavior.low_speed_avoidance_distance);
+    if (low_speed_avoidance_hold_candidate) {
+      const double low_speed_gap_max_self_distance =
+        std::max(
+          cfg.v2x_behavior.low_speed_avoidance_distance + model->length,
+          cfg.v2x_behavior.low_speed_avoidance_lookahead_distance);
+      const auto hold_gap = cfg.v2x_behavior.low_speed_local_path_enabled ?
+        gap_planner->plan_stopped_vehicle_local_path(
+          *model, ref_wp_id, N, lb, ub, now_sec, cfg.v2x_behavior, false) :
+        gap_planner->plan(
+          *model, ref_wp_id, N, lb, ub, now_sec, false, true, low_speed_gap_max_self_distance);
+      const bool gap_ok = cfg.v2x_behavior.low_speed_local_path_enabled ?
+        hold_gap.active && hold_gap.feasible :
+        has_consecutive_sufficient_gap(
+          hold_gap, cfg.v2x_behavior.low_speed_avoidance_min_gap_width,
+          cfg.v2x_behavior.low_speed_avoidance_min_gap_points);
+      if (gap_ok) {
+        if (hold_gap.pass_side_sign != 0) {
+          gap_planner->lock_low_speed_pass_side(hold_gap.pass_side_sign);
+        }
+        output.low_speed_avoidance_candidate = true;
+        output.state = V2XBehaviorState::LowSpeedAvoidance;
+        output.reason = "low-speed avoidance hold";
+        return commit_v2x_behavior_state(output, now_sec);
+      }
     }
 
     if (
@@ -2988,14 +3093,36 @@ struct MPC
     }
     const bool use_overtake_side_target =
       behavior_output.state == V2XBehaviorState::Overtake && overtake_pass_side_sign != 0;
+    const int follow_preposition_inner_side =
+      behavior_output.overtake_forbidden && !behavior_output.overtake_forbidden_wp ?
+      curve_inner_pass_side(ref_wp_id, N) : 0;
+    int follow_preposition_pass_side_sign = behavior_output.overtake_pass_side_sign;
+    if (
+      follow_preposition_inner_side != 0 &&
+      (follow_preposition_pass_side_sign == 0 ||
+      is_inner_curve_pass(follow_preposition_pass_side_sign, follow_preposition_inner_side))) {
+      follow_preposition_pass_side_sign = -follow_preposition_inner_side;
+    }
+    const double follow_preposition_side_clearance =
+      overtake_side_clearance(
+        follow_preposition_pass_side_sign, behavior_output.front_lateral, lb[0], ub[0]);
+    const bool follow_preposition_curve_allowed =
+      !behavior_output.overtake_forbidden ||
+      (!behavior_output.overtake_forbidden_wp &&
+      !is_inner_curve_pass(follow_preposition_pass_side_sign, follow_preposition_inner_side));
+    const bool follow_preposition_front_distance_ok =
+      std::isfinite(behavior_output.front_distance) &&
+      behavior_output.front_distance >=
+      std::max(0.0, cfg.v2x_behavior.overtake_guard_min_front_distance);
     const bool use_follow_preposition_target =
       cfg.v2x_behavior.follow_preposition_enabled &&
       behavior_output.state == V2XBehaviorState::Follow &&
       behavior_output.has_front_vehicle &&
       !behavior_output.has_side_vehicle &&
-      !behavior_output.overtake_forbidden &&
-      behavior_output.overtake_pass_side_sign != 0 &&
-      behavior_output.overtake_side_clearance >=
+      follow_preposition_curve_allowed &&
+      follow_preposition_front_distance_ok &&
+      follow_preposition_pass_side_sign != 0 &&
+      follow_preposition_side_clearance >=
       cfg.v2x_behavior.follow_preposition_min_side_clearance &&
       cfg.v2x_behavior.follow_preposition_offset > kEps;
     const int gap_plan_N = use_overtake_lookahead ? v2x_overtake_gap_plan_horizon(N) : N;
@@ -3043,12 +3170,21 @@ struct MPC
       apply_velocity_limit(umax_dyn, ur, N, planner_output.target_velocity_limit);
     }
 
-    if (!use_overtake_side_target) {
+    const auto overtake_line_output =
+      update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
+    if (std::isfinite(overtake_line_output.target_velocity_limit)) {
+      apply_velocity_limit(umax_dyn, ur, N, overtake_line_output.target_velocity_limit);
+    }
+    const bool use_overtake_line_target = overtake_line_output.active;
+
+    if (use_overtake_line_target) {
+      overtake_locked_target_ey_.reset();
+    } else if (!use_overtake_side_target) {
       overtake_locked_target_ey_.reset();
       overtake_locked_side_sign_ = 0;
     }
     double overtake_target_ey = 0.0;
-    if (use_overtake_side_target) {
+    if (!use_overtake_line_target && use_overtake_side_target) {
       const int pass_side_sign = overtake_pass_side_sign;
       const double raw_side_target = overtake_side_target(lb[0], ub[0], pass_side_sign);
       const double current_ey = model->spatial_state.e_y;
@@ -3073,7 +3209,14 @@ struct MPC
       xmax_dyn[nx + i * nx] = ub[i];
       const double center_ey = (lb[i] + ub[i]) / 2.0;
       xr[nx + i * nx] = cfg.center_bias * center_ey;
-      if (use_overtake_side_target) {
+      if (
+        use_overtake_line_target &&
+        i < static_cast<int>(overtake_line_output.target_active.size()) &&
+        overtake_line_output.target_active[i]) {
+        xr[nx + i * nx] =
+          (1.0 - cfg.v2x_behavior.overtake_line.target_bias) * xr[nx + i * nx] +
+          cfg.v2x_behavior.overtake_line.target_bias * overtake_line_output.target_ey[i];
+      } else if (use_overtake_side_target) {
         const double ramp_ratio = std::max(0.1, cfg.v2x_gap.overtake_target_ramp_ratio);
         const double linear_progress = clip(
           (static_cast<double>(i) + 1.0) / (static_cast<double>(N) * ramp_ratio), 0.0, 1.0);
@@ -3098,7 +3241,7 @@ struct MPC
         const double progress =
           linear_progress * linear_progress * (3.0 - 2.0 * linear_progress);
         const double preposition_target =
-          static_cast<double>(behavior_output.overtake_pass_side_sign) *
+          static_cast<double>(follow_preposition_pass_side_sign) *
           cfg.v2x_behavior.follow_preposition_offset;
         const double ramp_target =
           model->spatial_state.e_y +
@@ -3334,6 +3477,8 @@ struct MPC
   double first_v2x_behavior_eval_sec{std::numeric_limits<double>::infinity()};
   std::optional<double> overtake_locked_target_ey_;
   int overtake_locked_side_sign_{0};
+  OvertakeLineState overtake_line_state_;
+  double last_overtake_line_debug_log_sec_{std::numeric_limits<double>::quiet_NaN()};
   double overtake_curve_cooldown_until_sec_{-std::numeric_limits<double>::infinity()};
   double previous_steering{0.0};
   double current_speed_mps_{0.0};
@@ -3359,6 +3504,278 @@ private:
       umax_dyn[2 * n] = std::min(umax_dyn[2 * n], limit);
       ur[2 * n] = std::min(ur[2 * n], limit);
     }
+  }
+
+  void reset_overtake_line_state(const double now_sec, const std::string & reason)
+  {
+    if (
+      cfg.v2x_behavior.overtake_line.debug_log_enabled &&
+      overtake_line_state_.phase != OvertakeLinePhase::Idle) {
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"),
+        "OvertakeLine: %s -> Idle, side=%d, wp_id=%d, reason=%s",
+        to_string(overtake_line_state_.phase), overtake_line_state_.pass_side_sign, model->wp_id,
+        reason.c_str());
+    }
+    overtake_line_state_ = OvertakeLineState{};
+    overtake_line_state_.phase_start_sec = now_sec;
+  }
+
+  void transition_overtake_line_phase(
+    const OvertakeLinePhase next_phase, const double now_sec, const double current_ey,
+    const int pass_side_sign, const std::string & reason)
+  {
+    if (overtake_line_state_.phase == next_phase) {
+      if (pass_side_sign != 0 && overtake_line_state_.pass_side_sign == 0) {
+        overtake_line_state_.pass_side_sign = pass_side_sign;
+      }
+      return;
+    }
+
+    if (cfg.v2x_behavior.overtake_line.debug_log_enabled) {
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"),
+        "OvertakeLine: %s -> %s, side=%d, ey=%.2f, wp_id=%d, reason=%s",
+        to_string(overtake_line_state_.phase), to_string(next_phase),
+        pass_side_sign != 0 ? pass_side_sign : overtake_line_state_.pass_side_sign, current_ey,
+        model->wp_id, reason.c_str());
+    }
+
+    overtake_line_state_.phase = next_phase;
+    overtake_line_state_.phase_start_sec = now_sec;
+    overtake_line_state_.phase_start_ey = current_ey;
+    overtake_line_state_.target_ey = current_ey;
+    if (pass_side_sign != 0) {
+      overtake_line_state_.pass_side_sign = pass_side_sign;
+    }
+  }
+
+  double overtake_line_goal_ey() const
+  {
+    const int pass_side_sign = overtake_line_state_.pass_side_sign;
+    if (
+      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+      overtake_line_state_.phase == OvertakeLinePhase::Pass) {
+      return static_cast<double>(pass_side_sign) *
+             std::max(0.0, cfg.v2x_behavior.overtake_line.lateral_offset);
+    }
+    return 0.0;
+  }
+
+  double overtake_line_phase_distance() const
+  {
+    const auto & line_cfg = cfg.v2x_behavior.overtake_line;
+    switch (overtake_line_state_.phase) {
+      case OvertakeLinePhase::ShiftOut:
+        return std::max(0.5, line_cfg.shift_distance);
+      case OvertakeLinePhase::Pass:
+        return std::max(0.5, line_cfg.pass_distance);
+      case OvertakeLinePhase::Return:
+      case OvertakeLinePhase::Recovery:
+        return std::max(0.5, line_cfg.return_distance);
+      case OvertakeLinePhase::Idle:
+      case OvertakeLinePhase::FollowPrepare:
+        return std::max(0.5, line_cfg.shift_distance);
+    }
+    return std::max(0.5, line_cfg.shift_distance);
+  }
+
+  double limit_overtake_line_goal_change(const double raw_goal)
+  {
+    const double max_change = std::max(0.0, cfg.v2x_behavior.overtake_line.max_target_change);
+    if (max_change <= kEps) {
+      overtake_line_state_.target_ey = raw_goal;
+      return raw_goal;
+    }
+    const double limited_goal = clip(
+      raw_goal, overtake_line_state_.target_ey - max_change,
+      overtake_line_state_.target_ey + max_change);
+    overtake_line_state_.target_ey = limited_goal;
+    return limited_goal;
+  }
+
+  OvertakeLineOutput update_overtake_line(
+    const V2XBehaviorOutput & behavior_output, const int ref_wp_id, const int N,
+    const Eigen::VectorXd & lb, const Eigen::VectorXd & ub, const double now_sec)
+  {
+    OvertakeLineOutput output;
+    const auto & line_cfg = cfg.v2x_behavior.overtake_line;
+    if (!line_cfg.enabled || N <= 0) {
+      reset_overtake_line_state(now_sec, "disabled");
+      return output;
+    }
+
+    const double current_ey = model->spatial_state.e_y;
+    if (
+      behavior_output.state == V2XBehaviorState::SafetyBrake ||
+      behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake) {
+      reset_overtake_line_state(now_sec, "safety brake");
+      return output;
+    }
+    if (behavior_output.state == V2XBehaviorState::LowSpeedAvoidance) {
+      reset_overtake_line_state(now_sec, "low speed avoidance owns target");
+      return output;
+    }
+    const bool stopped_or_low_speed_front =
+      behavior_output.has_front_vehicle &&
+      std::isfinite(behavior_output.front_distance) &&
+      std::isfinite(behavior_output.front_speed) &&
+      behavior_output.front_speed <= cfg.v2x_behavior.low_speed_avoidance_max_front_speed &&
+      behavior_output.front_distance <= std::max(
+        cfg.v2x_behavior.low_speed_avoidance_distance + model->length,
+        cfg.v2x_behavior.low_speed_avoidance_lookahead_distance);
+    if (behavior_output.low_speed_avoidance_candidate || stopped_or_low_speed_front) {
+      reset_overtake_line_state(now_sec, "stopped vehicle bypass owns target");
+      return output;
+    }
+
+    const bool behavior_overtake =
+      behavior_output.state == V2XBehaviorState::Overtake &&
+      behavior_output.overtake_pass_side_sign != 0;
+    const bool phase_active = overtake_line_state_.phase != OvertakeLinePhase::Idle;
+
+    if (behavior_overtake) {
+      const int pass_side_sign = overtake_line_state_.pass_side_sign != 0 ?
+        overtake_line_state_.pass_side_sign : behavior_output.overtake_pass_side_sign;
+      if (!phase_active || overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare) {
+        transition_overtake_line_phase(
+          OvertakeLinePhase::ShiftOut, now_sec, current_ey, pass_side_sign,
+          "overtake selected");
+      } else if (overtake_line_state_.pass_side_sign == 0) {
+        overtake_line_state_.pass_side_sign = pass_side_sign;
+      }
+    } else if (
+      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+      overtake_line_state_.phase == OvertakeLinePhase::Pass) {
+      if (!behavior_output.has_front_vehicle && !behavior_output.has_side_vehicle) {
+        transition_overtake_line_phase(
+          OvertakeLinePhase::Return, now_sec, current_ey, overtake_line_state_.pass_side_sign,
+          "front clear");
+      } else if (behavior_output.has_front_vehicle) {
+        transition_overtake_line_phase(
+          OvertakeLinePhase::Recovery, now_sec, current_ey, overtake_line_state_.pass_side_sign,
+          "overtake gap lost");
+      }
+    } else if (
+      overtake_line_state_.phase != OvertakeLinePhase::Return &&
+      overtake_line_state_.phase != OvertakeLinePhase::Recovery) {
+      reset_overtake_line_state(now_sec, "not overtaking");
+      return output;
+    }
+
+    const double phase_elapsed =
+      std::isfinite(overtake_line_state_.phase_start_sec) ?
+      std::max(0.0, now_sec - overtake_line_state_.phase_start_sec) : 0.0;
+    const double phase_traveled = std::max(0.0, current_speed_mps_) * phase_elapsed;
+    const bool phase_hold_elapsed =
+      phase_elapsed >= std::max(0.0, line_cfg.phase_hold_time);
+
+    const double lateral_offset = std::max(0.0, line_cfg.lateral_offset);
+    const double raw_goal_for_phase = overtake_line_goal_ey();
+    if (
+      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut && phase_hold_elapsed &&
+      (phase_traveled >= std::max(0.5, line_cfg.shift_distance) ||
+      std::abs(current_ey - raw_goal_for_phase) <= std::max(0.15, 0.25 * lateral_offset))) {
+      transition_overtake_line_phase(
+        OvertakeLinePhase::Pass, now_sec, current_ey, overtake_line_state_.pass_side_sign,
+        "shift complete");
+    }
+    if (
+      overtake_line_state_.phase == OvertakeLinePhase::Pass && phase_hold_elapsed &&
+      !behavior_output.has_front_vehicle && !behavior_output.has_side_vehicle) {
+      transition_overtake_line_phase(
+        OvertakeLinePhase::Return, now_sec, current_ey, overtake_line_state_.pass_side_sign,
+        "front and side clear");
+    }
+    if (
+      overtake_line_state_.phase == OvertakeLinePhase::Return && phase_hold_elapsed &&
+      (phase_traveled >= std::max(0.5, line_cfg.return_distance) || std::abs(current_ey) < 0.15)) {
+      reset_overtake_line_state(now_sec, "return complete");
+      return output;
+    }
+    if (
+      overtake_line_state_.phase == OvertakeLinePhase::Recovery && phase_hold_elapsed &&
+      (phase_traveled >= std::max(0.5, line_cfg.return_distance) || std::abs(current_ey) < 0.20)) {
+      reset_overtake_line_state(now_sec, "recovery complete");
+      return output;
+    }
+
+    if (overtake_line_state_.phase == OvertakeLinePhase::Idle) {
+      return output;
+    }
+
+    const double raw_goal = overtake_line_goal_ey();
+    const double goal_ey = limit_overtake_line_goal_change(raw_goal);
+    const double phase_distance = overtake_line_phase_distance();
+    const double min_wall_clearance = std::max(0.0, line_cfg.min_wall_clearance);
+    const double max_lateral_accel = std::max(0.0, line_cfg.max_lateral_accel);
+    const double speed_for_time = std::max(1.0, current_speed_mps_);
+
+    output.active = true;
+    output.target_ey.assign(N, 0.0);
+    output.target_active.assign(N, true);
+    if (overtake_line_state_.phase == OvertakeLinePhase::Recovery) {
+      output.target_velocity_limit = std::max(0.0, cfg.v2x_behavior.follow_velocity);
+    }
+
+    for (int i = 0; i < N; ++i) {
+      const double distance = horizon_path_distance_to_index(ref_wp_id, static_cast<std::size_t>(i));
+      const double progress = overtake_line_state_.phase == OvertakeLinePhase::Pass ?
+        1.0 : smoothstep(distance / phase_distance);
+      double target_ey =
+        overtake_line_state_.phase_start_ey +
+        progress * (goal_ey - overtake_line_state_.phase_start_ey);
+
+      double lower = lb[i] + min_wall_clearance;
+      double upper = ub[i] - min_wall_clearance;
+      if (upper < lower) {
+        lower = lb[i];
+        upper = ub[i];
+        output.wall_clearance_limited = true;
+      }
+
+      const double unclipped_target = target_ey;
+      target_ey = clip(target_ey, lower, upper);
+      if (std::abs(target_ey - unclipped_target) > 1e-6) {
+        output.wall_clearance_limited = true;
+      }
+
+      const double time_to_target = std::max(0.15, distance / speed_for_time);
+      const double lateral_shift = std::abs(target_ey - current_ey);
+      double required_lateral_accel = 2.0 * lateral_shift / (time_to_target * time_to_target);
+      if (max_lateral_accel > kEps && required_lateral_accel > max_lateral_accel) {
+        const double direction = target_ey >= current_ey ? 1.0 : -1.0;
+        const double limited_shift = 0.5 * max_lateral_accel * time_to_target * time_to_target;
+        target_ey = current_ey + direction * limited_shift;
+        target_ey = clip(target_ey, lower, upper);
+        required_lateral_accel = max_lateral_accel;
+        output.lateral_accel_limited = true;
+      }
+      output.max_required_lateral_accel =
+        std::max(output.max_required_lateral_accel, required_lateral_accel);
+      output.target_ey[i] = target_ey;
+    }
+
+    if (line_cfg.debug_log_enabled) {
+      const double period = std::max(0.0, cfg.v2x_behavior.debug_log_period_sec);
+      const bool log_now =
+        !std::isfinite(last_overtake_line_debug_log_sec_) ||
+        period <= kEps ||
+        now_sec - last_overtake_line_debug_log_sec_ >= period;
+      if (log_now) {
+        RCLCPP_INFO(
+          rclcpp::get_logger("mpc_controller"),
+          "OvertakeLine debug: phase=%s, side=%d, goal=%.2f, first_target=%.2f, "
+          "current_ey=%.2f, max_lat_acc=%.2f, lat_limited=%d, wall_limited=%d",
+          to_string(overtake_line_state_.phase), overtake_line_state_.pass_side_sign, goal_ey,
+          output.target_ey.empty() ? 0.0 : output.target_ey.front(), current_ey,
+          output.max_required_lateral_accel, output.lateral_accel_limited ? 1 : 0,
+          output.wall_clearance_limited ? 1 : 0);
+        last_overtake_line_debug_log_sec_ = now_sec;
+      }
+    }
+
+    return output;
   }
 
   bool is_overtake_forbidden_wp(const int wp_id) const
@@ -4420,6 +4837,51 @@ Config load_config(const std::string & path)
     0.1,
     mpc["v2x_overtake_target_ramp_ratio"] ?
     mpc["v2x_overtake_target_ramp_ratio"].as<double>() : 0.7);
+  cfg.mpc.v2x_behavior.overtake_line.enabled =
+    mpc["v2x_overtake_line_enabled"] ?
+    mpc["v2x_overtake_line_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_line.shift_distance = std::max(
+    0.5,
+    mpc["v2x_overtake_line_shift_distance"] ?
+    mpc["v2x_overtake_line_shift_distance"].as<double>() : 8.0);
+  cfg.mpc.v2x_behavior.overtake_line.pass_distance = std::max(
+    0.5,
+    mpc["v2x_overtake_line_pass_distance"] ?
+    mpc["v2x_overtake_line_pass_distance"].as<double>() : 8.0);
+  cfg.mpc.v2x_behavior.overtake_line.return_distance = std::max(
+    0.5,
+    mpc["v2x_overtake_line_return_distance"] ?
+    mpc["v2x_overtake_line_return_distance"].as<double>() : 10.0);
+  cfg.mpc.v2x_behavior.overtake_line.lateral_offset = std::max(
+    0.0,
+    mpc["v2x_overtake_line_lateral_offset"] ?
+    mpc["v2x_overtake_line_lateral_offset"].as<double>() : 1.2);
+  cfg.mpc.v2x_behavior.overtake_line.target_bias = clip(
+    mpc["v2x_overtake_line_target_bias"] ?
+    mpc["v2x_overtake_line_target_bias"].as<double>() : 0.8, 0.0, 1.0);
+  cfg.mpc.v2x_behavior.overtake_line.min_wall_clearance = std::max(
+    0.0,
+    mpc["v2x_overtake_line_min_wall_clearance"] ?
+    mpc["v2x_overtake_line_min_wall_clearance"].as<double>() : 0.8);
+  cfg.mpc.v2x_behavior.overtake_line.max_lateral_accel = std::max(
+    0.0,
+    mpc["v2x_overtake_line_max_lateral_accel"] ?
+    mpc["v2x_overtake_line_max_lateral_accel"].as<double>() : 2.5);
+  cfg.mpc.v2x_behavior.overtake_line.max_target_change = std::max(
+    0.0,
+    mpc["v2x_overtake_line_max_target_change"] ?
+    mpc["v2x_overtake_line_max_target_change"].as<double>() : 0.25);
+  cfg.mpc.v2x_behavior.overtake_line.return_clear_distance = std::max(
+    0.0,
+    mpc["v2x_overtake_line_return_clear_distance"] ?
+    mpc["v2x_overtake_line_return_clear_distance"].as<double>() : 4.0);
+  cfg.mpc.v2x_behavior.overtake_line.phase_hold_time = std::max(
+    0.0,
+    mpc["v2x_overtake_line_phase_hold_time"] ?
+    mpc["v2x_overtake_line_phase_hold_time"].as<double>() : 0.3);
+  cfg.mpc.v2x_behavior.overtake_line.debug_log_enabled =
+    mpc["v2x_overtake_line_debug_log_enabled"] ?
+    mpc["v2x_overtake_line_debug_log_enabled"].as<bool>() : false;
   cfg.mpc.v2x_behavior.enabled =
     mpc["use_v2x_behavior_fsm"] ? mpc["use_v2x_behavior_fsm"].as<bool>() : false;
   cfg.mpc.v2x_behavior.debug_log_enabled =
@@ -4884,6 +5346,17 @@ public:
           get_logger(), "V2X behavior debug log is enabled: period=%.2f sec",
           mpc_cfg_.v2x_behavior.debug_log_period_sec);
       }
+    }
+    if (mpc_cfg_.v2x_behavior.overtake_line.enabled) {
+      RCLCPP_INFO(
+        get_logger(),
+        "V2X overtake line is enabled: offset=%.2f, shift=%.2f, pass=%.2f, "
+        "return=%.2f, bias=%.2f",
+        mpc_cfg_.v2x_behavior.overtake_line.lateral_offset,
+        mpc_cfg_.v2x_behavior.overtake_line.shift_distance,
+        mpc_cfg_.v2x_behavior.overtake_line.pass_distance,
+        mpc_cfg_.v2x_behavior.overtake_line.return_distance,
+        mpc_cfg_.v2x_behavior.overtake_line.target_bias);
     }
     if (mpc_cfg_.v2x_behavior.low_speed_avoidance_enabled) {
       RCLCPP_INFO(

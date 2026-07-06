@@ -150,6 +150,10 @@ mpc:
   v2x_overtake_guard_min_gap_time: 0.7        # [s] reject gaps that appear too late at current speed
   v2x_overtake_guard_min_speed_for_reachable: 1.0 # [m/s] lower bound for reachability time estimate
   v2x_overtake_guard_min_front_distance: 3.0  # [m] keep too-close cases in Follow/SafetyBrake
+  v2x_overtake_close_follow_enabled: true     # allow side target when tucked close but relative speed is small
+  v2x_overtake_close_follow_min_front_distance: 1.5 # [m] do not side-escape from bumper-touch distance
+  v2x_overtake_close_follow_max_closing_speed: 0.8 # [m/s] only allow if front speed is nearly matched
+  v2x_overtake_close_follow_min_side_clearance: 2.0 # [m] require enough room before close-follow side target
   v2x_overtake_before_curve_enabled: true     # allow slow-front overtake in soft curve-lookahead zones
   v2x_overtake_before_curve_max_front_speed: 12.0 # [m/s] front vehicle is slow enough to justify pass
   v2x_overtake_before_curve_min_speed_advantage: 1.0 # [m/s] ego must be faster by this margin

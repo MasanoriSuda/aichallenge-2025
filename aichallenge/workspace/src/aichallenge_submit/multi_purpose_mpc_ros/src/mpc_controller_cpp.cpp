@@ -1147,6 +1147,10 @@ struct V2XBehaviorConfig
   double overtake_guard_min_gap_time{0.8};
   double overtake_guard_min_speed_for_reachable{1.0};
   double overtake_guard_min_front_distance{3.0};
+  bool overtake_close_follow_enabled{false};
+  double overtake_close_follow_min_front_distance{1.5};
+  double overtake_close_follow_max_closing_speed{0.8};
+  double overtake_close_follow_min_side_clearance{2.0};
   bool overtake_before_curve_enabled{false};
   double overtake_before_curve_max_front_speed{8.0};
   double overtake_before_curve_min_speed_advantage{1.0};
@@ -2847,7 +2851,15 @@ struct MPC
              << ", guard=" << fallback_guard_reason;
           overtake_block_reason = ss.str();
         } else {
-          overtake_block_reason = fallback_guard_reason;
+          std::string close_follow_reason;
+          if (overtake_close_follow_allows(
+              output, nearest_front_distance, nearest_front_speed, close_follow_reason)) {
+            overtake_gap_available = true;
+            output.overtake_fallback_target = true;
+            overtake_block_reason = close_follow_reason;
+          } else {
+            overtake_block_reason = fallback_guard_reason + " / " + close_follow_reason;
+          }
         }
       }
     }
@@ -3118,7 +3130,6 @@ struct MPC
       cfg.v2x_behavior.follow_preposition_enabled &&
       behavior_output.state == V2XBehaviorState::Follow &&
       behavior_output.has_front_vehicle &&
-      !behavior_output.has_side_vehicle &&
       follow_preposition_curve_allowed &&
       follow_preposition_front_distance_ok &&
       follow_preposition_pass_side_sign != 0 &&
@@ -4152,6 +4163,72 @@ private:
     return true;
   }
 
+  bool overtake_close_follow_allows(
+    const V2XBehaviorOutput & output, const double front_distance, const double front_speed,
+    std::string & block_reason) const
+  {
+    if (!cfg.v2x_behavior.overtake_close_follow_enabled) {
+      block_reason = "overtake close-follow disabled";
+      return false;
+    }
+    if (output.overtake_pass_side_sign == 0) {
+      block_reason = "overtake close-follow invalid side";
+      return false;
+    }
+    if (!std::isfinite(front_distance)) {
+      block_reason = "overtake close-follow front distance";
+      return false;
+    }
+    if (!std::isfinite(front_speed)) {
+      block_reason = "overtake close-follow front speed";
+      return false;
+    }
+
+    const double min_front_distance =
+      std::max(0.0, cfg.v2x_behavior.overtake_close_follow_min_front_distance);
+    if (front_distance < min_front_distance) {
+      std::ostringstream ss;
+      ss << "overtake close-follow front distance"
+         << ", fd=" << front_distance
+         << ", min=" << min_front_distance;
+      block_reason = ss.str();
+      return false;
+    }
+
+    const double min_side_clearance = std::max(
+      cfg.v2x_behavior.overtake_fallback_min_side_clearance,
+      cfg.v2x_behavior.overtake_close_follow_min_side_clearance);
+    if (output.overtake_side_clearance < min_side_clearance) {
+      std::ostringstream ss;
+      ss << "overtake close-follow side clearance"
+         << ", clearance=" << output.overtake_side_clearance
+         << ", min=" << min_side_clearance;
+      block_reason = ss.str();
+      return false;
+    }
+
+    const double closing_speed = std::max(0.0, current_speed_mps_ - std::max(0.0, front_speed));
+    const double max_closing_speed =
+      std::max(0.0, cfg.v2x_behavior.overtake_close_follow_max_closing_speed);
+    if (closing_speed > max_closing_speed) {
+      std::ostringstream ss;
+      ss << "overtake close-follow closing speed"
+         << ", closing=" << closing_speed
+         << ", max=" << max_closing_speed;
+      block_reason = ss.str();
+      return false;
+    }
+
+    std::ostringstream ss;
+    ss << "overtake close-follow side target"
+       << ", side=" << (output.overtake_pass_side_sign > 0 ? "left" : "right")
+       << ", clearance=" << output.overtake_side_clearance
+       << ", fd=" << front_distance
+       << ", closing=" << closing_speed;
+    block_reason = ss.str();
+    return true;
+  }
+
   bool overtake_fallback_guard_allows(
     const int pass_side_sign, const double front_distance, const double current_ey,
     const double lower, const double upper, std::string & block_reason) const
@@ -5069,6 +5146,21 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_guard_min_front_distance"] ?
     mpc["v2x_overtake_guard_min_front_distance"].as<double>() : 3.0);
+  cfg.mpc.v2x_behavior.overtake_close_follow_enabled =
+    mpc["v2x_overtake_close_follow_enabled"] ?
+    mpc["v2x_overtake_close_follow_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_close_follow_min_front_distance = std::max(
+    0.0,
+    mpc["v2x_overtake_close_follow_min_front_distance"] ?
+    mpc["v2x_overtake_close_follow_min_front_distance"].as<double>() : 1.5);
+  cfg.mpc.v2x_behavior.overtake_close_follow_max_closing_speed = std::max(
+    0.0,
+    mpc["v2x_overtake_close_follow_max_closing_speed"] ?
+    mpc["v2x_overtake_close_follow_max_closing_speed"].as<double>() : 0.8);
+  cfg.mpc.v2x_behavior.overtake_close_follow_min_side_clearance = std::max(
+    0.0,
+    mpc["v2x_overtake_close_follow_min_side_clearance"] ?
+    mpc["v2x_overtake_close_follow_min_side_clearance"].as<double>() : 2.0);
   cfg.mpc.v2x_behavior.overtake_before_curve_enabled =
     mpc["v2x_overtake_before_curve_enabled"] ?
     mpc["v2x_overtake_before_curve_enabled"].as<bool>() : false;

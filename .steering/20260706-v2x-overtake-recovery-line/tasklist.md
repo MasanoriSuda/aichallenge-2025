@@ -99,6 +99,7 @@
 - 2026-07-06: `v2x_follow_preposition_offset=0.9`、`target_bias=0.4`、`ramp_ratio=1.4` に調整し、Follow 中でもMPC予測点に追い越し準備の横方向意思が出るようにした。`make autoware-build` 成功。
 - 2026-07-06: 最新ログでは `pass=-1` が soft curve forbidden の内側側に見えており、preposition が条件で落ちていた。Follow preposition 用の pass side を通常 Overtake 判定と分離し、soft curve forbidden ではカーブ外側を優先するようにした。
 - 2026-07-06: 最新ログでは `fd=15.30` の時点で reachable な右側 fallback があったが、`v2x_overtake_guard_max_lateral_shift=2.2` により `shift=3.34` で拒否され、`fd=10.07` まで詰まってから Overtake に入り SafetyBrake へ戻されていた。絶対横移動量ガードを `0.0` で無効化し、時間込みの `v2x_overtake_guard_max_lateral_accel` に一本化した。
+- 2026-07-06: 最新ログでは OvertakeLine 有効後も `fd=1.8-2.0` まで詰まった状態で `overtake fallback guard front distance, min=5` により追い越し横 target が止まっていた。相対速度が小さく横余裕がある close-follow 状態だけ `v2x_overtake_close_follow_*` で side target を許可する例外を追加した。
 
 ## チューニング候補
 

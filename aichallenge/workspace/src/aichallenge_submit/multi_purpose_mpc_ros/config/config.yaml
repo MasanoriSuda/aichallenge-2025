@@ -39,13 +39,17 @@ bicycle_model:
   width: 1.45   # +safety margin
 
 mpc:
-  N: 10
+  N: 15
   # Q: [e_y, e_psi, t]
   # R: [v, delta]
   # QN: [e_y, e_psi, t]
   R: [100000.0, 0.0]
   a_min: -1.6 # m/s^2
   a_max: 1.0 # m/s^2
+  domain_a_max:
+    1: 1.0
+    2: 1.0
+    3: 0.7
   delta_max_deg: 32.0 # degrees
   steer_rate_max: 1.2 # rad/s
   control_rate: 40.0 # Hz
@@ -76,7 +80,7 @@ mpc:
   v2x_v_max_safety: 30.0
   v2x_self_filter_radius: 0.3
   gap_min_width: 1.8
-  gap_target_bias: 0.2
+  gap_target_bias: 0.8
   no_gap_target_velocity: 2.0
   # Prefer the vehicle side when a free gap is bounded by a wall and a V2X vehicle.
   v2x_wall_clearance_margin: 0.8      # [m] shrink the wall side of the selected V2X gap
@@ -90,40 +94,91 @@ mpc:
   v2x_multi_front_gap_distance: 18.0 # [m] with 2+ front vehicles, use no-gap velocity instead
   # V2X behavior FSM. When true, Cruise/Follow/Overtake/SafetyBrake controls when gap planner is allowed.
   use_v2x_behavior_fsm: true
+  v2x_behavior_debug_log_enabled: true # Phase4: periodically log why Follow/Overtake was selected
+  v2x_behavior_debug_log_period_sec: 1.0
   v2x_follow_distance: 14.0        # [m]
   v2x_safety_brake_distance: 6.0  # [m] minimum distance; dynamic stop distance is also applied
   v2x_safety_brake_margin: 3.0    # [m] added to v^2 / (2 * abs(a_min))
+  v2x_follow_gap_planner_enabled: false # Follow tracks the base path; lateral pass is only Overtake/low-speed avoidance
+  v2x_follow_gap_planner_no_gap_speed_limit_enabled: false # do not yield just because no gap is found
+  v2x_follow_gap_planner_respect_overtake_forbidden: true # do not side-attack in hairpins/forbidden zones
   v2x_follow_speed_limit_enabled: false # when false, Follow does not cap velocity
   v2x_follow_velocity: 3.0        # [m/s]
+  v2x_follow_preposition_enabled: true # keep Follow slightly off the front vehicle's direct wake
+  v2x_follow_preposition_offset: 0.6 # [m] soft lateral reference offset while following
+  v2x_follow_preposition_min_side_clearance: 1.4 # [m] require pass-side room before offsetting
+  v2x_follow_preposition_target_bias: 0.25 # weak reference only; constraints are not narrowed
+  v2x_follow_preposition_ramp_ratio: 1.8 # higher = slower lateral drift while following
   v2x_front_decel_guard_enabled: true
-  v2x_front_decel_guard_distance: 9.0     # [m] close moving front vehicle gets a speed cap
-  v2x_front_decel_guard_ttc: 1.5          # [s] also cap when closing time is short
-  v2x_front_decel_guard_speed_margin: 0.5 # [m/s] target <= front speed + margin
-  v2x_front_decel_guard_min_closing_speed: 1.5 # [m/s] avoid capping while merely tucked in
-  v2x_front_decel_guard_curve_distance: 16.0 # [m] earlier cap when overtake is forbidden in curves
-  v2x_front_decel_guard_curve_ttc: 3.0       # [s] earlier TTC cap in curves
+  v2x_front_decel_guard_distance: 0.0     # [m] straight sections do not get a follow speed cap
+  v2x_front_decel_guard_ttc: 0.0          # [s] straight sections do not get a follow speed cap
+  v2x_front_decel_guard_speed_margin: 1.2 # [m/s] target <= front speed + margin
+  v2x_front_decel_guard_min_closing_speed: 2.0 # [m/s] avoid capping while merely tucked in
+  v2x_front_decel_guard_curve_include_slow_front: true # hairpin guard must follow heavily slowing cars too
+  v2x_front_decel_guard_curve_lateral_margin: 1.5 # [m] catch cars that cut into our path in hairpins
+  v2x_front_decel_guard_curve_lookahead_distance: 8.0 # [m] enable front speed matching before hairpins
+  v2x_front_decel_guard_curve_distance: 10.0 # [m] earlier cap when overtake is forbidden in curves
+  v2x_front_decel_guard_curve_ttc: 2.8       # [s] earlier TTC cap in curves
+  v2x_front_risk_arbitration_enabled: true   # Phase1: required-decel based braking guard
+  v2x_front_risk_brake_prepare_limit_enabled: true # cap speed before the front gap collapses
+  v2x_front_risk_avoid_candidate_limit_enabled: true # cap speed when an avoidable front risk is found
+  v2x_front_risk_comfort_decel: 2.0          # [m/s^2] start smooth speed cap above this
+  v2x_front_risk_hard_decel: 4.0             # [m/s^2] stronger speed cap above this
+  v2x_front_risk_emergency_decel: 8.0        # [m/s^2] force SafetyBrake above this
+  v2x_front_risk_distance_margin: 2.0        # [m] keep this clearance from front vehicle
+  v2x_front_risk_min_closing_speed: 0.5      # [m/s] ignore nearly matched speed
+  v2x_front_risk_prepare_time: 0.5           # [s] subtract closing distance during reaction delay
+  v2x_front_risk_curve_limit_enabled: true   # in curves, cap speed before emergency braking is needed
+  v2x_front_risk_curve_limit_required_decel: 1.1 # [m/s^2] start curve-only cap before a_min is exceeded
+  v2x_front_risk_curve_limit_decel: 1.2      # [m/s^2] assumed feasible decel for curve-only cap
+  v2x_front_risk_curve_limit_speed_margin: 0.5 # [m/s] keep slight race margin over front speed
   v2x_safety_brake_velocity: 0.0  # [m/s]
-  v2x_overtake_min_gap_width: 2.5 # [m]
+  # Gap width is measured after inflating V2X vehicles by ego+other half width.
+  # Keep this as center-line slack, not raw vehicle width.
+  v2x_overtake_min_gap_width: 0.8 # [m]
   v2x_overtake_max_curvature: 0.03
+  v2x_overtake_block_inner_curve_pass: true # do not dive into the inside of hairpin curves
+  v2x_overtake_forbidden_curve_lookahead_distance: 8.0 # [m] block overtake only near/in hairpins; keep straights raceable
+  v2x_overtake_gap_lookahead_distance: 24.0 # [m] search farther than MPC horizon for slow-front pass
   v2x_overtake_guard_enabled: true
-  v2x_overtake_guard_min_gap_width: 2.5       # [m] require a full vehicle-width passable gap
-  v2x_overtake_guard_min_gap_points: 3        # require consecutive horizon points before Overtake
-  v2x_overtake_guard_min_prepare_distance: 8.0 # [m] do not dive into gaps that appear too late
-  v2x_overtake_guard_max_lateral_shift: 1.0   # [m] reject abrupt side-step targets
+  v2x_overtake_guard_min_gap_width: 0.8       # [m] center-line slack after inflated obstacles
+  v2x_overtake_guard_min_gap_points: 2        # require consecutive horizon points before Overtake
+  v2x_overtake_guard_min_prepare_distance: 5.0 # [m] do not dive into gaps that appear too late
+  v2x_overtake_guard_max_lateral_shift: 2.2   # [m] reject abrupt side-step targets
+  v2x_overtake_guard_reachable_gap_enabled: true # reject gaps that require excessive lateral accel
+  v2x_overtake_guard_max_lateral_accel: 3.2   # [m/s^2] max required lateral accel to reach gap
+  v2x_overtake_guard_min_gap_time: 0.7        # [s] reject gaps that appear too late at current speed
+  v2x_overtake_guard_min_speed_for_reachable: 1.0 # [m/s] lower bound for reachability time estimate
   v2x_overtake_guard_min_front_distance: 3.0  # [m] keep too-close cases in Follow/SafetyBrake
+  v2x_overtake_before_curve_enabled: true     # allow slow-front overtake in soft curve-lookahead zones
+  v2x_overtake_before_curve_max_front_speed: 12.0 # [m/s] front vehicle is slow enough to justify pass
+  v2x_overtake_before_curve_min_speed_advantage: 1.0 # [m/s] ego must be faster by this margin
+  v2x_overtake_start_curve_clearance_distance: 8.0 # [m] do not start a new pass just before hairpins
+  v2x_overtake_continue_in_forbidden_enabled: false # moving vehicles should follow/brake, not keep passing in hairpins
+  v2x_overtake_front_velocity_limit_enabled: false # do not match front speed while a reachable overtake gap exists
+  v2x_overtake_fallback_ignore_soft_curve_forbidden: false # avoid wall-side fallback targets in hairpins
+  v2x_overtake_fallback_min_side_clearance: 1.2 # [m] required pass-side clearance for fallback target
+  v2x_overtake_curve_cooldown_enabled: true # suppress immediate re-overtake after a curve-related abort
+  v2x_overtake_curve_cooldown_sec: 1.5      # [s] prevents left/right target flip inside hairpins
+  v2x_side_overtake_enabled: true # treat side-by-side vehicles as overtake candidates, not passive Follow only
+  v2x_side_overtake_ignore_soft_curve_forbidden: false # do not side-pass moving vehicles in hairpins
+  v2x_overtake_target_ramp_enabled: true      # start lateral target before the front vehicle enters MPC horizon
+  v2x_overtake_target_ramp_ratio: 1.2         # higher = ramp pass-side target more gently
   v2x_moving_front_speed_threshold: 1.0 # [m/s] above this, Follow uses moving-front behavior
   v2x_moving_follow_speed_margin: 4.0   # [m/s] speed margin over the moving front vehicle
-  v2x_moving_safety_brake_distance: 3.0 # [m] minimum brake distance for moving front vehicles
-  v2x_moving_safety_brake_margin: 1.0   # [m] added to relative-speed stopping distance
-  v2x_moving_safety_brake_time_headway: 0.3 # [s] speed-dependent emergency margin
+  v2x_moving_safety_brake_distance: 2.0 # [m] minimum brake distance for moving front vehicles
+  v2x_moving_safety_brake_margin: 0.5   # [m] added to relative-speed stopping distance
+  v2x_moving_safety_brake_time_headway: 0.15 # [s] speed-dependent emergency margin
   v2x_start_grid_grace_time: 1800.0      # [s] keep stop-vehicle behavior suppressed during race start tests
   v2x_require_gap_for_overtake: true
   v2x_low_speed_avoidance_enabled: true
+  v2x_low_speed_avoidance_ignore_soft_curve_forbidden: true # gate2: allow stopped-vehicle bypass in curve-lookahead zones
   use_v2x_local_path_planner: true
   v2x_low_speed_avoidance_distance: 10.0         # [m] close stopped/slow vehicle bypass range
   v2x_low_speed_avoidance_lookahead_distance: 18.0 # [m] include multiple stopped vehicles in gate2-like layouts
   v2x_low_speed_avoidance_velocity: 11.1         # [m/s]
-  v2x_low_speed_avoidance_max_front_speed: 1.0   # [m/s]
+  v2x_low_speed_avoidance_max_front_speed: 0.2   # [m/s] only treat truly stopped vehicles as bypass targets
+  v2x_low_speed_avoidance_min_prepare_distance: 6.0 # [m] too close should brake/follow, not start lateral bypass
   v2x_low_speed_avoidance_min_gap_width: 0.5     # [m] checked after wall clearance shrink
   v2x_low_speed_avoidance_min_gap_points: 2      # require consecutive safe gap points before entering bypass
   v2x_low_speed_avoidance_clear_distance: 8.0    # [m] keep low-speed bypass until clear of nearby V2X vehicles
@@ -142,13 +197,13 @@ mpc:
 
   v_max: 40.0   # km/h
   domain_v_max:
-    1: 40.0
+    1: 20.0
     2: 40.0
-    3: 40.0
+    3: 20.0
   domain_start_v_max_duration: 15.0 # [s] compensate inner-lane advantage at side-by-side start
   domain_start_v_max:
     2: 37.0
-  ay_max: 9.5  # m/s^2, maximum lateral acceleration in curves
+  ay_max: 30.0  # m/s^2, maximum lateral acceleration in curves
   Q:  [150000.0, 5000000.0, 100000.0]
   QN: [100000.0, 100000.0, 1000.0]
 

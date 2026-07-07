@@ -2853,7 +2853,8 @@ struct MPC
         } else {
           std::string close_follow_reason;
           if (overtake_close_follow_allows(
-              output, nearest_front_distance, nearest_front_speed, close_follow_reason)) {
+              output, nearest_front_distance, nearest_front_speed, model->spatial_state.e_y,
+              lb[0], ub[0], close_follow_reason)) {
             overtake_gap_available = true;
             output.overtake_fallback_target = true;
             overtake_block_reason = close_follow_reason;
@@ -4165,7 +4166,7 @@ private:
 
   bool overtake_close_follow_allows(
     const V2XBehaviorOutput & output, const double front_distance, const double front_speed,
-    std::string & block_reason) const
+    const double current_ey, const double lower, const double upper, std::string & block_reason) const
   {
     if (!cfg.v2x_behavior.overtake_close_follow_enabled) {
       block_reason = "overtake close-follow disabled";
@@ -4173,6 +4174,10 @@ private:
     }
     if (output.overtake_pass_side_sign == 0) {
       block_reason = "overtake close-follow invalid side";
+      return false;
+    }
+    if (upper - lower <= kEps) {
+      block_reason = "overtake close-follow invalid bounds";
       return false;
     }
     if (!std::isfinite(front_distance)) {
@@ -4219,12 +4224,52 @@ private:
       return false;
     }
 
+    const double raw_target =
+      overtake_side_target(lower, upper, output.overtake_pass_side_sign);
+    const double directional_target = output.overtake_pass_side_sign > 0 ?
+      std::max(raw_target, current_ey) :
+      std::min(raw_target, current_ey);
+    const double lateral_shift = std::abs(directional_target - current_ey);
+    const double speed_for_time =
+      std::max(std::max(0.0, current_speed_mps_),
+        std::max(kEps, cfg.v2x_behavior.overtake_guard_min_speed_for_reachable));
+    const double gap_time = front_distance / speed_for_time;
+    const double min_gap_time = std::max(0.0, cfg.v2x_behavior.overtake_guard_min_gap_time);
+    if (min_gap_time > kEps && gap_time < min_gap_time) {
+      std::ostringstream ss;
+      ss << "overtake close-follow gap time"
+         << ", t=" << gap_time
+         << ", min=" << min_gap_time;
+      block_reason = ss.str();
+      return false;
+    }
+
+    if (cfg.v2x_behavior.overtake_guard_reachable_gap_enabled) {
+      const double max_lateral_accel =
+        std::max(0.0, cfg.v2x_behavior.overtake_guard_max_lateral_accel);
+      const double required_lateral_accel = gap_time > kEps ?
+        2.0 * lateral_shift / (gap_time * gap_time) :
+        std::numeric_limits<double>::infinity();
+      if (max_lateral_accel > kEps && required_lateral_accel > max_lateral_accel) {
+        std::ostringstream ss;
+        ss << "overtake close-follow lateral accel"
+           << ", ay=" << required_lateral_accel
+           << ", max=" << max_lateral_accel
+           << ", shift=" << lateral_shift
+           << ", t=" << gap_time;
+        block_reason = ss.str();
+        return false;
+      }
+    }
+
     std::ostringstream ss;
     ss << "overtake close-follow side target"
        << ", side=" << (output.overtake_pass_side_sign > 0 ? "left" : "right")
        << ", clearance=" << output.overtake_side_clearance
        << ", fd=" << front_distance
-       << ", closing=" << closing_speed;
+       << ", closing=" << closing_speed
+       << ", shift=" << lateral_shift
+       << ", t=" << gap_time;
     block_reason = ss.str();
     return true;
   }
@@ -4725,6 +4770,8 @@ struct RefPathConfig
 {
   bool update_by_topic{};
   std::string csv_path;
+  bool domain_csv_path_applied{false};
+  int domain_csv_path_domain{-1};
   double resolution{};
   int smoothing_distance{};
   double max_width{};
@@ -4750,6 +4797,7 @@ struct Config
 Config load_config(const std::string & path)
 {
   const YAML::Node root = YAML::LoadFile(path);
+  const auto ros_domain_id = ros_domain_id_from_env();
   Config cfg;
   cfg.save_config = root["common"]["save_config"].as<bool>();
   cfg.animation_enabled = root["sim_logger"]["animation_enabled"].as<bool>();
@@ -4760,6 +4808,17 @@ Config load_config(const std::string & path)
   const auto ref = root["reference_path"];
   cfg.reference_path.update_by_topic = ref["update_by_topic"].as<bool>();
   cfg.reference_path.csv_path = ref["csv_path"].as<std::string>();
+  if (ref["domain_csv_path"] && ros_domain_id.has_value()) {
+    for (const auto & item : ref["domain_csv_path"]) {
+      if (item.first.as<int>() != ros_domain_id.value()) {
+        continue;
+      }
+      cfg.reference_path.csv_path = item.second.as<std::string>();
+      cfg.reference_path.domain_csv_path_applied = true;
+      cfg.reference_path.domain_csv_path_domain = ros_domain_id.value();
+      break;
+    }
+  }
   cfg.reference_path.resolution = ref["resolution"].as<double>();
   cfg.reference_path.smoothing_distance = ref["smoothing_distance"].as<int>();
   cfg.reference_path.max_width = ref["max_width"].as<double>();
@@ -4779,7 +4838,6 @@ Config load_config(const std::string & path)
   cfg.mpc.QN = Eigen::Vector3d(QN.at(0), QN.at(1), QN.at(2));
   cfg.mpc.v_max_kmh = mpc["v_max"].as<double>();
   cfg.mpc.v_max = kmh_to_m_per_sec(cfg.mpc.v_max_kmh);
-  const auto ros_domain_id = ros_domain_id_from_env();
   if (ros_domain_id.has_value()) {
     cfg.mpc.ros_domain_id = ros_domain_id.value();
   }
@@ -5395,6 +5453,13 @@ public:
     }
     if (use_obstacle_avoidance_) {
       RCLCPP_WARN(get_logger(), "USE_OBSTACLE_AVOIDANCE is enabled!");
+    }
+    if (cfg_.reference_path.domain_csv_path_applied) {
+      RCLCPP_INFO(
+        get_logger(), "reference_path.domain_csv_path applied: ROS_DOMAIN_ID=%d, csv_path=%s",
+        cfg_.reference_path.domain_csv_path_domain, cfg_.reference_path.csv_path.c_str());
+    } else {
+      RCLCPP_INFO(get_logger(), "reference_path.csv_path: %s", cfg_.reference_path.csv_path.c_str());
     }
     if (mpc_cfg_.domain_v_max_applied) {
       RCLCPP_INFO(

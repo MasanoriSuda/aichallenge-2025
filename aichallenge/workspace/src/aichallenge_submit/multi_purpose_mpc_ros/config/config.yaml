@@ -24,6 +24,10 @@ reference_path:
   # path from pkg share dir
   # csv_path: ""
   csv_path: "env/final_ver3/traj_mincurv.csv"
+  domain_csv_path:
+    1: "env/final_ver3/traj_mincurv.csv"
+    2: "env/final_ver3/traj_mincurv.csv"
+    3: "env/final_ver3/traj_mincurv.csv"
   resolution: 0.6
   smoothing_distance: 2
   max_width: 6.0
@@ -52,7 +56,7 @@ mpc:
     3: 1.0
   delta_max_deg: 32.0 # degrees
   steer_rate_max: 1.2 # rad/s
-  control_rate: 40.0 # Hz
+  control_rate: 100.0 # Hz
   steering_tire_angle_gain_var: 1.5
   # steering_tire_angle_gain_var: 1.0
   # accel_low_pass_gain: 0.1
@@ -220,8 +224,8 @@ mpc:
   domain_start_v_max:
     2: 37.0
   ay_max: 30.0  # m/s^2, maximum lateral acceleration in curves
-  Q:  [150000.0, 5000000.0, 100000.0]
-  QN: [100000.0, 100000.0, 1000.0]
+  Q:  [50000.0, 1500000.0, 30000.0]
+  QN: [30000.0, 30000.0, 300.0]
 
   ## ---------- 究極 ------------- ##
   ## Lap1: 53s, Lap2: 47s

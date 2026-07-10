@@ -49,7 +49,9 @@ class ReferencePathGenerator():
             is_ref_path_given = cfg_ref_path.csv_path != ""
             if is_ref_path_given:
                 print("Using given reference path")
-                wp_x, wp_y, _, _ = load_ref_path(cls.__in_pkg_share(cfg.reference_path.csv_path))
+                wp_x, wp_y, _, _ = load_ref_path(
+                    cls.__in_pkg_share(cfg.reference_path.csv_path),
+                    circular=cfg_ref_path.circular)
                 return ReferencePath(
                     map,
                     wp_x,

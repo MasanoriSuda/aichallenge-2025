@@ -5,6 +5,7 @@
 #include <geometry_msgs/msg/pose2_d.hpp>
 #include <geometry_msgs/msg/quaternion.hpp>
 #include <geometry_msgs/msg/vector3.hpp>
+#include <multi_purpose_mpc_ros/path_core.hpp>
 #include <multi_purpose_mpc_ros_msgs/msg/ackermann_control_boost_command.hpp>
 #include <multi_purpose_mpc_ros_msgs/msg/border_cells.hpp>
 #include <multi_purpose_mpc_ros_msgs/msg/path_constraints.hpp>
@@ -71,6 +72,8 @@ using std_msgs::msg::Int32;
 using v2x_msgs::msg::V2XVehiclePositionArray;
 using visualization_msgs::msg::Marker;
 using visualization_msgs::msg::MarkerArray;
+using SteadyClock = std::chrono::steady_clock;
+namespace path_core = ::multi_purpose_mpc_ros::path_core;
 
 constexpr double kEps = 1e-12;
 constexpr double kPi = 3.14159265358979323846;
@@ -88,7 +91,7 @@ double smoothstep(const double value)
 
 double wrap_to_pi(const double angle)
 {
-  return std::fmod(angle + kPi, 2.0 * kPi) - kPi;
+  return path_core::wrap_to_pi(angle);
 }
 
 double kmh_to_m_per_sec(const double kmh)
@@ -165,12 +168,60 @@ std::unordered_map<std::string, std::vector<double>> read_csv_columns(const std:
   return columns;
 }
 
-std::optional<Eigen::VectorXd> solve_osqp(
+struct OsqpSolveResult
+{
+  Eigen::VectorXd solution;
+  c_int status{};
+  double max_constraint_violation{};
+};
+
+struct CscDeleter
+{
+  void operator()(csc * matrix) const noexcept
+  {
+    c_free(matrix);
+  }
+};
+
+struct OsqpWorkspaceDeleter
+{
+  void operator()(OSQPWorkspace * workspace) const noexcept
+  {
+    if (workspace != nullptr) {
+      static_cast<void>(osqp_cleanup(workspace));
+    }
+  }
+};
+
+bool sparse_values_are_finite(const Eigen::SparseMatrix<double> & matrix)
+{
+  for (int i = 0; i < matrix.nonZeros(); ++i) {
+    if (!std::isfinite(matrix.valuePtr()[i])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+std::optional<OsqpSolveResult> solve_osqp(
   Eigen::SparseMatrix<double> P, Eigen::SparseMatrix<double> A, const Eigen::VectorXd & q,
   const Eigen::VectorXd & l, const Eigen::VectorXd & u)
 {
   P.makeCompressed();
   A.makeCompressed();
+
+  if (
+    P.rows() <= 0 || P.rows() != P.cols() || q.size() != P.cols() || A.rows() <= 0 ||
+    A.cols() != P.cols() || A.rows() != l.size() || l.size() != u.size() ||
+    !sparse_values_are_finite(P) || !sparse_values_are_finite(A) || !q.allFinite())
+  {
+    return std::nullopt;
+  }
+  for (int i = 0; i < l.size(); ++i) {
+    if (std::isnan(l[i]) || std::isnan(u[i]) || l[i] > u[i]) {
+      return std::nullopt;
+    }
+  }
 
   std::vector<c_float> p_x(P.nonZeros());
   std::vector<c_int> p_i(P.nonZeros());
@@ -205,18 +256,21 @@ std::optional<Eigen::VectorXd> solve_osqp(
     u_data[i] = static_cast<c_float>(u[i]);
   }
 
-  csc * P_csc = csc_matrix(
-    static_cast<c_int>(P.rows()), static_cast<c_int>(P.cols()), static_cast<c_int>(P.nonZeros()),
-    p_x.data(), p_i.data(), p_p.data());
-  csc * A_csc = csc_matrix(
-    static_cast<c_int>(A.rows()), static_cast<c_int>(A.cols()), static_cast<c_int>(A.nonZeros()),
-    a_x.data(), a_i.data(), a_p.data());
+  std::unique_ptr<csc, CscDeleter> P_csc(csc_matrix(
+      static_cast<c_int>(P.rows()), static_cast<c_int>(P.cols()),
+      static_cast<c_int>(P.nonZeros()), p_x.data(), p_i.data(), p_p.data()));
+  std::unique_ptr<csc, CscDeleter> A_csc(csc_matrix(
+      static_cast<c_int>(A.rows()), static_cast<c_int>(A.cols()),
+      static_cast<c_int>(A.nonZeros()), a_x.data(), a_i.data(), a_p.data()));
+  if (!P_csc || !A_csc) {
+    return std::nullopt;
+  }
 
   OSQPData data;
   data.n = static_cast<c_int>(P.cols());
   data.m = static_cast<c_int>(A.rows());
-  data.P = P_csc;
-  data.A = A_csc;
+  data.P = P_csc.get();
+  data.A = A_csc.get();
   data.q = q_data.data();
   data.l = l_data.data();
   data.u = u_data.data();
@@ -225,27 +279,62 @@ std::optional<Eigen::VectorXd> solve_osqp(
   osqp_set_default_settings(&settings);
   settings.verbose = false;
 
-  OSQPWorkspace * work = nullptr;
-  if (osqp_setup(&work, &data, &settings) != 0 || work == nullptr) {
-    c_free(P_csc);
-    c_free(A_csc);
+  OSQPWorkspace * raw_work = nullptr;
+  const c_int setup_exit_flag = osqp_setup(&raw_work, &data, &settings);
+  std::unique_ptr<OSQPWorkspace, OsqpWorkspaceDeleter> work(raw_work);
+  if (setup_exit_flag != 0 || !work) {
     return std::nullopt;
   }
-  osqp_solve(work);
-  if (work->solution == nullptr || work->solution->x == nullptr) {
-    osqp_cleanup(work);
-    c_free(P_csc);
-    c_free(A_csc);
+  const c_int solve_exit_flag = osqp_solve(work.get());
+  if (
+    solve_exit_flag != 0 || work->info == nullptr ||
+    (work->info->status_val != OSQP_SOLVED &&
+    work->info->status_val != OSQP_SOLVED_INACCURATE) ||
+    work->solution == nullptr || work->solution->x == nullptr)
+  {
     return std::nullopt;
   }
+
+  const c_int status = work->info->status_val;
   Eigen::VectorXd solution(P.cols());
   for (int i = 0; i < solution.size(); ++i) {
     solution[i] = static_cast<double>(work->solution->x[i]);
   }
-  osqp_cleanup(work);
-  c_free(P_csc);
-  c_free(A_csc);
-  return solution;
+  if (!solution.allFinite()) {
+    return std::nullopt;
+  }
+
+  const Eigen::VectorXd constraint_values = A * solution;
+  if (constraint_values.size() != l.size() || !constraint_values.allFinite()) {
+    return std::nullopt;
+  }
+
+  double max_constraint_violation = 0.0;
+  double max_projected_abs = 0.0;
+  for (int i = 0; i < constraint_values.size(); ++i) {
+    double projected_value = constraint_values[i];
+    if (std::isfinite(l[i])) {
+      projected_value = std::max(projected_value, l[i]);
+    }
+    if (std::isfinite(u[i])) {
+      projected_value = std::min(projected_value, u[i]);
+    }
+    max_constraint_violation =
+      std::max(max_constraint_violation, std::abs(constraint_values[i] - projected_value));
+    max_projected_abs = std::max(max_projected_abs, std::abs(projected_value));
+  }
+  const double constraint_scale =
+    std::max(constraint_values.cwiseAbs().maxCoeff(), max_projected_abs);
+  const double inaccurate_multiplier = status == OSQP_SOLVED_INACCURATE ? 10.0 : 1.0;
+  const double constraint_tolerance =
+    inaccurate_multiplier *
+    (static_cast<double>(settings.eps_abs) +
+    static_cast<double>(settings.eps_rel) * constraint_scale);
+  if (max_constraint_violation > constraint_tolerance) {
+    return std::nullopt;
+  }
+
+  return OsqpSolveResult{solution, status, max_constraint_violation};
 }
 
 std::pair<std::vector<double>, std::vector<double>> load_waypoints(const std::string & csv_path)
@@ -254,10 +343,23 @@ std::pair<std::vector<double>, std::vector<double>> load_waypoints(const std::st
   return {columns.at("wp_x"), columns.at("wp_y")};
 }
 
-std::pair<std::vector<double>, std::vector<double>> load_ref_path(const std::string & csv_path)
+std::pair<std::vector<double>, std::vector<double>> load_ref_path(
+  const std::string & csv_path, const bool circular)
 {
-  const auto columns = read_csv_columns(csv_path);
-  return {columns.at("x_m"), columns.at("y_m")};
+  auto points = path_core::load_reference_path_csv(csv_path);
+  if (circular) {
+    path_core::normalize_circular_endpoint(points, 1e-3);
+  }
+
+  std::vector<double> x;
+  std::vector<double> y;
+  x.reserve(points.size());
+  y.reserve(points.size());
+  for (const auto & point : points) {
+    x.push_back(point.x_m);
+    y.push_back(point.y_m);
+  }
+  return {std::move(x), std::move(y)};
 }
 
 double yaw_from_quaternion(const Quaternion & q)
@@ -507,6 +609,12 @@ struct ReferencePath
     smoothing_distance(smoothing_distance_in),
     circular(circular_in)
   {
+    if (wp_x.size() != wp_y.size() || wp_x.size() < 2U) {
+      throw std::invalid_argument("Reference path requires matching x/y arrays with at least 2 points");
+    }
+    if (smoothing_distance < 0) {
+      throw std::invalid_argument("Reference path smoothing_distance must be non-negative");
+    }
     org_wp_x = wp_x;
     org_wp_y = wp_y;
     waypoints = construct_path(wp_x, wp_y);
@@ -523,10 +631,18 @@ struct ReferencePath
       wp_y.insert(wp_y.end(), wp_y.begin(), wp_y.begin() + append_count);
     }
 
-    std::vector<int> n_wp;
+    std::vector<std::size_t> n_wp;
     for (std::size_t i = 0; i + 1 < wp_x.size(); ++i) {
       const double d = std::hypot(wp_x[i + 1] - wp_x[i], wp_y[i + 1] - wp_y[i]);
-      n_wp.push_back(std::max(1, static_cast<int>(d / resolution)));
+      if (!std::isfinite(d) || d <= path_core::kMinimumSegmentLengthM) {
+        throw std::runtime_error(
+                "Reference path contains a degenerate segment at index " +
+                std::to_string(i));
+      }
+      // Keep the legacy waypoint density until distance-based horizon and
+      // waypoint-parameter migration are implemented together.  The ceil
+      // helper is tested in path_core but is not a production default yet.
+      n_wp.push_back(std::max<std::size_t>(1U, static_cast<std::size_t>(d / resolution)));
     }
 
     const double gp_x = wp_x.back();
@@ -534,7 +650,7 @@ struct ReferencePath
     std::vector<double> interp_x;
     std::vector<double> interp_y;
     for (std::size_t i = 0; i + 1 < wp_x.size(); ++i) {
-      for (int j = 0; j < n_wp[i]; ++j) {
+      for (std::size_t j = 0; j < n_wp[i]; ++j) {
         const double t = static_cast<double>(j) / static_cast<double>(n_wp[i]);
         interp_x.push_back(wp_x[i] + (wp_x[i + 1] - wp_x[i]) * t);
         interp_y.push_back(wp_y[i] + (wp_y[i + 1] - wp_y[i]) * t);
@@ -554,6 +670,9 @@ struct ReferencePath
         ++count;
       }
       smoothed.emplace_back(sx / count, sy / count);
+    }
+    if (smoothed.size() < 4U) {
+      throw std::runtime_error("Reference path contains fewer than 3 waypoints after smoothing");
     }
     return construct_waypoints(smoothed);
   }
@@ -725,10 +844,10 @@ struct ReferencePath
     u << a_max, v_max;
 
     const auto solution_opt = solve_osqp(P, D, q, l, u);
-    if (!solution_opt.has_value() || solution_opt->size() != N) {
+    if (!solution_opt.has_value() || solution_opt->solution.size() != N) {
       return false;
     }
-    const Eigen::VectorXd solution = solution_opt.value();
+    const Eigen::VectorXd solution = solution_opt->solution;
     for (int i = 0; i < N; ++i) {
       waypoints[i].v_ref = solution[i];
     }
@@ -877,13 +996,15 @@ struct BicycleModel
 {
   BicycleModel(
     ReferencePath * ref_path, const double length_in, const double width_in,
-    const double safety_margin_scale_in, const double Ts_in)
+    const double safety_margin_scale_in, const double Ts_in,
+    const double min_linearization_speed_mps_in)
   : length(length_in),
     width(width_in),
     safety_margin_scale(std::max(0.0, safety_margin_scale_in)),
     safety_margin(compute_safety_margin()),
     reference_path(ref_path),
-    Ts(Ts_in)
+    Ts(Ts_in),
+    min_linearization_speed_mps(min_linearization_speed_mps_in)
   {
     current_waypoint = &reference_path->waypoints.at(wp_id);
     temporal_state = s2t(*current_waypoint, spatial_state);
@@ -1022,7 +1143,7 @@ struct BicycleModel
     A.row(1) = Eigen::Vector3d(-std::pow(kappa_ref, 2.0) * delta_s, 1.0, 0.0);
     B.row(0) = Eigen::Vector2d(0.0, 0.0);
     B.row(1) = Eigen::Vector2d(0.0, delta_s);
-    if (v_ref == 0.0) {
+    if (std::abs(v_ref) < min_linearization_speed_mps) {
       A.row(2) = Eigen::Vector3d(0.0, 0.0, 1.0);
       B.row(2) = Eigen::Vector2d(0.0, 0.0);
       f = Eigen::Vector3d(0.0, 0.0, 0.0);
@@ -1041,6 +1162,7 @@ struct BicycleModel
   ReferencePath * reference_path{};
   double s{0.0};
   double Ts{};
+  double min_linearization_speed_mps{0.5};
   int wp_id{0};
   Waypoint * current_waypoint{};
   SimpleSpatialState spatial_state;
@@ -2380,6 +2502,8 @@ struct MpcConfig
   double delta_max{};
   double steer_rate_max{};
   double control_rate{};
+  double odom_timeout_sec{0.5};
+  double min_linearization_speed_mps{0.5};
   double steering_tire_angle_gain_var{};
   double accel_low_pass_gain{};
   double steer_low_pass_gain{};
@@ -2409,6 +2533,9 @@ struct MpcProblem
   Eigen::SparseMatrix<double> P;
   Eigen::SparseMatrix<double> A;
   int N{};
+  int base_wp_id{};
+  int planning_wp_id{};
+  int ref_wp_id{};
 };
 
 struct MPC
@@ -2450,6 +2577,26 @@ struct MPC
   void update_current_speed(const double current_speed_mps)
   {
     current_speed_mps_ = std::max(0.0, current_speed_mps);
+  }
+
+  void reset_control_history(const double steering)
+  {
+    previous_steering = std::isfinite(steering) ?
+      clip(steering, -std::abs(cfg.delta_max), std::abs(cfg.delta_max)) : 0.0;
+    current_control = Eigen::VectorXd::Zero(2 * std::max(0, cfg.N));
+    for (int index = 0; index < cfg.N; ++index) {
+      current_control[2 * index + 1] = previous_steering;
+    }
+    current_prediction.first.clear();
+    current_prediction.second.clear();
+    failure_fallback_speed_ = 0.0;
+    infeasibility_counter = 0;
+    last_control_was_fallback_ = true;
+  }
+
+  bool last_control_was_fallback() const
+  {
+    return last_control_was_fallback_;
   }
 
   V2XBehaviorOutput evaluate_v2x_behavior(
@@ -2993,7 +3140,9 @@ struct MPC
     return commit_v2x_behavior_state(output, now_sec);
   }
 
-  MpcProblem init_problem(const int N, const double safety_margin, const double now_sec)
+  MpcProblem init_problem(
+    const int N, const double safety_margin, const double now_sec, const int base_wp_id,
+    const int planning_wp_id)
   {
     constexpr int nx = 3;
     constexpr int nu = 2;
@@ -3030,15 +3179,13 @@ struct MPC
     for (int i = 0; i < N - 1; ++i) {
       kappa_pred[i] = std::tan(current_control[3 + i * nu]) / model->length;
     }
-    kappa_pred[N - 1] = std::tan(current_control[current_control.size() - 1]) / model->length;
-
-    model->wp_id += effective_wp_id_offset();
+    kappa_pred[N - 1] = std::tan(current_control[nu * N - 1]) / model->length;
 
     Eigen::MatrixXd A_dense = Eigen::MatrixXd::Zero(nx_N, nx_N);
     Eigen::MatrixXd B_dense = Eigen::MatrixXd::Zero(nx_N, nu_N);
     for (int n = 0; n < N; ++n) {
-      const auto & current_waypoint = model->reference_path->get_waypoint(model->wp_id + n);
-      const auto & next_waypoint = model->reference_path->get_waypoint(model->wp_id + n + 1);
+      const auto & current_waypoint = model->reference_path->get_waypoint(planning_wp_id + n);
+      const auto & next_waypoint = model->reference_path->get_waypoint(planning_wp_id + n + 1);
       const double delta_s = next_waypoint.distance_to(current_waypoint);
       const double kappa_ref = current_waypoint.kappa;
       const double v_ref = clip(current_waypoint.v_ref, umin[0], umax[0]);
@@ -3065,7 +3212,12 @@ struct MPC
       model->reference_path->update_simple_path_constraints(cfg.N, model->safety_margin);
     }
     if (!model->reference_path->path_constraints_upper.empty()) {
-      ref_wp_id = (model->wp_id + 1) % static_cast<int>(model->reference_path->path_constraints_upper.size());
+      const int constraint_count =
+        static_cast<int>(model->reference_path->path_constraints_upper.size());
+      const int candidate_ref_wp_id = planning_wp_id + 1;
+      ref_wp_id = model->reference_path->circular ?
+        ((candidate_ref_wp_id % constraint_count) + constraint_count) % constraint_count :
+        std::clamp(candidate_ref_wp_id, 0, constraint_count - 1);
     }
     Eigen::VectorXd ub(N);
     Eigen::VectorXd lb(N);
@@ -3367,66 +3519,127 @@ struct MPC
       }
     }
 
-    return MpcProblem{q, l, u, P, A_full, N};
+    return MpcProblem{q, l, u, P, A_full, N, base_wp_id, planning_wp_id, ref_wp_id};
   }
 
-  std::optional<Eigen::VectorXd> solve_problem(const MpcProblem & problem)
+  std::optional<OsqpSolveResult> solve_problem(const MpcProblem & problem)
   {
-    const auto solution_opt = solve_osqp(problem.P, problem.A, problem.q, problem.l, problem.u);
-    if (!solution_opt.has_value() || solution_opt->size() != problem.P.rows()) {
+    auto solution_opt = solve_osqp(problem.P, problem.A, problem.q, problem.l, problem.u);
+    if (!solution_opt.has_value() || solution_opt->solution.size() != problem.P.rows()) {
       return std::nullopt;
     }
-    return solution_opt.value();
+    return solution_opt;
+  }
+
+  void ensure_current_control_horizon()
+  {
+    const int required_size = 2 * cfg.N;
+    if (required_size <= 0 || current_control.size() >= required_size) {
+      return;
+    }
+
+    double padding_speed = std::isfinite(current_speed_mps_) ?
+      std::max(0.0, current_speed_mps_) : 0.0;
+    double padding_steering = std::isfinite(previous_steering) ? previous_steering : 0.0;
+    if (current_control.size() >= 2) {
+      const double last_speed = current_control[current_control.size() - 2];
+      const double last_steering = current_control[current_control.size() - 1];
+      if (std::isfinite(last_speed)) {
+        padding_speed = std::max(0.0, last_speed);
+      }
+      if (std::isfinite(last_steering)) {
+        padding_steering = last_steering;
+      }
+    }
+
+    Eigen::VectorXd padded_control = Eigen::VectorXd::Zero(required_size);
+    const int copy_size = static_cast<int>(current_control.size());
+    if (copy_size > 0) {
+      padded_control.head(copy_size) = current_control;
+    }
+    for (int i = copy_size / 2; i < cfg.N; ++i) {
+      padded_control[2 * i] = padding_speed;
+      padded_control[2 * i + 1] = padding_steering;
+    }
+    current_control = std::move(padded_control);
+  }
+
+  std::pair<Eigen::Vector2d, double> safe_failure_control(const std::string & reason)
+  {
+    last_control_was_fallback_ = true;
+    current_prediction.first.clear();
+    current_prediction.second.clear();
+
+    const double current_speed = std::isfinite(current_speed_mps_) ?
+      std::max(0.0, current_speed_mps_) : 0.0;
+    double fallback_base_speed = current_speed;
+    if (failure_fallback_speed_.has_value() && std::isfinite(failure_fallback_speed_.value())) {
+      fallback_base_speed = std::min(fallback_base_speed, failure_fallback_speed_.value());
+    }
+
+    const double deceleration = std::isfinite(cfg.a_min) ? std::max(0.0, -cfg.a_min) : 0.0;
+    const double time_step = std::isfinite(model->Ts) ? std::max(0.0, model->Ts) : 0.0;
+    const double fallback_speed = deceleration > kEps && time_step > kEps ?
+      std::max(0.0, fallback_base_speed - deceleration * time_step) : 0.0;
+    failure_fallback_speed_ = fallback_speed;
+
+    const double max_steering = std::isfinite(cfg.delta_max) ?
+      std::max(0.0, std::abs(cfg.delta_max)) : 0.0;
+    const double fallback_steering = std::isfinite(previous_steering) ?
+      clip(previous_steering, -max_steering, max_steering) : 0.0;
+    previous_steering = fallback_steering;
+
+    const int safe_horizon = std::max(0, cfg.N);
+    current_control = Eigen::VectorXd::Zero(2 * safe_horizon);
+    for (int i = 0; i < safe_horizon; ++i) {
+      current_control[2 * i] = fallback_speed;
+      current_control[2 * i + 1] = fallback_steering;
+    }
+
+    if (infeasibility_counter == 0 || infeasibility_counter % 100 == 0) {
+      RCLCPP_ERROR(
+        rclcpp::get_logger("mpc_controller"),
+        "MPC control failed; using deceleration fallback: reason=%s, failures=%d, "
+        "speed=%.3f, steering=%.3f",
+        reason.c_str(), infeasibility_counter + 1, fallback_speed, fallback_steering);
+    }
+    ++infeasibility_counter;
+    Eigen::Vector2d fallback;
+    fallback << fallback_speed, fallback_steering;
+    return {fallback, std::abs(fallback_steering)};
   }
 
   std::pair<Eigen::Vector2d, double> get_control(const double now_sec)
   {
     constexpr int nx = 3;
     constexpr int nu = 2;
-    model->get_current_waypoint();
-    const int N = model->reference_path->circular ?
-      cfg.N :
-      std::min(cfg.N, model->reference_path->n_waypoints - model->wp_id);
-
-    model->spatial_state = model->t2s(*model->current_waypoint, model->temporal_state);
-    MpcProblem problem = init_problem(N, model->safety_margin, now_sec);
-
+    if (cfg.N < 2) {
+      return safe_failure_control("mpc.N must be at least 2");
+    }
     try {
+      model->get_current_waypoint();
+      const int base_wp_id = model->wp_id;
+      const int planning_wp_id = get_planning_wp_id(base_wp_id);
+      const int remaining_segments =
+        std::max(0, model->reference_path->n_waypoints - 1 - planning_wp_id);
+      const int N = model->reference_path->circular ?
+        cfg.N : std::min(cfg.N, remaining_segments);
+      if (N < 2) {
+        throw std::runtime_error("MPC horizon has fewer than 2 steps");
+      }
+      ensure_current_control_horizon();
+
+      const auto & planning_waypoint =
+        model->reference_path->get_waypoint(planning_wp_id);
+      model->spatial_state = model->t2s(planning_waypoint, model->temporal_state);
+      const MpcProblem problem =
+        init_problem(N, model->safety_margin, now_sec, base_wp_id, planning_wp_id);
       auto solution_opt = solve_problem(problem);
       if (!solution_opt.has_value()) {
         throw std::runtime_error("OSQP failed");
       }
-      Eigen::VectorXd dec = solution_opt.value();
+      Eigen::VectorXd dec = solution_opt->solution;
       Eigen::VectorXd control_signals = dec.tail(N * nu);
-      bool all_steers_non_zero = true;
-      for (int i = 1; i < control_signals.size(); i += 2) {
-        if (control_signals[i] == 0.0) {
-          all_steers_non_zero = false;
-          break;
-        }
-      }
-      if (!all_steers_non_zero) {
-        for (int i = 1; i < 6; ++i) {
-          const double relaxed_safety_margin = model->safety_margin * ((5.0 - i) / 5.0);
-          problem = init_problem(N, relaxed_safety_margin, now_sec);
-          solution_opt = solve_problem(problem);
-          if (!solution_opt.has_value()) {
-            continue;
-          }
-          dec = solution_opt.value();
-          control_signals = dec.tail(N * nu);
-          all_steers_non_zero = true;
-          for (int j = 1; j < control_signals.size(); j += 2) {
-            if (control_signals[j] == 0.0) {
-              all_steers_non_zero = false;
-              break;
-            }
-          }
-          if (infeasibility_counter == 0 && all_steers_non_zero) {
-            break;
-          }
-        }
-      }
 
       for (int i = 1; i < control_signals.size(); i += 2) {
         control_signals[i] = std::atan(control_signals[i] * model->length);
@@ -3435,11 +3648,13 @@ struct MPC
       double delta = control_signals[1];
       const double max_delta_change = cfg.steer_rate_max * model->Ts;
       delta = clip(delta, previous_steering - max_delta_change, previous_steering + max_delta_change);
-      previous_steering = delta;
       control_signals[1] = delta;
+      if (!std::isfinite(v) || !std::isfinite(delta) || !control_signals.allFinite()) {
+        throw std::runtime_error("MPC postprocessed control is not finite");
+      }
 
-      current_control = control_signals;
-      current_prediction = update_prediction(dec.head((N + 1) * nx), N);
+      auto prediction =
+        update_prediction(dec.head((N + 1) * nx), N, problem.planning_wp_id);
       Eigen::Vector2d u(v, delta);
 
       double max_delta = 0.0;
@@ -3447,28 +3662,30 @@ struct MPC
       for (int i = 1; i < end; i += 2) {
         max_delta = std::max(max_delta, std::abs(control_signals[i]));
       }
+
+      previous_steering = delta;
+      current_control = std::move(control_signals);
+      current_prediction = std::move(prediction);
+      failure_fallback_speed_.reset();
       infeasibility_counter = 0;
-      last_solved_wp_id = model->wp_id;
+      last_control_was_fallback_ = false;
+      last_solved_wp_id = problem.planning_wp_id;
       return {u, max_delta};
-    } catch (const std::exception &) {
-      Eigen::Vector2d u(0.0, 0.0);
-      double max_delta = 0.0;
-      const int id = nu * (infeasibility_counter + 1);
-      if (id + 2 < current_control.size()) {
-        u = current_control.segment<2>(id);
-        max_delta = std::abs(u[1]);
-      }
-      ++infeasibility_counter;
-      return {u, max_delta};
+    } catch (const std::exception & error) {
+      return safe_failure_control(error.what());
+    } catch (...) {
+      return safe_failure_control("unknown exception");
     }
   }
 
   std::pair<std::vector<double>, std::vector<double>> update_prediction(
-    const Eigen::VectorXd & spatial_state_prediction_flat, const int N)
+    const Eigen::VectorXd & spatial_state_prediction_flat, const int N,
+    const int planning_wp_id)
   {
     std::pair<std::vector<double>, std::vector<double>> out;
     for (int n = 2; n < N; ++n) {
-      const auto & associated_waypoint = model->reference_path->get_waypoint(model->wp_id + n);
+      const auto & associated_waypoint =
+        model->reference_path->get_waypoint(planning_wp_id + n);
       Eigen::Vector3d pred_state = spatial_state_prediction_flat.segment<3>(n * 3);
       const auto temporal = model->s2t(associated_waypoint, pred_state);
       out.first.push_back(temporal.x);
@@ -3502,10 +3719,22 @@ struct MPC
     }
     return cfg.wp_id_offset;
   }
+
+  int get_planning_wp_id(const int base_wp_id) const
+  {
+    const int candidate_wp_id = base_wp_id + effective_wp_id_offset();
+    const int waypoint_count = model->reference_path->n_waypoints;
+    if (model->reference_path->circular) {
+      return ((candidate_wp_id % waypoint_count) + waypoint_count) % waypoint_count;
+    }
+    return std::clamp(candidate_wp_id, 0, waypoint_count - 1);
+  }
   std::pair<std::vector<double>, std::vector<double>> current_prediction;
   int infeasibility_counter{0};
   int last_solved_wp_id{0};
   Eigen::VectorXd current_control;
+  std::optional<double> failure_fallback_speed_;
+  bool last_control_was_fallback_{false};
 
 private:
   static void apply_velocity_limit(
@@ -4820,7 +5049,13 @@ Config load_config(const std::string & path)
     }
   }
   cfg.reference_path.resolution = ref["resolution"].as<double>();
+  if (!std::isfinite(cfg.reference_path.resolution) || cfg.reference_path.resolution <= 0.0) {
+    throw std::runtime_error("reference_path.resolution must be finite and positive");
+  }
   cfg.reference_path.smoothing_distance = ref["smoothing_distance"].as<int>();
+  if (cfg.reference_path.smoothing_distance < 0) {
+    throw std::runtime_error("reference_path.smoothing_distance must be non-negative");
+  }
   cfg.reference_path.max_width = ref["max_width"].as<double>();
   cfg.reference_path.circular = ref["circular"].as<bool>();
   cfg.reference_path.use_path_constraints_topic = ref["use_path_constraints_topic"].as<bool>();
@@ -4830,6 +5065,10 @@ Config load_config(const std::string & path)
 
   const auto mpc = root["mpc"];
   cfg.mpc.N = mpc["N"].as<int>();
+  if (cfg.mpc.N < 2) {
+    throw std::runtime_error(
+            "Invalid mpc.N=" + std::to_string(cfg.mpc.N) + "; expected at least 2");
+  }
   const auto Q = mpc["Q"].as<std::vector<double>>();
   const auto R = mpc["R"].as<std::vector<double>>();
   const auto QN = mpc["QN"].as<std::vector<double>>();
@@ -4869,23 +5108,77 @@ Config load_config(const std::string & path)
   }
   cfg.mpc.a_min = mpc["a_min"].as<double>();
   cfg.mpc.a_max = mpc["a_max"].as<double>();
+  if (!std::isfinite(cfg.mpc.a_min) || cfg.mpc.a_min >= 0.0) {
+    throw std::runtime_error("mpc.a_min must be finite and negative");
+  }
+  if (!std::isfinite(cfg.mpc.a_max) || cfg.mpc.a_max < 0.0) {
+    throw std::runtime_error("mpc.a_max must be finite and non-negative");
+  }
   if (mpc["domain_a_max"] && ros_domain_id.has_value()) {
     for (const auto & item : mpc["domain_a_max"]) {
       if (item.first.as<int>() != ros_domain_id.value()) {
         continue;
       }
-      cfg.mpc.a_max = std::max(0.0, item.second.as<double>());
+      const double domain_a_max = item.second.as<double>();
+      if (!std::isfinite(domain_a_max) || domain_a_max < 0.0) {
+        throw std::runtime_error("mpc.domain_a_max values must be finite and non-negative");
+      }
+      cfg.mpc.a_max = domain_a_max;
       cfg.mpc.domain_a_max_applied = true;
       break;
     }
   }
   cfg.mpc.ay_max = mpc["ay_max"].as<double>();
   cfg.mpc.delta_max = mpc["delta_max_deg"].as<double>() * kPi / 180.0;
+  if (!std::isfinite(cfg.mpc.ay_max) || cfg.mpc.ay_max <= 0.0) {
+    throw std::runtime_error("mpc.ay_max must be finite and positive");
+  }
+  if (!std::isfinite(cfg.mpc.delta_max) || cfg.mpc.delta_max <= 0.0) {
+    throw std::runtime_error("mpc.delta_max_deg must be finite and positive");
+  }
   cfg.mpc.steer_rate_max = mpc["steer_rate_max"].as<double>();
   cfg.mpc.control_rate = mpc["control_rate"].as<double>();
   cfg.mpc.steering_tire_angle_gain_var = mpc["steering_tire_angle_gain_var"].as<double>();
+  if (!std::isfinite(cfg.mpc.steer_rate_max) || cfg.mpc.steer_rate_max < 0.0) {
+    throw std::runtime_error("mpc.steer_rate_max must be finite and non-negative");
+  }
+  if (!std::isfinite(cfg.mpc.control_rate) || cfg.mpc.control_rate <= 0.0) {
+    throw std::runtime_error("mpc.control_rate must be finite and positive");
+  }
+  if (
+    !std::isfinite(cfg.mpc.steering_tire_angle_gain_var) ||
+    cfg.mpc.steering_tire_angle_gain_var <= 0.0)
+  {
+    throw std::runtime_error("mpc.steering_tire_angle_gain_var must be finite and positive");
+  }
+  cfg.mpc.odom_timeout_sec =
+    mpc["odom_timeout_sec"] ? mpc["odom_timeout_sec"].as<double>() : 0.5;
+  if (!std::isfinite(cfg.mpc.odom_timeout_sec) || cfg.mpc.odom_timeout_sec <= 0.0) {
+    throw std::runtime_error("mpc.odom_timeout_sec must be finite and positive");
+  }
+  cfg.mpc.min_linearization_speed_mps =
+    mpc["min_linearization_speed_mps"] ?
+    mpc["min_linearization_speed_mps"].as<double>() : 0.5;
+  if (
+    !std::isfinite(cfg.mpc.min_linearization_speed_mps) ||
+    cfg.mpc.min_linearization_speed_mps <= 0.0)
+  {
+    throw std::runtime_error("mpc.min_linearization_speed_mps must be finite and positive");
+  }
   cfg.mpc.accel_low_pass_gain = mpc["accel_low_pass_gain"].as<double>();
   cfg.mpc.steer_low_pass_gain = mpc["steer_low_pass_gain"].as<double>();
+  if (
+    !std::isfinite(cfg.mpc.accel_low_pass_gain) || cfg.mpc.accel_low_pass_gain < 0.0 ||
+    cfg.mpc.accel_low_pass_gain > 1.0)
+  {
+    throw std::runtime_error("mpc.accel_low_pass_gain must be finite and within [0, 1]");
+  }
+  if (
+    !std::isfinite(cfg.mpc.steer_low_pass_gain) || cfg.mpc.steer_low_pass_gain < 0.0 ||
+    cfg.mpc.steer_low_pass_gain > 1.0)
+  {
+    throw std::runtime_error("mpc.steer_low_pass_gain must be finite and within [0, 1]");
+  }
   cfg.mpc.wp_id_offset = mpc["wp_id_offset"].as<int>();
   cfg.mpc.wp_id_low_offset =
     mpc["wp_id_low_offset"] ? mpc["wp_id_low_offset"].as<int>() : cfg.mpc.wp_id_offset;
@@ -5552,7 +5845,8 @@ private:
     std::vector<double> wp_x;
     std::vector<double> wp_y;
     if (!cfg_.reference_path.csv_path.empty()) {
-      std::tie(wp_x, wp_y) = load_ref_path(in_pkg_share(cfg_.reference_path.csv_path));
+      std::tie(wp_x, wp_y) = load_ref_path(
+        in_pkg_share(cfg_.reference_path.csv_path), cfg_.reference_path.circular);
     } else {
       std::tie(wp_x, wp_y) = load_waypoints(in_pkg_share(cfg_.waypoints_csv_path));
     }
@@ -5561,7 +5855,7 @@ private:
       cfg_.reference_path.max_width, cfg_.reference_path.circular);
     car_ = std::make_unique<BicycleModel>(
       reference_path_.get(), cfg_.bicycle_length, cfg_.bicycle_width, mpc_cfg_.safety_margin_scale,
-      1.0 / cfg_.mpc.control_rate);
+      1.0 / cfg_.mpc.control_rate, mpc_cfg_.min_linearization_speed_mps);
     mpc_ = std::make_unique<MPC>(
       car_.get(), mpc_cfg_, use_obstacle_avoidance_, cfg_.reference_path.use_path_constraints_topic);
     if (mpc_cfg_.v2x_gap.enabled || mpc_cfg_.v2x_behavior.enabled) {
@@ -5572,9 +5866,12 @@ private:
       v2x_gap_planner_ = std::make_unique<V2XGapPlanner>(planner_cfg);
       mpc_->set_gap_planner(v2x_gap_planner_.get());
     }
-    reference_path_->compute_speed_profile(
-      mpc_cfg_.a_min, mpc_cfg_.a_max, 0.0,
-      use_bug_acc_ ? kmh_to_m_per_sec(40.0) : mpc_cfg_.v_max, mpc_cfg_.ay_max);
+    if (!reference_path_->compute_speed_profile(
+        mpc_cfg_.a_min, mpc_cfg_.a_max, 0.0,
+        use_bug_acc_ ? kmh_to_m_per_sec(40.0) : mpc_cfg_.v_max, mpc_cfg_.ay_max))
+    {
+      throw std::runtime_error("Failed to compute the initial reference speed profile");
+    }
   }
 
   void setup_parameters_callback()
@@ -5598,6 +5895,40 @@ private:
 
     param_callback_handle_ = add_on_set_parameters_callback(
       [this](const std::vector<rclcpp::Parameter> & params) {
+        rcl_interfaces::msg::SetParametersResult result;
+        result.successful = true;
+        for (const auto & param : params) {
+          const auto & name = param.get_name();
+          const bool is_nonnegative_weight =
+            name == "Q0" || name == "Q1" || name == "Q2" || name == "R0" ||
+            name == "R1" || name == "QN0" || name == "QN1" || name == "QN2";
+          const bool is_checked_double =
+            name == "v_max" || name == "steering_tire_angle_gain_var" ||
+            name == "ay_max" || name == "accel_low_pass_gain" ||
+            name == "steer_low_pass_gain" || name == "wp_id_low_speed" ||
+            is_nonnegative_weight;
+          if (!is_checked_double) {
+            continue;
+          }
+          if (param.get_type() != rclcpp::ParameterType::PARAMETER_DOUBLE) {
+            result.successful = false;
+            result.reason = name + " must be a double";
+            return result;
+          }
+          const double value = param.as_double();
+          const bool invalid =
+            !std::isfinite(value) ||
+            ((name == "v_max" || name == "wp_id_low_speed" || is_nonnegative_weight) &&
+            value < 0.0) ||
+            ((name == "steering_tire_angle_gain_var" || name == "ay_max") && value <= 0.0) ||
+            ((name == "accel_low_pass_gain" || name == "steer_low_pass_gain") &&
+            (value < 0.0 || value > 1.0));
+          if (invalid) {
+            result.successful = false;
+            result.reason = name + " is outside its finite safety range";
+            return result;
+          }
+        }
         for (const auto & param : params) {
           const auto & name = param.get_name();
           if (name == "v_max" && param.get_type() == rclcpp::ParameterType::PARAMETER_DOUBLE) {
@@ -5648,8 +5979,6 @@ private:
             mpc_->cfg.wp_id_low_speed = mpc_cfg_.wp_id_low_speed;
           }
         }
-        rcl_interfaces::msg::SetParametersResult result;
-        result.successful = true;
         return result;
       });
   }
@@ -5674,7 +6003,24 @@ private:
     section_marker_pub_ = create_publisher<MarkerArray>("/section_marker", latching_qos);
 
     odom_sub_ = create_subscription<Odometry>(
-      "/localization/kinematic_state", 1, [this](const Odometry::SharedPtr msg) { odom_ = msg; });
+      "/localization/kinematic_state", 1, [this](const Odometry::SharedPtr msg) {
+        const auto receipt_time = SteadyClock::now();
+        odom_ = msg;
+        last_odom_receipt_steady_ = receipt_time;
+        const rclcpp::Time source_stamp(msg->header.stamp);
+        if (source_stamp.nanoseconds() > 0) {
+          if (
+            !last_odom_source_stamp_.has_value() ||
+            source_stamp.nanoseconds() != last_odom_source_stamp_->nanoseconds())
+          {
+            last_odom_source_stamp_ = source_stamp;
+            last_odom_source_advance_steady_ = receipt_time;
+          }
+        } else {
+          last_odom_source_stamp_.reset();
+          last_odom_source_advance_steady_.reset();
+        }
+      });
     control_mode_request_sub_ = create_subscription<Bool>(
       "control/control_mode_request_topic", 1, [this](const Bool::SharedPtr msg) {
         if (msg->data && !enable_control_) {
@@ -5710,17 +6056,24 @@ private:
     }
     if (use_obstacle_avoidance_ && cfg_.reference_path.use_path_constraints_topic) {
       path_constraints_sub_ = create_subscription<PathConstraints>(
-        "/path_constraints_provider/path_constraints", 1, [this](const PathConstraints::SharedPtr msg) {
-          if (!reference_path_->set_path_constraints(msg->upper_bounds, msg->lower_bounds, msg->rows, msg->cols)) {
+      "/path_constraints_provider/path_constraints", 1, [this](const PathConstraints::SharedPtr msg) {
+          if (
+            msg->rows != reference_path_->n_waypoints - 1 || msg->cols != mpc_cfg_.N ||
+            !reference_path_->set_path_constraints(
+              msg->upper_bounds, msg->lower_bounds, msg->rows, msg->cols))
+          {
             RCLCPP_WARN(get_logger(), "Invalid path constraints message ignored");
           }
         });
     }
     if (use_obstacle_avoidance_ && cfg_.reference_path.use_border_cells_topic) {
       border_cells_sub_ = create_subscription<BorderCells>(
-        "/path_constraints_provider/border_cells", 1, [this](const BorderCells::SharedPtr msg) {
-          if (!reference_path_->set_border_cells(
-              msg->dynamic_upper_bounds, msg->dynamic_lower_bounds, msg->rows, msg->cols)) {
+      "/path_constraints_provider/border_cells", 1, [this](const BorderCells::SharedPtr msg) {
+          if (
+            msg->rows != reference_path_->n_waypoints - 1 || msg->cols != mpc_cfg_.N ||
+            !reference_path_->set_border_cells(
+              msg->dynamic_upper_bounds, msg->dynamic_lower_bounds, msg->rows, msg->cols))
+          {
             RCLCPP_WARN(get_logger(), "Invalid border cells message ignored");
           }
         });
@@ -5749,20 +6102,85 @@ private:
     return msg;
   }
 
-  void publish_control_command(
+  bool command_is_finite(const AckermannControlCommand & command) const
+  {
+    return
+      std::isfinite(command.lateral.steering_tire_angle) &&
+      std::isfinite(command.lateral.steering_tire_rotation_rate) &&
+      std::isfinite(command.longitudinal.speed) &&
+      std::isfinite(command.longitudinal.acceleration);
+  }
+
+  void publish_failsafe_command(const rclcpp::Time & stamp, const char * reason)
+  {
+    const double safe_deceleration =
+      std::isfinite(mpc_cfg_.a_min) && mpc_cfg_.a_min < 0.0 ? mpc_cfg_.a_min : -1.0;
+    const double previous_steering = std::isfinite(last_u_[1]) ? last_u_[1] : 0.0;
+    const double max_steering_step =
+      std::isfinite(mpc_cfg_.steer_rate_max) && std::isfinite(mpc_cfg_.control_rate) &&
+      mpc_cfg_.control_rate > 0.0 ?
+      std::max(0.0, mpc_cfg_.steer_rate_max) / mpc_cfg_.control_rate : 0.0;
+    const double safe_steering = clip(
+      0.0, previous_steering - max_steering_step,
+      previous_steering + max_steering_step);
+    const Eigen::Vector2d safe_control(0.0, safe_steering);
+    auto raw_command = create_ackermann_control_command(
+      stamp, safe_control, safe_deceleration);
+
+    if (!command_failsafe_active_) {
+      RCLCPP_ERROR(get_logger(), "Control failsafe active: %s", reason);
+    }
+    command_failsafe_active_ = true;
+
+    if (use_bug_acc_) {
+      AckermannControlBoostCommand boost_command;
+      boost_command.command = raw_command;
+      boost_command.boost_mode = false;
+      boost_command_pub_->publish(boost_command);
+    } else {
+      command_raw_pub_->publish(raw_command);
+      const double steering_gain =
+        std::isfinite(mpc_cfg_.steering_tire_angle_gain_var) ?
+        mpc_cfg_.steering_tire_angle_gain_var : 1.0;
+      raw_command.lateral.steering_tire_angle *= steering_gain;
+      if (!command_is_finite(raw_command)) {
+        raw_command.lateral.steering_tire_angle = 0.0;
+      }
+      command_pub_->publish(raw_command);
+    }
+    last_u_ = safe_control;
+    last_acc_ = safe_deceleration;
+    if (mpc_) {
+      mpc_->reset_control_history(safe_steering);
+    }
+  }
+
+  bool publish_control_command(
     const rclcpp::Time & stamp, const Eigen::Vector2d & u, const double acc, const bool bug_acc_enabled)
   {
-    auto cmd = create_ackermann_control_command(stamp, u, acc);
+    auto raw_command = create_ackermann_control_command(stamp, u, acc);
     if (use_bug_acc_) {
+      if (!command_is_finite(raw_command)) {
+        publish_failsafe_command(stamp, "non-finite boost control command rejected");
+        return false;
+      }
       AckermannControlBoostCommand boost_cmd;
-      boost_cmd.command = cmd;
+      boost_cmd.command = raw_command;
       boost_cmd.boost_mode = bug_acc_enabled;
       boost_command_pub_->publish(boost_cmd);
-      return;
+      command_failsafe_active_ = false;
+      return true;
     }
-    command_raw_pub_->publish(cmd);
-    cmd.lateral.steering_tire_angle *= mpc_cfg_.steering_tire_angle_gain_var;
-    command_pub_->publish(cmd);
+    auto final_command = raw_command;
+    final_command.lateral.steering_tire_angle *= mpc_cfg_.steering_tire_angle_gain_var;
+    if (!command_is_finite(raw_command) || !command_is_finite(final_command)) {
+      publish_failsafe_command(stamp, "non-finite control command rejected");
+      return false;
+    }
+    command_raw_pub_->publish(raw_command);
+    command_pub_->publish(final_command);
+    command_failsafe_active_ = false;
+    return true;
   }
 
   void publish_ref_path_marker()
@@ -5860,19 +6278,58 @@ private:
 
   void control()
   {
-    if (!odom_) {
-      RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000, "odometry is not available");
+    const auto steady_now = SteadyClock::now();
+    const auto control_time = now();
+    const bool missing_odometry = !odom_ || !last_odom_receipt_steady_.has_value();
+    const double odometry_age_sec = missing_odometry ?
+      std::numeric_limits<double>::infinity() :
+      std::chrono::duration<double>(
+      steady_now - last_odom_receipt_steady_.value()).count();
+    const double odometry_source_age_sec = last_odom_source_advance_steady_.has_value() ?
+      std::chrono::duration<double>(
+      steady_now - last_odom_source_advance_steady_.value()).count() : 0.0;
+    const bool stale_source_stamp =
+      last_odom_source_stamp_.has_value() &&
+      odometry_source_age_sec > mpc_cfg_.odom_timeout_sec;
+    if (
+      missing_odometry || odometry_age_sec > mpc_cfg_.odom_timeout_sec ||
+      stale_source_stamp)
+    {
+      if (!odom_failsafe_active_) {
+        RCLCPP_ERROR(
+          get_logger(),
+          "Odometry is missing or stale: receipt_age=%.3f s, source_age=%.3f s, limit=%.3f s",
+          odometry_age_sec, odometry_source_age_sec, mpc_cfg_.odom_timeout_sec);
+      }
+      odom_failsafe_active_ = true;
+      publish_failsafe_command(control_time, "missing or stale odometry");
+      if (initialized_) {
+        last_t_ = control_time;
+      }
       return;
     }
+    if (odom_failsafe_active_) {
+      RCLCPP_INFO(get_logger(), "Odometry recovered: age=%.3f s", odometry_age_sec);
+      odom_failsafe_active_ = false;
+    }
     if (cfg_.reference_path.update_by_topic && !trajectory_) {
-      RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000, "trajectory is not available");
+      publish_failsafe_command(control_time, "trajectory is not available");
+      return;
+    }
+
+    const auto pose = odom_to_pose_2d(*odom_);
+    const double actual_v = odom_->twist.twist.linear.x;
+    if (
+      !std::isfinite(pose.x) || !std::isfinite(pose.y) || !std::isfinite(pose.theta) ||
+      !std::isfinite(actual_v))
+    {
+      publish_failsafe_command(control_time, "non-finite odometry rejected");
       return;
     }
     if (!initialized_) {
-      const auto pose = odom_to_pose_2d(*odom_);
       car_->update_states(pose.x, pose.y, pose.theta);
       car_->update_reference_path(reference_path_.get());
-      last_t_ = now();
+      last_t_ = control_time;
       t_start_ = last_t_;
       initialized_ = true;
       pred_marker_color_.r = 0.0;
@@ -5883,17 +6340,39 @@ private:
       RCLCPP_INFO(get_logger(), "START!");
     }
 
-    const auto current_time = now();
-    const double dt = (current_time - last_t_).seconds();
+    const auto current_time = control_time;
+    const double raw_dt = (current_time - last_t_).seconds();
+    const double nominal_dt = 1.0 / mpc_cfg_.control_rate;
+    const double dt =
+      std::isfinite(raw_dt) && raw_dt > 0.0 && raw_dt <= mpc_cfg_.odom_timeout_sec ?
+      raw_dt : nominal_dt;
+    if (dt != raw_dt) {
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 1000,
+        "Invalid control dt %.6f s; using nominal %.6f s", raw_dt, nominal_dt);
+    }
     last_t_ = current_time;
     ++loop_;
 
     if (loop_ % 100 == 0 && cfg_.reference_path.update_by_topic && trajectory_) {
-      auto new_reference_path = create_reference_path_from_autoware_trajectory(*trajectory_);
-      if (new_reference_path) {
+      try {
+        auto new_reference_path = create_reference_path_from_autoware_trajectory(*trajectory_);
+        if (!new_reference_path || new_reference_path->n_waypoints < 3) {
+          throw std::runtime_error("trajectory did not produce a usable reference path");
+        }
+        auto previous_reference_path = std::move(reference_path_);
         reference_path_ = std::move(new_reference_path);
-        car_->update_reference_path(reference_path_.get());
+        try {
+          car_->update_reference_path(reference_path_.get());
+        } catch (...) {
+          reference_path_ = std::move(previous_reference_path);
+          car_->update_reference_path(reference_path_.get());
+          throw;
+        }
         ref_path_published_ = false;
+      } catch (const std::exception & error) {
+        RCLCPP_ERROR(
+          get_logger(), "Trajectory update rejected; keeping last valid path: %s", error.what());
       }
     }
     if (!ref_path_published_) {
@@ -5906,8 +6385,6 @@ private:
     }
     (void)is_colliding;
 
-    const auto pose = odom_to_pose_2d(*odom_);
-    const double actual_v = odom_->twist.twist.linear.x;
     car_->update_states(pose.x, pose.y, pose.theta);
     mpc_->update_current_speed(std::abs(actual_v));
 
@@ -5929,6 +6406,7 @@ private:
     reference_path_->set_v_ref(std::vector<double>(reference_path_->waypoints.size(), effective_v_max));
 
     auto [u, max_delta] = mpc_->get_control(current_time.seconds());
+    const bool mpc_fallback_active = mpc_->last_control_was_fallback();
 
     if (!enable_control_) {
       const double last_v_cmd = last_u_[0];
@@ -5942,7 +6420,11 @@ private:
 
     double acc = 0.0;
     bool bug_acc_enabled = false;
-    if (use_bug_acc_) {
+    const bool forced_stop_active = mpc_fallback_active || !enable_control_;
+    if (forced_stop_active) {
+      bug_acc_enabled = false;
+      acc = mpc_cfg_.a_min;
+    } else if (use_bug_acc_) {
       const auto deg2rad = [](const double deg) { return deg * kPi / 180.0; };
       if (
         std::abs(actual_v) > kmh_to_m_per_sec(44.0) ||
@@ -5973,12 +6455,29 @@ private:
       acc = clip(acc, mpc_cfg_.a_min, mpc_cfg_.a_max);
     }
 
-    acc = last_acc_ + (acc - last_acc_) * mpc_cfg_.accel_low_pass_gain;
+    if (!forced_stop_active) {
+      acc = last_acc_ + (acc - last_acc_) * mpc_cfg_.accel_low_pass_gain;
+    }
     u[1] = last_u_[1] + (u[1] - last_u_[1]) * mpc_cfg_.steer_low_pass_gain;
+    acc = clip(acc, mpc_cfg_.a_min, mpc_cfg_.a_max);
+    const double max_steering_step = mpc_cfg_.steer_rate_max / mpc_cfg_.control_rate;
+    u[1] = clip(
+      u[1], last_u_[1] - max_steering_step,
+      last_u_[1] + max_steering_step);
+    u[1] = clip(u[1], -mpc_cfg_.delta_max, mpc_cfg_.delta_max);
+    if (
+      !u.allFinite() || !std::isfinite(acc) ||
+      !std::isfinite(u[1] * mpc_cfg_.steering_tire_angle_gain_var))
+    {
+      publish_failsafe_command(current_time, "non-finite postprocessed control rejected");
+      return;
+    }
+    car_->drive(Eigen::Vector2d(actual_v, u[1]));
+    if (!publish_control_command(current_time, u, acc, bug_acc_enabled)) {
+      return;
+    }
     last_acc_ = acc;
     last_u_ = u;
-    car_->drive(Eigen::Vector2d(actual_v, u[1]));
-    publish_control_command(current_time, u, acc, bug_acc_enabled);
 
     const auto interval = std::max(1, static_cast<int>(mpc_cfg_.control_rate / 4.0));
     if (!mpc_->current_prediction.first.empty() && loop_ % interval == 0) {
@@ -6006,6 +6505,8 @@ private:
   bool enable_control_{true};
   bool initialized_{false};
   bool ref_path_published_{false};
+  bool odom_failsafe_active_{false};
+  bool command_failsafe_active_{false};
   int current_laps_{1};
   double last_lap_time_{0.0};
   std::optional<int> last_condition_;
@@ -6048,6 +6549,9 @@ private:
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_callback_handle_;
   Odometry::SharedPtr odom_;
   Trajectory::SharedPtr trajectory_;
+  std::optional<SteadyClock::time_point> last_odom_receipt_steady_;
+  std::optional<rclcpp::Time> last_odom_source_stamp_;
+  std::optional<SteadyClock::time_point> last_odom_source_advance_steady_;
 };
 
 std::optional<std::string> value_after_arg(const std::vector<std::string> & args, const std::string & name)
@@ -6073,7 +6577,7 @@ int main(int argc, char ** argv)
     throw std::runtime_error("--config_path is required");
   }
   auto node = std::make_shared<multi_purpose_mpc_ros::MPCControllerCpp>(config_path.value(), ref_vel_path);
-  rclcpp::executors::MultiThreadedExecutor executor(rclcpp::ExecutorOptions(), 2);
+  rclcpp::executors::SingleThreadedExecutor executor;
   executor.add_node(node);
   executor.spin();
   rclcpp::shutdown();

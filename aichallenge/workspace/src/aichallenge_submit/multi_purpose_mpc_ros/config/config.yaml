@@ -57,6 +57,8 @@ mpc:
   delta_max_deg: 32.0 # degrees
   steer_rate_max: 1.2 # rad/s
   control_rate: 100.0 # Hz
+  odom_timeout_sec: 0.5 # [s], steady-clock local safety timeout (not an official limit)
+  min_linearization_speed_mps: 0.5 # [m/s], avoid singular 1/v terms below this speed
   steering_tire_angle_gain_var: 1.5
   # steering_tire_angle_gain_var: 1.0
   # accel_low_pass_gain: 0.1

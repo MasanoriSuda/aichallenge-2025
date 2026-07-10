@@ -86,6 +86,32 @@ MPC コントローラは参照パスの取得方法を2種類持つ。
 2. **Trajectory トピック経由**（`reference_path.update_by_topic: true`）
    - `simple_trajectory_generator` と同じ経路を動的に受け取り、内部で参照パスを再構成する
 
+### C++ MPC correctness hardening（2026-07-10）
+
+C++ 本番ノードの経路入力・solver処理には、次の安全化を適用している。
+
+- CSV直接読込では `s_m,x_m,y_m,psi_rad,kappa_radpm,vx_mps,ax_mps2` の7列を strict loader で読み、欠落列、不正数値、NaN / Inf、非単調 `s_m` を起動時エラーにする。
+- `circular: true` で先頭・終点が同一点の場合は、全列を同じレコード単位で末尾から除去してから内部 ReferencePath を作る。
+- `ceil(distance / resolution)` の分割 helper と単体テストを追加した。ただし、固定 `N` の物理 horizon を変えないため、本番 ReferencePath は距離ベース horizon へ移行するまで legacy `floor` 分割を維持する。
+- 角度正規化は `atan2(sin(angle), cos(angle))` 相当を使い、正負の pi 境界を扱う。
+- MPC問題生成では現在位置の `base_wp_id` を変更せず、offset適用後の `planning_wp_id` をローカルに保持する。副作用を1周期内で複数回進めないため、旧 safety-margin retry は除去した。
+- OSQPは `SOLVED` / `SOLVED_INACCURATE`、解の有限性、入力を含む全制約違反を確認し、直線の steering 0 を異常扱いしない。
+- callback間の未保護な同時更新を避ける初期安全策として、C++ node は `SingleThreadedExecutor` で実行する。
+- odometry の受信時刻と、非ゼロsource stampが最後に変化した時刻をsteady clockで監視する。既定 `odom_timeout_sec: 0.5` を超えた場合、boost を無効にして速度0・負加速度・rate limit付き操舵復帰を直接publishする。pose、速度、solver出力、gain適用後commandの NaN / Inf も同じ fail-safe 経路で拒否する。
+- `min_linearization_speed_mps: 0.5` 未満では `1/v`、`1/v^2` を含む時間状態の線形化を停止する。両値はローカル設定であり、2026公式値ではない。
+- Python `path_constraints_provider` も circular CSV の重複終点を同じ許容差で除去し、C++側は受信したrows/colsが内部ReferencePathと一致しない制約を拒否する。
+- solver fallback と `/control/mpc/stop_request` はlegacy boost arbitrationより優先し、boostを必ず無効化する。low-pass gainは `[0,1]` に限定し、filter後にも加速度、操舵角、操舵変化量を制限する。
+
+trajectory の静的検証には次を使う。
+
+```bash
+ros2 run multi_purpose_mpc_ros reference_path_validator \
+  $(ros2 pkg prefix --share multi_purpose_mpc_ros)/env/final_ver3/traj_mincurv.csv \
+  --circular
+```
+
+現段階では、0.25m周期再サンプリング、メートル単位 smoothing、距離ベース horizon、速度プロファイル再設計は未実装である。現在の `resolution: 0.6`、legacy補間、`smoothing_distance`、固定 `N` を一度に変更せず、validator・単体テスト・計算時間測定を追加してから段階移行する。特に `final_ver3` へ `ceil` だけを適用すると内部点数がほぼ倍増し、固定 `N=15` の実距離 horizon がほぼ半減するため、単独では有効化しない。
+
 ## 統合方針
 
 ### アーキテクチャ: control_method による切り替え

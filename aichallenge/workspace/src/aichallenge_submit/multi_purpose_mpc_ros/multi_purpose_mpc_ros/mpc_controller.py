@@ -328,7 +328,9 @@ class MPCController(Node):
             is_ref_path_given = cfg_ref_path.csv_path != "" # type: ignore
             if is_ref_path_given:
                 print("Using given reference path")
-                wp_x, wp_y, _, _ = load_ref_path(self.in_pkg_share(self._cfg.reference_path.csv_path)) # type: ignore
+                wp_x, wp_y, _, _ = load_ref_path(
+                    self.in_pkg_share(self._cfg.reference_path.csv_path),
+                    circular=cfg_ref_path.circular) # type: ignore
                 return ReferencePath(
                     map,
                     wp_x,

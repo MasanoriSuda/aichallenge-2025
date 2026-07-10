@@ -15,6 +15,37 @@ colcon build --symlink-install --allow-overriding gyro_odometer \
 - 通常の MPC 実行系は C++ executable `mpc_controller_cpp` です。
 - Python 補助スクリプト用に、ビルド時に仮想環境が `${ROS_WS}/install/multi_purpose_mpc_ros/.venv` に作成されます。
 
+## test
+
+autoware コンテナ内で、C++ の経路処理テストと Python の V2X tracker テストを実行します。
+
+```bash
+cd /aichallenge/workspace
+colcon test --packages-select multi_purpose_mpc_ros --event-handlers console_direct+
+colcon test-result --verbose
+```
+
+## trajectory validation
+
+MPC が使用する7列 trajectory CSV を、実行時と同じ strict loader で検証できます。
+
+```bash
+ros2 run multi_purpose_mpc_ros reference_path_validator \
+  $(ros2 pkg prefix --share multi_purpose_mpc_ros)/env/final_ver3/traj_mincurv.csv \
+  --circular
+```
+
+必須列、数値変換、有限値、`s_m` の単調増加、周回重複終点、点間隔、曲率、速度、加速度を確認します。`--resolution <m>` を付けると、点間隔が指定値の105%を超えた場合に非0で終了します。現在の raw CSV は再サンプリング前なので、0.25m の上限検証は後続の周期再サンプリング実装後に使用します。
+
+本番の内部補間は、固定 `mpc.N` の実距離を維持するため、現時点では legacy `floor` 方式です。`ceil` 分割は pure helper とテストまでを先行追加しており、距離ベース horizon と同時に段階導入します。
+
+## runtime safety settings
+
+- `mpc.odom_timeout_sec`: odometry受信と非ゼロsource stampの更新をsteady clockで監視するローカルtimeout。既定は0.5秒です。
+- `mpc.min_linearization_speed_mps`: `1/v` を含むモデルを使わない低速閾値。既定は0.5 m/sです。
+
+staleまたは非有限なodometry、非有限な制御出力、OSQP失敗時には、古い予測制御列を再生せず、速度を下げるfail-safe commandへ移ります。solver fallbackとcontrol disable時はlegacy boostを強制無効化します。これらの既定値は2026公式値ではなく、走行ログとSafety Gateで調整する暫定ローカル基準です。
+
 ## run
 
 ### MPC コントローラー

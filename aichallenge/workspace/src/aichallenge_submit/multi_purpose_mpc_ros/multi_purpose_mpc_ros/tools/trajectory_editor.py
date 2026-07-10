@@ -300,6 +300,8 @@ class TrajectoryEditor(tk.Tk):
         self.undo_stack: List[Tuple[List[Dict[str, str]], List[Point], Optional[int]]] = []
         self.recompute_on_save = tk.BooleanVar(value=True)
         self.influence_radius_points = tk.IntVar(value=4)
+        self.smooth_alpha = tk.DoubleVar(value=0.15)
+        self.smooth_passes = tk.IntVar(value=1)
         self.drag_origin_points: Optional[List[Point]] = None
 
         self._build_ui()
@@ -328,6 +330,27 @@ class TrajectoryEditor(tk.Tk):
         tk.Button(toolbar, text="Fit", command=self.fit_view).pack(
             side=tk.LEFT, padx=2, pady=2
         )
+        tk.Button(toolbar, text="Smooth All", command=self.smooth_all_points).pack(
+            side=tk.LEFT, padx=2, pady=2
+        )
+        tk.Label(toolbar, text="Smooth").pack(side=tk.LEFT, padx=(8, 2))
+        tk.Spinbox(
+            toolbar,
+            from_=0.01,
+            to=0.50,
+            increment=0.01,
+            width=5,
+            format="%.2f",
+            textvariable=self.smooth_alpha,
+        ).pack(side=tk.LEFT, padx=2)
+        tk.Label(toolbar, text="Passes").pack(side=tk.LEFT, padx=(8, 2))
+        tk.Spinbox(
+            toolbar,
+            from_=1,
+            to=10,
+            width=3,
+            textvariable=self.smooth_passes,
+        ).pack(side=tk.LEFT, padx=2)
         tk.Label(toolbar, text="Influence pts").pack(side=tk.LEFT, padx=(8, 2))
         tk.Spinbox(
             toolbar,
@@ -368,6 +391,7 @@ class TrajectoryEditor(tk.Tk):
         self.bind("<BackSpace>", lambda _event: self.delete_selected())
         self.bind("<Control-s>", lambda _event: self.save())
         self.bind("<Control-z>", lambda _event: self.undo())
+        self.bind("<Control-m>", lambda _event: self.smooth_all_points())
         self.bind("<f>", lambda _event: self.fit_view())
         self.bind("<Left>", lambda event: self.nudge_selected(-1.0, 0.0, event))
         self.bind("<Right>", lambda event: self.nudge_selected(1.0, 0.0, event))
@@ -385,6 +409,18 @@ class TrajectoryEditor(tk.Tk):
         if extra:
             base = f"{base} | {extra}"
         self.status.set(base)
+
+    def _smooth_alpha(self) -> float:
+        try:
+            return max(0.0, min(0.5, float(self.smooth_alpha.get())))
+        except (tk.TclError, ValueError):
+            return 0.15
+
+    def _smooth_passes(self) -> int:
+        try:
+            return max(1, min(10, int(self.smooth_passes.get())))
+        except (tk.TclError, ValueError):
+            return 1
 
     def world_to_screen(self, point: Point) -> Point:
         width = max(self.canvas.winfo_width(), 1)
@@ -669,6 +705,45 @@ class TrajectoryEditor(tk.Tk):
                 points[-1] = point
             elif index == len(points) - 1:
                 points[0] = point
+
+    def smooth_all_points(self) -> None:
+        points = self.trajectory.points
+        closed = _closed_duplicate(points)
+        count = len(points) - 1 if closed else len(points)
+        if count < 3:
+            self._set_status("cannot smooth: too few points")
+            return
+
+        alpha = self._smooth_alpha()
+        passes = self._smooth_passes()
+        self._push_undo()
+
+        smoothed = list(points)
+        for _ in range(passes):
+            source = list(smoothed)
+            updated = list(source)
+            for idx in range(count):
+                if not closed and (idx == 0 or idx == count - 1):
+                    continue
+                prev_idx = (idx - 1) % count if closed else idx - 1
+                next_idx = (idx + 1) % count if closed else idx + 1
+                px, py = source[prev_idx]
+                x, y = source[idx]
+                nx, ny = source[next_idx]
+                avg_x = 0.5 * (px + nx)
+                avg_y = 0.5 * (py + ny)
+                updated[idx] = (
+                    (1.0 - alpha) * x + alpha * avg_x,
+                    (1.0 - alpha) * y + alpha * avg_y,
+                )
+            if closed:
+                updated[-1] = updated[0]
+            smoothed = updated
+
+        self.trajectory.points = smoothed
+        recompute_geometry(self.trajectory)
+        self.redraw()
+        self._set_status(f"smoothed all points alpha={alpha:.2f}, passes={passes}")
 
     def insert_point(self, x: float, y: float) -> None:
         segment_index = self._nearest_segment(x, y)

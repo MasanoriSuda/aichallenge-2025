@@ -40,7 +40,7 @@ reference_path:
   csv_path: "env/final_ver3/traj_mincurv.csv"
   domain_csv_path:
     1: "env/final_ver3/traj_mincurv.csv"
-    2: "env/final_ver3/traj_mincurv_ver4.csv"
+    2: "env/final_ver3/traj_mincurv_org.csv"
     3: "env/final_ver3/traj_mincurv_org.csv"
   resolution: 0.6
   smoothing_distance: 2
@@ -57,7 +57,7 @@ bicycle_model:
   width: 1.45   # +safety margin
 
 mpc:
-  N: 15
+  N: 30
   # Q: [e_y, e_psi, t]
   # R: [v, delta]
   # QN: [e_y, e_psi, t]
@@ -67,10 +67,10 @@ mpc:
   domain_a_max:
     1: 1.0
     2: 1.0
-    3: 0.7
+    3: 1.0
   delta_max_deg: 32.0 # degrees
   steer_rate_max: 1.2 # rad/s
-  control_rate: 100.0 # Hz
+  control_rate: 40.0 # Hz
   odom_timeout_sec: 0.5 # [s], steady-clock local safety timeout (not an official limit)
   min_linearization_speed_mps: 0.5 # [m/s], avoid singular 1/v terms below this speed
   steering_tire_angle_gain_var: 1.5
@@ -236,9 +236,9 @@ mpc:
 
   v_max: 40.0   # km/h
   domain_v_max:
-    1: 40.0
-    2: 40.0
-    3: 10.0
+    1: 10.0
+    2: 20.0
+    3: 40.0
   domain_start_v_max_duration: 15.0 # [s] compensate inner-lane advantage at side-by-side start
   domain_start_v_max:
     2: 37.0

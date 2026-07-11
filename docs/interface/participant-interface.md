@@ -1,6 +1,6 @@
 # 参加者インターフェース契約
 
-> 参加者（提出者）が**変えてはいけない約束**を列挙します。「[守るべき約束（一覧）](#守るべき約束一覧)」で 6 項目を簡潔にまとめたあと、各節で技術的な詳細を補足します。評価システムが依存する安定面（契約）の集約であり、手順書ではありません。
+> 参加者（提出者）が**変えてはいけない約束**を列挙します。「[守るべき約束（一覧）](#守るべき約束一覧)」で 7 項目を簡潔にまとめたあと、各節で技術的な詳細を補足します。評価システムが依存する安定面（契約）の集約であり、手順書ではありません。
 
 関連ドキュメント:
 
@@ -17,7 +17,7 @@
 
 ## 1. 概要
 
-この文書は現行リポジトリの参加者インターフェース契約を記述する。Automotive AI Challenge 2026 のAWSIM管理topicは2026-07-11に[公式インターフェース仕様](https://automotiveaichallenge.github.io/aichallenge-documentation-racingkart/specifications/interface.html)と照合した。V2X、評価、提出など確認中の仕様を変更する場合は、先に [../spec/open-questions.md](../spec/open-questions.md) の該当項目を解消してから本契約を更新する。
+この文書は現行リポジトリの参加者インターフェース契約を記述する。Automotive AI Challenge 2026 のAWSIM管理topicとgear topicは2026-07-12に[公式インターフェース仕様](https://automotiveaichallenge.github.io/aichallenge-documentation-racingkart/specifications/interface.html)と照合した。V2X、評価、提出、自律スタック復帰など確認中の仕様を変更する場合は、先に [../spec/open-questions.md](../spec/open-questions.md) の該当項目を解消してから本契約を更新する。
 
 評価環境は `docker_build.sh eval --submit <tar>` で封入イメージを生成し、そのイメージ内で `evaluation.launch.xml` を起動します。提出する tar.gz はイメージのビルドとランタイムに直接影響するため、以下の契約を守ることが評価の前提条件です。
 
@@ -38,6 +38,7 @@
 4. `control_method` に渡せる値は **`mpc`・`pure_pursuit`・`tiny_lidar_net`・`pilot_net`・`joycon` の 5 つのみ**（既定: `mpc`）。それ以外の値を渡すとどの制御ノードも起動せず車両が動かない。既定値を変更すると `control_method` を明示しない既存の起動経路の挙動が変わる。
 5. 提出パッケージは最小インターフェース（AWSIM センサトピックの subscribe、`/localization/kinematic_state` と `/planning/scenario_planning/trajectory` の produce、`/control/command/control_cmd` の publish、`/set_initial_pose` サービスの advertise）をすべて満たす。いずれかのトピック名・型を変更すると localization / planning / control の連結が切れ、車両の起動・走行・評価ができなくなる。
 6. 2026 SIMでBoostを使う場合は、車両Domain内の `/awsim/status` と `/awsim/cmd` を `std_msgs/msg/Float32MultiArray` で扱う。`/awsim/cmd.data[0]` の `0.0`→`1.0`以上の立ち上がりが発動条件であり、`/awsim/boost_cmd`、`Bool`、Domain 0の`/admin/awsim/*`を代用しない。
+7. gear変更が必要な場合は、車両Domain内の `/control/command/gear_cmd` と `/vehicle/status/gear_status` を使う。スタック復帰を理由にDomain 0の`/admin/awsim/reset`、クロスドメイン転送、非公開のteleport / respawn手段で代用しない。
 
 ---
 
@@ -122,6 +123,7 @@ AWSIM が publish し参加者ノードが subscribe するトピックです（
 | `/sensing/gnss/nav_sat_fix` | `sensor_msgs/NavSatFix` | `reference.launch.xml`（racing_kart_gnss_poser 入力） |
 | `/vehicle/status/velocity_status` | `autoware_auto_vehicle_msgs/VelocityReport` | `reference.launch.xml`（vehicle_velocity_converter 入力） |
 | `/vehicle/status/steering_status` | `autoware_auto_vehicle_msgs/SteeringReport` | `reference.launch.xml`（raw_vehicle_cmd_converter 入力、実車経路のみ） |
+| `/vehicle/status/gear_status` | `autoware_auto_vehicle_msgs/GearReport` | 2026公式gear状態。gear変更またはスタック復帰を行う場合の任意入力 |
 | `/clock` | `rosgraph_msgs/Clock` | シミュレーション時間（`use_sim_time=true`） |
 | `/awsim/status` | `std_msgs/Float32MultiArray` | 2026公式AWSIM状態。index 5=`boostRemaining`、6=`isBoosting` |
 | `/awsim/state` | `std_msgs/String` | 車両FSM。`Spawned, Grounded, Ready, Start, Finish` |
@@ -145,9 +147,28 @@ AWSIM が publish し参加者ノードが subscribe するトピックです（
 | トピック | 型 | 確認元 |
 |---|---|---|
 | `/control/command/control_cmd` | `autoware_auto_control_msgs/AckermannControlCommand` | `pure_pursuit.launch.xml`（remap）、`mpc_controller_cpp.cpp`、`mpc_controller.py`（比較用 Python 版）、`boost_commander.cpp`、`tiny_lidar_net_controller_node.py`、`pilot_net_controller_node.py` |
+| `/control/command/gear_cmd` | `autoware_auto_vehicle_msgs/GearCommand` | 2026公式gear指令。gear変更またはスタック復帰を行う場合の任意出力 |
 | `/awsim/cmd` | `std_msgs/Float32MultiArray` | 2026 SIM Boostを使う場合の任意出力。index 0=`boostCommand` |
 
 AWSIM はこのトピックを受けてカートを動かします。全制御方式（mpc / pure_pursuit / tiny_lidar_net / pilot_net）がこのトピックに収束します。
+
+### 2026 Gear の任意契約
+
+gear変更を行わない提出物に `/control/command/gear_cmd` と
+`/vehicle/status/gear_status` は必須ではない。使用する場合は次を守る。
+
+- 指令は `autoware_auto_vehicle_msgs/msg/GearCommand`、状態は
+  `autoware_auto_vehicle_msgs/msg/GearReport` を使う。
+- 公式のgear値は `1=NEUTRAL`、`2=DRIVE`、`20=REVERSE` である。
+- AWSIMは `AckermannControlCommand.longitudinal.speed` を使用せず、
+  `longitudinal.acceleration` を加速度指令として使用する。したがって負の
+  `longitudinal.speed` だけを送っても後退契約にはならない。
+- これらはAWSIMと車両Domain N内で直接通信する。自律スタック復帰の
+  許可、REVERSE中の加速度符号、gear status acknowledgementの待機条件は
+  [../spec/open-questions.md](../spec/open-questions.md) の未確定事項であり、
+  topicが公開されていること自体は自律復帰の競技上の許可を意味しない。
+- `/admin/awsim/reset` はDomain 0のシミュレーション全体管理用であり、
+  参加者車両のgear変更やスタック復帰に使用しない。
 
 ### 2026 SIM Boost の任意契約
 

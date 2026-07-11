@@ -18,6 +18,77 @@ awsim_boost:
   status_timeout_sec: 0.5
   confirmation_timeout_sec: 2.0
 
+# Staged wall-stuck recovery. The detector and all actuation are disabled by default so the
+# existing MPC output is unchanged. Enable shadow_mode first and inspect logs before takeover.
+stuck_recovery:
+  enabled: false
+  domain_enabled:
+    1: false
+    2: false
+    3: false
+  shadow_mode: true
+  simulation_only: true
+  # Independent safety latch. Keep false until AWSIM Reverse acceleration semantics are measured.
+  reverse_actuation_enabled: false
+  # TBD: measured adapter sign only (-1 or +1). Zero intentionally prevents reverse actuation.
+  reverse_acceleration_sign: 0.0
+  # TBD: signed acceleration verified to stop while physical gear remains Reverse.
+  reverse_stop_acceleration_mps2: 0.0
+  # TBD: achieved positive deceleration measured from signed odometry while stopping in Reverse.
+  verified_reverse_stop_deceleration_mps2: 0.0
+  # Measured command-to-effect delay; included in the physical stopping-distance reserve.
+  reverse_control_latency_sec: 0.1
+  boost_status_timeout_sec: 0.5
+  detector:
+    stopped_speed_mps: 0.15
+    moving_speed_mps: 0.25
+    forward_intent_speed_mps: 1.0
+    forward_intent_acceleration_mps2: 0.1
+    stationary_duration_sec: 1.2
+    max_pose_displacement_m: 0.15
+    max_progress_delta_m: 0.20
+    # Wait beyond the documented AWSIM wall-recovery motion before considering our own action.
+    awsim_recovery_settle_sec: 1.2
+  gear:
+    report_timeout_sec: 0.5
+    stop_confirm_sec: 0.3
+    command_resend_interval_sec: 0.2
+    max_command_requests: 1
+  maneuver:
+    clearance_wait_timeout_sec: 1.0
+    max_reverse_distance_m: 0.8
+    max_reverse_duration_sec: 2.0
+    # Positive magnitude only; reverse_acceleration_sign is applied by the ROS/AWSIM adapter.
+    reverse_acceleration_magnitude_mps2: 0.3
+    escape_distance_m: 0.30
+    max_reverse_pose_step_m: 0.25
+    max_attempts: 1
+  footprint:
+    # Pose-to-collider correspondence is still TBD; these are current vehicle-sheet estimates.
+    front_extent_m: 1.49
+    rear_extent_m: 0.51
+    left_extent_m: 0.725
+    right_extent_m: 0.725
+    margin_m: 0.05
+    sweep_interpolation_step_m: 0.05
+  rear_safety:
+    # Total entries in each V2X array (include self if AWSIM publishes self).
+    # -1 means unknown and intentionally blocks Reverse until the race layout is confirmed.
+    expected_v2x_vehicle_count: -1
+    # unknown blocks Reverse. Use excluded only if V2X officially excludes self; otherwise
+    # use vehicle_id and set the exact self_vehicle_id.
+    self_filter_mode: unknown
+    self_vehicle_id: ""
+    vehicle_radius_m: 1.45
+    prediction_margin_sec: 0.1
+  rejoin:
+    speed_limit_mps: 1.0
+    max_lateral_error_m: 0.5
+    max_heading_error_rad: 0.35
+    confirm_sec: 0.3
+    timeout_sec: 5.0
+    cooldown_sec: 1.0
+
 map:
   # path from pkg share dir
   yaml_path: "env/final_ver3/occupancy_grid_map.yaml"

@@ -46,6 +46,72 @@ ros2 run multi_purpose_mpc_ros reference_path_validator \
 
 staleまたは非有限なodometry、非有限な制御出力、OSQP失敗時には、古い予測制御列を再生せず、速度を下げるfail-safe commandへ移ります。solver fallbackとcontrol disable時はlegacy boostを強制無効化します。これらの既定値は2026公式値ではなく、走行ログとSafety Gateで調整する暫定ローカル基準です。
 
+## stuck recovery（既定OFF）
+
+壁接触後に前進できない状態を検出するpure C++ core、gear確認を含む
+Recovery FSM、静的occupancy grid上の車体swept-footprint検査を追加しています。
+通常MPCと将来のMPCCとは別責務で、最終
+`/control/command/control_cmd`はpublisherを増やさず既存C++ nodeが1周期に1回だけ
+publishします。
+
+現在の初期設定は次の多重ラッチです。
+
+- `enabled: false`かつ全`domain_enabled: false`で、detectorも通常制御も変更しない。
+- 最初の確認は`enabled: true`、対象Domainを`true`、`shadow_mode: true`とし、
+  candidate / reject reasonのログだけを観測する。
+- `simulation_only: true`のため、実車環境では制御権を取得しない。
+- `reverse_actuation_enabled: false`に加え、`reverse_acceleration_sign: 0.0`を別の
+  安全ラッチとする。signが0のままではReverse駆動を有効化できない。
+- `reverse_stop_acceleration_mps2: 0.0`も実測前の停止値であり、0のままでは
+  actuation設定を受理しない。駆動commandと停止commandは逆符号でなければならず、
+  `verified_reverse_stop_deceleration_mps2`も実測した正値が必要。
+
+Shadow確認例:
+
+```yaml
+stuck_recovery:
+  enabled: true
+  domain_enabled:
+    1: true
+    2: false
+    3: false
+  shadow_mode: true
+  simulation_only: true
+  reverse_actuation_enabled: false
+  reverse_acceleration_sign: 0.0
+```
+
+`Stuck detector:`は前進要求、signed speed、pose / path進捗、壁またはlegacy
+collision hintとreject reasonを出します。`Stuck recovery:`はexecution mode、FSM
+state、action、static candidateの拒否理由、rear V2X完全性をstate変化時に出します。
+Follow / SafetyBrake / LowSpeedAvoidance、Start前、control disable、odom異常、solver
+fallbackはスタック確定から除外されます。
+
+実際のReverse制御は現時点で`Straight`だけです。`Left` / `Right`は
+`recovery_footprint` pure APIで同じ静的安全規則を評価できますが、runtime候補選択、
+実command、RViz表示にはまだ統合していません。Straightでも次をすべて満たさない限り
+gear要求へ進みません。
+
+- 全swept footprintがstatic mapで安全。map外、unknown、新規接触は即reject。
+- `/v2x/vehicle_positions`がfreshかつ想定台数分completeで、予測した後方corridorに
+  車両がいない。期待値は配列の総entry数（環境が自車を含める場合は自車込み）で、
+  空ID・重複ID・異常sampleもrejectする。`rear_safety.expected_v2x_vehicle_count: -1`の
+  既定値はReverseを阻止する。自車の扱いも`self_filter_mode: unknown`では阻止し、
+  公式確認後に`excluded`または正確な`vehicle_id`を明示する。
+- `/awsim/status`がfreshでBoost中ではない。
+- `/vehicle/status/gear_status`がfreshで、REVERSE確認後にだけ駆動する。
+- 後退距離、時間、gear request回数、Recovery attemptが設定上限内。
+
+重要: AWSIMでREVERSE中の`longitudinal.acceleration`符号は未実測です。
+`reverse_actuation_enabled` や `reverse_acceleration_sign`を推測で変更しないでください。
+gear遷移、signed odometry、標準壁リカバリーとの競合を含むAWSIM実走は
+未検証です。
+
+自動テストでは`stuck_recovery_core` 26件と`recovery_footprint` 17件が成功し、
+`make autoware-build`も成功しています。package全体testは既存
+`traj_mincurv.csv`の周回末尾fixture期待の1件だけが失敗し、Recovery新規testは
+すべて成功しました。
+
 ## run
 
 ### MPC コントローラー

@@ -184,17 +184,34 @@ class _Value:
     def get(self) -> object:
         return self.value
 
+    def set(self, value: object) -> None:
+        self.value = value
+
 
 def _headless_editor(data: editor.TrajectoryData) -> editor.TrajectoryEditor:
     instance = editor.TrajectoryEditor.__new__(editor.TrajectoryEditor)
     instance.trajectory = data
-    instance.original_trajectory = copy.deepcopy(data)
+    instance.loaded_original = copy.deepcopy(data)
+    instance.original_trajectory = instance.loaded_original
+    instance.loaded_original_circular = True
     instance.circular = _Value(True)
     instance.influence_radius_points = _Value(1)
     instance.last_operation = "edited"
     instance.candidate = None
     instance.world_to_screen = lambda point: point
     return instance
+
+
+class _CanvasSize:
+    def __init__(self, width: int, height: int) -> None:
+        self.width = width
+        self.height = height
+
+    def winfo_width(self) -> int:
+        return self.width
+
+    def winfo_height(self) -> int:
+        return self.height
 
 
 def _prepare_headless_save(
@@ -529,6 +546,124 @@ def test_successful_ui_save_updates_state_only_after_atomic_write(
     assert instance.revision == 5
 
 
+def test_successful_save_keeps_loaded_original_session_snapshot(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source.csv"
+    target = tmp_path / "edited.csv"
+    _write_rows(
+        source,
+        contract.MPC_COLUMNS,
+        [_mpc_row(0, 0, 0), _mpc_row(1, 1, 0)],
+    )
+    instance = _headless_editor(editor.load_trajectory(source))
+    instance.circular = _Value(False)
+    original_signature = editor._trajectory_content_signature(instance.loaded_original)
+    instance.trajectory.rows[0]["vx_mps"] = "1.5"
+    report = editor.validate_trajectory_data(instance.trajectory, circular=False)
+    _prepare_headless_save(instance, report)
+
+    assert instance._save_to_path(target)
+    assert instance.trajectory.rows[0]["vx_mps"] == "1.5"
+    assert editor._trajectory_content_signature(instance.loaded_original) == original_signature
+    assert instance.original_trajectory is instance.loaded_original
+    assert instance.loaded_original.path == source
+
+
+def test_scroll_navigation_preserves_world_screen_round_trip_and_zoom_anchor(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "line.csv"
+    _write_rows(
+        source,
+        contract.MPC_COLUMNS,
+        [_mpc_row(0, 0, 0), _mpc_row(100, 100, 50)],
+    )
+    instance = _headless_editor(editor.load_trajectory(source))
+    instance.world_to_screen = editor.TrajectoryEditor.world_to_screen.__get__(instance)
+    instance.canvas = _CanvasSize(400, 300)
+    instance.rails = []
+    instance.show_original = _Value(True)
+    instance.show_working = _Value(True)
+    instance.show_candidate = _Value(True)
+    instance.center_x = 50.0
+    instance.center_y = 25.0
+    instance.scale = 10.0
+    instance.redraw = lambda: None
+
+    instance._set_scroll_fraction("x", 1.0)
+    instance._set_scroll_fraction("y", 1.0)
+    world = instance.screen_to_world(125.0, 90.0)
+    assert instance.world_to_screen(world) == pytest.approx((125.0, 90.0))
+
+    anchor_before = instance.screen_to_world(260.0, 175.0)
+    instance._zoom_at(260.0, 175.0, 1.15)
+    assert instance.screen_to_world(260.0, 175.0) == pytest.approx(anchor_before)
+
+
+def test_layer_toggle_is_view_only(tmp_path: Path) -> None:
+    source = tmp_path / "line.csv"
+    _write_rows(
+        source,
+        contract.MPC_COLUMNS,
+        [_mpc_row(0, 0, 0), _mpc_row(1, 1, 0)],
+    )
+    instance = _headless_editor(editor.load_trajectory(source))
+    instance.show_original = _Value(False)
+    instance.dirty = True
+    instance.revision = 11
+    instance.undo_stack = ["sentinel"]
+    instance.redraw = lambda: None
+    instance._set_status = lambda _extra="": None
+    before = copy.deepcopy(instance.trajectory)
+
+    instance._on_layer_visibility_changed()
+
+    assert instance.trajectory == before
+    assert instance.dirty
+    assert instance.revision == 11
+    assert instance.undo_stack == ["sentinel"]
+
+
+def test_original_difference_uses_arc_length_when_point_counts_differ() -> None:
+    original = [(0.0, 0.0), (2.0, 0.0)]
+    unchanged_resample = [(0.0, 0.0), (1.0, 0.0), (2.0, 0.0)]
+    changed = [(0.0, 0.0), (1.0, 0.2), (2.0, 0.0)]
+
+    same = editor.build_original_difference(original, unchanged_resample)
+    difference = editor.build_original_difference(original, changed)
+
+    assert same.maximum_displacement_m == pytest.approx(0.0)
+    assert same.working_point_count - same.original_point_count == 1
+    assert difference.maximum_displacement_m == pytest.approx(0.2009780947)
+    assert len(difference.changed_ranges_m) == 1
+    assert difference.changed_ranges_m[0] == pytest.approx((1.0198039, 1.0198039))
+    assert difference.changed_indices == (1,)
+
+
+def test_click_reveals_hidden_working_layer_before_editing(tmp_path: Path) -> None:
+    source = tmp_path / "line.csv"
+    _write_rows(
+        source,
+        contract.MPC_COLUMNS,
+        [_mpc_row(0, 0, 0), _mpc_row(1, 1, 0)],
+    )
+    instance = _headless_editor(editor.load_trajectory(source))
+    instance.show_working = _Value(False)
+    instance.selected_index = None
+    instance.dirty = False
+    instance.focus_set = lambda: None
+    instance.redraw = lambda: None
+    instance._set_status = lambda _extra="": None
+    event = type("Event", (), {"state": 0, "x": 0, "y": 0})()
+
+    instance._on_left_down(event)
+
+    assert instance.show_working.get() is True
+    assert instance.selected_index is None
+    assert not instance.dirty
+
+
 def test_cli_topology_flags_are_explicit_and_mutually_exclusive() -> None:
     common = ["--trajectory", "trajectory.csv", "--osm", "map.osm"]
 
@@ -566,6 +701,7 @@ def test_save_as_name_is_non_destructive_by_default() -> None:
         ("traj.csv", "normalize_geometry", "traj_normalized.csv"),
         ("traj_edited.csv", "normalize_geometry", "traj_normalized.csv"),
         ("traj_normalized.csv", "recompute_speed_profile", "traj_speed_profiled.csv"),
+        ("traj_clearance_adjusted.csv", "adjust_clearance", "traj_clearance_adjusted.csv"),
         ("traj_speed_profiled.csv", "edited", "traj_edited.csv"),
     ],
 )
@@ -651,6 +787,209 @@ def test_apply_candidate_is_one_undoable_revision(tmp_path: Path) -> None:
     assert instance.revision == 10
     assert not instance.dirty
     assert instance.last_operation == "edited"
+
+
+def test_speed_only_candidate_preserves_current_safe_clearance(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source.csv"
+    _write_rows(
+        source,
+        contract.MPC_COLUMNS,
+        [_mpc_row(0, 0, 0), _mpc_row(1, 1, 0)],
+    )
+    instance = _headless_editor(editor.load_trajectory(source))
+    _prepare_headless_candidate(instance, revision=8)
+    vehicle = editor.VehicleFootprintSpec.from_extents(
+        front_m=1.0,
+        rear_m=0.5,
+        left_m=0.5,
+        right_m=0.5,
+    )
+    safe_report = editor.ClearanceReport(
+        map_signature="map-v1",
+        source_revision=8,
+        vehicle=vehicle,
+        minimum_clearance_m=0.4,
+        conservative_minimum_clearance_m=0.3,
+        measurement_resolution_m=0.1,
+        colliding_point_count=0,
+        colliding_segment_count=0,
+        unknown_contact_count=0,
+        outside_map_count=0,
+        issues=(),
+        is_safe=True,
+    )
+    instance.clearance_config = object()
+    instance.clearance_grid = None
+    instance.clearance_report = safe_report
+    instance.clearance_revision = 8
+    instance.clearance_state = "safe"
+    instance.clearance_selected_issue = None
+    instance.clearance_report_window = None
+    instance.clearance_summary = _Value("")
+    candidate = _candidate_for(instance.trajectory, source_revision=8)
+    instance.candidate = candidate
+
+    assert instance._apply_candidate(candidate)
+    assert instance.clearance_report is safe_report
+    assert instance.clearance_revision == 9
+    assert instance.clearance_state == "safe"
+
+
+def test_clearance_pose_adapter_uses_strict_mpc_geometry(tmp_path: Path) -> None:
+    source = tmp_path / "source.csv"
+    _write_rows(
+        source,
+        contract.MPC_COLUMNS,
+        [_mpc_row(0, 1, 2), _mpc_row(3, 4, 5)],
+    )
+    data = editor.load_trajectory(source)
+    data.rows[0]["psi_rad"] = "0.25"
+    data.rows[0]["kappa_radpm"] = "-0.1"
+
+    poses = editor.TrajectoryEditor._trajectory_clearance_poses(data)
+
+    assert poses[0].x_m == pytest.approx(1.0)
+    assert poses[0].y_m == pytest.approx(2.0)
+    assert poses[0].yaw_rad == pytest.approx(0.25)
+    assert poses[0].s_m == pytest.approx(0.0)
+    assert poses[0].curvature_radpm == pytest.approx(-0.1)
+
+
+def test_candidate_safety_guard_rejects_without_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source.csv"
+    _write_rows(
+        source,
+        contract.MPC_COLUMNS,
+        [_mpc_row(0, 0, 0), _mpc_row(1, 1, 0)],
+    )
+    instance = _headless_editor(editor.load_trajectory(source))
+    _prepare_headless_candidate(instance, revision=8)
+    candidate = _candidate_for(instance.trajectory, source_revision=8)
+    candidate.apply_guard = lambda _data: (False, "synthetic unsafe", None)
+    instance.candidate = candidate
+    before = copy.deepcopy(instance.trajectory)
+    monkeypatch.setattr(editor.messagebox, "showerror", lambda *_args, **_kwargs: None)
+
+    assert not instance._apply_candidate(candidate)
+    assert instance.trajectory == before
+    assert instance.revision == 8
+    assert not instance.undo_stack
+
+
+def test_current_unsafe_clearance_report_blocks_save(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source.csv"
+    target = tmp_path / "must_not_exist.csv"
+    _write_rows(
+        source,
+        contract.MPC_COLUMNS,
+        [_mpc_row(0, 0, 0), _mpc_row(1, 1, 0)],
+    )
+    instance = _headless_editor(editor.load_trajectory(source))
+    report = editor.validate_trajectory_data(instance.trajectory, circular=False)
+    _prepare_headless_save(instance, report)
+    instance.clearance_report = type("UnsafeReport", (), {"is_safe": False})()
+    instance.clearance_revision = instance.revision
+    monkeypatch.setattr(editor.messagebox, "showerror", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        editor,
+        "save_trajectory",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("serializer ran for unsafe clearance")
+        ),
+    )
+
+    assert not instance._save_to_path(target)
+    assert not target.exists()
+
+
+def test_failed_clearance_attempt_invalidates_previous_safe_report(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source.csv"
+    _write_rows(
+        source,
+        contract.MPC_COLUMNS,
+        [_mpc_row(0, 0, 0), _mpc_row(1, 1, 0)],
+    )
+    instance = _headless_editor(editor.load_trajectory(source))
+    instance.revision = 3
+    instance.clearance_config = object()
+    instance.clearance_report = type(
+        "SafeReport", (), {"is_safe": True, "map_signature": "old"}
+    )()
+    instance.clearance_revision = 3
+    instance.clearance_state = "safe"
+    instance.clearance_summary = _Value("safe")
+    instance.clearance_report_window = None
+    instance._clearance_precheck = lambda: True
+    instance._ensure_clearance_config = lambda: instance.clearance_config
+    instance._validation_options = lambda _config: object()
+    instance._load_clearance_context = lambda *_args: (_ for _ in ()).throw(
+        ValueError("map missing")
+    )
+    instance._set_status = lambda _extra="": None
+    monkeypatch.setattr(editor.messagebox, "showerror", lambda *_args, **_kwargs: None)
+
+    assert instance.validate_clearance_action() is None
+    assert instance.clearance_report is None
+    assert instance.clearance_state == "failed"
+    assert instance.clearance_revision is None
+
+
+def test_safe_clearance_map_signature_is_rechecked_before_save(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source.csv"
+    target = tmp_path / "must_not_exist.csv"
+    _write_rows(
+        source,
+        contract.MPC_COLUMNS,
+        [_mpc_row(0, 0, 0), _mpc_row(1, 1, 0)],
+    )
+    instance = _headless_editor(editor.load_trajectory(source))
+    report = editor.validate_trajectory_data(instance.trajectory, circular=False)
+    _prepare_headless_save(instance, report)
+    instance.clearance_config = type(
+        "Config",
+        (),
+        {
+            "map_yaml_path": tmp_path / "map.yaml",
+            "unknown_is_occupied": True,
+        },
+    )()
+    instance.clearance_report = type(
+        "SafeReport", (), {"is_safe": True, "map_signature": "old"}
+    )()
+    instance.clearance_revision = instance.revision
+    instance.clearance_state = "safe"
+    instance.clearance_summary = _Value("safe")
+    instance.clearance_report_window = None
+    changed_grid = type(
+        "Grid", (), {"spec": type("Spec", (), {"signature": "new"})()}
+    )()
+    monkeypatch.setattr(editor, "load_occupancy_grid", lambda *_args, **_kwargs: changed_grid)
+    monkeypatch.setattr(editor.messagebox, "showerror", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        editor,
+        "save_trajectory",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("serializer ran after map signature changed")
+        ),
+    )
+
+    assert not instance._save_to_path(target)
+    assert instance.clearance_state == "stale"
+    assert not target.exists()
 
 
 def test_stale_candidate_is_rejected_without_mutation(

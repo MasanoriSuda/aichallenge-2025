@@ -39,7 +39,8 @@ def run_candidate_task(
     parent: tk.Misc,
     *,
     title: str,
-    task: Callable[[], _TaskResult],
+    task: Callable[..., _TaskResult],
+    cancellable: bool = False,
 ) -> _TaskResult:
     """Run pure candidate work off the Tk thread while keeping UI responsive."""
 
@@ -53,15 +54,30 @@ def run_candidate_task(
     progress = ttk.Progressbar(body, mode="indeterminate", length=320)
     progress.pack(fill=tk.X, pady=(10, 0))
     progress.start(12)
-    dialog.protocol("WM_DELETE_WINDOW", lambda: None)
     dialog.grab_set()
 
     completed = threading.Event()
+    cancel_requested = threading.Event()
     outcome: dict[str, object] = {}
+
+    def request_cancel() -> None:
+        cancel_requested.set()
+        if cancel_button is not None:
+            cancel_button.configure(state=tk.DISABLED, text="Cancelling ...")
+
+    cancel_button: Optional[ttk.Button] = None
+    if cancellable:
+        cancel_button = ttk.Button(body, text="Cancel", command=request_cancel)
+        cancel_button.pack(anchor="e", pady=(10, 0))
+        dialog.protocol("WM_DELETE_WINDOW", request_cancel)
+    else:
+        dialog.protocol("WM_DELETE_WINDOW", lambda: None)
 
     def worker() -> None:
         try:
-            outcome["value"] = task()
+            outcome["value"] = (
+                task(cancel_requested) if cancellable else task()
+            )
         except BaseException as error:  # noqa: BLE001
             outcome["error"] = error
         finally:

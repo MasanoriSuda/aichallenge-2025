@@ -172,6 +172,35 @@ MPC の `env/final_ver3/traj_mincurv.csv` を Lanelet2 map 上で編集します
 ros2 run multi_purpose_mpc_ros trajectory_editor
 ```
 
+任意ファイルと経路の topology を明示する場合:
+
+```bash
+ros2 run multi_purpose_mpc_ros trajectory_editor \
+  --trajectory /path/to/trajectory.csv \
+  --osm /path/to/lanelet2_map.osm \
+  --circular
+```
+
+非周回経路は `--open` を指定します。引数を省略した組み込み MPC preset は、このリポジトリ固有の周回経路として起動します。これは Automotive AI Challenge 2026 の公式インターフェース仕様ではありません。
+
+安全な基本操作は次の順です。
+
+1. `Open Traj` でCSVを開き、必要なら `Circular` を確認する。
+2. `Validate` で error / warning、CSV行、`s_m`、問題値を確認する。
+3. 必要なら点を編集する。MPCのXY変更はgeometryとspeed metadataの両方をstaleにする。
+4. `Normalize Geometry` で重複終端・退化点の除去、等間隔線形再サンプリング、`s_m/psi/kappa` 再生成、`vx/ax` policyを明示してcandidateを作る。
+5. XY、間隔、heading、curvature、速度、加速度、横加速度のBefore/Candidate比較と補正レポートを確認し、`Apply Candidate` または `Discard` を選ぶ。
+6. `vx/ax`を作り直す場合は `Recompute Speed` で `v_max/a_max/a_min/ay_max/minimum_speed` と収束条件を設定し、同様にpreviewして適用する。
+7. `Validate` 後、`Save As` で `*_normalized.csv`、`*_speed_profiled.csv`、または `*_edited.csv` へ別名保存する。
+
+Normalizeの`preserve`は点数・topology不変時だけ使用できます。`interpolate`はarc length上で`vx/ax`を補間します。`recompute`は補間値を一時値として入れたうえでspeedをstaleのまま維持し、保存前に`Recompute Speed`を要求します。有限XYと`vx/ax`を読めるMPC CSVなら、非単調`s_m`、不正な`s_m/psi/kappa`、重複・退化点をrepair対象として開けます。schema不正、非有限XY、不正`vx/ax`は開きません。
+
+MPC CSVはcanonical 7列 `s_m,x_m,y_m,psi_rad,kappa_radpm,vx_mps,ax_mps2`、Pure Pursuit CSVは既存8列を形式別に検証します。高度なNormalize/Speed機能はMPC限定で、Pure Pursuitの既存編集・quaternion再計算は維持します。保存時の暗黙再計算は行いません。stale fieldまたはvalidation errorがあれば保存を止めます。`Overwrite` は対象pathを表示して確認し、同一directoryのtemporary fileを再検証してから原子的に置換します。symlink targetの直接置換は拒否します。
+
+`AI Challenge 2026 Candidate - Safe` の `resolution=0.25 m`、`a_max=1.0 m/s²`、read-onlyの`horizon_distance=16 m`は比較検証用のローカル候補であり、2026公式確定値ではありません。`v_max/a_min/ay_max`の初期値は現在のCSV統計から入る未検証値なので、走行条件に合わせて確認してください。candidate生成と比較model作成はprogress dialog中のworkerで行い、Apply直前にsource revision、candidate内容、validationを再確認します。
+
+Editor内の `vx_mps/ax_mps2` はoffline CSV metadataです。現行C++ MPCの走行速度はruntime側の速度上限処理が優先されるため、Editorで値を保存しただけでは走行速度プロファイルへ直接反映されません。
+
 Pure Pursuit 用の `simple_trajectory_generator/data/raceline_awsim_30km_from_garage.csv` を開く場合:
 
 ```bash

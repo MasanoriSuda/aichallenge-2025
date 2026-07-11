@@ -1,6 +1,6 @@
 # multi_purpose_mpc_ros インテグレーション設計
 
-> 仕様ドキュメント（現仕様の正）。最終確認: 2026-07-05。文書運用方針は [docs/README.md](../README.md) を参照。
+> 仕様ドキュメント（現仕様の正）。最終確認: 2026-07-11。文書運用方針は [docs/README.md](../README.md) を参照。
 
 作成日: 2026-02-10
 
@@ -110,7 +110,21 @@ ros2 run multi_purpose_mpc_ros reference_path_validator \
   --circular
 ```
 
-現段階では、0.25m周期再サンプリング、メートル単位 smoothing、距離ベース horizon、速度プロファイル再設計は未実装である。現在の `resolution: 0.6`、legacy補間、`smoothing_distance`、固定 `N` を一度に変更せず、validator・単体テスト・計算時間測定を追加してから段階移行する。特に `final_ver3` へ `ceil` だけを適用すると内部点数がほぼ倍増し、固定 `N=15` の実距離 horizon がほぼ半減するため、単独では有効化しない。
+### Offline Trajectory Editor safety（2026-07-11）
+
+`trajectory_editor` には、GUI非依存のPython validator、geometry normalization、offline speed-profile生成、Before/Candidate比較、安全保存を追加している。MPCはcanonical 7列、Pure Pursuitは既存8列として別々に検証し、Validate操作はworking data、Undo、revision、入力fileを変更しない。
+
+- 周回状態は重複終端とは別に保持し、`--circular` / `--open` またはGUIで明示する。組み込みMPC presetの周回既定はローカル設定であり、2026公式仕様ではない。
+- MPCのXY変更は `s_m/psi_rad/kappa_radpm` と `vx_mps/ax_mps2` の両方をstaleとする。Pure Pursuitは既存8列とquaternionの明示再計算を維持する。保存時の暗黙再計算は行わない。
+- `Normalize Geometry` は重複終端・退化点の選択的除去、open/circularのcanonical arc length、等間隔線形再サンプリング、heading/curvature再生成をdetached candidate上で行う。`vx/ax`はpreserve、周期/線形interpolate、後続speed再計算へdeferのいずれかを明示する。
+- `Recompute Speed` は `min(v_max, sqrt(ay_max/max(abs(kappa), epsilon)))` の上限からforward/backward relaxationを行い、周回seamを含む制約、minimum speed競合、非収束、出力validationを確認する。open終端の`ax_mps2`は0とする。
+- candidateはsource revisionと内容signatureに結び、workerで生成する。XY、spacing、psi、kappa、velocity、acceleration、lateral accelerationと補正統計をpreviewし、validation error時はApplyを無効にする。Applyは1回のUndo snapshotとしてworkingへ反映する。
+- 通常動線は処理に応じた `*_normalized.csv`、`*_speed_profiled.csv`、`*_edited.csv` への `Save As` とする。上書きはpath確認を要求し、同一directoryのtemporary fileを再検証後にatomic replaceする。symlink targetは置換しない。
+- `resolution=0.25 m`、`a_max=1.0 m/s²`、`horizon_distance=16 m` は `AI Challenge 2026 Candidate - Safe` のローカル候補値であり、公式確定値ではない。resolutionと加速度条件は編集可能、horizonはruntime統合hintとしてread-only表示する。
+
+Editorが保存する `vx_mps/ax_mps2` はoffline CSV metadataである。現在のC++ MPCは制御周期内のruntime速度上限を優先するため、この値を編集しただけでは走行速度プロファイルへ直接反映されない。
+
+Editorの0.25m CSV生成はoffline機能として実装済みだが、runtime側の `resolution: 0.6`、legacy補間、`smoothing_distance`、固定 `N` は変更していない。生成CSVを本番pathへ採用する場合は、C++ validator、固定Nの実距離horizon、計算時間、壁余白、走行回帰を別途確認する。特にCSV密度だけを上げてもruntime再サンプリングや速度上書きの責務は自動では変わらない。
 
 ## 統合方針
 

@@ -196,6 +196,19 @@ TEST(PathCoreCsv, RejectsDegenerateAndNonFiniteDerivedSegmentLengths)
     {"row 3", "column '<segment-length>'", "derived segment length must be finite"});
 }
 
+TEST(PathCoreCsv, UsesExclusiveMinimumSegmentLengthBoundary)
+{
+  expect_csv_error(
+    std::string(kHeader) +
+    "0,0,0,0,0,1,0\n1,0.000001,0,0,0,1,0\n",
+    {"row 3", "column '<segment-length>'", "must be more than"});
+
+  const TempCsv csv(
+    std::string(kHeader) +
+    "0,0,0,0,0,1,0\n1,0.0000010000000001,0,0,0,1,0\n");
+  EXPECT_EQ(path_core::load_reference_path_csv(csv.path()).size(), 2U);
+}
+
 TEST(PathCoreCsv, RejectsInsufficientPointCount)
 {
   expect_csv_error(
@@ -223,6 +236,25 @@ TEST(PathCoreCircular, RemovesClosureDuplicateAsWholeRecord)
   EXPECT_DOUBLE_EQ(points.back().kappa_radpm, 2.2);
   EXPECT_DOUBLE_EQ(points.back().vx_mps, 23.0);
   EXPECT_DOUBLE_EQ(points.back().ax_mps2, 24.0);
+}
+
+TEST(PathCoreCircular, UsesInclusiveClosureToleranceBoundary)
+{
+  const auto make_points = [](const double endpoint_x) {
+      return std::vector<path_core::ReferencePathPoint>{
+        point(0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0),
+        point(1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0),
+        point(2.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0),
+        point(3.0, endpoint_x, 0.0, 0.0, 0.0, 1.0, 0.0)};
+    };
+
+  auto at_tolerance = make_points(0.001);
+  EXPECT_TRUE(path_core::normalize_circular_endpoint(at_tolerance, 0.001));
+  EXPECT_EQ(at_tolerance.size(), 3U);
+
+  auto above_tolerance = make_points(std::nextafter(0.001, 1.0));
+  EXPECT_FALSE(path_core::normalize_circular_endpoint(above_tolerance, 0.001));
+  EXPECT_EQ(above_tolerance.size(), 4U);
 }
 
 #ifdef MULTI_PURPOSE_MPC_ROS_SOURCE_DIR

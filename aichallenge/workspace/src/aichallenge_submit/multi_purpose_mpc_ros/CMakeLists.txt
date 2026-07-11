@@ -56,6 +56,7 @@ target_link_libraries(reference_path_validator
 )
 
 if(BUILD_TESTING)
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
   find_package(ament_cmake_gtest REQUIRED)
   find_package(ament_cmake_pytest REQUIRED)
 
@@ -81,11 +82,35 @@ if(BUILD_TESTING)
       -P ${CMAKE_CURRENT_SOURCE_DIR}/test/assert_process_result.cmake
   )
 
+  add_test(
+    NAME test_trajectory_editor_cpp_contract
+    COMMAND ${CMAKE_COMMAND} -E env
+      "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}:$ENV{PYTHONPATH}"
+      ${Python3_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/test/test_trajectory_cpp_contract.py
+      --validator $<TARGET_FILE:reference_path_validator>
+  )
+
   ament_add_pytest_test(test_v2x_vehicle_tracker
     test/test_v2x_vehicle_tracker.py
   )
   ament_add_pytest_test(test_reference_path_utils
     test/test_reference_path_utils.py
+  )
+  ament_add_pytest_test(test_trajectory_contract
+    test/test_trajectory_contract.py
+  )
+  ament_add_pytest_test(test_trajectory_editor_compat
+    test/test_trajectory_editor_compat.py
+  )
+  ament_add_pytest_test(test_trajectory_processing
+    test/test_trajectory_processing.py
+  )
+  ament_add_pytest_test(test_trajectory_plot
+    test/test_trajectory_plot.py
+  )
+  ament_add_pytest_test(test_trajectory_speed
+    test/test_trajectory_speed.py
   )
 endif()
 

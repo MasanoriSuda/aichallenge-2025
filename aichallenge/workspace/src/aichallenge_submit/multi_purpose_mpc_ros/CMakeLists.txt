@@ -29,6 +29,11 @@ ament_auto_add_library(${PROJECT_NAME}_path_core SHARED
   src/path_core.cpp
 )
 
+ament_auto_add_library(${PROJECT_NAME}_awsim_boost_start_dash SHARED
+  NO_TARGET_LINK_LIBRARIES
+  src/awsim_boost_start_dash.cpp
+)
+
 ament_auto_add_executable(boost_commander
   src/boost_commander_node.cpp
 )
@@ -41,6 +46,7 @@ target_include_directories(mpc_controller_cpp PRIVATE
   ${OpenCV_INCLUDE_DIRS}
 )
 target_link_libraries(mpc_controller_cpp
+  ${PROJECT_NAME}_awsim_boost_start_dash
   ${PROJECT_NAME}_path_core
   osqp::osqp
   yaml-cpp
@@ -69,6 +75,15 @@ if(BUILD_TESTING)
     )
     target_compile_definitions(test_path_core PRIVATE
       MULTI_PURPOSE_MPC_ROS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+    )
+  endif()
+
+  ament_add_gtest(test_awsim_boost_start_dash
+    test/test_awsim_boost_start_dash.cpp
+  )
+  if(TARGET test_awsim_boost_start_dash)
+    target_link_libraries(test_awsim_boost_start_dash
+      ${PROJECT_NAME}_awsim_boost_start_dash
     )
   endif()
 

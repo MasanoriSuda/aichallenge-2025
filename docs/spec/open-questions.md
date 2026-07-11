@@ -2,7 +2,7 @@
 
 > Automotive AI Challenge 2026 ベース化で、公式ページ更新または運営確認が必要な事項。
 >
-> 確認日: 2026-07-01
+> 確認日: 2026-07-11
 
 ## Purpose
 
@@ -27,11 +27,21 @@
 |---|---|
 | タイムアップ | 公式ページ上は 10 分予定だが未定扱い。確定値が必要。 |
 | スタート位置 | ランダムまたは過去戦績予定。評価再現性への影響確認が必要。 |
-| ブーストアイテム | 利用できる入力/出力、制御への影響、評価ログへの出方。 |
+| ブーストアイテム運用 | 公開I/Fと効果は確認済み。オンライン予選で実際に付与される回数、評価ログへの出方は未確認。 |
 | ハンディキャップ | 順位による加速度・速度差の仕様。 |
 | スタック時復帰 | SIM 決勝・実機決勝で手動復帰できるか。 |
 | コードチェック | 禁止事項の具体的検査範囲。 |
 | 実車停止手順 | オペレータ停止、遠隔操作、緊急停止の公式手順。 |
+
+## Resolved 2026 Interfaces
+
+### AWSIM Boost（2026-07-11確認）
+
+- 状態: `/awsim/status`、`std_msgs/msg/Float32MultiArray`。index 5=`boostRemaining`、6=`isBoosting`。
+- 指令: `/awsim/cmd`、`std_msgs/msg/Float32MultiArray`。index 0を`0.0`から`1.0`以上へ立ち上げると発動し、その後`0.0`へ戻す。
+- 効果: 加速度`+0.5 m/s²`、10秒。
+- 使用可能回数: AWSIMの`--boosts`で設定可能。既定5だが現行ローカルdev/evalは2であり、オンライン運用値は未確認。
+- 参照: [公式インターフェース](https://automotiveaichallenge.github.io/aichallenge-documentation-racingkart/specifications/interface.html)、[公式シミュレーター仕様](https://automotiveaichallenge.github.io/aichallenge-documentation-racingkart/specifications/simulator.html)。
 
 ## How To Resolve
 

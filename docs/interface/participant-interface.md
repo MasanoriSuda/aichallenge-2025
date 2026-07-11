@@ -1,6 +1,6 @@
 # 参加者インターフェース契約
 
-> 参加者（提出者）が**変えてはいけない約束**を列挙します。「[守るべき約束（一覧）](#守るべき約束一覧)」で 5 項目を簡潔にまとめたあと、各節で技術的な詳細を補足します。評価システムが依存する安定面（契約）の集約であり、手順書ではありません。
+> 参加者（提出者）が**変えてはいけない約束**を列挙します。「[守るべき約束（一覧）](#守るべき約束一覧)」で 6 項目を簡潔にまとめたあと、各節で技術的な詳細を補足します。評価システムが依存する安定面（契約）の集約であり、手順書ではありません。
 
 関連ドキュメント:
 
@@ -17,7 +17,7 @@
 
 ## 1. 概要
 
-この文書は現行リポジトリの参加者インターフェース契約を記述する。Automotive AI Challenge 2026 公式仕様との差分はまだ確認中のため、2026 向けに topic 名、message 型、Domain 構成を変更する場合は、先に [../spec/open-questions.md](../spec/open-questions.md) の該当項目を解消してから本契約を更新する。
+この文書は現行リポジトリの参加者インターフェース契約を記述する。Automotive AI Challenge 2026 のAWSIM管理topicは2026-07-11に[公式インターフェース仕様](https://automotiveaichallenge.github.io/aichallenge-documentation-racingkart/specifications/interface.html)と照合した。V2X、評価、提出など確認中の仕様を変更する場合は、先に [../spec/open-questions.md](../spec/open-questions.md) の該当項目を解消してから本契約を更新する。
 
 評価環境は `docker_build.sh eval --submit <tar>` で封入イメージを生成し、そのイメージ内で `evaluation.launch.xml` を起動します。提出する tar.gz はイメージのビルドとランタイムに直接影響するため、以下の契約を守ることが評価の前提条件です。
 
@@ -37,6 +37,7 @@
 3. エントリ launch ファイルは **`aichallenge_submit_launch` パッケージ内の `aichallenge_submit.launch.xml`** として提供する。このファイルを欠くと評価の launch ツリーが起動できない。
 4. `control_method` に渡せる値は **`mpc`・`pure_pursuit`・`tiny_lidar_net`・`pilot_net`・`joycon` の 5 つのみ**（既定: `mpc`）。それ以外の値を渡すとどの制御ノードも起動せず車両が動かない。既定値を変更すると `control_method` を明示しない既存の起動経路の挙動が変わる。
 5. 提出パッケージは最小インターフェース（AWSIM センサトピックの subscribe、`/localization/kinematic_state` と `/planning/scenario_planning/trajectory` の produce、`/control/command/control_cmd` の publish、`/set_initial_pose` サービスの advertise）をすべて満たす。いずれかのトピック名・型を変更すると localization / planning / control の連結が切れ、車両の起動・走行・評価ができなくなる。
+6. 2026 SIMでBoostを使う場合は、車両Domain内の `/awsim/status` と `/awsim/cmd` を `std_msgs/msg/Float32MultiArray` で扱う。`/awsim/cmd.data[0]` の `0.0`→`1.0`以上の立ち上がりが発動条件であり、`/awsim/boost_cmd`、`Bool`、Domain 0の`/admin/awsim/*`を代用しない。
 
 ---
 
@@ -107,7 +108,7 @@ aichallenge_submit.launch.xml
 
 ## 4. トピック I/O 契約
 
-評価可能な提出物が守るべき ROS 2 トピック契約です。型・方向はソースで確認済みです。AWSIM 側の publisher 一覧は本リポジトリ外（Unity プロジェクト）のため（要確認）と明記します。
+評価可能な提出物が守るべき ROS 2 トピック契約です。型・方向はソースで確認済みです。2026 AWSIMのシミュレーション管理topicは公式仕様で確認済みで、AWSIMが各車両Domain 1〜4へ直接接続する。Domain bridgeを追加せず、Domain 0の管理面と車両DomainのI/Oを分離する。
 
 > **アーキテクチャ補足**: `aichallenge_awsim_adapter` の launch（`aichallenge_awsim_adapter.launch.xml`）は現状**全行がコメントアウト**されており、`actuation_cmd_converter` ノードは起動しません。AWSIM は Autoware 標準のトピック名を直接 publish/subscribe します。
 
@@ -122,6 +123,8 @@ AWSIM が publish し参加者ノードが subscribe するトピックです（
 | `/vehicle/status/velocity_status` | `autoware_auto_vehicle_msgs/VelocityReport` | `reference.launch.xml`（vehicle_velocity_converter 入力） |
 | `/vehicle/status/steering_status` | `autoware_auto_vehicle_msgs/SteeringReport` | `reference.launch.xml`（raw_vehicle_cmd_converter 入力、実車経路のみ） |
 | `/clock` | `rosgraph_msgs/Clock` | シミュレーション時間（`use_sim_time=true`） |
+| `/awsim/status` | `std_msgs/Float32MultiArray` | 2026公式AWSIM状態。index 5=`boostRemaining`、6=`isBoosting` |
+| `/awsim/state` | `std_msgs/String` | 車両FSM。`Spawned, Grounded, Ready, Start, Finish` |
 
 `tiny_lidar_net` 使用時の追加入力（要確認: AWSIM 側の `/scan` publisher 名は本リポジトリ外）:
 
@@ -142,8 +145,20 @@ AWSIM が publish し参加者ノードが subscribe するトピックです（
 | トピック | 型 | 確認元 |
 |---|---|---|
 | `/control/command/control_cmd` | `autoware_auto_control_msgs/AckermannControlCommand` | `pure_pursuit.launch.xml`（remap）、`mpc_controller_cpp.cpp`、`mpc_controller.py`（比較用 Python 版）、`boost_commander.cpp`、`tiny_lidar_net_controller_node.py`、`pilot_net_controller_node.py` |
+| `/awsim/cmd` | `std_msgs/Float32MultiArray` | 2026 SIM Boostを使う場合の任意出力。index 0=`boostCommand` |
 
 AWSIM はこのトピックを受けてカートを動かします。全制御方式（mpc / pure_pursuit / tiny_lidar_net / pilot_net）がこのトピックに収束します。
+
+### 2026 SIM Boost の任意契約
+
+Boostを使用しない提出物に `/awsim/cmd` は必須ではない。使用する場合は次を守る。
+
+- `/awsim/status` は `Float32MultiArray` 7要素で、index 5が残り回数、index 6がBoost中フラグ。
+- `/awsim/cmd` は `Float32MultiArray` で、index 0を`0.0`から`1.0`以上へ立ち上げると発動する。
+- 再発動可能な入力へ戻すにはindex 0を一度`0.0`へ戻す。
+- 残り回数は起動引数で変わるため固定値にせず、`/awsim/status.data[5]`を正とする。
+- `/awsim/status.data[6] >= 0.5`の間は新しい発動edgeを送らない。
+- このI/Oは車両Domain内でAWSIMと直接通信する。`/admin/awsim/*`やクロスドメイン転送を使わない。
 
 実車経路（`simulation=false`）のみ使用する追加出力:
 

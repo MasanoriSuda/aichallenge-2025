@@ -64,6 +64,8 @@ reference.launch.xml (aichallenge_submit_launch)
 | `planning/scenario_planning/trajectory` | Trajectory | 相対パス。`update_by_topic: true` 時のみ使用 |
 | `control/control_mode_request_topic` | Bool | 制御有効/無効 |
 | `/control/mpc/stop_request` | Empty | 停止要求 |
+| `/awsim/status` | Float32MultiArray | SIM状態。Boost残数と発動中状態を含む |
+| `/awsim/state` | String | 車両FSM。Startとセッション境界を検知 |
 
 **出力:**
 | トピック名 | 型 | 備考 |
@@ -72,6 +74,7 @@ reference.launch.xml (aichallenge_submit_launch)
 | `/control/command/control_cmd_raw` | AckermannControlCommand | ゲイン適用前 |
 | `/mpc/prediction` | MarkerArray | 予測軌跡（可視化） |
 | `/mpc/ref_path` | MarkerArray | 参照パス（可視化） |
+| `/awsim/cmd` | Float32MultiArray | 2026 SIM Boost指令。`awsim_boost.enabled`時のみ |
 
 ### 経路参照の方式
 
@@ -101,6 +104,33 @@ C++ 本番ノードの経路入力・solver処理には、次の安全化を適�
 - `min_linearization_speed_mps: 0.5` 未満では `1/v`、`1/v^2` を含む時間状態の線形化を停止する。両値はローカル設定であり、2026公式値ではない。
 - Python `path_constraints_provider` も circular CSV の重複終点を同じ許容差で除去し、C++側は受信したrows/colsが内部ReferencePathと一致しない制約を拒否する。
 - solver fallback と `/control/mpc/stop_request` はlegacy boost arbitrationより優先し、boostを必ず無効化する。low-pass gainは `[0,1]` に限定し、filter後にも加速度、操舵角、操舵変化量を制限する。
+
+### AWSIM 2026 Start Dash Boost（2026-07-11）
+
+2026公式Boostは通常の`AckermannControlCommand`加速度とは独立したAWSIM item commandとして扱う。
+
+- `awsim_boost.enabled: true`、`mode: start_once`でシミュレーション時だけ有効化する。
+- `/awsim/state=Start`、自動制御有効、正常odometry、solver非fallback、freshな7要素`/awsim/status`、`boostRemaining >= 1`、`isBoosting < 0.5`をすべて満たした最初の正常control cycleで発動する。
+- `/awsim/cmd`へ`[1.0]`、続けて`[0.0]`をReliable QoSで各1回publishする。
+- high/lowの1ペア送信時点でそのセッションを使用済みにし、確認timeoutやstatus欠落でも再送しない。
+- `isBoosting`または残数減少で確認するが、確認結果は再送判断に使わない。
+- `Start`重複、`Ready`、control disable、fail-safe回復では再armしない。`Finish`後の新しい`Spawned`だけ次セッションへrearmする。
+- `use_sim_time=false`またはlegacy `use_boost_acceleration=true`では公式Boost I/Oを無効化する。
+- 使用可能回数は環境設定で変わるため、5や2をコードへ固定しない。
+
+```yaml
+awsim_boost:
+  enabled: true
+  domain_enabled:
+    1: true
+    2: true
+    3: true
+  mode: start_once
+  status_timeout_sec: 0.5
+  confirmation_timeout_sec: 2.0
+```
+
+`use_boost_acceleration`、`AckermannControlBoostCommand`、`/boost_commander/command`、高頻度`control_cmd`再送は2025由来のlegacy経路であり、2026公式Boostには使用しない。
 
 trajectory の静的検証には次を使う。
 
@@ -236,7 +266,7 @@ make autoware-build
 ビルドで行われること:
 1. `multi_purpose_mpc_ros_msgs` のメッセージ型生成（`AckermannControlBoostCommand.msg`, `PathConstraints.msg`, `BorderCells.msg`）
 2. `multi_purpose_mpc_ros` のビルド:
-   - C++ ライブラリ/ノード（`boost_commander`, `mpc_controller_cpp`）のビルド
+   - C++ ライブラリ/ノード（`awsim_boost_start_dash`, `boost_commander`, `mpc_controller_cpp`）のビルド
    - OSQP C API（`osqp_vendor`）、Eigen、OpenCV、yaml-cpp を使った MPC 実行系のビルド
    - Python 補助スクリプト用 venv の作成（`/usr/bin/python3 -m venv`）
    - `requirements.txt` からの pip install（`numpy`, `pandas`, `matplotlib`, `osqp`, `scikit-image`, `PyYAML`）
@@ -261,6 +291,9 @@ MPC の config ファイル: `multi_purpose_mpc_ros/config/config.yaml`
 | `reference_path.csv_path` | `env/final_ver3/traj_mincurv.csv` | 最適化済み経路が存在するか |
 | `reference_path.domain_csv_path` | Domain 1..3 別 CSV | `ROS_DOMAIN_ID` ごとの trajectory 上書き。未設定 Domain は `csv_path` を使う |
 | `reference_path.update_by_topic` | `false` | CSV 直接読み込みモード（推奨） |
+| `awsim_boost.enabled` | `true` | SIMで2026公式Boostを有効化。実車では無効 |
+| `awsim_boost.domain_enabled` | Domain 1..3=`true` | `ROS_DOMAIN_ID`ごとの有効/無効上書き。未設定Domainは`enabled`を使う |
+| `awsim_boost.mode` | `start_once` | Start後の正常制御時に1回だけ発動 |
 | `mpc.steering_tire_angle_gain_var` | `1.639` | 実機値。sim では `1.50` が必要かも |
 | `mpc.wp_id_low_offset` | 未設定 | 低速時の参照 waypoint offset。未設定時は `wp_id_offset` |
 | `mpc.wp_id_low_speed` | `0.0` | 低速判定閾値。値は km/h、`0.0` なら無効 |
@@ -345,7 +378,7 @@ aichallenge_submit/multi_purpose_mpc_ros_msgs/
 - sim/実機での `steering_tire_angle_gain_var` 切り替え（config 分離 or launch param override）
 - 速度プリセットの launch arg 化
 - 障害物回避の有効化（`use_obstacle_avoidance=true`）
-- `boost_commander` ノードの統合（`use_boost_acceleration=true` 時）
+- 2025由来`boost_commander` / custom message / `use_boost_acceleration`の段階的削除
 - `path_constraints_provider` ノードの統合（高度な障害物回避）
 
 ## 事前準備: MPC 用地図・経路データの生成
@@ -454,6 +487,8 @@ python3 ../create_waypoints.py               # 要: matplotlib, pyyaml
 | 入力: Odometry | **完全一致** | `/localization/kinematic_state` |
 | 出力: 制御指令 | **完全一致** | `/control/command/control_cmd` |
 | 出力: 制御指令（raw）| **完全一致** | `/control/command/control_cmd_raw` |
+| AWSIM SIM状態 | **2026公式** | `/awsim/status`, `/awsim/state` |
+| AWSIM Boost指令 | **2026公式・SIMのみ** | `/awsim/cmd` |
 | Planning → Control | **不要** | MPC は独自 CSV を使う（`update_by_topic: false`） |
 
 トピックインタフェースの互換性は高く、**リマップは不要**。

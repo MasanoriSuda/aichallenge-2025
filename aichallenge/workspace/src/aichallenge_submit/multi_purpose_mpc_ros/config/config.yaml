@@ -4,6 +4,20 @@ common:
 sim_logger:
   animation_enabled: false
 
+# Automotive AI Challenge 2026 official AWSIM item interface.
+# Trigger once at the first healthy control cycle after /awsim/state becomes Start.
+awsim_boost:
+  # Default for ROS domains not listed in domain_enabled.
+  enabled: true
+  # Per-vehicle override keyed by ROS_DOMAIN_ID. Change a vehicle to false to disable Boost.
+  domain_enabled:
+    1: true
+    2: true
+    3: true
+  mode: start_once
+  status_timeout_sec: 0.5
+  confirmation_timeout_sec: 2.0
+
 map:
   # path from pkg share dir
   yaml_path: "env/final_ver3/occupancy_grid_map.yaml"
@@ -26,8 +40,8 @@ reference_path:
   csv_path: "env/final_ver3/traj_mincurv.csv"
   domain_csv_path:
     1: "env/final_ver3/traj_mincurv.csv"
-    2: "env/final_ver3/traj_mincurv.csv"
-    3: "env/final_ver3/traj_mincurv.csv"
+    2: "env/final_ver3/traj_mincurv_ver4.csv"
+    3: "env/final_ver3/traj_mincurv_org.csv"
   resolution: 0.6
   smoothing_distance: 2
   max_width: 6.0
@@ -53,7 +67,7 @@ mpc:
   domain_a_max:
     1: 1.0
     2: 1.0
-    3: 1.0
+    3: 0.7
   delta_max_deg: 32.0 # degrees
   steer_rate_max: 1.2 # rad/s
   control_rate: 100.0 # Hz
@@ -224,7 +238,7 @@ mpc:
   domain_v_max:
     1: 40.0
     2: 40.0
-    3: 40.0
+    3: 10.0
   domain_start_v_max_duration: 15.0 # [s] compensate inner-lane advantage at side-by-side start
   domain_start_v_max:
     2: 37.0

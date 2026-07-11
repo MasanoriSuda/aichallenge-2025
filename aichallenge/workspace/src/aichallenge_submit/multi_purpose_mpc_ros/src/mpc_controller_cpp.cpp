@@ -5,6 +5,7 @@
 #include <geometry_msgs/msg/pose2_d.hpp>
 #include <geometry_msgs/msg/quaternion.hpp>
 #include <geometry_msgs/msg/vector3.hpp>
+#include <multi_purpose_mpc_ros/awsim_boost_start_dash.hpp>
 #include <multi_purpose_mpc_ros/path_core.hpp>
 #include <multi_purpose_mpc_ros_msgs/msg/ackermann_control_boost_command.hpp>
 #include <multi_purpose_mpc_ros_msgs/msg/border_cells.hpp>
@@ -18,6 +19,7 @@
 #include <std_msgs/msg/empty.hpp>
 #include <std_msgs/msg/float32_multi_array.hpp>
 #include <std_msgs/msg/int32.hpp>
+#include <std_msgs/msg/string.hpp>
 #include <v2x_msgs/msg/v2_x_vehicle_position_array.hpp>
 #include <visualization_msgs/msg/marker.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
@@ -69,11 +71,13 @@ using std_msgs::msg::ColorRGBA;
 using std_msgs::msg::Empty;
 using std_msgs::msg::Float32MultiArray;
 using std_msgs::msg::Int32;
+using std_msgs::msg::String;
 using v2x_msgs::msg::V2XVehiclePositionArray;
 using visualization_msgs::msg::Marker;
 using visualization_msgs::msg::MarkerArray;
 using SteadyClock = std::chrono::steady_clock;
 namespace path_core = ::multi_purpose_mpc_ros::path_core;
+namespace awsim_boost = ::multi_purpose_mpc_ros::awsim_boost;
 
 constexpr double kEps = 1e-12;
 constexpr double kPi = 3.14159265358979323846;
@@ -5020,6 +5024,7 @@ struct Config
   RefPathConfig reference_path;
   double bicycle_length{};
   double bicycle_width{};
+  awsim_boost::Config awsim_boost;
   MpcConfig mpc;
 };
 
@@ -5062,6 +5067,57 @@ Config load_config(const std::string & path)
   cfg.reference_path.use_border_cells_topic = ref["use_border_cells_topic"].as<bool>();
   cfg.bicycle_length = root["bicycle_model"]["length"].as<double>();
   cfg.bicycle_width = root["bicycle_model"]["width"].as<double>();
+
+  const auto boost = root["awsim_boost"];
+  if (boost) {
+    cfg.awsim_boost.enabled = boost["enabled"] ? boost["enabled"].as<bool>() : false;
+    std::map<int, bool> domain_enabled;
+    const auto domain_enabled_node = boost["domain_enabled"];
+    if (domain_enabled_node) {
+      if (!domain_enabled_node.IsMap()) {
+        throw std::runtime_error("awsim_boost.domain_enabled must be a map");
+      }
+      for (const auto & item : domain_enabled_node) {
+        const int domain_id = item.first.as<int>();
+        if (domain_id < 0) {
+          throw std::runtime_error(
+                  "awsim_boost.domain_enabled keys must be non-negative ROS domain IDs");
+        }
+        const bool enabled = item.second.as<bool>();
+        if (!domain_enabled.emplace(domain_id, enabled).second) {
+          throw std::runtime_error(
+                  "awsim_boost.domain_enabled contains duplicate ROS domain ID " +
+                  std::to_string(domain_id));
+        }
+      }
+    }
+    const auto enabled_resolution =
+      awsim_boost::resolve_enabled(cfg.awsim_boost.enabled, domain_enabled, ros_domain_id);
+    cfg.awsim_boost.enabled = enabled_resolution.enabled;
+    cfg.awsim_boost.domain_enabled_applied = enabled_resolution.domain_override_applied;
+    cfg.awsim_boost.domain_enabled_domain = enabled_resolution.domain_id;
+    const std::string mode = boost["mode"] ?
+      boost["mode"].as<std::string>() :
+      (cfg.awsim_boost.enabled ? "start_once" : "disabled");
+    cfg.awsim_boost.mode = awsim_boost::parse_mode(mode);
+    cfg.awsim_boost.status_timeout_sec =
+      boost["status_timeout_sec"] ? boost["status_timeout_sec"].as<double>() : 0.5;
+    cfg.awsim_boost.confirmation_timeout_sec =
+      boost["confirmation_timeout_sec"] ?
+      boost["confirmation_timeout_sec"].as<double>() : 2.0;
+  }
+  if (
+    !std::isfinite(cfg.awsim_boost.status_timeout_sec) ||
+    cfg.awsim_boost.status_timeout_sec <= 0.0)
+  {
+    throw std::runtime_error("awsim_boost.status_timeout_sec must be finite and positive");
+  }
+  if (
+    !std::isfinite(cfg.awsim_boost.confirmation_timeout_sec) ||
+    cfg.awsim_boost.confirmation_timeout_sec <= 0.0)
+  {
+    throw std::runtime_error("awsim_boost.confirmation_timeout_sec must be finite and positive");
+  }
 
   const auto mpc = root["mpc"];
   cfg.mpc.N = mpc["N"].as<int>();
@@ -5717,6 +5773,10 @@ public:
     cfg_ = load_config(config_path_);
     mpc_cfg_ = cfg_.mpc;
     mpc_cfg_.steer_rate_max = mpc_cfg_.steer_rate_max / mpc_cfg_.steering_tire_angle_gain_var;
+    awsim_boost_guard_ = std::make_unique<awsim_boost::StartDashGuard>(cfg_.awsim_boost);
+    awsim_boost_io_enabled_ =
+      use_sim_time_ && cfg_.awsim_boost.enabled &&
+      cfg_.awsim_boost.mode == awsim_boost::Mode::StartOnce && !use_bug_acc_;
 
     create_map_ref_path_car_mpc();
     setup_parameters_callback();
@@ -5743,6 +5803,30 @@ public:
     }
     if (use_bug_acc_) {
       RCLCPP_WARN(get_logger(), "USE_BUG_ACC is enabled!");
+    }
+    if (cfg_.awsim_boost.domain_enabled_applied) {
+      RCLCPP_INFO(
+        get_logger(),
+        "AWSIM Boost domain_enabled applied: ROS_DOMAIN_ID=%d, enabled=%s",
+        cfg_.awsim_boost.domain_enabled_domain,
+        cfg_.awsim_boost.enabled ? "true" : "false");
+    }
+    if (awsim_boost_io_enabled_) {
+      RCLCPP_INFO(
+        get_logger(),
+        "AWSIM 2026 boost enabled: mode=%s, status_timeout=%.2f s, confirmation_timeout=%.2f s",
+        awsim_boost::to_string(cfg_.awsim_boost.mode), cfg_.awsim_boost.status_timeout_sec,
+        cfg_.awsim_boost.confirmation_timeout_sec);
+    } else if (cfg_.awsim_boost.enabled && !use_sim_time_) {
+      RCLCPP_WARN(get_logger(), "AWSIM boost is configured but disabled outside simulation.");
+    } else if (cfg_.awsim_boost.enabled && use_bug_acc_) {
+      RCLCPP_WARN(
+        get_logger(),
+        "AWSIM 2026 boost is disabled while legacy use_boost_acceleration is active.");
+    } else if (!cfg_.awsim_boost.enabled) {
+      RCLCPP_INFO(get_logger(), "AWSIM 2026 boost is disabled by configuration.");
+    } else if (cfg_.awsim_boost.mode == awsim_boost::Mode::Disabled) {
+      RCLCPP_INFO(get_logger(), "AWSIM 2026 boost mode is disabled.");
     }
     if (use_obstacle_avoidance_) {
       RCLCPP_WARN(get_logger(), "USE_OBSTACLE_AVOIDANCE is enabled!");
@@ -6001,6 +6085,10 @@ private:
       latching_qos);
     ref_vel_marker_pub_ = create_publisher<MarkerArray>("/ref_vel_marker", latching_qos);
     section_marker_pub_ = create_publisher<MarkerArray>("/section_marker", latching_qos);
+    if (awsim_boost_io_enabled_) {
+      const auto boost_qos = rclcpp::QoS(rclcpp::KeepLast(10)).reliable();
+      awsim_boost_pub_ = create_publisher<Float32MultiArray>("/awsim/cmd", boost_qos);
+    }
 
     odom_sub_ = create_subscription<Odometry>(
       "/localization/kinematic_state", 1, [this](const Odometry::SharedPtr msg) {
@@ -6040,7 +6128,13 @@ private:
       });
     if (use_sim_time_) {
       awsim_status_sub_ = create_subscription<Float32MultiArray>(
-        "/awsim/status", 1, [this](const Float32MultiArray::SharedPtr msg) { awsim_status_callback(msg); });
+        "/awsim/status", 1,
+        [this](const Float32MultiArray::SharedPtr msg) {awsim_status_callback(msg);});
+      if (awsim_boost_io_enabled_) {
+        awsim_state_sub_ = create_subscription<String>(
+          "/awsim/state", rclcpp::QoS(rclcpp::KeepLast(10)).reliable(),
+          [this](const String::SharedPtr msg) {awsim_state_callback(msg);});
+      }
       condition_sub_ = create_subscription<Int32>(
         "/aichallenge/pitstop/condition", 1, [this](const Int32::SharedPtr msg) {
           if (!last_condition_.has_value()) {
@@ -6242,6 +6336,22 @@ private:
 
   void awsim_status_callback(const Float32MultiArray::SharedPtr msg)
   {
+    if (awsim_boost_io_enabled_ && awsim_boost_guard_) {
+      const auto previous_phase = awsim_boost_guard_->phase();
+      if (!awsim_boost_guard_->on_awsim_status(msg->data, SteadyClock::now())) {
+        RCLCPP_WARN_THROTTLE(
+          get_logger(), *get_clock(), 1000,
+          "Invalid /awsim/status for Boost: expected 7 finite values including indices 5 and 6");
+      } else if (
+        previous_phase != awsim_boost_guard_->phase() &&
+        awsim_boost_guard_->phase() == awsim_boost::Phase::Confirmed)
+      {
+        RCLCPP_INFO(
+          get_logger(), "AWSIM Boost confirmed: remaining=%.0f, is_boosting=%d",
+          awsim_boost_guard_->remaining().value_or(-1.0),
+          awsim_boost_guard_->is_boosting().value_or(false) ? 1 : 0);
+      }
+    }
     if (msg->data.size() < 3) {
       return;
     }
@@ -6252,6 +6362,66 @@ private:
       current_laps_ = laps;
     }
     last_lap_time_ = lap_time;
+  }
+
+  void awsim_state_callback(const String::SharedPtr msg)
+  {
+    if (!awsim_boost_guard_) {
+      return;
+    }
+    const auto previous_phase = awsim_boost_guard_->phase();
+    awsim_boost_guard_->on_awsim_state(msg->data);
+    if (
+      previous_phase != awsim_boost_guard_->phase() &&
+      awsim_boost_guard_->phase() == awsim_boost::Phase::Armed)
+    {
+      RCLCPP_INFO(get_logger(), "AWSIM Boost rearmed for a new race session.");
+      last_awsim_boost_block_reason_ = awsim_boost::BlockReason::None;
+    }
+  }
+
+  void maybe_publish_awsim_boost(
+    const SteadyClock::time_point steady_now, const bool control_enabled,
+    const bool failsafe_active)
+  {
+    if (!awsim_boost_io_enabled_ || !awsim_boost_guard_ || !awsim_boost_pub_) {
+      return;
+    }
+
+    const auto previous_phase = awsim_boost_guard_->phase();
+    const auto evaluation =
+      awsim_boost_guard_->evaluate(control_enabled, failsafe_active, steady_now);
+    if (
+      previous_phase != awsim_boost_guard_->phase() &&
+      awsim_boost_guard_->phase() == awsim_boost::Phase::UnconfirmedSpent)
+    {
+      RCLCPP_WARN(
+        get_logger(),
+        "AWSIM Boost confirmation timed out; the start Boost remains spent and will not be retried.");
+    }
+
+    if (evaluation.action == awsim_boost::Action::PublishPulse) {
+      Float32MultiArray command;
+      command.data = {awsim_boost::kCommandPulseValues[0]};
+      awsim_boost_pub_->publish(command);
+      command.data = {awsim_boost::kCommandPulseValues[1]};
+      awsim_boost_pub_->publish(command);
+      RCLCPP_INFO(
+        get_logger(), "AWSIM start Boost pulse published once: remaining_before=%.0f",
+        awsim_boost_guard_->remaining().value_or(-1.0));
+      last_awsim_boost_block_reason_ = awsim_boost::BlockReason::None;
+      return;
+    }
+
+    if (
+      evaluation.reason != awsim_boost::BlockReason::None &&
+      evaluation.reason != last_awsim_boost_block_reason_)
+    {
+      RCLCPP_INFO(
+        get_logger(), "AWSIM Boost not published: %s",
+        awsim_boost::to_string(evaluation.reason));
+      last_awsim_boost_block_reason_ = evaluation.reason;
+    }
   }
 
   std::unique_ptr<ReferencePath> create_reference_path_from_autoware_trajectory(
@@ -6476,6 +6646,7 @@ private:
     if (!publish_control_command(current_time, u, acc, bug_acc_enabled)) {
       return;
     }
+    maybe_publish_awsim_boost(steady_now, enable_control_, forced_stop_active);
     last_acc_ = acc;
     last_u_ = u;
 
@@ -6502,6 +6673,7 @@ private:
   bool use_bug_acc_{};
   bool use_obstacle_avoidance_{};
   bool use_stats_{};
+  bool awsim_boost_io_enabled_{false};
   bool enable_control_{true};
   bool initialized_{false};
   bool ref_path_published_{false};
@@ -6524,10 +6696,12 @@ private:
   std::unique_ptr<MPC> mpc_;
   std::unique_ptr<V2XGapPlanner> v2x_gap_planner_;
   std::unique_ptr<ReferenceVelocityConfigulator> ref_vel_configulator_;
+  std::unique_ptr<awsim_boost::StartDashGuard> awsim_boost_guard_;
 
   rclcpp::Publisher<AckermannControlCommand>::SharedPtr command_pub_;
   rclcpp::Publisher<AckermannControlCommand>::SharedPtr command_raw_pub_;
   rclcpp::Publisher<AckermannControlBoostCommand>::SharedPtr boost_command_pub_;
+  rclcpp::Publisher<Float32MultiArray>::SharedPtr awsim_boost_pub_;
   rclcpp::Publisher<MarkerArray>::SharedPtr mpc_pred_pub_;
   rclcpp::Publisher<MarkerArray>::SharedPtr mpc_pred_pub_dummy_;
   rclcpp::Publisher<MarkerArray>::SharedPtr ref_path_pub_;
@@ -6540,6 +6714,7 @@ private:
   rclcpp::Subscription<Trajectory>::SharedPtr trajectory_sub_;
   rclcpp::Subscription<Empty>::SharedPtr stop_request_sub_;
   rclcpp::Subscription<Float32MultiArray>::SharedPtr awsim_status_sub_;
+  rclcpp::Subscription<String>::SharedPtr awsim_state_sub_;
   rclcpp::Subscription<Int32>::SharedPtr condition_sub_;
   rclcpp::Subscription<PathConstraints>::SharedPtr path_constraints_sub_;
   rclcpp::Subscription<BorderCells>::SharedPtr border_cells_sub_;
@@ -6552,6 +6727,7 @@ private:
   std::optional<SteadyClock::time_point> last_odom_receipt_steady_;
   std::optional<rclcpp::Time> last_odom_source_stamp_;
   std::optional<SteadyClock::time_point> last_odom_source_advance_steady_;
+  awsim_boost::BlockReason last_awsim_boost_block_reason_{awsim_boost::BlockReason::None};
 };
 
 std::optional<std::string> value_after_arg(const std::vector<std::string> & args, const std::string & name)

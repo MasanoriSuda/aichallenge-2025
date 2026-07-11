@@ -59,6 +59,8 @@ Automotive AI Challenge 2026 公式仕様との差分は確認中です。3〜4 
 | `0` | AWSIM シミュレータ本体 + `awsim_state_manager_node`（管理・スタート信号の所有者） | `simulator` サービス。`evaluation.launch.xml` の `<set_env name="ROS_DOMAIN_ID" value="0"/>` にハードコード |
 | `1..N` | 車両ごとの Autoware インスタンス（planning / control / localization） | Makefile `ROS_DOMAIN_ID := 1`（既定）。多車両は `docker compose -p N` で Domain 1..N に分離 |
 
+AWSIMプロセスは管理面をDomain 0に維持しつつ、2026公式仕様どおり各車両Domain 1〜4へ直接接続してセンサ・`/awsim/status`・`/awsim/state`をpublishし、制御・`/awsim/cmd`をsubscribeする。これは車両AutowareをDomain 0へ同居させることや、Domain間DDS通信を追加することを意味しない。
+
 ---
 
 ## 3. admin/awsim トピック契約
@@ -79,6 +81,8 @@ Automotive AI Challenge 2026 公式仕様との差分は確認中です。3〜4 
 |---|---|---|---|
 | `/awsim/state` | `std_msgs/String` | sub（AWSIM が publish） | 車両ごとの FSM 状態。既知の値: `spawned, grounded, ready, start, finish`。オーケストレータは `Grounded,Ready,Start` で録画/キャプチャを開始し、`Finish` で停止する（param: `vehicle_state_topic: /awsim/state`） |
 | `/awsim/control_mode_request_topic` | `std_msgs/Bool` | pub（複数 publisher → AWSIM） | `data=true` = AUTONOMOUS engage。publisher は `autostart_orchestrator`（自動）/ `make autoware-request-control`（手動一発）/ `teleop_manager`（ジョイ）/ rviz プラグイン。なお `control_mode_adapter.py` は Autoware の**サービス** `/control/control_mode_request`（`autoware_auto_vehicle_msgs/srv/ControlModeCommand`）を受け、AUTONOMOUS→`Bool(true)` / MANUAL→`Bool(false)` に変換してこのトピックへ中継する |
+| `/awsim/status` | `std_msgs/Float32MultiArray` | sub（AWSIMがpublish） | 車両ごとのSIM状態。index 5=`boostRemaining`、6=`isBoosting` |
+| `/awsim/cmd` | `std_msgs/Float32MultiArray` | pub（参加者→AWSIM） | 任意の2026 Boost指令。index 0の立ち上がりedgeで発動 |
 
 ---
 

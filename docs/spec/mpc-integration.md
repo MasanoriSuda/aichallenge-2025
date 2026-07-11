@@ -121,6 +121,10 @@ C++ 本番ノードの経路入力・solver処理には、次の安全化を適�
 ```yaml
 awsim_boost:
   enabled: true
+  domain_enabled:
+    1: true
+    2: true
+    3: true
   mode: start_once
   status_timeout_sec: 0.5
   confirmation_timeout_sec: 2.0
@@ -288,6 +292,7 @@ MPC の config ファイル: `multi_purpose_mpc_ros/config/config.yaml`
 | `reference_path.domain_csv_path` | Domain 1..3 別 CSV | `ROS_DOMAIN_ID` ごとの trajectory 上書き。未設定 Domain は `csv_path` を使う |
 | `reference_path.update_by_topic` | `false` | CSV 直接読み込みモード（推奨） |
 | `awsim_boost.enabled` | `true` | SIMで2026公式Boostを有効化。実車では無効 |
+| `awsim_boost.domain_enabled` | Domain 1..3=`true` | `ROS_DOMAIN_ID`ごとの有効/無効上書き。未設定Domainは`enabled`を使う |
 | `awsim_boost.mode` | `start_once` | Start後の正常制御時に1回だけ発動 |
 | `mpc.steering_tire_angle_gain_var` | `1.639` | 実機値。sim では `1.50` が必要かも |
 | `mpc.wp_id_low_offset` | 未設定 | 低速時の参照 waypoint offset。未設定時は `wp_id_offset` |

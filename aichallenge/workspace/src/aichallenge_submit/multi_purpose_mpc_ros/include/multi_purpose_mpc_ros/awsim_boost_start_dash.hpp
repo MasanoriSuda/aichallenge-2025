@@ -3,6 +3,7 @@
 
 #include <array>
 #include <chrono>
+#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -52,9 +53,18 @@ enum class BlockReason
 struct Config
 {
   bool enabled{false};
+  bool domain_enabled_applied{false};
+  int domain_enabled_domain{-1};
   Mode mode{Mode::Disabled};
   double status_timeout_sec{0.5};
   double confirmation_timeout_sec{2.0};
+};
+
+struct EnabledResolution
+{
+  bool enabled{false};
+  bool domain_override_applied{false};
+  int domain_id{-1};
 };
 
 struct Evaluation
@@ -101,6 +111,9 @@ private:
 };
 
 Mode parse_mode(std::string_view value);
+EnabledResolution resolve_enabled(
+  bool default_enabled, const std::map<int, bool> & domain_enabled,
+  std::optional<int> ros_domain_id) noexcept;
 const char * to_string(Mode mode) noexcept;
 const char * to_string(Phase phase) noexcept;
 const char * to_string(BlockReason reason) noexcept;

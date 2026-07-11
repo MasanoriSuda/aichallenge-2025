@@ -7,7 +7,13 @@ sim_logger:
 # Automotive AI Challenge 2026 official AWSIM item interface.
 # Trigger once at the first healthy control cycle after /awsim/state becomes Start.
 awsim_boost:
+  # Default for ROS domains not listed in domain_enabled.
   enabled: true
+  # Per-vehicle override keyed by ROS_DOMAIN_ID. Change a vehicle to false to disable Boost.
+  domain_enabled:
+    1: true
+    2: true
+    3: true
   mode: start_once
   status_timeout_sec: 0.5
   confirmation_timeout_sec: 2.0

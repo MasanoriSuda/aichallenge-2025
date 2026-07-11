@@ -58,6 +58,7 @@
 - [x] trigger、confirmation、skip、timeoutの診断ログを追加する。
 - [x] 実車、feature disabled、未知modeではpublishしない。
 - [x] legacy `use_boost_acceleration` と公式Boostを接続しない。
+- [x] `domain_enabled`で`ROS_DOMAIN_ID`ごとにBoostの有効・無効を上書きできるようにする。
 
 ## Phase 4: Automated tests
 
@@ -71,6 +72,7 @@
 - [x] confirmation timeout後も追加Pulseがない。
 - [x] remaining減少またはisBoostingでConfirmedになる。
 - [x] Finish後の新しいSpawnedで次セッションに1回だけrearmする。
+- [x] Domain別設定のtrue/falseと未登録Domainのglobal fallbackを単体テストする。
 - [ ] ROS publish seamでhigh/lowがこの順序で各1回だけ出る。
 
 ## Phase 5: Build・Runtime verification
@@ -102,6 +104,14 @@
 - [ ] 2回目以降を使用する場合も `isBoosting` とconfirmationを必須にする。
 
 ## Verification Record
+
+### Domain別有効化（2026-07-11）
+
+- `awsim_boost.domain_enabled`を追加し、該当`ROS_DOMAIN_ID`のboolを`enabled`より優先する。
+- 未登録Domainまたは`ROS_DOMAIN_ID`未設定時はglobal `enabled`へfallbackする。
+- 既定のDomain 1〜3は従来動作を維持するためすべて`true`とした。
+- `make autoware-build`: 25 packages成功。
+- `multi_purpose_mpc_ros`: 13 test targets、242 tests、failure 0。Boost guardはDomain解決を含む15 tests成功。
 
 2026-07-11 16:11 JSTにDomain 1の`make dev`で確認。走行ログは`output/20260711-161103/d1/autoware.log`。
 

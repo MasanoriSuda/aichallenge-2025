@@ -221,6 +221,21 @@ Mode parse_mode(const std::string_view value)
   throw std::invalid_argument("unknown AWSIM boost mode: " + std::string(value));
 }
 
+EnabledResolution resolve_enabled(
+  const bool default_enabled, const std::map<int, bool> & domain_enabled,
+  const std::optional<int> ros_domain_id) noexcept
+{
+  if (!ros_domain_id.has_value()) {
+    return {default_enabled, false, -1};
+  }
+
+  const auto override = domain_enabled.find(ros_domain_id.value());
+  if (override == domain_enabled.end()) {
+    return {default_enabled, false, ros_domain_id.value()};
+  }
+  return {override->second, true, ros_domain_id.value()};
+}
+
 const char * to_string(const Mode mode) noexcept
 {
   switch (mode) {

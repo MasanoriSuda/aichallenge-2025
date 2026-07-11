@@ -5071,6 +5071,31 @@ Config load_config(const std::string & path)
   const auto boost = root["awsim_boost"];
   if (boost) {
     cfg.awsim_boost.enabled = boost["enabled"] ? boost["enabled"].as<bool>() : false;
+    std::map<int, bool> domain_enabled;
+    const auto domain_enabled_node = boost["domain_enabled"];
+    if (domain_enabled_node) {
+      if (!domain_enabled_node.IsMap()) {
+        throw std::runtime_error("awsim_boost.domain_enabled must be a map");
+      }
+      for (const auto & item : domain_enabled_node) {
+        const int domain_id = item.first.as<int>();
+        if (domain_id < 0) {
+          throw std::runtime_error(
+                  "awsim_boost.domain_enabled keys must be non-negative ROS domain IDs");
+        }
+        const bool enabled = item.second.as<bool>();
+        if (!domain_enabled.emplace(domain_id, enabled).second) {
+          throw std::runtime_error(
+                  "awsim_boost.domain_enabled contains duplicate ROS domain ID " +
+                  std::to_string(domain_id));
+        }
+      }
+    }
+    const auto enabled_resolution =
+      awsim_boost::resolve_enabled(cfg.awsim_boost.enabled, domain_enabled, ros_domain_id);
+    cfg.awsim_boost.enabled = enabled_resolution.enabled;
+    cfg.awsim_boost.domain_enabled_applied = enabled_resolution.domain_override_applied;
+    cfg.awsim_boost.domain_enabled_domain = enabled_resolution.domain_id;
     const std::string mode = boost["mode"] ?
       boost["mode"].as<std::string>() :
       (cfg.awsim_boost.enabled ? "start_once" : "disabled");
@@ -5779,6 +5804,13 @@ public:
     if (use_bug_acc_) {
       RCLCPP_WARN(get_logger(), "USE_BUG_ACC is enabled!");
     }
+    if (cfg_.awsim_boost.domain_enabled_applied) {
+      RCLCPP_INFO(
+        get_logger(),
+        "AWSIM Boost domain_enabled applied: ROS_DOMAIN_ID=%d, enabled=%s",
+        cfg_.awsim_boost.domain_enabled_domain,
+        cfg_.awsim_boost.enabled ? "true" : "false");
+    }
     if (awsim_boost_io_enabled_) {
       RCLCPP_INFO(
         get_logger(),
@@ -5791,6 +5823,10 @@ public:
       RCLCPP_WARN(
         get_logger(),
         "AWSIM 2026 boost is disabled while legacy use_boost_acceleration is active.");
+    } else if (!cfg_.awsim_boost.enabled) {
+      RCLCPP_INFO(get_logger(), "AWSIM 2026 boost is disabled by configuration.");
+    } else if (cfg_.awsim_boost.mode == awsim_boost::Mode::Disabled) {
+      RCLCPP_INFO(get_logger(), "AWSIM 2026 boost mode is disabled.");
     }
     if (use_obstacle_avoidance_) {
       RCLCPP_WARN(get_logger(), "USE_OBSTACLE_AVOIDANCE is enabled!");

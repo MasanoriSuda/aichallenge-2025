@@ -177,6 +177,10 @@ AWSIM                 MPC node                Boost guard
 ```yaml
 awsim_boost:
   enabled: true
+  domain_enabled:
+    1: true
+    2: true
+    3: true
   mode: start_once
   status_timeout_sec: 0.5
   confirmation_timeout_sec: 2.0
@@ -187,6 +191,7 @@ config parserへ `AwsimBoostConfig` を追加する。
 検証:
 
 - `mode in {disabled, start_once}`
+- `domain_enabled`に現在の`ROS_DOMAIN_ID`があればそのboolを優先し、未登録またはDomain未取得時は`enabled`を使う。
 - timeoutはfiniteかつ正。
 - `enabled=false` または `mode=disabled` はpublisherを動作させない。
 - 将来のstrategy追加時も `/awsim/cmd` publisher自体は共通化する。

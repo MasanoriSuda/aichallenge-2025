@@ -94,12 +94,17 @@ Automotive AI Challenge 2026 の公式 AWSIM Boost インターフェースを M
 ```yaml
 awsim_boost:
   enabled: true
+  domain_enabled:
+    1: true
+    2: true
+    3: true
   mode: start_once
   status_timeout_sec: 0.5
   confirmation_timeout_sec: 2.0
 ```
 
 - `mode` は初回実装では `disabled` / `start_once` のみを受理する。
+- `domain_enabled`は`ROS_DOMAIN_ID`ごとに`enabled`を上書きする。該当Domainがなければ`enabled`へfallbackする。
 - 未知の mode、負または非有限の timeout は起動時 error とする。
 - 実車起動では設定が有効でも指令を送らず、シミュレーション専用であることをログへ出す。
 

@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <limits>
+#include <map>
 #include <stdexcept>
 #include <vector>
 
@@ -222,6 +223,32 @@ TEST(AwsimBoostStartDash, ParsesOnlySupportedModes)
   EXPECT_EQ(parse_mode(" disabled "), Mode::Disabled);
   EXPECT_EQ(parse_mode("START_ONCE"), Mode::StartOnce);
   EXPECT_THROW(parse_mode("straight_only"), std::invalid_argument);
+}
+
+TEST(AwsimBoostStartDash, ResolvesDomainEnabledOverrideWithGlobalFallback)
+{
+  using multi_purpose_mpc_ros::awsim_boost::resolve_enabled;
+  const std::map<int, bool> domain_enabled{{1, true}, {2, false}};
+
+  const auto domain_one = resolve_enabled(false, domain_enabled, 1);
+  EXPECT_TRUE(domain_one.enabled);
+  EXPECT_TRUE(domain_one.domain_override_applied);
+  EXPECT_EQ(domain_one.domain_id, 1);
+
+  const auto domain_two = resolve_enabled(true, domain_enabled, 2);
+  EXPECT_FALSE(domain_two.enabled);
+  EXPECT_TRUE(domain_two.domain_override_applied);
+  EXPECT_EQ(domain_two.domain_id, 2);
+
+  const auto unknown_domain = resolve_enabled(true, domain_enabled, 3);
+  EXPECT_TRUE(unknown_domain.enabled);
+  EXPECT_FALSE(unknown_domain.domain_override_applied);
+  EXPECT_EQ(unknown_domain.domain_id, 3);
+
+  const auto missing_domain = resolve_enabled(false, domain_enabled, std::nullopt);
+  EXPECT_FALSE(missing_domain.enabled);
+  EXPECT_FALSE(missing_domain.domain_override_applied);
+  EXPECT_EQ(missing_domain.domain_id, -1);
 }
 
 TEST(AwsimBoostStartDash, OfficialCommandPulseIsOneThenZero)

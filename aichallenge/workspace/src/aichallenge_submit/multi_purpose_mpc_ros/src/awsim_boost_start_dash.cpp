@@ -47,29 +47,37 @@ StartDashGuard::StartDashGuard(Config config)
   phase_ = config_.enabled && config_.mode == Mode::StartOnce ? Phase::Armed : Phase::Disabled;
 }
 
-void StartDashGuard::on_awsim_state(const std::string_view state)
+StateEvent StartDashGuard::on_awsim_state(const std::string_view state)
 {
-  if (phase_ == Phase::Disabled) {
-    return;
-  }
-
   const std::string normalized = normalize(state);
   if (normalized == "start") {
+    // A stale or reordered Start after Finish still belongs to the spent session. Wait for the
+    // explicit Finish -> Spawned boundary before accepting a new start.
+    if (finish_seen_) {
+      return StateEvent::None;
+    }
     start_seen_ = true;
-    return;
+    if (start_event_emitted_) {
+      return StateEvent::None;
+    }
+    start_event_emitted_ = true;
+    return StateEvent::StartEntered;
   }
   if (normalized == "finish") {
     start_seen_ = false;
+    if (finish_seen_) {
+      return StateEvent::None;
+    }
     finish_seen_ = true;
-    return;
+    return StateEvent::Finished;
   }
   if (normalized != "spawned") {
-    return;
+    return StateEvent::None;
   }
 
   if (finish_seen_) {
     rearm_for_new_session();
-    return;
+    return StateEvent::NewSession;
   }
 
   // A normal race begins with Spawned. It may also be duplicated or delayed, so a Spawned
@@ -78,6 +86,7 @@ void StartDashGuard::on_awsim_state(const std::string_view state)
     start_seen_ = false;
     status_.reset();
   }
+  return StateEvent::None;
 }
 
 bool StartDashGuard::on_awsim_status(
@@ -184,8 +193,9 @@ std::optional<bool> StartDashGuard::is_boosting() const noexcept
 
 void StartDashGuard::rearm_for_new_session()
 {
-  phase_ = Phase::Armed;
+  phase_ = config_.enabled && config_.mode == Mode::StartOnce ? Phase::Armed : Phase::Disabled;
   start_seen_ = false;
+  start_event_emitted_ = false;
   finish_seen_ = false;
   status_.reset();
   remaining_before_pulse_.reset();
@@ -260,6 +270,21 @@ const char * to_string(const Phase phase) noexcept
       return "Confirmed";
     case Phase::UnconfirmedSpent:
       return "UnconfirmedSpent";
+  }
+  return "Unknown";
+}
+
+const char * to_string(const StateEvent event) noexcept
+{
+  switch (event) {
+    case StateEvent::None:
+      return "None";
+    case StateEvent::StartEntered:
+      return "StartEntered";
+    case StateEvent::Finished:
+      return "Finished";
+    case StateEvent::NewSession:
+      return "NewSession";
   }
   return "Unknown";
 }

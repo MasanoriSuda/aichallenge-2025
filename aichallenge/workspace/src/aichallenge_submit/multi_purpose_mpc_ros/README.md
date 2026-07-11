@@ -143,6 +143,17 @@ mpc:
   v2x_safety_brake_velocity: 0.0
   v2x_overtake_min_gap_width: 2.0
   v2x_overtake_max_curvature: 0.05
+  v2x_overtake_try_both_sides: false
+  v2x_overtake_velocity_advantage: 0.0
+  v2x_overtake_line_enabled: false
+  v2x_overtake_target_hold_sec: 0.0
+  v2x_overtake_clear_confirm_sec: 0.0
+  v2x_overtake_reacquire_enabled: false
+  v2x_overtake_reacquire_window_sec: 0.0
+  v2x_overtake_reacquire_max_return_progress: 0.0
+  v2x_overtake_recovery_velocity_limit_enabled: true
+  v2x_overtake_recovery_velocity: 5.0
+  v2x_overtake_solver_failure_abort_cycles: 3
   v2x_require_gap_for_overtake: true
   v2x_low_speed_avoidance_enabled: false
   v2x_low_speed_avoidance_distance: 10.0
@@ -159,6 +170,14 @@ mpc:
 ```
 
 既定では無効です。`SafetyBrake` は `v2x_safety_brake_distance` と `v^2 / (2 * abs(a_min)) + v2x_safety_brake_margin` の大きい方で判定します。`SafetyBrake` の横方向判定は corridor 全体ではなく、`v2x_vehicle_radius + v2x_prediction_margin` の衝突幅に重なった場合だけ使います。`v2x_low_speed_avoidance_enabled: true` の場合、近距離の前方車両に対して連続した十分な gap があるときは、SafetyBrake より先に `LowSpeedAvoidance` へ倒し、`v2x_low_speed_avoidance_velocity` に速度を制限して徐行回避します。連続点数は `v2x_low_speed_avoidance_min_gap_points` で指定します。V2X メッセージは速度を直接持たないため、差分速度推定は開始条件の hard gate にしません。低速回避中は停止車列を先読みするため、gap planner が見る V2X 車両を `v2x_low_speed_avoidance_lookahead_distance` 程度まで広げ、通常走行では無効にしている車両間 gap も一時的に候補へ戻します。低速回避では `v2x_low_speed_pass_side` で通過側を `auto` / `left` / `right` から選べます。`right` は reference path 座標系の負の lateral 側、`left` は正の lateral 側です。`auto` の場合は最初に選んだ側を低速回避中の side lock として使います。実制御時だけ `v2x_low_speed_pass_ramp_ratio` に従って手前の horizon 点にも side-pass target を入れ、候補判定時は実際に障害物と重なる horizon 点だけで gap を評価します。すでに `LowSpeedAvoidance` 中の場合は、曲率による追い越し禁止区間に入っても gap がある限り低速回避を継続し、さらに `v2x_low_speed_avoidance_clear_distance` 以内に V2X 車両が残る間は通常速度へ戻らず徐行を維持します。`v2x_require_gap_for_overtake: false` にすると、追い越し禁止条件に入っていない前方車は gap 幅の事前判定を必須にせず `Overtake` へ倒します。ヘアピン入口などで追い抜きを禁止したい場合は `v2x_overtake_forbidden_wp_ranges` に wp_id 範囲を追加します。
+
+通常追い越しで `v2x_overtake_try_both_sides: true` にすると、ShiftOut前に限り第一候補側が不成立なら反対側を同じ膨張半径・wall margin・guardで評価します。ShiftOut以降はpass sideをlockし、反対側へ即座に振り替えません。追い越し判定では共通`gap_min_width`による前段除外を使わず、`max(v2x_overtake_min_gap_width, v2x_overtake_guard_min_gap_width)`を候補生成とguardの両方へ適用します。curve zone中も左右の幾何gapはdebugへ残しますが、hard forbidden、soft curve entry、inner curve判定は別の実行許可として維持されます。
+
+OvertakeLine有効時は対象`vehicle_id`とpass sideをlockします。`v2x_overtake_target_hold_sec`以内の一時欠落ではPassを維持し、対象が`v2x_overtake_line_return_clear_distance`以上後方にいる状態を`v2x_overtake_clear_confirm_sec`継続して初めてReturnへ入ります。Return直後の再取得は、安定した同一ID・同一side・gap/curve許可・時間/復帰進捗の全条件を満たす場合だけPassへ戻します。不明ID、position jump、timeout、連続solver失敗はRecovery側へ倒します。Recoveryの速度上限は専用flag/valueで、`v2x_follow_velocity`を暗黙には使いません。
+
+`v2x_behavior_debug_log_enabled`では、左右gapと各拒否理由、対象ID、locked targetの相対位置、soft desired velocity、solver連続失敗数を確認できます。MPC投入前にはbounds・target・速度参照のfinite/range preflightを行い、solverが追い越し中に設定回数連続失敗した場合は減速fallbackを維持したまま同じ横目標を中止してRecoveryへ移ります。
+
+速度上限は`v_max`をglobal hard maximum、`domain_v_max`を通常の車両別maximum、`domain_start_v_max`をStart期間だけのmaximumとして分けます。start値は通常domain値より高くできますがglobal値を超えません。期間はMPC初期化やReady待機ではなく、重複を除いた`/awsim/state=Start`から計時します。通常は`Finish -> Spawned`、Finishを省く手動resetでは`Spawned -> Grounded/Ready -> Start`を新しいsession境界として扱います。Boostを車両別に無効化していても、start速度を設定した車両は`/awsim/state`を購読します。
 
 ### MPC シミュレーション
 ```bash

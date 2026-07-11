@@ -16,6 +16,7 @@ using multi_purpose_mpc_ros::awsim_boost::BlockReason;
 using multi_purpose_mpc_ros::awsim_boost::Config;
 using multi_purpose_mpc_ros::awsim_boost::Mode;
 using multi_purpose_mpc_ros::awsim_boost::Phase;
+using multi_purpose_mpc_ros::awsim_boost::StateEvent;
 using multi_purpose_mpc_ros::awsim_boost::StartDashGuard;
 
 Config enabled_config()
@@ -39,12 +40,57 @@ TEST(AwsimBoostStartDash, DisabledModeNeverTriggers)
   config.mode = Mode::Disabled;
   StartDashGuard guard(config);
   const auto now = StartDashGuard::Clock::now();
-  guard.on_awsim_state("Start");
+  EXPECT_EQ(guard.on_awsim_state("Start"), StateEvent::StartEntered);
   EXPECT_FALSE(guard.on_awsim_status(status(2.0F, 0.0F), now));
   const auto result = guard.evaluate(true, false, now);
   EXPECT_EQ(result.action, Action::None);
   EXPECT_EQ(result.reason, BlockReason::Disabled);
   EXPECT_EQ(guard.phase(), Phase::Disabled);
+}
+
+TEST(AwsimBoostStartDash, ReportsRaceSessionEdgesEvenWhenBoostIsDisabled)
+{
+  Config config;
+  config.enabled = false;
+  config.mode = Mode::Disabled;
+  StartDashGuard guard(config);
+  const auto now = StartDashGuard::Clock::now();
+
+  EXPECT_EQ(guard.on_awsim_state(" Spawned "), StateEvent::None);
+  EXPECT_EQ(guard.on_awsim_state("Start"), StateEvent::StartEntered);
+  EXPECT_EQ(guard.on_awsim_state("start"), StateEvent::None);
+  EXPECT_EQ(guard.on_awsim_state("Ready"), StateEvent::None);
+  EXPECT_EQ(guard.on_awsim_state("START"), StateEvent::None);
+
+  EXPECT_EQ(guard.on_awsim_state("Finish"), StateEvent::Finished);
+  EXPECT_EQ(guard.on_awsim_state("finish"), StateEvent::None);
+  EXPECT_EQ(guard.on_awsim_state("Start"), StateEvent::None);
+  EXPECT_EQ(guard.on_awsim_state("Spawned"), StateEvent::NewSession);
+  EXPECT_EQ(guard.on_awsim_state("spawned"), StateEvent::None);
+  EXPECT_EQ(guard.phase(), Phase::Disabled);
+
+  EXPECT_EQ(guard.on_awsim_state("Start"), StateEvent::StartEntered);
+  EXPECT_FALSE(guard.on_awsim_status(status(5.0F, 0.0F), now));
+  const auto evaluation = guard.evaluate(true, false, now);
+  EXPECT_EQ(evaluation.action, Action::None);
+  EXPECT_EQ(evaluation.reason, BlockReason::Disabled);
+}
+
+TEST(AwsimBoostStartDash, FinishBlocksBoostUntilSpawnedStartsNewSession)
+{
+  StartDashGuard guard(enabled_config());
+  const auto now = StartDashGuard::Clock::now();
+  EXPECT_EQ(guard.on_awsim_state("Start"), StateEvent::StartEntered);
+  ASSERT_TRUE(guard.on_awsim_status(status(2.0F, 0.0F), now));
+
+  EXPECT_EQ(guard.on_awsim_state("Finish"), StateEvent::Finished);
+  EXPECT_EQ(guard.on_awsim_state("Start"), StateEvent::None);
+  EXPECT_EQ(guard.evaluate(true, false, now).reason, BlockReason::AwaitingStart);
+
+  EXPECT_EQ(guard.on_awsim_state("Spawned"), StateEvent::NewSession);
+  EXPECT_EQ(guard.on_awsim_state("Start"), StateEvent::StartEntered);
+  ASSERT_TRUE(guard.on_awsim_status(status(2.0F, 0.0F), now));
+  EXPECT_EQ(guard.evaluate(true, false, now).action, Action::PublishPulse);
 }
 
 TEST(AwsimBoostStartDash, RequiresStartAndFreshStatus)

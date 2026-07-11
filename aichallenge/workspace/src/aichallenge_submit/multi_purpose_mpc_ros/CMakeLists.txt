@@ -34,6 +34,11 @@ ament_auto_add_library(${PROJECT_NAME}_awsim_boost_start_dash SHARED
   src/awsim_boost_start_dash.cpp
 )
 
+ament_auto_add_library(${PROJECT_NAME}_v2x_overtake_core SHARED
+  NO_TARGET_LINK_LIBRARIES
+  src/v2x_overtake_core.cpp
+)
+
 ament_auto_add_executable(boost_commander
   src/boost_commander_node.cpp
 )
@@ -48,6 +53,7 @@ target_include_directories(mpc_controller_cpp PRIVATE
 target_link_libraries(mpc_controller_cpp
   ${PROJECT_NAME}_awsim_boost_start_dash
   ${PROJECT_NAME}_path_core
+  ${PROJECT_NAME}_v2x_overtake_core
   osqp::osqp
   yaml-cpp
   ${OpenCV_LIBRARIES}
@@ -84,6 +90,15 @@ if(BUILD_TESTING)
   if(TARGET test_awsim_boost_start_dash)
     target_link_libraries(test_awsim_boost_start_dash
       ${PROJECT_NAME}_awsim_boost_start_dash
+    )
+  endif()
+
+  ament_add_gtest(test_v2x_overtake_core
+    test/test_v2x_overtake_core.cpp
+  )
+  if(TARGET test_v2x_overtake_core)
+    target_link_libraries(test_v2x_overtake_core
+      ${PROJECT_NAME}_v2x_overtake_core
     )
   endif()
 

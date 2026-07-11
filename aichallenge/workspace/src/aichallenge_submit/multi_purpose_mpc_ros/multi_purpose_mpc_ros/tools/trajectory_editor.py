@@ -4,12 +4,14 @@
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import CancelledError
 import copy
 import csv
 from dataclasses import dataclass
 from dataclasses import field
 import math
 from pathlib import Path
+import threading
 import tkinter as tk
 from tkinter import filedialog
 from tkinter import messagebox
@@ -17,6 +19,24 @@ from tkinter import ttk
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 import xml.etree.ElementTree as ET
 
+from multi_purpose_mpc_ros.tools.trajectory_clearance import AdjustmentParameters
+from multi_purpose_mpc_ros.tools.trajectory_clearance import AdjustmentResult
+from multi_purpose_mpc_ros.tools.trajectory_clearance import AdjustmentStatus
+from multi_purpose_mpc_ros.tools.trajectory_clearance import ClearanceReport
+from multi_purpose_mpc_ros.tools.trajectory_clearance import MapLoadOptions
+from multi_purpose_mpc_ros.tools.trajectory_clearance import OccupancyGrid
+from multi_purpose_mpc_ros.tools.trajectory_clearance import Pose2D
+from multi_purpose_mpc_ros.tools.trajectory_clearance import ValidationOptions
+from multi_purpose_mpc_ros.tools.trajectory_clearance import VehicleFootprintSpec
+from multi_purpose_mpc_ros.tools.trajectory_clearance import adjust_clearance
+from multi_purpose_mpc_ros.tools.trajectory_clearance import footprint_polygon
+from multi_purpose_mpc_ros.tools.trajectory_clearance import load_occupancy_grid
+from multi_purpose_mpc_ros.tools.trajectory_clearance import validate_clearance
+from multi_purpose_mpc_ros.tools.trajectory_clearance_dialog import ClearanceDialogConfig
+from multi_purpose_mpc_ros.tools.trajectory_clearance_dialog import ask_clearance_settings
+from multi_purpose_mpc_ros.tools.trajectory_clearance_dialog import clearance_report_summary
+from multi_purpose_mpc_ros.tools.trajectory_clearance_dialog import provisional_default_config
+from multi_purpose_mpc_ros.tools.trajectory_clearance_dialog import show_clearance_report
 from multi_purpose_mpc_ros.tools.trajectory_contract import CLOSURE_TOLERANCE_M
 from multi_purpose_mpc_ros.tools.trajectory_contract import MPC_COLUMNS
 from multi_purpose_mpc_ros.tools.trajectory_contract import PURE_PURSUIT_COLUMNS
@@ -64,6 +84,107 @@ class UndoState:
     last_operation: str
 
 
+@dataclass(frozen=True)
+class OriginalDifference:
+    original_point_count: int
+    working_point_count: int
+    original_length_m: float
+    working_length_m: float
+    maximum_displacement_m: float
+    mean_displacement_m: float
+    changed_ranges_m: Tuple[Tuple[float, float], ...]
+    changed_indices: Tuple[int, ...]
+
+
+def _display_arc_lengths(points: Sequence[Point]) -> Tuple[float, ...]:
+    if not points:
+        return ()
+    values = [0.0]
+    for first, second in zip(points, points[1:]):
+        values.append(values[-1] + math.hypot(second[0] - first[0], second[1] - first[1]))
+    return tuple(values)
+
+
+def _interpolate_point_at_s(
+    points: Sequence[Point],
+    arc_lengths: Sequence[float],
+    s_m: float,
+) -> Point:
+    if not points:
+        raise ValueError("cannot interpolate an empty trajectory")
+    if len(points) == 1 or s_m <= arc_lengths[0]:
+        return points[0]
+    if s_m >= arc_lengths[-1]:
+        return points[-1]
+    low = 0
+    high = len(arc_lengths) - 1
+    while low + 1 < high:
+        middle = (low + high) // 2
+        if arc_lengths[middle] <= s_m:
+            low = middle
+        else:
+            high = middle
+    span = arc_lengths[high] - arc_lengths[low]
+    if span <= 1e-12:
+        return points[low]
+    factor = (s_m - arc_lengths[low]) / span
+    return (
+        points[low][0] + factor * (points[high][0] - points[low][0]),
+        points[low][1] + factor * (points[high][1] - points[low][1]),
+    )
+
+
+def build_original_difference(
+    original_points: Sequence[Point],
+    working_points: Sequence[Point],
+    *,
+    change_threshold_m: float = 0.01,
+) -> OriginalDifference:
+    if not math.isfinite(change_threshold_m) or change_threshold_m < 0.0:
+        raise ValueError("change threshold must be finite and non-negative")
+    original_arc = _display_arc_lengths(original_points)
+    working_arc = _display_arc_lengths(working_points)
+    displacements: list[float] = []
+    changed_indices: list[int] = []
+    if original_points:
+        for index, (point, s_m) in enumerate(zip(working_points, working_arc)):
+            reference = _interpolate_point_at_s(original_points, original_arc, s_m)
+            displacement = math.hypot(point[0] - reference[0], point[1] - reference[1])
+            displacements.append(displacement)
+            if displacement > change_threshold_m:
+                changed_indices.append(index)
+    elif working_points:
+        displacements = [math.inf] * len(working_points)
+        changed_indices = list(range(len(working_points)))
+
+    changed_ranges: list[Tuple[float, float]] = []
+    if changed_indices:
+        start = previous = changed_indices[0]
+        for index in changed_indices[1:]:
+            if index != previous + 1:
+                changed_ranges.append((working_arc[start], working_arc[previous]))
+                start = index
+            previous = index
+        changed_ranges.append((working_arc[start], working_arc[previous]))
+    finite_displacements = [value for value in displacements if math.isfinite(value)]
+    maximum = max(displacements, default=0.0)
+    mean = (
+        sum(finite_displacements) / len(finite_displacements)
+        if finite_displacements and len(finite_displacements) == len(displacements)
+        else maximum
+    )
+    return OriginalDifference(
+        original_point_count=len(original_points),
+        working_point_count=len(working_points),
+        original_length_m=original_arc[-1] if original_arc else 0.0,
+        working_length_m=working_arc[-1] if working_arc else 0.0,
+        maximum_displacement_m=maximum,
+        mean_displacement_m=mean,
+        changed_ranges_m=tuple(changed_ranges),
+        changed_indices=tuple(changed_indices),
+    )
+
+
 def _trajectory_content_signature(data: TrajectoryData) -> object:
     """Bind a validation result to the exact mutable candidate content."""
 
@@ -85,6 +206,24 @@ def _trajectory_content_signature(data: TrajectoryData) -> object:
     )
 
 
+def _trajectory_geometry_signature(data: TrajectoryData) -> object:
+    """Identify the geometry fields relevant to a clearance result."""
+
+    geometry_columns = (
+        ("s_m", "x_m", "y_m", "psi_rad", "kappa_radpm")
+        if data.format_name == "mpc"
+        else tuple(data.fieldnames)
+    )
+    return (
+        data.format_name,
+        tuple(data.points),
+        tuple(
+            tuple(row.get(column) for column in geometry_columns)
+            for row in data.rows
+        ),
+    )
+
+
 @dataclass
 class EditorCandidate:
     source_revision: int
@@ -97,6 +236,10 @@ class EditorCandidate:
     geometry_dirty: bool
     speed_dirty: bool
     plot_data: Optional[object] = None
+    apply_guard: Optional[
+        Callable[[TrajectoryData], Tuple[bool, str, Optional[object]]]
+    ] = field(default=None, repr=False)
+    safety_payload: Optional[object] = field(default=None, repr=False)
     content_signature: object = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -158,6 +301,23 @@ def _default_paths(preset: str = "mpc") -> Tuple[Optional[Path], Optional[Path]]
         pure_pursuit_candidates if preset == "pure_pursuit" else mpc_candidates
     )
     return _first_existing(trajectory_candidates), _first_existing(osm_candidates)
+
+
+def _default_occupancy_grid_path(trajectory_path: Path) -> Optional[Path]:
+    """Find the map paired with a trajectory without changing runtime config."""
+
+    candidates = [Path(trajectory_path).parent / "occupancy_grid_map.yaml"]
+    package_share = _package_share("multi_purpose_mpc_ros")
+    if package_share is not None:
+        candidates.append(
+            package_share / "env" / "final_ver3" / "occupancy_grid_map.yaml"
+        )
+    source = Path(__file__).resolve()
+    for parent in source.parents:
+        candidates.append(
+            parent / "env" / "final_ver3" / "occupancy_grid_map.yaml"
+        )
+    return _first_existing(candidates)
 
 
 def _tags(element: ET.Element) -> Dict[str, str]:
@@ -548,7 +708,16 @@ class TrajectoryEditor(tk.Tk):
         self.trajectory_path = trajectory_path
         self.osm_path = osm_path
         self.trajectory = trajectory
-        self.original_trajectory = copy.deepcopy(trajectory)
+        # The loaded source is a session-level reference, not a save baseline.
+        # Keep ``original_trajectory`` as a compatibility alias for downstream
+        # imports/tests, but never replace either snapshot on Save / Save As.
+        self.loaded_original = copy.deepcopy(trajectory)
+        self.original_trajectory = self.loaded_original
+        self.loaded_original_circular = bool(initial_topology)
+        self.original_difference = build_original_difference(
+            self.loaded_original.points,
+            self.trajectory.points,
+        )
         self.rails = rails
 
         self.center_x = 0.0
@@ -562,6 +731,9 @@ class TrajectoryEditor(tk.Tk):
         self.undo_stack: List[UndoState] = []
         self.circular_override = circular if circular_explicit else None
         self.circular = tk.BooleanVar(value=initial_topology)
+        self.show_original = tk.BooleanVar(value=True)
+        self.show_working = tk.BooleanVar(value=True)
+        self.show_candidate = tk.BooleanVar(value=True)
         self.dirty = False
         self.geometry_dirty = initial_repairable
         self.speed_dirty = initial_repairable
@@ -572,6 +744,13 @@ class TrajectoryEditor(tk.Tk):
         self.validation_revision: Optional[int] = None
         self.validation_external = False
         self.validation_issues_by_iid: Dict[str, ValidationIssue] = {}
+        self.clearance_config: Optional[ClearanceDialogConfig] = None
+        self.clearance_grid: Optional[OccupancyGrid] = None
+        self.clearance_report: Optional[ClearanceReport] = None
+        self.clearance_revision: Optional[int] = None
+        self.clearance_state = "not_run"
+        self.clearance_selected_issue: Optional[object] = None
+        self.clearance_report_window: Optional[tk.Toplevel] = None
         self.influence_radius_points = tk.IntVar(value=4)
         self.smooth_alpha = tk.DoubleVar(value=0.15)
         self.smooth_passes = tk.IntVar(value=1)
@@ -581,6 +760,7 @@ class TrajectoryEditor(tk.Tk):
         self._bind_events()
         self.protocol("WM_DELETE_WINDOW", self.close)
         self.fit_view()
+        self.after_idle(self.fit_view)
         self.validate_current()
 
     def _build_ui(self) -> None:
@@ -618,6 +798,11 @@ class TrajectoryEditor(tk.Tk):
         tk.Button(toolbar, text="Fit", command=self.fit_view).pack(
             side=tk.LEFT, padx=2, pady=2
         )
+        tk.Button(
+            toolbar,
+            text="Center Selection",
+            command=self.center_selection,
+        ).pack(side=tk.LEFT, padx=2, pady=2)
 
         tuning_toolbar = tk.Frame(self)
         tuning_toolbar.pack(side=tk.TOP, fill=tk.X)
@@ -669,6 +854,68 @@ class TrajectoryEditor(tk.Tk):
             command=self._on_circular_changed,
         ).pack(side=tk.LEFT, padx=8)
 
+        clearance_toolbar = tk.Frame(self)
+        clearance_toolbar.pack(side=tk.TOP, fill=tk.X)
+        tk.Label(clearance_toolbar, text="Wall clearance:").pack(
+            side=tk.LEFT, padx=(4, 2), pady=2
+        )
+        tk.Button(
+            clearance_toolbar,
+            text="Vehicle / Margin Settings",
+            command=self.configure_clearance,
+        ).pack(side=tk.LEFT, padx=2, pady=2)
+        tk.Button(
+            clearance_toolbar,
+            text="Validate Clearance",
+            command=self.validate_clearance_action,
+        ).pack(side=tk.LEFT, padx=2, pady=2)
+        tk.Button(
+            clearance_toolbar,
+            text="Adjust Clearance",
+            command=self.adjust_clearance_action,
+        ).pack(side=tk.LEFT, padx=2, pady=2)
+        self.clearance_summary = tk.StringVar(value="Clearance: not run")
+        tk.Label(
+            clearance_toolbar,
+            textvariable=self.clearance_summary,
+            anchor="w",
+        ).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(8, 4), pady=2)
+
+        view_toolbar = tk.Frame(self)
+        view_toolbar.pack(side=tk.TOP, fill=tk.X)
+        tk.Label(view_toolbar, text="Layers:").pack(
+            side=tk.LEFT, padx=(4, 2), pady=2
+        )
+        tk.Checkbutton(
+            view_toolbar,
+            text="Original (gray dashed)",
+            variable=self.show_original,
+            command=self._on_layer_visibility_changed,
+            foreground="#6f7782",
+        ).pack(side=tk.LEFT, padx=4, pady=2)
+        tk.Checkbutton(
+            view_toolbar,
+            text="Working (blue solid)",
+            variable=self.show_working,
+            command=self._on_layer_visibility_changed,
+            foreground="#1976c5",
+        ).pack(side=tk.LEFT, padx=4, pady=2)
+        tk.Checkbutton(
+            view_toolbar,
+            text="Candidate (orange dashed, when available)",
+            variable=self.show_candidate,
+            command=self._on_layer_visibility_changed,
+            foreground="#c56800",
+        ).pack(side=tk.LEFT, padx=4, pady=2)
+        self.original_difference_summary = tk.StringVar(
+            value="Original diff: unchanged"
+        )
+        tk.Label(
+            view_toolbar,
+            textvariable=self.original_difference_summary,
+            anchor="w",
+        ).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(8, 4), pady=2)
+
         self.status = tk.StringVar()
         tk.Label(self, textvariable=self.status, anchor="w").pack(
             side=tk.BOTTOM, fill=tk.X
@@ -715,8 +962,24 @@ class TrajectoryEditor(tk.Tk):
         issue_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.issue_tree.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-        self.canvas = tk.Canvas(self, background="#101318")
-        self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        canvas_frame = ttk.Frame(self)
+        canvas_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        canvas_frame.rowconfigure(0, weight=1)
+        canvas_frame.columnconfigure(0, weight=1)
+        self.canvas = tk.Canvas(canvas_frame, background="#101318")
+        self.horizontal_scrollbar = ttk.Scrollbar(
+            canvas_frame,
+            orient=tk.HORIZONTAL,
+            command=self._on_horizontal_scroll,
+        )
+        self.vertical_scrollbar = ttk.Scrollbar(
+            canvas_frame,
+            orient=tk.VERTICAL,
+            command=self._on_vertical_scroll,
+        )
+        self.canvas.grid(row=0, column=0, sticky="nsew")
+        self.vertical_scrollbar.grid(row=0, column=1, sticky="ns")
+        self.horizontal_scrollbar.grid(row=1, column=0, sticky="ew")
         self._set_status()
 
     def _bind_events(self) -> None:
@@ -766,6 +1029,7 @@ class TrajectoryEditor(tk.Tk):
         self.speed_dirty = self.speed_dirty or speed_dirty
         self.revision += 1
         self._clear_validation("Validation stale after edit")
+        self._clear_clearance("Clearance: stale after edit")
 
     def _on_circular_changed(self) -> None:
         self._mark_modified(geometry_dirty=True, speed_dirty=True)
@@ -842,16 +1106,542 @@ class TrajectoryEditor(tk.Tk):
         self._set_status("validation complete")
         return report
 
+    def _clear_clearance(
+        self,
+        reason: str = "Clearance: not run",
+        *,
+        state: Optional[str] = None,
+    ) -> None:
+        self.clearance_grid = None
+        self.clearance_report = None
+        self.clearance_revision = None
+        self.clearance_selected_issue = None
+        window = self.__dict__.get("clearance_report_window")
+        try:
+            if window is not None and window.winfo_exists():
+                window.destroy()
+        except tk.TclError:
+            pass
+        self.clearance_report_window = None
+        if state is None:
+            state = "stale" if self.__dict__.get("clearance_config") else "not_run"
+        self.clearance_state = state
+        summary = self.__dict__.get("clearance_summary")
+        if summary is not None:
+            summary.set(reason)
+
+    def configure_clearance(self) -> bool:
+        """Edit offline map/vehicle settings without mutating the document."""
+
+        default_map = _default_occupancy_grid_path(self.trajectory.path)
+        initial = self.clearance_config
+        if initial is None and default_map is not None:
+            try:
+                initial = provisional_default_config(default_map)
+            except ValueError:
+                # The dialog can still be used with explicit manual values.
+                initial = None
+        result = ask_clearance_settings(
+            self,
+            initial=initial,
+            map_yaml_path=default_map,
+        )
+        if result is None:
+            self._set_status("clearance settings cancelled")
+            return False
+        self.clearance_config = result
+        self._clear_clearance(
+            "Clearance: settings changed; validation required",
+            state="stale",
+        )
+        self.redraw()
+        self._set_status("clearance settings applied")
+        return True
+
+    def _ensure_clearance_config(self) -> Optional[ClearanceDialogConfig]:
+        if self.clearance_config is None and not self.configure_clearance():
+            return None
+        return self.clearance_config
+
+    @staticmethod
+    def _trajectory_clearance_poses(data: TrajectoryData) -> Tuple[Pose2D, ...]:
+        if data.format_name != "mpc":
+            raise ValueError(
+                "Wall-clearance validation is available for strict seven-column "
+                "MPC trajectories only."
+            )
+        if len(data.rows) != len(data.points):
+            raise ValueError("trajectory rows and points have different lengths")
+        poses: List[Pose2D] = []
+        for index, (row, point) in enumerate(zip(data.rows, data.points)):
+            try:
+                yaw = float(row["psi_rad"])
+                s_m = float(row["s_m"])
+                curvature = float(row["kappa_radpm"])
+            except (KeyError, TypeError, ValueError) as error:
+                raise ValueError(
+                    f"trajectory point {index} has invalid geometry metadata"
+                ) from error
+            values = (point[0], point[1], yaw, s_m, curvature)
+            if not all(math.isfinite(value) for value in values):
+                raise ValueError(
+                    f"trajectory point {index} has non-finite geometry metadata"
+                )
+            poses.append(
+                Pose2D(
+                    x_m=point[0],
+                    y_m=point[1],
+                    yaw_rad=yaw,
+                    s_m=s_m,
+                    curvature_radpm=curvature,
+                )
+            )
+        return tuple(poses)
+
+    @staticmethod
+    def _map_load_options(config: ClearanceDialogConfig) -> MapLoadOptions:
+        # Match the current C++ runtime preprocessing: enclosed occupied
+        # components with fewer than five cells are removed after thresholding.
+        return MapLoadOptions(
+            unknown_is_occupied=config.unknown_is_occupied,
+            fill_free_holes_below_cells=5,
+            runtime_binary_parity=True,
+        )
+
+    @staticmethod
+    def _vehicle_footprint(
+        config: ClearanceDialogConfig,
+    ) -> VehicleFootprintSpec:
+        return VehicleFootprintSpec(**config.vehicle_footprint_kwargs())
+
+    def _load_clearance_context(
+        self,
+        config: ClearanceDialogConfig,
+        data: TrajectoryData,
+    ) -> Tuple[OccupancyGrid, VehicleFootprintSpec, Tuple[Pose2D, ...]]:
+        grid = load_occupancy_grid(
+            config.map_yaml_path,
+            options=self._map_load_options(config),
+        )
+        vehicle = self._vehicle_footprint(config)
+        poses = self._trajectory_clearance_poses(data)
+        return grid, vehicle, poses
+
+    def _validation_options(
+        self, config: ClearanceDialogConfig
+    ) -> ValidationOptions:
+        return ValidationOptions(
+            circular=bool(self.circular.get()),
+            sweep_step_m=config.sweep_step_m,
+            include_sweep=True,
+        )
+
+    def _show_clearance_report(
+        self,
+        report: ClearanceReport,
+        *,
+        current_document: bool,
+    ) -> None:
+        if current_document:
+            self.clearance_report = report
+            self.clearance_revision = self.revision
+            self.clearance_state = "safe" if report.is_safe else "unsafe"
+            self.clearance_summary.set(
+                "Clearance: " + clearance_report_summary(report)
+            )
+        existing = self.clearance_report_window
+        try:
+            if existing is not None and existing.winfo_exists():
+                existing.destroy()
+        except tk.TclError:
+            pass
+        self.clearance_report_window = show_clearance_report(
+            self,
+            report=report,
+            on_center_issue=self._center_clearance_issue,
+        )
+        self.redraw()
+
+    def _center_clearance_issue(self, issue: object) -> None:
+        index = getattr(issue, "point_index", None)
+        if index is None:
+            index = getattr(issue, "segment_index", None)
+        if index is None or not self.trajectory.points:
+            self._set_status("clearance issue has no trajectory location")
+            return
+        self.selected_index = min(max(int(index), 0), len(self.trajectory.points) - 1)
+        self.clearance_selected_issue = issue
+        self.center_selection()
+        self._set_status(f"clearance issue={getattr(issue, 'code', 'unknown')}")
+
+    def _clearance_precheck(self) -> bool:
+        if self.trajectory.format_name != "mpc":
+            messagebox.showinfo(
+                "Wall Clearance",
+                "Wall-clearance validation and adjustment are currently limited "
+                "to strict seven-column MPC trajectories. Original/Working "
+                "layers and scrollbars remain available for Pure Pursuit.",
+            )
+            return False
+        if self.geometry_dirty:
+            messagebox.showerror(
+                "Wall Clearance blocked",
+                "Heading/curvature metadata is stale. Run Recompute Geometry or "
+                "Normalize Geometry before checking the oriented vehicle footprint.",
+            )
+            self._set_status("clearance blocked: geometry stale")
+            return False
+        report = self.validate_current()
+        if not report.is_valid:
+            messagebox.showerror(
+                "Wall Clearance blocked",
+                f"Trajectory validation found {report.error_count} error(s).",
+            )
+            self._set_status("clearance blocked: trajectory validation errors")
+            return False
+        return True
+
+    def validate_clearance_action(self) -> Optional[ClearanceReport]:
+        """Run a read-only footprint and swept-footprint wall check."""
+
+        if not self._clearance_precheck():
+            return None
+        config = self._ensure_clearance_config()
+        if config is None:
+            return None
+        self._clear_clearance("Clearance: validation running", state="running")
+        source_revision = self.revision
+        snapshot = copy.deepcopy(self.trajectory)
+        validation_options = self._validation_options(config)
+        try:
+            result = self._run_pure_candidate_task(
+                "Validate Wall Clearance",
+                lambda: self._validate_clearance_snapshot(
+                    config,
+                    snapshot,
+                    validation_options,
+                    source_revision,
+                ),
+            )
+            if (
+                not isinstance(result, tuple)
+                or len(result) != 2
+                or not isinstance(result[0], OccupancyGrid)
+                or not isinstance(result[1], ClearanceReport)
+            ):
+                raise TypeError("clearance worker returned an unexpected result")
+            grid, report = result
+            if source_revision != self.revision:
+                raise ValueError(
+                    "working trajectory changed while clearance was being checked"
+                )
+        except Exception as exc:  # noqa: BLE001
+            self._clear_clearance(
+                "Clearance: validation failed; previous result invalidated",
+                state="failed",
+            )
+            messagebox.showerror("Validate Clearance failed", str(exc))
+            self._set_status("clearance validation failed")
+            return None
+
+        self.clearance_grid = grid
+        self._show_clearance_report(report, current_document=True)
+        self._set_status(
+            "clearance safe" if report.is_safe else "clearance violations found"
+        )
+        return report
+
+    def _validate_clearance_snapshot(
+        self,
+        config: ClearanceDialogConfig,
+        snapshot: TrajectoryData,
+        options: ValidationOptions,
+        source_revision: int,
+    ) -> Tuple[OccupancyGrid, ClearanceReport]:
+        """Load and validate detached data without touching Tk state."""
+
+        grid, vehicle, poses = self._load_clearance_context(config, snapshot)
+        return grid, validate_clearance(
+            grid,
+            poses,
+            vehicle,
+            options=options,
+            source_revision=source_revision,
+        )
+
+    def _clearance_apply_guard(
+        self,
+        *,
+        config: ClearanceDialogConfig,
+        expected_map_signature: str,
+        vehicle: VehicleFootprintSpec,
+        options: ValidationOptions,
+    ) -> Callable[[TrajectoryData], Tuple[bool, str, Optional[object]]]:
+        def guard(data: TrajectoryData) -> Tuple[bool, str, Optional[object]]:
+            if self.clearance_config != config:
+                return False, "clearance settings changed after candidate creation", None
+            try:
+                fresh_grid = load_occupancy_grid(
+                    config.map_yaml_path,
+                    options=self._map_load_options(config),
+                )
+                if fresh_grid.spec.signature != expected_map_signature:
+                    return False, "occupancy-grid content changed after preview", None
+                fresh_report = validate_clearance(
+                    fresh_grid,
+                    self._trajectory_clearance_poses(data),
+                    vehicle,
+                    options=options,
+                    source_revision=self.revision,
+                )
+            except Exception as exc:  # noqa: BLE001
+                return False, f"clearance recheck failed: {exc}", None
+            if not fresh_report.is_safe:
+                return False, "candidate is no longer wall-clearance safe", fresh_report
+            return True, "", fresh_report
+
+        return guard
+
+    def adjust_clearance_action(self) -> bool:
+        """Create a detached, constrained lateral-adjustment candidate."""
+
+        if not self._clearance_precheck():
+            return False
+        config = self._ensure_clearance_config()
+        if config is None:
+            return False
+        self._clear_clearance("Clearance: adjustment running", state="running")
+        source_revision = self.revision
+        snapshot = copy.deepcopy(self.trajectory)
+        circular = bool(self.circular.get())
+        final_options = self._validation_options(config)
+        try:
+            parameters = AdjustmentParameters(
+                **config.adjustment_parameter_kwargs(
+                    circular=circular
+                )
+            )
+            task_result = self._run_pure_candidate_task(
+                "Adjust Wall Clearance",
+                lambda cancel_event: self._adjust_clearance_snapshot(
+                    config,
+                    snapshot,
+                    parameters,
+                    source_revision,
+                    cancel_requested=cancel_event.is_set,
+                ),
+                cancellable=True,
+            )
+            if not isinstance(task_result, tuple) or len(task_result) != 3:
+                raise TypeError("clearance worker returned an unexpected result")
+            grid, vehicle, result = task_result
+            if not isinstance(grid, OccupancyGrid):
+                raise TypeError("clearance worker returned an invalid map")
+            if not isinstance(vehicle, VehicleFootprintSpec):
+                raise TypeError("clearance worker returned an invalid vehicle")
+            if not isinstance(result, AdjustmentResult):
+                raise TypeError("clearance worker returned an invalid adjustment")
+            if source_revision != self.revision:
+                raise ValueError(
+                    "working trajectory changed while a clearance candidate was generated"
+                )
+        except CancelledError:
+            self._clear_clearance(
+                "Clearance: adjustment cancelled; validation required",
+                state="stale",
+            )
+            self._set_status("clearance adjustment cancelled")
+            return False
+        except Exception as exc:  # noqa: BLE001
+            self._clear_clearance(
+                "Clearance: adjustment failed; previous result invalidated",
+                state="failed",
+            )
+            messagebox.showerror("Adjust Clearance failed", str(exc))
+            self._set_status("clearance adjustment failed")
+            return False
+
+        if result.status is AdjustmentStatus.NOT_NEEDED:
+            self.clearance_grid = grid
+            self._show_clearance_report(result.before_report, current_document=True)
+            messagebox.showinfo(
+                "Adjust Clearance",
+                "The current trajectory already satisfies the selected clearance "
+                "conditions; no candidate was created.",
+            )
+            self._set_status("clearance adjustment not needed")
+            return False
+        if result.status is not AdjustmentStatus.FEASIBLE or result.candidate is None:
+            self.clearance_grid = grid
+            self._show_clearance_report(result.before_report, current_document=True)
+            messagebox.showerror(
+                "Adjust Clearance infeasible",
+                "No safe path was found within the selected maximum lateral shift. "
+                "Working data was not changed.",
+            )
+            self._set_status("clearance adjustment infeasible")
+            return False
+
+        clearance_candidate = result.candidate
+        if len(clearance_candidate.poses) != len(snapshot.points):
+            messagebox.showerror(
+                "Adjust Clearance failed",
+                "The clearance candidate changed the point count unexpectedly.",
+            )
+            return False
+        adjusted = copy.deepcopy(snapshot)
+        adjusted.points = [
+            (pose.x_m, pose.y_m) for pose in clearance_candidate.poses
+        ]
+        try:
+            candidate_result = self._run_pure_candidate_task(
+                "Validate Adjusted Clearance",
+                lambda: self._validate_adjusted_clearance_candidate(
+                    adjusted,
+                    grid,
+                    vehicle,
+                    parameters,
+                    final_options,
+                    circular,
+                    source_revision,
+                ),
+            )
+            if not isinstance(candidate_result, tuple) or len(candidate_result) != 3:
+                raise TypeError("candidate worker returned an unexpected result")
+            adjusted, validation, final_report = candidate_result
+        except Exception as exc:  # noqa: BLE001
+            messagebox.showerror("Adjust Clearance failed", str(exc))
+            self._set_status("clearance candidate validation failed")
+            return False
+        if not validation.is_valid or not final_report.is_safe:
+            self._show_clearance_report(final_report, current_document=False)
+            messagebox.showerror(
+                "Adjust Clearance rejected",
+                "The regenerated candidate failed trajectory or clearance validation. "
+                "Working data was not changed.",
+            )
+            self._set_status("clearance candidate rejected")
+            return False
+
+        candidate = EditorCandidate(
+            source_revision=source_revision,
+            operation="adjust_clearance",
+            trajectory=adjusted,
+            validation=validation,
+            transformation=clearance_candidate,
+            parameters={
+                "map": str(config.map_yaml_path),
+                "map_signature": grid.spec.signature,
+                "vehicle_reference": config.reference_point,
+                "body_length_m": config.body_length_m,
+                "body_width_m": config.body_width_m,
+                "envelope_length_m": config.envelope_length_m,
+                "envelope_width_m": config.envelope_width_m,
+                "minimum_clearance_m": final_report.minimum_clearance_m,
+                "max_lateral_shift_m": clearance_candidate.max_shift_m,
+                "max_abs_curvature_radpm": parameters.max_abs_curvature_radpm,
+            },
+            suggested_suffix="_clearance_adjusted",
+            geometry_dirty=False,
+            speed_dirty=True,
+            apply_guard=self._clearance_apply_guard(
+                config=config,
+                expected_map_signature=grid.spec.signature,
+                vehicle=vehicle,
+                options=final_options,
+            ),
+            safety_payload=final_report,
+        )
+        self.clearance_grid = grid
+        self.clearance_report = result.before_report
+        self.clearance_revision = self.revision
+        self.clearance_state = "unsafe"
+        self.clearance_summary.set(
+            "Clearance: " + clearance_report_summary(result.before_report)
+        )
+        applied = self._present_candidate(candidate)
+        if applied:
+            self._set_status(
+                "clearance candidate applied; recompute speed before saving"
+            )
+        return applied
+
+    def _adjust_clearance_snapshot(
+        self,
+        config: ClearanceDialogConfig,
+        snapshot: TrajectoryData,
+        parameters: AdjustmentParameters,
+        source_revision: int,
+        *,
+        cancel_requested: Optional[Callable[[], bool]] = None,
+    ) -> Tuple[OccupancyGrid, VehicleFootprintSpec, AdjustmentResult]:
+        """Load inputs and create a detached adjustment result off the Tk thread."""
+
+        grid, vehicle, poses = self._load_clearance_context(config, snapshot)
+        result = adjust_clearance(
+            grid,
+            poses,
+            vehicle,
+            parameters=parameters,
+            source_revision=source_revision,
+            cancel_requested=cancel_requested,
+        )
+        return grid, vehicle, result
+
+    def _validate_adjusted_clearance_candidate(
+        self,
+        adjusted: TrajectoryData,
+        grid: OccupancyGrid,
+        vehicle: VehicleFootprintSpec,
+        parameters: AdjustmentParameters,
+        options: ValidationOptions,
+        circular: bool,
+        source_revision: int,
+    ) -> Tuple[TrajectoryData, ValidationReport, ClearanceReport]:
+        """Regenerate and fully validate a detached candidate off the Tk thread."""
+
+        recompute_geometry(adjusted, circular=circular)
+        validation = validate_trajectory_data(adjusted, circular=circular)
+        final_poses = self._trajectory_clearance_poses(adjusted)
+        maximum_curvature = max(
+            abs(pose.curvature_radpm or 0.0) for pose in final_poses
+        )
+        if (
+            parameters.max_abs_curvature_radpm is not None
+            and maximum_curvature
+            > parameters.max_abs_curvature_radpm + 1e-9
+        ):
+            raise ValueError(
+                "regenerated candidate exceeds maximum absolute curvature: "
+                f"{maximum_curvature:.6g} > "
+                f"{parameters.max_abs_curvature_radpm:.6g} rad/m"
+            )
+        final_report = validate_clearance(
+            grid,
+            final_poses,
+            vehicle,
+            options=options,
+            source_revision=source_revision,
+        )
+        return adjusted, validation, final_report
+
     def _run_pure_candidate_task(
         self,
         title: str,
-        task: Callable[[], object],
+        task: Callable[..., object],
+        *,
+        cancellable: bool = False,
     ) -> object:
         """Use a responsive modal worker in Tk and a direct path in headless tests."""
 
         if self.__dict__.get("tk") is None:
-            return task()
-        return run_candidate_task(self, title=title, task=task)
+            return task(threading.Event()) if cancellable else task()
+        return run_candidate_task(
+            self,
+            title=title,
+            task=task,
+            cancellable=cancellable,
+        )
 
     def _preview_baseline(self) -> Tuple[TrajectoryData, ValidationReport]:
         """Return a detached, renderable snapshot of the current revision."""
@@ -1012,6 +1802,47 @@ class TrajectoryEditor(tk.Tk):
             self._set_status("candidate revalidation failed")
             return False
 
+        safety_payload = candidate.safety_payload
+        current_clearance = self.__dict__.get("clearance_report")
+        if (
+            safety_payload is None
+            and candidate.operation == "recompute_speed_profile"
+            and isinstance(current_clearance, ClearanceReport)
+            and current_clearance.is_safe
+            and self.__dict__.get("clearance_state") == "safe"
+            and self.__dict__.get("clearance_revision") == self.revision
+            and _trajectory_geometry_signature(candidate.trajectory)
+            == _trajectory_geometry_signature(self.trajectory)
+        ):
+            # A speed-profile candidate changes only vx/ax metadata.  Keep the
+            # current geometry-bound SAFE result and advance its revision below.
+            safety_payload = current_clearance
+        if candidate.apply_guard is not None:
+            try:
+                guard_result = self._run_pure_candidate_task(
+                    "Recheck Candidate Safety",
+                    lambda: candidate.apply_guard(candidate.trajectory),
+                )
+                safe_to_apply, rejection_reason, safety_payload = guard_result
+            except Exception as exc:  # noqa: BLE001
+                safe_to_apply = False
+                rejection_reason = f"candidate safety recheck failed: {exc}"
+                safety_payload = None
+            if not safe_to_apply:
+                self.candidate = None
+                if isinstance(safety_payload, ClearanceReport):
+                    self._show_clearance_report(
+                        safety_payload,
+                        current_document=False,
+                    )
+                messagebox.showerror(
+                    "Candidate safety check failed",
+                    rejection_reason or "The candidate is no longer safe to apply.",
+                )
+                self.redraw()
+                self._set_status("candidate safety recheck failed")
+                return False
+
         self._push_undo()
         selected_index = self.selected_index
         self.trajectory = copy.deepcopy(candidate.trajectory)
@@ -1028,6 +1859,14 @@ class TrajectoryEditor(tk.Tk):
         self.candidate = None
         self.revision += 1
         self._clear_validation("Validation stale after candidate apply")
+        self._clear_clearance("Clearance: stale after candidate apply")
+        if isinstance(safety_payload, ClearanceReport):
+            self.clearance_report = safety_payload
+            self.clearance_revision = self.revision
+            self.clearance_state = "safe"
+            summary = self.__dict__.get("clearance_summary")
+            if summary is not None:
+                summary.set("Clearance: " + clearance_report_summary(safety_payload))
         self._show_validation_report(candidate.validation)
         self.redraw()
         self._set_status(f"candidate applied={candidate.operation}")
@@ -1213,7 +2052,7 @@ class TrajectoryEditor(tk.Tk):
             index = issue.segment_index
         if index is not None and self.trajectory.points:
             self.selected_index = min(max(index, 0), len(self.trajectory.points) - 1)
-            self.redraw()
+            self.center_selection()
         self._set_status(f"issue={issue.code}")
 
     def _set_status(self, extra: str = "") -> None:
@@ -1270,6 +2109,213 @@ class TrajectoryEditor(tk.Tk):
         except (tk.TclError, ValueError):
             return 1
 
+    def _layer_visible(self, attribute: str, *, default: bool = True) -> bool:
+        variable = getattr(self, attribute, None)
+        if variable is None:
+            return default
+        try:
+            return bool(variable.get())
+        except (tk.TclError, AttributeError):
+            return default
+
+    @staticmethod
+    def _clearance_cell_polygon(grid: OccupancyGrid, cell: Tuple[int, int]) -> Tuple[Point, ...]:
+        row, column = cell
+        if grid.state(row, column).value == "outside":
+            return ()
+        resolution = grid.spec.resolution_m
+        map_y = grid.height - 1 - row
+        center_x = column * resolution
+        center_y = map_y * resolution
+        half = 0.5 * resolution
+        return tuple(
+            grid.local_to_world(center_x + dx, center_y + dy)
+            for dx, dy in ((-half, -half), (half, -half), (half, half), (-half, half))
+        )
+
+    def _visible_content_bounds(self) -> Optional[Tuple[float, float, float, float]]:
+        points: List[Point] = []
+        for rail in getattr(self, "rails", []):
+            points.extend(rail)
+        if self._layer_visible("show_original"):
+            original = getattr(
+                self,
+                "loaded_original",
+                getattr(self, "original_trajectory", None),
+            )
+            if original is not None:
+                points.extend(original.points)
+        if self._layer_visible("show_working"):
+            points.extend(self.trajectory.points)
+        candidate = getattr(self, "candidate", None)
+        if candidate is not None and self._layer_visible("show_candidate"):
+            points.extend(candidate.trajectory.points)
+        clearance_report = self.__dict__.get("clearance_report")
+        clearance_grid = self.__dict__.get("clearance_grid")
+        if (
+            clearance_report is not None
+            and clearance_grid is not None
+            and self.__dict__.get("clearance_revision") == self.revision
+        ):
+            for issue in tuple(clearance_report.issues)[:500]:
+                if issue.grid_cell is not None:
+                    points.extend(
+                        self._clearance_cell_polygon(
+                            clearance_grid,
+                            issue.grid_cell,
+                        )
+                    )
+            selected_issue = self.__dict__.get("clearance_selected_issue")
+            config = self.__dict__.get("clearance_config")
+            if selected_issue is not None and config is not None:
+                index = getattr(selected_issue, "point_index", None)
+                if index is None:
+                    index = getattr(selected_issue, "segment_index", None)
+                if index is not None and self.trajectory.points:
+                    index = min(max(int(index), 0), len(self.trajectory.points) - 1)
+                    try:
+                        pose = self._trajectory_clearance_poses(self.trajectory)[index]
+                        vehicle = self._vehicle_footprint(config)
+                        points.extend(
+                            footprint_polygon(pose, vehicle, include_margin=True)
+                        )
+                    except Exception:  # noqa: BLE001
+                        pass
+
+        finite_points = [
+            point
+            for point in points
+            if math.isfinite(point[0]) and math.isfinite(point[1])
+        ]
+        if not finite_points:
+            return None
+        return (
+            min(point[0] for point in finite_points),
+            max(point[0] for point in finite_points),
+            min(point[1] for point in finite_points),
+            max(point[1] for point in finite_points),
+        )
+
+    def _scroll_domain(self) -> Tuple[float, float, float, float]:
+        width = max(self.canvas.winfo_width(), 1)
+        height = max(self.canvas.winfo_height(), 1)
+        scale = max(float(self.scale), 1e-9)
+        bounds = self._visible_content_bounds()
+        if bounds is None:
+            half_width = width / (2.0 * scale)
+            half_height = height / (2.0 * scale)
+            return (
+                self.center_x - half_width,
+                self.center_x + half_width,
+                self.center_y - half_height,
+                self.center_y + half_height,
+            )
+
+        min_x, max_x, min_y, max_y = bounds
+        padding_world = 40.0 / scale
+        min_x -= padding_world
+        max_x += padding_world
+        min_y -= padding_world
+        max_y += padding_world
+
+        viewport_width = width / scale
+        viewport_height = height / scale
+        if max_x - min_x < viewport_width:
+            midpoint = 0.5 * (min_x + max_x)
+            min_x = midpoint - 0.5 * viewport_width
+            max_x = midpoint + 0.5 * viewport_width
+        if max_y - min_y < viewport_height:
+            midpoint = 0.5 * (min_y + max_y)
+            min_y = midpoint - 0.5 * viewport_height
+            max_y = midpoint + 0.5 * viewport_height
+        return min_x, max_x, min_y, max_y
+
+    def _scroll_fractions(self, axis: str) -> Tuple[float, float]:
+        min_x, max_x, min_y, max_y = self._scroll_domain()
+        scale = max(float(self.scale), 1e-9)
+        if axis == "x":
+            domain_min, domain_max = min_x, max_x
+            viewport_span = max(self.canvas.winfo_width(), 1) / scale
+            visible_start = self.center_x - 0.5 * viewport_span
+        else:
+            domain_min, domain_max = min_y, max_y
+            viewport_span = max(self.canvas.winfo_height(), 1) / scale
+            # Scrollbar coordinates increase down while world Y increases up.
+            visible_start = domain_max - (self.center_y + 0.5 * viewport_span)
+
+        domain_span = max(domain_max - domain_min, viewport_span, 1e-12)
+        if axis == "x":
+            first = (visible_start - domain_min) / domain_span
+        else:
+            first = visible_start / domain_span
+        visible_fraction = min(1.0, viewport_span / domain_span)
+        first = max(0.0, min(first, 1.0 - visible_fraction))
+        return first, min(1.0, first + visible_fraction)
+
+    def _set_scroll_fraction(self, axis: str, first: float) -> None:
+        min_x, max_x, min_y, max_y = self._scroll_domain()
+        scale = max(float(self.scale), 1e-9)
+        if axis == "x":
+            domain_min, domain_max = min_x, max_x
+            viewport_span = max(self.canvas.winfo_width(), 1) / scale
+        else:
+            domain_min, domain_max = min_y, max_y
+            viewport_span = max(self.canvas.winfo_height(), 1) / scale
+        domain_span = max(domain_max - domain_min, viewport_span, 1e-12)
+        visible_fraction = min(1.0, viewport_span / domain_span)
+        first = max(0.0, min(float(first), 1.0 - visible_fraction))
+        if axis == "x":
+            self.center_x = domain_min + first * domain_span + 0.5 * viewport_span
+        else:
+            visible_top = domain_max - first * domain_span
+            self.center_y = visible_top - 0.5 * viewport_span
+
+    def _scroll_axis(self, axis: str, *args: str) -> None:
+        if not args:
+            return
+        first, last = self._scroll_fractions(axis)
+        if args[0] == "moveto" and len(args) >= 2:
+            target = float(args[1])
+        elif args[0] == "scroll" and len(args) >= 3:
+            amount = int(args[1])
+            step = (last - first) * (0.9 if args[2] == "pages" else 0.1)
+            target = first + amount * step
+        else:
+            return
+        self._set_scroll_fraction(axis, target)
+        self.redraw()
+
+    def _on_horizontal_scroll(self, *args: str) -> None:
+        self._scroll_axis("x", *args)
+
+    def _on_vertical_scroll(self, *args: str) -> None:
+        self._scroll_axis("y", *args)
+
+    def _clamp_view_center(self) -> None:
+        for axis in ("x", "y"):
+            first, _last = self._scroll_fractions(axis)
+            self._set_scroll_fraction(axis, first)
+
+    def _update_scrollbars(self) -> None:
+        x_first, x_last = self._scroll_fractions("x")
+        y_first, y_last = self._scroll_fractions("y")
+        self.horizontal_scrollbar.set(x_first, x_last)
+        self.vertical_scrollbar.set(y_first, y_last)
+        min_x, max_x, min_y, max_y = self._scroll_domain()
+        virtual_width = max(
+            max(self.canvas.winfo_width(), 1),
+            min((max_x - min_x) * self.scale, 1_000_000_000.0),
+        )
+        virtual_height = max(
+            max(self.canvas.winfo_height(), 1),
+            min((max_y - min_y) * self.scale, 1_000_000_000.0),
+        )
+        self.canvas.configure(scrollregion=(0.0, 0.0, virtual_width, virtual_height))
+
+    def _on_layer_visibility_changed(self) -> None:
+        self.redraw()
+        self._set_status("layer visibility changed")
+
     def world_to_screen(self, point: Point) -> Point:
         width = max(self.canvas.winfo_width(), 1)
         height = max(self.canvas.winfo_height(), 1)
@@ -1285,16 +2331,10 @@ class TrajectoryEditor(tk.Tk):
         return wx, wy
 
     def fit_view(self) -> None:
-        points: List[Point] = list(self.trajectory.points)
-        for rail in self.rails:
-            points.extend(rail)
-        if not points:
+        bounds = self._visible_content_bounds()
+        if bounds is None:
             return
-
-        min_x = min(p[0] for p in points)
-        max_x = max(p[0] for p in points)
-        min_y = min(p[1] for p in points)
-        max_y = max(p[1] for p in points)
+        min_x, max_x, min_y, max_y = bounds
         self.center_x = (min_x + max_x) * 0.5
         self.center_y = (min_y + max_y) * 0.5
 
@@ -1302,11 +2342,131 @@ class TrajectoryEditor(tk.Tk):
         height = max(self.canvas.winfo_height(), 1)
         span_x = max(max_x - min_x, 1.0)
         span_y = max(max_y - min_y, 1.0)
-        self.scale = 0.9 * min(width / span_x, height / span_y)
+        self.scale = max(
+            0.01,
+            min(0.9 * min(width / span_x, height / span_y), 5000.0),
+        )
         self.redraw()
 
+    def center_selection(self) -> None:
+        if self.selected_index is None or not self.trajectory.points:
+            self._set_status("center selection: no point selected")
+            return
+        index = min(max(self.selected_index, 0), len(self.trajectory.points) - 1)
+        self.center_x, self.center_y = self.trajectory.points[index]
+        self.redraw()
+        self._set_status(f"centered selection={index}")
+
+    def _draw_clearance_overlay(self) -> None:
+        report = getattr(self, "clearance_report", None)
+        if report is None or self.clearance_revision != self.revision:
+            return
+
+        grid = self.__dict__.get("clearance_grid")
+        for issue in tuple(report.issues)[:500]:
+            if grid is not None and issue.grid_cell is not None:
+                cell_polygon = self._clearance_cell_polygon(grid, issue.grid_cell)
+                if cell_polygon:
+                    cell_coords: List[float] = []
+                    for corner in (*cell_polygon, cell_polygon[0]):
+                        cell_coords.extend(self.world_to_screen(corner))
+                    self.canvas.create_line(
+                        *cell_coords,
+                        fill="#ff3b4f",
+                        width=2,
+                    )
+            index = issue.point_index
+            if index is None:
+                index = issue.segment_index
+            if index is None or not self.trajectory.points:
+                continue
+            point = self.trajectory.points[
+                min(max(int(index), 0), len(self.trajectory.points) - 1)
+            ]
+            sx, sy = self.world_to_screen(point)
+            radius = 5.0
+            self.canvas.create_line(
+                sx - radius,
+                sy - radius,
+                sx + radius,
+                sy + radius,
+                fill="#ff3b4f",
+                width=2,
+            )
+            self.canvas.create_line(
+                sx - radius,
+                sy + radius,
+                sx + radius,
+                sy - radius,
+                fill="#ff3b4f",
+                width=2,
+            )
+
+        selected_issue = getattr(self, "clearance_selected_issue", None)
+        config = getattr(self, "clearance_config", None)
+        if selected_issue is None or config is None:
+            return
+        index = getattr(selected_issue, "point_index", None)
+        if index is None:
+            index = getattr(selected_issue, "segment_index", None)
+        if index is None or not self.trajectory.points:
+            return
+        index = min(max(int(index), 0), len(self.trajectory.points) - 1)
+        try:
+            pose = self._trajectory_clearance_poses(self.trajectory)[index]
+            vehicle = self._vehicle_footprint(config)
+            polygons = (
+                (footprint_polygon(pose, vehicle, include_margin=True), "#ff4fc3", (5, 3)),
+                (footprint_polygon(pose, vehicle, include_margin=False), "#34d5eb", None),
+            )
+        except Exception:  # noqa: BLE001 - overlay must never break editing
+            return
+        for polygon, color, dash in polygons:
+            coords: List[float] = []
+            for point in (*polygon, polygon[0]):
+                sx, sy = self.world_to_screen(point)
+                coords.extend((sx, sy))
+            self.canvas.create_line(
+                *coords,
+                fill=color,
+                width=2,
+                dash=dash,
+            )
+
+    def _refresh_original_difference(self) -> OriginalDifference:
+        original = self.__dict__.get(
+            "loaded_original",
+            self.__dict__.get("original_trajectory"),
+        )
+        original_points = () if original is None else original.points
+        difference = build_original_difference(
+            original_points,
+            self.trajectory.points,
+        )
+        self.original_difference = difference
+        summary = self.__dict__.get("original_difference_summary")
+        if summary is not None:
+            ranges = ", ".join(
+                f"{start:.2f}-{end:.2f}m"
+                for start, end in difference.changed_ranges_m[:3]
+            )
+            if len(difference.changed_ranges_m) > 3:
+                ranges += f", +{len(difference.changed_ranges_m) - 3} more"
+            if not ranges:
+                ranges = "none"
+            summary.set(
+                "Original diff: "
+                f"points={difference.working_point_count - difference.original_point_count:+d}, "
+                f"length={difference.working_length_m - difference.original_length_m:+.3f}m, "
+                f"max={difference.maximum_displacement_m:.3f}m, "
+                f"mean={difference.mean_displacement_m:.3f}m, changed={ranges}"
+            )
+        return difference
+
     def redraw(self) -> None:
+        self._clamp_view_center()
         self.canvas.delete("all")
+        difference = self._refresh_original_difference()
 
         for rail in self.rails:
             coords: List[float] = []
@@ -1321,27 +2481,67 @@ class TrajectoryEditor(tk.Tk):
                     smooth=False,
                 )
 
-        traj_coords: List[float] = []
-        for index in _display_indices(len(self.trajectory.points)):
-            point = self.trajectory.points[index]
-            sx, sy = self.world_to_screen(point)
-            traj_coords.extend([sx, sy])
-        if (
-            self.circular.get()
-            and self.trajectory.points
-            and not _closed_duplicate(self.trajectory.points)
-        ):
-            sx, sy = self.world_to_screen(self.trajectory.points[0])
-            traj_coords.extend([sx, sy])
-        if len(traj_coords) >= 4:
-            self.canvas.create_line(
-                *traj_coords,
-                fill="#3aa0ff",
-                width=2,
-                smooth=False,
+        if self._layer_visible("show_original"):
+            original = getattr(
+                self,
+                "loaded_original",
+                getattr(self, "original_trajectory", None),
             )
+            original_coords: List[float] = []
+            if original is not None:
+                for index in _display_indices(len(original.points)):
+                    sx, sy = self.world_to_screen(original.points[index])
+                    original_coords.extend([sx, sy])
+                if (
+                    getattr(self, "loaded_original_circular", bool(self.circular.get()))
+                    and original.points
+                    and not _closed_duplicate(original.points)
+                ):
+                    sx, sy = self.world_to_screen(original.points[0])
+                    original_coords.extend([sx, sy])
+            if len(original_coords) >= 4:
+                self.canvas.create_line(
+                    *original_coords,
+                    fill="#8b929c",
+                    width=2,
+                    dash=(3, 4),
+                    smooth=False,
+                )
 
-        if self.candidate is not None:
+        if self._layer_visible("show_working"):
+            traj_coords: List[float] = []
+            for index in _display_indices(len(self.trajectory.points)):
+                point = self.trajectory.points[index]
+                sx, sy = self.world_to_screen(point)
+                traj_coords.extend([sx, sy])
+            if (
+                self.circular.get()
+                and self.trajectory.points
+                and not _closed_duplicate(self.trajectory.points)
+            ):
+                sx, sy = self.world_to_screen(self.trajectory.points[0])
+                traj_coords.extend([sx, sy])
+            if len(traj_coords) >= 4:
+                self.canvas.create_line(
+                    *traj_coords,
+                    fill="#3aa0ff",
+                    width=2,
+                    smooth=False,
+                )
+            changed = set(difference.changed_indices)
+            for index in range(len(self.trajectory.points) - 1):
+                if index not in changed and index + 1 not in changed:
+                    continue
+                first = self.world_to_screen(self.trajectory.points[index])
+                second = self.world_to_screen(self.trajectory.points[index + 1])
+                self.canvas.create_line(
+                    *first,
+                    *second,
+                    fill="#d65cff",
+                    width=3,
+                )
+
+        if self.candidate is not None and self._layer_visible("show_candidate"):
             candidate_coords: List[float] = []
             for index in _display_indices(len(self.candidate.trajectory.points)):
                 point = self.candidate.trajectory.points[index]
@@ -1363,34 +2563,44 @@ class TrajectoryEditor(tk.Tk):
                     smooth=False,
                 )
 
-        radius = 3.0
-        influenced = self._influenced_indices(self.selected_index)
-        visible_indices = set(_display_indices(len(self.trajectory.points)))
-        visible_indices.update(influenced)
-        if self.selected_index is not None:
-            visible_indices.add(self.selected_index)
-        for idx in sorted(visible_indices):
-            point = self.trajectory.points[idx]
-            sx, sy = self.world_to_screen(point)
-            canonical_idx = self._canonical_index(idx, self.trajectory.points)
-            if idx == self.selected_index:
-                fill = "#ffb02e"
-            elif canonical_idx in influenced:
-                fill = "#8bd46e"
-            else:
-                fill = "#e8eef7"
-            outline = "#ffffff" if idx == self.selected_index else "#213040"
-            self.canvas.create_oval(
-                sx - radius,
-                sy - radius,
-                sx + radius,
-                sy + radius,
-                fill=fill,
-                outline=outline,
-                width=1,
-            )
+        if self._layer_visible("show_working"):
+            radius = 3.0
+            influenced = self._influenced_indices(self.selected_index)
+            visible_indices = set(_display_indices(len(self.trajectory.points)))
+            visible_indices.update(influenced)
+            if self.selected_index is not None:
+                visible_indices.add(self.selected_index)
+            for idx in sorted(visible_indices):
+                point = self.trajectory.points[idx]
+                sx, sy = self.world_to_screen(point)
+                canonical_idx = self._canonical_index(idx, self.trajectory.points)
+                if idx == self.selected_index:
+                    fill = "#ffb02e"
+                elif canonical_idx in influenced:
+                    fill = "#8bd46e"
+                else:
+                    fill = "#e8eef7"
+                outline = "#ffffff" if idx == self.selected_index else "#213040"
+                self.canvas.create_oval(
+                    sx - radius,
+                    sy - radius,
+                    sx + radius,
+                    sy + radius,
+                    fill=fill,
+                    outline=outline,
+                    width=1,
+                )
+        self._draw_clearance_overlay()
+        self._update_scrollbars()
 
     def _push_undo(self) -> None:
+        working_visibility = self.__dict__.get("show_working")
+        if working_visibility is not None:
+            try:
+                if not bool(working_visibility.get()):
+                    working_visibility.set(True)
+            except (tk.TclError, AttributeError):
+                pass
         self.undo_stack.append(
             UndoState(
                 rows=copy.deepcopy(self.trajectory.rows),
@@ -1420,6 +2630,7 @@ class TrajectoryEditor(tk.Tk):
         self.candidate = None
         self.revision += 1
         self._clear_validation("Validation stale after undo")
+        self._clear_clearance("Clearance: stale after undo")
         self.redraw()
         self._set_status("undo")
 
@@ -1463,6 +2674,11 @@ class TrajectoryEditor(tk.Tk):
 
     def _on_left_down(self, event: tk.Event) -> None:
         self.focus_set()
+        if not self._layer_visible("show_working"):
+            self.show_working.set(True)
+            self.redraw()
+            self._set_status("Working layer restored before editing")
+            return
         if event.state & 0x0001:
             self.insert_point(event.x, event.y)
             return
@@ -1758,6 +2974,7 @@ class TrajectoryEditor(tk.Tk):
         self.candidate = None
         self.revision += 1
         self._clear_validation("Validation stale after geometry recompute")
+        self._clear_clearance("Clearance: stale after geometry recompute")
         self._show_validation_report(report)
         self.redraw()
         self._set_status("derived geometry recomputed")
@@ -1823,7 +3040,9 @@ class TrajectoryEditor(tk.Tk):
             return
 
         self.trajectory = candidate
-        self.original_trajectory = copy.deepcopy(candidate)
+        self.loaded_original = copy.deepcopy(candidate)
+        self.original_trajectory = self.loaded_original
+        self.loaded_original_circular = bool(candidate_topology)
         self.trajectory_path = selected_path
         self.circular.set(bool(candidate_topology))
         self.selected_index = None
@@ -1835,6 +3054,8 @@ class TrajectoryEditor(tk.Tk):
         self.candidate = None
         self.revision += 1
         self._clear_validation("Not validated after open")
+        self.clearance_config = None
+        self._clear_clearance("Clearance: not run for newly opened trajectory")
         self.fit_view()
         self.validate_current()
         self._set_status("trajectory loaded")
@@ -1862,8 +3083,14 @@ class TrajectoryEditor(tk.Tk):
         operation_suffix = {
             "normalize_geometry": "_normalized",
             "recompute_speed_profile": "_speed_profiled",
+            "adjust_clearance": "_clearance_adjusted",
         }.get(operation, "_edited")
-        for known_suffix in ("_normalized", "_speed_profiled", "_edited"):
+        for known_suffix in (
+            "_clearance_adjusted",
+            "_normalized",
+            "_speed_profiled",
+            "_edited",
+        ):
             if stem.endswith(known_suffix):
                 stem = stem[: -len(known_suffix)]
                 break
@@ -1892,6 +3119,75 @@ class TrajectoryEditor(tk.Tk):
             )
             self._set_status("save blocked: stale derived fields")
             return False
+
+        current_clearance = self.__dict__.get("clearance_report")
+        current_clearance_revision = self.__dict__.get("clearance_revision")
+        clearance_state = self.__dict__.get("clearance_state", "not_run")
+        clearance_config = self.__dict__.get("clearance_config")
+        if clearance_config is not None and clearance_state in {
+            "running",
+            "failed",
+            "stale",
+        }:
+            messagebox.showerror(
+                "Save blocked",
+                "Wall-clearance state is "
+                f"{clearance_state}. Run Validate Clearance successfully before saving.",
+            )
+            self._set_status(f"save blocked: clearance {clearance_state}")
+            return False
+        if (
+            current_clearance is not None
+            and current_clearance_revision == self.revision
+            and not current_clearance.is_safe
+        ):
+            messagebox.showerror(
+                "Save blocked",
+                "The current wall-clearance report contains violations. Resolve "
+                "them or change the explicit map/vehicle settings and validate again.",
+            )
+            self._set_status("save blocked: wall-clearance violations")
+            return False
+        if clearance_state == "safe":
+            if (
+                current_clearance is None
+                or current_clearance_revision != self.revision
+                or clearance_config is None
+            ):
+                messagebox.showerror(
+                    "Save blocked",
+                    "Wall-clearance SAFE state is stale or incomplete. Validate again.",
+                )
+                self._set_status("save blocked: inconsistent clearance state")
+                return False
+            try:
+                fresh_grid = load_occupancy_grid(
+                    clearance_config.map_yaml_path,
+                    options=self._map_load_options(clearance_config),
+                )
+            except Exception as exc:  # noqa: BLE001
+                self._clear_clearance(
+                    "Clearance: map recheck failed before save",
+                    state="failed",
+                )
+                messagebox.showerror(
+                    "Save blocked",
+                    f"Could not recheck the occupancy grid: {exc}",
+                )
+                self._set_status("save blocked: clearance map recheck failed")
+                return False
+            if fresh_grid.spec.signature != current_clearance.map_signature:
+                self._clear_clearance(
+                    "Clearance: map changed; validation required",
+                    state="stale",
+                )
+                messagebox.showerror(
+                    "Save blocked",
+                    "The occupancy-grid content changed after the SAFE report. "
+                    "Run Validate Clearance again.",
+                )
+                self._set_status("save blocked: clearance map changed")
+                return False
 
         report = self.validate_current()
         if not report.is_valid:
@@ -1950,8 +3246,11 @@ class TrajectoryEditor(tk.Tk):
             self._set_status("save failed; existing file left unchanged")
             return False
 
+        clearance_was_current = (
+            current_clearance is not None
+            and current_clearance_revision == self.revision
+        )
         self.trajectory = candidate
-        self.original_trajectory = copy.deepcopy(candidate)
         self.trajectory_path = target
         self.dirty = False
         self.geometry_dirty = False
@@ -1959,6 +3258,8 @@ class TrajectoryEditor(tk.Tk):
         self.candidate = None
         self.undo_stack.clear()
         self.revision += 1
+        if clearance_was_current:
+            self.clearance_revision = self.revision
         self._clear_validation("Not validated after save")
         self.validate_current()
         self.redraw()

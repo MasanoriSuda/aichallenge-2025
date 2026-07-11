@@ -119,10 +119,17 @@ ros2 run multi_purpose_mpc_ros reference_path_validator \
 - `Normalize Geometry` は重複終端・退化点の選択的除去、open/circularのcanonical arc length、等間隔線形再サンプリング、heading/curvature再生成をdetached candidate上で行う。`vx/ax`はpreserve、周期/線形interpolate、後続speed再計算へdeferのいずれかを明示する。
 - `Recompute Speed` は `min(v_max, sqrt(ay_max/max(abs(kappa), epsilon)))` の上限からforward/backward relaxationを行い、周回seamを含む制約、minimum speed競合、非収束、出力validationを確認する。open終端の`ax_mps2`は0とする。
 - candidateはsource revisionと内容signatureに結び、workerで生成する。XY、spacing、psi、kappa、velocity、acceleration、lateral accelerationと補正統計をpreviewし、validation error時はApplyを無効にする。Applyは1回のUndo snapshotとしてworkingへ反映する。
+- main canvasは読込時`Original`、編集中`Working`、detached `Candidate`を独立表示する。`Original`はSaveで置換せず、別trajectoryのOpen時だけ更新する。same-arc比較でpoint数差、path長差、最大・平均変位、1cm超の変更`s_m`範囲を表示し、該当Working segmentを強調する。zoom後の移動は水平・垂直scrollbarを正規操作とし、既存の右・中drag panと`Center Selection`も同じviewport stateへ同期する。
+- `Validate Clearance`は選択したoccupancy-grid YAML / P2・P5 PGMを読み、rear-axle基準の向き付き車体矩形、前後左右margin、point間sweepをofflineで検証する。final_ver3のbinary PGM、origin yaw=0、negate=0では画像最大値正規化、Y反転、pixel threshold、5 cell未満のoccupied component除去を現C++ runtimeへ合わせる。一般map loader完全互換ではなく、Editorはorigin yawを扱い、unknownを既定occupied、map外をclampせずerrorとする安全側仕様を持つ。
+- raw minimum clearanceは離散poseの車体矩形とunsafe cell矩形の距離である。別表示のconservative minimumはpoint側のgrid量子化下限と、segment sweepの距離場下限・回転膨張を含む値の最小である。final_ver3の0.1m gridに対する約0.071mはpoint側量子化項に限り、report全体の固定差引量ではない。Lanelet2 railは表示用であり、wall判定には使用しない。
+- `Adjust Clearance`は最大shift内のpath法線方向offsetを決定的に探索し、補正後のgeometryとpoint/swept clearanceがsafeな場合だけdetached candidateを生成する。Apply直前にdocument revision、candidate content、map signature、vehicle/margin設定、clearanceを再検査する。Apply後はgeometry valid、speed metadata staleとし、`Recompute Speed`完了まで保存を止める。sweep step 0.05m、最大shift 0.50m、offset step 0.05m、最大絶対曲率0.70rad/m、margin 0mはローカル暫定値であり、`INFEASIBLE`はbounded search内で候補を発見できなかったことだけを表す。実コース規模で数十秒かかる場合があるためworkerで実行し、progress dialogから協調Cancelできる。
+- Clearance stateはnot-run、running、safe、unsafe、failed、staleを区別する。失敗した再検証では過去のSAFEを無効化し、設定後のfailed/running/staleは保存不可とする。SAFE保存時もYAML/PGMを再読込してmap signatureを再確認する。
 - 通常動線は処理に応じた `*_normalized.csv`、`*_speed_profiled.csv`、`*_edited.csv` への `Save As` とする。上書きはpath確認を要求し、同一directoryのtemporary fileを再検証後にatomic replaceする。symlink targetは置換しない。
 - `resolution=0.25 m`、`a_max=1.0 m/s²`、`horizon_distance=16 m` は `AI Challenge 2026 Candidate - Safe` のローカル候補値であり、公式確定値ではない。resolutionと加速度条件は編集可能、horizonはruntime統合hintとしてread-only表示する。
 
 Editorが保存する `vx_mps/ax_mps2` はoffline CSV metadataである。現在のC++ MPCは制御周期内のruntime速度上限を優先するため、この値を編集しただけでは走行速度プロファイルへ直接反映されない。
+
+Clearanceの車体presetは現行`vehicle_info.param.yaml`から導出したrear-axle基準の暫定値であり、trajectory pose基準とAWSIM colliderの一致は未確認である。margin既定値は0 mで、2026公式安全余白を意味しない。occupancy gridも静的近似なので、EditorのSAFEはAWSIM／実車の非接触やSafety Gate通過を保証しない。採用candidateは別名保存し、C++ validator後にシミュレータで最初のヘアピンと1周を確認する。
 
 Editorの0.25m CSV生成はoffline機能として実装済みだが、runtime側の `resolution: 0.6`、legacy補間、`smoothing_distance`、固定 `N` は変更していない。生成CSVを本番pathへ採用する場合は、C++ validator、固定Nの実距離horizon、計算時間、壁余白、走行回帰を別途確認する。特にCSV密度だけを上げてもruntime再サンプリングや速度上書きの責務は自動では変わらない。
 

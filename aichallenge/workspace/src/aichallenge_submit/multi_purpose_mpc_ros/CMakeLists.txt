@@ -103,6 +103,12 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_trajectory_editor_compat
     test/test_trajectory_editor_compat.py
   )
+  ament_add_pytest_test(test_trajectory_clearance_dialog
+    test/test_trajectory_clearance_dialog.py
+  )
+  ament_add_pytest_test(test_trajectory_clearance
+    test/test_trajectory_clearance.py
+  )
   ament_add_pytest_test(test_trajectory_processing
     test/test_trajectory_processing.py
   )

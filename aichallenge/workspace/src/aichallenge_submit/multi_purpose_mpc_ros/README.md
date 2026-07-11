@@ -17,7 +17,7 @@ colcon build --symlink-install --allow-overriding gyro_odometer \
 
 ## test
 
-autoware コンテナ内で、C++ の経路処理テストと Python の V2X tracker テストを実行します。
+autoware コンテナ内で、C++経路処理、Python trajectory editor／clearance、V2X trackerのテストを実行します。
 
 ```bash
 cd /aichallenge/workspace
@@ -35,7 +35,7 @@ ros2 run multi_purpose_mpc_ros reference_path_validator \
   --circular
 ```
 
-必須列、数値変換、有限値、`s_m` の単調増加、周回重複終点、点間隔、曲率、速度、加速度を確認します。`--resolution <m>` を付けると、点間隔が指定値の105%を超えた場合に非0で終了します。現在の raw CSV は再サンプリング前なので、0.25m の上限検証は後続の周期再サンプリング実装後に使用します。
+必須列、数値変換、有限値、`s_m` の単調増加、周回重複終点、点間隔、曲率、速度、加速度を確認します。`--resolution <m>` を付けると、点間隔が指定値の105%を超えた場合に非0で終了します。現行raw CSVは0.25m上限を満たさない場合があります。Editorで生成したnormalized copyには`--resolution 0.25`を使用できますが、runtime側の補間と固定Nの移行は別課題です。
 
 本番の内部補間は、固定 `mpc.N` の実距離を維持するため、現時点では legacy `floor` 方式です。`ceil` 分割は pure helper とテストまでを先行追加しており、距離ベース horizon と同時に段階導入します。
 
@@ -192,6 +192,43 @@ ros2 run multi_purpose_mpc_ros trajectory_editor \
 5. XY、間隔、heading、curvature、速度、加速度、横加速度のBefore/Candidate比較と補正レポートを確認し、`Apply Candidate` または `Discard` を選ぶ。
 6. `vx/ax`を作り直す場合は `Recompute Speed` で `v_max/a_max/a_min/ay_max/minimum_speed` と収束条件を設定し、同様にpreviewして適用する。
 7. `Validate` 後、`Save As` で `*_normalized.csv`、`*_speed_profiled.csv`、または `*_edited.csv` へ別名保存する。
+
+表示は `Original`（読込時の灰色破線）、`Working`（青実線）、`Candidate`
+（橙破線）を個別に切り替えられます。`Original` は Save / Save As 後も更新
+されず、別のCSVをOpenしたときだけ置き換わります。拡大後は画面下・右の水平／
+垂直スクロールバーで移動でき、右・中ドラッグpanも引き続き利用できます。
+`Center Selection` は選択点またはvalidation issueを画面中央へ移動します。
+`Original diff`にはpoint数差、path長差、最大・平均変位、1cmを超える変更の
+`s_m`範囲を表示し、該当するWorking segmentをmagentaで強調します。Workingを
+非表示にした状態で編集を始めると、不可視データの誤編集を避けるため先に再表示します。
+
+MPC trajectoryの静的な壁余白確認は次の順で行います。
+
+1. `Vehicle / Margin Settings` でoccupancy-grid YAML、車体外形、前後左右margin、unknown cell policyを確認する。
+2. `Validate Clearance` で各poseの向き付き車体矩形とpoint間のswept footprintを非破壊検証する。
+3. reportのissueを選び、`Center Issue` で該当点と車体／margin矩形を確認する。
+4. 必要な場合だけ `Adjust Clearance` で法線方向の離散offset候補を作り、既存のBefore/Candidate previewからApplyする。
+5. Apply後はgeometryは再生成済みですがspeed metadataはstaleになるため、`Recompute Speed`を実行してから保存する。
+
+車体presetは現在の`vehicle_info.param.yaml`から導出するrear-axle基準の暫定値
+（前1.554 m、後0.510 m、左右各0.650 m）で、margin既定値は0 mです。
+trajectory pose基準とAWSIM colliderの一致は未確認なので、2026公式寸法や実接触保証
+として扱わないでください。判定の正本候補は選択したoccupancy gridで、Lanelet2 railは
+表示用です。raw minimumは離散poseでの車体矩形とunsafe cell矩形の距離です。
+conservative minimumはpoint側のgrid量子化下限と、segment sweepの距離場下限・
+回転膨張を含む値の最小であり、0.1m gridの約0.071mはpoint側の量子化項に限ります。
+unknown cellは既定でoccupied扱い、map外は常にerrorです。final_ver3のbinary PGM、
+origin yaw=0、negate=0では主要な画像前処理をC++ runtimeへ合わせますが、一般map
+loaderの完全互換ではありません。
+自動補正は最大shift内で安全なdetached candidateが得られた場合だけApplyでき、
+地図内容・設定・document revision・candidate内容をApply直前に再確認します。
+既定のsweep step 0.05m、最大shift 0.50m、offset step 0.05m、最大絶対曲率
+0.70rad/mもローカル暫定値です。`INFEASIBLE`はこの有限探索内で候補が見つからなかった
+意味で、連続空間に解がない証明ではありません。実コース規模のAdjustは数十秒かかる
+場合があり、progress dialogの`Cancel`で協調停止できます。clearance stateはnot-run、running、
+safe、unsafe、failed、staleを区別し、失敗した再検証は過去のSAFEを無効化します。
+設定後のfailed/running/staleは保存不可で、SAFE保存時もmap signatureを再確認します。
+これはofflineの静的検査であり、実際の壁接触は`make dev` / gate走行で別途確認が必要です。
 
 Normalizeの`preserve`は点数・topology不変時だけ使用できます。`interpolate`はarc length上で`vx/ax`を補間します。`recompute`は補間値を一時値として入れたうえでspeedをstaleのまま維持し、保存前に`Recompute Speed`を要求します。有限XYと`vx/ax`を読めるMPC CSVなら、非単調`s_m`、不正な`s_m/psi/kappa`、重複・退化点をrepair対象として開けます。schema不正、非有限XY、不正`vx/ax`は開きません。
 

@@ -1,4 +1,5 @@
 from typing import List, Tuple
+import math
 import pandas as pd
 
 def format_time(seconds):
@@ -18,8 +19,25 @@ def load_waypoints(csv_file_path: str) -> Tuple[List[float], List[float]]:
     wp_y = df['wp_y'].tolist()
     return wp_x, wp_y
 
-def load_ref_path(csv_file_path: str):
+def load_ref_path(
+    csv_file_path: str,
+    circular: bool = False,
+    closure_tolerance_m: float = 1e-3,
+):
     df = pd.read_csv(csv_file_path)
+    if not math.isfinite(closure_tolerance_m) or closure_tolerance_m < 0.0:
+        raise ValueError("closure_tolerance_m must be finite and non-negative")
+    if circular and len(df.index) >= 2:
+        closure_distance_m = math.hypot(
+            float(df["x_m"].iloc[-1]) - float(df["x_m"].iloc[0]),
+            float(df["y_m"].iloc[-1]) - float(df["y_m"].iloc[0]),
+        )
+        if not math.isfinite(closure_distance_m):
+            raise ValueError("circular reference path closure distance must be finite")
+        if closure_distance_m <= closure_tolerance_m:
+            df = df.iloc[:-1]
+    if circular and len(df.index) < 3:
+        raise ValueError("circular reference path requires at least 3 unique points")
     x = df['x_m'].tolist()
     y = df['y_m'].tolist()
     psi = df['psi_rad'].tolist()

@@ -57,15 +57,20 @@ mpc:
   delta_max_deg: 32.0 # degrees
   steer_rate_max: 1.2 # rad/s
   control_rate: 100.0 # Hz
+  odom_timeout_sec: 0.5 # [s], steady-clock local safety timeout (not an official limit)
+  min_linearization_speed_mps: 0.5 # [m/s], avoid singular 1/v terms below this speed
   steering_tire_angle_gain_var: 1.5
   # steering_tire_angle_gain_var: 1.0
   # accel_low_pass_gain: 0.1
   # steer_low_pass_gain: 0.3
   accel_low_pass_gain: 1.0
   steer_low_pass_gain: 1.0
+  # Temporary limitation (2026-07-11): keep both waypoint offsets at 0.
+  # A nonzero offset can mismatch the MPC state/reference frames in tight curves and cause
+  # OSQP failure; change only after fixing the frame handling and testing the first hairpin.
   wp_id_low_offset: 0
   wp_id_low_speed: 15.0 # km/h
-  wp_id_offset: 2
+  wp_id_offset: 0
   # 1.0 = target the center of path constraints, 0.0 = target the edited trajectory.
   center_bias: 0.0
   # 1.0 = current safety margin, 0.0 = no additional safety margin.

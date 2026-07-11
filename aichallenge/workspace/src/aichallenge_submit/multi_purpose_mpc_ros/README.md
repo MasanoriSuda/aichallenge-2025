@@ -15,6 +15,37 @@ colcon build --symlink-install --allow-overriding gyro_odometer \
 - 通常の MPC 実行系は C++ executable `mpc_controller_cpp` です。
 - Python 補助スクリプト用に、ビルド時に仮想環境が `${ROS_WS}/install/multi_purpose_mpc_ros/.venv` に作成されます。
 
+## test
+
+autoware コンテナ内で、C++ の経路処理テストと Python の V2X tracker テストを実行します。
+
+```bash
+cd /aichallenge/workspace
+colcon test --packages-select multi_purpose_mpc_ros --event-handlers console_direct+
+colcon test-result --verbose
+```
+
+## trajectory validation
+
+MPC が使用する7列 trajectory CSV を、実行時と同じ strict loader で検証できます。
+
+```bash
+ros2 run multi_purpose_mpc_ros reference_path_validator \
+  $(ros2 pkg prefix --share multi_purpose_mpc_ros)/env/final_ver3/traj_mincurv.csv \
+  --circular
+```
+
+必須列、数値変換、有限値、`s_m` の単調増加、周回重複終点、点間隔、曲率、速度、加速度を確認します。`--resolution <m>` を付けると、点間隔が指定値の105%を超えた場合に非0で終了します。現在の raw CSV は再サンプリング前なので、0.25m の上限検証は後続の周期再サンプリング実装後に使用します。
+
+本番の内部補間は、固定 `mpc.N` の実距離を維持するため、現時点では legacy `floor` 方式です。`ceil` 分割は pure helper とテストまでを先行追加しており、距離ベース horizon と同時に段階導入します。
+
+## runtime safety settings
+
+- `mpc.odom_timeout_sec`: odometry受信と非ゼロsource stampの更新をsteady clockで監視するローカルtimeout。既定は0.5秒です。
+- `mpc.min_linearization_speed_mps`: `1/v` を含むモデルを使わない低速閾値。既定は0.5 m/sです。
+
+staleまたは非有限なodometry、非有限な制御出力、OSQP失敗時には、古い予測制御列を再生せず、速度を下げるfail-safe commandへ移ります。solver fallbackとcontrol disable時はlegacy boostを強制無効化します。これらの既定値は2026公式値ではなく、走行ログとSafety Gateで調整する暫定ローカル基準です。
+
 ## run
 
 ### MPC コントローラー
@@ -140,6 +171,35 @@ MPC の `env/final_ver3/traj_mincurv.csv` を Lanelet2 map 上で編集します
 ```bash
 ros2 run multi_purpose_mpc_ros trajectory_editor
 ```
+
+任意ファイルと経路の topology を明示する場合:
+
+```bash
+ros2 run multi_purpose_mpc_ros trajectory_editor \
+  --trajectory /path/to/trajectory.csv \
+  --osm /path/to/lanelet2_map.osm \
+  --circular
+```
+
+非周回経路は `--open` を指定します。引数を省略した組み込み MPC preset は、このリポジトリ固有の周回経路として起動します。これは Automotive AI Challenge 2026 の公式インターフェース仕様ではありません。
+
+安全な基本操作は次の順です。
+
+1. `Open Traj` でCSVを開き、必要なら `Circular` を確認する。
+2. `Validate` で error / warning、CSV行、`s_m`、問題値を確認する。
+3. 必要なら点を編集する。MPCのXY変更はgeometryとspeed metadataの両方をstaleにする。
+4. `Normalize Geometry` で重複終端・退化点の除去、等間隔線形再サンプリング、`s_m/psi/kappa` 再生成、`vx/ax` policyを明示してcandidateを作る。
+5. XY、間隔、heading、curvature、速度、加速度、横加速度のBefore/Candidate比較と補正レポートを確認し、`Apply Candidate` または `Discard` を選ぶ。
+6. `vx/ax`を作り直す場合は `Recompute Speed` で `v_max/a_max/a_min/ay_max/minimum_speed` と収束条件を設定し、同様にpreviewして適用する。
+7. `Validate` 後、`Save As` で `*_normalized.csv`、`*_speed_profiled.csv`、または `*_edited.csv` へ別名保存する。
+
+Normalizeの`preserve`は点数・topology不変時だけ使用できます。`interpolate`はarc length上で`vx/ax`を補間します。`recompute`は補間値を一時値として入れたうえでspeedをstaleのまま維持し、保存前に`Recompute Speed`を要求します。有限XYと`vx/ax`を読めるMPC CSVなら、非単調`s_m`、不正な`s_m/psi/kappa`、重複・退化点をrepair対象として開けます。schema不正、非有限XY、不正`vx/ax`は開きません。
+
+MPC CSVはcanonical 7列 `s_m,x_m,y_m,psi_rad,kappa_radpm,vx_mps,ax_mps2`、Pure Pursuit CSVは既存8列を形式別に検証します。高度なNormalize/Speed機能はMPC限定で、Pure Pursuitの既存編集・quaternion再計算は維持します。保存時の暗黙再計算は行いません。stale fieldまたはvalidation errorがあれば保存を止めます。`Overwrite` は対象pathを表示して確認し、同一directoryのtemporary fileを再検証してから原子的に置換します。symlink targetの直接置換は拒否します。
+
+`AI Challenge 2026 Candidate - Safe` の `resolution=0.25 m`、`a_max=1.0 m/s²`、read-onlyの`horizon_distance=16 m`は比較検証用のローカル候補であり、2026公式確定値ではありません。`v_max/a_min/ay_max`の初期値は現在のCSV統計から入る未検証値なので、走行条件に合わせて確認してください。candidate生成と比較model作成はprogress dialog中のworkerで行い、Apply直前にsource revision、candidate内容、validationを再確認します。
+
+Editor内の `vx_mps/ax_mps2` はoffline CSV metadataです。現行C++ MPCの走行速度はruntime側の速度上限処理が優先されるため、Editorで値を保存しただけでは走行速度プロファイルへ直接反映されません。
 
 Pure Pursuit 用の `simple_trajectory_generator/data/raceline_awsim_30km_from_garage.csv` を開く場合:
 

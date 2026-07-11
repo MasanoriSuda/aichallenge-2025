@@ -35,6 +35,16 @@ enum class Action
   PublishPulse,
 };
 
+// Race-session edges are reported independently of whether boost output is enabled. This lets
+// other controller features use the authoritative AWSIM Start boundary without enabling boost.
+enum class StateEvent
+{
+  None,
+  StartEntered,
+  Finished,
+  NewSession,
+};
+
 enum class BlockReason
 {
   None,
@@ -81,7 +91,7 @@ public:
 
   explicit StartDashGuard(Config config);
 
-  void on_awsim_state(std::string_view state);
+  StateEvent on_awsim_state(std::string_view state);
   bool on_awsim_status(const std::vector<float> & data, TimePoint received_at);
   Evaluation evaluate(bool control_enabled, bool failsafe_active, TimePoint now);
 
@@ -104,6 +114,7 @@ private:
   Config config_;
   Phase phase_{Phase::Disabled};
   bool start_seen_{false};
+  bool start_event_emitted_{false};
   bool finish_seen_{false};
   std::optional<Status> status_;
   std::optional<double> remaining_before_pulse_;
@@ -116,6 +127,7 @@ EnabledResolution resolve_enabled(
   std::optional<int> ros_domain_id) noexcept;
 const char * to_string(Mode mode) noexcept;
 const char * to_string(Phase phase) noexcept;
+const char * to_string(StateEvent event) noexcept;
 const char * to_string(BlockReason reason) noexcept;
 
 }  // namespace multi_purpose_mpc_ros::awsim_boost

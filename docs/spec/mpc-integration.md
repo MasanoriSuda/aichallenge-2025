@@ -301,11 +301,13 @@ MPC の config ファイル: `multi_purpose_mpc_ros/config/config.yaml`
 | `mpc.center_bias` | `0.0` | `0.0` = CSV trajectory 追従、`1.0` = 左右制約中央寄せ |
 | `mpc.safety_margin_scale` | `1.0` | `0.0` = 追加 margin なし、`1.0` = 現行 margin |
 | `mpc.use_v2x_gap_planner` | `false` | `/v2x/vehicle_positions` から rule-based gap を作る暫定拡張。既定無効 |
-| `mpc.v_max` | `20.0` | 速度プリセット（中速）。環境に合わせて調整 |
-| `mpc.domain_v_max` | 未設定 | `ROS_DOMAIN_ID` ごとの最高車速上書き。値は km/h |
-| `mpc.domain_start_v_max` | 未設定 | `ROS_DOMAIN_ID` ごとのスタート限定最高車速上書き。値は km/h |
-| `mpc.domain_start_v_max_duration` | `0.0` | `domain_start_v_max` を適用する開始後秒数 |
+| `mpc.v_max` | `20.0` | 全車両が越えないglobal hard maximum。値は km/h |
+| `mpc.domain_v_max` | 未設定 | `ROS_DOMAIN_ID` ごとの通常最高車速。global maximum以下へ制限される |
+| `mpc.domain_start_v_max` | 未設定 | `ROS_DOMAIN_ID` ごとのスタート期間最高車速。通常domain値を一時的に上回れるがglobal maximum以下 |
+| `mpc.domain_start_v_max_duration` | `0.0` | 重複を除いた`/awsim/state=Start`から`domain_start_v_max`を適用する秒数 |
 | `obstacles.csv_path` | `""` | 空 = トピック購読モード（障害物回避が off なので影響なし） |
+
+`domain_start_v_max`のepochはMPC初回odometryではなくrace-session trackerが受理した`Start`である。Readyでduration以上待機しても期間を消費せず、同一sessionの重複Startでは延長しない。通常は`Finish -> Spawned`で次sessionを再armする。Finishを省く手動resetは、単独の遅延Spawnedでwindowを消さないよう`Spawned -> Grounded/Ready -> Start`の完全な進行を確認してspeed windowだけ再開し、Boostの使用済みlatchは再armしない。Boost出力を車両別に無効化していてもstart速度が設定されたSIM車両は`/awsim/state`を購読する。`use_sim_time=false`ではAWSIM Startを取得できないため通常domain maximumへ安全側fallbackする。
 
 **コースが変更された場合**（例: 新しい lanelet2_map.osm が配布された場合）は、「事前準備」セクションの手順に従って OGM と経路を再生成する。
 
@@ -627,6 +629,8 @@ mpc:
   v2x_overtake_max_curvature: 0.05
   v2x_overtake_forbidden_curve_lookahead_distance: 0.0
   v2x_overtake_gap_lookahead_distance: 0.0
+  v2x_overtake_try_both_sides: false
+  v2x_overtake_velocity_advantage: 0.0
   v2x_overtake_guard_enabled: true
   v2x_overtake_guard_min_gap_width: 2.5
   v2x_overtake_guard_min_gap_points: 3
@@ -659,6 +663,14 @@ mpc:
   v2x_overtake_line_max_target_change: 0.25
   v2x_overtake_line_return_clear_distance: 4.0
   v2x_overtake_line_phase_hold_time: 0.3
+  v2x_overtake_target_hold_sec: 0.0
+  v2x_overtake_clear_confirm_sec: 0.0
+  v2x_overtake_reacquire_enabled: false
+  v2x_overtake_reacquire_window_sec: 0.0
+  v2x_overtake_reacquire_max_return_progress: 0.0
+  v2x_overtake_recovery_velocity_limit_enabled: true
+  v2x_overtake_recovery_velocity: 5.0
+  v2x_overtake_solver_failure_abort_cycles: 3
   v2x_overtake_line_debug_log_enabled: false
   v2x_moving_front_speed_threshold: 1.0
   v2x_moving_follow_speed_margin: 2.0
@@ -686,14 +698,17 @@ mpc:
 ```
 
 - `Cruise`: 他車なし。V2X 由来の横目標変更は入れない。
-- `v2x_behavior_debug_log_enabled=true` の場合、`v2x_behavior_debug_log_period_sec` 周期で V2X FSM の詳細ログを出す。ログには desired/final state、state hold 後の結果、front distance/speed、required decel、risk、overtake forbidden、curve guard、low-speed candidate、overtake zone、gap availability、block reason を含める。追い越しに入らず `Follow` に居続ける場合は、`reason` と `block` を確認する。
+- `v2x_behavior_debug_log_enabled=true` の場合、`v2x_behavior_debug_log_period_sec` 周期で V2X FSM の詳細ログを出す。ログには desired/final state、state hold 後の結果、front distance/speed、required decel、risk、overtake forbidden、curve guard、左右gapと各拒否理由、対象vehicle ID、locked target相対位置、soft desired velocity、solver連続失敗数、block reason を含める。追い越しに入らず `Follow` に居続ける場合は、`left_reason` / `right_reason` と `block` を確認する。
 - `Follow`: 前方車あり、追い抜き禁止または gap 不足。レース中に競り負けた直後の不要な失速を避けるため、既定では速度制限を入れない。`v2x_follow_speed_limit_enabled=true` の場合だけ、停止/低速車には前方距離から計算した停止可能速度を使い、`v2x_moving_front_speed_threshold` より速い前走車には前走車速度 + `v2x_moving_follow_speed_margin` を上限にする。`v2x_follow_gap_planner_enabled=true` の場合は、Follow のままでも feasible な gap planner 出力だけを横制約と target に反映する。`v2x_follow_gap_planner_no_gap_speed_limit_enabled=false` なら、gap 不成立時の `no_gap_target_velocity` は Follow では使わず、譲り減速を避ける。`v2x_follow_gap_planner_respect_overtake_forbidden=true` なら、曲率または WP 範囲で overtaking forbidden の区間では Follow の gap planner も止め、ヘアピン入口で横に張りに行って進路を失う挙動を抑える。`v2x_follow_preposition_enabled=true` の場合は、WP 禁止ではないソフトな曲率禁止区間でも、カーブ外側かつ前方距離が残っているときだけ弱い lateral target を出し、真後ろ追従から外れる準備をする。通常の overtake pass side が内側を選んだ場合でも、Follow preposition だけはカーブ外側へ差し替える。
 - `v2x_front_decel_guard_enabled=true` の場合、通常 Follow の速度制限を無効にしていても、近距離の動く前走車に対しては `front speed + v2x_front_decel_guard_speed_margin` の速度上限を掛ける。これは通常追走で失速させるためではなく、前走車の減速に追従できず追突するケースの緊急ガードである。`v2x_front_decel_guard_min_closing_speed` 未満の閉じ速度では発火させず、前走車の後ろに付いているだけの後続車を不要に失速させない。追い越し禁止カーブ中は `v2x_front_decel_guard_curve_distance` と `v2x_front_decel_guard_curve_ttc` まで判定距離を広げ、速度差を付けた車両がカーブで前走車へ追いつくケースを早めに抑える。直線で譲らせずヘアピンだけ追従させる場合は、`v2x_front_decel_guard_distance=0.0` と `v2x_front_decel_guard_ttc=0.0` にし、curve 側の距離/TTC だけを使う。ヘアピンで前走車が `v2x_moving_front_speed_threshold` 以下まで落ちる場合は、`v2x_front_decel_guard_curve_include_slow_front=true` にしてカーブ中だけ低速前走車も速度上限の対象にする。前走車が曲がり込みで横から進路を塞ぐ場合は、`v2x_front_decel_guard_curve_lateral_margin` でカーブ中の前方判定横幅を広げる。`v2x_front_decel_guard_curve_lookahead_distance` は速度上限用の曲率先読み距離で、`v2x_overtake_forbidden_curve_lookahead_distance` より短くすることで、横攻め停止だけを早めて失速開始を遅らせられる。
 - `v2x_front_risk_arbitration_enabled=true` の場合、前走車との相対速度と有効距離から required decel を計算し、`EmergencyBrake` では SafetyBrake へ倒す。`BrakePrepare` は既定では警戒レベルとして扱い、`v2x_front_risk_brake_prepare_limit_enabled=true` の場合だけ速度制限に使う。`AvoidCandidate` も既定では速度制限に使うが、レース中に譲りすぎる場合は `v2x_front_risk_avoid_candidate_limit_enabled=false` で警戒レベルに落とせる。Phase 1 では reachable gap との統合は行わず、ブレーキ開始の遅れを切り分けるための braking guard として使う。
 - `v2x_front_risk_curve_limit_enabled=true` の場合、曲率ガード中だけ required decel ベースの速度上限を追加する。直線の競り合いでは `BrakePrepare` / `AvoidCandidate` の速度制限を使わず、ヘアピンなど先行車が急減速する区間だけ `v2x_front_risk_curve_limit_decel` を前提に追突しない相対速度へ落とす。`v2x_front_risk_curve_limit_required_decel` は発火閾値、`v2x_front_risk_curve_limit_speed_margin` は前走車速度に足す余裕速度である。
 - レース中に譲りすぎる場合は、距離/TTC ベースの `v2x_front_decel_guard_enabled` を `false` にし、required decel ベースの `v2x_front_risk_arbitration_enabled=true` へ切り替える。さらに `v2x_front_risk_brake_prepare_limit_enabled=false` と `v2x_front_risk_avoid_candidate_limit_enabled=false` にすると、通常の競り合いでは速度を落とさず、EmergencyBrake だけを残す。
 - `Overtake`: 低曲率かつ十分な gap がある場合だけ gap planner を許可する。`v2x_overtake_guard_enabled=true` の場合は、gap 幅だけでなく、連続した gap 点数、gap までの準備距離、前方車との距離を追加確認してから Overtake に入る。`v2x_overtake_guard_reachable_gap_enabled=true` の場合は、最初に使える gap までの距離を現在速度から時間へ変換し、`2 * abs(target_ey - current_ey) / t^2` で必要横加速度を近似する。`v2x_overtake_guard_min_gap_time` 未満で現れる gap、または `v2x_overtake_guard_max_lateral_accel` を超える gap は Overtake 候補から外す。`v2x_overtake_guard_max_lateral_shift` は絶対横移動量の追加上限で、`0.0` の場合は無効である。早めに追い越し準備へ入るほど総横移動量は大きく見えるため、通常は `0.0` にして時間込みの lateral accel guard を優先する。これにより、通れない側へ一瞬振ってから反対側へ戻るような近距離 gap 飛び込みや、高速度では横移動が間に合わない gap へ突っ込む挙動を Follow / SafetyBrake 側へ倒す。`v2x_overtake_forbidden_curve_lookahead_distance` を指定すると、MPC horizon `N` より先の曲率まで見て overtake forbidden を立てるため、ヘアピン手前から横攻めを止められる。`v2x_overtake_gap_lookahead_distance` を指定すると、追い越し可否判定と Overtake 中の gap planner だけを MPC horizon より先まで伸ばして評価する。前方検出距離が MPC horizon より長い場合でも、低速前走車の先にある通過側 gap を早めに見つけられる。`v2x_overtake_target_ramp_enabled=true` では、長い lookahead 上で見つけた最初の追い越し target へ、現MPC horizon の先頭側から `v2x_overtake_target_ramp_ratio` の比率で target_ey を立ち上げる。これにより、前方車がまだ10点 horizon内に入っていない段階でも横方向の意思をMPCへ渡せる。
-- `v2x_overtake_line_enabled=true` の場合、通常 `Overtake` 中の横参照を `ShiftOut` / `Pass` / `Return` / `Recovery` の内部フェーズで生成する。pass side は追い越し開始時に lock し、`v2x_overtake_line_lateral_offset` へ `smoothstep` で横移動する。`Pass` 中は同じ側を維持し、前方・横の V2X 車両が消えたら `Return` で基準 trajectory 側へ戻る。target は `lb/ub` から `v2x_overtake_line_min_wall_clearance` だけ内側へ clip し、必要横加速度が `v2x_overtake_line_max_lateral_accel` を超える場合は target 変化を抑える。`LowSpeedAvoidance` と `SafetyBrake` が優先で、停止車列の gate2 local path には適用しない。`LowSpeedAvoidance` へ入る前でも、前方車が `v2x_low_speed_avoidance_max_front_speed` 以下かつ低速回避 lookahead 内にいる場合は OvertakeLine を抑止する。既定は `false` で、既存の overtake target ramp を維持する。
+- `v2x_overtake_line_enabled=true` の場合、通常 `Overtake` 中の横参照を `ShiftOut` / `Pass` / `Return` / `Recovery` の内部フェーズで生成する。pass sideと安定した対象vehicle IDは追い越し開始時にlockし、`v2x_overtake_line_lateral_offset`へ`smoothstep`で横移動する。1周期のfront/side欠落ではReturnへ入らず、`v2x_overtake_target_hold_sec`までPassを保持する。対象が`v2x_overtake_line_return_clear_distance`以上後方にあり、その観測が`v2x_overtake_clear_confirm_sec`継続して初めてReturnへ入る。Return初期に同一ID・同一sideを再取得した場合は、時間、復帰進捗、gap、curve実行許可を再確認してPassへ戻せる。不明ID、position jump、timeoutはRecoveryへ倒す。targetは`lb/ub`から`v2x_overtake_line_min_wall_clearance`だけ内側へclipし、必要横加速度が`v2x_overtake_line_max_lateral_accel`を超える場合はtarget変化を抑える。Recoveryは`v2x_follow_velocity`を流用せず、専用flagが有効な場合だけ`v2x_overtake_recovery_velocity`を上限にする。`LowSpeedAvoidance`と`SafetyBrake`は常に優先する。
+- `v2x_overtake_try_both_sides=true`では、追い越し開始前に第一候補が不成立なら反対側を同じ条件で再評価する。ShiftOut以降はlocked側だけを評価し、反対側だけが空いても即side flipしない。通常追い越しの候補生成幅は`max(v2x_overtake_min_gap_width, v2x_overtake_guard_min_gap_width)`を使うため、共通`gap_min_width`が後段guardより大きくてもguard設定を前段で無効化しない。vehicle-vehicle/multi-front policyは引き続き適用する。
+- gapの幾何可否とcurve実行許可は別に保持する。soft curvature zoneでも左右候補を計算してdebugへ残すが、hard forbidden WP、開始直前curve clearance、inner curve、cooldownを満たさない候補はMPCへ反映しない。現在の`0.03 rad/m`等はローカル暫定値であり、本変更では緩和していない。
+- Overtakeのdesired velocityは`max(進入速度, 前走車速度 + v2x_overtake_velocity_advantage)`をactive domain/global cap内のsoft referenceとして使う。SafetyBrake、front risk、curve動的上限、加速度制約を上書きするhard lower boundではない。MPC投入前に全horizonのbounds、横target、速度参照、曲率参照をpreflightし、追い越し中に`v2x_overtake_solver_failure_abort_cycles`回連続でsolverが失敗した場合は減速fallbackを維持しつつ同じ横targetをRecoveryへ倒す。
 - `v2x_overtake_close_follow_enabled=true` の場合、近距離で通常 fallback guard の `min_prepare_distance` を満たせないときでも、前方距離・横余裕・相対速度が安全側の範囲内なら `Overtake` の横 target だけを許可する。さらに通常 overtake guard と同じ `v2x_overtake_guard_min_gap_time` / `v2x_overtake_guard_max_lateral_accel` で横移動の到達性を確認し、至近距離で急なU字経路が必要になる場合は Follow / SafetyBrake 側へ残す。真後ろに詰まってから永久に Follow に落ちるケースを避けるための例外で、相対速度が大きい場合や emergency front risk では使わない。既定は `false`。
 - `v2x_overtake_before_curve_enabled=true` の場合、WP 明示禁止ではなく曲率先読みだけで overtake forbidden になっている区間では、前走車が `v2x_overtake_before_curve_max_front_speed` 以下で、自車が `v2x_overtake_before_curve_min_speed_advantage` 以上速く、かつ `front_decel_guard_curve_lookahead_distance` ではまだガードされていない場合だけ、新規 Overtake を許す。これは長い曲率先読みで直線中の低速前走車に張り付く問題を抑えるための例外である。`v2x_overtake_continue_in_forbidden_enabled=true` の場合は、すでに Overtake 中なら同じ soft forbidden 区間で Overtake 継続を許し、ヘアピン前に横へ出た車両が途中で Follow に戻される挙動を抑える。
 - `v2x_overtake_front_velocity_limit_enabled=true` の場合、`Overtake` 中でも前走車の required decel / front decel guard 由来の速度上限を掛ける。安全寄りだが、前走車速度へ引っ張られて追い越しが成立しない場合は `false` にする。`false` でも `EmergencyBrake` と inside stopping distance は Overtake 判定より先に評価されるため、近すぎる場合の SafetyBrake は残る。

@@ -105,6 +105,7 @@ enum class RejectReason
   InvalidRollout,
   SampleLimitExceeded,
   InitialOutOfMap,
+  InitialContactNotForward,
   OutOfMap,
   Collision,
   NewContact,
@@ -162,12 +163,26 @@ FootprintSample sample_footprint(
   const OccupancyGrid & grid, const FootprintExtents & footprint,
   const Pose2D & pose);
 
+/// Validate one occupied-contact transition while escaping an initial wall contact.
+///
+/// Every tracked cell must be explicitly Occupied, the contact count must not increase,
+/// and each current cell must be within the fixed one-cell halo of the initial patch as well
+/// as the same as or 8-neighbour-adjacent to a previous cell. Once previous_contact_cells is
+/// empty, any renewed contact is rejected.
+RejectReason evaluate_contact_transition(
+  const OccupancyGrid & grid,
+  const std::vector<std::size_t> & initial_contact_cells,
+  const std::vector<std::size_t> & previous_contact_cells,
+  const std::vector<std::size_t> & current_contact_cells) noexcept;
+
 /// Evaluate static-map safety over a swept reverse rollout.
 ///
 /// An initially clear footprint must remain clear. If the initial pose already
-/// contacts occupied cells, later contacts must remain a subset of that
-/// baseline, the contact count may never increase, and all contact must clear
-/// before the candidate ends. Out-of-map and unknown cells are occupied.
+/// contacts explicitly Occupied cells, only Straight is supported and all contact
+/// cells must lie fully ahead of the pose reference for a reverse escape. Later contacts remain inside the
+/// fixed initial-patch halo, form a local non-increasing continuation of the
+/// previous patch, and clear before the candidate ends. Out-of-map and unknown
+/// cells fail closed.
 FeasibilityResult evaluate_reverse_candidate(
   const OccupancyGrid & grid, const FootprintExtents & footprint,
   const Pose2D & initial_pose, ReversePrimitive primitive,

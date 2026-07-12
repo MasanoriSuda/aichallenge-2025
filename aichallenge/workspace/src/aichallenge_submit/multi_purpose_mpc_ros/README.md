@@ -46,7 +46,7 @@ ros2 run multi_purpose_mpc_ros reference_path_validator \
 
 staleまたは非有限なodometry、非有限な制御出力、OSQP失敗時には、古い予測制御列を再生せず、速度を下げるfail-safe commandへ移ります。solver fallbackとcontrol disable時はlegacy boostを強制無効化します。これらの既定値は2026公式値ではなく、走行ログとSafety Gateで調整する暫定ローカル基準です。
 
-## stuck recovery（既定OFF）
+## stuck recovery（P1 / P2 SIM限定Active）
 
 壁接触後に前進できない状態を検出するpure C++ core、gear確認を含む
 Recovery FSM、静的occupancy grid上の車体swept-footprint検査を追加しています。
@@ -54,45 +54,55 @@ Recovery FSM、静的occupancy grid上の車体swept-footprint検査を追加し
 `/control/command/control_cmd`はpublisherを増やさず既存C++ nodeが1周期に1回だけ
 publishします。
 
-現在の初期設定は次の多重ラッチです。
+現在の設定と多重ラッチは次の通りです。
 
-- `enabled: false`かつ全`domain_enabled: false`で、detectorも通常制御も変更しない。
-- 最初の確認は`enabled: true`、対象Domainを`true`、`shadow_mode: true`とし、
-  candidate / reject reasonのログだけを観測する。
+- 未列挙Domainの既定は`enabled: false`。Domain 1 / 2だけ`domain_enabled: true`、
+  Domain 3はfalse、`shadow_mode: false`です。
 - `simulation_only: true`のため、実車環境では制御権を取得しない。
-- `reverse_actuation_enabled: false`に加え、`reverse_acceleration_sign: 0.0`を別の
-  安全ラッチとする。signが0のままではReverse駆動を有効化できない。
-- `reverse_stop_acceleration_mps2: 0.0`も実測前の停止値であり、0のままでは
-  actuation設定を受理しない。駆動commandと停止commandは逆符号でなければならず、
-  `verified_reverse_stop_deceleration_mps2`も実測した正値が必要。
+- AWSIM校正済みの`reverse_acceleration_sign: 1.0`、駆動`+0.5 m/s^2`、
+  停止`-0.8 m/s^2`を使う。保守的停止減速度は`0.4 m/s^2`、制御遅延予約は`0.2 s`。
+- 後退は最大`0.8 m`、`2.0 s`、`0.8 m/s`、1 attempt。速度上限はcoreと
+  command adapterの二重防護で停止側へ倒す。
+- 3台SIMではV2Xが自車を除く2 entryだったため、期待数2、self excludedとする。
+  単独走行はV2X不足でfail-closed、4台構成では期待数を3へ変更する。
 
-Shadow確認例:
+現在のP1 / P2有効化例:
 
 ```yaml
 stuck_recovery:
-  enabled: true
+  enabled: false
   domain_enabled:
     1: true
-    2: false
+    2: true
     3: false
-  shadow_mode: true
+  shadow_mode: false
   simulation_only: true
-  reverse_actuation_enabled: false
-  reverse_acceleration_sign: 0.0
+  reverse_actuation_enabled: true
+  reverse_acceleration_sign: 1.0
 ```
+
+別Domainで再校正する場合は、そのDomainだけ`domain_enabled: true`にした上で
+`shadow_mode: true`、`reverse_actuation_enabled: false`から開始してください。
 
 `Stuck detector:`は前進要求、signed speed、pose / path進捗、壁またはlegacy
 collision hintとreject reasonを出します。`Stuck recovery:`はexecution mode、FSM
 state、action、static candidateの拒否理由、rear V2X完全性をstate変化時に出します。
-Follow / SafetyBrake / LowSpeedAvoidance、Start前、control disable、odom異常、solver
-fallbackはスタック確定から除外されます。
+Follow / SafetyBrake / LowSpeedAvoidance、Start前、control disable、odom異常、短時間または
+壁証拠のないsolver fallbackはスタック確定から除外されます。例外はfallbackが連続2.0秒以上、
+path前進要求、停止、pose / path無進捗、現在のfootprint-to-wall証拠が全て継続する場合だけです。
+collision hint単独ではこの例外を成立させません。
+detector更新間隔が0.2秒を超えた場合は、停止時間とfallback継続時間をresetします。
 
 実際のReverse制御は現時点で`Straight`だけです。`Left` / `Right`は
 `recovery_footprint` pure APIで同じ静的安全規則を評価できますが、runtime候補選択、
 実command、RViz表示にはまだ統合していません。Straightでも次をすべて満たさない限り
 gear要求へ進みません。
 
-- 全swept footprintがstatic mapで安全。map外、unknown、新規接触は即reject。
+- 全swept footprintがstatic mapで安全。map外、unknown、新規接触は即reject。初期接触は
+  Reverseで離れられる前方wallに限定し、現在cellは初期patchの固定1-cell halo内かつ
+  直前patchと同一または8近傍の明示Occupiedだけを許す。接触数増加、chain migration、
+  clear後の再接触をrejectし、rolloutと実後退中監視は同じ判定helperを使う。初期接触を
+  持つLeft / Rightは方向付きpenetration評価が未実装のためfail-closedとする。
 - `/v2x/vehicle_positions`がfreshかつ想定台数分completeで、予測した後方corridorに
   車両がいない。期待値は配列の総entry数（環境が自車を含める場合は自車込み）で、
   空ID・重複ID・異常sampleもrejectする。`rear_safety.expected_v2x_vehicle_count: -1`の
@@ -100,14 +110,16 @@ gear要求へ進みません。
   公式確認後に`excluded`または正確な`vehicle_id`を明示する。
 - `/awsim/status`がfreshでBoost中ではない。
 - `/vehicle/status/gear_status`がfreshで、REVERSE確認後にだけ駆動する。
-- 後退距離、時間、gear request回数、Recovery attemptが設定上限内。
+- gear command publisherはReliable / KeepLast(1) / Volatile。古いREVERSEを再参加時に
+  replayし得るTransientLocalは使用しない。
+- 後退距離、時間、signed speed絶対値、gear request回数、Recovery attemptが設定上限内。
 
-重要: AWSIMでREVERSE中の`longitudinal.acceleration`符号は未実測です。
-`reverse_actuation_enabled` や `reverse_acceleration_sign`を推測で変更しないでください。
-gear遷移、signed odometry、標準壁リカバリーとの競合を含むAWSIM実走は
-未検証です。
+重要: 上記値は2026-07-12のローカルAWSIM単車校正値です。online SIMや実車へ無条件に
+転用せず、`simulation_only: true`を維持してください。正面壁スタックからの全FSM遷移、
+標準wall recoveryとの競合、dev3の後方安全全シナリオは引き続き確認が必要です。
+運営チャット案内に従い、戦略的な後退には使わず、低速・短時間・後方clearな復帰に限定します。
 
-自動テストでは`stuck_recovery_core` 26件と`recovery_footprint` 17件が成功し、
+自動テストでは`stuck_recovery_core` 33件と`recovery_footprint` 19件が成功し、
 `make autoware-build`も成功しています。package全体testは既存
 `traj_mincurv.csv`の周回末尾fixture期待の1件だけが失敗し、Recovery新規testは
 すべて成功しました。

@@ -23,6 +23,21 @@ void validate_detector_config(const DetectorConfig & config)
 {
   validate_nonnegative(config.stopped_speed_mps, "stopped speed");
   validate_nonnegative(config.moving_speed_mps, "moving speed");
+  validate_nonnegative(
+    config.solver_fallback_duration_sec,
+    "solver fallback duration");
+  validate_nonnegative(
+    config.max_observation_gap_sec,
+    "maximum observation gap");
+  if (config.solver_fallback_recovery_enabled &&
+    config.solver_fallback_duration_sec <= 0.0)
+  {
+    throw std::invalid_argument(
+            "enabled solver fallback recovery requires a positive duration");
+  }
+  if (config.max_observation_gap_sec <= 0.0) {
+    throw std::invalid_argument("maximum observation gap must be positive");
+  }
   validate_nonnegative(config.forward_intent_speed_mps, "forward intent speed");
   validate_nonnegative(
     config.forward_intent_acceleration_mps2, "forward intent acceleration");
@@ -48,11 +63,18 @@ void validate_supervisor_config(const SupervisorConfig & config)
   validate_nonnegative(config.clearance_wait_timeout_sec, "clearance wait timeout");
   validate_nonnegative(config.gear_report_timeout_sec, "gear report timeout");
   validate_nonnegative(
-    config.gear_command_resend_interval_sec, "gear command resend interval");
-  validate_nonnegative(config.max_reverse_distance_m, "maximum reverse distance");
-  validate_nonnegative(config.max_reverse_duration_sec, "maximum reverse duration");
+    config.gear_command_resend_interval_sec,
+    "gear command resend interval");
   validate_nonnegative(
-    config.reverse_acceleration_magnitude_mps2, "reverse acceleration magnitude");
+    config.max_reverse_distance_m,
+    "maximum reverse distance");
+  validate_nonnegative(
+    config.max_reverse_duration_sec,
+    "maximum reverse duration");
+  validate_nonnegative(config.max_reverse_speed_mps, "maximum reverse speed");
+  validate_nonnegative(
+    config.reverse_acceleration_magnitude_mps2,
+    "reverse acceleration magnitude");
   validate_nonnegative(config.rejoin_speed_limit_mps, "rejoin speed limit");
   validate_nonnegative(config.max_rejoin_lateral_error_m, "maximum rejoin lateral error");
   validate_nonnegative(config.max_rejoin_heading_error_rad, "maximum rejoin heading error");
@@ -149,12 +171,25 @@ DetectorDecision StuckDetector::update(const DetectorInput & input)
     last_update_sec_ = input.now_sec;
     return reject(input, StuckVerdict::NotEligible, StuckRejectReason::NonMonotonicTime);
   }
+  if (last_update_sec_.has_value() &&
+    input.now_sec - *last_update_sec_ > config_.max_observation_gap_sec)
+  {
+    // Do not count executor/odometry outages as continuous stopped or fallback
+    // observation.
+    reset_observation();
+  }
   last_update_sec_ = input.now_sec;
 
   const bool forward_intent =
     input.requested_forward_speed_mps >= config_.forward_intent_speed_mps ||
-    input.requested_acceleration_mps2 >= config_.forward_intent_acceleration_mps2;
-  const bool evidence = input.wall_evidence || input.collision_hint;
+    input.requested_acceleration_mps2 >=
+    config_.forward_intent_acceleration_mps2;
+  // A solver-fallback recovery requires current footprint/wall evidence. A
+  // legacy collision hint alone is intentionally insufficient because it can
+  // remain latched after contact has cleared.
+  const bool evidence = input.solver_fallback ?
+    input.wall_evidence :
+    (input.wall_evidence || input.collision_hint);
 
   const auto reject_and_reset =
     [this, &input, forward_intent, evidence](
@@ -173,11 +208,18 @@ DetectorDecision StuckDetector::update(const DetectorInput & input)
   if (!input.odometry_fresh) {
     return reject_and_reset(StuckVerdict::NotEligible, StuckRejectReason::OdometryStale);
   }
-  if (input.solver_fallback) {
-    return reject_and_reset(StuckVerdict::NotEligible, StuckRejectReason::SolverFallback);
-  }
   if (input.deliberate_stop) {
     return reject_and_reset(StuckVerdict::NotEligible, StuckRejectReason::DeliberateStop);
+  }
+  if (input.solver_fallback && !config_.solver_fallback_recovery_enabled) {
+    return reject_and_reset(
+      StuckVerdict::NotEligible,
+      StuckRejectReason::SolverFallback);
+  }
+  if (input.solver_fallback && !input.wall_evidence) {
+    return reject_and_reset(
+      StuckVerdict::NotEligible,
+      StuckRejectReason::SolverFallbackMissingWallEvidence);
   }
   if (input.gear_transition_active) {
     return reject_and_reset(StuckVerdict::NotEligible, StuckRejectReason::GearTransition);
@@ -188,6 +230,14 @@ DetectorDecision StuckDetector::update(const DetectorInput & input)
   }
   if (!forward_intent) {
     return reject_and_reset(StuckVerdict::NotEligible, StuckRejectReason::NoForwardIntent);
+  }
+
+  if (input.solver_fallback) {
+    if (!solver_fallback_since_sec_.has_value()) {
+      solver_fallback_since_sec_ = input.now_sec;
+    }
+  } else {
+    solver_fallback_since_sec_.reset();
   }
 
   const double absolute_speed_mps = std::abs(input.signed_speed_mps);
@@ -207,9 +257,17 @@ DetectorDecision StuckDetector::update(const DetectorInput & input)
     stationary_since_sec_ = input.now_sec;
   }
   const double stationary_duration_sec = input.now_sec - *stationary_since_sec_;
-  if (stationary_duration_sec < config_.stationary_duration_sec) {
+  const double solver_fallback_duration_sec =
+    solver_fallback_since_sec_.has_value() ?
+    input.now_sec - *solver_fallback_since_sec_ :
+    0.0;
+  if (stationary_duration_sec < config_.stationary_duration_sec ||
+    (input.solver_fallback &&
+    solver_fallback_duration_sec < config_.solver_fallback_duration_sec))
+  {
     return reject(
-      input, StuckVerdict::Moving, StuckRejectReason::ObservationWindowIncomplete,
+      input, StuckVerdict::Moving,
+      StuckRejectReason::ObservationWindowIncomplete,
       forward_intent, evidence);
   }
   if (!evidence) {
@@ -224,6 +282,7 @@ DetectorDecision StuckDetector::update(const DetectorInput & input)
 void StuckDetector::reset() noexcept
 {
   stationary_since_sec_.reset();
+  solver_fallback_since_sec_.reset();
   last_update_sec_.reset();
 }
 
@@ -245,19 +304,30 @@ DetectorDecision StuckDetector::reject(
   {
     decision.stationary_duration_sec = input.now_sec - *stationary_since_sec_;
   }
-  decision.pose_displacement_m =
-    std::isfinite(input.pose_displacement_m) ? input.pose_displacement_m : 0.0;
-  decision.progress_delta_m =
-    std::isfinite(input.unwrapped_progress_delta_m) ?
-    input.unwrapped_progress_delta_m : 0.0;
+  decision.pose_displacement_m = std::isfinite(input.pose_displacement_m) ?
+    input.pose_displacement_m :
+    0.0;
+  decision.progress_delta_m = std::isfinite(input.unwrapped_progress_delta_m) ?
+    input.unwrapped_progress_delta_m :
+    0.0;
+  if (solver_fallback_since_sec_.has_value() && std::isfinite(input.now_sec) &&
+    input.now_sec >= *solver_fallback_since_sec_)
+  {
+    decision.solver_fallback_duration_sec =
+      input.now_sec - *solver_fallback_since_sec_;
+  }
   decision.forward_intent = forward_intent;
   decision.corroborating_evidence = evidence;
+  decision.solver_fallback_qualified =
+    input.solver_fallback && config_.solver_fallback_recovery_enabled &&
+    verdict == StuckVerdict::Confirmed && forward_intent && evidence;
   return decision;
 }
 
 void StuckDetector::reset_observation() noexcept
 {
   stationary_since_sec_.reset();
+  solver_fallback_since_sec_.reset();
 }
 
 RecoverySupervisor::RecoverySupervisor(SupervisorConfig config)
@@ -552,6 +622,14 @@ RecoveryAction RecoverySupervisor::update_reverse_maneuver(const RecoveryInput &
       input.now_sec);
     return hold_action(RecoveryReason::RearHazardAppeared);
   }
+  if (config_.max_reverse_speed_mps <= 0.0 ||
+    std::abs(input.signed_speed_mps) >= config_.max_reverse_speed_mps)
+  {
+    transition(
+      RecoveryState::StopBeforeDrive,
+      RecoveryReason::ReverseSpeedLimit, input.now_sec);
+    return hold_action(RecoveryReason::ReverseSpeedLimit);
+  }
   if (input.traveled_distance_m >= config_.max_reverse_distance_m) {
     transition(
       RecoveryState::StopBeforeDrive, RecoveryReason::ReverseDistanceLimit,
@@ -796,6 +874,7 @@ bool RecoverySupervisor::input_is_finite(const RecoveryInput & input) const noex
          finite_nonnegative(input.traveled_distance_m) &&
          std::isfinite(input.lateral_error_m) && std::isfinite(input.heading_error_rad) &&
          finite_nonnegative(input.detector.stationary_duration_sec) &&
+         finite_nonnegative(input.detector.solver_fallback_duration_sec) &&
          finite_nonnegative(input.detector.pose_displacement_m) &&
          std::isfinite(input.detector.progress_delta_m);
 }
@@ -849,7 +928,25 @@ CoreOutput StuckRecoveryCore::update(const CoreInput & input)
   recovery.control_enabled = input.detector.control_enabled;
   recovery.odometry_valid = input.detector.odometry_fresh &&
     std::isfinite(input.detector.signed_speed_mps);
-  recovery.solver_healthy = !input.detector.solver_fallback;
+  const RecoveryState current_state = supervisor_.state();
+  const bool drive_report_will_enter_rejoin =
+    (current_state == RecoveryState::ShiftToDrive ||
+    current_state == RecoveryState::WaitDriveReport) &&
+    recovery.gear_report_fresh && recovery.reported_gear == Gear::Drive;
+  const bool recovery_no_longer_depends_on_solver =
+    current_state != RecoveryState::Normal &&
+    current_state != RecoveryState::LowSpeedRejoin &&
+    !drive_report_will_enter_rejoin;
+  const bool confirmed_solver_fallback_candidate =
+    (current_state == RecoveryState::Normal ||
+    current_state == RecoveryState::SuspectStuck) &&
+    output.detector.solver_fallback_qualified;
+  // The normal MPC solver is not used while the recovery supervisor exclusively
+  // owns the stop, gear-shift, and reverse commands. It becomes mandatory again
+  // for LowSpeedRejoin.
+  recovery.solver_healthy = !input.detector.solver_fallback ||
+    recovery_no_longer_depends_on_solver ||
+    confirmed_solver_fallback_candidate;
   recovery.hard_stop_requested = input.detector.deliberate_stop;
   recovery.awsim_recovery_settled = !input.detector.awsim_recovery_settling;
   recovery.signed_speed_mps = input.detector.signed_speed_mps;
@@ -929,6 +1026,8 @@ const char * to_string(const StuckRejectReason reason) noexcept
       return "non_monotonic_time";
     case StuckRejectReason::SolverFallback:
       return "solver_fallback";
+    case StuckRejectReason::SolverFallbackMissingWallEvidence:
+      return "solver_fallback_missing_wall_evidence";
     case StuckRejectReason::DeliberateStop:
       return "deliberate_stop";
     case StuckRejectReason::GearTransition:
@@ -1079,6 +1178,8 @@ const char * to_string(const RecoveryReason reason) noexcept
       return "reverse_distance_limit";
     case RecoveryReason::ReverseDurationLimit:
       return "reverse_duration_limit";
+    case RecoveryReason::ReverseSpeedLimit:
+      return "reverse_speed_limit";
     case RecoveryReason::ReverseEscapeConfirmed:
       return "reverse_escape_confirmed";
     case RecoveryReason::CollisionWorsening:

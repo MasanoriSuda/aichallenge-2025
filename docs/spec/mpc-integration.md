@@ -105,14 +105,14 @@ C++ 本番ノードの経路入力・solver処理には、次の安全化を適�
 - Python `path_constraints_provider` も circular CSV の重複終点を同じ許容差で除去し、C++側は受信したrows/colsが内部ReferencePathと一致しない制約を拒否する。
 - solver fallback と `/control/mpc/stop_request` はlegacy boost arbitrationより優先し、boostを必ず無効化する。low-pass gainは `[0,1]` に限定し、filter後にも加速度、操舵角、操舵変化量を制限する。
 
-### Wall Stuck Recovery（Implementation Complete / AWSIM Verification Pending）
+### Wall Stuck Recovery（Implementation Complete / P1-P2 Scenario Verification Pending）
 
 前進専用の現行MPCは、正面が壁に押し付けられると後退できない。
 この復帰はMPC / MPCCの評価関数とは分離し、次の2つのpure C++ coreと
 `mpc_controller_cpp`内のROS adapterとして実装した。
 
 - `stuck_recovery_core`: 前進意図、signed speed、pose / path進捗、補助証拠、
-  意図的停止の除外、Recovery FSM、gear timeout、距離・時間・試行上限を扱う。
+  意図的停止の除外、Recovery FSM、gear timeout、距離・時間・速度・試行上限を扱う。
 - `recovery_footprint`: 向き付き車体矩形、swept interpolation、map外 / unknownの
   occupied扱い、初期接触を増やさず離脱するStraight / Left / Right rolloutを扱う。
 
@@ -125,28 +125,32 @@ freshな一致reportを駆動前に必須とする。
 
 実行modeは次の順に段階化している。
 
-1. `enabled: false`: 既定。Recovery coreをcontrol cycleで評価せず、通常MPCを維持する。
+1. `enabled: false`: Recovery coreをcontrol cycleで評価せず、通常MPCを維持する。
 2. `enabled: true`, `shadow_mode: true`: detectorと安全判定のログだけを出し、
    control / gear commandを変更しない。
 3. `shadow_mode: false`: SIMに限ってFSMがcommand ownerになり得るが、後述の
-   reverse actuationラッチが閉じている間はgear駆動しない。
+   reverse actuationラッチが閉じている間はgear駆動しない。現在はP1 / P2だけ
+   このmodeであり、P3、未列挙Domain、実車は無効である。
 
 ```yaml
 stuck_recovery:
   enabled: false
   domain_enabled:
-    1: false
-    2: false
+    1: true
+    2: true
     3: false
-  shadow_mode: true
+  shadow_mode: false
   simulation_only: true
-  reverse_actuation_enabled: false
-  reverse_acceleration_sign: 0.0
-  reverse_stop_acceleration_mps2: 0.0
-  verified_reverse_stop_deceleration_mps2: 0.0
-  reverse_control_latency_sec: 0.1
+  reverse_actuation_enabled: true
+  reverse_acceleration_sign: 1.0
+  reverse_stop_acceleration_mps2: -0.8
+  verified_reverse_stop_deceleration_mps2: 0.4
+  reverse_control_latency_sec: 0.2
   boost_status_timeout_sec: 0.5
   detector:
+    solver_fallback_recovery_enabled: true
+    solver_fallback_duration_sec: 2.0
+    max_observation_gap_sec: 0.2
     stopped_speed_mps: 0.15
     moving_speed_mps: 0.25
     forward_intent_speed_mps: 1.0
@@ -164,9 +168,10 @@ stuck_recovery:
     clearance_wait_timeout_sec: 1.0
     max_reverse_distance_m: 0.8
     max_reverse_duration_sec: 2.0
-    reverse_acceleration_magnitude_mps2: 0.3
+    max_reverse_speed_mps: 0.8
+    reverse_acceleration_magnitude_mps2: 0.5
     escape_distance_m: 0.30
-    max_reverse_pose_step_m: 0.25
+    max_reverse_pose_step_m: 0.05
     max_attempts: 1
   footprint:
     front_extent_m: 1.49
@@ -176,8 +181,8 @@ stuck_recovery:
     margin_m: 0.05
     sweep_interpolation_step_m: 0.05
   rear_safety:
-    expected_v2x_vehicle_count: -1
-    self_filter_mode: unknown
+    expected_v2x_vehicle_count: 2
+    self_filter_mode: excluded
     self_vehicle_id: ""
     vehicle_radius_m: 1.45
     prediction_margin_sec: 0.1
@@ -191,18 +196,29 @@ stuck_recovery:
 ```
 
 `reverse_actuation_enabled` と `reverse_acceleration_sign` は別々のhard latchである。
-signの有効値はAWSIMで実測した `-1` または `+1` に限定し、未確定の
-`0` で `reverse_actuation_enabled: true` にすると起動時に拒否する。これにより、
-gear topicが公開されていることだけを根拠に後退駆動しない。
-`reverse_stop_acceleration_mps2`もREVERSE gear中の停止方向を実測して非0値を設定するまで
-actuation設定を受理しない。駆動commandと停止commandは逆符号でなければならず、
-実測した正の`verified_reverse_stop_deceleration_mps2`とcommand-to-effect latencyを使って
-停止距離を予約し、累積後退距離が上限へ達する前に停止へ移る。
+sign 0や駆動・停止commandの同符号、停止減速度0は起動時に拒否する。2026-07-12の
+ローカルAWSIM校正では、REVERSE中の正加速度が後退駆動、負加速度が停止だった。
+`+0.5 m/s^2`の駆動でsigned velocityが負になり、`-0.8 m/s^2`で停止した。
+gear report遅延はREVERSE約0.035 s、DRIVE約0.015 s、command-to-effect約0.140 s、
+停止時間約0.154 s、平均停止減速度約0.628 m/s^2だった。設定は保守的に
+`0.4 m/s^2`と`0.2 s`を停止距離予約へ使う。
+
+通常のsolver fallbackはRecoveryから除外する。例外はfallbackが連続2.0秒以上で、
+solverとは独立したpath前進要求、低実速度、pose / path無進捗、現在の
+footprint-to-wall証拠が全て継続した場合だけである。collision hint単独では成立しない。
+detector更新間隔が0.2秒を超えた場合は停止時間とfallback時間をresetし、callback / odometry
+途絶時間を連続観測へ加算しない。
+Recoveryがcommand ownerになった後はfallback継続だけで途中abortしないが、通常MPCを
+再使用するLowSpeedRejoinではsolver復帰を必須とする。
 
 Straightの実制御候補は次のhard conditionをすべて満たす場合だけ実行する。
 
-- static map上の全swept footprintが安全。初期接触中は新規接触と
-  接触cell増加を禁止し、候補終端までに接触を解消する。
+- static map上の全swept footprintが安全。初期接触はReverseで離れられる前方wallに限定する。
+  現在cellは初期patchの固定1-cell halo内かつ直前patchと同一または8近傍の明示Occupiedだけを
+  許し、接触数増加、chain migration、一度clear後の再接触、unknown、離れたpatchをrejectする。
+  候補終端までに接触を解消し、rolloutと実後退中監視は共通helperを使用する。swept stepと
+  runtime corner motionはmap resolution以下の設定stepに制限する。初期接触を持つLeft /
+  Rightは、向きが変わる場合のpenetration単調性が未実装のためfail-closedとする。
 - `/v2x/vehicle_positions`の最近messageがfreshで、position jumpのない他車の
   現在位置からreverse duration分を予測した後方corridorがclear。さらに、
   `expected_v2x_vehicle_count`と正確に一致するcomplete messageを必須とし、既定`-1`では
@@ -211,6 +227,8 @@ Straightの実制御候補は次のhard conditionをすべて満たす場合だ�
 - `/awsim/status`がfreshで`isBoosting=false`。Boost中またはstatus不明時は
   rear information incompleteとする。
 - freshなREVERSE GearReportを確認してから駆動加速度を出す。
+- signed speedの絶対値が`max_reverse_speed_mps`へ達したら、距離・時間上限より先でも
+  停止シーケンスへ移る。command adapterも同じ条件を再確認して駆動commandを遮断する。
 
 Recovery開始後はそのrace sessionのStart Boostを再発動せず、LowSpeedRejoin前に
 MPC prediction / control history / solver fallback、V2X behavior、OvertakeLine、pass-side / target
@@ -222,11 +240,28 @@ lateral / heading errorが所定時間閾値内に入るまで継続する。
 同一安全評価APIも持つが、runtime選択、実操舵command、RViz candidate表示は
 未実装である。
 
-自動検証は`stuck_recovery_core` 24 tests、`recovery_footprint` 17 testsが成功し、
+自動検証は`stuck_recovery_core` 33 tests、`recovery_footprint` 19 testsが成功し、
 `make autoware-build`も成功した。package全体testは、既存
 `final_ver3/traj_mincurv.csv`が重複終端を持つとするfixture期待の1件だけが失敗し、
-Recovery新規testは全て成功した。AWSIMでのgear遷移、Reverse加速度符号、
-signed odometry、標準wall recoveryとの競合、dev2 / dev3後方安全は未検証である。
+Recovery新規testは全て成功した。AWSIM単車のgear遷移、Reverse加速度符号、
+signed odometryは校正済みである。標準wall recoveryとの競合、正面壁スタックからの
+全FSM遷移、dev3後方安全の全シナリオは未検証である。
+
+以前のP1限定3台・360秒統合走行では、長時間solver fallbackにwall evidenceがなく、
+`solver_fallback_missing_wall_evidence`でRecoveryを発動しないことを確認した。
+現在の3台クリーン起動ではDomain 1 / 2をActive、Domain 3をdisabledとし、各Domainの
+V2Xが自車を除く2 entryであることを確認した。P1は実走中に
+`Confirmed -> WAIT_AWSIM_RECOVERY`へ遷移し、
+AWSIM標準wall recoveryで動きが戻ったため`awsim_recovery_resolved`で通常制御へ復帰した。
+最終の前方接触 / 固定initial halo / runtime corner-motion強化はpure testとbuildで確認した。
+標準補正でも解消しない正面壁スタックから独自Reverseを通る最終binaryのend-to-end再現は
+未完了である。
+gear publisherはReliable / KeepLast(1) / Volatileであり、TransientLocalは古いREVERSEの
+late-join replayを避けるため使用しない。
+
+運営チャットの回答は、技術的実装を可としつつ、低速・短時間・後方clearな
+スタック復帰に限定し、戦略的な後退を避けるよう案内している。本実装の0.8 m、2.0 s、
+0.8 m/s、1 attemptはこの運用方針に沿うローカル値であり、2026公式上限ではない。
 
 ### AWSIM 2026 Start Dash Boost（2026-07-11）
 

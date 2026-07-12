@@ -37,6 +37,13 @@ void set_world_cell(
   grid.cells[index->row * grid.width + index->column] = state;
 }
 
+std::size_t world_cell_index(
+  const recovery::OccupancyGrid & grid, const double x_m, const double y_m)
+{
+  const auto index = grid.world_to_grid(x_m, y_m);
+  return index->row * grid.width + index->column;
+}
+
 recovery::FootprintExtents compact_footprint()
 {
   return recovery::FootprintExtents{0.2, 0.2, 0.2, 0.2, 0.0};
@@ -88,6 +95,56 @@ TEST(RecoveryFootprintFeasibility, ClearStraightRolloutIsFeasible)
   EXPECT_EQ(result.initial_contact_count, 0U);
   EXPECT_EQ(result.final_contact_count, 0U);
   EXPECT_GT(result.checked_pose_count, result.rollout.size());
+}
+
+TEST(RecoveryFootprintContactTransition, AllowsOnlyFixedHaloNonIncreasingOccupiedPatch)
+{
+  auto grid = make_grid();
+  set_world_cell(grid, 10.0, 10.0);
+  set_world_cell(grid, 11.0, 10.0);
+  set_world_cell(grid, 11.0, 11.0);
+  set_world_cell(grid, 12.0, 10.0);
+  set_world_cell(grid, 13.0, 10.0);
+  set_world_cell(grid, 9.0, 10.0, recovery::CellState::Unknown);
+  const std::size_t initial = world_cell_index(grid, 10.0, 10.0);
+  const std::size_t adjacent = world_cell_index(grid, 11.0, 10.0);
+  const std::size_t diagonal = world_cell_index(grid, 11.0, 11.0);
+  const std::size_t second_adjacent = world_cell_index(grid, 12.0, 10.0);
+  const std::size_t far_on_same_wall = world_cell_index(grid, 13.0, 10.0);
+  const std::size_t unknown = world_cell_index(grid, 9.0, 10.0);
+
+  EXPECT_EQ(
+    recovery::evaluate_contact_transition(grid, {initial}, {initial}, {adjacent}),
+    recovery::RejectReason::None);
+  EXPECT_EQ(
+    recovery::evaluate_contact_transition(grid, {initial}, {initial}, {diagonal}),
+    recovery::RejectReason::None);
+  EXPECT_EQ(
+    recovery::evaluate_contact_transition(
+      grid, {initial, adjacent}, {initial, adjacent}, {adjacent}),
+    recovery::RejectReason::None);
+  EXPECT_EQ(
+    recovery::evaluate_contact_transition(grid, {initial}, {initial}, {initial, adjacent}),
+    recovery::RejectReason::ContactWorsened);
+  EXPECT_EQ(
+    recovery::evaluate_contact_transition(grid, {initial}, {initial}, {far_on_same_wall}),
+    recovery::RejectReason::NewContact);
+  EXPECT_EQ(
+    recovery::evaluate_contact_transition(grid, {initial}, {initial}, {unknown}),
+    recovery::RejectReason::Collision);
+  EXPECT_EQ(
+    recovery::evaluate_contact_transition(grid, {unknown}, {unknown}, {}),
+    recovery::RejectReason::Collision);
+  EXPECT_EQ(
+    recovery::evaluate_contact_transition(grid, {initial}, {initial}, {}),
+    recovery::RejectReason::None);
+  EXPECT_EQ(
+    recovery::evaluate_contact_transition(grid, {}, {}, {initial}),
+    recovery::RejectReason::NewContact);
+  EXPECT_EQ(
+    recovery::evaluate_contact_transition(
+      grid, {initial}, {adjacent}, {second_adjacent}),
+    recovery::RejectReason::NewContact);
 }
 
 TEST(RecoveryFootprintFeasibility, WallBehindRejectsStraightRollout)
@@ -201,6 +258,22 @@ TEST(RecoveryFootprintInitialContact, ReverseEscapeMayClearExistingContact)
   EXPECT_EQ(result.final_contact_count, 0U);
 }
 
+TEST(RecoveryFootprintInitialContact, ReverseCannotPassThroughRearContact)
+{
+  auto grid = make_grid(20U, 20U, 1.0);
+  set_world_cell(grid, 4.0, 10.0);
+  recovery::ReverseRolloutParameters parameters{2.3, 0.5, 0.1, 1.0, 0.0};
+
+  const auto result = recovery::evaluate_reverse_candidate(
+    grid, recovery::FootprintExtents{0.6, 0.6, 0.2, 0.2, 0.0},
+    recovery::Pose2D{5.0, 10.0, 0.0}, recovery::ReversePrimitive::Straight,
+    parameters);
+
+  EXPECT_FALSE(result.feasible);
+  EXPECT_EQ(result.initial_contact_count, 1U);
+  EXPECT_EQ(result.reason, recovery::RejectReason::InitialContactNotForward);
+}
+
 TEST(RecoveryFootprintInitialContact, NewWallContactDuringEscapeIsRejected)
 {
   auto grid = make_grid();
@@ -231,7 +304,7 @@ TEST(RecoveryFootprintInitialContact, CandidateMustClearContactByItsEnd)
   EXPECT_EQ(result.final_contact_count, 1U);
 }
 
-TEST(RecoveryFootprintInitialContact, ReenteringClearedInitialCellWorsensContact)
+TEST(RecoveryFootprintInitialContact, CurvedEscapeIsRejectedWithoutDirectionalProof)
 {
   auto grid = make_grid(30U, 30U, 1.0);
   set_world_cell(grid, 11.0, 15.0);
@@ -245,7 +318,7 @@ TEST(RecoveryFootprintInitialContact, ReenteringClearedInitialCellWorsensContact
 
   EXPECT_FALSE(result.feasible);
   EXPECT_EQ(result.initial_contact_count, 1U);
-  EXPECT_EQ(result.reason, recovery::RejectReason::ContactWorsened);
+  EXPECT_EQ(result.reason, recovery::RejectReason::InvalidRollout);
 }
 
 TEST(RecoveryFootprintRollout, CurvedPrimitivesUseReverseBicycleKinematics)
@@ -330,6 +403,13 @@ TEST(RecoveryFootprintValidation, RejectsInvalidGridFootprintPoseAndRollout)
     recovery::ReversePrimitive::Left, invalid_parameters);
   EXPECT_EQ(result.reason, recovery::RejectReason::InvalidRollout);
 
+  invalid_parameters = straight_parameters();
+  invalid_parameters.swept_step_m = 2.0;
+  result = recovery::evaluate_reverse_candidate(
+    make_grid(), compact_footprint(), recovery::Pose2D{10.0, 10.0, 0.0},
+    recovery::ReversePrimitive::Straight, invalid_parameters);
+  EXPECT_EQ(result.reason, recovery::RejectReason::InvalidRollout);
+
   result = recovery::evaluate_reverse_candidate(
     make_grid(), compact_footprint(), recovery::Pose2D{10.0, 10.0, 0.0},
     static_cast<recovery::ReversePrimitive>(99), straight_parameters());
@@ -351,6 +431,9 @@ TEST(RecoveryFootprintValidation, RejectsUnboundedSamplingRequestsDeterministica
 TEST(RecoveryFootprintStrings, RejectReasonsAndPrimitivesHaveStableNames)
 {
   EXPECT_STREQ(recovery::to_string(recovery::RejectReason::NewContact), "new_contact");
+  EXPECT_STREQ(
+    recovery::to_string(recovery::RejectReason::InitialContactNotForward),
+    "initial_contact_not_forward");
   EXPECT_STREQ(
     recovery::to_string(recovery::ReversePrimitive::Right), "reverse_right");
   EXPECT_STREQ(

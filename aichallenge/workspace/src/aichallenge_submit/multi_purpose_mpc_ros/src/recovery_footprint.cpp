@@ -211,6 +211,33 @@ double footprint_corner_radius(const FootprintExtents & footprint) noexcept
   return std::hypot(longitudinal, lateral);
 }
 
+bool initial_contact_patch_is_forward(
+  const OccupancyGrid & grid, const Pose2D & initial_pose,
+  const std::vector<std::size_t> & initial_contact_cells) noexcept
+{
+  const double forward_x = std::cos(initial_pose.yaw_rad);
+  const double forward_y = std::sin(initial_pose.yaw_rad);
+  const double cell_half_projection = 0.5 * grid.resolution_m *
+    (std::abs(forward_x) + std::abs(forward_y));
+  for (const std::size_t cell_index : initial_contact_cells) {
+    if (cell_index >= grid.cells.size()) {
+      return false;
+    }
+    const auto cell_center = grid.grid_to_world(
+      cell_index / grid.width, cell_index % grid.width);
+    if (!cell_center.has_value()) {
+      return false;
+    }
+    const double local_forward =
+      (cell_center->x_m - initial_pose.x_m) * forward_x +
+      (cell_center->y_m - initial_pose.y_m) * forward_y;
+    if (local_forward - cell_half_projection < -kNumericalEpsilon) {
+      return false;
+    }
+  }
+  return true;
+}
+
 FeasibilityResult rejected(
   FeasibilityResult result, const RejectReason reason, const double distance_m,
   const std::size_t final_contact_count = 0U)
@@ -314,6 +341,8 @@ const char * to_string(const RejectReason reason) noexcept
       return "sample_limit_exceeded";
     case RejectReason::InitialOutOfMap:
       return "initial_out_of_map";
+    case RejectReason::InitialContactNotForward:
+      return "initial_contact_not_forward";
     case RejectReason::OutOfMap:
       return "out_of_map";
     case RejectReason::Collision:
@@ -367,8 +396,9 @@ RolloutResult generate_reverse_rollout(
       parameters.reverse_distance_m :
       parameters.reverse_distance_m * static_cast<double>(index) /
       static_cast<double>(segment_count.value());
-    result.poses.push_back(RolloutPose{
-      pose_at_reverse_distance(initial_pose, primitive, parameters, distance), distance});
+    result.poses.push_back(
+      RolloutPose{
+        pose_at_reverse_distance(initial_pose, primitive, parameters, distance), distance});
   }
   return result;
 }
@@ -453,6 +483,73 @@ FootprintSample sample_footprint(
   return sample;
 }
 
+RejectReason evaluate_contact_transition(
+  const OccupancyGrid & grid,
+  const std::vector<std::size_t> & initial_contact_cells,
+  const std::vector<std::size_t> & previous_contact_cells,
+  const std::vector<std::size_t> & current_contact_cells) noexcept
+{
+  if (!grid.valid()) {
+    return RejectReason::InvalidGrid;
+  }
+
+  const auto is_explicitly_occupied = [&grid](const std::size_t cell_index) {
+      if (cell_index >= grid.cells.size()) {
+        return false;
+      }
+      return grid.cell(cell_index / grid.width, cell_index % grid.width) == CellState::Occupied;
+    };
+  if (
+    !std::all_of(
+      initial_contact_cells.begin(), initial_contact_cells.end(), is_explicitly_occupied) ||
+    !std::all_of(
+      previous_contact_cells.begin(), previous_contact_cells.end(), is_explicitly_occupied) ||
+    !std::all_of(
+      current_contact_cells.begin(), current_contact_cells.end(), is_explicitly_occupied))
+  {
+    return RejectReason::Collision;
+  }
+  const auto absolute_difference = [](const std::size_t lhs, const std::size_t rhs) {
+      return lhs > rhs ? lhs - rhs : rhs - lhs;
+    };
+  const auto touches_patch = [&](
+    const std::size_t cell, const std::vector<std::size_t> & patch) {
+      const std::size_t row = cell / grid.width;
+      const std::size_t column = cell % grid.width;
+      return std::any_of(
+        patch.begin(), patch.end(), [&](const std::size_t patch_cell) {
+          return absolute_difference(row, patch_cell / grid.width) <= 1U &&
+          absolute_difference(column, patch_cell % grid.width) <= 1U;
+        });
+    };
+  if (
+    !std::all_of(
+      previous_contact_cells.begin(), previous_contact_cells.end(),
+      [&](const std::size_t cell) {return touches_patch(cell, initial_contact_cells);}))
+  {
+    return RejectReason::NewContact;
+  }
+  if (current_contact_cells.empty()) {
+    return RejectReason::None;
+  }
+  if (initial_contact_cells.empty() || previous_contact_cells.empty()) {
+    return RejectReason::NewContact;
+  }
+  if (current_contact_cells.size() > previous_contact_cells.size()) {
+    return RejectReason::ContactWorsened;
+  }
+
+  for (const std::size_t current : current_contact_cells) {
+    if (
+      !touches_patch(current, initial_contact_cells) ||
+      !touches_patch(current, previous_contact_cells))
+    {
+      return RejectReason::NewContact;
+    }
+  }
+  return RejectReason::None;
+}
+
 FeasibilityResult evaluate_reverse_candidate(
   const OccupancyGrid & grid, const FootprintExtents & footprint,
   const Pose2D & initial_pose, const ReversePrimitive primitive,
@@ -470,6 +567,11 @@ FeasibilityResult evaluate_reverse_candidate(
     return rejected(std::move(result), RejectReason::InvalidInitialPose, 0.0);
   }
   if (!valid_rollout_parameters(primitive, parameters)) {
+    return rejected(std::move(result), RejectReason::InvalidRollout, 0.0);
+  }
+  if (parameters.swept_step_m > grid.resolution_m + kNumericalEpsilon) {
+    // The one-cell contact-patch continuity rule is conservative only when each swept sample
+    // moves every vehicle corner by no more than one map cell.
     return rejected(std::move(result), RejectReason::InvalidRollout, 0.0);
   }
 
@@ -493,7 +595,27 @@ FeasibilityResult evaluate_reverse_candidate(
   result.maximum_contact_count = initial_contacts.size();
   result.final_contact_count = initial_contacts.size();
   std::size_t previous_contact_count = initial_contacts.size();
+  std::vector<std::size_t> previous_contacts = initial_contacts;
   const double corner_radius = footprint_corner_radius(footprint);
+  if (!initial_contacts.empty()) {
+    if (primitive != ReversePrimitive::Straight) {
+      // A changing body orientation needs a directional penetration metric before an existing
+      // contact can be proven to improve. Runtime actuation currently uses Straight only.
+      return rejected(
+        std::move(result), RejectReason::InvalidRollout, 0.0, initial_contacts.size());
+    }
+    const RejectReason initial_contact_reason = evaluate_contact_transition(
+      grid, initial_contacts, initial_contacts, initial_contacts);
+    if (initial_contact_reason != RejectReason::None) {
+      return rejected(
+        std::move(result), initial_contact_reason, 0.0, initial_contacts.size());
+    }
+    if (!initial_contact_patch_is_forward(grid, initial_pose, initial_contacts)) {
+      return rejected(
+        std::move(result), RejectReason::InitialContactNotForward, 0.0,
+        initial_contacts.size());
+    }
+  }
 
   for (std::size_t segment = 1U; segment < result.rollout.size(); ++segment) {
     const auto & from = result.rollout[segment - 1U];
@@ -542,18 +664,14 @@ FeasibilityResult evaluate_reverse_candidate(
             std::move(result), RejectReason::Collision, distance, contact_count);
         }
       } else {
-        if (!std::includes(
-            initial_contacts.begin(), initial_contacts.end(),
-            sample.contact_cells.begin(), sample.contact_cells.end()))
-        {
+        const RejectReason transition_reason = evaluate_contact_transition(
+          grid, initial_contacts, previous_contacts, sample.contact_cells);
+        if (transition_reason != RejectReason::None) {
           return rejected(
-            std::move(result), RejectReason::NewContact, distance, contact_count);
-        }
-        if (contact_count > previous_contact_count) {
-          return rejected(
-            std::move(result), RejectReason::ContactWorsened, distance, contact_count);
+            std::move(result), transition_reason, distance, contact_count);
         }
       }
+      previous_contacts = sample.contact_cells;
       previous_contact_count = contact_count;
     }
   }

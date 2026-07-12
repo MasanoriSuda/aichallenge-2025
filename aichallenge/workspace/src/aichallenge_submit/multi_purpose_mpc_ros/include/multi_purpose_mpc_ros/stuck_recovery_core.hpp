@@ -25,6 +25,7 @@ enum class StuckRejectReason
   InvalidInput,
   NonMonotonicTime,
   SolverFallback,
+  SolverFallbackMissingWallEvidence,
   DeliberateStop,
   GearTransition,
   AwsimRecoverySettling,
@@ -38,6 +39,14 @@ enum class StuckRejectReason
 
 struct DetectorConfig
 {
+  // Allow a persistent MPC fallback to become a stuck candidate only when the
+  // normal path still requests forward motion and current footprint-to-wall
+  // evidence is present. Disabled by default so transient solver failures
+  // retain the legacy fail-safe behavior.
+  bool solver_fallback_recovery_enabled{false};
+  double solver_fallback_duration_sec{2.0};
+  // Observation time is continuous only while updates stay within this gap.
+  double max_observation_gap_sec{0.25};
   double stopped_speed_mps{0.15};
   double moving_speed_mps{0.25};
   double forward_intent_speed_mps{1.0};
@@ -73,8 +82,10 @@ struct DetectorDecision
   double stationary_duration_sec{};
   double pose_displacement_m{};
   double progress_delta_m{};
+  double solver_fallback_duration_sec{};
   bool forward_intent{false};
   bool corroborating_evidence{false};
+  bool solver_fallback_qualified{false};
 };
 
 class StuckDetector
@@ -95,6 +106,7 @@ private:
 
   DetectorConfig config_;
   std::optional<double> stationary_since_sec_;
+  std::optional<double> solver_fallback_since_sec_;
   std::optional<double> last_update_sec_;
 };
 
@@ -166,6 +178,7 @@ enum class RecoveryReason
   ReverseInProgress,
   ReverseDistanceLimit,
   ReverseDurationLimit,
+  ReverseSpeedLimit,
   ReverseEscapeConfirmed,
   CollisionWorsening,
   RearHazardAppeared,
@@ -197,8 +210,14 @@ struct SupervisorConfig
   std::size_t max_gear_command_requests{1U};
   double max_reverse_distance_m{0.8};
   double max_reverse_duration_sec{2.0};
-  // Positive magnitude only. The node-side gear actuation adapter owns the simulator-specific
-  // acceleration sign. Zero is the fail-safe default while that sign is unverified.
+  // The controller begins its calibrated stop sequence at this measured
+  // absolute speed. Keep a margin below the competition-operation ceiling to
+  // cover command and vehicle latency. Zero is a fail-safe value that prevents
+  // ReverseCreep until an explicit limit is configured.
+  double max_reverse_speed_mps{0.0};
+  // Positive magnitude only. The node-side gear actuation adapter owns the
+  // simulator-specific acceleration sign. Zero is the fail-safe default while
+  // that sign is unverified.
   double reverse_acceleration_magnitude_mps2{0.0};
   std::size_t max_attempts{1U};
   double rejoin_speed_limit_mps{1.0};

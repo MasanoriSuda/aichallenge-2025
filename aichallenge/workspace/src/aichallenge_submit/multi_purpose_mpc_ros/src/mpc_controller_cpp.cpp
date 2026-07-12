@@ -5559,8 +5559,16 @@ struct RecoverySafetySnapshot
   bool current_footprint_clear{false};
   bool collision_worsening{false};
   std::vector<std::size_t> current_contact_cells;
+  std::size_t current_contact_count{};
   recovery_footprint::RejectReason static_reject_reason{
     recovery_footprint::RejectReason::InvalidGrid};
+  recovery_footprint::RejectReason runtime_contact_reject_reason{
+    recovery_footprint::RejectReason::None};
+  std::size_t static_initial_contact_count{};
+  std::size_t static_maximum_contact_count{};
+  std::size_t static_final_contact_count{};
+  std::size_t static_checked_pose_count{};
+  double static_rejected_at_distance_m{};
 };
 
 Config load_config(const std::string & path)
@@ -5701,6 +5709,15 @@ Config load_config(const std::string & path)
     const auto detector = recovery["detector"];
     if (detector) {
       auto & out = core.detector;
+      out.solver_fallback_recovery_enabled = detector["solver_fallback_recovery_enabled"] ?
+        detector["solver_fallback_recovery_enabled"].as<bool>() :
+        out.solver_fallback_recovery_enabled;
+      out.solver_fallback_duration_sec = detector["solver_fallback_duration_sec"] ?
+        detector["solver_fallback_duration_sec"].as<double>() :
+        out.solver_fallback_duration_sec;
+      out.max_observation_gap_sec = detector["max_observation_gap_sec"] ?
+        detector["max_observation_gap_sec"].as<double>() :
+        out.max_observation_gap_sec;
       out.stopped_speed_mps = detector["stopped_speed_mps"] ?
         detector["stopped_speed_mps"].as<double>() : out.stopped_speed_mps;
       out.moving_speed_mps = detector["moving_speed_mps"] ?
@@ -5744,6 +5761,8 @@ Config load_config(const std::string & path)
         maneuver["max_reverse_distance_m"].as<double>() : out.max_reverse_distance_m;
       out.max_reverse_duration_sec = maneuver["max_reverse_duration_sec"] ?
         maneuver["max_reverse_duration_sec"].as<double>() : out.max_reverse_duration_sec;
+      out.max_reverse_speed_mps = maneuver["max_reverse_speed_mps"] ?
+        maneuver["max_reverse_speed_mps"].as<double>() : out.max_reverse_speed_mps;
       out.reverse_acceleration_magnitude_mps2 = maneuver["reverse_acceleration_magnitude_mps2"] ?
         maneuver["reverse_acceleration_magnitude_mps2"].as<double>() :
         out.reverse_acceleration_magnitude_mps2;
@@ -6994,6 +7013,7 @@ private:
       awsim_boost_pub_ = create_publisher<Float32MultiArray>("/awsim/cmd", boost_qos);
     }
     if (stuck_recovery_actuation_io_enabled_) {
+      // Volatile durability prevents a newly joined subscriber from replaying a stale REVERSE.
       gear_command_pub_ = create_publisher<GearCommand>(
         "/control/command/gear_cmd", rclcpp::QoS(rclcpp::KeepLast(1)).reliable());
     }
@@ -7601,20 +7621,25 @@ private:
     const auto current_sample = recovery_footprint::sample_footprint(
       *recovery_grid_, recovery_footprint_, recovery_pose);
     snapshot.current_contact_cells = current_sample.contact_cells;
+    snapshot.current_contact_count = current_sample.contact_cells.size();
     snapshot.wall_evidence = current_sample.valid && !current_sample.contact_cells.empty();
     snapshot.current_footprint_clear =
       current_sample.valid && !current_sample.out_of_map && current_sample.contact_cells.empty();
-    const auto * contact_limit = recovery_previous_contact_cells_.has_value() ?
+    const auto * initial_contact_patch = recovery_initial_contact_cells_.has_value() ?
+      &recovery_initial_contact_cells_.value() : nullptr;
+    const auto * previous_contact_patch = recovery_previous_contact_cells_.has_value() ?
       &recovery_previous_contact_cells_.value() :
-      (recovery_initial_contact_cells_.has_value() ?
-      &recovery_initial_contact_cells_.value() : nullptr);
-    if (contact_limit != nullptr) {
-      const bool remains_subset = std::includes(
-        contact_limit->begin(), contact_limit->end(),
-        current_sample.contact_cells.begin(), current_sample.contact_cells.end());
+      initial_contact_patch;
+    if (previous_contact_patch != nullptr) {
+      snapshot.runtime_contact_reject_reason =
+        initial_contact_patch != nullptr && current_sample.valid && !current_sample.out_of_map ?
+        recovery_footprint::evaluate_contact_transition(
+        *recovery_grid_, *initial_contact_patch, *previous_contact_patch,
+        current_sample.contact_cells) :
+        (current_sample.out_of_map ? recovery_footprint::RejectReason::OutOfMap :
+        recovery_footprint::RejectReason::InvalidInitialPose);
       snapshot.collision_worsening =
-        !current_sample.valid || current_sample.out_of_map || !remains_subset ||
-        current_sample.contact_cells.size() > contact_limit->size();
+        snapshot.runtime_contact_reject_reason != recovery_footprint::RejectReason::None;
     }
 
     if (evaluate_rollout) {
@@ -7629,6 +7654,11 @@ private:
         recovery_footprint::ReversePrimitive::Straight, rollout);
       snapshot.rear_static_clear = static_result.feasible;
       snapshot.static_reject_reason = static_result.reason;
+      snapshot.static_initial_contact_count = static_result.initial_contact_count;
+      snapshot.static_maximum_contact_count = static_result.maximum_contact_count;
+      snapshot.static_final_contact_count = static_result.final_contact_count;
+      snapshot.static_checked_pose_count = static_result.checked_pose_count;
+      snapshot.static_rejected_at_distance_m = static_result.rejected_at_distance_m;
     }
 
     if (!evaluate_rollout) {
@@ -7741,8 +7771,9 @@ private:
 
   std::optional<stuck_recovery::CoreOutput> evaluate_stuck_recovery(
     const Pose2D & pose, const double actual_v, const Eigen::Vector2d & normal_u,
-    const double normal_acc, const bool mpc_fallback_active,
-    const SteadyClock::time_point steady_now, const rclcpp::Time & control_time)
+    const double normal_acc, const double path_forward_intent_speed_mps,
+    const bool mpc_fallback_active, const SteadyClock::time_point steady_now,
+    const rclcpp::Time & control_time)
   {
     if (!cfg_.stuck_recovery.core.enabled || !stuck_recovery_core_) {
       return std::nullopt;
@@ -7764,7 +7795,23 @@ private:
         const double pose_step_m = std::hypot(
           pose.x - recovery_last_reverse_pose_->x,
           pose.y - recovery_last_reverse_pose_->y);
-        if (!std::isfinite(pose_step_m) || pose_step_m > cfg_.stuck_recovery.max_reverse_pose_step_m) {
+        const double yaw_step_rad = std::abs(
+          wrap_to_pi(pose.theta - recovery_last_reverse_pose_->theta));
+        const double footprint_corner_radius_m = std::hypot(
+          std::max(
+            recovery_footprint_.front_extent_m + recovery_footprint_.margin_m,
+            recovery_footprint_.rear_extent_m + recovery_footprint_.margin_m),
+          std::max(
+            recovery_footprint_.left_extent_m + recovery_footprint_.margin_m,
+            recovery_footprint_.right_extent_m + recovery_footprint_.margin_m));
+        const double corner_motion_m = pose_step_m + footprint_corner_radius_m * yaw_step_rad;
+        const double maximum_runtime_corner_motion_m = std::min(
+          cfg_.stuck_recovery.max_reverse_pose_step_m,
+          cfg_.stuck_recovery.sweep_interpolation_step_m);
+        if (
+          !std::isfinite(corner_motion_m) ||
+          corner_motion_m > maximum_runtime_corner_motion_m)
+        {
           recovery_reverse_pose_jump_ = true;
         } else {
           recovery_cumulative_reverse_distance_m_ += pose_step_m;
@@ -7781,9 +7828,12 @@ private:
     }
     const bool recovery_context_active =
       supervisor_state != stuck_recovery::RecoveryState::Normal;
+    const double requested_forward_speed_mps = std::max(
+      0.0, mpc_fallback_active ? path_forward_intent_speed_mps : normal_u[0]);
     const bool low_speed_recovery_candidate =
       std::abs(actual_v) <= cfg_.stuck_recovery.core.detector.moving_speed_mps &&
-      (normal_u[0] >= cfg_.stuck_recovery.core.detector.forward_intent_speed_mps ||
+      (requested_forward_speed_mps >=
+      cfg_.stuck_recovery.core.detector.forward_intent_speed_mps ||
       normal_acc >= cfg_.stuck_recovery.core.detector.forward_intent_acceleration_mps2);
     const double reverse_distance_to_check_m = std::max(
       0.0, cfg_.stuck_recovery.core.supervisor.max_reverse_distance_m - traveled_distance_m);
@@ -7818,7 +7868,7 @@ private:
     input.detector.gear_transition_active = recovery_gear_transition_active();
     input.detector.awsim_recovery_settling = awsim_recovery_settling;
     input.detector.signed_speed_mps = actual_v;
-    input.detector.requested_forward_speed_mps = std::max(0.0, normal_u[0]);
+    input.detector.requested_forward_speed_mps = requested_forward_speed_mps;
     input.detector.requested_acceleration_mps2 = normal_acc;
     input.detector.pose_displacement_m = pose_displacement_m;
     input.detector.unwrapped_progress_delta_m = progress_delta_m;
@@ -7843,26 +7893,37 @@ private:
     update_recovery_observation_anchor(pose, car_->s, output.detector.reject_reason);
     const auto previous_state = recovery_last_output_.has_value() ?
       recovery_last_output_->state : stuck_recovery::RecoveryState::Normal;
-    if (
+    const bool started_recovery_episode =
       output.state != stuck_recovery::RecoveryState::Normal &&
-      previous_state == stuck_recovery::RecoveryState::Normal)
-    {
+      previous_state == stuck_recovery::RecoveryState::Normal;
+    if (started_recovery_episode) {
       recovery_initial_contact_cells_ = safety.current_contact_cells;
+      recovery_previous_contact_cells_ = safety.current_contact_cells;
       recovery_boost_suppressed_for_session_ = true;
     }
-    if (
+    const bool started_reverse_maneuver =
       output.state == stuck_recovery::RecoveryState::ReverseManeuver &&
-      previous_state != stuck_recovery::RecoveryState::ReverseManeuver)
-    {
+      previous_state != stuck_recovery::RecoveryState::ReverseManeuver;
+    if (started_reverse_maneuver) {
       recovery_maneuver_start_pose_ = pose;
       recovery_last_reverse_pose_ = pose;
       recovery_cumulative_reverse_distance_m_ = 0.0;
       recovery_reverse_pose_jump_ = false;
       recovery_initial_contact_cells_ = safety.current_contact_cells;
-    }
-    if (output.state != stuck_recovery::RecoveryState::Normal) {
       recovery_previous_contact_cells_ = safety.current_contact_cells;
-    } else if (previous_state != stuck_recovery::RecoveryState::Normal) {
+    } else if (
+      output.state != stuck_recovery::RecoveryState::Normal &&
+      !started_recovery_episode &&
+      (!recovery_previous_contact_cells_.has_value() ||
+      safety.runtime_contact_reject_reason == recovery_footprint::RejectReason::None))
+    {
+      // Do not absorb a rejected contact transition into the next cycle's safety baseline.
+      recovery_previous_contact_cells_ = safety.current_contact_cells;
+    } else if (
+      output.state == stuck_recovery::RecoveryState::Normal &&
+      previous_state != stuck_recovery::RecoveryState::Normal)
+    {
+      recovery_initial_contact_cells_.reset();
       recovery_previous_contact_cells_.reset();
     }
     if (output.action.reset_normal_control && !recovery_reset_applied_) {
@@ -7891,12 +7952,18 @@ private:
       RCLCPP_INFO(
         get_logger(),
         "Stuck recovery: mode=%s, state=%s, action=%s, reason=%s, static=%s, "
-        "rear_complete=%d, rear_v2x_clear=%d",
+        "static_contacts=%zu/%zu/%zu, static_reject_at=%.3f m, checked=%zu, "
+        "runtime_contact=%s, current_contacts=%zu, rear_complete=%d, rear_v2x_clear=%d",
         stuck_recovery::to_string(output.execution_mode),
         stuck_recovery::to_string(output.state),
         stuck_recovery::to_string(output.action.type),
         stuck_recovery::to_string(output.action.reason),
         recovery_footprint::to_string(safety.static_reject_reason),
+        safety.static_initial_contact_count, safety.static_maximum_contact_count,
+        safety.static_final_contact_count, safety.static_rejected_at_distance_m,
+        safety.static_checked_pose_count,
+        recovery_footprint::to_string(safety.runtime_contact_reject_reason),
+        safety.current_contact_count,
         safety.rear_information_complete ? 1 : 0, safety.rear_v2x_clear ? 1 : 0);
     }
     if (!last_recovery_reject_reason_.has_value() ||
@@ -7905,11 +7972,15 @@ private:
       RCLCPP_INFO(
         get_logger(),
         "Stuck detector: verdict=%s, reject=%s, stationary=%.2f s, pose=%.3f m, "
-        "progress=%.3f m, evidence=%d",
+        "progress=%.3f m, evidence=%d, wall=%d, forward_intent=%d, "
+        "solver_fallback=%d, fallback_duration=%.2f s, fallback_qualified=%d",
         stuck_recovery::to_string(output.detector.verdict),
         stuck_recovery::to_string(output.detector.reject_reason),
         output.detector.stationary_duration_sec, output.detector.pose_displacement_m,
-        output.detector.progress_delta_m, output.detector.corroborating_evidence ? 1 : 0);
+        output.detector.progress_delta_m, output.detector.corroborating_evidence ? 1 : 0,
+        safety.wall_evidence ? 1 : 0, output.detector.forward_intent ? 1 : 0,
+        mpc_fallback_active ? 1 : 0, output.detector.solver_fallback_duration_sec,
+        output.detector.solver_fallback_qualified ? 1 : 0);
     }
     last_recovery_execution_mode_ = output.execution_mode;
     last_recovery_state_ = output.state;
@@ -8025,13 +8096,23 @@ private:
     {
       publish_recovery_gear_request(output.action, stamp);
     } else if (output.action.type == stuck_recovery::RecoveryActionType::ReverseCreep) {
-      if (!stuck_recovery_actuation_io_enabled_ || !reverse_reported_fresh) {
+      const bool reverse_speed_safe =
+        std::isfinite(actual_v) &&
+        cfg_.stuck_recovery.core.supervisor.max_reverse_speed_mps > 0.0 &&
+        std::abs(actual_v) < cfg_.stuck_recovery.core.supervisor.max_reverse_speed_mps;
+      if (
+        !stuck_recovery_actuation_io_enabled_ || !reverse_reported_fresh ||
+        !reverse_speed_safe)
+      {
         acc = reverse_possible && stuck_recovery_actuation_io_enabled_ ?
           reverse_actuation_calibration(cfg_.stuck_recovery).stop_acceleration_mps2 : 0.0;
         RCLCPP_ERROR_THROTTLE(
           get_logger(), *get_clock(), 1000,
-          "Stuck recovery reverse command blocked: actuation=%d, reverse_report=%d",
-          stuck_recovery_actuation_io_enabled_ ? 1 : 0, reverse_reported_fresh ? 1 : 0);
+          "Stuck recovery reverse command blocked: actuation=%d, reverse_report=%d, "
+          "speed_safe=%d, speed=%.3f m/s, limit=%.3f m/s",
+          stuck_recovery_actuation_io_enabled_ ? 1 : 0, reverse_reported_fresh ? 1 : 0,
+          reverse_speed_safe ? 1 : 0, actual_v,
+          cfg_.stuck_recovery.core.supervisor.max_reverse_speed_mps);
       } else {
         const double steering_gain =
           std::abs(mpc_cfg_.steering_tire_angle_gain_var) > kEps ?
@@ -8256,7 +8337,7 @@ private:
       last_u_[1] + max_steering_step);
     u[1] = clip(u[1], -mpc_cfg_.delta_max, mpc_cfg_.delta_max);
     const auto recovery_output = evaluate_stuck_recovery(
-      pose, actual_v, u, acc, mpc_fallback_active, steady_now, current_time);
+      pose, actual_v, u, acc, effective_v_max, mpc_fallback_active, steady_now, current_time);
     const bool recovery_command_active = recovery_output.has_value() &&
       apply_stuck_recovery_arbitration(
       recovery_output.value(), actual_v, current_time, u, acc, bug_acc_enabled);

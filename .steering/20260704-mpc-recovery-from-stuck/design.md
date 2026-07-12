@@ -2,7 +2,7 @@
 
 作成日: 2026-07-12
 更新日: 2026-07-12
-状態: Implementation Complete / AWSIM Verification Pending
+状態: Implementation Complete / P1-P2 AWSIM Scenario Verification Pending
 
 ## 方針
 
@@ -14,7 +14,8 @@ MPCの速度入力を負にする改造は行わない。
 /control/command/control_cmdの最終publisherを現在の1か所に維持する。
 
 導入は次の順序とする。2026-07-12時点では公式gear契約の文書化、2〜3のコードと
-pure test、4のpure footprint / rollout APIまで実装済みである。AWSIM実挙動の確認は
+pure test、4のpure footprint / rollout API、AWSIM単車でのgear / acceleration校正、
+P1 / P2のSIM限定有効化まで実装済みである。正面壁スタックを用いたend-to-end確認は
 未完了である。
 
 1. 公式gear契約とAWSIM実挙動の確認。
@@ -26,23 +27,25 @@ pure test、4のpure footprint / rollout APIまで実装済みである。AWSIM�
 
 ## 実装結果の概要
 
-- 設定は`enabled: false`、全`domain_enabled: false`、`shadow_mode: true`、
-  `simulation_only: true`が既定である。
-- Reverse駆動は`reverse_actuation_enabled: false`と
-  `reverse_acceleration_sign: 0.0`の二重ラッチで閉じている。sign 0のまま
-  actuationを有効化する設定は起動時に拒否する。
-- `reverse_stop_acceleration_mps2: 0.0`、`verified_reverse_stop_deceleration_mps2: 0.0`、
-  `expected_v2x_vehicle_count: -1`、`self_filter_mode: unknown`も実測前 / unknownを示し、
-  設定を解決するまでReverseへ進まない。
+- 設定は未列挙Domainの`enabled: false`を既定とし、P1 / P2だけ
+  `domain_enabled=true`、`shadow_mode: false`、`simulation_only: true`である。
+  P3と実車は無効である。
+- AWSIM実測に基づき、Reverse駆動は正加速度、停止は負加速度とする。
+  `reverse_acceleration_sign=+1`、駆動`+0.5 m/s^2`、停止`-0.8 m/s^2`、
+  保守的停止減速度`0.4 m/s^2`、制御遅延予約`0.2 s`を使用する。
+- 3台SIMのV2Xは自車を含まない2 entryだったため、P1 / P2検証では
+  `expected_v2x_vehicle_count=2`、`self_filter_mode=excluded`とする。
 - Shadowはdetector、static footprint、V2X / Boost完全性、FSM candidateのログを
   出すが、control / gear commandを上書きしない。
 - Active時もStraightのstatic swept footprint、fresh V2X rear corridor、freshかつ
   inactiveなBoost、freshで一致したGearReportのhard conditionを順に満たす。
 - Recoveryがcommand ownerの周期は通常MPCの`u / acceleration`を破棄し、
   同じC++ nodeの既存publisherからRecoveryまたはSafeStopだけをpublishする。
+- 後退は最大0.8 m / 2.0 s / 0.8 m/s / 1 attemptとし、速度上限はcoreと
+  command adapterの二重防護で停止側へ倒す。
 - Left / Rightの後退自転車modelとstatic safetyはテスト可能なAPIとして実装したが、
   runtime候補選択、実操舵command、RViz表示は未実装である。
-- AWSIM実走は未検証で、REVERSE中のacceleration符号はTBDのままである。
+- 正面壁スタックからLowSpeedRejoinまでのend-to-end実走は未検証である。
 
 ## 現行構成と問題
 
@@ -234,7 +237,7 @@ AckermannControlCommandへ変換する。sign 0は意図的な駆動禁止値で
 - control_enabled。
 - odometryがfreshかつ有限。
 - gear遷移中ではない。
-- solver fallbackではない。
+- 通常はsolver fallbackではない。下記の限定例外だけを認める。
 - deliberate stopではない。
 - Normal MPCが明確な前進速度または前進加速度を要求している。
 - signed speedの絶対値が停止閾値以下。
@@ -244,6 +247,20 @@ AckermannControlCommandへ変換する。sign 0は意図的な駆動禁止値で
 さらにConfirmedへ進むには、wall proximity、front footprint接触、急減速履歴、
 legacy collision hintのいずれかを補助証拠として要求する。
 
+solver fallback例外は、通常のMPC失敗で車両が停止し続けるP1/P2事象を拾うための
+限定経路である。次を全て満たさなければならない。
+
+- fallbackが連続2.0秒以上。solverが1周期でも復帰すればtimerをresetする。
+- detector更新間隔が0.2秒を超えた場合もtimerをresetする。
+- solver出力ではなくpath上限から得た前進要求が存在する。
+- signed speed、pose変位、unwrapped path進捗が停止条件を継続する。
+- 現在の車体footprintがoccupied wall cellと交差する。
+- deliberate stop、Start前、gear遷移、AWSIM recovery settlingではない。
+
+この例外ではlegacy collision hint単独を証拠として採用しない。qualified fallbackで
+Recoveryが制御権を取得した後は、通常MPCのfallback継続だけでFSMをSafeStopへ落とさない。
+ただし`LOW_SPEED_REJOIN`は通常MPCを再使用するため、solverが復帰していなければSafeStopとする。
+
 初期config候補:
 
     stuck_recovery:
@@ -251,6 +268,9 @@ legacy collision hintのいずれかを補助証拠として要求する。
       shadow_mode: true
       simulation_only: true
       detector:
+        solver_fallback_recovery_enabled: true
+        solver_fallback_duration_sec: 2.0
+        max_observation_gap_sec: 0.2
         stopped_speed_mps: 0.15
         forward_intent_speed_mps: 1.0
         stationary_duration_sec: 1.2
@@ -412,14 +432,21 @@ runtime checkerには次を実装した。
 - margin込みの向き付き矩形rasterization。
 - rollout間を補間したswept footprint。
 - initial contact cellsと新規contact cellsの区別。
+- 初期contact patchの固定1-cell haloと、直前patchの同一・8近傍cellを併用した連続遷移。
 
 初期接触poseの扱い:
 
 - t=0の接触だけで全候補をrejectしない。
-- initial contact cell数またはpenetration proxyをbaselineにする。
-- 最初の離脱区間で接触を増やさない。
+- 接触cellは明示Occupiedだけを許し、unknown / invalidはfail-closedとする。
+- 初期接触cellの全体がrear-axle pose基準より前方にある場合だけStraight reverse候補とする。
+- 各sampleで接触数を増やさず、現在cellが初期patchの固定halo内かつ直前patchと同一または
+  8近傍であることを必須にし、patchのchain migrationを禁止する。
 - 一定距離以内にinitial contactを解消する。
-- initial contactと無関係な新規壁cellとの接触は即rejectする。
+- 一度接触が0になった後の再接触と、離れたwall patchへの接触は即rejectする。
+- rollout評価と実後退中のruntime監視で同じ`evaluate_contact_transition`を使用する。
+- `swept_step_m`はmap resolution以下を必須とし、1 sampleでwall patchを飛び越えない。
+- 初期接触を持つ候補はStraightだけを許可し、yawが変わるLeft / Rightは方向付き
+  penetration metricを導入するまでfail-closedとする。
 
 trajectory editorのtrajectory_clearance.pyとtest fixtureは概念を参照できるが、
 runtimeでPython GUIコードを呼び出さない。
@@ -451,16 +478,17 @@ SIMでunknown時の限定creepを検討する場合も、初期安全版とは�
 暫定config候補:
 
     stuck_recovery:
-      reverse_actuation_enabled: false
-      reverse_acceleration_sign: 0.0
-      reverse_stop_acceleration_mps2: 0.0
-      verified_reverse_stop_deceleration_mps2: 0.0
-      reverse_control_latency_sec: 0.1
+      reverse_actuation_enabled: true
+      reverse_acceleration_sign: 1.0
+      reverse_stop_acceleration_mps2: -0.8
+      verified_reverse_stop_deceleration_mps2: 0.4
+      reverse_control_latency_sec: 0.2
       maneuver:
         max_reverse_distance_m: 0.8
         max_reverse_duration_sec: 2.0
-        reverse_acceleration_magnitude_mps2: 0.3
-        max_reverse_pose_step_m: 0.25
+        max_reverse_speed_mps: 0.8
+        reverse_acceleration_magnitude_mps2: 0.5
+        max_reverse_pose_step_m: 0.05
         max_attempts: 1
       gear:
         report_timeout_sec: 0.5
@@ -470,8 +498,8 @@ SIMでunknown時の限定creepを検討する場合も、初期安全版とは�
         max_lateral_error_m: 0.5
         max_heading_error_rad: 0.35
 
-数値はAWSIM実験と公式確認前の候補であり、requirementsの確定値ではない。
-特にreverse_accelerationの符号と大きさは実験前に使用しない。
+数値は2026-07-12のローカルAWSIM単車校正と運営チャットの低速・短時間方針に基づく
+P1 SIM限定値であり、2026公式上限ではない。実車へ転用しない。
 
 ## 3プリミティブ拡張
 
@@ -624,6 +652,11 @@ lateral / heading errorとhold時間で行う。
 
 ## 公式チャットへ確認する事項
 
+2026-07-12の運営チャット回答では、技術的な実装は可としつつ、競技利用は慎重に扱い、
+低速・短時間・後方clearを満たすスタック復帰に限定し、戦略的な後退は避けるよう案内された。
+本実装はこの運用制約を採用する。ただし公開ルールに数値上限や正式許可が明記された
+わけではないため、以下の詳細確認は残す。
+
 1. SIM予選で参加者コードがREVERSEを用いて自律復帰してよいか。
 2. 後退距離、速度、時間、回数に上限またはペナルティがあるか。
 3. REVERSE時のAckermannControlCommand.longitudinal.accelerationの符号。
@@ -637,12 +670,24 @@ lateral / heading errorとhold時間で行う。
 ## 2026-07-12 検証結果
 
 - `make autoware-build`: 成功。
-- `test_stuck_recovery_core`: 26 / 26成功。
-- `test_recovery_footprint`: 17 / 17成功。
+- `test_stuck_recovery_core`: 33 / 33成功。
+- `test_recovery_footprint`: 19 / 19成功。
 - package全体test: Recovery新規testは全て成功。既存
   `final_ver3/traj_mincurv.csv`の重複終端fixture期待1件だけ失敗。
 - `git diff --check`: 成功。
 - `config.yaml` YAML parse: 成功。
-- AWSIM、40 Hz deadline、dev2 / dev3、Left / Right実制御、RViz: 未検証または未実装。
-- REVERSE時のacceleration符号: TBD。`reverse_actuation_enabled: false`かつ
-  `reverse_acceleration_sign: 0.0`のまま維持する。
+- AWSIM単車校正: Reverse report遅延約0.035 s、Drive report遅延約0.015 s、
+  command-to-effect約0.140 s。`+0.5 m/s^2`で後退し、`-0.8 m/s^2`で約0.154 s後に停止、
+  平均停止減速度は約0.628 m/s^2。
+- 3台クリーン起動: Domain 1 / 2はActive、Domain 3はdisabled、V2Xは各Domain 2 entryを確認。
+- P1は`Confirmed -> WAIT_AWSIM_RECOVERY`へ入り、AWSIM標準wall recoveryで動きが戻った
+  ケースでは`awsim_recovery_resolved`として独自Reverseを発動せず通常制御へ戻った。
+- 最終の前方接触 / 固定initial halo / corner-motion強化はpure testとbuildで確認し、
+  最終binaryの独自Reverse実走は未検証として残した。
+- 3台・360秒走行: P1はStart待機、Follow / SafetyBrake由来のdeliberate stop、
+  長時間solver fallbackを経験したが、wall evidenceがないためRecoveryは0回だった。
+  `solver_fallback_missing_wall_evidence`でfail-closedになることをログで確認した。
+- 再ビルド後のP1 / P2起動でActive設定の読込に成功し、gear publisher QoSが
+  Reliable / KeepLast(1) / VolatileであることをROS graphから確認した。
+- AWSIM標準補正でも解消しない正面壁スタックの独自Reverse end-to-end、40 Hz deadline、
+  Left / Right実制御、RVizは未検証または未実装。

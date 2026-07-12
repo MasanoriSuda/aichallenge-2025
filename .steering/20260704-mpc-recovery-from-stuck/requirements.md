@@ -2,7 +2,7 @@
 
 作成日: 2026-07-12
 更新日: 2026-07-12
-状態: Implementation Complete / AWSIM Verification Pending
+状態: Implementation Complete / P1-P2 AWSIM Scenario Verification Pending
 
 ## 目的
 
@@ -21,9 +21,9 @@
 
 ## 2026-07-12 実装到達点
 
-本状態の`Implementation Complete`は、既定OFF / Shadow先行のコード、安全ラッチ、
-pure unit test、buildまでが実装済みであることを表す。online SIMや実車で後退制御を
-有効化できるという意味ではない。
+本状態の`Implementation Complete`は、P1 / P2のSIM限定Active実装、安全ラッチ、pure unit
+test、build、AWSIM単車校正までが実装済みであることを表す。実車利用や競技中の戦略的後退を
+許可するものではなく、正面壁スタックからの復帰用途だけに限定する。
 
 実装済み:
 
@@ -31,19 +31,31 @@ pure unit test、buildまでが実装済みであることを表す。online SIM
   gear report確認、timeout、distance / duration / attempt上限、LowSpeedRejoin。
 - `recovery_footprint` pure libraryのoriented footprint、swept interpolation、
   out-of-map / unknown reject、初期接触離脱、Straight / Left / Right rollout API。
+- 初期接触から離れる際は、Reverse方向と反対側にある前方接触だけを対象とする。現在の
+  接触cellは初期patchの固定1-cell halo内かつ直前patchと同一または8近傍の明示Occupiedに
+  限り、接触数増加、patchの連鎖移動、一度clear後の再接触をrejectする。rolloutと実後退中の
+  runtime監視は同じpure helperを使用する。初期接触を持つLeft / Rightは、向きが変わる場合の
+  penetration単調性を証明できるまでfail-closedとする。
 - `mpc_controller_cpp`内の `/control/command/gear_cmd` publisher、
   `/vehicle/status/gear_status` subscriber、signed odometry入力、単一control publisher arbitration。
 - 静的Straight swept-footprint、fresh V2X後方corridor、freshかつinactiveなBoostを
   実制御前のhard conditionとするnode adapter。
 - Recovery開始後のBoost session抑止と、再合流時のMPC / V2X / Overtake状態reset。
-- `enabled: false`、全Domain false、`shadow_mode: true`、`simulation_only: true`の
-  安全側既定。
-- `reverse_actuation_enabled: false`と`reverse_acceleration_sign: 0.0`の独立ラッチ。
-  sign 0のままactuationを有効化する設定は起動時に拒否する。
-- `reverse_stop_acceleration_mps2: 0.0`と
-  `verified_reverse_stop_deceleration_mps2: 0.0`、
-  `rear_safety.expected_v2x_vehicle_count: -1`、`self_filter_mode: unknown`も
-  未実測・unknownを表す安全側既定であり、そのままではReverseへ進めない。
+- 未列挙Domainの既定を`enabled: false`とし、Domain 1 / 2だけtrue、Domain 3はfalse、
+  `shadow_mode: false`、`simulation_only: true`とするP1 / P2限定Active設定。
+- AWSIM単車校正に基づく`reverse_acceleration_sign: 1.0`、
+  `reverse_stop_acceleration_mps2: -0.8`、保守的停止減速度`0.4 m/s^2`、
+  command-to-effect予約`0.2 s`。
+- 3台SIMのV2X観測に基づく`expected_v2x_vehicle_count: 2`、
+  `self_filter_mode: excluded`。単独走行ではmessage不足でfail-closedとなり、4台構成では
+  期待値を3へ変更する。
+- 後退上限`0.8 m`、`2.0 s`、`0.8 m/s`、1 attempt。速度上限はsigned speedの絶対値で
+  判定し、到達時は直ちに停止シーケンスへ移る。command生成側でも同じ条件を再確認する。
+- 通常のsolver fallbackは引き続き除外する。例外は、fallbackが連続2.0秒以上、現在の
+  footprint-to-wall証拠、前進path要求、低速、pose / path無進捗がすべて継続した場合だけ。
+  collision hint単独では例外を成立させない。
+- callback / odometry観測間隔が0.2秒を超えた場合は、停止時間とfallback継続時間を
+  resetし、観測途絶時間を「連続」として加算しない。
 
 実装済みだが実制御未統合:
 
@@ -51,21 +63,29 @@ pure unit test、buildまでが実装済みであることを表す。online SIM
 - runtimeで実commandへ変換する候補はStraightだけである。
 - 3候補のruntime選択、score / tie-break、forward rejoin可能性評価、RViz表示は未実装である。
 
-未検証のため有効化禁止:
+引き続き未検証:
 
-- AWSIMのDRIVE / REVERSE / DRIVE report遷移と応答時間。
-- REVERSE中の`AckermannControlCommand.longitudinal.acceleration`の符号と
-  odometry / VelocityReportのsigned velocity。
+- 実際の正面壁スタックからのdetector成立、全FSM遷移、LowSpeedRejoin完了。
 - AWSIM標準wall recoveryと独自Recoveryの競合。
-- online SIMでの自律REVERSE許可、dev2 / dev3の後方車安全、通常lap / 40 Hz回帰。
+- online SIMでの正式な利用可否、dev3の後方車安全全シナリオ、通常lap / 40 Hz回帰。
+- 実車での利用。`simulation_only: true`を解除してはならない。
 
 検証結果:
 
 - `make autoware-build`: 成功。
-- `test_stuck_recovery_core`: 26 / 26成功。
-- `test_recovery_footprint`: 17 / 17成功。
+- `test_stuck_recovery_core`: 33 / 33成功。
+- `test_recovery_footprint`: 19 / 19成功。
 - package全体test: Recovery新規testを含むその他は成功。既存
   `final_ver3/traj_mincurv.csv`の重複終端を期待するfixture 1件だけ失敗。
+- AWSIM校正: REVERSE report確認後の正加速度`+0.5 m/s^2`でsigned velocityが負方向へ変化し、
+  負加速度`-0.8 m/s^2`で停止。gear report遅延はREVERSE約0.035 s、DRIVE約0.015 s、
+  command-to-effect約0.140 s、停止約0.154 s、平均停止減速度約0.628 m/s^2。
+- 3台クリーン起動: Domain 1 / 2は`mode=active`、Domain 3は`mode=disabled`、各Domainの
+  V2X entry数が2であることを確認。P1は実走中に
+  `Confirmed -> WAIT_AWSIM_RECOVERY`へ遷移し、AWSIM標準
+  wall recoveryで動きが戻ったため`awsim_recovery_resolved`で通常制御へ復帰した。
+  最終の前方接触 / 固定halo安全強化はpure testで検証済みだが、独自Reverseから
+  LowSpeedRejoinまでの最終binaryによる全FSM実走は引き続き未完了。
 
 ## 原資料と関連文書
 
@@ -186,10 +206,13 @@ input.md内の星評価や暫定数値をそのまま確定仕様として扱わ
 
 - R-OFFICIAL-01: gear topic実装前にdocs/interface/participant-interface.mdへ
   2026公式gear契約を反映する。
-- R-OFFICIAL-02: SIM予選での自律REVERSE復帰可否を運営へ確認する。
+- R-OFFICIAL-02: 運営チャットの「技術的には実装可、低速・短時間・後方確認付きの
+  リカバリ用途に限定し、戦略利用は避ける」という案内を設計制約として採用する。
+  ただし公開ルール上の正式許可とは区別する。
 - R-OFFICIAL-03: REVERSE中の加速度符号、gear report遷移時間、QoS、拒否条件を
   AWSIMで実測する。
-- R-OFFICIAL-04: 公式確認が完了するまでSIM限定かつ既定無効とする。
+- R-OFFICIAL-04: P1 / P2での段階検証中はSIM限定とし、P3、未列挙Domain、実車を
+  無効のまま保つ。
 - R-OFFICIAL-05: 実車有効化はoperator stop、remote control、rear sensingを含む
   別ステアリングで扱う。
 
@@ -209,11 +232,15 @@ input.md内の星評価や暫定数値をそのまま確定仕様として扱わ
 ### R-EXCLUDE: 誤検知防止
 
 - R-EXCLUDE-01: Start前、Finish後、control disable中はRecoveryへ入らない。
-- R-EXCLUDE-02: odometry stale、非有限値、solver fallback中は既存fail-safeを優先する。
+- R-EXCLUDE-02: odometry stale、非有限値、短時間または壁証拠のないsolver fallback中は
+  既存fail-safeを優先する。連続2.0秒以上のfallbackは、現在のwall footprint証拠、
+  前進path要求、停止、pose / path無進捗が全て継続する場合だけRecovery候補にできる。
 - R-EXCLUDE-03: V2X Follow、SafetyBrake、LowSpeedAvoidance、停止車待ちを
   スタックと誤判定しない。
 - R-EXCLUDE-04: gear切替中、Recovery cooldown中、復帰後再合流中に
   新しいRecoveryを重複開始しない。
+- R-EXCLUDE-04A: detector更新間隔が設定上限を超えた場合、停止とfallbackの
+  継続観測timerをresetする。
 - R-EXCLUDE-05: collision penaltyによる低速化だけでRecoveryを発動しない。
 - R-EXCLUDE-06: 後方に他車がいる、または後方情報がfreshでない場合、
   初期実装では後退せずWAIT_FOR_CLEARまたはSafeStopとする。
@@ -252,7 +279,9 @@ input.md内の星評価や暫定数値をそのまま確定仕様として扱わ
 - R-SAFE-04: AWSIM colliderと設定footprintの対応が未確認であることを記録し、
   safety証明として断定しない。
 - R-SAFE-05: 初期poseが壁cellへ接触している場合、全候補を即時rejectせず、
-  新しい衝突を増やさず初期接触から単調に離れる条件を用意する。
+  Reverseで離れられる前方接触だけを対象とする。接触は初期patchの固定1-cell halo内かつ
+  直前patchの同一または8近傍に限って許し、接触数増加、chain migration、一度clear後の
+  再接触をrejectする。
 - R-SAFE-06: V2Xはtimeout、position jump、self filter、prediction marginを適用する。
 - R-SAFE-07: V2Xだけを後方安全の完全な証明とせず、freshness不明時は安全側へ倒す。
 - R-SAFE-08: Safety条件はscoreではなくhard rejectとして候補選択より先に適用する。
@@ -260,7 +289,8 @@ input.md内の星評価や暫定数値をそのまま確定仕様として扱わ
 ### R-MANEUVER: 復帰操作
 
 - R-MANEUVER-01: 最初の実制御は正面接触を対象とする直進後退だけに限定する。
-- R-MANEUVER-02: 後退距離、継続時間、加速度、操舵角、試行回数にhard upper limitを持つ。
+- R-MANEUVER-02: 後退距離、継続時間、実速度、加速度、操舵角、試行回数に
+  hard upper limitを持つ。初期値は0.8 m、2.0 s、0.8 m/s、1 attemptとする。
 - R-MANEUVER-03: longitudinal.speedがAWSIMで未使用であることを前提にせず、
   実測したgearとaccelerationの意味をadapterへ閉じ込める。
 - R-MANEUVER-04: Phase 3ではReverseStraight、ReverseLeft、ReverseRightの
@@ -307,13 +337,17 @@ input.md内の星評価や暫定数値をそのまま確定仕様として扱わ
 
 - 前進要求、低速度、無進捗が所定時間継続した場合だけSUSPECT_STUCKとなる。
 - 一時停止、Follow、SafetyBrake、LowSpeedAvoidance、Start前、Finish後、
-  odometry stale、solver fallbackではRecoveryへ入らない。
+  odometry stale、短時間fallback、壁証拠のないfallbackではRecoveryへ入らない。
+- 連続2.0秒のsolver fallbackでも、現在のwall footprint証拠、path前進要求、停止、
+  pose / path無進捗が揃った場合だけRecoveryへ入る。
 - AWSIM姿勢補正中のpose / yaw変化でdetector timerが適切にholdまたはresetされる。
 - gear reportが来る前に駆動加速度を出さない。
 - gear timeoutでSafeStopとなる。
-- reverse距離、時間、attempt上限で停止する。
+- reverse距離、時間、signed speed絶対値、attempt上限で停止し、上限到達後に再加速しない。
 - 後方車、後方壁、map外、unknown cellを含む候補をrejectする。
 - 初期接触から離れる直進候補を正しく扱う。
+- 初期halo内の隣接・斜め隣接cellへの1対1移動と接触縮小を許し、接触数増加、halo外への
+  chain migration、後方wall通過、unknown、clear後の再接触をrejectする。
 - Recovery完了時にMPCとV2X lockがresetされる。
 - feature flag無効時の既存core testが回帰しない。
 
@@ -328,8 +362,8 @@ input.md内の星評価や暫定数値をそのまま確定仕様として扱わ
 
 ### AWSIM検証
 
-- 停止中のDRIVE / REVERSE commandとgear reportの関係を記録する。
-- REVERSE中のacceleration符号とsigned velocityを確認する。
+- [確認済み] 停止中のDRIVE / REVERSE commandとgear reportの関係を記録する。
+- [確認済み] REVERSE中のacceleration符号とsigned velocityを確認する。
 - AWSIM標準壁リカバリーの発動中に独自Recoveryが競合しない。
 - 正面壁接触後、標準補正で解消しない場合だけ短距離後退する。
 - 後方車がいる場合は後退せず停止または待機する。
@@ -345,8 +379,8 @@ input.md内の星評価や暫定数値をそのまま確定仕様として扱わ
 - SIM予選で参加者コードによる自律REVERSE復帰が許可されるか。
 - 最大後退距離、速度、時間、試行回数に公式制限があるか。
 - 後退が逆走、蛇行、妨害として評価される条件。
-- AWSIMでREVERSE時に駆動方向へ使うaccelerationの符号。
-- GearCommandの再送要否とGearReportの想定応答時間。
+- 配布online SIMでもローカルAWSIM校正と同じacceleration符号・GearReport QoS・応答を持つか。
+- GearCommandを再送すべき公式条件。
 - online SIM予選でgear_statusが常時publishされるか。
 - wall recovery中またはcollision penalty中を示す公式statusが提供されるか。
 - 2026環境で利用できる公式collision eventの有無。

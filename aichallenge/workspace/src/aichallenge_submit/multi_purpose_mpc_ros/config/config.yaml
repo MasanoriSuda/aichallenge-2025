@@ -18,28 +18,34 @@ awsim_boost:
   status_timeout_sec: 0.5
   confirmation_timeout_sec: 2.0
 
-# Staged wall-stuck recovery. The detector and all actuation are disabled by default so the
-# existing MPC output is unchanged. Enable shadow_mode first and inspect logs before takeover.
+# Staged wall-stuck recovery. It is active only for P1/P2 in the current dev3 simulation;
+# P3, unlisted domains, and every non-simulation environment remain disabled/fail-closed.
 stuck_recovery:
   enabled: false
   domain_enabled:
-    1: false
-    2: false
+    1: true
+    2: true
     3: false
-  shadow_mode: true
+  shadow_mode: false
   simulation_only: true
-  # Independent safety latch. Keep false until AWSIM Reverse acceleration semantics are measured.
-  reverse_actuation_enabled: false
-  # TBD: measured adapter sign only (-1 or +1). Zero intentionally prevents reverse actuation.
-  reverse_acceleration_sign: 0.0
-  # TBD: signed acceleration verified to stop while physical gear remains Reverse.
-  reverse_stop_acceleration_mps2: 0.0
-  # TBD: achieved positive deceleration measured from signed odometry while stopping in Reverse.
-  verified_reverse_stop_deceleration_mps2: 0.0
-  # Measured command-to-effect delay; included in the physical stopping-distance reserve.
-  reverse_control_latency_sec: 0.1
+  # P1/P2 simulation-only activation. 2026-07-12 local AWSIM calibration measured positive drive
+  # acceleration in Reverse and negative stopping acceleration; keep disabled for real vehicle.
+  reverse_actuation_enabled: true
+  reverse_acceleration_sign: 1.0
+  reverse_stop_acceleration_mps2: -0.8
+  # Measured average was 0.628 m/s^2; use a conservative lower bound for stopping reserve.
+  verified_reverse_stop_deceleration_mps2: 0.4
+  # Measured command-to-effect delay was about 0.14 s; round up for reserve.
+  reverse_control_latency_sec: 0.2
   boost_status_timeout_sec: 0.5
   detector:
+    # A solver failure is eligible only after this duration and still requires forward path
+    # demand, stopped pose/progress, and current footprint-to-wall evidence. A collision hint
+    # alone is intentionally insufficient for this exception.
+    solver_fallback_recovery_enabled: true
+    solver_fallback_duration_sec: 2.0
+    # A longer callback/odometry gap resets both stationary and fallback continuity timers.
+    max_observation_gap_sec: 0.2
     stopped_speed_mps: 0.15
     moving_speed_mps: 0.25
     forward_intent_speed_mps: 1.0
@@ -58,10 +64,13 @@ stuck_recovery:
     clearance_wait_timeout_sec: 1.0
     max_reverse_distance_m: 0.8
     max_reverse_duration_sec: 2.0
+    # Begin the calibrated stop sequence below the operator-chat guideline of 1.0 m/s.
+    max_reverse_speed_mps: 0.8
     # Positive magnitude only; reverse_acceleration_sign is applied by the ROS/AWSIM adapter.
-    reverse_acceleration_magnitude_mps2: 0.3
+    reverse_acceleration_magnitude_mps2: 0.5
     escape_distance_m: 0.30
-    max_reverse_pose_step_m: 0.25
+    # Fail closed before an odometry interval can skip a 0.1 m map cell.
+    max_reverse_pose_step_m: 0.05
     max_attempts: 1
   footprint:
     # Pose-to-collider correspondence is still TBD; these are current vehicle-sheet estimates.
@@ -72,12 +81,10 @@ stuck_recovery:
     margin_m: 0.05
     sweep_interpolation_step_m: 0.05
   rear_safety:
-    # Total entries in each V2X array (include self if AWSIM publishes self).
-    # -1 means unknown and intentionally blocks Reverse until the race layout is confirmed.
-    expected_v2x_vehicle_count: -1
-    # unknown blocks Reverse. Use excluded only if V2X officially excludes self; otherwise
-    # use vehicle_id and set the exact self_vehicle_id.
-    self_filter_mode: unknown
+    # 2026 preliminary/dev3 uses three vehicles. Latest run showed two entries per domain and no
+    # self entry. Use 3 for a four-vehicle final; single-vehicle runs fail closed without V2X.
+    expected_v2x_vehicle_count: 2
+    self_filter_mode: excluded
     self_vehicle_id: ""
     vehicle_radius_m: 1.45
     prediction_margin_sec: 0.1

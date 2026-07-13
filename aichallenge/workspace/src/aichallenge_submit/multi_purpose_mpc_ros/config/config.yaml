@@ -23,8 +23,8 @@ awsim_boost:
 stuck_recovery:
   enabled: false
   domain_enabled:
-    1: true
-    2: true
+    1: false
+    2: false
     3: false
   shadow_mode: false
   simulation_only: true
@@ -358,8 +358,8 @@ mpc:
 
   v_max: 40.0   # km/h
   domain_v_max:
-    1: 10.0
-    2: 20.0
+    1: 40.0
+    2: 40.0
     3: 40.0
   domain_start_v_max_duration: 15.0 # [s] compensate inner-lane advantage at side-by-side start
   domain_start_v_max:

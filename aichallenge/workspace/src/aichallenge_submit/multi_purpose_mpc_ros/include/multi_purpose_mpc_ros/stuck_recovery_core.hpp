@@ -45,6 +45,11 @@ struct DetectorConfig
   // retain the legacy fail-safe behavior.
   bool solver_fallback_recovery_enabled{false};
   double solver_fallback_duration_sec{2.0};
+  // Optional fallback for a physically stuck vehicle whose simulator wall and
+  // occupancy-grid/collision evidence disagree. This never applies while the
+  // MPC solver itself is in fallback.
+  bool evidence_free_recovery_enabled{false};
+  double evidence_free_duration_sec{3.0};
   // Observation time is continuous only while updates stay within this gap.
   double max_observation_gap_sec{0.25};
   double stopped_speed_mps{0.15};
@@ -86,6 +91,7 @@ struct DetectorDecision
   bool forward_intent{false};
   bool corroborating_evidence{false};
   bool solver_fallback_qualified{false};
+  bool evidence_free_qualified{false};
 };
 
 class StuckDetector
@@ -121,6 +127,13 @@ enum class Gear
   Reverse,
 };
 
+enum class ManeuverDirection
+{
+  Unknown,
+  Reverse,
+  Forward,
+};
+
 enum class RecoveryState
 {
   Normal,
@@ -132,6 +145,8 @@ enum class RecoveryState
   ShiftToReverse,
   WaitReverseReport,
   ReverseManeuver,
+  ForwardManeuver,
+  StopAndReassess,
   StopBeforeDrive,
   ShiftToDrive,
   WaitDriveReport,
@@ -145,6 +160,7 @@ enum class RecoveryActionType
   HoldStop,
   RequestReverse,
   ReverseCreep,
+  ForwardCreep,
   RequestDrive,
   LowSpeedRejoin,
   SafeStop,
@@ -168,6 +184,7 @@ enum class RecoveryReason
   RearVehicleBlocked,
   RearInformationIncomplete,
   ClearanceWaitTimedOut,
+  ManeuverDirectionUnknown,
   AttemptLimitReached,
   ReverseGearRequested,
   ReverseGearConfirmed,
@@ -183,9 +200,19 @@ enum class RecoveryReason
   CollisionWorsening,
   RearHazardAppeared,
   ReverseGearLost,
+  ForwardInProgress,
+  ForwardDistanceLimit,
+  ForwardDurationLimit,
+  ForwardSpeedLimit,
+  ForwardEscapeConfirmed,
+  ForwardHazardAppeared,
+  EscapeStepComplete,
+  EscapeStepLimitReached,
+  ContactNotImproving,
   DriveGearRequested,
   DriveGearConfirmed,
   DriveGearLost,
+  EscapeNotConfirmed,
   RejoinInProgress,
   RejoinComplete,
   RejoinTimedOut,
@@ -205,6 +232,8 @@ struct SupervisorConfig
   double stop_speed_mps{0.05};
   double stop_confirm_sec{0.3};
   double clearance_wait_timeout_sec{1.0};
+  bool clearance_safe_stop_recovery_enabled{false};
+  double safe_stop_clear_confirm_sec{0.5};
   double gear_report_timeout_sec{0.5};
   double gear_command_resend_interval_sec{0.2};
   std::size_t max_gear_command_requests{1U};
@@ -219,6 +248,12 @@ struct SupervisorConfig
   // simulator-specific acceleration sign. Zero is the fail-safe default while
   // that sign is unverified.
   double reverse_acceleration_magnitude_mps2{0.0};
+  double max_forward_distance_m{0.6};
+  double max_forward_duration_sec{1.5};
+  double max_forward_speed_mps{0.8};
+  double forward_acceleration_magnitude_mps2{0.5};
+  double escape_step_distance_m{0.20};
+  std::size_t max_escape_steps{3U};
   std::size_t max_attempts{1U};
   double rejoin_speed_limit_mps{1.0};
   double max_rejoin_lateral_error_m{0.5};
@@ -254,8 +289,12 @@ struct RecoveryInput
   bool solver_healthy{false};
   bool hard_stop_requested{false};
   bool awsim_recovery_settled{false};
+  bool awsim_recovery_resolved{false};
   Gear reported_gear{Gear::Unknown};
   bool gear_report_fresh{false};
+  ManeuverDirection maneuver_direction{ManeuverDirection::Unknown};
+  bool stepwise_escape{false};
+  bool step_contact_improved{false};
   bool rear_static_clear{false};
   bool rear_v2x_clear{false};
   bool rear_information_complete{false};
@@ -263,7 +302,14 @@ struct RecoveryInput
   bool recovery_escape_confirmed{false};
   bool rejoin_safe{false};
   double signed_speed_mps{};
+  // Distance of the current bounded maneuver, including the node-side
+  // stopping reserve when used for actuation limits.
   double traveled_distance_m{};
+  // Distance accumulated across every bounded maneuver in this recovery
+  // episode. This prevents a sequence of short steps from being mistaken for
+  // a completed escape after each per-step distance reset.
+  double episode_traveled_distance_m{};
+  double reverse_steering_tire_angle_rad{};
   double lateral_error_m{};
   double heading_error_rad{};
 };
@@ -292,7 +338,9 @@ public:
   [[nodiscard]] RecoveryState state() const noexcept;
   [[nodiscard]] RecoveryReason state_reason() const noexcept;
   [[nodiscard]] std::size_t attempt_count() const noexcept;
+  [[nodiscard]] std::size_t escape_step_count() const noexcept;
   [[nodiscard]] bool safe_stop_latched() const noexcept;
+  [[nodiscard]] bool drive_report_will_reassess_or_stop() const noexcept;
   [[nodiscard]] const SupervisorConfig & config() const noexcept;
 
 private:
@@ -304,16 +352,22 @@ private:
   RecoveryAction update_wait_for_clear(const RecoveryInput & input);
   RecoveryAction update_wait_reverse_report(const RecoveryInput & input);
   RecoveryAction update_reverse_maneuver(const RecoveryInput & input);
+  RecoveryAction update_forward_maneuver(const RecoveryInput & input);
+  RecoveryAction update_stop_and_reassess(const RecoveryInput & input);
   RecoveryAction update_stop_before_drive(const RecoveryInput & input);
   RecoveryAction update_wait_drive_report(const RecoveryInput & input);
   RecoveryAction update_low_speed_rejoin(const RecoveryInput & input);
+  RecoveryAction update_safe_stop(const RecoveryInput & input);
 
   void transition(RecoveryState next, RecoveryReason reason, double now_sec) noexcept;
   RecoveryAction normal_action(RecoveryReason reason = RecoveryReason::None) const noexcept;
   RecoveryAction hold_action(RecoveryReason reason) const noexcept;
   RecoveryAction safe_stop_action(RecoveryReason reason) const noexcept;
   RecoveryAction request_gear_action(Gear gear, RecoveryReason reason, double now_sec) noexcept;
-  RecoveryAction reverse_action(RecoveryReason reason) const noexcept;
+  RecoveryAction reverse_action(
+    RecoveryReason reason, double steering_tire_angle_rad) const noexcept;
+  RecoveryAction forward_action(
+    RecoveryReason reason, double steering_tire_angle_rad) const noexcept;
   RecoveryAction rejoin_action(RecoveryReason reason) noexcept;
   RecoveryReason clearance_reason(const RecoveryInput & input) const noexcept;
   bool clearance_is_safe(const RecoveryInput & input) const noexcept;
@@ -326,14 +380,20 @@ private:
   RecoveryState state_{RecoveryState::Normal};
   RecoveryReason state_reason_{RecoveryReason::SessionReset};
   std::size_t attempt_count_{0U};
+  std::size_t escape_step_count_{0U};
   std::size_t gear_command_request_count_{0U};
   std::optional<double> state_entered_sec_;
   std::optional<double> last_update_sec_;
   std::optional<double> stopped_since_sec_;
   std::optional<double> aligned_since_sec_;
+  std::optional<double> clearance_safe_since_sec_;
   std::optional<double> last_gear_request_sec_;
   std::optional<double> cooldown_until_sec_;
   bool normal_reset_pending_{false};
+  bool active_stepwise_escape_{false};
+  bool reassess_after_drive_{false};
+  bool safe_stop_after_drive_{false};
+  bool escape_confirmed_before_drive_{false};
 };
 
 enum class ExecutionMode
@@ -393,6 +453,7 @@ private:
 const char * to_string(StuckVerdict verdict) noexcept;
 const char * to_string(StuckRejectReason reason) noexcept;
 const char * to_string(Gear gear) noexcept;
+const char * to_string(ManeuverDirection direction) noexcept;
 const char * to_string(RecoveryState state) noexcept;
 const char * to_string(RecoveryActionType action) noexcept;
 const char * to_string(RecoveryReason reason) noexcept;

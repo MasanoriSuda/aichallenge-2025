@@ -1,8 +1,8 @@
 # MPC Stuck Recovery Requirements
 
 作成日: 2026-07-12
-更新日: 2026-07-12
-状態: Implementation Complete / P1-P2 AWSIM Scenario Verification Pending
+更新日: 2026-07-13
+状態: Implementation Complete / 2026-07-13 AWSIM Verification Pending
 
 ## 目的
 
@@ -57,11 +57,23 @@ test、build、AWSIM単車校正までが実装済みであることを表す。
 - callback / odometry観測間隔が0.2秒を超えた場合は、停止時間とfallback継続時間を
   resetし、観測途絶時間を「連続」として加算しない。
 
-実装済みだが実制御未統合:
+2026-07-13追加実装:
 
-- Left / Rightは後退自転車modelとstatic safetyのpure API / testだけである。
-- runtimeで実commandへ変換する候補はStraightだけである。
-- 3候補のruntime選択、score / tie-break、forward rejoin可能性評価、RViz表示は未実装である。
+- solver正常時の1.5秒evidence-free継続スタック判定。
+- AWSIM補正待機後は、補正前に選んだmaneuverを使い回さず、現在pose / contactを基準に候補を再選択する。
+- map contactが0でもLeft / Right / Mixed近傍wallがある場合は、static swept rolloutから候補を生成する。
+- 通常はReverseを優先し、後続車でReverse corridorが塞がれた場合だけ、static mapとforward V2X
+  corridorがclearな`ForwardStraight`を最大0.6 mの代替離脱として許可する。
+- evidence-free Recoveryでは、AWSIM補正によるpose変化だけを復帰成功とせず、経路進捗を必須とする。
+- V2X position jumpは固定距離だけで判定せず、message間隔と許容速度から正常移動距離を算入する。
+- clearance timeoutだけを対象とするSafeStopの0.5秒clear継続再評価。
+- Straight / Left / Rightの決定的なruntime選択、episode latch、実操舵command。
+- 選択rolloutの横変位を含むrear V2X corridor。
+
+引き続き未実装:
+
+- candidate終端からのforward rejoin可能性score、全候補のRViz表示。
+- 初期接触を持つLeft / Rightの方向付きpenetration単調性評価。
 
 引き続き未検証:
 
@@ -86,6 +98,30 @@ test、build、AWSIM単車校正までが実装済みであることを表す。
   wall recoveryで動きが戻ったため`awsim_recovery_resolved`で通常制御へ復帰した。
   最終の前方接触 / 固定halo安全強化はpure testで検証済みだが、独自Reverseから
   LowSpeedRejoinまでの最終binaryによる全FSM実走は引き続き未完了。
+
+## 2026-07-13 追加要求
+
+最新3台走行`output/20260713-051613`では、P1が前進要求を維持したまま停止し、poseと
+path progressも変化しなかったが、AWSIM物理壁とoccupancy map / legacy collision通知の
+不一致により`wall=0`、`evidence=0`となり、detectorが`SUSPECT_STUCK`から進まなかった。
+一方、`v2x_start_grid_grace_time`を1800秒から5秒へ短縮した走行ではP2 / P3は停止連鎖せず
+走行を継続した。
+
+この結果を受け、次を追加対象とする。
+
+- solverが正常で、意図的停止・前方車待ち・gear遷移ではなく、前進要求、低速、pose / path
+  無進捗が3秒以上連続した場合に限り、wall / collision証拠なしでもRecovery候補とする。
+- solver fallbackについては従来どおりcurrent wall evidenceを必須とし、証拠なし救済を
+  適用しない。
+- clearance timeoutによるSafeStopだけは後方情報とstatic rolloutを継続再評価し、clearが
+  一定時間継続した場合に限りCHECK_CLEARANCEへ戻す。gear / odometry / solver等の故障に
+  よるSafeStopはlatchedのままとする。
+- runtimeでStraight / Left / Rightを決定的に評価し、Straight優先、次にLeft、Rightの順で
+  feasible候補を1つlatchedする。選択後は同じprimitiveを後退終了まで維持する。
+- Left / RightのV2X後方corridorは選択rolloutの横変位分を含めて保守的に拡張する。
+- 初期接触を持つLeft / Rightは、penetration単調性を証明できるまで引き続きrejectする。
+- 後続車の空間確保は、新topicを追加せず、5秒のstart-grid grace、既存の停止車回避、
+  `v2x_safety_brake_distance: 6.0`を第一段階として検証する。
 
 ## 原資料と関連文書
 
@@ -160,6 +196,8 @@ input.md内の星評価や暫定数値をそのまま確定仕様として扱わ
 - 単一の最終command ownerによるNormal / Recovery / SafeStopの排他制御。
 - SIM限定・既定無効のfeature flag。
 - 直進後退による最初の復帰MVP。
+- Straight / Left / Rightのruntime candidate選択と実command。
+- 選択candidateのrear V2X corridor hard check。
 - 後方静的map、V2X、gear、odometryの安全確認。
 - 最大距離、最大時間、最大試行回数、cooldown。
 - 復帰後のMPC、filter、V2X追い越し状態の再初期化。
@@ -170,9 +208,8 @@ input.md内の星評価や暫定数値をそのまま確定仕様として扱わ
 
 ### 後続段階で対象
 
-- pure APIまで実装済みのLeft / Rightをruntime candidate選択と実commandへ統合する。
-- Straight / Left / Rightの全候補にrear V2Xとforward rejoin可能性を統一適用する。
-- 単位正規化済みscoreとdeterministic tie-breakによるruntime候補選択。
+- Straight / Left / Rightの全候補にforward rejoin可能性を統一適用する。
+- 必要性が実測された場合の単位正規化済みscore。現実装は安全判定後の固定優先順を使う。
 - 候補軌跡と拒否理由のRViz可視化。
 
 ### 対象外
@@ -226,8 +263,20 @@ input.md内の星評価や暫定数値をそのまま確定仕様として扱わ
 - R-DET-04: 壁近傍、急減速、legacy collision signalは補助証拠として使用できるが、
   単独でRecoveryを開始しない。
 - R-DET-05: AWSIM標準壁リカバリーの1秒間と、その直後のpose / yaw安定待ちを設ける。
+- R-DET-05A: AWSIM補正によるpose変化だけでは復帰済みとせず、現在の車体footprint contactが
+  clearになった場合だけ通常制御へ戻る。contactが残る場合は待機後に限定Recoveryを継続する。
 - R-DET-06: detectorはShadow modeを持ち、制御を変えずcandidateとreasonだけを記録できる。
 - R-DET-07: 同じ入力、時刻、設定に対して決定的な判定を返す。
+- R-DET-08: solver正常時に限り、意図的停止ではない前進要求、低実速度、pose / path無進捗が
+  設定時間以上連続した場合、wall / collision証拠なしでも限定的にConfirmedとできる。
+- R-DET-09: 証拠なしConfirmedの有効化と継続時間は独立parameterとし、既定無効または
+  fail-closedな値を持つ。
+- R-DET-10: 前進intentは瞬間的なMPC解だけでなくreference path速度要求との最大値を使用し、
+  stopped中のMPC target再構築で0 / 非0が交互になっても無進捗timerを不当にresetしない。
+- R-DET-11: solver正常の証拠なしConfirmedでmap footprintと後方3.0 m Straight rolloutがclear、
+  V2X情報がfresh / completeかつ後方clearの場合だけReverseStraightを許可する。map invalid、
+  out-of-map、unknown、solver fallback、V2X不完全ではこのfallbackを使用しない。escape完了には
+  episode実測2.0 mを必須とする。
 
 ### R-EXCLUDE: 誤検知防止
 
@@ -237,6 +286,9 @@ input.md内の星評価や暫定数値をそのまま確定仕様として扱わ
   前進path要求、停止、pose / path無進捗が全て継続する場合だけRecovery候補にできる。
 - R-EXCLUDE-03: V2X Follow、SafetyBrake、LowSpeedAvoidance、停止車待ちを
   スタックと誤判定しない。
+- R-EXCLUDE-03A: 通常V2X behaviorの除外状態はRecovery開始判定にだけ使用する。Recovery開始後は
+  一時的なFollow / SafetyBrake表示を`control_interrupted`へ変換せず、選択方向のfresh / completeな
+  V2X corridorを駆動可否の正本とする。control disableや明示hard stopは引き続き即時停止する。
 - R-EXCLUDE-04: gear切替中、Recovery cooldown中、復帰後再合流中に
   新しいRecoveryを重複開始しない。
 - R-EXCLUDE-04A: detector更新間隔が設定上限を超えた場合、停止とfallbackの
@@ -257,7 +309,8 @@ input.md内の星評価や暫定数値をそのまま確定仕様として扱わ
 - R-FSM-05: gear report timeout、不正値、stale時はSafeStopへ遷移する。
 - R-FSM-06: reverse中の新しい障害物、V2X接近、odom異常、距離上限、
   時間上限で直ちに停止フェーズへ遷移する。
-- R-FSM-07: 試行回数上限後はRecoveryを無限再試行せず、latched SafeStopとする。
+- R-FSM-07: 試行回数上限、gear / odometry / solver異常後はRecoveryを無限再試行せず、
+  latched SafeStopとする。clearance timeoutだけは安全条件の継続確認後に再開できる。
 - R-FSM-08: Spawned / Finish / 新race sessionでstateとattemptを決定的に再初期化する。
 
 ### R-GEAR: ギア管理
@@ -288,7 +341,8 @@ input.md内の星評価や暫定数値をそのまま確定仕様として扱わ
 
 ### R-MANEUVER: 復帰操作
 
-- R-MANEUVER-01: 最初の実制御は正面接触を対象とする直進後退だけに限定する。
+- R-MANEUVER-01: 実制御はStraightを優先し、Straightが不可能で初期footprintがclearな場合に
+  限りLeft、Rightの順で操舵付き後退を選択できる。
 - R-MANEUVER-02: 後退距離、継続時間、実速度、加速度、操舵角、試行回数に
   hard upper limitを持つ。初期値は0.8 m、2.0 s、0.8 m/s、1 attemptとする。
 - R-MANEUVER-03: longitudinal.speedがAWSIMで未使用であることを前提にせず、
@@ -299,6 +353,42 @@ input.md内の星評価や暫定数値をそのまま確定仕様として扱わ
 - R-MANEUVER-06: scoreを使う場合は単位を正規化し、同点tie-breakを固定する。
 - R-MANEUVER-07: 二段切返しは3候補の失敗ログが蓄積してから追加する。
 
+### R-DIRECTION: 壁方向に応じた離脱
+
+- R-DIRECTION-01: occupancy gridの近傍wall cellを車体座標へ変換し、Front / Rear /
+  Left / Right / Mixed / Unknownを決定的に分類する。
+- R-DIRECTION-02: Frontでは従来のReverse候補、RearではDriveのままForwardStraight候補を
+  使用し、接触方向へ押し続けない。
+- R-DIRECTION-03: Left / Right / MixedはR-SIDE-ESCAPEの改善証明がある場合だけ駆動し、
+  Unknownでは推測せずfail-closedとする。
+- R-DIRECTION-04: Rearからの前進もfull swept footprint、complete / fresh V2X corridor、
+  Boost inactive、fresh Drive reportを駆動前に必須とする。
+- R-DIRECTION-05: 前進は0.6 m、1.5 s、0.8 m/s、1 attemptのローカル上限を持ち、
+  0.30 m離脱後はLowSpeedRejoinへ移る。
+- R-DIRECTION-06: Reverse reportとV2X完全性が別周期で到着した場合、およびReverseManeuver中に
+  V2X完全性が一時欠落した場合は、情報が揃うまでReverseの停止commandを維持する。
+  1周期の欠落だけで駆動、Drive復帰、または脱出ステップの進捗初期化を行わない。
+
+### R-SIDE-ESCAPE: Side / Mixed段階離脱
+
+- R-SIDE-01: Side / Mixedかつ実footprint contactがある場合、前進衝突からの離脱を原則とし、
+  ReverseのStraight / Left / Right、合計3候補を同じswept-footprint規則で評価する。
+  ForwardStraightはRearと明確に分類できた場合だけ使用する。
+- R-SIDE-02: 1候補は0.40 m以下とし、初期contact数を超えず、新しい非連結contactを作らず、
+  終端で初期contactの5%以上を減らす場合だけacceptする。
+- R-SIDE-03: accept候補はcontact減少数最大、同点時はStraight、Left、Rightの決定順で選ぶ。
+- R-SIDE-04: 1ステップごとに完全停止し、実測contact数が減少した場合だけ次候補を再評価する。
+- R-SIDE-05: 実contactが減らない、map / gear情報が不完全、8ステップ以内にepisode実測
+  2.0 mへ到達しない場合はSafeStopとする。Reverse中の失敗は停止してDriveへ戻してから
+  SafeStopとする。V2X情報の一時欠落はReverseを維持して停止し、回復すれば距離・contact基準を
+  初期化せず同じステップを再開する。情報欠落だけではDriveへ戻さない。
+- R-SIDE-06: 段階中にwall regionがFront / Rearへ変化しても、接触が残る間は段階評価を継続する。
+- R-SIDE-07: Front / Rearの既存RequireClear候補と固定initial halo規則を弱めない。
+- R-SIDE-08: V2X / static clearanceが成立したWAIT_FOR_CLEAR周期では同じsnapshotを使って
+  gear要求まで進め、次周期の情報欠落で成立済み候補を失わない。
+- R-SIDE-09: gear要求前は0.40 m終端の予測改善を必須とし、開始後は新規contactとcontact増加を
+  毎周期禁止する。残距離ごとに追加5%改善を要求せず0.40 mまで継続し、終点で実改善を確認する。
+
 ### R-REJOIN: 復帰後の再合流
 
 - R-REJOIN-01: DRIVE report確認後に現在poseをreference pathへ再投影する。
@@ -308,6 +398,12 @@ input.md内の星評価や暫定数値をそのまま確定仕様として扱わ
 - R-REJOIN-04: heading errorとlateral errorが閾値以内になるまで低速上限を適用する。
 - R-REJOIN-05: 再合流中も壁、前方車、SafetyBrakeを優先する。
 - R-REJOIN-06: 通常速度へ戻すときに加速度や操舵のstepを作らない。
+- R-REJOIN-07: Front / Sideはstepをまたぐepisode実移動2.0 m、Rearは実移動0.30 mを
+  escape条件とし、距離未達またはfootprint非clearではLowSpeedRejoinへ進まない。
+- R-REJOIN-08: V2X / Boost情報の欠落だけでescapeまたはLowSpeedRejoin完了を成立させない。
+  LowSpeedRejoin中に不完全となった場合は停止保持し、complete復帰後に再開する。
+- R-REJOIN-09: Drive確認後にescape条件未達なら`escape_not_confirmed` SafeStopとし、
+  `e_y` / `e_psi`だけで完了させない。
 
 ### R-OBS: 観測性
 
@@ -319,6 +415,8 @@ input.md内の星評価や暫定数値をそのまま確定仕様として扱わ
 - R-OBS-04: debug無効時に40 Hzの周期ログを増やさない。
 - R-OBS-05: Recoveryの発動回数、成功回数、失敗理由、移動距離を
   評価後に集計できる。
+- R-OBS-06: state / reason変化時にmaneuver距離、episode距離、停止予約、escape target、
+  escape成立、Boost freshness、V2X message completeness、`e_y`、`e_psi`を記録する。
 
 ## 非機能要求
 
@@ -338,17 +436,39 @@ input.md内の星評価や暫定数値をそのまま確定仕様として扱わ
 - 前進要求、低速度、無進捗が所定時間継続した場合だけSUSPECT_STUCKとなる。
 - 一時停止、Follow、SafetyBrake、LowSpeedAvoidance、Start前、Finish後、
   odometry stale、短時間fallback、壁証拠のないfallbackではRecoveryへ入らない。
+- solver正常かつ意図的停止でない証拠なしスタックは、設定時間未満ではSuspectedを維持し、
+  設定時間到達後だけConfirmedとなる。
 - 連続2.0秒のsolver fallbackでも、現在のwall footprint証拠、path前進要求、停止、
   pose / path無進捗が揃った場合だけRecoveryへ入る。
 - AWSIM姿勢補正中のpose / yaw変化でdetector timerが適切にholdまたはresetされる。
 - gear reportが来る前に駆動加速度を出さない。
 - gear timeoutでSafeStopとなる。
-- reverse距離、時間、signed speed絶対値、attempt上限で停止し、上限到達後に再加速しない。
+- episode reverse距離、時間、attempt上限で停止する。signed speed上限到達時はReverseのまま
+  減速し、上限未満へ戻った場合だけ同じmaneuverを再開する。
 - 後方車、後方壁、map外、unknown cellを含む候補をrejectする。
+- Straight / Left / Rightから決定的に候補を選び、選択操舵角をReverse commandへ渡す。
+- Front wallではReverse、Rear wallではForwardStraightを選び、Side / Mixedでは改善候補、
+  Unknownでは駆動候補を生成しない。
+- Rear接触から離れるForwardStraightだけを許し、前方接触を貫通する前進候補をrejectする。
+- Side / MixedではReverse 3候補から予測contactが5%以上減る候補だけを選ぶ。
+- 段階移動後の実contactが減らない場合は次ステップへ進まない。
+- 段階移動は0.40 m、最大8回で、各回の間に停止確認と再評価を行い、step間でepisode距離を
+  resetしない。
+- Reverse gear確認直後にcorridor情報が1周期欠落しても停止したまま再評価し、clear確認後だけ
+  ReverseCreepへ入る。
+- ReverseManeuver中にcorridor情報が一時欠落しても停止し、回復後は移動距離とcontact基準を
+  初期化せず同じ脱出ステップを再開する。
+- corridor情報がtimeoutを超えて不完全でもReverse停止を維持し、情報欠落だけを理由にDrive、
+  LowSpeedRejoin、RejoinCompleteへ進まない。
+- stepwise Reverse完了後のDrive reportは、solver fallback中でもLowSpeedRejoinへ誤遷移せず、
+  STOP_AND_REASSESSから次候補を再評価する。LowSpeedRejoin自体はsolver正常を必須とする。
+- clearance timeout後も危険中は停止し、clear継続確認後だけRecoveryを再開する。
 - 初期接触から離れる直進候補を正しく扱う。
 - 初期halo内の隣接・斜め隣接cellへの1対1移動と接触縮小を許し、接触数増加、halo外への
   chain migration、後方wall通過、unknown、clear後の再接触をrejectする。
 - Recovery完了時にMPCとV2X lockがresetされる。
+- Drive確認後もescape未達ならSafeStopとなり、Front / Side実測2.0 m、footprint clear、
+  V2X complete、lateral / heading整列が揃った場合だけRejoinCompleteとなる。
 - feature flag無効時の既存core testが回帰しない。
 
 ### ビルド・静的検証

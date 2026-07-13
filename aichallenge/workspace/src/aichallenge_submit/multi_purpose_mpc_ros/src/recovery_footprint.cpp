@@ -33,7 +33,9 @@ double wrap_to_pi(const double angle) noexcept
 bool valid_primitive(const ReversePrimitive primitive) noexcept
 {
   return primitive == ReversePrimitive::Straight || primitive == ReversePrimitive::Left ||
-         primitive == ReversePrimitive::Right;
+         primitive == ReversePrimitive::Right || primitive == ReversePrimitive::ForwardStraight ||
+         primitive == ReversePrimitive::ForwardLeft ||
+         primitive == ReversePrimitive::ForwardRight;
 }
 
 bool valid_y_axis(const YAxisConvention convention) noexcept
@@ -70,10 +72,10 @@ std::optional<std::size_t> subdivision_count(
 double steering_for(
   const ReversePrimitive primitive, const ReverseRolloutParameters & parameters) noexcept
 {
-  if (primitive == ReversePrimitive::Left) {
+  if (primitive == ReversePrimitive::Left || primitive == ReversePrimitive::ForwardLeft) {
     return parameters.steering_angle_rad;
   }
-  if (primitive == ReversePrimitive::Right) {
+  if (primitive == ReversePrimitive::Right || primitive == ReversePrimitive::ForwardRight) {
     return -parameters.steering_angle_rad;
   }
   return 0.0;
@@ -94,7 +96,9 @@ bool valid_rollout_parameters(
     return false;
   }
   if (
-    primitive != ReversePrimitive::Straight &&
+    (primitive == ReversePrimitive::Left || primitive == ReversePrimitive::Right ||
+    primitive == ReversePrimitive::ForwardLeft ||
+    primitive == ReversePrimitive::ForwardRight) &&
     parameters.steering_angle_rad <= kNumericalEpsilon)
   {
     return false;
@@ -108,7 +112,8 @@ Pose2D pose_at_reverse_distance(
 {
   const double steering = steering_for(primitive, parameters);
   const double curvature = std::tan(steering) / parameters.wheelbase_m;
-  const double signed_distance = -distance_m;
+  const double signed_distance = primitive_is_forward(primitive) ?
+    distance_m : -distance_m;
 
   Pose2D pose = initial_pose;
   if (std::abs(curvature) <= kNumericalEpsilon) {
@@ -238,6 +243,33 @@ bool initial_contact_patch_is_forward(
   return true;
 }
 
+bool initial_contact_patch_is_rear(
+  const OccupancyGrid & grid, const Pose2D & initial_pose,
+  const std::vector<std::size_t> & initial_contact_cells) noexcept
+{
+  const double forward_x = std::cos(initial_pose.yaw_rad);
+  const double forward_y = std::sin(initial_pose.yaw_rad);
+  const double cell_half_projection = 0.5 * grid.resolution_m *
+    (std::abs(forward_x) + std::abs(forward_y));
+  for (const std::size_t cell_index : initial_contact_cells) {
+    if (cell_index >= grid.cells.size()) {
+      return false;
+    }
+    const auto cell_center = grid.grid_to_world(
+      cell_index / grid.width, cell_index % grid.width);
+    if (!cell_center.has_value()) {
+      return false;
+    }
+    const double local_forward =
+      (cell_center->x_m - initial_pose.x_m) * forward_x +
+      (cell_center->y_m - initial_pose.y_m) * forward_y;
+    if (local_forward + cell_half_projection > kNumericalEpsilon) {
+      return false;
+    }
+  }
+  return true;
+}
+
 FeasibilityResult rejected(
   FeasibilityResult result, const RejectReason reason, const double distance_m,
   const std::size_t final_contact_count = 0U)
@@ -324,6 +356,24 @@ bool FootprintExtents::valid() const noexcept
     left_extent_m + right_extent_m + 2.0 * margin_m > kNumericalEpsilon;
 }
 
+bool primitive_is_forward(const ReversePrimitive primitive) noexcept
+{
+  return primitive == ReversePrimitive::ForwardStraight ||
+         primitive == ReversePrimitive::ForwardLeft ||
+         primitive == ReversePrimitive::ForwardRight;
+}
+
+double primitive_steering_sign(const ReversePrimitive primitive) noexcept
+{
+  if (primitive == ReversePrimitive::Left || primitive == ReversePrimitive::ForwardLeft) {
+    return 1.0;
+  }
+  if (primitive == ReversePrimitive::Right || primitive == ReversePrimitive::ForwardRight) {
+    return -1.0;
+  }
+  return 0.0;
+}
+
 const char * to_string(const RejectReason reason) noexcept
 {
   switch (reason) {
@@ -343,6 +393,8 @@ const char * to_string(const RejectReason reason) noexcept
       return "initial_out_of_map";
     case RejectReason::InitialContactNotForward:
       return "initial_contact_not_forward";
+    case RejectReason::InitialContactNotRear:
+      return "initial_contact_not_rear";
     case RejectReason::OutOfMap:
       return "out_of_map";
     case RejectReason::Collision:
@@ -351,6 +403,8 @@ const char * to_string(const RejectReason reason) noexcept
       return "new_contact";
     case RejectReason::ContactWorsened:
       return "contact_worsened";
+    case RejectReason::ContactNotImproved:
+      return "contact_not_improved";
     case RejectReason::InitialContactNotCleared:
       return "initial_contact_not_cleared";
   }
@@ -366,8 +420,35 @@ const char * to_string(const ReversePrimitive primitive) noexcept
       return "reverse_left";
     case ReversePrimitive::Right:
       return "reverse_right";
+    case ReversePrimitive::ForwardStraight:
+      return "forward_straight";
+    case ReversePrimitive::ForwardLeft:
+      return "forward_left";
+    case ReversePrimitive::ForwardRight:
+      return "forward_right";
   }
   return "invalid";
+}
+
+const char * to_string(const WallRegion region) noexcept
+{
+  switch (region) {
+    case WallRegion::None:
+      return "none";
+    case WallRegion::Front:
+      return "front";
+    case WallRegion::Rear:
+      return "rear";
+    case WallRegion::Left:
+      return "left";
+    case WallRegion::Right:
+      return "right";
+    case WallRegion::Mixed:
+      return "mixed";
+    case WallRegion::Unknown:
+      return "unknown";
+  }
+  return "unknown";
 }
 
 RolloutResult generate_reverse_rollout(
@@ -483,6 +564,134 @@ FootprintSample sample_footprint(
   return sample;
 }
 
+WallProximityResult classify_nearby_wall(
+  const OccupancyGrid & grid, const FootprintExtents & footprint,
+  const Pose2D & pose, const double search_margin_m, const double ambiguity_m)
+{
+  WallProximityResult result;
+  result.nearest_distance_m = std::numeric_limits<double>::infinity();
+  if (
+    !grid.valid() || !footprint.valid() || !valid_pose(pose) ||
+    !finite(search_margin_m) || search_margin_m < 0.0 ||
+    !finite(ambiguity_m) || ambiguity_m < 0.0)
+  {
+    return result;
+  }
+
+  FootprintExtents search_footprint = footprint;
+  search_footprint.margin_m += search_margin_m;
+  const FootprintSample nearby = sample_footprint(grid, search_footprint, pose);
+  const FootprintSample current = sample_footprint(grid, footprint, pose);
+  if (!nearby.valid || nearby.out_of_map || !current.valid || current.out_of_map) {
+    return result;
+  }
+  result.valid = true;
+  result.nearby_cell_count = nearby.contact_cells.size();
+  result.intersects_footprint = !current.contact_cells.empty();
+  if (nearby.contact_cells.empty()) {
+    result.region = WallRegion::None;
+    return result;
+  }
+
+  const double forward_x = std::cos(pose.yaw_rad);
+  const double forward_y = std::sin(pose.yaw_rad);
+  const double left_x = -forward_y;
+  const double left_y = forward_x;
+  const double front = footprint.front_extent_m + footprint.margin_m;
+  const double rear = footprint.rear_extent_m + footprint.margin_m;
+  const double left = footprint.left_extent_m + footprint.margin_m;
+  const double right = footprint.right_extent_m + footprint.margin_m;
+  const double cell_projection = 0.5 * grid.resolution_m *
+    (std::abs(forward_x) + std::abs(forward_y));
+
+  std::array<double, 4> nearest{
+    std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(),
+    std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity()};
+  for (const std::size_t cell_index : nearby.contact_cells) {
+    if (cell_index >= grid.cells.size()) {
+      result.valid = false;
+      result.region = WallRegion::Unknown;
+      return result;
+    }
+    const auto cell_center = grid.grid_to_world(
+      cell_index / grid.width, cell_index % grid.width);
+    if (!cell_center.has_value()) {
+      result.valid = false;
+      result.region = WallRegion::Unknown;
+      return result;
+    }
+    const double dx = cell_center->x_m - pose.x_m;
+    const double dy = cell_center->y_m - pose.y_m;
+    const double local_forward = dx * forward_x + dy * forward_y;
+    const double local_left = dx * left_x + dy * left_y;
+
+    const double front_gap = std::max(0.0, local_forward - front - cell_projection);
+    const double rear_gap = std::max(0.0, -rear - local_forward - cell_projection);
+    const double left_gap = std::max(0.0, local_left - left - cell_projection);
+    const double right_gap = std::max(0.0, -right - local_left - cell_projection);
+    const bool longitudinal_inside = local_forward >= -rear && local_forward <= front;
+    const bool lateral_inside = local_left >= -right && local_left <= left;
+
+    std::size_t side = 0U;
+    double gap = 0.0;
+    if (!longitudinal_inside && !lateral_inside) {
+      const double longitudinal_gap = local_forward > front ? front_gap : rear_gap;
+      const double lateral_gap = local_left > left ? left_gap : right_gap;
+      if (std::abs(longitudinal_gap - lateral_gap) <= ambiguity_m) {
+        // A true corner contact cannot prove a unique escape direction.
+        continue;
+      }
+      if (longitudinal_gap < lateral_gap) {
+        side = local_forward > front ? 0U : 1U;
+        gap = longitudinal_gap;
+      } else {
+        side = local_left > left ? 2U : 3U;
+        gap = lateral_gap;
+      }
+    } else if (!longitudinal_inside) {
+      side = local_forward > front ? 0U : 1U;
+      gap = local_forward > front ? front_gap : rear_gap;
+    } else if (!lateral_inside) {
+      side = local_left > left ? 2U : 3U;
+      gap = local_left > left ? left_gap : right_gap;
+    } else {
+      // Cell geometry intersects the footprint while its centre is inside it.
+      const double longitudinal_ratio = local_forward >= 0.0 ?
+        local_forward / std::max(front, kNumericalEpsilon) :
+        -local_forward / std::max(rear, kNumericalEpsilon);
+      const double lateral_ratio = local_left >= 0.0 ?
+        local_left / std::max(left, kNumericalEpsilon) :
+        -local_left / std::max(right, kNumericalEpsilon);
+      if (std::abs(longitudinal_ratio - lateral_ratio) <= kNumericalEpsilon) {
+        continue;
+      }
+      side = longitudinal_ratio > lateral_ratio ?
+        (local_forward >= 0.0 ? 0U : 1U) : (local_left >= 0.0 ? 2U : 3U);
+      gap = 0.0;
+    }
+    nearest[side] = std::min(nearest[side], gap);
+  }
+
+  const auto best = std::min_element(nearest.begin(), nearest.end());
+  if (best == nearest.end() || !std::isfinite(*best)) {
+    result.region = WallRegion::Mixed;
+    return result;
+  }
+  result.nearest_distance_m = *best;
+  const std::size_t near_side_count = static_cast<std::size_t>(std::count_if(
+      nearest.begin(), nearest.end(), [&](const double distance) {
+        return std::isfinite(distance) && distance <= *best + ambiguity_m;
+      }));
+  if (near_side_count != 1U) {
+    result.region = WallRegion::Mixed;
+    return result;
+  }
+  constexpr std::array<WallRegion, 4> kRegions{
+    WallRegion::Front, WallRegion::Rear, WallRegion::Left, WallRegion::Right};
+  result.region = kRegions[static_cast<std::size_t>(std::distance(nearest.begin(), best))];
+  return result;
+}
+
 RejectReason evaluate_contact_transition(
   const OccupancyGrid & grid,
   const std::vector<std::size_t> & initial_contact_cells,
@@ -550,10 +759,60 @@ RejectReason evaluate_contact_transition(
   return RejectReason::None;
 }
 
-FeasibilityResult evaluate_reverse_candidate(
+RejectReason evaluate_improving_contact_transition(
+  const OccupancyGrid & grid,
+  const std::vector<std::size_t> & initial_contact_cells,
+  const std::vector<std::size_t> & previous_contact_cells,
+  const std::vector<std::size_t> & current_contact_cells) noexcept
+{
+  if (!grid.valid()) {
+    return RejectReason::InvalidGrid;
+  }
+  const auto is_explicitly_occupied = [&grid](const std::size_t cell_index) {
+      return cell_index < grid.cells.size() &&
+             grid.cell(cell_index / grid.width, cell_index % grid.width) == CellState::Occupied;
+    };
+  if (
+    !std::all_of(initial_contact_cells.begin(), initial_contact_cells.end(), is_explicitly_occupied) ||
+    !std::all_of(previous_contact_cells.begin(), previous_contact_cells.end(), is_explicitly_occupied) ||
+    !std::all_of(current_contact_cells.begin(), current_contact_cells.end(), is_explicitly_occupied))
+  {
+    return RejectReason::Collision;
+  }
+  if (current_contact_cells.empty()) {
+    return RejectReason::None;
+  }
+  if (initial_contact_cells.empty() || previous_contact_cells.empty()) {
+    return RejectReason::NewContact;
+  }
+  if (current_contact_cells.size() > initial_contact_cells.size()) {
+    return RejectReason::ContactWorsened;
+  }
+
+  const auto absolute_difference = [](const std::size_t lhs, const std::size_t rhs) {
+      return lhs > rhs ? lhs - rhs : rhs - lhs;
+    };
+  for (const std::size_t current : current_contact_cells) {
+    const std::size_t row = current / grid.width;
+    const std::size_t column = current % grid.width;
+    const bool touches_previous = std::any_of(
+      previous_contact_cells.begin(), previous_contact_cells.end(),
+      [&](const std::size_t previous) {
+        return absolute_difference(row, previous / grid.width) <= 1U &&
+               absolute_difference(column, previous % grid.width) <= 1U;
+      });
+    if (!touches_previous) {
+      return RejectReason::NewContact;
+    }
+  }
+  return RejectReason::None;
+}
+
+FeasibilityResult evaluate_recovery_candidate(
   const OccupancyGrid & grid, const FootprintExtents & footprint,
   const Pose2D & initial_pose, const ReversePrimitive primitive,
-  const ReverseRolloutParameters & parameters)
+  const ReverseRolloutParameters & parameters, const ContactEscapePolicy policy,
+  const double minimum_contact_reduction_ratio)
 {
   FeasibilityResult result;
   result.primitive = primitive;
@@ -567,6 +826,17 @@ FeasibilityResult evaluate_reverse_candidate(
     return rejected(std::move(result), RejectReason::InvalidInitialPose, 0.0);
   }
   if (!valid_rollout_parameters(primitive, parameters)) {
+    return rejected(std::move(result), RejectReason::InvalidRollout, 0.0);
+  }
+  if (
+    (policy != ContactEscapePolicy::RequireClear &&
+    policy != ContactEscapePolicy::RequireImprovement &&
+    policy != ContactEscapePolicy::AllowNonWorsening) ||
+    !std::isfinite(minimum_contact_reduction_ratio) ||
+    minimum_contact_reduction_ratio < 0.0 || minimum_contact_reduction_ratio > 1.0 ||
+    (policy == ContactEscapePolicy::RequireImprovement &&
+    minimum_contact_reduction_ratio <= 0.0))
+  {
     return rejected(std::move(result), RejectReason::InvalidRollout, 0.0);
   }
   if (parameters.swept_step_m > grid.resolution_m + kNumericalEpsilon) {
@@ -598,7 +868,10 @@ FeasibilityResult evaluate_reverse_candidate(
   std::vector<std::size_t> previous_contacts = initial_contacts;
   const double corner_radius = footprint_corner_radius(footprint);
   if (!initial_contacts.empty()) {
-    if (primitive != ReversePrimitive::Straight) {
+    if (
+      policy == ContactEscapePolicy::RequireClear &&
+      primitive != ReversePrimitive::Straight && primitive != ReversePrimitive::ForwardStraight)
+    {
       // A changing body orientation needs a directional penetration metric before an existing
       // contact can be proven to improve. Runtime actuation currently uses Straight only.
       return rejected(
@@ -610,9 +883,22 @@ FeasibilityResult evaluate_reverse_candidate(
       return rejected(
         std::move(result), initial_contact_reason, 0.0, initial_contacts.size());
     }
-    if (!initial_contact_patch_is_forward(grid, initial_pose, initial_contacts)) {
+    if (
+      policy == ContactEscapePolicy::RequireClear &&
+      primitive == ReversePrimitive::Straight &&
+      !initial_contact_patch_is_forward(grid, initial_pose, initial_contacts))
+    {
       return rejected(
         std::move(result), RejectReason::InitialContactNotForward, 0.0,
+        initial_contacts.size());
+    }
+    if (
+      policy == ContactEscapePolicy::RequireClear &&
+      primitive == ReversePrimitive::ForwardStraight &&
+      !initial_contact_patch_is_rear(grid, initial_pose, initial_contacts))
+    {
+      return rejected(
+        std::move(result), RejectReason::InitialContactNotRear, 0.0,
         initial_contacts.size());
     }
   }
@@ -664,7 +950,10 @@ FeasibilityResult evaluate_reverse_candidate(
             std::move(result), RejectReason::Collision, distance, contact_count);
         }
       } else {
-        const RejectReason transition_reason = evaluate_contact_transition(
+        const RejectReason transition_reason = policy != ContactEscapePolicy::RequireClear ?
+          evaluate_improving_contact_transition(
+          grid, initial_contacts, previous_contacts, sample.contact_cells) :
+          evaluate_contact_transition(
           grid, initial_contacts, previous_contacts, sample.contact_cells);
         if (transition_reason != RejectReason::None) {
           return rejected(
@@ -676,10 +965,30 @@ FeasibilityResult evaluate_reverse_candidate(
     }
   }
 
-  if (!initial_contacts.empty() && previous_contact_count != 0U) {
+  result.contact_reduction = initial_contacts.size() > previous_contact_count ?
+    initial_contacts.size() - previous_contact_count : 0U;
+  if (
+    policy == ContactEscapePolicy::RequireClear && !initial_contacts.empty() &&
+    previous_contact_count != 0U)
+  {
     return rejected(
       std::move(result), RejectReason::InitialContactNotCleared,
       parameters.reverse_distance_m, previous_contact_count);
+  }
+  if (policy == ContactEscapePolicy::RequireImprovement) {
+    if (initial_contacts.empty()) {
+      return rejected(
+        std::move(result), RejectReason::ContactNotImproved,
+        parameters.reverse_distance_m, previous_contact_count);
+    }
+    const std::size_t minimum_reduction = std::max<std::size_t>(
+      1U, static_cast<std::size_t>(std::ceil(
+        minimum_contact_reduction_ratio * static_cast<double>(initial_contacts.size()))));
+    if (result.contact_reduction < minimum_reduction) {
+      return rejected(
+        std::move(result), RejectReason::ContactNotImproved,
+        parameters.reverse_distance_m, previous_contact_count);
+    }
   }
 
   result.feasible = true;
@@ -687,6 +996,16 @@ FeasibilityResult evaluate_reverse_candidate(
   result.rejected_at_distance_m = 0.0;
   result.final_contact_count = previous_contact_count;
   return result;
+}
+
+FeasibilityResult evaluate_reverse_candidate(
+  const OccupancyGrid & grid, const FootprintExtents & footprint,
+  const Pose2D & initial_pose, const ReversePrimitive primitive,
+  const ReverseRolloutParameters & parameters)
+{
+  return evaluate_recovery_candidate(
+    grid, footprint, initial_pose, primitive, parameters,
+    ContactEscapePolicy::RequireClear, 0.0);
 }
 
 }  // namespace multi_purpose_mpc_ros::recovery_footprint

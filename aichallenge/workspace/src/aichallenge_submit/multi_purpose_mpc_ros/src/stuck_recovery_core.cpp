@@ -27,6 +27,9 @@ void validate_detector_config(const DetectorConfig & config)
     config.solver_fallback_duration_sec,
     "solver fallback duration");
   validate_nonnegative(
+    config.evidence_free_duration_sec,
+    "evidence-free recovery duration");
+  validate_nonnegative(
     config.max_observation_gap_sec,
     "maximum observation gap");
   if (config.solver_fallback_recovery_enabled &&
@@ -34,6 +37,14 @@ void validate_detector_config(const DetectorConfig & config)
   {
     throw std::invalid_argument(
             "enabled solver fallback recovery requires a positive duration");
+  }
+  if (
+    config.evidence_free_recovery_enabled &&
+    (config.evidence_free_duration_sec <= 0.0 ||
+    config.evidence_free_duration_sec < config.stationary_duration_sec))
+  {
+    throw std::invalid_argument(
+            "enabled evidence-free recovery requires a duration no shorter than stationary duration");
   }
   if (config.max_observation_gap_sec <= 0.0) {
     throw std::invalid_argument("maximum observation gap must be positive");
@@ -61,6 +72,9 @@ void validate_supervisor_config(const SupervisorConfig & config)
   validate_nonnegative(config.stop_speed_mps, "stop speed");
   validate_nonnegative(config.stop_confirm_sec, "stop confirmation duration");
   validate_nonnegative(config.clearance_wait_timeout_sec, "clearance wait timeout");
+  validate_nonnegative(
+    config.safe_stop_clear_confirm_sec,
+    "safe-stop clearance confirmation duration");
   validate_nonnegative(config.gear_report_timeout_sec, "gear report timeout");
   validate_nonnegative(
     config.gear_command_resend_interval_sec,
@@ -75,6 +89,16 @@ void validate_supervisor_config(const SupervisorConfig & config)
   validate_nonnegative(
     config.reverse_acceleration_magnitude_mps2,
     "reverse acceleration magnitude");
+  validate_nonnegative(config.max_forward_distance_m, "maximum forward distance");
+  validate_nonnegative(config.max_forward_duration_sec, "maximum forward duration");
+  validate_nonnegative(config.max_forward_speed_mps, "maximum forward speed");
+  validate_nonnegative(
+    config.forward_acceleration_magnitude_mps2,
+    "forward acceleration magnitude");
+  validate_nonnegative(config.escape_step_distance_m, "escape step distance");
+  if (config.escape_step_distance_m <= 0.0) {
+    throw std::invalid_argument("escape step distance must be positive");
+  }
   validate_nonnegative(config.rejoin_speed_limit_mps, "rejoin speed limit");
   validate_nonnegative(config.max_rejoin_lateral_error_m, "maximum rejoin lateral error");
   validate_nonnegative(config.max_rejoin_heading_error_rad, "maximum rejoin heading error");
@@ -271,6 +295,14 @@ DetectorDecision StuckDetector::update(const DetectorInput & input)
       forward_intent, evidence);
   }
   if (!evidence) {
+    if (
+      config_.evidence_free_recovery_enabled && !input.solver_fallback &&
+      stationary_duration_sec >= config_.evidence_free_duration_sec)
+    {
+      return reject(
+        input, StuckVerdict::Confirmed, StuckRejectReason::None,
+        forward_intent, false);
+    }
     return reject(
       input, StuckVerdict::Suspected, StuckRejectReason::MissingCorroboratingEvidence,
       forward_intent, false);
@@ -321,6 +353,10 @@ DetectorDecision StuckDetector::reject(
   decision.solver_fallback_qualified =
     input.solver_fallback && config_.solver_fallback_recovery_enabled &&
     verdict == StuckVerdict::Confirmed && forward_intent && evidence;
+  decision.evidence_free_qualified =
+    !input.solver_fallback && config_.evidence_free_recovery_enabled &&
+    verdict == StuckVerdict::Confirmed && forward_intent && !evidence &&
+    decision.stationary_duration_sec >= config_.evidence_free_duration_sec;
   return decision;
 }
 
@@ -415,6 +451,10 @@ RecoveryAction RecoverySupervisor::update(const RecoveryInput & input)
       return update_wait_reverse_report(input);
     case RecoveryState::ReverseManeuver:
       return update_reverse_maneuver(input);
+    case RecoveryState::ForwardManeuver:
+      return update_forward_maneuver(input);
+    case RecoveryState::StopAndReassess:
+      return update_stop_and_reassess(input);
     case RecoveryState::StopBeforeDrive:
       return update_stop_before_drive(input);
     case RecoveryState::ShiftToDrive:
@@ -427,7 +467,7 @@ RecoveryAction RecoverySupervisor::update(const RecoveryInput & input)
     case RecoveryState::LowSpeedRejoin:
       return update_low_speed_rejoin(input);
     case RecoveryState::SafeStop:
-      return safe_stop_action(state_reason_);
+      return update_safe_stop(input);
   }
   transition(RecoveryState::SafeStop, RecoveryReason::InvalidInput, input.now_sec);
   return safe_stop_action(RecoveryReason::InvalidInput);
@@ -438,14 +478,20 @@ void RecoverySupervisor::reset_session() noexcept
   state_ = RecoveryState::Normal;
   state_reason_ = RecoveryReason::SessionReset;
   attempt_count_ = 0U;
+  escape_step_count_ = 0U;
   gear_command_request_count_ = 0U;
   state_entered_sec_.reset();
   last_update_sec_.reset();
   stopped_since_sec_.reset();
   aligned_since_sec_.reset();
+  clearance_safe_since_sec_.reset();
   last_gear_request_sec_.reset();
   cooldown_until_sec_.reset();
   normal_reset_pending_ = false;
+  active_stepwise_escape_ = false;
+  reassess_after_drive_ = false;
+  safe_stop_after_drive_ = false;
+  escape_confirmed_before_drive_ = false;
 }
 
 RecoveryState RecoverySupervisor::state() const noexcept
@@ -463,9 +509,19 @@ std::size_t RecoverySupervisor::attempt_count() const noexcept
   return attempt_count_;
 }
 
+std::size_t RecoverySupervisor::escape_step_count() const noexcept
+{
+  return escape_step_count_;
+}
+
 bool RecoverySupervisor::safe_stop_latched() const noexcept
 {
   return state_ == RecoveryState::SafeStop;
+}
+
+bool RecoverySupervisor::drive_report_will_reassess_or_stop() const noexcept
+{
+  return reassess_after_drive_ || safe_stop_after_drive_;
 }
 
 const SupervisorConfig & RecoverySupervisor::config() const noexcept
@@ -514,7 +570,14 @@ RecoveryAction RecoverySupervisor::update_wait_awsim(const RecoveryInput & input
   if (state_elapsed(input.now_sec) < config_.awsim_recovery_wait_sec) {
     return hold_action(RecoveryReason::AwsimRecoveryWaiting);
   }
-  if (input.detector.verdict != StuckVerdict::Confirmed) {
+  // AWSIM wall recovery can rotate or nudge a still-colliding vehicle enough
+  // to reset the detector's observation window. Only leave Recovery when the
+  // current footprint is actually clear; otherwise continue with the bounded
+  // maneuver after the AWSIM settling interval.
+  if (
+    input.detector.verdict != StuckVerdict::Confirmed &&
+    input.awsim_recovery_resolved)
+  {
     transition(RecoveryState::Normal, RecoveryReason::AwsimRecoveryResolved, input.now_sec);
     cooldown_until_sec_ = input.now_sec + config_.cooldown_sec;
     return normal_action(RecoveryReason::AwsimRecoveryResolved);
@@ -536,15 +599,45 @@ RecoveryAction RecoverySupervisor::update_stop_and_confirm(const RecoveryInput &
 
 RecoveryAction RecoverySupervisor::update_check_clearance(const RecoveryInput & input)
 {
+  if (input.maneuver_direction == ManeuverDirection::Unknown) {
+    transition(
+      RecoveryState::SafeStop, RecoveryReason::ManeuverDirectionUnknown, input.now_sec);
+    return safe_stop_action(RecoveryReason::ManeuverDirectionUnknown);
+  }
   if (!clearance_is_safe(input)) {
     const RecoveryReason reason = clearance_reason(input);
     transition(RecoveryState::WaitForClear, reason, input.now_sec);
     return hold_action(reason);
   }
-  if (attempt_count_ >= config_.max_attempts) {
+  if (input.stepwise_escape && escape_step_count_ >= config_.max_escape_steps) {
+    transition(
+      RecoveryState::SafeStop, RecoveryReason::EscapeStepLimitReached, input.now_sec);
+    return safe_stop_action(RecoveryReason::EscapeStepLimitReached);
+  }
+  if (!input.stepwise_escape && attempt_count_ >= config_.max_attempts) {
     transition(
       RecoveryState::SafeStop, RecoveryReason::AttemptLimitReached, input.now_sec);
     return safe_stop_action(RecoveryReason::AttemptLimitReached);
+  }
+
+  if (input.maneuver_direction == ManeuverDirection::Forward) {
+    if (
+      !input.gear_report_fresh || !gear_report_is_valid(input.reported_gear) ||
+      input.reported_gear != Gear::Drive)
+    {
+      transition(RecoveryState::SafeStop, RecoveryReason::DriveGearLost, input.now_sec);
+      return safe_stop_action(RecoveryReason::DriveGearLost);
+    }
+    if (!input.stepwise_escape || attempt_count_ == 0U) {
+      ++attempt_count_;
+    }
+    if (input.stepwise_escape) {
+      ++escape_step_count_;
+    }
+    active_stepwise_escape_ = input.stepwise_escape;
+    transition(
+      RecoveryState::ForwardManeuver, RecoveryReason::ForwardInProgress, input.now_sec);
+    return update_forward_maneuver(input);
   }
   if (config_.max_gear_command_requests == 0U) {
     transition(
@@ -552,7 +645,13 @@ RecoveryAction RecoverySupervisor::update_check_clearance(const RecoveryInput & 
     return safe_stop_action(RecoveryReason::GearCommandLimitReached);
   }
 
-  ++attempt_count_;
+  if (!input.stepwise_escape || attempt_count_ == 0U) {
+    ++attempt_count_;
+  }
+  if (input.stepwise_escape) {
+    ++escape_step_count_;
+  }
+  active_stepwise_escape_ = input.stepwise_escape;
   transition(
     RecoveryState::ShiftToReverse, RecoveryReason::ReverseGearRequested, input.now_sec);
   return request_gear_action(Gear::Reverse, RecoveryReason::ReverseGearRequested, input.now_sec);
@@ -562,7 +661,10 @@ RecoveryAction RecoverySupervisor::update_wait_for_clear(const RecoveryInput & i
 {
   if (clearance_is_safe(input)) {
     transition(RecoveryState::CheckClearance, RecoveryReason::ClearanceCheck, input.now_sec);
-    return hold_action(RecoveryReason::ClearanceCheck);
+    // Consume the same complete clearance snapshot immediately. Waiting for a
+    // second control cycle can lose a valid V2X/candidate sample and leave a
+    // stopped vehicle oscillating between WAIT_FOR_CLEAR and CHECK_CLEARANCE.
+    return update_check_clearance(input);
   }
   if (state_elapsed(input.now_sec) >= config_.clearance_wait_timeout_sec) {
     transition(
@@ -572,6 +674,29 @@ RecoveryAction RecoverySupervisor::update_wait_for_clear(const RecoveryInput & i
   return hold_action(clearance_reason(input));
 }
 
+RecoveryAction RecoverySupervisor::update_safe_stop(const RecoveryInput & input)
+{
+  if (
+    !config_.clearance_safe_stop_recovery_enabled ||
+    state_reason_ != RecoveryReason::ClearanceWaitTimedOut)
+  {
+    clearance_safe_since_sec_.reset();
+    return safe_stop_action(state_reason_);
+  }
+  if (!clearance_is_safe(input)) {
+    clearance_safe_since_sec_.reset();
+    return safe_stop_action(RecoveryReason::ClearanceWaitTimedOut);
+  }
+  if (!clearance_safe_since_sec_.has_value()) {
+    clearance_safe_since_sec_ = input.now_sec;
+  }
+  if (input.now_sec - *clearance_safe_since_sec_ < config_.safe_stop_clear_confirm_sec) {
+    return safe_stop_action(RecoveryReason::ClearanceWaitTimedOut);
+  }
+  transition(RecoveryState::CheckClearance, RecoveryReason::ClearanceCheck, input.now_sec);
+  return hold_action(RecoveryReason::ClearanceCheck);
+}
+
 RecoveryAction RecoverySupervisor::update_wait_reverse_report(const RecoveryInput & input)
 {
   if (input.gear_report_fresh && !gear_report_is_valid(input.reported_gear)) {
@@ -579,6 +704,26 @@ RecoveryAction RecoverySupervisor::update_wait_reverse_report(const RecoveryInpu
     return safe_stop_action(RecoveryReason::GearReportInvalid);
   }
   if (input.gear_report_fresh && input.reported_gear == Gear::Reverse) {
+    if (!clearance_is_safe(input)) {
+      // Missing V2X/Boost information is not evidence of a rear hazard and
+      // must never complete or abandon a recovery. Remain stopped in Reverse
+      // and resume the same bounded maneuver when the complete snapshot
+      // returns. A positively observed static/vehicle blockage still returns
+      // to Drive after the bounded wait below.
+      if (!input.rear_information_complete) {
+        return hold_action(RecoveryReason::RearInformationIncomplete);
+      }
+      if (state_elapsed(input.now_sec) >= config_.clearance_wait_timeout_sec) {
+        transition(
+          RecoveryState::StopBeforeDrive, RecoveryReason::RearHazardAppeared,
+          input.now_sec);
+        return hold_action(RecoveryReason::RearHazardAppeared);
+      }
+      // Gear changes and V2X callbacks can become visible on adjacent control
+      // cycles. Stay stopped in Reverse until a complete safe corridor is
+      // observed; never emit ReverseCreep on incomplete information.
+      return hold_action(clearance_reason(input));
+    }
     transition(
       RecoveryState::ReverseManeuver, RecoveryReason::ReverseGearConfirmed,
       input.now_sec);
@@ -616,21 +761,46 @@ RecoveryAction RecoverySupervisor::update_reverse_maneuver(const RecoveryInput &
       input.now_sec);
     return hold_action(RecoveryReason::CollisionWorsening);
   }
-  if (!clearance_is_safe(input)) {
-    transition(
-      RecoveryState::StopBeforeDrive, RecoveryReason::RearHazardAppeared,
-      input.now_sec);
-    return hold_action(RecoveryReason::RearHazardAppeared);
-  }
-  if (config_.max_reverse_speed_mps <= 0.0 ||
-    std::abs(input.signed_speed_mps) >= config_.max_reverse_speed_mps)
-  {
+  if (config_.max_reverse_speed_mps <= 0.0) {
     transition(
       RecoveryState::StopBeforeDrive,
       RecoveryReason::ReverseSpeedLimit, input.now_sec);
     return hold_action(RecoveryReason::ReverseSpeedLimit);
   }
-  if (input.traveled_distance_m >= config_.max_reverse_distance_m) {
+  if (
+    active_stepwise_escape_ &&
+    input.traveled_distance_m >= config_.escape_step_distance_m)
+  {
+    if (!input.step_contact_improved) {
+      safe_stop_after_drive_ = true;
+      transition(
+        RecoveryState::StopBeforeDrive, RecoveryReason::ContactNotImproving,
+        input.now_sec);
+      return hold_action(RecoveryReason::ContactNotImproving);
+    }
+    reassess_after_drive_ = true;
+    transition(
+      RecoveryState::StopBeforeDrive, RecoveryReason::EscapeStepComplete,
+      input.now_sec);
+    return hold_action(RecoveryReason::EscapeStepComplete);
+  }
+  if (!clearance_is_safe(input)) {
+    // Static occupancy and V2X callbacks can briefly become inconsistent with
+    // the control cycle while Reverse remains engaged. Stop immediately, but
+    // keep Reverse and wait for a complete safe corridor instead of abandoning
+    // an otherwise improving escape step after one incomplete sample.
+    transition(
+      RecoveryState::WaitReverseReport, clearance_reason(input), input.now_sec);
+    return hold_action(clearance_reason(input));
+  }
+  if (!active_stepwise_escape_ && input.recovery_escape_confirmed) {
+    escape_confirmed_before_drive_ = true;
+    transition(
+      RecoveryState::StopBeforeDrive, RecoveryReason::ReverseEscapeConfirmed,
+      input.now_sec);
+    return hold_action(RecoveryReason::ReverseEscapeConfirmed);
+  }
+  if (input.episode_traveled_distance_m >= config_.max_reverse_distance_m) {
     transition(
       RecoveryState::StopBeforeDrive, RecoveryReason::ReverseDistanceLimit,
       input.now_sec);
@@ -642,13 +812,98 @@ RecoveryAction RecoverySupervisor::update_reverse_maneuver(const RecoveryInput &
       input.now_sec);
     return hold_action(RecoveryReason::ReverseDurationLimit);
   }
-  if (input.recovery_escape_confirmed) {
-    transition(
-      RecoveryState::StopBeforeDrive, RecoveryReason::ReverseEscapeConfirmed,
-      input.now_sec);
-    return hold_action(RecoveryReason::ReverseEscapeConfirmed);
+  if (std::abs(input.signed_speed_mps) >= config_.max_reverse_speed_mps) {
+    // The speed ceiling is a regulator, not a completed escape. Brake in
+    // Reverse and resume the same maneuver once speed is below the ceiling;
+    // otherwise a constant-acceleration creep can terminate after only a
+    // fraction of the required escape distance. Distance, duration and
+    // clearance limits above remain authoritative while speed is regulated.
+    return hold_action(RecoveryReason::ReverseSpeedLimit);
   }
-  return reverse_action(RecoveryReason::ReverseInProgress);
+  return reverse_action(
+    RecoveryReason::ReverseInProgress, input.reverse_steering_tire_angle_rad);
+}
+
+RecoveryAction RecoverySupervisor::update_forward_maneuver(const RecoveryInput & input)
+{
+  if (
+    !input.gear_report_fresh || !gear_report_is_valid(input.reported_gear) ||
+    input.reported_gear != Gear::Drive)
+  {
+    transition(RecoveryState::SafeStop, RecoveryReason::DriveGearLost, input.now_sec);
+    return safe_stop_action(RecoveryReason::DriveGearLost);
+  }
+  if (input.collision_worsening) {
+    transition(RecoveryState::SafeStop, RecoveryReason::CollisionWorsening, input.now_sec);
+    return safe_stop_action(RecoveryReason::CollisionWorsening);
+  }
+  if (config_.max_forward_speed_mps <= 0.0 ||
+    std::abs(input.signed_speed_mps) >= config_.max_forward_speed_mps)
+  {
+    transition(RecoveryState::SafeStop, RecoveryReason::ForwardSpeedLimit, input.now_sec);
+    return safe_stop_action(RecoveryReason::ForwardSpeedLimit);
+  }
+  if (
+    active_stepwise_escape_ &&
+    input.traveled_distance_m >= config_.escape_step_distance_m)
+  {
+    if (!input.step_contact_improved) {
+      transition(
+        RecoveryState::SafeStop, RecoveryReason::ContactNotImproving,
+        input.now_sec);
+      return safe_stop_action(RecoveryReason::ContactNotImproving);
+    }
+    transition(
+      RecoveryState::StopAndReassess, RecoveryReason::EscapeStepComplete,
+      input.now_sec);
+    return hold_action(RecoveryReason::EscapeStepComplete);
+  }
+  if (!clearance_is_safe(input)) {
+    transition(
+      RecoveryState::SafeStop, RecoveryReason::ForwardHazardAppeared, input.now_sec);
+    return safe_stop_action(RecoveryReason::ForwardHazardAppeared);
+  }
+  if (input.recovery_escape_confirmed) {
+    escape_confirmed_before_drive_ = true;
+    transition(
+      RecoveryState::LowSpeedRejoin, RecoveryReason::ForwardEscapeConfirmed,
+      input.now_sec);
+    return rejoin_action(RecoveryReason::ForwardEscapeConfirmed);
+  }
+  if (input.traveled_distance_m >= config_.max_forward_distance_m) {
+    transition(RecoveryState::SafeStop, RecoveryReason::ForwardDistanceLimit, input.now_sec);
+    return safe_stop_action(RecoveryReason::ForwardDistanceLimit);
+  }
+  if (state_elapsed(input.now_sec) >= config_.max_forward_duration_sec) {
+    transition(RecoveryState::SafeStop, RecoveryReason::ForwardDurationLimit, input.now_sec);
+    return safe_stop_action(RecoveryReason::ForwardDurationLimit);
+  }
+  return forward_action(
+    RecoveryReason::ForwardInProgress, input.reverse_steering_tire_angle_rad);
+}
+
+RecoveryAction RecoverySupervisor::update_stop_and_reassess(const RecoveryInput & input)
+{
+  if (!stopped_confirmed(input)) {
+    return hold_action(RecoveryReason::StopConfirmationPending);
+  }
+  if (input.recovery_escape_confirmed) {
+    active_stepwise_escape_ = false;
+    escape_confirmed_before_drive_ = true;
+    transition(
+      RecoveryState::LowSpeedRejoin, RecoveryReason::ForwardEscapeConfirmed,
+      input.now_sec);
+    return rejoin_action(RecoveryReason::ForwardEscapeConfirmed);
+  }
+  if (escape_step_count_ >= config_.max_escape_steps) {
+    transition(
+      RecoveryState::SafeStop, RecoveryReason::EscapeStepLimitReached,
+      input.now_sec);
+    return safe_stop_action(RecoveryReason::EscapeStepLimitReached);
+  }
+  active_stepwise_escape_ = false;
+  transition(RecoveryState::CheckClearance, RecoveryReason::ClearanceCheck, input.now_sec);
+  return hold_action(RecoveryReason::ClearanceCheck);
 }
 
 RecoveryAction RecoverySupervisor::update_stop_before_drive(const RecoveryInput & input)
@@ -672,6 +927,26 @@ RecoveryAction RecoverySupervisor::update_wait_drive_report(const RecoveryInput 
     return safe_stop_action(RecoveryReason::GearReportInvalid);
   }
   if (input.gear_report_fresh && input.reported_gear == Gear::Drive) {
+    if (safe_stop_after_drive_) {
+      safe_stop_after_drive_ = false;
+      transition(
+        RecoveryState::SafeStop, RecoveryReason::ContactNotImproving,
+        input.now_sec);
+      return safe_stop_action(RecoveryReason::ContactNotImproving);
+    }
+    if (reassess_after_drive_) {
+      reassess_after_drive_ = false;
+      transition(
+        RecoveryState::StopAndReassess, RecoveryReason::EscapeStepComplete,
+        input.now_sec);
+      return update_stop_and_reassess(input);
+    }
+    if (!escape_confirmed_before_drive_) {
+      transition(
+        RecoveryState::SafeStop, RecoveryReason::EscapeNotConfirmed,
+        input.now_sec);
+      return safe_stop_action(RecoveryReason::EscapeNotConfirmed);
+    }
     transition(
       RecoveryState::LowSpeedRejoin, RecoveryReason::DriveGearConfirmed,
       input.now_sec);
@@ -705,6 +980,14 @@ RecoveryAction RecoverySupervisor::update_low_speed_rejoin(const RecoveryInput &
   if (!input.rejoin_safe) {
     transition(RecoveryState::SafeStop, RecoveryReason::RejoinUnsafe, input.now_sec);
     return safe_stop_action(RecoveryReason::RejoinUnsafe);
+  }
+  if (!escape_confirmed_before_drive_) {
+    transition(RecoveryState::SafeStop, RecoveryReason::EscapeNotConfirmed, input.now_sec);
+    return safe_stop_action(RecoveryReason::EscapeNotConfirmed);
+  }
+  if (!input.rear_information_complete) {
+    aligned_since_sec_.reset();
+    return hold_action(RecoveryReason::RearInformationIncomplete);
   }
   if (state_elapsed(input.now_sec) >= config_.rejoin_timeout_sec) {
     transition(RecoveryState::SafeStop, RecoveryReason::RejoinTimedOut, input.now_sec);
@@ -747,7 +1030,10 @@ void RecoverySupervisor::transition(
   state_reason_ = reason;
   state_entered_sec_ = now_sec;
 
-  if (next == RecoveryState::StopAndConfirm || next == RecoveryState::StopBeforeDrive) {
+  if (
+    next == RecoveryState::StopAndConfirm || next == RecoveryState::StopBeforeDrive ||
+    next == RecoveryState::StopAndReassess)
+  {
     stopped_since_sec_.reset();
   }
   if (next == RecoveryState::ShiftToReverse || next == RecoveryState::ShiftToDrive) {
@@ -766,6 +1052,13 @@ void RecoverySupervisor::transition(
     if (next == RecoveryState::SafeStop) {
       normal_reset_pending_ = false;
     }
+    active_stepwise_escape_ = false;
+    reassess_after_drive_ = false;
+    safe_stop_after_drive_ = false;
+    escape_confirmed_before_drive_ = false;
+  }
+  if (next != RecoveryState::SafeStop) {
+    clearance_safe_since_sec_.reset();
   }
 }
 
@@ -809,12 +1102,25 @@ RecoveryAction RecoverySupervisor::request_gear_action(
   return action;
 }
 
-RecoveryAction RecoverySupervisor::reverse_action(const RecoveryReason reason) const noexcept
+RecoveryAction RecoverySupervisor::reverse_action(
+  const RecoveryReason reason, const double steering_tire_angle_rad) const noexcept
 {
   RecoveryAction action;
   action.type = RecoveryActionType::ReverseCreep;
   action.acceleration_magnitude_mps2 = config_.reverse_acceleration_magnitude_mps2;
-  action.steering_tire_angle_rad = 0.0;
+  action.steering_tire_angle_rad = steering_tire_angle_rad;
+  action.inhibit_boost = true;
+  action.reason = reason;
+  return action;
+}
+
+RecoveryAction RecoverySupervisor::forward_action(
+  const RecoveryReason reason, const double steering_tire_angle_rad) const noexcept
+{
+  RecoveryAction action;
+  action.type = RecoveryActionType::ForwardCreep;
+  action.acceleration_magnitude_mps2 = config_.forward_acceleration_magnitude_mps2;
+  action.steering_tire_angle_rad = steering_tire_angle_rad;
   action.inhibit_boost = true;
   action.reason = reason;
   return action;
@@ -872,6 +1178,8 @@ bool RecoverySupervisor::input_is_finite(const RecoveryInput & input) const noex
 {
   return std::isfinite(input.now_sec) && std::isfinite(input.signed_speed_mps) &&
          finite_nonnegative(input.traveled_distance_m) &&
+         finite_nonnegative(input.episode_traveled_distance_m) &&
+         std::isfinite(input.reverse_steering_tire_angle_rad) &&
          std::isfinite(input.lateral_error_m) && std::isfinite(input.heading_error_rad) &&
          finite_nonnegative(input.detector.stationary_duration_sec) &&
          finite_nonnegative(input.detector.solver_fallback_duration_sec) &&
@@ -932,7 +1240,8 @@ CoreOutput StuckRecoveryCore::update(const CoreInput & input)
   const bool drive_report_will_enter_rejoin =
     (current_state == RecoveryState::ShiftToDrive ||
     current_state == RecoveryState::WaitDriveReport) &&
-    recovery.gear_report_fresh && recovery.reported_gear == Gear::Drive;
+    recovery.gear_report_fresh && recovery.reported_gear == Gear::Drive &&
+    !supervisor_.drive_report_will_reassess_or_stop();
   const bool recovery_no_longer_depends_on_solver =
     current_state != RecoveryState::Normal &&
     current_state != RecoveryState::LowSpeedRejoin &&
@@ -947,7 +1256,12 @@ CoreOutput StuckRecoveryCore::update(const CoreInput & input)
   recovery.solver_healthy = !input.detector.solver_fallback ||
     recovery_no_longer_depends_on_solver ||
     confirmed_solver_fallback_candidate;
-  recovery.hard_stop_requested = input.detector.deliberate_stop;
+  // deliberate_stop is a detector eligibility gate for normal V2X behavior.
+  // Once Recovery owns the command, directional static/V2X clearance is the
+  // maneuver safety gate. Preserve only an explicit recovery hard stop from
+  // the adapter instead of turning a transient Follow/SafetyBrake state into
+  // a latched ControlInterrupted SafeStop.
+  recovery.hard_stop_requested = input.recovery.hard_stop_requested;
   recovery.awsim_recovery_settled = !input.detector.awsim_recovery_settling;
   recovery.signed_speed_mps = input.detector.signed_speed_mps;
 
@@ -1067,6 +1381,19 @@ const char * to_string(const Gear gear) noexcept
   return "Unknown";
 }
 
+const char * to_string(const ManeuverDirection direction) noexcept
+{
+  switch (direction) {
+    case ManeuverDirection::Unknown:
+      return "Unknown";
+    case ManeuverDirection::Reverse:
+      return "Reverse";
+    case ManeuverDirection::Forward:
+      return "Forward";
+  }
+  return "Unknown";
+}
+
 const char * to_string(const RecoveryState state) noexcept
 {
   switch (state) {
@@ -1088,6 +1415,10 @@ const char * to_string(const RecoveryState state) noexcept
       return "WAIT_REVERSE_REPORT";
     case RecoveryState::ReverseManeuver:
       return "REVERSE_MANEUVER";
+    case RecoveryState::ForwardManeuver:
+      return "FORWARD_MANEUVER";
+    case RecoveryState::StopAndReassess:
+      return "STOP_AND_REASSESS";
     case RecoveryState::StopBeforeDrive:
       return "STOP_BEFORE_DRIVE";
     case RecoveryState::ShiftToDrive:
@@ -1113,6 +1444,8 @@ const char * to_string(const RecoveryActionType action) noexcept
       return "RequestReverse";
     case RecoveryActionType::ReverseCreep:
       return "ReverseCreep";
+    case RecoveryActionType::ForwardCreep:
+      return "ForwardCreep";
     case RecoveryActionType::RequestDrive:
       return "RequestDrive";
     case RecoveryActionType::LowSpeedRejoin:
@@ -1158,6 +1491,8 @@ const char * to_string(const RecoveryReason reason) noexcept
       return "rear_information_incomplete";
     case RecoveryReason::ClearanceWaitTimedOut:
       return "clearance_wait_timed_out";
+    case RecoveryReason::ManeuverDirectionUnknown:
+      return "maneuver_direction_unknown";
     case RecoveryReason::AttemptLimitReached:
       return "attempt_limit_reached";
     case RecoveryReason::ReverseGearRequested:
@@ -1188,12 +1523,32 @@ const char * to_string(const RecoveryReason reason) noexcept
       return "rear_hazard_appeared";
     case RecoveryReason::ReverseGearLost:
       return "reverse_gear_lost";
+    case RecoveryReason::ForwardInProgress:
+      return "forward_in_progress";
+    case RecoveryReason::ForwardDistanceLimit:
+      return "forward_distance_limit";
+    case RecoveryReason::ForwardDurationLimit:
+      return "forward_duration_limit";
+    case RecoveryReason::ForwardSpeedLimit:
+      return "forward_speed_limit";
+    case RecoveryReason::ForwardEscapeConfirmed:
+      return "forward_escape_confirmed";
+    case RecoveryReason::ForwardHazardAppeared:
+      return "forward_hazard_appeared";
+    case RecoveryReason::EscapeStepComplete:
+      return "escape_step_complete";
+    case RecoveryReason::EscapeStepLimitReached:
+      return "escape_step_limit_reached";
+    case RecoveryReason::ContactNotImproving:
+      return "contact_not_improving";
     case RecoveryReason::DriveGearRequested:
       return "drive_gear_requested";
     case RecoveryReason::DriveGearConfirmed:
       return "drive_gear_confirmed";
     case RecoveryReason::DriveGearLost:
       return "drive_gear_lost";
+    case RecoveryReason::EscapeNotConfirmed:
+      return "escape_not_confirmed";
     case RecoveryReason::RejoinInProgress:
       return "rejoin_in_progress";
     case RecoveryReason::RejoinComplete:

@@ -61,8 +61,21 @@ publishします。
 - `simulation_only: true`のため、実車環境では制御権を取得しない。
 - AWSIM校正済みの`reverse_acceleration_sign: 1.0`、駆動`+0.5 m/s^2`、
   停止`-0.8 m/s^2`を使う。保守的停止減速度は`0.4 m/s^2`、制御遅延予約は`0.2 s`。
-- 後退は最大`0.8 m`、`2.0 s`、`0.8 m/s`、1 attempt。速度上限はcoreと
-  command adapterの二重防護で停止側へ倒す。
+- Front / Side後退は実測`2.0 m`のescapeを必須とし、停止予約込み最大`3.0 m`、
+  `4.0 s`、`0.8 m/s`、最大2 attempt。速度上限到達時はReverseのまま一時減速し、
+  上限未満へ戻れば同じmaneuverを再開する。
+- 近傍wallを車体基準で分類し、Frontは後退、RearはDriveのまま最大`0.6 m`、
+  `1.5 s`、`0.8 m/s`の直進前進で離脱する。
+- Side / Mixedかつmap contactがある場合は、前進衝突から離れるReverseの直進・左・右3候補から
+  予測contactが5%以上減る0.40 m候補だけを使う。各ステップで停止・実測改善を確認し、
+  episode全体の実移動を保持し、最大8回以内に2.0 mへ到達しなければ停止する。
+  ForwardStraightはRear分類時だけ使用する。
+  Unknownまたは改善候補なしでは動かない。
+- Reverse中にV2X completenessが一時欠落した場合は即停止し、Reverseを維持して安全情報の
+  回復を待つ。情報欠落だけではDriveやLowSpeedRejoinへ移らず、completeへ戻れば
+  移動距離・contact基準を保ったまま同じステップを再開する。
+- AWSIM標準補正でposeが動いても、現在footprint contactが残る場合は復帰済みと判定しない。
+  補正待機後に候補を再評価し、現在footprintがclearの場合だけ通常制御へ戻る。
 - 3台SIMではV2Xが自車を除く2 entryだったため、期待数2、self excludedとする。
   単独走行はV2X不足でfail-closed、4台構成では期待数を3へ変更する。
 
@@ -86,40 +99,79 @@ stuck_recovery:
 
 `Stuck detector:`は前進要求、signed speed、pose / path進捗、壁またはlegacy
 collision hintとreject reasonを出します。`Stuck recovery:`はexecution mode、FSM
-state、action、static candidateの拒否理由、rear V2X完全性をstate変化時に出します。
+state、action、wall region / 距離、maneuver direction、static candidateの拒否理由、
+Boost / V2X完全性、maneuver / episode距離、停止予約、escape target、`e_y` / `e_psi`を
+stateまたはreason変化時に出します。
 Follow / SafetyBrake / LowSpeedAvoidance、Start前、control disable、odom異常、短時間または
 壁証拠のないsolver fallbackはスタック確定から除外されます。例外はfallbackが連続2.0秒以上、
 path前進要求、停止、pose / path無進捗、現在のfootprint-to-wall証拠が全て継続する場合だけです。
 collision hint単独ではこの例外を成立させません。
 detector更新間隔が0.2秒を超えた場合は、停止時間とfallback継続時間をresetします。
+このV2X behavior除外はRecovery開始前の誤検知防止です。Recovery開始後は一時的な通常behaviorを
+`control_interrupted`へ変換せず、選択方向のstatic / V2X corridorで駆動可否を判定します。
+control disableと明示的なRecovery hard stopは従来どおり即時停止します。
 
-実際のReverse制御は現時点で`Straight`だけです。`Left` / `Right`は
-`recovery_footprint` pure APIで同じ静的安全規則を評価できますが、runtime候補選択、
-実command、RViz表示にはまだ統合していません。Straightでも次をすべて満たさない限り
-gear要求へ進みません。
+solverが正常な場合は、AWSIM物理壁とoccupancy map / collision通知の不一致を救済するため、
+意図的停止でない前進要求、低速、pose / path無進捗が1.5秒継続すると、壁証拠なしでも
+限定的にRecovery候補となります。solver fallback中はこの救済を使用しません。
+前進要求には瞬間的なMPC解とreference path速度要求の最大値を使い、停止中のMPC target再構築で
+0 / 非0が交互になってもtimerをresetしません。map footprintと後方3.0 m Straight rollout、
+fresh / completeなV2X corridorが全てclearの場合だけReverseStraightを選び、
+実測2.0 mのescape後に停止します。
+
+通常footprintの外側0.50 mまでのwall cellを車体座標へ変換し、Front / Rear / Left / Right /
+Mixedへ分類します。Frontでは`ReverseStraight`、`ReverseLeft`、`ReverseRight`、Rearでは
+`ForwardStraight`を評価します。Side / MixedもReverseのStraight / Left / Rightだけを
+0.40 m評価し、contact減少最大の候補を選びます。近傍wallなしでは推測で動きません。
+選択候補はepisode中固定し、どの候補も次をすべて満たさない限り駆動へ進みません。
 
 - 全swept footprintがstatic mapで安全。map外、unknown、新規接触は即reject。初期接触は
-  Reverseで離れられる前方wallに限定し、現在cellは初期patchの固定1-cell halo内かつ
+  Reverseでは前方wall、ForwardStraightでは後方wallに限定し、現在cellは初期patchの固定1-cell halo内かつ
   直前patchと同一または8近傍の明示Occupiedだけを許す。接触数増加、chain migration、
   clear後の再接触をrejectし、rolloutと実後退中監視は同じ判定helperを使う。初期接触を
   持つLeft / Rightは方向付きpenetration評価が未実装のためfail-closedとする。
-- `/v2x/vehicle_positions`がfreshかつ想定台数分completeで、予測した後方corridorに
+- `/v2x/vehicle_positions`がfreshかつ想定台数分completeで、選択方向へ予測したcorridorに
   車両がいない。期待値は配列の総entry数（環境が自車を含める場合は自車込み）で、
   空ID・重複ID・異常sampleもrejectする。`rear_safety.expected_v2x_vehicle_count: -1`の
   既定値はReverseを阻止する。自車の扱いも`self_filter_mode: unknown`では阻止し、
   公式確認後に`excluded`または正確な`vehicle_id`を明示する。
+
+後方clear待ちがtimeoutした場合も、原因がclearanceだけならSafeStop中に再評価を続け、
+0.5秒連続で安全になった後だけRecoveryへ戻ります。gear、odometry、solver、control等の
+異常によるSafeStopは従来どおりsession resetまでlatchedします。
 - `/awsim/status`がfreshでBoost中ではない。
 - `/vehicle/status/gear_status`がfreshで、REVERSE確認後にだけ駆動する。
+- Rear-wall前進はfreshなDRIVE report確認後だけ駆動する。
+- Side / Mixedは各swept sampleで初期contact数を超えず、新規非連結contactがなく、終端で
+  5%以上減少することを要求する。実移動後にも減少を確認し、0.40 mごとに停止・再評価する。
+- gear要求後は残距離ごとの追加5%改善を要求せず、contact非増加と新規contactなしを監視して
+  0.40 mまで継続する。終点では実測contact減少を改めて必須とする。
+- WAIT_FOR_CLEARでstatic / V2X clearanceが成立した周期は、同じsnapshotでgear要求まで進める。
+  clear確認とgear要求の間に別周期を挟まず、一時的なV2X欠落で候補を失うことを防ぐ。
+- AWSIM補正待機後は待機前のcandidateを使い回さず、現在pose / contactから候補を選び直す。
+- evidence-free Recoveryではmap footprintが開始時からclearなので、AWSIMのpose nudgeだけでは
+  復帰済みとしない。reference path進捗が確認できない場合はSTOP_AND_CONFIRMへ進む。
+- Left / Right / Mixed近傍wallでmap contactが0の場合も、clearなswept rolloutから候補を作る。
+  Reverseを優先し、停止した後続車でReverse corridorだけが塞がれた場合は、mapとforward V2X
+  corridorがclearな`ForwardStraight`へ限定的に切り替える。候補固定後の途中切替はしない。
+- V2X position jumpの許容距離は固定閾値と`v2x_v_max_safety * message_dt`の大きい方とし、
+  約1 Hz配信で正常走行車が5 m以上進んでもrear informationを不完全扱いしない。
+- stepwise Reverse後のDrive確認は通常MPCを使わず`STOP_AND_REASSESS`へ進めるため、継続中の
+  solver fallbackだけでは中断しない。実際のLowSpeedRejoin開始時にはsolver正常を必須とする。
 - gear command publisherはReliable / KeepLast(1) / Volatile。古いREVERSEを再参加時に
   replayし得るTransientLocalは使用しない。
-- 後退距離、時間、signed speed絶対値、gear request回数、Recovery attemptが設定上限内。
+- episode後退距離、時間、signed speed絶対値、gear request回数、Recovery attemptが設定上限内。
+- Drive確認後もepisode escapeが未確認なら`escape_not_confirmed`でSafeStopし、
+  LowSpeedRejoinへ進まない。LowSpeedRejoin中のV2X情報欠落は停止保持し、情報復帰後だけ再開する。
+- LowSpeedRejoin完了はescape確認、map footprint clear、fresh / completeなV2X、
+  `|e_y| <= 0.5 m`、`|e_psi| <= 0.35 rad`の0.3秒継続を必須とする。
 
 重要: 上記値は2026-07-12のローカルAWSIM単車校正値です。online SIMや実車へ無条件に
 転用せず、`simulation_only: true`を維持してください。正面壁スタックからの全FSM遷移、
 標準wall recoveryとの競合、dev3の後方安全全シナリオは引き続き確認が必要です。
 運営チャット案内に従い、戦略的な後退には使わず、低速・短時間・後方clearな復帰に限定します。
 
-自動テストでは`stuck_recovery_core` 33件と`recovery_footprint` 19件が成功し、
+自動テストでは`stuck_recovery_core` 51件と`recovery_footprint` 25件が成功し、
 `make autoware-build`も成功しています。package全体testは既存
 `traj_mincurv.csv`の周回末尾fixture期待の1件だけが失敗し、Recovery新規testは
 すべて成功しました。

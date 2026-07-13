@@ -1,8 +1,8 @@
 # MPC Stuck Recovery Tasklist
 
 作成日: 2026-07-12
-更新日: 2026-07-12
-状態: Implementation Complete / P1-P2 AWSIM Scenario Verification Pending
+更新日: 2026-07-13
+状態: Implementation Complete / 2026-07-13 AWSIM Verification Pending
 
 ## Definition of Done
 
@@ -146,10 +146,10 @@
 - [x] ReverseLeft候補を追加する（pure評価APIのみ）。
 - [x] ReverseRight候補を追加する（pure評価APIのみ）。
 - [x] 全candidateへ同じstatic hard safety checksを適用する。
-- [ ] Left / Rightをruntime候補選択と実controlへ統合する。
+- [x] Left / Rightをruntime候補選択と実controlへ統合する。
 - [ ] candidate終端からforward rejoin可能性を確認する。
 - [ ] score項目を正規化する。
-- [ ] deterministic tie-breakを追加する。
+- [x] deterministic priority（Straight、Left、Right）を追加する。
 - [ ] 全candidateのaccept / reject reasonをログする。
 - [ ] RViz candidate markerをdebug flag付きで追加する。
 - [ ] 正面、左前角、右前角のsynthetic testを追加する。
@@ -302,3 +302,212 @@
 - 再ビルド後のP1 / P2起動と、gear publisherのReliable / Volatile QoSを確認した。
 - 正面壁スタックからLowSpeedRejoinまでのend-to-end、標準wall recoveryとの競合、
   40 Hz deadline、dev3後方安全の全シナリオは未検証である。
+
+## Phase 11: 2026-07-13 実走フィードバック対応
+
+- [x] `output/20260713-051613`のP1 / P2 / P3ログを解析する。
+- [x] P1が`missing_corroborating_evidence`でSuspectedに留まることを確認する。
+- [x] `v2x_start_grid_grace_time`を1800秒から5秒へ短縮する。
+- [x] solver正常時だけ有効なevidence-free継続スタック判定を追加する。
+- [x] evidence-free設定値のvalidationとunit testを追加する。
+- [x] clearance timeout SafeStopのclear継続再評価を追加する。
+- [x] gear / odometry / solver等のSafeStopがlatchedのままであるtestを維持する。
+- [x] Straight / Left / Right runtime候補選択を追加する。
+- [x] 選択primitiveとsteering angleをReverse commandへ接続する。
+- [x] 選択rollout横変位をrear V2X corridorへ反映する。
+- [ ] primitive選択とepisode resetのnode integration testを追加する（pure rolloutと操舵伝達testは成功）。
+- [x] `make autoware-build`と対象testを実行する。
+- [ ] dev3でP1復帰、P2 / P3回避、後方最小距離を確認する。
+
+### Phase 11 verification record
+
+- `make autoware-build`: 成功。
+- `test_stuck_recovery_core` / `test_recovery_footprint`: 2 / 2 target成功。
+- package ctest: 16件中15件成功。既知の`test_path_core` trajectory endpoint fixtureだけ失敗。
+- YAML parse / `git diff --check`: 成功。
+- AWSIM dev3 end-to-endは未実行。
+
+## Phase 12: 2026-07-13 Rear wall recovery
+
+- [x] `output/20260713-054744/d1/autoware.log`でP1がReverse report直後の
+  `rear_information_complete=false`により後退前に中断したことを確認する。
+- [x] 近傍wallをFront / Rear / Left / Right / Mixedへ分類するpure helperを追加する。
+- [x] Rear contactから離れるForwardStraight swept candidateを追加する。
+- [x] FrontはReverse、RearはForward、Side / Mixed / Unknownはfail-closedとする。
+- [x] ForwardManeuver / ForwardCreepと距離・時間・速度・attempt上限を追加する。
+- [x] 前進corridorへV2X予測安全確認を適用する。
+- [x] Reverse report直後の一時的なcorridor情報欠落を停止状態で再待機する。
+- [x] wall region、距離、maneuver direction、primitiveをstate変化ログへ追加する。
+- [x] pure unit test、`make autoware-build`、`git diff --check`を実行する。
+- [ ] dev3でP1 Rear wall接触を再現し、`direction=Forward`、`FORWARD_MANEUVER`、
+  `LOW_SPEED_REJOIN`をログと映像で確認する。
+- [ ] Front wallで従来のReverseが回帰していないことを確認する。
+
+### Phase 12 verification record
+
+- `make autoware-build`: 成功。
+- `test_stuck_recovery_core`: 39 tests成功。
+- `test_recovery_footprint`: 22 tests成功。
+- package ctest: 16件中15件成功。既知の`test_path_core` trajectory endpoint fixtureだけ失敗。
+- AWSIM dev3 end-to-endは未実行。
+
+## Phase 13: 2026-07-13 Side / Mixed stepwise escape
+
+- [x] `output/20260713-061716/d1/autoware.log`で`wall=mixed`、`current_contacts=144`、
+  `maneuver_direction_unknown`によるlatched SafeStopを確認する。
+- [x] ForwardLeft / ForwardRightを追加し、前後×Straight / Left / Rightの6候補にする。
+- [x] Side / Mixed専用のprogressive contact transitionを追加する。
+- [x] 0.20 m終端で5%以上contactが減る候補だけacceptする。
+- [x] contact減少最大、Forward優先、Straight優先の決定的選択を追加する。
+- [x] `STOP_AND_REASSESS`と最大3ステップをpure FSMへ追加する。
+- [x] 実移動後にcontactが減らなければ次ステップへ進まない。
+- [x] Reverse失敗時は停止・Drive復帰後にSafeStopとする。
+- [x] state logへstepwise、予測contact reduction、step countを追加する。
+- [x] config / README / `docs/spec/mpc-integration.md`を更新する。
+- [x] pure unit testと`make autoware-build`を実行する。
+- [ ] dev3で同じP1 Side / Mixed接触を再現し、候補選択と接触減少を確認する。
+- [ ] P2 / P3と前後corridorが重なる場合に駆動しないことを確認する。
+
+### Phase 13 verification record
+
+- `make autoware-build`: 成功。
+- `test_stuck_recovery_core`: 41 tests成功。
+- `test_recovery_footprint`: 24 tests成功。
+- package全体ctest: 16件中15件成功。既知の`test_path_core` trajectory endpoint fixtureだけ失敗。
+- AWSIM dev3 end-to-endは後続確認。
+
+## Phase 14: 2026-07-13 Side / Mixed実走フォローアップ
+
+- [x] `output/20260713-063758/d1/autoware.log`でReverseRight選択、Reverse gear、contact減少を確認する。
+- [x] Reverse中の一時的なV2X completeness欠落を即Drive復帰せず停止待機へ変更する。
+- [x] clearance回復時に同じmaneuverの距離・contact基準を保持して再開する。
+- [x] step完了後の次候補では距離・contact基準を新しいstepへ更新する。
+- [x] clearance欠落継続時はtimeout後に停止確認してDriveへ戻す。
+- [x] stepwise Drive復帰をLowSpeedRejoinと誤認せず、solver fallback中も再判定へ進める。
+- [x] 通常LowSpeedRejoinではsolver正常を必須とする既存testを維持する。
+- [x] `make autoware-build`と対象pure testを実行する。
+- [ ] dev3で同じP1 Side / Mixed接触を再現し、最大3ステップ内のclearまたは明示的停止理由を確認する。
+
+### Phase 14 verification record
+
+- `make autoware-build`: 成功。
+- `test_stuck_recovery_core`: 44 tests成功。
+- `test_recovery_footprint`: 24 tests成功。
+- package全体ctest: 既知の`test_path_core` trajectory endpoint fixture 1件だけ失敗。
+- 修正後AWSIM dev3 end-to-endは未実行。
+
+## Phase 15: 2026-07-13 Reverse要求前の自己中断修正
+
+- [x] `output/20260713-080636/d1/autoware.log`でP1のSide / Mixed候補選択を確認する。
+- [x] `ReverseLeft`選択後、`Follow`により`control_interrupted` SafeStopへ入ることを確認する。
+- [x] side vehicleだけのFollowを通常状態の`deliberate_stop`から除外する。
+- [x] detectorの`deliberate_stop`を開始済みRecoveryのimplicit hard stopへ変換しない。
+- [x] adapterが明示するRecovery hard stopはlatched SafeStopとして維持する。
+- [x] AWSIM pose変化だけでなくfootprint clearを標準補正の解決条件に追加する。
+- [x] `make autoware-build`と対象pure testを実行する。
+- [ ] dev3で同じP1 Side / Mixed接触を再現し、gear requestと実移動を確認する。
+
+### Phase 15 verification record
+
+- `make autoware-build`: 成功。
+- `test_stuck_recovery_core`: 47 tests成功。
+- `test_recovery_footprint`: 24 tests成功。
+- package全体ctest: 既知の`test_path_core` trajectory endpoint fixture 1件だけ失敗。
+- 修正後AWSIM dev3 end-to-endは未実行。
+
+## Phase 16: 2026-07-13 Reverse距離化とRear初動短縮
+
+- [x] `output/20260713-081653/d1/autoware.log`で成立済みReverseLeftがgear要求前に消えることを確認する。
+- [x] WAIT_FOR_CLEARでclearになった同一snapshotから即Reverse gear要求へ進める。
+- [x] Side / Mixed候補をReverse Straight / Left / Rightへ限定する。
+- [x] Rear分類時だけForwardStraightを使用する方針を維持する。
+- [x] Side / Mixedを0.40 m×最大2回、合計最大0.80 mの段階後退へ変更する。
+- [x] 開始後はcontact非増加を監視し、残距離ごとの追加5%改善要求で途中停止しないようにする。
+- [x] stationary確認を0.4秒、AWSIM補正優先待ちを1.0秒、停止確認を0.2秒へ短縮する。
+- [x] `make autoware-build`と対象pure testを実行する。
+- [ ] dev3でSide / Mixed接触後のReverse gear要求、0.40 m移動、再評価を確認する。
+- [ ] Rear接触からForwardStraight開始までの実測時間とclear復帰を確認する。
+
+### Phase 16 verification record
+
+- `make autoware-build`: 成功。
+- `test_stuck_recovery_core`: 47 tests成功。
+- `test_recovery_footprint`: 25 tests成功。
+- package全体ctest: 既知の`test_path_core` trajectory endpoint fixture 1件だけ失敗。
+- 変更後AWSIM dev3 end-to-endは未実行。
+
+## Phase 17: 2026-07-13 map不一致スタックの前進intent修正
+
+- [x] `output/20260713-083842/d1/autoware.log`でP1がRecoveryへ入らない原因を確認する。
+- [x] `normal_u[0]`の0 / 非0交互変化が`no_forward_intent`でtimerをresetすることを確認する。
+- [x] reference path速度要求をstableなforward intentへ統合する。
+- [x] evidence-free継続時間を3.0秒から1.5秒へ短縮する。
+- [x] map footprintと後方0.8 m rolloutがclearな場合だけReverseStraight候補を追加する。
+- [x] solver fallback、map invalid、V2X不完全ではfallbackを使用しない制約を維持する。
+- [x] `make autoware-build`と対象pure testを実行する。
+- [ ] dev3で同じP1停止を再現し、evidence-free Confirmed、Reverse gear、0.30 m後退を確認する。
+
+### Phase 17 verification record
+
+- `make autoware-build`: 成功。
+- `test_stuck_recovery_core`: 47 tests成功。
+- `test_recovery_footprint`: 25 tests成功。
+- 変更後AWSIM dev3 end-to-endは未実行。
+
+## Phase 18: 2026-07-13 dev3全車停止の解除
+
+- [x] `output/20260713-084700`のP1〜P3を時系列比較する。
+- [x] P2のAWSIM待機前candidate latchが現contactと不整合になる原因を確認する。
+- [x] `STOP_AND_CONFIRM`後にcandidateとcontact baselineを現在snapshotから再選択する。
+- [x] P1のLeft wall / map contact 0が候補なしになる分岐漏れを修正する。
+- [x] Reverse corridorが後続車で塞がれた場合だけsafeなForwardStraightへ切り替える。
+- [x] forward straightで距離が増える後方車をforward corridorの新規衝突対象から除外する。
+- [x] `make autoware-build`と対象pure testを実行する。
+- [ ] dev3でP2の候補再選択とP1のReverseまたはForward離脱を確認する。
+
+### Phase 18 verification record
+
+- `make autoware-build`: 成功。
+- `test_stuck_recovery_core`: 47 tests成功。
+- `test_recovery_footprint`: 25 tests成功。
+- 変更後AWSIM dev3 end-to-endは未実行。
+
+## Phase 19: 2026-07-13 Reverse未実行の前段修正
+
+- [x] `output/20260713-091107`でReverse gear / ReverseCreepが0回であることを確認する。
+- [x] evidence-free episodeが0.15 m pose nudgeだけで復帰済みになる原因を修正する。
+- [x] evidence-free AWSIM復帰成功にはreference path進捗を必須にする。
+- [x] 約1 Hz V2Xの正常移動を固定5 m jumpとしてrejectする問題を修正する。
+- [x] position jump許容距離をmessage dtと安全速度で拡張する。
+- [x] `make autoware-build`と対象pure testを実行する。
+- [ ] dev3でRequestReverse、Reverse gear report、ReverseCreep、負速度を確認する。
+
+### Phase 19 verification record
+
+- `make autoware-build`: 成功。
+- `test_stuck_recovery_core`: 48 tests成功。
+- `test_recovery_footprint`: 25 tests成功。
+- 変更後AWSIM dev3 end-to-endは未実行。
+
+## Phase 20: 2026-07-13 2.0 m escapeとRejoin完了条件
+
+- [x] `output/20260713-092501`でP1の実後退が約0.01 mで中断したことを確認する。
+- [x] V2X / Boost情報欠落時はReverseのまま停止保持し、complete復帰後に同じmaneuverを再開する。
+- [x] step距離とRecovery episode距離を分離し、step間でepisode距離を保持する。
+- [x] Front / Sideのescape targetを実測2.0 m、停止予約込みhard上限を3.0 mへ変更する。
+- [x] RearのForward escape target 0.30 mを方向別keyとして維持する。
+- [x] Drive確認後もescape未成立なら`escape_not_confirmed` SafeStopとする。
+- [x] LowSpeedRejoin中のV2X不完全時は停止保持し、情報欠落だけで完了させない。
+- [x] 速度上限をRecovery終了条件からReverse内の減速・再開条件へ変更する。
+- [x] reason変化、episode距離、停止予約、escape、V2X / Boost、`e_y` / `e_psi`をログへ追加する。
+- [x] `make autoware-build`とRecovery専用testを実行する。
+- [ ] dev3でFront / Sideが実測2.0 m以上離脱してからLowSpeedRejoinへ入ることを確認する。
+- [ ] RejoinComplete後にpath progressが再開し、同一地点で再スタックしないことを確認する。
+- [ ] P3が先行車復帰後にSafetyBrakeを解除して走行再開することを確認する。
+
+### Phase 20 verification record
+
+- `make autoware-build`: 成功。
+- `test_stuck_recovery_core`: 51 tests成功。
+- package全体ctest: 16 target中15成功。失敗1件は既知の`test_path_core` trajectory endpoint fixture。
+- 変更後AWSIM dev3 end-to-endは未実行。

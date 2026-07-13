@@ -147,6 +147,32 @@ TEST(RecoveryFootprintContactTransition, AllowsOnlyFixedHaloNonIncreasingOccupie
     recovery::RejectReason::NewContact);
 }
 
+TEST(RecoveryFootprintContactTransition, ImprovingStepAllowsBoundedPatchMigration)
+{
+  auto grid = make_grid();
+  set_world_cell(grid, 10.0, 10.0);
+  set_world_cell(grid, 11.0, 10.0);
+  set_world_cell(grid, 12.0, 10.0);
+  set_world_cell(grid, 14.0, 10.0);
+  const auto first = world_cell_index(grid, 10.0, 10.0);
+  const auto second = world_cell_index(grid, 11.0, 10.0);
+  const auto migrated = world_cell_index(grid, 12.0, 10.0);
+  const auto disconnected = world_cell_index(grid, 14.0, 10.0);
+
+  EXPECT_EQ(
+    recovery::evaluate_improving_contact_transition(
+      grid, {first, second}, {second}, {migrated}),
+    recovery::RejectReason::None);
+  EXPECT_EQ(
+    recovery::evaluate_improving_contact_transition(
+      grid, {first}, {first}, {first, second}),
+    recovery::RejectReason::ContactWorsened);
+  EXPECT_EQ(
+    recovery::evaluate_improving_contact_transition(
+      grid, {first, second}, {second}, {disconnected}),
+    recovery::RejectReason::NewContact);
+}
+
 TEST(RecoveryFootprintFeasibility, WallBehindRejectsStraightRollout)
 {
   auto grid = make_grid();
@@ -272,6 +298,97 @@ TEST(RecoveryFootprintInitialContact, ReverseCannotPassThroughRearContact)
   EXPECT_FALSE(result.feasible);
   EXPECT_EQ(result.initial_contact_count, 1U);
   EXPECT_EQ(result.reason, recovery::RejectReason::InitialContactNotForward);
+}
+
+TEST(RecoveryFootprintInitialContact, ForwardEscapeMayClearExistingRearContact)
+{
+  auto grid = make_grid(20U, 20U, 1.0);
+  set_world_cell(grid, 4.0, 10.0);
+  recovery::ReverseRolloutParameters parameters{1.5, 0.25, 0.1, 1.0, 0.0};
+
+  const auto result = recovery::evaluate_reverse_candidate(
+    grid, recovery::FootprintExtents{0.6, 0.6, 0.2, 0.2, 0.0},
+    recovery::Pose2D{5.0, 10.0, 0.0}, recovery::ReversePrimitive::ForwardStraight,
+    parameters);
+
+  EXPECT_TRUE(result.feasible);
+  EXPECT_EQ(result.initial_contact_count, 1U);
+  EXPECT_EQ(result.final_contact_count, 0U);
+  ASSERT_FALSE(result.rollout.empty());
+  EXPECT_GT(result.rollout.back().pose.x_m, 5.0);
+}
+
+TEST(RecoveryFootprintInitialContact, ForwardCannotPassThroughFrontContact)
+{
+  auto grid = make_grid(20U, 20U, 1.0);
+  set_world_cell(grid, 6.0, 10.0);
+  recovery::ReverseRolloutParameters parameters{1.5, 0.25, 0.1, 1.0, 0.0};
+
+  const auto result = recovery::evaluate_reverse_candidate(
+    grid, recovery::FootprintExtents{0.6, 0.6, 0.2, 0.2, 0.0},
+    recovery::Pose2D{5.0, 10.0, 0.0}, recovery::ReversePrimitive::ForwardStraight,
+    parameters);
+
+  EXPECT_FALSE(result.feasible);
+  EXPECT_EQ(result.reason, recovery::RejectReason::InitialContactNotRear);
+}
+
+TEST(RecoveryFootprintInitialContact, ShortStepMayRequireMeasuredContactImprovement)
+{
+  auto grid = make_grid(120U, 120U, 0.1);
+  for (const double x_m : {4.4, 4.5, 4.6, 4.7}) {
+    for (const double y_m : {4.8, 4.9, 5.0, 5.1, 5.2}) {
+      set_world_cell(grid, x_m, y_m);
+    }
+  }
+  recovery::ReverseRolloutParameters parameters{0.2, 0.05, 0.05, 1.0, 0.25};
+  const auto result = recovery::evaluate_recovery_candidate(
+    grid, recovery::FootprintExtents{0.5, 0.5, 0.5, 0.5, 0.0},
+    recovery::Pose2D{5.0, 5.0, 0.0}, recovery::ReversePrimitive::ForwardStraight,
+    parameters, recovery::ContactEscapePolicy::RequireImprovement, 0.05);
+
+  EXPECT_TRUE(result.feasible);
+  EXPECT_GT(result.initial_contact_count, result.final_contact_count);
+  EXPECT_GT(result.contact_reduction, 0U);
+  EXPECT_GT(result.final_contact_count, 0U);
+}
+
+TEST(RecoveryFootprintInitialContact, CommittedStepMayRemainNonWorseningUntilEndpoint)
+{
+  auto grid = make_grid(30U, 30U, 1.0);
+  set_world_cell(grid, 10.5, 10.5);
+  recovery::ReverseRolloutParameters parameters{0.1, 0.1, 0.1, 1.0, 0.0};
+  const auto result = recovery::evaluate_recovery_candidate(
+    grid, recovery::FootprintExtents{0.2, 0.2, 0.2, 0.2, 0.0},
+    recovery::Pose2D{10.5, 10.5, 0.0}, recovery::ReversePrimitive::Straight,
+    parameters, recovery::ContactEscapePolicy::AllowNonWorsening, 0.0);
+
+  EXPECT_TRUE(result.feasible);
+  EXPECT_GT(result.initial_contact_count, 0U);
+  EXPECT_EQ(result.final_contact_count, result.initial_contact_count);
+  EXPECT_EQ(result.contact_reduction, 0U);
+}
+
+TEST(RecoveryFootprintWallRegion, ClassifiesVehicleRelativeSidesAndFailsClosedAtCorner)
+{
+  const recovery::Pose2D pose{10.0, 10.0, 0.0};
+  const recovery::FootprintExtents footprint{1.0, 1.0, 1.0, 1.0, 0.0};
+  const auto classify = [&](const double x_m, const double y_m) {
+      auto grid = make_grid(200U, 200U, 0.1);
+      set_world_cell(grid, x_m, y_m);
+      return recovery::classify_nearby_wall(grid, footprint, pose, 0.5, 0.02);
+    };
+
+  EXPECT_EQ(classify(11.2, 10.0).region, recovery::WallRegion::Front);
+  EXPECT_EQ(classify(8.8, 10.0).region, recovery::WallRegion::Rear);
+  EXPECT_EQ(classify(10.0, 11.2).region, recovery::WallRegion::Left);
+  EXPECT_EQ(classify(10.0, 8.8).region, recovery::WallRegion::Right);
+  EXPECT_EQ(classify(11.2, 11.2).region, recovery::WallRegion::Mixed);
+
+  const auto clear = recovery::classify_nearby_wall(
+    make_grid(200U, 200U, 0.1), footprint, pose, 0.5, 0.02);
+  EXPECT_TRUE(clear.valid);
+  EXPECT_EQ(clear.region, recovery::WallRegion::None);
 }
 
 TEST(RecoveryFootprintInitialContact, NewWallContactDuringEscapeIsRejected)
@@ -436,6 +553,8 @@ TEST(RecoveryFootprintStrings, RejectReasonsAndPrimitivesHaveStableNames)
     "initial_contact_not_forward");
   EXPECT_STREQ(
     recovery::to_string(recovery::ReversePrimitive::Right), "reverse_right");
+  EXPECT_STREQ(
+    recovery::to_string(recovery::ReversePrimitive::ForwardLeft), "forward_left");
   EXPECT_STREQ(
     recovery::to_string(static_cast<recovery::RejectReason>(999)), "unknown");
 }

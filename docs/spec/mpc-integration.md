@@ -105,6 +105,259 @@ C++ 本番ノードの経路入力・solver処理には、次の安全化を適�
 - Python `path_constraints_provider` も circular CSV の重複終点を同じ許容差で除去し、C++側は受信したrows/colsが内部ReferencePathと一致しない制約を拒否する。
 - solver fallback と `/control/mpc/stop_request` はlegacy boost arbitrationより優先し、boostを必ず無効化する。low-pass gainは `[0,1]` に限定し、filter後にも加速度、操舵角、操舵変化量を制限する。
 
+### Wall Stuck Recovery（Implementation Complete / P1-P2 Scenario Verification Pending）
+
+前進専用の現行MPCは、正面が壁に押し付けられると後退できない。
+この復帰はMPC / MPCCの評価関数とは分離し、次の2つのpure C++ coreと
+`mpc_controller_cpp`内のROS adapterとして実装した。
+
+- `stuck_recovery_core`: 前進意図、signed speed、pose / path進捗、補助証拠、
+  意図的停止の除外、Recovery FSM、gear timeout、距離・時間・速度・試行上限を扱う。
+- `recovery_footprint`: 向き付き車体矩形、swept interpolation、map外 / unknownの
+  occupied扱い、wall方向分類、初期接触を増やさず離脱するReverse Straight / Left / Rightと
+  ForwardStraight rolloutを扱う。
+
+最終command arbitrationは既存C++ nodeの単一thread内で行う。Recoveryが制御権を
+持つ周期はNormal MPC commandを破棄し、Recovery / SafeStopのどちらか一方だけを
+既存 `/control/command/control_cmd` publisherからpublishする。別のcontrol publisherや
+Domain 0のreset / teleportは追加しない。gear実制御時だけ
+`/control/command/gear_cmd`をpublishし、`/vehicle/status/gear_status`の
+freshな一致reportを駆動前に必須とする。
+
+実行modeは次の順に段階化している。
+
+1. `enabled: false`: Recovery coreをcontrol cycleで評価せず、通常MPCを維持する。
+2. `enabled: true`, `shadow_mode: true`: detectorと安全判定のログだけを出し、
+   control / gear commandを変更しない。
+3. `shadow_mode: false`: SIMに限ってFSMがcommand ownerになり得るが、後述の
+   reverse actuationラッチが閉じている間はgear駆動しない。現在はP1 / P2だけ
+   このmodeであり、P3、未列挙Domain、実車は無効である。
+
+```yaml
+stuck_recovery:
+  enabled: false
+  domain_enabled:
+    1: true
+    2: true
+    3: false
+  shadow_mode: false
+  simulation_only: true
+  reverse_actuation_enabled: true
+  reverse_acceleration_sign: 1.0
+  reverse_stop_acceleration_mps2: -0.8
+  verified_reverse_stop_deceleration_mps2: 0.4
+  reverse_control_latency_sec: 0.2
+  boost_status_timeout_sec: 0.5
+  detector:
+    solver_fallback_recovery_enabled: true
+    solver_fallback_duration_sec: 2.0
+    evidence_free_recovery_enabled: true
+    evidence_free_duration_sec: 1.5
+    max_observation_gap_sec: 0.2
+    stopped_speed_mps: 0.15
+    moving_speed_mps: 0.25
+    forward_intent_speed_mps: 1.0
+    forward_intent_acceleration_mps2: 0.1
+    stationary_duration_sec: 0.4
+    max_pose_displacement_m: 0.15
+    max_progress_delta_m: 0.20
+    awsim_recovery_settle_sec: 1.0
+  gear:
+    report_timeout_sec: 0.5
+    stop_confirm_sec: 0.2
+    command_resend_interval_sec: 0.2
+    max_command_requests: 1
+  maneuver:
+    clearance_wait_timeout_sec: 1.0
+    clearance_safe_stop_recovery_enabled: true
+    safe_stop_clear_confirm_sec: 0.5
+    max_reverse_distance_m: 3.0
+    max_reverse_duration_sec: 4.0
+    max_reverse_speed_mps: 0.8
+    reverse_acceleration_magnitude_mps2: 0.5
+    max_forward_distance_m: 0.6
+    max_forward_duration_sec: 1.5
+    max_forward_speed_mps: 0.8
+    forward_acceleration_magnitude_mps2: 0.5
+    reverse_escape_distance_m: 2.0
+    forward_escape_distance_m: 0.30
+    max_reverse_pose_step_m: 0.05
+    reverse_steering_angle_rad: 0.25
+    wall_direction_search_margin_m: 0.50
+    wall_direction_ambiguity_m: 0.02
+    side_escape_enabled: true
+    escape_step_distance_m: 0.40
+    max_escape_steps: 8
+    side_escape_min_contact_reduction_ratio: 0.05
+    max_attempts: 2
+  footprint:
+    front_extent_m: 1.49
+    rear_extent_m: 0.51
+    left_extent_m: 0.725
+    right_extent_m: 0.725
+    margin_m: 0.05
+    sweep_interpolation_step_m: 0.05
+  rear_safety:
+    expected_v2x_vehicle_count: 2
+    self_filter_mode: excluded
+    self_vehicle_id: ""
+    vehicle_radius_m: 1.45
+    prediction_margin_sec: 0.1
+  rejoin:
+    speed_limit_mps: 1.0
+    max_lateral_error_m: 0.5
+    max_heading_error_rad: 0.35
+    confirm_sec: 0.3
+    timeout_sec: 5.0
+    cooldown_sec: 1.0
+```
+
+`reverse_actuation_enabled` と `reverse_acceleration_sign` は別々のhard latchである。
+sign 0や駆動・停止commandの同符号、停止減速度0は起動時に拒否する。2026-07-12の
+ローカルAWSIM校正では、REVERSE中の正加速度が後退駆動、負加速度が停止だった。
+`+0.5 m/s^2`の駆動でsigned velocityが負になり、`-0.8 m/s^2`で停止した。
+gear report遅延はREVERSE約0.035 s、DRIVE約0.015 s、command-to-effect約0.140 s、
+停止時間約0.154 s、平均停止減速度約0.628 m/s^2だった。設定は保守的に
+`0.4 m/s^2`と`0.2 s`を停止距離予約へ使う。
+
+通常のsolver fallbackはRecoveryから除外する。例外はfallbackが連続2.0秒以上で、
+solverとは独立したpath前進要求、低実速度、pose / path無進捗、現在の
+footprint-to-wall証拠が全て継続した場合だけである。collision hint単独では成立しない。
+detector更新間隔が0.2秒を超えた場合は停止時間とfallback時間をresetし、callback / odometry
+途絶時間を連続観測へ加算しない。
+
+solver正常時には、物理壁とoccupancy map / legacy collision通知の不一致へ限定対応する。
+Follow / SafetyBrake / LowSpeedAvoidance等の意図的停止ではなく、前進要求、低実速度、pose / path
+無進捗が`evidence_free_duration_sec`継続した場合だけ、wall evidenceなしでもConfirmedとする。
+現設定は有効、1.5秒であり、solver fallbackへは適用しない。前進intentはMPC解とreference path
+速度要求の最大値を使い、停止中のtarget再構築による0 / 非0の交互変化でtimerをresetしない。
+証拠なしConfirmedでは、現在map footprintと後方3.0 m ReverseStraight rolloutがclearで、
+fresh / completeなV2X corridorもclearの場合だけ候補を生成し、実測2.0 m後退後に停止する。
+map invalid、out-of-map、unknown、solver fallback、V2X不完全ではこのfallbackを使用しない。
+Recoveryがcommand ownerになった後はfallback継続だけで途中abortしないが、通常MPCを
+再使用するLowSpeedRejoinではsolver復帰を必須とする。
+
+通常V2X behaviorの`deliberate_stop`はRecovery開始前の誤検知除外に限定する。Followは実front
+vehicleがある場合だけ該当し、side vehicleの存在だけでは意図的停止としない。Recovery開始後は
+一時的なFollow / SafetyBrakeをimplicitな`control_interrupted`へ変換せず、選択方向のstatic / V2X
+corridorを駆動可否の正本とする。control disableとadapterが明示するRecovery hard stopは
+従来どおりSafeStopを優先する。
+
+近傍wall cellを車体座標へ変換し、Front / Rear / Left / Right / Mixedへ分類する。
+FrontではReverse Straight / Left / Rightをこの順で評価し、RearではForwardStraightを
+評価する。Side / Mixedかつ実map contactありでもReverse Straight / Left / Rightの3候補を
+0.40 m評価する。Unknownまたは改善候補なしはfail-closedとする。検索marginは
+方向推定専用でありcollision footprintを縮小しない。最初のfeasible候補はRecovery episode中
+固定する。Reverse Left / Rightは`reverse_steering_angle_rad`の正負を実commandへ渡し、
+選択rolloutの横変位分だけV2X corridorを拡張する。
+
+AWSIM補正待機中にpose / contactが変わるため、`STOP_AND_CONFIRM`後は待機前の候補を破棄し、
+現在snapshotをbaselineとして候補を再選択する。Left / Right / Mixed近傍wallでmap contactが0の
+場合もstatic swept rolloutを評価する。通常はReverseを優先するが、fresh / completeなV2Xで
+Reverse corridorだけが後続車に塞がれ、ForwardStraightのstatic rolloutとforward corridorが
+clearの場合に限り最大0.6 mのForwardCreepへ切り替える。直進前進で距離が増え続ける後方車は
+forward corridorの新規衝突対象から外す一方、前方、横並び、予測中に前方へ入る車両はrejectする。
+候補をepisodeへ固定した後は方向を途中変更しない。
+
+Recovery episode開始時のwall / collision / map contact証拠を保持する。証拠ありepisodeでは
+AWSIM補正後のfootprint clearを復帰成功に使用できる。evidence-free episodeは開始時からmap上clear
+なので、pose変化だけでは成功とせず、reference path進捗が`max_progress_delta_m`以上の場合だけ
+`awsim_recovery_resolved`とする。横方向nudgeだけの場合はSTOP_AND_CONFIRMへ進む。
+
+V2X trackerのposition jump許容距離は
+`max(v2x_position_jump_threshold, v2x_v_max_safety * message_dt)`とする。これにより約1 Hz配信で
+正常走行車が固定距離閾値以上進んでもcomplete判定を維持する。非有限・逆行timestamp、許容速度を
+超える移動、position jump、台数・ID・frame・covariance不正は引き続きRecoveryをfail-closedとする。
+
+実制御候補は次のhard conditionをすべて満たす場合だけ実行する。
+
+- static map上の全swept footprintが安全。Reverseの初期接触は前方wall、ForwardStraightは
+  後方wallに限定する。
+  現在cellは初期patchの固定1-cell halo内かつ直前patchと同一または8近傍の明示Occupiedだけを
+  許し、接触数増加、chain migration、一度clear後の再接触、unknown、離れたpatchをrejectする。
+  候補終端までに接触を解消し、rolloutと実後退中監視は共通helperを使用する。swept stepと
+  runtime corner motionはmap resolution以下の設定stepに制限する。初期接触を持つLeft /
+  Rightは、向きが変わる場合のpenetration単調性が未実装のためfail-closedとする。
+- `/v2x/vehicle_positions`の最近messageがfreshで、position jumpのない他車の
+  現在位置から選択maneuver duration分を予測した進行方向corridorがclear。さらに、
+  `expected_v2x_vehicle_count`と正確に一致するcomplete messageを必須とし、既定`-1`では
+  rear informationをunknownとしてReverseを阻止する。source stamp / map frame / covariance / ID
+  も検証し、自車の扱いは`self_filter_mode=excluded`または正確な`vehicle_id`を明示する。
+- `/awsim/status`がfreshで`isBoosting=false`。Boost中またはstatus不明時は
+  rear information incompleteとする。
+- freshなREVERSE GearReportを確認してから駆動加速度を出す。
+- Rear-wall離脱はfreshなDRIVE GearReportを確認し、最大0.6 m / 1.5 s / 0.8 m/sの
+  ForwardCreepだけを出す。
+- Side / Mixed候補は各swept sampleでcontact数がステップ初期値を超えず、previous patchと
+  局所連続し、終端で5%以上減る場合だけacceptする。contact減少最大、Straight、Left、Rightの
+  決定順で選ぶ。実移動後にもcontact減少を確認し、0.40 mごとに停止・再評価する。
+  episode距離は各stepをまたいで保持し、実測2.0 mまたは最大8ステップ、実改善なし、Unknownで
+  SafeStopとする。V2X不完全時は即停止してReverseを維持し、情報が回復すれば同じステップを
+  再開する。completeな情報でstaticまたは他車blockが継続した場合だけDriveへ戻す。
+  gear要求後は`AllowNonWorsening`へ切り替え、残距離ごとの追加5%改善は要求せず、contact非増加と
+  新規contactなしを監視して0.40 m終端まで進める。終点の実測改善判定は維持する。
+- signed speedの絶対値が`max_reverse_speed_mps`へ達した周期はReverseを維持して減速し、
+  上限未満へ戻れば同じmaneuverを再開する。速度上限だけでescape完了やDrive復帰にしない。
+
+`clearance_wait_timeout_sec`到達によるSafeStopだけはrecoverableとし、static rollout、freshで
+completeなV2X、後方corridor clearが`safe_stop_clear_confirm_sec`連続した後に再び
+CHECK_CLEARANCEへ戻る。gear / odometry / solver / control / attempt limitによるSafeStopは
+session resetまでlatchedする。
+
+REVERSE GearReportとV2X completenessが隣接周期で到着する場合は、
+`WAIT_REVERSE_REPORT`で停止commandを維持し、completeかつclearになった後だけReverseCreepへ
+入る。ReverseManeuver中の一時欠落にも同じ停止待機を適用し、回復後は累積移動距離とcontact基準を
+維持して再開する。情報不足の周期には駆動せず、情報欠落だけではDRIVEやLowSpeedRejoinへ
+遷移しない。completeなstatic / vehicle blockageが継続した場合だけ停止後DRIVEへ戻す。
+
+stepwise Reverse完了後にDrive reportを待つ間は、次の`STOP_AND_REASSESS`またはSafeStopが
+予約されているためnormal MPC solverを使用しない。したがってsolver fallback継続だけで
+再判定を中断しない。通常離脱後にLowSpeedRejoinへ入るDrive reportでは従来どおりsolver正常を
+必須とする。
+
+`WAIT_FOR_CLEAR`でstatic rolloutとV2X corridorが同時にclearになった場合は、その同一snapshotで
+`CHECK_CLEARANCE`を消費してgear要求へ進む。clear確認後にもう1周期待つことでV2X completenessや
+contact candidateを失い、駆動前にSafeStopへ落ちる競合を避ける。
+
+AWSIM標準wall recoveryによるpose / yaw変化でdetectorの観測windowがresetされても、現在footprintに
+map contactが残る場合は`awsim_recovery_resolved`としない。待機時間終了後に
+`STOP_AND_CONFIRM`へ進め、現在footprintがclearの場合だけ通常制御へ戻す。
+
+Recovery開始後はそのrace sessionのStart Boostを再発動せず、LowSpeedRejoin前に
+MPC prediction / control history / solver fallback、V2X behavior、OvertakeLine、pass-side / target
+lockをresetする。再合流へ入る前にFront / Sideはepisode実測2.0 m、Rearは実測0.30 mの
+escapeと車体clearanceを必須とする。未達でDriveへ戻った場合は`escape_not_confirmed`で
+SafeStopする。再合流中もV2X completeを必須とし、欠落時は停止保持する。専用速度上限で
+lateral / heading errorが所定時間閾値内に入るまで継続する。
+
+現runtimeはFront / Side / Mixedの`ReverseStraight` / `ReverseLeft` / `ReverseRight`、Rearの
+`ForwardStraight`を決定的に評価し、
+最初のfeasible候補をepisode中固定して実commandへ変換する。RViz candidate表示と
+終端rejoin scoreは未実装である。
+
+自動検証は`stuck_recovery_core` 51 tests、`recovery_footprint` 25 testsが成功し、
+`make autoware-build`も成功した。package全体testは、既存
+`final_ver3/traj_mincurv.csv`が重複終端を持つとするfixture期待の1件だけが失敗し、
+Recovery新規testは全て成功した。AWSIM単車のgear遷移、Reverse加速度符号、
+signed odometryは校正済みである。標準wall recoveryとの競合、正面壁スタックからの
+全FSM遷移、dev3後方安全の全シナリオは未検証である。
+
+以前のP1限定3台・360秒統合走行では、長時間solver fallbackにwall evidenceがなく、
+`solver_fallback_missing_wall_evidence`でRecoveryを発動しないことを確認した。
+現在の3台クリーン起動ではDomain 1 / 2をActive、Domain 3をdisabledとし、各Domainの
+V2Xが自車を除く2 entryであることを確認した。P1は実走中に
+`Confirmed -> WAIT_AWSIM_RECOVERY`へ遷移し、
+AWSIM標準wall recoveryで動きが戻ったため`awsim_recovery_resolved`で通常制御へ復帰した。
+最終の前方接触 / 固定initial halo / runtime corner-motion強化はpure testとbuildで確認した。
+標準補正でも解消しない正面壁スタックから独自Reverseを通る最終binaryのend-to-end再現は
+未完了である。
+gear publisherはReliable / KeepLast(1) / Volatileであり、TransientLocalは古いREVERSEの
+late-join replayを避けるため使用しない。
+
+運営チャットの回答は、技術的実装を可としつつ、低速・短時間・後方clearな
+スタック復帰に限定し、戦略的な後退を避けるよう案内している。本実装の0.8 m、2.0 s、
+0.8 m/s、1 attemptはこの運用方針に沿うローカル値であり、2026公式上限ではない。
+
 ### AWSIM 2026 Start Dash Boost（2026-07-11）
 
 2026公式Boostは通常の`AckermannControlCommand`加速度とは独立したAWSIM item commandとして扱う。

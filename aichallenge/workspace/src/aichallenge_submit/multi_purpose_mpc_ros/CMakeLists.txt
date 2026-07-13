@@ -39,6 +39,16 @@ ament_auto_add_library(${PROJECT_NAME}_v2x_overtake_core SHARED
   src/v2x_overtake_core.cpp
 )
 
+ament_auto_add_library(${PROJECT_NAME}_stuck_recovery_core SHARED
+  NO_TARGET_LINK_LIBRARIES
+  src/stuck_recovery_core.cpp
+)
+
+ament_auto_add_library(${PROJECT_NAME}_recovery_footprint SHARED
+  NO_TARGET_LINK_LIBRARIES
+  src/recovery_footprint.cpp
+)
+
 ament_auto_add_executable(boost_commander
   src/boost_commander_node.cpp
 )
@@ -53,6 +63,8 @@ target_include_directories(mpc_controller_cpp PRIVATE
 target_link_libraries(mpc_controller_cpp
   ${PROJECT_NAME}_awsim_boost_start_dash
   ${PROJECT_NAME}_path_core
+  ${PROJECT_NAME}_recovery_footprint
+  ${PROJECT_NAME}_stuck_recovery_core
   ${PROJECT_NAME}_v2x_overtake_core
   osqp::osqp
   yaml-cpp
@@ -99,6 +111,24 @@ if(BUILD_TESTING)
   if(TARGET test_v2x_overtake_core)
     target_link_libraries(test_v2x_overtake_core
       ${PROJECT_NAME}_v2x_overtake_core
+    )
+  endif()
+
+  ament_add_gtest(test_stuck_recovery_core
+    test/test_stuck_recovery_core.cpp
+  )
+  if(TARGET test_stuck_recovery_core)
+    target_link_libraries(test_stuck_recovery_core
+      ${PROJECT_NAME}_stuck_recovery_core
+    )
+  endif()
+
+  ament_add_gtest(test_recovery_footprint
+    test/test_recovery_footprint.cpp
+  )
+  if(TARGET test_recovery_footprint)
+    target_link_libraries(test_recovery_footprint
+      ${PROJECT_NAME}_recovery_footprint
     )
   endif()
 

@@ -1,5 +1,7 @@
 #include <autoware_auto_control_msgs/msg/ackermann_control_command.hpp>
 #include <autoware_auto_planning_msgs/msg/trajectory.hpp>
+#include <autoware_auto_vehicle_msgs/msg/gear_command.hpp>
+#include <autoware_auto_vehicle_msgs/msg/gear_report.hpp>
 #include <builtin_interfaces/msg/time.hpp>
 #include <geometry_msgs/msg/point.hpp>
 #include <geometry_msgs/msg/pose2_d.hpp>
@@ -7,6 +9,8 @@
 #include <geometry_msgs/msg/vector3.hpp>
 #include <multi_purpose_mpc_ros/awsim_boost_start_dash.hpp>
 #include <multi_purpose_mpc_ros/path_core.hpp>
+#include <multi_purpose_mpc_ros/recovery_footprint.hpp>
+#include <multi_purpose_mpc_ros/stuck_recovery_core.hpp>
 #include <multi_purpose_mpc_ros/v2x_overtake_core.hpp>
 #include <multi_purpose_mpc_ros_msgs/msg/ackermann_control_boost_command.hpp>
 #include <multi_purpose_mpc_ros_msgs/msg/border_cells.hpp>
@@ -33,10 +37,12 @@
 #include <osqp.h>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cctype>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -50,6 +56,7 @@
 #include <string>
 #include <tuple>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -60,6 +67,8 @@ namespace
 
 using autoware_auto_control_msgs::msg::AckermannControlCommand;
 using autoware_auto_planning_msgs::msg::Trajectory;
+using autoware_auto_vehicle_msgs::msg::GearCommand;
+using autoware_auto_vehicle_msgs::msg::GearReport;
 using geometry_msgs::msg::Point;
 using geometry_msgs::msg::Pose2D;
 using geometry_msgs::msg::Quaternion;
@@ -81,6 +90,8 @@ using SteadyClock = std::chrono::steady_clock;
 namespace path_core = ::multi_purpose_mpc_ros::path_core;
 namespace awsim_boost = ::multi_purpose_mpc_ros::awsim_boost;
 namespace overtake_core = ::multi_purpose_mpc_ros::v2x_overtake_core;
+namespace recovery_footprint = ::multi_purpose_mpc_ros::recovery_footprint;
+namespace stuck_recovery = ::multi_purpose_mpc_ros::stuck_recovery;
 
 constexpr double kEps = 1e-12;
 constexpr double kPi = 3.14159265358979323846;
@@ -106,6 +117,36 @@ double kmh_to_m_per_sec(const double kmh)
   return kmh / 3.6;
 }
 
+stuck_recovery::Gear recovery_gear_from_report(const std::uint8_t report)
+{
+  if (report == GearReport::NEUTRAL) {
+    return stuck_recovery::Gear::Neutral;
+  }
+  if (report == GearReport::DRIVE) {
+    return stuck_recovery::Gear::Drive;
+  }
+  if (report == GearReport::REVERSE) {
+    return stuck_recovery::Gear::Reverse;
+  }
+  return stuck_recovery::Gear::Unknown;
+}
+
+std::optional<std::uint8_t> gear_command_value(const stuck_recovery::Gear gear)
+{
+  switch (gear) {
+    case stuck_recovery::Gear::Neutral:
+      return GearCommand::NEUTRAL;
+    case stuck_recovery::Gear::Drive:
+      return GearCommand::DRIVE;
+    case stuck_recovery::Gear::Reverse:
+      return GearCommand::REVERSE;
+    case stuck_recovery::Gear::NoCommand:
+    case stuck_recovery::Gear::Unknown:
+      return std::nullopt;
+  }
+  return std::nullopt;
+}
+
 std::optional<int> ros_domain_id_from_env()
 {
   const char * value = std::getenv("ROS_DOMAIN_ID");
@@ -126,6 +167,11 @@ std::optional<int> ros_domain_id_from_env()
 double stamp_to_seconds(const builtin_interfaces::msg::Time & stamp)
 {
   return static_cast<double>(stamp.sec) + static_cast<double>(stamp.nanosec) * 1e-9;
+}
+
+double steady_seconds(const SteadyClock::time_point time_point)
+{
+  return std::chrono::duration<double>(time_point.time_since_epoch()).count();
 }
 
 std::vector<std::string> split_csv_line(const std::string & line)
@@ -408,6 +454,8 @@ struct Map
   {
     const YAML::Node map_data = YAML::LoadFile(map_yaml_path);
     threshold_occupied = map_data["occupied_thresh"].as<double>();
+    threshold_free = map_data["free_thresh"].as<double>();
+    negate = map_data["negate"] ? map_data["negate"].as<int>() : 0;
     resolution = map_data["resolution"].as<double>();
     origin = map_data["origin"].as<std::vector<double>>();
 
@@ -430,6 +478,7 @@ struct Map
     if (max_value > 1.0) {
       data /= max_value;
     }
+    raw_normalized_data = data.clone();
     process_map();
     height = data.rows;
     width = data.cols;
@@ -538,8 +587,11 @@ struct Map
   }
 
   double threshold_occupied{};
+  double threshold_free{};
+  int negate{};
   cv::Mat data;
   cv::Mat data_backup;
+  cv::Mat raw_normalized_data;
   int height{};
   int width{};
   double resolution{};
@@ -1549,6 +1601,7 @@ struct V2XGapPlanner
     double vy{};
     bool has_sample{false};
     bool position_jump{false};
+    bool invalid_velocity{false};
   };
 
   struct LateralInterval
@@ -1598,13 +1651,53 @@ struct V2XGapPlanner
     }
   };
 
-  explicit V2XGapPlanner(const V2XGapPlannerConfig & cfg_in) : cfg(cfg_in) {}
+  explicit V2XGapPlanner(
+    const V2XGapPlannerConfig & cfg_in, const bool track_recovery_completeness = false)
+  : cfg(cfg_in), track_recovery_completeness_(track_recovery_completeness) {}
 
   void update(const V2XVehiclePositionArray & msg, const double receipt_sec)
   {
     std::lock_guard<std::mutex> lock(mutex_);
+    if (track_recovery_completeness_) {
+      last_message_receipt_sec_ = receipt_sec;
+      last_message_vehicle_count_ = msg.vehicles.size();
+      last_message_has_empty_id_ = false;
+      last_message_has_duplicate_id_ = false;
+      last_message_has_invalid_sample_ = false;
+    }
+    std::unordered_set<std::string> message_ids;
     const double array_stamp = stamp_to_seconds(msg.header.stamp);
+    if (track_recovery_completeness_) {
+      const double source_age_sec = receipt_sec - array_stamp;
+      if (
+        msg.header.frame_id != "map" || !std::isfinite(array_stamp) || array_stamp <= 0.0 ||
+        !std::isfinite(source_age_sec) || source_age_sec < -kEps ||
+        source_age_sec > cfg.timeout_sec ||
+        (last_message_source_stamp_sec_.has_value() &&
+        array_stamp < last_message_source_stamp_sec_.value()))
+      {
+        last_message_has_invalid_sample_ = true;
+      }
+      if (std::isfinite(array_stamp) && array_stamp > 0.0) {
+        last_message_source_stamp_sec_ = array_stamp;
+      }
+    }
     for (const auto & vehicle : msg.vehicles) {
+      if (track_recovery_completeness_) {
+        if (vehicle.vehicle_id.empty()) {
+          last_message_has_empty_id_ = true;
+        } else if (!message_ids.emplace(vehicle.vehicle_id).second) {
+          last_message_has_duplicate_id_ = true;
+        }
+        if (
+          !std::isfinite(vehicle.position.x) || !std::isfinite(vehicle.position.y) ||
+          !std::isfinite(vehicle.covariance.x) || !std::isfinite(vehicle.covariance.y) ||
+          vehicle.covariance.x < 0.0 || vehicle.covariance.y < 0.0 ||
+          (!vehicle.header.frame_id.empty() && vehicle.header.frame_id != "map"))
+        {
+          last_message_has_invalid_sample_ = true;
+        }
+      }
       const std::string id = vehicle.vehicle_id.empty() ? "__unknown__" : vehicle.vehicle_id;
       double sample_stamp = stamp_to_seconds(vehicle.header.stamp);
       if (sample_stamp <= 0.0) {
@@ -1612,19 +1705,43 @@ struct V2XGapPlanner
       }
 
       auto & tracked = vehicles_[id];
+      if (track_recovery_completeness_) {
+        const double sample_age_sec = receipt_sec - sample_stamp;
+        if (
+          !std::isfinite(sample_stamp) || sample_stamp <= 0.0 ||
+          !std::isfinite(sample_age_sec) || sample_age_sec < -kEps ||
+          sample_age_sec > cfg.timeout_sec ||
+          (tracked.has_sample && sample_stamp < tracked.stamp_sec))
+        {
+          last_message_has_invalid_sample_ = true;
+        }
+      }
       double vx = 0.0;
       double vy = 0.0;
       bool position_jump = false;
+      bool invalid_velocity = false;
       if (tracked.has_sample) {
         const double dt = sample_stamp - tracked.stamp_sec;
         const double dx = vehicle.position.x - tracked.x;
         const double dy = vehicle.position.y - tracked.y;
         const double jump = std::hypot(dx, dy);
-        position_jump = jump > cfg.position_jump_threshold;
-        if (dt > kEps && jump <= cfg.position_jump_threshold) {
+        // AWSIM V2X can update near 1 Hz, so a normally moving kart may travel
+        // more than the fixed spatial jump threshold between samples. Scale
+        // the admissible displacement by dt and the configured safety speed;
+        // the fixed threshold remains the minimum tolerance for short-dt
+        // localization noise and discontinuities.
+        const double admissible_jump = dt > kEps ?
+          std::max(cfg.position_jump_threshold, cfg.v_max_safety * dt) :
+          cfg.position_jump_threshold;
+        position_jump = !std::isfinite(dt) || dt < -kEps || jump > admissible_jump;
+        if (dt > kEps && !position_jump) {
           vx = dx / dt;
           vy = dy / dt;
           if (std::hypot(vx, vy) > cfg.v_max_safety) {
+            invalid_velocity = true;
+            if (track_recovery_completeness_) {
+              last_message_has_invalid_sample_ = true;
+            }
             vx = 0.0;
             vy = 0.0;
           }
@@ -1642,6 +1759,7 @@ struct V2XGapPlanner
       tracked.vy = vy;
       tracked.has_sample = true;
       tracked.position_jump = position_jump;
+      tracked.invalid_velocity = invalid_velocity;
     }
   }
 
@@ -1654,12 +1772,38 @@ struct V2XGapPlanner
       if (!tracked.has_sample) {
         continue;
       }
-      if (now_sec - tracked.receipt_sec > cfg.timeout_sec) {
+      const double age_sec = now_sec - tracked.receipt_sec;
+      if (!std::isfinite(age_sec) || age_sec < 0.0 || age_sec > cfg.timeout_sec) {
         continue;
       }
       vehicles.push_back(tracked);
     }
     return vehicles;
+  }
+
+  bool has_complete_message(const double now_sec, const std::size_t expected_vehicle_count)
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!track_recovery_completeness_ || !last_message_receipt_sec_.has_value()) {
+      return false;
+    }
+    const double age_sec = now_sec - last_message_receipt_sec_.value();
+    return std::isfinite(age_sec) && age_sec >= 0.0 && age_sec <= cfg.timeout_sec &&
+           last_message_vehicle_count_ == expected_vehicle_count &&
+           !last_message_has_empty_id_ && !last_message_has_duplicate_id_ &&
+           !last_message_has_invalid_sample_;
+  }
+
+  void reset_recovery_tracking()
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    vehicles_.clear();
+    last_message_receipt_sec_.reset();
+    last_message_source_stamp_sec_.reset();
+    last_message_vehicle_count_ = 0U;
+    last_message_has_empty_id_ = false;
+    last_message_has_duplicate_id_ = false;
+    last_message_has_invalid_sample_ = false;
   }
 
   void reset_low_speed_target_lock()
@@ -2526,6 +2670,13 @@ private:
 
   std::mutex mutex_;
   std::unordered_map<std::string, TrackedVehicle> vehicles_;
+  std::optional<double> last_message_receipt_sec_;
+  std::optional<double> last_message_source_stamp_sec_;
+  std::size_t last_message_vehicle_count_{0U};
+  bool last_message_has_empty_id_{false};
+  bool last_message_has_duplicate_id_{false};
+  bool last_message_has_invalid_sample_{false};
+  bool track_recovery_completeness_{false};
   std::optional<double> last_target_ey_;
   std::optional<double> low_speed_locked_target_ey_;
   std::optional<int> low_speed_locked_side_sign_;
@@ -2645,6 +2796,29 @@ struct MPC
   bool last_control_was_fallback() const
   {
     return last_control_was_fallback_;
+  }
+
+  const V2XBehaviorOutput & last_v2x_behavior_output() const
+  {
+    return last_v2x_behavior_output_;
+  }
+
+  void reset_after_external_maneuver(const double now_sec, const double steering)
+  {
+    reset_control_history(steering);
+    v2x_behavior_state = V2XBehaviorState::Cruise;
+    v2x_behavior_state_initialized = false;
+    last_v2x_behavior_state_change_sec = now_sec;
+    overtake_locked_target_ey_.reset();
+    overtake_locked_side_sign_ = 0;
+    overtake_entry_speed_.reset();
+    overtake_solver_recovery_active_ = false;
+    overtake_curve_cooldown_until_sec_ = now_sec;
+    reset_overtake_line_state(now_sec, "external recovery completed");
+    if (gap_planner != nullptr) {
+      gap_planner->reset_low_speed_targets();
+    }
+    last_v2x_behavior_output_ = V2XBehaviorOutput{};
   }
 
   V2XBehaviorOutput evaluate_v2x_behavior(
@@ -3368,6 +3542,7 @@ struct MPC
     }
 
     const auto behavior_output = evaluate_v2x_behavior(ref_wp_id, N, lb, ub, now_sec);
+    last_v2x_behavior_output_ = behavior_output;
     const bool suppress_overtake_after_solver_failures =
       overtake_solver_recovery_active_ &&
       behavior_output.state == V2XBehaviorState::Overtake;
@@ -3877,6 +4052,7 @@ struct MPC
   bool use_obstacle_avoidance{};
   bool use_path_constraints_topic{};
   V2XBehaviorState v2x_behavior_state{V2XBehaviorState::Cruise};
+  V2XBehaviorOutput last_v2x_behavior_output_;
   bool v2x_behavior_state_initialized{false};
   double last_v2x_behavior_state_change_sec{-std::numeric_limits<double>::infinity()};
   double last_v2x_behavior_debug_log_sec_{std::numeric_limits<double>::quiet_NaN()};
@@ -5323,6 +5499,59 @@ struct RefPathConfig
   bool use_border_cells_topic{};
 };
 
+struct StuckRecoveryAdapterConfig
+{
+  stuck_recovery::CoreConfig core;
+  bool domain_enabled_applied{false};
+  int domain_enabled_domain{-1};
+  // A second, explicit latch keeps reverse actuation unavailable until the AWSIM gear and
+  // acceleration semantics have been measured. Shadow detection remains usable independently.
+  bool reverse_actuation_enabled{false};
+  // Multiplied by the positive magnitude emitted by the pure core. Zero is the safe TBD default.
+  double reverse_acceleration_sign{0.0};
+  // Signed command measured to decelerate while the physical gear remains Reverse.
+  double reverse_stop_acceleration_mps2{0.0};
+  // Positive achieved deceleration measured in Reverse; used for stopping-distance reserve.
+  double verified_reverse_stop_deceleration_mps2{0.0};
+  double reverse_control_latency_sec{0.1};
+  double max_reverse_pose_step_m{0.25};
+  // Non-negative magnitude used by the deterministic Left/Right reverse rollouts.
+  double reverse_steering_angle_rad{0.0};
+  double boost_status_timeout_sec{0.5};
+  // Total entries expected in each V2X array, including self if that simulator includes self.
+  // -1 means unknown and therefore fail-closed for reverse actuation.
+  int expected_v2x_vehicle_count{-1};
+  std::string v2x_self_filter_mode{"unknown"};
+  std::string self_vehicle_id;
+  double rear_vehicle_radius_m{1.45};
+  double rear_prediction_margin_sec{0.1};
+  double reverse_escape_distance_m{2.0};
+  double forward_escape_distance_m{0.30};
+  // Occupancy cells within this additional envelope are used only to infer
+  // which vehicle end is against a wall; they do not relax collision checks.
+  double wall_direction_search_margin_m{0.50};
+  double wall_direction_ambiguity_m{0.02};
+  bool side_escape_enabled{true};
+  double side_escape_min_contact_reduction_ratio{0.05};
+  double front_extent_m{1.49};
+  double rear_extent_m{0.51};
+  double left_extent_m{0.725};
+  double right_extent_m{0.725};
+  double footprint_margin_m{0.05};
+  double sweep_interpolation_step_m{0.05};
+};
+
+stuck_recovery::ReverseActuationCalibration reverse_actuation_calibration(
+  const StuckRecoveryAdapterConfig & config)
+{
+  return stuck_recovery::ReverseActuationCalibration{
+    config.reverse_acceleration_sign *
+    config.core.supervisor.reverse_acceleration_magnitude_mps2,
+    config.reverse_stop_acceleration_mps2,
+    config.verified_reverse_stop_deceleration_mps2,
+    config.reverse_control_latency_sec};
+}
+
 struct Config
 {
   bool save_config{};
@@ -5335,7 +5564,43 @@ struct Config
   double bicycle_length{};
   double bicycle_width{};
   awsim_boost::Config awsim_boost;
+  StuckRecoveryAdapterConfig stuck_recovery;
   MpcConfig mpc;
+};
+
+struct RecoverySafetySnapshot
+{
+  bool wall_evidence{false};
+  recovery_footprint::WallRegion wall_region{recovery_footprint::WallRegion::Unknown};
+  double wall_distance_m{std::numeric_limits<double>::infinity()};
+  bool rear_static_clear{false};
+  bool rear_v2x_clear{false};
+  bool rear_information_complete{false};
+  bool boost_inactive_confirmed{false};
+  bool v2x_message_complete{false};
+  bool current_footprint_clear{false};
+  bool collision_worsening{false};
+  std::vector<std::size_t> current_contact_cells;
+  std::size_t current_contact_count{};
+  recovery_footprint::RejectReason static_reject_reason{
+    recovery_footprint::RejectReason::InvalidGrid};
+  recovery_footprint::RejectReason runtime_contact_reject_reason{
+    recovery_footprint::RejectReason::None};
+  std::size_t static_initial_contact_count{};
+  std::size_t static_maximum_contact_count{};
+  std::size_t static_final_contact_count{};
+  std::size_t static_checked_pose_count{};
+  double static_rejected_at_distance_m{};
+  bool reverse_candidate_selected{false};
+  bool stepwise_escape{false};
+  std::size_t contact_reduction{};
+  stuck_recovery::ManeuverDirection maneuver_direction{
+    stuck_recovery::ManeuverDirection::Unknown};
+  recovery_footprint::ReversePrimitive selected_reverse_primitive{
+    recovery_footprint::ReversePrimitive::Straight};
+  double selected_reverse_steering_angle_rad{};
+  double selected_center_min_lateral_m{};
+  double selected_center_max_lateral_m{};
 };
 
 Config load_config(const std::string & path)
@@ -5429,6 +5694,291 @@ Config load_config(const std::string & path)
     throw std::runtime_error("awsim_boost.confirmation_timeout_sec must be finite and positive");
   }
 
+  const auto recovery = root["stuck_recovery"];
+  if (recovery) {
+    auto & adapter = cfg.stuck_recovery;
+    auto & core = adapter.core;
+    core.enabled = recovery["enabled"] ? recovery["enabled"].as<bool>() : false;
+    const auto domain_enabled = recovery["domain_enabled"];
+    if (domain_enabled) {
+      if (!domain_enabled.IsMap()) {
+        throw std::runtime_error("stuck_recovery.domain_enabled must be a map");
+      }
+      std::map<int, bool> values;
+      for (const auto & item : domain_enabled) {
+        const int domain_id = item.first.as<int>();
+        if (domain_id < 0 || !values.emplace(domain_id, item.second.as<bool>()).second) {
+          throw std::runtime_error(
+                  "stuck_recovery.domain_enabled requires unique non-negative domain IDs");
+        }
+      }
+      if (ros_domain_id.has_value()) {
+        const auto override_value = values.find(ros_domain_id.value());
+        if (override_value != values.end()) {
+          core.enabled = override_value->second;
+          adapter.domain_enabled_applied = true;
+          adapter.domain_enabled_domain = ros_domain_id.value();
+        }
+      }
+    }
+    core.shadow_mode = recovery["shadow_mode"] ? recovery["shadow_mode"].as<bool>() : true;
+    core.simulation_only =
+      recovery["simulation_only"] ? recovery["simulation_only"].as<bool>() : true;
+    adapter.reverse_actuation_enabled = recovery["reverse_actuation_enabled"] ?
+      recovery["reverse_actuation_enabled"].as<bool>() : false;
+    adapter.reverse_acceleration_sign = recovery["reverse_acceleration_sign"] ?
+      recovery["reverse_acceleration_sign"].as<double>() : 0.0;
+    adapter.reverse_stop_acceleration_mps2 = recovery["reverse_stop_acceleration_mps2"] ?
+      recovery["reverse_stop_acceleration_mps2"].as<double>() : 0.0;
+    adapter.verified_reverse_stop_deceleration_mps2 =
+      recovery["verified_reverse_stop_deceleration_mps2"] ?
+      recovery["verified_reverse_stop_deceleration_mps2"].as<double>() : 0.0;
+    adapter.reverse_control_latency_sec = recovery["reverse_control_latency_sec"] ?
+      recovery["reverse_control_latency_sec"].as<double>() : adapter.reverse_control_latency_sec;
+    adapter.boost_status_timeout_sec = recovery["boost_status_timeout_sec"] ?
+      recovery["boost_status_timeout_sec"].as<double>() : 0.5;
+
+    const auto detector = recovery["detector"];
+    if (detector) {
+      auto & out = core.detector;
+      out.solver_fallback_recovery_enabled = detector["solver_fallback_recovery_enabled"] ?
+        detector["solver_fallback_recovery_enabled"].as<bool>() :
+        out.solver_fallback_recovery_enabled;
+      out.solver_fallback_duration_sec = detector["solver_fallback_duration_sec"] ?
+        detector["solver_fallback_duration_sec"].as<double>() :
+        out.solver_fallback_duration_sec;
+      out.evidence_free_recovery_enabled = detector["evidence_free_recovery_enabled"] ?
+        detector["evidence_free_recovery_enabled"].as<bool>() :
+        out.evidence_free_recovery_enabled;
+      out.evidence_free_duration_sec = detector["evidence_free_duration_sec"] ?
+        detector["evidence_free_duration_sec"].as<double>() :
+        out.evidence_free_duration_sec;
+      out.max_observation_gap_sec = detector["max_observation_gap_sec"] ?
+        detector["max_observation_gap_sec"].as<double>() :
+        out.max_observation_gap_sec;
+      out.stopped_speed_mps = detector["stopped_speed_mps"] ?
+        detector["stopped_speed_mps"].as<double>() : out.stopped_speed_mps;
+      out.moving_speed_mps = detector["moving_speed_mps"] ?
+        detector["moving_speed_mps"].as<double>() : out.moving_speed_mps;
+      out.forward_intent_speed_mps = detector["forward_intent_speed_mps"] ?
+        detector["forward_intent_speed_mps"].as<double>() : out.forward_intent_speed_mps;
+      out.forward_intent_acceleration_mps2 = detector["forward_intent_acceleration_mps2"] ?
+        detector["forward_intent_acceleration_mps2"].as<double>() :
+        out.forward_intent_acceleration_mps2;
+      out.stationary_duration_sec = detector["stationary_duration_sec"] ?
+        detector["stationary_duration_sec"].as<double>() : out.stationary_duration_sec;
+      out.max_pose_displacement_m = detector["max_pose_displacement_m"] ?
+        detector["max_pose_displacement_m"].as<double>() : out.max_pose_displacement_m;
+      out.max_progress_delta_m = detector["max_progress_delta_m"] ?
+        detector["max_progress_delta_m"].as<double>() : out.max_progress_delta_m;
+      core.supervisor.awsim_recovery_wait_sec = detector["awsim_recovery_settle_sec"] ?
+        detector["awsim_recovery_settle_sec"].as<double>() :
+        core.supervisor.awsim_recovery_wait_sec;
+    }
+
+    const auto gear = recovery["gear"];
+    if (gear) {
+      auto & out = core.supervisor;
+      out.gear_report_timeout_sec = gear["report_timeout_sec"] ?
+        gear["report_timeout_sec"].as<double>() : out.gear_report_timeout_sec;
+      out.stop_confirm_sec = gear["stop_confirm_sec"] ?
+        gear["stop_confirm_sec"].as<double>() : out.stop_confirm_sec;
+      out.gear_command_resend_interval_sec = gear["command_resend_interval_sec"] ?
+        gear["command_resend_interval_sec"].as<double>() :
+        out.gear_command_resend_interval_sec;
+      out.max_gear_command_requests = gear["max_command_requests"] ?
+        gear["max_command_requests"].as<std::size_t>() : out.max_gear_command_requests;
+    }
+
+    const auto maneuver = recovery["maneuver"];
+    if (maneuver) {
+      auto & out = core.supervisor;
+      out.clearance_wait_timeout_sec = maneuver["clearance_wait_timeout_sec"] ?
+        maneuver["clearance_wait_timeout_sec"].as<double>() : out.clearance_wait_timeout_sec;
+      out.clearance_safe_stop_recovery_enabled =
+        maneuver["clearance_safe_stop_recovery_enabled"] ?
+        maneuver["clearance_safe_stop_recovery_enabled"].as<bool>() :
+        out.clearance_safe_stop_recovery_enabled;
+      out.safe_stop_clear_confirm_sec = maneuver["safe_stop_clear_confirm_sec"] ?
+        maneuver["safe_stop_clear_confirm_sec"].as<double>() :
+        out.safe_stop_clear_confirm_sec;
+      out.max_reverse_distance_m = maneuver["max_reverse_distance_m"] ?
+        maneuver["max_reverse_distance_m"].as<double>() : out.max_reverse_distance_m;
+      out.max_reverse_duration_sec = maneuver["max_reverse_duration_sec"] ?
+        maneuver["max_reverse_duration_sec"].as<double>() : out.max_reverse_duration_sec;
+      out.max_reverse_speed_mps = maneuver["max_reverse_speed_mps"] ?
+        maneuver["max_reverse_speed_mps"].as<double>() : out.max_reverse_speed_mps;
+      out.reverse_acceleration_magnitude_mps2 = maneuver["reverse_acceleration_magnitude_mps2"] ?
+        maneuver["reverse_acceleration_magnitude_mps2"].as<double>() :
+        out.reverse_acceleration_magnitude_mps2;
+      out.max_forward_distance_m = maneuver["max_forward_distance_m"] ?
+        maneuver["max_forward_distance_m"].as<double>() : out.max_forward_distance_m;
+      out.max_forward_duration_sec = maneuver["max_forward_duration_sec"] ?
+        maneuver["max_forward_duration_sec"].as<double>() : out.max_forward_duration_sec;
+      out.max_forward_speed_mps = maneuver["max_forward_speed_mps"] ?
+        maneuver["max_forward_speed_mps"].as<double>() : out.max_forward_speed_mps;
+      out.forward_acceleration_magnitude_mps2 =
+        maneuver["forward_acceleration_magnitude_mps2"] ?
+        maneuver["forward_acceleration_magnitude_mps2"].as<double>() :
+        out.forward_acceleration_magnitude_mps2;
+      out.escape_step_distance_m = maneuver["escape_step_distance_m"] ?
+        maneuver["escape_step_distance_m"].as<double>() : out.escape_step_distance_m;
+      out.max_escape_steps = maneuver["max_escape_steps"] ?
+        maneuver["max_escape_steps"].as<std::size_t>() : out.max_escape_steps;
+      out.max_attempts = maneuver["max_attempts"] ?
+        maneuver["max_attempts"].as<std::size_t>() : out.max_attempts;
+      // Keep accepting the original shared key while the checked-in config
+      // migrates to direction-specific escape distances. A rear-wall forward
+      // recovery must not inherit the much longer front/side reverse target.
+      if (maneuver["escape_distance_m"]) {
+        adapter.reverse_escape_distance_m = maneuver["escape_distance_m"].as<double>();
+        adapter.forward_escape_distance_m = maneuver["escape_distance_m"].as<double>();
+      }
+      adapter.reverse_escape_distance_m = maneuver["reverse_escape_distance_m"] ?
+        maneuver["reverse_escape_distance_m"].as<double>() :
+        adapter.reverse_escape_distance_m;
+      adapter.forward_escape_distance_m = maneuver["forward_escape_distance_m"] ?
+        maneuver["forward_escape_distance_m"].as<double>() :
+        adapter.forward_escape_distance_m;
+      adapter.max_reverse_pose_step_m = maneuver["max_reverse_pose_step_m"] ?
+        maneuver["max_reverse_pose_step_m"].as<double>() :
+        adapter.max_reverse_pose_step_m;
+      adapter.reverse_steering_angle_rad = maneuver["reverse_steering_angle_rad"] ?
+        maneuver["reverse_steering_angle_rad"].as<double>() :
+        adapter.reverse_steering_angle_rad;
+      adapter.wall_direction_search_margin_m = maneuver["wall_direction_search_margin_m"] ?
+        maneuver["wall_direction_search_margin_m"].as<double>() :
+        adapter.wall_direction_search_margin_m;
+      adapter.wall_direction_ambiguity_m = maneuver["wall_direction_ambiguity_m"] ?
+        maneuver["wall_direction_ambiguity_m"].as<double>() :
+        adapter.wall_direction_ambiguity_m;
+      adapter.side_escape_enabled = maneuver["side_escape_enabled"] ?
+        maneuver["side_escape_enabled"].as<bool>() : adapter.side_escape_enabled;
+      adapter.side_escape_min_contact_reduction_ratio =
+        maneuver["side_escape_min_contact_reduction_ratio"] ?
+        maneuver["side_escape_min_contact_reduction_ratio"].as<double>() :
+        adapter.side_escape_min_contact_reduction_ratio;
+    }
+
+    const auto footprint = recovery["footprint"];
+    if (footprint) {
+      adapter.front_extent_m = footprint["front_extent_m"] ?
+        footprint["front_extent_m"].as<double>() : adapter.front_extent_m;
+      adapter.rear_extent_m = footprint["rear_extent_m"] ?
+        footprint["rear_extent_m"].as<double>() : adapter.rear_extent_m;
+      adapter.left_extent_m = footprint["left_extent_m"] ?
+        footprint["left_extent_m"].as<double>() : adapter.left_extent_m;
+      adapter.right_extent_m = footprint["right_extent_m"] ?
+        footprint["right_extent_m"].as<double>() : adapter.right_extent_m;
+      adapter.footprint_margin_m = footprint["margin_m"] ?
+        footprint["margin_m"].as<double>() : adapter.footprint_margin_m;
+      adapter.sweep_interpolation_step_m = footprint["sweep_interpolation_step_m"] ?
+        footprint["sweep_interpolation_step_m"].as<double>() :
+        adapter.sweep_interpolation_step_m;
+    }
+
+    const auto rear_safety = recovery["rear_safety"];
+    if (rear_safety) {
+      adapter.expected_v2x_vehicle_count = rear_safety["expected_v2x_vehicle_count"] ?
+        rear_safety["expected_v2x_vehicle_count"].as<int>() :
+        adapter.expected_v2x_vehicle_count;
+      adapter.v2x_self_filter_mode = rear_safety["self_filter_mode"] ?
+        rear_safety["self_filter_mode"].as<std::string>() : adapter.v2x_self_filter_mode;
+      adapter.self_vehicle_id = rear_safety["self_vehicle_id"] ?
+        rear_safety["self_vehicle_id"].as<std::string>() : adapter.self_vehicle_id;
+      adapter.rear_vehicle_radius_m = rear_safety["vehicle_radius_m"] ?
+        rear_safety["vehicle_radius_m"].as<double>() : adapter.rear_vehicle_radius_m;
+      adapter.rear_prediction_margin_sec = rear_safety["prediction_margin_sec"] ?
+        rear_safety["prediction_margin_sec"].as<double>() : adapter.rear_prediction_margin_sec;
+    }
+
+    const auto rejoin = recovery["rejoin"];
+    if (rejoin) {
+      auto & out = core.supervisor;
+      out.rejoin_speed_limit_mps = rejoin["speed_limit_mps"] ?
+        rejoin["speed_limit_mps"].as<double>() : out.rejoin_speed_limit_mps;
+      out.max_rejoin_lateral_error_m = rejoin["max_lateral_error_m"] ?
+        rejoin["max_lateral_error_m"].as<double>() : out.max_rejoin_lateral_error_m;
+      out.max_rejoin_heading_error_rad = rejoin["max_heading_error_rad"] ?
+        rejoin["max_heading_error_rad"].as<double>() : out.max_rejoin_heading_error_rad;
+      out.rejoin_confirm_sec = rejoin["confirm_sec"] ?
+        rejoin["confirm_sec"].as<double>() : out.rejoin_confirm_sec;
+      out.rejoin_timeout_sec = rejoin["timeout_sec"] ?
+        rejoin["timeout_sec"].as<double>() : out.rejoin_timeout_sec;
+      out.cooldown_sec = rejoin["cooldown_sec"] ?
+        rejoin["cooldown_sec"].as<double>() : out.cooldown_sec;
+    }
+
+    const auto finite_non_negative = [](const double value) {
+        return std::isfinite(value) && value >= 0.0;
+      };
+    const double absolute_reverse_sign = std::abs(adapter.reverse_acceleration_sign);
+    if (
+      !std::isfinite(adapter.reverse_acceleration_sign) ||
+      (absolute_reverse_sign > kEps && std::abs(absolute_reverse_sign - 1.0) > kEps))
+    {
+      throw std::runtime_error("stuck_recovery.reverse_acceleration_sign must be -1, 0, or +1");
+    }
+    if (
+      adapter.reverse_actuation_enabled &&
+      (std::abs(adapter.reverse_acceleration_sign) < kEps ||
+      !std::isfinite(adapter.reverse_stop_acceleration_mps2) ||
+      std::abs(adapter.reverse_stop_acceleration_mps2) < kEps ||
+      adapter.reverse_acceleration_sign * adapter.reverse_stop_acceleration_mps2 >= 0.0 ||
+      !std::isfinite(adapter.verified_reverse_stop_deceleration_mps2) ||
+      adapter.verified_reverse_stop_deceleration_mps2 <= 0.0 ||
+      adapter.expected_v2x_vehicle_count < 0 ||
+      adapter.v2x_self_filter_mode == "unknown" ||
+      (adapter.v2x_self_filter_mode == "vehicle_id" && adapter.self_vehicle_id.empty())))
+    {
+      throw std::runtime_error(
+              "stuck_recovery reverse actuation requires opposite drive/stop commands, measured "
+              "stop deceleration, and an explicit V2X self-filter contract");
+    }
+    if (
+      adapter.v2x_self_filter_mode != "unknown" &&
+      adapter.v2x_self_filter_mode != "excluded" &&
+      adapter.v2x_self_filter_mode != "vehicle_id")
+    {
+      throw std::runtime_error(
+              "stuck_recovery.rear_safety.self_filter_mode must be unknown, excluded, or vehicle_id");
+    }
+    if (
+      !std::isfinite(adapter.reverse_stop_acceleration_mps2) ||
+      !finite_non_negative(adapter.verified_reverse_stop_deceleration_mps2) ||
+      !finite_non_negative(adapter.reverse_control_latency_sec) ||
+      !std::isfinite(adapter.max_reverse_pose_step_m) ||
+      adapter.max_reverse_pose_step_m <= 0.0 ||
+      !finite_non_negative(adapter.reverse_steering_angle_rad) ||
+      adapter.reverse_steering_angle_rad >= 1.5707963267948966 ||
+      !std::isfinite(adapter.boost_status_timeout_sec) ||
+      adapter.boost_status_timeout_sec <= 0.0 ||
+      adapter.expected_v2x_vehicle_count < -1 ||
+      !finite_non_negative(adapter.rear_vehicle_radius_m) ||
+      !finite_non_negative(adapter.rear_prediction_margin_sec) ||
+      !finite_non_negative(adapter.reverse_escape_distance_m) ||
+      !finite_non_negative(adapter.forward_escape_distance_m) ||
+      adapter.reverse_escape_distance_m <= 0.0 ||
+      adapter.forward_escape_distance_m <= 0.0 ||
+      adapter.reverse_escape_distance_m > core.supervisor.max_reverse_distance_m ||
+      adapter.forward_escape_distance_m > core.supervisor.max_forward_distance_m ||
+      !finite_non_negative(adapter.wall_direction_search_margin_m) ||
+      !finite_non_negative(adapter.wall_direction_ambiguity_m) ||
+      !std::isfinite(adapter.side_escape_min_contact_reduction_ratio) ||
+      adapter.side_escape_min_contact_reduction_ratio <= 0.0 ||
+      adapter.side_escape_min_contact_reduction_ratio > 1.0 ||
+      !finite_non_negative(adapter.front_extent_m) ||
+      !finite_non_negative(adapter.rear_extent_m) ||
+      !finite_non_negative(adapter.left_extent_m) ||
+      !finite_non_negative(adapter.right_extent_m) ||
+      !finite_non_negative(adapter.footprint_margin_m) ||
+      !std::isfinite(adapter.sweep_interpolation_step_m) ||
+      adapter.sweep_interpolation_step_m <= 0.0)
+    {
+      throw std::runtime_error("stuck_recovery adapter values must be finite and within range");
+    }
+  }
+
   const auto mpc = root["mpc"];
   cfg.mpc.N = mpc["N"].as<int>();
   if (cfg.mpc.N < 2) {
@@ -5512,6 +6062,14 @@ Config load_config(const std::string & path)
       cfg.mpc.a_max = domain_a_max;
       cfg.mpc.domain_a_max_applied = true;
       break;
+    }
+  }
+  if (cfg.stuck_recovery.reverse_actuation_enabled) {
+    if (!stuck_recovery::reverse_actuation_calibration_is_valid(
+        reverse_actuation_calibration(cfg.stuck_recovery), cfg.mpc.a_min, cfg.mpc.a_max))
+    {
+      throw std::runtime_error(
+              "stuck_recovery Reverse calibration is invalid or outside MPC acceleration bounds");
     }
   }
   cfg.mpc.ay_max = mpc["ay_max"].as<double>();
@@ -6145,6 +6703,12 @@ public:
     cfg_ = load_config(config_path_);
     mpc_cfg_ = cfg_.mpc;
     mpc_cfg_.steer_rate_max = mpc_cfg_.steer_rate_max / mpc_cfg_.steering_tire_angle_gain_var;
+    stuck_recovery_core_ =
+      std::make_unique<stuck_recovery::StuckRecoveryCore>(cfg_.stuck_recovery.core);
+    stuck_recovery_actuation_io_enabled_ =
+      cfg_.stuck_recovery.core.enabled && !cfg_.stuck_recovery.core.shadow_mode &&
+      (!cfg_.stuck_recovery.core.simulation_only || use_sim_time_) &&
+      cfg_.stuck_recovery.reverse_actuation_enabled && !use_bug_acc_;
     awsim_boost_guard_ = std::make_unique<awsim_boost::StartDashGuard>(cfg_.awsim_boost);
     awsim_boost_io_enabled_ =
       use_sim_time_ && cfg_.awsim_boost.enabled &&
@@ -6152,6 +6716,7 @@ public:
     awsim_state_tracking_enabled_ =
       use_sim_time_ &&
       (awsim_boost_io_enabled_ ||
+      cfg_.stuck_recovery.core.enabled ||
       (mpc_cfg_.domain_start_v_max_applied &&
       mpc_cfg_.domain_start_v_max_duration > 0.0));
 
@@ -6180,6 +6745,28 @@ public:
     }
     if (use_bug_acc_) {
       RCLCPP_WARN(get_logger(), "USE_BUG_ACC is enabled!");
+    }
+    if (cfg_.stuck_recovery.domain_enabled_applied) {
+      RCLCPP_INFO(
+        get_logger(),
+        "Stuck recovery domain_enabled applied: ROS_DOMAIN_ID=%d, enabled=%s",
+        cfg_.stuck_recovery.domain_enabled_domain,
+        cfg_.stuck_recovery.core.enabled ? "true" : "false");
+    }
+    RCLCPP_INFO(
+      get_logger(),
+      "Stuck recovery: mode=%s, reverse_actuation=%s, simulation_only=%s",
+      stuck_recovery::to_string(stuck_recovery_core_->execution_mode(use_sim_time_)),
+      stuck_recovery_actuation_io_enabled_ ? "enabled" : "disabled",
+      cfg_.stuck_recovery.core.simulation_only ? "true" : "false");
+    if (
+      cfg_.stuck_recovery.core.enabled && !cfg_.stuck_recovery.core.shadow_mode &&
+      !stuck_recovery_actuation_io_enabled_)
+    {
+      RCLCPP_WARN(
+        get_logger(),
+        "Stuck recovery takeover is configured but reverse actuation is safety-blocked; "
+        "confirmed candidates will be held stopped without a gear command");
     }
     if (cfg_.awsim_boost.domain_enabled_applied) {
       RCLCPP_INFO(
@@ -6309,6 +6896,49 @@ private:
   void create_map_ref_path_car_mpc()
   {
     map_ = std::make_unique<Map>(in_pkg_share(cfg_.map_yaml_path));
+    if (cfg_.stuck_recovery.core.enabled) {
+      if (
+        map_->origin.size() < 3U || std::abs(map_->origin.at(2)) > kEps ||
+        (map_->negate != 0 && map_->negate != 1) ||
+        !std::isfinite(map_->threshold_free) || !std::isfinite(map_->threshold_occupied) ||
+        map_->threshold_free < 0.0 || map_->threshold_occupied > 1.0 ||
+        map_->threshold_free >= map_->threshold_occupied)
+      {
+        throw std::runtime_error(
+                "stuck_recovery supports only yaw-zero maps with valid ROS occupancy thresholds");
+      }
+      recovery_grid_ = std::make_unique<recovery_footprint::OccupancyGrid>();
+      recovery_grid_->width = static_cast<std::size_t>(map_->width);
+      recovery_grid_->height = static_cast<std::size_t>(map_->height);
+      recovery_grid_->resolution_m = map_->resolution;
+      recovery_grid_->origin_x_m = map_->origin.at(0);
+      recovery_grid_->origin_y_m = map_->origin.at(1);
+      recovery_grid_->y_axis = recovery_footprint::YAxisConvention::RowZeroAtMaximumY;
+      recovery_grid_->cells.reserve(recovery_grid_->width * recovery_grid_->height);
+      for (int row = 0; row < map_->height; ++row) {
+        for (int column = 0; column < map_->width; ++column) {
+          const double normalized_value = map_->raw_normalized_data.at<double>(row, column);
+          const double occupancy_probability =
+            map_->negate == 0 ? 1.0 - normalized_value : normalized_value;
+          if (occupancy_probability > map_->threshold_occupied) {
+            recovery_grid_->cells.push_back(recovery_footprint::CellState::Occupied);
+          } else if (occupancy_probability < map_->threshold_free) {
+            recovery_grid_->cells.push_back(recovery_footprint::CellState::Free);
+          } else {
+            recovery_grid_->cells.push_back(recovery_footprint::CellState::Unknown);
+          }
+        }
+      }
+      recovery_footprint_ = recovery_footprint::FootprintExtents{
+        cfg_.stuck_recovery.front_extent_m,
+        cfg_.stuck_recovery.rear_extent_m,
+        cfg_.stuck_recovery.left_extent_m,
+        cfg_.stuck_recovery.right_extent_m,
+        cfg_.stuck_recovery.footprint_margin_m};
+      if (!recovery_grid_->valid() || !recovery_footprint_.valid()) {
+        throw std::runtime_error("stuck_recovery map or footprint configuration is invalid");
+      }
+    }
     std::vector<double> wp_x;
     std::vector<double> wp_y;
     if (!cfg_.reference_path.csv_path.empty()) {
@@ -6325,13 +6955,18 @@ private:
       1.0 / cfg_.mpc.control_rate, mpc_cfg_.min_linearization_speed_mps);
     mpc_ = std::make_unique<MPC>(
       car_.get(), mpc_cfg_, use_obstacle_avoidance_, cfg_.reference_path.use_path_constraints_topic);
-    if (mpc_cfg_.v2x_gap.enabled || mpc_cfg_.v2x_behavior.enabled) {
+    const bool mpc_requires_v2x_planner =
+      mpc_cfg_.v2x_gap.enabled || mpc_cfg_.v2x_behavior.enabled;
+    if (mpc_requires_v2x_planner || cfg_.stuck_recovery.core.enabled) {
       auto planner_cfg = mpc_cfg_.v2x_gap;
       if (mpc_cfg_.v2x_behavior.enabled) {
         planner_cfg.enabled = true;
       }
-      v2x_gap_planner_ = std::make_unique<V2XGapPlanner>(planner_cfg);
-      mpc_->set_gap_planner(v2x_gap_planner_.get());
+      v2x_gap_planner_ = std::make_unique<V2XGapPlanner>(
+        planner_cfg, cfg_.stuck_recovery.core.enabled);
+      if (mpc_requires_v2x_planner) {
+        mpc_->set_gap_planner(v2x_gap_planner_.get());
+      }
     }
     if (!reference_path_->compute_speed_profile(
         mpc_cfg_.a_min, mpc_cfg_.a_max, 0.0,
@@ -6474,6 +7109,11 @@ private:
       const auto boost_qos = rclcpp::QoS(rclcpp::KeepLast(10)).reliable();
       awsim_boost_pub_ = create_publisher<Float32MultiArray>("/awsim/cmd", boost_qos);
     }
+    if (stuck_recovery_actuation_io_enabled_) {
+      // Volatile durability prevents a newly joined subscriber from replaying a stale REVERSE.
+      gear_command_pub_ = create_publisher<GearCommand>(
+        "/control/command/gear_cmd", rclcpp::QoS(rclcpp::KeepLast(1)).reliable());
+    }
 
     odom_sub_ = create_subscription<Odometry>(
       "/localization/kinematic_state", 1, [this](const Odometry::SharedPtr msg) {
@@ -6511,6 +7151,33 @@ private:
           enable_control_ = false;
         }
       });
+    if (cfg_.stuck_recovery.core.enabled) {
+      gear_report_sub_ = create_subscription<GearReport>(
+        "/vehicle/status/gear_status", rclcpp::QoS(rclcpp::KeepLast(10)).reliable(),
+        [this](const GearReport::SharedPtr msg) {
+          const auto next_gear = recovery_gear_from_report(msg->report);
+          if (!reported_gear_.has_value() || reported_gear_.value() != next_gear) {
+            RCLCPP_INFO(
+              get_logger(), "Stuck recovery gear report: raw=%u, gear=%s",
+              static_cast<unsigned int>(msg->report), stuck_recovery::to_string(next_gear));
+          }
+          reported_gear_ = next_gear;
+          if (next_gear == stuck_recovery::Gear::Drive) {
+            last_commanded_recovery_gear_ = stuck_recovery::Gear::Drive;
+            if (recovery_waiting_for_drive_after_reset_) {
+              recovery_waiting_for_drive_after_reset_ = false;
+              recovery_fault_latched_ = !race_started_;
+              recovery_reset_drive_request_count_ = 0U;
+              recovery_reset_stopped_since_.reset();
+              RCLCPP_INFO(
+                get_logger(),
+                "Stuck recovery Drive report confirmed; control hold remains=%d until Start",
+                recovery_fault_latched_ ? 1 : 0);
+            }
+          }
+          last_gear_report_receipt_steady_ = SteadyClock::now();
+        });
+    }
     if (use_sim_time_) {
       awsim_status_sub_ = create_subscription<Float32MultiArray>(
         "/awsim/status", 1,
@@ -6528,6 +7195,7 @@ private:
           const int diff_condition = msg->data - last_condition_.value();
           if (diff_condition > 30) {
             last_colliding_time_ = now();
+            last_collision_receipt_steady_ = SteadyClock::now();
             RCLCPP_WARN(get_logger(), "Collision detected!");
           }
           last_condition_ = msg->data;
@@ -6557,7 +7225,10 @@ private:
           }
         });
     }
-    if (use_obstacle_avoidance_ || mpc_cfg_.v2x_gap.enabled || mpc_cfg_.v2x_behavior.enabled) {
+    if (
+      use_obstacle_avoidance_ || mpc_cfg_.v2x_gap.enabled || mpc_cfg_.v2x_behavior.enabled ||
+      cfg_.stuck_recovery.core.enabled)
+    {
       v2x_sub_ = create_subscription<V2XVehiclePositionArray>(
         "/v2x/vehicle_positions", 1, [this](const V2XVehiclePositionArray::SharedPtr msg) {
           if (v2x_gap_planner_) {
@@ -6590,10 +7261,24 @@ private:
       std::isfinite(command.longitudinal.acceleration);
   }
 
+  bool recovery_may_be_in_reverse() const
+  {
+    return
+      (reported_gear_.has_value() &&
+      reported_gear_.value() == stuck_recovery::Gear::Reverse) ||
+      (last_commanded_recovery_gear_.has_value() &&
+      last_commanded_recovery_gear_.value() == stuck_recovery::Gear::Reverse);
+  }
+
   void publish_failsafe_command(const rclcpp::Time & stamp, const char * reason)
   {
-    const double safe_deceleration =
+    const bool reverse_possible = recovery_may_be_in_reverse();
+    const double normal_safe_deceleration =
       std::isfinite(mpc_cfg_.a_min) && mpc_cfg_.a_min < 0.0 ? mpc_cfg_.a_min : -1.0;
+    const double safe_deceleration = reverse_possible ?
+      (stuck_recovery_actuation_io_enabled_ ?
+      reverse_actuation_calibration(cfg_.stuck_recovery).stop_acceleration_mps2 : 0.0) :
+      normal_safe_deceleration;
     const double previous_steering = std::isfinite(last_u_[1]) ? last_u_[1] : 0.0;
     const double max_steering_step =
       std::isfinite(mpc_cfg_.steer_rate_max) && std::isfinite(mpc_cfg_.control_rate) &&
@@ -6610,6 +7295,13 @@ private:
       RCLCPP_ERROR(get_logger(), "Control failsafe active: %s", reason);
     }
     command_failsafe_active_ = true;
+    if (
+      recovery_last_output_.has_value() &&
+      recovery_last_output_->state != stuck_recovery::RecoveryState::Normal)
+    {
+      recovery_fault_latched_ = true;
+      recovery_boost_suppressed_for_session_ = true;
+    }
 
     if (use_bug_acc_) {
       AckermannControlBoostCommand boost_command;
@@ -6721,6 +7413,10 @@ private:
 
   void awsim_status_callback(const Float32MultiArray::SharedPtr msg)
   {
+    if (msg->data.size() >= 7U && std::isfinite(msg->data[6])) {
+      awsim_boost_active_ = msg->data[6] > 0.5F;
+      last_awsim_status_receipt_steady_ = SteadyClock::now();
+    }
     if (awsim_boost_io_enabled_ && awsim_boost_guard_) {
       const auto previous_phase = awsim_boost_guard_->phase();
       if (!awsim_boost_guard_->on_awsim_status(msg->data, SteadyClock::now())) {
@@ -6749,6 +7445,42 @@ private:
     last_lap_time_ = lap_time;
   }
 
+  void reset_stuck_recovery_session(const char * reason)
+  {
+    if (stuck_recovery_core_) {
+      stuck_recovery_core_->reset_session();
+    }
+    if (cfg_.stuck_recovery.core.enabled && v2x_gap_planner_) {
+      v2x_gap_planner_->reset_recovery_tracking();
+    }
+    recovery_observation_anchor_pose_.reset();
+    recovery_observation_anchor_progress_m_.reset();
+    recovery_maneuver_start_pose_.reset();
+    recovery_last_reverse_pose_.reset();
+    recovery_cumulative_reverse_distance_m_ = 0.0;
+    recovery_episode_traveled_distance_m_ = 0.0;
+    recovery_reverse_pose_jump_ = false;
+    recovery_episode_had_contact_evidence_ = false;
+    recovery_selected_reverse_primitive_.reset();
+    recovery_selected_stepwise_escape_ = false;
+    recovery_initial_contact_cells_.reset();
+    recovery_previous_contact_cells_.reset();
+    recovery_last_output_.reset();
+    recovery_boost_suppressed_for_session_ = false;
+    recovery_reset_applied_ = false;
+    recovery_rejoin_hold_cycle_ = false;
+    recovery_fault_latched_ = false;
+    recovery_waiting_for_drive_after_reset_ = false;
+    recovery_reset_drive_request_count_ = 0U;
+    recovery_reset_stopped_since_.reset();
+    last_recovery_state_.reset();
+    last_recovery_reject_reason_.reset();
+    last_recovery_execution_mode_.reset();
+    last_gear_report_receipt_steady_.reset();
+    last_collision_receipt_steady_.reset();
+    RCLCPP_INFO(get_logger(), "Stuck recovery session reset: %s", reason);
+  }
+
   void awsim_state_callback(const String::SharedPtr msg)
   {
     if (!awsim_boost_guard_) {
@@ -6763,6 +7495,36 @@ private:
     std::transform(
       normalized_state.begin(), normalized_state.end(), normalized_state.begin(),
       [](const unsigned char value) {return static_cast<char>(std::tolower(value));});
+    const bool recovery_state_changed = normalized_state != last_awsim_state_;
+    if (recovery_state_changed) {
+      const bool recovery_was_active =
+        recovery_last_output_.has_value() &&
+        recovery_last_output_->state != stuck_recovery::RecoveryState::Normal;
+      const bool reverse_was_possible = recovery_may_be_in_reverse();
+      if (normalized_state == "start") {
+        reset_stuck_recovery_session("AWSIM Start entered");
+        race_started_ = true;
+        if (reverse_was_possible) {
+          recovery_waiting_for_drive_after_reset_ = true;
+          recovery_fault_latched_ = true;
+          recovery_boost_suppressed_for_session_ = true;
+          RCLCPP_ERROR(
+            get_logger(),
+            "AWSIM Start entered while recovery gear may still be Reverse; holding until Drive report");
+        }
+      } else {
+        if (race_started_ || normalized_state == "spawned" || normalized_state == "finish") {
+          reset_stuck_recovery_session("AWSIM race inactive or session boundary");
+          if (recovery_was_active || reverse_was_possible) {
+            recovery_fault_latched_ = true;
+            recovery_boost_suppressed_for_session_ = true;
+            recovery_waiting_for_drive_after_reset_ = reverse_was_possible;
+          }
+        }
+        race_started_ = false;
+      }
+      last_awsim_state_ = normalized_state;
+    }
     const auto previous_phase = awsim_boost_guard_->phase();
     const auto state_event = awsim_boost_guard_->on_awsim_state(msg->data);
     if (state_event == awsim_boost::StateEvent::StartEntered) {
@@ -6882,6 +7644,961 @@ private:
     return ref_path;
   }
 
+  bool recovery_gear_report_fresh(const SteadyClock::time_point steady_now) const
+  {
+    if (!reported_gear_.has_value() || !last_gear_report_receipt_steady_.has_value()) {
+      return false;
+    }
+    const double age_sec = std::chrono::duration<double>(
+      steady_now - last_gear_report_receipt_steady_.value()).count();
+    return std::isfinite(age_sec) && age_sec >= 0.0 &&
+           age_sec <= cfg_.stuck_recovery.core.supervisor.gear_report_timeout_sec;
+  }
+
+  bool recovery_boost_inactive_confirmed(const SteadyClock::time_point steady_now) const
+  {
+    if (!awsim_boost_active_.has_value() || !last_awsim_status_receipt_steady_.has_value()) {
+      return false;
+    }
+    const double age_sec = std::chrono::duration<double>(
+      steady_now - last_awsim_status_receipt_steady_.value()).count();
+    return std::isfinite(age_sec) && age_sec >= 0.0 &&
+           age_sec <= cfg_.stuck_recovery.boost_status_timeout_sec &&
+           !awsim_boost_active_.value();
+  }
+
+  bool recovery_gear_transition_active() const
+  {
+    if (!stuck_recovery_core_) {
+      return false;
+    }
+    switch (stuck_recovery_core_->supervisor().state()) {
+      case stuck_recovery::RecoveryState::ShiftToReverse:
+      case stuck_recovery::RecoveryState::WaitReverseReport:
+      case stuck_recovery::RecoveryState::ShiftToDrive:
+      case stuck_recovery::RecoveryState::WaitDriveReport:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  double recovery_progress_delta(const double current_progress_m) const
+  {
+    if (!recovery_observation_anchor_progress_m_.has_value()) {
+      return 0.0;
+    }
+    double delta = current_progress_m - recovery_observation_anchor_progress_m_.value();
+    if (!cfg_.reference_path.circular) {
+      return delta;
+    }
+    double path_length_m = 0.0;
+    for (const double segment_length_m : reference_path_->segment_lengths) {
+      path_length_m += segment_length_m;
+    }
+    if (!std::isfinite(path_length_m) || path_length_m <= kEps) {
+      return delta;
+    }
+    while (delta > 0.5 * path_length_m) {
+      delta -= path_length_m;
+    }
+    while (delta < -0.5 * path_length_m) {
+      delta += path_length_m;
+    }
+    return delta;
+  }
+
+  RecoverySafetySnapshot evaluate_recovery_safety(
+    const Pose2D & pose, const SteadyClock::time_point steady_now,
+    const double ros_now_sec, const double reverse_distance_to_check_m,
+    const double forward_distance_to_check_m,
+    const double escape_step_distance_to_check_m,
+    const bool evaluate_rollout) const
+  {
+    RecoverySafetySnapshot snapshot;
+    std::optional<recovery_footprint::FeasibilityResult> forward_deadlock_fallback;
+    if (!recovery_grid_ || !recovery_footprint_.valid()) {
+      return snapshot;
+    }
+
+    const recovery_footprint::Pose2D recovery_pose{pose.x, pose.y, pose.theta};
+    const auto wall_proximity = recovery_footprint::classify_nearby_wall(
+      *recovery_grid_, recovery_footprint_, recovery_pose,
+      cfg_.stuck_recovery.wall_direction_search_margin_m,
+      cfg_.stuck_recovery.wall_direction_ambiguity_m);
+    snapshot.wall_region = wall_proximity.region;
+    snapshot.wall_distance_m = wall_proximity.nearest_distance_m;
+    const auto current_sample = recovery_footprint::sample_footprint(
+      *recovery_grid_, recovery_footprint_, recovery_pose);
+    snapshot.current_contact_cells = current_sample.contact_cells;
+    snapshot.current_contact_count = current_sample.contact_cells.size();
+    snapshot.wall_evidence = wall_proximity.valid &&
+      wall_proximity.region != recovery_footprint::WallRegion::None &&
+      wall_proximity.region != recovery_footprint::WallRegion::Unknown;
+    snapshot.current_footprint_clear =
+      current_sample.valid && !current_sample.out_of_map && current_sample.contact_cells.empty();
+    const auto * initial_contact_patch = recovery_initial_contact_cells_.has_value() ?
+      &recovery_initial_contact_cells_.value() : nullptr;
+    const auto * previous_contact_patch = recovery_previous_contact_cells_.has_value() ?
+      &recovery_previous_contact_cells_.value() :
+      initial_contact_patch;
+    if (previous_contact_patch != nullptr) {
+      snapshot.runtime_contact_reject_reason =
+        initial_contact_patch != nullptr && current_sample.valid && !current_sample.out_of_map ?
+        (recovery_selected_stepwise_escape_ ?
+        recovery_footprint::evaluate_improving_contact_transition(
+        *recovery_grid_, *initial_contact_patch, *previous_contact_patch,
+        current_sample.contact_cells) :
+        recovery_footprint::evaluate_contact_transition(
+        *recovery_grid_, *initial_contact_patch, *previous_contact_patch,
+        current_sample.contact_cells)) :
+        (current_sample.out_of_map ? recovery_footprint::RejectReason::OutOfMap :
+        recovery_footprint::RejectReason::InvalidInitialPose);
+      snapshot.collision_worsening =
+        snapshot.runtime_contact_reject_reason != recovery_footprint::RejectReason::None;
+    }
+
+    if (evaluate_rollout) {
+      recovery_footprint::ReverseRolloutParameters rollout;
+      rollout.rollout_step_m = cfg_.stuck_recovery.sweep_interpolation_step_m;
+      rollout.swept_step_m = cfg_.stuck_recovery.sweep_interpolation_step_m;
+      rollout.wheelbase_m = cfg_.bicycle_length;
+      rollout.steering_angle_rad = cfg_.stuck_recovery.reverse_steering_angle_rad;
+
+      const bool wall_supports_stepwise_escape =
+        cfg_.stuck_recovery.side_escape_enabled && !current_sample.contact_cells.empty() &&
+        ((stuck_recovery_core_ != nullptr &&
+        stuck_recovery_core_->supervisor().escape_step_count() > 0U) ||
+        snapshot.wall_region == recovery_footprint::WallRegion::Left ||
+        snapshot.wall_region == recovery_footprint::WallRegion::Right ||
+        snapshot.wall_region == recovery_footprint::WallRegion::Mixed);
+      const bool stepwise_candidate_mode =
+        recovery_selected_reverse_primitive_.has_value() ?
+        recovery_selected_stepwise_escape_ : wall_supports_stepwise_escape;
+      const bool committed_stepwise_maneuver =
+        stepwise_candidate_mode && recovery_selected_reverse_primitive_.has_value() &&
+        stuck_recovery_core_ != nullptr &&
+        stuck_recovery_core_->supervisor().escape_step_count() > 0U;
+
+      const auto evaluate_candidate =
+        [&](const recovery_footprint::ReversePrimitive primitive) {
+          rollout.reverse_distance_m = stepwise_candidate_mode ?
+            std::max(0.0, escape_step_distance_to_check_m) :
+            (recovery_footprint::primitive_is_forward(primitive) ?
+            std::max(0.0, forward_distance_to_check_m) :
+            std::max(0.0, reverse_distance_to_check_m));
+          return recovery_footprint::evaluate_recovery_candidate(
+            *recovery_grid_, recovery_footprint_, recovery_pose, primitive, rollout,
+            stepwise_candidate_mode ?
+            (committed_stepwise_maneuver ?
+            recovery_footprint::ContactEscapePolicy::AllowNonWorsening :
+            recovery_footprint::ContactEscapePolicy::RequireImprovement) :
+            recovery_footprint::ContactEscapePolicy::RequireClear,
+            stepwise_candidate_mode && !committed_stepwise_maneuver ?
+            cfg_.stuck_recovery.side_escape_min_contact_reduction_ratio : 0.0);
+        };
+      std::optional<recovery_footprint::FeasibilityResult> first_result;
+      std::optional<recovery_footprint::FeasibilityResult> selected_result;
+      if (recovery_selected_reverse_primitive_.has_value()) {
+        auto result = evaluate_candidate(recovery_selected_reverse_primitive_.value());
+        first_result = result;
+        if (result.feasible) {
+          selected_result = std::move(result);
+        }
+      } else if (stepwise_candidate_mode) {
+        // A Side/Mixed contact normally follows forward impact. Prefer a
+        // bounded retreat and reserve ForwardStraight exclusively for a
+        // positively classified Rear contact.
+        constexpr std::array<recovery_footprint::ReversePrimitive, 3> kStepPreference{
+          recovery_footprint::ReversePrimitive::Straight,
+          recovery_footprint::ReversePrimitive::Left,
+          recovery_footprint::ReversePrimitive::Right};
+        for (const auto primitive : kStepPreference) {
+          auto result = evaluate_candidate(primitive);
+          if (!first_result.has_value()) {
+            first_result = result;
+          }
+          if (
+            result.feasible &&
+            (!selected_result.has_value() ||
+            result.contact_reduction > selected_result->contact_reduction))
+          {
+            selected_result = std::move(result);
+          }
+        }
+      } else if (
+        snapshot.current_footprint_clear &&
+        (snapshot.wall_region == recovery_footprint::WallRegion::Left ||
+        snapshot.wall_region == recovery_footprint::WallRegion::Right ||
+        snapshot.wall_region == recovery_footprint::WallRegion::Mixed))
+      {
+        // A physical side contact can be reported while the conservative map
+        // footprint is still clear. Keep the normal retreat preference, but
+        // also retain a statically clear forward escape for the multi-vehicle
+        // case where a stopped follower occupies the reverse corridor.
+        constexpr std::array<recovery_footprint::ReversePrimitive, 3> kPrimitivePreference{
+          recovery_footprint::ReversePrimitive::Straight,
+          recovery_footprint::ReversePrimitive::Left,
+          recovery_footprint::ReversePrimitive::Right};
+        for (const auto primitive : kPrimitivePreference) {
+          auto result = evaluate_candidate(primitive);
+          if (!first_result.has_value()) {
+            first_result = result;
+          }
+          if (result.feasible) {
+            selected_result = std::move(result);
+            break;
+          }
+        }
+        auto forward_result = evaluate_candidate(
+          recovery_footprint::ReversePrimitive::ForwardStraight);
+        if (forward_result.feasible) {
+          if (selected_result.has_value()) {
+            forward_deadlock_fallback = std::move(forward_result);
+          } else {
+            selected_result = std::move(forward_result);
+          }
+        }
+      } else if (snapshot.wall_region == recovery_footprint::WallRegion::Rear) {
+        auto result = evaluate_candidate(
+          recovery_footprint::ReversePrimitive::ForwardStraight);
+        first_result = result;
+        if (result.feasible) {
+          selected_result = std::move(result);
+        }
+      } else if (snapshot.wall_region == recovery_footprint::WallRegion::Front) {
+        constexpr std::array<recovery_footprint::ReversePrimitive, 3> kPrimitivePreference{
+          recovery_footprint::ReversePrimitive::Straight,
+          recovery_footprint::ReversePrimitive::Left,
+          recovery_footprint::ReversePrimitive::Right};
+        for (const auto primitive : kPrimitivePreference) {
+          auto result = evaluate_candidate(primitive);
+          if (!first_result.has_value()) {
+            first_result = result;
+          }
+          if (result.feasible) {
+            selected_result = std::move(result);
+            break;
+          }
+        }
+      } else if (
+        snapshot.wall_region == recovery_footprint::WallRegion::None &&
+        snapshot.current_footprint_clear)
+      {
+        // The physical AWSIM wall and the occupancy map can disagree. An
+        // evidence-free detector confirmation is allowed only with a healthy
+        // solver and sustained no-progress. Provide a bounded straight retreat
+        // when the complete static rollout itself is clear; the core still
+        // requires that confirmation and the directional V2X corridor below.
+        auto result = evaluate_candidate(recovery_footprint::ReversePrimitive::Straight);
+        first_result = result;
+        if (result.feasible) {
+          selected_result = std::move(result);
+        }
+      }
+
+      snapshot.rear_static_clear = selected_result.has_value();
+      if (first_result.has_value()) {
+        const auto & diagnostic_result = selected_result.has_value() ?
+          selected_result.value() : first_result.value();
+        snapshot.static_reject_reason = diagnostic_result.reason;
+        snapshot.static_initial_contact_count = diagnostic_result.initial_contact_count;
+        snapshot.static_maximum_contact_count = diagnostic_result.maximum_contact_count;
+        snapshot.static_final_contact_count = diagnostic_result.final_contact_count;
+        snapshot.static_checked_pose_count = diagnostic_result.checked_pose_count;
+        snapshot.static_rejected_at_distance_m = diagnostic_result.rejected_at_distance_m;
+      }
+      if (selected_result.has_value()) {
+        snapshot.reverse_candidate_selected = true;
+        snapshot.stepwise_escape = stepwise_candidate_mode;
+        snapshot.contact_reduction = selected_result->contact_reduction;
+        snapshot.selected_reverse_primitive = selected_result->primitive;
+        snapshot.maneuver_direction = recovery_footprint::primitive_is_forward(
+          selected_result->primitive) ?
+          stuck_recovery::ManeuverDirection::Forward :
+          stuck_recovery::ManeuverDirection::Reverse;
+        snapshot.selected_reverse_steering_angle_rad =
+          recovery_footprint::primitive_steering_sign(selected_result->primitive) *
+          cfg_.stuck_recovery.reverse_steering_angle_rad;
+        const double cos_initial = std::cos(recovery_pose.yaw_rad);
+        const double sin_initial = std::sin(recovery_pose.yaw_rad);
+        for (const auto & rollout_pose : selected_result->rollout) {
+          const double dx = rollout_pose.pose.x_m - recovery_pose.x_m;
+          const double dy = rollout_pose.pose.y_m - recovery_pose.y_m;
+          const double lateral = -sin_initial * dx + cos_initial * dy;
+          snapshot.selected_center_min_lateral_m =
+            std::min(snapshot.selected_center_min_lateral_m, lateral);
+          snapshot.selected_center_max_lateral_m =
+            std::max(snapshot.selected_center_max_lateral_m, lateral);
+        }
+      }
+    }
+
+    if (!evaluate_rollout) {
+      return snapshot;
+    }
+
+    snapshot.boost_inactive_confirmed = recovery_boost_inactive_confirmed(steady_now);
+    snapshot.v2x_message_complete =
+      v2x_gap_planner_ != nullptr && cfg_.stuck_recovery.expected_v2x_vehicle_count >= 0 &&
+      cfg_.stuck_recovery.v2x_self_filter_mode != "unknown" &&
+      v2x_gap_planner_->has_complete_message(
+      ros_now_sec,
+      static_cast<std::size_t>(cfg_.stuck_recovery.expected_v2x_vehicle_count));
+    if (!snapshot.boost_inactive_confirmed || !snapshot.v2x_message_complete)
+    {
+      return snapshot;
+    }
+
+    const auto active_vehicles = v2x_gap_planner_->active_vehicles(ros_now_sec);
+    if (cfg_.stuck_recovery.v2x_self_filter_mode == "vehicle_id") {
+      const std::size_t self_matches = static_cast<std::size_t>(std::count_if(
+          active_vehicles.begin(), active_vehicles.end(), [this](const auto & vehicle) {
+            return vehicle.id == cfg_.stuck_recovery.self_vehicle_id;
+          }));
+      if (self_matches != 1U) {
+        snapshot.rear_information_complete = false;
+        snapshot.rear_v2x_clear = false;
+        return snapshot;
+      }
+    }
+    const auto v2x_corridor_status =
+      [&](const stuck_recovery::ManeuverDirection direction,
+      const double selected_center_min_lateral_m,
+      const double selected_center_max_lateral_m) -> std::pair<bool, bool> {
+        const bool forward_maneuver =
+          direction == stuck_recovery::ManeuverDirection::Forward;
+        const double prediction_horizon_sec =
+          (forward_maneuver ?
+          cfg_.stuck_recovery.core.supervisor.max_forward_duration_sec :
+          cfg_.stuck_recovery.core.supervisor.max_reverse_duration_sec) +
+          cfg_.stuck_recovery.rear_prediction_margin_sec;
+        const double cos_yaw = std::cos(pose.theta);
+        const double sin_yaw = std::sin(pose.theta);
+        // A vehicle that remains strictly behind cannot be hit by a straight
+        // forward escape; including the ego rear overhang here creates a
+        // permanent deadlock with a conservatively inflated stopped follower.
+        const double corridor_min_longitudinal = forward_maneuver ?
+          0.0 :
+          -cfg_.stuck_recovery.rear_extent_m - cfg_.stuck_recovery.footprint_margin_m -
+          cfg_.stuck_recovery.core.supervisor.max_reverse_distance_m;
+        const double corridor_max_longitudinal = forward_maneuver ?
+          cfg_.stuck_recovery.front_extent_m + cfg_.stuck_recovery.footprint_margin_m +
+          cfg_.stuck_recovery.core.supervisor.max_forward_distance_m :
+          cfg_.stuck_recovery.front_extent_m + cfg_.stuck_recovery.footprint_margin_m;
+        const double corridor_min_lateral =
+          -cfg_.stuck_recovery.right_extent_m - cfg_.stuck_recovery.footprint_margin_m +
+          selected_center_min_lateral_m;
+        const double corridor_max_lateral =
+          cfg_.stuck_recovery.left_extent_m + cfg_.stuck_recovery.footprint_margin_m +
+          selected_center_max_lateral_m;
+        const double vehicle_radius_m = cfg_.stuck_recovery.rear_vehicle_radius_m;
+
+        for (const auto & vehicle : active_vehicles) {
+          if (
+            cfg_.stuck_recovery.v2x_self_filter_mode == "vehicle_id" &&
+            vehicle.id == cfg_.stuck_recovery.self_vehicle_id)
+          {
+            continue;
+          }
+          const double dx = vehicle.x - pose.x;
+          const double dy = vehicle.y - pose.y;
+          if (!std::isfinite(dx) || !std::isfinite(dy) || !std::isfinite(vehicle.vx) ||
+            !std::isfinite(vehicle.vy) || vehicle.position_jump || vehicle.invalid_velocity)
+          {
+            return {false, false};
+          }
+          const double predicted_dx = dx + vehicle.vx * prediction_horizon_sec;
+          const double predicted_dy = dy + vehicle.vy * prediction_horizon_sec;
+          const double current_longitudinal = cos_yaw * dx + sin_yaw * dy;
+          const double current_lateral = -sin_yaw * dx + cos_yaw * dy;
+          const double predicted_longitudinal =
+            cos_yaw * predicted_dx + sin_yaw * predicted_dy;
+          const double predicted_lateral =
+            -sin_yaw * predicted_dx + cos_yaw * predicted_dy;
+          const double uncertainty_margin_m =
+            std::max(vehicle.covariance_x, vehicle.covariance_y);
+          const double inflated_vehicle_radius_m = vehicle_radius_m + uncertainty_margin_m;
+          const double vehicle_min_longitudinal =
+            std::min(current_longitudinal, predicted_longitudinal) - inflated_vehicle_radius_m;
+          const double vehicle_max_longitudinal =
+            std::max(current_longitudinal, predicted_longitudinal) + inflated_vehicle_radius_m;
+          const double vehicle_min_lateral =
+            std::min(current_lateral, predicted_lateral) - inflated_vehicle_radius_m;
+          const double vehicle_max_lateral =
+            std::max(current_lateral, predicted_lateral) + inflated_vehicle_radius_m;
+          const bool longitudinal_overlap =
+            vehicle_min_longitudinal <= corridor_max_longitudinal &&
+            vehicle_max_longitudinal >= corridor_min_longitudinal;
+          const bool lateral_overlap =
+            vehicle_min_lateral <= corridor_max_lateral &&
+            vehicle_max_lateral >= corridor_min_lateral;
+          if (longitudinal_overlap && lateral_overlap) {
+            return {true, false};
+          }
+        }
+        return {true, true};
+      };
+
+    auto corridor_status = v2x_corridor_status(
+      snapshot.maneuver_direction, snapshot.selected_center_min_lateral_m,
+      snapshot.selected_center_max_lateral_m);
+    snapshot.rear_information_complete = corridor_status.first;
+    snapshot.rear_v2x_clear = corridor_status.second;
+
+    if (
+      snapshot.rear_information_complete && !snapshot.rear_v2x_clear &&
+      snapshot.maneuver_direction == stuck_recovery::ManeuverDirection::Reverse &&
+      !recovery_selected_reverse_primitive_.has_value() &&
+      forward_deadlock_fallback.has_value())
+    {
+      double forward_min_lateral_m = 0.0;
+      double forward_max_lateral_m = 0.0;
+      const double cos_initial = std::cos(recovery_pose.yaw_rad);
+      const double sin_initial = std::sin(recovery_pose.yaw_rad);
+      for (const auto & rollout_pose : forward_deadlock_fallback->rollout) {
+        const double dx = rollout_pose.pose.x_m - recovery_pose.x_m;
+        const double dy = rollout_pose.pose.y_m - recovery_pose.y_m;
+        const double lateral = -sin_initial * dx + cos_initial * dy;
+        forward_min_lateral_m = std::min(forward_min_lateral_m, lateral);
+        forward_max_lateral_m = std::max(forward_max_lateral_m, lateral);
+      }
+      const auto forward_corridor_status = v2x_corridor_status(
+        stuck_recovery::ManeuverDirection::Forward,
+        forward_min_lateral_m, forward_max_lateral_m);
+      if (forward_corridor_status.first && forward_corridor_status.second) {
+        const auto & result = forward_deadlock_fallback.value();
+        snapshot.static_reject_reason = result.reason;
+        snapshot.static_initial_contact_count = result.initial_contact_count;
+        snapshot.static_maximum_contact_count = result.maximum_contact_count;
+        snapshot.static_final_contact_count = result.final_contact_count;
+        snapshot.static_checked_pose_count = result.checked_pose_count;
+        snapshot.static_rejected_at_distance_m = result.rejected_at_distance_m;
+        snapshot.reverse_candidate_selected = true;
+        snapshot.stepwise_escape = false;
+        snapshot.contact_reduction = result.contact_reduction;
+        snapshot.selected_reverse_primitive = result.primitive;
+        snapshot.maneuver_direction = stuck_recovery::ManeuverDirection::Forward;
+        snapshot.selected_reverse_steering_angle_rad = 0.0;
+        snapshot.selected_center_min_lateral_m = forward_min_lateral_m;
+        snapshot.selected_center_max_lateral_m = forward_max_lateral_m;
+        snapshot.rear_information_complete = true;
+        snapshot.rear_v2x_clear = true;
+      }
+    }
+    return snapshot;
+  }
+
+  void update_recovery_observation_anchor(
+    const Pose2D & pose, const double progress_m,
+    const stuck_recovery::StuckRejectReason reason)
+  {
+    const bool keep_window =
+      reason == stuck_recovery::StuckRejectReason::ObservationWindowIncomplete ||
+      reason == stuck_recovery::StuckRejectReason::MissingCorroboratingEvidence ||
+      reason == stuck_recovery::StuckRejectReason::None;
+    if (!keep_window) {
+      recovery_observation_anchor_pose_ = pose;
+      recovery_observation_anchor_progress_m_ = progress_m;
+    }
+  }
+
+  std::optional<stuck_recovery::CoreOutput> evaluate_stuck_recovery(
+    const Pose2D & pose, const double actual_v, const Eigen::Vector2d & normal_u,
+    const double normal_acc, const double path_forward_intent_speed_mps,
+    const bool mpc_fallback_active, const SteadyClock::time_point steady_now,
+    const rclcpp::Time & control_time)
+  {
+    if (!cfg_.stuck_recovery.core.enabled || !stuck_recovery_core_) {
+      return std::nullopt;
+    }
+    if (!recovery_observation_anchor_pose_.has_value()) {
+      recovery_observation_anchor_pose_ = pose;
+      recovery_observation_anchor_progress_m_ = car_->s;
+    }
+    const auto & anchor_pose = recovery_observation_anchor_pose_.value();
+    const double pose_displacement_m = std::hypot(pose.x - anchor_pose.x, pose.y - anchor_pose.y);
+    const double progress_delta_m = recovery_progress_delta(car_->s);
+    const auto supervisor_state = stuck_recovery_core_->supervisor().state();
+    const bool recovery_motion_phase =
+      recovery_maneuver_start_pose_.has_value() &&
+      (supervisor_state == stuck_recovery::RecoveryState::ReverseManeuver ||
+      supervisor_state == stuck_recovery::RecoveryState::ForwardManeuver);
+    if (recovery_motion_phase) {
+      if (recovery_last_reverse_pose_.has_value()) {
+        const double pose_step_m = std::hypot(
+          pose.x - recovery_last_reverse_pose_->x,
+          pose.y - recovery_last_reverse_pose_->y);
+        const double yaw_step_rad = std::abs(
+          wrap_to_pi(pose.theta - recovery_last_reverse_pose_->theta));
+        const double footprint_corner_radius_m = std::hypot(
+          std::max(
+            recovery_footprint_.front_extent_m + recovery_footprint_.margin_m,
+            recovery_footprint_.rear_extent_m + recovery_footprint_.margin_m),
+          std::max(
+            recovery_footprint_.left_extent_m + recovery_footprint_.margin_m,
+            recovery_footprint_.right_extent_m + recovery_footprint_.margin_m));
+        const double corner_motion_m = pose_step_m + footprint_corner_radius_m * yaw_step_rad;
+        const double maximum_runtime_corner_motion_m = std::min(
+          cfg_.stuck_recovery.max_reverse_pose_step_m,
+          cfg_.stuck_recovery.sweep_interpolation_step_m);
+        if (
+          !std::isfinite(corner_motion_m) ||
+          corner_motion_m > maximum_runtime_corner_motion_m)
+        {
+          recovery_reverse_pose_jump_ = true;
+        } else {
+          recovery_cumulative_reverse_distance_m_ += pose_step_m;
+          recovery_episode_traveled_distance_m_ += pose_step_m;
+        }
+      }
+      recovery_last_reverse_pose_ = pose;
+    }
+    const double traveled_distance_m = recovery_cumulative_reverse_distance_m_;
+    const double episode_traveled_distance_m = recovery_episode_traveled_distance_m_;
+    double reverse_stopping_reserve_m = 0.0;
+    if (cfg_.stuck_recovery.reverse_actuation_enabled) {
+      reverse_stopping_reserve_m = stuck_recovery::reverse_stopping_distance_reserve_m(
+        reverse_actuation_calibration(cfg_.stuck_recovery), actual_v,
+        1.0 / mpc_cfg_.control_rate);
+    }
+    const bool recovery_context_active =
+      supervisor_state != stuck_recovery::RecoveryState::Normal;
+    // normal_u[0] can alternate between zero and the path demand while a
+    // stopped overtake/recovery target is being rebuilt. Keep the reference
+    // path demand as the stable intent source so the no-progress timer is not
+    // reset every other control cycle.
+    const double requested_forward_speed_mps = std::max(
+      {0.0, path_forward_intent_speed_mps, normal_u[0]});
+    const bool low_speed_recovery_candidate =
+      std::abs(actual_v) <= cfg_.stuck_recovery.core.detector.moving_speed_mps &&
+      (requested_forward_speed_mps >=
+      cfg_.stuck_recovery.core.detector.forward_intent_speed_mps ||
+      normal_acc >= cfg_.stuck_recovery.core.detector.forward_intent_acceleration_mps2);
+    const double reverse_distance_to_check_m = std::max(
+      0.0,
+      cfg_.stuck_recovery.core.supervisor.max_reverse_distance_m -
+      episode_traveled_distance_m);
+    const double forward_distance_to_check_m = std::max(
+      0.0,
+      cfg_.stuck_recovery.core.supervisor.max_forward_distance_m -
+      episode_traveled_distance_m);
+    const double escape_step_distance_to_check_m = std::max(
+      0.0, cfg_.stuck_recovery.core.supervisor.escape_step_distance_m - traveled_distance_m);
+    const auto safety = evaluate_recovery_safety(
+      pose, steady_now, control_time.seconds(), reverse_distance_to_check_m,
+      forward_distance_to_check_m,
+      escape_step_distance_to_check_m,
+      recovery_context_active || low_speed_recovery_candidate);
+    const auto & behavior = mpc_->last_v2x_behavior_output();
+    const bool deliberate_stop =
+      behavior.state == V2XBehaviorState::LowSpeedAvoidance ||
+      behavior.state == V2XBehaviorState::SafetyBrake ||
+      (behavior.state == V2XBehaviorState::Follow && behavior.has_front_vehicle) ||
+      behavior.has_danger_vehicle;
+    const bool collision_hint =
+      last_collision_receipt_steady_.has_value() &&
+      std::chrono::duration<double>(
+      steady_now - last_collision_receipt_steady_.value()).count() < 5.0;
+    const bool awsim_recovery_settling =
+      last_collision_receipt_steady_.has_value() &&
+      std::chrono::duration<double>(
+      steady_now - last_collision_receipt_steady_.value()).count() <
+      cfg_.stuck_recovery.core.supervisor.awsim_recovery_wait_sec;
+    const bool gear_report_fresh = recovery_gear_report_fresh(steady_now);
+
+    stuck_recovery::CoreInput input;
+    input.simulation_environment = use_sim_time_;
+    input.detector.now_sec = steady_seconds(steady_now);
+    input.detector.race_started = race_started_;
+    input.detector.control_enabled = enable_control_;
+    input.detector.odometry_fresh = true;
+    input.detector.solver_fallback = mpc_fallback_active;
+    input.detector.deliberate_stop = deliberate_stop;
+    input.detector.gear_transition_active = recovery_gear_transition_active();
+    input.detector.awsim_recovery_settling = awsim_recovery_settling;
+    input.detector.signed_speed_mps = actual_v;
+    input.detector.requested_forward_speed_mps = requested_forward_speed_mps;
+    input.detector.requested_acceleration_mps2 = normal_acc;
+    input.detector.pose_displacement_m = pose_displacement_m;
+    input.detector.unwrapped_progress_delta_m = progress_delta_m;
+    input.detector.wall_evidence = safety.wall_evidence;
+    input.detector.collision_hint = collision_hint;
+    input.recovery.reported_gear = reported_gear_.value_or(stuck_recovery::Gear::Unknown);
+    input.recovery.gear_report_fresh = gear_report_fresh;
+    input.recovery.maneuver_direction = safety.maneuver_direction;
+    input.recovery.stepwise_escape = safety.stepwise_escape;
+    input.recovery.step_contact_improved =
+      recovery_initial_contact_cells_.has_value() &&
+      safety.current_contact_count < recovery_initial_contact_cells_->size();
+    input.recovery.rear_static_clear = safety.rear_static_clear;
+    input.recovery.rear_v2x_clear = safety.rear_v2x_clear;
+    input.recovery.rear_information_complete = safety.rear_information_complete;
+    input.recovery.collision_worsening =
+      safety.collision_worsening || recovery_reverse_pose_jump_;
+    const double escape_distance_target_m =
+      safety.maneuver_direction == stuck_recovery::ManeuverDirection::Forward ?
+      cfg_.stuck_recovery.forward_escape_distance_m :
+      cfg_.stuck_recovery.reverse_escape_distance_m;
+    input.recovery.recovery_escape_confirmed =
+      safety.current_footprint_clear &&
+      episode_traveled_distance_m >= escape_distance_target_m;
+    input.recovery.rejoin_safe = safety.current_footprint_clear;
+    input.recovery.awsim_recovery_resolved =
+      safety.current_footprint_clear &&
+      (recovery_episode_had_contact_evidence_ ||
+      std::abs(progress_delta_m) >=
+      cfg_.stuck_recovery.core.detector.max_progress_delta_m);
+    input.recovery.traveled_distance_m = traveled_distance_m + reverse_stopping_reserve_m;
+    input.recovery.episode_traveled_distance_m =
+      episode_traveled_distance_m + reverse_stopping_reserve_m;
+    input.recovery.reverse_steering_tire_angle_rad =
+      safety.selected_reverse_steering_angle_rad;
+    input.recovery.lateral_error_m = car_->spatial_state.e_y;
+    input.recovery.heading_error_rad = car_->spatial_state.e_psi;
+
+    auto output = stuck_recovery_core_->update(input);
+    update_recovery_observation_anchor(pose, car_->s, output.detector.reject_reason);
+    const auto previous_state = recovery_last_output_.has_value() ?
+      recovery_last_output_->state : stuck_recovery::RecoveryState::Normal;
+    const bool started_recovery_episode =
+      output.state != stuck_recovery::RecoveryState::Normal &&
+      previous_state == stuck_recovery::RecoveryState::Normal;
+    if (started_recovery_episode) {
+      recovery_episode_traveled_distance_m_ = 0.0;
+      recovery_initial_contact_cells_ = safety.current_contact_cells;
+      recovery_previous_contact_cells_ = safety.current_contact_cells;
+      recovery_episode_had_contact_evidence_ =
+        safety.wall_evidence || collision_hint || !safety.current_contact_cells.empty();
+      recovery_boost_suppressed_for_session_ = true;
+    }
+    const bool entered_step_reassessment =
+      output.state == stuck_recovery::RecoveryState::CheckClearance &&
+      (previous_state == stuck_recovery::RecoveryState::StopAndConfirm ||
+      previous_state == stuck_recovery::RecoveryState::StopAndReassess ||
+      previous_state == stuck_recovery::RecoveryState::ShiftToDrive ||
+      previous_state == stuck_recovery::RecoveryState::WaitDriveReport);
+    if (entered_step_reassessment) {
+      recovery_selected_reverse_primitive_.reset();
+      recovery_selected_stepwise_escape_ = false;
+      recovery_maneuver_start_pose_.reset();
+      recovery_last_reverse_pose_.reset();
+      recovery_cumulative_reverse_distance_m_ = 0.0;
+      recovery_reverse_pose_jump_ = false;
+      recovery_initial_contact_cells_ = safety.current_contact_cells;
+      recovery_previous_contact_cells_ = safety.current_contact_cells;
+    }
+    if (
+      output.state != stuck_recovery::RecoveryState::Normal &&
+      !entered_step_reassessment &&
+      !recovery_selected_reverse_primitive_.has_value() &&
+      safety.reverse_candidate_selected)
+    {
+      recovery_selected_reverse_primitive_ = safety.selected_reverse_primitive;
+      recovery_selected_stepwise_escape_ = safety.stepwise_escape;
+      RCLCPP_INFO(
+        get_logger(), "Stuck recovery maneuver selected: direction=%s, primitive=%s, "
+        "steering=%.3f rad, wall=%s, wall_distance=%.3f m",
+        stuck_recovery::to_string(safety.maneuver_direction),
+        recovery_footprint::to_string(safety.selected_reverse_primitive),
+        safety.selected_reverse_steering_angle_rad,
+        recovery_footprint::to_string(safety.wall_region), safety.wall_distance_m);
+    }
+    const bool maneuver_state =
+      output.state == stuck_recovery::RecoveryState::ReverseManeuver ||
+      output.state == stuck_recovery::RecoveryState::ForwardManeuver;
+    const bool previous_maneuver_state =
+      previous_state == stuck_recovery::RecoveryState::ReverseManeuver ||
+      previous_state == stuck_recovery::RecoveryState::ForwardManeuver;
+    const bool resumed_reverse_maneuver =
+      output.state == stuck_recovery::RecoveryState::ReverseManeuver &&
+      previous_state == stuck_recovery::RecoveryState::WaitReverseReport &&
+      recovery_maneuver_start_pose_.has_value();
+    const bool started_recovery_maneuver =
+      maneuver_state && !previous_maneuver_state && !resumed_reverse_maneuver;
+    if (started_recovery_maneuver) {
+      recovery_maneuver_start_pose_ = pose;
+      recovery_last_reverse_pose_ = pose;
+      recovery_cumulative_reverse_distance_m_ = 0.0;
+      recovery_reverse_pose_jump_ = false;
+      recovery_initial_contact_cells_ = safety.current_contact_cells;
+      recovery_previous_contact_cells_ = safety.current_contact_cells;
+    } else if (resumed_reverse_maneuver) {
+      // Do not count pose drift while clearance was incomplete, and do not
+      // reset cumulative progress/contact baselines for the current step.
+      recovery_last_reverse_pose_ = pose;
+      recovery_reverse_pose_jump_ = false;
+    } else if (
+      output.state != stuck_recovery::RecoveryState::Normal &&
+      !started_recovery_episode && !started_recovery_maneuver &&
+      (!recovery_previous_contact_cells_.has_value() ||
+      safety.runtime_contact_reject_reason == recovery_footprint::RejectReason::None))
+    {
+      // Do not absorb a rejected contact transition into the next cycle's safety baseline.
+      recovery_previous_contact_cells_ = safety.current_contact_cells;
+    } else if (
+      output.state == stuck_recovery::RecoveryState::Normal &&
+      previous_state != stuck_recovery::RecoveryState::Normal)
+    {
+      recovery_initial_contact_cells_.reset();
+      recovery_previous_contact_cells_.reset();
+      recovery_episode_had_contact_evidence_ = false;
+      recovery_selected_reverse_primitive_.reset();
+      recovery_selected_stepwise_escape_ = false;
+      recovery_episode_traveled_distance_m_ = 0.0;
+    }
+    if (output.action.reset_normal_control && !recovery_reset_applied_) {
+      mpc_->reset_after_external_maneuver(control_time.seconds(), 0.0);
+      last_u_ = Eigen::Vector2d::Zero();
+      last_acc_ = 0.0;
+      recovery_reset_applied_ = true;
+      recovery_rejoin_hold_cycle_ = true;
+    }
+    if (output.state == stuck_recovery::RecoveryState::Normal &&
+      output.state_reason == stuck_recovery::RecoveryReason::RejoinComplete)
+    {
+      recovery_initial_contact_cells_.reset();
+      recovery_previous_contact_cells_.reset();
+      recovery_maneuver_start_pose_.reset();
+      recovery_last_reverse_pose_.reset();
+      recovery_cumulative_reverse_distance_m_ = 0.0;
+      recovery_episode_traveled_distance_m_ = 0.0;
+      recovery_reverse_pose_jump_ = false;
+      recovery_selected_reverse_primitive_.reset();
+      recovery_selected_stepwise_escape_ = false;
+      recovery_reset_applied_ = false;
+    }
+
+    if (!last_recovery_execution_mode_.has_value() ||
+      last_recovery_execution_mode_.value() != output.execution_mode ||
+      !last_recovery_state_.has_value() || last_recovery_state_.value() != output.state ||
+      !recovery_last_output_.has_value() ||
+      recovery_last_output_->state_reason != output.state_reason)
+    {
+      RCLCPP_INFO(
+        get_logger(),
+        "Stuck recovery: mode=%s, state=%s, action=%s, reason=%s, static=%s, "
+        "static_contacts=%zu/%zu/%zu, static_reject_at=%.3f m, checked=%zu, "
+        "runtime_contact=%s, current_contacts=%zu, corridor_complete=%d, boost_inactive=%d, "
+        "v2x_message_complete=%d, corridor_v2x_clear=%d, "
+        "wall=%s, wall_distance=%.3f, direction=%s, primitive=%s, steering=%.3f, "
+        "stepwise=%d, contact_reduction=%zu, step=%zu/%zu, maneuver_distance=%.3f m, "
+        "episode_distance=%.3f m, stopping_reserve=%.3f m, escape_target=%.3f m, "
+        "escape_confirmed=%d, rejoin_safe=%d, e_y=%.3f m, e_psi=%.3f rad",
+        stuck_recovery::to_string(output.execution_mode),
+        stuck_recovery::to_string(output.state),
+        stuck_recovery::to_string(output.action.type),
+        stuck_recovery::to_string(output.action.reason),
+        recovery_footprint::to_string(safety.static_reject_reason),
+        safety.static_initial_contact_count, safety.static_maximum_contact_count,
+        safety.static_final_contact_count, safety.static_rejected_at_distance_m,
+        safety.static_checked_pose_count,
+        recovery_footprint::to_string(safety.runtime_contact_reject_reason),
+        safety.current_contact_count,
+        safety.rear_information_complete ? 1 : 0,
+        safety.boost_inactive_confirmed ? 1 : 0,
+        safety.v2x_message_complete ? 1 : 0, safety.rear_v2x_clear ? 1 : 0,
+        recovery_footprint::to_string(safety.wall_region), safety.wall_distance_m,
+        stuck_recovery::to_string(safety.maneuver_direction),
+        safety.reverse_candidate_selected ?
+        recovery_footprint::to_string(safety.selected_reverse_primitive) : "none",
+        safety.selected_reverse_steering_angle_rad, safety.stepwise_escape ? 1 : 0,
+        safety.contact_reduction,
+        stuck_recovery_core_->supervisor().escape_step_count(),
+        cfg_.stuck_recovery.core.supervisor.max_escape_steps,
+        traveled_distance_m, episode_traveled_distance_m, reverse_stopping_reserve_m,
+        escape_distance_target_m, input.recovery.recovery_escape_confirmed ? 1 : 0,
+        input.recovery.rejoin_safe ? 1 : 0, input.recovery.lateral_error_m,
+        input.recovery.heading_error_rad);
+    }
+    if (!last_recovery_reject_reason_.has_value() ||
+      last_recovery_reject_reason_.value() != output.detector.reject_reason)
+    {
+      RCLCPP_INFO(
+        get_logger(),
+        "Stuck detector: verdict=%s, reject=%s, stationary=%.2f s, pose=%.3f m, "
+        "progress=%.3f m, evidence=%d, wall=%d, forward_intent=%d, "
+        "solver_fallback=%d, fallback_duration=%.2f s, fallback_qualified=%d, "
+        "evidence_free_qualified=%d",
+        stuck_recovery::to_string(output.detector.verdict),
+        stuck_recovery::to_string(output.detector.reject_reason),
+        output.detector.stationary_duration_sec, output.detector.pose_displacement_m,
+        output.detector.progress_delta_m, output.detector.corroborating_evidence ? 1 : 0,
+        safety.wall_evidence ? 1 : 0, output.detector.forward_intent ? 1 : 0,
+        mpc_fallback_active ? 1 : 0, output.detector.solver_fallback_duration_sec,
+        output.detector.solver_fallback_qualified ? 1 : 0,
+        output.detector.evidence_free_qualified ? 1 : 0);
+    }
+    last_recovery_execution_mode_ = output.execution_mode;
+    last_recovery_state_ = output.state;
+    last_recovery_reject_reason_ = output.detector.reject_reason;
+    recovery_last_output_ = output;
+    return output;
+  }
+
+  void publish_recovery_gear_request(
+    const stuck_recovery::RecoveryAction & action, const rclcpp::Time & stamp)
+  {
+    if (action.requested_gear == stuck_recovery::Gear::NoCommand) {
+      return;
+    }
+    if (!stuck_recovery_actuation_io_enabled_ || !gear_command_pub_) {
+      RCLCPP_ERROR(
+        get_logger(), "Stuck recovery gear request blocked by reverse actuation safety latch: %s",
+        stuck_recovery::to_string(action.requested_gear));
+      return;
+    }
+    const auto command_value = gear_command_value(action.requested_gear);
+    if (!command_value.has_value()) {
+      RCLCPP_ERROR(get_logger(), "Stuck recovery rejected an invalid gear request");
+      return;
+    }
+    GearCommand command;
+    command.stamp = stamp;
+    command.command = command_value.value();
+    gear_command_pub_->publish(command);
+    last_commanded_recovery_gear_ = action.requested_gear;
+    RCLCPP_WARN(
+      get_logger(), "Stuck recovery gear requested: gear=%s raw=%u",
+      stuck_recovery::to_string(action.requested_gear),
+      static_cast<unsigned int>(command.command));
+  }
+
+  void maybe_request_drive_after_recovery_reset(
+    const rclcpp::Time & stamp, const SteadyClock::time_point steady_now,
+    const double signed_speed_mps)
+  {
+    if (!recovery_waiting_for_drive_after_reset_ || !stuck_recovery_actuation_io_enabled_ ||
+      !gear_command_pub_ || !std::isfinite(signed_speed_mps))
+    {
+      return;
+    }
+    if (std::abs(signed_speed_mps) > cfg_.stuck_recovery.core.supervisor.stop_speed_mps) {
+      recovery_reset_stopped_since_.reset();
+      return;
+    }
+    if (!recovery_reset_stopped_since_.has_value()) {
+      recovery_reset_stopped_since_ = steady_now;
+      return;
+    }
+    const double stopped_duration_sec = std::chrono::duration<double>(
+      steady_now - recovery_reset_stopped_since_.value()).count();
+    if (
+      stopped_duration_sec < cfg_.stuck_recovery.core.supervisor.stop_confirm_sec ||
+      recovery_reset_drive_request_count_ >=
+      cfg_.stuck_recovery.core.supervisor.max_gear_command_requests)
+    {
+      return;
+    }
+    stuck_recovery::RecoveryAction action;
+    action.type = stuck_recovery::RecoveryActionType::RequestDrive;
+    action.requested_gear = stuck_recovery::Gear::Drive;
+    action.reason = stuck_recovery::RecoveryReason::DriveGearRequested;
+    publish_recovery_gear_request(action, stamp);
+    ++recovery_reset_drive_request_count_;
+  }
+
+  bool apply_stuck_recovery_arbitration(
+    const stuck_recovery::CoreOutput & output, const double actual_v,
+    const rclcpp::Time & stamp, Eigen::Vector2d & u, double & acc,
+    bool & bug_acc_enabled)
+  {
+    if (!output.actuation_allowed ||
+      output.action.type == stuck_recovery::RecoveryActionType::NormalControl)
+    {
+      return false;
+    }
+
+    recovery_boost_suppressed_for_session_ = true;
+    bug_acc_enabled = false;
+    if (output.action.type == stuck_recovery::RecoveryActionType::LowSpeedRejoin) {
+      if (recovery_rejoin_hold_cycle_) {
+        const double max_steering_step = mpc_cfg_.steer_rate_max / mpc_cfg_.control_rate;
+        u[0] = 0.0;
+        u[1] = clip(0.0, last_u_[1] - max_steering_step, last_u_[1] + max_steering_step);
+        acc = mpc_cfg_.a_min;
+        recovery_rejoin_hold_cycle_ = false;
+        return true;
+      }
+      u[0] = std::min(u[0], output.action.rejoin_speed_limit_mps);
+      acc = clip(100.0 * (u[0] - actual_v), mpc_cfg_.a_min, mpc_cfg_.a_max);
+      return true;
+    }
+
+    const double max_steering_step = mpc_cfg_.steer_rate_max / mpc_cfg_.control_rate;
+    u[0] = 0.0;
+    u[1] = clip(0.0, last_u_[1] - max_steering_step, last_u_[1] + max_steering_step);
+    const bool reverse_reported_fresh =
+      recovery_gear_report_fresh(SteadyClock::now()) && reported_gear_.has_value() &&
+      reported_gear_.value() == stuck_recovery::Gear::Reverse;
+    const bool drive_reported_fresh =
+      recovery_gear_report_fresh(SteadyClock::now()) && reported_gear_.has_value() &&
+      reported_gear_.value() == stuck_recovery::Gear::Drive;
+    const bool reverse_possible = recovery_may_be_in_reverse();
+    acc = reverse_possible ?
+      (stuck_recovery_actuation_io_enabled_ ?
+      reverse_actuation_calibration(cfg_.stuck_recovery).stop_acceleration_mps2 : 0.0) :
+      mpc_cfg_.a_min;
+
+    if (
+      output.action.type == stuck_recovery::RecoveryActionType::RequestReverse ||
+      output.action.type == stuck_recovery::RecoveryActionType::RequestDrive)
+    {
+      publish_recovery_gear_request(output.action, stamp);
+    } else if (output.action.type == stuck_recovery::RecoveryActionType::ReverseCreep) {
+      const bool reverse_speed_safe =
+        std::isfinite(actual_v) &&
+        cfg_.stuck_recovery.core.supervisor.max_reverse_speed_mps > 0.0 &&
+        std::abs(actual_v) < cfg_.stuck_recovery.core.supervisor.max_reverse_speed_mps;
+      if (
+        !stuck_recovery_actuation_io_enabled_ || !reverse_reported_fresh ||
+        !reverse_speed_safe)
+      {
+        acc = reverse_possible && stuck_recovery_actuation_io_enabled_ ?
+          reverse_actuation_calibration(cfg_.stuck_recovery).stop_acceleration_mps2 : 0.0;
+        RCLCPP_ERROR_THROTTLE(
+          get_logger(), *get_clock(), 1000,
+          "Stuck recovery reverse command blocked: actuation=%d, reverse_report=%d, "
+          "speed_safe=%d, speed=%.3f m/s, limit=%.3f m/s",
+          stuck_recovery_actuation_io_enabled_ ? 1 : 0, reverse_reported_fresh ? 1 : 0,
+          reverse_speed_safe ? 1 : 0, actual_v,
+          cfg_.stuck_recovery.core.supervisor.max_reverse_speed_mps);
+      } else {
+        const double steering_gain =
+          std::abs(mpc_cfg_.steering_tire_angle_gain_var) > kEps ?
+          mpc_cfg_.steering_tire_angle_gain_var : 1.0;
+        u[1] = output.action.steering_tire_angle_rad / steering_gain;
+        const auto calibration = reverse_actuation_calibration(cfg_.stuck_recovery);
+        acc = calibration.drive_acceleration_mps2;
+      }
+    } else if (output.action.type == stuck_recovery::RecoveryActionType::ForwardCreep) {
+      const bool forward_speed_safe =
+        std::isfinite(actual_v) &&
+        cfg_.stuck_recovery.core.supervisor.max_forward_speed_mps > 0.0 &&
+        std::abs(actual_v) < cfg_.stuck_recovery.core.supervisor.max_forward_speed_mps;
+      if (!stuck_recovery_actuation_io_enabled_ || !drive_reported_fresh || !forward_speed_safe) {
+        u[0] = 0.0;
+        acc = mpc_cfg_.a_min;
+        RCLCPP_ERROR_THROTTLE(
+          get_logger(), *get_clock(), 1000,
+          "Stuck recovery forward command blocked: actuation=%d, drive_report=%d, "
+          "speed_safe=%d, speed=%.3f m/s, limit=%.3f m/s",
+          stuck_recovery_actuation_io_enabled_ ? 1 : 0, drive_reported_fresh ? 1 : 0,
+          forward_speed_safe ? 1 : 0, actual_v,
+          cfg_.stuck_recovery.core.supervisor.max_forward_speed_mps);
+      } else {
+        const double steering_gain =
+          std::abs(mpc_cfg_.steering_tire_angle_gain_var) > kEps ?
+          mpc_cfg_.steering_tire_angle_gain_var : 1.0;
+        u[0] = cfg_.stuck_recovery.core.supervisor.max_forward_speed_mps;
+        u[1] = output.action.steering_tire_angle_rad / steering_gain;
+        acc = clip(
+          output.action.acceleration_magnitude_mps2, 0.0, mpc_cfg_.a_max);
+      }
+    }
+    return true;
+  }
+
   void control()
   {
     const auto steady_now = SteadyClock::now();
@@ -6917,6 +8634,12 @@ private:
     if (odom_failsafe_active_) {
       RCLCPP_INFO(get_logger(), "Odometry recovered: age=%.3f s", odometry_age_sec);
       odom_failsafe_active_ = false;
+    }
+    if (recovery_fault_latched_) {
+      maybe_request_drive_after_recovery_reset(
+        control_time, steady_now, odom_->twist.twist.linear.x);
+      publish_failsafe_command(control_time, "stuck recovery fault remains latched until session reset");
+      return;
     }
     if (cfg_.reference_path.update_by_topic && !trajectory_) {
       publish_failsafe_command(control_time, "trajectory is not available");
@@ -7087,6 +8810,13 @@ private:
       u[1], last_u_[1] - max_steering_step,
       last_u_[1] + max_steering_step);
     u[1] = clip(u[1], -mpc_cfg_.delta_max, mpc_cfg_.delta_max);
+    const auto recovery_output = evaluate_stuck_recovery(
+      pose, actual_v, u, acc, effective_v_max, mpc_fallback_active, steady_now, current_time);
+    const bool recovery_command_active = recovery_output.has_value() &&
+      apply_stuck_recovery_arbitration(
+      recovery_output.value(), actual_v, current_time, u, acc, bug_acc_enabled);
+    acc = clip(acc, mpc_cfg_.a_min, mpc_cfg_.a_max);
+    u[1] = clip(u[1], -mpc_cfg_.delta_max, mpc_cfg_.delta_max);
     if (
       !u.allFinite() || !std::isfinite(acc) ||
       !std::isfinite(u[1] * mpc_cfg_.steering_tire_angle_gain_var))
@@ -7094,11 +8824,19 @@ private:
       publish_failsafe_command(current_time, "non-finite postprocessed control rejected");
       return;
     }
-    car_->drive(Eigen::Vector2d(actual_v, u[1]));
+    const bool recovery_uses_normal_model =
+      recovery_output.has_value() &&
+      recovery_output->action.type == stuck_recovery::RecoveryActionType::LowSpeedRejoin;
+    if (!recovery_command_active || recovery_uses_normal_model) {
+      car_->drive(Eigen::Vector2d(actual_v, u[1]));
+    }
     if (!publish_control_command(current_time, u, acc, bug_acc_enabled)) {
       return;
     }
-    maybe_publish_awsim_boost(steady_now, enable_control_, forced_stop_active);
+    maybe_publish_awsim_boost(
+      steady_now, enable_control_,
+      forced_stop_active || recovery_boost_suppressed_for_session_ ||
+      (recovery_output.has_value() && recovery_output->action.inhibit_boost));
     last_acc_ = acc;
     last_u_ = u;
 
@@ -7114,7 +8852,10 @@ private:
       return;
     }
     const Eigen::Vector2d zero(0.0, 0.0);
-    command_pub_->publish(create_ackermann_control_command(now(), zero, 0.0));
+    const double shutdown_acceleration =
+      recovery_may_be_in_reverse() && stuck_recovery_actuation_io_enabled_ ?
+      reverse_actuation_calibration(cfg_.stuck_recovery).stop_acceleration_mps2 : 0.0;
+    command_pub_->publish(create_ackermann_control_command(now(), zero, shutdown_acceleration));
   }
 
   std::string config_path_;
@@ -7127,6 +8868,15 @@ private:
   bool use_stats_{};
   bool awsim_boost_io_enabled_{false};
   bool awsim_state_tracking_enabled_{false};
+  bool stuck_recovery_actuation_io_enabled_{false};
+  bool race_started_{false};
+  bool recovery_boost_suppressed_for_session_{false};
+  bool recovery_reset_applied_{false};
+  bool recovery_rejoin_hold_cycle_{false};
+  bool recovery_fault_latched_{false};
+  bool recovery_waiting_for_drive_after_reset_{false};
+  std::size_t recovery_reset_drive_request_count_{0U};
+  std::optional<SteadyClock::time_point> recovery_reset_stopped_since_;
   bool enable_control_{true};
   bool initialized_{false};
   bool ref_path_published_{false};
@@ -7136,11 +8886,13 @@ private:
   double last_lap_time_{0.0};
   std::optional<int> last_condition_;
   std::optional<rclcpp::Time> last_colliding_time_;
+  std::optional<SteadyClock::time_point> last_collision_receipt_steady_;
   rclcpp::Time last_t_;
   std::optional<rclcpp::Time> domain_start_epoch_;
   std::optional<overtake_core::StartWindowStatus> last_start_window_status_;
   bool domain_manual_reset_pending_{false};
   bool domain_manual_reset_ready_{false};
+  std::string last_awsim_state_;
   int loop_{0};
   double last_acc_{0.0};
   Eigen::Vector2d last_u_{0.0, 0.0};
@@ -7153,11 +8905,36 @@ private:
   std::unique_ptr<V2XGapPlanner> v2x_gap_planner_;
   std::unique_ptr<ReferenceVelocityConfigulator> ref_vel_configulator_;
   std::unique_ptr<awsim_boost::StartDashGuard> awsim_boost_guard_;
+  std::unique_ptr<stuck_recovery::StuckRecoveryCore> stuck_recovery_core_;
+  std::unique_ptr<recovery_footprint::OccupancyGrid> recovery_grid_;
+  recovery_footprint::FootprintExtents recovery_footprint_;
+  std::optional<Pose2D> recovery_observation_anchor_pose_;
+  std::optional<double> recovery_observation_anchor_progress_m_;
+  std::optional<Pose2D> recovery_maneuver_start_pose_;
+  std::optional<Pose2D> recovery_last_reverse_pose_;
+  double recovery_cumulative_reverse_distance_m_{0.0};
+  double recovery_episode_traveled_distance_m_{0.0};
+  bool recovery_reverse_pose_jump_{false};
+  bool recovery_episode_had_contact_evidence_{false};
+  std::optional<recovery_footprint::ReversePrimitive> recovery_selected_reverse_primitive_;
+  bool recovery_selected_stepwise_escape_{false};
+  std::optional<std::vector<std::size_t>> recovery_initial_contact_cells_;
+  std::optional<std::vector<std::size_t>> recovery_previous_contact_cells_;
+  std::optional<stuck_recovery::CoreOutput> recovery_last_output_;
+  std::optional<stuck_recovery::RecoveryState> last_recovery_state_;
+  std::optional<stuck_recovery::StuckRejectReason> last_recovery_reject_reason_;
+  std::optional<stuck_recovery::ExecutionMode> last_recovery_execution_mode_;
+  std::optional<stuck_recovery::Gear> reported_gear_;
+  std::optional<stuck_recovery::Gear> last_commanded_recovery_gear_;
+  std::optional<bool> awsim_boost_active_;
+  std::optional<SteadyClock::time_point> last_gear_report_receipt_steady_;
+  std::optional<SteadyClock::time_point> last_awsim_status_receipt_steady_;
 
   rclcpp::Publisher<AckermannControlCommand>::SharedPtr command_pub_;
   rclcpp::Publisher<AckermannControlCommand>::SharedPtr command_raw_pub_;
   rclcpp::Publisher<AckermannControlBoostCommand>::SharedPtr boost_command_pub_;
   rclcpp::Publisher<Float32MultiArray>::SharedPtr awsim_boost_pub_;
+  rclcpp::Publisher<GearCommand>::SharedPtr gear_command_pub_;
   rclcpp::Publisher<MarkerArray>::SharedPtr mpc_pred_pub_;
   rclcpp::Publisher<MarkerArray>::SharedPtr mpc_pred_pub_dummy_;
   rclcpp::Publisher<MarkerArray>::SharedPtr ref_path_pub_;
@@ -7171,6 +8948,7 @@ private:
   rclcpp::Subscription<Empty>::SharedPtr stop_request_sub_;
   rclcpp::Subscription<Float32MultiArray>::SharedPtr awsim_status_sub_;
   rclcpp::Subscription<String>::SharedPtr awsim_state_sub_;
+  rclcpp::Subscription<GearReport>::SharedPtr gear_report_sub_;
   rclcpp::Subscription<Int32>::SharedPtr condition_sub_;
   rclcpp::Subscription<PathConstraints>::SharedPtr path_constraints_sub_;
   rclcpp::Subscription<BorderCells>::SharedPtr border_cells_sub_;

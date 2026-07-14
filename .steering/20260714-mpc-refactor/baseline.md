@@ -1,10 +1,79 @@
 # MPC Baseline Manifest
 
 - 記録日: 2026-07-14
+- 最終更新: 2026-07-15（補正レビュー反映）
 - 状態: **Baseline candidate v0（未凍結）**
 - 用途: 疎結合化前の静的 snapshot と、runtime baseline 取得計画
 
-この文書に hash が載っているだけでは挙動凍結は完了していない。runtime evidence、既知差分の判断、比較 tolerance が揃った時点で `Baseline v1` に昇格する。
+この文書に hash が載っているだけでは挙動凍結は完了していない。runtime evidence、既知差分の判断、比較 tolerance が Full matrix まで揃った時点でだけ `Full Baseline v1` に昇格する。`Baseline v1` という名称は Full 承認済み基準に限定し、途中の scoped fixture には使用しない。
+
+## 0. 段階ゲートと artifact scope
+
+検証作業は変更リスクに応じて分割する。ただし Contract/Safety Floor は Phase 1〜5 の全構造リファクタに適用し、外部契約と H-01〜H-08 の判定を scoped baseline の名目で弱めない。既存 external-contract / hard-safety RED の Phase 0b 是正だけは 0.1 の ordered remediation entry に従う。
+
+| Gate / artifact | 用途 | 次に許可する変更 | この段階で固定する主対象 |
+|---|---|---|---|
+| Contract/Safety Floor | Phase 1〜5 の全構造リファクタの共通前提 | scoped baseline 取得 | 外部契約 static exact、対象 runtime graph/current QoS、sole publisher、anchor identity、H-01〜H-08 |
+| Scoped Solver Baseline | solver 限定 oracle。`Full Baseline v1` ではない | Phase 1 | normalized QP、solver result、同周期 fallback、次周期 overtake transition、raw/final command |
+| Scoped Path Baseline | path 限定 oracle。`Full Baseline v1` ではない | Phase 2A | base path、承認済み resolved speed artifact との結合、trajectory update、last-known-good path、dynamic view |
+| Full Baseline v1 | 全体比較の唯一の baseline | Phase 2B-0 以降 | 全 deterministic fixture、V2X/behavior/reference/arbitration、Domain 1〜4、gate/eval/timing、全 identity |
+| Final Full Verification | 最終 candidate の完了判定 | 完了 | Full Baseline v1 と同じ matrix、submit tar、eval image、`make eval` の再確認 |
+
+標準順序は次とする。
+
+```text
+Contract/Safety Floor
+  -> Scoped Solver Baseline -> Phase 1
+  -> Scoped Path Baseline   -> Phase 2A
+  -> Full Baseline v1       -> Phase 2B-0 -> Phase 2B-1 以降
+  -> Final Full Verification
+```
+
+Phase 0b の意図的修正後の clean commit、source/config/resource、installed binary、dev/eval image、compiler/OSQP/tool/schema identity を baseline anchor とする。Full evidence を後から取得する場合も、この pre-refactor anchor から再取得または比較し、Phase 1/2A 後の実装だけを自身の golden にしない。anchor または依存 identity が変わった場合は、影響する scoped/full artifact を再取得する。
+
+### 0.1 Contract/Safety Floor
+
+- `docs/interface/` と `AGENTS.md` にある endpoint/type/direction/Domain/owner、launch entry、control method、service、tar/result/output ownership を static exact 比較する。
+- Scoped 段階でも、対象 Domain 1 runtime の必須 endpoint、current QoS、`/set_initial_pose`、`/control/command/control_cmd` の sole publisher を確認する。Domain 0〜4 の全 graph/current QoS は Full で確認する。
+- external-contract RED と hard-safety RED は 0 件でなければならない。H-01〜H-08 の `FAIL / UNRESOLVED` を `PENDING`、`KNOWN_RED`、対象外、waiver に読み替えない。
+- ROS adapter、launch/config、最終 arbitration、`aichallenge_system/` に変更が広がった場合は scoped gate を適用せず、該当する Full 検証へ昇格する。
+
+Phase 0b は Floor の waiver ではなく、Floor 合格可能な状態へ直すための ordered remediation entry である。まず Contract Conformance lane で、static oracle が検出した external-contract RED を既存 `docs/interface/` の exact target へ実装適合させる修正だけを許可し、契約文書、endpoint/type/Domain/schema 自体は変えない。external-contract RED が 0 件になった後だけ Safety lane へ進み、H-01〜H-08 の signal、単位、authoritative criterion、観測方法を確定して D 台帳へ登録済みの safety RED を是正する。両 lane は別 commit/review、before/after fixture、Baseline candidate v0 へ戻せる rollback を必須にする。修正後の clean anchor で Floor 全項目が green にならなければ、scoped baseline 取得と Phase 1 を許可しない。
+
+### 0.2 Scoped Solver Baseline artifact
+
+同じ `SnapshotIdentity` と clean initial state から、少なくとも次を別 field/artifact で保存する。
+
+- `OnlineMpc` と `ReferenceSpeedProfile` は schema、artifact path、identity を分け、`ProblemKind::OnlineMpc` / `ProblemKind::ReferenceSpeedProfile` を必須 discriminant とし、一方を他方の golden にしない
+- 両 family の dimensions、triangle policy、variable/constraint ordering、正規化 `(row, col)` 座標集合と `P/A/q/l/u`
+- `OnlineMpc`: feasible / infeasible / preflight / problem-build / non-finite / constraint-violation の accepted status、objective、最大違反、first control、prediction、raw/final command
+- `ReferenceSpeedProfile`: base path identity、QP/result、生成 `v_ref`、startup/topic-update caller の failure/last-known-good path semantics
+- 現行は solve ごとに OSQP workspace を setup する。previous control/steering/last solved waypoint は `MpcControlHistoryState` 相当の semantic field、failure counter/fallback speed は別の solver-execution field として保存し、warm-start state として golden 化しない
+- 現行の同周期 fallback command source/counter update と、次周期に現れる overtake suppression/Recovery transition。future `SolverExecutionFeedback` / `OvertakeExecutionFeedback` 型を baseline 前提にせず、安定した semantic field へ正規化する
+- B-01、B-02、B-07 と同じ fixture の 2 回以上の replay 結果
+
+full solution vector は補助 artifact とし、非一意解で要素一致を合格条件にしない。solver failure から behavior/corridor へ同周期に再入したり corridor を再 commit したりせず、同周期 fallback と次周期 execution feedback を独立に比較する。
+
+### 0.3 Scoped Path Baseline artifact
+
+- approved `ReferenceSpeedProfile` artifact と結び付けた base/limited/resolved speed 列。Online MPC の周期出力で上書きしない。
+- path fixture: 両 canonical CSV、Domain 1〜4 resolver source、circular/open、補間、平滑化、曲率、幅、周期 dynamic view。
+- trajectory update success: valid update の採用 event、新 path snapshot/hash/version、以降の active path。
+- trajectory update failure: reject reason、直前の valid path snapshot/hash/version が不変であること。partial update、empty path への置換、暗黙の初期 CSV 再読込を許可しない。
+
+各 path fixture は path/config version、update event/cycle identity、必要な source stamp を区別する `SnapshotIdentity` を持つ。
+
+Phase 3 の更新境界比較では `cycle ID/time 採取 -> validation 済み domain refs と complete config candidate の commit -> active version/source-stamp read -> identity/CycleInput seal` の event 順を保存し、`SnapshotIdentity` の各 version と対応する active snapshot version、特に config version を exact 比較する。path/V2X/session の validation/version/last-known-good は各 owner の artifact として保存する。invalid domain source + valid config、invalid complete config + valid domain refs の双方で、invalid source だけが last-known-good/version を維持し、他 source の valid update を rollback しない case を固定する。
+
+### 0.4 Full Baseline v1 と Final Full Verification
+
+Full Baseline v1 は Contract/Safety Floor、Scoped Solver/Path の artifact に加え、V2X/behavior、corridor、reference、arbitration、Boost/Recovery/gear、Domain 1〜4、B-01〜B-09、H-01〜H-08、timing、submit/eval identity を同じ anchor に結び付けてレビュー承認したものとする。scoped artifact の集合だけで自動的に Full へ昇格しない。
+
+corridor は Full Baseline v1 で、現行の判定用 `update_last_target=false` と反映用 `update_last_target=true` の両 trace、選択結果、最終 committed corridor を保存する。refactored candidate は proposal/selection/commit の semantic field と最終 corridor をこの reference に比較しつつ、Phase 2C-1 以降は commit 1 回・no-recompute invariant を満たす。legacy の二重計算と candidate の一回計算という内部 trace 差は、承認済み structural delta として別 field で扱う。
+
+R-13 の final validation / SafeStop は D-12 の Candidate v0 trace と、必要な Phase 0b 安全修正後の valid pass-through、one-shot `PrevalidatedSafeStop`、`FatalSafetyFault` / `FatalSafeStopValidationFailure` を Full artifact に含める。未来 component 名の存在を Scoped Solver/Path Baseline の開始条件にしない。
+
+Final Full Verification は最終 candidate に Full と同じ matrix を再実行した結果であり、新しい baseline 名や version ではない。差分は Full Baseline v1 に対する intentional delta または regression として記録する。
 
 ## 1. Repository identity
 
@@ -25,7 +94,7 @@ git status --short
 git submodule status --recursive
 ```
 
-`point-out-by-chatgpt-pro.md` は設計上の入力資料であり、現行契約や実挙動の正本ではない。
+`point-out-by-chatgpt-pro.md`、`point-out-v1.md`、2026-07-15 補正レビューは設計上の入力資料であり、現行契約や実挙動の正本ではない。
 
 ## 2. Canonical launch route
 
@@ -193,11 +262,21 @@ runtime 観測をそのまま正しい契約として golden 化しない。次�
 | Vehicle N | `/control/command/gear_cmd` | `autoware_auto_vehicle_msgs/msg/GearCommand` | participant publish（gear 使用時のみ） |
 | Vehicle N | `/vehicle/status/gear_status` | `autoware_auto_vehicle_msgs/msg/GearReport` | AWSIM publish、participant subscribe（gear 使用時のみ） |
 | Vehicle N | `/awsim/control_mode_request_topic` | `std_msgs/msg/Bool` | orchestrator/operation path publish、AWSIM subscribe。MPC façadeは新規 pub/sub しない |
-| Domain 0 | `/admin/awsim/start` | `std_msgs/msg/Bool` | `awsim_state_manager` 所有の管理経路。participant は触れない |
-| Domain 0 | `/admin/awsim/reset` | `std_msgs/msg/Empty` | 管理/operation path publish。participant は触れない |
-| Domain 0 | `/admin/awsim/state` | `std_msgs/msg/String` | AWSIM publish、`awsim_state_manager` subscribe |
+| Domain 0 | `/admin/awsim/start` | `std_msgs/msg/Bool` | 双方向 pub + sub。`awsim_state_manager` が `waitstart/ready` で一度だけ `true` を publish、manual operation も publish。participant/autostart orchestrator は触れない |
+| Domain 0 | `/admin/awsim/reset` | `std_msgs/msg/Empty` | management operation path が publish。participant は触れない |
+| Domain 0 | `/admin/awsim/state` | `std_msgs/msg/String` | AWSIM publish、`awsim_state_manager` subscribe。既知/終了状態文字列は `evaluation-interface.md` §3-1 と exact 比較 |
 
 現行 `docs/interface/` は上表 endpoint の QoS 値を一般契約として固定していない。このため QoS は runtime 観測値を `Current QoS Compatibility Oracle` として別保存し、リファクタ前後で維持する。不一致は説明が付くまで compatibility blocker だが、正本文書に値がないものを external-contract RED とは呼ばない。`docs/spec/mpc-integration.md` に明記済みの `/awsim/cmd` Reliable と gear の Reliable / KeepLast(1) / Volatile は current component expectation として併記する。
+
+正方向 endpoint だけでなく、次の負方向/ownership invariant も exact oracle にする。
+
+- `autostart_orchestrator_node` は `/admin/awsim/start` を pub/sub しない。
+- `awsim_state_manager_node` は `/awsim/state` を subscribe せず、Domain 0 でだけ動作する。
+- `admin_start_once: true`、trigger state `waitstart,ready`、`/awsim/state` の `spawned, grounded, ready, start, finish` を維持する。
+- Boost に `/awsim/boost_cmd`、`Bool`、Domain 0 の `/admin/awsim/*` を代用しない。gear/Recovery に `/admin/awsim/reset`、クロスドメイン転送、teleport/respawn を代用しない。
+- `result-summary.json` は schema v2 と `session` / `vehicles` / `laps`、`dN-result-details.json` は schema v3 と `vehicle_number` / `finished` / lap・penalty fields を `evaluation-interface.md` §5-2 の型・主要キーと exact 比較する。
+- `output/latest/` 自体は実ディレクトリ、所定の内部リンク名、`HOST_UID/HOST_GID` ownership を維持する。
+- submit tar はリポジトリ直下の Docker build context 内の相対 path に置き、build context 外から `COPY` させない。
 
 契約済み `control_method` は `mpc`、`pure_pursuit`、`tiny_lidar_net`、`pilot_net`、`joycon` の 5 値で、既定は `mpc`。実装に存在する `rl_train` は現時点では非契約の開発用 option であり、本リファクタ内で契約値へ昇格させない。
 
@@ -232,9 +311,9 @@ Recovery と path constraint は canonical config で無効なため、それら
 
 ## 6. 既知差分・判断台帳
 
-`Baseline v1` の前に、各項目を「維持」「既存契約への適合修正」「外部契約を変えない安全修正」「機能性能上の waiver」のいずれかに分類する。hard-safety RED と external-contract RED は waiver や「対象外」で通過させず、Baseline v1 承認を block する。
+`Full Baseline v1` の前に、各項目を「維持」「既存契約への適合修正」「外部契約を変えない安全修正」「機能性能上の waiver」のいずれかに分類する。hard-safety RED と external-contract RED は waiver や「対象外」で通過させず、Contract/Safety Floor と Full Baseline v1 の承認を block する。
 
-| ID | 観測事項 | Candidate v0 の扱い | Baseline v1 までの判断 |
+| ID | 観測事項 | Candidate v0 の扱い | Full Baseline v1 までの判断 |
 |---|---|---|---|
 | D-01 | interface contract の `control_method` は 5 値だが `reference.launch.xml` に `rl_train` がある | `rl_train` は非契約開発 option | 非契約のまま隔離/削除を判断。契約値への昇格は本計画外 |
 | D-02 | `mpc-integration.md` の V2X 無効記述と config の V2X enabled が不一致 | runtime は enabled 候補 | 文書を現状に合わせるか、意図を確認する |
@@ -247,25 +326,26 @@ Recovery と path constraint は canonical config で無効なため、それら
 | D-09 | raw 32 deg clamp 後に gain 1.5 を適用し、final の再 clamp がない | static 上の final 上限は 48 deg | 実測と安全限界を照合し、違反なら Phase 0b で独立修正する |
 | D-10 | 各周期の速度 profile 上書きが base path と dynamic reference を混在させる | 値列を fixture 化 | 意図的挙動か副作用かを判定する |
 | D-11 | solver failure が overtake recovery state を直接変更する | state sequence を凍結 | 明示 feedback 化しても周期 semantics を維持する |
+| D-12 | `publish_failsafe_command()` は fault 発生後に通常 `mpc_cfg_` と `last_u_` から stop command を組み立て、gain 適用後の非有限 steering は 0 に置換する。独立した startup limit validation、one-shot final revalidation、fatal reason はない | Candidate v0 の command/write/log sequence を凍結し、R-13 の target semantics と混同しない | 現行は R-13 を満たさないため、Phase 0b の独立安全修正として実装後、その commit から scoped/full artifact を再取得する。Phase 4 に挙動変更を混ぜない |
 
 `point-out-by-chatgpt-pro.md` 内の数値や所見は、この台帳と現行コードで再検証してから採用する。例として現行 `a_min` candidate は `-1.35 m/s^2` であり、同資料の `-1.6` は現在値ではない。
 
-機能性能上の known RED を例外承認する場合だけ、owner、issue、期限、適用 scenario、承認者を waiver に残す。D-04 は責務を確定するまで、D-09 が安全違反と判定された場合は解消するまで Baseline v1 に進めない。
+機能性能上の known RED を例外承認する場合だけ、owner、issue、期限、適用 scenario、承認者を waiver に残す。D-04 は責務を確定するまで、D-09 は安全違反なら解消するまで、D-12 は Phase 0b の R-13 修正が完了するまで Full Baseline v1 に進めない。Scoped Solver/Path Baseline でも external-contract/hard-safety RED を通過させない。
 
 ## 7. Hard-safety oracle candidate
 
-Phase 0 の走行取得前に、各行の authoritative limit と観測方法を確定する。`UNRESOLVED` は PASS ではなく Baseline v1 blocker である。
+Phase 0 の走行取得前に、各行の authoritative limit と観測方法を確定する。`UNRESOLVED` は PASS ではなく Contract/Safety Floor と Full Baseline v1 の blocker である。
 
-| ID | signal / unit | Candidate criterion | 根拠と現在の状態 |
-|---|---|---|---|
-| H-01 | final command 全 numeric field | NaN/Inf が 0 件 | fail-safe invariant。閾値は確定、runtime evidence 未取得 |
-| H-02 | final steering angle / rad | authoritative final angle limit 内 | raw config は 32 deg、現行 final 理論値は 48 deg。車両側 final limit が **UNRESOLVED** |
-| H-03 | final steering angle の実差分 / rad/s | authoritative slew limit 内 | 現行 nominal intent は 1.2 rad/s、message の rotation-rate 2.0 とは別。hard limit は **UNRESOLVED** |
-| H-04 | final longitudinal acceleration / m/s² | resolved normal limit（candidate D1〜4: `[-1.35, 1.0]`）内 | current config。fault/Recovery の別規則と runtime evidence は未確定 |
-| H-05 | stale odometry から safe source への遷移 / s | candidate `odom_timeout_sec + 1 observed control interval` 以内、以後 normal source なし | current timeout 0.5 s。観測点と scheduling allowance は **UNRESOLVED** |
-| H-06 | collision / penalty | required safety scenario で 0 | result penalty/log/condition を分離。gate の local proxy だけでは公式 PASS にしない。oracle mapping は **UNRESOLVED** |
-| H-07 | fault/forced-stop/Recovery 中の Boost rising edge / count | 0 | current safety requirement。deterministic/live evidence 未取得 |
-| H-08 | Recovery disabled 時の gear/reverse action / count | 0 | canonical config。runtime/pure-rule evidence 未取得 |
+| ID | signal / unit | Candidate criterion | Status | 根拠と現在の状態 |
+|---|---|---|---|---|
+| H-01 | final command 全 numeric field | NaN/Inf が 0 件 | `UNRESOLVED` | fail-safe invariant。閾値は確定、runtime evidence 未取得 |
+| H-02 | final steering angle / rad | authoritative final angle limit 内 | `UNRESOLVED` | raw config は 32 deg、現行 final 理論値は 48 deg。車両側 final limit 未確定 |
+| H-03 | final steering angle の実差分 / rad/s | authoritative slew limit 内 | `UNRESOLVED` | 現行 nominal intent は 1.2 rad/s、message の rotation-rate 2.0 とは別。hard limit 未確定 |
+| H-04 | final longitudinal acceleration / m/s² | resolved normal limit（candidate D1〜4: `[-1.35, 1.0]`）内 | `UNRESOLVED` | current config。fault/Recovery の別規則と runtime evidence は未確定 |
+| H-05 | stale odometry から safe source への遷移 / s | candidate `odom_timeout_sec + 1 observed control interval` 以内、以後 normal source なし | `UNRESOLVED` | current timeout 0.5 s。観測点と scheduling allowance は未確定 |
+| H-06 | collision / penalty | required safety scenario で 0 | `UNRESOLVED` | result penalty/log/condition を分離。gate の local proxy だけでは公式 PASS にしない。oracle mapping 未確定 |
+| H-07 | fault/forced-stop/Recovery 中の Boost rising edge / count | 0 | `UNRESOLVED` | current safety requirement。deterministic/live evidence 未取得 |
+| H-08 | Recovery disabled 時の gear/reverse action / count | 0 | `UNRESOLVED` | canonical config。runtime/pure-rule evidence 未取得 |
 
 H-02/H-03 は「現行値と同じ」だけでは安全 PASS にしない。根拠文書、車両/AWSIM interface、または承認済み工学上限を先に確定する。H-06 は公式 result を得られない local gate では proxy 判定として残し、公式安全性を断定しない。
 
@@ -295,7 +375,7 @@ B-08 は次の順で、同じ提出 tar と image/binary identity を結び付�
   -> make eval
 ```
 
-B-09 は canonical config の `reference_path.update_by_topic=false` を変更しない。一時 config/test launch で valid update 採用、invalid update 拒否、最後の valid path 保持を確認する component compatibility test とし、production runtime 等価性は主張しない。
+B-09 は canonical config の `reference_path.update_by_topic=false` を変更しない。一時 config/test launch で valid update 採用、invalid/incomplete update 拒否、最後の valid path 保持を確認する component compatibility test とし、production runtime 等価性は主張しない。成功 case は update event と新 path snapshot/hash/version、失敗 case は reject reason と直前の snapshot/hash/version を別 artifact にする。失敗時の partial mutation、empty path、初期 CSV への暗黙 fallback は FAIL とする。
 
 Scenario status の許可範囲:
 
@@ -409,10 +489,13 @@ recorder は subscriber 作成と QoS 適用が完了した ready signal を出�
 個別試験のときだけ trajectory、stop request、gear status/command を追加する。MCAP と raw log はコミットせず、そこから次の小型成果物を生成する。
 
 - environment/input hash を持つ `manifest.json`
+- path/config/V2X/session/cycle/source stamp を区別する `snapshot-identity.json`
 - 連続重複を除いた状態遷移と意味イベントの `events.json`
 - rate、偏差、command、最接近距離などの `metrics.json`
 - path progress または event 基準で間引いた小型 trace
 - 数ケースに限定した QP characterization fixture
+- schema と identity を分けた `OnlineMpc` / `ReferenceSpeedProfile` fixture
+- corridor proposal/selection/commit、同周期 fallback/次周期 overtake transition、final-validation semantic result の型非依存な小型 artifact
 
 終了時に必須 topic ごとの message count、最初/最後の source stamp、QoS、bag metadata を検査する。`/aichallenge/pitstop/condition` は local proxy の一つであり、単独で公式 collision oracle としない。log、result penalty、condition を別 field として記録し、gate で result がない場合は local proxy と明記する。
 
@@ -429,8 +512,12 @@ endpoint、type、direction、publisher ownership、launch entry、Domain、tar/
 固定 input/state に対して次を比較する。
 
 - enum、flag、phase、pass side、target ID、accepted solver status は exact
-- horizon/QP の dimensions と正規化 sparse index pattern は exact
-- reference、QP numeric values、solver solution、raw/final command、prediction は field 別 absolute/relative tolerance
+- horizon/QP の dimensions、triangle policy、variable/constraint ordering、重複座標を production 規則で集約後に `(row, col)` で sort した座標集合は exact。triplet 挿入順と Eigen/OSQP 内部格納順は比較しない
+- reference、QP numeric values、raw/final command、prediction は field 別 absolute/relative tolerance
+- solver は accepted status、objective、最大制約違反、first control、predicted trajectory を primary comparison とし、full solution vector は補助比較にする
+- baseline reference の legacy corridor evaluation/apply trace と refactored proposal/selection/commit trace を別 schema で保存し、semantic selection と最終 corridor を比較する。Phase 2C-1 以降の candidate で commit 後の proposal/selection/commit 再計算があれば FAIL
+- solver failure は同周期 command source と次周期 OvertakeLine・corridor continuity transition を型非依存の semantic field で比較する。refactored candidate では `OvertakeExecutionFeedback` を同じ field へ正規化し、`RaceBehaviorPlanner` への raw solver feedback と同周期再入を許可しない
+- `FinalCommandValidator` は valid pass-through、one-shot `PrevalidatedSafeStop`、`FatalSafetyFault` / `FatalSafeStopValidationFailure` を exact に区別し、SafeStop 失敗後の再帰 fallback、通常 command、Boost、Recovery、gear action を許可しない
 - 現行の自由文字列 reason は全文 exact にせず、安定 prefix/category と抽出した numeric field に正規化
 
 将来 enum/reason code を導入する場合、旧文字列 category との対応表を intentional internal API change としてレビューする。
@@ -447,7 +534,7 @@ live AWSIM では cycle ごとの target ID、状態遷移時刻、solver status
 
 ### 10.4 Intentional delta
 
-既存 interface contract への適合修正または外部契約を変えない安全修正は、`Baseline candidate v0` との差分を保存し、修正 commit と test を紐づけて `Baseline v1` を作る。外部契約そのものの変更は本計画外とする。以後の構造リファクタは v1 との等価性を判定する。
+既存 interface contract への適合修正または外部契約を変えない安全修正は、`Baseline candidate v0` との差分を保存し、修正 commit と test を紐づけて `Full Baseline v1` を作る。外部契約そのものの変更は本計画外とする。Scoped artifact は対象 Phase の比較だけに使用し、Phase 2B 以降の構造リファクタは Full Baseline v1 との等価性を判定する。
 
 ## 11. 生成物の配置
 
@@ -455,9 +542,35 @@ live AWSIM では cycle ごとの target ID、状態遷移時刻、solver status
 - コミットしない: rosbag/MCAP、raw graph dump、param dump、launch log、build/install、Docker artifact
 - 既存 `output/<run-id>` / `output/latest` は評価成果物の読み取り元としてのみ使い、独自 recorder の file/link を追加しない
 - raw evidence の一時出力: `/tmp/aichallenge-mpc-baseline/<run-id>/`
-- Baseline v1 承認時は normalized fixture だけで再判定可能にする。raw evidence を根拠として残す場合は content hash、保存期限、承認済み外部 artifact URI を manifest に記録し、ephemeral path だけを参照しない
+- Full Baseline v1 承認時は normalized fixture だけで再判定可能にする。raw evidence を根拠として残す場合は content hash、保存期限、承認済み外部 artifact URI を manifest に記録し、ephemeral path だけを参照しない
 
-## 12. Freeze checklist
+## 12. Approval checklists
+
+### 12.1 Contract/Safety Floor
+
+- [ ] Phase 0b 後の clean anchor commit と source/config/resource/binary/image/tool/schema identity を固定した
+- [ ] 全外部契約を static exact oracle と照合した
+- [ ] admin start ownership/one-shot/state strings、orchestrator/state-manager の禁止 subscription、result schema、`output/latest/` / UID ownership の負方向・成果物 invariant を照合した
+- [ ] Boost/gear/Recovery の禁止代替 endpoint・cross-domain・teleport/respawn と、submit tar の build-context 内配置を照合した
+- [ ] 対象 Domain 1 runtime の必須 endpoint/type/current QoS、`/set_initial_pose`、sole command publisher を確認した
+- [ ] external-contract RED と hard-safety RED が 0 件である
+- [ ] H-01〜H-08 に FAIL/UNRESOLVED がない
+
+### 12.2 Scoped Solver Baseline
+
+- [ ] normalized sparse coordinate、`P/A/q/l/u`、solver primary result と補助 full solution artifact を取得した
+- [ ] feasible/infeasible/non-finite/constraint-violation fixture が決定的である
+- [ ] 同周期 fallback と次周期 overtake suppression/Recovery transition を未来型に依存しない semantic artifact で固定した
+- [ ] B-01/B-02/B-07、build/package test が PASS である
+
+### 12.3 Scoped Path Baseline
+
+- [ ] approved `ReferenceSpeedProfile` artifact と path fixture の identity を結び付け、base/limited/resolved speed と dynamic view を取得した
+- [ ] 両 CSV、Domain 1〜4 resolver、circular/open、補間/平滑化/曲率/幅/dynamic view を固定した
+- [ ] B-09 の trajectory update 成功、失敗、last-known-good path 保持が PASS である
+- [ ] B-02/B-09、build/package test が PASS である
+
+### 12.4 Full Baseline v1
 
 - [x] commit、branch、canonical launch route を記録した
 - [x] core/config/launch/resource の主要 hash を記録した
@@ -472,12 +585,21 @@ live AWSIM では cycle ごとの target ID、状態遷移時刻、solver status
 - [ ] B-01/B-02/B-07/B-08/B-09 は PASS、B-03〜B-06 は許可 status と completeness evidence を持つ
 - [ ] normalized fixture と比較器を作成した
 - [ ] 最低 3 回の反復から tolerance を確定した
-- [ ] D-01〜D-11 を分類した
+- [ ] D-01〜D-12 を分類した
 - [ ] D-04 の二つの control-mode topic の責務判断を完了した
 - [ ] 必要な Phase 0b 修正を独立して完了した
 - [ ] external-contract RED と hard-safety RED が 0 件である
 - [ ] H-01〜H-08 に FAIL/UNRESOLVED がない
 - [ ] `LegacyReplayHarness` の必須 fixture が 2 回以上同じ正規化 output を返す
+- [ ] legacy corridor の判定/反映 trace と最終 corridor を固定し、candidate の proposal/selection/commit semantic 比較と Phase 2C-1 後の no-recompute 判定規則を承認した
+- [ ] R-13 の valid/one-shot `PrevalidatedSafeStop`/`FatalSafetyFault` / `FatalSafeStopValidationFailure` fixture を固定した
 - [ ] observation seam を含む最終 clean commit から black-box/cycle baseline を再取得した
 - [ ] 最終 commit、source/config/resource、comparison schema、installed binary、dev/eval image、submit tar の identity を再取得した
-- [ ] Baseline v1 をレビュー・承認した
+- [ ] scoped artifact を自動昇格させず、Full Baseline v1 をレビュー・承認した
+
+### 12.5 Final Full Verification
+
+- [ ] 最終 candidate で Contract/Safety Floor と B-01〜B-09 の全 matrix を再実行した
+- [ ] H-01〜H-08、Domain 0〜4 graph/current QoS、timing/arbitration comparison が PASS である
+- [ ] submit tar 最上位、eval image/binary identity、result schema、`output/latest/`、`make eval` を再確認した
+- [ ] Full Baseline v1 との差分を intentional delta または regression として分類した

@@ -2,10 +2,11 @@
 
 - 実施日: 2026-07-15
 - scope: Contract Conformance候補（E01〜E06）+ Phase 0 supporting baseline/tooling/documentation（E07〜E08と証跡）。Safety laneなし
-- 状態: **未commitの候補実装。local static と sealed eval identity は RED=0。Phase 0 全体は未完了**
+- 状態: **ユーザー承認済みの候補実装commit。local static と sealed eval identity は RED=0。Phase 0 全体は未完了**
 - production code anchor: `50e0de5dcd3861565c78c501a6f3db0ca8e9489d`
 - 修正前HEAD: `caf3599d9bad42b3cc88d91cebd2fa1fcc44b0ee`
-- current branch/HEAD: `feat/20260714-mpc-refactor` / `caf3599d9bad42b3cc88d91cebd2fa1fcc44b0ee` + dirty working tree
+- approved candidate anchor: `465acdc3477c0491aa6b168dfdfd1d16599a7246`（`origin/feat/20260714-mpc-refactor` と一致）
+- current branch: `feat/20260714-mpc-refactor`（本承認記録の文書差分はcandidate anchor後）
 - oracle SHA-256: `bdd6a8affd40019332b311e85046014232b635b657afaa90540c4dff1b54d3dd`
 - 方針: endpoint / type / Domain / result schema は変更せず、実装を既存契約へ適合させる
 
@@ -17,7 +18,9 @@
 
 production behaviorの変更E01〜E06はContract Conformance候補である。E07〜E08、oracle、fixture、manifest、証跡文書はPhase 0を再現・検証するsupporting baseline/tooling/documentationであり、Contract laneそのものとは分けて扱う。`docs/interface/participant-interface.md` も実装経路とupstream identityの記録を更新しているため、working tree全体を「契約文書を変更しないContract laneのみ」とは扱わない。ただし、endpoint、type、Domain、schema、control methodの契約値は変更していない。
 
-R-13を含むSafety laneは実装していない。Contract Conformance、supporting変更、Safety laneの独立commit/review、clean post-remediation anchor、live baseline取得は未完了である。評価基盤の `aichallenge_system/` には差分を入れていない。また、Phase 0aより先にremediationした順序差は記録済みだが、承認済み計画の例外としては未承認である。
+Contract Conformance候補とsupporting変更はcommit `465acdc` に同居している。2026-07-15、ユーザーはこの候補commit、Phase 0aより先にremediationした順序差、Contract/supporting同居を実行例外として承認した。この承認で変更前live evidence、Safety lane、Contract/Safety Floor、Full Baseline v1を免除しない。
+
+R-13を含むSafety laneは実装しておらず、今後も独立変更とする。評価基盤の `aichallenge_system/` には差分を入れていない。candidate anchorは確定したが、live baselineとPhase 0全体のclean completion anchorは未取得である。
 
 ## 2. 同一oracleによるbefore / after
 
@@ -134,4 +137,4 @@ R-13は未実装である。2026公式資料からcontrol commandの角度単位
 - Interface specification: <https://automotiveaichallenge.github.io/aichallenge-documentation-racingkart/specifications/interface.html>
 - SW class rules: <https://automotiveaichallenge.github.io/aichallenge-documentation-racingkart/competition/sw-class.html>
 
-H-01〜H-08のsignal、単位、authoritative criterion、観測方法を確定し、Safety laneを独立実装・検証・reviewするまでContract/Safety Floorは成立しない。さらにContract Conformanceとsupporting変更の独立commit/review、順序差の承認、clean anchor、残るlive evidenceが必要であり、**Phase 0完了およびPhase 1開始は保留**とする。
+H-01〜H-08のsignal、単位、authoritative criterion、観測方法を確定し、Safety laneを独立実装・検証・reviewするまでContract/Safety Floorは成立しない。さらにPhase 0全体のclean completion anchorと残るlive evidenceが必要であり、**Phase 0完了およびPhase 1開始は保留**とする。

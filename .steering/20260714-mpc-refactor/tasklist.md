@@ -1,8 +1,8 @@
 # MPC 疎結合化 Task List
 
 - 作成日: 2026-07-14
-- 最終更新: 2026-07-15（Phase 0b Contract Conformance実装・sealed eval検証）
-- 状態: Implementation / Phase 0 未完了（local static・sealed identity RED=0、canonical live runtime・Safety lane未完了）
+- 最終更新: 2026-07-15（候補commit・実行例外のユーザー承認を反映）
+- 状態: Implementation / Phase 0 未完了（候補anchor `465acdc` 承認済み、canonical live runtime・Safety lane未完了）
 - 原則: `Contract/Safety Floor`、対象 staged baseline、直前 Phase の Definition of Done を満たすまで次へ進まない
 
 ## 0. Planning
@@ -170,15 +170,15 @@ Phase 1〜5 の各 Phase と各 subphase は、変更対象の大小にかかわ
 ### 1.7 Phase 0b — 意図的修正（triage で必要な項目。現行で未充足の R-13 は必須）
 
 - [x] 変更を分類した（E01〜E06はContract Conformance候補、E07〜E08とoracle/fixture/manifest/docはPhase 0 supporting baseline/tooling/documentation、Safety laneは未実装）
-- [ ] Contract Conformance、supporting変更、Safety laneを独立commit/reviewとし、同じcommitに混ぜない
+- [x] Contract Conformanceとsupporting変更は候補commit `465acdc` に同居する実行例外としてユーザー承認済み。Safety laneは同commitに含めず独立変更とする
 - [x] Phase 0a black-box captureより先にContract remediationを実施した順序差と、変更前live evidenceを未取得であることを `phase0-contract-conformance.md` に記録した
-- [ ] Phase 0aより先にremediationした順序差を計画例外として承認するか、production code anchorの隔離環境から必要な変更前live evidenceを取得して順序上の不足を解消する
+- [x] Phase 0aより先にremediationした順序差を2026-07-15付の実行例外としてユーザー承認した（変更前live evidenceと残るPhase 0条件は免除しない）
 - [x] Contract Conformance候補E01〜E06はstatic oracleのexternal-contract REDを既存contract targetへ適合させる修正に限定した。`participant-interface.md` の実装経路・upstream identity記録は更新したが、endpoint/type/Domain/schemaの契約値は変更していない
 - [x] Contract Conformance lane のbefore/after exact oracleを同一toolで通し、local external-contract REDを0件にした
 - [ ] Safety lane entry として H-01〜H-08 の signal、単位、authoritative criterion、観測方法が確定している
 - [ ] 未解消 hard-safety RED、対象 code path、是正内容、reviewer、before/after fixture を D 台帳へ登録し、未登録の構造変更を混ぜない
 - [ ] 修正失敗・回帰 mismatch 時に Baseline candidate v0 へ戻せる rollback 手順と停止条件を承認する
-- [ ] 各修正を構造リファクタと別 commit/PR にする
+- [x] Contract/supporting候補commit `465acdc` を後続の構造リファクタおよびSafety laneと分離した
 - [x] production behavior変更E01〜E06を既存interface contractへの適合に限定し、E07〜E08はsupporting baseline/tooling変更として別分類した
 - [x] topic/type/Domain/契約済みcontrol method/result schema 自体の変更を本 Phase に入れない
 - [x] 変更理由、安全/評価影響、before/after、test を `phase0-contract-conformance.md` に記録する
@@ -681,4 +681,4 @@ Phase 1〜5 の各 Phase と各 subphase は、変更対象の大小にかかわ
 
 Phase 0b Contract Conformance候補としてcanonical control methodの5値化、submit側cross-domain reset bridgeの隔離、Joycon Boost guard、dev/gate state manager supervision、AWSIM CWDを実装した。Phase 0 supporting変更としてeval upstream SHA固定、submit archiveの生成物除外、oracle/fixture/manifest/docを追加・更新した。local buildは26 packages、no-cache eval buildも26 packagesで成功し、同一static oracleは修正前 `PASS=7 / RED=7 / NEEDS_RUNTIME=5`、修正後 `PASS=15 / RED=0 / NEEDS_RUNTIME=4` となった。詳細identityと検証結果は `phase0-contract-conformance.md` と `sealed-eval-manifest.json` を参照する。
 
-未実行・未完了は、実AWSIMを含む `make dev` / `make dev4` / `make gate1`〜`gate3` / `make eval`、canonical live DDS graph、sole control publisher、topic rate、完走artifact、H-01〜H-08、R-13 Safety lane、既存MPC test 1件のRED、Contract laneの独立commit/review、clean anchorである。Phase 0a live captureより先にContract remediationを行ったため、変更前live evidenceは取得済みと扱わない。Phase 1〜5は開始条件未成立のため未着手である。
+未実行・未完了は、実AWSIMを含む `make dev` / `make dev4` / `make gate1`〜`gate3` / `make eval`、canonical live DDS graph、sole control publisher、topic rate、完走artifact、H-01〜H-08、R-13 Safety lane、既存MPC test 1件のRED、Phase 0全体のclean completion anchorである。Phase 0a live captureより先にContract remediationを行う例外は承認済みだが、変更前live evidenceは取得済みと扱わない。Phase 1〜5は開始条件未成立のため未着手である。

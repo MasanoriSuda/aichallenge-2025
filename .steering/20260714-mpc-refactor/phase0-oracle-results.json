@@ -5,6 +5,23 @@
     "schema_version": "phase0-contract-oracle-v1",
     "sha256": "bdd6a8affd40019332b311e85046014232b635b657afaa90540c4dff1b54d3dd"
   },
+  "approval": {
+    "approved_at": "2026-07-15",
+    "approved_by": "user",
+    "candidate_anchor": "465acdc3477c0491aa6b168dfdfd1d16599a7246",
+    "scope": [
+      "Contract Conformance candidate E01-E06",
+      "Phase 0 supporting baseline/tooling/documentation E07-E08",
+      "Phase 0a-before-remediation ordering exception",
+      "Contract/supporting changes sharing the candidate commit"
+    ],
+    "does_not_approve": [
+      "Phase 0 completion",
+      "Safety H-01 through H-08 or R-13",
+      "Contract/Safety Floor",
+      "Full Baseline v1 or Phase 1 entry"
+    ]
+  },
   "before": {
     "production_code_anchor": "50e0de5dcd3861565c78c501a6f3db0ca8e9489d",
     "evaluated_head": "caf3599d9bad42b3cc88d91cebd2fa1fcc44b0ee",
@@ -32,8 +49,8 @@
     ]
   },
   "after": {
-    "head": "caf3599d9bad42b3cc88d91cebd2fa1fcc44b0ee",
-    "source": "uncommitted working tree containing Contract Conformance candidate and Phase 0 supporting changes",
+    "head": "465acdc3477c0491aa6b168dfdfd1d16599a7246",
+    "source": "approved committed candidate containing Contract Conformance and Phase 0 supporting changes",
     "sealed_eval_manifest_sha256": "4fcc52305372de65a66b52bd07542f73a348553fd8ae527a8d474cfe72b269c1",
     "summary": {
       "PASS": 15,
@@ -49,9 +66,9 @@
     ]
   },
   "limitations": [
-    "The after source is not a clean commit and is not an approved baseline anchor.",
-    "Contract Conformance and supporting baseline/tooling/documentation changes are not yet split into independently reviewed commits.",
-    "The Phase 0a-before-Phase-0b ordering deviation is recorded but not approved as a plan exception.",
+    "The candidate commit is approved for Phase 0 continuation but is not Full Baseline v1 or the Phase 0 completion anchor.",
+    "Contract Conformance and supporting changes share the approved candidate commit by explicit execution exception; Safety remains separate.",
+    "The Phase 0a-before-Phase-0b ordering deviation is approved as an execution exception but does not supply the missing live evidence.",
     "The record does not replace canonical live DDS, topic-rate, or completed-run artifact evidence.",
     "Safety H-01 through H-08 and R-13 are outside this Contract Conformance oracle result."
   ]

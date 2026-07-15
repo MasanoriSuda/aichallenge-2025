@@ -1,9 +1,11 @@
 # MPC 疎結合化 設計
 
 - 作成日: 2026-07-14
-- 最終更新: 2026-07-15（補正レビュー反映）
-- 状態: 承認済み（Phase 0 実行中）
+- 最終更新: 2026-07-15（計画中止を反映）
+- 状態: **中止**（競技プログラミング作業として進めるため、本疎結合化と後続 Phase は実施しない）
 - 前提: 開始条件は `Contract/Safety Floor`、`Scoped Solver Baseline`、`Scoped Path Baseline`、`Full Baseline v1`、`Final Full Verification` の名称に統一する。各 Phase は開始条件を満たし、変更対象に対応する verification slice を前後比較する
+
+> 2026-07-15 決定: 本計画はここで終了する。既存の Phase 0 成果と証跡は履歴として残すが、疎結合化を目的とする Phase 1 以降には着手しない。
 
 ## 1. 現状認識
 
@@ -563,6 +565,8 @@ baseline は比較元の承認済み evidence であり、各変更後に再実�
 ### Phase 0: Staged characterization / remediation
 
 Phase 0a と observation step では制御ロジック、責務境界、外部契約を変更しない。Phase 0a で既存 topic/log だけの black-box evidence を取得し、続く observation step で recorder、比較器、test-only/no-op trace seam と `LegacyReplayHarness` を追加する。canonical production では seam を無効にする。Phase 0b は ordered remediation とし、まず Contract Conformance lane で既存 `docs/interface/` の exact target への実装適合だけを行って external-contract RED を 0 件にする。その後の Safety lane だけが、確定済み safety oracle と登録済み hard-safety RED に対する修正を行う。両 lane は独立 commit/review、before/after test、rollback を entry 条件とする。
+
+2026-07-15の実行例外として、ユーザー承認のもとPhase 0a live captureより先にContract Conformance候補E01〜E06とsupporting baseline/tooling/documentation E07〜E08をcommit `465acdc3477c0491aa6b168dfdfd1d16599a7246` へまとめた。この承認は順序差とContract/supporting同居に限る。変更前live evidenceを取得済みとは扱わず、Phase 0a、Safety lane、Contract/Safety Floor、Full Baseline v1の完了条件は免除しない。Safety laneは同commitに含めず、確定済みoracleに基づく独立変更として扱う。
 
 bootstrap は次の 3 比較に分ける。
 

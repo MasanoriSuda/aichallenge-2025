@@ -10,6 +10,7 @@
 #include <multi_purpose_mpc_ros/awsim_boost_start_dash.hpp>
 #include <multi_purpose_mpc_ros/path_core.hpp>
 #include <multi_purpose_mpc_ros/recovery_footprint.hpp>
+#include <multi_purpose_mpc_ros/start_grid_grace.hpp>
 #include <multi_purpose_mpc_ros/stuck_recovery_core.hpp>
 #include <multi_purpose_mpc_ros/v2x_overtake_core.hpp>
 #include <multi_purpose_mpc_ros_msgs/msg/ackermann_control_boost_command.hpp>
@@ -91,6 +92,7 @@ namespace path_core = ::multi_purpose_mpc_ros::path_core;
 namespace awsim_boost = ::multi_purpose_mpc_ros::awsim_boost;
 namespace overtake_core = ::multi_purpose_mpc_ros::v2x_overtake_core;
 namespace recovery_footprint = ::multi_purpose_mpc_ros::recovery_footprint;
+namespace start_grid_grace = ::multi_purpose_mpc_ros::start_grid_grace;
 namespace stuck_recovery = ::multi_purpose_mpc_ros::stuck_recovery;
 
 constexpr double kEps = 1e-12;
@@ -1525,6 +1527,7 @@ struct V2XBehaviorOutput
   bool has_side_vehicle{false};
   bool has_danger_vehicle{false};
   bool start_grid_grace_active{false};
+  bool start_grid_stop_suppressed{false};
   bool low_speed_avoidance_candidate{false};
   bool low_speed_avoidance_gap_blocked{false};
   bool overtake_forbidden{false};
@@ -2743,6 +2746,7 @@ struct MPC
     const bool use_path_constraints_topic_in)
   : model(model_in),
     cfg(cfg_in),
+    start_grid_grace_guard_(cfg_in.v2x_behavior.start_grid_grace_time),
     use_obstacle_avoidance(use_obstacle_avoidance_in),
     use_path_constraints_topic(use_path_constraints_topic_in),
     current_control(Eigen::VectorXd::Zero(2 * cfg_in.N))
@@ -2775,6 +2779,27 @@ struct MPC
   void update_current_speed(const double current_speed_mps)
   {
     current_speed_mps_ = std::max(0.0, current_speed_mps);
+  }
+
+  start_grid_grace::Transition arm_start_grid_grace(const double start_sec)
+  {
+    return start_grid_grace_guard_.arm(start_sec);
+  }
+
+  start_grid_grace::Transition prepare_start_grid_grace()
+  {
+    return start_grid_grace_guard_.prepare();
+  }
+
+  start_grid_grace::Transition clear_start_grid_grace()
+  {
+    const auto transition = start_grid_grace_guard_.clear();
+    if (transition == start_grid_grace::Transition::Cleared) {
+      start_grid_stop_suppressed_ = false;
+      start_grid_emergency_override_logged_ = false;
+      start_grid_initial_target_id_.reset();
+    }
+    return transition;
   }
 
   void reset_control_history(const double steering)
@@ -2830,18 +2855,31 @@ struct MPC
       return output;
     }
 
-    if (!std::isfinite(first_v2x_behavior_eval_sec)) {
-      first_v2x_behavior_eval_sec = now_sec;
+    const auto start_grid_evaluation = start_grid_grace_guard_.evaluate(now_sec);
+    const bool start_grid_grace_active = start_grid_evaluation.active;
+    if (start_grid_evaluation.transition == start_grid_grace::Transition::Expired) {
+      start_grid_initial_target_id_.reset();
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"),
+        "Start grid grace expired after %.2f s",
+        start_grid_evaluation.elapsed_sec);
+    } else if (
+      start_grid_evaluation.transition == start_grid_grace::Transition::ClockRejected)
+    {
+      start_grid_initial_target_id_.reset();
+      RCLCPP_WARN(
+        rclcpp::get_logger("mpc_controller"),
+        "Start grid grace rejected because the ROS clock is invalid or moved backwards");
     }
-    const bool start_grid_grace_active =
-      cfg.v2x_behavior.start_grid_grace_time > 0.0 &&
-      now_sec - first_v2x_behavior_eval_sec < cfg.v2x_behavior.start_grid_grace_time;
     output.start_grid_grace_active = start_grid_grace_active;
     output.ego_speed = current_speed_mps_;
 
     const auto vehicles = gap_planner->active_vehicles(now_sec);
     output.active_vehicle_count = vehicles.size();
     if (vehicles.empty()) {
+      update_start_grid_suppression_diagnostics(
+        false, false, std::string{}, std::numeric_limits<double>::infinity(),
+        std::numeric_limits<double>::infinity(), 0.0);
       output.reason = "no active vehicles";
       return commit_v2x_behavior_state(output, now_sec);
     }
@@ -2987,14 +3025,51 @@ struct MPC
     {
       output.target_vehicle_id = overtake_line_state_.target_vehicle_id;
     }
-    const bool suppress_start_grid_stop_behavior =
-      start_grid_grace_active && has_side_vehicle;
     output.follow_gap_planner_allowed = !overtake_forbidden && !overtake_cooldown_active;
     const FrontRiskMetrics front_risk =
       compute_front_risk(nearest_front_distance, nearest_front_speed);
     const FrontRiskLevel front_risk_level = classify_front_risk(front_risk);
     output.front_risk = front_risk;
     output.front_risk_level = front_risk_level;
+    const bool front_risk_emergency = front_risk_level == FrontRiskLevel::EmergencyBrake;
+    const bool initial_static_target =
+      start_grid_grace_active && has_front_vehicle && has_side_vehicle &&
+      !nearest_front_id.empty() && std::isfinite(nearest_front_speed) &&
+      nearest_front_speed >= 0.0 &&
+      nearest_front_speed <= cfg.v2x_behavior.low_speed_avoidance_max_front_speed;
+    if (initial_static_target && !start_grid_initial_target_id_.has_value()) {
+      start_grid_initial_target_id_ = nearest_front_id;
+    }
+    const bool initial_static_target_latched =
+      start_grid_initial_target_id_.has_value() &&
+      nearest_front_id == start_grid_initial_target_id_.value();
+    const start_grid_grace::StaticStopContext start_grid_context{
+      start_grid_grace_active,
+      has_front_vehicle,
+      has_side_vehicle,
+      initial_static_target_latched,
+      front_risk_emergency,
+      nearest_front_speed,
+      cfg.v2x_behavior.low_speed_avoidance_max_front_speed,
+      cfg.v2x_behavior.moving_front_speed_threshold};
+    const bool suppress_start_grid_stop_behavior =
+      start_grid_grace::should_suppress_static_stop(start_grid_context);
+    auto non_emergency_start_grid_context = start_grid_context;
+    non_emergency_start_grid_context.emergency_brake_required = false;
+    const bool emergency_overrides_start_grid =
+      front_risk_emergency &&
+      start_grid_grace::should_suppress_static_stop(non_emergency_start_grid_context);
+    output.start_grid_stop_suppressed = suppress_start_grid_stop_behavior;
+    update_start_grid_suppression_diagnostics(
+      suppress_start_grid_stop_behavior, emergency_overrides_start_grid,
+      output.target_vehicle_id, nearest_front_distance, nearest_front_speed,
+      front_risk.required_decel);
+    if (emergency_overrides_start_grid) {
+      output.state = V2XBehaviorState::SafetyBrake;
+      output.reason = front_risk_reason(
+        "start-grid front risk emergency", front_risk, front_risk_level);
+      return commit_v2x_behavior_state(output, now_sec);
+    }
     const bool low_speed_avoidance_candidate =
       cfg.v2x_behavior.low_speed_avoidance_enabled && has_front_vehicle &&
       !suppress_start_grid_stop_behavior &&
@@ -3075,9 +3150,7 @@ struct MPC
       }
     }
 
-    if (
-      has_front_vehicle && !suppress_start_grid_stop_behavior &&
-      front_risk_level == FrontRiskLevel::EmergencyBrake) {
+    if (has_front_vehicle && front_risk_level == FrontRiskLevel::EmergencyBrake) {
       output.state = V2XBehaviorState::SafetyBrake;
       output.reason = front_risk_reason("front risk emergency", front_risk, front_risk_level);
       return commit_v2x_behavior_state(output, now_sec);
@@ -4048,6 +4121,7 @@ struct MPC
 
   BicycleModel * model{};
   MpcConfig cfg;
+  start_grid_grace::Guard start_grid_grace_guard_;
   V2XGapPlanner * gap_planner{};
   bool use_obstacle_avoidance{};
   bool use_path_constraints_topic{};
@@ -4056,7 +4130,9 @@ struct MPC
   bool v2x_behavior_state_initialized{false};
   double last_v2x_behavior_state_change_sec{-std::numeric_limits<double>::infinity()};
   double last_v2x_behavior_debug_log_sec_{std::numeric_limits<double>::quiet_NaN()};
-  double first_v2x_behavior_eval_sec{std::numeric_limits<double>::infinity()};
+  bool start_grid_stop_suppressed_{false};
+  bool start_grid_emergency_override_logged_{false};
+  std::optional<std::string> start_grid_initial_target_id_;
   std::optional<double> overtake_locked_target_ey_;
   int overtake_locked_side_sign_{0};
   OvertakeLineState overtake_line_state_;
@@ -4093,6 +4169,33 @@ struct MPC
   bool last_control_was_fallback_{false};
 
 private:
+  void update_start_grid_suppression_diagnostics(
+    const bool suppressed, const bool emergency_override, const std::string & target_id,
+    const double front_distance, const double front_speed, const double required_decel)
+  {
+    if (suppressed && !start_grid_stop_suppressed_) {
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"),
+        "Start grid static stop suppressed: target=%s, distance=%.2f m, speed=%.2f m/s",
+        target_id.c_str(), front_distance, front_speed);
+    } else if (!suppressed && start_grid_stop_suppressed_) {
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"),
+        "Start grid static stop suppression released: target=%s",
+        target_id.c_str());
+    }
+    start_grid_stop_suppressed_ = suppressed;
+
+    if (emergency_override && !start_grid_emergency_override_logged_) {
+      RCLCPP_WARN(
+        rclcpp::get_logger("mpc_controller"),
+        "Start grid suppression overridden by front-risk emergency: target=%s, "
+        "distance=%.2f m, speed=%.2f m/s, required_decel=%.2f m/s^2",
+        target_id.c_str(), front_distance, front_speed, required_decel);
+    }
+    start_grid_emergency_override_logged_ = emergency_override;
+  }
+
   static void validate_mpc_preflight(
     const Eigen::VectorXd & lb, const Eigen::VectorXd & ub, const Eigen::VectorXd & xr,
     const Eigen::VectorXd & ur, const Eigen::VectorXd & umax_dyn, const int N, const int nx)
@@ -5443,7 +5546,7 @@ private:
         RCLCPP_INFO(
           rclcpp::get_logger("mpc_controller"),
           "V2X debug: desired=%s, final=%s, allow_gap=%d, limit=%.2f, desired_v=%.2f, wp_id=%d, "
-          "vehicles=%zu, front=%d, side=%d, danger=%d, grace=%d, "
+          "vehicles=%zu, front=%d, side=%d, danger=%d, grace=%d, grid_suppress=%d, "
           "fd=%.2f, fs=%.2f, ego=%.2f, rel=%.2f, req_dec=%.2f, avail=%.2f, risk=%s, "
           "forbid=%d, forbid_wp=%d, curve_guard=%d, low_speed=%d, low_speed_block=%d, "
           "zone=%d, start_curve=%d, before_curve=%d, continue=%d, gap=%d, fallback=%d, "
@@ -5455,6 +5558,7 @@ private:
           output.active_vehicle_count,
           output.has_front_vehicle ? 1 : 0, output.has_side_vehicle ? 1 : 0,
           output.has_danger_vehicle ? 1 : 0, output.start_grid_grace_active ? 1 : 0,
+          output.start_grid_stop_suppressed ? 1 : 0,
           output.front_distance, output.front_speed, output.ego_speed,
           output.front_risk.relative_speed, output.front_risk.required_decel,
           output.front_risk.available_distance, to_string(output.front_risk_level),
@@ -6718,7 +6822,9 @@ public:
       (awsim_boost_io_enabled_ ||
       cfg_.stuck_recovery.core.enabled ||
       (mpc_cfg_.domain_start_v_max_applied &&
-      mpc_cfg_.domain_start_v_max_duration > 0.0));
+      mpc_cfg_.domain_start_v_max_duration > 0.0) ||
+      (mpc_cfg_.v2x_behavior.enabled &&
+      mpc_cfg_.v2x_behavior.start_grid_grace_time > 0.0));
 
     create_map_ref_path_car_mpc();
     setup_parameters_callback();
@@ -7481,6 +7587,52 @@ private:
     RCLCPP_INFO(get_logger(), "Stuck recovery session reset: %s", reason);
   }
 
+  void arm_start_grid_grace(const rclcpp::Time & start_time, const char * reason)
+  {
+    if (
+      !mpc_ || !mpc_cfg_.v2x_behavior.enabled ||
+      mpc_cfg_.v2x_behavior.start_grid_grace_time <= 0.0)
+    {
+      return;
+    }
+    const auto transition = mpc_->arm_start_grid_grace(start_time.seconds());
+    if (transition == start_grid_grace::Transition::Armed) {
+      RCLCPP_INFO(
+        get_logger(), "Start grid grace armed: duration=%.2f s, reason=%s",
+        mpc_cfg_.v2x_behavior.start_grid_grace_time, reason);
+    } else if (transition == start_grid_grace::Transition::ClockRejected) {
+      RCLCPP_WARN(
+        get_logger(), "Start grid grace rejected: invalid ROS clock, reason=%s", reason);
+    }
+  }
+
+  void prepare_start_grid_grace(const char * reason)
+  {
+    if (
+      !mpc_ || !mpc_cfg_.v2x_behavior.enabled ||
+      mpc_cfg_.v2x_behavior.start_grid_grace_time <= 0.0)
+    {
+      return;
+    }
+    if (mpc_->prepare_start_grid_grace() == start_grid_grace::Transition::Prepared) {
+      RCLCPP_INFO(
+        get_logger(),
+        "Start grid grace prepared: static-grid suppression active until %.2f s after Start, "
+        "reason=%s",
+        mpc_cfg_.v2x_behavior.start_grid_grace_time, reason);
+    }
+  }
+
+  void clear_start_grid_grace(const char * reason)
+  {
+    if (!mpc_ || !mpc_cfg_.v2x_behavior.enabled) {
+      return;
+    }
+    if (mpc_->clear_start_grid_grace() == start_grid_grace::Transition::Cleared) {
+      RCLCPP_INFO(get_logger(), "Start grid grace cleared: %s", reason);
+    }
+  }
+
   void awsim_state_callback(const String::SharedPtr msg)
   {
     if (!awsim_boost_guard_) {
@@ -7495,6 +7647,7 @@ private:
     std::transform(
       normalized_state.begin(), normalized_state.end(), normalized_state.begin(),
       [](const unsigned char value) {return static_cast<char>(std::tolower(value));});
+    const rclcpp::Time state_time = now();
     const bool recovery_state_changed = normalized_state != last_awsim_state_;
     if (recovery_state_changed) {
       const bool recovery_was_active =
@@ -7525,10 +7678,21 @@ private:
       }
       last_awsim_state_ = normalized_state;
     }
+    if (
+      recovery_state_changed &&
+      (normalized_state == "spawned" || normalized_state == "grounded" ||
+      normalized_state == "finish"))
+    {
+      clear_start_grid_grace("AWSIM session boundary");
+    }
+    if (recovery_state_changed && normalized_state == "ready") {
+      prepare_start_grid_grace("AWSIM Ready entered");
+    }
     const auto previous_phase = awsim_boost_guard_->phase();
     const auto state_event = awsim_boost_guard_->on_awsim_state(msg->data);
     if (state_event == awsim_boost::StateEvent::StartEntered) {
-      domain_start_epoch_ = now();
+      domain_start_epoch_ = state_time;
+      arm_start_grid_grace(state_time, "AWSIM Start entered");
       last_start_window_status_.reset();
       domain_manual_reset_pending_ = false;
       domain_manual_reset_ready_ = false;
@@ -7538,6 +7702,7 @@ private:
       state_event == awsim_boost::StateEvent::Finished ||
       state_event == awsim_boost::StateEvent::NewSession)
     {
+      clear_start_grid_grace("AWSIM race session event");
       domain_start_epoch_.reset();
       last_start_window_status_.reset();
       domain_manual_reset_pending_ = false;
@@ -7561,7 +7726,8 @@ private:
       normalized_state == "start" && domain_manual_reset_pending_ &&
       domain_manual_reset_ready_)
     {
-      domain_start_epoch_ = now();
+      domain_start_epoch_ = state_time;
+      arm_start_grid_grace(state_time, "AWSIM manual reset Start entered");
       last_start_window_status_.reset();
       domain_manual_reset_pending_ = false;
       domain_manual_reset_ready_ = false;

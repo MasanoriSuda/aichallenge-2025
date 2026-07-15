@@ -15,6 +15,11 @@ make eval → run_evaluation.bash → evaluation.launch.xml
 ```
 
 - `run_simulator.bash` はモード名（第1引数 > `SIM_MODE` > 既定 `simulator`）で `<mode>.sh` に委譲する。
+- `${LOG_DIR}` を絶対パスへ解決して AWSIM の CWD にし、相対出力の result JSON を run
+  ディレクトリへ集約する。
+- dev/gate の Compose 経路では `awsim_state_manager` を Domain 0 で同時起動し、AWSIM と
+  どちらかが先に異常終了した場合は残る子プロセスも停止する。eval は
+  `evaluation.launch.xml` が manager を1つだけ起動する。
 - モード名 `dev<N>` / `gate<N>` は `dev.sh N` / `gate.sh N` に解決される
   （例: `SIM_MODE=dev2` → `dev.sh 2`）。
 - 不明なモードはフォールバックせず、対応モード一覧を出して exit 1。

@@ -1,9 +1,9 @@
 # Log設計メモ（/output 配下に集約）
 
-> 仕様ドキュメント（現仕様の正）。最終確認: 2026-06-14。文書運用方針は [docs/README.md](../README.md) を参照。
+> 仕様ドキュメント（現仕様の正）。最終確認: 2026-07-15。文書運用方針は [docs/README.md](../README.md) を参照。
 
 作成日: 2026-01-27  
-更新日: 2026-06-14
+更新日: 2026-07-15
 
 対象: `docker-compose.yml`（make 経由 / 主要パス）・`aichallenge/run_evaluation.bash`（評価オーケストレータ）
 
@@ -34,6 +34,7 @@
 output/
   <YYYYMMDD-HHMMSS>/
     awsim.log                  # run_simulator.bash が LOG_DIR 直下に書く
+    awsim_state_manager.log    # dev/gate の Domain 0 state manager（eval は launch 側で所有）
     d<N>/                      # N = 1..4（Autoware domain per vehicle）
       autoware.log
       capture/
@@ -60,6 +61,11 @@ output/
 
 - 重要ログは標準出力に出すだけでなく、**必ずファイルに tee する**
 - build / run / eval の各段階で、コマンド・引数・環境（GPU/DOMAIN_ID 等）をログ先頭に記録する
+
+`run_simulator.bash` は `${LOG_DIR}` を絶対パスへ解決して AWSIM の CWD にし、dev/gate
+では `awsim_state_manager_node` を Domain 0 で同時起動・監視する。eval は
+`evaluation.launch.xml` が同ノードを所有するため、runner は `eval` モードでmanager起動を
+既定OFFとして二重起動を防ぐ。
 
 ## 3. 設計上の注意点
 

@@ -2,7 +2,7 @@
 
 - 作成日: 2026-07-14
 - 最終更新: 2026-07-15（補正レビュー反映）
-- 状態: Draft
+- 状態: 承認済み（Phase 0 実行中）
 - 対象: `aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/`
 - 入力資料: `point-out-by-chatgpt-pro.md`、`point-out-v1.md`、2026-07-15 補正レビュー、現行コード、現行 launch/config、`docs/spec/`、`docs/interface/`
 

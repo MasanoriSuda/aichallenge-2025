@@ -1,7 +1,49 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <launch>
   <arg name="input_source" default="joy" description="teleop input: joy | keyboard | keyboard_x11"/>
-  <include file="$(find-pkg-share teleop_manager)/launch/teleop_manager.launch.xml">
-    <arg name="input_source" value="$(var input_source)"/>
-  </include>
+  <arg name="teleop_param" default="$(find-pkg-share teleop_manager)/config/teleop.param.yaml"/>
+  <arg name="self_control_topic" default="/ackermann_cmd"/>
+  <arg name="vehicle_control_topic" default="/control/command/control_cmd"/>
+  <arg name="trigger_topic" default="/rosbag2_recorder/trigger"/>
+
+  <group if="$(eval &quot;'$(var input_source)' == 'joy'&quot;)">
+    <node pkg="joy" exec="joy_node" name="joy_node" output="screen">
+      <param name="deadzone" value="0.05"/>
+    </node>
+  </group>
+
+  <group if="$(eval &quot;'$(var input_source)' == 'keyboard'&quot;)">
+    <node pkg="teleop_manager" exec="keyboard_to_joy_node"
+          name="keyboard_to_joy_node" output="screen">
+      <param from="$(var teleop_param)"/>
+    </node>
+  </group>
+
+  <group if="$(eval &quot;'$(var input_source)' == 'keyboard_x11'&quot;)">
+    <node pkg="teleop_manager" exec="keyboard_x11_to_joy_node"
+          name="keyboard_x11_to_joy_node" output="screen">
+      <param from="$(var teleop_param)"/>
+    </node>
+  </group>
+
+  <!-- The eval image supplies teleop_manager from an upstream tree. Keep its
+       valid drive/gear/control-mode outputs, but isolate its legacy Domain 0
+       reset and unconditional Boost endpoints behind the submitted guard. -->
+  <node pkg="teleop_manager" exec="teleop_manager_node"
+        name="teleop_manager_node" output="screen">
+    <param from="$(var teleop_param)"/>
+    <remap from="/joy" to="/joy"/>
+    <remap from="/ackermann_cmd" to="$(var self_control_topic)"/>
+    <remap from="/control/command/control_cmd" to="$(var vehicle_control_topic)"/>
+    <remap from="/rosbag2_recorder/trigger" to="$(var trigger_topic)"/>
+    <remap from="/admin/awsim/status" to="/awsim/status"/>
+    <remap from="/awsim/cmd" to="/participant/joycon/boost_request_raw"/>
+    <remap from="/admin/awsim/reset" to="/participant/joycon/reset_ignored"/>
+    <remap from="/initialpose" to="/participant/joycon/initialpose_ignored"/>
+  </node>
+
+  <node pkg="joycon_contract_guard" exec="joycon_contract_guard_node"
+        name="joycon_contract_guard" output="screen">
+    <param name="boost_status_timeout_sec" value="0.5"/>
+  </node>
 </launch>

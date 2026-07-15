@@ -57,7 +57,9 @@ aichallenge-racingkart/              # リポジトリルート（Docker ビル�
 
 `eval` ビルド時の処理:
 
-1. アップストリームをクローンしてクリーンな `/aichallenge` ツリーを取得
+1. `AICHALLENGE_UPSTREAM_REF=6124702b2f0eb364bf921b8fa827a092806ed1d1` を
+   fetchしてクリーンな `/aichallenge` ツリーを取得し、SHAを
+   `/aichallenge/.upstream-commit` に保存
 2. `/aichallenge/simulator` と `/aichallenge/workspace/src/aichallenge_submit` を削除
 3. 提出 tar.gz を `/aichallenge/workspace/src/` に展開（→ `/aichallenge/workspace/src/aichallenge_submit/`）
 4. ローカルの `aichallenge/simulator/`（AWSIM バイナリ + データ）をイメージに戻す
@@ -72,7 +74,7 @@ aichallenge-racingkart/              # リポジトリルート（Docker ビル�
 |---|---|---|---|
 | `autoware` | `aichallenge-2025-dev` | Autoware スタック実行（ROS_DOMAIN_ID=1..N） | `run_autoware.bash` |
 | `autoware-build` | `aichallenge-2025-dev` | colcon build 実行 | `build_autoware.bash` |
-| `simulator` | `aichallenge-2025-dev` | AWSIM 起動（ROS_DOMAIN_ID=0） | `run_simulator.bash` |
+| `simulator` | `aichallenge-2025-dev` | AWSIM + state manager 起動（ROS_DOMAIN_ID=0） | `run_simulator.bash` |
 | `autoware-command` | `aichallenge-2025-dev` | ROS one-shot コマンド（initial pose / control 要求など） | `$CMD` 変数で指定 |
 | `zenoh` | `aichallenge-2025-dev` | Zenoh ブリッジ（実車連携用。実車環境でのみ使用） | `zenoh-bridge-ros2dds` |
 | `driver` | `ghcr.io/tier4/racing_kart_interface:latest-experiment` | 実車ドライバスタック（racing_kart_interface） | `vehicle` モード |
@@ -134,13 +136,19 @@ evaluation.launch.xml              ← run_evaluation.bash のエントリ（単
         ├── mode/real.launch.xml（simulation:=false のとき）
         └── mode/v2x.launch.xml（domain_id != 0 のとき）
 
-simulator.launch.xml               ← 多車両開発（make devN）のシミュレータ専用エントリ
+make dev / devN / gateN            ← 開発用 simulator Compose service
+└── run_simulator.bash（ROS_DOMAIN_ID=0）
+    ├── simulator_scripts/<mode>.sh → AWSIM
+    └── mode/awsim_state_manager.launch.xml
+        └── awsim_state_manager_node.py（AWSIM より先に終了した場合は run を失敗扱い）
+
+simulator.launch.xml               ← launch 単体で同じ Domain 0 構成を起動する補助 entry
 └── ROS_DOMAIN_ID=0: AWSIM + awsim_state_manager_node のみ（per-vehicle ノードなし）
 ```
 
 ### パッケージ一覧
 
-#### `aichallenge_submit/`（参加者が提出するパッケージ群、15 パッケージ）
+#### `aichallenge_submit/`（参加者が提出するパッケージ群、16 パッケージ）
 
 eval イメージビルド時にこのディレクトリ全体が提出 tar.gz の内容で差し替えられる。
 
@@ -150,6 +158,7 @@ eval イメージビルド時にこのディレクトリ全体が提出 tar.gz �
 | `gyro_odometer` | Autoware アンダーレイを上書きするカスタム実装 |
 | `imu_corrector` | IMU 補正 |
 | `imu_gnss_poser` | IMU + GNSS 融合による自己位置初期化 |
+| `joycon_contract_guard` | upstream teleop のlegacy reset/Boost endpointを隔離し、車両DomainのJoy-Con契約を強制 |
 | `laserscan_generator` | LiDAR スキャン生成 |
 | `multi_purpose_mpc_ros` | MPC 制御器（Python） |
 | `multi_purpose_mpc_ros_msgs` | MPC 制御器用カスタムメッセージ |
@@ -296,6 +305,7 @@ output/latest/d<N>/ へのシンボリックリンク更新
 output/
 ├── <YYYYMMDD-HHMMSS>/              # run_id（タイムスタンプ）
 │   ├── awsim.log                   # AWSIM stdout/stderr
+│   ├── awsim_state_manager.log     # dev/gate の Domain 0 manager stdout/stderr
 │   ├── result-summary.json         # レース結果サマリ（schema v2）
 │   ├── dN-result-details.json      # 車両別詳細（schema v3）
 │   └── d<N>/                       # 車両 Domain N の Autoware 側成果物

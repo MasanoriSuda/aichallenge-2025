@@ -385,6 +385,18 @@ awsim_boost:
 
 `use_boost_acceleration`、`AckermannControlBoostCommand`、`/boost_commander/command`、高頻度`control_cmd`再送は2025由来のlegacy経路であり、2026公式Boostには使用しない。
 
+`control_method=joycon` の手動 Boost も同じ `/awsim/status` / `/awsim/cmd` 契約を使う。
+sealed evalではupstreamの`teleop_manager`を直接変更できないため、submitに含める
+`joycon_contract_guard`の手前へlegacy `/awsim/cmd`をremapし、guardだけが公式
+`/awsim/cmd`をpublishする。
+7要素・finite・fresh、`boostRemaining >= 1`、Boost非動作中を満たす場合だけpulseを送り、
+送信後は `isBoosting` または残数0.5以上の減少を確認するまで再送しない。セッションをまたぐ
+解除は `/awsim/state` の `Finish -> Spawned` だけで行う。Joy-Con のresetボタンから
+Domain 0 `/admin/awsim/reset` や固定 `/initialpose` は送らず、管理resetと
+`/set_initial_pose` handshakeをそれぞれ正規の操作経路から実行する。upstream teleopの
+legacy reset/initialpose出力はparticipant-localのignored topicへremapし、reset要求時はguardが
+正規操作手順を警告する。
+
 trajectory の静的検証には次を使う。
 
 ```bash

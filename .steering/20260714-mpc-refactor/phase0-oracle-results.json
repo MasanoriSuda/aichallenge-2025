@@ -1,0 +1,58 @@
+{
+  "schema_version": "phase0-contract-oracle-result-record-v1",
+  "recorded_at": "2026-07-15T10:13:55+09:00",
+  "oracle": {
+    "schema_version": "phase0-contract-oracle-v1",
+    "sha256": "bdd6a8affd40019332b311e85046014232b635b657afaa90540c4dff1b54d3dd"
+  },
+  "before": {
+    "production_code_anchor": "50e0de5dcd3861565c78c501a6f3db0ca8e9489d",
+    "evaluated_head": "caf3599d9bad42b3cc88d91cebd2fa1fcc44b0ee",
+    "source": "git archive of evaluated_head, evaluated by the recorded oracle with required fixtures overlaid",
+    "summary": {
+      "PASS": 7,
+      "RED": 7,
+      "NEEDS_RUNTIME": 5
+    },
+    "red": [
+      "C-CONTROL-METHODS",
+      "C-NO-REACHABLE-DOMAIN-BRIDGE",
+      "C-JOYCON-BOOST",
+      "C-NO-PARTICIPANT-ADMIN-RESET",
+      "C-DEV-AWSIM-MANAGER",
+      "C-DEV-AWSIM-CWD",
+      "C-SUBMISSION-TAR"
+    ],
+    "needs_runtime": [
+      "R-SEALED-EVAL-IDENTITY",
+      "R-DDS-GRAPH",
+      "R-SOLE-PUBLISHER",
+      "R-TOPIC-RATE",
+      "R-ARTIFACTS"
+    ]
+  },
+  "after": {
+    "head": "caf3599d9bad42b3cc88d91cebd2fa1fcc44b0ee",
+    "source": "uncommitted working tree containing Contract Conformance candidate and Phase 0 supporting changes",
+    "sealed_eval_manifest_sha256": "4fcc52305372de65a66b52bd07542f73a348553fd8ae527a8d474cfe72b269c1",
+    "summary": {
+      "PASS": 15,
+      "RED": 0,
+      "NEEDS_RUNTIME": 4
+    },
+    "red": [],
+    "needs_runtime": [
+      "R-DDS-GRAPH",
+      "R-SOLE-PUBLISHER",
+      "R-TOPIC-RATE",
+      "R-ARTIFACTS"
+    ]
+  },
+  "limitations": [
+    "The after source is not a clean commit and is not an approved baseline anchor.",
+    "Contract Conformance and supporting baseline/tooling/documentation changes are not yet split into independently reviewed commits.",
+    "The Phase 0a-before-Phase-0b ordering deviation is recorded but not approved as a plan exception.",
+    "The record does not replace canonical live DDS, topic-rate, or completed-run artifact evidence.",
+    "Safety H-01 through H-08 and R-13 are outside this Contract Conformance oracle result."
+  ]
+}

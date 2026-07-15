@@ -1,0 +1,67 @@
+{
+  "schema_version": "phase0-sealed-eval-manifest-v1",
+  "recorded_at": "2026-07-15T10:08:37+09:00",
+  "image": {
+    "tag": "aichallenge-2025-eval:latest",
+    "id": "sha256:65189d6d538414a053355dfd83d78843bc216228521703713d589aad231076a5",
+    "created": "2026-07-15T10:04:46.028227255+09:00",
+    "size_bytes": 19879003935,
+    "repo_digests": []
+  },
+  "base_image": {
+    "ref": "ghcr.io/automotiveaichallenge/autoware-universe:humble-latest",
+    "id": "sha256:5081b195bee4bb26c6a73615dc3aaf3875a733cf1e39fed57e1a12d5de512524",
+    "created": "2025-12-16T06:43:31.348990581Z",
+    "repo_digests": [
+      "ghcr.io/automotiveaichallenge/autoware-universe@sha256:1cc16419a235a02183cf60f753141fce9712776023654275579172893a4d8de8",
+      "ghcr.io/automotiveaichallenge/autoware-universe@sha256:27a96b55c82ab943e0648a8e2ff0ef553e393b0c506df73cb27179535486e1bb"
+    ]
+  },
+  "inputs": {
+    "upstream_ref": "6124702b2f0eb364bf921b8fa827a092806ed1d1",
+    "submit_tar_sha256": "0d3b3399a93aed10363175577bdb23fcf4a44126fe8eae9e7bde20da972f6dbd",
+    "awsim_tree_sha256": "7ccdb298c5ff624447dea601554c808e1ded9189810badf97c68528000a6273e",
+    "awsim_file_count": 1088,
+    "awsim_size_bytes": 688493822
+  },
+  "inside_image": {
+    "upstream_commit": "6124702b2f0eb364bf921b8fa827a092806ed1d1",
+    "workspace_package_count": 26,
+    "awsim_tree_sha256": "7ccdb298c5ff624447dea601554c808e1ded9189810badf97c68528000a6273e",
+    "upstream_teleop_source_sha256": "49435e656e152e6159c4ef8bb0ec239a26b4df605d91766b424b1119a98ecf50",
+    "upstream_evaluation_launch_sha256": "84196f29d6631be5d1ef4ecb43ac4994b5bc2a3392679a003d75756d3c4f929f",
+    "upstream_run_simulator_sha256": "940687cc9a72667ced05b8e7c92bb832d016488b97ee3068a221730986115a43"
+  },
+  "source_sha256": {
+    "joycon_guard_core": "a0757ea869e0edc251757a4b7084f32a93c9213420830e162ea59ee6a3b83301",
+    "joycon_guard_node": "2a139c780553e33c9c14e514e016fa25f20ef450d399fdf20c5d5866eebf7973",
+    "joycon_launch": "0340b9de5e54ea1b6a501858126aeb52c46a8cb5f4dc189246174d0614928e99",
+    "reference_launch": "1f6de0227b29563db1636ecd887a0b8970d3d51bfc60b3cc15289777837266c9"
+  },
+  "image_source_sha256": {
+    "joycon_guard_core": "a0757ea869e0edc251757a4b7084f32a93c9213420830e162ea59ee6a3b83301",
+    "joycon_guard_node": "2a139c780553e33c9c14e514e016fa25f20ef450d399fdf20c5d5866eebf7973",
+    "joycon_launch": "0340b9de5e54ea1b6a501858126aeb52c46a8cb5f4dc189246174d0614928e99",
+    "reference_launch": "1f6de0227b29563db1636ecd887a0b8970d3d51bfc60b3cc15289777837266c9"
+  },
+  "evidence": {
+    "build_log": "output/docker/20260715-093625-docker_build-332082.log",
+    "build_log_sha256": "929789da3aa3f26d6a0ce505536cff8ca7391b6bc0f0cd2250531989ace911b3",
+    "build_summary": "26 packages finished in sealed image"
+  },
+  "checks": {
+    "build_succeeded": true,
+    "upstream_commit_verified": true,
+    "submit_overlay_hashes_match": true,
+    "guard_tests_passed": true,
+    "launch_show_args_passed": true,
+    "package_prefix_verified": true,
+    "joycon_xml_parsed": true,
+    "awsim_overlay_hash_matches": true
+  },
+  "limitations": [
+    "This records one completed image identity; it does not claim bit-reproducible rebuilds.",
+    "The base image tag, apt indexes, top-level pip dependencies, and rosdep indexes remain mutable.",
+    "make eval, the full live DDS graph, topic rates, and generated result artifacts are not covered by this manifest."
+  ]
+}

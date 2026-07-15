@@ -99,7 +99,7 @@ aichallenge_submit.launch.xml
 | `pure_pursuit` | `simple_pure_pursuit`（C++） | `/localization/kinematic_state`、`/planning/scenario_planning/trajectory` |
 | `tiny_lidar_net` | `tiny_lidar_net_controller`（Python） | `/scan`（`sensor_msgs/LaserScan`） |
 | `pilot_net` | `pilot_net_controller`（Python） | `/image_raw`（`sensor_msgs/Image`） |
-| `joycon` | `teleop_manager`（`teleop_manager` パッケージ） | （手動制御） |
+| `joycon` | `teleop_manager` + `joycon_contract_guard` | `/joy`、`/awsim/status`、`/awsim/state`（手動制御） |
 
 各値は `control/<name>.launch.xml` を `<include>` する `<group if=...>` で実装されており、いずれも `/control/command/control_cmd`（`autoware_auto_control_msgs/AckermannControlCommand`）を publish します。
 
@@ -215,7 +215,7 @@ Boostを使用しない提出物に `/awsim/cmd` は必須ではない。使用�
 
 `Dockerfile` eval ステージは以下を実行します。この部分は参加者が変更できません。
 
-1. アップストリームをクローンしてクリーンな `/aichallenge` ツリーを得る
+1. `AICHALLENGE_UPSTREAM_REF` の固定SHAをfetchしてクリーンな `/aichallenge` ツリーを得る
 2. `/aichallenge/simulator` と `/aichallenge/workspace/src/aichallenge_submit` を削除
 3. 提出 tar.gz を `/aichallenge/workspace/src` に展開（→ `/aichallenge/workspace/src/aichallenge_submit/`）
 4. ローカルの `aichallenge/simulator/`（AWSIM バイナリ + データ）をイメージに戻す
@@ -229,7 +229,7 @@ Boostを使用しない提出物に `/awsim/cmd` は必須ではない。使用�
 |---|---|---|
 | RMW 実装 | `rmw_cyclonedds_cpp` | イメージに bake 済み |
 | `CYCLONEDDS_URI` | `file:///opt/autoware/cyclonedds.xml` | イメージに bake 済み |
-| アップストリーム `aichallenge_system/` | クローン時の HEAD | eval ステージでクローン |
+| アップストリーム `aichallenge_system/` | `6124702b2f0eb364bf921b8fa827a092806ed1d1` | eval ステージでSHAを検証してfetch |
 | AWSIM バイナリ | ローカルの `aichallenge/simulator/` | ステップ 4 でコピー |
 | `colcon build` オプション | `--allow-overriding gyro_odometer` 固定 | `Dockerfile` に記述 |
 

@@ -1,8 +1,8 @@
 # MPC 疎結合化 Task List
 
 - 作成日: 2026-07-14
-- 最終更新: 2026-07-15（補正レビュー反映）
-- 状態: Planning / Phase 0 未完了
+- 最終更新: 2026-07-15（Phase 0b Contract Conformance実装・sealed eval検証）
+- 状態: Implementation / Phase 0 未完了（local static・sealed identity RED=0、canonical live runtime・Safety lane未完了）
 - 原則: `Contract/Safety Floor`、対象 staged baseline、直前 Phase の Definition of Done を満たすまで次へ進まない
 
 ## 0. Planning
@@ -17,7 +17,7 @@
 - [x] `baseline.md` を作成した
 - [x] `design.md` を作成した
 - [x] Phase ごとの task/DoD を本書に作成した
-- [ ] 計画レビューで scope、順序、Full Baseline v1 の承認者を確定する
+- [x] 計画レビューで scope、順序、Full Baseline v1 の承認者を確定する（2026-07-15、ユーザー承認）
 
 ## 全 Phase 共通条件
 
@@ -67,32 +67,32 @@ Phase 1〜5 の各 Phase と各 subphase は、変更対象の大小にかかわ
 - [x] canonical Autoware/AWSIM の dev/gate/eval launch route を記録する
 - [x] launch/config/map/trajectory/AWSIM の主要 hash を記録する
 - [x] Domain 1〜4 の静的 config 差と fallback source を記録する
-- [ ] Docker image ID/digest を記録する
-- [ ] compiler、OSQP、ROS distro、build option を記録する
-- [ ] install 済み `mpc_controller_cpp` binary hash を記録する
+- [x] Docker image ID/digest を記録する（local dev imageはIDのみ、eval image/base/input/sourceは `sealed-eval-manifest.json` に記録）
+- [x] compiler、OSQP、ROS distro、build option を記録する
+- [x] install 済み `mpc_controller_cpp` binary hash を記録する
 - [ ] 実 run と同じ env/project の Compose config と、起動後 container inspect を run ごとに記録する
 - [ ] unset `VEHICLE_ID`、unused launch `vehicle_id=default`、V2X message ID を別概念として記録する
 - [ ] Phase 0 完了直前に最終 clean commit と全 source/config/resource/tool/schema hash を再取得する
 
 ### 1.2 Contract/runtime surface
 
-- [ ] `aichallenge_submit.launch.xml`、既定 `mpc`、契約済み 5 control method の include 経路を静的確認する
+- [x] `aichallenge_submit.launch.xml`、既定 `mpc`、契約済み 5 control method の include 経路を静的確認する
 - [ ] 同じ C++ config resolver から Domain 1〜4 の `effective-config.json` を保存する
 - [ ] Domain 1〜4 の宣言済み dynamic ROS parameter dump を別 layer として保存する
 - [ ] Domain 0 と Domain 1〜4 の publisher/subscriber、topic type、QoS、owner を oracle と照合する
 - [ ] `/control/command/control_cmd` の publisher owner が一つであることを確認する
-- [ ] `/set_initial_pose` と AWSIM admin/state contract に影響がないことを確認する
+- [x] `/set_initial_pose` と AWSIM admin/state contract に影響がないことをstatic oracleとbuildで確認する
 - [ ] `/admin/awsim/start` の bidirectional direction、`admin_start_once: true`、trigger `waitstart,ready`、`/admin/awsim/state` と `/awsim/state` の状態文字列を exact 比較する
-- [ ] `autostart_orchestrator_node` が `/admin/awsim/start` を pub/sub せず、`awsim_state_manager_node` が `/awsim/state` を subscribe しない負方向 ownership を graph/static oracle で確認する
-- [ ] Boost が `/awsim/boost_cmd` / `Bool` / Domain 0 admin topic を、gear/Recovery が `/admin/awsim/reset` / cross-domain / teleport / respawn を代用していないことを確認する
-- [ ] submit tar の指定 path がリポジトリ直下の Docker build context 内にあることを確認する
+- [x] `autostart_orchestrator_node` が `/admin/awsim/start` を pub/sub せず、`awsim_state_manager_node` が `/awsim/state` を subscribe しない負方向 ownership をstatic oracleで確認する（live graphは別項目）
+- [x] Boost が `/awsim/boost_cmd` / `Bool` / Domain 0 admin topic を、gear/Recovery が `/admin/awsim/reset` / cross-domain / teleport / respawn を代用していないことをlocal sourceで確認する
+- [x] submit tar の指定 path がリポジトリ直下の Docker build context 内にあることを確認する
 - [ ] result summary v2 / details v3 の主要キー・型、`output/latest/` の実ディレクトリと内部リンク、`HOST_UID/HOST_GID` ownership を exact 比較する
 - [ ] debug/optional endpoint の active/inactive 状態を保存する
 - [ ] control/odometry/trajectory の実測 topic hz を保存する
 
 ### 1.3 Known-difference triage
 
-- [ ] D-01 `rl_train` を非契約開発 option のまま隔離するか削除するか決める
+- [x] D-01 `rl_train` を非契約開発 option のまま隔離する（canonical分岐とsubmit wrapperを削除、tool package自体は非提出開発用）
 - [ ] D-02 V2X enabled と文書の不一致を解消する
 - [ ] D-03 Recovery disabled と文書の記述範囲を解消する
 - [ ] D-04 publisher 不在の legacy local-control topic を維持/削除するか決め、公式 topic と統合しない
@@ -154,7 +154,7 @@ Phase 1〜5 の各 Phase と各 subphase は、変更対象の大小にかかわ
 
 ### 1.6 Scenario capture
 
-- [ ] B-01 対象 package の既存 unit test を実行する
+- [ ] B-01 対象 package の既存 unit test を実行する（実行済みだが15/16 target PASS、既存path fixture 1件REDのため未完了）
 - [ ] 全 live run に clean-down、ready、開始/終了 anchor、最大 timeout、flush、completeness、cleanup を定義する
 - [ ] initial-pose、node、fresh odom、reference、sole publisher、期待 vehicle 数、startup fatal の valid-run barrier を実装する
 - [ ] invalid/incomplete/infra unavailable run を反復数に含めず、`INVALID / BLOCKED` とする
@@ -164,21 +164,24 @@ Phase 1〜5 の各 Phase と各 subphase は、変更対象の大小にかかわ
 - [ ] B-05 `make gate3 ROS_DOMAIN_ID=1` の baseline を取得する
 - [ ] B-06 `make dev4` で Domain 1〜4、fallback、V2X baseline を取得する
 - [ ] B-07 stale/non-finite/solver failure/stop request の replay fixture を取得する
-- [ ] B-08 submit tar 作成/hash -> eval image build/identity -> `make eval` の順で baseline を取得する
+- [ ] B-08 submit tar 作成/hash -> eval image build/identityまでは完了。Safety Floor成立後に `make eval` を実行してbaselineを取得する
 - [ ] B-09 一時 config/test launch で trajectory topic mode の valid/invalid update を replay する
 
 ### 1.7 Phase 0b — 意図的修正（triage で必要な項目。現行で未充足の R-13 は必須）
 
-- [ ] Phase 0b の各修正を Contract Conformance lane または Safety lane に分類し、同じ commit/PR に混ぜない
-- [ ] Contract Conformance lane は static oracle が検出した external-contract RED を既存 `docs/interface/` の exact target へ実装適合させる修正だけに限定し、契約文書、endpoint/type/Domain/schema 自体を変更しない
-- [ ] Contract Conformance lane の before/after exact oracle を通し、external-contract RED を 0 件にしてから Safety lane へ進む
+- [x] 変更を分類した（E01〜E06はContract Conformance候補、E07〜E08とoracle/fixture/manifest/docはPhase 0 supporting baseline/tooling/documentation、Safety laneは未実装）
+- [ ] Contract Conformance、supporting変更、Safety laneを独立commit/reviewとし、同じcommitに混ぜない
+- [x] Phase 0a black-box captureより先にContract remediationを実施した順序差と、変更前live evidenceを未取得であることを `phase0-contract-conformance.md` に記録した
+- [ ] Phase 0aより先にremediationした順序差を計画例外として承認するか、production code anchorの隔離環境から必要な変更前live evidenceを取得して順序上の不足を解消する
+- [x] Contract Conformance候補E01〜E06はstatic oracleのexternal-contract REDを既存contract targetへ適合させる修正に限定した。`participant-interface.md` の実装経路・upstream identity記録は更新したが、endpoint/type/Domain/schemaの契約値は変更していない
+- [x] Contract Conformance lane のbefore/after exact oracleを同一toolで通し、local external-contract REDを0件にした
 - [ ] Safety lane entry として H-01〜H-08 の signal、単位、authoritative criterion、観測方法が確定している
 - [ ] 未解消 hard-safety RED、対象 code path、是正内容、reviewer、before/after fixture を D 台帳へ登録し、未登録の構造変更を混ぜない
 - [ ] 修正失敗・回帰 mismatch 時に Baseline candidate v0 へ戻せる rollback 手順と停止条件を承認する
 - [ ] 各修正を構造リファクタと別 commit/PR にする
-- [ ] 修正を「既存 interface contract への適合」または「外部契約を変えない安全修正」に限定する
-- [ ] topic/type/Domain/control method/result schema 自体の変更を本 Phase に入れない
-- [ ] 変更理由、安全/評価影響、before/after、test を記録する
+- [x] production behavior変更E01〜E06を既存interface contractへの適合に限定し、E07〜E08はsupporting baseline/tooling変更として別分類した
+- [x] topic/type/Domain/契約済みcontrol method/result schema 自体の変更を本 Phase に入れない
+- [x] 変更理由、安全/評価影響、before/after、test を `phase0-contract-conformance.md` に記録する
 - [ ] 修正後に該当 scenario と回帰 matrix を再実行する
 - [ ] Baseline candidate v0 から Full Baseline v1 anchor への intentional delta を保存する
 - [ ] D-12 で未充足と確認した R-13 を、`ValidatedHardSafetyLimits`、`HardSafetyCommandValidator`、prebuilt `PrevalidatedSafeStop`、context-matched `GuaranteedTerminalStop`、one-shot validation、`FatalSafetyFault` として Phase 4 に持ち越さず、この Phase の独立安全修正として実装・検証する
@@ -674,6 +677,8 @@ Phase 1〜5 の各 Phase と各 subphase は、変更対象の大小にかかわ
 - 変更が `aichallenge_system/`、実車、評価 schema に波及する
 - baseline 根拠が ephemeral path だけにあり、fixture/hash/retention で追跡できない
 
-## 11. 今回未実行の検証
+## 11. 今回の実行範囲と未実行検証
 
-本 planning 作業ではコード、launch、config を変更していない。Phase 0 の baseline 取得に必要な Docker/ROS/AWSIM 起動、build、package test、gate、V2X、eval は未実行で、`Contract/Safety Floor` も H-01〜H-08 が `UNRESOLVED` のため未成立である。Phase 1〜5 の verification slice と Final Full Verification は、各開始条件が未成立のため未着手であり、Phase 0 の実行項目として扱わない。
+Phase 0b Contract Conformance候補としてcanonical control methodの5値化、submit側cross-domain reset bridgeの隔離、Joycon Boost guard、dev/gate state manager supervision、AWSIM CWDを実装した。Phase 0 supporting変更としてeval upstream SHA固定、submit archiveの生成物除外、oracle/fixture/manifest/docを追加・更新した。local buildは26 packages、no-cache eval buildも26 packagesで成功し、同一static oracleは修正前 `PASS=7 / RED=7 / NEEDS_RUNTIME=5`、修正後 `PASS=15 / RED=0 / NEEDS_RUNTIME=4` となった。詳細identityと検証結果は `phase0-contract-conformance.md` と `sealed-eval-manifest.json` を参照する。
+
+未実行・未完了は、実AWSIMを含む `make dev` / `make dev4` / `make gate1`〜`gate3` / `make eval`、canonical live DDS graph、sole control publisher、topic rate、完走artifact、H-01〜H-08、R-13 Safety lane、既存MPC test 1件のRED、Contract laneの独立commit/review、clean anchorである。Phase 0a live captureより先にContract remediationを行ったため、変更前live evidenceは取得済みと扱わない。Phase 1〜5は開始条件未成立のため未着手である。

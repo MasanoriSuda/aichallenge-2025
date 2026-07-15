@@ -60,12 +60,17 @@ FROM common AS eval
 
 ENV RCUTILS_COLORIZED_OUTPUT=0
 ARG SUBMIT_TAR=submit/aichallenge_submit.tar.gz
+ARG AICHALLENGE_UPSTREAM_REF=6124702b2f0eb364bf921b8fa827a092806ed1d1
 
 COPY ${SUBMIT_TAR} /tmp/s.tgz
-RUN git clone --depth 1 https://github.com/AutomotiveAIChallenge/aichallenge-racingkart /t \
+RUN git init /t \
+ && git -C /t fetch --depth 1 https://github.com/AutomotiveAIChallenge/aichallenge-racingkart "${AICHALLENGE_UPSTREAM_REF}" \
+ && git -C /t checkout --detach FETCH_HEAD \
+ && test "$(git -C /t rev-parse HEAD)" = "${AICHALLENGE_UPSTREAM_REF}" \
  && mv /t/aichallenge /aichallenge \
  && rm -rf /aichallenge/simulator /aichallenge/workspace/src/aichallenge_submit /t \
  && chmod 757 /aichallenge \
+ && printf '%s\n' "${AICHALLENGE_UPSTREAM_REF}" > /aichallenge/.upstream-commit \
  && tar zxf /tmp/s.tgz -C /aichallenge/workspace/src \
  && rm /tmp/s.tgz
 COPY aichallenge/simulator/ /aichallenge/simulator/

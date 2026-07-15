@@ -2,7 +2,7 @@
 
 - 作成日: 2026-07-14
 - 最終更新: 2026-07-15（補正レビュー反映）
-- 状態: Draft
+- 状態: 承認済み（Phase 0 実行中）
 - 前提: 開始条件は `Contract/Safety Floor`、`Scoped Solver Baseline`、`Scoped Path Baseline`、`Full Baseline v1`、`Final Full Verification` の名称に統一する。各 Phase は開始条件を満たし、変更対象に対応する verification slice を前後比較する
 
 ## 1. 現状認識

@@ -1,0 +1,63 @@
+{
+  "schema_version": "v3",
+  "vehicle_name": "GoKart1",
+  "vehicle_number": 1,
+  "finished": false,
+  "lap_count": 7,
+  "required_laps": 2147483647,
+  "session_timeout": 10000000.0,
+  "min_lap_time": 47.4559326171875,
+  "avg_lap_time": 49.67426300048828,
+  "total_lap_time": 347.7198486328125,
+  "laps": [
+    47.4559326171875,
+    47.87602233886719,
+    48.16608428955078,
+    53.75227737426758,
+    47.966041564941406,
+    47.74099349975586,
+    54.76249313354492
+  ],
+  "penalty_count": 4,
+  "penalty_total_seconds": 9.095160484313965,
+  "penalty_events": [
+    {
+      "kind": "wall",
+      "lap": 4,
+      "race_time": 163.79319763183594,
+      "duration": 2.290008544921875
+    },
+    {
+      "kind": "wall",
+      "lap": 7,
+      "race_time": 313.2831726074219,
+      "duration": 2.175018310546875
+    },
+    {
+      "kind": "wall",
+      "lap": 7,
+      "race_time": 316.878173828125,
+      "duration": 2.55999755859375
+    },
+    {
+      "kind": "wall",
+      "lap": 7,
+      "race_time": 319.9681701660156,
+      "duration": 2.09002685546875
+    }
+  ],
+  "penalty_by_kind": {
+    "crash": {
+      "count": 0,
+      "total_seconds": 0.0
+    },
+    "wall": {
+      "count": 4,
+      "total_seconds": 9.11505126953125
+    },
+    "over": {
+      "count": 0,
+      "total_seconds": 0.0
+    }
+  }
+}

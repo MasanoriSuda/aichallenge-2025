@@ -34,6 +34,11 @@ ament_auto_add_library(${PROJECT_NAME}_awsim_boost_start_dash SHARED
   src/awsim_boost_start_dash.cpp
 )
 
+ament_auto_add_library(${PROJECT_NAME}_start_grid_grace SHARED
+  NO_TARGET_LINK_LIBRARIES
+  src/start_grid_grace.cpp
+)
+
 ament_auto_add_library(${PROJECT_NAME}_v2x_overtake_core SHARED
   NO_TARGET_LINK_LIBRARIES
   src/v2x_overtake_core.cpp
@@ -64,6 +69,7 @@ target_link_libraries(mpc_controller_cpp
   ${PROJECT_NAME}_awsim_boost_start_dash
   ${PROJECT_NAME}_path_core
   ${PROJECT_NAME}_recovery_footprint
+  ${PROJECT_NAME}_start_grid_grace
   ${PROJECT_NAME}_stuck_recovery_core
   ${PROJECT_NAME}_v2x_overtake_core
   osqp::osqp
@@ -102,6 +108,15 @@ if(BUILD_TESTING)
   if(TARGET test_awsim_boost_start_dash)
     target_link_libraries(test_awsim_boost_start_dash
       ${PROJECT_NAME}_awsim_boost_start_dash
+    )
+  endif()
+
+  ament_add_gtest(test_start_grid_grace
+    test/test_start_grid_grace.cpp
+  )
+  if(TARGET test_start_grid_grace)
+    target_link_libraries(test_start_grid_grace
+      ${PROJECT_NAME}_start_grid_grace
     )
   endif()
 

@@ -330,7 +330,7 @@ mpc:
   v2x_moving_safety_brake_distance: 2.0 # [m] minimum brake distance for moving front vehicles
   v2x_moving_safety_brake_margin: 0.5   # [m] added to relative-speed stopping distance
   v2x_moving_safety_brake_time_headway: 0.15 # [s] speed-dependent emergency margin
-  v2x_start_grid_grace_time: 5.0         # [s] suppress stop-vehicle avoidance only while clearing the start grid
+  v2x_start_grid_grace_time: 5.0         # [s] Ready staging plus this duration after Start; static grid only
   v2x_require_gap_for_overtake: true
   v2x_low_speed_avoidance_enabled: true
   v2x_low_speed_avoidance_ignore_soft_curve_forbidden: true # gate2: allow stopped-vehicle bypass in curve-lookahead zones

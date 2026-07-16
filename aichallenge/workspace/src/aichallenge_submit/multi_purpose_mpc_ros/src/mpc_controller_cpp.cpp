@@ -5779,11 +5779,43 @@ Config load_config(const std::string & path)
       boost["mode"].as<std::string>() :
       (cfg.awsim_boost.enabled ? "start_once" : "disabled");
     cfg.awsim_boost.mode = awsim_boost::parse_mode(mode);
+    const std::string trigger = boost["trigger"] ?
+      boost["trigger"].as<std::string>() : "awsim_start";
+    cfg.awsim_boost.trigger = awsim_boost::parse_trigger(trigger);
+    cfg.awsim_boost.motion_speed_threshold_mps =
+      boost["motion_speed_threshold_mps"] ?
+      boost["motion_speed_threshold_mps"].as<double>() : 0.1;
+    cfg.awsim_boost.max_trigger_speed_mps =
+      boost["max_trigger_speed_mps"] ? boost["max_trigger_speed_mps"].as<double>() : 1.0;
+    cfg.awsim_boost.motion_trigger_timeout_sec =
+      boost["motion_trigger_timeout_sec"] ?
+      boost["motion_trigger_timeout_sec"].as<double>() : 0.5;
     cfg.awsim_boost.status_timeout_sec =
       boost["status_timeout_sec"] ? boost["status_timeout_sec"].as<double>() : 0.5;
     cfg.awsim_boost.confirmation_timeout_sec =
       boost["confirmation_timeout_sec"] ?
       boost["confirmation_timeout_sec"].as<double>() : 2.0;
+  }
+  if (
+    !std::isfinite(cfg.awsim_boost.motion_speed_threshold_mps) ||
+    cfg.awsim_boost.motion_speed_threshold_mps <= 0.0)
+  {
+    throw std::runtime_error(
+            "awsim_boost.motion_speed_threshold_mps must be finite and positive");
+  }
+  if (
+    !std::isfinite(cfg.awsim_boost.max_trigger_speed_mps) ||
+    cfg.awsim_boost.max_trigger_speed_mps < cfg.awsim_boost.motion_speed_threshold_mps)
+  {
+    throw std::runtime_error(
+            "awsim_boost.max_trigger_speed_mps must be finite and at least the motion threshold");
+  }
+  if (
+    !std::isfinite(cfg.awsim_boost.motion_trigger_timeout_sec) ||
+    cfg.awsim_boost.motion_trigger_timeout_sec <= 0.0)
+  {
+    throw std::runtime_error(
+            "awsim_boost.motion_trigger_timeout_sec must be finite and positive");
   }
   if (
     !std::isfinite(cfg.awsim_boost.status_timeout_sec) ||
@@ -6884,8 +6916,12 @@ public:
     if (awsim_boost_io_enabled_) {
       RCLCPP_INFO(
         get_logger(),
-        "AWSIM 2026 boost enabled: mode=%s, status_timeout=%.2f s, confirmation_timeout=%.2f s",
-        awsim_boost::to_string(cfg_.awsim_boost.mode), cfg_.awsim_boost.status_timeout_sec,
+        "AWSIM 2026 boost enabled: mode=%s, trigger=%s, motion=%.2f..%.2f m/s, "
+        "motion_timeout=%.2f s, status_timeout=%.2f s, confirmation_timeout=%.2f s",
+        awsim_boost::to_string(cfg_.awsim_boost.mode),
+        awsim_boost::to_string(cfg_.awsim_boost.trigger),
+        cfg_.awsim_boost.motion_speed_threshold_mps, cfg_.awsim_boost.max_trigger_speed_mps,
+        cfg_.awsim_boost.motion_trigger_timeout_sec, cfg_.awsim_boost.status_timeout_sec,
         cfg_.awsim_boost.confirmation_timeout_sec);
     } else if (cfg_.awsim_boost.enabled && !use_sim_time_) {
       RCLCPP_WARN(get_logger(), "AWSIM boost is configured but disabled outside simulation.");
@@ -7690,6 +7726,15 @@ private:
     }
     const auto previous_phase = awsim_boost_guard_->phase();
     const auto state_event = awsim_boost_guard_->on_awsim_state(msg->data);
+    if (
+      previous_phase != awsim_boost_guard_->phase() &&
+      awsim_boost_guard_->phase() == awsim_boost::Phase::AwaitingMotion)
+    {
+      RCLCPP_INFO(
+        get_logger(), "AWSIM Boost motion watch prepared: state=%s",
+        normalized_state.c_str());
+      last_awsim_boost_block_reason_ = awsim_boost::BlockReason::None;
+    }
     if (state_event == awsim_boost::StateEvent::StartEntered) {
       domain_start_epoch_ = state_time;
       arm_start_grid_grace(state_time, "AWSIM Start entered");
@@ -7745,16 +7790,20 @@ private:
   }
 
   void maybe_publish_awsim_boost(
-    const SteadyClock::time_point steady_now, const bool control_enabled,
-    const bool failsafe_active)
+    const SteadyClock::time_point steady_now,
+    const awsim_boost::TriggerContext & context)
   {
     if (!awsim_boost_io_enabled_ || !awsim_boost_guard_ || !awsim_boost_pub_) {
       return;
     }
 
     const auto previous_phase = awsim_boost_guard_->phase();
-    const auto evaluation =
-      awsim_boost_guard_->evaluate(control_enabled, failsafe_active, steady_now);
+    const auto evaluation = awsim_boost_guard_->evaluate(context, steady_now);
+    if (evaluation.motion_detected_now) {
+      RCLCPP_INFO(
+        get_logger(), "AWSIM Boost launch motion detected: speed=%.3f m/s",
+        context.forward_speed_mps);
+    }
     if (
       previous_phase != awsim_boost_guard_->phase() &&
       awsim_boost_guard_->phase() == awsim_boost::Phase::UnconfirmedSpent)
@@ -7762,6 +7811,14 @@ private:
       RCLCPP_WARN(
         get_logger(),
         "AWSIM Boost confirmation timed out; the start Boost remains spent and will not be retried.");
+    }
+    if (
+      previous_phase != awsim_boost_guard_->phase() &&
+      awsim_boost_guard_->phase() == awsim_boost::Phase::LaunchExpiredSpent)
+    {
+      RCLCPP_WARN(
+        get_logger(), "AWSIM launch Boost skipped: %s, speed=%.3f m/s",
+        awsim_boost::to_string(evaluation.reason), context.forward_speed_mps);
     }
 
     if (evaluation.action == awsim_boost::Action::PublishPulse) {
@@ -7771,8 +7828,10 @@ private:
       command.data = {awsim_boost::kCommandPulseValues[1]};
       awsim_boost_pub_->publish(command);
       RCLCPP_INFO(
-        get_logger(), "AWSIM start Boost pulse published once: remaining_before=%.0f",
-        awsim_boost_guard_->remaining().value_or(-1.0));
+        get_logger(),
+        "AWSIM launch Boost pulse published once: motion_delay=%.3f s, "
+        "remaining_before=%.0f",
+        evaluation.motion_elapsed_sec, awsim_boost_guard_->remaining().value_or(-1.0));
       last_awsim_boost_block_reason_ = awsim_boost::BlockReason::None;
       return;
     }
@@ -8999,10 +9058,19 @@ private:
     if (!publish_control_command(current_time, u, acc, bug_acc_enabled)) {
       return;
     }
-    maybe_publish_awsim_boost(
-      steady_now, enable_control_,
-      forced_stop_active || recovery_boost_suppressed_for_session_ ||
-      (recovery_output.has_value() && recovery_output->action.inhibit_boost));
+    awsim_boost::TriggerContext boost_context;
+    boost_context.control_enabled = enable_control_;
+    boost_context.normal_command_published = true;
+    boost_context.failsafe_active =
+      forced_stop_active || odom_failsafe_active_ || command_failsafe_active_;
+    boost_context.v2x_safety_brake_active =
+      mpc_->last_v2x_behavior_output().state == V2XBehaviorState::SafetyBrake;
+    boost_context.solver_fallback_active = mpc_fallback_active;
+    boost_context.reverse_or_recovery_active =
+      recovery_boost_suppressed_for_session_ || recovery_command_active ||
+      (recovery_output.has_value() && recovery_output->action.inhibit_boost);
+    boost_context.forward_speed_mps = actual_v;
+    maybe_publish_awsim_boost(steady_now, boost_context);
     last_acc_ = acc;
     last_u_ = u;
 

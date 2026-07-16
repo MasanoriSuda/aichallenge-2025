@@ -358,12 +358,14 @@ late-join replayを避けるため使用しない。
 スタック復帰に限定し、戦略的な後退を避けるよう案内している。本実装の0.8 m、2.0 s、
 0.8 m/s、1 attemptはこの運用方針に沿うローカル値であり、2026公式上限ではない。
 
-### AWSIM 2026 Start Dash Boost（2026-07-11）
+### AWSIM 2026 Start Dash Boost（2026-07-16）
 
 2026公式Boostは通常の`AckermannControlCommand`加速度とは独立したAWSIM item commandとして扱う。
 
 - `awsim_boost.enabled: true`、`mode: start_once`でシミュレーション時だけ有効化する。
-- `/awsim/state=Start`、自動制御有効、正常odometry、solver非fallback、freshな7要素`/awsim/status`、`boostRemaining >= 1`、`isBoosting < 0.5`をすべて満たした最初の正常control cycleで発動する。
+- `trigger: first_forward_motion`では、`/awsim/state=Ready`で発車監視を準備し、正常な制御指令をpublishしたcycleで符号付き前進速度が`motion_speed_threshold_mps`以上になった瞬間を発動基準にする。`Start`は`Ready`欠落時の監視準備fallbackであり、発動基準にはしない。
+- 自動制御有効、正常odometry、solver非fallback、V2X SafetyBrake・Reverse/Recovery・fail-safeのいずれでもないこと、freshな7要素`/awsim/status`、`boostRemaining >= 1`、`isBoosting < 0.5`をすべて満たした最初の正常control cycleで発動する。
+- 初回前進検出から`motion_trigger_timeout_sec`以内かつ`max_trigger_speed_mps`以下の場合だけ発動する。安全制約が解除されないまま窓を過ぎた場合は、そのセッションでは発動・再送しない。
 - `/awsim/cmd`へ`[1.0]`、続けて`[0.0]`をReliable QoSで各1回publishする。
 - high/lowの1ペア送信時点でそのセッションを使用済みにし、確認timeoutやstatus欠落でも再送しない。
 - `isBoosting`または残数減少で確認するが、確認結果は再送判断に使わない。
@@ -379,6 +381,10 @@ awsim_boost:
     2: true
     3: true
   mode: start_once
+  trigger: first_forward_motion
+  motion_speed_threshold_mps: 0.1
+  max_trigger_speed_mps: 1.0
+  motion_trigger_timeout_sec: 0.5
   status_timeout_sec: 0.5
   confirmation_timeout_sec: 2.0
 ```
@@ -546,7 +552,11 @@ MPC の config ファイル: `multi_purpose_mpc_ros/config/config.yaml`
 | `reference_path.update_by_topic` | `false` | CSV 直接読み込みモード（推奨） |
 | `awsim_boost.enabled` | `true` | SIMで2026公式Boostを有効化。実車では無効 |
 | `awsim_boost.domain_enabled` | Domain 1..3=`true` | `ROS_DOMAIN_ID`ごとの有効/無効上書き。未設定Domainは`enabled`を使う |
-| `awsim_boost.mode` | `start_once` | Start後の正常制御時に1回だけ発動 |
+| `awsim_boost.mode` | `start_once` | 1セッションにつき1回だけ発動 |
+| `awsim_boost.trigger` | `first_forward_motion` | Ready後の初回前進を基準に発動。`awsim_start`は旧タイミングとの互換値 |
+| `awsim_boost.motion_speed_threshold_mps` | `0.1` | 発車と判定する符号付き前進速度 |
+| `awsim_boost.max_trigger_speed_mps` | `1.0` | 遅延発動を禁止する最大前進速度 |
+| `awsim_boost.motion_trigger_timeout_sec` | `0.5` | 初回前進検出後に安全条件成立を待つ上限時間 |
 | `mpc.steering_tire_angle_gain_var` | `1.639` | 実機値。sim では `1.50` が必要かも |
 | `mpc.wp_id_low_offset` | 未設定 | 低速時の参照 waypoint offset。未設定時は `wp_id_offset` |
 | `mpc.wp_id_low_speed` | `0.0` | 低速判定閾値。値は km/h、`0.0` なら無効 |

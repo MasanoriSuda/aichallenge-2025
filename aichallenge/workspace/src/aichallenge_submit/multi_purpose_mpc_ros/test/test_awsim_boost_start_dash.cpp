@@ -18,15 +18,37 @@ using multi_purpose_mpc_ros::awsim_boost::Mode;
 using multi_purpose_mpc_ros::awsim_boost::Phase;
 using multi_purpose_mpc_ros::awsim_boost::StateEvent;
 using multi_purpose_mpc_ros::awsim_boost::StartDashGuard;
+using multi_purpose_mpc_ros::awsim_boost::Trigger;
+using multi_purpose_mpc_ros::awsim_boost::TriggerContext;
 
 Config enabled_config()
 {
   Config config;
   config.enabled = true;
   config.mode = Mode::StartOnce;
+  config.trigger = Trigger::AwsimStart;
   config.status_timeout_sec = 0.5;
   config.confirmation_timeout_sec = 2.0;
   return config;
+}
+
+Config motion_config()
+{
+  auto config = enabled_config();
+  config.trigger = Trigger::FirstForwardMotion;
+  config.motion_speed_threshold_mps = 0.1;
+  config.max_trigger_speed_mps = 1.0;
+  config.motion_trigger_timeout_sec = 0.5;
+  return config;
+}
+
+TriggerContext healthy_motion_context(const double forward_speed_mps)
+{
+  TriggerContext context;
+  context.control_enabled = true;
+  context.normal_command_published = true;
+  context.forward_speed_mps = forward_speed_mps;
+  return context;
 }
 
 std::vector<float> status(const float remaining, const float is_boosting)
@@ -263,12 +285,152 @@ TEST(AwsimBoostStartDash, FinishThenSpawnedRearmsNextSessionOnce)
     Action::None);
 }
 
+TEST(AwsimBoostStartDash, FirstForwardMotionWaitsForReadyAndMotion)
+{
+  StartDashGuard guard(motion_config());
+  const auto now = StartDashGuard::Clock::now();
+  ASSERT_TRUE(guard.on_awsim_status(status(2.0F, 0.0F), now));
+
+  EXPECT_EQ(
+    guard.evaluate(healthy_motion_context(0.0), now).reason,
+    BlockReason::AwaitingReady);
+  EXPECT_EQ(guard.on_awsim_state("Ready"), StateEvent::None);
+  EXPECT_EQ(guard.phase(), Phase::AwaitingMotion);
+  EXPECT_EQ(
+    guard.evaluate(healthy_motion_context(0.0), now).reason,
+    BlockReason::AwaitingMotion);
+  EXPECT_EQ(
+    guard.evaluate(healthy_motion_context(0.099), now).reason,
+    BlockReason::AwaitingMotion);
+
+  const auto launched = guard.evaluate(
+    healthy_motion_context(0.1), now + std::chrono::milliseconds(10));
+  EXPECT_EQ(launched.action, Action::PublishPulse);
+  EXPECT_TRUE(launched.motion_detected_now);
+  EXPECT_DOUBLE_EQ(launched.motion_elapsed_sec, 0.0);
+  EXPECT_EQ(guard.phase(), Phase::PulseSent);
+}
+
+TEST(AwsimBoostStartDash, MotionTriggerWaitsForSafetyThenPublishesWithinWindow)
+{
+  StartDashGuard guard(motion_config());
+  const auto now = StartDashGuard::Clock::now();
+  guard.on_awsim_state("ready");
+  ASSERT_TRUE(guard.on_awsim_status(status(2.0F, 0.0F), now));
+
+  auto context = healthy_motion_context(0.1);
+  context.v2x_safety_brake_active = true;
+  const auto safety_blocked = guard.evaluate(context, now);
+  EXPECT_TRUE(safety_blocked.motion_detected_now);
+  EXPECT_EQ(safety_blocked.reason, BlockReason::SafetyBrakeActive);
+  EXPECT_EQ(guard.phase(), Phase::MotionDetected);
+
+  context.v2x_safety_brake_active = false;
+  context.solver_fallback_active = true;
+  EXPECT_EQ(
+    guard.evaluate(context, now + std::chrono::milliseconds(100)).reason,
+    BlockReason::SolverFallbackActive);
+  context.solver_fallback_active = false;
+  const auto published = guard.evaluate(context, now + std::chrono::milliseconds(200));
+  EXPECT_EQ(published.action, Action::PublishPulse);
+  EXPECT_NEAR(published.motion_elapsed_sec, 0.2, 1e-9);
+}
+
+TEST(AwsimBoostStartDash, MotionTriggerExposesAllControlInhibits)
+{
+  StartDashGuard guard(motion_config());
+  const auto now = StartDashGuard::Clock::now();
+  guard.on_awsim_state("ready");
+  ASSERT_TRUE(guard.on_awsim_status(status(2.0F, 0.0F), now));
+
+  auto context = healthy_motion_context(0.1);
+  context.normal_command_published = false;
+  EXPECT_EQ(guard.evaluate(context, now).reason, BlockReason::CommandNotPublished);
+  context.normal_command_published = true;
+  context.reverse_or_recovery_active = true;
+  EXPECT_EQ(
+    guard.evaluate(context, now + std::chrono::milliseconds(25)).reason,
+    BlockReason::ReverseOrRecoveryActive);
+  context.reverse_or_recovery_active = false;
+  context.failsafe_active = true;
+  EXPECT_EQ(
+    guard.evaluate(context, now + std::chrono::milliseconds(50)).reason,
+    BlockReason::FailsafeActive);
+  context.failsafe_active = false;
+  EXPECT_EQ(
+    guard.evaluate(context, now + std::chrono::milliseconds(75)).action,
+    Action::PublishPulse);
+}
+
+TEST(AwsimBoostStartDash, MotionTriggerTimeoutAndSpeedCeilingNeverRetry)
+{
+  const auto now = StartDashGuard::Clock::now();
+  StartDashGuard timed_out(motion_config());
+  timed_out.on_awsim_state("ready");
+  ASSERT_TRUE(timed_out.on_awsim_status(status(2.0F, 0.0F), now));
+  auto blocked = healthy_motion_context(0.1);
+  blocked.control_enabled = false;
+  EXPECT_EQ(timed_out.evaluate(blocked, now).reason, BlockReason::ControlDisabled);
+  timed_out.on_awsim_state("Ready");
+  EXPECT_EQ(
+    timed_out.evaluate(blocked, now + std::chrono::milliseconds(501)).reason,
+    BlockReason::MotionTriggerTimedOut);
+  EXPECT_EQ(timed_out.phase(), Phase::LaunchExpiredSpent);
+  EXPECT_EQ(
+    timed_out.evaluate(healthy_motion_context(0.1), now + std::chrono::seconds(1)).reason,
+    BlockReason::AlreadySpent);
+
+  StartDashGuard too_fast(motion_config());
+  too_fast.on_awsim_state("ready");
+  ASSERT_TRUE(too_fast.on_awsim_status(status(2.0F, 0.0F), now));
+  EXPECT_EQ(
+    too_fast.evaluate(healthy_motion_context(1.01), now).reason,
+    BlockReason::MotionTriggerSpeedExceeded);
+  EXPECT_EQ(too_fast.phase(), Phase::LaunchExpiredSpent);
+}
+
+TEST(AwsimBoostStartDash, StartFallbackAcceptsLowSpeedButRejectsDelayedHighSpeed)
+{
+  const auto now = StartDashGuard::Clock::now();
+  StartDashGuard low_speed(motion_config());
+  EXPECT_EQ(low_speed.on_awsim_state("start"), StateEvent::StartEntered);
+  ASSERT_TRUE(low_speed.on_awsim_status(status(2.0F, 0.0F), now));
+  EXPECT_EQ(
+    low_speed.evaluate(healthy_motion_context(0.2), now).action,
+    Action::PublishPulse);
+
+  StartDashGuard delayed(motion_config());
+  EXPECT_EQ(delayed.on_awsim_state("start"), StateEvent::StartEntered);
+  ASSERT_TRUE(delayed.on_awsim_status(status(2.0F, 0.0F), now));
+  EXPECT_EQ(
+    delayed.evaluate(healthy_motion_context(2.0), now).reason,
+    BlockReason::MotionTriggerSpeedExceeded);
+}
+
+TEST(AwsimBoostStartDash, MotionTriggerRejectsNonfiniteForwardSpeed)
+{
+  StartDashGuard guard(motion_config());
+  const auto now = StartDashGuard::Clock::now();
+  guard.on_awsim_state("ready");
+  auto context = healthy_motion_context(std::numeric_limits<double>::quiet_NaN());
+  EXPECT_EQ(guard.evaluate(context, now).reason, BlockReason::InvalidForwardSpeed);
+  EXPECT_EQ(guard.phase(), Phase::AwaitingMotion);
+}
+
 TEST(AwsimBoostStartDash, ParsesOnlySupportedModes)
 {
   using multi_purpose_mpc_ros::awsim_boost::parse_mode;
   EXPECT_EQ(parse_mode(" disabled "), Mode::Disabled);
   EXPECT_EQ(parse_mode("START_ONCE"), Mode::StartOnce);
   EXPECT_THROW(parse_mode("straight_only"), std::invalid_argument);
+}
+
+TEST(AwsimBoostStartDash, ParsesOnlySupportedTriggers)
+{
+  using multi_purpose_mpc_ros::awsim_boost::parse_trigger;
+  EXPECT_EQ(parse_trigger(" awsim_start "), Trigger::AwsimStart);
+  EXPECT_EQ(parse_trigger("FIRST_FORWARD_MOTION"), Trigger::FirstForwardMotion);
+  EXPECT_THROW(parse_trigger("ready"), std::invalid_argument);
 }
 
 TEST(AwsimBoostStartDash, ResolvesDomainEnabledOverrideWithGlobalFallback)
@@ -311,6 +473,15 @@ TEST(AwsimBoostStartDash, RejectsInvalidTimeouts)
   EXPECT_THROW(StartDashGuard guard(config), std::invalid_argument);
   config = enabled_config();
   config.confirmation_timeout_sec = std::numeric_limits<double>::infinity();
+  EXPECT_THROW(StartDashGuard guard(config), std::invalid_argument);
+  config = motion_config();
+  config.motion_speed_threshold_mps = 0.0;
+  EXPECT_THROW(StartDashGuard guard(config), std::invalid_argument);
+  config = motion_config();
+  config.max_trigger_speed_mps = 0.05;
+  EXPECT_THROW(StartDashGuard guard(config), std::invalid_argument);
+  config = motion_config();
+  config.motion_trigger_timeout_sec = -1.0;
   EXPECT_THROW(StartDashGuard guard(config), std::invalid_argument);
 }
 

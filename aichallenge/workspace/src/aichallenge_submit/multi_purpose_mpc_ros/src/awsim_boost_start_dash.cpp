@@ -44,12 +44,41 @@ StartDashGuard::StartDashGuard(Config config)
   {
     throw std::invalid_argument("AWSIM boost confirmation timeout must be finite and positive");
   }
+  if (
+    !std::isfinite(config_.motion_speed_threshold_mps) ||
+    config_.motion_speed_threshold_mps <= 0.0)
+  {
+    throw std::invalid_argument("AWSIM boost motion speed threshold must be finite and positive");
+  }
+  if (
+    !std::isfinite(config_.max_trigger_speed_mps) ||
+    config_.max_trigger_speed_mps < config_.motion_speed_threshold_mps)
+  {
+    throw std::invalid_argument(
+            "AWSIM boost maximum trigger speed must be finite and at least the motion threshold");
+  }
+  if (
+    !std::isfinite(config_.motion_trigger_timeout_sec) ||
+    config_.motion_trigger_timeout_sec <= 0.0)
+  {
+    throw std::invalid_argument("AWSIM boost motion trigger timeout must be finite and positive");
+  }
   phase_ = config_.enabled && config_.mode == Mode::StartOnce ? Phase::Armed : Phase::Disabled;
 }
 
 StateEvent StartDashGuard::on_awsim_state(const std::string_view state)
 {
   const std::string normalized = normalize(state);
+  if (normalized == "ready") {
+    if (
+      config_.trigger == Trigger::FirstForwardMotion && !finish_seen_ &&
+      phase_ == Phase::Armed)
+    {
+      ready_seen_ = true;
+      phase_ = Phase::AwaitingMotion;
+    }
+    return StateEvent::None;
+  }
   if (normalized == "start") {
     // A stale or reordered Start after Finish still belongs to the spent session. Wait for the
     // explicit Finish -> Spawned boundary before accepting a new start.
@@ -57,6 +86,13 @@ StateEvent StartDashGuard::on_awsim_state(const std::string_view state)
       return StateEvent::None;
     }
     start_seen_ = true;
+    if (
+      config_.trigger == Trigger::FirstForwardMotion && phase_ == Phase::Armed)
+    {
+      // Fallback for launch paths that omit Ready. The speed ceiling is checked by evaluate().
+      ready_seen_ = true;
+      phase_ = Phase::AwaitingMotion;
+    }
     if (start_event_emitted_) {
       return StateEvent::None;
     }
@@ -65,6 +101,11 @@ StateEvent StartDashGuard::on_awsim_state(const std::string_view state)
   }
   if (normalized == "finish") {
     start_seen_ = false;
+    ready_seen_ = false;
+    motion_detected_at_.reset();
+    if (phase_ == Phase::AwaitingMotion || phase_ == Phase::MotionDetected) {
+      phase_ = Phase::Armed;
+    }
     if (finish_seen_) {
       return StateEvent::None;
     }
@@ -112,11 +153,12 @@ bool StartDashGuard::on_awsim_status(
   return true;
 }
 
-Evaluation StartDashGuard::evaluate(
-  const bool control_enabled, const bool failsafe_active, const TimePoint now)
+Evaluation StartDashGuard::evaluate(const TriggerContext & context, const TimePoint now)
 {
+  Evaluation evaluation;
   if (phase_ == Phase::Disabled) {
-    return {Action::None, BlockReason::Disabled};
+    evaluation.reason = BlockReason::Disabled;
+    return evaluation;
   }
 
   if (phase_ == Phase::PulseSent) {
@@ -126,43 +168,128 @@ Evaluation StartDashGuard::evaluate(
       config_.confirmation_timeout_sec)
     {
       phase_ = Phase::UnconfirmedSpent;
-      return {Action::None, BlockReason::ConfirmationTimedOut};
+      evaluation.reason = BlockReason::ConfirmationTimedOut;
+      return evaluation;
     }
-    return {Action::None, BlockReason::AlreadySpent};
+    evaluation.reason = BlockReason::AlreadySpent;
+    return evaluation;
   }
-  if (phase_ == Phase::Confirmed || phase_ == Phase::UnconfirmedSpent) {
-    return {Action::None, BlockReason::AlreadySpent};
+  if (
+    phase_ == Phase::Confirmed || phase_ == Phase::UnconfirmedSpent ||
+    phase_ == Phase::LaunchExpiredSpent)
+  {
+    evaluation.reason = BlockReason::AlreadySpent;
+    return evaluation;
   }
-  if (!start_seen_) {
-    return {Action::None, BlockReason::AwaitingStart};
+
+  if (config_.trigger == Trigger::AwsimStart) {
+    if (!start_seen_) {
+      evaluation.reason = BlockReason::AwaitingStart;
+      return evaluation;
+    }
+  } else {
+    if (!ready_seen_ || phase_ == Phase::Armed) {
+      evaluation.reason = BlockReason::AwaitingReady;
+      return evaluation;
+    }
+    if (!std::isfinite(context.forward_speed_mps)) {
+      evaluation.reason = BlockReason::InvalidForwardSpeed;
+      return evaluation;
+    }
+    if (!motion_detected_at_.has_value()) {
+      if (context.forward_speed_mps > config_.max_trigger_speed_mps) {
+        phase_ = Phase::LaunchExpiredSpent;
+        evaluation.reason = BlockReason::MotionTriggerSpeedExceeded;
+        return evaluation;
+      }
+      if (context.forward_speed_mps < config_.motion_speed_threshold_mps) {
+        evaluation.reason = BlockReason::AwaitingMotion;
+        return evaluation;
+      }
+      motion_detected_at_ = now;
+      phase_ = Phase::MotionDetected;
+      evaluation.motion_detected_now = true;
+    }
+    if (now < motion_detected_at_.value()) {
+      phase_ = Phase::LaunchExpiredSpent;
+      evaluation.reason = BlockReason::MotionTriggerTimedOut;
+      return evaluation;
+    }
+    evaluation.motion_elapsed_sec =
+      std::chrono::duration<double>(now - motion_detected_at_.value()).count();
+    if (evaluation.motion_elapsed_sec > config_.motion_trigger_timeout_sec) {
+      phase_ = Phase::LaunchExpiredSpent;
+      evaluation.reason = BlockReason::MotionTriggerTimedOut;
+      return evaluation;
+    }
+    if (context.forward_speed_mps > config_.max_trigger_speed_mps) {
+      phase_ = Phase::LaunchExpiredSpent;
+      evaluation.reason = BlockReason::MotionTriggerSpeedExceeded;
+      return evaluation;
+    }
   }
-  if (!control_enabled) {
-    return {Action::None, BlockReason::ControlDisabled};
+
+  if (!context.control_enabled) {
+    evaluation.reason = BlockReason::ControlDisabled;
+    return evaluation;
   }
-  if (failsafe_active) {
-    return {Action::None, BlockReason::FailsafeActive};
+  if (!context.normal_command_published) {
+    evaluation.reason = BlockReason::CommandNotPublished;
+    return evaluation;
+  }
+  if (context.solver_fallback_active) {
+    evaluation.reason = BlockReason::SolverFallbackActive;
+    return evaluation;
+  }
+  if (context.v2x_safety_brake_active) {
+    evaluation.reason = BlockReason::SafetyBrakeActive;
+    return evaluation;
+  }
+  if (context.reverse_or_recovery_active) {
+    evaluation.reason = BlockReason::ReverseOrRecoveryActive;
+    return evaluation;
+  }
+  if (context.failsafe_active) {
+    evaluation.reason = BlockReason::FailsafeActive;
+    return evaluation;
   }
   if (!status_.has_value()) {
-    return {Action::None, BlockReason::MissingStatus};
+    evaluation.reason = BlockReason::MissingStatus;
+    return evaluation;
   }
   if (now < status_->received_at) {
-    return {Action::None, BlockReason::StaleStatus};
+    evaluation.reason = BlockReason::StaleStatus;
+    return evaluation;
   }
   const double status_age = std::chrono::duration<double>(now - status_->received_at).count();
   if (status_age > config_.status_timeout_sec) {
-    return {Action::None, BlockReason::StaleStatus};
+    evaluation.reason = BlockReason::StaleStatus;
+    return evaluation;
   }
   if (status_->remaining < 1.0) {
-    return {Action::None, BlockReason::NoRemainingBoost};
+    evaluation.reason = BlockReason::NoRemainingBoost;
+    return evaluation;
   }
   if (status_->is_boosting) {
-    return {Action::None, BlockReason::AlreadyBoosting};
+    evaluation.reason = BlockReason::AlreadyBoosting;
+    return evaluation;
   }
 
   remaining_before_pulse_ = status_->remaining;
   pulse_sent_at_ = now;
   phase_ = Phase::PulseSent;
-  return {Action::PublishPulse, BlockReason::None};
+  evaluation.action = Action::PublishPulse;
+  return evaluation;
+}
+
+Evaluation StartDashGuard::evaluate(
+  const bool control_enabled, const bool failsafe_active, const TimePoint now)
+{
+  TriggerContext context;
+  context.control_enabled = control_enabled;
+  context.normal_command_published = true;
+  context.failsafe_active = failsafe_active;
+  return evaluate(context, now);
 }
 
 Phase StartDashGuard::phase() const noexcept
@@ -195,9 +322,11 @@ void StartDashGuard::rearm_for_new_session()
 {
   phase_ = config_.enabled && config_.mode == Mode::StartOnce ? Phase::Armed : Phase::Disabled;
   start_seen_ = false;
+  ready_seen_ = false;
   start_event_emitted_ = false;
   finish_seen_ = false;
   status_.reset();
+  motion_detected_at_.reset();
   remaining_before_pulse_.reset();
   pulse_sent_at_.reset();
 }
@@ -231,6 +360,18 @@ Mode parse_mode(const std::string_view value)
   throw std::invalid_argument("unknown AWSIM boost mode: " + std::string(value));
 }
 
+Trigger parse_trigger(const std::string_view value)
+{
+  const std::string normalized = normalize(value);
+  if (normalized == "awsim_start") {
+    return Trigger::AwsimStart;
+  }
+  if (normalized == "first_forward_motion") {
+    return Trigger::FirstForwardMotion;
+  }
+  throw std::invalid_argument("unknown AWSIM boost trigger: " + std::string(value));
+}
+
 EnabledResolution resolve_enabled(
   const bool default_enabled, const std::map<int, bool> & domain_enabled,
   const std::optional<int> ros_domain_id) noexcept
@@ -257,6 +398,17 @@ const char * to_string(const Mode mode) noexcept
   return "unknown";
 }
 
+const char * to_string(const Trigger trigger) noexcept
+{
+  switch (trigger) {
+    case Trigger::AwsimStart:
+      return "awsim_start";
+    case Trigger::FirstForwardMotion:
+      return "first_forward_motion";
+  }
+  return "unknown";
+}
+
 const char * to_string(const Phase phase) noexcept
 {
   switch (phase) {
@@ -264,12 +416,18 @@ const char * to_string(const Phase phase) noexcept
       return "Disabled";
     case Phase::Armed:
       return "Armed";
+    case Phase::AwaitingMotion:
+      return "AwaitingMotion";
+    case Phase::MotionDetected:
+      return "MotionDetected";
     case Phase::PulseSent:
       return "PulseSent";
     case Phase::Confirmed:
       return "Confirmed";
     case Phase::UnconfirmedSpent:
       return "UnconfirmedSpent";
+    case Phase::LaunchExpiredSpent:
+      return "LaunchExpiredSpent";
   }
   return "Unknown";
 }
@@ -298,10 +456,28 @@ const char * to_string(const BlockReason reason) noexcept
       return "disabled";
     case BlockReason::AwaitingStart:
       return "awaiting Start state";
+    case BlockReason::AwaitingReady:
+      return "awaiting Ready state";
+    case BlockReason::AwaitingMotion:
+      return "awaiting forward launch motion";
     case BlockReason::ControlDisabled:
       return "control disabled";
+    case BlockReason::CommandNotPublished:
+      return "normal control command not published";
     case BlockReason::FailsafeActive:
       return "control failsafe active";
+    case BlockReason::SafetyBrakeActive:
+      return "V2X SafetyBrake active";
+    case BlockReason::SolverFallbackActive:
+      return "MPC solver fallback active";
+    case BlockReason::ReverseOrRecoveryActive:
+      return "reverse or stuck recovery active";
+    case BlockReason::InvalidForwardSpeed:
+      return "invalid forward speed";
+    case BlockReason::MotionTriggerTimedOut:
+      return "launch motion trigger timed out";
+    case BlockReason::MotionTriggerSpeedExceeded:
+      return "launch motion trigger speed exceeded";
     case BlockReason::MissingStatus:
       return "missing valid /awsim/status";
     case BlockReason::StaleStatus:

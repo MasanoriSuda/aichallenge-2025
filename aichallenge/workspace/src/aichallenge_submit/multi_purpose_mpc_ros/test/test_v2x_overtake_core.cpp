@@ -12,6 +12,10 @@ namespace
 using multi_purpose_mpc_ros::v2x_overtake_core::PassSide;
 using multi_purpose_mpc_ros::v2x_overtake_core::ContinuityAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::ContinuityRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::ForwardDistanceRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::RecoveryExitReason;
+using multi_purpose_mpc_ros::v2x_overtake_core::RecoveryPolicyRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::SolverCooldownRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ReacquireRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SideSelectionReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::SideSelectionRequest;
@@ -20,6 +24,10 @@ using multi_purpose_mpc_ros::v2x_overtake_core::StartWindowStatus;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_effective_speed_limit;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_target_continuity;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_reacquire_during_return;
+using multi_purpose_mpc_ros::v2x_overtake_core::integrate_forward_distance;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_recovery_policy;
+using multi_purpose_mpc_ros::v2x_overtake_core::arm_solver_cooldown;
+using multi_purpose_mpc_ros::v2x_overtake_core::is_solver_cooldown_active;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_pass_side;
 
 SpeedLimitRequest speed_request()
@@ -27,6 +35,21 @@ SpeedLimitRequest speed_request()
   SpeedLimitRequest request;
   request.normal_speed_mps = 20.0;
   request.global_hard_cap_mps = 40.0;
+  return request;
+}
+
+RecoveryPolicyRequest recovery_request()
+{
+  RecoveryPolicyRequest request;
+  request.configured_velocity_limit_mps = 3.0;
+  request.elapsed_sec = 0.5;
+  request.traveled_distance_m = 0.5;
+  request.target_distance_m = 10.0;
+  request.lateral_error_m = 0.6;
+  request.lateral_completion_m = 0.2;
+  request.stalled_sec = 0.0;
+  request.stall_timeout_sec = 1.0;
+  request.timeout_sec = 5.0;
   return request;
 }
 
@@ -220,6 +243,121 @@ TEST(V2XOvertakeCoreContinuity, ReacquiresOnlySameTargetAndSideDuringEarlyReturn
   request.return_elapsed_sec = 0.20;
   request.return_progress = 0.26;
   EXPECT_FALSE(can_reacquire_during_return(request));
+}
+
+TEST(V2XOvertakeCoreRecovery, IntegratesEachAcceptedSpeedObservation)
+{
+  double distance = 0.0;
+  auto resolution = integrate_forward_distance(
+    ForwardDistanceRequest{distance, 3.0, 0.1, 0.2});
+  ASSERT_TRUE(resolution.observation_accepted);
+  distance = resolution.accumulated_distance_m;
+  EXPECT_NEAR(distance, 0.3, 1e-12);
+
+  resolution = integrate_forward_distance(
+    ForwardDistanceRequest{distance, 0.0, 0.1, 0.2});
+  ASSERT_TRUE(resolution.observation_accepted);
+  distance = resolution.accumulated_distance_m;
+  EXPECT_NEAR(distance, 0.3, 1e-12);
+
+  resolution = integrate_forward_distance(
+    ForwardDistanceRequest{distance, 1.0, 0.1, 0.2});
+  ASSERT_TRUE(resolution.observation_accepted);
+  EXPECT_NEAR(resolution.accumulated_distance_m, 0.4, 1e-12);
+  EXPECT_NE(resolution.accumulated_distance_m, 1.0 * 0.3);
+}
+
+TEST(V2XOvertakeCoreRecovery, RejectsGapRollbackAndInvalidObservationWithoutDistanceJump)
+{
+  const ForwardDistanceRequest base{1.25, 2.0, 0.1, 0.2};
+
+  auto request = base;
+  request.delta_sec = 0.201;
+  auto resolution = integrate_forward_distance(request);
+  EXPECT_FALSE(resolution.observation_accepted);
+  EXPECT_DOUBLE_EQ(resolution.accumulated_distance_m, 1.25);
+
+  request = base;
+  request.delta_sec = -0.001;
+  resolution = integrate_forward_distance(request);
+  EXPECT_FALSE(resolution.observation_accepted);
+  EXPECT_DOUBLE_EQ(resolution.accumulated_distance_m, 1.25);
+
+  request = base;
+  request.forward_speed_mps = std::numeric_limits<double>::quiet_NaN();
+  resolution = integrate_forward_distance(request);
+  EXPECT_FALSE(resolution.observation_accepted);
+  EXPECT_DOUBLE_EQ(resolution.accumulated_distance_m, 1.25);
+}
+
+TEST(V2XOvertakeCoreRecovery, KeepsConfiguredVelocityCeilingAtZeroVehicleSpeed)
+{
+  const auto resolution = resolve_recovery_policy(recovery_request());
+  EXPECT_DOUBLE_EQ(resolution.velocity_limit_mps, 3.0);
+  EXPECT_EQ(resolution.exit_reason, RecoveryExitReason::Active);
+}
+
+TEST(V2XOvertakeCoreRecovery, ResolvesEveryBoundedExitReason)
+{
+  auto request = recovery_request();
+  request.lateral_error_m = 0.2;
+  EXPECT_EQ(
+    resolve_recovery_policy(request).exit_reason,
+    RecoveryExitReason::LateralComplete);
+
+  request = recovery_request();
+  request.traveled_distance_m = 10.0;
+  EXPECT_EQ(
+    resolve_recovery_policy(request).exit_reason,
+    RecoveryExitReason::DistanceComplete);
+
+  request = recovery_request();
+  request.stalled_sec = 1.0;
+  EXPECT_EQ(resolve_recovery_policy(request).exit_reason, RecoveryExitReason::Stalled);
+
+  request = recovery_request();
+  request.elapsed_sec = 5.0;
+  EXPECT_EQ(resolve_recovery_policy(request).exit_reason, RecoveryExitReason::TimedOut);
+
+  request = recovery_request();
+  request.elapsed_sec = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_EQ(
+    resolve_recovery_policy(request).exit_reason,
+    RecoveryExitReason::InvalidObservation);
+}
+
+TEST(V2XOvertakeCoreRecovery, RejectsInvalidPolicyConfiguration)
+{
+  auto request = recovery_request();
+  request.configured_velocity_limit_mps = 0.0;
+  EXPECT_THROW(resolve_recovery_policy(request), std::invalid_argument);
+
+  request = recovery_request();
+  request.stall_timeout_sec = 5.1;
+  EXPECT_THROW(resolve_recovery_policy(request), std::invalid_argument);
+
+  ForwardDistanceRequest distance_request{0.0, 1.0, 0.1, 0.0};
+  EXPECT_THROW(integrate_forward_distance(distance_request), std::invalid_argument);
+}
+
+TEST(V2XOvertakeCoreRecovery, ArmsExtendsAndExpiresSolverCooldownAtBoundary)
+{
+  double cooldown_until = arm_solver_cooldown(
+    SolverCooldownRequest{10.0, -std::numeric_limits<double>::infinity(), 2.0});
+  EXPECT_DOUBLE_EQ(cooldown_until, 12.0);
+  EXPECT_TRUE(is_solver_cooldown_active(11.999, cooldown_until));
+  EXPECT_FALSE(is_solver_cooldown_active(12.0, cooldown_until));
+
+  cooldown_until = arm_solver_cooldown(
+    SolverCooldownRequest{11.0, cooldown_until, 0.5});
+  EXPECT_DOUBLE_EQ(cooldown_until, 12.0);
+
+  cooldown_until = arm_solver_cooldown(
+    SolverCooldownRequest{11.0, cooldown_until, 5.0});
+  EXPECT_DOUBLE_EQ(cooldown_until, 16.0);
+  EXPECT_THROW(
+    arm_solver_cooldown(SolverCooldownRequest{11.0, cooldown_until, -0.1}),
+    std::invalid_argument);
 }
 
 }  // namespace

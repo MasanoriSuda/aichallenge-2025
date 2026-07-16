@@ -12,8 +12,8 @@ awsim_boost:
   # Per-vehicle override keyed by ROS_DOMAIN_ID. Change a vehicle to false to disable Boost.
   domain_enabled:
     1: true
-    2: true
-    3: true
+    2: false
+    3: false
   mode: start_once
   trigger: first_forward_motion
   motion_speed_threshold_mps: 0.1
@@ -327,6 +327,11 @@ mpc:
   v2x_overtake_reacquire_max_return_progress: 0.25 # [0-1] do not reverse a mostly completed Return
   v2x_overtake_recovery_velocity_limit_enabled: true # explicit abort/return cap; does not affect successful Pass
   v2x_overtake_recovery_velocity: 3.0         # [m/s] dedicated Recovery cap, independent of v2x_follow_velocity
+  v2x_overtake_recovery_stall_speed: 0.15     # [m/s] continuous low speed starts bounded Recovery stall timer
+  v2x_overtake_recovery_stall_timeout_sec: 1.0 # [s] release a line Recovery that cannot restart
+  v2x_overtake_recovery_timeout_sec: 5.0      # [s] absolute bound for one Recovery phase
+  v2x_overtake_recovery_max_observation_gap_sec: 0.2 # [s] reject discontinuous distance integration
+  v2x_overtake_solver_cooldown_sec: 2.0       # [s] suppress immediate re-entry after solver abort
   v2x_overtake_solver_failure_abort_cycles: 3 # consecutive failures before aborting the lateral pass target
   v2x_overtake_line_debug_log_enabled: true   # log phase changes when enabled
   v2x_moving_front_speed_threshold: 1.0 # [m/s] above this, Follow uses moving-front behavior

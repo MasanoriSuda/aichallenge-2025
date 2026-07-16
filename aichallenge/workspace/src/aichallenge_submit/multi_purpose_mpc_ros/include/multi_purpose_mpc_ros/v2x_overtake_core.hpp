@@ -117,6 +117,75 @@ struct ReacquireRequest
 /// Allow Return -> Pass only for the same stable target and pass side early in Return.
 bool can_reacquire_during_return(const ReacquireRequest & request) noexcept;
 
+struct ForwardDistanceRequest
+{
+  double accumulated_distance_m{};
+  double forward_speed_mps{};
+  double delta_sec{};
+  double max_observation_gap_sec{};
+};
+
+struct ForwardDistanceResolution
+{
+  double accumulated_distance_m{};
+  bool observation_accepted{false};
+};
+
+/// Integrate forward distance for one control observation.
+///
+/// Invalid/rolled-back/late observations do not change the accumulated distance.
+/// Configuration errors throw std::invalid_argument.
+ForwardDistanceResolution integrate_forward_distance(const ForwardDistanceRequest & request);
+
+enum class RecoveryExitReason
+{
+  Active,
+  DistanceComplete,
+  LateralComplete,
+  Stalled,
+  TimedOut,
+  InvalidObservation,
+};
+
+struct RecoveryPolicyRequest
+{
+  double configured_velocity_limit_mps{};
+  double elapsed_sec{};
+  double traveled_distance_m{};
+  double target_distance_m{};
+  double lateral_error_m{};
+  double lateral_completion_m{};
+  double stalled_sec{};
+  double stall_timeout_sec{};
+  double timeout_sec{};
+};
+
+struct RecoveryPolicyResolution
+{
+  double velocity_limit_mps{};
+  RecoveryExitReason exit_reason{RecoveryExitReason::Active};
+};
+
+/// Resolve the bounded overtake Recovery policy.
+///
+/// The returned velocity limit is the configured ceiling and intentionally does not shrink with
+/// current vehicle speed. Runtime observation errors fail closed via InvalidObservation.
+RecoveryPolicyResolution resolve_recovery_policy(const RecoveryPolicyRequest & request);
+const char * to_string(RecoveryExitReason reason) noexcept;
+
+struct SolverCooldownRequest
+{
+  double now_sec{};
+  double current_until_sec{};
+  double duration_sec{};
+};
+
+/// Arm or extend the solver-failure cooldown without shortening an existing deadline.
+double arm_solver_cooldown(const SolverCooldownRequest & request);
+
+/// Return true strictly before a finite solver-failure cooldown deadline.
+bool is_solver_cooldown_active(double now_sec, double cooldown_until_sec) noexcept;
+
 }  // namespace multi_purpose_mpc_ros::v2x_overtake_core
 
 #endif  // MULTI_PURPOSE_MPC_ROS__V2X_OVERTAKE_CORE_HPP_

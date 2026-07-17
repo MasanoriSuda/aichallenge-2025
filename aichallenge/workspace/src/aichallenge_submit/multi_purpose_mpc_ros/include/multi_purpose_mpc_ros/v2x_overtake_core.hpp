@@ -376,6 +376,19 @@ struct SolverFallbackSteeringRequest
 double rate_limit_solver_fallback_steering_toward_neutral(
   const SolverFallbackSteeringRequest & request);
 
+struct SolverFallbackNeutralizationRequest
+{
+  int consecutive_failures{0};
+  int steering_hold_cycles{0};
+  bool force_neutralize{false};
+};
+
+/// Select neutral steering recovery after a bounded failure hold window.
+///
+/// force_neutralize bypasses the hold window. Negative counters throw std::invalid_argument.
+bool should_neutralize_solver_fallback_steering(
+  const SolverFallbackNeutralizationRequest & request);
+
 }  // namespace multi_purpose_mpc_ros::v2x_overtake_core
 
 #endif  // MULTI_PURPOSE_MPC_ROS__V2X_OVERTAKE_CORE_HPP_

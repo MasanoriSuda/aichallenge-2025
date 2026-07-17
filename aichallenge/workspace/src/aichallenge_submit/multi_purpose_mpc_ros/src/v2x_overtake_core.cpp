@@ -682,4 +682,17 @@ double rate_limit_solver_fallback_steering_toward_neutral(
   return steering - std::copysign(max_step, steering);
 }
 
+bool should_neutralize_solver_fallback_steering(
+  const SolverFallbackNeutralizationRequest & request)
+{
+  if (request.consecutive_failures < 0) {
+    throw std::invalid_argument("Solver fallback failure count must be non-negative");
+  }
+  if (request.steering_hold_cycles < 0) {
+    throw std::invalid_argument("Solver fallback steering hold cycles must be non-negative");
+  }
+  return request.force_neutralize ||
+         request.consecutive_failures > request.steering_hold_cycles;
+}
+
 }  // namespace multi_purpose_mpc_ros::v2x_overtake_core

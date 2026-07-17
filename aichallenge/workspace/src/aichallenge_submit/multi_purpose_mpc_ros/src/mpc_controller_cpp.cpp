@@ -2762,6 +2762,7 @@ struct MpcConfig
   double delta_max{};
   double steer_rate_max{};
   double control_rate{};
+  int solver_failure_steering_hold_cycles{4};
   double odom_timeout_sec{0.5};
   double min_linearization_speed_mps{0.5};
   double steering_tire_angle_gain_var{};
@@ -4230,14 +4231,22 @@ struct MPC
       std::max(0.0, fallback_base_speed - deceleration * time_step) : 0.0;
     failure_fallback_speed_ = fallback_speed;
 
+    const int failure_count = infeasibility_counter < std::numeric_limits<int>::max() ?
+      infeasibility_counter + 1 : std::numeric_limits<int>::max();
+
     const double max_steering = std::isfinite(cfg.delta_max) ?
       std::max(0.0, std::abs(cfg.delta_max)) : 0.0;
     const bool overtake_recovery_phase =
       overtake_line_state_.phase == OvertakeLinePhase::Recovery;
-    const bool neutralize_overtake_fallback =
+    const bool force_neutralize_overtake_fallback =
       overtake_recovery_phase || overtake_solver_recovery_active_ ||
       overtake_solver_reentry_blocked_;
-    const double fallback_steering = neutralize_overtake_fallback ?
+    const bool neutralize_fallback =
+      v2x_overtake_core::should_neutralize_solver_fallback_steering(
+        v2x_overtake_core::SolverFallbackNeutralizationRequest{
+          failure_count, cfg.solver_failure_steering_hold_cycles,
+          force_neutralize_overtake_fallback});
+    const double fallback_steering = neutralize_fallback ?
       v2x_overtake_core::rate_limit_solver_fallback_steering_toward_neutral(
         v2x_overtake_core::SolverFallbackSteeringRequest{
           std::isfinite(previous_steering) ? previous_steering : 0.0,
@@ -4253,7 +4262,6 @@ struct MPC
       current_control[2 * i + 1] = fallback_steering;
     }
 
-    const int failure_count = infeasibility_counter + 1;
     const bool active_overtake_phase =
       overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
       overtake_line_state_.phase == OvertakeLinePhase::Pass;
@@ -4288,14 +4296,19 @@ struct MPC
       overtake_solver_reentry_blocked_ = gate.blocked;
       overtake_solver_recovery_success_count_ = gate.consecutive_successes;
     }
-    if (infeasibility_counter == 0 || failure_count % 10 == 0) {
+    const bool neutralization_just_started =
+      !force_neutralize_overtake_fallback && neutralize_fallback &&
+      cfg.solver_failure_steering_hold_cycles < std::numeric_limits<int>::max() &&
+      failure_count == cfg.solver_failure_steering_hold_cycles + 1;
+    if (infeasibility_counter == 0 || neutralization_just_started || failure_count % 10 == 0) {
       RCLCPP_ERROR(
         rclcpp::get_logger("mpc_controller"),
         "MPC control failed; using deceleration fallback: reason=%s, failures=%d, "
-        "speed=%.3f, steering=%.3f",
-        reason.c_str(), failure_count, fallback_speed, fallback_steering);
+        "speed=%.3f, steering=%.3f, steering_mode=%s",
+        reason.c_str(), failure_count, fallback_speed, fallback_steering,
+        neutralize_fallback ? "neutralize" : "hold");
     }
-    ++infeasibility_counter;
+    infeasibility_counter = failure_count;
     Eigen::Vector2d fallback;
     fallback << fallback_speed, fallback_steering;
     return {fallback, std::abs(fallback_steering)};
@@ -6738,12 +6751,19 @@ Config load_config(const std::string & path)
   }
   cfg.mpc.steer_rate_max = mpc["steer_rate_max"].as<double>();
   cfg.mpc.control_rate = mpc["control_rate"].as<double>();
+  cfg.mpc.solver_failure_steering_hold_cycles =
+    mpc["solver_failure_steering_hold_cycles"] ?
+    mpc["solver_failure_steering_hold_cycles"].as<int>() : 4;
   cfg.mpc.steering_tire_angle_gain_var = mpc["steering_tire_angle_gain_var"].as<double>();
   if (!std::isfinite(cfg.mpc.steer_rate_max) || cfg.mpc.steer_rate_max < 0.0) {
     throw std::runtime_error("mpc.steer_rate_max must be finite and non-negative");
   }
   if (!std::isfinite(cfg.mpc.control_rate) || cfg.mpc.control_rate <= 0.0) {
     throw std::runtime_error("mpc.control_rate must be finite and positive");
+  }
+  if (cfg.mpc.solver_failure_steering_hold_cycles < 0) {
+    throw std::runtime_error(
+            "mpc.solver_failure_steering_hold_cycles must be non-negative");
   }
   if (
     !std::isfinite(cfg.mpc.steering_tire_angle_gain_var) ||
@@ -7671,6 +7691,10 @@ public:
     if (mpc_cfg_.v2x_gap.enabled) {
       RCLCPP_WARN(get_logger(), "USE_V2X_GAP_PLANNER is enabled!");
     }
+    RCLCPP_INFO(
+      get_logger(),
+      "MPC solver fallback steering: hold=%d cycles, neutralize_rate=%.3f rad/s",
+      mpc_cfg_.solver_failure_steering_hold_cycles, mpc_cfg_.steer_rate_max);
     if (mpc_cfg_.v2x_behavior.enabled) {
       RCLCPP_WARN(get_logger(), "USE_V2X_BEHAVIOR_FSM is enabled!");
       if (mpc_cfg_.v2x_behavior.debug_log_enabled) {

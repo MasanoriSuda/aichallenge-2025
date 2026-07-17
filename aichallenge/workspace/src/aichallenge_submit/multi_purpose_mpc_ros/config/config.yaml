@@ -192,6 +192,7 @@ mpc:
     3: 1.0
   delta_max_deg: 32.0 # degrees
   steer_rate_max: 1.2 # rad/s
+  solver_failure_steering_hold_cycles: 4 # 0.1 s at 40 Hz, then rate-limit steering to neutral
   control_rate: 40.0 # Hz
   odom_timeout_sec: 0.5 # [s], steady-clock local safety timeout (not an official limit)
   min_linearization_speed_mps: 0.5 # [m/s], avoid singular 1/v terms below this speed

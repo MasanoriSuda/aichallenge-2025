@@ -25,6 +25,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::PredictionTimeRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecoveryExitReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecoveryPolicyRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SolverCooldownRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::SolverFallbackNeutralizationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SolverFallbackSteeringRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SolverReentryGateRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ReacquireRequest;
@@ -47,6 +48,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::update_front_hazard_hold;
 using multi_purpose_mpc_ros::v2x_overtake_core::arm_solver_cooldown;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_solver_cooldown_active;
 using multi_purpose_mpc_ros::v2x_overtake_core::rate_limit_solver_fallback_steering_toward_neutral;
+using multi_purpose_mpc_ros::v2x_overtake_core::should_neutralize_solver_fallback_steering;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_solver_reentry_gate;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_pass_side;
 
@@ -779,6 +781,29 @@ TEST(V2XOvertakeCoreRecovery, RateLimitsFallbackSteeringTowardNeutral)
   request.steer_rate_radps = -1.0;
   EXPECT_THROW(
     rate_limit_solver_fallback_steering_toward_neutral(request), std::invalid_argument);
+}
+
+TEST(V2XOvertakeCoreRecovery, NeutralizesFallbackAfterBoundedHoldWindow)
+{
+  SolverFallbackNeutralizationRequest request{1, 4, false};
+  EXPECT_FALSE(should_neutralize_solver_fallback_steering(request));
+
+  request.consecutive_failures = 4;
+  EXPECT_FALSE(should_neutralize_solver_fallback_steering(request));
+
+  request.consecutive_failures = 5;
+  EXPECT_TRUE(should_neutralize_solver_fallback_steering(request));
+
+  request.consecutive_failures = 1;
+  request.force_neutralize = true;
+  EXPECT_TRUE(should_neutralize_solver_fallback_steering(request));
+
+  request.consecutive_failures = -1;
+  EXPECT_THROW(should_neutralize_solver_fallback_steering(request), std::invalid_argument);
+
+  request.consecutive_failures = 0;
+  request.steering_hold_cycles = -1;
+  EXPECT_THROW(should_neutralize_solver_fallback_steering(request), std::invalid_argument);
 }
 
 }  // namespace

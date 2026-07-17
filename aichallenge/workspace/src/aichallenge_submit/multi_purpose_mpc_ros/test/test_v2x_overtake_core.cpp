@@ -2,9 +2,11 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <limits>
 #include <optional>
 #include <stdexcept>
+#include <vector>
 
 namespace
 {
@@ -12,7 +14,13 @@ namespace
 using multi_purpose_mpc_ros::v2x_overtake_core::PassSide;
 using multi_purpose_mpc_ros::v2x_overtake_core::ContinuityAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::ContinuityRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::CoursePoint;
 using multi_purpose_mpc_ros::v2x_overtake_core::ForwardDistanceRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::ForwardCourseProjectionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSpeedReferenceRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSpeedStage;
+using multi_purpose_mpc_ros::v2x_overtake_core::PassCompletionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::PredictionTimeRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecoveryExitReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecoveryPolicyRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SolverCooldownRequest;
@@ -22,6 +30,10 @@ using multi_purpose_mpc_ros::v2x_overtake_core::SideSelectionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SpeedLimitRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StartWindowStatus;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_effective_speed_limit;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_speed_reference;
+using multi_purpose_mpc_ros::v2x_overtake_core::advance_prediction_time;
+using multi_purpose_mpc_ros::v2x_overtake_core::project_forward_course_progress;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_completion;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_target_continuity;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_reacquire_during_return;
 using multi_purpose_mpc_ros::v2x_overtake_core::integrate_forward_distance;
@@ -122,6 +134,226 @@ TEST(V2XOvertakeCoreSpeed, RejectsInvalidSpeedPolicyConfiguration)
   request.start_speed_mps = std::numeric_limits<double>::infinity();
   request.start_window_duration_sec = 15.0;
   EXPECT_THROW(resolve_effective_speed_limit(request), std::invalid_argument);
+}
+
+TEST(V2XOvertakeCoreSpeed, CapsShiftOutButReleasesFrontCapInPass)
+{
+  OvertakeSpeedReferenceRequest request;
+  request.base_reference_speed_mps = 11.0;
+  request.hard_cap_mps = 11.1;
+  request.front_speed_mps = 8.0;
+  request.entry_speed_mps = 8.5;
+  request.shiftout_max_closing_speed_mps = 1.0;
+
+  auto result = resolve_overtake_speed_reference(request);
+  EXPECT_DOUBLE_EQ(result.reference_speed_mps, 9.0);
+  EXPECT_TRUE(result.front_cap_applied);
+
+  request.stage = OvertakeSpeedStage::Pass;
+  result = resolve_overtake_speed_reference(request);
+  EXPECT_DOUBLE_EQ(result.reference_speed_mps, 11.0);
+  EXPECT_FALSE(result.front_cap_applied);
+}
+
+TEST(V2XOvertakeCorePrediction, AccumulatesPathTimeAndSaturatesAtHorizon)
+{
+  double elapsed = advance_prediction_time(PredictionTimeRequest{0.0, 5.0, 10.0, 1.0, 1.0});
+  EXPECT_DOUBLE_EQ(elapsed, 0.5);
+  elapsed = advance_prediction_time(PredictionTimeRequest{elapsed, 2.0, 0.0, 2.0, 1.0});
+  EXPECT_DOUBLE_EQ(elapsed, 1.0);
+
+  auto invalid = PredictionTimeRequest{0.0, 1.0, 1.0, 0.0, 1.0};
+  EXPECT_THROW(advance_prediction_time(invalid), std::invalid_argument);
+}
+
+TEST(V2XOvertakeCoreProgress, UsesAlongCourseDistanceAndProjectedSpeed)
+{
+  const std::vector<CoursePoint> path{{0.0, 0.0}, {10.0, 0.0}, {20.0, 0.0}};
+  ForwardCourseProjectionRequest request;
+  request.start_index = 0U;
+  request.origin_x_m = 1.0;
+  request.origin_y_m = 0.0;
+  request.target_x_m = 15.0;
+  request.target_y_m = 1.0;
+  request.target_vx_mps = 5.0;
+  request.lookbehind_distance_m = 2.0;
+  request.lookahead_distance_m = 20.0;
+  request.max_cross_track_distance_m = 2.0;
+
+  const auto result = project_forward_course_progress(path, request);
+  ASSERT_TRUE(result.valid);
+  EXPECT_NEAR(result.forward_distance_m, 14.0, 1e-12);
+  EXPECT_NEAR(result.lateral_m, 1.0, 1e-12);
+  EXPECT_NEAR(result.along_track_speed_mps, 5.0, 1e-12);
+  EXPECT_EQ(result.segment_index, 1U);
+}
+
+TEST(V2XOvertakeCoreProgress, DetectsFrontAroundHairpinOutsideEgoTangent)
+{
+  const std::vector<CoursePoint> path{
+    {0.0, 0.0}, {10.0, 0.0}, {10.0, 10.0}, {0.0, 10.0}};
+  ForwardCourseProjectionRequest request;
+  request.start_index = 0U;
+  request.origin_x_m = 1.0;
+  request.origin_y_m = 0.0;
+  request.target_x_m = 10.0;
+  request.target_y_m = 5.0;
+  request.target_vy_mps = 3.0;
+  request.lookbehind_distance_m = 2.0;
+  request.lookahead_distance_m = 20.0;
+  request.max_cross_track_distance_m = 2.0;
+
+  const auto result = project_forward_course_progress(path, request);
+  ASSERT_TRUE(result.valid);
+  EXPECT_NEAR(result.forward_distance_m, 14.0, 1e-12);
+  EXPECT_NEAR(result.lateral_m, 0.0, 1e-12);
+  EXPECT_NEAR(result.along_track_speed_mps, 3.0, 1e-12);
+}
+
+TEST(V2XOvertakeCoreProgress, WrapsAcrossCircularCourseEnd)
+{
+  const std::vector<CoursePoint> path{
+    {0.0, 0.0}, {10.0, 0.0}, {10.0, 10.0}, {0.0, 10.0}};
+  ForwardCourseProjectionRequest request;
+  request.start_index = 3U;
+  request.circular = true;
+  request.origin_x_m = 0.0;
+  request.origin_y_m = 9.0;
+  request.target_x_m = 1.0;
+  request.target_y_m = 0.0;
+  request.target_vx_mps = 1.0;
+  request.lookbehind_distance_m = 2.0;
+  request.lookahead_distance_m = 15.0;
+  request.max_cross_track_distance_m = 1.0;
+
+  const auto result = project_forward_course_progress(path, request);
+  ASSERT_TRUE(result.valid);
+  EXPECT_NEAR(result.forward_distance_m, 10.0, 1e-12);
+  EXPECT_EQ(result.segment_index, 0U);
+}
+
+TEST(V2XOvertakeCoreProgress, WrapsAcrossLegacyDuplicateCircularEndpoint)
+{
+  const std::vector<CoursePoint> path{
+    {0.0, 0.0}, {10.0, 0.0}, {10.0, 10.0}, {0.0, 10.0}, {0.0, 0.0}};
+  ForwardCourseProjectionRequest request;
+  request.start_index = 3U;
+  request.circular = true;
+  request.origin_x_m = 0.0;
+  request.origin_y_m = 1.0;
+  request.target_x_m = 1.0;
+  request.target_y_m = 0.0;
+  request.target_vx_mps = 1.0;
+  request.lookbehind_distance_m = 2.0;
+  request.lookahead_distance_m = 5.0;
+  request.max_cross_track_distance_m = 1.0;
+
+  const auto result = project_forward_course_progress(path, request);
+  ASSERT_TRUE(result.valid);
+  EXPECT_NEAR(result.forward_distance_m, 2.0, 1e-12);
+  EXPECT_EQ(result.segment_index, 0U);
+}
+
+TEST(V2XOvertakeCoreProgress, SkipsRepeatedInteriorPoint)
+{
+  const std::vector<CoursePoint> path{
+    {0.0, 0.0}, {10.0, 0.0}, {10.0, 0.0}, {20.0, 0.0}};
+  ForwardCourseProjectionRequest request;
+  request.start_index = 0U;
+  request.origin_x_m = 1.0;
+  request.target_x_m = 15.0;
+  request.target_vx_mps = 1.0;
+  request.lookbehind_distance_m = 2.0;
+  request.lookahead_distance_m = 20.0;
+  request.max_cross_track_distance_m = 1.0;
+
+  const auto result = project_forward_course_progress(path, request);
+  ASSERT_TRUE(result.valid);
+  EXPECT_NEAR(result.forward_distance_m, 14.0, 1e-12);
+  EXPECT_EQ(result.segment_index, 2U);
+}
+
+TEST(V2XOvertakeCoreProgress, KeepsRearNegativeAndRejectsOppositeDirection)
+{
+  const std::vector<CoursePoint> path{{0.0, 0.0}, {10.0, 0.0}, {20.0, 0.0}};
+  ForwardCourseProjectionRequest request;
+  request.start_index = 1U;
+  request.origin_x_m = 11.0;
+  request.target_x_m = 9.0;
+  request.target_vx_mps = 1.0;
+  request.lookbehind_distance_m = 5.0;
+  request.lookahead_distance_m = 8.0;
+  request.max_cross_track_distance_m = 1.0;
+
+  auto result = project_forward_course_progress(path, request);
+  ASSERT_TRUE(result.valid);
+  EXPECT_NEAR(result.forward_distance_m, -2.0, 1e-12);
+
+  request.start_index = 0U;
+  request.origin_x_m = 1.0;
+  request.target_x_m = 5.0;
+  request.target_vx_mps = -1.0;
+  result = project_forward_course_progress(path, request);
+  EXPECT_FALSE(result.valid);
+}
+
+TEST(V2XOvertakeCoreProgress, RejectsTargetOutsideBoundedCourseSection)
+{
+  const std::vector<CoursePoint> path{{0.0, 0.0}, {10.0, 0.0}, {20.0, 0.0}};
+  ForwardCourseProjectionRequest request;
+  request.start_index = 0U;
+  request.origin_x_m = 1.0;
+  request.target_x_m = 30.0;
+  request.target_vx_mps = 1.0;
+  request.lookbehind_distance_m = 2.0;
+  request.lookahead_distance_m = 10.0;
+  request.max_cross_track_distance_m = 2.0;
+
+  EXPECT_FALSE(project_forward_course_progress(path, request).valid);
+}
+
+TEST(V2XOvertakeCoreCompletion, RequiresRearClearBeforeHardCurve)
+{
+  PassCompletionRequest request;
+  request.distance_to_hard_curve_m = 45.0;
+  request.curve_buffer_m = 2.0;
+  request.front_distance_m = 4.0;
+  request.front_speed_mps = 8.0;
+  request.planned_ego_speed_mps = 11.0;
+  request.return_clear_distance_m = 4.0;
+  request.minimum_shift_distance_m = 8.0;
+  request.merge_buffer_m = 3.0;
+  request.minimum_relative_speed_mps = 0.5;
+
+  auto result = resolve_pass_completion(request);
+  EXPECT_TRUE(result.feasible);
+  EXPECT_NEAR(result.available_distance_m, 43.0, 1e-12);
+  EXPECT_NEAR(result.required_distance_m, 11.0 * 8.0 / 3.0 + 3.0, 1e-12);
+
+  request.distance_to_hard_curve_m = 30.0;
+  result = resolve_pass_completion(request);
+  EXPECT_FALSE(result.feasible);
+
+  request.distance_to_hard_curve_m = std::numeric_limits<double>::infinity();
+  result = resolve_pass_completion(request);
+  EXPECT_TRUE(result.feasible);
+}
+
+TEST(V2XOvertakeCoreCompletion, RejectsInsufficientRelativeSpeed)
+{
+  PassCompletionRequest request;
+  request.distance_to_hard_curve_m = 100.0;
+  request.front_distance_m = 3.0;
+  request.front_speed_mps = 10.8;
+  request.planned_ego_speed_mps = 11.0;
+  request.return_clear_distance_m = 4.0;
+  request.minimum_shift_distance_m = 8.0;
+  request.merge_buffer_m = 3.0;
+  request.minimum_relative_speed_mps = 0.5;
+
+  const auto result = resolve_pass_completion(request);
+  EXPECT_FALSE(result.feasible);
+  EXPECT_TRUE(std::isinf(result.required_distance_m));
 }
 
 TEST(V2XOvertakeCoreSide, SelectsPreferredWhenBothSidesAreFeasible)

@@ -33,6 +33,23 @@ using multi_purpose_mpc_ros::stuck_recovery::StuckVerdict;
 using multi_purpose_mpc_ros::stuck_recovery::SupervisorConfig;
 using multi_purpose_mpc_ros::stuck_recovery::reverse_actuation_calibration_is_valid;
 using multi_purpose_mpc_ros::stuck_recovery::reverse_stopping_distance_reserve_m;
+using multi_purpose_mpc_ros::stuck_recovery::source_sample_is_current;
+using multi_purpose_mpc_ros::stuck_recovery::source_timestamp_is_monotonic;
+
+TEST(StuckRecoveryV2XClockDomain, AcceptsMonotonicSimulationSourceStamps)
+{
+  const std::optional<double> previous_array_stamp{42.0};
+  EXPECT_TRUE(source_timestamp_is_monotonic(43.0, previous_array_stamp));
+  EXPECT_TRUE(source_sample_is_current(43.04, 43.0, 1.0));
+}
+
+TEST(StuckRecoveryV2XClockDomain, RejectsRollbackFutureAndStaleSourceSamples)
+{
+  const std::optional<double> previous_array_stamp{43.0};
+  EXPECT_FALSE(source_timestamp_is_monotonic(42.9, previous_array_stamp));
+  EXPECT_FALSE(source_sample_is_current(43.0, 43.1, 1.0));
+  EXPECT_FALSE(source_sample_is_current(43.0, 41.9, 1.0));
+}
 
 DetectorConfig detector_config()
 {
@@ -979,6 +996,22 @@ TEST(RecoverySupervisor, RearWallUsesBoundedForwardCreepWithoutGearChange)
   EXPECT_EQ(supervisor.state(), RecoveryState::LowSpeedRejoin);
 }
 
+TEST(RecoverySupervisor, ForwardCreepUsesTheSelectedSteeringAngle)
+{
+  RecoverySupervisor supervisor(supervisor_config());
+  double now = 0.0;
+  auto input = healthy_recovery_input(now);
+  input.maneuver_direction = ManeuverDirection::Forward;
+  input.reverse_steering_tire_angle_rad = 0.25;
+  advance_to_clearance_check(supervisor, input, now);
+
+  now += 0.01;
+  input.now_sec = now;
+  const auto action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::ForwardCreep);
+  EXPECT_DOUBLE_EQ(action.steering_tire_angle_rad, 0.25);
+}
+
 TEST(RecoverySupervisor, ImprovingForwardStepStopsAndReturnsToClearanceSelection)
 {
   auto config = supervisor_config();
@@ -1039,6 +1072,67 @@ TEST(RecoverySupervisor, NonImprovingForwardStepLatchesSafeStop)
   EXPECT_EQ(supervisor.state(), RecoveryState::SafeStop);
 }
 
+TEST(RecoverySupervisor, StepwiseForwardDurationLimitStopsAndReassesses)
+{
+  auto config = supervisor_config();
+  config.max_forward_duration_sec = 0.1;
+  RecoverySupervisor supervisor(config);
+  double now = 0.0;
+  auto input = healthy_recovery_input(now);
+  input.maneuver_direction = ManeuverDirection::Forward;
+  input.stepwise_escape = true;
+  advance_to_clearance_check(supervisor, input, now);
+
+  now += 0.01;
+  input.now_sec = now;
+  EXPECT_EQ(supervisor.update(input).type, RecoveryActionType::ForwardCreep);
+
+  now += 0.1;
+  input.now_sec = now;
+  auto action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
+  EXPECT_EQ(action.reason, RecoveryReason::ForwardDurationLimit);
+  EXPECT_EQ(supervisor.state(), RecoveryState::StopAndReassess);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.signed_speed_mps = 0.0;
+  action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
+  EXPECT_EQ(action.reason, RecoveryReason::ClearanceCheck);
+  EXPECT_EQ(supervisor.state(), RecoveryState::CheckClearance);
+}
+
+TEST(RecoverySupervisor, StepwiseForwardCollisionWorseningStopsAndReassesses)
+{
+  RecoverySupervisor supervisor(supervisor_config());
+  double now = 0.0;
+  auto input = healthy_recovery_input(now);
+  input.maneuver_direction = ManeuverDirection::Forward;
+  input.stepwise_escape = true;
+  advance_to_clearance_check(supervisor, input, now);
+
+  now += 0.01;
+  input.now_sec = now;
+  EXPECT_EQ(supervisor.update(input).type, RecoveryActionType::ForwardCreep);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.collision_worsening = true;
+  auto action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
+  EXPECT_EQ(action.reason, RecoveryReason::CollisionWorsening);
+  EXPECT_EQ(supervisor.state(), RecoveryState::StopAndReassess);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.collision_worsening = false;
+  action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
+  EXPECT_EQ(action.reason, RecoveryReason::ClearanceCheck);
+  EXPECT_EQ(supervisor.state(), RecoveryState::CheckClearance);
+}
+
 TEST(RecoverySupervisor, ReverseDurationCollisionAndRearHazardAllStopCreep) {
   auto duration_config = supervisor_config();
   duration_config.max_reverse_duration_sec = 0.1;
@@ -1074,6 +1168,70 @@ TEST(RecoverySupervisor, ReverseDurationCollisionAndRearHazardAllStopCreep) {
   EXPECT_EQ(action.reason, RecoveryReason::RearStaticBlocked);
   EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
   EXPECT_EQ(rear_supervisor.state(), RecoveryState::WaitReverseReport);
+}
+
+TEST(RecoverySupervisor, StepwiseCollisionWorseningStopsAndReassesses)
+{
+  RecoverySupervisor supervisor(supervisor_config());
+  double now = 0.0;
+  auto input = healthy_recovery_input(now);
+  input.stepwise_escape = true;
+  advance_to_reverse(supervisor, input, now);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.collision_worsening = true;
+  auto action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
+  EXPECT_EQ(action.reason, RecoveryReason::CollisionWorsening);
+  EXPECT_EQ(supervisor.state(), RecoveryState::StopBeforeDrive);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.signed_speed_mps = 0.0;
+  action = supervisor.update(input);
+  ASSERT_EQ(action.type, RecoveryActionType::RequestDrive);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.reported_gear = Gear::Drive;
+  input.collision_worsening = false;
+  action = supervisor.update(input);
+  EXPECT_NE(action.type, RecoveryActionType::SafeStop);
+  EXPECT_EQ(action.reason, RecoveryReason::ClearanceCheck);
+  EXPECT_EQ(supervisor.state(), RecoveryState::CheckClearance);
+}
+
+TEST(RecoverySupervisor, StepwiseReverseDurationLimitStopsAndReassesses)
+{
+  auto config = supervisor_config();
+  config.max_reverse_duration_sec = 0.1;
+  RecoverySupervisor supervisor(config);
+  double now = 0.0;
+  auto input = healthy_recovery_input(now);
+  input.stepwise_escape = true;
+  advance_to_reverse(supervisor, input, now);
+
+  now += 0.1;
+  input.now_sec = now;
+  auto action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
+  EXPECT_EQ(action.reason, RecoveryReason::ReverseDurationLimit);
+  EXPECT_EQ(supervisor.state(), RecoveryState::StopBeforeDrive);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.signed_speed_mps = 0.0;
+  action = supervisor.update(input);
+  ASSERT_EQ(action.type, RecoveryActionType::RequestDrive);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.reported_gear = Gear::Drive;
+  action = supervisor.update(input);
+  EXPECT_NE(action.type, RecoveryActionType::SafeStop);
+  EXPECT_EQ(action.reason, RecoveryReason::ClearanceCheck);
+  EXPECT_EQ(supervisor.state(), RecoveryState::CheckClearance);
 }
 
 TEST(RecoverySupervisor, ReverseManeuverPausesForTransientClearanceLossAndResumes)

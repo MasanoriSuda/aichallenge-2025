@@ -1,7 +1,9 @@
 #ifndef MULTI_PURPOSE_MPC_ROS__V2X_OVERTAKE_CORE_HPP_
 #define MULTI_PURPOSE_MPC_ROS__V2X_OVERTAKE_CORE_HPP_
 
+#include <cstddef>
 #include <optional>
+#include <vector>
 
 namespace multi_purpose_mpc_ros::v2x_overtake_core
 {
@@ -37,6 +39,107 @@ struct SpeedLimitResolution
 /// elapsed time falls back to the capped normal speed.
 SpeedLimitResolution resolve_effective_speed_limit(const SpeedLimitRequest & request);
 const char * to_string(StartWindowStatus status) noexcept;
+
+enum class OvertakeSpeedStage
+{
+  ShiftOut,
+  Pass,
+};
+
+struct OvertakeSpeedReferenceRequest
+{
+  OvertakeSpeedStage stage{OvertakeSpeedStage::ShiftOut};
+  double base_reference_speed_mps{};
+  double hard_cap_mps{};
+  double front_speed_mps{};
+  double entry_speed_mps{};
+  double shiftout_max_closing_speed_mps{};
+};
+
+struct OvertakeSpeedReferenceResolution
+{
+  double reference_speed_mps{};
+  bool front_cap_applied{false};
+};
+
+/// Keep closing speed bounded while shifting out, then release the front-speed
+/// ceiling in Pass so the original trajectory reference can be used.
+OvertakeSpeedReferenceResolution resolve_overtake_speed_reference(
+  const OvertakeSpeedReferenceRequest & request);
+
+struct PredictionTimeRequest
+{
+  double elapsed_sec{};
+  double segment_distance_m{};
+  double predicted_speed_mps{};
+  double minimum_speed_mps{};
+  double maximum_time_sec{};
+};
+
+/// Advance a path-aligned prediction clock by distance / predicted speed.
+double advance_prediction_time(const PredictionTimeRequest & request);
+
+struct CoursePoint
+{
+  double x_m{};
+  double y_m{};
+};
+
+struct ForwardCourseProjectionRequest
+{
+  std::size_t start_index{};
+  bool circular{false};
+  double origin_x_m{};
+  double origin_y_m{};
+  double target_x_m{};
+  double target_y_m{};
+  double target_vx_mps{};
+  double target_vy_mps{};
+  double lookbehind_distance_m{};
+  double lookahead_distance_m{};
+  double max_cross_track_distance_m{};
+};
+
+struct ForwardCourseProjection
+{
+  bool valid{false};
+  double forward_distance_m{};
+  double lateral_m{};
+  double along_track_speed_mps{};
+  double cross_track_distance_m{};
+  std::size_t segment_index{};
+};
+
+/// Project ego and a V2X target onto the same bounded section of a reference
+/// polyline. The result is path progress, not the target's Cartesian distance
+/// in the ego tangent frame. A circular path may wrap once, but the bounded
+/// lookahead prevents selecting a spatially close branch far around the lap.
+ForwardCourseProjection project_forward_course_progress(
+  const std::vector<CoursePoint> & path, const ForwardCourseProjectionRequest & request);
+
+struct PassCompletionRequest
+{
+  double distance_to_hard_curve_m{};
+  double curve_buffer_m{};
+  double front_distance_m{};
+  double front_speed_mps{};
+  double planned_ego_speed_mps{};
+  double return_clear_distance_m{};
+  double minimum_shift_distance_m{};
+  double merge_buffer_m{};
+  double minimum_relative_speed_mps{};
+};
+
+struct PassCompletionResolution
+{
+  bool feasible{false};
+  double available_distance_m{};
+  double required_distance_m{};
+  double relative_speed_mps{};
+};
+
+/// Estimate whether ego can clear the target before the next hard curve.
+PassCompletionResolution resolve_pass_completion(const PassCompletionRequest & request);
 
 enum class PassSide : int
 {

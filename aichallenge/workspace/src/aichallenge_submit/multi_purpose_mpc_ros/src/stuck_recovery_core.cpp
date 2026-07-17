@@ -12,6 +12,8 @@ namespace multi_purpose_mpc_ros::stuck_recovery
 namespace
 {
 
+constexpr double kTimestampEpsilon = 1.0e-9;
+
 void validate_nonnegative(const double value, const char * name)
 {
   if (!std::isfinite(value) || value < 0.0) {
@@ -131,6 +133,30 @@ DetectorDecision disabled_decision(const DetectorInput & input) noexcept
 }
 
 }  // namespace
+
+bool source_timestamp_is_monotonic(
+  const double stamp_sec, const std::optional<double> & previous_stamp_sec) noexcept
+{
+  return std::isfinite(stamp_sec) && stamp_sec > 0.0 &&
+         (!previous_stamp_sec.has_value() ||
+         stamp_sec + kTimestampEpsilon >= previous_stamp_sec.value());
+}
+
+bool source_sample_is_current(
+  const double array_stamp_sec, const double sample_stamp_sec,
+  const double timeout_sec) noexcept
+{
+  if (
+    !std::isfinite(array_stamp_sec) || array_stamp_sec <= 0.0 ||
+    !std::isfinite(sample_stamp_sec) || sample_stamp_sec <= 0.0 ||
+    !finite_nonnegative(timeout_sec))
+  {
+    return false;
+  }
+  const double source_age_sec = array_stamp_sec - sample_stamp_sec;
+  return source_age_sec >= -kTimestampEpsilon &&
+         source_age_sec <= timeout_sec + kTimestampEpsilon;
+}
 
 StuckDetector::StuckDetector(DetectorConfig config)
 : config_(std::move(config))
@@ -756,6 +782,13 @@ RecoveryAction RecoverySupervisor::update_reverse_maneuver(const RecoveryInput &
     return hold_action(RecoveryReason::ReverseGearLost);
   }
   if (input.collision_worsening) {
+    // A stepwise contact escape owns only one short bounded motion. Stop that
+    // motion immediately, return to Drive, and select a new statically checked
+    // primitive instead of abandoning the whole episode after one map-cell
+    // boundary change. The escape-step limit still bounds repeated retries.
+    if (active_stepwise_escape_) {
+      reassess_after_drive_ = true;
+    }
     transition(
       RecoveryState::StopBeforeDrive, RecoveryReason::CollisionWorsening,
       input.now_sec);
@@ -807,6 +840,14 @@ RecoveryAction RecoverySupervisor::update_reverse_maneuver(const RecoveryInput &
     return hold_action(RecoveryReason::ReverseDistanceLimit);
   }
   if (state_elapsed(input.now_sec) >= config_.max_reverse_duration_sec) {
+    // A stepwise escape may hit its per-maneuver time budget just before the
+    // short distance target when acceleration is intentionally small.  Treat
+    // that boundary like a completed bounded step: stop, return to Drive, and
+    // run the full static/V2X clearance selection again.  The episode distance
+    // and max_escape_steps limits still bound the total recovery motion.
+    if (active_stepwise_escape_) {
+      reassess_after_drive_ = true;
+    }
     transition(
       RecoveryState::StopBeforeDrive, RecoveryReason::ReverseDurationLimit,
       input.now_sec);
@@ -834,6 +875,12 @@ RecoveryAction RecoverySupervisor::update_forward_maneuver(const RecoveryInput &
     return safe_stop_action(RecoveryReason::DriveGearLost);
   }
   if (input.collision_worsening) {
+    if (active_stepwise_escape_) {
+      transition(
+        RecoveryState::StopAndReassess, RecoveryReason::CollisionWorsening,
+        input.now_sec);
+      return hold_action(RecoveryReason::CollisionWorsening);
+    }
     transition(RecoveryState::SafeStop, RecoveryReason::CollisionWorsening, input.now_sec);
     return safe_stop_action(RecoveryReason::CollisionWorsening);
   }
@@ -875,6 +922,12 @@ RecoveryAction RecoverySupervisor::update_forward_maneuver(const RecoveryInput &
     return safe_stop_action(RecoveryReason::ForwardDistanceLimit);
   }
   if (state_elapsed(input.now_sec) >= config_.max_forward_duration_sec) {
+    if (active_stepwise_escape_) {
+      transition(
+        RecoveryState::StopAndReassess, RecoveryReason::ForwardDurationLimit,
+        input.now_sec);
+      return hold_action(RecoveryReason::ForwardDurationLimit);
+    }
     transition(RecoveryState::SafeStop, RecoveryReason::ForwardDurationLimit, input.now_sec);
     return safe_stop_action(RecoveryReason::ForwardDurationLimit);
   }

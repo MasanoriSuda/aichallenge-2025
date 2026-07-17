@@ -11,7 +11,7 @@ awsim_boost:
   enabled: true
   # Per-vehicle override keyed by ROS_DOMAIN_ID. Change a vehicle to false to disable Boost.
   domain_enabled:
-    1: true
+    1: false
     2: false
     3: false
   mode: start_once
@@ -22,17 +22,18 @@ awsim_boost:
   status_timeout_sec: 0.5
   confirmation_timeout_sec: 2.0
 
-# Staged wall-stuck recovery. It is active only for P1/P2 in the current dev3 simulation;
-# P3, unlisted domains, and every non-simulation environment remain disabled/fail-closed.
+# Staged wall/contact-stuck recovery. P1/P2/P3 use the same safety-reviewed recovery in dev3.
+# Unlisted domains and
+# every non-simulation environment remain disabled/fail-closed.
 stuck_recovery:
-  enabled: false
+  enabled: true
   domain_enabled:
-    1: false
-    2: false
-    3: false
+    1: true
+    2: true
+    3: true
   shadow_mode: false
   simulation_only: true
-  # P1/P2 simulation-only activation. 2026-07-12 local AWSIM calibration measured positive drive
+  # P1/P2/P3 simulation-only activation. 2026-07-12 local AWSIM calibration measured positive drive
   # acceleration in Reverse and negative stopping acceleration; keep disabled for real vehicle.
   reverse_actuation_enabled: true
   reverse_acceleration_sign: 1.0
@@ -155,7 +156,7 @@ reference_path:
   # csv_path: ""
   csv_path: "env/final_ver3/traj_mincurv.csv"
   domain_csv_path:
-    1: "env/final_ver3/traj_mincurv.csv"
+    1: "env/final_ver3/traj_mincurv_org.csv"
     2: "env/final_ver3/traj_mincurv_org.csv"
     3: "env/final_ver3/traj_mincurv_org.csv"
   resolution: 0.6
@@ -214,6 +215,8 @@ mpc:
   v2x_vehicle_length: 2.0
   v2x_prediction_margin: 0.1
   v2x_prediction_time: 1.0
+  v2x_prediction_use_path_time: true # align obstacle prediction time with path distance, not waypoint index
+  v2x_prediction_min_ego_speed: 1.0 # [m/s] avoid singular path-time prediction near standstill
   v2x_timeout_sec: 1.0
   v2x_position_jump_threshold: 5.0
   v2x_v_max_safety: 30.0
@@ -229,19 +232,25 @@ mpc:
   v2x_vehicle_vehicle_gap_enabled: false
   v2x_vehicle_vehicle_gap_min_distance: 18.0 # [m] only used when vehicle-vehicle gap is enabled
   v2x_vehicle_vehicle_gap_min_width: 3.2     # [m] only used when vehicle-vehicle gap is enabled
-  v2x_multi_front_gap_enabled: false
+  v2x_multi_front_gap_enabled: true # evaluate the outside of a two-kart pack; vehicle-vehicle gaps stay disabled
   v2x_multi_front_gap_distance: 18.0 # [m] with 2+ front vehicles, use no-gap velocity instead
   # V2X behavior FSM. When true, Cruise/Follow/Overtake/SafetyBrake controls when gap planner is allowed.
   use_v2x_behavior_fsm: true
   v2x_behavior_debug_log_enabled: true # Phase4: periodically log why Follow/Overtake was selected
   v2x_behavior_debug_log_period_sec: 1.0
+  # Project ego and V2X targets onto the same bounded reference-path section.
+  # This preserves along-course ordering through hairpins instead of relying
+  # only on the ego waypoint's Cartesian tangent.
+  v2x_front_progress_detection_enabled: true
+  v2x_front_progress_detection_distance: 24.0 # [m] early Follow/risk/overtake classification
+  v2x_front_progress_lookbehind_distance: 3.0 # [m] keep nearby rear/side classification stable
   v2x_follow_distance: 14.0        # [m]
   v2x_safety_brake_distance: 6.0  # [m] minimum distance; dynamic stop distance is also applied
   v2x_safety_brake_margin: 3.0    # [m] added to v^2 / (2 * abs(a_min))
   v2x_follow_gap_planner_enabled: false # Follow tracks the base path; lateral pass is only Overtake/low-speed avoidance
   v2x_follow_gap_planner_no_gap_speed_limit_enabled: false # do not yield just because no gap is found
   v2x_follow_gap_planner_respect_overtake_forbidden: true # do not side-attack in hairpins/forbidden zones
-  v2x_follow_speed_limit_enabled: false # when false, Follow does not cap velocity
+  v2x_follow_speed_limit_enabled: true  # match a moving front vehicle before the gap becomes critical
   v2x_follow_velocity: 3.0        # [m/s]
   v2x_follow_preposition_enabled: true # keep Follow slightly off the front vehicle's direct wake
   v2x_follow_preposition_offset: 0.9 # [m] soft lateral reference offset while following
@@ -275,12 +284,20 @@ mpc:
   # Gap width is measured after inflating V2X vehicles by ego+other half width.
   # Keep this as center-line slack, not raw vehicle width.
   v2x_overtake_min_gap_width: 0.8 # [m]
-  v2x_overtake_max_curvature: 0.03
+  v2x_overtake_max_curvature: 0.04
   v2x_overtake_block_inner_curve_pass: true # do not dive into the inside of hairpin curves
-  v2x_overtake_forbidden_curve_lookahead_distance: 8.0 # [m] block overtake only near/in hairpins; keep straights raceable
+  v2x_overtake_forbidden_curve_lookahead_distance: 6.0 # [m] soft entry/continuation policy; hard curve uses completion guard below
   v2x_overtake_gap_lookahead_distance: 24.0 # [m] search farther than MPC horizon for slow-front pass
   v2x_overtake_try_both_sides: true         # before ShiftOut, retry the opposite side if preferred gap is blocked
-  v2x_overtake_velocity_advantage: 1.0      # [m/s] soft reference over front speed; never overrides hard caps
+  v2x_overtake_velocity_advantage: 1.0      # [m/s] legacy whole-phase cap when stage speed is disabled
+  v2x_overtake_stage_speed_enabled: true    # bound closing speed in ShiftOut, release front-speed cap in Pass
+  v2x_overtake_shiftout_max_closing_speed: 1.0 # [m/s] lateral shift safety cap relative to the front kart
+  v2x_overtake_completion_guard_enabled: true # require enough distance to clear the target before a hard hairpin
+  v2x_overtake_completion_hard_curvature: 0.12 # [rad/m] hard hairpin boundary, separate from soft curve policy
+  v2x_overtake_completion_lookahead_distance: 80.0 # [m] search limit for the next hard boundary
+  v2x_overtake_completion_curve_buffer_distance: 2.0 # [m] finish target clearance before the hard boundary
+  v2x_overtake_completion_merge_buffer_distance: 3.0 # [m] reserve after reaching rear-clear position
+  v2x_overtake_completion_min_relative_speed: 0.5 # [m/s] reject passes with no credible longitudinal gain
   v2x_overtake_guard_enabled: true
   v2x_overtake_guard_min_gap_width: 0.8       # [m] center-line slack after inflated obstacles
   v2x_overtake_guard_min_gap_points: 2        # require consecutive horizon points before Overtake
@@ -290,8 +307,8 @@ mpc:
   v2x_overtake_guard_max_lateral_accel: 3.2   # [m/s^2] max required lateral accel to reach gap
   v2x_overtake_guard_min_gap_time: 0.7        # [s] reject gaps that appear too late at current speed
   v2x_overtake_guard_min_speed_for_reachable: 1.0 # [m/s] lower bound for reachability time estimate
-  v2x_overtake_guard_min_front_distance: 3.0  # [m] keep too-close cases in Follow/SafetyBrake
-  v2x_overtake_close_follow_enabled: true     # allow side target when tucked close but relative speed is small
+  v2x_overtake_guard_min_front_distance: 5.0  # [m] finish the lateral shift before entering bumper range
+  v2x_overtake_close_follow_enabled: false    # do not start a pass after closing into bumper range
   v2x_overtake_close_follow_min_front_distance: 1.5 # [m] do not side-escape from bumper-touch distance
   v2x_overtake_close_follow_max_closing_speed: 0.8 # [m/s] only allow if front speed is nearly matched
   v2x_overtake_close_follow_min_side_clearance: 2.0 # [m] require enough room before close-follow side target
@@ -299,7 +316,7 @@ mpc:
   v2x_overtake_before_curve_max_front_speed: 12.0 # [m/s] front vehicle is slow enough to justify pass
   v2x_overtake_before_curve_min_speed_advantage: 1.0 # [m/s] ego must be faster by this margin
   v2x_overtake_start_curve_clearance_distance: 3.0 # [m] do not start a new pass just before hairpins
-  v2x_overtake_continue_in_forbidden_enabled: false # moving vehicles should follow/brake, not keep passing in hairpins
+  v2x_overtake_continue_in_forbidden_enabled: true # continue only an active outer-side pass in a soft curve zone
   v2x_overtake_front_velocity_limit_enabled: false # do not match front speed while a reachable overtake gap exists
   v2x_overtake_fallback_ignore_soft_curve_forbidden: false # avoid wall-side fallback targets in hairpins
   v2x_overtake_fallback_min_side_clearance: 1.2 # [m] required pass-side clearance for fallback target
@@ -317,7 +334,7 @@ mpc:
   v2x_overtake_line_target_bias: 0.8          # [0-1] weight of explicit overtake line in xr[e_y]
   v2x_overtake_line_min_wall_clearance: 0.8   # [m] keep target away from path constraint edge
   v2x_overtake_line_max_lateral_accel: 2.5    # [m/s^2] clamp target movement if lateral accel is excessive
-  v2x_overtake_line_max_target_change: 0.25   # [m/cycle] smooth target goal updates across cycles
+  v2x_overtake_line_max_target_change: 0.04   # [m/cycle] smooth target goal updates across cycles
   v2x_overtake_line_return_clear_distance: 4.0 # [m] locked target must be this far behind before Return
   v2x_overtake_line_phase_hold_time: 0.3      # [s] minimum phase hold before transition
   v2x_overtake_target_hold_sec: 0.30          # [s] tolerate brief front/side classification loss
@@ -332,13 +349,13 @@ mpc:
   v2x_overtake_recovery_timeout_sec: 5.0      # [s] absolute bound for one Recovery phase
   v2x_overtake_recovery_max_observation_gap_sec: 0.2 # [s] reject discontinuous distance integration
   v2x_overtake_solver_cooldown_sec: 2.0       # [s] suppress immediate re-entry after solver abort
-  v2x_overtake_solver_failure_abort_cycles: 3 # consecutive failures before aborting the lateral pass target
+  v2x_overtake_solver_failure_abort_cycles: 8 # consecutive failures before aborting the lateral pass target
   v2x_overtake_line_debug_log_enabled: true   # log phase changes when enabled
   v2x_moving_front_speed_threshold: 1.0 # [m/s] above this, Follow uses moving-front behavior
-  v2x_moving_follow_speed_margin: 4.0   # [m/s] speed margin over the moving front vehicle
-  v2x_moving_safety_brake_distance: 2.0 # [m] minimum brake distance for moving front vehicles
-  v2x_moving_safety_brake_margin: 0.5   # [m] added to relative-speed stopping distance
-  v2x_moving_safety_brake_time_headway: 0.15 # [s] speed-dependent emergency margin
+  v2x_moving_follow_speed_margin: 0.8   # [m/s] controlled closing margin while still behind
+  v2x_moving_safety_brake_distance: 3.0 # [m] minimum brake distance for moving front vehicles
+  v2x_moving_safety_brake_margin: 1.0   # [m] added to relative-speed stopping distance
+  v2x_moving_safety_brake_time_headway: 0.8 # [s] speed-dependent emergency margin
   v2x_start_grid_grace_time: 5.0         # [s] Ready staging plus this duration after Start; static grid only
   v2x_require_gap_for_overtake: true
   v2x_low_speed_avoidance_enabled: true
@@ -367,9 +384,9 @@ mpc:
 
   v_max: 40.0   # km/h
   domain_v_max:
-    1: 40.0
+    1: 20.0
     2: 40.0
-    3: 40.0
+    3: 10.0
   domain_start_v_max_duration: 15.0 # [s] compensate inner-lane advantage at side-by-side start
   domain_start_v_max:
     2: 37.0

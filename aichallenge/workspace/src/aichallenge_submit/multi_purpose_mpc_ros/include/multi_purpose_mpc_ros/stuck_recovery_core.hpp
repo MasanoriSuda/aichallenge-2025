@@ -7,6 +7,16 @@
 namespace multi_purpose_mpc_ros::stuck_recovery
 {
 
+// V2X source stamps can use simulation time while the receiving ROS node uses
+// a wall/system clock. Receipt freshness must therefore be checked with the
+// receiver clock, and source ordering must be checked only within the source
+// clock domain.
+bool source_timestamp_is_monotonic(
+  double stamp_sec, const std::optional<double> & previous_stamp_sec) noexcept;
+
+bool source_sample_is_current(
+  double array_stamp_sec, double sample_stamp_sec, double timeout_sec) noexcept;
+
 enum class StuckVerdict
 {
   NotEligible,

@@ -28,6 +28,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::ReacquireRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SideSelectionReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::SideSelectionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SpeedLimitRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::StallWatchdogRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StartWindowStatus;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_effective_speed_limit;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_speed_reference;
@@ -38,6 +39,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_target_continuity;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_reacquire_during_return;
 using multi_purpose_mpc_ros::v2x_overtake_core::integrate_forward_distance;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_recovery_policy;
+using multi_purpose_mpc_ros::v2x_overtake_core::update_stall_watchdog;
 using multi_purpose_mpc_ros::v2x_overtake_core::arm_solver_cooldown;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_solver_cooldown_active;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_pass_side;
@@ -570,6 +572,66 @@ TEST(V2XOvertakeCoreRecovery, RejectsInvalidPolicyConfiguration)
 
   ForwardDistanceRequest distance_request{0.0, 1.0, 0.1, 0.0};
   EXPECT_THROW(integrate_forward_distance(distance_request), std::invalid_argument);
+}
+
+TEST(V2XOvertakeCoreStallWatchdog, TimesOutOnlyAcrossContinuousLowSpeedObservations)
+{
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  StallWatchdogRequest request{true, 0.0, 10.0, nan, nan, 0.15, 1.5, 0.2};
+
+  auto resolution = update_stall_watchdog(request);
+  EXPECT_TRUE(resolution.observation_accepted);
+  EXPECT_FALSE(resolution.timed_out);
+  EXPECT_DOUBLE_EQ(resolution.stall_since_sec, 10.0);
+
+  request.previous_update_sec = resolution.update_sec;
+  request.stall_since_sec = resolution.stall_since_sec;
+  request.now_sec = 11.5;
+  request.max_observation_gap_sec = 2.0;
+  resolution = update_stall_watchdog(request);
+  EXPECT_TRUE(resolution.timed_out);
+  EXPECT_DOUBLE_EQ(resolution.stalled_sec, 1.5);
+}
+
+TEST(V2XOvertakeCoreStallWatchdog, ResetsForMotionInactiveStateAndObservationGap)
+{
+  StallWatchdogRequest request{true, 0.0, 10.1, 10.0, 9.0, 0.15, 1.5, 0.2};
+
+  auto resolution = update_stall_watchdog(request);
+  EXPECT_DOUBLE_EQ(resolution.stall_since_sec, 9.0);
+
+  request.speed_mps = 0.16;
+  resolution = update_stall_watchdog(request);
+  EXPECT_FALSE(std::isfinite(resolution.stall_since_sec));
+  EXPECT_FALSE(resolution.timed_out);
+
+  request.speed_mps = 0.0;
+  request.active = false;
+  resolution = update_stall_watchdog(request);
+  EXPECT_FALSE(std::isfinite(resolution.stall_since_sec));
+
+  request.active = true;
+  request.now_sec = 10.5;
+  request.previous_update_sec = 10.1;
+  request.stall_since_sec = 9.0;
+  resolution = update_stall_watchdog(request);
+  EXPECT_DOUBLE_EQ(resolution.stall_since_sec, 10.5);
+  EXPECT_DOUBLE_EQ(resolution.stalled_sec, 0.0);
+}
+
+TEST(V2XOvertakeCoreStallWatchdog, RejectsInvalidConfigurationAndObservation)
+{
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  StallWatchdogRequest request{true, 0.0, 10.0, nan, nan, 0.15, 1.5, 0.2};
+
+  request.timeout_sec = 0.0;
+  EXPECT_THROW(update_stall_watchdog(request), std::invalid_argument);
+
+  request.timeout_sec = 1.5;
+  request.now_sec = nan;
+  const auto resolution = update_stall_watchdog(request);
+  EXPECT_FALSE(resolution.observation_accepted);
+  EXPECT_FALSE(std::isfinite(resolution.stall_since_sec));
 }
 
 TEST(V2XOvertakeCoreRecovery, ArmsExtendsAndExpiresSolverCooldownAtBoundary)

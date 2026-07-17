@@ -274,6 +274,34 @@ struct RecoveryPolicyResolution
 /// The returned velocity limit is the configured ceiling and intentionally does not shrink with
 /// current vehicle speed. Runtime observation errors fail closed via InvalidObservation.
 RecoveryPolicyResolution resolve_recovery_policy(const RecoveryPolicyRequest & request);
+
+struct StallWatchdogRequest
+{
+  bool active{false};
+  double speed_mps{};
+  double now_sec{};
+  double previous_update_sec{};
+  double stall_since_sec{};
+  double speed_threshold_mps{};
+  double timeout_sec{};
+  double max_observation_gap_sec{};
+};
+
+struct StallWatchdogResolution
+{
+  double update_sec{};
+  double stall_since_sec{};
+  double stalled_sec{};
+  bool observation_accepted{false};
+  bool timed_out{false};
+};
+
+/// Update a bounded low-speed stall observation.
+///
+/// `previous_update_sec` and `stall_since_sec` use NaN to represent an inactive timer. A clock
+/// rollback or observation gap restarts the timer from the current observation instead of
+/// carrying elapsed time across an unobserved interval.
+StallWatchdogResolution update_stall_watchdog(const StallWatchdogRequest & request);
 const char * to_string(RecoveryExitReason reason) noexcept;
 
 struct SolverCooldownRequest

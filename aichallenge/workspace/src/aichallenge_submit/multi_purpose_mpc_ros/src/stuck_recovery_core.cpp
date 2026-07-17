@@ -1447,6 +1447,31 @@ const char * to_string(const ManeuverDirection direction) noexcept
   return "Unknown";
 }
 
+bool recovery_candidate_commit_allowed(const RecoveryState state) noexcept
+{
+  switch (state) {
+    case RecoveryState::ShiftToReverse:
+    case RecoveryState::WaitReverseReport:
+    case RecoveryState::ReverseManeuver:
+    case RecoveryState::ForwardManeuver:
+      return true;
+    case RecoveryState::Normal:
+    case RecoveryState::SuspectStuck:
+    case RecoveryState::WaitAwsimRecovery:
+    case RecoveryState::StopAndConfirm:
+    case RecoveryState::CheckClearance:
+    case RecoveryState::WaitForClear:
+    case RecoveryState::StopAndReassess:
+    case RecoveryState::StopBeforeDrive:
+    case RecoveryState::ShiftToDrive:
+    case RecoveryState::WaitDriveReport:
+    case RecoveryState::LowSpeedRejoin:
+    case RecoveryState::SafeStop:
+      return false;
+  }
+  return false;
+}
+
 const char * to_string(const RecoveryState state) noexcept
 {
   switch (state) {

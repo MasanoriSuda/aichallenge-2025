@@ -164,6 +164,10 @@ enum class RecoveryState
   SafeStop,
 };
 
+/// Return true once a recovery candidate has entered an actuation path and may be fixed for the
+/// rest of that maneuver. Observation/clearance states must continue to re-evaluate direction.
+bool recovery_candidate_commit_allowed(RecoveryState state) noexcept;
+
 enum class RecoveryActionType
 {
   NormalControl,

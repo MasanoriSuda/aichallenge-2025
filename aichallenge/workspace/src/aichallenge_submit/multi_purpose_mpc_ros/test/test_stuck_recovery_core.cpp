@@ -33,6 +33,7 @@ using multi_purpose_mpc_ros::stuck_recovery::StuckVerdict;
 using multi_purpose_mpc_ros::stuck_recovery::SupervisorConfig;
 using multi_purpose_mpc_ros::stuck_recovery::reverse_actuation_calibration_is_valid;
 using multi_purpose_mpc_ros::stuck_recovery::reverse_stopping_distance_reserve_m;
+using multi_purpose_mpc_ros::stuck_recovery::recovery_candidate_commit_allowed;
 using multi_purpose_mpc_ros::stuck_recovery::source_sample_is_current;
 using multi_purpose_mpc_ros::stuck_recovery::source_timestamp_is_monotonic;
 
@@ -49,6 +50,23 @@ TEST(StuckRecoveryV2XClockDomain, RejectsRollbackFutureAndStaleSourceSamples)
   EXPECT_FALSE(source_timestamp_is_monotonic(42.9, previous_array_stamp));
   EXPECT_FALSE(source_sample_is_current(43.0, 43.1, 1.0));
   EXPECT_FALSE(source_sample_is_current(43.0, 41.9, 1.0));
+}
+
+TEST(StuckRecoveryCandidateCommit, DelaysCommitUntilActuationPath)
+{
+  EXPECT_FALSE(recovery_candidate_commit_allowed(RecoveryState::SuspectStuck));
+  EXPECT_FALSE(recovery_candidate_commit_allowed(RecoveryState::WaitAwsimRecovery));
+  EXPECT_FALSE(recovery_candidate_commit_allowed(RecoveryState::CheckClearance));
+  EXPECT_FALSE(recovery_candidate_commit_allowed(RecoveryState::WaitForClear));
+  EXPECT_FALSE(recovery_candidate_commit_allowed(RecoveryState::SafeStop));
+
+  EXPECT_TRUE(recovery_candidate_commit_allowed(RecoveryState::ShiftToReverse));
+  EXPECT_TRUE(recovery_candidate_commit_allowed(RecoveryState::WaitReverseReport));
+  EXPECT_TRUE(recovery_candidate_commit_allowed(RecoveryState::ReverseManeuver));
+  EXPECT_TRUE(recovery_candidate_commit_allowed(RecoveryState::ForwardManeuver));
+
+  EXPECT_FALSE(recovery_candidate_commit_allowed(RecoveryState::StopAndReassess));
+  EXPECT_FALSE(recovery_candidate_commit_allowed(RecoveryState::LowSpeedRejoin));
 }
 
 DetectorConfig detector_config()

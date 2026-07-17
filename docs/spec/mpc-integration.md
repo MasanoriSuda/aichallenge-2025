@@ -248,13 +248,15 @@ corridorを駆動可否の正本とする。control disableとadapterが明示�
 FrontではReverse Straight / Left / Rightをこの順で評価し、RearではForwardStraightを
 評価する。Side / Mixedかつ実map contactありでもReverse Straight / Left / Rightの3候補を
 0.40 m評価する。Unknownまたは改善候補なしはfail-closedとする。検索marginは
-方向推定専用でありcollision footprintを縮小しない。最初のfeasible候補はRecovery episode中
-固定する。Reverse Left / Rightは`reverse_steering_angle_rad`の正負を実commandへ渡し、
+方向推定専用でありcollision footprintを縮小しない。候補は`SUSPECT_STUCK`、AWSIM補正待機、
+停止確認、clearance待機では毎周期再評価し、`SHIFT_TO_REVERSE` / `WAIT_REVERSE_REPORT` /
+`REVERSE_MANEUVER` / `FORWARD_MANEUVER`へ到達した時点でepisodeへ固定する。固定後は方向と操舵符号を
+変更しない。Reverse Left / Rightは`reverse_steering_angle_rad`の正負を実commandへ渡し、
 選択rolloutの横変位分だけV2X corridorを拡張する。
 
 AWSIM補正待機中にpose / contactが変わるため、`STOP_AND_CONFIRM`後は待機前の候補を破棄し、
-現在snapshotをbaselineとして候補を再選択する。Left / Right / Mixed近傍wallでmap contactが0の
-場合もstatic swept rolloutを評価する。通常はReverseを優先するが、fresh / completeなV2Xで
+現在snapshotをbaselineとして候補を再選択する。現在map footprintがclearならwall分類にかかわらず
+static swept rolloutを評価する。通常はReverseを優先するが、fresh / completeなV2Xで
 Reverse corridorだけが後続車に塞がれた場合は、Forward Straight / Left / Rightのうちstatic
 rolloutとforward corridorがclearな候補を評価し、終端の絶対heading errorを最も減らす候補へ
 最大0.6 mのForwardCreepを切り替える。同値ではStraightを優先し、選択したLeft / Rightの
@@ -343,7 +345,7 @@ lateral / heading errorが所定時間閾値内に入るまで継続する。
 現runtimeはFront / Side / Mixedの`ReverseStraight` / `ReverseLeft` / `ReverseRight`、Rearの
 `ForwardStraight`、後続車にReverseを塞がれたclear-footprint時の`ForwardStraight` /
 `ForwardLeft` / `ForwardRight`を決定的に評価し、
-最初のfeasible候補をepisode中固定して実commandへ変換する。RViz candidate表示と
+actuation開始時のfeasible候補をepisode中固定して実commandへ変換する。RViz candidate表示と
 終端rejoin scoreは未実装である。
 
 2026-07-17時点で`stuck_recovery_core`、`v2x_overtake_core`、`recovery_footprint`の対象suiteは
@@ -374,6 +376,16 @@ skipするよう修正し、duplicate circular endpointとinterior duplicateの�
 SafeStopし、P1は前方SafetyBrakeを維持した。車両同士の追突は起きていないものの3台は停止しており、
 「安全な離脱rolloutがない先頭車」まで必ず再発進させる修正ではない。残課題は通常MPCのwall侵入抑制、
 side-only近接時のdeadlock分類、および追加primitiveの安全設計であり、現行gateはfail-closedを維持する。
+
+LowSpeedAvoidance stall監視とactuation直前の候補固定を追加した`output/20260717-225927`では、
+対象unit test 120件と25 package buildは成功したが、dev3受け入れは不成立だった。このrunでは
+LowSpeedAvoidance自体が発生せず、D1はWP 118付近のwall contactを5 step・累積2.015 mの退避で
+解消した後、LowSpeedRejoin中の新規contactにより`rejoin_unsafe`となった。D3はWP 183付近で
+約1.71 radのheading errorを持って停止し、安全なForward static fallbackが成立せず、Reverseも
+D2に塞がれて`clearance_wait_timed_out`となった。D2は共通コース進捗でD3を検出してSafetyBrakeした。
+したがって3台停止は再発しており、次の対象はRecovery gate緩和ではなく、通常走行中のwall接触と
+LowSpeedRejoin新規接触の予防である。実験詳細は
+`.steering/20260717-v2x-low-speed-recovery-deadlock-fix/results.md`に記録する。
 gear publisherはReliable / KeepLast(1) / Volatileであり、TransientLocalは古いREVERSEの
 late-join replayを避けるため使用しない。
 
@@ -985,6 +997,10 @@ mpc:
   v2x_low_speed_avoidance_min_gap_width: 0.5
   v2x_low_speed_avoidance_min_gap_points: 2
   v2x_low_speed_avoidance_clear_distance: 8.0
+  v2x_low_speed_avoidance_stall_speed: 0.15
+  v2x_low_speed_avoidance_stall_timeout_sec: 1.5
+  v2x_low_speed_avoidance_stall_cooldown_sec: 3.0
+  v2x_low_speed_avoidance_stall_max_observation_gap_sec: 0.2
   v2x_local_path_pass_clearance: 3.0
   v2x_local_path_return_distance: 6.0
   v2x_local_path_invert_target: false
@@ -1011,6 +1027,7 @@ mpc:
 - `v2x_overtake_before_curve_enabled=true` の場合、WP 明示禁止ではなく曲率先読みだけで overtake forbidden になっている区間では、前走車が `v2x_overtake_before_curve_max_front_speed` 以下で、自車が `v2x_overtake_before_curve_min_speed_advantage` 以上速く、かつ `front_decel_guard_curve_lookahead_distance` ではまだガードされていない場合だけ、新規 Overtake を許す。これは長い曲率先読みで直線中の低速前走車に張り付く問題を抑えるための例外である。`v2x_overtake_continue_in_forbidden_enabled=true` の場合は、すでに Overtake 中なら同じ soft forbidden 区間で Overtake 継続を許し、ヘアピン前に横へ出た車両が途中で Follow に戻される挙動を抑える。
 - `v2x_overtake_front_velocity_limit_enabled=true` の場合、`Overtake` 中でも前走車の required decel / front decel guard 由来の速度上限を掛ける。安全寄りだが、前走車速度へ引っ張られて追い越しが成立しない場合は `false` にする。`false` でも `EmergencyBrake` と inside stopping distance は Overtake 判定より先に評価されるため、近すぎる場合の SafetyBrake は残る。
 - `LowSpeedAvoidance`: 近距離の低速前方車両に対して通過可能な側がある場合、SafetyBrake より先に `v2x_low_speed_avoidance_velocity` へ速度制限して徐行回避する。開始条件では `v2x_low_speed_avoidance_max_front_speed` 以下の V2X 推定速度を低速車両として扱う。いったん `LowSpeedAvoidance` に入った後は、local path または gap がまだ feasible で、対象車両が `v2x_low_speed_avoidance_clear_distance` 以内に残る限り、停止車基準の inside stopping distance と `EmergencyBrake` より LowSpeedAvoidance を優先する。これは gate2 のような停止車列回避で、基準 trajectory 上の前方距離だけを見た SafetyBrake により通過途中で停止しないためである。
+- `LowSpeedAvoidance`確定中に実速度が`v2x_low_speed_avoidance_stall_speed`以下で`v2x_low_speed_avoidance_stall_timeout_sec`継続した場合は、局所回避targetを解除し、dangerならSafetyBrake、front/sideありならFollow、それ以外はCruiseへ戻す。`v2x_low_speed_avoidance_stall_cooldown_sec`中は同じ回避への即再進入を抑制する。時刻逆行、非有限値、`v2x_low_speed_avoidance_stall_max_observation_gap_sec`超過では継続時間を加算しない。現行0.15 m/s、1.5 s、3.0 s、0.2 sは2025 AWSIM向けローカル暫定値であり、2026公式値ではない。
 - 低速回避では `v2x_low_speed_pass_side` で通過側を `auto` / `left` / `right` から選べる。`right` は reference path 座標系の負の lateral 側、`left` は正の lateral 側である。`auto` の場合は最初に選んだ側を低速回避中の side lock として使う。configured side に通過可能 gap がない場合は逆側へ無理に振らず、Follow / SafetyBrake 側へ倒す。
 - `use_v2x_local_path_planner=true` の場合、`LowSpeedAvoidance` は従来の constraint-only gap planner ではなく、停止/低速車両列を reference path の `s/d` 座標へ射影し、選んだ側の「壁と膨張済み車両の間」を通る `target_ey` 列と横制約 `lb/ub` を生成する。この target は全 horizon 点で active になり、障害物が horizon 上で重なる前から MPC の `xr[e_y]` を通過側へ向ける。
 - local path planner の target は `v2x_wall_avoidance_bias` を反映する。`0.0` は通路中央、`1.0` は膨張済み車両から `v2x_vehicle_side_target_margin` だけ離れた車両側寄りで、壁側へ膨らみすぎる場合は `0.5` から `1.0` の範囲で上げる。

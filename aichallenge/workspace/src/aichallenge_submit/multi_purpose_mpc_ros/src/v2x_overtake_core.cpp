@@ -507,6 +507,47 @@ RecoveryPolicyResolution resolve_recovery_policy(const RecoveryPolicyRequest & r
   return resolution;
 }
 
+StallWatchdogResolution update_stall_watchdog(const StallWatchdogRequest & request)
+{
+  if (!std::isfinite(request.speed_threshold_mps) || request.speed_threshold_mps < 0.0) {
+    throw std::invalid_argument("stall speed threshold must be finite and non-negative");
+  }
+  if (!std::isfinite(request.timeout_sec) || request.timeout_sec <= 0.0) {
+    throw std::invalid_argument("stall timeout must be finite and positive");
+  }
+  if (
+    !std::isfinite(request.max_observation_gap_sec) ||
+    request.max_observation_gap_sec <= 0.0)
+  {
+    throw std::invalid_argument("stall observation gap must be finite and positive");
+  }
+
+  const double inactive = std::numeric_limits<double>::quiet_NaN();
+  StallWatchdogResolution resolution{inactive, inactive, 0.0, false, false};
+  if (!std::isfinite(request.now_sec) || !std::isfinite(request.speed_mps)) {
+    return resolution;
+  }
+
+  resolution.update_sec = request.now_sec;
+  resolution.observation_accepted = true;
+  if (!request.active || std::abs(request.speed_mps) > request.speed_threshold_mps) {
+    return resolution;
+  }
+
+  const bool observation_continuous =
+    std::isfinite(request.previous_update_sec) &&
+    request.now_sec >= request.previous_update_sec &&
+    request.now_sec - request.previous_update_sec <= request.max_observation_gap_sec;
+  const bool previous_stall_valid =
+    std::isfinite(request.stall_since_sec) &&
+    request.stall_since_sec <= request.now_sec;
+  resolution.stall_since_sec = observation_continuous && previous_stall_valid ?
+    request.stall_since_sec : request.now_sec;
+  resolution.stalled_sec = std::max(0.0, request.now_sec - resolution.stall_since_sec);
+  resolution.timed_out = resolution.stalled_sec >= request.timeout_sec;
+  return resolution;
+}
+
 const char * to_string(const RecoveryExitReason reason) noexcept
 {
   switch (reason) {

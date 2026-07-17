@@ -1394,6 +1394,10 @@ struct V2XBehaviorConfig
   double low_speed_avoidance_min_gap_width{1.5};
   int low_speed_avoidance_min_gap_points{2};
   double low_speed_avoidance_clear_distance{8.0};
+  double low_speed_avoidance_stall_speed{0.15};
+  double low_speed_avoidance_stall_timeout_sec{1.5};
+  double low_speed_avoidance_stall_cooldown_sec{3.0};
+  double low_speed_avoidance_stall_max_observation_gap_sec{0.2};
   double low_speed_local_path_pass_clearance{3.0};
   double low_speed_local_path_return_distance{6.0};
   bool low_speed_local_path_invert_target{false};
@@ -1550,6 +1554,8 @@ struct V2XBehaviorOutput
   bool start_grid_stop_suppressed{false};
   bool low_speed_avoidance_candidate{false};
   bool low_speed_avoidance_gap_blocked{false};
+  bool low_speed_avoidance_stalled{false};
+  bool low_speed_avoidance_cooldown_active{false};
   bool overtake_forbidden{false};
   bool overtake_forbidden_wp{false};
   bool front_decel_curve_guard{false};
@@ -1588,6 +1594,7 @@ struct V2XBehaviorOutput
   double front_distance{std::numeric_limits<double>::infinity()};
   double front_local_longitudinal{std::numeric_limits<double>::infinity()};
   double front_progress_lateral{std::numeric_limits<double>::infinity()};
+  double low_speed_avoidance_stalled_sec{0.0};
   std::string reason;
   std::string overtake_block_reason;
 };
@@ -2879,6 +2886,9 @@ struct MPC
     v2x_behavior_state = V2XBehaviorState::Cruise;
     v2x_behavior_state_initialized = false;
     last_v2x_behavior_state_change_sec = now_sec;
+    low_speed_avoidance_stall_since_sec_ = std::numeric_limits<double>::quiet_NaN();
+    low_speed_avoidance_stall_last_update_sec_ = std::numeric_limits<double>::quiet_NaN();
+    low_speed_avoidance_stall_cooldown_until_sec_ = now_sec;
     overtake_locked_target_ey_.reset();
     overtake_locked_side_sign_ = 0;
     overtake_entry_speed_.reset();
@@ -2918,6 +2928,9 @@ struct MPC
     }
     output.start_grid_grace_active = start_grid_grace_active;
     output.ego_speed = current_speed_mps_;
+    const bool low_speed_avoidance_cooldown_active =
+      std::isfinite(now_sec) && now_sec < low_speed_avoidance_stall_cooldown_until_sec_;
+    output.low_speed_avoidance_cooldown_active = low_speed_avoidance_cooldown_active;
 
     const auto vehicles = gap_planner->active_vehicles(now_sec);
     output.active_vehicle_count = vehicles.size();
@@ -3180,6 +3193,7 @@ struct MPC
     }
     const bool low_speed_avoidance_candidate =
       cfg.v2x_behavior.low_speed_avoidance_enabled && has_front_vehicle &&
+      !low_speed_avoidance_cooldown_active &&
       !suppress_start_grid_stop_behavior &&
       nearest_front_speed <= cfg.v2x_behavior.low_speed_avoidance_max_front_speed &&
       (!overtake_forbidden || continuing_low_speed_avoidance ||
@@ -3223,6 +3237,7 @@ struct MPC
 
     const bool low_speed_avoidance_hold_candidate =
       cfg.v2x_behavior.low_speed_avoidance_enabled && continuing_low_speed_avoidance &&
+      !low_speed_avoidance_cooldown_active &&
       has_front_vehicle && !suppress_start_grid_stop_behavior &&
       nearest_front_speed <= cfg.v2x_behavior.low_speed_avoidance_max_front_speed &&
       (!overtake_forbidden ||
@@ -3272,7 +3287,7 @@ struct MPC
 
     if (
       has_low_speed_clearance_vehicle && cfg.v2x_behavior.low_speed_avoidance_enabled &&
-      continuing_low_speed_avoidance) {
+      continuing_low_speed_avoidance && !low_speed_avoidance_cooldown_active) {
       output.state = V2XBehaviorState::LowSpeedAvoidance;
       output.reason = "low-speed avoidance clearance hold";
       return commit_v2x_behavior_state(output, now_sec);
@@ -3646,7 +3661,8 @@ struct MPC
 
     if (
       has_side_vehicle && cfg.v2x_behavior.low_speed_avoidance_enabled &&
-      v2x_behavior_state_initialized && v2x_behavior_state == V2XBehaviorState::LowSpeedAvoidance) {
+      v2x_behavior_state_initialized && v2x_behavior_state == V2XBehaviorState::LowSpeedAvoidance &&
+      !low_speed_avoidance_cooldown_active) {
       output.state = V2XBehaviorState::LowSpeedAvoidance;
       output.reason = "low-speed avoidance side vehicle";
       return commit_v2x_behavior_state(output, now_sec);
@@ -4282,6 +4298,10 @@ struct MPC
   bool v2x_behavior_state_initialized{false};
   double last_v2x_behavior_state_change_sec{-std::numeric_limits<double>::infinity()};
   double last_v2x_behavior_debug_log_sec_{std::numeric_limits<double>::quiet_NaN()};
+  double low_speed_avoidance_stall_since_sec_{std::numeric_limits<double>::quiet_NaN()};
+  double low_speed_avoidance_stall_last_update_sec_{std::numeric_limits<double>::quiet_NaN()};
+  double low_speed_avoidance_stall_cooldown_until_sec_{
+    -std::numeric_limits<double>::infinity()};
   bool start_grid_stop_suppressed_{false};
   bool start_grid_emergency_override_logged_{false};
   std::optional<std::string> start_grid_initial_target_id_;
@@ -5728,7 +5748,34 @@ private:
     V2XBehaviorState final_state = output.state;
     const bool had_previous_state = v2x_behavior_state_initialized;
     const V2XBehaviorState previous_state = v2x_behavior_state;
-    if (v2x_behavior_state_initialized) {
+    const bool low_speed_avoidance_watchdog_active =
+      had_previous_state && previous_state == V2XBehaviorState::LowSpeedAvoidance &&
+      final_state == V2XBehaviorState::LowSpeedAvoidance;
+    const auto low_speed_stall = v2x_overtake_core::update_stall_watchdog(
+      v2x_overtake_core::StallWatchdogRequest{
+        low_speed_avoidance_watchdog_active,
+        current_speed_mps_,
+        now_sec,
+        low_speed_avoidance_stall_last_update_sec_,
+        low_speed_avoidance_stall_since_sec_,
+        cfg.v2x_behavior.low_speed_avoidance_stall_speed,
+        cfg.v2x_behavior.low_speed_avoidance_stall_timeout_sec,
+        cfg.v2x_behavior.low_speed_avoidance_stall_max_observation_gap_sec});
+    low_speed_avoidance_stall_last_update_sec_ = low_speed_stall.update_sec;
+    low_speed_avoidance_stall_since_sec_ = low_speed_stall.stall_since_sec;
+    output.low_speed_avoidance_stalled_sec = low_speed_stall.stalled_sec;
+    if (low_speed_avoidance_watchdog_active && low_speed_stall.timed_out) {
+      output.low_speed_avoidance_stalled = true;
+      low_speed_avoidance_stall_cooldown_until_sec_ = std::max(
+        low_speed_avoidance_stall_cooldown_until_sec_,
+        now_sec + cfg.v2x_behavior.low_speed_avoidance_stall_cooldown_sec);
+      output.low_speed_avoidance_cooldown_active = true;
+      final_state = output.has_danger_vehicle ? V2XBehaviorState::SafetyBrake :
+        (output.has_front_vehicle || output.has_side_vehicle ?
+        V2XBehaviorState::Follow : V2XBehaviorState::Cruise);
+      output.reason = "low-speed avoidance stalled";
+    }
+    if (v2x_behavior_state_initialized && !output.low_speed_avoidance_stalled) {
       const double elapsed = now_sec - last_v2x_behavior_state_change_sec;
       const bool more_restrictive =
         behavior_restriction_rank(final_state) > behavior_restriction_rank(v2x_behavior_state);
@@ -5846,6 +5893,7 @@ private:
           "fd=%.2f, progress=%d, local_fd=%.2f, path_lat=%.2f, fs=%.2f, ego=%.2f, "
           "rel=%.2f, req_dec=%.2f, avail=%.2f, risk=%s, "
           "forbid=%d, forbid_wp=%d, curve_guard=%d, low_speed=%d, low_speed_block=%d, "
+          "low_stall=%.2f, low_timeout=%d, low_cooldown=%d, "
           "zone=%d, start_curve=%d, before_curve=%d, continue=%d, completion=%d, "
           "completion_avail=%.2f, completion_req=%.2f, completion_rel=%.2f, "
           "gap=%d, fallback=%d, "
@@ -5868,6 +5916,9 @@ private:
           output.front_decel_curve_guard ? 1 : 0,
           output.low_speed_avoidance_candidate ? 1 : 0,
           output.low_speed_avoidance_gap_blocked ? 1 : 0,
+          output.low_speed_avoidance_stalled_sec,
+          output.low_speed_avoidance_stalled ? 1 : 0,
+          output.low_speed_avoidance_cooldown_active ? 1 : 0,
           output.overtake_zone_allows ? 1 : 0,
           output.overtake_start_curve_blocked ? 1 : 0,
           output.before_curve_overtake_allowed ? 1 : 0,
@@ -5888,6 +5939,11 @@ private:
           output.reason.c_str(), output.overtake_block_reason.c_str());
         last_v2x_behavior_debug_log_sec_ = now_sec;
       }
+    }
+
+    if (final_state != V2XBehaviorState::LowSpeedAvoidance) {
+      low_speed_avoidance_stall_since_sec_ = std::numeric_limits<double>::quiet_NaN();
+      low_speed_avoidance_stall_last_update_sec_ = std::numeric_limits<double>::quiet_NaN();
     }
 
     output.state = final_state;
@@ -7174,6 +7230,22 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_low_speed_avoidance_clear_distance"] ?
     mpc["v2x_low_speed_avoidance_clear_distance"].as<double>() : 8.0);
+  cfg.mpc.v2x_behavior.low_speed_avoidance_stall_speed = std::max(
+    0.0,
+    mpc["v2x_low_speed_avoidance_stall_speed"] ?
+    mpc["v2x_low_speed_avoidance_stall_speed"].as<double>() : 0.15);
+  cfg.mpc.v2x_behavior.low_speed_avoidance_stall_timeout_sec = std::max(
+    0.01,
+    mpc["v2x_low_speed_avoidance_stall_timeout_sec"] ?
+    mpc["v2x_low_speed_avoidance_stall_timeout_sec"].as<double>() : 1.5);
+  cfg.mpc.v2x_behavior.low_speed_avoidance_stall_cooldown_sec = std::max(
+    0.0,
+    mpc["v2x_low_speed_avoidance_stall_cooldown_sec"] ?
+    mpc["v2x_low_speed_avoidance_stall_cooldown_sec"].as<double>() : 3.0);
+  cfg.mpc.v2x_behavior.low_speed_avoidance_stall_max_observation_gap_sec = std::max(
+    0.01,
+    mpc["v2x_low_speed_avoidance_stall_max_observation_gap_sec"] ?
+    mpc["v2x_low_speed_avoidance_stall_max_observation_gap_sec"].as<double>() : 0.2);
   cfg.mpc.v2x_behavior.low_speed_local_path_pass_clearance = std::max(
     0.0,
     mpc["v2x_local_path_pass_clearance"] ?
@@ -7447,9 +7519,15 @@ public:
     }
     if (mpc_cfg_.v2x_behavior.low_speed_avoidance_enabled) {
       RCLCPP_INFO(
-        get_logger(), "V2X low-speed pass: side=%s, ramp_ratio=%.2f",
+        get_logger(),
+        "V2X low-speed pass: side=%s, ramp_ratio=%.2f, stall=%.2f m/s/%.2f s, "
+        "cooldown=%.2f s, max_gap=%.2f s",
         mpc_cfg_.v2x_gap.low_speed_pass_side.c_str(),
-        mpc_cfg_.v2x_gap.low_speed_pass_ramp_ratio);
+        mpc_cfg_.v2x_gap.low_speed_pass_ramp_ratio,
+        mpc_cfg_.v2x_behavior.low_speed_avoidance_stall_speed,
+        mpc_cfg_.v2x_behavior.low_speed_avoidance_stall_timeout_sec,
+        mpc_cfg_.v2x_behavior.low_speed_avoidance_stall_cooldown_sec,
+        mpc_cfg_.v2x_behavior.low_speed_avoidance_stall_max_observation_gap_sec);
       if (mpc_cfg_.v2x_behavior.low_speed_local_path_enabled) {
         RCLCPP_INFO(
           get_logger(), "V2X low-speed local path planner: pass_clearance=%.2f, return_distance=%.2f",
@@ -8610,6 +8688,22 @@ private:
         }
       }
 
+      // Wall classification can change while AWSIM settles. Until actuation is committed, retain
+      // a statically safe short forward candidate for every clear-footprint reverse selection.
+      // Contact escape remains reverse-only and any Front-wall candidate still has to pass the
+      // full swept-footprint check, so this does not weaken the collision gate.
+      if (
+        snapshot.current_footprint_clear && selected_result.has_value() &&
+        !recovery_footprint::primitive_is_forward(selected_result->primitive) &&
+        !forward_deadlock_fallback.has_value())
+      {
+        auto forward_result = select_forward_deadlock_fallback();
+        if (forward_result.has_value()) {
+          forward_deadlock_fallback = std::move(forward_result.value());
+          forward_deadlock_fallback_stepwise = stepwise_candidate_mode;
+        }
+      }
+
       snapshot.rear_static_clear = selected_result.has_value();
       if (first_result.has_value()) {
         const auto & diagnostic_result = selected_result.has_value() ?
@@ -9010,6 +9104,7 @@ private:
       output.state != stuck_recovery::RecoveryState::Normal &&
       !entered_step_reassessment &&
       !recovery_selected_reverse_primitive_.has_value() &&
+      stuck_recovery::recovery_candidate_commit_allowed(output.state) &&
       safety.reverse_candidate_selected)
     {
       recovery_selected_reverse_primitive_ = safety.selected_reverse_primitive;

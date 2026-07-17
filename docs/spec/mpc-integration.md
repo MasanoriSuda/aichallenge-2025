@@ -406,6 +406,18 @@ bounded recovery候補を再評価する。現在footprintにcontactがある場
 必要な場合のみV2X completeness・rear-clear・static sweep・距離/時間上限を備えたcooperative yieldを
 別ステアリングで設計する。実験詳細は
 `.steering/20260717-wall-contact-prevention-and-rejoin-stability/results.md`に記録する。
+
+通常MPCのモデルとAWSIM指令の不一致を除くため、`steering_tire_angle_gain_var`を1.5から1.0へ
+変更した。従来はMPCが制約した内部操舵をpublish時に1.5倍し、D1では内部`+0.463 rad`に対して
+約`+0.695 rad`を指令して、内部の`delta_max=32 deg`（約`0.559 rad`）を実指令が上回っていた。
+
+`output/20260717-234612`ではD3がWP72、D1がWP123をStart後のwall contactおよび連続OSQP
+failureなしで通過し、それぞれ136.583 s、142.589 sで1周した。旧runのD2 Start後約79秒での
+3台停止も再発せず、通常MPCの壁逸脱予防はPassとする。一方D2は2周目WP34〜41のOvertakeLine
+ShiftOut / Recovery中に、wall contactを伴わない別の連続solver failureで停止した。これは追い越し
+復帰中のre-entry guardとして別ステアリングで扱う。本gainは2025 AWSIMで確認した暫定値であり、
+2026公式値および実車値ではない。実験詳細は
+`.steering/20260717-normal-mpc-wall-departure-prevention/results.md`に記録する。
 gear publisherはReliable / KeepLast(1) / Volatileであり、TransientLocalは古いREVERSEの
 late-join replayを避けるため使用しない。
 
@@ -612,7 +624,7 @@ MPC の config ファイル: `multi_purpose_mpc_ros/config/config.yaml`
 | `awsim_boost.motion_speed_threshold_mps` | `0.1` | 発車と判定する符号付き前進速度 |
 | `awsim_boost.max_trigger_speed_mps` | `1.0` | 遅延発動を禁止する最大前進速度 |
 | `awsim_boost.motion_trigger_timeout_sec` | `0.5` | 初回前進検出後に安全条件成立を待つ上限時間 |
-| `mpc.steering_tire_angle_gain_var` | `1.639` | 実機値。sim では `1.50` が必要かも |
+| `mpc.steering_tire_angle_gain_var` | `1.0` | 2025 AWSIMのdev3でモデル/実指令一致を確認。実機値と2026公式値は未確定 |
 | `mpc.wp_id_low_offset` | 未設定 | 低速時の参照 waypoint offset。未設定時は `wp_id_offset` |
 | `mpc.wp_id_low_speed` | `0.0` | 低速判定閾値。値は km/h、`0.0` なら無効 |
 | `mpc.wp_id_offset` | `2` | 通常時の参照 waypoint offset |

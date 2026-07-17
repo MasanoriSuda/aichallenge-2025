@@ -195,7 +195,8 @@ mpc:
   control_rate: 40.0 # Hz
   odom_timeout_sec: 0.5 # [s], steady-clock local safety timeout (not an official limit)
   min_linearization_speed_mps: 0.5 # [m/s], avoid singular 1/v terms below this speed
-  steering_tire_angle_gain_var: 1.5
+  # 2026-07-17 AWSIM experiment: keep MPC model steering and published steering identical.
+  steering_tire_angle_gain_var: 1.0
   # steering_tire_angle_gain_var: 1.0
   # accel_low_pass_gain: 0.1
   # steer_low_pass_gain: 0.3

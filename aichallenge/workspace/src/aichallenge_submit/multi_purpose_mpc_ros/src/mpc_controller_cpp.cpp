@@ -1298,6 +1298,9 @@ struct V2XBehaviorConfig
   bool front_progress_detection_enabled{false};
   double front_progress_detection_distance{0.0};
   double front_progress_lookbehind_distance{3.0};
+  bool front_hazard_hold_enabled{false};
+  double front_hazard_hold_sec{0.0};
+  double front_hazard_rear_clear_distance{4.0};
   double follow_distance{8.0};
   double safety_brake_distance{3.0};
   double safety_brake_margin{2.0};
@@ -1550,6 +1553,9 @@ struct V2XBehaviorOutput
   bool front_progress_used{false};
   bool has_side_vehicle{false};
   bool has_danger_vehicle{false};
+  bool front_hazard_hold_active{false};
+  double front_hazard_hold_remaining_sec{0.0};
+  std::string front_hazard_hold_target_id;
   bool start_grid_grace_active{false};
   bool start_grid_stop_suppressed{false};
   bool low_speed_avoidance_candidate{false};
@@ -2889,6 +2895,8 @@ struct MPC
     low_speed_avoidance_stall_since_sec_ = std::numeric_limits<double>::quiet_NaN();
     low_speed_avoidance_stall_last_update_sec_ = std::numeric_limits<double>::quiet_NaN();
     low_speed_avoidance_stall_cooldown_until_sec_ = now_sec;
+    front_hazard_hold_until_sec_ = now_sec;
+    front_hazard_hold_target_id_.clear();
     overtake_locked_target_ey_.reset();
     overtake_locked_side_sign_ = 0;
     overtake_entry_speed_.reset();
@@ -2928,9 +2936,43 @@ struct MPC
     }
     output.start_grid_grace_active = start_grid_grace_active;
     output.ego_speed = current_speed_mps_;
+    const bool front_hazard_hold_session_active =
+      start_grid_evaluation.phase == start_grid_grace::Phase::Disabled ||
+      start_grid_evaluation.phase == start_grid_grace::Phase::Grace ||
+      start_grid_evaluation.phase == start_grid_grace::Phase::Expired;
+    if (!front_hazard_hold_session_active) {
+      front_hazard_hold_until_sec_ = now_sec;
+      front_hazard_hold_target_id_.clear();
+    }
     const bool low_speed_avoidance_cooldown_active =
       std::isfinite(now_sec) && now_sec < low_speed_avoidance_stall_cooldown_until_sec_;
     output.low_speed_avoidance_cooldown_active = low_speed_avoidance_cooldown_active;
+
+    const auto update_front_hazard_hold = [
+      &output, this, now_sec, front_hazard_hold_session_active](
+        const bool hazard_observed, const bool target_rear_clear,
+        const std::string & observed_target_id) {
+        if (hazard_observed && !observed_target_id.empty()) {
+          front_hazard_hold_target_id_ = observed_target_id;
+        }
+        const auto resolution = v2x_overtake_core::update_front_hazard_hold(
+          v2x_overtake_core::FrontHazardHoldRequest{
+            cfg.v2x_behavior.front_hazard_hold_enabled &&
+            front_hazard_hold_session_active,
+            hazard_observed,
+            target_rear_clear,
+            now_sec,
+            front_hazard_hold_until_sec_,
+            cfg.v2x_behavior.front_hazard_hold_sec});
+        front_hazard_hold_until_sec_ = resolution.until_sec;
+        output.front_hazard_hold_active = resolution.active;
+        output.front_hazard_hold_remaining_sec = resolution.remaining_sec;
+        output.front_hazard_hold_target_id = front_hazard_hold_target_id_;
+        if (!resolution.active) {
+          front_hazard_hold_target_id_.clear();
+        }
+        return resolution.active;
+      };
 
     const auto vehicles = gap_planner->active_vehicles(now_sec);
     output.active_vehicle_count = vehicles.size();
@@ -2938,7 +2980,13 @@ struct MPC
       update_start_grid_suppression_diagnostics(
         false, false, std::string{}, std::numeric_limits<double>::infinity(),
         std::numeric_limits<double>::infinity(), 0.0);
-      output.reason = "no active vehicles";
+      if (update_front_hazard_hold(false, false, std::string{})) {
+        output.state = V2XBehaviorState::SafetyBrake;
+        output.target_vehicle_id = output.front_hazard_hold_target_id;
+        output.reason = "front hazard target temporarily missing";
+      } else {
+        output.reason = "no active vehicles";
+      }
       return commit_v2x_behavior_state(output, now_sec);
     }
 
@@ -3004,6 +3052,7 @@ struct MPC
     bool has_front_vehicle = false;
     bool has_danger_vehicle = false;
     bool has_side_vehicle = false;
+    bool held_target_rear_clear = false;
     bool has_low_speed_clearance_vehicle = false;
     double nearest_front_distance = std::numeric_limits<double>::infinity();
     double nearest_front_speed = std::numeric_limits<double>::infinity();
@@ -3060,6 +3109,13 @@ struct MPC
       const double front_lateral = use_course_progress ? course_projection.lateral_m : lateral;
       const double front_vehicle_speed = use_course_progress ?
         course_projection.along_track_speed_mps : vehicle_speed;
+      if (
+        !front_hazard_hold_target_id_.empty() &&
+        vehicle.id == front_hazard_hold_target_id_ &&
+        longitudinal <= -cfg.v2x_behavior.front_hazard_rear_clear_distance)
+      {
+        held_target_rear_clear = true;
+      }
       if (
         !overtake_line_state_.target_vehicle_id.empty() &&
         vehicle.id == overtake_line_state_.target_vehicle_id)
@@ -3186,9 +3242,27 @@ struct MPC
       output.target_vehicle_id, nearest_front_distance, nearest_front_speed,
       front_risk.required_decel);
     if (emergency_overrides_start_grid) {
+      update_front_hazard_hold(true, false, nearest_front_id);
       output.state = V2XBehaviorState::SafetyBrake;
       output.reason = front_risk_reason(
         "start-grid front risk emergency", front_risk, front_risk_level);
+      return commit_v2x_behavior_state(output, now_sec);
+    }
+    const bool front_hazard_hold_was_active =
+      cfg.v2x_behavior.front_hazard_hold_enabled &&
+      now_sec < front_hazard_hold_until_sec_;
+    const bool refresh_held_front_hazard =
+      front_hazard_hold_was_active &&
+      (front_risk_emergency || has_danger_vehicle) &&
+      !suppress_start_grid_stop_behavior;
+    if (update_front_hazard_hold(
+        refresh_held_front_hazard, held_target_rear_clear,
+        refresh_held_front_hazard ? nearest_front_id : std::string{}))
+    {
+      output.state = V2XBehaviorState::SafetyBrake;
+      output.target_vehicle_id = output.front_hazard_hold_target_id;
+      output.reason = refresh_held_front_hazard ?
+        "front hazard hold refreshed" : "front hazard hold after geometry loss";
       return commit_v2x_behavior_state(output, now_sec);
     }
     const bool low_speed_avoidance_candidate =
@@ -3274,12 +3348,14 @@ struct MPC
     }
 
     if (has_front_vehicle && front_risk_level == FrontRiskLevel::EmergencyBrake) {
+      update_front_hazard_hold(true, false, nearest_front_id);
       output.state = V2XBehaviorState::SafetyBrake;
       output.reason = front_risk_reason("front risk emergency", front_risk, front_risk_level);
       return commit_v2x_behavior_state(output, now_sec);
     }
 
     if (has_danger_vehicle && !suppress_start_grid_stop_behavior) {
+      update_front_hazard_hold(true, false, nearest_front_id);
       output.state = V2XBehaviorState::SafetyBrake;
       output.reason = "inside stopping distance";
       return commit_v2x_behavior_state(output, now_sec);
@@ -4302,6 +4378,8 @@ struct MPC
   double low_speed_avoidance_stall_last_update_sec_{std::numeric_limits<double>::quiet_NaN()};
   double low_speed_avoidance_stall_cooldown_until_sec_{
     -std::numeric_limits<double>::infinity()};
+  double front_hazard_hold_until_sec_{0.0};
+  std::string front_hazard_hold_target_id_;
   bool start_grid_stop_suppressed_{false};
   bool start_grid_emergency_override_logged_{false};
   std::optional<std::string> start_grid_initial_target_id_;
@@ -5890,6 +5968,7 @@ private:
           "V2X debug: desired=%s, final=%s, allow_gap=%d, limit=%.2f, desired_v=%.2f, "
           "speed_cap=%d, wp_id=%d, "
           "vehicles=%zu, front=%d, side=%d, danger=%d, grace=%d, grid_suppress=%d, "
+          "hazard_hold=%d, hazard_remaining=%.2f, hazard_target=%s, "
           "fd=%.2f, progress=%d, local_fd=%.2f, path_lat=%.2f, fs=%.2f, ego=%.2f, "
           "rel=%.2f, req_dec=%.2f, avail=%.2f, risk=%s, "
           "forbid=%d, forbid_wp=%d, curve_guard=%d, low_speed=%d, low_speed_block=%d, "
@@ -5907,6 +5986,9 @@ private:
           output.has_front_vehicle ? 1 : 0, output.has_side_vehicle ? 1 : 0,
           output.has_danger_vehicle ? 1 : 0, output.start_grid_grace_active ? 1 : 0,
           output.start_grid_stop_suppressed ? 1 : 0,
+          output.front_hazard_hold_active ? 1 : 0,
+          output.front_hazard_hold_remaining_sec,
+          output.front_hazard_hold_target_id.c_str(),
           output.front_distance, output.front_progress_used ? 1 : 0,
           output.front_local_longitudinal, output.front_progress_lateral,
           output.front_speed, output.ego_speed,
@@ -6005,6 +6087,7 @@ struct StuckRecoveryAdapterConfig
   double right_extent_m{0.725};
   double footprint_margin_m{0.05};
   double sweep_interpolation_step_m{0.05};
+  double rejoin_static_lookahead_m{0.8};
 };
 
 stuck_recovery::ReverseActuationCalibration reverse_actuation_calibration(
@@ -6045,6 +6128,10 @@ struct RecoverySafetySnapshot
   bool boost_inactive_confirmed{false};
   bool v2x_message_complete{false};
   bool current_footprint_clear{false};
+  bool rejoin_forward_static_clear{false};
+  recovery_footprint::RejectReason rejoin_static_reject_reason{
+    recovery_footprint::RejectReason::InvalidGrid};
+  double rejoin_static_rejected_at_distance_m{};
   bool collision_worsening{false};
   std::vector<std::size_t> current_contact_cells;
   std::size_t current_contact_count{};
@@ -6403,6 +6490,10 @@ Config load_config(const std::string & path)
         rejoin["confirm_sec"].as<double>() : out.rejoin_confirm_sec;
       out.rejoin_timeout_sec = rejoin["timeout_sec"] ?
         rejoin["timeout_sec"].as<double>() : out.rejoin_timeout_sec;
+      out.retry_rejoin_blocked_path = rejoin["retry_on_blocked_path"] ?
+        rejoin["retry_on_blocked_path"].as<bool>() : out.retry_rejoin_blocked_path;
+      adapter.rejoin_static_lookahead_m = rejoin["static_lookahead_m"] ?
+        rejoin["static_lookahead_m"].as<double>() : adapter.rejoin_static_lookahead_m;
       out.cooldown_sec = rejoin["cooldown_sec"] ?
         rejoin["cooldown_sec"].as<double>() : out.cooldown_sec;
     }
@@ -6471,7 +6562,9 @@ Config load_config(const std::string & path)
       !finite_non_negative(adapter.right_extent_m) ||
       !finite_non_negative(adapter.footprint_margin_m) ||
       !std::isfinite(adapter.sweep_interpolation_step_m) ||
-      adapter.sweep_interpolation_step_m <= 0.0)
+      adapter.sweep_interpolation_step_m <= 0.0 ||
+      !std::isfinite(adapter.rejoin_static_lookahead_m) ||
+      adapter.rejoin_static_lookahead_m <= 0.0)
     {
       throw std::runtime_error("stuck_recovery adapter values must be finite and within range");
     }
@@ -6822,6 +6915,15 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.front_progress_lookbehind_distance =
     mpc["v2x_front_progress_lookbehind_distance"] ?
     mpc["v2x_front_progress_lookbehind_distance"].as<double>() : 3.0;
+  cfg.mpc.v2x_behavior.front_hazard_hold_enabled =
+    mpc["v2x_front_hazard_hold_enabled"] ?
+    mpc["v2x_front_hazard_hold_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.front_hazard_hold_sec =
+    mpc["v2x_front_hazard_hold_sec"] ?
+    mpc["v2x_front_hazard_hold_sec"].as<double>() : 0.0;
+  cfg.mpc.v2x_behavior.front_hazard_rear_clear_distance =
+    mpc["v2x_front_hazard_rear_clear_distance"] ?
+    mpc["v2x_front_hazard_rear_clear_distance"].as<double>() : 4.0;
   if (
     !std::isfinite(cfg.mpc.v2x_behavior.front_progress_detection_distance) ||
     cfg.mpc.v2x_behavior.front_progress_detection_distance < 0.0 ||
@@ -6837,6 +6939,22 @@ Config load_config(const std::string & path)
   {
     throw std::runtime_error(
             "mpc.v2x_front_progress_lookbehind_distance must be finite and non-negative");
+  }
+  if (
+    !std::isfinite(cfg.mpc.v2x_behavior.front_hazard_hold_sec) ||
+    cfg.mpc.v2x_behavior.front_hazard_hold_sec < 0.0 ||
+    (cfg.mpc.v2x_behavior.front_hazard_hold_enabled &&
+    cfg.mpc.v2x_behavior.front_hazard_hold_sec <= 0.0))
+  {
+    throw std::runtime_error(
+            "mpc.v2x_front_hazard_hold_sec must be finite and positive when enabled");
+  }
+  if (
+    !std::isfinite(cfg.mpc.v2x_behavior.front_hazard_rear_clear_distance) ||
+    cfg.mpc.v2x_behavior.front_hazard_rear_clear_distance <= 0.0)
+  {
+    throw std::runtime_error(
+            "mpc.v2x_front_hazard_rear_clear_distance must be finite and positive");
   }
   cfg.mpc.v2x_behavior.follow_distance = std::max(
     0.0, mpc["v2x_follow_distance"] ? mpc["v2x_follow_distance"].as<double>() : 8.0);
@@ -8458,6 +8576,7 @@ private:
     const double forward_distance_to_check_m,
     const double escape_step_distance_to_check_m,
     const double recovery_heading_error_rad,
+    const double rejoin_steering_angle_rad,
     const bool evaluate_rollout) const
   {
     RecoverySafetySnapshot snapshot;
@@ -8511,6 +8630,23 @@ private:
       rollout.wheelbase_m = cfg_.bicycle_length;
       rollout.steering_angle_rad = cfg_.stuck_recovery.reverse_steering_angle_rad;
 
+      if (snapshot.current_footprint_clear && std::isfinite(rejoin_steering_angle_rad)) {
+        auto rejoin_rollout = rollout;
+        rejoin_rollout.reverse_distance_m = cfg_.stuck_recovery.rejoin_static_lookahead_m;
+        rejoin_rollout.steering_angle_rad = std::abs(rejoin_steering_angle_rad);
+        const auto rejoin_primitive = std::abs(rejoin_steering_angle_rad) <= kEps ?
+          recovery_footprint::ReversePrimitive::ForwardStraight :
+          rejoin_steering_angle_rad > 0.0 ?
+          recovery_footprint::ReversePrimitive::ForwardLeft :
+          recovery_footprint::ReversePrimitive::ForwardRight;
+        const auto rejoin_result = recovery_footprint::evaluate_recovery_candidate(
+          *recovery_grid_, recovery_footprint_, recovery_pose, rejoin_primitive,
+          rejoin_rollout, recovery_footprint::ContactEscapePolicy::RequireClear, 0.0);
+        snapshot.rejoin_forward_static_clear = rejoin_result.feasible;
+        snapshot.rejoin_static_reject_reason = rejoin_result.reason;
+        snapshot.rejoin_static_rejected_at_distance_m = rejoin_result.rejected_at_distance_m;
+      }
+
       const bool wall_supports_stepwise_escape =
         cfg_.stuck_recovery.side_escape_enabled && !current_sample.contact_cells.empty() &&
         ((stuck_recovery_core_ != nullptr &&
@@ -8549,6 +8685,38 @@ private:
             stepwise_candidate_mode && !committed_stepwise_maneuver ?
             cfg_.stuck_recovery.side_escape_min_contact_reduction_ratio : 0.0);
         };
+      std::optional<recovery_footprint::FeasibilityResult> first_result;
+      std::optional<recovery_footprint::FeasibilityResult> selected_result;
+      const auto select_heading_aligned_reverse_candidate = [&]() {
+          std::optional<recovery_footprint::FeasibilityResult> best_result;
+          double best_heading_error = std::numeric_limits<double>::infinity();
+          constexpr std::array<recovery_footprint::ReversePrimitive, 3> kReversePreference{
+            recovery_footprint::ReversePrimitive::Straight,
+            recovery_footprint::ReversePrimitive::Left,
+            recovery_footprint::ReversePrimitive::Right};
+          for (const auto primitive : kReversePreference) {
+            auto result = evaluate_candidate(primitive);
+            if (!first_result.has_value()) {
+              first_result = result;
+            }
+            if (!result.feasible || result.rollout.empty()) {
+              continue;
+            }
+            const double yaw_delta = wrap_to_pi(
+              result.rollout.back().pose.yaw_rad - recovery_pose.yaw_rad);
+            const double candidate_heading_error = std::isfinite(recovery_heading_error_rad) ?
+              std::abs(wrap_to_pi(recovery_heading_error_rad + yaw_delta)) :
+              std::abs(yaw_delta);
+            if (
+              !best_result.has_value() ||
+              candidate_heading_error + kEps < best_heading_error)
+            {
+              best_heading_error = candidate_heading_error;
+              best_result = std::move(result);
+            }
+          }
+          return best_result;
+        };
       const auto select_forward_deadlock_fallback = [&]() {
           std::optional<recovery_footprint::FeasibilityResult> best_result;
           double best_heading_error = std::numeric_limits<double>::infinity();
@@ -8576,8 +8744,6 @@ private:
           }
           return best_result;
         };
-      std::optional<recovery_footprint::FeasibilityResult> first_result;
-      std::optional<recovery_footprint::FeasibilityResult> selected_result;
       if (recovery_selected_reverse_primitive_.has_value()) {
         auto result = evaluate_candidate(recovery_selected_reverse_primitive_.value());
         first_result = result;
@@ -8590,21 +8756,25 @@ private:
         // clear, use the same stop-and-reassess cadence with RequireClear;
         // this avoids rejecting a safe 0.4 m step merely because the longer
         // 3.0 m maximum-distance rollout meets another wall later.
-        constexpr std::array<recovery_footprint::ReversePrimitive, 3> kStepPreference{
-          recovery_footprint::ReversePrimitive::Straight,
-          recovery_footprint::ReversePrimitive::Left,
-          recovery_footprint::ReversePrimitive::Right};
-        for (const auto primitive : kStepPreference) {
-          auto result = evaluate_candidate(primitive);
-          if (!first_result.has_value()) {
-            first_result = result;
-          }
-          if (
-            result.feasible &&
-            (!selected_result.has_value() ||
-            result.contact_reduction > selected_result->contact_reduction))
-          {
-            selected_result = std::move(result);
+        if (clearance_reassessment_step) {
+          selected_result = select_heading_aligned_reverse_candidate();
+        } else {
+          constexpr std::array<recovery_footprint::ReversePrimitive, 3> kStepPreference{
+            recovery_footprint::ReversePrimitive::Straight,
+            recovery_footprint::ReversePrimitive::Left,
+            recovery_footprint::ReversePrimitive::Right};
+          for (const auto primitive : kStepPreference) {
+            auto result = evaluate_candidate(primitive);
+            if (!first_result.has_value()) {
+              first_result = result;
+            }
+            if (
+              result.feasible &&
+              (!selected_result.has_value() ||
+              result.contact_reduction > selected_result->contact_reduction))
+            {
+              selected_result = std::move(result);
+            }
           }
         }
         if (clearance_reassessment_step) {
@@ -8628,20 +8798,7 @@ private:
         // footprint is still clear. Keep the normal retreat preference, but
         // also retain a statically clear forward escape for the multi-vehicle
         // case where a stopped follower occupies the reverse corridor.
-        constexpr std::array<recovery_footprint::ReversePrimitive, 3> kPrimitivePreference{
-          recovery_footprint::ReversePrimitive::Straight,
-          recovery_footprint::ReversePrimitive::Left,
-          recovery_footprint::ReversePrimitive::Right};
-        for (const auto primitive : kPrimitivePreference) {
-          auto result = evaluate_candidate(primitive);
-          if (!first_result.has_value()) {
-            first_result = result;
-          }
-          if (result.feasible) {
-            selected_result = std::move(result);
-            break;
-          }
-        }
+        selected_result = select_heading_aligned_reverse_candidate();
         auto forward_result = select_forward_deadlock_fallback();
         if (forward_result.has_value()) {
           if (selected_result.has_value()) {
@@ -8658,18 +8815,22 @@ private:
           selected_result = std::move(result);
         }
       } else if (snapshot.wall_region == recovery_footprint::WallRegion::Front) {
-        constexpr std::array<recovery_footprint::ReversePrimitive, 3> kPrimitivePreference{
-          recovery_footprint::ReversePrimitive::Straight,
-          recovery_footprint::ReversePrimitive::Left,
-          recovery_footprint::ReversePrimitive::Right};
-        for (const auto primitive : kPrimitivePreference) {
-          auto result = evaluate_candidate(primitive);
-          if (!first_result.has_value()) {
-            first_result = result;
-          }
-          if (result.feasible) {
-            selected_result = std::move(result);
-            break;
+        if (snapshot.current_footprint_clear) {
+          selected_result = select_heading_aligned_reverse_candidate();
+        } else {
+          constexpr std::array<recovery_footprint::ReversePrimitive, 3> kPrimitivePreference{
+            recovery_footprint::ReversePrimitive::Straight,
+            recovery_footprint::ReversePrimitive::Left,
+            recovery_footprint::ReversePrimitive::Right};
+          for (const auto primitive : kPrimitivePreference) {
+            auto result = evaluate_candidate(primitive);
+            if (!first_result.has_value()) {
+              first_result = result;
+            }
+            if (result.feasible) {
+              selected_result = std::move(result);
+              break;
+            }
           }
         }
       } else if (
@@ -8681,11 +8842,7 @@ private:
         // solver and sustained no-progress. Provide a bounded straight retreat
         // when the complete static rollout itself is clear; the core still
         // requires that confirmation and the directional V2X corridor below.
-        auto result = evaluate_candidate(recovery_footprint::ReversePrimitive::Straight);
-        first_result = result;
-        if (result.feasible) {
-          selected_result = std::move(result);
-        }
+        selected_result = select_heading_aligned_reverse_candidate();
       }
 
       // Wall classification can change while AWSIM settles. Until actuation is committed, retain
@@ -8999,6 +9156,7 @@ private:
       forward_distance_to_check_m,
       escape_step_distance_to_check_m,
       car_->spatial_state.e_psi,
+      normal_u[1],
       recovery_context_active || low_speed_recovery_candidate);
     const auto & behavior = mpc_->last_v2x_behavior_output();
     const bool deliberate_stop =
@@ -9056,6 +9214,7 @@ private:
       safety.current_footprint_clear &&
       episode_traveled_distance_m >= escape_distance_target_m;
     input.recovery.rejoin_safe = safety.current_footprint_clear;
+    input.recovery.rejoin_forward_clear = safety.rejoin_forward_static_clear;
     input.recovery.awsim_recovery_resolved =
       safety.current_footprint_clear &&
       (recovery_episode_had_contact_evidence_ ||
@@ -9197,7 +9356,8 @@ private:
         "wall=%s, wall_distance=%.3f, direction=%s, primitive=%s, steering=%.3f, "
         "stepwise=%d, contact_reduction=%zu, step=%zu/%zu, maneuver_distance=%.3f m, "
         "episode_distance=%.3f m, stopping_reserve=%.3f m, escape_target=%.3f m, "
-        "escape_confirmed=%d, rejoin_safe=%d, e_y=%.3f m, e_psi=%.3f rad",
+        "escape_confirmed=%d, rejoin_safe=%d, rejoin_path_clear=%d, "
+        "rejoin_static=%s, rejoin_reject_at=%.3f m, e_y=%.3f m, e_psi=%.3f rad",
         stuck_recovery::to_string(output.execution_mode),
         stuck_recovery::to_string(output.state),
         stuck_recovery::to_string(output.action.type),
@@ -9221,7 +9381,10 @@ private:
         cfg_.stuck_recovery.core.supervisor.max_escape_steps,
         traveled_distance_m, episode_traveled_distance_m, reverse_stopping_reserve_m,
         escape_distance_target_m, input.recovery.recovery_escape_confirmed ? 1 : 0,
-        input.recovery.rejoin_safe ? 1 : 0, input.recovery.lateral_error_m,
+        input.recovery.rejoin_safe ? 1 : 0,
+        input.recovery.rejoin_forward_clear ? 1 : 0,
+        recovery_footprint::to_string(safety.rejoin_static_reject_reason),
+        safety.rejoin_static_rejected_at_distance_m, input.recovery.lateral_error_m,
         input.recovery.heading_error_rad);
     }
     if (!last_recovery_reject_reason_.has_value() ||

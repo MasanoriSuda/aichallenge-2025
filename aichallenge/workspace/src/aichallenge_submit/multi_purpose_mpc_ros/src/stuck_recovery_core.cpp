@@ -1034,6 +1034,19 @@ RecoveryAction RecoverySupervisor::update_low_speed_rejoin(const RecoveryInput &
     transition(RecoveryState::SafeStop, RecoveryReason::RejoinUnsafe, input.now_sec);
     return safe_stop_action(RecoveryReason::RejoinUnsafe);
   }
+  if (!input.rejoin_forward_clear) {
+    if (
+      config_.retry_rejoin_blocked_path &&
+      escape_step_count_ < config_.max_escape_steps)
+    {
+      transition(
+        RecoveryState::StopAndConfirm, RecoveryReason::RejoinPathBlocked,
+        input.now_sec);
+      return hold_action(RecoveryReason::RejoinPathBlocked);
+    }
+    transition(RecoveryState::SafeStop, RecoveryReason::RejoinPathBlocked, input.now_sec);
+    return safe_stop_action(RecoveryReason::RejoinPathBlocked);
+  }
   if (!escape_confirmed_before_drive_) {
     transition(RecoveryState::SafeStop, RecoveryReason::EscapeNotConfirmed, input.now_sec);
     return safe_stop_action(RecoveryReason::EscapeNotConfirmed);
@@ -1635,6 +1648,8 @@ const char * to_string(const RecoveryReason reason) noexcept
       return "rejoin_timed_out";
     case RecoveryReason::RejoinUnsafe:
       return "rejoin_unsafe";
+    case RecoveryReason::RejoinPathBlocked:
+      return "rejoin_path_blocked";
     case RecoveryReason::CooldownActive:
       return "cooldown_active";
     case RecoveryReason::OdometryUnsafe:

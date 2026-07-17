@@ -567,6 +567,33 @@ const char * to_string(const RecoveryExitReason reason) noexcept
   return "unknown";
 }
 
+FrontHazardHoldResolution update_front_hazard_hold(const FrontHazardHoldRequest & request)
+{
+  if (!std::isfinite(request.now_sec)) {
+    throw std::invalid_argument("Front hazard hold time must be finite");
+  }
+  if (!std::isfinite(request.hold_sec) || request.hold_sec < 0.0) {
+    throw std::invalid_argument("Front hazard hold duration must be finite and non-negative");
+  }
+  if (!std::isfinite(request.current_until_sec)) {
+    throw std::invalid_argument("Front hazard hold deadline must be finite");
+  }
+
+  if (!request.enabled || request.target_rear_clear) {
+    return {false, request.now_sec, 0.0};
+  }
+
+  double until_sec = request.current_until_sec;
+  if (request.hazard_observed) {
+    until_sec = std::max(until_sec, request.now_sec + request.hold_sec);
+  }
+  const bool active = request.now_sec < until_sec;
+  return {
+    active,
+    active ? until_sec : request.now_sec,
+    active ? std::max(0.0, until_sec - request.now_sec) : 0.0};
+}
+
 double arm_solver_cooldown(const SolverCooldownRequest & request)
 {
   if (!std::isfinite(request.now_sec)) {

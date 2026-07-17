@@ -304,6 +304,29 @@ struct StallWatchdogResolution
 StallWatchdogResolution update_stall_watchdog(const StallWatchdogRequest & request);
 const char * to_string(RecoveryExitReason reason) noexcept;
 
+struct FrontHazardHoldRequest
+{
+  bool enabled{false};
+  bool hazard_observed{false};
+  bool target_rear_clear{false};
+  double now_sec{};
+  double current_until_sec{};
+  double hold_sec{};
+};
+
+struct FrontHazardHoldResolution
+{
+  bool active{false};
+  double until_sec{};
+  double remaining_sec{};
+};
+
+/// Keep a recently observed front hazard active across a short V2X geometry dropout.
+///
+/// A fresh hazard arms or extends the deadline. A positive rear-clear observation releases the
+/// hold immediately. Invalid configuration or clock values throw std::invalid_argument.
+FrontHazardHoldResolution update_front_hazard_hold(const FrontHazardHoldRequest & request);
+
 struct SolverCooldownRequest
 {
   double now_sec{};

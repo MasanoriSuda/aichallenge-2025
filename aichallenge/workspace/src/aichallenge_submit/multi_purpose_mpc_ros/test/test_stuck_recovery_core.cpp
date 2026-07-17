@@ -1403,6 +1403,59 @@ TEST(RecoverySupervisor, LowSpeedRejoinHoldsUntilInformationReturns)
   EXPECT_TRUE(action.reset_normal_control);
 }
 
+TEST(RecoverySupervisor, BlockedRejoinPathReturnsToBoundedClearanceReassessment)
+{
+  auto config = supervisor_config();
+  config.retry_rejoin_blocked_path = true;
+  config.max_escape_steps = 2U;
+  RecoverySupervisor supervisor(config);
+  double now = 0.0;
+  auto input = healthy_recovery_input(now);
+  advance_to_reverse(supervisor, input, now);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.recovery_escape_confirmed = true;
+  supervisor.update(input);
+  now += 0.01;
+  input.now_sec = now;
+  supervisor.update(input);
+  now += 0.01;
+  input.now_sec = now;
+  input.reported_gear = Gear::Drive;
+  input.rejoin_forward_clear = false;
+
+  const auto action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
+  EXPECT_EQ(action.reason, RecoveryReason::RejoinPathBlocked);
+  EXPECT_EQ(supervisor.state(), RecoveryState::StopAndConfirm);
+}
+
+TEST(RecoverySupervisor, BlockedRejoinPathFailsClosedWhenRetryIsDisabled)
+{
+  RecoverySupervisor supervisor(supervisor_config());
+  double now = 0.0;
+  auto input = healthy_recovery_input(now);
+  advance_to_reverse(supervisor, input, now);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.recovery_escape_confirmed = true;
+  supervisor.update(input);
+  now += 0.01;
+  input.now_sec = now;
+  supervisor.update(input);
+  now += 0.01;
+  input.now_sec = now;
+  input.reported_gear = Gear::Drive;
+  input.rejoin_forward_clear = false;
+
+  const auto action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::SafeStop);
+  EXPECT_EQ(action.reason, RecoveryReason::RejoinPathBlocked);
+  EXPECT_EQ(supervisor.state(), RecoveryState::SafeStop);
+}
+
 TEST(RecoverySupervisor, FullRecoveryRequestsResetOnceAndCompletesRejoin)
 {
   RecoverySupervisor supervisor(supervisor_config());

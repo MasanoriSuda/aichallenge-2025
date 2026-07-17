@@ -231,6 +231,7 @@ enum class RecoveryReason
   RejoinComplete,
   RejoinTimedOut,
   RejoinUnsafe,
+  RejoinPathBlocked,
   CooldownActive,
   OdometryUnsafe,
   SolverUnsafe,
@@ -274,6 +275,7 @@ struct SupervisorConfig
   double max_rejoin_heading_error_rad{0.35};
   double rejoin_confirm_sec{0.3};
   double rejoin_timeout_sec{5.0};
+  bool retry_rejoin_blocked_path{false};
   double cooldown_sec{1.0};
 };
 
@@ -315,6 +317,7 @@ struct RecoveryInput
   bool collision_worsening{false};
   bool recovery_escape_confirmed{false};
   bool rejoin_safe{false};
+  bool rejoin_forward_clear{true};
   double signed_speed_mps{};
   // Distance of the current bounded maneuver, including the node-side
   // stopping reserve when used for actuation limits.

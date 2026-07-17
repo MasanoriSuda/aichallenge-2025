@@ -386,6 +386,26 @@ D2に塞がれて`clearance_wait_timed_out`となった。D2は共通コース�
 したがって3台停止は再発しており、次の対象はRecovery gate緩和ではなく、通常走行中のwall接触と
 LowSpeedRejoin新規接触の予防である。実験詳細は
 `.steering/20260717-v2x-low-speed-recovery-deadlock-fix/results.md`に記録する。
+
+その後の壁接触予防・再合流安定化では、SafetyBrakeを発火させた前方危険targetを1.0秒保持し、
+短時間のV2X front/side分類欠落だけでCruiseへ戻らないようにした。新しい危険観測で期限を延長し、
+targetが4.0 m以上明確にrearへ抜けた場合または期限到達で解除する。静止スタートグリッドを保持しないよう、
+start-grid phaseが`WaitingForStart`または`Prepared`の間はholdをarmせず既存状態もclearする。
+
+LowSpeedRejoinはnormal MPC先頭操舵による0.8 mの前進swept footprintを駆動前と走行中に確認する。
+現在footprintがclearで前進rolloutだけblockedの場合は、`retry_on_blocked_path=true`なら停止確認へ戻り、
+bounded recovery候補を再評価する。現在footprintにcontactがある場合は従来どおりSafeStopする。
+また、current footprint clear時のReverse候補はstatic safeな候補から終端heading errorが最小のものを選ぶ。
+これらは2025 AWSIM向け暫定値であり、2026公式値ではない。
+
+`output/20260717-232948`では、危険target消失直後のCruise復帰は再発せず、D1のLowSpeedRejoinも
+前方wall collisionを検出して新規contact前に停止した。D2は旧runの停止時刻約62秒を超えて走行した。
+一方、D1には安全な前進rolloutがなく、D3がD1の後退corridorを塞いだためD1がSafeStopし、D3と
+後から到達したD2が順にSafetyBrakeしてD2のStartから約79秒後に3台停止した。これはhazard dropoutによる追突ではなく、
+壁際先頭車と後続車による閉塞である。次段はWP 72 / WP 123付近の通常MPC wall departure抑制を優先し、
+必要な場合のみV2X completeness・rear-clear・static sweep・距離/時間上限を備えたcooperative yieldを
+別ステアリングで設計する。実験詳細は
+`.steering/20260717-wall-contact-prevention-and-rejoin-stability/results.md`に記録する。
 gear publisherはReliable / KeepLast(1) / Volatileであり、TransientLocalは古いREVERSEの
 late-join replayを避けるため使用しない。
 

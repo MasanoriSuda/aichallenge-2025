@@ -129,6 +129,11 @@ stuck_recovery:
     prediction_margin_sec: 0.1
   rejoin:
     speed_limit_mps: 1.0
+    # Check the first normal-MPC steering command before allowing forward rejoin motion.
+    static_lookahead_m: 0.8
+    # A clear current footprint with a blocked forward sweep gets one of the remaining
+    # bounded 0.40 m escape-step reassessments instead of driving back into the wall.
+    retry_on_blocked_path: true
     max_lateral_error_m: 0.5
     max_heading_error_rad: 0.35
     confirm_sec: 0.3
@@ -244,6 +249,10 @@ mpc:
   v2x_front_progress_detection_enabled: true
   v2x_front_progress_detection_distance: 24.0 # [m] early Follow/risk/overtake classification
   v2x_front_progress_lookbehind_distance: 3.0 # [m] keep nearby rear/side classification stable
+  # Keep braking briefly when a dangerous front target crosses the local/progress classifier seam.
+  v2x_front_hazard_hold_enabled: true
+  v2x_front_hazard_hold_sec: 1.0 # [s] longer than the 20260717 D2 dropout, still bounded
+  v2x_front_hazard_rear_clear_distance: 4.0 # [m] release early only after target is clearly behind
   v2x_follow_distance: 14.0        # [m]
   v2x_safety_brake_distance: 6.0  # [m] minimum distance; dynamic stop distance is also applied
   v2x_safety_brake_margin: 3.0    # [m] added to v^2 / (2 * abs(a_min))

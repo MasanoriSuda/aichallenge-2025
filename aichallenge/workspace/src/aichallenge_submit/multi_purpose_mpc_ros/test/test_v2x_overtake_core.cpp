@@ -16,6 +16,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::ContinuityAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::ContinuityRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CoursePoint;
 using multi_purpose_mpc_ros::v2x_overtake_core::ForwardDistanceRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::FrontHazardHoldRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ForwardCourseProjectionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSpeedReferenceRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSpeedStage;
@@ -40,6 +41,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::can_reacquire_during_return;
 using multi_purpose_mpc_ros::v2x_overtake_core::integrate_forward_distance;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_recovery_policy;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_stall_watchdog;
+using multi_purpose_mpc_ros::v2x_overtake_core::update_front_hazard_hold;
 using multi_purpose_mpc_ros::v2x_overtake_core::arm_solver_cooldown;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_solver_cooldown_active;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_pass_side;
@@ -74,6 +76,55 @@ TEST(V2XOvertakeCoreSpeed, UsesCappedNormalSpeedWithoutStartConfiguration)
   const auto result = resolve_effective_speed_limit(request);
   EXPECT_DOUBLE_EQ(result.speed_mps, 40.0);
   EXPECT_EQ(result.start_window_status, StartWindowStatus::NotConfigured);
+}
+
+TEST(V2XFrontHazardHold, HoldsAcrossDropoutAndRefreshesDeadline)
+{
+  FrontHazardHoldRequest request;
+  request.enabled = true;
+  request.hazard_observed = true;
+  request.now_sec = 10.0;
+  request.current_until_sec = 10.0;
+  request.hold_sec = 1.0;
+  auto result = update_front_hazard_hold(request);
+  ASSERT_TRUE(result.active);
+  EXPECT_DOUBLE_EQ(result.until_sec, 11.0);
+
+  request.hazard_observed = false;
+  request.now_sec = 10.6;
+  request.current_until_sec = result.until_sec;
+  result = update_front_hazard_hold(request);
+  ASSERT_TRUE(result.active);
+  EXPECT_NEAR(result.remaining_sec, 0.4, 1e-12);
+
+  request.hazard_observed = true;
+  result = update_front_hazard_hold(request);
+  ASSERT_TRUE(result.active);
+  EXPECT_DOUBLE_EQ(result.until_sec, 11.6);
+}
+
+TEST(V2XFrontHazardHold, RearClearAndExpiryReleaseImmediately)
+{
+  FrontHazardHoldRequest request{true, false, true, 10.2, 11.0, 1.0};
+  auto result = update_front_hazard_hold(request);
+  EXPECT_FALSE(result.active);
+  EXPECT_DOUBLE_EQ(result.until_sec, 10.2);
+
+  request.target_rear_clear = false;
+  request.now_sec = 11.0;
+  request.current_until_sec = 11.0;
+  result = update_front_hazard_hold(request);
+  EXPECT_FALSE(result.active);
+  EXPECT_DOUBLE_EQ(result.remaining_sec, 0.0);
+}
+
+TEST(V2XFrontHazardHold, RejectsInvalidClockAndDuration)
+{
+  FrontHazardHoldRequest request{true, false, false, 1.0, 1.0, -0.1};
+  EXPECT_THROW(update_front_hazard_hold(request), std::invalid_argument);
+  request.hold_sec = 1.0;
+  request.now_sec = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_THROW(update_front_hazard_hold(request), std::invalid_argument);
 }
 
 TEST(V2XOvertakeCoreSpeed, StartWindowMayExceedNormalButNotGlobalHardCap)

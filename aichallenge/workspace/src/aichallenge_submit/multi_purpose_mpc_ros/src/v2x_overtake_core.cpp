@@ -626,4 +626,60 @@ bool is_solver_cooldown_active(
          now_sec < cooldown_until_sec;
 }
 
+SolverReentryGateResolution update_solver_reentry_gate(
+  const SolverReentryGateRequest & request)
+{
+  if (request.consecutive_successes < 0) {
+    throw std::invalid_argument("Solver re-entry success count must be non-negative");
+  }
+  if (request.required_successes <= 0) {
+    throw std::invalid_argument("Solver re-entry required successes must be positive");
+  }
+  if (request.arm) {
+    return {true, 0, false};
+  }
+  if (!request.blocked) {
+    return {false, 0, false};
+  }
+  if (!request.solver_succeeded) {
+    return {true, 0, false};
+  }
+
+  const int successes =
+    request.consecutive_successes >= request.required_successes ?
+    request.required_successes : request.consecutive_successes + 1;
+  if (!request.cooldown_active && successes >= request.required_successes) {
+    return {false, 0, true};
+  }
+  return {true, successes, false};
+}
+
+double rate_limit_solver_fallback_steering_toward_neutral(
+  const SolverFallbackSteeringRequest & request)
+{
+  if (!std::isfinite(request.current_steering_rad)) {
+    throw std::invalid_argument("Solver fallback steering must be finite");
+  }
+  if (!std::isfinite(request.max_steering_rad) || request.max_steering_rad < 0.0) {
+    throw std::invalid_argument("Solver fallback maximum steering must be finite and non-negative");
+  }
+  if (!std::isfinite(request.steer_rate_radps) || request.steer_rate_radps < 0.0) {
+    throw std::invalid_argument("Solver fallback steering rate must be finite and non-negative");
+  }
+  if (!std::isfinite(request.step_sec) || request.step_sec < 0.0) {
+    throw std::invalid_argument("Solver fallback time step must be finite and non-negative");
+  }
+
+  const double steering = std::clamp(
+    request.current_steering_rad, -request.max_steering_rad, request.max_steering_rad);
+  const double max_step = request.steer_rate_radps * request.step_sec;
+  if (!std::isfinite(max_step)) {
+    throw std::invalid_argument("Solver fallback steering step overflowed");
+  }
+  if (std::abs(steering) <= max_step) {
+    return 0.0;
+  }
+  return steering - std::copysign(max_step, steering);
+}
+
 }  // namespace multi_purpose_mpc_ros::v2x_overtake_core

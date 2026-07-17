@@ -25,6 +25,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::PredictionTimeRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecoveryExitReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecoveryPolicyRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SolverCooldownRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::SolverFallbackSteeringRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::SolverReentryGateRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ReacquireRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SideSelectionReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::SideSelectionRequest;
@@ -44,6 +46,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::update_stall_watchdog;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_front_hazard_hold;
 using multi_purpose_mpc_ros::v2x_overtake_core::arm_solver_cooldown;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_solver_cooldown_active;
+using multi_purpose_mpc_ros::v2x_overtake_core::rate_limit_solver_fallback_steering_toward_neutral;
+using multi_purpose_mpc_ros::v2x_overtake_core::update_solver_reentry_gate;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_pass_side;
 
 SpeedLimitRequest speed_request()
@@ -703,6 +707,78 @@ TEST(V2XOvertakeCoreRecovery, ArmsExtendsAndExpiresSolverCooldownAtBoundary)
   EXPECT_THROW(
     arm_solver_cooldown(SolverCooldownRequest{11.0, cooldown_until, -0.1}),
     std::invalid_argument);
+}
+
+TEST(V2XOvertakeCoreRecovery, RequiresCooldownAndConsecutiveSolverSuccessesForReentry)
+{
+  SolverReentryGateRequest request;
+  request.arm = true;
+  request.required_successes = 3;
+  auto resolution = update_solver_reentry_gate(request);
+  ASSERT_TRUE(resolution.blocked);
+  EXPECT_EQ(resolution.consecutive_successes, 0);
+
+  request.arm = false;
+  request.blocked = resolution.blocked;
+  request.consecutive_successes = resolution.consecutive_successes;
+  request.solver_succeeded = true;
+  request.cooldown_active = true;
+  resolution = update_solver_reentry_gate(request);
+  EXPECT_TRUE(resolution.blocked);
+  EXPECT_EQ(resolution.consecutive_successes, 1);
+
+  request.consecutive_successes = resolution.consecutive_successes;
+  request.cooldown_active = false;
+  resolution = update_solver_reentry_gate(request);
+  EXPECT_TRUE(resolution.blocked);
+  EXPECT_EQ(resolution.consecutive_successes, 2);
+
+  request.consecutive_successes = resolution.consecutive_successes;
+  resolution = update_solver_reentry_gate(request);
+  EXPECT_FALSE(resolution.blocked);
+  EXPECT_TRUE(resolution.released);
+  EXPECT_EQ(resolution.consecutive_successes, 0);
+}
+
+TEST(V2XOvertakeCoreRecovery, SolverFailureResetsReentrySuccessCount)
+{
+  const auto resolution = update_solver_reentry_gate(
+    SolverReentryGateRequest{false, true, 12, false, false, 20});
+  EXPECT_TRUE(resolution.blocked);
+  EXPECT_EQ(resolution.consecutive_successes, 0);
+
+  EXPECT_THROW(
+    update_solver_reentry_gate(
+      SolverReentryGateRequest{false, true, 0, true, false, 0}),
+    std::invalid_argument);
+}
+
+TEST(V2XOvertakeCoreRecovery, SaturatesReentrySuccessCountWithoutOverflow)
+{
+  const auto resolution = update_solver_reentry_gate(
+    SolverReentryGateRequest{
+      false, true, std::numeric_limits<int>::max(), true, true, 20});
+  EXPECT_TRUE(resolution.blocked);
+  EXPECT_FALSE(resolution.released);
+  EXPECT_EQ(resolution.consecutive_successes, 20);
+}
+
+TEST(V2XOvertakeCoreRecovery, RateLimitsFallbackSteeringTowardNeutral)
+{
+  SolverFallbackSteeringRequest request{-0.179, 0.559, 1.2, 0.025};
+  EXPECT_NEAR(
+    rate_limit_solver_fallback_steering_toward_neutral(request), -0.149, 1e-12);
+
+  request.current_steering_rad = 0.02;
+  EXPECT_DOUBLE_EQ(rate_limit_solver_fallback_steering_toward_neutral(request), 0.0);
+
+  request.current_steering_rad = 1.0;
+  request.step_sec = 0.0;
+  EXPECT_DOUBLE_EQ(rate_limit_solver_fallback_steering_toward_neutral(request), 0.559);
+
+  request.steer_rate_radps = -1.0;
+  EXPECT_THROW(
+    rate_limit_solver_fallback_steering_toward_neutral(request), std::invalid_argument);
 }
 
 }  // namespace

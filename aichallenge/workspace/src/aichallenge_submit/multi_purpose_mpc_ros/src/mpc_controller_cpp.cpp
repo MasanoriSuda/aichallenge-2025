@@ -1287,6 +1287,7 @@ struct OvertakeLineConfig
   double recovery_max_observation_gap_sec{0.2};
   double solver_cooldown_sec{2.0};
   int solver_failure_abort_cycles{3};
+  int solver_recovery_success_cycles{20};
   bool debug_log_enabled{false};
 };
 
@@ -3859,9 +3860,10 @@ struct MPC
     last_v2x_behavior_output_ = behavior_output;
     const bool solver_overtake_cooldown_active =
       v2x_overtake_core::is_solver_cooldown_active(
-      now_sec, overtake_solver_cooldown_until_sec_);
+        now_sec, overtake_solver_cooldown_until_sec_);
     const bool suppress_overtake_after_solver_failures =
-      (overtake_solver_recovery_active_ || solver_overtake_cooldown_active) &&
+      (overtake_solver_recovery_active_ || solver_overtake_cooldown_active ||
+       overtake_solver_reentry_blocked_) &&
       behavior_output.state == V2XBehaviorState::Overtake;
     const bool use_gap_planner =
       gap_planner != nullptr &&
@@ -4230,8 +4232,18 @@ struct MPC
 
     const double max_steering = std::isfinite(cfg.delta_max) ?
       std::max(0.0, std::abs(cfg.delta_max)) : 0.0;
-    const double fallback_steering = std::isfinite(previous_steering) ?
-      clip(previous_steering, -max_steering, max_steering) : 0.0;
+    const bool overtake_recovery_phase =
+      overtake_line_state_.phase == OvertakeLinePhase::Recovery;
+    const bool neutralize_overtake_fallback =
+      overtake_recovery_phase || overtake_solver_recovery_active_ ||
+      overtake_solver_reentry_blocked_;
+    const double fallback_steering = neutralize_overtake_fallback ?
+      v2x_overtake_core::rate_limit_solver_fallback_steering_toward_neutral(
+        v2x_overtake_core::SolverFallbackSteeringRequest{
+          std::isfinite(previous_steering) ? previous_steering : 0.0,
+          max_steering, std::max(0.0, cfg.steer_rate_max), time_step}) :
+      (std::isfinite(previous_steering) ?
+       clip(previous_steering, -max_steering, max_steering) : 0.0);
     previous_steering = fallback_steering;
 
     const int safe_horizon = std::max(0, cfg.N);
@@ -4245,8 +4257,16 @@ struct MPC
     const bool active_overtake_phase =
       overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
       overtake_line_state_.phase == OvertakeLinePhase::Pass;
-    overtake_infeasibility_counter_ = active_overtake_phase ?
+    const bool overtake_solver_relevant_phase =
+      active_overtake_phase || overtake_recovery_phase;
+    overtake_infeasibility_counter_ = overtake_solver_relevant_phase ?
       overtake_infeasibility_counter_ + 1 : 0;
+    if (!overtake_solver_recovery_active_ && overtake_recovery_phase) {
+      overtake_solver_recovery_active_ = true;
+      RCLCPP_ERROR(
+        rclcpp::get_logger("mpc_controller"),
+        "MPC overtake Recovery entered solver fallback; re-entry gate requested");
+    }
     if (
       !overtake_solver_recovery_active_ &&
       active_overtake_phase &&
@@ -4258,6 +4278,15 @@ struct MPC
         rclcpp::get_logger("mpc_controller"),
         "MPC overtake target aborted after %d consecutive failures; Recovery requested",
         overtake_infeasibility_counter_);
+    }
+    if (overtake_solver_reentry_blocked_) {
+      const auto gate = v2x_overtake_core::update_solver_reentry_gate(
+        v2x_overtake_core::SolverReentryGateRequest{
+          false, overtake_solver_reentry_blocked_,
+          overtake_solver_recovery_success_count_, false, true,
+          cfg.v2x_behavior.overtake_line.solver_recovery_success_cycles});
+      overtake_solver_reentry_blocked_ = gate.blocked;
+      overtake_solver_recovery_success_count_ = gate.consecutive_successes;
     }
     if (infeasibility_counter == 0 || failure_count % 10 == 0) {
       RCLCPP_ERROR(
@@ -4338,6 +4367,24 @@ struct MPC
       infeasibility_counter = 0;
       overtake_infeasibility_counter_ = 0;
       last_control_was_fallback_ = false;
+      if (overtake_solver_reentry_blocked_) {
+        const bool cooldown_active = v2x_overtake_core::is_solver_cooldown_active(
+          now_sec, overtake_solver_cooldown_until_sec_);
+        const auto gate = v2x_overtake_core::update_solver_reentry_gate(
+          v2x_overtake_core::SolverReentryGateRequest{
+            false, overtake_solver_reentry_blocked_,
+            overtake_solver_recovery_success_count_, true, cooldown_active,
+            cfg.v2x_behavior.overtake_line.solver_recovery_success_cycles});
+        overtake_solver_reentry_blocked_ = gate.blocked;
+        overtake_solver_recovery_success_count_ = gate.consecutive_successes;
+        if (gate.released) {
+          overtake_solver_cooldown_logged_ = false;
+          RCLCPP_INFO(
+            rclcpp::get_logger("mpc_controller"),
+            "OvertakeLine solver re-entry gate released after %d healthy solves",
+            cfg.v2x_behavior.overtake_line.solver_recovery_success_cycles);
+        }
+      }
       last_solved_wp_id = problem.planning_wp_id;
       return {u, max_delta};
     } catch (const std::exception & error) {
@@ -4388,6 +4435,8 @@ struct MPC
   OvertakeLineState overtake_line_state_;
   std::optional<double> overtake_entry_speed_;
   bool overtake_solver_recovery_active_{false};
+  bool overtake_solver_reentry_blocked_{false};
+  int overtake_solver_recovery_success_count_{0};
   double last_overtake_line_debug_log_sec_{std::numeric_limits<double>::quiet_NaN()};
   double overtake_solver_cooldown_until_sec_{-std::numeric_limits<double>::infinity()};
   bool overtake_solver_cooldown_logged_{false};
@@ -4496,19 +4545,30 @@ private:
 
   void reset_overtake_line_state(const double now_sec, const std::string & reason)
   {
-    if (
-      overtake_solver_recovery_active_ && std::isfinite(now_sec) &&
-      cfg.v2x_behavior.overtake_line.solver_cooldown_sec > 0.0)
-    {
-      overtake_solver_cooldown_until_sec_ = v2x_overtake_core::arm_solver_cooldown(
-        v2x_overtake_core::SolverCooldownRequest{
-          now_sec, overtake_solver_cooldown_until_sec_,
-          cfg.v2x_behavior.overtake_line.solver_cooldown_sec});
+    if (overtake_solver_recovery_active_) {
+      const auto gate = v2x_overtake_core::update_solver_reentry_gate(
+        v2x_overtake_core::SolverReentryGateRequest{
+          true, overtake_solver_reentry_blocked_,
+          overtake_solver_recovery_success_count_, false, true,
+          cfg.v2x_behavior.overtake_line.solver_recovery_success_cycles});
+      overtake_solver_reentry_blocked_ = gate.blocked;
+      overtake_solver_recovery_success_count_ = gate.consecutive_successes;
       overtake_solver_cooldown_logged_ = false;
+      if (
+        std::isfinite(now_sec) &&
+        cfg.v2x_behavior.overtake_line.solver_cooldown_sec > 0.0)
+      {
+        overtake_solver_cooldown_until_sec_ = v2x_overtake_core::arm_solver_cooldown(
+          v2x_overtake_core::SolverCooldownRequest{
+            now_sec, overtake_solver_cooldown_until_sec_,
+            cfg.v2x_behavior.overtake_line.solver_cooldown_sec});
+      }
       RCLCPP_WARN(
         rclcpp::get_logger("mpc_controller"),
-        "OvertakeLine solver cooldown armed: duration=%.2f s, reason=%s",
-        cfg.v2x_behavior.overtake_line.solver_cooldown_sec, reason.c_str());
+        "OvertakeLine solver re-entry gate armed: cooldown=%.2f s, "
+        "healthy_solves=%d, reason=%s",
+        cfg.v2x_behavior.overtake_line.solver_cooldown_sec,
+        cfg.v2x_behavior.overtake_line.solver_recovery_success_cycles, reason.c_str());
     }
     if (
       cfg.v2x_behavior.overtake_line.debug_log_enabled &&
@@ -4646,23 +4706,28 @@ private:
       behavior_output.target_vehicle_id == overtake_line_state_.target_vehicle_id);
     const bool solver_cooldown_active = v2x_overtake_core::is_solver_cooldown_active(
       now_sec, overtake_solver_cooldown_until_sec_);
+    const bool solver_reentry_suppressed =
+      solver_cooldown_active || overtake_solver_reentry_blocked_;
     const bool behavior_requests_overtake =
       behavior_output.state == V2XBehaviorState::Overtake &&
       behavior_output.overtake_pass_side_sign != 0;
-    if (solver_cooldown_active && behavior_requests_overtake) {
+    if (solver_reentry_suppressed && behavior_requests_overtake) {
       if (!overtake_solver_cooldown_logged_) {
         RCLCPP_INFO(
           rclcpp::get_logger("mpc_controller"),
-          "OvertakeLine start suppressed by solver cooldown: remaining=%.2f s",
-          std::max(0.0, overtake_solver_cooldown_until_sec_ - now_sec));
+          "OvertakeLine start suppressed by solver recovery gate: remaining=%.2f s, "
+          "healthy_solves=%d/%d",
+          std::max(0.0, overtake_solver_cooldown_until_sec_ - now_sec),
+          overtake_solver_recovery_success_count_,
+          line_cfg.solver_recovery_success_cycles);
         overtake_solver_cooldown_logged_ = true;
       }
-    } else if (!solver_cooldown_active) {
+    } else if (!solver_reentry_suppressed) {
       overtake_solver_cooldown_logged_ = false;
     }
     const bool behavior_overtake =
       behavior_requests_overtake && !overtake_solver_recovery_active_ &&
-      !solver_cooldown_active && locked_target_matches;
+      !solver_reentry_suppressed && locked_target_matches;
 
     if (
       overtake_line_state_.target_vehicle_id.empty() && behavior_overtake &&
@@ -6894,6 +6959,10 @@ Config load_config(const std::string & path)
     1,
     mpc["v2x_overtake_solver_failure_abort_cycles"] ?
     mpc["v2x_overtake_solver_failure_abort_cycles"].as<int>() : 3);
+  cfg.mpc.v2x_behavior.overtake_line.solver_recovery_success_cycles = std::max(
+    1,
+    mpc["v2x_overtake_solver_recovery_success_cycles"] ?
+    mpc["v2x_overtake_solver_recovery_success_cycles"].as<int>() : 20);
   cfg.mpc.v2x_behavior.overtake_line.debug_log_enabled =
     mpc["v2x_overtake_line_debug_log_enabled"] ?
     mpc["v2x_overtake_line_debug_log_enabled"].as<bool>() : false;
@@ -7623,7 +7692,7 @@ public:
         get_logger(),
         "V2X overtake line is enabled: offset=%.2f, shift=%.2f, pass=%.2f, "
         "return=%.2f, bias=%.2f, recovery_v=%.2f, stall=%.2f m/s/%.2f s, "
-        "timeout=%.2f s, solver_cooldown=%.2f s",
+        "timeout=%.2f s, solver_cooldown=%.2f s, solver_healthy=%d cycles",
         mpc_cfg_.v2x_behavior.overtake_line.lateral_offset,
         mpc_cfg_.v2x_behavior.overtake_line.shift_distance,
         mpc_cfg_.v2x_behavior.overtake_line.pass_distance,
@@ -7633,7 +7702,8 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line.recovery_stall_speed,
         mpc_cfg_.v2x_behavior.overtake_line.recovery_stall_timeout_sec,
         mpc_cfg_.v2x_behavior.overtake_line.recovery_timeout_sec,
-        mpc_cfg_.v2x_behavior.overtake_line.solver_cooldown_sec);
+        mpc_cfg_.v2x_behavior.overtake_line.solver_cooldown_sec,
+        mpc_cfg_.v2x_behavior.overtake_line.solver_recovery_success_cycles);
     }
     if (mpc_cfg_.v2x_behavior.low_speed_avoidance_enabled) {
       RCLCPP_INFO(

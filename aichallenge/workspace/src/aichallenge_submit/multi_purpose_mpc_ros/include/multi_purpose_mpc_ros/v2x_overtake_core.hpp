@@ -340,6 +340,42 @@ double arm_solver_cooldown(const SolverCooldownRequest & request);
 /// Return true strictly before a finite solver-failure cooldown deadline.
 bool is_solver_cooldown_active(double now_sec, double cooldown_until_sec) noexcept;
 
+struct SolverReentryGateRequest
+{
+  bool arm{false};
+  bool blocked{false};
+  int consecutive_successes{0};
+  bool solver_succeeded{false};
+  bool cooldown_active{false};
+  int required_successes{1};
+};
+
+struct SolverReentryGateResolution
+{
+  bool blocked{false};
+  int consecutive_successes{0};
+  bool released{false};
+};
+
+/// Require both cooldown expiry and consecutive healthy MPC solves before another overtake.
+///
+/// Arming always resets the success count. Any failed solve while blocked also resets the count.
+/// Invalid counters or a non-positive required_successes value throw std::invalid_argument.
+SolverReentryGateResolution update_solver_reentry_gate(
+  const SolverReentryGateRequest & request);
+
+struct SolverFallbackSteeringRequest
+{
+  double current_steering_rad{};
+  double max_steering_rad{};
+  double steer_rate_radps{};
+  double step_sec{};
+};
+
+/// Move a solver-fallback steering command toward neutral without exceeding the rate limit.
+double rate_limit_solver_fallback_steering_toward_neutral(
+  const SolverFallbackSteeringRequest & request);
+
 }  // namespace multi_purpose_mpc_ros::v2x_overtake_core
 
 #endif  // MULTI_PURPOSE_MPC_ROS__V2X_OVERTAKE_CORE_HPP_

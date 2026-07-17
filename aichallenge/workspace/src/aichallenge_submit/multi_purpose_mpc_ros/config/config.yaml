@@ -360,6 +360,7 @@ mpc:
   v2x_overtake_recovery_max_observation_gap_sec: 0.2 # [s] reject discontinuous distance integration
   v2x_overtake_solver_cooldown_sec: 2.0       # [s] suppress immediate re-entry after solver abort
   v2x_overtake_solver_failure_abort_cycles: 8 # consecutive failures before aborting the lateral pass target
+  v2x_overtake_solver_recovery_success_cycles: 20 # 0.5 s at 40 Hz before re-entry after solver abort
   v2x_overtake_line_debug_log_enabled: true   # log phase changes when enabled
   v2x_moving_front_speed_threshold: 1.0 # [m/s] above this, Follow uses moving-front behavior
   v2x_moving_follow_speed_margin: 0.8   # [m/s] controlled closing margin while still behind

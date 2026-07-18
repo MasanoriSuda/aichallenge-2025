@@ -55,11 +55,20 @@ struct DetectorConfig
   // retain the legacy fail-safe behavior.
   bool solver_fallback_recovery_enabled{false};
   double solver_fallback_duration_sec{2.0};
+  // A persistent solver fallback may recover without wall/contact evidence
+  // only after a longer no-motion window. The adapter must restrict this
+  // route to reverse-only actuation and still prove rear static/V2X clearance.
+  bool solver_evidence_free_recovery_enabled{false};
+  double solver_evidence_free_duration_sec{3.0};
   // Optional fallback for a physically stuck vehicle whose simulator wall and
   // occupancy-grid/collision evidence disagree. This never applies while the
   // MPC solver itself is in fallback.
   bool evidence_free_recovery_enabled{false};
   double evidence_free_duration_sec{3.0};
+  // Allow a vehicle stopped behind another stopped V2X vehicle to join a
+  // reverse-only recovery cascade after a longer confirmation window.
+  bool coordinated_stop_recovery_enabled{false};
+  double coordinated_stop_duration_sec{3.0};
   // Observation time is continuous only while updates stay within this gap.
   double max_observation_gap_sec{0.25};
   double stopped_speed_mps{0.15};
@@ -79,6 +88,7 @@ struct DetectorInput
   bool odometry_fresh{false};
   bool solver_fallback{false};
   bool deliberate_stop{false};
+  bool coordinated_stop{false};
   bool gear_transition_active{false};
   bool awsim_recovery_settling{false};
   double signed_speed_mps{};
@@ -101,7 +111,9 @@ struct DetectorDecision
   bool forward_intent{false};
   bool corroborating_evidence{false};
   bool solver_fallback_qualified{false};
+  bool solver_evidence_free_qualified{false};
   bool evidence_free_qualified{false};
+  bool coordinated_stop_qualified{false};
 };
 
 class StuckDetector

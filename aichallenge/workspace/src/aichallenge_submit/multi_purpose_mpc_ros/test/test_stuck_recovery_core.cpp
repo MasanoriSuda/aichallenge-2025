@@ -282,12 +282,28 @@ TEST(StuckDetectorConfig, RejectsUnsafeNumericConfiguration)
   EXPECT_THROW(StuckDetector{config}, std::invalid_argument);
 
   config = detector_config();
+  config.solver_evidence_free_recovery_enabled = true;
+  EXPECT_THROW(StuckDetector{config}, std::invalid_argument);
+
+  config = detector_config();
+  config.solver_fallback_recovery_enabled = true;
+  config.solver_evidence_free_recovery_enabled = true;
+  config.solver_evidence_free_duration_sec =
+    config.solver_fallback_duration_sec - 0.01;
+  EXPECT_THROW(StuckDetector{config}, std::invalid_argument);
+
+  config = detector_config();
   config.max_observation_gap_sec = 0.0;
   EXPECT_THROW(StuckDetector{config}, std::invalid_argument);
 
   config = detector_config();
   config.evidence_free_recovery_enabled = true;
   config.evidence_free_duration_sec = config.stationary_duration_sec - 0.01;
+  EXPECT_THROW(StuckDetector{config}, std::invalid_argument);
+
+  config = detector_config();
+  config.coordinated_stop_recovery_enabled = true;
+  config.coordinated_stop_duration_sec = config.stationary_duration_sec - 0.01;
   EXPECT_THROW(StuckDetector{config}, std::invalid_argument);
 
   config = detector_config();
@@ -420,6 +436,44 @@ TEST(StuckDetector, EvidenceFreeFallbackRequiresLongHealthyNonDeliberateStall)
   EXPECT_EQ(decision.reject_reason, StuckRejectReason::DeliberateStop);
 }
 
+TEST(StuckDetector, CoordinatesOnlySustainedQualifiedDeliberateStop)
+{
+  auto config = detector_config();
+  config.coordinated_stop_recovery_enabled = true;
+  config.coordinated_stop_duration_sec = 3.0;
+  StuckDetector detector(config);
+
+  auto input = eligible_detector_input(0.0);
+  input.wall_evidence = false;
+  input.collision_hint = false;
+  input.deliberate_stop = true;
+  input.coordinated_stop = true;
+
+  auto decision = detector.update(input);
+  EXPECT_EQ(decision.verdict, StuckVerdict::Moving);
+  EXPECT_EQ(decision.reject_reason, StuckRejectReason::ObservationWindowIncomplete);
+  EXPECT_FALSE(decision.coordinated_stop_qualified);
+
+  input.now_sec = 2.99;
+  decision = detector.update(input);
+  EXPECT_EQ(decision.verdict, StuckVerdict::Moving);
+  EXPECT_FALSE(decision.coordinated_stop_qualified);
+
+  input.now_sec = 3.0;
+  decision = detector.update(input);
+  EXPECT_EQ(decision.verdict, StuckVerdict::Confirmed);
+  EXPECT_FALSE(decision.corroborating_evidence);
+  EXPECT_TRUE(decision.coordinated_stop_qualified);
+  EXPECT_FALSE(decision.evidence_free_qualified);
+
+  detector.reset();
+  input.now_sec = 10.0;
+  input.coordinated_stop = false;
+  decision = detector.update(input);
+  EXPECT_EQ(decision.verdict, StuckVerdict::NotEligible);
+  EXPECT_EQ(decision.reject_reason, StuckRejectReason::DeliberateStop);
+}
+
 TEST(
   StuckDetector,
   QualifiesOnlySustainedSolverFallbackWithCurrentWallEvidence) {
@@ -464,6 +518,40 @@ TEST(
     decision.reject_reason,
     StuckRejectReason::ObservationWindowIncomplete);
   EXPECT_DOUBLE_EQ(decision.solver_fallback_duration_sec, 0.0);
+}
+
+TEST(StuckDetector, QualifiesPersistentWallFreeSolverFallbackAfterLongerWindow)
+{
+  auto config = detector_config();
+  config.solver_fallback_recovery_enabled = true;
+  config.solver_evidence_free_recovery_enabled = true;
+  config.solver_evidence_free_duration_sec = 3.0;
+  StuckDetector detector(config);
+
+  auto input = eligible_detector_input(10.0);
+  input.solver_fallback = true;
+  input.wall_evidence = false;
+  input.collision_hint = false;
+
+  auto decision = detector.update(input);
+  EXPECT_EQ(decision.verdict, StuckVerdict::Moving);
+  EXPECT_EQ(decision.reject_reason, StuckRejectReason::ObservationWindowIncomplete);
+  EXPECT_FALSE(decision.solver_evidence_free_qualified);
+
+  input.now_sec = 12.99;
+  decision = detector.update(input);
+  EXPECT_EQ(decision.verdict, StuckVerdict::Moving);
+  EXPECT_FALSE(decision.solver_evidence_free_qualified);
+
+  input.now_sec = 13.0;
+  decision = detector.update(input);
+  EXPECT_EQ(decision.verdict, StuckVerdict::Confirmed);
+  EXPECT_EQ(decision.reject_reason, StuckRejectReason::None);
+  EXPECT_FALSE(decision.corroborating_evidence);
+  EXPECT_FALSE(decision.solver_fallback_qualified);
+  EXPECT_TRUE(decision.solver_evidence_free_qualified);
+  EXPECT_DOUBLE_EQ(decision.stationary_duration_sec, 3.0);
+  EXPECT_DOUBLE_EQ(decision.solver_fallback_duration_sec, 3.0);
 }
 
 TEST(StuckDetector, SolverRecoveryResetsFallbackQualificationTimer) {
@@ -1771,6 +1859,41 @@ TEST(StuckRecoveryCore, QualifiedSolverFallbackCanEnterExclusiveRecovery) {
   EXPECT_EQ(output.state, RecoveryState::WaitAwsimRecovery);
   EXPECT_EQ(output.action.type, RecoveryActionType::HoldStop);
   EXPECT_NE(output.state_reason, RecoveryReason::SolverUnsafe);
+}
+
+TEST(StuckRecoveryCore, QualifiedWallFreeSolverFallbackCanEnterExclusiveRecovery)
+{
+  CoreConfig config;
+  config.enabled = true;
+  config.shadow_mode = false;
+  config.simulation_only = true;
+  config.detector = detector_config();
+  config.detector.solver_fallback_recovery_enabled = true;
+  config.detector.solver_evidence_free_recovery_enabled = true;
+  config.detector.stationary_duration_sec = 0.0;
+  config.detector.solver_fallback_duration_sec = 0.01;
+  config.detector.solver_evidence_free_duration_sec = 0.01;
+  config.supervisor = supervisor_config();
+  StuckRecoveryCore core(config);
+
+  CoreInput input;
+  input.simulation_environment = true;
+  input.detector = eligible_detector_input(0.0);
+  input.detector.solver_fallback = true;
+  input.detector.wall_evidence = false;
+  input.detector.collision_hint = false;
+  input.recovery = healthy_recovery_input(0.0);
+  auto output = core.update(input);
+  EXPECT_EQ(output.state, RecoveryState::Normal);
+  EXPECT_EQ(output.action.type, RecoveryActionType::NormalControl);
+
+  input.detector.now_sec = 0.01;
+  input.recovery.now_sec = 0.01;
+  output = core.update(input);
+  EXPECT_TRUE(output.detector.solver_evidence_free_qualified);
+  EXPECT_FALSE(output.detector.solver_fallback_qualified);
+  EXPECT_EQ(output.state, RecoveryState::SuspectStuck);
+  EXPECT_EQ(output.action.type, RecoveryActionType::HoldStop);
 }
 
 TEST(StuckRecoveryCore, PersistentFallbackCannotEnterLowSpeedRejoin) {

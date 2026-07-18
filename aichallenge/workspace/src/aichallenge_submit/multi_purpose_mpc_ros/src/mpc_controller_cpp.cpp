@@ -6153,6 +6153,12 @@ struct StuckRecoveryAdapterConfig
   double rear_prediction_margin_sec{0.1};
   double reverse_escape_distance_m{2.0};
   double forward_escape_distance_m{0.30};
+  // Maximum V2X front speed accepted as a stopped vehicle for a decentralized
+  // tail-first reverse cascade.
+  double coordinated_stop_front_speed_mps{0.20};
+  // Large-heading solver failures wait for a reverse corridor instead of
+  // switching to the short forward deadlock fallback.
+  double solver_reverse_only_heading_error_rad{1.0};
   // Occupancy cells within this additional envelope are used only to infer
   // which vehicle end is against a wall; they do not relax collision checks.
   double wall_direction_search_margin_m{0.50};
@@ -6410,12 +6416,31 @@ Config load_config(const std::string & path)
       out.solver_fallback_duration_sec = detector["solver_fallback_duration_sec"] ?
         detector["solver_fallback_duration_sec"].as<double>() :
         out.solver_fallback_duration_sec;
+      out.solver_evidence_free_recovery_enabled =
+        detector["solver_evidence_free_recovery_enabled"] ?
+        detector["solver_evidence_free_recovery_enabled"].as<bool>() :
+        out.solver_evidence_free_recovery_enabled;
+      out.solver_evidence_free_duration_sec =
+        detector["solver_evidence_free_duration_sec"] ?
+        detector["solver_evidence_free_duration_sec"].as<double>() :
+        out.solver_evidence_free_duration_sec;
       out.evidence_free_recovery_enabled = detector["evidence_free_recovery_enabled"] ?
         detector["evidence_free_recovery_enabled"].as<bool>() :
         out.evidence_free_recovery_enabled;
       out.evidence_free_duration_sec = detector["evidence_free_duration_sec"] ?
         detector["evidence_free_duration_sec"].as<double>() :
         out.evidence_free_duration_sec;
+      out.coordinated_stop_recovery_enabled =
+        detector["coordinated_stop_recovery_enabled"] ?
+        detector["coordinated_stop_recovery_enabled"].as<bool>() :
+        out.coordinated_stop_recovery_enabled;
+      out.coordinated_stop_duration_sec = detector["coordinated_stop_duration_sec"] ?
+        detector["coordinated_stop_duration_sec"].as<double>() :
+        out.coordinated_stop_duration_sec;
+      adapter.coordinated_stop_front_speed_mps =
+        detector["coordinated_stop_front_speed_mps"] ?
+        detector["coordinated_stop_front_speed_mps"].as<double>() :
+        adapter.coordinated_stop_front_speed_mps;
       out.max_observation_gap_sec = detector["max_observation_gap_sec"] ?
         detector["max_observation_gap_sec"].as<double>() :
         out.max_observation_gap_sec;
@@ -6503,6 +6528,10 @@ Config load_config(const std::string & path)
       adapter.forward_escape_distance_m = maneuver["forward_escape_distance_m"] ?
         maneuver["forward_escape_distance_m"].as<double>() :
         adapter.forward_escape_distance_m;
+      adapter.solver_reverse_only_heading_error_rad =
+        maneuver["solver_reverse_only_heading_error_rad"] ?
+        maneuver["solver_reverse_only_heading_error_rad"].as<double>() :
+        adapter.solver_reverse_only_heading_error_rad;
       adapter.max_reverse_pose_step_m = maneuver["max_reverse_pose_step_m"] ?
         maneuver["max_reverse_pose_step_m"].as<double>() :
         adapter.max_reverse_pose_step_m;
@@ -6625,6 +6654,10 @@ Config load_config(const std::string & path)
       !finite_non_negative(adapter.rear_prediction_margin_sec) ||
       !finite_non_negative(adapter.reverse_escape_distance_m) ||
       !finite_non_negative(adapter.forward_escape_distance_m) ||
+      !finite_non_negative(adapter.coordinated_stop_front_speed_mps) ||
+      !std::isfinite(adapter.solver_reverse_only_heading_error_rad) ||
+      adapter.solver_reverse_only_heading_error_rad <= 0.0 ||
+      adapter.solver_reverse_only_heading_error_rad > 3.14159265358979323846 ||
       adapter.reverse_escape_distance_m <= 0.0 ||
       adapter.forward_escape_distance_m <= 0.0 ||
       adapter.reverse_escape_distance_m > core.supervisor.max_reverse_distance_m ||
@@ -7603,6 +7636,18 @@ public:
       stuck_recovery::to_string(stuck_recovery_core_->execution_mode(use_sim_time_)),
       stuck_recovery_actuation_io_enabled_ ? "enabled" : "disabled",
       cfg_.stuck_recovery.core.simulation_only ? "true" : "false");
+    RCLCPP_INFO(
+      get_logger(),
+      "Stuck recovery coordinated reverse: enabled=%s, stop=%.2f s, "
+      "front_speed<=%.2f m/s, solver_evidence_free=%s/%.2f s, "
+      "solver_reverse_only_heading>=%.2f rad",
+      cfg_.stuck_recovery.core.detector.coordinated_stop_recovery_enabled ? "true" : "false",
+      cfg_.stuck_recovery.core.detector.coordinated_stop_duration_sec,
+      cfg_.stuck_recovery.coordinated_stop_front_speed_mps,
+      cfg_.stuck_recovery.core.detector.solver_evidence_free_recovery_enabled ?
+      "true" : "false",
+      cfg_.stuck_recovery.core.detector.solver_evidence_free_duration_sec,
+      cfg_.stuck_recovery.solver_reverse_only_heading_error_rad);
     if (
       cfg_.stuck_recovery.core.enabled && !cfg_.stuck_recovery.core.shadow_mode &&
       !stuck_recovery_actuation_io_enabled_)
@@ -8334,6 +8379,8 @@ private:
     recovery_episode_traveled_distance_m_ = 0.0;
     recovery_reverse_pose_jump_ = false;
     recovery_episode_had_contact_evidence_ = false;
+    recovery_coordinated_stop_episode_ = false;
+    recovery_reverse_only_episode_ = false;
     recovery_selected_reverse_primitive_.reset();
     recovery_selected_stepwise_escape_ = false;
     recovery_initial_contact_cells_.reset();
@@ -8671,6 +8718,7 @@ private:
     const double escape_step_distance_to_check_m,
     const double recovery_heading_error_rad,
     const double rejoin_steering_angle_rad,
+    const bool reverse_only,
     const bool evaluate_rollout) const
   {
     RecoverySafetySnapshot snapshot;
@@ -8893,20 +8941,24 @@ private:
         // also retain a statically clear forward escape for the multi-vehicle
         // case where a stopped follower occupies the reverse corridor.
         selected_result = select_heading_aligned_reverse_candidate();
-        auto forward_result = select_forward_deadlock_fallback();
-        if (forward_result.has_value()) {
-          if (selected_result.has_value()) {
-            forward_deadlock_fallback = std::move(forward_result.value());
-          } else {
-            selected_result = std::move(forward_result.value());
+        if (!reverse_only) {
+          auto forward_result = select_forward_deadlock_fallback();
+          if (forward_result.has_value()) {
+            if (selected_result.has_value()) {
+              forward_deadlock_fallback = std::move(forward_result.value());
+            } else {
+              selected_result = std::move(forward_result.value());
+            }
           }
         }
       } else if (snapshot.wall_region == recovery_footprint::WallRegion::Rear) {
-        auto result = evaluate_candidate(
-          recovery_footprint::ReversePrimitive::ForwardStraight);
-        first_result = result;
-        if (result.feasible) {
-          selected_result = std::move(result);
+        if (!reverse_only) {
+          auto result = evaluate_candidate(
+            recovery_footprint::ReversePrimitive::ForwardStraight);
+          first_result = result;
+          if (result.feasible) {
+            selected_result = std::move(result);
+          }
         }
       } else if (snapshot.wall_region == recovery_footprint::WallRegion::Front) {
         if (snapshot.current_footprint_clear) {
@@ -8944,7 +8996,7 @@ private:
       // Contact escape remains reverse-only and any Front-wall candidate still has to pass the
       // full swept-footprint check, so this does not weaken the collision gate.
       if (
-        snapshot.current_footprint_clear && selected_result.has_value() &&
+        !reverse_only && snapshot.current_footprint_clear && selected_result.has_value() &&
         !recovery_footprint::primitive_is_forward(selected_result->primitive) &&
         !forward_deadlock_fallback.has_value())
       {
@@ -9230,6 +9282,30 @@ private:
     // reset every other control cycle.
     const double requested_forward_speed_mps = std::max(
       {0.0, path_forward_intent_speed_mps, normal_u[0]});
+    const auto & behavior = mpc_->last_v2x_behavior_output();
+    const bool deliberate_stop =
+      behavior.state == V2XBehaviorState::LowSpeedAvoidance ||
+      behavior.state == V2XBehaviorState::SafetyBrake ||
+      (behavior.state == V2XBehaviorState::Follow && behavior.has_front_vehicle) ||
+      behavior.has_danger_vehicle;
+    const bool coordinated_stop_candidate =
+      cfg_.stuck_recovery.core.detector.coordinated_stop_recovery_enabled &&
+      behavior.has_front_vehicle &&
+      !behavior.target_vehicle_id.empty() && std::isfinite(behavior.front_speed) &&
+      behavior.front_speed <= cfg_.stuck_recovery.coordinated_stop_front_speed_mps &&
+      (behavior.state == V2XBehaviorState::SafetyBrake ||
+      behavior.state == V2XBehaviorState::Follow);
+    const bool coordinated_stop_active =
+      coordinated_stop_candidate || recovery_coordinated_stop_episode_;
+    const bool solver_reverse_only_candidate =
+      mpc_fallback_active &&
+      (cfg_.stuck_recovery.core.detector.solver_evidence_free_recovery_enabled ||
+      (std::isfinite(car_->spatial_state.e_psi) &&
+      std::abs(car_->spatial_state.e_psi) >=
+      cfg_.stuck_recovery.solver_reverse_only_heading_error_rad));
+    const bool reverse_only =
+      recovery_reverse_only_episode_ || coordinated_stop_active ||
+      solver_reverse_only_candidate;
     const bool low_speed_recovery_candidate =
       std::abs(actual_v) <= cfg_.stuck_recovery.core.detector.moving_speed_mps &&
       (requested_forward_speed_mps >=
@@ -9251,13 +9327,8 @@ private:
       escape_step_distance_to_check_m,
       car_->spatial_state.e_psi,
       normal_u[1],
+      reverse_only,
       recovery_context_active || low_speed_recovery_candidate);
-    const auto & behavior = mpc_->last_v2x_behavior_output();
-    const bool deliberate_stop =
-      behavior.state == V2XBehaviorState::LowSpeedAvoidance ||
-      behavior.state == V2XBehaviorState::SafetyBrake ||
-      (behavior.state == V2XBehaviorState::Follow && behavior.has_front_vehicle) ||
-      behavior.has_danger_vehicle;
     const bool collision_hint =
       last_collision_receipt_steady_.has_value() &&
       std::chrono::duration<double>(
@@ -9276,7 +9347,8 @@ private:
     input.detector.control_enabled = enable_control_;
     input.detector.odometry_fresh = true;
     input.detector.solver_fallback = mpc_fallback_active;
-    input.detector.deliberate_stop = deliberate_stop;
+    input.detector.deliberate_stop = deliberate_stop || recovery_coordinated_stop_episode_;
+    input.detector.coordinated_stop = coordinated_stop_active;
     input.detector.gear_transition_active = recovery_gear_transition_active();
     input.detector.awsim_recovery_settling = awsim_recovery_settling;
     input.detector.signed_speed_mps = actual_v;
@@ -9335,6 +9407,8 @@ private:
       recovery_previous_contact_cells_ = safety.current_contact_cells;
       recovery_episode_had_contact_evidence_ =
         safety.wall_evidence || collision_hint || !safety.current_contact_cells.empty();
+      recovery_coordinated_stop_episode_ = coordinated_stop_active;
+      recovery_reverse_only_episode_ = reverse_only;
       recovery_boost_suppressed_for_session_ = true;
     }
     const bool entered_step_reassessment =
@@ -9364,11 +9438,13 @@ private:
       recovery_selected_stepwise_escape_ = safety.stepwise_escape;
       RCLCPP_INFO(
         get_logger(), "Stuck recovery maneuver selected: direction=%s, primitive=%s, "
-        "steering=%.3f rad, wall=%s, wall_distance=%.3f m",
+        "steering=%.3f rad, wall=%s, wall_distance=%.3f m, coordinated=%d, reverse_only=%d",
         stuck_recovery::to_string(safety.maneuver_direction),
         recovery_footprint::to_string(safety.selected_reverse_primitive),
         safety.selected_reverse_steering_angle_rad,
-        recovery_footprint::to_string(safety.wall_region), safety.wall_distance_m);
+        recovery_footprint::to_string(safety.wall_region), safety.wall_distance_m,
+        recovery_coordinated_stop_episode_ ? 1 : 0,
+        recovery_reverse_only_episode_ ? 1 : 0);
     }
     const bool maneuver_state =
       output.state == stuck_recovery::RecoveryState::ReverseManeuver ||
@@ -9409,6 +9485,8 @@ private:
       recovery_initial_contact_cells_.reset();
       recovery_previous_contact_cells_.reset();
       recovery_episode_had_contact_evidence_ = false;
+      recovery_coordinated_stop_episode_ = false;
+      recovery_reverse_only_episode_ = false;
       recovery_selected_reverse_primitive_.reset();
       recovery_selected_stepwise_escape_ = false;
       recovery_episode_traveled_distance_m_ = 0.0;
@@ -9432,6 +9510,8 @@ private:
       recovery_reverse_pose_jump_ = false;
       recovery_selected_reverse_primitive_.reset();
       recovery_selected_stepwise_escape_ = false;
+      recovery_coordinated_stop_episode_ = false;
+      recovery_reverse_only_episode_ = false;
       recovery_reset_applied_ = false;
     }
 
@@ -9443,7 +9523,8 @@ private:
     {
       RCLCPP_INFO(
         get_logger(),
-        "Stuck recovery: mode=%s, state=%s, action=%s, reason=%s, static=%s, "
+        "Stuck recovery: mode=%s, state=%s, action=%s, reason=%s, "
+        "coordinated=%d, reverse_only=%d, static=%s, "
         "static_contacts=%zu/%zu/%zu, static_reject_at=%.3f m, checked=%zu, "
         "runtime_contact=%s, current_contacts=%zu, corridor_complete=%d, boost_inactive=%d, "
         "v2x_message_complete=%d, corridor_v2x_clear=%d, "
@@ -9456,6 +9537,8 @@ private:
         stuck_recovery::to_string(output.state),
         stuck_recovery::to_string(output.action.type),
         stuck_recovery::to_string(output.action.reason),
+        recovery_coordinated_stop_episode_ ? 1 : 0,
+        recovery_reverse_only_episode_ ? 1 : 0,
         recovery_footprint::to_string(safety.static_reject_reason),
         safety.static_initial_contact_count, safety.static_maximum_contact_count,
         safety.static_final_contact_count, safety.static_rejected_at_distance_m,
@@ -9489,7 +9572,8 @@ private:
         "Stuck detector: verdict=%s, reject=%s, stationary=%.2f s, pose=%.3f m, "
         "progress=%.3f m, evidence=%d, wall=%d, forward_intent=%d, "
         "solver_fallback=%d, fallback_duration=%.2f s, fallback_qualified=%d, "
-        "evidence_free_qualified=%d",
+        "solver_evidence_free_qualified=%d, evidence_free_qualified=%d, "
+        "coordinated_stop_qualified=%d, coordinated_candidate=%d",
         stuck_recovery::to_string(output.detector.verdict),
         stuck_recovery::to_string(output.detector.reject_reason),
         output.detector.stationary_duration_sec, output.detector.pose_displacement_m,
@@ -9497,7 +9581,10 @@ private:
         safety.wall_evidence ? 1 : 0, output.detector.forward_intent ? 1 : 0,
         mpc_fallback_active ? 1 : 0, output.detector.solver_fallback_duration_sec,
         output.detector.solver_fallback_qualified ? 1 : 0,
-        output.detector.evidence_free_qualified ? 1 : 0);
+        output.detector.solver_evidence_free_qualified ? 1 : 0,
+        output.detector.evidence_free_qualified ? 1 : 0,
+        output.detector.coordinated_stop_qualified ? 1 : 0,
+        coordinated_stop_candidate ? 1 : 0);
     }
     last_recovery_execution_mode_ = output.execution_mode;
     last_recovery_state_ = output.state;
@@ -9995,6 +10082,8 @@ private:
   double recovery_episode_traveled_distance_m_{0.0};
   bool recovery_reverse_pose_jump_{false};
   bool recovery_episode_had_contact_evidence_{false};
+  bool recovery_coordinated_stop_episode_{false};
+  bool recovery_reverse_only_episode_{false};
   std::optional<recovery_footprint::ReversePrimitive> recovery_selected_reverse_primitive_;
   bool recovery_selected_stepwise_escape_{false};
   std::optional<std::vector<std::size_t>> recovery_initial_contact_cells_;

@@ -29,8 +29,14 @@ void validate_detector_config(const DetectorConfig & config)
     config.solver_fallback_duration_sec,
     "solver fallback duration");
   validate_nonnegative(
+    config.solver_evidence_free_duration_sec,
+    "solver evidence-free recovery duration");
+  validate_nonnegative(
     config.evidence_free_duration_sec,
     "evidence-free recovery duration");
+  validate_nonnegative(
+    config.coordinated_stop_duration_sec,
+    "coordinated stop recovery duration");
   validate_nonnegative(
     config.max_observation_gap_sec,
     "maximum observation gap");
@@ -41,12 +47,31 @@ void validate_detector_config(const DetectorConfig & config)
             "enabled solver fallback recovery requires a positive duration");
   }
   if (
+    config.solver_evidence_free_recovery_enabled &&
+    (!config.solver_fallback_recovery_enabled ||
+    config.solver_evidence_free_duration_sec <= 0.0 ||
+    config.solver_evidence_free_duration_sec < config.stationary_duration_sec ||
+    config.solver_evidence_free_duration_sec < config.solver_fallback_duration_sec))
+  {
+    throw std::invalid_argument(
+            "enabled solver evidence-free recovery requires solver fallback recovery and a "
+            "duration no shorter than stationary and solver fallback durations");
+  }
+  if (
     config.evidence_free_recovery_enabled &&
     (config.evidence_free_duration_sec <= 0.0 ||
     config.evidence_free_duration_sec < config.stationary_duration_sec))
   {
     throw std::invalid_argument(
             "enabled evidence-free recovery requires a duration no shorter than stationary duration");
+  }
+  if (
+    config.coordinated_stop_recovery_enabled &&
+    (config.coordinated_stop_duration_sec <= 0.0 ||
+    config.coordinated_stop_duration_sec < config.stationary_duration_sec))
+  {
+    throw std::invalid_argument(
+            "enabled coordinated stop recovery requires a duration no shorter than stationary duration");
   }
   if (config.max_observation_gap_sec <= 0.0) {
     throw std::invalid_argument("maximum observation gap must be positive");
@@ -234,9 +259,10 @@ DetectorDecision StuckDetector::update(const DetectorInput & input)
     input.requested_forward_speed_mps >= config_.forward_intent_speed_mps ||
     input.requested_acceleration_mps2 >=
     config_.forward_intent_acceleration_mps2;
-  // A solver-fallback recovery requires current footprint/wall evidence. A
-  // legacy collision hint alone is intentionally insufficient because it can
-  // remain latched after contact has cleared.
+  // A solver-fallback recovery normally requires current footprint/wall
+  // evidence. The separately configured evidence-free route has a longer
+  // no-motion window and is constrained to reverse-only actuation by the ROS
+  // adapter. A legacy collision hint alone remains intentionally insufficient.
   const bool evidence = input.solver_fallback ?
     input.wall_evidence :
     (input.wall_evidence || input.collision_hint);
@@ -258,7 +284,13 @@ DetectorDecision StuckDetector::update(const DetectorInput & input)
   if (!input.odometry_fresh) {
     return reject_and_reset(StuckVerdict::NotEligible, StuckRejectReason::OdometryStale);
   }
-  if (input.deliberate_stop) {
+  const bool coordinated_stop_candidate =
+    input.deliberate_stop && input.coordinated_stop &&
+    config_.coordinated_stop_recovery_enabled;
+  const bool solver_evidence_free_candidate =
+    input.solver_fallback && !input.wall_evidence &&
+    config_.solver_evidence_free_recovery_enabled;
+  if (input.deliberate_stop && !coordinated_stop_candidate) {
     return reject_and_reset(StuckVerdict::NotEligible, StuckRejectReason::DeliberateStop);
   }
   if (input.solver_fallback && !config_.solver_fallback_recovery_enabled) {
@@ -266,7 +298,9 @@ DetectorDecision StuckDetector::update(const DetectorInput & input)
       StuckVerdict::NotEligible,
       StuckRejectReason::SolverFallback);
   }
-  if (input.solver_fallback && !input.wall_evidence) {
+  if (input.solver_fallback && !input.wall_evidence &&
+    !solver_evidence_free_candidate && !coordinated_stop_candidate)
+  {
     return reject_and_reset(
       StuckVerdict::NotEligible,
       StuckRejectReason::SolverFallbackMissingWallEvidence);
@@ -311,7 +345,16 @@ DetectorDecision StuckDetector::update(const DetectorInput & input)
     solver_fallback_since_sec_.has_value() ?
     input.now_sec - *solver_fallback_since_sec_ :
     0.0;
-  if (stationary_duration_sec < config_.stationary_duration_sec ||
+  double required_stationary_duration_sec = config_.stationary_duration_sec;
+  if (coordinated_stop_candidate) {
+    required_stationary_duration_sec = std::max(
+      required_stationary_duration_sec, config_.coordinated_stop_duration_sec);
+  }
+  if (solver_evidence_free_candidate) {
+    required_stationary_duration_sec = std::max(
+      required_stationary_duration_sec, config_.solver_evidence_free_duration_sec);
+  }
+  if (stationary_duration_sec < required_stationary_duration_sec ||
     (input.solver_fallback &&
     solver_fallback_duration_sec < config_.solver_fallback_duration_sec))
   {
@@ -321,6 +364,16 @@ DetectorDecision StuckDetector::update(const DetectorInput & input)
       forward_intent, evidence);
   }
   if (!evidence) {
+    if (coordinated_stop_candidate) {
+      return reject(
+        input, StuckVerdict::Confirmed, StuckRejectReason::None,
+        forward_intent, false);
+    }
+    if (solver_evidence_free_candidate) {
+      return reject(
+        input, StuckVerdict::Confirmed, StuckRejectReason::None,
+        forward_intent, false);
+    }
     if (
       config_.evidence_free_recovery_enabled && !input.solver_fallback &&
       stationary_duration_sec >= config_.evidence_free_duration_sec)
@@ -379,10 +432,22 @@ DetectorDecision StuckDetector::reject(
   decision.solver_fallback_qualified =
     input.solver_fallback && config_.solver_fallback_recovery_enabled &&
     verdict == StuckVerdict::Confirmed && forward_intent && evidence;
+  decision.solver_evidence_free_qualified =
+    input.solver_fallback && config_.solver_fallback_recovery_enabled &&
+    config_.solver_evidence_free_recovery_enabled &&
+    verdict == StuckVerdict::Confirmed && forward_intent && !evidence &&
+    decision.stationary_duration_sec >= config_.solver_evidence_free_duration_sec &&
+    decision.solver_fallback_duration_sec >= config_.solver_fallback_duration_sec;
   decision.evidence_free_qualified =
-    !input.solver_fallback && config_.evidence_free_recovery_enabled &&
+    !input.solver_fallback && !input.deliberate_stop &&
+    config_.evidence_free_recovery_enabled &&
     verdict == StuckVerdict::Confirmed && forward_intent && !evidence &&
     decision.stationary_duration_sec >= config_.evidence_free_duration_sec;
+  decision.coordinated_stop_qualified =
+    input.deliberate_stop && input.coordinated_stop &&
+    config_.coordinated_stop_recovery_enabled && verdict == StuckVerdict::Confirmed &&
+    forward_intent && !evidence &&
+    decision.stationary_duration_sec >= config_.coordinated_stop_duration_sec;
   return decision;
 }
 
@@ -1315,7 +1380,8 @@ CoreOutput StuckRecoveryCore::update(const CoreInput & input)
   const bool confirmed_solver_fallback_candidate =
     (current_state == RecoveryState::Normal ||
     current_state == RecoveryState::SuspectStuck) &&
-    output.detector.solver_fallback_qualified;
+    (output.detector.solver_fallback_qualified ||
+    output.detector.solver_evidence_free_qualified);
   // The normal MPC solver is not used while the recovery supervisor exclusively
   // owns the stop, gear-shift, and reverse commands. It becomes mandatory again
   // for LowSpeedRejoin.

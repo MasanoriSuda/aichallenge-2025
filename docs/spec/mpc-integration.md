@@ -152,8 +152,13 @@ stuck_recovery:
   detector:
     solver_fallback_recovery_enabled: true
     solver_fallback_duration_sec: 2.0
+    solver_evidence_free_recovery_enabled: true
+    solver_evidence_free_duration_sec: 3.0
     evidence_free_recovery_enabled: true
     evidence_free_duration_sec: 1.5
+    coordinated_stop_recovery_enabled: true
+    coordinated_stop_duration_sec: 3.0
+    coordinated_stop_front_speed_mps: 0.20
     max_observation_gap_sec: 0.2
     stopped_speed_mps: 0.15
     moving_speed_mps: 0.25
@@ -184,6 +189,7 @@ stuck_recovery:
     forward_escape_distance_m: 0.30
     max_reverse_pose_step_m: 0.05
     reverse_steering_angle_rad: 0.25
+    solver_reverse_only_heading_error_rad: 1.0
     wall_direction_search_margin_m: 0.50
     wall_direction_ambiguity_m: 0.02
     side_escape_enabled: true
@@ -226,6 +232,12 @@ solverとは独立したpath前進要求、低実速度、pose / path無進捗�
 footprint-to-wall証拠が全て継続した場合だけである。collision hint単独では成立しない。
 detector更新間隔が0.2秒を超えた場合は停止時間とfallback時間をresetし、callback / odometry
 途絶時間を連続観測へ加算しない。
+
+2025 AWSIM向け暫定設定では、wall証拠がないsolver fallbackも、同じ前進要求、低実速度、
+pose / path無進捗が3.0秒継続した場合だけ`solver_evidence_free_qualified`とする。solver failure由来の
+episodeはReverse-onlyであり、後方V2X corridorがclearでもstatic swept footprintが安全でなければ
+ギアを要求しない。Follow / SafetyBrakeで前方停止車が0.20 m/s以下のまま3.0秒停止した後続車は
+`coordinated_stop_qualified`となり、同じReverse-only gateで最後尾から後方空間を作る。
 
 solver正常時には、物理壁とoccupancy map / legacy collision通知の不一致へ限定対応する。
 Follow / SafetyBrake / LowSpeedAvoidance等の意図的停止ではなく、前進要求、低実速度、pose / path
@@ -418,6 +430,16 @@ ShiftOut / Recovery中に、wall contactを伴わない別の連続solver failur
 復帰中のre-entry guardとして別ステアリングで扱う。本gainは2025 AWSIMで確認した暫定値であり、
 2026公式値および実車値ではない。実験詳細は
 `.steering/20260717-normal-mpc-wall-departure-prevention/results.md`に記録する。
+
+協調Reverseとsolver failure Reverse-onlyを有効にした`output/20260718-011435`では、D1が
+8 step・累積2.059 m後退してescapeを確認し、D2も0.148 m後退した時点で後方車を検出して停止した。
+D3はWP282付近の連続solver failureからReverse-only Recoveryへ入ったが、現在footprintに16 contactが
+あり、全Reverse候補が0.05 m先からcontactを悪化させるため`maneuver_direction_unknown`でSafeStopした。
+D3はReverse gearを要求しておらず、static gateのfail-closed動作はPassとする。一方、D1 / D2も
+その後solver unsafeとなって全車停止したため、デッドロック解消はFailである。wall証拠なしsolver
+failure経路はunit testで確認したが、このrunのD3ではwall証拠も成立しており単独発火は未確認である。
+詳細は`.steering/20260718-v2x-coordinated-reverse-recovery/results.md`に記録する。
+
 gear publisherはReliable / KeepLast(1) / Volatileであり、TransientLocalは古いREVERSEの
 late-join replayを避けるため使用しない。
 

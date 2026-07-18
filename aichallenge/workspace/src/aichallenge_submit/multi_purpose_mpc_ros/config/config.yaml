@@ -49,10 +49,18 @@ stuck_recovery:
     # alone is intentionally insufficient for this exception.
     solver_fallback_recovery_enabled: true
     solver_fallback_duration_sec: 2.0
+    # A wall-free solver fallback must remain motionless with no path progress
+    # for longer, then may use only a statically and V2X-clear reverse rollout.
+    solver_evidence_free_recovery_enabled: true
+    solver_evidence_free_duration_sec: 3.0
     # AWSIM physical walls and the occupancy map can disagree. With a healthy solver only,
     # sustained forward intent plus no pose/path progress may confirm a stuck vehicle.
     evidence_free_recovery_enabled: true
     evidence_free_duration_sec: 1.5
+    # A stopped follower may join a reverse-only, tail-first V2X recovery cascade.
+    coordinated_stop_recovery_enabled: true
+    coordinated_stop_duration_sec: 3.0
+    coordinated_stop_front_speed_mps: 0.20
     # A longer callback/odometry gap resets both stationary and fallback continuity timers.
     max_observation_gap_sec: 0.2
     stopped_speed_mps: 0.15
@@ -92,6 +100,9 @@ stuck_recovery:
     forward_acceleration_magnitude_mps2: 0.5
     reverse_escape_distance_m: 2.0
     forward_escape_distance_m: 0.30
+    # A wall-evidenced solver failure with this much heading error also waits for reverse.
+    # Wall-free solver failures are always reverse-only when the detector route above is enabled.
+    solver_reverse_only_heading_error_rad: 1.0
     # Fail closed before an odometry interval can skip a 0.1 m map cell.
     max_reverse_pose_step_m: 0.05
     # Straight is preferred. This magnitude is used only when a safe Left/Right rollout is needed.
@@ -161,9 +172,9 @@ reference_path:
   # csv_path: ""
   csv_path: "env/final_ver3/traj_mincurv.csv"
   domain_csv_path:
-    1: "env/final_ver3/traj_mincurv_org.csv"
-    2: "env/final_ver3/traj_mincurv_org.csv"
-    3: "env/final_ver3/traj_mincurv_org.csv"
+    1: "env/final_ver3/traj_mincurv.csv"
+    2: "env/final_ver3/traj_mincurv.csv"
+    3: "env/final_ver3/traj_mincurv.csv"
   resolution: 0.6
   smoothing_distance: 2
   max_width: 6.0

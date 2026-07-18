@@ -13,6 +13,8 @@ namespace
 
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kNumericalEpsilon = 1e-12;
+constexpr double kClearanceComparisonToleranceM = 1e-6;
+constexpr double kMinimumEscapeImprovementM = 1e-3;
 constexpr std::size_t kMaximumSamples = 1000000U;
 
 bool finite(const double value) noexcept
@@ -23,6 +25,46 @@ bool finite(const double value) noexcept
 bool valid_pose(const Pose2D & pose) noexcept
 {
   return finite(pose.x_m) && finite(pose.y_m) && finite(pose.yaw_rad);
+}
+
+bool valid_circle_obstacle(const CircleObstacle & obstacle) noexcept
+{
+  return
+    finite(obstacle.x_m) && finite(obstacle.y_m) &&
+    finite(obstacle.velocity_x_mps) && finite(obstacle.velocity_y_mps) &&
+    finite(obstacle.radius_m) && obstacle.radius_m >= 0.0;
+}
+
+double circle_to_footprint_clearance(
+  const FootprintExtents & footprint, const Pose2D & pose,
+  const double circle_x_m, const double circle_y_m, const double radius_m) noexcept
+{
+  const double dx = circle_x_m - pose.x_m;
+  const double dy = circle_y_m - pose.y_m;
+  const double cos_yaw = std::cos(pose.yaw_rad);
+  const double sin_yaw = std::sin(pose.yaw_rad);
+  const double longitudinal = cos_yaw * dx + sin_yaw * dy;
+  const double lateral = -sin_yaw * dx + cos_yaw * dy;
+  const double minimum_longitudinal = -footprint.rear_extent_m - footprint.margin_m;
+  const double maximum_longitudinal = footprint.front_extent_m + footprint.margin_m;
+  const double minimum_lateral = -footprint.right_extent_m - footprint.margin_m;
+  const double maximum_lateral = footprint.left_extent_m + footprint.margin_m;
+
+  const double outside_longitudinal = std::max(
+    {minimum_longitudinal - longitudinal, 0.0, longitudinal - maximum_longitudinal});
+  const double outside_lateral = std::max(
+    {minimum_lateral - lateral, 0.0, lateral - maximum_lateral});
+  double signed_point_clearance = std::hypot(outside_longitudinal, outside_lateral);
+  if (
+    outside_longitudinal <= kNumericalEpsilon &&
+    outside_lateral <= kNumericalEpsilon)
+  {
+    const double distance_to_boundary = std::min(
+      {longitudinal - minimum_longitudinal, maximum_longitudinal - longitudinal,
+        lateral - minimum_lateral, maximum_lateral - lateral});
+    signed_point_clearance = -distance_to_boundary;
+  }
+  return signed_point_clearance - radius_m;
 }
 
 double wrap_to_pi(const double angle) noexcept
@@ -468,6 +510,142 @@ const char * to_string(const WallRegion region) noexcept
       return "unknown";
   }
   return "unknown";
+}
+
+bool use_stepwise_escape_mode(
+  const bool side_escape_enabled, const bool current_footprint_clear,
+  const std::size_t current_contact_count, const WallRegion wall_region,
+  const std::size_t completed_escape_steps) noexcept
+{
+  if (!side_escape_enabled) {
+    return false;
+  }
+  const bool side_wall =
+    wall_region == WallRegion::Left || wall_region == WallRegion::Right ||
+    wall_region == WallRegion::Mixed;
+  if (current_footprint_clear) {
+    return wall_region == WallRegion::None || side_wall;
+  }
+  return
+    current_contact_count > 0U &&
+    (completed_escape_steps > 0U || side_wall);
+}
+
+const char * to_string(const DynamicClearanceRejectReason reason) noexcept
+{
+  switch (reason) {
+    case DynamicClearanceRejectReason::None:
+      return "none";
+    case DynamicClearanceRejectReason::InvalidFootprint:
+      return "invalid_footprint";
+    case DynamicClearanceRejectReason::InvalidRollout:
+      return "invalid_rollout";
+    case DynamicClearanceRejectReason::InvalidObstacle:
+      return "invalid_obstacle";
+    case DynamicClearanceRejectReason::NewOverlap:
+      return "new_overlap";
+    case DynamicClearanceRejectReason::InitialOverlapWorsened:
+      return "initial_overlap_worsened";
+    case DynamicClearanceRejectReason::InitialOverlapNotImproved:
+      return "initial_overlap_not_improved";
+  }
+  return "unknown";
+}
+
+DynamicClearanceResult evaluate_circle_obstacle_clearance(
+  const FootprintExtents & footprint, const std::vector<RolloutPose> & rollout,
+  const CircleObstacle & obstacle, const double prediction_horizon_sec)
+{
+  DynamicClearanceResult result;
+  if (!footprint.valid()) {
+    result.reason = DynamicClearanceRejectReason::InvalidFootprint;
+    return result;
+  }
+  if (!valid_circle_obstacle(obstacle)) {
+    result.reason = DynamicClearanceRejectReason::InvalidObstacle;
+    return result;
+  }
+  if (
+    rollout.empty() || !finite(prediction_horizon_sec) || prediction_horizon_sec < 0.0 ||
+    !valid_pose(rollout.front().pose) || !finite(rollout.front().reverse_distance_m) ||
+    rollout.front().reverse_distance_m < 0.0)
+  {
+    result.reason = DynamicClearanceRejectReason::InvalidRollout;
+    return result;
+  }
+  double previous_distance_m = rollout.front().reverse_distance_m;
+  for (const auto & rollout_pose : rollout) {
+    if (
+      !valid_pose(rollout_pose.pose) || !finite(rollout_pose.reverse_distance_m) ||
+      rollout_pose.reverse_distance_m < previous_distance_m - kNumericalEpsilon)
+    {
+      result.reason = DynamicClearanceRejectReason::InvalidRollout;
+      return result;
+    }
+    previous_distance_m = rollout_pose.reverse_distance_m;
+  }
+  const double total_distance_m = rollout.back().reverse_distance_m;
+  if (!finite(total_distance_m) || total_distance_m <= kNumericalEpsilon) {
+    result.reason = DynamicClearanceRejectReason::InvalidRollout;
+    return result;
+  }
+
+  result.valid = true;
+  result.minimum_clearance_m = std::numeric_limits<double>::infinity();
+  double previous_clearance_m = std::numeric_limits<double>::quiet_NaN();
+  bool initial_overlap = false;
+  for (std::size_t index = 0U; index < rollout.size(); ++index) {
+    const auto & rollout_pose = rollout[index];
+    const double distance_fraction = std::clamp(
+      rollout_pose.reverse_distance_m / total_distance_m, 0.0, 1.0);
+    const double prediction_time_sec = prediction_horizon_sec * distance_fraction;
+    const double obstacle_x_m =
+      obstacle.x_m + obstacle.velocity_x_mps * prediction_time_sec;
+    const double obstacle_y_m =
+      obstacle.y_m + obstacle.velocity_y_mps * prediction_time_sec;
+    const double clearance_m = circle_to_footprint_clearance(
+      footprint, rollout_pose.pose, obstacle_x_m, obstacle_y_m, obstacle.radius_m);
+    if (!finite(clearance_m)) {
+      result.valid = false;
+      result.reason = DynamicClearanceRejectReason::InvalidObstacle;
+      return result;
+    }
+    ++result.checked_pose_count;
+    result.minimum_clearance_m = std::min(result.minimum_clearance_m, clearance_m);
+    result.final_clearance_m = clearance_m;
+    if (index == 0U) {
+      result.initial_clearance_m = clearance_m;
+      previous_clearance_m = clearance_m;
+      initial_overlap = clearance_m < -kClearanceComparisonToleranceM;
+      continue;
+    }
+    if (!initial_overlap && clearance_m < -kClearanceComparisonToleranceM) {
+      result.reason = DynamicClearanceRejectReason::NewOverlap;
+      result.rejected_at_distance_m = rollout_pose.reverse_distance_m;
+      return result;
+    }
+    if (
+      initial_overlap &&
+      clearance_m + kClearanceComparisonToleranceM < previous_clearance_m)
+    {
+      result.reason = DynamicClearanceRejectReason::InitialOverlapWorsened;
+      result.rejected_at_distance_m = rollout_pose.reverse_distance_m;
+      return result;
+    }
+    previous_clearance_m = clearance_m;
+  }
+
+  if (
+    initial_overlap &&
+    result.final_clearance_m < result.initial_clearance_m + kMinimumEscapeImprovementM)
+  {
+    result.reason = DynamicClearanceRejectReason::InitialOverlapNotImproved;
+    result.rejected_at_distance_m = total_distance_m;
+    return result;
+  }
+  result.clear = true;
+  result.reason = DynamicClearanceRejectReason::None;
+  return result;
 }
 
 RolloutResult generate_reverse_rollout(

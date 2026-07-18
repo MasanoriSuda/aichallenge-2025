@@ -7,54 +7,52 @@
     },
     "vehicles": [
         {
-            "vehicle_number": 1,
-            "vehicle_name": "GoKart1",
+            "vehicle_number": 3,
+            "vehicle_name": "GoKart3",
             "final_position": 1,
-            "finished": false,
-            "lap_count": 2,
-            "laps": [
-                60.14364242553711,
-                65.75350189208985
-            ],
-            "min_lap_time": 60.14364242553711,
-            "max_lap_time": 65.75350189208985,
-            "avg_lap_time": 62.948570251464847,
-            "total_lap_time": 125.89714050292969
-        },
-        {
-            "vehicle_number": 2,
-            "vehicle_name": "GoKart2",
-            "final_position": 2,
             "finished": false,
             "lap_count": 1,
             "laps": [
-                69.05168914794922
+                123.54673767089844
             ],
-            "min_lap_time": 69.05168914794922,
-            "max_lap_time": 69.05168914794922,
-            "avg_lap_time": 69.05168914794922,
-            "total_lap_time": 69.05168914794922
+            "min_lap_time": 123.54673767089844,
+            "max_lap_time": 123.54673767089844,
+            "avg_lap_time": 123.54673767089844,
+            "total_lap_time": 123.54673767089844
         },
         {
-            "vehicle_number": 3,
-            "vehicle_name": "GoKart3",
+            "vehicle_number": 1,
+            "vehicle_name": "GoKart1",
             "final_position": 3,
             "finished": false,
             "lap_count": 1,
             "laps": [
-                52.63203811645508
+                126.81993865966797
             ],
-            "min_lap_time": 52.63203811645508,
-            "max_lap_time": 52.63203811645508,
-            "avg_lap_time": 52.63203811645508,
-            "total_lap_time": 52.63203811645508
+            "min_lap_time": 126.81993865966797,
+            "max_lap_time": 126.81993865966797,
+            "avg_lap_time": 126.81993865966797,
+            "total_lap_time": 126.81993865966797
+        },
+        {
+            "vehicle_number": 2,
+            "vehicle_name": "GoKart2",
+            "final_position": 3,
+            "finished": false,
+            "lap_count": 1,
+            "laps": [
+                131.73793029785157
+            ],
+            "min_lap_time": 131.73793029785157,
+            "max_lap_time": 131.73793029785157,
+            "avg_lap_time": 131.73793029785157,
+            "total_lap_time": 131.73793029785157
         }
     ],
     "laps": [
-        60.14364242553711,
-        65.75350189208985
+        126.81993865966797
     ],
-    "min_time": 60.14364242553711,
-    "total_lap_time": 125.89714050292969,
-    "num_laps": 2
+    "min_time": 126.81993865966797,
+    "total_lap_time": 126.81993865966797,
+    "num_laps": 1
 }

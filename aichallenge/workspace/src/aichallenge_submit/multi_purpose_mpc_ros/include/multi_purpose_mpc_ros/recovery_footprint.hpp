@@ -104,6 +104,17 @@ enum class WallRegion
   Unknown,
 };
 
+/// Select the bounded stop-and-reassess cadence for a recovery candidate.
+///
+/// A clear footprint may still have physical/nearby side-wall evidence that
+/// the occupancy cells do not classify as an overlap. Such Left/Right/Mixed
+/// cases use the same short step as a direct side contact. Clear Front/Rear
+/// cases retain their direction-specific bounded maneuver.
+bool use_stepwise_escape_mode(
+  bool side_escape_enabled, bool current_footprint_clear,
+  std::size_t current_contact_count, WallRegion wall_region,
+  std::size_t completed_escape_steps) noexcept;
+
 struct WallProximityResult
 {
   bool valid{false};
@@ -197,6 +208,52 @@ struct FeasibilityResult
   double rejected_at_distance_m{};
   std::vector<RolloutPose> rollout;
 };
+
+/// Conservatively inflated V2X vehicle represented as a moving circle.
+struct CircleObstacle
+{
+  double x_m{};
+  double y_m{};
+  double velocity_x_mps{};
+  double velocity_y_mps{};
+  double radius_m{};
+};
+
+enum class DynamicClearanceRejectReason
+{
+  None,
+  InvalidFootprint,
+  InvalidRollout,
+  InvalidObstacle,
+  NewOverlap,
+  InitialOverlapWorsened,
+  InitialOverlapNotImproved,
+};
+
+const char * to_string(DynamicClearanceRejectReason reason) noexcept;
+
+struct DynamicClearanceResult
+{
+  bool valid{false};
+  bool clear{false};
+  DynamicClearanceRejectReason reason{DynamicClearanceRejectReason::InvalidRollout};
+  std::size_t checked_pose_count{};
+  double initial_clearance_m{};
+  double minimum_clearance_m{};
+  double final_clearance_m{};
+  double rejected_at_distance_m{};
+};
+
+/// Evaluate one V2X circle over the selected recovery rollout.
+///
+/// A clear initial pose must remain clear. If conservative inflation already
+/// overlaps the ego footprint at t=0, the overlap may be used as an escape
+/// contact only when signed clearance never worsens and improves by the end of
+/// the rollout. The obstacle is linearly predicted over prediction_horizon_sec
+/// according to each rollout pose's travelled-distance fraction.
+DynamicClearanceResult evaluate_circle_obstacle_clearance(
+  const FootprintExtents & footprint, const std::vector<RolloutPose> & rollout,
+  const CircleObstacle & obstacle, double prediction_horizon_sec);
 
 /// Generate deterministic Straight/Left/Right reverse poses, including t=0.
 RolloutResult generate_reverse_rollout(

@@ -17,6 +17,30 @@ bool source_timestamp_is_monotonic(
 bool source_sample_is_current(
   double array_stamp_sec, double sample_stamp_sec, double timeout_sec) noexcept;
 
+// Evidence-free solver recovery must remain reverse-only. When current wall
+// evidence exists, however, the wall direction selects the safe escape unless
+// the heading error is large enough to forbid a short forward maneuver.
+bool solver_fallback_requires_reverse_only(
+  bool solver_fallback, bool evidence_free_recovery_enabled,
+  bool wall_evidence, double heading_error_rad,
+  double reverse_only_heading_error_rad) noexcept;
+
+struct RejoinSteeringRequest
+{
+  double path_curvature_radpm{};
+  double wheelbase_m{};
+  double lateral_error_m{};
+  double heading_error_rad{};
+  double lateral_error_gain_rad_per_m{};
+  double heading_error_gain{};
+  double max_steering_tire_angle_rad{};
+};
+
+// Low-speed path-rejoin steering. The feedforward term follows path curvature,
+// while both feedback terms drive the signed path errors toward zero.
+std::optional<double> compute_rejoin_steering_tire_angle(
+  const RejoinSteeringRequest & request) noexcept;
+
 enum class StuckVerdict
 {
   NotEligible,
@@ -290,6 +314,7 @@ struct SupervisorConfig
   double rejoin_timeout_sec{5.0};
   double rejoin_solver_recovery_timeout_sec{1.0};
   bool retry_rejoin_blocked_path{false};
+  bool retry_rejoin_timeout{false};
   double cooldown_sec{1.0};
 };
 
@@ -341,6 +366,8 @@ struct RecoveryInput
   // a completed escape after each per-step distance reset.
   double episode_traveled_distance_m{};
   double reverse_steering_tire_angle_rad{};
+  // Rate-limited tire angle already checked by the adapter's forward swept footprint.
+  double rejoin_steering_tire_angle_rad{};
   double lateral_error_m{};
   double heading_error_rad{};
 };
@@ -399,7 +426,8 @@ private:
     RecoveryReason reason, double steering_tire_angle_rad) const noexcept;
   RecoveryAction forward_action(
     RecoveryReason reason, double steering_tire_angle_rad) const noexcept;
-  RecoveryAction rejoin_action(RecoveryReason reason) noexcept;
+  RecoveryAction rejoin_action(
+    RecoveryReason reason, double steering_tire_angle_rad) noexcept;
   RecoveryReason clearance_reason(const RecoveryInput & input) const noexcept;
   bool clearance_is_safe(const RecoveryInput & input) const noexcept;
   bool stopped_confirmed(const RecoveryInput & input) noexcept;
@@ -480,6 +508,7 @@ private:
   CoreConfig config_;
   StuckDetector detector_;
   RecoverySupervisor supervisor_;
+  bool solver_fallback_recovery_episode_{false};
 };
 
 const char * to_string(StuckVerdict verdict) noexcept;

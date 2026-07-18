@@ -127,6 +127,9 @@ void validate_supervisor_config(const SupervisorConfig & config)
     throw std::invalid_argument("escape step distance must be positive");
   }
   validate_nonnegative(config.rejoin_speed_limit_mps, "rejoin speed limit");
+  if (config.rejoin_speed_limit_mps <= 0.0) {
+    throw std::invalid_argument("rejoin speed limit must be positive");
+  }
   validate_nonnegative(config.max_rejoin_lateral_error_m, "maximum rejoin lateral error");
   validate_nonnegative(config.max_rejoin_heading_error_rad, "maximum rejoin heading error");
   validate_nonnegative(config.rejoin_confirm_sec, "rejoin confirmation duration");
@@ -162,6 +165,23 @@ DetectorDecision disabled_decision(const DetectorInput & input) noexcept
 
 }  // namespace
 
+bool solver_fallback_requires_reverse_only(
+  const bool solver_fallback, const bool evidence_free_recovery_enabled,
+  const bool wall_evidence, const double heading_error_rad,
+  const double reverse_only_heading_error_rad) noexcept
+{
+  if (!solver_fallback) {
+    return false;
+  }
+  const bool large_heading_error =
+    std::isfinite(heading_error_rad) &&
+    std::isfinite(reverse_only_heading_error_rad) &&
+    reverse_only_heading_error_rad > 0.0 &&
+    std::abs(heading_error_rad) >= reverse_only_heading_error_rad;
+  return large_heading_error ||
+         (evidence_free_recovery_enabled && !wall_evidence);
+}
+
 bool source_timestamp_is_monotonic(
   const double stamp_sec, const std::optional<double> & previous_stamp_sec) noexcept
 {
@@ -184,6 +204,38 @@ bool source_sample_is_current(
   const double source_age_sec = array_stamp_sec - sample_stamp_sec;
   return source_age_sec >= -kTimestampEpsilon &&
          source_age_sec <= timeout_sec + kTimestampEpsilon;
+}
+
+std::optional<double> compute_rejoin_steering_tire_angle(
+  const RejoinSteeringRequest & request) noexcept
+{
+  if (
+    !std::isfinite(request.path_curvature_radpm) ||
+    !std::isfinite(request.wheelbase_m) || request.wheelbase_m <= 0.0 ||
+    !std::isfinite(request.lateral_error_m) ||
+    !std::isfinite(request.heading_error_rad) ||
+    !finite_nonnegative(request.lateral_error_gain_rad_per_m) ||
+    !finite_nonnegative(request.heading_error_gain) ||
+    !std::isfinite(request.max_steering_tire_angle_rad) ||
+    request.max_steering_tire_angle_rad <= 0.0 ||
+    request.max_steering_tire_angle_rad >= 0.5 * std::acos(-1.0))
+  {
+    return std::nullopt;
+  }
+
+  const double feedforward_rad = std::atan(
+    request.wheelbase_m * request.path_curvature_radpm);
+  const double target_rad =
+    feedforward_rad -
+    request.lateral_error_gain_rad_per_m * request.lateral_error_m -
+    request.heading_error_gain * request.heading_error_rad;
+  if (!std::isfinite(target_rad)) {
+    return std::nullopt;
+  }
+  return std::clamp(
+    target_rad,
+    -request.max_steering_tire_angle_rad,
+    request.max_steering_tire_angle_rad);
 }
 
 StuckDetector::StuckDetector(DetectorConfig config)
@@ -834,6 +886,13 @@ RecoveryAction RecoverySupervisor::update_wait_reverse_report(const RecoveryInpu
         return hold_action(RecoveryReason::RearInformationIncomplete);
       }
       if (state_elapsed(input.now_sec) >= config_.clearance_wait_timeout_sec) {
+        if (active_stepwise_escape_) {
+          // The current primitive is no longer safe, but this bounded
+          // stepwise episode can still select a different candidate after
+          // returning to Drive. Preserve the episode distance/step budget and
+          // reuse the normal stop-and-reassess path.
+          reassess_after_drive_ = true;
+        }
         transition(
           RecoveryState::StopBeforeDrive, RecoveryReason::RearHazardAppeared,
           input.now_sec);
@@ -939,7 +998,7 @@ RecoveryAction RecoverySupervisor::update_reverse_maneuver(const RecoveryInput &
     // that boundary like a completed bounded step: stop, return to Drive, and
     // run the full static/V2X clearance selection again.  The episode distance
     // and max_escape_steps limits still bound the total recovery motion.
-    if (active_stepwise_escape_) {
+    if (active_stepwise_escape_ || attempt_count_ < config_.max_attempts) {
       reassess_after_drive_ = true;
     }
     transition(
@@ -1001,15 +1060,18 @@ RecoveryAction RecoverySupervisor::update_forward_maneuver(const RecoveryInput &
   }
   if (!clearance_is_safe(input)) {
     transition(
-      RecoveryState::SafeStop, RecoveryReason::ForwardHazardAppeared, input.now_sec);
-    return safe_stop_action(RecoveryReason::ForwardHazardAppeared);
+      RecoveryState::StopAndReassess, RecoveryReason::ForwardHazardAppeared,
+      input.now_sec);
+    return hold_action(RecoveryReason::ForwardHazardAppeared);
   }
   if (input.recovery_escape_confirmed) {
     escape_confirmed_before_drive_ = true;
     transition(
       RecoveryState::LowSpeedRejoin, RecoveryReason::ForwardEscapeConfirmed,
       input.now_sec);
-    return rejoin_action(RecoveryReason::ForwardEscapeConfirmed);
+    return rejoin_action(
+      RecoveryReason::ForwardEscapeConfirmed,
+      input.rejoin_steering_tire_angle_rad);
   }
   if (input.traveled_distance_m >= config_.max_forward_distance_m) {
     transition(RecoveryState::SafeStop, RecoveryReason::ForwardDistanceLimit, input.now_sec);
@@ -1040,7 +1102,9 @@ RecoveryAction RecoverySupervisor::update_stop_and_reassess(const RecoveryInput 
     transition(
       RecoveryState::LowSpeedRejoin, RecoveryReason::ForwardEscapeConfirmed,
       input.now_sec);
-    return rejoin_action(RecoveryReason::ForwardEscapeConfirmed);
+    return rejoin_action(
+      RecoveryReason::ForwardEscapeConfirmed,
+      input.rejoin_steering_tire_angle_rad);
   }
   if (escape_step_count_ >= config_.max_escape_steps) {
     transition(
@@ -1131,8 +1195,10 @@ RecoveryAction RecoverySupervisor::update_low_speed_rejoin(const RecoveryInput &
   if (!input.rejoin_forward_clear) {
     if (
       config_.retry_rejoin_blocked_path &&
-      escape_step_count_ < config_.max_escape_steps)
+      (escape_step_count_ < config_.max_escape_steps ||
+      attempt_count_ < config_.max_attempts))
     {
+      escape_confirmed_before_drive_ = false;
       transition(
         RecoveryState::StopAndConfirm, RecoveryReason::RejoinPathBlocked,
         input.now_sec);
@@ -1150,6 +1216,17 @@ RecoveryAction RecoverySupervisor::update_low_speed_rejoin(const RecoveryInput &
     return hold_action(RecoveryReason::RearInformationIncomplete);
   }
   if (state_elapsed(input.now_sec) >= config_.rejoin_timeout_sec) {
+    if (
+      config_.retry_rejoin_timeout &&
+      (escape_step_count_ < config_.max_escape_steps ||
+      attempt_count_ < config_.max_attempts))
+    {
+      escape_confirmed_before_drive_ = false;
+      transition(
+        RecoveryState::StopAndConfirm, RecoveryReason::RejoinTimedOut,
+        input.now_sec);
+      return hold_action(RecoveryReason::RejoinTimedOut);
+    }
     transition(RecoveryState::SafeStop, RecoveryReason::RejoinTimedOut, input.now_sec);
     return safe_stop_action(RecoveryReason::RejoinTimedOut);
   }
@@ -1157,7 +1234,9 @@ RecoveryAction RecoverySupervisor::update_low_speed_rejoin(const RecoveryInput &
   // Always expose the one-shot reset request before Normal control can resume, including when
   // rejoin_confirm_sec is configured as zero.
   if (normal_reset_pending_) {
-    return rejoin_action(RecoveryReason::RejoinInProgress);
+    return rejoin_action(
+      RecoveryReason::RejoinInProgress,
+      input.rejoin_steering_tire_angle_rad);
   }
 
   const bool aligned =
@@ -1176,7 +1255,9 @@ RecoveryAction RecoverySupervisor::update_low_speed_rejoin(const RecoveryInput &
     aligned_since_sec_.reset();
   }
 
-  return rejoin_action(RecoveryReason::RejoinInProgress);
+  return rejoin_action(
+    RecoveryReason::RejoinInProgress,
+    input.rejoin_steering_tire_angle_rad);
 }
 
 void RecoverySupervisor::transition(
@@ -1288,11 +1369,13 @@ RecoveryAction RecoverySupervisor::forward_action(
   return action;
 }
 
-RecoveryAction RecoverySupervisor::rejoin_action(const RecoveryReason reason) noexcept
+RecoveryAction RecoverySupervisor::rejoin_action(
+  const RecoveryReason reason, const double steering_tire_angle_rad) noexcept
 {
   RecoveryAction action;
   action.type = RecoveryActionType::LowSpeedRejoin;
   action.rejoin_speed_limit_mps = config_.rejoin_speed_limit_mps;
+  action.steering_tire_angle_rad = steering_tire_angle_rad;
   action.inhibit_boost = true;
   action.reset_normal_control = normal_reset_pending_;
   normal_reset_pending_ = false;
@@ -1342,6 +1425,7 @@ bool RecoverySupervisor::input_is_finite(const RecoveryInput & input) const noex
          finite_nonnegative(input.traveled_distance_m) &&
          finite_nonnegative(input.episode_traveled_distance_m) &&
          std::isfinite(input.reverse_steering_tire_angle_rad) &&
+         std::isfinite(input.rejoin_steering_tire_angle_rad) &&
          std::isfinite(input.lateral_error_m) && std::isfinite(input.heading_error_rad) &&
          finite_nonnegative(input.detector.stationary_duration_sec) &&
          finite_nonnegative(input.detector.solver_fallback_duration_sec) &&
@@ -1371,6 +1455,7 @@ CoreOutput StuckRecoveryCore::update(const CoreInput & input)
   if (output.execution_mode == ExecutionMode::Disabled) {
     detector_.reset();
     supervisor_.reset_session();
+    solver_fallback_recovery_episode_ = false;
     output.detector = disabled_decision(input.detector);
     output.action = RecoveryAction{};
     output.action.reason = RecoveryReason::Disabled;
@@ -1383,6 +1468,7 @@ CoreOutput StuckRecoveryCore::update(const CoreInput & input)
   output.shadow_candidate = is_shadow_candidate(output.detector.verdict);
   if (output.execution_mode != ExecutionMode::Active) {
     supervisor_.reset_session();
+    solver_fallback_recovery_episode_ = false;
     output.action = RecoveryAction{};
     output.action.reason = output.execution_mode == ExecutionMode::Shadow ?
       RecoveryReason::ShadowMode : RecoveryReason::SimulationOnlyBlocked;
@@ -1407,13 +1493,21 @@ CoreOutput StuckRecoveryCore::update(const CoreInput & input)
     current_state == RecoveryState::SuspectStuck) &&
     (output.detector.solver_fallback_qualified ||
     output.detector.solver_evidence_free_qualified);
+  if (confirmed_solver_fallback_candidate) {
+    solver_fallback_recovery_episode_ = true;
+  }
   // The normal MPC solver is not used while the recovery supervisor exclusively
-  // owns the stop, gear-shift, and reverse commands. Drive confirmation may
-  // enter LowSpeedRejoin while fallback is still active; that state holds stop
-  // for its bounded solver-recovery window before normal MPC can move again.
+  // owns the stop, gear-shift, maneuver, and low-speed rejoin commands. A
+  // solver-qualified episode must retain that qualification until rejoin is
+  // complete; otherwise its first measured motion clears the detector timer
+  // and creates a circular wait for the failed solver before external rejoin.
+  // A solver failure that starts during a non-solver recovery still uses the
+  // bounded LowSpeedRejoin hold/timeout in RecoverySupervisor.
   recovery.solver_healthy = !input.detector.solver_fallback ||
     recovery_no_longer_depends_on_solver ||
-    confirmed_solver_fallback_candidate;
+    confirmed_solver_fallback_candidate ||
+    (current_state == RecoveryState::LowSpeedRejoin &&
+    solver_fallback_recovery_episode_);
   // deliberate_stop is a detector eligibility gate for normal V2X behavior.
   // Once Recovery owns the command, directional static/V2X clearance is the
   // maneuver safety gate. Preserve only an explicit recovery hard stop from
@@ -1426,6 +1520,9 @@ CoreOutput StuckRecoveryCore::update(const CoreInput & input)
   output.action = supervisor_.update(recovery);
   output.state = supervisor_.state();
   output.state_reason = supervisor_.state_reason();
+  if (output.state == RecoveryState::Normal) {
+    solver_fallback_recovery_episode_ = false;
+  }
   return output;
 }
 
@@ -1433,6 +1530,7 @@ void StuckRecoveryCore::reset_session() noexcept
 {
   detector_.reset();
   supervisor_.reset_session();
+  solver_fallback_recovery_episode_ = false;
 }
 
 ExecutionMode StuckRecoveryCore::execution_mode(const bool simulation_environment) const noexcept

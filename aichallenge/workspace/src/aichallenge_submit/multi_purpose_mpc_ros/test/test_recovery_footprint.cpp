@@ -112,6 +112,134 @@ TEST(RecoveryFootprintFeasibility, ClearStraightRolloutIsFeasible)
   EXPECT_GT(result.checked_pose_count, result.rollout.size());
 }
 
+TEST(RecoveryFootprintStepwiseMode, UsesShortStepsForClearSideWallEvidence)
+{
+  EXPECT_TRUE(recovery::use_stepwise_escape_mode(
+    true, true, 0U, recovery::WallRegion::Left, 0U));
+  EXPECT_TRUE(recovery::use_stepwise_escape_mode(
+    true, true, 0U, recovery::WallRegion::Right, 0U));
+  EXPECT_TRUE(recovery::use_stepwise_escape_mode(
+    true, true, 0U, recovery::WallRegion::Mixed, 0U));
+  EXPECT_TRUE(recovery::use_stepwise_escape_mode(
+    true, true, 0U, recovery::WallRegion::None, 0U));
+}
+
+TEST(RecoveryFootprintStepwiseMode, KeepsClearFrontAndRearDirectionSpecific)
+{
+  EXPECT_FALSE(recovery::use_stepwise_escape_mode(
+    true, true, 0U, recovery::WallRegion::Front, 0U));
+  EXPECT_FALSE(recovery::use_stepwise_escape_mode(
+    true, true, 0U, recovery::WallRegion::Rear, 0U));
+  EXPECT_FALSE(recovery::use_stepwise_escape_mode(
+    false, true, 0U, recovery::WallRegion::Left, 0U));
+}
+
+TEST(RecoveryFootprintStepwiseMode, ContinuesAnExistingContactEscape)
+{
+  EXPECT_TRUE(recovery::use_stepwise_escape_mode(
+    true, false, 1U, recovery::WallRegion::Front, 1U));
+  EXPECT_TRUE(recovery::use_stepwise_escape_mode(
+    true, false, 1U, recovery::WallRegion::Left, 0U));
+  EXPECT_FALSE(recovery::use_stepwise_escape_mode(
+    true, false, 1U, recovery::WallRegion::Front, 0U));
+  EXPECT_FALSE(recovery::use_stepwise_escape_mode(
+    true, false, 0U, recovery::WallRegion::Left, 1U));
+}
+
+TEST(RecoveryFootprintDynamicClearance, FrontOverlapMaySeparateDuringReverse)
+{
+  const recovery::FootprintExtents footprint{1.49, 0.51, 0.725, 0.725, 0.05};
+  const auto rollout = recovery::generate_reverse_rollout(
+    recovery::Pose2D{0.0, 0.0, 0.0}, recovery::ReversePrimitive::Straight,
+    recovery::ReverseRolloutParameters{0.4, 0.05, 0.05, 2.14, 0.0});
+  ASSERT_TRUE(rollout.valid);
+
+  const auto result = recovery::evaluate_circle_obstacle_clearance(
+    footprint, rollout.poses,
+    recovery::CircleObstacle{1.76, -0.74, 0.0, 0.0, 1.45}, 4.1);
+
+  EXPECT_TRUE(result.valid);
+  EXPECT_TRUE(result.clear);
+  EXPECT_EQ(result.reason, recovery::DynamicClearanceRejectReason::None);
+  EXPECT_LT(result.initial_clearance_m, 0.0);
+  EXPECT_GT(result.final_clearance_m, result.initial_clearance_m);
+}
+
+TEST(RecoveryFootprintDynamicClearance, ReproducedTailGeometrySeparatesWithSelectedRightTurn)
+{
+  const recovery::FootprintExtents footprint{1.49, 0.51, 0.725, 0.725, 0.05};
+  const auto rollout = recovery::generate_reverse_rollout(
+    recovery::Pose2D{0.0, 0.0, 0.0}, recovery::ReversePrimitive::Right,
+    recovery::ReverseRolloutParameters{0.4, 0.05, 0.05, 2.14, 0.25});
+  ASSERT_TRUE(rollout.valid);
+
+  const auto result = recovery::evaluate_circle_obstacle_clearance(
+    footprint, rollout.poses,
+    recovery::CircleObstacle{1.76, -0.74, 0.0, 0.0, 1.45}, 4.1);
+
+  EXPECT_TRUE(result.valid);
+  EXPECT_TRUE(result.clear);
+  EXPECT_EQ(result.reason, recovery::DynamicClearanceRejectReason::None);
+  EXPECT_LT(result.initial_clearance_m, 0.0);
+  EXPECT_GT(result.final_clearance_m, result.initial_clearance_m);
+}
+
+TEST(RecoveryFootprintDynamicClearance, RearOverlapBlocksWorseningReverse)
+{
+  const recovery::FootprintExtents footprint{1.49, 0.51, 0.725, 0.725, 0.05};
+  const auto rollout = recovery::generate_reverse_rollout(
+    recovery::Pose2D{0.0, 0.0, 0.0}, recovery::ReversePrimitive::Straight,
+    recovery::ReverseRolloutParameters{0.4, 0.05, 0.05, 2.14, 0.0});
+  ASSERT_TRUE(rollout.valid);
+
+  const auto result = recovery::evaluate_circle_obstacle_clearance(
+    footprint, rollout.poses,
+    recovery::CircleObstacle{-1.76, 0.74, 0.0, 0.0, 1.45}, 4.1);
+
+  EXPECT_TRUE(result.valid);
+  EXPECT_FALSE(result.clear);
+  EXPECT_EQ(
+    result.reason, recovery::DynamicClearanceRejectReason::InitialOverlapWorsened);
+  EXPECT_GT(result.rejected_at_distance_m, 0.0);
+}
+
+TEST(RecoveryFootprintDynamicClearance, NewOverlapDuringRolloutIsBlocked)
+{
+  const recovery::FootprintExtents footprint{0.5, 0.5, 0.3, 0.3, 0.0};
+  const auto rollout = recovery::generate_reverse_rollout(
+    recovery::Pose2D{0.0, 0.0, 0.0}, recovery::ReversePrimitive::Straight,
+    recovery::ReverseRolloutParameters{2.0, 0.05, 0.05, 2.14, 0.0});
+  ASSERT_TRUE(rollout.valid);
+
+  const auto result = recovery::evaluate_circle_obstacle_clearance(
+    footprint, rollout.poses,
+    recovery::CircleObstacle{-1.5, 0.0, 0.0, 0.0, 0.2}, 4.1);
+
+  EXPECT_TRUE(result.valid);
+  EXPECT_FALSE(result.clear);
+  EXPECT_EQ(result.reason, recovery::DynamicClearanceRejectReason::NewOverlap);
+  EXPECT_GT(result.rejected_at_distance_m, 0.0);
+  EXPECT_LT(result.rejected_at_distance_m, 2.0);
+}
+
+TEST(RecoveryFootprintDynamicClearance, InvalidObstacleFailsClosed)
+{
+  const auto rollout = recovery::generate_reverse_rollout(
+    recovery::Pose2D{0.0, 0.0, 0.0}, recovery::ReversePrimitive::Straight,
+    recovery::ReverseRolloutParameters{0.4, 0.05, 0.05, 2.14, 0.0});
+  ASSERT_TRUE(rollout.valid);
+
+  const auto result = recovery::evaluate_circle_obstacle_clearance(
+    compact_footprint(), rollout.poses,
+    recovery::CircleObstacle{
+      std::numeric_limits<double>::quiet_NaN(), 0.0, 0.0, 0.0, 0.2},
+    4.1);
+
+  EXPECT_FALSE(result.valid);
+  EXPECT_FALSE(result.clear);
+  EXPECT_EQ(result.reason, recovery::DynamicClearanceRejectReason::InvalidObstacle);
+}
+
 TEST(RecoveryFootprintContactTransition, AllowsOnlyFixedHaloNonIncreasingOccupiedPatch)
 {
   auto grid = make_grid();
@@ -572,6 +700,9 @@ TEST(RecoveryFootprintStrings, RejectReasonsAndPrimitivesHaveStableNames)
     recovery::to_string(recovery::ReversePrimitive::Right), "reverse_right");
   EXPECT_STREQ(
     recovery::to_string(recovery::ReversePrimitive::ForwardLeft), "forward_left");
+  EXPECT_STREQ(
+    recovery::to_string(recovery::DynamicClearanceRejectReason::InitialOverlapWorsened),
+    "initial_overlap_worsened");
   EXPECT_STREQ(
     recovery::to_string(static_cast<recovery::RejectReason>(999)), "unknown");
 }

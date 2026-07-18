@@ -25,17 +25,60 @@ using multi_purpose_mpc_ros::stuck_recovery::RecoveryInput;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryReason;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryState;
 using multi_purpose_mpc_ros::stuck_recovery::RecoverySupervisor;
+using multi_purpose_mpc_ros::stuck_recovery::RejoinSteeringRequest;
 using multi_purpose_mpc_ros::stuck_recovery::ReverseActuationCalibration;
 using multi_purpose_mpc_ros::stuck_recovery::StuckDetector;
 using multi_purpose_mpc_ros::stuck_recovery::StuckRecoveryCore;
 using multi_purpose_mpc_ros::stuck_recovery::StuckRejectReason;
 using multi_purpose_mpc_ros::stuck_recovery::StuckVerdict;
 using multi_purpose_mpc_ros::stuck_recovery::SupervisorConfig;
+using multi_purpose_mpc_ros::stuck_recovery::compute_rejoin_steering_tire_angle;
+using multi_purpose_mpc_ros::stuck_recovery::solver_fallback_requires_reverse_only;
 using multi_purpose_mpc_ros::stuck_recovery::reverse_actuation_calibration_is_valid;
 using multi_purpose_mpc_ros::stuck_recovery::reverse_stopping_distance_reserve_m;
 using multi_purpose_mpc_ros::stuck_recovery::recovery_candidate_commit_allowed;
 using multi_purpose_mpc_ros::stuck_recovery::source_sample_is_current;
 using multi_purpose_mpc_ros::stuck_recovery::source_timestamp_is_monotonic;
+
+TEST(StuckRecoveryRejoinSteering, CombinesCurvatureAndSignedPathErrorFeedback)
+{
+  RejoinSteeringRequest request;
+  request.path_curvature_radpm = 0.1;
+  request.wheelbase_m = 1.0;
+  request.lateral_error_m = 0.2;
+  request.heading_error_rad = -0.05;
+  request.lateral_error_gain_rad_per_m = 0.6;
+  request.heading_error_gain = 1.2;
+  request.max_steering_tire_angle_rad = 0.35;
+
+  const auto steering = compute_rejoin_steering_tire_angle(request);
+  ASSERT_TRUE(steering.has_value());
+  EXPECT_NEAR(
+    steering.value(), std::atan(0.1) - 0.6 * 0.2 - 1.2 * -0.05, 1.0e-12);
+
+  request.path_curvature_radpm = 0.0;
+  request.heading_error_rad = 0.0;
+  EXPECT_LT(compute_rejoin_steering_tire_angle(request).value(), 0.0);
+  request.lateral_error_m = -0.2;
+  EXPECT_GT(compute_rejoin_steering_tire_angle(request).value(), 0.0);
+}
+
+TEST(StuckRecoveryRejoinSteering, AppliesLimitAndRejectsInvalidInputs)
+{
+  RejoinSteeringRequest request;
+  request.wheelbase_m = 1.0;
+  request.lateral_error_m = 10.0;
+  request.lateral_error_gain_rad_per_m = 1.0;
+  request.max_steering_tire_angle_rad = 0.3;
+  ASSERT_TRUE(compute_rejoin_steering_tire_angle(request).has_value());
+  EXPECT_DOUBLE_EQ(compute_rejoin_steering_tire_angle(request).value(), -0.3);
+
+  request.wheelbase_m = 0.0;
+  EXPECT_FALSE(compute_rejoin_steering_tire_angle(request).has_value());
+  request.wheelbase_m = 1.0;
+  request.lateral_error_m = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_FALSE(compute_rejoin_steering_tire_angle(request).has_value());
+}
 
 TEST(StuckRecoveryV2XClockDomain, AcceptsMonotonicSimulationSourceStamps)
 {
@@ -749,6 +792,10 @@ TEST(RecoverySupervisorConfig, RejectsNonFiniteOrNegativeConfiguration)
   EXPECT_THROW(RecoverySupervisor{config}, std::invalid_argument);
 
   config = supervisor_config();
+  config.rejoin_speed_limit_mps = 0.0;
+  EXPECT_THROW(RecoverySupervisor{config}, std::invalid_argument);
+
+  config = supervisor_config();
   config.rejoin_solver_recovery_timeout_sec = -0.1;
   EXPECT_THROW(RecoverySupervisor{config}, std::invalid_argument);
 
@@ -1122,6 +1169,47 @@ TEST(RecoverySupervisor, ForwardCreepUsesTheSelectedSteeringAngle)
   EXPECT_DOUBLE_EQ(action.steering_tire_angle_rad, 0.25);
 }
 
+TEST(RecoverySupervisor, ForwardHazardStopsAndReassessesInsteadOfLatching)
+{
+  auto config = supervisor_config();
+  config.max_attempts = 2U;
+  RecoverySupervisor supervisor(config);
+  double now = 0.0;
+  auto input = healthy_recovery_input(now);
+  input.maneuver_direction = ManeuverDirection::Forward;
+  advance_to_clearance_check(supervisor, input, now);
+
+  now += 0.01;
+  input.now_sec = now;
+  ASSERT_EQ(supervisor.update(input).type, RecoveryActionType::ForwardCreep);
+  ASSERT_EQ(supervisor.state(), RecoveryState::ForwardManeuver);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.rear_v2x_clear = false;
+  auto action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
+  EXPECT_EQ(action.reason, RecoveryReason::ForwardHazardAppeared);
+  EXPECT_EQ(supervisor.state(), RecoveryState::StopAndReassess);
+  EXPECT_FALSE(supervisor.safe_stop_latched());
+
+  now += 0.01;
+  input.now_sec = now;
+  input.signed_speed_mps = 0.0;
+  input.rear_v2x_clear = true;
+  action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
+  EXPECT_EQ(action.reason, RecoveryReason::ClearanceCheck);
+  EXPECT_EQ(supervisor.state(), RecoveryState::CheckClearance);
+
+  now += 0.01;
+  input.now_sec = now;
+  action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::ForwardCreep);
+  EXPECT_EQ(supervisor.state(), RecoveryState::ForwardManeuver);
+  EXPECT_EQ(supervisor.attempt_count(), 2U);
+}
+
 TEST(RecoverySupervisor, ImprovingForwardStepStopsAndReturnsToClearanceSelection)
 {
   auto config = supervisor_config();
@@ -1344,6 +1432,46 @@ TEST(RecoverySupervisor, StepwiseReverseDurationLimitStopsAndReassesses)
   EXPECT_EQ(supervisor.state(), RecoveryState::CheckClearance);
 }
 
+TEST(RecoverySupervisor, NonStepwiseReverseDurationUsesRemainingAttemptForReassessment)
+{
+  auto config = supervisor_config();
+  config.max_reverse_duration_sec = 0.1;
+  config.max_attempts = 2U;
+  RecoverySupervisor supervisor(config);
+  double now = 0.0;
+  auto input = healthy_recovery_input(now);
+  advance_to_reverse(supervisor, input, now);
+  ASSERT_EQ(supervisor.attempt_count(), 1U);
+
+  now += 0.1;
+  input.now_sec = now;
+  auto action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
+  EXPECT_EQ(action.reason, RecoveryReason::ReverseDurationLimit);
+  EXPECT_EQ(supervisor.state(), RecoveryState::StopBeforeDrive);
+  EXPECT_TRUE(supervisor.drive_report_will_reassess_or_stop());
+
+  now += 0.01;
+  input.now_sec = now;
+  input.signed_speed_mps = 0.0;
+  action = supervisor.update(input);
+  ASSERT_EQ(action.type, RecoveryActionType::RequestDrive);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.reported_gear = Gear::Drive;
+  action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
+  EXPECT_EQ(action.reason, RecoveryReason::ClearanceCheck);
+  EXPECT_EQ(supervisor.state(), RecoveryState::CheckClearance);
+
+  now += 0.01;
+  input.now_sec = now;
+  action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::RequestReverse);
+  EXPECT_EQ(supervisor.attempt_count(), 2U);
+}
+
 TEST(RecoverySupervisor, ReverseManeuverPausesForTransientClearanceLossAndResumes)
 {
   RecoverySupervisor supervisor(supervisor_config());
@@ -1428,6 +1556,44 @@ TEST(RecoverySupervisor, PersistentReverseClearanceLossReturnsToDriveAfterTimeou
   EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
   EXPECT_EQ(action.reason, RecoveryReason::RearHazardAppeared);
   EXPECT_EQ(supervisor.state(), RecoveryState::StopBeforeDrive);
+}
+
+TEST(RecoverySupervisor, PersistentStepwiseReverseClearanceLossReassessesAfterDrive)
+{
+  auto config = supervisor_config();
+  config.clearance_wait_timeout_sec = 0.1;
+  config.max_escape_steps = 2U;
+  RecoverySupervisor supervisor(config);
+  double now = 0.0;
+  auto input = healthy_recovery_input(now);
+  input.stepwise_escape = true;
+  advance_to_reverse(supervisor, input, now);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.rear_static_clear = false;
+  EXPECT_EQ(supervisor.update(input).reason, RecoveryReason::RearStaticBlocked);
+  EXPECT_EQ(supervisor.state(), RecoveryState::WaitReverseReport);
+
+  now += 0.1;
+  input.now_sec = now;
+  EXPECT_EQ(supervisor.update(input).reason, RecoveryReason::RearHazardAppeared);
+  EXPECT_EQ(supervisor.state(), RecoveryState::StopBeforeDrive);
+  EXPECT_TRUE(supervisor.drive_report_will_reassess_or_stop());
+
+  now += 0.01;
+  input.now_sec = now;
+  input.signed_speed_mps = 0.0;
+  EXPECT_EQ(supervisor.update(input).type, RecoveryActionType::RequestDrive);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.reported_gear = Gear::Drive;
+  const auto action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
+  EXPECT_EQ(action.reason, RecoveryReason::ClearanceCheck);
+  EXPECT_EQ(supervisor.state(), RecoveryState::CheckClearance);
+  EXPECT_EQ(supervisor.escape_step_count(), 1U);
 }
 
 TEST(RecoverySupervisor, DriveConfirmationWithoutEscapeLatchesSafeStop)
@@ -1656,10 +1822,12 @@ TEST(RecoverySupervisor, FullRecoveryRequestsResetOnceAndCompletesRejoin)
   input.gear_report_fresh = true;
   input.lateral_error_m = 1.0;
   input.heading_error_rad = 0.5;
+  input.rejoin_steering_tire_angle_rad = -0.17;
   action = supervisor.update(input);
   EXPECT_EQ(action.type, RecoveryActionType::LowSpeedRejoin);
   EXPECT_TRUE(action.reset_normal_control);
   EXPECT_DOUBLE_EQ(action.rejoin_speed_limit_mps, 1.0);
+  EXPECT_DOUBLE_EQ(action.steering_tire_angle_rad, -0.17);
   EXPECT_TRUE(action.inhibit_boost);
 
   now += 0.01;
@@ -1785,6 +1953,91 @@ TEST(RecoverySupervisor, AttemptLimitAndRejoinTimeoutAreLatched)
   action = timeout.update(input);
   EXPECT_EQ(action.type, RecoveryActionType::SafeStop);
   EXPECT_EQ(action.reason, RecoveryReason::RejoinTimedOut);
+}
+
+TEST(RecoverySupervisor, ConfiguredRejoinTimeoutReturnsToBoundedReassessment)
+{
+  auto config = supervisor_config();
+  config.retry_rejoin_timeout = true;
+  config.rejoin_timeout_sec = 0.1;
+  config.max_attempts = 2U;
+  config.max_escape_steps = 2U;
+  RecoverySupervisor supervisor(config);
+  double now = 0.0;
+  auto input = healthy_recovery_input(now);
+  advance_to_reverse(supervisor, input, now);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.recovery_escape_confirmed = true;
+  ASSERT_EQ(supervisor.update(input).reason, RecoveryReason::ReverseEscapeConfirmed);
+  now += 0.01;
+  input.now_sec = now;
+  input.signed_speed_mps = 0.0;
+  ASSERT_EQ(supervisor.update(input).type, RecoveryActionType::RequestDrive);
+  now += 0.01;
+  input.now_sec = now;
+  input.reported_gear = Gear::Drive;
+  input.lateral_error_m = 1.0;
+  input.heading_error_rad = 1.0;
+  ASSERT_EQ(supervisor.update(input).type, RecoveryActionType::LowSpeedRejoin);
+
+  now += 0.11;
+  input.now_sec = now;
+  auto action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
+  EXPECT_EQ(action.reason, RecoveryReason::RejoinTimedOut);
+  EXPECT_EQ(supervisor.state(), RecoveryState::StopAndConfirm);
+  EXPECT_FALSE(supervisor.safe_stop_latched());
+
+  now += 0.01;
+  input.now_sec = now;
+  input.recovery_escape_confirmed = false;
+  action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
+  EXPECT_EQ(action.reason, RecoveryReason::ClearanceCheck);
+  EXPECT_EQ(supervisor.state(), RecoveryState::CheckClearance);
+
+  now += 0.01;
+  input.now_sec = now;
+  action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::RequestReverse);
+  EXPECT_EQ(supervisor.attempt_count(), 2U);
+}
+
+TEST(RecoverySupervisor, RejoinTimeoutStillFailsClosedWithoutRetryBudget)
+{
+  auto config = supervisor_config();
+  config.retry_rejoin_timeout = true;
+  config.rejoin_timeout_sec = 0.1;
+  config.max_attempts = 1U;
+  config.max_escape_steps = 0U;
+  RecoverySupervisor supervisor(config);
+  double now = 0.0;
+  auto input = healthy_recovery_input(now);
+  advance_to_reverse(supervisor, input, now);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.recovery_escape_confirmed = true;
+  supervisor.update(input);
+  now += 0.01;
+  input.now_sec = now;
+  input.signed_speed_mps = 0.0;
+  supervisor.update(input);
+  now += 0.01;
+  input.now_sec = now;
+  input.reported_gear = Gear::Drive;
+  input.lateral_error_m = 1.0;
+  input.heading_error_rad = 1.0;
+  supervisor.update(input);
+
+  now += 0.11;
+  input.now_sec = now;
+  const auto action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::SafeStop);
+  EXPECT_EQ(action.reason, RecoveryReason::RejoinTimedOut);
+  EXPECT_EQ(supervisor.state(), RecoveryState::SafeStop);
 }
 
 TEST(RecoverySupervisor, SessionResetClearsLatchedStopTimersAndAttempts)
@@ -2041,7 +2294,7 @@ TEST(StuckRecoveryCore, QualifiedWallFreeSolverFallbackCanEnterExclusiveRecovery
   EXPECT_EQ(output.action.type, RecoveryActionType::HoldStop);
 }
 
-TEST(StuckRecoveryCore, PersistentFallbackEntersBoundedRejoinSolverWait) {
+TEST(StuckRecoveryCore, QualifiedFallbackKeepsIndependentRejoinControl) {
   CoreConfig config;
   config.enabled = true;
   config.shadow_mode = false;
@@ -2101,8 +2354,9 @@ TEST(StuckRecoveryCore, PersistentFallbackEntersBoundedRejoinSolverWait) {
   input.recovery.now_sec = drive_confirmation_sec + 0.01;
   auto output = core.update(input);
   EXPECT_EQ(output.state, RecoveryState::LowSpeedRejoin);
-  EXPECT_EQ(output.action.type, RecoveryActionType::HoldStop);
-  EXPECT_EQ(output.state_reason, RecoveryReason::SolverRecoveryPending);
+  EXPECT_EQ(output.action.type, RecoveryActionType::LowSpeedRejoin);
+  EXPECT_EQ(output.action.reason, RecoveryReason::RejoinInProgress);
+  EXPECT_NE(output.state_reason, RecoveryReason::SolverRecoveryPending);
 
   input.detector.now_sec = drive_confirmation_sec + 0.02;
   input.detector.solver_fallback = false;
@@ -2173,6 +2427,30 @@ TEST(StuckRecoveryCore, PersistentFallbackCanReturnToStepReassessment)
     ASSERT_NE(output.state, RecoveryState::SafeStop);
   }
   EXPECT_TRUE(reassessment_checked);
+}
+
+TEST(StuckRecoveryPolicy, EvidenceFreeSolverFallbackRequiresReverse)
+{
+  EXPECT_TRUE(solver_fallback_requires_reverse_only(
+    true, true, false, 0.2, 1.0));
+  EXPECT_FALSE(solver_fallback_requires_reverse_only(
+    false, true, false, 2.0, 1.0));
+}
+
+TEST(StuckRecoveryPolicy, WallEvidenceAllowsDirectionSelectedEscape)
+{
+  EXPECT_FALSE(solver_fallback_requires_reverse_only(
+    true, true, true, -0.86, 1.0));
+  EXPECT_TRUE(solver_fallback_requires_reverse_only(
+    true, true, true, -1.01, 1.0));
+}
+
+TEST(StuckRecoveryPolicy, InvalidHeadingCannotRelaxEvidenceFreeRecovery)
+{
+  EXPECT_TRUE(solver_fallback_requires_reverse_only(
+    true, true, false, std::numeric_limits<double>::quiet_NaN(), 1.0));
+  EXPECT_FALSE(solver_fallback_requires_reverse_only(
+    true, false, true, std::numeric_limits<double>::quiet_NaN(), 1.0));
 }
 
 TEST(StuckRecoveryCore, ResetSessionClearsDetectorAndSupervisorHistory) {

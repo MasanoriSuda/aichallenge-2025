@@ -749,6 +749,10 @@ TEST(RecoverySupervisorConfig, RejectsNonFiniteOrNegativeConfiguration)
   EXPECT_THROW(RecoverySupervisor{config}, std::invalid_argument);
 
   config = supervisor_config();
+  config.rejoin_solver_recovery_timeout_sec = -0.1;
+  EXPECT_THROW(RecoverySupervisor{config}, std::invalid_argument);
+
+  config = supervisor_config();
   config.safe_stop_clear_confirm_sec = -0.1;
   EXPECT_THROW(RecoverySupervisor{config}, std::invalid_argument);
 }
@@ -1491,6 +1495,88 @@ TEST(RecoverySupervisor, LowSpeedRejoinHoldsUntilInformationReturns)
   EXPECT_TRUE(action.reset_normal_control);
 }
 
+TEST(RecoverySupervisor, LowSpeedRejoinHoldsForSolverRecoveryAndThenResumes)
+{
+  auto config = supervisor_config();
+  config.rejoin_solver_recovery_timeout_sec = 0.2;
+  RecoverySupervisor supervisor(config);
+  double now = 0.0;
+  auto input = healthy_recovery_input(now);
+  advance_to_reverse(supervisor, input, now);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.recovery_escape_confirmed = true;
+  supervisor.update(input);
+  now += 0.01;
+  input.now_sec = now;
+  supervisor.update(input);
+  now += 0.01;
+  input.now_sec = now;
+  input.reported_gear = Gear::Drive;
+  auto action = supervisor.update(input);
+  ASSERT_EQ(supervisor.state(), RecoveryState::LowSpeedRejoin);
+  ASSERT_EQ(action.type, RecoveryActionType::LowSpeedRejoin);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.solver_healthy = false;
+  action = supervisor.update(input);
+  EXPECT_EQ(supervisor.state(), RecoveryState::LowSpeedRejoin);
+  EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
+  EXPECT_EQ(action.reason, RecoveryReason::SolverRecoveryPending);
+  expect_zero_drive(action);
+
+  now += 0.1;
+  input.now_sec = now;
+  action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
+  EXPECT_EQ(action.reason, RecoveryReason::SolverRecoveryPending);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.solver_healthy = true;
+  action = supervisor.update(input);
+  EXPECT_EQ(supervisor.state(), RecoveryState::LowSpeedRejoin);
+  EXPECT_EQ(action.type, RecoveryActionType::LowSpeedRejoin);
+  EXPECT_EQ(action.reason, RecoveryReason::RejoinInProgress);
+}
+
+TEST(RecoverySupervisor, LowSpeedRejoinSolverRecoveryTimeoutFailsClosed)
+{
+  auto config = supervisor_config();
+  config.rejoin_solver_recovery_timeout_sec = 0.05;
+  RecoverySupervisor supervisor(config);
+  double now = 0.0;
+  auto input = healthy_recovery_input(now);
+  advance_to_reverse(supervisor, input, now);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.recovery_escape_confirmed = true;
+  supervisor.update(input);
+  now += 0.01;
+  input.now_sec = now;
+  supervisor.update(input);
+  now += 0.01;
+  input.now_sec = now;
+  input.reported_gear = Gear::Drive;
+  supervisor.update(input);
+  ASSERT_EQ(supervisor.state(), RecoveryState::LowSpeedRejoin);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.solver_healthy = false;
+  EXPECT_EQ(supervisor.update(input).reason, RecoveryReason::SolverRecoveryPending);
+
+  now += 0.05;
+  input.now_sec = now;
+  const auto action = supervisor.update(input);
+  EXPECT_EQ(supervisor.state(), RecoveryState::SafeStop);
+  EXPECT_EQ(action.type, RecoveryActionType::SafeStop);
+  EXPECT_EQ(action.reason, RecoveryReason::SolverUnsafe);
+}
+
 TEST(RecoverySupervisor, BlockedRejoinPathReturnsToBoundedClearanceReassessment)
 {
   auto config = supervisor_config();
@@ -1600,6 +1686,65 @@ TEST(RecoverySupervisor, FullRecoveryRequestsResetOnceAndCompletesRejoin)
   action = supervisor.update(input);
   EXPECT_EQ(action.type, RecoveryActionType::NormalControl);
   EXPECT_EQ(action.reason, RecoveryReason::CooldownActive);
+}
+
+TEST(RecoverySupervisor, CompletedRejoinRestoresBudgetForANewRecoveryEpisode)
+{
+  auto config = supervisor_config();
+  config.max_escape_steps = 1U;
+  RecoverySupervisor supervisor(config);
+  double now = 0.0;
+  auto input = healthy_recovery_input(now);
+  input.stepwise_escape = true;
+  advance_to_reverse(supervisor, input, now);
+  ASSERT_EQ(supervisor.escape_step_count(), 1U);
+  ASSERT_EQ(supervisor.attempt_count(), 1U);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.traveled_distance_m = config.escape_step_distance_m;
+  input.step_contact_improved = true;
+  input.recovery_escape_confirmed = true;
+  EXPECT_EQ(supervisor.update(input).reason, RecoveryReason::EscapeStepComplete);
+  now += 0.01;
+  input.now_sec = now;
+  input.signed_speed_mps = 0.0;
+  EXPECT_EQ(supervisor.update(input).type, RecoveryActionType::RequestDrive);
+  now += 0.01;
+  input.now_sec = now;
+  input.reported_gear = Gear::Drive;
+  EXPECT_EQ(supervisor.update(input).type, RecoveryActionType::LowSpeedRejoin);
+  now += 0.01;
+  input.now_sec = now;
+  EXPECT_EQ(supervisor.update(input).type, RecoveryActionType::LowSpeedRejoin);
+  now += config.rejoin_confirm_sec;
+  input.now_sec = now;
+  EXPECT_EQ(supervisor.update(input).reason, RecoveryReason::RejoinComplete);
+  ASSERT_EQ(supervisor.escape_step_count(), 1U);
+
+  // Preserve the completed episode count for its final log. Clear it when a
+  // later detector event actually starts another recovery episode.
+  now += config.cooldown_sec + 0.01;
+  input.now_sec = now;
+  input.recovery_escape_confirmed = false;
+  EXPECT_EQ(supervisor.update(input).reason, RecoveryReason::StuckConfirmed);
+  EXPECT_EQ(supervisor.escape_step_count(), 0U);
+  EXPECT_EQ(supervisor.attempt_count(), 0U);
+
+  now += 0.01;
+  input.now_sec = now;
+  EXPECT_EQ(supervisor.update(input).type, RecoveryActionType::HoldStop);
+  now += 0.01;
+  input.now_sec = now;
+  EXPECT_EQ(supervisor.update(input).type, RecoveryActionType::HoldStop);
+  now += 0.01;
+  input.now_sec = now;
+  EXPECT_EQ(supervisor.update(input).type, RecoveryActionType::HoldStop);
+  now += 0.01;
+  input.now_sec = now;
+  EXPECT_EQ(supervisor.update(input).type, RecoveryActionType::RequestReverse);
+  EXPECT_EQ(supervisor.escape_step_count(), 1U);
+  EXPECT_EQ(supervisor.attempt_count(), 1U);
 }
 
 TEST(RecoverySupervisor, AttemptLimitAndRejoinTimeoutAreLatched)
@@ -1896,7 +2041,7 @@ TEST(StuckRecoveryCore, QualifiedWallFreeSolverFallbackCanEnterExclusiveRecovery
   EXPECT_EQ(output.action.type, RecoveryActionType::HoldStop);
 }
 
-TEST(StuckRecoveryCore, PersistentFallbackCannotEnterLowSpeedRejoin) {
+TEST(StuckRecoveryCore, PersistentFallbackEntersBoundedRejoinSolverWait) {
   CoreConfig config;
   config.enabled = true;
   config.shadow_mode = false;
@@ -1906,6 +2051,7 @@ TEST(StuckRecoveryCore, PersistentFallbackCannotEnterLowSpeedRejoin) {
   config.detector.stationary_duration_sec = 0.0;
   config.detector.solver_fallback_duration_sec = 0.01;
   config.supervisor = supervisor_config();
+  config.supervisor.rejoin_solver_recovery_timeout_sec = 0.05;
   StuckRecoveryCore core(config);
 
   CoreInput input;
@@ -1916,6 +2062,7 @@ TEST(StuckRecoveryCore, PersistentFallbackCannotEnterLowSpeedRejoin) {
   core.update(input);
 
   bool drive_confirmation_checked = false;
+  double drive_confirmation_sec = 0.0;
   for (std::size_t step = 1U; step < 20U; ++step) {
     const double now_sec = static_cast<double>(step) * 0.01;
     input.detector.now_sec = now_sec;
@@ -1938,17 +2085,31 @@ TEST(StuckRecoveryCore, PersistentFallbackCannotEnterLowSpeedRejoin) {
     {
       input.recovery.reported_gear = Gear::Drive;
       const auto output = core.update(input);
-      EXPECT_EQ(output.state, RecoveryState::SafeStop);
-      EXPECT_EQ(output.action.type, RecoveryActionType::SafeStop);
-      EXPECT_EQ(output.state_reason, RecoveryReason::SolverUnsafe);
+      EXPECT_EQ(output.state, RecoveryState::LowSpeedRejoin);
+      EXPECT_EQ(output.action.type, RecoveryActionType::LowSpeedRejoin);
       drive_confirmation_checked = true;
+      drive_confirmation_sec = now_sec;
       break;
     }
 
     const auto output = core.update(input);
     ASSERT_NE(output.state, RecoveryState::SafeStop);
   }
-  EXPECT_TRUE(drive_confirmation_checked);
+  ASSERT_TRUE(drive_confirmation_checked);
+
+  input.detector.now_sec = drive_confirmation_sec + 0.01;
+  input.recovery.now_sec = drive_confirmation_sec + 0.01;
+  auto output = core.update(input);
+  EXPECT_EQ(output.state, RecoveryState::LowSpeedRejoin);
+  EXPECT_EQ(output.action.type, RecoveryActionType::HoldStop);
+  EXPECT_EQ(output.state_reason, RecoveryReason::SolverRecoveryPending);
+
+  input.detector.now_sec = drive_confirmation_sec + 0.02;
+  input.detector.solver_fallback = false;
+  input.recovery.now_sec = drive_confirmation_sec + 0.02;
+  output = core.update(input);
+  EXPECT_EQ(output.state, RecoveryState::LowSpeedRejoin);
+  EXPECT_EQ(output.action.type, RecoveryActionType::LowSpeedRejoin);
 }
 
 TEST(StuckRecoveryCore, PersistentFallbackCanReturnToStepReassessment)
@@ -2049,6 +2210,9 @@ TEST(StuckRecoveryCore, EnumStringsAreStableAndUnknownSafe)
   EXPECT_STREQ(
     to_string(RecoveryReason::ReverseSpeedLimit),
     "reverse_speed_limit");
+  EXPECT_STREQ(
+    to_string(RecoveryReason::SolverRecoveryPending),
+    "solver_recovery_pending");
   EXPECT_STREQ(
     to_string(ExecutionMode::SimulationOnlyBlocked),
     "simulation_only_blocked");

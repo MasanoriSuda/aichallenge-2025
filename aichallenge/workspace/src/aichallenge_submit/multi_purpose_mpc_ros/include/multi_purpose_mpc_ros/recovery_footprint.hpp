@@ -154,6 +154,11 @@ const char * to_string(RejectReason reason) noexcept;
 const char * to_string(ReversePrimitive primitive) noexcept;
 const char * to_string(WallRegion region) noexcept;
 
+/// Return deterministic positive steering magnitudes from max/count through max.
+/// Invalid, non-positive inputs return an empty list.
+std::vector<double> steering_magnitude_samples(
+  double maximum_steering_angle_rad, std::size_t sample_count);
+
 struct RolloutPose
 {
   Pose2D pose;
@@ -188,6 +193,7 @@ struct FeasibilityResult
   std::size_t final_contact_count{};
   std::size_t checked_pose_count{};
   std::size_t contact_reduction{};
+  double steering_angle_rad{};
   double rejected_at_distance_m{};
   std::vector<RolloutPose> rollout;
 };

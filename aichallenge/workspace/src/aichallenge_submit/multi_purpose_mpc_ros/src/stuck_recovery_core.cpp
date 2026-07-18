@@ -131,6 +131,9 @@ void validate_supervisor_config(const SupervisorConfig & config)
   validate_nonnegative(config.max_rejoin_heading_error_rad, "maximum rejoin heading error");
   validate_nonnegative(config.rejoin_confirm_sec, "rejoin confirmation duration");
   validate_nonnegative(config.rejoin_timeout_sec, "rejoin timeout");
+  validate_nonnegative(
+    config.rejoin_solver_recovery_timeout_sec,
+    "rejoin solver recovery timeout");
   validate_nonnegative(config.cooldown_sec, "recovery cooldown");
 }
 
@@ -496,6 +499,24 @@ RecoveryAction RecoverySupervisor::update(const RecoveryInput & input)
     return safe_stop_action(RecoveryReason::OdometryUnsafe);
   }
   if (!input.solver_healthy) {
+    if (
+      state_ == RecoveryState::LowSpeedRejoin &&
+      config_.rejoin_solver_recovery_timeout_sec > 0.0)
+    {
+      if (!solver_unhealthy_since_sec_.has_value()) {
+        solver_unhealthy_since_sec_ = input.now_sec;
+      }
+      aligned_since_sec_.reset();
+      if (
+        input.now_sec - *solver_unhealthy_since_sec_ <
+        config_.rejoin_solver_recovery_timeout_sec)
+      {
+        transition(
+          RecoveryState::LowSpeedRejoin,
+          RecoveryReason::SolverRecoveryPending, input.now_sec);
+        return hold_action(RecoveryReason::SolverRecoveryPending);
+      }
+    }
     if (state_ == RecoveryState::Normal || state_ == RecoveryState::SuspectStuck) {
       transition(RecoveryState::Normal, RecoveryReason::SolverUnsafe, input.now_sec);
       return normal_action(RecoveryReason::SolverUnsafe);
@@ -503,6 +524,7 @@ RecoveryAction RecoverySupervisor::update(const RecoveryInput & input)
     transition(RecoveryState::SafeStop, RecoveryReason::SolverUnsafe, input.now_sec);
     return safe_stop_action(RecoveryReason::SolverUnsafe);
   }
+  solver_unhealthy_since_sec_.reset();
   if (!input.control_enabled) {
     if (state_ == RecoveryState::Normal || state_ == RecoveryState::SuspectStuck) {
       transition(RecoveryState::Normal, RecoveryReason::ControlInterrupted, input.now_sec);
@@ -575,6 +597,7 @@ void RecoverySupervisor::reset_session() noexcept
   last_update_sec_.reset();
   stopped_since_sec_.reset();
   aligned_since_sec_.reset();
+  solver_unhealthy_since_sec_.reset();
   clearance_safe_since_sec_.reset();
   last_gear_request_sec_.reset();
   cooldown_until_sec_.reset();
@@ -628,10 +651,16 @@ RecoveryAction RecoverySupervisor::update_normal(const RecoveryInput & input)
   cooldown_until_sec_.reset();
 
   if (input.detector.verdict == StuckVerdict::Confirmed) {
+    // Maneuver and attempt limits bound one recovery episode. A completed
+    // rejoin must not consume the budget of a later, independent obstruction.
+    attempt_count_ = 0U;
+    escape_step_count_ = 0U;
     transition(RecoveryState::SuspectStuck, RecoveryReason::StuckConfirmed, input.now_sec);
     return hold_action(RecoveryReason::StuckConfirmed);
   }
   if (input.detector.verdict == StuckVerdict::Suspected) {
+    attempt_count_ = 0U;
+    escape_step_count_ = 0U;
     transition(RecoveryState::SuspectStuck, RecoveryReason::StuckSuspected, input.now_sec);
     return normal_action(RecoveryReason::StuckSuspected);
   }
@@ -1174,6 +1203,8 @@ void RecoverySupervisor::transition(
   if (next == RecoveryState::LowSpeedRejoin) {
     aligned_since_sec_.reset();
     normal_reset_pending_ = true;
+  } else {
+    solver_unhealthy_since_sec_.reset();
   }
   if (next == RecoveryState::Normal || next == RecoveryState::SafeStop) {
     stopped_since_sec_.reset();
@@ -1368,23 +1399,18 @@ CoreOutput StuckRecoveryCore::update(const CoreInput & input)
   recovery.odometry_valid = input.detector.odometry_fresh &&
     std::isfinite(input.detector.signed_speed_mps);
   const RecoveryState current_state = supervisor_.state();
-  const bool drive_report_will_enter_rejoin =
-    (current_state == RecoveryState::ShiftToDrive ||
-    current_state == RecoveryState::WaitDriveReport) &&
-    recovery.gear_report_fresh && recovery.reported_gear == Gear::Drive &&
-    !supervisor_.drive_report_will_reassess_or_stop();
   const bool recovery_no_longer_depends_on_solver =
     current_state != RecoveryState::Normal &&
-    current_state != RecoveryState::LowSpeedRejoin &&
-    !drive_report_will_enter_rejoin;
+    current_state != RecoveryState::LowSpeedRejoin;
   const bool confirmed_solver_fallback_candidate =
     (current_state == RecoveryState::Normal ||
     current_state == RecoveryState::SuspectStuck) &&
     (output.detector.solver_fallback_qualified ||
     output.detector.solver_evidence_free_qualified);
   // The normal MPC solver is not used while the recovery supervisor exclusively
-  // owns the stop, gear-shift, and reverse commands. It becomes mandatory again
-  // for LowSpeedRejoin.
+  // owns the stop, gear-shift, and reverse commands. Drive confirmation may
+  // enter LowSpeedRejoin while fallback is still active; that state holds stop
+  // for its bounded solver-recovery window before normal MPC can move again.
   recovery.solver_healthy = !input.detector.solver_fallback ||
     recovery_no_longer_depends_on_solver ||
     confirmed_solver_fallback_candidate;
@@ -1716,6 +1742,8 @@ const char * to_string(const RecoveryReason reason) noexcept
       return "rejoin_unsafe";
     case RecoveryReason::RejoinPathBlocked:
       return "rejoin_path_blocked";
+    case RecoveryReason::SolverRecoveryPending:
+      return "solver_recovery_pending";
     case RecoveryReason::CooldownActive:
       return "cooldown_active";
     case RecoveryReason::OdometryUnsafe:

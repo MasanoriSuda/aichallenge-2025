@@ -114,10 +114,14 @@ stuck_recovery:
     # Front/side/corner contact retreats in 0.40 m verified steps. Episode
     # distance is retained across reassessment until the 2.0 m target is met.
     side_escape_enabled: true
+    # Evaluate intermediate steering magnitudes without relaxing the contact policy.
+    side_escape_steering_samples: 5
     escape_step_distance_m: 0.40
     # Stopping reserve can end a nominal 0.40 m step before 0.40 m of measured
     # motion, so retain enough bounded reassessments to reach 2.0 m.
-    max_escape_steps: 8
+    # Ten bounded steps cover run-to-run stopping-reserve variation while the
+    # independent 3.0 m total-distance cap remains unchanged.
+    max_escape_steps: 10
     # Each predicted step must remove at least 5% of its initial occupied contacts.
     side_escape_min_contact_reduction_ratio: 0.05
     # One additional non-stepwise continuation is allowed after contact clears.
@@ -149,6 +153,8 @@ stuck_recovery:
     max_heading_error_rad: 0.35
     confirm_sec: 0.3
     timeout_sec: 5.0
+    # Hold Drive at zero command briefly while MPC is reinitialized after Recovery.
+    solver_recovery_timeout_sec: 1.0
     cooldown_sec: 1.0
 
 map:
@@ -190,7 +196,7 @@ bicycle_model:
   width: 1.45   # +safety margin
 
 mpc:
-  N: 30
+  N: 20
   # Q: [e_y, e_psi, t]
   # R: [v, delta]
   # QN: [e_y, e_psi, t]

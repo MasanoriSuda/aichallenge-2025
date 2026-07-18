@@ -189,12 +189,13 @@ stuck_recovery:
     forward_escape_distance_m: 0.30
     max_reverse_pose_step_m: 0.05
     reverse_steering_angle_rad: 0.25
+    side_escape_steering_samples: 5
     solver_reverse_only_heading_error_rad: 1.0
     wall_direction_search_margin_m: 0.50
     wall_direction_ambiguity_m: 0.02
     side_escape_enabled: true
     escape_step_distance_m: 0.40
-    max_escape_steps: 8
+    max_escape_steps: 10
     side_escape_min_contact_reduction_ratio: 0.05
     max_attempts: 2
   footprint:
@@ -216,6 +217,7 @@ stuck_recovery:
     max_heading_error_rad: 0.35
     confirm_sec: 0.3
     timeout_sec: 5.0
+    solver_recovery_timeout_sec: 1.0
     cooldown_sec: 1.0
 ```
 
@@ -258,12 +260,13 @@ corridorを駆動可否の正本とする。control disableとadapterが明示�
 
 近傍wall cellを車体座標へ変換し、Front / Rear / Left / Right / Mixedへ分類する。
 FrontではReverse Straight / Left / Rightをこの順で評価し、RearではForwardStraightを
-評価する。Side / Mixedかつ実map contactありでもReverse Straight / Left / Rightの3候補を
-0.40 m評価する。Unknownまたは改善候補なしはfail-closedとする。検索marginは
+評価する。Side / Mixedかつ実map contactありではReverse Straightに加え、Left / Rightを
+0.05、0.10、0.15、0.20、0.25 radで0.40 m評価する。contact減少最大を選び、同値では
+Straight、Leftの小角、Rightの小角の決定順を使う。Unknownまたは改善候補なしはfail-closedとする。検索marginは
 方向推定専用でありcollision footprintを縮小しない。候補は`SUSPECT_STUCK`、AWSIM補正待機、
 停止確認、clearance待機では毎周期再評価し、`SHIFT_TO_REVERSE` / `WAIT_REVERSE_REPORT` /
 `REVERSE_MANEUVER` / `FORWARD_MANEUVER`へ到達した時点でepisodeへ固定する。固定後は方向と操舵符号を
-変更しない。Reverse Left / Rightは`reverse_steering_angle_rad`の正負を実commandへ渡し、
+変更しない。Reverse Left / Rightは選択したsigned steering angleをepisodeへ固定して実commandへ渡し、
 選択rolloutの横変位分だけV2X corridorを拡張する。
 
 AWSIM補正待機中にpose / contactが変わるため、`STOP_AND_CONFIRM`後は待機前の候補を破棄し、
@@ -296,8 +299,9 @@ sim timeのsource stampをwall-clock受信時刻から引いて全messageをstal
   現在cellは初期patchの固定1-cell halo内かつ直前patchと同一または8近傍の明示Occupiedだけを
   許し、接触数増加、chain migration、一度clear後の再接触、unknown、離れたpatchをrejectする。
   候補終端までに接触を解消し、rolloutと実後退中監視は共通helperを使用する。swept stepと
-  runtime corner motionはmap resolution以下の設定stepに制限する。初期接触を持つLeft /
-  Rightは、向きが変わる場合のpenetration単調性が未実装のためfail-closedとする。Forward Left /
+  runtime corner motionはmap resolution以下の設定stepに制限する。初期接触を一動作で完全解消する
+  `RequireClear`のLeft / Rightは、向きが変わる場合のpenetration単調性が未実装のためfail-closedとする。
+  Side / Mixedの段階離脱は`RequireImprovement`として各swept sampleのcontact非増加と局所連続を検証する。Forward Left /
   Rightは現在footprintがclearなdeadlock fallbackだけで使い、初期接触からの旋回前進には使わない。
 - `/v2x/vehicle_positions`の最近messageがfreshで、position jumpのない他車の
   現在位置から選択maneuver duration分を予測した進行方向corridorがclear。さらに、
@@ -312,13 +316,13 @@ sim timeのsource stampをwall-clock受信時刻から引いて全messageをstal
 - Side / Mixed候補は各swept sampleでcontact数がステップ初期値を超えず、previous patchと
   局所連続し、終端で5%以上減る場合だけacceptする。contact減少最大、Straight、Left、Rightの
   決定順で選ぶ。実移動後にもcontact減少を確認し、0.40 mごとに停止・再評価する。
-  episode距離は各stepをまたいで保持し、実測2.0 mまたは最大8ステップ、実改善なし、Unknownで
+  episode距離は各stepをまたいで保持し、実測2.0 mまたは最大10ステップ、実改善なし、Unknownで
   SafeStopとする。V2X不完全時は即停止してReverseを維持し、情報が回復すれば同じステップを
   再開する。completeな情報でstaticまたは他車blockが継続した場合だけDriveへ戻す。
   gear要求後は`AllowNonWorsening`へ切り替え、残距離ごとの追加5%改善は要求せず、contact非増加と
   新規contactなしを監視して0.40 m終端まで進める。終点の実測改善判定は維持する。
   step中にcontact悪化または単step時間上限へ達した場合も即停止し、Driveでstatic / V2X候補を
-  再評価する。1回の境界変化だけでepisodeを破棄しない一方、累積距離・最大8ステップ・改善確認の
+  再評価する。1回の境界変化だけでepisodeを破棄しない一方、累積距離・最大10ステップ・改善確認の
   上限は維持する。
 - signed speedの絶対値が`max_reverse_speed_mps`へ達した周期はReverseを維持して減速し、
   上限未満へ戻れば同じmaneuverを再開する。速度上限だけでescape完了やDrive復帰にしない。
@@ -336,8 +340,9 @@ REVERSE GearReportとV2X completenessが隣接周期で到着する場合は、
 
 stepwise Reverse完了後にDrive reportを待つ間は、次の`STOP_AND_REASSESS`またはSafeStopが
 予約されているためnormal MPC solverを使用しない。したがってsolver fallback継続だけで
-再判定を中断しない。通常離脱後にLowSpeedRejoinへ入るDrive reportでは従来どおりsolver正常を
-必須とする。
+再判定を中断しない。通常離脱後にLowSpeedRejoinへ入った後のsolver fallbackはDriveで停止保持し、
+最大`solver_recovery_timeout_sec`だけ再初期化を待つ。復旧すれば再合流を再開し、timeoutでは
+`solver_unsafe`としてfail-closedにする。
 
 `WAIT_FOR_CLEAR`でstatic rolloutとV2X corridorが同時にclearになった場合は、その同一snapshotで
 `CHECK_CLEARANCE`を消費してgear要求へ進む。clear確認後にもう1周期待つことでV2X completenessや
@@ -353,6 +358,10 @@ lockをresetする。再合流へ入る前にFront / Sideはepisode実測2.0 m�
 escapeと車体clearanceを必須とする。未達でDriveへ戻った場合は`escape_not_confirmed`で
 SafeStopする。再合流中もV2X completeを必須とし、欠落時は停止保持する。専用速度上限で
 lateral / heading errorが所定時間閾値内に入るまで継続する。
+
+step / attempt上限は1 Recovery episodeの予算である。`rejoin_complete`の最終ログには完了時の
+カウンタを残し、cooldown後に新しいSuspected / Confirmedが独立したepisodeを開始する時点で0へ戻す。
+SafeStop中の上限を自動解除するものではない。
 
 現runtimeはFront / Side / Mixedの`ReverseStraight` / `ReverseLeft` / `ReverseRight`、Rearの
 `ForwardStraight`、後続車にReverseを塞がれたclear-footprint時の`ForwardStraight` /
@@ -439,6 +448,17 @@ D3はReverse gearを要求しておらず、static gateのfail-closed動作はPa
 その後solver unsafeとなって全車停止したため、デッドロック解消はFailである。wall証拠なしsolver
 failure経路はunit testで確認したが、このrunのD3ではwall証拠も成立しており単独発火は未確認である。
 詳細は`.steering/20260718-v2x-coordinated-reverse-recovery/results.md`に記録する。
+
+適応contact操舵とrejoin solver graceを追加した3回の`make dev3`では、8 step版のD2が
+1.820 mで停止する再現後、10 step版が2.182 mまで後退して`rejoin_complete`し、WP161から
+WP199まで前進した。最終binaryの`output/20260718-164220`では、D3がSide / Mixed contactから
+`-0.15`、`-0.20`、`-0.25 rad`を実際に選択してcontactを154から99へ低減し、D2も6 step・
+2.006 mでLowSpeedRejoinへ入った。D1はstatic collision、D2は`rejoin_timed_out`、D3は
+10 stepでescape未達となり、3台全停止は未解消である。危険候補の強制実行はなく、安全gateは
+維持された。途中runで判明した完了episodeのstep予算持ち越しは、新しいepisode開始時にresetし、
+2 episode連続unit testで確認した。対象testは合計93/93、25 package buildは成功した。
+solver graceはunit testで確認したが、dev3のLowSpeedRejoin中solverは正常でruntime未観測である。
+詳細は`.steering/20260718-adaptive-contact-escape-and-rejoin-solver-grace/results.md`に記録する。
 
 gear publisherはReliable / KeepLast(1) / Volatileであり、TransientLocalは古いREVERSEの
 late-join replayを避けるため使用しない。

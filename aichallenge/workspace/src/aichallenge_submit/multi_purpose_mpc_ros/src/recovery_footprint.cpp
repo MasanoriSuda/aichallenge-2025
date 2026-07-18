@@ -374,6 +374,25 @@ double primitive_steering_sign(const ReversePrimitive primitive) noexcept
   return 0.0;
 }
 
+std::vector<double> steering_magnitude_samples(
+  const double maximum_steering_angle_rad, const std::size_t sample_count)
+{
+  if (
+    !finite(maximum_steering_angle_rad) || maximum_steering_angle_rad <= 0.0 ||
+    sample_count == 0U || sample_count > kMaximumSamples)
+  {
+    return {};
+  }
+  std::vector<double> samples;
+  samples.reserve(sample_count);
+  for (std::size_t index = 1U; index <= sample_count; ++index) {
+    samples.push_back(
+      maximum_steering_angle_rad * static_cast<double>(index) /
+      static_cast<double>(sample_count));
+  }
+  return samples;
+}
+
 const char * to_string(const RejectReason reason) noexcept
 {
   switch (reason) {
@@ -816,6 +835,7 @@ FeasibilityResult evaluate_recovery_candidate(
 {
   FeasibilityResult result;
   result.primitive = primitive;
+  result.steering_angle_rad = steering_for(primitive, parameters);
   if (!grid.valid()) {
     return rejected(std::move(result), RejectReason::InvalidGrid, 0.0);
   }

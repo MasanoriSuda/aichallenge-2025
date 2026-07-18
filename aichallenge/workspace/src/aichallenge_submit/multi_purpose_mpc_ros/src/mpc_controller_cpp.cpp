@@ -6165,6 +6165,7 @@ struct StuckRecoveryAdapterConfig
   double wall_direction_ambiguity_m{0.02};
   bool side_escape_enabled{true};
   double side_escape_min_contact_reduction_ratio{0.05};
+  std::size_t side_escape_steering_samples{5U};
   double front_extent_m{1.49};
   double rear_extent_m{0.51};
   double left_extent_m{0.725};
@@ -6550,6 +6551,9 @@ Config load_config(const std::string & path)
         maneuver["side_escape_min_contact_reduction_ratio"] ?
         maneuver["side_escape_min_contact_reduction_ratio"].as<double>() :
         adapter.side_escape_min_contact_reduction_ratio;
+      adapter.side_escape_steering_samples = maneuver["side_escape_steering_samples"] ?
+        maneuver["side_escape_steering_samples"].as<std::size_t>() :
+        adapter.side_escape_steering_samples;
     }
 
     const auto footprint = recovery["footprint"];
@@ -6597,6 +6601,9 @@ Config load_config(const std::string & path)
         rejoin["confirm_sec"].as<double>() : out.rejoin_confirm_sec;
       out.rejoin_timeout_sec = rejoin["timeout_sec"] ?
         rejoin["timeout_sec"].as<double>() : out.rejoin_timeout_sec;
+      out.rejoin_solver_recovery_timeout_sec = rejoin["solver_recovery_timeout_sec"] ?
+        rejoin["solver_recovery_timeout_sec"].as<double>() :
+        out.rejoin_solver_recovery_timeout_sec;
       out.retry_rejoin_blocked_path = rejoin["retry_on_blocked_path"] ?
         rejoin["retry_on_blocked_path"].as<bool>() : out.retry_rejoin_blocked_path;
       adapter.rejoin_static_lookahead_m = rejoin["static_lookahead_m"] ?
@@ -6667,6 +6674,8 @@ Config load_config(const std::string & path)
       !std::isfinite(adapter.side_escape_min_contact_reduction_ratio) ||
       adapter.side_escape_min_contact_reduction_ratio <= 0.0 ||
       adapter.side_escape_min_contact_reduction_ratio > 1.0 ||
+      adapter.side_escape_steering_samples == 0U ||
+      adapter.side_escape_steering_samples > 16U ||
       !finite_non_negative(adapter.front_extent_m) ||
       !finite_non_negative(adapter.rear_extent_m) ||
       !finite_non_negative(adapter.left_extent_m) ||
@@ -7640,14 +7649,17 @@ public:
       get_logger(),
       "Stuck recovery coordinated reverse: enabled=%s, stop=%.2f s, "
       "front_speed<=%.2f m/s, solver_evidence_free=%s/%.2f s, "
-      "solver_reverse_only_heading>=%.2f rad",
+      "solver_reverse_only_heading>=%.2f rad, steering_samples=%zu, "
+      "rejoin_solver_wait=%.2f s",
       cfg_.stuck_recovery.core.detector.coordinated_stop_recovery_enabled ? "true" : "false",
       cfg_.stuck_recovery.core.detector.coordinated_stop_duration_sec,
       cfg_.stuck_recovery.coordinated_stop_front_speed_mps,
       cfg_.stuck_recovery.core.detector.solver_evidence_free_recovery_enabled ?
       "true" : "false",
       cfg_.stuck_recovery.core.detector.solver_evidence_free_duration_sec,
-      cfg_.stuck_recovery.solver_reverse_only_heading_error_rad);
+      cfg_.stuck_recovery.solver_reverse_only_heading_error_rad,
+      cfg_.stuck_recovery.side_escape_steering_samples,
+      cfg_.stuck_recovery.core.supervisor.rejoin_solver_recovery_timeout_sec);
     if (
       cfg_.stuck_recovery.core.enabled && !cfg_.stuck_recovery.core.shadow_mode &&
       !stuck_recovery_actuation_io_enabled_)
@@ -8382,6 +8394,7 @@ private:
     recovery_coordinated_stop_episode_ = false;
     recovery_reverse_only_episode_ = false;
     recovery_selected_reverse_primitive_.reset();
+    recovery_selected_reverse_steering_angle_rad_.reset();
     recovery_selected_stepwise_escape_ = false;
     recovery_initial_contact_cells_.reset();
     recovery_previous_contact_cells_.reset();
@@ -8808,15 +8821,18 @@ private:
         stuck_recovery_core_ != nullptr &&
         stuck_recovery_core_->supervisor().escape_step_count() > 0U;
 
-      const auto evaluate_candidate =
-        [&](const recovery_footprint::ReversePrimitive primitive) {
-          rollout.reverse_distance_m = stepwise_candidate_mode ?
+      const auto evaluate_candidate_with_steering =
+        [&](const recovery_footprint::ReversePrimitive primitive,
+        const double steering_magnitude_rad) {
+          auto candidate_rollout = rollout;
+          candidate_rollout.steering_angle_rad = steering_magnitude_rad;
+          candidate_rollout.reverse_distance_m = stepwise_candidate_mode ?
             std::max(0.0, escape_step_distance_to_check_m) :
             (recovery_footprint::primitive_is_forward(primitive) ?
             std::max(0.0, forward_distance_to_check_m) :
             std::max(0.0, reverse_distance_to_check_m));
           return recovery_footprint::evaluate_recovery_candidate(
-            *recovery_grid_, recovery_footprint_, recovery_pose, primitive, rollout,
+            *recovery_grid_, recovery_footprint_, recovery_pose, primitive, candidate_rollout,
             clearance_reassessment_step ?
             recovery_footprint::ContactEscapePolicy::RequireClear :
             stepwise_candidate_mode ?
@@ -8826,6 +8842,14 @@ private:
             recovery_footprint::ContactEscapePolicy::RequireClear,
             stepwise_candidate_mode && !committed_stepwise_maneuver ?
             cfg_.stuck_recovery.side_escape_min_contact_reduction_ratio : 0.0);
+        };
+      const auto evaluate_candidate =
+        [&](const recovery_footprint::ReversePrimitive primitive) {
+          const double steering_magnitude_rad =
+            recovery_selected_reverse_steering_angle_rad_.has_value() ?
+            std::abs(recovery_selected_reverse_steering_angle_rad_.value()) :
+            cfg_.stuck_recovery.reverse_steering_angle_rad;
+          return evaluate_candidate_with_steering(primitive, steering_magnitude_rad);
         };
       std::optional<recovery_footprint::FeasibilityResult> first_result;
       std::optional<recovery_footprint::FeasibilityResult> selected_result;
@@ -8901,21 +8925,31 @@ private:
         if (clearance_reassessment_step) {
           selected_result = select_heading_aligned_reverse_candidate();
         } else {
-          constexpr std::array<recovery_footprint::ReversePrimitive, 3> kStepPreference{
-            recovery_footprint::ReversePrimitive::Straight,
-            recovery_footprint::ReversePrimitive::Left,
-            recovery_footprint::ReversePrimitive::Right};
-          for (const auto primitive : kStepPreference) {
-            auto result = evaluate_candidate(primitive);
-            if (!first_result.has_value()) {
-              first_result = result;
-            }
-            if (
-              result.feasible &&
-              (!selected_result.has_value() ||
-              result.contact_reduction > selected_result->contact_reduction))
-            {
-              selected_result = std::move(result);
+          const auto consider_step_candidate =
+            [&](recovery_footprint::FeasibilityResult result) {
+              if (!first_result.has_value()) {
+                first_result = result;
+              }
+              if (
+                result.feasible &&
+                (!selected_result.has_value() ||
+                result.contact_reduction > selected_result->contact_reduction))
+              {
+                selected_result = std::move(result);
+              }
+            };
+          consider_step_candidate(evaluate_candidate_with_steering(
+            recovery_footprint::ReversePrimitive::Straight, 0.0));
+          const auto steering_samples = recovery_footprint::steering_magnitude_samples(
+            cfg_.stuck_recovery.reverse_steering_angle_rad,
+            cfg_.stuck_recovery.side_escape_steering_samples);
+          for (const auto primitive : {
+              recovery_footprint::ReversePrimitive::Left,
+              recovery_footprint::ReversePrimitive::Right})
+          {
+            for (const double steering_magnitude_rad : steering_samples) {
+              consider_step_candidate(evaluate_candidate_with_steering(
+                primitive, steering_magnitude_rad));
             }
           }
         }
@@ -9028,8 +9062,7 @@ private:
           stuck_recovery::ManeuverDirection::Forward :
           stuck_recovery::ManeuverDirection::Reverse;
         snapshot.selected_reverse_steering_angle_rad =
-          recovery_footprint::primitive_steering_sign(selected_result->primitive) *
-          cfg_.stuck_recovery.reverse_steering_angle_rad;
+          selected_result->steering_angle_rad;
         const double cos_initial = std::cos(recovery_pose.yaw_rad);
         const double sin_initial = std::sin(recovery_pose.yaw_rad);
         for (const auto & rollout_pose : selected_result->rollout) {
@@ -9190,8 +9223,7 @@ private:
         snapshot.selected_reverse_primitive = result.primitive;
         snapshot.maneuver_direction = stuck_recovery::ManeuverDirection::Forward;
         snapshot.selected_reverse_steering_angle_rad =
-          recovery_footprint::primitive_steering_sign(result.primitive) *
-          cfg_.stuck_recovery.reverse_steering_angle_rad;
+          result.steering_angle_rad;
         snapshot.selected_center_min_lateral_m = forward_min_lateral_m;
         snapshot.selected_center_max_lateral_m = forward_max_lateral_m;
         snapshot.rear_information_complete = true;
@@ -9419,6 +9451,7 @@ private:
       previous_state == stuck_recovery::RecoveryState::WaitDriveReport);
     if (entered_step_reassessment) {
       recovery_selected_reverse_primitive_.reset();
+      recovery_selected_reverse_steering_angle_rad_.reset();
       recovery_selected_stepwise_escape_ = false;
       recovery_maneuver_start_pose_.reset();
       recovery_last_reverse_pose_.reset();
@@ -9435,6 +9468,8 @@ private:
       safety.reverse_candidate_selected)
     {
       recovery_selected_reverse_primitive_ = safety.selected_reverse_primitive;
+      recovery_selected_reverse_steering_angle_rad_ =
+        safety.selected_reverse_steering_angle_rad;
       recovery_selected_stepwise_escape_ = safety.stepwise_escape;
       RCLCPP_INFO(
         get_logger(), "Stuck recovery maneuver selected: direction=%s, primitive=%s, "
@@ -9488,6 +9523,7 @@ private:
       recovery_coordinated_stop_episode_ = false;
       recovery_reverse_only_episode_ = false;
       recovery_selected_reverse_primitive_.reset();
+      recovery_selected_reverse_steering_angle_rad_.reset();
       recovery_selected_stepwise_escape_ = false;
       recovery_episode_traveled_distance_m_ = 0.0;
     }
@@ -9509,6 +9545,7 @@ private:
       recovery_episode_traveled_distance_m_ = 0.0;
       recovery_reverse_pose_jump_ = false;
       recovery_selected_reverse_primitive_.reset();
+      recovery_selected_reverse_steering_angle_rad_.reset();
       recovery_selected_stepwise_escape_ = false;
       recovery_coordinated_stop_episode_ = false;
       recovery_reverse_only_episode_ = false;
@@ -10085,6 +10122,7 @@ private:
   bool recovery_coordinated_stop_episode_{false};
   bool recovery_reverse_only_episode_{false};
   std::optional<recovery_footprint::ReversePrimitive> recovery_selected_reverse_primitive_;
+  std::optional<double> recovery_selected_reverse_steering_angle_rad_;
   bool recovery_selected_stepwise_escape_{false};
   std::optional<std::vector<std::size_t>> recovery_initial_contact_cells_;
   std::optional<std::vector<std::size_t>> recovery_previous_contact_cells_;

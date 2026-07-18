@@ -244,6 +244,7 @@ enum class RecoveryReason
   RejoinTimedOut,
   RejoinUnsafe,
   RejoinPathBlocked,
+  SolverRecoveryPending,
   CooldownActive,
   OdometryUnsafe,
   SolverUnsafe,
@@ -287,6 +288,7 @@ struct SupervisorConfig
   double max_rejoin_heading_error_rad{0.35};
   double rejoin_confirm_sec{0.3};
   double rejoin_timeout_sec{5.0};
+  double rejoin_solver_recovery_timeout_sec{1.0};
   bool retry_rejoin_blocked_path{false};
   double cooldown_sec{1.0};
 };
@@ -415,6 +417,7 @@ private:
   std::optional<double> last_update_sec_;
   std::optional<double> stopped_since_sec_;
   std::optional<double> aligned_since_sec_;
+  std::optional<double> solver_unhealthy_since_sec_;
   std::optional<double> clearance_safe_since_sec_;
   std::optional<double> last_gear_request_sec_;
   std::optional<double> cooldown_until_sec_;

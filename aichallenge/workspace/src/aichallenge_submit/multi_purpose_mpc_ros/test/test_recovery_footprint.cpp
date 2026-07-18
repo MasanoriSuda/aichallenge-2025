@@ -84,6 +84,21 @@ TEST(RecoveryFootprintGrid, UsesExplicitRowMajorYFlipCompatibleWithMpcMap)
   EXPECT_FALSE(grid.world_to_grid(10.0, 21.30).has_value());
 }
 
+TEST(RecoveryFootprintSteeringSamples, DividesMaximumAngleDeterministically)
+{
+  const auto samples = recovery::steering_magnitude_samples(0.25, 5U);
+  ASSERT_EQ(samples.size(), 5U);
+  EXPECT_NEAR(samples[0], 0.05, 1e-12);
+  EXPECT_NEAR(samples[1], 0.10, 1e-12);
+  EXPECT_NEAR(samples[2], 0.15, 1e-12);
+  EXPECT_NEAR(samples[3], 0.20, 1e-12);
+  EXPECT_NEAR(samples[4], 0.25, 1e-12);
+  EXPECT_TRUE(recovery::steering_magnitude_samples(0.0, 5U).empty());
+  EXPECT_TRUE(recovery::steering_magnitude_samples(0.25, 0U).empty());
+  EXPECT_TRUE(recovery::steering_magnitude_samples(
+    std::numeric_limits<double>::quiet_NaN(), 5U).empty());
+}
+
 TEST(RecoveryFootprintFeasibility, ClearStraightRolloutIsFeasible)
 {
   const auto result = recovery::evaluate_reverse_candidate(
@@ -480,6 +495,8 @@ TEST(RecoveryFootprintRollout, CurvedCandidatesAreCheckedWithTheSameSafetyRules)
     grid, compact_footprint(), initial, recovery::ReversePrimitive::Right, parameters);
   EXPECT_TRUE(left.feasible);
   EXPECT_TRUE(right.feasible);
+  EXPECT_DOUBLE_EQ(left.steering_angle_rad, parameters.steering_angle_rad);
+  EXPECT_DOUBLE_EQ(right.steering_angle_rad, -parameters.steering_angle_rad);
   EXPECT_GT(left.checked_pose_count, left.rollout.size());
   EXPECT_GT(right.checked_pose_count, right.rollout.size());
 }

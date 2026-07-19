@@ -15,13 +15,12 @@
 
 #include <cmath>
 #include <fstream>
-#include <limits>
 #include <mutex>
-#include <optional>
 #include <sstream>
 #include <string>
 #include <vector>
 
+#include <imu_gnss_poser/heading_reference.hpp>
 #include <rclcpp/rclcpp.hpp>
 
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
@@ -34,15 +33,10 @@
 namespace
 {
 
-struct Point2D
+std::vector<imu_gnss_poser::Point2D> load_raceline(
+  const std::string & path, rclcpp::Logger logger)
 {
-  double x;
-  double y;
-};
-
-std::vector<Point2D> load_raceline(const std::string & path, rclcpp::Logger logger)
-{
-  std::vector<Point2D> pts;
+  std::vector<imu_gnss_poser::Point2D> pts;
   if (path.empty()) {
     return pts;
   }
@@ -69,42 +63,6 @@ std::vector<Point2D> load_raceline(const std::string & path, rclcpp::Logger logg
     }
   }
   return pts;
-}
-
-size_t find_closest(const std::vector<Point2D> & pts, double qx, double qy)
-{
-  size_t best = 0;
-  double best_d2 = std::numeric_limits<double>::infinity();
-  for (size_t i = 0; i < pts.size(); ++i) {
-    const double dx = pts[i].x - qx;
-    const double dy = pts[i].y - qy;
-    const double d2 = dx * dx + dy * dy;
-    if (d2 < best_d2) {
-      best_d2 = d2;
-      best = i;
-    }
-  }
-  return best;
-}
-
-std::optional<double> compute_yaw(const std::vector<Point2D> & pts, size_t idx)
-{
-  constexpr double kMinSegLen2 = 1.0e-6;
-  for (size_t i = idx; i + 1 < pts.size(); ++i) {
-    const double dx = pts[i + 1].x - pts[i].x;
-    const double dy = pts[i + 1].y - pts[i].y;
-    if (dx * dx + dy * dy > kMinSegLen2) {
-      return std::atan2(dy, dx);
-    }
-  }
-  for (size_t i = idx; i > 0; --i) {
-    const double dx = pts[i].x - pts[i - 1].x;
-    const double dy = pts[i].y - pts[i - 1].y;
-    if (dx * dx + dy * dy > kMinSegLen2) {
-      return std::atan2(dy, dx);
-    }
-  }
-  return std::nullopt;
 }
 
 }  // namespace
@@ -230,11 +188,23 @@ private:
       last_gnss_ = msg;
     }
 
-    // Publish initial_pose3d until EKF is triggered (same msg as pub_pose_)
+    // The service may be called before the first GNSS sample. Keep the continuous
+    // GNSS/IMU measurement unchanged, but initialize EKF only with raceline yaw.
     if (!ekf_triggered_) {
-      pub_initial_pose_3d_->publish(*msg);
+      const auto initial_pose = imu_gnss_poser::make_raceline_initial_pose(
+        *msg, raceline_, {init_cov_x_, init_cov_y_, init_cov_yaw_});
+      if (!initial_pose.has_value()) {
+        RCLCPP_WARN_THROTTLE(
+          get_logger(), *get_clock(), 2000,
+          "Waiting for a valid raceline-aligned initial pose; EKF trigger deferred");
+        return;
+      }
+      pub_initial_pose_3d_->publish(initial_pose->pose);
       if (!initial_pose_published_) {
-        RCLCPP_INFO(get_logger(), "Publishing initial_pose3d");
+        RCLCPP_INFO(
+          get_logger(),
+          "Publishing raceline-aligned initial_pose3d: yaw=%.3f rad, reference_index=%zu",
+          initial_pose->yaw_rad, initial_pose->reference_index);
         initial_pose_published_ = true;
       }
       try_trigger_ekf();
@@ -254,28 +224,6 @@ private:
     msg.pose.covariance[7 * 3] = gnss_cov_roll_;
     msg.pose.covariance[7 * 4] = gnss_cov_pitch_;
     msg.pose.covariance[7 * 5] = gnss_cov_yaw_;
-  }
-
-  bool try_apply_raceline_yaw(geometry_msgs::msg::PoseWithCovarianceStamped & msg) const
-  {
-    if (!has_raceline_) {
-      return false;
-    }
-    const auto & pos = msg.pose.pose.position;
-    if (!std::isfinite(pos.x) || !std::isfinite(pos.y)) {
-      return false;
-    }
-    const auto idx = find_closest(raceline_, pos.x, pos.y);
-    const auto yaw = compute_yaw(raceline_, idx);
-    if (!yaw.has_value()) {
-      return false;
-    }
-    msg.pose.pose.orientation.x = 0.0;
-    msg.pose.pose.orientation.y = 0.0;
-    msg.pose.pose.orientation.z = std::sin(*yaw * 0.5);
-    msg.pose.pose.orientation.w = std::cos(*yaw * 0.5);
-    msg.pose.covariance[7 * 5] = init_cov_yaw_;
-    return true;
   }
 
   void apply_imu_orientation_fallback(geometry_msgs::msg::PoseWithCovarianceStamped & msg) const
@@ -340,44 +288,21 @@ private:
       return;
     }
 
-    const auto & pos = gnss->pose.pose.position;
-    if (!std::isfinite(pos.x) || !std::isfinite(pos.y)) {
-      response->success = false;
-      response->message = "GNSS position is invalid (NaN/Inf)";
-      RCLCPP_ERROR(get_logger(), "%s", response->message.c_str());
-      return;
-    }
-
-    const auto idx = find_closest(raceline_, pos.x, pos.y);
-    const auto yaw = compute_yaw(raceline_, idx);
-    if (!yaw.has_value()) {
+    auto initial_pose = imu_gnss_poser::make_raceline_initial_pose(
+      *gnss, raceline_, {init_cov_x_, init_cov_y_, init_cov_yaw_});
+    if (!initial_pose.has_value()) {
       response->success = false;
       response->message = "cannot compute yaw from heading reference";
       RCLCPP_ERROR(get_logger(), "%s", response->message.c_str());
       return;
     }
 
-    geometry_msgs::msg::PoseWithCovarianceStamped pose_msg;
-    pose_msg.header.stamp = this->now();
-    pose_msg.header.frame_id = gnss->header.frame_id;
-    pose_msg.pose.pose.position = gnss->pose.pose.position;
-    pose_msg.pose.pose.orientation.z = std::sin(*yaw * 0.5);
-    pose_msg.pose.pose.orientation.w = std::cos(*yaw * 0.5);
-    pose_msg.pose.covariance[7 * 0] = init_cov_x_;
-    pose_msg.pose.covariance[7 * 1] = init_cov_y_;
-    pose_msg.pose.covariance[7 * 5] = init_cov_yaw_;
+    initial_pose->pose.header.stamp = this->now();
+    pub_initial_pose_3d_->publish(initial_pose->pose);
+    initial_pose_published_ = true;
+    try_trigger_ekf();
 
-    pub_initial_pose_3d_->publish(pose_msg);
-
-    // Call trigger directly without resetting ekf_triggered_,
-    // so gnss_callback won't re-publish initial_pose3d continuously.
-    if (ekf_trigger_client_->service_is_ready()) {
-      auto req = std::make_shared<std_srvs::srv::SetBool::Request>();
-      req->data = true;
-      ekf_trigger_client_->async_send_request(req);
-    }
-
-    const double yaw_deg = *yaw * 180.0 / M_PI;
+    const double yaw_deg = initial_pose->yaw_rad * 180.0 / M_PI;
     char buf[128];
     std::snprintf(buf, sizeof(buf), "published initial pose (yaw %.1f deg)", yaw_deg);
     response->success = true;
@@ -398,7 +323,7 @@ private:
     for (size_t i = 0; i + 1 < raceline_.size();
       i += static_cast<size_t>(arrow_interval_))
     {
-      const auto yaw = compute_yaw(raceline_, i);
+      const auto yaw = imu_gnss_poser::compute_path_yaw(raceline_, i);
       if (!yaw.has_value()) {
         continue;
       }
@@ -451,7 +376,7 @@ private:
   double init_cov_yaw_{0.5};
 
   // Raceline
-  std::vector<Point2D> raceline_;
+  std::vector<imu_gnss_poser::Point2D> raceline_;
   bool has_raceline_{false};
   int64_t arrow_interval_{2};
   double arrow_length_{1.0};

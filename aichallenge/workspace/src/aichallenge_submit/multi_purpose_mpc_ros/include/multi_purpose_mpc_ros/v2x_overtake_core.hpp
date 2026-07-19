@@ -179,6 +179,68 @@ SideSelection select_pass_side(const SideSelectionRequest & request) noexcept;
 
 PassSide opposite_side(PassSide side) noexcept;
 
+struct LowSpeedPassSideCandidate
+{
+  bool feasible{false};
+  double target_lateral_m{};
+  double width_m{};
+};
+
+struct LowSpeedPassSideRequest
+{
+  double current_lateral_m{};
+  LowSpeedPassSideCandidate left;
+  LowSpeedPassSideCandidate right;
+};
+
+/// Select the feasible stopped-vehicle pass side requiring the smaller lateral
+/// transition. Width is only a tie-breaker after the minimum-width checks have
+/// already declared both candidates feasible.
+PassSide select_reachable_low_speed_pass_side(
+  const LowSpeedPassSideRequest & request) noexcept;
+
+/// Return true only after ego has physically entered the selected pass
+/// corridor. Until then the corridor must remain a target, not an immediately
+/// active hard state bound.
+bool has_entered_low_speed_pass_corridor(
+  double current_lateral_m, double lower_m, double upper_m,
+  double tolerance_m = 0.05) noexcept;
+
+/// Limit speed during the lateral shift, then restore the configured pass
+/// speed after ego has entered the selected corridor.
+double resolve_low_speed_pass_velocity(
+  double pass_velocity_mps, double shift_velocity_mps, bool corridor_entered);
+
+struct LowSpeedShiftSteeringRequest
+{
+  double current_lateral_m{};
+  double current_heading_error_rad{};
+  double target_lateral_m{};
+  double reference_curvature_radpm{};
+  double wheelbase_m{};
+  double max_steering_rad{};
+  double lateral_gain{};
+  double heading_gain{};
+};
+
+/// Compute a bounded steering target for the short, low-speed transition into
+/// a stopped-vehicle pass corridor. The feedback follows the same lateral and
+/// heading-error signs as the spatial bicycle model.
+double resolve_low_speed_shift_steering(
+  const LowSpeedShiftSteeringRequest & request);
+
+bool is_low_speed_shift_complete(
+  double current_lateral_m, double current_heading_error_rad,
+  double target_lateral_m, double lateral_tolerance_m,
+  double heading_tolerance_rad) noexcept;
+
+/// Release the direct low-speed shift controller only after its target pose is
+/// settled and the complete stopped-vehicle pack has cleared the ego vehicle.
+bool should_release_low_speed_shift_control(
+  bool pose_settled, bool has_front_vehicle, bool has_side_vehicle,
+  bool has_clearance_vehicle, double clear_duration_sec,
+  double required_clear_duration_sec) noexcept;
+
 enum class ContinuityAction
 {
   Continue,

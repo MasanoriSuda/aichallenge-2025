@@ -9,7 +9,7 @@ solver failureと発車不能を防ぐ。
 ## Scope
 
 - `imu_gnss_poser`の初回自動初期姿勢生成
-- heading-referenceからyawを求めるpure coreと単体テスト
+- MPCが使用するtrajectoryからyawを求めるpure coreと単体テスト
 - `/set_initial_pose`の名前・型・応答契約は維持する
 - 継続GNSS measurementは従来どおりGNSS/IMU orientationを使う
 - `aichallenge_system`とAWSIMの開始FSMは変更しない
@@ -21,4 +21,4 @@ solver failureと発車不能を防ぐ。
 - `make autoware-build`が成功する
 - pure coreの単体テストが成功する
 - `make gate1`で開始直後の`e_psi`が小さく、OSQP連続失敗なしに正方向へ発車する
-
+- `make gate2`でも初期姿勢とMPC trajectoryのheadingが一致する

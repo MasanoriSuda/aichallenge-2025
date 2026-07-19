@@ -2,6 +2,9 @@
 
 #include <cmath>
 #include <limits>
+#include <sstream>
+#include <stdexcept>
+#include <string>
 
 namespace imu_gnss_poser
 {
@@ -9,6 +12,40 @@ namespace
 {
 
 constexpr double kMinimumSegmentLengthSquared = 1.0e-6;
+
+std::string trim(std::string value)
+{
+  const auto first = value.find_first_not_of(" \t\r\n");
+  if (first == std::string::npos) {
+    return {};
+  }
+  const auto last = value.find_last_not_of(" \t\r\n");
+  return value.substr(first, last - first + 1U);
+}
+
+std::vector<std::string> split_csv_row(const std::string & row)
+{
+  std::vector<std::string> fields;
+  std::istringstream stream(row);
+  std::string field;
+  while (std::getline(stream, field, ',')) {
+    fields.push_back(trim(field));
+  }
+  return fields;
+}
+
+std::optional<std::size_t> find_column(
+  const std::vector<std::string> & header, const std::vector<std::string> & candidates)
+{
+  for (std::size_t index = 0; index < header.size(); ++index) {
+    for (const auto & candidate : candidates) {
+      if (header[index] == candidate) {
+        return index;
+      }
+    }
+  }
+  return std::nullopt;
+}
 
 bool finite_point(const Point2D & point) noexcept
 {
@@ -36,6 +73,42 @@ std::optional<double> segment_yaw(
 }
 
 }  // namespace
+
+std::vector<Point2D> load_path_points_csv(std::istream & input)
+{
+  std::string line;
+  if (!std::getline(input, line)) {
+    throw std::runtime_error("heading CSV is empty");
+  }
+
+  const auto header = split_csv_row(line);
+  const auto x_column = find_column(header, {"x", "x_m"});
+  const auto y_column = find_column(header, {"y", "y_m"});
+  if (!x_column.has_value() || !y_column.has_value()) {
+    throw std::runtime_error("heading CSV must contain x/y or x_m/y_m columns");
+  }
+
+  std::vector<Point2D> points;
+  while (std::getline(input, line)) {
+    if (trim(line).empty()) {
+      continue;
+    }
+    const auto fields = split_csv_row(line);
+    if (x_column.value() >= fields.size() || y_column.value() >= fields.size()) {
+      continue;
+    }
+    try {
+      const double x = std::stod(fields[x_column.value()]);
+      const double y = std::stod(fields[y_column.value()]);
+      if (std::isfinite(x) && std::isfinite(y)) {
+        points.push_back({x, y});
+      }
+    } catch (const std::exception &) {
+      continue;
+    }
+  }
+  return points;
+}
 
 std::optional<std::size_t> find_closest_finite_point(
   const std::vector<Point2D> & points, const double query_x, const double query_y) noexcept
@@ -121,4 +194,3 @@ std::optional<RacelineInitialPose> make_raceline_initial_pose(
 }
 
 }  // namespace imu_gnss_poser
-

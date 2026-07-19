@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <limits>
+#include <sstream>
 #include <vector>
 
 namespace
@@ -11,6 +12,33 @@ namespace
 
 using imu_gnss_poser::InitialPoseCovariance;
 using imu_gnss_poser::Point2D;
+
+TEST(HeadingReference, LoadsLegacyXYColumns)
+{
+  std::istringstream csv{"x,y,z\n1.0,2.0,0.0\n3.0,4.0,0.0\n"};
+  const auto points = imu_gnss_poser::load_path_points_csv(csv);
+  ASSERT_EQ(points.size(), 2U);
+  EXPECT_DOUBLE_EQ(points[0].x, 1.0);
+  EXPECT_DOUBLE_EQ(points[0].y, 2.0);
+}
+
+TEST(HeadingReference, LoadsMpcTrajectoryColumnsByHeader)
+{
+  std::istringstream csv{
+    "s_m,x_m,y_m,psi_rad\n0.0,10.0,20.0,1.5\n1.0,invalid,21.0,1.6\n2.0,12.0,22.0,1.7\n"};
+  const auto points = imu_gnss_poser::load_path_points_csv(csv);
+  ASSERT_EQ(points.size(), 2U);
+  EXPECT_DOUBLE_EQ(points[0].x, 10.0);
+  EXPECT_DOUBLE_EQ(points[0].y, 20.0);
+  EXPECT_DOUBLE_EQ(points[1].x, 12.0);
+  EXPECT_DOUBLE_EQ(points[1].y, 22.0);
+}
+
+TEST(HeadingReference, RejectsCsvWithoutCoordinateColumns)
+{
+  std::istringstream csv{"s_m,psi_rad\n0.0,1.5\n"};
+  EXPECT_THROW(imu_gnss_poser::load_path_points_csv(csv), std::runtime_error);
+}
 
 TEST(HeadingReference, FindsClosestFinitePoint)
 {
@@ -82,4 +110,3 @@ TEST(HeadingReference, RejectsInvalidInputInsteadOfUsingRawYaw)
 }
 
 }  // namespace
-

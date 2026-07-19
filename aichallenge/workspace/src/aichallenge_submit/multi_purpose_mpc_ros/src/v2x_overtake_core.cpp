@@ -388,6 +388,125 @@ PassSide opposite_side(const PassSide side) noexcept
   return PassSide::None;
 }
 
+PassSide select_reachable_low_speed_pass_side(
+  const LowSpeedPassSideRequest & request) noexcept
+{
+  const auto valid = [](const LowSpeedPassSideCandidate & candidate) {
+      return candidate.feasible && std::isfinite(candidate.target_lateral_m) &&
+             std::isfinite(candidate.width_m) && candidate.width_m >= 0.0;
+    };
+  const bool left_valid = valid(request.left);
+  const bool right_valid = valid(request.right);
+  if (left_valid && !right_valid) {
+    return PassSide::Left;
+  }
+  if (right_valid && !left_valid) {
+    return PassSide::Right;
+  }
+  if (!left_valid || !std::isfinite(request.current_lateral_m)) {
+    return PassSide::None;
+  }
+
+  const double left_transition =
+    std::abs(request.left.target_lateral_m - request.current_lateral_m);
+  const double right_transition =
+    std::abs(request.right.target_lateral_m - request.current_lateral_m);
+  constexpr double kSelectionTolerance = 1.0e-6;
+  if (left_transition + kSelectionTolerance < right_transition) {
+    return PassSide::Left;
+  }
+  if (right_transition + kSelectionTolerance < left_transition) {
+    return PassSide::Right;
+  }
+  if (request.left.width_m > request.right.width_m + kSelectionTolerance) {
+    return PassSide::Left;
+  }
+  return PassSide::Right;
+}
+
+bool has_entered_low_speed_pass_corridor(
+  const double current_lateral_m, const double lower_m, const double upper_m,
+  const double tolerance_m) noexcept
+{
+  if (
+    !std::isfinite(current_lateral_m) || !std::isfinite(lower_m) ||
+    !std::isfinite(upper_m) || !std::isfinite(tolerance_m) ||
+    lower_m > upper_m || tolerance_m < 0.0)
+  {
+    return false;
+  }
+  return current_lateral_m >= lower_m - tolerance_m &&
+         current_lateral_m <= upper_m + tolerance_m;
+}
+
+double resolve_low_speed_pass_velocity(
+  const double pass_velocity_mps, const double shift_velocity_mps,
+  const bool corridor_entered)
+{
+  validate_speed(pass_velocity_mps, "low-speed pass velocity");
+  validate_speed(shift_velocity_mps, "low-speed shift velocity");
+  return corridor_entered ? pass_velocity_mps :
+         std::min(pass_velocity_mps, shift_velocity_mps);
+}
+
+double resolve_low_speed_shift_steering(
+  const LowSpeedShiftSteeringRequest & request)
+{
+  if (
+    !std::isfinite(request.current_lateral_m) ||
+    !std::isfinite(request.current_heading_error_rad) ||
+    !std::isfinite(request.target_lateral_m) ||
+    !std::isfinite(request.reference_curvature_radpm) ||
+    !std::isfinite(request.wheelbase_m) || request.wheelbase_m <= 0.0 ||
+    !std::isfinite(request.max_steering_rad) || request.max_steering_rad < 0.0 ||
+    !std::isfinite(request.lateral_gain) || request.lateral_gain < 0.0 ||
+    !std::isfinite(request.heading_gain) || request.heading_gain < 0.0)
+  {
+    throw std::invalid_argument("invalid low-speed shift steering request");
+  }
+
+  const double lateral_error = request.current_lateral_m - request.target_lateral_m;
+  const double target_curvature =
+    request.reference_curvature_radpm - request.lateral_gain * lateral_error -
+    request.heading_gain * request.current_heading_error_rad;
+  const double target_steering = std::atan(request.wheelbase_m * target_curvature);
+  return std::clamp(
+    target_steering, -request.max_steering_rad, request.max_steering_rad);
+}
+
+bool is_low_speed_shift_complete(
+  const double current_lateral_m, const double current_heading_error_rad,
+  const double target_lateral_m, const double lateral_tolerance_m,
+  const double heading_tolerance_rad) noexcept
+{
+  if (
+    !std::isfinite(current_lateral_m) || !std::isfinite(current_heading_error_rad) ||
+    !std::isfinite(target_lateral_m) || !std::isfinite(lateral_tolerance_m) ||
+    !std::isfinite(heading_tolerance_rad) || lateral_tolerance_m < 0.0 ||
+    heading_tolerance_rad < 0.0)
+  {
+    return false;
+  }
+  return std::abs(current_lateral_m - target_lateral_m) <= lateral_tolerance_m &&
+         std::abs(current_heading_error_rad) <= heading_tolerance_rad;
+}
+
+bool should_release_low_speed_shift_control(
+  const bool pose_settled, const bool has_front_vehicle,
+  const bool has_side_vehicle, const bool has_clearance_vehicle,
+  const double clear_duration_sec, const double required_clear_duration_sec) noexcept
+{
+  if (
+    !std::isfinite(clear_duration_sec) || clear_duration_sec < 0.0 ||
+    !std::isfinite(required_clear_duration_sec) || required_clear_duration_sec < 0.0)
+  {
+    return false;
+  }
+  return pose_settled && !has_front_vehicle && !has_side_vehicle &&
+         !has_clearance_vehicle &&
+         clear_duration_sec >= required_clear_duration_sec;
+}
+
 ContinuityAction resolve_target_continuity(const ContinuityRequest & request)
 {
   if (std::isnan(request.target_age_sec) || request.target_age_sec < 0.0) {

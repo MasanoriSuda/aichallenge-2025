@@ -1395,6 +1395,12 @@ struct V2XBehaviorConfig
   double low_speed_avoidance_distance{8.0};
   double low_speed_avoidance_lookahead_distance{18.0};
   double low_speed_avoidance_velocity{2.0};
+  double low_speed_avoidance_shift_velocity{1.0};
+  double low_speed_avoidance_shift_lateral_gain{0.4};
+  double low_speed_avoidance_shift_heading_gain{1.3};
+  double low_speed_avoidance_shift_lateral_tolerance{0.4};
+  double low_speed_avoidance_shift_heading_tolerance{0.2};
+  double low_speed_avoidance_shift_clear_hold_sec{2.0};
   double low_speed_avoidance_max_front_speed{1.0};
   double low_speed_avoidance_min_prepare_distance{0.0};
   double low_speed_avoidance_min_gap_width{1.5};
@@ -1514,7 +1520,9 @@ struct GapPlannerOutput
 {
   bool active{false};
   bool feasible{true};
+  bool pass_corridor_enforced{false};
   int pass_side_sign{0};
+  double pass_target_ey{0.0};
   std::vector<double> lb;
   std::vector<double> ub;
   std::vector<double> target_ey;
@@ -1555,6 +1563,7 @@ struct V2XBehaviorOutput
   bool has_front_vehicle{false};
   bool front_progress_used{false};
   bool has_side_vehicle{false};
+  bool has_low_speed_clearance_vehicle{false};
   bool has_danger_vehicle{false};
   bool front_hazard_hold_active{false};
   double front_hazard_hold_remaining_sec{0.0};
@@ -1874,6 +1883,7 @@ struct V2XGapPlanner
     low_speed_locked_target_ey_.reset();
     low_speed_locked_side_sign_.reset();
     last_target_ey_.reset();
+    last_logged_local_path_corridor_enforced_.reset();
   }
 
   GapPlannerOutput plan_stopped_vehicle_local_path(
@@ -1982,8 +1992,11 @@ struct V2XGapPlanner
       double min_width{std::numeric_limits<double>::infinity()};
     };
 
+    // Low-speed stopped-vehicle bypass has its own clearance threshold. Using
+    // the general racing gap minimum here made the dedicated parameter unable
+    // to relax narrow car-to-wall gaps in Gate2-like layouts.
     const double required_width =
-      std::max(0.0, std::max(cfg.min_gap_width, behavior_cfg.low_speed_avoidance_min_gap_width));
+      std::max(0.0, behavior_cfg.low_speed_avoidance_min_gap_width);
     const auto evaluate_side = [&](const int pass_side_sign) {
       SideCandidate candidate;
       for (const auto & vehicle : projected) {
@@ -2001,30 +2014,43 @@ struct V2XGapPlanner
         const LateralInterval interval = pass_side_sign < 0 ?
           LateralInterval{base.lower + wall_margin, obstacle_lower} :
           LateralInterval{obstacle_upper, base.upper - wall_margin};
-        if (interval.width() < required_width) {
-          candidate.feasible = false;
-          return candidate;
-        }
+        candidate.min_width = std::min(candidate.min_width, interval.width());
         candidate.intersection.lower = std::max(candidate.intersection.lower, interval.lower);
         candidate.intersection.upper = std::min(candidate.intersection.upper, interval.upper);
-        candidate.min_width = std::min(candidate.min_width, interval.width());
-        if (candidate.intersection.width() < required_width) {
+        if (
+          interval.width() < required_width ||
+          candidate.intersection.width() < required_width) {
           candidate.feasible = false;
-          return candidate;
         }
       }
       return candidate;
     };
 
+    const auto side_target_ey = [&](const SideCandidate & candidate, const int side_sign) {
+      const double interval_width = candidate.intersection.width();
+      const double vehicle_margin =
+        std::min(std::max(0.0, cfg.vehicle_side_target_margin), interval_width * 0.5);
+      const double center_target = candidate.intersection.center();
+      const double vehicle_side_target = side_sign < 0 ?
+        candidate.intersection.upper - vehicle_margin :
+        candidate.intersection.lower + vehicle_margin;
+      return center_target + cfg.wall_avoidance_bias * (vehicle_side_target - center_target);
+    };
+
+    const auto right = evaluate_side(-1);
+    const auto left = evaluate_side(1);
     int pass_side_sign = configured_pass_side != 0 ? configured_pass_side : locked_pass_side;
     SideCandidate selected_side;
     if (pass_side_sign != 0) {
-      selected_side = evaluate_side(pass_side_sign);
+      selected_side = pass_side_sign < 0 ? right : left;
     } else {
-      const auto right = evaluate_side(-1);
-      const auto left = evaluate_side(1);
       if (right.feasible && left.feasible) {
-        pass_side_sign = right.min_width >= left.min_width ? -1 : 1;
+        const auto side = v2x_overtake_core::select_reachable_low_speed_pass_side(
+          v2x_overtake_core::LowSpeedPassSideRequest{
+            model.spatial_state.e_y,
+            {true, side_target_ey(left, 1), left.min_width},
+            {true, side_target_ey(right, -1), right.min_width}});
+        pass_side_sign = static_cast<int>(side);
         selected_side = pass_side_sign < 0 ? right : left;
       } else if (right.feasible) {
         pass_side_sign = -1;
@@ -2065,11 +2091,17 @@ struct V2XGapPlanner
       std::max(0.0, behavior_cfg.low_speed_local_path_pass_clearance);
     const double approach_distance =
       std::max(0.5, pass_begin_s * std::max(0.1, cfg.low_speed_pass_ramp_ratio));
+    const bool enforce_pass_corridor =
+      v2x_overtake_core::has_entered_low_speed_pass_corridor(
+        model.spatial_state.e_y, selected_side.intersection.lower,
+        selected_side.intersection.upper);
+    output.pass_corridor_enforced = enforce_pass_corridor;
+    output.pass_target_ey = pass_target_ey;
     for (int i = 0; i < N; ++i) {
       const double point_s = forward_path_distance(*model.reference_path, ref_wp_id, ref_wp_id + i + 1);
       const LateralInterval base_interval{base_lb[i], base_ub[i]};
       LateralInterval local_corridor = selected_side.intersection;
-      if (point_s < approach_distance) {
+      if (!enforce_pass_corridor || point_s < approach_distance) {
         local_corridor.lower = std::min(model.spatial_state.e_y, selected_side.intersection.lower);
         local_corridor.upper = std::max(model.spatial_state.e_y, selected_side.intersection.upper);
       }
@@ -2093,22 +2125,32 @@ struct V2XGapPlanner
       output.target_active[i] = true;
     }
     output.target_velocity_limit =
-      std::max(0.0, behavior_cfg.low_speed_avoidance_velocity);
+      v2x_overtake_core::resolve_low_speed_pass_velocity(
+        std::max(0.0, behavior_cfg.low_speed_avoidance_velocity),
+        std::max(0.0, behavior_cfg.low_speed_avoidance_shift_velocity),
+        enforce_pass_corridor);
 
     if (update_last_target) {
       if (
         last_logged_local_path_side_ != pass_side_sign ||
-        std::abs(last_logged_local_path_target_ey_ - pass_target_ey) > 0.1) {
+        std::abs(last_logged_local_path_target_ey_ - pass_target_ey) > 0.1 ||
+        last_logged_local_path_corridor_enforced_ != enforce_pass_corridor) {
         RCLCPP_INFO(
           rclcpp::get_logger("mpc_controller"),
           "V2X local path selected: side=%s, target_ey=%.2f, center_ey=%.2f, "
           "vehicle_side_ey=%.2f, width=%.2f, approach_s=%.2f, pass_s=[%.2f, %.2f], "
-          "vehicles=%zu",
+          "vehicles=%zu, corridor=%s, required_width=%.2f, "
+          "right=%s/min=%.2f/range=[%.2f,%.2f], left=%s/min=%.2f/range=[%.2f,%.2f]",
           pass_side_sign < 0 ? "right" : "left", pass_target_ey,
           center_target_ey, vehicle_side_target_ey, interval_width, approach_distance, pass_begin_s,
-          pass_end_s, projected.size());
+          pass_end_s, projected.size(), enforce_pass_corridor ? "hard" : "shift_target",
+          required_width, right.feasible ? "ok" : "blocked", right.min_width,
+          right.intersection.lower, right.intersection.upper,
+          left.feasible ? "ok" : "blocked", left.min_width,
+          left.intersection.lower, left.intersection.upper);
         last_logged_local_path_side_ = pass_side_sign;
         last_logged_local_path_target_ey_ = pass_target_ey;
+        last_logged_local_path_corridor_enforced_ = enforce_pass_corridor;
       }
       std::lock_guard<std::mutex> lock(mutex_);
       low_speed_locked_side_sign_ = pass_side_sign;
@@ -2746,6 +2788,7 @@ private:
   std::optional<int> low_speed_locked_side_sign_;
   int last_logged_local_path_side_{0};
   double last_logged_local_path_target_ey_{std::numeric_limits<double>::infinity()};
+  std::optional<bool> last_logged_local_path_corridor_enforced_;
 };
 
 struct MpcConfig
@@ -3068,6 +3111,8 @@ struct MPC
     double nearest_side_abs_longitudinal = std::numeric_limits<double>::infinity();
     const bool continuing_low_speed_avoidance =
       v2x_behavior_state_initialized && v2x_behavior_state == V2XBehaviorState::LowSpeedAvoidance;
+    const bool track_low_speed_clearance =
+      continuing_low_speed_avoidance || low_speed_shift_control_was_active_;
 
     for (const auto & vehicle : vehicles) {
       const double self_distance =
@@ -3140,7 +3185,7 @@ struct MPC
       const double clearance_longitudinal =
         use_course_progress ? front_longitudinal : longitudinal;
       if (
-        continuing_low_speed_avoidance &&
+        track_low_speed_clearance &&
         self_distance <= cfg.v2x_behavior.low_speed_avoidance_clear_distance &&
         clearance_longitudinal > -side_longitudinal_range) {
         has_low_speed_clearance_vehicle = true;
@@ -3198,6 +3243,7 @@ struct MPC
     output.front_progress_lateral = nearest_front_lateral;
     output.has_front_vehicle = has_front_vehicle;
     output.has_side_vehicle = has_side_vehicle;
+    output.has_low_speed_clearance_vehicle = has_low_speed_clearance_vehicle;
     output.has_danger_vehicle = has_danger_vehicle;
     output.target_vehicle_id = has_front_vehicle ? nearest_front_id : nearest_side_id;
     if (
@@ -3766,6 +3812,11 @@ struct MPC
   {
     constexpr int nx = 3;
     constexpr int nu = 2;
+    // Once the direct shift controller owns the stopped-vehicle bypass, keep
+    // it latched until the entire vehicle pack has cleared. Releasing as soon
+    // as e_y/e_psi settle can hand control back to an infeasible MPC problem
+    // while the ego vehicle is still alongside the first stopped vehicle.
+    low_speed_shift_control_active_ = low_speed_shift_control_was_active_;
     const int nx_N = nx * (N + 1);
     const int nu_N = nu * N;
     const double inf = std::numeric_limits<double>::infinity();
@@ -3860,6 +3911,32 @@ struct MPC
     }
 
     const auto behavior_output = evaluate_v2x_behavior(ref_wp_id, N, lb, ub, now_sec);
+    const bool low_speed_shift_pose_settled =
+      v2x_overtake_core::is_low_speed_shift_complete(
+      model->spatial_state.e_y, model->spatial_state.e_psi,
+      low_speed_shift_target_ey_,
+      cfg.v2x_behavior.low_speed_avoidance_shift_lateral_tolerance,
+      cfg.v2x_behavior.low_speed_avoidance_shift_heading_tolerance);
+    if (low_speed_shift_control_was_active_) {
+      if (
+        behavior_output.has_front_vehicle || behavior_output.has_side_vehicle ||
+        behavior_output.has_low_speed_clearance_vehicle)
+      {
+        low_speed_shift_last_relevant_vehicle_sec_ = now_sec;
+      }
+      const double clear_duration_sec =
+        std::isfinite(low_speed_shift_last_relevant_vehicle_sec_) ?
+        std::max(0.0, now_sec - low_speed_shift_last_relevant_vehicle_sec_) : 0.0;
+      if (
+        v2x_overtake_core::should_release_low_speed_shift_control(
+          low_speed_shift_pose_settled, behavior_output.has_front_vehicle,
+          behavior_output.has_side_vehicle,
+          behavior_output.has_low_speed_clearance_vehicle, clear_duration_sec,
+          cfg.v2x_behavior.low_speed_avoidance_shift_clear_hold_sec))
+      {
+        low_speed_shift_control_active_ = false;
+      }
+    }
     last_v2x_behavior_output_ = behavior_output;
     const bool solver_overtake_cooldown_active =
       v2x_overtake_core::is_solver_cooldown_active(
@@ -3978,6 +4055,19 @@ struct MPC
       std::isfinite(planner_output.target_velocity_limit) &&
       (planner_output.feasible || apply_no_gap_velocity_limit)) {
       apply_velocity_limit(umax_dyn, ur, N, planner_output.target_velocity_limit);
+    }
+    if (
+      use_low_speed_local_path && planner_output.active && planner_output.feasible &&
+      !planner_output.pass_corridor_enforced &&
+      behavior_output.state == V2XBehaviorState::LowSpeedAvoidance)
+    {
+      low_speed_shift_control_active_ = true;
+      low_speed_shift_target_ey_ = planner_output.pass_target_ey;
+      low_speed_shift_velocity_mps_ = std::min(
+        cfg.v_max, std::max(0.0, cfg.v2x_behavior.low_speed_avoidance_shift_velocity));
+      if (!low_speed_shift_control_was_active_) {
+        low_speed_shift_last_relevant_vehicle_sec_ = now_sec;
+      }
     }
 
     const auto overtake_line_output =
@@ -4316,6 +4406,57 @@ struct MPC
     return {fallback, std::abs(fallback_steering)};
   }
 
+  std::pair<Eigen::Vector2d, double> low_speed_shift_control(
+    const Waypoint & reference_waypoint)
+  {
+    const double max_steering = std::max(0.0, std::abs(cfg.delta_max));
+    const double target_steering =
+      v2x_overtake_core::resolve_low_speed_shift_steering(
+      v2x_overtake_core::LowSpeedShiftSteeringRequest{
+        model->spatial_state.e_y,
+        model->spatial_state.e_psi,
+        low_speed_shift_target_ey_,
+        reference_waypoint.kappa,
+        model->length,
+        max_steering,
+        cfg.v2x_behavior.low_speed_avoidance_shift_lateral_gain,
+        cfg.v2x_behavior.low_speed_avoidance_shift_heading_gain});
+    const double max_steering_step =
+      std::max(0.0, cfg.steer_rate_max) * std::max(0.0, model->Ts);
+    const double steering = clip(
+      target_steering, previous_steering - max_steering_step,
+      previous_steering + max_steering_step);
+    const double speed = std::max(0.0, low_speed_shift_velocity_mps_);
+
+    if (!low_speed_shift_control_was_active_) {
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"),
+        "Low-speed pass shift control entered: target_ey=%.2f, speed=%.2f, "
+        "lateral_gain=%.2f, heading_gain=%.2f, completion=%.2f m/%.2f rad, "
+        "vehicle_clear_hold=%.2f s",
+        low_speed_shift_target_ey_, speed,
+        cfg.v2x_behavior.low_speed_avoidance_shift_lateral_gain,
+        cfg.v2x_behavior.low_speed_avoidance_shift_heading_gain,
+        cfg.v2x_behavior.low_speed_avoidance_shift_lateral_tolerance,
+        cfg.v2x_behavior.low_speed_avoidance_shift_heading_tolerance,
+        cfg.v2x_behavior.low_speed_avoidance_shift_clear_hold_sec);
+    }
+    low_speed_shift_control_was_active_ = true;
+    previous_steering = steering;
+    current_prediction.first.clear();
+    current_prediction.second.clear();
+    current_control = Eigen::VectorXd::Zero(2 * std::max(0, cfg.N));
+    for (int i = 0; i < cfg.N; ++i) {
+      current_control[2 * i] = speed;
+      current_control[2 * i + 1] = steering;
+    }
+    failure_fallback_speed_.reset();
+    infeasibility_counter = 0;
+    overtake_infeasibility_counter_ = 0;
+    last_control_was_fallback_ = false;
+    return {Eigen::Vector2d(speed, steering), std::abs(steering)};
+  }
+
   std::pair<Eigen::Vector2d, double> get_control(const double now_sec)
   {
     constexpr int nx = 3;
@@ -4341,6 +4482,18 @@ struct MPC
       model->spatial_state = model->t2s(planning_waypoint, model->temporal_state);
       const MpcProblem problem =
         init_problem(N, model->safety_margin, now_sec, base_wp_id, planning_wp_id);
+      if (low_speed_shift_control_active_) {
+        return low_speed_shift_control(planning_waypoint);
+      }
+      if (low_speed_shift_control_was_active_) {
+        RCLCPP_INFO(
+          rclcpp::get_logger("mpc_controller"),
+          "Low-speed pass shift control completed: e_y=%.2f, e_psi=%.2f; returning to MPC",
+          model->spatial_state.e_y, model->spatial_state.e_psi);
+        low_speed_shift_control_was_active_ = false;
+        low_speed_shift_last_relevant_vehicle_sec_ =
+          std::numeric_limits<double>::quiet_NaN();
+      }
       auto solution_opt = solve_problem(problem);
       if (!solution_opt.has_value()) {
         throw std::runtime_error("OSQP failed");
@@ -4456,6 +4609,12 @@ struct MPC
   double overtake_solver_cooldown_until_sec_{-std::numeric_limits<double>::infinity()};
   bool overtake_solver_cooldown_logged_{false};
   double overtake_curve_cooldown_until_sec_{-std::numeric_limits<double>::infinity()};
+  bool low_speed_shift_control_active_{false};
+  bool low_speed_shift_control_was_active_{false};
+  double low_speed_shift_target_ey_{0.0};
+  double low_speed_shift_velocity_mps_{0.0};
+  double low_speed_shift_last_relevant_vehicle_sec_{
+    std::numeric_limits<double>::quiet_NaN()};
   double previous_steering{0.0};
   double current_speed_mps_{0.0};
 
@@ -7569,6 +7728,30 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_low_speed_avoidance_velocity"] ?
     mpc["v2x_low_speed_avoidance_velocity"].as<double>() : 2.0);
+  cfg.mpc.v2x_behavior.low_speed_avoidance_shift_velocity = std::max(
+    0.0,
+    mpc["v2x_low_speed_avoidance_shift_velocity"] ?
+    mpc["v2x_low_speed_avoidance_shift_velocity"].as<double>() : 1.0);
+  cfg.mpc.v2x_behavior.low_speed_avoidance_shift_lateral_gain = std::max(
+    0.0,
+    mpc["v2x_low_speed_avoidance_shift_lateral_gain"] ?
+    mpc["v2x_low_speed_avoidance_shift_lateral_gain"].as<double>() : 0.4);
+  cfg.mpc.v2x_behavior.low_speed_avoidance_shift_heading_gain = std::max(
+    0.0,
+    mpc["v2x_low_speed_avoidance_shift_heading_gain"] ?
+    mpc["v2x_low_speed_avoidance_shift_heading_gain"].as<double>() : 1.3);
+  cfg.mpc.v2x_behavior.low_speed_avoidance_shift_lateral_tolerance = std::max(
+    0.0,
+    mpc["v2x_low_speed_avoidance_shift_lateral_tolerance"] ?
+    mpc["v2x_low_speed_avoidance_shift_lateral_tolerance"].as<double>() : 0.4);
+  cfg.mpc.v2x_behavior.low_speed_avoidance_shift_heading_tolerance = std::max(
+    0.0,
+    mpc["v2x_low_speed_avoidance_shift_heading_tolerance"] ?
+    mpc["v2x_low_speed_avoidance_shift_heading_tolerance"].as<double>() : 0.2);
+  cfg.mpc.v2x_behavior.low_speed_avoidance_shift_clear_hold_sec = std::max(
+    0.0,
+    mpc["v2x_low_speed_avoidance_shift_clear_hold_sec"] ?
+    mpc["v2x_low_speed_avoidance_shift_clear_hold_sec"].as<double>() : 2.0);
   cfg.mpc.v2x_behavior.low_speed_avoidance_max_front_speed = std::max(
     0.0,
     mpc["v2x_low_speed_avoidance_max_front_speed"] ?
@@ -7907,10 +8090,12 @@ public:
     if (mpc_cfg_.v2x_behavior.low_speed_avoidance_enabled) {
       RCLCPP_INFO(
         get_logger(),
-        "V2X low-speed pass: side=%s, ramp_ratio=%.2f, stall=%.2f m/s/%.2f s, "
-        "cooldown=%.2f s, max_gap=%.2f s",
+        "V2X low-speed pass: side=%s, ramp_ratio=%.2f, shift_gains=%.2f/%.2f, "
+        "stall=%.2f m/s/%.2f s, cooldown=%.2f s, max_gap=%.2f s",
         mpc_cfg_.v2x_gap.low_speed_pass_side.c_str(),
         mpc_cfg_.v2x_gap.low_speed_pass_ramp_ratio,
+        mpc_cfg_.v2x_behavior.low_speed_avoidance_shift_lateral_gain,
+        mpc_cfg_.v2x_behavior.low_speed_avoidance_shift_heading_gain,
         mpc_cfg_.v2x_behavior.low_speed_avoidance_stall_speed,
         mpc_cfg_.v2x_behavior.low_speed_avoidance_stall_timeout_sec,
         mpc_cfg_.v2x_behavior.low_speed_avoidance_stall_cooldown_sec,

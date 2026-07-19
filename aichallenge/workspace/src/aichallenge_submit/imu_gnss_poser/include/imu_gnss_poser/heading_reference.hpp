@@ -3,6 +3,7 @@
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
 
 #include <cstddef>
+#include <istream>
 #include <optional>
 #include <vector>
 
@@ -29,6 +30,8 @@ struct RacelineInitialPose
   std::size_t reference_index{};
 };
 
+std::vector<Point2D> load_path_points_csv(std::istream & input);
+
 std::optional<std::size_t> find_closest_finite_point(
   const std::vector<Point2D> & points, double query_x, double query_y) noexcept;
 
@@ -41,4 +44,3 @@ std::optional<RacelineInitialPose> make_raceline_initial_pose(
   const InitialPoseCovariance & covariance) noexcept;
 
 }  // namespace imu_gnss_poser
-

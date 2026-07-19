@@ -16,7 +16,6 @@
 #include <cmath>
 #include <fstream>
 #include <mutex>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -45,22 +44,10 @@ std::vector<imu_gnss_poser::Point2D> load_raceline(
     RCLCPP_WARN(logger, "Cannot open heading CSV: %s (raceline yaw disabled)", path.c_str());
     return pts;
   }
-  std::string line;
-  std::getline(ifs, line);  // skip header
-  while (std::getline(ifs, line)) {
-    try {
-      std::istringstream ss(line);
-      std::string tok;
-      std::getline(ss, tok, ',');
-      const double x = std::stod(tok);
-      std::getline(ss, tok, ',');
-      const double y = std::stod(tok);
-      if (std::isfinite(x) && std::isfinite(y)) {
-        pts.push_back({x, y});
-      }
-    } catch (const std::exception & e) {
-      RCLCPP_WARN(logger, "Skipping invalid CSV line: %s", e.what());
-    }
+  try {
+    pts = imu_gnss_poser::load_path_points_csv(ifs);
+  } catch (const std::exception & e) {
+    RCLCPP_WARN(logger, "Invalid heading CSV %s: %s", path.c_str(), e.what());
   }
   return pts;
 }

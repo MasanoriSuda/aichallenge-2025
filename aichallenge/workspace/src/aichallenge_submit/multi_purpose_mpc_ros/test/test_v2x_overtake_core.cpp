@@ -12,6 +12,9 @@ namespace
 {
 
 using multi_purpose_mpc_ros::v2x_overtake_core::PassSide;
+using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedPassSideCandidate;
+using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedPassSideRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedShiftSteeringRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ContinuityAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::ContinuityRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CoursePoint;
@@ -51,6 +54,12 @@ using multi_purpose_mpc_ros::v2x_overtake_core::rate_limit_solver_fallback_steer
 using multi_purpose_mpc_ros::v2x_overtake_core::should_neutralize_solver_fallback_steering;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_solver_reentry_gate;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_pass_side;
+using multi_purpose_mpc_ros::v2x_overtake_core::select_reachable_low_speed_pass_side;
+using multi_purpose_mpc_ros::v2x_overtake_core::has_entered_low_speed_pass_corridor;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_low_speed_pass_velocity;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_low_speed_shift_steering;
+using multi_purpose_mpc_ros::v2x_overtake_core::is_low_speed_shift_complete;
+using multi_purpose_mpc_ros::v2x_overtake_core::should_release_low_speed_shift_control;
 
 SpeedLimitRequest speed_request()
 {
@@ -461,6 +470,117 @@ TEST(V2XOvertakeCoreSide, RejectsSelectionWithoutAValidPreference)
     SideSelectionRequest{PassSide::None, PassSide::None, true, true, true});
   EXPECT_EQ(result.side, PassSide::None);
   EXPECT_EQ(result.reason, SideSelectionReason::InvalidPreference);
+}
+
+TEST(V2XOvertakeCoreSide, LowSpeedPassPrefersReachableSideOverSlightlyWiderSide)
+{
+  const auto side = select_reachable_low_speed_pass_side(
+    LowSpeedPassSideRequest{
+      2.03,
+      LowSpeedPassSideCandidate{true, 2.60, 2.40},
+      LowSpeedPassSideCandidate{true, -2.71, 2.59}});
+  EXPECT_EQ(side, PassSide::Left);
+}
+
+TEST(V2XOvertakeCoreSide, LowSpeedPassUsesWidthOnlyForEqualTransitions)
+{
+  const auto side = select_reachable_low_speed_pass_side(
+    LowSpeedPassSideRequest{
+      0.0,
+      LowSpeedPassSideCandidate{true, 2.0, 2.20},
+      LowSpeedPassSideCandidate{true, -2.0, 2.60}});
+  EXPECT_EQ(side, PassSide::Right);
+}
+
+TEST(V2XOvertakeCoreSide, LowSpeedPassRejectsInvalidFeasibleCandidate)
+{
+  const auto side = select_reachable_low_speed_pass_side(
+    LowSpeedPassSideRequest{
+      0.0,
+      LowSpeedPassSideCandidate{true, std::numeric_limits<double>::quiet_NaN(), 2.20},
+      LowSpeedPassSideCandidate{false, -2.0, 2.60}});
+  EXPECT_EQ(side, PassSide::None);
+}
+
+TEST(V2XOvertakeCoreSide, LowSpeedPassHardensCorridorOnlyAfterEgoEnters)
+{
+  EXPECT_FALSE(has_entered_low_speed_pass_corridor(2.03, -4.0, -1.41));
+  EXPECT_TRUE(has_entered_low_speed_pass_corridor(-1.38, -4.0, -1.41));
+  EXPECT_TRUE(has_entered_low_speed_pass_corridor(-2.71, -4.0, -1.41));
+}
+
+TEST(V2XOvertakeCoreSide, LowSpeedPassRejectsInvalidCorridor)
+{
+  EXPECT_FALSE(has_entered_low_speed_pass_corridor(0.0, 1.0, -1.0));
+  EXPECT_FALSE(has_entered_low_speed_pass_corridor(
+      std::numeric_limits<double>::quiet_NaN(), -1.0, 1.0));
+}
+
+TEST(V2XOvertakeCoreSide, LowSpeedPassLimitsOnlyShiftPhaseVelocity)
+{
+  EXPECT_DOUBLE_EQ(resolve_low_speed_pass_velocity(11.1, 1.0, false), 1.0);
+  EXPECT_DOUBLE_EQ(resolve_low_speed_pass_velocity(11.1, 1.0, true), 11.1);
+  EXPECT_DOUBLE_EQ(resolve_low_speed_pass_velocity(0.8, 1.0, false), 0.8);
+  EXPECT_THROW(resolve_low_speed_pass_velocity(-1.0, 1.0, false), std::invalid_argument);
+}
+
+TEST(V2XOvertakeCoreSide, LowSpeedShiftSteersTowardNegativeLateralTarget)
+{
+  LowSpeedShiftSteeringRequest request;
+  request.current_lateral_m = 2.03;
+  request.target_lateral_m = -2.71;
+  request.current_heading_error_rad = 0.0;
+  request.reference_curvature_radpm = -0.05;
+  request.wheelbase_m = 1.087;
+  request.max_steering_rad = 0.559;
+  request.lateral_gain = 0.4;
+  request.heading_gain = 1.3;
+  EXPECT_DOUBLE_EQ(resolve_low_speed_shift_steering(request), -0.559);
+}
+
+TEST(V2XOvertakeCoreSide, LowSpeedShiftHeadingFeedbackCountersteers)
+{
+  LowSpeedShiftSteeringRequest request;
+  request.current_lateral_m = -2.0;
+  request.target_lateral_m = -2.71;
+  request.current_heading_error_rad = -0.5;
+  request.reference_curvature_radpm = 0.0;
+  request.wheelbase_m = 1.087;
+  request.max_steering_rad = 0.559;
+  request.lateral_gain = 0.4;
+  request.heading_gain = 1.3;
+  EXPECT_GT(resolve_low_speed_shift_steering(request), 0.0);
+}
+
+TEST(V2XOvertakeCoreSide, LowSpeedShiftRejectsInvalidGeometry)
+{
+  LowSpeedShiftSteeringRequest request;
+  request.wheelbase_m = 0.0;
+  request.max_steering_rad = 0.559;
+  request.lateral_gain = 0.4;
+  request.heading_gain = 1.3;
+  EXPECT_THROW(resolve_low_speed_shift_steering(request), std::invalid_argument);
+}
+
+TEST(V2XOvertakeCoreSide, LowSpeedShiftCompletesOnlyAfterLateralAndHeadingSettle)
+{
+  EXPECT_FALSE(is_low_speed_shift_complete(-1.36, -0.75, -2.71, 0.4, 0.2));
+  EXPECT_FALSE(is_low_speed_shift_complete(-2.60, -0.25, -2.71, 0.4, 0.2));
+  EXPECT_TRUE(is_low_speed_shift_complete(-2.60, -0.15, -2.71, 0.4, 0.2));
+  EXPECT_FALSE(is_low_speed_shift_complete(
+      std::numeric_limits<double>::quiet_NaN(), 0.0, -2.71, 0.4, 0.2));
+}
+
+TEST(V2XOvertakeCoreSide, LowSpeedShiftStaysLatchedUntilStoppedVehiclePackClears)
+{
+  EXPECT_FALSE(should_release_low_speed_shift_control(false, false, false, false, 2.0, 2.0));
+  EXPECT_FALSE(should_release_low_speed_shift_control(true, true, false, false, 2.0, 2.0));
+  EXPECT_FALSE(should_release_low_speed_shift_control(true, false, true, false, 2.0, 2.0));
+  EXPECT_FALSE(should_release_low_speed_shift_control(true, false, false, true, 2.0, 2.0));
+  EXPECT_FALSE(should_release_low_speed_shift_control(true, false, false, false, 1.99, 2.0));
+  EXPECT_TRUE(should_release_low_speed_shift_control(true, false, false, false, 2.0, 2.0));
+  EXPECT_FALSE(should_release_low_speed_shift_control(
+      true, false, false, false, std::numeric_limits<double>::quiet_NaN(), 2.0));
 }
 
 TEST(V2XOvertakeCoreContinuity, HoldsShortTargetLossInsteadOfReturning)

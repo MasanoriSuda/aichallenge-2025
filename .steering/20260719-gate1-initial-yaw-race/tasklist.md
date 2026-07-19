@@ -7,3 +7,5 @@
 - [x] pure core単体テストを追加する
 - [x] package build/testを実行する
 - [x] gate1実走で発車を確認する
+- [x] MPC trajectory CSVの列形式を初期化yawで利用可能にする
+- [ ] gate2実走で初期`e_psi`と低速追い越しを確認する

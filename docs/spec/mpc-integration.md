@@ -1209,6 +1209,12 @@ mpc:
   v2x_low_speed_avoidance_distance: 10.0
   v2x_low_speed_avoidance_lookahead_distance: 18.0
   v2x_low_speed_avoidance_velocity: 1.5
+  v2x_low_speed_avoidance_shift_velocity: 1.0
+  v2x_low_speed_avoidance_shift_lateral_gain: 0.4
+  v2x_low_speed_avoidance_shift_heading_gain: 1.3
+  v2x_low_speed_avoidance_shift_lateral_tolerance: 0.4
+  v2x_low_speed_avoidance_shift_heading_tolerance: 0.2
+  v2x_low_speed_avoidance_shift_clear_hold_sec: 2.0
   v2x_low_speed_avoidance_max_front_speed: 1.0
   v2x_low_speed_avoidance_min_gap_width: 0.5
   v2x_low_speed_avoidance_min_gap_points: 2
@@ -1244,20 +1250,20 @@ mpc:
 - `v2x_overtake_close_follow_enabled=true` の場合、近距離で通常 fallback guard の `min_prepare_distance` を満たせないときでも、前方距離・横余裕・相対速度が安全側の範囲内なら `Overtake` の横 target だけを許可する。さらに通常 overtake guard と同じ `v2x_overtake_guard_min_gap_time` / `v2x_overtake_guard_max_lateral_accel` で横移動の到達性を確認し、至近距離で急なU字経路が必要になる場合は Follow / SafetyBrake 側へ残す。真後ろに詰まってから永久に Follow に落ちるケースを避けるための例外で、相対速度が大きい場合や emergency front risk では使わない。既定は `false`。
 - `v2x_overtake_before_curve_enabled=true` の場合、WP 明示禁止ではなく曲率先読みだけで overtake forbidden になっている区間では、前走車が `v2x_overtake_before_curve_max_front_speed` 以下で、自車が `v2x_overtake_before_curve_min_speed_advantage` 以上速く、かつ `front_decel_guard_curve_lookahead_distance` ではまだガードされていない場合だけ、新規 Overtake を許す。これは長い曲率先読みで直線中の低速前走車に張り付く問題を抑えるための例外である。`v2x_overtake_continue_in_forbidden_enabled=true` の場合は、すでに Overtake 中なら同じ soft forbidden 区間で Overtake 継続を許し、ヘアピン前に横へ出た車両が途中で Follow に戻される挙動を抑える。
 - `v2x_overtake_front_velocity_limit_enabled=true` の場合、`Overtake` 中でも前走車の required decel / front decel guard 由来の速度上限を掛ける。安全寄りだが、前走車速度へ引っ張られて追い越しが成立しない場合は `false` にする。`false` でも `EmergencyBrake` と inside stopping distance は Overtake 判定より先に評価されるため、近すぎる場合の SafetyBrake は残る。
-- `LowSpeedAvoidance`: 近距離の低速前方車両に対して通過可能な側がある場合、SafetyBrake より先に `v2x_low_speed_avoidance_velocity` へ速度制限して徐行回避する。開始条件では `v2x_low_speed_avoidance_max_front_speed` 以下の V2X 推定速度を低速車両として扱う。いったん `LowSpeedAvoidance` に入った後は、local path または gap がまだ feasible で、対象車両が `v2x_low_speed_avoidance_clear_distance` 以内に残る限り、停止車基準の inside stopping distance と `EmergencyBrake` より LowSpeedAvoidance を優先する。これは gate2 のような停止車列回避で、基準 trajectory 上の前方距離だけを見た SafetyBrake により通過途中で停止しないためである。
+- `LowSpeedAvoidance`: 近距離の低速前方車両に対して通過可能な側がある場合、`v2x_low_speed_avoidance_velocity`を上限として徐行回避する。開始条件では`v2x_low_speed_avoidance_max_front_speed`以下のV2X推定速度を低速車両として扱う。local path開始時は通常MPCへ成立しない横移動を強制せず、`v2x_low_speed_avoidance_shift_velocity`と横/heading feedback gainによるbounded直接操舵で選択回廊へ入る。開始後にFSM表示がSafetyBrakeへ変わっても、このlatchは停止車列clearanceが残る間は維持される。これはgate2のような停止車列回避で、車列途中にMPCへ戻ってOSQP failureと停止を起こさないための2025 AWSIM向け暫定制御である。
 - `LowSpeedAvoidance`確定中に実速度が`v2x_low_speed_avoidance_stall_speed`以下で`v2x_low_speed_avoidance_stall_timeout_sec`継続した場合は、局所回避targetを解除し、dangerならSafetyBrake、front/sideありならFollow、それ以外はCruiseへ戻す。`v2x_low_speed_avoidance_stall_cooldown_sec`中は同じ回避への即再進入を抑制する。時刻逆行、非有限値、`v2x_low_speed_avoidance_stall_max_observation_gap_sec`超過では継続時間を加算しない。現行0.15 m/s、1.5 s、3.0 s、0.2 sは2025 AWSIM向けローカル暫定値であり、2026公式値ではない。
 - 低速回避では `v2x_low_speed_pass_side` で通過側を `auto` / `left` / `right` から選べる。`right` は reference path 座標系の負の lateral 側、`left` は正の lateral 側である。`auto` の場合は最初に選んだ側を低速回避中の side lock として使う。configured side に通過可能 gap がない場合は逆側へ無理に振らず、Follow / SafetyBrake 側へ倒す。
 - `use_v2x_local_path_planner=true` の場合、`LowSpeedAvoidance` は従来の constraint-only gap planner ではなく、停止/低速車両列を reference path の `s/d` 座標へ射影し、選んだ側の「壁と膨張済み車両の間」を通る `target_ey` 列と横制約 `lb/ub` を生成する。この target は全 horizon 点で active になり、障害物が horizon 上で重なる前から MPC の `xr[e_y]` を通過側へ向ける。
 - local path planner の target は `v2x_wall_avoidance_bias` を反映する。`0.0` は通路中央、`1.0` は膨張済み車両から `v2x_vehicle_side_target_margin` だけ離れた車両側寄りで、壁側へ膨らみすぎる場合は `0.5` から `1.0` の範囲で上げる。
 - local path planner は通過中の horizon 後半で基準 trajectory 側へ戻さない。`LowSpeedAvoidance` が継続している間は選んだ通過側 corridor を制約にも反映し、MPC が反対側をすり抜け候補として選ばないようにする。
-- local path planner の通過側 target への入り方は `v2x_low_speed_pass_ramp_ratio` を使う。停止車両までの横移動開始距離にこの比率を掛けた距離で target へ到達させるため、近距離開始で操舵が遅い場合は `0.2` から `0.4` 程度へ下げる。
+- local path planner の通過側 target への入り方は `v2x_low_speed_pass_ramp_ratio` を使う。Gate2では0.2/0.5が初期OSQP failureとなったため1.0を維持し、実際の近距離横移動は低速直接feedbackへ分離する。
 - local path planner は `v2x_low_speed_avoidance_lookahead_distance` 内の低速車両を先読みし、選んだ側の通路が車列全体で成立する場合だけ `LowSpeedAvoidance` を許可する。成立しない場合は Follow / SafetyBrake 側へ倒す。
 - `v2x_local_path_pass_clearance` は最後の低速車両を抜いた後も通過側 target を保持する距離、`v2x_local_path_return_distance` は基準 trajectory の `e_y=0` へ戻すブレンド距離である。
 - `v2x_local_path_invert_target` は local path planner が選んだ `target_ey` を MPC へ渡す直前に反転する切り分け用設定である。RViz 上の通過方向と `e_y` 符号が逆に見える場合の検証に使い、恒久対応では座標系と操舵符号を整理する。
 - `v2x_low_speed_pass_ramp_ratio` は、低速回避で通過側 target へ入る速さである。`use_v2x_local_path_planner=true` では停止車両手前の横移動距離を短くし、`false` の旧 gap planner 系では手前の horizon 点にも side-pass target をソフト参照として入れる。
 - MPC の操舵レート制約は、前回出力した実操舵から horizon 先頭の操舵にも掛ける。これにより、MPC 表示が「実際にはまだ切れていない操舵」を前提にした進行方向を描くことを避ける。近距離停止車両の横抜けで操舵が遅い場合は `steer_rate_max` を上げるが、実効値は `steering_tire_angle_gain_var` で割った値になる。
 - 近距離停止車両が `LowSpeedAvoidance` の距離条件に入っているが、連続した安全 gap が確認できない場合は、通常 `Overtake` へ落とさず `Follow` に倒す。これは回避ラインが確定する前に通常追い越しで横へ振り、停止車両の前を横切って接触することを防ぐためである。
-- `LowSpeedAvoidance` 中は、曲率による追い越し禁止区間に入っても gap がある限り低速回避を継続する。さらに `v2x_low_speed_avoidance_clear_distance` 以内に V2X 車両が残る間は通常速度へ戻らず、横抜け後半での早すぎる Cruise 復帰を抑える。新規の通常追い越し開始は引き続き禁止条件に従う。
+- 低速直接feedbackの解除には、横/heading許容値への収束に加え、front/sideと共通コース進捗上の車列clearanceがすべて消えた状態が`v2x_low_speed_avoidance_shift_clear_hold_sec`継続することを要求する。`v2x_low_speed_avoidance_clear_distance`内の停止車は、横へ避けて通常のfront判定から外れてもclearance車両として追跡する。現行8 m/2秒は2025 AWSIM Gate2向けのローカル暫定値であり、2026公式値ではない。
 - 前方車判定は、進行方向前方にあり、かつ `v2x_vehicle_radius + v2x_prediction_margin` の横方向衝突幅に重なる車両だけに限定する。混走スタートの斜め横車両を前方車として `Follow` に落とすと片方だけ加速が遅れるため、横に並ぶ車両は `side vehicle` として扱う。
 - 動いている前走車に対する SafetyBrake は相対速度ベースで判定する。停止車向けの大きな停止距離をそのまま使うと、競り負けた直後に不要な強制減速が入るため、`v2x_moving_safety_brake_distance`、`v2x_moving_safety_brake_margin`、`v2x_moving_safety_brake_time_headway` を別に持つ。
 - `v2x_start_grid_grace_time` は、同時走行スタート直後に front + side の複数車両配置があり、前走車が `v2x_low_speed_avoidance_max_front_speed` 以下で静止している場合だけ、停止車向けの `LowSpeedAvoidance` と `inside stopping distance` 判定を猶予する。AWSIMのcount開始では車両が `Ready` のまま物理発進し、スタートライン通過後に各車の `Start` が届くため、`Ready` でstatic-grid suppressionをprepared状態にする。この準備時間は設定durationへ算入せず、race-session trackerが受理した `/awsim/state=Start` の ROS timeを猶予終了用epochとして、そこから設定秒数後にExpiredへ移る。重複Ready/Startでは延長しない。Finish / Spawned / Groundedと、Finishを省く `Spawned -> Grounded/Ready -> Start` の手動resetでは前session状態を破棄する。`use_sim_time=false`、V2X車両なし、side contextなし、設定 `0.0` では通常判定を変更しない。現行 `5.0 s` は2025由来のローカル暫定値であり、2026公式スタート配置の確定値ではない。

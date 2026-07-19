@@ -78,7 +78,8 @@
 
     <node pkg="imu_gnss_poser" exec="imu_gnss_poser_node" name="imu_gnss_poser" output="screen">
       <param from="$(find-pkg-share imu_gnss_poser)/config/imu_gnss_poser.param.yaml"/>
-      <param name="heading_csv_path" value="$(find-pkg-share imu_gnss_poser)/data/heading_reference.csv"/>
+      <!-- Keep initialization yaw on the same trajectory used by MPC. -->
+      <param name="heading_csv_path" value="$(find-pkg-share multi_purpose_mpc_ros)/env/final_ver3/traj_mincurv.csv"/>
     </node>
 
     <include file="$(find-pkg-share ekf_localizer)/launch/ekf_localizer.launch.xml">

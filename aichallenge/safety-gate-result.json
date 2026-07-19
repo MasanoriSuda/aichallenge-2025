@@ -1,13 +1,13 @@
 {
     "schema_version": "v1",
-    "all_passed": false,
+    "all_passed": true,
     "gate_arg": "2",
     "scenario_folder": "SafetyGate",
     "tests": [
         {
             "test_name": "test2",
-            "passed": false,
-            "fail_reason": "pass_zone_0_not_entered: ego never entered the PASS zone (timeout reached)"
+            "passed": true,
+            "fail_reason": ""
         }
     ]
 }

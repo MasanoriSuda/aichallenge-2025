@@ -1362,6 +1362,8 @@ struct V2XBehaviorConfig
   bool follow_gap_planner_no_gap_speed_limit_enabled{false};
   bool follow_gap_planner_respect_overtake_forbidden{true};
   bool follow_speed_limit_enabled{false};
+  /// 0 preserves the legacy behavior: cap every detected Follow target.
+  double follow_speed_limit_distance{0.0};
   double follow_velocity{5.0};
   bool follow_preposition_enabled{false};
   double follow_preposition_offset{0.0};
@@ -1627,6 +1629,8 @@ struct V2XBehaviorOutput
   bool has_side_vehicle{false};
   bool has_low_speed_clearance_vehicle{false};
   bool has_danger_vehicle{false};
+  v2x_overtake_core::FrontDangerAction front_danger_action{
+    v2x_overtake_core::FrontDangerAction::None};
   bool front_hazard_hold_active{false};
   double front_hazard_hold_remaining_sec{0.0};
   std::string front_hazard_hold_target_id;
@@ -1636,6 +1640,8 @@ struct V2XBehaviorOutput
   bool low_speed_avoidance_gap_blocked{false};
   bool low_speed_avoidance_stalled{false};
   bool low_speed_avoidance_cooldown_active{false};
+  bool follow_speed_limit_active{false};
+  bool follow_speed_limit_moving_front{false};
   bool overtake_forbidden{false};
   bool overtake_forbidden_wp{false};
   bool front_decel_curve_guard{false};
@@ -3077,7 +3083,7 @@ struct MPC
     const auto update_front_hazard_hold = [
       &output, this, now_sec, front_hazard_hold_session_active](
         const bool hazard_observed, const bool target_rear_clear,
-        const std::string & observed_target_id) {
+        const std::string & observed_target_id, const bool target_observed_safe) {
         if (hazard_observed && !observed_target_id.empty()) {
           front_hazard_hold_target_id_ = observed_target_id;
         }
@@ -3089,7 +3095,8 @@ struct MPC
             target_rear_clear,
             now_sec,
             front_hazard_hold_until_sec_,
-            cfg.v2x_behavior.front_hazard_hold_sec});
+            cfg.v2x_behavior.front_hazard_hold_sec,
+            target_observed_safe});
         front_hazard_hold_until_sec_ = resolution.until_sec;
         output.front_hazard_hold_active = resolution.active;
         output.front_hazard_hold_remaining_sec = resolution.remaining_sec;
@@ -3106,7 +3113,7 @@ struct MPC
       update_start_grid_suppression_diagnostics(
         false, false, std::string{}, std::numeric_limits<double>::infinity(),
         std::numeric_limits<double>::infinity(), 0.0);
-      if (update_front_hazard_hold(false, false, std::string{})) {
+      if (update_front_hazard_hold(false, false, std::string{}, false)) {
         output.state = V2XBehaviorState::SafetyBrake;
         output.target_vehicle_id = output.front_hazard_hold_target_id;
         output.reason = "front hazard target temporarily missing";
@@ -3381,6 +3388,15 @@ struct MPC
     output.front_risk = front_risk;
     output.front_risk_level = front_risk_level;
     const bool front_risk_emergency = front_risk_level == FrontRiskLevel::EmergencyBrake;
+    const auto front_danger_action = v2x_overtake_core::resolve_front_danger_action(
+      v2x_overtake_core::FrontDangerActionRequest{
+        has_danger_vehicle,
+        front_risk_emergency,
+        nearest_front_speed,
+        cfg.v2x_behavior.moving_front_speed_threshold});
+    output.front_danger_action = front_danger_action;
+    const bool front_danger_requires_safety_brake =
+      front_danger_action == v2x_overtake_core::FrontDangerAction::SafetyBrake;
     const bool initial_static_target =
       start_grid_grace_active && has_front_vehicle && has_side_vehicle &&
       !nearest_front_id.empty() && std::isfinite(nearest_front_speed) &&
@@ -3414,7 +3430,7 @@ struct MPC
       output.target_vehicle_id, nearest_front_distance, nearest_front_speed,
       front_risk.required_decel);
     if (emergency_overrides_start_grid) {
-      update_front_hazard_hold(true, false, nearest_front_id);
+      update_front_hazard_hold(true, false, nearest_front_id, false);
       output.state = V2XBehaviorState::SafetyBrake;
       output.reason = front_risk_reason(
         "start-grid front risk emergency", front_risk, front_risk_level);
@@ -3423,13 +3439,21 @@ struct MPC
     const bool front_hazard_hold_was_active =
       cfg.v2x_behavior.front_hazard_hold_enabled &&
       now_sec < front_hazard_hold_until_sec_;
+    const bool held_target_observed_safe =
+      front_hazard_hold_was_active && has_front_vehicle &&
+      !front_hazard_hold_target_id_.empty() &&
+      nearest_front_id == front_hazard_hold_target_id_ &&
+      std::isfinite(nearest_front_speed) &&
+      nearest_front_speed > cfg.v2x_behavior.moving_front_speed_threshold &&
+      current_speed_mps_ <= nearest_front_speed;
     const bool refresh_held_front_hazard =
       front_hazard_hold_was_active &&
-      (front_risk_emergency || has_danger_vehicle) &&
+      front_danger_requires_safety_brake &&
       !suppress_start_grid_stop_behavior;
     if (update_front_hazard_hold(
         refresh_held_front_hazard, held_target_rear_clear,
-        refresh_held_front_hazard ? nearest_front_id : std::string{}))
+        refresh_held_front_hazard ? nearest_front_id : std::string{},
+        held_target_observed_safe))
     {
       output.state = V2XBehaviorState::SafetyBrake;
       output.target_vehicle_id = output.front_hazard_hold_target_id;
@@ -3520,16 +3544,16 @@ struct MPC
     }
 
     if (has_front_vehicle && front_risk_level == FrontRiskLevel::EmergencyBrake) {
-      update_front_hazard_hold(true, false, nearest_front_id);
+      update_front_hazard_hold(true, false, nearest_front_id, false);
       output.state = V2XBehaviorState::SafetyBrake;
       output.reason = front_risk_reason("front risk emergency", front_risk, front_risk_level);
       return commit_v2x_behavior_state(output, now_sec);
     }
 
-    if (has_danger_vehicle && !suppress_start_grid_stop_behavior) {
-      update_front_hazard_hold(true, false, nearest_front_id);
+    if (front_danger_requires_safety_brake && !suppress_start_grid_stop_behavior) {
+      update_front_hazard_hold(true, false, nearest_front_id, false);
       output.state = V2XBehaviorState::SafetyBrake;
-      output.reason = "inside stopping distance";
+      output.reason = "stopped/slow front inside stopping distance";
       return commit_v2x_behavior_state(output, now_sec);
     }
 
@@ -3550,7 +3574,7 @@ struct MPC
           front_risk_level, front_risk_applied)) {
         output.reason += front_risk_applied ?
           " / " + front_risk_reason("front risk brake", front_risk, front_risk_level) :
-          " / front decel guard";
+          output.follow_speed_limit_active ? " / follow speed cap" : " / front decel guard";
       }
       return commit_v2x_behavior_state(output, now_sec);
     }
@@ -3922,7 +3946,7 @@ struct MPC
               front_risk_level, front_risk_applied)) {
             output.reason += front_risk_applied ?
               " / " + front_risk_reason("front risk brake", front_risk, front_risk_level) :
-              " / front decel guard";
+              output.follow_speed_limit_active ? " / follow speed cap" : " / front decel guard";
           }
         }
       } else {
@@ -3936,7 +3960,7 @@ struct MPC
             front_risk_level, front_risk_applied)) {
           output.reason += front_risk_applied ?
             " / " + front_risk_reason("front risk brake", front_risk, front_risk_level) :
-            " / front decel guard";
+            output.follow_speed_limit_active ? " / follow speed cap" : " / front decel guard";
         }
       }
       return commit_v2x_behavior_state(output, now_sec);
@@ -6184,17 +6208,6 @@ private:
     return std::sqrt(2.0 * brake_decel * available_distance);
   }
 
-  double follow_velocity_limit(const double front_distance, const double front_speed) const
-  {
-    if (
-      std::isfinite(front_speed) &&
-      front_speed > cfg.v2x_behavior.moving_front_speed_threshold) {
-      return std::min(
-        cfg.v_max, front_speed + std::max(0.0, cfg.v2x_behavior.moving_follow_speed_margin));
-    }
-    return front_distance_velocity_limit(front_distance);
-  }
-
   FrontRiskMetrics compute_front_risk(
     const double front_distance, const double front_speed) const
   {
@@ -6362,9 +6375,30 @@ private:
   {
     front_risk_applied = false;
     bool any_limit_applied = false;
-    if (cfg.v2x_behavior.follow_speed_limit_enabled) {
+    const bool active_pass_gap_hold =
+      v2x_overtake_core::can_hold_active_pass_after_gap_loss(
+      v2x_overtake_core::ActivePassGapHoldRequest{
+        overtake_line_state_.phase == OvertakeLinePhase::Pass,
+        overtake_line_state_.pass_front_overlap_exclusion_latched,
+        output.locked_target_seen,
+        output.locked_target_position_jump});
+    const auto follow_speed_limit = v2x_overtake_core::resolve_follow_speed_limit(
+      v2x_overtake_core::FollowSpeedLimitRequest{
+        cfg.v2x_behavior.follow_speed_limit_enabled,
+        active_pass_gap_hold,
+        front_distance,
+        cfg.v2x_behavior.follow_speed_limit_distance,
+        front_speed,
+        cfg.v2x_behavior.moving_front_speed_threshold,
+        cfg.v2x_behavior.moving_follow_speed_margin,
+        front_distance_velocity_limit(front_distance),
+        cfg.v2x_behavior.follow_velocity,
+        cfg.v_max});
+    output.follow_speed_limit_active = follow_speed_limit.active;
+    output.follow_speed_limit_moving_front = follow_speed_limit.moving_front;
+    if (follow_speed_limit.active) {
       output.target_velocity_limit =
-        std::min(output.target_velocity_limit, follow_velocity_limit(front_distance, front_speed));
+        std::min(output.target_velocity_limit, follow_speed_limit.speed_limit_mps);
       any_limit_applied = true;
     }
 
@@ -6485,7 +6519,9 @@ private:
         low_speed_avoidance_stall_cooldown_until_sec_,
         now_sec + cfg.v2x_behavior.low_speed_avoidance_stall_cooldown_sec);
       output.low_speed_avoidance_cooldown_active = true;
-      final_state = output.has_danger_vehicle ? V2XBehaviorState::SafetyBrake :
+      final_state =
+        output.front_danger_action == v2x_overtake_core::FrontDangerAction::SafetyBrake ?
+        V2XBehaviorState::SafetyBrake :
         (output.has_front_vehicle || output.has_side_vehicle ?
         V2XBehaviorState::Follow : V2XBehaviorState::Cruise);
       output.reason = "low-speed avoidance stalled";
@@ -6611,10 +6647,6 @@ private:
       if (cfg.v2x_behavior.follow_gap_planner_enabled && follow_gap_planner_allowed) {
         output.allow_gap_planner = true;
       }
-      if (cfg.v2x_behavior.follow_speed_limit_enabled && !active_pass_gap_hold) {
-        output.target_velocity_limit = std::min(
-        output.target_velocity_limit, std::max(0.0, cfg.v2x_behavior.follow_velocity));
-      }
     } else if (final_state == V2XBehaviorState::SafetyBrake) {
       output.target_velocity_limit = std::max(0.0, cfg.v2x_behavior.safety_brake_velocity);
     }
@@ -6682,9 +6714,11 @@ private:
         RCLCPP_INFO(
           rclcpp::get_logger("mpc_controller"),
           "V2X debug: desired=%s, final=%s, allow_gap=%d, limit=%.2f, desired_v=%.2f, "
+          "follow_cap=%d, follow_moving=%d, follow_cap_dist=%.2f, "
           "speed_cap=%d, cap_release=%d, adaptive_cap=%d, closing=%.2f, "
           "shift_t=%.2f, wp_id=%d, "
-          "vehicles=%zu, front=%d, side=%d, danger=%d, grace=%d, grid_suppress=%d, "
+          "vehicles=%zu, front=%d, side=%d, danger=%d, danger_action=%s, "
+          "grace=%d, grid_suppress=%d, "
           "hazard_hold=%d, hazard_remaining=%.2f, hazard_target=%s, "
           "fd=%.2f, progress=%d, local_fd=%.2f, path_lat=%.2f, fs=%.2f, ego=%.2f, "
           "rel=%.2f, req_dec=%.2f, avail=%.2f, risk=%s, "
@@ -6700,6 +6734,9 @@ private:
           "left_reason=%s, right_reason=%s, reason=%s, block=%s",
           to_string(desired_state), to_string(final_state), output.allow_gap_planner ? 1 : 0,
           output.target_velocity_limit, output.desired_velocity,
+          output.follow_speed_limit_active ? 1 : 0,
+          output.follow_speed_limit_moving_front ? 1 : 0,
+          cfg.v2x_behavior.follow_speed_limit_distance,
           output.overtake_speed_front_cap_applied ? 1 : 0,
           output.overtake_front_cap_release_ready ? 1 : 0,
           output.overtake_shiftout_adaptive_speed_applied ? 1 : 0,
@@ -6707,7 +6744,9 @@ private:
           output.overtake_shiftout_remaining_time, model->wp_id,
           output.active_vehicle_count,
           output.has_front_vehicle ? 1 : 0, output.has_side_vehicle ? 1 : 0,
-          output.has_danger_vehicle ? 1 : 0, output.start_grid_grace_active ? 1 : 0,
+          output.has_danger_vehicle ? 1 : 0,
+          v2x_overtake_core::to_string(output.front_danger_action),
+          output.start_grid_grace_active ? 1 : 0,
           output.start_grid_stop_suppressed ? 1 : 0,
           output.front_hazard_hold_active ? 1 : 0,
           output.front_hazard_hold_remaining_sec,
@@ -7865,6 +7904,16 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.follow_speed_limit_enabled =
     mpc["v2x_follow_speed_limit_enabled"] ?
     mpc["v2x_follow_speed_limit_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.follow_speed_limit_distance =
+    mpc["v2x_follow_speed_limit_distance"] ?
+    mpc["v2x_follow_speed_limit_distance"].as<double>() : 0.0;
+  if (
+    !std::isfinite(cfg.mpc.v2x_behavior.follow_speed_limit_distance) ||
+    cfg.mpc.v2x_behavior.follow_speed_limit_distance < 0.0)
+  {
+    throw std::runtime_error(
+            "mpc.v2x_follow_speed_limit_distance must be finite and non-negative");
+  }
   cfg.mpc.v2x_behavior.follow_velocity = std::max(
     0.0, mpc["v2x_follow_velocity"] ? mpc["v2x_follow_velocity"].as<double>() : 5.0);
   if (!mpc["v2x_overtake_recovery_velocity"]) {

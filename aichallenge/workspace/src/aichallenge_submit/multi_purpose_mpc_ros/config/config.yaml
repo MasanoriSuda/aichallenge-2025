@@ -307,16 +307,17 @@ mpc:
   v2x_front_progress_lookbehind_distance: 3.0 # [m] keep nearby rear/side classification stable
   # Keep braking briefly when a dangerous front target crosses the local/progress classifier seam.
   v2x_front_hazard_hold_enabled: true
-  v2x_front_hazard_hold_sec: 1.0 # [s] longer than the 20260717 D2 dropout, still bounded
+  v2x_front_hazard_hold_sec: 0.25 # [s] sim race: bridge one short V2X dropout without a 1 s full-stop tail
   v2x_front_hazard_rear_clear_distance: 4.0 # [m] release early only after target is clearly behind
-  v2x_follow_distance: 14.0        # [m]
+  v2x_follow_distance: 5.0         # [m] sim race: base Follow range; common-course detection remains 24 m
   v2x_safety_brake_distance: 6.0  # [m] minimum distance; dynamic stop distance is also applied
   v2x_safety_brake_margin: 3.0    # [m] added to v^2 / (2 * abs(a_min))
   v2x_follow_gap_planner_enabled: false # Follow tracks the base path; lateral pass is only Overtake/low-speed avoidance
   v2x_follow_gap_planner_no_gap_speed_limit_enabled: false # do not yield just because no gap is found
   v2x_follow_gap_planner_respect_overtake_forbidden: true # do not side-attack in hairpins/forbidden zones
-  v2x_follow_speed_limit_enabled: true  # match a moving front vehicle before the gap becomes critical
-  v2x_follow_velocity: 3.0        # [m/s]
+  v2x_follow_speed_limit_enabled: true  # match front speed only inside the dedicated distance gate
+  v2x_follow_speed_limit_distance: 5.0 # [m] sim race: detect at 24 m, start generic Follow cap at 5 m
+  v2x_follow_velocity: 3.0        # [m/s] slow/stopped-front cap; moving fronts use front speed + margin
   v2x_follow_preposition_enabled: true # keep Follow slightly off the front vehicle's direct wake
   v2x_follow_preposition_offset: 0.9 # [m] soft lateral reference offset while following
   v2x_follow_preposition_min_side_clearance: 1.4 # [m] require pass-side room before offsetting
@@ -357,7 +358,7 @@ mpc:
   v2x_overtake_velocity_advantage: 1.0      # [m/s] legacy whole-phase cap when stage speed is disabled
   v2x_overtake_stage_speed_enabled: true    # cap ShiftOut/early Pass; release only after the locked target is no longer ahead
   v2x_overtake_shiftout_adaptive_closing_speed_enabled: true # preserve entry gap until distance+lateral ShiftOut completes
-  v2x_overtake_shiftout_min_closing_speed: 0.0 # [m/s] may match front speed when the protected-distance budget is exhausted
+  v2x_overtake_shiftout_min_closing_speed: 0.5 # [m/s] keep a small pass gain when the protected-distance budget is exhausted
   v2x_overtake_shiftout_max_closing_speed: 1.5 # [m/s] early Pass closing cap; 2.0 m/s caused close-range SafetyBrake
   v2x_overtake_pass_unlatched_max_closing_speed: 0.5 # [m/s] preserve distance until Pass lateral clearance latches
   v2x_overtake_shiftout_adaptive_min_time_sec: 0.5 # [s] avoid an unbounded cap as ShiftOut completes
@@ -374,7 +375,7 @@ mpc:
   v2x_overtake_guard_min_prepare_distance: 5.0 # [m] do not dive into gaps that appear too late
   v2x_overtake_guard_max_lateral_shift: 0.0   # [m] disabled; use time-based lateral accel guard instead
   v2x_overtake_guard_reachable_gap_enabled: true # reject gaps that require excessive lateral accel
-  v2x_overtake_guard_max_lateral_accel: 3.2   # [m/s^2] max required lateral accel to reach gap
+  v2x_overtake_guard_max_lateral_accel: 4.0   # [m/s^2] match the committed OvertakeLine execution limit
   v2x_overtake_guard_min_gap_time: 0.7        # [s] reject gaps that appear too late at current speed
   v2x_overtake_guard_min_speed_for_reachable: 1.0 # [m/s] lower bound for reachability time estimate
   v2x_overtake_guard_min_front_distance: 5.0  # [m] entry threshold; finish ShiftOut before bumper range
@@ -413,7 +414,7 @@ mpc:
   v2x_overtake_line_max_target_change: 0.04   # [m/cycle] smooth target goal updates across cycles
   v2x_overtake_line_return_clear_distance: 4.0 # [m] locked target must be this far behind before Return
   v2x_overtake_line_phase_hold_time: 0.3      # [s] minimum phase hold before transition
-  v2x_overtake_target_hold_sec: 0.30          # [s] tolerate brief front/side classification loss
+  v2x_overtake_target_hold_sec: 0.75          # [s] keep a locked Pass across a transient V2X classification loss
   v2x_overtake_clear_confirm_sec: 0.30        # [s] require target rear-clear observation before Return
   v2x_overtake_reacquire_enabled: true        # allow same target/side to return to Pass early in Return
   v2x_overtake_reacquire_window_sec: 0.50     # [s] maximum Return age for a safe reacquire

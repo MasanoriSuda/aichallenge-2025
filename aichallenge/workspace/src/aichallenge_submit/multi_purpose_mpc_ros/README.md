@@ -289,7 +289,7 @@ free gap が壁と他車に挟まれている場合、`v2x_wall_clearance_margin
 
 #### V2X behavior FSM
 
-`use_v2x_behavior_fsm: true` にすると、`Cruise` / `Follow` / `Overtake` / `LowSpeedAvoidance` / `SafetyBrake` の最小状態で `V2XGapPlanner` の使用可否を制御します。`Follow` と `SafetyBrake` では gap planner を使わず、速度上限を下げます。`Follow` 中は `v2x_follow_velocity` と前方距離から計算した停止可能速度の小さい方を使います。`Overtake` と `LowSpeedAvoidance` のときだけ gap planner が `lb/ub` と `xr` に反映されます。
+`use_v2x_behavior_fsm: true` にすると、`Cruise` / `Follow` / `Overtake` / `LowSpeedAvoidance` / `SafetyBrake` の最小状態で `V2XGapPlanner` の使用可否を制御します。`Follow` と `SafetyBrake` では gap planner を使わず、必要な場合に速度上限を下げます。`v2x_follow_speed_limit_enabled: true` の場合、汎用Follow速度capは `v2x_follow_speed_limit_distance` 以内だけ有効です。停止・低速前車には `v2x_follow_velocity` と前方距離から計算した停止可能速度の小さい方、移動前車には前車速度とclosing marginを使います。距離が `0.0` またはキー省略なら従来どおり検出距離全域が対象です。front risk、curve risk、decel guard、SafetyBrakeはこの距離gateとは独立しています。`Overtake` と `LowSpeedAvoidance` のときだけ gap planner が `lb/ub` と `xr` に反映されます。
 
 ```yaml
 mpc:
@@ -297,6 +297,8 @@ mpc:
   v2x_follow_distance: 8.0
   v2x_safety_brake_distance: 3.0
   v2x_safety_brake_margin: 2.0
+  v2x_follow_speed_limit_enabled: false
+  v2x_follow_speed_limit_distance: 0.0
   v2x_follow_velocity: 5.0
   v2x_safety_brake_velocity: 0.0
   v2x_overtake_min_gap_width: 2.0

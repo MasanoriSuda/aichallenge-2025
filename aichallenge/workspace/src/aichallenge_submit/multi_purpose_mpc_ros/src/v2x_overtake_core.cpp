@@ -88,6 +88,36 @@ const char * to_string(const StartWindowStatus status) noexcept
   return "unknown";
 }
 
+FollowSpeedLimitResolution resolve_follow_speed_limit(
+  const FollowSpeedLimitRequest & request)
+{
+  validate_speed(request.activation_distance_m, "Follow activation distance");
+  validate_speed(request.moving_front_speed_threshold_mps, "moving-front speed threshold");
+  validate_speed(request.moving_front_speed_margin_mps, "moving-front speed margin");
+  validate_speed(request.slow_front_velocity_cap_mps, "slow-front velocity cap");
+  validate_speed(request.maximum_speed_mps, "maximum speed");
+
+  if (
+    !request.enabled || request.suppressed ||
+    !std::isfinite(request.front_distance_m) || request.front_distance_m < 0.0 ||
+    (request.activation_distance_m > 0.0 &&
+    request.front_distance_m > request.activation_distance_m))
+  {
+    return {};
+  }
+
+  validate_speed(request.slow_front_distance_limit_mps, "slow-front distance limit");
+  const bool moving_front =
+    std::isfinite(request.front_speed_mps) && request.front_speed_mps >= 0.0 &&
+    request.front_speed_mps > request.moving_front_speed_threshold_mps;
+  const double speed_limit_mps = moving_front ?
+    std::min(
+      request.maximum_speed_mps,
+      request.front_speed_mps + request.moving_front_speed_margin_mps) :
+    std::min(request.slow_front_distance_limit_mps, request.slow_front_velocity_cap_mps);
+  return {true, moving_front, speed_limit_mps};
+}
+
 OvertakeSpeedReferenceResolution resolve_overtake_speed_reference(
   const OvertakeSpeedReferenceRequest & request)
 {
@@ -914,7 +944,7 @@ FrontHazardHoldResolution update_front_hazard_hold(const FrontHazardHoldRequest 
     throw std::invalid_argument("Front hazard hold deadline must be finite");
   }
 
-  if (!request.enabled || request.target_rear_clear) {
+  if (!request.enabled || request.target_rear_clear || request.target_observed_safe) {
     return {false, request.now_sec, 0.0};
   }
 
@@ -927,6 +957,43 @@ FrontHazardHoldResolution update_front_hazard_hold(const FrontHazardHoldRequest 
     active,
     active ? until_sec : request.now_sec,
     active ? std::max(0.0, until_sec - request.now_sec) : 0.0};
+}
+
+FrontDangerAction resolve_front_danger_action(const FrontDangerActionRequest & request)
+{
+  if (
+    !std::isfinite(request.moving_front_speed_threshold_mps) ||
+    request.moving_front_speed_threshold_mps < 0.0)
+  {
+    throw std::invalid_argument(
+            "Moving-front speed threshold must be finite and non-negative");
+  }
+  if (request.emergency_brake) {
+    return FrontDangerAction::SafetyBrake;
+  }
+  if (!request.inside_stopping_distance) {
+    return FrontDangerAction::None;
+  }
+  if (
+    std::isfinite(request.front_speed_mps) && request.front_speed_mps >= 0.0 &&
+    request.front_speed_mps > request.moving_front_speed_threshold_mps)
+  {
+    return FrontDangerAction::RelativeSpeedLimit;
+  }
+  return FrontDangerAction::SafetyBrake;
+}
+
+const char * to_string(const FrontDangerAction action) noexcept
+{
+  switch (action) {
+    case FrontDangerAction::None:
+      return "None";
+    case FrontDangerAction::RelativeSpeedLimit:
+      return "RelativeSpeedLimit";
+    case FrontDangerAction::SafetyBrake:
+      return "SafetyBrake";
+  }
+  return "Unknown";
 }
 
 double arm_solver_cooldown(const SolverCooldownRequest & request)

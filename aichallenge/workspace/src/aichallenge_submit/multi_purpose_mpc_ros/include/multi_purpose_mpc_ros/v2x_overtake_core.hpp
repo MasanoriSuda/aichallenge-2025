@@ -2,6 +2,7 @@
 #define MULTI_PURPOSE_MPC_ROS__V2X_OVERTAKE_CORE_HPP_
 
 #include <cstddef>
+#include <limits>
 #include <optional>
 #include <vector>
 
@@ -39,6 +40,37 @@ struct SpeedLimitResolution
 /// elapsed time falls back to the capped normal speed.
 SpeedLimitResolution resolve_effective_speed_limit(const SpeedLimitRequest & request);
 const char * to_string(StartWindowStatus status) noexcept;
+
+struct FollowSpeedLimitRequest
+{
+  bool enabled{false};
+  bool suppressed{false};
+  double front_distance_m{std::numeric_limits<double>::infinity()};
+  /// 0 keeps the legacy behavior: apply the cap at every detected front distance.
+  double activation_distance_m{0.0};
+  double front_speed_mps{std::numeric_limits<double>::infinity()};
+  double moving_front_speed_threshold_mps{};
+  double moving_front_speed_margin_mps{};
+  double slow_front_distance_limit_mps{};
+  double slow_front_velocity_cap_mps{};
+  double maximum_speed_mps{};
+};
+
+struct FollowSpeedLimitResolution
+{
+  bool active{false};
+  bool moving_front{false};
+  double speed_limit_mps{std::numeric_limits<double>::infinity()};
+};
+
+/// Apply the generic Follow cap only inside its dedicated distance gate.
+///
+/// Detection, front-risk, curve and emergency policies remain outside this
+/// helper. A zero activation distance preserves the legacy unbounded gate.
+/// Moving fronts use their speed plus a closing margin; slow fronts use the
+/// smaller of the distance-derived limit and the configured Follow cap.
+FollowSpeedLimitResolution resolve_follow_speed_limit(
+  const FollowSpeedLimitRequest & request);
 
 enum class OvertakeSpeedStage
 {
@@ -581,6 +613,7 @@ struct FrontHazardHoldRequest
   double now_sec{};
   double current_until_sec{};
   double hold_sec{};
+  bool target_observed_safe{false};
 };
 
 struct FrontHazardHoldResolution
@@ -592,9 +625,31 @@ struct FrontHazardHoldResolution
 
 /// Keep a recently observed front hazard active across a short V2X geometry dropout.
 ///
-/// A fresh hazard arms or extends the deadline. A positive rear-clear observation releases the
-/// hold immediately. Invalid configuration or clock values throw std::invalid_argument.
+/// A fresh hazard arms or extends the deadline. A positive rear-clear observation, or a fresh
+/// observation that confirms the moving target is no longer closing, releases the hold
+/// immediately. Invalid configuration or clock values throw std::invalid_argument.
 FrontHazardHoldResolution update_front_hazard_hold(const FrontHazardHoldRequest & request);
+
+enum class FrontDangerAction
+{
+  None,
+  RelativeSpeedLimit,
+  SafetyBrake,
+};
+
+struct FrontDangerActionRequest
+{
+  bool inside_stopping_distance{false};
+  bool emergency_brake{false};
+  double front_speed_mps{};
+  double moving_front_speed_threshold_mps{};
+};
+
+/// Resolve a close-front geometry observation without turning every moving-front headway event
+/// into a full stop. Emergency risk and stopped/slow fronts remain fail-closed; a moving front
+/// uses the caller's relative-speed limit path instead.
+FrontDangerAction resolve_front_danger_action(const FrontDangerActionRequest & request);
+const char * to_string(FrontDangerAction action) noexcept;
 
 struct SolverCooldownRequest
 {

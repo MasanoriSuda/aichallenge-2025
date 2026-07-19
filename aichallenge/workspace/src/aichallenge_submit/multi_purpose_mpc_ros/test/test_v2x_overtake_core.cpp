@@ -19,8 +19,11 @@ using multi_purpose_mpc_ros::v2x_overtake_core::ContinuityAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::ContinuityRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CoursePoint;
 using multi_purpose_mpc_ros::v2x_overtake_core::ForwardDistanceRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::FrontDangerAction;
+using multi_purpose_mpc_ros::v2x_overtake_core::FrontDangerActionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::FrontHazardHoldRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ForwardCourseProjectionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::FollowSpeedLimitRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSpeedReferenceRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSpeedStage;
 using multi_purpose_mpc_ros::v2x_overtake_core::ShiftOutCompletionRequest;
@@ -50,6 +53,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::SpeedLimitRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StallWatchdogRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StartWindowStatus;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_effective_speed_limit;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_follow_speed_limit;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_speed_reference;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_shiftout_complete;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_release_overtake_front_cap;
@@ -74,6 +78,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::integrate_forward_distance;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_recovery_policy;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_stall_watchdog;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_front_hazard_hold;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_front_danger_action;
 using multi_purpose_mpc_ros::v2x_overtake_core::arm_solver_cooldown;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_solver_cooldown_active;
 using multi_purpose_mpc_ros::v2x_overtake_core::rate_limit_solver_fallback_steering_toward_neutral;
@@ -110,6 +115,21 @@ RecoveryPolicyRequest recovery_request()
   return request;
 }
 
+FollowSpeedLimitRequest follow_speed_request()
+{
+  FollowSpeedLimitRequest request;
+  request.enabled = true;
+  request.front_distance_m = 5.0;
+  request.activation_distance_m = 5.0;
+  request.front_speed_mps = 3.0;
+  request.moving_front_speed_threshold_mps = 1.0;
+  request.moving_front_speed_margin_mps = 0.8;
+  request.slow_front_distance_limit_mps = 2.3;
+  request.slow_front_velocity_cap_mps = 3.0;
+  request.maximum_speed_mps = 20.0;
+  return request;
+}
+
 TEST(V2XOvertakeCoreSpeed, UsesCappedNormalSpeedWithoutStartConfiguration)
 {
   auto request = speed_request();
@@ -117,6 +137,74 @@ TEST(V2XOvertakeCoreSpeed, UsesCappedNormalSpeedWithoutStartConfiguration)
   const auto result = resolve_effective_speed_limit(request);
   EXPECT_DOUBLE_EQ(result.speed_mps, 40.0);
   EXPECT_EQ(result.start_window_status, StartWindowStatus::NotConfigured);
+}
+
+TEST(V2XFollowSpeedLimit, ActivatesAtFiveMeterBoundaryForMovingFront)
+{
+  auto request = follow_speed_request();
+  request.front_distance_m = 5.001;
+  auto resolution = resolve_follow_speed_limit(request);
+  EXPECT_FALSE(resolution.active);
+  EXPECT_FALSE(std::isfinite(resolution.speed_limit_mps));
+
+  request.front_distance_m = 5.0;
+  resolution = resolve_follow_speed_limit(request);
+  EXPECT_TRUE(resolution.active);
+  EXPECT_TRUE(resolution.moving_front);
+  EXPECT_DOUBLE_EQ(resolution.speed_limit_mps, 3.8);
+}
+
+TEST(V2XFollowSpeedLimit, SlowFrontUsesDistanceAndConfiguredCap)
+{
+  auto request = follow_speed_request();
+  request.front_speed_mps = 0.5;
+  auto resolution = resolve_follow_speed_limit(request);
+  EXPECT_TRUE(resolution.active);
+  EXPECT_FALSE(resolution.moving_front);
+  EXPECT_DOUBLE_EQ(resolution.speed_limit_mps, 2.3);
+
+  request.slow_front_distance_limit_mps = 4.0;
+  resolution = resolve_follow_speed_limit(request);
+  EXPECT_DOUBLE_EQ(resolution.speed_limit_mps, 3.0);
+}
+
+TEST(V2XFollowSpeedLimit, ZeroDistancePreservesLegacyUnboundedGate)
+{
+  auto request = follow_speed_request();
+  request.activation_distance_m = 0.0;
+  request.front_distance_m = 20.0;
+  const auto resolution = resolve_follow_speed_limit(request);
+  EXPECT_TRUE(resolution.active);
+  EXPECT_TRUE(resolution.moving_front);
+  EXPECT_DOUBLE_EQ(resolution.speed_limit_mps, 3.8);
+}
+
+TEST(V2XFollowSpeedLimit, DisableSuppressAndInvalidObservationRemainInactive)
+{
+  auto request = follow_speed_request();
+  request.enabled = false;
+  EXPECT_FALSE(resolve_follow_speed_limit(request).active);
+
+  request.enabled = true;
+  request.suppressed = true;
+  EXPECT_FALSE(resolve_follow_speed_limit(request).active);
+
+  request.suppressed = false;
+  request.front_distance_m = std::numeric_limits<double>::infinity();
+  EXPECT_FALSE(resolve_follow_speed_limit(request).active);
+  request.front_distance_m = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_FALSE(resolve_follow_speed_limit(request).active);
+}
+
+TEST(V2XFollowSpeedLimit, RejectsInvalidConfiguration)
+{
+  auto request = follow_speed_request();
+  request.activation_distance_m = -0.1;
+  EXPECT_THROW(resolve_follow_speed_limit(request), std::invalid_argument);
+
+  request = follow_speed_request();
+  request.moving_front_speed_margin_mps = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_THROW(resolve_follow_speed_limit(request), std::invalid_argument);
 }
 
 TEST(V2XFrontHazardHold, HoldsAcrossDropoutAndRefreshesDeadline)
@@ -159,6 +247,16 @@ TEST(V2XFrontHazardHold, RearClearAndExpiryReleaseImmediately)
   EXPECT_DOUBLE_EQ(result.remaining_sec, 0.0);
 }
 
+TEST(V2XFrontHazardHold, SafeMovingTargetObservationReleasesImmediately)
+{
+  FrontHazardHoldRequest request{true, false, false, 10.2, 11.0, 1.0};
+  request.target_observed_safe = true;
+  const auto result = update_front_hazard_hold(request);
+  EXPECT_FALSE(result.active);
+  EXPECT_DOUBLE_EQ(result.until_sec, 10.2);
+  EXPECT_DOUBLE_EQ(result.remaining_sec, 0.0);
+}
+
 TEST(V2XFrontHazardHold, RejectsInvalidClockAndDuration)
 {
   FrontHazardHoldRequest request{true, false, false, 1.0, 1.0, -0.1};
@@ -166,6 +264,42 @@ TEST(V2XFrontHazardHold, RejectsInvalidClockAndDuration)
   request.hold_sec = 1.0;
   request.now_sec = std::numeric_limits<double>::quiet_NaN();
   EXPECT_THROW(update_front_hazard_hold(request), std::invalid_argument);
+}
+
+TEST(V2XFrontDangerAction, MovingFrontUsesRelativeSpeedLimit)
+{
+  FrontDangerActionRequest request;
+  request.inside_stopping_distance = true;
+  request.front_speed_mps = 3.0;
+  request.moving_front_speed_threshold_mps = 1.0;
+  EXPECT_EQ(resolve_front_danger_action(request), FrontDangerAction::RelativeSpeedLimit);
+}
+
+TEST(V2XFrontDangerAction, EmergencyAndStoppedFrontKeepSafetyBrake)
+{
+  FrontDangerActionRequest request;
+  request.inside_stopping_distance = true;
+  request.front_speed_mps = 0.2;
+  request.moving_front_speed_threshold_mps = 1.0;
+  EXPECT_EQ(resolve_front_danger_action(request), FrontDangerAction::SafetyBrake);
+
+  request.front_speed_mps = 5.0;
+  request.emergency_brake = true;
+  EXPECT_EQ(resolve_front_danger_action(request), FrontDangerAction::SafetyBrake);
+}
+
+TEST(V2XFrontDangerAction, ClearGeometryDoesNotLimitAndInvalidTargetFailsClosed)
+{
+  FrontDangerActionRequest request;
+  request.moving_front_speed_threshold_mps = 1.0;
+  EXPECT_EQ(resolve_front_danger_action(request), FrontDangerAction::None);
+
+  request.inside_stopping_distance = true;
+  request.front_speed_mps = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_EQ(resolve_front_danger_action(request), FrontDangerAction::SafetyBrake);
+
+  request.moving_front_speed_threshold_mps = -0.1;
+  EXPECT_THROW(resolve_front_danger_action(request), std::invalid_argument);
 }
 
 TEST(V2XOvertakeCoreSpeed, StartWindowMayExceedNormalButNotGlobalHardCap)

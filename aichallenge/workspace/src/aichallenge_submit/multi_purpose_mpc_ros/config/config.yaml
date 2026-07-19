@@ -348,7 +348,7 @@ mpc:
   v2x_safety_brake_velocity: 0.0  # [m/s]
   # Gap width is measured after inflating V2X vehicles by ego+other half width.
   # Keep this as center-line slack, not raw vehicle width.
-  v2x_overtake_min_gap_width: 0.8 # [m]
+  v2x_overtake_min_gap_width: 0.2 # [m] sim A/B: allow near-minimum kart-to-wall corridor
   v2x_overtake_max_curvature: 0.04
   v2x_overtake_block_inner_curve_pass: true # do not dive into the inside of hairpin curves
   v2x_overtake_forbidden_curve_lookahead_distance: 6.0 # [m] soft entry/continuation policy; hard curve uses completion guard below
@@ -369,7 +369,7 @@ mpc:
   v2x_overtake_completion_merge_buffer_distance: 3.0 # [m] reserve after reaching rear-clear position
   v2x_overtake_completion_min_relative_speed: 0.5 # [m/s] reject passes with no credible longitudinal gain
   v2x_overtake_guard_enabled: true
-  v2x_overtake_guard_min_gap_width: 0.8       # [m] center-line slack after inflated obstacles
+  v2x_overtake_guard_min_gap_width: 0.2       # [m] sim A/B: center-line slack after inflated obstacles
   v2x_overtake_guard_min_gap_points: 2        # require consecutive horizon points before Overtake
   v2x_overtake_guard_min_prepare_distance: 5.0 # [m] do not dive into gaps that appear too late
   v2x_overtake_guard_max_lateral_shift: 0.0   # [m] disabled; use time-based lateral accel guard instead
@@ -408,7 +408,7 @@ mpc:
   v2x_overtake_line_return_distance: 10.0     # [m] distance to blend back to the base trajectory
   v2x_overtake_line_lateral_offset: 1.2       # [m] signed by pass side: left positive, right negative
   v2x_overtake_line_target_bias: 1.0          # [0-1] explicit line is the sole lateral owner during ShiftOut/Pass
-  v2x_overtake_line_min_wall_clearance: 0.8   # [m] keep target away from path constraint edge
+  v2x_overtake_line_min_wall_clearance: 0.1   # [m] sim A/B: center a 0.2m residual corridor without fallback
   v2x_overtake_line_max_lateral_accel: 4.0    # [m/s^2] sim race: complete committed ShiftOut before the hairpin
   v2x_overtake_line_max_target_change: 0.04   # [m/cycle] smooth target goal updates across cycles
   v2x_overtake_line_return_clear_distance: 4.0 # [m] locked target must be this far behind before Return

@@ -39,6 +39,11 @@ ament_auto_add_library(${PROJECT_NAME}_start_grid_grace SHARED
   src/start_grid_grace.cpp
 )
 
+ament_auto_add_library(${PROJECT_NAME}_mpc_velocity_limit SHARED
+  NO_TARGET_LINK_LIBRARIES
+  src/mpc_velocity_limit.cpp
+)
+
 ament_auto_add_library(${PROJECT_NAME}_v2x_overtake_core SHARED
   NO_TARGET_LINK_LIBRARIES
   src/v2x_overtake_core.cpp
@@ -73,6 +78,7 @@ target_include_directories(mpc_controller_cpp PRIVATE
 target_link_libraries(mpc_controller_cpp
   ${PROJECT_NAME}_awsim_boost_start_dash
   ${PROJECT_NAME}_path_core
+  ${PROJECT_NAME}_mpc_velocity_limit
   ${PROJECT_NAME}_recovery_footprint
   ${PROJECT_NAME}_recovery_mpc
   ${PROJECT_NAME}_start_grid_grace
@@ -123,6 +129,15 @@ if(BUILD_TESTING)
   if(TARGET test_start_grid_grace)
     target_link_libraries(test_start_grid_grace
       ${PROJECT_NAME}_start_grid_grace
+    )
+  endif()
+
+  ament_add_gtest(test_mpc_velocity_limit
+    test/test_mpc_velocity_limit.cpp
+  )
+  if(TARGET test_mpc_velocity_limit)
+    target_link_libraries(test_mpc_velocity_limit
+      ${PROJECT_NAME}_mpc_velocity_limit
     )
   endif()
 

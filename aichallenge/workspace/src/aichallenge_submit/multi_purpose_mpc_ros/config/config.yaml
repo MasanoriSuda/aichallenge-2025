@@ -355,8 +355,13 @@ mpc:
   v2x_overtake_gap_lookahead_distance: 24.0 # [m] search farther than MPC horizon for slow-front pass
   v2x_overtake_try_both_sides: true         # before ShiftOut, retry the opposite side if preferred gap is blocked
   v2x_overtake_velocity_advantage: 1.0      # [m/s] legacy whole-phase cap when stage speed is disabled
-  v2x_overtake_stage_speed_enabled: true    # bound closing speed in ShiftOut, release front-speed cap in Pass
-  v2x_overtake_shiftout_max_closing_speed: 1.0 # [m/s] lateral shift safety cap relative to the front kart
+  v2x_overtake_stage_speed_enabled: true    # cap ShiftOut/early Pass; release only after the locked target is no longer ahead
+  v2x_overtake_shiftout_adaptive_closing_speed_enabled: true # preserve entry gap until distance+lateral ShiftOut completes
+  v2x_overtake_shiftout_min_closing_speed: 0.0 # [m/s] may match front speed when the protected-distance budget is exhausted
+  v2x_overtake_shiftout_max_closing_speed: 1.5 # [m/s] early Pass closing cap; 2.0 m/s caused close-range SafetyBrake
+  v2x_overtake_pass_unlatched_max_closing_speed: 0.5 # [m/s] preserve distance until Pass lateral clearance latches
+  v2x_overtake_shiftout_adaptive_min_time_sec: 0.5 # [s] avoid an unbounded cap as ShiftOut completes
+  v2x_overtake_pass_front_overlap_lateral_clearance: 1.0 # [m] sim race: latch the locked Pass target as side-by-side until Pass ends
   v2x_overtake_completion_guard_enabled: true # require enough distance to clear the target before a hard hairpin
   v2x_overtake_completion_hard_curvature: 0.12 # [rad/m] hard hairpin boundary, separate from soft curve policy
   v2x_overtake_completion_lookahead_distance: 80.0 # [m] search limit for the next hard boundary
@@ -372,7 +377,8 @@ mpc:
   v2x_overtake_guard_max_lateral_accel: 3.2   # [m/s^2] max required lateral accel to reach gap
   v2x_overtake_guard_min_gap_time: 0.7        # [s] reject gaps that appear too late at current speed
   v2x_overtake_guard_min_speed_for_reachable: 1.0 # [m/s] lower bound for reachability time estimate
-  v2x_overtake_guard_min_front_distance: 5.0  # [m] finish the lateral shift before entering bumper range
+  v2x_overtake_guard_min_front_distance: 5.0  # [m] entry threshold; finish ShiftOut before bumper range
+  v2x_overtake_continue_min_front_distance: 2.5 # [m] active-pass threshold; entry prepare distance is not reused
   v2x_overtake_close_follow_enabled: false    # do not start a pass after closing into bumper range
   v2x_overtake_close_follow_min_front_distance: 1.5 # [m] do not side-escape from bumper-touch distance
   v2x_overtake_close_follow_max_closing_speed: 0.8 # [m/s] only allow if front speed is nearly matched
@@ -382,6 +388,10 @@ mpc:
   v2x_overtake_before_curve_min_speed_advantage: 1.0 # [m/s] ego must be faster by this margin
   v2x_overtake_start_curve_clearance_distance: 3.0 # [m] do not start a new pass just before hairpins
   v2x_overtake_continue_in_forbidden_enabled: true # continue only an active outer-side pass in a soft curve zone
+  v2x_overtake_continue_inner_soft_curve_enabled: true # sim race: finish an already committed Pass through the inner soft-curve tail
+  v2x_overtake_active_hard_curve_completion_enabled: true # dev3 A/B: only an active Pass may finish before the hard boundary
+  v2x_overtake_active_hard_curve_rear_clear_distance: 0.5 # [m] simulation-only active Pass clearance target
+  v2x_overtake_active_hard_curve_buffer_distance: 0.5 # [m] reserve before crossing the hard-curvature boundary
   v2x_overtake_front_velocity_limit_enabled: false # do not match front speed while a reachable overtake gap exists
   v2x_overtake_fallback_ignore_soft_curve_forbidden: false # avoid wall-side fallback targets in hairpins
   v2x_overtake_fallback_min_side_clearance: 1.2 # [m] required pass-side clearance for fallback target
@@ -389,16 +399,17 @@ mpc:
   v2x_overtake_curve_cooldown_sec: 1.5      # [s] prevents left/right target flip inside hairpins
   v2x_side_overtake_enabled: true # treat side-by-side vehicles as overtake candidates, not passive Follow only
   v2x_side_overtake_ignore_soft_curve_forbidden: false # do not side-pass moving vehicles in hairpins
+  v2x_side_overtake_entry_rear_tolerance: 0.5 # [m] do not start ShiftOut after the side target is already behind
   v2x_overtake_target_ramp_enabled: true      # start lateral target before the front vehicle enters MPC horizon
   v2x_overtake_target_ramp_ratio: 1.2         # higher = ramp pass-side target more gently
   v2x_overtake_line_enabled: true            # explicit ShiftOut/Pass/Return lateral line; off keeps legacy behavior
-  v2x_overtake_line_shift_distance: 8.0       # [m] distance to blend from current lateral to pass-side line
+  v2x_overtake_line_shift_distance: 6.0       # [m] sim race: reach the pass-side line before the target enters the hairpin
   v2x_overtake_line_pass_distance: 8.0        # [m] pass-side hold distance hint
   v2x_overtake_line_return_distance: 10.0     # [m] distance to blend back to the base trajectory
   v2x_overtake_line_lateral_offset: 1.2       # [m] signed by pass side: left positive, right negative
-  v2x_overtake_line_target_bias: 0.8          # [0-1] weight of explicit overtake line in xr[e_y]
+  v2x_overtake_line_target_bias: 1.0          # [0-1] explicit line is the sole lateral owner during ShiftOut/Pass
   v2x_overtake_line_min_wall_clearance: 0.8   # [m] keep target away from path constraint edge
-  v2x_overtake_line_max_lateral_accel: 2.5    # [m/s^2] clamp target movement if lateral accel is excessive
+  v2x_overtake_line_max_lateral_accel: 4.0    # [m/s^2] sim race: complete committed ShiftOut before the hairpin
   v2x_overtake_line_max_target_change: 0.04   # [m/cycle] smooth target goal updates across cycles
   v2x_overtake_line_return_clear_distance: 4.0 # [m] locked target must be this far behind before Return
   v2x_overtake_line_phase_hold_time: 0.3      # [s] minimum phase hold before transition
@@ -407,7 +418,7 @@ mpc:
   v2x_overtake_reacquire_enabled: true        # allow same target/side to return to Pass early in Return
   v2x_overtake_reacquire_window_sec: 0.50     # [s] maximum Return age for a safe reacquire
   v2x_overtake_reacquire_max_return_progress: 0.25 # [0-1] do not reverse a mostly completed Return
-  v2x_overtake_recovery_velocity_limit_enabled: true # explicit abort/return cap; does not affect successful Pass
+  v2x_overtake_recovery_velocity_limit_enabled: true # explicit abort/return cap; active Pass uses its own locked-target cap
   v2x_overtake_recovery_velocity: 3.0         # [m/s] dedicated Recovery cap, independent of v2x_follow_velocity
   v2x_overtake_recovery_stall_speed: 0.15     # [m/s] continuous low speed starts bounded Recovery stall timer
   v2x_overtake_recovery_stall_timeout_sec: 1.0 # [s] release a line Recovery that cannot restart

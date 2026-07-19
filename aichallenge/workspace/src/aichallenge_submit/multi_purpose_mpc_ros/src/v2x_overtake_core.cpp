@@ -111,6 +111,174 @@ OvertakeSpeedReferenceResolution resolve_overtake_speed_reference(
   return {std::min(base_reference, front_cap), true};
 }
 
+bool has_reached_pass_side_lateral_goal(
+  const double current_lateral_m, const double target_lateral_m,
+  const double lateral_tolerance_m, const int pass_side_sign) noexcept
+{
+  if (
+    !std::isfinite(current_lateral_m) || !std::isfinite(target_lateral_m) ||
+    !std::isfinite(lateral_tolerance_m) || lateral_tolerance_m < 0.0 ||
+    pass_side_sign == 0)
+  {
+    return false;
+  }
+  return pass_side_sign > 0 ?
+    current_lateral_m >= target_lateral_m - lateral_tolerance_m :
+    current_lateral_m <= target_lateral_m + lateral_tolerance_m;
+}
+
+bool is_shiftout_complete(const ShiftOutCompletionRequest & request) noexcept
+{
+  if (
+    !request.phase_hold_elapsed ||
+    !std::isfinite(request.traveled_distance_m) || request.traveled_distance_m < 0.0 ||
+    !std::isfinite(request.required_distance_m) || request.required_distance_m < 0.0)
+  {
+    return false;
+  }
+  return request.traveled_distance_m >= request.required_distance_m &&
+         has_reached_pass_side_lateral_goal(
+           request.current_lateral_m, request.target_lateral_m,
+           request.lateral_tolerance_m, request.pass_side_sign);
+}
+
+bool can_release_overtake_front_cap(
+  const OvertakeFrontCapReleaseRequest & request) noexcept
+{
+  return request.pass_phase && request.lateral_complete && request.target_seen &&
+         std::isfinite(request.target_longitudinal_m) &&
+         request.target_longitudinal_m <= 0.0;
+}
+
+bool can_exclude_locked_target_from_front_overlap(
+  const PassFrontOverlapExclusionRequest & request) noexcept
+{
+  if (!request.pass_phase || !request.locked_target) {
+    return false;
+  }
+  if (request.already_latched) {
+    return true;
+  }
+  return std::isfinite(request.relative_lateral_m) &&
+         std::isfinite(request.required_lateral_clearance_m) &&
+         request.required_lateral_clearance_m > 0.0 &&
+         std::abs(request.relative_lateral_m) >= request.required_lateral_clearance_m;
+}
+
+bool can_hold_active_pass_after_gap_loss(const ActivePassGapHoldRequest & request) noexcept
+{
+  return request.pass_phase && request.lateral_clearance_latched &&
+         request.locked_target_seen && !request.locked_target_position_jump;
+}
+
+bool explicit_overtake_line_owns_lateral_plan(
+  const OvertakeLateralPlannerOwnershipRequest & request) noexcept
+{
+  return request.explicit_line_enabled &&
+         (request.behavior_requests_overtake || request.line_phase_active);
+}
+
+bool can_start_side_overtake(const SideOvertakeEntryRequest & request) noexcept
+{
+  if (request.continuing_overtake) {
+    return true;
+  }
+  if (
+    !std::isfinite(request.target_longitudinal_m) ||
+    !std::isfinite(request.rear_tolerance_m) || request.rear_tolerance_m < 0.0)
+  {
+    return false;
+  }
+  return request.target_longitudinal_m >= -request.rear_tolerance_m;
+}
+
+double resolve_unlatched_pass_closing_speed(
+  const double configured_closing_speed_mps,
+  const double unlatched_pass_closing_speed_mps,
+  const bool pass_phase, const bool lateral_clearance_latched)
+{
+  validate_speed(configured_closing_speed_mps, "configured overtake closing speed");
+  validate_speed(unlatched_pass_closing_speed_mps, "unlatched Pass closing speed");
+  if (pass_phase && !lateral_clearance_latched) {
+    return std::min(configured_closing_speed_mps, unlatched_pass_closing_speed_mps);
+  }
+  return configured_closing_speed_mps;
+}
+
+double resolve_overtake_line_horizon_progress(
+  const OvertakeLineHorizonProgressRequest & request) noexcept
+{
+  if (request.hold_target) {
+    return 1.0;
+  }
+  if (
+    !std::isfinite(request.phase_traveled_m) || request.phase_traveled_m < 0.0 ||
+    !std::isfinite(request.horizon_distance_m) || request.horizon_distance_m < 0.0 ||
+    !std::isfinite(request.phase_distance_m) || request.phase_distance_m <= 0.0)
+  {
+    return 0.0;
+  }
+  const double linear_progress = std::clamp(
+    (request.phase_traveled_m + request.horizon_distance_m) /
+    request.phase_distance_m,
+    0.0, 1.0);
+  return linear_progress * linear_progress * (3.0 - 2.0 * linear_progress);
+}
+
+double resolve_pass_side_lateral_goal(const PassSideLateralGoalRequest & request) noexcept
+{
+  if (
+    request.pass_side_sign == 0 ||
+    !std::isfinite(request.base_lateral_offset_m) || request.base_lateral_offset_m < 0.0 ||
+    !std::isfinite(request.minimum_separation_m) || request.minimum_separation_m < 0.0)
+  {
+    return 0.0;
+  }
+  const double base_goal = static_cast<double>(request.pass_side_sign) *
+    request.base_lateral_offset_m;
+  if (!std::isfinite(request.target_lateral_m)) {
+    return base_goal;
+  }
+  const double target_side_goal = request.target_lateral_m +
+    static_cast<double>(request.pass_side_sign) * request.minimum_separation_m;
+  return request.pass_side_sign > 0 ?
+    std::max(base_goal, target_side_goal) : std::min(base_goal, target_side_goal);
+}
+
+AdaptiveShiftOutClosingSpeedResolution resolve_adaptive_shiftout_closing_speed(
+  const AdaptiveShiftOutClosingSpeedRequest & request)
+{
+  validate_speed(request.minimum_closing_speed_mps, "minimum ShiftOut closing speed");
+  validate_speed(request.maximum_closing_speed_mps, "maximum ShiftOut closing speed");
+  validate_speed(request.front_distance_m, "ShiftOut front distance");
+  validate_speed(request.protected_front_distance_m, "protected ShiftOut front distance");
+  validate_speed(request.remaining_shiftout_distance_m, "remaining ShiftOut distance");
+  validate_speed(request.ego_speed_mps, "ShiftOut ego speed");
+  if (request.maximum_closing_speed_mps < request.minimum_closing_speed_mps) {
+    throw std::invalid_argument(
+            "maximum ShiftOut closing speed must not be below minimum closing speed");
+  }
+  if (!std::isfinite(request.minimum_speed_mps) || request.minimum_speed_mps <= 0.0) {
+    throw std::invalid_argument("minimum ShiftOut speed must be finite and positive");
+  }
+  if (!std::isfinite(request.minimum_time_sec) || request.minimum_time_sec <= 0.0) {
+    throw std::invalid_argument("minimum ShiftOut time must be finite and positive");
+  }
+
+  const double speed_for_time = std::max(request.ego_speed_mps, request.minimum_speed_mps);
+  const double remaining_time = std::max(
+    request.minimum_time_sec, request.remaining_shiftout_distance_m / speed_for_time);
+  const double distance_budget = std::max(
+    0.0, request.front_distance_m - request.protected_front_distance_m);
+  const double raw_closing_speed = distance_budget / remaining_time;
+  return {
+    std::clamp(
+      raw_closing_speed, request.minimum_closing_speed_mps,
+      request.maximum_closing_speed_mps),
+    remaining_time,
+    distance_budget};
+}
+
 double advance_prediction_time(const PredictionTimeRequest & request)
 {
   if (!std::isfinite(request.elapsed_sec) || request.elapsed_sec < 0.0) {
@@ -351,6 +519,53 @@ PassCompletionResolution resolve_pass_completion(const PassCompletionRequest & r
   return resolution;
 }
 
+OvertakeGuardPhaseResolution resolve_overtake_guard_phase(
+  const OvertakeGuardPhaseRequest & request)
+{
+  validate_speed(request.entry_min_front_distance_m, "overtake entry front distance");
+  validate_speed(
+    request.continuation_min_front_distance_m, "overtake continuation front distance");
+  if (request.continuation_min_front_distance_m > request.entry_min_front_distance_m) {
+    throw std::invalid_argument(
+            "Overtake continuation front distance must not exceed entry front distance");
+  }
+
+  if (request.continuing_overtake) {
+    return {request.continuation_min_front_distance_m, false};
+  }
+  return {request.entry_min_front_distance_m, true};
+}
+
+bool can_continue_overtake_in_soft_curve(
+  const OvertakeCurveContinuationRequest & request) noexcept
+{
+  return request.continuation_enabled &&
+         request.continuing_overtake &&
+         request.soft_curve_forbidden &&
+         !request.hard_curve_forbidden &&
+         !request.cooldown_active &&
+         !request.emergency_brake &&
+         (!request.inner_curve_pass || request.inner_soft_curve_enabled);
+}
+
+ActiveHardCurveContinuationResolution resolve_active_hard_curve_continuation(
+  const ActiveHardCurveContinuationRequest & request)
+{
+  ActiveHardCurveContinuationResolution resolution;
+  if (
+    !request.enabled || !request.continuing_overtake || !request.pass_phase ||
+    !request.locked_target_seen || !request.hard_curve_ahead ||
+    request.explicit_forbidden_wp || request.cooldown_active || request.emergency_brake)
+  {
+    return resolution;
+  }
+
+  resolution.completion = resolve_pass_completion(request.completion);
+  resolution.allowed =
+    resolution.completion.feasible || request.lateral_clearance_latched;
+  return resolution;
+}
+
 SideSelection select_pass_side(const SideSelectionRequest & request) noexcept
 {
   if (is_configured_side(request.locked)) {
@@ -527,7 +742,8 @@ ContinuityAction resolve_target_continuity(const ContinuityRequest & request)
   if (
     request.rear_clear_observed ||
     (request.target_seen && request.target_not_ahead) ||
-    (!request.target_seen && request.target_age_sec <= request.target_hold_sec))
+    (!request.target_seen && request.target_age_sec <= request.target_hold_sec) ||
+    (request.target_seen && request.active_execution_latched))
   {
     return ContinuityAction::Hold;
   }

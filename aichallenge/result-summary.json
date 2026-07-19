@@ -11,12 +11,14 @@
             "vehicle_name": "GoKart3",
             "final_position": 1,
             "finished": false,
-            "lap_count": 0,
-            "laps": [],
-            "min_lap_time": 0.0,
-            "max_lap_time": 0.0,
-            "avg_lap_time": 0.0,
-            "total_lap_time": 0.0
+            "lap_count": 1,
+            "laps": [
+                122.96705627441406
+            ],
+            "min_lap_time": 122.96705627441406,
+            "max_lap_time": 122.96705627441406,
+            "avg_lap_time": 122.96705627441406,
+            "total_lap_time": 122.96705627441406
         },
         {
             "vehicle_number": 1,

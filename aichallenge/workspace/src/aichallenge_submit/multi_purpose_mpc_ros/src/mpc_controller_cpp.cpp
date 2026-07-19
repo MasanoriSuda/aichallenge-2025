@@ -8,6 +8,7 @@
 #include <geometry_msgs/msg/quaternion.hpp>
 #include <geometry_msgs/msg/vector3.hpp>
 #include <multi_purpose_mpc_ros/awsim_boost_start_dash.hpp>
+#include <multi_purpose_mpc_ros/mpc_velocity_limit.hpp>
 #include <multi_purpose_mpc_ros/path_core.hpp>
 #include <multi_purpose_mpc_ros/recovery_footprint.hpp>
 #include <multi_purpose_mpc_ros/recovery_mpc.hpp>
@@ -91,6 +92,7 @@ using visualization_msgs::msg::MarkerArray;
 using SteadyClock = std::chrono::steady_clock;
 namespace path_core = ::multi_purpose_mpc_ros::path_core;
 namespace awsim_boost = ::multi_purpose_mpc_ros::awsim_boost;
+namespace mpc_velocity_limit = ::multi_purpose_mpc_ros::mpc_velocity_limit;
 namespace overtake_core = ::multi_purpose_mpc_ros::v2x_overtake_core;
 namespace recovery_footprint = ::multi_purpose_mpc_ros::recovery_footprint;
 namespace recovery_mpc = ::multi_purpose_mpc_ros::recovery_mpc;
@@ -232,6 +234,31 @@ struct OsqpSolveResult
   double max_constraint_violation{};
 };
 
+struct OsqpSolveOutcome
+{
+  std::optional<OsqpSolveResult> result;
+  std::string failure_detail;
+};
+
+OsqpSolveOutcome osqp_failure(std::string detail)
+{
+  return OsqpSolveOutcome{std::nullopt, std::move(detail)};
+}
+
+std::string describe_osqp_info(const OSQPInfo * info)
+{
+  if (info == nullptr) {
+    return "info=unavailable";
+  }
+  std::ostringstream detail;
+  detail << "status=" << info->status
+         << ", status_val=" << info->status_val
+         << ", iter=" << info->iter
+         << ", pri_res=" << info->pri_res
+         << ", dua_res=" << info->dua_res;
+  return detail.str();
+}
+
 struct CscDeleter
 {
   void operator()(csc * matrix) const noexcept
@@ -260,7 +287,7 @@ bool sparse_values_are_finite(const Eigen::SparseMatrix<double> & matrix)
   return true;
 }
 
-std::optional<OsqpSolveResult> solve_osqp(
+OsqpSolveOutcome solve_osqp(
   Eigen::SparseMatrix<double> P, Eigen::SparseMatrix<double> A, const Eigen::VectorXd & q,
   const Eigen::VectorXd & l, const Eigen::VectorXd & u)
 {
@@ -272,11 +299,14 @@ std::optional<OsqpSolveResult> solve_osqp(
     A.cols() != P.cols() || A.rows() != l.size() || l.size() != u.size() ||
     !sparse_values_are_finite(P) || !sparse_values_are_finite(A) || !q.allFinite())
   {
-    return std::nullopt;
+    return osqp_failure("stage=validation, reason=invalid dimensions or non-finite matrix/vector");
   }
   for (int i = 0; i < l.size(); ++i) {
     if (std::isnan(l[i]) || std::isnan(u[i]) || l[i] > u[i]) {
-      return std::nullopt;
+      std::ostringstream detail;
+      detail << "stage=validation, reason=invalid bounds, index=" << i
+             << ", lower=" << l[i] << ", upper=" << u[i];
+      return osqp_failure(detail.str());
     }
   }
 
@@ -320,7 +350,7 @@ std::optional<OsqpSolveResult> solve_osqp(
       static_cast<c_int>(A.rows()), static_cast<c_int>(A.cols()),
       static_cast<c_int>(A.nonZeros()), a_x.data(), a_i.data(), a_p.data()));
   if (!P_csc || !A_csc) {
-    return std::nullopt;
+    return osqp_failure("stage=csc, reason=matrix allocation failed");
   }
 
   OSQPData data;
@@ -340,16 +370,29 @@ std::optional<OsqpSolveResult> solve_osqp(
   const c_int setup_exit_flag = osqp_setup(&raw_work, &data, &settings);
   std::unique_ptr<OSQPWorkspace, OsqpWorkspaceDeleter> work(raw_work);
   if (setup_exit_flag != 0 || !work) {
-    return std::nullopt;
+    std::ostringstream detail;
+    detail << "stage=setup, exit_flag=" << setup_exit_flag;
+    return osqp_failure(detail.str());
   }
   const c_int solve_exit_flag = osqp_solve(work.get());
+  if (solve_exit_flag != 0) {
+    std::ostringstream detail;
+    detail << "stage=solve, exit_flag=" << solve_exit_flag << ", "
+           << describe_osqp_info(work->info);
+    return osqp_failure(detail.str());
+  }
+  if (work->info == nullptr) {
+    return osqp_failure("stage=solve, reason=missing solver info");
+  }
   if (
-    solve_exit_flag != 0 || work->info == nullptr ||
-    (work->info->status_val != OSQP_SOLVED &&
-    work->info->status_val != OSQP_SOLVED_INACCURATE) ||
-    work->solution == nullptr || work->solution->x == nullptr)
+    work->info->status_val != OSQP_SOLVED &&
+    work->info->status_val != OSQP_SOLVED_INACCURATE)
   {
-    return std::nullopt;
+    return osqp_failure("stage=status, " + describe_osqp_info(work->info));
+  }
+  if (work->solution == nullptr || work->solution->x == nullptr) {
+    return osqp_failure(
+      "stage=solution, reason=missing primal solution, " + describe_osqp_info(work->info));
   }
 
   const c_int status = work->info->status_val;
@@ -358,12 +401,15 @@ std::optional<OsqpSolveResult> solve_osqp(
     solution[i] = static_cast<double>(work->solution->x[i]);
   }
   if (!solution.allFinite()) {
-    return std::nullopt;
+    return osqp_failure(
+      "stage=solution, reason=non-finite primal solution, " + describe_osqp_info(work->info));
   }
 
   const Eigen::VectorXd constraint_values = A * solution;
   if (constraint_values.size() != l.size() || !constraint_values.allFinite()) {
-    return std::nullopt;
+    return osqp_failure(
+      "stage=constraint_check, reason=invalid projected constraints, " +
+      describe_osqp_info(work->info));
   }
 
   double max_constraint_violation = 0.0;
@@ -388,10 +434,15 @@ std::optional<OsqpSolveResult> solve_osqp(
     (static_cast<double>(settings.eps_abs) +
     static_cast<double>(settings.eps_rel) * constraint_scale);
   if (max_constraint_violation > constraint_tolerance) {
-    return std::nullopt;
+    std::ostringstream detail;
+    detail << "stage=constraint_check, max_violation=" << max_constraint_violation
+           << ", tolerance=" << constraint_tolerance << ", "
+           << describe_osqp_info(work->info);
+    return osqp_failure(detail.str());
   }
 
-  return OsqpSolveResult{solution, status, max_constraint_violation};
+  return OsqpSolveOutcome{
+    OsqpSolveResult{solution, status, max_constraint_violation}, std::string{}};
 }
 
 std::pair<std::vector<double>, std::vector<double>> load_waypoints(const std::string & csv_path)
@@ -906,11 +957,11 @@ struct ReferencePath
     l << a_min, v_min;
     u << a_max, v_max;
 
-    const auto solution_opt = solve_osqp(P, D, q, l, u);
-    if (!solution_opt.has_value() || solution_opt->solution.size() != N) {
+    const auto outcome = solve_osqp(P, D, q, l, u);
+    if (!outcome.result.has_value() || outcome.result->solution.size() != N) {
       return false;
     }
-    const Eigen::VectorXd solution = solution_opt->solution;
+    const Eigen::VectorXd solution = outcome.result->solution;
     for (int i = 0; i < N; ++i) {
       waypoints[i].v_ref = solution[i];
     }
@@ -1355,6 +1406,7 @@ struct V2XBehaviorConfig
   double overtake_guard_min_gap_time{0.8};
   double overtake_guard_min_speed_for_reachable{1.0};
   double overtake_guard_min_front_distance{3.0};
+  double overtake_continue_min_front_distance{3.0};
   bool overtake_close_follow_enabled{false};
   double overtake_close_follow_min_front_distance{1.5};
   double overtake_close_follow_max_closing_speed{0.8};
@@ -1364,6 +1416,10 @@ struct V2XBehaviorConfig
   double overtake_before_curve_min_speed_advantage{1.0};
   double overtake_start_curve_clearance_distance{0.0};
   bool overtake_continue_in_forbidden_enabled{false};
+  bool overtake_continue_inner_soft_curve_enabled{false};
+  bool overtake_active_hard_curve_completion_enabled{false};
+  double overtake_active_hard_curve_rear_clear_distance{0.5};
+  double overtake_active_hard_curve_buffer_distance{0.5};
   bool overtake_front_velocity_limit_enabled{true};
   bool overtake_fallback_ignore_soft_curve_forbidden{false};
   double overtake_fallback_min_side_clearance{1.0};
@@ -1371,11 +1427,17 @@ struct V2XBehaviorConfig
   double overtake_curve_cooldown_sec{0.0};
   bool side_overtake_enabled{false};
   bool side_overtake_ignore_soft_curve_forbidden{true};
+  double side_overtake_entry_rear_tolerance{0.5};
   double overtake_gap_lookahead_distance{0.0};
   bool overtake_try_both_sides{false};
   double overtake_velocity_advantage{0.0};
   bool overtake_stage_speed_enabled{false};
+  bool overtake_shiftout_adaptive_closing_speed_enabled{false};
+  double overtake_shiftout_min_closing_speed{1.0};
   double overtake_shiftout_max_closing_speed{1.0};
+  double overtake_pass_unlatched_max_closing_speed{0.5};
+  double overtake_shiftout_adaptive_min_time_sec{0.5};
+  double overtake_pass_front_overlap_lateral_clearance{0.0};
   bool overtake_completion_guard_enabled{false};
   double overtake_completion_hard_curvature{0.12};
   double overtake_completion_lookahead_distance{80.0};
@@ -1581,8 +1643,13 @@ struct V2XBehaviorOutput
   bool overtake_start_curve_blocked{false};
   bool before_curve_overtake_allowed{false};
   bool continuing_overtake_allowed{false};
+  bool overtake_hard_curve_blocked{false};
+  bool active_hard_curve_continuation_allowed{false};
+  bool overtake_inner_curve_pass{false};
   bool overtake_completion_feasible{true};
   bool overtake_speed_front_cap_applied{false};
+  bool overtake_shiftout_adaptive_speed_applied{false};
+  bool overtake_front_cap_release_ready{false};
   bool overtake_gap_available{false};
   bool overtake_fallback_target{false};
   bool overtake_cooldown_active{false};
@@ -1592,6 +1659,11 @@ struct V2XBehaviorOutput
   double overtake_completion_available_distance{std::numeric_limits<double>::infinity()};
   double overtake_completion_required_distance{0.0};
   double overtake_completion_relative_speed{std::numeric_limits<double>::infinity()};
+  double overtake_shiftout_closing_speed_limit{std::numeric_limits<double>::infinity()};
+  double overtake_shiftout_remaining_time{std::numeric_limits<double>::infinity()};
+  double active_hard_curve_distance{std::numeric_limits<double>::infinity()};
+  double active_hard_curve_available_distance{0.0};
+  double active_hard_curve_required_distance{std::numeric_limits<double>::infinity()};
   bool overtake_left_gap_available{false};
   bool overtake_right_gap_available{false};
   std::string overtake_left_reason;
@@ -1601,6 +1673,7 @@ struct V2XBehaviorOutput
   bool locked_target_position_jump{false};
   double locked_target_longitudinal{std::numeric_limits<double>::infinity()};
   double locked_target_lateral{std::numeric_limits<double>::infinity()};
+  double locked_target_speed{std::numeric_limits<double>::infinity()};
   double locked_target_receipt_sec{-std::numeric_limits<double>::infinity()};
   double front_speed{std::numeric_limits<double>::infinity()};
   double front_lateral{std::numeric_limits<double>::infinity()};
@@ -1620,6 +1693,7 @@ struct V2XBehaviorOutput
 struct OvertakeLineState
 {
   OvertakeLinePhase phase{OvertakeLinePhase::Idle};
+  bool pass_front_overlap_exclusion_latched{false};
   int pass_side_sign{0};
   double target_ey{0.0};
   double phase_start_sec{-std::numeric_limits<double>::infinity()};
@@ -1630,6 +1704,8 @@ struct OvertakeLineState
   std::string target_vehicle_id;
   double target_last_seen_sec{-std::numeric_limits<double>::infinity()};
   double target_last_longitudinal{std::numeric_limits<double>::infinity()};
+  double target_last_lateral{std::numeric_limits<double>::infinity()};
+  double target_last_speed{std::numeric_limits<double>::infinity()};
   double rear_clear_since_sec{std::numeric_limits<double>::quiet_NaN()};
 };
 
@@ -1638,7 +1714,10 @@ struct OvertakeLineOutput
   bool active{false};
   std::vector<double> target_ey;
   std::vector<bool> target_active;
+  double target_velocity_reference{std::numeric_limits<double>::infinity()};
   double target_velocity_limit{std::numeric_limits<double>::infinity()};
+  double closing_speed_limit{std::numeric_limits<double>::infinity()};
+  bool front_cap_release_ready{false};
   double max_required_lateral_accel{0.0};
   bool lateral_accel_limited{false};
   bool wall_clearance_limited{false};
@@ -3111,6 +3190,7 @@ struct MPC
     std::string nearest_front_id;
     std::string nearest_side_id;
     double nearest_side_abs_longitudinal = std::numeric_limits<double>::infinity();
+    double nearest_side_course_longitudinal = std::numeric_limits<double>::infinity();
     const bool continuing_low_speed_avoidance =
       v2x_behavior_state_initialized && v2x_behavior_state == V2XBehaviorState::LowSpeedAvoidance;
     const bool track_low_speed_clearance =
@@ -3175,6 +3255,7 @@ struct MPC
         output.locked_target_position_jump = vehicle.position_jump;
         output.locked_target_longitudinal = front_longitudinal;
         output.locked_target_lateral = front_lateral;
+        output.locked_target_speed = front_vehicle_speed;
         output.locked_target_receipt_sec = vehicle.receipt_sec;
       }
       const bool within_local_corridor = std::abs(lateral) <= corridor_lateral_range;
@@ -3192,8 +3273,45 @@ struct MPC
         clearance_longitudinal > -side_longitudinal_range) {
         has_low_speed_clearance_vehicle = true;
       }
+      const bool is_locked_pass_target =
+        overtake_line_state_.phase == OvertakeLinePhase::Pass &&
+        !overtake_line_state_.target_vehicle_id.empty() &&
+        vehicle.id == overtake_line_state_.target_vehicle_id;
+      // Keep the Pass clearance test in the same course frame as the explicit
+      // overtake line.  A vehicle-local tangent rotates rapidly through a
+      // hairpin and can make an already established side-by-side separation
+      // appear to collapse, which re-enables the generic front brake.  Fall
+      // back to the local relative lateral value when course projection is not
+      // available.
+      const double locked_pass_target_relative_lateral =
+        use_course_progress && std::isfinite(model->spatial_state.e_y) ?
+        front_lateral - model->spatial_state.e_y : lateral;
+      const bool locked_pass_target_laterally_clear =
+        v2x_overtake_core::can_exclude_locked_target_from_front_overlap(
+        v2x_overtake_core::PassFrontOverlapExclusionRequest{
+          overtake_line_state_.phase == OvertakeLinePhase::Pass, is_locked_pass_target,
+          locked_pass_target_relative_lateral,
+          cfg.v2x_behavior.overtake_pass_front_overlap_lateral_clearance,
+          overtake_line_state_.pass_front_overlap_exclusion_latched});
+      if (
+        locked_pass_target_laterally_clear &&
+        !overtake_line_state_.pass_front_overlap_exclusion_latched)
+      {
+        overtake_line_state_.pass_front_overlap_exclusion_latched = true;
+        if (cfg.v2x_behavior.overtake_line.debug_log_enabled) {
+          RCLCPP_INFO(
+            rclcpp::get_logger("mpc_controller"),
+            "OvertakeLine: Pass front-overlap exclusion latched, target=%s, lateral=%.2f, "
+            "wp_id=%d",
+            vehicle.id.c_str(), locked_pass_target_relative_lateral, model->wp_id);
+        }
+      }
+      // Course-frame lateral values oscillate through a hairpin. Once the locked target has
+      // become side-by-side in Pass, keep only that target out of the generic front-brake set
+      // until the phase ends. Locked-target continuity and all other front vehicles remain active.
       const bool front_overlap =
-        front_geometry_valid && std::abs(front_lateral) <= front_lateral_range;
+        front_geometry_valid && std::abs(front_lateral) <= front_lateral_range &&
+        !locked_pass_target_laterally_clear;
       if (
         front_overlap && front_longitudinal > 0.0 &&
         front_longitudinal < front_detection_distance)
@@ -3233,6 +3351,8 @@ struct MPC
         if (std::abs(longitudinal) < nearest_side_abs_longitudinal) {
           nearest_side_abs_longitudinal = std::abs(longitudinal);
           nearest_side_id = vehicle.id;
+          nearest_side_course_longitudinal = use_course_progress ?
+            front_longitudinal : longitudinal;
         }
       }
     }
@@ -3435,20 +3555,24 @@ struct MPC
       return commit_v2x_behavior_state(output, now_sec);
     }
 
+    const bool active_overtake_line =
+      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+      overtake_line_state_.phase == OvertakeLinePhase::Pass;
     const bool continuing_overtake =
-      v2x_behavior_state_initialized && v2x_behavior_state == V2XBehaviorState::Overtake;
+      active_overtake_line ||
+      (v2x_behavior_state_initialized && v2x_behavior_state == V2XBehaviorState::Overtake);
     bool overtake_completion_feasible = true;
     double overtake_completion_available_distance = std::numeric_limits<double>::infinity();
     double overtake_completion_required_distance = 0.0;
     double overtake_completion_relative_speed = std::numeric_limits<double>::infinity();
+    const double distance_to_hard_curve = distance_to_hard_overtake_boundary(
+      ref_wp_id, cfg.v2x_behavior.overtake_completion_hard_curvature,
+      cfg.v2x_behavior.overtake_completion_lookahead_distance);
     if (
       cfg.v2x_behavior.overtake_completion_guard_enabled && !continuing_overtake &&
       has_front_vehicle && std::isfinite(nearest_front_distance) &&
       std::isfinite(nearest_front_speed))
     {
-      const double distance_to_hard_curve = distance_to_hard_overtake_boundary(
-        ref_wp_id, cfg.v2x_behavior.overtake_completion_hard_curvature,
-        cfg.v2x_behavior.overtake_completion_lookahead_distance);
       const double planned_ego_speed = std::min(
         cfg.v_max,
         std::max({
@@ -3475,6 +3599,52 @@ struct MPC
     output.overtake_completion_required_distance = overtake_completion_required_distance;
     output.overtake_completion_relative_speed = overtake_completion_relative_speed;
     const bool soft_overtake_forbidden = overtake_forbidden && !overtake_forbidden_wp;
+    const bool hard_overtake_forbidden =
+      overtake_forbidden_wp ||
+      is_curvature_above_threshold(
+        ref_wp_id, N, 0.0, cfg.v2x_behavior.overtake_completion_hard_curvature);
+    // During a laterally separated Pass the locked kart is intentionally removed from the
+    // generic front-overlap set. Keep using its explicit course projection for the hard-curve
+    // completion check; otherwise the lateral-clear transition itself aborts the pass.
+    const bool active_target_valid =
+      output.locked_target_seen && !output.locked_target_position_jump &&
+      std::isfinite(output.locked_target_longitudinal) &&
+      std::isfinite(output.locked_target_speed);
+    const double hard_curve_accel_distance = std::isfinite(distance_to_hard_curve) ?
+      std::max(0.0, distance_to_hard_curve) : 0.0;
+    const double reachable_hard_curve_speed = std::sqrt(std::max(
+        0.0, current_speed_mps_ * current_speed_mps_ +
+        2.0 * std::max(0.0, cfg.a_max) * hard_curve_accel_distance));
+    const double hard_curve_reference_speed = std::min(
+      cfg.v_max, std::max(current_speed_mps_, std::max(0.0, waypoint.v_ref)));
+    const double active_hard_curve_planned_speed = std::max(
+      kEps, std::min(hard_curve_reference_speed, reachable_hard_curve_speed));
+    const auto active_hard_curve_continuation =
+      v2x_overtake_core::resolve_active_hard_curve_continuation(
+      v2x_overtake_core::ActiveHardCurveContinuationRequest{
+        cfg.v2x_behavior.overtake_active_hard_curve_completion_enabled,
+        continuing_overtake,
+        overtake_line_state_.phase == OvertakeLinePhase::Pass,
+        active_target_valid,
+        overtake_line_state_.pass_front_overlap_exclusion_latched,
+        hard_overtake_forbidden && !overtake_forbidden_wp &&
+        std::isfinite(distance_to_hard_curve),
+        overtake_forbidden_wp,
+        overtake_cooldown_active,
+        front_risk_level == FrontRiskLevel::EmergencyBrake,
+        v2x_overtake_core::PassCompletionRequest{
+          std::isfinite(distance_to_hard_curve) ? distance_to_hard_curve : 0.0,
+          cfg.v2x_behavior.overtake_active_hard_curve_buffer_distance,
+          active_target_valid ? std::max(0.0, output.locked_target_longitudinal) : 0.0,
+          active_target_valid ? std::max(0.0, output.locked_target_speed) : 0.0,
+          active_hard_curve_planned_speed,
+          cfg.v2x_behavior.overtake_active_hard_curve_rear_clear_distance,
+          0.0,
+          0.0,
+          cfg.v2x_behavior.overtake_completion_min_relative_speed}});
+    const bool active_hard_curve_allowed = active_hard_curve_continuation.allowed;
+    const bool effective_hard_overtake_forbidden =
+      hard_overtake_forbidden && !active_hard_curve_allowed;
     const int inner_curve_pass_side =
       soft_overtake_forbidden ? curve_inner_pass_side(ref_wp_id, N) : 0;
     const bool continuing_inner_curve_pass =
@@ -3498,18 +3668,30 @@ struct MPC
       is_overtake_forbidden_curvature(
         ref_wp_id, N, cfg.v2x_behavior.overtake_start_curve_clearance_distance);
     const bool continuing_overtake_allowed =
-      cfg.v2x_behavior.overtake_continue_in_forbidden_enabled &&
-      !overtake_cooldown_active &&
-      continuing_overtake &&
-      soft_overtake_forbidden &&
-      !continuing_inner_curve_pass &&
-      front_risk_level != FrontRiskLevel::EmergencyBrake;
+      v2x_overtake_core::can_continue_overtake_in_soft_curve(
+        v2x_overtake_core::OvertakeCurveContinuationRequest{
+          cfg.v2x_behavior.overtake_continue_in_forbidden_enabled,
+          cfg.v2x_behavior.overtake_continue_inner_soft_curve_enabled,
+          continuing_overtake,
+          soft_overtake_forbidden,
+          effective_hard_overtake_forbidden,
+          continuing_inner_curve_pass,
+          overtake_cooldown_active,
+          front_risk_level == FrontRiskLevel::EmergencyBrake});
     const double fallback_min_side_clearance = std::max(
       cfg.v2x_behavior.overtake_min_gap_width,
       cfg.v2x_behavior.overtake_fallback_min_side_clearance);
     output.overtake_start_curve_blocked = overtake_start_curve_blocked;
     output.before_curve_overtake_allowed = before_curve_overtake_allowed;
     output.continuing_overtake_allowed = continuing_overtake_allowed;
+    output.overtake_hard_curve_blocked = hard_overtake_forbidden;
+    output.active_hard_curve_continuation_allowed = active_hard_curve_allowed;
+    output.active_hard_curve_distance = distance_to_hard_curve;
+    output.active_hard_curve_available_distance =
+      active_hard_curve_continuation.completion.available_distance_m;
+    output.active_hard_curve_required_distance =
+      active_hard_curve_continuation.completion.required_distance_m;
+    output.overtake_inner_curve_pass = continuing_inner_curve_pass;
 
     struct SideAssessment
     {
@@ -3567,7 +3749,7 @@ struct MPC
       if (cfg.v2x_behavior.overtake_guard_enabled) {
         assessment.gap_available = overtake_guard_allows(
           candidate_gap, ref_wp_id, nearest_front_distance, model->spatial_state.e_y,
-          assessment.reason);
+          continuing_overtake, assessment.reason);
         if (!assessment.gap_available && !candidate_gap.reject_reason.empty()) {
           assessment.reason = candidate_gap.reject_reason + " / " + assessment.reason;
         }
@@ -3583,7 +3765,7 @@ struct MPC
         std::string fallback_guard_reason;
         if (overtake_fallback_guard_allows(
             side, nearest_front_distance, model->spatial_state.e_y,
-            lb[0], ub[0], fallback_guard_reason)) {
+            lb[0], ub[0], continuing_overtake, fallback_guard_reason)) {
           assessment.gap_available = true;
           assessment.fallback_target = true;
           std::ostringstream ss;
@@ -3652,6 +3834,10 @@ struct MPC
         }
         const bool inner_curve_pass =
           is_inner_curve_pass(assessment.side, inner_curve_pass_side);
+        const bool active_locked_inner_curve_allowed =
+          (continuing_overtake_allowed || active_hard_curve_allowed) &&
+          continuing_overtake &&
+          locked_pass_side != 0 && assessment.side == locked_pass_side;
         const bool side_fallback_soft_curve_allowed =
           cfg.v2x_behavior.overtake_fallback_ignore_soft_curve_forbidden &&
           soft_overtake_forbidden &&
@@ -3660,9 +3846,11 @@ struct MPC
           front_risk_level != FrontRiskLevel::EmergencyBrake;
         return !overtake_cooldown_active && !overtake_start_curve_blocked &&
                overtake_completion_feasible &&
-               !overtake_forbidden_wp && !inner_curve_pass &&
+               !overtake_forbidden_wp && !effective_hard_overtake_forbidden &&
+               (!inner_curve_pass || active_locked_inner_curve_allowed) &&
                (!soft_overtake_forbidden || before_curve_overtake_allowed ||
-               continuing_overtake_allowed || side_fallback_soft_curve_allowed);
+               continuing_overtake_allowed || active_hard_curve_allowed ||
+               side_fallback_soft_curve_allowed);
       };
     const auto select_side = [&](const bool require_execution_permission) {
         return overtake_core::select_pass_side(
@@ -3704,7 +3892,10 @@ struct MPC
       overtake_cooldown_active ? "overtake curve cooldown" :
       overtake_start_curve_blocked ? "overtake start too close to curve" :
       !overtake_completion_feasible ? "overtake completion distance" :
-      selected_inner_curve_pass ? "overtake inner curve blocked" :
+      effective_hard_overtake_forbidden ? "overtake hard curve blocked" :
+      selected_inner_curve_pass &&
+      !(continuing_overtake_allowed || active_hard_curve_allowed) ?
+      "overtake inner curve blocked" :
       soft_overtake_forbidden && !overtake_zone_allows ? "overtake forbidden curve" :
       selected_assessment.reason;
     output.overtake_gap_available = overtake_gap_available;
@@ -3715,8 +3906,12 @@ struct MPC
         output.state = V2XBehaviorState::Overtake;
         output.reason = before_curve_overtake_allowed ?
           "slow front before curve and reachable gap / " + overtake_block_reason :
+          active_hard_curve_allowed ?
+          "continue active pass before hard curve / " + overtake_block_reason :
           continuing_overtake_allowed ?
-          "continue overtake in soft forbidden zone / " + overtake_block_reason :
+          (selected_inner_curve_pass ?
+          "continue locked pass in soft inner curve / " + overtake_block_reason :
+          "continue overtake in soft forbidden zone / " + overtake_block_reason) :
           cfg.v2x_behavior.overtake_guard_enabled ?
           overtake_block_reason :
           "front vehicle and gap available";
@@ -3732,9 +3927,9 @@ struct MPC
         }
       } else {
         output.state = V2XBehaviorState::Follow;
-        output.reason = overtake_zone_allows ? overtake_block_reason :
-          before_curve_overtake_allowed ? "before-curve overtake blocked" :
-          overtake_block_reason;
+        // `before_curve_overtake_allowed` is a relaxation that has already passed.  If
+        // execution is still rejected, report the guard that actually rejected it.
+        output.reason = overtake_block_reason;
         bool front_risk_applied = false;
         if (apply_follow_velocity_limits(
             output, nearest_front_distance, nearest_front_speed, front_decel_curve_guard, front_risk,
@@ -3748,20 +3943,34 @@ struct MPC
     }
 
     if (has_side_vehicle && cfg.v2x_behavior.side_overtake_enabled) {
+      const bool side_overtake_entry_target_valid =
+        v2x_overtake_core::can_start_side_overtake(
+        v2x_overtake_core::SideOvertakeEntryRequest{
+          continuing_overtake, nearest_side_course_longitudinal,
+          cfg.v2x_behavior.side_overtake_entry_rear_tolerance});
       const bool side_inner_curve_pass =
         is_inner_curve_pass(output.overtake_pass_side_sign, inner_curve_pass_side);
+      const bool active_locked_side_inner_curve_allowed =
+        (continuing_overtake_allowed || active_hard_curve_allowed) &&
+        continuing_overtake &&
+        overtake_locked_side_sign_ != 0 &&
+        output.overtake_pass_side_sign == overtake_locked_side_sign_;
       const bool side_overtake_zone_allows =
+        side_overtake_entry_target_valid &&
         !overtake_cooldown_active &&
         !overtake_start_curve_blocked &&
         !overtake_forbidden_wp &&
-        !side_inner_curve_pass &&
+        !effective_hard_overtake_forbidden &&
+        (!side_inner_curve_pass || active_locked_side_inner_curve_allowed) &&
         (!overtake_forbidden ||
         (cfg.v2x_behavior.side_overtake_ignore_soft_curve_forbidden && soft_overtake_forbidden) ||
-        continuing_overtake_allowed);
+        continuing_overtake_allowed || active_hard_curve_allowed);
       output.overtake_zone_allows = side_overtake_zone_allows;
 
       const bool side_overtake_gap_available = output.overtake_gap_available;
-      std::string side_overtake_block_reason = overtake_forbidden_wp ?
+      std::string side_overtake_block_reason = !side_overtake_entry_target_valid ?
+        "side target already behind" :
+        overtake_forbidden_wp ?
         "overtake forbidden wp" :
         overtake_cooldown_active ?
         "overtake curve cooldown" :
@@ -3769,7 +3978,9 @@ struct MPC
         "overtake start too close to curve" :
         !overtake_completion_feasible ?
         "overtake completion distance" :
-        side_inner_curve_pass ?
+        effective_hard_overtake_forbidden ?
+        "overtake hard curve blocked" :
+        side_inner_curve_pass && !active_locked_side_inner_curve_allowed ?
         "overtake inner curve blocked" :
         side_overtake_zone_allows ?
         output.overtake_block_reason :
@@ -3947,10 +4158,18 @@ struct MPC
       (overtake_solver_recovery_active_ || solver_overtake_cooldown_active ||
        overtake_solver_reentry_blocked_) &&
       behavior_output.state == V2XBehaviorState::Overtake;
+    const bool explicit_overtake_line_owns_plan =
+      v2x_overtake_core::explicit_overtake_line_owns_lateral_plan(
+      v2x_overtake_core::OvertakeLateralPlannerOwnershipRequest{
+        cfg.v2x_behavior.overtake_line.enabled,
+        behavior_output.state == V2XBehaviorState::Overtake,
+        overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+        overtake_line_state_.phase == OvertakeLinePhase::Pass});
     const bool use_gap_planner =
       gap_planner != nullptr &&
       (!cfg.v2x_behavior.enabled || behavior_output.allow_gap_planner) &&
-      !suppress_overtake_after_solver_failures;
+      !suppress_overtake_after_solver_failures &&
+      !explicit_overtake_line_owns_plan;
     const bool use_low_speed_local_path =
       use_gap_planner && cfg.v2x_behavior.low_speed_local_path_enabled &&
       behavior_output.state == V2XBehaviorState::LowSpeedAvoidance;
@@ -3967,7 +4186,7 @@ struct MPC
     }
     const bool use_overtake_side_target =
       behavior_output.state == V2XBehaviorState::Overtake && overtake_pass_side_sign != 0 &&
-      !suppress_overtake_after_solver_failures;
+      !suppress_overtake_after_solver_failures && !explicit_overtake_line_owns_plan;
     const int follow_preposition_inner_side =
       behavior_output.overtake_forbidden && !behavior_output.overtake_forbidden_wp ?
       curve_inner_pass_side(ref_wp_id, N) : 0;
@@ -4074,6 +4293,12 @@ struct MPC
 
     const auto overtake_line_output =
       update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
+    if (std::isfinite(overtake_line_output.target_velocity_reference)) {
+      for (int i = 0; i < N; ++i) {
+        ur[2 * i] = std::min({
+          ur[2 * i], umax_dyn[2 * i], overtake_line_output.target_velocity_reference});
+      }
+    }
     if (std::isfinite(overtake_line_output.target_velocity_limit)) {
       apply_velocity_limit(umax_dyn, ur, N, overtake_line_output.target_velocity_limit);
     }
@@ -4264,13 +4489,19 @@ struct MPC
     return MpcProblem{q, l, u, P, A_full, N, base_wp_id, planning_wp_id, ref_wp_id};
   }
 
-  std::optional<OsqpSolveResult> solve_problem(const MpcProblem & problem)
+  OsqpSolveOutcome solve_problem(const MpcProblem & problem)
   {
-    auto solution_opt = solve_osqp(problem.P, problem.A, problem.q, problem.l, problem.u);
-    if (!solution_opt.has_value() || solution_opt->solution.size() != problem.P.rows()) {
-      return std::nullopt;
+    auto outcome = solve_osqp(problem.P, problem.A, problem.q, problem.l, problem.u);
+    if (
+      outcome.result.has_value() &&
+      outcome.result->solution.size() != problem.P.rows())
+    {
+      std::ostringstream detail;
+      detail << "stage=solution, reason=unexpected solution size, actual="
+             << outcome.result->solution.size() << ", expected=" << problem.P.rows();
+      return osqp_failure(detail.str());
     }
-    return solution_opt;
+    return outcome;
   }
 
   void ensure_current_control_horizon()
@@ -4496,11 +4727,11 @@ struct MPC
         low_speed_shift_last_relevant_vehicle_sec_ =
           std::numeric_limits<double>::quiet_NaN();
       }
-      auto solution_opt = solve_problem(problem);
-      if (!solution_opt.has_value()) {
-        throw std::runtime_error("OSQP failed");
+      auto outcome = solve_problem(problem);
+      if (!outcome.result.has_value()) {
+        throw std::runtime_error("OSQP failed: " + outcome.failure_detail);
       }
-      Eigen::VectorXd dec = solution_opt->solution;
+      Eigen::VectorXd dec = outcome.result->solution;
       Eigen::VectorXd control_signals = dec.tail(N * nu);
 
       for (int i = 1; i < control_signals.size(); i += 2) {
@@ -4709,11 +4940,18 @@ private:
     }
   }
 
-  static void apply_velocity_limit(
+  void apply_velocity_limit(
     Eigen::VectorXd & umax_dyn, Eigen::VectorXd & ur, const int N, const double velocity_limit)
   {
-    const double limit = std::max(0.0, velocity_limit);
+    const auto limits = mpc_velocity_limit::build_reachable_limits(
+      mpc_velocity_limit::ReachableLimitRequest{
+        N,
+        std::max(0.0, current_speed_mps_),
+        std::max(0.0, velocity_limit),
+        std::max(0.0, -cfg.a_min),
+        model->Ts});
     for (int n = 0; n < N; ++n) {
+      const double limit = limits[static_cast<std::size_t>(n)];
       umax_dyn[2 * n] = std::min(umax_dyn[2 * n], limit);
       ur[2 * n] = std::min(ur[2 * n], limit);
     }
@@ -4781,6 +5019,9 @@ private:
     }
 
     overtake_line_state_.phase = next_phase;
+    if (next_phase != OvertakeLinePhase::Pass) {
+      overtake_line_state_.pass_front_overlap_exclusion_latched = false;
+    }
     overtake_line_state_.phase_start_sec = now_sec;
     overtake_line_state_.phase_start_ey = current_ey;
     overtake_line_state_.target_ey = current_ey;
@@ -4801,8 +5042,12 @@ private:
     if (
       overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
       overtake_line_state_.phase == OvertakeLinePhase::Pass) {
-      return static_cast<double>(pass_side_sign) *
-             std::max(0.0, cfg.v2x_behavior.overtake_line.lateral_offset);
+      return overtake_core::resolve_pass_side_lateral_goal(
+        overtake_core::PassSideLateralGoalRequest{
+          pass_side_sign,
+          std::max(0.0, cfg.v2x_behavior.overtake_line.lateral_offset),
+          overtake_line_state_.target_last_lateral,
+          std::max(0.0, cfg.v2x_behavior.overtake_pass_front_overlap_lateral_clearance)});
     }
     return 0.0;
   }
@@ -4823,6 +5068,23 @@ private:
         return std::max(0.5, line_cfg.shift_distance);
     }
     return std::max(0.5, line_cfg.shift_distance);
+  }
+
+  double overtake_shiftout_remaining_distance(const double current_ey) const
+  {
+    const double shift_distance =
+      std::max(0.5, cfg.v2x_behavior.overtake_line.shift_distance);
+    const double distance_remaining = std::max(
+      0.0, shift_distance - overtake_line_state_.phase_traveled_m);
+    const double goal_ey = overtake_line_goal_ey();
+    const double total_lateral_shift =
+      std::abs(goal_ey - overtake_line_state_.phase_start_ey);
+    if (!std::isfinite(current_ey) || total_lateral_shift <= kEps) {
+      return distance_remaining;
+    }
+    const double lateral_remaining_ratio = clip(
+      std::abs(goal_ey - current_ey) / total_lateral_shift, 0.0, 1.0);
+    return std::max(distance_remaining, shift_distance * lateral_remaining_ratio);
   }
 
   double limit_overtake_line_goal_change(const double raw_goal)
@@ -4913,11 +5175,23 @@ private:
       overtake_line_state_.target_last_seen_sec = now_sec;
       overtake_line_state_.target_last_longitudinal = behavior_output.has_front_vehicle ?
         behavior_output.front_distance : 0.0;
+      overtake_line_state_.target_last_lateral = std::isfinite(behavior_output.front_lateral) ?
+        behavior_output.front_lateral : std::numeric_limits<double>::infinity();
+      overtake_line_state_.target_last_speed = std::isfinite(behavior_output.front_speed) ?
+        std::max(0.0, behavior_output.front_speed) :
+        std::numeric_limits<double>::infinity();
     }
     if (behavior_output.locked_target_seen) {
       overtake_line_state_.target_last_seen_sec = now_sec;
       overtake_line_state_.target_last_longitudinal =
         behavior_output.locked_target_longitudinal;
+      if (std::isfinite(behavior_output.locked_target_lateral)) {
+        overtake_line_state_.target_last_lateral = behavior_output.locked_target_lateral;
+      }
+      if (std::isfinite(behavior_output.locked_target_speed)) {
+        overtake_line_state_.target_last_speed =
+          std::max(0.0, behavior_output.locked_target_speed);
+      }
     }
     const double target_age = std::isfinite(overtake_line_state_.target_last_seen_sec) ?
       std::max(0.0, now_sec - overtake_line_state_.target_last_seen_sec) :
@@ -4978,13 +5252,28 @@ private:
     } else if (
       overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
       overtake_line_state_.phase == OvertakeLinePhase::Pass) {
+      const bool active_execution_latched =
+        behavior_output.locked_target_seen &&
+        behavior_output.locked_target_longitudinal > 0.0 &&
+        !behavior_output.overtake_forbidden_wp &&
+        (!behavior_output.overtake_hard_curve_blocked ||
+        behavior_output.active_hard_curve_continuation_allowed) &&
+        (!behavior_output.overtake_inner_curve_pass ||
+        behavior_output.active_hard_curve_continuation_allowed) &&
+        behavior_output.overtake_completion_feasible &&
+        !behavior_output.overtake_cooldown_active &&
+        behavior_output.front_risk_level != FrontRiskLevel::EmergencyBrake &&
+        (!behavior_output.overtake_forbidden ||
+        behavior_output.continuing_overtake_allowed ||
+        behavior_output.active_hard_curve_continuation_allowed);
       const auto continuity = overtake_core::resolve_target_continuity(
         overtake_core::ContinuityRequest{
           overtake_solver_recovery_active_, behavior_output.locked_target_position_jump,
           rear_clear_observed, rear_clear_confirmed, behavior_output.has_side_vehicle,
           behavior_output.locked_target_seen, target_age, line_cfg.target_hold_sec,
           behavior_output.locked_target_seen &&
-          behavior_output.locked_target_longitudinal <= 0.0});
+          behavior_output.locked_target_longitudinal <= 0.0,
+          active_execution_latched});
       if (continuity == overtake_core::ContinuityAction::Return) {
         transition_overtake_line_phase(
           OvertakeLinePhase::Return, now_sec, current_ey, overtake_line_state_.pass_side_sign,
@@ -5043,10 +5332,27 @@ private:
 
     const double lateral_offset = std::max(0.0, line_cfg.lateral_offset);
     const double raw_goal_for_phase = overtake_line_goal_ey();
+    double feasible_goal_for_phase = raw_goal_for_phase;
+    if (lb.size() > 0 && ub.size() > 0) {
+      double feasible_lower = lb[0] + std::max(0.0, line_cfg.min_wall_clearance);
+      double feasible_upper = ub[0] - std::max(0.0, line_cfg.min_wall_clearance);
+      if (feasible_upper < feasible_lower) {
+        feasible_lower = lb[0];
+        feasible_upper = ub[0];
+      }
+      feasible_goal_for_phase = clip(
+        raw_goal_for_phase, feasible_lower, feasible_upper);
+    }
+    const double shiftout_lateral_tolerance = std::max(0.15, 0.25 * lateral_offset);
     if (
-      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut && phase_hold_elapsed &&
-      (overtake_line_state_.phase_traveled_m >= std::max(0.5, line_cfg.shift_distance) ||
-      std::abs(current_ey - raw_goal_for_phase) <= std::max(0.15, 0.25 * lateral_offset))) {
+      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut &&
+      overtake_core::is_shiftout_complete(
+        overtake_core::ShiftOutCompletionRequest{
+          phase_hold_elapsed, overtake_line_state_.phase_traveled_m,
+          std::max(0.5, line_cfg.shift_distance), current_ey,
+          feasible_goal_for_phase, shiftout_lateral_tolerance,
+          overtake_line_state_.pass_side_sign}))
+    {
       transition_overtake_line_phase(
         OvertakeLinePhase::Pass, now_sec, current_ey, overtake_line_state_.pass_side_sign,
         "shift complete");
@@ -5091,6 +5397,61 @@ private:
     }
 
     const double raw_goal = overtake_line_goal_ey();
+    const bool lateral_complete =
+      overtake_core::has_reached_pass_side_lateral_goal(
+        current_ey, feasible_goal_for_phase, shiftout_lateral_tolerance,
+        overtake_line_state_.pass_side_sign);
+    const bool locked_target_seen = behavior_output.locked_target_seen;
+    const double locked_target_longitudinal = locked_target_seen ?
+      behavior_output.locked_target_longitudinal :
+      overtake_line_state_.target_last_longitudinal;
+    const double locked_target_speed =
+      locked_target_seen && std::isfinite(behavior_output.locked_target_speed) ?
+      behavior_output.locked_target_speed : overtake_line_state_.target_last_speed;
+    output.front_cap_release_ready =
+      overtake_core::can_release_overtake_front_cap(
+      overtake_core::OvertakeFrontCapReleaseRequest{
+        overtake_line_state_.phase == OvertakeLinePhase::Pass,
+        lateral_complete, locked_target_seen, locked_target_longitudinal});
+    if (
+      (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+      overtake_line_state_.phase == OvertakeLinePhase::Pass) &&
+      !output.front_cap_release_ready &&
+      std::isfinite(locked_target_speed))
+    {
+      double closing_speed_limit =
+        std::max(0.0, cfg.v2x_behavior.overtake_shiftout_max_closing_speed);
+      closing_speed_limit = overtake_core::resolve_unlatched_pass_closing_speed(
+        closing_speed_limit,
+        cfg.v2x_behavior.overtake_pass_unlatched_max_closing_speed,
+        overtake_line_state_.phase == OvertakeLinePhase::Pass,
+        overtake_line_state_.pass_front_overlap_exclusion_latched);
+      if (
+        overtake_line_state_.phase == OvertakeLinePhase::ShiftOut &&
+        cfg.v2x_behavior.overtake_shiftout_adaptive_closing_speed_enabled &&
+        std::isfinite(locked_target_longitudinal))
+      {
+        const auto adaptive_closing =
+          overtake_core::resolve_adaptive_shiftout_closing_speed(
+          overtake_core::AdaptiveShiftOutClosingSpeedRequest{
+            cfg.v2x_behavior.overtake_shiftout_min_closing_speed,
+            cfg.v2x_behavior.overtake_shiftout_max_closing_speed,
+            std::max(0.0, locked_target_longitudinal),
+            cfg.v2x_behavior.overtake_guard_min_front_distance,
+            overtake_shiftout_remaining_distance(current_ey),
+            std::max(0.0, current_speed_mps_),
+            std::max(kEps, cfg.v2x_behavior.overtake_guard_min_speed_for_reachable),
+            cfg.v2x_behavior.overtake_shiftout_adaptive_min_time_sec});
+        closing_speed_limit = adaptive_closing.closing_speed_mps;
+      }
+      output.closing_speed_limit = closing_speed_limit;
+      // This is an overtake progress reference, not a hard state/input bound.  Applying an
+      // abruptly reduced hard bound together with the new lateral ShiftOut corridor can make
+      // an otherwise reachable MPC problem numerically infeasible.  Recovery below keeps its
+      // dedicated hard limit; active ShiftOut/early Pass only shapes the velocity reference.
+      output.target_velocity_reference = std::min(
+        cfg.v_max, std::max(0.0, locked_target_speed) + closing_speed_limit);
+    }
     const double goal_ey = limit_overtake_line_goal_change(raw_goal);
     const double phase_distance = overtake_line_phase_distance();
     const double min_wall_clearance = std::max(0.0, line_cfg.min_wall_clearance);
@@ -5109,8 +5470,11 @@ private:
 
     for (int i = 0; i < N; ++i) {
       const double distance = horizon_path_distance_to_index(ref_wp_id, static_cast<std::size_t>(i));
-      const double progress = overtake_line_state_.phase == OvertakeLinePhase::Pass ?
-        1.0 : smoothstep(distance / phase_distance);
+      const double progress =
+        overtake_core::resolve_overtake_line_horizon_progress(
+        overtake_core::OvertakeLineHorizonProgressRequest{
+          overtake_line_state_.phase == OvertakeLinePhase::Pass,
+          overtake_line_state_.phase_traveled_m, distance, phase_distance});
       double target_ey =
         overtake_line_state_.phase_start_ey +
         progress * (goal_ey - overtake_line_state_.phase_start_ey);
@@ -5156,11 +5520,14 @@ private:
           rclcpp::get_logger("mpc_controller"),
           "OvertakeLine debug: phase=%s, side=%d, goal=%.2f, first_target=%.2f, "
           "current_ey=%.2f, elapsed=%.2f, traveled=%.2f, stalled=%.2f, "
-          "v_limit=%.2f, cooldown=%.2f, max_lat_acc=%.2f, lat_limited=%d, wall_limited=%d",
+          "v_ref=%.2f, v_limit=%.2f, closing=%.2f, cap_release=%d, cooldown=%.2f, "
+          "max_lat_acc=%.2f, lat_limited=%d, wall_limited=%d",
           to_string(overtake_line_state_.phase), overtake_line_state_.pass_side_sign, goal_ey,
           output.target_ey.empty() ? 0.0 : output.target_ey.front(), current_ey,
           phase_elapsed, overtake_line_state_.phase_traveled_m, recovery_stalled_sec,
-          output.target_velocity_limit,
+          output.target_velocity_reference, output.target_velocity_limit,
+          output.closing_speed_limit,
+          output.front_cap_release_ready ? 1 : 0,
           std::max(0.0, overtake_solver_cooldown_until_sec_ - now_sec),
           output.max_required_lateral_accel, output.lateral_accel_limited ? 1 : 0,
           output.wall_clearance_limited ? 1 : 0);
@@ -5187,10 +5554,11 @@ private:
     return false;
   }
 
-  bool is_overtake_forbidden_curvature(
-    const int ref_wp_id, const int N, const double configured_lookahead_distance) const
+  bool is_curvature_above_threshold(
+    const int ref_wp_id, const int N, const double configured_lookahead_distance,
+    const double configured_threshold) const
   {
-    const double threshold = std::max(0.0, cfg.v2x_behavior.overtake_max_curvature);
+    const double threshold = std::max(0.0, configured_threshold);
     if (threshold <= kEps) {
       return false;
     }
@@ -5218,6 +5586,14 @@ private:
       max_abs_kappa = std::max(max_abs_kappa, std::abs(waypoint.kappa));
     }
     return max_abs_kappa > threshold;
+  }
+
+  bool is_overtake_forbidden_curvature(
+    const int ref_wp_id, const int N, const double configured_lookahead_distance) const
+  {
+    return is_curvature_above_threshold(
+      ref_wp_id, N, configured_lookahead_distance,
+      cfg.v2x_behavior.overtake_max_curvature);
   }
 
   double distance_to_hard_overtake_boundary(
@@ -5487,12 +5863,22 @@ private:
 
   bool overtake_guard_allows(
     const GapPlannerOutput & gap_output, const int ref_wp_id, const double front_distance,
-    const double current_ey, std::string & block_reason) const
+    const double current_ey, const bool continuing_overtake,
+    std::string & block_reason) const
   {
-    const double min_front_distance =
-      std::max(0.0, cfg.v2x_behavior.overtake_guard_min_front_distance);
+    const auto guard_phase = v2x_overtake_core::resolve_overtake_guard_phase(
+      v2x_overtake_core::OvertakeGuardPhaseRequest{
+        continuing_overtake,
+        cfg.v2x_behavior.overtake_guard_min_front_distance,
+        cfg.v2x_behavior.overtake_continue_min_front_distance});
+    const double min_front_distance = guard_phase.min_front_distance_m;
     if (min_front_distance > kEps && front_distance < min_front_distance) {
-      block_reason = "overtake guard front distance";
+      std::ostringstream ss;
+      ss << "overtake guard front distance"
+         << ", phase=" << (continuing_overtake ? "continue" : "entry")
+         << ", fd=" << front_distance
+         << ", min=" << min_front_distance;
+      block_reason = ss.str();
       return false;
     }
 
@@ -5535,7 +5921,10 @@ private:
 
     const double min_prepare_distance =
       std::max(0.0, cfg.v2x_behavior.overtake_guard_min_prepare_distance);
-    if (min_prepare_distance > kEps && reachable_gap.first_gap_distance < min_prepare_distance) {
+    if (
+      guard_phase.require_prepare_distance && min_prepare_distance > kEps &&
+      reachable_gap.first_gap_distance < min_prepare_distance)
+    {
       block_reason = "overtake guard prepare distance";
       return false;
     }
@@ -5694,7 +6083,8 @@ private:
 
   bool overtake_fallback_guard_allows(
     const int pass_side_sign, const double front_distance, const double current_ey,
-    const double lower, const double upper, std::string & block_reason) const
+    const double lower, const double upper, const bool continuing_overtake,
+    std::string & block_reason) const
   {
     if (pass_side_sign == 0 || upper - lower <= kEps) {
       block_reason = "overtake fallback guard invalid side";
@@ -5705,14 +6095,20 @@ private:
       return false;
     }
 
-    const double min_front_distance =
-      std::max(0.0, cfg.v2x_behavior.overtake_guard_min_front_distance);
+    const auto guard_phase = v2x_overtake_core::resolve_overtake_guard_phase(
+      v2x_overtake_core::OvertakeGuardPhaseRequest{
+        continuing_overtake,
+        cfg.v2x_behavior.overtake_guard_min_front_distance,
+        cfg.v2x_behavior.overtake_continue_min_front_distance});
+    const double min_front_distance = guard_phase.min_front_distance_m;
     const double min_prepare_distance =
-      std::max(0.0, cfg.v2x_behavior.overtake_guard_min_prepare_distance);
+      guard_phase.require_prepare_distance ?
+      std::max(0.0, cfg.v2x_behavior.overtake_guard_min_prepare_distance) : 0.0;
     const double required_front_distance = std::max(min_front_distance, min_prepare_distance);
     if (required_front_distance > kEps && front_distance < required_front_distance) {
       std::ostringstream ss;
       ss << "overtake fallback guard front distance"
+         << ", phase=" << (continuing_overtake ? "continue" : "entry")
          << ", fd=" << front_distance
          << ", min=" << required_front_distance;
       block_reason = ss.str();
@@ -6112,17 +6508,75 @@ private:
           overtake_entry_speed_.value(), std::max(0.0, current_speed_mps_));
       }
       if (cfg.v2x_behavior.overtake_stage_speed_enabled) {
-        if (std::isfinite(output.front_speed)) {
+        const double overtake_target_speed =
+          output.locked_target_seen && std::isfinite(output.locked_target_speed) ?
+          output.locked_target_speed : std::isfinite(output.front_speed) ?
+          output.front_speed : overtake_line_state_.target_last_speed;
+        if (std::isfinite(overtake_target_speed)) {
+          const double pass_goal_ey =
+            static_cast<double>(overtake_line_state_.pass_side_sign) *
+            std::max(0.0, cfg.v2x_behavior.overtake_line.lateral_offset);
+          const double pass_lateral_tolerance = std::max(
+            0.15, 0.25 * std::max(0.0, cfg.v2x_behavior.overtake_line.lateral_offset));
+          const bool pass_lateral_complete =
+            overtake_core::has_reached_pass_side_lateral_goal(
+              model->spatial_state.e_y, pass_goal_ey, pass_lateral_tolerance,
+              overtake_line_state_.pass_side_sign);
+          output.overtake_front_cap_release_ready =
+            overtake_core::can_release_overtake_front_cap(
+            overtake_core::OvertakeFrontCapReleaseRequest{
+              overtake_line_state_.phase == OvertakeLinePhase::Pass,
+              pass_lateral_complete, output.locked_target_seen,
+              output.locked_target_longitudinal});
+          const bool front_cap_stage = !output.overtake_front_cap_release_ready;
+          const bool physical_shiftout_stage =
+            overtake_line_state_.phase != OvertakeLinePhase::Pass;
+          double closing_speed_limit =
+            cfg.v2x_behavior.overtake_shiftout_max_closing_speed;
+          closing_speed_limit = overtake_core::resolve_unlatched_pass_closing_speed(
+            closing_speed_limit,
+            cfg.v2x_behavior.overtake_pass_unlatched_max_closing_speed,
+            overtake_line_state_.phase == OvertakeLinePhase::Pass,
+            overtake_line_state_.pass_front_overlap_exclusion_latched);
+          if (
+            physical_shiftout_stage &&
+            cfg.v2x_behavior.overtake_shiftout_adaptive_closing_speed_enabled &&
+            std::isfinite(output.front_distance))
+          {
+            const double remaining_shiftout_distance =
+              overtake_shiftout_remaining_distance(model->spatial_state.e_y);
+            const auto adaptive_closing =
+              v2x_overtake_core::resolve_adaptive_shiftout_closing_speed(
+              v2x_overtake_core::AdaptiveShiftOutClosingSpeedRequest{
+                cfg.v2x_behavior.overtake_shiftout_min_closing_speed,
+                cfg.v2x_behavior.overtake_shiftout_max_closing_speed,
+                std::max(0.0, output.front_distance),
+                cfg.v2x_behavior.overtake_guard_min_front_distance,
+                remaining_shiftout_distance,
+                std::max(0.0, current_speed_mps_),
+                std::max(kEps, cfg.v2x_behavior.overtake_guard_min_speed_for_reachable),
+                cfg.v2x_behavior.overtake_shiftout_adaptive_min_time_sec});
+            closing_speed_limit = adaptive_closing.closing_speed_mps;
+            output.overtake_shiftout_adaptive_speed_applied = true;
+            output.overtake_shiftout_closing_speed_limit = closing_speed_limit;
+            output.overtake_shiftout_remaining_time = adaptive_closing.remaining_time_sec;
+          }
+          const double front_based_shiftout_cap =
+            std::max(0.0, overtake_target_speed) + closing_speed_limit;
+          const double entry_speed_floor =
+            output.overtake_shiftout_adaptive_speed_applied ?
+            std::min(overtake_entry_speed_.value(), front_based_shiftout_cap) :
+            overtake_entry_speed_.value();
           const auto speed_reference = v2x_overtake_core::resolve_overtake_speed_reference(
             v2x_overtake_core::OvertakeSpeedReferenceRequest{
-              overtake_line_state_.phase == OvertakeLinePhase::Pass ?
-              v2x_overtake_core::OvertakeSpeedStage::Pass :
-              v2x_overtake_core::OvertakeSpeedStage::ShiftOut,
+              front_cap_stage ?
+              v2x_overtake_core::OvertakeSpeedStage::ShiftOut :
+              v2x_overtake_core::OvertakeSpeedStage::Pass,
               cfg.v_max,
               cfg.v_max,
-              std::max(0.0, output.front_speed),
-              overtake_entry_speed_.value(),
-              cfg.v2x_behavior.overtake_shiftout_max_closing_speed});
+              std::max(0.0, overtake_target_speed),
+              entry_speed_floor,
+              closing_speed_limit});
           output.desired_velocity = speed_reference.reference_speed_mps;
           output.overtake_speed_front_cap_applied = speed_reference.front_cap_applied;
         } else {
@@ -6141,13 +6595,23 @@ private:
       output.target_velocity_limit = std::min(
         output.target_velocity_limit, std::max(0.0, cfg.v2x_behavior.low_speed_avoidance_velocity));
     } else if (final_state == V2XBehaviorState::Follow) {
+      // The explicit Pass line already owns the lateral target. A transient side-gap failure
+      // must neither re-enable a second gap-planner target nor restore the generic Follow cap.
+      const bool active_pass_gap_hold =
+        v2x_overtake_core::can_hold_active_pass_after_gap_loss(
+        v2x_overtake_core::ActivePassGapHoldRequest{
+          overtake_line_state_.phase == OvertakeLinePhase::Pass,
+          overtake_line_state_.pass_front_overlap_exclusion_latched,
+          output.locked_target_seen,
+          output.locked_target_position_jump});
       const bool follow_gap_planner_allowed =
-        !cfg.v2x_behavior.follow_gap_planner_respect_overtake_forbidden ||
-        output.follow_gap_planner_allowed;
+        !active_pass_gap_hold &&
+        (!cfg.v2x_behavior.follow_gap_planner_respect_overtake_forbidden ||
+        output.follow_gap_planner_allowed);
       if (cfg.v2x_behavior.follow_gap_planner_enabled && follow_gap_planner_allowed) {
         output.allow_gap_planner = true;
       }
-      if (cfg.v2x_behavior.follow_speed_limit_enabled) {
+      if (cfg.v2x_behavior.follow_speed_limit_enabled && !active_pass_gap_hold) {
         output.target_velocity_limit = std::min(
         output.target_velocity_limit, std::max(0.0, cfg.v2x_behavior.follow_velocity));
       }
@@ -6189,9 +6653,20 @@ private:
     if (!v2x_behavior_state_initialized || final_state != v2x_behavior_state) {
       RCLCPP_INFO(
         rclcpp::get_logger("mpc_controller"),
-        "V2X behavior: %s -> %s, front_distance=%.2f, wp_id=%d, reason=%s",
+        "V2X behavior: %s -> %s, front_distance=%.2f, wp_id=%d, reason=%s, "
+        "block=%s, gap=%d, soft_curve=%d, hard_curve=%d, inner_pass=%d, continue=%d, "
+        "hard_continue=%d, hard_dist=%.2f, hard_avail=%.2f, hard_req=%.2f",
         v2x_behavior_state_initialized ? to_string(v2x_behavior_state) : "None", to_string(final_state),
-        output.front_distance, model->wp_id, output.reason.c_str());
+        output.front_distance, model->wp_id, output.reason.c_str(),
+        output.overtake_block_reason.c_str(), output.overtake_gap_available ? 1 : 0,
+        output.overtake_forbidden && !output.overtake_forbidden_wp ? 1 : 0,
+        output.overtake_hard_curve_blocked ? 1 : 0,
+        output.overtake_inner_curve_pass ? 1 : 0,
+        output.continuing_overtake_allowed ? 1 : 0,
+        output.active_hard_curve_continuation_allowed ? 1 : 0,
+        output.active_hard_curve_distance,
+        output.active_hard_curve_available_distance,
+        output.active_hard_curve_required_distance);
       v2x_behavior_state = final_state;
       last_v2x_behavior_state_change_sec = now_sec;
       v2x_behavior_state_initialized = true;
@@ -6207,14 +6682,17 @@ private:
         RCLCPP_INFO(
           rclcpp::get_logger("mpc_controller"),
           "V2X debug: desired=%s, final=%s, allow_gap=%d, limit=%.2f, desired_v=%.2f, "
-          "speed_cap=%d, wp_id=%d, "
+          "speed_cap=%d, cap_release=%d, adaptive_cap=%d, closing=%.2f, "
+          "shift_t=%.2f, wp_id=%d, "
           "vehicles=%zu, front=%d, side=%d, danger=%d, grace=%d, grid_suppress=%d, "
           "hazard_hold=%d, hazard_remaining=%.2f, hazard_target=%s, "
           "fd=%.2f, progress=%d, local_fd=%.2f, path_lat=%.2f, fs=%.2f, ego=%.2f, "
           "rel=%.2f, req_dec=%.2f, avail=%.2f, risk=%s, "
-          "forbid=%d, forbid_wp=%d, curve_guard=%d, low_speed=%d, low_speed_block=%d, "
+          "forbid=%d, forbid_wp=%d, hard_curve=%d, inner_pass=%d, curve_guard=%d, "
+          "low_speed=%d, low_speed_block=%d, "
           "low_stall=%.2f, low_timeout=%d, low_cooldown=%d, "
-          "zone=%d, start_curve=%d, before_curve=%d, continue=%d, completion=%d, "
+          "zone=%d, start_curve=%d, before_curve=%d, continue=%d, hard_continue=%d, "
+          "hard_dist=%.2f, hard_avail=%.2f, hard_req=%.2f, completion=%d, "
           "completion_avail=%.2f, completion_req=%.2f, completion_rel=%.2f, "
           "gap=%d, fallback=%d, "
           "cooldown=%d, pass=%d, side_clear=%.2f, plan_N=%d, target=%s, locked_seen=%d, "
@@ -6222,7 +6700,11 @@ private:
           "left_reason=%s, right_reason=%s, reason=%s, block=%s",
           to_string(desired_state), to_string(final_state), output.allow_gap_planner ? 1 : 0,
           output.target_velocity_limit, output.desired_velocity,
-          output.overtake_speed_front_cap_applied ? 1 : 0, model->wp_id,
+          output.overtake_speed_front_cap_applied ? 1 : 0,
+          output.overtake_front_cap_release_ready ? 1 : 0,
+          output.overtake_shiftout_adaptive_speed_applied ? 1 : 0,
+          output.overtake_shiftout_closing_speed_limit,
+          output.overtake_shiftout_remaining_time, model->wp_id,
           output.active_vehicle_count,
           output.has_front_vehicle ? 1 : 0, output.has_side_vehicle ? 1 : 0,
           output.has_danger_vehicle ? 1 : 0, output.start_grid_grace_active ? 1 : 0,
@@ -6236,6 +6718,8 @@ private:
           output.front_risk.relative_speed, output.front_risk.required_decel,
           output.front_risk.available_distance, to_string(output.front_risk_level),
           output.overtake_forbidden ? 1 : 0, output.overtake_forbidden_wp ? 1 : 0,
+          output.overtake_hard_curve_blocked ? 1 : 0,
+          output.overtake_inner_curve_pass ? 1 : 0,
           output.front_decel_curve_guard ? 1 : 0,
           output.low_speed_avoidance_candidate ? 1 : 0,
           output.low_speed_avoidance_gap_blocked ? 1 : 0,
@@ -6246,6 +6730,10 @@ private:
           output.overtake_start_curve_blocked ? 1 : 0,
           output.before_curve_overtake_allowed ? 1 : 0,
           output.continuing_overtake_allowed ? 1 : 0,
+          output.active_hard_curve_continuation_allowed ? 1 : 0,
+          output.active_hard_curve_distance,
+          output.active_hard_curve_available_distance,
+          output.active_hard_curve_required_distance,
           output.overtake_completion_feasible ? 1 : 0,
           output.overtake_completion_available_distance,
           output.overtake_completion_required_distance,
@@ -7585,6 +8073,13 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_guard_min_front_distance"] ?
     mpc["v2x_overtake_guard_min_front_distance"].as<double>() : 3.0);
+  cfg.mpc.v2x_behavior.overtake_continue_min_front_distance = std::min(
+    cfg.mpc.v2x_behavior.overtake_guard_min_front_distance,
+    std::max(
+      0.0,
+      mpc["v2x_overtake_continue_min_front_distance"] ?
+      mpc["v2x_overtake_continue_min_front_distance"].as<double>() :
+      cfg.mpc.v2x_behavior.overtake_guard_min_front_distance));
   cfg.mpc.v2x_behavior.overtake_close_follow_enabled =
     mpc["v2x_overtake_close_follow_enabled"] ?
     mpc["v2x_overtake_close_follow_enabled"].as<bool>() : false;
@@ -7618,6 +8113,20 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_continue_in_forbidden_enabled =
     mpc["v2x_overtake_continue_in_forbidden_enabled"] ?
     mpc["v2x_overtake_continue_in_forbidden_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_continue_inner_soft_curve_enabled =
+    mpc["v2x_overtake_continue_inner_soft_curve_enabled"] ?
+    mpc["v2x_overtake_continue_inner_soft_curve_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_active_hard_curve_completion_enabled =
+    mpc["v2x_overtake_active_hard_curve_completion_enabled"] ?
+    mpc["v2x_overtake_active_hard_curve_completion_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_active_hard_curve_rear_clear_distance = std::max(
+    0.0,
+    mpc["v2x_overtake_active_hard_curve_rear_clear_distance"] ?
+    mpc["v2x_overtake_active_hard_curve_rear_clear_distance"].as<double>() : 0.5);
+  cfg.mpc.v2x_behavior.overtake_active_hard_curve_buffer_distance = std::max(
+    0.0,
+    mpc["v2x_overtake_active_hard_curve_buffer_distance"] ?
+    mpc["v2x_overtake_active_hard_curve_buffer_distance"].as<double>() : 0.5);
   cfg.mpc.v2x_behavior.overtake_front_velocity_limit_enabled =
     mpc["v2x_overtake_front_velocity_limit_enabled"] ?
     mpc["v2x_overtake_front_velocity_limit_enabled"].as<bool>() : true;
@@ -7641,6 +8150,16 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.side_overtake_ignore_soft_curve_forbidden =
     mpc["v2x_side_overtake_ignore_soft_curve_forbidden"] ?
     mpc["v2x_side_overtake_ignore_soft_curve_forbidden"].as<bool>() : true;
+  cfg.mpc.v2x_behavior.side_overtake_entry_rear_tolerance =
+    mpc["v2x_side_overtake_entry_rear_tolerance"] ?
+    mpc["v2x_side_overtake_entry_rear_tolerance"].as<double>() : 0.5;
+  if (
+    !std::isfinite(cfg.mpc.v2x_behavior.side_overtake_entry_rear_tolerance) ||
+    cfg.mpc.v2x_behavior.side_overtake_entry_rear_tolerance < 0.0)
+  {
+    throw std::runtime_error(
+            "mpc.v2x_side_overtake_entry_rear_tolerance must be finite and non-negative");
+  }
   cfg.mpc.v2x_behavior.overtake_gap_lookahead_distance = std::max(
     0.0,
     mpc["v2x_overtake_gap_lookahead_distance"] ?
@@ -7655,10 +8174,34 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_stage_speed_enabled =
     mpc["v2x_overtake_stage_speed_enabled"] ?
     mpc["v2x_overtake_stage_speed_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_shiftout_adaptive_closing_speed_enabled =
+    mpc["v2x_overtake_shiftout_adaptive_closing_speed_enabled"] ?
+    mpc["v2x_overtake_shiftout_adaptive_closing_speed_enabled"].as<bool>() : false;
   cfg.mpc.v2x_behavior.overtake_shiftout_max_closing_speed = std::max(
     0.0,
     mpc["v2x_overtake_shiftout_max_closing_speed"] ?
     mpc["v2x_overtake_shiftout_max_closing_speed"].as<double>() : 1.0);
+  cfg.mpc.v2x_behavior.overtake_shiftout_min_closing_speed = std::min(
+    cfg.mpc.v2x_behavior.overtake_shiftout_max_closing_speed,
+    std::max(
+      0.0,
+      mpc["v2x_overtake_shiftout_min_closing_speed"] ?
+      mpc["v2x_overtake_shiftout_min_closing_speed"].as<double>() :
+      cfg.mpc.v2x_behavior.overtake_shiftout_max_closing_speed));
+  cfg.mpc.v2x_behavior.overtake_pass_unlatched_max_closing_speed = std::min(
+    cfg.mpc.v2x_behavior.overtake_shiftout_max_closing_speed,
+    std::max(
+      0.0,
+      mpc["v2x_overtake_pass_unlatched_max_closing_speed"] ?
+      mpc["v2x_overtake_pass_unlatched_max_closing_speed"].as<double>() : 0.5));
+  cfg.mpc.v2x_behavior.overtake_shiftout_adaptive_min_time_sec = std::max(
+    kEps,
+    mpc["v2x_overtake_shiftout_adaptive_min_time_sec"] ?
+    mpc["v2x_overtake_shiftout_adaptive_min_time_sec"].as<double>() : 0.5);
+  cfg.mpc.v2x_behavior.overtake_pass_front_overlap_lateral_clearance = std::max(
+    0.0,
+    mpc["v2x_overtake_pass_front_overlap_lateral_clearance"] ?
+    mpc["v2x_overtake_pass_front_overlap_lateral_clearance"].as<double>() : 0.0);
   cfg.mpc.v2x_behavior.overtake_completion_guard_enabled =
     mpc["v2x_overtake_completion_guard_enabled"] ?
     mpc["v2x_overtake_completion_guard_enabled"].as<bool>() : false;

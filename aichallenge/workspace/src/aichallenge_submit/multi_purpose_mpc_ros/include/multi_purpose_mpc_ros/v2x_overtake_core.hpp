@@ -62,10 +62,153 @@ struct OvertakeSpeedReferenceResolution
   bool front_cap_applied{false};
 };
 
-/// Keep closing speed bounded while shifting out, then release the front-speed
-/// ceiling in Pass so the original trajectory reference can be used.
+/// Keep closing speed bounded while the caller selects ShiftOut, then release
+/// the front-speed ceiling only after the caller has confirmed a clear Pass.
 OvertakeSpeedReferenceResolution resolve_overtake_speed_reference(
   const OvertakeSpeedReferenceRequest & request);
+
+struct ShiftOutCompletionRequest
+{
+  bool phase_hold_elapsed{false};
+  double traveled_distance_m{};
+  double required_distance_m{};
+  double current_lateral_m{};
+  double target_lateral_m{};
+  double lateral_tolerance_m{};
+  int pass_side_sign{};
+};
+
+/// True once the vehicle reaches or crosses the target line toward pass_side_sign.
+/// Overshoot on the selected pass side is complete, not an error.
+bool has_reached_pass_side_lateral_goal(
+  double current_lateral_m, double target_lateral_m,
+  double lateral_tolerance_m, int pass_side_sign) noexcept;
+
+/// Enter Pass only after both longitudinal shift distance and directional
+/// lateral target completion. Invalid observations never complete ShiftOut.
+bool is_shiftout_complete(const ShiftOutCompletionRequest & request) noexcept;
+
+struct OvertakeFrontCapReleaseRequest
+{
+  bool pass_phase{false};
+  bool lateral_complete{false};
+  bool target_seen{false};
+  double target_longitudinal_m{};
+};
+
+/// Release the front-speed cap only when the locked target is observed no
+/// longer ahead after lateral ShiftOut has completed.
+bool can_release_overtake_front_cap(
+  const OvertakeFrontCapReleaseRequest & request) noexcept;
+
+struct PassFrontOverlapExclusionRequest
+{
+  bool pass_phase{false};
+  bool locked_target{false};
+  double relative_lateral_m{};
+  double required_lateral_clearance_m{};
+  bool already_latched{false};
+};
+
+/// A locked target that is laterally separated in Pass is a side-by-side
+/// vehicle, not a centerline front obstacle. The result stays true after the
+/// first clearance until Pass ends so hairpin frame rotation cannot chatter it.
+/// Other vehicles remain unchanged.
+bool can_exclude_locked_target_from_front_overlap(
+  const PassFrontOverlapExclusionRequest & request) noexcept;
+
+struct ActivePassGapHoldRequest
+{
+  bool pass_phase{false};
+  bool lateral_clearance_latched{false};
+  bool locked_target_seen{false};
+  bool locked_target_position_jump{false};
+};
+
+/// Once ShiftOut has completed and the locked target is side-by-side, do not
+/// treat a transient gap-width/time failure as a new-pass rejection.
+bool can_hold_active_pass_after_gap_loss(const ActivePassGapHoldRequest & request) noexcept;
+
+struct OvertakeLateralPlannerOwnershipRequest
+{
+  bool explicit_line_enabled{false};
+  bool behavior_requests_overtake{false};
+  bool line_phase_active{false};
+};
+
+/// The explicit ShiftOut/Pass line and the gap planner must not inject lateral
+/// references/bounds into the same MPC solve.
+bool explicit_overtake_line_owns_lateral_plan(
+  const OvertakeLateralPlannerOwnershipRequest & request) noexcept;
+
+struct SideOvertakeEntryRequest
+{
+  bool continuing_overtake{false};
+  double target_longitudinal_m{};
+  double rear_tolerance_m{};
+};
+
+/// Do not start a new lateral pass for a side vehicle that ego has already
+/// passed in common course progress. Existing committed passes remain valid.
+bool can_start_side_overtake(const SideOvertakeEntryRequest & request) noexcept;
+
+/// Limit closing speed only while Pass is waiting for lateral-clearance latch.
+/// ShiftOut keeps its adaptive limit and a latched Pass is released elsewhere.
+double resolve_unlatched_pass_closing_speed(
+  double configured_closing_speed_mps, double unlatched_pass_closing_speed_mps,
+  bool pass_phase, bool lateral_clearance_latched);
+
+struct OvertakeLineHorizonProgressRequest
+{
+  bool hold_target{false};
+  double phase_traveled_m{};
+  double horizon_distance_m{};
+  double phase_distance_m{};
+};
+
+/// Advance the explicit lateral line inside the prediction horizon using both
+/// distance already traveled in the phase and distance ahead of ego. Without
+/// phase_traveled_m, the ramp restarts at ego every control cycle and ShiftOut
+/// can never converge at the configured distance.
+double resolve_overtake_line_horizon_progress(
+  const OvertakeLineHorizonProgressRequest & request) noexcept;
+
+struct PassSideLateralGoalRequest
+{
+  int pass_side_sign{};
+  double base_lateral_offset_m{};
+  double target_lateral_m{};
+  double minimum_separation_m{};
+};
+
+/// Place the pass line on the selected side of both the base trajectory and
+/// the locked target. This prevents a target that moves toward the same side
+/// in a curve from consuming the fixed lateral pass offset.
+double resolve_pass_side_lateral_goal(const PassSideLateralGoalRequest & request) noexcept;
+
+struct AdaptiveShiftOutClosingSpeedRequest
+{
+  double minimum_closing_speed_mps{};
+  double maximum_closing_speed_mps{};
+  double front_distance_m{};
+  double protected_front_distance_m{};
+  double remaining_shiftout_distance_m{};
+  double ego_speed_mps{};
+  double minimum_speed_mps{};
+  double minimum_time_sec{};
+};
+
+struct AdaptiveShiftOutClosingSpeedResolution
+{
+  double closing_speed_mps{};
+  double remaining_time_sec{};
+  double distance_budget_m{};
+};
+
+/// Select a ShiftOut closing-speed cap that preserves the protected front
+/// distance over the estimated remaining lateral-shift time.
+AdaptiveShiftOutClosingSpeedResolution resolve_adaptive_shiftout_closing_speed(
+  const AdaptiveShiftOutClosingSpeedRequest & request);
 
 struct PredictionTimeRequest
 {
@@ -140,6 +283,69 @@ struct PassCompletionResolution
 
 /// Estimate whether ego can clear the target before the next hard curve.
 PassCompletionResolution resolve_pass_completion(const PassCompletionRequest & request);
+
+struct OvertakeGuardPhaseRequest
+{
+  bool continuing_overtake{false};
+  double entry_min_front_distance_m{};
+  double continuation_min_front_distance_m{};
+};
+
+struct OvertakeGuardPhaseResolution
+{
+  double min_front_distance_m{};
+  bool require_prepare_distance{true};
+};
+
+/// Select the front-distance guard for a new pass or an already active pass.
+///
+/// The prepare-distance check belongs to pass entry. Once a pass is active,
+/// only the continuation front-distance threshold is reused; the geometric
+/// gap and lateral reachability checks remain the caller's responsibility.
+OvertakeGuardPhaseResolution resolve_overtake_guard_phase(
+  const OvertakeGuardPhaseRequest & request);
+
+struct OvertakeCurveContinuationRequest
+{
+  bool continuation_enabled{false};
+  bool inner_soft_curve_enabled{false};
+  bool continuing_overtake{false};
+  bool soft_curve_forbidden{false};
+  bool hard_curve_forbidden{false};
+  bool inner_curve_pass{false};
+  bool cooldown_active{false};
+  bool emergency_brake{false};
+};
+
+/// Allow an active locked pass through a soft curve without weakening hard guards.
+bool can_continue_overtake_in_soft_curve(
+  const OvertakeCurveContinuationRequest & request) noexcept;
+
+struct ActiveHardCurveContinuationRequest
+{
+  bool enabled{false};
+  bool continuing_overtake{false};
+  bool pass_phase{false};
+  bool locked_target_seen{false};
+  bool lateral_clearance_latched{false};
+  bool hard_curve_ahead{false};
+  bool explicit_forbidden_wp{false};
+  bool cooldown_active{false};
+  bool emergency_brake{false};
+  PassCompletionRequest completion;
+};
+
+struct ActiveHardCurveContinuationResolution
+{
+  bool allowed{false};
+  PassCompletionResolution completion;
+};
+
+/// Allow only an already shifted-out Pass to finish before a detected hard boundary.
+/// A Pass that already established and latched lateral clearance stays committed even when
+/// the conservative distance estimate briefly becomes infeasible at the boundary.
+ActiveHardCurveContinuationResolution resolve_active_hard_curve_continuation(
+  const ActiveHardCurveContinuationRequest & request);
 
 enum class PassSide : int
 {
@@ -260,6 +466,7 @@ struct ContinuityRequest
   double target_age_sec{};
   double target_hold_sec{};
   bool target_not_ahead{false};
+  bool active_execution_latched{false};
 };
 
 /// Decide how an active ShiftOut/Pass phase reacts when behavior no longer requests Overtake.

@@ -23,6 +23,18 @@ using multi_purpose_mpc_ros::v2x_overtake_core::FrontHazardHoldRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ForwardCourseProjectionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSpeedReferenceRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSpeedStage;
+using multi_purpose_mpc_ros::v2x_overtake_core::ShiftOutCompletionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeFrontCapReleaseRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::PassFrontOverlapExclusionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::ActivePassGapHoldRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeLateralPlannerOwnershipRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::SideOvertakeEntryRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeLineHorizonProgressRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::PassSideLateralGoalRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::AdaptiveShiftOutClosingSpeedRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeGuardPhaseRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeCurveContinuationRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::ActiveHardCurveContinuationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassCompletionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PredictionTimeRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecoveryExitReason;
@@ -39,6 +51,20 @@ using multi_purpose_mpc_ros::v2x_overtake_core::StallWatchdogRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StartWindowStatus;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_effective_speed_limit;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_speed_reference;
+using multi_purpose_mpc_ros::v2x_overtake_core::is_shiftout_complete;
+using multi_purpose_mpc_ros::v2x_overtake_core::can_release_overtake_front_cap;
+using multi_purpose_mpc_ros::v2x_overtake_core::can_exclude_locked_target_from_front_overlap;
+using multi_purpose_mpc_ros::v2x_overtake_core::can_hold_active_pass_after_gap_loss;
+using multi_purpose_mpc_ros::v2x_overtake_core::explicit_overtake_line_owns_lateral_plan;
+using multi_purpose_mpc_ros::v2x_overtake_core::can_start_side_overtake;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_unlatched_pass_closing_speed;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_line_horizon_progress;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_side_lateral_goal;
+using multi_purpose_mpc_ros::v2x_overtake_core::has_reached_pass_side_lateral_goal;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_adaptive_shiftout_closing_speed;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_guard_phase;
+using multi_purpose_mpc_ros::v2x_overtake_core::can_continue_overtake_in_soft_curve;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_active_hard_curve_continuation;
 using multi_purpose_mpc_ros::v2x_overtake_core::advance_prediction_time;
 using multi_purpose_mpc_ros::v2x_overtake_core::project_forward_course_progress;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_completion;
@@ -221,6 +247,243 @@ TEST(V2XOvertakeCoreSpeed, CapsShiftOutButReleasesFrontCapInPass)
   result = resolve_overtake_speed_reference(request);
   EXPECT_DOUBLE_EQ(result.reference_speed_mps, 11.0);
   EXPECT_FALSE(result.front_cap_applied);
+}
+
+TEST(V2XOvertakeCoreSpeed, RequiresDistanceAndLateralCompletionBeforePass)
+{
+  ShiftOutCompletionRequest request;
+  request.phase_hold_elapsed = true;
+  request.traveled_distance_m = 8.0;
+  request.required_distance_m = 8.0;
+  request.current_lateral_m = 0.73;
+  request.target_lateral_m = 1.20;
+  request.lateral_tolerance_m = 0.30;
+  request.pass_side_sign = 1;
+  EXPECT_FALSE(is_shiftout_complete(request));
+
+  request.current_lateral_m = 0.91;
+  EXPECT_TRUE(is_shiftout_complete(request));
+
+  request.traveled_distance_m = 7.99;
+  EXPECT_FALSE(is_shiftout_complete(request));
+  request.traveled_distance_m = 8.0;
+  request.phase_hold_elapsed = false;
+  EXPECT_FALSE(is_shiftout_complete(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, TreatsPassSideOvershootAsLateralCompletion)
+{
+  EXPECT_TRUE(has_reached_pass_side_lateral_goal(1.82, 1.20, 0.30, 1));
+  EXPECT_FALSE(has_reached_pass_side_lateral_goal(0.73, 1.20, 0.30, 1));
+  EXPECT_TRUE(has_reached_pass_side_lateral_goal(-1.82, -1.20, 0.30, -1));
+  EXPECT_FALSE(has_reached_pass_side_lateral_goal(-0.73, -1.20, 0.30, -1));
+  EXPECT_FALSE(has_reached_pass_side_lateral_goal(1.82, 1.20, 0.30, 0));
+}
+
+TEST(V2XOvertakeCoreSpeed, ReleasesFrontCapOnlyAfterTargetIsNoLongerAhead)
+{
+  OvertakeFrontCapReleaseRequest request;
+  request.pass_phase = true;
+  request.lateral_complete = true;
+  request.target_seen = true;
+  request.target_longitudinal_m = 0.01;
+  EXPECT_FALSE(can_release_overtake_front_cap(request));
+
+  request.target_longitudinal_m = 0.0;
+  EXPECT_TRUE(can_release_overtake_front_cap(request));
+  request.target_seen = false;
+  EXPECT_FALSE(can_release_overtake_front_cap(request));
+  request.target_seen = true;
+  request.lateral_complete = false;
+  EXPECT_FALSE(can_release_overtake_front_cap(request));
+  request.lateral_complete = true;
+  request.pass_phase = false;
+  EXPECT_FALSE(can_release_overtake_front_cap(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, ExcludesOnlyLaterallyClearLockedTargetDuringPass)
+{
+  PassFrontOverlapExclusionRequest request;
+  request.pass_phase = true;
+  request.locked_target = true;
+  request.relative_lateral_m = 1.39;
+  request.required_lateral_clearance_m = 1.20;
+  EXPECT_TRUE(can_exclude_locked_target_from_front_overlap(request));
+
+  request.relative_lateral_m = 1.19;
+  EXPECT_FALSE(can_exclude_locked_target_from_front_overlap(request));
+  request.already_latched = true;
+  EXPECT_TRUE(can_exclude_locked_target_from_front_overlap(request));
+
+  request.relative_lateral_m = 1.39;
+  request.pass_phase = false;
+  EXPECT_FALSE(can_exclude_locked_target_from_front_overlap(request));
+  request.pass_phase = true;
+  request.locked_target = false;
+  EXPECT_FALSE(can_exclude_locked_target_from_front_overlap(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, HoldsOnlyCommittedActivePassAfterGapLoss)
+{
+  ActivePassGapHoldRequest request;
+  request.pass_phase = true;
+  request.lateral_clearance_latched = true;
+  request.locked_target_seen = true;
+  EXPECT_TRUE(can_hold_active_pass_after_gap_loss(request));
+
+  request.pass_phase = false;
+  EXPECT_FALSE(can_hold_active_pass_after_gap_loss(request));
+  request.pass_phase = true;
+  request.locked_target_position_jump = true;
+  EXPECT_FALSE(can_hold_active_pass_after_gap_loss(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, ExplicitLineExclusivelyOwnsActiveOvertakeLateralPlan)
+{
+  OvertakeLateralPlannerOwnershipRequest request;
+  request.explicit_line_enabled = true;
+  request.behavior_requests_overtake = true;
+  EXPECT_TRUE(explicit_overtake_line_owns_lateral_plan(request));
+
+  request.behavior_requests_overtake = false;
+  request.line_phase_active = true;
+  EXPECT_TRUE(explicit_overtake_line_owns_lateral_plan(request));
+
+  request.explicit_line_enabled = false;
+  EXPECT_FALSE(explicit_overtake_line_owns_lateral_plan(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, RejectsNewSidePassAfterTargetIsAlreadyBehind)
+{
+  SideOvertakeEntryRequest request;
+  request.target_longitudinal_m = -1.47;
+  request.rear_tolerance_m = 0.5;
+  EXPECT_FALSE(can_start_side_overtake(request));
+
+  request.target_longitudinal_m = -0.4;
+  EXPECT_TRUE(can_start_side_overtake(request));
+
+  request.target_longitudinal_m = -1.47;
+  request.continuing_overtake = true;
+  EXPECT_TRUE(can_start_side_overtake(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, SlowsClosingOnlyUntilPassLateralClearanceLatches)
+{
+  EXPECT_DOUBLE_EQ(resolve_unlatched_pass_closing_speed(1.5, 0.5, true, false), 0.5);
+  EXPECT_DOUBLE_EQ(resolve_unlatched_pass_closing_speed(1.5, 0.5, false, false), 1.5);
+  EXPECT_DOUBLE_EQ(resolve_unlatched_pass_closing_speed(1.5, 0.5, true, true), 1.5);
+}
+
+TEST(V2XOvertakeCoreSpeed, AdvancesExplicitLineRampWithTraveledPhaseDistance)
+{
+  OvertakeLineHorizonProgressRequest request;
+  request.phase_distance_m = 8.0;
+  request.horizon_distance_m = 2.0;
+
+  EXPECT_NEAR(resolve_overtake_line_horizon_progress(request), 0.15625, 1e-9);
+
+  request.phase_traveled_m = 4.0;
+  EXPECT_NEAR(resolve_overtake_line_horizon_progress(request), 0.84375, 1e-9);
+
+  request.phase_traveled_m = 6.0;
+  EXPECT_DOUBLE_EQ(resolve_overtake_line_horizon_progress(request), 1.0);
+
+  request.hold_target = true;
+  request.phase_distance_m = 0.0;
+  EXPECT_DOUBLE_EQ(resolve_overtake_line_horizon_progress(request), 1.0);
+}
+
+TEST(V2XOvertakeCoreSpeed, RejectsInvalidExplicitLineRampInputs)
+{
+  OvertakeLineHorizonProgressRequest request;
+  request.phase_distance_m = 8.0;
+  request.phase_traveled_m = -0.1;
+  EXPECT_DOUBLE_EQ(resolve_overtake_line_horizon_progress(request), 0.0);
+
+  request.phase_traveled_m = 0.0;
+  request.horizon_distance_m = std::numeric_limits<double>::infinity();
+  EXPECT_DOUBLE_EQ(resolve_overtake_line_horizon_progress(request), 0.0);
+}
+
+TEST(V2XOvertakeCoreSpeed, PlacesPassGoalBeyondLockedTargetOnSelectedSide)
+{
+  PassSideLateralGoalRequest request;
+  request.pass_side_sign = 1;
+  request.base_lateral_offset_m = 1.2;
+  request.target_lateral_m = 0.6;
+  request.minimum_separation_m = 1.0;
+  EXPECT_DOUBLE_EQ(resolve_pass_side_lateral_goal(request), 1.6);
+
+  request.pass_side_sign = -1;
+  request.target_lateral_m = -0.7;
+  EXPECT_DOUBLE_EQ(resolve_pass_side_lateral_goal(request), -1.7);
+
+  request.target_lateral_m = 0.0;
+  EXPECT_DOUBLE_EQ(resolve_pass_side_lateral_goal(request), -1.2);
+}
+
+TEST(V2XOvertakeCoreSpeed, FallsBackToBasePassGoalWithoutTargetLateral)
+{
+  PassSideLateralGoalRequest request;
+  request.pass_side_sign = 1;
+  request.base_lateral_offset_m = 1.2;
+  request.target_lateral_m = std::numeric_limits<double>::infinity();
+  request.minimum_separation_m = 1.0;
+  EXPECT_DOUBLE_EQ(resolve_pass_side_lateral_goal(request), 1.2);
+
+  request.pass_side_sign = 0;
+  EXPECT_DOUBLE_EQ(resolve_pass_side_lateral_goal(request), 0.0);
+}
+
+TEST(V2XOvertakeCoreSpeed, AdaptsShiftOutClosingSpeedToFrontDistanceBudget)
+{
+  AdaptiveShiftOutClosingSpeedRequest request;
+  request.minimum_closing_speed_mps = 1.5;
+  request.maximum_closing_speed_mps = 2.0;
+  request.front_distance_m = 6.9;
+  request.protected_front_distance_m = 5.0;
+  request.remaining_shiftout_distance_m = 8.0;
+  request.ego_speed_mps = 3.0;
+  request.minimum_speed_mps = 1.0;
+  request.minimum_time_sec = 0.5;
+
+  auto result = resolve_adaptive_shiftout_closing_speed(request);
+  EXPECT_DOUBLE_EQ(result.closing_speed_mps, 1.5);
+  EXPECT_NEAR(result.remaining_time_sec, 8.0 / 3.0, 1e-9);
+  EXPECT_NEAR(result.distance_budget_m, 1.9, 1e-9);
+
+  request.front_distance_m = 8.5;
+  request.ego_speed_mps = 4.0;
+  result = resolve_adaptive_shiftout_closing_speed(request);
+  EXPECT_DOUBLE_EQ(result.closing_speed_mps, 1.75);
+
+  request.front_distance_m = 15.0;
+  result = resolve_adaptive_shiftout_closing_speed(request);
+  EXPECT_DOUBLE_EQ(result.closing_speed_mps, 2.0);
+}
+
+TEST(V2XOvertakeCoreSpeed, AdaptiveShiftOutCanMatchFrontSpeedAtSmallDistanceBudget)
+{
+  AdaptiveShiftOutClosingSpeedRequest request;
+  request.minimum_closing_speed_mps = 0.0;
+  request.maximum_closing_speed_mps = 1.5;
+  request.front_distance_m = 7.0;
+  request.protected_front_distance_m = 5.0;
+  request.remaining_shiftout_distance_m = 8.0;
+  request.ego_speed_mps = 3.0;
+  request.minimum_speed_mps = 1.0;
+  request.minimum_time_sec = 0.5;
+
+  const auto result = resolve_adaptive_shiftout_closing_speed(request);
+  EXPECT_NEAR(result.closing_speed_mps, 0.75, 1e-9);
+}
+
+TEST(V2XOvertakeCoreSpeed, RejectsInvalidAdaptiveShiftOutRange)
+{
+  AdaptiveShiftOutClosingSpeedRequest request{
+    2.0, 1.5, 10.0, 5.0, 8.0, 4.0, 1.0, 0.5};
+  EXPECT_THROW(resolve_adaptive_shiftout_closing_speed(request), std::invalid_argument);
 }
 
 TEST(V2XOvertakeCorePrediction, AccumulatesPathTimeAndSaturatesAtHorizon)
@@ -424,6 +687,153 @@ TEST(V2XOvertakeCoreCompletion, RejectsInsufficientRelativeSpeed)
   EXPECT_TRUE(std::isinf(result.required_distance_m));
 }
 
+TEST(V2XOvertakeCoreGuardPhase, KeepsEntryDistanceAndPrepareCheckBeforePassStarts)
+{
+  const auto result = resolve_overtake_guard_phase(
+    OvertakeGuardPhaseRequest{false, 5.0, 2.5});
+
+  EXPECT_DOUBLE_EQ(result.min_front_distance_m, 5.0);
+  EXPECT_TRUE(result.require_prepare_distance);
+}
+
+TEST(V2XOvertakeCoreGuardPhase, UsesContinuationDistanceWithoutEntryPrepareCheck)
+{
+  const auto result = resolve_overtake_guard_phase(
+    OvertakeGuardPhaseRequest{true, 5.0, 2.5});
+
+  EXPECT_DOUBLE_EQ(result.min_front_distance_m, 2.5);
+  EXPECT_FALSE(result.require_prepare_distance);
+}
+
+TEST(V2XOvertakeCoreGuardPhase, RejectsContinuationThresholdAboveEntryThreshold)
+{
+  EXPECT_THROW(
+    resolve_overtake_guard_phase(OvertakeGuardPhaseRequest{true, 2.5, 5.0}),
+    std::invalid_argument);
+}
+
+TEST(V2XOvertakeCoreCurveContinuation, AllowsOuterActivePassInSoftCurve)
+{
+  OvertakeCurveContinuationRequest request;
+  request.continuation_enabled = true;
+  request.continuing_overtake = true;
+  request.soft_curve_forbidden = true;
+
+  EXPECT_TRUE(can_continue_overtake_in_soft_curve(request));
+}
+
+TEST(V2XOvertakeCoreCurveContinuation, InnerPassRequiresExplicitExperimentFlag)
+{
+  OvertakeCurveContinuationRequest request;
+  request.continuation_enabled = true;
+  request.continuing_overtake = true;
+  request.soft_curve_forbidden = true;
+  request.inner_curve_pass = true;
+
+  EXPECT_FALSE(can_continue_overtake_in_soft_curve(request));
+  request.inner_soft_curve_enabled = true;
+  EXPECT_TRUE(can_continue_overtake_in_soft_curve(request));
+}
+
+TEST(V2XOvertakeCoreCurveContinuation, HardCurveAndEmergencyAlwaysBlock)
+{
+  OvertakeCurveContinuationRequest request;
+  request.continuation_enabled = true;
+  request.inner_soft_curve_enabled = true;
+  request.continuing_overtake = true;
+  request.soft_curve_forbidden = true;
+  request.inner_curve_pass = true;
+
+  request.hard_curve_forbidden = true;
+  EXPECT_FALSE(can_continue_overtake_in_soft_curve(request));
+  request.hard_curve_forbidden = false;
+  request.emergency_brake = true;
+  EXPECT_FALSE(can_continue_overtake_in_soft_curve(request));
+}
+
+TEST(V2XOvertakeCoreCurveContinuation, NeverRelaxesNewPassOrCooldown)
+{
+  OvertakeCurveContinuationRequest request;
+  request.continuation_enabled = true;
+  request.inner_soft_curve_enabled = true;
+  request.soft_curve_forbidden = true;
+
+  EXPECT_FALSE(can_continue_overtake_in_soft_curve(request));
+  request.continuing_overtake = true;
+  request.cooldown_active = true;
+  EXPECT_FALSE(can_continue_overtake_in_soft_curve(request));
+}
+
+ActiveHardCurveContinuationRequest active_hard_curve_request()
+{
+  ActiveHardCurveContinuationRequest request;
+  request.enabled = true;
+  request.continuing_overtake = true;
+  request.pass_phase = true;
+  request.locked_target_seen = true;
+  request.hard_curve_ahead = true;
+  request.completion = PassCompletionRequest{
+    12.0, 0.5, 3.0, 3.0, 6.0, 0.5, 0.0, 0.0, 0.5};
+  return request;
+}
+
+TEST(V2XOvertakeCoreActiveHardCurve, AllowsFeasibleLockedPassBeforeBoundary)
+{
+  const auto resolution =
+    resolve_active_hard_curve_continuation(active_hard_curve_request());
+
+  EXPECT_TRUE(resolution.allowed);
+  EXPECT_NEAR(resolution.completion.available_distance_m, 11.5, 1e-9);
+  EXPECT_NEAR(resolution.completion.required_distance_m, 7.0, 1e-9);
+}
+
+TEST(V2XOvertakeCoreActiveHardCurve, RejectsInsufficientBoundaryDistance)
+{
+  auto request = active_hard_curve_request();
+  request.completion.distance_to_hard_curve_m = 4.0;
+
+  const auto resolution = resolve_active_hard_curve_continuation(request);
+
+  EXPECT_FALSE(resolution.allowed);
+  EXPECT_NEAR(resolution.completion.available_distance_m, 3.5, 1e-9);
+  EXPECT_NEAR(resolution.completion.required_distance_m, 7.0, 1e-9);
+}
+
+TEST(V2XOvertakeCoreActiveHardCurve, HoldsLaterallyLatchedPassAtBoundary)
+{
+  auto request = active_hard_curve_request();
+  request.completion.distance_to_hard_curve_m = 4.0;
+  request.lateral_clearance_latched = true;
+
+  const auto resolution = resolve_active_hard_curve_continuation(request);
+
+  EXPECT_TRUE(resolution.allowed);
+  EXPECT_FALSE(resolution.completion.feasible);
+}
+
+TEST(V2XOvertakeCoreActiveHardCurve, NeverRelaxesEntryShiftoutOrSafetyGuards)
+{
+  auto request = active_hard_curve_request();
+
+  request.continuing_overtake = false;
+  EXPECT_FALSE(resolve_active_hard_curve_continuation(request).allowed);
+  request.continuing_overtake = true;
+  request.pass_phase = false;
+  EXPECT_FALSE(resolve_active_hard_curve_continuation(request).allowed);
+  request.pass_phase = true;
+  request.locked_target_seen = false;
+  EXPECT_FALSE(resolve_active_hard_curve_continuation(request).allowed);
+  request.locked_target_seen = true;
+  request.explicit_forbidden_wp = true;
+  EXPECT_FALSE(resolve_active_hard_curve_continuation(request).allowed);
+  request.explicit_forbidden_wp = false;
+  request.cooldown_active = true;
+  EXPECT_FALSE(resolve_active_hard_curve_continuation(request).allowed);
+  request.cooldown_active = false;
+  request.emergency_brake = true;
+  EXPECT_FALSE(resolve_active_hard_curve_continuation(request).allowed);
+}
+
 TEST(V2XOvertakeCoreSide, SelectsPreferredWhenBothSidesAreFeasible)
 {
   const auto result = select_pass_side(
@@ -591,6 +1001,19 @@ TEST(V2XOvertakeCoreContinuity, HoldsShortTargetLossInsteadOfReturning)
   EXPECT_EQ(resolve_target_continuity(request), ContinuityAction::Hold);
 
   request.target_age_sec = 0.31;
+  EXPECT_EQ(resolve_target_continuity(request), ContinuityAction::Recovery);
+}
+
+TEST(V2XOvertakeCoreContinuity, HoldsLatchedActiveTargetAcrossGapRecheckLoss)
+{
+  ContinuityRequest request;
+  request.target_seen = true;
+  request.target_age_sec = 0.0;
+  request.target_hold_sec = 0.30;
+  request.active_execution_latched = true;
+  EXPECT_EQ(resolve_target_continuity(request), ContinuityAction::Hold);
+
+  request.active_execution_latched = false;
   EXPECT_EQ(resolve_target_continuity(request), ContinuityAction::Recovery);
 }
 

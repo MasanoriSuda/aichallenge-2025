@@ -102,6 +102,7 @@ void validate_supervisor_config(const SupervisorConfig & config)
   validate_nonnegative(
     config.safe_stop_clear_confirm_sec,
     "safe-stop clearance confirmation duration");
+  validate_nonnegative(config.aggressive_retry_delay_sec, "aggressive retry delay");
   validate_nonnegative(config.gear_report_timeout_sec, "gear report timeout");
   validate_nonnegative(
     config.gear_command_resend_interval_sec,
@@ -138,6 +139,74 @@ void validate_supervisor_config(const SupervisorConfig & config)
     config.rejoin_solver_recovery_timeout_sec,
     "rejoin solver recovery timeout");
   validate_nonnegative(config.cooldown_sec, "recovery cooldown");
+}
+
+bool aggressive_retry_reason_is_recoverable(const RecoveryReason reason) noexcept
+{
+  switch (reason) {
+    case RecoveryReason::ClearanceWaitTimedOut:
+    case RecoveryReason::ManeuverDirectionUnknown:
+    case RecoveryReason::AttemptLimitReached:
+    case RecoveryReason::GearReportMissing:
+    case RecoveryReason::GearReportTimedOut:
+    case RecoveryReason::GearCommandLimitReached:
+    case RecoveryReason::ReverseDistanceLimit:
+    case RecoveryReason::ReverseDurationLimit:
+    case RecoveryReason::ReverseSpeedLimit:
+    case RecoveryReason::CollisionWorsening:
+    case RecoveryReason::RearHazardAppeared:
+    case RecoveryReason::ReverseGearLost:
+    case RecoveryReason::ForwardDistanceLimit:
+    case RecoveryReason::ForwardDurationLimit:
+    case RecoveryReason::ForwardSpeedLimit:
+    case RecoveryReason::ForwardHazardAppeared:
+    case RecoveryReason::EscapeStepLimitReached:
+    case RecoveryReason::ContactNotImproving:
+    case RecoveryReason::DriveGearLost:
+    case RecoveryReason::EscapeNotConfirmed:
+    case RecoveryReason::RejoinTimedOut:
+    case RecoveryReason::RejoinUnsafe:
+    case RecoveryReason::RejoinPathBlocked:
+    case RecoveryReason::SolverUnsafe:
+      return true;
+    case RecoveryReason::None:
+    case RecoveryReason::Disabled:
+    case RecoveryReason::ShadowMode:
+    case RecoveryReason::SimulationOnlyBlocked:
+    case RecoveryReason::RaceInactive:
+    case RecoveryReason::AwaitingStuckConfirmation:
+    case RecoveryReason::StuckSuspected:
+    case RecoveryReason::StuckConfirmed:
+    case RecoveryReason::AwsimRecoveryWaiting:
+    case RecoveryReason::AwsimRecoveryResolved:
+    case RecoveryReason::StopConfirmationPending:
+    case RecoveryReason::ClearanceCheck:
+    case RecoveryReason::RearStaticBlocked:
+    case RecoveryReason::RearVehicleBlocked:
+    case RecoveryReason::RearInformationIncomplete:
+    case RecoveryReason::ReverseGearRequested:
+    case RecoveryReason::ReverseGearConfirmed:
+    case RecoveryReason::GearReportInvalid:
+    case RecoveryReason::ReverseInProgress:
+    case RecoveryReason::ReverseEscapeConfirmed:
+    case RecoveryReason::ForwardInProgress:
+    case RecoveryReason::ForwardEscapeConfirmed:
+    case RecoveryReason::EscapeStepComplete:
+    case RecoveryReason::DriveGearRequested:
+    case RecoveryReason::DriveGearConfirmed:
+    case RecoveryReason::RejoinInProgress:
+    case RecoveryReason::RejoinComplete:
+    case RecoveryReason::SolverRecoveryPending:
+    case RecoveryReason::AggressiveRetry:
+    case RecoveryReason::CooldownActive:
+    case RecoveryReason::OdometryUnsafe:
+    case RecoveryReason::ControlInterrupted:
+    case RecoveryReason::InvalidInput:
+    case RecoveryReason::NonMonotonicTime:
+    case RecoveryReason::SessionReset:
+      return false;
+  }
+  return false;
 }
 
 bool finite_nonnegative(const double value) noexcept
@@ -550,7 +619,9 @@ RecoveryAction RecoverySupervisor::update(const RecoveryInput & input)
     transition(RecoveryState::SafeStop, RecoveryReason::OdometryUnsafe, input.now_sec);
     return safe_stop_action(RecoveryReason::OdometryUnsafe);
   }
-  if (!input.solver_healthy) {
+  const bool aggressive_solver_independent_rejoin =
+    config_.aggressive_sim_recovery_enabled && state_ == RecoveryState::LowSpeedRejoin;
+  if (!input.solver_healthy && !aggressive_solver_independent_rejoin) {
     if (
       state_ == RecoveryState::LowSpeedRejoin &&
       config_.rejoin_solver_recovery_timeout_sec > 0.0)
@@ -849,24 +920,43 @@ RecoveryAction RecoverySupervisor::update_wait_for_clear(const RecoveryInput & i
 RecoveryAction RecoverySupervisor::update_safe_stop(const RecoveryInput & input)
 {
   if (
-    !config_.clearance_safe_stop_recovery_enabled ||
-    state_reason_ != RecoveryReason::ClearanceWaitTimedOut)
+    config_.clearance_safe_stop_recovery_enabled &&
+    state_reason_ == RecoveryReason::ClearanceWaitTimedOut)
   {
+    if (!clearance_is_safe(input)) {
+      clearance_safe_since_sec_.reset();
+    } else {
+      if (!clearance_safe_since_sec_.has_value()) {
+        clearance_safe_since_sec_ = input.now_sec;
+      }
+      if (input.now_sec - *clearance_safe_since_sec_ >= config_.safe_stop_clear_confirm_sec) {
+        transition(RecoveryState::CheckClearance, RecoveryReason::ClearanceCheck, input.now_sec);
+        return hold_action(RecoveryReason::ClearanceCheck);
+      }
+    }
+  } else {
     clearance_safe_since_sec_.reset();
+  }
+
+  if (
+    !config_.aggressive_sim_recovery_enabled ||
+    !aggressive_retry_reason_is_recoverable(state_reason_) ||
+    state_elapsed(input.now_sec) < config_.aggressive_retry_delay_sec)
+  {
     return safe_stop_action(state_reason_);
   }
-  if (!clearance_is_safe(input)) {
-    clearance_safe_since_sec_.reset();
-    return safe_stop_action(RecoveryReason::ClearanceWaitTimedOut);
-  }
-  if (!clearance_safe_since_sec_.has_value()) {
-    clearance_safe_since_sec_ = input.now_sec;
-  }
-  if (input.now_sec - *clearance_safe_since_sec_ < config_.safe_stop_clear_confirm_sec) {
-    return safe_stop_action(RecoveryReason::ClearanceWaitTimedOut);
-  }
-  transition(RecoveryState::CheckClearance, RecoveryReason::ClearanceCheck, input.now_sec);
-  return hold_action(RecoveryReason::ClearanceCheck);
+
+  // A new simulation-race recovery cycle must not inherit a consumed budget
+  // or an escape confirmation from the failed primitive. The ROS adapter also
+  // resets its pose/contact/candidate anchors on this transition.
+  attempt_count_ = 0U;
+  escape_step_count_ = 0U;
+  active_stepwise_escape_ = false;
+  reassess_after_drive_ = false;
+  safe_stop_after_drive_ = false;
+  escape_confirmed_before_drive_ = false;
+  transition(RecoveryState::StopAndConfirm, RecoveryReason::AggressiveRetry, input.now_sec);
+  return hold_action(RecoveryReason::AggressiveRetry);
 }
 
 RecoveryAction RecoverySupervisor::update_wait_reverse_report(const RecoveryInput & input)
@@ -1444,6 +1534,10 @@ double RecoverySupervisor::state_elapsed(const double now_sec) const noexcept
 StuckRecoveryCore::StuckRecoveryCore(CoreConfig config)
 : config_(std::move(config)), detector_(config_.detector), supervisor_(config_.supervisor)
 {
+  if (config_.supervisor.aggressive_sim_recovery_enabled && !config_.simulation_only) {
+    throw std::invalid_argument(
+            "aggressive simulation recovery requires CoreConfig::simulation_only");
+  }
 }
 
 CoreOutput StuckRecoveryCore::update(const CoreInput & input)
@@ -1842,6 +1936,8 @@ const char * to_string(const RecoveryReason reason) noexcept
       return "rejoin_path_blocked";
     case RecoveryReason::SolverRecoveryPending:
       return "solver_recovery_pending";
+    case RecoveryReason::AggressiveRetry:
+      return "aggressive_retry";
     case RecoveryReason::CooldownActive:
       return "cooldown_active";
     case RecoveryReason::OdometryUnsafe:

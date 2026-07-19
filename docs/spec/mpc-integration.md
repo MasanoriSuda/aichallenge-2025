@@ -108,7 +108,7 @@ C++ 本番ノードの経路入力・solver処理には、次の安全化を適�
 ### Wall / Contact Stuck Recovery（Implementation Complete / dev3 Enabled）
 
 前進専用の現行MPCは、正面が壁に押し付けられると後退できない。
-この復帰はMPC / MPCCの評価関数とは分離し、次の2つのpure C++ coreと
+この復帰は通常走行MPC / MPCCの評価関数とは分離し、次のpure C++ coreと
 `mpc_controller_cpp`内のROS adapterとして実装した。
 
 - `stuck_recovery_core`: 前進意図、signed speed、pose / path進捗、補助証拠、
@@ -116,6 +116,8 @@ C++ 本番ノードの経路入力・solver処理には、次の安全化を適�
 - `recovery_footprint`: 向き付き車体矩形、swept interpolation、map外 / unknownの
   occupied扱い、wall方向分類、初期接触を増やさず離脱するReverse Straight / Left / Rightと
   Forward Straight / Left / Right rolloutを扱う。
+- `recovery_mpc`: 符号付き距離のFrenet bicycle modelでForward / Reverseを予測する
+  離散・有限ホライズンplanner。2026-07-19のdev3 A/Bで改善しなかったため既定無効。
 
 最終command arbitrationは既存C++ nodeの単一thread内で行う。Recoveryが制御権を
 持つ周期はNormal MPC commandを破棄し、Recovery / SafeStopのどちらか一方だけを
@@ -177,6 +179,8 @@ stuck_recovery:
     clearance_wait_timeout_sec: 1.0
     clearance_safe_stop_recovery_enabled: true
     safe_stop_clear_confirm_sec: 0.5
+    aggressive_sim_recovery_enabled: false
+    aggressive_retry_delay_sec: 0.5
     max_reverse_distance_m: 3.0
     max_reverse_duration_sec: 4.0
     max_reverse_speed_mps: 0.8
@@ -211,6 +215,20 @@ stuck_recovery:
     self_vehicle_id: ""
     vehicle_radius_m: 1.45
     prediction_margin_sec: 0.1
+  recovery_mpc:
+    enabled: false
+    horizon_steps: 10
+    travel_step_m: 0.20
+    steering_sample_count: 9
+    beam_width: 48
+    maximum_steering_tire_angle_rad: 0.35
+    maximum_steering_change_rad: 0.12
+    lateral_error_weight: 6.0
+    heading_error_weight: 12.0
+    steering_weight: 0.15
+    steering_change_weight: 1.0
+    terminal_lateral_error_weight: 30.0
+    terminal_heading_error_weight: 40.0
   rejoin:
     speed_limit_mps: 1.0
     feedback_steering_enabled: true
@@ -218,6 +236,7 @@ stuck_recovery:
     heading_error_gain: 1.20
     max_steering_tire_angle_rad: 0.35
     static_lookahead_m: 0.8
+    aggressive_force_after_retries: 0
     retry_on_blocked_path: true
     retry_on_timeout: true
     max_lateral_error_m: 0.5
@@ -230,11 +249,11 @@ stuck_recovery:
 
 `reverse_actuation_enabled` と `reverse_acceleration_sign` は別々のhard latchである。
 sign 0や駆動・停止commandの同符号、停止減速度0は起動時に拒否する。2026-07-12の
-ローカルAWSIM校正では、REVERSE中の正加速度が後退駆動、負加速度が停止だった。
-`+0.5 m/s^2`の駆動でsigned velocityが負になり、`-0.8 m/s^2`で停止した。
-gear report遅延はREVERSE約0.035 s、DRIVE約0.015 s、command-to-effect約0.140 s、
-停止時間約0.154 s、平均停止減速度約0.628 m/s^2だった。設定は保守的に
-`0.4 m/s^2`と`0.2 s`を停止距離予約へ使う。
+ローカルAWSIM校正ではREVERSE中の正加速度を後退駆動、負加速度を停止としている。
+運営`main`のteleopに合わせた逆符号A/Bは`output/20260718-225500`で後退量が小さく、
+後続runでも全車`rejoin_complete`へ到達しなかったため不採用とした。現dev3は成功実績のある
+`+0.5 m/s^2`を駆動、`-0.8 m/s^2`を停止とする。gear report遅延、停止距離予約用の
+`0.4 m/s^2`と`0.2 s`は従来の暫定計測値を維持する。
 
 通常のsolver fallbackはRecoveryから除外する。例外はfallbackが連続2.0秒以上で、
 solverとは独立したpath前進要求、低実速度、pose / path無進捗、現在の
@@ -258,11 +277,11 @@ Follow / SafetyBrake / LowSpeedAvoidance等の意図的停止ではなく、前�
 証拠なしConfirmedでは、現在map footprintと後方3.0 m ReverseStraight rolloutがclearで、
 fresh / completeなV2X corridorもclearの場合だけ候補を生成し、実測2.0 m後退後に停止する。
 map invalid、out-of-map、unknown、solver fallback、V2X不完全ではこのfallbackを使用しない。
-Recoveryがcommand ownerになった後はfallback継続だけで途中abortしないが、通常MPCを
-再使用するLowSpeedRejoinではsolver復帰を必須とする。ただしsolver fallback自体を起点に
-全hard gateを通過したepisodeだけは資格をcoreへラッチし、fallbackが継続しても独立feedbackの
-LowSpeedRejoinを完了まで許可する。非solver起因episodeで新しく発生したfallbackは従来どおり
-Driveで停止し、`solver_recovery_timeout_sec`以内の復旧を必須とする。
+Recoveryがcommand ownerになった後はfallback継続だけで途中abortしない。通常設定の
+LowSpeedRejoinではsolver復帰を必須とし、solver fallback自体を起点に全hard gateを通過した
+episodeだけ資格をcoreへラッチする。`aggressive_sim_recovery_enabled=true`のdev3では、
+LowSpeedRejoinが専用の低速速度・操舵feedbackを直接出力することを利用し、episode起点に関係なく
+solver healthを再合流条件から外す。この例外は`simulation_only: true`との組み合わせでしか起動できない。
 
 通常V2X behaviorの`deliberate_stop`はRecovery開始前の誤検知除外に限定する。Followは実front
 vehicleがある場合だけ該当し、side vehicleの存在だけでは意図的停止としない。Recovery開始後は
@@ -275,7 +294,8 @@ FrontではReverse Straight / Left / Rightをこの順で評価し、RearではF
 評価する。Side / Mixedかつ実map contactありではReverse / ForwardのStraightに加え、Left / Rightを
 0.05、0.10、0.15、0.20、0.25 radで0.40 m評価する。同じ`RequireImprovement`条件でcontact減少最大を
 選び、Reverse / Forwardが同値ならReverse、同方向内ではStraight、Leftの小角、Rightの小角の
-決定順を使う。solver起因などのreverse-only episodeではForwardを生成しない。
+決定順を使う。通常設定のsolver起因などのreverse-only episodeではForwardを生成しないが、
+積極シミュレーション復旧では他車の協力を仮定せず、両方向を同じstatic/V2X gateで評価する。
 Unknownまたは改善候補なしはfail-closedとする。検索marginは
 方向推定専用でありcollision footprintを縮小しない。候補は`SUSPECT_STUCK`、AWSIM補正待機、
 停止確認、clearance待機では毎周期再評価し、`SHIFT_TO_REVERSE` / `WAIT_REVERSE_REPORT` /
@@ -343,10 +363,15 @@ sim timeのsource stampをwall-clock受信時刻から引いて全messageをstal
 - signed speedの絶対値が`max_reverse_speed_mps`へ達した周期はReverseを維持して減速し、
   上限未満へ戻れば同じmaneuverを再開する。速度上限だけでescape完了やDrive復帰にしない。
 
-`clearance_wait_timeout_sec`到達によるSafeStopだけはrecoverableとし、static rollout、freshで
-completeなV2X、後方corridor clearが`safe_stop_clear_confirm_sec`連続した後に再び
-CHECK_CLEARANCEへ戻る。gear / odometry / solver / control / attempt limitによるSafeStopは
-session resetまでlatchedする。
+通常設定では`clearance_wait_timeout_sec`到達によるSafeStopだけをrecoverableとし、static rollout、
+freshでcompleteなV2X、後方corridor clearが`safe_stop_clear_confirm_sec`連続した後に再び
+CHECK_CLEARANCEへ戻る。積極シミュレーション復旧ではmotion/solver/gear report/rejoin/attempt limitの
+終端も`aggressive_retry_delay_sec`停止後にbudgetと候補をリセットして再評価する。奇数retryでは、
+静的・V2X rolloutがclearなら前進fallbackを優先し、同じ効かなかった後退の反復を避ける。
+さらに`rejoin.aggressive_force_after_retries`回以上失敗し、現在footprintが非接触かつfeedback steeringが
+有効なら、短いrejoin sweepのwall交差だけをsimulation-onlyで緩和してLowSpeedRejoinへ進む。
+現在footprintの接触、非有限値、gear/odometry/controlのハード異常は緩和しない。0はこの分岐を無効にする。
+invalid/non-finite input、non-monotonic time、odometry unsafe、control interruptedはlatchedのままとする。
 
 REVERSE GearReportとV2X completenessが隣接周期で到着する場合は、
 `WAIT_REVERSE_REPORT`で停止commandを維持し、completeかつclearになった後だけReverseCreepへ
@@ -359,10 +384,9 @@ SafeStopする。
 
 stepwise Reverse完了後にDrive reportを待つ間は、次の`STOP_AND_REASSESS`またはSafeStopが
 予約されているためnormal MPC solverを使用しない。したがってsolver fallback継続だけで
-再判定を中断しない。非solver起因の通常離脱後にLowSpeedRejoinへ入った後のsolver fallbackは
-Driveで停止保持し、最大`solver_recovery_timeout_sec`だけ再初期化を待つ。復旧すれば再合流を再開し、
-timeoutでは`solver_unsafe`としてfail-closedにする。solver fallbackを起点に全gateを通過したepisodeは
-資格をLowSpeedRejoin完了まで保持し、通常MPC solverに依存しないfeedback commandを継続する。
+再判定を中断しない。通常設定では非solver起因のLowSpeedRejoin後のsolver fallbackをDriveで停止保持し、
+最大`solver_recovery_timeout_sec`だけ再初期化を待つ。積極シミュレーション復旧ではこの待機を行わず、
+通常MPC solverに依存しないfeedback commandを継続する。
 
 `WAIT_FOR_CLEAR`でstatic rolloutとV2X corridorが同時にclearになった場合は、その同一snapshotで
 `CHECK_CLEARANCE`を消費してgear要求へ進む。clear確認後にもう1周期待つことでV2X completenessや
@@ -549,6 +573,34 @@ contactを悪化させ、D1 / D2もstep上限へ到達した。このためSide 
 このrunではcontact Recoveryが発火しなかったため、双方向contact候補がForwardを選ぶ実走証拠は
 未取得である。対象test 77/77 + 34/34と25 package buildは成功しており、選択分岐の実走確認は
 次に同じ深いMixed接触が再現したrunで継続する。
+
+`output/20260718-222730`では双方向contact候補が実走で初めてForwardを選び、D3のcontactを
+30から0へ減らして0.823 m移動した。一方、非solver起因episodeだったためLowSpeedRejoin直後に
+`solver_unsafe`で停止した。D1は後方hazard待機中にcontactが0から72へ急増し、10 stepで0.067 mしか
+動けず上限停止、D2もReverse 7 stepで0.165 mしか動かなかった。このrunを根拠に、dev3を実車安全の
+先行試験ではなく非協力的な2台とのシミュレーション競争試験として分離し、
+`aggressive_sim_recovery_enabled`、solver-independent rejoin、回復可能終端の反復、alternate forward、
+運営main準拠Reverse符号を導入した。純粋coreでは通常fail-closedを既定値として維持し、追加testを含む
+package全431 testと25 package buildが成功した。実走結果は
+`.steering/20260718-dev3-noncooperative-race-recovery/results.md`へ記録する。
+
+`output/20260718-225500`では、D2のReverseが0.7秒で0.164 m動き、負のReverse駆動符号を確認した。
+D1 / D2 / D3はSafeStopを34 / 27 / 31回再試行して永久ラッチを解除したが、最大横偏差が
+5.153 / 3.727 / 5.132 mへ拡大し、`rejoin_complete`は全車0回だった。これを受けて
+`rejoin.aggressive_force_after_retries: 3`を追加した`output/20260718-230630`では、D3の横偏差が
+2.824 mから0.582 mへ縮小し、D2もrejoin中に約1.0 m/sで経路を横断した。一方、D2はheading error
+2.169 radのまま反対側のwallへ達し、2回目も`rejoin_complete`は全車0回だった。したがって本設定は
+永久停止解除と経路方向への移動には有効だが、競技復帰の完成条件は満たさない。次の正式修正は
+接触前の衝突回避と、大姿勢誤差を扱う複数点rejoin plannerであり、retry回数の追加ではない。
+
+この候補として`recovery_mpc`を追加した。符号付き移動距離のFrenet bicycle modelを10 step x
+0.20 m予測し、横偏差、姿勢差、操舵量、操舵変化の離散beam searchから第一tire angleだけを使う。
+LowSpeedRejoinでは毎周期再計画し、escapeではstatic / V2X gateを通る既存primitiveの順位付けに
+のみ使う。計算不能時は従来P feedback / heading選択へfallbackする。`output/20260719-121902`では
+D1がMPC rejoinへ入ったものの他車と物理的に噛んで実速度0.001〜0.003 m/sのままtimeoutし、D2は
+深いcontact、D3はmap外でSafeStopした。全車`rejoin_complete=0`のため既定は
+`recovery_mpc.enabled: false`とし、元のbounded stepwise Recoveryを正式設定とする。pure core 6 testと
+25 package buildは成功している。詳細は`.steering/20260719-bounded-recovery-mpc/results.md`に記録する。
 
 gear publisherはReliable / KeepLast(1) / Volatileであり、TransientLocalは古いREVERSEの
 late-join replayを避けるため使用しない。

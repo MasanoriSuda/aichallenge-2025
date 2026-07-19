@@ -33,8 +33,8 @@ stuck_recovery:
     3: true
   shadow_mode: false
   simulation_only: true
-  # P1/P2/P3 simulation-only activation. 2026-07-12 local AWSIM calibration measured positive drive
-  # acceleration in Reverse and negative stopping acceleration; keep disabled for real vehicle.
+  # P1/P2/P3 simulation-only activation. Local AWSIM calibration and the successful bounded
+  # recovery runs use positive acceleration in Reverse and negative acceleration to stop.
   reverse_actuation_enabled: true
   reverse_acceleration_sign: 1.0
   reverse_stop_acceleration_mps2: -0.8
@@ -84,12 +84,17 @@ stuck_recovery:
     # Other SafeStop causes remain latched until the next race session.
     clearance_safe_stop_recovery_enabled: true
     safe_stop_clear_confirm_sec: 0.5
+    # Keep the successful bounded step/reassessment behavior. The aggressive
+    # unlimited-retry policy is retained in code for A/B comparison but disabled here.
+    aggressive_sim_recovery_enabled: false
+    aggressive_retry_delay_sec: 0.5
     # Front/side recovery must create meaningful separation before rejoin. The
     # The additional 1.0 m covers the calibrated worst-case stopping reserve
     # at the 0.8 m/s ceiling beyond the 2.0 m measured escape target.
     max_reverse_distance_m: 3.0
     max_reverse_duration_sec: 4.0
-    # Begin the calibrated stop sequence below the operator-chat guideline of 1.0 m/s.
+    # Use the calibrated bounded-recovery actuation; the higher-acceleration
+    # A/B candidate increased stopping reserve and shortened each escape step.
     max_reverse_speed_mps: 0.8
     # Positive magnitude only; reverse_acceleration_sign is applied by the ROS/AWSIM adapter.
     reverse_acceleration_magnitude_mps2: 0.5
@@ -144,6 +149,25 @@ stuck_recovery:
     self_vehicle_id: ""
     vehicle_radius_m: 1.45
     prediction_margin_sec: 0.1
+  # Simulation-only finite-horizon Recovery controller. It guides the bounded
+  # reverse/forward primitive choice and replans LowSpeedRejoin steering every cycle.
+  # Invalid/no-solution plans fall back to the original primitive/P feedback.
+  recovery_mpc:
+    # output/20260719-121902 produced no rejoin_complete in dev3. Keep this as
+    # an A/B implementation, but use the proven original bounded policy by default.
+    enabled: false
+    horizon_steps: 10
+    travel_step_m: 0.20
+    steering_sample_count: 9
+    beam_width: 48
+    maximum_steering_tire_angle_rad: 0.35
+    maximum_steering_change_rad: 0.12
+    lateral_error_weight: 6.0
+    heading_error_weight: 12.0
+    steering_weight: 0.15
+    steering_change_weight: 1.0
+    terminal_lateral_error_weight: 30.0
+    terminal_heading_error_weight: 40.0
   rejoin:
     speed_limit_mps: 1.0
     # Simulation-only low-speed path feedback. The rate-limited tire angle is
@@ -154,6 +178,8 @@ stuck_recovery:
     max_steering_tire_angle_rad: 0.35
     # Check the rate-limited feedback steering command before allowing forward rejoin motion.
     static_lookahead_m: 0.8
+    # Never bypass the forward swept-footprint check in the bounded policy.
+    aggressive_force_after_retries: 0
     # A clear current footprint with a blocked forward sweep gets one of the remaining
     # bounded 0.40 m escape-step reassessments instead of driving back into the wall.
     retry_on_blocked_path: true
@@ -430,7 +456,7 @@ mpc:
 
   v_max: 40.0   # km/h
   domain_v_max:
-    1: 20.0
+    1: 40.0
     2: 40.0
     3: 10.0
   domain_start_v_max_duration: 15.0 # [s] compensate inner-lane advantage at side-by-side start

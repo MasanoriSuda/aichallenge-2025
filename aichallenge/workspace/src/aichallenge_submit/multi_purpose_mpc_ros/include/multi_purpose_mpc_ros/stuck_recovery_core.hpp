@@ -269,6 +269,7 @@ enum class RecoveryReason
   RejoinUnsafe,
   RejoinPathBlocked,
   SolverRecoveryPending,
+  AggressiveRetry,
   CooldownActive,
   OdometryUnsafe,
   SolverUnsafe,
@@ -286,6 +287,11 @@ struct SupervisorConfig
   double clearance_wait_timeout_sec{1.0};
   bool clearance_safe_stop_recovery_enabled{false};
   double safe_stop_clear_confirm_sec{0.5};
+  // Simulation-race mode: motion/solver terminal states are paused and then
+  // re-evaluated instead of remaining latched for the rest of the race.
+  // CoreConfig::simulation_only must also be true.
+  bool aggressive_sim_recovery_enabled{false};
+  double aggressive_retry_delay_sec{0.5};
   double gear_report_timeout_sec{0.5};
   double gear_command_resend_interval_sec{0.2};
   std::size_t max_gear_command_requests{1U};

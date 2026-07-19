@@ -802,6 +802,10 @@ TEST(RecoverySupervisorConfig, RejectsNonFiniteOrNegativeConfiguration)
   config = supervisor_config();
   config.safe_stop_clear_confirm_sec = -0.1;
   EXPECT_THROW(RecoverySupervisor{config}, std::invalid_argument);
+
+  config = supervisor_config();
+  config.aggressive_retry_delay_sec = -0.1;
+  EXPECT_THROW(RecoverySupervisor{config}, std::invalid_argument);
 }
 
 TEST(RecoverySupervisor, NeverDrivesBeforeFreshMatchingReverseReport)
@@ -1743,6 +1747,85 @@ TEST(RecoverySupervisor, LowSpeedRejoinSolverRecoveryTimeoutFailsClosed)
   EXPECT_EQ(action.reason, RecoveryReason::SolverUnsafe);
 }
 
+TEST(RecoverySupervisor, AggressiveSimulationRejoinDoesNotDependOnSolverHealth)
+{
+  auto config = supervisor_config();
+  config.aggressive_sim_recovery_enabled = true;
+  config.rejoin_solver_recovery_timeout_sec = 0.01;
+  RecoverySupervisor supervisor(config);
+  double now = 0.0;
+  auto input = healthy_recovery_input(now);
+  advance_to_reverse(supervisor, input, now);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.recovery_escape_confirmed = true;
+  supervisor.update(input);
+  now += 0.01;
+  input.now_sec = now;
+  supervisor.update(input);
+  now += 0.01;
+  input.now_sec = now;
+  input.reported_gear = Gear::Drive;
+  ASSERT_EQ(supervisor.update(input).type, RecoveryActionType::LowSpeedRejoin);
+
+  now += 0.02;
+  input.now_sec = now;
+  input.solver_healthy = false;
+  const auto action = supervisor.update(input);
+  EXPECT_EQ(supervisor.state(), RecoveryState::LowSpeedRejoin);
+  EXPECT_EQ(action.type, RecoveryActionType::LowSpeedRejoin);
+  EXPECT_EQ(action.reason, RecoveryReason::RejoinInProgress);
+}
+
+TEST(RecoverySupervisor, AggressiveSimulationRetriesRecoverableSafeStopWithFreshBudget)
+{
+  auto config = supervisor_config();
+  config.aggressive_sim_recovery_enabled = true;
+  config.aggressive_retry_delay_sec = 0.1;
+  config.max_attempts = 0U;
+  RecoverySupervisor supervisor(config);
+  double now = 0.0;
+  auto input = healthy_recovery_input(now);
+  advance_to_clearance_check(supervisor, input, now);
+
+  now += 0.01;
+  input.now_sec = now;
+  auto action = supervisor.update(input);
+  ASSERT_EQ(action.type, RecoveryActionType::SafeStop);
+  ASSERT_EQ(action.reason, RecoveryReason::AttemptLimitReached);
+
+  now += 0.05;
+  input.now_sec = now;
+  EXPECT_EQ(supervisor.update(input).type, RecoveryActionType::SafeStop);
+
+  now += 0.06;
+  input.now_sec = now;
+  action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
+  EXPECT_EQ(action.reason, RecoveryReason::AggressiveRetry);
+  EXPECT_EQ(supervisor.state(), RecoveryState::StopAndConfirm);
+  EXPECT_EQ(supervisor.attempt_count(), 0U);
+  EXPECT_EQ(supervisor.escape_step_count(), 0U);
+}
+
+TEST(RecoverySupervisor, AggressiveSimulationKeepsInvalidInputLatched)
+{
+  auto config = supervisor_config();
+  config.aggressive_sim_recovery_enabled = true;
+  config.aggressive_retry_delay_sec = 0.0;
+  RecoverySupervisor supervisor(config);
+  auto input = healthy_recovery_input(0.0);
+  input.lateral_error_m = std::numeric_limits<double>::quiet_NaN();
+  ASSERT_EQ(supervisor.update(input).reason, RecoveryReason::InvalidInput);
+
+  input = healthy_recovery_input(1.0);
+  const auto action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::SafeStop);
+  EXPECT_EQ(action.reason, RecoveryReason::InvalidInput);
+  EXPECT_EQ(supervisor.state(), RecoveryState::SafeStop);
+}
+
 TEST(RecoverySupervisor, BlockedRejoinPathReturnsToBoundedClearanceReassessment)
 {
   auto config = supervisor_config();
@@ -2194,6 +2277,18 @@ TEST(StuckRecoveryCore, DeliberateStopDoesNotBecomeAnImplicitRecoveryHardStop)
   EXPECT_EQ(output.action.type, RecoveryActionType::HoldStop);
 }
 
+TEST(StuckRecoveryCore, AggressiveSimulationModeCannotBeEnabledForNonSimulationCore)
+{
+  CoreConfig config;
+  config.enabled = true;
+  config.shadow_mode = false;
+  config.simulation_only = false;
+  config.detector = detector_config();
+  config.supervisor = supervisor_config();
+  config.supervisor.aggressive_sim_recovery_enabled = true;
+  EXPECT_THROW(StuckRecoveryCore{config}, std::invalid_argument);
+}
+
 TEST(StuckRecoveryCore, ExplicitRecoveryHardStopRemainsLatched)
 {
   CoreConfig config;
@@ -2491,6 +2586,7 @@ TEST(StuckRecoveryCore, EnumStringsAreStableAndUnknownSafe)
   EXPECT_STREQ(
     to_string(RecoveryReason::SolverRecoveryPending),
     "solver_recovery_pending");
+  EXPECT_STREQ(to_string(RecoveryReason::AggressiveRetry), "aggressive_retry");
   EXPECT_STREQ(
     to_string(ExecutionMode::SimulationOnlyBlocked),
     "simulation_only_blocked");

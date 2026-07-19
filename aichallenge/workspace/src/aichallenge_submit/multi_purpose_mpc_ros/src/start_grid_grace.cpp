@@ -1,5 +1,6 @@
 #include <multi_purpose_mpc_ros/start_grid_grace.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 
@@ -96,6 +97,24 @@ bool should_suppress_static_stop(const StaticStopContext &context) noexcept {
              context.stationary_speed_threshold_mps &&
          context.initial_static_target_latched &&
          context.front_speed_mps <= context.rollout_speed_threshold_mps;
+}
+
+double resolve_front_lateral_range(const FrontLateralRangeContext &context) {
+  if (!std::isfinite(context.corridor_lateral_range_m) ||
+      context.corridor_lateral_range_m < 0.0 ||
+      !std::isfinite(context.danger_lateral_range_m) ||
+      context.danger_lateral_range_m < 0.0 ||
+      !std::isfinite(context.curve_lateral_margin_m) ||
+      context.curve_lateral_margin_m < 0.0) {
+    throw std::invalid_argument("invalid front lateral range context");
+  }
+
+  if (context.grace_active || !context.curve_guard_active) {
+    return context.danger_lateral_range_m;
+  }
+  return std::min(context.corridor_lateral_range_m,
+                  context.danger_lateral_range_m +
+                      context.curve_lateral_margin_m);
 }
 
 const char *to_string(const Phase phase) noexcept {

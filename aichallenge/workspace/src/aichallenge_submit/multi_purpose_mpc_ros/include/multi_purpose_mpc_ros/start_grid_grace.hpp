@@ -40,6 +40,14 @@ struct StaticStopContext {
   double rollout_speed_threshold_mps{0.0};
 };
 
+struct FrontLateralRangeContext {
+  bool grace_active{false};
+  bool curve_guard_active{false};
+  double corridor_lateral_range_m{0.0};
+  double danger_lateral_range_m{0.0};
+  double curve_lateral_margin_m{0.0};
+};
+
 class Guard {
 public:
   explicit Guard(double duration_sec);
@@ -60,6 +68,10 @@ private:
 };
 
 bool should_suppress_static_stop(const StaticStopContext &context) noexcept;
+
+/// Keep adjacent start-grid vehicles out of the front collision corridor.
+/// The wider curve guard is restored as soon as start-grid grace ends.
+double resolve_front_lateral_range(const FrontLateralRangeContext &context);
 
 const char *to_string(Phase phase) noexcept;
 const char *to_string(Transition transition) noexcept;

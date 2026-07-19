@@ -3062,12 +3062,14 @@ struct MPC
     const double side_longitudinal_range =
       model->length + cfg.v2x_gap.vehicle_radius + cfg.v2x_gap.prediction_margin;
     const double danger_lateral_range = cfg.v2x_gap.vehicle_radius + cfg.v2x_gap.prediction_margin;
-    const double front_lateral_range = front_decel_curve_guard ?
-      std::min(
+    const double front_lateral_range =
+      start_grid_grace::resolve_front_lateral_range(
+      start_grid_grace::FrontLateralRangeContext{
+        start_grid_grace_active,
+        front_decel_curve_guard,
         corridor_lateral_range,
-        danger_lateral_range +
-        std::max(0.0, cfg.v2x_behavior.front_decel_guard_curve_lateral_margin)) :
-      danger_lateral_range;
+        danger_lateral_range,
+        std::max(0.0, cfg.v2x_behavior.front_decel_guard_curve_lateral_margin)});
     const double brake_decel = std::max(kEps, std::abs(cfg.a_min));
     const double stopped_stop_distance =
       current_speed_mps_ * current_speed_mps_ / (2.0 * brake_decel) +

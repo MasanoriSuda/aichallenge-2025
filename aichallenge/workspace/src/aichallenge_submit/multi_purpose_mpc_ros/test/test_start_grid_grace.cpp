@@ -123,3 +123,48 @@ TEST(StartGridGraceSuppression, EmergencyBrakeAlwaysWins) {
 
   EXPECT_FALSE(start_grid_grace::should_suppress_static_stop(context));
 }
+
+TEST(StartGridGraceFrontLateralRange, UsesNormalWidthDuringGrace) {
+  start_grid_grace::FrontLateralRangeContext context;
+  context.grace_active = true;
+  context.curve_guard_active = true;
+  context.corridor_lateral_range_m = 4.0;
+  context.danger_lateral_range_m = 1.55;
+  context.curve_lateral_margin_m = 1.5;
+
+  EXPECT_DOUBLE_EQ(start_grid_grace::resolve_front_lateral_range(context), 1.55);
+}
+
+TEST(StartGridGraceFrontLateralRange, RestoresCurveWidthAfterGrace) {
+  start_grid_grace::FrontLateralRangeContext context;
+  context.grace_active = false;
+  context.curve_guard_active = true;
+  context.corridor_lateral_range_m = 4.0;
+  context.danger_lateral_range_m = 1.55;
+  context.curve_lateral_margin_m = 1.5;
+
+  EXPECT_DOUBLE_EQ(start_grid_grace::resolve_front_lateral_range(context), 3.05);
+  context.corridor_lateral_range_m = 2.8;
+  EXPECT_DOUBLE_EQ(start_grid_grace::resolve_front_lateral_range(context), 2.8);
+}
+
+TEST(StartGridGraceFrontLateralRange, KeepsNormalWidthOutsideCurves) {
+  start_grid_grace::FrontLateralRangeContext context;
+  context.grace_active = false;
+  context.curve_guard_active = false;
+  context.corridor_lateral_range_m = 4.0;
+  context.danger_lateral_range_m = 1.55;
+  context.curve_lateral_margin_m = 1.5;
+
+  EXPECT_DOUBLE_EQ(start_grid_grace::resolve_front_lateral_range(context), 1.55);
+}
+
+TEST(StartGridGraceFrontLateralRange, RejectsInvalidGeometry) {
+  start_grid_grace::FrontLateralRangeContext context;
+  context.corridor_lateral_range_m = 4.0;
+  context.danger_lateral_range_m = std::numeric_limits<double>::quiet_NaN();
+  context.curve_lateral_margin_m = 1.5;
+
+  EXPECT_THROW(start_grid_grace::resolve_front_lateral_range(context),
+               std::invalid_argument);
+}

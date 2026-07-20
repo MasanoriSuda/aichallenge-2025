@@ -310,8 +310,8 @@ mpc:
   v2x_front_hazard_hold_sec: 0.25 # [s] sim race: bridge one short V2X dropout without a 1 s full-stop tail
   v2x_front_hazard_rear_clear_distance: 4.0 # [m] release early only after target is clearly behind
   v2x_follow_distance: 5.0         # [m] sim race: base Follow range; common-course detection remains 24 m
-  v2x_safety_brake_distance: 6.0  # [m] minimum distance; dynamic stop distance is also applied
-  v2x_safety_brake_margin: 3.0    # [m] added to v^2 / (2 * abs(a_min))
+  v2x_safety_brake_distance: 2.2  # [m] dev3 attack: retain a small center-distance floor
+  v2x_safety_brake_margin: 0.3    # [m] dev3 attack: dynamic stopping distance still applies
   v2x_follow_gap_planner_enabled: false # Follow tracks the base path; lateral pass is only Overtake/low-speed avoidance
   v2x_follow_gap_planner_no_gap_speed_limit_enabled: false # do not yield just because no gap is found
   v2x_follow_gap_planner_respect_overtake_forbidden: true # do not side-attack in hairpins/forbidden zones
@@ -329,23 +329,23 @@ mpc:
   v2x_front_decel_guard_speed_margin: 1.2 # [m/s] target <= front speed + margin
   v2x_front_decel_guard_min_closing_speed: 2.0 # [m/s] avoid capping while merely tucked in
   v2x_front_decel_guard_curve_include_slow_front: true # hairpin guard must follow heavily slowing cars too
-  v2x_front_decel_guard_curve_lateral_margin: 1.5 # [m] catch cars that cut into our path in hairpins
-  v2x_front_decel_guard_curve_lookahead_distance: 4.0 # [m] enable front speed matching only near hairpins
-  v2x_front_decel_guard_curve_distance: 10.0 # [m] earlier cap when overtake is forbidden in curves
-  v2x_front_decel_guard_curve_ttc: 2.8       # [s] earlier TTC cap in curves
+  v2x_front_decel_guard_curve_lateral_margin: 1.0 # [m] dev3 attack: do not absorb the adjacent pass lane
+  v2x_front_decel_guard_curve_lookahead_distance: 2.5 # [m] delay curve speed matching until the hairpin
+  v2x_front_decel_guard_curve_distance: 6.0 # [m] retain a close-range curve cap
+  v2x_front_decel_guard_curve_ttc: 1.5       # [s] dev3 attack TTC cap in curves
   v2x_front_risk_arbitration_enabled: true   # Phase1: required-decel based braking guard
   v2x_front_risk_brake_prepare_limit_enabled: true # cap speed before the front gap collapses
   v2x_front_risk_avoid_candidate_limit_enabled: true # cap speed when an avoidable front risk is found
   v2x_front_risk_comfort_decel: 2.0          # [m/s^2] start smooth speed cap above this
   v2x_front_risk_hard_decel: 4.0             # [m/s^2] stronger speed cap above this
-  v2x_front_risk_emergency_decel: 8.0        # [m/s^2] force SafetyBrake above this
-  v2x_front_risk_distance_margin: 2.0        # [m] keep this clearance from front vehicle
+  v2x_front_risk_emergency_decel: 10.0       # [m/s^2] dev3 attack: defer emergency arbitration
+  v2x_front_risk_distance_margin: 1.0        # [m] reduced race margin from the front vehicle
   v2x_front_risk_min_closing_speed: 0.5      # [m/s] ignore nearly matched speed
-  v2x_front_risk_prepare_time: 0.5           # [s] subtract closing distance during reaction delay
+  v2x_front_risk_prepare_time: 0.25          # [s] dev3 attack reaction reserve
   v2x_front_risk_curve_limit_enabled: true   # in curves, cap speed before emergency braking is needed
-  v2x_front_risk_curve_limit_required_decel: 1.1 # [m/s^2] start curve-only cap before a_min is exceeded
-  v2x_front_risk_curve_limit_decel: 1.2      # [m/s^2] assumed feasible decel for curve-only cap
-  v2x_front_risk_curve_limit_speed_margin: 0.5 # [m/s] keep slight race margin over front speed
+  v2x_front_risk_curve_limit_required_decel: 1.8 # [m/s^2] start curve-only cap later
+  v2x_front_risk_curve_limit_decel: 1.8      # [m/s^2] dev3 attack curve decel model
+  v2x_front_risk_curve_limit_speed_margin: 1.0 # [m/s] permit a stronger curve closing margin
   v2x_safety_brake_velocity: 0.0  # [m/s]
   # Gap width is measured after inflating V2X vehicles by ego+other half width.
   # Keep this as center-line slack, not raw vehicle width.
@@ -356,6 +356,7 @@ mpc:
   v2x_overtake_outer_curve_hard_continuation_enabled: true # keep a locked outer ShiftOut/Pass through a hard curve while gap remains
   v2x_overtake_inner_curve_entry_enabled: true # sim race: prefer a reachable inside gap when entering a soft curve
   v2x_overtake_inner_curve_hard_continuation_enabled: true # keep only the locked inside ShiftOut/Pass through the hard apex
+  v2x_overtake_hard_curve_entry_enabled: true # dev3 attack: start an inner/outer pass after hard-curve recognition when gap is valid
   v2x_overtake_forbidden_curve_lookahead_distance: 6.0 # [m] soft entry/continuation policy; hard curve uses completion guard below
   v2x_overtake_gap_lookahead_distance: 24.0 # [m] search farther than MPC horizon for slow-front pass
   v2x_overtake_try_both_sides: true         # before ShiftOut, retry the opposite side if preferred gap is blocked
@@ -363,10 +364,10 @@ mpc:
   v2x_overtake_stage_speed_enabled: true    # cap ShiftOut/early Pass; release only after the locked target is no longer ahead
   v2x_overtake_shiftout_adaptive_closing_speed_enabled: true # preserve entry gap until distance+lateral ShiftOut completes
   v2x_overtake_shiftout_min_closing_speed: 0.5 # [m/s] keep a small pass gain when the protected-distance budget is exhausted
-  v2x_overtake_shiftout_max_closing_speed: 1.5 # [m/s] early Pass closing cap; 2.0 m/s caused close-range SafetyBrake
-  v2x_overtake_pass_unlatched_max_closing_speed: 0.5 # [m/s] preserve distance until Pass lateral clearance latches
+  v2x_overtake_shiftout_max_closing_speed: 2.0 # [m/s] dev3 attack: commit the lateral move before the gap closes
+  v2x_overtake_pass_unlatched_max_closing_speed: 1.0 # [m/s] keep forward gain until Pass lateral clearance latches
   v2x_overtake_shiftout_adaptive_min_time_sec: 0.5 # [s] avoid an unbounded cap as ShiftOut completes
-  v2x_overtake_pass_front_overlap_lateral_clearance: 1.0 # [m] sim race: latch the locked Pass target as side-by-side until Pass ends
+  v2x_overtake_pass_front_overlap_lateral_clearance: 0.75 # [m] dev3 attack: latch side-by-side earlier
   v2x_overtake_completion_guard_enabled: true # require enough distance to clear the target before a hard hairpin
   v2x_overtake_completion_hard_curvature: 0.12 # [rad/m] hard hairpin boundary, separate from soft curve policy
   v2x_overtake_completion_lookahead_distance: 80.0 # [m] search limit for the next hard boundary
@@ -376,22 +377,24 @@ mpc:
   v2x_overtake_guard_enabled: true
   v2x_overtake_guard_min_gap_width: 0.2       # [m] sim A/B: center-line slack after inflated obstacles
   v2x_overtake_guard_min_gap_points: 2        # require consecutive horizon points before Overtake
-  v2x_overtake_guard_min_prepare_distance: 5.0 # [m] do not dive into gaps that appear too late
+  v2x_overtake_continue_min_gap_points: 1     # active locked line may survive a one-point hairpin corridor
+  v2x_overtake_guard_min_prepare_distance: 3.0 # [m] dev3 attack: use short straight/curve openings
   v2x_overtake_guard_max_lateral_shift: 0.0   # [m] disabled; use time-based lateral accel guard instead
   v2x_overtake_guard_reachable_gap_enabled: true # reject gaps that require excessive lateral accel
-  v2x_overtake_guard_max_lateral_accel: 4.0   # [m/s^2] match the committed OvertakeLine execution limit
-  v2x_overtake_guard_min_gap_time: 0.7        # [s] reject gaps that appear too late at current speed
+  v2x_overtake_guard_max_lateral_accel: 6.0   # [m/s^2] match the aggressive OvertakeLine execution limit
+  v2x_overtake_guard_min_gap_time: 0.5        # [s] entry still needs time to establish a pass line
+  v2x_overtake_continue_min_gap_time: 0.3     # [s] locked line uses the shorter continuation horizon
   v2x_overtake_guard_min_speed_for_reachable: 1.0 # [m/s] lower bound for reachability time estimate
-  v2x_overtake_guard_min_front_distance: 5.0  # [m] entry threshold; finish ShiftOut before bumper range
-  v2x_overtake_continue_min_front_distance: 2.5 # [m] active-pass threshold; entry prepare distance is not reused
-  v2x_overtake_close_follow_enabled: false    # do not start a pass after closing into bumper range
-  v2x_overtake_close_follow_min_front_distance: 1.5 # [m] do not side-escape from bumper-touch distance
-  v2x_overtake_close_follow_max_closing_speed: 0.8 # [m/s] only allow if front speed is nearly matched
-  v2x_overtake_close_follow_min_side_clearance: 2.0 # [m] require enough room before close-follow side target
+  v2x_overtake_guard_min_front_distance: 4.0  # [m] dev3 attack entry threshold
+  v2x_overtake_continue_min_front_distance: 1.8 # [m] active-pass floor near the nominal body-overlap distance
+  v2x_overtake_close_follow_enabled: true     # side-escape after matching a slow front vehicle
+  v2x_overtake_close_follow_min_front_distance: 2.2 # [m] do not side-escape from bumper-touch distance
+  v2x_overtake_close_follow_max_closing_speed: 1.5 # [m/s] require a controlled closing rate
+  v2x_overtake_close_follow_min_side_clearance: 1.2 # [m] pass-side center corridor before close-follow escape
   v2x_overtake_before_curve_enabled: true     # allow slow-front overtake in soft curve-lookahead zones
   v2x_overtake_before_curve_max_front_speed: 12.0 # [m/s] front vehicle is slow enough to justify pass
   v2x_overtake_before_curve_min_speed_advantage: 1.0 # [m/s] ego must be faster by this margin
-  v2x_overtake_start_curve_clearance_distance: 3.0 # [m] do not start a new pass just before hairpins
+  v2x_overtake_start_curve_clearance_distance: 0.5 # [m] hard-entry policy owns curve attack decisions
   v2x_overtake_continue_in_forbidden_enabled: true # continue only an active outer-side pass in a soft curve zone
   v2x_overtake_continue_inner_soft_curve_enabled: true # sim race: finish an already committed Pass through the inner soft-curve tail
   v2x_overtake_active_hard_curve_completion_enabled: true # dev3 A/B: only an active Pass may finish before the hard boundary
@@ -401,25 +404,26 @@ mpc:
   v2x_overtake_fallback_ignore_soft_curve_forbidden: false # avoid wall-side fallback targets in hairpins
   v2x_overtake_fallback_min_side_clearance: 1.2 # [m] required pass-side clearance for fallback target
   v2x_overtake_curve_cooldown_enabled: true # suppress immediate re-overtake after a curve-related abort
-  v2x_overtake_curve_cooldown_sec: 1.5      # [s] prevents left/right target flip inside hairpins
+  v2x_overtake_curve_cooldown_sec: 0.3      # [s] short anti-chatter window before retrying another gap
   v2x_side_overtake_enabled: true # treat side-by-side vehicles as overtake candidates, not passive Follow only
   v2x_side_overtake_ignore_soft_curve_forbidden: false # do not side-pass moving vehicles in hairpins
   v2x_side_overtake_entry_rear_tolerance: 0.5 # [m] do not start ShiftOut after the side target is already behind
   v2x_overtake_target_ramp_enabled: true      # start lateral target before the front vehicle enters MPC horizon
   v2x_overtake_target_ramp_ratio: 1.2         # higher = ramp pass-side target more gently
   v2x_overtake_line_enabled: true            # explicit ShiftOut/Pass/Return lateral line; off keeps legacy behavior
-  v2x_overtake_line_shift_distance: 6.0       # [m] sim race: reach the pass-side line before the target enters the hairpin
+  v2x_overtake_line_shift_distance: 4.0       # [m] dev3 attack: reach the pass-side line promptly
   v2x_overtake_line_pass_distance: 8.0        # [m] pass-side hold distance hint
-  v2x_overtake_line_return_distance: 10.0     # [m] distance to blend back to the base trajectory
+  v2x_overtake_line_return_distance: 6.0      # [m] blend back promptly after clearing the target
   v2x_overtake_line_lateral_offset: 1.2       # [m] signed by pass side: left positive, right negative
   v2x_overtake_line_target_bias: 1.0          # [0-1] explicit line is the sole lateral owner during ShiftOut/Pass
   v2x_overtake_line_min_wall_clearance: 0.1   # [m] sim A/B: center a 0.2m residual corridor without fallback
-  v2x_overtake_line_max_lateral_accel: 4.0    # [m/s^2] sim race: complete committed ShiftOut before the hairpin
+  v2x_overtake_line_max_lateral_accel: 6.0    # [m/s^2] dev3 attack: complete committed ShiftOut in a hairpin
   v2x_overtake_line_max_target_change: 0.04   # [m/cycle] smooth target goal updates across cycles
-  v2x_overtake_line_return_clear_distance: 4.0 # [m] locked target must be this far behind before Return
+  v2x_overtake_line_return_clear_distance: 2.0 # [m] begin Return after nominal vehicle-length clearance
   v2x_overtake_line_phase_hold_time: 0.3      # [s] minimum phase hold before transition
   v2x_overtake_target_hold_sec: 0.75          # [s] keep a locked Pass across a transient V2X classification loss
-  v2x_overtake_clear_confirm_sec: 0.30        # [s] require target rear-clear observation before Return
+  v2x_overtake_active_gap_loss_hold_sec: 0.50 # [s] hold only active locked ShiftOut/Pass on transient gap loss
+  v2x_overtake_clear_confirm_sec: 0.10        # [s] short rear-clear debounce before Return
   v2x_overtake_reacquire_enabled: true        # allow same target/side to return to Pass early in Return
   v2x_overtake_reacquire_window_sec: 0.50     # [s] maximum Return age for a safe reacquire
   v2x_overtake_reacquire_max_return_progress: 0.25 # [0-1] do not reverse a mostly completed Return
@@ -436,13 +440,13 @@ mpc:
   v2x_moving_front_speed_threshold: 1.0 # [m/s] above this, Follow uses moving-front behavior
   # Common-course front distance is center-to-center, not bumper clearance.
   v2x_moving_follow_speed_margin: 0.8   # [m/s] maximum closing margin with enough distance
-  v2x_moving_follow_hard_distance: 2.3 # [m] SafetyBrake before the nominal 2.0 m body-overlap boundary
+  v2x_moving_follow_hard_distance: 2.05 # [m] dev3 attack floor near the nominal 2.0 m body-overlap boundary
   v2x_moving_follow_target_distance: 5.0 # [m] match front speed here; about 3.0 m bumper clearance
   v2x_moving_follow_recovery_speed_margin: 0.6 # [m/s] command below front speed near hard distance
   v2x_moving_follow_distance_gain: 1.0 # [(m/s)/m] signed speed-margin gain around target distance
-  v2x_moving_safety_brake_distance: 3.0 # [m] minimum brake distance for moving front vehicles
-  v2x_moving_safety_brake_margin: 1.0   # [m] added to relative-speed stopping distance
-  v2x_moving_safety_brake_time_headway: 0.8 # [s] speed-dependent emergency margin
+  v2x_moving_safety_brake_distance: 2.2 # [m] moving-front hard floor for dev3
+  v2x_moving_safety_brake_margin: 0.3   # [m] added to relative-speed stopping distance
+  v2x_moving_safety_brake_time_headway: 0.3 # [s] speed-dependent emergency margin
   v2x_start_grid_grace_time: 5.0         # [s] Ready staging plus this duration after Start; static grid only
   v2x_require_gap_for_overtake: true
   v2x_low_speed_avoidance_enabled: true

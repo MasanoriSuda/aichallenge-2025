@@ -224,6 +224,27 @@ bool can_hold_active_pass_after_gap_loss(const ActivePassGapHoldRequest & reques
          request.locked_target_seen && !request.locked_target_position_jump;
 }
 
+ActiveLineGapLossHoldResolution resolve_active_line_gap_loss_hold(
+  const ActiveLineGapLossHoldRequest & request) noexcept
+{
+  ActiveLineGapLossHoldResolution resolution;
+  if (
+    !request.enabled || !request.active_line || !request.locked_target_seen ||
+    request.locked_target_position_jump || !request.transient_gap_failure ||
+    request.explicit_forbidden_wp || request.cooldown_active || request.emergency_brake ||
+    !std::isfinite(request.now_sec) || !std::isfinite(request.last_valid_gap_sec) ||
+    !std::isfinite(request.hold_sec) || request.hold_sec <= 0.0 ||
+    request.now_sec < request.last_valid_gap_sec)
+  {
+    return resolution;
+  }
+
+  const double elapsed_sec = request.now_sec - request.last_valid_gap_sec;
+  resolution.remaining_sec = std::max(0.0, request.hold_sec - elapsed_sec);
+  resolution.active = elapsed_sec <= request.hold_sec;
+  return resolution;
+}
+
 bool explicit_overtake_line_owns_lateral_plan(
   const OvertakeLateralPlannerOwnershipRequest & request) noexcept
 {
@@ -619,6 +640,10 @@ OuterCurveOvertakeResolution resolve_outer_curve_overtake(
     request.entry_enabled && !request.continuing_overtake &&
     request.soft_curve_forbidden && !request.hard_curve_forbidden &&
     request.gap_available;
+  resolution.hard_entry_allowed =
+    request.entry_enabled && request.hard_entry_enabled &&
+    !request.continuing_overtake && request.hard_curve_forbidden &&
+    request.gap_available;
   resolution.hard_continuation_allowed =
     request.hard_continuation_enabled && request.continuing_overtake &&
     request.hard_curve_forbidden && request.gap_available &&
@@ -643,6 +668,10 @@ InnerCurveOvertakeResolution resolve_inner_curve_overtake(
   resolution.entry_allowed =
     request.entry_enabled && !request.continuing_overtake &&
     request.soft_curve_forbidden && !request.hard_curve_forbidden &&
+    request.gap_available;
+  resolution.hard_entry_allowed =
+    request.entry_enabled && request.hard_entry_enabled &&
+    !request.continuing_overtake && request.hard_curve_forbidden &&
     request.gap_available;
   resolution.hard_continuation_allowed =
     request.hard_continuation_enabled && request.continuing_overtake &&

@@ -30,6 +30,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::ShiftOutCompletionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeFrontCapReleaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassFrontOverlapExclusionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ActivePassGapHoldRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::ActiveLineGapLossHoldRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeLateralPlannerOwnershipRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SideOvertakeEntryRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeLineHorizonProgressRequest;
@@ -61,6 +62,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::is_shiftout_complete;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_release_overtake_front_cap;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_exclude_locked_target_from_front_overlap;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_hold_active_pass_after_gap_loss;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_active_line_gap_loss_hold;
 using multi_purpose_mpc_ros::v2x_overtake_core::explicit_overtake_line_owns_lateral_plan;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_start_side_overtake;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_unlatched_pass_closing_speed;
@@ -543,6 +545,49 @@ TEST(V2XOvertakeCoreSpeed, HoldsOnlyCommittedActivePassAfterGapLoss)
   EXPECT_FALSE(can_hold_active_pass_after_gap_loss(request));
 }
 
+TEST(V2XOvertakeCoreSpeed, HoldsActiveLineOnlyWithinBoundedTransientGapWindow)
+{
+  ActiveLineGapLossHoldRequest request;
+  request.enabled = true;
+  request.active_line = true;
+  request.locked_target_seen = true;
+  request.transient_gap_failure = true;
+  request.now_sec = 10.4;
+  request.last_valid_gap_sec = 10.0;
+  request.hold_sec = 0.5;
+
+  const auto active = resolve_active_line_gap_loss_hold(request);
+  EXPECT_TRUE(active.active);
+  EXPECT_NEAR(active.remaining_sec, 0.1, 1.0e-9);
+
+  request.now_sec = 10.6;
+  EXPECT_FALSE(resolve_active_line_gap_loss_hold(request).active);
+}
+
+TEST(V2XOvertakeCoreSpeed, GapHoldNeverMasksHardOrTargetFailures)
+{
+  ActiveLineGapLossHoldRequest request;
+  request.enabled = true;
+  request.active_line = true;
+  request.locked_target_seen = true;
+  request.transient_gap_failure = true;
+  request.now_sec = 10.1;
+  request.last_valid_gap_sec = 10.0;
+  request.hold_sec = 0.5;
+
+  request.locked_target_position_jump = true;
+  EXPECT_FALSE(resolve_active_line_gap_loss_hold(request).active);
+  request.locked_target_position_jump = false;
+  request.explicit_forbidden_wp = true;
+  EXPECT_FALSE(resolve_active_line_gap_loss_hold(request).active);
+  request.explicit_forbidden_wp = false;
+  request.emergency_brake = true;
+  EXPECT_FALSE(resolve_active_line_gap_loss_hold(request).active);
+  request.emergency_brake = false;
+  request.transient_gap_failure = false;
+  EXPECT_FALSE(resolve_active_line_gap_loss_hold(request).active);
+}
+
 TEST(V2XOvertakeCoreSpeed, ExplicitLineExclusivelyOwnsActiveOvertakeLateralPlan)
 {
   OvertakeLateralPlannerOwnershipRequest request;
@@ -1001,6 +1046,18 @@ TEST(V2XOvertakeCoreOuterCurve, RejectsInnerEntryAndHardCurveEntry)
   EXPECT_FALSE(resolve_outer_curve_overtake(request).entry_allowed);
 }
 
+TEST(V2XOvertakeCoreOuterCurve, AllowsConfiguredNewOuterEntryInHardCurve)
+{
+  auto request = outer_curve_request();
+  request.hard_entry_enabled = true;
+  request.hard_curve_forbidden = true;
+
+  const auto resolution = resolve_outer_curve_overtake(request);
+  EXPECT_FALSE(resolution.entry_allowed);
+  EXPECT_TRUE(resolution.hard_entry_allowed);
+  EXPECT_FALSE(resolution.hard_continuation_allowed);
+}
+
 TEST(V2XOvertakeCoreOuterCurve, ContinuesLockedOuterLineThroughHardCurve)
 {
   auto request = outer_curve_request();
@@ -1039,6 +1096,12 @@ TEST(V2XOvertakeCoreOuterCurve, NeverRelaxesExplicitAndEmergencyGuards)
   request = outer_curve_request();
   request.emergency_brake = true;
   EXPECT_FALSE(resolve_outer_curve_overtake(request).entry_allowed);
+
+  request = outer_curve_request();
+  request.hard_entry_enabled = true;
+  request.hard_curve_forbidden = true;
+  request.explicit_forbidden_wp = true;
+  EXPECT_FALSE(resolve_outer_curve_overtake(request).hard_entry_allowed);
 }
 
 TEST(V2XOvertakeCoreOuterCurve, DisabledFlagsPreserveLegacyCurvePolicy)
@@ -1086,6 +1149,18 @@ TEST(V2XOvertakeCoreInnerCurve, RejectsOuterEntryAndHardCurveEntry)
   EXPECT_FALSE(resolve_inner_curve_overtake(request).entry_allowed);
 }
 
+TEST(V2XOvertakeCoreInnerCurve, AllowsConfiguredNewInnerEntryInHardCurve)
+{
+  auto request = inner_curve_request();
+  request.hard_entry_enabled = true;
+  request.hard_curve_forbidden = true;
+
+  const auto resolution = resolve_inner_curve_overtake(request);
+  EXPECT_FALSE(resolution.entry_allowed);
+  EXPECT_TRUE(resolution.hard_entry_allowed);
+  EXPECT_FALSE(resolution.hard_continuation_allowed);
+}
+
 TEST(V2XOvertakeCoreInnerCurve, ContinuesLockedInnerLineThroughHardCurve)
 {
   auto request = inner_curve_request();
@@ -1124,6 +1199,12 @@ TEST(V2XOvertakeCoreInnerCurve, NeverRelaxesExplicitCooldownAndEmergencyGuards)
   request = inner_curve_request();
   request.emergency_brake = true;
   EXPECT_FALSE(resolve_inner_curve_overtake(request).entry_allowed);
+
+  request = inner_curve_request();
+  request.hard_entry_enabled = true;
+  request.hard_curve_forbidden = true;
+  request.cooldown_active = true;
+  EXPECT_FALSE(resolve_inner_curve_overtake(request).hard_entry_allowed);
 }
 
 TEST(V2XOvertakeCoreInnerCurve, DisabledFlagsPreserveLegacyCurvePolicy)

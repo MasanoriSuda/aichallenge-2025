@@ -171,6 +171,33 @@ struct ActivePassGapHoldRequest
 /// treat a transient gap-width/time failure as a new-pass rejection.
 bool can_hold_active_pass_after_gap_loss(const ActivePassGapHoldRequest & request) noexcept;
 
+struct ActiveLineGapLossHoldRequest
+{
+  bool enabled{false};
+  bool active_line{false};
+  bool locked_target_seen{false};
+  bool locked_target_position_jump{false};
+  bool transient_gap_failure{false};
+  bool explicit_forbidden_wp{false};
+  bool cooldown_active{false};
+  bool emergency_brake{false};
+  double now_sec{};
+  double last_valid_gap_sec{};
+  double hold_sec{};
+};
+
+struct ActiveLineGapLossHoldResolution
+{
+  bool active{false};
+  double remaining_sec{0.0};
+};
+
+/// Keep a locked ShiftOut/Pass line for a bounded time after only a transient
+/// gap-width/time/reachability failure. Hard safety and target-continuity
+/// failures are never held, and a hold never extends its own deadline.
+ActiveLineGapLossHoldResolution resolve_active_line_gap_loss_hold(
+  const ActiveLineGapLossHoldRequest & request) noexcept;
+
 struct OvertakeLateralPlannerOwnershipRequest
 {
   bool explicit_line_enabled{false};
@@ -366,6 +393,7 @@ bool can_continue_overtake_in_soft_curve(
 struct OuterCurveOvertakeRequest
 {
   bool entry_enabled{false};
+  bool hard_entry_enabled{false};
   bool hard_continuation_enabled{false};
   bool continuing_overtake{false};
   bool soft_curve_forbidden{false};
@@ -382,6 +410,7 @@ struct OuterCurveOvertakeRequest
 struct OuterCurveOvertakeResolution
 {
   bool entry_allowed{false};
+  bool hard_entry_allowed{false};
   bool hard_continuation_allowed{false};
 };
 
@@ -394,6 +423,7 @@ OuterCurveOvertakeResolution resolve_outer_curve_overtake(
 struct InnerCurveOvertakeRequest
 {
   bool entry_enabled{false};
+  bool hard_entry_enabled{false};
   bool hard_continuation_enabled{false};
   bool continuing_overtake{false};
   bool soft_curve_forbidden{false};
@@ -410,12 +440,14 @@ struct InnerCurveOvertakeRequest
 struct InnerCurveOvertakeResolution
 {
   bool entry_allowed{false};
+  bool hard_entry_allowed{false};
   bool hard_continuation_allowed{false};
 };
 
 /// Allow a new pass on the inside of a soft curve, then keep the same locked
 /// inside line through a hard curve while its geometric gap remains available.
-/// A new pass is never started after the hard-curve boundary.
+/// hard_entry_enabled is a separate simulation-race exception for starting
+/// after the hard-curve boundary.
 InnerCurveOvertakeResolution resolve_inner_curve_overtake(
   const InnerCurveOvertakeRequest & request) noexcept;
 

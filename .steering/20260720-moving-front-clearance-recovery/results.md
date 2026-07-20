@@ -3,7 +3,7 @@
 ## 実装結果
 
 - moving-front Follow capを固定`front speed + 0.8 m/s`から中心間距離連動へ変更した。
-- 最終dev3設定では2.3 mで`front speed - 0.6 m/s`、3.0 mで同速、3.8 m以上で従来の
+- 比較実験用dev3設定では2.3〜4.4 mで`front speed - 0.6 m/s`、5.0 mで同速、5.8 m以上で従来の
   `front speed + 0.8 m/s`となる。
 - 2.3 m以下のmoving frontは相対速度が小さくてもSafetyBrakeとした。
 - 距離回復域はFollowだけでなく、横クリア前のShiftOut/Passにも適用した。
@@ -58,13 +58,29 @@ Summary: 25 packages finished [3.90s]
 
 stderrは既存の`setup.py install is deprecated`警告のみ。dev3実走はユーザー側で行う。
 
+## 5.0 m追走目標の比較実験
+
+- `v2x_moving_follow_target_distance`を3.0 mから5.0 mへ変更する。
+- hard 2.3 m、recovery 0.6 m/s、gain 1.0、最大接近速度差0.8 m/sは維持する。
+- Follow速度制限開始距離も5.0 mなので、5.0 mより遠方の追い上げは変更しない。
+- 中心間5.0 mは、nominalな車体占有長2.0 mを引くと約3.0 mのバンパー間距離に相当する。
+- 横gap、壁margin、OvertakeLine、close-follow設定は変更しない。
+
+```text
+config.yaml: OK
+git diff --check: OK
+make autoware-build
+Summary: 25 packages finished [3.97s]
+[build_autoware] Build successful.
+```
+
 ## dev3確認項目
 
 - `fd <= 2.3`で`danger_action=SafetyBrake`、reasonが
   `moving front inside hard center distance`になること。
-- `2.3 < fd < 3.8`で`clearance_cap=1`となり、`clearance_margin`が
+- `2.3 < fd < 5.8`で`clearance_cap=1`となり、`clearance_margin`が
   `-0.6`から`+0.8`へ連続的に変化すること。
-- 継続接触せず、中心間距離がおおむね3.0 mへ回復すること。
-- 2.5 m付近でのFollow/Overtakeチャタリングが減ること。
+- 継続接触せず、中心間距離がおおむね5.0 mへ回復すること。
+- 追い越し開始が遅すぎず、5.0 m付近から横ShiftOutへ入れること。
 - 横クリア後は`clearance_cap=0`となり、Pass加速が再開すること。
 - `ShiftOut -> Pass -> Return`の発生回数とSafetyBrakeの持続時間を確認すること。

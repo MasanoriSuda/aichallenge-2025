@@ -1397,6 +1397,10 @@ struct V2XBehaviorConfig
   double overtake_min_gap_width{2.0};
   double overtake_max_curvature{0.05};
   bool overtake_block_inner_curve_pass{false};
+  bool overtake_outer_curve_entry_enabled{false};
+  bool overtake_outer_curve_hard_continuation_enabled{false};
+  bool overtake_inner_curve_entry_enabled{false};
+  bool overtake_inner_curve_hard_continuation_enabled{false};
   double overtake_forbidden_curve_lookahead_distance{0.0};
   bool overtake_guard_enabled{true};
   double overtake_guard_min_gap_width{2.5};
@@ -1657,6 +1661,10 @@ struct V2XBehaviorOutput
   bool continuing_overtake_allowed{false};
   bool overtake_hard_curve_blocked{false};
   bool active_hard_curve_continuation_allowed{false};
+  bool outer_curve_entry_allowed{false};
+  bool outer_curve_hard_continuation_allowed{false};
+  bool inner_curve_entry_allowed{false};
+  bool inner_curve_hard_continuation_allowed{false};
   bool overtake_inner_curve_pass{false};
   bool overtake_completion_feasible{true};
   bool overtake_speed_front_cap_applied{false};
@@ -3771,9 +3779,15 @@ struct MPC
       std::string reason{"not evaluated"};
     };
 
-    const int preferred_pass_side =
-      choose_overtake_pass_side(nearest_front_lateral, lb[0], ub[0]);
     const int locked_pass_side = overtake_locked_side_sign_;
+    const int geometric_preferred_pass_side =
+      choose_overtake_pass_side(nearest_front_lateral, lb[0], ub[0]);
+    const bool prefer_inner_curve_entry =
+      cfg.v2x_behavior.overtake_inner_curve_entry_enabled &&
+      locked_pass_side == 0 && soft_overtake_forbidden &&
+      !hard_overtake_forbidden && inner_curve_pass_side != 0;
+    const int preferred_pass_side = prefer_inner_curve_entry ?
+      inner_curve_pass_side : geometric_preferred_pass_side;
     const int overtake_plan_N = v2x_overtake_gap_plan_horizon(N);
     output.overtake_plan_N = overtake_plan_N;
     const auto [overtake_lb, overtake_ub] =
@@ -3897,10 +3911,44 @@ struct MPC
         return side > 0 ? overtake_core::PassSide::Left :
                side < 0 ? overtake_core::PassSide::Right : overtake_core::PassSide::None;
       };
+    const auto resolve_outer_curve_for_side = [&](const SideAssessment & assessment) {
+        return v2x_overtake_core::resolve_outer_curve_overtake(
+          v2x_overtake_core::OuterCurveOvertakeRequest{
+            cfg.v2x_behavior.overtake_outer_curve_entry_enabled,
+            cfg.v2x_behavior.overtake_outer_curve_hard_continuation_enabled,
+            continuing_overtake,
+            soft_overtake_forbidden,
+            hard_overtake_forbidden,
+            overtake_forbidden_wp,
+            overtake_cooldown_active,
+            front_risk_level == FrontRiskLevel::EmergencyBrake,
+            assessment.gap_available,
+            active_target_valid,
+            assessment.side,
+            inner_curve_pass_side});
+      };
+    const auto resolve_inner_curve_for_side = [&](const SideAssessment & assessment) {
+        return v2x_overtake_core::resolve_inner_curve_overtake(
+          v2x_overtake_core::InnerCurveOvertakeRequest{
+            cfg.v2x_behavior.overtake_inner_curve_entry_enabled,
+            cfg.v2x_behavior.overtake_inner_curve_hard_continuation_enabled,
+            continuing_overtake,
+            soft_overtake_forbidden,
+            hard_overtake_forbidden,
+            overtake_forbidden_wp,
+            overtake_cooldown_active,
+            front_risk_level == FrontRiskLevel::EmergencyBrake,
+            assessment.gap_available,
+            active_target_valid,
+            assessment.side,
+            inner_curve_pass_side});
+      };
     const auto execution_allowed_for_side = [&](const SideAssessment & assessment) {
         if (!assessment.gap_available || assessment.side == 0) {
           return false;
         }
+        const auto outer_curve = resolve_outer_curve_for_side(assessment);
+        const auto inner_curve = resolve_inner_curve_for_side(assessment);
         const bool inner_curve_pass =
           is_inner_curve_pass(assessment.side, inner_curve_pass_side);
         const bool active_locked_inner_curve_allowed =
@@ -3913,12 +3961,23 @@ struct MPC
           assessment.side_clearance >= fallback_min_side_clearance &&
           !inner_curve_pass &&
           front_risk_level != FrontRiskLevel::EmergencyBrake;
-        return !overtake_cooldown_active && !overtake_start_curve_blocked &&
-               overtake_completion_feasible &&
-               !overtake_forbidden_wp && !effective_hard_overtake_forbidden &&
-               (!inner_curve_pass || active_locked_inner_curve_allowed) &&
+        return !overtake_cooldown_active &&
+               (!overtake_start_curve_blocked || outer_curve.entry_allowed ||
+               outer_curve.hard_continuation_allowed || inner_curve.entry_allowed ||
+               inner_curve.hard_continuation_allowed) &&
+               (overtake_completion_feasible || outer_curve.entry_allowed ||
+               outer_curve.hard_continuation_allowed || inner_curve.entry_allowed ||
+               inner_curve.hard_continuation_allowed) &&
+               !overtake_forbidden_wp &&
+               (!effective_hard_overtake_forbidden ||
+               outer_curve.hard_continuation_allowed ||
+               inner_curve.hard_continuation_allowed) &&
+               (!inner_curve_pass || active_locked_inner_curve_allowed ||
+               inner_curve.entry_allowed || inner_curve.hard_continuation_allowed) &&
                (!soft_overtake_forbidden || before_curve_overtake_allowed ||
                continuing_overtake_allowed || active_hard_curve_allowed ||
+               outer_curve.entry_allowed || outer_curve.hard_continuation_allowed ||
+               inner_curve.entry_allowed || inner_curve.hard_continuation_allowed ||
                side_fallback_soft_curve_allowed);
       };
     const auto select_side = [&](const bool require_execution_permission) {
@@ -3947,16 +4006,33 @@ struct MPC
       right_assessment : left_assessment;
     output.overtake_side_clearance = selected_assessment.side_clearance;
     output.overtake_fallback_target = selected_assessment.fallback_target;
+    const auto selected_outer_curve = resolve_outer_curve_for_side(selected_assessment);
+    output.outer_curve_entry_allowed = selected_outer_curve.entry_allowed;
+    output.outer_curve_hard_continuation_allowed =
+      selected_outer_curve.hard_continuation_allowed;
+    const auto selected_inner_curve = resolve_inner_curve_for_side(selected_assessment);
+    output.inner_curve_entry_allowed = selected_inner_curve.entry_allowed;
+    output.inner_curve_hard_continuation_allowed =
+      selected_inner_curve.hard_continuation_allowed;
     const bool overtake_gap_available = output.overtake_pass_side_sign != 0 &&
       selected_assessment.gap_available;
     const bool selected_inner_curve_pass =
       is_inner_curve_pass(output.overtake_pass_side_sign, inner_curve_pass_side);
+    output.overtake_inner_curve_pass = selected_inner_curve_pass;
     const bool overtake_zone_allows =
       overtake_gap_available && execution_allowed_for_side(selected_assessment);
     output.overtake_zone_allows = overtake_zone_allows;
 
     std::string overtake_block_reason = !overtake_gap_available ?
       selected_assessment.reason :
+      selected_outer_curve.entry_allowed ?
+      "outer curve entry and reachable gap" :
+      selected_outer_curve.hard_continuation_allowed ?
+      "continue locked outer line through hard curve" :
+      selected_inner_curve.entry_allowed ?
+      "inner curve entry and reachable gap" :
+      selected_inner_curve.hard_continuation_allowed ?
+      "continue locked inner line through hard curve" :
       overtake_forbidden_wp ? "overtake forbidden wp" :
       overtake_cooldown_active ? "overtake curve cooldown" :
       overtake_start_curve_blocked ? "overtake start too close to curve" :
@@ -3973,7 +4049,15 @@ struct MPC
     if (has_front_vehicle) {
       if (overtake_zone_allows && overtake_gap_available) {
         output.state = V2XBehaviorState::Overtake;
-        output.reason = before_curve_overtake_allowed ?
+        output.reason = selected_outer_curve.entry_allowed ?
+          "outer curve entry / " + selected_assessment.reason :
+          selected_outer_curve.hard_continuation_allowed ?
+          "continue locked outer line through hard curve / " + selected_assessment.reason :
+          selected_inner_curve.entry_allowed ?
+          "inner curve entry / " + selected_assessment.reason :
+          selected_inner_curve.hard_continuation_allowed ?
+          "continue locked inner line through hard curve / " + selected_assessment.reason :
+          before_curve_overtake_allowed ?
           "slow front before curve and reachable gap / " + overtake_block_reason :
           active_hard_curve_allowed ?
           "continue active pass before hard curve / " + overtake_block_reason :
@@ -4024,21 +4108,40 @@ struct MPC
         continuing_overtake &&
         overtake_locked_side_sign_ != 0 &&
         output.overtake_pass_side_sign == overtake_locked_side_sign_;
+      const bool side_outer_curve_allowed =
+        output.outer_curve_entry_allowed ||
+        output.outer_curve_hard_continuation_allowed;
+      const bool side_inner_curve_allowed =
+        output.inner_curve_entry_allowed ||
+        output.inner_curve_hard_continuation_allowed;
       const bool side_overtake_zone_allows =
         side_overtake_entry_target_valid &&
         !overtake_cooldown_active &&
-        !overtake_start_curve_blocked &&
+        (!overtake_start_curve_blocked || side_outer_curve_allowed ||
+        side_inner_curve_allowed) &&
         !overtake_forbidden_wp &&
-        !effective_hard_overtake_forbidden &&
-        (!side_inner_curve_pass || active_locked_side_inner_curve_allowed) &&
+        (!effective_hard_overtake_forbidden ||
+        output.outer_curve_hard_continuation_allowed ||
+        output.inner_curve_hard_continuation_allowed) &&
+        (!side_inner_curve_pass || active_locked_side_inner_curve_allowed ||
+        side_inner_curve_allowed) &&
         (!overtake_forbidden ||
         (cfg.v2x_behavior.side_overtake_ignore_soft_curve_forbidden && soft_overtake_forbidden) ||
-        continuing_overtake_allowed || active_hard_curve_allowed);
+        continuing_overtake_allowed || active_hard_curve_allowed ||
+        side_outer_curve_allowed || side_inner_curve_allowed);
       output.overtake_zone_allows = side_overtake_zone_allows;
 
       const bool side_overtake_gap_available = output.overtake_gap_available;
       std::string side_overtake_block_reason = !side_overtake_entry_target_valid ?
         "side target already behind" :
+        output.inner_curve_entry_allowed ?
+        "inner curve entry and reachable gap" :
+        output.inner_curve_hard_continuation_allowed ?
+        "continue locked inner line through hard curve" :
+        output.outer_curve_entry_allowed ?
+        "outer curve entry and reachable gap" :
+        output.outer_curve_hard_continuation_allowed ?
+        "continue locked outer line through hard curve" :
         overtake_forbidden_wp ?
         "overtake forbidden wp" :
         overtake_cooldown_active ?
@@ -4059,7 +4162,15 @@ struct MPC
       output.overtake_block_reason = side_overtake_block_reason;
       if (side_overtake_zone_allows && side_overtake_gap_available) {
         output.state = V2XBehaviorState::Overtake;
-        output.reason = "side vehicle and reachable gap / " + side_overtake_block_reason;
+        output.reason = output.inner_curve_hard_continuation_allowed ?
+          "continue side-by-side inner line through hard curve / " + side_overtake_block_reason :
+          output.inner_curve_entry_allowed ?
+          "side vehicle inner curve entry / " + side_overtake_block_reason :
+          output.outer_curve_hard_continuation_allowed ?
+          "continue side-by-side outer line through hard curve / " + side_overtake_block_reason :
+          output.outer_curve_entry_allowed ?
+          "side vehicle outer curve entry / " + side_overtake_block_reason :
+          "side vehicle and reachable gap / " + side_overtake_block_reason;
         return commit_v2x_behavior_state(output, now_sec);
       }
       output.reason = side_overtake_zone_allows ?
@@ -5326,15 +5437,25 @@ private:
         behavior_output.locked_target_longitudinal > 0.0 &&
         !behavior_output.overtake_forbidden_wp &&
         (!behavior_output.overtake_hard_curve_blocked ||
-        behavior_output.active_hard_curve_continuation_allowed) &&
+        behavior_output.active_hard_curve_continuation_allowed ||
+        behavior_output.outer_curve_hard_continuation_allowed ||
+        behavior_output.inner_curve_hard_continuation_allowed) &&
         (!behavior_output.overtake_inner_curve_pass ||
-        behavior_output.active_hard_curve_continuation_allowed) &&
-        behavior_output.overtake_completion_feasible &&
+        behavior_output.active_hard_curve_continuation_allowed ||
+        behavior_output.inner_curve_entry_allowed ||
+        behavior_output.inner_curve_hard_continuation_allowed) &&
+        (behavior_output.overtake_completion_feasible ||
+        behavior_output.outer_curve_hard_continuation_allowed ||
+        behavior_output.inner_curve_entry_allowed ||
+        behavior_output.inner_curve_hard_continuation_allowed) &&
         !behavior_output.overtake_cooldown_active &&
         behavior_output.front_risk_level != FrontRiskLevel::EmergencyBrake &&
         (!behavior_output.overtake_forbidden ||
         behavior_output.continuing_overtake_allowed ||
-        behavior_output.active_hard_curve_continuation_allowed);
+        behavior_output.active_hard_curve_continuation_allowed ||
+        behavior_output.outer_curve_hard_continuation_allowed ||
+        behavior_output.inner_curve_entry_allowed ||
+        behavior_output.inner_curve_hard_continuation_allowed);
       const auto continuity = overtake_core::resolve_target_continuity(
         overtake_core::ContinuityRequest{
           overtake_solver_recovery_active_, behavior_output.locked_target_position_jump,
@@ -6735,7 +6856,9 @@ private:
         rclcpp::get_logger("mpc_controller"),
         "V2X behavior: %s -> %s, front_distance=%.2f, wp_id=%d, reason=%s, "
         "block=%s, gap=%d, soft_curve=%d, hard_curve=%d, inner_pass=%d, continue=%d, "
-        "hard_continue=%d, hard_dist=%.2f, hard_avail=%.2f, hard_req=%.2f",
+        "hard_continue=%d, outer_entry=%d, outer_hard=%d, "
+        "inner_entry=%d, inner_hard=%d, "
+        "hard_dist=%.2f, hard_avail=%.2f, hard_req=%.2f",
         v2x_behavior_state_initialized ? to_string(v2x_behavior_state) : "None", to_string(final_state),
         output.front_distance, model->wp_id, output.reason.c_str(),
         output.overtake_block_reason.c_str(), output.overtake_gap_available ? 1 : 0,
@@ -6744,6 +6867,10 @@ private:
         output.overtake_inner_curve_pass ? 1 : 0,
         output.continuing_overtake_allowed ? 1 : 0,
         output.active_hard_curve_continuation_allowed ? 1 : 0,
+        output.outer_curve_entry_allowed ? 1 : 0,
+        output.outer_curve_hard_continuation_allowed ? 1 : 0,
+        output.inner_curve_entry_allowed ? 1 : 0,
+        output.inner_curve_hard_continuation_allowed ? 1 : 0,
         output.active_hard_curve_distance,
         output.active_hard_curve_available_distance,
         output.active_hard_curve_required_distance);
@@ -6775,6 +6902,8 @@ private:
           "low_speed=%d, low_speed_block=%d, "
           "low_stall=%.2f, low_timeout=%d, low_cooldown=%d, "
           "zone=%d, start_curve=%d, before_curve=%d, continue=%d, hard_continue=%d, "
+          "outer_entry=%d, outer_hard=%d, "
+          "inner_entry=%d, inner_hard=%d, "
           "hard_dist=%.2f, hard_avail=%.2f, hard_req=%.2f, completion=%d, "
           "completion_avail=%.2f, completion_req=%.2f, completion_rel=%.2f, "
           "gap=%d, fallback=%d, "
@@ -6821,6 +6950,10 @@ private:
           output.before_curve_overtake_allowed ? 1 : 0,
           output.continuing_overtake_allowed ? 1 : 0,
           output.active_hard_curve_continuation_allowed ? 1 : 0,
+          output.outer_curve_entry_allowed ? 1 : 0,
+          output.outer_curve_hard_continuation_allowed ? 1 : 0,
+          output.inner_curve_entry_allowed ? 1 : 0,
+          output.inner_curve_hard_continuation_allowed ? 1 : 0,
           output.active_hard_curve_distance,
           output.active_hard_curve_available_distance,
           output.active_hard_curve_required_distance,
@@ -8131,6 +8264,18 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_block_inner_curve_pass =
     mpc["v2x_overtake_block_inner_curve_pass"] ?
     mpc["v2x_overtake_block_inner_curve_pass"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_outer_curve_entry_enabled =
+    mpc["v2x_overtake_outer_curve_entry_enabled"] ?
+    mpc["v2x_overtake_outer_curve_entry_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_outer_curve_hard_continuation_enabled =
+    mpc["v2x_overtake_outer_curve_hard_continuation_enabled"] ?
+    mpc["v2x_overtake_outer_curve_hard_continuation_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_inner_curve_entry_enabled =
+    mpc["v2x_overtake_inner_curve_entry_enabled"] ?
+    mpc["v2x_overtake_inner_curve_entry_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_inner_curve_hard_continuation_enabled =
+    mpc["v2x_overtake_inner_curve_hard_continuation_enabled"] ?
+    mpc["v2x_overtake_inner_curve_hard_continuation_enabled"].as<bool>() : false;
   cfg.mpc.v2x_behavior.overtake_forbidden_curve_lookahead_distance = std::max(
     0.0,
     mpc["v2x_overtake_forbidden_curve_lookahead_distance"] ?

@@ -601,6 +601,56 @@ bool can_continue_overtake_in_soft_curve(
          (!request.inner_curve_pass || request.inner_soft_curve_enabled);
 }
 
+OuterCurveOvertakeResolution resolve_outer_curve_overtake(
+  const OuterCurveOvertakeRequest & request) noexcept
+{
+  OuterCurveOvertakeResolution resolution;
+  const bool outside_curve =
+    request.pass_side_sign != 0 && request.inner_curve_pass_side != 0 &&
+    request.pass_side_sign != request.inner_curve_pass_side;
+  if (
+    !outside_curve || request.explicit_forbidden_wp || request.cooldown_active ||
+    request.emergency_brake)
+  {
+    return resolution;
+  }
+
+  resolution.entry_allowed =
+    request.entry_enabled && !request.continuing_overtake &&
+    request.soft_curve_forbidden && !request.hard_curve_forbidden &&
+    request.gap_available;
+  resolution.hard_continuation_allowed =
+    request.hard_continuation_enabled && request.continuing_overtake &&
+    request.hard_curve_forbidden && request.gap_available &&
+    request.locked_target_seen;
+  return resolution;
+}
+
+InnerCurveOvertakeResolution resolve_inner_curve_overtake(
+  const InnerCurveOvertakeRequest & request) noexcept
+{
+  InnerCurveOvertakeResolution resolution;
+  const bool inside_curve =
+    request.pass_side_sign != 0 && request.inner_curve_pass_side != 0 &&
+    request.pass_side_sign == request.inner_curve_pass_side;
+  if (
+    !inside_curve || request.explicit_forbidden_wp || request.cooldown_active ||
+    request.emergency_brake)
+  {
+    return resolution;
+  }
+
+  resolution.entry_allowed =
+    request.entry_enabled && !request.continuing_overtake &&
+    request.soft_curve_forbidden && !request.hard_curve_forbidden &&
+    request.gap_available;
+  resolution.hard_continuation_allowed =
+    request.hard_continuation_enabled && request.continuing_overtake &&
+    request.hard_curve_forbidden && request.gap_available &&
+    request.locked_target_seen;
+  return resolution;
+}
+
 ActiveHardCurveContinuationResolution resolve_active_hard_curve_continuation(
   const ActiveHardCurveContinuationRequest & request)
 {

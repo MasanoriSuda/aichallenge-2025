@@ -351,7 +351,11 @@ mpc:
   # Keep this as center-line slack, not raw vehicle width.
   v2x_overtake_min_gap_width: 0.2 # [m] sim A/B: allow near-minimum kart-to-wall corridor
   v2x_overtake_max_curvature: 0.04
-  v2x_overtake_block_inner_curve_pass: true # do not dive into the inside of hairpin curves
+  v2x_overtake_block_inner_curve_pass: true # block inner passes unless the explicit sim-race exception below is satisfied
+  v2x_overtake_outer_curve_entry_enabled: true # sim race: allow a reachable outside pass in a soft curve
+  v2x_overtake_outer_curve_hard_continuation_enabled: true # keep a locked outer ShiftOut/Pass through a hard curve while gap remains
+  v2x_overtake_inner_curve_entry_enabled: true # sim race: prefer a reachable inside gap when entering a soft curve
+  v2x_overtake_inner_curve_hard_continuation_enabled: true # keep only the locked inside ShiftOut/Pass through the hard apex
   v2x_overtake_forbidden_curve_lookahead_distance: 6.0 # [m] soft entry/continuation policy; hard curve uses completion guard below
   v2x_overtake_gap_lookahead_distance: 24.0 # [m] search farther than MPC horizon for slow-front pass
   v2x_overtake_try_both_sides: true         # before ShiftOut, retry the opposite side if preferred gap is blocked
@@ -433,7 +437,7 @@ mpc:
   # Common-course front distance is center-to-center, not bumper clearance.
   v2x_moving_follow_speed_margin: 0.8   # [m/s] maximum closing margin with enough distance
   v2x_moving_follow_hard_distance: 2.3 # [m] SafetyBrake before the nominal 2.0 m body-overlap boundary
-  v2x_moving_follow_target_distance: 3.0 # [m] match front speed here; about 1.0 m bumper clearance
+  v2x_moving_follow_target_distance: 5.0 # [m] match front speed here; about 3.0 m bumper clearance
   v2x_moving_follow_recovery_speed_margin: 0.6 # [m/s] command below front speed near hard distance
   v2x_moving_follow_distance_gain: 1.0 # [(m/s)/m] signed speed-margin gain around target distance
   v2x_moving_safety_brake_distance: 3.0 # [m] minimum brake distance for moving front vehicles

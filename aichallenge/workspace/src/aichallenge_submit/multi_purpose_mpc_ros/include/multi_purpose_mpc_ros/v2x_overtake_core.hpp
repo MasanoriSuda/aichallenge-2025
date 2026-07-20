@@ -363,6 +363,62 @@ struct OvertakeCurveContinuationRequest
 bool can_continue_overtake_in_soft_curve(
   const OvertakeCurveContinuationRequest & request) noexcept;
 
+struct OuterCurveOvertakeRequest
+{
+  bool entry_enabled{false};
+  bool hard_continuation_enabled{false};
+  bool continuing_overtake{false};
+  bool soft_curve_forbidden{false};
+  bool hard_curve_forbidden{false};
+  bool explicit_forbidden_wp{false};
+  bool cooldown_active{false};
+  bool emergency_brake{false};
+  bool gap_available{false};
+  bool locked_target_seen{false};
+  int pass_side_sign{0};
+  int inner_curve_pass_side{0};
+};
+
+struct OuterCurveOvertakeResolution
+{
+  bool entry_allowed{false};
+  bool hard_continuation_allowed{false};
+};
+
+/// Allow a new pass only on the outside of a soft curve, then keep the same locked
+/// outside line through a hard curve while its geometric gap remains available.
+/// Explicit forbidden waypoints, inner passes, cooldown and emergency braking are never relaxed.
+OuterCurveOvertakeResolution resolve_outer_curve_overtake(
+  const OuterCurveOvertakeRequest & request) noexcept;
+
+struct InnerCurveOvertakeRequest
+{
+  bool entry_enabled{false};
+  bool hard_continuation_enabled{false};
+  bool continuing_overtake{false};
+  bool soft_curve_forbidden{false};
+  bool hard_curve_forbidden{false};
+  bool explicit_forbidden_wp{false};
+  bool cooldown_active{false};
+  bool emergency_brake{false};
+  bool gap_available{false};
+  bool locked_target_seen{false};
+  int pass_side_sign{0};
+  int inner_curve_pass_side{0};
+};
+
+struct InnerCurveOvertakeResolution
+{
+  bool entry_allowed{false};
+  bool hard_continuation_allowed{false};
+};
+
+/// Allow a new pass on the inside of a soft curve, then keep the same locked
+/// inside line through a hard curve while its geometric gap remains available.
+/// A new pass is never started after the hard-curve boundary.
+InnerCurveOvertakeResolution resolve_inner_curve_overtake(
+  const InnerCurveOvertakeRequest & request) noexcept;
+
 struct ActiveHardCurveContinuationRequest
 {
   bool enabled{false};

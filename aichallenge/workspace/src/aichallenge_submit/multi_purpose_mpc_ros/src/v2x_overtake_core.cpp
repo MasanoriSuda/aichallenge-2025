@@ -94,6 +94,11 @@ FollowSpeedLimitResolution resolve_follow_speed_limit(
   validate_speed(request.activation_distance_m, "Follow activation distance");
   validate_speed(request.moving_front_speed_threshold_mps, "moving-front speed threshold");
   validate_speed(request.moving_front_speed_margin_mps, "moving-front speed margin");
+  validate_speed(request.moving_front_target_distance_m, "moving-front target distance");
+  validate_speed(
+    request.moving_front_recovery_speed_margin_mps,
+    "moving-front recovery speed margin");
+  validate_speed(request.moving_front_distance_gain, "moving-front distance gain");
   validate_speed(request.slow_front_velocity_cap_mps, "slow-front velocity cap");
   validate_speed(request.maximum_speed_mps, "maximum speed");
 
@@ -110,12 +115,30 @@ FollowSpeedLimitResolution resolve_follow_speed_limit(
   const bool moving_front =
     std::isfinite(request.front_speed_mps) && request.front_speed_mps >= 0.0 &&
     request.front_speed_mps > request.moving_front_speed_threshold_mps;
-  const double speed_limit_mps = moving_front ?
-    std::min(
-      request.maximum_speed_mps,
-      request.front_speed_mps + request.moving_front_speed_margin_mps) :
-    std::min(request.slow_front_distance_limit_mps, request.slow_front_velocity_cap_mps);
-  return {true, moving_front, speed_limit_mps};
+  if (!moving_front) {
+    return {
+      true, false, false, 0.0,
+      std::min(request.slow_front_distance_limit_mps, request.slow_front_velocity_cap_mps)};
+  }
+
+  double moving_speed_margin_mps = request.moving_front_speed_margin_mps;
+  bool clearance_recovery = false;
+  if (
+    request.moving_front_target_distance_m > 0.0 &&
+    request.moving_front_distance_gain > 0.0)
+  {
+    moving_speed_margin_mps = std::clamp(
+      request.moving_front_distance_gain *
+      (request.front_distance_m - request.moving_front_target_distance_m),
+      -request.moving_front_recovery_speed_margin_mps,
+      request.moving_front_speed_margin_mps);
+    clearance_recovery =
+      moving_speed_margin_mps < request.moving_front_speed_margin_mps;
+  }
+  const double speed_limit_mps = std::min(
+    request.maximum_speed_mps,
+    std::max(0.0, request.front_speed_mps + moving_speed_margin_mps));
+  return {true, true, clearance_recovery, moving_speed_margin_mps, speed_limit_mps};
 }
 
 OvertakeSpeedReferenceResolution resolve_overtake_speed_reference(
@@ -968,16 +991,30 @@ FrontDangerAction resolve_front_danger_action(const FrontDangerActionRequest & r
     throw std::invalid_argument(
             "Moving-front speed threshold must be finite and non-negative");
   }
+  if (
+    !std::isfinite(request.moving_front_hard_distance_m) ||
+    request.moving_front_hard_distance_m < 0.0)
+  {
+    throw std::invalid_argument(
+            "Moving-front hard distance must be finite and non-negative");
+  }
   if (request.emergency_brake) {
+    return FrontDangerAction::SafetyBrake;
+  }
+  const bool moving_front =
+    std::isfinite(request.front_speed_mps) && request.front_speed_mps >= 0.0 &&
+    request.front_speed_mps > request.moving_front_speed_threshold_mps;
+  if (
+    moving_front && request.moving_front_hard_distance_m > 0.0 &&
+    (!std::isfinite(request.front_distance_m) || request.front_distance_m < 0.0 ||
+    request.front_distance_m <= request.moving_front_hard_distance_m))
+  {
     return FrontDangerAction::SafetyBrake;
   }
   if (!request.inside_stopping_distance) {
     return FrontDangerAction::None;
   }
-  if (
-    std::isfinite(request.front_speed_mps) && request.front_speed_mps >= 0.0 &&
-    request.front_speed_mps > request.moving_front_speed_threshold_mps)
-  {
+  if (moving_front) {
     return FrontDangerAction::RelativeSpeedLimit;
   }
   return FrontDangerAction::SafetyBrake;

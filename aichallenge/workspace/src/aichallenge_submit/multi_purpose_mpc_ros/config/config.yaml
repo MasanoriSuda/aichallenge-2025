@@ -430,7 +430,12 @@ mpc:
   v2x_overtake_solver_recovery_success_cycles: 20 # 0.5 s at 40 Hz before re-entry after solver abort
   v2x_overtake_line_debug_log_enabled: true   # log phase changes when enabled
   v2x_moving_front_speed_threshold: 1.0 # [m/s] above this, Follow uses moving-front behavior
-  v2x_moving_follow_speed_margin: 0.8   # [m/s] controlled closing margin while still behind
+  # Common-course front distance is center-to-center, not bumper clearance.
+  v2x_moving_follow_speed_margin: 0.8   # [m/s] maximum closing margin with enough distance
+  v2x_moving_follow_hard_distance: 2.3 # [m] SafetyBrake before the nominal 2.0 m body-overlap boundary
+  v2x_moving_follow_target_distance: 3.0 # [m] match front speed here; about 1.0 m bumper clearance
+  v2x_moving_follow_recovery_speed_margin: 0.6 # [m/s] command below front speed near hard distance
+  v2x_moving_follow_distance_gain: 1.0 # [(m/s)/m] signed speed-margin gain around target distance
   v2x_moving_safety_brake_distance: 3.0 # [m] minimum brake distance for moving front vehicles
   v2x_moving_safety_brake_margin: 1.0   # [m] added to relative-speed stopping distance
   v2x_moving_safety_brake_time_headway: 0.8 # [s] speed-dependent emergency margin

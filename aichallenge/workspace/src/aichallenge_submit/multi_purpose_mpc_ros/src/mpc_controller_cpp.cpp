@@ -1448,6 +1448,10 @@ struct V2XBehaviorConfig
   double overtake_completion_min_relative_speed{0.5};
   double moving_front_speed_threshold{1.0};
   double moving_follow_speed_margin{2.0};
+  double moving_follow_hard_distance{0.0};
+  double moving_follow_target_distance{0.0};
+  double moving_follow_recovery_speed_margin{0.0};
+  double moving_follow_distance_gain{0.0};
   double moving_safety_brake_distance{1.5};
   double moving_safety_brake_margin{1.0};
   double moving_safety_brake_time_headway{0.3};
@@ -1642,6 +1646,8 @@ struct V2XBehaviorOutput
   bool low_speed_avoidance_cooldown_active{false};
   bool follow_speed_limit_active{false};
   bool follow_speed_limit_moving_front{false};
+  bool moving_front_clearance_limit_active{false};
+  double moving_front_clearance_speed_margin{0.0};
   bool overtake_forbidden{false};
   bool overtake_forbidden_wp{false};
   bool front_decel_curve_guard{false};
@@ -3393,10 +3399,41 @@ struct MPC
         has_danger_vehicle,
         front_risk_emergency,
         nearest_front_speed,
-        cfg.v2x_behavior.moving_front_speed_threshold});
+        cfg.v2x_behavior.moving_front_speed_threshold,
+        nearest_front_distance,
+        cfg.v2x_behavior.moving_follow_hard_distance});
     output.front_danger_action = front_danger_action;
     const bool front_danger_requires_safety_brake =
       front_danger_action == v2x_overtake_core::FrontDangerAction::SafetyBrake;
+    // Follow uses the full configured distance gate below. Independently retain the
+    // distance-recovery part of the cap while ShiftOut/early Pass owns the lateral plan.
+    // Once the locked target is laterally clear, the existing front-overlap latch removes it
+    // from nearest-front selection and this cap no longer prevents pass acceleration.
+    const auto moving_front_clearance_limit = v2x_overtake_core::resolve_follow_speed_limit(
+      v2x_overtake_core::FollowSpeedLimitRequest{
+        cfg.v2x_behavior.follow_speed_limit_enabled,
+        false,
+        nearest_front_distance,
+        cfg.v2x_behavior.follow_speed_limit_distance,
+        nearest_front_speed,
+        cfg.v2x_behavior.moving_front_speed_threshold,
+        cfg.v2x_behavior.moving_follow_speed_margin,
+        cfg.v2x_behavior.moving_follow_target_distance,
+        cfg.v2x_behavior.moving_follow_recovery_speed_margin,
+        cfg.v2x_behavior.moving_follow_distance_gain,
+        front_distance_velocity_limit(nearest_front_distance),
+        cfg.v2x_behavior.follow_velocity,
+        cfg.v_max});
+    output.moving_front_clearance_limit_active =
+      moving_front_clearance_limit.active &&
+      moving_front_clearance_limit.moving_front &&
+      moving_front_clearance_limit.moving_front_clearance_recovery;
+    output.moving_front_clearance_speed_margin =
+      moving_front_clearance_limit.moving_front_speed_margin_mps;
+    if (output.moving_front_clearance_limit_active) {
+      output.target_velocity_limit = std::min(
+        output.target_velocity_limit, moving_front_clearance_limit.speed_limit_mps);
+    }
     const bool initial_static_target =
       start_grid_grace_active && has_front_vehicle && has_side_vehicle &&
       !nearest_front_id.empty() && std::isfinite(nearest_front_speed) &&
@@ -3553,7 +3590,15 @@ struct MPC
     if (front_danger_requires_safety_brake && !suppress_start_grid_stop_behavior) {
       update_front_hazard_hold(true, false, nearest_front_id, false);
       output.state = V2XBehaviorState::SafetyBrake;
-      output.reason = "stopped/slow front inside stopping distance";
+      const bool moving_front_inside_hard_distance =
+        std::isfinite(nearest_front_speed) &&
+        nearest_front_speed > cfg.v2x_behavior.moving_front_speed_threshold &&
+        cfg.v2x_behavior.moving_follow_hard_distance > 0.0 &&
+        std::isfinite(nearest_front_distance) &&
+        nearest_front_distance <= cfg.v2x_behavior.moving_follow_hard_distance;
+      output.reason = moving_front_inside_hard_distance ?
+        "moving front inside hard center distance" :
+        "stopped/slow front inside stopping distance";
       return commit_v2x_behavior_state(output, now_sec);
     }
 
@@ -6391,6 +6436,9 @@ private:
         front_speed,
         cfg.v2x_behavior.moving_front_speed_threshold,
         cfg.v2x_behavior.moving_follow_speed_margin,
+        cfg.v2x_behavior.moving_follow_target_distance,
+        cfg.v2x_behavior.moving_follow_recovery_speed_margin,
+        cfg.v2x_behavior.moving_follow_distance_gain,
         front_distance_velocity_limit(front_distance),
         cfg.v2x_behavior.follow_velocity,
         cfg.v_max});
@@ -6715,6 +6763,7 @@ private:
           rclcpp::get_logger("mpc_controller"),
           "V2X debug: desired=%s, final=%s, allow_gap=%d, limit=%.2f, desired_v=%.2f, "
           "follow_cap=%d, follow_moving=%d, follow_cap_dist=%.2f, "
+          "clearance_cap=%d, clearance_margin=%.2f, "
           "speed_cap=%d, cap_release=%d, adaptive_cap=%d, closing=%.2f, "
           "shift_t=%.2f, wp_id=%d, "
           "vehicles=%zu, front=%d, side=%d, danger=%d, danger_action=%s, "
@@ -6737,6 +6786,8 @@ private:
           output.follow_speed_limit_active ? 1 : 0,
           output.follow_speed_limit_moving_front ? 1 : 0,
           cfg.v2x_behavior.follow_speed_limit_distance,
+          output.moving_front_clearance_limit_active ? 1 : 0,
+          output.moving_front_clearance_speed_margin,
           output.overtake_speed_front_cap_applied ? 1 : 0,
           output.overtake_front_cap_release_ready ? 1 : 0,
           output.overtake_shiftout_adaptive_speed_applied ? 1 : 0,
@@ -8282,6 +8333,22 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_moving_follow_speed_margin"] ?
     mpc["v2x_moving_follow_speed_margin"].as<double>() : 2.0);
+  cfg.mpc.v2x_behavior.moving_follow_hard_distance = std::max(
+    0.0,
+    mpc["v2x_moving_follow_hard_distance"] ?
+    mpc["v2x_moving_follow_hard_distance"].as<double>() : 0.0);
+  cfg.mpc.v2x_behavior.moving_follow_target_distance = std::max(
+    cfg.mpc.v2x_behavior.moving_follow_hard_distance,
+    mpc["v2x_moving_follow_target_distance"] ?
+    mpc["v2x_moving_follow_target_distance"].as<double>() : 0.0);
+  cfg.mpc.v2x_behavior.moving_follow_recovery_speed_margin = std::max(
+    0.0,
+    mpc["v2x_moving_follow_recovery_speed_margin"] ?
+    mpc["v2x_moving_follow_recovery_speed_margin"].as<double>() : 0.0);
+  cfg.mpc.v2x_behavior.moving_follow_distance_gain = std::max(
+    0.0,
+    mpc["v2x_moving_follow_distance_gain"] ?
+    mpc["v2x_moving_follow_distance_gain"].as<double>() : 0.0);
   cfg.mpc.v2x_behavior.moving_safety_brake_distance = std::max(
     0.0,
     mpc["v2x_moving_safety_brake_distance"] ?

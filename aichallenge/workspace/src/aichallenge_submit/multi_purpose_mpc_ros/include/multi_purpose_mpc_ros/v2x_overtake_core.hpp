@@ -51,6 +51,13 @@ struct FollowSpeedLimitRequest
   double front_speed_mps{std::numeric_limits<double>::infinity()};
   double moving_front_speed_threshold_mps{};
   double moving_front_speed_margin_mps{};
+  /// Center-to-center distance where a moving front should be speed-matched.
+  /// Zero preserves the legacy fixed moving_front_speed_margin_mps behavior.
+  double moving_front_target_distance_m{};
+  /// Maximum amount to command below the moving front speed while recovering clearance.
+  double moving_front_recovery_speed_margin_mps{};
+  /// Signed speed-margin gain [(m/s)/m] around moving_front_target_distance_m.
+  double moving_front_distance_gain{};
   double slow_front_distance_limit_mps{};
   double slow_front_velocity_cap_mps{};
   double maximum_speed_mps{};
@@ -60,6 +67,8 @@ struct FollowSpeedLimitResolution
 {
   bool active{false};
   bool moving_front{false};
+  bool moving_front_clearance_recovery{false};
+  double moving_front_speed_margin_mps{};
   double speed_limit_mps{std::numeric_limits<double>::infinity()};
 };
 
@@ -67,8 +76,9 @@ struct FollowSpeedLimitResolution
 ///
 /// Detection, front-risk, curve and emergency policies remain outside this
 /// helper. A zero activation distance preserves the legacy unbounded gate.
-/// Moving fronts use their speed plus a closing margin; slow fronts use the
-/// smaller of the distance-derived limit and the configured Follow cap.
+/// Moving fronts use a distance-dependent signed speed margin when a target
+/// distance and gain are configured. Slow fronts use the smaller of the
+/// distance-derived limit and the configured Follow cap.
 FollowSpeedLimitResolution resolve_follow_speed_limit(
   const FollowSpeedLimitRequest & request);
 
@@ -643,11 +653,17 @@ struct FrontDangerActionRequest
   bool emergency_brake{false};
   double front_speed_mps{};
   double moving_front_speed_threshold_mps{};
+  double front_distance_m{std::numeric_limits<double>::infinity()};
+  /// Moving-front center-to-center distance that requires a full stop.
+  /// Zero disables this additional hard-clearance check.
+  double moving_front_hard_distance_m{};
 };
 
 /// Resolve a close-front geometry observation without turning every moving-front headway event
 /// into a full stop. Emergency risk and stopped/slow fronts remain fail-closed; a moving front
-/// uses the caller's relative-speed limit path instead.
+/// uses the caller's relative-speed limit path instead. A moving front inside
+/// the configured hard center distance remains fail-closed even after the
+/// relative speed has nearly matched.
 FrontDangerAction resolve_front_danger_action(const FrontDangerActionRequest & request);
 const char * to_string(FrontDangerAction action) noexcept;
 

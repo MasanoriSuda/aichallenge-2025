@@ -124,6 +124,9 @@ FollowSpeedLimitRequest follow_speed_request()
   request.front_speed_mps = 3.0;
   request.moving_front_speed_threshold_mps = 1.0;
   request.moving_front_speed_margin_mps = 0.8;
+  request.moving_front_target_distance_m = 2.5;
+  request.moving_front_recovery_speed_margin_mps = 0.5;
+  request.moving_front_distance_gain = 1.0;
   request.slow_front_distance_limit_mps = 2.3;
   request.slow_front_velocity_cap_mps = 3.0;
   request.maximum_speed_mps = 20.0;
@@ -168,6 +171,48 @@ TEST(V2XFollowSpeedLimit, SlowFrontUsesDistanceAndConfiguredCap)
   EXPECT_DOUBLE_EQ(resolution.speed_limit_mps, 3.0);
 }
 
+TEST(V2XFollowSpeedLimit, MovingFrontMarginRecoversCenterDistanceContinuously)
+{
+  auto request = follow_speed_request();
+
+  request.front_distance_m = 3.0;
+  auto resolution = resolve_follow_speed_limit(request);
+  ASSERT_TRUE(resolution.active);
+  ASSERT_TRUE(resolution.moving_front);
+  EXPECT_TRUE(resolution.moving_front_clearance_recovery);
+  EXPECT_DOUBLE_EQ(resolution.moving_front_speed_margin_mps, 0.5);
+  EXPECT_DOUBLE_EQ(resolution.speed_limit_mps, 3.5);
+
+  request.front_distance_m = 2.5;
+  resolution = resolve_follow_speed_limit(request);
+  EXPECT_TRUE(resolution.moving_front_clearance_recovery);
+  EXPECT_DOUBLE_EQ(resolution.moving_front_speed_margin_mps, 0.0);
+  EXPECT_DOUBLE_EQ(resolution.speed_limit_mps, 3.0);
+
+  request.front_distance_m = 2.0;
+  resolution = resolve_follow_speed_limit(request);
+  EXPECT_TRUE(resolution.moving_front_clearance_recovery);
+  EXPECT_DOUBLE_EQ(resolution.moving_front_speed_margin_mps, -0.5);
+  EXPECT_DOUBLE_EQ(resolution.speed_limit_mps, 2.5);
+
+  request.front_distance_m = 1.0;
+  resolution = resolve_follow_speed_limit(request);
+  EXPECT_DOUBLE_EQ(resolution.moving_front_speed_margin_mps, -0.5);
+  EXPECT_DOUBLE_EQ(resolution.speed_limit_mps, 2.5);
+}
+
+TEST(V2XFollowSpeedLimit, ZeroTargetDistancePreservesFixedMovingFrontMargin)
+{
+  auto request = follow_speed_request();
+  request.front_distance_m = 2.0;
+  request.moving_front_target_distance_m = 0.0;
+  const auto resolution = resolve_follow_speed_limit(request);
+  ASSERT_TRUE(resolution.active);
+  EXPECT_FALSE(resolution.moving_front_clearance_recovery);
+  EXPECT_DOUBLE_EQ(resolution.moving_front_speed_margin_mps, 0.8);
+  EXPECT_DOUBLE_EQ(resolution.speed_limit_mps, 3.8);
+}
+
 TEST(V2XFollowSpeedLimit, ZeroDistancePreservesLegacyUnboundedGate)
 {
   auto request = follow_speed_request();
@@ -204,6 +249,10 @@ TEST(V2XFollowSpeedLimit, RejectsInvalidConfiguration)
 
   request = follow_speed_request();
   request.moving_front_speed_margin_mps = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_THROW(resolve_follow_speed_limit(request), std::invalid_argument);
+
+  request = follow_speed_request();
+  request.moving_front_distance_gain = -0.1;
   EXPECT_THROW(resolve_follow_speed_limit(request), std::invalid_argument);
 }
 
@@ -273,6 +322,24 @@ TEST(V2XFrontDangerAction, MovingFrontUsesRelativeSpeedLimit)
   request.front_speed_mps = 3.0;
   request.moving_front_speed_threshold_mps = 1.0;
   EXPECT_EQ(resolve_front_danger_action(request), FrontDangerAction::RelativeSpeedLimit);
+}
+
+TEST(V2XFrontDangerAction, MovingFrontInsideHardCenterDistanceUsesSafetyBrake)
+{
+  FrontDangerActionRequest request;
+  request.inside_stopping_distance = true;
+  request.front_speed_mps = 3.0;
+  request.moving_front_speed_threshold_mps = 1.0;
+  request.front_distance_m = 2.0;
+  request.moving_front_hard_distance_m = 2.0;
+  EXPECT_EQ(resolve_front_danger_action(request), FrontDangerAction::SafetyBrake);
+
+  request.front_distance_m = 2.001;
+  EXPECT_EQ(resolve_front_danger_action(request), FrontDangerAction::RelativeSpeedLimit);
+
+  request.inside_stopping_distance = false;
+  request.front_distance_m = 1.9;
+  EXPECT_EQ(resolve_front_danger_action(request), FrontDangerAction::SafetyBrake);
 }
 
 TEST(V2XFrontDangerAction, EmergencyAndStoppedFrontKeepSafetyBrake)

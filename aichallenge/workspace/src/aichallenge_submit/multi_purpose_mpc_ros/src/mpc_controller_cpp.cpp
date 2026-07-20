@@ -8,6 +8,7 @@
 #include <geometry_msgs/msg/quaternion.hpp>
 #include <geometry_msgs/msg/vector3.hpp>
 #include <multi_purpose_mpc_ros/awsim_boost_start_dash.hpp>
+#include <multi_purpose_mpc_ros/mpc_state_prediction.hpp>
 #include <multi_purpose_mpc_ros/mpc_velocity_limit.hpp>
 #include <multi_purpose_mpc_ros/path_core.hpp>
 #include <multi_purpose_mpc_ros/recovery_footprint.hpp>
@@ -92,6 +93,7 @@ using visualization_msgs::msg::MarkerArray;
 using SteadyClock = std::chrono::steady_clock;
 namespace path_core = ::multi_purpose_mpc_ros::path_core;
 namespace awsim_boost = ::multi_purpose_mpc_ros::awsim_boost;
+namespace mpc_state_prediction = ::multi_purpose_mpc_ros::mpc_state_prediction;
 namespace mpc_velocity_limit = ::multi_purpose_mpc_ros::mpc_velocity_limit;
 namespace overtake_core = ::multi_purpose_mpc_ros::v2x_overtake_core;
 namespace recovery_footprint = ::multi_purpose_mpc_ros::recovery_footprint;
@@ -2917,6 +2919,8 @@ struct MpcConfig
   double control_rate{};
   int solver_failure_steering_hold_cycles{4};
   double odom_timeout_sec{0.5};
+  double state_prediction_delay_sec{0.0};
+  bool state_prediction_simulation_only{true};
   double min_linearization_speed_mps{0.5};
   double steering_tire_angle_gain_var{};
   double accel_low_pass_gain{};
@@ -7994,6 +7998,20 @@ Config load_config(const std::string & path)
   if (!std::isfinite(cfg.mpc.odom_timeout_sec) || cfg.mpc.odom_timeout_sec <= 0.0) {
     throw std::runtime_error("mpc.odom_timeout_sec must be finite and positive");
   }
+  cfg.mpc.state_prediction_delay_sec =
+    mpc["state_prediction_delay_sec"] ?
+    mpc["state_prediction_delay_sec"].as<double>() : 0.0;
+  cfg.mpc.state_prediction_simulation_only =
+    mpc["state_prediction_simulation_only"] ?
+    mpc["state_prediction_simulation_only"].as<bool>() : true;
+  if (
+    !std::isfinite(cfg.mpc.state_prediction_delay_sec) ||
+    cfg.mpc.state_prediction_delay_sec < 0.0 ||
+    cfg.mpc.state_prediction_delay_sec > 1.0)
+  {
+    throw std::runtime_error(
+            "mpc.state_prediction_delay_sec must be finite and within [0, 1]");
+  }
   cfg.mpc.min_linearization_speed_mps =
     mpc["min_linearization_speed_mps"] ?
     mpc["min_linearization_speed_mps"].as<double>() : 0.5;
@@ -8889,13 +8907,18 @@ public:
     declare_parameter("use_boost_acceleration", false);
     declare_parameter("use_obstacle_avoidance", false);
     declare_parameter("use_stats", false);
+    declare_parameter("simulation_mode", false);
     use_sim_time_ = get_parameter("use_sim_time").as_bool();
+    simulation_mode_ = get_parameter("simulation_mode").as_bool();
     use_bug_acc_ = get_parameter("use_boost_acceleration").as_bool();
     use_obstacle_avoidance_ = get_parameter("use_obstacle_avoidance").as_bool();
     use_stats_ = get_parameter("use_stats").as_bool();
 
     cfg_ = load_config(config_path_);
     mpc_cfg_ = cfg_.mpc;
+    state_prediction_active_ =
+      mpc_cfg_.state_prediction_delay_sec > 0.0 &&
+      (!mpc_cfg_.state_prediction_simulation_only || simulation_mode_);
     mpc_cfg_.steer_rate_max = mpc_cfg_.steer_rate_max / mpc_cfg_.steering_tire_angle_gain_var;
     stuck_recovery_core_ =
       std::make_unique<stuck_recovery::StuckRecoveryCore>(cfg_.stuck_recovery.core);
@@ -9039,6 +9062,22 @@ public:
     RCLCPP_INFO(
       get_logger(), "MPC wp_id_offset: normal=%d, low=%d below %.2f km/h",
       mpc_cfg_.wp_id_offset, mpc_cfg_.wp_id_low_offset, mpc_cfg_.wp_id_low_speed_kmh);
+    if (state_prediction_active_) {
+      RCLCPP_INFO(
+        get_logger(), "MPC state prediction enabled: delay=%.3f s, simulation_only=%s",
+        mpc_cfg_.state_prediction_delay_sec,
+        mpc_cfg_.state_prediction_simulation_only ? "true" : "false");
+    } else if (
+      mpc_cfg_.state_prediction_delay_sec > 0.0 &&
+      mpc_cfg_.state_prediction_simulation_only && !simulation_mode_)
+    {
+      RCLCPP_WARN(
+        get_logger(),
+        "MPC state prediction configured at %.3f s but disabled outside simulation",
+        mpc_cfg_.state_prediction_delay_sec);
+    } else {
+      RCLCPP_INFO(get_logger(), "MPC state prediction disabled");
+    }
     if (mpc_cfg_.domain_a_max_applied) {
       RCLCPP_INFO(
         get_logger(), "domain_a_max applied: ROS_DOMAIN_ID=%d, a_max=%.2f m/s^2",
@@ -11582,15 +11621,25 @@ private:
 
     const auto pose = odom_to_pose_2d(*odom_);
     const double actual_v = odom_->twist.twist.linear.x;
+    const double yaw_rate = odom_->twist.twist.angular.z;
     if (
       !std::isfinite(pose.x) || !std::isfinite(pose.y) || !std::isfinite(pose.theta) ||
-      !std::isfinite(actual_v))
+      !std::isfinite(actual_v) || (state_prediction_active_ && !std::isfinite(yaw_rate)))
     {
       publish_failsafe_command(control_time, "non-finite odometry rejected");
       return;
     }
+    Pose2D mpc_pose = pose;
+    if (state_prediction_active_) {
+      const auto predicted = mpc_state_prediction::predict_constant_turn_rate(
+        mpc_state_prediction::State2D{pose.x, pose.y, pose.theta},
+        actual_v, yaw_rate, mpc_cfg_.state_prediction_delay_sec);
+      mpc_pose.x = predicted.x;
+      mpc_pose.y = predicted.y;
+      mpc_pose.theta = predicted.yaw;
+    }
     if (!initialized_) {
-      car_->update_states(pose.x, pose.y, pose.theta);
+      car_->update_states(mpc_pose.x, mpc_pose.y, mpc_pose.theta);
       car_->update_reference_path(reference_path_.get());
       last_t_ = control_time;
       initialized_ = true;
@@ -11647,7 +11696,7 @@ private:
     }
     (void)is_colliding;
 
-    car_->update_states(pose.x, pose.y, pose.theta);
+    car_->update_states(mpc_pose.x, mpc_pose.y, mpc_pose.theta);
     mpc_->update_current_speed(std::abs(actual_v));
 
     std::optional<double> elapsed_since_start;
@@ -11806,6 +11855,8 @@ private:
   Config cfg_;
   MpcConfig mpc_cfg_;
   bool use_sim_time_{};
+  bool simulation_mode_{};
+  bool state_prediction_active_{false};
   bool use_bug_acc_{};
   bool use_obstacle_avoidance_{};
   bool use_stats_{};

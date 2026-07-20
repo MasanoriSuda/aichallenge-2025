@@ -8,6 +8,13 @@
   <arg name="vehicle_model" default="racing_kart"  description="vehicle model name"/>
   <arg name="sensor_model" default="racing_kart_sensor_kit" description="sensor model name"/>
   <!-- Optional parameters -->
+  <!--
+    EKF pose timing compensation. The simulation default is a 2025-derived provisional
+    value and remains overrideable for A/B testing; do not apply it to the vehicle unless
+    the actual sensor timestamp delay has been measured.
+  -->
+  <arg name="simulation_pose_additional_delay" default="0.3" description="additional pose measurement delay for simulation [s]"/>
+  <arg name="vehicle_pose_additional_delay" default="0.0" description="additional pose measurement delay for vehicle [s]"/>
   <!-- Map -->
   <arg name="lanelet2_map_file" default="lanelet2_map.osm" description="lanelet2 map file name"/>
   <arg name="pointcloud_map_file" default="pointcloud_map.pcd" description="pointcloud map file name"/>
@@ -66,7 +73,8 @@
   </group>
 
     <!-- Localization -->
-  <let name="pose_additional_delay_var" value="0.0" />
+  <let name="pose_additional_delay_var" value="$(var simulation_pose_additional_delay)" if="$(var simulation)"/>
+  <let name="pose_additional_delay_var" value="$(var vehicle_pose_additional_delay)" unless="$(var simulation)"/>
   <group>
     <push-ros-namespace namespace="localization"/>
     <include file="$(find-pkg-share gyro_odometer)/launch/gyro_odometer.launch.xml">
@@ -143,6 +151,7 @@
 
   <group if="$(eval &quot;'$(var control_method)' == 'mpc'&quot;)">
     <include file="$(find-pkg-share aichallenge_submit_launch)/launch/control/mpc.launch.xml">
+      <arg name="simulation" value="$(var simulation)"/>
       <arg name="use_sim_time" value="$(var use_sim_time)"/>
     </include>
   </group>

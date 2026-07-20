@@ -44,6 +44,11 @@ ament_auto_add_library(${PROJECT_NAME}_mpc_velocity_limit SHARED
   src/mpc_velocity_limit.cpp
 )
 
+ament_auto_add_library(${PROJECT_NAME}_mpc_state_prediction SHARED
+  NO_TARGET_LINK_LIBRARIES
+  src/mpc_state_prediction.cpp
+)
+
 ament_auto_add_library(${PROJECT_NAME}_v2x_overtake_core SHARED
   NO_TARGET_LINK_LIBRARIES
   src/v2x_overtake_core.cpp
@@ -78,6 +83,7 @@ target_include_directories(mpc_controller_cpp PRIVATE
 target_link_libraries(mpc_controller_cpp
   ${PROJECT_NAME}_awsim_boost_start_dash
   ${PROJECT_NAME}_path_core
+  ${PROJECT_NAME}_mpc_state_prediction
   ${PROJECT_NAME}_mpc_velocity_limit
   ${PROJECT_NAME}_recovery_footprint
   ${PROJECT_NAME}_recovery_mpc
@@ -138,6 +144,15 @@ if(BUILD_TESTING)
   if(TARGET test_mpc_velocity_limit)
     target_link_libraries(test_mpc_velocity_limit
       ${PROJECT_NAME}_mpc_velocity_limit
+    )
+  endif()
+
+  ament_add_gtest(test_mpc_state_prediction
+    test/test_mpc_state_prediction.cpp
+  )
+  if(TARGET test_mpc_state_prediction)
+    target_link_libraries(test_mpc_state_prediction
+      ${PROJECT_NAME}_mpc_state_prediction
     )
   endif()
 

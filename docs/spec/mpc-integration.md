@@ -795,6 +795,13 @@ colcon が自動解決するため、特別な指定は不要。
 
 MPC の config ファイル: `multi_purpose_mpc_ros/config/config.yaml`
 
+自己位置の計測時刻補正は MPC の waypoint offset ではなく、`aichallenge_submit_launch/launch/reference.launch.xml` から EKF に渡す。さらにSIMでは、EKF出力をMPC初期状態へ変換する直前に、2025 Pure Pursuit由来のCTRV予測を適用して制御計算・アクチュエータ遅延を補う。EKFの `0.3 s` とMPCの `0.125 s` はいずれも2025由来の暫定調整値であり、2026 AWSIMで実測した確定値ではない。
+
+| launch 引数 | 現在の値 | 確認事項 |
+|---------|---------|---------|
+| `simulation_pose_additional_delay` | `0.3` | SIM の pose measurement 追加遅延 [s]。同条件の `0.0` との A/B 比較で要調整 |
+| `vehicle_pose_additional_delay` | `0.0` | 実車の pose measurement 追加遅延 [s]。センサ時刻遅延を実測するまで補正しない |
+
 | 設定項目 | 現在の値 | 確認事項 |
 |---------|---------|---------|
 | `map.yaml_path` | `env/final_ver3/occupancy_grid_map.yaml` | 占有格子地図が存在するか |
@@ -809,14 +816,16 @@ MPC の config ファイル: `multi_purpose_mpc_ros/config/config.yaml`
 | `awsim_boost.max_trigger_speed_mps` | `1.0` | 遅延発動を禁止する最大前進速度 |
 | `awsim_boost.motion_trigger_timeout_sec` | `0.5` | 初回前進検出後に安全条件成立を待つ上限時間 |
 | `mpc.steering_tire_angle_gain_var` | `1.0` | 2025 AWSIMのdev3でモデル/実指令一致を確認。実機値と2026公式値は未確定 |
-| `mpc.wp_id_low_offset` | 未設定 | 低速時の参照 waypoint offset。未設定時は `wp_id_offset` |
-| `mpc.wp_id_low_speed` | `0.0` | 低速判定閾値。値は km/h、`0.0` なら無効 |
-| `mpc.wp_id_offset` | `2` | 通常時の参照 waypoint offset |
+| `mpc.state_prediction_delay_sec` | `0.125` | EKF補正後の自己位置を速度・ヨーレートで先行予測する時間 [s]。`0.0` で無効 |
+| `mpc.state_prediction_simulation_only` | `true` | `true` のとき明示的なsimulation launchでのみMPC初期状態予測を有効化 |
+| `mpc.wp_id_low_offset` | `0` | 低速時の制御先読み waypoint offset。自己位置の計測遅延補正には使わない |
+| `mpc.wp_id_low_speed` | `15.0` | 低速判定閾値。値は km/h、`0.0` なら無効 |
+| `mpc.wp_id_offset` | `0` | 通常時の制御先読み waypoint offset。tight curve の状態・参照フレーム不整合を修正するまで `0` を維持 |
 | `mpc.center_bias` | `0.0` | `0.0` = CSV trajectory 追従、`1.0` = 左右制約中央寄せ |
-| `mpc.safety_margin_scale` | `1.0` | `0.0` = 追加 margin なし、`1.0` = 現行 margin |
-| `mpc.use_v2x_gap_planner` | `false` | `/v2x/vehicle_positions` から rule-based gap を作る暫定拡張。既定無効 |
-| `mpc.v_max` | `20.0` | 全車両が越えないglobal hard maximum。値は km/h |
-| `mpc.domain_v_max` | 未設定 | `ROS_DOMAIN_ID` ごとの通常最高車速。global maximum以下へ制限される |
+| `mpc.safety_margin_scale` | `0.0` | `0.0` = 追加 margin なし、`1.0` = 標準 margin |
+| `mpc.use_v2x_gap_planner` | `true` | `/v2x/vehicle_positions` から rule-based gap を作る dev3 向け拡張 |
+| `mpc.v_max` | `40.0` | 全車両が越えないglobal hard maximum。値は km/h |
+| `mpc.domain_v_max` | Domain 1=`20.0`, 2=`40.0`, 3=`10.0` | `ROS_DOMAIN_ID` ごとの通常最高車速。global maximum以下へ制限される |
 | `mpc.domain_start_v_max` | 未設定 | `ROS_DOMAIN_ID` ごとのスタート期間最高車速。通常domain値を一時的に上回れるがglobal maximum以下 |
 | `mpc.domain_start_v_max_duration` | `0.0` | 重複を除いた`/awsim/state=Start`から`domain_start_v_max`を適用する秒数 |
 | `obstacles.csv_path` | `""` | 空 = トピック購読モード（障害物回避が off なので影響なし） |

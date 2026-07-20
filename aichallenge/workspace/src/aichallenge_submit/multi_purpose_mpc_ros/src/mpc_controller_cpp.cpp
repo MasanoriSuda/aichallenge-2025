@@ -3696,6 +3696,13 @@ struct MPC
       output.locked_target_seen && !output.locked_target_position_jump &&
       std::isfinite(output.locked_target_longitudinal) &&
       std::isfinite(output.locked_target_speed);
+    const bool committed_active_pass =
+      v2x_overtake_core::can_hold_active_pass_after_gap_loss(
+        v2x_overtake_core::ActivePassGapHoldRequest{
+          overtake_line_state_.phase == OvertakeLinePhase::Pass,
+          overtake_line_state_.pass_front_overlap_exclusion_latched,
+          output.locked_target_seen,
+          output.locked_target_position_jump});
     const double hard_curve_accel_distance = std::isfinite(distance_to_hard_curve) ?
       std::max(0.0, distance_to_hard_curve) : 0.0;
     const double reachable_hard_curve_speed = std::sqrt(std::max(
@@ -3732,7 +3739,9 @@ struct MPC
     const bool effective_hard_overtake_forbidden =
       hard_overtake_forbidden && !active_hard_curve_allowed;
     const int inner_curve_pass_side =
-      soft_overtake_forbidden ? curve_inner_pass_side(ref_wp_id, N) : 0;
+      v2x_overtake_core::should_resolve_curve_pass_side(
+        soft_overtake_forbidden, hard_overtake_forbidden, overtake_forbidden_wp) ?
+      curve_inner_pass_side(ref_wp_id, N) : 0;
     const bool continuing_inner_curve_pass =
       is_inner_curve_pass(overtake_locked_side_sign_, inner_curve_pass_side);
     const bool slow_front_overtake_candidate =
@@ -3812,15 +3821,30 @@ struct MPC
       assessment.side = side;
       assessment.side_clearance =
         overtake_side_clearance(side, nearest_front_lateral, lb[0], ub[0]);
+      if (side == 0) {
+        assessment.reason = "invalid pass side";
+        return assessment;
+      }
+      // Once Pass has established lateral separation, the explicit line owns
+      // the maneuver. Re-running entry reachability against a rotating
+      // hairpin frame can report large lateral acceleration or a vanishing
+      // gap even though ego is already alongside the same kart. Keep the
+      // locked side until rear-clear; wall bounds and the hard execution
+      // gates below remain active.
+      if (
+        committed_active_pass && locked_pass_side != 0 &&
+        side == locked_pass_side)
+      {
+        assessment.gap_available = true;
+        assessment.reason = "committed active pass continuity";
+        assessment.guard_reason = assessment.reason;
+        return assessment;
+      }
       if (
         !has_front_vehicle &&
         !(has_side_vehicle && cfg.v2x_behavior.side_overtake_enabled))
       {
         assessment.reason = "no relevant overtake target";
-        return assessment;
-      }
-      if (side == 0) {
-        assessment.reason = "invalid pass side";
         return assessment;
       }
       if (!cfg.v2x_behavior.require_gap_for_overtake && !cfg.v2x_behavior.overtake_guard_enabled) {
@@ -4113,6 +4137,18 @@ struct MPC
     output.overtake_gap_available = overtake_gap_available;
     output.overtake_block_reason = overtake_block_reason;
 
+    // A committed locked target can briefly leave both the front and side
+    // corridor classifications in a hairpin. Preserve the same explicit Pass
+    // line instead of dropping to Follow solely because that frame changed.
+    if (
+      committed_active_pass && !has_front_vehicle && !has_side_vehicle &&
+      overtake_zone_allows && overtake_gap_available)
+    {
+      output.state = V2XBehaviorState::Overtake;
+      output.reason = "committed active pass / " + overtake_block_reason;
+      return commit_v2x_behavior_state(output, now_sec);
+    }
+
     if (has_front_vehicle) {
       if (overtake_zone_allows && overtake_gap_available) {
         output.state = V2XBehaviorState::Overtake;
@@ -4289,9 +4325,9 @@ struct MPC
     constexpr int nx = 3;
     constexpr int nu = 2;
     // Once the direct shift controller owns the stopped-vehicle bypass, keep
-    // it latched until the entire vehicle pack has cleared. Releasing as soon
-    // as e_y/e_psi settle can hand control back to an infeasible MPC problem
-    // while the ego vehicle is still alongside the first stopped vehicle.
+    // it latched through the complete vehicle pack. After the pack clears it
+    // first rejoins a current valid path target; get_control() hands ownership
+    // back only after an MPC probe solve succeeds.
     low_speed_shift_control_active_ = low_speed_shift_control_was_active_;
     const int nx_N = nx * (N + 1);
     const int nu_N = nu * N;
@@ -4387,23 +4423,54 @@ struct MPC
     }
 
     const auto behavior_output = evaluate_v2x_behavior(ref_wp_id, N, lb, ub, now_sec);
-    const bool low_speed_shift_pose_settled =
-      v2x_overtake_core::is_low_speed_shift_complete(
-      model->spatial_state.e_y, model->spatial_state.e_psi,
-      low_speed_shift_target_ey_,
-      cfg.v2x_behavior.low_speed_avoidance_shift_lateral_tolerance,
-      cfg.v2x_behavior.low_speed_avoidance_shift_heading_tolerance);
     if (low_speed_shift_control_was_active_) {
-      if (
+      const bool has_relevant_vehicle =
         behavior_output.has_front_vehicle || behavior_output.has_side_vehicle ||
-        behavior_output.has_low_speed_clearance_vehicle)
-      {
+        behavior_output.has_low_speed_clearance_vehicle;
+      if (has_relevant_vehicle) {
         low_speed_shift_last_relevant_vehicle_sec_ = now_sec;
+        if (low_speed_shift_rejoin_active_) {
+          low_speed_shift_rejoin_active_ = false;
+          low_speed_shift_target_ey_ = low_speed_shift_pass_target_ey_;
+          low_speed_shift_handoff_deferred_logged_ = false;
+          RCLCPP_INFO(
+            rclcpp::get_logger("mpc_controller"),
+            "Low-speed pass rejoin cancelled: relevant vehicle reacquired; "
+            "restoring pass target_ey=%.2f",
+            low_speed_shift_target_ey_);
+        }
       }
       const double clear_duration_sec =
         std::isfinite(low_speed_shift_last_relevant_vehicle_sec_) ?
         std::max(0.0, now_sec - low_speed_shift_last_relevant_vehicle_sec_) : 0.0;
       if (
+        !low_speed_shift_rejoin_active_ &&
+        v2x_overtake_core::should_begin_low_speed_shift_rejoin(
+          behavior_output.has_front_vehicle, behavior_output.has_side_vehicle,
+          behavior_output.has_low_speed_clearance_vehicle, clear_duration_sec,
+          cfg.v2x_behavior.low_speed_avoidance_shift_clear_hold_sec))
+      {
+        const double rejoin_target_ey = clip(0.0, lb[0], ub[0]);
+        if (std::isfinite(rejoin_target_ey)) {
+          low_speed_shift_rejoin_active_ = true;
+          low_speed_shift_target_ey_ = rejoin_target_ey;
+          low_speed_shift_handoff_deferred_logged_ = false;
+          RCLCPP_INFO(
+            rclcpp::get_logger("mpc_controller"),
+            "Low-speed pass rejoin started: pass_target_ey=%.2f, "
+            "rejoin_target_ey=%.2f, clear=%.2f s",
+            low_speed_shift_pass_target_ey_, low_speed_shift_target_ey_,
+            clear_duration_sec);
+        }
+      }
+      const bool low_speed_shift_pose_settled =
+        v2x_overtake_core::is_low_speed_shift_complete(
+        model->spatial_state.e_y, model->spatial_state.e_psi,
+        low_speed_shift_target_ey_,
+        cfg.v2x_behavior.low_speed_avoidance_shift_lateral_tolerance,
+        cfg.v2x_behavior.low_speed_avoidance_shift_heading_tolerance);
+      if (
+        low_speed_shift_rejoin_active_ &&
         v2x_overtake_core::should_release_low_speed_shift_control(
           low_speed_shift_pose_settled, behavior_output.has_front_vehicle,
           behavior_output.has_side_vehicle,
@@ -4546,7 +4613,10 @@ struct MPC
       behavior_output.state == V2XBehaviorState::LowSpeedAvoidance)
     {
       low_speed_shift_control_active_ = true;
-      low_speed_shift_target_ey_ = planner_output.pass_target_ey;
+      low_speed_shift_pass_target_ey_ = planner_output.pass_target_ey;
+      low_speed_shift_target_ey_ = low_speed_shift_pass_target_ey_;
+      low_speed_shift_rejoin_active_ = false;
+      low_speed_shift_handoff_deferred_logged_ = false;
       low_speed_shift_velocity_mps_ = std::min(
         cfg.v_max, std::max(0.0, cfg.v2x_behavior.low_speed_avoidance_shift_velocity));
       if (!low_speed_shift_control_was_active_) {
@@ -4981,17 +5051,20 @@ struct MPC
       if (low_speed_shift_control_active_) {
         return low_speed_shift_control(planning_waypoint);
       }
-      if (low_speed_shift_control_was_active_) {
-        RCLCPP_INFO(
-          rclcpp::get_logger("mpc_controller"),
-          "Low-speed pass shift control completed: e_y=%.2f, e_psi=%.2f; returning to MPC",
-          model->spatial_state.e_y, model->spatial_state.e_psi);
-        low_speed_shift_control_was_active_ = false;
-        low_speed_shift_last_relevant_vehicle_sec_ =
-          std::numeric_limits<double>::quiet_NaN();
-      }
+      const bool low_speed_shift_handoff_requested = low_speed_shift_control_was_active_;
       auto outcome = solve_problem(problem);
       if (!outcome.result.has_value()) {
+        if (low_speed_shift_handoff_requested) {
+          low_speed_shift_control_active_ = true;
+          if (!low_speed_shift_handoff_deferred_logged_) {
+            RCLCPP_WARN(
+              rclcpp::get_logger("mpc_controller"),
+              "Low-speed pass MPC handoff deferred: %s; continuing rejoin control",
+              outcome.failure_detail.c_str());
+            low_speed_shift_handoff_deferred_logged_ = true;
+          }
+          return low_speed_shift_control(planning_waypoint);
+        }
         throw std::runtime_error("OSQP failed: " + outcome.failure_detail);
       }
       Eigen::VectorXd dec = outcome.result->solution;
@@ -5022,6 +5095,19 @@ struct MPC
       previous_steering = delta;
       current_control = std::move(control_signals);
       current_prediction = std::move(prediction);
+      if (low_speed_shift_handoff_requested) {
+        RCLCPP_INFO(
+          rclcpp::get_logger("mpc_controller"),
+          "Low-speed pass shift control completed: e_y=%.2f, e_psi=%.2f; "
+          "MPC handoff solve succeeded",
+          model->spatial_state.e_y, model->spatial_state.e_psi);
+        low_speed_shift_control_active_ = false;
+        low_speed_shift_control_was_active_ = false;
+        low_speed_shift_rejoin_active_ = false;
+        low_speed_shift_handoff_deferred_logged_ = false;
+        low_speed_shift_last_relevant_vehicle_sec_ =
+          std::numeric_limits<double>::quiet_NaN();
+      }
       if (infeasibility_counter > 0) {
         RCLCPP_INFO(
           rclcpp::get_logger("mpc_controller"),
@@ -5107,6 +5193,9 @@ struct MPC
   double overtake_curve_cooldown_until_sec_{-std::numeric_limits<double>::infinity()};
   bool low_speed_shift_control_active_{false};
   bool low_speed_shift_control_was_active_{false};
+  bool low_speed_shift_rejoin_active_{false};
+  bool low_speed_shift_handoff_deferred_logged_{false};
+  double low_speed_shift_pass_target_ey_{0.0};
   double low_speed_shift_target_ey_{0.0};
   double low_speed_shift_velocity_mps_{0.0};
   double low_speed_shift_last_relevant_vehicle_sec_{

@@ -167,9 +167,16 @@ struct ActivePassGapHoldRequest
   bool locked_target_position_jump{false};
 };
 
-/// Once ShiftOut has completed and the locked target is side-by-side, do not
-/// treat a transient gap-width/time failure as a new-pass rejection.
+/// Once ShiftOut has completed and the locked target is side-by-side, keep the
+/// committed Pass across entry-gap/reachability re-evaluation. The caller is
+/// responsible for retaining hard execution, target-continuity and wall gates.
 bool can_hold_active_pass_after_gap_loss(const ActivePassGapHoldRequest & request) noexcept;
+
+/// Curve-side classification is required for both soft and hard curvature
+/// zones. Explicit forbidden waypoints remain unconditionally blocked.
+bool should_resolve_curve_pass_side(
+  bool soft_curve_forbidden, bool hard_curve_forbidden,
+  bool explicit_forbidden_wp) noexcept;
 
 struct ActiveLineGapLossHoldRequest
 {
@@ -570,8 +577,15 @@ bool is_low_speed_shift_complete(
   double target_lateral_m, double lateral_tolerance_m,
   double heading_tolerance_rad) noexcept;
 
-/// Release the direct low-speed shift controller only after its target pose is
-/// settled and the complete stopped-vehicle pack has cleared the ego vehicle.
+/// Start returning from the pass corridor after the complete stopped-vehicle
+/// pack has remained clear for the configured hold duration.
+bool should_begin_low_speed_shift_rejoin(
+  bool has_front_vehicle, bool has_side_vehicle,
+  bool has_clearance_vehicle, double clear_duration_sec,
+  double required_clear_duration_sec) noexcept;
+
+/// Release the direct low-speed shift controller only after its rejoin target
+/// pose is settled and the complete stopped-vehicle pack remains clear.
 bool should_release_low_speed_shift_control(
   bool pose_settled, bool has_front_vehicle, bool has_side_vehicle,
   bool has_clearance_vehicle, double clear_duration_sec,

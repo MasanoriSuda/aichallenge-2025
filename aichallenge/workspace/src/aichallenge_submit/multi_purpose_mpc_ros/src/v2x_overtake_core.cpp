@@ -224,6 +224,13 @@ bool can_hold_active_pass_after_gap_loss(const ActivePassGapHoldRequest & reques
          request.locked_target_seen && !request.locked_target_position_jump;
 }
 
+bool should_resolve_curve_pass_side(
+  const bool soft_curve_forbidden, const bool hard_curve_forbidden,
+  const bool explicit_forbidden_wp) noexcept
+{
+  return !explicit_forbidden_wp && (soft_curve_forbidden || hard_curve_forbidden);
+}
+
 ActiveLineGapLossHoldResolution resolve_active_line_gap_loss_hold(
   const ActiveLineGapLossHoldRequest & request) noexcept
 {
@@ -838,10 +845,10 @@ bool is_low_speed_shift_complete(
          std::abs(current_heading_error_rad) <= heading_tolerance_rad;
 }
 
-bool should_release_low_speed_shift_control(
-  const bool pose_settled, const bool has_front_vehicle,
-  const bool has_side_vehicle, const bool has_clearance_vehicle,
-  const double clear_duration_sec, const double required_clear_duration_sec) noexcept
+bool should_begin_low_speed_shift_rejoin(
+  const bool has_front_vehicle, const bool has_side_vehicle,
+  const bool has_clearance_vehicle, const double clear_duration_sec,
+  const double required_clear_duration_sec) noexcept
 {
   if (
     !std::isfinite(clear_duration_sec) || clear_duration_sec < 0.0 ||
@@ -849,9 +856,18 @@ bool should_release_low_speed_shift_control(
   {
     return false;
   }
-  return pose_settled && !has_front_vehicle && !has_side_vehicle &&
-         !has_clearance_vehicle &&
+  return !has_front_vehicle && !has_side_vehicle && !has_clearance_vehicle &&
          clear_duration_sec >= required_clear_duration_sec;
+}
+
+bool should_release_low_speed_shift_control(
+  const bool pose_settled, const bool has_front_vehicle,
+  const bool has_side_vehicle, const bool has_clearance_vehicle,
+  const double clear_duration_sec, const double required_clear_duration_sec) noexcept
+{
+  return pose_settled && should_begin_low_speed_shift_rejoin(
+    has_front_vehicle, has_side_vehicle, has_clearance_vehicle,
+    clear_duration_sec, required_clear_duration_sec);
 }
 
 ContinuityAction resolve_target_continuity(const ContinuityRequest & request)

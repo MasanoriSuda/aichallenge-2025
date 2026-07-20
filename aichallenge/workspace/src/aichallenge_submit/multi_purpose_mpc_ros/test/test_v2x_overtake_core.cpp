@@ -62,6 +62,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::is_shiftout_complete;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_release_overtake_front_cap;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_exclude_locked_target_from_front_overlap;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_hold_active_pass_after_gap_loss;
+using multi_purpose_mpc_ros::v2x_overtake_core::should_resolve_curve_pass_side;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_active_line_gap_loss_hold;
 using multi_purpose_mpc_ros::v2x_overtake_core::explicit_overtake_line_owns_lateral_plan;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_start_side_overtake;
@@ -96,6 +97,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::has_entered_low_speed_pass_corri
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_low_speed_pass_velocity;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_low_speed_shift_steering;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_low_speed_shift_complete;
+using multi_purpose_mpc_ros::v2x_overtake_core::should_begin_low_speed_shift_rejoin;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_release_low_speed_shift_control;
 
 SpeedLimitRequest speed_request()
@@ -541,8 +543,23 @@ TEST(V2XOvertakeCoreSpeed, HoldsOnlyCommittedActivePassAfterGapLoss)
   request.pass_phase = false;
   EXPECT_FALSE(can_hold_active_pass_after_gap_loss(request));
   request.pass_phase = true;
+  request.lateral_clearance_latched = false;
+  EXPECT_FALSE(can_hold_active_pass_after_gap_loss(request));
+  request.lateral_clearance_latched = true;
+  request.locked_target_seen = false;
+  EXPECT_FALSE(can_hold_active_pass_after_gap_loss(request));
+  request.locked_target_seen = true;
   request.locked_target_position_jump = true;
   EXPECT_FALSE(can_hold_active_pass_after_gap_loss(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, ResolvesPassSideForSoftAndHardCurvesExceptExplicitForbiddenWp)
+{
+  EXPECT_TRUE(should_resolve_curve_pass_side(true, false, false));
+  EXPECT_TRUE(should_resolve_curve_pass_side(false, true, false));
+  EXPECT_TRUE(should_resolve_curve_pass_side(true, true, false));
+  EXPECT_FALSE(should_resolve_curve_pass_side(false, false, false));
+  EXPECT_FALSE(should_resolve_curve_pass_side(true, true, true));
 }
 
 TEST(V2XOvertakeCoreSpeed, HoldsActiveLineOnlyWithinBoundedTransientGapWindow)
@@ -1437,7 +1454,18 @@ TEST(V2XOvertakeCoreSide, LowSpeedShiftCompletesOnlyAfterLateralAndHeadingSettle
       std::numeric_limits<double>::quiet_NaN(), 0.0, -2.71, 0.4, 0.2));
 }
 
-TEST(V2XOvertakeCoreSide, LowSpeedShiftStaysLatchedUntilStoppedVehiclePackClears)
+TEST(V2XOvertakeCoreSide, LowSpeedShiftBeginsRejoinOnlyAfterStoppedVehiclePackClears)
+{
+  EXPECT_FALSE(should_begin_low_speed_shift_rejoin(true, false, false, 2.0, 2.0));
+  EXPECT_FALSE(should_begin_low_speed_shift_rejoin(false, true, false, 2.0, 2.0));
+  EXPECT_FALSE(should_begin_low_speed_shift_rejoin(false, false, true, 2.0, 2.0));
+  EXPECT_FALSE(should_begin_low_speed_shift_rejoin(false, false, false, 1.99, 2.0));
+  EXPECT_TRUE(should_begin_low_speed_shift_rejoin(false, false, false, 2.0, 2.0));
+  EXPECT_FALSE(should_begin_low_speed_shift_rejoin(
+      false, false, false, std::numeric_limits<double>::quiet_NaN(), 2.0));
+}
+
+TEST(V2XOvertakeCoreSide, LowSpeedShiftReleasesOnlyAfterRejoinPoseSettles)
 {
   EXPECT_FALSE(should_release_low_speed_shift_control(false, false, false, false, 2.0, 2.0));
   EXPECT_FALSE(should_release_low_speed_shift_control(true, true, false, false, 2.0, 2.0));

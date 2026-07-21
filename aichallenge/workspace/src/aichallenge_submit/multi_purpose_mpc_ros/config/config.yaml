@@ -234,7 +234,7 @@ reference_path:
   # csv_path: ""
   csv_path: "env/final_ver3/traj_mincurv.csv"
   domain_csv_path:
-    1: "env/final_ver3/traj_mincurv.csv"
+    1: "env/final_ver3/traj_mincurv_org.csv"
     2: "env/final_ver3/traj_mincurv.csv"
     3: "env/final_ver3/traj_mincurv.csv"
   resolution: 0.6
@@ -252,7 +252,7 @@ bicycle_model:
   width: 1.45   # +safety margin
 
 mpc:
-  N: 30
+  N: 20
   # Q: [e_y, e_psi, t]
   # R: [v, delta]
   # QN: [e_y, e_psi, t]
@@ -313,7 +313,7 @@ mpc:
   # Add a small buffer for low-speed side pass stability.
   v2x_vehicle_radius: 1.45
   v2x_vehicle_length: 2.0
-  v2x_prediction_margin: 0.1
+  v2x_prediction_margin: 0.05
   v2x_prediction_time: 1.0
   v2x_prediction_use_path_time: true # align obstacle prediction time with path distance, not waypoint index
   v2x_prediction_min_ego_speed: 1.0 # [m/s] avoid singular path-time prediction near standstill
@@ -325,7 +325,7 @@ mpc:
   gap_target_bias: 0.8
   no_gap_target_velocity: 2.0
   # Prefer the vehicle side when a free gap is bounded by a wall and a V2X vehicle.
-  v2x_wall_clearance_margin: 0.8      # [m] shrink the wall side of the selected V2X gap
+  v2x_wall_clearance_margin: 0.72     # [m] aggressive sim: approximately one kart half-width
   v2x_vehicle_side_target_margin: 0.2 # [m] keep this margin from the inflated vehicle interval
   v2x_wall_avoidance_bias: 0.0        # 0.0 = gap center, 1.0 = vehicle side
   # Do not aim for a narrow gap between two moving V2X vehicles at close range.
@@ -406,10 +406,10 @@ mpc:
   v2x_overtake_shiftout_max_closing_speed: 1.2 # [m/s] retain pass gain without consuming a 4-5m entry gap at 1Hz V2X
   v2x_overtake_pass_unlatched_max_closing_speed: 0.5 # [m/s] keep the front cap until physical lateral separation latches
   v2x_overtake_shiftout_adaptive_min_time_sec: 0.5 # [s] avoid an unbounded cap as ShiftOut completes
-  # The line goal and front-brake exclusion are intentionally separate. The former preserves
-  # an aggressive lateral target; the latter prevents releasing the front brake at 0.75m.
-  v2x_overtake_line_min_target_separation: 0.75 # [m] minimum target-relative line separation
-  v2x_overtake_pass_front_overlap_lateral_clearance: 1.15 # [m] aggressive physical front-brake exclusion
+  # The line goal normally latches the validated ego-center corridor midpoint. This separation
+  # remains the fallback when a fresh planner corridor is unavailable at entry.
+  v2x_overtake_line_min_target_separation: 1.40 # [m] aggressive sim fallback: nearly one combined kart width
+  v2x_overtake_pass_front_overlap_lateral_clearance: 1.35 # [m] do not latch lateral clear at the old 1.15m overlap
   v2x_overtake_completion_guard_enabled: true # require enough distance to clear the target before a hard hairpin
   v2x_overtake_completion_hard_curvature: 0.12 # [rad/m] hard hairpin boundary, separate from soft curve policy
   v2x_overtake_completion_lookahead_distance: 80.0 # [m] search limit for the next hard boundary
@@ -461,6 +461,7 @@ mpc:
   v2x_overtake_line_min_wall_clearance: 0.1   # [m] sim A/B: center a 0.2m residual corridor without fallback
   v2x_overtake_line_max_lateral_accel: 6.0    # [m/s^2] dev3 attack: complete committed ShiftOut in a hairpin
   v2x_overtake_line_max_target_change: 0.04   # [m/cycle] smooth target goal updates across cycles
+  v2x_overtake_line_target_intrusion_ordering_margin: 0.10 # [m] abort if the ahead target reaches/crosses ego's selected-side ordering
   v2x_overtake_line_return_clear_distance: 2.0 # [m] begin Return after nominal vehicle-length clearance
   v2x_overtake_line_phase_hold_time: 0.3      # [s] minimum phase hold before transition
   v2x_overtake_target_hold_sec: 0.75          # [s] keep a locked Pass across a transient V2X classification loss
@@ -491,7 +492,7 @@ mpc:
   v2x_moving_safety_brake_time_headway: 0.3 # [s] speed-dependent emergency margin
   v2x_start_grid_grace_time: 5.0         # [s] Ready staging plus this duration after Start; static grid only
   v2x_start_grid_breakout_enabled: true  # sim race: use a feasible side corridor before falling back to Follow
-  v2x_start_grid_breakout_side_deadband: 0.05 # [m] compatibility/validation only; unlocked breakout compares both actual gaps
+  v2x_start_grid_breakout_side_deadband: 0.05 # [m] if both gaps work, prefer away from target stagger outside this band
   v2x_require_gap_for_overtake: true
   v2x_low_speed_avoidance_enabled: true
   v2x_low_speed_avoidance_ignore_soft_curve_forbidden: true # gate2: allow stopped-vehicle bypass in curve-lookahead zones

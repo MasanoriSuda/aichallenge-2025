@@ -145,20 +145,45 @@ BreakoutSideDecision resolve_breakout_side(const BreakoutSideContext &context) n
   return BreakoutSideDecision{true, 0};
 }
 
-int resolve_breakout_gap_preference(const BreakoutGapPreferenceContext &context) noexcept {
+int resolve_breakout_stagger_preference(const double ego_lateral_m,
+                                        const double front_lateral_m,
+                                        const double side_deadband_m) noexcept {
+  if (!std::isfinite(ego_lateral_m) || !std::isfinite(front_lateral_m) ||
+      !std::isfinite(side_deadband_m) || side_deadband_m < 0.0) {
+    return 0;
+  }
+  const double target_relative_lateral = front_lateral_m - ego_lateral_m;
+  if (target_relative_lateral > side_deadband_m) {
+    return -1;
+  }
+  if (target_relative_lateral < -side_deadband_m) {
+    return 1;
+  }
+  return 0;
+}
+
+int resolve_breakout_gap_preference(
+    const BreakoutGapPreferenceContext &context) noexcept {
   if (context.left_available != context.right_available) {
     return context.left_available ? 1 : -1;
   }
   if (context.left_available && context.right_available &&
-      std::isfinite(context.left_width_m) && std::isfinite(context.right_width_m)) {
+      (context.stagger_preferred_side == -1 ||
+       context.stagger_preferred_side == 1)) {
+    return context.stagger_preferred_side;
+  }
+  if (context.left_available && context.right_available &&
+      std::isfinite(context.left_width_m) &&
+      std::isfinite(context.right_width_m)) {
     constexpr double kWidthTieTolerance = 1e-3;
     const double width_delta = context.left_width_m - context.right_width_m;
     if (std::abs(width_delta) > kWidthTieTolerance) {
       return width_delta > 0.0 ? 1 : -1;
     }
   }
-  return context.fallback_side >= -1 && context.fallback_side <= 1 ?
-         context.fallback_side : 0;
+  return context.fallback_side >= -1 && context.fallback_side <= 1
+             ? context.fallback_side
+             : 0;
 }
 
 bool should_preserve_breakout_line(const BreakoutLineContext &context) noexcept {

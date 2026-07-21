@@ -20,6 +20,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::StoppedVehicleLineOwnershipReque
 using multi_purpose_mpc_ros::v2x_overtake_core::ContinuityAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::ContinuityRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CoursePoint;
+using multi_purpose_mpc_ros::v2x_overtake_core::VehicleRelativeLateralRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ForwardDistanceRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::FrontDangerAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::FrontDangerActionRequest;
@@ -28,15 +29,21 @@ using multi_purpose_mpc_ros::v2x_overtake_core::ForwardCourseProjectionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::FollowSpeedLimitRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSpeedReferenceRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSpeedStage;
+using multi_purpose_mpc_ros::v2x_overtake_core::StartGridBreakoutSpeedReferenceRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ShiftOutCompletionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeFrontCapReleaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassFrontOverlapExclusionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ActivePassGapHoldRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ActiveLineGapLossHoldRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::ValidatedStartGridBreakoutContinuityRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeLateralPlannerOwnershipRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::LiveExecutionCorridorBlockRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::LockedTargetPassSideIntrusionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeLineHeadingReferenceRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SideOvertakeEntryRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeLineHorizonProgressRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassSideLateralGoalRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::PassCorridorCenterRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::AdaptiveShiftOutClosingSpeedRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeGuardPhaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeCurveContinuationRequest;
@@ -60,18 +67,26 @@ using multi_purpose_mpc_ros::v2x_overtake_core::StartWindowStatus;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_effective_speed_limit;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_follow_speed_limit;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_speed_reference;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_start_grid_breakout_speed_reference;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_shiftout_complete;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_release_overtake_front_cap;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_exclude_locked_target_from_front_overlap;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_hold_active_pass_after_gap_loss;
+using multi_purpose_mpc_ros::v2x_overtake_core::can_hold_validated_start_grid_breakout;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_resolve_curve_pass_side;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_active_line_gap_loss_hold;
 using multi_purpose_mpc_ros::v2x_overtake_core::explicit_overtake_line_owns_lateral_plan;
+using multi_purpose_mpc_ros::v2x_overtake_core::GapPlannerStateBoundsRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::should_apply_gap_planner_state_bounds;
+using multi_purpose_mpc_ros::v2x_overtake_core::should_block_live_execution_corridor;
+using multi_purpose_mpc_ros::v2x_overtake_core::locked_target_intrudes_pass_side;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_start_side_overtake;
 using multi_purpose_mpc_ros::v2x_overtake_core::side_only_target_requires_follow;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_unlatched_pass_closing_speed;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_line_horizon_progress;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_line_heading_reference;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_side_lateral_goal;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_corridor_center;
 using multi_purpose_mpc_ros::v2x_overtake_core::has_reached_pass_side_lateral_goal;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_adaptive_shiftout_closing_speed;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_guard_phase;
@@ -81,6 +96,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_inner_curve_overtake;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_active_hard_curve_continuation;
 using multi_purpose_mpc_ros::v2x_overtake_core::advance_prediction_time;
 using multi_purpose_mpc_ros::v2x_overtake_core::project_forward_course_progress;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_vehicle_relative_lateral;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_completion;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_target_continuity;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_reacquire_during_return;
@@ -466,6 +482,25 @@ TEST(V2XOvertakeCoreSpeed, CapsShiftOutButReleasesFrontCapInPass)
   EXPECT_FALSE(result.front_cap_applied);
 }
 
+TEST(V2XOvertakeCoreSpeed, ValidatedStartGridBreakoutReleasesRaceReferenceAtEntry)
+{
+  StartGridBreakoutSpeedReferenceRequest request;
+  request.base_reference_speed_mps = 10.28;
+  request.hard_cap_mps = 10.28;
+  request.front_speed_mps = 3.08;
+  request.entry_speed_mps = 3.66;
+  request.shiftout_max_closing_speed_mps = 1.2;
+
+  auto result = resolve_start_grid_breakout_speed_reference(request);
+  EXPECT_DOUBLE_EQ(result.reference_speed_mps, 4.28);
+  EXPECT_TRUE(result.front_cap_applied);
+
+  request.validated_breakout = true;
+  result = resolve_start_grid_breakout_speed_reference(request);
+  EXPECT_DOUBLE_EQ(result.reference_speed_mps, 10.28);
+  EXPECT_FALSE(result.front_cap_applied);
+}
+
 TEST(V2XOvertakeCoreSpeed, RequiresDistanceAndLateralCompletionBeforePass)
 {
   ShiftOutCompletionRequest request;
@@ -580,6 +615,44 @@ TEST(V2XOvertakeCoreSpeed, HoldsOnlyCommittedActivePassAfterGapLoss)
   EXPECT_FALSE(can_hold_active_pass_after_gap_loss(request));
 }
 
+TEST(V2XOvertakeCoreSpeed, HoldsValidatedStartGridBreakoutAcrossGapReevaluation)
+{
+  ValidatedStartGridBreakoutContinuityRequest request;
+  request.continuing_breakout = true;
+  request.active_line = true;
+  request.target_matches = true;
+  request.locked_target_seen = true;
+  EXPECT_TRUE(can_hold_validated_start_grid_breakout(request));
+
+  request.target_matches = false;
+  EXPECT_FALSE(can_hold_validated_start_grid_breakout(request));
+  request.target_matches = true;
+  request.locked_target_position_jump = true;
+  EXPECT_FALSE(can_hold_validated_start_grid_breakout(request));
+  request.locked_target_position_jump = false;
+  request.explicit_forbidden_wp = true;
+  EXPECT_FALSE(can_hold_validated_start_grid_breakout(request));
+  request.explicit_forbidden_wp = false;
+  request.active_line = false;
+  EXPECT_FALSE(can_hold_validated_start_grid_breakout(request));
+}
+
+TEST(V2XOvertakeCoreGeometry, UsesEgoRelativeLateralForCommonCourseOverlap)
+{
+  VehicleRelativeLateralRequest request;
+  request.course_projection_used = true;
+  request.vehicle_course_lateral_m = -1.64;
+  request.ego_course_lateral_m = 1.38;
+  request.local_relative_lateral_m = -0.2;
+  EXPECT_NEAR(resolve_vehicle_relative_lateral(request), -3.02, 1.0e-9);
+
+  request.ego_course_lateral_m = -1.20;
+  EXPECT_NEAR(resolve_vehicle_relative_lateral(request), -0.44, 1.0e-9);
+
+  request.course_projection_used = false;
+  EXPECT_DOUBLE_EQ(resolve_vehicle_relative_lateral(request), -0.2);
+}
+
 TEST(V2XOvertakeCoreSpeed, ResolvesPassSideForSoftAndHardCurvesExceptExplicitForbiddenWp)
 {
   EXPECT_TRUE(should_resolve_curve_pass_side(true, false, false));
@@ -647,6 +720,67 @@ TEST(V2XOvertakeCoreSpeed, ExplicitLineExclusivelyOwnsActiveOvertakeLateralPlan)
   EXPECT_FALSE(explicit_overtake_line_owns_lateral_plan(request));
 }
 
+TEST(V2XOvertakeCoreSpeed, GapPlannerHardBoundsNeverOverrideExplicitLine)
+{
+  GapPlannerStateBoundsRequest request;
+  EXPECT_TRUE(should_apply_gap_planner_state_bounds(request));
+
+  request.explicit_line_owns_plan = true;
+  EXPECT_FALSE(should_apply_gap_planner_state_bounds(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, LiveCorridorLossDoesNotAbortLaterallyCommittedPass)
+{
+  LiveExecutionCorridorBlockRequest request;
+  EXPECT_FALSE(should_block_live_execution_corridor(request));
+
+  request.raw_corridor_blocked = true;
+  EXPECT_TRUE(should_block_live_execution_corridor(request));
+
+  request.pass_phase = true;
+  EXPECT_TRUE(should_block_live_execution_corridor(request));
+
+  request.lateral_clearance_latched = true;
+  EXPECT_FALSE(should_block_live_execution_corridor(request));
+
+  request.pass_phase = false;
+  EXPECT_TRUE(should_block_live_execution_corridor(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, DetectsLockedTargetCrossingSelectedPassSideOrdering)
+{
+  LockedTargetPassSideIntrusionRequest request;
+  request.active_line = true;
+  request.pass_side_sign = -1;
+  request.target_seen = true;
+  request.target_longitudinal_m = 2.0;
+  request.ordering_margin_m = 0.10;
+
+  // Successful right pass: target remains left of ego in common-course coordinates.
+  request.target_relative_lateral_m = 0.67;
+  EXPECT_FALSE(locked_target_intrudes_pass_side(request));
+
+  // Failed right pass: target is on the selected/right side of ego.
+  request.target_relative_lateral_m = -0.35;
+  EXPECT_TRUE(locked_target_intrudes_pass_side(request));
+
+  // Once Pass has proved lateral separation, a rotating hairpin projection
+  // must not reinterpret the same committed maneuver as target intrusion.
+  request.lateral_clearance_latched = true;
+  EXPECT_FALSE(locked_target_intrudes_pass_side(request));
+  request.lateral_clearance_latched = false;
+
+  // A nearly coincident line is also an intrusion, before geometric crossing.
+  request.target_relative_lateral_m = 0.05;
+  EXPECT_TRUE(locked_target_intrudes_pass_side(request));
+
+  request.target_longitudinal_m = -0.01;
+  EXPECT_FALSE(locked_target_intrudes_pass_side(request));
+  request.target_longitudinal_m = 2.0;
+  request.target_position_jump = true;
+  EXPECT_FALSE(locked_target_intrudes_pass_side(request));
+}
+
 TEST(V2XOvertakeCoreSpeed, RejectsNewSidePassAfterTargetIsAlreadyBehind)
 {
   SideOvertakeEntryRequest request;
@@ -711,6 +845,26 @@ TEST(V2XOvertakeCoreSpeed, RejectsInvalidExplicitLineRampInputs)
   EXPECT_DOUBLE_EQ(resolve_overtake_line_horizon_progress(request), 0.0);
 }
 
+TEST(V2XOvertakeCoreSpeed, BuildsHeadingReferenceFromExplicitLateralLine)
+{
+  OvertakeLineHeadingReferenceRequest request;
+  request.previous_lateral_m = 0.0;
+  request.current_lateral_m = 0.2;
+  request.delta_s_m = 1.0;
+  EXPECT_NEAR(resolve_overtake_line_heading_reference(request), std::atan(0.2), 1e-12);
+
+  request.previous_lateral_m = 0.2;
+  EXPECT_DOUBLE_EQ(resolve_overtake_line_heading_reference(request), 0.0);
+
+  request.previous_lateral_m = 0.0;
+  request.base_curvature_radpm = 0.1;
+  EXPECT_NEAR(
+    resolve_overtake_line_heading_reference(request), std::atan2(0.2, 0.98), 1e-12);
+
+  request.delta_s_m = 0.0;
+  EXPECT_DOUBLE_EQ(resolve_overtake_line_heading_reference(request), 0.0);
+}
+
 TEST(V2XOvertakeCoreSpeed, PlacesPassGoalBeyondLockedTargetOnSelectedSide)
 {
   PassSideLateralGoalRequest request;
@@ -739,6 +893,46 @@ TEST(V2XOvertakeCoreSpeed, FallsBackToBasePassGoalWithoutTargetLateral)
 
   request.pass_side_sign = 0;
   EXPECT_DOUBLE_EQ(resolve_pass_side_lateral_goal(request), 0.0);
+}
+
+TEST(V2XOvertakeCoreSpeed, FixedBreakoutGoalDoesNotChaseTurningTarget)
+{
+  PassSideLateralGoalRequest request;
+  request.pass_side_sign = -1;
+  request.base_lateral_offset_m = 1.2;
+  request.target_lateral_m = 0.0;
+  request.minimum_separation_m = 0.75;
+  request.fixed_lateral_goal_m = -1.2;
+  EXPECT_DOUBLE_EQ(resolve_pass_side_lateral_goal(request), -1.2);
+
+  request.target_lateral_m = -1.66;
+  EXPECT_DOUBLE_EQ(resolve_pass_side_lateral_goal(request), -1.2);
+
+  request.fixed_lateral_goal_m = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_DOUBLE_EQ(resolve_pass_side_lateral_goal(request), -2.41);
+}
+
+TEST(V2XOvertakeCoreSpeed, ResolvesCenterOfValidatedPassCorridor)
+{
+  PassCorridorCenterRequest request;
+  request.active = true;
+  request.lower_bound_m = -2.1;
+  request.upper_bound_m = -0.7;
+  const auto center = resolve_pass_corridor_center(request);
+  ASSERT_TRUE(center.has_value());
+  EXPECT_DOUBLE_EQ(center.value(), -1.4);
+
+  request.active = false;
+  EXPECT_FALSE(resolve_pass_corridor_center(request).has_value());
+
+  request.active = true;
+  request.lower_bound_m = 0.8;
+  request.upper_bound_m = 0.2;
+  EXPECT_FALSE(resolve_pass_corridor_center(request).has_value());
+
+  request.lower_bound_m = std::numeric_limits<double>::quiet_NaN();
+  request.upper_bound_m = 1.0;
+  EXPECT_FALSE(resolve_pass_corridor_center(request).has_value());
 }
 
 TEST(V2XOvertakeCoreSpeed, AdaptsShiftOutClosingSpeedToFrontDistanceBudget)

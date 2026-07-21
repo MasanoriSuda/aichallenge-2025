@@ -164,6 +164,19 @@ OvertakeSpeedReferenceResolution resolve_overtake_speed_reference(
   return {std::min(base_reference, front_cap), true};
 }
 
+OvertakeSpeedReferenceResolution resolve_start_grid_breakout_speed_reference(
+  const StartGridBreakoutSpeedReferenceRequest & request)
+{
+  return resolve_overtake_speed_reference(
+    OvertakeSpeedReferenceRequest{
+      request.validated_breakout ? OvertakeSpeedStage::Pass : OvertakeSpeedStage::ShiftOut,
+      request.base_reference_speed_mps,
+      request.hard_cap_mps,
+      request.front_speed_mps,
+      request.entry_speed_mps,
+      request.shiftout_max_closing_speed_mps});
+}
+
 bool has_reached_pass_side_lateral_goal(
   const double current_lateral_m, const double target_lateral_m,
   const double lateral_tolerance_m, const int pass_side_sign) noexcept
@@ -224,6 +237,14 @@ bool can_hold_active_pass_after_gap_loss(const ActivePassGapHoldRequest & reques
          request.locked_target_seen && !request.locked_target_position_jump;
 }
 
+bool can_hold_validated_start_grid_breakout(
+  const ValidatedStartGridBreakoutContinuityRequest & request) noexcept
+{
+  return request.continuing_breakout && request.active_line && request.target_matches &&
+         request.locked_target_seen && !request.locked_target_position_jump &&
+         !request.explicit_forbidden_wp;
+}
+
 bool should_resolve_curve_pass_side(
   const bool soft_curve_forbidden, const bool hard_curve_forbidden,
   const bool explicit_forbidden_wp) noexcept
@@ -257,6 +278,40 @@ bool explicit_overtake_line_owns_lateral_plan(
 {
   return request.explicit_line_enabled &&
          (request.behavior_requests_overtake || request.line_phase_active);
+}
+
+bool should_apply_gap_planner_state_bounds(
+  const GapPlannerStateBoundsRequest & request) noexcept
+{
+  return !request.explicit_line_owns_plan;
+}
+
+bool should_block_live_execution_corridor(
+  const LiveExecutionCorridorBlockRequest & request) noexcept
+{
+  return request.raw_corridor_blocked &&
+         !(request.pass_phase && request.lateral_clearance_latched);
+}
+
+bool locked_target_intrudes_pass_side(
+  const LockedTargetPassSideIntrusionRequest & request) noexcept
+{
+  if (
+    !request.active_line || request.pass_side_sign == 0 ||
+    request.lateral_clearance_latched || !request.target_seen ||
+    request.target_position_jump || !std::isfinite(request.target_longitudinal_m) ||
+    request.target_longitudinal_m <= 0.0 ||
+    !std::isfinite(request.target_relative_lateral_m) ||
+    !std::isfinite(request.ordering_margin_m) || request.ordering_margin_m < 0.0)
+  {
+    return false;
+  }
+
+  // For a right pass (side=-1), target-relative lateral must remain positive:
+  // target is left of ego. The signs are mirrored for a left pass.
+  const double signed_target_ordering =
+    static_cast<double>(request.pass_side_sign) * request.target_relative_lateral_m;
+  return signed_target_ordering >= -request.ordering_margin_m;
 }
 
 bool can_start_side_overtake(const SideOvertakeEntryRequest & request) noexcept
@@ -318,6 +373,30 @@ double resolve_overtake_line_horizon_progress(
   return linear_progress * linear_progress * (3.0 - 2.0 * linear_progress);
 }
 
+double resolve_overtake_line_heading_reference(
+  const OvertakeLineHeadingReferenceRequest & request) noexcept
+{
+  if (
+    !std::isfinite(request.previous_lateral_m) ||
+    !std::isfinite(request.current_lateral_m) ||
+    !std::isfinite(request.delta_s_m) || request.delta_s_m <= 0.0 ||
+    !std::isfinite(request.base_curvature_radpm))
+  {
+    return 0.0;
+  }
+
+  const double lateral_gradient =
+    (request.current_lateral_m - request.previous_lateral_m) / request.delta_s_m;
+  // Frenet offset geometry: dr_offset/ds has tangential component 1-kappa*d
+  // and normal component d'. Keep a small signed denominator around a cusp.
+  double tangential_scale =
+    1.0 - request.base_curvature_radpm * request.current_lateral_m;
+  if (std::abs(tangential_scale) < 1e-3) {
+    tangential_scale = std::copysign(1e-3, tangential_scale == 0.0 ? 1.0 : tangential_scale);
+  }
+  return std::atan2(lateral_gradient, tangential_scale);
+}
+
 double resolve_pass_side_lateral_goal(const PassSideLateralGoalRequest & request) noexcept
 {
   if (
@@ -326,6 +405,12 @@ double resolve_pass_side_lateral_goal(const PassSideLateralGoalRequest & request
     !std::isfinite(request.minimum_separation_m) || request.minimum_separation_m < 0.0)
   {
     return 0.0;
+  }
+  if (request.fixed_lateral_goal_m.has_value()) {
+    const double fixed_goal = request.fixed_lateral_goal_m.value();
+    if (std::isfinite(fixed_goal)) {
+      return fixed_goal;
+    }
   }
   const double base_goal = static_cast<double>(request.pass_side_sign) *
     request.base_lateral_offset_m;
@@ -336,6 +421,18 @@ double resolve_pass_side_lateral_goal(const PassSideLateralGoalRequest & request
     static_cast<double>(request.pass_side_sign) * request.minimum_separation_m;
   return request.pass_side_sign > 0 ?
     std::max(base_goal, target_side_goal) : std::min(base_goal, target_side_goal);
+}
+
+std::optional<double> resolve_pass_corridor_center(
+  const PassCorridorCenterRequest & request) noexcept
+{
+  if (
+    !request.active || !std::isfinite(request.lower_bound_m) ||
+    !std::isfinite(request.upper_bound_m) || request.upper_bound_m < request.lower_bound_m)
+  {
+    return std::nullopt;
+  }
+  return 0.5 * (request.lower_bound_m + request.upper_bound_m);
 }
 
 AdaptiveShiftOutClosingSpeedResolution resolve_adaptive_shiftout_closing_speed(
@@ -391,6 +488,19 @@ double advance_prediction_time(const PredictionTimeRequest & request)
   const double segment_time = request.segment_distance_m /
     std::max(request.predicted_speed_mps, request.minimum_speed_mps);
   return std::min(request.maximum_time_sec, request.elapsed_sec + segment_time);
+}
+
+double resolve_vehicle_relative_lateral(
+  const VehicleRelativeLateralRequest & request) noexcept
+{
+  if (
+    request.course_projection_used && std::isfinite(request.vehicle_course_lateral_m) &&
+    std::isfinite(request.ego_course_lateral_m))
+  {
+    return request.vehicle_course_lateral_m - request.ego_course_lateral_m;
+  }
+  return std::isfinite(request.local_relative_lateral_m) ?
+         request.local_relative_lateral_m : std::numeric_limits<double>::infinity();
 }
 
 ForwardCourseProjection project_forward_course_progress(

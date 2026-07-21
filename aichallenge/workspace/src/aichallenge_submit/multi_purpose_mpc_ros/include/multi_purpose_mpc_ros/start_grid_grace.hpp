@@ -84,6 +84,8 @@ struct BreakoutGapPreferenceContext {
   bool right_available{false};
   double left_width_m{0.0};
   double right_width_m{0.0};
+  /// Side away from the visible front-target stagger. Zero means no preference.
+  int stagger_preferred_side{0};
   int fallback_side{0};
 };
 
@@ -133,9 +135,17 @@ bool should_continue_breakout(const BreakoutContinuationContext &context) noexce
 /// its side corridor is open. Invalid geometry fails closed through valid=false.
 BreakoutSideDecision resolve_breakout_side(const BreakoutSideContext &context) noexcept;
 
-/// Prefer the wider collision-inflated corridor before a side is locked. Availability wins over
-/// width, and the geometric fallback is used only when both feasible widths are effectively tied.
-int resolve_breakout_gap_preference(const BreakoutGapPreferenceContext &context) noexcept;
+/// Prefer the side opposite the front target's lateral stagger while still
+/// letting the gap planner reject that side when it is not feasible.
+int resolve_breakout_stagger_preference(double ego_lateral_m,
+                                        double front_lateral_m,
+                                        double side_deadband_m) noexcept;
+
+/// Prefer a feasible corridor away from the visible target stagger before a
+/// side is locked. Availability wins; without visible stagger, width and then
+/// geometric fallback break the tie.
+int resolve_breakout_gap_preference(
+    const BreakoutGapPreferenceContext &context) noexcept;
 
 /// A validated breakout deliberately passes a close grid target. Preserve its explicit line
 /// through the front-risk metric; an unavailable gap or blocked execution zone still fails closed.

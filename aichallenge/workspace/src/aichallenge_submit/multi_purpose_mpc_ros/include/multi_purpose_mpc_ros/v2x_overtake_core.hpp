@@ -109,6 +109,22 @@ struct OvertakeSpeedReferenceResolution
 OvertakeSpeedReferenceResolution resolve_overtake_speed_reference(
   const OvertakeSpeedReferenceRequest & request);
 
+struct StartGridBreakoutSpeedReferenceRequest
+{
+  bool validated_breakout{false};
+  double base_reference_speed_mps{};
+  double hard_cap_mps{};
+  double front_speed_mps{};
+  double entry_speed_mps{};
+  double shiftout_max_closing_speed_mps{};
+};
+
+/// A collision-inflated, executable start-grid corridor owns longitudinal separation from entry.
+/// Before validation, retain the normal ShiftOut front cap. Once validated, expose the full race
+/// reference immediately; the caller's MPC acceleration and global/domain caps remain authoritative.
+OvertakeSpeedReferenceResolution resolve_start_grid_breakout_speed_reference(
+  const StartGridBreakoutSpeedReferenceRequest & request);
+
 struct ShiftOutCompletionRequest
 {
   bool phase_hold_elapsed{false};
@@ -172,6 +188,23 @@ struct ActivePassGapHoldRequest
 /// responsible for retaining hard execution, target-continuity and wall gates.
 bool can_hold_active_pass_after_gap_loss(const ActivePassGapHoldRequest & request) noexcept;
 
+struct ValidatedStartGridBreakoutContinuityRequest
+{
+  bool continuing_breakout{false};
+  bool active_line{false};
+  bool target_matches{false};
+  bool locked_target_seen{false};
+  bool locked_target_position_jump{false};
+  bool explicit_forbidden_wp{false};
+};
+
+/// A start-grid side corridor is fully validated before the line is latched.
+/// Keep that same line through later gap-width/reachability re-evaluation so
+/// the maneuver cannot fall back behind the grid target mid-pass. A changed or
+/// discontinuous target and an explicit forbidden waypoint still cancel it.
+bool can_hold_validated_start_grid_breakout(
+  const ValidatedStartGridBreakoutContinuityRequest & request) noexcept;
+
 /// Curve-side classification is required for both soft and hard curvature
 /// zones. Explicit forbidden waypoints remain unconditionally blocked.
 bool should_resolve_curve_pass_side(
@@ -200,8 +233,10 @@ struct ActiveLineGapLossHoldResolution
 };
 
 /// Keep a locked ShiftOut/Pass line for a bounded time after only a transient
-/// gap-width/time/reachability failure. Hard safety and target-continuity
-/// failures are never held, and a hold never extends its own deadline.
+/// gap-width/time/reachability or live execution-corridor failure. Callers use
+/// separate last-valid timestamps when those signals have independent validity.
+/// Hard safety and target-continuity failures are never held, and a hold never
+/// extends its own deadline.
 ActiveLineGapLossHoldResolution resolve_active_line_gap_loss_hold(
   const ActiveLineGapLossHoldRequest & request) noexcept;
 
@@ -212,10 +247,57 @@ struct OvertakeLateralPlannerOwnershipRequest
   bool line_phase_active{false};
 };
 
-/// The explicit ShiftOut/Pass line and the gap planner must not inject lateral
-/// references/bounds into the same MPC solve.
+/// The explicit ShiftOut/Pass line exclusively owns the lateral reference.
+/// Obstacle-aware corridor bounds may still be supplied by the gap planner.
 bool explicit_overtake_line_owns_lateral_plan(
   const OvertakeLateralPlannerOwnershipRequest & request) noexcept;
+
+struct GapPlannerStateBoundsRequest
+{
+  bool explicit_line_owns_plan{false};
+};
+
+/// A selected obstacle-free interval is not a continuous reachable hard state
+/// bound for an explicit ShiftOut/Pass line. Keep it as a feasibility guard.
+bool should_apply_gap_planner_state_bounds(
+  const GapPlannerStateBoundsRequest & request) noexcept;
+
+struct LiveExecutionCorridorBlockRequest
+{
+  bool raw_corridor_blocked{false};
+  bool pass_phase{false};
+  bool lateral_clearance_latched{false};
+};
+
+/// A live planner dropout can still abort ShiftOut and an uncommitted Pass.
+/// Once Pass has established lateral separation, keep the explicit line and
+/// let target intrusion, wall, emergency, continuity, and solver guards own
+/// cancellation instead of re-applying entry-corridor geometry.
+bool should_block_live_execution_corridor(
+  const LiveExecutionCorridorBlockRequest & request) noexcept;
+
+struct LockedTargetPassSideIntrusionRequest
+{
+  bool active_line{false};
+  int pass_side_sign{};
+  /// Pass has already established the configured ego/target lateral separation.
+  bool lateral_clearance_latched{false};
+  bool target_seen{false};
+  bool target_position_jump{false};
+  double target_longitudinal_m{};
+  /// Common-course target lateral position minus ego lateral position.
+  double target_relative_lateral_m{};
+  /// Required signed ordering margin between ego and the target.
+  double ordering_margin_m{};
+};
+
+/// Before lateral separation is established, a valid pass has ego outside the
+/// target on the selected side. Detect when an ahead target reaches or crosses
+/// that line so ShiftOut cannot keep steering ego into the target. Once Pass
+/// has latched separation, common-course lateral ordering can rotate through a
+/// hairpin and is no longer an authoritative cancellation signal.
+bool locked_target_intrudes_pass_side(
+  const LockedTargetPassSideIntrusionRequest & request) noexcept;
 
 struct SideOvertakeEntryRequest
 {
@@ -254,18 +336,46 @@ struct OvertakeLineHorizonProgressRequest
 double resolve_overtake_line_horizon_progress(
   const OvertakeLineHorizonProgressRequest & request) noexcept;
 
+struct OvertakeLineHeadingReferenceRequest
+{
+  double previous_lateral_m{};
+  double current_lateral_m{};
+  double delta_s_m{};
+  double base_curvature_radpm{};
+};
+
+/// Convert a lateral offset profile d(s) into a heading-error reference. This
+/// keeps the MPC e_y and e_psi references geometrically consistent while the
+/// explicit line shifts across the base trajectory.
+double resolve_overtake_line_heading_reference(
+  const OvertakeLineHeadingReferenceRequest & request) noexcept;
+
 struct PassSideLateralGoalRequest
 {
   int pass_side_sign{};
   double base_lateral_offset_m{};
   double target_lateral_m{};
   double minimum_separation_m{};
+  /// A validated pass corridor latches its center so a moving target cannot drag the line.
+  std::optional<double> fixed_lateral_goal_m;
 };
 
-/// Place the pass line on the selected side of both the base trajectory and
-/// the locked target. This prevents a target that moves toward the same side
-/// in a curve from consuming the fixed lateral pass offset.
+/// Use a finite fixed goal when supplied. Otherwise place the pass line on the selected side of
+/// both the base trajectory and locked target. The fixed form is intended for the center of a
+/// validated, vehicle-inflated pass corridor.
 double resolve_pass_side_lateral_goal(const PassSideLateralGoalRequest & request) noexcept;
+
+struct PassCorridorCenterRequest
+{
+  bool active{};
+  double lower_bound_m{};
+  double upper_bound_m{};
+};
+
+/// Return the center of a valid ego-center corridor. The supplied bounds are expected to have
+/// already applied obstacle inflation and wall clearance.
+std::optional<double> resolve_pass_corridor_center(
+  const PassCorridorCenterRequest & request) noexcept;
 
 struct AdaptiveShiftOutClosingSpeedRequest
 {
@@ -308,6 +418,21 @@ struct CoursePoint
   double x_m{};
   double y_m{};
 };
+
+struct VehicleRelativeLateralRequest
+{
+  bool course_projection_used{false};
+  double vehicle_course_lateral_m{};
+  double ego_course_lateral_m{};
+  double local_relative_lateral_m{};
+};
+
+/// Course projection returns each vehicle's lateral coordinate relative to the
+/// reference path, not relative to ego. Subtract ego's coordinate before using
+/// it as a collision-overlap test. Fall back to local relative geometry when a
+/// finite common-course pair is unavailable.
+double resolve_vehicle_relative_lateral(
+  const VehicleRelativeLateralRequest & request) noexcept;
 
 struct ForwardCourseProjectionRequest
 {

@@ -316,6 +316,30 @@ TEST(StartGridGraceBreakout, PrefersWiderAvailableInflatedGap) {
   EXPECT_EQ(start_grid_grace::resolve_breakout_gap_preference(context), 1);
 }
 
+TEST(StartGridGraceBreakout, PrefersGapAwayFromVisibleTargetStagger) {
+  EXPECT_EQ(
+      start_grid_grace::resolve_breakout_stagger_preference(-0.32, -0.46, 0.05),
+      1);
+  EXPECT_EQ(
+      start_grid_grace::resolve_breakout_stagger_preference(-0.88, 0.08, 0.05),
+      -1);
+  EXPECT_EQ(
+      start_grid_grace::resolve_breakout_stagger_preference(0.00, 0.04, 0.05),
+      0);
+
+  start_grid_grace::BreakoutGapPreferenceContext context;
+  context.left_available = true;
+  context.right_available = true;
+  context.left_width_m = 0.8;
+  context.right_width_m = 2.5;
+  context.stagger_preferred_side = 1;
+  context.fallback_side = -1;
+  EXPECT_EQ(start_grid_grace::resolve_breakout_gap_preference(context), 1);
+
+  context.left_available = false;
+  EXPECT_EQ(start_grid_grace::resolve_breakout_gap_preference(context), -1);
+}
+
 TEST(StartGridGraceBreakout, AvailabilityWinsAndTieUsesGeometricFallback) {
   start_grid_grace::BreakoutGapPreferenceContext context;
   context.left_available = false;

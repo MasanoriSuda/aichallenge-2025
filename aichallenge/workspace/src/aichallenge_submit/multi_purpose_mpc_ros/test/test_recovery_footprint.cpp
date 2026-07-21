@@ -165,6 +165,28 @@ TEST(RecoveryFootprintDynamicClearance, FrontOverlapMaySeparateDuringReverse)
   EXPECT_GT(result.final_clearance_m, result.initial_clearance_m);
 }
 
+TEST(RecoveryFootprintDynamicClearance, MovingFrontOverlapMaySeparateDuringReverse)
+{
+  const recovery::FootprintExtents footprint{1.49, 0.51, 0.725, 0.725, 0.05};
+  const auto rollout = recovery::generate_reverse_rollout(
+    recovery::Pose2D{0.0, 0.0, 0.0}, recovery::ReversePrimitive::Straight,
+    recovery::ReverseRolloutParameters{0.4, 0.05, 0.05, 2.14, 0.0});
+  ASSERT_TRUE(rollout.valid);
+
+  // A small positive V2X velocity must not switch this geometry to the coarse
+  // rectangular moving corridor. The time-predicted rollout proves that every
+  // sample moves the initially overlapping front vehicle farther away.
+  const auto result = recovery::evaluate_circle_obstacle_clearance(
+    footprint, rollout.poses,
+    recovery::CircleObstacle{1.76, -0.74, 0.30, 0.0, 1.45}, 4.1);
+
+  EXPECT_TRUE(result.valid);
+  EXPECT_TRUE(result.clear);
+  EXPECT_EQ(result.reason, recovery::DynamicClearanceRejectReason::None);
+  EXPECT_LT(result.initial_clearance_m, 0.0);
+  EXPECT_GT(result.final_clearance_m, result.initial_clearance_m);
+}
+
 TEST(RecoveryFootprintDynamicClearance, ReproducedTailGeometrySeparatesWithSelectedRightTurn)
 {
   const recovery::FootprintExtents footprint{1.49, 0.51, 0.725, 0.725, 0.05};

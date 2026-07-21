@@ -13,10 +13,14 @@ namespace
 
 using multi_purpose_mpc_ros::stuck_recovery::CoreConfig;
 using multi_purpose_mpc_ros::stuck_recovery::CoreInput;
+using multi_purpose_mpc_ros::stuck_recovery::CollisionDeliberateStopOverrideRequest;
 using multi_purpose_mpc_ros::stuck_recovery::DetectorConfig;
 using multi_purpose_mpc_ros::stuck_recovery::DetectorDecision;
 using multi_purpose_mpc_ros::stuck_recovery::DetectorInput;
 using multi_purpose_mpc_ros::stuck_recovery::ExecutionMode;
+using multi_purpose_mpc_ros::stuck_recovery::FaultRetryConfig;
+using multi_purpose_mpc_ros::stuck_recovery::FaultRetryGate;
+using multi_purpose_mpc_ros::stuck_recovery::FaultRetryInput;
 using multi_purpose_mpc_ros::stuck_recovery::Gear;
 using multi_purpose_mpc_ros::stuck_recovery::ManeuverDirection;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryAction;
@@ -24,6 +28,7 @@ using multi_purpose_mpc_ros::stuck_recovery::RecoveryActionType;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryInput;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryReason;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryState;
+using multi_purpose_mpc_ros::stuck_recovery::ReverseDirectionPolicyInput;
 using multi_purpose_mpc_ros::stuck_recovery::RecoverySupervisor;
 using multi_purpose_mpc_ros::stuck_recovery::RejoinSteeringRequest;
 using multi_purpose_mpc_ros::stuck_recovery::ReverseActuationCalibration;
@@ -33,10 +38,14 @@ using multi_purpose_mpc_ros::stuck_recovery::StuckRejectReason;
 using multi_purpose_mpc_ros::stuck_recovery::StuckVerdict;
 using multi_purpose_mpc_ros::stuck_recovery::SupervisorConfig;
 using multi_purpose_mpc_ros::stuck_recovery::compute_rejoin_steering_tire_angle;
+using multi_purpose_mpc_ros::stuck_recovery::recovery_escape_distance_confirmed;
+using multi_purpose_mpc_ros::stuck_recovery::should_override_deliberate_stop_for_collision;
 using multi_purpose_mpc_ros::stuck_recovery::solver_fallback_requires_reverse_only;
 using multi_purpose_mpc_ros::stuck_recovery::reverse_actuation_calibration_is_valid;
 using multi_purpose_mpc_ros::stuck_recovery::reverse_stopping_distance_reserve_m;
 using multi_purpose_mpc_ros::stuck_recovery::recovery_candidate_commit_allowed;
+using multi_purpose_mpc_ros::stuck_recovery::recovery_reverse_direction_required;
+using multi_purpose_mpc_ros::stuck_recovery::recovery_reverse_intent_latch_allowed;
 using multi_purpose_mpc_ros::stuck_recovery::source_sample_is_current;
 using multi_purpose_mpc_ros::stuck_recovery::source_timestamp_is_monotonic;
 
@@ -80,6 +89,36 @@ TEST(StuckRecoveryRejoinSteering, AppliesLimitAndRejectsInvalidInputs)
   EXPECT_FALSE(compute_rejoin_steering_tire_angle(request).has_value());
 }
 
+TEST(StuckRecoveryCollisionStopOverride, RequiresSimulationCollisionAndStoppedEgo)
+{
+  CollisionDeliberateStopOverrideRequest request;
+  request.enabled = true;
+  request.simulation_environment = true;
+  request.collision_hint = true;
+  request.has_front_vehicle = true;
+  request.forward_intent = true;
+  request.signed_speed_mps = 0.10;
+  request.stopped_speed_mps = 0.15;
+  EXPECT_TRUE(should_override_deliberate_stop_for_collision(request));
+
+  request.simulation_environment = false;
+  EXPECT_FALSE(should_override_deliberate_stop_for_collision(request));
+  request.simulation_environment = true;
+  request.signed_speed_mps = 0.16;
+  EXPECT_FALSE(should_override_deliberate_stop_for_collision(request));
+  request.signed_speed_mps = 0.10;
+  request.collision_hint = false;
+  EXPECT_FALSE(should_override_deliberate_stop_for_collision(request));
+}
+
+TEST(StuckRecoveryEscapeConfirmation, AppliesToleranceOnlyWithClearFootprint)
+{
+  EXPECT_TRUE(recovery_escape_distance_confirmed(true, 1.947, 2.0, 0.10));
+  EXPECT_FALSE(recovery_escape_distance_confirmed(true, 1.89, 2.0, 0.10));
+  EXPECT_FALSE(recovery_escape_distance_confirmed(false, 2.0, 2.0, 0.10));
+  EXPECT_FALSE(recovery_escape_distance_confirmed(true, 1.947, 2.0, -0.10));
+}
+
 TEST(StuckRecoveryV2XClockDomain, AcceptsMonotonicSimulationSourceStamps)
 {
   const std::optional<double> previous_array_stamp{42.0};
@@ -93,6 +132,69 @@ TEST(StuckRecoveryV2XClockDomain, RejectsRollbackFutureAndStaleSourceSamples)
   EXPECT_FALSE(source_timestamp_is_monotonic(42.9, previous_array_stamp));
   EXPECT_FALSE(source_sample_is_current(43.0, 43.1, 1.0));
   EXPECT_FALSE(source_sample_is_current(43.0, 41.9, 1.0));
+}
+
+TEST(StuckRecoveryFaultRetry, RequiresContinuousHealthySimulationWindow)
+{
+  FaultRetryGate gate(FaultRetryConfig{true, 0.5, 0.2});
+  FaultRetryInput input;
+  input.simulation_environment = true;
+  input.race_started = true;
+  input.control_enabled = true;
+  input.odometry_fresh_and_finite = true;
+  input.command_finite = true;
+  input.drive_gear_fresh = true;
+  input.boost_inactive = true;
+  input.v2x_complete = true;
+  input.bounded_maneuver_available = true;
+  input.now_sec = 10.0;
+  EXPECT_FALSE(gate.update(input));
+  for (const double now_sec : {10.1, 10.2, 10.3, 10.4}) {
+    input.now_sec = now_sec;
+    EXPECT_FALSE(gate.update(input));
+  }
+  input.now_sec = 10.5;
+  EXPECT_TRUE(gate.update(input));
+}
+
+TEST(StuckRecoveryFaultRetry, ResetsOnUnsafeConditionOrObservationGap)
+{
+  FaultRetryGate gate(FaultRetryConfig{true, 0.5, 0.2});
+  FaultRetryInput input;
+  input.simulation_environment = true;
+  input.race_started = true;
+  input.control_enabled = true;
+  input.odometry_fresh_and_finite = true;
+  input.command_finite = true;
+  input.drive_gear_fresh = true;
+  input.boost_inactive = true;
+  input.v2x_complete = true;
+  input.bounded_maneuver_available = true;
+  input.now_sec = 1.0;
+  EXPECT_FALSE(gate.update(input));
+  input.v2x_complete = false;
+  input.now_sec = 1.1;
+  EXPECT_FALSE(gate.update(input));
+  input.v2x_complete = true;
+  input.now_sec = 1.2;
+  EXPECT_FALSE(gate.update(input));
+  input.now_sec = 1.6;
+  EXPECT_FALSE(gate.update(input));
+}
+
+TEST(StuckRecoveryFaultRetry, NeverRetriesOutsideSimulation)
+{
+  FaultRetryGate gate(FaultRetryConfig{true, 0.0, 0.2});
+  FaultRetryInput input;
+  input.race_started = true;
+  input.control_enabled = true;
+  input.odometry_fresh_and_finite = true;
+  input.command_finite = true;
+  input.drive_gear_fresh = true;
+  input.boost_inactive = true;
+  input.v2x_complete = true;
+  input.bounded_maneuver_available = true;
+  EXPECT_FALSE(gate.update(input));
 }
 
 TEST(StuckRecoveryCandidateCommit, DelaysCommitUntilActuationPath)
@@ -110,6 +212,50 @@ TEST(StuckRecoveryCandidateCommit, DelaysCommitUntilActuationPath)
 
   EXPECT_FALSE(recovery_candidate_commit_allowed(RecoveryState::StopAndReassess));
   EXPECT_FALSE(recovery_candidate_commit_allowed(RecoveryState::LowSpeedRejoin));
+}
+
+TEST(StuckRecoveryReverseIntent, LatchesDirectionOnlyAfterAwsimSettling)
+{
+  EXPECT_FALSE(recovery_reverse_intent_latch_allowed(RecoveryState::SuspectStuck));
+  EXPECT_FALSE(recovery_reverse_intent_latch_allowed(RecoveryState::WaitAwsimRecovery));
+  EXPECT_TRUE(recovery_reverse_intent_latch_allowed(RecoveryState::StopAndConfirm));
+  EXPECT_TRUE(recovery_reverse_intent_latch_allowed(RecoveryState::CheckClearance));
+  EXPECT_TRUE(recovery_reverse_intent_latch_allowed(RecoveryState::WaitForClear));
+  EXPECT_TRUE(recovery_reverse_intent_latch_allowed(RecoveryState::ReverseManeuver));
+  EXPECT_FALSE(recovery_reverse_intent_latch_allowed(RecoveryState::ForwardManeuver));
+  EXPECT_FALSE(recovery_reverse_intent_latch_allowed(RecoveryState::SafeStop));
+}
+
+TEST(StuckRecoveryReverseIntent, RequiresExplicitFailureBeforeForwardFallback)
+{
+  ReverseDirectionPolicyInput input;
+  input.obstacle_reverse_first = true;
+  EXPECT_TRUE(recovery_reverse_direction_required(input));
+
+  input.forward_fallback_unlocked = true;
+  EXPECT_FALSE(recovery_reverse_direction_required(input));
+
+  input.reverse_intent_latched = true;
+  EXPECT_TRUE(recovery_reverse_direction_required(input));
+  input.reverse_intent_latched = false;
+  input.forward_fallback_unlocked = false;
+
+  input.coordinated_stop_active = true;
+  EXPECT_TRUE(recovery_reverse_direction_required(input));
+  input.forward_fallback_unlocked = true;
+  EXPECT_FALSE(recovery_reverse_direction_required(input));
+  input.forward_fallback_unlocked = false;
+  input.coordinated_stop_active = false;
+
+  input.solver_reverse_only_candidate = true;
+  EXPECT_TRUE(recovery_reverse_direction_required(input));
+  input.forward_fallback_unlocked = true;
+  EXPECT_TRUE(recovery_reverse_direction_required(input));
+  input.forward_fallback_unlocked = false;
+  input.solver_reverse_only_candidate = false;
+
+  input.reverse_only_episode = true;
+  EXPECT_TRUE(recovery_reverse_direction_required(input));
 }
 
 DetectorConfig detector_config()
@@ -408,6 +554,28 @@ TEST(StuckDetector, ConfirmsOnlyAfterSustainedNoProgressAndEvidence)
   EXPECT_DOUBLE_EQ(decision.stationary_duration_sec, 1.0);
   EXPECT_TRUE(decision.forward_intent);
   EXPECT_TRUE(decision.corroborating_evidence);
+}
+
+TEST(StuckDetector, TreatsOneKilometerPerHourAsStoppedWithObstacleEvidence)
+{
+  auto config = detector_config();
+  config.stopped_speed_mps = 0.28;
+  config.moving_speed_mps = 0.35;
+  config.stationary_duration_sec = 0.25;
+  StuckDetector detector(config);
+  auto input = eligible_detector_input(20.0);
+  input.signed_speed_mps = 0.28;
+
+  EXPECT_EQ(detector.update(input).verdict, StuckVerdict::Moving);
+  input.now_sec = 20.25;
+  EXPECT_EQ(detector.update(input).verdict, StuckVerdict::Confirmed);
+
+  detector.reset();
+  input.now_sec = 21.0;
+  input.signed_speed_mps = 0.281;
+  const auto moving = detector.update(input);
+  EXPECT_EQ(moving.verdict, StuckVerdict::Moving);
+  EXPECT_EQ(moving.reject_reason, StuckRejectReason::VehicleMoving);
 }
 
 TEST(StuckDetector, RequiresIndependentCorroboratingEvidence)
@@ -942,6 +1110,8 @@ TEST(RecoverySupervisor, ClearanceTimeoutCanResumeOnlyAfterStableClearance)
   config.clearance_wait_timeout_sec = 0.2;
   config.clearance_safe_stop_recovery_enabled = true;
   config.safe_stop_clear_confirm_sec = 0.1;
+  config.aggressive_sim_recovery_enabled = true;
+  config.aggressive_retry_delay_sec = 0.05;
   RecoverySupervisor supervisor(config);
   double now = 0.0;
   auto input = healthy_recovery_input(now);
@@ -952,6 +1122,13 @@ TEST(RecoverySupervisor, ClearanceTimeoutCanResumeOnlyAfterStableClearance)
   input.now_sec = now;
   EXPECT_EQ(supervisor.update(input).type, RecoveryActionType::HoldStop);
   now += 0.2;
+  input.now_sec = now;
+  EXPECT_EQ(supervisor.update(input).type, RecoveryActionType::SafeStop);
+  EXPECT_EQ(supervisor.state(), RecoveryState::SafeStop);
+
+  // Even aggressive simulation recovery must not churn a new maneuver while
+  // the external V2X blocker is unchanged.
+  now += 0.10;
   input.now_sec = now;
   EXPECT_EQ(supervisor.update(input).type, RecoveryActionType::SafeStop);
   EXPECT_EQ(supervisor.state(), RecoveryState::SafeStop);

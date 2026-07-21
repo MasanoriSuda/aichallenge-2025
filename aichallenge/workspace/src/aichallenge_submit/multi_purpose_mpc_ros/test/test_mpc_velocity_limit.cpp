@@ -56,3 +56,47 @@ TEST(MpcVelocityLimit, RejectsInvalidInputs)
     multi_purpose_mpc_ros::mpc_velocity_limit::build_reachable_limits(request),
     std::invalid_argument);
 }
+
+TEST(MpcVelocityLimit, EnablesSimulationSolverFailureCrawlOnlyOnClearCruise)
+{
+  using multi_purpose_mpc_ros::mpc_velocity_limit::SolverFailureCrawlRequest;
+  using multi_purpose_mpc_ros::mpc_velocity_limit::resolve_solver_failure_crawl;
+
+  SolverFailureCrawlRequest request;
+  request.simulation_environment = true;
+  request.enabled = true;
+  request.control_enabled = true;
+  request.solver_fallback = true;
+  request.unrestricted_cruise = true;
+  request.configured_speed_mps = 1.0;
+  request.effective_speed_limit_mps = 0.8;
+
+  const auto enabled = resolve_solver_failure_crawl(request);
+  EXPECT_TRUE(enabled.active);
+  EXPECT_DOUBLE_EQ(enabled.target_speed_mps, 0.8);
+
+  request.front_vehicle_detected = true;
+  EXPECT_FALSE(resolve_solver_failure_crawl(request).active);
+  request.front_vehicle_detected = false;
+  request.unrestricted_cruise = false;
+  EXPECT_FALSE(resolve_solver_failure_crawl(request).active);
+}
+
+TEST(MpcVelocityLimit, SolverFailureCrawlFailsClosedOutsideSimulationOrOnInvalidSpeed)
+{
+  using multi_purpose_mpc_ros::mpc_velocity_limit::SolverFailureCrawlRequest;
+  using multi_purpose_mpc_ros::mpc_velocity_limit::resolve_solver_failure_crawl;
+
+  SolverFailureCrawlRequest request;
+  request.enabled = true;
+  request.control_enabled = true;
+  request.solver_fallback = true;
+  request.unrestricted_cruise = true;
+  request.configured_speed_mps = 1.0;
+  request.effective_speed_limit_mps = 2.0;
+  EXPECT_FALSE(resolve_solver_failure_crawl(request).active);
+
+  request.simulation_environment = true;
+  request.configured_speed_mps = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_FALSE(resolve_solver_failure_crawl(request).active);
+}

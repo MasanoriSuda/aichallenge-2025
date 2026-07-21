@@ -603,6 +603,22 @@ bool has_entered_low_speed_pass_corridor(
 double resolve_low_speed_pass_velocity(
   double pass_velocity_mps, double shift_velocity_mps, bool corridor_entered);
 
+enum class LowSpeedDirectControlPhase
+{
+  Shift,
+  Pass,
+  Rejoin,
+};
+
+/// Select the bounded direct-control speed without handing ownership to MPC
+/// inside a stopped-vehicle pack.
+double resolve_low_speed_direct_control_velocity(
+  LowSpeedDirectControlPhase phase,
+  double shift_velocity_mps,
+  double pass_velocity_mps,
+  double rejoin_velocity_mps,
+  double maximum_velocity_mps);
+
 struct LowSpeedShiftSteeringRequest
 {
   double current_lateral_m{};

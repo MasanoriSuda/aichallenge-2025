@@ -31,4 +31,25 @@ std::vector<double> build_reachable_limits(const ReachableLimitRequest & request
   return limits;
 }
 
+SolverFailureCrawlDecision resolve_solver_failure_crawl(
+  const SolverFailureCrawlRequest & request) noexcept
+{
+  SolverFailureCrawlDecision decision;
+  if (
+    !request.simulation_environment || !request.enabled || !request.control_enabled ||
+    !request.solver_fallback || !request.unrestricted_cruise ||
+    request.front_vehicle_detected || !std::isfinite(request.configured_speed_mps) ||
+    request.configured_speed_mps <= 0.0 ||
+    !std::isfinite(request.effective_speed_limit_mps) ||
+    request.effective_speed_limit_mps <= 0.0)
+  {
+    return decision;
+  }
+
+  decision.target_speed_mps = std::min(
+    request.configured_speed_mps, request.effective_speed_limit_mps);
+  decision.active = decision.target_speed_mps > 0.0;
+  return decision;
+}
+
 }  // namespace multi_purpose_mpc_ros::mpc_velocity_limit

@@ -102,6 +102,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::select_reachable_low_speed_pass_
 using multi_purpose_mpc_ros::v2x_overtake_core::has_entered_low_speed_pass_corridor;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_low_speed_pass_velocity;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_low_speed_shift_steering;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_low_speed_direct_control_velocity;
+using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedDirectControlPhase;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_low_speed_shift_complete;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_begin_low_speed_shift_rejoin;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_release_low_speed_shift_control;
@@ -536,6 +538,25 @@ TEST(V2XOvertakeCoreSpeed, ExcludesOnlyLaterallyClearLockedTargetDuringPass)
   request.pass_phase = true;
   request.locked_target = false;
   EXPECT_FALSE(can_exclude_locked_target_from_front_overlap(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, KeepsLineGoalAndFrontBrakeExclusionIndependent)
+{
+  PassSideLateralGoalRequest goal_request;
+  goal_request.pass_side_sign = 1;
+  goal_request.base_lateral_offset_m = 1.2;
+  goal_request.target_lateral_m = 0.0;
+  goal_request.minimum_separation_m = 0.75;
+  EXPECT_DOUBLE_EQ(resolve_pass_side_lateral_goal(goal_request), 1.2);
+
+  PassFrontOverlapExclusionRequest exclusion_request;
+  exclusion_request.pass_phase = true;
+  exclusion_request.locked_target = true;
+  exclusion_request.relative_lateral_m = 1.0;
+  exclusion_request.required_lateral_clearance_m = 1.15;
+  EXPECT_FALSE(can_exclude_locked_target_from_front_overlap(exclusion_request));
+  exclusion_request.relative_lateral_m = 1.15;
+  EXPECT_TRUE(can_exclude_locked_target_from_front_overlap(exclusion_request));
 }
 
 TEST(V2XOvertakeCoreSpeed, HoldsOnlyCommittedActivePassAfterGapLoss)
@@ -1535,6 +1556,20 @@ TEST(V2XOvertakeCoreSide, LowSpeedShiftSteersTowardNegativeLateralTarget)
   request.lateral_gain = 0.4;
   request.heading_gain = 1.3;
   EXPECT_DOUBLE_EQ(resolve_low_speed_shift_steering(request), -0.559);
+}
+
+TEST(V2XOvertakeCoreSide, SelectsPhaseSpecificDirectControlVelocity)
+{
+  EXPECT_DOUBLE_EQ(resolve_low_speed_direct_control_velocity(
+      LowSpeedDirectControlPhase::Shift, 3.0, 6.0, 4.0, 11.1), 3.0);
+  EXPECT_DOUBLE_EQ(resolve_low_speed_direct_control_velocity(
+      LowSpeedDirectControlPhase::Pass, 3.0, 6.0, 4.0, 11.1), 6.0);
+  EXPECT_DOUBLE_EQ(resolve_low_speed_direct_control_velocity(
+      LowSpeedDirectControlPhase::Rejoin, 3.0, 6.0, 4.0, 11.1), 4.0);
+  EXPECT_DOUBLE_EQ(resolve_low_speed_direct_control_velocity(
+      LowSpeedDirectControlPhase::Pass, 3.0, 12.0, 4.0, 10.0), 10.0);
+  EXPECT_THROW(resolve_low_speed_direct_control_velocity(
+      LowSpeedDirectControlPhase::Pass, 3.0, -1.0, 4.0, 11.1), std::invalid_argument);
 }
 
 TEST(V2XOvertakeCoreSide, LowSpeedShiftHeadingFeedbackCountersteers)

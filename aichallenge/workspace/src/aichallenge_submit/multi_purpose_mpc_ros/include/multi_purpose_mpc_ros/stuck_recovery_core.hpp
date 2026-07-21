@@ -17,6 +17,67 @@ bool source_timestamp_is_monotonic(
 bool source_sample_is_current(
   double array_stamp_sec, double sample_stamp_sec, double timeout_sec) noexcept;
 
+struct FaultRetryConfig
+{
+  bool enabled{false};
+  double clear_confirm_sec{0.5};
+  double max_observation_gap_sec{0.2};
+};
+
+struct FaultRetryInput
+{
+  double now_sec{};
+  bool simulation_environment{false};
+  bool race_started{false};
+  bool control_enabled{false};
+  bool odometry_fresh_and_finite{false};
+  bool command_finite{false};
+  bool drive_gear_fresh{false};
+  bool boost_inactive{false};
+  bool v2x_complete{false};
+  bool bounded_maneuver_available{false};
+  bool collision_worsening{false};
+};
+
+class FaultRetryGate
+{
+public:
+  explicit FaultRetryGate(FaultRetryConfig config);
+
+  bool update(const FaultRetryInput & input);
+  void reset() noexcept;
+
+private:
+  FaultRetryConfig config_;
+  std::optional<double> healthy_since_sec_;
+  std::optional<double> last_update_sec_;
+};
+
+struct CollisionDeliberateStopOverrideRequest
+{
+  bool enabled{false};
+  bool simulation_environment{false};
+  bool collision_hint{false};
+  bool has_front_vehicle{false};
+  bool forward_intent{false};
+  double signed_speed_mps{};
+  double stopped_speed_mps{};
+};
+
+// A recent physical collision is stronger evidence than a transient V2X
+// SafetyBrake/Follow classification. This only removes the deliberate-stop
+// eligibility veto; the normal no-progress timer and all recovery rollout
+// gates remain authoritative.
+bool should_override_deliberate_stop_for_collision(
+  const CollisionDeliberateStopOverrideRequest & request) noexcept;
+
+// Accept a bounded measurement/stopping error only after the current vehicle
+// footprint has become clear. The tolerance must never bypass the footprint
+// requirement.
+bool recovery_escape_distance_confirmed(
+  bool current_footprint_clear, double traveled_distance_m,
+  double target_distance_m, double tolerance_m) noexcept;
+
 // Evidence-free solver recovery must remain reverse-only. When current wall
 // evidence exists, however, the wall direction selects the safe escape unless
 // the heading error is large enough to forbid a short forward maneuver.
@@ -203,6 +264,25 @@ enum class RecoveryState
 /// Return true once a recovery candidate has entered an actuation path and may be fixed for the
 /// rest of that maneuver. Observation/clearance states must continue to re-evaluate direction.
 bool recovery_candidate_commit_allowed(RecoveryState state) noexcept;
+
+/// Reverse direction may be latched after the AWSIM settling state while the concrete
+/// primitive/steering remains re-evaluated against the current pose and clearance snapshot.
+bool recovery_reverse_intent_latch_allowed(RecoveryState state) noexcept;
+
+struct ReverseDirectionPolicyInput
+{
+  bool reverse_only_episode{false};
+  bool reverse_intent_latched{false};
+  bool coordinated_stop_active{false};
+  bool solver_reverse_only_candidate{false};
+  bool obstacle_reverse_first{false};
+  bool forward_fallback_unlocked{false};
+};
+
+/// Strict episode reasons and a latched Reverse intent always win. A non-strict obstacle-first
+/// request may release Forward candidates only after an explicit failed recovery retry.
+bool recovery_reverse_direction_required(
+  const ReverseDirectionPolicyInput & input) noexcept;
 
 enum class RecoveryActionType
 {

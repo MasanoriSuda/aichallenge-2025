@@ -13,6 +13,7 @@ namespace
 {
 
 constexpr double kTimestampEpsilon = 1.0e-9;
+constexpr double kDistanceComparisonEpsilon = 1.0e-9;
 
 void validate_nonnegative(const double value, const char * name)
 {
@@ -234,6 +235,26 @@ DetectorDecision disabled_decision(const DetectorInput & input) noexcept
 
 }  // namespace
 
+bool should_override_deliberate_stop_for_collision(
+  const CollisionDeliberateStopOverrideRequest & request) noexcept
+{
+  return request.enabled && request.simulation_environment && request.collision_hint &&
+         request.has_front_vehicle && request.forward_intent &&
+         std::isfinite(request.signed_speed_mps) &&
+         std::isfinite(request.stopped_speed_mps) && request.stopped_speed_mps >= 0.0 &&
+         std::abs(request.signed_speed_mps) <= request.stopped_speed_mps;
+}
+
+bool recovery_escape_distance_confirmed(
+  const bool current_footprint_clear, const double traveled_distance_m,
+  const double target_distance_m, const double tolerance_m) noexcept
+{
+  return current_footprint_clear && std::isfinite(traveled_distance_m) &&
+         std::isfinite(target_distance_m) && std::isfinite(tolerance_m) &&
+         traveled_distance_m >= 0.0 && target_distance_m >= 0.0 && tolerance_m >= 0.0 &&
+         traveled_distance_m + tolerance_m + kDistanceComparisonEpsilon >= target_distance_m;
+}
+
 bool solver_fallback_requires_reverse_only(
   const bool solver_fallback, const bool evidence_free_recovery_enabled,
   const bool wall_evidence, const double heading_error_rad,
@@ -273,6 +294,46 @@ bool source_sample_is_current(
   const double source_age_sec = array_stamp_sec - sample_stamp_sec;
   return source_age_sec >= -kTimestampEpsilon &&
          source_age_sec <= timeout_sec + kTimestampEpsilon;
+}
+
+FaultRetryGate::FaultRetryGate(FaultRetryConfig config)
+: config_(std::move(config))
+{
+  validate_nonnegative(config_.clear_confirm_sec, "fault retry clear confirmation");
+  validate_nonnegative(config_.max_observation_gap_sec, "fault retry maximum observation gap");
+  if (config_.max_observation_gap_sec <= 0.0) {
+    throw std::invalid_argument("fault retry maximum observation gap must be positive");
+  }
+}
+
+bool FaultRetryGate::update(const FaultRetryInput & input)
+{
+  const bool healthy = config_.enabled && input.simulation_environment &&
+    input.race_started && input.control_enabled && input.odometry_fresh_and_finite &&
+    input.command_finite && input.drive_gear_fresh && input.boost_inactive &&
+    input.v2x_complete && input.bounded_maneuver_available && !input.collision_worsening;
+  if (!std::isfinite(input.now_sec) || !healthy) {
+    reset();
+    return false;
+  }
+  if (
+    last_update_sec_.has_value() &&
+    (input.now_sec < last_update_sec_.value() ||
+    input.now_sec - last_update_sec_.value() > config_.max_observation_gap_sec))
+  {
+    healthy_since_sec_ = input.now_sec;
+  }
+  if (!healthy_since_sec_.has_value()) {
+    healthy_since_sec_ = input.now_sec;
+  }
+  last_update_sec_ = input.now_sec;
+  return input.now_sec - healthy_since_sec_.value() >= config_.clear_confirm_sec;
+}
+
+void FaultRetryGate::reset() noexcept
+{
+  healthy_since_sec_.reset();
+  last_update_sec_.reset();
 }
 
 std::optional<double> compute_rejoin_steering_tire_angle(
@@ -925,6 +986,10 @@ RecoveryAction RecoverySupervisor::update_safe_stop(const RecoveryInput & input)
   {
     if (!clearance_is_safe(input)) {
       clearance_safe_since_sec_.reset();
+      // A blocked rear corridor is external state, not a failed maneuver.
+      // Stay stopped and re-evaluate the same complete snapshot instead of
+      // entering the aggressive retry loop while the blocker is unchanged.
+      return safe_stop_action(state_reason_);
     } else {
       if (!clearance_safe_since_sec_.has_value()) {
         clearance_safe_since_sec_ = input.now_sec;
@@ -933,6 +998,7 @@ RecoveryAction RecoverySupervisor::update_safe_stop(const RecoveryInput & input)
         transition(RecoveryState::CheckClearance, RecoveryReason::ClearanceCheck, input.now_sec);
         return hold_action(RecoveryReason::ClearanceCheck);
       }
+      return safe_stop_action(state_reason_);
     }
   } else {
     clearance_safe_since_sec_.reset();
@@ -1767,6 +1833,40 @@ bool recovery_candidate_commit_allowed(const RecoveryState state) noexcept
       return false;
   }
   return false;
+}
+
+bool recovery_reverse_intent_latch_allowed(const RecoveryState state) noexcept
+{
+  switch (state) {
+    case RecoveryState::StopAndConfirm:
+    case RecoveryState::CheckClearance:
+    case RecoveryState::WaitForClear:
+    case RecoveryState::ShiftToReverse:
+    case RecoveryState::WaitReverseReport:
+    case RecoveryState::ReverseManeuver:
+    case RecoveryState::StopAndReassess:
+    case RecoveryState::StopBeforeDrive:
+    case RecoveryState::ShiftToDrive:
+    case RecoveryState::WaitDriveReport:
+      return true;
+    case RecoveryState::Normal:
+    case RecoveryState::SuspectStuck:
+    case RecoveryState::WaitAwsimRecovery:
+    case RecoveryState::ForwardManeuver:
+    case RecoveryState::LowSpeedRejoin:
+    case RecoveryState::SafeStop:
+      return false;
+  }
+  return false;
+}
+
+bool recovery_reverse_direction_required(
+  const ReverseDirectionPolicyInput & input) noexcept
+{
+  return input.reverse_only_episode || input.reverse_intent_latched ||
+         (input.coordinated_stop_active && !input.forward_fallback_unlocked) ||
+         input.solver_reverse_only_candidate ||
+         (input.obstacle_reverse_first && !input.forward_fallback_unlocked);
 }
 
 const char * to_string(const RecoveryState state) noexcept

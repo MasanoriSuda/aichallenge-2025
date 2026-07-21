@@ -98,6 +98,7 @@ C++ 本番ノードの経路入力・solver処理には、次の安全化を適�
 - `ceil(distance / resolution)` の分割 helper と単体テストを追加した。ただし、固定 `N` の物理 horizon を変えないため、本番 ReferencePath は距離ベース horizon へ移行するまで legacy `floor` 分割を維持する。
 - 角度正規化は `atan2(sin(angle), cos(angle))` 相当を使い、正負の pi 境界を扱う。
 - MPC問題生成では現在最近傍の `tracking_wp_id` を状態変換、モデル線形化、経路制約、V2X、予測軌跡に使う。`wp_id_offset` 適用後の `preview_wp_id` は入力参照候補にだけ使い、future側が低速なら早めに減速し、同方向で大曲率なら早めに切り増す。カーブ出口での早期加速・早期切り戻しには使わない。これによりヘアピンで状態座標系と参照座標系を一致させたまま、offset `0..2` の先読みを行う。
+- `waypoint_local_association_enabled=true` の場合、`tracking_wp_id` は前回IDを中心とする経路距離窓から選ぶ。候補scoreには位置距離、車両yawと経路headingの差、後退量、現在速度と制御周期から到達しにくい前方jumpを含める。初期化、経路更新、または局所候補までの距離が `waypoint_local_lost_distance_m` を超えた場合だけ全経路探索へ戻す。circular pathでは周回端をwrapし、ヘアピンで空間的に近い別枝へIDが飛ぶことを抑える。現行の距離窓8 m後方／30 m前方、lost 4 mは2025 AWSIM向け暫定値である。
 - OSQPは `SOLVED` / `SOLVED_INACCURATE`、解の有限性、入力を含む全制約違反を確認し、直線の steering 0 を異常扱いしない。
 - callback間の未保護な同時更新を避ける初期安全策として、C++ node は `SingleThreadedExecutor` で実行する。
 - odometry の受信時刻と、非ゼロsource stampが最後に変化した時刻をsteady clockで監視する。既定 `odom_timeout_sec: 0.5` を超えた場合、boost を無効にして速度0・負加速度・rate limit付き操舵復帰を直接publishする。pose、速度、solver出力、gain適用後commandの NaN / Inf も同じ fail-safe 経路で拒否する。
@@ -159,36 +160,41 @@ stuck_recovery:
     evidence_free_recovery_enabled: true
     evidence_free_duration_sec: 1.5
     coordinated_stop_recovery_enabled: true
-    coordinated_stop_duration_sec: 3.0
-    coordinated_stop_front_speed_mps: 0.20
+    coordinated_stop_duration_sec: 0.25
+    coordinated_stop_front_speed_mps: 0.28
     max_observation_gap_sec: 0.2
-    stopped_speed_mps: 0.15
-    moving_speed_mps: 0.25
+    stopped_speed_mps: 0.28
+    moving_speed_mps: 0.35
     forward_intent_speed_mps: 1.0
     forward_intent_acceleration_mps2: 0.1
-    stationary_duration_sec: 0.4
+    stationary_duration_sec: 0.25
     max_pose_displacement_m: 0.15
     max_progress_delta_m: 0.20
-    awsim_recovery_settle_sec: 1.0
+    awsim_recovery_settle_sec: 0.30
   gear:
     report_timeout_sec: 0.5
-    stop_confirm_sec: 0.2
+    stop_speed_mps: 0.28
+    stop_confirm_sec: 0.10
     command_resend_interval_sec: 0.2
     max_command_requests: 1
   maneuver:
     clearance_wait_timeout_sec: 1.0
     clearance_safe_stop_recovery_enabled: true
     safe_stop_clear_confirm_sec: 0.5
-    aggressive_sim_recovery_enabled: false
+    aggressive_sim_recovery_enabled: true
     aggressive_retry_delay_sec: 0.5
+    race_relaxed_fault_retry_enabled: true
+    fault_retry_clear_confirm_sec: 0.5
+    fault_retry_max_observation_gap_sec: 0.2
+    tracked_v2x_completeness_enabled: true
     max_reverse_distance_m: 3.0
     max_reverse_duration_sec: 4.0
     max_reverse_speed_mps: 0.8
     reverse_acceleration_magnitude_mps2: 0.5
     max_forward_distance_m: 0.6
-    max_forward_duration_sec: 1.5
-    max_forward_speed_mps: 0.8
-    forward_acceleration_magnitude_mps2: 0.5
+    max_forward_duration_sec: 2.0
+    max_forward_speed_mps: 1.0
+    forward_acceleration_magnitude_mps2: 1.0
     reverse_escape_distance_m: 2.0
     forward_escape_distance_m: 0.30
     max_reverse_pose_step_m: 0.05
@@ -247,6 +253,13 @@ stuck_recovery:
     cooldown_sec: 1.0
 ```
 
+`race_relaxed_fault_retry_enabled` は `simulation_only: true` の場合だけ使用できる。Recovery fault後も
+Drive gear、finite odometry/command、boost inactive、V2X completeness、短距離の静的map/V2X回廊が
+`fault_retry_clear_confirm_sec` 連続して正常なら、fault latchを解除して通常のstuck detectorから再評価する。
+一条件でも欠けるか観測間隔が上限を超えた場合は確認時間を0へ戻す。`tracked_v2x_completeness_enabled` は
+単一メッセージに全車が揃わない瞬間でも、vehicle IDごとのfreshで有限な最新sampleが期待台数ぶん揃えば
+completenessを成立させる。実車相当では従来どおり自動解除しない。
+
 `reverse_actuation_enabled` と `reverse_acceleration_sign` は別々のhard latchである。
 sign 0や駆動・停止commandの同符号、停止減速度0は起動時に拒否する。2026-07-12の
 ローカルAWSIM校正ではREVERSE中の正加速度を後退駆動、負加速度を停止としている。
@@ -266,8 +279,9 @@ pose / path無進捗が3.0秒継続した場合だけ`solver_evidence_free_quali
 episodeは、wall証拠なしまたは`abs(e_psi) >= solver_reverse_only_heading_error_rad`の場合だけ
 Reverse-onlyとする。wall証拠があり姿勢誤差が閾値未満ならwall方向が選んだ短距離候補を
 static / V2X gateで検証する。いずれもswept footprintが安全でなければギアを要求しない。
-Follow / SafetyBrakeで前方停止車が0.20 m/s以下のまま3.0秒停止した後続車は
+Follow / SafetyBrakeで前方停止車が0.28 m/s以下のまま0.25秒停止した後続車は
 `coordinated_stop_qualified`となり、同じReverse-only gateで最後尾から後方空間を作る。
+SIMレースの停止entryは1 km/h相当の0.28 m/s、release hysteresisは0.35 m/sとする。
 
 solver正常時には、物理壁とoccupancy map / legacy collision通知の不一致へ限定対応する。
 Follow / SafetyBrake / LowSpeedAvoidance等の意図的停止ではなく、前進要求、低実速度、pose / path
@@ -294,22 +308,30 @@ FrontではReverse Straight / Left / Rightをこの順で評価し、RearではF
 評価する。Side / Mixedかつ実map contactありではReverse / ForwardのStraightに加え、Left / Rightを
 0.05、0.10、0.15、0.20、0.25 radで0.40 m評価する。同じ`RequireImprovement`条件でcontact減少最大を
 選び、Reverse / Forwardが同値ならReverse、同方向内ではStraight、Leftの小角、Rightの小角の
-決定順を使う。通常設定のsolver起因などのreverse-only episodeではForwardを生成しないが、
-積極シミュレーション復旧では他車の協力を仮定せず、両方向を同じstatic/V2X gateで評価する。
-Unknownまたは改善候補なしはfail-closedとする。検索marginは
-方向推定専用でありcollision footprintを縮小しない。候補は`SUSPECT_STUCK`、AWSIM補正待機、
-停止確認、clearance待機では毎周期再評価し、`SHIFT_TO_REVERSE` / `WAIT_REVERSE_REPORT` /
-`REVERSE_MANEUVER` / `FORWARD_MANEUVER`へ到達した時点でepisodeへ固定する。固定後は方向と操舵符号を
-変更しない。Reverse Left / Rightは選択したsigned steering angleをepisodeへ固定して実commandへ渡し、
+決定順を使う。solver起因のreverse-only episodeでは、積極シミュレーション設定でもForwardを
+生成しない。coordinated-stopは初回Reverse intentだけを所有し、その候補が明示的に不成立となった
+次のbounded retryではForward候補を解禁する。前進要求中に0.28 m/s以下となり、前方停止車、前方車を伴う
+recent collision、またはRear以外のwall/contactがある場合もReverseを最初に評価する。この
+Reverse-first候補が静的非実行可能、接触悪化、距離・step上限等で明示的にSafeStopへ到達した場合だけ、
+次のaggressive retryでForward候補を解禁する。RequireImprovement候補がない接触状態では、SIMの
+aggressive recoveryに限り、新規接触と接触セル増加を許さない`AllowNonWorsening`の0.40 m候補まで
+探索する。実車相当とsolver reverse-onlyでは従来のfail-closedを維持する。
+検索marginは方向推定専用でありcollision footprintを縮小しない。候補は`SUSPECT_STUCK`、
+AWSIM補正待機、停止確認、clearance待機では毎周期再評価する。ただしAWSIM補正待機を抜けた後の
+Reverseという方向は別latchで保持し、clearance確認中にForwardへ変更しない。具体的なprimitiveと
+操舵値は`SHIFT_TO_REVERSE` / `WAIT_REVERSE_REPORT` / `REVERSE_MANEUVER` / `FORWARD_MANEUVER`へ
+到達した時点でepisodeへ固定する。固定後は方向と操舵符号を変更しない。Reverse Left / Rightは
+選択したsigned steering angleをepisodeへ固定して実commandへ渡し、
 選択rolloutの横変位分だけV2X corridorを拡張する。
 
 AWSIM補正待機中にpose / contactが変わるため、`STOP_AND_CONFIRM`後は待機前の候補を破棄し、
-現在snapshotをbaselineとして候補を再選択する。現在map footprintがclearならwall分類にかかわらず
-static swept rolloutを評価する。通常はReverseを優先するが、fresh / completeなV2Xで
-Reverse corridorだけが後続車に塞がれた場合は、Forward Straight / Left / Rightのうちstatic
-rolloutとforward corridorがclearな候補を評価し、終端の絶対heading errorを最も減らす候補へ
-最大0.6 mのForwardCreepを切り替える。同値ではStraightを優先し、選択したLeft / Rightの
-操舵符号を実commandへ渡す。前進で距離が増え続ける後方車は
+現在snapshotをbaselineとして候補を再選択する。待機時間は2025 AWSIM dev3向けに0.30秒、
+停止確認は0.10秒とする。現在map footprintがclearならwall分類にかかわらずstatic swept rolloutを
+評価する。fresh / completeなV2XでReverse corridorが後続車に塞がれた場合は停止して同じReverse方向の
+clearanceを待つ。非協調episodeでReverse復帰自体が明示的に失敗した後だけ、Forward Straight /
+Left / Rightのうちstatic rolloutとforward corridorがclearな候補を評価し、終端の絶対heading errorを
+最も減らす候補へ最大0.6 mのForwardCreepを切り替える。同値ではStraightを優先し、選択したLeft /
+Rightの操舵符号を実commandへ渡す。前進で距離が増え続ける後方車は
 forward corridorの新規衝突対象から外す一方、前方、横並び、予測中に前方へ入る車両はrejectする。
 候補をepisodeへ固定した後は方向を途中変更しない。
 
@@ -535,8 +557,9 @@ D2が最後尾だったが、従来V2X矩形は自車前端1.49 m、margin 0.05 
 停止列では静的mapが選択した実rolloutの全姿勢について、向き付きfootprintと膨張他車円の
 signed clearanceを評価する。初期から保守円が重なる場合は、全sampleで重なりが悪化せず、
 rollout終端で有意に改善する場合だけ分離操作として許可する。前方車から離れる最後尾は進めるが、
-後方車へ近づく車両、新規重なりを生む旋回、改善しない操作は引き続きblockする。他車速度が
-`coordinated_stop_front_speed_mps`を超える場合は従来のmoving prediction corridorを維持する。
+後方車へ近づく車両、新規重なりを生む旋回、改善しない操作は引き続きblockする。選択済みrolloutが
+ある場合は他車速度によらず、他車の速度予測を含むrollout signed clearanceと単調分離条件を使う。
+このため0.2 m/s境界で停止車用判定と粗いmoving corridorが切り替わる不連続を作らない。
 V2X不完全・不正速度・position jumpもfail closedのままである。再現D2の右旋回0.40 mを含む
 `recovery_footprint` 31件とpackage buildは成功した。`make dev3` run
 `output/20260718-181438`では、最後尾D2が9 step、合計2.055 m後退し、LowSpeedRejoinから
@@ -604,6 +627,18 @@ D1がMPC rejoinへ入ったものの他車と物理的に噛んで実速度0.001
 
 gear publisherはReliable / KeepLast(1) / Volatileであり、TransientLocalは古いREVERSEの
 late-join replayを避けるため使用しない。
+
+`output/20260721-184659`の3車停止では、D1が`maneuver_direction_unknown`、D2が
+`clearance_wait_timed_out`、D3が`escape_not_confirmed`（実移動1.947 m / 目標2.0 m）で
+それぞれSafeStopへ入り、`aggressive_sim_recovery_enabled=false`のため永久停止した。
+dev3の競争シミュレーションに限定して同設定を有効化し、回復可能なSafeStopは再試行する。ただし
+`clearance_wait_timed_out`は、同じV2X閉塞が残る間はSafeStopのまま待ち、clearanceが安定確認された後だけ
+再評価する。escape距離には停止reserveと離散計測を吸収する0.10 m許容を設けるが、現在footprintの
+clear確認は省略しない。さらにcollision hint、前方車、前進intent、停止速度が同時に成立した場合だけ、
+通常のFollow / SafetyBrake由来`deliberate_stop`をRecovery検出から除外しない。このoverrideは
+`simulation_only: true`かつ明示設定時だけ有効で、通常のno-progress時間、static/V2X clearance、
+距離・時間・試行回数の上限は維持する。これらは2025 AWSIM dev3向け暫定修正であり、実車設定や
+2026公式仕様ではない。
 
 運営チャットの回答は、技術的実装を可としつつ、低速・短時間・後方clearな
 スタック復帰に限定し、戦略的な後退を避けるよう案内している。本実装の0.8 m、2.0 s、
@@ -818,6 +853,9 @@ MPC の config ファイル: `multi_purpose_mpc_ros/config/config.yaml`
 | `mpc.steering_tire_angle_gain_var` | `1.0` | 2025 AWSIMのdev3でモデル/実指令一致を確認。実機値と2026公式値は未確定 |
 | `mpc.state_prediction_delay_sec` | `0.125` | EKF補正後の自己位置を速度・ヨーレートで先行予測する時間 [s]。`0.0` で無効 |
 | `mpc.state_prediction_simulation_only` | `true` | `true` のとき明示的なsimulation launchでのみMPC初期状態予測を有効化 |
+| `mpc.waypoint_local_association_enabled` | `true` | 前回tracking WP近傍の連続探索を有効化。`false`は全経路最近傍へ戻す |
+| `mpc.waypoint_local_lookbehind_m` / `mpc.waypoint_local_lookahead_m` | `8.0` / `30.0` | 前回WPから局所探索する後方／前方経路距離 [m] |
+| `mpc.waypoint_local_lost_distance_m` | `4.0` | 局所候補がこれより遠い場合だけ全経路で再捕捉 [m] |
 | `mpc.wp_id_low_offset` | `1` | 低速時の入力参照 preview offset。整数 `0..2`。状態・制約の追従 waypoint は変更しない |
 | `mpc.wp_id_low_speed` | `15.0` | 低速判定閾値。値は km/h、`0.0` なら無効 |
 | `mpc.wp_id_offset` | `2` | 通常時の入力参照 preview offset。整数 `0..2`。早期減速と同方向の早期切り増しにだけ適用する |
@@ -1245,6 +1283,8 @@ mpc:
   v2x_low_speed_avoidance_lookahead_distance: 18.0
   v2x_low_speed_avoidance_velocity: 1.5
   v2x_low_speed_avoidance_shift_velocity: 1.0
+  v2x_low_speed_avoidance_pass_control_velocity: 1.0
+  v2x_low_speed_avoidance_rejoin_control_velocity: 1.0
   v2x_low_speed_avoidance_shift_lateral_gain: 0.4
   v2x_low_speed_avoidance_shift_heading_gain: 1.3
   v2x_low_speed_avoidance_shift_lateral_tolerance: 0.4
@@ -1276,10 +1316,12 @@ mpc:
 - `v2x_front_risk_curve_limit_enabled=true` の場合、曲率ガード中だけ required decel ベースの速度上限を追加する。直線の競り合いでは `BrakePrepare` / `AvoidCandidate` の速度制限を使わず、ヘアピンなど先行車が急減速する区間だけ `v2x_front_risk_curve_limit_decel` を前提に追突しない相対速度へ落とす。`v2x_front_risk_curve_limit_required_decel` は発火閾値、`v2x_front_risk_curve_limit_speed_margin` は前走車速度に足す余裕速度である。
 - レース中に譲りすぎる場合は、距離/TTC ベースの `v2x_front_decel_guard_enabled` を `false` にし、required decel ベースの `v2x_front_risk_arbitration_enabled=true` へ切り替える。さらに `v2x_front_risk_brake_prepare_limit_enabled=false` と `v2x_front_risk_avoid_candidate_limit_enabled=false` にすると、通常の競り合いでは速度を落とさず、EmergencyBrake だけを残す。
 - `Overtake`: 低曲率かつ十分な gap がある場合だけ gap planner を許可する。`v2x_overtake_guard_enabled=true` の場合は、gap 幅だけでなく、連続した gap 点数、gap までの準備距離、前方車との距離を追加確認してから Overtake に入る。`v2x_overtake_guard_reachable_gap_enabled=true` の場合は、最初に使える gap までの距離を現在速度から時間へ変換し、`2 * abs(target_ey - current_ey) / t^2` で必要横加速度を近似する。`v2x_overtake_guard_min_gap_time` 未満で現れる gap、または `v2x_overtake_guard_max_lateral_accel` を超える gap は Overtake 候補から外す。`v2x_overtake_guard_max_lateral_shift` は絶対横移動量の追加上限で、`0.0` の場合は無効である。早めに追い越し準備へ入るほど総横移動量は大きく見えるため、通常は `0.0` にして時間込みの lateral accel guard を優先する。これにより、通れない側へ一瞬振ってから反対側へ戻るような近距離 gap 飛び込みや、高速度では横移動が間に合わない gap へ突っ込む挙動を Follow / SafetyBrake 側へ倒す。`v2x_overtake_forbidden_curve_lookahead_distance` を指定すると、MPC horizon `N` より先の曲率まで見て overtake forbidden を立てるため、ヘアピン手前から横攻めを止められる。`v2x_overtake_gap_lookahead_distance` を指定すると、追い越し可否判定と Overtake 中の gap planner だけを MPC horizon より先まで伸ばして評価する。前方検出距離が MPC horizon より長い場合でも、低速前走車の先にある通過側 gap を早めに見つけられる。`v2x_overtake_target_ramp_enabled=true` では、長い lookahead 上で見つけた最初の追い越し target へ、現MPC horizon の先頭側から `v2x_overtake_target_ramp_ratio` の比率で target_ey を立ち上げる。これにより、前方車がまだ10点 horizon内に入っていない段階でも横方向の意思をMPCへ渡せる。
-- `v2x_overtake_guard_min_front_distance` は新規追い越しの開始閾値である。すでに `Overtake` へ入った車両には `v2x_overtake_continue_min_front_distance` を使い、開始時専用の `v2x_overtake_guard_min_prepare_distance` は再適用しない。gap連続点数とgap timeも入口の`v2x_overtake_guard_min_gap_points` / `v2x_overtake_guard_min_gap_time`から、継続用の`v2x_overtake_continue_min_gap_points` / `v2x_overtake_continue_min_gap_time`へ切り替えられる。継続用キー省略時は入口値を使う。`v2x_overtake_active_gap_loss_hold_sec`が0より大きい場合、locked ShiftOut / Pass中のgap width、gap time、reachable gap欠落だけを、最後に有効gapを確認した時刻から指定秒数だけholdする。hold自身では期限を延長せず、front distance、横加速度、反対側gap、明示禁止WP、cooldown、EmergencyBrake、target position jumpは緩和しない。現行dev3の入口/継続前方距離4.0 m / 1.8 m、連続点2 / 1、gap time 0.5 s / 0.3 s、hold 1.0 sは2025 AWSIM向けの攻めたローカル暫定値である。`output/20260721-102131`ではWP61からWP63まで約0.9秒だけ選択側gapが欠落し、旧0.5秒holdが切れて`ShiftOut -> Recovery`となったため、この実測区間をbridgeする値へ変更した。
+- `v2x_overtake_guard_min_front_distance` は新規追い越しの開始閾値である。すでに `Overtake` へ入った車両には `v2x_overtake_continue_min_front_distance` を使い、開始時専用の `v2x_overtake_guard_min_prepare_distance` は再適用しない。gap連続点数とgap timeも入口の`v2x_overtake_guard_min_gap_points` / `v2x_overtake_guard_min_gap_time`から、継続用の`v2x_overtake_continue_min_gap_points` / `v2x_overtake_continue_min_gap_time`へ切り替えられる。継続用キー省略時は入口値を使う。`v2x_overtake_active_gap_loss_hold_sec`が0より大きい場合、locked ShiftOut / Pass中のgap width、gap time、reachable gap欠落だけを、最後に有効gapを確認した時刻から指定秒数だけholdする。hold自身では期限を延長せず、front distance、横加速度、反対側gap、明示禁止WP、cooldown、EmergencyBrake、target position jumpは緩和しない。現行dev3の入口/継続前方距離5.0 m / 1.8 m、連続点2 / 1、gap time 0.5 s / 0.3 s、hold 1.0 sは2025 AWSIM向けの攻めたローカル暫定値である。`output/20260721-102131`ではWP61からWP63まで約0.9秒だけ選択側gapが欠落し、旧0.5秒holdが切れて`ShiftOut -> Recovery`となったため、この実測区間をbridgeする値へ変更した。
 - `v2x_overtake_line_enabled=true` の場合、通常 `Overtake` 中の横参照を `ShiftOut` / `Pass` / `Return` / `Recovery` の内部フェーズで生成する。ShiftOut / Passでは明示lineを横計画の唯一のownerとし、legacy side targetとgap plannerの横目標を重ねない。pass sideと安定した対象vehicle IDは追い越し開始時にlockし、phase開始からの累積走行距離とhorizon距離を使った`smoothstep`で横移動するため、制御周期ごとにrampが自車位置から再開しない。Passの横目標は固定offsetだけでなくlocked targetの共通コース横位置を基準に選択側へ置く。ShiftOutからPassへは`v2x_overtake_line_shift_distance`の走行と、wall clearanceを反映した横目標への収束を両方確認して移行する。Pass中の前後重なり解除は、対象と自車を同じreference pathへ射影した横差で判定し、一度成立したらlatchする。latch後は同一target、同一pass side、position jumpなしを満たす間をcommitted Passとし、入口用のgap幅・gap time・到達横加速度を再適用して中断しない。hairpin中に対象がfront/side分類から一時的に外れても同じlineを維持するが、明示禁止WP、curve実行許可、EmergencyBrake、target continuity、solver/odometry guardと`lb/ub`によるwall clipは緩和しない。1周期のfront/side欠落ではReturnへ入らず、`v2x_overtake_target_hold_sec`までPassを保持する。対象が`v2x_overtake_line_return_clear_distance`以上後方にあり、その観測が`v2x_overtake_clear_confirm_sec`継続して初めてReturnへ入る。Return初期に同一ID・同一sideを再取得した場合は、時間、復帰進捗、gap、curve実行許可を再確認してPassへ戻せる。不明ID、position jump、timeoutはRecoveryへ倒す。targetは`lb/ub`から`v2x_overtake_line_min_wall_clearance`だけ内側へclipし、必要横加速度が`v2x_overtake_line_max_lateral_accel`を超える場合はtarget変化を抑える。ShiftOut / Return / Recovery の進捗距離は周期ごとの前進速度を積算し、時刻巻き戻り、非有限値、`v2x_overtake_recovery_max_observation_gap_sec`を超える観測間隔は積算しない。Recoveryは`v2x_follow_velocity`を流用せず、専用flagが有効な場合だけ`v2x_overtake_recovery_velocity`を固定上限として使う。現在速度との`min`は取らないため、停止後も再発進可能な速度参照を維持する。`v2x_overtake_recovery_stall_speed`未満が`v2x_overtake_recovery_stall_timeout_sec`続くか、Recovery全体が`v2x_overtake_recovery_timeout_sec`を超えた場合はline stateを解除する。`LowSpeedAvoidance`と`SafetyBrake`は常に優先する。現行dev3設定はshift 4.0 m、Return 6.0 m、target bias 1.0、最大横加速度6.0 m/s2、rear-clear 2.0 m、確認0.10 sであり、2025 AWSIMシミュレーション予選向けの攻めた暫定値である。
+- OvertakeLineの対象車横分離には`v2x_overtake_line_min_target_separation`、汎用front-brake除外には`v2x_overtake_pass_front_overlap_lateral_clearance`を使い、同じ値を共用しない。現行dev3はline目標を0.75 mまで攻める一方、前後重なり中のbrake除外は車幅相当の1.15 mを要求する。ShiftOut最大closing speedは1.2 m/s、横分離latch前のPassは0.5 m/sとし、入口前方距離を5.0 mへ広げる。これにより横へ出始めただけで前方衝突guardを外す構造を避けつつ、line自体の攻め幅は維持する。旧キーしかない設定ではline最小分離へ旧値をfallbackし、既存yamlとの互換性を保つ。これらの値はChatGPT Proレビューを現行実装・`output/20260721-184659`へ照合して採用した2025 AWSIM dev3向け暫定値であり、実車値ではない。
 - ShiftOut / Passで`v2x_overtake_solver_failure_abort_cycles`連続failureへ到達するか、Recovery中にsolver fallbackへ入った場合はsolver失敗episodeとして扱う。Recovery中のfallback操舵は`steer_rate_max`以内で中立へ戻しながら既存`a_min`で減速する。episode終了後は、`v2x_overtake_solver_cooldown_sec`経過と`v2x_overtake_solver_recovery_success_cycles`回の連続正常解を両方確認するまで、OvertakeLine、legacy side target、追い越しgap plannerを再開しない。gate中の1回のfailureで成功カウントは0へ戻る。2026-07-18の`output/20260718-001009`では、D2がWP86の8連続failureから復旧し、2秒と20連続正常解を確認してgateを解除した後、WP220まで走行した。Recovery中立復帰は対象unit testで確認したが、このrunではRecovery直後にsolverが復旧したため実command未観測である。値は2025 AWSIM向け暫定値である。
 - 通常MPCのsolver failureでは、`solver_failure_steering_hold_cycles`以下の単発failureだけ直前操舵を保持し、その次の周期から`steer_rate_max`以内で操舵を0へ戻す。既定4周期は40 Hzで0.1秒の2025 AWSIM向け暫定値である。OvertakeLine Recovery / solver re-entry gateは待機せず中立復帰する。`output/20260718-003725`のD3では、連続failure時の操舵が1周期目`0.559 rad`、5周期目`0.529 rad`、10周期目`0.379 rad`、20周期目`0.079 rad`、30周期目`0.000 rad`となり、旧runの長時間固定操舵を解消した。一方、failure開始時に`e_psi=-1.808 rad`まで姿勢がずれており、Stuck Recoveryが`forward_duration_limit`でSafeStopしてD1/D2も後続停止したため、この変更は安全fallbackとして採用するがdev3デッドロックの解消とは扱わない。詳細は`.steering/20260718-normal-mpc-fallback-neutralization/results.md`に記録する。
+- `solver_failure_crawl_enabled=true`では、simulation time、control enabled、V2X `Cruise`、front vehicleなしをすべて満たす通常MPC failureに限り、減速fallbackのゼロ速度化を上位arbitrationで置き換える。速度は`min(solver_failure_crawl_speed_mps, effective_v_max)`、操舵は既存の低速横偏差・heading feedbackを`e_y=0`へ向けて使用する。SafetyBrake、Follow、Overtake、LowSpeedAvoidance、front検出中、実時間動作では従来の減速fallbackを維持する。停止速度以下でsolver fallbackが継続する場合は、AWSIM collision correctionとwaypoint再関連付けによる離散pose/progress変化を走行再開とは扱わず、既存の2–3秒stuck recovery gateを進める。現行1.0 m/sは2025 AWSIM dev3向け暫定値である。
 - OSQP wrapperはvalidation、CSC allocation、setup、solve、status、solution、constraint checkを失敗stageとして区別する。solver infoが得られる失敗ではstatus文字列、status value、iteration、primal residual、dual residualを`MPC control failed`のreasonへ含める。上位層で一律`OSQP failed`だけに丸めず、infeasible、最大iteration、数値誤差、post-solve制約違反を次runで切り分けられるようにする。
 - V2X behavior、gap planner、OvertakeLineが現速度より低い動的速度上限を要求した場合、全horizonへ最終上限を即時適用しない。現速度から`abs(a_min) * Ts`ずつ下げるreachable upper-bound envelopeを速度参照と上限制約の両方へ適用する。これにより`SafetyBrake=0 m/s`や`Overtake -> Follow=3 m/s`でも既存`a_min`を超える減速を要求せず、最終上限とpublished acceleration clampは維持する。現行`a_min=-1.35 m/s^2`、40 Hzは2025 AWSIM向け暫定値である。
 - `v2x_overtake_try_both_sides=true`では、追い越し開始前に第一候補が不成立なら反対側を同じ条件で再評価する。ShiftOut以降はlocked側だけを評価し、反対側だけが空いても即side flipしない。通常追い越しの候補生成幅は`max(v2x_overtake_min_gap_width, v2x_overtake_guard_min_gap_width)`を使うため、共通`gap_min_width`が後段guardより大きくてもguard設定を前段で無効化しない。vehicle-vehicle/multi-front policyは引き続き適用する。
@@ -1295,7 +1337,7 @@ mpc:
 - `v2x_overtake_active_hard_curve_completion_enabled=true` は、新規追い越しのhard completion guardを変更せず、OvertakeLineがすでに`Pass`へ入ったlocked targetだけをhard境界残距離で再評価するdev3設定である。現在速度と`a_max`から境界までの到達可能速度を計算し、`v2x_overtake_active_hard_curve_rear_clear_distance`だけ対象を後方へ抜くためのrequired distanceが、境界距離から`v2x_overtake_active_hard_curve_buffer_distance`を引いたavailable distance以下なら継続する。共通コース横差で前後重なり解除をlatch済みの場合も、すでに成立した横クリアランスを失わないよう継続する。ShiftOut/Return/Recovery、新規pass、明示禁止WP、curve cooldown、EmergencyBrakeでは使わず、locked side、wall clearance、SafetyBrakeは維持する。現行0.5 m / 0.5 mは2025 AWSIMシミュレーション予選だけを対象にした攻めた値であり、実車向け値ではない。設定省略時の既定は`false`、現行dev3 configは`true`である。`output/20260719-223908`のD2ではPass中に`hard_continue=1`を維持した。
 - `v2x_side_overtake_entry_rear_tolerance` は、frontではなくside候補から新規追い越しへ入るときのコース進捗後方許容量である。対象の共通コース相対進捗が`-tolerance`未満なら、すでに後方へ抜いた車両を追うShiftOutを開始しない。前方車がなく、この後方side候補しか存在しない場合は`Follow`ではなく`Cruise`とし、後方車へ合わせるV2X縦横制御を生成しない。継続中のlocked Passには適用しない。現行dev3値は0.5 mである。`output/20260721-102131/d3`ではスタート直後から`front_distance=inf`なのに後方side候補だけで`Follow`へ断続的に遷移していたため修正した。
 - `v2x_overtake_front_velocity_limit_enabled=true` の場合、`Overtake` 中でも前走車の required decel / front decel guard 由来の速度上限を掛ける。安全寄りだが、前走車速度へ引っ張られて追い越しが成立しない場合は `false` にする。`false`でも`EmergencyBrake`と停止・低速前車のinside stopping distanceはOvertake判定より先に評価し、SafetyBrakeを維持する。moving frontの非Emergencyなinside stopping distanceは全停止にせず、Overtake stage speedまたはFollow/front-riskの相対速度capへ渡す。
-- `LowSpeedAvoidance`: 近距離の低速前方車両に対して通過可能な側がある場合、`v2x_low_speed_avoidance_velocity`を上限として徐行回避する。開始条件では`v2x_low_speed_avoidance_max_front_speed`以下のV2X推定速度を低速車両として扱う。local path開始時は通常MPCへ成立しない横移動を強制せず、`v2x_low_speed_avoidance_shift_velocity`と横/heading feedback gainによるbounded直接操舵で選択回廊へ入る。開始後にFSM表示がSafetyBrakeへ変わっても、このlatchは停止車列clearanceが残る間は維持される。これはgate2のような停止車列回避で、車列途中にMPCへ戻ってOSQP failureと停止を起こさないための2025 AWSIM向け暫定制御である。現行dev3 configでは、停止車両の通過に約12〜15秒を要した`1.0 m/s`から`3.0 m/s`へ直接制御速度を上げて通過時間を短縮する。
+- `LowSpeedAvoidance`: 近距離の低速前方車両に対して通過可能な側がある場合、`v2x_low_speed_avoidance_velocity`を上限として徐行回避する。開始条件では`v2x_low_speed_avoidance_max_front_speed`以下のV2X推定速度を低速車両として扱う。local path開始時は通常MPCへ成立しない横移動を強制せず、横/heading feedback gainによるbounded直接操舵で選択回廊へ入る。直接操舵の速度は、回廊へ入るShift、車列を抜くPass、基準経路へ戻るRejoinに分け、現行dev3ではそれぞれ `v2x_low_speed_avoidance_shift_velocity=3.0 m/s`、`v2x_low_speed_avoidance_pass_control_velocity=6.0 m/s`、`v2x_low_speed_avoidance_rejoin_control_velocity=4.0 m/s` とする。開始後にFSM表示がSafetyBrakeへ変わっても、このlatchと直接操舵ownershipは停止車列clearanceが消え、再合流後のMPC probeが成功するまで維持する。これはgate2のような停止車列回避で、車列途中にMPCへ戻ってOSQP failureと停止を起こさず、Shift用の低速値のまま通過し続ける遅延も避けるための2025 AWSIM向け暫定制御である。
 - 直接操舵latchは関連車両列が`v2x_low_speed_avoidance_shift_clear_hold_sec`だけclearになると、開始時のpass targetを待ち続けず、現在のpath constraint内で`e_y=0`に最も近い再合流targetへ切り替える。再合流中に関連車両を再検出した場合は保存したpass targetを復元する。再合流姿勢の成立後もMPCをprobe solveし、成功した周期だけ所有権を渡す。失敗時は通常のsolver failure counterを増やさず直接再合流制御を継続する。これは`output/20260720-164126`のD2で、停止車両rear-clear後も古い`target_ey=-2.61`が残ってlatchが63.4秒継続し、解除直後にOSQPが25周期失敗した事象への修正である。
 - `LowSpeedAvoidance`確定中に実速度が`v2x_low_speed_avoidance_stall_speed`以下で`v2x_low_speed_avoidance_stall_timeout_sec`継続した場合は、局所回避targetを解除し、dangerならSafetyBrake、front/sideありならFollow、それ以外はCruiseへ戻す。`v2x_low_speed_avoidance_stall_cooldown_sec`中は同じ回避への即再進入を抑制する。時刻逆行、非有限値、`v2x_low_speed_avoidance_stall_max_observation_gap_sec`超過では継続時間を加算しない。現行0.15 m/s、1.5 s、3.0 s、0.2 sは2025 AWSIM向けローカル暫定値であり、2026公式値ではない。
 - 低速回避では `v2x_low_speed_pass_side` で通過側を `auto` / `left` / `right` から選べる。`right` は reference path 座標系の負の lateral 側、`left` は正の lateral 側である。`auto` の場合は最初に選んだ側を低速回避中の side lock として使う。configured side に通過可能 gap がない場合は逆側へ無理に振らず、Follow / SafetyBrake 側へ倒す。

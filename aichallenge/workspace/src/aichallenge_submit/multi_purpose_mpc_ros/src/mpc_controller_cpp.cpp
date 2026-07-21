@@ -10,6 +10,7 @@
 #include <multi_purpose_mpc_ros/awsim_boost_start_dash.hpp>
 #include <multi_purpose_mpc_ros/mpc_state_prediction.hpp>
 #include <multi_purpose_mpc_ros/mpc_velocity_limit.hpp>
+#include <multi_purpose_mpc_ros/mpc_waypoint_association.hpp>
 #include <multi_purpose_mpc_ros/mpc_waypoint_preview.hpp>
 #include <multi_purpose_mpc_ros/path_core.hpp>
 #include <multi_purpose_mpc_ros/recovery_footprint.hpp>
@@ -96,6 +97,7 @@ namespace path_core = ::multi_purpose_mpc_ros::path_core;
 namespace awsim_boost = ::multi_purpose_mpc_ros::awsim_boost;
 namespace mpc_state_prediction = ::multi_purpose_mpc_ros::mpc_state_prediction;
 namespace mpc_velocity_limit = ::multi_purpose_mpc_ros::mpc_velocity_limit;
+namespace mpc_waypoint_association = ::multi_purpose_mpc_ros::mpc_waypoint_association;
 namespace mpc_waypoint_preview = ::multi_purpose_mpc_ros::mpc_waypoint_preview;
 namespace overtake_core = ::multi_purpose_mpc_ros::v2x_overtake_core;
 namespace recovery_footprint = ::multi_purpose_mpc_ros::recovery_footprint;
@@ -1115,15 +1117,18 @@ struct BicycleModel
   BicycleModel(
     ReferencePath * ref_path, const double length_in, const double width_in,
     const double safety_margin_scale_in, const double Ts_in,
-    const double min_linearization_speed_mps_in)
+    const double min_linearization_speed_mps_in,
+    const mpc_waypoint_association::Config & waypoint_association_config_in)
   : length(length_in),
     width(width_in),
     safety_margin_scale(std::max(0.0, safety_margin_scale_in)),
     safety_margin(compute_safety_margin()),
     reference_path(ref_path),
     Ts(Ts_in),
-    min_linearization_speed_mps(min_linearization_speed_mps_in)
+    min_linearization_speed_mps(min_linearization_speed_mps_in),
+    waypoint_association_config(waypoint_association_config_in)
   {
+    rebuild_waypoint_association_path();
     current_waypoint = &reference_path->waypoints.at(wp_id);
     temporal_state = s2t(*current_waypoint, spatial_state);
   }
@@ -1209,19 +1214,40 @@ struct BicycleModel
     return reference_path->segment_lengths.size();
   }
 
-  int get_closest_waypoint(const double x, const double y) const
+  void rebuild_waypoint_association_path()
   {
-    double best = std::numeric_limits<double>::infinity();
-    int best_id = 0;
-    for (int i = 0; i < reference_path->n_waypoints; ++i) {
-      const auto & wp = reference_path->waypoints[i];
-      const double d = std::hypot(wp.x - x, wp.y - y);
-      if (d < best) {
-        best = d;
-        best_id = i;
-      }
+    waypoint_association_path.clear();
+    waypoint_association_path.reserve(reference_path->waypoints.size());
+    for (const auto & waypoint : reference_path->waypoints) {
+      waypoint_association_path.push_back(
+        mpc_waypoint_association::Waypoint{waypoint.x, waypoint.y, waypoint.psi});
     }
-    return best_id;
+    waypoint_association_initialized = false;
+  }
+
+  int get_closest_waypoint(
+    const double x, const double y, const double psi,
+    const double speed_mps, const double dt_sec, const bool force_global)
+  {
+    const bool local_association_was_initialized = waypoint_association_initialized;
+    const auto association = mpc_waypoint_association::associate(
+      waypoint_association_path,
+      mpc_waypoint_association::Request{
+        x, y, psi, std::max(0.0, speed_mps), std::max(0.0, dt_sec), wp_id,
+        waypoint_association_initialized && !force_global, reference_path->circular},
+      waypoint_association_config);
+    if (
+      waypoint_association_config.enabled && local_association_was_initialized &&
+      !force_global && association.used_global_search)
+    {
+      RCLCPP_WARN(
+        rclcpp::get_logger("mpc_controller"),
+        "Waypoint local association lost; global reacquisition selected WP%d at %.2f m",
+        association.index, association.distance_m);
+    }
+    waypoint_association_initialized = true;
+    last_waypoint_association_used_global = association.used_global_search;
+    return association.index;
   }
 
   double get_s_at_waypoint(const int id) const
@@ -1236,17 +1262,22 @@ struct BicycleModel
   void update_reference_path(ReferencePath * ref_path)
   {
     reference_path = ref_path;
-    wp_id = get_closest_waypoint(temporal_state.x, temporal_state.y);
+    rebuild_waypoint_association_path();
+    wp_id = get_closest_waypoint(
+      temporal_state.x, temporal_state.y, temporal_state.psi, 0.0, Ts, true);
     s = get_s_at_waypoint(wp_id);
     current_waypoint = &reference_path->waypoints.at(wp_id);
   }
 
-  void update_states(const double x, const double y, const double psi)
+  void update_states(
+    const double x, const double y, const double psi,
+    const double speed_mps, const double dt_sec)
   {
     temporal_state.x = x;
     temporal_state.y = y;
     temporal_state.psi = psi;
-    wp_id = get_closest_waypoint(temporal_state.x, temporal_state.y);
+    wp_id = get_closest_waypoint(
+      temporal_state.x, temporal_state.y, temporal_state.psi, speed_mps, dt_sec, false);
     s = get_s_at_waypoint(wp_id);
     current_waypoint = &reference_path->waypoints.at(wp_id);
   }
@@ -1281,6 +1312,10 @@ struct BicycleModel
   double s{0.0};
   double Ts{};
   double min_linearization_speed_mps{0.5};
+  mpc_waypoint_association::Config waypoint_association_config;
+  std::vector<mpc_waypoint_association::Waypoint> waypoint_association_path;
+  bool waypoint_association_initialized{false};
+  bool last_waypoint_association_used_global{true};
   int wp_id{0};
   Waypoint * current_waypoint{};
   SimpleSpatialState spatial_state;
@@ -1451,6 +1486,7 @@ struct V2XBehaviorConfig
   double overtake_shiftout_max_closing_speed{1.0};
   double overtake_pass_unlatched_max_closing_speed{0.5};
   double overtake_shiftout_adaptive_min_time_sec{0.5};
+  double overtake_line_min_target_separation{0.0};
   double overtake_pass_front_overlap_lateral_clearance{0.0};
   bool overtake_completion_guard_enabled{false};
   double overtake_completion_hard_curvature{0.12};
@@ -1476,6 +1512,8 @@ struct V2XBehaviorConfig
   double low_speed_avoidance_lookahead_distance{18.0};
   double low_speed_avoidance_velocity{2.0};
   double low_speed_avoidance_shift_velocity{1.0};
+  double low_speed_avoidance_pass_control_velocity{2.0};
+  double low_speed_avoidance_rejoin_control_velocity{1.5};
   double low_speed_avoidance_shift_lateral_gain{0.4};
   double low_speed_avoidance_shift_heading_gain{1.3};
   double low_speed_avoidance_shift_lateral_tolerance{0.4};
@@ -1959,6 +1997,34 @@ struct V2XGapPlanner
            last_message_vehicle_count_ == expected_vehicle_count &&
            !last_message_has_empty_id_ && !last_message_has_duplicate_id_ &&
            !last_message_has_invalid_sample_;
+  }
+
+  bool has_complete_tracked_set(
+    const double now_sec, const std::size_t expected_vehicle_count)
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!track_recovery_completeness_) {
+      return false;
+    }
+    std::size_t fresh_vehicle_count = 0U;
+    for (const auto & item : vehicles_) {
+      const auto & tracked = item.second;
+      const double age_sec = now_sec - tracked.receipt_sec;
+      if (!tracked.has_sample || !std::isfinite(age_sec) || age_sec < 0.0 ||
+        age_sec > cfg.timeout_sec)
+      {
+        continue;
+      }
+      if (
+        tracked.id.empty() || tracked.position_jump || tracked.invalid_velocity ||
+        !std::isfinite(tracked.x) || !std::isfinite(tracked.y) ||
+        !std::isfinite(tracked.vx) || !std::isfinite(tracked.vy))
+      {
+        return false;
+      }
+      ++fresh_vehicle_count;
+    }
+    return fresh_vehicle_count == expected_vehicle_count;
   }
 
   void reset_recovery_tracking()
@@ -2920,10 +2986,13 @@ struct MpcConfig
   double steer_rate_max{};
   double control_rate{};
   int solver_failure_steering_hold_cycles{4};
+  bool solver_failure_crawl_enabled{false};
+  double solver_failure_crawl_speed_mps{0.0};
   double odom_timeout_sec{0.5};
   double state_prediction_delay_sec{0.0};
   bool state_prediction_simulation_only{true};
   double min_linearization_speed_mps{0.5};
+  mpc_waypoint_association::Config waypoint_association;
   double steering_tire_angle_gain_var{};
   double accel_low_pass_gain{};
   double steer_low_pass_gain{};
@@ -3017,6 +3086,36 @@ struct MPC
     current_speed_mps_ = std::max(0.0, current_speed_mps);
   }
 
+  void set_low_speed_direct_control_phase(
+    const v2x_overtake_core::LowSpeedDirectControlPhase phase)
+  {
+    if (phase != low_speed_direct_control_phase_) {
+      const auto phase_name = [](const v2x_overtake_core::LowSpeedDirectControlPhase value) {
+          switch (value) {
+            case v2x_overtake_core::LowSpeedDirectControlPhase::Shift:
+              return "Shift";
+            case v2x_overtake_core::LowSpeedDirectControlPhase::Pass:
+              return "Pass";
+            case v2x_overtake_core::LowSpeedDirectControlPhase::Rejoin:
+              return "Rejoin";
+          }
+          return "Unknown";
+        };
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"),
+        "Low-speed direct control phase: %s -> %s",
+        phase_name(low_speed_direct_control_phase_), phase_name(phase));
+    }
+    low_speed_direct_control_phase_ = phase;
+    low_speed_shift_velocity_mps_ =
+      v2x_overtake_core::resolve_low_speed_direct_control_velocity(
+      phase,
+      cfg.v2x_behavior.low_speed_avoidance_shift_velocity,
+      cfg.v2x_behavior.low_speed_avoidance_pass_control_velocity,
+      cfg.v2x_behavior.low_speed_avoidance_rejoin_control_velocity,
+      cfg.v_max);
+  }
+
   void set_v2x_race_session_active(const bool active, const double now_sec)
   {
     if (v2x_race_session_active_ == active) {
@@ -3053,6 +3152,8 @@ struct MPC
     low_speed_shift_pass_target_ey_ = 0.0;
     low_speed_shift_target_ey_ = 0.0;
     low_speed_shift_velocity_mps_ = 0.0;
+    low_speed_direct_control_phase_ =
+      v2x_overtake_core::LowSpeedDirectControlPhase::Shift;
     low_speed_shift_last_relevant_vehicle_sec_ = std::numeric_limits<double>::quiet_NaN();
     reset_overtake_line_state(
       now_sec, active ? "AWSIM race session started" : "AWSIM race session inactive");
@@ -4594,6 +4695,8 @@ struct MPC
         if (low_speed_shift_rejoin_active_) {
           low_speed_shift_rejoin_active_ = false;
           low_speed_shift_target_ey_ = low_speed_shift_pass_target_ey_;
+          set_low_speed_direct_control_phase(
+            v2x_overtake_core::LowSpeedDirectControlPhase::Shift);
           low_speed_shift_handoff_deferred_logged_ = false;
           RCLCPP_INFO(
             rclcpp::get_logger("mpc_controller"),
@@ -4616,6 +4719,8 @@ struct MPC
         if (std::isfinite(rejoin_target_ey)) {
           low_speed_shift_rejoin_active_ = true;
           low_speed_shift_target_ey_ = rejoin_target_ey;
+          set_low_speed_direct_control_phase(
+            v2x_overtake_core::LowSpeedDirectControlPhase::Rejoin);
           low_speed_shift_handoff_deferred_logged_ = false;
           RCLCPP_INFO(
             rclcpp::get_logger("mpc_controller"),
@@ -4779,11 +4884,19 @@ struct MPC
       low_speed_shift_target_ey_ = low_speed_shift_pass_target_ey_;
       low_speed_shift_rejoin_active_ = false;
       low_speed_shift_handoff_deferred_logged_ = false;
-      low_speed_shift_velocity_mps_ = std::min(
-        cfg.v_max, std::max(0.0, cfg.v2x_behavior.low_speed_avoidance_shift_velocity));
+      set_low_speed_direct_control_phase(
+        v2x_overtake_core::LowSpeedDirectControlPhase::Shift);
       if (!low_speed_shift_control_was_active_) {
         low_speed_shift_last_relevant_vehicle_sec_ = now_sec;
       }
+    }
+    if (
+      low_speed_shift_control_was_active_ && !low_speed_shift_rejoin_active_ &&
+      use_low_speed_local_path && planner_output.active && planner_output.feasible &&
+      planner_output.pass_corridor_enforced)
+    {
+      set_low_speed_direct_control_phase(
+        v2x_overtake_core::LowSpeedDirectControlPhase::Pass);
     }
 
     const auto overtake_line_output =
@@ -5154,7 +5267,13 @@ struct MPC
     const double steering = clip(
       target_steering, previous_steering - max_steering_step,
       previous_steering + max_steering_step);
-    const double speed = std::max(0.0, low_speed_shift_velocity_mps_);
+    const double speed = v2x_overtake_core::resolve_low_speed_direct_control_velocity(
+      low_speed_direct_control_phase_,
+      cfg.v2x_behavior.low_speed_avoidance_shift_velocity,
+      cfg.v2x_behavior.low_speed_avoidance_pass_control_velocity,
+      cfg.v2x_behavior.low_speed_avoidance_rejoin_control_velocity,
+      cfg.v_max);
+    low_speed_shift_velocity_mps_ = speed;
 
     if (!low_speed_shift_control_was_active_) {
       RCLCPP_INFO(
@@ -5358,6 +5477,8 @@ struct MPC
   bool low_speed_shift_control_was_active_{false};
   bool low_speed_shift_rejoin_active_{false};
   bool low_speed_shift_handoff_deferred_logged_{false};
+  v2x_overtake_core::LowSpeedDirectControlPhase low_speed_direct_control_phase_{
+    v2x_overtake_core::LowSpeedDirectControlPhase::Shift};
   double low_speed_shift_pass_target_ey_{0.0};
   double low_speed_shift_target_ey_{0.0};
   double low_speed_shift_velocity_mps_{0.0};
@@ -5557,7 +5678,7 @@ private:
           pass_side_sign,
           std::max(0.0, cfg.v2x_behavior.overtake_line.lateral_offset),
           overtake_line_state_.target_last_lateral,
-          std::max(0.0, cfg.v2x_behavior.overtake_pass_front_overlap_lateral_clearance)});
+          std::max(0.0, cfg.v2x_behavior.overtake_line_min_target_separation)});
     }
     return 0.0;
   }
@@ -7355,6 +7476,9 @@ struct RefPathConfig
 struct StuckRecoveryAdapterConfig
 {
   stuck_recovery::CoreConfig core;
+  stuck_recovery::FaultRetryConfig fault_retry;
+  bool tracked_v2x_completeness_enabled{false};
+  bool collision_deliberate_stop_override_enabled{false};
   bool domain_enabled_applied{false};
   int domain_enabled_domain{-1};
   // A second, explicit latch keeps reverse actuation unavailable until the AWSIM gear and
@@ -7380,6 +7504,7 @@ struct StuckRecoveryAdapterConfig
   double rear_prediction_margin_sec{0.1};
   double reverse_escape_distance_m{2.0};
   double forward_escape_distance_m{0.30};
+  double escape_confirm_distance_tolerance_m{0.0};
   // Maximum V2X front speed accepted as a stopped vehicle for a decentralized
   // tail-first reverse cascade.
   double coordinated_stop_front_speed_mps{0.20};
@@ -7686,6 +7811,9 @@ Config load_config(const std::string & path)
       out.coordinated_stop_duration_sec = detector["coordinated_stop_duration_sec"] ?
         detector["coordinated_stop_duration_sec"].as<double>() :
         out.coordinated_stop_duration_sec;
+      adapter.collision_deliberate_stop_override_enabled =
+        detector["collision_deliberate_stop_override_enabled"] ?
+        detector["collision_deliberate_stop_override_enabled"].as<bool>() : false;
       adapter.coordinated_stop_front_speed_mps =
         detector["coordinated_stop_front_speed_mps"] ?
         detector["coordinated_stop_front_speed_mps"].as<double>() :
@@ -7718,6 +7846,8 @@ Config load_config(const std::string & path)
       auto & out = core.supervisor;
       out.gear_report_timeout_sec = gear["report_timeout_sec"] ?
         gear["report_timeout_sec"].as<double>() : out.gear_report_timeout_sec;
+      out.stop_speed_mps = gear["stop_speed_mps"] ?
+        gear["stop_speed_mps"].as<double>() : out.stop_speed_mps;
       out.stop_confirm_sec = gear["stop_confirm_sec"] ?
         gear["stop_confirm_sec"].as<double>() : out.stop_confirm_sec;
       out.gear_command_resend_interval_sec = gear["command_resend_interval_sec"] ?
@@ -7745,6 +7875,16 @@ Config load_config(const std::string & path)
       out.aggressive_retry_delay_sec = maneuver["aggressive_retry_delay_sec"] ?
         maneuver["aggressive_retry_delay_sec"].as<double>() :
         out.aggressive_retry_delay_sec;
+      adapter.fault_retry.enabled = maneuver["race_relaxed_fault_retry_enabled"] ?
+        maneuver["race_relaxed_fault_retry_enabled"].as<bool>() : false;
+      adapter.fault_retry.clear_confirm_sec = maneuver["fault_retry_clear_confirm_sec"] ?
+        maneuver["fault_retry_clear_confirm_sec"].as<double>() : 0.5;
+      adapter.fault_retry.max_observation_gap_sec =
+        maneuver["fault_retry_max_observation_gap_sec"] ?
+        maneuver["fault_retry_max_observation_gap_sec"].as<double>() : 0.2;
+      adapter.tracked_v2x_completeness_enabled =
+        maneuver["tracked_v2x_completeness_enabled"] ?
+        maneuver["tracked_v2x_completeness_enabled"].as<bool>() : false;
       out.max_reverse_distance_m = maneuver["max_reverse_distance_m"] ?
         maneuver["max_reverse_distance_m"].as<double>() : out.max_reverse_distance_m;
       out.max_reverse_duration_sec = maneuver["max_reverse_duration_sec"] ?
@@ -7783,6 +7923,10 @@ Config load_config(const std::string & path)
       adapter.forward_escape_distance_m = maneuver["forward_escape_distance_m"] ?
         maneuver["forward_escape_distance_m"].as<double>() :
         adapter.forward_escape_distance_m;
+      adapter.escape_confirm_distance_tolerance_m =
+        maneuver["escape_confirm_distance_tolerance_m"] ?
+        maneuver["escape_confirm_distance_tolerance_m"].as<double>() :
+        adapter.escape_confirm_distance_tolerance_m;
       adapter.solver_reverse_only_heading_error_rad =
         maneuver["solver_reverse_only_heading_error_rad"] ?
         maneuver["solver_reverse_only_heading_error_rad"].as<double>() :
@@ -7935,6 +8079,14 @@ Config load_config(const std::string & path)
       throw std::runtime_error(
               "stuck_recovery aggressive simulation recovery requires simulation_only: true");
     }
+    if (adapter.fault_retry.enabled && !core.simulation_only) {
+      throw std::runtime_error(
+              "stuck_recovery race fault retry requires simulation_only: true");
+    }
+    if (adapter.collision_deliberate_stop_override_enabled && !core.simulation_only) {
+      throw std::runtime_error(
+              "stuck_recovery collision deliberate-stop override requires simulation_only: true");
+    }
     if (adapter.recovery_mpc_enabled && !core.simulation_only) {
       throw std::runtime_error(
               "stuck_recovery recovery_mpc requires simulation_only: true");
@@ -7988,6 +8140,7 @@ Config load_config(const std::string & path)
       !finite_non_negative(adapter.rear_prediction_margin_sec) ||
       !finite_non_negative(adapter.reverse_escape_distance_m) ||
       !finite_non_negative(adapter.forward_escape_distance_m) ||
+      !finite_non_negative(adapter.escape_confirm_distance_tolerance_m) ||
       !finite_non_negative(adapter.coordinated_stop_front_speed_mps) ||
       !std::isfinite(adapter.solver_reverse_only_heading_error_rad) ||
       adapter.solver_reverse_only_heading_error_rad <= 0.0 ||
@@ -8016,6 +8169,9 @@ Config load_config(const std::string & path)
       !finite_non_negative(adapter.rejoin_heading_error_gain) ||
       !finite_non_negative(adapter.rejoin_max_steering_tire_angle_rad) ||
       adapter.rejoin_max_steering_tire_angle_rad >= 1.5707963267948966 ||
+      !finite_non_negative(adapter.fault_retry.clear_confirm_sec) ||
+      !std::isfinite(adapter.fault_retry.max_observation_gap_sec) ||
+      adapter.fault_retry.max_observation_gap_sec <= 0.0 ||
       (adapter.rejoin_feedback_steering_enabled &&
       (adapter.rejoin_max_steering_tire_angle_rad <= 0.0 ||
       (adapter.rejoin_lateral_error_gain_rad_per_m <= 0.0 &&
@@ -8131,6 +8287,12 @@ Config load_config(const std::string & path)
   cfg.mpc.solver_failure_steering_hold_cycles =
     mpc["solver_failure_steering_hold_cycles"] ?
     mpc["solver_failure_steering_hold_cycles"].as<int>() : 4;
+  cfg.mpc.solver_failure_crawl_enabled =
+    mpc["solver_failure_crawl_enabled"] ?
+    mpc["solver_failure_crawl_enabled"].as<bool>() : false;
+  cfg.mpc.solver_failure_crawl_speed_mps =
+    mpc["solver_failure_crawl_speed_mps"] ?
+    mpc["solver_failure_crawl_speed_mps"].as<double>() : 0.0;
   cfg.mpc.steering_tire_angle_gain_var = mpc["steering_tire_angle_gain_var"].as<double>();
   if (!std::isfinite(cfg.mpc.steer_rate_max) || cfg.mpc.steer_rate_max < 0.0) {
     throw std::runtime_error("mpc.steer_rate_max must be finite and non-negative");
@@ -8141,6 +8303,13 @@ Config load_config(const std::string & path)
   if (cfg.mpc.solver_failure_steering_hold_cycles < 0) {
     throw std::runtime_error(
             "mpc.solver_failure_steering_hold_cycles must be non-negative");
+  }
+  if (
+    !std::isfinite(cfg.mpc.solver_failure_crawl_speed_mps) ||
+    cfg.mpc.solver_failure_crawl_speed_mps < 0.0)
+  {
+    throw std::runtime_error(
+            "mpc.solver_failure_crawl_speed_mps must be finite and non-negative");
   }
   if (
     !std::isfinite(cfg.mpc.steering_tire_angle_gain_var) ||
@@ -8175,6 +8344,42 @@ Config load_config(const std::string & path)
     cfg.mpc.min_linearization_speed_mps <= 0.0)
   {
     throw std::runtime_error("mpc.min_linearization_speed_mps must be finite and positive");
+  }
+  auto & waypoint_association = cfg.mpc.waypoint_association;
+  waypoint_association.enabled = mpc["waypoint_local_association_enabled"] ?
+    mpc["waypoint_local_association_enabled"].as<bool>() : false;
+  waypoint_association.local_lookbehind_m = mpc["waypoint_local_lookbehind_m"] ?
+    mpc["waypoint_local_lookbehind_m"].as<double>() : 8.0;
+  waypoint_association.local_lookahead_m = mpc["waypoint_local_lookahead_m"] ?
+    mpc["waypoint_local_lookahead_m"].as<double>() : 30.0;
+  waypoint_association.lost_distance_m = mpc["waypoint_local_lost_distance_m"] ?
+    mpc["waypoint_local_lost_distance_m"].as<double>() : 4.0;
+  waypoint_association.heading_weight_m_per_rad = mpc["waypoint_heading_weight_m_per_rad"] ?
+    mpc["waypoint_heading_weight_m_per_rad"].as<double>() : 2.0;
+  waypoint_association.backward_progress_weight = mpc["waypoint_backward_progress_weight"] ?
+    mpc["waypoint_backward_progress_weight"].as<double>() : 0.25;
+  waypoint_association.forward_jump_weight = mpc["waypoint_forward_jump_weight"] ?
+    mpc["waypoint_forward_jump_weight"].as<double>() : 1.0;
+  waypoint_association.minimum_forward_reach_m = mpc["waypoint_minimum_forward_reach_m"] ?
+    mpc["waypoint_minimum_forward_reach_m"].as<double>() : 1.5;
+  waypoint_association.forward_reach_time_scale = mpc["waypoint_forward_reach_time_scale"] ?
+    mpc["waypoint_forward_reach_time_scale"].as<double>() : 4.0;
+  const auto association_value_valid = [](const double value) {
+      return std::isfinite(value) && value >= 0.0;
+    };
+  if (
+    !association_value_valid(waypoint_association.local_lookbehind_m) ||
+    !association_value_valid(waypoint_association.local_lookahead_m) ||
+    waypoint_association.local_lookahead_m <= 0.0 ||
+    !association_value_valid(waypoint_association.lost_distance_m) ||
+    waypoint_association.lost_distance_m <= 0.0 ||
+    !association_value_valid(waypoint_association.heading_weight_m_per_rad) ||
+    !association_value_valid(waypoint_association.backward_progress_weight) ||
+    !association_value_valid(waypoint_association.forward_jump_weight) ||
+    !association_value_valid(waypoint_association.minimum_forward_reach_m) ||
+    !association_value_valid(waypoint_association.forward_reach_time_scale))
+  {
+    throw std::runtime_error("mpc waypoint association values must be finite and within range");
   }
   cfg.mpc.accel_low_pass_gain = mpc["accel_low_pass_gain"].as<double>();
   cfg.mpc.steer_low_pass_gain = mpc["steer_low_pass_gain"].as<double>();
@@ -8833,6 +9038,12 @@ Config load_config(const std::string & path)
     kEps,
     mpc["v2x_overtake_shiftout_adaptive_min_time_sec"] ?
     mpc["v2x_overtake_shiftout_adaptive_min_time_sec"].as<double>() : 0.5);
+  cfg.mpc.v2x_behavior.overtake_line_min_target_separation = std::max(
+    0.0,
+    mpc["v2x_overtake_line_min_target_separation"] ?
+    mpc["v2x_overtake_line_min_target_separation"].as<double>() :
+    (mpc["v2x_overtake_pass_front_overlap_lateral_clearance"] ?
+    mpc["v2x_overtake_pass_front_overlap_lateral_clearance"].as<double>() : 0.0));
   cfg.mpc.v2x_behavior.overtake_pass_front_overlap_lateral_clearance = std::max(
     0.0,
     mpc["v2x_overtake_pass_front_overlap_lateral_clearance"] ?
@@ -8928,6 +9139,16 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_low_speed_avoidance_shift_velocity"] ?
     mpc["v2x_low_speed_avoidance_shift_velocity"].as<double>() : 1.0);
+  cfg.mpc.v2x_behavior.low_speed_avoidance_pass_control_velocity = std::max(
+    0.0,
+    mpc["v2x_low_speed_avoidance_pass_control_velocity"] ?
+    mpc["v2x_low_speed_avoidance_pass_control_velocity"].as<double>() :
+    cfg.mpc.v2x_behavior.low_speed_avoidance_shift_velocity);
+  cfg.mpc.v2x_behavior.low_speed_avoidance_rejoin_control_velocity = std::max(
+    0.0,
+    mpc["v2x_low_speed_avoidance_rejoin_control_velocity"] ?
+    mpc["v2x_low_speed_avoidance_rejoin_control_velocity"].as<double>() :
+    cfg.mpc.v2x_behavior.low_speed_avoidance_shift_velocity);
   cfg.mpc.v2x_behavior.low_speed_avoidance_shift_lateral_gain = std::max(
     0.0,
     mpc["v2x_low_speed_avoidance_shift_lateral_gain"] ?
@@ -9083,6 +9304,8 @@ public:
     mpc_cfg_.steer_rate_max = mpc_cfg_.steer_rate_max / mpc_cfg_.steering_tire_angle_gain_var;
     stuck_recovery_core_ =
       std::make_unique<stuck_recovery::StuckRecoveryCore>(cfg_.stuck_recovery.core);
+    recovery_fault_retry_gate_ =
+      std::make_unique<stuck_recovery::FaultRetryGate>(cfg_.stuck_recovery.fault_retry);
     stuck_recovery_actuation_io_enabled_ =
       cfg_.stuck_recovery.core.enabled && !cfg_.stuck_recovery.core.shadow_mode &&
       (!cfg_.stuck_recovery.core.simulation_only || use_sim_time_) &&
@@ -9145,7 +9368,8 @@ public:
       "front_speed<=%.2f m/s, solver_evidence_free=%s/%.2f s, "
       "solver_reverse_only_heading>=%.2f rad, steering_samples=%zu, "
       "rejoin_solver_wait=%.2f s, recovery_mpc=%s/%zux%.2f m/beam=%zu, "
-      "aggressive_sim=%s/retry=%.2f s/force_rejoin=%zu",
+      "aggressive_sim=%s/retry=%.2f s/force_rejoin=%zu, "
+      "collision_stop_override=%s, escape_distance_tolerance=%.2f m",
       cfg_.stuck_recovery.core.detector.coordinated_stop_recovery_enabled ? "true" : "false",
       cfg_.stuck_recovery.core.detector.coordinated_stop_duration_sec,
       cfg_.stuck_recovery.coordinated_stop_front_speed_mps,
@@ -9161,7 +9385,19 @@ public:
       cfg_.stuck_recovery.recovery_mpc_config.beam_width,
       cfg_.stuck_recovery.core.supervisor.aggressive_sim_recovery_enabled ? "true" : "false",
       cfg_.stuck_recovery.core.supervisor.aggressive_retry_delay_sec,
-      cfg_.stuck_recovery.aggressive_force_rejoin_after_retries);
+      cfg_.stuck_recovery.aggressive_force_rejoin_after_retries,
+      cfg_.stuck_recovery.collision_deliberate_stop_override_enabled ? "true" : "false",
+      cfg_.stuck_recovery.escape_confirm_distance_tolerance_m);
+    RCLCPP_INFO(
+      get_logger(),
+      "Stuck recovery fast Reverse: stop_entry<=%.2f m/s, moving_release>%.2f m/s, "
+      "stationary=%.2f s, AWSIM_settle=%.2f s, gear_stop<=%.2f m/s/%.2f s",
+      cfg_.stuck_recovery.core.detector.stopped_speed_mps,
+      cfg_.stuck_recovery.core.detector.moving_speed_mps,
+      cfg_.stuck_recovery.core.detector.stationary_duration_sec,
+      cfg_.stuck_recovery.core.supervisor.awsim_recovery_wait_sec,
+      cfg_.stuck_recovery.core.supervisor.stop_speed_mps,
+      cfg_.stuck_recovery.core.supervisor.stop_confirm_sec);
     if (
       cfg_.stuck_recovery.core.enabled && !cfg_.stuck_recovery.core.shadow_mode &&
       !stuck_recovery_actuation_io_enabled_)
@@ -9270,8 +9506,11 @@ public:
     }
     RCLCPP_INFO(
       get_logger(),
-      "MPC solver fallback steering: hold=%d cycles, neutralize_rate=%.3f rad/s",
-      mpc_cfg_.solver_failure_steering_hold_cycles, mpc_cfg_.steer_rate_max);
+      "MPC solver fallback steering: hold=%d cycles, neutralize_rate=%.3f rad/s, "
+      "sim_crawl=%d/%.2f m/s",
+      mpc_cfg_.solver_failure_steering_hold_cycles, mpc_cfg_.steer_rate_max,
+      mpc_cfg_.solver_failure_crawl_enabled ? 1 : 0,
+      mpc_cfg_.solver_failure_crawl_speed_mps);
     if (mpc_cfg_.v2x_behavior.enabled) {
       RCLCPP_WARN(get_logger(), "USE_V2X_BEHAVIOR_FSM is enabled!");
       if (mpc_cfg_.v2x_behavior.debug_log_enabled) {
@@ -9404,7 +9643,8 @@ private:
       cfg_.reference_path.max_width, cfg_.reference_path.circular);
     car_ = std::make_unique<BicycleModel>(
       reference_path_.get(), cfg_.bicycle_length, cfg_.bicycle_width, mpc_cfg_.safety_margin_scale,
-      1.0 / cfg_.mpc.control_rate, mpc_cfg_.min_linearization_speed_mps);
+      1.0 / cfg_.mpc.control_rate, mpc_cfg_.min_linearization_speed_mps,
+      mpc_cfg_.waypoint_association);
     mpc_ = std::make_unique<MPC>(
       car_.get(), mpc_cfg_, use_obstacle_avoidance_, cfg_.reference_path.use_path_constraints_topic);
     const bool mpc_requires_v2x_planner =
@@ -9920,6 +10160,9 @@ private:
     if (cfg_.stuck_recovery.core.enabled && v2x_gap_planner_) {
       v2x_gap_planner_->reset_recovery_tracking();
     }
+    if (recovery_fault_retry_gate_) {
+      recovery_fault_retry_gate_->reset();
+    }
     recovery_observation_anchor_pose_.reset();
     recovery_observation_anchor_progress_m_.reset();
     recovery_maneuver_start_pose_.reset();
@@ -9931,6 +10174,8 @@ private:
     recovery_aggressive_retry_count_ = 0U;
     recovery_coordinated_stop_episode_ = false;
     recovery_reverse_only_episode_ = false;
+    recovery_reverse_intent_latched_ = false;
+    recovery_forward_fallback_unlocked_ = false;
     recovery_selected_reverse_primitive_.reset();
     recovery_selected_reverse_steering_angle_rad_.reset();
     recovery_selected_stepwise_escape_ = false;
@@ -10487,6 +10732,18 @@ private:
             cfg_.stuck_recovery.reverse_steering_angle_rad;
           return evaluate_candidate_with_steering(primitive, steering_magnitude_rad);
         };
+      const auto evaluate_non_worsening_candidate_with_steering =
+        [&](const recovery_footprint::ReversePrimitive primitive,
+        const double steering_magnitude_rad) {
+          auto candidate_rollout = rollout;
+          candidate_rollout.steering_angle_rad = steering_magnitude_rad;
+          candidate_rollout.reverse_distance_m = std::max(
+            0.0, escape_step_distance_to_check_m);
+          return recovery_footprint::evaluate_recovery_candidate(
+            *recovery_grid_, recovery_footprint_, recovery_pose, primitive,
+            candidate_rollout,
+            recovery_footprint::ContactEscapePolicy::AllowNonWorsening, 0.0);
+        };
       const auto recovery_mpc_guidance =
         [&](const recovery_mpc::Direction direction) -> std::optional<double> {
           if (!cfg_.stuck_recovery.recovery_mpc_enabled ||
@@ -10711,6 +10968,64 @@ private:
             }
           }
         }
+        if (
+          !selected_result.has_value() && !snapshot.current_footprint_clear &&
+          use_sim_time_ &&
+          cfg_.stuck_recovery.core.supervisor.aggressive_sim_recovery_enabled)
+        {
+          // A kart already touching the conservative occupancy footprint must
+          // not remain stopped forever only because a 0.4 m primitive cannot
+          // remove a full map cell. Keep rejecting new/increased contact, but
+          // allow one bounded non-worsening step and reassess immediately.
+          const auto select_non_worsening =
+            [&](const bool forward) {
+              std::optional<recovery_footprint::FeasibilityResult> best_result;
+              double best_heading_error = std::numeric_limits<double>::infinity();
+              const auto consider = [&](recovery_footprint::FeasibilityResult result) {
+                  if (!result.feasible || result.rollout.empty()) {
+                    return;
+                  }
+                  const double yaw_delta = wrap_to_pi(
+                    result.rollout.back().pose.yaw_rad - recovery_pose.yaw_rad);
+                  const double heading_error = std::isfinite(recovery_heading_error_rad) ?
+                    std::abs(wrap_to_pi(recovery_heading_error_rad + yaw_delta)) :
+                    std::abs(yaw_delta);
+                  if (!best_result.has_value() || heading_error + kEps < best_heading_error) {
+                    best_heading_error = heading_error;
+                    best_result = std::move(result);
+                  }
+                };
+              consider(evaluate_non_worsening_candidate_with_steering(
+                forward ? recovery_footprint::ReversePrimitive::ForwardStraight :
+                recovery_footprint::ReversePrimitive::Straight, 0.0));
+              for (const auto primitive : forward ?
+                std::array<recovery_footprint::ReversePrimitive, 2>{
+                  recovery_footprint::ReversePrimitive::ForwardLeft,
+                  recovery_footprint::ReversePrimitive::ForwardRight} :
+                std::array<recovery_footprint::ReversePrimitive, 2>{
+                  recovery_footprint::ReversePrimitive::Left,
+                  recovery_footprint::ReversePrimitive::Right})
+              {
+                for (const double steering_magnitude_rad : steering_samples) {
+                  consider(evaluate_non_worsening_candidate_with_steering(
+                    primitive, steering_magnitude_rad));
+                }
+              }
+              return best_result;
+            };
+          selected_result = select_non_worsening(false);
+          if (!reverse_only) {
+            auto forward_result = select_non_worsening(true);
+            if (forward_result.has_value()) {
+              if (selected_result.has_value()) {
+                forward_deadlock_fallback = std::move(forward_result.value());
+                forward_deadlock_fallback_stepwise = true;
+              } else {
+                selected_result = std::move(forward_result.value());
+              }
+            }
+          }
+        }
       } else if (
         snapshot.current_footprint_clear &&
         (snapshot.wall_region == recovery_footprint::WallRegion::Left ||
@@ -10837,12 +11152,18 @@ private:
     }
 
     snapshot.boost_inactive_confirmed = recovery_boost_inactive_confirmed(steady_now);
-    snapshot.v2x_message_complete =
+    const bool v2x_contract_configured =
       v2x_gap_planner_ != nullptr && cfg_.stuck_recovery.expected_v2x_vehicle_count >= 0 &&
-      cfg_.stuck_recovery.v2x_self_filter_mode != "unknown" &&
-      v2x_gap_planner_->has_complete_message(
-      ros_now_sec,
-      static_cast<std::size_t>(cfg_.stuck_recovery.expected_v2x_vehicle_count));
+      cfg_.stuck_recovery.v2x_self_filter_mode != "unknown";
+    const std::size_t expected_vehicle_count =
+      static_cast<std::size_t>(std::max(0, cfg_.stuck_recovery.expected_v2x_vehicle_count));
+    const bool complete_current_message =
+      v2x_contract_configured &&
+      v2x_gap_planner_->has_complete_message(ros_now_sec, expected_vehicle_count);
+    const bool complete_tracked_set =
+      v2x_contract_configured && cfg_.stuck_recovery.tracked_v2x_completeness_enabled &&
+      v2x_gap_planner_->has_complete_tracked_set(ros_now_sec, expected_vehicle_count);
+    snapshot.v2x_message_complete = complete_current_message || complete_tracked_set;
     if (!snapshot.boost_inactive_confirmed || !snapshot.v2x_message_complete)
     {
       return snapshot;
@@ -10929,11 +11250,12 @@ private:
           const double uncertainty_margin_m =
             std::max(vehicle.covariance_x, vehicle.covariance_y);
           const double inflated_vehicle_radius_m = vehicle_radius_m + uncertainty_margin_m;
-          const double vehicle_speed_mps = std::hypot(vehicle.vx, vehicle.vy);
-          if (
-            selected_rollout != nullptr && !selected_rollout->empty() &&
-            vehicle_speed_mps <= cfg_.stuck_recovery.coordinated_stop_front_speed_mps)
+          if (selected_rollout != nullptr && !selected_rollout->empty())
           {
+            // The rollout evaluator predicts obstacle motion and verifies that
+            // any existing overlap improves monotonically. Use that stronger
+            // test for slowly moving/noisy vehicles too; the old speed switch
+            // produced discontinuous 0.19/0.21 m/s recovery decisions.
             const auto rollout_clearance =
               recovery_footprint::evaluate_circle_obstacle_clearance(
               recovery_footprint_, *selected_rollout,
@@ -10995,7 +11317,7 @@ private:
 
     const bool prefer_alternate_forward =
       cfg_.stuck_recovery.core.supervisor.aggressive_sim_recovery_enabled &&
-      recovery_aggressive_retry_count_ % 2U == 1U;
+      recovery_forward_fallback_unlocked_;
     if (
       snapshot.rear_information_complete && !snapshot.rear_v2x_clear &&
       snapshot.maneuver_direction == stuck_recovery::ManeuverDirection::Reverse &&
@@ -11163,12 +11485,36 @@ private:
     // reset every other control cycle.
     const double requested_forward_speed_mps = std::max(
       {0.0, path_forward_intent_speed_mps, normal_u[0]});
+    const bool collision_hint =
+      last_collision_receipt_steady_.has_value() &&
+      std::chrono::duration<double>(
+      steady_now - last_collision_receipt_steady_.value()).count() < 5.0;
     const auto & behavior = mpc_->last_v2x_behavior_output();
-    const bool deliberate_stop =
+    const bool raw_deliberate_stop =
       behavior.state == V2XBehaviorState::LowSpeedAvoidance ||
       behavior.state == V2XBehaviorState::SafetyBrake ||
       (behavior.state == V2XBehaviorState::Follow && behavior.has_front_vehicle) ||
       behavior.has_danger_vehicle;
+    const bool forward_intent =
+      requested_forward_speed_mps >=
+      cfg_.stuck_recovery.core.detector.forward_intent_speed_mps ||
+      normal_acc >= cfg_.stuck_recovery.core.detector.forward_intent_acceleration_mps2;
+    const bool collision_deliberate_stop_override =
+      raw_deliberate_stop &&
+      stuck_recovery::should_override_deliberate_stop_for_collision(
+      stuck_recovery::CollisionDeliberateStopOverrideRequest{
+        cfg_.stuck_recovery.collision_deliberate_stop_override_enabled,
+        use_sim_time_, collision_hint, behavior.has_front_vehicle,
+        forward_intent, actual_v,
+        cfg_.stuck_recovery.core.detector.stopped_speed_mps});
+    const bool deliberate_stop =
+      raw_deliberate_stop && !collision_deliberate_stop_override;
+    if (collision_deliberate_stop_override) {
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 1000,
+        "Stuck detector collision override: SafetyBrake/Follow remains active, "
+        "but collision evidence and stopped ego permit no-progress confirmation");
+    }
     const bool coordinated_stop_candidate =
       cfg_.stuck_recovery.core.detector.coordinated_stop_recovery_enabled &&
       behavior.has_front_vehicle &&
@@ -11179,6 +11525,7 @@ private:
     const bool coordinated_stop_active =
       coordinated_stop_candidate || recovery_coordinated_stop_episode_;
     bool current_wall_evidence = false;
+    auto current_wall_region = recovery_footprint::WallRegion::Unknown;
     if (recovery_grid_ && recovery_footprint_.valid()) {
       const auto wall_proximity = recovery_footprint::classify_nearby_wall(
         *recovery_grid_, recovery_footprint_,
@@ -11189,6 +11536,7 @@ private:
         wall_proximity.valid &&
         wall_proximity.region != recovery_footprint::WallRegion::None &&
         wall_proximity.region != recovery_footprint::WallRegion::Unknown;
+      current_wall_region = wall_proximity.region;
     }
     const bool solver_reverse_only_candidate =
       stuck_recovery::solver_fallback_requires_reverse_only(
@@ -11196,10 +11544,22 @@ private:
       cfg_.stuck_recovery.core.detector.solver_evidence_free_recovery_enabled,
       current_wall_evidence, car_->spatial_state.e_psi,
       cfg_.stuck_recovery.solver_reverse_only_heading_error_rad);
-    const bool reverse_only =
-      !cfg_.stuck_recovery.core.supervisor.aggressive_sim_recovery_enabled &&
-      (recovery_reverse_only_episode_ || coordinated_stop_active ||
-      solver_reverse_only_candidate);
+    const bool low_speed_obstacle =
+      std::abs(actual_v) <= cfg_.stuck_recovery.core.detector.stopped_speed_mps &&
+      forward_intent &&
+      (coordinated_stop_active ||
+      (collision_hint && behavior.has_front_vehicle) ||
+      (current_wall_evidence &&
+      current_wall_region != recovery_footprint::WallRegion::Rear));
+    const bool obstacle_reverse_first =
+      use_sim_time_ &&
+      cfg_.stuck_recovery.core.supervisor.aggressive_sim_recovery_enabled &&
+      low_speed_obstacle;
+    const bool reverse_only = stuck_recovery::recovery_reverse_direction_required(
+      stuck_recovery::ReverseDirectionPolicyInput{
+        recovery_reverse_only_episode_, recovery_reverse_intent_latched_,
+        coordinated_stop_active, solver_reverse_only_candidate,
+        obstacle_reverse_first, recovery_forward_fallback_unlocked_});
     const bool low_speed_recovery_candidate =
       std::abs(actual_v) <= cfg_.stuck_recovery.core.detector.moving_speed_mps &&
       (requested_forward_speed_mps >=
@@ -11226,10 +11586,6 @@ private:
       checked_rejoin_steering_tire_angle_rad,
       reverse_only,
       recovery_context_active || low_speed_recovery_candidate);
-    const bool collision_hint =
-      last_collision_receipt_steady_.has_value() &&
-      std::chrono::duration<double>(
-      steady_now - last_collision_receipt_steady_.value()).count() < 5.0;
     const bool awsim_recovery_settling =
       last_collision_receipt_steady_.has_value() &&
       std::chrono::duration<double>(
@@ -11251,8 +11607,20 @@ private:
     input.detector.signed_speed_mps = actual_v;
     input.detector.requested_forward_speed_mps = requested_forward_speed_mps;
     input.detector.requested_acceleration_mps2 = normal_acc;
-    input.detector.pose_displacement_m = pose_displacement_m;
-    input.detector.unwrapped_progress_delta_m = progress_delta_m;
+    const bool stopped_solver_observation =
+      use_sim_time_ &&
+      cfg_.stuck_recovery.core.supervisor.aggressive_sim_recovery_enabled &&
+      mpc_fallback_active &&
+      std::abs(actual_v) <= cfg_.stuck_recovery.core.detector.stopped_speed_mps;
+    // AWSIM collision correction and nearest-waypoint reassociation can move
+    // pose/s by one map cell while the reported vehicle speed is zero. During
+    // a continuous solver fallback this is not evidence that racing resumed;
+    // keeping the observation window lets the existing bounded recovery gate
+    // engage instead of waiting tens of seconds.
+    input.detector.pose_displacement_m =
+      stopped_solver_observation ? 0.0 : pose_displacement_m;
+    input.detector.unwrapped_progress_delta_m =
+      stopped_solver_observation ? 0.0 : progress_delta_m;
     input.detector.wall_evidence = safety.wall_evidence;
     input.detector.collision_hint = collision_hint;
     input.recovery.reported_gear = reported_gear_.value_or(stuck_recovery::Gear::Unknown);
@@ -11280,8 +11648,11 @@ private:
       cfg_.stuck_recovery.aggressive_force_rejoin_after_retries &&
       safety.current_footprint_clear && rejoin_steering_tire_angle.has_value();
     input.recovery.recovery_escape_confirmed =
-      safety.current_footprint_clear &&
-      (episode_traveled_distance_m >= escape_distance_target_m || aggressive_force_rejoin);
+      stuck_recovery::recovery_escape_distance_confirmed(
+      safety.current_footprint_clear, episode_traveled_distance_m,
+      escape_distance_target_m,
+      cfg_.stuck_recovery.escape_confirm_distance_tolerance_m) ||
+      aggressive_force_rejoin;
     input.recovery.rejoin_safe = safety.current_footprint_clear;
     input.recovery.rejoin_forward_clear =
       rejoin_steering_tire_angle.has_value() &&
@@ -11324,8 +11695,33 @@ private:
       recovery_episode_had_contact_evidence_ =
         safety.wall_evidence || collision_hint || !safety.current_contact_cells.empty();
       recovery_coordinated_stop_episode_ = coordinated_stop_active;
-      recovery_reverse_only_episode_ = reverse_only;
+      // Keep only strict episode reasons here. Obstacle-first Reverse is a
+      // direction intent that is latched after AWSIM settling, not a stale
+      // primitive/rollout commitment made from the pre-settle pose.
+      // A coordinated stop requires Reverse first, but it must not prohibit a
+      // bounded Forward escape forever when no Reverse rollout is feasible.
+      // Only solver geometry remains a strict reverse-only episode reason.
+      recovery_reverse_only_episode_ = solver_reverse_only_candidate;
+      recovery_reverse_intent_latched_ = false;
+      recovery_forward_fallback_unlocked_ = false;
       recovery_boost_suppressed_for_session_ = true;
+    }
+    if (
+      !recovery_reverse_intent_latched_ && !recovery_forward_fallback_unlocked_ &&
+      stuck_recovery::recovery_reverse_intent_latch_allowed(output.state) &&
+      reverse_only &&
+      (obstacle_reverse_first || recovery_reverse_only_episode_ ||
+      (safety.reverse_candidate_selected &&
+      safety.maneuver_direction == stuck_recovery::ManeuverDirection::Reverse)))
+    {
+      recovery_reverse_intent_latched_ = true;
+      RCLCPP_INFO(
+        get_logger(),
+        "Stuck recovery Reverse intent latched after AWSIM settling: state=%s, "
+        "obstacle=%d, coordinated=%d, solver_reverse_only=%d",
+        stuck_recovery::to_string(output.state), obstacle_reverse_first ? 1 : 0,
+        recovery_coordinated_stop_episode_ ? 1 : 0,
+        solver_reverse_only_candidate ? 1 : 0);
     }
     const bool restarted_escape_after_rejoin =
       previous_state == stuck_recovery::RecoveryState::LowSpeedRejoin &&
@@ -11364,10 +11760,22 @@ private:
       recovery_selected_reverse_primitive_.reset();
       recovery_selected_reverse_steering_angle_rad_.reset();
       recovery_selected_stepwise_escape_ = false;
+      // A Reverse-first attempt may use the existing Forward candidate search
+      // only after it has explicitly reached SafeStop. Coordinated stop owns
+      // the first direction, not the whole recovery episode. Solver geometry
+      // remains strict reverse-only.
+      if (
+        recovery_reverse_intent_latched_ &&
+        !recovery_reverse_only_episode_)
+      {
+        recovery_reverse_intent_latched_ = false;
+        recovery_forward_fallback_unlocked_ = true;
+      }
       RCLCPP_WARN(
         get_logger(),
-        "Stuck recovery aggressive retry: cycle=%zu, episode progress and candidate reset",
-        recovery_aggressive_retry_count_);
+        "Stuck recovery aggressive retry: cycle=%zu, episode progress and candidate reset, "
+        "forward_fallback=%d",
+        recovery_aggressive_retry_count_, recovery_forward_fallback_unlocked_ ? 1 : 0);
     }
     const bool entered_step_reassessment =
       output.state == stuck_recovery::RecoveryState::CheckClearance &&
@@ -11406,7 +11814,7 @@ private:
         safety.selected_reverse_steering_angle_rad,
         recovery_footprint::to_string(safety.wall_region), safety.wall_distance_m,
         recovery_coordinated_stop_episode_ ? 1 : 0,
-        recovery_reverse_only_episode_ ? 1 : 0,
+        reverse_only ? 1 : 0,
         safety.recovery_mpc_guidance_used ? 1 : 0,
         safety.recovery_mpc_desired_steering_angle_rad,
         recovery_aggressive_retry_count_);
@@ -11452,6 +11860,8 @@ private:
       recovery_episode_had_contact_evidence_ = false;
       recovery_coordinated_stop_episode_ = false;
       recovery_reverse_only_episode_ = false;
+      recovery_reverse_intent_latched_ = false;
+      recovery_forward_fallback_unlocked_ = false;
       recovery_aggressive_retry_count_ = 0U;
       recovery_selected_reverse_primitive_.reset();
       recovery_selected_reverse_steering_angle_rad_.reset();
@@ -11480,6 +11890,8 @@ private:
       recovery_selected_stepwise_escape_ = false;
       recovery_coordinated_stop_episode_ = false;
       recovery_reverse_only_episode_ = false;
+      recovery_reverse_intent_latched_ = false;
+      recovery_forward_fallback_unlocked_ = false;
       recovery_reset_applied_ = false;
     }
 
@@ -11509,7 +11921,7 @@ private:
         stuck_recovery::to_string(output.action.type),
         stuck_recovery::to_string(output.action.reason),
         recovery_coordinated_stop_episode_ ? 1 : 0,
-        recovery_reverse_only_episode_ ? 1 : 0,
+        reverse_only ? 1 : 0,
         recovery_footprint::to_string(safety.static_reject_reason),
         safety.static_initial_contact_count, safety.static_maximum_contact_count,
         safety.static_final_contact_count, safety.static_rejected_at_distance_m,
@@ -11750,6 +12162,53 @@ private:
     return true;
   }
 
+  bool maybe_clear_recovery_fault_latch(
+    const Pose2D & pose, const SteadyClock::time_point steady_now,
+    const rclcpp::Time & control_time)
+  {
+    if (!recovery_fault_latched_ || !recovery_fault_retry_gate_) {
+      return !recovery_fault_latched_;
+    }
+    const double bounded_distance_m =
+      cfg_.stuck_recovery.core.supervisor.escape_step_distance_m;
+    const auto safety = evaluate_recovery_safety(
+      pose, steady_now, control_time.seconds(), bounded_distance_m,
+      bounded_distance_m, bounded_distance_m, 0.0, 0.0, false, true);
+    const bool drive_gear_fresh =
+      recovery_gear_report_fresh(steady_now) && reported_gear_.has_value() &&
+      reported_gear_.value() == stuck_recovery::Gear::Drive &&
+      !recovery_waiting_for_drive_after_reset_;
+    const bool bounded_maneuver_available =
+      safety.rear_information_complete && safety.rear_v2x_clear &&
+      (safety.rear_static_clear ||
+      (safety.current_footprint_clear && safety.rejoin_forward_static_clear));
+    const bool retry_ready = recovery_fault_retry_gate_->update(
+      stuck_recovery::FaultRetryInput{
+        steady_seconds(steady_now), use_sim_time_, race_started_, enable_control_, true,
+        last_u_.allFinite() && std::isfinite(last_acc_), drive_gear_fresh,
+        safety.boost_inactive_confirmed, safety.v2x_message_complete,
+        bounded_maneuver_available, safety.collision_worsening});
+    if (!retry_ready) {
+      return false;
+    }
+
+    RCLCPP_WARN(
+      get_logger(),
+      "Stuck recovery fault auto-cleared after a healthy bounded retry window; "
+      "static=%d, v2x=%d, current_clear=%d",
+      safety.rear_static_clear ? 1 : 0, safety.rear_v2x_clear ? 1 : 0,
+      safety.current_footprint_clear ? 1 : 0);
+    mpc_->reset_after_external_maneuver(control_time.seconds(), 0.0);
+    last_u_ = Eigen::Vector2d::Zero();
+    last_acc_ = 0.0;
+    reset_stuck_recovery_session("race-relaxed fault retry");
+    // A recovery episode must not re-arm the one-shot start boost after an
+    // adapter reset, even though normal race control may resume.
+    recovery_boost_suppressed_for_session_ = true;
+    command_failsafe_active_ = false;
+    return true;
+  }
+
   void control()
   {
     const auto steady_now = SteadyClock::now();
@@ -11786,12 +12245,6 @@ private:
       RCLCPP_INFO(get_logger(), "Odometry recovered: age=%.3f s", odometry_age_sec);
       odom_failsafe_active_ = false;
     }
-    if (recovery_fault_latched_) {
-      maybe_request_drive_after_recovery_reset(
-        control_time, steady_now, odom_->twist.twist.linear.x);
-      publish_failsafe_command(control_time, "stuck recovery fault remains latched until session reset");
-      return;
-    }
     if (cfg_.reference_path.update_by_topic && !trajectory_) {
       publish_failsafe_command(control_time, "trajectory is not available");
       return;
@@ -11807,6 +12260,14 @@ private:
       publish_failsafe_command(control_time, "non-finite odometry rejected");
       return;
     }
+    if (recovery_fault_latched_) {
+      maybe_request_drive_after_recovery_reset(control_time, steady_now, actual_v);
+      if (!maybe_clear_recovery_fault_latch(pose, steady_now, control_time)) {
+        publish_failsafe_command(
+          control_time, "stuck recovery fault remains latched pending bounded retry health");
+        return;
+      }
+    }
     Pose2D mpc_pose = pose;
     if (state_prediction_active_) {
       const auto predicted = mpc_state_prediction::predict_constant_turn_rate(
@@ -11817,7 +12278,9 @@ private:
       mpc_pose.theta = predicted.yaw;
     }
     if (!initialized_) {
-      car_->update_states(mpc_pose.x, mpc_pose.y, mpc_pose.theta);
+      car_->update_states(
+        mpc_pose.x, mpc_pose.y, mpc_pose.theta,
+        std::abs(actual_v), 1.0 / mpc_cfg_.control_rate);
       car_->update_reference_path(reference_path_.get());
       last_t_ = control_time;
       initialized_ = true;
@@ -11874,7 +12337,7 @@ private:
     }
     (void)is_colliding;
 
-    car_->update_states(mpc_pose.x, mpc_pose.y, mpc_pose.theta);
+    car_->update_states(mpc_pose.x, mpc_pose.y, mpc_pose.theta, std::abs(actual_v), dt);
     mpc_->update_current_speed(std::abs(actual_v));
     mpc_->set_v2x_race_session_active(
       overtake_core::is_v2x_behavior_session_active(
@@ -11917,6 +12380,45 @@ private:
 
     auto [u, max_delta] = mpc_->get_control(current_time.seconds());
     const bool mpc_fallback_active = mpc_->last_control_was_fallback();
+    const auto & v2x_behavior = mpc_->last_v2x_behavior_output();
+    const auto solver_failure_crawl = mpc_velocity_limit::resolve_solver_failure_crawl(
+      mpc_velocity_limit::SolverFailureCrawlRequest{
+        use_sim_time_, mpc_cfg_.solver_failure_crawl_enabled, enable_control_,
+        mpc_fallback_active, v2x_behavior.state == V2XBehaviorState::Cruise,
+        v2x_behavior.has_front_vehicle, mpc_cfg_.solver_failure_crawl_speed_mps,
+        effective_v_max});
+    const bool solver_failure_crawl_active = solver_failure_crawl.active;
+    if (solver_failure_crawl_active) {
+      const double path_curvature = car_->current_waypoint != nullptr ?
+        car_->current_waypoint->kappa : 0.0;
+      const double target_steering =
+        v2x_overtake_core::resolve_low_speed_shift_steering(
+        v2x_overtake_core::LowSpeedShiftSteeringRequest{
+          car_->spatial_state.e_y, car_->spatial_state.e_psi, 0.0,
+          path_curvature, car_->length, std::abs(mpc_cfg_.delta_max),
+          mpc_cfg_.v2x_behavior.low_speed_avoidance_shift_lateral_gain,
+          mpc_cfg_.v2x_behavior.low_speed_avoidance_shift_heading_gain});
+      const double max_steering_step =
+        mpc_cfg_.steer_rate_max / mpc_cfg_.control_rate;
+      u[0] = solver_failure_crawl.target_speed_mps;
+      u[1] = clip(
+        target_steering, last_u_[1] - max_steering_step,
+        last_u_[1] + max_steering_step);
+      max_delta = std::abs(u[1]);
+    }
+    if (solver_failure_crawl_active != solver_failure_crawl_was_active_) {
+      if (solver_failure_crawl_active) {
+        RCLCPP_WARN(
+          get_logger(),
+          "MPC solver fail-operational crawl entered: target=%.2f m/s, "
+          "e_y=%.3f m, e_psi=%.3f rad",
+          solver_failure_crawl.target_speed_mps,
+          car_->spatial_state.e_y, car_->spatial_state.e_psi);
+      } else {
+        RCLCPP_INFO(get_logger(), "MPC solver fail-operational crawl exited");
+      }
+      solver_failure_crawl_was_active_ = solver_failure_crawl_active;
+    }
 
     if (!enable_control_) {
       const double last_v_cmd = last_u_[0];
@@ -11930,10 +12432,14 @@ private:
 
     double acc = 0.0;
     bool bug_acc_enabled = false;
-    const bool forced_stop_active = mpc_fallback_active || !enable_control_;
+    const bool forced_stop_active =
+      (mpc_fallback_active && !solver_failure_crawl_active) || !enable_control_;
     if (forced_stop_active) {
       bug_acc_enabled = false;
       acc = mpc_cfg_.a_min;
+    } else if (solver_failure_crawl_active) {
+      bug_acc_enabled = false;
+      acc = clip(100.0 * (u[0] - actual_v), mpc_cfg_.a_min, mpc_cfg_.a_max);
     } else if (use_bug_acc_) {
       const auto deg2rad = [](const double deg) { return deg * kPi / 180.0; };
       if (
@@ -12051,6 +12557,7 @@ private:
   bool recovery_rejoin_hold_cycle_{false};
   bool recovery_fault_latched_{false};
   bool recovery_waiting_for_drive_after_reset_{false};
+  bool solver_failure_crawl_was_active_{false};
   std::size_t recovery_reset_drive_request_count_{0U};
   std::optional<SteadyClock::time_point> recovery_reset_stopped_since_;
   bool enable_control_{true};
@@ -12082,6 +12589,7 @@ private:
   std::unique_ptr<ReferenceVelocityConfigulator> ref_vel_configulator_;
   std::unique_ptr<awsim_boost::StartDashGuard> awsim_boost_guard_;
   std::unique_ptr<stuck_recovery::StuckRecoveryCore> stuck_recovery_core_;
+  std::unique_ptr<stuck_recovery::FaultRetryGate> recovery_fault_retry_gate_;
   std::unique_ptr<recovery_footprint::OccupancyGrid> recovery_grid_;
   recovery_footprint::FootprintExtents recovery_footprint_;
   std::optional<Pose2D> recovery_observation_anchor_pose_;
@@ -12095,6 +12603,8 @@ private:
   std::size_t recovery_aggressive_retry_count_{0U};
   bool recovery_coordinated_stop_episode_{false};
   bool recovery_reverse_only_episode_{false};
+  bool recovery_reverse_intent_latched_{false};
+  bool recovery_forward_fallback_unlocked_{false};
   std::optional<recovery_footprint::ReversePrimitive> recovery_selected_reverse_primitive_;
   std::optional<double> recovery_selected_reverse_steering_angle_rad_;
   bool recovery_selected_stepwise_escape_{false};

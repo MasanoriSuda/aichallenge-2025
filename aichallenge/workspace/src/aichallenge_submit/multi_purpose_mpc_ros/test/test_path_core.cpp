@@ -258,16 +258,22 @@ TEST(PathCoreCircular, UsesInclusiveClosureToleranceBoundary)
 }
 
 #ifdef MULTI_PURPOSE_MPC_ROS_SOURCE_DIR
-TEST(PathCoreCircular, RemovesOneEndpointFromConfiguredFinalVer3Trajectory)
+TEST(PathCoreCircular, KeepsConfiguredFinalVer3DistinctClosureEndpoint)
 {
   const std::filesystem::path csv_path =
     std::filesystem::path(MULTI_PURPOSE_MPC_ROS_SOURCE_DIR) /
     "env/final_ver3/traj_mincurv.csv";
   auto points = path_core::load_reference_path_csv(csv_path.string());
   const std::size_t raw_size = points.size();
+  ASSERT_GE(raw_size, 3U);
+  const double closure_segment_m = std::hypot(
+    points.back().x_m - points.front().x_m,
+    points.back().y_m - points.front().y_m);
 
-  EXPECT_TRUE(path_core::normalize_circular_endpoint(points, 0.001));
-  EXPECT_EQ(points.size() + 1U, raw_size);
+  EXPECT_GT(closure_segment_m, 0.001);
+  EXPECT_LT(closure_segment_m, 2.0);
+  EXPECT_FALSE(path_core::normalize_circular_endpoint(points, 0.001));
+  EXPECT_EQ(points.size(), raw_size);
 }
 #endif
 

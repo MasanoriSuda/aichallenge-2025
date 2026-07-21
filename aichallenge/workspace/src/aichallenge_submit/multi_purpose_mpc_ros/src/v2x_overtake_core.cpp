@@ -866,6 +866,32 @@ double resolve_low_speed_pass_velocity(
          std::min(pass_velocity_mps, shift_velocity_mps);
 }
 
+double resolve_low_speed_direct_control_velocity(
+  const LowSpeedDirectControlPhase phase,
+  const double shift_velocity_mps,
+  const double pass_velocity_mps,
+  const double rejoin_velocity_mps,
+  const double maximum_velocity_mps)
+{
+  validate_speed(shift_velocity_mps, "low-speed direct shift velocity");
+  validate_speed(pass_velocity_mps, "low-speed direct pass velocity");
+  validate_speed(rejoin_velocity_mps, "low-speed direct rejoin velocity");
+  validate_speed(maximum_velocity_mps, "low-speed direct maximum velocity");
+  double selected_velocity_mps = shift_velocity_mps;
+  switch (phase) {
+    case LowSpeedDirectControlPhase::Shift:
+      selected_velocity_mps = shift_velocity_mps;
+      break;
+    case LowSpeedDirectControlPhase::Pass:
+      selected_velocity_mps = pass_velocity_mps;
+      break;
+    case LowSpeedDirectControlPhase::Rejoin:
+      selected_velocity_mps = rejoin_velocity_mps;
+      break;
+  }
+  return std::min(selected_velocity_mps, maximum_velocity_mps);
+}
+
 double resolve_low_speed_shift_steering(
   const LowSpeedShiftSteeringRequest & request)
 {

@@ -228,6 +228,11 @@ struct SideOvertakeEntryRequest
 /// passed in common course progress. Existing committed passes remain valid.
 bool can_start_side_overtake(const SideOvertakeEntryRequest & request) noexcept;
 
+/// A side-only target that is already behind ego must not turn an otherwise
+/// clear road into Follow. Invalid observations remain conservative.
+bool side_only_target_requires_follow(
+  double target_longitudinal_m, double rear_tolerance_m) noexcept;
+
 /// Limit closing speed only while Pass is waiting for lateral-clearance latch.
 /// ShiftOut keeps its adaptive limit and a latched Pass is released elsewhere.
 double resolve_unlatched_pass_closing_speed(
@@ -521,6 +526,50 @@ struct SideSelection
 SideSelection select_pass_side(const SideSelectionRequest & request) noexcept;
 
 PassSide opposite_side(PassSide side) noexcept;
+
+/// Gate race-only V2X behavior when AWSIM state tracking is available. Launches
+/// without state tracking retain the legacy always-active behavior.
+bool is_v2x_behavior_session_active(bool state_tracking_enabled, bool race_started) noexcept;
+
+struct LowSpeedBypassCandidateRequest
+{
+  bool enabled{false};
+  bool candidate_vehicle_present{false};
+  bool cooldown_active{false};
+  bool start_grid_stop_suppressed{false};
+  bool overtake_forbidden{false};
+  bool continuing{false};
+  bool ignore_soft_curve_forbidden{false};
+  bool explicit_forbidden_wp{false};
+  double vehicle_speed_mps{std::numeric_limits<double>::infinity()};
+  double maximum_vehicle_speed_mps{};
+  double forward_distance_m{std::numeric_limits<double>::infinity()};
+  double minimum_prepare_distance_m{};
+  double maximum_entry_distance_m{};
+};
+
+/// Select a stopped-vehicle bypass candidate independently from the narrow
+/// footprint-overlap set used by emergency braking. This allows a vehicle in
+/// the future course corridor to start lateral planning before center overlap.
+bool can_start_low_speed_bypass(const LowSpeedBypassCandidateRequest & request) noexcept;
+
+struct StoppedVehicleLineOwnershipRequest
+{
+  bool low_speed_behavior_active{false};
+  bool low_speed_candidate{false};
+  bool overtake_behavior_active{false};
+  bool has_front_vehicle{false};
+  double front_distance_m{std::numeric_limits<double>::infinity()};
+  double front_speed_mps{std::numeric_limits<double>::infinity()};
+  double maximum_stopped_speed_mps{};
+  double stopped_detection_distance_m{};
+};
+
+/// Yield the generic OvertakeLine only when the stopped-vehicle bypass owns
+/// the lateral plan. A close stopped front must not cancel an already selected
+/// generic Overtake merely because it is stationary.
+bool should_yield_overtake_line_to_stopped_bypass(
+  const StoppedVehicleLineOwnershipRequest & request) noexcept;
 
 struct LowSpeedPassSideCandidate
 {

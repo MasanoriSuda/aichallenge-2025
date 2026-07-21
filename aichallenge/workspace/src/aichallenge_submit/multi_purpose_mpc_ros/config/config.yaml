@@ -233,7 +233,7 @@ bicycle_model:
   width: 1.45   # +safety margin
 
 mpc:
-  N: 20
+  N: 30
   # Q: [e_y, e_psi, t]
   # R: [v, delta]
   # QN: [e_y, e_psi, t]
@@ -251,24 +251,23 @@ mpc:
   odom_timeout_sec: 0.5 # [s], steady-clock local safety timeout (not an official limit)
   # Controller/actuation latency compensation after EKF pose timing compensation.
   # 0.125 s reproduces the non-mutating equivalent of the 2025 Pure Pursuit prediction.
-  state_prediction_delay_sec: 0.125
+  state_prediction_delay_sec: 0.0
   state_prediction_simulation_only: true
   min_linearization_speed_mps: 0.5 # [m/s], avoid singular 1/v terms below this speed
   # 2026-07-17 AWSIM experiment: keep MPC model steering and published steering identical.
-  steering_tire_angle_gain_var: 1.0
+  steering_tire_angle_gain_var: 1.5
   # steering_tire_angle_gain_var: 1.0
   # accel_low_pass_gain: 0.1
   # steer_low_pass_gain: 0.3
   accel_low_pass_gain: 1.0
   steer_low_pass_gain: 1.0
-  # These offsets compensate MPC/control lookahead, not localization measurement delay.
-  # Simulation pose timing is compensated by EKF pose_additional_delay in reference.launch.xml.
-  # Temporary limitation (2026-07-11): keep both waypoint offsets at 0 because a nonzero
-  # offset can mismatch the MPC state/reference frames in tight curves and cause OSQP failure.
-  # Change only after fixing the frame handling and testing the first hairpin.
+  # One-way input preview: allow earlier braking and same-direction steering increase,
+  # but never early acceleration/unwind. State/dynamics/constraints/V2X/prediction remain
+  # anchored to the closest tracking waypoint. Supported integer range is 0..2.
+  # This does not compensate localization delay; that is handled by state prediction.
   wp_id_low_offset: 0
   wp_id_low_speed: 15.0 # km/h
-  wp_id_offset: 0
+  wp_id_offset: 2
   # 1.0 = target the center of path constraints, 0.0 = target the edited trajectory.
   center_bias: 0.0
   # 1.0 = current safety margin, 0.0 = no additional safety margin.
@@ -428,7 +427,7 @@ mpc:
   v2x_overtake_line_return_clear_distance: 2.0 # [m] begin Return after nominal vehicle-length clearance
   v2x_overtake_line_phase_hold_time: 0.3      # [s] minimum phase hold before transition
   v2x_overtake_target_hold_sec: 0.75          # [s] keep a locked Pass across a transient V2X classification loss
-  v2x_overtake_active_gap_loss_hold_sec: 0.50 # [s] hold only active locked ShiftOut/Pass on transient gap loss
+  v2x_overtake_active_gap_loss_hold_sec: 1.00 # [s] bridge the measured WP61-63 hairpin gap dropout without changing sides
   v2x_overtake_clear_confirm_sec: 0.10        # [s] short rear-clear debounce before Return
   v2x_overtake_reacquire_enabled: true        # allow same target/side to return to Pass early in Return
   v2x_overtake_reacquire_window_sec: 0.50     # [s] maximum Return age for a safe reacquire
@@ -468,7 +467,7 @@ mpc:
   v2x_low_speed_avoidance_shift_heading_tolerance: 0.2 # [rad] do not hand off while still heavily yawed
   v2x_low_speed_avoidance_shift_clear_hold_sec: 2.0 # [s] ignore brief front/side detection gaps before MPC handoff
   v2x_low_speed_avoidance_max_front_speed: 0.2   # [m/s] only treat truly stopped vehicles as bypass targets
-  v2x_low_speed_avoidance_min_prepare_distance: 6.0 # [m] too close should brake/follow, not start lateral bypass
+  v2x_low_speed_avoidance_min_prepare_distance: 3.0 # [m] sim: allow close stopped-front bypass when a corridor is feasible
   v2x_low_speed_avoidance_min_gap_width: 0.5     # [m] checked after wall clearance shrink
   v2x_low_speed_avoidance_min_gap_points: 2      # require consecutive safe gap points before entering bypass
   v2x_low_speed_avoidance_clear_distance: 8.0    # [m] keep low-speed bypass until clear of nearby V2X vehicles

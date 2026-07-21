@@ -10,6 +10,7 @@
 #include <multi_purpose_mpc_ros/awsim_boost_start_dash.hpp>
 #include <multi_purpose_mpc_ros/mpc_state_prediction.hpp>
 #include <multi_purpose_mpc_ros/mpc_velocity_limit.hpp>
+#include <multi_purpose_mpc_ros/mpc_waypoint_preview.hpp>
 #include <multi_purpose_mpc_ros/path_core.hpp>
 #include <multi_purpose_mpc_ros/recovery_footprint.hpp>
 #include <multi_purpose_mpc_ros/recovery_mpc.hpp>
@@ -95,6 +96,7 @@ namespace path_core = ::multi_purpose_mpc_ros::path_core;
 namespace awsim_boost = ::multi_purpose_mpc_ros::awsim_boost;
 namespace mpc_state_prediction = ::multi_purpose_mpc_ros::mpc_state_prediction;
 namespace mpc_velocity_limit = ::multi_purpose_mpc_ros::mpc_velocity_limit;
+namespace mpc_waypoint_preview = ::multi_purpose_mpc_ros::mpc_waypoint_preview;
 namespace overtake_core = ::multi_purpose_mpc_ros::v2x_overtake_core;
 namespace recovery_footprint = ::multi_purpose_mpc_ros::recovery_footprint;
 namespace recovery_mpc = ::multi_purpose_mpc_ros::recovery_mpc;
@@ -2951,8 +2953,8 @@ struct MpcProblem
   Eigen::SparseMatrix<double> P;
   Eigen::SparseMatrix<double> A;
   int N{};
-  int base_wp_id{};
-  int planning_wp_id{};
+  int tracking_wp_id{};
+  int preview_wp_id{};
   int ref_wp_id{};
 };
 
@@ -2970,6 +2972,12 @@ struct MPC
   {
     (void)use_obstacle_avoidance;
     (void)use_path_constraints_topic;
+    if (
+      !mpc_waypoint_preview::is_valid_offset(cfg.wp_id_offset) ||
+      !mpc_waypoint_preview::is_valid_offset(cfg.wp_id_low_offset))
+    {
+      throw std::invalid_argument("MPC waypoint preview offsets must be within [0, 2]");
+    }
     model->reference_path->update_simple_path_constraints(cfg.N, model->safety_margin);
   }
 
@@ -2990,12 +2998,72 @@ struct MPC
 
   void update_wp_id_offset(const int wp_id_offset)
   {
+    if (!mpc_waypoint_preview::is_valid_offset(wp_id_offset)) {
+      throw std::invalid_argument("MPC waypoint preview offset must be within [0, 2]");
+    }
     cfg.wp_id_offset = wp_id_offset;
+  }
+
+  void update_wp_id_low_offset(const int wp_id_low_offset)
+  {
+    if (!mpc_waypoint_preview::is_valid_offset(wp_id_low_offset)) {
+      throw std::invalid_argument("MPC low-speed waypoint preview offset must be within [0, 2]");
+    }
+    cfg.wp_id_low_offset = wp_id_low_offset;
   }
 
   void update_current_speed(const double current_speed_mps)
   {
     current_speed_mps_ = std::max(0.0, current_speed_mps);
+  }
+
+  void set_v2x_race_session_active(const bool active, const double now_sec)
+  {
+    if (v2x_race_session_active_ == active) {
+      return;
+    }
+
+    v2x_race_session_active_ = active;
+    v2x_behavior_state = V2XBehaviorState::Cruise;
+    v2x_behavior_state_initialized = false;
+    last_v2x_behavior_state_change_sec = now_sec;
+    last_v2x_behavior_debug_log_sec_ = std::numeric_limits<double>::quiet_NaN();
+    low_speed_avoidance_stall_since_sec_ = std::numeric_limits<double>::quiet_NaN();
+    low_speed_avoidance_stall_last_update_sec_ = std::numeric_limits<double>::quiet_NaN();
+    low_speed_avoidance_stall_cooldown_until_sec_ = now_sec;
+    front_hazard_hold_until_sec_ = now_sec;
+    front_hazard_hold_target_id_.clear();
+    start_grid_stop_suppressed_ = false;
+    start_grid_emergency_override_logged_ = false;
+    start_grid_initial_target_id_.reset();
+    overtake_locked_target_ey_.reset();
+    overtake_locked_side_sign_ = 0;
+    overtake_entry_speed_.reset();
+    overtake_solver_recovery_active_ = false;
+    overtake_solver_reentry_blocked_ = false;
+    overtake_solver_recovery_success_count_ = 0;
+    overtake_solver_cooldown_until_sec_ = now_sec;
+    overtake_solver_cooldown_logged_ = false;
+    overtake_curve_cooldown_until_sec_ = now_sec;
+    last_overtake_line_debug_log_sec_ = std::numeric_limits<double>::quiet_NaN();
+    low_speed_shift_control_active_ = false;
+    low_speed_shift_control_was_active_ = false;
+    low_speed_shift_rejoin_active_ = false;
+    low_speed_shift_handoff_deferred_logged_ = false;
+    low_speed_shift_pass_target_ey_ = 0.0;
+    low_speed_shift_target_ey_ = 0.0;
+    low_speed_shift_velocity_mps_ = 0.0;
+    low_speed_shift_last_relevant_vehicle_sec_ = std::numeric_limits<double>::quiet_NaN();
+    reset_overtake_line_state(
+      now_sec, active ? "AWSIM race session started" : "AWSIM race session inactive");
+    if (gap_planner != nullptr) {
+      gap_planner->reset_low_speed_targets();
+    }
+    last_v2x_behavior_output_ = V2XBehaviorOutput{};
+    RCLCPP_INFO(
+      rclcpp::get_logger("mpc_controller"),
+      "V2X race session changed: active=%d; behavior, pass line, and watchdog reset",
+      active ? 1 : 0);
   }
 
   start_grid_grace::Transition arm_start_grid_grace(const double start_sec)
@@ -3074,6 +3142,12 @@ struct MPC
   {
     V2XBehaviorOutput output;
     if (!cfg.v2x_behavior.enabled || gap_planner == nullptr || N <= 0) {
+      return output;
+    }
+    if (!v2x_race_session_active_) {
+      output.state = V2XBehaviorState::Cruise;
+      output.ego_speed = current_speed_mps_;
+      output.reason = "AWSIM race session inactive";
       return output;
     }
 
@@ -3222,6 +3296,14 @@ struct MPC
     double nearest_front_local_longitudinal = std::numeric_limits<double>::infinity();
     bool nearest_front_progress_used = false;
     std::string nearest_front_id;
+    bool has_low_speed_corridor_vehicle = false;
+    double nearest_low_speed_corridor_distance = std::numeric_limits<double>::infinity();
+    double nearest_low_speed_corridor_speed = std::numeric_limits<double>::infinity();
+    double nearest_low_speed_corridor_lateral = std::numeric_limits<double>::infinity();
+    double nearest_low_speed_corridor_local_longitudinal =
+      std::numeric_limits<double>::infinity();
+    bool nearest_low_speed_corridor_progress_used = false;
+    std::string nearest_low_speed_corridor_id;
     std::string nearest_side_id;
     double nearest_side_abs_longitudinal = std::numeric_limits<double>::infinity();
     double nearest_side_course_longitudinal = std::numeric_limits<double>::infinity();
@@ -3301,6 +3383,27 @@ struct MPC
 
       const double clearance_longitudinal =
         use_course_progress ? front_longitudinal : longitudinal;
+      const bool within_low_speed_course_corridor =
+        use_course_progress ? within_progress_corridor : within_local_corridor;
+      const double low_speed_candidate_speed = std::isfinite(front_vehicle_speed) ?
+        std::max(0.0, front_vehicle_speed) : std::numeric_limits<double>::infinity();
+      if (
+        cfg.v2x_behavior.low_speed_avoidance_enabled &&
+        within_low_speed_course_corridor &&
+        clearance_longitudinal > 0.0 &&
+        clearance_longitudinal <= cfg.v2x_behavior.low_speed_avoidance_distance &&
+        std::isfinite(low_speed_candidate_speed) &&
+        low_speed_candidate_speed <= cfg.v2x_behavior.low_speed_avoidance_max_front_speed &&
+        clearance_longitudinal < nearest_low_speed_corridor_distance)
+      {
+        has_low_speed_corridor_vehicle = true;
+        nearest_low_speed_corridor_distance = clearance_longitudinal;
+        nearest_low_speed_corridor_speed = low_speed_candidate_speed;
+        nearest_low_speed_corridor_lateral = front_lateral;
+        nearest_low_speed_corridor_local_longitudinal = longitudinal;
+        nearest_low_speed_corridor_progress_used = use_course_progress;
+        nearest_low_speed_corridor_id = vehicle.id;
+      }
       if (
         track_low_speed_clearance &&
         self_distance <= cfg.v2x_behavior.low_speed_avoidance_clear_distance &&
@@ -3519,18 +3622,44 @@ struct MPC
         "front hazard hold refreshed" : "front hazard hold after geometry loss";
       return commit_v2x_behavior_state(output, now_sec);
     }
+    const bool low_speed_corridor_vehicle_is_nearest =
+      has_low_speed_corridor_vehicle &&
+      (!has_front_vehicle || nearest_low_speed_corridor_id == nearest_front_id ||
+      nearest_low_speed_corridor_distance <= nearest_front_distance + kEps);
+    // The broad low-speed corridor intentionally reaches beyond the narrow front-brake
+    // overlap. Do not let that relaxed geometry interpret the initial grid formation as a
+    // stopped obstacle while the start grace is active. An already active bypass may continue.
+    const bool suppress_new_low_speed_bypass_during_start_grid =
+      start_grid_grace_active && !continuing_low_speed_avoidance;
+    const bool suppress_low_speed_bypass =
+      suppress_start_grid_stop_behavior || suppress_new_low_speed_bypass_during_start_grid;
     const bool low_speed_avoidance_candidate =
-      cfg.v2x_behavior.low_speed_avoidance_enabled && has_front_vehicle &&
-      !low_speed_avoidance_cooldown_active &&
-      !suppress_start_grid_stop_behavior &&
-      nearest_front_speed <= cfg.v2x_behavior.low_speed_avoidance_max_front_speed &&
-      (!overtake_forbidden || continuing_low_speed_avoidance ||
-      (cfg.v2x_behavior.low_speed_avoidance_ignore_soft_curve_forbidden &&
-      !overtake_forbidden_wp)) &&
-      nearest_front_distance >=
-      std::max(0.0, cfg.v2x_behavior.low_speed_avoidance_min_prepare_distance) &&
-      nearest_front_distance <= cfg.v2x_behavior.low_speed_avoidance_distance;
+      v2x_overtake_core::can_start_low_speed_bypass(
+      v2x_overtake_core::LowSpeedBypassCandidateRequest{
+        cfg.v2x_behavior.low_speed_avoidance_enabled,
+        low_speed_corridor_vehicle_is_nearest,
+        low_speed_avoidance_cooldown_active,
+        suppress_low_speed_bypass,
+        overtake_forbidden,
+        continuing_low_speed_avoidance,
+        cfg.v2x_behavior.low_speed_avoidance_ignore_soft_curve_forbidden,
+        overtake_forbidden_wp,
+        nearest_low_speed_corridor_speed,
+        cfg.v2x_behavior.low_speed_avoidance_max_front_speed,
+        nearest_low_speed_corridor_distance,
+        cfg.v2x_behavior.low_speed_avoidance_min_prepare_distance,
+        cfg.v2x_behavior.low_speed_avoidance_distance});
     output.low_speed_avoidance_candidate = low_speed_avoidance_candidate;
+    const auto adopt_low_speed_corridor_vehicle = [&]() {
+        output.has_front_vehicle = true;
+        output.front_distance = nearest_low_speed_corridor_distance;
+        output.front_speed = nearest_low_speed_corridor_speed;
+        output.front_lateral = nearest_low_speed_corridor_lateral;
+        output.front_local_longitudinal = nearest_low_speed_corridor_local_longitudinal;
+        output.front_progress_used = nearest_low_speed_corridor_progress_used;
+        output.front_progress_lateral = nearest_low_speed_corridor_lateral;
+        output.target_vehicle_id = nearest_low_speed_corridor_id;
+      };
     bool low_speed_avoidance_gap_blocked = false;
     if (low_speed_avoidance_candidate) {
       const double low_speed_gap_max_self_distance =
@@ -3551,6 +3680,7 @@ struct MPC
         if (candidate_gap.pass_side_sign != 0) {
           gap_planner->lock_low_speed_pass_side(candidate_gap.pass_side_sign);
         }
+        adopt_low_speed_corridor_vehicle();
         output.state = V2XBehaviorState::LowSpeedAvoidance;
         output.reason = candidate_gap.pass_side_sign < 0 ?
           "low-speed front vehicle and right gap available" :
@@ -3566,12 +3696,11 @@ struct MPC
     const bool low_speed_avoidance_hold_candidate =
       cfg.v2x_behavior.low_speed_avoidance_enabled && continuing_low_speed_avoidance &&
       !low_speed_avoidance_cooldown_active &&
-      has_front_vehicle && !suppress_start_grid_stop_behavior &&
-      nearest_front_speed <= cfg.v2x_behavior.low_speed_avoidance_max_front_speed &&
+      low_speed_corridor_vehicle_is_nearest && !suppress_low_speed_bypass &&
       (!overtake_forbidden ||
       (cfg.v2x_behavior.low_speed_avoidance_ignore_soft_curve_forbidden &&
       !overtake_forbidden_wp)) &&
-      nearest_front_distance <=
+      nearest_low_speed_corridor_distance <=
       std::max(
         cfg.v2x_behavior.low_speed_avoidance_clear_distance,
         cfg.v2x_behavior.low_speed_avoidance_distance);
@@ -3594,6 +3723,7 @@ struct MPC
         if (hold_gap.pass_side_sign != 0) {
           gap_planner->lock_low_speed_pass_side(hold_gap.pass_side_sign);
         }
+        adopt_low_speed_corridor_vehicle();
         output.low_speed_avoidance_candidate = true;
         output.state = V2XBehaviorState::LowSpeedAvoidance;
         output.reason = "low-speed avoidance hold";
@@ -3632,14 +3762,24 @@ struct MPC
     }
 
     if (low_speed_avoidance_gap_blocked) {
+      // This candidate can be outside the narrow front-overlap set. Adopt it before applying
+      // Follow limits so an unavailable passing gap still causes a controlled approach instead
+      // of leaving the velocity uncapped until contact.
+      adopt_low_speed_corridor_vehicle();
+      const auto stopped_front_risk =
+        compute_front_risk(output.front_distance, output.front_speed);
+      const auto stopped_front_risk_level = classify_front_risk(stopped_front_risk);
+      output.front_risk = stopped_front_risk;
+      output.front_risk_level = stopped_front_risk_level;
       output.state = V2XBehaviorState::Follow;
       output.reason = "low-speed gap unavailable";
       bool front_risk_applied = false;
       if (apply_follow_velocity_limits(
-          output, nearest_front_distance, nearest_front_speed, front_decel_curve_guard, front_risk,
-          front_risk_level, front_risk_applied)) {
+          output, output.front_distance, output.front_speed, front_decel_curve_guard,
+          stopped_front_risk, stopped_front_risk_level, front_risk_applied)) {
         output.reason += front_risk_applied ?
-          " / " + front_risk_reason("front risk brake", front_risk, front_risk_level) :
+          " / " + front_risk_reason(
+          "front risk brake", stopped_front_risk, stopped_front_risk_level) :
           output.follow_speed_limit_active ? " / follow speed cap" : " / front decel guard";
       }
       return commit_v2x_behavior_state(output, now_sec);
@@ -4311,8 +4451,15 @@ struct MPC
     }
 
     if (has_side_vehicle) {
-      output.state = V2XBehaviorState::Follow;
-      if (output.reason.empty()) {
+      const bool side_target_requires_follow =
+        v2x_overtake_core::side_only_target_requires_follow(
+        nearest_side_course_longitudinal,
+        cfg.v2x_behavior.side_overtake_entry_rear_tolerance);
+      output.state = side_target_requires_follow ?
+        V2XBehaviorState::Follow : V2XBehaviorState::Cruise;
+      if (!side_target_requires_follow) {
+        output.reason = "rear-side vehicle does not constrain ego";
+      } else if (output.reason.empty()) {
         output.reason = "side vehicle";
       }
       return commit_v2x_behavior_state(output, now_sec);
@@ -4323,8 +4470,8 @@ struct MPC
   }
 
   MpcProblem init_problem(
-    const int N, const double safety_margin, const double now_sec, const int base_wp_id,
-    const int planning_wp_id)
+    const int N, const double safety_margin, const double now_sec, const int tracking_wp_id,
+    const int preview_wp_id)
   {
     constexpr int nx = 3;
     constexpr int nu = 2;
@@ -4371,16 +4518,27 @@ struct MPC
     Eigen::MatrixXd A_dense = Eigen::MatrixXd::Zero(nx_N, nx_N);
     Eigen::MatrixXd B_dense = Eigen::MatrixXd::Zero(nx_N, nu_N);
     for (int n = 0; n < N; ++n) {
-      const auto & current_waypoint = model->reference_path->get_waypoint(planning_wp_id + n);
-      const auto & next_waypoint = model->reference_path->get_waypoint(planning_wp_id + n + 1);
-      const double delta_s = next_waypoint.distance_to(current_waypoint);
-      const double kappa_ref = current_waypoint.kappa;
-      const double v_ref = clip(current_waypoint.v_ref, umin[0], umax[0]);
-      const auto [f, A_lin, B_lin] = model->linearize(v_ref, kappa_ref, delta_s);
+      const auto & tracking_waypoint =
+        model->reference_path->get_waypoint(tracking_wp_id + n);
+      const auto & next_tracking_waypoint =
+        model->reference_path->get_waypoint(tracking_wp_id + n + 1);
+      const auto & preview_waypoint =
+        model->reference_path->get_waypoint(preview_wp_id + n);
+      const double delta_s = next_tracking_waypoint.distance_to(tracking_waypoint);
+      const double tracking_kappa = tracking_waypoint.kappa;
+      const double tracking_v = clip(tracking_waypoint.v_ref, umin[0], umax[0]);
+      const double preview_kappa = preview_waypoint.kappa;
+      const double preview_v = clip(preview_waypoint.v_ref, umin[0], umax[0]);
+      const auto input_reference = mpc_waypoint_preview::resolve_input_reference(
+        tracking_v, tracking_kappa, preview_v, preview_kappa);
+      const auto [f, A_lin, B_lin] =
+        model->linearize(tracking_v, tracking_kappa, delta_s);
       A_dense.block<nx, nx>((n + 1) * nx, n * nx) = A_lin;
       B_dense.block<nx, nu>((n + 1) * nx, n * nu) = B_lin;
-      ur.segment<nu>(n * nu) = Eigen::Vector2d(v_ref, kappa_ref);
-      uq.segment<nx>(n * nx) = B_lin * Eigen::Vector2d(v_ref, kappa_ref) - f;
+      ur.segment<nu>(n * nu) =
+        Eigen::Vector2d(input_reference.velocity_mps, input_reference.curvature_radpm);
+      uq.segment<nx>(n * nx) =
+        B_lin * Eigen::Vector2d(tracking_v, tracking_kappa) - f;
 
       double max_kappa_pred = std::abs(kappa_pred[n]);
       if (cfg.use_max_kappa_pred) {
@@ -4402,7 +4560,7 @@ struct MPC
     if (!model->reference_path->path_constraints_upper.empty()) {
       const int constraint_count =
         static_cast<int>(model->reference_path->path_constraints_upper.size());
-      const int candidate_ref_wp_id = planning_wp_id + 1;
+      const int candidate_ref_wp_id = tracking_wp_id + 1;
       ref_wp_id = model->reference_path->circular ?
         ((candidate_ref_wp_id % constraint_count) + constraint_count) % constraint_count :
         std::clamp(candidate_ref_wp_id, 0, constraint_count - 1);
@@ -4823,7 +4981,7 @@ struct MPC
       }
     }
 
-    return MpcProblem{q, l, u, P, A_full, N, base_wp_id, planning_wp_id, ref_wp_id};
+    return MpcProblem{q, l, u, P, A_full, N, tracking_wp_id, preview_wp_id, ref_wp_id};
   }
 
   OsqpSolveOutcome solve_problem(const MpcProblem & problem)
@@ -5036,10 +5194,10 @@ struct MPC
     }
     try {
       model->get_current_waypoint();
-      const int base_wp_id = model->wp_id;
-      const int planning_wp_id = get_planning_wp_id(base_wp_id);
+      const int tracking_wp_id = model->wp_id;
+      const int preview_wp_id = get_preview_wp_id(tracking_wp_id);
       const int remaining_segments =
-        std::max(0, model->reference_path->n_waypoints - 1 - planning_wp_id);
+        std::max(0, model->reference_path->n_waypoints - 1 - tracking_wp_id);
       const int N = model->reference_path->circular ?
         cfg.N : std::min(cfg.N, remaining_segments);
       if (N < 2) {
@@ -5047,13 +5205,13 @@ struct MPC
       }
       ensure_current_control_horizon();
 
-      const auto & planning_waypoint =
-        model->reference_path->get_waypoint(planning_wp_id);
-      model->spatial_state = model->t2s(planning_waypoint, model->temporal_state);
+      const auto & tracking_waypoint =
+        model->reference_path->get_waypoint(tracking_wp_id);
+      model->spatial_state = model->t2s(tracking_waypoint, model->temporal_state);
       const MpcProblem problem =
-        init_problem(N, model->safety_margin, now_sec, base_wp_id, planning_wp_id);
+        init_problem(N, model->safety_margin, now_sec, tracking_wp_id, preview_wp_id);
       if (low_speed_shift_control_active_) {
-        return low_speed_shift_control(planning_waypoint);
+        return low_speed_shift_control(tracking_waypoint);
       }
       const bool low_speed_shift_handoff_requested = low_speed_shift_control_was_active_;
       auto outcome = solve_problem(problem);
@@ -5067,7 +5225,7 @@ struct MPC
               outcome.failure_detail.c_str());
             low_speed_shift_handoff_deferred_logged_ = true;
           }
-          return low_speed_shift_control(planning_waypoint);
+          return low_speed_shift_control(tracking_waypoint);
         }
         throw std::runtime_error("OSQP failed: " + outcome.failure_detail);
       }
@@ -5087,7 +5245,7 @@ struct MPC
       }
 
       auto prediction =
-        update_prediction(dec.head((N + 1) * nx), N, problem.planning_wp_id);
+        update_prediction(dec.head((N + 1) * nx), N, problem.tracking_wp_id);
       Eigen::Vector2d u(v, delta);
 
       double max_delta = 0.0;
@@ -5139,7 +5297,7 @@ struct MPC
             cfg.v2x_behavior.overtake_line.solver_recovery_success_cycles);
         }
       }
-      last_solved_wp_id = problem.planning_wp_id;
+      last_solved_wp_id = problem.tracking_wp_id;
       return {u, max_delta};
     } catch (const std::exception & error) {
       return safe_failure_control(error.what());
@@ -5150,12 +5308,12 @@ struct MPC
 
   std::pair<std::vector<double>, std::vector<double>> update_prediction(
     const Eigen::VectorXd & spatial_state_prediction_flat, const int N,
-    const int planning_wp_id)
+    const int tracking_wp_id)
   {
     std::pair<std::vector<double>, std::vector<double>> out;
     for (int n = 2; n < N; ++n) {
       const auto & associated_waypoint =
-        model->reference_path->get_waypoint(planning_wp_id + n);
+        model->reference_path->get_waypoint(tracking_wp_id + n);
       Eigen::Vector3d pred_state = spatial_state_prediction_flat.segment<3>(n * 3);
       const auto temporal = model->s2t(associated_waypoint, pred_state);
       out.first.push_back(temporal.x);
@@ -5170,6 +5328,7 @@ struct MPC
   V2XGapPlanner * gap_planner{};
   bool use_obstacle_avoidance{};
   bool use_path_constraints_topic{};
+  bool v2x_race_session_active_{true};
   V2XBehaviorState v2x_behavior_state{V2XBehaviorState::Cruise};
   V2XBehaviorOutput last_v2x_behavior_output_;
   bool v2x_behavior_state_initialized{false};
@@ -5209,20 +5368,15 @@ struct MPC
 
   int effective_wp_id_offset() const
   {
-    if (cfg.wp_id_low_speed > kEps && current_speed_mps_ <= cfg.wp_id_low_speed) {
-      return cfg.wp_id_low_offset;
-    }
-    return cfg.wp_id_offset;
+    return mpc_waypoint_preview::select_effective_offset(
+      cfg.wp_id_offset, cfg.wp_id_low_offset, current_speed_mps_, cfg.wp_id_low_speed);
   }
 
-  int get_planning_wp_id(const int base_wp_id) const
+  int get_preview_wp_id(const int tracking_wp_id) const
   {
-    const int candidate_wp_id = base_wp_id + effective_wp_id_offset();
-    const int waypoint_count = model->reference_path->n_waypoints;
-    if (model->reference_path->circular) {
-      return ((candidate_wp_id % waypoint_count) + waypoint_count) % waypoint_count;
-    }
-    return std::clamp(candidate_wp_id, 0, waypoint_count - 1);
+    return mpc_waypoint_preview::resolve_preview_index(
+      tracking_wp_id, effective_wp_id_offset(), model->reference_path->n_waypoints,
+      model->reference_path->circular);
   }
   std::pair<std::vector<double>, std::vector<double>> current_prediction;
   int infeasibility_counter{0};
@@ -5475,19 +5629,20 @@ private:
       reset_overtake_line_state(now_sec, "safety brake");
       return output;
     }
-    if (behavior_output.state == V2XBehaviorState::LowSpeedAvoidance) {
-      reset_overtake_line_state(now_sec, "low speed avoidance owns target");
-      return output;
-    }
-    const bool stopped_or_low_speed_front =
-      behavior_output.has_front_vehicle &&
-      std::isfinite(behavior_output.front_distance) &&
-      std::isfinite(behavior_output.front_speed) &&
-      behavior_output.front_speed <= cfg.v2x_behavior.low_speed_avoidance_max_front_speed &&
-      behavior_output.front_distance <= std::max(
-        cfg.v2x_behavior.low_speed_avoidance_distance + model->length,
-        cfg.v2x_behavior.low_speed_avoidance_lookahead_distance);
-    if (behavior_output.low_speed_avoidance_candidate || stopped_or_low_speed_front) {
+    const bool stopped_bypass_owns_line =
+      v2x_overtake_core::should_yield_overtake_line_to_stopped_bypass(
+      v2x_overtake_core::StoppedVehicleLineOwnershipRequest{
+        behavior_output.state == V2XBehaviorState::LowSpeedAvoidance,
+        behavior_output.low_speed_avoidance_candidate,
+        behavior_output.state == V2XBehaviorState::Overtake,
+        behavior_output.has_front_vehicle,
+        behavior_output.front_distance,
+        behavior_output.front_speed,
+        cfg.v2x_behavior.low_speed_avoidance_max_front_speed,
+        std::max(
+          cfg.v2x_behavior.low_speed_avoidance_distance + model->length,
+          cfg.v2x_behavior.low_speed_avoidance_lookahead_distance)});
+    if (stopped_bypass_owns_line) {
       reset_overtake_line_state(now_sec, "stopped vehicle bypass owns target");
       return output;
     }
@@ -8038,6 +8193,12 @@ Config load_config(const std::string & path)
   cfg.mpc.wp_id_offset = mpc["wp_id_offset"].as<int>();
   cfg.mpc.wp_id_low_offset =
     mpc["wp_id_low_offset"] ? mpc["wp_id_low_offset"].as<int>() : cfg.mpc.wp_id_offset;
+  if (
+    !mpc_waypoint_preview::is_valid_offset(cfg.mpc.wp_id_offset) ||
+    !mpc_waypoint_preview::is_valid_offset(cfg.mpc.wp_id_low_offset))
+  {
+    throw std::runtime_error("mpc waypoint preview offsets must be within [0, 2]");
+  }
   cfg.mpc.wp_id_low_speed_kmh =
     std::max(0.0, mpc["wp_id_low_speed"] ? mpc["wp_id_low_speed"].as<double>() : 0.0);
   cfg.mpc.wp_id_low_speed = kmh_to_m_per_sec(cfg.mpc.wp_id_low_speed_kmh);
@@ -9060,8 +9221,10 @@ public:
       RCLCPP_INFO(get_logger(), "MPC v_max: v_max=%.2f km/h", mpc_cfg_.v_max_kmh);
     }
     RCLCPP_INFO(
-      get_logger(), "MPC wp_id_offset: normal=%d, low=%d below %.2f km/h",
-      mpc_cfg_.wp_id_offset, mpc_cfg_.wp_id_low_offset, mpc_cfg_.wp_id_low_speed_kmh);
+      get_logger(),
+      "MPC waypoint preview offset: normal=%d, low=%d below %.2f km/h (supported: 0..%d)",
+      mpc_cfg_.wp_id_offset, mpc_cfg_.wp_id_low_offset, mpc_cfg_.wp_id_low_speed_kmh,
+      mpc_waypoint_preview::kMaxOffset);
     if (state_prediction_active_) {
       RCLCPP_INFO(
         get_logger(), "MPC state prediction enabled: delay=%.3f s, simulation_only=%s",
@@ -9290,6 +9453,21 @@ private:
         result.successful = true;
         for (const auto & param : params) {
           const auto & name = param.get_name();
+          const bool is_waypoint_preview_offset =
+            name == "wp_id_offset" || name == "wp_id_low_offset";
+          if (is_waypoint_preview_offset) {
+            if (param.get_type() != rclcpp::ParameterType::PARAMETER_INTEGER) {
+              result.successful = false;
+              result.reason = name + " must be an integer";
+              return result;
+            }
+            if (!mpc_waypoint_preview::is_valid_offset(param.as_int())) {
+              result.successful = false;
+              result.reason = name + " must be within [0, 2]";
+              return result;
+            }
+            continue;
+          }
           const bool is_nonnegative_weight =
             name == "Q0" || name == "Q1" || name == "Q2" || name == "R0" ||
             name == "R1" || name == "QN0" || name == "QN1" || name == "QN2";
@@ -9364,7 +9542,7 @@ private:
             mpc_->update_wp_id_offset(param.as_int());
           } else if (name == "wp_id_low_offset") {
             mpc_cfg_.wp_id_low_offset = param.as_int();
-            mpc_->cfg.wp_id_low_offset = param.as_int();
+            mpc_->update_wp_id_low_offset(param.as_int());
           } else if (name == "wp_id_low_speed") {
             mpc_cfg_.wp_id_low_speed_kmh = std::max(0.0, param.as_double());
             mpc_cfg_.wp_id_low_speed = kmh_to_m_per_sec(mpc_cfg_.wp_id_low_speed_kmh);
@@ -11698,6 +11876,10 @@ private:
 
     car_->update_states(mpc_pose.x, mpc_pose.y, mpc_pose.theta);
     mpc_->update_current_speed(std::abs(actual_v));
+    mpc_->set_v2x_race_session_active(
+      overtake_core::is_v2x_behavior_session_active(
+        awsim_state_tracking_enabled_, race_started_),
+      current_time.seconds());
 
     std::optional<double> elapsed_since_start;
     if (domain_start_epoch_.has_value()) {

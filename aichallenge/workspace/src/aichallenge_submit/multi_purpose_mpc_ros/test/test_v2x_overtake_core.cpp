@@ -14,7 +14,9 @@ namespace
 using multi_purpose_mpc_ros::v2x_overtake_core::PassSide;
 using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedPassSideCandidate;
 using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedPassSideRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedBypassCandidateRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedShiftSteeringRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::StoppedVehicleLineOwnershipRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ContinuityAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::ContinuityRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CoursePoint;
@@ -66,6 +68,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::should_resolve_curve_pass_side;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_active_line_gap_loss_hold;
 using multi_purpose_mpc_ros::v2x_overtake_core::explicit_overtake_line_owns_lateral_plan;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_start_side_overtake;
+using multi_purpose_mpc_ros::v2x_overtake_core::side_only_target_requires_follow;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_unlatched_pass_closing_speed;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_line_horizon_progress;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_side_lateral_goal;
@@ -92,6 +95,9 @@ using multi_purpose_mpc_ros::v2x_overtake_core::rate_limit_solver_fallback_steer
 using multi_purpose_mpc_ros::v2x_overtake_core::should_neutralize_solver_fallback_steering;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_solver_reentry_gate;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_pass_side;
+using multi_purpose_mpc_ros::v2x_overtake_core::is_v2x_behavior_session_active;
+using multi_purpose_mpc_ros::v2x_overtake_core::can_start_low_speed_bypass;
+using multi_purpose_mpc_ros::v2x_overtake_core::should_yield_overtake_line_to_stopped_bypass;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_reachable_low_speed_pass_side;
 using multi_purpose_mpc_ros::v2x_overtake_core::has_entered_low_speed_pass_corridor;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_low_speed_pass_velocity;
@@ -633,6 +639,17 @@ TEST(V2XOvertakeCoreSpeed, RejectsNewSidePassAfterTargetIsAlreadyBehind)
   request.target_longitudinal_m = -1.47;
   request.continuing_overtake = true;
   EXPECT_TRUE(can_start_side_overtake(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, RearSideTargetDoesNotForceFollowOnClearRoad)
+{
+  EXPECT_TRUE(side_only_target_requires_follow(0.2, 0.5));
+  EXPECT_TRUE(side_only_target_requires_follow(-0.5, 0.5));
+  EXPECT_FALSE(side_only_target_requires_follow(-0.51, 0.5));
+
+  EXPECT_TRUE(side_only_target_requires_follow(
+    std::numeric_limits<double>::quiet_NaN(), 0.5));
+  EXPECT_TRUE(side_only_target_requires_follow(-1.0, -0.1));
 }
 
 TEST(V2XOvertakeCoreSpeed, SlowsClosingOnlyUntilPassLateralClearanceLatches)
@@ -1363,6 +1380,105 @@ TEST(V2XOvertakeCoreSide, LowSpeedPassPrefersReachableSideOverSlightlyWiderSide)
       LowSpeedPassSideCandidate{true, 2.60, 2.40},
       LowSpeedPassSideCandidate{true, -2.71, 2.59}});
   EXPECT_EQ(side, PassSide::Left);
+}
+
+LowSpeedBypassCandidateRequest low_speed_bypass_request()
+{
+  LowSpeedBypassCandidateRequest request;
+  request.enabled = true;
+  request.candidate_vehicle_present = true;
+  request.vehicle_speed_mps = 0.0;
+  request.maximum_vehicle_speed_mps = 0.2;
+  request.forward_distance_m = 3.2;
+  request.minimum_prepare_distance_m = 3.0;
+  request.maximum_entry_distance_m = 10.0;
+  return request;
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, AcceptsCloseStoppedVehicleAtPrepareBoundary)
+{
+  auto request = low_speed_bypass_request();
+  EXPECT_TRUE(can_start_low_speed_bypass(request));
+
+  request.forward_distance_m = request.minimum_prepare_distance_m;
+  EXPECT_TRUE(can_start_low_speed_bypass(request));
+  request.forward_distance_m = request.maximum_entry_distance_m;
+  EXPECT_TRUE(can_start_low_speed_bypass(request));
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, RejectsBumperTouchAndMovingVehicle)
+{
+  auto request = low_speed_bypass_request();
+  request.forward_distance_m = 2.99;
+  EXPECT_FALSE(can_start_low_speed_bypass(request));
+
+  request = low_speed_bypass_request();
+  request.vehicle_speed_mps = 0.21;
+  EXPECT_FALSE(can_start_low_speed_bypass(request));
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, StartGridSuppressionBlocksNewCandidate)
+{
+  auto request = low_speed_bypass_request();
+  request.start_grid_stop_suppressed = true;
+  EXPECT_FALSE(can_start_low_speed_bypass(request));
+
+  request.start_grid_stop_suppressed = false;
+  EXPECT_TRUE(can_start_low_speed_bypass(request));
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, RaceSessionGateOnlyAppliesWithAwsimStateTracking)
+{
+  EXPECT_TRUE(is_v2x_behavior_session_active(false, false));
+  EXPECT_FALSE(is_v2x_behavior_session_active(true, false));
+  EXPECT_TRUE(is_v2x_behavior_session_active(true, true));
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, AllowsSoftCurveOverrideButNotExplicitForbiddenWaypoint)
+{
+  auto request = low_speed_bypass_request();
+  request.overtake_forbidden = true;
+  request.ignore_soft_curve_forbidden = true;
+  EXPECT_TRUE(can_start_low_speed_bypass(request));
+
+  request.explicit_forbidden_wp = true;
+  EXPECT_FALSE(can_start_low_speed_bypass(request));
+  request.continuing = true;
+  EXPECT_TRUE(can_start_low_speed_bypass(request));
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, CandidateOwnsLineWhenLowSpeedBypassIsActive)
+{
+  StoppedVehicleLineOwnershipRequest request;
+  request.low_speed_candidate = true;
+  request.overtake_behavior_active = true;
+
+  EXPECT_TRUE(should_yield_overtake_line_to_stopped_bypass(request));
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, SelectedGenericOvertakeKeepsLineForCloseStoppedFront)
+{
+  StoppedVehicleLineOwnershipRequest request;
+  request.overtake_behavior_active = true;
+  request.has_front_vehicle = true;
+  request.front_distance_m = 2.5;
+  request.front_speed_mps = 0.0;
+  request.maximum_stopped_speed_mps = 0.2;
+  request.stopped_detection_distance_m = 18.0;
+
+  EXPECT_FALSE(should_yield_overtake_line_to_stopped_bypass(request));
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, FollowWithoutBypassReleasesStaleOvertakeLine)
+{
+  StoppedVehicleLineOwnershipRequest request;
+  request.has_front_vehicle = true;
+  request.front_distance_m = 4.0;
+  request.front_speed_mps = 0.0;
+  request.maximum_stopped_speed_mps = 0.2;
+  request.stopped_detection_distance_m = 18.0;
+
+  EXPECT_TRUE(should_yield_overtake_line_to_stopped_bypass(request));
 }
 
 TEST(V2XOvertakeCoreSide, LowSpeedPassUsesWidthOnlyForEqualTransitions)

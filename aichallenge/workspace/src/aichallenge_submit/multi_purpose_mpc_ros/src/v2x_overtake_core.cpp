@@ -273,6 +273,18 @@ bool can_start_side_overtake(const SideOvertakeEntryRequest & request) noexcept
   return request.target_longitudinal_m >= -request.rear_tolerance_m;
 }
 
+bool side_only_target_requires_follow(
+  const double target_longitudinal_m, const double rear_tolerance_m) noexcept
+{
+  if (
+    !std::isfinite(target_longitudinal_m) ||
+    !std::isfinite(rear_tolerance_m) || rear_tolerance_m < 0.0)
+  {
+    return true;
+  }
+  return target_longitudinal_m >= -rear_tolerance_m;
+}
+
 double resolve_unlatched_pass_closing_speed(
   const double configured_closing_speed_mps,
   const double unlatched_pass_closing_speed_mps,
@@ -740,6 +752,57 @@ PassSide opposite_side(const PassSide side) noexcept
     return PassSide::Left;
   }
   return PassSide::None;
+}
+
+bool is_v2x_behavior_session_active(
+  const bool state_tracking_enabled, const bool race_started) noexcept
+{
+  return !state_tracking_enabled || race_started;
+}
+
+bool can_start_low_speed_bypass(const LowSpeedBypassCandidateRequest & request) noexcept
+{
+  if (
+    !request.enabled || !request.candidate_vehicle_present || request.cooldown_active ||
+    request.start_grid_stop_suppressed ||
+    !std::isfinite(request.vehicle_speed_mps) || request.vehicle_speed_mps < 0.0 ||
+    !std::isfinite(request.maximum_vehicle_speed_mps) ||
+    request.maximum_vehicle_speed_mps < 0.0 ||
+    request.vehicle_speed_mps > request.maximum_vehicle_speed_mps ||
+    !std::isfinite(request.forward_distance_m) || request.forward_distance_m < 0.0 ||
+    !std::isfinite(request.minimum_prepare_distance_m) ||
+    request.minimum_prepare_distance_m < 0.0 ||
+    !std::isfinite(request.maximum_entry_distance_m) ||
+    request.maximum_entry_distance_m < request.minimum_prepare_distance_m)
+  {
+    return false;
+  }
+
+  const bool curve_policy_allows =
+    !request.overtake_forbidden || request.continuing ||
+    (request.ignore_soft_curve_forbidden && !request.explicit_forbidden_wp);
+  return curve_policy_allows &&
+         request.forward_distance_m >= request.minimum_prepare_distance_m &&
+         request.forward_distance_m <= request.maximum_entry_distance_m;
+}
+
+bool should_yield_overtake_line_to_stopped_bypass(
+  const StoppedVehicleLineOwnershipRequest & request) noexcept
+{
+  if (request.low_speed_behavior_active || request.low_speed_candidate) {
+    return true;
+  }
+  const bool stopped_front =
+    request.has_front_vehicle &&
+    std::isfinite(request.front_distance_m) && request.front_distance_m >= 0.0 &&
+    std::isfinite(request.front_speed_mps) && request.front_speed_mps >= 0.0 &&
+    std::isfinite(request.maximum_stopped_speed_mps) &&
+    request.maximum_stopped_speed_mps >= 0.0 &&
+    std::isfinite(request.stopped_detection_distance_m) &&
+    request.stopped_detection_distance_m >= 0.0 &&
+    request.front_speed_mps <= request.maximum_stopped_speed_mps &&
+    request.front_distance_m <= request.stopped_detection_distance_m;
+  return stopped_front && !request.overtake_behavior_active;
 }
 
 PassSide select_reachable_low_speed_pass_side(

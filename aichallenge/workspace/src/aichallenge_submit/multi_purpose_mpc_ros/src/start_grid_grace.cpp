@@ -117,6 +117,32 @@ double resolve_front_lateral_range(const FrontLateralRangeContext &context) {
                       context.curve_lateral_margin_m);
 }
 
+bool should_attempt_breakout(const BreakoutContext &context) noexcept {
+  return context.enabled && context.grace_active && context.has_front_vehicle &&
+         context.has_side_vehicle && context.initial_static_target_latched &&
+         std::isfinite(context.front_speed_mps) && context.front_speed_mps >= 0.0 &&
+         std::isfinite(context.stationary_speed_threshold_mps) &&
+         context.stationary_speed_threshold_mps >= 0.0 &&
+         context.front_speed_mps <= context.stationary_speed_threshold_mps;
+}
+
+BreakoutSideDecision resolve_breakout_side(const BreakoutSideContext &context) noexcept {
+  if (!std::isfinite(context.ego_lateral_m) ||
+      !std::isfinite(context.front_lateral_m) ||
+      !std::isfinite(context.side_deadband_m) ||
+      context.side_deadband_m < 0.0 || context.latched_side < -1 || context.latched_side > 1) {
+    return {};
+  }
+  if (context.latched_side != 0) {
+    return BreakoutSideDecision{true, context.latched_side};
+  }
+  const double separation = context.ego_lateral_m - context.front_lateral_m;
+  if (std::abs(separation) <= context.side_deadband_m + 1e-9) {
+    return BreakoutSideDecision{true, 0};
+  }
+  return BreakoutSideDecision{true, separation > 0.0 ? 1 : -1};
+}
+
 const char *to_string(const Phase phase) noexcept {
   switch (phase) {
   case Phase::Disabled:

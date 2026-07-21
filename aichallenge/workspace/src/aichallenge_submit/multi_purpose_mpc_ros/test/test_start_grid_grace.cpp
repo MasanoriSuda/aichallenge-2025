@@ -168,3 +168,100 @@ TEST(StartGridGraceFrontLateralRange, RejectsInvalidGeometry) {
   EXPECT_THROW(start_grid_grace::resolve_front_lateral_range(context),
                std::invalid_argument);
 }
+
+TEST(StartGridGraceBreakout, AllowsOnlyLatchedStationaryGridTarget) {
+  start_grid_grace::BreakoutContext context;
+  context.enabled = true;
+  context.grace_active = true;
+  context.has_front_vehicle = true;
+  context.has_side_vehicle = true;
+  context.initial_static_target_latched = true;
+  context.front_speed_mps = 0.0;
+  context.stationary_speed_threshold_mps = 0.2;
+
+  EXPECT_TRUE(start_grid_grace::should_attempt_breakout(context));
+  context.initial_static_target_latched = false;
+  EXPECT_FALSE(start_grid_grace::should_attempt_breakout(context));
+  context.initial_static_target_latched = true;
+  context.front_speed_mps = 0.21;
+  EXPECT_FALSE(start_grid_grace::should_attempt_breakout(context));
+  context.front_speed_mps = 0.0;
+  context.has_side_vehicle = false;
+  EXPECT_FALSE(start_grid_grace::should_attempt_breakout(context));
+}
+
+TEST(StartGridGraceBreakout, FailsClosedWhenDisabledOrInvalid) {
+  start_grid_grace::BreakoutContext context;
+  context.enabled = false;
+  context.grace_active = true;
+  context.has_front_vehicle = true;
+  context.has_side_vehicle = true;
+  context.initial_static_target_latched = true;
+  context.front_speed_mps = 0.0;
+  context.stationary_speed_threshold_mps = 0.2;
+
+  EXPECT_FALSE(start_grid_grace::should_attempt_breakout(context));
+  context.enabled = true;
+  context.front_speed_mps = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_FALSE(start_grid_grace::should_attempt_breakout(context));
+}
+
+TEST(StartGridGraceBreakout, PreservesVisibleStaggeredSide) {
+  start_grid_grace::BreakoutSideContext context;
+  context.ego_lateral_m = -0.89;
+  context.front_lateral_m = -0.07;
+  context.side_deadband_m = 0.05;
+
+  auto decision = start_grid_grace::resolve_breakout_side(context);
+  ASSERT_TRUE(decision.valid);
+  EXPECT_EQ(decision.required_side, -1);
+  context.ego_lateral_m = 0.89;
+  context.front_lateral_m = 0.07;
+  decision = start_grid_grace::resolve_breakout_side(context);
+  ASSERT_TRUE(decision.valid);
+  EXPECT_EQ(decision.required_side, 1);
+}
+
+TEST(StartGridGraceBreakout, LetsGapPlannerChooseWhenStaggerIsInsideDeadband) {
+  start_grid_grace::BreakoutSideContext context;
+  context.ego_lateral_m = 0.03;
+  context.front_lateral_m = 0.0;
+  context.side_deadband_m = 0.05;
+
+  const auto decision = start_grid_grace::resolve_breakout_side(context);
+  ASSERT_TRUE(decision.valid);
+  EXPECT_EQ(decision.required_side, 0);
+}
+
+TEST(StartGridGraceBreakout, KeepsLatchedSideWhenRelativeLateralPositionChanges) {
+  start_grid_grace::BreakoutSideContext context;
+  context.ego_lateral_m = 0.80;
+  context.front_lateral_m = 0.0;
+  context.side_deadband_m = 0.05;
+  context.latched_side = -1;
+
+  auto decision = start_grid_grace::resolve_breakout_side(context);
+  ASSERT_TRUE(decision.valid);
+  EXPECT_EQ(decision.required_side, -1);
+
+  context.ego_lateral_m = -0.80;
+  context.front_lateral_m = 0.20;
+  decision = start_grid_grace::resolve_breakout_side(context);
+  ASSERT_TRUE(decision.valid);
+  EXPECT_EQ(decision.required_side, -1);
+}
+
+TEST(StartGridGraceBreakout, RejectsInvalidSideGeometry) {
+  start_grid_grace::BreakoutSideContext context;
+  context.ego_lateral_m = std::numeric_limits<double>::quiet_NaN();
+  context.front_lateral_m = 0.0;
+  context.side_deadband_m = 0.05;
+
+  EXPECT_FALSE(start_grid_grace::resolve_breakout_side(context).valid);
+  context.ego_lateral_m = 1.0;
+  context.side_deadband_m = -0.1;
+  EXPECT_FALSE(start_grid_grace::resolve_breakout_side(context).valid);
+  context.side_deadband_m = 0.05;
+  context.latched_side = 2;
+  EXPECT_FALSE(start_grid_grace::resolve_breakout_side(context).valid);
+}

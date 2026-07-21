@@ -490,6 +490,8 @@ mpc:
   v2x_moving_safety_brake_margin: 0.3   # [m] added to relative-speed stopping distance
   v2x_moving_safety_brake_time_headway: 0.3 # [s] speed-dependent emergency margin
   v2x_start_grid_grace_time: 5.0         # [s] Ready staging plus this duration after Start; static grid only
+  v2x_start_grid_breakout_enabled: true  # sim race: use a feasible side corridor before falling back to Follow
+  v2x_start_grid_breakout_side_deadband: 0.05 # [m] smaller offset tries both collision-checked sides
   v2x_require_gap_for_overtake: true
   v2x_low_speed_avoidance_enabled: true
   v2x_low_speed_avoidance_ignore_soft_curve_forbidden: true # gate2: allow stopped-vehicle bypass in curve-lookahead zones

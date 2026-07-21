@@ -301,6 +301,10 @@ bool locked_target_intrudes_pass_side(
     request.lateral_clearance_latched || !request.target_seen ||
     request.target_position_jump || !std::isfinite(request.target_longitudinal_m) ||
     request.target_longitudinal_m <= 0.0 ||
+    std::isnan(request.maximum_guard_longitudinal_m) ||
+    request.maximum_guard_longitudinal_m < 0.0 ||
+    (std::isfinite(request.maximum_guard_longitudinal_m) &&
+    request.target_longitudinal_m > request.maximum_guard_longitudinal_m + 1e-9) ||
     !std::isfinite(request.target_relative_lateral_m) ||
     !std::isfinite(request.ordering_margin_m) || request.ordering_margin_m < 0.0)
   {
@@ -849,6 +853,46 @@ SideSelection select_pass_side(const SideSelectionRequest & request) noexcept
   }
   if (is_feasible(request, alternate)) {
     return {PassSide::None, SideSelectionReason::PreferredUnavailable};
+  }
+  return {PassSide::None, SideSelectionReason::NoFeasibleSide};
+}
+
+SideSelection select_curve_attack_side(const CurveAttackSideRequest & request) noexcept
+{
+  if (is_configured_side(request.locked_side)) {
+    return select_pass_side(
+      SideSelectionRequest{
+        request.inner_side, request.locked_side,
+        request.left_feasible, request.right_feasible, false});
+  }
+
+  if (
+    !is_configured_side(request.inner_side) ||
+    !std::isfinite(request.minimum_inner_open_distance_m) ||
+    request.minimum_inner_open_distance_m < 0.0)
+  {
+    return {PassSide::None, SideSelectionReason::InvalidPreference};
+  }
+
+  const double inner_open_distance = request.inner_side == PassSide::Left ?
+    request.left_continuous_open_distance_m : request.right_continuous_open_distance_m;
+  const bool inner_sufficient =
+    is_feasible(
+      SideSelectionRequest{
+        request.inner_side, PassSide::None,
+        request.left_feasible, request.right_feasible, false},
+      request.inner_side) &&
+    std::isfinite(inner_open_distance) && inner_open_distance >= 0.0 &&
+    inner_open_distance + 1e-9 >= request.minimum_inner_open_distance_m;
+  if (inner_sufficient) {
+    return {request.inner_side, SideSelectionReason::Preferred};
+  }
+
+  const PassSide outside_side = opposite_side(request.inner_side);
+  const bool outside_feasible = outside_side == PassSide::Left ?
+    request.left_feasible : request.right_feasible;
+  if (outside_feasible) {
+    return {outside_side, SideSelectionReason::Alternate};
   }
   return {PassSide::None, SideSelectionReason::NoFeasibleSide};
 }

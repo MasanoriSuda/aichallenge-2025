@@ -393,7 +393,8 @@ mpc:
   v2x_overtake_block_inner_curve_pass: true # block inner passes unless the explicit sim-race exception below is satisfied
   v2x_overtake_outer_curve_entry_enabled: true # sim race: allow a reachable outside pass in a soft curve
   v2x_overtake_outer_curve_hard_continuation_enabled: true # keep a locked outer ShiftOut/Pass through a hard curve while gap remains
-  v2x_overtake_inner_curve_entry_enabled: true # sim race: prefer a reachable inside gap when entering a soft curve
+  v2x_overtake_inner_curve_entry_enabled: true # sim race: use inside only when its continuous corridor is sufficiently open
+  v2x_overtake_inner_curve_min_open_distance: 3.0 # [m] otherwise default to a feasible outside curve line
   v2x_overtake_inner_curve_hard_continuation_enabled: true # keep only the locked inside ShiftOut/Pass through the hard apex
   v2x_overtake_hard_curve_entry_enabled: true # dev3 attack: start an inner/outer pass after hard-curve recognition when gap is valid
   v2x_overtake_forbidden_curve_lookahead_distance: 6.0 # [m] soft entry/continuation policy; hard curve uses completion guard below
@@ -462,6 +463,7 @@ mpc:
   v2x_overtake_line_max_lateral_accel: 6.0    # [m/s^2] dev3 attack: complete committed ShiftOut in a hairpin
   v2x_overtake_line_max_target_change: 0.04   # [m/cycle] smooth target goal updates across cycles
   v2x_overtake_line_target_intrusion_ordering_margin: 0.10 # [m] abort if the ahead target reaches/crosses ego's selected-side ordering
+  v2x_overtake_line_target_intrusion_guard_distance: 2.0 # [m] farther targets may be crossed laterally while ego remains behind
   v2x_overtake_line_return_clear_distance: 2.0 # [m] begin Return after nominal vehicle-length clearance
   v2x_overtake_line_phase_hold_time: 0.3      # [s] minimum phase hold before transition
   v2x_overtake_target_hold_sec: 0.75          # [s] keep a locked Pass across a transient V2X classification loss

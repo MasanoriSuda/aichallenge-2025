@@ -1199,6 +1199,7 @@ mpc:
   v2x_overtake_outer_curve_entry_enabled: false
   v2x_overtake_outer_curve_hard_continuation_enabled: false
   v2x_overtake_inner_curve_entry_enabled: false
+  v2x_overtake_inner_curve_min_open_distance: 0.0
   v2x_overtake_inner_curve_hard_continuation_enabled: false
   v2x_overtake_hard_curve_entry_enabled: false
   v2x_overtake_forbidden_curve_lookahead_distance: 0.0
@@ -1249,6 +1250,8 @@ mpc:
   v2x_overtake_line_min_wall_clearance: 0.8
   v2x_overtake_line_max_lateral_accel: 2.5
   v2x_overtake_line_max_target_change: 0.25
+  v2x_overtake_line_target_intrusion_ordering_margin: 0.10
+  v2x_overtake_line_target_intrusion_guard_distance: .inf
   v2x_overtake_line_return_clear_distance: 4.0
   v2x_overtake_line_phase_hold_time: 0.3
   v2x_overtake_target_hold_sec: 0.0
@@ -1334,7 +1337,8 @@ mpc:
 - `v2x_overtake_before_curve_enabled=true` の場合、WP 明示禁止ではなく曲率先読みだけで overtake forbidden になっている区間では、前走車が `v2x_overtake_before_curve_max_front_speed` 以下で、自車が `v2x_overtake_before_curve_min_speed_advantage` 以上速く、かつ `front_decel_guard_curve_lookahead_distance` ではまだガードされていない場合だけ、新規 Overtake を許す。これは長い曲率先読みで直線中の低速前走車に張り付く問題を抑えるための例外である。`v2x_overtake_continue_in_forbidden_enabled=true` の場合は、すでに Overtake 中なら同じ soft forbidden 区間で Overtake 継続を許し、ヘアピン前に横へ出た車両が途中で Follow に戻される挙動を抑える。
 - `v2x_overtake_continue_inner_soft_curve_enabled=true` は、開始済みOvertakeのロック側が曲率先読みで内側に変わってもsoft curve内だけ継続するdev3設定である。この設定単独では新規inner passを許可しない。明示禁止WP、curve cooldown、EmergencyBrakeでは継続を禁止し、gap到達性とwall clearanceも従来どおり再評価する。設定省略時の既定は`false`だが、現行dev3 configは開始済みPassをヘアピン境界まで完了させるため`true`としている。
 - `v2x_overtake_outer_curve_entry_enabled=true` は、曲率符号から求めたカーブ内側と反対の外側に連続gapがある場合だけ、soft curve禁止区間で新規ShiftOutを許可する。`v2x_overtake_outer_curve_hard_continuation_enabled=true`では、同じ外側のlocked ShiftOut/Passが開始済みで、target観測と外側gapが継続している場合だけhard curveでもOvertakeLineを維持する。両設定の省略時既定は`false`、現行dev3では2025 AWSIM比較実験として`true`である。debugの`outer_entry=1`はsoft curve外側進入、`outer_hard=1`はhard curve外側継続を示す。
-- `v2x_overtake_inner_curve_entry_enabled=true` は、曲率符号から求めた内側に連続gapがある場合だけsoft curve禁止区間で新規ShiftOutを許可する。未ロックで両側gapが成立する場合は内側を第一候補にし、不成立なら`v2x_overtake_try_both_sides`で外側へ戻す。`v2x_overtake_inner_curve_hard_continuation_enabled=true`では、同じ内側locked ShiftOut/Passについて、target観測と内側gapが継続する場合だけhard curveでもOvertakeLineを維持する。両設定の省略時既定は`false`、現行dev3では2025 AWSIMシミュレーション予選向け比較実験として`true`である。
+- `v2x_overtake_inner_curve_entry_enabled=true` は、曲率符号から求めた内側に連続gapがある場合だけsoft curve禁止区間で新規ShiftOutを許可する。未ロック時は左右の膨張済み回廊を同時に評価し、内側の連続有効距離が`v2x_overtake_inner_curve_min_open_distance`以上ならイン差し、それ未満なら実行可能な外側を既定として選ぶ。現行dev3は3.0 mであり、最低幅を一瞬満たしただけの内側回廊へ飛び込まないためのシミュレーションレース値である。どちらも成立しない場合はFollow/SafetyBrakeへ残る。一度ShiftOutを開始した側はtargetとともにlockし、後続周期の内外判定で反対側へ切り替えない。`v2x_overtake_inner_curve_hard_continuation_enabled=true`では、同じ内側locked ShiftOut/Passについて、target観測と内側gapが継続する場合だけhard curveでもOvertakeLineを維持する。明示禁止WP、cooldown、EmergencyBrake、target continuity/intrusion、wall/body回廊は従来どおり解除しない。設定省略時の既定はentryが`false`、最小連続距離が0.0 mで、現行dev3ではentryを`true`としている。
+- `v2x_overtake_line_target_intrusion_guard_distance`は、横分離成立前の左右順序侵入をRecovery条件として使う前方距離である。それより遠方では、前車の後方にいる間に選択回廊へ横移動できるため左右順序だけでは中止せず、膨張済み回廊と到達横加速度を実行条件にする。現行dev3の2.0 mとordering margin 0.10 mは2025 AWSIM向けの攻めた暫定値で、キー省略時は無限距離として従来挙動を維持する。Passの横分離latch後は従来どおり左右順序を診断専用とする。
 - `v2x_overtake_hard_curve_entry_enabled=true`は、上記の内側／外側entryが有効で、hard curve認識後にも対象側gapが成立する場合に新規ShiftOutを許可するdev3専用例外である。明示禁止WP、curve cooldown、EmergencyBrake、target position jump、gap plannerのwall/body境界は緩和しない。設定省略時既定は`false`。debugの`outer_hard_entry=1` / `inner_hard_entry=1`はhard curve内からの新規進入、`gap_hold=1`は成立中ラインの時限gap holdを示す。
 - `v2x_overtake_active_hard_curve_completion_enabled=true` は、新規追い越しのhard completion guardを変更せず、OvertakeLineがすでに`Pass`へ入ったlocked targetだけをhard境界残距離で再評価するdev3設定である。現在速度と`a_max`から境界までの到達可能速度を計算し、`v2x_overtake_active_hard_curve_rear_clear_distance`だけ対象を後方へ抜くためのrequired distanceが、境界距離から`v2x_overtake_active_hard_curve_buffer_distance`を引いたavailable distance以下なら継続する。共通コース横差で前後重なり解除をlatch済みの場合も、すでに成立した横クリアランスを失わないよう継続する。ShiftOut/Return/Recovery、新規pass、明示禁止WP、curve cooldown、EmergencyBrakeでは使わず、locked side、wall clearance、SafetyBrakeは維持する。現行0.5 m / 0.5 mは2025 AWSIMシミュレーション予選だけを対象にした攻めた値であり、実車向け値ではない。設定省略時の既定は`false`、現行dev3 configは`true`である。`output/20260719-223908`のD2ではPass中に`hard_continue=1`を維持した。
 - `v2x_side_overtake_entry_rear_tolerance` は、frontではなくside候補から新規追い越しへ入るときのコース進捗後方許容量である。対象の共通コース相対進捗が`-tolerance`未満なら、すでに後方へ抜いた車両を追うShiftOutを開始しない。前方車がなく、この後方side候補しか存在しない場合は`Follow`ではなく`Cruise`とし、後方車へ合わせるV2X縦横制御を生成しない。継続中のlocked Passには適用しない。現行dev3値は0.5 mである。`output/20260721-102131/d3`ではスタート直後から`front_distance=inf`なのに後方side候補だけで`Follow`へ断続的に遷移していたため修正した。

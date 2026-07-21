@@ -61,6 +61,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::SolverReentryGateRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ReacquireRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SideSelectionReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::SideSelectionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::CurveAttackSideRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SpeedLimitRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StallWatchdogRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StartWindowStatus;
@@ -111,6 +112,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::rate_limit_solver_fallback_steer
 using multi_purpose_mpc_ros::v2x_overtake_core::should_neutralize_solver_fallback_steering;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_solver_reentry_gate;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_pass_side;
+using multi_purpose_mpc_ros::v2x_overtake_core::select_curve_attack_side;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_v2x_behavior_session_active;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_start_low_speed_bypass;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_yield_overtake_line_to_stopped_bypass;
@@ -763,6 +765,15 @@ TEST(V2XOvertakeCoreSpeed, DetectsLockedTargetCrossingSelectedPassSideOrdering)
   // Failed right pass: target is on the selected/right side of ego.
   request.target_relative_lateral_m = -0.35;
   EXPECT_TRUE(locked_target_intrudes_pass_side(request));
+
+  // A farther target can still be crossed laterally while ego remains behind;
+  // the inflated corridor and lateral reachability checks own that ShiftOut.
+  request.maximum_guard_longitudinal_m = 2.0;
+  request.target_longitudinal_m = 7.0;
+  EXPECT_FALSE(locked_target_intrudes_pass_side(request));
+  request.target_longitudinal_m = 2.0;
+  EXPECT_TRUE(locked_target_intrudes_pass_side(request));
+  request.maximum_guard_longitudinal_m = std::numeric_limits<double>::infinity();
 
   // Once Pass has proved lateral separation, a rotating hairpin projection
   // must not reinterpret the same committed maneuver as target intrusion.
@@ -1585,6 +1596,46 @@ TEST(V2XOvertakeCoreSide, RejectsSelectionWithoutAValidPreference)
     SideSelectionRequest{PassSide::None, PassSide::None, true, true, true});
   EXPECT_EQ(result.side, PassSide::None);
   EXPECT_EQ(result.reason, SideSelectionReason::InvalidPreference);
+}
+
+TEST(V2XOvertakeCoreCurveAttackSide, SelectsInsideWhenContinuouslyOpen)
+{
+  const auto result = select_curve_attack_side(
+    CurveAttackSideRequest{
+      PassSide::Left, PassSide::None, true, true, 3.0, 8.0, 3.0});
+
+  EXPECT_EQ(result.side, PassSide::Left);
+  EXPECT_EQ(result.reason, SideSelectionReason::Preferred);
+}
+
+TEST(V2XOvertakeCoreCurveAttackSide, DefaultsOutsideWhenInsideRunIsTooShort)
+{
+  const auto result = select_curve_attack_side(
+    CurveAttackSideRequest{
+      PassSide::Left, PassSide::None, true, true, 2.99, 8.0, 3.0});
+
+  EXPECT_EQ(result.side, PassSide::Right);
+  EXPECT_EQ(result.reason, SideSelectionReason::Alternate);
+}
+
+TEST(V2XOvertakeCoreCurveAttackSide, RejectsInsufficientInsideWhenOutsideIsBlocked)
+{
+  const auto result = select_curve_attack_side(
+    CurveAttackSideRequest{
+      PassSide::Right, PassSide::None, false, true, 0.0, 2.0, 3.0});
+
+  EXPECT_EQ(result.side, PassSide::None);
+  EXPECT_EQ(result.reason, SideSelectionReason::NoFeasibleSide);
+}
+
+TEST(V2XOvertakeCoreCurveAttackSide, PreservesLockedSideWithoutSwitching)
+{
+  const auto result = select_curve_attack_side(
+    CurveAttackSideRequest{
+      PassSide::Left, PassSide::Right, true, false, 10.0, 0.0, 3.0});
+
+  EXPECT_EQ(result.side, PassSide::None);
+  EXPECT_EQ(result.reason, SideSelectionReason::LockedUnavailable);
 }
 
 TEST(V2XOvertakeCoreSide, LowSpeedPassPrefersReachableSideOverSlightlyWiderSide)

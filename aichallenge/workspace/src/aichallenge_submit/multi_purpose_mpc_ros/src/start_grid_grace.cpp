@@ -127,20 +127,31 @@ bool should_attempt_breakout(const BreakoutContext &context) noexcept {
 }
 
 bool should_continue_breakout(const BreakoutContinuationContext &context) noexcept {
-  return context.breakout_target_latched && context.current_front_matches &&
-         (context.grace_active ||
-          (context.active_line && context.line_target_matches));
+  if (!context.breakout_target_latched) {
+    return false;
+  }
+
+  // Before a line is committed, only the currently detected front target may
+  // use the start-grid exception. Once the same target owns an active
+  // ShiftOut/Pass line, however, lateral separation intentionally removes it
+  // from the generic front-overlap set. Keep the latched line in that case so
+  // a hard-curve lookahead cannot cancel the pass merely because
+  // current_front_matches became false.
+  return (context.grace_active && context.current_front_matches) ||
+         (context.active_line && context.line_target_matches);
 }
 
 BreakoutSideDecision resolve_breakout_side(const BreakoutSideContext &context) noexcept {
-  if (!std::isfinite(context.ego_lateral_m) ||
-      !std::isfinite(context.front_lateral_m) ||
-      !std::isfinite(context.side_deadband_m) ||
-      context.side_deadband_m < 0.0 || context.latched_side < -1 || context.latched_side > 1) {
+  if (!std::isfinite(context.side_deadband_m) || context.side_deadband_m < 0.0 ||
+      context.latched_side < -1 || context.latched_side > 1) {
     return {};
   }
   if (context.latched_side != 0) {
     return BreakoutSideDecision{true, context.latched_side};
+  }
+  if (!std::isfinite(context.ego_lateral_m) ||
+      !std::isfinite(context.front_lateral_m)) {
+    return {};
   }
   return BreakoutSideDecision{true, 0};
 }

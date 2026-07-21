@@ -285,17 +285,22 @@ struct LockedTargetPassSideIntrusionRequest
   bool target_seen{false};
   bool target_position_jump{false};
   double target_longitudinal_m{};
+  /// Apply lateral-ordering cancellation only when the ahead target is within
+  /// this longitudinal distance. Positive infinity preserves the legacy policy.
+  double maximum_guard_longitudinal_m{std::numeric_limits<double>::infinity()};
   /// Common-course target lateral position minus ego lateral position.
   double target_relative_lateral_m{};
   /// Required signed ordering margin between ego and the target.
   double ordering_margin_m{};
 };
 
-/// Before lateral separation is established, a valid pass has ego outside the
-/// target on the selected side. Detect when an ahead target reaches or crosses
-/// that line so ShiftOut cannot keep steering ego into the target. Once Pass
-/// has latched separation, common-course lateral ordering can rotate through a
-/// hairpin and is no longer an authoritative cancellation signal.
+/// Before lateral separation is established and the target is longitudinally
+/// close, a valid pass has ego outside the target on the selected side. Detect
+/// when that target reaches or crosses the line so ShiftOut cannot keep
+/// steering ego into it. A farther target can be crossed laterally while ego
+/// remains behind; inflated-corridor and reachability checks own that entry.
+/// Once Pass has latched separation, common-course lateral ordering can rotate
+/// through a hairpin and is no longer an authoritative cancellation signal.
 bool locked_target_intrudes_pass_side(
   const LockedTargetPassSideIntrusionRequest & request) noexcept;
 
@@ -649,6 +654,24 @@ struct SideSelection
 
 /// Select a feasible pass side without changing sides after one is locked.
 SideSelection select_pass_side(const SideSelectionRequest & request) noexcept;
+
+struct CurveAttackSideRequest
+{
+  PassSide inner_side{PassSide::None};
+  PassSide locked_side{PassSide::None};
+  bool left_feasible{false};
+  bool right_feasible{false};
+  double left_continuous_open_distance_m{0.0};
+  double right_continuous_open_distance_m{0.0};
+  double minimum_inner_open_distance_m{0.0};
+};
+
+/// Select an aggressive curve pass side before ShiftOut.
+///
+/// A sufficiently long inside corridor wins. Otherwise an executable outside
+/// corridor is preferred. Once a side is locked, the lock remains authoritative
+/// and an unavailable lock never causes an in-manoeuvre side switch.
+SideSelection select_curve_attack_side(const CurveAttackSideRequest & request) noexcept;
 
 PassSide opposite_side(PassSide side) noexcept;
 

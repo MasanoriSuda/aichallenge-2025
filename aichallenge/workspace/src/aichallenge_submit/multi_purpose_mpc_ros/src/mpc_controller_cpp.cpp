@@ -1365,6 +1365,7 @@ struct OvertakeLineConfig
   double max_lateral_accel{2.5};
   double max_target_change{0.25};
   double target_intrusion_ordering_margin{0.10};
+  double target_intrusion_guard_distance{std::numeric_limits<double>::infinity()};
   double return_clear_distance{4.0};
   double phase_hold_time{0.3};
   double target_hold_sec{0.0};
@@ -1441,6 +1442,7 @@ struct V2XBehaviorConfig
   bool overtake_outer_curve_entry_enabled{false};
   bool overtake_outer_curve_hard_continuation_enabled{false};
   bool overtake_inner_curve_entry_enabled{false};
+  double overtake_inner_curve_min_open_distance{0.0};
   bool overtake_inner_curve_hard_continuation_enabled{false};
   bool overtake_hard_curve_entry_enabled{false};
   double overtake_forbidden_curve_lookahead_distance{0.0};
@@ -4043,6 +4045,7 @@ struct MPC
         output.locked_target_seen,
         output.locked_target_position_jump,
         output.locked_target_longitudinal,
+        cfg.v2x_behavior.overtake_line.target_intrusion_guard_distance,
         output.locked_target_relative_lateral,
         cfg.v2x_behavior.overtake_line.target_intrusion_ordering_margin});
     if (
@@ -4167,6 +4170,7 @@ struct MPC
       double gap_hold_remaining_sec{0.0};
       double side_clearance{0.0};
       double corridor_width{0.0};
+      double continuous_corridor_distance{0.0};
       std::optional<double> corridor_center_ey;
       std::string guard_reason;
       std::string reason{"not evaluated"};
@@ -4175,14 +4179,13 @@ struct MPC
     const int locked_pass_side = overtake_locked_side_sign_;
     const int geometric_preferred_pass_side =
       choose_overtake_pass_side(nearest_front_lateral, lb[0], ub[0]);
-    const bool prefer_inner_curve_entry =
-      cfg.v2x_behavior.overtake_inner_curve_entry_enabled &&
-      locked_pass_side == 0 && inner_curve_pass_side != 0 &&
-      ((soft_overtake_forbidden && !hard_overtake_forbidden) ||
-      (hard_overtake_forbidden &&
-      cfg.v2x_behavior.overtake_hard_curve_entry_enabled));
-    const int preferred_pass_side = prefer_inner_curve_entry ?
-      inner_curve_pass_side : geometric_preferred_pass_side;
+    const bool curve_attack_selection_requested =
+      !start_grid_breakout_attempt && locked_pass_side == 0 &&
+      inner_curve_pass_side != 0 && !overtake_forbidden_wp &&
+      (soft_overtake_forbidden || hard_overtake_forbidden) &&
+      (cfg.v2x_behavior.overtake_inner_curve_entry_enabled ||
+      cfg.v2x_behavior.overtake_outer_curve_entry_enabled);
+    const int preferred_pass_side = geometric_preferred_pass_side;
     const int overtake_plan_N = v2x_overtake_gap_plan_horizon(N);
     output.overtake_plan_N = overtake_plan_N;
     const auto [overtake_lb, overtake_ub] =
@@ -4258,14 +4261,31 @@ struct MPC
       }
 
       const int overtake_plan_N = v2x_overtake_gap_plan_horizon(N);
+      const double required_gap_width = std::max(
+        cfg.v2x_behavior.overtake_min_gap_width,
+        cfg.v2x_behavior.overtake_guard_min_gap_width);
       const auto candidate_gap =
         gap_planner->plan(
         *model, ref_wp_id, overtake_plan_N, overtake_lb, overtake_ub, now_sec, false, false,
         std::numeric_limits<double>::infinity(), side,
-        std::max(
-          cfg.v2x_behavior.overtake_min_gap_width,
-          cfg.v2x_behavior.overtake_guard_min_gap_width));
+        required_gap_width);
+      double current_continuous_corridor_distance = 0.0;
       for (std::size_t i = 0; i < candidate_gap.target_active.size(); ++i) {
+        const bool usable_corridor =
+          candidate_gap.target_active[i] && i < candidate_gap.lb.size() &&
+          i < candidate_gap.ub.size() &&
+          candidate_gap.ub[i] - candidate_gap.lb[i] + kEps >= required_gap_width;
+        if (usable_corridor) {
+          const int offset = static_cast<int>(i);
+          const auto & current = model->reference_path->get_waypoint(ref_wp_id + offset);
+          const auto & next = model->reference_path->get_waypoint(ref_wp_id + offset + 1);
+          current_continuous_corridor_distance += next.distance_to(current);
+          assessment.continuous_corridor_distance = std::max(
+            assessment.continuous_corridor_distance,
+            current_continuous_corridor_distance);
+        } else {
+          current_continuous_corridor_distance = 0.0;
+        }
         if (
           candidate_gap.target_active[i] && i < candidate_gap.lb.size() &&
           i < candidate_gap.ub.size())
@@ -4387,6 +4407,7 @@ struct MPC
       }
       if (
         cfg.v2x_behavior.overtake_try_both_sides ||
+        curve_attack_selection_requested ||
         (start_grid_breakout_attempt && locked_pass_side == 0))
       {
         const auto alternate_assessment = assess_side(-first_side);
@@ -4400,8 +4421,17 @@ struct MPC
 
     output.overtake_left_gap_available = left_assessment.gap_available;
     output.overtake_right_gap_available = right_assessment.gap_available;
-    output.overtake_left_reason = left_assessment.reason;
-    output.overtake_right_reason = right_assessment.reason;
+    const auto side_reason = [&](const SideAssessment & assessment) {
+        if (!curve_attack_selection_requested) {
+          return assessment.reason;
+        }
+        std::ostringstream ss;
+        ss << assessment.reason
+           << ", curve_open_s=" << assessment.continuous_corridor_distance;
+        return ss.str();
+      };
+    output.overtake_left_reason = side_reason(left_assessment);
+    output.overtake_right_reason = side_reason(right_assessment);
     const int start_grid_stagger_preferred_side =
       start_grid_breakout_attempt ?
       start_grid_grace::resolve_breakout_stagger_preference(
@@ -4421,13 +4451,19 @@ struct MPC
         return side > 0 ? overtake_core::PassSide::Left :
                side < 0 ? overtake_core::PassSide::Right : overtake_core::PassSide::None;
       };
+    // The behavior FSM can publish Overtake one V2X callback before the control
+    // timer creates and locks the explicit ShiftOut line. Curve entry must stay
+    // entry-eligible during that handoff; treating the behavior label alone as
+    // continuation creates a one-cycle state where neither entry nor locked
+    // continuation is legal and immediately returns to Follow.
+    const bool curve_line_committed = active_overtake_line && locked_pass_side != 0;
     const auto resolve_outer_curve_for_side = [&](const SideAssessment & assessment) {
         return v2x_overtake_core::resolve_outer_curve_overtake(
           v2x_overtake_core::OuterCurveOvertakeRequest{
             cfg.v2x_behavior.overtake_outer_curve_entry_enabled,
             cfg.v2x_behavior.overtake_hard_curve_entry_enabled,
             cfg.v2x_behavior.overtake_outer_curve_hard_continuation_enabled,
-            continuing_overtake,
+            curve_line_committed,
             soft_overtake_forbidden,
             hard_overtake_forbidden,
             overtake_forbidden_wp,
@@ -4444,7 +4480,7 @@ struct MPC
             cfg.v2x_behavior.overtake_inner_curve_entry_enabled,
             cfg.v2x_behavior.overtake_hard_curve_entry_enabled,
             cfg.v2x_behavior.overtake_inner_curve_hard_continuation_enabled,
-            continuing_overtake,
+            curve_line_committed,
             soft_overtake_forbidden,
             hard_overtake_forbidden,
             overtake_forbidden_wp,
@@ -4471,7 +4507,7 @@ struct MPC
           is_inner_curve_pass(assessment.side, inner_curve_pass_side);
         const bool active_locked_inner_curve_allowed =
           (continuing_overtake_allowed || active_hard_curve_allowed) &&
-          continuing_overtake &&
+          curve_line_committed &&
           locked_pass_side != 0 && assessment.side == locked_pass_side;
         const bool side_fallback_soft_curve_allowed =
           cfg.v2x_behavior.overtake_fallback_ignore_soft_curve_forbidden &&
@@ -4518,7 +4554,18 @@ struct MPC
             (!require_execution_permission || execution_allowed_for_side(right_assessment)),
             cfg.v2x_behavior.overtake_try_both_sides || start_grid_breakout_attempt});
       };
-    auto side_selection = select_side(true);
+    auto side_selection = curve_attack_selection_requested ?
+      overtake_core::select_curve_attack_side(
+      overtake_core::CurveAttackSideRequest{
+        pass_side(inner_curve_pass_side), pass_side(locked_pass_side),
+        left_assessment.gap_available && execution_allowed_for_side(left_assessment),
+        right_assessment.gap_available && execution_allowed_for_side(right_assessment),
+        left_assessment.continuous_corridor_distance,
+        right_assessment.continuous_corridor_distance,
+        cfg.v2x_behavior.overtake_inner_curve_min_open_distance}) :
+      select_side(true);
+    const bool side_selected_for_execution =
+      side_selection.side != overtake_core::PassSide::None;
     if (side_selection.side == overtake_core::PassSide::None) {
       // Preserve the geometric candidate and its reason for diagnostics even when curve policy
       // prevents executing either side.
@@ -4559,12 +4606,19 @@ struct MPC
       is_inner_curve_pass(output.overtake_pass_side_sign, inner_curve_pass_side);
     output.overtake_inner_curve_pass = selected_inner_curve_pass;
     const bool overtake_zone_allows =
-      overtake_gap_available && execution_allowed_for_side(selected_assessment);
+      side_selected_for_execution && overtake_gap_available &&
+      execution_allowed_for_side(selected_assessment);
     output.overtake_zone_allows = overtake_zone_allows;
 
     std::string overtake_block_reason = !overtake_gap_available ?
       selected_assessment.reason :
       start_grid_breakout_attempt ? "start-grid breakout corridor available" :
+      curve_attack_selection_requested && !side_selected_for_execution ?
+      "curve attack has no executable inside/outside corridor" :
+      curve_attack_selection_requested && selected_inner_curve_pass ?
+      "curve attack inside continuous corridor" :
+      curve_attack_selection_requested ?
+      "curve attack outside default" :
       selected_outer_curve.entry_allowed ?
       "outer curve entry and reachable gap" :
       selected_outer_curve.hard_entry_allowed ?
@@ -4682,7 +4736,7 @@ struct MPC
         is_inner_curve_pass(output.overtake_pass_side_sign, inner_curve_pass_side);
       const bool active_locked_side_inner_curve_allowed =
         (continuing_overtake_allowed || active_hard_curve_allowed) &&
-        continuing_overtake &&
+        curve_line_committed &&
         overtake_locked_side_sign_ != 0 &&
         output.overtake_pass_side_sign == overtake_locked_side_sign_;
       const bool side_outer_curve_allowed =
@@ -4693,7 +4747,21 @@ struct MPC
         output.inner_curve_entry_allowed ||
         output.inner_curve_hard_entry_allowed ||
         output.inner_curve_hard_continuation_allowed;
-      const bool side_overtake_zone_allows =
+      // A start-grid target leaves the generic front-overlap set as ShiftOut
+      // creates lateral separation, so execution reaches this side-only
+      // branch before the phase label changes to Pass. Preserve the already
+      // validated target/side/corridor here as well; otherwise the normal
+      // side-vehicle hard-curve entry policy immediately cancels the same
+      // breakout that the front-vehicle branch just latched.
+      const bool validated_start_grid_side_continuation =
+        start_grid_breakout_attempt && validated_start_grid_breakout_continuity &&
+        output.overtake_gap_available && locked_pass_side != 0 &&
+        output.overtake_pass_side_sign == locked_pass_side &&
+        !output.locked_target_pass_side_intrusion && !overtake_forbidden_wp &&
+        !overtake_cooldown_active &&
+        front_risk_level != FrontRiskLevel::EmergencyBrake;
+      const bool normal_side_overtake_zone_allows =
+        side_selected_for_execution &&
         side_overtake_entry_target_valid &&
         !overtake_cooldown_active &&
         (!overtake_start_curve_blocked || side_outer_curve_allowed ||
@@ -4710,10 +4778,14 @@ struct MPC
         (cfg.v2x_behavior.side_overtake_ignore_soft_curve_forbidden && soft_overtake_forbidden) ||
         continuing_overtake_allowed || active_hard_curve_allowed ||
         side_outer_curve_allowed || side_inner_curve_allowed);
+      const bool side_overtake_zone_allows =
+        validated_start_grid_side_continuation || normal_side_overtake_zone_allows;
       output.overtake_zone_allows = side_overtake_zone_allows;
 
       const bool side_overtake_gap_available = output.overtake_gap_available;
-      std::string side_overtake_block_reason = !side_overtake_entry_target_valid ?
+      std::string side_overtake_block_reason = validated_start_grid_side_continuation ?
+        "latched start-grid breakout side continuity" :
+        !side_overtake_entry_target_valid ?
         "side target already behind" :
         output.inner_curve_entry_allowed ?
         "inner curve entry and reachable gap" :
@@ -4747,7 +4819,9 @@ struct MPC
       output.overtake_block_reason = side_overtake_block_reason;
       if (side_overtake_zone_allows && side_overtake_gap_available) {
         output.state = V2XBehaviorState::Overtake;
-        output.reason = output.inner_curve_hard_continuation_allowed ?
+        output.reason = validated_start_grid_side_continuation ?
+          "start-grid breakout side continuation / " + side_overtake_block_reason :
+          output.inner_curve_hard_continuation_allowed ?
           "continue side-by-side inner line through hard curve / " + side_overtake_block_reason :
           output.inner_curve_hard_entry_allowed ?
           "side vehicle inner hard curve entry / " + side_overtake_block_reason :
@@ -8944,6 +9018,11 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_line_target_intrusion_ordering_margin"] ?
     mpc["v2x_overtake_line_target_intrusion_ordering_margin"].as<double>() : 0.10);
+  cfg.mpc.v2x_behavior.overtake_line.target_intrusion_guard_distance = std::max(
+    0.0,
+    mpc["v2x_overtake_line_target_intrusion_guard_distance"] ?
+    mpc["v2x_overtake_line_target_intrusion_guard_distance"].as<double>() :
+    std::numeric_limits<double>::infinity());
   cfg.mpc.v2x_behavior.overtake_line.return_clear_distance = std::max(
     0.0,
     mpc["v2x_overtake_line_return_clear_distance"] ?
@@ -9270,6 +9349,10 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_inner_curve_entry_enabled =
     mpc["v2x_overtake_inner_curve_entry_enabled"] ?
     mpc["v2x_overtake_inner_curve_entry_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_inner_curve_min_open_distance = std::max(
+    0.0,
+    mpc["v2x_overtake_inner_curve_min_open_distance"] ?
+    mpc["v2x_overtake_inner_curve_min_open_distance"].as<double>() : 0.0);
   cfg.mpc.v2x_behavior.overtake_inner_curve_hard_continuation_enabled =
     mpc["v2x_overtake_inner_curve_hard_continuation_enabled"] ?
     mpc["v2x_overtake_inner_curve_hard_continuation_enabled"].as<bool>() : false;

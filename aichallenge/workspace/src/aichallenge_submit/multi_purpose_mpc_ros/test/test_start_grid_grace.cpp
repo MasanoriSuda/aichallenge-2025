@@ -220,7 +220,9 @@ TEST(StartGridGraceBreakout, ContinuesActiveSameTargetLineAfterGraceExpires) {
   start_grid_grace::BreakoutContinuationContext context;
   context.grace_active = false;
   context.breakout_target_latched = true;
-  context.current_front_matches = true;
+  // The target leaves the generic front-overlap set as ego shifts alongside,
+  // but the same locked target still owns the explicit overtake line.
+  context.current_front_matches = false;
   context.active_line = true;
   context.line_target_matches = true;
 
@@ -229,6 +231,15 @@ TEST(StartGridGraceBreakout, ContinuesActiveSameTargetLineAfterGraceExpires) {
   EXPECT_FALSE(start_grid_grace::should_continue_breakout(context));
   context.active_line = true;
   context.line_target_matches = false;
+  EXPECT_FALSE(start_grid_grace::should_continue_breakout(context));
+}
+
+TEST(StartGridGraceBreakout, DoesNotContinueMissingFrontBeforeLineIsActive) {
+  start_grid_grace::BreakoutContinuationContext context;
+  context.grace_active = true;
+  context.breakout_target_latched = true;
+  context.current_front_matches = false;
+
   EXPECT_FALSE(start_grid_grace::should_continue_breakout(context));
 }
 
@@ -257,6 +268,18 @@ TEST(StartGridGraceBreakout, LetsGapPlannerCompareBothSidesDespiteVisibleStagger
   decision = start_grid_grace::resolve_breakout_side(context);
   ASSERT_TRUE(decision.valid);
   EXPECT_EQ(decision.required_side, 0);
+}
+
+TEST(StartGridGraceBreakout, PreservesLatchedSideAfterTargetLeavesFrontSet) {
+  start_grid_grace::BreakoutSideContext context;
+  context.ego_lateral_m = -1.5;
+  context.front_lateral_m = std::numeric_limits<double>::infinity();
+  context.side_deadband_m = 0.05;
+  context.latched_side = -1;
+
+  const auto decision = start_grid_grace::resolve_breakout_side(context);
+  EXPECT_TRUE(decision.valid);
+  EXPECT_EQ(decision.required_side, -1);
 }
 
 TEST(StartGridGraceBreakout, LetsGapPlannerChooseWhenStaggerIsInsideDeadband) {

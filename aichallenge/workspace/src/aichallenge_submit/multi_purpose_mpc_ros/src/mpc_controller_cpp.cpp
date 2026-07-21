@@ -3263,14 +3263,25 @@ struct MPC
 
     const auto start_grid_evaluation = start_grid_grace_guard_.evaluate(now_sec);
     const bool start_grid_grace_active = start_grid_evaluation.active;
+    const bool start_grid_breakout_line_active =
+      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+      overtake_line_state_.phase == OvertakeLinePhase::Pass;
+    const bool start_grid_breakout_line_target_matches =
+      start_grid_breakout_target_id_.has_value() &&
+      overtake_line_state_.target_vehicle_id == start_grid_breakout_target_id_.value();
     if (start_grid_evaluation.transition == start_grid_grace::Transition::Expired) {
       start_grid_initial_target_id_.reset();
-      start_grid_breakout_target_id_.reset();
-      start_grid_breakout_side_sign_ = 0;
+      // Grace limits entry into the start-grid exception. Do not cancel a same-target
+      // ShiftOut/Pass that is already executing merely because its entry window expired.
+      if (!(start_grid_breakout_line_active && start_grid_breakout_line_target_matches)) {
+        start_grid_breakout_target_id_.reset();
+        start_grid_breakout_side_sign_ = 0;
+      }
       RCLCPP_INFO(
         rclcpp::get_logger("mpc_controller"),
-        "Start grid grace expired after %.2f s",
-        start_grid_evaluation.elapsed_sec);
+        "Start grid grace expired after %.2f s; active breakout preserved=%d",
+        start_grid_evaluation.elapsed_sec,
+        start_grid_breakout_target_id_.has_value() ? 1 : 0);
     } else if (
       start_grid_evaluation.transition == start_grid_grace::Transition::ClockRejected)
     {
@@ -3280,6 +3291,13 @@ struct MPC
       RCLCPP_WARN(
         rclcpp::get_logger("mpc_controller"),
         "Start grid grace rejected because the ROS clock is invalid or moved backwards");
+    }
+    if (
+      !start_grid_grace_active && start_grid_breakout_target_id_.has_value() &&
+      !(start_grid_breakout_line_active && start_grid_breakout_line_target_matches))
+    {
+      start_grid_breakout_target_id_.reset();
+      start_grid_breakout_side_sign_ = 0;
     }
     output.start_grid_grace_active = start_grid_grace_active;
     output.ego_speed = current_speed_mps_;
@@ -3669,7 +3687,7 @@ struct MPC
     output.moving_front_clearance_speed_margin =
       moving_front_clearance_limit.moving_front_speed_margin_mps;
     const bool initial_static_target =
-      start_grid_grace_active && has_front_vehicle && has_side_vehicle &&
+      start_grid_grace_active && has_front_vehicle &&
       !nearest_front_id.empty() && std::isfinite(nearest_front_speed) &&
       nearest_front_speed >= 0.0 &&
       nearest_front_speed <= cfg.v2x_behavior.low_speed_avoidance_max_front_speed;
@@ -3680,8 +3698,14 @@ struct MPC
       start_grid_initial_target_id_.has_value() &&
       nearest_front_id == start_grid_initial_target_id_.value();
     const bool continuing_start_grid_breakout =
-      start_grid_grace_active && start_grid_breakout_target_id_.has_value() &&
-      nearest_front_id == start_grid_breakout_target_id_.value();
+      start_grid_grace::should_continue_breakout(
+      start_grid_grace::BreakoutContinuationContext{
+        start_grid_grace_active,
+        start_grid_breakout_target_id_.has_value(),
+        start_grid_breakout_target_id_.has_value() &&
+        nearest_front_id == start_grid_breakout_target_id_.value(),
+        start_grid_breakout_line_active,
+        start_grid_breakout_line_target_matches});
     const bool start_grid_breakout_attempt =
       continuing_start_grid_breakout ||
       start_grid_grace::should_attempt_breakout(
@@ -3689,7 +3713,6 @@ struct MPC
         cfg.v2x_behavior.start_grid_breakout_enabled,
         start_grid_grace_active,
         has_front_vehicle,
-        has_side_vehicle,
         initial_static_target_latched,
         nearest_front_speed,
         cfg.v2x_behavior.low_speed_avoidance_max_front_speed});
@@ -4088,6 +4111,7 @@ struct MPC
       bool transient_gap_hold{false};
       double gap_hold_remaining_sec{0.0};
       double side_clearance{0.0};
+      double corridor_width{0.0};
       std::string guard_reason;
       std::string reason{"not evaluated"};
     };
@@ -4125,7 +4149,7 @@ struct MPC
       {
         assessment.reason = !start_grid_breakout_side.valid ?
           "start-grid breakout invalid lateral geometry" :
-          "start-grid breakout opposite staggered side";
+          "start-grid breakout opposite locked side";
         return assessment;
       }
       // Once Pass has established lateral separation, the explicit line owns
@@ -4164,6 +4188,16 @@ struct MPC
         std::max(
           cfg.v2x_behavior.overtake_min_gap_width,
           cfg.v2x_behavior.overtake_guard_min_gap_width));
+      for (std::size_t i = 0; i < candidate_gap.target_active.size(); ++i) {
+        if (
+          candidate_gap.target_active[i] && i < candidate_gap.lb.size() &&
+          i < candidate_gap.ub.size())
+        {
+          assessment.corridor_width = std::max(
+            assessment.corridor_width,
+            std::max(0.0, candidate_gap.ub[i] - candidate_gap.lb[i]));
+        }
+      }
       const int planned_pass_side_sign =
         infer_gap_pass_side(candidate_gap, model->spatial_state.e_y);
       if (planned_pass_side_sign != 0 && planned_pass_side_sign != side) {
@@ -4181,6 +4215,11 @@ struct MPC
         assessment.gap_available = has_sufficient_overtake_gap(candidate_gap);
         assessment.reason = assessment.gap_available ?
           "front vehicle and geometric gap available" : "overtake gap width";
+      }
+      if (start_grid_breakout_attempt && assessment.gap_available) {
+        std::ostringstream ss;
+        ss << assessment.reason << ", corridor_width=" << assessment.corridor_width;
+        assessment.reason = ss.str();
       }
       assessment.guard_reason = assessment.reason;
       if (
@@ -4263,7 +4302,10 @@ struct MPC
       } else {
         right_assessment = first_assessment;
       }
-      if (cfg.v2x_behavior.overtake_try_both_sides) {
+      if (
+        cfg.v2x_behavior.overtake_try_both_sides ||
+        (start_grid_breakout_attempt && locked_pass_side == 0))
+      {
         const auto alternate_assessment = assess_side(-first_side);
         if (first_side > 0) {
           right_assessment = alternate_assessment;
@@ -4277,6 +4319,15 @@ struct MPC
     output.overtake_right_gap_available = right_assessment.gap_available;
     output.overtake_left_reason = left_assessment.reason;
     output.overtake_right_reason = right_assessment.reason;
+    const int selection_preferred_pass_side =
+      start_grid_breakout_attempt && locked_pass_side == 0 ?
+      start_grid_grace::resolve_breakout_gap_preference(
+      start_grid_grace::BreakoutGapPreferenceContext{
+        left_assessment.gap_available,
+        right_assessment.gap_available,
+        left_assessment.corridor_width,
+        right_assessment.corridor_width,
+        preferred_pass_side}) : preferred_pass_side;
     const auto pass_side = [](const int side) {
         return side > 0 ? overtake_core::PassSide::Left :
                side < 0 ? overtake_core::PassSide::Right : overtake_core::PassSide::None;
@@ -4369,14 +4420,14 @@ struct MPC
     const auto select_side = [&](const bool require_execution_permission) {
         return overtake_core::select_pass_side(
           overtake_core::SideSelectionRequest{
-            preferred_pass_side != 0 ? pass_side(preferred_pass_side) :
+            selection_preferred_pass_side != 0 ? pass_side(selection_preferred_pass_side) :
             overtake_core::PassSide::Left,
             pass_side(locked_pass_side),
             left_assessment.gap_available &&
             (!require_execution_permission || execution_allowed_for_side(left_assessment)),
             right_assessment.gap_available &&
             (!require_execution_permission || execution_allowed_for_side(right_assessment)),
-            cfg.v2x_behavior.overtake_try_both_sides});
+            cfg.v2x_behavior.overtake_try_both_sides || start_grid_breakout_attempt});
       };
     auto side_selection = select_side(true);
     if (side_selection.side == overtake_core::PassSide::None) {
@@ -4388,7 +4439,7 @@ struct MPC
     const SideAssessment & selected_assessment = output.overtake_pass_side_sign > 0 ?
       left_assessment : output.overtake_pass_side_sign < 0 ?
       right_assessment :
-      (locked_pass_side != 0 ? locked_pass_side : preferred_pass_side) < 0 ?
+      (locked_pass_side != 0 ? locked_pass_side : selection_preferred_pass_side) < 0 ?
       right_assessment : left_assessment;
     output.overtake_side_clearance = selected_assessment.side_clearance;
     output.overtake_fallback_target = selected_assessment.fallback_target;
@@ -5828,9 +5879,18 @@ private:
     }
 
     const double current_ey = model->spatial_state.e_y;
+    const bool preserve_validated_breakout_line =
+      start_grid_grace::should_preserve_breakout_line(
+      start_grid_grace::BreakoutLineContext{
+        behavior_output.start_grid_breakout_active,
+        behavior_output.state == V2XBehaviorState::Overtake,
+        behavior_output.overtake_gap_available,
+        behavior_output.overtake_zone_allows});
     if (
       behavior_output.state == V2XBehaviorState::SafetyBrake ||
-      behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake) {
+      (behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake &&
+      !preserve_validated_breakout_line))
+    {
       reset_overtake_line_state(now_sec, "safety brake");
       return output;
     }
@@ -6141,7 +6201,12 @@ private:
     const double locked_target_speed =
       locked_target_seen && std::isfinite(behavior_output.locked_target_speed) ?
       behavior_output.locked_target_speed : overtake_line_state_.target_last_speed;
-    output.front_cap_release_ready =
+    // A validated start-grid breakout already owns a collision-inflated side corridor and its
+    // behavior layer applies the dedicated ShiftOut/Pass speed policy. Reapplying the generic
+    // locked-target cap here kept the effective reference at front speed + 0.5 m/s even after
+    // the breakout behavior had released its cap, making the ego follow the grid target into the
+    // first hairpin. Let the behavior layer remain the single speed owner for this maneuver.
+    output.front_cap_release_ready = preserve_validated_breakout_line ||
       overtake_core::can_release_overtake_front_cap(
       overtake_core::OvertakeFrontCapReleaseRequest{
         overtake_line_state_.phase == OvertakeLinePhase::Pass,

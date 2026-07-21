@@ -174,7 +174,6 @@ TEST(StartGridGraceBreakout, AllowsOnlyLatchedStationaryGridTarget) {
   context.enabled = true;
   context.grace_active = true;
   context.has_front_vehicle = true;
-  context.has_side_vehicle = true;
   context.initial_static_target_latched = true;
   context.front_speed_mps = 0.0;
   context.stationary_speed_threshold_mps = 0.2;
@@ -186,8 +185,20 @@ TEST(StartGridGraceBreakout, AllowsOnlyLatchedStationaryGridTarget) {
   context.front_speed_mps = 0.21;
   EXPECT_FALSE(start_grid_grace::should_attempt_breakout(context));
   context.front_speed_mps = 0.0;
-  context.has_side_vehicle = false;
+  context.has_front_vehicle = false;
   EXPECT_FALSE(start_grid_grace::should_attempt_breakout(context));
+}
+
+TEST(StartGridGraceBreakout, DoesNotRequireSideClassificationForInitialBreakout) {
+  start_grid_grace::BreakoutContext context;
+  context.enabled = true;
+  context.grace_active = true;
+  context.has_front_vehicle = true;
+  context.initial_static_target_latched = true;
+  context.front_speed_mps = 0.0;
+  context.stationary_speed_threshold_mps = 0.2;
+
+  EXPECT_TRUE(start_grid_grace::should_attempt_breakout(context));
 }
 
 TEST(StartGridGraceBreakout, FailsClosedWhenDisabledOrInvalid) {
@@ -195,7 +206,6 @@ TEST(StartGridGraceBreakout, FailsClosedWhenDisabledOrInvalid) {
   context.enabled = false;
   context.grace_active = true;
   context.has_front_vehicle = true;
-  context.has_side_vehicle = true;
   context.initial_static_target_latched = true;
   context.front_speed_mps = 0.0;
   context.stationary_speed_threshold_mps = 0.2;
@@ -206,7 +216,34 @@ TEST(StartGridGraceBreakout, FailsClosedWhenDisabledOrInvalid) {
   EXPECT_FALSE(start_grid_grace::should_attempt_breakout(context));
 }
 
-TEST(StartGridGraceBreakout, PreservesVisibleStaggeredSide) {
+TEST(StartGridGraceBreakout, ContinuesActiveSameTargetLineAfterGraceExpires) {
+  start_grid_grace::BreakoutContinuationContext context;
+  context.grace_active = false;
+  context.breakout_target_latched = true;
+  context.current_front_matches = true;
+  context.active_line = true;
+  context.line_target_matches = true;
+
+  EXPECT_TRUE(start_grid_grace::should_continue_breakout(context));
+  context.active_line = false;
+  EXPECT_FALSE(start_grid_grace::should_continue_breakout(context));
+  context.active_line = true;
+  context.line_target_matches = false;
+  EXPECT_FALSE(start_grid_grace::should_continue_breakout(context));
+}
+
+TEST(StartGridGraceBreakout, ContinuesLatchedTargetDuringGraceBeforeLineStarts) {
+  start_grid_grace::BreakoutContinuationContext context;
+  context.grace_active = true;
+  context.breakout_target_latched = true;
+  context.current_front_matches = true;
+
+  EXPECT_TRUE(start_grid_grace::should_continue_breakout(context));
+  context.current_front_matches = false;
+  EXPECT_FALSE(start_grid_grace::should_continue_breakout(context));
+}
+
+TEST(StartGridGraceBreakout, LetsGapPlannerCompareBothSidesDespiteVisibleStagger) {
   start_grid_grace::BreakoutSideContext context;
   context.ego_lateral_m = -0.89;
   context.front_lateral_m = -0.07;
@@ -214,12 +251,12 @@ TEST(StartGridGraceBreakout, PreservesVisibleStaggeredSide) {
 
   auto decision = start_grid_grace::resolve_breakout_side(context);
   ASSERT_TRUE(decision.valid);
-  EXPECT_EQ(decision.required_side, -1);
+  EXPECT_EQ(decision.required_side, 0);
   context.ego_lateral_m = 0.89;
   context.front_lateral_m = 0.07;
   decision = start_grid_grace::resolve_breakout_side(context);
   ASSERT_TRUE(decision.valid);
-  EXPECT_EQ(decision.required_side, 1);
+  EXPECT_EQ(decision.required_side, 0);
 }
 
 TEST(StartGridGraceBreakout, LetsGapPlannerChooseWhenStaggerIsInsideDeadband) {
@@ -264,4 +301,46 @@ TEST(StartGridGraceBreakout, RejectsInvalidSideGeometry) {
   context.side_deadband_m = 0.05;
   context.latched_side = 2;
   EXPECT_FALSE(start_grid_grace::resolve_breakout_side(context).valid);
+}
+
+TEST(StartGridGraceBreakout, PrefersWiderAvailableInflatedGap) {
+  start_grid_grace::BreakoutGapPreferenceContext context;
+  context.left_available = true;
+  context.right_available = true;
+  context.left_width_m = 0.4;
+  context.right_width_m = 1.8;
+  context.fallback_side = 1;
+
+  EXPECT_EQ(start_grid_grace::resolve_breakout_gap_preference(context), -1);
+  context.left_width_m = 2.0;
+  EXPECT_EQ(start_grid_grace::resolve_breakout_gap_preference(context), 1);
+}
+
+TEST(StartGridGraceBreakout, AvailabilityWinsAndTieUsesGeometricFallback) {
+  start_grid_grace::BreakoutGapPreferenceContext context;
+  context.left_available = false;
+  context.right_available = true;
+  context.left_width_m = 4.0;
+  context.right_width_m = 0.4;
+  context.fallback_side = 1;
+
+  EXPECT_EQ(start_grid_grace::resolve_breakout_gap_preference(context), -1);
+  context.left_available = true;
+  context.left_width_m = context.right_width_m;
+  EXPECT_EQ(start_grid_grace::resolve_breakout_gap_preference(context), 1);
+}
+
+TEST(StartGridGraceBreakout, PreservesLineOnlyForValidatedActiveBreakout) {
+  start_grid_grace::BreakoutLineContext context;
+  context.breakout_active = true;
+  context.behavior_overtake = true;
+  context.gap_available = true;
+  context.zone_allows = true;
+
+  EXPECT_TRUE(start_grid_grace::should_preserve_breakout_line(context));
+  context.gap_available = false;
+  EXPECT_FALSE(start_grid_grace::should_preserve_breakout_line(context));
+  context.gap_available = true;
+  context.zone_allows = false;
+  EXPECT_FALSE(start_grid_grace::should_preserve_breakout_line(context));
 }

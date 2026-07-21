@@ -52,10 +52,17 @@ struct BreakoutContext {
   bool enabled{false};
   bool grace_active{false};
   bool has_front_vehicle{false};
-  bool has_side_vehicle{false};
   bool initial_static_target_latched{false};
   double front_speed_mps{0.0};
   double stationary_speed_threshold_mps{0.0};
+};
+
+struct BreakoutContinuationContext {
+  bool grace_active{false};
+  bool breakout_target_latched{false};
+  bool current_front_matches{false};
+  bool active_line{false};
+  bool line_target_matches{false};
 };
 
 struct BreakoutSideContext {
@@ -70,6 +77,21 @@ struct BreakoutSideDecision {
   bool valid{false};
   /// +1 requires left, -1 requires right, and 0 lets the gap planner try both sides.
   int required_side{0};
+};
+
+struct BreakoutGapPreferenceContext {
+  bool left_available{false};
+  bool right_available{false};
+  double left_width_m{0.0};
+  double right_width_m{0.0};
+  int fallback_side{0};
+};
+
+struct BreakoutLineContext {
+  bool breakout_active{false};
+  bool behavior_overtake{false};
+  bool gap_available{false};
+  bool zone_allows{false};
 };
 
 class Guard {
@@ -101,11 +123,23 @@ double resolve_front_lateral_range(const FrontLateralRangeContext &context);
 /// side breakout. Passing geometry is intentionally checked by the caller.
 bool should_attempt_breakout(const BreakoutContext &context) noexcept;
 
-/// Preserve a previously selected side for the whole breakout. Before selection, use a visible
-/// grid stagger; when the lateral difference is inside the deadband, leave side selection to the
-/// collision-inflated gap planner instead of rejecting the breakout. Invalid geometry fails
-/// closed through valid=false.
+/// Continue a latched breakout during grace, or after grace only while the same target owns an
+/// active ShiftOut/Pass line. This prevents the grace timeout from cancelling a maneuver that is
+/// already alongside the grid target without allowing a stale latch to start another maneuver.
+bool should_continue_breakout(const BreakoutContinuationContext &context) noexcept;
+
+/// Preserve a previously selected side for the whole breakout. Before selection, always leave
+/// both sides to the collision-inflated gap planner; the initial grid stagger is not evidence that
+/// its side corridor is open. Invalid geometry fails closed through valid=false.
 BreakoutSideDecision resolve_breakout_side(const BreakoutSideContext &context) noexcept;
+
+/// Prefer the wider collision-inflated corridor before a side is locked. Availability wins over
+/// width, and the geometric fallback is used only when both feasible widths are effectively tied.
+int resolve_breakout_gap_preference(const BreakoutGapPreferenceContext &context) noexcept;
+
+/// A validated breakout deliberately passes a close grid target. Preserve its explicit line
+/// through the front-risk metric; an unavailable gap or blocked execution zone still fails closed.
+bool should_preserve_breakout_line(const BreakoutLineContext &context) noexcept;
 
 const char *to_string(Phase phase) noexcept;
 const char *to_string(Transition transition) noexcept;

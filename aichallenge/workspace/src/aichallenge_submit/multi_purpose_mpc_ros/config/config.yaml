@@ -464,7 +464,7 @@ mpc:
   v2x_overtake_line_return_clear_distance: 2.0 # [m] begin Return after nominal vehicle-length clearance
   v2x_overtake_line_phase_hold_time: 0.3      # [s] minimum phase hold before transition
   v2x_overtake_target_hold_sec: 0.75          # [s] keep a locked Pass across a transient V2X classification loss
-  v2x_overtake_active_gap_loss_hold_sec: 1.00 # [s] bridge the measured WP61-63 hairpin gap dropout without changing sides
+  v2x_overtake_active_gap_loss_hold_sec: 2.00 # [s] retain one locked side through the measured WP63-64 hairpin gap dropout
   v2x_overtake_clear_confirm_sec: 0.10        # [s] short rear-clear debounce before Return
   v2x_overtake_reacquire_enabled: true        # allow same target/side to return to Pass early in Return
   v2x_overtake_reacquire_window_sec: 0.50     # [s] maximum Return age for a safe reacquire
@@ -491,7 +491,7 @@ mpc:
   v2x_moving_safety_brake_time_headway: 0.3 # [s] speed-dependent emergency margin
   v2x_start_grid_grace_time: 5.0         # [s] Ready staging plus this duration after Start; static grid only
   v2x_start_grid_breakout_enabled: true  # sim race: use a feasible side corridor before falling back to Follow
-  v2x_start_grid_breakout_side_deadband: 0.05 # [m] smaller offset tries both collision-checked sides
+  v2x_start_grid_breakout_side_deadband: 0.05 # [m] compatibility/validation only; unlocked breakout compares both actual gaps
   v2x_require_gap_for_overtake: true
   v2x_low_speed_avoidance_enabled: true
   v2x_low_speed_avoidance_ignore_soft_curve_forbidden: true # gate2: allow stopped-vehicle bypass in curve-lookahead zones

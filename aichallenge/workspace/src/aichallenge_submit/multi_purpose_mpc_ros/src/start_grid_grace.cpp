@@ -119,11 +119,17 @@ double resolve_front_lateral_range(const FrontLateralRangeContext &context) {
 
 bool should_attempt_breakout(const BreakoutContext &context) noexcept {
   return context.enabled && context.grace_active && context.has_front_vehicle &&
-         context.has_side_vehicle && context.initial_static_target_latched &&
-         std::isfinite(context.front_speed_mps) && context.front_speed_mps >= 0.0 &&
+         context.initial_static_target_latched && std::isfinite(context.front_speed_mps) &&
+         context.front_speed_mps >= 0.0 &&
          std::isfinite(context.stationary_speed_threshold_mps) &&
          context.stationary_speed_threshold_mps >= 0.0 &&
          context.front_speed_mps <= context.stationary_speed_threshold_mps;
+}
+
+bool should_continue_breakout(const BreakoutContinuationContext &context) noexcept {
+  return context.breakout_target_latched && context.current_front_matches &&
+         (context.grace_active ||
+          (context.active_line && context.line_target_matches));
 }
 
 BreakoutSideDecision resolve_breakout_side(const BreakoutSideContext &context) noexcept {
@@ -136,11 +142,28 @@ BreakoutSideDecision resolve_breakout_side(const BreakoutSideContext &context) n
   if (context.latched_side != 0) {
     return BreakoutSideDecision{true, context.latched_side};
   }
-  const double separation = context.ego_lateral_m - context.front_lateral_m;
-  if (std::abs(separation) <= context.side_deadband_m + 1e-9) {
-    return BreakoutSideDecision{true, 0};
+  return BreakoutSideDecision{true, 0};
+}
+
+int resolve_breakout_gap_preference(const BreakoutGapPreferenceContext &context) noexcept {
+  if (context.left_available != context.right_available) {
+    return context.left_available ? 1 : -1;
   }
-  return BreakoutSideDecision{true, separation > 0.0 ? 1 : -1};
+  if (context.left_available && context.right_available &&
+      std::isfinite(context.left_width_m) && std::isfinite(context.right_width_m)) {
+    constexpr double kWidthTieTolerance = 1e-3;
+    const double width_delta = context.left_width_m - context.right_width_m;
+    if (std::abs(width_delta) > kWidthTieTolerance) {
+      return width_delta > 0.0 ? 1 : -1;
+    }
+  }
+  return context.fallback_side >= -1 && context.fallback_side <= 1 ?
+         context.fallback_side : 0;
+}
+
+bool should_preserve_breakout_line(const BreakoutLineContext &context) noexcept {
+  return context.breakout_active && context.behavior_overtake &&
+         context.gap_available && context.zone_allows;
 }
 
 const char *to_string(const Phase phase) noexcept {

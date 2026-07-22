@@ -676,8 +676,11 @@ SideSelection select_curve_attack_side(const CurveAttackSideRequest & request) n
 PassSide opposite_side(PassSide side) noexcept;
 
 /// Gate race-only V2X behavior when AWSIM state tracking is available. Launches
-/// without state tracking retain the legacy always-active behavior.
-bool is_v2x_behavior_session_active(bool state_tracking_enabled, bool race_started) noexcept;
+/// without state tracking retain the legacy always-active behavior. A prepared
+/// start-grid Ready rollout is active because AWSIM already moves the vehicle
+/// before its per-vehicle Start event reaches the controller.
+bool is_v2x_behavior_session_active(
+  bool state_tracking_enabled, bool race_started, bool start_grid_ready_rollout) noexcept;
 
 struct LowSpeedBypassCandidateRequest
 {
@@ -1043,6 +1046,121 @@ struct SolverFallbackNeutralizationRequest
 /// force_neutralize bypasses the hold window. Negative counters throw std::invalid_argument.
 bool should_neutralize_solver_fallback_steering(
   const SolverFallbackNeutralizationRequest & request);
+
+struct StartGridCorridorScoreRequest
+{
+  double corridor_center_ey{};
+  double corridor_width{};
+  double ego_ey{};
+};
+
+struct UnvalidatedOvertakeFallbackRequest
+{
+  bool start_grid_breakout_attempt{false};
+  bool geometric_gap_available{false};
+  bool side_clearance_available{false};
+  bool emergency_brake{false};
+};
+
+/// Decide whether an instantaneous side-clearance fallback may replace the geometric gap.
+///
+/// A start-grid breakout must use the explicitly validated wall/car or car/car corridor. If that
+/// corridor disappears, accepting the generic fallback can create a new target-relative line far
+/// inside the track and carry it into the first hairpin.
+bool can_try_unvalidated_overtake_fallback(
+  const UnvalidatedOvertakeFallbackRequest & request) noexcept;
+
+struct OffsetCurveFeasibilityRequest
+{
+  double reference_curvature_radpm{};
+  double lateral_offset_m{};
+  double max_abs_curvature_radpm{};
+  double min_frenet_denominator{0.10};
+};
+
+struct OffsetCurveFeasibilityResult
+{
+  bool feasible{false};
+  double offset_curvature_radpm{std::numeric_limits<double>::infinity()};
+  double frenet_denominator{};
+};
+
+/// Check whether a constant Frenet offset remains turnable at one reference-path sample.
+/// Inside offsets shrink the turn radius according to kappa/(1-kappa*e_y); outer offsets reduce
+/// curvature. A non-positive/small denominator is rejected before it can create a folded line.
+OffsetCurveFeasibilityResult evaluate_offset_curve_feasibility(
+  const OffsetCurveFeasibilityRequest & request);
+
+/// Score a collision-inflated start-grid corridor.
+///
+/// Lower is better. Lateral travel dominates; width is a small tie breaker so an equally close
+/// wider corridor wins without making ego cross the track merely to chase width.
+double score_start_grid_corridor(const StartGridCorridorScoreRequest & request);
+
+/// Maximum lateral half-extent of a rectangle when its yaw is unknown.
+///
+/// This is the rectangle half-diagonal. It is used only where V2X does not provide target yaw;
+/// the aggressive vehicle-vehicle slot keeps its separately configured circular inflation.
+double conservative_rectangle_lateral_half_extent(double length_m, double width_m);
+
+struct WallCorridorGeometryRequest
+{
+  double lower{};
+  double upper{};
+  bool lower_is_vehicle{false};
+  bool upper_is_vehicle{false};
+  /// Extra inflation for the sole vehicle boundary of a wall-vehicle corridor.
+  double vehicle_extra_inflation_m{};
+  /// Required ego-center clearance from every wall boundary.
+  double wall_clearance_m{};
+  /// Minimum residual ego-center interval after all geometry is applied.
+  double minimum_width_m{};
+};
+
+struct WallCorridorGeometryResult
+{
+  bool feasible{false};
+  double lower{};
+  double upper{};
+
+  double width() const noexcept
+  {
+    return upper - lower;
+  }
+};
+
+/// Apply vehicle inflation and wall clearance before declaring a lateral corridor feasible.
+///
+/// Unlike the legacy target-only adjustment, this never clamps wall clearance to half of an
+/// already narrow interval. A corridor that closes after the physical margins is rejected.
+WallCorridorGeometryResult evaluate_wall_corridor_geometry(
+  const WallCorridorGeometryRequest & request);
+
+struct StartGridBoundaryCandidateRequest
+{
+  double forward_distance_m{};
+  double lookbehind_distance_m{};
+  double lookahead_distance_m{};
+};
+
+/// Accept a vehicle as a start-grid lateral boundary inside a bounded common-progress window.
+///
+/// Unlike normal front detection, the start grid intentionally admits a nearby side/rear vehicle:
+/// staggered rows can put one edge of the useful vehicle-vehicle corridor slightly behind ego by
+/// the time another domain reports Start.
+bool is_start_grid_boundary_candidate(const StartGridBoundaryCandidateRequest & request);
+
+struct InterVehicleRearClearRequest
+{
+  bool lower_vehicle_seen{false};
+  bool upper_vehicle_seen{false};
+  double lower_longitudinal_m{std::numeric_limits<double>::infinity()};
+  double upper_longitudinal_m{std::numeric_limits<double>::infinity()};
+  double return_clear_distance_m{};
+};
+
+/// Require both boundary vehicles to be observed behind ego before leaving a woven corridor.
+bool is_inter_vehicle_corridor_rear_clear(const InterVehicleRearClearRequest & request);
 
 }  // namespace multi_purpose_mpc_ros::v2x_overtake_core
 

@@ -96,6 +96,30 @@ struct BreakoutLineContext {
   bool zone_allows{false};
 };
 
+enum class DynamicDecisionAction {
+  Observe,
+  CommitCandidate,
+  NoCandidate,
+};
+
+struct DynamicDecisionContext {
+  bool enabled{false};
+  bool candidate_available{false};
+  bool peer_motion_observed{false};
+  bool emergency_commit{false};
+  double elapsed_sec{0.0};
+  double peer_motion_elapsed_sec{0.0};
+  double candidate_stable_sec{0.0};
+  double motion_observation_sec{0.0};
+  double max_observation_sec{0.0};
+  double min_candidate_stable_sec{0.0};
+};
+
+struct DynamicDecisionResolution {
+  DynamicDecisionAction action{DynamicDecisionAction::NoCandidate};
+  double remaining_sec{0.0};
+};
+
 class Guard {
 public:
   explicit Guard(double duration_sec);
@@ -151,8 +175,15 @@ int resolve_breakout_gap_preference(
 /// through the front-risk metric; an unavailable gap or blocked execution zone still fails closed.
 bool should_preserve_breakout_line(const BreakoutLineContext &context) noexcept;
 
+/// Keep accelerating on the base trajectory while peer motion makes the best start corridor
+/// observable. A stable candidate commits after the motion window; the bounded maximum wait
+/// prevents an indefinitely undecided launch.
+DynamicDecisionResolution resolve_dynamic_breakout_decision(
+    const DynamicDecisionContext &context);
+
 const char *to_string(Phase phase) noexcept;
 const char *to_string(Transition transition) noexcept;
+const char *to_string(DynamicDecisionAction action) noexcept;
 
 } // namespace multi_purpose_mpc_ros::start_grid_grace
 

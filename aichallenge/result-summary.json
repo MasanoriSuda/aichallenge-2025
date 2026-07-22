@@ -7,9 +7,9 @@
     },
     "vehicles": [
         {
-            "vehicle_number": 2,
-            "vehicle_name": "GoKart2",
-            "final_position": 1,
+            "vehicle_number": 1,
+            "vehicle_name": "GoKart1",
+            "final_position": 3,
             "finished": false,
             "lap_count": 0,
             "laps": [],
@@ -19,9 +19,9 @@
             "total_lap_time": 0.0
         },
         {
-            "vehicle_number": 1,
-            "vehicle_name": "GoKart1",
-            "final_position": 2,
+            "vehicle_number": 2,
+            "vehicle_name": "GoKart2",
+            "final_position": 3,
             "finished": false,
             "lap_count": 0,
             "laps": [],

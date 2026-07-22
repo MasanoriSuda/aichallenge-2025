@@ -234,7 +234,7 @@ reference_path:
   # csv_path: ""
   csv_path: "env/final_ver3/traj_mincurv.csv"
   domain_csv_path:
-    1: "env/final_ver3/traj_mincurv_org.csv"
+    1: "env/final_ver3/traj_mincurv.csv"
     2: "env/final_ver3/traj_mincurv.csv"
     3: "env/final_ver3/traj_mincurv.csv"
   resolution: 0.6
@@ -329,7 +329,7 @@ mpc:
   v2x_vehicle_side_target_margin: 0.2 # [m] keep this margin from the inflated vehicle interval
   v2x_wall_avoidance_bias: 0.0        # 0.0 = gap center, 1.0 = vehicle side
   # Do not aim for a narrow gap between two moving V2X vehicles at close range.
-  v2x_vehicle_vehicle_gap_enabled: false
+  v2x_vehicle_vehicle_gap_enabled: true
   v2x_vehicle_vehicle_gap_min_distance: 18.0 # [m] only used when vehicle-vehicle gap is enabled
   v2x_vehicle_vehicle_gap_min_width: 3.2     # [m] only used when vehicle-vehicle gap is enabled
   v2x_multi_front_gap_enabled: true # evaluate the outside of a two-kart pack; vehicle-vehicle gaps stay disabled
@@ -459,7 +459,8 @@ mpc:
   v2x_overtake_line_return_distance: 6.0      # [m] blend back promptly after clearing the target
   v2x_overtake_line_lateral_offset: 1.2       # [m] signed by pass side: left positive, right negative
   v2x_overtake_line_target_bias: 1.0          # [0-1] explicit line is the sole lateral owner during ShiftOut/Pass
-  v2x_overtake_line_min_wall_clearance: 0.1   # [m] sim A/B: center a 0.2m residual corridor without fallback
+  # Applied to both the legacy lateral bounds and the occupancy-grid vehicle footprint.
+  v2x_overtake_line_min_wall_clearance: 0.8   # [m] keep a committed inside line off the physical wall
   v2x_overtake_line_max_lateral_accel: 6.0    # [m/s^2] dev3 attack: complete committed ShiftOut in a hairpin
   v2x_overtake_line_max_target_change: 0.04   # [m/cycle] smooth target goal updates across cycles
   v2x_overtake_line_target_intrusion_ordering_margin: 0.10 # [m] abort if the ahead target reaches/crosses ego's selected-side ordering
@@ -495,6 +496,18 @@ mpc:
   v2x_start_grid_grace_time: 5.0         # [s] Ready staging plus this duration after Start; static grid only
   v2x_start_grid_breakout_enabled: true  # sim race: use a feasible side corridor before falling back to Follow
   v2x_start_grid_breakout_side_deadband: 0.05 # [m] if both gaps work, prefer away from target stagger outside this band
+  v2x_start_grid_inter_vehicle_corridor_enabled: true # sim race: evaluate wall-car/car-car/car-wall equally at launch
+  v2x_start_grid_inter_vehicle_min_gap_width: 0.2 # [m] residual ego-center corridor after vehicle inflation
+  v2x_start_grid_inter_vehicle_min_open_distance: 3.0 # [m] same two boundary vehicles must keep the slot open
+  v2x_start_grid_inter_vehicle_longitudinal_span: 12.0 # [m] start-only persistence that joins staggered rows into three corridor choices
+  v2x_start_grid_inter_vehicle_lookbehind_distance: 4.0 # [m] keep an adjacent staggered-row car as a corridor boundary after it draws slightly behind
+  # Car-car slot only: wall-car candidates use a yaw-unknown rectangular footprint envelope.
+  v2x_start_grid_inter_vehicle_lateral_radius: 1.25 # [m] sim-only inflation before prediction margin; preserves the aggressive inter-vehicle slot
+  v2x_start_grid_dynamic_decision_enabled: true # accelerate on the base line while P2/P3 motion reveals the best launch corridor
+  v2x_start_grid_dynamic_peer_motion_speed: 0.25 # [m/s] begin the short observation window after either peer rolls
+  v2x_start_grid_dynamic_motion_observation_sec: 0.4 # [s] observe moving peers before committing inside/weave/outside
+  v2x_start_grid_dynamic_max_observation_sec: 1.25 # [s] bounded wait; P1 never stops while observing
+  v2x_start_grid_dynamic_candidate_stable_sec: 0.2 # [s] physical corridor must stop flickering before lock
   v2x_require_gap_for_overtake: true
   v2x_low_speed_avoidance_enabled: true
   v2x_low_speed_avoidance_ignore_soft_curve_forbidden: true # gate2: allow stopped-vehicle bypass in curve-lookahead zones
@@ -538,7 +551,7 @@ mpc:
   domain_v_max:
     1: 20.0
     2: 40.0
-    3: 10.0
+    3: 40.0
   domain_start_v_max_duration: 15.0 # [s] compensate inner-lane advantage at side-by-side start
   domain_start_v_max:
     2: 37.0

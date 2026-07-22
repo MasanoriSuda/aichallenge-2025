@@ -909,9 +909,10 @@ PassSide opposite_side(const PassSide side) noexcept
 }
 
 bool is_v2x_behavior_session_active(
-  const bool state_tracking_enabled, const bool race_started) noexcept
+  const bool state_tracking_enabled, const bool race_started,
+  const bool start_grid_ready_rollout) noexcept
 {
-  return !state_tracking_enabled || race_started;
+  return !state_tracking_enabled || race_started || start_grid_ready_rollout;
 }
 
 bool can_start_low_speed_bypass(const LowSpeedBypassCandidateRequest & request) noexcept
@@ -1470,6 +1471,132 @@ bool should_neutralize_solver_fallback_steering(
   }
   return request.force_neutralize ||
          request.consecutive_failures > request.steering_hold_cycles;
+}
+
+bool can_try_unvalidated_overtake_fallback(
+  const UnvalidatedOvertakeFallbackRequest & request) noexcept
+{
+  return !request.start_grid_breakout_attempt &&
+         !request.geometric_gap_available &&
+         request.side_clearance_available &&
+         !request.emergency_brake;
+}
+
+OffsetCurveFeasibilityResult evaluate_offset_curve_feasibility(
+  const OffsetCurveFeasibilityRequest & request)
+{
+  if (
+    !std::isfinite(request.reference_curvature_radpm) ||
+    !std::isfinite(request.lateral_offset_m) ||
+    !std::isfinite(request.max_abs_curvature_radpm) ||
+    request.max_abs_curvature_radpm <= 0.0 ||
+    !std::isfinite(request.min_frenet_denominator) ||
+    request.min_frenet_denominator <= 0.0)
+  {
+    throw std::invalid_argument("Invalid offset-curve feasibility request");
+  }
+
+  const double denominator =
+    1.0 - request.reference_curvature_radpm * request.lateral_offset_m;
+  if (denominator <= request.min_frenet_denominator) {
+    return {false, std::numeric_limits<double>::infinity(), denominator};
+  }
+  const double offset_curvature = request.reference_curvature_radpm / denominator;
+  return {
+    std::abs(offset_curvature) <= request.max_abs_curvature_radpm,
+    offset_curvature,
+    denominator};
+}
+
+double score_start_grid_corridor(const StartGridCorridorScoreRequest & request)
+{
+  if (
+    !std::isfinite(request.corridor_center_ey) ||
+    !std::isfinite(request.corridor_width) || request.corridor_width < 0.0 ||
+    !std::isfinite(request.ego_ey))
+  {
+    throw std::invalid_argument("Start-grid corridor geometry must be finite and non-negative");
+  }
+  return 10.0 * std::abs(request.corridor_center_ey - request.ego_ey) -
+         0.1 * request.corridor_width;
+}
+
+double conservative_rectangle_lateral_half_extent(
+  const double length_m, const double width_m)
+{
+  if (
+    !std::isfinite(length_m) || length_m < 0.0 ||
+    !std::isfinite(width_m) || width_m < 0.0)
+  {
+    throw std::invalid_argument(
+            "Rectangle length and width must be finite and non-negative");
+  }
+  return 0.5 * std::hypot(length_m, width_m);
+}
+
+WallCorridorGeometryResult evaluate_wall_corridor_geometry(
+  const WallCorridorGeometryRequest & request)
+{
+  if (
+    !std::isfinite(request.lower) || !std::isfinite(request.upper) ||
+    request.upper < request.lower ||
+    !std::isfinite(request.vehicle_extra_inflation_m) ||
+    request.vehicle_extra_inflation_m < 0.0 ||
+    !std::isfinite(request.wall_clearance_m) || request.wall_clearance_m < 0.0 ||
+    !std::isfinite(request.minimum_width_m) || request.minimum_width_m < 0.0)
+  {
+    throw std::invalid_argument(
+            "Wall-corridor bounds and margins must be finite, ordered, and non-negative");
+  }
+
+  double lower = request.lower;
+  double upper = request.upper;
+  const bool wall_vehicle_corridor =
+    request.lower_is_vehicle != request.upper_is_vehicle;
+  if (!request.lower_is_vehicle) {
+    lower += request.wall_clearance_m;
+  } else if (wall_vehicle_corridor) {
+    lower += request.vehicle_extra_inflation_m;
+  }
+  if (!request.upper_is_vehicle) {
+    upper -= request.wall_clearance_m;
+  } else if (wall_vehicle_corridor) {
+    upper -= request.vehicle_extra_inflation_m;
+  }
+
+  const bool feasible = upper >= lower && upper - lower >= request.minimum_width_m;
+  return {feasible, lower, upper};
+}
+
+bool is_start_grid_boundary_candidate(const StartGridBoundaryCandidateRequest & request)
+{
+  if (
+    !std::isfinite(request.forward_distance_m) ||
+    !std::isfinite(request.lookbehind_distance_m) || request.lookbehind_distance_m < 0.0 ||
+    !std::isfinite(request.lookahead_distance_m) || request.lookahead_distance_m < 0.0)
+  {
+    throw std::invalid_argument(
+            "Start-grid boundary progress and windows must be finite and non-negative");
+  }
+  return request.forward_distance_m >= -request.lookbehind_distance_m &&
+         request.forward_distance_m <= request.lookahead_distance_m;
+}
+
+bool is_inter_vehicle_corridor_rear_clear(
+  const InterVehicleRearClearRequest & request)
+{
+  if (
+    !std::isfinite(request.return_clear_distance_m) ||
+    request.return_clear_distance_m < 0.0)
+  {
+    throw std::invalid_argument(
+            "Inter-vehicle return-clear distance must be finite and non-negative");
+  }
+  return request.lower_vehicle_seen && request.upper_vehicle_seen &&
+         std::isfinite(request.lower_longitudinal_m) &&
+         std::isfinite(request.upper_longitudinal_m) &&
+         request.lower_longitudinal_m <= -request.return_clear_distance_m &&
+         request.upper_longitudinal_m <= -request.return_clear_distance_m;
 }
 
 }  // namespace multi_purpose_mpc_ros::v2x_overtake_core

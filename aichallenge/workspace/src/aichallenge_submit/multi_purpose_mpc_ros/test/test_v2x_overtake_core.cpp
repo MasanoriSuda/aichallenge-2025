@@ -58,6 +58,14 @@ using multi_purpose_mpc_ros::v2x_overtake_core::SolverCooldownRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SolverFallbackNeutralizationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SolverFallbackSteeringRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SolverReentryGateRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::StartGridCorridorScoreRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::UnvalidatedOvertakeFallbackRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OffsetCurveFeasibilityRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::WallCorridorGeometryRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::conservative_rectangle_lateral_half_extent;
+using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_wall_corridor_geometry;
+using multi_purpose_mpc_ros::v2x_overtake_core::is_start_grid_boundary_candidate;
+using multi_purpose_mpc_ros::v2x_overtake_core::InterVehicleRearClearRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ReacquireRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SideSelectionReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::SideSelectionRequest;
@@ -111,6 +119,10 @@ using multi_purpose_mpc_ros::v2x_overtake_core::is_solver_cooldown_active;
 using multi_purpose_mpc_ros::v2x_overtake_core::rate_limit_solver_fallback_steering_toward_neutral;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_neutralize_solver_fallback_steering;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_solver_reentry_gate;
+using multi_purpose_mpc_ros::v2x_overtake_core::score_start_grid_corridor;
+using multi_purpose_mpc_ros::v2x_overtake_core::can_try_unvalidated_overtake_fallback;
+using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_offset_curve_feasibility;
+using multi_purpose_mpc_ros::v2x_overtake_core::is_inter_vehicle_corridor_rear_clear;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_pass_side;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_curve_attack_side;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_v2x_behavior_session_active;
@@ -1153,6 +1165,16 @@ TEST(V2XOvertakeCoreProgress, RejectsTargetOutsideBoundedCourseSection)
   EXPECT_FALSE(project_forward_course_progress(path, request).valid);
 }
 
+TEST(V2XOvertakeCoreStartGrid, AdmitsNearbyRearBoundaryWithinConfiguredWindow)
+{
+  EXPECT_TRUE(is_start_grid_boundary_candidate({-3.0, 4.0, 24.0}));
+  EXPECT_TRUE(is_start_grid_boundary_candidate({24.0, 4.0, 24.0}));
+  EXPECT_FALSE(is_start_grid_boundary_candidate({-4.01, 4.0, 24.0}));
+  EXPECT_FALSE(is_start_grid_boundary_candidate({24.01, 4.0, 24.0}));
+  EXPECT_THROW(
+    is_start_grid_boundary_candidate({-1.0, -0.1, 24.0}), std::invalid_argument);
+}
+
 TEST(V2XOvertakeCoreCompletion, RequiresRearClearBeforeHardCurve)
 {
   PassCompletionRequest request;
@@ -1695,9 +1717,10 @@ TEST(V2XOvertakeCoreLowSpeedBypass, StartGridSuppressionBlocksNewCandidate)
 
 TEST(V2XOvertakeCoreLowSpeedBypass, RaceSessionGateOnlyAppliesWithAwsimStateTracking)
 {
-  EXPECT_TRUE(is_v2x_behavior_session_active(false, false));
-  EXPECT_FALSE(is_v2x_behavior_session_active(true, false));
-  EXPECT_TRUE(is_v2x_behavior_session_active(true, true));
+  EXPECT_TRUE(is_v2x_behavior_session_active(false, false, false));
+  EXPECT_FALSE(is_v2x_behavior_session_active(true, false, false));
+  EXPECT_TRUE(is_v2x_behavior_session_active(true, true, false));
+  EXPECT_TRUE(is_v2x_behavior_session_active(true, false, true));
 }
 
 TEST(V2XOvertakeCoreLowSpeedBypass, AllowsSoftCurveOverrideButNotExplicitForbiddenWaypoint)
@@ -2227,6 +2250,144 @@ TEST(V2XOvertakeCoreRecovery, NeutralizesFallbackAfterBoundedHoldWindow)
   request.consecutive_failures = 0;
   request.steering_hold_cycles = -1;
   EXPECT_THROW(should_neutralize_solver_fallback_steering(request), std::invalid_argument);
+}
+
+TEST(V2XOvertakeCoreStartGridCorridor, PrefersShortestLateralTravelBeforeExtraWidth)
+{
+  const double between_vehicle_score = score_start_grid_corridor(
+    StartGridCorridorScoreRequest{0.25, 0.25, 0.0});
+  const double wider_outer_score = score_start_grid_corridor(
+    StartGridCorridorScoreRequest{1.20, 1.80, 0.0});
+  EXPECT_LT(between_vehicle_score, wider_outer_score);
+
+  const double equal_shift_narrow = score_start_grid_corridor(
+    StartGridCorridorScoreRequest{-0.50, 0.30, 0.0});
+  const double equal_shift_wide = score_start_grid_corridor(
+    StartGridCorridorScoreRequest{0.50, 0.80, 0.0});
+  EXPECT_LT(equal_shift_wide, equal_shift_narrow);
+}
+
+TEST(V2XOvertakeCoreStartGridCorridor, DoesNotReplaceFailedGapWithUnvalidatedFallback)
+{
+  UnvalidatedOvertakeFallbackRequest request{true, false, true, false};
+  EXPECT_FALSE(can_try_unvalidated_overtake_fallback(request));
+
+  // The ordinary race overtake fallback remains available outside the start-grid exception.
+  request.start_grid_breakout_attempt = false;
+  EXPECT_TRUE(can_try_unvalidated_overtake_fallback(request));
+
+  request.geometric_gap_available = true;
+  EXPECT_FALSE(can_try_unvalidated_overtake_fallback(request));
+
+  request.geometric_gap_available = false;
+  request.emergency_brake = true;
+  EXPECT_FALSE(can_try_unvalidated_overtake_fallback(request));
+}
+
+TEST(V2XOvertakeCoreStartGridCorridor, RejectsAnInsideOffsetBeyondSteeringCurvature)
+{
+  // Right hairpin: negative kappa and negative e_y are the inside. A -1.22 m line turns much
+  // tighter than its -0.40 rad/m reference and exceeds a 32 deg / 1.087 m wheelbase limit.
+  const double max_curvature = std::tan(32.0 * std::acos(-1.0) / 180.0) / 1.087;
+  const auto inside = evaluate_offset_curve_feasibility(
+    OffsetCurveFeasibilityRequest{-0.40, -1.22, max_curvature, 0.10});
+  EXPECT_FALSE(inside.feasible);
+  EXPECT_GT(std::abs(inside.offset_curvature_radpm), max_curvature);
+
+  const auto moderate_inside = evaluate_offset_curve_feasibility(
+    OffsetCurveFeasibilityRequest{-0.40, -0.50, max_curvature, 0.10});
+  EXPECT_TRUE(moderate_inside.feasible);
+
+  const auto outside = evaluate_offset_curve_feasibility(
+    OffsetCurveFeasibilityRequest{-0.40, 1.00, max_curvature, 0.10});
+  EXPECT_TRUE(outside.feasible);
+  EXPECT_LT(std::abs(outside.offset_curvature_radpm), 0.40);
+
+  EXPECT_THROW(
+    evaluate_offset_curve_feasibility(
+      OffsetCurveFeasibilityRequest{-0.40, -1.22, 0.0, 0.10}),
+    std::invalid_argument);
+}
+
+TEST(V2XOvertakeCoreStartGridCorridor, RejectsInvalidCorridorGeometry)
+{
+  EXPECT_THROW(
+    score_start_grid_corridor(StartGridCorridorScoreRequest{0.0, -0.1, 0.0}),
+    std::invalid_argument);
+  EXPECT_THROW(
+    score_start_grid_corridor(
+      StartGridCorridorScoreRequest{
+        std::numeric_limits<double>::quiet_NaN(), 0.2, 0.0}),
+    std::invalid_argument);
+}
+
+TEST(V2XOvertakeCoreStartGridCorridor, UsesRectangleEnvelopeWhenTargetYawIsUnavailable)
+{
+  const double ego_half_extent =
+    conservative_rectangle_lateral_half_extent(1.087, 1.45);
+  const double target_half_extent =
+    conservative_rectangle_lateral_half_extent(2.0, 1.45);
+
+  EXPECT_NEAR(ego_half_extent, 0.9062, 1.0e-3);
+  EXPECT_NEAR(target_half_extent, 1.2352, 1.0e-3);
+  EXPECT_GT(ego_half_extent + target_half_extent, 2.14);
+  EXPECT_THROW(
+    conservative_rectangle_lateral_half_extent(-0.1, 1.45), std::invalid_argument);
+}
+
+TEST(V2XOvertakeCoreStartGridCorridor, RejectsOuterGapClosedByPhysicalMargins)
+{
+  // Reproduced 20260722-231926 outer raw corridor: 1.65829 m. The old implementation
+  // clamped 0.72 m wall clearance to half the interval and retained a false candidate.
+  const auto closed = evaluate_wall_corridor_geometry(
+    WallCorridorGeometryRequest{
+      1.524475, 3.182765, true, false,
+      2.1414 - 1.25, 0.9062, 0.2});
+  EXPECT_FALSE(closed.feasible);
+  EXPECT_LT(closed.width(), 0.2);
+
+  // The aggressive car-car slot is intentionally unaffected by wall-only inflation.
+  const auto between_vehicles = evaluate_wall_corridor_geometry(
+    WallCorridorGeometryRequest{
+      -1.3585995, -1.0855205, true, true, 0.0, 0.9062, 0.2});
+  EXPECT_TRUE(between_vehicles.feasible);
+  EXPECT_NEAR(between_vehicles.width(), 0.273079, 1.0e-6);
+}
+
+TEST(V2XOvertakeCoreStartGridCorridor, AppliesFullWallClearanceBeforeWidthCheck)
+{
+  const auto narrow = evaluate_wall_corridor_geometry(
+    WallCorridorGeometryRequest{0.0, 0.8, false, true, 0.0, 0.72, 0.2});
+  EXPECT_FALSE(narrow.feasible);
+  EXPECT_NEAR(narrow.width(), 0.08, 1.0e-9);
+
+  const auto open = evaluate_wall_corridor_geometry(
+    WallCorridorGeometryRequest{0.0, 1.2, false, true, 0.0, 0.72, 0.2});
+  EXPECT_TRUE(open.feasible);
+  EXPECT_NEAR(open.lower, 0.72, 1.0e-9);
+  EXPECT_NEAR(open.upper, 1.2, 1.0e-9);
+
+  EXPECT_THROW(
+    evaluate_wall_corridor_geometry(
+      WallCorridorGeometryRequest{1.0, 0.0, false, true, 0.0, 0.72, 0.2}),
+    std::invalid_argument);
+}
+
+TEST(V2XOvertakeCoreStartGridCorridor, RequiresBothBoundaryVehiclesRearClear)
+{
+  InterVehicleRearClearRequest request{true, true, -4.1, -4.2, 4.0};
+  EXPECT_TRUE(is_inter_vehicle_corridor_rear_clear(request));
+
+  request.upper_longitudinal_m = -3.9;
+  EXPECT_FALSE(is_inter_vehicle_corridor_rear_clear(request));
+
+  request.upper_longitudinal_m = -4.2;
+  request.lower_vehicle_seen = false;
+  EXPECT_FALSE(is_inter_vehicle_corridor_rear_clear(request));
+
+  request.lower_vehicle_seen = true;
+  request.return_clear_distance_m = -0.1;
+  EXPECT_THROW(is_inter_vehicle_corridor_rear_clear(request), std::invalid_argument);
 }
 
 }  // namespace

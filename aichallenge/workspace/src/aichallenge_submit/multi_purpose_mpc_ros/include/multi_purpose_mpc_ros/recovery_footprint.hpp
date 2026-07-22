@@ -194,6 +194,16 @@ struct FootprintSample
   std::vector<std::size_t> contact_cells;
 };
 
+/// Result of moving a Frenet lateral target away from a static-map wall.
+struct LateralClearanceResult
+{
+  bool valid{false};
+  bool feasible{false};
+  bool adjusted{false};
+  double lateral_offset_m{};
+  std::size_t checked_pose_count{};
+};
+
 struct FeasibilityResult
 {
   bool feasible{false};
@@ -264,6 +274,19 @@ RolloutResult generate_reverse_rollout(
 FootprintSample sample_footprint(
   const OccupancyGrid & grid, const FootprintExtents & footprint,
   const Pose2D & pose);
+
+/// Find the first collision-free lateral target between desired and fallback.
+///
+/// reference_pose is the zero-offset path pose. Positive lateral offset is to
+/// its left. additional_lateral_clearance_m inflates only the left/right
+/// extents, preserving the physical front/rear footprint at bends. Unknown and
+/// out-of-map samples are not feasible. The search is deterministic and moves
+/// monotonically from desired_lateral_offset_m toward fallback_lateral_offset_m.
+LateralClearanceResult clamp_lateral_offset_to_static_map(
+  const OccupancyGrid & grid, const FootprintExtents & footprint,
+  const Pose2D & reference_pose, double desired_lateral_offset_m,
+  double fallback_lateral_offset_m, double additional_lateral_clearance_m,
+  double sample_step_m);
 
 /// Classify the nearest occupied/unknown map cells in the vehicle frame.
 ///

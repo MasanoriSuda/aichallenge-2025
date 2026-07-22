@@ -1509,6 +1509,17 @@ struct V2XBehaviorConfig
   double start_grid_grace_time{0.0};
   bool start_grid_breakout_enabled{false};
   double start_grid_breakout_side_deadband{0.05};
+  bool start_grid_inter_vehicle_corridor_enabled{false};
+  double start_grid_inter_vehicle_min_gap_width{0.2};
+  double start_grid_inter_vehicle_min_open_distance{3.0};
+  double start_grid_inter_vehicle_longitudinal_span{12.0};
+  double start_grid_inter_vehicle_lookbehind_distance{4.0};
+  double start_grid_inter_vehicle_lateral_radius{1.25};
+  bool start_grid_dynamic_decision_enabled{false};
+  double start_grid_dynamic_peer_motion_speed{0.25};
+  double start_grid_dynamic_motion_observation_sec{0.40};
+  double start_grid_dynamic_max_observation_sec{1.25};
+  double start_grid_dynamic_candidate_stable_sec{0.20};
   bool require_gap_for_overtake{true};
   bool low_speed_avoidance_enabled{false};
   bool low_speed_avoidance_ignore_soft_curve_forbidden{false};
@@ -1646,6 +1657,12 @@ struct GapPlannerOutput
   bool pass_corridor_enforced{false};
   int pass_side_sign{0};
   double pass_target_ey{0.0};
+  bool vehicle_vehicle_corridor{false};
+  std::string lower_boundary_vehicle_id;
+  std::string upper_boundary_vehicle_id;
+  double selected_corridor_width{0.0};
+  double vehicle_vehicle_corridor_distance{0.0};
+  std::string corridor_candidates;
   std::vector<double> lb;
   std::vector<double> ub;
   std::vector<double> target_ey;
@@ -1696,6 +1713,14 @@ struct V2XBehaviorOutput
   bool start_grid_grace_active{false};
   bool start_grid_stop_suppressed{false};
   bool start_grid_breakout_active{false};
+  bool start_grid_inter_vehicle_corridor{false};
+  bool start_grid_dynamic_observation_active{false};
+  double start_grid_dynamic_observation_elapsed_sec{0.0};
+  double start_grid_dynamic_peer_speed{0.0};
+  double start_grid_dynamic_candidate_stable_sec{0.0};
+  std::string start_grid_dynamic_candidate;
+  std::string start_grid_lower_boundary_vehicle_id;
+  std::string start_grid_upper_boundary_vehicle_id;
   bool low_speed_avoidance_candidate{false};
   bool low_speed_avoidance_gap_blocked{false};
   bool low_speed_avoidance_stalled{false};
@@ -1755,6 +1780,10 @@ struct V2XBehaviorOutput
   double locked_target_relative_lateral{std::numeric_limits<double>::infinity()};
   double locked_target_speed{std::numeric_limits<double>::infinity()};
   double locked_target_receipt_sec{-std::numeric_limits<double>::infinity()};
+  bool lower_boundary_vehicle_seen{false};
+  bool upper_boundary_vehicle_seen{false};
+  double lower_boundary_vehicle_longitudinal{std::numeric_limits<double>::infinity()};
+  double upper_boundary_vehicle_longitudinal{std::numeric_limits<double>::infinity()};
   double front_speed{std::numeric_limits<double>::infinity()};
   double front_lateral{std::numeric_limits<double>::infinity()};
   double ego_speed{0.0};
@@ -1787,6 +1816,9 @@ struct OvertakeLineState
   double target_last_lateral{std::numeric_limits<double>::infinity()};
   double target_last_speed{std::numeric_limits<double>::infinity()};
   std::optional<double> fixed_pass_corridor_goal_ey;
+  bool inter_vehicle_corridor{false};
+  std::string lower_boundary_vehicle_id;
+  std::string upper_boundary_vehicle_id;
   double rear_clear_since_sec{std::numeric_limits<double>::quiet_NaN()};
   double last_valid_gap_sec{std::numeric_limits<double>::quiet_NaN()};
   double last_valid_execution_corridor_sec{std::numeric_limits<double>::quiet_NaN()};
@@ -1807,6 +1839,9 @@ struct OvertakeLineOutput
   double max_required_lateral_accel{0.0};
   bool lateral_accel_limited{false};
   bool wall_clearance_limited{false};
+  bool static_map_wall_limited{false};
+  bool static_map_margin_degraded{false};
+  bool static_map_wall_infeasible{false};
 };
 
 struct V2XGapPlanner
@@ -1848,6 +1883,10 @@ struct V2XGapPlanner
     double lower{};
     double upper{};
     double distance_from_self{};
+    std::string lower_vehicle_id;
+    std::string upper_vehicle_id;
+    double lower_wall_extra_inflation{};
+    double upper_wall_extra_inflation{};
 
     double width() const
     {
@@ -1862,6 +1901,10 @@ struct V2XGapPlanner
     bool upper_is_vehicle{false};
     double lower_vehicle_distance{std::numeric_limits<double>::infinity()};
     double upper_vehicle_distance{std::numeric_limits<double>::infinity()};
+    std::string lower_vehicle_id;
+    std::string upper_vehicle_id;
+    double lower_vehicle_wall_extra_inflation{};
+    double upper_vehicle_wall_extra_inflation{};
 
     bool is_vehicle_vehicle_gap() const
     {
@@ -2358,7 +2401,14 @@ struct V2XGapPlanner
     const bool allow_vehicle_vehicle_gap = false,
     const double max_self_distance = std::numeric_limits<double>::infinity(),
     const int forced_pass_side_sign = 0,
-    const std::optional<double> min_gap_width_override = std::nullopt)
+    const std::optional<double> min_gap_width_override = std::nullopt,
+    const bool prefer_short_lateral_path = false,
+    const std::optional<std::pair<std::string, std::string>> &
+    locked_vehicle_vehicle_gap = std::nullopt,
+    const std::optional<double> locked_corridor_target_ey = std::nullopt,
+    const double start_grid_inter_vehicle_longitudinal_span = 0.0,
+    const double start_grid_inter_vehicle_lookbehind_distance = 0.0,
+    const double start_grid_inter_vehicle_lateral_radius = 0.0)
   {
     GapPlannerOutput output;
     if (!cfg.enabled || N <= 0) {
@@ -2366,11 +2416,15 @@ struct V2XGapPlanner
     }
 
     std::vector<TrackedVehicle> vehicles;
-    const bool use_corridor_center_desired = allow_vehicle_vehicle_gap && base_lb.size() > 0 &&
-                                            base_ub.size() > 0;
+    const bool use_corridor_center_desired = allow_vehicle_vehicle_gap &&
+                                            !prefer_short_lateral_path &&
+                                            base_lb.size() > 0 && base_ub.size() > 0;
     double desired_ey = use_corridor_center_desired ?
       0.5 * (base_lb[0] + base_ub[0]) :
       model.spatial_state.e_y;
+    if (locked_corridor_target_ey.has_value()) {
+      desired_ey = locked_corridor_target_ey.value();
+    }
     // Gate2-like stopped vehicle rows need the target to be recomputed after each passed vehicle.
     // Keep last_target_ey_ only as a continuity hint; do not pin one absolute lateral target.
     const bool use_low_speed_target_lock = false;
@@ -2419,6 +2473,87 @@ struct V2XGapPlanner
       return output;
     }
 
+    // A staggered start row does not put both boundary vehicles in the same
+    // instantaneous Frenet cross-section.  For start-grid corridor selection only,
+    // keep the two nearest non-rear vehicles as longitudinally persistent lateral
+    // boundaries.  This exposes the three physical choices (wall-car, car-car,
+    // car-wall) to one comparison.  Normal execution planning continues to use the
+    // real vehicle length and the locked corridor centre, so this does not enlarge
+    // obstacles during the race.
+    struct StartGridCourseProjection
+    {
+      double forward_distance{};
+      double lateral{};
+      double along_track_speed{};
+    };
+    std::unordered_map<std::string, StartGridCourseProjection> start_grid_course_projections;
+    std::unordered_set<std::string> start_grid_persistent_vehicle_ids;
+    const double start_grid_span =
+      prefer_short_lateral_path ?
+      std::max(0.0, start_grid_inter_vehicle_longitudinal_span) : 0.0;
+    const double start_grid_lookbehind =
+      prefer_short_lateral_path ?
+      std::max(0.0, start_grid_inter_vehicle_lookbehind_distance) : 0.0;
+    if (start_grid_span > kEps && vehicles.size() >= 2U) {
+      struct ForwardVehicle
+      {
+        double longitudinal{};
+        std::string id;
+      };
+      std::vector<ForwardVehicle> forward_vehicles;
+      std::vector<v2x_overtake_core::CoursePoint> course_path;
+      course_path.reserve(static_cast<std::size_t>(model.reference_path->n_waypoints));
+      for (int waypoint_id = 0; waypoint_id < model.reference_path->n_waypoints; ++waypoint_id) {
+        const auto & waypoint = model.reference_path->get_waypoint(waypoint_id);
+        course_path.push_back({waypoint.x, waypoint.y});
+      }
+      for (const auto & vehicle : vehicles) {
+        const double age = std::max(0.0, now_sec - vehicle.stamp_sec);
+        const double pred_x = vehicle.x + vehicle.vx * age;
+        const double pred_y = vehicle.y + vehicle.vy * age;
+        const auto projection = v2x_overtake_core::project_forward_course_progress(
+          course_path,
+          v2x_overtake_core::ForwardCourseProjectionRequest{
+            static_cast<std::size_t>(std::max(0, ref_wp_id)),
+            model.reference_path->circular,
+            model.temporal_state.x,
+            model.temporal_state.y,
+            pred_x,
+            pred_y,
+            vehicle.vx,
+            vehicle.vy,
+            start_grid_lookbehind,
+            2.0 * start_grid_span,
+            10.0});
+        if (
+          !projection.valid ||
+          !v2x_overtake_core::is_start_grid_boundary_candidate(
+            v2x_overtake_core::StartGridBoundaryCandidateRequest{
+              projection.forward_distance_m, start_grid_lookbehind, 2.0 * start_grid_span}))
+        {
+          continue;
+        }
+        start_grid_course_projections.emplace(
+          vehicle.id,
+          StartGridCourseProjection{
+            projection.forward_distance_m,
+            projection.lateral_m,
+            projection.along_track_speed_mps});
+        forward_vehicles.push_back({projection.forward_distance_m, vehicle.id});
+      }
+      std::sort(
+        forward_vehicles.begin(), forward_vehicles.end(),
+        [](const ForwardVehicle & lhs, const ForwardVehicle & rhs) {
+          return lhs.longitudinal < rhs.longitudinal;
+        });
+      for (std::size_t i = 0; i < std::min<std::size_t>(2U, forward_vehicles.size()); ++i) {
+        start_grid_persistent_vehicle_ids.insert(forward_vehicles[i].id);
+      }
+      if (start_grid_persistent_vehicle_ids.size() < 2U) {
+        start_grid_persistent_vehicle_ids.clear();
+      }
+    }
+
     if (!allow_vehicle_vehicle_gap && should_block_multi_front_gap(model, ref_wp_id, base_lb, base_ub, vehicles)) {
       output.active = true;
       output.feasible = false;
@@ -2441,6 +2576,28 @@ struct V2XGapPlanner
     bool first_target_selected = false;
     std::size_t selected_first_target_index = 0;
     double path_prediction_time = 0.0;
+    std::optional<std::pair<std::string, std::string>> selected_vehicle_vehicle_gap =
+      locked_vehicle_vehicle_gap;
+    const bool external_vehicle_vehicle_gap_lock = locked_vehicle_vehicle_gap.has_value();
+    double current_vehicle_vehicle_corridor_distance = 0.0;
+    double horizon_course_distance = 0.0;
+    // V2X has no target yaw. Keep the configured aggressive circular radius for a car-car slot,
+    // but use each rectangle's half-diagonal when deciding whether a wall-car slot can really
+    // contain ego. The extra inflation is attached to the vehicle boundary and applied only when
+    // the opposite boundary is a wall.
+    const double start_grid_ego_lateral_half_extent = prefer_short_lateral_path ?
+      v2x_overtake_core::conservative_rectangle_lateral_half_extent(
+        model.length, model.width) : 0.0;
+    const double target_half_width = std::max(
+      0.0, cfg.vehicle_radius - 0.5 * std::max(0.0, model.width));
+    const double start_grid_target_lateral_half_extent = prefer_short_lateral_path ?
+      v2x_overtake_core::conservative_rectangle_lateral_half_extent(
+        cfg.vehicle_length, 2.0 * target_half_width) : 0.0;
+    const double start_grid_wall_vehicle_body_radius =
+      start_grid_ego_lateral_half_extent + start_grid_target_lateral_half_extent;
+    const double corridor_wall_clearance = prefer_short_lateral_path ?
+      std::max(cfg.wall_clearance_margin, start_grid_ego_lateral_half_extent) :
+      cfg.wall_clearance_margin;
 
     for (int i = 0; i < N; ++i) {
       const LateralInterval base{base_lb[i], base_ub[i]};
@@ -2452,6 +2609,10 @@ struct V2XGapPlanner
       }
 
       const auto & waypoint = model.reference_path->get_waypoint(ref_wp_id + i);
+      if (i > 0) {
+        horizon_course_distance += waypoint.distance_to(
+          model.reference_path->get_waypoint(ref_wp_id + i - 1));
+      }
       double horizon_t = std::min(static_cast<double>(i + 1) * model.Ts, cfg.prediction_time);
       if (cfg.prediction_use_path_time) {
         double segment_distance = 0.0;
@@ -2483,30 +2644,59 @@ struct V2XGapPlanner
 
         const double dx = pred_x - waypoint.x;
         const double dy = pred_y - waypoint.y;
-        const double longitudinal = std::cos(waypoint.psi) * dx + std::sin(waypoint.psi) * dy;
-        const double lateral = -std::sin(waypoint.psi) * dx + std::cos(waypoint.psi) * dy;
+        double longitudinal = std::cos(waypoint.psi) * dx + std::sin(waypoint.psi) * dy;
+        double lateral = -std::sin(waypoint.psi) * dx + std::cos(waypoint.psi) * dy;
         const double covariance_margin = std::max(vehicle.covariance_x, vehicle.covariance_y);
+        const auto start_grid_projection = start_grid_course_projections.find(vehicle.id);
+        const bool use_start_grid_course_projection =
+          start_grid_persistent_vehicle_ids.count(vehicle.id) > 0U &&
+          start_grid_projection != start_grid_course_projections.end();
+        const bool is_locked_inter_vehicle_boundary =
+          external_vehicle_vehicle_gap_lock &&
+          (vehicle.id == locked_vehicle_vehicle_gap->first ||
+          vehicle.id == locked_vehicle_vehicle_gap->second);
+        if (use_start_grid_course_projection) {
+          longitudinal = start_grid_projection->second.forward_distance +
+            start_grid_projection->second.along_track_speed * horizon_t -
+            horizon_course_distance;
+          lateral = start_grid_projection->second.lateral;
+        }
+        double obstacle_body_radius = std::max(0.0, cfg.vehicle_radius);
+        if (use_start_grid_course_projection || is_locked_inter_vehicle_boundary) {
+          obstacle_body_radius = std::min(
+            obstacle_body_radius,
+            std::max(0.0, start_grid_inter_vehicle_lateral_radius));
+        }
         const double obstacle_radius =
-          std::max(0.0, cfg.vehicle_radius + cfg.prediction_margin + covariance_margin);
-        const double longitudinal_radius =
+          obstacle_body_radius + cfg.prediction_margin + covariance_margin;
+        const double wall_extra_inflation = prefer_short_lateral_path ?
+          std::max(0.0, start_grid_wall_vehicle_body_radius - obstacle_body_radius) : 0.0;
+        double longitudinal_radius =
           0.5 * std::max(0.0, cfg.vehicle_length) + 0.5 * model.length +
           cfg.prediction_margin + covariance_margin;
+        if (use_start_grid_course_projection) {
+          longitudinal_radius = std::max(longitudinal_radius, 0.5 * start_grid_span);
+        }
         if (std::abs(longitudinal) > longitudinal_radius) {
           continue;
         }
         if (lateral + obstacle_radius < base.lower || lateral - obstacle_radius > base.upper) {
           continue;
         }
-        occupied.push_back({lateral - obstacle_radius, lateral + obstacle_radius, self_distance});
+        occupied.push_back(
+          {lateral - obstacle_radius, lateral + obstacle_radius, self_distance,
+            vehicle.id, vehicle.id, wall_extra_inflation, wall_extra_inflation});
       }
 
       if (occupied.empty()) {
+        current_vehicle_vehicle_corridor_distance = 0.0;
         continue;
       }
 
       any_obstacle_in_horizon = true;
       const auto free_intervals = compute_free_intervals(
-        base, occupied, allow_vehicle_vehicle_gap, min_gap_width_override);
+        base, occupied, allow_vehicle_vehicle_gap, min_gap_width_override,
+        corridor_wall_clearance);
       if (free_intervals.empty()) {
         feasible = false;
         output.reject_reason = allow_vehicle_vehicle_gap ?
@@ -2514,40 +2704,125 @@ struct V2XGapPlanner
         break;
       }
       const auto pass_side_intervals = filter_by_pass_side(free_intervals, base, low_speed_pass_side);
-      if (low_speed_pass_side != 0 && pass_side_intervals.empty()) {
+      if (
+        low_speed_pass_side != 0 && pass_side_intervals.empty() &&
+        !selected_vehicle_vehicle_gap.has_value())
+      {
         feasible = false;
         output.reject_reason = "pass-side gap unavailable";
         break;
       }
+      const auto & side_selectable_intervals =
+        selected_vehicle_vehicle_gap.has_value() || pass_side_intervals.empty() ?
+        free_intervals : pass_side_intervals;
+      std::vector<GapCandidate> locked_pair_intervals;
+      if (selected_vehicle_vehicle_gap.has_value()) {
+        for (const auto & candidate : side_selectable_intervals) {
+          if (
+            candidate.is_vehicle_vehicle_gap() &&
+            candidate.lower_vehicle_id == selected_vehicle_vehicle_gap->first &&
+            candidate.upper_vehicle_id == selected_vehicle_vehicle_gap->second)
+          {
+            locked_pair_intervals.push_back(candidate);
+          }
+        }
+        if (locked_pair_intervals.empty()) {
+          if (external_vehicle_vehicle_gap_lock) {
+            for (const auto & candidate : side_selectable_intervals) {
+              if (
+                locked_corridor_target_ey.has_value() &&
+                candidate.interval.lower - kEps <= locked_corridor_target_ey.value() &&
+                locked_corridor_target_ey.value() <= candidate.interval.upper + kEps)
+              {
+                locked_pair_intervals.push_back(candidate);
+              }
+            }
+            if (locked_pair_intervals.empty()) {
+              feasible = false;
+              output.reject_reason = "locked vehicle-vehicle corridor unavailable";
+              break;
+            }
+          } else {
+            selected_vehicle_vehicle_gap.reset();
+            current_vehicle_vehicle_corridor_distance = 0.0;
+          }
+        }
+      }
       const auto & selectable_intervals =
-        pass_side_intervals.empty() ? free_intervals : pass_side_intervals;
+        selected_vehicle_vehicle_gap.has_value() && !locked_pair_intervals.empty() ?
+        locked_pair_intervals : side_selectable_intervals;
       double selection_desired_ey = desired_ey;
       const bool prefer_locked_target = use_low_speed_target_lock && low_speed_locked_target_ey.has_value();
       if (prefer_locked_target) {
         selection_desired_ey = low_speed_locked_target_ey.value();
       }
       const bool prefer_wide_gap =
-        allow_vehicle_vehicle_gap && low_speed_pass_side == 0 && !prefer_locked_target;
+        allow_vehicle_vehicle_gap && low_speed_pass_side == 0 && !prefer_locked_target &&
+        !prefer_short_lateral_path;
+      if (prefer_short_lateral_path && !first_target_selected) {
+        std::ostringstream candidates;
+        for (std::size_t candidate_index = 0;
+          candidate_index < selectable_intervals.size(); ++candidate_index)
+        {
+          const auto & candidate = selectable_intervals[candidate_index];
+          if (candidate_index > 0U) {
+            candidates << ";";
+          }
+          candidates << (candidate.is_vehicle_vehicle_gap() ? "vehicle-vehicle" : "wall-vehicle")
+                     << "@" << candidate.interval.center()
+                     << "/" << candidate.interval.width();
+          if (candidate.is_vehicle_vehicle_gap()) {
+            candidates << "[" << candidate.lower_vehicle_id
+                       << "," << candidate.upper_vehicle_id << "]";
+          }
+        }
+        output.corridor_candidates = candidates.str();
+      }
       const auto selected = select_interval(
-        selectable_intervals, selection_desired_ey, prefer_wide_gap, prefer_locked_target);
+        selectable_intervals, selection_desired_ey, prefer_wide_gap, prefer_locked_target,
+        prefer_short_lateral_path);
+      if (
+        prefer_short_lateral_path && !selected_vehicle_vehicle_gap.has_value() &&
+        selected.is_vehicle_vehicle_gap())
+      {
+        selected_vehicle_vehicle_gap =
+          std::make_pair(selected.lower_vehicle_id, selected.upper_vehicle_id);
+      }
       if (allow_vehicle_vehicle_gap && low_speed_pass_side == 0) {
         low_speed_pass_side = infer_pass_side_sign(base, selected.interval);
+        if (low_speed_pass_side == 0 && prefer_short_lateral_path) {
+          const double relative_target = selected.interval.center() - model.spatial_state.e_y;
+          low_speed_pass_side = relative_target < -kEps ? -1 : 1;
+        }
       }
       if ((allow_vehicle_vehicle_gap || forced_pass_side_sign != 0) && output.pass_side_sign == 0) {
         output.pass_side_sign = low_speed_pass_side;
       }
-      const auto adjusted = apply_wall_clearance(base, selected.interval, false);
+      const auto & adjusted = selected.interval;
       output.lb[i] = adjusted.lower;
       output.ub[i] = adjusted.upper;
       output.target_ey[i] = prefer_locked_target ?
         clip(low_speed_locked_target_ey.value(), adjusted.lower, adjusted.upper) :
-        select_target_ey(base, selected.interval, adjusted, allow_vehicle_vehicle_gap);
+        select_target_ey(selected, allow_vehicle_vehicle_gap);
       output.target_active[i] = true;
       desired_ey = output.target_ey[i];
       if (!first_target_selected) {
         selected_first_target = output.target_ey[i];
         selected_first_target_index = static_cast<std::size_t>(i);
         first_target_selected = true;
+        output.vehicle_vehicle_corridor = selected.is_vehicle_vehicle_gap();
+        output.lower_boundary_vehicle_id = selected.lower_vehicle_id;
+        output.upper_boundary_vehicle_id = selected.upper_vehicle_id;
+        output.selected_corridor_width = adjusted.width();
+      }
+      if (selected.is_vehicle_vehicle_gap()) {
+        const auto & next_waypoint = model.reference_path->get_waypoint(ref_wp_id + i + 1);
+        current_vehicle_vehicle_corridor_distance += next_waypoint.distance_to(waypoint);
+        output.vehicle_vehicle_corridor_distance = std::max(
+          output.vehicle_vehicle_corridor_distance,
+          current_vehicle_vehicle_corridor_distance);
+      } else {
+        current_vehicle_vehicle_corridor_distance = 0.0;
       }
     }
 
@@ -2687,7 +2962,8 @@ private:
   std::vector<GapCandidate> compute_free_intervals(
     const LateralInterval & base, std::vector<OccupiedInterval> occupied,
     const bool allow_vehicle_vehicle_gap,
-    const std::optional<double> min_gap_width_override) const
+    const std::optional<double> min_gap_width_override,
+    const double wall_clearance) const
   {
     std::vector<OccupiedInterval> merged;
     for (auto & interval : occupied) {
@@ -2711,7 +2987,11 @@ private:
         continue;
       }
       auto & last = compacted.back();
-      last.upper = std::max(last.upper, interval.upper);
+      if (interval.upper > last.upper) {
+        last.upper = interval.upper;
+        last.upper_vehicle_id = interval.upper_vehicle_id;
+        last.upper_wall_extra_inflation = interval.upper_wall_extra_inflation;
+      }
       last.distance_from_self = std::min(last.distance_from_self, interval.distance_from_self);
     }
 
@@ -2719,20 +2999,26 @@ private:
     double cursor = base.lower;
     bool cursor_from_vehicle = false;
     double cursor_vehicle_distance = std::numeric_limits<double>::infinity();
+    std::string cursor_vehicle_id;
+    double cursor_wall_extra_inflation = 0.0;
     for (const auto & interval : compacted) {
       if (interval.lower > cursor) {
         free_intervals.push_back(
           {{cursor, interval.lower}, cursor_from_vehicle, true, cursor_vehicle_distance,
-            interval.distance_from_self});
+            interval.distance_from_self, cursor_vehicle_id, interval.lower_vehicle_id,
+            cursor_wall_extra_inflation, interval.lower_wall_extra_inflation});
       }
       cursor = std::max(cursor, interval.upper);
       cursor_from_vehicle = true;
       cursor_vehicle_distance = interval.distance_from_self;
+      cursor_vehicle_id = interval.upper_vehicle_id;
+      cursor_wall_extra_inflation = interval.upper_wall_extra_inflation;
     }
     if (cursor < base.upper) {
       free_intervals.push_back(
         {{cursor, base.upper}, cursor_from_vehicle, false, cursor_vehicle_distance,
-          std::numeric_limits<double>::infinity()});
+          std::numeric_limits<double>::infinity(), cursor_vehicle_id, std::string{},
+          cursor_wall_extra_inflation, 0.0});
     }
 
     std::vector<GapCandidate> filtered;
@@ -2754,8 +3040,23 @@ private:
           continue;
         }
       }
-      if (candidate.interval.width() >= required_width) {
-        filtered.push_back(candidate);
+      const bool wall_vehicle_corridor =
+        candidate.lower_is_vehicle != candidate.upper_is_vehicle;
+      double vehicle_extra_inflation = 0.0;
+      if (wall_vehicle_corridor) {
+        vehicle_extra_inflation = candidate.lower_is_vehicle ?
+          candidate.lower_vehicle_wall_extra_inflation :
+          candidate.upper_vehicle_wall_extra_inflation;
+      }
+      const auto geometry = v2x_overtake_core::evaluate_wall_corridor_geometry(
+        v2x_overtake_core::WallCorridorGeometryRequest{
+          candidate.interval.lower, candidate.interval.upper,
+          candidate.lower_is_vehicle, candidate.upper_is_vehicle,
+          vehicle_extra_inflation, std::max(0.0, wall_clearance), required_width});
+      if (geometry.feasible) {
+        auto adjusted_candidate = candidate;
+        adjusted_candidate.interval = {geometry.lower, geometry.upper};
+        filtered.push_back(std::move(adjusted_candidate));
       }
     }
     return filtered;
@@ -2892,7 +3193,8 @@ private:
 
   GapCandidate select_interval(
     const std::vector<GapCandidate> & intervals, const double desired_ey,
-    const bool prefer_wide_gap, const bool prefer_containing_desired) const
+    const bool prefer_wide_gap, const bool prefer_containing_desired,
+    const bool prefer_short_lateral_path) const
   {
     auto best = intervals.front();
     double best_score = std::numeric_limits<double>::infinity();
@@ -2904,7 +3206,11 @@ private:
       const double distance_to_desired = contains_desired ?
         0.0 :
         std::min(std::abs(desired_ey - interval.lower), std::abs(desired_ey - interval.upper));
-      const double score = prefer_containing_desired ?
+      const double score = prefer_short_lateral_path ?
+        v2x_overtake_core::score_start_grid_corridor(
+          v2x_overtake_core::StartGridCorridorScoreRequest{
+            center, interval.width(), desired_ey}) :
+        prefer_containing_desired ?
         (contains_desired ? 0.0 : 1000.0) + 8.0 * distance_to_desired +
           0.2 * std::abs(center - desired_ey) - 0.2 * interval.width() :
         prefer_wide_gap ?
@@ -2918,40 +3224,18 @@ private:
     return best;
   }
 
-  LateralInterval apply_wall_clearance(
-    const LateralInterval & base, const LateralInterval & selected,
-    const bool skip_wall_clearance) const
-  {
-    LateralInterval adjusted = selected;
-    if (skip_wall_clearance) {
-      return adjusted;
-    }
-    const double margin = std::min(std::max(0.0, cfg.wall_clearance_margin), selected.width() * 0.5);
-    if (margin <= kEps) {
-      return adjusted;
-    }
-    const bool lower_is_wall = std::abs(selected.lower - base.lower) <= kEps;
-    const bool upper_is_wall = std::abs(selected.upper - base.upper) <= kEps;
-    if (lower_is_wall && !upper_is_wall) {
-      adjusted.lower += margin;
-    } else if (upper_is_wall && !lower_is_wall) {
-      adjusted.upper -= margin;
-    }
-    return adjusted;
-  }
-
   double select_target_ey(
-    const LateralInterval & base, const LateralInterval & selected,
-    const LateralInterval & adjusted, const bool prefer_gap_center) const
+    const GapCandidate & selected, const bool prefer_gap_center) const
   {
+    const auto & adjusted = selected.interval;
     const double center = adjusted.center();
     const double bias = prefer_gap_center ? 0.0 : clip(cfg.wall_avoidance_bias, 0.0, 1.0);
     if (bias <= kEps || adjusted.width() <= kEps) {
       return center;
     }
 
-    const bool lower_is_wall = std::abs(selected.lower - base.lower) <= kEps;
-    const bool upper_is_wall = std::abs(selected.upper - base.upper) <= kEps;
+    const bool lower_is_wall = !selected.lower_is_vehicle;
+    const bool upper_is_wall = !selected.upper_is_vehicle;
     double vehicle_side_target = center;
     const double vehicle_margin =
       std::min(std::max(0.0, cfg.vehicle_side_target_margin), adjusted.width() * 0.5);
@@ -3070,6 +3354,14 @@ struct MPC
     gap_planner = planner;
   }
 
+  void set_overtake_static_wall_geometry(
+    const recovery_footprint::OccupancyGrid * grid,
+    const recovery_footprint::FootprintExtents & footprint)
+  {
+    overtake_static_wall_grid_ = grid;
+    overtake_static_wall_footprint_ = footprint;
+  }
+
   void update_v_max(const double v_max)
   {
     cfg.v_max = v_max;
@@ -3131,6 +3423,18 @@ struct MPC
       cfg.v_max);
   }
 
+  void reset_start_grid_dynamic_decision() noexcept
+  {
+    start_grid_dynamic_decision_pending_ = false;
+    start_grid_dynamic_observation_start_sec_ =
+      std::numeric_limits<double>::quiet_NaN();
+    start_grid_dynamic_peer_motion_start_sec_ =
+      std::numeric_limits<double>::quiet_NaN();
+    start_grid_dynamic_candidate_since_sec_ =
+      std::numeric_limits<double>::quiet_NaN();
+    start_grid_dynamic_candidate_key_.clear();
+  }
+
   void set_v2x_race_session_active(const bool active, const double now_sec)
   {
     if (v2x_race_session_active_ == active) {
@@ -3152,6 +3456,7 @@ struct MPC
     start_grid_initial_target_id_.reset();
     start_grid_breakout_target_id_.reset();
     start_grid_breakout_side_sign_ = 0;
+    reset_start_grid_dynamic_decision();
     overtake_locked_target_ey_.reset();
     overtake_locked_side_sign_ = 0;
     overtake_entry_speed_.reset();
@@ -3203,8 +3508,14 @@ struct MPC
       start_grid_initial_target_id_.reset();
       start_grid_breakout_target_id_.reset();
       start_grid_breakout_side_sign_ = 0;
+      reset_start_grid_dynamic_decision();
     }
     return transition;
+  }
+
+  bool start_grid_ready_rollout_active() const noexcept
+  {
+    return start_grid_grace_guard_.phase() == start_grid_grace::Phase::Prepared;
   }
 
   void reset_control_history(const double steering)
@@ -3246,6 +3557,7 @@ struct MPC
     front_hazard_hold_target_id_.clear();
     start_grid_breakout_target_id_.reset();
     start_grid_breakout_side_sign_ = 0;
+    reset_start_grid_dynamic_decision();
     overtake_locked_target_ey_.reset();
     overtake_locked_side_sign_ = 0;
     overtake_entry_speed_.reset();
@@ -3288,6 +3600,7 @@ struct MPC
       if (!(start_grid_breakout_line_active && start_grid_breakout_line_target_matches)) {
         start_grid_breakout_target_id_.reset();
         start_grid_breakout_side_sign_ = 0;
+        reset_start_grid_dynamic_decision();
       }
       RCLCPP_INFO(
         rclcpp::get_logger("mpc_controller"),
@@ -3300,6 +3613,7 @@ struct MPC
       start_grid_initial_target_id_.reset();
       start_grid_breakout_target_id_.reset();
       start_grid_breakout_side_sign_ = 0;
+      reset_start_grid_dynamic_decision();
       RCLCPP_WARN(
         rclcpp::get_logger("mpc_controller"),
         "Start grid grace rejected because the ROS clock is invalid or moved backwards");
@@ -3310,6 +3624,7 @@ struct MPC
     {
       start_grid_breakout_target_id_.reset();
       start_grid_breakout_side_sign_ = 0;
+      reset_start_grid_dynamic_decision();
     }
     output.start_grid_grace_active = start_grid_grace_active;
     output.ego_speed = current_speed_mps_;
@@ -3451,6 +3766,7 @@ struct MPC
     std::string nearest_side_id;
     double nearest_side_abs_longitudinal = std::numeric_limits<double>::infinity();
     double nearest_side_course_longitudinal = std::numeric_limits<double>::infinity();
+    double start_grid_peer_max_speed = 0.0;
     const bool continuing_low_speed_avoidance =
       v2x_behavior_state_initialized && v2x_behavior_state == V2XBehaviorState::LowSpeedAvoidance;
     const bool track_low_speed_clearance =
@@ -3462,6 +3778,9 @@ struct MPC
       if (self_distance < cfg.v2x_gap.self_filter_radius) {
         continue;
       }
+
+      start_grid_peer_max_speed = std::max(
+        start_grid_peer_max_speed, std::hypot(vehicle.vx, vehicle.vy));
 
       const double dx = vehicle.x - model->temporal_state.x;
       const double dy = vehicle.y - model->temporal_state.y;
@@ -3525,6 +3844,16 @@ struct MPC
         output.locked_target_relative_lateral = front_relative_lateral;
         output.locked_target_speed = front_vehicle_speed;
         output.locked_target_receipt_sec = vehicle.receipt_sec;
+      }
+      if (overtake_line_state_.inter_vehicle_corridor) {
+        if (vehicle.id == overtake_line_state_.lower_boundary_vehicle_id) {
+          output.lower_boundary_vehicle_seen = true;
+          output.lower_boundary_vehicle_longitudinal = front_longitudinal;
+        }
+        if (vehicle.id == overtake_line_state_.upper_boundary_vehicle_id) {
+          output.upper_boundary_vehicle_seen = true;
+          output.upper_boundary_vehicle_longitudinal = front_longitudinal;
+        }
       }
       const bool within_local_corridor = std::abs(lateral) <= corridor_lateral_range;
       const bool within_progress_corridor =
@@ -3645,6 +3974,7 @@ struct MPC
     }
 
     output.front_distance = nearest_front_distance;
+    output.start_grid_dynamic_peer_speed = start_grid_peer_max_speed;
     output.front_speed = nearest_front_speed;
     output.front_lateral = nearest_front_lateral;
     output.front_progress_used = nearest_front_progress_used;
@@ -3724,8 +4054,14 @@ struct MPC
         nearest_front_id == start_grid_breakout_target_id_.value(),
         start_grid_breakout_line_active,
         start_grid_breakout_line_target_matches});
+    const bool continuing_start_grid_dynamic_observation =
+      cfg.v2x_behavior.start_grid_dynamic_decision_enabled &&
+      start_grid_dynamic_decision_pending_ && start_grid_grace_active &&
+      has_front_vehicle && !start_grid_breakout_line_active &&
+      !start_grid_breakout_target_id_.has_value();
     const bool start_grid_breakout_attempt =
       continuing_start_grid_breakout ||
+      continuing_start_grid_dynamic_observation ||
       start_grid_grace::should_attempt_breakout(
       start_grid_grace::BreakoutContext{
         cfg.v2x_behavior.start_grid_breakout_enabled,
@@ -4172,6 +4508,9 @@ struct MPC
       double corridor_width{0.0};
       double continuous_corridor_distance{0.0};
       std::optional<double> corridor_center_ey;
+      bool vehicle_vehicle_corridor{false};
+      std::string lower_boundary_vehicle_id;
+      std::string upper_boundary_vehicle_id;
       std::string guard_reason;
       std::string reason{"not evaluated"};
     };
@@ -4325,10 +4664,19 @@ struct MPC
         assessment.reason = ss.str();
       }
       assessment.guard_reason = assessment.reason;
-      if (
-        !assessment.gap_available &&
-        assessment.side_clearance >= fallback_min_side_clearance &&
-        front_risk_level != FrontRiskLevel::EmergencyBrake) {
+      // The generic fallback only proves instantaneous side clearance. A start-grid breakout has
+      // a stronger, persistent corridor contract; if that contract fails, reusing the fallback
+      // would replace the failed car-car goal with a target-relative line (20260723-000738:
+      // -1.22 m -> -4.09 m) and carry P1 too far inside into the first hairpin.
+      const bool fallback_side_clearance_available =
+        assessment.side_clearance >= fallback_min_side_clearance;
+      if (v2x_overtake_core::can_try_unvalidated_overtake_fallback(
+          v2x_overtake_core::UnvalidatedOvertakeFallbackRequest{
+            start_grid_breakout_attempt,
+            assessment.gap_available,
+            fallback_side_clearance_available,
+            front_risk_level == FrontRiskLevel::EmergencyBrake}))
+      {
         std::string fallback_guard_reason;
         if (overtake_fallback_guard_allows(
             side, nearest_front_distance, model->spatial_state.e_y,
@@ -4357,6 +4705,12 @@ struct MPC
               fallback_guard_reason + " / " + close_follow_reason;
           }
         }
+      } else if (
+        start_grid_breakout_attempt && !assessment.gap_available &&
+        fallback_side_clearance_available &&
+        front_risk_level != FrontRiskLevel::EmergencyBrake)
+      {
+        assessment.reason += " / start-grid requires validated corridor";
       }
       const bool transient_gap_failure =
         assessment.guard_reason.find("overtake guard gap width") != std::string::npos ||
@@ -4419,6 +4773,227 @@ struct MPC
       }
     }
 
+    SideAssessment start_grid_corridor_assessment;
+    bool start_grid_corridor_selected = false;
+    std::string start_grid_corridor_strategy;
+    bool start_grid_dynamic_observation_active = false;
+    if (
+      start_grid_breakout_attempt && locked_pass_side == 0 &&
+      cfg.v2x_behavior.start_grid_inter_vehicle_corridor_enabled)
+    {
+      const double start_grid_min_width = std::max(
+        0.0, cfg.v2x_behavior.start_grid_inter_vehicle_min_gap_width);
+      const auto plan_start_grid_gap = [&](const int forced_side) {
+          return gap_planner->plan(
+            *model, ref_wp_id, overtake_plan_N, overtake_lb, overtake_ub, now_sec,
+            false, true, std::numeric_limits<double>::infinity(), forced_side,
+            start_grid_min_width, true, std::nullopt, std::nullopt,
+            cfg.v2x_behavior.start_grid_inter_vehicle_longitudinal_span,
+            cfg.v2x_behavior.start_grid_inter_vehicle_lookbehind_distance,
+            cfg.v2x_behavior.start_grid_inter_vehicle_lateral_radius);
+        };
+      const auto assess_start_grid_gap = [&](const GapPlannerOutput & start_grid_gap) {
+          SideAssessment assessment;
+          assessment.side = start_grid_gap.pass_side_sign;
+          assessment.corridor_width = start_grid_gap.selected_corridor_width;
+          assessment.vehicle_vehicle_corridor = start_grid_gap.vehicle_vehicle_corridor;
+          assessment.lower_boundary_vehicle_id = start_grid_gap.lower_boundary_vehicle_id;
+          assessment.upper_boundary_vehicle_id = start_grid_gap.upper_boundary_vehicle_id;
+          assessment.continuous_corridor_distance =
+            start_grid_gap.vehicle_vehicle_corridor_distance;
+          for (std::size_t i = 0; i < start_grid_gap.target_active.size(); ++i) {
+            if (
+              start_grid_gap.target_active[i] && i < start_grid_gap.lb.size() &&
+              i < start_grid_gap.ub.size())
+            {
+              assessment.corridor_center_ey =
+                0.5 * (start_grid_gap.lb[i] + start_grid_gap.ub[i]);
+              break;
+            }
+          }
+          if (assessment.side == 0) {
+            assessment.reason = start_grid_gap.reject_reason.empty() ?
+              "start-grid corridor unavailable" : start_grid_gap.reject_reason;
+            return assessment;
+          }
+          assessment.side_clearance = overtake_side_clearance(
+            assessment.side, nearest_front_lateral, lb[0], ub[0]);
+          assessment.gap_available = overtake_guard_allows(
+            start_grid_gap, ref_wp_id, nearest_front_distance, model->spatial_state.e_y,
+            continuing_overtake, true, assessment.reason);
+          if (
+            assessment.gap_available && assessment.vehicle_vehicle_corridor &&
+            start_grid_gap.vehicle_vehicle_corridor_distance + kEps <
+            cfg.v2x_behavior.start_grid_inter_vehicle_min_open_distance)
+          {
+            assessment.gap_available = false;
+            std::ostringstream ss;
+            ss << "start-grid inter-vehicle corridor too short: open="
+               << start_grid_gap.vehicle_vehicle_corridor_distance
+               << " m, required="
+               << cfg.v2x_behavior.start_grid_inter_vehicle_min_open_distance << " m";
+            assessment.reason = ss.str();
+          }
+
+          // A wall-side inside dive must remain drivable if it is still held at the first
+          // hairpin. Vehicle-vehicle weaving is kept aggressive because it has a separate
+          // rear-clear contract; an unturnable wall-side inside candidate is replaced by an
+          // explicitly replanned outside candidate below.
+          const bool wall_side_inside =
+            assessment.gap_available && !assessment.vehicle_vehicle_corridor &&
+            inner_curve_pass_side != 0 && assessment.side == inner_curve_pass_side &&
+            assessment.corridor_center_ey.has_value();
+          if (wall_side_inside) {
+            const double max_supported_curvature =
+              std::tan(std::abs(cfg.delta_max)) / std::max(kEps, model->length);
+            double worst_offset_curvature = 0.0;
+            bool turnable = true;
+            for (int i = 0; i < overtake_plan_N; ++i) {
+              const auto feasibility =
+                v2x_overtake_core::evaluate_offset_curve_feasibility(
+                v2x_overtake_core::OffsetCurveFeasibilityRequest{
+                  model->reference_path->get_waypoint(ref_wp_id + i).kappa,
+                  assessment.corridor_center_ey.value(), max_supported_curvature, 0.10});
+              worst_offset_curvature = std::max(
+                worst_offset_curvature, std::abs(feasibility.offset_curvature_radpm));
+              if (!feasibility.feasible) {
+                turnable = false;
+                break;
+              }
+            }
+            if (!turnable) {
+              assessment.gap_available = false;
+              std::ostringstream ss;
+              ss << "start-grid inside corridor exceeds steering curvature"
+                 << ", goal=" << assessment.corridor_center_ey.value()
+                 << ", required_kappa=" << worst_offset_curvature
+                 << ", max_kappa=" << max_supported_curvature;
+              assessment.reason = ss.str();
+            }
+          }
+
+          if (assessment.gap_available) {
+            std::ostringstream ss;
+            ss << "start-grid shortest corridor, type="
+               << (assessment.vehicle_vehicle_corridor ?
+               "vehicle-vehicle" : "wall-vehicle")
+               << ", width=" << assessment.corridor_width
+               << ", open=" << assessment.continuous_corridor_distance
+               << ", candidates=" << start_grid_gap.corridor_candidates;
+            assessment.reason = ss.str();
+            assessment.guard_reason = assessment.reason;
+          }
+          return assessment;
+        };
+
+      GapPlannerOutput start_grid_gap = plan_start_grid_gap(0);
+      start_grid_corridor_assessment = assess_start_grid_gap(start_grid_gap);
+      const bool rejected_unturnable_inside =
+        !start_grid_corridor_assessment.gap_available &&
+        start_grid_corridor_assessment.reason.find(
+        "start-grid inside corridor exceeds steering curvature") != std::string::npos;
+      if (rejected_unturnable_inside && inner_curve_pass_side != 0) {
+        auto outer_gap = plan_start_grid_gap(-inner_curve_pass_side);
+        auto outer_assessment = assess_start_grid_gap(outer_gap);
+        if (outer_assessment.gap_available) {
+          start_grid_gap = std::move(outer_gap);
+          start_grid_corridor_assessment = std::move(outer_assessment);
+        }
+      }
+      if (start_grid_corridor_assessment.gap_available) {
+        start_grid_corridor_selected = true;
+        start_grid_corridor_strategy =
+          start_grid_corridor_assessment.vehicle_vehicle_corridor ? "weave" :
+          inner_curve_pass_side != 0 &&
+          start_grid_corridor_assessment.side == inner_curve_pass_side ? "inside" : "outside";
+        if (start_grid_corridor_assessment.side > 0) {
+          left_assessment = start_grid_corridor_assessment;
+        } else {
+          right_assessment = start_grid_corridor_assessment;
+        }
+      }
+
+      const bool dynamic_decision_scope =
+        cfg.v2x_behavior.start_grid_dynamic_decision_enabled &&
+        !continuing_start_grid_breakout && !start_grid_breakout_line_active &&
+        !start_grid_breakout_target_id_.has_value();
+      if (dynamic_decision_scope) {
+        if (!start_grid_dynamic_decision_pending_) {
+          start_grid_dynamic_decision_pending_ = true;
+          start_grid_dynamic_observation_start_sec_ = now_sec;
+          RCLCPP_INFO(
+            rclcpp::get_logger("mpc_controller"),
+            "Start-grid dynamic decision observation started: wp_id=%d",
+            model->wp_id);
+        }
+        if (
+          !std::isfinite(start_grid_dynamic_peer_motion_start_sec_) &&
+          start_grid_peer_max_speed + kEps >=
+          cfg.v2x_behavior.start_grid_dynamic_peer_motion_speed)
+        {
+          start_grid_dynamic_peer_motion_start_sec_ = now_sec;
+        }
+
+        std::string candidate_key;
+        if (start_grid_corridor_selected) {
+          std::ostringstream key;
+          key << start_grid_corridor_strategy << ':'
+              << start_grid_corridor_assessment.side << ':'
+              << start_grid_corridor_assessment.lower_boundary_vehicle_id << ':'
+              << start_grid_corridor_assessment.upper_boundary_vehicle_id;
+          candidate_key = key.str();
+        }
+        if (candidate_key != start_grid_dynamic_candidate_key_) {
+          start_grid_dynamic_candidate_key_ = candidate_key;
+          start_grid_dynamic_candidate_since_sec_ = candidate_key.empty() ?
+            std::numeric_limits<double>::quiet_NaN() : now_sec;
+          RCLCPP_INFO(
+            rclcpp::get_logger("mpc_controller"),
+            "Start-grid dynamic candidate changed: candidate=%s, peer_v=%.2f m/s, wp_id=%d",
+            candidate_key.empty() ? "none" : candidate_key.c_str(),
+            start_grid_peer_max_speed, model->wp_id);
+        }
+
+        const double observation_elapsed = std::max(
+          0.0, now_sec - start_grid_dynamic_observation_start_sec_);
+        const bool peer_motion_observed =
+          std::isfinite(start_grid_dynamic_peer_motion_start_sec_);
+        const double peer_motion_elapsed = peer_motion_observed ?
+          std::max(0.0, now_sec - start_grid_dynamic_peer_motion_start_sec_) : 0.0;
+        const double candidate_stable =
+          start_grid_corridor_selected &&
+          std::isfinite(start_grid_dynamic_candidate_since_sec_) ?
+          std::max(0.0, now_sec - start_grid_dynamic_candidate_since_sec_) : 0.0;
+        const auto decision = start_grid_grace::resolve_dynamic_breakout_decision(
+          start_grid_grace::DynamicDecisionContext{
+            true, start_grid_corridor_selected, peer_motion_observed,
+            front_risk_level == FrontRiskLevel::EmergencyBrake,
+            observation_elapsed, peer_motion_elapsed, candidate_stable,
+            cfg.v2x_behavior.start_grid_dynamic_motion_observation_sec,
+            cfg.v2x_behavior.start_grid_dynamic_max_observation_sec,
+            cfg.v2x_behavior.start_grid_dynamic_candidate_stable_sec});
+        output.start_grid_dynamic_observation_elapsed_sec = observation_elapsed;
+        output.start_grid_dynamic_candidate_stable_sec = candidate_stable;
+        output.start_grid_dynamic_candidate = candidate_key;
+        if (decision.action == start_grid_grace::DynamicDecisionAction::Observe) {
+          start_grid_dynamic_observation_active = true;
+          output.start_grid_dynamic_observation_active = true;
+        } else if (
+          decision.action == start_grid_grace::DynamicDecisionAction::CommitCandidate)
+        {
+          RCLCPP_INFO(
+            rclcpp::get_logger("mpc_controller"),
+            "Start-grid dynamic decision committed: strategy=%s, side=%d, elapsed=%.2f s, "
+            "peer_v=%.2f m/s, stable=%.2f s, center=%.2f",
+            start_grid_corridor_strategy.c_str(), start_grid_corridor_assessment.side,
+            observation_elapsed, start_grid_peer_max_speed, candidate_stable,
+            start_grid_corridor_assessment.corridor_center_ey.value_or(
+              model->spatial_state.e_y));
+          reset_start_grid_dynamic_decision();
+        }
+      }
+    }
+
     output.overtake_left_gap_available = left_assessment.gap_available;
     output.overtake_right_gap_available = right_assessment.gap_available;
     const auto side_reason = [&](const SideAssessment & assessment) {
@@ -4437,7 +5012,8 @@ struct MPC
       start_grid_grace::resolve_breakout_stagger_preference(
         model->spatial_state.e_y, nearest_front_lateral,
         cfg.v2x_behavior.start_grid_breakout_side_deadband) : 0;
-    const int selection_preferred_pass_side =
+    const int selection_preferred_pass_side = start_grid_corridor_selected ?
+      start_grid_corridor_assessment.side :
       start_grid_breakout_attempt && locked_pass_side == 0 ?
       start_grid_grace::resolve_breakout_gap_preference(
       start_grid_grace::BreakoutGapPreferenceContext{
@@ -4581,6 +5157,17 @@ struct MPC
     if (selected_assessment.gap_available) {
       output.overtake_corridor_center_ey = selected_assessment.corridor_center_ey;
     }
+    if (
+      start_grid_corridor_selected &&
+      output.overtake_pass_side_sign == start_grid_corridor_assessment.side &&
+      start_grid_corridor_assessment.vehicle_vehicle_corridor)
+    {
+      output.start_grid_inter_vehicle_corridor = true;
+      output.start_grid_lower_boundary_vehicle_id =
+        start_grid_corridor_assessment.lower_boundary_vehicle_id;
+      output.start_grid_upper_boundary_vehicle_id =
+        start_grid_corridor_assessment.upper_boundary_vehicle_id;
+    }
     output.overtake_fallback_target = selected_assessment.fallback_target;
     output.overtake_gap_hold_active = selected_assessment.transient_gap_hold;
     output.overtake_gap_hold_remaining_sec = selected_assessment.gap_hold_remaining_sec;
@@ -4644,6 +5231,26 @@ struct MPC
     output.overtake_gap_available = overtake_gap_available;
     output.overtake_block_reason = overtake_block_reason;
 
+    if (start_grid_dynamic_observation_active) {
+      // Longitudinal launch continues at the normal/domain race reference while the lateral
+      // target remains the base trajectory. Do not enter Follow here: that would recreate the
+      // very launch hesitation this observation phase is meant to avoid.
+      output.state = V2XBehaviorState::Cruise;
+      output.start_grid_breakout_active = true;
+      output.start_grid_stop_suppressed = true;
+      output.overtake_zone_allows = false;
+      std::ostringstream ss;
+      ss << "start-grid dynamic observation"
+         << ", elapsed=" << output.start_grid_dynamic_observation_elapsed_sec
+         << ", peer_v=" << output.start_grid_dynamic_peer_speed
+         << ", candidate=" <<
+        (output.start_grid_dynamic_candidate.empty() ?
+        "none" : output.start_grid_dynamic_candidate)
+         << ", stable=" << output.start_grid_dynamic_candidate_stable_sec;
+      output.reason = ss.str();
+      return commit_v2x_behavior_state(output, now_sec);
+    }
+
     if (
       start_grid_breakout_attempt && front_risk_emergency &&
       (!overtake_zone_allows || !overtake_gap_available))
@@ -4670,9 +5277,24 @@ struct MPC
       if (overtake_zone_allows && overtake_gap_available) {
         output.state = V2XBehaviorState::Overtake;
         if (start_grid_breakout_attempt) {
+          const bool new_breakout =
+            !start_grid_breakout_target_id_.has_value() ||
+            start_grid_breakout_target_id_.value() != nearest_front_id;
           start_grid_breakout_target_id_ = nearest_front_id;
           start_grid_breakout_side_sign_ = output.overtake_pass_side_sign;
           output.start_grid_breakout_active = true;
+          if (new_breakout && start_grid_corridor_selected) {
+            RCLCPP_INFO(
+              rclcpp::get_logger("mpc_controller"),
+              "Start-grid corridor selected: strategy=%s, type=%s, "
+              "lower=%s, upper=%s, side=%d, center=%.2f",
+              start_grid_corridor_strategy.c_str(),
+              output.start_grid_inter_vehicle_corridor ? "vehicle-vehicle" : "wall-vehicle",
+              output.start_grid_lower_boundary_vehicle_id.c_str(),
+              output.start_grid_upper_boundary_vehicle_id.c_str(),
+              output.overtake_pass_side_sign,
+              output.overtake_corridor_center_ey.value_or(model->spatial_state.e_y));
+          }
         }
         output.reason = start_grid_breakout_attempt ?
           "start-grid breakout / " + selected_assessment.reason :
@@ -5117,6 +5739,22 @@ struct MPC
     const auto [gap_plan_lb, gap_plan_ub] = use_overtake_lookahead ?
       build_v2x_gap_planner_bounds(ref_wp_id, N, lb, ub, gap_plan_N) :
       std::pair<Eigen::VectorXd, Eigen::VectorXd>{lb, ub};
+    const bool inter_vehicle_corridor_plan =
+      behavior_output.start_grid_inter_vehicle_corridor ||
+      overtake_line_state_.inter_vehicle_corridor;
+    std::optional<std::pair<std::string, std::string>> inter_vehicle_corridor_lock;
+    std::optional<double> inter_vehicle_corridor_goal;
+    if (behavior_output.start_grid_inter_vehicle_corridor) {
+      inter_vehicle_corridor_lock = std::make_pair(
+        behavior_output.start_grid_lower_boundary_vehicle_id,
+        behavior_output.start_grid_upper_boundary_vehicle_id);
+      inter_vehicle_corridor_goal = behavior_output.overtake_corridor_center_ey;
+    } else if (overtake_line_state_.inter_vehicle_corridor) {
+      inter_vehicle_corridor_lock = std::make_pair(
+        overtake_line_state_.lower_boundary_vehicle_id,
+        overtake_line_state_.upper_boundary_vehicle_id);
+      inter_vehicle_corridor_goal = overtake_line_state_.fixed_pass_corridor_goal_ey;
+    }
     const auto planner_output = use_gap_planner ?
       (use_low_speed_local_path ?
       gap_planner->plan_stopped_vehicle_local_path(
@@ -5124,7 +5762,8 @@ struct MPC
       gap_planner->plan(
         *model, ref_wp_id, gap_plan_N, gap_plan_lb, gap_plan_ub, now_sec,
         !explicit_overtake_line_owns_plan,
-        behavior_output.state == V2XBehaviorState::LowSpeedAvoidance,
+        behavior_output.state == V2XBehaviorState::LowSpeedAvoidance ||
+        inter_vehicle_corridor_plan,
         behavior_output.state == V2XBehaviorState::LowSpeedAvoidance ?
         std::max(
           cfg.v2x_behavior.low_speed_avoidance_distance + model->length,
@@ -5134,7 +5773,10 @@ struct MPC
         behavior_output.state == V2XBehaviorState::Overtake ?
         std::optional<double>{std::max(
           cfg.v2x_behavior.overtake_min_gap_width,
-          cfg.v2x_behavior.overtake_guard_min_gap_width)} : std::nullopt)) :
+          cfg.v2x_behavior.overtake_guard_min_gap_width)} : std::nullopt,
+        false, inter_vehicle_corridor_lock, inter_vehicle_corridor_goal, 0.0, 0.0,
+        inter_vehicle_corridor_plan ?
+        cfg.v2x_behavior.start_grid_inter_vehicle_lateral_radius : 0.0)) :
       GapPlannerOutput{};
     const bool live_execution_corridor_valid =
       explicit_overtake_line_owns_plan && use_gap_planner &&
@@ -5829,6 +6471,8 @@ struct MPC
   MpcConfig cfg;
   start_grid_grace::Guard start_grid_grace_guard_;
   V2XGapPlanner * gap_planner{};
+  const recovery_footprint::OccupancyGrid * overtake_static_wall_grid_{};
+  recovery_footprint::FootprintExtents overtake_static_wall_footprint_;
   bool use_obstacle_avoidance{};
   bool use_path_constraints_topic{};
   bool v2x_race_session_active_{true};
@@ -5848,6 +6492,14 @@ struct MPC
   std::optional<std::string> start_grid_initial_target_id_;
   std::optional<std::string> start_grid_breakout_target_id_;
   int start_grid_breakout_side_sign_{0};
+  bool start_grid_dynamic_decision_pending_{false};
+  double start_grid_dynamic_observation_start_sec_{
+    std::numeric_limits<double>::quiet_NaN()};
+  double start_grid_dynamic_peer_motion_start_sec_{
+    std::numeric_limits<double>::quiet_NaN()};
+  double start_grid_dynamic_candidate_since_sec_{
+    std::numeric_limits<double>::quiet_NaN()};
+  std::string start_grid_dynamic_candidate_key_;
   std::optional<double> overtake_locked_target_ey_;
   int overtake_locked_side_sign_{0};
   OvertakeLineState overtake_line_state_;
@@ -6225,10 +6877,17 @@ private:
     const double target_age = std::isfinite(overtake_line_state_.target_last_seen_sec) ?
       std::max(0.0, now_sec - overtake_line_state_.target_last_seen_sec) :
       std::numeric_limits<double>::infinity();
-    const bool rear_clear_observed =
+    const double return_clear_distance = std::max(0.0, line_cfg.return_clear_distance);
+    const bool rear_clear_observed = overtake_line_state_.inter_vehicle_corridor ?
+      v2x_overtake_core::is_inter_vehicle_corridor_rear_clear(
+        v2x_overtake_core::InterVehicleRearClearRequest{
+          behavior_output.lower_boundary_vehicle_seen,
+          behavior_output.upper_boundary_vehicle_seen,
+          behavior_output.lower_boundary_vehicle_longitudinal,
+          behavior_output.upper_boundary_vehicle_longitudinal,
+          return_clear_distance}) :
       behavior_output.locked_target_seen &&
-      behavior_output.locked_target_longitudinal <=
-      -std::max(0.0, line_cfg.return_clear_distance);
+      behavior_output.locked_target_longitudinal <= -return_clear_distance;
     if (rear_clear_observed) {
       if (!std::isfinite(overtake_line_state_.rear_clear_since_sec)) {
         overtake_line_state_.rear_clear_since_sec = now_sec;
@@ -6241,7 +6900,18 @@ private:
       now_sec - overtake_line_state_.rear_clear_since_sec >=
       std::max(0.0, line_cfg.clear_confirm_sec);
 
-    if (behavior_overtake) {
+    // Complete a committed pass as soon as rear clearance is confirmed. The behavior layer can
+    // legitimately keep publishing Overtake through committed-pass continuity, but letting that
+    // label win here carries one fixed inside goal through the following hairpin indefinitely.
+    if (
+      overtake_line_state_.phase == OvertakeLinePhase::Pass &&
+      rear_clear_confirmed)
+    {
+      transition_overtake_line_phase(
+        OvertakeLinePhase::Return, now_sec, current_ey,
+        overtake_line_state_.pass_side_sign,
+        "locked target rear clearance confirmed during committed pass");
+    } else if (behavior_overtake) {
       const int pass_side_sign = overtake_line_state_.pass_side_sign != 0 ?
         overtake_line_state_.pass_side_sign : behavior_output.overtake_pass_side_sign;
       if (!phase_active || overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare) {
@@ -6253,6 +6923,20 @@ private:
         // the usable slot instead of following the target kart toward one edge of that slot.
         overtake_line_state_.fixed_pass_corridor_goal_ey =
           behavior_output.overtake_corridor_center_ey;
+        if (behavior_output.start_grid_inter_vehicle_corridor) {
+          overtake_line_state_.inter_vehicle_corridor = true;
+          overtake_line_state_.lower_boundary_vehicle_id =
+            behavior_output.start_grid_lower_boundary_vehicle_id;
+          overtake_line_state_.upper_boundary_vehicle_id =
+            behavior_output.start_grid_upper_boundary_vehicle_id;
+          RCLCPP_INFO(
+            rclcpp::get_logger("mpc_controller"),
+            "Start-grid inter-vehicle corridor locked: lower=%s, upper=%s, "
+            "side=%d, goal_ey=%.2f",
+            overtake_line_state_.lower_boundary_vehicle_id.c_str(),
+            overtake_line_state_.upper_boundary_vehicle_id.c_str(), pass_side_sign,
+            overtake_line_state_.fixed_pass_corridor_goal_ey.value_or(current_ey));
+        }
       } else if (overtake_line_state_.pass_side_sign == 0) {
         overtake_line_state_.pass_side_sign = pass_side_sign;
       } else if (overtake_line_state_.phase == OvertakeLinePhase::Return) {
@@ -6271,7 +6955,9 @@ private:
         const double return_progress = clip(
           (std::abs(overtake_line_state_.phase_start_ey) - std::abs(current_ey)) /
           return_denominator, 0.0, 1.0);
-        if (overtake_core::can_reacquire_during_return(
+        if (
+          !rear_clear_observed &&
+          overtake_core::can_reacquire_during_return(
             overtake_core::ReacquireRequest{
               line_cfg.reacquire_enabled, stable_target_id, same_target, same_side,
               behavior_output.overtake_gap_available, behavior_output.overtake_zone_allows,
@@ -6585,6 +7271,50 @@ private:
         required_lateral_accel = max_lateral_accel;
         output.lateral_accel_limited = true;
       }
+
+      if (
+        overtake_static_wall_grid_ != nullptr &&
+        overtake_static_wall_footprint_.valid())
+      {
+        const auto & waypoint = model->reference_path->get_waypoint(ref_wp_id + i);
+        const recovery_footprint::Pose2D reference_pose{
+          waypoint.x, waypoint.y, waypoint.psi};
+        const double fallback_ey = clip(0.0, lower, upper);
+        const double sample_step = std::clamp(
+          0.5 * overtake_static_wall_grid_->resolution_m, 0.02, 0.10);
+        auto static_clearance =
+          recovery_footprint::clamp_lateral_offset_to_static_map(
+          *overtake_static_wall_grid_, overtake_static_wall_footprint_, reference_pose,
+          target_ey, fallback_ey, min_wall_clearance, sample_step);
+        if (static_clearance.valid && !static_clearance.feasible) {
+          // If the requested extra race margin does not fit, retain physical
+          // collision avoidance instead of trusting the inaccurate smoothed
+          // path bounds or stopping in the committed pass line.
+          static_clearance = recovery_footprint::clamp_lateral_offset_to_static_map(
+            *overtake_static_wall_grid_, overtake_static_wall_footprint_, reference_pose,
+            target_ey, fallback_ey, 0.0, sample_step);
+          output.static_map_margin_degraded = true;
+        }
+        if (static_clearance.valid && static_clearance.feasible) {
+          if (static_clearance.adjusted) {
+            output.static_map_wall_limited = true;
+            output.wall_clearance_limited = true;
+          }
+          target_ey = static_clearance.lateral_offset_m;
+          const double static_lateral_shift = std::abs(target_ey - current_ey);
+          required_lateral_accel =
+            2.0 * static_lateral_shift / (time_to_target * time_to_target);
+        } else {
+          // A clear reference-path target should always exist. Keep the target
+          // on the reference path and reduce speed when the static map cannot
+          // validate even the physical footprint.
+          output.static_map_wall_infeasible = true;
+          target_ey = fallback_ey;
+          output.target_velocity_limit = std::min(
+            output.target_velocity_limit,
+            std::max(0.0, line_cfg.recovery_velocity));
+        }
+      }
       output.max_required_lateral_accel =
         std::max(output.max_required_lateral_accel, required_lateral_accel);
       output.target_ey[i] = target_ey;
@@ -6617,7 +7347,10 @@ private:
           "first_epsi=%.2f, "
           "current_ey=%.2f, elapsed=%.2f, traveled=%.2f, stalled=%.2f, "
           "v_ref=%.2f, v_limit=%.2f, closing=%.2f, cap_release=%d, cooldown=%.2f, "
-          "max_lat_acc=%.2f, lat_limited=%d, wall_limited=%d, corridor_goal=%.2f",
+          "max_lat_acc=%.2f, lat_limited=%d, wall_limited=%d, "
+          "static_wall_limited=%d, static_margin_degraded=%d, "
+          "static_wall_infeasible=%d, corridor_goal=%.2f, "
+          "inter_vehicle=%d, boundaries=[%s,%s]",
           to_string(overtake_line_state_.phase), overtake_line_state_.pass_side_sign, goal_ey,
           output.target_ey.empty() ? 0.0 : output.target_ey.front(),
           output.target_epsi.empty() ? 0.0 : output.target_epsi.front(), current_ey,
@@ -6628,8 +7361,14 @@ private:
           std::max(0.0, overtake_solver_cooldown_until_sec_ - now_sec),
           output.max_required_lateral_accel, output.lateral_accel_limited ? 1 : 0,
           output.wall_clearance_limited ? 1 : 0,
+          output.static_map_wall_limited ? 1 : 0,
+          output.static_map_margin_degraded ? 1 : 0,
+          output.static_map_wall_infeasible ? 1 : 0,
           overtake_line_state_.fixed_pass_corridor_goal_ey.value_or(
-            std::numeric_limits<double>::quiet_NaN()));
+            std::numeric_limits<double>::quiet_NaN()),
+          overtake_line_state_.inter_vehicle_corridor ? 1 : 0,
+          overtake_line_state_.lower_boundary_vehicle_id.c_str(),
+          overtake_line_state_.upper_boundary_vehicle_id.c_str());
         last_overtake_line_debug_log_sec_ = now_sec;
       }
     }
@@ -7849,6 +8588,8 @@ private:
           "shift_t=%.2f, wp_id=%d, "
           "vehicles=%zu, front=%d, side=%d, danger=%d, danger_action=%s, "
           "grace=%d, grid_suppress=%d, grid_breakout=%d, "
+          "grid_observe=%d, grid_obs=%.2f, grid_peer=%.2f, grid_candidate=%s, "
+          "grid_stable=%.2f, "
           "hazard_hold=%d, hazard_remaining=%.2f, hazard_target=%s, "
           "fd=%.2f, progress=%d, local_fd=%.2f, path_lat=%.2f, fs=%.2f, ego=%.2f, "
           "rel=%.2f, req_dec=%.2f, avail=%.2f, risk=%s, "
@@ -7883,6 +8624,12 @@ private:
           output.start_grid_grace_active ? 1 : 0,
           output.start_grid_stop_suppressed ? 1 : 0,
           output.start_grid_breakout_active ? 1 : 0,
+          output.start_grid_dynamic_observation_active ? 1 : 0,
+          output.start_grid_dynamic_observation_elapsed_sec,
+          output.start_grid_dynamic_peer_speed,
+          output.start_grid_dynamic_candidate.empty() ?
+          "none" : output.start_grid_dynamic_candidate.c_str(),
+          output.start_grid_dynamic_candidate_stable_sec,
           output.front_hazard_hold_active ? 1 : 0,
           output.front_hazard_hold_remaining_sec,
           output.front_hazard_hold_target_id.c_str(),
@@ -9616,6 +10363,48 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_start_grid_breakout_side_deadband"] ?
     mpc["v2x_start_grid_breakout_side_deadband"].as<double>() : 0.05);
+  cfg.mpc.v2x_behavior.start_grid_inter_vehicle_corridor_enabled =
+    mpc["v2x_start_grid_inter_vehicle_corridor_enabled"] ?
+    mpc["v2x_start_grid_inter_vehicle_corridor_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.start_grid_inter_vehicle_min_gap_width = std::max(
+    0.0,
+    mpc["v2x_start_grid_inter_vehicle_min_gap_width"] ?
+    mpc["v2x_start_grid_inter_vehicle_min_gap_width"].as<double>() : 0.2);
+  cfg.mpc.v2x_behavior.start_grid_inter_vehicle_min_open_distance = std::max(
+    0.0,
+    mpc["v2x_start_grid_inter_vehicle_min_open_distance"] ?
+    mpc["v2x_start_grid_inter_vehicle_min_open_distance"].as<double>() : 3.0);
+  cfg.mpc.v2x_behavior.start_grid_inter_vehicle_longitudinal_span = std::max(
+    0.0,
+    mpc["v2x_start_grid_inter_vehicle_longitudinal_span"] ?
+    mpc["v2x_start_grid_inter_vehicle_longitudinal_span"].as<double>() : 12.0);
+  cfg.mpc.v2x_behavior.start_grid_inter_vehicle_lookbehind_distance = std::max(
+    0.0,
+    mpc["v2x_start_grid_inter_vehicle_lookbehind_distance"] ?
+    mpc["v2x_start_grid_inter_vehicle_lookbehind_distance"].as<double>() : 4.0);
+  cfg.mpc.v2x_behavior.start_grid_inter_vehicle_lateral_radius = std::max(
+    0.0,
+    mpc["v2x_start_grid_inter_vehicle_lateral_radius"] ?
+    mpc["v2x_start_grid_inter_vehicle_lateral_radius"].as<double>() : 1.25);
+  cfg.mpc.v2x_behavior.start_grid_dynamic_decision_enabled =
+    mpc["v2x_start_grid_dynamic_decision_enabled"] ?
+    mpc["v2x_start_grid_dynamic_decision_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.start_grid_dynamic_peer_motion_speed = std::max(
+    0.0,
+    mpc["v2x_start_grid_dynamic_peer_motion_speed"] ?
+    mpc["v2x_start_grid_dynamic_peer_motion_speed"].as<double>() : 0.25);
+  cfg.mpc.v2x_behavior.start_grid_dynamic_motion_observation_sec = std::max(
+    0.0,
+    mpc["v2x_start_grid_dynamic_motion_observation_sec"] ?
+    mpc["v2x_start_grid_dynamic_motion_observation_sec"].as<double>() : 0.40);
+  cfg.mpc.v2x_behavior.start_grid_dynamic_max_observation_sec = std::max(
+    cfg.mpc.v2x_behavior.start_grid_dynamic_motion_observation_sec,
+    mpc["v2x_start_grid_dynamic_max_observation_sec"] ?
+    mpc["v2x_start_grid_dynamic_max_observation_sec"].as<double>() : 1.25);
+  cfg.mpc.v2x_behavior.start_grid_dynamic_candidate_stable_sec = std::max(
+    0.0,
+    mpc["v2x_start_grid_dynamic_candidate_stable_sec"] ?
+    mpc["v2x_start_grid_dynamic_candidate_stable_sec"].as<double>() : 0.20);
   cfg.mpc.v2x_behavior.require_gap_for_overtake =
     mpc["v2x_require_gap_for_overtake"] ?
     mpc["v2x_require_gap_for_overtake"].as<bool>() : true;
@@ -10032,22 +10821,42 @@ public:
           mpc_cfg_.v2x_behavior.front_progress_lookbehind_distance);
       }
       RCLCPP_INFO(
-        get_logger(), "V2X start grid: grace=%.2f s, breakout=%s, side_deadband=%.2f m",
+        get_logger(),
+        "V2X start grid: grace=%.2f s, breakout=%s, side_deadband=%.2f m, "
+        "inter_vehicle=%s/min_width=%.2f m/min_open=%.2f m/"
+        "longitudinal_span=%.2f m/lookbehind=%.2f m/lateral_radius=%.2f m, "
+        "dynamic=%s/peer_motion=%.2f m/s/observe=%.2f s/max=%.2f s/stable=%.2f s",
         mpc_cfg_.v2x_behavior.start_grid_grace_time,
         mpc_cfg_.v2x_behavior.start_grid_breakout_enabled ? "enabled" : "disabled",
-        mpc_cfg_.v2x_behavior.start_grid_breakout_side_deadband);
+        mpc_cfg_.v2x_behavior.start_grid_breakout_side_deadband,
+        mpc_cfg_.v2x_behavior.start_grid_inter_vehicle_corridor_enabled ?
+        "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.start_grid_inter_vehicle_min_gap_width,
+        mpc_cfg_.v2x_behavior.start_grid_inter_vehicle_min_open_distance,
+        mpc_cfg_.v2x_behavior.start_grid_inter_vehicle_longitudinal_span,
+        mpc_cfg_.v2x_behavior.start_grid_inter_vehicle_lookbehind_distance,
+        mpc_cfg_.v2x_behavior.start_grid_inter_vehicle_lateral_radius,
+        mpc_cfg_.v2x_behavior.start_grid_dynamic_decision_enabled ? "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.start_grid_dynamic_peer_motion_speed,
+        mpc_cfg_.v2x_behavior.start_grid_dynamic_motion_observation_sec,
+        mpc_cfg_.v2x_behavior.start_grid_dynamic_max_observation_sec,
+        mpc_cfg_.v2x_behavior.start_grid_dynamic_candidate_stable_sec);
     }
     if (mpc_cfg_.v2x_behavior.overtake_line.enabled) {
       RCLCPP_INFO(
         get_logger(),
         "V2X overtake line is enabled: offset=%.2f, shift=%.2f, pass=%.2f, "
-        "return=%.2f, bias=%.2f, recovery_v=%.2f, stall=%.2f m/s/%.2f s, "
+        "return=%.2f, bias=%.2f, wall_clearance=%.2f, static_map_clamp=%s, "
+        "recovery_v=%.2f, "
+        "stall=%.2f m/s/%.2f s, "
         "timeout=%.2f s, solver_cooldown=%.2f s, solver_healthy=%d cycles",
         mpc_cfg_.v2x_behavior.overtake_line.lateral_offset,
         mpc_cfg_.v2x_behavior.overtake_line.shift_distance,
         mpc_cfg_.v2x_behavior.overtake_line.pass_distance,
         mpc_cfg_.v2x_behavior.overtake_line.return_distance,
         mpc_cfg_.v2x_behavior.overtake_line.target_bias,
+        mpc_cfg_.v2x_behavior.overtake_line.min_wall_clearance,
+        recovery_grid_ && recovery_footprint_.valid() ? "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.recovery_velocity,
         mpc_cfg_.v2x_behavior.overtake_line.recovery_stall_speed,
         mpc_cfg_.v2x_behavior.overtake_line.recovery_stall_timeout_sec,
@@ -10097,7 +10906,10 @@ private:
   void create_map_ref_path_car_mpc()
   {
     map_ = std::make_unique<Map>(in_pkg_share(cfg_.map_yaml_path));
-    if (cfg_.stuck_recovery.core.enabled) {
+    const bool static_wall_grid_required =
+      cfg_.stuck_recovery.core.enabled ||
+      mpc_cfg_.v2x_behavior.overtake_line.enabled;
+    if (static_wall_grid_required) {
       if (
         map_->origin.size() < 3U || std::abs(map_->origin.at(2)) > kEps ||
         (map_->negate != 0 && map_->negate != 1) ||
@@ -10106,7 +10918,7 @@ private:
         map_->threshold_free >= map_->threshold_occupied)
       {
         throw std::runtime_error(
-                "stuck_recovery supports only yaw-zero maps with valid ROS occupancy thresholds");
+            "static wall checks support only yaw-zero maps with valid ROS occupancy thresholds");
       }
       recovery_grid_ = std::make_unique<recovery_footprint::OccupancyGrid>();
       recovery_grid_->width = static_cast<std::size_t>(map_->width);
@@ -10137,7 +10949,7 @@ private:
         cfg_.stuck_recovery.right_extent_m,
         cfg_.stuck_recovery.footprint_margin_m};
       if (!recovery_grid_->valid() || !recovery_footprint_.valid()) {
-        throw std::runtime_error("stuck_recovery map or footprint configuration is invalid");
+        throw std::runtime_error("static wall map or footprint configuration is invalid");
       }
     }
     std::vector<double> wp_x;
@@ -10157,6 +10969,9 @@ private:
       mpc_cfg_.waypoint_association);
     mpc_ = std::make_unique<MPC>(
       car_.get(), mpc_cfg_, use_obstacle_avoidance_, cfg_.reference_path.use_path_constraints_topic);
+    if (recovery_grid_ && recovery_footprint_.valid()) {
+      mpc_->set_overtake_static_wall_geometry(recovery_grid_.get(), recovery_footprint_);
+    }
     const bool mpc_requires_v2x_planner =
       mpc_cfg_.v2x_gap.enabled || mpc_cfg_.v2x_behavior.enabled;
     if (mpc_requires_v2x_planner || cfg_.stuck_recovery.core.enabled) {
@@ -12851,7 +13666,8 @@ private:
     mpc_->update_current_speed(std::abs(actual_v));
     mpc_->set_v2x_race_session_active(
       overtake_core::is_v2x_behavior_session_active(
-        awsim_state_tracking_enabled_, race_started_),
+        awsim_state_tracking_enabled_, race_started_,
+        mpc_->start_grid_ready_rollout_active()),
       current_time.seconds());
 
     std::optional<double> elapsed_since_start;

@@ -389,6 +389,58 @@ TEST(RecoveryFootprintFeasibility, RotationAsymmetricExtentsAndMarginAffectRaste
   EXPECT_EQ(margin_sample.contact_cells.size(), 1U);
 }
 
+TEST(RecoveryFootprintLateralClearance, PullsWallSideTargetTowardReferencePath)
+{
+  auto grid = make_grid(200U, 200U, 0.1);
+  for (std::size_t column = 0U; column < grid.width; ++column) {
+    const auto wall = grid.world_to_grid(0.1 * static_cast<double>(column), 10.0);
+    ASSERT_TRUE(wall.has_value());
+    grid.cells[wall->row * grid.width + wall->column] = recovery::CellState::Occupied;
+  }
+  const recovery::FootprintExtents footprint{0.5, 0.5, 0.5, 0.5, 0.0};
+
+  const auto result = recovery::clamp_lateral_offset_to_static_map(
+    grid, footprint, recovery::Pose2D{10.0, 8.0, 0.0},
+    1.40, 0.0, 0.25, 0.05);
+
+  ASSERT_TRUE(result.valid);
+  ASSERT_TRUE(result.feasible);
+  EXPECT_TRUE(result.adjusted);
+  EXPECT_LT(result.lateral_offset_m, 1.40);
+  EXPECT_GT(result.lateral_offset_m, 0.0);
+  EXPECT_GT(result.checked_pose_count, 1U);
+}
+
+TEST(RecoveryFootprintLateralClearance, KeepsAlreadyClearTarget)
+{
+  auto grid = make_grid(200U, 200U, 0.1);
+  for (std::size_t column = 0U; column < grid.width; ++column) {
+    const auto wall = grid.world_to_grid(0.1 * static_cast<double>(column), 10.0);
+    ASSERT_TRUE(wall.has_value());
+    grid.cells[wall->row * grid.width + wall->column] = recovery::CellState::Occupied;
+  }
+
+  const auto result = recovery::clamp_lateral_offset_to_static_map(
+    grid, recovery::FootprintExtents{0.5, 0.5, 0.5, 0.5, 0.0},
+    recovery::Pose2D{10.0, 8.0, 0.0}, 0.50, 0.0, 0.25, 0.05);
+
+  ASSERT_TRUE(result.valid);
+  ASSERT_TRUE(result.feasible);
+  EXPECT_FALSE(result.adjusted);
+  EXPECT_DOUBLE_EQ(result.lateral_offset_m, 0.50);
+  EXPECT_EQ(result.checked_pose_count, 1U);
+}
+
+TEST(RecoveryFootprintLateralClearance, InvalidSearchFailsClosed)
+{
+  const auto result = recovery::clamp_lateral_offset_to_static_map(
+    make_grid(), compact_footprint(), recovery::Pose2D{10.0, 10.0, 0.0},
+    1.0, 0.0, 0.2, 0.0);
+
+  EXPECT_FALSE(result.valid);
+  EXPECT_FALSE(result.feasible);
+}
+
 TEST(RecoveryFootprintFeasibility, CandidateLeavingMapIsRejectedWithoutEdgeClamping)
 {
   const auto result = recovery::evaluate_reverse_candidate(

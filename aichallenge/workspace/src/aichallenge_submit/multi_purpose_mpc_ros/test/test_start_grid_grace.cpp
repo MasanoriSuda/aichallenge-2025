@@ -201,6 +201,71 @@ TEST(StartGridGraceBreakout, DoesNotRequireSideClassificationForInitialBreakout)
   EXPECT_TRUE(start_grid_grace::should_attempt_breakout(context));
 }
 
+TEST(StartGridGraceDynamicDecision, ObservesUntilPeerMotionAndCandidateAreStable) {
+  start_grid_grace::DynamicDecisionContext context;
+  context.enabled = true;
+  context.candidate_available = true;
+  context.elapsed_sec = 0.5;
+  context.motion_observation_sec = 0.4;
+  context.max_observation_sec = 1.25;
+  context.min_candidate_stable_sec = 0.2;
+  context.candidate_stable_sec = 0.5;
+
+  auto resolution = start_grid_grace::resolve_dynamic_breakout_decision(context);
+  EXPECT_EQ(resolution.action,
+            start_grid_grace::DynamicDecisionAction::Observe);
+
+  context.peer_motion_observed = true;
+  context.peer_motion_elapsed_sec = 0.39;
+  resolution = start_grid_grace::resolve_dynamic_breakout_decision(context);
+  EXPECT_EQ(resolution.action,
+            start_grid_grace::DynamicDecisionAction::Observe);
+  EXPECT_NEAR(resolution.remaining_sec, 0.01, 1e-9);
+
+  context.peer_motion_elapsed_sec = 0.4;
+  resolution = start_grid_grace::resolve_dynamic_breakout_decision(context);
+  EXPECT_EQ(resolution.action,
+            start_grid_grace::DynamicDecisionAction::CommitCandidate);
+}
+
+TEST(StartGridGraceDynamicDecision, BoundsObservationAndRequiresARealCandidate) {
+  start_grid_grace::DynamicDecisionContext context;
+  context.enabled = true;
+  context.elapsed_sec = 1.25;
+  context.motion_observation_sec = 0.4;
+  context.max_observation_sec = 1.25;
+  context.min_candidate_stable_sec = 0.2;
+
+  auto resolution = start_grid_grace::resolve_dynamic_breakout_decision(context);
+  EXPECT_EQ(resolution.action,
+            start_grid_grace::DynamicDecisionAction::NoCandidate);
+
+  context.candidate_available = true;
+  resolution = start_grid_grace::resolve_dynamic_breakout_decision(context);
+  EXPECT_EQ(resolution.action,
+            start_grid_grace::DynamicDecisionAction::CommitCandidate);
+
+  context.elapsed_sec = 0.0;
+  context.emergency_commit = true;
+  resolution = start_grid_grace::resolve_dynamic_breakout_decision(context);
+  EXPECT_EQ(resolution.action,
+            start_grid_grace::DynamicDecisionAction::CommitCandidate);
+
+  context.emergency_commit = false;
+  context.elapsed_sec = 1.20;
+  context.peer_motion_observed = true;
+  context.peer_motion_elapsed_sec = 0.0;
+  context.candidate_stable_sec = 0.0;
+  resolution = start_grid_grace::resolve_dynamic_breakout_decision(context);
+  EXPECT_EQ(resolution.action,
+            start_grid_grace::DynamicDecisionAction::Observe);
+  EXPECT_NEAR(resolution.remaining_sec, 0.05, 1e-9);
+
+  context.elapsed_sec = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_THROW(start_grid_grace::resolve_dynamic_breakout_decision(context),
+               std::invalid_argument);
+}
+
 TEST(StartGridGraceBreakout, FailsClosedWhenDisabledOrInvalid) {
   start_grid_grace::BreakoutContext context;
   context.enabled = false;

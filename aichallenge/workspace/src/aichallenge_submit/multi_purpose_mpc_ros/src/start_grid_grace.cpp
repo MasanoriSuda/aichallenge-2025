@@ -202,6 +202,67 @@ bool should_preserve_breakout_line(const BreakoutLineContext &context) noexcept 
          context.gap_available && context.zone_allows;
 }
 
+DynamicDecisionResolution resolve_dynamic_breakout_decision(
+    const DynamicDecisionContext &context) {
+  const auto finite_non_negative = [](const double value) {
+    return std::isfinite(value) && value >= 0.0;
+  };
+  if (!finite_non_negative(context.elapsed_sec) ||
+      !finite_non_negative(context.peer_motion_elapsed_sec) ||
+      !finite_non_negative(context.candidate_stable_sec) ||
+      !finite_non_negative(context.motion_observation_sec) ||
+      !finite_non_negative(context.max_observation_sec) ||
+      !finite_non_negative(context.min_candidate_stable_sec)) {
+    throw std::invalid_argument("invalid start-grid dynamic decision timing");
+  }
+
+  if (!context.enabled) {
+    return {context.candidate_available
+                ? DynamicDecisionAction::CommitCandidate
+                : DynamicDecisionAction::NoCandidate,
+            0.0};
+  }
+  if (context.emergency_commit) {
+    return {context.candidate_available
+                ? DynamicDecisionAction::CommitCandidate
+                : DynamicDecisionAction::NoCandidate,
+            0.0};
+  }
+
+  const bool maximum_wait_elapsed =
+      context.elapsed_sec >= context.max_observation_sec;
+  const bool motion_window_elapsed =
+      context.peer_motion_observed &&
+      context.peer_motion_elapsed_sec >= context.motion_observation_sec;
+  const bool candidate_stable =
+      context.candidate_available &&
+      context.candidate_stable_sec >= context.min_candidate_stable_sec;
+  if (context.candidate_available &&
+      (maximum_wait_elapsed || (motion_window_elapsed && candidate_stable))) {
+    return {DynamicDecisionAction::CommitCandidate, 0.0};
+  }
+  if (maximum_wait_elapsed) {
+    return {DynamicDecisionAction::NoCandidate, 0.0};
+  }
+
+  const double maximum_remaining_sec =
+      context.max_observation_sec - context.elapsed_sec;
+  double remaining_sec = maximum_remaining_sec;
+  if (context.peer_motion_observed) {
+    double required_remaining_sec = std::max(
+        0.0, context.motion_observation_sec -
+                 context.peer_motion_elapsed_sec);
+    if (context.candidate_available) {
+      required_remaining_sec = std::max(
+          required_remaining_sec,
+          std::max(0.0, context.min_candidate_stable_sec -
+                                context.candidate_stable_sec));
+    }
+    remaining_sec = std::min(maximum_remaining_sec, required_remaining_sec);
+  }
+  return {DynamicDecisionAction::Observe, std::max(0.0, remaining_sec)};
+}
+
 const char *to_string(const Phase phase) noexcept {
   switch (phase) {
   case Phase::Disabled:
@@ -232,6 +293,18 @@ const char *to_string(const Transition transition) noexcept {
     return "Cleared";
   case Transition::ClockRejected:
     return "ClockRejected";
+  }
+  return "Unknown";
+}
+
+const char *to_string(const DynamicDecisionAction action) noexcept {
+  switch (action) {
+  case DynamicDecisionAction::Observe:
+    return "Observe";
+  case DynamicDecisionAction::CommitCandidate:
+    return "CommitCandidate";
+  case DynamicDecisionAction::NoCandidate:
+    return "NoCandidate";
   }
   return "Unknown";
 }

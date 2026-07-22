@@ -761,6 +761,61 @@ FootprintSample sample_footprint(
   return sample;
 }
 
+LateralClearanceResult clamp_lateral_offset_to_static_map(
+  const OccupancyGrid & grid, const FootprintExtents & footprint,
+  const Pose2D & reference_pose, const double desired_lateral_offset_m,
+  const double fallback_lateral_offset_m, const double additional_lateral_clearance_m,
+  const double sample_step_m)
+{
+  LateralClearanceResult result;
+  result.lateral_offset_m = fallback_lateral_offset_m;
+  if (
+    !grid.valid() || !footprint.valid() || !valid_pose(reference_pose) ||
+    !finite(desired_lateral_offset_m) || !finite(fallback_lateral_offset_m) ||
+    !finite(additional_lateral_clearance_m) || additional_lateral_clearance_m < 0.0 ||
+    !finite(sample_step_m) || sample_step_m <= 0.0)
+  {
+    return result;
+  }
+
+  recovery_footprint::FootprintExtents clearance_footprint = footprint;
+  clearance_footprint.left_extent_m += additional_lateral_clearance_m;
+  clearance_footprint.right_extent_m += additional_lateral_clearance_m;
+  if (!clearance_footprint.valid()) {
+    return result;
+  }
+
+  const double lateral_distance =
+    std::abs(fallback_lateral_offset_m - desired_lateral_offset_m);
+  const auto segment_count = subdivision_count(lateral_distance, sample_step_m);
+  if (!segment_count.has_value() || segment_count.value() + 1U > kMaximumSamples) {
+    return result;
+  }
+
+  result.valid = true;
+  const double left_x = -std::sin(reference_pose.yaw_rad);
+  const double left_y = std::cos(reference_pose.yaw_rad);
+  for (std::size_t index = 0U; index <= segment_count.value(); ++index) {
+    const double ratio = segment_count.value() == 0U ? 1.0 :
+      static_cast<double>(index) / static_cast<double>(segment_count.value());
+    const double lateral_offset = desired_lateral_offset_m +
+      ratio * (fallback_lateral_offset_m - desired_lateral_offset_m);
+    const Pose2D candidate_pose{
+      reference_pose.x_m + lateral_offset * left_x,
+      reference_pose.y_m + lateral_offset * left_y,
+      reference_pose.yaw_rad};
+    const auto sample = sample_footprint(grid, clearance_footprint, candidate_pose);
+    ++result.checked_pose_count;
+    if (sample.valid && !sample.out_of_map && sample.contact_cells.empty()) {
+      result.feasible = true;
+      result.adjusted = std::abs(lateral_offset - desired_lateral_offset_m) > 1e-9;
+      result.lateral_offset_m = lateral_offset;
+      return result;
+    }
+  }
+  return result;
+}
+
 WallProximityResult classify_nearby_wall(
   const OccupancyGrid & grid, const FootprintExtents & footprint,
   const Pose2D & pose, const double search_margin_m, const double ambiguity_m)

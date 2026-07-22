@@ -274,6 +274,11 @@ ament_python_install_package(${PROJECT_NAME}
   SCRIPTS_DESTINATION lib/${PROJECT_NAME}
 )
 
+ament_python_install_package(kaleidoscope
+  PACKAGE_DIR tools/kaleidoscope/kaleidoscope
+  SCRIPTS_DESTINATION lib/${PROJECT_NAME}
+)
+
 install(PROGRAMS
   scripts/run_mpc_controller.bash
   scripts/run_mpc_simulation.bash

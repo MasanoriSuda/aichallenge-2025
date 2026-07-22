@@ -346,6 +346,9 @@ ros2 run multi_purpose_mpc_ros run_mpc_simulation.bash
 
 ### Trajectory editor
 MPC の `env/final_ver3/traj_mincurv.csv` を Lanelet2 map 上で編集します。
+実装本体は、将来単独配布できるPythonパッケージとして
+`tools/kaleidoscope/kaleidoscope/` に配置しています。従来の
+`multi_purpose_mpc_ros.tools.trajectory_*` は移行用の互換importです。
 
 ```bash
 ros2 run multi_purpose_mpc_ros trajectory_editor

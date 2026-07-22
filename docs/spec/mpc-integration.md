@@ -689,6 +689,8 @@ ros2 run multi_purpose_mpc_ros reference_path_validator \
 
 `trajectory_editor` には、GUI非依存のPython validator、geometry normalization、offline speed-profile生成、Before/Candidate比較、安全保存を追加している。MPCはcanonical 7列、Pure Pursuitは既存8列として別々に検証し、Validate操作はworking data、Undo、revision、入力fileを変更しない。
 
+実装本体は `multi_purpose_mpc_ros/tools/kaleidoscope/kaleidoscope/` に切り出している。ROS nodeではなくPython/Tkアプリであり、現行の `ros2 run multi_purpose_mpc_ros trajectory_editor` と旧Python importは互換層で維持する。既定CSV・mapの探索はROS package shareまたは現リポジトリ配置を使用し、ホスト固有の絶対pathには依存しない。
+
 - 周回状態は重複終端とは別に保持し、`--circular` / `--open` またはGUIで明示する。組み込みMPC presetの周回既定はローカル設定であり、2026公式仕様ではない。
 - MPCのXY変更は `s_m/psi_rad/kappa_radpm` と `vx_mps/ax_mps2` の両方をstaleとする。Pure Pursuitは既存8列とquaternionの明示再計算を維持する。保存時の暗黙再計算は行わない。
 - `Normalize Geometry` は重複終端・退化点の選択的除去、open/circularのcanonical arc length、等間隔線形再サンプリング、heading/curvature再生成をdetached candidate上で行う。`vx/ax`はpreserve、周期/線形interpolate、後続speed再計算へdeferのいずれかを明示する。

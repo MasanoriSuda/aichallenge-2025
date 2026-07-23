@@ -39,12 +39,27 @@ ros2 run multi_purpose_mpc_ros reference_path_validator \
 
 本番の内部補間は、固定 `mpc.N` の実距離を維持するため、現時点では legacy `floor` 方式です。`ceil` 分割は pure helper とテストまでを先行追加しており、距離ベース horizon と同時に段階導入します。
 
+runtimeの単一情報源はCSVのXY geometryです。7列すべてを入力検証しますが、
+`psi_rad/kappa_radpm/vx_mps/ax_mps2`はEditor・比較用metadataとして扱い、C++ MPCは
+内部補間後のgeometryからheadingとcurvatureを再生成します。速度も起動時に
+`v²`の前進／後退制約と横加速度上限から再計算し、制御周期中のDomain・追い越し・ACC等の
+速度上限はこのruntime profileへcapとして適用します。
+
 ## runtime safety settings
 
 - `mpc.odom_timeout_sec`: odometry受信と非ゼロsource stampの更新をsteady clockで監視するローカルtimeout。既定は0.5秒です。
 - `mpc.min_linearization_speed_mps`: `1/v` を含むモデルを使わない低速閾値。既定は0.5 m/sです。
 
 staleまたは非有限なodometry、非有限な制御出力、OSQP失敗時には、古い予測制御列を再生せず、速度を下げるfail-safe commandへ移ります。solver fallbackとcontrol disable時はlegacy boostを強制無効化します。これらの既定値は2026公式値ではなく、走行ログとSafety Gateで調整する暫定ローカル基準です。
+
+`V2X debug:`と状態遷移ログには`health`、`receipt_age`、`source_age`、受信`interval`、
+message／fresh vehicle数、position jump、異常速度推定を出します。まず`make dev3`で
+Follow／Overtakeの切替と同時刻の値を比較し、DDS受信ジッタと幾何判定の揺れを切り分けます。
+
+`steering_tire_angle_gain_var`はAWSIM向けの出力補償であり、BicycleModelの物理タイヤ角倍率では
+ありません。MPCはgain適用前の`raw`操舵角で曲率を予測し、publish時だけgainを適用します。
+`Steering debug:`には`raw`、AWSIMへ送る`output`、rawから予測した曲率、`yaw_rate / speed`で
+求めた実測曲率を出します。
 
 ## stuck recovery（P1 / P2 / P3 SIM限定Active）
 

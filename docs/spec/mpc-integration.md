@@ -507,16 +507,22 @@ bounded recovery候補を再評価する。現在footprintにcontactがある場
 別ステアリングで設計する。実験詳細は
 `.steering/20260717-wall-contact-prevention-and-rejoin-stability/results.md`に記録する。
 
-通常MPCのモデルとAWSIM指令の不一致を除くため、`steering_tire_angle_gain_var`を1.5から1.0へ
-変更した。従来はMPCが制約した内部操舵をpublish時に1.5倍し、D1では内部`+0.463 rad`に対して
-約`+0.695 rad`を指令して、内部の`delta_max=32 deg`（約`0.559 rad`）を実指令が上回っていた。
+`steering_tire_angle_gain_var=1.5`は2025 AWSIM向けの出力補償として扱う。QPの曲率制約、
+前回操舵列からの予測曲率、操舵レート制約、低速直接操舵、遅延補償用BicycleModelはgain適用前の
+desired equivalent tire angleを使用し、publish時だけAWSIM commandへgainを適用する。
+`output/20260723-190900`でgainを内部モデルにも適用したところ、通常走行中の
+`measured_kappa / predicted_kappa`中央値はD1/D2/D3で0.53/0.58/0.54だった。一方、
+gain適用前のraw角による予測との比は0.81/0.88/0.83で、D1は横偏差約2.7 mから
+WP124〜126で1330周期連続solver failureとなった。このため内部モデルへのgain適用は
+AWSIMでは回帰と判断し、出力補償の責務へ戻した。
 
 `output/20260717-234612`ではD3がWP72、D1がWP123をStart後のwall contactおよび連続OSQP
 failureなしで通過し、それぞれ136.583 s、142.589 sで1周した。旧runのD2 Start後約79秒での
 3台停止も再発せず、通常MPCの壁逸脱予防はPassとする。一方D2は2周目WP34〜41のOvertakeLine
 ShiftOut / Recovery中に、wall contactを伴わない別の連続solver failureで停止した。これは追い越し
-復帰中のre-entry guardとして別ステアリングで扱う。本gainは2025 AWSIMで確認した暫定値であり、
-2026公式値および実車値ではない。実験詳細は
+復帰中のre-entry guardとして別ステアリングで扱う。gain値自体は2025 AWSIM向け暫定値であり、
+2026公式値および実車値ではない。raw予測曲率とAWSIM実測`yaw_rate / speed`の一致は
+引き続きdev3走行で確認する。過去のgain=1.0走行詳細は
 `.steering/20260717-normal-mpc-wall-departure-prevention/results.md`に記録する。
 
 協調Reverseとsolver failure Reverse-onlyを有効にした`output/20260718-011435`では、D1が
@@ -704,7 +710,11 @@ ros2 run multi_purpose_mpc_ros reference_path_validator \
 - 通常動線は処理に応じた `*_normalized.csv`、`*_speed_profiled.csv`、`*_edited.csv` への `Save As` とする。上書きはpath確認を要求し、同一directoryのtemporary fileを再検証後にatomic replaceする。symlink targetは置換しない。
 - `resolution=0.25 m`、`a_max=1.0 m/s²`、`horizon_distance=16 m` は `AI Challenge 2026 Candidate - Safe` のローカル候補値であり、公式確定値ではない。resolutionと加速度条件は編集可能、horizonはruntime統合hintとしてread-only表示する。
 
-Editorが保存する `vx_mps/ax_mps2` はoffline CSV metadataである。現在のC++ MPCは制御周期内のruntime速度上限を優先するため、この値を編集しただけでは走行速度プロファイルへ直接反映されない。
+Editorが保存する `psi_rad/kappa_radpm/vx_mps/ax_mps2` はoffline CSV metadataである。
+C++ MPCはstrict loaderで7列を検証した後、XYを内部補間してheading／curvatureを再生成し、
+起動時に`v[i+1]^2 <= v[i]^2 + 2*a_max*ds`と対応する後退制動pass、横加速度上限から
+runtime速度profileを一意に計算する。Domain・追い越し・ACC等の動的速度上限はprofileを
+一定値で置換せずcapとして適用する。
 
 Clearanceの車体presetは現行`vehicle_info.param.yaml`から導出したrear-axle基準の暫定値であり、trajectory pose基準とAWSIM colliderの一致は未確認である。margin既定値は0 mで、2026公式安全余白を意味しない。occupancy gridも静的近似なので、EditorのSAFEはAWSIM／実車の非接触やSafety Gate通過を保証しない。採用candidateは別名保存し、C++ validator後にシミュレータで最初のヘアピンと1周を確認する。
 
@@ -852,7 +862,7 @@ MPC の config ファイル: `multi_purpose_mpc_ros/config/config.yaml`
 | `awsim_boost.motion_speed_threshold_mps` | `0.1` | 発車と判定する符号付き前進速度 |
 | `awsim_boost.max_trigger_speed_mps` | `1.0` | 遅延発動を禁止する最大前進速度 |
 | `awsim_boost.motion_trigger_timeout_sec` | `0.5` | 初回前進検出後に安全条件成立を待つ上限時間 |
-| `mpc.steering_tire_angle_gain_var` | `1.0` | 2025 AWSIMのdev3でモデル/実指令一致を確認。実機値と2026公式値は未確定 |
+| `mpc.steering_tire_angle_gain_var` | `1.5` | publish時だけ適用する2025 AWSIM向け出力補償。内部モデル、実機値、2026公式値は未確定 |
 | `mpc.state_prediction_delay_sec` | `0.125` | EKF補正後の自己位置を速度・ヨーレートで先行予測する時間 [s]。`0.0` で無効 |
 | `mpc.state_prediction_simulation_only` | `true` | `true` のとき明示的なsimulation launchでのみMPC初期状態予測を有効化 |
 | `mpc.waypoint_local_association_enabled` | `true` | 前回tracking WP近傍の連続探索を有効化。`false`は全経路最近傍へ戻す |
@@ -948,7 +958,9 @@ aichallenge_submit/multi_purpose_mpc_ros_msgs/
 
 ## 事前準備: MPC 用地図・経路データの生成
 
-MPC コントローラはノード起動時にファイルを読み込むだけで、実行時に計算は行わない。**コースが変わった場合はこの手順で再生成が必要**。
+MPC コントローラはノード起動時にCSVのXY geometryを読み、内部heading／curvatureと速度profileを
+再計算する。最小曲率lineとoccupancy grid自体はoffline生成物なので、
+**コースが変わった場合はこの手順で再生成が必要**。
 
 現在は `env/final_ver3/` に計算済みのファイルが格納されており、同じコースであればそのまま使える。
 

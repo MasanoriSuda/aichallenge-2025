@@ -15,6 +15,7 @@
 #include <multi_purpose_mpc_ros/path_core.hpp>
 #include <multi_purpose_mpc_ros/recovery_footprint.hpp>
 #include <multi_purpose_mpc_ros/recovery_mpc.hpp>
+#include <multi_purpose_mpc_ros/runtime_speed_profile.hpp>
 #include <multi_purpose_mpc_ros/start_grid_grace.hpp>
 #include <multi_purpose_mpc_ros/stuck_recovery_core.hpp>
 #include <multi_purpose_mpc_ros/v2x_overtake_core.hpp>
@@ -102,11 +103,13 @@ namespace mpc_waypoint_preview = ::multi_purpose_mpc_ros::mpc_waypoint_preview;
 namespace overtake_core = ::multi_purpose_mpc_ros::v2x_overtake_core;
 namespace recovery_footprint = ::multi_purpose_mpc_ros::recovery_footprint;
 namespace recovery_mpc = ::multi_purpose_mpc_ros::recovery_mpc;
+namespace runtime_speed_profile = ::multi_purpose_mpc_ros::runtime_speed_profile;
 namespace start_grid_grace = ::multi_purpose_mpc_ros::start_grid_grace;
 namespace stuck_recovery = ::multi_purpose_mpc_ros::stuck_recovery;
 
 constexpr double kEps = 1e-12;
 constexpr double kPi = 3.14159265358979323846;
+constexpr double kV2XSourceFutureToleranceSec = 0.05;
 
 double clip(const double value, const double min_value, const double max_value)
 {
@@ -917,7 +920,9 @@ struct ReferencePath
   {
     const std::size_t count = std::min(v_ref.size(), waypoints.size());
     for (std::size_t i = 0; i < count; ++i) {
-      waypoints[i].v_ref = v_ref[i];
+      waypoints[i].v_ref =
+        nominal_v_ref.size() == waypoints.size() ?
+        std::min(nominal_v_ref[i], v_ref[i]) : v_ref[i];
     }
   }
 
@@ -925,53 +930,39 @@ struct ReferencePath
     const double a_min_in, const double a_max_in, const double v_min_in, const double v_max_in,
     const double ay_max)
   {
-    const int N = n_waypoints - 1;
-    if (N < 2) {
+    if (waypoints.size() < 3U) {
       return false;
     }
 
-    Eigen::VectorXd a_min = Eigen::VectorXd::Constant(N - 1, a_min_in);
-    Eigen::VectorXd a_max = Eigen::VectorXd::Constant(N - 1, a_max_in);
-    Eigen::VectorXd v_min = Eigen::VectorXd::Constant(N, v_min_in);
-    Eigen::VectorXd v_max = Eigen::VectorXd::Constant(N, v_max_in);
-
-    std::vector<Eigen::Triplet<double>> d_triplets;
-    for (int i = 0; i < N; ++i) {
-      const auto & current = get_waypoint(i);
-      const auto & next = get_waypoint(i + 1);
-      const double li = next.distance_to(current);
-      const double v_max_dyn = std::sqrt(ay_max / (std::abs(current.kappa) + kEps));
-      if (v_max_dyn < v_max[i]) {
-        v_max[i] = v_max_dyn;
-      }
-      if (i < N - 1) {
-        d_triplets.emplace_back(i, i, -1.0 / (2.0 * li));
-        d_triplets.emplace_back(i, i + 1, 1.0 / (2.0 * li));
-      }
+    std::vector<double> curvature;
+    curvature.reserve(waypoints.size());
+    for (const auto & waypoint : waypoints) {
+      curvature.push_back(waypoint.kappa);
     }
-    for (int i = 0; i < N; ++i) {
-      d_triplets.emplace_back(N - 1 + i, i, 1.0);
+    std::vector<runtime_speed_profile::Edge> edges;
+    edges.reserve(waypoints.size() - 1U);
+    for (std::size_t i = 0; i + 1U < waypoints.size(); ++i) {
+      edges.push_back(runtime_speed_profile::Edge{
+        i, i + 1U, waypoints[i + 1U].distance_to(waypoints[i])});
     }
 
-    Eigen::SparseMatrix<double> D(N - 1 + N, N);
-    D.setFromTriplets(d_triplets.begin(), d_triplets.end());
-    Eigen::SparseMatrix<double> P(N, N);
-    P.setIdentity();
-    Eigen::VectorXd q = -1.0 * v_max;
-    Eigen::VectorXd l(N - 1 + N);
-    Eigen::VectorXd u(N - 1 + N);
-    l << a_min, v_min;
-    u << a_max, v_max;
-
-    const auto outcome = solve_osqp(P, D, q, l, u);
-    if (!outcome.result.has_value() || outcome.result->solution.size() != N) {
+    runtime_speed_profile::Parameters parameters;
+    parameters.acceleration_max_mps2 = a_max_in;
+    parameters.deceleration_max_mps2 = -a_min_in;
+    parameters.velocity_min_mps = v_min_in;
+    parameters.velocity_max_mps = v_max_in;
+    parameters.lateral_acceleration_max_mps2 = ay_max;
+    if (!circular) {
+      parameters.terminal_velocity_mps = 0.0;
+    }
+    const auto result = runtime_speed_profile::compute(curvature, edges, parameters);
+    if (!result.has_value() || result->velocity_mps.size() != waypoints.size()) {
       return false;
     }
-    const Eigen::VectorXd solution = outcome.result->solution;
-    for (int i = 0; i < N; ++i) {
-      waypoints[i].v_ref = solution[i];
+    nominal_v_ref = result->velocity_mps;
+    for (std::size_t i = 0; i < waypoints.size(); ++i) {
+      waypoints[i].v_ref = nominal_v_ref[i];
     }
-    waypoints.back().v_ref = circular ? waypoints[waypoints.size() - 2].v_ref : 0.0;
     return true;
   }
 
@@ -1093,6 +1084,7 @@ struct ReferencePath
   int n_waypoints{};
   double length{};
   std::vector<double> segment_lengths;
+  std::vector<double> nominal_v_ref;
   std::vector<std::vector<double>> path_constraints_upper;
   std::vector<std::vector<double>> path_constraints_lower;
   BorderCellsData border_cells;
@@ -1700,6 +1692,14 @@ struct V2XBehaviorOutput
   bool allow_gap_planner{false};
   bool follow_gap_planner_allowed{true};
   std::size_t active_vehicle_count{0};
+  std::string v2x_health{"NoData"};
+  double v2x_receipt_age_sec{std::numeric_limits<double>::infinity()};
+  double v2x_source_age_sec{std::numeric_limits<double>::infinity()};
+  double v2x_receipt_interval_sec{std::numeric_limits<double>::infinity()};
+  std::size_t v2x_message_vehicle_count{0};
+  std::size_t v2x_position_jump_count{0};
+  std::size_t v2x_invalid_velocity_count{0};
+  bool v2x_message_invalid{false};
   bool has_front_vehicle{false};
   bool front_progress_used{false};
   bool has_side_vehicle{false};
@@ -1917,6 +1917,19 @@ struct V2XGapPlanner
     }
   };
 
+  struct Diagnostics
+  {
+    std::string health{"NoData"};
+    double receipt_age_sec{std::numeric_limits<double>::infinity()};
+    double source_age_sec{std::numeric_limits<double>::infinity()};
+    double receipt_interval_sec{std::numeric_limits<double>::infinity()};
+    std::size_t message_vehicle_count{0U};
+    std::size_t fresh_vehicle_count{0U};
+    std::size_t position_jump_count{0U};
+    std::size_t invalid_velocity_count{0U};
+    bool message_invalid{false};
+  };
+
   explicit V2XGapPlanner(
     const V2XGapPlannerConfig & cfg_in, const bool track_recovery_completeness = false)
   : cfg(cfg_in), track_recovery_completeness_(track_recovery_completeness) {}
@@ -1924,42 +1937,42 @@ struct V2XGapPlanner
   void update(const V2XVehiclePositionArray & msg, const double receipt_sec)
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (track_recovery_completeness_) {
-      last_message_receipt_sec_ = receipt_sec;
-      last_message_vehicle_count_ = msg.vehicles.size();
-      last_message_has_empty_id_ = false;
-      last_message_has_duplicate_id_ = false;
-      last_message_has_invalid_sample_ = false;
+    if (last_message_receipt_sec_.has_value()) {
+      const double interval_sec = receipt_sec - last_message_receipt_sec_.value();
+      last_message_receipt_interval_sec_ =
+        std::isfinite(interval_sec) && interval_sec >= 0.0 ?
+        std::optional<double>{interval_sec} : std::nullopt;
     }
+    last_message_receipt_sec_ = receipt_sec;
+    last_message_vehicle_count_ = msg.vehicles.size();
+    last_message_has_empty_id_ = false;
+    last_message_has_duplicate_id_ = false;
+    last_message_has_invalid_sample_ = false;
     std::unordered_set<std::string> message_ids;
     const double array_stamp = stamp_to_seconds(msg.header.stamp);
-    if (track_recovery_completeness_) {
-      if (
-        msg.header.frame_id != "map" ||
-        !stuck_recovery::source_timestamp_is_monotonic(
-          array_stamp, last_message_source_stamp_sec_))
-      {
-        last_message_has_invalid_sample_ = true;
-      }
-      if (std::isfinite(array_stamp) && array_stamp > 0.0) {
-        last_message_source_stamp_sec_ = array_stamp;
-      }
+    if (
+      msg.header.frame_id != "map" ||
+      !stuck_recovery::source_timestamp_is_monotonic(
+        array_stamp, last_message_source_stamp_sec_))
+    {
+      last_message_has_invalid_sample_ = true;
+    }
+    if (std::isfinite(array_stamp) && array_stamp > 0.0) {
+      last_message_source_stamp_sec_ = array_stamp;
     }
     for (const auto & vehicle : msg.vehicles) {
-      if (track_recovery_completeness_) {
-        if (vehicle.vehicle_id.empty()) {
-          last_message_has_empty_id_ = true;
-        } else if (!message_ids.emplace(vehicle.vehicle_id).second) {
-          last_message_has_duplicate_id_ = true;
-        }
-        if (
-          !std::isfinite(vehicle.position.x) || !std::isfinite(vehicle.position.y) ||
-          !std::isfinite(vehicle.covariance.x) || !std::isfinite(vehicle.covariance.y) ||
-          vehicle.covariance.x < 0.0 || vehicle.covariance.y < 0.0 ||
-          (!vehicle.header.frame_id.empty() && vehicle.header.frame_id != "map"))
-        {
-          last_message_has_invalid_sample_ = true;
-        }
+      if (vehicle.vehicle_id.empty()) {
+        last_message_has_empty_id_ = true;
+      } else if (!message_ids.emplace(vehicle.vehicle_id).second) {
+        last_message_has_duplicate_id_ = true;
+      }
+      if (
+        !std::isfinite(vehicle.position.x) || !std::isfinite(vehicle.position.y) ||
+        !std::isfinite(vehicle.covariance.x) || !std::isfinite(vehicle.covariance.y) ||
+        vehicle.covariance.x < 0.0 || vehicle.covariance.y < 0.0 ||
+        (!vehicle.header.frame_id.empty() && vehicle.header.frame_id != "map"))
+      {
+        last_message_has_invalid_sample_ = true;
       }
       const std::string id = vehicle.vehicle_id.empty() ? "__unknown__" : vehicle.vehicle_id;
       double sample_stamp = stamp_to_seconds(vehicle.header.stamp);
@@ -1968,16 +1981,14 @@ struct V2XGapPlanner
       }
 
       auto & tracked = vehicles_[id];
-      if (track_recovery_completeness_) {
-        if (
-          !stuck_recovery::source_sample_is_current(
-            array_stamp, sample_stamp, cfg.timeout_sec) ||
-          !stuck_recovery::source_timestamp_is_monotonic(
-            sample_stamp,
-            tracked.has_sample ? std::optional<double>{tracked.stamp_sec} : std::nullopt))
-        {
-          last_message_has_invalid_sample_ = true;
-        }
+      if (
+        !stuck_recovery::source_sample_is_current(
+          array_stamp, sample_stamp, cfg.timeout_sec) ||
+        !stuck_recovery::source_timestamp_is_monotonic(
+          sample_stamp,
+          tracked.has_sample ? std::optional<double>{tracked.stamp_sec} : std::nullopt))
+      {
+        last_message_has_invalid_sample_ = true;
       }
       double vx = 0.0;
       double vy = 0.0;
@@ -2002,9 +2013,7 @@ struct V2XGapPlanner
           vy = dy / dt;
           if (std::hypot(vx, vy) > cfg.v_max_safety) {
             invalid_velocity = true;
-            if (track_recovery_completeness_) {
-              last_message_has_invalid_sample_ = true;
-            }
+            last_message_has_invalid_sample_ = true;
             vx = 0.0;
             vy = 0.0;
           }
@@ -2042,6 +2051,56 @@ struct V2XGapPlanner
       vehicles.push_back(tracked);
     }
     return vehicles;
+  }
+
+  Diagnostics diagnostics(const double now_sec)
+  {
+    Diagnostics output;
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!last_message_receipt_sec_.has_value()) {
+      return output;
+    }
+    output.receipt_age_sec = now_sec - last_message_receipt_sec_.value();
+    output.source_age_sec = last_message_source_stamp_sec_.has_value() ?
+      now_sec - last_message_source_stamp_sec_.value() :
+      std::numeric_limits<double>::infinity();
+    output.receipt_interval_sec = last_message_receipt_interval_sec_.value_or(
+      std::numeric_limits<double>::infinity());
+    output.message_vehicle_count = last_message_vehicle_count_;
+    output.message_invalid =
+      last_message_has_empty_id_ || last_message_has_duplicate_id_ ||
+      last_message_has_invalid_sample_;
+    for (const auto & item : vehicles_) {
+      const auto & tracked = item.second;
+      const double age_sec = now_sec - tracked.receipt_sec;
+      if (
+        tracked.has_sample && std::isfinite(age_sec) && age_sec >= 0.0 &&
+        age_sec <= cfg.timeout_sec)
+      {
+        ++output.fresh_vehicle_count;
+        output.position_jump_count += tracked.position_jump ? 1U : 0U;
+        output.invalid_velocity_count += tracked.invalid_velocity ? 1U : 0U;
+      }
+    }
+    if (!std::isfinite(output.receipt_age_sec) || output.receipt_age_sec < 0.0) {
+      output.health = "Invalid";
+    } else if (output.receipt_age_sec > cfg.timeout_sec) {
+      output.health = "Stale";
+    } else if (
+      !std::isfinite(output.source_age_sec) ||
+      output.source_age_sec < -kV2XSourceFutureToleranceSec ||
+      output.message_invalid)
+    {
+      output.health = "Invalid";
+    } else if (
+      output.source_age_sec > cfg.timeout_sec ||
+      output.position_jump_count > 0U || output.invalid_velocity_count > 0U)
+    {
+      output.health = "Degraded";
+    } else {
+      output.health = "Healthy";
+    }
+    return output;
   }
 
   bool has_complete_message(const double now_sec, const std::size_t expected_vehicle_count)
@@ -2090,6 +2149,7 @@ struct V2XGapPlanner
     std::lock_guard<std::mutex> lock(mutex_);
     vehicles_.clear();
     last_message_receipt_sec_.reset();
+    last_message_receipt_interval_sec_.reset();
     last_message_source_stamp_sec_.reset();
     last_message_vehicle_count_ = 0U;
     last_message_has_empty_id_ = false;
@@ -3254,6 +3314,7 @@ private:
   std::mutex mutex_;
   std::unordered_map<std::string, TrackedVehicle> vehicles_;
   std::optional<double> last_message_receipt_sec_;
+  std::optional<double> last_message_receipt_interval_sec_;
   std::optional<double> last_message_source_stamp_sec_;
   std::size_t last_message_vehicle_count_{0U};
   bool last_message_has_empty_id_{false};
@@ -3667,6 +3728,15 @@ struct MPC
         return resolution.active;
       };
 
+    const auto diagnostics = gap_planner->diagnostics(now_sec);
+    output.v2x_health = diagnostics.health;
+    output.v2x_receipt_age_sec = diagnostics.receipt_age_sec;
+    output.v2x_source_age_sec = diagnostics.source_age_sec;
+    output.v2x_receipt_interval_sec = diagnostics.receipt_interval_sec;
+    output.v2x_message_vehicle_count = diagnostics.message_vehicle_count;
+    output.v2x_position_jump_count = diagnostics.position_jump_count;
+    output.v2x_invalid_velocity_count = diagnostics.invalid_velocity_count;
+    output.v2x_message_invalid = diagnostics.message_invalid;
     const auto vehicles = gap_planner->active_vehicles(now_sec);
     output.active_vehicle_count = vehicles.size();
     if (vehicles.empty()) {
@@ -8543,6 +8613,7 @@ private:
       RCLCPP_INFO(
         rclcpp::get_logger("mpc_controller"),
         "V2X behavior: %s -> %s, front_distance=%.2f, wp_id=%d, reason=%s, "
+        "health=%s, receipt_age=%.3f, source_age=%.3f, interval=%.3f, "
         "block=%s, gap=%d, gap_hold=%d, hold_rem=%.2f, "
         "soft_curve=%d, hard_curve=%d, inner_pass=%d, continue=%d, "
         "hard_continue=%d, outer_entry=%d, outer_hard_entry=%d, outer_hard=%d, "
@@ -8550,6 +8621,8 @@ private:
         "hard_dist=%.2f, hard_avail=%.2f, hard_req=%.2f",
         v2x_behavior_state_initialized ? to_string(v2x_behavior_state) : "None", to_string(final_state),
         output.front_distance, model->wp_id, output.reason.c_str(),
+        output.v2x_health.c_str(), output.v2x_receipt_age_sec,
+        output.v2x_source_age_sec, output.v2x_receipt_interval_sec,
         output.overtake_block_reason.c_str(), output.overtake_gap_available ? 1 : 0,
         output.overtake_gap_hold_active ? 1 : 0,
         output.overtake_gap_hold_remaining_sec,
@@ -8586,7 +8659,9 @@ private:
           "clearance_cap=%d, clearance_margin=%.2f, "
           "speed_cap=%d, cap_release=%d, adaptive_cap=%d, closing=%.2f, "
           "shift_t=%.2f, wp_id=%d, "
-          "vehicles=%zu, front=%d, side=%d, danger=%d, danger_action=%s, "
+          "health=%s, receipt_age=%.3f, source_age=%.3f, interval=%.3f, "
+          "vehicles=%zu, message_vehicles=%zu, jumps=%zu, invalid_velocity=%zu, "
+          "message_invalid=%d, front=%d, side=%d, danger=%d, danger_action=%s, "
           "grace=%d, grid_suppress=%d, grid_breakout=%d, "
           "grid_observe=%d, grid_obs=%.2f, grid_peer=%.2f, grid_candidate=%s, "
           "grid_stable=%.2f, "
@@ -8617,7 +8692,11 @@ private:
           output.overtake_shiftout_adaptive_speed_applied ? 1 : 0,
           output.overtake_shiftout_closing_speed_limit,
           output.overtake_shiftout_remaining_time, model->wp_id,
-          output.active_vehicle_count,
+          output.v2x_health.c_str(), output.v2x_receipt_age_sec,
+          output.v2x_source_age_sec, output.v2x_receipt_interval_sec,
+          output.active_vehicle_count, output.v2x_message_vehicle_count,
+          output.v2x_position_jump_count, output.v2x_invalid_velocity_count,
+          output.v2x_message_invalid ? 1 : 0,
           output.has_front_vehicle ? 1 : 0, output.has_side_vehicle ? 1 : 0,
           output.has_danger_vehicle ? 1 : 0,
           v2x_overtake_core::to_string(output.front_danger_action),
@@ -11072,6 +11151,13 @@ private:
             const double v_mps = kmh_to_m_per_sec(param.as_double());
             mpc_cfg_.v_max = v_mps;
             mpc_->update_v_max(v_mps);
+            if (!reference_path_->compute_speed_profile(
+                  mpc_cfg_.a_min, mpc_cfg_.a_max, 0.0, v_mps, mpc_cfg_.ay_max))
+            {
+              result.successful = false;
+              result.reason = "failed to recompute the runtime speed profile";
+              return result;
+            }
             reference_path_->set_v_ref(std::vector<double>(reference_path_->waypoints.size(), v_mps));
           } else if (
             name == "steering_tire_angle_gain_var" &&
@@ -13829,6 +13915,36 @@ private:
     }
     if (!publish_control_command(current_time, u, acc, bug_acc_enabled)) {
       return;
+    }
+    if (mpc_cfg_.v2x_behavior.debug_log_enabled) {
+      const double output_steering =
+        u[1] * mpc_cfg_.steering_tire_angle_gain_var;
+      const double predicted_curvature = std::tan(u[1]) / car_->length;
+      const bool measured_curvature_valid =
+        std::isfinite(yaw_rate) && std::abs(actual_v) >= 1.0 &&
+        !recovery_command_active;
+      const double measured_curvature = measured_curvature_valid ?
+        yaw_rate / actual_v : std::numeric_limits<double>::quiet_NaN();
+      const double curvature_error = measured_curvature_valid ?
+        measured_curvature - predicted_curvature :
+        std::numeric_limits<double>::quiet_NaN();
+      const bool curvature_ratio_valid =
+        measured_curvature_valid && std::abs(predicted_curvature) >= 1e-3;
+      const double curvature_ratio = curvature_ratio_valid ?
+        measured_curvature / predicted_curvature :
+        std::numeric_limits<double>::quiet_NaN();
+      const double reference_curvature = car_->current_waypoint != nullptr ?
+        car_->current_waypoint->kappa : std::numeric_limits<double>::quiet_NaN();
+      RCLCPP_INFO_THROTTLE(
+        get_logger(), *get_clock(), 1000,
+        "Steering debug: wp_id=%d, speed=%.3f, yaw_rate=%.3f, raw=%.4f, "
+        "output=%.4f, predicted_kappa=%.5f, measured_kappa=%.5f, "
+        "error=%.5f, ratio=%.3f, valid=%d, ref_kappa=%.5f, "
+        "solver_fallback=%d, recovery=%d",
+        mpc_->model->wp_id, actual_v, yaw_rate, u[1], output_steering,
+        predicted_curvature, measured_curvature, curvature_error, curvature_ratio,
+        measured_curvature_valid ? 1 : 0, reference_curvature,
+        mpc_fallback_active ? 1 : 0, recovery_command_active ? 1 : 0);
     }
     awsim_boost::TriggerContext boost_context;
     boost_context.control_enabled = enable_control_;

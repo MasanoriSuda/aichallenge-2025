@@ -49,6 +49,11 @@ ament_auto_add_library(${PROJECT_NAME}_mpc_state_prediction SHARED
   src/mpc_state_prediction.cpp
 )
 
+ament_auto_add_library(${PROJECT_NAME}_runtime_speed_profile SHARED
+  NO_TARGET_LINK_LIBRARIES
+  src/runtime_speed_profile.cpp
+)
+
 ament_auto_add_library(${PROJECT_NAME}_mpc_waypoint_preview SHARED
   NO_TARGET_LINK_LIBRARIES
   src/mpc_waypoint_preview.cpp
@@ -94,6 +99,7 @@ target_link_libraries(mpc_controller_cpp
   ${PROJECT_NAME}_awsim_boost_start_dash
   ${PROJECT_NAME}_path_core
   ${PROJECT_NAME}_mpc_state_prediction
+  ${PROJECT_NAME}_runtime_speed_profile
   ${PROJECT_NAME}_mpc_waypoint_association
   ${PROJECT_NAME}_mpc_waypoint_preview
   ${PROJECT_NAME}_mpc_velocity_limit
@@ -165,6 +171,15 @@ if(BUILD_TESTING)
   if(TARGET test_mpc_state_prediction)
     target_link_libraries(test_mpc_state_prediction
       ${PROJECT_NAME}_mpc_state_prediction
+    )
+  endif()
+
+  ament_add_gtest(test_runtime_speed_profile
+    test/test_runtime_speed_profile.cpp
+  )
+  if(TARGET test_runtime_speed_profile)
+    target_link_libraries(test_runtime_speed_profile
+      ${PROJECT_NAME}_runtime_speed_profile
     )
   endif()
 

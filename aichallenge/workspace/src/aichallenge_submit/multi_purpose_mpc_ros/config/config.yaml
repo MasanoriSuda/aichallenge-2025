@@ -431,7 +431,7 @@ mpc:
   v2x_overtake_guard_min_front_distance: 5.0  # [m] begin ShiftOut before the closing budget becomes unrecoverable
   v2x_overtake_continue_min_front_distance: 1.8 # [m] active-pass floor near the nominal body-overlap distance
   v2x_overtake_close_follow_enabled: true     # side-escape after matching a slow front vehicle
-  v2x_overtake_close_follow_min_front_distance: 2.2 # [m] do not side-escape from bumper-touch distance
+  v2x_overtake_close_follow_min_front_distance: 2.2 # [m] extra floor; new ShiftOut also requires the normal 5.0m entry distance
   v2x_overtake_close_follow_max_closing_speed: 1.5 # [m/s] require a controlled closing rate
   v2x_overtake_close_follow_min_side_clearance: 1.2 # [m] pass-side center corridor before close-follow escape
   v2x_overtake_before_curve_enabled: true     # allow slow-front overtake in soft curve-lookahead zones
@@ -443,7 +443,7 @@ mpc:
   v2x_overtake_active_hard_curve_completion_enabled: true # dev3 A/B: only an active Pass may finish before the hard boundary
   v2x_overtake_active_hard_curve_rear_clear_distance: 0.5 # [m] simulation-only active Pass clearance target
   v2x_overtake_active_hard_curve_buffer_distance: 0.5 # [m] reserve before crossing the hard-curvature boundary
-  v2x_overtake_front_velocity_limit_enabled: false # do not match front speed while a reachable overtake gap exists
+  v2x_overtake_front_velocity_limit_enabled: true # generic Follow cap for a different front vehicle; risk/decel guards always remain enabled
   v2x_overtake_fallback_ignore_soft_curve_forbidden: false # avoid wall-side fallback targets in hairpins
   v2x_overtake_fallback_min_side_clearance: 1.2 # [m] required pass-side clearance for fallback target
   v2x_overtake_curve_cooldown_enabled: true # suppress immediate re-overtake after a curve-related abort

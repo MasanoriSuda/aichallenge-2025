@@ -82,6 +82,18 @@ struct FollowSpeedLimitResolution
 FollowSpeedLimitResolution resolve_follow_speed_limit(
   const FollowSpeedLimitRequest & request);
 
+struct GenericFollowCapOwnershipRequest
+{
+  bool shiftout_active{false};
+  bool pass_active{false};
+  bool front_matches_locked_target{false};
+};
+
+/// An active ShiftOut/Pass owns the generic front-speed cap only for its locked target.
+/// Front-risk, deceleration and emergency limits remain separate policies.
+bool should_apply_generic_follow_cap(
+  const GenericFollowCapOwnershipRequest & request) noexcept;
+
 enum class OvertakeSpeedStage
 {
   ShiftOut,
@@ -150,12 +162,14 @@ struct OvertakeFrontCapReleaseRequest
 {
   bool pass_phase{false};
   bool lateral_complete{false};
+  bool lateral_separation_latched{false};
   bool target_seen{false};
   double target_longitudinal_m{};
 };
 
-/// Release the front-speed cap only when the locked target is observed no
-/// longer ahead after lateral ShiftOut has completed.
+/// Release the front-speed cap after a persistent physical lateral-separation
+/// latch, or when the locked target is observed no longer ahead after
+/// lateral ShiftOut has completed.
 bool can_release_overtake_front_cap(
   const OvertakeFrontCapReleaseRequest & request) noexcept;
 
@@ -275,6 +289,21 @@ struct LiveExecutionCorridorBlockRequest
 /// cancellation instead of re-applying entry-corridor geometry.
 bool should_block_live_execution_corridor(
   const LiveExecutionCorridorBlockRequest & request) noexcept;
+
+struct GapPlannerNoGapVelocityLimitRequest
+{
+  bool follow_behavior{false};
+  bool follow_limit_enabled{false};
+  bool overtake_fallback_target{false};
+  bool committed_execution_corridor_bypass{false};
+};
+
+/// Keep the generic no-gap speed limit for normal planner ownership, including
+/// an explicitly enabled Follow policy. A laterally committed Pass that already
+/// treats live-corridor loss as diagnostic-only must not retain only the
+/// planner's no-gap longitudinal limit.
+bool should_apply_gap_planner_no_gap_velocity_limit(
+  const GapPlannerNoGapVelocityLimitRequest & request) noexcept;
 
 struct LockedTargetPassSideIntrusionRequest
 {
@@ -517,6 +546,43 @@ struct PassCompletionResolution
 
 /// Estimate whether ego can clear the target before the next hard curve.
 PassCompletionResolution resolve_pass_completion(const PassCompletionRequest & request);
+
+struct CurveEntryCompletionOverrideRequest
+{
+  bool curve_entry_allowed{false};
+  bool line_committed{false};
+  bool front_vehicle_seen{false};
+  double front_distance_m{};
+  double maximum_front_distance_m{};
+  double ego_speed_mps{};
+  double front_speed_mps{};
+  double minimum_relative_speed_mps{};
+};
+
+/// A curve-specific new-entry exception may bypass the distance estimate only when
+/// the target is inside the bounded line-entry range and measured ego speed already
+/// has the configured advantage over the front kart.
+bool can_override_completion_for_curve_entry(
+  const CurveEntryCompletionOverrideRequest & request) noexcept;
+
+struct OvertakeCompletionPermissionRequest
+{
+  bool completion_feasible{false};
+  bool curve_entry_allowed{false};
+  bool curve_continuation_allowed{false};
+  bool line_committed{false};
+  bool front_vehicle_seen{false};
+  double front_distance_m{};
+  double maximum_front_distance_m{};
+  double ego_speed_mps{};
+  double front_speed_mps{};
+  double minimum_relative_speed_mps{};
+};
+
+/// Combine the normal completion-distance decision with the narrowly scoped
+/// near-target/measured-speed curve-entry exception and already-committed curve continuity.
+bool overtake_completion_policy_allows_execution(
+  const OvertakeCompletionPermissionRequest & request) noexcept;
 
 struct OvertakeGuardPhaseRequest
 {

@@ -1581,6 +1581,12 @@ enum class OvertakeLinePhase
   Recovery,
 };
 
+enum class V2XTrackingResetPolicy
+{
+  PreserveHistory,
+  ClearHistory,
+};
+
 const char * to_string(const OvertakeLinePhase phase)
 {
   switch (phase) {
@@ -1859,6 +1865,8 @@ struct V2XGapPlanner
     double receipt_sec{};
     double vx{};
     double vy{};
+    std::uint64_t recovery_epoch{};
+    bool recovery_sample_valid{false};
     bool has_sample{false};
     bool position_jump{false};
     bool invalid_velocity{false};
@@ -1952,28 +1960,31 @@ struct V2XGapPlanner
     last_message_has_invalid_sample_ = false;
     std::unordered_set<std::string> message_ids;
     const double array_stamp = stamp_to_seconds(msg.header.stamp);
-    if (
+    const bool array_header_invalid =
       msg.header.frame_id != "map" ||
       !stuck_recovery::source_timestamp_is_monotonic(
-        array_stamp, last_message_source_stamp_sec_))
-    {
+      array_stamp, last_message_source_stamp_sec_);
+    if (array_header_invalid) {
       last_message_has_invalid_sample_ = true;
     }
     if (std::isfinite(array_stamp) && array_stamp > 0.0) {
       last_message_source_stamp_sec_ = array_stamp;
     }
     for (const auto & vehicle : msg.vehicles) {
-      if (vehicle.vehicle_id.empty()) {
+      const bool empty_id = vehicle.vehicle_id.empty();
+      const bool duplicate_id =
+        !empty_id && !message_ids.emplace(vehicle.vehicle_id).second;
+      if (empty_id) {
         last_message_has_empty_id_ = true;
-      } else if (!message_ids.emplace(vehicle.vehicle_id).second) {
+      } else if (duplicate_id) {
         last_message_has_duplicate_id_ = true;
       }
-      if (
+      const bool invalid_geometry =
         !std::isfinite(vehicle.position.x) || !std::isfinite(vehicle.position.y) ||
         !std::isfinite(vehicle.covariance.x) || !std::isfinite(vehicle.covariance.y) ||
         vehicle.covariance.x < 0.0 || vehicle.covariance.y < 0.0 ||
-        (!vehicle.header.frame_id.empty() && vehicle.header.frame_id != "map"))
-      {
+        (!vehicle.header.frame_id.empty() && vehicle.header.frame_id != "map");
+      if (invalid_geometry) {
         last_message_has_invalid_sample_ = true;
       }
       const std::string id = vehicle.vehicle_id.empty() ? "__unknown__" : vehicle.vehicle_id;
@@ -1983,13 +1994,13 @@ struct V2XGapPlanner
       }
 
       auto & tracked = vehicles_[id];
-      if (
+      const bool source_sample_invalid =
         !stuck_recovery::source_sample_is_current(
           array_stamp, sample_stamp, cfg.timeout_sec) ||
         !stuck_recovery::source_timestamp_is_monotonic(
           sample_stamp,
-          tracked.has_sample ? std::optional<double>{tracked.stamp_sec} : std::nullopt))
-      {
+          tracked.has_sample ? std::optional<double>{tracked.stamp_sec} : std::nullopt);
+      if (source_sample_invalid) {
         last_message_has_invalid_sample_ = true;
       }
       double vx = 0.0;
@@ -2010,6 +2021,9 @@ struct V2XGapPlanner
           std::max(cfg.position_jump_threshold, cfg.v_max_safety * dt) :
           cfg.position_jump_threshold;
         position_jump = !std::isfinite(dt) || dt < -kEps || jump > admissible_jump;
+        if (position_jump) {
+          last_message_has_invalid_sample_ = true;
+        }
         if (dt > kEps && !position_jump) {
           vx = dx / dt;
           vy = dy / dt;
@@ -2031,10 +2045,15 @@ struct V2XGapPlanner
       tracked.receipt_sec = receipt_sec;
       tracked.vx = vx;
       tracked.vy = vy;
+      tracked.recovery_epoch = recovery_epoch_;
+      tracked.recovery_sample_valid =
+        !array_header_invalid && !empty_id && !duplicate_id && !invalid_geometry &&
+        !source_sample_invalid && !position_jump && !invalid_velocity;
       tracked.has_sample = true;
       tracked.position_jump = position_jump;
       tracked.invalid_velocity = invalid_velocity;
     }
+    last_message_recovery_epoch_ = recovery_epoch_;
   }
 
   std::vector<TrackedVehicle> active_vehicles(const double now_sec)
@@ -2108,7 +2127,11 @@ struct V2XGapPlanner
   bool has_complete_message(const double now_sec, const std::size_t expected_vehicle_count)
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (!track_recovery_completeness_ || !last_message_receipt_sec_.has_value()) {
+    if (
+      !track_recovery_completeness_ || !last_message_receipt_sec_.has_value() ||
+      !last_message_recovery_epoch_.has_value() ||
+      last_message_recovery_epoch_.value() != recovery_epoch_)
+    {
       return false;
     }
     const double age_sec = now_sec - last_message_receipt_sec_.value();
@@ -2122,12 +2145,19 @@ struct V2XGapPlanner
     const double now_sec, const std::size_t expected_vehicle_count)
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (!track_recovery_completeness_) {
+    if (
+      !track_recovery_completeness_ || !last_message_receipt_sec_.has_value() ||
+      !last_message_recovery_epoch_.has_value() ||
+      last_message_recovery_epoch_.value() != recovery_epoch_)
+    {
       return false;
     }
     std::size_t fresh_vehicle_count = 0U;
     for (const auto & item : vehicles_) {
       const auto & tracked = item.second;
+      if (tracked.recovery_epoch != recovery_epoch_) {
+        continue;
+      }
       const double age_sec = now_sec - tracked.receipt_sec;
       if (!tracked.has_sample || !std::isfinite(age_sec) || age_sec < 0.0 ||
         age_sec > cfg.timeout_sec)
@@ -2135,7 +2165,8 @@ struct V2XGapPlanner
         continue;
       }
       if (
-        tracked.id.empty() || tracked.position_jump || tracked.invalid_velocity ||
+        tracked.id.empty() || !tracked.recovery_sample_valid ||
+        tracked.position_jump || tracked.invalid_velocity ||
         !std::isfinite(tracked.x) || !std::isfinite(tracked.y) ||
         !std::isfinite(tracked.vx) || !std::isfinite(tracked.vy))
       {
@@ -2146,13 +2177,21 @@ struct V2XGapPlanner
     return fresh_vehicle_count == expected_vehicle_count;
   }
 
-  void reset_recovery_tracking()
+  void begin_recovery_tracking_epoch()
   {
     std::lock_guard<std::mutex> lock(mutex_);
+    ++recovery_epoch_;
+  }
+
+  void reset_all_tracking()
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    ++recovery_epoch_;
     vehicles_.clear();
     last_message_receipt_sec_.reset();
     last_message_receipt_interval_sec_.reset();
     last_message_source_stamp_sec_.reset();
+    last_message_recovery_epoch_.reset();
     last_message_vehicle_count_ = 0U;
     last_message_has_empty_id_ = false;
     last_message_has_duplicate_id_ = false;
@@ -3320,6 +3359,8 @@ private:
   std::optional<double> last_message_receipt_sec_;
   std::optional<double> last_message_receipt_interval_sec_;
   std::optional<double> last_message_source_stamp_sec_;
+  std::optional<std::uint64_t> last_message_recovery_epoch_;
+  std::uint64_t recovery_epoch_{0U};
   std::size_t last_message_vehicle_count_{0U};
   bool last_message_has_empty_id_{false};
   bool last_message_has_duplicate_id_{false};
@@ -4137,14 +4178,28 @@ struct MPC
     output.front_danger_action = front_danger_action;
     const bool front_danger_requires_safety_brake =
       front_danger_action == v2x_overtake_core::FrontDangerAction::SafetyBrake;
-    // Follow uses the full configured distance gate below. Independently retain the
-    // distance-recovery part of the cap while ShiftOut/early Pass owns the lateral plan.
-    // Once the locked target is laterally clear, the existing front-overlap latch removes it
-    // from nearest-front selection and this cap no longer prevents pass acceleration.
+    const bool active_overtake_line =
+      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+      overtake_line_state_.phase == OvertakeLinePhase::Pass;
+    const bool nearest_front_matches_locked_target =
+      active_overtake_line && !nearest_front_id.empty() &&
+      nearest_front_id == overtake_line_state_.target_vehicle_id;
+    const bool generic_follow_cap_allowed_by_owner =
+      v2x_overtake_core::should_apply_generic_follow_cap(
+      v2x_overtake_core::GenericFollowCapOwnershipRequest{
+        overtake_line_state_.phase == OvertakeLinePhase::ShiftOut,
+        overtake_line_state_.phase == OvertakeLinePhase::Pass,
+        nearest_front_matches_locked_target});
+    const bool generic_follow_cap_allowed =
+      generic_follow_cap_allowed_by_owner &&
+      (!active_overtake_line || cfg.v2x_behavior.overtake_front_velocity_limit_enabled);
+    // Follow owns clearance recovery. Once a validated ShiftOut/Pass starts, its bounded
+    // stage-speed policy owns longitudinal separation; front-risk, deceleration and emergency
+    // policies below remain active independently.
     const auto moving_front_clearance_limit = v2x_overtake_core::resolve_follow_speed_limit(
       v2x_overtake_core::FollowSpeedLimitRequest{
         cfg.v2x_behavior.follow_speed_limit_enabled,
-        false,
+        !generic_follow_cap_allowed,
         nearest_front_distance,
         cfg.v2x_behavior.follow_speed_limit_distance,
         nearest_front_speed,
@@ -4436,7 +4491,7 @@ struct MPC
       bool front_risk_applied = false;
       if (apply_follow_velocity_limits(
           output, output.front_distance, output.front_speed, front_decel_curve_guard,
-          stopped_front_risk, stopped_front_risk_level, front_risk_applied)) {
+          stopped_front_risk, stopped_front_risk_level, false, front_risk_applied)) {
         output.reason += front_risk_applied ?
           " / " + front_risk_reason(
           "front risk brake", stopped_front_risk, stopped_front_risk_level) :
@@ -4445,9 +4500,6 @@ struct MPC
       return commit_v2x_behavior_state(output, now_sec);
     }
 
-    const bool active_overtake_line =
-      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
-      overtake_line_state_.phase == OvertakeLinePhase::Pass;
     const bool continuing_overtake =
       active_overtake_line ||
       (v2x_behavior_state_initialized && v2x_behavior_state == V2XBehaviorState::Overtake);
@@ -4463,11 +4515,16 @@ struct MPC
       has_front_vehicle && std::isfinite(nearest_front_distance) &&
       std::isfinite(nearest_front_speed))
     {
-      const double planned_ego_speed = std::min(
+      const double nominal_planned_ego_speed = std::min(
         cfg.v_max,
         std::max({
           current_speed_mps_, std::max(0.0, waypoint.v_ref),
           cfg.v2x_behavior.overtake_completion_min_relative_speed}));
+      const double staged_speed_ceiling = overtake_stage_speed_ceiling(
+        nearest_front_distance, nearest_front_speed, current_speed_mps_,
+        false, false, std::max(0.5, cfg.v2x_behavior.overtake_line.shift_distance));
+      const double planned_ego_speed = std::max(
+        kEps, std::min(nominal_planned_ego_speed, staged_speed_ceiling));
       const auto completion = v2x_overtake_core::resolve_pass_completion(
         v2x_overtake_core::PassCompletionRequest{
           distance_to_hard_curve,
@@ -4547,8 +4604,17 @@ struct MPC
         2.0 * std::max(0.0, cfg.a_max) * hard_curve_accel_distance));
     const double hard_curve_reference_speed = std::min(
       cfg.v_max, std::max(current_speed_mps_, std::max(0.0, waypoint.v_ref)));
-    const double active_hard_curve_planned_speed = std::max(
+    const double nominal_active_hard_curve_planned_speed = std::max(
       kEps, std::min(hard_curve_reference_speed, reachable_hard_curve_speed));
+    const double active_stage_speed_ceiling = overtake_stage_speed_ceiling(
+      active_target_valid ? std::max(0.0, output.locked_target_longitudinal) : 0.0,
+      active_target_valid ? std::max(0.0, output.locked_target_speed) : 0.0,
+      overtake_entry_speed_.value_or(std::max(0.0, current_speed_mps_)),
+      overtake_line_state_.phase == OvertakeLinePhase::Pass,
+      overtake_line_state_.pass_front_overlap_exclusion_latched, 0.0);
+    const double active_hard_curve_planned_speed = std::max(
+      kEps,
+      std::min(nominal_active_hard_curve_planned_speed, active_stage_speed_ceiling));
     const auto active_hard_curve_continuation =
       v2x_overtake_core::resolve_active_hard_curve_continuation(
       v2x_overtake_core::ActiveHardCurveContinuationRequest{
@@ -5161,6 +5227,10 @@ struct MPC
     // continuation creates a one-cycle state where neither entry nor locked
     // continuation is legal and immediately returns to Follow.
     const bool curve_line_committed = active_overtake_line && locked_pass_side != 0;
+    const double curve_entry_max_front_distance =
+      std::max(0.0, cfg.v2x_behavior.overtake_guard_min_front_distance) +
+      std::max(0.0, cfg.v2x_behavior.overtake_line.shift_distance) +
+      std::max(0.0, cfg.v2x_behavior.overtake_line.return_clear_distance);
     const auto resolve_outer_curve_for_side = [&](const SideAssessment & assessment) {
         return v2x_overtake_core::resolve_outer_curve_overtake(
           v2x_overtake_core::OuterCurveOvertakeRequest{
@@ -5219,17 +5289,30 @@ struct MPC
           assessment.side_clearance >= fallback_min_side_clearance &&
           !inner_curve_pass &&
           front_risk_level != FrontRiskLevel::EmergencyBrake;
+        const bool new_curve_entry_allowed =
+          outer_curve.entry_allowed || outer_curve.hard_entry_allowed ||
+          inner_curve.entry_allowed || inner_curve.hard_entry_allowed;
+        const bool completion_policy_allows_execution =
+          v2x_overtake_core::overtake_completion_policy_allows_execution(
+          v2x_overtake_core::OvertakeCompletionPermissionRequest{
+            overtake_completion_feasible,
+            new_curve_entry_allowed,
+            outer_curve.hard_continuation_allowed ||
+            inner_curve.hard_continuation_allowed,
+            curve_line_committed,
+            has_front_vehicle,
+            nearest_front_distance,
+            curve_entry_max_front_distance,
+            current_speed_mps_,
+            nearest_front_speed,
+            cfg.v2x_behavior.overtake_completion_min_relative_speed});
         return !overtake_cooldown_active &&
                (!overtake_start_curve_blocked || outer_curve.entry_allowed ||
                outer_curve.hard_entry_allowed ||
                outer_curve.hard_continuation_allowed || inner_curve.entry_allowed ||
                inner_curve.hard_entry_allowed ||
                inner_curve.hard_continuation_allowed) &&
-               (overtake_completion_feasible || outer_curve.entry_allowed ||
-               outer_curve.hard_entry_allowed ||
-               outer_curve.hard_continuation_allowed || inner_curve.entry_allowed ||
-               inner_curve.hard_entry_allowed ||
-               inner_curve.hard_continuation_allowed) &&
+               completion_policy_allows_execution &&
                !overtake_forbidden_wp &&
                (!effective_hard_overtake_forbidden ||
                outer_curve.hard_entry_allowed ||
@@ -5315,6 +5398,20 @@ struct MPC
     output.inner_curve_hard_entry_allowed = selected_inner_curve.hard_entry_allowed;
     output.inner_curve_hard_continuation_allowed =
       selected_inner_curve.hard_continuation_allowed;
+    const bool selected_new_curve_entry_allowed =
+      selected_outer_curve.entry_allowed || selected_outer_curve.hard_entry_allowed ||
+      selected_inner_curve.entry_allowed || selected_inner_curve.hard_entry_allowed;
+    const bool selected_curve_entry_completion_override =
+      v2x_overtake_core::can_override_completion_for_curve_entry(
+      v2x_overtake_core::CurveEntryCompletionOverrideRequest{
+        selected_new_curve_entry_allowed,
+        curve_line_committed,
+        has_front_vehicle,
+        nearest_front_distance,
+        curve_entry_max_front_distance,
+        current_speed_mps_,
+        nearest_front_speed,
+        cfg.v2x_behavior.overtake_completion_min_relative_speed});
     const bool overtake_gap_available = output.overtake_pass_side_sign != 0 &&
       selected_assessment.gap_available;
     const bool selected_inner_curve_pass =
@@ -5328,6 +5425,10 @@ struct MPC
     std::string overtake_block_reason = !overtake_gap_available ?
       selected_assessment.reason :
       start_grid_breakout_attempt ? "start-grid breakout corridor available" :
+      curve_attack_selection_requested && !side_selected_for_execution &&
+      selected_new_curve_entry_allowed && !overtake_completion_feasible &&
+      !selected_curve_entry_completion_override ?
+      "curve entry lacks measured gain/near-target range" :
       curve_attack_selection_requested && !side_selected_for_execution ?
       "curve attack has no executable inside/outside corridor" :
       curve_attack_selection_requested && selected_inner_curve_pass ?
@@ -5449,15 +5550,13 @@ struct MPC
           cfg.v2x_behavior.overtake_guard_enabled ?
           overtake_block_reason :
           "front vehicle and gap available";
-        if (cfg.v2x_behavior.overtake_front_velocity_limit_enabled) {
-          bool front_risk_applied = false;
-          if (apply_follow_velocity_limits(
-              output, nearest_front_distance, nearest_front_speed, front_decel_curve_guard, front_risk,
-              front_risk_level, front_risk_applied)) {
-            output.reason += front_risk_applied ?
-              " / " + front_risk_reason("front risk brake", front_risk, front_risk_level) :
-              output.follow_speed_limit_active ? " / follow speed cap" : " / front decel guard";
-          }
+        bool front_risk_applied = false;
+        if (apply_follow_velocity_limits(
+            output, nearest_front_distance, nearest_front_speed, front_decel_curve_guard, front_risk,
+            front_risk_level, !generic_follow_cap_allowed, front_risk_applied)) {
+          output.reason += front_risk_applied ?
+            " / " + front_risk_reason("front risk brake", front_risk, front_risk_level) :
+            output.follow_speed_limit_active ? " / follow speed cap" : " / front decel guard";
         }
       } else {
         output.state = V2XBehaviorState::Follow;
@@ -5467,7 +5566,7 @@ struct MPC
         bool front_risk_applied = false;
         if (apply_follow_velocity_limits(
             output, nearest_front_distance, nearest_front_speed, front_decel_curve_guard, front_risk,
-            front_risk_level, front_risk_applied)) {
+            front_risk_level, false, front_risk_applied)) {
           output.reason += front_risk_applied ?
             " / " + front_risk_reason("front risk brake", front_risk, front_risk_level) :
             output.follow_speed_limit_active ? " / follow speed cap" : " / front decel guard";
@@ -5995,11 +6094,13 @@ struct MPC
     if (std::isfinite(behavior_output.target_velocity_limit)) {
       apply_velocity_limit(umax_dyn, ur, N, behavior_output.target_velocity_limit);
     }
-    const bool allow_no_gap_velocity_limit =
-      behavior_output.state != V2XBehaviorState::Follow ||
-      cfg.v2x_behavior.follow_gap_planner_no_gap_speed_limit_enabled;
     const bool apply_no_gap_velocity_limit =
-      allow_no_gap_velocity_limit && !behavior_output.overtake_fallback_target;
+      v2x_overtake_core::should_apply_gap_planner_no_gap_velocity_limit(
+      v2x_overtake_core::GapPlannerNoGapVelocityLimitRequest{
+        behavior_output.state == V2XBehaviorState::Follow,
+        cfg.v2x_behavior.follow_gap_planner_no_gap_speed_limit_enabled,
+        behavior_output.overtake_fallback_target,
+        committed_execution_corridor_bypass});
     if (planner_output.active) {
       if (planner_output.feasible) {
         if (apply_gap_planner_state_bounds) {
@@ -7059,7 +7160,6 @@ private:
       rear_clear_observed &&
       now_sec - overtake_line_state_.rear_clear_since_sec >=
       std::max(0.0, line_cfg.clear_confirm_sec);
-
     // Complete a committed pass as soon as rear clearance is confirmed. The behavior layer can
     // legitimately keep publishing Overtake through committed-pass continuity, but letting that
     // label win here carries one fixed inside goal through the following hairpin indefinitely.
@@ -7337,7 +7437,9 @@ private:
       overtake_core::can_release_overtake_front_cap(
       overtake_core::OvertakeFrontCapReleaseRequest{
         overtake_line_state_.phase == OvertakeLinePhase::Pass,
-        lateral_complete, locked_target_seen, locked_target_longitudinal});
+        lateral_complete,
+        overtake_line_state_.pass_front_overlap_exclusion_latched,
+        locked_target_seen, locked_target_longitudinal});
     if (
       (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
       overtake_line_state_.phase == OvertakeLinePhase::Pass) &&
@@ -8011,8 +8113,18 @@ private:
       return false;
     }
 
-    const double min_front_distance =
-      std::max(0.0, cfg.v2x_behavior.overtake_close_follow_min_front_distance);
+    // Close-follow is only a geometric side-target fallback. It must not bypass the normal
+    // new-line front-distance contract; the 20260724 d1 run otherwise began ShiftOut at
+    // 2.99 m while both karts were still accelerating at the same rate.
+    const auto entry_guard = v2x_overtake_core::resolve_overtake_guard_phase(
+      v2x_overtake_core::OvertakeGuardPhaseRequest{
+        false,
+        cfg.v2x_behavior.overtake_guard_min_front_distance,
+        cfg.v2x_behavior.overtake_continue_min_front_distance});
+    const double min_front_distance = std::max({
+      0.0,
+      cfg.v2x_behavior.overtake_close_follow_min_front_distance,
+      entry_guard.min_front_distance_m});
     if (front_distance < min_front_distance) {
       std::ostringstream ss;
       ss << "overtake close-follow front distance"
@@ -8359,24 +8471,80 @@ private:
     return std::min(cfg.v_max, front_speed + speed_margin);
   }
 
+  double overtake_stage_speed_ceiling(
+    const double front_distance, const double front_speed, const double entry_speed,
+    const bool pass_phase, const bool lateral_clearance_latched,
+    const double remaining_shiftout_distance) const
+  {
+    // Once the Pass phase has established persistent physical lateral
+    // separation, the locked target is no longer a longitudinal obstacle.
+    // Keep all global/risk limits, but do not model the early-pass closing cap
+    // as an attainable-speed ceiling for completion checks.
+    if (pass_phase && lateral_clearance_latched) {
+      return std::numeric_limits<double>::infinity();
+    }
+    if (
+      !cfg.v2x_behavior.overtake_stage_speed_enabled ||
+      !std::isfinite(front_speed) || front_speed < 0.0 ||
+      !std::isfinite(entry_speed) || entry_speed < 0.0)
+    {
+      return std::numeric_limits<double>::infinity();
+    }
+
+    double closing_speed_limit =
+      cfg.v2x_behavior.overtake_shiftout_max_closing_speed;
+    closing_speed_limit = v2x_overtake_core::resolve_unlatched_pass_closing_speed(
+      closing_speed_limit,
+      cfg.v2x_behavior.overtake_pass_unlatched_max_closing_speed,
+      pass_phase, lateral_clearance_latched);
+    bool adaptive_closing_applied = false;
+    if (
+      !pass_phase &&
+      cfg.v2x_behavior.overtake_shiftout_adaptive_closing_speed_enabled &&
+      std::isfinite(front_distance) && front_distance >= 0.0 &&
+      std::isfinite(remaining_shiftout_distance) && remaining_shiftout_distance >= 0.0)
+    {
+      const auto adaptive_closing =
+        v2x_overtake_core::resolve_adaptive_shiftout_closing_speed(
+        v2x_overtake_core::AdaptiveShiftOutClosingSpeedRequest{
+          cfg.v2x_behavior.overtake_shiftout_min_closing_speed,
+          cfg.v2x_behavior.overtake_shiftout_max_closing_speed,
+          front_distance,
+          cfg.v2x_behavior.overtake_guard_min_front_distance,
+          remaining_shiftout_distance,
+          std::max(0.0, current_speed_mps_),
+          std::max(kEps, cfg.v2x_behavior.overtake_guard_min_speed_for_reachable),
+          cfg.v2x_behavior.overtake_shiftout_adaptive_min_time_sec});
+      closing_speed_limit = adaptive_closing.closing_speed_mps;
+      adaptive_closing_applied = true;
+    }
+
+    const double front_based_cap =
+      std::max(0.0, front_speed) + closing_speed_limit;
+    const double entry_speed_floor = adaptive_closing_applied ?
+      std::min(entry_speed, front_based_cap) : entry_speed;
+    return v2x_overtake_core::resolve_overtake_speed_reference(
+      v2x_overtake_core::OvertakeSpeedReferenceRequest{
+        v2x_overtake_core::OvertakeSpeedStage::ShiftOut,
+        cfg.v_max,
+        cfg.v_max,
+        std::max(0.0, front_speed),
+        entry_speed_floor,
+        closing_speed_limit}).reference_speed_mps;
+  }
+
   bool apply_follow_velocity_limits(
     V2XBehaviorOutput & output, const double front_distance, const double front_speed,
     const bool curve_guard, const FrontRiskMetrics & front_risk,
-    const FrontRiskLevel front_risk_level, bool & front_risk_applied) const
+    const FrontRiskLevel front_risk_level, const bool suppress_generic_follow_cap,
+    bool & front_risk_applied) const
   {
     front_risk_applied = false;
     bool any_limit_applied = false;
-    const bool active_pass_gap_hold =
-      v2x_overtake_core::can_hold_active_pass_after_gap_loss(
-      v2x_overtake_core::ActivePassGapHoldRequest{
-        overtake_line_state_.phase == OvertakeLinePhase::Pass,
-        overtake_line_state_.pass_front_overlap_exclusion_latched,
-        output.locked_target_seen,
-        output.locked_target_position_jump});
     const auto follow_speed_limit = v2x_overtake_core::resolve_follow_speed_limit(
       v2x_overtake_core::FollowSpeedLimitRequest{
         cfg.v2x_behavior.follow_speed_limit_enabled,
-        active_pass_gap_hold,
+        suppress_generic_follow_cap,
         front_distance,
         cfg.v2x_behavior.follow_speed_limit_distance,
         front_speed,
@@ -8580,7 +8748,9 @@ private:
             overtake_core::can_release_overtake_front_cap(
             overtake_core::OvertakeFrontCapReleaseRequest{
               overtake_line_state_.phase == OvertakeLinePhase::Pass,
-              pass_lateral_complete, output.locked_target_seen,
+              pass_lateral_complete,
+              overtake_line_state_.pass_front_overlap_exclusion_latched,
+              output.locked_target_seen,
               output.locked_target_longitudinal});
           const bool front_cap_stage = !output.overtake_front_cap_release_ready;
           const bool physical_shiftout_stage =
@@ -11655,13 +11825,23 @@ private:
     last_lap_time_ = lap_time;
   }
 
-  void reset_stuck_recovery_session(const char * reason)
+  void reset_stuck_recovery_session(
+    const char * reason, const V2XTrackingResetPolicy v2x_tracking_reset)
   {
     if (stuck_recovery_core_) {
       stuck_recovery_core_->reset_session();
     }
-    if (cfg_.stuck_recovery.core.enabled && v2x_gap_planner_) {
-      v2x_gap_planner_->reset_recovery_tracking();
+    if (v2x_gap_planner_) {
+      if (
+        v2x_tracking_reset == V2XTrackingResetPolicy::PreserveHistory &&
+        cfg_.stuck_recovery.core.enabled)
+      {
+        // Recovery must still observe a complete post-reset V2X epoch, while normal behavior
+        // keeps the Ready-time position samples needed for the next velocity estimate.
+        v2x_gap_planner_->begin_recovery_tracking_epoch();
+      } else if (v2x_tracking_reset == V2XTrackingResetPolicy::ClearHistory) {
+        v2x_gap_planner_->reset_all_tracking();
+      }
     }
     if (recovery_fault_retry_gate_) {
       recovery_fault_retry_gate_->reset();
@@ -11768,7 +11948,8 @@ private:
         recovery_last_output_->state != stuck_recovery::RecoveryState::Normal;
       const bool reverse_was_possible = recovery_may_be_in_reverse();
       if (normalized_state == "start") {
-        reset_stuck_recovery_session("AWSIM Start entered");
+        reset_stuck_recovery_session(
+          "AWSIM Start entered", V2XTrackingResetPolicy::PreserveHistory);
         race_started_ = true;
         if (reverse_was_possible) {
           recovery_waiting_for_drive_after_reset_ = true;
@@ -11779,8 +11960,13 @@ private:
             "AWSIM Start entered while recovery gear may still be Reverse; holding until Drive report");
         }
       } else {
-        if (race_started_ || normalized_state == "spawned" || normalized_state == "finish") {
-          reset_stuck_recovery_session("AWSIM race inactive or session boundary");
+        if (
+          race_started_ || normalized_state == "spawned" ||
+          normalized_state == "grounded" || normalized_state == "finish")
+        {
+          reset_stuck_recovery_session(
+            "AWSIM race inactive or session boundary",
+            V2XTrackingResetPolicy::ClearHistory);
           if (recovery_was_active || reverse_was_possible) {
             recovery_fault_latched_ = true;
             recovery_boost_suppressed_for_session_ = true;
@@ -13704,7 +13890,8 @@ private:
     mpc_->reset_after_external_maneuver(control_time.seconds(), 0.0);
     last_u_ = Eigen::Vector2d::Zero();
     last_acc_ = 0.0;
-    reset_stuck_recovery_session("race-relaxed fault retry");
+    reset_stuck_recovery_session(
+      "race-relaxed fault retry", V2XTrackingResetPolicy::PreserveHistory);
     // A recovery episode must not re-arm the one-shot start boost after an
     // adapter reset, even though normal race control may resume.
     recovery_boost_suppressed_for_session_ = true;

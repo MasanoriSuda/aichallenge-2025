@@ -28,6 +28,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::FrontHazardHoldRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ForwardCourseProjectionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RelativeCourseProgressContinuityRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::FollowSpeedLimitRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::GenericFollowCapOwnershipRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSpeedReferenceRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSpeedStage;
 using multi_purpose_mpc_ros::v2x_overtake_core::StartGridBreakoutSpeedReferenceRequest;
@@ -51,6 +52,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeCurveContinuationRequest
 using multi_purpose_mpc_ros::v2x_overtake_core::OuterCurveOvertakeRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::InnerCurveOvertakeRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ActiveHardCurveContinuationRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::CurveEntryCompletionOverrideRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeCompletionPermissionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassCompletionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PredictionTimeRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecoveryExitReason;
@@ -76,6 +79,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::StallWatchdogRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StartWindowStatus;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_effective_speed_limit;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_follow_speed_limit;
+using multi_purpose_mpc_ros::v2x_overtake_core::should_apply_generic_follow_cap;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_speed_reference;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_start_grid_breakout_speed_reference;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_shiftout_complete;
@@ -87,7 +91,9 @@ using multi_purpose_mpc_ros::v2x_overtake_core::should_resolve_curve_pass_side;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_active_line_gap_loss_hold;
 using multi_purpose_mpc_ros::v2x_overtake_core::explicit_overtake_line_owns_lateral_plan;
 using multi_purpose_mpc_ros::v2x_overtake_core::GapPlannerStateBoundsRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::GapPlannerNoGapVelocityLimitRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_apply_gap_planner_state_bounds;
+using multi_purpose_mpc_ros::v2x_overtake_core::should_apply_gap_planner_no_gap_velocity_limit;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_block_live_execution_corridor;
 using multi_purpose_mpc_ros::v2x_overtake_core::locked_target_intrudes_pass_side;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_start_side_overtake;
@@ -109,6 +115,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::project_forward_course_progress;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_relative_course_progress_continuous;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_vehicle_relative_lateral;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_completion;
+using multi_purpose_mpc_ros::v2x_overtake_core::can_override_completion_for_curve_entry;
+using multi_purpose_mpc_ros::v2x_overtake_core::overtake_completion_policy_allows_execution;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_target_continuity;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_reacquire_during_return;
 using multi_purpose_mpc_ros::v2x_overtake_core::integrate_forward_distance;
@@ -302,6 +310,38 @@ TEST(V2XFollowSpeedLimit, RejectsInvalidConfiguration)
   request = follow_speed_request();
   request.moving_front_distance_gain = -0.1;
   EXPECT_THROW(resolve_follow_speed_limit(request), std::invalid_argument);
+}
+
+TEST(V2XFollowSpeedLimitOwnership, FollowOwnsCapOutsideActiveOvertakeLine)
+{
+  EXPECT_TRUE(should_apply_generic_follow_cap({false, false, false}));
+  EXPECT_TRUE(should_apply_generic_follow_cap({true, false, false}));
+  EXPECT_TRUE(should_apply_generic_follow_cap({false, true, false}));
+  EXPECT_FALSE(should_apply_generic_follow_cap({true, false, true}));
+  EXPECT_FALSE(should_apply_generic_follow_cap({false, true, true}));
+  EXPECT_FALSE(should_apply_generic_follow_cap({true, true, true}));
+}
+
+TEST(V2XFollowSpeedLimitOwnership, ActiveShiftOutUsesStageSpeedInsteadOfClearanceRecoveryCap)
+{
+  auto follow_request = follow_speed_request();
+  follow_request.front_distance_m = 2.90;
+  follow_request.front_speed_mps = 2.71;
+  follow_request.moving_front_target_distance_m = 5.0;
+  follow_request.moving_front_recovery_speed_margin_mps = 0.6;
+  auto follow_resolution = resolve_follow_speed_limit(follow_request);
+  ASSERT_TRUE(follow_resolution.active);
+  EXPECT_NEAR(follow_resolution.speed_limit_mps, 2.11, 1e-12);
+
+  follow_request.suppressed = !should_apply_generic_follow_cap({true, false, true});
+  follow_resolution = resolve_follow_speed_limit(follow_request);
+  EXPECT_FALSE(follow_resolution.active);
+
+  const auto stage_resolution = resolve_overtake_speed_reference(
+    OvertakeSpeedReferenceRequest{
+      OvertakeSpeedStage::ShiftOut, 11.11, 11.11, 2.71, 2.57, 0.50});
+  EXPECT_NEAR(stage_resolution.reference_speed_mps, 3.21, 1e-12);
+  EXPECT_TRUE(stage_resolution.front_cap_applied);
 }
 
 TEST(V2XFrontHazardHold, HoldsAcrossDropoutAndRefreshesDeadline)
@@ -553,6 +593,7 @@ TEST(V2XOvertakeCoreSpeed, ReleasesFrontCapOnlyAfterTargetIsNoLongerAhead)
   OvertakeFrontCapReleaseRequest request;
   request.pass_phase = true;
   request.lateral_complete = true;
+  request.lateral_separation_latched = false;
   request.target_seen = true;
   request.target_longitudinal_m = 0.01;
   EXPECT_FALSE(can_release_overtake_front_cap(request));
@@ -565,6 +606,23 @@ TEST(V2XOvertakeCoreSpeed, ReleasesFrontCapOnlyAfterTargetIsNoLongerAhead)
   request.lateral_complete = false;
   EXPECT_FALSE(can_release_overtake_front_cap(request));
   request.lateral_complete = true;
+  request.pass_phase = false;
+  EXPECT_FALSE(can_release_overtake_front_cap(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, ReleasesFrontCapAfterPhysicalLateralSeparationLatch)
+{
+  OvertakeFrontCapReleaseRequest request;
+  request.pass_phase = true;
+  request.lateral_complete = false;
+  request.lateral_separation_latched = true;
+  request.target_seen = true;
+  request.target_longitudinal_m = 8.0;
+  EXPECT_TRUE(can_release_overtake_front_cap(request));
+
+  request.target_seen = false;
+  EXPECT_FALSE(can_release_overtake_front_cap(request));
+  request.target_seen = true;
   request.pass_phase = false;
   EXPECT_FALSE(can_release_overtake_front_cap(request));
 }
@@ -761,6 +819,30 @@ TEST(V2XOvertakeCoreSpeed, LiveCorridorLossDoesNotAbortLaterallyCommittedPass)
 
   request.pass_phase = false;
   EXPECT_TRUE(should_block_live_execution_corridor(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, NoGapVelocityLimitDoesNotOverrideCommittedPassBypass)
+{
+  GapPlannerNoGapVelocityLimitRequest request;
+  EXPECT_TRUE(should_apply_gap_planner_no_gap_velocity_limit(request));
+
+  request.follow_behavior = true;
+  EXPECT_FALSE(should_apply_gap_planner_no_gap_velocity_limit(request));
+
+  request.follow_limit_enabled = true;
+  EXPECT_TRUE(should_apply_gap_planner_no_gap_velocity_limit(request));
+
+  request.follow_behavior = false;
+  request.overtake_fallback_target = true;
+  EXPECT_FALSE(should_apply_gap_planner_no_gap_velocity_limit(request));
+
+  request.overtake_fallback_target = false;
+  request.committed_execution_corridor_bypass = true;
+  EXPECT_FALSE(should_apply_gap_planner_no_gap_velocity_limit(request));
+
+  request.follow_behavior = true;
+  request.follow_limit_enabled = true;
+  EXPECT_FALSE(should_apply_gap_planner_no_gap_velocity_limit(request));
 }
 
 TEST(V2XOvertakeCoreSpeed, DetectsLockedTargetCrossingSelectedPassSideOrdering)
@@ -1267,6 +1349,98 @@ TEST(V2XOvertakeCoreCompletion, RejectsInsufficientRelativeSpeed)
   const auto result = resolve_pass_completion(request);
   EXPECT_FALSE(result.feasible);
   EXPECT_TRUE(std::isinf(result.required_distance_m));
+}
+
+TEST(V2XOvertakeCoreCompletion, UsesExecutableUnlatchedStageSpeedAtHardCurve)
+{
+  const auto stage_speed = resolve_overtake_speed_reference(
+    OvertakeSpeedReferenceRequest{
+      OvertakeSpeedStage::ShiftOut, 11.11, 11.11, 4.14, 3.56, 0.5});
+  ASSERT_NEAR(stage_speed.reference_speed_mps, 4.64, 1e-12);
+
+  PassCompletionRequest request{
+    17.95, 0.5, 3.33, 4.14, stage_speed.reference_speed_mps,
+    0.5, 0.0, 0.0, 0.5};
+  const auto staged_result = resolve_pass_completion(request);
+  EXPECT_FALSE(staged_result.feasible);
+  EXPECT_NEAR(staged_result.available_distance_m, 17.45, 1e-12);
+  EXPECT_NEAR(staged_result.required_distance_m, 35.5424, 1e-6);
+
+  // The old nominal/reachable estimate looked feasible even though the
+  // unlatched controller could not command that speed.
+  request.planned_ego_speed_mps = 6.98;
+  const auto optimistic_result = resolve_pass_completion(request);
+  EXPECT_TRUE(optimistic_result.feasible);
+  EXPECT_NEAR(optimistic_result.required_distance_m, 6.98 * 3.83 / 2.84, 1e-6);
+}
+
+TEST(V2XOvertakeCoreCompletion, AcceptsMinimumRelativeSpeedWithinNumericTolerance)
+{
+  PassCompletionRequest request{
+    100.0, 0.0, 3.0, 4.14, 4.64 - 5e-10,
+    0.5, 0.0, 0.0, 0.5};
+
+  const auto result = resolve_pass_completion(request);
+  EXPECT_TRUE(result.feasible);
+  EXPECT_TRUE(std::isfinite(result.required_distance_m));
+}
+
+TEST(V2XOvertakeCoreCompletion, CurveEntryOverrideRequiresMeasuredSpeedAdvantage)
+{
+  CurveEntryCompletionOverrideRequest request{
+    true, false, true, 7.60, 11.0, 3.97, 4.82, 0.5};
+  EXPECT_FALSE(can_override_completion_for_curve_entry(request));
+
+  // The later 20260724 approach had a real 0.84 m/s advantage and may use
+  // the curve-specific entry exception even though the distance estimate is false.
+  request.ego_speed_mps = 6.35;
+  request.front_speed_mps = 5.51;
+  EXPECT_TRUE(can_override_completion_for_curve_entry(request));
+
+  request.front_distance_m = 23.83;
+  EXPECT_FALSE(can_override_completion_for_curve_entry(request));
+  request.front_distance_m = 11.0 + 5e-10;
+  EXPECT_TRUE(can_override_completion_for_curve_entry(request));
+
+  request.line_committed = true;
+  EXPECT_FALSE(can_override_completion_for_curve_entry(request));
+  request.line_committed = false;
+  request.front_vehicle_seen = false;
+  EXPECT_FALSE(can_override_completion_for_curve_entry(request));
+}
+
+TEST(V2XOvertakeCoreCompletion, CurveEntryOverrideUsesNumericTolerance)
+{
+  const CurveEntryCompletionOverrideRequest request{
+    true, false, true, 11.0 + 5e-10, 11.0, 4.64 - 5e-10, 4.14, 0.5};
+  EXPECT_TRUE(can_override_completion_for_curve_entry(request));
+}
+
+TEST(V2XOvertakeCoreCompletion, CompletionPolicyDoesNotLeakRawCurveEntryPermission)
+{
+  OvertakeCompletionPermissionRequest request;
+  request.curve_entry_allowed = true;
+  request.front_vehicle_seen = true;
+  request.front_distance_m = 7.60;
+  request.maximum_front_distance_m = 11.0;
+  request.ego_speed_mps = 3.97;
+  request.front_speed_mps = 4.82;
+  request.minimum_relative_speed_mps = 0.5;
+  EXPECT_FALSE(overtake_completion_policy_allows_execution(request));
+
+  request.ego_speed_mps = 6.35;
+  request.front_speed_mps = 5.51;
+  EXPECT_TRUE(overtake_completion_policy_allows_execution(request));
+
+  request.ego_speed_mps = 0.0;
+  request.front_speed_mps = 10.0;
+  request.curve_entry_allowed = false;
+  request.completion_feasible = true;
+  EXPECT_TRUE(overtake_completion_policy_allows_execution(request));
+
+  request.completion_feasible = false;
+  request.curve_continuation_allowed = true;
+  EXPECT_TRUE(overtake_completion_policy_allows_execution(request));
 }
 
 TEST(V2XOvertakeCoreGuardPhase, KeepsEntryDistanceAndPrepareCheckBeforePassStarts)

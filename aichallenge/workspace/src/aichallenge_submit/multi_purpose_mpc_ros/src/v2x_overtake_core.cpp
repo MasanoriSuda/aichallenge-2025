@@ -141,6 +141,14 @@ FollowSpeedLimitResolution resolve_follow_speed_limit(
   return {true, true, clearance_recovery, moving_speed_margin_mps, speed_limit_mps};
 }
 
+bool should_apply_generic_follow_cap(
+  const GenericFollowCapOwnershipRequest & request) noexcept
+{
+  return
+    !request.front_matches_locked_target ||
+    (!request.shiftout_active && !request.pass_active);
+}
+
 OvertakeSpeedReferenceResolution resolve_overtake_speed_reference(
   const OvertakeSpeedReferenceRequest & request)
 {
@@ -211,9 +219,14 @@ bool is_shiftout_complete(const ShiftOutCompletionRequest & request) noexcept
 bool can_release_overtake_front_cap(
   const OvertakeFrontCapReleaseRequest & request) noexcept
 {
-  return request.pass_phase && request.lateral_complete && request.target_seen &&
-         std::isfinite(request.target_longitudinal_m) &&
-         request.target_longitudinal_m <= 0.0;
+  if (
+    !request.pass_phase || !request.target_seen ||
+    !std::isfinite(request.target_longitudinal_m))
+  {
+    return false;
+  }
+  return request.lateral_separation_latched ||
+         (request.lateral_complete && request.target_longitudinal_m <= 0.0);
 }
 
 bool can_exclude_locked_target_from_front_overlap(
@@ -291,6 +304,16 @@ bool should_block_live_execution_corridor(
 {
   return request.raw_corridor_blocked &&
          !(request.pass_phase && request.lateral_clearance_latched);
+}
+
+bool should_apply_gap_planner_no_gap_velocity_limit(
+  const GapPlannerNoGapVelocityLimitRequest & request) noexcept
+{
+  const bool behavior_allows_limit =
+    !request.follow_behavior || request.follow_limit_enabled;
+  return behavior_allows_limit &&
+         !request.overtake_fallback_target &&
+         !request.committed_execution_corridor_bypass;
 }
 
 bool locked_target_intrudes_pass_side(
@@ -772,7 +795,10 @@ PassCompletionResolution resolve_pass_completion(const PassCompletionRequest & r
     std::max(0.0, request.distance_to_hard_curve_m - request.curve_buffer_m);
   resolution.relative_speed_mps = request.planned_ego_speed_mps - request.front_speed_mps;
   resolution.required_distance_m = std::numeric_limits<double>::infinity();
-  if (resolution.relative_speed_mps < request.minimum_relative_speed_mps) {
+  if (
+    resolution.relative_speed_mps + 1e-9 <
+    request.minimum_relative_speed_mps)
+  {
     return resolution;
   }
 
@@ -784,6 +810,44 @@ PassCompletionResolution resolve_pass_completion(const PassCompletionRequest & r
   resolution.feasible =
     resolution.available_distance_m + 1e-9 >= resolution.required_distance_m;
   return resolution;
+}
+
+bool can_override_completion_for_curve_entry(
+  const CurveEntryCompletionOverrideRequest & request) noexcept
+{
+  if (
+    !request.curve_entry_allowed || request.line_committed ||
+    !request.front_vehicle_seen ||
+    !std::isfinite(request.front_distance_m) || request.front_distance_m < 0.0 ||
+    !std::isfinite(request.maximum_front_distance_m) ||
+    request.maximum_front_distance_m < 0.0 ||
+    !std::isfinite(request.ego_speed_mps) || request.ego_speed_mps < 0.0 ||
+    !std::isfinite(request.front_speed_mps) || request.front_speed_mps < 0.0 ||
+    !std::isfinite(request.minimum_relative_speed_mps) ||
+    request.minimum_relative_speed_mps < 0.0)
+  {
+    return false;
+  }
+  return request.front_distance_m <= request.maximum_front_distance_m + 1e-9 &&
+         request.ego_speed_mps - request.front_speed_mps + 1e-9 >=
+         request.minimum_relative_speed_mps;
+}
+
+bool overtake_completion_policy_allows_execution(
+  const OvertakeCompletionPermissionRequest & request) noexcept
+{
+  return
+    request.completion_feasible || request.curve_continuation_allowed ||
+    can_override_completion_for_curve_entry(
+    CurveEntryCompletionOverrideRequest{
+      request.curve_entry_allowed,
+      request.line_committed,
+      request.front_vehicle_seen,
+      request.front_distance_m,
+      request.maximum_front_distance_m,
+      request.ego_speed_mps,
+      request.front_speed_mps,
+      request.minimum_relative_speed_mps});
 }
 
 OvertakeGuardPhaseResolution resolve_overtake_guard_phase(

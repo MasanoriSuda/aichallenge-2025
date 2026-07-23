@@ -547,14 +547,14 @@ mpc:
   ## ---------- ver3 ------------- ##
   ## Lap1: 53s, Lap2: 47s
 
-  v_max: 40.0   # km/h
+  v_max: 40.0
   domain_v_max:
-    1: 20.0
-    2: 40.0
-    3: 40.0
-  domain_start_v_max_duration: 15.0 # [s] compensate inner-lane advantage at side-by-side start
+    1: 40.0
+    2: 20.0
+    3: 20.0
+  domain_start_v_max_duration: 15.0
   domain_start_v_max:
-    2: 40.0
+    2: 20.0
   ay_max: 30.0  # m/s^2, maximum lateral acceleration in curves
   Q:  [50000.0, 1500000.0, 30000.0]
   QN: [30000.0, 30000.0, 300.0]

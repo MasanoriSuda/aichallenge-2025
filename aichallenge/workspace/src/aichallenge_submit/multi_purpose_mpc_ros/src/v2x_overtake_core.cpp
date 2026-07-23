@@ -530,6 +530,15 @@ ForwardCourseProjection project_forward_course_progress(
     throw std::invalid_argument(
             "Course projection distances must be finite with positive lookahead/cross-track");
   }
+  if (
+    request.preferred_target_path_progress_m.has_value() &&
+    (!finite(request.preferred_target_path_progress_m.value()) ||
+    !finite(request.max_target_path_progress_change_m) ||
+    request.max_target_path_progress_change_m < 0.0))
+  {
+    throw std::invalid_argument(
+            "Preferred target progress requires finite progress and non-negative change");
+  }
   for (const auto & point : path) {
     if (!finite(point.x_m) || !finite(point.y_m)) {
       throw std::invalid_argument("Course projection path points must be finite");
@@ -552,6 +561,20 @@ ForwardCourseProjection project_forward_course_progress(
   const auto segment_length = [&](const std::size_t from, const std::size_t to) {
       return std::hypot(path[to].x_m - path[from].x_m, path[to].y_m - path[from].y_m);
     };
+  std::vector<double> path_progress_m(point_count, 0.0);
+  for (std::size_t index = 1U; index < point_count; ++index) {
+    const double length_m = segment_length(index - 1U, index);
+    path_progress_m[index] =
+      path_progress_m[index - 1U] +
+      (finite(length_m) && length_m > 1e-9 ? length_m : 0.0);
+  }
+  double total_path_length_m = path_progress_m.back();
+  if (request.circular) {
+    const double closure_length_m = segment_length(point_count - 1U, 0U);
+    if (finite(closure_length_m) && closure_length_m > 1e-9) {
+      total_path_length_m += closure_length_m;
+    }
+  }
 
   std::size_t anchor = request.circular ?
     request.start_index % point_count : std::min(request.start_index, point_count - 1U);
@@ -586,6 +609,7 @@ ForwardCourseProjection project_forward_course_progress(
     double tangent_x{};
     double tangent_y{};
     std::size_t segment_index{};
+    double path_progress_m{};
   };
   Candidate origin;
   Candidate target;
@@ -612,6 +636,20 @@ ForwardCourseProjection project_forward_course_progress(
       if (cross_track_m > request.max_cross_track_distance_m) {
         return;
       }
+      const double target_path_progress_m = path_progress_m[from] + along_m;
+      if (target_candidate && request.preferred_target_path_progress_m.has_value()) {
+        double progress_change_m =
+          target_path_progress_m - request.preferred_target_path_progress_m.value();
+        if (request.circular && total_path_length_m > 1e-9) {
+          progress_change_m = std::remainder(progress_change_m, total_path_length_m);
+        }
+        if (
+          std::abs(progress_change_m) >
+          request.max_target_path_progress_change_m + 1e-9)
+        {
+          return;
+        }
+      }
       double score = cross_track_m * cross_track_m;
       if (target_candidate && target_speed_mps > 0.25) {
         const double direction_alignment =
@@ -635,6 +673,7 @@ ForwardCourseProjection project_forward_course_progress(
         best.tangent_x = tangent_x;
         best.tangent_y = tangent_y;
         best.segment_index = from;
+        best.path_progress_m = target_path_progress_m;
       }
     };
 
@@ -680,7 +719,28 @@ ForwardCourseProjection project_forward_course_progress(
     request.target_vy_mps * target.tangent_y);
   result.cross_track_distance_m = target.cross_track_m;
   result.segment_index = target.segment_index;
+  result.target_path_progress_m = target.path_progress_m;
   return result;
+}
+
+bool is_relative_course_progress_continuous(
+  const RelativeCourseProgressContinuityRequest & request) noexcept
+{
+  if (
+    !std::isfinite(request.previous_longitudinal_m) ||
+    !std::isfinite(request.observed_longitudinal_m) ||
+    !std::isfinite(request.elapsed_sec) || request.elapsed_sec < 0.0 ||
+    !std::isfinite(request.ego_speed_mps) || request.ego_speed_mps < 0.0 ||
+    !std::isfinite(request.target_speed_mps) || request.target_speed_mps < 0.0 ||
+    !std::isfinite(request.tolerance_m) || request.tolerance_m < 0.0)
+  {
+    return false;
+  }
+  const double maximum_change_m =
+    request.tolerance_m +
+    (request.ego_speed_mps + request.target_speed_mps) * request.elapsed_sec;
+  return std::abs(request.observed_longitudinal_m - request.previous_longitudinal_m) <=
+         maximum_change_m + 1e-9;
 }
 
 PassCompletionResolution resolve_pass_completion(const PassCompletionRequest & request)

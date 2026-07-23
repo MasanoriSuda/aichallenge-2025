@@ -26,6 +26,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::FrontDangerAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::FrontDangerActionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::FrontHazardHoldRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ForwardCourseProjectionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::RelativeCourseProgressContinuityRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::FollowSpeedLimitRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSpeedReferenceRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSpeedStage;
@@ -105,6 +106,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_inner_curve_overtake;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_active_hard_curve_continuation;
 using multi_purpose_mpc_ros::v2x_overtake_core::advance_prediction_time;
 using multi_purpose_mpc_ros::v2x_overtake_core::project_forward_course_progress;
+using multi_purpose_mpc_ros::v2x_overtake_core::is_relative_course_progress_continuous;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_vehicle_relative_lateral;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_completion;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_target_continuity;
@@ -1063,6 +1065,47 @@ TEST(V2XOvertakeCoreProgress, DetectsFrontAroundHairpinOutsideEgoTangent)
   EXPECT_NEAR(result.along_track_speed_mps, 3.0, 1e-12);
 }
 
+TEST(V2XOvertakeCoreProgress, KeepsTargetOnPreviousTopologicalBranch)
+{
+  const std::vector<CoursePoint> path{
+    {0.0, 0.0}, {10.0, 0.0}, {10.0, 1.0},
+    {0.0, 1.0}, {0.0, 2.0}, {10.0, 2.0}};
+  ForwardCourseProjectionRequest request;
+  request.start_index = 0U;
+  request.origin_x_m = 1.0;
+  request.origin_y_m = 0.0;
+  request.target_x_m = 8.0;
+  request.target_y_m = 1.2;
+  request.target_vx_mps = 1.0;
+  request.lookbehind_distance_m = 2.0;
+  request.lookahead_distance_m = 40.0;
+  request.max_cross_track_distance_m = 3.0;
+
+  const auto nearest_result = project_forward_course_progress(path, request);
+  ASSERT_TRUE(nearest_result.valid);
+  EXPECT_EQ(nearest_result.segment_index, 4U);
+  EXPECT_NEAR(nearest_result.forward_distance_m, 29.0, 1e-12);
+
+  request.preferred_target_path_progress_m = 8.0;
+  request.max_target_path_progress_change_m = 3.0;
+  const auto continuous_result = project_forward_course_progress(path, request);
+  ASSERT_TRUE(continuous_result.valid);
+  EXPECT_EQ(continuous_result.segment_index, 0U);
+  EXPECT_NEAR(continuous_result.forward_distance_m, 7.0, 1e-12);
+  EXPECT_NEAR(continuous_result.target_path_progress_m, 8.0, 1e-12);
+}
+
+TEST(V2XOvertakeCoreProgress, RejectsImpossibleRelativeProgressJump)
+{
+  EXPECT_TRUE(is_relative_course_progress_continuous(
+    RelativeCourseProgressContinuityRequest{0.2, -0.1, 0.1, 6.0, 5.0, 1.5}));
+  EXPECT_FALSE(is_relative_course_progress_continuous(
+    RelativeCourseProgressContinuityRequest{22.1, -0.7, 0.05, 3.0, 5.5, 1.5}));
+  EXPECT_FALSE(is_relative_course_progress_continuous(
+    RelativeCourseProgressContinuityRequest{
+      1.0, 2.0, std::numeric_limits<double>::quiet_NaN(), 3.0, 5.5, 1.5}));
+}
+
 TEST(V2XOvertakeCoreProgress, WrapsAcrossCircularCourseEnd)
 {
   const std::vector<CoursePoint> path{
@@ -1083,6 +1126,13 @@ TEST(V2XOvertakeCoreProgress, WrapsAcrossCircularCourseEnd)
   ASSERT_TRUE(result.valid);
   EXPECT_NEAR(result.forward_distance_m, 10.0, 1e-12);
   EXPECT_EQ(result.segment_index, 0U);
+
+  request.preferred_target_path_progress_m = 39.0;
+  request.max_target_path_progress_change_m = 3.0;
+  const auto continuous_result = project_forward_course_progress(path, request);
+  ASSERT_TRUE(continuous_result.valid);
+  EXPECT_NEAR(continuous_result.forward_distance_m, 10.0, 1e-12);
+  EXPECT_EQ(continuous_result.segment_index, 0U);
 }
 
 TEST(V2XOvertakeCoreProgress, WrapsAcrossLegacyDuplicateCircularEndpoint)

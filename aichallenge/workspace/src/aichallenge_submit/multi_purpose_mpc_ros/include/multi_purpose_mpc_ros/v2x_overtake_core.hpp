@@ -452,6 +452,8 @@ struct ForwardCourseProjectionRequest
   double lookbehind_distance_m{};
   double lookahead_distance_m{};
   double max_cross_track_distance_m{};
+  std::optional<double> preferred_target_path_progress_m;
+  double max_target_path_progress_change_m{std::numeric_limits<double>::infinity()};
 };
 
 struct ForwardCourseProjection
@@ -462,14 +464,35 @@ struct ForwardCourseProjection
   double along_track_speed_mps{};
   double cross_track_distance_m{};
   std::size_t segment_index{};
+  double target_path_progress_m{};
 };
 
 /// Project ego and a V2X target onto the same bounded section of a reference
 /// polyline. The result is path progress, not the target's Cartesian distance
 /// in the ego tangent frame. A circular path may wrap once, but the bounded
 /// lookahead prevents selecting a spatially close branch far around the lap.
+/// When a previous target progress is supplied, candidates on a topologically
+/// distant branch are rejected even if that branch is closer in Cartesian
+/// distance.
 ForwardCourseProjection project_forward_course_progress(
   const std::vector<CoursePoint> & path, const ForwardCourseProjectionRequest & request);
+
+struct RelativeCourseProgressContinuityRequest
+{
+  double previous_longitudinal_m{};
+  double observed_longitudinal_m{};
+  double elapsed_sec{};
+  double ego_speed_mps{};
+  double target_speed_mps{};
+  double tolerance_m{};
+};
+
+/// Reject a relative course-progress change that cannot be explained by the
+/// distance either vehicle could have travelled since the last accepted
+/// observation. This keeps a nearby hairpin branch from appearing as an
+/// instantaneous completed pass.
+bool is_relative_course_progress_continuous(
+  const RelativeCourseProgressContinuityRequest & request) noexcept;
 
 struct PassCompletionRequest
 {

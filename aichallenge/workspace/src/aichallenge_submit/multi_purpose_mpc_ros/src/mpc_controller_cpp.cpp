@@ -110,6 +110,7 @@ namespace stuck_recovery = ::multi_purpose_mpc_ros::stuck_recovery;
 constexpr double kEps = 1e-12;
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kV2XSourceFutureToleranceSec = 0.05;
+constexpr double kV2XCourseProgressContinuityToleranceM = 1.5;
 
 double clip(const double value, const double min_value, const double max_value)
 {
@@ -1774,6 +1775,7 @@ struct V2XBehaviorOutput
   std::string target_vehicle_id;
   bool locked_target_seen{false};
   bool locked_target_position_jump{false};
+  bool locked_target_course_progress_rejected{false};
   bool locked_target_pass_side_intrusion{false};
   double locked_target_longitudinal{std::numeric_limits<double>::infinity()};
   double locked_target_lateral{std::numeric_limits<double>::infinity()};
@@ -2584,7 +2586,9 @@ struct V2XGapPlanner
             vehicle.vy,
             start_grid_lookbehind,
             2.0 * start_grid_span,
-            10.0});
+            10.0,
+            std::nullopt,
+            std::numeric_limits<double>::infinity()});
         if (
           !projection.valid ||
           !v2x_overtake_core::is_start_grid_boundary_candidate(
@@ -3518,6 +3522,7 @@ struct MPC
     start_grid_breakout_target_id_.reset();
     start_grid_breakout_side_sign_ = 0;
     reset_start_grid_dynamic_decision();
+    v2x_course_progress_tracks_.clear();
     overtake_locked_target_ey_.reset();
     overtake_locked_side_sign_ = 0;
     overtake_entry_speed_.reset();
@@ -3619,6 +3624,7 @@ struct MPC
     start_grid_breakout_target_id_.reset();
     start_grid_breakout_side_sign_ = 0;
     reset_start_grid_dynamic_decision();
+    v2x_course_progress_tracks_.clear();
     overtake_locked_target_ey_.reset();
     overtake_locked_side_sign_ = 0;
     overtake_entry_speed_.reset();
@@ -3842,6 +3848,17 @@ struct MPC
     const bool track_low_speed_clearance =
       continuing_low_speed_avoidance || low_speed_shift_control_was_active_;
 
+    for (auto it = v2x_course_progress_tracks_.begin();
+      it != v2x_course_progress_tracks_.end();)
+    {
+      const double age_sec = now_sec - it->second.receipt_sec;
+      if (!std::isfinite(age_sec) || age_sec < 0.0 || age_sec > cfg.v2x_gap.timeout_sec) {
+        it = v2x_course_progress_tracks_.erase(it);
+      } else {
+        ++it;
+      }
+    }
+
     for (const auto & vehicle : vehicles) {
       const double self_distance =
         std::hypot(vehicle.x - model->temporal_state.x, vehicle.y - model->temporal_state.y);
@@ -3858,29 +3875,60 @@ struct MPC
       const double lateral = -sin_yaw * dx + cos_yaw * dy;
       const double vehicle_speed = std::hypot(vehicle.vx, vehicle.vy);
       v2x_overtake_core::ForwardCourseProjection course_projection;
+      bool course_progress_continuity_constrained = false;
       if (
         cfg.v2x_behavior.front_progress_detection_enabled &&
         !course_progress_path.empty() && std::isfinite(vehicle.x) &&
         std::isfinite(vehicle.y) && std::isfinite(vehicle.vx) &&
         std::isfinite(vehicle.vy))
       {
+        v2x_overtake_core::ForwardCourseProjectionRequest projection_request{
+          static_cast<std::size_t>(std::max(0, model->wp_id)),
+          model->reference_path->circular,
+          model->temporal_state.x,
+          model->temporal_state.y,
+          vehicle.x,
+          vehicle.y,
+          vehicle.vx,
+          vehicle.vy,
+          cfg.v2x_behavior.front_progress_lookbehind_distance,
+          front_detection_distance,
+          corridor_lateral_range,
+          std::nullopt,
+          std::numeric_limits<double>::infinity()};
+        const auto progress_track = v2x_course_progress_tracks_.find(vehicle.id);
+        if (progress_track != v2x_course_progress_tracks_.end()) {
+          const double source_delta_sec =
+            vehicle.stamp_sec - progress_track->second.source_stamp_sec;
+          const double receipt_delta_sec =
+            vehicle.receipt_sec - progress_track->second.receipt_sec;
+          if (
+            std::isfinite(source_delta_sec) && source_delta_sec >= -kEps &&
+            std::isfinite(receipt_delta_sec) && receipt_delta_sec >= -kEps &&
+            receipt_delta_sec <= cfg.v2x_gap.timeout_sec + kEps)
+          {
+            projection_request.preferred_target_path_progress_m =
+              progress_track->second.path_progress_m;
+            projection_request.max_target_path_progress_change_m =
+              kV2XCourseProgressContinuityToleranceM +
+              std::max(1.0, vehicle_speed) * std::max(0.0, source_delta_sec);
+            course_progress_continuity_constrained = true;
+          }
+        }
         course_projection = v2x_overtake_core::project_forward_course_progress(
-          course_progress_path,
-          v2x_overtake_core::ForwardCourseProjectionRequest{
-            static_cast<std::size_t>(std::max(0, model->wp_id)),
-            model->reference_path->circular,
-            model->temporal_state.x,
-            model->temporal_state.y,
-            vehicle.x,
-            vehicle.y,
-            vehicle.vx,
-            vehicle.vy,
-            cfg.v2x_behavior.front_progress_lookbehind_distance,
-            front_detection_distance,
-            corridor_lateral_range});
+          course_progress_path, projection_request);
+        if (course_projection.valid) {
+          v2x_course_progress_tracks_[vehicle.id] = V2XCourseProgressTrack{
+            course_projection.target_path_progress_m,
+            vehicle.stamp_sec,
+            vehicle.receipt_sec};
+        }
       }
       const bool use_course_progress =
         cfg.v2x_behavior.front_progress_detection_enabled && course_projection.valid;
+      const bool course_progress_continuity_rejected =
+        cfg.v2x_behavior.front_progress_detection_enabled &&
+        course_progress_continuity_constrained && !course_projection.valid;
       const bool front_geometry_valid =
         cfg.v2x_behavior.front_progress_detection_enabled ?
         use_course_progress : std::abs(lateral) <= corridor_lateral_range;
@@ -3907,20 +3955,30 @@ struct MPC
         !overtake_line_state_.target_vehicle_id.empty() &&
         vehicle.id == overtake_line_state_.target_vehicle_id)
       {
-        output.locked_target_seen = true;
         output.locked_target_position_jump = vehicle.position_jump;
-        output.locked_target_longitudinal = front_longitudinal;
-        output.locked_target_lateral = front_lateral;
-        output.locked_target_relative_lateral = front_relative_lateral;
-        output.locked_target_speed = front_vehicle_speed;
-        output.locked_target_receipt_sec = vehicle.receipt_sec;
+        output.locked_target_course_progress_rejected =
+          course_progress_continuity_rejected;
+        output.locked_target_seen = front_geometry_valid;
+        if (front_geometry_valid) {
+          output.locked_target_longitudinal = front_longitudinal;
+          output.locked_target_lateral = front_lateral;
+          output.locked_target_relative_lateral = front_relative_lateral;
+          output.locked_target_speed = front_vehicle_speed;
+          output.locked_target_receipt_sec = vehicle.receipt_sec;
+        }
       }
       if (overtake_line_state_.inter_vehicle_corridor) {
-        if (vehicle.id == overtake_line_state_.lower_boundary_vehicle_id) {
+        if (
+          front_geometry_valid &&
+          vehicle.id == overtake_line_state_.lower_boundary_vehicle_id)
+        {
           output.lower_boundary_vehicle_seen = true;
           output.lower_boundary_vehicle_longitudinal = front_longitudinal;
         }
-        if (vehicle.id == overtake_line_state_.upper_boundary_vehicle_id) {
+        if (
+          front_geometry_valid &&
+          vehicle.id == overtake_line_state_.upper_boundary_vehicle_id)
+        {
           output.upper_boundary_vehicle_seen = true;
           output.upper_boundary_vehicle_longitudinal = front_longitudinal;
         }
@@ -6538,6 +6596,13 @@ struct MPC
   }
 
   BicycleModel * model{};
+  struct V2XCourseProgressTrack
+  {
+    double path_progress_m{};
+    double source_stamp_sec{};
+    double receipt_sec{};
+  };
+
   MpcConfig cfg;
   start_grid_grace::Guard start_grid_grace_guard_;
   V2XGapPlanner * gap_planner{};
@@ -6548,6 +6613,7 @@ struct MPC
   bool v2x_race_session_active_{true};
   V2XBehaviorState v2x_behavior_state{V2XBehaviorState::Cruise};
   V2XBehaviorOutput last_v2x_behavior_output_;
+  std::unordered_map<std::string, V2XCourseProgressTrack> v2x_course_progress_tracks_;
   bool v2x_behavior_state_initialized{false};
   double last_v2x_behavior_state_change_sec{-std::numeric_limits<double>::infinity()};
   double last_v2x_behavior_debug_log_sec_{std::numeric_limits<double>::quiet_NaN()};
@@ -6887,9 +6953,33 @@ private:
     }
 
     const bool phase_active = overtake_line_state_.phase != OvertakeLinePhase::Idle;
+    bool locked_target_progress_continuous = behavior_output.locked_target_seen;
+    if (
+      phase_active && locked_target_progress_continuous &&
+      std::isfinite(overtake_line_state_.target_last_seen_sec) &&
+      std::isfinite(overtake_line_state_.target_last_longitudinal))
+    {
+      const double target_speed =
+        std::isfinite(behavior_output.locked_target_speed) ?
+        std::max(0.0, behavior_output.locked_target_speed) :
+        (std::isfinite(overtake_line_state_.target_last_speed) ?
+        std::max(0.0, overtake_line_state_.target_last_speed) : 0.0);
+      locked_target_progress_continuous =
+        v2x_overtake_core::is_relative_course_progress_continuous(
+        v2x_overtake_core::RelativeCourseProgressContinuityRequest{
+          overtake_line_state_.target_last_longitudinal,
+          behavior_output.locked_target_longitudinal,
+          std::max(0.0, now_sec - overtake_line_state_.target_last_seen_sec),
+          std::max(0.0, current_speed_mps_),
+          target_speed,
+          kV2XCourseProgressContinuityToleranceM});
+    }
+    const bool locked_target_progress_rejected =
+      behavior_output.locked_target_course_progress_rejected ||
+      (behavior_output.locked_target_seen && !locked_target_progress_continuous);
     const bool locked_target_matches =
       !phase_active || overtake_line_state_.target_vehicle_id.empty() ||
-      (behavior_output.locked_target_seen &&
+      (locked_target_progress_continuous &&
       !behavior_output.locked_target_position_jump &&
       behavior_output.target_vehicle_id == overtake_line_state_.target_vehicle_id);
     const bool solver_cooldown_active = v2x_overtake_core::is_solver_cooldown_active(
@@ -6932,7 +7022,7 @@ private:
         std::max(0.0, behavior_output.front_speed) :
         std::numeric_limits<double>::infinity();
     }
-    if (behavior_output.locked_target_seen) {
+    if (locked_target_progress_continuous) {
       overtake_line_state_.target_last_seen_sec = now_sec;
       overtake_line_state_.target_last_longitudinal =
         behavior_output.locked_target_longitudinal;
@@ -6956,7 +7046,7 @@ private:
           behavior_output.lower_boundary_vehicle_longitudinal,
           behavior_output.upper_boundary_vehicle_longitudinal,
           return_clear_distance}) :
-      behavior_output.locked_target_seen &&
+      locked_target_progress_continuous &&
       behavior_output.locked_target_longitudinal <= -return_clear_distance;
     if (rear_clear_observed) {
       if (!std::isfinite(overtake_line_state_.rear_clear_since_sec)) {
@@ -7043,7 +7133,7 @@ private:
       overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
       overtake_line_state_.phase == OvertakeLinePhase::Pass) {
       const bool active_execution_latched =
-        behavior_output.locked_target_seen &&
+        locked_target_progress_continuous &&
         behavior_output.locked_target_longitudinal > 0.0 &&
         !behavior_output.locked_target_pass_side_intrusion &&
         !behavior_output.overtake_execution_corridor_blocked &&
@@ -7079,8 +7169,8 @@ private:
         overtake_core::ContinuityRequest{
           overtake_solver_recovery_active_, behavior_output.locked_target_position_jump,
           rear_clear_observed, rear_clear_confirmed, behavior_output.has_side_vehicle,
-          behavior_output.locked_target_seen, target_age, line_cfg.target_hold_sec,
-          behavior_output.locked_target_seen &&
+          locked_target_progress_continuous, target_age, line_cfg.target_hold_sec,
+          locked_target_progress_continuous &&
           behavior_output.locked_target_longitudinal <= 0.0,
           active_execution_latched});
       if (continuity == overtake_core::ContinuityAction::Return) {
@@ -7093,7 +7183,8 @@ private:
           behavior_output.overtake_execution_corridor_blocked ?
           "live overtake corridor unavailable" :
           behavior_output.locked_target_position_jump ? "locked target position jump" :
-          behavior_output.locked_target_seen ?
+          locked_target_progress_rejected ? "locked target course progress discontinuity" :
+          locked_target_progress_continuous ?
           "locked target no longer executable" : "locked target stale or lost";
         transition_overtake_line_phase(
           OvertakeLinePhase::Recovery, now_sec, current_ey,
@@ -7230,7 +7321,7 @@ private:
       overtake_core::has_reached_pass_side_lateral_goal(
         current_ey, feasible_goal_for_phase, shiftout_lateral_tolerance,
         overtake_line_state_.pass_side_sign);
-    const bool locked_target_seen = behavior_output.locked_target_seen;
+    const bool locked_target_seen = locked_target_progress_continuous;
     const double locked_target_longitudinal = locked_target_seen ?
       behavior_output.locked_target_longitudinal :
       overtake_line_state_.target_last_longitudinal;
@@ -8678,7 +8769,7 @@ private:
           "completion_avail=%.2f, completion_req=%.2f, completion_rel=%.2f, "
           "gap=%d, gap_hold=%d, hold_rem=%.2f, fallback=%d, "
           "cooldown=%d, pass=%d, side_clear=%.2f, plan_N=%d, target=%s, locked_seen=%d, "
-          "locked_s=%.2f, left_gap=%d, right_gap=%d, solver_failures=%d, "
+          "course_reject=%d, locked_s=%.2f, left_gap=%d, right_gap=%d, solver_failures=%d, "
           "left_reason=%s, right_reason=%s, reason=%s, block=%s",
           to_string(desired_state), to_string(final_state), output.allow_gap_planner ? 1 : 0,
           output.target_velocity_limit, output.desired_velocity,
@@ -8751,6 +8842,7 @@ private:
           output.overtake_cooldown_active ? 1 : 0, output.overtake_pass_side_sign,
           output.overtake_side_clearance, output.overtake_plan_N,
           output.target_vehicle_id.c_str(), output.locked_target_seen ? 1 : 0,
+          output.locked_target_course_progress_rejected ? 1 : 0,
           output.locked_target_longitudinal,
           output.overtake_left_gap_available ? 1 : 0,
           output.overtake_right_gap_available ? 1 : 0, infeasibility_counter,

@@ -9,7 +9,10 @@ description = "Offline trajectory editor for the Automotive AI Challenge"
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
-dependencies = ["PyYAML>=6.0"]
+dependencies = [
+  "defusedxml>=0.7.1",
+  "PyYAML>=6.0",
+]
 
 [project.scripts]
 kaleidoscope = "kaleidoscope.trajectory_editor:main"

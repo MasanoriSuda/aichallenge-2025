@@ -19,6 +19,8 @@ from tkinter import ttk
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 import xml.etree.ElementTree as ET
 
+from defusedxml import ElementTree as DefusedET
+
 from .trajectory_clearance import AdjustmentParameters
 from .trajectory_clearance import AdjustmentResult
 from .trajectory_clearance import AdjustmentStatus
@@ -328,7 +330,7 @@ def _tags(element: ET.Element) -> Dict[str, str]:
 
 
 def load_osm_rails(path: Path) -> List[List[Point]]:
-    tree = ET.parse(path)
+    tree = DefusedET.parse(path)
     root = tree.getroot()
 
     nodes: Dict[str, Point] = {}

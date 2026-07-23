@@ -108,6 +108,7 @@ python3 -m kaleidoscope
 
 - Python 3.10以降
 - Tkinter（Ubuntuでは`python3-tk`）
+- defusedxml
 - PyYAML
 
 editor GUIは`rclpy`、ROS topic、ROS serviceを必要としません。NumPy、pandas、

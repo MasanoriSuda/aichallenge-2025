@@ -53,6 +53,7 @@ the sibling packages and data are present.
 
 - Python 3.10 or newer
 - Tkinter (`python3-tk` on Ubuntu)
+- defusedxml
 - PyYAML
 
 The editor GUI does not require `rclpy`, ROS topics, or ROS services. Before

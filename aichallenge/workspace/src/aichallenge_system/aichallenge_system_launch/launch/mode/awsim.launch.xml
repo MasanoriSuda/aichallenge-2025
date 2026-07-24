@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <launch>
     <arg name="capture" default="false"/>
-    <arg name="rosbag" default="false"/>
+    <arg name="rosbag" default="true"/>
     <arg name="autostart_orchestrator_params" default="$(find-pkg-share autostart_orchestrator_py)/config/autostart_orchestrator.param.yaml"/>
     <!-- Default start gating is based on vehicle state: READY/START. -->
     <!-- Keep the orchestrator process alive on success (so it will not terminate the entire launch). -->

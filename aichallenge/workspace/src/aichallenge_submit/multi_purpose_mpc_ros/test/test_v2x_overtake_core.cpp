@@ -76,6 +76,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::SideSelectionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CurveAttackSideRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SpeedLimitRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StallWatchdogRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassProgressWatchdogRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StartWindowStatus;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_effective_speed_limit;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_follow_speed_limit;
@@ -101,6 +102,10 @@ using multi_purpose_mpc_ros::v2x_overtake_core::side_only_target_requires_follow
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_unlatched_pass_closing_speed;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_line_horizon_progress;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_line_heading_reference;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  should_abort_active_overtake_for_static_wall;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  static_wall_clamp_requires_overtake_recovery;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_side_lateral_goal;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_corridor_center;
 using multi_purpose_mpc_ros::v2x_overtake_core::has_reached_pass_side_lateral_goal;
@@ -112,6 +117,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_inner_curve_overtake;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_active_hard_curve_continuation;
 using multi_purpose_mpc_ros::v2x_overtake_core::advance_prediction_time;
 using multi_purpose_mpc_ros::v2x_overtake_core::project_forward_course_progress;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  is_course_progress_continuity_constraint_rejection;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_relative_course_progress_continuous;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_vehicle_relative_lateral;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_completion;
@@ -122,6 +129,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::can_reacquire_during_return;
 using multi_purpose_mpc_ros::v2x_overtake_core::integrate_forward_distance;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_recovery_policy;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_stall_watchdog;
+using multi_purpose_mpc_ros::v2x_overtake_core::update_committed_pass_progress_watchdog;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_front_hazard_hold;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_front_danger_action;
 using multi_purpose_mpc_ros::v2x_overtake_core::arm_solver_cooldown;
@@ -137,11 +145,15 @@ using multi_purpose_mpc_ros::v2x_overtake_core::select_pass_side;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_curve_attack_side;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_v2x_behavior_session_active;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_start_low_speed_bypass;
+using multi_purpose_mpc_ros::v2x_overtake_core::StoppedCandidateConfirmationRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::update_stopped_candidate_confirmation;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_yield_overtake_line_to_stopped_bypass;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_reachable_low_speed_pass_side;
 using multi_purpose_mpc_ros::v2x_overtake_core::has_entered_low_speed_pass_corridor;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_low_speed_pass_velocity;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_low_speed_shift_steering;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  limit_low_speed_shift_steering_by_lateral_acceleration;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_low_speed_direct_control_velocity;
 using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedDirectControlPhase;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_low_speed_shift_complete;
@@ -593,7 +605,7 @@ TEST(V2XOvertakeCoreSpeed, ReleasesFrontCapOnlyAfterTargetIsNoLongerAhead)
   OvertakeFrontCapReleaseRequest request;
   request.pass_phase = true;
   request.lateral_complete = true;
-  request.lateral_separation_latched = false;
+  request.lateral_separation_clear = false;
   request.target_seen = true;
   request.target_longitudinal_m = 0.01;
   EXPECT_FALSE(can_release_overtake_front_cap(request));
@@ -610,16 +622,19 @@ TEST(V2XOvertakeCoreSpeed, ReleasesFrontCapOnlyAfterTargetIsNoLongerAhead)
   EXPECT_FALSE(can_release_overtake_front_cap(request));
 }
 
-TEST(V2XOvertakeCoreSpeed, ReleasesFrontCapAfterPhysicalLateralSeparationLatch)
+TEST(V2XOvertakeCoreSpeed, ReleasesFrontCapOnlyWhilePhysicalLateralSeparationIsClear)
 {
   OvertakeFrontCapReleaseRequest request;
   request.pass_phase = true;
   request.lateral_complete = false;
-  request.lateral_separation_latched = true;
+  request.lateral_separation_clear = true;
   request.target_seen = true;
   request.target_longitudinal_m = 8.0;
   EXPECT_TRUE(can_release_overtake_front_cap(request));
 
+  request.lateral_separation_clear = false;
+  EXPECT_FALSE(can_release_overtake_front_cap(request));
+  request.lateral_separation_clear = true;
   request.target_seen = false;
   EXPECT_FALSE(can_release_overtake_front_cap(request));
   request.target_seen = true;
@@ -843,6 +858,13 @@ TEST(V2XOvertakeCoreSpeed, NoGapVelocityLimitDoesNotOverrideCommittedPassBypass)
   request.follow_behavior = true;
   request.follow_limit_enabled = true;
   EXPECT_FALSE(should_apply_gap_planner_no_gap_velocity_limit(request));
+
+  request.committed_execution_corridor_bypass = false;
+  request.transient_execution_corridor_hold = true;
+  EXPECT_FALSE(should_apply_gap_planner_no_gap_velocity_limit(request));
+
+  request.transient_execution_corridor_hold = false;
+  EXPECT_TRUE(should_apply_gap_planner_no_gap_velocity_limit(request));
 }
 
 TEST(V2XOvertakeCoreSpeed, DetectsLockedTargetCrossingSelectedPassSideOrdering)
@@ -970,6 +992,38 @@ TEST(V2XOvertakeCoreSpeed, BuildsHeadingReferenceFromExplicitLateralLine)
 
   request.delta_s_m = 0.0;
   EXPECT_DOUBLE_EQ(resolve_overtake_line_heading_reference(request), 0.0);
+}
+
+TEST(V2XOvertakeCoreSpeed, AbortsActiveLineForUnvalidatedOrContactingActualFootprint)
+{
+  EXPECT_FALSE(should_abort_active_overtake_for_static_wall(
+    false, true, true, false, true));
+  EXPECT_FALSE(should_abort_active_overtake_for_static_wall(
+    true, false, false, true, true));
+  EXPECT_FALSE(should_abort_active_overtake_for_static_wall(
+    true, true, true, false, false));
+  EXPECT_TRUE(should_abort_active_overtake_for_static_wall(
+    true, true, false, false, false));
+  EXPECT_TRUE(should_abort_active_overtake_for_static_wall(
+    true, true, true, true, false));
+  EXPECT_TRUE(should_abort_active_overtake_for_static_wall(
+    true, true, true, false, true));
+}
+
+TEST(V2XOvertakeCoreSpeed, AbortsWhenStaticClampReintroducesExcessLateralAcceleration)
+{
+  EXPECT_TRUE(static_wall_clamp_requires_overtake_recovery(
+    true, true, 6.001, 6.0));
+  EXPECT_TRUE(static_wall_clamp_requires_overtake_recovery(
+    true, true, std::numeric_limits<double>::infinity(), 6.0));
+  EXPECT_FALSE(static_wall_clamp_requires_overtake_recovery(
+    true, true, 6.0, 6.0));
+  EXPECT_FALSE(static_wall_clamp_requires_overtake_recovery(
+    true, false, 95.0, 6.0));
+  EXPECT_FALSE(static_wall_clamp_requires_overtake_recovery(
+    false, true, 95.0, 6.0));
+  EXPECT_FALSE(static_wall_clamp_requires_overtake_recovery(
+    true, true, 95.0, 0.0));
 }
 
 TEST(V2XOvertakeCoreSpeed, PlacesPassGoalBeyondLockedTargetOnSelectedSide)
@@ -1295,6 +1349,59 @@ TEST(V2XOvertakeCoreProgress, RejectsTargetOutsideBoundedCourseSection)
   request.max_cross_track_distance_m = 2.0;
 
   EXPECT_FALSE(project_forward_course_progress(path, request).valid);
+}
+
+TEST(V2XOvertakeCoreProgress, ClassifiesOnlyConstraintSpecificProjectionFailureAsDiscontinuity)
+{
+  const std::vector<CoursePoint> path{
+    {0.0, 0.0}, {10.0, 0.0}, {10.0, 1.0},
+    {0.0, 1.0}, {0.0, 2.0}, {10.0, 2.0}};
+  ForwardCourseProjectionRequest request;
+  request.start_index = 0U;
+  request.origin_x_m = 1.0;
+  request.target_x_m = 8.0;
+  request.target_y_m = 1.2;
+  request.target_vx_mps = 1.0;
+  request.lookbehind_distance_m = 2.0;
+  request.lookahead_distance_m = 40.0;
+  request.max_cross_track_distance_m = 3.0;
+
+  const auto unconstrained = project_forward_course_progress(path, request);
+  ASSERT_TRUE(unconstrained.valid);
+
+  request.preferred_target_path_progress_m = 100.0;
+  request.max_target_path_progress_change_m = 0.1;
+  const auto constrained = project_forward_course_progress(path, request);
+  ASSERT_FALSE(constrained.valid);
+  EXPECT_TRUE(is_course_progress_continuity_constraint_rejection(
+    true, constrained.valid, unconstrained.valid));
+
+  EXPECT_FALSE(is_course_progress_continuity_constraint_rejection(
+    false, constrained.valid, unconstrained.valid));
+  EXPECT_FALSE(is_course_progress_continuity_constraint_rejection(
+    true, true, unconstrained.valid));
+}
+
+TEST(V2XOvertakeCoreProgress, BoundedTargetLossIsNotProgressDiscontinuity)
+{
+  const std::vector<CoursePoint> path{{0.0, 0.0}, {10.0, 0.0}, {20.0, 0.0}};
+  ForwardCourseProjectionRequest request;
+  request.start_index = 0U;
+  request.origin_x_m = 1.0;
+  request.target_x_m = 30.0;
+  request.target_vx_mps = 1.0;
+  request.lookbehind_distance_m = 2.0;
+  request.lookahead_distance_m = 10.0;
+  request.max_cross_track_distance_m = 2.0;
+
+  const auto unconstrained = project_forward_course_progress(path, request);
+  ASSERT_FALSE(unconstrained.valid);
+  request.preferred_target_path_progress_m = 5.0;
+  request.max_target_path_progress_change_m = 3.0;
+  const auto constrained = project_forward_course_progress(path, request);
+  ASSERT_FALSE(constrained.valid);
+  EXPECT_FALSE(is_course_progress_continuity_constraint_rejection(
+    true, constrained.valid, unconstrained.valid));
 }
 
 TEST(V2XOvertakeCoreStartGrid, AdmitsNearbyRearBoundaryWithinConfiguredWindow)
@@ -1969,6 +2076,83 @@ TEST(V2XOvertakeCoreLowSpeedBypass, CandidateOwnsLineWhenLowSpeedBypassIsActive)
   EXPECT_TRUE(should_yield_overtake_line_to_stopped_bypass(request));
 }
 
+TEST(V2XOvertakeCoreLowSpeedBypass, ConfirmsOnlyDistinctConsecutiveStoppedObservations)
+{
+  StoppedCandidateConfirmationRequest request;
+  request.candidate_present = true;
+  request.observation_sec = 10.0;
+  request.required_count = 3;
+  request.maximum_observation_gap_sec = 0.2;
+
+  auto result = update_stopped_candidate_confirmation(request);
+  EXPECT_EQ(result.observation_count, 1);
+  EXPECT_FALSE(result.confirmed);
+
+  request.same_candidate = true;
+  request.previous_count = result.observation_count;
+  request.previous_observation_sec = result.last_observation_sec;
+  result = update_stopped_candidate_confirmation(request);
+  EXPECT_EQ(result.observation_count, 1);
+  EXPECT_FALSE(result.confirmed);
+
+  request.previous_count = result.observation_count;
+  request.previous_observation_sec = result.last_observation_sec;
+  request.observation_sec = 10.05;
+  result = update_stopped_candidate_confirmation(request);
+  EXPECT_EQ(result.observation_count, 2);
+  EXPECT_FALSE(result.confirmed);
+
+  request.previous_count = result.observation_count;
+  request.previous_observation_sec = result.last_observation_sec;
+  request.observation_sec = 10.10;
+  result = update_stopped_candidate_confirmation(request);
+  EXPECT_EQ(result.observation_count, 3);
+  EXPECT_TRUE(result.confirmed);
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, ResetsStoppedConfirmationOnLossIdChangeOrGap)
+{
+  StoppedCandidateConfirmationRequest request;
+  request.candidate_present = false;
+  request.same_candidate = true;
+  request.observation_sec = 10.10;
+  request.previous_observation_sec = 10.05;
+  request.previous_count = 2;
+  request.required_count = 3;
+  request.maximum_observation_gap_sec = 0.2;
+  auto result = update_stopped_candidate_confirmation(request);
+  EXPECT_EQ(result.observation_count, 0);
+  EXPECT_FALSE(result.confirmed);
+
+  request.candidate_present = true;
+  request.same_candidate = false;
+  result = update_stopped_candidate_confirmation(request);
+  EXPECT_EQ(result.observation_count, 1);
+  EXPECT_FALSE(result.confirmed);
+
+  request.same_candidate = true;
+  request.previous_count = 2;
+  request.previous_observation_sec = 10.0;
+  request.observation_sec = 10.25;
+  result = update_stopped_candidate_confirmation(request);
+  EXPECT_EQ(result.observation_count, 1);
+  EXPECT_FALSE(result.confirmed);
+
+  request.observation_sec = std::numeric_limits<double>::quiet_NaN();
+  result = update_stopped_candidate_confirmation(request);
+  EXPECT_EQ(result.observation_count, 0);
+  EXPECT_FALSE(result.confirmed);
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, ActiveDirectControlExcludesGenericOvertakeLine)
+{
+  StoppedVehicleLineOwnershipRequest request;
+  request.low_speed_direct_control_active = true;
+  request.overtake_behavior_active = true;
+
+  EXPECT_TRUE(should_yield_overtake_line_to_stopped_bypass(request));
+}
+
 TEST(V2XOvertakeCoreLowSpeedBypass, SelectedGenericOvertakeKeepsLineForCloseStoppedFront)
 {
   StoppedVehicleLineOwnershipRequest request;
@@ -2050,6 +2234,25 @@ TEST(V2XOvertakeCoreSide, LowSpeedShiftSteersTowardNegativeLateralTarget)
   EXPECT_DOUBLE_EQ(resolve_low_speed_shift_steering(request), -0.559);
 }
 
+TEST(V2XOvertakeCoreSide, LowSpeedShiftSteeringRespectsActualSpeedLateralAcceleration)
+{
+  const double limited = limit_low_speed_shift_steering_by_lateral_acceleration(
+    -0.445, 7.191, 1.087, 6.0, 1.5);
+  const double expected =
+    -std::atan(1.087 * 6.0 / (7.191 * 7.191)) / 1.5;
+  EXPECT_NEAR(limited, expected, 1e-12);
+  EXPECT_NEAR(limited, -0.0835, 1e-3);
+
+  EXPECT_DOUBLE_EQ(
+    limit_low_speed_shift_steering_by_lateral_acceleration(
+      -0.3, 0.0, 1.087, 6.0, 1.5),
+    -0.3);
+  EXPECT_THROW(
+    limit_low_speed_shift_steering_by_lateral_acceleration(
+      -0.3, 7.191, 1.087, 6.0, 0.0),
+    std::invalid_argument);
+}
+
 TEST(V2XOvertakeCoreSide, SelectsPhaseSpecificDirectControlVelocity)
 {
   EXPECT_DOUBLE_EQ(resolve_low_speed_direct_control_velocity(
@@ -2059,7 +2262,9 @@ TEST(V2XOvertakeCoreSide, SelectsPhaseSpecificDirectControlVelocity)
   EXPECT_DOUBLE_EQ(resolve_low_speed_direct_control_velocity(
       LowSpeedDirectControlPhase::Rejoin, 3.0, 6.0, 4.0, 11.1), 4.0);
   EXPECT_DOUBLE_EQ(resolve_low_speed_direct_control_velocity(
-      LowSpeedDirectControlPhase::Pass, 3.0, 12.0, 4.0, 10.0), 10.0);
+    LowSpeedDirectControlPhase::Pass, 3.0, 12.0, 4.0, 10.0), 10.0);
+  EXPECT_DOUBLE_EQ(resolve_low_speed_direct_control_velocity(
+    LowSpeedDirectControlPhase::Pass, 3.0, 6.0, 4.0, 0.0), 0.0);
   EXPECT_THROW(resolve_low_speed_direct_control_velocity(
       LowSpeedDirectControlPhase::Pass, 3.0, -1.0, 4.0, 11.1), std::invalid_argument);
 }
@@ -2359,6 +2564,89 @@ TEST(V2XOvertakeCoreStallWatchdog, RejectsInvalidConfigurationAndObservation)
   const auto resolution = update_stall_watchdog(request);
   EXPECT_FALSE(resolution.observation_accepted);
   EXPECT_FALSE(std::isfinite(resolution.stall_since_sec));
+}
+
+TEST(V2XOvertakeCorePassProgressWatchdog, TimesOutAtDistanceBoundaryWithoutMinimumProgress)
+{
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  CommittedPassProgressWatchdogRequest request;
+  request.active = true;
+  request.target_longitudinal_m = 8.0;
+  request.traveled_distance_m = 0.0;
+  request.best_target_longitudinal_m = nan;
+  request.progress_checkpoint_distance_m = nan;
+  request.minimum_progress_m = 0.5;
+  request.maximum_without_progress_distance_m = 32.0;
+
+  auto resolution = update_committed_pass_progress_watchdog(request);
+  EXPECT_TRUE(resolution.observation_accepted);
+  EXPECT_FALSE(resolution.timed_out);
+  EXPECT_DOUBLE_EQ(resolution.best_target_longitudinal_m, 8.0);
+  EXPECT_DOUBLE_EQ(resolution.progress_checkpoint_distance_m, 0.0);
+
+  request.best_target_longitudinal_m = resolution.best_target_longitudinal_m;
+  request.progress_checkpoint_distance_m = resolution.progress_checkpoint_distance_m;
+  request.target_longitudinal_m = 7.51;
+  request.traveled_distance_m = 31.999;
+  resolution = update_committed_pass_progress_watchdog(request);
+  EXPECT_FALSE(resolution.progressed);
+  EXPECT_FALSE(resolution.timed_out);
+
+  request.traveled_distance_m = 32.0;
+  resolution = update_committed_pass_progress_watchdog(request);
+  EXPECT_TRUE(resolution.timed_out);
+}
+
+TEST(V2XOvertakeCorePassProgressWatchdog, MinimumProgressRearmsDistanceBudget)
+{
+  CommittedPassProgressWatchdogRequest request;
+  request.active = true;
+  request.target_longitudinal_m = 7.5;
+  request.traveled_distance_m = 20.0;
+  request.best_target_longitudinal_m = 8.0;
+  request.progress_checkpoint_distance_m = 0.0;
+  request.minimum_progress_m = 0.5;
+  request.maximum_without_progress_distance_m = 32.0;
+
+  auto resolution = update_committed_pass_progress_watchdog(request);
+  EXPECT_TRUE(resolution.progressed);
+  EXPECT_FALSE(resolution.timed_out);
+  EXPECT_DOUBLE_EQ(resolution.best_target_longitudinal_m, 7.5);
+  EXPECT_DOUBLE_EQ(resolution.progress_checkpoint_distance_m, 20.0);
+
+  request.best_target_longitudinal_m = resolution.best_target_longitudinal_m;
+  request.progress_checkpoint_distance_m = resolution.progress_checkpoint_distance_m;
+  request.target_longitudinal_m = 7.4;
+  request.traveled_distance_m = 51.999;
+  EXPECT_FALSE(update_committed_pass_progress_watchdog(request).timed_out);
+  request.traveled_distance_m = 52.0;
+  EXPECT_TRUE(update_committed_pass_progress_watchdog(request).timed_out);
+}
+
+TEST(V2XOvertakeCorePassProgressWatchdog, PausesInactiveAndRebaselinesAfterRollback)
+{
+  CommittedPassProgressWatchdogRequest request;
+  request.active = false;
+  request.target_longitudinal_m = 8.0;
+  request.traveled_distance_m = 40.0;
+  request.best_target_longitudinal_m = 7.0;
+  request.progress_checkpoint_distance_m = 0.0;
+  request.minimum_progress_m = 0.5;
+  request.maximum_without_progress_distance_m = 32.0;
+
+  auto resolution = update_committed_pass_progress_watchdog(request);
+  EXPECT_FALSE(resolution.observation_accepted);
+  EXPECT_FALSE(resolution.timed_out);
+  EXPECT_DOUBLE_EQ(resolution.best_target_longitudinal_m, 7.0);
+
+  request.active = true;
+  request.traveled_distance_m = 1.0;
+  request.progress_checkpoint_distance_m = 20.0;
+  resolution = update_committed_pass_progress_watchdog(request);
+  EXPECT_TRUE(resolution.observation_accepted);
+  EXPECT_FALSE(resolution.timed_out);
+  EXPECT_DOUBLE_EQ(resolution.best_target_longitudinal_m, 8.0);
+  EXPECT_DOUBLE_EQ(resolution.progress_checkpoint_distance_m, 1.0);
 }
 
 TEST(V2XOvertakeCoreRecovery, ArmsExtendsAndExpiresSolverCooldownAtBoundary)

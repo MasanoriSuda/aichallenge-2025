@@ -162,14 +162,14 @@ struct OvertakeFrontCapReleaseRequest
 {
   bool pass_phase{false};
   bool lateral_complete{false};
-  bool lateral_separation_latched{false};
+  bool lateral_separation_clear{false};
   bool target_seen{false};
   double target_longitudinal_m{};
 };
 
-/// Release the front-speed cap after a persistent physical lateral-separation
-/// latch, or when the locked target is observed no longer ahead after
-/// lateral ShiftOut has completed.
+/// Release the front-speed cap while physical lateral separation is currently
+/// clear, or when the locked target is observed no longer ahead after lateral
+/// ShiftOut has completed. A historical continuity latch is not sufficient.
 bool can_release_overtake_front_cap(
   const OvertakeFrontCapReleaseRequest & request) noexcept;
 
@@ -296,12 +296,14 @@ struct GapPlannerNoGapVelocityLimitRequest
   bool follow_limit_enabled{false};
   bool overtake_fallback_target{false};
   bool committed_execution_corridor_bypass{false};
+  bool transient_execution_corridor_hold{false};
 };
 
 /// Keep the generic no-gap speed limit for normal planner ownership, including
-/// an explicitly enabled Follow policy. A laterally committed Pass that already
-/// treats live-corridor loss as diagnostic-only must not retain only the
-/// planner's no-gap longitudinal limit.
+/// an explicitly enabled Follow policy. A laterally committed Pass that treats
+/// live-corridor loss as diagnostic-only, or an active line retained by the
+/// bounded transient-loss hold, must not retain only the planner's no-gap
+/// longitudinal limit.
 bool should_apply_gap_planner_no_gap_velocity_limit(
   const GapPlannerNoGapVelocityLimitRequest & request) noexcept;
 
@@ -383,6 +385,23 @@ struct OvertakeLineHeadingReferenceRequest
 /// explicit line shifts across the base trajectory.
 double resolve_overtake_line_heading_reference(
   const OvertakeLineHeadingReferenceRequest & request) noexcept;
+
+/// Fail closed when the current vehicle footprint cannot be validated against
+/// the static wall map during an executing ShiftOut or Pass.
+///
+/// wall_geometry_available is explicit so deployments without the optional
+/// static grid preserve their existing behavior.
+bool should_abort_active_overtake_for_static_wall(
+  bool active_execution_phase, bool wall_geometry_available,
+  bool sample_valid, bool sample_out_of_map, bool sample_has_contact) noexcept;
+
+/// A static-wall clamp may move a target after the normal lateral-acceleration
+/// limiter has run. Abort the executing line when that adjusted target again
+/// exceeds the configured acceleration limit instead of publishing an
+/// unrealizable heading jump.
+bool static_wall_clamp_requires_overtake_recovery(
+  bool active_execution_phase, bool static_target_adjusted,
+  double required_lateral_accel_mps2, double maximum_lateral_accel_mps2) noexcept;
 
 struct PassSideLateralGoalRequest
 {
@@ -505,6 +524,13 @@ struct ForwardCourseProjection
 /// distance.
 ForwardCourseProjection project_forward_course_progress(
   const std::vector<CoursePoint> & path, const ForwardCourseProjectionRequest & request);
+
+/// Distinguish a real rejection by the target-progress continuity constraint
+/// from a target that is unavailable even to the same unconstrained bounded
+/// projection. The unconstrained result is diagnostic-only.
+bool is_course_progress_continuity_constraint_rejection(
+  bool continuity_constraint_applied, bool constrained_projection_valid,
+  bool unconstrained_projection_valid) noexcept;
 
 struct RelativeCourseProgressContinuityRequest
 {
@@ -793,10 +819,35 @@ struct LowSpeedBypassCandidateRequest
 /// the future course corridor to start lateral planning before center overlap.
 bool can_start_low_speed_bypass(const LowSpeedBypassCandidateRequest & request) noexcept;
 
+struct StoppedCandidateConfirmationRequest
+{
+  bool candidate_present{false};
+  bool same_candidate{false};
+  double observation_sec{std::numeric_limits<double>::quiet_NaN()};
+  double previous_observation_sec{std::numeric_limits<double>::quiet_NaN()};
+  int previous_count{0};
+  int required_count{1};
+  double maximum_observation_gap_sec{};
+};
+
+struct StoppedCandidateConfirmationResult
+{
+  int observation_count{0};
+  bool confirmed{false};
+  double last_observation_sec{std::numeric_limits<double>::quiet_NaN()};
+};
+
+/// Count only distinct, consecutive V2X observations for the same stopped
+/// vehicle. Repeated control ticks over one received sample do not advance the
+/// confirmation.
+StoppedCandidateConfirmationResult update_stopped_candidate_confirmation(
+  const StoppedCandidateConfirmationRequest & request) noexcept;
+
 struct StoppedVehicleLineOwnershipRequest
 {
   bool low_speed_behavior_active{false};
   bool low_speed_candidate{false};
+  bool low_speed_direct_control_active{false};
   bool overtake_behavior_active{false};
   bool has_front_vehicle{false};
   double front_distance_m{std::numeric_limits<double>::infinity()};
@@ -876,6 +927,12 @@ struct LowSpeedShiftSteeringRequest
 /// heading-error signs as the spatial bicycle model.
 double resolve_low_speed_shift_steering(
   const LowSpeedShiftSteeringRequest & request);
+
+/// Limit a controller-side steering target so the published tire-angle command
+/// cannot exceed the configured lateral acceleration at the measured speed.
+double limit_low_speed_shift_steering_by_lateral_acceleration(
+  double target_steering_rad, double current_speed_mps, double wheelbase_m,
+  double maximum_lateral_acceleration_mps2, double steering_command_gain);
 
 bool is_low_speed_shift_complete(
   double current_lateral_m, double current_heading_error_rad,
@@ -957,6 +1014,32 @@ struct ForwardDistanceResolution
 /// Invalid/rolled-back/late observations do not change the accumulated distance.
 /// Configuration errors throw std::invalid_argument.
 ForwardDistanceResolution integrate_forward_distance(const ForwardDistanceRequest & request);
+
+struct CommittedPassProgressWatchdogRequest
+{
+  bool active{false};
+  double target_longitudinal_m{};
+  double traveled_distance_m{};
+  double best_target_longitudinal_m{std::numeric_limits<double>::quiet_NaN()};
+  double progress_checkpoint_distance_m{std::numeric_limits<double>::quiet_NaN()};
+  double minimum_progress_m{};
+  double maximum_without_progress_distance_m{};
+};
+
+struct CommittedPassProgressWatchdogResolution
+{
+  double best_target_longitudinal_m{std::numeric_limits<double>::quiet_NaN()};
+  double progress_checkpoint_distance_m{std::numeric_limits<double>::quiet_NaN()};
+  bool observation_accepted{false};
+  bool progressed{false};
+  bool timed_out{false};
+};
+
+/// Abort a committed Pass that consumes too much course distance without
+/// reducing the locked target's ahead distance. Inactive or invalid
+/// observations pause the watchdog. A phase-distance rollback re-baselines it.
+CommittedPassProgressWatchdogResolution update_committed_pass_progress_watchdog(
+  const CommittedPassProgressWatchdogRequest & request) noexcept;
 
 enum class RecoveryExitReason
 {

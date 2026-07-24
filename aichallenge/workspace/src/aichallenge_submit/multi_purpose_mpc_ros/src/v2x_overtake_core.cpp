@@ -225,7 +225,7 @@ bool can_release_overtake_front_cap(
   {
     return false;
   }
-  return request.lateral_separation_latched ||
+  return request.lateral_separation_clear ||
          (request.lateral_complete && request.target_longitudinal_m <= 0.0);
 }
 
@@ -313,7 +313,8 @@ bool should_apply_gap_planner_no_gap_velocity_limit(
     !request.follow_behavior || request.follow_limit_enabled;
   return behavior_allows_limit &&
          !request.overtake_fallback_target &&
-         !request.committed_execution_corridor_bypass;
+         !request.committed_execution_corridor_bypass &&
+         !request.transient_execution_corridor_hold;
 }
 
 bool locked_target_intrudes_pass_side(
@@ -422,6 +423,31 @@ double resolve_overtake_line_heading_reference(
     tangential_scale = std::copysign(1e-3, tangential_scale == 0.0 ? 1.0 : tangential_scale);
   }
   return std::atan2(lateral_gradient, tangential_scale);
+}
+
+bool should_abort_active_overtake_for_static_wall(
+  const bool active_execution_phase, const bool wall_geometry_available,
+  const bool sample_valid, const bool sample_out_of_map,
+  const bool sample_has_contact) noexcept
+{
+  return active_execution_phase && wall_geometry_available &&
+         (!sample_valid || sample_out_of_map || sample_has_contact);
+}
+
+bool static_wall_clamp_requires_overtake_recovery(
+  const bool active_execution_phase, const bool static_target_adjusted,
+  const double required_lateral_accel_mps2,
+  const double maximum_lateral_accel_mps2) noexcept
+{
+  if (
+    !active_execution_phase || !static_target_adjusted ||
+    !std::isfinite(maximum_lateral_accel_mps2) ||
+    maximum_lateral_accel_mps2 <= 0.0)
+  {
+    return false;
+  }
+  return !std::isfinite(required_lateral_accel_mps2) ||
+         required_lateral_accel_mps2 > maximum_lateral_accel_mps2;
 }
 
 double resolve_pass_side_lateral_goal(const PassSideLateralGoalRequest & request) noexcept
@@ -746,6 +772,15 @@ ForwardCourseProjection project_forward_course_progress(
   return result;
 }
 
+bool is_course_progress_continuity_constraint_rejection(
+  const bool continuity_constraint_applied, const bool constrained_projection_valid,
+  const bool unconstrained_projection_valid) noexcept
+{
+  return continuity_constraint_applied &&
+         !constrained_projection_valid &&
+         unconstrained_projection_valid;
+}
+
 bool is_relative_course_progress_continuous(
   const RelativeCourseProgressContinuityRequest & request) noexcept
 {
@@ -1065,10 +1100,48 @@ bool can_start_low_speed_bypass(const LowSpeedBypassCandidateRequest & request) 
          request.forward_distance_m <= request.maximum_entry_distance_m;
 }
 
+StoppedCandidateConfirmationResult update_stopped_candidate_confirmation(
+  const StoppedCandidateConfirmationRequest & request) noexcept
+{
+  StoppedCandidateConfirmationResult result;
+  if (
+    !request.candidate_present || !std::isfinite(request.observation_sec) ||
+    request.previous_count < 0 || request.required_count < 1 ||
+    !std::isfinite(request.maximum_observation_gap_sec) ||
+    request.maximum_observation_gap_sec < 0.0)
+  {
+    return result;
+  }
+
+  if (
+    request.same_candidate && std::isfinite(request.previous_observation_sec) &&
+    request.observation_sec == request.previous_observation_sec)
+  {
+    result.observation_count = request.previous_count;
+    result.confirmed = result.observation_count >= request.required_count;
+    result.last_observation_sec = request.previous_observation_sec;
+    return result;
+  }
+
+  const bool observation_contiguous =
+    request.same_candidate && std::isfinite(request.previous_observation_sec) &&
+    request.observation_sec > request.previous_observation_sec &&
+    request.observation_sec - request.previous_observation_sec <=
+    request.maximum_observation_gap_sec;
+  result.observation_count = observation_contiguous ?
+    std::min(request.required_count, request.previous_count + 1) : 1;
+  result.confirmed = result.observation_count >= request.required_count;
+  result.last_observation_sec = request.observation_sec;
+  return result;
+}
+
 bool should_yield_overtake_line_to_stopped_bypass(
   const StoppedVehicleLineOwnershipRequest & request) noexcept
 {
-  if (request.low_speed_behavior_active || request.low_speed_candidate) {
+  if (
+    request.low_speed_behavior_active || request.low_speed_candidate ||
+    request.low_speed_direct_control_active)
+  {
     return true;
   }
   const bool stopped_front =
@@ -1196,6 +1269,35 @@ double resolve_low_speed_shift_steering(
     target_steering, -request.max_steering_rad, request.max_steering_rad);
 }
 
+double limit_low_speed_shift_steering_by_lateral_acceleration(
+  const double target_steering_rad, const double current_speed_mps,
+  const double wheelbase_m, const double maximum_lateral_acceleration_mps2,
+  const double steering_command_gain)
+{
+  if (
+    !std::isfinite(target_steering_rad) ||
+    !std::isfinite(current_speed_mps) || current_speed_mps < 0.0 ||
+    !std::isfinite(wheelbase_m) || wheelbase_m <= 0.0 ||
+    !std::isfinite(maximum_lateral_acceleration_mps2) ||
+    maximum_lateral_acceleration_mps2 < 0.0 ||
+    !std::isfinite(steering_command_gain) || steering_command_gain <= 0.0)
+  {
+    throw std::invalid_argument("invalid low-speed lateral acceleration limit request");
+  }
+  if (current_speed_mps <= std::numeric_limits<double>::epsilon()) {
+    return target_steering_rad;
+  }
+
+  const double maximum_tire_angle_rad = std::atan(
+    wheelbase_m * maximum_lateral_acceleration_mps2 /
+    (current_speed_mps * current_speed_mps));
+  const double maximum_controller_angle_rad =
+    maximum_tire_angle_rad / steering_command_gain;
+  return std::clamp(
+    target_steering_rad, -maximum_controller_angle_rad,
+    maximum_controller_angle_rad);
+}
+
 bool is_low_speed_shift_complete(
   const double current_lateral_m, const double current_heading_error_rad,
   const double target_lateral_m, const double lateral_tolerance_m,
@@ -1304,6 +1406,56 @@ ForwardDistanceResolution integrate_forward_distance(const ForwardDistanceReques
   resolution.accumulated_distance_m +=
     std::max(0.0, request.forward_speed_mps) * request.delta_sec;
   resolution.observation_accepted = true;
+  return resolution;
+}
+
+CommittedPassProgressWatchdogResolution update_committed_pass_progress_watchdog(
+  const CommittedPassProgressWatchdogRequest & request) noexcept
+{
+  CommittedPassProgressWatchdogResolution resolution{
+    request.best_target_longitudinal_m,
+    request.progress_checkpoint_distance_m,
+    false,
+    false,
+    false};
+  if (
+    !request.active ||
+    !std::isfinite(request.target_longitudinal_m) ||
+    !std::isfinite(request.traveled_distance_m) ||
+    request.traveled_distance_m < 0.0 ||
+    !std::isfinite(request.minimum_progress_m) ||
+    request.minimum_progress_m <= 0.0 ||
+    !std::isfinite(request.maximum_without_progress_distance_m) ||
+    request.maximum_without_progress_distance_m <= 0.0)
+  {
+    return resolution;
+  }
+
+  resolution.observation_accepted = true;
+  const bool previous_state_valid =
+    std::isfinite(request.best_target_longitudinal_m) &&
+    std::isfinite(request.progress_checkpoint_distance_m) &&
+    request.progress_checkpoint_distance_m >= 0.0 &&
+    request.traveled_distance_m >= request.progress_checkpoint_distance_m;
+  if (!previous_state_valid) {
+    resolution.best_target_longitudinal_m = request.target_longitudinal_m;
+    resolution.progress_checkpoint_distance_m = request.traveled_distance_m;
+    return resolution;
+  }
+
+  if (
+    request.target_longitudinal_m <=
+    request.best_target_longitudinal_m - request.minimum_progress_m)
+  {
+    resolution.best_target_longitudinal_m = request.target_longitudinal_m;
+    resolution.progress_checkpoint_distance_m = request.traveled_distance_m;
+    resolution.progressed = true;
+    return resolution;
+  }
+
+  resolution.timed_out =
+    request.traveled_distance_m - request.progress_checkpoint_distance_m >=
+    request.maximum_without_progress_distance_m;
   return resolution;
 }
 

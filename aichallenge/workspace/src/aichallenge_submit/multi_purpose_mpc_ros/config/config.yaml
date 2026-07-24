@@ -409,8 +409,10 @@ mpc:
   v2x_overtake_shiftout_adaptive_min_time_sec: 0.5 # [s] avoid an unbounded cap as ShiftOut completes
   # The line goal normally latches the validated ego-center corridor midpoint. This separation
   # remains the fallback when a fresh planner corridor is unavailable at entry.
-  v2x_overtake_line_min_target_separation: 1.40 # [m] aggressive sim fallback: nearly one combined kart width
-  v2x_overtake_pass_front_overlap_lateral_clearance: 1.35 # [m] do not latch lateral clear at the old 1.15m overlap
+  v2x_overtake_line_min_target_separation: 1.50 # [m] combined kart width plus prediction margin
+  v2x_overtake_pass_front_overlap_lateral_clearance: 1.50 # [m] current physical clearance required before front-cap release
+  v2x_overtake_line_progress_watchdog_distance: 32.0 # [m] abort a committed single-target Pass with no longitudinal gain
+  v2x_overtake_line_progress_watchdog_min_progress: 0.5 # [m] target-distance reduction that rearms the distance watchdog
   v2x_overtake_completion_guard_enabled: true # require enough distance to clear the target before a hard hairpin
   v2x_overtake_completion_hard_curvature: 0.12 # [rad/m] hard hairpin boundary, separate from soft curve policy
   v2x_overtake_completion_lookahead_distance: 80.0 # [m] search limit for the next hard boundary
@@ -523,6 +525,9 @@ mpc:
   v2x_low_speed_avoidance_shift_lateral_tolerance: 0.4 # [m] settle near corridor target before MPC handoff
   v2x_low_speed_avoidance_shift_heading_tolerance: 0.2 # [rad] do not hand off while still heavily yawed
   v2x_low_speed_avoidance_shift_clear_hold_sec: 2.0 # [s] ignore brief front/side detection gaps before MPC handoff
+  v2x_low_speed_avoidance_stopped_confirmation_samples: 3 # distinct valid V2X speed samples; control-loop repeats do not count
+  v2x_low_speed_avoidance_stopped_confirmation_max_gap_sec: 1.0 # [s] reset confirmation after a V2X observation gap
+  v2x_low_speed_avoidance_max_lateral_accel: 6.0 # [m/s^2] actual-speed cap for direct shift steering
   v2x_low_speed_avoidance_max_front_speed: 0.2   # [m/s] only treat truly stopped vehicles as bypass targets
   v2x_low_speed_avoidance_min_prepare_distance: 3.0 # [m] sim: allow close stopped-front bypass when a corridor is feasible
   v2x_low_speed_avoidance_min_gap_width: 0.5     # [m] checked after wall clearance shrink

@@ -1459,6 +1459,27 @@ CommittedPassProgressWatchdogResolution update_committed_pass_progress_watchdog(
   return resolution;
 }
 
+RecoveryVelocityLimitResolution resolve_recovery_velocity_limit(
+  const RecoveryVelocityLimitRequest & request)
+{
+  validate_speed(request.configured_velocity_limit_mps, "Recovery velocity limit");
+  if (request.configured_velocity_limit_mps <= 0.0) {
+    throw std::invalid_argument("Recovery velocity limit must be positive");
+  }
+  if (
+    request.moving_follow_profile_available &&
+    (std::isnan(request.moving_follow_velocity_limit_mps) ||
+    request.moving_follow_velocity_limit_mps < 0.0))
+  {
+    throw std::invalid_argument(
+            "Recovery moving Follow velocity limit must be non-negative or positive infinity");
+  }
+  if (request.solver_recovery_active || !request.moving_follow_profile_available) {
+    return {request.configured_velocity_limit_mps, false};
+  }
+  return {request.moving_follow_velocity_limit_mps, true};
+}
+
 RecoveryPolicyResolution resolve_recovery_policy(const RecoveryPolicyRequest & request)
 {
   validate_speed(request.configured_velocity_limit_mps, "Recovery velocity limit");

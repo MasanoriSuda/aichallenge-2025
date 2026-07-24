@@ -127,6 +127,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::overtake_completion_policy_allow
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_target_continuity;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_reacquire_during_return;
 using multi_purpose_mpc_ros::v2x_overtake_core::integrate_forward_distance;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_recovery_velocity_limit;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_recovery_policy;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_stall_watchdog;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_committed_pass_progress_watchdog;
@@ -2461,6 +2462,47 @@ TEST(V2XOvertakeCoreRecovery, KeepsConfiguredVelocityCeilingAtZeroVehicleSpeed)
   const auto resolution = resolve_recovery_policy(recovery_request());
   EXPECT_DOUBLE_EQ(resolution.velocity_limit_mps, 3.0);
   EXPECT_EQ(resolution.exit_reason, RecoveryExitReason::Active);
+}
+
+TEST(V2XOvertakeCoreRecovery, UsesFixedVelocityWithoutMovingFollowObservation)
+{
+  const auto resolution = resolve_recovery_velocity_limit(
+    {3.0, false, std::numeric_limits<double>::infinity(), false});
+  EXPECT_DOUBLE_EQ(resolution.velocity_limit_mps, 3.0);
+  EXPECT_FALSE(resolution.moving_follow_profile_used);
+}
+
+TEST(V2XOvertakeCoreRecovery, DelegatesVelocityToMovingFollowProfile)
+{
+  auto resolution = resolve_recovery_velocity_limit({3.0, true, 4.25, false});
+  EXPECT_DOUBLE_EQ(resolution.velocity_limit_mps, 4.25);
+  EXPECT_TRUE(resolution.moving_follow_profile_used);
+
+  resolution = resolve_recovery_velocity_limit(
+    {3.0, true, std::numeric_limits<double>::infinity(), false});
+  EXPECT_TRUE(std::isinf(resolution.velocity_limit_mps));
+  EXPECT_TRUE(resolution.moving_follow_profile_used);
+}
+
+TEST(V2XOvertakeCoreRecovery, SolverRecoveryKeepsFixedVelocityCeiling)
+{
+  const auto resolution = resolve_recovery_velocity_limit({3.0, true, 4.25, true});
+  EXPECT_DOUBLE_EQ(resolution.velocity_limit_mps, 3.0);
+  EXPECT_FALSE(resolution.moving_follow_profile_used);
+}
+
+TEST(V2XOvertakeCoreRecovery, RejectsInvalidVelocitySelection)
+{
+  EXPECT_THROW(
+    resolve_recovery_velocity_limit({0.0, false, 4.25, false}),
+    std::invalid_argument);
+  EXPECT_THROW(
+    resolve_recovery_velocity_limit(
+      {3.0, true, std::numeric_limits<double>::quiet_NaN(), false}),
+    std::invalid_argument);
+  EXPECT_THROW(
+    resolve_recovery_velocity_limit({3.0, true, -0.1, false}),
+    std::invalid_argument);
 }
 
 TEST(V2XOvertakeCoreRecovery, ResolvesEveryBoundedExitReason)

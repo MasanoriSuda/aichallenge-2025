@@ -1070,6 +1070,29 @@ struct RecoveryPolicyResolution
   RecoveryExitReason exit_reason{RecoveryExitReason::Active};
 };
 
+struct RecoveryVelocityLimitRequest
+{
+  double configured_velocity_limit_mps{};
+  bool moving_follow_profile_available{false};
+  double moving_follow_velocity_limit_mps{std::numeric_limits<double>::infinity()};
+  bool solver_recovery_active{false};
+};
+
+struct RecoveryVelocityLimitResolution
+{
+  double velocity_limit_mps{};
+  bool moving_follow_profile_used{false};
+};
+
+/// Select the longitudinal ceiling used while an overtake line returns in Recovery.
+///
+/// A fresh moving target delegates longitudinal control to the normal Follow profile. An
+/// infinite Follow limit means the target is outside the normal Follow distance gate, so
+/// Recovery adds no extra ceiling. Solver recovery and unavailable target observations retain
+/// the configured fail-closed ceiling.
+RecoveryVelocityLimitResolution resolve_recovery_velocity_limit(
+  const RecoveryVelocityLimitRequest & request);
+
 /// Resolve the bounded overtake Recovery policy.
 ///
 /// The returned velocity limit is the configured ceiling and intentionally does not shrink with

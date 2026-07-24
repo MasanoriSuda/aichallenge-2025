@@ -1853,6 +1853,7 @@ struct OvertakeLineOutput
   double target_velocity_limit{std::numeric_limits<double>::infinity()};
   double closing_speed_limit{std::numeric_limits<double>::infinity()};
   bool front_cap_release_ready{false};
+  bool recovery_moving_follow_profile_used{false};
   double max_required_lateral_accel{0.0};
   bool lateral_accel_limited{false};
   bool wall_clearance_limited{false};
@@ -7709,7 +7710,16 @@ private:
       return output;
     }
 
+    const bool locked_target_seen = locked_target_progress_continuous;
+    const double locked_target_longitudinal = locked_target_seen ?
+      behavior_output.locked_target_longitudinal :
+      overtake_line_state_.target_last_longitudinal;
+    const double locked_target_speed =
+      locked_target_seen && std::isfinite(behavior_output.locked_target_speed) ?
+      behavior_output.locked_target_speed : overtake_line_state_.target_last_speed;
     v2x_overtake_core::RecoveryPolicyResolution recovery_policy;
+    v2x_overtake_core::RecoveryVelocityLimitResolution recovery_velocity_limit{
+      line_cfg.recovery_velocity, false};
     if (overtake_line_state_.phase == OvertakeLinePhase::Recovery) {
       recovery_policy = v2x_overtake_core::resolve_recovery_policy(
         v2x_overtake_core::RecoveryPolicyRequest{
@@ -7734,6 +7744,40 @@ private:
         reset_overtake_line_state(now_sec, reason);
         return output;
       }
+
+      const bool moving_follow_profile_available =
+        locked_target_seen &&
+        !behavior_output.locked_target_position_jump &&
+        std::isfinite(locked_target_longitudinal) &&
+        std::isfinite(locked_target_speed) &&
+        locked_target_speed >
+        std::max(0.0, cfg.v2x_behavior.moving_front_speed_threshold);
+      v2x_overtake_core::FollowSpeedLimitResolution moving_follow_limit;
+      if (moving_follow_profile_available) {
+        moving_follow_limit = v2x_overtake_core::resolve_follow_speed_limit(
+          v2x_overtake_core::FollowSpeedLimitRequest{
+            cfg.v2x_behavior.follow_speed_limit_enabled,
+            false,
+            locked_target_longitudinal,
+            cfg.v2x_behavior.follow_speed_limit_distance,
+            locked_target_speed,
+            cfg.v2x_behavior.moving_front_speed_threshold,
+            cfg.v2x_behavior.moving_follow_speed_margin,
+            cfg.v2x_behavior.moving_follow_target_distance,
+            cfg.v2x_behavior.moving_follow_recovery_speed_margin,
+            cfg.v2x_behavior.moving_follow_distance_gain,
+            front_distance_velocity_limit(locked_target_longitudinal),
+            cfg.v2x_behavior.follow_velocity,
+            cfg.v_max});
+      }
+      recovery_velocity_limit =
+        v2x_overtake_core::resolve_recovery_velocity_limit(
+        v2x_overtake_core::RecoveryVelocityLimitRequest{
+          recovery_policy.velocity_limit_mps,
+          moving_follow_profile_available,
+          moving_follow_limit.active && moving_follow_limit.moving_front ?
+          moving_follow_limit.speed_limit_mps : std::numeric_limits<double>::infinity(),
+          overtake_solver_recovery_active_});
     }
 
     if (overtake_line_state_.phase == OvertakeLinePhase::Idle) {
@@ -7745,13 +7789,6 @@ private:
       overtake_core::has_reached_pass_side_lateral_goal(
         current_ey, feasible_goal_for_phase, shiftout_lateral_tolerance,
         overtake_line_state_.pass_side_sign);
-    const bool locked_target_seen = locked_target_progress_continuous;
-    const double locked_target_longitudinal = locked_target_seen ?
-      behavior_output.locked_target_longitudinal :
-      overtake_line_state_.target_last_longitudinal;
-    const double locked_target_speed =
-      locked_target_seen && std::isfinite(behavior_output.locked_target_speed) ?
-      behavior_output.locked_target_speed : overtake_line_state_.target_last_speed;
     // A validated start-grid breakout already owns a collision-inflated side corridor and its
     // behavior layer applies the dedicated ShiftOut/Pass speed policy. Reapplying the generic
     // locked-target cap here kept the effective reference at front speed + 0.5 m/s even after
@@ -7816,7 +7853,9 @@ private:
       overtake_line_state_.phase == OvertakeLinePhase::Recovery &&
       (line_cfg.recovery_velocity_limit_enabled || overtake_solver_recovery_active_))
     {
-      output.target_velocity_limit = recovery_policy.velocity_limit_mps;
+      output.target_velocity_limit = recovery_velocity_limit.velocity_limit_mps;
+      output.recovery_moving_follow_profile_used =
+        recovery_velocity_limit.moving_follow_profile_used;
     }
     if (actual_wall_physical_contact) {
       output.target_velocity_limit = 0.0;
@@ -7970,7 +8009,8 @@ private:
           "OvertakeLine debug: phase=%s, side=%d, goal=%.2f, first_target=%.2f, "
           "first_epsi=%.2f, "
           "current_ey=%.2f, elapsed=%.2f, traveled=%.2f, stalled=%.2f, "
-          "v_ref=%.2f, v_limit=%.2f, closing=%.2f, cap_release=%d, cooldown=%.2f, "
+          "v_ref=%.2f, v_limit=%.2f, recovery_speed=%s, "
+          "closing=%.2f, cap_release=%d, cooldown=%.2f, "
           "max_lat_acc=%.2f, lat_limited=%d, wall_limited=%d, "
           "static_wall_limited=%d, static_margin_degraded=%d, "
           "static_wall_infeasible=%d, corridor_goal=%.2f, "
@@ -7980,6 +8020,7 @@ private:
           output.target_epsi.empty() ? 0.0 : output.target_epsi.front(), current_ey,
           phase_elapsed, overtake_line_state_.phase_traveled_m, recovery_stalled_sec,
           output.target_velocity_reference, output.target_velocity_limit,
+          output.recovery_moving_follow_profile_used ? "follow" : "fixed",
           output.closing_speed_limit,
           output.front_cap_release_ready ? 1 : 0,
           std::max(0.0, overtake_solver_cooldown_until_sec_ - now_sec),

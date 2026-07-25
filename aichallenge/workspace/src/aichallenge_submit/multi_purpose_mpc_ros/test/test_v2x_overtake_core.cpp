@@ -71,6 +71,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_wall_corridor_geometry;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_start_grid_boundary_candidate;
 using multi_purpose_mpc_ros::v2x_overtake_core::InterVehicleRearClearRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ReacquireRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::RecoveryReacquireRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SideSelectionReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::SideSelectionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CurveAttackSideRequest;
@@ -126,6 +127,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::can_override_completion_for_curv
 using multi_purpose_mpc_ros::v2x_overtake_core::overtake_completion_policy_allows_execution;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_target_continuity;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_reacquire_during_return;
+using multi_purpose_mpc_ros::v2x_overtake_core::can_reacquire_during_recovery;
 using multi_purpose_mpc_ros::v2x_overtake_core::integrate_forward_distance;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_recovery_velocity_limit;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_recovery_policy;
@@ -2410,6 +2412,43 @@ TEST(V2XOvertakeCoreContinuity, ReacquiresOnlySameTargetAndSideDuringEarlyReturn
   request.return_elapsed_sec = 0.20;
   request.return_progress = 0.26;
   EXPECT_FALSE(can_reacquire_during_return(request));
+}
+
+TEST(V2XOvertakeCoreContinuity, ReacquiresExecutableSameTargetGapDuringRecovery)
+{
+  RecoveryReacquireRequest request;
+  request.enabled = true;
+  request.phase_hold_elapsed = true;
+  request.stable_target_id = true;
+  request.same_target = true;
+  request.target_progress_continuous = true;
+  request.same_side = true;
+  request.target_rear_clear = false;
+  request.gap_available = true;
+  request.execution_allowed = true;
+  request.solver_ready = true;
+  EXPECT_TRUE(can_reacquire_during_recovery(request));
+
+  request.phase_hold_elapsed = false;
+  EXPECT_FALSE(can_reacquire_during_recovery(request));
+  request.phase_hold_elapsed = true;
+  request.same_target = false;
+  EXPECT_FALSE(can_reacquire_during_recovery(request));
+  request.same_target = true;
+  request.same_side = false;
+  EXPECT_FALSE(can_reacquire_during_recovery(request));
+  request.same_side = true;
+  request.target_rear_clear = true;
+  EXPECT_FALSE(can_reacquire_during_recovery(request));
+  request.target_rear_clear = false;
+  request.gap_available = false;
+  EXPECT_FALSE(can_reacquire_during_recovery(request));
+  request.gap_available = true;
+  request.execution_allowed = false;
+  EXPECT_FALSE(can_reacquire_during_recovery(request));
+  request.execution_allowed = true;
+  request.solver_ready = false;
+  EXPECT_FALSE(can_reacquire_during_recovery(request));
 }
 
 TEST(V2XOvertakeCoreRecovery, IntegratesEachAcceptedSpeedObservation)

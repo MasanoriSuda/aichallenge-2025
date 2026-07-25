@@ -995,6 +995,23 @@ struct ReacquireRequest
 /// Allow Return -> Pass only for the same stable target and pass side early in Return.
 bool can_reacquire_during_return(const ReacquireRequest & request) noexcept;
 
+struct RecoveryReacquireRequest
+{
+  bool enabled{false};
+  bool phase_hold_elapsed{false};
+  bool stable_target_id{false};
+  bool same_target{false};
+  bool target_progress_continuous{false};
+  bool same_side{false};
+  bool target_rear_clear{false};
+  bool gap_available{false};
+  bool execution_allowed{false};
+  bool solver_ready{false};
+};
+
+/// Allow Recovery -> ShiftOut when the same executable pass opportunity becomes available again.
+bool can_reacquire_during_recovery(const RecoveryReacquireRequest & request) noexcept;
+
 struct ForwardDistanceRequest
 {
   double accumulated_distance_m{};

@@ -1369,6 +1369,7 @@ struct OvertakeLineConfig
   bool reacquire_enabled{false};
   double reacquire_window_sec{0.0};
   double reacquire_max_return_progress{0.0};
+  bool recovery_reacquire_enabled{false};
   bool recovery_velocity_limit_enabled{true};
   double recovery_velocity{5.0};
   double recovery_stall_speed{0.15};
@@ -7553,6 +7554,51 @@ private:
             OvertakeLinePhase::Pass, now_sec, current_ey,
             overtake_line_state_.pass_side_sign, "same target reacquired during early return");
         }
+      } else if (overtake_line_state_.phase == OvertakeLinePhase::Recovery) {
+        const bool stable_target_id =
+          !overtake_line_state_.target_vehicle_id.empty() &&
+          overtake_line_state_.target_vehicle_id != "__unknown__";
+        const bool same_target =
+          stable_target_id &&
+          behavior_output.target_vehicle_id == overtake_line_state_.target_vehicle_id;
+        const bool same_side =
+          behavior_output.overtake_pass_side_sign == overtake_line_state_.pass_side_sign;
+        const double recovery_elapsed = std::max(
+          0.0, now_sec - overtake_line_state_.phase_start_sec);
+        const bool recovery_phase_hold_elapsed =
+          recovery_elapsed >= std::max(0.0, line_cfg.phase_hold_time);
+        const bool curve_entry_allowed =
+          behavior_output.outer_curve_entry_allowed ||
+          behavior_output.outer_curve_hard_entry_allowed ||
+          behavior_output.inner_curve_entry_allowed ||
+          behavior_output.inner_curve_hard_entry_allowed;
+        const bool execution_allowed =
+          behavior_output.overtake_zone_allows &&
+          !behavior_output.overtake_execution_corridor_blocked &&
+          !behavior_output.overtake_forbidden_wp &&
+          !behavior_output.overtake_cooldown_active &&
+          !behavior_output.locked_target_position_jump &&
+          behavior_output.front_risk_level != FrontRiskLevel::EmergencyBrake &&
+          (!behavior_output.overtake_hard_curve_blocked || curve_entry_allowed) &&
+          (!behavior_output.overtake_forbidden ||
+          behavior_output.continuing_overtake_allowed || curve_entry_allowed) &&
+          (behavior_output.overtake_completion_feasible || curve_entry_allowed);
+        if (
+          v2x_overtake_core::can_reacquire_during_recovery(
+            v2x_overtake_core::RecoveryReacquireRequest{
+              line_cfg.recovery_reacquire_enabled, recovery_phase_hold_elapsed,
+              stable_target_id, same_target, locked_target_progress_continuous,
+              same_side, rear_clear_observed, behavior_output.overtake_gap_available,
+              execution_allowed,
+              !overtake_solver_recovery_active_ && !solver_reentry_suppressed}))
+        {
+          transition_overtake_line_phase(
+            OvertakeLinePhase::ShiftOut, now_sec, current_ey,
+            overtake_line_state_.pass_side_sign,
+            "same target gap reacquired during recovery");
+          overtake_line_state_.fixed_pass_corridor_goal_ey =
+            behavior_output.overtake_corridor_center_ey;
+        }
       }
     } else if (
       overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
@@ -10557,6 +10603,9 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_line.reacquire_max_return_progress = clip(
     mpc["v2x_overtake_reacquire_max_return_progress"] ?
     mpc["v2x_overtake_reacquire_max_return_progress"].as<double>() : 0.0, 0.0, 1.0);
+  cfg.mpc.v2x_behavior.overtake_line.recovery_reacquire_enabled =
+    mpc["v2x_overtake_recovery_reacquire_enabled"] ?
+    mpc["v2x_overtake_recovery_reacquire_enabled"].as<bool>() : false;
   cfg.mpc.v2x_behavior.overtake_line.recovery_velocity_limit_enabled =
     mpc["v2x_overtake_recovery_velocity_limit_enabled"] ?
     mpc["v2x_overtake_recovery_velocity_limit_enabled"].as<bool>() : true;

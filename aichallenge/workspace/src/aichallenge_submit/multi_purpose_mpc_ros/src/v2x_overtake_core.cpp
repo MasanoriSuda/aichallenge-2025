@@ -1380,6 +1380,14 @@ bool can_reacquire_during_return(const ReacquireRequest & request) noexcept
          request.return_progress <= request.max_return_progress;
 }
 
+bool can_reacquire_during_recovery(const RecoveryReacquireRequest & request) noexcept
+{
+  return request.enabled && request.phase_hold_elapsed && request.stable_target_id &&
+         request.same_target && request.target_progress_continuous && request.same_side &&
+         !request.target_rear_clear && request.gap_available && request.execution_allowed &&
+         request.solver_ready;
+}
+
 ForwardDistanceResolution integrate_forward_distance(const ForwardDistanceRequest & request)
 {
   if (

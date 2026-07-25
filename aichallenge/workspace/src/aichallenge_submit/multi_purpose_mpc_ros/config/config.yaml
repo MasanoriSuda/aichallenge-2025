@@ -475,6 +475,7 @@ mpc:
   v2x_overtake_reacquire_enabled: true        # allow same target/side to return to Pass early in Return
   v2x_overtake_reacquire_window_sec: 0.50     # [s] maximum Return age for a safe reacquire
   v2x_overtake_reacquire_max_return_progress: 0.25 # [0-1] do not reverse a mostly completed Return
+  v2x_overtake_recovery_reacquire_enabled: true # resume ShiftOut when the same safe gap reopens during Recovery
   v2x_overtake_recovery_velocity_limit_enabled: true # explicit abort/return cap; active Pass uses its own locked-target cap
   v2x_overtake_recovery_velocity: 5.0         # [m/s] dedicated Recovery cap, independent of v2x_follow_velocity
   v2x_overtake_recovery_stall_speed: 0.15     # [m/s] continuous low speed starts bounded Recovery stall timer

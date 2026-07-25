@@ -1266,6 +1266,33 @@ TEST(RecoverySupervisor, ReverseSpeedBelowLimitContinuesCreep) {
   EXPECT_EQ(action.reason, RecoveryReason::ReverseInProgress);
 }
 
+TEST(RecoverySupervisor, ContinuousReverseBrakesAndResumesWithoutGearCycle)
+{
+  RecoverySupervisor supervisor(supervisor_config());
+  double now = 0.0;
+  auto input = healthy_recovery_input(now);
+  advance_to_reverse(supervisor, input, now);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.signed_speed_mps = -0.6;
+  input.reverse_escape_brake_required = true;
+  auto action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
+  EXPECT_EQ(action.reason, RecoveryReason::ReverseEscapeBraking);
+  EXPECT_EQ(action.requested_gear, Gear::NoCommand);
+  EXPECT_EQ(supervisor.state(), RecoveryState::ReverseManeuver);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.signed_speed_mps = -0.2;
+  input.reverse_escape_brake_required = false;
+  action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::ReverseCreep);
+  EXPECT_EQ(action.reason, RecoveryReason::ReverseInProgress);
+  EXPECT_EQ(supervisor.state(), RecoveryState::ReverseManeuver);
+}
+
 TEST(RecoverySupervisor, ReverseCreepUsesTheSelectedSteeringAngle)
 {
   RecoverySupervisor supervisor(supervisor_config());

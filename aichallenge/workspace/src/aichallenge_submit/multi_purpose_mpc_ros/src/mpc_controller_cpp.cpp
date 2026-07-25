@@ -9550,6 +9550,8 @@ struct StuckRecoveryAdapterConfig
   std::string self_vehicle_id;
   double rear_vehicle_radius_m{1.45};
   double rear_prediction_margin_sec{0.1};
+  bool fast_continuous_reverse_enabled{false};
+  double fast_rejoin_min_reverse_distance_m{0.0};
   double reverse_escape_distance_m{2.0};
   double forward_escape_distance_m{0.30};
   double escape_confirm_distance_tolerance_m{0.0};
@@ -9937,6 +9939,13 @@ Config load_config(const std::string & path)
         maneuver["max_reverse_distance_m"].as<double>() : out.max_reverse_distance_m;
       out.max_reverse_duration_sec = maneuver["max_reverse_duration_sec"] ?
         maneuver["max_reverse_duration_sec"].as<double>() : out.max_reverse_duration_sec;
+      adapter.fast_continuous_reverse_enabled =
+        maneuver["fast_continuous_reverse_enabled"] ?
+        maneuver["fast_continuous_reverse_enabled"].as<bool>() : false;
+      adapter.fast_rejoin_min_reverse_distance_m =
+        maneuver["fast_rejoin_min_reverse_distance_m"] ?
+        maneuver["fast_rejoin_min_reverse_distance_m"].as<double>() :
+        adapter.fast_rejoin_min_reverse_distance_m;
       out.max_reverse_speed_mps = maneuver["max_reverse_speed_mps"] ?
         maneuver["max_reverse_speed_mps"].as<double>() : out.max_reverse_speed_mps;
       out.reverse_acceleration_magnitude_mps2 = maneuver["reverse_acceleration_magnitude_mps2"] ?
@@ -10139,6 +10148,10 @@ Config load_config(const std::string & path)
       throw std::runtime_error(
               "stuck_recovery recovery_mpc requires simulation_only: true");
     }
+    if (adapter.fast_continuous_reverse_enabled && !core.simulation_only) {
+      throw std::runtime_error(
+              "stuck_recovery fast continuous Reverse requires simulation_only: true");
+    }
     if (!recovery_mpc::config_is_valid(adapter.recovery_mpc_config)) {
       throw std::runtime_error("stuck_recovery.recovery_mpc values are invalid");
     }
@@ -10186,6 +10199,7 @@ Config load_config(const std::string & path)
       adapter.expected_v2x_vehicle_count < -1 ||
       !finite_non_negative(adapter.rear_vehicle_radius_m) ||
       !finite_non_negative(adapter.rear_prediction_margin_sec) ||
+      !finite_non_negative(adapter.fast_rejoin_min_reverse_distance_m) ||
       !finite_non_negative(adapter.reverse_escape_distance_m) ||
       !finite_non_negative(adapter.forward_escape_distance_m) ||
       !finite_non_negative(adapter.escape_confirm_distance_tolerance_m) ||
@@ -10195,6 +10209,9 @@ Config load_config(const std::string & path)
       adapter.solver_reverse_only_heading_error_rad > 3.14159265358979323846 ||
       adapter.reverse_escape_distance_m <= 0.0 ||
       adapter.forward_escape_distance_m <= 0.0 ||
+      (adapter.fast_continuous_reverse_enabled &&
+      (adapter.fast_rejoin_min_reverse_distance_m <= 0.0 ||
+      adapter.fast_rejoin_min_reverse_distance_m > adapter.reverse_escape_distance_m)) ||
       adapter.reverse_escape_distance_m > core.supervisor.max_reverse_distance_m ||
       adapter.forward_escape_distance_m > core.supervisor.max_forward_distance_m ||
       !finite_non_negative(adapter.wall_direction_search_margin_m) ||
@@ -11544,6 +11561,17 @@ public:
       cfg_.stuck_recovery.core.supervisor.awsim_recovery_wait_sec,
       cfg_.stuck_recovery.core.supervisor.stop_speed_mps,
       cfg_.stuck_recovery.core.supervisor.stop_confirm_sec);
+    RCLCPP_INFO(
+      get_logger(),
+      "Stuck recovery continuous Reverse: %s, speed<=%.2f m/s, accel=%.2f m/s^2, "
+      "stop_cmd=%.2f m/s^2, verified_stop=%.2f m/s^2, escape=%.2f m, fast_rejoin=%.2f m",
+      cfg_.stuck_recovery.fast_continuous_reverse_enabled ? "enabled" : "disabled",
+      cfg_.stuck_recovery.core.supervisor.max_reverse_speed_mps,
+      cfg_.stuck_recovery.core.supervisor.reverse_acceleration_magnitude_mps2,
+      cfg_.stuck_recovery.reverse_stop_acceleration_mps2,
+      cfg_.stuck_recovery.verified_reverse_stop_deceleration_mps2,
+      cfg_.stuck_recovery.reverse_escape_distance_m,
+      cfg_.stuck_recovery.fast_rejoin_min_reverse_distance_m);
     if (
       cfg_.stuck_recovery.core.enabled && !cfg_.stuck_recovery.core.shadow_mode &&
       !stuck_recovery_actuation_io_enabled_)
@@ -12904,7 +12932,7 @@ private:
       const bool stepwise_environment = recovery_footprint::use_stepwise_escape_mode(
         cfg_.stuck_recovery.side_escape_enabled, snapshot.current_footprint_clear,
         current_sample.contact_cells.size(), snapshot.wall_region,
-        completed_escape_steps);
+        completed_escape_steps, cfg_.stuck_recovery.fast_continuous_reverse_enabled);
       const bool clearance_reassessment_step =
         stepwise_environment && snapshot.current_footprint_clear;
       const bool stepwise_candidate_mode =
@@ -13779,10 +13807,13 @@ private:
       (requested_forward_speed_mps >=
       cfg_.stuck_recovery.core.detector.forward_intent_speed_mps ||
       normal_acc >= cfg_.stuck_recovery.core.detector.forward_intent_acceleration_mps2);
+    const double reverse_rollout_target_m =
+      cfg_.stuck_recovery.fast_continuous_reverse_enabled ?
+      cfg_.stuck_recovery.reverse_escape_distance_m :
+      cfg_.stuck_recovery.core.supervisor.max_reverse_distance_m;
     const double reverse_distance_to_check_m = std::max(
-      0.0,
-      cfg_.stuck_recovery.core.supervisor.max_reverse_distance_m -
-      episode_traveled_distance_m);
+      cfg_.stuck_recovery.sweep_interpolation_step_m,
+      reverse_rollout_target_m - episode_traveled_distance_m);
     const double forward_distance_to_check_m = std::max(
       0.0,
       cfg_.stuck_recovery.core.supervisor.max_forward_distance_m -
@@ -13851,10 +13882,20 @@ private:
     input.recovery.rear_information_complete = safety.rear_information_complete;
     input.recovery.collision_worsening =
       safety.collision_worsening || recovery_reverse_pose_jump_;
+    const bool fast_continuous_reverse_selected =
+      cfg_.stuck_recovery.fast_continuous_reverse_enabled &&
+      safety.reverse_candidate_selected && !safety.stepwise_escape &&
+      safety.maneuver_direction == stuck_recovery::ManeuverDirection::Reverse;
+    const bool fast_rejoin_ready =
+      fast_continuous_reverse_selected && safety.current_footprint_clear &&
+      rejoin_steering_tire_angle.has_value() && safety.rejoin_forward_static_clear &&
+      safety.rear_information_complete && safety.rear_v2x_clear;
     const double escape_distance_target_m =
       safety.maneuver_direction == stuck_recovery::ManeuverDirection::Forward ?
       cfg_.stuck_recovery.forward_escape_distance_m :
-      cfg_.stuck_recovery.reverse_escape_distance_m;
+      (fast_rejoin_ready ?
+      cfg_.stuck_recovery.fast_rejoin_min_reverse_distance_m :
+      cfg_.stuck_recovery.reverse_escape_distance_m);
     const bool aggressive_force_rejoin =
       cfg_.stuck_recovery.core.supervisor.aggressive_sim_recovery_enabled &&
       cfg_.stuck_recovery.aggressive_force_rejoin_after_retries > 0U &&
@@ -13867,6 +13908,11 @@ private:
       escape_distance_target_m,
       cfg_.stuck_recovery.escape_confirm_distance_tolerance_m) ||
       aggressive_force_rejoin;
+    input.recovery.reverse_escape_brake_required =
+      fast_continuous_reverse_selected &&
+      !input.recovery.recovery_escape_confirmed &&
+      episode_traveled_distance_m + reverse_stopping_reserve_m + kEps >=
+      escape_distance_target_m;
     input.recovery.rejoin_safe = safety.current_footprint_clear;
     input.recovery.rejoin_forward_clear =
       rejoin_steering_tire_angle.has_value() &&
@@ -14125,7 +14171,8 @@ private:
         "v2x_blocker=%s, v2x_gate=%s/%s, v2x_clearance=%.3f/%.3f/%.3f m, "
         "v2x_reject_at=%.3f m, "
         "wall=%s, wall_distance=%.3f, direction=%s, primitive=%s, steering=%.3f, "
-        "stepwise=%d, contact_reduction=%zu, step=%zu/%zu, maneuver_distance=%.3f m, "
+        "stepwise=%d, continuous=%d, brake=%d, contact_reduction=%zu, "
+        "step=%zu/%zu, maneuver_distance=%.3f m, "
         "episode_distance=%.3f m, stopping_reserve=%.3f m, escape_target=%.3f m, "
         "escape_confirmed=%d, rejoin_safe=%d, rejoin_path_clear=%d, "
         "rejoin_static=%s, rejoin_reject_at=%.3f m, rejoin_steering=%.3f rad, "
@@ -14154,7 +14201,8 @@ private:
         safety.reverse_candidate_selected ?
         recovery_footprint::to_string(safety.selected_reverse_primitive) : "none",
         safety.selected_reverse_steering_angle_rad, safety.stepwise_escape ? 1 : 0,
-        safety.contact_reduction,
+        fast_continuous_reverse_selected ? 1 : 0,
+        input.recovery.reverse_escape_brake_required ? 1 : 0, safety.contact_reduction,
         stuck_recovery_core_->supervisor().escape_step_count(),
         cfg_.stuck_recovery.core.supervisor.max_escape_steps,
         traveled_distance_m, episode_traveled_distance_m, reverse_stopping_reserve_m,

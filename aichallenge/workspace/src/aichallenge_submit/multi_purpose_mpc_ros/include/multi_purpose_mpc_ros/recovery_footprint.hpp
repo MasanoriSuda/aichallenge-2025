@@ -109,11 +109,14 @@ enum class WallRegion
 /// A clear footprint may still have physical/nearby side-wall evidence that
 /// the occupancy cells do not classify as an overlap. Such Left/Right/Mixed
 /// cases use the same short step as a direct side contact. Clear Front/Rear
-/// cases retain their direction-specific bounded maneuver.
+/// cases retain their direction-specific bounded maneuver. Simulation-race
+/// continuous escape may explicitly bypass short steps only after the current
+/// footprint itself is clear.
 bool use_stepwise_escape_mode(
   bool side_escape_enabled, bool current_footprint_clear,
   std::size_t current_contact_count, WallRegion wall_region,
-  std::size_t completed_escape_steps) noexcept;
+  std::size_t completed_escape_steps,
+  bool continuous_clear_escape_enabled = false) noexcept;
 
 struct WallProximityResult
 {

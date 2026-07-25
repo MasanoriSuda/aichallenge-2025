@@ -134,6 +134,16 @@ TEST(RecoveryFootprintStepwiseMode, KeepsClearFrontAndRearDirectionSpecific)
     false, true, 0U, recovery::WallRegion::Left, 0U));
 }
 
+TEST(RecoveryFootprintStepwiseMode, ContinuousModeBypassesStepsOnlyAfterFootprintIsClear)
+{
+  EXPECT_FALSE(recovery::use_stepwise_escape_mode(
+    true, true, 0U, recovery::WallRegion::Mixed, 0U, true));
+  EXPECT_FALSE(recovery::use_stepwise_escape_mode(
+    true, true, 0U, recovery::WallRegion::None, 0U, true));
+  EXPECT_TRUE(recovery::use_stepwise_escape_mode(
+    true, false, 1U, recovery::WallRegion::Mixed, 0U, true));
+}
+
 TEST(RecoveryFootprintStepwiseMode, ContinuesAnExistingContactEscape)
 {
   EXPECT_TRUE(recovery::use_stepwise_escape_mode(

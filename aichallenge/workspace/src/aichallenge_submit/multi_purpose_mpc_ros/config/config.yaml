@@ -37,9 +37,10 @@ stuck_recovery:
   # recovery runs use positive acceleration in Reverse and negative acceleration to stop.
   reverse_actuation_enabled: true
   reverse_acceleration_sign: 1.0
-  reverse_stop_acceleration_mps2: -0.8
-  # Measured average was 0.628 m/s^2; use a conservative lower bound for stopping reserve.
-  verified_reverse_stop_deceleration_mps2: 0.4
+  reverse_stop_acceleration_mps2: -1.0
+  # Measured average was 0.628 m/s^2 with the former -0.8 command. Keep the
+  # stopping reserve below that measured result while using the stronger command.
+  verified_reverse_stop_deceleration_mps2: 0.6
   # Measured command-to-effect delay was about 0.14 s; round up for reserve.
   reverse_control_latency_sec: 0.2
   boost_status_timeout_sec: 0.5
@@ -103,16 +104,20 @@ stuck_recovery:
     # Accept the configured set of individually fresh vehicle IDs across a
     # transient partial array instead of requiring every ID in the same message.
     tracked_v2x_completeness_enabled: true
-    # Front/side recovery must create meaningful separation before rejoin. The
-    # The additional 1.0 m covers the calibrated worst-case stopping reserve
-    # at the 0.8 m/s ceiling beyond the 2.0 m measured escape target.
+    # Independent hard cap beyond the 2.0 m nominal escape target. Continuous
+    # Reverse begins calibrated braking before the predicted stopping point
+    # reaches the active escape target.
     max_reverse_distance_m: 3.0
     max_reverse_duration_sec: 4.0
     # Use the calibrated bounded-recovery actuation; the higher-acceleration
     # A/B candidate increased stopping reserve and shortened each escape step.
-    max_reverse_speed_mps: 0.8
+    # SIM race: allow one continuous, acceleration-limited escape instead of a
+    # 0.4 m Reverse/Drive cascade when the complete rollout is clear.
+    fast_continuous_reverse_enabled: true
+    fast_rejoin_min_reverse_distance_m: 0.8
+    max_reverse_speed_mps: 2.0
     # Positive magnitude only; reverse_acceleration_sign is applied by the ROS/AWSIM adapter.
-    reverse_acceleration_magnitude_mps2: 0.5
+    reverse_acceleration_magnitude_mps2: 1.0
     # Rear-wall/deadlock recovery stays in Drive and performs one bounded creep.
     # Use the normal MPC acceleration ceiling so a kart resting on another
     # collider does not spend ten steps producing only millimetres of motion.

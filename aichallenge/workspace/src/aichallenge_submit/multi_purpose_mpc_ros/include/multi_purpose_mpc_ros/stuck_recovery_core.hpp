@@ -323,6 +323,7 @@ enum class RecoveryReason
   GearReportTimedOut,
   GearCommandLimitReached,
   ReverseInProgress,
+  ReverseEscapeBraking,
   ReverseDistanceLimit,
   ReverseDurationLimit,
   ReverseSpeedLimit,
@@ -441,6 +442,9 @@ struct RecoveryInput
   bool rear_information_complete{false};
   bool collision_worsening{false};
   bool recovery_escape_confirmed{false};
+  // Keep Reverse engaged but command calibrated braking when the predicted
+  // stopping point has reached the current continuous-escape target.
+  bool reverse_escape_brake_required{false};
   bool rejoin_safe{false};
   bool rejoin_forward_clear{true};
   double signed_speed_mps{};

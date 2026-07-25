@@ -189,6 +189,7 @@ bool aggressive_retry_reason_is_recoverable(const RecoveryReason reason) noexcep
     case RecoveryReason::ReverseGearConfirmed:
     case RecoveryReason::GearReportInvalid:
     case RecoveryReason::ReverseInProgress:
+    case RecoveryReason::ReverseEscapeBraking:
     case RecoveryReason::ReverseEscapeConfirmed:
     case RecoveryReason::ForwardInProgress:
     case RecoveryReason::ForwardEscapeConfirmed:
@@ -1162,6 +1163,12 @@ RecoveryAction RecoverySupervisor::update_reverse_maneuver(const RecoveryInput &
       input.now_sec);
     return hold_action(RecoveryReason::ReverseDurationLimit);
   }
+  if (!active_stepwise_escape_ && input.reverse_escape_brake_required) {
+    // Do not leave Reverse merely to regulate stopping distance. The adapter
+    // applies the calibrated Reverse stop command; if the vehicle stops short,
+    // this state can resume ReverseCreep without another Drive/Reverse cycle.
+    return hold_action(RecoveryReason::ReverseEscapeBraking);
+  }
   if (std::abs(input.signed_speed_mps) >= config_.max_reverse_speed_mps) {
     // The speed ceiling is a regulator, not a completed escape. Brake in
     // Reverse and resume the same maneuver once speed is below the ceiling;
@@ -1984,6 +1991,8 @@ const char * to_string(const RecoveryReason reason) noexcept
       return "gear_command_limit_reached";
     case RecoveryReason::ReverseInProgress:
       return "reverse_in_progress";
+    case RecoveryReason::ReverseEscapeBraking:
+      return "reverse_escape_braking";
     case RecoveryReason::ReverseDistanceLimit:
       return "reverse_distance_limit";
     case RecoveryReason::ReverseDurationLimit:

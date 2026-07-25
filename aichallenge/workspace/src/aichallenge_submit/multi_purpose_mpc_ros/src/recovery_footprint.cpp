@@ -515,7 +515,8 @@ const char * to_string(const WallRegion region) noexcept
 bool use_stepwise_escape_mode(
   const bool side_escape_enabled, const bool current_footprint_clear,
   const std::size_t current_contact_count, const WallRegion wall_region,
-  const std::size_t completed_escape_steps) noexcept
+  const std::size_t completed_escape_steps,
+  const bool continuous_clear_escape_enabled) noexcept
 {
   if (!side_escape_enabled) {
     return false;
@@ -524,6 +525,9 @@ bool use_stepwise_escape_mode(
     wall_region == WallRegion::Left || wall_region == WallRegion::Right ||
     wall_region == WallRegion::Mixed;
   if (current_footprint_clear) {
+    if (continuous_clear_escape_enabled) {
+      return false;
+    }
     return wall_region == WallRegion::None || side_wall;
   }
   return

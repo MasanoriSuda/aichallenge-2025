@@ -53,6 +53,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OuterCurveOvertakeRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::InnerCurveOvertakeRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ActiveHardCurveContinuationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CurveEntryCompletionOverrideRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::InnerCurvePrecommitRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeCompletionPermissionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassCompletionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PredictionTimeRequest;
@@ -124,6 +125,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::is_relative_course_progress_cont
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_vehicle_relative_lateral;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_completion;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_override_completion_for_curve_entry;
+using multi_purpose_mpc_ros::v2x_overtake_core::can_precommit_inner_curve_line;
 using multi_purpose_mpc_ros::v2x_overtake_core::overtake_completion_policy_allows_execution;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_target_continuity;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_reacquire_during_return;
@@ -1524,6 +1526,64 @@ TEST(V2XOvertakeCoreCompletion, CurveEntryOverrideUsesNumericTolerance)
   const CurveEntryCompletionOverrideRequest request{
     true, false, true, 11.0 + 5e-10, 11.0, 4.64 - 5e-10, 4.14, 0.5};
   EXPECT_TRUE(can_override_completion_for_curve_entry(request));
+}
+
+TEST(V2XOvertakeCoreCompletion, InnerCurvePrecommitAllowsBoundedInitialSpeedDeficit)
+{
+  InnerCurvePrecommitRequest request;
+  request.enabled = true;
+  request.inner_curve_entry_allowed = true;
+  request.front_vehicle_seen = true;
+  request.front_distance_m = 3.08;
+  request.minimum_front_distance_m = 3.0;
+  request.maximum_front_distance_m = 9.0;
+  request.continuous_open_distance_m = 4.96;
+  request.minimum_open_distance_m = 3.0;
+  request.ego_speed_mps = 3.10;
+  request.front_speed_mps = 3.32;
+  request.minimum_relative_speed_mps = -0.5;
+
+  EXPECT_TRUE(can_precommit_inner_curve_line(request));
+
+  request.minimum_relative_speed_mps = 0.0;
+  EXPECT_FALSE(can_precommit_inner_curve_line(request));
+}
+
+TEST(V2XOvertakeCoreCompletion, InnerCurvePrecommitKeepsSafetyGates)
+{
+  InnerCurvePrecommitRequest request;
+  request.enabled = true;
+  request.inner_curve_entry_allowed = true;
+  request.front_vehicle_seen = true;
+  request.front_distance_m = 3.5;
+  request.minimum_front_distance_m = 3.0;
+  request.maximum_front_distance_m = 9.0;
+  request.continuous_open_distance_m = 4.0;
+  request.minimum_open_distance_m = 3.0;
+  request.ego_speed_mps = 3.2;
+  request.front_speed_mps = 3.3;
+  request.minimum_relative_speed_mps = -0.5;
+
+  request.emergency_brake_required = true;
+  EXPECT_FALSE(can_precommit_inner_curve_line(request));
+  request.emergency_brake_required = false;
+
+  request.continuous_open_distance_m = 2.99;
+  EXPECT_FALSE(can_precommit_inner_curve_line(request));
+  request.continuous_open_distance_m = 4.0;
+
+  request.front_distance_m = 2.99;
+  EXPECT_FALSE(can_precommit_inner_curve_line(request));
+  request.front_distance_m = 9.01;
+  EXPECT_FALSE(can_precommit_inner_curve_line(request));
+  request.front_distance_m = 3.5;
+
+  request.line_committed = true;
+  EXPECT_FALSE(can_precommit_inner_curve_line(request));
+  request.line_committed = false;
+
+  request.enabled = false;
+  EXPECT_FALSE(can_precommit_inner_curve_line(request));
 }
 
 TEST(V2XOvertakeCoreCompletion, CompletionPolicyDoesNotLeakRawCurveEntryPermission)

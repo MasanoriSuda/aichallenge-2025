@@ -868,6 +868,35 @@ bool can_override_completion_for_curve_entry(
          request.minimum_relative_speed_mps;
 }
 
+bool can_precommit_inner_curve_line(
+  const InnerCurvePrecommitRequest & request) noexcept
+{
+  if (
+    !request.enabled || !request.inner_curve_entry_allowed || request.line_committed ||
+    !request.front_vehicle_seen || request.emergency_brake_required ||
+    !std::isfinite(request.front_distance_m) || request.front_distance_m < 0.0 ||
+    !std::isfinite(request.minimum_front_distance_m) ||
+    request.minimum_front_distance_m < 0.0 ||
+    !std::isfinite(request.maximum_front_distance_m) ||
+    request.maximum_front_distance_m < request.minimum_front_distance_m ||
+    !std::isfinite(request.continuous_open_distance_m) ||
+    request.continuous_open_distance_m < 0.0 ||
+    !std::isfinite(request.minimum_open_distance_m) ||
+    request.minimum_open_distance_m < 0.0 ||
+    !std::isfinite(request.ego_speed_mps) || request.ego_speed_mps < 0.0 ||
+    !std::isfinite(request.front_speed_mps) || request.front_speed_mps < 0.0 ||
+    !std::isfinite(request.minimum_relative_speed_mps))
+  {
+    return false;
+  }
+
+  return request.front_distance_m + 1e-9 >= request.minimum_front_distance_m &&
+         request.front_distance_m <= request.maximum_front_distance_m + 1e-9 &&
+         request.continuous_open_distance_m + 1e-9 >= request.minimum_open_distance_m &&
+         request.ego_speed_mps - request.front_speed_mps + 1e-9 >=
+         request.minimum_relative_speed_mps;
+}
+
 bool overtake_completion_policy_allows_execution(
   const OvertakeCompletionPermissionRequest & request) noexcept
 {

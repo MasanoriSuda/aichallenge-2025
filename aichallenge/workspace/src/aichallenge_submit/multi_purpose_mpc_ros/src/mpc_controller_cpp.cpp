@@ -1439,6 +1439,8 @@ struct V2XBehaviorConfig
   bool overtake_outer_curve_hard_continuation_enabled{false};
   bool overtake_inner_curve_entry_enabled{false};
   double overtake_inner_curve_min_open_distance{0.0};
+  bool overtake_inner_curve_precommit_enabled{false};
+  double overtake_inner_curve_precommit_min_relative_speed{0.0};
   bool overtake_inner_curve_hard_continuation_enabled{false};
   bool overtake_hard_curve_entry_enabled{false};
   double overtake_forbidden_curve_lookahead_distance{0.0};
@@ -5420,7 +5422,7 @@ struct MPC
         const bool new_curve_entry_allowed =
           outer_curve.entry_allowed || outer_curve.hard_entry_allowed ||
           inner_curve.entry_allowed || inner_curve.hard_entry_allowed;
-        const bool completion_policy_allows_execution =
+        const bool normal_completion_policy_allows_execution =
           v2x_overtake_core::overtake_completion_policy_allows_execution(
           v2x_overtake_core::OvertakeCompletionPermissionRequest{
             overtake_completion_feasible,
@@ -5434,6 +5436,25 @@ struct MPC
             current_speed_mps_,
             nearest_front_speed,
             cfg.v2x_behavior.overtake_completion_min_relative_speed});
+        const bool inner_curve_precommit_allowed =
+          inner_curve_pass &&
+          v2x_overtake_core::can_precommit_inner_curve_line(
+          v2x_overtake_core::InnerCurvePrecommitRequest{
+            cfg.v2x_behavior.overtake_inner_curve_precommit_enabled,
+            inner_curve.entry_allowed || inner_curve.hard_entry_allowed,
+            curve_line_committed,
+            has_front_vehicle,
+            front_risk_level == FrontRiskLevel::EmergencyBrake,
+            nearest_front_distance,
+            std::max(0.0, cfg.v2x_behavior.overtake_guard_min_front_distance),
+            curve_entry_max_front_distance,
+            assessment.continuous_corridor_distance,
+            cfg.v2x_behavior.overtake_inner_curve_min_open_distance,
+            current_speed_mps_,
+            nearest_front_speed,
+            cfg.v2x_behavior.overtake_inner_curve_precommit_min_relative_speed});
+        const bool completion_policy_allows_execution =
+          normal_completion_policy_allows_execution || inner_curve_precommit_allowed;
         return !overtake_cooldown_active &&
                (!overtake_start_curve_blocked || outer_curve.entry_allowed ||
                outer_curve.hard_entry_allowed ||
@@ -10906,6 +10927,18 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_inner_curve_min_open_distance"] ?
     mpc["v2x_overtake_inner_curve_min_open_distance"].as<double>() : 0.0);
+  cfg.mpc.v2x_behavior.overtake_inner_curve_precommit_enabled =
+    mpc["v2x_overtake_inner_curve_precommit_enabled"] ?
+    mpc["v2x_overtake_inner_curve_precommit_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_inner_curve_precommit_min_relative_speed =
+    mpc["v2x_overtake_inner_curve_precommit_min_relative_speed"] ?
+    mpc["v2x_overtake_inner_curve_precommit_min_relative_speed"].as<double>() : 0.0;
+  if (!std::isfinite(
+      cfg.mpc.v2x_behavior.overtake_inner_curve_precommit_min_relative_speed))
+  {
+    throw std::runtime_error(
+            "v2x_overtake_inner_curve_precommit_min_relative_speed must be finite");
+  }
   cfg.mpc.v2x_behavior.overtake_inner_curve_hard_continuation_enabled =
     mpc["v2x_overtake_inner_curve_hard_continuation_enabled"] ?
     mpc["v2x_overtake_inner_curve_hard_continuation_enabled"].as<bool>() : false;
@@ -11639,6 +11672,13 @@ public:
           mpc_cfg_.v2x_behavior.front_progress_detection_distance,
           mpc_cfg_.v2x_behavior.front_progress_lookbehind_distance);
       }
+      RCLCPP_INFO(
+        get_logger(),
+        "V2X inner curve precommit: %s, min_relative_speed=%.2f m/s, min_open=%.2f m",
+        mpc_cfg_.v2x_behavior.overtake_inner_curve_precommit_enabled ?
+        "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_inner_curve_precommit_min_relative_speed,
+        mpc_cfg_.v2x_behavior.overtake_inner_curve_min_open_distance);
       RCLCPP_INFO(
         get_logger(),
         "V2X start grid: grace=%.2f s, breakout=%s, side_deadband=%.2f m, "

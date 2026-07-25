@@ -591,6 +591,30 @@ struct CurveEntryCompletionOverrideRequest
 bool can_override_completion_for_curve_entry(
   const CurveEntryCompletionOverrideRequest & request) noexcept;
 
+struct InnerCurvePrecommitRequest
+{
+  bool enabled{false};
+  bool inner_curve_entry_allowed{false};
+  bool line_committed{false};
+  bool front_vehicle_seen{false};
+  bool emergency_brake_required{false};
+  double front_distance_m{};
+  double minimum_front_distance_m{};
+  double maximum_front_distance_m{};
+  double continuous_open_distance_m{};
+  double minimum_open_distance_m{};
+  double ego_speed_mps{};
+  double front_speed_mps{};
+  double minimum_relative_speed_mps{};
+};
+
+/// Permit an uncommitted inner line to bypass only the pass-completion estimate.
+///
+/// The caller remains responsible for the inflated vehicle/wall corridor,
+/// lateral-reachability, cooldown, and forbidden-waypoint checks.
+bool can_precommit_inner_curve_line(
+  const InnerCurvePrecommitRequest & request) noexcept;
+
 struct OvertakeCompletionPermissionRequest
 {
   bool completion_feasible{false};

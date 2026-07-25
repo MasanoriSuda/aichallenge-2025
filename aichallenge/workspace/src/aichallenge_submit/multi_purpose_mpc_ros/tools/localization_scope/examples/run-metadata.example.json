@@ -1,0 +1,54 @@
+{
+  "schema_version": "1.0",
+  "run": {
+    "run_id": "20260725-001",
+    "display_name": "AWSIM 2026.2 medium baseline",
+    "test_type": "lap",
+    "comparison_group": "localization-baseline",
+    "variant": "baseline",
+    "tags": [
+      "medium",
+      "awsim-2026.2"
+    ],
+    "notes": ""
+  },
+  "awsim": {
+    "version": "2026.2",
+    "build_id": null,
+    "image_digest": null
+  },
+  "experiment": {
+    "speed_profile": "medium",
+    "target_speed_mps": 5.0,
+    "vehicle_id": "d1",
+    "lap_count": 6
+  },
+  "trajectory": {
+    "path": null,
+    "topic": "/planning/scenario_planning/trajectory",
+    "record_topic": true,
+    "circular": true
+  },
+  "configs": {
+    "mpc": null,
+    "localization": [],
+    "launch": null,
+    "overrides": {}
+  },
+  "topics": {},
+  "analysis": {
+    "speed_bands_mps": [
+      0.0,
+      3.0,
+      5.0,
+      7.0
+    ],
+    "speed_band_names": [
+      "low",
+      "medium",
+      "medium_high",
+      "high"
+    ],
+    "sync_tolerance_sec": 0.5
+  }
+}

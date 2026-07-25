@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aichallenge-localization-scope"
+version = "0.1.0"
+description = "Offline localization rosbag analysis for Automotive AI Challenge"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+localization-scope = "localization_scope.cli:main"
+
+[tool.setuptools]
+packages = ["localization_scope"]
+

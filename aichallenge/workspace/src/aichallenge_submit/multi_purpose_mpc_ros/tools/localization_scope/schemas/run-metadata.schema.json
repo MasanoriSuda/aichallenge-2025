@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://automotiveaichallenge.example/localization-scope/run-metadata.schema.json",
+  "title": "Localization Scope run metadata",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "run",
+    "awsim",
+    "experiment"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "run": {
+      "type": "object",
+      "required": [
+        "display_name",
+        "test_type"
+      ],
+      "properties": {
+        "run_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "display_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "test_type": {
+          "enum": [
+            "stationary",
+            "straight",
+            "constant_turn",
+            "accel_brake",
+            "lap",
+            "race",
+            "custom"
+          ]
+        },
+        "comparison_group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "variant": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "awsim": {
+      "type": "object",
+      "required": [
+        "version"
+      ],
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "build_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "image_digest": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "experiment": {
+      "type": "object",
+      "required": [
+        "speed_profile"
+      ],
+      "properties": {
+        "speed_profile": {
+          "enum": [
+            "low",
+            "medium",
+            "medium_high",
+            "high",
+            "custom",
+            "unspecified"
+          ]
+        },
+        "target_speed_mps": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "vehicle_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "lap_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    },
+    "trajectory": {
+      "type": "object"
+    },
+    "configs": {
+      "type": "object"
+    },
+    "topics": {
+      "type": "object",
+      "additionalProperties": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    },
+    "analysis": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": true
+}

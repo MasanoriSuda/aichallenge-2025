@@ -355,7 +355,7 @@ mpc:
   v2x_follow_gap_planner_no_gap_speed_limit_enabled: false # do not yield just because no gap is found
   v2x_follow_gap_planner_respect_overtake_forbidden: true # do not side-attack in hairpins/forbidden zones
   v2x_follow_speed_limit_enabled: true  # match front speed only inside the dedicated distance gate
-  v2x_follow_speed_limit_distance: 5.0 # [m] sim race: detect at 24 m, start generic Follow cap at 5 m
+  v2x_follow_speed_limit_distance: 3.0 # [m] sim race: detect at 24 m, start generic Follow cap at 5 m
   v2x_follow_velocity: 3.0        # [m/s] slow/stopped-front cap; moving fronts use front speed + margin
   v2x_follow_preposition_enabled: true # keep Follow slightly off the front vehicle's direct wake
   v2x_follow_preposition_offset: 0.9 # [m] soft lateral reference offset while following
@@ -489,7 +489,7 @@ mpc:
   # Common-course front distance is center-to-center, not bumper clearance.
   v2x_moving_follow_speed_margin: 0.8   # [m/s] maximum closing margin with enough distance
   v2x_moving_follow_hard_distance: 2.05 # [m] dev3 attack floor near the nominal 2.0 m body-overlap boundary
-  v2x_moving_follow_target_distance: 5.0 # [m] match front speed here; about 3.0 m bumper clearance
+  v2x_moving_follow_target_distance: 3.0 # [m] match front speed here; about 3.0 m bumper clearance
   v2x_moving_follow_recovery_speed_margin: 0.6 # [m/s] command below front speed near hard distance
   v2x_moving_follow_distance_gain: 1.0 # [(m/s)/m] signed speed-margin gain around target distance
   v2x_moving_safety_brake_distance: 2.2 # [m] moving-front hard floor for dev3
@@ -555,7 +555,7 @@ mpc:
   v_max: 40.0
   domain_v_max:
     1: 40.0
-    2: 16.0
+    2: 40.0
     3: 20.0
   domain_start_v_max_duration: 15.0
   domain_start_v_max:

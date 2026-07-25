@@ -163,7 +163,7 @@ stuck_recovery:
   rear_safety:
     # 2026 preliminary/dev3 uses three vehicles. Latest run showed two entries per domain and no
     # self entry. Use 3 for a four-vehicle final; single-vehicle runs fail closed without V2X.
-    expected_v2x_vehicle_count: 2
+    expected_v2x_vehicle_count: 1
     self_filter_mode: excluded
     self_vehicle_id: ""
     vehicle_radius_m: 1.45
@@ -388,7 +388,7 @@ mpc:
   v2x_safety_brake_velocity: 0.0  # [m/s]
   # Gap width is measured after inflating V2X vehicles by ego+other half width.
   # Keep this as center-line slack, not raw vehicle width.
-  v2x_overtake_min_gap_width: 0.2 # [m] sim A/B: allow near-minimum kart-to-wall corridor
+  v2x_overtake_min_gap_width: 0.1 # [m] sim A/B: allow near-minimum kart-to-wall corridor
   v2x_overtake_max_curvature: 0.04
   v2x_overtake_block_inner_curve_pass: true # block inner passes unless the explicit sim-race exception below is satisfied
   v2x_overtake_outer_curve_entry_enabled: true # sim race: allow a reachable outside pass in a soft curve
@@ -420,7 +420,7 @@ mpc:
   v2x_overtake_completion_merge_buffer_distance: 3.0 # [m] reserve after reaching rear-clear position
   v2x_overtake_completion_min_relative_speed: 0.5 # [m/s] reject passes with no credible longitudinal gain
   v2x_overtake_guard_enabled: true
-  v2x_overtake_guard_min_gap_width: 0.2       # [m] sim A/B: center-line slack after inflated obstacles
+  v2x_overtake_guard_min_gap_width: 0.1       # [m] sim A/B: center-line slack after inflated obstacles
   v2x_overtake_guard_min_gap_points: 2        # require consecutive horizon points before Overtake
   v2x_overtake_continue_min_gap_points: 1     # active locked line may survive a one-point hairpin corridor
   v2x_overtake_guard_min_prepare_distance: 3.0 # [m] dev3 attack: use short straight/curve openings
@@ -430,7 +430,7 @@ mpc:
   v2x_overtake_guard_min_gap_time: 0.5        # [s] entry still needs time to establish a pass line
   v2x_overtake_continue_min_gap_time: 0.3     # [s] locked line uses the shorter continuation horizon
   v2x_overtake_guard_min_speed_for_reachable: 1.0 # [m/s] lower bound for reachability time estimate
-  v2x_overtake_guard_min_front_distance: 5.0  # [m] begin ShiftOut before the closing budget becomes unrecoverable
+  v2x_overtake_guard_min_front_distance: 3.0  # [m] begin ShiftOut before the closing budget becomes unrecoverable
   v2x_overtake_continue_min_front_distance: 1.8 # [m] active-pass floor near the nominal body-overlap distance
   v2x_overtake_close_follow_enabled: true     # side-escape after matching a slow front vehicle
   v2x_overtake_close_follow_min_front_distance: 2.2 # [m] extra floor; new ShiftOut also requires the normal 5.0m entry distance
@@ -462,7 +462,7 @@ mpc:
   v2x_overtake_line_lateral_offset: 1.2       # [m] signed by pass side: left positive, right negative
   v2x_overtake_line_target_bias: 1.0          # [0-1] explicit line is the sole lateral owner during ShiftOut/Pass
   # Applied to both the legacy lateral bounds and the occupancy-grid vehicle footprint.
-  v2x_overtake_line_min_wall_clearance: 0.8   # [m] keep a committed inside line off the physical wall
+  v2x_overtake_line_min_wall_clearance: 0.2   # [m] keep a committed inside line off the physical wall
   v2x_overtake_line_max_lateral_accel: 6.0    # [m/s^2] dev3 attack: complete committed ShiftOut in a hairpin
   v2x_overtake_line_max_target_change: 0.04   # [m/cycle] smooth target goal updates across cycles
   v2x_overtake_line_target_intrusion_ordering_margin: 0.10 # [m] abort if the ahead target reaches/crosses ego's selected-side ordering
@@ -556,7 +556,7 @@ mpc:
   v_max: 40.0
   domain_v_max:
     1: 40.0
-    2: 40.0
+    2: 12.0
     3: 20.0
   domain_start_v_max_duration: 15.0
   domain_start_v_max:

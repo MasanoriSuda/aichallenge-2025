@@ -129,6 +129,29 @@ bool should_release_reverse_only_for_rear_wall(
   bool recovery_context_active, bool rear_wall_evidence,
   bool reverse_only_episode, bool reverse_intent_latched) noexcept;
 
+struct SolverForwardFallbackUnlockRequest
+{
+  bool simulation_environment{false};
+  bool aggressive_sim_recovery_enabled{false};
+  bool aggressive_retry{false};
+  bool solver_fallback_active{false};
+  bool solver_reverse_only_episode{false};
+  bool wall_absent{false};
+  bool current_footprint_clear{false};
+  bool reverse_candidates_checked{false};
+  bool reverse_candidates_blocked{false};
+  bool forward_static_clear{false};
+  bool v2x_information_complete{false};
+  bool v2x_clear{false};
+  bool boost_inactive_confirmed{false};
+};
+
+// A solver-only Reverse preference may be released only after a complete,
+// failed Reverse attempt reaches the simulation-only aggressive retry gate.
+// The selected Forward primitive is still rechecked by static and V2X rollout.
+bool solver_forward_fallback_unlock_allowed(
+  const SolverForwardFallbackUnlockRequest & request) noexcept;
+
 struct RejoinSteeringRequest
 {
   double path_curvature_radpm{};
@@ -322,8 +345,8 @@ struct ReverseDirectionPolicyInput
   bool forward_fallback_unlocked{false};
 };
 
-/// Strict episode reasons and a latched Reverse intent always win. A non-strict obstacle-first
-/// request may release Forward candidates only after an explicit failed recovery retry.
+/// A strict episode/latch remains authoritative until the adapter explicitly clears it.
+/// Once cleared, a validated Forward unlock suppresses transient Reverse requests.
 bool recovery_reverse_direction_required(
   const ReverseDirectionPolicyInput & input) noexcept;
 

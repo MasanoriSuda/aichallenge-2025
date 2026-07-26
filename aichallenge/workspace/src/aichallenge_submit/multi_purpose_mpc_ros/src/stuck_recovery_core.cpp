@@ -285,6 +285,24 @@ bool should_release_reverse_only_for_rear_wall(
          (reverse_only_episode || reverse_intent_latched);
 }
 
+bool solver_forward_fallback_unlock_allowed(
+  const SolverForwardFallbackUnlockRequest & request) noexcept
+{
+  return request.simulation_environment &&
+         request.aggressive_sim_recovery_enabled &&
+         request.aggressive_retry &&
+         request.solver_fallback_active &&
+         request.solver_reverse_only_episode &&
+         request.wall_absent &&
+         request.current_footprint_clear &&
+         request.reverse_candidates_checked &&
+         request.reverse_candidates_blocked &&
+         request.forward_static_clear &&
+         request.v2x_information_complete &&
+         request.v2x_clear &&
+         request.boost_inactive_confirmed;
+}
+
 bool source_timestamp_is_monotonic(
   const double stamp_sec, const std::optional<double> & previous_stamp_sec) noexcept
 {
@@ -1998,9 +2016,9 @@ bool recovery_reverse_direction_required(
   const ReverseDirectionPolicyInput & input) noexcept
 {
   return input.reverse_only_episode || input.reverse_intent_latched ||
-         (input.coordinated_stop_active && !input.forward_fallback_unlocked) ||
-         input.solver_reverse_only_candidate ||
-         (input.obstacle_reverse_first && !input.forward_fallback_unlocked);
+         (!input.forward_fallback_unlocked &&
+         (input.coordinated_stop_active || input.solver_reverse_only_candidate ||
+         input.obstacle_reverse_first));
 }
 
 const char * to_string(const RecoveryState state) noexcept

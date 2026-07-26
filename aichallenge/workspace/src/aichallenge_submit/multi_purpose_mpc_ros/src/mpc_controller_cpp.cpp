@@ -13366,6 +13366,9 @@ private:
         // when the complete static rollout itself is clear; the core still
         // requires that confirmation and the directional V2X corridor below.
         selected_result = select_heading_aligned_reverse_candidate();
+        if (!reverse_only && !selected_result.has_value()) {
+          selected_result = select_forward_deadlock_fallback();
+        }
       }
 
       // Wall classification can change while AWSIM settles. Until actuation is committed, retain
@@ -14112,11 +14115,40 @@ private:
       recovery_selected_reverse_primitive_.reset();
       recovery_selected_reverse_steering_angle_rad_.reset();
       recovery_selected_stepwise_escape_ = false;
-      // A Reverse-first attempt may use the existing Forward candidate search
-      // only after it has explicitly reached SafeStop. Coordinated stop owns
-      // the first direction, not the whole recovery episode. Solver geometry
-      // remains strict reverse-only.
-      if (
+      stuck_recovery::SolverForwardFallbackUnlockRequest solver_unlock_request;
+      solver_unlock_request.simulation_environment = use_sim_time_;
+      solver_unlock_request.aggressive_sim_recovery_enabled =
+        cfg_.stuck_recovery.core.supervisor.aggressive_sim_recovery_enabled;
+      solver_unlock_request.aggressive_retry = true;
+      solver_unlock_request.solver_fallback_active = mpc_fallback_active;
+      solver_unlock_request.solver_reverse_only_episode = recovery_reverse_only_episode_;
+      solver_unlock_request.wall_absent =
+        safety.wall_region == recovery_footprint::WallRegion::None;
+      solver_unlock_request.current_footprint_clear = safety.current_footprint_clear;
+      solver_unlock_request.reverse_candidates_checked =
+        !safety.reverse_candidate_selected && safety.static_checked_pose_count > 0U;
+      solver_unlock_request.reverse_candidates_blocked =
+        safety.static_reject_reason == recovery_footprint::RejectReason::Collision;
+      solver_unlock_request.forward_static_clear = safety.rejoin_forward_static_clear;
+      solver_unlock_request.v2x_information_complete =
+        safety.v2x_message_complete && safety.rear_information_complete;
+      solver_unlock_request.v2x_clear = safety.rear_v2x_clear;
+      solver_unlock_request.boost_inactive_confirmed = safety.boost_inactive_confirmed;
+      const bool solver_forward_fallback_unlocked =
+        stuck_recovery::solver_forward_fallback_unlock_allowed(solver_unlock_request);
+      if (solver_forward_fallback_unlocked) {
+        recovery_reverse_only_episode_ = false;
+        recovery_reverse_intent_latched_ = false;
+        recovery_forward_fallback_unlocked_ = true;
+        RCLCPP_WARN(
+          get_logger(),
+          "Stuck recovery unlocked solver Forward fallback after blocked Reverse: "
+          "static=%s, checked=%zu, rejoin_static=%s, v2x_clear=%d",
+          recovery_footprint::to_string(safety.static_reject_reason),
+          safety.static_checked_pose_count,
+          recovery_footprint::to_string(safety.rejoin_static_reject_reason),
+          safety.rear_v2x_clear ? 1 : 0);
+      } else if (
         recovery_reverse_intent_latched_ &&
         !recovery_reverse_only_episode_)
       {

@@ -39,10 +39,12 @@ using multi_purpose_mpc_ros::stuck_recovery::StuckRecoveryCore;
 using multi_purpose_mpc_ros::stuck_recovery::StuckRejectReason;
 using multi_purpose_mpc_ros::stuck_recovery::StuckVerdict;
 using multi_purpose_mpc_ros::stuck_recovery::SupervisorConfig;
+using multi_purpose_mpc_ros::stuck_recovery::SolverForwardFallbackUnlockRequest;
 using multi_purpose_mpc_ros::stuck_recovery::compute_rejoin_steering_tire_angle;
 using multi_purpose_mpc_ros::stuck_recovery::recovery_escape_distance_confirmed;
 using multi_purpose_mpc_ros::stuck_recovery::should_override_deliberate_stop_for_collision;
 using multi_purpose_mpc_ros::stuck_recovery::solver_fallback_requires_reverse_only;
+using multi_purpose_mpc_ros::stuck_recovery::solver_forward_fallback_unlock_allowed;
 using multi_purpose_mpc_ros::stuck_recovery::reverse_actuation_calibration_is_valid;
 using multi_purpose_mpc_ros::stuck_recovery::reverse_stopping_distance_reserve_m;
 using multi_purpose_mpc_ros::stuck_recovery::recovery_candidate_commit_allowed;
@@ -318,11 +320,13 @@ TEST(StuckRecoveryReverseIntent, RequiresExplicitFailureBeforeForwardFallback)
   input.solver_reverse_only_candidate = true;
   EXPECT_TRUE(recovery_reverse_direction_required(input));
   input.forward_fallback_unlocked = true;
-  EXPECT_TRUE(recovery_reverse_direction_required(input));
+  EXPECT_FALSE(recovery_reverse_direction_required(input));
   input.forward_fallback_unlocked = false;
   input.solver_reverse_only_candidate = false;
 
   input.reverse_only_episode = true;
+  EXPECT_TRUE(recovery_reverse_direction_required(input));
+  input.forward_fallback_unlocked = true;
   EXPECT_TRUE(recovery_reverse_direction_required(input));
 }
 
@@ -2832,6 +2836,82 @@ TEST(StuckRecoveryPolicy, RearWallReleasesStaleReverseLatchesOnlyDuringRecovery)
     true, false, true, true));
   EXPECT_FALSE(should_release_reverse_only_for_rear_wall(
     true, true, false, false));
+}
+
+TEST(StuckRecoveryPolicy, SolverForwardFallbackRequiresCompleteFailedReverseAttempt)
+{
+  SolverForwardFallbackUnlockRequest request;
+  request.simulation_environment = true;
+  request.aggressive_sim_recovery_enabled = true;
+  request.aggressive_retry = true;
+  request.solver_fallback_active = true;
+  request.solver_reverse_only_episode = true;
+  request.wall_absent = true;
+  request.current_footprint_clear = true;
+  request.reverse_candidates_checked = true;
+  request.reverse_candidates_blocked = true;
+  request.forward_static_clear = true;
+  request.v2x_information_complete = true;
+  request.v2x_clear = true;
+  request.boost_inactive_confirmed = true;
+  EXPECT_TRUE(solver_forward_fallback_unlock_allowed(request));
+
+  request.reverse_candidates_checked = false;
+  EXPECT_FALSE(solver_forward_fallback_unlock_allowed(request));
+  request.reverse_candidates_checked = true;
+  request.reverse_candidates_blocked = false;
+  EXPECT_FALSE(solver_forward_fallback_unlock_allowed(request));
+  request.reverse_candidates_blocked = true;
+  request.forward_static_clear = false;
+  EXPECT_FALSE(solver_forward_fallback_unlock_allowed(request));
+}
+
+TEST(StuckRecoveryPolicy, SolverForwardFallbackFailsClosedOutsideSimulationSafetyGates)
+{
+  SolverForwardFallbackUnlockRequest request;
+  request.simulation_environment = true;
+  request.aggressive_sim_recovery_enabled = true;
+  request.aggressive_retry = true;
+  request.solver_fallback_active = true;
+  request.solver_reverse_only_episode = true;
+  request.wall_absent = true;
+  request.current_footprint_clear = true;
+  request.reverse_candidates_checked = true;
+  request.reverse_candidates_blocked = true;
+  request.forward_static_clear = true;
+  request.v2x_information_complete = true;
+  request.v2x_clear = true;
+  request.boost_inactive_confirmed = true;
+
+  request.simulation_environment = false;
+  EXPECT_FALSE(solver_forward_fallback_unlock_allowed(request));
+  request.simulation_environment = true;
+  request.aggressive_sim_recovery_enabled = false;
+  EXPECT_FALSE(solver_forward_fallback_unlock_allowed(request));
+  request.aggressive_sim_recovery_enabled = true;
+  request.aggressive_retry = false;
+  EXPECT_FALSE(solver_forward_fallback_unlock_allowed(request));
+  request.aggressive_retry = true;
+  request.solver_fallback_active = false;
+  EXPECT_FALSE(solver_forward_fallback_unlock_allowed(request));
+  request.solver_fallback_active = true;
+  request.solver_reverse_only_episode = false;
+  EXPECT_FALSE(solver_forward_fallback_unlock_allowed(request));
+  request.solver_reverse_only_episode = true;
+  request.wall_absent = false;
+  EXPECT_FALSE(solver_forward_fallback_unlock_allowed(request));
+  request.wall_absent = true;
+  request.current_footprint_clear = false;
+  EXPECT_FALSE(solver_forward_fallback_unlock_allowed(request));
+  request.current_footprint_clear = true;
+  request.v2x_information_complete = false;
+  EXPECT_FALSE(solver_forward_fallback_unlock_allowed(request));
+  request.v2x_information_complete = true;
+  request.v2x_clear = false;
+  EXPECT_FALSE(solver_forward_fallback_unlock_allowed(request));
+  request.v2x_clear = true;
+  request.boost_inactive_confirmed = false;
+  EXPECT_FALSE(solver_forward_fallback_unlock_allowed(request));
 }
 
 TEST(StuckRecoveryPolicy, InvalidHeadingCannotRelaxEvidenceFreeRecovery)

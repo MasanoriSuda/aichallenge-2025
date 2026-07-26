@@ -258,10 +258,14 @@ bool recovery_escape_distance_confirmed(
 
 bool solver_fallback_requires_reverse_only(
   const bool solver_fallback, const bool evidence_free_recovery_enabled,
-  const bool wall_evidence, const double heading_error_rad,
+  const bool wall_evidence, const bool rear_wall_evidence,
+  const double heading_error_rad,
   const double reverse_only_heading_error_rad) noexcept
 {
   if (!solver_fallback) {
+    return false;
+  }
+  if (wall_evidence && rear_wall_evidence) {
     return false;
   }
   const bool large_heading_error =
@@ -271,6 +275,14 @@ bool solver_fallback_requires_reverse_only(
     std::abs(heading_error_rad) >= reverse_only_heading_error_rad;
   return large_heading_error ||
          (evidence_free_recovery_enabled && !wall_evidence);
+}
+
+bool should_release_reverse_only_for_rear_wall(
+  const bool recovery_context_active, const bool rear_wall_evidence,
+  const bool reverse_only_episode, const bool reverse_intent_latched) noexcept
+{
+  return recovery_context_active && rear_wall_evidence &&
+         (reverse_only_episode || reverse_intent_latched);
 }
 
 bool source_timestamp_is_monotonic(

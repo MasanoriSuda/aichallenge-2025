@@ -114,11 +114,20 @@ bool recovery_escape_distance_confirmed(
 
 // Evidence-free solver recovery must remain reverse-only. When current wall
 // evidence exists, however, the wall direction selects the safe escape unless
-// the heading error is large enough to forbid a short forward maneuver.
+// the heading error is large enough to forbid a short forward maneuver. An
+// explicitly observed Rear wall always requires Forward escape and therefore
+// overrides the solver-only Reverse preference.
 bool solver_fallback_requires_reverse_only(
   bool solver_fallback, bool evidence_free_recovery_enabled,
-  bool wall_evidence, double heading_error_rad,
+  bool wall_evidence, bool rear_wall_evidence, double heading_error_rad,
   double reverse_only_heading_error_rad) noexcept;
+
+// A Rear wall requires a persistent transition away from stale Reverse state;
+// merely relaxing the current solver candidate is insufficient because the
+// episode and intent latches otherwise keep Reverse selected.
+bool should_release_reverse_only_for_rear_wall(
+  bool recovery_context_active, bool rear_wall_evidence,
+  bool reverse_only_episode, bool reverse_intent_latched) noexcept;
 
 struct RejoinSteeringRequest
 {

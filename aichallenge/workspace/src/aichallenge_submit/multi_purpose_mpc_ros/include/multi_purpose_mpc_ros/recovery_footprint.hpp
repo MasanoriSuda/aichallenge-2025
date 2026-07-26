@@ -155,6 +155,7 @@ enum class RejectReason
   ContactWorsened,
   ContactNotImproved,
   InitialContactNotCleared,
+  NotEvaluated,
 };
 
 enum class ContactEscapePolicy

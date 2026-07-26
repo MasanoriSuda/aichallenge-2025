@@ -440,6 +440,8 @@ const char * to_string(const RejectReason reason) noexcept
   switch (reason) {
     case RejectReason::None:
       return "none";
+    case RejectReason::NotEvaluated:
+      return "not_evaluated";
     case RejectReason::InvalidGrid:
       return "invalid_grid";
     case RejectReason::InvalidFootprint:

@@ -776,6 +776,8 @@ TEST(RecoveryFootprintValidation, RejectsUnboundedSamplingRequestsDeterministica
 
 TEST(RecoveryFootprintStrings, RejectReasonsAndPrimitivesHaveStableNames)
 {
+  EXPECT_STREQ(
+    recovery::to_string(recovery::RejectReason::NotEvaluated), "not_evaluated");
   EXPECT_STREQ(recovery::to_string(recovery::RejectReason::NewContact), "new_contact");
   EXPECT_STREQ(
     recovery::to_string(recovery::RejectReason::InitialContactNotForward),

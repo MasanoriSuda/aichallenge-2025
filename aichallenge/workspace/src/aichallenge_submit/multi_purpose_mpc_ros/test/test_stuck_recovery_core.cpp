@@ -48,6 +48,7 @@ using multi_purpose_mpc_ros::stuck_recovery::reverse_stopping_distance_reserve_m
 using multi_purpose_mpc_ros::stuck_recovery::recovery_candidate_commit_allowed;
 using multi_purpose_mpc_ros::stuck_recovery::recovery_reverse_direction_required;
 using multi_purpose_mpc_ros::stuck_recovery::recovery_reverse_intent_latch_allowed;
+using multi_purpose_mpc_ros::stuck_recovery::should_release_reverse_only_for_rear_wall;
 using multi_purpose_mpc_ros::stuck_recovery::source_sample_is_current;
 using multi_purpose_mpc_ros::stuck_recovery::source_timestamp_is_monotonic;
 
@@ -2798,25 +2799,47 @@ TEST(StuckRecoveryCore, PersistentFallbackCanReturnToStepReassessment)
 TEST(StuckRecoveryPolicy, EvidenceFreeSolverFallbackRequiresReverse)
 {
   EXPECT_TRUE(solver_fallback_requires_reverse_only(
-    true, true, false, 0.2, 1.0));
+    true, true, false, false, 0.2, 1.0));
   EXPECT_FALSE(solver_fallback_requires_reverse_only(
-    false, true, false, 2.0, 1.0));
+    false, true, false, false, 2.0, 1.0));
 }
 
 TEST(StuckRecoveryPolicy, WallEvidenceAllowsDirectionSelectedEscape)
 {
   EXPECT_FALSE(solver_fallback_requires_reverse_only(
-    true, true, true, -0.86, 1.0));
+    true, true, true, false, -0.86, 1.0));
   EXPECT_TRUE(solver_fallback_requires_reverse_only(
-    true, true, true, -1.01, 1.0));
+    true, true, true, false, -1.01, 1.0));
+}
+
+TEST(StuckRecoveryPolicy, RearWallOverridesLargeHeadingSolverReverseOnly)
+{
+  EXPECT_FALSE(solver_fallback_requires_reverse_only(
+    true, true, true, true, 2.8, 1.0));
+  EXPECT_TRUE(solver_fallback_requires_reverse_only(
+    true, true, true, false, 2.8, 1.0));
+}
+
+TEST(StuckRecoveryPolicy, RearWallReleasesStaleReverseLatchesOnlyDuringRecovery)
+{
+  EXPECT_TRUE(should_release_reverse_only_for_rear_wall(
+    true, true, true, false));
+  EXPECT_TRUE(should_release_reverse_only_for_rear_wall(
+    true, true, false, true));
+  EXPECT_FALSE(should_release_reverse_only_for_rear_wall(
+    false, true, true, true));
+  EXPECT_FALSE(should_release_reverse_only_for_rear_wall(
+    true, false, true, true));
+  EXPECT_FALSE(should_release_reverse_only_for_rear_wall(
+    true, true, false, false));
 }
 
 TEST(StuckRecoveryPolicy, InvalidHeadingCannotRelaxEvidenceFreeRecovery)
 {
   EXPECT_TRUE(solver_fallback_requires_reverse_only(
-    true, true, false, std::numeric_limits<double>::quiet_NaN(), 1.0));
+    true, true, false, false, std::numeric_limits<double>::quiet_NaN(), 1.0));
   EXPECT_FALSE(solver_fallback_requires_reverse_only(
-    true, false, true, std::numeric_limits<double>::quiet_NaN(), 1.0));
+    true, false, true, false, std::numeric_limits<double>::quiet_NaN(), 1.0));
 }
 
 TEST(StuckRecoveryCore, ResetSessionClearsDetectorAndSupervisorHistory) {

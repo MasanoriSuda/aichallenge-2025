@@ -9630,13 +9630,13 @@ struct RecoverySafetySnapshot
   bool current_footprint_clear{false};
   bool rejoin_forward_static_clear{false};
   recovery_footprint::RejectReason rejoin_static_reject_reason{
-    recovery_footprint::RejectReason::InvalidGrid};
+    recovery_footprint::RejectReason::NotEvaluated};
   double rejoin_static_rejected_at_distance_m{};
   bool collision_worsening{false};
   std::vector<std::size_t> current_contact_cells;
   std::size_t current_contact_count{};
   recovery_footprint::RejectReason static_reject_reason{
-    recovery_footprint::RejectReason::InvalidGrid};
+    recovery_footprint::RejectReason::NotEvaluated};
   recovery_footprint::RejectReason runtime_contact_reject_reason{
     recovery_footprint::RejectReason::None};
   std::size_t static_initial_contact_count{};
@@ -13833,11 +13833,26 @@ private:
         wall_proximity.region != recovery_footprint::WallRegion::Unknown;
       current_wall_region = wall_proximity.region;
     }
+    const bool rear_wall_forward_escape_required =
+      current_wall_evidence &&
+      current_wall_region == recovery_footprint::WallRegion::Rear;
+    if (stuck_recovery::should_release_reverse_only_for_rear_wall(
+        recovery_context_active, rear_wall_forward_escape_required,
+        recovery_reverse_only_episode_, recovery_reverse_intent_latched_))
+    {
+      recovery_reverse_only_episode_ = false;
+      recovery_reverse_intent_latched_ = false;
+      recovery_forward_fallback_unlocked_ = true;
+      RCLCPP_WARN(
+        get_logger(),
+        "Stuck recovery released Reverse-only latch: explicit Rear wall requires Forward escape");
+    }
     const bool solver_reverse_only_candidate =
       stuck_recovery::solver_fallback_requires_reverse_only(
       mpc_fallback_active,
       cfg_.stuck_recovery.core.detector.solver_evidence_free_recovery_enabled,
-      current_wall_evidence, car_->spatial_state.e_psi,
+      current_wall_evidence, rear_wall_forward_escape_required,
+      car_->spatial_state.e_psi,
       cfg_.stuck_recovery.solver_reverse_only_heading_error_rad);
     const bool low_speed_obstacle =
       std::abs(actual_v) <= cfg_.stuck_recovery.core.detector.stopped_speed_mps &&

@@ -45,7 +45,9 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeLineHeadingReferenceRequ
 using multi_purpose_mpc_ros::v2x_overtake_core::SideOvertakeEntryRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeLineHorizonProgressRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassSideLateralGoalRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::FeasiblePassSideLateralGoalRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassCorridorCenterRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::CompletedPassReturnRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::AdaptiveShiftOutClosingSpeedRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeGuardPhaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeCurveContinuationRequest;
@@ -109,7 +111,10 @@ using multi_purpose_mpc_ros::v2x_overtake_core::
 using multi_purpose_mpc_ros::v2x_overtake_core::
   static_wall_clamp_requires_overtake_recovery;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_side_lateral_goal;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_feasible_pass_side_lateral_goal;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_corridor_center;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  should_return_completed_pass_before_margin_recovery;
 using multi_purpose_mpc_ros::v2x_overtake_core::has_reached_pass_side_lateral_goal;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_adaptive_shiftout_closing_speed;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_guard_phase;
@@ -647,6 +652,28 @@ TEST(V2XOvertakeCoreSpeed, ReleasesFrontCapOnlyWhilePhysicalLateralSeparationIsC
   EXPECT_FALSE(can_release_overtake_front_cap(request));
 }
 
+TEST(V2XOvertakeCoreSpeed, RetainsFrontCapReleaseOnlyInsideReapplyHysteresisBand)
+{
+  OvertakeFrontCapReleaseRequest request;
+  request.pass_phase = true;
+  request.lateral_separation_clear = false;
+  request.lateral_separation_release_active = true;
+  request.lateral_separation_above_reapply_threshold = true;
+  request.target_seen = true;
+  request.target_longitudinal_m = 5.0;
+  EXPECT_TRUE(can_release_overtake_front_cap(request));
+
+  request.lateral_separation_above_reapply_threshold = false;
+  EXPECT_FALSE(can_release_overtake_front_cap(request));
+  request.lateral_separation_release_active = false;
+  request.lateral_separation_above_reapply_threshold = true;
+  EXPECT_FALSE(can_release_overtake_front_cap(request));
+  request.lateral_separation_clear = true;
+  EXPECT_TRUE(can_release_overtake_front_cap(request));
+  request.target_seen = false;
+  EXPECT_FALSE(can_release_overtake_front_cap(request));
+}
+
 TEST(V2XOvertakeCoreSpeed, ExcludesOnlyLaterallyClearLockedTargetDuringPass)
 {
   PassFrontOverlapExclusionRequest request;
@@ -1076,6 +1103,71 @@ TEST(V2XOvertakeCoreSpeed, FixedBreakoutGoalDoesNotChaseTurningTarget)
 
   request.fixed_lateral_goal_m = std::numeric_limits<double>::quiet_NaN();
   EXPECT_DOUBLE_EQ(resolve_pass_side_lateral_goal(request), -2.41);
+}
+
+TEST(V2XOvertakeCoreSpeed, IntersectsPreferredGoalWithTargetSeparationAndWallBounds)
+{
+  FeasiblePassSideLateralGoalRequest request;
+  request.pass_side_sign = 1;
+  request.preferred_goal_m = 0.8;
+  request.target_lateral_m = 0.4;
+  request.minimum_separation_m = 1.5;
+  request.feasible_lower_bound_m = -2.0;
+  request.feasible_upper_bound_m = 2.2;
+  request.enforce_target_separation = true;
+  auto resolution = resolve_feasible_pass_side_lateral_goal(request);
+  EXPECT_TRUE(resolution.target_separation_feasible);
+  EXPECT_DOUBLE_EQ(resolution.goal_m, 1.9);
+
+  request.pass_side_sign = -1;
+  request.preferred_goal_m = -0.8;
+  request.target_lateral_m = -0.2;
+  request.feasible_lower_bound_m = -2.2;
+  request.feasible_upper_bound_m = 2.0;
+  resolution = resolve_feasible_pass_side_lateral_goal(request);
+  EXPECT_TRUE(resolution.target_separation_feasible);
+  EXPECT_DOUBLE_EQ(resolution.goal_m, -1.7);
+}
+
+TEST(V2XOvertakeCoreSpeed, PreservesWallFeasibleGoalWhenTargetSeparationDoesNotFit)
+{
+  FeasiblePassSideLateralGoalRequest request;
+  request.pass_side_sign = 1;
+  request.preferred_goal_m = 0.8;
+  request.target_lateral_m = 0.4;
+  request.minimum_separation_m = 1.5;
+  request.feasible_lower_bound_m = -1.0;
+  request.feasible_upper_bound_m = 1.8;
+  request.enforce_target_separation = true;
+  auto resolution = resolve_feasible_pass_side_lateral_goal(request);
+  EXPECT_FALSE(resolution.target_separation_feasible);
+  EXPECT_DOUBLE_EQ(resolution.goal_m, 0.8);
+
+  request.enforce_target_separation = false;
+  request.preferred_goal_m = 2.1;
+  resolution = resolve_feasible_pass_side_lateral_goal(request);
+  EXPECT_TRUE(resolution.target_separation_feasible);
+  EXPECT_DOUBLE_EQ(resolution.goal_m, 1.8);
+}
+
+TEST(V2XOvertakeCoreSpeed, ReturnsCompletedPassBeforeMarginOnlyRecovery)
+{
+  CompletedPassReturnRequest request;
+  request.pass_phase = true;
+  request.lateral_separation_latched = true;
+  request.target_seen = true;
+  request.target_longitudinal_m = -0.5;
+  request.rear_clear_distance_m = 0.5;
+  EXPECT_TRUE(should_return_completed_pass_before_margin_recovery(request));
+
+  request.target_longitudinal_m = -0.49;
+  EXPECT_FALSE(should_return_completed_pass_before_margin_recovery(request));
+  request.target_longitudinal_m = -0.5;
+  request.physical_path_blocked = true;
+  EXPECT_FALSE(should_return_completed_pass_before_margin_recovery(request));
+  request.physical_path_blocked = false;
+  request.pass_phase = false;
+  EXPECT_FALSE(should_return_completed_pass_before_margin_recovery(request));
 }
 
 TEST(V2XOvertakeCoreSpeed, ResolvesCenterOfValidatedPassCorridor)

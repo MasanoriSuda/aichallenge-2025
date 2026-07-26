@@ -425,6 +425,7 @@ mpc:
   # remains the fallback when a fresh planner corridor is unavailable at entry.
   v2x_overtake_line_min_target_separation: 1.50 # [m] combined kart width plus prediction margin
   v2x_overtake_pass_front_overlap_lateral_clearance: 1.50 # [m] current physical clearance required before front-cap release
+  v2x_overtake_pass_front_cap_reapply_lateral_clearance: 1.30 # [m] reapply cap below this after 1.50m release; collision protection still uses 1.50m
   v2x_overtake_line_progress_watchdog_distance: 32.0 # [m] abort a committed single-target Pass with no longitudinal gain
   v2x_overtake_line_progress_watchdog_min_progress: 0.5 # [m] target-distance reduction that rearms the distance watchdog
   v2x_overtake_completion_guard_enabled: true # require enough distance to clear the target before a hard hairpin

@@ -225,7 +225,11 @@ bool can_release_overtake_front_cap(
   {
     return false;
   }
-  return request.lateral_separation_clear ||
+  const bool lateral_release =
+    request.lateral_separation_clear ||
+    (request.lateral_separation_release_active &&
+    request.lateral_separation_above_reapply_threshold);
+  return lateral_release ||
          (request.lateral_complete && request.target_longitudinal_m <= 0.0);
 }
 
@@ -476,6 +480,60 @@ double resolve_pass_side_lateral_goal(const PassSideLateralGoalRequest & request
     std::max(base_goal, target_side_goal) : std::min(base_goal, target_side_goal);
 }
 
+FeasiblePassSideLateralGoalResolution resolve_feasible_pass_side_lateral_goal(
+  const FeasiblePassSideLateralGoalRequest & request) noexcept
+{
+  FeasiblePassSideLateralGoalResolution resolution;
+  if (
+    !std::isfinite(request.preferred_goal_m) ||
+    !std::isfinite(request.feasible_lower_bound_m) ||
+    !std::isfinite(request.feasible_upper_bound_m) ||
+    request.feasible_upper_bound_m < request.feasible_lower_bound_m)
+  {
+    return resolution;
+  }
+
+  const auto clamp_to_interval = [](const double value, const double lower, const double upper) {
+      return std::min(upper, std::max(lower, value));
+    };
+  resolution.goal_m = clamp_to_interval(
+    request.preferred_goal_m,
+    request.feasible_lower_bound_m, request.feasible_upper_bound_m);
+
+  const bool valid_separation_request =
+    request.enforce_target_separation &&
+    request.pass_side_sign != 0 &&
+    std::isfinite(request.target_lateral_m) &&
+    std::isfinite(request.minimum_separation_m) &&
+    request.minimum_separation_m >= 0.0;
+  if (!request.enforce_target_separation) {
+    resolution.target_separation_feasible = true;
+    return resolution;
+  }
+  if (!valid_separation_request) {
+    return resolution;
+  }
+
+  double separated_lower = request.feasible_lower_bound_m;
+  double separated_upper = request.feasible_upper_bound_m;
+  const double target_side_limit =
+    request.target_lateral_m +
+    static_cast<double>(request.pass_side_sign) * request.minimum_separation_m;
+  if (request.pass_side_sign > 0) {
+    separated_lower = std::max(separated_lower, target_side_limit);
+  } else {
+    separated_upper = std::min(separated_upper, target_side_limit);
+  }
+  if (separated_upper < separated_lower) {
+    return resolution;
+  }
+
+  resolution.goal_m = clamp_to_interval(
+    request.preferred_goal_m, separated_lower, separated_upper);
+  resolution.target_separation_feasible = true;
+  return resolution;
+}
+
 std::optional<double> resolve_pass_corridor_center(
   const PassCorridorCenterRequest & request) noexcept
 {
@@ -486,6 +544,19 @@ std::optional<double> resolve_pass_corridor_center(
     return std::nullopt;
   }
   return 0.5 * (request.lower_bound_m + request.upper_bound_m);
+}
+
+bool should_return_completed_pass_before_margin_recovery(
+  const CompletedPassReturnRequest & request) noexcept
+{
+  return request.pass_phase &&
+         request.lateral_separation_latched &&
+         request.target_seen &&
+         !request.physical_path_blocked &&
+         std::isfinite(request.target_longitudinal_m) &&
+         std::isfinite(request.rear_clear_distance_m) &&
+         request.rear_clear_distance_m >= 0.0 &&
+         request.target_longitudinal_m <= -request.rear_clear_distance_m;
 }
 
 AdaptiveShiftOutClosingSpeedResolution resolve_adaptive_shiftout_closing_speed(

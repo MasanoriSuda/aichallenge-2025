@@ -163,13 +163,17 @@ struct OvertakeFrontCapReleaseRequest
   bool pass_phase{false};
   bool lateral_complete{false};
   bool lateral_separation_clear{false};
+  bool lateral_separation_release_active{false};
+  bool lateral_separation_above_reapply_threshold{false};
   bool target_seen{false};
   double target_longitudinal_m{};
 };
 
 /// Release the front-speed cap while physical lateral separation is currently
-/// clear, or when the locked target is observed no longer ahead after lateral
-/// ShiftOut has completed. A historical continuity latch is not sufficient.
+/// clear. After the release threshold has been reached once, retain release only
+/// inside the caller-provided reapply hysteresis band. A substantial clearance
+/// collapse reapplies the cap. The target-behind completion remains available
+/// after lateral ShiftOut has completed.
 bool can_release_overtake_front_cap(
   const OvertakeFrontCapReleaseRequest & request) noexcept;
 
@@ -418,6 +422,30 @@ struct PassSideLateralGoalRequest
 /// validated, vehicle-inflated pass corridor.
 double resolve_pass_side_lateral_goal(const PassSideLateralGoalRequest & request) noexcept;
 
+struct FeasiblePassSideLateralGoalRequest
+{
+  int pass_side_sign{};
+  double preferred_goal_m{};
+  double target_lateral_m{};
+  double minimum_separation_m{};
+  double feasible_lower_bound_m{};
+  double feasible_upper_bound_m{};
+  bool enforce_target_separation{false};
+};
+
+struct FeasiblePassSideLateralGoalResolution
+{
+  double goal_m{};
+  bool target_separation_feasible{false};
+};
+
+/// Intersect the current wall-feasible lateral interval with the selected-side
+/// minimum target separation. If the intersection is empty, preserve the wall
+/// interval and report the target separation as infeasible so speed/collision
+/// protection can remain active.
+FeasiblePassSideLateralGoalResolution resolve_feasible_pass_side_lateral_goal(
+  const FeasiblePassSideLateralGoalRequest & request) noexcept;
+
 struct PassCorridorCenterRequest
 {
   bool active{};
@@ -429,6 +457,22 @@ struct PassCorridorCenterRequest
 /// already applied obstacle inflation and wall clearance.
 std::optional<double> resolve_pass_corridor_center(
   const PassCorridorCenterRequest & request) noexcept;
+
+struct CompletedPassReturnRequest
+{
+  bool pass_phase{false};
+  bool lateral_separation_latched{false};
+  bool target_seen{false};
+  bool physical_path_blocked{false};
+  double target_longitudinal_m{};
+  double rear_clear_distance_m{};
+};
+
+/// A committed Pass whose locked target is already behind should merge back
+/// instead of entering a margin-only Recovery. Physical contact or a physically
+/// infeasible path remains a Recovery condition.
+bool should_return_completed_pass_before_margin_recovery(
+  const CompletedPassReturnRequest & request) noexcept;
 
 struct AdaptiveShiftOutClosingSpeedRequest
 {

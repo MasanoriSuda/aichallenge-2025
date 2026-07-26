@@ -474,6 +474,40 @@ struct CompletedPassReturnRequest
 bool should_return_completed_pass_before_margin_recovery(
   const CompletedPassReturnRequest & request) noexcept;
 
+struct ReturnCorridorOccupancyRequest
+{
+  bool vehicle_is_locked_target{false};
+  bool geometry_valid{false};
+  double ego_lateral_m{};
+  double vehicle_lateral_m{};
+  double vehicle_longitudinal_m{};
+  double lateral_clearance_m{};
+  double rear_clearance_m{};
+  double front_clearance_m{};
+};
+
+/// Return true when a non-target V2X vehicle occupies the lateral sweep from
+/// the current pass line to the reference path and is close enough
+/// longitudinally to make an immediate merge unsafe.
+bool blocks_overtake_return_corridor(
+  const ReturnCorridorOccupancyRequest & request) noexcept;
+
+struct EarlyReturnCancellationRequest
+{
+  bool return_phase{false};
+  bool reacquire_enabled{false};
+  bool return_corridor_blocked{false};
+  double return_elapsed_sec{};
+  double reacquire_window_sec{};
+  double return_progress{};
+  double maximum_return_progress{};
+};
+
+/// Cancel only a newly started Return when another vehicle enters the merge
+/// corridor. A late outward correction is intentionally rejected.
+bool should_cancel_early_overtake_return(
+  const EarlyReturnCancellationRequest & request) noexcept;
+
 struct AdaptiveShiftOutClosingSpeedRequest
 {
   double minimum_closing_speed_mps{};

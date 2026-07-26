@@ -1770,6 +1770,12 @@ struct V2XBehaviorOutput
   bool overtake_gap_hold_active{false};
   bool overtake_fallback_target{false};
   bool overtake_cooldown_active{false};
+  bool overtake_return_corridor_blocked{false};
+  std::string overtake_return_corridor_blocker_id;
+  double overtake_return_corridor_blocker_longitudinal{
+    std::numeric_limits<double>::infinity()};
+  double overtake_return_corridor_blocker_lateral{
+    std::numeric_limits<double>::infinity()};
   int overtake_pass_side_sign{0};
   int overtake_plan_N{0};
   double overtake_side_clearance{0.0};
@@ -1847,6 +1853,8 @@ struct OvertakeLineState
   double last_valid_execution_corridor_sec{std::numeric_limits<double>::quiet_NaN()};
   bool execution_corridor_hold_active{false};
   bool committed_execution_corridor_bypass_active{false};
+  bool return_corridor_blocked{false};
+  std::string return_corridor_blocker_id;
 };
 
 struct OvertakeLineOutput
@@ -3957,6 +3965,14 @@ struct MPC
     std::string nearest_side_id;
     double nearest_side_abs_longitudinal = std::numeric_limits<double>::infinity();
     double nearest_side_course_longitudinal = std::numeric_limits<double>::infinity();
+    bool overtake_return_corridor_blocked = false;
+    std::string overtake_return_corridor_blocker_id;
+    double overtake_return_corridor_blocker_longitudinal =
+      std::numeric_limits<double>::infinity();
+    double overtake_return_corridor_blocker_lateral =
+      std::numeric_limits<double>::infinity();
+    double nearest_return_corridor_blocker_distance =
+      std::numeric_limits<double>::infinity();
     double start_grid_peer_max_speed = 0.0;
     const bool continuing_low_speed_avoidance =
       v2x_behavior_state_initialized && v2x_behavior_state == V2XBehaviorState::LowSpeedAvoidance;
@@ -4070,6 +4086,45 @@ struct MPC
           lateral});
       const double front_vehicle_speed = use_course_progress ?
         course_projection.along_track_speed_mps : vehicle_speed;
+      const double vehicle_course_lateral = use_course_progress ?
+        front_lateral : model->spatial_state.e_y + lateral;
+      const double vehicle_course_longitudinal = use_course_progress ?
+        front_longitudinal : longitudinal;
+      const bool vehicle_is_locked_target =
+        !overtake_line_state_.target_vehicle_id.empty() &&
+        vehicle.id == overtake_line_state_.target_vehicle_id;
+      const double return_corridor_lateral_clearance =
+        cfg.v2x_gap.vehicle_radius + cfg.v2x_gap.prediction_margin;
+      const double return_corridor_rear_clearance = std::max(
+        std::max(0.0, cfg.v2x_behavior.overtake_line.return_clear_distance),
+        side_longitudinal_range);
+      const double return_corridor_front_clearance = std::max(
+        side_longitudinal_range,
+        std::max(0.0, cfg.v2x_behavior.moving_safety_brake_distance));
+      const bool blocks_return_corridor =
+        v2x_overtake_core::blocks_overtake_return_corridor(
+        v2x_overtake_core::ReturnCorridorOccupancyRequest{
+          vehicle_is_locked_target,
+          !vehicle.position_jump && std::isfinite(vehicle_course_lateral) &&
+          std::isfinite(vehicle_course_longitudinal),
+          model->spatial_state.e_y,
+          vehicle_course_lateral,
+          vehicle_course_longitudinal,
+          return_corridor_lateral_clearance,
+          return_corridor_rear_clearance,
+          return_corridor_front_clearance});
+      if (
+        blocks_return_corridor &&
+        std::abs(vehicle_course_longitudinal) <
+        nearest_return_corridor_blocker_distance)
+      {
+        overtake_return_corridor_blocked = true;
+        overtake_return_corridor_blocker_id = vehicle.id;
+        overtake_return_corridor_blocker_longitudinal = vehicle_course_longitudinal;
+        overtake_return_corridor_blocker_lateral = vehicle_course_lateral;
+        nearest_return_corridor_blocker_distance =
+          std::abs(vehicle_course_longitudinal);
+      }
       if (
         !front_hazard_hold_target_id_.empty() &&
         vehicle.id == front_hazard_hold_target_id_ &&
@@ -4298,6 +4353,13 @@ struct MPC
     output.has_side_vehicle = has_side_vehicle;
     output.has_low_speed_clearance_vehicle = has_low_speed_clearance_vehicle;
     output.has_danger_vehicle = has_danger_vehicle;
+    output.overtake_return_corridor_blocked = overtake_return_corridor_blocked;
+    output.overtake_return_corridor_blocker_id =
+      overtake_return_corridor_blocker_id;
+    output.overtake_return_corridor_blocker_longitudinal =
+      overtake_return_corridor_blocker_longitudinal;
+    output.overtake_return_corridor_blocker_lateral =
+      overtake_return_corridor_blocker_lateral;
     output.target_vehicle_id = has_front_vehicle ? nearest_front_id : nearest_side_id;
     if (
       output.locked_target_seen &&
@@ -7424,6 +7486,42 @@ private:
       rear_clear_observed &&
       now_sec - overtake_line_state_.rear_clear_since_sec >=
       std::max(0.0, line_cfg.clear_confirm_sec);
+    const bool return_corridor_guard_active =
+      overtake_line_state_.phase == OvertakeLinePhase::Pass ||
+      overtake_line_state_.phase == OvertakeLinePhase::Return;
+    const bool return_corridor_blocked =
+      return_corridor_guard_active &&
+      behavior_output.overtake_return_corridor_blocked;
+    if (return_corridor_guard_active) {
+      const bool return_corridor_state_changed =
+        return_corridor_blocked != overtake_line_state_.return_corridor_blocked ||
+        (return_corridor_blocked &&
+        behavior_output.overtake_return_corridor_blocker_id !=
+        overtake_line_state_.return_corridor_blocker_id);
+      if (return_corridor_state_changed && line_cfg.debug_log_enabled) {
+        RCLCPP_INFO(
+          rclcpp::get_logger("mpc_controller"),
+          "OvertakeLine return corridor: %s, blocker=%s, s=%.2f, ey=%.2f, "
+          "phase=%s, wp_id=%d",
+          return_corridor_blocked ? "Blocked" : "Released",
+          return_corridor_blocked ?
+          behavior_output.overtake_return_corridor_blocker_id.c_str() : "none",
+          return_corridor_blocked ?
+          behavior_output.overtake_return_corridor_blocker_longitudinal :
+          std::numeric_limits<double>::infinity(),
+          return_corridor_blocked ?
+          behavior_output.overtake_return_corridor_blocker_lateral :
+          std::numeric_limits<double>::infinity(),
+          to_string(overtake_line_state_.phase), model->wp_id);
+      }
+      overtake_line_state_.return_corridor_blocked = return_corridor_blocked;
+      overtake_line_state_.return_corridor_blocker_id =
+        return_corridor_blocked ?
+        behavior_output.overtake_return_corridor_blocker_id : "";
+    } else {
+      overtake_line_state_.return_corridor_blocked = false;
+      overtake_line_state_.return_corridor_blocker_id.clear();
+    }
     const bool active_execution_phase =
       overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
       overtake_line_state_.phase == OvertakeLinePhase::Pass;
@@ -7480,8 +7578,7 @@ private:
           clearance_sample.out_of_map, !clearance_sample.contact_cells.empty());
       }
     }
-    const bool completed_pass_ready_to_return_before_margin_recovery =
-      overtake_core::should_return_completed_pass_before_margin_recovery(
+    auto completed_pass_return_request =
       overtake_core::CompletedPassReturnRequest{
         overtake_line_state_.phase == OvertakeLinePhase::Pass,
         overtake_line_state_.pass_front_overlap_exclusion_latched,
@@ -7490,7 +7587,37 @@ private:
         behavior_output.locked_target_longitudinal,
         std::max(
           0.0,
-          cfg.v2x_behavior.overtake_active_hard_curve_rear_clear_distance)});
+          cfg.v2x_behavior.overtake_active_hard_curve_rear_clear_distance)};
+    const bool completed_pass_target_rear_before_margin_recovery =
+      overtake_core::should_return_completed_pass_before_margin_recovery(
+      completed_pass_return_request);
+    completed_pass_return_request.physical_path_blocked = return_corridor_blocked;
+    const bool completed_pass_ready_to_return_before_margin_recovery =
+      overtake_core::should_return_completed_pass_before_margin_recovery(
+      completed_pass_return_request);
+    const bool completed_pass_waiting_for_return_corridor =
+      completed_pass_target_rear_before_margin_recovery &&
+      return_corridor_blocked;
+    const double return_elapsed =
+      overtake_line_state_.phase == OvertakeLinePhase::Return ?
+      std::max(0.0, now_sec - overtake_line_state_.phase_start_sec) : 0.0;
+    const double return_progress_denominator =
+      std::max(0.1, std::abs(overtake_line_state_.phase_start_ey));
+    const double return_progress =
+      overtake_line_state_.phase == OvertakeLinePhase::Return ?
+      clip(
+        (std::abs(overtake_line_state_.phase_start_ey) - std::abs(current_ey)) /
+        return_progress_denominator, 0.0, 1.0) : 0.0;
+    const bool cancel_early_return_for_corridor_blocker =
+      overtake_core::should_cancel_early_overtake_return(
+      overtake_core::EarlyReturnCancellationRequest{
+        overtake_line_state_.phase == OvertakeLinePhase::Return,
+        line_cfg.reacquire_enabled,
+        return_corridor_blocked,
+        return_elapsed,
+        std::max(0.0, line_cfg.reacquire_window_sec),
+        return_progress,
+        std::max(0.0, line_cfg.reacquire_max_return_progress)});
     const bool pass_progress_watchdog_active =
       line_cfg.progress_watchdog_distance > 0.0 &&
       overtake_line_state_.phase == OvertakeLinePhase::Pass &&
@@ -7524,6 +7651,11 @@ private:
         OvertakeLinePhase::Recovery, now_sec, current_ey,
         overtake_line_state_.pass_side_sign,
         "actual footprint intersects static wall");
+    } else if (cancel_early_return_for_corridor_blocker) {
+      transition_overtake_line_phase(
+        OvertakeLinePhase::Pass, now_sec, current_ey,
+        overtake_line_state_.pass_side_sign,
+        "different vehicle entered return corridor");
     } else if (
       actual_wall_margin_blocked &&
       completed_pass_ready_to_return_before_margin_recovery &&
@@ -7533,6 +7665,14 @@ private:
         OvertakeLinePhase::Return, now_sec, current_ey,
         overtake_line_state_.pass_side_sign,
         "locked target rear; returning before wall-margin recovery");
+    } else if (
+      actual_wall_margin_blocked &&
+      completed_pass_waiting_for_return_corridor &&
+      !actual_wall_sample_unavailable)
+    {
+      output.target_velocity_limit = std::min(
+        output.target_velocity_limit,
+        std::max(0.0, line_cfg.recovery_velocity));
     } else if (actual_wall_margin_blocked) {
       const char * reason = actual_wall_sample_unavailable ?
         "actual footprint static wall check unavailable" :
@@ -7542,7 +7682,8 @@ private:
         overtake_line_state_.pass_side_sign, reason);
     } else if (
       overtake_line_state_.phase == OvertakeLinePhase::Pass &&
-      rear_clear_confirmed)
+      rear_clear_confirmed &&
+      !return_corridor_blocked)
     {
       transition_overtake_line_phase(
         OvertakeLinePhase::Return, now_sec, current_ey,
@@ -7701,9 +7842,12 @@ private:
           behavior_output.locked_target_longitudinal <= 0.0,
           active_execution_latched});
       if (continuity == overtake_core::ContinuityAction::Return) {
-        transition_overtake_line_phase(
-          OvertakeLinePhase::Return, now_sec, current_ey, overtake_line_state_.pass_side_sign,
-          "locked target rear clearance confirmed");
+        if (!return_corridor_blocked) {
+          transition_overtake_line_phase(
+            OvertakeLinePhase::Return, now_sec, current_ey,
+            overtake_line_state_.pass_side_sign,
+            "locked target rear clearance confirmed");
+        }
       } else if (continuity == overtake_core::ContinuityAction::Recovery) {
         const char * recovery_reason = overtake_solver_recovery_active_ ?
           "solver failure threshold reached" :
@@ -7824,6 +7968,7 @@ private:
     }
     if (
       overtake_line_state_.phase == OvertakeLinePhase::Return && phase_hold_elapsed &&
+      !return_corridor_blocked &&
       (overtake_line_state_.phase_traveled_m >= std::max(0.5, line_cfg.return_distance) ||
       std::abs(current_ey) < 0.15)) {
       reset_overtake_line_state(now_sec, "return complete");
@@ -8005,6 +8150,16 @@ private:
     output.target_epsi.assign(N, 0.0);
     output.target_active.assign(N, true);
     if (
+      return_corridor_blocked &&
+      (overtake_line_state_.phase == OvertakeLinePhase::Return ||
+      (overtake_line_state_.phase == OvertakeLinePhase::Pass &&
+      rear_clear_observed)))
+    {
+      output.target_velocity_limit = std::min(
+        output.target_velocity_limit,
+        std::max(0.0, line_cfg.recovery_velocity));
+    }
+    if (
       overtake_line_state_.phase == OvertakeLinePhase::Recovery &&
       (line_cfg.recovery_velocity_limit_enabled || overtake_solver_recovery_active_))
     {
@@ -8130,6 +8285,7 @@ private:
         static_map_margin_degraded_during_execution ?
         "static wall clearance margin infeasible" :
         "static wall clamp exceeds lateral acceleration limit";
+      bool rebuild_after_phase_transition = false;
       if (
         completed_pass_ready_to_return_before_margin_recovery &&
         !static_map_physical_infeasible_during_execution)
@@ -8138,14 +8294,25 @@ private:
           OvertakeLinePhase::Return, now_sec, current_ey,
           overtake_line_state_.pass_side_sign,
           "locked target rear; returning before static wall recovery");
+        rebuild_after_phase_transition = true;
+      } else if (
+        completed_pass_waiting_for_return_corridor &&
+        !static_map_physical_infeasible_during_execution)
+      {
+        output.target_velocity_limit = std::min(
+          output.target_velocity_limit,
+          std::max(0.0, line_cfg.recovery_velocity));
       } else {
         transition_overtake_line_phase(
           OvertakeLinePhase::Recovery, now_sec, current_ey,
           overtake_line_state_.pass_side_sign, reason);
+        rebuild_after_phase_transition = true;
       }
-      // Rebuild once from the new Return or Recovery phase so no part of the
-      // unrealizable ShiftOut/Pass horizon reaches the MPC.
-      return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
+      if (rebuild_after_phase_transition) {
+        // Rebuild once from the new Return or Recovery phase so no part of the
+        // unrealizable ShiftOut/Pass horizon reaches the MPC.
+        return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
+      }
     }
 
     double previous_target_ey = current_ey;

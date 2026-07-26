@@ -559,6 +559,58 @@ bool should_return_completed_pass_before_margin_recovery(
          request.target_longitudinal_m <= -request.rear_clear_distance_m;
 }
 
+bool blocks_overtake_return_corridor(
+  const ReturnCorridorOccupancyRequest & request) noexcept
+{
+  if (
+    request.vehicle_is_locked_target || !request.geometry_valid ||
+    !std::isfinite(request.ego_lateral_m) ||
+    !std::isfinite(request.vehicle_lateral_m) ||
+    !std::isfinite(request.vehicle_longitudinal_m) ||
+    !std::isfinite(request.lateral_clearance_m) ||
+    !std::isfinite(request.rear_clearance_m) ||
+    !std::isfinite(request.front_clearance_m) ||
+    request.lateral_clearance_m < 0.0 ||
+    request.rear_clearance_m < 0.0 ||
+    request.front_clearance_m < 0.0)
+  {
+    return false;
+  }
+
+  const double swept_lower =
+    std::min(0.0, request.ego_lateral_m) - request.lateral_clearance_m;
+  const double swept_upper =
+    std::max(0.0, request.ego_lateral_m) + request.lateral_clearance_m;
+  const bool inside_lateral_sweep =
+    request.vehicle_lateral_m >= swept_lower &&
+    request.vehicle_lateral_m <= swept_upper;
+  const bool inside_longitudinal_window =
+    request.vehicle_longitudinal_m >= -request.rear_clearance_m &&
+    request.vehicle_longitudinal_m <= request.front_clearance_m;
+  return inside_lateral_sweep && inside_longitudinal_window;
+}
+
+bool should_cancel_early_overtake_return(
+  const EarlyReturnCancellationRequest & request) noexcept
+{
+  if (
+    !request.return_phase || !request.reacquire_enabled ||
+    !request.return_corridor_blocked ||
+    !std::isfinite(request.return_elapsed_sec) ||
+    !std::isfinite(request.reacquire_window_sec) ||
+    !std::isfinite(request.return_progress) ||
+    !std::isfinite(request.maximum_return_progress) ||
+    request.return_elapsed_sec < 0.0 ||
+    request.reacquire_window_sec < 0.0 ||
+    request.return_progress < 0.0 ||
+    request.maximum_return_progress < 0.0)
+  {
+    return false;
+  }
+  return request.return_elapsed_sec <= request.reacquire_window_sec &&
+         request.return_progress <= request.maximum_return_progress;
+}
+
 AdaptiveShiftOutClosingSpeedResolution resolve_adaptive_shiftout_closing_speed(
   const AdaptiveShiftOutClosingSpeedRequest & request)
 {

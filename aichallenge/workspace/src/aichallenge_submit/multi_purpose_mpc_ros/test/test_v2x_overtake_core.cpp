@@ -48,6 +48,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::PassSideLateralGoalRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::FeasiblePassSideLateralGoalRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassCorridorCenterRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CompletedPassReturnRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::ReturnCorridorOccupancyRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::EarlyReturnCancellationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::AdaptiveShiftOutClosingSpeedRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeGuardPhaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeCurveContinuationRequest;
@@ -115,6 +117,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_feasible_pass_side_later
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_corridor_center;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   should_return_completed_pass_before_margin_recovery;
+using multi_purpose_mpc_ros::v2x_overtake_core::blocks_overtake_return_corridor;
+using multi_purpose_mpc_ros::v2x_overtake_core::should_cancel_early_overtake_return;
 using multi_purpose_mpc_ros::v2x_overtake_core::has_reached_pass_side_lateral_goal;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_adaptive_shiftout_closing_speed;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_guard_phase;
@@ -1168,6 +1172,81 @@ TEST(V2XOvertakeCoreSpeed, ReturnsCompletedPassBeforeMarginOnlyRecovery)
   request.physical_path_blocked = false;
   request.pass_phase = false;
   EXPECT_FALSE(should_return_completed_pass_before_margin_recovery(request));
+}
+
+TEST(V2XOvertakeCoreGeometry, BlocksReturnForDifferentVehicleInsideMergeSweep)
+{
+  ReturnCorridorOccupancyRequest request;
+  request.geometry_valid = true;
+  request.ego_lateral_m = -2.5;
+  request.vehicle_lateral_m = -0.4;
+  request.vehicle_longitudinal_m = 0.1;
+  request.lateral_clearance_m = 1.5;
+  request.rear_clearance_m = 3.5;
+  request.front_clearance_m = 3.5;
+  EXPECT_TRUE(blocks_overtake_return_corridor(request));
+
+  request.vehicle_is_locked_target = true;
+  EXPECT_FALSE(blocks_overtake_return_corridor(request));
+}
+
+TEST(V2XOvertakeCoreGeometry, AllowsReturnAfterDifferentVehicleClearsMergeWindow)
+{
+  ReturnCorridorOccupancyRequest request;
+  request.geometry_valid = true;
+  request.ego_lateral_m = 2.3;
+  request.vehicle_lateral_m = 0.2;
+  request.vehicle_longitudinal_m = 3.51;
+  request.lateral_clearance_m = 1.5;
+  request.rear_clearance_m = 3.5;
+  request.front_clearance_m = 3.5;
+  EXPECT_FALSE(blocks_overtake_return_corridor(request));
+
+  request.vehicle_longitudinal_m = -3.51;
+  EXPECT_FALSE(blocks_overtake_return_corridor(request));
+
+  request.vehicle_longitudinal_m = 0.0;
+  request.vehicle_lateral_m = -1.51;
+  EXPECT_FALSE(blocks_overtake_return_corridor(request));
+}
+
+TEST(V2XOvertakeCoreGeometry, RejectsInvalidReturnCorridorGeometry)
+{
+  ReturnCorridorOccupancyRequest request;
+  request.geometry_valid = false;
+  request.ego_lateral_m = -2.0;
+  request.vehicle_lateral_m = 0.0;
+  request.vehicle_longitudinal_m = 0.0;
+  request.lateral_clearance_m = 1.5;
+  request.rear_clearance_m = 3.0;
+  request.front_clearance_m = 3.0;
+  EXPECT_FALSE(blocks_overtake_return_corridor(request));
+
+  request.geometry_valid = true;
+  request.vehicle_longitudinal_m = std::numeric_limits<double>::infinity();
+  EXPECT_FALSE(blocks_overtake_return_corridor(request));
+}
+
+TEST(V2XOvertakeCoreContinuity, CancelsOnlyEarlyReturnForNewCorridorBlocker)
+{
+  EarlyReturnCancellationRequest request;
+  request.return_phase = true;
+  request.reacquire_enabled = true;
+  request.return_corridor_blocked = true;
+  request.return_elapsed_sec = 0.5;
+  request.reacquire_window_sec = 0.5;
+  request.return_progress = 0.25;
+  request.maximum_return_progress = 0.25;
+  EXPECT_TRUE(should_cancel_early_overtake_return(request));
+
+  request.return_elapsed_sec = 0.51;
+  EXPECT_FALSE(should_cancel_early_overtake_return(request));
+  request.return_elapsed_sec = 0.5;
+  request.return_progress = 0.26;
+  EXPECT_FALSE(should_cancel_early_overtake_return(request));
+  request.return_progress = 0.25;
+  request.return_corridor_blocked = false;
+  EXPECT_FALSE(should_cancel_early_overtake_return(request));
 }
 
 TEST(V2XOvertakeCoreSpeed, ResolvesCenterOfValidatedPassCorridor)

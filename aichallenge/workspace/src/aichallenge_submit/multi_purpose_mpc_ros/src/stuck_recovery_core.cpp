@@ -337,6 +337,121 @@ void FaultRetryGate::reset() noexcept
   last_update_sec_.reset();
 }
 
+AdaptiveReverseRetryTracker::AdaptiveReverseRetryTracker(AdaptiveReverseRetryConfig config)
+: config_(std::move(config))
+{
+  if (
+    !std::isfinite(config_.multiplier) || config_.multiplier <= 1.0 ||
+    !std::isfinite(config_.maximum_target_distance_m) ||
+    config_.maximum_target_distance_m <= 0.0 ||
+    !std::isfinite(config_.reset_forward_distance_m) ||
+    config_.reset_forward_distance_m <= 0.0)
+  {
+    throw std::invalid_argument(
+            "adaptive reverse retry requires multiplier > 1 and positive finite distances");
+  }
+}
+
+bool AdaptiveReverseRetryTracker::on_recovery_started() noexcept
+{
+  if (!config_.enabled) {
+    reset();
+    return false;
+  }
+  const bool repeated_before_forward_reset =
+    recurrence_window_active_ &&
+    normal_forward_progress_m_ + kDistanceComparisonEpsilon <
+    config_.reset_forward_distance_m;
+  if (repeated_before_forward_reset) {
+    if (retry_level_ < std::numeric_limits<std::size_t>::max()) {
+      ++retry_level_;
+    }
+  } else {
+    retry_level_ = 0U;
+  }
+  recurrence_window_active_ = false;
+  normal_forward_progress_m_ = 0.0;
+  return repeated_before_forward_reset;
+}
+
+void AdaptiveReverseRetryTracker::on_rejoin_complete() noexcept
+{
+  if (!config_.enabled) {
+    reset();
+    return;
+  }
+  recurrence_window_active_ = true;
+  normal_forward_progress_m_ = 0.0;
+}
+
+bool AdaptiveReverseRetryTracker::observe_normal_forward_progress(
+  const double distance_m) noexcept
+{
+  if (
+    !config_.enabled || !recurrence_window_active_ ||
+    !std::isfinite(distance_m) || distance_m <= 0.0)
+  {
+    return false;
+  }
+  normal_forward_progress_m_ += distance_m;
+  if (
+    normal_forward_progress_m_ + kDistanceComparisonEpsilon <
+    config_.reset_forward_distance_m)
+  {
+    return false;
+  }
+  retry_level_ = 0U;
+  normal_forward_progress_m_ = 0.0;
+  recurrence_window_active_ = false;
+  return true;
+}
+
+void AdaptiveReverseRetryTracker::reset() noexcept
+{
+  retry_level_ = 0U;
+  normal_forward_progress_m_ = 0.0;
+  recurrence_window_active_ = false;
+}
+
+double AdaptiveReverseRetryTracker::target_distance_m(
+  const double base_distance_m) const noexcept
+{
+  if (!std::isfinite(base_distance_m) || base_distance_m <= 0.0) {
+    return base_distance_m;
+  }
+  if (!config_.enabled) {
+    return base_distance_m;
+  }
+  double target_distance_m = std::min(
+    base_distance_m, config_.maximum_target_distance_m);
+  for (std::size_t level = 0U; level < retry_level_; ++level) {
+    if (
+      target_distance_m >= config_.maximum_target_distance_m ||
+      target_distance_m >
+      config_.maximum_target_distance_m / config_.multiplier)
+    {
+      return config_.maximum_target_distance_m;
+    }
+    target_distance_m *= config_.multiplier;
+  }
+  return std::min(target_distance_m, config_.maximum_target_distance_m);
+}
+
+std::size_t AdaptiveReverseRetryTracker::retry_level() const noexcept
+{
+  return retry_level_;
+}
+
+double AdaptiveReverseRetryTracker::normal_forward_progress_m() const noexcept
+{
+  return normal_forward_progress_m_;
+}
+
+bool AdaptiveReverseRetryTracker::recurrence_window_active() const noexcept
+{
+  return recurrence_window_active_;
+}
+
 std::optional<double> compute_rejoin_steering_tire_angle(
   const RejoinSteeringRequest & request) noexcept
 {

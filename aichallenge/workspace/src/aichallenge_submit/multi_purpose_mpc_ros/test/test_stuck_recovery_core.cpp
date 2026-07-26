@@ -14,6 +14,8 @@ namespace
 using multi_purpose_mpc_ros::stuck_recovery::CoreConfig;
 using multi_purpose_mpc_ros::stuck_recovery::CoreInput;
 using multi_purpose_mpc_ros::stuck_recovery::CollisionDeliberateStopOverrideRequest;
+using multi_purpose_mpc_ros::stuck_recovery::AdaptiveReverseRetryConfig;
+using multi_purpose_mpc_ros::stuck_recovery::AdaptiveReverseRetryTracker;
 using multi_purpose_mpc_ros::stuck_recovery::DetectorConfig;
 using multi_purpose_mpc_ros::stuck_recovery::DetectorDecision;
 using multi_purpose_mpc_ros::stuck_recovery::DetectorInput;
@@ -195,6 +197,71 @@ TEST(StuckRecoveryFaultRetry, NeverRetriesOutsideSimulation)
   input.v2x_complete = true;
   input.bounded_maneuver_available = true;
   EXPECT_FALSE(gate.update(input));
+}
+
+TEST(StuckRecoveryAdaptiveReverseRetry, DoublesAfterShortRejoinAndCapsTarget)
+{
+  AdaptiveReverseRetryTracker tracker(
+    AdaptiveReverseRetryConfig{true, 2.0, 4.0, 5.0});
+
+  EXPECT_FALSE(tracker.on_recovery_started());
+  EXPECT_DOUBLE_EQ(tracker.target_distance_m(0.8), 0.8);
+
+  tracker.on_rejoin_complete();
+  EXPECT_FALSE(tracker.observe_normal_forward_progress(1.0));
+  EXPECT_TRUE(tracker.on_recovery_started());
+  EXPECT_EQ(tracker.retry_level(), 1U);
+  EXPECT_DOUBLE_EQ(tracker.target_distance_m(0.8), 1.6);
+  EXPECT_DOUBLE_EQ(tracker.target_distance_m(2.0), 4.0);
+
+  tracker.on_rejoin_complete();
+  EXPECT_TRUE(tracker.on_recovery_started());
+  EXPECT_EQ(tracker.retry_level(), 2U);
+  EXPECT_DOUBLE_EQ(tracker.target_distance_m(0.8), 3.2);
+
+  tracker.on_rejoin_complete();
+  EXPECT_TRUE(tracker.on_recovery_started());
+  EXPECT_EQ(tracker.retry_level(), 3U);
+  EXPECT_DOUBLE_EQ(tracker.target_distance_m(0.8), 4.0);
+}
+
+TEST(StuckRecoveryAdaptiveReverseRetry, SustainedForwardProgressResetsSequence)
+{
+  AdaptiveReverseRetryTracker tracker(
+    AdaptiveReverseRetryConfig{true, 2.0, 4.0, 5.0});
+  tracker.on_recovery_started();
+  tracker.on_rejoin_complete();
+  EXPECT_FALSE(tracker.observe_normal_forward_progress(2.0));
+  EXPECT_TRUE(tracker.observe_normal_forward_progress(3.0));
+  EXPECT_FALSE(tracker.recurrence_window_active());
+
+  EXPECT_FALSE(tracker.on_recovery_started());
+  EXPECT_EQ(tracker.retry_level(), 0U);
+  EXPECT_DOUBLE_EQ(tracker.target_distance_m(0.8), 0.8);
+}
+
+TEST(StuckRecoveryAdaptiveReverseRetry, DisabledTrackerPreservesBaseTarget)
+{
+  AdaptiveReverseRetryTracker tracker(
+    AdaptiveReverseRetryConfig{false, 2.0, 4.0, 5.0});
+  tracker.on_rejoin_complete();
+  EXPECT_FALSE(tracker.on_recovery_started());
+  EXPECT_FALSE(tracker.observe_normal_forward_progress(10.0));
+  EXPECT_DOUBLE_EQ(tracker.target_distance_m(7.0), 7.0);
+  EXPECT_EQ(tracker.retry_level(), 0U);
+}
+
+TEST(StuckRecoveryAdaptiveReverseRetry, RejectsUnsafeConfiguration)
+{
+  EXPECT_THROW(
+    AdaptiveReverseRetryTracker(AdaptiveReverseRetryConfig{true, 1.0, 4.0, 5.0}),
+    std::invalid_argument);
+  EXPECT_THROW(
+    AdaptiveReverseRetryTracker(AdaptiveReverseRetryConfig{true, 2.0, 0.0, 5.0}),
+    std::invalid_argument);
+  EXPECT_THROW(
+    AdaptiveReverseRetryTracker(AdaptiveReverseRetryConfig{true, 2.0, 4.0, 0.0}),
+    std::invalid_argument);
 }
 
 TEST(StuckRecoveryCandidateCommit, DelaysCommitUntilActuationPath)

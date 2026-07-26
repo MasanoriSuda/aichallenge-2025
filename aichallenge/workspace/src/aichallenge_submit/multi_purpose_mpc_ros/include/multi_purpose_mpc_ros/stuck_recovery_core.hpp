@@ -53,6 +53,40 @@ private:
   std::optional<double> last_update_sec_;
 };
 
+struct AdaptiveReverseRetryConfig
+{
+  bool enabled{false};
+  double multiplier{2.0};
+  double maximum_target_distance_m{4.0};
+  double reset_forward_distance_m{5.0};
+};
+
+// Retains only short-lived Recovery recurrence history. A completed rejoin
+// arms the tracker; another Recovery before enough normal forward progress
+// increases the target level. Independent obstructions after sustained motion
+// start again at level zero.
+class AdaptiveReverseRetryTracker
+{
+public:
+  explicit AdaptiveReverseRetryTracker(AdaptiveReverseRetryConfig config);
+
+  bool on_recovery_started() noexcept;
+  void on_rejoin_complete() noexcept;
+  bool observe_normal_forward_progress(double distance_m) noexcept;
+  void reset() noexcept;
+
+  [[nodiscard]] double target_distance_m(double base_distance_m) const noexcept;
+  [[nodiscard]] std::size_t retry_level() const noexcept;
+  [[nodiscard]] double normal_forward_progress_m() const noexcept;
+  [[nodiscard]] bool recurrence_window_active() const noexcept;
+
+private:
+  AdaptiveReverseRetryConfig config_;
+  std::size_t retry_level_{0U};
+  double normal_forward_progress_m_{0.0};
+  bool recurrence_window_active_{false};
+};
+
 struct CollisionDeliberateStopOverrideRequest
 {
   bool enabled{false};

@@ -286,7 +286,7 @@ mpc:
   odom_timeout_sec: 0.5 # [s], steady-clock local safety timeout (not an official limit)
   # Controller/actuation latency compensation after EKF pose timing compensation.
   # 0.125 s reproduces the non-mutating equivalent of the 2025 Pure Pursuit prediction.
-  state_prediction_delay_sec: 0.0
+  state_prediction_delay_sec: 0.125
   state_prediction_simulation_only: true
   min_linearization_speed_mps: 0.5 # [m/s], avoid singular 1/v terms below this speed
   # Keep ego course progress on the same hairpin branch after contact. Reacquire globally only

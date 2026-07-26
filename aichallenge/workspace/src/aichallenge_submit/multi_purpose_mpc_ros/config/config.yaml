@@ -441,7 +441,7 @@ mpc:
   v2x_overtake_guard_min_prepare_distance: 3.0 # [m] dev3 attack: use short straight/curve openings
   v2x_overtake_guard_max_lateral_shift: 0.0   # [m] disabled; use time-based lateral accel guard instead
   v2x_overtake_guard_reachable_gap_enabled: true # reject gaps that require excessive lateral accel
-  v2x_overtake_guard_max_lateral_accel: 6.0   # [m/s^2] match the aggressive OvertakeLine execution limit
+  v2x_overtake_guard_max_lateral_accel: 5.0   # [m/s^2] reserve margin below the 6.0 execution limit
   v2x_overtake_guard_min_gap_time: 0.5        # [s] entry still needs time to establish a pass line
   v2x_overtake_continue_min_gap_time: 0.3     # [s] locked line uses the shorter continuation horizon
   v2x_overtake_guard_min_speed_for_reachable: 1.0 # [m/s] lower bound for reachability time estimate
@@ -471,13 +471,13 @@ mpc:
   v2x_overtake_target_ramp_enabled: true      # start lateral target before the front vehicle enters MPC horizon
   v2x_overtake_target_ramp_ratio: 1.2         # higher = ramp pass-side target more gently
   v2x_overtake_line_enabled: true            # explicit ShiftOut/Pass/Return lateral line; off keeps legacy behavior
-  v2x_overtake_line_shift_distance: 4.0       # [m] dev3 attack: reach the pass-side line promptly
+  v2x_overtake_line_shift_distance: 5.0       # [m] reduce ShiftOut lateral acceleration before Pass
   v2x_overtake_line_pass_distance: 8.0        # [m] pass-side hold distance hint
   v2x_overtake_line_return_distance: 6.0      # [m] blend back promptly after clearing the target
   v2x_overtake_line_lateral_offset: 1.2       # [m] signed by pass side: left positive, right negative
   v2x_overtake_line_target_bias: 1.0          # [0-1] explicit line is the sole lateral owner during ShiftOut/Pass
   # Applied to both the legacy lateral bounds and the occupancy-grid vehicle footprint.
-  v2x_overtake_line_min_wall_clearance: 0.2   # [m] keep a committed inside line off the physical wall
+  v2x_overtake_line_min_wall_clearance: 0.3   # [m] balanced margin against pre-Pass wall contact
   v2x_overtake_line_max_lateral_accel: 6.0    # [m/s^2] dev3 attack: complete committed ShiftOut in a hairpin
   v2x_overtake_line_max_target_change: 0.04   # [m/cycle] smooth target goal updates across cycles
   v2x_overtake_line_target_intrusion_ordering_margin: 0.10 # [m] abort if the ahead target reaches/crosses ego's selected-side ordering

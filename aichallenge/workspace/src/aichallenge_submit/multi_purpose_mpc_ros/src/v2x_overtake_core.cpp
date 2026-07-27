@@ -666,6 +666,84 @@ double advance_prediction_time(const PredictionTimeRequest & request)
   return std::min(request.maximum_time_sec, request.elapsed_sec + segment_time);
 }
 
+CourseAlignedPrediction resolve_course_aligned_prediction(
+  const CourseAlignedPredictionRequest & request) noexcept
+{
+  CourseAlignedPrediction result{
+    false, request.fallback_longitudinal_m, request.fallback_lateral_m};
+  if (
+    !request.enabled || !request.projection_valid ||
+    !std::isfinite(request.target_forward_distance_m) ||
+    !std::isfinite(request.target_lateral_m) ||
+    !std::isfinite(request.target_along_track_speed_mps) ||
+    request.target_along_track_speed_mps < 0.0 ||
+    !std::isfinite(request.horizon_time_sec) || request.horizon_time_sec < 0.0 ||
+    !std::isfinite(request.ego_horizon_course_distance_m) ||
+    request.ego_horizon_course_distance_m < 0.0)
+  {
+    return result;
+  }
+
+  const double longitudinal =
+    request.target_forward_distance_m +
+    request.target_along_track_speed_mps * request.horizon_time_sec -
+    request.ego_horizon_course_distance_m;
+  if (!std::isfinite(longitudinal)) {
+    return result;
+  }
+  result.used_course_alignment = true;
+  result.longitudinal_m = longitudinal;
+  result.lateral_m = request.target_lateral_m;
+  return result;
+}
+
+CourseLateralPrediction resolve_course_lateral_prediction(
+  const CourseLateralPredictionRequest & request) noexcept
+{
+  CourseLateralPrediction result{
+    false, request.fallback_lateral_m, 0.0, 0.0};
+  if (
+    !request.enabled || !request.current_projection_valid ||
+    !request.previous_projection_valid ||
+    !std::isfinite(request.current_lateral_m) ||
+    !std::isfinite(request.previous_lateral_m) ||
+    !std::isfinite(request.sample_interval_sec) ||
+    request.sample_interval_sec <= 0.0 ||
+    !std::isfinite(request.sample_age_sec) || request.sample_age_sec < 0.0 ||
+    !std::isfinite(request.horizon_time_sec) || request.horizon_time_sec < 0.0 ||
+    !std::isfinite(request.velocity_deadband_mps) ||
+    request.velocity_deadband_mps < 0.0 ||
+    !std::isfinite(request.maximum_velocity_mps) ||
+    request.maximum_velocity_mps < 0.0)
+  {
+    return result;
+  }
+
+  const double raw_velocity =
+    (request.current_lateral_m - request.previous_lateral_m) /
+    request.sample_interval_sec;
+  if (!std::isfinite(raw_velocity)) {
+    return result;
+  }
+  const double applied_velocity =
+    std::abs(raw_velocity) <= request.velocity_deadband_mps ?
+    0.0 :
+    std::clamp(
+      raw_velocity, -request.maximum_velocity_mps, request.maximum_velocity_mps);
+  const double lateral =
+    request.current_lateral_m +
+    applied_velocity * (request.sample_age_sec + request.horizon_time_sec);
+  if (!std::isfinite(lateral)) {
+    return result;
+  }
+
+  result.used_course_lateral_velocity = true;
+  result.lateral_m = lateral;
+  result.raw_lateral_velocity_mps = raw_velocity;
+  result.applied_lateral_velocity_mps = applied_velocity;
+  return result;
+}
+
 double resolve_vehicle_relative_lateral(
   const VehicleRelativeLateralRequest & request) noexcept
 {

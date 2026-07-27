@@ -544,6 +544,62 @@ struct PredictionTimeRequest
 /// Advance a path-aligned prediction clock by distance / predicted speed.
 double advance_prediction_time(const PredictionTimeRequest & request);
 
+struct CourseAlignedPredictionRequest
+{
+  bool enabled{false};
+  bool projection_valid{false};
+  double target_forward_distance_m{};
+  double target_lateral_m{};
+  double target_along_track_speed_mps{};
+  double horizon_time_sec{};
+  double ego_horizon_course_distance_m{};
+  double fallback_longitudinal_m{};
+  double fallback_lateral_m{};
+};
+
+struct CourseAlignedPrediction
+{
+  bool used_course_alignment{false};
+  double longitudinal_m{};
+  double lateral_m{};
+};
+
+/// Advance a target along the reference course while retaining its projected
+/// lateral offset. Invalid or disabled projections preserve the Cartesian
+/// constant-velocity result supplied by the caller.
+CourseAlignedPrediction resolve_course_aligned_prediction(
+  const CourseAlignedPredictionRequest & request) noexcept;
+
+struct CourseLateralPredictionRequest
+{
+  bool enabled{false};
+  bool current_projection_valid{false};
+  bool previous_projection_valid{false};
+  double current_lateral_m{};
+  double previous_lateral_m{};
+  double sample_interval_sec{};
+  double sample_age_sec{};
+  double horizon_time_sec{};
+  double velocity_deadband_mps{};
+  double maximum_velocity_mps{};
+  double fallback_lateral_m{};
+};
+
+struct CourseLateralPrediction
+{
+  bool used_course_lateral_velocity{false};
+  double lateral_m{};
+  double raw_lateral_velocity_mps{};
+  double applied_lateral_velocity_mps{};
+};
+
+/// Predict target lateral position from the change in Frenet lateral offset
+/// between two source samples. Small velocities are suppressed and remaining
+/// velocities are bounded before extrapolation. Invalid observations preserve
+/// the Cartesian constant-velocity result supplied by the caller.
+CourseLateralPrediction resolve_course_lateral_prediction(
+  const CourseLateralPredictionRequest & request) noexcept;
+
 struct CoursePoint
 {
   double x_m{};

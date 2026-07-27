@@ -1134,6 +1134,10 @@ mpc:
   v2x_vehicle_radius: 1.25
   v2x_prediction_margin: 0.2
   v2x_prediction_use_path_time: false
+  v2x_prediction_use_course_progress: false
+  v2x_prediction_use_course_lateral_velocity: false
+  v2x_prediction_course_lateral_velocity_deadband: 0.15
+  v2x_prediction_course_lateral_velocity_max: 1.0
   v2x_prediction_min_ego_speed: 1.0
   v2x_timeout_sec: 1.0
   gap_min_width: 1.8
@@ -1155,6 +1159,8 @@ mpc:
 - 有効時は `/v2x/vehicle_positions` を subscribe し、vehicle_id ごとの直近2点から速度を推定する。
 - 他車は円近似し、horizon waypoint ごとに `lb/ub` を狭める。
 - `v2x_prediction_use_path_time=true`では、V2X車両の予測時刻を`waypoint index * Ts`ではなく、各path segmentの距離を参照速度（下限`v2x_prediction_min_ego_speed`）で割った時間の累積として求める。観測ageは別途加算し、`v2x_prediction_time`を超えない。
+- `v2x_prediction_use_course_progress=true`では、V2X車両を現在速度の直線上ではなくreference pathの進行方向へ予測し、投影時の横偏差を維持する。ヘアピン等で将来位置がコース外へ直進する誤予測を抑えるための実験設定であり、bounded course projectionが成立しない車両は従来のCartesian等速直線予測へ戻す。
+- `v2x_prediction_use_course_lateral_velocity=true`では、V2X速度推定に使った前回位置と現在位置をそれぞれbounded course projectionし、Frenet横偏差の差分から低速車の横速度を求める。`v2x_prediction_course_lateral_velocity_deadband`以下の揺れは0とし、残りを`v2x_prediction_course_lateral_velocity_max`へclampして、観測ageと各horizon時刻だけ横位置を先読みする。投影不能時は既存のCartesian横予測へ戻る。これは低速車が開けた空間を再び塞ぐ動きの先読みに限定した2025由来シミュレータ向け暫定実験であり、縦方向course-progress予測とは独立して切り替える。
 - gap が選べる場合は `xr` を gap 中央へ寄せる。
 - gap が壁と他車に挟まれている場合は、`v2x_wall_clearance_margin` で壁側制約を内側へ削り、`v2x_wall_avoidance_bias` で target を車側へ寄せられる。
 - 左右が両方とも V2X 車両の gap は `v2x_vehicle_vehicle_gap_enabled=false` で通常候補から外せる。通常周回では `v2x_vehicle_vehicle_gap_min_distance/min_width` を適用する。start-grid専用の3回廊評価は後述の明示設定で分離し、通常値を暗黙に緩和しない。

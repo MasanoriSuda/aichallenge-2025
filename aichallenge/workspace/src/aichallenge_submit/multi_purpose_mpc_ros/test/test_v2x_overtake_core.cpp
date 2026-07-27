@@ -127,6 +127,10 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_outer_curve_overtake;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_inner_curve_overtake;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_active_hard_curve_continuation;
 using multi_purpose_mpc_ros::v2x_overtake_core::advance_prediction_time;
+using multi_purpose_mpc_ros::v2x_overtake_core::CourseAlignedPredictionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::CourseLateralPredictionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_course_aligned_prediction;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_course_lateral_prediction;
 using multi_purpose_mpc_ros::v2x_overtake_core::project_forward_course_progress;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   is_course_progress_continuity_constraint_rejection;
@@ -1331,6 +1335,112 @@ TEST(V2XOvertakeCorePrediction, AccumulatesPathTimeAndSaturatesAtHorizon)
 
   auto invalid = PredictionTimeRequest{0.0, 1.0, 1.0, 0.0, 1.0};
   EXPECT_THROW(advance_prediction_time(invalid), std::invalid_argument);
+}
+
+TEST(V2XOvertakeCorePrediction, AdvancesTargetAlongCourseAndRetainsLateralOffset)
+{
+  const auto result = resolve_course_aligned_prediction(
+    CourseAlignedPredictionRequest{
+      true, true, 8.0, 1.2, 4.0, 1.0, 6.0, -3.0, -2.0});
+
+  EXPECT_TRUE(result.used_course_alignment);
+  EXPECT_DOUBLE_EQ(result.longitudinal_m, 6.0);
+  EXPECT_DOUBLE_EQ(result.lateral_m, 1.2);
+}
+
+TEST(V2XOvertakeCorePrediction, FallsBackWhenCourseProjectionIsUnavailable)
+{
+  auto request = CourseAlignedPredictionRequest{
+    true, false, 8.0, 1.2, 4.0, 1.0, 6.0, -3.0, -2.0};
+  auto result = resolve_course_aligned_prediction(request);
+  EXPECT_FALSE(result.used_course_alignment);
+  EXPECT_DOUBLE_EQ(result.longitudinal_m, -3.0);
+  EXPECT_DOUBLE_EQ(result.lateral_m, -2.0);
+
+  request.projection_valid = true;
+  request.target_forward_distance_m = std::numeric_limits<double>::quiet_NaN();
+  result = resolve_course_aligned_prediction(request);
+  EXPECT_FALSE(result.used_course_alignment);
+  EXPECT_DOUBLE_EQ(result.longitudinal_m, -3.0);
+  EXPECT_DOUBLE_EQ(result.lateral_m, -2.0);
+}
+
+TEST(V2XOvertakeCorePrediction, PredictsCourseLateralMotionFromTwoSamples)
+{
+  const auto result = resolve_course_lateral_prediction(
+    CourseLateralPredictionRequest{
+      true, true, true, 1.2, 0.8, 0.5, 0.1, 0.9, 0.15, 1.0, -2.0});
+
+  EXPECT_TRUE(result.used_course_lateral_velocity);
+  EXPECT_NEAR(result.raw_lateral_velocity_mps, 0.8, 1e-12);
+  EXPECT_NEAR(result.applied_lateral_velocity_mps, 0.8, 1e-12);
+  EXPECT_NEAR(result.lateral_m, 2.0, 1e-12);
+}
+
+TEST(V2XOvertakeCorePrediction, SuppressesAndClampsCourseLateralVelocity)
+{
+  auto request = CourseLateralPredictionRequest{
+    true, true, true, 1.1, 1.0, 0.5, 0.0, 1.0, 0.25, 0.6, -2.0};
+  auto result = resolve_course_lateral_prediction(request);
+  EXPECT_TRUE(result.used_course_lateral_velocity);
+  EXPECT_NEAR(result.raw_lateral_velocity_mps, 0.2, 1e-12);
+  EXPECT_DOUBLE_EQ(result.applied_lateral_velocity_mps, 0.0);
+  EXPECT_DOUBLE_EQ(result.lateral_m, 1.1);
+
+  request.current_lateral_m = -0.5;
+  request.previous_lateral_m = 0.5;
+  result = resolve_course_lateral_prediction(request);
+  EXPECT_NEAR(result.raw_lateral_velocity_mps, -2.0, 1e-12);
+  EXPECT_DOUBLE_EQ(result.applied_lateral_velocity_mps, -0.6);
+  EXPECT_DOUBLE_EQ(result.lateral_m, -1.1);
+}
+
+TEST(V2XOvertakeCorePrediction, FallsBackForInvalidCourseLateralObservation)
+{
+  auto request = CourseLateralPredictionRequest{
+    true, true, false, 1.0, 0.5, 0.5, 0.0, 1.0, 0.15, 1.0, -2.0};
+  auto result = resolve_course_lateral_prediction(request);
+  EXPECT_FALSE(result.used_course_lateral_velocity);
+  EXPECT_DOUBLE_EQ(result.lateral_m, -2.0);
+
+  request.previous_projection_valid = true;
+  request.sample_interval_sec = 0.0;
+  result = resolve_course_lateral_prediction(request);
+  EXPECT_FALSE(result.used_course_lateral_velocity);
+  EXPECT_DOUBLE_EQ(result.lateral_m, -2.0);
+}
+
+TEST(V2XOvertakeCorePrediction, DoesNotMisreadCourseTurningAsLateralMotion)
+{
+  const std::vector<CoursePoint> path{
+    {0.0, 0.0}, {10.0, 0.0}, {10.0, 10.0}, {0.0, 10.0}};
+  ForwardCourseProjectionRequest current_request;
+  current_request.start_index = 0U;
+  current_request.origin_x_m = 1.0;
+  current_request.origin_y_m = 0.0;
+  current_request.target_x_m = 10.0;
+  current_request.target_y_m = 5.0;
+  current_request.target_vx_mps = 2.0;
+  current_request.target_vy_mps = 5.0;
+  current_request.lookbehind_distance_m = 3.0;
+  current_request.lookahead_distance_m = 20.0;
+  current_request.max_cross_track_distance_m = 2.0;
+  const auto current = project_forward_course_progress(path, current_request);
+  ASSERT_TRUE(current.valid);
+
+  auto previous_request = current_request;
+  previous_request.target_x_m = 8.0;
+  previous_request.target_y_m = 0.0;
+  const auto previous = project_forward_course_progress(path, previous_request);
+  ASSERT_TRUE(previous.valid);
+
+  const auto result = resolve_course_lateral_prediction(
+    CourseLateralPredictionRequest{
+      true, true, true,
+      current.lateral_m, previous.lateral_m, 1.0, 0.0, 1.0, 0.15, 1.0, -2.0});
+  EXPECT_TRUE(result.used_course_lateral_velocity);
+  EXPECT_NEAR(result.raw_lateral_velocity_mps, 0.0, 1e-12);
+  EXPECT_NEAR(result.lateral_m, 0.0, 1e-12);
 }
 
 TEST(V2XOvertakeCoreProgress, UsesAlongCourseDistanceAndProjectedSpeed)

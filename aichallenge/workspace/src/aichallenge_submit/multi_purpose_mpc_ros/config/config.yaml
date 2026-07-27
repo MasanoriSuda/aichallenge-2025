@@ -175,7 +175,7 @@ stuck_recovery:
   rear_safety:
     # 2026 preliminary/dev3 uses three vehicles. Latest run showed two entries per domain and no
     # self entry. Use 3 for a four-vehicle final; single-vehicle runs fail closed without V2X.
-    expected_v2x_vehicle_count: 2
+    expected_v2x_vehicle_count: 1
     self_filter_mode: excluded
     self_vehicle_id: ""
     vehicle_radius_m: 1.45
@@ -247,7 +247,7 @@ reference_path:
   csv_path: "env/final_ver3/traj_mincurv.csv"
   domain_csv_path:
     1: "env/final_ver3/traj_mincurv.csv"
-    2: "env/final_ver3/traj_mincurv.csv"
+    2: "env/final_ver3/traj_mincurv_org.csv"
     3: "env/final_ver3/traj_mincurv.csv"
   resolution: 0.6
   smoothing_distance: 2
@@ -328,6 +328,12 @@ mpc:
   v2x_prediction_margin: 0.05
   v2x_prediction_time: 1.0
   v2x_prediction_use_path_time: true # align obstacle prediction time with path distance, not waypoint index
+  v2x_prediction_use_course_progress: false # predict moving targets along the reference course
+  # Predict only target lateral motion from consecutive course-relative offsets.
+  # Keep longitudinal course-progress prediction disabled for this isolated A/B.
+  v2x_prediction_use_course_lateral_velocity: false
+  v2x_prediction_course_lateral_velocity_deadband: 0.15 # [m/s]
+  v2x_prediction_course_lateral_velocity_max: 1.0       # [m/s]
   v2x_prediction_min_ego_speed: 1.0 # [m/s] avoid singular path-time prediction near standstill
   v2x_timeout_sec: 1.0
   v2x_position_jump_threshold: 5.0

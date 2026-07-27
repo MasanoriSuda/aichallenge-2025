@@ -1323,6 +1323,10 @@ struct V2XGapPlannerConfig
   double prediction_margin{0.2};
   double prediction_time{3.0};
   bool prediction_use_path_time{false};
+  bool prediction_use_course_progress{false};
+  bool prediction_use_course_lateral_velocity{false};
+  double prediction_course_lateral_velocity_deadband{0.15};
+  double prediction_course_lateral_velocity_max{1.0};
   double prediction_min_ego_speed{1.0};
   double prediction_max_ego_speed{std::numeric_limits<double>::infinity()};
   double timeout_sec{1.0};
@@ -1889,6 +1893,7 @@ struct V2XGapPlanner
     double receipt_sec{};
     double vx{};
     double vy{};
+    double velocity_observation_interval_sec{};
     std::uint64_t recovery_epoch{};
     bool recovery_sample_valid{false};
     bool has_sample{false};
@@ -2030,6 +2035,7 @@ struct V2XGapPlanner
       }
       double vx = 0.0;
       double vy = 0.0;
+      double velocity_observation_interval_sec = 0.0;
       bool position_jump = false;
       bool invalid_velocity = false;
       bool velocity_observation_valid = false;
@@ -2060,6 +2066,7 @@ struct V2XGapPlanner
             vy = 0.0;
           } else {
             velocity_observation_valid = true;
+            velocity_observation_interval_sec = dt;
           }
         }
       }
@@ -2073,6 +2080,7 @@ struct V2XGapPlanner
       tracked.receipt_sec = receipt_sec;
       tracked.vx = vx;
       tracked.vy = vy;
+      tracked.velocity_observation_interval_sec = velocity_observation_interval_sec;
       tracked.recovery_epoch = recovery_epoch_;
       tracked.recovery_sample_valid =
         !array_header_invalid && !empty_id && !duplicate_id && !invalid_geometry &&
@@ -2605,6 +2613,157 @@ struct V2XGapPlanner
       return output;
     }
 
+    std::unordered_map<std::string, v2x_overtake_core::ForwardCourseProjection>
+    course_aligned_projections;
+    struct CourseLateralObservation
+    {
+      double current_lateral{};
+      double previous_lateral{};
+      double sample_interval_sec{};
+    };
+    std::unordered_map<std::string, CourseLateralObservation>
+    course_lateral_observations;
+    if (
+      (cfg.prediction_use_course_progress ||
+      cfg.prediction_use_course_lateral_velocity) &&
+      model.reference_path->n_waypoints >= 2)
+    {
+      std::vector<v2x_overtake_core::CoursePoint> course_path;
+      course_path.reserve(static_cast<std::size_t>(model.reference_path->n_waypoints));
+      for (int waypoint_id = 0; waypoint_id < model.reference_path->n_waypoints; ++waypoint_id) {
+        const auto & waypoint = model.reference_path->get_waypoint(waypoint_id);
+        course_path.push_back({waypoint.x, waypoint.y});
+      }
+
+      double horizon_course_span = 0.0;
+      for (int i = 1; i < N; ++i) {
+        horizon_course_span +=
+          model.reference_path->get_waypoint(ref_wp_id + i).distance_to(
+          model.reference_path->get_waypoint(ref_wp_id + i - 1));
+      }
+      double maximum_corridor_offset = 0.0;
+      for (Eigen::Index i = 0; i < base_lb.size(); ++i) {
+        if (std::isfinite(base_lb[i])) {
+          maximum_corridor_offset =
+            std::max(maximum_corridor_offset, std::abs(base_lb[i]));
+        }
+        if (std::isfinite(base_ub[i])) {
+          maximum_corridor_offset =
+            std::max(maximum_corridor_offset, std::abs(base_ub[i]));
+        }
+      }
+      const double projection_lookbehind = std::max(
+        3.0, 0.5 * (std::max(0.0, model.length) + std::max(0.0, cfg.vehicle_length)));
+      const double projection_max_cross_track = std::max(
+        3.0,
+        maximum_corridor_offset + std::max(0.0, cfg.vehicle_radius) +
+        std::max(0.0, cfg.prediction_margin) + 0.5 * std::max(0.0, model.width));
+
+      for (const auto & vehicle : vehicles) {
+        const double age = std::max(0.0, now_sec - vehicle.stamp_sec);
+        const double current_x = vehicle.x + vehicle.vx * age;
+        const double current_y = vehicle.y + vehicle.vy * age;
+        const double target_speed = std::hypot(vehicle.vx, vehicle.vy);
+        const double projection_lookahead = std::max(
+          5.0,
+          horizon_course_span + target_speed * std::max(0.0, cfg.prediction_time) +
+          std::max(0.0, model.length) + std::max(0.0, cfg.vehicle_length));
+        v2x_overtake_core::ForwardCourseProjectionRequest projection_request;
+        projection_request.start_index =
+          static_cast<std::size_t>(std::max(0, ref_wp_id));
+        projection_request.circular = model.reference_path->circular;
+        projection_request.origin_x_m = model.temporal_state.x;
+        projection_request.origin_y_m = model.temporal_state.y;
+        projection_request.target_x_m = current_x;
+        projection_request.target_y_m = current_y;
+        projection_request.target_vx_mps = vehicle.vx;
+        projection_request.target_vy_mps = vehicle.vy;
+        projection_request.lookbehind_distance_m = projection_lookbehind;
+        projection_request.lookahead_distance_m = projection_lookahead;
+        projection_request.max_cross_track_distance_m = projection_max_cross_track;
+        try {
+          if (cfg.prediction_use_course_progress) {
+            const auto projection =
+              v2x_overtake_core::project_forward_course_progress(course_path, projection_request);
+            if (projection.valid) {
+              course_aligned_projections.emplace(vehicle.id, projection);
+            }
+          }
+          if (
+            cfg.prediction_use_course_lateral_velocity &&
+            vehicle.velocity_observation_valid &&
+            vehicle.velocity_observation_interval_sec > kEps)
+          {
+            auto current_request = projection_request;
+            current_request.target_x_m = vehicle.x;
+            current_request.target_y_m = vehicle.y;
+            const auto current_projection =
+              v2x_overtake_core::project_forward_course_progress(
+              course_path, current_request);
+            if (current_projection.valid) {
+              auto previous_request = current_request;
+              previous_request.target_x_m =
+                vehicle.x - vehicle.vx * vehicle.velocity_observation_interval_sec;
+              previous_request.target_y_m =
+                vehicle.y - vehicle.vy * vehicle.velocity_observation_interval_sec;
+              previous_request.lookbehind_distance_m +=
+                target_speed * vehicle.velocity_observation_interval_sec;
+              previous_request.preferred_target_path_progress_m =
+                current_projection.target_path_progress_m;
+              previous_request.max_target_path_progress_change_m = std::max(
+                1.0,
+                target_speed * vehicle.velocity_observation_interval_sec + 1.0);
+              const auto previous_projection =
+                v2x_overtake_core::project_forward_course_progress(
+                course_path, previous_request);
+              if (previous_projection.valid) {
+                const CourseLateralObservation observation{
+                  current_projection.lateral_m,
+                  previous_projection.lateral_m,
+                  vehicle.velocity_observation_interval_sec};
+                course_lateral_observations.emplace(
+                  vehicle.id, observation);
+                const auto diagnostic =
+                  v2x_overtake_core::resolve_course_lateral_prediction(
+                  v2x_overtake_core::CourseLateralPredictionRequest{
+                    true, true, true,
+                    observation.current_lateral, observation.previous_lateral,
+                    observation.sample_interval_sec, 0.0, 0.0,
+                    cfg.prediction_course_lateral_velocity_deadband,
+                    cfg.prediction_course_lateral_velocity_max,
+                    observation.current_lateral});
+                const int motion_sign =
+                  diagnostic.applied_lateral_velocity_mps > kEps ? 1 :
+                  (diagnostic.applied_lateral_velocity_mps < -kEps ? -1 : 0);
+                const auto last_motion =
+                  last_logged_course_lateral_motion_sign_.find(vehicle.id);
+                if (
+                  last_motion == last_logged_course_lateral_motion_sign_.end() ||
+                  last_motion->second != motion_sign)
+                {
+                  RCLCPP_INFO(
+                    rclcpp::get_logger("mpc_controller"),
+                    "V2X course lateral motion: id=%s, direction=%s, "
+                    "d_prev=%.2f, d_now=%.2f, raw_d_dot=%.2f, "
+                    "applied_d_dot=%.2f, dt=%.2f",
+                    vehicle.id.c_str(),
+                    motion_sign > 0 ? "left" : (motion_sign < 0 ? "right" : "steady"),
+                    observation.previous_lateral, observation.current_lateral,
+                    diagnostic.raw_lateral_velocity_mps,
+                    diagnostic.applied_lateral_velocity_mps,
+                    observation.sample_interval_sec);
+                  last_logged_course_lateral_motion_sign_[vehicle.id] = motion_sign;
+                }
+              }
+            }
+          }
+        } catch (const std::invalid_argument &) {
+          // An invalid path or V2X sample affects only this optional prediction.
+          // The per-horizon Cartesian constant-velocity fallback remains available.
+        }
+      }
+    }
+
     // A staggered start row does not put both boundary vehicles in the same
     // instantaneous Frenet cross-section.  For start-grid corridor selection only,
     // keep the two nearest non-rear vehicles as longitudinally persistent lateral
@@ -2715,6 +2874,7 @@ struct V2XGapPlanner
     const bool external_vehicle_vehicle_gap_lock = locked_vehicle_vehicle_gap.has_value();
     double current_vehicle_vehicle_corridor_distance = 0.0;
     double horizon_course_distance = 0.0;
+    double course_prediction_horizon_distance = 0.0;
     // V2X has no target yaw. Keep the configured aggressive circular radius for a car-car slot,
     // but use each rectangle's half-diagonal when deciding whether a wall-car slot can really
     // contain ego. The extra inflation is attached to the vehicle boundary and applied only when
@@ -2743,9 +2903,15 @@ struct V2XGapPlanner
       }
 
       const auto & waypoint = model.reference_path->get_waypoint(ref_wp_id + i);
-      if (i > 0) {
-        horizon_course_distance += waypoint.distance_to(
+      if (i == 0) {
+        course_prediction_horizon_distance = std::hypot(
+          waypoint.x - model.temporal_state.x,
+          waypoint.y - model.temporal_state.y);
+      } else {
+        const double segment_distance = waypoint.distance_to(
           model.reference_path->get_waypoint(ref_wp_id + i - 1));
+        horizon_course_distance += segment_distance;
+        course_prediction_horizon_distance += segment_distance;
       }
       double horizon_t = std::min(static_cast<double>(i + 1) * model.Ts, cfg.prediction_time);
       if (cfg.prediction_use_path_time) {
@@ -2770,16 +2936,52 @@ struct V2XGapPlanner
         const double age = std::max(0.0, now_sec - vehicle.stamp_sec);
         const double pred_x = vehicle.x + vehicle.vx * (age + horizon_t);
         const double pred_y = vehicle.y + vehicle.vy * (age + horizon_t);
-        const double self_distance =
-          std::hypot(pred_x - model.temporal_state.x, pred_y - model.temporal_state.y);
-        if (self_distance < cfg.self_filter_radius) {
-          continue;
-        }
-
         const double dx = pred_x - waypoint.x;
         const double dy = pred_y - waypoint.y;
-        double longitudinal = std::cos(waypoint.psi) * dx + std::sin(waypoint.psi) * dy;
-        double lateral = -std::sin(waypoint.psi) * dx + std::cos(waypoint.psi) * dy;
+        const double fallback_longitudinal =
+          std::cos(waypoint.psi) * dx + std::sin(waypoint.psi) * dy;
+        const double fallback_lateral =
+          -std::sin(waypoint.psi) * dx + std::cos(waypoint.psi) * dy;
+        const auto course_projection = course_aligned_projections.find(vehicle.id);
+        const auto course_prediction =
+          v2x_overtake_core::resolve_course_aligned_prediction(
+          v2x_overtake_core::CourseAlignedPredictionRequest{
+            cfg.prediction_use_course_progress,
+            course_projection != course_aligned_projections.end(),
+            course_projection != course_aligned_projections.end() ?
+            course_projection->second.forward_distance_m : 0.0,
+            course_projection != course_aligned_projections.end() ?
+            course_projection->second.lateral_m : 0.0,
+            course_projection != course_aligned_projections.end() ?
+            course_projection->second.along_track_speed_mps : 0.0,
+            horizon_t,
+            course_prediction_horizon_distance,
+            fallback_longitudinal,
+            fallback_lateral});
+        double longitudinal = course_prediction.longitudinal_m;
+        const auto course_lateral_observation =
+          course_lateral_observations.find(vehicle.id);
+        const auto course_lateral_prediction =
+          v2x_overtake_core::resolve_course_lateral_prediction(
+          v2x_overtake_core::CourseLateralPredictionRequest{
+            cfg.prediction_use_course_lateral_velocity,
+            course_lateral_observation != course_lateral_observations.end(),
+            course_lateral_observation != course_lateral_observations.end(),
+            course_lateral_observation != course_lateral_observations.end() ?
+            course_lateral_observation->second.current_lateral : 0.0,
+            course_lateral_observation != course_lateral_observations.end() ?
+            course_lateral_observation->second.previous_lateral : 0.0,
+            course_lateral_observation != course_lateral_observations.end() ?
+            course_lateral_observation->second.sample_interval_sec : 0.0,
+            age,
+            horizon_t,
+            cfg.prediction_course_lateral_velocity_deadband,
+            cfg.prediction_course_lateral_velocity_max,
+            course_prediction.lateral_m});
+        double lateral = course_lateral_prediction.lateral_m;
+        double self_distance = course_prediction.used_course_alignment ?
+          std::hypot(longitudinal, lateral) :
+          std::hypot(pred_x - model.temporal_state.x, pred_y - model.temporal_state.y);
         const double covariance_margin = std::max(vehicle.covariance_x, vehicle.covariance_y);
         const auto start_grid_projection = start_grid_course_projections.find(vehicle.id);
         const bool use_start_grid_course_projection =
@@ -2794,6 +2996,10 @@ struct V2XGapPlanner
             start_grid_projection->second.along_track_speed * horizon_t -
             horizon_course_distance;
           lateral = start_grid_projection->second.lateral;
+          self_distance = std::hypot(longitudinal, lateral);
+        }
+        if (self_distance < cfg.self_filter_radius) {
+          continue;
         }
         double obstacle_body_radius = std::max(0.0, cfg.vehicle_radius);
         if (use_start_grid_course_projection || is_locked_inter_vehicle_boundary) {
@@ -3403,6 +3609,7 @@ private:
   int last_logged_local_path_side_{0};
   double last_logged_local_path_target_ey_{std::numeric_limits<double>::infinity()};
   std::optional<bool> last_logged_local_path_corridor_enforced_;
+  std::unordered_map<std::string, int> last_logged_course_lateral_motion_sign_;
 };
 
 struct MpcConfig
@@ -10785,6 +10992,20 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_gap.prediction_use_path_time =
     mpc["v2x_prediction_use_path_time"] ?
     mpc["v2x_prediction_use_path_time"].as<bool>() : false;
+  cfg.mpc.v2x_gap.prediction_use_course_progress =
+    mpc["v2x_prediction_use_course_progress"] ?
+    mpc["v2x_prediction_use_course_progress"].as<bool>() : false;
+  cfg.mpc.v2x_gap.prediction_use_course_lateral_velocity =
+    mpc["v2x_prediction_use_course_lateral_velocity"] ?
+    mpc["v2x_prediction_use_course_lateral_velocity"].as<bool>() : false;
+  cfg.mpc.v2x_gap.prediction_course_lateral_velocity_deadband = std::max(
+    0.0,
+    mpc["v2x_prediction_course_lateral_velocity_deadband"] ?
+    mpc["v2x_prediction_course_lateral_velocity_deadband"].as<double>() : 0.15);
+  cfg.mpc.v2x_gap.prediction_course_lateral_velocity_max = std::max(
+    0.0,
+    mpc["v2x_prediction_course_lateral_velocity_max"] ?
+    mpc["v2x_prediction_course_lateral_velocity_max"].as<double>() : 1.0);
   cfg.mpc.v2x_gap.prediction_min_ego_speed = std::max(
     kEps,
     mpc["v2x_prediction_min_ego_speed"] ?
@@ -11990,6 +12211,16 @@ public:
     }
     if (mpc_cfg_.v2x_gap.enabled) {
       RCLCPP_WARN(get_logger(), "USE_V2X_GAP_PLANNER is enabled!");
+      RCLCPP_INFO(
+        get_logger(),
+        "V2X obstacle prediction: horizon=%.2f sec, path_time=%d, course_progress=%d, "
+        "course_lateral_velocity=%d/deadband=%.2f/max=%.2f m/s",
+        mpc_cfg_.v2x_gap.prediction_time,
+        mpc_cfg_.v2x_gap.prediction_use_path_time ? 1 : 0,
+        mpc_cfg_.v2x_gap.prediction_use_course_progress ? 1 : 0,
+        mpc_cfg_.v2x_gap.prediction_use_course_lateral_velocity ? 1 : 0,
+        mpc_cfg_.v2x_gap.prediction_course_lateral_velocity_deadband,
+        mpc_cfg_.v2x_gap.prediction_course_lateral_velocity_max);
     }
     RCLCPP_INFO(
       get_logger(),

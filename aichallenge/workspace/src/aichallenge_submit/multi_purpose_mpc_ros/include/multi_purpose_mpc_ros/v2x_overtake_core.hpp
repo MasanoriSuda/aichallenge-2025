@@ -1121,6 +1121,23 @@ enum class ContinuityAction
   Recovery,
 };
 
+struct CommittedExecutionContinuityRequest
+{
+  bool active_execution_phase{false};
+  bool target_progress_continuous{false};
+  bool target_ahead{false};
+  bool target_pass_side_intrusion{false};
+  bool live_execution_corridor_blocked{false};
+  bool explicit_forbidden_waypoint{false};
+  bool emergency_front_risk{false};
+};
+
+/// Once ShiftOut/Pass is committed, keep the fixed target/side/corridor across
+/// transient behavior entry-policy changes. Only current execution hard guards
+/// may invalidate this hold.
+bool can_hold_committed_execution_after_behavior_drop(
+  const CommittedExecutionContinuityRequest & request) noexcept;
+
 struct ContinuityRequest
 {
   bool solver_recovery_requested{false};

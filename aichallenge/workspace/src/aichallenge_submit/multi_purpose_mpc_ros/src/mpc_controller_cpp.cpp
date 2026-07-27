@@ -8388,38 +8388,16 @@ private:
       overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
       overtake_line_state_.phase == OvertakeLinePhase::Pass) {
       const bool active_execution_latched =
-        locked_target_progress_continuous &&
-        behavior_output.locked_target_longitudinal > 0.0 &&
-        !behavior_output.locked_target_pass_side_intrusion &&
-        !behavior_output.overtake_execution_corridor_blocked &&
-        !behavior_output.overtake_forbidden_wp &&
-        (!behavior_output.overtake_hard_curve_blocked ||
-        behavior_output.active_hard_curve_continuation_allowed ||
-        behavior_output.outer_curve_hard_entry_allowed ||
-        behavior_output.outer_curve_hard_continuation_allowed ||
-        behavior_output.inner_curve_hard_entry_allowed ||
-        behavior_output.inner_curve_hard_continuation_allowed) &&
-        (!behavior_output.overtake_inner_curve_pass ||
-        behavior_output.active_hard_curve_continuation_allowed ||
-        behavior_output.inner_curve_entry_allowed ||
-        behavior_output.inner_curve_hard_entry_allowed ||
-        behavior_output.inner_curve_hard_continuation_allowed) &&
-        (behavior_output.overtake_completion_feasible ||
-        behavior_output.outer_curve_hard_entry_allowed ||
-        behavior_output.outer_curve_hard_continuation_allowed ||
-        behavior_output.inner_curve_entry_allowed ||
-        behavior_output.inner_curve_hard_entry_allowed ||
-        behavior_output.inner_curve_hard_continuation_allowed) &&
-        !behavior_output.overtake_cooldown_active &&
-        behavior_output.front_risk_level != FrontRiskLevel::EmergencyBrake &&
-        (!behavior_output.overtake_forbidden ||
-        behavior_output.continuing_overtake_allowed ||
-        behavior_output.active_hard_curve_continuation_allowed ||
-        behavior_output.outer_curve_hard_entry_allowed ||
-        behavior_output.outer_curve_hard_continuation_allowed ||
-        behavior_output.inner_curve_entry_allowed ||
-        behavior_output.inner_curve_hard_entry_allowed ||
-        behavior_output.inner_curve_hard_continuation_allowed);
+        overtake_core::can_hold_committed_execution_after_behavior_drop(
+        overtake_core::CommittedExecutionContinuityRequest{
+          active_execution_phase,
+          locked_target_progress_continuous,
+          locked_target_progress_continuous &&
+          behavior_output.locked_target_longitudinal > 0.0,
+          behavior_output.locked_target_pass_side_intrusion,
+          behavior_output.overtake_execution_corridor_blocked,
+          behavior_output.overtake_forbidden_wp,
+          behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake});
       const auto continuity = overtake_core::resolve_target_continuity(
         overtake_core::ContinuityRequest{
           overtake_solver_recovery_active_, behavior_output.locked_target_position_jump,
@@ -8442,6 +8420,10 @@ private:
           "live overtake corridor unavailable" :
           behavior_output.locked_target_position_jump ? "locked target position jump" :
           locked_target_progress_rejected ? "locked target course progress discontinuity" :
+          behavior_output.locked_target_pass_side_intrusion ?
+          "locked target entered selected pass-side line" :
+          behavior_output.overtake_forbidden_wp ?
+          "overtake explicitly forbidden waypoint" :
           locked_target_progress_continuous ?
           "locked target no longer executable" : "locked target stale or lost";
         transition_overtake_line_phase(

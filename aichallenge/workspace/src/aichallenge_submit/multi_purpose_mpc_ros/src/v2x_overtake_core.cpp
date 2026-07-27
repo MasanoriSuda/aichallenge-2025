@@ -1570,6 +1570,18 @@ bool should_release_low_speed_shift_control(
     clear_duration_sec, required_clear_duration_sec);
 }
 
+bool can_hold_committed_execution_after_behavior_drop(
+  const CommittedExecutionContinuityRequest & request) noexcept
+{
+  return request.active_execution_phase &&
+         request.target_progress_continuous &&
+         request.target_ahead &&
+         !request.target_pass_side_intrusion &&
+         !request.live_execution_corridor_blocked &&
+         !request.explicit_forbidden_waypoint &&
+         !request.emergency_front_risk;
+}
+
 ContinuityAction resolve_target_continuity(const ContinuityRequest & request)
 {
   if (std::isnan(request.target_age_sec) || request.target_age_sec < 0.0) {

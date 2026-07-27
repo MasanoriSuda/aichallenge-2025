@@ -19,6 +19,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedShiftSteeringRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StoppedVehicleLineOwnershipRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ContinuityAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::ContinuityRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::CommittedExecutionContinuityRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CoursePoint;
 using multi_purpose_mpc_ros::v2x_overtake_core::VehicleRelativeLateralRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ForwardDistanceRequest;
@@ -140,6 +141,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_completion;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_override_completion_for_curve_entry;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_precommit_inner_curve_line;
 using multi_purpose_mpc_ros::v2x_overtake_core::overtake_completion_policy_allows_execution;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  can_hold_committed_execution_after_behavior_drop;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_target_continuity;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_reacquire_during_return;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_reacquire_during_recovery;
@@ -2689,6 +2692,44 @@ TEST(V2XOvertakeCoreContinuity, HoldsShortTargetLossInsteadOfReturning)
 
   request.target_age_sec = 0.31;
   EXPECT_EQ(resolve_target_continuity(request), ContinuityAction::Recovery);
+}
+
+TEST(V2XOvertakeCoreContinuity, HoldsCommittedLineAcrossBehaviorEntryPolicyDrop)
+{
+  CommittedExecutionContinuityRequest request;
+  request.active_execution_phase = true;
+  request.target_progress_continuous = true;
+  request.target_ahead = true;
+  EXPECT_TRUE(can_hold_committed_execution_after_behavior_drop(request));
+
+  request.active_execution_phase = false;
+  EXPECT_FALSE(can_hold_committed_execution_after_behavior_drop(request));
+  request.active_execution_phase = true;
+  request.target_progress_continuous = false;
+  EXPECT_FALSE(can_hold_committed_execution_after_behavior_drop(request));
+  request.target_progress_continuous = true;
+  request.target_ahead = false;
+  EXPECT_FALSE(can_hold_committed_execution_after_behavior_drop(request));
+}
+
+TEST(V2XOvertakeCoreContinuity, HardExecutionGuardsCancelCommittedBehaviorDropHold)
+{
+  CommittedExecutionContinuityRequest request;
+  request.active_execution_phase = true;
+  request.target_progress_continuous = true;
+  request.target_ahead = true;
+
+  request.target_pass_side_intrusion = true;
+  EXPECT_FALSE(can_hold_committed_execution_after_behavior_drop(request));
+  request.target_pass_side_intrusion = false;
+  request.live_execution_corridor_blocked = true;
+  EXPECT_FALSE(can_hold_committed_execution_after_behavior_drop(request));
+  request.live_execution_corridor_blocked = false;
+  request.explicit_forbidden_waypoint = true;
+  EXPECT_FALSE(can_hold_committed_execution_after_behavior_drop(request));
+  request.explicit_forbidden_waypoint = false;
+  request.emergency_front_risk = true;
+  EXPECT_FALSE(can_hold_committed_execution_after_behavior_drop(request));
 }
 
 TEST(V2XOvertakeCoreContinuity, HoldsLatchedActiveTargetAcrossGapRecheckLoss)

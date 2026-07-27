@@ -4450,16 +4450,19 @@ struct MPC
         clearance_longitudinal > -side_longitudinal_range) {
         has_low_speed_clearance_vehicle = true;
       }
-      const bool is_locked_pass_target =
-        overtake_line_state_.phase == OvertakeLinePhase::Pass &&
+      const bool active_overtake_execution =
+        overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+        overtake_line_state_.phase == OvertakeLinePhase::Pass;
+      const bool is_locked_execution_target =
+        active_overtake_execution &&
         !overtake_line_state_.target_vehicle_id.empty() &&
         vehicle.id == overtake_line_state_.target_vehicle_id;
-      // Keep the Pass clearance test in the same course frame as the explicit
-      // overtake line.  A vehicle-local tangent rotates rapidly through a
-      // hairpin and can make an already established side-by-side separation
-      // appear to collapse, which re-enables the generic front brake.  Fall
-      // back to the local relative lateral value when course projection is not
-      // available.
+      // Keep the committed ShiftOut/Pass clearance test in the same course
+      // frame as the explicit overtake line. A vehicle-local tangent rotates
+      // rapidly through a hairpin and can make an already established
+      // side-by-side separation appear to collapse, which re-enables the
+      // generic front brake. Fall back to the local relative lateral value
+      // when course projection is not available.
       const double locked_pass_target_relative_lateral = front_relative_lateral;
       const double locked_pass_target_required_lateral_clearance = std::max(
         cfg.v2x_behavior.overtake_pass_front_overlap_lateral_clearance,
@@ -4472,17 +4475,18 @@ struct MPC
       const bool locked_pass_target_currently_laterally_clear =
         v2x_overtake_core::can_exclude_locked_target_from_front_overlap(
         v2x_overtake_core::PassFrontOverlapExclusionRequest{
-          overtake_line_state_.phase == OvertakeLinePhase::Pass, is_locked_pass_target,
+          active_overtake_execution, is_locked_execution_target,
           locked_pass_target_relative_lateral,
           locked_pass_target_required_lateral_clearance, false});
       const bool locked_pass_target_laterally_clear_or_latched =
         v2x_overtake_core::can_exclude_locked_target_from_front_overlap(
         v2x_overtake_core::PassFrontOverlapExclusionRequest{
-          overtake_line_state_.phase == OvertakeLinePhase::Pass, is_locked_pass_target,
+          overtake_line_state_.phase == OvertakeLinePhase::Pass,
+          is_locked_execution_target,
           locked_pass_target_relative_lateral,
           locked_pass_target_required_lateral_clearance,
           overtake_line_state_.pass_front_overlap_exclusion_latched});
-      if (is_locked_pass_target) {
+      if (is_locked_execution_target) {
         output.locked_target_current_lateral_clear =
           locked_pass_target_currently_laterally_clear;
         output.locked_target_above_front_cap_reapply_clearance =
@@ -4491,6 +4495,7 @@ struct MPC
           locked_pass_target_front_cap_reapply_clearance;
       }
       if (
+        overtake_line_state_.phase == OvertakeLinePhase::Pass &&
         locked_pass_target_laterally_clear_or_latched &&
         !overtake_line_state_.pass_front_overlap_exclusion_latched)
       {
@@ -8641,17 +8646,20 @@ private:
     // locked-target cap here kept the effective reference at front speed + 0.5 m/s even after
     // the breakout behavior had released its cap, making the ego follow the grid target into the
     // first hairpin. Let the behavior layer remain the single speed owner for this maneuver.
+    const bool active_overtake_execution =
+      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+      overtake_line_state_.phase == OvertakeLinePhase::Pass;
     output.front_cap_release_ready = preserve_validated_breakout_line ||
       overtake_core::can_release_overtake_front_cap(
       overtake_core::OvertakeFrontCapReleaseRequest{
-        overtake_line_state_.phase == OvertakeLinePhase::Pass,
+        active_overtake_execution,
         lateral_complete,
         behavior_output.locked_target_current_lateral_clear,
         overtake_line_state_.pass_front_cap_release_active,
         behavior_output.locked_target_above_front_cap_reapply_clearance,
         locked_target_seen, locked_target_longitudinal});
     if (
-      overtake_line_state_.phase == OvertakeLinePhase::Pass &&
+      active_overtake_execution &&
       !preserve_validated_breakout_line &&
       output.front_cap_release_ready !=
       overtake_line_state_.pass_front_cap_release_active)
@@ -8673,9 +8681,10 @@ private:
           "locked target unavailable";
         RCLCPP_INFO(
           rclcpp::get_logger("mpc_controller"),
-          "OvertakeLine pass front cap: %s, target=%s, lateral=%.2f, "
+          "OvertakeLine execution front cap: %s, phase=%s, target=%s, lateral=%.2f, "
           "release=%.2f, reapply=%.2f, target_s=%.2f, reason=%s",
           output.front_cap_release_ready ? "Released" : "Reapplied",
+          to_string(overtake_line_state_.phase),
           overtake_line_state_.target_vehicle_id.c_str(),
           behavior_output.locked_target_relative_lateral,
           release_clearance, reapply_clearance, locked_target_longitudinal, reason);
@@ -9983,10 +9992,13 @@ private:
             overtake_core::has_reached_pass_side_lateral_goal(
               model->spatial_state.e_y, pass_goal_ey, pass_lateral_tolerance,
               overtake_line_state_.pass_side_sign);
+          const bool active_overtake_execution =
+            overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+            overtake_line_state_.phase == OvertakeLinePhase::Pass;
           output.overtake_front_cap_release_ready =
             overtake_core::can_release_overtake_front_cap(
             overtake_core::OvertakeFrontCapReleaseRequest{
-              overtake_line_state_.phase == OvertakeLinePhase::Pass,
+              active_overtake_execution,
               pass_lateral_complete,
               output.locked_target_current_lateral_clear,
               overtake_line_state_.pass_front_cap_release_active,

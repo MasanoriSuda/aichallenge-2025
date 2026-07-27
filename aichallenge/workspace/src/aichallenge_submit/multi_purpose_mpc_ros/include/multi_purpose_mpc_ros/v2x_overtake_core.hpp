@@ -160,7 +160,7 @@ bool is_shiftout_complete(const ShiftOutCompletionRequest & request) noexcept;
 
 struct OvertakeFrontCapReleaseRequest
 {
-  bool pass_phase{false};
+  bool active_execution_phase{false};
   bool lateral_complete{false};
   bool lateral_separation_clear{false};
   bool lateral_separation_release_active{false};
@@ -169,26 +169,27 @@ struct OvertakeFrontCapReleaseRequest
   double target_longitudinal_m{};
 };
 
-/// Release the front-speed cap while physical lateral separation is currently
-/// clear. After the release threshold has been reached once, retain release only
-/// inside the caller-provided reapply hysteresis band. A substantial clearance
-/// collapse reapplies the cap. The target-behind completion remains available
-/// after lateral ShiftOut has completed.
+/// During committed ShiftOut/Pass, release the front-speed cap while physical
+/// lateral separation is currently clear. After the release threshold has been
+/// reached once, retain release only inside the caller-provided reapply
+/// hysteresis band. A substantial clearance collapse reapplies the cap. The
+/// target-behind completion remains available after lateral ShiftOut has
+/// completed.
 bool can_release_overtake_front_cap(
   const OvertakeFrontCapReleaseRequest & request) noexcept;
 
 struct PassFrontOverlapExclusionRequest
 {
-  bool pass_phase{false};
+  bool active_execution_phase{false};
   bool locked_target{false};
   double relative_lateral_m{};
   double required_lateral_clearance_m{};
   bool already_latched{false};
 };
 
-/// A locked target that is laterally separated in Pass is a side-by-side
-/// vehicle, not a centerline front obstacle. The result stays true after the
-/// first clearance until Pass ends so hairpin frame rotation cannot chatter it.
+/// A locked target that is laterally separated during committed ShiftOut/Pass is
+/// a side-by-side vehicle, not a centerline front obstacle. The caller may keep
+/// the result latched during Pass so hairpin frame rotation cannot chatter it.
 /// Other vehicles remain unchanged.
 bool can_exclude_locked_target_from_front_overlap(
   const PassFrontOverlapExclusionRequest & request) noexcept;

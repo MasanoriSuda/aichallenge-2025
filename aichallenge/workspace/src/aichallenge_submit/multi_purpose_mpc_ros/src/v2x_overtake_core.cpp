@@ -220,7 +220,7 @@ bool can_release_overtake_front_cap(
   const OvertakeFrontCapReleaseRequest & request) noexcept
 {
   if (
-    !request.pass_phase || !request.target_seen ||
+    !request.active_execution_phase || !request.target_seen ||
     !std::isfinite(request.target_longitudinal_m))
   {
     return false;
@@ -236,7 +236,7 @@ bool can_release_overtake_front_cap(
 bool can_exclude_locked_target_from_front_overlap(
   const PassFrontOverlapExclusionRequest & request) noexcept
 {
-  if (!request.pass_phase || !request.locked_target) {
+  if (!request.active_execution_phase || !request.locked_target) {
     return false;
   }
   if (request.already_latched) {

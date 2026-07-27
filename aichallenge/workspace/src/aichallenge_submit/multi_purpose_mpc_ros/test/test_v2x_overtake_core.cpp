@@ -621,7 +621,7 @@ TEST(V2XOvertakeCoreSpeed, TreatsPassSideOvershootAsLateralCompletion)
 TEST(V2XOvertakeCoreSpeed, ReleasesFrontCapOnlyAfterTargetIsNoLongerAhead)
 {
   OvertakeFrontCapReleaseRequest request;
-  request.pass_phase = true;
+  request.active_execution_phase = true;
   request.lateral_complete = true;
   request.lateral_separation_clear = false;
   request.target_seen = true;
@@ -636,14 +636,14 @@ TEST(V2XOvertakeCoreSpeed, ReleasesFrontCapOnlyAfterTargetIsNoLongerAhead)
   request.lateral_complete = false;
   EXPECT_FALSE(can_release_overtake_front_cap(request));
   request.lateral_complete = true;
-  request.pass_phase = false;
+  request.active_execution_phase = false;
   EXPECT_FALSE(can_release_overtake_front_cap(request));
 }
 
-TEST(V2XOvertakeCoreSpeed, ReleasesFrontCapOnlyWhilePhysicalLateralSeparationIsClear)
+TEST(V2XOvertakeCoreSpeed, ReleasesFrontCapDuringExecutionWhenLateralSeparationIsClear)
 {
   OvertakeFrontCapReleaseRequest request;
-  request.pass_phase = true;
+  request.active_execution_phase = true;
   request.lateral_complete = false;
   request.lateral_separation_clear = true;
   request.target_seen = true;
@@ -656,14 +656,14 @@ TEST(V2XOvertakeCoreSpeed, ReleasesFrontCapOnlyWhilePhysicalLateralSeparationIsC
   request.target_seen = false;
   EXPECT_FALSE(can_release_overtake_front_cap(request));
   request.target_seen = true;
-  request.pass_phase = false;
+  request.active_execution_phase = false;
   EXPECT_FALSE(can_release_overtake_front_cap(request));
 }
 
 TEST(V2XOvertakeCoreSpeed, RetainsFrontCapReleaseOnlyInsideReapplyHysteresisBand)
 {
   OvertakeFrontCapReleaseRequest request;
-  request.pass_phase = true;
+  request.active_execution_phase = true;
   request.lateral_separation_clear = false;
   request.lateral_separation_release_active = true;
   request.lateral_separation_above_reapply_threshold = true;
@@ -682,10 +682,10 @@ TEST(V2XOvertakeCoreSpeed, RetainsFrontCapReleaseOnlyInsideReapplyHysteresisBand
   EXPECT_FALSE(can_release_overtake_front_cap(request));
 }
 
-TEST(V2XOvertakeCoreSpeed, ExcludesOnlyLaterallyClearLockedTargetDuringPass)
+TEST(V2XOvertakeCoreSpeed, ExcludesOnlyLaterallyClearLockedTargetDuringExecution)
 {
   PassFrontOverlapExclusionRequest request;
-  request.pass_phase = true;
+  request.active_execution_phase = true;
   request.locked_target = true;
   request.relative_lateral_m = 1.39;
   request.required_lateral_clearance_m = 1.20;
@@ -697,9 +697,9 @@ TEST(V2XOvertakeCoreSpeed, ExcludesOnlyLaterallyClearLockedTargetDuringPass)
   EXPECT_TRUE(can_exclude_locked_target_from_front_overlap(request));
 
   request.relative_lateral_m = 1.39;
-  request.pass_phase = false;
+  request.active_execution_phase = false;
   EXPECT_FALSE(can_exclude_locked_target_from_front_overlap(request));
-  request.pass_phase = true;
+  request.active_execution_phase = true;
   request.locked_target = false;
   EXPECT_FALSE(can_exclude_locked_target_from_front_overlap(request));
 }
@@ -714,7 +714,7 @@ TEST(V2XOvertakeCoreSpeed, KeepsLineGoalAndFrontBrakeExclusionIndependent)
   EXPECT_DOUBLE_EQ(resolve_pass_side_lateral_goal(goal_request), 1.2);
 
   PassFrontOverlapExclusionRequest exclusion_request;
-  exclusion_request.pass_phase = true;
+  exclusion_request.active_execution_phase = true;
   exclusion_request.locked_target = true;
   exclusion_request.relative_lateral_m = 1.0;
   exclusion_request.required_lateral_clearance_m = 1.15;

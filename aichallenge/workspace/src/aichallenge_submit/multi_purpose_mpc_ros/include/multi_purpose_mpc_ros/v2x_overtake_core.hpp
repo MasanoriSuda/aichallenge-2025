@@ -905,7 +905,9 @@ enum class SideSelectionReason
 {
   Preferred,
   Alternate,
+  HigherQuality,
   Locked,
+  LockedQualitySwitch,
   LockedUnavailable,
   PreferredUnavailable,
   NoFeasibleSide,
@@ -930,6 +932,46 @@ struct SideSelection
 /// Select a feasible pass side without changing sides after one is locked.
 SideSelection select_pass_side(const SideSelectionRequest & request) noexcept;
 
+struct OvertakeSideQualityCandidate
+{
+  PassSide side{PassSide::None};
+  bool feasible{false};
+  double side_clearance_m{0.0};
+  double corridor_width_m{0.0};
+  double continuous_open_distance_m{0.0};
+  double required_lateral_accel_mps2{0.0};
+};
+
+struct OvertakeSideQualitySelectionRequest
+{
+  PassSide preferred{PassSide::None};
+  PassSide locked{PassSide::None};
+  OvertakeSideQualityCandidate left;
+  OvertakeSideQualityCandidate right;
+  bool allow_locked_reselection{false};
+  double minimum_score_advantage{0.0};
+};
+
+struct OvertakeSideQualitySelection
+{
+  PassSide side{PassSide::None};
+  SideSelectionReason reason{SideSelectionReason::NoFeasibleSide};
+  double left_score{-std::numeric_limits<double>::infinity()};
+  double right_score{-std::numeric_limits<double>::infinity()};
+};
+
+/// Rank both executable sides using inflated lateral room, continuous open
+/// distance and ShiftOut lateral-acceleration demand. Curve inside/outside is
+/// intentionally not a score input.
+double score_overtake_side_quality(
+  const OvertakeSideQualityCandidate & candidate) noexcept;
+
+/// Select the higher-quality executable side. A locked side remains preferred
+/// unless early-reselection is explicitly enabled and the alternate exceeds
+/// the configured score advantage.
+OvertakeSideQualitySelection select_overtake_side_by_quality(
+  const OvertakeSideQualitySelectionRequest & request) noexcept;
+
 struct CurveAttackSideRequest
 {
   PassSide inner_side{PassSide::None};
@@ -949,6 +991,49 @@ struct CurveAttackSideRequest
 SideSelection select_curve_attack_side(const CurveAttackSideRequest & request) noexcept;
 
 PassSide opposite_side(PassSide side) noexcept;
+
+bool selected_pass_side_ordering_conflict(
+  bool active_shiftout, int pass_side_sign, bool target_seen,
+  bool target_position_jump, double target_longitudinal_m,
+  double maximum_guard_longitudinal_m, double target_relative_lateral_m,
+  double ordering_margin_m) noexcept;
+
+enum class EarlyShiftOutSideReplanAction
+{
+  Keep,
+  Switch,
+  Abort,
+};
+
+struct EarlyShiftOutSideReplanRequest
+{
+  bool enabled{false};
+  bool side_switch_permitted{true};
+  bool shiftout_phase{false};
+  bool lateral_clearance_latched{false};
+  PassSide locked_side{PassSide::None};
+  PassSide candidate_side{PassSide::None};
+  bool candidate_feasible{false};
+  bool selected_side_conflict{false};
+  double lateral_progress_m{0.0};
+  double maximum_lateral_progress_m{0.0};
+  double traveled_distance_m{0.0};
+  double maximum_traveled_distance_m{0.0};
+  double candidate_stable_sec{0.0};
+  double required_stable_sec{0.0};
+};
+
+struct EarlyShiftOutSideReplanResolution
+{
+  EarlyShiftOutSideReplanAction action{EarlyShiftOutSideReplanAction::Keep};
+  bool inside_switch_window{false};
+};
+
+/// Switch only in the shallow ShiftOut window after a stable alternate-side
+/// decision. A stable selected-side conflict outside that window aborts rather
+/// than crossing the target with a direct side reversal.
+EarlyShiftOutSideReplanResolution resolve_early_shiftout_side_replan(
+  const EarlyShiftOutSideReplanRequest & request) noexcept;
 
 /// Gate race-only V2X behavior when AWSIM state tracking is available. Launches
 /// without state tracking retain the legacy always-active behavior. A prepared

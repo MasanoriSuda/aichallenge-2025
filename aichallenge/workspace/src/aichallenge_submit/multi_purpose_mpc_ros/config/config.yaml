@@ -488,6 +488,13 @@ mpc:
   v2x_overtake_line_max_target_change: 0.04   # [m/cycle] smooth target goal updates across cycles
   v2x_overtake_line_target_intrusion_ordering_margin: 0.10 # [m] abort if the ahead target reaches/crosses ego's selected-side ordering
   v2x_overtake_line_target_intrusion_guard_distance: 2.0 # [m] farther targets may be crossed laterally while ego remains behind
+  v2x_overtake_line_side_quality_selection_enabled: true # compare both sides; inside/outside is not an unconditional preference
+  v2x_overtake_line_side_quality_min_score_advantage: 0.25 # [quality m] hysteresis over geometric tie preference
+  v2x_overtake_line_early_side_replan_enabled: true
+  v2x_overtake_line_early_side_replan_max_lateral_progress: 0.60 # [m] never directly reverse a deeply committed ShiftOut
+  v2x_overtake_line_early_side_replan_max_traveled_distance: 5.0 # [m]
+  v2x_overtake_line_early_side_replan_stable_sec: 0.25 # [s] suppress left/right observation chatter
+  v2x_overtake_line_side_replan_target_guard_distance: 8.0 # [m] measured ordering conflict; hard intrusion remains 2 m
   v2x_overtake_line_return_clear_distance: 2.0 # [m] begin Return after nominal vehicle-length clearance
   v2x_overtake_line_phase_hold_time: 0.3      # [s] minimum phase hold before transition
   v2x_overtake_target_hold_sec: 0.75          # [s] keep a locked Pass across a transient V2X classification loss

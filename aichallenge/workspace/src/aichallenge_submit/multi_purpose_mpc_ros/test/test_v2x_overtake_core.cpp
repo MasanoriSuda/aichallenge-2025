@@ -81,6 +81,10 @@ using multi_purpose_mpc_ros::v2x_overtake_core::RecoveryReacquireRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SideSelectionReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::SideSelectionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CurveAttackSideRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSideQualityCandidate;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSideQualitySelectionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::EarlyShiftOutSideReplanAction;
+using multi_purpose_mpc_ros::v2x_overtake_core::EarlyShiftOutSideReplanRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SpeedLimitRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StallWatchdogRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassProgressWatchdogRequest;
@@ -164,6 +168,10 @@ using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_offset_curve_feasibilit
 using multi_purpose_mpc_ros::v2x_overtake_core::is_inter_vehicle_corridor_rear_clear;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_pass_side;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_curve_attack_side;
+using multi_purpose_mpc_ros::v2x_overtake_core::score_overtake_side_quality;
+using multi_purpose_mpc_ros::v2x_overtake_core::select_overtake_side_by_quality;
+using multi_purpose_mpc_ros::v2x_overtake_core::selected_pass_side_ordering_conflict;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_early_shiftout_side_replan;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_v2x_behavior_session_active;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_start_low_speed_bypass;
 using multi_purpose_mpc_ros::v2x_overtake_core::StoppedCandidateConfirmationRequest;
@@ -2347,6 +2355,138 @@ TEST(V2XOvertakeCoreCurveAttackSide, PreservesLockedSideWithoutSwitching)
 
   EXPECT_EQ(result.side, PassSide::None);
   EXPECT_EQ(result.reason, SideSelectionReason::LockedUnavailable);
+}
+
+TEST(V2XOvertakeCoreSideQuality, LowerLateralDemandBeatsInsidePreference)
+{
+  const auto result = select_overtake_side_by_quality(
+    OvertakeSideQualitySelectionRequest{
+      PassSide::Right,
+      PassSide::None,
+      OvertakeSideQualityCandidate{PassSide::Left, true, 3.0, 2.5, 5.0, 2.0},
+      OvertakeSideQualityCandidate{PassSide::Right, true, 3.0, 2.5, 5.0, 5.0},
+      false,
+      0.10});
+
+  EXPECT_EQ(result.side, PassSide::Left);
+  EXPECT_EQ(result.reason, SideSelectionReason::HigherQuality);
+  EXPECT_GT(result.left_score, result.right_score);
+}
+
+TEST(V2XOvertakeCoreSideQuality, LockedSideNeedsStableQualityAdvantageToSwitch)
+{
+  OvertakeSideQualitySelectionRequest request{
+    PassSide::Right,
+    PassSide::Right,
+    OvertakeSideQualityCandidate{PassSide::Left, true, 2.8, 2.8, 5.0, 2.0},
+    OvertakeSideQualityCandidate{PassSide::Right, true, 2.7, 2.7, 5.0, 2.0},
+    true,
+    0.25};
+
+  auto result = select_overtake_side_by_quality(request);
+  EXPECT_EQ(result.side, PassSide::Right);
+  EXPECT_EQ(result.reason, SideSelectionReason::Locked);
+
+  request.left.side_clearance_m = 3.4;
+  request.left.corridor_width_m = 3.4;
+  result = select_overtake_side_by_quality(request);
+  EXPECT_EQ(result.side, PassSide::Left);
+  EXPECT_EQ(result.reason, SideSelectionReason::LockedQualitySwitch);
+}
+
+TEST(V2XOvertakeCoreSideQuality, RejectsNonFiniteCandidateQuality)
+{
+  OvertakeSideQualityCandidate candidate{
+    PassSide::Left, true, 3.0, 2.5, 5.0,
+    std::numeric_limits<double>::infinity()};
+  EXPECT_FALSE(std::isfinite(score_overtake_side_quality(candidate)));
+}
+
+TEST(V2XOvertakeCoreSideReplan, DetectsTargetBeyondEgoOnSelectedSide)
+{
+  EXPECT_TRUE(selected_pass_side_ordering_conflict(
+      true, -1, true, false, 6.5, 8.0, -0.93, 0.10));
+  EXPECT_FALSE(selected_pass_side_ordering_conflict(
+      true, -1, true, false, 6.5, 8.0, 0.45, 0.10));
+  EXPECT_FALSE(selected_pass_side_ordering_conflict(
+      true, -1, true, false, 8.01, 8.0, -0.93, 0.10));
+  EXPECT_FALSE(selected_pass_side_ordering_conflict(
+      false, -1, true, false, 1.0, 8.0, -0.93, 0.10));
+}
+
+TEST(V2XOvertakeCoreSideReplan, SwitchesOnlyAfterStableEarlyAlternate)
+{
+  EarlyShiftOutSideReplanRequest request;
+  request.enabled = true;
+  request.side_switch_permitted = true;
+  request.shiftout_phase = true;
+  request.locked_side = PassSide::Right;
+  request.candidate_side = PassSide::Left;
+  request.candidate_feasible = true;
+  request.selected_side_conflict = true;
+  request.lateral_progress_m = 0.4;
+  request.maximum_lateral_progress_m = 0.6;
+  request.traveled_distance_m = 3.0;
+  request.maximum_traveled_distance_m = 5.0;
+  request.candidate_stable_sec = 0.24;
+  request.required_stable_sec = 0.25;
+
+  auto result = resolve_early_shiftout_side_replan(request);
+  EXPECT_EQ(result.action, EarlyShiftOutSideReplanAction::Keep);
+  EXPECT_TRUE(result.inside_switch_window);
+
+  request.candidate_stable_sec = 0.25;
+  result = resolve_early_shiftout_side_replan(request);
+  EXPECT_EQ(result.action, EarlyShiftOutSideReplanAction::Switch);
+}
+
+TEST(V2XOvertakeCoreSideReplan, LateConflictAbortsWithoutDirectSideReversal)
+{
+  EarlyShiftOutSideReplanRequest request;
+  request.enabled = true;
+  request.side_switch_permitted = true;
+  request.shiftout_phase = true;
+  request.locked_side = PassSide::Right;
+  request.candidate_side = PassSide::Left;
+  request.candidate_feasible = true;
+  request.selected_side_conflict = true;
+  request.lateral_progress_m = 0.61;
+  request.maximum_lateral_progress_m = 0.6;
+  request.traveled_distance_m = 3.0;
+  request.maximum_traveled_distance_m = 5.0;
+  request.candidate_stable_sec = 0.25;
+  request.required_stable_sec = 0.25;
+
+  auto result = resolve_early_shiftout_side_replan(request);
+  EXPECT_EQ(result.action, EarlyShiftOutSideReplanAction::Abort);
+  EXPECT_FALSE(result.inside_switch_window);
+
+  request.lateral_progress_m = 0.4;
+  request.side_switch_permitted = false;
+  result = resolve_early_shiftout_side_replan(request);
+  EXPECT_EQ(result.action, EarlyShiftOutSideReplanAction::Abort);
+}
+
+TEST(V2XOvertakeCoreSideReplan, LateQualityAdvantageAloneKeepsCommittedSide)
+{
+  EarlyShiftOutSideReplanRequest request;
+  request.enabled = true;
+  request.side_switch_permitted = true;
+  request.shiftout_phase = true;
+  request.locked_side = PassSide::Right;
+  request.candidate_side = PassSide::Left;
+  request.candidate_feasible = true;
+  request.selected_side_conflict = false;
+  request.lateral_progress_m = 0.8;
+  request.maximum_lateral_progress_m = 0.6;
+  request.traveled_distance_m = 6.0;
+  request.maximum_traveled_distance_m = 5.0;
+  request.candidate_stable_sec = 1.0;
+  request.required_stable_sec = 0.25;
+
+  EXPECT_EQ(
+    resolve_early_shiftout_side_replan(request).action,
+    EarlyShiftOutSideReplanAction::Keep);
 }
 
 TEST(V2XOvertakeCoreSide, LowSpeedPassPrefersReachableSideOverSlightlyWiderSide)

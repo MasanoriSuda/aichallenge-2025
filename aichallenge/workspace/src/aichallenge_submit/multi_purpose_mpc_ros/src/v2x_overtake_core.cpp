@@ -1246,6 +1246,108 @@ SideSelection select_pass_side(const SideSelectionRequest & request) noexcept
   return {PassSide::None, SideSelectionReason::NoFeasibleSide};
 }
 
+double score_overtake_side_quality(
+  const OvertakeSideQualityCandidate & candidate) noexcept
+{
+  if (
+    !is_configured_side(candidate.side) || !candidate.feasible ||
+    !std::isfinite(candidate.side_clearance_m) || candidate.side_clearance_m < 0.0 ||
+    !std::isfinite(candidate.corridor_width_m) || candidate.corridor_width_m < 0.0 ||
+    !std::isfinite(candidate.continuous_open_distance_m) ||
+    candidate.continuous_open_distance_m < 0.0 ||
+    !std::isfinite(candidate.required_lateral_accel_mps2) ||
+    candidate.required_lateral_accel_mps2 < 0.0)
+  {
+    return -std::numeric_limits<double>::infinity();
+  }
+
+  const double lateral_room_m = candidate.corridor_width_m > 1e-9 ?
+    std::min(candidate.side_clearance_m, candidate.corridor_width_m) :
+    candidate.side_clearance_m;
+  const double continuity_bonus_m =
+    0.10 * std::min(candidate.continuous_open_distance_m, 10.0);
+  const double lateral_accel_penalty_m =
+    0.10 * std::min(candidate.required_lateral_accel_mps2, 10.0);
+  return lateral_room_m + continuity_bonus_m - lateral_accel_penalty_m;
+}
+
+OvertakeSideQualitySelection select_overtake_side_by_quality(
+  const OvertakeSideQualitySelectionRequest & request) noexcept
+{
+  OvertakeSideQualitySelection result;
+  result.left_score = score_overtake_side_quality(request.left);
+  result.right_score = score_overtake_side_quality(request.right);
+  const bool left_feasible = std::isfinite(result.left_score);
+  const bool right_feasible = std::isfinite(result.right_score);
+  const auto score_for = [&](const PassSide side) {
+      return side == PassSide::Left ? result.left_score :
+             side == PassSide::Right ? result.right_score :
+             -std::numeric_limits<double>::infinity();
+    };
+  const auto feasible = [&](const PassSide side) {
+      return side == PassSide::Left ? left_feasible :
+             side == PassSide::Right ? right_feasible : false;
+    };
+
+  if (is_configured_side(request.locked)) {
+    if (!request.allow_locked_reselection) {
+      result.side = feasible(request.locked) ? request.locked : PassSide::None;
+      result.reason = feasible(request.locked) ?
+        SideSelectionReason::Locked : SideSelectionReason::LockedUnavailable;
+      return result;
+    }
+
+    const PassSide alternate = opposite_side(request.locked);
+    if (!feasible(request.locked)) {
+      result.side = feasible(alternate) ? alternate : PassSide::None;
+      result.reason = feasible(alternate) ?
+        SideSelectionReason::LockedQualitySwitch : SideSelectionReason::LockedUnavailable;
+      return result;
+    }
+    const double minimum_advantage = std::max(0.0, request.minimum_score_advantage);
+    if (
+      feasible(alternate) &&
+      score_for(alternate) > score_for(request.locked) + minimum_advantage + 1e-9)
+    {
+      result.side = alternate;
+      result.reason = SideSelectionReason::LockedQualitySwitch;
+      return result;
+    }
+    result.side = request.locked;
+    result.reason = SideSelectionReason::Locked;
+    return result;
+  }
+
+  if (!is_configured_side(request.preferred)) {
+    result.reason = SideSelectionReason::InvalidPreference;
+    return result;
+  }
+  if (!left_feasible && !right_feasible) {
+    result.reason = SideSelectionReason::NoFeasibleSide;
+    return result;
+  }
+  if (left_feasible != right_feasible) {
+    result.side = left_feasible ? PassSide::Left : PassSide::Right;
+    result.reason = result.side == request.preferred ?
+      SideSelectionReason::Preferred : SideSelectionReason::Alternate;
+    return result;
+  }
+
+  const double difference = result.left_score - result.right_score;
+  const double minimum_advantage = std::max(0.0, request.minimum_score_advantage);
+  if (difference > minimum_advantage + 1e-9) {
+    result.side = PassSide::Left;
+    result.reason = SideSelectionReason::HigherQuality;
+  } else if (difference < -minimum_advantage - 1e-9) {
+    result.side = PassSide::Right;
+    result.reason = SideSelectionReason::HigherQuality;
+  } else {
+    result.side = request.preferred;
+    result.reason = SideSelectionReason::Preferred;
+  }
+  return result;
+}
+
 SideSelection select_curve_attack_side(const CurveAttackSideRequest & request) noexcept
 {
   if (is_configured_side(request.locked_side)) {
@@ -1295,6 +1397,67 @@ PassSide opposite_side(const PassSide side) noexcept
     return PassSide::Left;
   }
   return PassSide::None;
+}
+
+bool selected_pass_side_ordering_conflict(
+  const bool active_shiftout, const int pass_side_sign, const bool target_seen,
+  const bool target_position_jump, const double target_longitudinal_m,
+  const double maximum_guard_longitudinal_m, const double target_relative_lateral_m,
+  const double ordering_margin_m) noexcept
+{
+  if (
+    !active_shiftout || pass_side_sign == 0 || !target_seen || target_position_jump ||
+    !std::isfinite(target_longitudinal_m) || target_longitudinal_m <= 0.0 ||
+    !std::isfinite(maximum_guard_longitudinal_m) ||
+    maximum_guard_longitudinal_m < 0.0 ||
+    target_longitudinal_m > maximum_guard_longitudinal_m + 1e-9 ||
+    !std::isfinite(target_relative_lateral_m) ||
+    !std::isfinite(ordering_margin_m) || ordering_margin_m < 0.0)
+  {
+    return false;
+  }
+
+  return static_cast<double>(pass_side_sign) * target_relative_lateral_m >
+         ordering_margin_m + 1e-9;
+}
+
+EarlyShiftOutSideReplanResolution resolve_early_shiftout_side_replan(
+  const EarlyShiftOutSideReplanRequest & request) noexcept
+{
+  EarlyShiftOutSideReplanResolution result;
+  if (
+    !request.enabled || !request.shiftout_phase || request.lateral_clearance_latched ||
+    !is_configured_side(request.locked_side) ||
+    !std::isfinite(request.lateral_progress_m) || request.lateral_progress_m < 0.0 ||
+    !std::isfinite(request.maximum_lateral_progress_m) ||
+    request.maximum_lateral_progress_m < 0.0 ||
+    !std::isfinite(request.traveled_distance_m) || request.traveled_distance_m < 0.0 ||
+    !std::isfinite(request.maximum_traveled_distance_m) ||
+    request.maximum_traveled_distance_m < 0.0 ||
+    !std::isfinite(request.candidate_stable_sec) || request.candidate_stable_sec < 0.0 ||
+    !std::isfinite(request.required_stable_sec) || request.required_stable_sec < 0.0)
+  {
+    return result;
+  }
+
+  result.inside_switch_window =
+    request.side_switch_permitted &&
+    request.lateral_progress_m <= request.maximum_lateral_progress_m + 1e-9 &&
+    request.traveled_distance_m <= request.maximum_traveled_distance_m + 1e-9;
+  if (request.candidate_stable_sec + 1e-9 < request.required_stable_sec) {
+    return result;
+  }
+
+  const bool alternate_feasible =
+    request.candidate_feasible &&
+    is_configured_side(request.candidate_side) &&
+    request.candidate_side != request.locked_side;
+  if (result.inside_switch_window && alternate_feasible) {
+    result.action = EarlyShiftOutSideReplanAction::Switch;
+  } else if (request.selected_side_conflict) {
+    result.action = EarlyShiftOutSideReplanAction::Abort;
+  }
+  return result;
 }
 
 bool is_v2x_behavior_session_active(

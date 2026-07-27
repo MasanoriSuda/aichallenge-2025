@@ -162,6 +162,7 @@ struct OvertakeFrontCapReleaseRequest
 {
   bool active_execution_phase{false};
   bool lateral_complete{false};
+  bool execution_horizon_unconstrained{false};
   bool lateral_separation_clear{false};
   bool lateral_separation_release_active{false};
   bool lateral_separation_above_reapply_threshold{false};
@@ -169,12 +170,12 @@ struct OvertakeFrontCapReleaseRequest
   double target_longitudinal_m{};
 };
 
-/// During committed ShiftOut/Pass, release the front-speed cap while physical
-/// lateral separation is currently clear. After the release threshold has been
-/// reached once, retain release only inside the caller-provided reapply
-/// hysteresis band. A substantial clearance collapse reapplies the cap. The
-/// target-behind completion remains available after lateral ShiftOut has
-/// completed.
+/// During committed ShiftOut/Pass, release the front-speed cap only after the
+/// pass-side lateral goal is complete and its execution horizon is not limited
+/// by lateral acceleration or wall constraints. Physical lateral clearance uses
+/// caller-provided release/reapply hysteresis. A target already behind may also
+/// release the cap, but still requires the completed, unconstrained lateral
+/// path.
 bool can_release_overtake_front_cap(
   const OvertakeFrontCapReleaseRequest & request) noexcept;
 

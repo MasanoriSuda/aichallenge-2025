@@ -8637,6 +8637,38 @@ private:
     }
 
     const double raw_goal = feasible_goal_for_phase;
+    const double goal_ey = limit_overtake_line_goal_change(raw_goal);
+    const double phase_distance = overtake_line_phase_distance();
+    const double max_lateral_accel = std::max(0.0, line_cfg.max_lateral_accel);
+    const double speed_for_time = std::max(1.0, current_speed_mps_);
+    const bool generating_execution_horizon =
+      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+      overtake_line_state_.phase == OvertakeLinePhase::Pass;
+    const auto horizon_evaluation = evaluate_overtake_line_horizon(
+      ref_wp_id, N, lb, ub, current_ey,
+      overtake_line_state_.phase_start_ey,
+      overtake_line_state_.phase_traveled_m,
+      overtake_line_state_.phase == OvertakeLinePhase::Pass,
+      phase_distance, goal_ey, min_wall_clearance, max_lateral_accel,
+      speed_for_time, generating_execution_horizon);
+    output.target_ey = horizon_evaluation.target_ey;
+    output.max_required_lateral_accel =
+      horizon_evaluation.max_required_lateral_accel;
+    output.lateral_accel_limited =
+      horizon_evaluation.lateral_accel_limited;
+    output.wall_clearance_limited =
+      horizon_evaluation.wall_clearance_limited;
+    output.static_map_wall_limited =
+      horizon_evaluation.static_map_wall_limited;
+    output.static_map_margin_degraded =
+      horizon_evaluation.static_map_margin_degraded;
+    output.static_map_wall_infeasible =
+      horizon_evaluation.static_map_wall_infeasible;
+    const bool execution_horizon_unconstrained =
+      horizon_evaluation.execution_feasible() &&
+      !horizon_evaluation.lateral_accel_limited &&
+      !horizon_evaluation.wall_clearance_limited &&
+      !horizon_evaluation.static_map_wall_limited;
     const bool lateral_complete =
       overtake_core::has_reached_pass_side_lateral_goal(
         current_ey, feasible_goal_for_phase, shiftout_lateral_tolerance,
@@ -8654,6 +8686,7 @@ private:
       overtake_core::OvertakeFrontCapReleaseRequest{
         active_overtake_execution,
         lateral_complete,
+        execution_horizon_unconstrained,
         behavior_output.locked_target_current_lateral_clear,
         overtake_line_state_.pass_front_cap_release_active,
         behavior_output.locked_target_above_front_cap_reapply_clearance,
@@ -8675,19 +8708,23 @@ private:
             cfg.v2x_behavior.overtake_pass_front_cap_reapply_lateral_clearance));
         const char * reason = output.front_cap_release_ready ?
           behavior_output.locked_target_current_lateral_clear ?
-          "release clearance reached" :
-          "locked target no longer ahead" :
-          locked_target_seen ? "lateral clearance below reapply threshold" :
-          "locked target unavailable";
+          "lateral goal and execution horizon clear" :
+          "lateral goal complete and locked target no longer ahead" :
+          !locked_target_seen ? "locked target unavailable" :
+          !lateral_complete ? "lateral goal incomplete" :
+          !execution_horizon_unconstrained ? "execution horizon constrained" :
+          "lateral clearance below reapply threshold";
         RCLCPP_INFO(
           rclcpp::get_logger("mpc_controller"),
           "OvertakeLine execution front cap: %s, phase=%s, target=%s, lateral=%.2f, "
-          "release=%.2f, reapply=%.2f, target_s=%.2f, reason=%s",
+          "release=%.2f, reapply=%.2f, target_s=%.2f, lateral_complete=%d, "
+          "horizon_clear=%d, reason=%s",
           output.front_cap_release_ready ? "Released" : "Reapplied",
           to_string(overtake_line_state_.phase),
           overtake_line_state_.target_vehicle_id.c_str(),
           behavior_output.locked_target_relative_lateral,
-          release_clearance, reapply_clearance, locked_target_longitudinal, reason);
+          release_clearance, reapply_clearance, locked_target_longitudinal,
+          lateral_complete ? 1 : 0, execution_horizon_unconstrained ? 1 : 0, reason);
       }
       overtake_line_state_.pass_front_cap_release_active =
         output.front_cap_release_ready;
@@ -8731,13 +8768,8 @@ private:
       output.target_velocity_reference = std::min(
         cfg.v_max, std::max(0.0, locked_target_speed) + closing_speed_limit);
     }
-    const double goal_ey = limit_overtake_line_goal_change(raw_goal);
-    const double phase_distance = overtake_line_phase_distance();
-    const double max_lateral_accel = std::max(0.0, line_cfg.max_lateral_accel);
-    const double speed_for_time = std::max(1.0, current_speed_mps_);
 
     output.active = true;
-    output.target_ey.assign(N, 0.0);
     output.target_epsi.assign(N, 0.0);
     output.target_active.assign(N, true);
     if (
@@ -8762,29 +8794,6 @@ private:
       output.target_velocity_limit = 0.0;
     }
 
-    const bool generating_execution_horizon =
-      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
-      overtake_line_state_.phase == OvertakeLinePhase::Pass;
-    const auto horizon_evaluation = evaluate_overtake_line_horizon(
-      ref_wp_id, N, lb, ub, current_ey,
-      overtake_line_state_.phase_start_ey,
-      overtake_line_state_.phase_traveled_m,
-      overtake_line_state_.phase == OvertakeLinePhase::Pass,
-      phase_distance, goal_ey, min_wall_clearance, max_lateral_accel,
-      speed_for_time, generating_execution_horizon);
-    output.target_ey = horizon_evaluation.target_ey;
-    output.max_required_lateral_accel =
-      horizon_evaluation.max_required_lateral_accel;
-    output.lateral_accel_limited =
-      horizon_evaluation.lateral_accel_limited;
-    output.wall_clearance_limited =
-      horizon_evaluation.wall_clearance_limited;
-    output.static_map_wall_limited =
-      horizon_evaluation.static_map_wall_limited;
-    output.static_map_margin_degraded =
-      horizon_evaluation.static_map_margin_degraded;
-    output.static_map_wall_infeasible =
-      horizon_evaluation.static_map_wall_infeasible;
     if (horizon_evaluation.static_map_wall_infeasible) {
       output.target_velocity_limit = std::min(
         output.target_velocity_limit,
@@ -9983,28 +9992,16 @@ private:
           output.locked_target_speed : std::isfinite(output.front_speed) ?
           output.front_speed : overtake_line_state_.target_last_speed;
         if (std::isfinite(overtake_target_speed)) {
-          const double pass_goal_ey =
-            static_cast<double>(overtake_line_state_.pass_side_sign) *
-            std::max(0.0, cfg.v2x_behavior.overtake_line.lateral_offset);
-          const double pass_lateral_tolerance = std::max(
-            0.15, 0.25 * std::max(0.0, cfg.v2x_behavior.overtake_line.lateral_offset));
-          const bool pass_lateral_complete =
-            overtake_core::has_reached_pass_side_lateral_goal(
-              model->spatial_state.e_y, pass_goal_ey, pass_lateral_tolerance,
-              overtake_line_state_.pass_side_sign);
           const bool active_overtake_execution =
             overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
             overtake_line_state_.phase == OvertakeLinePhase::Pass;
+          // The explicit OvertakeLine evaluates the current wall/static-wall/lateral-accel
+          // horizon later in this control cycle. Consume only its previously authorized
+          // release here; the current OvertakeLine reference can immediately reapply the
+          // safer cap and the behavior layer observes that state on the next cycle.
           output.overtake_front_cap_release_ready =
-            overtake_core::can_release_overtake_front_cap(
-            overtake_core::OvertakeFrontCapReleaseRequest{
-              active_overtake_execution,
-              pass_lateral_complete,
-              output.locked_target_current_lateral_clear,
-              overtake_line_state_.pass_front_cap_release_active,
-              output.locked_target_above_front_cap_reapply_clearance,
-              output.locked_target_seen,
-              output.locked_target_longitudinal});
+            active_overtake_execution &&
+            overtake_line_state_.pass_front_cap_release_active;
           const bool front_cap_stage = !output.overtake_front_cap_release_ready;
           const bool physical_shiftout_stage =
             overtake_line_state_.phase != OvertakeLinePhase::Pass;

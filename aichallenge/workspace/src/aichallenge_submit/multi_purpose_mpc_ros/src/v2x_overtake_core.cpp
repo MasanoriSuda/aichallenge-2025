@@ -221,7 +221,8 @@ bool can_release_overtake_front_cap(
 {
   if (
     !request.active_execution_phase || !request.target_seen ||
-    !std::isfinite(request.target_longitudinal_m))
+    !std::isfinite(request.target_longitudinal_m) ||
+    !request.lateral_complete || !request.execution_horizon_unconstrained)
   {
     return false;
   }
@@ -229,8 +230,7 @@ bool can_release_overtake_front_cap(
     request.lateral_separation_clear ||
     (request.lateral_separation_release_active &&
     request.lateral_separation_above_reapply_threshold);
-  return lateral_release ||
-         (request.lateral_complete && request.target_longitudinal_m <= 0.0);
+  return lateral_release || request.target_longitudinal_m <= 0.0;
 }
 
 bool can_exclude_locked_target_from_front_overlap(

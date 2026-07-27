@@ -623,6 +623,7 @@ TEST(V2XOvertakeCoreSpeed, ReleasesFrontCapOnlyAfterTargetIsNoLongerAhead)
   OvertakeFrontCapReleaseRequest request;
   request.active_execution_phase = true;
   request.lateral_complete = true;
+  request.execution_horizon_unconstrained = true;
   request.lateral_separation_clear = false;
   request.target_seen = true;
   request.target_longitudinal_m = 0.01;
@@ -640,19 +641,24 @@ TEST(V2XOvertakeCoreSpeed, ReleasesFrontCapOnlyAfterTargetIsNoLongerAhead)
   EXPECT_FALSE(can_release_overtake_front_cap(request));
 }
 
-TEST(V2XOvertakeCoreSpeed, ReleasesFrontCapDuringExecutionWhenLateralSeparationIsClear)
+TEST(V2XOvertakeCoreSpeed, KeepsFrontCapUntilLateralGoalAndHorizonAreReady)
 {
   OvertakeFrontCapReleaseRequest request;
   request.active_execution_phase = true;
   request.lateral_complete = false;
+  request.execution_horizon_unconstrained = true;
   request.lateral_separation_clear = true;
   request.target_seen = true;
   request.target_longitudinal_m = 8.0;
+  EXPECT_FALSE(can_release_overtake_front_cap(request));
+
+  request.lateral_complete = true;
+  request.execution_horizon_unconstrained = false;
+  EXPECT_FALSE(can_release_overtake_front_cap(request));
+
+  request.execution_horizon_unconstrained = true;
   EXPECT_TRUE(can_release_overtake_front_cap(request));
 
-  request.lateral_separation_clear = false;
-  EXPECT_FALSE(can_release_overtake_front_cap(request));
-  request.lateral_separation_clear = true;
   request.target_seen = false;
   EXPECT_FALSE(can_release_overtake_front_cap(request));
   request.target_seen = true;
@@ -664,6 +670,8 @@ TEST(V2XOvertakeCoreSpeed, RetainsFrontCapReleaseOnlyInsideReapplyHysteresisBand
 {
   OvertakeFrontCapReleaseRequest request;
   request.active_execution_phase = true;
+  request.lateral_complete = true;
+  request.execution_horizon_unconstrained = true;
   request.lateral_separation_clear = false;
   request.lateral_separation_release_active = true;
   request.lateral_separation_above_reapply_threshold = true;
@@ -678,6 +686,9 @@ TEST(V2XOvertakeCoreSpeed, RetainsFrontCapReleaseOnlyInsideReapplyHysteresisBand
   EXPECT_FALSE(can_release_overtake_front_cap(request));
   request.lateral_separation_clear = true;
   EXPECT_TRUE(can_release_overtake_front_cap(request));
+  request.execution_horizon_unconstrained = false;
+  EXPECT_FALSE(can_release_overtake_front_cap(request));
+  request.execution_horizon_unconstrained = true;
   request.target_seen = false;
   EXPECT_FALSE(can_release_overtake_front_cap(request));
 }

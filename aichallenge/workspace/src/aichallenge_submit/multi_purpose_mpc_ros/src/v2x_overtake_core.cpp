@@ -222,7 +222,7 @@ bool can_release_overtake_front_cap(
   if (
     !request.active_execution_phase || !request.target_seen ||
     !std::isfinite(request.target_longitudinal_m) ||
-    !request.lateral_complete || !request.execution_horizon_unconstrained)
+    !request.lateral_complete)
   {
     return false;
   }
@@ -230,7 +230,42 @@ bool can_release_overtake_front_cap(
     request.lateral_separation_clear ||
     (request.lateral_separation_release_active &&
     request.lateral_separation_above_reapply_threshold);
+  const bool constrained_horizon_initial_release =
+    request.constrained_horizon_release_allowed &&
+    request.lateral_separation_clear;
+  const bool constrained_horizon_release_hold =
+    request.constrained_horizon_release_allowed &&
+    request.lateral_separation_release_active &&
+    request.lateral_separation_above_reapply_threshold;
+  if (
+    !request.execution_horizon_unconstrained &&
+    !constrained_horizon_initial_release &&
+    !constrained_horizon_release_hold)
+  {
+    return false;
+  }
   return lateral_release || request.target_longitudinal_m <= 0.0;
+}
+
+bool should_apply_committed_pass_speed_floor(
+  const CommittedPassSpeedFloorRequest & request) noexcept
+{
+  return
+    request.enabled &&
+    request.pass_phase &&
+    request.lateral_complete &&
+    request.front_cap_released &&
+    request.lateral_exclusion_latched &&
+    request.lateral_separation_above_reapply_threshold &&
+    request.target_seen &&
+    request.execution_path_physically_feasible &&
+    !request.actual_wall_contact &&
+    std::isfinite(request.target_speed_mps) &&
+    std::isfinite(request.slow_target_max_speed_mps) &&
+    request.slow_target_max_speed_mps >= 0.0 &&
+    request.target_speed_mps <= request.slow_target_max_speed_mps &&
+    std::isfinite(request.configured_min_speed_mps) &&
+    request.configured_min_speed_mps > 0.0;
 }
 
 bool can_exclude_locked_target_from_front_overlap(

@@ -166,6 +166,7 @@ struct OvertakeFrontCapReleaseRequest
   bool lateral_separation_clear{false};
   bool lateral_separation_release_active{false};
   bool lateral_separation_above_reapply_threshold{false};
+  bool constrained_horizon_release_allowed{false};
   bool target_seen{false};
   double target_longitudinal_m{};
 };
@@ -173,11 +174,35 @@ struct OvertakeFrontCapReleaseRequest
 /// During committed ShiftOut/Pass, release the front-speed cap only after the
 /// pass-side lateral goal is complete and its execution horizon is not limited
 /// by lateral acceleration or wall constraints. Physical lateral clearance uses
-/// caller-provided release/reapply hysteresis. A target already behind may also
-/// release the cap, but still requires the completed, unconstrained lateral
-/// path.
+/// caller-provided release/reapply hysteresis. A caller may accept a
+/// constrained-but-physically-feasible Pass horizon: initial release then
+/// requires full physical lateral clearance, while an existing release may use
+/// the lower reapply threshold. A target already behind may also release the
+/// cap, but still requires the completed lateral path.
 bool can_release_overtake_front_cap(
   const OvertakeFrontCapReleaseRequest & request) noexcept;
+
+struct CommittedPassSpeedFloorRequest
+{
+  bool enabled{false};
+  bool pass_phase{false};
+  bool lateral_complete{false};
+  bool front_cap_released{false};
+  bool lateral_exclusion_latched{false};
+  bool lateral_separation_above_reapply_threshold{false};
+  bool target_seen{false};
+  bool execution_path_physically_feasible{false};
+  bool actual_wall_contact{false};
+  double target_speed_mps{};
+  double slow_target_max_speed_mps{};
+  double configured_min_speed_mps{};
+};
+
+/// A reference-only velocity floor may help finish a physically committed Pass
+/// around a stopped/very-slow target. The caller must still clamp the result to
+/// all MPC hard speed bounds; this policy never overrides a safety limit.
+bool should_apply_committed_pass_speed_floor(
+  const CommittedPassSpeedFloorRequest & request) noexcept;
 
 struct PassFrontOverlapExclusionRequest
 {

@@ -96,6 +96,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_speed_reference
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_start_grid_breakout_speed_reference;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_shiftout_complete;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_release_overtake_front_cap;
+using multi_purpose_mpc_ros::v2x_overtake_core::should_apply_committed_pass_speed_floor;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_exclude_locked_target_from_front_overlap;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_hold_active_pass_after_gap_loss;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_hold_validated_start_grid_breakout;
@@ -699,9 +700,51 @@ TEST(V2XOvertakeCoreSpeed, RetainsFrontCapReleaseOnlyInsideReapplyHysteresisBand
   EXPECT_TRUE(can_release_overtake_front_cap(request));
   request.execution_horizon_unconstrained = false;
   EXPECT_FALSE(can_release_overtake_front_cap(request));
+  request.constrained_horizon_release_allowed = true;
+  EXPECT_TRUE(can_release_overtake_front_cap(request));
+  request.lateral_separation_clear = false;
+  EXPECT_FALSE(can_release_overtake_front_cap(request));
+  request.lateral_separation_release_active = true;
+  EXPECT_TRUE(can_release_overtake_front_cap(request));
+  request.lateral_separation_above_reapply_threshold = false;
+  EXPECT_FALSE(can_release_overtake_front_cap(request));
+  request.lateral_separation_above_reapply_threshold = true;
   request.execution_horizon_unconstrained = true;
   request.target_seen = false;
   EXPECT_FALSE(can_release_overtake_front_cap(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, AppliesCommittedPassFloorOnlyForClearSlowTargetPass)
+{
+  multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassSpeedFloorRequest request;
+  request.enabled = true;
+  request.pass_phase = true;
+  request.lateral_complete = true;
+  request.front_cap_released = true;
+  request.lateral_exclusion_latched = true;
+  request.lateral_separation_above_reapply_threshold = true;
+  request.target_seen = true;
+  request.execution_path_physically_feasible = true;
+  request.actual_wall_contact = false;
+  request.target_speed_mps = 0.2;
+  request.slow_target_max_speed_mps = 1.0;
+  request.configured_min_speed_mps = 3.0;
+  EXPECT_TRUE(should_apply_committed_pass_speed_floor(request));
+
+  request.target_speed_mps = 1.1;
+  EXPECT_FALSE(should_apply_committed_pass_speed_floor(request));
+  request.target_speed_mps = 0.2;
+  request.lateral_separation_above_reapply_threshold = false;
+  EXPECT_FALSE(should_apply_committed_pass_speed_floor(request));
+  request.lateral_separation_above_reapply_threshold = true;
+  request.execution_path_physically_feasible = false;
+  EXPECT_FALSE(should_apply_committed_pass_speed_floor(request));
+  request.execution_path_physically_feasible = true;
+  request.actual_wall_contact = true;
+  EXPECT_FALSE(should_apply_committed_pass_speed_floor(request));
+  request.actual_wall_contact = false;
+  request.front_cap_released = false;
+  EXPECT_FALSE(should_apply_committed_pass_speed_floor(request));
 }
 
 TEST(V2XOvertakeCoreSpeed, ExcludesOnlyLaterallyClearLockedTargetDuringExecution)

@@ -8,6 +8,7 @@
 #include <geometry_msgs/msg/quaternion.hpp>
 #include <geometry_msgs/msg/vector3.hpp>
 #include <multi_purpose_mpc_ros/awsim_boost_start_dash.hpp>
+#include <multi_purpose_mpc_ros/awsim_control_mode_guard.hpp>
 #include <multi_purpose_mpc_ros/mpc_state_prediction.hpp>
 #include <multi_purpose_mpc_ros/mpc_velocity_limit.hpp>
 #include <multi_purpose_mpc_ros/mpc_waypoint_association.hpp>
@@ -96,6 +97,7 @@ using visualization_msgs::msg::MarkerArray;
 using SteadyClock = std::chrono::steady_clock;
 namespace path_core = ::multi_purpose_mpc_ros::path_core;
 namespace awsim_boost = ::multi_purpose_mpc_ros::awsim_boost;
+namespace awsim_control_mode = ::multi_purpose_mpc_ros::awsim_control_mode;
 namespace mpc_state_prediction = ::multi_purpose_mpc_ros::mpc_state_prediction;
 namespace mpc_velocity_limit = ::multi_purpose_mpc_ros::mpc_velocity_limit;
 namespace mpc_waypoint_association = ::multi_purpose_mpc_ros::mpc_waypoint_association;
@@ -12639,6 +12641,10 @@ public:
     declare_parameter("use_obstacle_avoidance", false);
     declare_parameter("use_stats", false);
     declare_parameter("simulation_mode", false);
+    declare_parameter("awsim_control_mode_reassert_enabled", true);
+    declare_parameter("awsim_control_mode_reassert_period_sec", 0.2);
+    declare_parameter("awsim_control_mode_reassert_timeout_sec", 5.0);
+    declare_parameter("awsim_control_mode_motion_threshold_mps", 0.1);
     use_sim_time_ = get_parameter("use_sim_time").as_bool();
     simulation_mode_ = get_parameter("simulation_mode").as_bool();
     use_bug_acc_ = get_parameter("use_boost_acceleration").as_bool();
@@ -12666,9 +12672,19 @@ public:
     awsim_boost_io_enabled_ =
       use_sim_time_ && cfg_.awsim_boost.enabled &&
       cfg_.awsim_boost.mode == awsim_boost::Mode::StartOnce && !use_bug_acc_;
+    awsim_control_mode_reassert_enabled_ =
+      use_sim_time_ && simulation_mode_ &&
+      get_parameter("awsim_control_mode_reassert_enabled").as_bool();
+    awsim_control_mode_guard_ =
+      std::make_unique<awsim_control_mode::LaunchEngagementGuard>(
+      awsim_control_mode::Config{
+        awsim_control_mode_reassert_enabled_,
+        get_parameter("awsim_control_mode_reassert_period_sec").as_double(),
+        get_parameter("awsim_control_mode_reassert_timeout_sec").as_double(),
+        get_parameter("awsim_control_mode_motion_threshold_mps").as_double()});
     awsim_state_tracking_enabled_ =
       use_sim_time_ &&
-      (awsim_boost_io_enabled_ ||
+      (awsim_control_mode_reassert_enabled_ || awsim_boost_io_enabled_ ||
       cfg_.stuck_recovery.core.enabled ||
       (mpc_cfg_.domain_start_v_max_applied &&
       mpc_cfg_.domain_start_v_max_duration > 0.0) ||
@@ -12803,6 +12819,14 @@ public:
     } else if (cfg_.awsim_boost.mode == awsim_boost::Mode::Disabled) {
       RCLCPP_INFO(get_logger(), "AWSIM 2026 boost mode is disabled.");
     }
+    RCLCPP_INFO(
+      get_logger(),
+      "AWSIM control mode reassert: enabled=%s, period=%.2f s, timeout=%.2f s, "
+      "motion_threshold=%.2f m/s",
+      awsim_control_mode_reassert_enabled_ ? "true" : "false",
+      get_parameter("awsim_control_mode_reassert_period_sec").as_double(),
+      get_parameter("awsim_control_mode_reassert_timeout_sec").as_double(),
+      get_parameter("awsim_control_mode_motion_threshold_mps").as_double());
     if (use_obstacle_avoidance_) {
       RCLCPP_WARN(get_logger(), "USE_OBSTACLE_AVOIDANCE is enabled!");
     }
@@ -13271,6 +13295,11 @@ private:
       const auto boost_qos = rclcpp::QoS(rclcpp::KeepLast(10)).reliable();
       awsim_boost_pub_ = create_publisher<Float32MultiArray>("/awsim/cmd", boost_qos);
     }
+    if (awsim_control_mode_reassert_enabled_) {
+      awsim_control_mode_pub_ = create_publisher<Bool>(
+        "/awsim/control_mode_request_topic",
+        rclcpp::QoS(rclcpp::KeepLast(1)).reliable().durability_volatile());
+    }
     if (stuck_recovery_actuation_io_enabled_) {
       // Volatile durability prevents a newly joined subscriber from replaying a stale REVERSE.
       gear_command_pub_ = create_publisher<GearCommand>(
@@ -13711,6 +13740,52 @@ private:
     }
   }
 
+  void apply_awsim_control_mode_decision(
+    const awsim_control_mode::Decision & decision)
+  {
+    if (decision.publish_request && awsim_control_mode_pub_) {
+      Bool request;
+      request.data = true;
+      awsim_control_mode_pub_->publish(request);
+    }
+
+    const auto subscriber_count =
+      awsim_control_mode_pub_ ? awsim_control_mode_pub_->get_subscription_count() : 0U;
+    switch (decision.event) {
+      case awsim_control_mode::Event::ReadyRequest:
+        RCLCPP_INFO(
+          get_logger(),
+          "AWSIM control mode engage requested at Ready: subscribers=%zu",
+          subscriber_count);
+        break;
+      case awsim_control_mode::Event::StartRequest:
+        RCLCPP_WARN(
+          get_logger(),
+          "AWSIM control mode launch confirmation armed at Start: subscribers=%zu",
+          subscriber_count);
+        break;
+      case awsim_control_mode::Event::RetryRequest:
+        RCLCPP_WARN_THROTTLE(
+          get_logger(), *get_clock(), 1000,
+          "AWSIM control mode engage reasserted while awaiting launch motion: subscribers=%zu",
+          subscriber_count);
+        break;
+      case awsim_control_mode::Event::MotionConfirmed:
+        RCLCPP_INFO(
+          get_logger(),
+          "AWSIM control mode launch confirmed by vehicle motion");
+        break;
+      case awsim_control_mode::Event::TimedOut:
+        RCLCPP_ERROR(
+          get_logger(),
+          "AWSIM control mode launch confirmation timed out; re-enabling normal stuck recovery");
+        break;
+      case awsim_control_mode::Event::None:
+      case awsim_control_mode::Event::Reset:
+        break;
+    }
+  }
+
   void awsim_state_callback(const String::SharedPtr msg)
   {
     if (!awsim_boost_guard_) {
@@ -13728,6 +13803,9 @@ private:
     const rclcpp::Time state_time = now();
     const bool recovery_state_changed = normalized_state != last_awsim_state_;
     if (recovery_state_changed) {
+      RCLCPP_INFO(
+        get_logger(), "AWSIM vehicle state observed: state=%s",
+        normalized_state.c_str());
       const bool recovery_was_active =
         recovery_last_output_.has_value() &&
         recovery_last_output_->state != stuck_recovery::RecoveryState::Normal;
@@ -13761,6 +13839,11 @@ private:
         race_started_ = false;
       }
       last_awsim_state_ = normalized_state;
+    }
+    if (recovery_state_changed && awsim_control_mode_guard_) {
+      apply_awsim_control_mode_decision(
+        awsim_control_mode_guard_->on_awsim_state(
+          normalized_state, steady_seconds(SteadyClock::now())));
     }
     if (
       recovery_state_changed &&
@@ -15000,6 +15083,9 @@ private:
         cfg_.stuck_recovery.core.detector.stopped_speed_mps});
     const bool deliberate_stop =
       raw_deliberate_stop && !collision_deliberate_stop_override;
+    const bool control_mode_launch_guard_active =
+      awsim_control_mode_guard_ &&
+      awsim_control_mode_guard_->suppress_stuck_recovery();
     if (collision_deliberate_stop_override) {
       RCLCPP_WARN_THROTTLE(
         get_logger(), *get_clock(), 1000,
@@ -15127,7 +15213,9 @@ private:
     input.detector.control_enabled = enable_control_;
     input.detector.odometry_fresh = true;
     input.detector.solver_fallback = mpc_fallback_active;
-    input.detector.deliberate_stop = deliberate_stop || recovery_coordinated_stop_episode_;
+    input.detector.deliberate_stop =
+      deliberate_stop || recovery_coordinated_stop_episode_ ||
+      control_mode_launch_guard_active;
     input.detector.coordinated_stop = coordinated_stop_active;
     input.detector.gear_transition_active = recovery_gear_transition_active();
     input.detector.awsim_recovery_settling = awsim_recovery_settling;
@@ -15859,6 +15947,10 @@ private:
       publish_failsafe_command(control_time, "non-finite odometry rejected");
       return;
     }
+    if (awsim_control_mode_guard_) {
+      apply_awsim_control_mode_decision(
+        awsim_control_mode_guard_->update(steady_seconds(steady_now), actual_v));
+    }
     if (recovery_fault_latched_) {
       maybe_request_drive_after_recovery_reset(control_time, steady_now, actual_v);
       if (!maybe_clear_recovery_fault_latch(pose, steady_now, control_time)) {
@@ -16192,6 +16284,7 @@ private:
   bool use_obstacle_avoidance_{};
   bool use_stats_{};
   bool awsim_boost_io_enabled_{false};
+  bool awsim_control_mode_reassert_enabled_{false};
   bool awsim_state_tracking_enabled_{false};
   bool stuck_recovery_actuation_io_enabled_{false};
   bool race_started_{false};
@@ -16231,6 +16324,7 @@ private:
   std::unique_ptr<V2XGapPlanner> v2x_gap_planner_;
   std::unique_ptr<ReferenceVelocityConfigulator> ref_vel_configulator_;
   std::unique_ptr<awsim_boost::StartDashGuard> awsim_boost_guard_;
+  std::unique_ptr<awsim_control_mode::LaunchEngagementGuard> awsim_control_mode_guard_;
   std::unique_ptr<stuck_recovery::StuckRecoveryCore> stuck_recovery_core_;
   std::unique_ptr<stuck_recovery::FaultRetryGate> recovery_fault_retry_gate_;
   std::unique_ptr<stuck_recovery::AdaptiveReverseRetryTracker>
@@ -16269,6 +16363,7 @@ private:
   rclcpp::Publisher<AckermannControlCommand>::SharedPtr command_raw_pub_;
   rclcpp::Publisher<AckermannControlBoostCommand>::SharedPtr boost_command_pub_;
   rclcpp::Publisher<Float32MultiArray>::SharedPtr awsim_boost_pub_;
+  rclcpp::Publisher<Bool>::SharedPtr awsim_control_mode_pub_;
   rclcpp::Publisher<GearCommand>::SharedPtr gear_command_pub_;
   rclcpp::Publisher<MarkerArray>::SharedPtr mpc_pred_pub_;
   rclcpp::Publisher<MarkerArray>::SharedPtr mpc_pred_pub_dummy_;

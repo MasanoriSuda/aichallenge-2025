@@ -152,6 +152,21 @@ AWSIM が publish し参加者ノードが subscribe するトピックです（
 
 AWSIM はこのトピックを受けてカートを動かします。全制御方式（mpc / pure_pursuit / tiny_lidar_net / pilot_net）がこのトピックに収束します。
 
+### SIM control mode要求の信頼性
+
+`/awsim/control_mode_request_topic`は`std_msgs/msg/Bool`の`true`でAUTONOMOUS engageを
+要求する車両Domain内topicであり、複数publisherを許容する。評価側
+`autostart_orchestrator`のsuccessログはpublish APIの成功を示すだけで、AWSIMからの
+acknowledgementではない。
+
+現行MPC提出物は、DDS discoveryまたはAWSIM初期化が一発送信より遅い場合に備え、
+SIMの`Ready`で即時要求して周期再送を開始し、`Start`でも再送windowを開始し直す。
+各windowは実速度0.1 m/sを確認するまで最大5秒間、0.2秒周期で`true`を再送する。
+この有限期間だけEvidence-free Stuck Recoveryの新規開始を
+抑止する。発進確認後またはtimeout後は再送と抑止を終了し、通常のRecovery判定へ戻る。
+この参加者側補強は`use_sim_time=true`かつ`simulation_mode=true`でのみ有効であり、
+実車経路、Domain 0、`/admin/awsim/*`の責務を変更しない。
+
 ### 2026 Gear の任意契約
 
 gear変更を行わない提出物に `/control/command/gear_cmd` と

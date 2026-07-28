@@ -34,6 +34,11 @@ ament_auto_add_library(${PROJECT_NAME}_awsim_boost_start_dash SHARED
   src/awsim_boost_start_dash.cpp
 )
 
+ament_auto_add_library(${PROJECT_NAME}_awsim_control_mode_guard SHARED
+  NO_TARGET_LINK_LIBRARIES
+  src/awsim_control_mode_guard.cpp
+)
+
 ament_auto_add_library(${PROJECT_NAME}_start_grid_grace SHARED
   NO_TARGET_LINK_LIBRARIES
   src/start_grid_grace.cpp
@@ -97,6 +102,7 @@ target_include_directories(mpc_controller_cpp PRIVATE
 )
 target_link_libraries(mpc_controller_cpp
   ${PROJECT_NAME}_awsim_boost_start_dash
+  ${PROJECT_NAME}_awsim_control_mode_guard
   ${PROJECT_NAME}_path_core
   ${PROJECT_NAME}_mpc_state_prediction
   ${PROJECT_NAME}_runtime_speed_profile
@@ -144,6 +150,15 @@ if(BUILD_TESTING)
   if(TARGET test_awsim_boost_start_dash)
     target_link_libraries(test_awsim_boost_start_dash
       ${PROJECT_NAME}_awsim_boost_start_dash
+    )
+  endif()
+
+  ament_add_gtest(test_awsim_control_mode_guard
+    test/test_awsim_control_mode_guard.cpp
+  )
+  if(TARGET test_awsim_control_mode_guard)
+    target_link_libraries(test_awsim_control_mode_guard
+      ${PROJECT_NAME}_awsim_control_mode_guard
     )
   endif()
 

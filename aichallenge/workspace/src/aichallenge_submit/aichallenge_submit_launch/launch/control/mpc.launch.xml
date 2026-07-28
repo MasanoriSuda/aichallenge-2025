@@ -10,6 +10,10 @@
               --ref_vel_path $(find-pkg-share multi_purpose_mpc_ros)/config/ref_vel.yaml">
     <param name="use_sim_time" value="$(var use_sim_time)"/>
     <param name="simulation_mode" value="$(var simulation)"/>
+    <param name="awsim_control_mode_reassert_enabled" value="true"/>
+    <param name="awsim_control_mode_reassert_period_sec" value="0.2"/>
+    <param name="awsim_control_mode_reassert_timeout_sec" value="5.0"/>
+    <param name="awsim_control_mode_motion_threshold_mps" value="0.1"/>
     <param name="use_boost_acceleration" value="false"/>
     <param name="use_obstacle_avoidance" value="$(var use_obstacle_avoidance)"/>
     <param name="use_stats" value="false"/>

@@ -75,6 +75,7 @@ reference.launch.xml (aichallenge_submit_launch)
 | `/mpc/prediction` | MarkerArray | 予測軌跡（可視化） |
 | `/mpc/ref_path` | MarkerArray | 参照パス（可視化） |
 | `/awsim/cmd` | Float32MultiArray | 2026 SIM Boost指令。`awsim_boost.enabled`時のみ |
+| `/awsim/control_mode_request_topic` | Bool | SIMのAUTONOMOUS engage要求。Readyで即時送信し、Start後は発進確認まで有限再送 |
 
 ### 経路参照の方式
 

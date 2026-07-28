@@ -451,6 +451,64 @@ TEST(RecoveryFootprintLateralClearance, InvalidSearchFailsClosed)
   EXPECT_FALSE(result.feasible);
 }
 
+TEST(RecoveryFootprintPathClearance, AcceptsClearSweptPath)
+{
+  const std::vector<recovery::Pose2D> path{
+    {5.0, 5.0, 0.0},
+    {7.0, 5.5, 0.1},
+    {9.0, 6.0, 0.2}};
+
+  const auto result = recovery::evaluate_clear_footprint_path(
+    make_grid(200U, 200U, 0.1), compact_footprint(), path, 0.05);
+
+  EXPECT_TRUE(result.valid);
+  EXPECT_TRUE(result.clear);
+  EXPECT_EQ(result.reason, recovery::RejectReason::None);
+  EXPECT_GT(result.checked_pose_count, path.size());
+}
+
+TEST(RecoveryFootprintPathClearance, DetectsCollisionBetweenClearEndpoints)
+{
+  auto grid = make_grid(200U, 200U, 0.1);
+  set_world_cell(grid, 7.0, 5.0);
+  const auto footprint = compact_footprint();
+  const std::vector<recovery::Pose2D> path{
+    {5.0, 5.0, 0.0},
+    {9.0, 5.0, 0.0}};
+  ASSERT_TRUE(recovery::sample_footprint(grid, footprint, path.front()).contact_cells.empty());
+  ASSERT_TRUE(recovery::sample_footprint(grid, footprint, path.back()).contact_cells.empty());
+
+  const auto result =
+    recovery::evaluate_clear_footprint_path(grid, footprint, path, 0.05);
+
+  EXPECT_TRUE(result.valid);
+  EXPECT_FALSE(result.clear);
+  EXPECT_EQ(result.reason, recovery::RejectReason::Collision);
+  EXPECT_EQ(result.rejected_path_index, 1U);
+  EXPECT_GT(result.checked_pose_count, 1U);
+}
+
+TEST(RecoveryFootprintPathClearance, RejectsOutOfMapAndInvalidStep)
+{
+  const auto grid = make_grid(20U, 20U, 0.1);
+  const auto footprint = compact_footprint();
+  const std::vector<recovery::Pose2D> leaving_map{
+    {1.0, 1.0, 0.0},
+    {-1.0, 1.0, 0.0}};
+
+  const auto out_of_map =
+    recovery::evaluate_clear_footprint_path(grid, footprint, leaving_map, 0.05);
+  EXPECT_TRUE(out_of_map.valid);
+  EXPECT_FALSE(out_of_map.clear);
+  EXPECT_EQ(out_of_map.reason, recovery::RejectReason::OutOfMap);
+
+  const auto invalid_step =
+    recovery::evaluate_clear_footprint_path(grid, footprint, leaving_map, 0.2);
+  EXPECT_FALSE(invalid_step.valid);
+  EXPECT_FALSE(invalid_step.clear);
+  EXPECT_EQ(invalid_step.reason, recovery::RejectReason::InvalidRollout);
+}
+
 TEST(RecoveryFootprintFeasibility, CandidateLeavingMapIsRejectedWithoutEdgeClamping)
 {
   const auto result = recovery::evaluate_reverse_candidate(

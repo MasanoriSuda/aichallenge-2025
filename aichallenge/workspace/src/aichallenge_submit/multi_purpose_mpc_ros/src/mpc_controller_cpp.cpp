@@ -1696,6 +1696,13 @@ struct GapPlannerOutput
   std::string reject_reason;
 };
 
+struct LowSpeedStaticWallPreflight
+{
+  bool feasible{false};
+  std::size_t checked_pose_count{};
+  std::string reason{"not evaluated"};
+};
+
 struct FrontRiskMetrics
 {
   bool valid{false};
@@ -2341,7 +2348,7 @@ struct V2XGapPlanner
   GapPlannerOutput plan_stopped_vehicle_local_path(
     const BicycleModel & model, const int ref_wp_id, const int N, const Eigen::VectorXd & base_lb,
     const Eigen::VectorXd & base_ub, const double now_sec, const V2XBehaviorConfig & behavior_cfg,
-    const bool update_last_target = true)
+    const bool update_last_target = true, const int forced_pass_side_sign = 0)
   {
     GapPlannerOutput output;
     if (!cfg.enabled || !behavior_cfg.low_speed_local_path_enabled || N <= 0) {
@@ -2504,7 +2511,9 @@ struct V2XGapPlanner
 
     const auto right = evaluate_side(-1);
     const auto left = evaluate_side(1);
-    int pass_side_sign = configured_pass_side != 0 ? configured_pass_side : locked_pass_side;
+    int pass_side_sign = forced_pass_side_sign != 0 ?
+      forced_pass_side_sign :
+      (configured_pass_side != 0 ? configured_pass_side : locked_pass_side);
     SideCandidate selected_side;
     if (pass_side_sign != 0) {
       selected_side = pass_side_sign < 0 ? right : left;
@@ -3885,6 +3894,183 @@ struct MPC
       std::numeric_limits<double>::quiet_NaN();
   }
 
+  static const char * low_speed_pass_side_name(const int pass_side_sign) noexcept
+  {
+    return pass_side_sign < 0 ? "right" : (pass_side_sign > 0 ? "left" : "none");
+  }
+
+  LowSpeedStaticWallPreflight evaluate_low_speed_static_wall_preflight(
+    const int ref_wp_id, const GapPlannerOutput & planner_output) const
+  {
+    LowSpeedStaticWallPreflight result;
+    if (!planner_output.active || !planner_output.feasible) {
+      result.reason = planner_output.reject_reason.empty() ?
+        "local path infeasible" : planner_output.reject_reason;
+      return result;
+    }
+    if (
+      planner_output.pass_side_sign == 0 ||
+      !std::isfinite(planner_output.pass_target_ey) ||
+      planner_output.target_ey.empty())
+    {
+      result.reason = "invalid local path target";
+      return result;
+    }
+    if (
+      overtake_static_wall_grid_ == nullptr ||
+      !overtake_static_wall_footprint_.valid())
+    {
+      result.reason = "static wall geometry unavailable";
+      return result;
+    }
+    if (!actual_wall_monitor_pose_.has_value()) {
+      result.reason = "raw pose unavailable";
+      return result;
+    }
+
+    auto clearance_footprint = overtake_static_wall_footprint_;
+    const double wall_clearance_margin =
+      std::max(0.0, cfg.v2x_gap.wall_clearance_margin);
+    clearance_footprint.left_extent_m += wall_clearance_margin;
+    clearance_footprint.right_extent_m += wall_clearance_margin;
+
+    std::vector<recovery_footprint::Pose2D> path;
+    path.reserve(planner_output.target_ey.size() + 1U);
+    path.push_back(actual_wall_monitor_pose_.value());
+    for (std::size_t index = 0U; index < planner_output.target_ey.size(); ++index) {
+      const auto & waypoint =
+        model->reference_path->get_waypoint(ref_wp_id + static_cast<int>(index) + 1);
+      const double left_x = -std::sin(waypoint.psi);
+      const double left_y = std::cos(waypoint.psi);
+      path.push_back(
+        recovery_footprint::Pose2D{
+          waypoint.x + planner_output.pass_target_ey * left_x,
+          waypoint.y + planner_output.pass_target_ey * left_y,
+          waypoint.psi});
+    }
+
+    const double swept_step_m = std::max(
+      1e-3, std::min(0.10, 0.5 * overtake_static_wall_grid_->resolution_m));
+    const auto clearance = recovery_footprint::evaluate_clear_footprint_path(
+      *overtake_static_wall_grid_, clearance_footprint, path, swept_step_m);
+    result.feasible = clearance.valid && clearance.clear;
+    result.checked_pose_count = clearance.checked_pose_count;
+    result.reason = recovery_footprint::to_string(clearance.reason);
+    return result;
+  }
+
+  GapPlannerOutput plan_low_speed_local_path_with_static_wall_preflight(
+    const int ref_wp_id, const int N, const Eigen::VectorXd & lb,
+    const Eigen::VectorXd & ub, const double now_sec, const bool update_last_target)
+  {
+    if (gap_planner == nullptr) {
+      GapPlannerOutput output;
+      output.reject_reason = "gap planner unavailable";
+      return output;
+    }
+
+    auto candidate = gap_planner->plan_stopped_vehicle_local_path(
+      *model, ref_wp_id, N, lb, ub, now_sec, cfg.v2x_behavior, false);
+    auto preflight = evaluate_low_speed_static_wall_preflight(ref_wp_id, candidate);
+    const int primary_side = candidate.pass_side_sign;
+    const std::string primary_reason = preflight.reason;
+    const std::size_t primary_checked_pose_count = preflight.checked_pose_count;
+    bool static_wall_preflight_evaluated =
+      candidate.active && candidate.feasible;
+    bool alternate_selected = false;
+
+    const bool auto_side =
+      cfg.v2x_gap.low_speed_pass_side == "auto";
+    if (
+      !preflight.feasible && auto_side && !low_speed_shift_control_was_active_ &&
+      primary_side != 0)
+    {
+      auto alternate = gap_planner->plan_stopped_vehicle_local_path(
+        *model, ref_wp_id, N, lb, ub, now_sec, cfg.v2x_behavior, false, -primary_side);
+      const auto alternate_preflight =
+        evaluate_low_speed_static_wall_preflight(ref_wp_id, alternate);
+      if (alternate_preflight.feasible) {
+        candidate = std::move(alternate);
+        preflight = alternate_preflight;
+        alternate_selected = true;
+      } else {
+        const bool alternate_static_wall_preflight_evaluated =
+          alternate.active && alternate.feasible;
+        static_wall_preflight_evaluated =
+          static_wall_preflight_evaluated ||
+          alternate_static_wall_preflight_evaluated;
+        if (static_wall_preflight_evaluated) {
+          preflight.reason =
+            primary_reason + "; alternate " +
+            low_speed_pass_side_name(-primary_side) + ": " +
+            alternate_preflight.reason;
+          preflight.checked_pose_count =
+            primary_checked_pose_count + alternate_preflight.checked_pose_count;
+        }
+      }
+    }
+
+    if (!preflight.feasible) {
+      if (!static_wall_preflight_evaluated) {
+        return candidate;
+      }
+      candidate.feasible = false;
+      candidate.target_velocity_limit =
+        std::max(0.0, cfg.v2x_gap.no_gap_target_velocity);
+      candidate.reject_reason = "static wall preflight: " + preflight.reason;
+      const std::string signature =
+        std::to_string(primary_side) + ":" + preflight.reason;
+      if (
+        signature != last_low_speed_static_wall_preflight_log_signature_ ||
+        !std::isfinite(last_low_speed_static_wall_preflight_log_sec_) ||
+        now_sec - last_low_speed_static_wall_preflight_log_sec_ >= 1.0)
+      {
+        RCLCPP_WARN(
+          rclcpp::get_logger("mpc_controller"),
+          "Low-speed static wall preflight rejected: side=%s, reason=%s, checked=%zu",
+          low_speed_pass_side_name(primary_side), preflight.reason.c_str(),
+          preflight.checked_pose_count);
+        last_low_speed_static_wall_preflight_log_signature_ = signature;
+        last_low_speed_static_wall_preflight_log_sec_ = now_sec;
+      }
+      return candidate;
+    }
+
+    if (alternate_selected) {
+      const std::string signature =
+        std::to_string(primary_side) + "->" + std::to_string(candidate.pass_side_sign);
+      if (signature != last_low_speed_static_wall_preflight_log_signature_) {
+        RCLCPP_INFO(
+          rclcpp::get_logger("mpc_controller"),
+          "Low-speed static wall preflight switched side: %s -> %s, "
+          "primary_reason=%s, selected_checked=%zu",
+          low_speed_pass_side_name(primary_side),
+          low_speed_pass_side_name(candidate.pass_side_sign),
+          primary_reason.c_str(), preflight.checked_pose_count);
+        last_low_speed_static_wall_preflight_log_signature_ = signature;
+        last_low_speed_static_wall_preflight_log_sec_ = now_sec;
+      }
+    } else {
+      last_low_speed_static_wall_preflight_log_signature_.clear();
+    }
+
+    if (!update_last_target) {
+      return candidate;
+    }
+
+    candidate = gap_planner->plan_stopped_vehicle_local_path(
+      *model, ref_wp_id, N, lb, ub, now_sec, cfg.v2x_behavior, true,
+      candidate.pass_side_sign);
+    preflight = evaluate_low_speed_static_wall_preflight(ref_wp_id, candidate);
+    if (!preflight.feasible) {
+      candidate.feasible = false;
+      candidate.target_velocity_limit =
+        std::max(0.0, cfg.v2x_gap.no_gap_target_velocity);
+      candidate.reject_reason = "static wall commit preflight: " + preflight.reason;
+    }
+    return candidate;
+  }
+
   void set_v2x_race_session_active(const bool active, const double now_sec)
   {
     if (v2x_race_session_active_ == active) {
@@ -3908,6 +4094,9 @@ struct MPC
     start_grid_breakout_side_sign_ = 0;
     reset_start_grid_dynamic_decision();
     reset_low_speed_stopped_confirmation();
+    last_low_speed_static_wall_preflight_log_sec_ =
+      std::numeric_limits<double>::quiet_NaN();
+    last_low_speed_static_wall_preflight_log_signature_.clear();
     v2x_course_progress_tracks_.clear();
     overtake_locked_target_ey_.reset();
     overtake_locked_side_sign_ = 0;
@@ -4032,6 +4221,9 @@ struct MPC
     start_grid_breakout_side_sign_ = 0;
     reset_start_grid_dynamic_decision();
     reset_low_speed_stopped_confirmation();
+    last_low_speed_static_wall_preflight_log_sec_ =
+      std::numeric_limits<double>::quiet_NaN();
+    last_low_speed_static_wall_preflight_log_signature_.clear();
     v2x_course_progress_tracks_.clear();
     overtake_locked_target_ey_.reset();
     overtake_locked_side_sign_ = 0;
@@ -4913,8 +5105,8 @@ struct MPC
           cfg.v2x_behavior.low_speed_avoidance_distance + model->length,
           cfg.v2x_behavior.low_speed_avoidance_lookahead_distance);
       const auto candidate_gap = cfg.v2x_behavior.low_speed_local_path_enabled ?
-        gap_planner->plan_stopped_vehicle_local_path(
-          *model, ref_wp_id, N, lb, ub, now_sec, cfg.v2x_behavior, false) :
+        plan_low_speed_local_path_with_static_wall_preflight(
+          ref_wp_id, N, lb, ub, now_sec, false) :
         gap_planner->plan(
           *model, ref_wp_id, N, lb, ub, now_sec, false, true, low_speed_gap_max_self_distance);
       const bool gap_ok = cfg.v2x_behavior.low_speed_local_path_enabled ?
@@ -4956,8 +5148,8 @@ struct MPC
           cfg.v2x_behavior.low_speed_avoidance_distance + model->length,
           cfg.v2x_behavior.low_speed_avoidance_lookahead_distance);
       const auto hold_gap = cfg.v2x_behavior.low_speed_local_path_enabled ?
-        gap_planner->plan_stopped_vehicle_local_path(
-          *model, ref_wp_id, N, lb, ub, now_sec, cfg.v2x_behavior, false) :
+        plan_low_speed_local_path_with_static_wall_preflight(
+          ref_wp_id, N, lb, ub, now_sec, false) :
         gap_planner->plan(
           *model, ref_wp_id, N, lb, ub, now_sec, false, true, low_speed_gap_max_self_distance);
       const bool gap_ok = cfg.v2x_behavior.low_speed_local_path_enabled ?
@@ -6777,8 +6969,8 @@ struct MPC
     }
     const auto planner_output = use_gap_planner ?
       (use_low_speed_local_path ?
-      gap_planner->plan_stopped_vehicle_local_path(
-        *model, ref_wp_id, N, lb, ub, now_sec, cfg.v2x_behavior, true) :
+      plan_low_speed_local_path_with_static_wall_preflight(
+        ref_wp_id, N, lb, ub, now_sec, true) :
       gap_planner->plan(
         *model, ref_wp_id, gap_plan_N, gap_plan_lb, gap_plan_ub, now_sec,
         !explicit_overtake_line_owns_plan,
@@ -7662,6 +7854,9 @@ struct MPC
   int low_speed_stopped_observation_count_{0};
   double low_speed_stopped_last_observation_sec_{
     std::numeric_limits<double>::quiet_NaN()};
+  double last_low_speed_static_wall_preflight_log_sec_{
+    std::numeric_limits<double>::quiet_NaN()};
+  std::string last_low_speed_static_wall_preflight_log_signature_;
   std::optional<double> overtake_locked_target_ey_;
   int overtake_locked_side_sign_{0};
   OvertakeLineState overtake_line_state_;

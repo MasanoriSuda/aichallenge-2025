@@ -767,6 +767,97 @@ FootprintSample sample_footprint(
   return sample;
 }
 
+PathClearanceResult evaluate_clear_footprint_path(
+  const OccupancyGrid & grid, const FootprintExtents & footprint,
+  const std::vector<Pose2D> & path, const double swept_step_m)
+{
+  PathClearanceResult result;
+  if (!grid.valid()) {
+    result.reason = RejectReason::InvalidGrid;
+    return result;
+  }
+  if (!footprint.valid()) {
+    result.reason = RejectReason::InvalidFootprint;
+    return result;
+  }
+  if (
+    path.empty() || !finite(swept_step_m) || swept_step_m <= 0.0 ||
+    swept_step_m > grid.resolution_m + kNumericalEpsilon)
+  {
+    result.reason = RejectReason::InvalidRollout;
+    return result;
+  }
+  if (!valid_pose(path.front())) {
+    result.reason = RejectReason::InvalidInitialPose;
+    return result;
+  }
+  if (!std::all_of(path.begin() + 1, path.end(), valid_pose)) {
+    result.reason = RejectReason::InvalidRollout;
+    return result;
+  }
+
+  result.valid = true;
+  const auto evaluate_pose =
+    [&](const Pose2D & pose, const std::size_t path_index) {
+      const auto sample = sample_footprint(grid, footprint, pose);
+      ++result.checked_pose_count;
+      result.rejected_path_index = path_index;
+      if (!sample.valid) {
+        result.reason = RejectReason::InvalidInitialPose;
+        return false;
+      }
+      if (sample.out_of_map) {
+        result.reason =
+          path_index == 0U ? RejectReason::InitialOutOfMap : RejectReason::OutOfMap;
+        return false;
+      }
+      if (!sample.contact_cells.empty()) {
+        result.reason = RejectReason::Collision;
+        return false;
+      }
+      return true;
+    };
+
+  if (!evaluate_pose(path.front(), 0U)) {
+    return result;
+  }
+
+  const double corner_radius = footprint_corner_radius(footprint);
+  for (std::size_t path_index = 1U; path_index < path.size(); ++path_index) {
+    const auto & from = path[path_index - 1U];
+    const auto & to = path[path_index];
+    const double translation = std::hypot(to.x_m - from.x_m, to.y_m - from.y_m);
+    const double yaw_delta = wrap_to_pi(to.yaw_rad - from.yaw_rad);
+    const double maximum_corner_motion = translation + corner_radius * std::abs(yaw_delta);
+    const auto subdivisions = subdivision_count(maximum_corner_motion, swept_step_m);
+    if (
+      !subdivisions.has_value() ||
+      result.checked_pose_count > kMaximumSamples - subdivisions.value())
+    {
+      result.reason = RejectReason::SampleLimitExceeded;
+      result.rejected_path_index = path_index;
+      return result;
+    }
+
+    for (std::size_t substep = 1U; substep <= subdivisions.value(); ++substep) {
+      const double ratio =
+        static_cast<double>(substep) / static_cast<double>(subdivisions.value());
+      const Pose2D pose{
+        from.x_m + ratio * (to.x_m - from.x_m),
+        from.y_m + ratio * (to.y_m - from.y_m),
+        wrap_to_pi(from.yaw_rad + ratio * yaw_delta)};
+      if (!evaluate_pose(pose, path_index)) {
+        return result;
+      }
+    }
+  }
+
+  result.clear = true;
+  result.reason = RejectReason::None;
+  result.rejected_path_index = path.size() - 1U;
+  return result;
+}
+
 LateralClearanceResult clamp_lateral_offset_to_static_map(
   const OccupancyGrid & grid, const FootprintExtents & footprint,
   const Pose2D & reference_pose, const double desired_lateral_offset_m,

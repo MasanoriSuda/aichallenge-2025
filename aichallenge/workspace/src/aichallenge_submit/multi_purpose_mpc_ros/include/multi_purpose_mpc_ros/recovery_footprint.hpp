@@ -198,6 +198,16 @@ struct FootprintSample
   std::vector<std::size_t> contact_cells;
 };
 
+/// Result of checking an arbitrary pose path with a swept footprint.
+struct PathClearanceResult
+{
+  bool valid{false};
+  bool clear{false};
+  RejectReason reason{RejectReason::InvalidRollout};
+  std::size_t checked_pose_count{};
+  std::size_t rejected_path_index{};
+};
+
 /// Result of moving a Frenet lateral target away from a static-map wall.
 struct LateralClearanceResult
 {
@@ -278,6 +288,15 @@ RolloutResult generate_reverse_rollout(
 FootprintSample sample_footprint(
   const OccupancyGrid & grid, const FootprintExtents & footprint,
   const Pose2D & pose);
+
+/// Validate a sequence of poses with conservative swept-footprint interpolation.
+///
+/// Each segment is subdivided so that the upper bound of every footprint
+/// corner's motion is no greater than swept_step_m. Unknown/occupied cells and
+/// out-of-map samples fail closed. The first and last pose are both checked.
+PathClearanceResult evaluate_clear_footprint_path(
+  const OccupancyGrid & grid, const FootprintExtents & footprint,
+  const std::vector<Pose2D> & path, double swept_step_m);
 
 /// Find the first collision-free lateral target between desired and fallback.
 ///

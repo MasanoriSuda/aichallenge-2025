@@ -86,6 +86,10 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSideQualityCandidate;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSideQualitySelectionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::EarlyShiftOutSideReplanAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::EarlyShiftOutSideReplanRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeExecutionSideRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeExecutionSideSource;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeLineTransitionAction;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeLineTransitionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SpeedLimitRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StallWatchdogRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassProgressWatchdogRequest;
@@ -174,6 +178,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::score_overtake_side_quality;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_overtake_side_by_quality;
 using multi_purpose_mpc_ros::v2x_overtake_core::selected_pass_side_ordering_conflict;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_early_shiftout_side_replan;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_execution_side;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_line_transition;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_v2x_behavior_session_active;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_start_low_speed_bypass;
 using multi_purpose_mpc_ros::v2x_overtake_core::StoppedCandidateConfirmationRequest;
@@ -2656,6 +2662,134 @@ TEST(V2XOvertakeCoreSideReplan, LateQualityAdvantageAloneKeepsCommittedSide)
   EXPECT_EQ(
     resolve_early_shiftout_side_replan(request).action,
     EarlyShiftOutSideReplanAction::Keep);
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, BehaviorRevalidationOwnsPausedMissionSide)
+{
+  const auto result = resolve_overtake_execution_side(
+    OvertakeExecutionSideRequest{true, -1, 1});
+
+  EXPECT_EQ(result.side_sign, -1);
+  EXPECT_EQ(result.source, OvertakeExecutionSideSource::BehaviorRevalidation);
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, MissionLockOwnsNormalExecutionSide)
+{
+  auto result = resolve_overtake_execution_side(
+    OvertakeExecutionSideRequest{false, -1, 1});
+  EXPECT_EQ(result.side_sign, 1);
+  EXPECT_EQ(result.source, OvertakeExecutionSideSource::MissionLock);
+
+  result = resolve_overtake_execution_side(
+    OvertakeExecutionSideRequest{false, -1, 0});
+  EXPECT_EQ(result.side_sign, -1);
+  EXPECT_EQ(result.source, OvertakeExecutionSideSource::BehaviorSelection);
+
+  result = resolve_overtake_execution_side(OvertakeExecutionSideRequest{});
+  EXPECT_EQ(result.side_sign, 0);
+  EXPECT_EQ(result.source, OvertakeExecutionSideSource::None);
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, WallActionsKeepExistingPriority)
+{
+  OvertakeLineTransitionRequest request;
+  request.actual_wall_physical_contact = true;
+  request.actual_wall_margin_blocked = true;
+  request.starting_execution_phase = true;
+  request.side_replan_ready = true;
+  request.shiftout_phase = true;
+  request.behavior_overtake = true;
+  request.side_replan_candidate_sign = -1;
+  request.mission_side_sign = 1;
+  EXPECT_EQ(
+    resolve_overtake_line_transition(request),
+    OvertakeLineTransitionAction::RecoverPhysicalWallContact);
+
+  request.actual_wall_physical_contact = false;
+  EXPECT_EQ(
+    resolve_overtake_line_transition(request),
+    OvertakeLineTransitionAction::RejectEntryWallMargin);
+
+  request.starting_execution_phase = false;
+  request.active_execution_phase = true;
+  EXPECT_EQ(
+    resolve_overtake_line_transition(request),
+    OvertakeLineTransitionAction::RecoverWallMargin);
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, CompletedPassReturnsBeforeWallRecovery)
+{
+  OvertakeLineTransitionRequest request;
+  request.actual_wall_margin_blocked = true;
+  request.completed_pass_ready_to_return_before_margin_recovery = true;
+  EXPECT_EQ(
+    resolve_overtake_line_transition(request),
+    OvertakeLineTransitionAction::ReturnBeforeWallMarginRecovery);
+
+  request.completed_pass_ready_to_return_before_margin_recovery = false;
+  request.completed_pass_waiting_for_return_corridor = true;
+  EXPECT_EQ(
+    resolve_overtake_line_transition(request),
+    OvertakeLineTransitionAction::HoldCompletedPassForReturnCorridor);
+
+  request.actual_wall_sample_unavailable = true;
+  EXPECT_EQ(
+    resolve_overtake_line_transition(request),
+    OvertakeLineTransitionAction::RecoverWallMargin);
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, ReturnCancellationPrecedesWallAndSideActions)
+{
+  OvertakeLineTransitionRequest request;
+  request.cancel_early_return_for_corridor_blocker = true;
+  request.actual_wall_margin_blocked = true;
+  request.completed_pass_ready_to_return_before_margin_recovery = true;
+  request.side_replan_ready = true;
+  request.shiftout_phase = true;
+  request.behavior_overtake = true;
+  request.side_replan_candidate_sign = -1;
+  request.mission_side_sign = 1;
+
+  EXPECT_EQ(
+    resolve_overtake_line_transition(request),
+    OvertakeLineTransitionAction::ResumePassForReturnCorridorBlocker);
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, SideAndPassActionsKeepExistingPriority)
+{
+  OvertakeLineTransitionRequest request;
+  request.side_replan_ready = true;
+  request.side_replan_abort = true;
+  request.shiftout_phase = true;
+  request.behavior_overtake = true;
+  request.side_replan_candidate_sign = -1;
+  request.mission_side_sign = 1;
+  request.pass_phase = true;
+  request.rear_clear_confirmed = true;
+  request.pass_progress_watchdog_timed_out = true;
+  EXPECT_EQ(
+    resolve_overtake_line_transition(request),
+    OvertakeLineTransitionAction::ReplanEarlyShiftOutSide);
+
+  request.side_replan_ready = false;
+  EXPECT_EQ(
+    resolve_overtake_line_transition(request),
+    OvertakeLineTransitionAction::RecoverOccupiedPassSide);
+
+  request.side_replan_abort = false;
+  EXPECT_EQ(
+    resolve_overtake_line_transition(request),
+    OvertakeLineTransitionAction::ReturnRearClear);
+
+  request.return_corridor_blocked = true;
+  EXPECT_EQ(
+    resolve_overtake_line_transition(request),
+    OvertakeLineTransitionAction::RecoverLongitudinalProgress);
+
+  request.pass_progress_watchdog_timed_out = false;
+  EXPECT_EQ(
+    resolve_overtake_line_transition(request),
+    OvertakeLineTransitionAction::None);
 }
 
 TEST(V2XOvertakeCoreSide, LowSpeedPassPrefersReachableSideOverSlightlyWiderSide)

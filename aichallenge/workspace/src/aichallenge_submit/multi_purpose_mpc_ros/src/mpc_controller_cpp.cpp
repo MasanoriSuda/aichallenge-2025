@@ -8796,117 +8796,144 @@ private:
     // Complete a committed pass as soon as rear clearance is confirmed. The behavior layer can
     // legitimately keep publishing Overtake through committed-pass continuity, but letting that
     // label win here carries one fixed inside goal through the following hairpin indefinitely.
-    if (actual_wall_physical_contact) {
-      const int contact_pass_side =
-        overtake_line_state_.pass_side_sign != 0 ?
-        overtake_line_state_.pass_side_sign : behavior_output.overtake_pass_side_sign;
-      arm_overtake_line_side_retry_block(
-        contact_pass_side,
-        !overtake_line_state_.target_vehicle_id.empty() ?
-        overtake_line_state_.target_vehicle_id : behavior_output.target_vehicle_id,
-        now_sec, "actual footprint intersects static wall");
-      transition_overtake_line_phase(
-        OvertakeLinePhase::Recovery, now_sec, current_ey,
-        contact_pass_side,
-        "actual footprint intersects static wall");
-    } else if (
-      actual_wall_margin_blocked && starting_execution_phase &&
-      !active_execution_phase)
-    {
-      const char * reason = actual_wall_sample_unavailable ?
-        "actual footprint static wall check unavailable" :
-        "actual footprint wall margin violated";
-      arm_overtake_line_side_retry_block(
-        behavior_output.overtake_pass_side_sign,
-        behavior_output.target_vehicle_id, now_sec, reason);
-      if (line_cfg.debug_log_enabled) {
-        RCLCPP_INFO(
-          rclcpp::get_logger("mpc_controller"),
-          "OvertakeLine ShiftOut entry rejected before commit: target=%s, side=%d, "
-          "wp_id=%d, reason=%s",
-          behavior_output.target_vehicle_id.c_str(),
-          behavior_output.overtake_pass_side_sign, model->wp_id, reason);
-      }
-      return output;
-    } else if (cancel_early_return_for_corridor_blocker) {
-      transition_overtake_line_phase(
-        OvertakeLinePhase::Pass, now_sec, current_ey,
-        overtake_line_state_.pass_side_sign,
-        "different vehicle entered return corridor");
-    } else if (
-      actual_wall_margin_blocked &&
-      completed_pass_ready_to_return_before_margin_recovery &&
-      !actual_wall_sample_unavailable)
-    {
-      transition_overtake_line_phase(
-        OvertakeLinePhase::Return, now_sec, current_ey,
-        overtake_line_state_.pass_side_sign,
-        "locked target rear; returning before wall-margin recovery");
-    } else if (
-      actual_wall_margin_blocked &&
-      completed_pass_waiting_for_return_corridor &&
-      !actual_wall_sample_unavailable)
-    {
-      output.target_velocity_limit = std::min(
-        output.target_velocity_limit,
-        std::max(0.0, line_cfg.recovery_velocity));
-    } else if (actual_wall_margin_blocked) {
-      const char * reason = actual_wall_sample_unavailable ?
-        "actual footprint static wall check unavailable" :
-        "actual footprint wall margin violated";
-      arm_overtake_line_side_retry_block(
-        overtake_line_state_.pass_side_sign,
-        overtake_line_state_.target_vehicle_id, now_sec, reason);
-      transition_overtake_line_phase(
-        OvertakeLinePhase::Recovery, now_sec, current_ey,
-        overtake_line_state_.pass_side_sign, reason);
-    } else if (
-      behavior_output.overtake_side_replan_ready &&
-      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut &&
-      behavior_overtake &&
-      behavior_output.overtake_side_replan_candidate_sign != 0 &&
-      behavior_output.overtake_side_replan_candidate_sign !=
-      overtake_line_state_.pass_side_sign)
-    {
-      replan_early_shiftout_side(
+    const auto transition_action =
+      v2x_overtake_core::resolve_overtake_line_transition(
+      v2x_overtake_core::OvertakeLineTransitionRequest{
+        actual_wall_physical_contact,
+        actual_wall_margin_blocked,
+        actual_wall_sample_unavailable,
+        starting_execution_phase,
+        active_execution_phase,
+        cancel_early_return_for_corridor_blocker,
+        completed_pass_ready_to_return_before_margin_recovery,
+        completed_pass_waiting_for_return_corridor,
+        overtake_line_state_.phase == OvertakeLinePhase::ShiftOut,
+        overtake_line_state_.phase == OvertakeLinePhase::Pass,
+        behavior_overtake,
+        behavior_output.overtake_side_replan_ready,
+        behavior_output.overtake_side_replan_abort,
         behavior_output.overtake_side_replan_candidate_sign,
-        now_sec, current_ey, behavior_output.overtake_corridor_center_ey);
-    } else if (
-      behavior_output.overtake_side_replan_abort &&
-      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut)
-    {
-      const int blocked_side = overtake_line_state_.pass_side_sign;
-      arm_overtake_line_side_retry_block(
-        blocked_side, overtake_line_state_.target_vehicle_id, now_sec,
-        "selected pass side became occupied");
-      transition_overtake_line_phase(
-        OvertakeLinePhase::Recovery, now_sec, current_ey,
-        blocked_side, "selected pass side became occupied");
-      // Recovery owns the current lateral return. Release only the behavior
-      // side lock so the next Idle entry can compare both sides again.
-      overtake_locked_side_sign_ = 0;
-    } else if (
-      overtake_line_state_.phase == OvertakeLinePhase::Pass &&
-      rear_clear_confirmed &&
-      !return_corridor_blocked)
-    {
-      transition_overtake_line_phase(
-        OvertakeLinePhase::Return, now_sec, current_ey,
         overtake_line_state_.pass_side_sign,
-        "locked target rear clearance confirmed during committed pass");
-    } else if (pass_progress_watchdog.timed_out) {
-      transition_overtake_line_phase(
-        OvertakeLinePhase::Recovery, now_sec, current_ey,
-        overtake_line_state_.pass_side_sign,
-        "committed pass longitudinal progress stalled");
+        rear_clear_confirmed,
+        return_corridor_blocked,
+        pass_progress_watchdog.timed_out});
+    if (transition_action != v2x_overtake_core::OvertakeLineTransitionAction::None) {
+      switch (transition_action) {
+        case v2x_overtake_core::OvertakeLineTransitionAction::RecoverPhysicalWallContact:
+        {
+          const int contact_pass_side =
+            overtake_line_state_.pass_side_sign != 0 ?
+            overtake_line_state_.pass_side_sign : behavior_output.overtake_pass_side_sign;
+          arm_overtake_line_side_retry_block(
+            contact_pass_side,
+            !overtake_line_state_.target_vehicle_id.empty() ?
+            overtake_line_state_.target_vehicle_id : behavior_output.target_vehicle_id,
+            now_sec, "actual footprint intersects static wall");
+          transition_overtake_line_phase(
+            OvertakeLinePhase::Recovery, now_sec, current_ey,
+            contact_pass_side,
+            "actual footprint intersects static wall");
+          break;
+        }
+        case v2x_overtake_core::OvertakeLineTransitionAction::RejectEntryWallMargin:
+        {
+          const char * reason = actual_wall_sample_unavailable ?
+            "actual footprint static wall check unavailable" :
+            "actual footprint wall margin violated";
+          arm_overtake_line_side_retry_block(
+            behavior_output.overtake_pass_side_sign,
+            behavior_output.target_vehicle_id, now_sec, reason);
+          if (line_cfg.debug_log_enabled) {
+            RCLCPP_INFO(
+              rclcpp::get_logger("mpc_controller"),
+              "OvertakeLine ShiftOut entry rejected before commit: target=%s, side=%d, "
+              "wp_id=%d, reason=%s",
+              behavior_output.target_vehicle_id.c_str(),
+              behavior_output.overtake_pass_side_sign, model->wp_id, reason);
+          }
+          return output;
+        }
+        case
+          v2x_overtake_core::OvertakeLineTransitionAction::
+          ResumePassForReturnCorridorBlocker:
+          transition_overtake_line_phase(
+            OvertakeLinePhase::Pass, now_sec, current_ey,
+            overtake_line_state_.pass_side_sign,
+            "different vehicle entered return corridor");
+          break;
+        case
+          v2x_overtake_core::OvertakeLineTransitionAction::
+          ReturnBeforeWallMarginRecovery:
+          transition_overtake_line_phase(
+            OvertakeLinePhase::Return, now_sec, current_ey,
+            overtake_line_state_.pass_side_sign,
+            "locked target rear; returning before wall-margin recovery");
+          break;
+        case
+          v2x_overtake_core::OvertakeLineTransitionAction::
+          HoldCompletedPassForReturnCorridor:
+          output.target_velocity_limit = std::min(
+            output.target_velocity_limit,
+            std::max(0.0, line_cfg.recovery_velocity));
+          break;
+        case v2x_overtake_core::OvertakeLineTransitionAction::RecoverWallMargin:
+        {
+          const char * reason = actual_wall_sample_unavailable ?
+            "actual footprint static wall check unavailable" :
+            "actual footprint wall margin violated";
+          arm_overtake_line_side_retry_block(
+            overtake_line_state_.pass_side_sign,
+            overtake_line_state_.target_vehicle_id, now_sec, reason);
+          transition_overtake_line_phase(
+            OvertakeLinePhase::Recovery, now_sec, current_ey,
+            overtake_line_state_.pass_side_sign, reason);
+          break;
+        }
+        case v2x_overtake_core::OvertakeLineTransitionAction::ReplanEarlyShiftOutSide:
+          replan_early_shiftout_side(
+            behavior_output.overtake_side_replan_candidate_sign,
+            now_sec, current_ey, behavior_output.overtake_corridor_center_ey);
+          break;
+        case v2x_overtake_core::OvertakeLineTransitionAction::RecoverOccupiedPassSide:
+        {
+          const int blocked_side = overtake_line_state_.pass_side_sign;
+          arm_overtake_line_side_retry_block(
+            blocked_side, overtake_line_state_.target_vehicle_id, now_sec,
+            "selected pass side became occupied");
+          transition_overtake_line_phase(
+            OvertakeLinePhase::Recovery, now_sec, current_ey,
+            blocked_side, "selected pass side became occupied");
+          // Recovery owns the current lateral return. Release only the behavior
+          // side lock so the next Idle entry can compare both sides again.
+          overtake_locked_side_sign_ = 0;
+          break;
+        }
+        case v2x_overtake_core::OvertakeLineTransitionAction::ReturnRearClear:
+          transition_overtake_line_phase(
+            OvertakeLinePhase::Return, now_sec, current_ey,
+            overtake_line_state_.pass_side_sign,
+            "locked target rear clearance confirmed during committed pass");
+          break;
+        case
+          v2x_overtake_core::OvertakeLineTransitionAction::RecoverLongitudinalProgress:
+          transition_overtake_line_phase(
+            OvertakeLinePhase::Recovery, now_sec, current_ey,
+            overtake_line_state_.pass_side_sign,
+            "committed pass longitudinal progress stalled");
+          break;
+        case v2x_overtake_core::OvertakeLineTransitionAction::None:
+          break;
+      }
     } else if (behavior_overtake) {
       const bool resuming_paused_mission =
         overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare;
-      const int pass_side_sign =
-        resuming_paused_mission && behavior_output.overtake_pass_side_sign != 0 ?
-        behavior_output.overtake_pass_side_sign :
-        overtake_line_state_.pass_side_sign != 0 ?
-        overtake_line_state_.pass_side_sign : behavior_output.overtake_pass_side_sign;
+      const auto execution_side =
+        v2x_overtake_core::resolve_overtake_execution_side(
+        v2x_overtake_core::OvertakeExecutionSideRequest{
+          resuming_paused_mission,
+          behavior_output.overtake_pass_side_sign,
+          overtake_line_state_.pass_side_sign});
+      const int pass_side_sign = execution_side.side_sign;
       if (!phase_active || overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare) {
         transition_overtake_line_phase(
           OvertakeLinePhase::ShiftOut, now_sec, current_ey, pass_side_sign,

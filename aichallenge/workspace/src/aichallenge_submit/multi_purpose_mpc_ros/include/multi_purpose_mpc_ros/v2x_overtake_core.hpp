@@ -1073,6 +1073,80 @@ struct EarlyShiftOutSideReplanResolution
 EarlyShiftOutSideReplanResolution resolve_early_shiftout_side_replan(
   const EarlyShiftOutSideReplanRequest & request) noexcept;
 
+enum class OvertakeExecutionSideSource
+{
+  None,
+  BehaviorRevalidation,
+  MissionLock,
+  BehaviorSelection,
+};
+
+struct OvertakeExecutionSideRequest
+{
+  bool resuming_paused_mission{false};
+  int behavior_side_sign{0};
+  int mission_side_sign{0};
+};
+
+struct OvertakeExecutionSideResolution
+{
+  int side_sign{0};
+  OvertakeExecutionSideSource source{OvertakeExecutionSideSource::None};
+};
+
+/// Resolve the side used when starting or resuming an explicit OvertakeLine.
+///
+/// This preserves the current controller policy: a valid Behavior side owns a
+/// FollowPrepare resume; otherwise the existing mission side wins before a new
+/// Behavior selection. Keeping this policy in one named decision makes a later
+/// mission-lock behavior change explicit and regression-testable.
+OvertakeExecutionSideResolution resolve_overtake_execution_side(
+  const OvertakeExecutionSideRequest & request) noexcept;
+
+enum class OvertakeLineTransitionAction
+{
+  None,
+  RecoverPhysicalWallContact,
+  RejectEntryWallMargin,
+  ResumePassForReturnCorridorBlocker,
+  ReturnBeforeWallMarginRecovery,
+  HoldCompletedPassForReturnCorridor,
+  RecoverWallMargin,
+  ReplanEarlyShiftOutSide,
+  RecoverOccupiedPassSide,
+  ReturnRearClear,
+  RecoverLongitudinalProgress,
+};
+
+struct OvertakeLineTransitionRequest
+{
+  bool actual_wall_physical_contact{false};
+  bool actual_wall_margin_blocked{false};
+  bool actual_wall_sample_unavailable{false};
+  bool starting_execution_phase{false};
+  bool active_execution_phase{false};
+  bool cancel_early_return_for_corridor_blocker{false};
+  bool completed_pass_ready_to_return_before_margin_recovery{false};
+  bool completed_pass_waiting_for_return_corridor{false};
+  bool shiftout_phase{false};
+  bool pass_phase{false};
+  bool behavior_overtake{false};
+  bool side_replan_ready{false};
+  bool side_replan_abort{false};
+  int side_replan_candidate_sign{0};
+  int mission_side_sign{0};
+  bool rear_clear_confirmed{false};
+  bool return_corridor_blocked{false};
+  bool pass_progress_watchdog_timed_out{false};
+};
+
+/// Select exactly one active OvertakeLine action using the controller's current
+/// safety and mission priority. The caller remains responsible for state
+/// mutation and logging; this function only makes the previously implicit
+/// if/else priority testable.
+OvertakeLineTransitionAction resolve_overtake_line_transition(
+  const OvertakeLineTransitionRequest & request) noexcept;
+
 /// Gate race-only V2X behavior when AWSIM state tracking is available. Launches
 /// without state tracking retain the legacy always-active behavior. A prepared
 /// start-grid Ready rollout is active because AWSIM already moves the vehicle

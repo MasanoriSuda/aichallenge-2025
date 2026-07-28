@@ -1512,6 +1512,81 @@ EarlyShiftOutSideReplanResolution resolve_early_shiftout_side_replan(
   return result;
 }
 
+OvertakeExecutionSideResolution resolve_overtake_execution_side(
+  const OvertakeExecutionSideRequest & request) noexcept
+{
+  if (request.resuming_paused_mission && request.behavior_side_sign != 0) {
+    return {
+      request.behavior_side_sign,
+      OvertakeExecutionSideSource::BehaviorRevalidation};
+  }
+  if (request.mission_side_sign != 0) {
+    return {request.mission_side_sign, OvertakeExecutionSideSource::MissionLock};
+  }
+  if (request.behavior_side_sign != 0) {
+    return {request.behavior_side_sign, OvertakeExecutionSideSource::BehaviorSelection};
+  }
+  return {};
+}
+
+OvertakeLineTransitionAction resolve_overtake_line_transition(
+  const OvertakeLineTransitionRequest & request) noexcept
+{
+  if (request.actual_wall_physical_contact) {
+    return OvertakeLineTransitionAction::RecoverPhysicalWallContact;
+  }
+  if (
+    request.actual_wall_margin_blocked &&
+    request.starting_execution_phase &&
+    !request.active_execution_phase)
+  {
+    return OvertakeLineTransitionAction::RejectEntryWallMargin;
+  }
+  if (request.cancel_early_return_for_corridor_blocker) {
+    return OvertakeLineTransitionAction::ResumePassForReturnCorridorBlocker;
+  }
+  if (
+    request.actual_wall_margin_blocked &&
+    request.completed_pass_ready_to_return_before_margin_recovery &&
+    !request.actual_wall_sample_unavailable)
+  {
+    return OvertakeLineTransitionAction::ReturnBeforeWallMarginRecovery;
+  }
+  if (
+    request.actual_wall_margin_blocked &&
+    request.completed_pass_waiting_for_return_corridor &&
+    !request.actual_wall_sample_unavailable)
+  {
+    return OvertakeLineTransitionAction::HoldCompletedPassForReturnCorridor;
+  }
+  if (request.actual_wall_margin_blocked) {
+    return OvertakeLineTransitionAction::RecoverWallMargin;
+  }
+  if (
+    request.side_replan_ready &&
+    request.shiftout_phase &&
+    request.behavior_overtake &&
+    request.side_replan_candidate_sign != 0 &&
+    request.side_replan_candidate_sign != request.mission_side_sign)
+  {
+    return OvertakeLineTransitionAction::ReplanEarlyShiftOutSide;
+  }
+  if (request.side_replan_abort && request.shiftout_phase) {
+    return OvertakeLineTransitionAction::RecoverOccupiedPassSide;
+  }
+  if (
+    request.pass_phase &&
+    request.rear_clear_confirmed &&
+    !request.return_corridor_blocked)
+  {
+    return OvertakeLineTransitionAction::ReturnRearClear;
+  }
+  if (request.pass_progress_watchdog_timed_out) {
+    return OvertakeLineTransitionAction::RecoverLongitudinalProgress;
+  }
+  return OvertakeLineTransitionAction::None;
+}
+
 bool is_v2x_behavior_session_active(
   const bool state_tracking_enabled, const bool race_started,
   const bool start_grid_ready_rollout) noexcept

@@ -180,6 +180,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::selected_pass_side_ordering_conf
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_early_shiftout_side_replan;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_execution_side;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_line_transition;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  should_log_overtake_line_transition_action;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_v2x_behavior_session_active;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_start_low_speed_bypass;
 using multi_purpose_mpc_ros::v2x_overtake_core::StoppedCandidateConfirmationRequest;
@@ -2790,6 +2792,63 @@ TEST(V2XOvertakeCoreMissionOwnership, SideAndPassActionsKeepExistingPriority)
   EXPECT_EQ(
     resolve_overtake_line_transition(request),
     OvertakeLineTransitionAction::None);
+}
+
+TEST(V2XOvertakeCoreMissionDiagnostics, TransitionActionNamesAreStable)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::to_string;
+
+  EXPECT_STREQ(to_string(OvertakeLineTransitionAction::None), "None");
+  EXPECT_STREQ(
+    to_string(OvertakeLineTransitionAction::RecoverPhysicalWallContact),
+    "RecoverPhysicalWallContact");
+  EXPECT_STREQ(
+    to_string(OvertakeLineTransitionAction::RejectEntryWallMargin),
+    "RejectEntryWallMargin");
+  EXPECT_STREQ(
+    to_string(OvertakeLineTransitionAction::ResumePassForReturnCorridorBlocker),
+    "ResumePassForReturnCorridorBlocker");
+  EXPECT_STREQ(
+    to_string(OvertakeLineTransitionAction::ReturnBeforeWallMarginRecovery),
+    "ReturnBeforeWallMarginRecovery");
+  EXPECT_STREQ(
+    to_string(OvertakeLineTransitionAction::HoldCompletedPassForReturnCorridor),
+    "HoldCompletedPassForReturnCorridor");
+  EXPECT_STREQ(
+    to_string(OvertakeLineTransitionAction::RecoverWallMargin),
+    "RecoverWallMargin");
+  EXPECT_STREQ(
+    to_string(OvertakeLineTransitionAction::ReplanEarlyShiftOutSide),
+    "ReplanEarlyShiftOutSide");
+  EXPECT_STREQ(
+    to_string(OvertakeLineTransitionAction::RecoverOccupiedPassSide),
+    "RecoverOccupiedPassSide");
+  EXPECT_STREQ(
+    to_string(OvertakeLineTransitionAction::ReturnRearClear),
+    "ReturnRearClear");
+  EXPECT_STREQ(
+    to_string(OvertakeLineTransitionAction::RecoverLongitudinalProgress),
+    "RecoverLongitudinalProgress");
+}
+
+TEST(V2XOvertakeCoreMissionDiagnostics, LogsOnlyAtActionEventBoundary)
+{
+  const auto wall_action =
+    OvertakeLineTransitionAction::RecoverPhysicalWallContact;
+  const auto margin_action =
+    OvertakeLineTransitionAction::RecoverWallMargin;
+
+  EXPECT_FALSE(should_log_overtake_line_transition_action(
+      OvertakeLineTransitionAction::None,
+      OvertakeLineTransitionAction::None));
+  EXPECT_TRUE(should_log_overtake_line_transition_action(
+      wall_action, OvertakeLineTransitionAction::None));
+  EXPECT_FALSE(should_log_overtake_line_transition_action(
+      wall_action, wall_action));
+  EXPECT_TRUE(should_log_overtake_line_transition_action(
+      margin_action, wall_action));
+  EXPECT_TRUE(should_log_overtake_line_transition_action(
+      wall_action, OvertakeLineTransitionAction::None));
 }
 
 TEST(V2XOvertakeCoreSide, LowSpeedPassPrefersReachableSideOverSlightlyWiderSide)

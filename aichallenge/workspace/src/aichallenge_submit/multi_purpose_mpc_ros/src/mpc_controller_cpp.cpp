@@ -7860,6 +7860,8 @@ struct MPC
   std::optional<double> overtake_locked_target_ey_;
   int overtake_locked_side_sign_{0};
   OvertakeLineState overtake_line_state_;
+  v2x_overtake_core::OvertakeLineTransitionAction last_overtake_line_transition_action_{
+    v2x_overtake_core::OvertakeLineTransitionAction::None};
   std::optional<double> overtake_entry_speed_;
   bool overtake_solver_recovery_active_{false};
   bool overtake_solver_reentry_blocked_{false};
@@ -8024,6 +8026,8 @@ private:
         reason.c_str());
     }
     overtake_line_state_ = OvertakeLineState{};
+    last_overtake_line_transition_action_ =
+      v2x_overtake_core::OvertakeLineTransitionAction::None;
     overtake_line_state_.phase_start_sec = now_sec;
     overtake_solver_recovery_active_ = false;
   }
@@ -8817,6 +8821,36 @@ private:
         rear_clear_confirmed,
         return_corridor_blocked,
         pass_progress_watchdog.timed_out});
+    const bool should_log_transition_action =
+      v2x_overtake_core::should_log_overtake_line_transition_action(
+      transition_action, last_overtake_line_transition_action_);
+    last_overtake_line_transition_action_ = transition_action;
+    if (line_cfg.debug_log_enabled && should_log_transition_action) {
+      const auto & action_target_vehicle_id =
+        !overtake_line_state_.target_vehicle_id.empty() ?
+        overtake_line_state_.target_vehicle_id : behavior_output.target_vehicle_id;
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"),
+        "OvertakeLine action: action=%s, phase=%s, target=%s, "
+        "mission_side=%d, behavior_side=%d, candidate_side=%d, "
+        "wall_contact=%d, wall_margin=%d, wall_unknown=%d, "
+        "return_blocked=%d, rear_clear=%d, side_ready=%d, side_abort=%d, "
+        "watchdog=%d, wp_id=%d",
+        v2x_overtake_core::to_string(transition_action),
+        to_string(overtake_line_state_.phase), action_target_vehicle_id.c_str(),
+        overtake_line_state_.pass_side_sign,
+        behavior_output.overtake_pass_side_sign,
+        behavior_output.overtake_side_replan_candidate_sign,
+        actual_wall_physical_contact ? 1 : 0,
+        actual_wall_margin_blocked ? 1 : 0,
+        actual_wall_sample_unavailable ? 1 : 0,
+        return_corridor_blocked ? 1 : 0,
+        rear_clear_confirmed ? 1 : 0,
+        behavior_output.overtake_side_replan_ready ? 1 : 0,
+        behavior_output.overtake_side_replan_abort ? 1 : 0,
+        pass_progress_watchdog.timed_out ? 1 : 0,
+        model->wp_id);
+    }
     if (transition_action != v2x_overtake_core::OvertakeLineTransitionAction::None) {
       switch (transition_action) {
         case v2x_overtake_core::OvertakeLineTransitionAction::RecoverPhysicalWallContact:

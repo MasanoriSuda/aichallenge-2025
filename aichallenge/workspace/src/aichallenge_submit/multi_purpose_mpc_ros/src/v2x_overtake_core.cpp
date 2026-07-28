@@ -1529,6 +1529,35 @@ OvertakeExecutionSideResolution resolve_overtake_execution_side(
   return {};
 }
 
+const char * to_string(const OvertakeLineTransitionAction action) noexcept
+{
+  switch (action) {
+    case OvertakeLineTransitionAction::None:
+      return "None";
+    case OvertakeLineTransitionAction::RecoverPhysicalWallContact:
+      return "RecoverPhysicalWallContact";
+    case OvertakeLineTransitionAction::RejectEntryWallMargin:
+      return "RejectEntryWallMargin";
+    case OvertakeLineTransitionAction::ResumePassForReturnCorridorBlocker:
+      return "ResumePassForReturnCorridorBlocker";
+    case OvertakeLineTransitionAction::ReturnBeforeWallMarginRecovery:
+      return "ReturnBeforeWallMarginRecovery";
+    case OvertakeLineTransitionAction::HoldCompletedPassForReturnCorridor:
+      return "HoldCompletedPassForReturnCorridor";
+    case OvertakeLineTransitionAction::RecoverWallMargin:
+      return "RecoverWallMargin";
+    case OvertakeLineTransitionAction::ReplanEarlyShiftOutSide:
+      return "ReplanEarlyShiftOutSide";
+    case OvertakeLineTransitionAction::RecoverOccupiedPassSide:
+      return "RecoverOccupiedPassSide";
+    case OvertakeLineTransitionAction::ReturnRearClear:
+      return "ReturnRearClear";
+    case OvertakeLineTransitionAction::RecoverLongitudinalProgress:
+      return "RecoverLongitudinalProgress";
+  }
+  return "Unknown";
+}
+
 OvertakeLineTransitionAction resolve_overtake_line_transition(
   const OvertakeLineTransitionRequest & request) noexcept
 {
@@ -1585,6 +1614,15 @@ OvertakeLineTransitionAction resolve_overtake_line_transition(
     return OvertakeLineTransitionAction::RecoverLongitudinalProgress;
   }
   return OvertakeLineTransitionAction::None;
+}
+
+bool should_log_overtake_line_transition_action(
+  const OvertakeLineTransitionAction action,
+  const OvertakeLineTransitionAction previous_action) noexcept
+{
+  return
+    action != OvertakeLineTransitionAction::None &&
+    action != previous_action;
 }
 
 bool is_v2x_behavior_session_active(

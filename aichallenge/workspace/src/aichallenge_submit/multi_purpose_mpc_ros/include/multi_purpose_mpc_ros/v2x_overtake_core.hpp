@@ -1118,6 +1118,8 @@ enum class OvertakeLineTransitionAction
   RecoverLongitudinalProgress,
 };
 
+const char * to_string(OvertakeLineTransitionAction action) noexcept;
+
 struct OvertakeLineTransitionRequest
 {
   bool actual_wall_physical_contact{false};
@@ -1146,6 +1148,12 @@ struct OvertakeLineTransitionRequest
 /// if/else priority testable.
 OvertakeLineTransitionAction resolve_overtake_line_transition(
   const OvertakeLineTransitionRequest & request) noexcept;
+
+/// Log only the first cycle of one action event. Passing None resets the
+/// previous action in the caller, so a later recurrence is a new event.
+bool should_log_overtake_line_transition_action(
+  OvertakeLineTransitionAction action,
+  OvertakeLineTransitionAction previous_action) noexcept;
 
 /// Gate race-only V2X behavior when AWSIM state tracking is available. Launches
 /// without state tracking retain the legacy always-active behavior. A prepared

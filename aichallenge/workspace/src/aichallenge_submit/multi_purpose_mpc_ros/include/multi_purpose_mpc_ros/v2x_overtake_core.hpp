@@ -800,7 +800,11 @@ struct OvertakeCompletionPermissionRequest
 };
 
 /// Combine the normal completion-distance decision with the narrowly scoped
-/// near-target/measured-speed curve-entry exception and already-committed curve continuity.
+/// near-target/measured-speed curve-entry exception and committed mission continuity.
+///
+/// The completion-distance estimate is an entry admission check. Once a line is
+/// committed, current corridor/target/wall guards own continuity and a temporary
+/// stop must not require an already-positive measured closing speed to resume.
 bool overtake_completion_policy_allows_execution(
   const OvertakeCompletionPermissionRequest & request) noexcept;
 
@@ -1127,6 +1131,7 @@ struct StoppedVehicleLineOwnershipRequest
   bool low_speed_behavior_active{false};
   bool low_speed_candidate{false};
   bool low_speed_direct_control_active{false};
+  bool committed_pass_mission_active{false};
   bool overtake_behavior_active{false};
   bool has_front_vehicle{false};
   double front_distance_m{std::numeric_limits<double>::infinity()};
@@ -1136,8 +1141,8 @@ struct StoppedVehicleLineOwnershipRequest
 };
 
 /// Yield the generic OvertakeLine only when the stopped-vehicle bypass owns
-/// the lateral plan. A close stopped front must not cancel an already selected
-/// generic Overtake merely because it is stationary.
+/// the lateral plan. A candidate without a feasible local path must not erase
+/// a committed generic pass mission.
 bool should_yield_overtake_line_to_stopped_bypass(
   const StoppedVehicleLineOwnershipRequest & request) noexcept;
 
@@ -1179,6 +1184,19 @@ enum class LowSpeedDirectControlPhase
   Pass,
   Rejoin,
 };
+
+/// A feasible stopped-vehicle local path must start direct control even when
+/// ego is already inside its pass corridor. In that case Shift is already
+/// complete and Pass owns the first control cycle.
+LowSpeedDirectControlPhase resolve_low_speed_direct_control_entry_phase(
+  bool pass_corridor_entered) noexcept;
+
+/// Stop an active stopped-vehicle direct maneuver when its live local corridor
+/// is unavailable. Rejoin is already protected by independent wall guards and
+/// intentionally no longer depends on the passed vehicle corridor.
+bool should_stop_low_speed_direct_control_for_corridor(
+  bool direct_control_active, bool rejoin_active,
+  bool local_path_active, bool local_path_feasible) noexcept;
 
 /// Select the bounded direct-control speed without handing ownership to MPC
 /// inside a stopped-vehicle pack.

@@ -185,6 +185,10 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_low_speed_pass_velocity;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_low_speed_shift_steering;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   limit_low_speed_shift_steering_by_lateral_acceleration;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  resolve_low_speed_direct_control_entry_phase;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  should_stop_low_speed_direct_control_for_corridor;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_low_speed_direct_control_velocity;
 using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedDirectControlPhase;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_low_speed_shift_complete;
@@ -1313,6 +1317,26 @@ TEST(V2XOvertakeCoreSpeed, PreservesWallFeasibleGoalWhenTargetSeparationDoesNotF
   EXPECT_DOUBLE_EQ(resolution.goal_m, 1.8);
 }
 
+TEST(V2XOvertakeCoreSpeed, RejectsGoalOutsideValidatedCandidateCorridor)
+{
+  FeasiblePassSideLateralGoalRequest request;
+  request.pass_side_sign = 1;
+  request.preferred_goal_m = 1.6;
+  request.target_lateral_m = 0.4;
+  request.minimum_separation_m = 1.5;
+  request.feasible_lower_bound_m = 1.4;
+  request.feasible_upper_bound_m = 1.8;
+  request.enforce_target_separation = true;
+
+  auto resolution = resolve_feasible_pass_side_lateral_goal(request);
+  EXPECT_FALSE(resolution.target_separation_feasible);
+
+  request.feasible_upper_bound_m = 2.1;
+  resolution = resolve_feasible_pass_side_lateral_goal(request);
+  EXPECT_TRUE(resolution.target_separation_feasible);
+  EXPECT_DOUBLE_EQ(resolution.goal_m, 1.9);
+}
+
 TEST(V2XOvertakeCoreSpeed, ReturnsCompletedPassBeforeMarginOnlyRecovery)
 {
   CompletedPassReturnRequest request;
@@ -2047,6 +2071,18 @@ TEST(V2XOvertakeCoreCompletion, CompletionPolicyDoesNotLeakRawCurveEntryPermissi
   request.completion_feasible = false;
   request.curve_continuation_allowed = true;
   EXPECT_TRUE(overtake_completion_policy_allows_execution(request));
+
+  // A committed pass may be paused at zero speed by SafetyBrake. The
+  // completion-distance estimate is entry-only; fresh physical execution
+  // guards at the caller decide whether the same mission may resume.
+  request.curve_continuation_allowed = false;
+  request.line_committed = true;
+  request.ego_speed_mps = 0.02;
+  request.front_speed_mps = 2.44;
+  EXPECT_TRUE(overtake_completion_policy_allows_execution(request));
+
+  request.line_committed = false;
+  EXPECT_FALSE(overtake_completion_policy_allows_execution(request));
 }
 
 TEST(V2XOvertakeCoreGuardPhase, KeepsEntryDistanceAndPrepareCheckBeforePassStarts)
@@ -2705,6 +2741,12 @@ TEST(V2XOvertakeCoreLowSpeedBypass, CandidateOwnsLineWhenLowSpeedBypassIsActive)
   request.overtake_behavior_active = true;
 
   EXPECT_TRUE(should_yield_overtake_line_to_stopped_bypass(request));
+
+  request.committed_pass_mission_active = true;
+  EXPECT_FALSE(should_yield_overtake_line_to_stopped_bypass(request));
+
+  request.low_speed_behavior_active = true;
+  EXPECT_TRUE(should_yield_overtake_line_to_stopped_bypass(request));
 }
 
 TEST(V2XOvertakeCoreLowSpeedBypass, ConfirmsOnlyDistinctConsecutiveStoppedObservations)
@@ -2898,6 +2940,30 @@ TEST(V2XOvertakeCoreSide, SelectsPhaseSpecificDirectControlVelocity)
     LowSpeedDirectControlPhase::Pass, 3.0, 6.0, 4.0, 0.0), 0.0);
   EXPECT_THROW(resolve_low_speed_direct_control_velocity(
       LowSpeedDirectControlPhase::Pass, 3.0, -1.0, 4.0, 11.1), std::invalid_argument);
+}
+
+TEST(V2XOvertakeCoreSide, StartsDirectPassWhenAlreadyInsideValidatedCorridor)
+{
+  EXPECT_EQ(
+    resolve_low_speed_direct_control_entry_phase(false),
+    LowSpeedDirectControlPhase::Shift);
+  EXPECT_EQ(
+    resolve_low_speed_direct_control_entry_phase(true),
+    LowSpeedDirectControlPhase::Pass);
+}
+
+TEST(V2XOvertakeCoreSide, StopsDirectPassWhenLiveCorridorBecomesUnavailable)
+{
+  EXPECT_FALSE(
+    should_stop_low_speed_direct_control_for_corridor(false, false, false, false));
+  EXPECT_FALSE(
+    should_stop_low_speed_direct_control_for_corridor(true, true, false, false));
+  EXPECT_FALSE(
+    should_stop_low_speed_direct_control_for_corridor(true, false, true, true));
+  EXPECT_TRUE(
+    should_stop_low_speed_direct_control_for_corridor(true, false, false, false));
+  EXPECT_TRUE(
+    should_stop_low_speed_direct_control_for_corridor(true, false, true, false));
 }
 
 TEST(V2XOvertakeCoreSide, LowSpeedShiftHeadingFeedbackCountersteers)

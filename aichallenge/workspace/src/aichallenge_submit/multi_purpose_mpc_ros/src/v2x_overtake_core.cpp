@@ -1153,7 +1153,8 @@ bool overtake_completion_policy_allows_execution(
   const OvertakeCompletionPermissionRequest & request) noexcept
 {
   return
-    request.completion_feasible || request.curve_continuation_allowed ||
+    request.completion_feasible || request.line_committed ||
+    request.curve_continuation_allowed ||
     can_override_completion_for_curve_entry(
     CurveEntryCompletionOverrideRequest{
       request.curve_entry_allowed,
@@ -1583,9 +1584,14 @@ bool should_yield_overtake_line_to_stopped_bypass(
   const StoppedVehicleLineOwnershipRequest & request) noexcept
 {
   if (
-    request.low_speed_behavior_active || request.low_speed_candidate ||
-    request.low_speed_direct_control_active)
+    request.low_speed_behavior_active || request.low_speed_direct_control_active)
   {
+    return true;
+  }
+  if (request.committed_pass_mission_active) {
+    return false;
+  }
+  if (request.low_speed_candidate) {
     return true;
   }
   const bool stopped_front =
@@ -1660,6 +1666,21 @@ double resolve_low_speed_pass_velocity(
   validate_speed(shift_velocity_mps, "low-speed shift velocity");
   return corridor_entered ? pass_velocity_mps :
          std::min(pass_velocity_mps, shift_velocity_mps);
+}
+
+LowSpeedDirectControlPhase resolve_low_speed_direct_control_entry_phase(
+  const bool pass_corridor_entered) noexcept
+{
+  return pass_corridor_entered ?
+         LowSpeedDirectControlPhase::Pass : LowSpeedDirectControlPhase::Shift;
+}
+
+bool should_stop_low_speed_direct_control_for_corridor(
+  const bool direct_control_active, const bool rejoin_active,
+  const bool local_path_active, const bool local_path_feasible) noexcept
+{
+  return direct_control_active && !rejoin_active &&
+         (!local_path_active || !local_path_feasible);
 }
 
 double resolve_low_speed_direct_control_velocity(

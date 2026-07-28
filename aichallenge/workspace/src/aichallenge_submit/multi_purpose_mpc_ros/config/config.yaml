@@ -11,9 +11,9 @@ awsim_boost:
   enabled: true
   # Per-vehicle override keyed by ROS_DOMAIN_ID. Change a vehicle to false to disable Boost.
   domain_enabled:
-    1: true
-    2: true
-    3: true
+    1: false
+    2: false
+    3: false
   mode: start_once
   trigger: first_forward_motion
   motion_speed_threshold_mps: 0.1
@@ -173,9 +173,9 @@ stuck_recovery:
     margin_m: 0.05
     sweep_interpolation_step_m: 0.05
   rear_safety:
-    # 2026 preliminary/dev3 uses three vehicles. Latest run showed two entries per domain and no
-    # self entry. Use 3 for a four-vehicle final; single-vehicle runs fail closed without V2X.
-    expected_v2x_vehicle_count: 2
+    # make dev2 publishes one other vehicle per domain and excludes self. Change this to 2 for
+    # make dev3, or 3 for a four-vehicle final; single-vehicle runs fail closed without V2X.
+    expected_v2x_vehicle_count: 1
     self_filter_mode: excluded
     self_vehicle_id: ""
     vehicle_radius_m: 1.45
@@ -590,12 +590,12 @@ mpc:
   v_max: 40.0
   domain_v_max:
     1: 40.0
-    2: 40.0
+    2: 12.0
     3: 40.0
   domain_start_v_max_duration: 15.0
   domain_start_v_max:
     1: 40.0
-    2: 40.0
+    2: 20.0
     3: 40.0
   ay_max: 30.0  # m/s^2, maximum lateral acceleration in curves
   Q:  [50000.0, 1500000.0, 30000.0]

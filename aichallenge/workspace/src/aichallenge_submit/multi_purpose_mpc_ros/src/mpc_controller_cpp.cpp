@@ -2365,6 +2365,7 @@ struct V2XGapPlanner
       double s{};
       double lateral{};
       double covariance_margin{};
+      bool stopped_mission_trigger{false};
     };
 
     const auto vehicles = active_vehicles(now_sec);
@@ -2391,9 +2392,7 @@ struct V2XGapPlanner
       if (self_distance < cfg.self_filter_radius) {
         continue;
       }
-      if (std::hypot(vehicle.vx, vehicle.vy) > behavior_cfg.low_speed_avoidance_max_front_speed) {
-        continue;
-      }
+      const double vehicle_speed = std::hypot(vehicle.vx, vehicle.vy);
 
       double best_distance = std::numeric_limits<double>::infinity();
       int best_wp_id = ref_wp_id;
@@ -2422,6 +2421,11 @@ struct V2XGapPlanner
       projected_vehicle.s = s;
       projected_vehicle.lateral = -std::sin(waypoint.psi) * dx + std::cos(waypoint.psi) * dy;
       projected_vehicle.covariance_margin = std::max(vehicle.covariance_x, vehicle.covariance_y);
+      // A stopped vehicle triggers this maneuver, but every active vehicle in
+      // the same lookahead is a physical blocker. Filtering moving vehicles
+      // here validated corridors that were already occupied by the next kart.
+      projected_vehicle.stopped_mission_trigger =
+        vehicle_speed <= behavior_cfg.low_speed_avoidance_max_front_speed;
       projected.push_back(projected_vehicle);
     }
 
@@ -2432,7 +2436,16 @@ struct V2XGapPlanner
     std::sort(
       projected.begin(), projected.end(),
       [](const ProjectedVehicle & lhs, const ProjectedVehicle & rhs) { return lhs.s < rhs.s; });
-    if (projected.front().s > behavior_cfg.low_speed_avoidance_distance) {
+    const bool stopped_trigger_in_range = std::any_of(
+      projected.begin(), projected.end(),
+      [&](const ProjectedVehicle & vehicle) {
+        return vehicle.stopped_mission_trigger &&
+               vehicle.s <= behavior_cfg.low_speed_avoidance_distance;
+      });
+    // Once a side has been locked, keep evaluating the whole vehicle pack even
+    // if the original stopped target starts moving. Before commitment, a
+    // stopped target inside the trigger distance is still mandatory.
+    if (!stopped_trigger_in_range && locked_pass_side == 0) {
       return output;
     }
 
@@ -3916,6 +3929,7 @@ struct MPC
     low_speed_shift_velocity_mps_ = 0.0;
     low_speed_shift_steering_limit_rad_ = 0.0;
     low_speed_shift_wall_stop_active_ = false;
+    low_speed_shift_corridor_blocked_ = false;
     low_speed_direct_control_phase_ =
       v2x_overtake_core::LowSpeedDirectControlPhase::Shift;
     low_speed_shift_last_relevant_vehicle_sec_ = std::numeric_limits<double>::quiet_NaN();
@@ -4034,6 +4048,7 @@ struct MPC
     low_speed_shift_velocity_mps_ = 0.0;
     low_speed_shift_steering_limit_rad_ = 0.0;
     low_speed_shift_wall_stop_active_ = false;
+    low_speed_shift_corridor_blocked_ = false;
     low_speed_direct_control_phase_ =
       v2x_overtake_core::LowSpeedDirectControlPhase::Shift;
     low_speed_shift_last_relevant_vehicle_sec_ =
@@ -4263,7 +4278,9 @@ struct MPC
       std::numeric_limits<double>::infinity();
     double start_grid_peer_max_speed = 0.0;
     const bool continuing_low_speed_avoidance =
-      v2x_behavior_state_initialized && v2x_behavior_state == V2XBehaviorState::LowSpeedAvoidance;
+      (v2x_behavior_state_initialized &&
+      v2x_behavior_state == V2XBehaviorState::LowSpeedAvoidance) ||
+      low_speed_shift_control_was_active_;
     const bool track_low_speed_clearance =
       continuing_low_speed_avoidance || low_speed_shift_control_was_active_;
 
@@ -4700,6 +4717,10 @@ struct MPC
     const bool active_overtake_line =
       overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
       overtake_line_state_.phase == OvertakeLinePhase::Pass;
+    const bool paused_overtake_mission =
+      overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare &&
+      !overtake_line_state_.target_vehicle_id.empty() &&
+      overtake_line_state_.pass_side_sign != 0;
     const bool nearest_front_matches_locked_target =
       active_overtake_line && !nearest_front_id.empty() &&
       nearest_front_id == overtake_line_state_.target_vehicle_id;
@@ -5017,7 +5038,7 @@ struct MPC
     }
 
     const bool continuing_overtake =
-      active_overtake_line ||
+      active_overtake_line || paused_overtake_mission ||
       (v2x_behavior_state_initialized && v2x_behavior_state == V2XBehaviorState::Overtake);
     bool overtake_completion_feasible = true;
     double overtake_completion_available_distance = std::numeric_limits<double>::infinity();
@@ -5368,6 +5389,9 @@ struct MPC
         *model, ref_wp_id, overtake_plan_N, overtake_lb, overtake_ub, now_sec, false, false,
         std::numeric_limits<double>::infinity(), side,
         required_gap_width);
+      bool candidate_fixed_interval_available = false;
+      double candidate_fixed_lower = -std::numeric_limits<double>::infinity();
+      double candidate_fixed_upper = std::numeric_limits<double>::infinity();
       double current_continuous_corridor_distance = 0.0;
       for (std::size_t i = 0; i < candidate_gap.target_active.size(); ++i) {
         const bool usable_corridor =
@@ -5389,6 +5413,16 @@ struct MPC
           candidate_gap.target_active[i] && i < candidate_gap.lb.size() &&
           i < candidate_gap.ub.size())
         {
+          if (i < static_cast<std::size_t>(N)) {
+            const auto horizon_index = static_cast<Eigen::Index>(i);
+            candidate_fixed_interval_available = true;
+            candidate_fixed_lower = std::max(
+              candidate_fixed_lower,
+              std::max(lb[horizon_index], candidate_gap.lb[i]));
+            candidate_fixed_upper = std::min(
+              candidate_fixed_upper,
+              std::min(ub[horizon_index], candidate_gap.ub[i]));
+          }
           assessment.corridor_width = std::max(
             assessment.corridor_width,
             std::max(0.0, candidate_gap.ub[i] - candidate_gap.lb[i]));
@@ -5513,12 +5547,31 @@ struct MPC
         assessment.gap_available && !start_grid_breakout_attempt &&
         (initial_shiftout_preflight || side_replan_preflight);
       if (normal_shiftout_preflight) {
+        if (
+          candidate_gap.feasible && candidate_fixed_interval_available &&
+          candidate_fixed_upper + kEps < candidate_fixed_lower)
+        {
+          assessment.gap_available = false;
+          assessment.reason = "ShiftOut candidate corridor has no fixed-goal intersection";
+          assessment.guard_reason = assessment.reason;
+          return assessment;
+        }
         const double preflight_target_lateral =
-          side_replan_preflight ?
+          (side_replan_preflight || paused_overtake_mission) &&
+          output.locked_target_seen &&
+          std::isfinite(output.locked_target_lateral) ?
           output.locked_target_lateral : nearest_front_lateral;
+        const bool use_candidate_goal_interval =
+          candidate_gap.feasible && candidate_fixed_interval_available &&
+          !assessment.fallback_target;
+        std::optional<std::pair<double, double>> candidate_goal_interval;
+        if (use_candidate_goal_interval) {
+          candidate_goal_interval.emplace(candidate_fixed_lower, candidate_fixed_upper);
+        }
         const auto preflight = evaluate_overtake_line_entry_preflight(
           ref_wp_id, N, lb, ub, side, model->spatial_state.e_y,
-          preflight_target_lateral, assessment.corridor_center_ey);
+          preflight_target_lateral, assessment.corridor_center_ey,
+          candidate_goal_interval);
         assessment.required_lateral_accel = preflight.max_required_lateral_accel;
         if (!preflight.feasible) {
           assessment.gap_available = false;
@@ -5536,6 +5589,11 @@ struct MPC
             arm_overtake_line_side_retry_block(
               side, output.target_vehicle_id, now_sec, preflight.reason);
           }
+        } else {
+          // Propagate the exact endpoint approved by preflight. Locking the raw
+          // interval center made admission and execution disagree after target
+          // separation or wall bounds adjusted the goal.
+          assessment.corridor_center_ey = preflight.goal_ey;
         }
       }
       return assessment;
@@ -5543,7 +5601,10 @@ struct MPC
 
     SideAssessment left_assessment;
     SideAssessment right_assessment;
-    if (locked_pass_side != 0 && !side_replan_assessment_requested) {
+    if (
+      locked_pass_side != 0 && !side_replan_assessment_requested &&
+      !paused_overtake_mission)
+    {
       const auto locked_assessment = assess_side(locked_pass_side);
       if (locked_pass_side > 0) {
         left_assessment = locked_assessment;
@@ -5833,7 +5894,8 @@ struct MPC
     // entry-eligible during that handoff; treating the behavior label alone as
     // continuation creates a one-cycle state where neither entry nor locked
     // continuation is legal and immediately returns to Follow.
-    const bool curve_line_committed = active_overtake_line && locked_pass_side != 0;
+    const bool curve_line_committed =
+      (active_overtake_line || paused_overtake_mission) && locked_pass_side != 0;
     const double curve_entry_max_front_distance =
       std::max(0.0, cfg.v2x_behavior.overtake_guard_min_front_distance) +
       std::max(0.0, cfg.v2x_behavior.overtake_line.shift_distance) +
@@ -6549,11 +6611,11 @@ struct MPC
     }
 
     auto behavior_output = evaluate_v2x_behavior(ref_wp_id, N, lb, ub, now_sec);
+    const bool low_speed_relevant_vehicle =
+      behavior_output.has_front_vehicle || behavior_output.has_side_vehicle ||
+      behavior_output.has_low_speed_clearance_vehicle;
     if (low_speed_shift_control_was_active_) {
-      const bool has_relevant_vehicle =
-        behavior_output.has_front_vehicle || behavior_output.has_side_vehicle ||
-        behavior_output.has_low_speed_clearance_vehicle;
-      if (has_relevant_vehicle) {
+      if (low_speed_relevant_vehicle) {
         low_speed_shift_last_relevant_vehicle_sec_ = now_sec;
         if (low_speed_shift_rejoin_active_) {
           low_speed_shift_rejoin_active_ = false;
@@ -6637,7 +6699,22 @@ struct MPC
       !use_low_speed_local_path;
     int overtake_pass_side_sign = behavior_output.overtake_pass_side_sign;
     if (behavior_output.state == V2XBehaviorState::Overtake) {
-      if (overtake_locked_side_sign_ != 0) {
+      const bool resuming_paused_mission =
+        overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare;
+      if (resuming_paused_mission && overtake_pass_side_sign != 0) {
+        // A paused mission re-evaluates both sides. Adopt the newly validated
+        // side before the gap planner and explicit line are built so one cycle
+        // cannot combine old-side bounds with a new-side ShiftOut.
+        overtake_locked_side_sign_ = overtake_pass_side_sign;
+        if (!behavior_output.start_grid_inter_vehicle_corridor) {
+          // The new validation may replace an expired start-grid weave with a
+          // normal wall-to-vehicle corridor. Do not feed stale boundary IDs
+          // into this cycle's planner or rear-clear policy.
+          overtake_line_state_.inter_vehicle_corridor = false;
+          overtake_line_state_.lower_boundary_vehicle_id.clear();
+          overtake_line_state_.upper_boundary_vehicle_id.clear();
+        }
+      } else if (overtake_locked_side_sign_ != 0) {
         overtake_pass_side_sign = overtake_locked_side_sign_;
       } else if (overtake_pass_side_sign != 0) {
         overtake_locked_side_sign_ = overtake_pass_side_sign;
@@ -6669,6 +6746,7 @@ struct MPC
       std::max(0.0, cfg.v2x_behavior.overtake_guard_min_front_distance);
     const bool use_follow_preposition_target =
       cfg.v2x_behavior.follow_preposition_enabled &&
+      overtake_line_state_.phase != OvertakeLinePhase::FollowPrepare &&
       behavior_output.state == V2XBehaviorState::Follow &&
       behavior_output.has_front_vehicle &&
       follow_preposition_curve_allowed &&
@@ -6720,6 +6798,24 @@ struct MPC
         inter_vehicle_corridor_plan ?
         cfg.v2x_behavior.start_grid_inter_vehicle_lateral_radius : 0.0)) :
       GapPlannerOutput{};
+    low_speed_shift_corridor_blocked_ =
+      v2x_overtake_core::should_stop_low_speed_direct_control_for_corridor(
+      low_speed_shift_control_was_active_, low_speed_shift_rejoin_active_,
+      !low_speed_relevant_vehicle ||
+      (use_low_speed_local_path && planner_output.active),
+      !low_speed_relevant_vehicle ||
+      (use_low_speed_local_path && planner_output.feasible));
+    if (
+      low_speed_shift_control_was_active_ && !low_speed_shift_rejoin_active_ &&
+      !low_speed_shift_corridor_blocked_ && use_low_speed_local_path &&
+      planner_output.active && planner_output.feasible &&
+      std::isfinite(planner_output.pass_target_ey))
+    {
+      // The direct controller may outlive the initial stopped target. Keep its
+      // target inside the corridor validated against the current vehicle pack.
+      low_speed_shift_pass_target_ey_ = planner_output.pass_target_ey;
+      low_speed_shift_target_ey_ = low_speed_shift_pass_target_ey_;
+    }
     const bool live_execution_corridor_valid =
       explicit_overtake_line_owns_plan && use_gap_planner &&
       (!planner_output.active || planner_output.feasible);
@@ -6841,7 +6937,6 @@ struct MPC
     }
     if (
       use_low_speed_local_path && planner_output.active && planner_output.feasible &&
-      !planner_output.pass_corridor_enforced &&
       behavior_output.state == V2XBehaviorState::LowSpeedAvoidance &&
       !low_speed_shift_control_was_active_)
     {
@@ -6850,8 +6945,10 @@ struct MPC
       low_speed_shift_target_ey_ = low_speed_shift_pass_target_ey_;
       low_speed_shift_rejoin_active_ = false;
       low_speed_shift_handoff_deferred_logged_ = false;
+      low_speed_shift_corridor_blocked_ = false;
       set_low_speed_direct_control_phase(
-        v2x_overtake_core::LowSpeedDirectControlPhase::Shift);
+        v2x_overtake_core::resolve_low_speed_direct_control_entry_phase(
+          planner_output.pass_corridor_enforced));
       if (!low_speed_shift_control_was_active_) {
         low_speed_shift_last_relevant_vehicle_sec_ = now_sec;
       }
@@ -6889,7 +6986,12 @@ struct MPC
 
     if (use_overtake_line_target) {
       overtake_locked_target_ey_.reset();
-    } else if (!use_overtake_side_target) {
+    } else if (
+      !use_overtake_side_target &&
+      !(overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare &&
+      !overtake_line_state_.target_vehicle_id.empty() &&
+      overtake_line_state_.pass_side_sign != 0))
+    {
       overtake_locked_target_ey_.reset();
       overtake_locked_side_sign_ = 0;
       overtake_entry_speed_.reset();
@@ -7232,18 +7334,21 @@ struct MPC
     const Waypoint & reference_waypoint)
   {
     const double max_steering = std::max(0.0, std::abs(cfg.delta_max));
-    bool wall_stop_required = false;
+    bool wall_stop_required = low_speed_shift_corridor_blocked_;
     const char * wall_stop_reason = "clear";
+    if (low_speed_shift_corridor_blocked_) {
+      wall_stop_reason = "live vehicle corridor unavailable";
+    }
     const bool wall_geometry_available =
       overtake_static_wall_grid_ != nullptr &&
       overtake_static_wall_footprint_.valid();
-    if (!wall_geometry_available) {
+    if (!wall_stop_required && !wall_geometry_available) {
       wall_stop_required = true;
       wall_stop_reason = "static wall geometry unavailable";
-    } else if (!actual_wall_monitor_pose_.has_value()) {
+    } else if (!wall_stop_required && !actual_wall_monitor_pose_.has_value()) {
       wall_stop_required = true;
       wall_stop_reason = "raw pose unavailable";
-    } else {
+    } else if (!wall_stop_required) {
       const auto & actual_pose = actual_wall_monitor_pose_.value();
       const auto physical_sample = recovery_footprint::sample_footprint(
         *overtake_static_wall_grid_, overtake_static_wall_footprint_, actual_pose);
@@ -7278,12 +7383,12 @@ struct MPC
       if (wall_stop_required) {
         RCLCPP_ERROR(
           rclcpp::get_logger("mpc_controller"),
-          "Low-speed direct control stopped by raw-footprint wall guard: %s",
+          "Low-speed direct control stopped by live safety guard: %s",
           wall_stop_reason);
       } else {
         RCLCPP_INFO(
           rclcpp::get_logger("mpc_controller"),
-          "Low-speed direct control raw-footprint wall guard cleared");
+          "Low-speed direct control live safety guard cleared");
       }
     }
     low_speed_shift_wall_stop_active_ = wall_stop_required;
@@ -7452,8 +7557,12 @@ struct MPC
         low_speed_shift_handoff_deferred_logged_ = false;
         low_speed_shift_steering_limit_rad_ = 0.0;
         low_speed_shift_wall_stop_active_ = false;
+        low_speed_shift_corridor_blocked_ = false;
         low_speed_shift_last_relevant_vehicle_sec_ =
           std::numeric_limits<double>::quiet_NaN();
+        if (gap_planner != nullptr) {
+          gap_planner->reset_low_speed_targets();
+        }
       }
       if (infeasibility_counter > 0) {
         RCLCPP_INFO(
@@ -7576,6 +7685,7 @@ struct MPC
   double low_speed_shift_velocity_mps_{0.0};
   double low_speed_shift_steering_limit_rad_{0.0};
   bool low_speed_shift_wall_stop_active_{false};
+  bool low_speed_shift_corridor_blocked_{false};
   double low_speed_shift_last_relevant_vehicle_sec_{
     std::numeric_limits<double>::quiet_NaN()};
   double previous_steering{0.0};
@@ -7857,6 +7967,22 @@ private:
 
   double limit_overtake_line_goal_change(const double raw_goal)
   {
+    const bool raw_goal_is_validated_fixed_goal =
+      overtake_line_state_.fixed_pass_corridor_goal_ey.has_value() &&
+      std::isfinite(raw_goal) &&
+      std::abs(
+        raw_goal - overtake_line_state_.fixed_pass_corridor_goal_ey.value()) <= 1e-6;
+    if (
+      (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+      overtake_line_state_.phase == OvertakeLinePhase::Pass) &&
+      raw_goal_is_validated_fixed_goal)
+    {
+      // The distance-based ShiftOut profile already smooths the transition.
+      // Slewing its endpoint again made a preflighted 4 m ShiftOut continue for
+      // many more metres and encounter geometry that admission never checked.
+      overtake_line_state_.target_ey = raw_goal;
+      return raw_goal;
+    }
     const double max_change = std::max(0.0, cfg.v2x_behavior.overtake_line.max_target_change);
     if (max_change <= kEps) {
       overtake_line_state_.target_ey = raw_goal;
@@ -8060,7 +8186,8 @@ private:
     const int ref_wp_id, const int N, const Eigen::VectorXd & lb,
     const Eigen::VectorXd & ub, const int pass_side_sign,
     const double current_ey, const double target_lateral,
-    const std::optional<double> & corridor_center_ey) const
+    const std::optional<double> & corridor_center_ey,
+    const std::optional<std::pair<double, double>> & fixed_goal_interval = std::nullopt) const
   {
     OvertakeLineEntryPreflight result;
     if (
@@ -8087,6 +8214,24 @@ private:
     if (feasible_upper < feasible_lower) {
       feasible_lower = lb[0];
       feasible_upper = ub[0];
+    }
+    if (fixed_goal_interval.has_value()) {
+      const auto [candidate_lower, candidate_upper] = fixed_goal_interval.value();
+      if (
+        !std::isfinite(candidate_lower) || !std::isfinite(candidate_upper) ||
+        candidate_upper < candidate_lower)
+      {
+        result.feasible = false;
+        result.reason = "invalid ShiftOut candidate goal interval";
+        return result;
+      }
+      feasible_lower = std::max(feasible_lower, candidate_lower);
+      feasible_upper = std::min(feasible_upper, candidate_upper);
+      if (feasible_upper < feasible_lower) {
+        result.feasible = false;
+        result.reason = "candidate corridor does not fit wall-feasible bounds";
+        return result;
+      }
     }
     const bool enforce_target_separation = std::isfinite(target_lateral);
     const auto feasible_goal =
@@ -8149,7 +8294,19 @@ private:
       (behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake &&
       !preserve_validated_breakout_line))
     {
-      reset_overtake_line_state(now_sec, "safety brake");
+      const bool committed_execution =
+        (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+        overtake_line_state_.phase == OvertakeLinePhase::Pass) &&
+        !overtake_line_state_.target_vehicle_id.empty() &&
+        overtake_line_state_.pass_side_sign != 0;
+      if (committed_execution) {
+        transition_overtake_line_phase(
+          OvertakeLinePhase::FollowPrepare, now_sec, current_ey,
+          overtake_line_state_.pass_side_sign,
+          "committed pass paused by safety brake");
+      } else if (overtake_line_state_.phase != OvertakeLinePhase::FollowPrepare) {
+        reset_overtake_line_state(now_sec, "safety brake");
+      }
       return output;
     }
     const bool stopped_bypass_owns_line =
@@ -8158,6 +8315,12 @@ private:
         behavior_output.state == V2XBehaviorState::LowSpeedAvoidance,
         behavior_output.low_speed_avoidance_candidate,
         low_speed_shift_control_active_ || low_speed_shift_control_was_active_,
+        (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+        overtake_line_state_.phase == OvertakeLinePhase::Pass ||
+        overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare ||
+        overtake_line_state_.phase == OvertakeLinePhase::Recovery) &&
+        !overtake_line_state_.target_vehicle_id.empty() &&
+        overtake_line_state_.pass_side_sign != 0,
         behavior_output.state == V2XBehaviorState::Overtake,
         behavior_output.has_front_vehicle,
         behavior_output.front_distance,
@@ -8542,19 +8705,27 @@ private:
         overtake_line_state_.pass_side_sign,
         "committed pass longitudinal progress stalled");
     } else if (behavior_overtake) {
-      const int pass_side_sign = overtake_line_state_.pass_side_sign != 0 ?
+      const bool resuming_paused_mission =
+        overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare;
+      const int pass_side_sign =
+        resuming_paused_mission && behavior_output.overtake_pass_side_sign != 0 ?
+        behavior_output.overtake_pass_side_sign :
+        overtake_line_state_.pass_side_sign != 0 ?
         overtake_line_state_.pass_side_sign : behavior_output.overtake_pass_side_sign;
       if (!phase_active || overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare) {
         transition_overtake_line_phase(
           OvertakeLinePhase::ShiftOut, now_sec, current_ey, pass_side_sign,
-          "overtake selected");
+          resuming_paused_mission ?
+          "committed pass revalidated after pause" : "overtake selected");
+        overtake_locked_side_sign_ = pass_side_sign;
         // The gap planner bounds already include the target-vehicle inflation and wall margin.
         // Freeze their center when the pass starts so the explicit MPC line stays centered in
         // the usable slot instead of following the target kart toward one edge of that slot.
         overtake_line_state_.fixed_pass_corridor_goal_ey =
           behavior_output.overtake_corridor_center_ey;
+        overtake_line_state_.inter_vehicle_corridor =
+          behavior_output.start_grid_inter_vehicle_corridor;
         if (behavior_output.start_grid_inter_vehicle_corridor) {
-          overtake_line_state_.inter_vehicle_corridor = true;
           overtake_line_state_.lower_boundary_vehicle_id =
             behavior_output.start_grid_lower_boundary_vehicle_id;
           overtake_line_state_.upper_boundary_vehicle_id =
@@ -8566,6 +8737,9 @@ private:
             overtake_line_state_.lower_boundary_vehicle_id.c_str(),
             overtake_line_state_.upper_boundary_vehicle_id.c_str(), pass_side_sign,
             overtake_line_state_.fixed_pass_corridor_goal_ey.value_or(current_ey));
+        } else {
+          overtake_line_state_.lower_boundary_vehicle_id.clear();
+          overtake_line_state_.upper_boundary_vehicle_id.clear();
         }
       } else if (overtake_line_state_.pass_side_sign == 0) {
         overtake_line_state_.pass_side_sign = pass_side_sign;
@@ -8647,6 +8821,34 @@ private:
           overtake_line_state_.fixed_pass_corridor_goal_ey =
             behavior_output.overtake_corridor_center_ey;
         }
+      }
+    } else if (overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare) {
+      const bool target_stale =
+        !locked_target_progress_continuous && target_age > line_cfg.target_hold_sec;
+      if (
+        behavior_output.locked_target_position_jump ||
+        locked_target_progress_rejected || target_stale ||
+        behavior_output.overtake_forbidden_wp)
+      {
+        const char * reason = behavior_output.locked_target_position_jump ?
+          "paused target position jump" :
+          locked_target_progress_rejected ?
+          "paused target course progress discontinuity" :
+          behavior_output.overtake_forbidden_wp ?
+          "paused pass reached explicitly forbidden waypoint" :
+          "paused target stale or lost";
+        transition_overtake_line_phase(
+          OvertakeLinePhase::Recovery, now_sec, current_ey,
+          overtake_line_state_.pass_side_sign, reason);
+      } else if (rear_clear_confirmed) {
+        transition_overtake_line_phase(
+          OvertakeLinePhase::Return, now_sec, current_ey,
+          overtake_line_state_.pass_side_sign,
+          "paused target rear clearance confirmed");
+      } else {
+        // Keep target/side/validated goal ownership, but publish no lateral
+        // line until behavior has revalidated a current execution corridor.
+        return output;
       }
     } else if (
       overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
@@ -8837,6 +9039,25 @@ private:
       if (
         recovery_policy.exit_reason != v2x_overtake_core::RecoveryExitReason::Active)
       {
+        const bool normal_recovery_complete =
+          recovery_policy.exit_reason ==
+          v2x_overtake_core::RecoveryExitReason::DistanceComplete ||
+          recovery_policy.exit_reason ==
+          v2x_overtake_core::RecoveryExitReason::LateralComplete;
+        const bool retain_pass_mission =
+          normal_recovery_complete && !overtake_solver_recovery_active_ &&
+          !actual_wall_physical_contact &&
+          locked_target_seen && !behavior_output.locked_target_position_jump &&
+          !behavior_output.overtake_forbidden_wp &&
+          std::isfinite(locked_target_longitudinal) &&
+          locked_target_longitudinal > -return_clear_distance;
+        if (retain_pass_mission) {
+          transition_overtake_line_phase(
+            OvertakeLinePhase::FollowPrepare, now_sec, current_ey,
+            overtake_line_state_.pass_side_sign,
+            "recovery complete; committed pass mission retained");
+          return output;
+        }
         const std::string reason = std::string("recovery ") +
           v2x_overtake_core::to_string(recovery_policy.exit_reason);
         reset_overtake_line_state(now_sec, reason);
@@ -10386,6 +10607,11 @@ private:
     const bool leaving_overtake =
       had_previous_state && previous_state == V2XBehaviorState::Overtake &&
       final_state != V2XBehaviorState::Overtake;
+    const bool pausing_committed_pass =
+      leaving_overtake && final_state == V2XBehaviorState::SafetyBrake &&
+      (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+      overtake_line_state_.phase == OvertakeLinePhase::Pass) &&
+      !overtake_line_state_.target_vehicle_id.empty();
     const bool curve_related_overtake_exit =
       output.overtake_forbidden || output.front_decel_curve_guard ||
       output.reason.find("curve") != std::string::npos ||
@@ -10394,6 +10620,7 @@ private:
       output.overtake_block_reason.find("inner") != std::string::npos;
     if (
       cfg.v2x_behavior.overtake_curve_cooldown_enabled && leaving_overtake &&
+      !pausing_committed_pass &&
       curve_related_overtake_exit) {
       overtake_curve_cooldown_until_sec_ = std::max(
         overtake_curve_cooldown_until_sec_,
@@ -10406,7 +10633,10 @@ private:
         output.overtake_cooldown_active || now_sec < overtake_curve_cooldown_until_sec_;
     }
 
-    if (gap_planner != nullptr && final_state != V2XBehaviorState::LowSpeedAvoidance) {
+    if (
+      gap_planner != nullptr && final_state != V2XBehaviorState::LowSpeedAvoidance &&
+      !low_speed_shift_control_was_active_)
+    {
       if (v2x_behavior_state_initialized && v2x_behavior_state == V2XBehaviorState::LowSpeedAvoidance) {
         gap_planner->reset_low_speed_targets();
       } else {

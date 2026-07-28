@@ -788,6 +788,39 @@ TEST(V2XOvertakeCoreSpeed, KeepsLineGoalAndFrontBrakeExclusionIndependent)
   EXPECT_TRUE(can_exclude_locked_target_from_front_overlap(exclusion_request));
 }
 
+TEST(V2XOvertakeCoreSpeed, StagesCommittedPassBetweenInflatedAndBodyClearance)
+{
+  // Full acceleration still requires the inflated 1.50m clearance.
+  PassFrontOverlapExclusionRequest speed_release_request;
+  speed_release_request.active_execution_phase = true;
+  speed_release_request.locked_target = true;
+  speed_release_request.relative_lateral_m = 1.49;
+  speed_release_request.required_lateral_clearance_m = 1.50;
+  EXPECT_FALSE(can_exclude_locked_target_from_front_overlap(speed_release_request));
+  speed_release_request.relative_lateral_m = 1.50;
+  EXPECT_TRUE(can_exclude_locked_target_from_front_overlap(speed_release_request));
+
+  // A latched Pass may remain committed while the bodies are still laterally disjoint.
+  PassFrontOverlapExclusionRequest body_protection_request;
+  body_protection_request.active_execution_phase = true;
+  body_protection_request.locked_target = true;
+  body_protection_request.relative_lateral_m = 1.49;
+  body_protection_request.required_lateral_clearance_m = 1.45;
+  EXPECT_TRUE(can_exclude_locked_target_from_front_overlap(body_protection_request));
+  body_protection_request.relative_lateral_m = 1.45;
+  EXPECT_TRUE(can_exclude_locked_target_from_front_overlap(body_protection_request));
+  body_protection_request.relative_lateral_m = 1.44;
+  EXPECT_FALSE(can_exclude_locked_target_from_front_overlap(body_protection_request));
+
+  // The caller enables this smaller boundary only for the latched locked-target Pass.
+  body_protection_request.active_execution_phase = false;
+  body_protection_request.relative_lateral_m = 1.49;
+  EXPECT_FALSE(can_exclude_locked_target_from_front_overlap(body_protection_request));
+  body_protection_request.active_execution_phase = true;
+  body_protection_request.locked_target = false;
+  EXPECT_FALSE(can_exclude_locked_target_from_front_overlap(body_protection_request));
+}
+
 TEST(V2XOvertakeCoreSpeed, HoldsOnlyCommittedActivePassAfterGapLoss)
 {
   ActivePassGapHoldRequest request;

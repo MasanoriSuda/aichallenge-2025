@@ -1821,6 +1821,7 @@ struct V2XBehaviorOutput
   bool locked_target_course_progress_rejected{false};
   bool locked_target_pass_side_intrusion{false};
   bool locked_target_current_lateral_clear{false};
+  bool locked_target_body_lateral_clear{false};
   bool locked_target_above_front_cap_reapply_clearance{false};
   double locked_target_longitudinal{std::numeric_limits<double>::infinity()};
   double locked_target_lateral{std::numeric_limits<double>::infinity()};
@@ -4501,6 +4502,20 @@ struct MPC
           active_overtake_execution, is_locked_execution_target,
           locked_pass_target_relative_lateral,
           locked_pass_target_required_lateral_clearance, false});
+      // Once full inflated clearance has committed the Pass, retain the maneuver down to the
+      // physical combined-width boundary. The 1.45-1.50m band reapplies the longitudinal
+      // closing-speed cap below, but must not discard the entire Pass as a centerline hazard.
+      // ShiftOut, unlatched Pass, other vehicles, and actual body overlap keep the normal brake.
+      const double locked_pass_target_body_lateral_clearance =
+        std::max(0.0, cfg.v2x_gap.vehicle_radius);
+      const bool locked_pass_target_body_laterally_clear =
+        v2x_overtake_core::can_exclude_locked_target_from_front_overlap(
+        v2x_overtake_core::PassFrontOverlapExclusionRequest{
+          overtake_line_state_.phase == OvertakeLinePhase::Pass &&
+          overtake_line_state_.pass_front_overlap_exclusion_latched,
+          is_locked_execution_target,
+          locked_pass_target_relative_lateral,
+          locked_pass_target_body_lateral_clearance, false});
       const bool locked_pass_target_laterally_clear_or_latched =
         v2x_overtake_core::can_exclude_locked_target_from_front_overlap(
         v2x_overtake_core::PassFrontOverlapExclusionRequest{
@@ -4512,6 +4527,8 @@ struct MPC
       if (is_locked_execution_target) {
         output.locked_target_current_lateral_clear =
           locked_pass_target_currently_laterally_clear;
+        output.locked_target_body_lateral_clear =
+          locked_pass_target_body_laterally_clear;
         output.locked_target_above_front_cap_reapply_clearance =
           std::isfinite(locked_pass_target_relative_lateral) &&
           std::abs(locked_pass_target_relative_lateral) >=
@@ -4537,7 +4554,8 @@ struct MPC
       // two paths converge again.
       const bool front_overlap =
         front_geometry_valid && std::abs(front_relative_lateral) <= front_lateral_range &&
-        !locked_pass_target_currently_laterally_clear;
+        !locked_pass_target_currently_laterally_clear &&
+        !locked_pass_target_body_laterally_clear;
       if (
         front_overlap && front_longitudinal > 0.0 &&
         front_longitudinal < front_detection_distance)
@@ -10375,7 +10393,8 @@ private:
         "soft_curve=%d, hard_curve=%d, inner_pass=%d, continue=%d, "
         "hard_continue=%d, outer_entry=%d, outer_hard_entry=%d, outer_hard=%d, "
         "inner_entry=%d, inner_hard_entry=%d, inner_hard=%d, "
-        "hard_dist=%.2f, hard_avail=%.2f, hard_req=%.2f",
+        "hard_dist=%.2f, hard_avail=%.2f, hard_req=%.2f, "
+        "locked_rel=%.2f, lat_clear=%d, body_clear=%d",
         v2x_behavior_state_initialized ? to_string(v2x_behavior_state) : "None", to_string(final_state),
         output.front_distance, model->wp_id, output.reason.c_str(),
         output.v2x_health.c_str(), output.v2x_receipt_age_sec,
@@ -10396,7 +10415,10 @@ private:
         output.inner_curve_hard_continuation_allowed ? 1 : 0,
         output.active_hard_curve_distance,
         output.active_hard_curve_available_distance,
-        output.active_hard_curve_required_distance);
+        output.active_hard_curve_required_distance,
+        output.locked_target_relative_lateral,
+        output.locked_target_current_lateral_clear ? 1 : 0,
+        output.locked_target_body_lateral_clear ? 1 : 0);
       v2x_behavior_state = final_state;
       last_v2x_behavior_state_change_sec = now_sec;
       v2x_behavior_state_initialized = true;
@@ -10435,7 +10457,8 @@ private:
           "completion_avail=%.2f, completion_req=%.2f, completion_rel=%.2f, "
           "gap=%d, gap_hold=%d, hold_rem=%.2f, fallback=%d, "
           "cooldown=%d, pass=%d, side_clear=%.2f, plan_N=%d, target=%s, locked_seen=%d, "
-          "course_reject=%d, locked_s=%.2f, locked_lat=%.2f, lat_clear=%d, latched=%d, "
+          "course_reject=%d, locked_s=%.2f, locked_lat=%.2f, "
+          "lat_clear=%d, body_clear=%d, latched=%d, "
           "left_gap=%d, right_gap=%d, left_q=%.2f, right_q=%.2f, "
           "side_conflict=%d, replan_window=%d, replan_candidate=%d, "
           "replan_stable=%.2f, replan_ready=%d, replan_abort=%d, solver_failures=%d, "
@@ -10517,6 +10540,7 @@ private:
           output.locked_target_longitudinal,
           output.locked_target_relative_lateral,
           output.locked_target_current_lateral_clear ? 1 : 0,
+          output.locked_target_body_lateral_clear ? 1 : 0,
           overtake_line_state_.pass_front_overlap_exclusion_latched ? 1 : 0,
           output.overtake_left_gap_available ? 1 : 0,
           output.overtake_right_gap_available ? 1 : 0,
@@ -12890,7 +12914,7 @@ public:
         "stall=%.2f m/s/%.2f s, "
         "timeout=%.2f s, entry_retry_cooldown=%.2f s, "
         "solver_cooldown=%.2f s, solver_healthy=%d cycles, "
-        "front_cap_clearance=%.2f/%.2f m, "
+        "front_cap_clearance=%.2f/%.2f m, body_clearance=%.2f m, "
         "side_quality=%d/adv=%.2f, early_replan=%d/lat=%.2f m/dist=%.2f m/"
         "stable=%.2f s/target=%.2f m",
         mpc_cfg_.v2x_behavior.overtake_line.lateral_offset,
@@ -12911,6 +12935,7 @@ public:
           mpc_cfg_.v2x_behavior.overtake_pass_front_overlap_lateral_clearance,
           mpc_cfg_.v2x_gap.vehicle_radius + mpc_cfg_.v2x_gap.prediction_margin),
         mpc_cfg_.v2x_behavior.overtake_pass_front_cap_reapply_lateral_clearance,
+        mpc_cfg_.v2x_gap.vehicle_radius,
         mpc_cfg_.v2x_behavior.overtake_line.side_quality_selection_enabled ? 1 : 0,
         mpc_cfg_.v2x_behavior.overtake_line.side_quality_min_score_advantage,
         mpc_cfg_.v2x_behavior.overtake_line.early_side_replan_enabled ? 1 : 0,

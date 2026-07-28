@@ -431,7 +431,7 @@ mpc:
   # remains the fallback when a fresh planner corridor is unavailable at entry.
   v2x_overtake_line_min_target_separation: 1.50 # [m] combined kart width plus prediction margin
   v2x_overtake_pass_front_overlap_lateral_clearance: 1.50 # [m] current physical clearance required before front-cap release
-  v2x_overtake_pass_front_cap_reapply_lateral_clearance: 1.30 # [m] reapply cap below this after 1.50m release; collision protection still uses 1.50m
+  v2x_overtake_pass_front_cap_reapply_lateral_clearance: 1.50 # [m] below full clearance, cap closing speed while body-clear Pass remains committed
   # Once a low-speed target has been physically cleared in Pass, do not let a conservative
   # trajectory reference alone make the ego crawl beside it. This is a reference floor only;
   # curvature, front-risk, wall, acceleration and Emergency hard limits retain priority.
@@ -488,7 +488,7 @@ mpc:
   v2x_overtake_line_lateral_offset: 1.2       # [m] signed by pass side: left positive, right negative
   v2x_overtake_line_target_bias: 1.0          # [0-1] explicit line is the sole lateral owner during ShiftOut/Pass
   # Applied to both the legacy lateral bounds and the occupancy-grid vehicle footprint.
-  v2x_overtake_line_min_wall_clearance: 0.2   # [m] keep a committed inside line off the physical wall
+  v2x_overtake_line_min_wall_clearance: 0.1   # [m] aggressive sim: align execution width with the 0.1m candidate corridor
   v2x_overtake_line_max_lateral_accel: 6.0    # [m/s^2] dev3 attack: complete committed ShiftOut in a hairpin
   v2x_overtake_line_max_target_change: 0.04   # [m/cycle] smooth target goal updates across cycles
   v2x_overtake_line_target_intrusion_ordering_margin: 0.10 # [m] abort if the ahead target reaches/crosses ego's selected-side ordering

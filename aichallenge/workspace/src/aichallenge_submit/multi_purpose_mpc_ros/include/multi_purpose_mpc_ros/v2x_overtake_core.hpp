@@ -9,6 +9,11 @@
 namespace multi_purpose_mpc_ros::v2x_overtake_core
 {
 
+/// Treat a small negative receipt age as fresh when callback execution races
+/// with the control-cycle ROS-time snapshot. Larger future ages fail closed.
+bool is_v2x_receipt_age_fresh(
+  double age_sec, double timeout_sec, double future_tolerance_sec) noexcept;
+
 enum class StartWindowStatus
 {
   NotConfigured,

@@ -36,6 +36,17 @@ void validate_speed(const double speed_mps, const char * name)
 
 }  // namespace
 
+bool is_v2x_receipt_age_fresh(
+  const double age_sec, const double timeout_sec,
+  const double future_tolerance_sec) noexcept
+{
+  return
+    std::isfinite(age_sec) &&
+    std::isfinite(timeout_sec) && timeout_sec >= 0.0 &&
+    std::isfinite(future_tolerance_sec) && future_tolerance_sec >= 0.0 &&
+    age_sec >= -future_tolerance_sec && age_sec <= timeout_sec;
+}
+
 SpeedLimitResolution resolve_effective_speed_limit(const SpeedLimitRequest & request)
 {
   validate_speed(request.normal_speed_mps, "normal speed");

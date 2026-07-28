@@ -33,6 +33,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::GenericFollowCapOwnershipRequest
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSpeedReferenceRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSpeedStage;
 using multi_purpose_mpc_ros::v2x_overtake_core::StartGridBreakoutSpeedReferenceRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::is_v2x_receipt_age_fresh;
 using multi_purpose_mpc_ros::v2x_overtake_core::ShiftOutCompletionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeFrontCapReleaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassFrontOverlapExclusionRequest;
@@ -229,6 +230,26 @@ FollowSpeedLimitRequest follow_speed_request()
   request.slow_front_velocity_cap_mps = 3.0;
   request.maximum_speed_mps = 20.0;
   return request;
+}
+
+TEST(V2XReceiptAge, AcceptsCurrentAndSmallFutureReceipt)
+{
+  EXPECT_TRUE(is_v2x_receipt_age_fresh(0.0, 1.0, 0.05));
+  EXPECT_TRUE(is_v2x_receipt_age_fresh(1.0, 1.0, 0.05));
+  EXPECT_TRUE(is_v2x_receipt_age_fresh(-0.035, 1.0, 0.05));
+  EXPECT_TRUE(is_v2x_receipt_age_fresh(-0.05, 1.0, 0.05));
+}
+
+TEST(V2XReceiptAge, RejectsStaleInvalidAndExcessivelyFutureReceipt)
+{
+  EXPECT_FALSE(is_v2x_receipt_age_fresh(-0.050001, 1.0, 0.05));
+  EXPECT_FALSE(is_v2x_receipt_age_fresh(1.000001, 1.0, 0.05));
+  EXPECT_FALSE(is_v2x_receipt_age_fresh(
+    std::numeric_limits<double>::quiet_NaN(), 1.0, 0.05));
+  EXPECT_FALSE(is_v2x_receipt_age_fresh(
+    std::numeric_limits<double>::infinity(), 1.0, 0.05));
+  EXPECT_FALSE(is_v2x_receipt_age_fresh(0.0, -1.0, 0.05));
+  EXPECT_FALSE(is_v2x_receipt_age_fresh(0.0, 1.0, -0.05));
 }
 
 TEST(V2XOvertakeCoreSpeed, UsesCappedNormalSpeedWithoutStartConfiguration)

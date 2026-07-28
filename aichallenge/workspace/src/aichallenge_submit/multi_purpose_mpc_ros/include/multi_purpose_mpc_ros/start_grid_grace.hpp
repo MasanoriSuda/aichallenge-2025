@@ -40,6 +40,12 @@ struct StaticStopContext {
   double rollout_speed_threshold_mps{0.0};
 };
 
+struct CoordinatedRecoveryContext {
+  bool grace_active{false};
+  bool dynamic_observation_active{false};
+  bool breakout_active{false};
+};
+
 struct FrontLateralRangeContext {
   bool grace_active{false};
   bool curve_guard_active{false};
@@ -140,6 +146,12 @@ private:
 };
 
 bool should_suppress_static_stop(const StaticStopContext &context) noexcept;
+
+/// A normal stationary start grid is not evidence that the vehicle is stuck.
+/// Suppress only new coordinated-stop Recovery entries while launch handling
+/// owns the situation; an already active Recovery episode remains unaffected.
+bool should_suppress_coordinated_recovery(
+    const CoordinatedRecoveryContext &context) noexcept;
 
 /// Keep adjacent start-grid vehicles out of the front collision corridor.
 /// The wider curve guard is restored as soon as start-grid grace ends.

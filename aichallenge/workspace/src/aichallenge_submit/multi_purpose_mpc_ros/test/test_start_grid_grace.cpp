@@ -124,6 +124,27 @@ TEST(StartGridGraceSuppression, EmergencyBrakeAlwaysWins) {
   EXPECT_FALSE(start_grid_grace::should_suppress_static_stop(context));
 }
 
+TEST(StartGridGraceSuppression, CoordinatedRecoveryRemainsEnabledOutsideLaunch) {
+  const start_grid_grace::CoordinatedRecoveryContext context;
+  EXPECT_FALSE(
+      start_grid_grace::should_suppress_coordinated_recovery(context));
+}
+
+TEST(StartGridGraceSuppression, CoordinatedRecoveryIsSuppressedDuringLaunch) {
+  start_grid_grace::CoordinatedRecoveryContext context;
+
+  context.grace_active = true;
+  EXPECT_TRUE(start_grid_grace::should_suppress_coordinated_recovery(context));
+
+  context.grace_active = false;
+  context.dynamic_observation_active = true;
+  EXPECT_TRUE(start_grid_grace::should_suppress_coordinated_recovery(context));
+
+  context.dynamic_observation_active = false;
+  context.breakout_active = true;
+  EXPECT_TRUE(start_grid_grace::should_suppress_coordinated_recovery(context));
+}
+
 TEST(StartGridGraceFrontLateralRange, UsesNormalWidthDuringGrace) {
   start_grid_grace::FrontLateralRangeContext context;
   context.grace_active = true;

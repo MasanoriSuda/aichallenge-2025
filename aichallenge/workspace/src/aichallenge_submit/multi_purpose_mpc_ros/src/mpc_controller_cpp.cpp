@@ -109,6 +109,7 @@ namespace stuck_recovery = ::multi_purpose_mpc_ros::stuck_recovery;
 
 constexpr double kEps = 1e-12;
 constexpr double kPi = 3.14159265358979323846;
+constexpr double kV2XReceiptFutureToleranceSec = 0.05;
 constexpr double kV2XSourceFutureToleranceSec = 0.05;
 constexpr double kV2XCourseProgressContinuityToleranceM = 1.5;
 
@@ -2169,7 +2170,9 @@ struct V2XGapPlanner
         continue;
       }
       const double age_sec = now_sec - tracked.receipt_sec;
-      if (!std::isfinite(age_sec) || age_sec < 0.0 || age_sec > cfg.timeout_sec) {
+      if (!overtake_core::is_v2x_receipt_age_fresh(
+          age_sec, cfg.timeout_sec, kV2XReceiptFutureToleranceSec))
+      {
         continue;
       }
       vehicles.push_back(tracked);
@@ -2198,15 +2201,19 @@ struct V2XGapPlanner
       const auto & tracked = item.second;
       const double age_sec = now_sec - tracked.receipt_sec;
       if (
-        tracked.has_sample && std::isfinite(age_sec) && age_sec >= 0.0 &&
-        age_sec <= cfg.timeout_sec)
+        tracked.has_sample &&
+        overtake_core::is_v2x_receipt_age_fresh(
+          age_sec, cfg.timeout_sec, kV2XReceiptFutureToleranceSec))
       {
         ++output.fresh_vehicle_count;
         output.position_jump_count += tracked.position_jump ? 1U : 0U;
         output.invalid_velocity_count += tracked.invalid_velocity ? 1U : 0U;
       }
     }
-    if (!std::isfinite(output.receipt_age_sec) || output.receipt_age_sec < 0.0) {
+    if (
+      !std::isfinite(output.receipt_age_sec) ||
+      output.receipt_age_sec < -kV2XReceiptFutureToleranceSec)
+    {
       output.health = "Invalid";
     } else if (output.receipt_age_sec > cfg.timeout_sec) {
       output.health = "Stale";
@@ -2238,7 +2245,8 @@ struct V2XGapPlanner
       return false;
     }
     const double age_sec = now_sec - last_message_receipt_sec_.value();
-    return std::isfinite(age_sec) && age_sec >= 0.0 && age_sec <= cfg.timeout_sec &&
+    return overtake_core::is_v2x_receipt_age_fresh(
+      age_sec, cfg.timeout_sec, kV2XReceiptFutureToleranceSec) &&
            last_message_vehicle_count_ == expected_vehicle_count &&
            !last_message_has_empty_id_ && !last_message_has_duplicate_id_ &&
            !last_message_has_invalid_sample_;
@@ -2262,8 +2270,10 @@ struct V2XGapPlanner
         continue;
       }
       const double age_sec = now_sec - tracked.receipt_sec;
-      if (!tracked.has_sample || !std::isfinite(age_sec) || age_sec < 0.0 ||
-        age_sec > cfg.timeout_sec)
+      if (
+        !tracked.has_sample ||
+        !overtake_core::is_v2x_receipt_age_fresh(
+          age_sec, cfg.timeout_sec, kV2XReceiptFutureToleranceSec))
       {
         continue;
       }
@@ -2655,7 +2665,10 @@ struct V2XGapPlanner
         if (!tracked.has_sample) {
           continue;
         }
-        if (now_sec - tracked.receipt_sec > cfg.timeout_sec) {
+        if (!overtake_core::is_v2x_receipt_age_fresh(
+            now_sec - tracked.receipt_sec, cfg.timeout_sec,
+            kV2XReceiptFutureToleranceSec))
+        {
           continue;
         }
         vehicles.push_back(tracked);
@@ -4256,7 +4269,9 @@ struct MPC
       it != v2x_course_progress_tracks_.end();)
     {
       const double age_sec = now_sec - it->second.receipt_sec;
-      if (!std::isfinite(age_sec) || age_sec < 0.0 || age_sec > cfg.v2x_gap.timeout_sec) {
+      if (!overtake_core::is_v2x_receipt_age_fresh(
+          age_sec, cfg.v2x_gap.timeout_sec, kV2XReceiptFutureToleranceSec))
+      {
         it = v2x_course_progress_tracks_.erase(it);
       } else {
         ++it;
@@ -14991,13 +15006,26 @@ private:
         "Stuck detector collision override: SafetyBrake/Follow remains active, "
         "but collision evidence and stopped ego permit no-progress confirmation");
     }
-    const bool coordinated_stop_candidate =
+    const bool coordinated_stop_observation =
       cfg_.stuck_recovery.core.detector.coordinated_stop_recovery_enabled &&
       behavior.has_front_vehicle &&
       !behavior.target_vehicle_id.empty() && std::isfinite(behavior.front_speed) &&
       behavior.front_speed <= cfg_.stuck_recovery.coordinated_stop_front_speed_mps &&
       (behavior.state == V2XBehaviorState::SafetyBrake ||
       behavior.state == V2XBehaviorState::Follow);
+    const bool suppress_start_grid_coordinated_recovery =
+      start_grid_grace::should_suppress_coordinated_recovery(
+      start_grid_grace::CoordinatedRecoveryContext{
+        behavior.start_grid_grace_active,
+        behavior.start_grid_dynamic_observation_active,
+        behavior.start_grid_breakout_active});
+    const bool coordinated_stop_candidate =
+      coordinated_stop_observation && !suppress_start_grid_coordinated_recovery;
+    if (coordinated_stop_observation && suppress_start_grid_coordinated_recovery) {
+      RCLCPP_INFO_THROTTLE(
+        get_logger(), *get_clock(), 1000,
+        "Stuck recovery coordinated-stop entry suppressed during start-grid launch");
+    }
     const bool coordinated_stop_active =
       coordinated_stop_candidate || recovery_coordinated_stop_episode_;
     bool current_wall_evidence = false;

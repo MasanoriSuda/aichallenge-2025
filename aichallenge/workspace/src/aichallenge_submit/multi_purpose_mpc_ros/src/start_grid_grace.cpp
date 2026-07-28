@@ -99,6 +99,12 @@ bool should_suppress_static_stop(const StaticStopContext &context) noexcept {
          context.front_speed_mps <= context.rollout_speed_threshold_mps;
 }
 
+bool should_suppress_coordinated_recovery(
+    const CoordinatedRecoveryContext &context) noexcept {
+  return context.grace_active || context.dynamic_observation_active ||
+         context.breakout_active;
+}
+
 double resolve_front_lateral_range(const FrontLateralRangeContext &context) {
   if (!std::isfinite(context.corridor_lateral_range_m) ||
       context.corridor_lateral_range_m < 0.0 ||

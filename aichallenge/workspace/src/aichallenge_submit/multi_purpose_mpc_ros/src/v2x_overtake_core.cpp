@@ -219,10 +219,14 @@ bool is_shiftout_complete(const ShiftOutCompletionRequest & request) noexcept
 bool can_release_overtake_front_cap(
   const OvertakeFrontCapReleaseRequest & request) noexcept
 {
+  const bool committed_pass_speed_hold =
+    request.committed_pass_speed_hold_allowed &&
+    request.lateral_separation_release_active &&
+    request.lateral_separation_above_reapply_threshold;
   if (
     !request.active_execution_phase || !request.target_seen ||
     !std::isfinite(request.target_longitudinal_m) ||
-    !request.lateral_complete)
+    (!request.lateral_complete && !committed_pass_speed_hold))
   {
     return false;
   }
@@ -240,7 +244,8 @@ bool can_release_overtake_front_cap(
   if (
     !request.execution_horizon_unconstrained &&
     !constrained_horizon_initial_release &&
-    !constrained_horizon_release_hold)
+    !constrained_horizon_release_hold &&
+    !committed_pass_speed_hold)
   {
     return false;
   }

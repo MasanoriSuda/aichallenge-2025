@@ -167,6 +167,7 @@ struct OvertakeFrontCapReleaseRequest
   bool lateral_separation_release_active{false};
   bool lateral_separation_above_reapply_threshold{false};
   bool constrained_horizon_release_allowed{false};
+  bool committed_pass_speed_hold_allowed{false};
   bool target_seen{false};
   double target_longitudinal_m{};
 };
@@ -177,8 +178,11 @@ struct OvertakeFrontCapReleaseRequest
 /// caller-provided release/reapply hysteresis. A caller may accept a
 /// constrained-but-physically-feasible Pass horizon: initial release then
 /// requires full physical lateral clearance, while an existing release may use
-/// the lower reapply threshold. A target already behind may also release the
-/// cap, but still requires the completed lateral path.
+/// the lower reapply threshold. Once an existing release belongs to a
+/// physically feasible, body-clear committed Pass, the caller may also hold it
+/// across a transient line-goal completion error. A target already behind may
+/// release the cap, but still requires the completed lateral path unless the
+/// committed hold is active.
 bool can_release_overtake_front_cap(
   const OvertakeFrontCapReleaseRequest & request) noexcept;
 

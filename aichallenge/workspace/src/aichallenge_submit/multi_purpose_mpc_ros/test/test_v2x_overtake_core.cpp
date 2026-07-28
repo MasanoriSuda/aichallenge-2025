@@ -714,6 +714,42 @@ TEST(V2XOvertakeCoreSpeed, RetainsFrontCapReleaseOnlyInsideReapplyHysteresisBand
   EXPECT_FALSE(can_release_overtake_front_cap(request));
 }
 
+TEST(V2XOvertakeCoreSpeed, HoldsCommittedPassReleaseAcrossTransientLineError)
+{
+  OvertakeFrontCapReleaseRequest request;
+  request.active_execution_phase = true;
+  request.lateral_complete = false;
+  request.execution_horizon_unconstrained = false;
+  request.lateral_separation_clear = true;
+  request.lateral_separation_release_active = true;
+  request.lateral_separation_above_reapply_threshold = true;
+  request.constrained_horizon_release_allowed = true;
+  request.committed_pass_speed_hold_allowed = true;
+  request.target_seen = true;
+  request.target_longitudinal_m = 1.50;
+  EXPECT_TRUE(can_release_overtake_front_cap(request));
+
+  // The 1.45-1.50m body-clear band remains released after the full-clear latch.
+  request.lateral_separation_clear = false;
+  EXPECT_TRUE(can_release_overtake_front_cap(request));
+
+  // Below the body-clear reapply threshold the locked target regains speed authority.
+  request.lateral_separation_above_reapply_threshold = false;
+  EXPECT_FALSE(can_release_overtake_front_cap(request));
+  request.lateral_separation_above_reapply_threshold = true;
+
+  // This path is hold-only and cannot acquire release in ShiftOut or an unlatched Pass.
+  request.lateral_separation_release_active = false;
+  EXPECT_FALSE(can_release_overtake_front_cap(request));
+  request.lateral_separation_release_active = true;
+  request.committed_pass_speed_hold_allowed = false;
+  EXPECT_FALSE(can_release_overtake_front_cap(request));
+
+  // A normal unconstrained horizon does not bypass line completion before commitment.
+  request.execution_horizon_unconstrained = true;
+  EXPECT_FALSE(can_release_overtake_front_cap(request));
+}
+
 TEST(V2XOvertakeCoreSpeed, AppliesCommittedPassFloorOnlyForClearSlowTargetPass)
 {
   multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassSpeedFloorRequest request;

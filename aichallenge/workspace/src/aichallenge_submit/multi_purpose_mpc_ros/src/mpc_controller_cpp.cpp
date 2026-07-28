@@ -1895,6 +1895,7 @@ struct OvertakeLineOutput
   double closing_speed_limit{std::numeric_limits<double>::infinity()};
   bool front_cap_release_ready{false};
   bool constrained_horizon_front_cap_release_active{false};
+  bool committed_pass_speed_hold_active{false};
   bool committed_pass_speed_floor_active{false};
   bool recovery_moving_follow_profile_used{false};
   double max_required_lateral_accel{0.0};
@@ -8914,6 +8915,11 @@ private:
       overtake_line_state_.pass_front_overlap_exclusion_latched &&
       horizon_evaluation.execution_feasible() &&
       !actual_wall_physical_contact;
+    const bool committed_pass_speed_hold_allowed =
+      constrained_horizon_release_allowed &&
+      overtake_line_state_.pass_front_cap_release_active &&
+      behavior_output.locked_target_body_lateral_clear &&
+      !behavior_output.locked_target_position_jump;
     output.front_cap_release_ready = preserve_validated_breakout_line ||
       overtake_core::can_release_overtake_front_cap(
       overtake_core::OvertakeFrontCapReleaseRequest{
@@ -8924,7 +8930,12 @@ private:
         overtake_line_state_.pass_front_cap_release_active,
         behavior_output.locked_target_above_front_cap_reapply_clearance,
         constrained_horizon_release_allowed,
+        committed_pass_speed_hold_allowed,
         locked_target_seen, locked_target_longitudinal});
+    output.committed_pass_speed_hold_active =
+      output.front_cap_release_ready &&
+      committed_pass_speed_hold_allowed &&
+      !lateral_complete;
     output.constrained_horizon_front_cap_release_active =
       output.front_cap_release_ready &&
       !execution_horizon_unconstrained &&
@@ -9126,6 +9137,7 @@ private:
           "current_ey=%.2f, elapsed=%.2f, traveled=%.2f, stalled=%.2f, "
           "v_ref=%.2f, v_limit=%.2f, v_floor=%.2f, floor_active=%d, "
           "recovery_speed=%s, closing=%.2f, cap_release=%d, horizon_release=%d, "
+          "speed_hold=%d, "
           "cooldown=%.2f, "
           "max_lat_acc=%.2f, lat_limited=%d, wall_limited=%d, "
           "static_wall_limited=%d, static_margin_degraded=%d, "
@@ -9142,6 +9154,7 @@ private:
           output.closing_speed_limit,
           output.front_cap_release_ready ? 1 : 0,
           output.constrained_horizon_front_cap_release_active ? 1 : 0,
+          output.committed_pass_speed_hold_active ? 1 : 0,
           std::max(0.0, overtake_solver_cooldown_until_sec_ - now_sec),
           output.max_required_lateral_accel, output.lateral_accel_limited ? 1 : 0,
           output.wall_clearance_limited ? 1 : 0,

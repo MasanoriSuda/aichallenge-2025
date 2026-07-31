@@ -1747,10 +1747,11 @@ EarlyShiftOutSideReplanResolution resolve_early_shiftout_side_replan(
 OvertakeExecutionSideResolution resolve_overtake_execution_side(
   const OvertakeExecutionSideRequest & request) noexcept
 {
+  if (request.resuming_paused_mission && request.mission_side_sign != 0) {
+    return {request.mission_side_sign, OvertakeExecutionSideSource::MissionLock};
+  }
   if (request.resuming_paused_mission && request.behavior_side_sign != 0) {
-    return {
-      request.behavior_side_sign,
-      OvertakeExecutionSideSource::BehaviorRevalidation};
+    return {request.behavior_side_sign, OvertakeExecutionSideSource::BehaviorRevalidation};
   }
   if (request.mission_side_sign != 0) {
     return {request.mission_side_sign, OvertakeExecutionSideSource::MissionLock};
@@ -1759,6 +1760,38 @@ OvertakeExecutionSideResolution resolve_overtake_execution_side(
     return {request.behavior_side_sign, OvertakeExecutionSideSource::BehaviorSelection};
   }
   return {};
+}
+
+bool can_resume_paused_pass_directly(
+  const PausedPassDirectResumeRequest & request) noexcept
+{
+  if (
+    !request.resuming_paused_mission ||
+    !is_configured_side(static_cast<PassSide>(request.mission_side_sign)) ||
+    request.behavior_side_sign != request.mission_side_sign ||
+    !request.execution_corridor_valid || !request.target_seen ||
+    request.target_position_jump ||
+    !std::isfinite(request.target_relative_lateral_m) ||
+    !std::isfinite(request.required_lateral_clearance_m) ||
+    request.required_lateral_clearance_m < 0.0 ||
+    !std::isfinite(request.current_lateral_m) ||
+    !std::isfinite(request.goal_lateral_m))
+  {
+    return false;
+  }
+
+  const double side = static_cast<double>(request.mission_side_sign);
+  const bool current_on_committed_side = side * request.current_lateral_m >= -1e-9;
+  const bool goal_on_committed_side = side * request.goal_lateral_m >= -1e-9;
+  // A positive mission side means ego passes to the left, so the target must
+  // be laterally to the right of ego (negative relative lateral), and vice
+  // versa. Absolute clearance alone could resume Pass with ego still on the
+  // target-facing side of the committed corridor.
+  const bool lateral_clear_on_committed_side =
+    side * request.target_relative_lateral_m <=
+    -request.required_lateral_clearance_m + 1e-9;
+  return current_on_committed_side && goal_on_committed_side &&
+         lateral_clear_on_committed_side;
 }
 
 const char * to_string(const OvertakeLineTransitionAction action) noexcept

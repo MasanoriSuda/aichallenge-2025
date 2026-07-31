@@ -1226,12 +1226,30 @@ struct OvertakeExecutionSideResolution
 
 /// Resolve the side used when starting or resuming an explicit OvertakeLine.
 ///
-/// This preserves the current controller policy: a valid Behavior side owns a
-/// FollowPrepare resume; otherwise the existing mission side wins before a new
-/// Behavior selection. Keeping this policy in one named decision makes a later
-/// mission-lock behavior change explicit and regression-testable.
+/// A FollowPrepare resume keeps the side owned by the committed mission. A
+/// Behavior revalidation may confirm that side, but cannot redirect the vehicle
+/// across the target to the opposite side in the same mission.
 OvertakeExecutionSideResolution resolve_overtake_execution_side(
   const OvertakeExecutionSideRequest & request) noexcept;
+
+struct PausedPassDirectResumeRequest
+{
+  bool resuming_paused_mission{false};
+  int mission_side_sign{0};
+  int behavior_side_sign{0};
+  bool execution_corridor_valid{false};
+  bool target_seen{false};
+  bool target_position_jump{false};
+  double target_relative_lateral_m{0.0};
+  double required_lateral_clearance_m{0.0};
+  double current_lateral_m{0.0};
+  double goal_lateral_m{0.0};
+};
+
+/// Skip a redundant ShiftOut only after the committed side, current lateral
+/// separation, and the revalidated execution corridor all agree.
+bool can_resume_paused_pass_directly(
+  const PausedPassDirectResumeRequest & request) noexcept;
 
 enum class OvertakeLineTransitionAction
 {

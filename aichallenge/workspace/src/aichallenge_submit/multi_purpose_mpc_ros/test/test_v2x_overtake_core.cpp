@@ -187,6 +187,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::select_overtake_side_by_quality;
 using multi_purpose_mpc_ros::v2x_overtake_core::selected_pass_side_ordering_conflict;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_early_shiftout_side_replan;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_execution_side;
+using multi_purpose_mpc_ros::v2x_overtake_core::can_resume_paused_pass_directly;
+using multi_purpose_mpc_ros::v2x_overtake_core::PausedPassDirectResumeRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_line_transition;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   should_log_overtake_line_transition_action;
@@ -3107,10 +3109,19 @@ TEST(V2XOvertakeCoreSideReplan, LateralMotionGateKeepsSideForQualityOnlyReplan)
     EarlyShiftOutSideReplanAction::Abort);
 }
 
-TEST(V2XOvertakeCoreMissionOwnership, BehaviorRevalidationOwnsPausedMissionSide)
+TEST(V2XOvertakeCoreMissionOwnership, MissionLockOwnsPausedMissionSide)
 {
   const auto result = resolve_overtake_execution_side(
     OvertakeExecutionSideRequest{true, -1, 1});
+
+  EXPECT_EQ(result.side_sign, 1);
+  EXPECT_EQ(result.source, OvertakeExecutionSideSource::MissionLock);
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, BehaviorOwnsPausedMissionOnlyWithoutMissionSide)
+{
+  const auto result = resolve_overtake_execution_side(
+    OvertakeExecutionSideRequest{true, -1, 0});
 
   EXPECT_EQ(result.side_sign, -1);
   EXPECT_EQ(result.source, OvertakeExecutionSideSource::BehaviorRevalidation);
@@ -3131,6 +3142,41 @@ TEST(V2XOvertakeCoreMissionOwnership, MissionLockOwnsNormalExecutionSide)
   result = resolve_overtake_execution_side(OvertakeExecutionSideRequest{});
   EXPECT_EQ(result.side_sign, 0);
   EXPECT_EQ(result.source, OvertakeExecutionSideSource::None);
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, DirectPassResumeRequiresSameSideClearCorridor)
+{
+  PausedPassDirectResumeRequest request;
+  request.resuming_paused_mission = true;
+  request.mission_side_sign = 1;
+  request.behavior_side_sign = 1;
+  request.execution_corridor_valid = true;
+  request.target_seen = true;
+  request.target_relative_lateral_m = -1.60;
+  request.required_lateral_clearance_m = 1.50;
+  request.current_lateral_m = 0.80;
+  request.goal_lateral_m = 1.00;
+
+  EXPECT_TRUE(can_resume_paused_pass_directly(request));
+
+  request.behavior_side_sign = -1;
+  EXPECT_FALSE(can_resume_paused_pass_directly(request));
+  request.behavior_side_sign = 1;
+
+  request.goal_lateral_m = -0.20;
+  EXPECT_FALSE(can_resume_paused_pass_directly(request));
+  request.goal_lateral_m = 1.00;
+
+  request.target_relative_lateral_m = -1.49;
+  EXPECT_FALSE(can_resume_paused_pass_directly(request));
+  request.target_relative_lateral_m = -1.60;
+
+  request.target_position_jump = true;
+  EXPECT_FALSE(can_resume_paused_pass_directly(request));
+  request.target_position_jump = false;
+
+  request.target_relative_lateral_m = 1.60;
+  EXPECT_FALSE(can_resume_paused_pass_directly(request));
 }
 
 TEST(V2XOvertakeCoreMissionOwnership, WallActionsKeepExistingPriority)

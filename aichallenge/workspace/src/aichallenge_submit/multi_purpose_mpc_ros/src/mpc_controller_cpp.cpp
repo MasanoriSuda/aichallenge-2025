@@ -5453,7 +5453,13 @@ struct MPC
       std::string reason{"not evaluated"};
     };
 
-    const int locked_pass_side = overtake_locked_side_sign_;
+    // FollowPrepare is still an active committed mission even though the
+    // Behavior FSM temporarily left Overtake. Use the OvertakeLine-owned side
+    // as the revalidation lock so a cleared Behavior lock cannot select the
+    // opposite side and create a cross-course resume.
+    const int locked_pass_side =
+      paused_overtake_mission && overtake_line_state_.pass_side_sign != 0 ?
+      overtake_line_state_.pass_side_sign : overtake_locked_side_sign_;
     const bool shiftout_line_active =
       overtake_line_state_.phase == OvertakeLinePhase::ShiftOut &&
       locked_pass_side != 0;
@@ -7004,15 +7010,17 @@ struct MPC
     if (behavior_output.state == V2XBehaviorState::Overtake) {
       const bool resuming_paused_mission =
         overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare;
-      if (resuming_paused_mission && overtake_pass_side_sign != 0) {
-        // A paused mission re-evaluates both sides. Adopt the newly validated
-        // side before the gap planner and explicit line are built so one cycle
-        // cannot combine old-side bounds with a new-side ShiftOut.
-        overtake_locked_side_sign_ = overtake_pass_side_sign;
+      const int mission_side_sign = overtake_line_state_.pass_side_sign;
+      if (resuming_paused_mission && mission_side_sign != 0) {
+        // Behavior may confirm a fresh corridor, but the committed line owns
+        // the side until the mission returns to Idle. This keeps the gap
+        // planner and explicit line on the same side during a resume.
+        overtake_pass_side_sign = mission_side_sign;
+        overtake_locked_side_sign_ = mission_side_sign;
         if (!behavior_output.start_grid_inter_vehicle_corridor) {
-          // The new validation may replace an expired start-grid weave with a
-          // normal wall-to-vehicle corridor. Do not feed stale boundary IDs
-          // into this cycle's planner or rear-clear policy.
+          // A same-side revalidation may replace an expired start-grid weave
+          // with a normal wall-to-vehicle corridor. Do not feed stale boundary
+          // IDs into this cycle's planner or rear-clear policy.
           overtake_line_state_.inter_vehicle_corridor = false;
           overtake_line_state_.lower_boundary_vehicle_id.clear();
           overtake_line_state_.upper_boundary_vehicle_id.clear();
@@ -9112,6 +9120,22 @@ private:
     } else if (behavior_overtake) {
       const bool resuming_paused_mission =
         overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare;
+      const int mission_side_sign = overtake_line_state_.pass_side_sign;
+      const bool paused_side_revalidation_matches =
+        !resuming_paused_mission || mission_side_sign == 0 ||
+        behavior_output.overtake_pass_side_sign == mission_side_sign;
+      if (!paused_side_revalidation_matches) {
+        if (cfg.v2x_behavior.overtake_line.debug_log_enabled) {
+          RCLCPP_WARN(
+            rclcpp::get_logger("mpc_controller"),
+            "OvertakeLine paused resume held: mission_side=%d, behavior_side=%d, "
+            "wp_id=%d, reason=opposite-side revalidation rejected",
+            mission_side_sign, behavior_output.overtake_pass_side_sign, model->wp_id);
+        }
+        // Keep FollowPrepare ownership. A side switch requires the current
+        // mission to finish and a new Idle entry to validate both sides.
+        return output;
+      }
       const auto execution_side =
         v2x_overtake_core::resolve_overtake_execution_side(
         v2x_overtake_core::OvertakeExecutionSideRequest{
@@ -9124,11 +9148,32 @@ private:
           behavior_output.overtake_base_line_pass_through &&
           behavior_output.overtake_corridor_center_ey.has_value() &&
           std::abs(behavior_output.overtake_corridor_center_ey.value()) <= kEps;
+        const double resume_lateral_clearance = std::max(
+          cfg.v2x_behavior.overtake_pass_front_overlap_lateral_clearance,
+          cfg.v2x_gap.vehicle_radius + cfg.v2x_gap.prediction_margin);
+        const bool direct_same_side_resume =
+          behavior_output.overtake_corridor_center_ey.has_value() &&
+          v2x_overtake_core::can_resume_paused_pass_directly(
+          v2x_overtake_core::PausedPassDirectResumeRequest{
+            resuming_paused_mission,
+            mission_side_sign,
+            behavior_output.overtake_pass_side_sign,
+            behavior_output.overtake_gap_available &&
+            behavior_output.overtake_zone_allows,
+            behavior_output.locked_target_seen,
+            behavior_output.locked_target_position_jump,
+            behavior_output.locked_target_relative_lateral,
+            resume_lateral_clearance,
+            current_ey,
+            behavior_output.overtake_corridor_center_ey.value_or(current_ey)});
+        const bool direct_pass = direct_base_line_pass || direct_same_side_resume;
         transition_overtake_line_phase(
-          direct_base_line_pass ? OvertakeLinePhase::Pass : OvertakeLinePhase::ShiftOut,
+          direct_pass ? OvertakeLinePhase::Pass : OvertakeLinePhase::ShiftOut,
           now_sec, current_ey, pass_side_sign,
           direct_base_line_pass ?
           "validated base racing line already clear" :
+          direct_same_side_resume ?
+          "committed pass resumed on validated same side" :
           resuming_paused_mission ?
           "committed pass revalidated after pause" : "overtake selected");
         overtake_locked_side_sign_ = pass_side_sign;
@@ -9145,7 +9190,8 @@ private:
             rclcpp::get_logger("mpc_controller"),
             "Overtake minimum-motion entry: mode=%s, side=%d, current_ey=%.2f, "
             "goal_ey=%.2f, shift=%.2f, target=%s, wp_id=%d",
-            direct_base_line_pass ? "base-line" : "minimum-shift",
+            direct_base_line_pass ? "base-line" :
+            direct_same_side_resume ? "same-side-pass-resume" : "minimum-shift",
             pass_side_sign, current_ey,
             overtake_line_state_.fixed_pass_corridor_goal_ey.value(),
             std::abs(
@@ -11023,11 +11069,12 @@ private:
     const bool leaving_overtake =
       had_previous_state && previous_state == V2XBehaviorState::Overtake &&
       final_state != V2XBehaviorState::Overtake;
-    const bool pausing_committed_pass =
-      leaving_overtake && final_state == V2XBehaviorState::SafetyBrake &&
+    const bool committed_pass_mission_owns_side =
       (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
-      overtake_line_state_.phase == OvertakeLinePhase::Pass) &&
-      !overtake_line_state_.target_vehicle_id.empty();
+      overtake_line_state_.phase == OvertakeLinePhase::Pass ||
+      overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare) &&
+      !overtake_line_state_.target_vehicle_id.empty() &&
+      overtake_line_state_.pass_side_sign != 0;
     const bool curve_related_overtake_exit =
       output.overtake_forbidden || output.front_decel_curve_guard ||
       output.reason.find("curve") != std::string::npos ||
@@ -11036,7 +11083,7 @@ private:
       output.overtake_block_reason.find("inner") != std::string::npos;
     if (
       cfg.v2x_behavior.overtake_curve_cooldown_enabled && leaving_overtake &&
-      !pausing_committed_pass &&
+      !committed_pass_mission_owns_side &&
       curve_related_overtake_exit) {
       overtake_curve_cooldown_until_sec_ = std::max(
         overtake_curve_cooldown_until_sec_,

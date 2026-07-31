@@ -16667,13 +16667,62 @@ private:
     auto [u, max_delta] = mpc_->get_control(current_time.seconds());
     const bool mpc_fallback_active = mpc_->last_control_was_fallback();
     const auto & v2x_behavior = mpc_->last_v2x_behavior_output();
+    recovery_footprint::FootprintSample solver_crawl_footprint_sample;
+    if (mpc_fallback_active && recovery_grid_ && recovery_footprint_.valid()) {
+      solver_crawl_footprint_sample = recovery_footprint::sample_footprint(
+        *recovery_grid_, recovery_footprint_,
+        recovery_footprint::Pose2D{pose.x, pose.y, pose.theta});
+    }
+    const bool solver_crawl_footprint_clear =
+      solver_crawl_footprint_sample.valid &&
+      !solver_crawl_footprint_sample.out_of_map &&
+      solver_crawl_footprint_sample.contact_cells.empty();
+    const double solver_crawl_max_lateral_error_m =
+      cfg_.stuck_recovery.core.supervisor.max_rejoin_lateral_error_m;
+    const double solver_crawl_max_heading_error_rad =
+      cfg_.stuck_recovery.core.supervisor.max_rejoin_heading_error_rad;
+    mpc_velocity_limit::SolverFailureCrawlRequest solver_crawl_request;
+    solver_crawl_request.simulation_environment = use_sim_time_;
+    solver_crawl_request.enabled = mpc_cfg_.solver_failure_crawl_enabled;
+    solver_crawl_request.control_enabled = enable_control_;
+    solver_crawl_request.solver_fallback = mpc_fallback_active;
+    solver_crawl_request.unrestricted_cruise =
+      v2x_behavior.state == V2XBehaviorState::Cruise;
+    solver_crawl_request.front_vehicle_detected = v2x_behavior.has_front_vehicle;
+    solver_crawl_request.current_static_footprint_clear = solver_crawl_footprint_clear;
+    solver_crawl_request.lateral_error_m = car_->spatial_state.e_y;
+    solver_crawl_request.heading_error_rad = car_->spatial_state.e_psi;
+    solver_crawl_request.max_lateral_error_m = solver_crawl_max_lateral_error_m;
+    solver_crawl_request.max_heading_error_rad = solver_crawl_max_heading_error_rad;
+    solver_crawl_request.configured_speed_mps = mpc_cfg_.solver_failure_crawl_speed_mps;
+    solver_crawl_request.effective_speed_limit_mps = effective_v_max;
     const auto solver_failure_crawl = mpc_velocity_limit::resolve_solver_failure_crawl(
-      mpc_velocity_limit::SolverFailureCrawlRequest{
-        use_sim_time_, mpc_cfg_.solver_failure_crawl_enabled, enable_control_,
-        mpc_fallback_active, v2x_behavior.state == V2XBehaviorState::Cruise,
-        v2x_behavior.has_front_vehicle, mpc_cfg_.solver_failure_crawl_speed_mps,
-        effective_v_max});
+      solver_crawl_request);
     const bool solver_failure_crawl_active = solver_failure_crawl.active;
+    const bool solver_crawl_path_unsafe =
+      !std::isfinite(car_->spatial_state.e_y) ||
+      !std::isfinite(car_->spatial_state.e_psi) ||
+      !std::isfinite(solver_crawl_max_lateral_error_m) ||
+      solver_crawl_max_lateral_error_m < 0.0 ||
+      !std::isfinite(solver_crawl_max_heading_error_rad) ||
+      solver_crawl_max_heading_error_rad < 0.0 ||
+      std::abs(car_->spatial_state.e_y) > solver_crawl_max_lateral_error_m ||
+      std::abs(car_->spatial_state.e_psi) > solver_crawl_max_heading_error_rad;
+    if (
+      mpc_fallback_active && use_sim_time_ && mpc_cfg_.solver_failure_crawl_enabled &&
+      (solver_crawl_path_unsafe || !solver_crawl_footprint_clear))
+    {
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 1000,
+        "MPC solver fail-operational crawl blocked by path safety: "
+        "e_y=%.3f/%.3f m, e_psi=%.3f/%.3f rad, "
+        "footprint_valid=%d, out_of_map=%d, contacts=%zu",
+        car_->spatial_state.e_y, solver_crawl_max_lateral_error_m,
+        car_->spatial_state.e_psi, solver_crawl_max_heading_error_rad,
+        solver_crawl_footprint_sample.valid ? 1 : 0,
+        solver_crawl_footprint_sample.out_of_map ? 1 : 0,
+        solver_crawl_footprint_sample.contact_cells.size());
+    }
     if (solver_failure_crawl_active) {
       const double path_curvature = car_->current_waypoint != nullptr ?
         car_->current_waypoint->kappa : 0.0;

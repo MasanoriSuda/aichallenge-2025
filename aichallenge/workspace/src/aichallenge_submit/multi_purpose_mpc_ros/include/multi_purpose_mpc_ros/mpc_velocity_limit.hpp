@@ -22,6 +22,11 @@ struct SolverFailureCrawlRequest
   bool solver_fallback{false};
   bool unrestricted_cruise{false};
   bool front_vehicle_detected{false};
+  bool current_static_footprint_clear{false};
+  double lateral_error_m{0.0};
+  double heading_error_rad{0.0};
+  double max_lateral_error_m{0.0};
+  double max_heading_error_rad{0.0};
   double configured_speed_mps{0.0};
   double effective_speed_limit_mps{0.0};
 };
@@ -37,7 +42,9 @@ struct SolverFailureCrawlDecision
 std::vector<double> build_reachable_limits(const ReachableLimitRequest & request);
 
 /// Select a simulation-only fail-operational crawl after an MPC solve failure.
-/// The decision fails closed unless normal V2X Cruise reports no front vehicle.
+/// The decision fails closed unless normal V2X Cruise reports no front vehicle,
+/// path-tracking errors remain inside the recovery rejoin envelope, and the
+/// current static-map footprint is clear.
 SolverFailureCrawlDecision resolve_solver_failure_crawl(
   const SolverFailureCrawlRequest & request) noexcept;
 

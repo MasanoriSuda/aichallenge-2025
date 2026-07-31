@@ -68,6 +68,11 @@ TEST(MpcVelocityLimit, EnablesSimulationSolverFailureCrawlOnlyOnClearCruise)
   request.control_enabled = true;
   request.solver_fallback = true;
   request.unrestricted_cruise = true;
+  request.current_static_footprint_clear = true;
+  request.lateral_error_m = 0.1;
+  request.heading_error_rad = -0.2;
+  request.max_lateral_error_m = 0.5;
+  request.max_heading_error_rad = 0.35;
   request.configured_speed_mps = 1.0;
   request.effective_speed_limit_mps = 0.8;
 
@@ -92,6 +97,9 @@ TEST(MpcVelocityLimit, SolverFailureCrawlFailsClosedOutsideSimulationOrOnInvalid
   request.control_enabled = true;
   request.solver_fallback = true;
   request.unrestricted_cruise = true;
+  request.current_static_footprint_clear = true;
+  request.max_lateral_error_m = 0.5;
+  request.max_heading_error_rad = 0.35;
   request.configured_speed_mps = 1.0;
   request.effective_speed_limit_mps = 2.0;
   EXPECT_FALSE(resolve_solver_failure_crawl(request).active);
@@ -99,4 +107,66 @@ TEST(MpcVelocityLimit, SolverFailureCrawlFailsClosedOutsideSimulationOrOnInvalid
   request.simulation_environment = true;
   request.configured_speed_mps = std::numeric_limits<double>::quiet_NaN();
   EXPECT_FALSE(resolve_solver_failure_crawl(request).active);
+}
+
+TEST(MpcVelocityLimit, SolverFailureCrawlRequiresSafePathTrackingEnvelope)
+{
+  using multi_purpose_mpc_ros::mpc_velocity_limit::SolverFailureCrawlRequest;
+  using multi_purpose_mpc_ros::mpc_velocity_limit::resolve_solver_failure_crawl;
+
+  SolverFailureCrawlRequest request;
+  request.simulation_environment = true;
+  request.enabled = true;
+  request.control_enabled = true;
+  request.solver_fallback = true;
+  request.unrestricted_cruise = true;
+  request.current_static_footprint_clear = true;
+  request.max_lateral_error_m = 0.5;
+  request.max_heading_error_rad = 0.35;
+  request.configured_speed_mps = 1.0;
+  request.effective_speed_limit_mps = 2.0;
+
+  request.lateral_error_m = -0.5;
+  request.heading_error_rad = 0.35;
+  EXPECT_TRUE(resolve_solver_failure_crawl(request).active);
+
+  request.lateral_error_m = 0.5001;
+  EXPECT_FALSE(resolve_solver_failure_crawl(request).active);
+  request.lateral_error_m = 0.0;
+  request.heading_error_rad = -0.3501;
+  EXPECT_FALSE(resolve_solver_failure_crawl(request).active);
+
+  // Regression: P2 entered crawl at these errors, then traveled from the
+  // hairpin to an unrecoverable e_y=-4.603 m before Recovery started.
+  request.lateral_error_m = 0.628;
+  request.heading_error_rad = -0.740;
+  EXPECT_FALSE(resolve_solver_failure_crawl(request).active);
+
+  request.heading_error_rad = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_FALSE(resolve_solver_failure_crawl(request).active);
+  request.heading_error_rad = 0.0;
+  request.max_lateral_error_m = -0.1;
+  EXPECT_FALSE(resolve_solver_failure_crawl(request).active);
+}
+
+TEST(MpcVelocityLimit, SolverFailureCrawlRequiresClearCurrentStaticFootprint)
+{
+  using multi_purpose_mpc_ros::mpc_velocity_limit::SolverFailureCrawlRequest;
+  using multi_purpose_mpc_ros::mpc_velocity_limit::resolve_solver_failure_crawl;
+
+  SolverFailureCrawlRequest request;
+  request.simulation_environment = true;
+  request.enabled = true;
+  request.control_enabled = true;
+  request.solver_fallback = true;
+  request.unrestricted_cruise = true;
+  request.current_static_footprint_clear = false;
+  request.max_lateral_error_m = 0.5;
+  request.max_heading_error_rad = 0.35;
+  request.configured_speed_mps = 1.0;
+  request.effective_speed_limit_mps = 2.0;
+
+  EXPECT_FALSE(resolve_solver_failure_crawl(request).active);
+  request.current_static_footprint_clear = true;
+  EXPECT_TRUE(resolve_solver_failure_crawl(request).active);
 }

@@ -38,7 +38,16 @@ SolverFailureCrawlDecision resolve_solver_failure_crawl(
   if (
     !request.simulation_environment || !request.enabled || !request.control_enabled ||
     !request.solver_fallback || !request.unrestricted_cruise ||
-    request.front_vehicle_detected || !std::isfinite(request.configured_speed_mps) ||
+    request.front_vehicle_detected || !request.current_static_footprint_clear ||
+    !std::isfinite(request.lateral_error_m) ||
+    !std::isfinite(request.heading_error_rad) ||
+    !std::isfinite(request.max_lateral_error_m) ||
+    request.max_lateral_error_m < 0.0 ||
+    !std::isfinite(request.max_heading_error_rad) ||
+    request.max_heading_error_rad < 0.0 ||
+    std::abs(request.lateral_error_m) > request.max_lateral_error_m ||
+    std::abs(request.heading_error_rad) > request.max_heading_error_rad ||
+    !std::isfinite(request.configured_speed_mps) ||
     request.configured_speed_mps <= 0.0 ||
     !std::isfinite(request.effective_speed_limit_mps) ||
     request.effective_speed_limit_mps <= 0.0)

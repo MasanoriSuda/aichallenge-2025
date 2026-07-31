@@ -1761,6 +1761,35 @@ struct FrontHazardHoldResolution
 /// immediately. Invalid configuration or clock values throw std::invalid_argument.
 FrontHazardHoldResolution update_front_hazard_hold(const FrontHazardHoldRequest & request);
 
+struct FrontHazardTargetContinuityRequest
+{
+  bool held_target_matches{false};
+  bool observation_valid{false};
+  bool course_progress_valid{false};
+  double course_longitudinal_m{};
+  double local_longitudinal_m{};
+  double self_distance_m{};
+  double course_relative_lateral_m{};
+  double local_relative_lateral_m{};
+  double rear_clear_distance_m{};
+  double danger_lateral_range_m{};
+};
+
+struct FrontHazardTargetContinuityResolution
+{
+  bool near_field_conflict{false};
+  bool rear_clear{false};
+};
+
+/// Resolve continuity for the target protected by the short front-hazard hold.
+///
+/// A close target that still overlaps the inflated lateral danger band is not rear-clear merely
+/// because a rapidly rotating local tangent reports it behind the ego vehicle. Course progress is
+/// preferred for true rear-clear classification when available. Invalid observations fail open to
+/// the bounded timer; they never extend the hold indefinitely.
+FrontHazardTargetContinuityResolution resolve_front_hazard_target_continuity(
+  const FrontHazardTargetContinuityRequest & request) noexcept;
+
 enum class FrontDangerAction
 {
   None,

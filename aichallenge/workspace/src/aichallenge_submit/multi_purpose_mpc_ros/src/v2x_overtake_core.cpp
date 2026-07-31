@@ -2551,6 +2551,43 @@ FrontHazardHoldResolution update_front_hazard_hold(const FrontHazardHoldRequest 
     active ? std::max(0.0, until_sec - request.now_sec) : 0.0};
 }
 
+FrontHazardTargetContinuityResolution resolve_front_hazard_target_continuity(
+  const FrontHazardTargetContinuityRequest & request) noexcept
+{
+  if (
+    !request.held_target_matches || !request.observation_valid ||
+    !std::isfinite(request.self_distance_m) || request.self_distance_m < 0.0 ||
+    !std::isfinite(request.rear_clear_distance_m) || request.rear_clear_distance_m < 0.0 ||
+    !std::isfinite(request.danger_lateral_range_m) || request.danger_lateral_range_m < 0.0)
+  {
+    return {};
+  }
+
+  const bool local_lateral_conflict =
+    std::isfinite(request.local_relative_lateral_m) &&
+    std::abs(request.local_relative_lateral_m) <= request.danger_lateral_range_m;
+  const bool course_lateral_conflict =
+    request.course_progress_valid &&
+    std::isfinite(request.course_relative_lateral_m) &&
+    std::abs(request.course_relative_lateral_m) <= request.danger_lateral_range_m;
+  const bool near_field_conflict =
+    request.self_distance_m <= request.rear_clear_distance_m &&
+    (local_lateral_conflict || course_lateral_conflict);
+
+  double rear_longitudinal_m = request.local_longitudinal_m;
+  if (
+    request.course_progress_valid &&
+    std::isfinite(request.course_longitudinal_m))
+  {
+    rear_longitudinal_m = request.course_longitudinal_m;
+  }
+  const bool rear_clear =
+    std::isfinite(rear_longitudinal_m) &&
+    rear_longitudinal_m <= -request.rear_clear_distance_m &&
+    !near_field_conflict;
+  return {near_field_conflict, rear_clear};
+}
+
 FrontDangerAction resolve_front_danger_action(const FrontDangerActionRequest & request)
 {
   if (

@@ -4459,6 +4459,7 @@ struct MPC
     bool has_danger_vehicle = false;
     bool has_side_vehicle = false;
     bool held_target_rear_clear = false;
+    bool held_target_near_field_conflict = false;
     bool has_low_speed_clearance_vehicle = false;
     double nearest_front_distance = std::numeric_limits<double>::infinity();
     double nearest_front_speed = std::numeric_limits<double>::infinity();
@@ -4644,13 +4645,24 @@ struct MPC
         nearest_return_corridor_blocker_distance =
           std::abs(vehicle_course_longitudinal);
       }
-      if (
-        !front_hazard_hold_target_id_.empty() &&
-        vehicle.id == front_hazard_hold_target_id_ &&
-        longitudinal <= -cfg.v2x_behavior.front_hazard_rear_clear_distance)
-      {
-        held_target_rear_clear = true;
-      }
+      const auto held_target_continuity =
+        v2x_overtake_core::resolve_front_hazard_target_continuity(
+        v2x_overtake_core::FrontHazardTargetContinuityRequest{
+          !front_hazard_hold_target_id_.empty() &&
+          vehicle.id == front_hazard_hold_target_id_,
+          !vehicle.position_jump,
+          use_course_progress,
+          front_longitudinal,
+          longitudinal,
+          self_distance,
+          front_relative_lateral,
+          lateral,
+          cfg.v2x_behavior.front_hazard_rear_clear_distance,
+          danger_lateral_range});
+      held_target_near_field_conflict =
+        held_target_near_field_conflict || held_target_continuity.near_field_conflict;
+      held_target_rear_clear =
+        held_target_rear_clear || held_target_continuity.rear_clear;
       if (
         !overtake_line_state_.target_vehicle_id.empty() &&
         vehicle.id == overtake_line_state_.target_vehicle_id)
@@ -5128,19 +5140,30 @@ struct MPC
       std::isfinite(nearest_front_speed) &&
       nearest_front_speed > cfg.v2x_behavior.moving_front_speed_threshold &&
       current_speed_mps_ <= nearest_front_speed;
-    const bool refresh_held_front_hazard =
+    const bool refresh_held_front_danger =
       front_hazard_hold_was_active &&
       front_danger_requires_safety_brake &&
       !suppress_start_grid_stop_behavior && !start_grid_breakout_attempt;
+    const bool refresh_held_near_field_target =
+      front_hazard_hold_was_active && held_target_near_field_conflict &&
+      !held_target_rear_clear &&
+      !suppress_start_grid_stop_behavior && !start_grid_breakout_attempt;
+    const bool refresh_held_front_hazard =
+      refresh_held_front_danger || refresh_held_near_field_target;
+    const std::string refreshed_front_hazard_target_id =
+      refresh_held_front_danger ? nearest_front_id : front_hazard_hold_target_id_;
     if (update_front_hazard_hold(
         refresh_held_front_hazard, held_target_rear_clear,
-        refresh_held_front_hazard ? nearest_front_id : std::string{},
+        refresh_held_front_hazard ? refreshed_front_hazard_target_id : std::string{},
         held_target_observed_safe))
     {
       output.state = V2XBehaviorState::SafetyBrake;
       output.target_vehicle_id = output.front_hazard_hold_target_id;
-      output.reason = refresh_held_front_hazard ?
-        "front hazard hold refreshed" : "front hazard hold after geometry loss";
+      output.reason = refresh_held_front_danger ?
+        "front hazard hold refreshed" :
+        (refresh_held_near_field_target ?
+        "front hazard hold refreshed by near-field target" :
+        "front hazard hold after geometry loss");
       return commit_v2x_behavior_state(output, now_sec);
     }
     // The broad low-speed corridor intentionally reaches beyond the narrow front-brake

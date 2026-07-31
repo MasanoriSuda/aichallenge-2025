@@ -26,6 +26,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::ForwardDistanceRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::FrontDangerAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::FrontDangerActionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::FrontHazardHoldRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::FrontHazardTargetContinuityRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ForwardCourseProjectionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RelativeCourseProgressContinuityRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::FollowSpeedLimitRequest;
@@ -173,6 +174,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_recovery_policy;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_stall_watchdog;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_committed_pass_progress_watchdog;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_front_hazard_hold;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_front_hazard_target_continuity;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_front_danger_action;
 using multi_purpose_mpc_ros::v2x_overtake_core::arm_solver_cooldown;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_solver_cooldown_active;
@@ -491,6 +493,67 @@ TEST(V2XFrontHazardHold, RejectsInvalidClockAndDuration)
   request.hold_sec = 1.0;
   request.now_sec = std::numeric_limits<double>::quiet_NaN();
   EXPECT_THROW(update_front_hazard_hold(request), std::invalid_argument);
+}
+
+TEST(V2XFrontHazardTargetContinuity, KeepsNearConflictAcrossHairpinFrameSeam)
+{
+  FrontHazardTargetContinuityRequest request;
+  request.held_target_matches = true;
+  request.observation_valid = true;
+  request.local_longitudinal_m = -4.5;
+  request.self_distance_m = 1.8;
+  request.local_relative_lateral_m = 1.1;
+  request.rear_clear_distance_m = 4.0;
+  request.danger_lateral_range_m = 1.5;
+
+  const auto result = resolve_front_hazard_target_continuity(request);
+  EXPECT_TRUE(result.near_field_conflict);
+  EXPECT_FALSE(result.rear_clear);
+}
+
+TEST(V2XFrontHazardTargetContinuity, UsesCourseProgressForTrueRearClear)
+{
+  FrontHazardTargetContinuityRequest request;
+  request.held_target_matches = true;
+  request.observation_valid = true;
+  request.course_progress_valid = true;
+  request.course_longitudinal_m = -4.2;
+  request.local_longitudinal_m = 1.0;
+  request.self_distance_m = 5.0;
+  request.course_relative_lateral_m = 0.3;
+  request.local_relative_lateral_m = 0.4;
+  request.rear_clear_distance_m = 4.0;
+  request.danger_lateral_range_m = 1.5;
+
+  const auto result = resolve_front_hazard_target_continuity(request);
+  EXPECT_FALSE(result.near_field_conflict);
+  EXPECT_TRUE(result.rear_clear);
+}
+
+TEST(V2XFrontHazardTargetContinuity, DoesNotRefreshForLateralClearOrInvalidTarget)
+{
+  FrontHazardTargetContinuityRequest request;
+  request.held_target_matches = true;
+  request.observation_valid = true;
+  request.course_progress_valid = true;
+  request.course_longitudinal_m = 0.5;
+  request.local_longitudinal_m = 0.5;
+  request.self_distance_m = 2.0;
+  request.course_relative_lateral_m = 1.6;
+  request.local_relative_lateral_m = 1.7;
+  request.rear_clear_distance_m = 4.0;
+  request.danger_lateral_range_m = 1.5;
+
+  auto result = resolve_front_hazard_target_continuity(request);
+  EXPECT_FALSE(result.near_field_conflict);
+  EXPECT_FALSE(result.rear_clear);
+
+  request.observation_valid = false;
+  request.course_relative_lateral_m = 0.0;
+  request.local_relative_lateral_m = 0.0;
+  result = resolve_front_hazard_target_continuity(request);
+  EXPECT_FALSE(result.near_field_conflict);
+  EXPECT_FALSE(result.rear_clear);
 }
 
 TEST(V2XFrontDangerAction, MovingFrontUsesRelativeSpeedLimit)

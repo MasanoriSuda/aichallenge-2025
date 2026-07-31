@@ -51,6 +51,9 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeLineHorizonProgressReque
 using multi_purpose_mpc_ros::v2x_overtake_core::PassSideLateralGoalRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::FeasiblePassSideLateralGoalRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassCorridorCenterRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::MinimumLateralMotionGoalRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::MinimumLateralMotionSideCandidate;
+using multi_purpose_mpc_ros::v2x_overtake_core::MinimumLateralMotionSideSelectionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CompletedPassReturnRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ReturnCorridorOccupancyRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::EarlyReturnCancellationRequest;
@@ -129,6 +132,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_side_lateral_goal;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_feasible_pass_side_lateral_goal;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_corridor_center;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_minimum_lateral_motion_goal;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   should_return_completed_pass_before_margin_recovery;
 using multi_purpose_mpc_ros::v2x_overtake_core::blocks_overtake_return_corridor;
@@ -176,6 +180,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::can_try_unvalidated_overtake_fal
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_offset_curve_feasibility;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_inter_vehicle_corridor_rear_clear;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_pass_side;
+using multi_purpose_mpc_ros::v2x_overtake_core::select_minimum_lateral_motion_side;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_curve_attack_side;
 using multi_purpose_mpc_ros::v2x_overtake_core::score_overtake_side_quality;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_overtake_side_by_quality;
@@ -1777,6 +1782,99 @@ TEST(V2XOvertakeCoreSpeed, ResolvesCenterOfValidatedPassCorridor)
   request.lower_bound_m = std::numeric_limits<double>::quiet_NaN();
   request.upper_bound_m = 1.0;
   EXPECT_FALSE(resolve_pass_corridor_center(request).has_value());
+}
+
+TEST(V2XOvertakeCoreMinimumMotion, KeepsBaseLineWhenInflatedCorridorContainsIt)
+{
+  const auto resolution = resolve_minimum_lateral_motion_goal(
+    MinimumLateralMotionGoalRequest{0.0, 0.2, -0.4, 1.0});
+
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.base_line_clear);
+  EXPECT_TRUE(resolution.current_position_clear);
+  EXPECT_DOUBLE_EQ(resolution.goal_m, 0.0);
+  EXPECT_DOUBLE_EQ(resolution.required_shift_m, 0.2);
+}
+
+TEST(V2XOvertakeCoreMinimumMotion, UsesNearestSafeBoundaryWhenBaseLineIsBlocked)
+{
+  auto resolution = resolve_minimum_lateral_motion_goal(
+    MinimumLateralMotionGoalRequest{0.0, 0.1, 0.65, 1.40});
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.base_line_clear);
+  EXPECT_FALSE(resolution.current_position_clear);
+  EXPECT_DOUBLE_EQ(resolution.goal_m, 0.65);
+  EXPECT_DOUBLE_EQ(resolution.required_shift_m, 0.55);
+
+  resolution = resolve_minimum_lateral_motion_goal(
+    MinimumLateralMotionGoalRequest{0.0, -0.1, -1.40, -0.60});
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.base_line_clear);
+  EXPECT_DOUBLE_EQ(resolution.goal_m, -0.60);
+  EXPECT_DOUBLE_EQ(resolution.required_shift_m, 0.50);
+}
+
+TEST(V2XOvertakeCoreMinimumMotion, RejectsInvalidSafeInterval)
+{
+  const auto resolution = resolve_minimum_lateral_motion_goal(
+    MinimumLateralMotionGoalRequest{0.0, 0.0, 1.0, -1.0});
+  EXPECT_FALSE(resolution.valid);
+  EXPECT_FALSE(resolution.base_line_clear);
+  EXPECT_FALSE(resolution.current_position_clear);
+  EXPECT_FALSE(std::isfinite(resolution.required_shift_m));
+}
+
+TEST(V2XOvertakeCoreMinimumMotion, RequiresCurrentPositionInsideCorridorForDirectPass)
+{
+  const auto resolution = resolve_minimum_lateral_motion_goal(
+    MinimumLateralMotionGoalRequest{0.0, 0.40, -0.20, 0.20});
+
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.base_line_clear);
+  EXPECT_FALSE(resolution.current_position_clear);
+  EXPECT_DOUBLE_EQ(resolution.goal_m, 0.0);
+  EXPECT_DOUBLE_EQ(resolution.required_shift_m, 0.40);
+}
+
+TEST(V2XOvertakeCoreMinimumMotion, PrioritizesClearBaseLineBeforeShorterShift)
+{
+  const auto selection = select_minimum_lateral_motion_side(
+    MinimumLateralMotionSideSelectionRequest{
+      PassSide::Right,
+      MinimumLateralMotionSideCandidate{PassSide::Left, true, true, 0.20},
+      MinimumLateralMotionSideCandidate{PassSide::Right, true, false, 0.10}});
+
+  EXPECT_EQ(selection.side, PassSide::Left);
+  EXPECT_EQ(selection.reason, SideSelectionReason::HigherQuality);
+}
+
+TEST(V2XOvertakeCoreMinimumMotion, ChoosesSmallerShiftAndKeepsPreferenceOnTie)
+{
+  MinimumLateralMotionSideSelectionRequest request{
+    PassSide::Left,
+    MinimumLateralMotionSideCandidate{PassSide::Left, true, false, 0.80},
+    MinimumLateralMotionSideCandidate{PassSide::Right, true, false, 0.30}};
+
+  auto selection = select_minimum_lateral_motion_side(request);
+  EXPECT_EQ(selection.side, PassSide::Right);
+  EXPECT_EQ(selection.reason, SideSelectionReason::HigherQuality);
+
+  request.left.required_shift_m = 0.30;
+  selection = select_minimum_lateral_motion_side(request);
+  EXPECT_EQ(selection.side, PassSide::Left);
+  EXPECT_EQ(selection.reason, SideSelectionReason::Preferred);
+}
+
+TEST(V2XOvertakeCoreMinimumMotion, ReturnsNoSideWithoutSafeCandidate)
+{
+  const auto selection = select_minimum_lateral_motion_side(
+    MinimumLateralMotionSideSelectionRequest{
+      PassSide::Left,
+      MinimumLateralMotionSideCandidate{PassSide::Left, false, false, 0.0},
+      MinimumLateralMotionSideCandidate{PassSide::Right, false, false, 0.0}});
+
+  EXPECT_EQ(selection.side, PassSide::None);
+  EXPECT_EQ(selection.reason, SideSelectionReason::NoFeasibleSide);
 }
 
 TEST(V2XOvertakeCoreSpeed, AdaptsShiftOutClosingSpeedToFrontDistanceBudget)

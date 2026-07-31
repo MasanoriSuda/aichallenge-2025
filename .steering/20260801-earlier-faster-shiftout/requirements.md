@@ -15,16 +15,23 @@
 - `ShiftOut/Pass -> Recovery`: 12回
 - ShiftOut開始からPassまで: おおむね1.8～3.2秒
 
-## 変更条件
+## Candidate A（不採用）
 
 - 通常の前方認識・Follow準備範囲を8 mへ広げる。
 - 新規ShiftOutは前方距離6 m以上、かつ6 m以上先に連続した候補経路がある場合に限定する。
 - ShiftOut中のadaptive closing speedを0.8～2.0 m/sとする。
+
+試走では新規ShiftOutが促進されず、通常Followが長期化した。6 m設定が開始トリガーではなく
+entry禁止条件として働いたため、距離変更を不採用とする。
+
+## Candidate B（現行）
+
+- Follow範囲、entry前方距離、必要な連続候補経路を5/3/3 mへ戻す。
+- ShiftOut中のadaptive closing speedだけを0.8～2.0 m/sに維持する。
 - Pass未latch時の0.5 m/s制限、壁判定、SafetyBrake、Pass継続処理は変更しない。
 
 ## Definition of Done
 
 - 変更がparam yamlだけに閉じている。
 - `make autoware-build`が成功する。
-- 次回試走で新規ShiftOut開始距離、ShiftOut所要時間、Pass完遂数を比較できる。
-
+- 次回試走でShiftOut所要時間、Pass完遂数、Recovery回数を基準走行と比較できる。

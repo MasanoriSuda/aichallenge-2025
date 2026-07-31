@@ -1496,6 +1496,7 @@ struct V2XBehaviorConfig
   double side_overtake_entry_rear_tolerance{0.5};
   double overtake_gap_lookahead_distance{0.0};
   bool overtake_try_both_sides{false};
+  bool overtake_minimum_lateral_motion_enabled{false};
   double overtake_velocity_advantage{0.0};
   bool overtake_stage_speed_enabled{false};
   bool overtake_shiftout_adaptive_closing_speed_enabled{false};
@@ -1794,6 +1795,7 @@ struct V2XBehaviorOutput
   bool overtake_execution_corridor_blocked{false};
   bool overtake_gap_hold_active{false};
   bool overtake_fallback_target{false};
+  bool overtake_base_line_pass_through{false};
   bool overtake_cooldown_active{false};
   bool overtake_return_corridor_blocked{false};
   std::string overtake_return_corridor_blocker_id;
@@ -5439,6 +5441,10 @@ struct MPC
       double corridor_width{0.0};
       double continuous_corridor_distance{0.0};
       double required_lateral_accel{0.0};
+      bool minimum_motion_goal_available{false};
+      bool base_line_clear{false};
+      bool direct_base_line_pass_ready{false};
+      double required_lateral_shift{std::numeric_limits<double>::infinity()};
       std::optional<double> corridor_center_ey;
       bool vehicle_vehicle_corridor{false};
       std::string lower_boundary_vehicle_id;
@@ -5607,6 +5613,9 @@ struct MPC
       bool candidate_fixed_interval_available = false;
       double candidate_fixed_lower = -std::numeric_limits<double>::infinity();
       double candidate_fixed_upper = std::numeric_limits<double>::infinity();
+      bool minimum_motion_interval_available = false;
+      double minimum_motion_lower = -std::numeric_limits<double>::infinity();
+      double minimum_motion_upper = std::numeric_limits<double>::infinity();
       double current_continuous_corridor_distance = 0.0;
       for (std::size_t i = 0; i < candidate_gap.target_active.size(); ++i) {
         const bool usable_corridor =
@@ -5628,6 +5637,9 @@ struct MPC
           candidate_gap.target_active[i] && i < candidate_gap.lb.size() &&
           i < candidate_gap.ub.size())
         {
+          minimum_motion_interval_available = true;
+          minimum_motion_lower = std::max(minimum_motion_lower, candidate_gap.lb[i]);
+          minimum_motion_upper = std::min(minimum_motion_upper, candidate_gap.ub[i]);
           if (i < static_cast<std::size_t>(N)) {
             const auto horizon_index = static_cast<Eigen::Index>(i);
             candidate_fixed_interval_available = true;
@@ -5647,6 +5659,29 @@ struct MPC
               v2x_overtake_core::PassCorridorCenterRequest{
                 true, candidate_gap.lb[i], candidate_gap.ub[i]});
           }
+        }
+      }
+      if (
+        cfg.v2x_behavior.overtake_minimum_lateral_motion_enabled &&
+        !start_grid_breakout_attempt && candidate_gap.feasible &&
+        minimum_motion_interval_available &&
+        minimum_motion_lower <= minimum_motion_upper + kEps)
+      {
+        const auto minimum_motion_goal =
+          v2x_overtake_core::resolve_minimum_lateral_motion_goal(
+          v2x_overtake_core::MinimumLateralMotionGoalRequest{
+            0.0,
+            model->spatial_state.e_y,
+            minimum_motion_lower,
+            minimum_motion_upper});
+        if (minimum_motion_goal.valid) {
+          assessment.minimum_motion_goal_available = true;
+          assessment.base_line_clear = minimum_motion_goal.base_line_clear;
+          assessment.direct_base_line_pass_ready =
+            minimum_motion_goal.base_line_clear &&
+            minimum_motion_goal.current_position_clear;
+          assessment.required_lateral_shift = minimum_motion_goal.required_shift_m;
+          assessment.corridor_center_ey = minimum_motion_goal.goal_m;
         }
       }
       const int planned_pass_side_sign =
@@ -5809,6 +5844,18 @@ struct MPC
           // interval center made admission and execution disagree after target
           // separation or wall bounds adjusted the goal.
           assessment.corridor_center_ey = preflight.goal_ey;
+          assessment.required_lateral_shift =
+            std::abs(preflight.goal_ey - model->spatial_state.e_y);
+          if (assessment.minimum_motion_goal_available) {
+            // A target-separation correction may move an initially clear base
+            // line. Only direct-enter Pass when the final preflighted goal is
+            // still the reference racing line.
+            assessment.base_line_clear =
+              assessment.base_line_clear && std::abs(preflight.goal_ey) <= kEps;
+            assessment.direct_base_line_pass_ready =
+              assessment.direct_base_line_pass_ready &&
+              assessment.base_line_clear;
+          }
         }
       }
       return assessment;
@@ -6284,6 +6331,27 @@ struct MPC
         cfg.v2x_behavior.overtake_inner_curve_min_open_distance}) :
       select_side(true);
 
+    const bool minimum_motion_entry_selection =
+      cfg.v2x_behavior.overtake_minimum_lateral_motion_enabled &&
+      !start_grid_breakout_attempt && locked_pass_side == 0;
+    if (minimum_motion_entry_selection) {
+      const auto minimum_motion_candidate =
+        [&](const SideAssessment & assessment, const overtake_core::PassSide side) {
+          return overtake_core::MinimumLateralMotionSideCandidate{
+            side,
+            assessment.minimum_motion_goal_available &&
+            assessment.gap_available && execution_allowed_for_side(assessment),
+            assessment.base_line_clear,
+            assessment.required_lateral_shift};
+        };
+      side_selection = overtake_core::select_minimum_lateral_motion_side(
+        overtake_core::MinimumLateralMotionSideSelectionRequest{
+          selection_preferred_pass_side != 0 ? pass_side(selection_preferred_pass_side) :
+          overtake_core::PassSide::Left,
+          minimum_motion_candidate(left_assessment, overtake_core::PassSide::Left),
+          minimum_motion_candidate(right_assessment, overtake_core::PassSide::Right)});
+    }
+
     if (shiftout_line_active && cfg.v2x_behavior.overtake_line.early_side_replan_enabled) {
       const int raw_candidate_side = static_cast<int>(side_selection.side);
       const bool alternate_candidate =
@@ -6347,8 +6415,11 @@ struct MPC
       side_selection.side != overtake_core::PassSide::None;
     if (side_selection.side == overtake_core::PassSide::None) {
       // Preserve the geometric candidate and its reason for diagnostics even when curve policy
-      // prevents executing either side.
-      side_selection = select_side(false);
+      // prevents executing either side. Minimum-motion entry is the exception: a nonzero side
+      // would activate Follow preposition even though no validated minimum-motion goal exists.
+      if (!minimum_motion_entry_selection) {
+        side_selection = select_side(false);
+      }
       side_selected_for_execution = false;
     }
     output.overtake_pass_side_sign = static_cast<int>(side_selection.side);
@@ -6357,6 +6428,12 @@ struct MPC
       right_assessment :
       (locked_pass_side != 0 ? locked_pass_side : selection_preferred_pass_side) < 0 ?
       right_assessment : left_assessment;
+    output.overtake_base_line_pass_through =
+      cfg.v2x_behavior.overtake_minimum_lateral_motion_enabled &&
+      !start_grid_breakout_attempt && locked_pass_side == 0 &&
+      side_selected_for_execution &&
+      selected_assessment.minimum_motion_goal_available &&
+      selected_assessment.direct_base_line_pass_ready;
     output.overtake_side_clearance = selected_assessment.side_clearance;
     if (selected_assessment.gap_available) {
       output.overtake_corridor_center_ey = selected_assessment.corridor_center_ey;
@@ -6543,6 +6620,16 @@ struct MPC
           cfg.v2x_behavior.overtake_guard_enabled ?
           overtake_block_reason :
           "front vehicle and gap available";
+        if (
+          cfg.v2x_behavior.overtake_minimum_lateral_motion_enabled &&
+          !start_grid_breakout_attempt && locked_pass_side == 0)
+        {
+          output.reason =
+            std::string(
+            output.overtake_base_line_pass_through ?
+            "base racing line clear / " : "minimum lateral ShiftOut / ") +
+            output.reason;
+        }
         bool front_risk_applied = false;
         if (apply_follow_velocity_limits(
             output, nearest_front_distance, nearest_front_speed, front_decel_curve_guard, front_risk,
@@ -9033,16 +9120,38 @@ private:
           overtake_line_state_.pass_side_sign});
       const int pass_side_sign = execution_side.side_sign;
       if (!phase_active || overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare) {
+        const bool direct_base_line_pass =
+          behavior_output.overtake_base_line_pass_through &&
+          behavior_output.overtake_corridor_center_ey.has_value() &&
+          std::abs(behavior_output.overtake_corridor_center_ey.value()) <= kEps;
         transition_overtake_line_phase(
-          OvertakeLinePhase::ShiftOut, now_sec, current_ey, pass_side_sign,
+          direct_base_line_pass ? OvertakeLinePhase::Pass : OvertakeLinePhase::ShiftOut,
+          now_sec, current_ey, pass_side_sign,
+          direct_base_line_pass ?
+          "validated base racing line already clear" :
           resuming_paused_mission ?
           "committed pass revalidated after pause" : "overtake selected");
         overtake_locked_side_sign_ = pass_side_sign;
-        // The gap planner bounds already include the target-vehicle inflation and wall margin.
-        // Freeze their center when the pass starts so the explicit MPC line stays centered in
-        // the usable slot instead of following the target kart toward one edge of that slot.
+        // The gap planner bounds already include target-vehicle inflation and wall margin.
+        // Freeze the preflighted minimum-motion goal so a moving target cannot drag the line.
         overtake_line_state_.fixed_pass_corridor_goal_ey =
           behavior_output.overtake_corridor_center_ey;
+        if (
+          cfg.v2x_behavior.overtake_minimum_lateral_motion_enabled &&
+          !behavior_output.start_grid_breakout_active &&
+          overtake_line_state_.fixed_pass_corridor_goal_ey.has_value())
+        {
+          RCLCPP_INFO(
+            rclcpp::get_logger("mpc_controller"),
+            "Overtake minimum-motion entry: mode=%s, side=%d, current_ey=%.2f, "
+            "goal_ey=%.2f, shift=%.2f, target=%s, wp_id=%d",
+            direct_base_line_pass ? "base-line" : "minimum-shift",
+            pass_side_sign, current_ey,
+            overtake_line_state_.fixed_pass_corridor_goal_ey.value(),
+            std::abs(
+              overtake_line_state_.fixed_pass_corridor_goal_ey.value() - current_ey),
+            behavior_output.target_vehicle_id.c_str(), model->wp_id);
+        }
         overtake_line_state_.inter_vehicle_corridor =
           behavior_output.start_grid_inter_vehicle_corridor;
         if (behavior_output.start_grid_inter_vehicle_corridor) {
@@ -12828,6 +12937,9 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_try_both_sides =
     mpc["v2x_overtake_try_both_sides"] ?
     mpc["v2x_overtake_try_both_sides"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_minimum_lateral_motion_enabled =
+    mpc["v2x_overtake_minimum_lateral_motion_enabled"] ?
+    mpc["v2x_overtake_minimum_lateral_motion_enabled"].as<bool>() : false;
   cfg.mpc.v2x_behavior.overtake_velocity_advantage = std::max(
     0.0,
     mpc["v2x_overtake_velocity_advantage"] ?
@@ -13554,6 +13666,11 @@ public:
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_committed_pass_min_speed,
         mpc_cfg_.v2x_behavior.moving_front_speed_threshold);
+      RCLCPP_INFO(
+        get_logger(),
+        "V2X overtake minimum lateral motion: %s (base-line direct Pass, nearest-safe goal)",
+        mpc_cfg_.v2x_behavior.overtake_minimum_lateral_motion_enabled ?
+        "enabled" : "disabled");
     }
     if (mpc_cfg_.v2x_behavior.low_speed_avoidance_enabled) {
       RCLCPP_INFO(

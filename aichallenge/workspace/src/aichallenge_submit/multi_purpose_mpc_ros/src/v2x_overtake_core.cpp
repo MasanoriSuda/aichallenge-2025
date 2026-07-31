@@ -758,6 +758,34 @@ std::optional<double> resolve_pass_corridor_center(
   return 0.5 * (request.lower_bound_m + request.upper_bound_m);
 }
 
+MinimumLateralMotionGoalResolution resolve_minimum_lateral_motion_goal(
+  const MinimumLateralMotionGoalRequest & request) noexcept
+{
+  MinimumLateralMotionGoalResolution resolution;
+  if (
+    !std::isfinite(request.base_line_lateral_m) ||
+    !std::isfinite(request.current_lateral_m) ||
+    !std::isfinite(request.feasible_lower_bound_m) ||
+    !std::isfinite(request.feasible_upper_bound_m) ||
+    request.feasible_upper_bound_m < request.feasible_lower_bound_m)
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  resolution.base_line_clear =
+    request.feasible_lower_bound_m <= request.base_line_lateral_m + 1e-9 &&
+    request.base_line_lateral_m <= request.feasible_upper_bound_m + 1e-9;
+  resolution.current_position_clear =
+    request.feasible_lower_bound_m <= request.current_lateral_m + 1e-9 &&
+    request.current_lateral_m <= request.feasible_upper_bound_m + 1e-9;
+  resolution.goal_m = std::min(
+    request.feasible_upper_bound_m,
+    std::max(request.feasible_lower_bound_m, request.base_line_lateral_m));
+  resolution.required_shift_m = std::abs(resolution.goal_m - request.current_lateral_m);
+  return resolution;
+}
+
 bool should_return_completed_pass_before_margin_recovery(
   const CompletedPassReturnRequest & request) noexcept
 {
@@ -1457,6 +1485,49 @@ SideSelection select_pass_side(const SideSelectionRequest & request) noexcept
     return {PassSide::None, SideSelectionReason::PreferredUnavailable};
   }
   return {PassSide::None, SideSelectionReason::NoFeasibleSide};
+}
+
+SideSelection select_minimum_lateral_motion_side(
+  const MinimumLateralMotionSideSelectionRequest & request) noexcept
+{
+  const auto valid_candidate = [](const MinimumLateralMotionSideCandidate & candidate) {
+      return is_configured_side(candidate.side) && candidate.feasible &&
+             std::isfinite(candidate.required_shift_m) &&
+             candidate.required_shift_m >= 0.0;
+    };
+  const bool left_feasible =
+    request.left.side == PassSide::Left && valid_candidate(request.left);
+  const bool right_feasible =
+    request.right.side == PassSide::Right && valid_candidate(request.right);
+
+  if (!is_configured_side(request.preferred)) {
+    return {PassSide::None, SideSelectionReason::InvalidPreference};
+  }
+  if (!left_feasible && !right_feasible) {
+    return {PassSide::None, SideSelectionReason::NoFeasibleSide};
+  }
+  if (left_feasible != right_feasible) {
+    const PassSide selected = left_feasible ? PassSide::Left : PassSide::Right;
+    return {
+      selected,
+      selected == request.preferred ?
+      SideSelectionReason::Preferred : SideSelectionReason::Alternate};
+  }
+
+  if (request.left.base_line_clear != request.right.base_line_clear) {
+    return {
+      request.left.base_line_clear ? PassSide::Left : PassSide::Right,
+      SideSelectionReason::HigherQuality};
+  }
+  const double shift_difference =
+    request.left.required_shift_m - request.right.required_shift_m;
+  if (shift_difference < -1e-9) {
+    return {PassSide::Left, SideSelectionReason::HigherQuality};
+  }
+  if (shift_difference > 1e-9) {
+    return {PassSide::Right, SideSelectionReason::HigherQuality};
+  }
+  return {request.preferred, SideSelectionReason::Preferred};
 }
 
 double score_overtake_side_quality(

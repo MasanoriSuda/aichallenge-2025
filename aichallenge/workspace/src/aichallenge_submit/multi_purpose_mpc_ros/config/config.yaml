@@ -366,7 +366,7 @@ mpc:
   v2x_front_hazard_hold_enabled: true
   v2x_front_hazard_hold_sec: 0.25 # [s] sim race: bridge one short V2X dropout without a 1 s full-stop tail
   v2x_front_hazard_rear_clear_distance: 4.0 # [m] release early only after target is clearly behind
-  v2x_follow_distance: 8.0         # [m] sim A/B: begin front-vehicle preparation before the 6 m ShiftOut entry floor
+  v2x_follow_distance: 5.0         # [m] sim race: base Follow range; common-course detection remains 24 m
   v2x_safety_brake_distance: 2.2  # [m] dev3 attack: retain a small center-distance floor
   v2x_safety_brake_margin: 0.3    # [m] dev3 attack: dynamic stopping distance still applies
   v2x_follow_gap_planner_enabled: false # Follow tracks the base path; lateral pass is only Overtake/low-speed avoidance
@@ -420,15 +420,16 @@ mpc:
   v2x_overtake_forbidden_curve_lookahead_distance: 6.0 # [m] soft entry/continuation policy; hard curve uses completion guard below
   v2x_overtake_gap_lookahead_distance: 24.0 # [m] search farther than MPC horizon for slow-front pass
   v2x_overtake_try_both_sides: true         # before ShiftOut, retry the opposite side if preferred gap is blocked
+  v2x_overtake_minimum_lateral_motion_enabled: true # keep the racing line when clear; otherwise use the nearest safe corridor point
   v2x_overtake_velocity_advantage: 1.0      # [m/s] legacy whole-phase cap when stage speed is disabled
   v2x_overtake_stage_speed_enabled: true    # cap ShiftOut/early Pass; release only after the locked target is no longer ahead
   v2x_overtake_shiftout_adaptive_closing_speed_enabled: true # preserve entry gap until distance+lateral ShiftOut completes
   v2x_overtake_shiftout_min_closing_speed: 0.8 # [m/s] sim A/B: retain useful pass gain near the protected-distance budget
-  v2x_overtake_shiftout_max_closing_speed: 2.0 # [m/s] sim A/B: use the early 6-8 m preparation range to establish overlap sooner
+  v2x_overtake_shiftout_max_closing_speed: 2.0 # [m/s] sim A/B: use available distance budget to establish overlap sooner
   v2x_overtake_pass_unlatched_max_closing_speed: 0.5 # [m/s] keep the front cap until physical lateral separation latches
   v2x_overtake_shiftout_adaptive_min_time_sec: 0.5 # [s] avoid an unbounded cap as ShiftOut completes
-  # The line goal normally latches the validated ego-center corridor midpoint. This separation
-  # remains the fallback when a fresh planner corridor is unavailable at entry.
+  # Minimum-motion mode latches the nearest safe ego-center point. This separation remains the
+  # fallback when a fresh planner corridor is unavailable at entry or the mode is disabled.
   v2x_overtake_line_min_target_separation: 1.50 # [m] combined kart width plus prediction margin
   v2x_overtake_pass_front_overlap_lateral_clearance: 1.50 # [m] current physical clearance required before front-cap release
   v2x_overtake_pass_front_cap_reapply_lateral_clearance: 1.45 # [m] hold committed Pass speed down to the physical combined-width boundary
@@ -450,17 +451,17 @@ mpc:
   v2x_overtake_guard_min_gap_width: 0.1       # [m] sim A/B: center-line slack after inflated obstacles
   v2x_overtake_guard_min_gap_points: 2        # require consecutive horizon points before Overtake
   v2x_overtake_continue_min_gap_points: 1     # active locked line may survive a one-point hairpin corridor
-  v2x_overtake_guard_min_prepare_distance: 6.0 # [m] sim A/B: require enough continuous path to establish the pass line early
+  v2x_overtake_guard_min_prepare_distance: 3.0 # [m] dev3 attack: use short straight/curve openings
   v2x_overtake_guard_max_lateral_shift: 0.0   # [m] disabled; use time-based lateral accel guard instead
   v2x_overtake_guard_reachable_gap_enabled: true # reject gaps that require excessive lateral accel
   v2x_overtake_guard_max_lateral_accel: 6.0   # [m/s^2] match the aggressive OvertakeLine execution limit
   v2x_overtake_guard_min_gap_time: 0.5        # [s] entry still needs time to establish a pass line
   v2x_overtake_continue_min_gap_time: 0.3     # [s] locked line uses the shorter continuation horizon
   v2x_overtake_guard_min_speed_for_reachable: 1.0 # [m/s] lower bound for reachability time estimate
-  v2x_overtake_guard_min_front_distance: 6.0  # [m] sim A/B: reject late new ShiftOut and start while distance budget remains
+  v2x_overtake_guard_min_front_distance: 3.0  # [m] begin ShiftOut before the closing budget becomes unrecoverable
   v2x_overtake_continue_min_front_distance: 1.8 # [m] active-pass floor near the nominal body-overlap distance
   v2x_overtake_close_follow_enabled: true     # side-escape after matching a slow front vehicle
-  v2x_overtake_close_follow_min_front_distance: 2.2 # [m] extra floor; new ShiftOut also requires the normal 6.0m entry distance
+  v2x_overtake_close_follow_min_front_distance: 2.2 # [m] extra floor; new ShiftOut also requires the normal 3.0m entry distance
   v2x_overtake_close_follow_max_closing_speed: 1.5 # [m/s] require a controlled closing rate
   v2x_overtake_close_follow_min_side_clearance: 1.2 # [m] pass-side center corridor before close-follow escape
   v2x_overtake_before_curve_enabled: true     # allow slow-front overtake in soft curve-lookahead zones

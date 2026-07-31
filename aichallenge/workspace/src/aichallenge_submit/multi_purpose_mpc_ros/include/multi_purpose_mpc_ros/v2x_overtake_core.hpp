@@ -580,6 +580,29 @@ struct PassCorridorCenterRequest
 std::optional<double> resolve_pass_corridor_center(
   const PassCorridorCenterRequest & request) noexcept;
 
+struct MinimumLateralMotionGoalRequest
+{
+  double base_line_lateral_m{};
+  double current_lateral_m{};
+  double feasible_lower_bound_m{};
+  double feasible_upper_bound_m{};
+};
+
+struct MinimumLateralMotionGoalResolution
+{
+  bool valid{false};
+  bool base_line_clear{false};
+  bool current_position_clear{false};
+  double goal_m{};
+  double required_shift_m{std::numeric_limits<double>::infinity()};
+};
+
+/// Keep the base racing line when it lies inside the vehicle/wall-inflated
+/// corridor. Otherwise return the closest corridor boundary, which is the
+/// minimum lateral displacement needed to enter that validated corridor.
+MinimumLateralMotionGoalResolution resolve_minimum_lateral_motion_goal(
+  const MinimumLateralMotionGoalRequest & request) noexcept;
+
 struct CompletedPassReturnRequest
 {
   bool pass_phase{false};
@@ -1055,6 +1078,27 @@ struct SideSelection
 
 /// Select a feasible pass side without changing sides after one is locked.
 SideSelection select_pass_side(const SideSelectionRequest & request) noexcept;
+
+struct MinimumLateralMotionSideCandidate
+{
+  PassSide side{PassSide::None};
+  bool feasible{false};
+  bool base_line_clear{false};
+  double required_shift_m{std::numeric_limits<double>::infinity()};
+};
+
+struct MinimumLateralMotionSideSelectionRequest
+{
+  PassSide preferred{PassSide::None};
+  MinimumLateralMotionSideCandidate left;
+  MinimumLateralMotionSideCandidate right;
+};
+
+/// Prefer an executable side that preserves the base line. If neither side
+/// does, select the side requiring less lateral movement; exact ties retain
+/// the existing preferred-side policy.
+SideSelection select_minimum_lateral_motion_side(
+  const MinimumLateralMotionSideSelectionRequest & request) noexcept;
 
 struct OvertakeSideQualityCandidate
 {

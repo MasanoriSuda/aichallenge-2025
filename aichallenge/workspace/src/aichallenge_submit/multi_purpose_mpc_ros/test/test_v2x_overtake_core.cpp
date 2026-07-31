@@ -158,6 +158,10 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_completion;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_override_completion_for_curve_entry;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_precommit_inner_curve_line;
 using multi_purpose_mpc_ros::v2x_overtake_core::overtake_completion_policy_allows_execution;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntrySpeedReadinessRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::NewOvertakeEntrySpeedGateRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::update_overtake_entry_speed_readiness;
+using multi_purpose_mpc_ros::v2x_overtake_core::new_overtake_entry_speed_gate_allows;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   can_hold_committed_execution_after_behavior_drop;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_target_continuity;
@@ -188,6 +192,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::selected_pass_side_ordering_conf
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_early_shiftout_side_replan;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_execution_side;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_resume_paused_pass_directly;
+using multi_purpose_mpc_ros::v2x_overtake_core::clamp_paused_resume_goal_outward;
 using multi_purpose_mpc_ros::v2x_overtake_core::PausedPassDirectResumeRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_line_transition;
 using multi_purpose_mpc_ros::v2x_overtake_core::
@@ -2509,6 +2514,85 @@ TEST(V2XOvertakeCoreCompletion, CompletionPolicyDoesNotLeakRawCurveEntryPermissi
   EXPECT_FALSE(overtake_completion_policy_allows_execution(request));
 }
 
+TEST(V2XOvertakeCoreEntrySpeed, RejectsLatestRunLargeSpeedDeficit)
+{
+  const auto result = update_overtake_entry_speed_readiness(
+    OvertakeEntrySpeedReadinessRequest{
+      true, false, 100.0, std::numeric_limits<double>::quiet_NaN(),
+      1.39, 3.10, -0.5, 0.3});
+
+  EXPECT_FALSE(result.ready);
+  EXPECT_FALSE(std::isfinite(result.ready_since_sec));
+  EXPECT_DOUBLE_EQ(result.stable_sec, 0.0);
+  EXPECT_NEAR(result.relative_speed_mps, -1.71, 1e-12);
+}
+
+TEST(V2XOvertakeCoreEntrySpeed, RequiresContinuousConfirmationForOneTarget)
+{
+  auto result = update_overtake_entry_speed_readiness(
+    OvertakeEntrySpeedReadinessRequest{
+      true, false, 20.0, std::numeric_limits<double>::quiet_NaN(),
+      2.60, 3.00, -0.5, 0.3});
+  EXPECT_FALSE(result.ready);
+  EXPECT_DOUBLE_EQ(result.ready_since_sec, 20.0);
+
+  result = update_overtake_entry_speed_readiness(
+    OvertakeEntrySpeedReadinessRequest{
+      true, true, 20.29, result.ready_since_sec, 2.60, 3.00, -0.5, 0.3});
+  EXPECT_FALSE(result.ready);
+  EXPECT_NEAR(result.stable_sec, 0.29, 1e-12);
+
+  result = update_overtake_entry_speed_readiness(
+    OvertakeEntrySpeedReadinessRequest{
+      true, true, 20.30, result.ready_since_sec, 2.60, 3.00, -0.5, 0.3});
+  EXPECT_TRUE(result.ready);
+  EXPECT_NEAR(result.stable_sec, 0.30, 1e-12);
+}
+
+TEST(V2XOvertakeCoreEntrySpeed, ResetsForSpeedLossTargetChangeAndInvalidData)
+{
+  auto result = update_overtake_entry_speed_readiness(
+    OvertakeEntrySpeedReadinessRequest{
+      true, true, 10.2, 10.0, 1.39, 3.10, -0.5, 0.3});
+  EXPECT_FALSE(result.ready);
+  EXPECT_FALSE(std::isfinite(result.ready_since_sec));
+
+  result = update_overtake_entry_speed_readiness(
+    OvertakeEntrySpeedReadinessRequest{
+      true, false, 11.0, 10.0, 3.0, 3.0, -0.5, 0.3});
+  EXPECT_FALSE(result.ready);
+  EXPECT_DOUBLE_EQ(result.ready_since_sec, 11.0);
+
+  result = update_overtake_entry_speed_readiness(
+    OvertakeEntrySpeedReadinessRequest{
+      true, true, 11.4, result.ready_since_sec, 3.0,
+      std::numeric_limits<double>::infinity(), -0.5, 0.3});
+  EXPECT_FALSE(result.ready);
+  EXPECT_FALSE(std::isfinite(result.ready_since_sec));
+}
+
+TEST(V2XOvertakeCoreEntrySpeed, GatesOnlyFreshOvertakeAdmission)
+{
+  NewOvertakeEntrySpeedGateRequest request;
+  request.overtake_requested = true;
+  EXPECT_FALSE(new_overtake_entry_speed_gate_allows(request));
+
+  request.entry_speed_ready = true;
+  EXPECT_TRUE(new_overtake_entry_speed_gate_allows(request));
+  request.entry_speed_ready = false;
+
+  request.execution_committed = true;
+  EXPECT_TRUE(new_overtake_entry_speed_gate_allows(request));
+  request.execution_committed = false;
+
+  request.behavior_handoff_active = true;
+  EXPECT_TRUE(new_overtake_entry_speed_gate_allows(request));
+  request.behavior_handoff_active = false;
+
+  request.overtake_requested = false;
+  EXPECT_TRUE(new_overtake_entry_speed_gate_allows(request));
+}
+
 TEST(V2XOvertakeCoreGuardPhase, KeepsEntryDistanceAndPrepareCheckBeforePassStarts)
 {
   const auto result = resolve_overtake_guard_phase(
@@ -3144,6 +3228,16 @@ TEST(V2XOvertakeCoreMissionOwnership, MissionLockOwnsNormalExecutionSide)
   EXPECT_EQ(result.source, OvertakeExecutionSideSource::None);
 }
 
+TEST(V2XOvertakeCoreMissionOwnership, PausedResumeGoalNeverRetreatsInward)
+{
+  EXPECT_DOUBLE_EQ(clamp_paused_resume_goal_outward(1, 0.55, 0.40), 0.55);
+  EXPECT_DOUBLE_EQ(clamp_paused_resume_goal_outward(1, 0.55, 0.90), 0.90);
+  EXPECT_DOUBLE_EQ(clamp_paused_resume_goal_outward(-1, -0.55, -0.40), -0.55);
+  EXPECT_DOUBLE_EQ(clamp_paused_resume_goal_outward(-1, -0.55, -0.90), -0.90);
+  EXPECT_DOUBLE_EQ(
+    clamp_paused_resume_goal_outward(0, 0.55, -0.90), 0.55);
+}
+
 TEST(V2XOvertakeCoreMissionOwnership, DirectPassResumeRequiresSameSideClearCorridor)
 {
   PausedPassDirectResumeRequest request;
@@ -3152,10 +3246,15 @@ TEST(V2XOvertakeCoreMissionOwnership, DirectPassResumeRequiresSameSideClearCorri
   request.behavior_side_sign = 1;
   request.execution_corridor_valid = true;
   request.target_seen = true;
+  request.target_lateral_prediction_valid = true;
   request.target_relative_lateral_m = -1.60;
+  request.target_predicted_relative_lateral_m = -1.70;
   request.required_lateral_clearance_m = 1.50;
   request.current_lateral_m = 0.80;
   request.goal_lateral_m = 1.00;
+  request.ego_speed_mps = 5.0;
+  request.target_speed_mps = 3.0;
+  request.minimum_closing_speed_mps = 0.0;
 
   EXPECT_TRUE(can_resume_paused_pass_directly(request));
 
@@ -3164,6 +3263,10 @@ TEST(V2XOvertakeCoreMissionOwnership, DirectPassResumeRequiresSameSideClearCorri
   request.behavior_side_sign = 1;
 
   request.goal_lateral_m = -0.20;
+  EXPECT_FALSE(can_resume_paused_pass_directly(request));
+  request.goal_lateral_m = 1.00;
+
+  request.goal_lateral_m = 0.70;
   EXPECT_FALSE(can_resume_paused_pass_directly(request));
   request.goal_lateral_m = 1.00;
 
@@ -3176,6 +3279,44 @@ TEST(V2XOvertakeCoreMissionOwnership, DirectPassResumeRequiresSameSideClearCorri
   request.target_position_jump = false;
 
   request.target_relative_lateral_m = 1.60;
+  EXPECT_FALSE(can_resume_paused_pass_directly(request));
+  request.target_relative_lateral_m = -1.60;
+
+  request.target_lateral_prediction_valid = false;
+  EXPECT_FALSE(can_resume_paused_pass_directly(request));
+  request.target_lateral_prediction_valid = true;
+
+  request.target_predicted_relative_lateral_m = -1.20;
+  EXPECT_FALSE(can_resume_paused_pass_directly(request));
+  request.target_predicted_relative_lateral_m = -1.70;
+
+  request.ego_speed_mps = 2.99;
+  request.target_speed_mps = 3.0;
+  EXPECT_FALSE(can_resume_paused_pass_directly(request));
+  request.ego_speed_mps = 3.0;
+  EXPECT_TRUE(can_resume_paused_pass_directly(request));
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, DirectPassResumeMirrorsRightSidePrediction)
+{
+  PausedPassDirectResumeRequest request;
+  request.resuming_paused_mission = true;
+  request.mission_side_sign = -1;
+  request.behavior_side_sign = -1;
+  request.execution_corridor_valid = true;
+  request.target_seen = true;
+  request.target_lateral_prediction_valid = true;
+  request.target_relative_lateral_m = 1.70;
+  request.target_predicted_relative_lateral_m = 1.80;
+  request.required_lateral_clearance_m = 1.50;
+  request.current_lateral_m = -0.80;
+  request.goal_lateral_m = -1.00;
+  request.ego_speed_mps = 5.0;
+  request.target_speed_mps = 3.0;
+
+  EXPECT_TRUE(can_resume_paused_pass_directly(request));
+
+  request.target_predicted_relative_lateral_m = 1.20;
   EXPECT_FALSE(can_resume_paused_pass_directly(request));
 }
 

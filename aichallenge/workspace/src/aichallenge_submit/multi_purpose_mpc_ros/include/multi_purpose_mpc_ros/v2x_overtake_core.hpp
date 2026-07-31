@@ -917,6 +917,44 @@ struct OvertakeCompletionPermissionRequest
 bool overtake_completion_policy_allows_execution(
   const OvertakeCompletionPermissionRequest & request) noexcept;
 
+struct OvertakeEntrySpeedReadinessRequest
+{
+  bool monitor_active{false};
+  bool same_target{false};
+  double now_sec{};
+  double ready_since_sec{std::numeric_limits<double>::quiet_NaN()};
+  double ego_speed_mps{};
+  double target_speed_mps{};
+  double minimum_relative_speed_mps{};
+  double confirm_sec{};
+};
+
+struct OvertakeEntrySpeedReadiness
+{
+  bool ready{false};
+  double ready_since_sec{std::numeric_limits<double>::quiet_NaN()};
+  double stable_sec{};
+  double relative_speed_mps{std::numeric_limits<double>::quiet_NaN()};
+};
+
+/// Confirm a measured entry-speed condition continuously for one target.
+/// Invalid input, a target change, or a relative-speed deficit resets confirmation.
+OvertakeEntrySpeedReadiness update_overtake_entry_speed_readiness(
+  const OvertakeEntrySpeedReadinessRequest & request) noexcept;
+
+struct NewOvertakeEntrySpeedGateRequest
+{
+  bool overtake_requested{false};
+  bool execution_committed{false};
+  bool behavior_handoff_active{false};
+  bool entry_speed_ready{false};
+};
+
+/// Apply speed readiness only to a fresh Behavior -> Overtake admission.
+/// Committed execution and the accepted Behavior-to-Line handoff retain ownership.
+bool new_overtake_entry_speed_gate_allows(
+  const NewOvertakeEntrySpeedGateRequest & request) noexcept;
+
 struct OvertakeGuardPhaseRequest
 {
   bool continuing_overtake{false};
@@ -1232,6 +1270,11 @@ struct OvertakeExecutionSideResolution
 OvertakeExecutionSideResolution resolve_overtake_execution_side(
   const OvertakeExecutionSideRequest & request) noexcept;
 
+/// Keep a paused mission's candidate goal from retreating toward the target.
+/// Invalid inputs preserve the finite current lateral position.
+double clamp_paused_resume_goal_outward(
+  int mission_side_sign, double current_lateral_m, double candidate_goal_lateral_m) noexcept;
+
 struct PausedPassDirectResumeRequest
 {
   bool resuming_paused_mission{false};
@@ -1240,14 +1283,20 @@ struct PausedPassDirectResumeRequest
   bool execution_corridor_valid{false};
   bool target_seen{false};
   bool target_position_jump{false};
+  bool target_lateral_prediction_valid{false};
   double target_relative_lateral_m{0.0};
+  double target_predicted_relative_lateral_m{0.0};
   double required_lateral_clearance_m{0.0};
   double current_lateral_m{0.0};
   double goal_lateral_m{0.0};
+  double ego_speed_mps{0.0};
+  double target_speed_mps{0.0};
+  double minimum_closing_speed_mps{0.0};
 };
 
-/// Skip a redundant ShiftOut only after the committed side, current lateral
-/// separation, and the revalidated execution corridor all agree.
+/// Skip a redundant ShiftOut only after the committed side, current and
+/// predicted lateral separation, non-inward goal, closing speed, and the
+/// revalidated execution corridor all agree.
 bool can_resume_paused_pass_directly(
   const PausedPassDirectResumeRequest & request) noexcept;
 

@@ -1356,6 +1356,42 @@ bool overtake_completion_policy_allows_execution(
       request.minimum_relative_speed_mps});
 }
 
+OvertakeEntrySpeedReadiness update_overtake_entry_speed_readiness(
+  const OvertakeEntrySpeedReadinessRequest & request) noexcept
+{
+  OvertakeEntrySpeedReadiness result;
+  if (
+    !request.monitor_active || !std::isfinite(request.now_sec) ||
+    !std::isfinite(request.ego_speed_mps) || request.ego_speed_mps < 0.0 ||
+    !std::isfinite(request.target_speed_mps) || request.target_speed_mps < 0.0 ||
+    !std::isfinite(request.minimum_relative_speed_mps) ||
+    !std::isfinite(request.confirm_sec) || request.confirm_sec < 0.0)
+  {
+    return result;
+  }
+
+  result.relative_speed_mps = request.ego_speed_mps - request.target_speed_mps;
+  if (result.relative_speed_mps + 1e-9 < request.minimum_relative_speed_mps) {
+    return result;
+  }
+
+  result.ready_since_sec =
+    request.same_target && std::isfinite(request.ready_since_sec) &&
+    request.ready_since_sec <= request.now_sec ?
+    request.ready_since_sec : request.now_sec;
+  result.stable_sec = std::max(0.0, request.now_sec - result.ready_since_sec);
+  result.ready = result.stable_sec + 1e-9 >= request.confirm_sec;
+  return result;
+}
+
+bool new_overtake_entry_speed_gate_allows(
+  const NewOvertakeEntrySpeedGateRequest & request) noexcept
+{
+  return
+    !request.overtake_requested || request.execution_committed ||
+    request.behavior_handoff_active || request.entry_speed_ready;
+}
+
 OvertakeGuardPhaseResolution resolve_overtake_guard_phase(
   const OvertakeGuardPhaseRequest & request)
 {
@@ -1762,6 +1798,24 @@ OvertakeExecutionSideResolution resolve_overtake_execution_side(
   return {};
 }
 
+double clamp_paused_resume_goal_outward(
+  const int mission_side_sign, const double current_lateral_m,
+  const double candidate_goal_lateral_m) noexcept
+{
+  if (!std::isfinite(current_lateral_m)) {
+    return candidate_goal_lateral_m;
+  }
+  if (
+    !is_configured_side(static_cast<PassSide>(mission_side_sign)) ||
+    !std::isfinite(candidate_goal_lateral_m))
+  {
+    return current_lateral_m;
+  }
+  return mission_side_sign > 0 ?
+         std::max(current_lateral_m, candidate_goal_lateral_m) :
+         std::min(current_lateral_m, candidate_goal_lateral_m);
+}
+
 bool can_resume_paused_pass_directly(
   const PausedPassDirectResumeRequest & request) noexcept
 {
@@ -1770,28 +1824,52 @@ bool can_resume_paused_pass_directly(
     !is_configured_side(static_cast<PassSide>(request.mission_side_sign)) ||
     request.behavior_side_sign != request.mission_side_sign ||
     !request.execution_corridor_valid || !request.target_seen ||
-    request.target_position_jump ||
+    request.target_position_jump || !request.target_lateral_prediction_valid ||
     !std::isfinite(request.target_relative_lateral_m) ||
+    !std::isfinite(request.target_predicted_relative_lateral_m) ||
     !std::isfinite(request.required_lateral_clearance_m) ||
     request.required_lateral_clearance_m < 0.0 ||
     !std::isfinite(request.current_lateral_m) ||
-    !std::isfinite(request.goal_lateral_m))
+    !std::isfinite(request.goal_lateral_m) ||
+    !std::isfinite(request.ego_speed_mps) || request.ego_speed_mps < 0.0 ||
+    !std::isfinite(request.target_speed_mps) || request.target_speed_mps < 0.0 ||
+    !std::isfinite(request.minimum_closing_speed_mps) ||
+    request.minimum_closing_speed_mps < 0.0)
   {
     return false;
   }
 
   const double side = static_cast<double>(request.mission_side_sign);
+  const double goal_shift_m = request.goal_lateral_m - request.current_lateral_m;
+  const double target_goal_relative_lateral_m =
+    request.target_relative_lateral_m - goal_shift_m;
+  const double target_predicted_goal_relative_lateral_m =
+    request.target_predicted_relative_lateral_m - goal_shift_m;
   const bool current_on_committed_side = side * request.current_lateral_m >= -1e-9;
   const bool goal_on_committed_side = side * request.goal_lateral_m >= -1e-9;
+  const bool goal_does_not_retreat_inward = side * goal_shift_m >= -1e-9;
   // A positive mission side means ego passes to the left, so the target must
   // be laterally to the right of ego (negative relative lateral), and vice
-  // versa. Absolute clearance alone could resume Pass with ego still on the
-  // target-facing side of the committed corridor.
-  const bool lateral_clear_on_committed_side =
-    side * request.target_relative_lateral_m <=
-    -request.required_lateral_clearance_m + 1e-9;
+  // versa. Check current ego pose, the proposed goal, and the predicted target
+  // at that goal. Absolute clearance alone could resume Pass with ego still on
+  // the target-facing side of the committed corridor.
+  const auto lateral_clear_on_committed_side = [&](const double relative_lateral_m) {
+      return side * relative_lateral_m <=
+             -request.required_lateral_clearance_m + 1e-9;
+    };
+  const bool current_lateral_clear =
+    lateral_clear_on_committed_side(request.target_relative_lateral_m);
+  const bool goal_lateral_clear =
+    lateral_clear_on_committed_side(target_goal_relative_lateral_m);
+  const bool predicted_goal_lateral_clear =
+    lateral_clear_on_committed_side(target_predicted_goal_relative_lateral_m);
+  const bool closing_speed_ready =
+    request.ego_speed_mps - request.target_speed_mps + 1e-9 >=
+    request.minimum_closing_speed_mps;
   return current_on_committed_side && goal_on_committed_side &&
-         lateral_clear_on_committed_side;
+         goal_does_not_retreat_inward && current_lateral_clear &&
+         goal_lateral_clear && predicted_goal_lateral_clear &&
+         closing_speed_ready;
 }
 
 const char * to_string(const OvertakeLineTransitionAction action) noexcept

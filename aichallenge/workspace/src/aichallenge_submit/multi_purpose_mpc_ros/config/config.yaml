@@ -415,6 +415,10 @@ mpc:
   v2x_overtake_inner_curve_min_open_distance: 3.0 # [m] otherwise default to a feasible outside curve line
   v2x_overtake_inner_curve_precommit_enabled: true # sim race: lock a verified inside corridor before the short hairpin window closes
   v2x_overtake_inner_curve_precommit_min_relative_speed: -0.5 # [m/s] allow a small initial deficit; reject a front kart pulling away quickly
+  # Every fresh Overtake entry, including minimum-motion and curve attack, passes this final
+  # measured-speed gate. Existing ShiftOut/Pass/FollowPrepare missions are not re-gated.
+  v2x_overtake_entry_min_relative_speed: -0.5 # [m/s] tolerate a small deficit, reject a target pulling away clearly
+  v2x_overtake_entry_speed_confirm_sec: 0.3 # [s] prevent one noisy V2X speed sample from admitting a doomed pass
   v2x_overtake_inner_curve_hard_continuation_enabled: true # keep only the locked inside ShiftOut/Pass through the hard apex
   v2x_overtake_hard_curve_entry_enabled: true # dev3 attack: start an inner/outer pass after hard-curve recognition when gap is valid
   v2x_overtake_forbidden_curve_lookahead_distance: 6.0 # [m] soft entry/continuation policy; hard curve uses completion guard below

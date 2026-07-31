@@ -284,6 +284,107 @@ bool should_apply_committed_pass_speed_floor(
     request.configured_min_speed_mps > 0.0;
 }
 
+CommittedPassPolicyResolution resolve_committed_pass_policy(
+  const CommittedPassPolicyRequest & request) noexcept
+{
+  CommittedPassPolicyResolution resolution;
+  resolution.active_execution = request.shiftout_phase || request.pass_phase;
+  resolution.constrained_horizon_release_allowed =
+    request.pass_phase &&
+    request.lateral_exclusion_latched &&
+    request.execution_path_physically_feasible &&
+    !request.actual_wall_contact;
+  resolution.committed_pass_speed_hold_allowed =
+    resolution.constrained_horizon_release_allowed &&
+    request.prior_front_cap_release_active &&
+    request.locked_target_body_lateral_clear &&
+    !request.locked_target_position_jump;
+
+  resolution.front_cap_release_ready = request.preserve_validated_breakout_line ||
+    can_release_overtake_front_cap(
+    OvertakeFrontCapReleaseRequest{
+      resolution.active_execution,
+      request.lateral_complete,
+      request.execution_horizon_unconstrained,
+      request.lateral_separation_clear,
+      request.prior_front_cap_release_active,
+      request.lateral_separation_above_reapply_threshold,
+      resolution.constrained_horizon_release_allowed,
+      resolution.committed_pass_speed_hold_allowed,
+      request.target_seen,
+      request.target_longitudinal_m});
+  resolution.front_cap_state_update_required =
+    resolution.active_execution &&
+    !request.preserve_validated_breakout_line &&
+    resolution.front_cap_release_ready != request.prior_front_cap_release_active;
+  resolution.committed_pass_speed_hold_active =
+    resolution.front_cap_release_ready &&
+    resolution.committed_pass_speed_hold_allowed &&
+    !request.lateral_complete;
+  resolution.constrained_horizon_front_cap_release_active =
+    resolution.front_cap_release_ready &&
+    !request.execution_horizon_unconstrained &&
+    resolution.constrained_horizon_release_allowed;
+  resolution.committed_pass_speed_floor_active =
+    should_apply_committed_pass_speed_floor(
+    CommittedPassSpeedFloorRequest{
+      request.committed_pass_speed_floor_enabled,
+      request.pass_phase,
+      request.lateral_complete,
+      resolution.front_cap_release_ready,
+      request.lateral_exclusion_latched,
+      request.lateral_separation_above_reapply_threshold,
+      request.target_seen,
+      request.execution_path_physically_feasible,
+      request.actual_wall_contact,
+      request.target_speed_mps,
+      request.slow_target_max_speed_mps,
+      request.committed_pass_min_speed_mps});
+
+  if (!resolution.front_cap_state_update_required) {
+    return resolution;
+  }
+  if (resolution.front_cap_release_ready) {
+    resolution.transition_reason = !request.execution_horizon_unconstrained ?
+      CommittedPassFrontCapTransitionReason::ConstrainedFeasiblePassHorizonAccepted :
+      request.lateral_separation_clear ?
+      CommittedPassFrontCapTransitionReason::LateralGoalAndExecutionHorizonClear :
+      CommittedPassFrontCapTransitionReason::TargetNoLongerAhead;
+  } else {
+    resolution.transition_reason = !request.target_seen ?
+      CommittedPassFrontCapTransitionReason::LockedTargetUnavailable :
+      !request.lateral_complete ?
+      CommittedPassFrontCapTransitionReason::LateralGoalIncomplete :
+      !request.execution_horizon_unconstrained ?
+      CommittedPassFrontCapTransitionReason::ExecutionHorizonConstrained :
+      CommittedPassFrontCapTransitionReason::LateralClearanceBelowReapplyThreshold;
+  }
+  return resolution;
+}
+
+const char * to_string(const CommittedPassFrontCapTransitionReason reason) noexcept
+{
+  switch (reason) {
+    case CommittedPassFrontCapTransitionReason::None:
+      return "none";
+    case CommittedPassFrontCapTransitionReason::ConstrainedFeasiblePassHorizonAccepted:
+      return "physical lateral clearance; constrained feasible Pass horizon accepted";
+    case CommittedPassFrontCapTransitionReason::LateralGoalAndExecutionHorizonClear:
+      return "lateral goal and execution horizon clear";
+    case CommittedPassFrontCapTransitionReason::TargetNoLongerAhead:
+      return "lateral goal complete and locked target no longer ahead";
+    case CommittedPassFrontCapTransitionReason::LockedTargetUnavailable:
+      return "locked target unavailable";
+    case CommittedPassFrontCapTransitionReason::LateralGoalIncomplete:
+      return "lateral goal incomplete";
+    case CommittedPassFrontCapTransitionReason::ExecutionHorizonConstrained:
+      return "execution horizon constrained";
+    case CommittedPassFrontCapTransitionReason::LateralClearanceBelowReapplyThreshold:
+      return "lateral clearance below reapply threshold";
+  }
+  return "unknown";
+}
+
 bool can_exclude_locked_target_from_front_overlap(
   const PassFrontOverlapExclusionRequest & request) noexcept
 {

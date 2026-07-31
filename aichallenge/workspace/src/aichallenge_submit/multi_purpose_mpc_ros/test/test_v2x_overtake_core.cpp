@@ -36,6 +36,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::StartGridBreakoutSpeedReferenceR
 using multi_purpose_mpc_ros::v2x_overtake_core::is_v2x_receipt_age_fresh;
 using multi_purpose_mpc_ros::v2x_overtake_core::ShiftOutCompletionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeFrontCapReleaseRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassPolicyRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassFrontCapTransitionReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassFrontOverlapExclusionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ActivePassGapHoldRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ActiveLineGapLossHoldRequest;
@@ -101,6 +103,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_speed_reference
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_start_grid_breakout_speed_reference;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_shiftout_complete;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_release_overtake_front_cap;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_committed_pass_policy;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_apply_committed_pass_speed_floor;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_exclude_locked_target_from_front_overlap;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_hold_active_pass_after_gap_loss;
@@ -814,6 +817,156 @@ TEST(V2XOvertakeCoreSpeed, AppliesCommittedPassFloorOnlyForClearSlowTargetPass)
   request.actual_wall_contact = false;
   request.front_cap_released = false;
   EXPECT_FALSE(should_apply_committed_pass_speed_floor(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, ResolvesInitialReleaseForConstrainedFeasiblePass)
+{
+  CommittedPassPolicyRequest request;
+  request.pass_phase = true;
+  request.lateral_complete = true;
+  request.execution_horizon_unconstrained = false;
+  request.execution_path_physically_feasible = true;
+  request.lateral_exclusion_latched = true;
+  request.lateral_separation_clear = true;
+  request.lateral_separation_above_reapply_threshold = true;
+  request.target_seen = true;
+  request.target_longitudinal_m = 3.0;
+
+  const auto resolution = resolve_committed_pass_policy(request);
+  EXPECT_TRUE(resolution.active_execution);
+  EXPECT_TRUE(resolution.constrained_horizon_release_allowed);
+  EXPECT_FALSE(resolution.committed_pass_speed_hold_allowed);
+  EXPECT_TRUE(resolution.front_cap_release_ready);
+  EXPECT_TRUE(resolution.front_cap_state_update_required);
+  EXPECT_FALSE(resolution.committed_pass_speed_hold_active);
+  EXPECT_TRUE(resolution.constrained_horizon_front_cap_release_active);
+  EXPECT_EQ(
+    resolution.transition_reason,
+    CommittedPassFrontCapTransitionReason::ConstrainedFeasiblePassHorizonAccepted);
+}
+
+TEST(V2XOvertakeCoreSpeed, HoldsExistingReleaseAcrossCommittedPassLineError)
+{
+  CommittedPassPolicyRequest request;
+  request.pass_phase = true;
+  request.lateral_complete = false;
+  request.execution_horizon_unconstrained = false;
+  request.execution_path_physically_feasible = true;
+  request.lateral_exclusion_latched = true;
+  request.prior_front_cap_release_active = true;
+  request.lateral_separation_clear = false;
+  request.lateral_separation_above_reapply_threshold = true;
+  request.locked_target_body_lateral_clear = true;
+  request.target_seen = true;
+  request.target_longitudinal_m = 1.5;
+
+  const auto resolution = resolve_committed_pass_policy(request);
+  EXPECT_TRUE(resolution.constrained_horizon_release_allowed);
+  EXPECT_TRUE(resolution.committed_pass_speed_hold_allowed);
+  EXPECT_TRUE(resolution.front_cap_release_ready);
+  EXPECT_FALSE(resolution.front_cap_state_update_required);
+  EXPECT_TRUE(resolution.committed_pass_speed_hold_active);
+  EXPECT_TRUE(resolution.constrained_horizon_front_cap_release_active);
+  EXPECT_EQ(
+    resolution.transition_reason, CommittedPassFrontCapTransitionReason::None);
+}
+
+TEST(V2XOvertakeCoreSpeed, PreservesCurrentHorizonInfeasibleCapReapplyBehavior)
+{
+  CommittedPassPolicyRequest request;
+  request.pass_phase = true;
+  request.lateral_complete = true;
+  request.execution_horizon_unconstrained = false;
+  request.execution_path_physically_feasible = false;
+  request.lateral_exclusion_latched = true;
+  request.prior_front_cap_release_active = true;
+  request.lateral_separation_clear = true;
+  request.lateral_separation_above_reapply_threshold = true;
+  request.locked_target_body_lateral_clear = true;
+  request.target_seen = true;
+  request.target_longitudinal_m = 1.0;
+
+  const auto resolution = resolve_committed_pass_policy(request);
+  EXPECT_FALSE(resolution.constrained_horizon_release_allowed);
+  EXPECT_FALSE(resolution.committed_pass_speed_hold_allowed);
+  EXPECT_FALSE(resolution.front_cap_release_ready);
+  EXPECT_TRUE(resolution.front_cap_state_update_required);
+  EXPECT_FALSE(resolution.committed_pass_speed_hold_active);
+  EXPECT_FALSE(resolution.constrained_horizon_front_cap_release_active);
+  EXPECT_EQ(
+    resolution.transition_reason,
+    CommittedPassFrontCapTransitionReason::ExecutionHorizonConstrained);
+}
+
+TEST(V2XOvertakeCoreSpeed, ResolvesIntegratedCommittedPassSpeedFloor)
+{
+  CommittedPassPolicyRequest request;
+  request.pass_phase = true;
+  request.lateral_complete = true;
+  request.execution_horizon_unconstrained = true;
+  request.execution_path_physically_feasible = true;
+  request.lateral_exclusion_latched = true;
+  request.lateral_separation_clear = true;
+  request.lateral_separation_above_reapply_threshold = true;
+  request.target_seen = true;
+  request.target_longitudinal_m = 2.0;
+  request.committed_pass_speed_floor_enabled = true;
+  request.target_speed_mps = 0.2;
+  request.slow_target_max_speed_mps = 1.0;
+  request.committed_pass_min_speed_mps = 3.0;
+
+  auto resolution = resolve_committed_pass_policy(request);
+  EXPECT_TRUE(resolution.front_cap_release_ready);
+  EXPECT_TRUE(resolution.committed_pass_speed_floor_active);
+
+  request.actual_wall_contact = true;
+  resolution = resolve_committed_pass_policy(request);
+  EXPECT_FALSE(resolution.committed_pass_speed_floor_active);
+}
+
+TEST(V2XOvertakeCoreSpeed, PreservesValidatedBreakoutSpeedOwnership)
+{
+  CommittedPassPolicyRequest request;
+  request.preserve_validated_breakout_line = true;
+  request.shiftout_phase = true;
+  request.prior_front_cap_release_active = false;
+
+  const auto resolution = resolve_committed_pass_policy(request);
+  EXPECT_TRUE(resolution.active_execution);
+  EXPECT_TRUE(resolution.front_cap_release_ready);
+  EXPECT_FALSE(resolution.front_cap_state_update_required);
+  EXPECT_EQ(
+    resolution.transition_reason, CommittedPassFrontCapTransitionReason::None);
+}
+
+TEST(V2XOvertakeCoreSpeed, KeepsCommittedPassFrontCapDiagnosticStringsStable)
+{
+  using Reason = CommittedPassFrontCapTransitionReason;
+  EXPECT_STREQ(
+    multi_purpose_mpc_ros::v2x_overtake_core::to_string(
+      Reason::ConstrainedFeasiblePassHorizonAccepted),
+    "physical lateral clearance; constrained feasible Pass horizon accepted");
+  EXPECT_STREQ(
+    multi_purpose_mpc_ros::v2x_overtake_core::to_string(
+      Reason::LateralGoalAndExecutionHorizonClear),
+    "lateral goal and execution horizon clear");
+  EXPECT_STREQ(
+    multi_purpose_mpc_ros::v2x_overtake_core::to_string(Reason::TargetNoLongerAhead),
+    "lateral goal complete and locked target no longer ahead");
+  EXPECT_STREQ(
+    multi_purpose_mpc_ros::v2x_overtake_core::to_string(Reason::LockedTargetUnavailable),
+    "locked target unavailable");
+  EXPECT_STREQ(
+    multi_purpose_mpc_ros::v2x_overtake_core::to_string(Reason::LateralGoalIncomplete),
+    "lateral goal incomplete");
+  EXPECT_STREQ(
+    multi_purpose_mpc_ros::v2x_overtake_core::to_string(
+      Reason::ExecutionHorizonConstrained),
+    "execution horizon constrained");
+  EXPECT_STREQ(
+    multi_purpose_mpc_ros::v2x_overtake_core::to_string(
+      Reason::LateralClearanceBelowReapplyThreshold),
+    "lateral clearance below reapply threshold");
 }
 
 TEST(V2XOvertakeCoreSpeed, ExcludesOnlyLaterallyClearLockedTargetDuringExecution)

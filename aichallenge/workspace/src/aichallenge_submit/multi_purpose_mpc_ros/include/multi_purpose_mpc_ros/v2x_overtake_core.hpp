@@ -507,6 +507,28 @@ bool static_wall_clamp_requires_overtake_recovery(
   bool active_execution_phase, bool static_target_adjusted,
   double required_lateral_accel_mps2, double maximum_lateral_accel_mps2) noexcept;
 
+struct ReachableLateralTargetRequest
+{
+  double current_lateral_m{};
+  double desired_lateral_m{};
+  double time_to_target_sec{};
+  double maximum_lateral_accel_mps2{};
+};
+
+struct ReachableLateralTargetResolution
+{
+  bool valid{false};
+  bool limited{false};
+  double target_lateral_m{};
+  double required_lateral_accel_mps2{std::numeric_limits<double>::infinity()};
+};
+
+/// Project one lateral target onto the acceleration-reachable interval around
+/// the current offset. Static-map users must validate the returned target again
+/// after projection; reachability alone does not establish wall clearance.
+ReachableLateralTargetResolution resolve_reachable_lateral_target(
+  const ReachableLateralTargetRequest & request) noexcept;
+
 struct PassSideLateralGoalRequest
 {
   int pass_side_sign{};

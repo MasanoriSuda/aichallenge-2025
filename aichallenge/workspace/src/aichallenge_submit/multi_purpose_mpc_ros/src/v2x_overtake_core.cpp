@@ -632,6 +632,40 @@ bool static_wall_clamp_requires_overtake_recovery(
          required_lateral_accel_mps2 > maximum_lateral_accel_mps2;
 }
 
+ReachableLateralTargetResolution resolve_reachable_lateral_target(
+  const ReachableLateralTargetRequest & request) noexcept
+{
+  ReachableLateralTargetResolution result;
+  if (
+    !std::isfinite(request.current_lateral_m) ||
+    !std::isfinite(request.desired_lateral_m) ||
+    !std::isfinite(request.time_to_target_sec) || request.time_to_target_sec <= 0.0 ||
+    !std::isfinite(request.maximum_lateral_accel_mps2) ||
+    request.maximum_lateral_accel_mps2 <= 0.0)
+  {
+    return result;
+  }
+
+  result.valid = true;
+  const double lateral_delta = request.desired_lateral_m - request.current_lateral_m;
+  result.required_lateral_accel_mps2 =
+    2.0 * std::abs(lateral_delta) /
+    (request.time_to_target_sec * request.time_to_target_sec);
+  result.target_lateral_m = request.desired_lateral_m;
+  if (result.required_lateral_accel_mps2 <= request.maximum_lateral_accel_mps2) {
+    return result;
+  }
+
+  const double reachable_shift =
+    0.5 * request.maximum_lateral_accel_mps2 *
+    request.time_to_target_sec * request.time_to_target_sec;
+  result.target_lateral_m = request.current_lateral_m +
+    std::copysign(reachable_shift, lateral_delta);
+  result.required_lateral_accel_mps2 = request.maximum_lateral_accel_mps2;
+  result.limited = true;
+  return result;
+}
+
 double resolve_pass_side_lateral_goal(const PassSideLateralGoalRequest & request) noexcept
 {
   if (

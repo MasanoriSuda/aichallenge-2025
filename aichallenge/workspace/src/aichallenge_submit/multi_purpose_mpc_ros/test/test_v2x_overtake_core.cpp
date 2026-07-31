@@ -1518,6 +1518,37 @@ TEST(V2XOvertakeCoreSpeed, AbortsWhenStaticClampReintroducesExcessLateralAcceler
     true, true, 95.0, 0.0));
 }
 
+TEST(V2XOvertakeCoreSpeed, ProjectsStaticClampTargetOntoReachableLateralInterval)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::ReachableLateralTargetRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::resolve_reachable_lateral_target;
+
+  ReachableLateralTargetRequest request;
+  request.current_lateral_m = -1.8;
+  request.desired_lateral_m = -0.8;
+  request.time_to_target_sec = 0.5;
+  request.maximum_lateral_accel_mps2 = 6.0;
+
+  auto result = resolve_reachable_lateral_target(request);
+  ASSERT_TRUE(result.valid);
+  EXPECT_TRUE(result.limited);
+  EXPECT_NEAR(result.target_lateral_m, -1.05, 1e-12);
+  EXPECT_DOUBLE_EQ(result.required_lateral_accel_mps2, 6.0);
+
+  request.desired_lateral_m = -1.2;
+  result = resolve_reachable_lateral_target(request);
+  ASSERT_TRUE(result.valid);
+  EXPECT_FALSE(result.limited);
+  EXPECT_DOUBLE_EQ(result.target_lateral_m, -1.2);
+  EXPECT_NEAR(result.required_lateral_accel_mps2, 4.8, 1e-12);
+
+  request.time_to_target_sec = 0.0;
+  EXPECT_FALSE(resolve_reachable_lateral_target(request).valid);
+  request.time_to_target_sec = 0.5;
+  request.maximum_lateral_accel_mps2 = 0.0;
+  EXPECT_FALSE(resolve_reachable_lateral_target(request).valid);
+}
+
 TEST(V2XOvertakeCoreSpeed, PlacesPassGoalBeyondLockedTargetOnSelectedSide)
 {
   PassSideLateralGoalRequest request;
@@ -2949,6 +2980,33 @@ TEST(V2XOvertakeCoreSideReplan, LateQualityAdvantageAloneKeepsCommittedSide)
   EXPECT_EQ(
     resolve_early_shiftout_side_replan(request).action,
     EarlyShiftOutSideReplanAction::Keep);
+}
+
+TEST(V2XOvertakeCoreSideReplan, LateralMotionGateKeepsSideForQualityOnlyReplan)
+{
+  EarlyShiftOutSideReplanRequest request;
+  request.enabled = true;
+  request.side_switch_permitted = false;
+  request.shiftout_phase = true;
+  request.locked_side = PassSide::Right;
+  request.candidate_side = PassSide::Left;
+  request.candidate_feasible = true;
+  request.selected_side_conflict = false;
+  request.lateral_progress_m = 0.2;
+  request.maximum_lateral_progress_m = 0.6;
+  request.traveled_distance_m = 2.0;
+  request.maximum_traveled_distance_m = 5.0;
+  request.candidate_stable_sec = 0.25;
+  request.required_stable_sec = 0.25;
+
+  const auto result = resolve_early_shiftout_side_replan(request);
+  EXPECT_EQ(result.action, EarlyShiftOutSideReplanAction::Keep);
+  EXPECT_FALSE(result.inside_switch_window);
+
+  request.selected_side_conflict = true;
+  EXPECT_EQ(
+    resolve_early_shiftout_side_replan(request).action,
+    EarlyShiftOutSideReplanAction::Abort);
 }
 
 TEST(V2XOvertakeCoreMissionOwnership, BehaviorRevalidationOwnsPausedMissionSide)

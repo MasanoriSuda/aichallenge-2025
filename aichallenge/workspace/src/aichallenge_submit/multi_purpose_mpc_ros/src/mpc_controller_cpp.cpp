@@ -1372,6 +1372,7 @@ struct OvertakeLineConfig
   double early_side_replan_max_lateral_progress{0.60};
   double early_side_replan_max_traveled_distance{5.0};
   double early_side_replan_stable_sec{0.25};
+  double early_side_replan_max_locked_side_lateral_speed{0.25};
   double side_replan_target_guard_distance{8.0};
   double return_clear_distance{4.0};
   double phase_hold_time{0.3};
@@ -1821,6 +1822,8 @@ struct V2XBehaviorOutput
   bool overtake_side_replan_window_active{false};
   int overtake_side_replan_candidate_sign{0};
   double overtake_side_replan_candidate_stable_sec{0.0};
+  double overtake_side_replan_locked_side_lateral_speed{0.0};
+  bool overtake_side_replan_lateral_speed_permitted{true};
   bool overtake_side_replan_ready{false};
   bool overtake_side_replan_abort{false};
   std::string overtake_left_reason;
@@ -1914,6 +1917,7 @@ struct OvertakeLineOutput
   bool wall_clearance_limited{false};
   bool static_map_wall_limited{false};
   bool static_map_margin_degraded{false};
+  bool static_map_reachable_projection_used{false};
   bool static_map_wall_infeasible{false};
 };
 
@@ -1926,6 +1930,7 @@ struct OvertakeLineHorizonEvaluation
   bool wall_clearance_limited{false};
   bool static_map_wall_limited{false};
   bool static_map_margin_degraded{false};
+  bool static_map_reachable_projection_used{false};
   bool static_map_wall_infeasible{false};
   bool static_clamp_lateral_accel_infeasible{false};
   bool static_map_margin_degraded_during_execution{false};
@@ -5457,6 +5462,23 @@ struct MPC
       cfg.v2x_behavior.overtake_line.early_side_replan_max_lateral_progress + kEps &&
       overtake_line_state_.phase_traveled_m <=
       cfg.v2x_behavior.overtake_line.early_side_replan_max_traveled_distance + kEps;
+    const bool lateral_speed_observation_valid =
+      std::isfinite(current_speed_mps_) && current_speed_mps_ >= 0.0 &&
+      std::isfinite(model->spatial_state.e_psi);
+    const double locked_side_lateral_speed =
+      shiftout_line_active && lateral_speed_observation_valid ?
+      std::max(
+        0.0,
+        static_cast<double>(locked_pass_side) * current_speed_mps_ *
+        std::sin(model->spatial_state.e_psi)) : 0.0;
+    const bool side_replan_lateral_speed_permitted =
+      !shiftout_line_active ||
+      (lateral_speed_observation_valid &&
+      locked_side_lateral_speed <=
+      cfg.v2x_behavior.overtake_line.early_side_replan_max_locked_side_lateral_speed + kEps);
+    output.overtake_side_replan_locked_side_lateral_speed = locked_side_lateral_speed;
+    output.overtake_side_replan_lateral_speed_permitted =
+      side_replan_lateral_speed_permitted;
     const bool selected_side_conflict =
       v2x_overtake_core::selected_pass_side_ordering_conflict(
       shiftout_line_active,
@@ -6286,7 +6308,8 @@ struct MPC
       const auto replan = overtake_core::resolve_early_shiftout_side_replan(
         overtake_core::EarlyShiftOutSideReplanRequest{
           true,
-          !overtake_line_state_.early_side_replanned,
+          !overtake_line_state_.early_side_replanned &&
+          side_replan_lateral_speed_permitted,
           true,
           overtake_line_state_.pass_front_overlap_exclusion_latched,
           pass_side(locked_pass_side),
@@ -8362,11 +8385,51 @@ private:
           const double static_lateral_shift = std::abs(target_ey - current_ey);
           required_lateral_accel =
             2.0 * static_lateral_shift / (time_to_target * time_to_target);
-          evaluation.static_clamp_lateral_accel_infeasible =
-            evaluation.static_clamp_lateral_accel_infeasible ||
+          const bool static_clamp_unreachable =
             overtake_core::static_wall_clamp_requires_overtake_recovery(
             enforce_execution_feasibility,
             static_clearance.adjusted, required_lateral_accel, max_lateral_accel);
+          if (static_clamp_unreachable) {
+            // The margin-preserving wall clamp can move a near-horizon target after the normal
+            // acceleration limiter has run. Project that correction back onto the reachable
+            // interval, then validate the full physical kart footprint again. This may relax
+            // only the additional wall margin; contact, unknown map and out-of-map remain fatal.
+            const auto reachable_target =
+              overtake_core::resolve_reachable_lateral_target(
+              overtake_core::ReachableLateralTargetRequest{
+                current_ey, target_ey, time_to_target, max_lateral_accel});
+            bool physical_reachable_target_found = false;
+            if (reachable_target.valid && reachable_target.limited) {
+              const double reachable_desired =
+                clip(reachable_target.target_lateral_m, lower, upper);
+              const double reachable_fallback = clip(current_ey, lower, upper);
+              const auto physical_clearance =
+                recovery_footprint::clamp_lateral_offset_to_static_map(
+                *overtake_static_wall_grid_, overtake_static_wall_footprint_, reference_pose,
+                reachable_desired, reachable_fallback, 0.0, sample_step);
+              if (physical_clearance.valid && physical_clearance.feasible) {
+                const auto validated_reachability =
+                  overtake_core::resolve_reachable_lateral_target(
+                  overtake_core::ReachableLateralTargetRequest{
+                    current_ey, physical_clearance.lateral_offset_m,
+                    time_to_target, max_lateral_accel});
+                if (validated_reachability.valid && !validated_reachability.limited) {
+                  target_ey = physical_clearance.lateral_offset_m;
+                  required_lateral_accel =
+                    validated_reachability.required_lateral_accel_mps2;
+                  physical_reachable_target_found = true;
+                  evaluation.lateral_accel_limited = true;
+                  evaluation.wall_clearance_limited = true;
+                  evaluation.static_map_wall_limited = true;
+                  evaluation.static_map_margin_degraded = true;
+                  evaluation.static_map_reachable_projection_used = true;
+                }
+              }
+            }
+            evaluation.static_clamp_lateral_accel_infeasible =
+              evaluation.static_clamp_lateral_accel_infeasible ||
+              !physical_reachable_target_found;
+          }
         } else {
           evaluation.static_map_wall_infeasible = true;
           evaluation.static_map_physical_infeasible_during_execution =
@@ -9386,6 +9449,8 @@ private:
       horizon_evaluation.static_map_wall_limited;
     output.static_map_margin_degraded =
       horizon_evaluation.static_map_margin_degraded;
+    output.static_map_reachable_projection_used =
+      horizon_evaluation.static_map_reachable_projection_used;
     output.static_map_wall_infeasible =
       horizon_evaluation.static_map_wall_infeasible;
     const bool execution_horizon_unconstrained =
@@ -9618,7 +9683,7 @@ private:
           "speed_hold=%d, "
           "cooldown=%.2f, "
           "max_lat_acc=%.2f, lat_limited=%d, wall_limited=%d, "
-          "static_wall_limited=%d, static_margin_degraded=%d, "
+          "static_wall_limited=%d, static_margin_degraded=%d, static_reachable=%d, "
           "static_wall_infeasible=%d, corridor_goal=%.2f, "
           "inter_vehicle=%d, boundaries=[%s,%s]",
           to_string(overtake_line_state_.phase), overtake_line_state_.pass_side_sign, goal_ey,
@@ -9639,6 +9704,7 @@ private:
           output.wall_clearance_limited ? 1 : 0,
           output.static_map_wall_limited ? 1 : 0,
           output.static_map_margin_degraded ? 1 : 0,
+          output.static_map_reachable_projection_used ? 1 : 0,
           output.static_map_wall_infeasible ? 1 : 0,
           overtake_line_state_.fixed_pass_corridor_goal_ey.value_or(
             std::numeric_limits<double>::quiet_NaN()),
@@ -10962,7 +11028,8 @@ private:
           "lat_clear=%d, body_clear=%d, latched=%d, "
           "left_gap=%d, right_gap=%d, left_q=%.2f, right_q=%.2f, "
           "side_conflict=%d, replan_window=%d, replan_candidate=%d, "
-          "replan_stable=%.2f, replan_ready=%d, replan_abort=%d, solver_failures=%d, "
+          "replan_stable=%.2f, replan_vlat=%.2f, replan_vlat_ok=%d, "
+          "replan_ready=%d, replan_abort=%d, solver_failures=%d, "
           "left_reason=%s, right_reason=%s, reason=%s, block=%s",
           to_string(desired_state), to_string(final_state), output.allow_gap_planner ? 1 : 0,
           output.target_velocity_limit, output.desired_velocity,
@@ -11051,6 +11118,8 @@ private:
           output.overtake_side_replan_window_active ? 1 : 0,
           output.overtake_side_replan_candidate_sign,
           output.overtake_side_replan_candidate_stable_sec,
+          output.overtake_side_replan_locked_side_lateral_speed,
+          output.overtake_side_replan_lateral_speed_permitted ? 1 : 0,
           output.overtake_side_replan_ready ? 1 : 0,
           output.overtake_side_replan_abort ? 1 : 0,
           infeasibility_counter,
@@ -12233,6 +12302,12 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_line_early_side_replan_stable_sec"] ?
     mpc["v2x_overtake_line_early_side_replan_stable_sec"].as<double>() : 0.25);
+  cfg.mpc.v2x_behavior.overtake_line.early_side_replan_max_locked_side_lateral_speed =
+    std::max(
+      0.0,
+      mpc["v2x_overtake_line_early_side_replan_max_locked_side_lateral_speed"] ?
+      mpc["v2x_overtake_line_early_side_replan_max_locked_side_lateral_speed"].as<double>() :
+      0.25);
   cfg.mpc.v2x_behavior.overtake_line.side_replan_target_guard_distance = std::max(
     0.0,
     mpc["v2x_overtake_line_side_replan_target_guard_distance"] ?
@@ -13442,7 +13517,7 @@ public:
         "solver_cooldown=%.2f s, solver_healthy=%d cycles, "
         "front_cap_clearance=%.2f/%.2f m, body_clearance=%.2f m, "
         "side_quality=%d/adv=%.2f, early_replan=%d/lat=%.2f m/dist=%.2f m/"
-        "stable=%.2f s/target=%.2f m",
+        "stable=%.2f s/vlat=%.2f m/s/target=%.2f m",
         mpc_cfg_.v2x_behavior.overtake_line.lateral_offset,
         mpc_cfg_.v2x_behavior.overtake_line.shift_distance,
         mpc_cfg_.v2x_behavior.overtake_line.pass_distance,
@@ -13468,6 +13543,8 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line.early_side_replan_max_lateral_progress,
         mpc_cfg_.v2x_behavior.overtake_line.early_side_replan_max_traveled_distance,
         mpc_cfg_.v2x_behavior.overtake_line.early_side_replan_stable_sec,
+        mpc_cfg_.v2x_behavior.overtake_line
+          .early_side_replan_max_locked_side_lateral_speed,
         mpc_cfg_.v2x_behavior.overtake_line.side_replan_target_guard_distance);
       RCLCPP_INFO(
         get_logger(),

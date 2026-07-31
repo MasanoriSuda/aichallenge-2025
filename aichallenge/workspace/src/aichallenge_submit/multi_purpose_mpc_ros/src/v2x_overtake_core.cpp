@@ -1830,11 +1830,7 @@ bool can_resume_paused_pass_directly(
     !std::isfinite(request.required_lateral_clearance_m) ||
     request.required_lateral_clearance_m < 0.0 ||
     !std::isfinite(request.current_lateral_m) ||
-    !std::isfinite(request.goal_lateral_m) ||
-    !std::isfinite(request.ego_speed_mps) || request.ego_speed_mps < 0.0 ||
-    !std::isfinite(request.target_speed_mps) || request.target_speed_mps < 0.0 ||
-    !std::isfinite(request.minimum_closing_speed_mps) ||
-    request.minimum_closing_speed_mps < 0.0)
+    !std::isfinite(request.goal_lateral_m))
   {
     return false;
   }
@@ -1863,13 +1859,9 @@ bool can_resume_paused_pass_directly(
     lateral_clear_on_committed_side(target_goal_relative_lateral_m);
   const bool predicted_goal_lateral_clear =
     lateral_clear_on_committed_side(target_predicted_goal_relative_lateral_m);
-  const bool closing_speed_ready =
-    request.ego_speed_mps - request.target_speed_mps + 1e-9 >=
-    request.minimum_closing_speed_mps;
   return current_on_committed_side && goal_on_committed_side &&
          goal_does_not_retreat_inward && current_lateral_clear &&
-         goal_lateral_clear && predicted_goal_lateral_clear &&
-         closing_speed_ready;
+         goal_lateral_clear && predicted_goal_lateral_clear;
 }
 
 const char * to_string(const OvertakeLineTransitionAction action) noexcept

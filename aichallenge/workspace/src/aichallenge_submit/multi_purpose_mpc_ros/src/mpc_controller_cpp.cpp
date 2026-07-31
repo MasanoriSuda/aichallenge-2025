@@ -9248,10 +9248,7 @@ private:
             behavior_output.locked_target_predicted_relative_lateral,
             resume_lateral_clearance,
             current_ey,
-            same_side_resume_goal,
-            behavior_output.ego_speed,
-            behavior_output.locked_target_speed,
-            0.0});
+            same_side_resume_goal});
         if (
           resuming_paused_mission && mission_side_sign != 0 &&
           !direct_same_side_resume)

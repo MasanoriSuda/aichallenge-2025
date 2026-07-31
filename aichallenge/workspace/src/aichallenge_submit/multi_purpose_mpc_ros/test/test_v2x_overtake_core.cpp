@@ -3252,9 +3252,6 @@ TEST(V2XOvertakeCoreMissionOwnership, DirectPassResumeRequiresSameSideClearCorri
   request.required_lateral_clearance_m = 1.50;
   request.current_lateral_m = 0.80;
   request.goal_lateral_m = 1.00;
-  request.ego_speed_mps = 5.0;
-  request.target_speed_mps = 3.0;
-  request.minimum_closing_speed_mps = 0.0;
 
   EXPECT_TRUE(can_resume_paused_pass_directly(request));
 
@@ -3290,10 +3287,26 @@ TEST(V2XOvertakeCoreMissionOwnership, DirectPassResumeRequiresSameSideClearCorri
   EXPECT_FALSE(can_resume_paused_pass_directly(request));
   request.target_predicted_relative_lateral_m = -1.70;
 
-  request.ego_speed_mps = 2.99;
-  request.target_speed_mps = 3.0;
-  EXPECT_FALSE(can_resume_paused_pass_directly(request));
-  request.ego_speed_mps = 3.0;
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, DirectPassResumeDoesNotDeadlockOnMeasuredSpeedDeficit)
+{
+  // 20260801-081138/d1: lateral admission was already safe while ego was
+  // 1.61 m/s slower. FollowPrepare cannot create closing speed while waiting
+  // for a condition that only the Pass speed policy can resolve.
+  PausedPassDirectResumeRequest request;
+  request.resuming_paused_mission = true;
+  request.mission_side_sign = -1;
+  request.behavior_side_sign = -1;
+  request.execution_corridor_valid = true;
+  request.target_seen = true;
+  request.target_lateral_prediction_valid = true;
+  request.target_relative_lateral_m = 1.84;
+  request.target_predicted_relative_lateral_m = 2.60;
+  request.required_lateral_clearance_m = 1.50;
+  request.current_lateral_m = -0.64;
+  request.goal_lateral_m = -0.64;
+
   EXPECT_TRUE(can_resume_paused_pass_directly(request));
 }
 
@@ -3311,8 +3324,6 @@ TEST(V2XOvertakeCoreMissionOwnership, DirectPassResumeMirrorsRightSidePrediction
   request.required_lateral_clearance_m = 1.50;
   request.current_lateral_m = -0.80;
   request.goal_lateral_m = -1.00;
-  request.ego_speed_mps = 5.0;
-  request.target_speed_mps = 3.0;
 
   EXPECT_TRUE(can_resume_paused_pass_directly(request));
 

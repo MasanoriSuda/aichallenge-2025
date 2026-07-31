@@ -1289,14 +1289,12 @@ struct PausedPassDirectResumeRequest
   double required_lateral_clearance_m{0.0};
   double current_lateral_m{0.0};
   double goal_lateral_m{0.0};
-  double ego_speed_mps{0.0};
-  double target_speed_mps{0.0};
-  double minimum_closing_speed_mps{0.0};
 };
 
 /// Skip a redundant ShiftOut only after the committed side, current and
-/// predicted lateral separation, non-inward goal, closing speed, and the
-/// revalidated execution corridor all agree.
+/// predicted lateral separation, non-inward goal, and the revalidated
+/// execution corridor all agree. Longitudinal acceleration belongs to the
+/// Pass speed policy after this lateral-safety admission.
 bool can_resume_paused_pass_directly(
   const PausedPassDirectResumeRequest & request) noexcept;
 

@@ -871,7 +871,7 @@ TEST(V2XOvertakeCoreSpeed, HoldsExistingReleaseAcrossCommittedPassLineError)
     resolution.transition_reason, CommittedPassFrontCapTransitionReason::None);
 }
 
-TEST(V2XOvertakeCoreSpeed, PreservesCurrentHorizonInfeasibleCapReapplyBehavior)
+TEST(V2XOvertakeCoreSpeed, HoldsExistingReleaseAcrossInfeasiblePassHorizon)
 {
   CommittedPassPolicyRequest request;
   request.pass_phase = true;
@@ -885,17 +885,88 @@ TEST(V2XOvertakeCoreSpeed, PreservesCurrentHorizonInfeasibleCapReapplyBehavior)
   request.locked_target_body_lateral_clear = true;
   request.target_seen = true;
   request.target_longitudinal_m = 1.0;
+  request.committed_pass_speed_floor_enabled = true;
+  request.target_speed_mps = 0.2;
+  request.slow_target_max_speed_mps = 1.0;
+  request.committed_pass_min_speed_mps = 3.0;
 
   const auto resolution = resolve_committed_pass_policy(request);
   EXPECT_FALSE(resolution.constrained_horizon_release_allowed);
+  EXPECT_TRUE(resolution.committed_pass_speed_hold_allowed);
+  EXPECT_TRUE(resolution.front_cap_release_ready);
+  EXPECT_FALSE(resolution.front_cap_state_update_required);
+  EXPECT_TRUE(resolution.committed_pass_speed_hold_active);
+  EXPECT_FALSE(resolution.constrained_horizon_front_cap_release_active);
+  EXPECT_FALSE(resolution.committed_pass_speed_floor_active);
+  EXPECT_EQ(
+    resolution.transition_reason, CommittedPassFrontCapTransitionReason::None);
+}
+
+TEST(V2XOvertakeCoreSpeed, DoesNotAcquireInitialReleaseOnInfeasiblePassHorizon)
+{
+  CommittedPassPolicyRequest request;
+  request.pass_phase = true;
+  request.lateral_complete = true;
+  request.execution_horizon_unconstrained = false;
+  request.execution_path_physically_feasible = false;
+  request.lateral_exclusion_latched = true;
+  request.prior_front_cap_release_active = false;
+  request.lateral_separation_clear = true;
+  request.lateral_separation_above_reapply_threshold = true;
+  request.locked_target_body_lateral_clear = true;
+  request.target_seen = true;
+  request.target_longitudinal_m = 1.0;
+
+  const auto resolution = resolve_committed_pass_policy(request);
   EXPECT_FALSE(resolution.committed_pass_speed_hold_allowed);
   EXPECT_FALSE(resolution.front_cap_release_ready);
-  EXPECT_TRUE(resolution.front_cap_state_update_required);
+  EXPECT_FALSE(resolution.front_cap_state_update_required);
   EXPECT_FALSE(resolution.committed_pass_speed_hold_active);
-  EXPECT_FALSE(resolution.constrained_horizon_front_cap_release_active);
-  EXPECT_EQ(
-    resolution.transition_reason,
-    CommittedPassFrontCapTransitionReason::ExecutionHorizonConstrained);
+}
+
+TEST(V2XOvertakeCoreSpeed, DropsInfeasibleHorizonHoldWhenAnySafetyGuardFails)
+{
+  CommittedPassPolicyRequest request;
+  request.pass_phase = true;
+  request.lateral_complete = true;
+  request.execution_horizon_unconstrained = false;
+  request.execution_path_physically_feasible = false;
+  request.lateral_exclusion_latched = true;
+  request.prior_front_cap_release_active = true;
+  request.lateral_separation_clear = true;
+  request.lateral_separation_above_reapply_threshold = true;
+  request.locked_target_body_lateral_clear = true;
+  request.target_seen = true;
+  request.target_longitudinal_m = 1.0;
+  EXPECT_TRUE(resolve_committed_pass_policy(request).front_cap_release_ready);
+
+  request.actual_wall_contact = true;
+  EXPECT_FALSE(resolve_committed_pass_policy(request).front_cap_release_ready);
+  request.actual_wall_contact = false;
+
+  request.locked_target_position_jump = true;
+  EXPECT_FALSE(resolve_committed_pass_policy(request).front_cap_release_ready);
+  request.locked_target_position_jump = false;
+
+  request.locked_target_body_lateral_clear = false;
+  EXPECT_FALSE(resolve_committed_pass_policy(request).front_cap_release_ready);
+  request.locked_target_body_lateral_clear = true;
+
+  request.lateral_separation_above_reapply_threshold = false;
+  EXPECT_FALSE(resolve_committed_pass_policy(request).front_cap_release_ready);
+  request.lateral_separation_above_reapply_threshold = true;
+
+  request.lateral_exclusion_latched = false;
+  EXPECT_FALSE(resolve_committed_pass_policy(request).front_cap_release_ready);
+  request.lateral_exclusion_latched = true;
+
+  request.target_seen = false;
+  EXPECT_FALSE(resolve_committed_pass_policy(request).front_cap_release_ready);
+  request.target_seen = true;
+
+  request.pass_phase = false;
+  request.shiftout_phase = true;
+  EXPECT_FALSE(resolve_committed_pass_policy(request).front_cap_release_ready);
 }
 
 TEST(V2XOvertakeCoreSpeed, ResolvesIntegratedCommittedPassSpeedFloor)

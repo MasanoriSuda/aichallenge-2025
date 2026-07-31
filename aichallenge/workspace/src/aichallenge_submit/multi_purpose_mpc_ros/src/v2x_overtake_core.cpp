@@ -294,8 +294,13 @@ CommittedPassPolicyResolution resolve_committed_pass_policy(
     request.lateral_exclusion_latched &&
     request.execution_path_physically_feasible &&
     !request.actual_wall_contact;
+  // Horizon feasibility remains mandatory to acquire a release, but it must not revoke an
+  // already committed, body-clear Pass. Path limits and the Recovery FSM continue to own wall
+  // and lateral-acceleration safety independently from this locked-target speed cap.
   resolution.committed_pass_speed_hold_allowed =
-    resolution.constrained_horizon_release_allowed &&
+    request.pass_phase &&
+    request.lateral_exclusion_latched &&
+    !request.actual_wall_contact &&
     request.prior_front_cap_release_active &&
     request.locked_target_body_lateral_clear &&
     !request.locked_target_position_jump;
@@ -320,7 +325,10 @@ CommittedPassPolicyResolution resolve_committed_pass_policy(
   resolution.committed_pass_speed_hold_active =
     resolution.front_cap_release_ready &&
     resolution.committed_pass_speed_hold_allowed &&
-    !request.lateral_complete;
+    request.lateral_separation_above_reapply_threshold &&
+    (!request.lateral_complete ||
+    (!request.execution_horizon_unconstrained &&
+    !resolution.constrained_horizon_release_allowed));
   resolution.constrained_horizon_front_cap_release_active =
     resolution.front_cap_release_ready &&
     !request.execution_horizon_unconstrained &&

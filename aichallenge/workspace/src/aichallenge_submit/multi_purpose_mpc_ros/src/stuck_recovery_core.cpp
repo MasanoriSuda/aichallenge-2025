@@ -514,6 +514,57 @@ std::optional<double> compute_rejoin_steering_tire_angle(
     request.max_steering_tire_angle_rad);
 }
 
+RecoveryCourseProgressResolution resolve_recovery_course_progress(
+  const RecoveryCourseProgressRequest & request) noexcept
+{
+  RecoveryCourseProgressResolution resolution;
+  if (
+    !std::isfinite(request.current_lateral_error_m) ||
+    !std::isfinite(request.vehicle_yaw_rad) ||
+    !std::isfinite(request.heading_error_rad) ||
+    !std::isfinite(request.candidate_delta_x_m) ||
+    !std::isfinite(request.candidate_delta_y_m) ||
+    !finite_nonnegative(request.activation_lateral_error_m) ||
+    !finite_nonnegative(request.worsening_tolerance_m))
+  {
+    return resolution;
+  }
+
+  const double path_yaw_rad = request.vehicle_yaw_rad - request.heading_error_rad;
+  const double candidate_lateral_delta_m =
+    -std::sin(path_yaw_rad) * request.candidate_delta_x_m +
+    std::cos(path_yaw_rad) * request.candidate_delta_y_m;
+  resolution.candidate_lateral_error_m =
+    request.current_lateral_error_m + candidate_lateral_delta_m;
+  if (!std::isfinite(resolution.candidate_lateral_error_m)) {
+    return RecoveryCourseProgressResolution{};
+  }
+
+  resolution.valid = true;
+  resolution.guard_active =
+    std::abs(request.current_lateral_error_m) > request.activation_lateral_error_m;
+  resolution.lateral_improvement_m =
+    std::abs(request.current_lateral_error_m) -
+    std::abs(resolution.candidate_lateral_error_m);
+  resolution.candidate_allowed =
+    !resolution.guard_active ||
+    resolution.lateral_improvement_m + request.worsening_tolerance_m >= 0.0;
+  return resolution;
+}
+
+bool course_directed_forward_escape_allowed(
+  const CourseDirectedForwardEscapeRequest & request) noexcept
+{
+  return request.simulation_environment &&
+         request.aggressive_sim_recovery_enabled &&
+         request.course_progress_guard_active &&
+         request.obstacle_reverse_first &&
+         !request.reverse_only_episode &&
+         !request.reverse_intent_latched &&
+         !request.coordinated_stop_active &&
+         !request.solver_reverse_only;
+}
+
 StuckDetector::StuckDetector(DetectorConfig config)
 : config_(std::move(config))
 {

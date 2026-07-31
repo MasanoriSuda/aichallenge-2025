@@ -11204,6 +11204,9 @@ struct RecoverySafetySnapshot
   std::size_t static_checked_pose_count{};
   double static_rejected_at_distance_m{};
   bool reverse_candidate_selected{false};
+  bool course_progress_guard_active{false};
+  bool course_progress_candidate_rejected{false};
+  double selected_course_lateral_improvement_m{};
   bool stepwise_escape{false};
   std::size_t contact_reduction{};
   stuck_recovery::ManeuverDirection maneuver_direction{
@@ -14635,9 +14638,11 @@ private:
     const double ros_now_sec, const double reverse_distance_to_check_m,
     const double forward_distance_to_check_m,
     const double escape_step_distance_to_check_m,
+    const double recovery_lateral_error_m,
     const double recovery_heading_error_rad,
     const double rejoin_steering_angle_rad,
     const bool reverse_only,
+    const bool allow_forward_course_escape,
     const bool evaluate_rollout) const
   {
     RecoverySafetySnapshot snapshot;
@@ -14649,6 +14654,8 @@ private:
     }
 
     const recovery_footprint::Pose2D recovery_pose{pose.x, pose.y, pose.theta};
+    const bool forward_candidate_evaluation_allowed =
+      !reverse_only || allow_forward_course_escape;
     const auto wall_proximity = recovery_footprint::classify_nearby_wall(
       *recovery_grid_, recovery_footprint_, recovery_pose,
       cfg_.stuck_recovery.wall_direction_search_margin_m,
@@ -14805,6 +14812,33 @@ private:
         cfg_.stuck_recovery.side_escape_steering_samples);
       std::optional<recovery_footprint::FeasibilityResult> first_result;
       std::optional<recovery_footprint::FeasibilityResult> selected_result;
+      const auto course_progress =
+        [&](const recovery_footprint::FeasibilityResult & result) {
+          if (result.rollout.empty()) {
+            return stuck_recovery::RecoveryCourseProgressResolution{};
+          }
+          const auto & endpoint = result.rollout.back().pose;
+          return stuck_recovery::resolve_recovery_course_progress(
+            stuck_recovery::RecoveryCourseProgressRequest{
+              recovery_lateral_error_m,
+              recovery_pose.yaw_rad,
+              recovery_heading_error_rad,
+              endpoint.x_m - recovery_pose.x_m,
+              endpoint.y_m - recovery_pose.y_m,
+              cfg_.stuck_recovery.core.supervisor.max_rejoin_lateral_error_m,
+              0.02});
+        };
+      const auto course_candidate_allowed =
+        [&](const recovery_footprint::FeasibilityResult & result) {
+          const auto progress = course_progress(result);
+          snapshot.course_progress_guard_active =
+            snapshot.course_progress_guard_active || progress.guard_active;
+          if (!progress.valid || !progress.candidate_allowed) {
+            snapshot.course_progress_candidate_rejected = true;
+            return false;
+          }
+          return true;
+        };
       const auto select_heading_aligned_reverse_candidate = [&]() {
           std::optional<recovery_footprint::FeasibilityResult> best_result;
           double best_score = std::numeric_limits<double>::infinity();
@@ -14812,7 +14846,9 @@ private:
               if (!first_result.has_value()) {
                 first_result = result;
               }
-              if (!result.feasible || result.rollout.empty()) {
+              if (!result.feasible || result.rollout.empty() ||
+                !course_candidate_allowed(result))
+              {
                 return;
               }
               const double yaw_delta = wrap_to_pi(
@@ -14857,7 +14893,9 @@ private:
           std::optional<recovery_footprint::FeasibilityResult> best_result;
           double best_score = std::numeric_limits<double>::infinity();
           const auto consider = [&](recovery_footprint::FeasibilityResult result) {
-              if (!result.feasible || result.rollout.empty()) {
+              if (!result.feasible || result.rollout.empty() ||
+                !course_candidate_allowed(result))
+              {
                 return;
               }
               const double yaw_delta = wrap_to_pi(
@@ -14901,8 +14939,10 @@ private:
       if (recovery_selected_reverse_primitive_.has_value()) {
         auto result = evaluate_candidate(recovery_selected_reverse_primitive_.value());
         first_result = result;
-        if (result.feasible) {
+        if (result.feasible && course_candidate_allowed(result)) {
           selected_result = std::move(result);
+        } else if (forward_candidate_evaluation_allowed) {
+          selected_result = select_forward_deadlock_fallback();
         }
       } else if (stepwise_candidate_mode) {
         // Contact escape requires improvement. If the simulator reports a
@@ -14928,12 +14968,27 @@ private:
                          std::abs(
                     candidate.steering_angle_rad - desired_steering.value()) : 0.0;
                 };
-              if (result.feasible &&
-                (!best_result.has_value() ||
+              if (!result.feasible || !course_candidate_allowed(result)) {
+                return;
+              }
+              const double course_improvement =
+                course_progress(result).lateral_improvement_m;
+              const auto result_course_progress = course_progress(result);
+              const auto best_course_progress = best_result.has_value() ?
+                course_progress(best_result.value()) :
+                stuck_recovery::RecoveryCourseProgressResolution{};
+              const double best_course_improvement = best_result.has_value() ?
+                best_course_progress.lateral_improvement_m :
+                -std::numeric_limits<double>::infinity();
+              if (!best_result.has_value() ||
                 result.contact_reduction > best_result->contact_reduction ||
                 (result.contact_reduction == best_result->contact_reduction &&
+                ((result_course_progress.guard_active &&
+                course_improvement > best_course_improvement + kEps) ||
+                ((!result_course_progress.guard_active ||
+                std::abs(course_improvement - best_course_improvement) <= kEps) &&
                 desired_steering.has_value() &&
-                guidance_score(result) + kEps < guidance_score(best_result.value()))))
+                guidance_score(result) + kEps < guidance_score(best_result.value())))))
               {
                 best_result = std::move(result);
               }
@@ -14952,10 +15007,11 @@ private:
           // Mixed/corner contact does not prove that retreat is the improving
           // direction. Evaluate the same bounded step forward and choose it
           // only when the swept footprint removes more occupied contacts than
-          // every reverse candidate. Reverse wins ties. If reverse is better
-          // but V2X-blocked, retain the improving forward step as the existing
+          // every reverse candidate. Reverse wins ties near the path; outside
+          // the rejoin envelope the candidate with better course progress wins.
+          // If reverse is better but V2X-blocked, retain the improving forward step as the existing
           // directional deadlock fallback.
-          if (!reverse_only) {
+          if (forward_candidate_evaluation_allowed) {
             consider_step_candidate(evaluate_candidate_with_steering(
               recovery_footprint::ReversePrimitive::ForwardStraight, 0.0),
               best_forward_step);
@@ -14970,9 +15026,19 @@ private:
             }
           }
           if (best_forward_step.has_value()) {
+            const double forward_course_improvement =
+              course_progress(best_forward_step.value()).lateral_improvement_m;
+            const bool course_guard_active =
+              course_progress(best_forward_step.value()).guard_active;
+            const double selected_course_improvement = selected_result.has_value() ?
+              course_progress(selected_result.value()).lateral_improvement_m :
+              -std::numeric_limits<double>::infinity();
             if (
               !selected_result.has_value() ||
-              best_forward_step->contact_reduction > selected_result->contact_reduction)
+              best_forward_step->contact_reduction > selected_result->contact_reduction ||
+              (best_forward_step->contact_reduction == selected_result->contact_reduction &&
+              course_guard_active &&
+              forward_course_improvement > selected_course_improvement + kEps))
             {
               selected_result = std::move(best_forward_step);
             } else if (!recovery_footprint::primitive_is_forward(selected_result->primitive)) {
@@ -14981,7 +15047,7 @@ private:
             }
           }
         }
-        if (clearance_reassessment_step) {
+        if (clearance_reassessment_step && forward_candidate_evaluation_allowed) {
           auto forward_result = select_forward_deadlock_fallback();
           if (forward_result.has_value()) {
             if (selected_result.has_value()) {
@@ -15006,15 +15072,29 @@ private:
               std::optional<recovery_footprint::FeasibilityResult> best_result;
               double best_heading_error = std::numeric_limits<double>::infinity();
               const auto consider = [&](recovery_footprint::FeasibilityResult result) {
-                  if (!result.feasible || result.rollout.empty()) {
+                  if (!result.feasible || result.rollout.empty() ||
+                    !course_candidate_allowed(result))
+                  {
                     return;
                   }
+                  const double course_improvement =
+                    course_progress(result).lateral_improvement_m;
+                  const auto result_course_progress = course_progress(result);
                   const double yaw_delta = wrap_to_pi(
                     result.rollout.back().pose.yaw_rad - recovery_pose.yaw_rad);
                   const double heading_error = std::isfinite(recovery_heading_error_rad) ?
                     std::abs(wrap_to_pi(recovery_heading_error_rad + yaw_delta)) :
                     std::abs(yaw_delta);
-                  if (!best_result.has_value() || heading_error + kEps < best_heading_error) {
+                  const double best_course_improvement = best_result.has_value() ?
+                    course_progress(best_result.value()).lateral_improvement_m :
+                    -std::numeric_limits<double>::infinity();
+                  if (!best_result.has_value() ||
+                    (result_course_progress.guard_active &&
+                    course_improvement > best_course_improvement + kEps) ||
+                    ((!result_course_progress.guard_active ||
+                    std::abs(course_improvement - best_course_improvement) <= kEps) &&
+                    heading_error + kEps < best_heading_error))
+                  {
                     best_heading_error = heading_error;
                     best_result = std::move(result);
                   }
@@ -15038,14 +15118,24 @@ private:
               return best_result;
             };
           selected_result = select_non_worsening(false);
-          if (!reverse_only) {
+          if (forward_candidate_evaluation_allowed) {
             auto forward_result = select_non_worsening(true);
             if (forward_result.has_value()) {
-              if (selected_result.has_value()) {
+              const double forward_course_improvement =
+                course_progress(forward_result.value()).lateral_improvement_m;
+              const bool course_guard_active =
+                course_progress(forward_result.value()).guard_active;
+              const double selected_course_improvement = selected_result.has_value() ?
+                course_progress(selected_result.value()).lateral_improvement_m :
+                -std::numeric_limits<double>::infinity();
+              if (!selected_result.has_value() ||
+                (course_guard_active &&
+                forward_course_improvement > selected_course_improvement + kEps))
+              {
+                selected_result = std::move(forward_result.value());
+              } else {
                 forward_deadlock_fallback = std::move(forward_result.value());
                 forward_deadlock_fallback_stepwise = true;
-              } else {
-                selected_result = std::move(forward_result.value());
               }
             }
           }
@@ -15061,7 +15151,7 @@ private:
         // also retain a statically clear forward escape for the multi-vehicle
         // case where a stopped follower occupies the reverse corridor.
         selected_result = select_heading_aligned_reverse_candidate();
-        if (!reverse_only) {
+        if (forward_candidate_evaluation_allowed) {
           auto forward_result = select_forward_deadlock_fallback();
           if (forward_result.has_value()) {
             if (selected_result.has_value()) {
@@ -15072,17 +15162,20 @@ private:
           }
         }
       } else if (snapshot.wall_region == recovery_footprint::WallRegion::Rear) {
-        if (!reverse_only) {
+        if (forward_candidate_evaluation_allowed) {
           auto result = evaluate_candidate(
             recovery_footprint::ReversePrimitive::ForwardStraight);
           first_result = result;
-          if (result.feasible) {
+          if (result.feasible && course_candidate_allowed(result)) {
             selected_result = std::move(result);
           }
         }
       } else if (snapshot.wall_region == recovery_footprint::WallRegion::Front) {
         if (snapshot.current_footprint_clear) {
           selected_result = select_heading_aligned_reverse_candidate();
+          if (!selected_result.has_value() && forward_candidate_evaluation_allowed) {
+            selected_result = select_forward_deadlock_fallback();
+          }
         } else {
           constexpr std::array<recovery_footprint::ReversePrimitive, 3> kPrimitivePreference{
             recovery_footprint::ReversePrimitive::Straight,
@@ -15093,7 +15186,7 @@ private:
             if (!first_result.has_value()) {
               first_result = result;
             }
-            if (result.feasible) {
+            if (result.feasible && course_candidate_allowed(result)) {
               selected_result = std::move(result);
               break;
             }
@@ -15109,7 +15202,7 @@ private:
         // when the complete static rollout itself is clear; the core still
         // requires that confirmation and the directional V2X corridor below.
         selected_result = select_heading_aligned_reverse_candidate();
-        if (!reverse_only && !selected_result.has_value()) {
+        if (forward_candidate_evaluation_allowed && !selected_result.has_value()) {
           selected_result = select_forward_deadlock_fallback();
         }
       }
@@ -15120,7 +15213,8 @@ private:
       // clear-footprint fallback and Front-wall candidate still has to pass the full swept-
       // footprint check, so this does not weaken the collision gate.
       if (
-        !reverse_only && snapshot.current_footprint_clear && selected_result.has_value() &&
+        forward_candidate_evaluation_allowed && snapshot.current_footprint_clear &&
+        selected_result.has_value() &&
         !recovery_footprint::primitive_is_forward(selected_result->primitive) &&
         !forward_deadlock_fallback.has_value())
       {
@@ -15146,6 +15240,8 @@ private:
         snapshot.reverse_candidate_selected = true;
         snapshot.stepwise_escape = stepwise_candidate_mode;
         snapshot.contact_reduction = selected_result->contact_reduction;
+        snapshot.selected_course_lateral_improvement_m =
+          course_progress(selected_result.value()).lateral_improvement_m;
         snapshot.selected_reverse_primitive = selected_result->primitive;
         snapshot.maneuver_direction = recovery_footprint::primitive_is_forward(
           selected_result->primitive) ?
@@ -15632,6 +15728,21 @@ private:
         recovery_reverse_only_episode_, recovery_reverse_intent_latched_,
         coordinated_stop_active, solver_reverse_only_candidate,
         obstacle_reverse_first, recovery_forward_fallback_unlocked_});
+    const bool course_recovery_guard_active =
+      std::isfinite(car_->spatial_state.e_y) &&
+      std::abs(car_->spatial_state.e_y) >
+      cfg_.stuck_recovery.core.supervisor.max_rejoin_lateral_error_m;
+    const bool allow_forward_course_escape =
+      stuck_recovery::course_directed_forward_escape_allowed(
+      stuck_recovery::CourseDirectedForwardEscapeRequest{
+        use_sim_time_,
+        cfg_.stuck_recovery.core.supervisor.aggressive_sim_recovery_enabled,
+        course_recovery_guard_active,
+        obstacle_reverse_first,
+        recovery_reverse_only_episode_,
+        recovery_reverse_intent_latched_,
+        coordinated_stop_active,
+        solver_reverse_only_candidate});
     const bool low_speed_recovery_candidate =
       std::abs(actual_v) <= cfg_.stuck_recovery.core.detector.moving_speed_mps &&
       (requested_forward_speed_mps >=
@@ -15662,9 +15773,11 @@ private:
       pose, steady_now, control_time.seconds(), reverse_distance_to_check_m,
       forward_distance_to_check_m,
       escape_step_distance_to_check_m,
+      car_->spatial_state.e_y,
       car_->spatial_state.e_psi,
       checked_rejoin_steering_tire_angle_rad,
       reverse_only,
+      allow_forward_course_escape,
       recovery_context_active || low_speed_recovery_candidate);
     const bool awsim_recovery_settling =
       last_collision_receipt_steady_.has_value() &&
@@ -15826,7 +15939,7 @@ private:
       !recovery_reverse_intent_latched_ && !recovery_forward_fallback_unlocked_ &&
       stuck_recovery::recovery_reverse_intent_latch_allowed(output.state) &&
       reverse_only &&
-      (obstacle_reverse_first || recovery_reverse_only_episode_ ||
+      (recovery_reverse_only_episode_ || recovery_coordinated_stop_episode_ ||
       (safety.reverse_candidate_selected &&
       safety.maneuver_direction == stuck_recovery::ManeuverDirection::Reverse)))
     {
@@ -15953,13 +16066,16 @@ private:
       RCLCPP_INFO(
         get_logger(), "Stuck recovery maneuver selected: direction=%s, primitive=%s, "
         "steering=%.3f rad, wall=%s, wall_distance=%.3f m, coordinated=%d, "
-        "reverse_only=%d, recovery_mpc=%d, mpc_desired=%.3f rad, aggressive_retry=%zu",
+        "reverse_only=%d, course_guard=%d, course_improvement=%.3f m, "
+        "recovery_mpc=%d, mpc_desired=%.3f rad, aggressive_retry=%zu",
         stuck_recovery::to_string(safety.maneuver_direction),
         recovery_footprint::to_string(safety.selected_reverse_primitive),
         safety.selected_reverse_steering_angle_rad,
         recovery_footprint::to_string(safety.wall_region), safety.wall_distance_m,
         recovery_coordinated_stop_episode_ ? 1 : 0,
         reverse_only ? 1 : 0,
+        safety.course_progress_guard_active ? 1 : 0,
+        safety.selected_course_lateral_improvement_m,
         safety.recovery_mpc_guidance_used ? 1 : 0,
         safety.recovery_mpc_desired_steering_angle_rad,
         recovery_aggressive_retry_count_);
@@ -16059,6 +16175,7 @@ private:
         "v2x_blocker=%s, v2x_gate=%s/%s, v2x_clearance=%.3f/%.3f/%.3f m, "
         "v2x_reject_at=%.3f m, "
         "wall=%s, wall_distance=%.3f, direction=%s, primitive=%s, steering=%.3f, "
+        "course_guard=%d, course_rejected=%d, course_improvement=%.3f m, "
         "stepwise=%d, continuous=%d, brake=%d, adaptive_retry=%zu, contact_reduction=%zu, "
         "step=%zu/%zu, maneuver_distance=%.3f m, "
         "episode_distance=%.3f m, stopping_reserve=%.3f m, escape_target=%.3f m, "
@@ -16088,7 +16205,11 @@ private:
         stuck_recovery::to_string(safety.maneuver_direction),
         safety.reverse_candidate_selected ?
         recovery_footprint::to_string(safety.selected_reverse_primitive) : "none",
-        safety.selected_reverse_steering_angle_rad, safety.stepwise_escape ? 1 : 0,
+        safety.selected_reverse_steering_angle_rad,
+        safety.course_progress_guard_active ? 1 : 0,
+        safety.course_progress_candidate_rejected ? 1 : 0,
+        safety.selected_course_lateral_improvement_m,
+        safety.stepwise_escape ? 1 : 0,
         fast_continuous_reverse_selected ? 1 : 0,
         input.recovery.reverse_escape_brake_required ? 1 : 0,
         adaptive_reverse_retry_tracker_ ?
@@ -16326,7 +16447,9 @@ private:
       cfg_.stuck_recovery.core.supervisor.escape_step_distance_m;
     const auto safety = evaluate_recovery_safety(
       pose, steady_now, control_time.seconds(), bounded_distance_m,
-      bounded_distance_m, bounded_distance_m, 0.0, 0.0, false, true);
+      bounded_distance_m, bounded_distance_m,
+      car_->spatial_state.e_y, car_->spatial_state.e_psi, 0.0,
+      false, false, true);
     const bool drive_gear_fresh =
       recovery_gear_report_fresh(steady_now) && reported_gear_.has_value() &&
       reported_gear_.value() == stuck_recovery::Gear::Drive &&

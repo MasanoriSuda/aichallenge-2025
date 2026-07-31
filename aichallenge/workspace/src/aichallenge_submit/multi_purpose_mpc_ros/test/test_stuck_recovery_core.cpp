@@ -14,6 +14,7 @@ namespace
 using multi_purpose_mpc_ros::stuck_recovery::CoreConfig;
 using multi_purpose_mpc_ros::stuck_recovery::CoreInput;
 using multi_purpose_mpc_ros::stuck_recovery::CollisionDeliberateStopOverrideRequest;
+using multi_purpose_mpc_ros::stuck_recovery::CourseDirectedForwardEscapeRequest;
 using multi_purpose_mpc_ros::stuck_recovery::AdaptiveReverseRetryConfig;
 using multi_purpose_mpc_ros::stuck_recovery::AdaptiveReverseRetryTracker;
 using multi_purpose_mpc_ros::stuck_recovery::DetectorConfig;
@@ -30,6 +31,7 @@ using multi_purpose_mpc_ros::stuck_recovery::RecoveryActionType;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryInput;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryReason;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryState;
+using multi_purpose_mpc_ros::stuck_recovery::RecoveryCourseProgressRequest;
 using multi_purpose_mpc_ros::stuck_recovery::ReverseDirectionPolicyInput;
 using multi_purpose_mpc_ros::stuck_recovery::RecoverySupervisor;
 using multi_purpose_mpc_ros::stuck_recovery::RejoinSteeringRequest;
@@ -41,6 +43,7 @@ using multi_purpose_mpc_ros::stuck_recovery::StuckVerdict;
 using multi_purpose_mpc_ros::stuck_recovery::SupervisorConfig;
 using multi_purpose_mpc_ros::stuck_recovery::SolverForwardFallbackUnlockRequest;
 using multi_purpose_mpc_ros::stuck_recovery::compute_rejoin_steering_tire_angle;
+using multi_purpose_mpc_ros::stuck_recovery::course_directed_forward_escape_allowed;
 using multi_purpose_mpc_ros::stuck_recovery::recovery_escape_distance_confirmed;
 using multi_purpose_mpc_ros::stuck_recovery::should_override_deliberate_stop_for_collision;
 using multi_purpose_mpc_ros::stuck_recovery::solver_fallback_requires_reverse_only;
@@ -50,6 +53,7 @@ using multi_purpose_mpc_ros::stuck_recovery::reverse_stopping_distance_reserve_m
 using multi_purpose_mpc_ros::stuck_recovery::recovery_candidate_commit_allowed;
 using multi_purpose_mpc_ros::stuck_recovery::recovery_reverse_direction_required;
 using multi_purpose_mpc_ros::stuck_recovery::recovery_reverse_intent_latch_allowed;
+using multi_purpose_mpc_ros::stuck_recovery::resolve_recovery_course_progress;
 using multi_purpose_mpc_ros::stuck_recovery::should_release_reverse_only_for_rear_wall;
 using multi_purpose_mpc_ros::stuck_recovery::source_sample_is_current;
 using multi_purpose_mpc_ros::stuck_recovery::source_timestamp_is_monotonic;
@@ -92,6 +96,111 @@ TEST(StuckRecoveryRejoinSteering, AppliesLimitAndRejectsInvalidInputs)
   request.wheelbase_m = 1.0;
   request.lateral_error_m = std::numeric_limits<double>::quiet_NaN();
   EXPECT_FALSE(compute_rejoin_steering_tire_angle(request).has_value());
+}
+
+TEST(StuckRecoveryCourseProgress, RejectsRolloutThatMovesFartherOffCourse)
+{
+  RecoveryCourseProgressRequest request;
+  request.current_lateral_error_m = -3.63;
+  request.vehicle_yaw_rad = 0.0;
+  request.heading_error_rad = 0.0;
+  request.candidate_delta_y_m = -0.10;
+  request.activation_lateral_error_m = 0.5;
+  request.worsening_tolerance_m = 0.02;
+
+  const auto farther = resolve_recovery_course_progress(request);
+  ASSERT_TRUE(farther.valid);
+  EXPECT_TRUE(farther.guard_active);
+  EXPECT_FALSE(farther.candidate_allowed);
+  EXPECT_NEAR(farther.candidate_lateral_error_m, -3.73, 1.0e-12);
+  EXPECT_NEAR(farther.lateral_improvement_m, -0.10, 1.0e-12);
+
+  request.candidate_delta_y_m = 0.10;
+  const auto nearer = resolve_recovery_course_progress(request);
+  ASSERT_TRUE(nearer.valid);
+  EXPECT_TRUE(nearer.candidate_allowed);
+  EXPECT_NEAR(nearer.candidate_lateral_error_m, -3.53, 1.0e-12);
+  EXPECT_NEAR(nearer.lateral_improvement_m, 0.10, 1.0e-12);
+}
+
+TEST(StuckRecoveryCourseProgress, PreservesEscapeFreedomInsideRejoinEnvelope)
+{
+  RecoveryCourseProgressRequest request;
+  request.current_lateral_error_m = 0.2;
+  request.vehicle_yaw_rad = 0.5;
+  request.heading_error_rad = 0.5;
+  request.candidate_delta_y_m = 0.4;
+  request.activation_lateral_error_m = 0.5;
+  request.worsening_tolerance_m = 0.02;
+
+  const auto resolution = resolve_recovery_course_progress(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.guard_active);
+  EXPECT_TRUE(resolution.candidate_allowed);
+  EXPECT_NEAR(resolution.candidate_lateral_error_m, 0.6, 1.0e-12);
+}
+
+TEST(StuckRecoveryCourseProgress, AllowsOnlyBoundedNumericalWorseningAndFailsClosed)
+{
+  RecoveryCourseProgressRequest request;
+  request.current_lateral_error_m = 1.0;
+  request.vehicle_yaw_rad = 0.0;
+  request.heading_error_rad = 0.0;
+  request.candidate_delta_y_m = 0.01;
+  request.activation_lateral_error_m = 0.5;
+  request.worsening_tolerance_m = 0.02;
+  EXPECT_TRUE(resolve_recovery_course_progress(request).candidate_allowed);
+
+  request.candidate_delta_y_m = 0.03;
+  EXPECT_FALSE(resolve_recovery_course_progress(request).candidate_allowed);
+
+  request.candidate_delta_y_m = std::numeric_limits<double>::quiet_NaN();
+  const auto invalid = resolve_recovery_course_progress(request);
+  EXPECT_FALSE(invalid.valid);
+  EXPECT_FALSE(invalid.candidate_allowed);
+}
+
+TEST(StuckRecoveryCourseProgress, AllowsForwardOnlyForTemporaryObstacleReversePreference)
+{
+  CourseDirectedForwardEscapeRequest request;
+  request.simulation_environment = true;
+  request.aggressive_sim_recovery_enabled = true;
+  request.course_progress_guard_active = true;
+  request.obstacle_reverse_first = true;
+  EXPECT_TRUE(course_directed_forward_escape_allowed(request));
+
+  request.reverse_only_episode = true;
+  EXPECT_FALSE(course_directed_forward_escape_allowed(request));
+  request.reverse_only_episode = false;
+  request.reverse_intent_latched = true;
+  EXPECT_FALSE(course_directed_forward_escape_allowed(request));
+  request.reverse_intent_latched = false;
+  request.coordinated_stop_active = true;
+  EXPECT_FALSE(course_directed_forward_escape_allowed(request));
+  request.coordinated_stop_active = false;
+  request.solver_reverse_only = true;
+  EXPECT_FALSE(course_directed_forward_escape_allowed(request));
+}
+
+TEST(StuckRecoveryCourseProgress, NeverRelaxesReversePreferenceOutsideSimulationRaceMode)
+{
+  CourseDirectedForwardEscapeRequest request;
+  request.simulation_environment = true;
+  request.aggressive_sim_recovery_enabled = true;
+  request.course_progress_guard_active = true;
+  request.obstacle_reverse_first = true;
+
+  request.simulation_environment = false;
+  EXPECT_FALSE(course_directed_forward_escape_allowed(request));
+  request.simulation_environment = true;
+  request.aggressive_sim_recovery_enabled = false;
+  EXPECT_FALSE(course_directed_forward_escape_allowed(request));
+  request.aggressive_sim_recovery_enabled = true;
+  request.course_progress_guard_active = false;
+  EXPECT_FALSE(course_directed_forward_escape_allowed(request));
+  request.course_progress_guard_active = true;
+  request.obstacle_reverse_first = false;
+  EXPECT_FALSE(course_directed_forward_escape_allowed(request));
 }
 
 TEST(StuckRecoveryCollisionStopOverride, RequiresSimulationCollisionAndStoppedEgo)

@@ -168,6 +168,51 @@ struct RejoinSteeringRequest
 std::optional<double> compute_rejoin_steering_tire_angle(
   const RejoinSteeringRequest & request) noexcept;
 
+struct RecoveryCourseProgressRequest
+{
+  double current_lateral_error_m{};
+  double vehicle_yaw_rad{};
+  double heading_error_rad{};
+  double candidate_delta_x_m{};
+  double candidate_delta_y_m{};
+  double activation_lateral_error_m{};
+  double worsening_tolerance_m{};
+};
+
+struct RecoveryCourseProgressResolution
+{
+  bool valid{false};
+  bool guard_active{false};
+  bool candidate_allowed{false};
+  double candidate_lateral_error_m{};
+  double lateral_improvement_m{};
+};
+
+// Project a bounded Recovery rollout onto the reference-path normal. Outside
+// the rejoin envelope, candidates may hold the current course error within a
+// small numerical tolerance but must not drive the kart farther off course.
+RecoveryCourseProgressResolution resolve_recovery_course_progress(
+  const RecoveryCourseProgressRequest & request) noexcept;
+
+struct CourseDirectedForwardEscapeRequest
+{
+  bool simulation_environment{false};
+  bool aggressive_sim_recovery_enabled{false};
+  bool course_progress_guard_active{false};
+  bool obstacle_reverse_first{false};
+  bool reverse_only_episode{false};
+  bool reverse_intent_latched{false};
+  bool coordinated_stop_active{false};
+  bool solver_reverse_only{false};
+};
+
+// A temporary obstacle may express a Reverse-first preference, but outside
+// the rejoin envelope it must not prohibit a statically and dynamically safe
+// Forward rollout that returns toward the course. Strict Reverse policies are
+// never relaxed here.
+bool course_directed_forward_escape_allowed(
+  const CourseDirectedForwardEscapeRequest & request) noexcept;
+
 enum class StuckVerdict
 {
   NotEligible,

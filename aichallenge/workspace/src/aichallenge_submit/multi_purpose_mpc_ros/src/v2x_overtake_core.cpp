@@ -266,13 +266,24 @@ bool can_release_overtake_front_cap(
 bool should_apply_committed_pass_speed_floor(
   const CommittedPassSpeedFloorRequest & request) noexcept
 {
-  return
-    request.enabled &&
+  const bool physically_committed_pass =
     request.pass_phase &&
     request.lateral_complete &&
     request.front_cap_released &&
     request.lateral_exclusion_latched &&
+    request.lateral_separation_above_reapply_threshold;
+  // ShiftOut can remain active after the kart has physically moved clear because its line goal
+  // and traveled-distance completion checks have not both converged yet. Preserve progress only
+  // while full *current* separation is observed; this deliberately does not release the cap or
+  // rely on the historical Pass latch.
+  const bool physically_cleared_shiftout =
+    request.shiftout_phase &&
+    request.current_lateral_separation_clear &&
     request.lateral_separation_above_reapply_threshold &&
+    !request.target_position_jump;
+  return
+    request.enabled &&
+    (physically_committed_pass || physically_cleared_shiftout) &&
     request.target_seen &&
     request.execution_path_physically_feasible &&
     !request.actual_wall_contact &&
@@ -337,17 +348,24 @@ CommittedPassPolicyResolution resolve_committed_pass_policy(
     should_apply_committed_pass_speed_floor(
     CommittedPassSpeedFloorRequest{
       request.committed_pass_speed_floor_enabled,
+      request.shiftout_phase && !request.preserve_validated_breakout_line,
       request.pass_phase,
       request.lateral_complete,
       resolution.front_cap_release_ready,
       request.lateral_exclusion_latched,
+      request.lateral_separation_clear,
       request.lateral_separation_above_reapply_threshold,
+      request.locked_target_position_jump,
       request.target_seen,
       request.execution_path_physically_feasible,
       request.actual_wall_contact,
       request.target_speed_mps,
       request.slow_target_max_speed_mps,
       request.committed_pass_min_speed_mps});
+  resolution.committed_shiftout_speed_floor_active =
+    resolution.committed_pass_speed_floor_active &&
+    request.shiftout_phase &&
+    !request.preserve_validated_breakout_line;
 
   if (!resolution.front_cap_state_update_required) {
     return resolution;

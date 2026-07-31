@@ -432,9 +432,10 @@ mpc:
   v2x_overtake_line_min_target_separation: 1.50 # [m] combined kart width plus prediction margin
   v2x_overtake_pass_front_overlap_lateral_clearance: 1.50 # [m] current physical clearance required before front-cap release
   v2x_overtake_pass_front_cap_reapply_lateral_clearance: 1.45 # [m] hold committed Pass speed down to the physical combined-width boundary
-  # Once a low-speed target has been physically cleared in Pass, do not let a conservative
-  # trajectory reference alone make the ego crawl beside it. This is a reference floor only;
-  # curvature, front-risk, wall, acceleration and Emergency hard limits retain priority.
+  # Once a low-speed target has full current lateral clearance in ShiftOut, or is physically
+  # committed in Pass, do not let a conservative target-speed reference make the ego crawl
+  # beside it. This is a reference floor only; curvature, front-risk, wall, acceleration and
+  # Emergency hard limits retain priority. ShiftOut front-cap release conditions are unchanged.
   v2x_overtake_committed_pass_speed_floor_enabled: true
   v2x_overtake_committed_pass_min_speed: 3.0 # [m/s] sim race floor around target <= moving-front threshold
   v2x_overtake_line_progress_watchdog_distance: 32.0 # [m] abort a committed single-target Pass with no longitudinal gain

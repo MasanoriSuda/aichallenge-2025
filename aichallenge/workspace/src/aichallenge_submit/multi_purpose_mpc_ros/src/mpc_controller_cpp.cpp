@@ -1907,6 +1907,7 @@ struct OvertakeLineOutput
   bool constrained_horizon_front_cap_release_active{false};
   bool committed_pass_speed_hold_active{false};
   bool committed_pass_speed_floor_active{false};
+  bool committed_shiftout_speed_floor_active{false};
   bool recovery_moving_follow_profile_used{false};
   double max_required_lateral_accel{0.0};
   bool lateral_accel_limited{false};
@@ -9444,6 +9445,8 @@ private:
       committed_pass_policy.constrained_horizon_front_cap_release_active;
     output.committed_pass_speed_floor_active =
       committed_pass_policy.committed_pass_speed_floor_active;
+    output.committed_shiftout_speed_floor_active =
+      committed_pass_policy.committed_shiftout_speed_floor_active;
     if (committed_pass_policy.front_cap_state_update_required) {
       if (cfg.v2x_behavior.overtake_line.debug_log_enabled) {
         const double release_clearance = std::max(
@@ -9610,7 +9613,7 @@ private:
           "OvertakeLine debug: phase=%s, side=%d, goal=%.2f, first_target=%.2f, "
           "first_epsi=%.2f, "
           "current_ey=%.2f, elapsed=%.2f, traveled=%.2f, stalled=%.2f, "
-          "v_ref=%.2f, v_limit=%.2f, v_floor=%.2f, floor_active=%d, "
+          "v_ref=%.2f, v_limit=%.2f, v_floor=%.2f, floor_active=%d, shift_floor=%d, "
           "recovery_speed=%s, closing=%.2f, cap_release=%d, horizon_release=%d, "
           "speed_hold=%d, "
           "cooldown=%.2f, "
@@ -9625,6 +9628,7 @@ private:
           output.target_velocity_reference, output.target_velocity_limit,
           output.target_velocity_floor,
           output.committed_pass_speed_floor_active ? 1 : 0,
+          output.committed_shiftout_speed_floor_active ? 1 : 0,
           output.recovery_moving_follow_profile_used ? "follow" : "fixed",
           output.closing_speed_limit,
           output.front_cap_release_ready ? 1 : 0,

@@ -195,11 +195,14 @@ bool can_release_overtake_front_cap(
 struct CommittedPassSpeedFloorRequest
 {
   bool enabled{false};
+  bool shiftout_phase{false};
   bool pass_phase{false};
   bool lateral_complete{false};
   bool front_cap_released{false};
   bool lateral_exclusion_latched{false};
+  bool current_lateral_separation_clear{false};
   bool lateral_separation_above_reapply_threshold{false};
+  bool target_position_jump{false};
   bool target_seen{false};
   bool execution_path_physically_feasible{false};
   bool actual_wall_contact{false};
@@ -208,9 +211,11 @@ struct CommittedPassSpeedFloorRequest
   double configured_min_speed_mps{};
 };
 
-/// A reference-only velocity floor may help finish a physically committed Pass
+/// A reference-only velocity floor may help finish a physically committed Pass,
+/// or a ShiftOut that already has full current physical lateral separation,
 /// around a stopped/very-slow target. The caller must still clamp the result to
-/// all MPC hard speed bounds; this policy never overrides a safety limit.
+/// all MPC hard speed bounds; this policy never overrides a safety limit or
+/// releases the ShiftOut front-speed cap.
 bool should_apply_committed_pass_speed_floor(
   const CommittedPassSpeedFloorRequest & request) noexcept;
 
@@ -259,14 +264,14 @@ struct CommittedPassPolicyResolution
   bool committed_pass_speed_hold_active{false};
   bool constrained_horizon_front_cap_release_active{false};
   bool committed_pass_speed_floor_active{false};
+  bool committed_shiftout_speed_floor_active{false};
   CommittedPassFrontCapTransitionReason transition_reason{
     CommittedPassFrontCapTransitionReason::None};
 };
 
 /// Resolve all longitudinal speed ownership decisions for a committed ShiftOut/Pass.
-/// This composes the existing front-cap and speed-floor policies without changing
-/// their conditions. The caller remains responsible for state updates, logging and
-/// clamping the resulting speed floor to hard limits.
+/// The caller remains responsible for state updates, logging and clamping the
+/// resulting reference-only speed floor to hard limits.
 CommittedPassPolicyResolution resolve_committed_pass_policy(
   const CommittedPassPolicyRequest & request) noexcept;
 

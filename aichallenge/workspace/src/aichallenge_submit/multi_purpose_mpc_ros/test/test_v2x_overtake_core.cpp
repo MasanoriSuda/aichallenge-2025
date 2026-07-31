@@ -819,6 +819,39 @@ TEST(V2XOvertakeCoreSpeed, AppliesCommittedPassFloorOnlyForClearSlowTargetPass)
   EXPECT_FALSE(should_apply_committed_pass_speed_floor(request));
 }
 
+TEST(V2XOvertakeCoreSpeed, AppliesFloorForPhysicallyClearedSlowTargetShiftOut)
+{
+  multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassSpeedFloorRequest request;
+  request.enabled = true;
+  request.shiftout_phase = true;
+  request.current_lateral_separation_clear = true;
+  request.lateral_separation_above_reapply_threshold = true;
+  request.target_seen = true;
+  request.execution_path_physically_feasible = true;
+  request.target_speed_mps = 0.2;
+  request.slow_target_max_speed_mps = 1.0;
+  request.configured_min_speed_mps = 3.0;
+  EXPECT_TRUE(should_apply_committed_pass_speed_floor(request));
+
+  request.current_lateral_separation_clear = false;
+  EXPECT_FALSE(should_apply_committed_pass_speed_floor(request));
+  request.current_lateral_separation_clear = true;
+  request.target_position_jump = true;
+  EXPECT_FALSE(should_apply_committed_pass_speed_floor(request));
+  request.target_position_jump = false;
+  request.target_seen = false;
+  EXPECT_FALSE(should_apply_committed_pass_speed_floor(request));
+  request.target_seen = true;
+  request.execution_path_physically_feasible = false;
+  EXPECT_FALSE(should_apply_committed_pass_speed_floor(request));
+  request.execution_path_physically_feasible = true;
+  request.actual_wall_contact = true;
+  EXPECT_FALSE(should_apply_committed_pass_speed_floor(request));
+  request.actual_wall_contact = false;
+  request.target_speed_mps = 1.1;
+  EXPECT_FALSE(should_apply_committed_pass_speed_floor(request));
+}
+
 TEST(V2XOvertakeCoreSpeed, ResolvesInitialReleaseForConstrainedFeasiblePass)
 {
   CommittedPassPolicyRequest request;
@@ -993,6 +1026,34 @@ TEST(V2XOvertakeCoreSpeed, ResolvesIntegratedCommittedPassSpeedFloor)
   request.actual_wall_contact = true;
   resolution = resolve_committed_pass_policy(request);
   EXPECT_FALSE(resolution.committed_pass_speed_floor_active);
+}
+
+TEST(V2XOvertakeCoreSpeed, ResolvesShiftOutFloorWithoutReleasingFrontCap)
+{
+  CommittedPassPolicyRequest request;
+  request.shiftout_phase = true;
+  request.execution_horizon_unconstrained = true;
+  request.execution_path_physically_feasible = true;
+  request.lateral_separation_clear = true;
+  request.lateral_separation_above_reapply_threshold = true;
+  request.target_seen = true;
+  request.target_longitudinal_m = 2.0;
+  request.committed_pass_speed_floor_enabled = true;
+  request.target_speed_mps = 0.2;
+  request.slow_target_max_speed_mps = 1.0;
+  request.committed_pass_min_speed_mps = 3.0;
+
+  auto resolution = resolve_committed_pass_policy(request);
+  EXPECT_FALSE(resolution.front_cap_release_ready);
+  EXPECT_FALSE(resolution.front_cap_state_update_required);
+  EXPECT_TRUE(resolution.committed_pass_speed_floor_active);
+  EXPECT_TRUE(resolution.committed_shiftout_speed_floor_active);
+
+  request.preserve_validated_breakout_line = true;
+  resolution = resolve_committed_pass_policy(request);
+  EXPECT_TRUE(resolution.front_cap_release_ready);
+  EXPECT_FALSE(resolution.committed_pass_speed_floor_active);
+  EXPECT_FALSE(resolution.committed_shiftout_speed_floor_active);
 }
 
 TEST(V2XOvertakeCoreSpeed, PreservesValidatedBreakoutSpeedOwnership)

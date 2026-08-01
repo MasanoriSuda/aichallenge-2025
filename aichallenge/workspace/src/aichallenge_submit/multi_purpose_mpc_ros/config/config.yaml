@@ -457,6 +457,7 @@ mpc:
   v2x_overtake_shiftout_min_closing_speed: 0.8 # [m/s] sim A/B: retain useful pass gain near the protected-distance budget
   v2x_overtake_shiftout_max_closing_speed: 2.0 # [m/s] sim A/B: use available distance budget to establish overlap sooner
   v2x_overtake_pass_unlatched_max_closing_speed: 0.5 # [m/s] keep the front cap until physical lateral separation latches
+  v2x_overtake_unseparated_front_reserve_distance: 0.25 # [m] taper closing to zero before the moving-front hard stop while bodies overlap laterally
   v2x_overtake_shiftout_adaptive_min_time_sec: 0.5 # [s] avoid an unbounded cap as ShiftOut completes
   # Minimum-motion mode latches the nearest safe ego-center point. This separation remains the
   # fallback when a fresh planner corridor is unavailable at entry or the mode is disabled.
@@ -521,7 +522,7 @@ mpc:
   v2x_overtake_line_lateral_offset: 1.2       # [m] signed by pass side: left positive, right negative
   v2x_overtake_line_target_bias: 1.0          # [0-1] explicit line is the sole lateral owner during ShiftOut/Pass
   # Applied to both the legacy lateral bounds and the occupancy-grid vehicle footprint.
-  v2x_overtake_line_min_wall_clearance: 0.1   # [m] aggressive sim: align execution width with the 0.1m candidate corridor
+  v2x_overtake_line_min_wall_clearance: 0.15  # [m] retain attack candidates but reserve tracking error before final line commit
   v2x_overtake_line_max_lateral_accel: 6.0    # [m/s^2] dev3 attack: complete committed ShiftOut in a hairpin
   v2x_overtake_line_max_target_change: 0.04   # [m/cycle] smooth target goal updates across cycles
   v2x_overtake_line_target_intrusion_ordering_margin: 0.10 # [m] abort if the ahead target reaches/crosses ego's selected-side ordering

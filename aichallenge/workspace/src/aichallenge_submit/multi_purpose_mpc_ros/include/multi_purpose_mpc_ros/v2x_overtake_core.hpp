@@ -624,6 +624,33 @@ struct FeasiblePassSideLateralGoalResolution
 FeasiblePassSideLateralGoalResolution resolve_feasible_pass_side_lateral_goal(
   const FeasiblePassSideLateralGoalRequest & request) noexcept;
 
+struct PassLateralGoalPolicyRequest
+{
+  int pass_side_sign{};
+  double base_lateral_offset_m{};
+  double pass_goal_target_lateral_m{};
+  double separation_target_lateral_m{};
+  double minimum_separation_m{};
+  std::optional<double> fixed_lateral_goal_m;
+  bool feasible_interval_available{false};
+  double feasible_lower_bound_m{};
+  double feasible_upper_bound_m{};
+  bool enforce_target_separation{false};
+};
+
+struct PassLateralGoalPolicyResolution
+{
+  double preferred_goal_m{};
+  double execution_goal_m{};
+  bool target_separation_feasible{false};
+};
+
+/// Compose the latched or target-relative pass goal with the current
+/// wall-feasible interval. This keeps path-goal precedence out of the ROS/model
+/// orchestration layer without changing the existing target-separation policy.
+PassLateralGoalPolicyResolution resolve_pass_lateral_goal_policy(
+  const PassLateralGoalPolicyRequest & request) noexcept;
+
 struct PassCorridorCenterRequest
 {
   bool active{};
@@ -732,6 +759,35 @@ struct AdaptiveShiftOutClosingSpeedResolution
 /// distance over the estimated remaining lateral-shift time.
 AdaptiveShiftOutClosingSpeedResolution resolve_adaptive_shiftout_closing_speed(
   const AdaptiveShiftOutClosingSpeedRequest & request);
+
+struct UnseparatedClosingReserveRequest
+{
+  bool current_body_footprints_separated{false};
+  double target_longitudinal_m{};
+  double current_closing_speed_limit_mps{};
+  double moving_front_hard_distance_m{};
+  double body_longitudinal_clearance_m{};
+  double reserve_distance_m{};
+  double remaining_lateral_execution_distance_m{};
+  double ego_speed_mps{};
+  double minimum_speed_mps{};
+  double minimum_time_sec{};
+  double limiting_tolerance_mps{};
+};
+
+struct UnseparatedClosingReserveResolution
+{
+  bool eligible{false};
+  bool limited{false};
+  double closing_speed_limit_mps{};
+  double protected_front_distance_m{};
+};
+
+/// Reduce only the positive closing-speed budget while the ego and target
+/// body rectangles have not separated. The returned limit never asks the ego
+/// to travel below target speed; zero means speed matching.
+UnseparatedClosingReserveResolution resolve_unseparated_closing_reserve(
+  const UnseparatedClosingReserveRequest & request);
 
 struct PredictionTimeRequest
 {
@@ -1742,6 +1798,24 @@ struct RecoveryPolicyResolution
   RecoveryExitReason exit_reason{RecoveryExitReason::Active};
 };
 
+struct RecoveryMissionRetentionRequest
+{
+  bool normal_recovery_complete{false};
+  bool solver_recovery_active{false};
+  bool actual_wall_physical_contact{false};
+  bool locked_target_seen{false};
+  bool target_position_jump{false};
+  bool overtake_forbidden_waypoint{false};
+  double target_longitudinal_m{};
+  double return_clear_distance_m{};
+};
+
+/// Preserve the current side/target mission after an ordinary lateral
+/// Recovery only while the same target still requires completion. This is the
+/// existing lifecycle policy extracted from the controller for isolated tests.
+bool should_retain_pass_mission_after_recovery(
+  const RecoveryMissionRetentionRequest & request) noexcept;
+
 struct RecoveryVelocityLimitRequest
 {
   double configured_velocity_limit_mps{};
@@ -1893,13 +1967,46 @@ struct CommittedCorridorFrontDangerSuppressionRequest
   bool current_body_footprints_separated{false};
   bool footprint_prediction_valid{false};
   bool predicted_body_footprint_sweep_separated{false};
+  bool prior_front_cap_release_active{false};
+  bool predicted_body_footprint_overlap_confirmed{true};
+  bool minimum_motion_side_by_side_escape_active{false};
 };
 
 /// Suppress a longitudinal-only front danger stop only after a normal committed
-/// overtake has a validated fixed corridor and both current and predicted 2D
-/// body footprints remain separated. Uncertain observations fail closed.
+/// overtake has a validated fixed corridor and current 2D body footprints are
+/// separated. A previously released minimum-motion Pass may share the same
+/// bounded predicted-overlap confirmation used by its front-cap policy.
+/// Uncertain observations and confirmed overlap fail closed.
 bool can_suppress_committed_corridor_front_danger(
   const CommittedCorridorFrontDangerSuppressionRequest & request) noexcept;
+
+struct CommittedPassBodyGeometryRequest
+{
+  bool pass_phase{false};
+  bool minimum_motion_corridor_active{false};
+  bool prior_front_cap_release_active{false};
+  bool target_seen{false};
+  bool target_position_jump{false};
+  bool current_body_footprints_separated{false};
+  bool footprint_prediction_valid{false};
+  bool predicted_body_footprint_sweep_separated{false};
+  double target_longitudinal_m{};
+  double ego_vehicle_length_m{};
+  double target_vehicle_length_m{};
+};
+
+struct CommittedPassBodyGeometryResolution
+{
+  double body_longitudinal_clearance_m{};
+  bool side_by_side_escape_active{false};
+  bool raw_predicted_body_overlap{false};
+  bool predicted_overlap_confirmation_eligible{false};
+};
+
+/// Resolve the body geometry shared by behavior-level front danger and the
+/// OvertakeLine front-cap policy. Timer ownership remains with the caller.
+CommittedPassBodyGeometryResolution resolve_committed_pass_body_geometry(
+  const CommittedPassBodyGeometryRequest & request) noexcept;
 
 struct SolverCooldownRequest
 {

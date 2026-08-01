@@ -908,6 +908,37 @@ FeasiblePassSideLateralGoalResolution resolve_feasible_pass_side_lateral_goal(
   return resolution;
 }
 
+PassLateralGoalPolicyResolution resolve_pass_lateral_goal_policy(
+  const PassLateralGoalPolicyRequest & request) noexcept
+{
+  PassLateralGoalPolicyResolution resolution;
+  resolution.preferred_goal_m = resolve_pass_side_lateral_goal(
+    PassSideLateralGoalRequest{
+      request.pass_side_sign,
+      request.base_lateral_offset_m,
+      request.pass_goal_target_lateral_m,
+      request.minimum_separation_m,
+      request.fixed_lateral_goal_m});
+  resolution.execution_goal_m = resolution.preferred_goal_m;
+  resolution.target_separation_feasible = !request.enforce_target_separation;
+  if (!request.feasible_interval_available) {
+    return resolution;
+  }
+
+  const auto feasible_goal = resolve_feasible_pass_side_lateral_goal(
+    FeasiblePassSideLateralGoalRequest{
+      request.pass_side_sign,
+      resolution.preferred_goal_m,
+      request.separation_target_lateral_m,
+      request.minimum_separation_m,
+      request.feasible_lower_bound_m,
+      request.feasible_upper_bound_m,
+      request.enforce_target_separation});
+  resolution.execution_goal_m = feasible_goal.goal_m;
+  resolution.target_separation_feasible = feasible_goal.target_separation_feasible;
+  return resolution;
+}
+
 std::optional<double> resolve_pass_corridor_center(
   const PassCorridorCenterRequest & request) noexcept
 {
@@ -1045,6 +1076,42 @@ AdaptiveShiftOutClosingSpeedResolution resolve_adaptive_shiftout_closing_speed(
       request.maximum_closing_speed_mps),
     remaining_time,
     distance_budget};
+}
+
+UnseparatedClosingReserveResolution resolve_unseparated_closing_reserve(
+  const UnseparatedClosingReserveRequest & request)
+{
+  UnseparatedClosingReserveResolution resolution;
+  resolution.closing_speed_limit_mps = request.current_closing_speed_limit_mps;
+  resolution.eligible =
+    !request.current_body_footprints_separated &&
+    std::isfinite(request.target_longitudinal_m) &&
+    request.target_longitudinal_m > 0.0;
+  if (!resolution.eligible) {
+    return resolution;
+  }
+
+  resolution.protected_front_distance_m =
+    std::max(
+    std::max(0.0, request.moving_front_hard_distance_m),
+    std::max(0.0, request.body_longitudinal_clearance_m)) +
+    std::max(0.0, request.reserve_distance_m);
+  const auto adaptive = resolve_adaptive_shiftout_closing_speed(
+    AdaptiveShiftOutClosingSpeedRequest{
+      0.0,
+      request.current_closing_speed_limit_mps,
+      std::max(0.0, request.target_longitudinal_m),
+      resolution.protected_front_distance_m,
+      request.remaining_lateral_execution_distance_m,
+      request.ego_speed_mps,
+      request.minimum_speed_mps,
+      request.minimum_time_sec});
+  resolution.closing_speed_limit_mps = adaptive.closing_speed_mps;
+  resolution.limited =
+    resolution.closing_speed_limit_mps +
+    std::max(0.0, request.limiting_tolerance_mps) <
+    request.current_closing_speed_limit_mps;
+  return resolution;
 }
 
 double advance_prediction_time(const PredictionTimeRequest & request)
@@ -2657,6 +2724,19 @@ RecoveryPolicyResolution resolve_recovery_policy(const RecoveryPolicyRequest & r
   return resolution;
 }
 
+bool should_retain_pass_mission_after_recovery(
+  const RecoveryMissionRetentionRequest & request) noexcept
+{
+  return request.normal_recovery_complete &&
+         !request.solver_recovery_active &&
+         !request.actual_wall_physical_contact &&
+         request.locked_target_seen &&
+         !request.target_position_jump &&
+         !request.overtake_forbidden_waypoint &&
+         std::isfinite(request.target_longitudinal_m) &&
+         request.target_longitudinal_m > -request.return_clear_distance_m;
+}
+
 StallWatchdogResolution update_stall_watchdog(const StallWatchdogRequest & request)
 {
   if (!std::isfinite(request.speed_threshold_mps) || request.speed_threshold_mps < 0.0) {
@@ -2822,12 +2902,45 @@ FrontDangerAction resolve_front_danger_action(const FrontDangerActionRequest & r
 bool can_suppress_committed_corridor_front_danger(
   const CommittedCorridorFrontDangerSuppressionRequest & request) noexcept
 {
+  const bool predicted_path_acceptable =
+    request.predicted_body_footprint_sweep_separated ||
+    (request.prior_front_cap_release_active &&
+    (!request.predicted_body_footprint_overlap_confirmed ||
+    request.minimum_motion_side_by_side_escape_active));
   return request.enabled && request.active_shiftout_or_pass &&
          request.nearest_front_matches_locked_target && request.validated_fixed_corridor &&
          !request.inter_vehicle_corridor && request.target_seen &&
          !request.target_position_jump && request.current_body_footprints_separated &&
          request.footprint_prediction_valid &&
-         request.predicted_body_footprint_sweep_separated;
+         predicted_path_acceptable;
+}
+
+CommittedPassBodyGeometryResolution resolve_committed_pass_body_geometry(
+  const CommittedPassBodyGeometryRequest & request) noexcept
+{
+  CommittedPassBodyGeometryResolution resolution;
+  resolution.body_longitudinal_clearance_m =
+    0.5 * std::max(0.0, request.ego_vehicle_length_m) +
+    0.5 * std::max(0.0, request.target_vehicle_length_m);
+  resolution.side_by_side_escape_active =
+    request.pass_phase &&
+    request.current_body_footprints_separated &&
+    std::isfinite(request.target_longitudinal_m) &&
+    resolution.body_longitudinal_clearance_m > 0.0 &&
+    request.target_longitudinal_m <= resolution.body_longitudinal_clearance_m;
+  resolution.raw_predicted_body_overlap =
+    request.footprint_prediction_valid &&
+    !request.predicted_body_footprint_sweep_separated;
+  resolution.predicted_overlap_confirmation_eligible =
+    request.pass_phase &&
+    request.minimum_motion_corridor_active &&
+    request.prior_front_cap_release_active &&
+    request.target_seen &&
+    !request.target_position_jump &&
+    request.current_body_footprints_separated &&
+    resolution.raw_predicted_body_overlap &&
+    !resolution.side_by_side_escape_active;
+  return resolution;
 }
 
 const char * to_string(const FrontDangerAction action) noexcept

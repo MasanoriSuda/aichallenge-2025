@@ -27,6 +27,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::FrontDangerAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::FrontDangerActionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   CommittedCorridorFrontDangerSuppressionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassBodyGeometryRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::FrontHazardHoldRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::FrontHazardTargetContinuityRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ForwardCourseProjectionRequest;
@@ -55,6 +56,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::SideOvertakeEntryRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeLineHorizonProgressRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassSideLateralGoalRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::FeasiblePassSideLateralGoalRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::PassLateralGoalPolicyRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassCorridorCenterRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::MinimumLateralMotionGoalRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::MinimumLateralMotionSideCandidate;
@@ -63,6 +65,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::CompletedPassReturnRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ReturnCorridorOccupancyRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::EarlyReturnCancellationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::AdaptiveShiftOutClosingSpeedRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::UnseparatedClosingReserveRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeGuardPhaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeCurveContinuationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OuterCurveOvertakeRequest;
@@ -75,6 +78,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::PassCompletionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PredictionTimeRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecoveryExitReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecoveryPolicyRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::RecoveryMissionRetentionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SolverCooldownRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SolverFallbackNeutralizationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SolverFallbackSteeringRequest;
@@ -139,6 +143,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::
   static_wall_clamp_requires_overtake_recovery;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_side_lateral_goal;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_feasible_pass_side_lateral_goal;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_lateral_goal_policy;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_corridor_center;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_minimum_lateral_motion_goal;
 using multi_purpose_mpc_ros::v2x_overtake_core::
@@ -147,6 +152,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::blocks_overtake_return_corridor;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_cancel_early_overtake_return;
 using multi_purpose_mpc_ros::v2x_overtake_core::has_reached_pass_side_lateral_goal;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_adaptive_shiftout_closing_speed;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_unseparated_closing_reserve;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_guard_phase;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_continue_overtake_in_soft_curve;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_outer_curve_overtake;
@@ -178,6 +184,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::can_reacquire_during_recovery;
 using multi_purpose_mpc_ros::v2x_overtake_core::integrate_forward_distance;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_recovery_velocity_limit;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_recovery_policy;
+using multi_purpose_mpc_ros::v2x_overtake_core::should_retain_pass_mission_after_recovery;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_stall_watchdog;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_committed_pass_progress_watchdog;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_front_hazard_hold;
@@ -185,6 +192,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_front_hazard_target_cont
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_front_danger_action;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   can_suppress_committed_corridor_front_danger;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_committed_pass_body_geometry;
 using multi_purpose_mpc_ros::v2x_overtake_core::arm_solver_cooldown;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_solver_cooldown_active;
 using multi_purpose_mpc_ros::v2x_overtake_core::rate_limit_solver_fallback_steering_toward_neutral;
@@ -663,6 +671,63 @@ TEST(V2XFrontDangerAction, CommittedCorridorSuppressionFailsClosedOnUncertaintyO
   request.inter_vehicle_corridor = false;
   request.nearest_front_matches_locked_target = false;
   EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
+}
+
+TEST(V2XFrontDangerAction, CommittedCorridorSharesBoundedPredictedOverlapGrace)
+{
+  CommittedCorridorFrontDangerSuppressionRequest request;
+  request.enabled = true;
+  request.active_shiftout_or_pass = true;
+  request.nearest_front_matches_locked_target = true;
+  request.validated_fixed_corridor = true;
+  request.target_seen = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = false;
+  request.prior_front_cap_release_active = true;
+  request.predicted_body_footprint_overlap_confirmed = false;
+
+  EXPECT_TRUE(can_suppress_committed_corridor_front_danger(request));
+
+  request.predicted_body_footprint_overlap_confirmed = true;
+  EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
+
+  request.minimum_motion_side_by_side_escape_active = true;
+  EXPECT_TRUE(can_suppress_committed_corridor_front_danger(request));
+
+  request.current_body_footprints_separated = false;
+  EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
+}
+
+TEST(V2XFrontDangerAction, ResolvesSharedCommittedPassBodyGeometry)
+{
+  CommittedPassBodyGeometryRequest request;
+  request.pass_phase = true;
+  request.minimum_motion_corridor_active = true;
+  request.prior_front_cap_release_active = true;
+  request.target_seen = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = false;
+  request.target_longitudinal_m = 3.0;
+  request.ego_vehicle_length_m = 3.2;
+  request.target_vehicle_length_m = 2.4;
+
+  auto result = resolve_committed_pass_body_geometry(request);
+  EXPECT_DOUBLE_EQ(result.body_longitudinal_clearance_m, 2.8);
+  EXPECT_FALSE(result.side_by_side_escape_active);
+  EXPECT_TRUE(result.raw_predicted_body_overlap);
+  EXPECT_TRUE(result.predicted_overlap_confirmation_eligible);
+
+  request.target_longitudinal_m = 2.8;
+  result = resolve_committed_pass_body_geometry(request);
+  EXPECT_TRUE(result.side_by_side_escape_active);
+  EXPECT_FALSE(result.predicted_overlap_confirmation_eligible);
+
+  request.current_body_footprints_separated = false;
+  result = resolve_committed_pass_body_geometry(request);
+  EXPECT_FALSE(result.side_by_side_escape_active);
+  EXPECT_FALSE(result.predicted_overlap_confirmation_eligible);
 }
 
 TEST(V2XOvertakeCoreSpeed, StartWindowMayExceedNormalButNotGlobalHardCap)
@@ -2085,6 +2150,36 @@ TEST(V2XOvertakeCoreSpeed, RejectsGoalOutsideValidatedCandidateCorridor)
   EXPECT_DOUBLE_EQ(resolution.goal_m, 1.9);
 }
 
+TEST(V2XOvertakeCoreSpeed, ComposesPassGoalAndExecutionIntervalInOnePolicy)
+{
+  PassLateralGoalPolicyRequest request;
+  request.pass_side_sign = -1;
+  request.base_lateral_offset_m = 1.2;
+  request.pass_goal_target_lateral_m = -0.2;
+  request.separation_target_lateral_m = -0.4;
+  request.minimum_separation_m = 1.5;
+  request.fixed_lateral_goal_m = -0.8;
+  request.feasible_interval_available = true;
+  request.feasible_lower_bound_m = -2.2;
+  request.feasible_upper_bound_m = 2.0;
+  request.enforce_target_separation = true;
+
+  auto resolution = resolve_pass_lateral_goal_policy(request);
+  EXPECT_DOUBLE_EQ(resolution.preferred_goal_m, -0.8);
+  EXPECT_DOUBLE_EQ(resolution.execution_goal_m, -1.9);
+  EXPECT_TRUE(resolution.target_separation_feasible);
+
+  request.feasible_lower_bound_m = -1.0;
+  request.feasible_upper_bound_m = 1.0;
+  resolution = resolve_pass_lateral_goal_policy(request);
+  EXPECT_DOUBLE_EQ(resolution.execution_goal_m, -0.8);
+  EXPECT_FALSE(resolution.target_separation_feasible);
+
+  request.feasible_interval_available = false;
+  resolution = resolve_pass_lateral_goal_policy(request);
+  EXPECT_DOUBLE_EQ(resolution.execution_goal_m, -0.8);
+}
+
 TEST(V2XOvertakeCoreSpeed, ReturnsCompletedPassBeforeMarginOnlyRecovery)
 {
   CompletedPassReturnRequest request;
@@ -2411,6 +2506,55 @@ TEST(V2XOvertakeCoreSpeed, AdaptiveShiftOutCanMatchFrontSpeedAtSmallDistanceBudg
 
   const auto result = resolve_adaptive_shiftout_closing_speed(request);
   EXPECT_NEAR(result.closing_speed_mps, 0.75, 1e-9);
+}
+
+TEST(V2XOvertakeCoreSpeed, UnseparatedReserveCanRemoveClosingAtProtectedDistance)
+{
+  AdaptiveShiftOutClosingSpeedRequest request;
+  request.minimum_closing_speed_mps = 0.0;
+  request.maximum_closing_speed_mps = 0.5;
+  request.front_distance_m = 2.30;
+  request.protected_front_distance_m = 2.30;
+  request.remaining_shiftout_distance_m = 4.0;
+  request.ego_speed_mps = 5.0;
+  request.minimum_speed_mps = 1.0;
+  request.minimum_time_sec = 0.5;
+
+  auto result = resolve_adaptive_shiftout_closing_speed(request);
+  EXPECT_DOUBLE_EQ(result.distance_budget_m, 0.0);
+  EXPECT_DOUBLE_EQ(result.closing_speed_mps, 0.0);
+
+  request.front_distance_m = 2.70;
+  result = resolve_adaptive_shiftout_closing_speed(request);
+  EXPECT_DOUBLE_EQ(result.closing_speed_mps, 0.5);
+}
+
+TEST(V2XOvertakeCoreSpeed, UnseparatedClosingReserveOwnsProtectionBudget)
+{
+  UnseparatedClosingReserveRequest request;
+  request.target_longitudinal_m = 2.3;
+  request.current_closing_speed_limit_mps = 0.5;
+  request.moving_front_hard_distance_m = 2.0;
+  request.body_longitudinal_clearance_m = 2.05;
+  request.reserve_distance_m = 0.25;
+  request.remaining_lateral_execution_distance_m = 4.0;
+  request.ego_speed_mps = 5.0;
+  request.minimum_speed_mps = 1.0;
+  request.minimum_time_sec = 0.5;
+  request.limiting_tolerance_mps = 1e-12;
+
+  auto result = resolve_unseparated_closing_reserve(request);
+  EXPECT_TRUE(result.eligible);
+  EXPECT_TRUE(result.limited);
+  EXPECT_DOUBLE_EQ(result.protected_front_distance_m, 2.3);
+  EXPECT_DOUBLE_EQ(result.closing_speed_limit_mps, 0.0);
+
+  request.current_body_footprints_separated = true;
+  result = resolve_unseparated_closing_reserve(request);
+  EXPECT_FALSE(result.eligible);
+  EXPECT_FALSE(result.limited);
+  EXPECT_DOUBLE_EQ(result.closing_speed_limit_mps, 0.5);
+  EXPECT_DOUBLE_EQ(result.protected_front_distance_m, 0.0);
 }
 
 TEST(V2XOvertakeCoreSpeed, RejectsInvalidAdaptiveShiftOutRange)
@@ -4621,6 +4765,28 @@ TEST(V2XOvertakeCoreRecovery, ResolvesEveryBoundedExitReason)
   EXPECT_EQ(
     resolve_recovery_policy(request).exit_reason,
     RecoveryExitReason::InvalidObservation);
+}
+
+TEST(V2XOvertakeCoreRecovery, RetainsOnlyOrdinaryIncompletePassMission)
+{
+  RecoveryMissionRetentionRequest request;
+  request.normal_recovery_complete = true;
+  request.locked_target_seen = true;
+  request.target_longitudinal_m = 0.5;
+  request.return_clear_distance_m = 0.5;
+  EXPECT_TRUE(should_retain_pass_mission_after_recovery(request));
+
+  request.target_longitudinal_m = -0.5;
+  EXPECT_FALSE(should_retain_pass_mission_after_recovery(request));
+  request.target_longitudinal_m = 0.5;
+  request.actual_wall_physical_contact = true;
+  EXPECT_FALSE(should_retain_pass_mission_after_recovery(request));
+  request.actual_wall_physical_contact = false;
+  request.solver_recovery_active = true;
+  EXPECT_FALSE(should_retain_pass_mission_after_recovery(request));
+  request.solver_recovery_active = false;
+  request.target_position_jump = true;
+  EXPECT_FALSE(should_retain_pass_mission_after_recovery(request));
 }
 
 TEST(V2XOvertakeCoreRecovery, RejectsInvalidPolicyConfiguration)

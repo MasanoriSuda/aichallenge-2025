@@ -2546,6 +2546,71 @@ TEST(RecoverySupervisor, AggressiveSimulationDoesNotRepeatAnUnchangedSnapshot)
   EXPECT_EQ(supervisor.state(), RecoveryState::StopAndConfirm);
 }
 
+TEST(RecoverySupervisor, ForceMotionRetriesAnUnchangedSnapshot)
+{
+  auto config = supervisor_config();
+  config.aggressive_sim_recovery_enabled = true;
+  config.aggressive_force_motion_enabled = true;
+  config.aggressive_retry_delay_sec = 0.1;
+  config.max_attempts = 0U;
+  RecoverySupervisor supervisor(config);
+  double now = 0.0;
+  auto input = healthy_recovery_input(now);
+  input.maneuver_direction = ManeuverDirection::Unknown;
+  advance_to_clearance_check(supervisor, input, now);
+
+  now += 0.01;
+  input.now_sec = now;
+  ASSERT_EQ(supervisor.update(input).reason, RecoveryReason::ManeuverDirectionUnknown);
+  ASSERT_EQ(supervisor.state(), RecoveryState::SafeStop);
+
+  now += 0.11;
+  input.now_sec = now;
+  ASSERT_EQ(supervisor.update(input).reason, RecoveryReason::AggressiveRetry);
+  ASSERT_EQ(supervisor.state(), RecoveryState::StopAndConfirm);
+
+  now += 0.01;
+  input.now_sec = now;
+  ASSERT_EQ(supervisor.update(input).reason, RecoveryReason::ClearanceCheck);
+  now += 0.01;
+  input.now_sec = now;
+  ASSERT_EQ(supervisor.update(input).reason, RecoveryReason::ManeuverDirectionUnknown);
+  ASSERT_EQ(supervisor.state(), RecoveryState::SafeStop);
+
+  now += 0.11;
+  input.now_sec = now;
+  const auto action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
+  EXPECT_EQ(action.reason, RecoveryReason::AggressiveRetry);
+  EXPECT_EQ(supervisor.state(), RecoveryState::StopAndConfirm);
+}
+
+TEST(RecoverySupervisor, ForceMotionDoesNotLatchClearanceTimeout)
+{
+  auto config = supervisor_config();
+  config.clearance_wait_timeout_sec = 0.1;
+  config.clearance_safe_stop_recovery_enabled = true;
+  config.aggressive_sim_recovery_enabled = true;
+  config.aggressive_force_motion_enabled = true;
+  RecoverySupervisor supervisor(config);
+  double now = 0.0;
+  auto input = healthy_recovery_input(now);
+  input.rear_v2x_clear = false;
+  advance_to_clearance_check(supervisor, input, now);
+
+  now += 0.01;
+  input.now_sec = now;
+  ASSERT_EQ(supervisor.update(input).reason, RecoveryReason::RearVehicleBlocked);
+  ASSERT_EQ(supervisor.state(), RecoveryState::WaitForClear);
+
+  now += 0.11;
+  input.now_sec = now;
+  const auto action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
+  EXPECT_EQ(action.reason, RecoveryReason::AggressiveRetry);
+  EXPECT_EQ(supervisor.state(), RecoveryState::StopAndConfirm);
+}
+
 TEST(RecoverySupervisor, AggressiveSimulationKeepsInvalidInputLatched)
 {
   auto config = supervisor_config();

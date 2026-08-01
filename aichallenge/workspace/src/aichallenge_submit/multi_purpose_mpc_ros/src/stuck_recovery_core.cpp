@@ -165,6 +165,7 @@ bool aggressive_retry_reason_is_recoverable(const RecoveryReason reason) noexcep
     case RecoveryReason::AttemptLimitReached:
     case RecoveryReason::GearReportMissing:
     case RecoveryReason::GearReportTimedOut:
+    case RecoveryReason::GearReportInvalid:
     case RecoveryReason::GearCommandLimitReached:
     case RecoveryReason::ReverseDistanceLimit:
     case RecoveryReason::ReverseDurationLimit:
@@ -203,7 +204,6 @@ bool aggressive_retry_reason_is_recoverable(const RecoveryReason reason) noexcep
     case RecoveryReason::RearInformationIncomplete:
     case RecoveryReason::ReverseGearRequested:
     case RecoveryReason::ReverseGearConfirmed:
-    case RecoveryReason::GearReportInvalid:
     case RecoveryReason::ReverseInProgress:
     case RecoveryReason::ReverseEscapeBraking:
     case RecoveryReason::ReverseEscapeConfirmed:
@@ -1346,6 +1346,21 @@ RecoveryAction RecoverySupervisor::update_wait_for_clear(const RecoveryInput & i
     return update_check_clearance(input);
   }
   if (state_elapsed(input.now_sec) >= config_.clearance_wait_timeout_sec) {
+    if (
+      config_.aggressive_sim_recovery_enabled &&
+      config_.aggressive_force_motion_enabled)
+    {
+      attempt_count_ = 0U;
+      escape_step_count_ = 0U;
+      active_stepwise_escape_ = false;
+      reassess_after_drive_ = false;
+      safe_stop_after_drive_ = false;
+      escape_confirmed_before_drive_ = false;
+      transition(
+        RecoveryState::StopAndConfirm, RecoveryReason::AggressiveRetry,
+        input.now_sec);
+      return hold_action(RecoveryReason::AggressiveRetry);
+    }
     transition(
       RecoveryState::SafeStop, RecoveryReason::ClearanceWaitTimedOut, input.now_sec);
     return safe_stop_action(RecoveryReason::ClearanceWaitTimedOut);
@@ -1355,7 +1370,11 @@ RecoveryAction RecoverySupervisor::update_wait_for_clear(const RecoveryInput & i
 
 RecoveryAction RecoverySupervisor::update_safe_stop(const RecoveryInput & input)
 {
+  const bool force_motion =
+    config_.aggressive_sim_recovery_enabled &&
+    config_.aggressive_force_motion_enabled;
   if (
+    !force_motion &&
     config_.clearance_safe_stop_recovery_enabled &&
     state_reason_ == RecoveryReason::ClearanceWaitTimedOut)
   {
@@ -1389,6 +1408,7 @@ RecoveryAction RecoverySupervisor::update_safe_stop(const RecoveryInput & input)
 
   const auto current_snapshot = recovery_retry_snapshot(input);
   if (
+    !force_motion &&
     last_aggressive_retry_snapshot_.has_value() &&
     !recovery_retry_snapshot_materially_changed(
       last_aggressive_retry_snapshot_.value(), current_snapshot,

@@ -95,9 +95,13 @@ stuck_recovery:
     # Simulation race: recoverable terminal states are paused and reassessed instead of
     # remaining latched for the rest of the race.
     aggressive_sim_recovery_enabled: true
-    aggressive_retry_delay_sec: 0.5
-    # One retry is allowed for a new snapshot. Further retries wait until the
-    # path-relative pose or a discrete candidate/contact/V2X state changes.
+    # Competition simulation: a blocked vehicle must keep moving. V2X overlap
+    # becomes diagnostic-only, every conservative static rejection falls back
+    # to the least-bad short primitive, and SafeStop becomes a retry delay.
+    aggressive_force_motion_enabled: true
+    aggressive_retry_delay_sec: 0.2
+    # Used only when force_motion is disabled. The aggressive race policy
+    # retries even when the snapshot is unchanged.
     aggressive_retry_min_lateral_change_m: 0.15
     aggressive_retry_min_heading_change_rad: 0.10
     # Simulation-race only: a transient recovery failsafe may retry after every
@@ -134,7 +138,7 @@ stuck_recovery:
     # collider does not spend ten steps producing only millimetres of motion.
     max_forward_distance_m: 0.6
     max_forward_duration_sec: 2.0
-    max_forward_speed_mps: 1.0
+    max_forward_speed_mps: 2.0
     forward_acceleration_magnitude_mps2: 1.0
     reverse_escape_distance_m: 2.0
     forward_escape_distance_m: 0.30
@@ -204,7 +208,7 @@ stuck_recovery:
     terminal_lateral_error_weight: 30.0
     terminal_heading_error_weight: 40.0
   rejoin:
-    speed_limit_mps: 1.0
+    speed_limit_mps: 2.0
     # Simulation-only low-speed path feedback. The rate-limited tire angle is
     # also used for the forward swept-footprint gate before actuation.
     feedback_steering_enabled: true

@@ -11612,6 +11612,8 @@ struct RecoverySafetySnapshot
     recovery_footprint::RejectReason::NotEvaluated};
   double rejoin_static_rejected_at_distance_m{};
   bool collision_worsening{false};
+  bool aggressive_forced_candidate{false};
+  bool aggressive_v2x_override{false};
   std::vector<std::size_t> current_contact_cells;
   std::size_t current_contact_count{};
   recovery_footprint::RejectReason static_reject_reason{
@@ -11905,6 +11907,9 @@ Config load_config(const std::string & path)
       out.aggressive_sim_recovery_enabled = maneuver["aggressive_sim_recovery_enabled"] ?
         maneuver["aggressive_sim_recovery_enabled"].as<bool>() :
         out.aggressive_sim_recovery_enabled;
+      out.aggressive_force_motion_enabled = maneuver["aggressive_force_motion_enabled"] ?
+        maneuver["aggressive_force_motion_enabled"].as<bool>() :
+        out.aggressive_force_motion_enabled;
       out.aggressive_retry_delay_sec = maneuver["aggressive_retry_delay_sec"] ?
         maneuver["aggressive_retry_delay_sec"].as<double>() :
         out.aggressive_retry_delay_sec;
@@ -13666,7 +13671,8 @@ public:
       "solver_reverse_only_heading>=%.2f rad, steering_samples=%zu, "
       "rejoin_solver_wait=%.2f s, rejoin_progress=%.2f/regress=%.2f m/timeout=%.2f s, "
       "recovery_mpc=%s/%zux%.2f m/beam=%zu, "
-      "aggressive_sim=%s/retry=%.2f s/change=%.2f m/%.2f rad/force_rejoin=%zu, "
+      "aggressive_sim=%s/force_motion=%s/retry=%.2f s/change=%.2f m/%.2f rad/"
+      "force_rejoin=%zu, "
       "collision_stop_override=%s, escape_distance_tolerance=%.2f m",
       cfg_.stuck_recovery.core.detector.coordinated_stop_recovery_enabled ? "true" : "false",
       cfg_.stuck_recovery.core.detector.coordinated_stop_duration_sec,
@@ -13685,6 +13691,7 @@ public:
       cfg_.stuck_recovery.recovery_mpc_config.travel_step_m,
       cfg_.stuck_recovery.recovery_mpc_config.beam_width,
       cfg_.stuck_recovery.core.supervisor.aggressive_sim_recovery_enabled ? "true" : "false",
+      cfg_.stuck_recovery.core.supervisor.aggressive_force_motion_enabled ? "true" : "false",
       cfg_.stuck_recovery.core.supervisor.aggressive_retry_delay_sec,
       cfg_.stuck_recovery.core.supervisor.aggressive_retry_min_lateral_change_m,
       cfg_.stuck_recovery.core.supervisor.aggressive_retry_min_heading_change_rad,
@@ -15124,6 +15131,11 @@ private:
     const bool evaluate_rollout) const
   {
     RecoverySafetySnapshot snapshot;
+    const bool aggressive_force_motion =
+      use_sim_time_ &&
+      cfg_.stuck_recovery.core.simulation_only &&
+      cfg_.stuck_recovery.core.supervisor.aggressive_sim_recovery_enabled &&
+      cfg_.stuck_recovery.core.supervisor.aggressive_force_motion_enabled;
     std::optional<recovery_footprint::FeasibilityResult> forward_deadlock_fallback;
     bool forward_deadlock_fallback_stepwise = false;
     std::optional<std::vector<recovery_footprint::RolloutPose>> selected_v2x_rollout;
@@ -15693,6 +15705,107 @@ private:
         }
       }
 
+      if (!selected_result.has_value() && aggressive_force_motion) {
+        // Competition recovery must never remain motionless merely because
+        // every conservative rollout touches an inflated map/V2X envelope.
+        // Select the least-bad short primitive. Invalid/out-of-map rollouts
+        // remain unusable because they provide no bounded actuation geometry.
+        std::optional<recovery_footprint::FeasibilityResult> least_bad_result;
+        const auto force_candidate_usable = [](const auto & result) {
+            if (result.rollout.empty() || result.checked_pose_count == 0U) {
+              return false;
+            }
+            switch (result.reason) {
+              case recovery_footprint::RejectReason::InvalidGrid:
+              case recovery_footprint::RejectReason::InvalidFootprint:
+              case recovery_footprint::RejectReason::InvalidInitialPose:
+              case recovery_footprint::RejectReason::InvalidRollout:
+              case recovery_footprint::RejectReason::SampleLimitExceeded:
+              case recovery_footprint::RejectReason::InitialOutOfMap:
+              case recovery_footprint::RejectReason::OutOfMap:
+                return false;
+              case recovery_footprint::RejectReason::None:
+              case recovery_footprint::RejectReason::InitialContactNotForward:
+              case recovery_footprint::RejectReason::InitialContactNotRear:
+              case recovery_footprint::RejectReason::Collision:
+              case recovery_footprint::RejectReason::NewContact:
+              case recovery_footprint::RejectReason::ContactWorsened:
+              case recovery_footprint::RejectReason::ContactNotImproved:
+              case recovery_footprint::RejectReason::InitialContactNotCleared:
+              case recovery_footprint::RejectReason::NotEvaluated:
+                return true;
+            }
+            return false;
+          };
+        const auto consider_forced = [&](recovery_footprint::FeasibilityResult result) {
+            if (!force_candidate_usable(result)) {
+              return;
+            }
+            if (!first_result.has_value()) {
+              first_result = result;
+            }
+            const auto better_than = [&](const auto & candidate, const auto & incumbent) {
+                const std::size_t candidate_growth =
+                  candidate.maximum_contact_count > candidate.initial_contact_count ?
+                  candidate.maximum_contact_count - candidate.initial_contact_count : 0U;
+                const std::size_t incumbent_growth =
+                  incumbent.maximum_contact_count > incumbent.initial_contact_count ?
+                  incumbent.maximum_contact_count - incumbent.initial_contact_count : 0U;
+                if (candidate_growth != incumbent_growth) {
+                  return candidate_growth < incumbent_growth;
+                }
+                if (candidate.final_contact_count != incumbent.final_contact_count) {
+                  return candidate.final_contact_count < incumbent.final_contact_count;
+                }
+                const double candidate_improvement =
+                  course_progress(candidate).lateral_improvement_m;
+                const double incumbent_improvement =
+                  course_progress(incumbent).lateral_improvement_m;
+                if (std::abs(candidate_improvement - incumbent_improvement) > kEps) {
+                  return candidate_improvement > incumbent_improvement;
+                }
+                const double candidate_clear_distance = candidate.feasible ?
+                  escape_step_distance_to_check_m : candidate.rejected_at_distance_m;
+                const double incumbent_clear_distance = incumbent.feasible ?
+                  escape_step_distance_to_check_m : incumbent.rejected_at_distance_m;
+                if (std::abs(candidate_clear_distance - incumbent_clear_distance) > kEps) {
+                  return candidate_clear_distance > incumbent_clear_distance;
+                }
+                // Stable tie-break: Forward first helps a kart already resting
+                // on a rear vehicle resume the racing direction immediately.
+                return recovery_footprint::primitive_is_forward(candidate.primitive) &&
+                       !recovery_footprint::primitive_is_forward(incumbent.primitive);
+              };
+            if (!least_bad_result.has_value() ||
+              better_than(result, least_bad_result.value()))
+            {
+              least_bad_result = std::move(result);
+            }
+          };
+        consider_forced(evaluate_non_worsening_candidate_with_steering(
+          recovery_footprint::ReversePrimitive::ForwardStraight, 0.0));
+        consider_forced(evaluate_non_worsening_candidate_with_steering(
+          recovery_footprint::ReversePrimitive::Straight, 0.0));
+        for (const double steering_magnitude_rad : steering_samples) {
+          consider_forced(evaluate_non_worsening_candidate_with_steering(
+            recovery_footprint::ReversePrimitive::ForwardLeft,
+            steering_magnitude_rad));
+          consider_forced(evaluate_non_worsening_candidate_with_steering(
+            recovery_footprint::ReversePrimitive::ForwardRight,
+            steering_magnitude_rad));
+          consider_forced(evaluate_non_worsening_candidate_with_steering(
+            recovery_footprint::ReversePrimitive::Left,
+            steering_magnitude_rad));
+          consider_forced(evaluate_non_worsening_candidate_with_steering(
+            recovery_footprint::ReversePrimitive::Right,
+            steering_magnitude_rad));
+        }
+        if (least_bad_result.has_value()) {
+          selected_result = std::move(least_bad_result.value());
+          snapshot.aggressive_forced_candidate = true;
+        }
+      }
+
       // Wall classification can change while AWSIM settles. Until actuation is committed, retain
       // a statically safe short forward candidate for every clear-footprint reverse selection.
       // Contact escape is handled above by the stricter RequireImprovement comparison. Any
@@ -15724,7 +15837,8 @@ private:
       }
       if (selected_result.has_value()) {
         snapshot.reverse_candidate_selected = true;
-        snapshot.stepwise_escape = stepwise_candidate_mode;
+        snapshot.stepwise_escape =
+          snapshot.aggressive_forced_candidate || stepwise_candidate_mode;
         snapshot.contact_reduction = selected_result->contact_reduction;
         snapshot.selected_course_lateral_improvement_m =
           course_progress(selected_result.value()).lateral_improvement_m;
@@ -15773,8 +15887,17 @@ private:
       v2x_contract_configured && cfg_.stuck_recovery.tracked_v2x_completeness_enabled &&
       v2x_gap_planner_->has_complete_tracked_set(ros_now_sec, expected_vehicle_count);
     snapshot.v2x_message_complete = complete_current_message || complete_tracked_set;
-    if (!snapshot.boost_inactive_confirmed || !snapshot.v2x_message_complete)
-    {
+    if (!snapshot.boost_inactive_confirmed) {
+      return snapshot;
+    }
+    if (!snapshot.v2x_message_complete) {
+      if (aggressive_force_motion && snapshot.reverse_candidate_selected) {
+        snapshot.rear_information_complete = true;
+        snapshot.rear_v2x_clear = true;
+        snapshot.aggressive_v2x_override = true;
+        snapshot.v2x_clearance_mode = "aggressive_override";
+        snapshot.v2x_clearance_reason = "incomplete_v2x_ignored";
+      }
       return snapshot;
     }
 
@@ -15785,8 +15908,13 @@ private:
             return vehicle.id == cfg_.stuck_recovery.self_vehicle_id;
           }));
       if (self_matches != 1U) {
-        snapshot.rear_information_complete = false;
-        snapshot.rear_v2x_clear = false;
+        snapshot.rear_information_complete = aggressive_force_motion;
+        snapshot.rear_v2x_clear = aggressive_force_motion;
+        snapshot.aggressive_v2x_override = aggressive_force_motion;
+        if (aggressive_force_motion) {
+          snapshot.v2x_clearance_mode = "aggressive_override";
+          snapshot.v2x_clearance_reason = "self_contract_mismatch_ignored";
+        }
         return snapshot;
       }
     }
@@ -15928,6 +16056,7 @@ private:
       cfg_.stuck_recovery.core.supervisor.aggressive_sim_recovery_enabled &&
       candidate_direction_policy.prefer_forward_course_escape;
     if (
+      !aggressive_force_motion &&
       snapshot.rear_information_complete && !snapshot.rear_v2x_clear &&
       snapshot.maneuver_direction == stuck_recovery::ManeuverDirection::Reverse &&
       !recovery_selected_reverse_primitive_.has_value() &&
@@ -16008,6 +16137,18 @@ private:
         snapshot.selected_center_max_lateral_m = forward_max_lateral_m;
         snapshot.rear_information_complete = true;
         snapshot.rear_v2x_clear = true;
+      }
+    }
+    if (
+      aggressive_force_motion && snapshot.reverse_candidate_selected &&
+      (!snapshot.rear_information_complete || !snapshot.rear_v2x_clear))
+    {
+      snapshot.rear_information_complete = true;
+      snapshot.rear_v2x_clear = true;
+      snapshot.aggressive_v2x_override = true;
+      if (snapshot.v2x_clearance_mode == "none") {
+        snapshot.v2x_clearance_mode = "aggressive_override";
+        snapshot.v2x_clearance_reason = "v2x_blocker_ignored";
       }
     }
     return snapshot;
@@ -16716,7 +16857,8 @@ private:
         "coordinated=%d, reverse_only=%d, forward_probe=%d, static=%s, "
         "static_contacts=%zu/%zu/%zu, static_reject_at=%.3f m, checked=%zu, "
         "runtime_contact=%s, current_contacts=%zu, corridor_complete=%d, boost_inactive=%d, "
-        "v2x_message_complete=%d, corridor_v2x_clear=%d, "
+        "v2x_message_complete=%d, corridor_v2x_clear=%d, forced_candidate=%d, "
+        "v2x_override=%d, "
         "v2x_blocker=%s, v2x_gate=%s/%s, v2x_clearance=%.3f/%.3f/%.3f m, "
         "v2x_reject_at=%.3f m, "
         "wall=%s, wall_distance=%.3f, direction=%s, primitive=%s, steering=%.3f, "
@@ -16743,6 +16885,8 @@ private:
         safety.rear_information_complete ? 1 : 0,
         safety.boost_inactive_confirmed ? 1 : 0,
         safety.v2x_message_complete ? 1 : 0, safety.rear_v2x_clear ? 1 : 0,
+        safety.aggressive_forced_candidate ? 1 : 0,
+        safety.aggressive_v2x_override ? 1 : 0,
         safety.v2x_blocking_vehicle_id.c_str(), safety.v2x_clearance_mode.c_str(),
         safety.v2x_clearance_reason.c_str(), safety.v2x_initial_clearance_m,
         safety.v2x_minimum_clearance_m, safety.v2x_final_clearance_m,

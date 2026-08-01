@@ -15106,8 +15106,7 @@ private:
     const double recovery_heading_error_rad,
     const double rejoin_steering_angle_rad,
     const bool reverse_only,
-    const bool allow_forward_candidate_probe,
-    const bool prefer_forward_course_escape,
+    const stuck_recovery::RecoveryCandidateDirectionPolicy & candidate_direction_policy,
     const bool evaluate_rollout) const
   {
     RecoverySafetySnapshot snapshot;
@@ -15120,7 +15119,7 @@ private:
 
     const recovery_footprint::Pose2D recovery_pose{pose.x, pose.y, pose.theta};
     const bool forward_candidate_evaluation_allowed =
-      !reverse_only || allow_forward_candidate_probe;
+      !reverse_only || candidate_direction_policy.forward_probe_allowed;
     const auto wall_proximity = recovery_footprint::classify_nearby_wall(
       *recovery_grid_, recovery_footprint_, recovery_pose,
       cfg_.stuck_recovery.wall_direction_search_margin_m,
@@ -15401,7 +15400,10 @@ private:
           }
           return best_result;
         };
-      if (prefer_forward_course_escape && forward_candidate_evaluation_allowed) {
+      if (
+        candidate_direction_policy.prefer_forward_course_escape &&
+        forward_candidate_evaluation_allowed)
+      {
         selected_result = select_forward_deadlock_fallback();
         if (selected_result.has_value()) {
           first_result = selected_result;
@@ -16243,8 +16245,14 @@ private:
         current_wall_region == recovery_footprint::WallRegion::Mixed,
         course_recovery_guard_active,
         recovery_aggressive_retry_count_});
-    const bool allow_forward_candidate_probe =
-      allow_forward_course_escape || allow_solver_reverse_deadlock_forward_probe;
+    const auto candidate_direction_policy =
+      stuck_recovery::resolve_recovery_candidate_direction_policy(
+      stuck_recovery::RecoveryCandidateDirectionPolicyRequest{
+        allow_forward_course_escape,
+        allow_solver_reverse_deadlock_forward_probe,
+        measured_reverse_course_worsening,
+        recovery_forward_fallback_unlocked_,
+        course_recovery_guard_active});
     const bool low_speed_recovery_candidate =
       std::abs(actual_v) <= cfg_.stuck_recovery.core.detector.moving_speed_mps &&
       (requested_forward_speed_mps >=
@@ -16279,9 +16287,7 @@ private:
       car_->spatial_state.e_psi,
       checked_rejoin_steering_tire_angle_rad,
       reverse_only,
-      allow_forward_candidate_probe,
-      measured_reverse_course_worsening ||
-      (recovery_forward_fallback_unlocked_ && course_recovery_guard_active),
+      candidate_direction_policy,
       recovery_context_active || low_speed_recovery_candidate);
     const bool awsim_recovery_settling =
       last_collision_receipt_steady_.has_value() &&
@@ -16960,7 +16966,7 @@ private:
       pose, steady_now, control_time.seconds(), bounded_distance_m,
       bounded_distance_m, bounded_distance_m,
       car_->spatial_state.e_y, car_->spatial_state.e_psi, 0.0,
-      false, false, false, true);
+      false, stuck_recovery::RecoveryCandidateDirectionPolicy{}, true);
     const bool drive_gear_fresh =
       recovery_gear_report_fresh(steady_now) && reported_gear_.has_value() &&
       reported_gear_.value() == stuck_recovery::Gear::Drive &&

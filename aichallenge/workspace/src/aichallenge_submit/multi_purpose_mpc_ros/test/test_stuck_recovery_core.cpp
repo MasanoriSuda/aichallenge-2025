@@ -29,12 +29,15 @@ using multi_purpose_mpc_ros::stuck_recovery::Gear;
 using multi_purpose_mpc_ros::stuck_recovery::ManeuverDirection;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryAction;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryActionType;
+using multi_purpose_mpc_ros::stuck_recovery::RecoveryCandidateDirectionPolicyRequest;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryInput;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryReason;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryState;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryCourseProgressRequest;
 using multi_purpose_mpc_ros::stuck_recovery::ReverseDirectionPolicyInput;
 using multi_purpose_mpc_ros::stuck_recovery::RecoverySupervisor;
+using multi_purpose_mpc_ros::stuck_recovery::RejoinAlignmentProgressRequest;
+using multi_purpose_mpc_ros::stuck_recovery::RejoinAlignmentProgressTracker;
 using multi_purpose_mpc_ros::stuck_recovery::RejoinSteeringRequest;
 using multi_purpose_mpc_ros::stuck_recovery::ReverseActuationCalibration;
 using multi_purpose_mpc_ros::stuck_recovery::StuckDetector;
@@ -56,6 +59,7 @@ using multi_purpose_mpc_ros::stuck_recovery::reverse_stopping_distance_reserve_m
 using multi_purpose_mpc_ros::stuck_recovery::recovery_candidate_commit_allowed;
 using multi_purpose_mpc_ros::stuck_recovery::recovery_reverse_direction_required;
 using multi_purpose_mpc_ros::stuck_recovery::recovery_reverse_intent_latch_allowed;
+using multi_purpose_mpc_ros::stuck_recovery::resolve_recovery_candidate_direction_policy;
 using multi_purpose_mpc_ros::stuck_recovery::resolve_recovery_course_progress;
 using multi_purpose_mpc_ros::stuck_recovery::should_release_reverse_only_for_rear_wall;
 using multi_purpose_mpc_ros::stuck_recovery::source_sample_is_current;
@@ -99,6 +103,75 @@ TEST(StuckRecoveryRejoinSteering, AppliesLimitAndRejectsInvalidInputs)
   request.wheelbase_m = 1.0;
   request.lateral_error_m = std::numeric_limits<double>::quiet_NaN();
   EXPECT_FALSE(compute_rejoin_steering_tire_angle(request).has_value());
+}
+
+TEST(StuckRecoveryRejoinProgress, TracksMaterialImprovementAndResetIndependently)
+{
+  RejoinAlignmentProgressTracker tracker;
+  RejoinAlignmentProgressRequest request;
+  request.now_sec = 10.0;
+  request.lateral_error_m = 1.0;
+  request.max_lateral_error_m = 0.5;
+  request.max_heading_error_rad = 0.2;
+  request.minimum_progress_ratio = 0.05;
+
+  auto observation = tracker.observe(request);
+  EXPECT_TRUE(observation.material_progress);
+  EXPECT_DOUBLE_EQ(observation.alignment_error_ratio, 2.0);
+  EXPECT_DOUBLE_EQ(observation.no_progress_duration_sec, 0.0);
+
+  request.now_sec = 10.4;
+  request.lateral_error_m = 0.98;
+  observation = tracker.observe(request);
+  EXPECT_FALSE(observation.material_progress);
+  EXPECT_NEAR(observation.alignment_error_ratio, 1.96, 1.0e-12);
+  EXPECT_NEAR(observation.no_progress_duration_sec, 0.4, 1.0e-12);
+
+  request.now_sec = 10.5;
+  request.lateral_error_m = 0.90;
+  observation = tracker.observe(request);
+  EXPECT_TRUE(observation.material_progress);
+  EXPECT_NEAR(observation.alignment_error_ratio, 1.8, 1.0e-12);
+  EXPECT_DOUBLE_EQ(observation.no_progress_duration_sec, 0.0);
+
+  tracker.reset();
+  request.now_sec = 20.0;
+  observation = tracker.observe(request);
+  EXPECT_TRUE(observation.material_progress);
+  EXPECT_DOUBLE_EQ(observation.no_progress_duration_sec, 0.0);
+}
+
+TEST(StuckRecoveryCandidateDirectionPolicy, SeparatesForwardPermissionFromPreference)
+{
+  RecoveryCandidateDirectionPolicyRequest request;
+  auto policy = resolve_recovery_candidate_direction_policy(request);
+  EXPECT_FALSE(policy.forward_probe_allowed);
+  EXPECT_FALSE(policy.prefer_forward_course_escape);
+
+  request.forward_course_escape_allowed = true;
+  policy = resolve_recovery_candidate_direction_policy(request);
+  EXPECT_TRUE(policy.forward_probe_allowed);
+  EXPECT_FALSE(policy.prefer_forward_course_escape);
+
+  request.forward_course_escape_allowed = false;
+  request.solver_reverse_deadlock_forward_probe_allowed = true;
+  policy = resolve_recovery_candidate_direction_policy(request);
+  EXPECT_TRUE(policy.forward_probe_allowed);
+  EXPECT_FALSE(policy.prefer_forward_course_escape);
+
+  request = RecoveryCandidateDirectionPolicyRequest{};
+  request.measured_reverse_course_worsening = true;
+  policy = resolve_recovery_candidate_direction_policy(request);
+  EXPECT_FALSE(policy.forward_probe_allowed);
+  EXPECT_TRUE(policy.prefer_forward_course_escape);
+
+  request = RecoveryCandidateDirectionPolicyRequest{};
+  request.forward_fallback_unlocked = true;
+  policy = resolve_recovery_candidate_direction_policy(request);
+  EXPECT_FALSE(policy.prefer_forward_course_escape);
+  request.course_recovery_guard_active = true;
+  policy = resolve_recovery_candidate_direction_policy(request);
+  EXPECT_TRUE(policy.prefer_forward_course_escape);
 }
 
 TEST(StuckRecoveryCourseProgress, RejectsRolloutThatMovesFartherOffCourse)

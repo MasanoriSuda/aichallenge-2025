@@ -520,6 +520,53 @@ std::optional<double> compute_rejoin_steering_tire_angle(
     request.max_steering_tire_angle_rad);
 }
 
+RejoinAlignmentProgressObservation RejoinAlignmentProgressTracker::observe(
+  const RejoinAlignmentProgressRequest & request) noexcept
+{
+  const auto normalized_error = [](const double error, const double allowed_error) {
+      if (allowed_error > kDistanceComparisonEpsilon) {
+        return std::abs(error) / allowed_error;
+      }
+      return std::abs(error) <= kDistanceComparisonEpsilon ?
+             0.0 : std::numeric_limits<double>::infinity();
+    };
+
+  RejoinAlignmentProgressObservation observation;
+  observation.alignment_error_ratio = std::max(
+    normalized_error(request.lateral_error_m, request.max_lateral_error_m),
+    normalized_error(request.heading_error_rad, request.max_heading_error_rad));
+  if (!best_alignment_error_ratio_.has_value() ||
+    best_alignment_error_ratio_.value() - observation.alignment_error_ratio >=
+    request.minimum_progress_ratio)
+  {
+    best_alignment_error_ratio_ = observation.alignment_error_ratio;
+    last_progress_sec_ = request.now_sec;
+    observation.material_progress = true;
+  }
+  observation.no_progress_duration_sec = last_progress_sec_.has_value() ?
+    request.now_sec - last_progress_sec_.value() : 0.0;
+  return observation;
+}
+
+void RejoinAlignmentProgressTracker::reset() noexcept
+{
+  best_alignment_error_ratio_.reset();
+  last_progress_sec_.reset();
+}
+
+RecoveryCandidateDirectionPolicy resolve_recovery_candidate_direction_policy(
+  const RecoveryCandidateDirectionPolicyRequest & request) noexcept
+{
+  RecoveryCandidateDirectionPolicy policy;
+  policy.forward_probe_allowed =
+    request.forward_course_escape_allowed ||
+    request.solver_reverse_deadlock_forward_probe_allowed;
+  policy.prefer_forward_course_escape =
+    request.measured_reverse_course_worsening ||
+    (request.forward_fallback_unlocked && request.course_recovery_guard_active);
+  return policy;
+}
+
 RecoveryCourseProgressResolution resolve_recovery_course_progress(
   const RecoveryCourseProgressRequest & request) noexcept
 {
@@ -1018,8 +1065,7 @@ void RecoverySupervisor::reset_session() noexcept
   last_update_sec_.reset();
   stopped_since_sec_.reset();
   aligned_since_sec_.reset();
-  best_rejoin_alignment_error_ratio_.reset();
-  last_rejoin_progress_sec_.reset();
+  rejoin_alignment_progress_tracker_.reset();
   solver_unhealthy_since_sec_.reset();
   clearance_safe_since_sec_.reset();
   last_gear_request_sec_.reset();
@@ -1627,29 +1673,15 @@ RecoveryAction RecoverySupervisor::update_low_speed_rejoin(const RecoveryInput &
     return hold_action(RecoveryReason::RearInformationIncomplete);
   }
 
-  const auto normalized_error = [](const double error, const double allowed_error) {
-      if (allowed_error > kDistanceComparisonEpsilon) {
-        return std::abs(error) / allowed_error;
-      }
-      return std::abs(error) <= kDistanceComparisonEpsilon ?
-             0.0 : std::numeric_limits<double>::infinity();
-    };
-  const double alignment_error_ratio = std::max(
-    normalized_error(input.lateral_error_m, config_.max_rejoin_lateral_error_m),
-    normalized_error(input.heading_error_rad, config_.max_rejoin_heading_error_rad));
-  if (!best_rejoin_alignment_error_ratio_.has_value()) {
-    best_rejoin_alignment_error_ratio_ = alignment_error_ratio;
-    last_rejoin_progress_sec_ = input.now_sec;
-  } else if (
-    best_rejoin_alignment_error_ratio_.value() - alignment_error_ratio >=
-    config_.min_rejoin_alignment_progress_ratio)
-  {
-    best_rejoin_alignment_error_ratio_ = alignment_error_ratio;
-    last_rejoin_progress_sec_ = input.now_sec;
-  }
-  const double no_progress_duration_sec = last_rejoin_progress_sec_.has_value() ?
-    input.now_sec - last_rejoin_progress_sec_.value() : state_elapsed(input.now_sec);
-  if (no_progress_duration_sec >= config_.rejoin_timeout_sec) {
+  const auto alignment_progress = rejoin_alignment_progress_tracker_.observe(
+    RejoinAlignmentProgressRequest{
+      input.now_sec,
+      input.lateral_error_m,
+      input.heading_error_rad,
+      config_.max_rejoin_lateral_error_m,
+      config_.max_rejoin_heading_error_rad,
+      config_.min_rejoin_alignment_progress_ratio});
+  if (alignment_progress.no_progress_duration_sec >= config_.rejoin_timeout_sec) {
     if (
       config_.retry_rejoin_timeout &&
       (escape_step_count_ < config_.max_escape_steps ||
@@ -1717,13 +1749,11 @@ void RecoverySupervisor::transition(
   }
   if (next == RecoveryState::LowSpeedRejoin) {
     aligned_since_sec_.reset();
-    best_rejoin_alignment_error_ratio_.reset();
-    last_rejoin_progress_sec_.reset();
+    rejoin_alignment_progress_tracker_.reset();
     normal_reset_pending_ = true;
   } else {
     solver_unhealthy_since_sec_.reset();
-    best_rejoin_alignment_error_ratio_.reset();
-    last_rejoin_progress_sec_.reset();
+    rejoin_alignment_progress_tracker_.reset();
   }
   if (next == RecoveryState::Normal || next == RecoveryState::SafeStop) {
     stopped_since_sec_.reset();

@@ -169,6 +169,61 @@ struct RejoinSteeringRequest
 std::optional<double> compute_rejoin_steering_tire_angle(
   const RejoinSteeringRequest & request) noexcept;
 
+struct RejoinAlignmentProgressRequest
+{
+  double now_sec{};
+  double lateral_error_m{};
+  double heading_error_rad{};
+  double max_lateral_error_m{};
+  double max_heading_error_rad{};
+  double minimum_progress_ratio{};
+};
+
+struct RejoinAlignmentProgressObservation
+{
+  double alignment_error_ratio{};
+  double no_progress_duration_sec{};
+  bool material_progress{false};
+};
+
+// Owns the temporal state used by LowSpeedRejoin progress monitoring. Keeping
+// this independent from RecoverySupervisor state transitions makes progress,
+// regression and timeout policies explicit and independently testable.
+class RejoinAlignmentProgressTracker
+{
+public:
+  RejoinAlignmentProgressObservation observe(
+    const RejoinAlignmentProgressRequest & request) noexcept;
+  void reset() noexcept;
+
+private:
+  std::optional<double> best_alignment_error_ratio_;
+  std::optional<double> last_progress_sec_;
+};
+
+struct RecoveryCandidateDirectionPolicyRequest
+{
+  bool forward_course_escape_allowed{false};
+  bool solver_reverse_deadlock_forward_probe_allowed{false};
+  bool measured_reverse_course_worsening{false};
+  bool forward_fallback_unlocked{false};
+  bool course_recovery_guard_active{false};
+};
+
+struct RecoveryCandidateDirectionPolicy
+{
+  // Permission to evaluate Forward rollout candidates while Reverse-only
+  // policy is otherwise active.
+  bool forward_probe_allowed{false};
+  // Ordering only: evaluate Forward candidates before Reverse candidates.
+  bool prefer_forward_course_escape{false};
+};
+
+// Resolve Forward evaluation permission separately from candidate ordering.
+// The current expressions are intentionally preserved by this refactor.
+RecoveryCandidateDirectionPolicy resolve_recovery_candidate_direction_policy(
+  const RecoveryCandidateDirectionPolicyRequest & request) noexcept;
+
 struct RecoveryCourseProgressRequest
 {
   double current_lateral_error_m{};
@@ -677,8 +732,7 @@ private:
   std::optional<double> last_update_sec_;
   std::optional<double> stopped_since_sec_;
   std::optional<double> aligned_since_sec_;
-  std::optional<double> best_rejoin_alignment_error_ratio_;
-  std::optional<double> last_rejoin_progress_sec_;
+  RejoinAlignmentProgressTracker rejoin_alignment_progress_tracker_;
   std::optional<double> solver_unhealthy_since_sec_;
   std::optional<double> clearance_safe_since_sec_;
   std::optional<double> last_gear_request_sec_;

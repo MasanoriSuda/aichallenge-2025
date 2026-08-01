@@ -104,6 +104,11 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeExecutionSideRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeExecutionSideSource;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeLineTransitionAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeLineTransitionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionPathRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionPathStage;
+using multi_purpose_mpc_ros::v2x_overtake_core::PausedMissionExpiryReason;
+using multi_purpose_mpc_ros::v2x_overtake_core::PausedMissionExpiryRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::CompletedTargetReacquireSuppressionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SpeedLimitRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StallWatchdogRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassProgressWatchdogRequest;
@@ -136,6 +141,9 @@ using multi_purpose_mpc_ros::v2x_overtake_core::can_start_side_overtake;
 using multi_purpose_mpc_ros::v2x_overtake_core::side_only_target_requires_follow;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_unlatched_pass_closing_speed;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_line_horizon_progress;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_mission_path;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_paused_mission_expiry;
+using multi_purpose_mpc_ros::v2x_overtake_core::should_suppress_completed_target_reacquire;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_line_heading_reference;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   should_abort_active_overtake_for_static_wall;
@@ -2178,6 +2186,95 @@ TEST(V2XOvertakeCoreSpeed, ComposesPassGoalAndExecutionIntervalInOnePolicy)
   request.feasible_interval_available = false;
   resolution = resolve_pass_lateral_goal_policy(request);
   EXPECT_DOUBLE_EQ(resolution.execution_goal_m, -0.8);
+
+  request.feasible_interval_available = true;
+  request.feasible_lower_bound_m = -2.2;
+  request.feasible_upper_bound_m = 2.0;
+  request.enforce_target_separation = false;
+  resolution = resolve_pass_lateral_goal_policy(request);
+  EXPECT_DOUBLE_EQ(resolution.execution_goal_m, -0.8);
+  EXPECT_TRUE(resolution.target_separation_feasible);
+}
+
+TEST(V2XOvertakeCoreSpeed, ResolvesImmutableEndToEndMissionPath)
+{
+  OvertakeMissionPathRequest request;
+  request.start_lateral_m = 0.2;
+  request.pass_lateral_m = -1.0;
+  request.return_lateral_m = 0.0;
+  request.shift_distance_m = 4.0;
+  request.pass_distance_m = 8.0;
+  request.return_distance_m = 6.0;
+
+  request.path_distance_m = 0.0;
+  auto point = resolve_overtake_mission_path(request);
+  ASSERT_TRUE(point.valid);
+  EXPECT_EQ(point.stage, OvertakeMissionPathStage::ShiftOut);
+  EXPECT_DOUBLE_EQ(point.lateral_target_m, 0.2);
+  EXPECT_DOUBLE_EQ(point.total_distance_m, 18.0);
+
+  request.path_distance_m = 2.0;
+  point = resolve_overtake_mission_path(request);
+  EXPECT_EQ(point.stage, OvertakeMissionPathStage::ShiftOut);
+  EXPECT_NEAR(point.lateral_target_m, -0.4, 1e-12);
+
+  request.path_distance_m = 8.0;
+  point = resolve_overtake_mission_path(request);
+  EXPECT_EQ(point.stage, OvertakeMissionPathStage::Pass);
+  EXPECT_DOUBLE_EQ(point.lateral_target_m, -1.0);
+
+  request.path_distance_m = 15.0;
+  point = resolve_overtake_mission_path(request);
+  EXPECT_EQ(point.stage, OvertakeMissionPathStage::Return);
+  EXPECT_NEAR(point.lateral_target_m, -0.5, 1e-12);
+
+  request.path_distance_m = 18.0;
+  point = resolve_overtake_mission_path(request);
+  EXPECT_EQ(point.stage, OvertakeMissionPathStage::Complete);
+  EXPECT_DOUBLE_EQ(point.lateral_target_m, 0.0);
+
+  request.path_distance_m = -0.1;
+  EXPECT_FALSE(resolve_overtake_mission_path(request).valid);
+}
+
+TEST(V2XOvertakeCoreSpeed, ExpiresFollowPrepareByTimeOrDistance)
+{
+  PausedMissionExpiryRequest request;
+  request.follow_prepare_active = true;
+  request.elapsed_sec = 3.9;
+  request.traveled_distance_m = 19.9;
+  request.timeout_sec = 4.0;
+  request.maximum_distance_m = 20.0;
+  EXPECT_EQ(resolve_paused_mission_expiry(request), PausedMissionExpiryReason::Active);
+
+  request.elapsed_sec = 4.0;
+  EXPECT_EQ(resolve_paused_mission_expiry(request), PausedMissionExpiryReason::TimeLimit);
+
+  request.elapsed_sec = 1.0;
+  request.traveled_distance_m = 20.0;
+  EXPECT_EQ(resolve_paused_mission_expiry(request), PausedMissionExpiryReason::DistanceLimit);
+
+  request.follow_prepare_active = false;
+  EXPECT_EQ(resolve_paused_mission_expiry(request), PausedMissionExpiryReason::Active);
+}
+
+TEST(V2XOvertakeCoreSpeed, SuppressesOnlyNewEntryForCompletedTarget)
+{
+  CompletedTargetReacquireSuppressionRequest request;
+  request.completed_target_block_active = true;
+  request.candidate_matches_completed_target = true;
+  request.now_sec = 10.0;
+  request.block_until_sec = 11.5;
+  EXPECT_TRUE(should_suppress_completed_target_reacquire(request));
+
+  request.committed_mission_active = true;
+  EXPECT_FALSE(should_suppress_completed_target_reacquire(request));
+  request.committed_mission_active = false;
+  request.candidate_matches_completed_target = false;
+  EXPECT_FALSE(should_suppress_completed_target_reacquire(request));
+  request.candidate_matches_completed_target = true;
+  request.now_sec = 11.5;
+  EXPECT_FALSE(should_suppress_completed_target_reacquire(request));
 }
 
 TEST(V2XOvertakeCoreSpeed, ReturnsCompletedPassBeforeMarginOnlyRecovery)
@@ -4594,6 +4691,10 @@ TEST(V2XOvertakeCoreContinuity, ReacquiresOnlySameTargetAndSideDuringEarlyReturn
   request.return_progress = 0.10;
   request.max_return_progress = 0.25;
   EXPECT_TRUE(can_reacquire_during_return(request));
+
+  request.rear_clear_confirmed_latched = true;
+  EXPECT_FALSE(can_reacquire_during_return(request));
+  request.rear_clear_confirmed_latched = false;
 
   request.same_target = false;
   EXPECT_FALSE(can_reacquire_during_return(request));

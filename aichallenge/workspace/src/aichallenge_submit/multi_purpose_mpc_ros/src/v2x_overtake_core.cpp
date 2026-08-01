@@ -745,6 +745,55 @@ double resolve_overtake_line_horizon_progress(
   return linear_progress * linear_progress * (3.0 - 2.0 * linear_progress);
 }
 
+OvertakeMissionPathResolution resolve_overtake_mission_path(
+  const OvertakeMissionPathRequest & request) noexcept
+{
+  OvertakeMissionPathResolution resolution;
+  if (
+    !std::isfinite(request.path_distance_m) || request.path_distance_m < 0.0 ||
+    !std::isfinite(request.start_lateral_m) ||
+    !std::isfinite(request.pass_lateral_m) ||
+    !std::isfinite(request.return_lateral_m) ||
+    !std::isfinite(request.shift_distance_m) || request.shift_distance_m <= 0.0 ||
+    !std::isfinite(request.pass_distance_m) || request.pass_distance_m < 0.0 ||
+    !std::isfinite(request.return_distance_m) || request.return_distance_m <= 0.0)
+  {
+    return resolution;
+  }
+
+  const double pass_start_m = request.shift_distance_m;
+  const double return_start_m = pass_start_m + request.pass_distance_m;
+  resolution.total_distance_m = return_start_m + request.return_distance_m;
+  resolution.valid = true;
+  if (request.path_distance_m < pass_start_m) {
+    resolution.stage = OvertakeMissionPathStage::ShiftOut;
+    const double progress = resolve_overtake_line_horizon_progress(
+      OvertakeLineHorizonProgressRequest{
+        false, 0.0, request.path_distance_m, request.shift_distance_m});
+    resolution.lateral_target_m = request.start_lateral_m +
+      progress * (request.pass_lateral_m - request.start_lateral_m);
+    return resolution;
+  }
+  if (request.path_distance_m < return_start_m) {
+    resolution.stage = OvertakeMissionPathStage::Pass;
+    resolution.lateral_target_m = request.pass_lateral_m;
+    return resolution;
+  }
+  if (request.path_distance_m < resolution.total_distance_m) {
+    resolution.stage = OvertakeMissionPathStage::Return;
+    const double progress = resolve_overtake_line_horizon_progress(
+      OvertakeLineHorizonProgressRequest{
+        false, 0.0, request.path_distance_m - return_start_m,
+        request.return_distance_m});
+    resolution.lateral_target_m = request.pass_lateral_m +
+      progress * (request.return_lateral_m - request.pass_lateral_m);
+    return resolution;
+  }
+  resolution.stage = OvertakeMissionPathStage::Complete;
+  resolution.lateral_target_m = request.return_lateral_m;
+  return resolution;
+}
+
 double resolve_overtake_line_heading_reference(
   const OvertakeLineHeadingReferenceRequest & request) noexcept
 {
@@ -2557,6 +2606,7 @@ bool can_reacquire_during_return(const ReacquireRequest & request) noexcept
 {
   return request.enabled && request.stable_target_id && request.same_target &&
          request.same_side && request.gap_available && request.execution_allowed &&
+         !request.rear_clear_confirmed_latched &&
          std::isfinite(request.return_elapsed_sec) && request.return_elapsed_sec >= 0.0 &&
          std::isfinite(request.reacquire_window_sec) && request.reacquire_window_sec >= 0.0 &&
          request.return_elapsed_sec <= request.reacquire_window_sec &&
@@ -2571,6 +2621,17 @@ bool can_reacquire_during_recovery(const RecoveryReacquireRequest & request) noe
          request.same_target && request.target_progress_continuous && request.same_side &&
          !request.target_rear_clear && request.gap_available && request.execution_allowed &&
          request.solver_ready;
+}
+
+bool should_suppress_completed_target_reacquire(
+  const CompletedTargetReacquireSuppressionRequest & request) noexcept
+{
+  return request.completed_target_block_active &&
+         request.candidate_matches_completed_target &&
+         !request.committed_mission_active &&
+         std::isfinite(request.now_sec) &&
+         std::isfinite(request.block_until_sec) &&
+         request.now_sec < request.block_until_sec;
 }
 
 ForwardDistanceResolution integrate_forward_distance(const ForwardDistanceRequest & request)
@@ -2600,6 +2661,28 @@ ForwardDistanceResolution integrate_forward_distance(const ForwardDistanceReques
     std::max(0.0, request.forward_speed_mps) * request.delta_sec;
   resolution.observation_accepted = true;
   return resolution;
+}
+
+PausedMissionExpiryReason resolve_paused_mission_expiry(
+  const PausedMissionExpiryRequest & request) noexcept
+{
+  if (!request.follow_prepare_active) {
+    return PausedMissionExpiryReason::Active;
+  }
+  if (
+    std::isfinite(request.timeout_sec) && request.timeout_sec > 0.0 &&
+    std::isfinite(request.elapsed_sec) && request.elapsed_sec >= request.timeout_sec)
+  {
+    return PausedMissionExpiryReason::TimeLimit;
+  }
+  if (
+    std::isfinite(request.maximum_distance_m) && request.maximum_distance_m > 0.0 &&
+    std::isfinite(request.traveled_distance_m) &&
+    request.traveled_distance_m >= request.maximum_distance_m)
+  {
+    return PausedMissionExpiryReason::DistanceLimit;
+  }
+  return PausedMissionExpiryReason::Active;
 }
 
 CommittedPassProgressWatchdogResolution update_committed_pass_progress_watchdog(

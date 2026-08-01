@@ -532,6 +532,40 @@ struct OvertakeLineHorizonProgressRequest
 double resolve_overtake_line_horizon_progress(
   const OvertakeLineHorizonProgressRequest & request) noexcept;
 
+enum class OvertakeMissionPathStage
+{
+  Invalid,
+  ShiftOut,
+  Pass,
+  Return,
+  Complete,
+};
+
+struct OvertakeMissionPathRequest
+{
+  double path_distance_m{};
+  double start_lateral_m{};
+  double pass_lateral_m{};
+  double return_lateral_m{};
+  double shift_distance_m{};
+  double pass_distance_m{};
+  double return_distance_m{};
+};
+
+struct OvertakeMissionPathResolution
+{
+  bool valid{false};
+  OvertakeMissionPathStage stage{OvertakeMissionPathStage::Invalid};
+  double lateral_target_m{};
+  double total_distance_m{};
+};
+
+/// Resolve one point of the immutable ShiftOut/Pass/Return path admitted for
+/// an overtake mission. ShiftOut and Return use the same smoothstep profile as
+/// the live phase generator; Pass holds the latched lateral goal.
+OvertakeMissionPathResolution resolve_overtake_mission_path(
+  const OvertakeMissionPathRequest & request) noexcept;
+
 struct OvertakeLineHeadingReferenceRequest
 {
   double previous_lateral_m{};
@@ -1701,9 +1735,11 @@ struct ReacquireRequest
   double reacquire_window_sec{};
   double return_progress{};
   double max_return_progress{};
+  bool rear_clear_confirmed_latched{false};
 };
 
-/// Allow Return -> Pass only for the same stable target and pass side early in Return.
+/// Allow Return -> Pass only for the same stable target and pass side early in Return,
+/// and never after rear clearance has completed the pass mission.
 bool can_reacquire_during_return(const ReacquireRequest & request) noexcept;
 
 struct RecoveryReacquireRequest
@@ -1722,6 +1758,20 @@ struct RecoveryReacquireRequest
 
 /// Allow Recovery -> ShiftOut when the same executable pass opportunity becomes available again.
 bool can_reacquire_during_recovery(const RecoveryReacquireRequest & request) noexcept;
+
+struct CompletedTargetReacquireSuppressionRequest
+{
+  bool completed_target_block_active{false};
+  bool candidate_matches_completed_target{false};
+  bool committed_mission_active{false};
+  double now_sec{};
+  double block_until_sec{};
+};
+
+/// Suppress only a new overtake entry for a just-completed target. Collision,
+/// Follow and SafetyBrake ownership remain with the caller.
+bool should_suppress_completed_target_reacquire(
+  const CompletedTargetReacquireSuppressionRequest & request) noexcept;
 
 struct ForwardDistanceRequest
 {
@@ -1742,6 +1792,27 @@ struct ForwardDistanceResolution
 /// Invalid/rolled-back/late observations do not change the accumulated distance.
 /// Configuration errors throw std::invalid_argument.
 ForwardDistanceResolution integrate_forward_distance(const ForwardDistanceRequest & request);
+
+enum class PausedMissionExpiryReason
+{
+  Active,
+  TimeLimit,
+  DistanceLimit,
+};
+
+struct PausedMissionExpiryRequest
+{
+  bool follow_prepare_active{false};
+  double elapsed_sec{};
+  double traveled_distance_m{};
+  double timeout_sec{};
+  double maximum_distance_m{};
+};
+
+/// Bound one paused mission. Disabled (zero) limits are ignored, while invalid
+/// measurements never expire a mission by themselves.
+PausedMissionExpiryReason resolve_paused_mission_expiry(
+  const PausedMissionExpiryRequest & request) noexcept;
 
 struct CommittedPassProgressWatchdogRequest
 {

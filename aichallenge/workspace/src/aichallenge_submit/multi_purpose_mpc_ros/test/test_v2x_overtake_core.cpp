@@ -1947,6 +1947,53 @@ TEST(V2XOvertakeCoreMinimumMotion, ReturnsNoSideWithoutSafeCandidate)
   EXPECT_EQ(selection.reason, SideSelectionReason::NoFeasibleSide);
 }
 
+TEST(V2XOvertakeCoreMinimumMotion, PrefersInnerOnlyWithinConfiguredExtraShift)
+{
+  MinimumLateralMotionSideSelectionRequest request{
+    PassSide::Left,
+    MinimumLateralMotionSideCandidate{PassSide::Left, true, false, 0.40},
+    MinimumLateralMotionSideCandidate{PassSide::Right, true, false, 0.65}};
+  request.inner_side = PassSide::Right;
+  request.inner_preference_max_extra_shift_m = 0.30;
+
+  auto selection = select_minimum_lateral_motion_side(request);
+  EXPECT_EQ(selection.side, PassSide::Right);
+  EXPECT_EQ(selection.reason, SideSelectionReason::InnerPreference);
+
+  request.right.required_shift_m = 0.71;
+  selection = select_minimum_lateral_motion_side(request);
+  EXPECT_EQ(selection.side, PassSide::Left);
+  EXPECT_EQ(selection.reason, SideSelectionReason::HigherQuality);
+}
+
+TEST(V2XOvertakeCoreMinimumMotion, BaseLinePreservationStillBeatsInnerPreference)
+{
+  MinimumLateralMotionSideSelectionRequest request{
+    PassSide::Right,
+    MinimumLateralMotionSideCandidate{PassSide::Left, true, true, 0.30},
+    MinimumLateralMotionSideCandidate{PassSide::Right, true, false, 0.10}};
+  request.inner_side = PassSide::Right;
+  request.inner_preference_max_extra_shift_m = 0.30;
+
+  const auto selection = select_minimum_lateral_motion_side(request);
+  EXPECT_EQ(selection.side, PassSide::Left);
+  EXPECT_EQ(selection.reason, SideSelectionReason::HigherQuality);
+}
+
+TEST(V2XOvertakeCoreMinimumMotion, ZeroInnerTolerancePreservesExistingTiePolicy)
+{
+  MinimumLateralMotionSideSelectionRequest request{
+    PassSide::Left,
+    MinimumLateralMotionSideCandidate{PassSide::Left, true, false, 0.30},
+    MinimumLateralMotionSideCandidate{PassSide::Right, true, false, 0.30}};
+  request.inner_side = PassSide::Right;
+  request.inner_preference_max_extra_shift_m = 0.0;
+
+  const auto selection = select_minimum_lateral_motion_side(request);
+  EXPECT_EQ(selection.side, PassSide::Left);
+  EXPECT_EQ(selection.reason, SideSelectionReason::Preferred);
+}
+
 TEST(V2XOvertakeCoreSpeed, AdaptsShiftOutClosingSpeedToFrontDistanceBudget)
 {
   AdaptiveShiftOutClosingSpeedRequest request;

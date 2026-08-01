@@ -1091,6 +1091,7 @@ enum class SideSelectionReason
   Preferred,
   Alternate,
   HigherQuality,
+  InnerPreference,
   Locked,
   LockedQualitySwitch,
   LockedUnavailable,
@@ -1130,11 +1131,14 @@ struct MinimumLateralMotionSideSelectionRequest
   PassSide preferred{PassSide::None};
   MinimumLateralMotionSideCandidate left;
   MinimumLateralMotionSideCandidate right;
+  PassSide inner_side{PassSide::None};
+  double inner_preference_max_extra_shift_m{0.0};
 };
 
 /// Prefer an executable side that preserves the base line. If neither side
-/// does, select the side requiring less lateral movement; exact ties retain
-/// the existing preferred-side policy.
+/// does, prefer the curve-inside candidate when its extra lateral motion is
+/// bounded; otherwise select the side requiring less lateral movement. Exact
+/// ties without a known curve side retain the existing preferred-side policy.
 SideSelection select_minimum_lateral_motion_side(
   const MinimumLateralMotionSideSelectionRequest & request) noexcept;
 

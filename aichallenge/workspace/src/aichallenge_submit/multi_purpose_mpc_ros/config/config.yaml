@@ -442,6 +442,7 @@ mpc:
   v2x_overtake_gap_lookahead_distance: 24.0 # [m] search farther than MPC horizon for slow-front pass
   v2x_overtake_try_both_sides: true         # before ShiftOut, retry the opposite side if preferred gap is blocked
   v2x_overtake_minimum_lateral_motion_enabled: true # keep the racing line when clear; otherwise use the nearest safe corridor point
+  v2x_overtake_minimum_motion_inner_preference_max_extra_shift: 0.30 # [m] near-tie: prefer a validated small inside pass
   v2x_overtake_velocity_advantage: 1.0      # [m/s] legacy whole-phase cap when stage speed is disabled
   v2x_overtake_stage_speed_enabled: true    # cap ShiftOut/early Pass; release only after the locked target is no longer ahead
   v2x_overtake_shiftout_adaptive_closing_speed_enabled: true # preserve entry gap until distance+lateral ShiftOut completes

@@ -1500,6 +1500,7 @@ struct V2XBehaviorConfig
   double overtake_gap_lookahead_distance{0.0};
   bool overtake_try_both_sides{false};
   bool overtake_minimum_lateral_motion_enabled{false};
+  double overtake_minimum_motion_inner_preference_max_extra_shift{0.0};
   double overtake_velocity_advantage{0.0};
   bool overtake_stage_speed_enabled{false};
   bool overtake_shiftout_adaptive_closing_speed_enabled{false};
@@ -6223,12 +6224,23 @@ struct MPC
     output.overtake_left_gap_available = left_assessment.gap_available;
     output.overtake_right_gap_available = right_assessment.gap_available;
     const auto side_reason = [&](const SideAssessment & assessment) {
-        if (!curve_attack_selection_requested) {
+        if (
+          !curve_attack_selection_requested &&
+          !cfg.v2x_behavior.overtake_minimum_lateral_motion_enabled)
+        {
           return assessment.reason;
         }
         std::ostringstream ss;
-        ss << assessment.reason
-           << ", curve_open_s=" << assessment.continuous_corridor_distance;
+        ss << assessment.reason;
+        if (curve_attack_selection_requested) {
+          ss << ", curve_open_s=" << assessment.continuous_corridor_distance;
+        }
+        if (cfg.v2x_behavior.overtake_minimum_lateral_motion_enabled) {
+          ss << ", min_shift=" << assessment.required_lateral_shift
+             << ", base_clear=" << assessment.base_line_clear
+             << ", inner=" <<
+            (inner_curve_pass_side != 0 && assessment.side == inner_curve_pass_side);
+        }
         return ss.str();
       };
     output.overtake_left_reason = side_reason(left_assessment);
@@ -6451,7 +6463,9 @@ struct MPC
           selection_preferred_pass_side != 0 ? pass_side(selection_preferred_pass_side) :
           overtake_core::PassSide::Left,
           minimum_motion_candidate(left_assessment, overtake_core::PassSide::Left),
-          minimum_motion_candidate(right_assessment, overtake_core::PassSide::Right)});
+          minimum_motion_candidate(right_assessment, overtake_core::PassSide::Right),
+          pass_side(inner_curve_pass_side),
+          cfg.v2x_behavior.overtake_minimum_motion_inner_preference_max_extra_shift});
     }
 
     if (shiftout_line_active && cfg.v2x_behavior.overtake_line.early_side_replan_enabled) {
@@ -13213,6 +13227,10 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_minimum_lateral_motion_enabled =
     mpc["v2x_overtake_minimum_lateral_motion_enabled"] ?
     mpc["v2x_overtake_minimum_lateral_motion_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_minimum_motion_inner_preference_max_extra_shift = std::max(
+    0.0,
+    mpc["v2x_overtake_minimum_motion_inner_preference_max_extra_shift"] ?
+    mpc["v2x_overtake_minimum_motion_inner_preference_max_extra_shift"].as<double>() : 0.0);
   cfg.mpc.v2x_behavior.overtake_velocity_advantage = std::max(
     0.0,
     mpc["v2x_overtake_velocity_advantage"] ?
@@ -13954,9 +13972,11 @@ public:
         mpc_cfg_.v2x_behavior.moving_front_speed_threshold);
       RCLCPP_INFO(
         get_logger(),
-        "V2X overtake minimum lateral motion: %s (base-line direct Pass, nearest-safe goal)",
+        "V2X overtake minimum lateral motion: %s (base-line direct Pass, nearest-safe goal, "
+        "inner_extra<=%.2f m)",
         mpc_cfg_.v2x_behavior.overtake_minimum_lateral_motion_enabled ?
-        "enabled" : "disabled");
+        "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_minimum_motion_inner_preference_max_extra_shift);
     }
     if (mpc_cfg_.v2x_behavior.low_speed_avoidance_enabled) {
       RCLCPP_INFO(

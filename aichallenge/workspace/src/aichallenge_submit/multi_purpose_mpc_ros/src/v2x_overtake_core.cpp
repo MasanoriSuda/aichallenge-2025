@@ -1555,6 +1555,22 @@ SideSelection select_minimum_lateral_motion_side(
       request.left.base_line_clear ? PassSide::Left : PassSide::Right,
       SideSelectionReason::HigherQuality};
   }
+  const double inner_preference_max_extra_shift_m =
+    std::isfinite(request.inner_preference_max_extra_shift_m) ?
+    std::max(0.0, request.inner_preference_max_extra_shift_m) : 0.0;
+  if (
+    is_configured_side(request.inner_side) &&
+    inner_preference_max_extra_shift_m > 1e-9)
+  {
+    const auto & inner = request.inner_side == PassSide::Left ? request.left : request.right;
+    const auto & outer = request.inner_side == PassSide::Left ? request.right : request.left;
+    if (
+      inner.required_shift_m <=
+      outer.required_shift_m + inner_preference_max_extra_shift_m + 1e-9)
+    {
+      return {request.inner_side, SideSelectionReason::InnerPreference};
+    }
+  }
   const double shift_difference =
     request.left.required_shift_m - request.right.required_shift_m;
   if (shift_difference < -1e-9) {

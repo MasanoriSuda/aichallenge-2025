@@ -144,6 +144,10 @@ stuck_recovery:
     forward_escape_distance_m: 0.30
     # Accept bounded odometry/stopping error only after the current footprint is clear.
     escape_confirm_distance_tolerance_m: 0.10
+    # A tipped/resting kart can produce a valid but ineffective Forward rollout.
+    # After two Forward duration limits, require one checked Reverse cycle
+    # instead of selecting the same Forward primitive without bound.
+    aggressive_forward_retry_limit_before_reverse: 2
     # A wall-evidenced solver failure with this much heading error also waits for reverse.
     # Below this threshold, wall direction may select a statically/V2X-clear short forward escape.
     # Wall-free solver failures are always reverse-only when the detector route above is enabled.

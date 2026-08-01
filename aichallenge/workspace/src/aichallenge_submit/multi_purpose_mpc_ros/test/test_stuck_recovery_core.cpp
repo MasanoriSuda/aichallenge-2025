@@ -64,6 +64,7 @@ using multi_purpose_mpc_ros::stuck_recovery::recovery_retry_snapshot;
 using multi_purpose_mpc_ros::stuck_recovery::recovery_retry_snapshot_materially_changed;
 using multi_purpose_mpc_ros::stuck_recovery::resolve_recovery_candidate_direction_policy;
 using multi_purpose_mpc_ros::stuck_recovery::resolve_recovery_course_progress;
+using multi_purpose_mpc_ros::stuck_recovery::resolve_recovery_escape_direction;
 using multi_purpose_mpc_ros::stuck_recovery::should_release_reverse_only_for_rear_wall;
 using multi_purpose_mpc_ros::stuck_recovery::source_sample_is_current;
 using multi_purpose_mpc_ros::stuck_recovery::source_timestamp_is_monotonic;
@@ -261,6 +262,35 @@ TEST(StuckRecoveryCandidateDirectionPolicy, SeparatesForwardPermissionFromPrefer
   request.forward_course_escape_allowed = true;
   policy = resolve_recovery_candidate_direction_policy(request);
   EXPECT_TRUE(policy.prefer_forward_course_escape);
+
+  request.forced_reverse_retry = true;
+  policy = resolve_recovery_candidate_direction_policy(request);
+  EXPECT_FALSE(policy.forward_probe_allowed);
+  EXPECT_FALSE(policy.prefer_forward_course_escape);
+}
+
+TEST(StuckRecoveryEscapeDirection, ActuatedDirectionOwnsDistanceAcrossCandidateChanges)
+{
+  EXPECT_EQ(
+    resolve_recovery_escape_direction(
+      RecoveryState::ReverseManeuver, ManeuverDirection::Forward,
+      ManeuverDirection::Unknown),
+    ManeuverDirection::Reverse);
+  EXPECT_EQ(
+    resolve_recovery_escape_direction(
+      RecoveryState::StopBeforeDrive, ManeuverDirection::Forward,
+      ManeuverDirection::Reverse),
+    ManeuverDirection::Reverse);
+  EXPECT_EQ(
+    resolve_recovery_escape_direction(
+      RecoveryState::ForwardManeuver, ManeuverDirection::Reverse,
+      ManeuverDirection::Reverse),
+    ManeuverDirection::Forward);
+  EXPECT_EQ(
+    resolve_recovery_escape_direction(
+      RecoveryState::CheckClearance, ManeuverDirection::Forward,
+      ManeuverDirection::Unknown),
+    ManeuverDirection::Forward);
 }
 
 TEST(StuckRecoveryCourseProgress, RejectsRolloutThatMovesFartherOffCourse)

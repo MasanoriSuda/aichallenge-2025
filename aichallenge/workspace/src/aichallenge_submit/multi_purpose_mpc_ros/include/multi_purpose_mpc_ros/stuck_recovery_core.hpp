@@ -212,6 +212,10 @@ struct RecoveryCandidateDirectionPolicyRequest
   bool measured_reverse_course_worsening{false};
   bool forward_fallback_unlocked{false};
   bool course_recovery_guard_active{false};
+  // A bounded Forward primitive repeatedly reached its duration limit without
+  // escaping.  The next candidate cycle must evaluate Reverse only so an
+  // unchanged simulation contact cannot select the same Forward forever.
+  bool forced_reverse_retry{false};
 };
 
 struct RecoveryCandidateDirectionPolicy
@@ -456,6 +460,13 @@ enum class RecoveryState
   LowSpeedRejoin,
   SafeStop,
 };
+
+// Candidate evaluation may switch direction while the currently commanded
+// primitive is stopping. Escape distance belongs to the direction that was
+// actually actuated, never to the newly evaluated candidate.
+ManeuverDirection resolve_recovery_escape_direction(
+  RecoveryState state, ManeuverDirection selected_direction,
+  ManeuverDirection last_actuated_direction) noexcept;
 
 /// Return true once a recovery candidate has entered an actuation path and may be fixed for the
 /// rest of that maneuver. Observation/clearance states must continue to re-evaluate direction.

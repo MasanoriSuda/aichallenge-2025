@@ -11744,6 +11744,9 @@ struct StuckRecoveryAdapterConfig
   double reverse_escape_distance_m{2.0};
   double forward_escape_distance_m{0.30};
   double escape_confirm_distance_tolerance_m{0.0};
+  // After this many consecutive ForwardDurationLimit retries, require one
+  // statically/V2X checked Reverse candidate. Zero disables the alternation.
+  std::size_t aggressive_forward_retry_limit_before_reverse{0U};
   // Maximum V2X front speed accepted as a stopped vehicle for a decentralized
   // tail-first reverse cascade.
   double coordinated_stop_front_speed_mps{0.20};
@@ -12204,6 +12207,10 @@ Config load_config(const std::string & path)
         maneuver["escape_confirm_distance_tolerance_m"] ?
         maneuver["escape_confirm_distance_tolerance_m"].as<double>() :
         adapter.escape_confirm_distance_tolerance_m;
+      adapter.aggressive_forward_retry_limit_before_reverse =
+        maneuver["aggressive_forward_retry_limit_before_reverse"] ?
+        maneuver["aggressive_forward_retry_limit_before_reverse"].as<std::size_t>() :
+        adapter.aggressive_forward_retry_limit_before_reverse;
       adapter.solver_reverse_only_heading_error_rad =
         maneuver["solver_reverse_only_heading_error_rad"] ?
         maneuver["solver_reverse_only_heading_error_rad"].as<double>() :
@@ -13904,7 +13911,7 @@ public:
       "rejoin_solver_wait=%.2f s, rejoin_progress=%.2f/regress=%.2f m/timeout=%.2f s, "
       "recovery_mpc=%s/%zux%.2f m/beam=%zu, "
       "aggressive_sim=%s/force_motion=%s/retry=%.2f s/change=%.2f m/%.2f rad/"
-      "force_rejoin=%zu, "
+      "force_rejoin=%zu/forward_retry_to_reverse=%zu, "
       "collision_stop_override=%s, escape_distance_tolerance=%.2f m",
       cfg_.stuck_recovery.core.detector.coordinated_stop_recovery_enabled ? "true" : "false",
       cfg_.stuck_recovery.core.detector.coordinated_stop_duration_sec,
@@ -13928,6 +13935,7 @@ public:
       cfg_.stuck_recovery.core.supervisor.aggressive_retry_min_lateral_change_m,
       cfg_.stuck_recovery.core.supervisor.aggressive_retry_min_heading_change_rad,
       cfg_.stuck_recovery.aggressive_force_rejoin_after_retries,
+      cfg_.stuck_recovery.aggressive_forward_retry_limit_before_reverse,
       cfg_.stuck_recovery.collision_deliberate_stop_override_enabled ? "true" : "false",
       cfg_.stuck_recovery.escape_confirm_distance_tolerance_m);
     RCLCPP_INFO(
@@ -14870,6 +14878,9 @@ private:
     recovery_reverse_pose_jump_ = false;
     recovery_episode_had_contact_evidence_ = false;
     recovery_aggressive_retry_count_ = 0U;
+    recovery_consecutive_forward_duration_limits_ = 0U;
+    recovery_retry_force_reverse_ = false;
+    recovery_last_maneuver_direction_.reset();
     recovery_coordinated_stop_episode_ = false;
     recovery_reverse_only_episode_ = false;
     recovery_reverse_intent_latched_ = false;
@@ -16028,17 +16039,21 @@ private:
               least_bad_result = std::move(result);
             }
           };
-        consider_forced(evaluate_non_worsening_candidate_with_steering(
-          recovery_footprint::ReversePrimitive::ForwardStraight, 0.0));
+        if (forward_candidate_evaluation_allowed) {
+          consider_forced(evaluate_non_worsening_candidate_with_steering(
+            recovery_footprint::ReversePrimitive::ForwardStraight, 0.0));
+        }
         consider_forced(evaluate_non_worsening_candidate_with_steering(
           recovery_footprint::ReversePrimitive::Straight, 0.0));
         for (const double steering_magnitude_rad : steering_samples) {
-          consider_forced(evaluate_non_worsening_candidate_with_steering(
-            recovery_footprint::ReversePrimitive::ForwardLeft,
-            steering_magnitude_rad));
-          consider_forced(evaluate_non_worsening_candidate_with_steering(
-            recovery_footprint::ReversePrimitive::ForwardRight,
-            steering_magnitude_rad));
+          if (forward_candidate_evaluation_allowed) {
+            consider_forced(evaluate_non_worsening_candidate_with_steering(
+              recovery_footprint::ReversePrimitive::ForwardLeft,
+              steering_magnitude_rad));
+            consider_forced(evaluate_non_worsening_candidate_with_steering(
+              recovery_footprint::ReversePrimitive::ForwardRight,
+              steering_magnitude_rad));
+          }
           consider_forced(evaluate_non_worsening_candidate_with_steering(
             recovery_footprint::ReversePrimitive::Left,
             steering_magnitude_rad));
@@ -16563,6 +16578,8 @@ private:
       recovery_reverse_only_episode_ = false;
       recovery_reverse_intent_latched_ = false;
       recovery_forward_fallback_unlocked_ = true;
+      recovery_retry_force_reverse_ = false;
+      recovery_consecutive_forward_duration_limits_ = 0U;
       RCLCPP_WARN(
         get_logger(),
         "Stuck recovery measured course progress worsened during Reverse: "
@@ -16615,7 +16632,12 @@ private:
       use_sim_time_ &&
       cfg_.stuck_recovery.core.supervisor.aggressive_sim_recovery_enabled &&
       low_speed_obstacle;
-    const bool reverse_only = stuck_recovery::recovery_reverse_direction_required(
+    const bool force_reverse_retry =
+      use_sim_time_ && cfg_.stuck_recovery.core.simulation_only &&
+      cfg_.stuck_recovery.core.supervisor.aggressive_sim_recovery_enabled &&
+      recovery_retry_force_reverse_;
+    const bool reverse_only = force_reverse_retry ||
+      stuck_recovery::recovery_reverse_direction_required(
       stuck_recovery::ReverseDirectionPolicyInput{
         recovery_reverse_only_episode_, recovery_reverse_intent_latched_,
         coordinated_stop_active, solver_reverse_only_candidate,
@@ -16653,7 +16675,8 @@ private:
         allow_solver_reverse_deadlock_forward_probe,
         measured_reverse_course_worsening,
         recovery_forward_fallback_unlocked_,
-        course_recovery_guard_active});
+        course_recovery_guard_active,
+        force_reverse_retry});
     const bool low_speed_recovery_candidate =
       std::abs(actual_v) <= cfg_.stuck_recovery.core.detector.moving_speed_mps &&
       (requested_forward_speed_mps >=
@@ -16758,12 +16781,24 @@ private:
       adaptive_reverse_retry_tracker_->target_distance_m(
       cfg_.stuck_recovery.fast_rejoin_min_reverse_distance_m) :
       cfg_.stuck_recovery.fast_rejoin_min_reverse_distance_m;
+    const auto escape_direction = stuck_recovery::resolve_recovery_escape_direction(
+      supervisor_state, safety.maneuver_direction,
+      recovery_last_maneuver_direction_.value_or(
+        stuck_recovery::ManeuverDirection::Unknown));
     const double escape_distance_target_m =
-      safety.maneuver_direction == stuck_recovery::ManeuverDirection::Forward ?
+      escape_direction == stuck_recovery::ManeuverDirection::Forward ?
       cfg_.stuck_recovery.forward_escape_distance_m :
-      (fast_rejoin_ready ?
+      (escape_direction == stuck_recovery::ManeuverDirection::Reverse && fast_rejoin_ready ?
       adaptive_fast_rejoin_distance_m :
       adaptive_reverse_escape_distance_m);
+    const double applied_stopping_reserve_m =
+      escape_direction == stuck_recovery::ManeuverDirection::Reverse ?
+      reverse_stopping_reserve_m : 0.0;
+    // Do not credit a previous/opposite primitive toward the newly selected
+    // direction. The per-maneuver accumulator is preserved across a temporary
+    // clearance wait but reset when a new bounded primitive starts.
+    const double escape_traveled_distance_m =
+      traveled_distance_m + applied_stopping_reserve_m;
     const bool aggressive_force_rejoin =
       cfg_.stuck_recovery.core.supervisor.aggressive_sim_recovery_enabled &&
       cfg_.stuck_recovery.aggressive_force_rejoin_after_retries > 0U &&
@@ -16772,14 +16807,15 @@ private:
       safety.current_footprint_clear && rejoin_steering_tire_angle.has_value();
     input.recovery.recovery_escape_confirmed =
       stuck_recovery::recovery_escape_distance_confirmed(
-      safety.current_footprint_clear, episode_traveled_distance_m,
+      safety.current_footprint_clear, escape_traveled_distance_m,
       escape_distance_target_m,
       cfg_.stuck_recovery.escape_confirm_distance_tolerance_m) ||
       aggressive_force_rejoin;
     input.recovery.reverse_escape_brake_required =
+      escape_direction == stuck_recovery::ManeuverDirection::Reverse &&
       fast_continuous_reverse_selected &&
       !input.recovery.recovery_escape_confirmed &&
-      episode_traveled_distance_m + reverse_stopping_reserve_m + kEps >=
+      escape_traveled_distance_m + kEps >=
       escape_distance_target_m;
     input.recovery.rejoin_safe = safety.current_footprint_clear;
     input.recovery.rejoin_forward_clear =
@@ -16799,9 +16835,9 @@ private:
       (recovery_episode_had_contact_evidence_ ||
       std::abs(progress_delta_m) >=
       cfg_.stuck_recovery.core.detector.max_progress_delta_m);
-    input.recovery.traveled_distance_m = traveled_distance_m + reverse_stopping_reserve_m;
+    input.recovery.traveled_distance_m = traveled_distance_m + applied_stopping_reserve_m;
     input.recovery.episode_traveled_distance_m =
-      episode_traveled_distance_m + reverse_stopping_reserve_m;
+      episode_traveled_distance_m + applied_stopping_reserve_m;
     input.recovery.reverse_steering_tire_angle_rad =
       safety.selected_reverse_steering_angle_rad;
     input.recovery.rejoin_steering_tire_angle_rad =
@@ -16859,9 +16895,13 @@ private:
       recovery_reverse_only_episode_ = solver_reverse_only_candidate;
       recovery_reverse_intent_latched_ = false;
       recovery_forward_fallback_unlocked_ = false;
+      recovery_consecutive_forward_duration_limits_ = 0U;
+      recovery_retry_force_reverse_ = false;
+      recovery_last_maneuver_direction_.reset();
       recovery_boost_suppressed_for_session_ = true;
     }
     if (
+      !force_reverse_retry &&
       !recovery_reverse_intent_latched_ && !recovery_forward_fallback_unlocked_ &&
       stuck_recovery::recovery_reverse_intent_latch_allowed(output.state) &&
       reverse_only &&
@@ -16896,6 +16936,9 @@ private:
       recovery_selected_reverse_primitive_.reset();
       recovery_selected_reverse_steering_angle_rad_.reset();
       recovery_selected_stepwise_escape_ = false;
+      recovery_consecutive_forward_duration_limits_ = 0U;
+      recovery_retry_force_reverse_ = false;
+      recovery_last_maneuver_direction_.reset();
       RCLCPP_INFO(
         get_logger(),
         "Stuck recovery rejoin retry: reason=%s, escape progress reset for bounded reassessment",
@@ -16907,6 +16950,36 @@ private:
       output.state_reason == stuck_recovery::RecoveryReason::AggressiveRetry;
     if (restarted_after_aggressive_stop) {
       ++recovery_aggressive_retry_count_;
+      const bool ineffective_forward_maneuver =
+        recovery_last_output_.has_value() &&
+        recovery_last_output_->state_reason ==
+        stuck_recovery::RecoveryReason::ForwardDurationLimit &&
+        recovery_last_maneuver_direction_.has_value() &&
+        recovery_last_maneuver_direction_.value() ==
+        stuck_recovery::ManeuverDirection::Forward;
+      if (ineffective_forward_maneuver) {
+        ++recovery_consecutive_forward_duration_limits_;
+        const std::size_t retry_limit =
+          cfg_.stuck_recovery.aggressive_forward_retry_limit_before_reverse;
+        if (
+          retry_limit > 0U &&
+          recovery_consecutive_forward_duration_limits_ >= retry_limit)
+        {
+          recovery_retry_force_reverse_ = true;
+          RCLCPP_WARN(
+            get_logger(),
+            "Stuck recovery alternating after ineffective Forward: "
+            "consecutive=%zu, next_direction=Reverse",
+            recovery_consecutive_forward_duration_limits_);
+        }
+      } else if (
+        recovery_last_maneuver_direction_.has_value() &&
+        recovery_last_maneuver_direction_.value() ==
+        stuck_recovery::ManeuverDirection::Reverse)
+      {
+        recovery_consecutive_forward_duration_limits_ = 0U;
+        recovery_retry_force_reverse_ = false;
+      }
       recovery_episode_traveled_distance_m_ = 0.0;
       recovery_maneuver_start_pose_.reset();
       recovery_maneuver_start_lateral_error_m_.reset();
@@ -16918,6 +16991,7 @@ private:
       recovery_selected_reverse_primitive_.reset();
       recovery_selected_reverse_steering_angle_rad_.reset();
       recovery_selected_stepwise_escape_ = false;
+      recovery_last_maneuver_direction_.reset();
       stuck_recovery::SolverForwardFallbackUnlockRequest solver_unlock_request;
       solver_unlock_request.simulation_environment = use_sim_time_;
       solver_unlock_request.aggressive_sim_recovery_enabled =
@@ -16970,6 +17044,14 @@ private:
       previous_state == stuck_recovery::RecoveryState::ShiftToDrive ||
       previous_state == stuck_recovery::RecoveryState::WaitDriveReport);
     if (entered_step_reassessment) {
+      if (
+        recovery_last_maneuver_direction_.has_value() &&
+        recovery_last_maneuver_direction_.value() ==
+        stuck_recovery::ManeuverDirection::Reverse)
+      {
+        recovery_consecutive_forward_duration_limits_ = 0U;
+        recovery_retry_force_reverse_ = false;
+      }
       recovery_selected_reverse_primitive_.reset();
       recovery_selected_reverse_steering_angle_rad_.reset();
       recovery_selected_stepwise_escape_ = false;
@@ -16980,6 +17062,7 @@ private:
       recovery_reverse_pose_jump_ = false;
       recovery_initial_contact_cells_ = safety.current_contact_cells;
       recovery_previous_contact_cells_ = safety.current_contact_cells;
+      recovery_last_maneuver_direction_.reset();
     }
     if (
       output.state != stuck_recovery::RecoveryState::Normal &&
@@ -16995,7 +17078,8 @@ private:
       RCLCPP_INFO(
         get_logger(), "Stuck recovery maneuver selected: direction=%s, primitive=%s, "
         "steering=%.3f rad, wall=%s, wall_distance=%.3f m, coordinated=%d, "
-        "reverse_only=%d, forward_probe=%d, course_guard=%d, course_improvement=%.3f m, "
+        "reverse_only=%d, retry_force_reverse=%d, forward_probe=%d, "
+        "course_guard=%d, course_improvement=%.3f m, "
         "recovery_mpc=%d, mpc_desired=%.3f rad, aggressive_retry=%zu",
         stuck_recovery::to_string(safety.maneuver_direction),
         recovery_footprint::to_string(safety.selected_reverse_primitive),
@@ -17003,6 +17087,7 @@ private:
         recovery_footprint::to_string(safety.wall_region), safety.wall_distance_m,
         recovery_coordinated_stop_episode_ ? 1 : 0,
         reverse_only ? 1 : 0,
+        force_reverse_retry ? 1 : 0,
         allow_solver_reverse_deadlock_forward_probe ? 1 : 0,
         safety.course_progress_guard_active ? 1 : 0,
         safety.selected_course_lateral_improvement_m,
@@ -17023,6 +17108,10 @@ private:
     const bool started_recovery_maneuver =
       maneuver_state && !previous_maneuver_state && !resumed_reverse_maneuver;
     if (started_recovery_maneuver) {
+      recovery_last_maneuver_direction_ =
+        output.state == stuck_recovery::RecoveryState::ReverseManeuver ?
+        stuck_recovery::ManeuverDirection::Reverse :
+        stuck_recovery::ManeuverDirection::Forward;
       recovery_maneuver_start_pose_ = pose;
       recovery_maneuver_start_lateral_error_m_ = car_->spatial_state.e_y;
       recovery_last_reverse_pose_ = pose;
@@ -17055,6 +17144,9 @@ private:
       recovery_reverse_intent_latched_ = false;
       recovery_forward_fallback_unlocked_ = false;
       recovery_aggressive_retry_count_ = 0U;
+      recovery_consecutive_forward_duration_limits_ = 0U;
+      recovery_retry_force_reverse_ = false;
+      recovery_last_maneuver_direction_.reset();
       recovery_selected_reverse_primitive_.reset();
       recovery_selected_reverse_steering_angle_rad_.reset();
       recovery_selected_stepwise_escape_ = false;
@@ -17088,6 +17180,9 @@ private:
       recovery_reverse_only_episode_ = false;
       recovery_reverse_intent_latched_ = false;
       recovery_forward_fallback_unlocked_ = false;
+      recovery_consecutive_forward_duration_limits_ = 0U;
+      recovery_retry_force_reverse_ = false;
+      recovery_last_maneuver_direction_.reset();
       recovery_reset_applied_ = false;
     }
 
@@ -17100,7 +17195,8 @@ private:
       RCLCPP_INFO(
         get_logger(),
         "Stuck recovery: mode=%s, state=%s, action=%s, reason=%s, "
-        "coordinated=%d, reverse_only=%d, forward_probe=%d, static=%s, "
+        "coordinated=%d, reverse_only=%d, retry_force_reverse=%d, "
+        "forward_probe=%d, static=%s, "
         "static_contacts=%zu/%zu/%zu, static_reject_at=%.3f m, checked=%zu, "
         "runtime_contact=%s, current_contacts=%zu, corridor_complete=%d, boost_inactive=%d, "
         "v2x_message_complete=%d, corridor_v2x_clear=%d, forced_candidate=%d, "
@@ -17111,7 +17207,8 @@ private:
         "course_guard=%d, course_rejected=%d, course_improvement=%.3f m, "
         "stepwise=%d, continuous=%d, brake=%d, adaptive_retry=%zu, contact_reduction=%zu, "
         "step=%zu/%zu, maneuver_distance=%.3f m, "
-        "episode_distance=%.3f m, stopping_reserve=%.3f m, escape_target=%.3f m, "
+        "episode_distance=%.3f m, stopping_reserve=%.3f m, "
+        "escape_direction=%s, escape_target=%.3f m, "
         "escape_confirmed=%d, rejoin_safe=%d, rejoin_path_clear=%d, "
         "rejoin_static=%s, rejoin_reject_at=%.3f m, rejoin_steering=%.3f rad, "
         "e_y=%.3f m, e_psi=%.3f rad",
@@ -17121,6 +17218,7 @@ private:
         stuck_recovery::to_string(output.action.reason),
         recovery_coordinated_stop_episode_ ? 1 : 0,
         reverse_only ? 1 : 0,
+        force_reverse_retry ? 1 : 0,
         allow_solver_reverse_deadlock_forward_probe ? 1 : 0,
         recovery_footprint::to_string(safety.static_reject_reason),
         safety.static_initial_contact_count, safety.static_maximum_contact_count,
@@ -17153,8 +17251,9 @@ private:
         safety.contact_reduction,
         stuck_recovery_core_->supervisor().escape_step_count(),
         cfg_.stuck_recovery.core.supervisor.max_escape_steps,
-        traveled_distance_m, episode_traveled_distance_m, reverse_stopping_reserve_m,
-        escape_distance_target_m, input.recovery.recovery_escape_confirmed ? 1 : 0,
+        traveled_distance_m, episode_traveled_distance_m, applied_stopping_reserve_m,
+        stuck_recovery::to_string(escape_direction), escape_distance_target_m,
+        input.recovery.recovery_escape_confirmed ? 1 : 0,
         input.recovery.rejoin_safe ? 1 : 0,
         input.recovery.rejoin_forward_clear ? 1 : 0,
         recovery_footprint::to_string(safety.rejoin_static_reject_reason),
@@ -17916,6 +18015,9 @@ private:
   bool recovery_reverse_pose_jump_{false};
   bool recovery_episode_had_contact_evidence_{false};
   std::size_t recovery_aggressive_retry_count_{0U};
+  std::size_t recovery_consecutive_forward_duration_limits_{0U};
+  bool recovery_retry_force_reverse_{false};
+  std::optional<stuck_recovery::ManeuverDirection> recovery_last_maneuver_direction_;
   bool recovery_coordinated_stop_episode_{false};
   bool recovery_reverse_only_episode_{false};
   bool recovery_reverse_intent_latched_{false};

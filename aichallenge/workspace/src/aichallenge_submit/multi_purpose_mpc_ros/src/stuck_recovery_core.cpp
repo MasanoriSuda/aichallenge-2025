@@ -578,6 +578,9 @@ RecoveryCandidateDirectionPolicy resolve_recovery_candidate_direction_policy(
   const RecoveryCandidateDirectionPolicyRequest & request) noexcept
 {
   RecoveryCandidateDirectionPolicy policy;
+  if (request.forced_reverse_retry) {
+    return policy;
+  }
   policy.forward_probe_allowed =
     request.forward_course_escape_allowed ||
     request.solver_reverse_deadlock_forward_probe_allowed ||
@@ -586,6 +589,35 @@ RecoveryCandidateDirectionPolicy resolve_recovery_candidate_direction_policy(
     request.measured_reverse_course_worsening ||
     (request.forward_course_escape_allowed && request.course_recovery_guard_active);
   return policy;
+}
+
+ManeuverDirection resolve_recovery_escape_direction(
+  const RecoveryState state, const ManeuverDirection selected_direction,
+  const ManeuverDirection last_actuated_direction) noexcept
+{
+  switch (state) {
+    case RecoveryState::ReverseManeuver:
+      return ManeuverDirection::Reverse;
+    case RecoveryState::ForwardManeuver:
+      return ManeuverDirection::Forward;
+    case RecoveryState::Normal:
+    case RecoveryState::SuspectStuck:
+    case RecoveryState::WaitAwsimRecovery:
+    case RecoveryState::StopAndConfirm:
+    case RecoveryState::CheckClearance:
+    case RecoveryState::WaitForClear:
+    case RecoveryState::ShiftToReverse:
+    case RecoveryState::WaitReverseReport:
+    case RecoveryState::StopAndReassess:
+    case RecoveryState::StopBeforeDrive:
+    case RecoveryState::ShiftToDrive:
+    case RecoveryState::WaitDriveReport:
+    case RecoveryState::LowSpeedRejoin:
+    case RecoveryState::SafeStop:
+      break;
+  }
+  return last_actuated_direction != ManeuverDirection::Unknown ?
+         last_actuated_direction : selected_direction;
 }
 
 RecoveryRetrySnapshot recovery_retry_snapshot(const RecoveryInput & input) noexcept

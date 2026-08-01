@@ -219,12 +219,56 @@ struct CommittedPassSpeedFloorRequest
 bool should_apply_committed_pass_speed_floor(
   const CommittedPassSpeedFloorRequest & request) noexcept;
 
+struct CourseFrameFootprintSweepRequest
+{
+  double current_longitudinal_m{};
+  double current_lateral_m{};
+  double predicted_longitudinal_m{};
+  double predicted_lateral_m{};
+  double longitudinal_clearance_m{};
+  double lateral_clearance_m{};
+};
+
+/// Return true when the linearly predicted relative center path does not enter
+/// the open course-frame body-overlap rectangle. Touching its boundary is
+/// separation; invalid observations fail closed.
+bool course_frame_body_footprints_remain_separated(
+  const CourseFrameFootprintSweepRequest & request) noexcept;
+
+struct PredictedFootprintOverlapConfirmationRequest
+{
+  bool monitor_active{false};
+  double now_sec{};
+  double overlap_since_sec{std::numeric_limits<double>::quiet_NaN()};
+  double confirm_sec{};
+};
+
+struct PredictedFootprintOverlapConfirmation
+{
+  bool confirmed{false};
+  double overlap_since_sec{std::numeric_limits<double>::quiet_NaN()};
+  double elapsed_sec{};
+};
+
+/// Confirm a continuously predicted body overlap before revoking an already
+/// released minimum-motion Pass speed cap. Invalid input and a clear sample
+/// reset confirmation.
+PredictedFootprintOverlapConfirmation update_predicted_footprint_overlap_confirmation(
+  const PredictedFootprintOverlapConfirmationRequest & request) noexcept;
+
 enum class CommittedPassFrontCapTransitionReason
 {
   None,
+  MinimumMotionFootprintSweepClear,
+  MinimumMotionSideBySideForwardEscape,
   ConstrainedFeasiblePassHorizonAccepted,
   LateralGoalAndExecutionHorizonClear,
   TargetNoLongerAhead,
+  CurrentFootprintOverlap,
+  PredictedFootprintOverlap,
+  FootprintPredictionUnavailable,
+  LockedTargetPositionJump,
+  ActualWallContact,
   LockedTargetUnavailable,
   LateralGoalIncomplete,
   ExecutionHorizonConstrained,
@@ -240,6 +284,11 @@ struct CommittedPassPolicyRequest
   bool execution_horizon_unconstrained{false};
   bool execution_path_physically_feasible{false};
   bool actual_wall_contact{false};
+  bool minimum_motion_corridor_active{false};
+  bool current_body_footprints_separated{false};
+  bool footprint_prediction_valid{false};
+  bool predicted_body_footprint_sweep_separated{false};
+  bool predicted_body_footprint_overlap_confirmed{true};
   bool lateral_exclusion_latched{false};
   bool prior_front_cap_release_active{false};
   bool lateral_separation_clear{false};
@@ -248,6 +297,7 @@ struct CommittedPassPolicyRequest
   bool locked_target_position_jump{false};
   bool target_seen{false};
   double target_longitudinal_m{};
+  double body_longitudinal_clearance_m{};
   bool committed_pass_speed_floor_enabled{false};
   double target_speed_mps{};
   double slow_target_max_speed_mps{};
@@ -257,6 +307,10 @@ struct CommittedPassPolicyRequest
 struct CommittedPassPolicyResolution
 {
   bool active_execution{false};
+  bool minimum_motion_footprint_release_allowed{false};
+  bool minimum_motion_footprint_hold_active{false};
+  bool minimum_motion_side_by_side_escape_active{false};
+  bool minimum_motion_predicted_overlap_grace_active{false};
   bool constrained_horizon_release_allowed{false};
   bool committed_pass_speed_hold_allowed{false};
   bool front_cap_release_ready{false};
@@ -270,8 +324,10 @@ struct CommittedPassPolicyResolution
 };
 
 /// Resolve all longitudinal speed ownership decisions for a committed ShiftOut/Pass.
-/// The caller remains responsible for state updates, logging and clamping the
-/// resulting reference-only speed floor to hard limits.
+/// A minimum-motion Pass may acquire and retain release from a validated body-footprint
+/// sweep instead of the legacy fixed lateral threshold. Other Pass modes retain the
+/// legacy release/reapply hysteresis. The caller remains responsible for state updates,
+/// logging and clamping the resulting reference-only speed floor to hard limits.
 CommittedPassPolicyResolution resolve_committed_pass_policy(
   const CommittedPassPolicyRequest & request) noexcept;
 
@@ -1124,6 +1180,8 @@ struct MinimumLateralMotionSideCandidate
   bool feasible{false};
   bool base_line_clear{false};
   double required_shift_m{std::numeric_limits<double>::infinity()};
+  double corridor_width_m{0.0};
+  double continuous_open_distance_m{0.0};
 };
 
 struct MinimumLateralMotionSideSelectionRequest
@@ -1133,6 +1191,8 @@ struct MinimumLateralMotionSideSelectionRequest
   MinimumLateralMotionSideCandidate right;
   PassSide inner_side{PassSide::None};
   double inner_preference_max_extra_shift_m{0.0};
+  double inner_preference_min_corridor_width_m{0.0};
+  double inner_preference_min_open_distance_m{0.0};
 };
 
 /// Prefer an executable side that preserves the base line. If neither side
@@ -1820,6 +1880,26 @@ struct FrontDangerActionRequest
 /// relative speed has nearly matched.
 FrontDangerAction resolve_front_danger_action(const FrontDangerActionRequest & request);
 const char * to_string(FrontDangerAction action) noexcept;
+
+struct CommittedCorridorFrontDangerSuppressionRequest
+{
+  bool enabled{false};
+  bool active_shiftout_or_pass{false};
+  bool nearest_front_matches_locked_target{false};
+  bool validated_fixed_corridor{false};
+  bool inter_vehicle_corridor{false};
+  bool target_seen{false};
+  bool target_position_jump{false};
+  bool current_body_footprints_separated{false};
+  bool footprint_prediction_valid{false};
+  bool predicted_body_footprint_sweep_separated{false};
+};
+
+/// Suppress a longitudinal-only front danger stop only after a normal committed
+/// overtake has a validated fixed corridor and both current and predicted 2D
+/// body footprints remain separated. Uncertain observations fail closed.
+bool can_suppress_committed_corridor_front_danger(
+  const CommittedCorridorFrontDangerSuppressionRequest & request) noexcept;
 
 struct SolverCooldownRequest
 {

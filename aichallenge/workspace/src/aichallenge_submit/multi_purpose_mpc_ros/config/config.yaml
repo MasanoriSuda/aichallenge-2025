@@ -264,7 +264,7 @@ reference_path:
   csv_path: "env/final_ver3/traj_mincurv.csv"
   domain_csv_path:
     1: "env/final_ver3/traj_mincurv.csv"
-    2: "env/final_ver3/traj_mincurv.csv"
+    2: "env/final_ver3/traj_mincurv_org.csv"
     3: "env/final_ver3/traj_mincurv.csv"
   resolution: 0.6
   smoothing_distance: 2
@@ -442,7 +442,11 @@ mpc:
   v2x_overtake_gap_lookahead_distance: 24.0 # [m] search farther than MPC horizon for slow-front pass
   v2x_overtake_try_both_sides: true         # before ShiftOut, retry the opposite side if preferred gap is blocked
   v2x_overtake_minimum_lateral_motion_enabled: true # keep the racing line when clear; otherwise use the nearest safe corridor point
-  v2x_overtake_minimum_motion_inner_preference_max_extra_shift: 0.30 # [m] near-tie: prefer a validated small inside pass
+  v2x_overtake_minimum_motion_inner_preference_max_extra_shift: 0.60 # [m] keep small-wrap default; allow a verified open inside attack
+  v2x_overtake_minimum_motion_inner_lookahead_distance: 18.0 # [m] resolve the next curve inside while still on the preceding straight
+  v2x_overtake_minimum_motion_inner_min_open_distance: 8.0 # [m] inside must stay continuously executable before preference applies
+  v2x_overtake_minimum_motion_inner_min_corridor_width: 0.30 # [m] inflated center-line slack required for the aggressive inside choice
+  v2x_overtake_committed_corridor_front_danger_suppression_enabled: true # use 2D footprint sweep, not longitudinal distance alone, on a validated locked pass
   v2x_overtake_velocity_advantage: 1.0      # [m/s] legacy whole-phase cap when stage speed is disabled
   v2x_overtake_stage_speed_enabled: true    # cap ShiftOut/early Pass; release only after the locked target is no longer ahead
   v2x_overtake_shiftout_adaptive_closing_speed_enabled: true # preserve entry gap until distance+lateral ShiftOut completes
@@ -455,6 +459,7 @@ mpc:
   v2x_overtake_line_min_target_separation: 1.50 # [m] combined kart width plus prediction margin
   v2x_overtake_pass_front_overlap_lateral_clearance: 1.50 # [m] current physical clearance required before front-cap release
   v2x_overtake_pass_front_cap_reapply_lateral_clearance: 1.45 # [m] hold committed Pass speed down to the physical combined-width boundary
+  v2x_overtake_pass_predicted_overlap_confirm_sec: 0.25 # [s] require sustained predicted overlap before recapping an already released Pass
   # Once a low-speed target has full current lateral clearance in ShiftOut, or is physically
   # committed in Pass, do not let a conservative target-speed reference make the ego crawl
   # beside it. This is a reference floor only; curvature, front-risk, wall, acceleration and

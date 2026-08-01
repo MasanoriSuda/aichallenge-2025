@@ -1501,6 +1501,10 @@ struct V2XBehaviorConfig
   bool overtake_try_both_sides{false};
   bool overtake_minimum_lateral_motion_enabled{false};
   double overtake_minimum_motion_inner_preference_max_extra_shift{0.0};
+  double overtake_minimum_motion_inner_lookahead_distance{0.0};
+  double overtake_minimum_motion_inner_min_open_distance{0.0};
+  double overtake_minimum_motion_inner_min_corridor_width{0.0};
+  bool overtake_committed_corridor_front_danger_suppression_enabled{false};
   double overtake_velocity_advantage{0.0};
   bool overtake_stage_speed_enabled{false};
   bool overtake_shiftout_adaptive_closing_speed_enabled{false};
@@ -1511,6 +1515,7 @@ struct V2XBehaviorConfig
   double overtake_line_min_target_separation{0.0};
   double overtake_pass_front_overlap_lateral_clearance{0.0};
   double overtake_pass_front_cap_reapply_lateral_clearance{0.0};
+  double overtake_pass_predicted_overlap_confirm_sec{0.0};
   bool overtake_committed_pass_speed_floor_enabled{false};
   double overtake_committed_pass_min_speed{0.0};
   bool overtake_completion_guard_enabled{false};
@@ -1825,6 +1830,9 @@ struct V2XBehaviorOutput
   double overtake_left_quality{-std::numeric_limits<double>::infinity()};
   double overtake_right_quality{-std::numeric_limits<double>::infinity()};
   bool overtake_selected_side_conflict{false};
+  int overtake_lookahead_inner_side{0};
+  bool overtake_inner_preference_selected{false};
+  bool committed_corridor_front_danger_suppressed{false};
   bool overtake_side_replan_window_active{false};
   int overtake_side_replan_candidate_sign{0};
   double overtake_side_replan_candidate_stable_sec{0.0};
@@ -1843,11 +1851,16 @@ struct V2XBehaviorOutput
   bool locked_target_current_lateral_clear{false};
   bool locked_target_body_lateral_clear{false};
   bool locked_target_above_front_cap_reapply_clearance{false};
+  bool locked_target_current_body_footprints_separated{false};
+  bool locked_target_footprint_prediction_valid{false};
+  bool locked_target_predicted_body_footprint_sweep_separated{false};
   double locked_target_longitudinal{std::numeric_limits<double>::infinity()};
   double locked_target_lateral{std::numeric_limits<double>::infinity()};
   double locked_target_relative_lateral{std::numeric_limits<double>::infinity()};
   double locked_target_relative_lateral_velocity{0.0};
   double locked_target_predicted_relative_lateral{
+    std::numeric_limits<double>::infinity()};
+  double locked_target_predicted_longitudinal{
     std::numeric_limits<double>::infinity()};
   double locked_target_speed{std::numeric_limits<double>::infinity()};
   double locked_target_receipt_sec{-std::numeric_limits<double>::infinity()};
@@ -1877,6 +1890,7 @@ struct OvertakeLineState
   OvertakeLinePhase phase{OvertakeLinePhase::Idle};
   bool pass_front_overlap_exclusion_latched{false};
   bool pass_front_cap_release_active{false};
+  double pass_predicted_overlap_since_sec{std::numeric_limits<double>::quiet_NaN()};
   int pass_side_sign{0};
   double target_ey{0.0};
   double phase_start_sec{-std::numeric_limits<double>::infinity()};
@@ -4833,6 +4847,41 @@ struct MPC
           is_locked_execution_target,
           locked_pass_target_relative_lateral,
           locked_pass_target_body_lateral_clearance, false});
+      const double locked_pass_target_body_longitudinal_clearance =
+        0.5 * std::max(0.0, cfg.v2x_gap.vehicle_length) +
+        0.5 * std::max(0.0, model->length);
+      const bool locked_pass_target_current_body_footprints_separated =
+        v2x_overtake_core::course_frame_body_footprints_remain_separated(
+        v2x_overtake_core::CourseFrameFootprintSweepRequest{
+          front_longitudinal,
+          locked_pass_target_relative_lateral,
+          front_longitudinal,
+          locked_pass_target_relative_lateral,
+          locked_pass_target_body_longitudinal_clearance,
+          locked_pass_target_body_lateral_clearance});
+      const double footprint_prediction_time = std::max(0.0, cfg.v2x_gap.prediction_time);
+      const bool locked_pass_target_footprint_prediction_valid =
+        output.locked_target_lateral_prediction_valid &&
+        std::isfinite(front_longitudinal) &&
+        std::isfinite(front_vehicle_speed) &&
+        std::isfinite(current_speed_mps_) &&
+        std::isfinite(output.locked_target_predicted_relative_lateral) &&
+        std::isfinite(footprint_prediction_time);
+      const double locked_pass_target_predicted_longitudinal =
+        locked_pass_target_footprint_prediction_valid ?
+        front_longitudinal +
+        (front_vehicle_speed - current_speed_mps_) * footprint_prediction_time :
+        std::numeric_limits<double>::infinity();
+      const bool locked_pass_target_predicted_body_footprint_sweep_separated =
+        locked_pass_target_footprint_prediction_valid &&
+        v2x_overtake_core::course_frame_body_footprints_remain_separated(
+        v2x_overtake_core::CourseFrameFootprintSweepRequest{
+          front_longitudinal,
+          locked_pass_target_relative_lateral,
+          locked_pass_target_predicted_longitudinal,
+          output.locked_target_predicted_relative_lateral,
+          locked_pass_target_body_longitudinal_clearance,
+          locked_pass_target_body_lateral_clearance});
       const bool locked_pass_target_laterally_clear_or_latched =
         v2x_overtake_core::can_exclude_locked_target_from_front_overlap(
         v2x_overtake_core::PassFrontOverlapExclusionRequest{
@@ -4850,6 +4899,14 @@ struct MPC
           std::isfinite(locked_pass_target_relative_lateral) &&
           std::abs(locked_pass_target_relative_lateral) >=
           locked_pass_target_front_cap_reapply_clearance;
+        output.locked_target_current_body_footprints_separated =
+          locked_pass_target_current_body_footprints_separated;
+        output.locked_target_footprint_prediction_valid =
+          locked_pass_target_footprint_prediction_valid;
+        output.locked_target_predicted_body_footprint_sweep_separated =
+          locked_pass_target_predicted_body_footprint_sweep_separated;
+        output.locked_target_predicted_longitudinal =
+          locked_pass_target_predicted_longitudinal;
       }
       if (
         overtake_line_state_.phase == OvertakeLinePhase::Pass &&
@@ -5095,6 +5152,32 @@ struct MPC
       output.locked_target_seen && !output.locked_target_position_jump;
     output.start_grid_breakout_active =
       continuing_start_grid_breakout || start_grid_breakout_line_owned;
+    const bool committed_corridor_front_danger_suppressed =
+      v2x_overtake_core::can_suppress_committed_corridor_front_danger(
+      v2x_overtake_core::CommittedCorridorFrontDangerSuppressionRequest{
+        cfg.v2x_behavior.overtake_committed_corridor_front_danger_suppression_enabled,
+        active_overtake_line,
+        nearest_front_matches_locked_target,
+        cfg.v2x_behavior.overtake_minimum_lateral_motion_enabled &&
+        overtake_line_state_.fixed_pass_corridor_goal_ey.has_value() &&
+        !start_grid_breakout_line_target_matches,
+        overtake_line_state_.inter_vehicle_corridor,
+        output.locked_target_seen,
+        output.locked_target_position_jump,
+        output.locked_target_current_body_footprints_separated,
+        output.locked_target_footprint_prediction_valid,
+        output.locked_target_predicted_body_footprint_sweep_separated});
+    output.committed_corridor_front_danger_suppressed =
+      committed_corridor_front_danger_suppressed;
+    const bool effective_front_risk_emergency =
+      front_risk_emergency && !committed_corridor_front_danger_suppressed;
+    const FrontRiskLevel effective_front_risk_level =
+      committed_corridor_front_danger_suppressed && front_risk_emergency ?
+      FrontRiskLevel::AvoidCandidate : front_risk_level;
+    const bool effective_front_danger_requires_safety_brake =
+      front_danger_requires_safety_brake &&
+      !committed_corridor_front_danger_suppressed;
+    output.front_risk_level = effective_front_risk_level;
     // A latched start-grid breakout owns longitudinal separation while its side corridor
     // remains valid. Do not pull it back behind the rolling grid target.
     if (output.moving_front_clearance_limit_active && !start_grid_breakout_attempt) {
@@ -5136,18 +5219,20 @@ struct MPC
       cfg.v2x_behavior.front_hazard_hold_enabled &&
       now_sec < front_hazard_hold_until_sec_;
     const bool held_target_observed_safe =
-      front_hazard_hold_was_active && has_front_vehicle &&
+      committed_corridor_front_danger_suppressed ||
+      (front_hazard_hold_was_active && has_front_vehicle &&
       !front_hazard_hold_target_id_.empty() &&
       nearest_front_id == front_hazard_hold_target_id_ &&
       std::isfinite(nearest_front_speed) &&
       nearest_front_speed > cfg.v2x_behavior.moving_front_speed_threshold &&
-      current_speed_mps_ <= nearest_front_speed;
+      current_speed_mps_ <= nearest_front_speed);
     const bool refresh_held_front_danger =
       front_hazard_hold_was_active &&
-      front_danger_requires_safety_brake &&
+      effective_front_danger_requires_safety_brake &&
       !suppress_start_grid_stop_behavior && !start_grid_breakout_attempt;
     const bool refresh_held_near_field_target =
       front_hazard_hold_was_active && held_target_near_field_conflict &&
+      !committed_corridor_front_danger_suppressed &&
       !held_target_rear_clear &&
       !suppress_start_grid_stop_behavior && !start_grid_breakout_attempt;
     const bool refresh_held_front_hazard =
@@ -5275,17 +5360,18 @@ struct MPC
     }
 
     if (
-      has_front_vehicle && front_risk_level == FrontRiskLevel::EmergencyBrake &&
+      has_front_vehicle && effective_front_risk_emergency &&
       !start_grid_breakout_attempt)
     {
       update_front_hazard_hold(true, false, nearest_front_id, false);
       output.state = V2XBehaviorState::SafetyBrake;
-      output.reason = front_risk_reason("front risk emergency", front_risk, front_risk_level);
+      output.reason = front_risk_reason(
+        "front risk emergency", front_risk, effective_front_risk_level);
       return commit_v2x_behavior_state(output, now_sec);
     }
 
     if (
-      front_danger_requires_safety_brake && !suppress_start_grid_stop_behavior &&
+      effective_front_danger_requires_safety_brake && !suppress_start_grid_stop_behavior &&
       !start_grid_breakout_attempt)
     {
       update_front_hazard_hold(true, false, nearest_front_id, false);
@@ -5463,7 +5549,7 @@ struct MPC
         std::isfinite(distance_to_hard_curve),
         overtake_forbidden_wp,
         overtake_cooldown_active,
-        front_risk_level == FrontRiskLevel::EmergencyBrake,
+        effective_front_risk_emergency,
         v2x_overtake_core::PassCompletionRequest{
           std::isfinite(distance_to_hard_curve) ? distance_to_hard_curve : 0.0,
           cfg.v2x_behavior.overtake_active_hard_curve_buffer_distance,
@@ -5477,10 +5563,17 @@ struct MPC
     const bool active_hard_curve_allowed = active_hard_curve_continuation.allowed;
     const bool effective_hard_overtake_forbidden =
       hard_overtake_forbidden && !active_hard_curve_allowed;
+    const int lookahead_inner_curve_pass_side = curve_inner_pass_side(
+      ref_wp_id, N,
+      cfg.v2x_behavior.overtake_minimum_motion_inner_lookahead_distance);
     const int inner_curve_pass_side =
       v2x_overtake_core::should_resolve_curve_pass_side(
         soft_overtake_forbidden, hard_overtake_forbidden, overtake_forbidden_wp) ?
-      curve_inner_pass_side(ref_wp_id, N) : 0;
+      curve_inner_pass_side(
+        ref_wp_id, N, cfg.v2x_behavior.overtake_forbidden_curve_lookahead_distance) : 0;
+    const int minimum_motion_inner_side =
+      inner_curve_pass_side != 0 ? inner_curve_pass_side : lookahead_inner_curve_pass_side;
+    output.overtake_lookahead_inner_side = minimum_motion_inner_side;
     const bool continuing_inner_curve_pass =
       is_inner_curve_pass(overtake_locked_side_sign_, inner_curve_pass_side);
     const bool slow_front_overtake_candidate =
@@ -5495,7 +5588,7 @@ struct MPC
       soft_overtake_forbidden &&
       !front_decel_curve_guard &&
       slow_front_overtake_candidate &&
-      front_risk_level != FrontRiskLevel::EmergencyBrake;
+      !effective_front_risk_emergency;
     const bool overtake_start_curve_blocked =
       !continuing_overtake &&
       cfg.v2x_behavior.overtake_start_curve_clearance_distance > kEps &&
@@ -5511,7 +5604,7 @@ struct MPC
           effective_hard_overtake_forbidden,
           continuing_inner_curve_pass,
           overtake_cooldown_active,
-          front_risk_level == FrontRiskLevel::EmergencyBrake});
+          effective_front_risk_emergency});
     const double fallback_min_side_clearance = std::max(
       cfg.v2x_behavior.overtake_min_gap_width,
       cfg.v2x_behavior.overtake_fallback_min_side_clearance);
@@ -5822,7 +5915,7 @@ struct MPC
             start_grid_breakout_attempt,
             assessment.gap_available,
             fallback_side_clearance_available,
-            front_risk_level == FrontRiskLevel::EmergencyBrake}))
+            effective_front_risk_emergency}))
       {
         std::string fallback_guard_reason;
         if (overtake_fallback_guard_allows(
@@ -5855,7 +5948,7 @@ struct MPC
       } else if (
         start_grid_breakout_attempt && !assessment.gap_available &&
         fallback_side_clearance_available &&
-        front_risk_level != FrontRiskLevel::EmergencyBrake)
+        !effective_front_risk_emergency)
       {
         assessment.reason += " / start-grid requires validated corridor";
       }
@@ -5872,7 +5965,7 @@ struct MPC
           transient_gap_failure,
           overtake_forbidden_wp,
           overtake_cooldown_active,
-          front_risk_level == FrontRiskLevel::EmergencyBrake,
+          effective_front_risk_emergency,
           now_sec,
           overtake_line_state_.last_valid_gap_sec,
           cfg.v2x_behavior.overtake_line.active_gap_loss_hold_sec});
@@ -6194,7 +6287,7 @@ struct MPC
         const auto decision = start_grid_grace::resolve_dynamic_breakout_decision(
           start_grid_grace::DynamicDecisionContext{
             true, start_grid_corridor_selected, peer_motion_observed,
-            front_risk_level == FrontRiskLevel::EmergencyBrake,
+            effective_front_risk_emergency,
             observation_elapsed, peer_motion_elapsed, candidate_stable,
             cfg.v2x_behavior.start_grid_dynamic_motion_observation_sec,
             cfg.v2x_behavior.start_grid_dynamic_max_observation_sec,
@@ -6239,7 +6332,7 @@ struct MPC
           ss << ", min_shift=" << assessment.required_lateral_shift
              << ", base_clear=" << assessment.base_line_clear
              << ", inner=" <<
-            (inner_curve_pass_side != 0 && assessment.side == inner_curve_pass_side);
+            (minimum_motion_inner_side != 0 && assessment.side == minimum_motion_inner_side);
         }
         return ss.str();
       };
@@ -6287,7 +6380,7 @@ struct MPC
             hard_overtake_forbidden,
             overtake_forbidden_wp,
             overtake_cooldown_active,
-            front_risk_level == FrontRiskLevel::EmergencyBrake,
+            effective_front_risk_emergency,
             assessment.gap_available,
             active_target_valid,
             assessment.side,
@@ -6304,7 +6397,7 @@ struct MPC
             hard_overtake_forbidden,
             overtake_forbidden_wp,
             overtake_cooldown_active,
-            front_risk_level == FrontRiskLevel::EmergencyBrake,
+            effective_front_risk_emergency,
             assessment.gap_available,
             active_target_valid,
             assessment.side,
@@ -6333,7 +6426,7 @@ struct MPC
           soft_overtake_forbidden &&
           assessment.side_clearance >= fallback_min_side_clearance &&
           !inner_curve_pass &&
-          front_risk_level != FrontRiskLevel::EmergencyBrake;
+          !effective_front_risk_emergency;
         const bool new_curve_entry_allowed =
           outer_curve.entry_allowed || outer_curve.hard_entry_allowed ||
           inner_curve.entry_allowed || inner_curve.hard_entry_allowed;
@@ -6359,7 +6452,7 @@ struct MPC
             inner_curve.entry_allowed || inner_curve.hard_entry_allowed,
             curve_line_committed,
             has_front_vehicle,
-            front_risk_level == FrontRiskLevel::EmergencyBrake,
+            effective_front_risk_emergency,
             nearest_front_distance,
             std::max(0.0, cfg.v2x_behavior.overtake_guard_min_front_distance),
             curve_entry_max_front_distance,
@@ -6456,7 +6549,9 @@ struct MPC
             assessment.minimum_motion_goal_available &&
             assessment.gap_available && execution_allowed_for_side(assessment),
             assessment.base_line_clear,
-            assessment.required_lateral_shift};
+            assessment.required_lateral_shift,
+            assessment.corridor_width,
+            assessment.continuous_corridor_distance};
         };
       side_selection = overtake_core::select_minimum_lateral_motion_side(
         overtake_core::MinimumLateralMotionSideSelectionRequest{
@@ -6464,8 +6559,12 @@ struct MPC
           overtake_core::PassSide::Left,
           minimum_motion_candidate(left_assessment, overtake_core::PassSide::Left),
           minimum_motion_candidate(right_assessment, overtake_core::PassSide::Right),
-          pass_side(inner_curve_pass_side),
-          cfg.v2x_behavior.overtake_minimum_motion_inner_preference_max_extra_shift});
+          pass_side(minimum_motion_inner_side),
+          cfg.v2x_behavior.overtake_minimum_motion_inner_preference_max_extra_shift,
+          cfg.v2x_behavior.overtake_minimum_motion_inner_min_corridor_width,
+          cfg.v2x_behavior.overtake_minimum_motion_inner_min_open_distance});
+      output.overtake_inner_preference_selected =
+        side_selection.reason == overtake_core::SideSelectionReason::InnerPreference;
     }
 
     if (shiftout_line_active && cfg.v2x_behavior.overtake_line.early_side_replan_enabled) {
@@ -6749,9 +6848,10 @@ struct MPC
         bool front_risk_applied = false;
         if (apply_follow_velocity_limits(
             output, nearest_front_distance, nearest_front_speed, front_decel_curve_guard, front_risk,
-            front_risk_level, !generic_follow_cap_allowed, front_risk_applied)) {
+            effective_front_risk_level, !generic_follow_cap_allowed, front_risk_applied)) {
           output.reason += front_risk_applied ?
-            " / " + front_risk_reason("front risk brake", front_risk, front_risk_level) :
+            " / " + front_risk_reason(
+            "front risk brake", front_risk, effective_front_risk_level) :
             output.follow_speed_limit_active ? " / follow speed cap" : " / front decel guard";
         }
       } else {
@@ -6762,9 +6862,10 @@ struct MPC
         bool front_risk_applied = false;
         if (apply_follow_velocity_limits(
             output, nearest_front_distance, nearest_front_speed, front_decel_curve_guard, front_risk,
-            front_risk_level, false, front_risk_applied)) {
+            effective_front_risk_level, false, front_risk_applied)) {
           output.reason += front_risk_applied ?
-            " / " + front_risk_reason("front risk brake", front_risk, front_risk_level) :
+            " / " + front_risk_reason(
+            "front risk brake", front_risk, effective_front_risk_level) :
             output.follow_speed_limit_active ? " / follow speed cap" : " / front decel guard";
         }
       }
@@ -6804,7 +6905,7 @@ struct MPC
         output.overtake_pass_side_sign == locked_pass_side &&
         !output.locked_target_pass_side_intrusion && !overtake_forbidden_wp &&
         !overtake_cooldown_active &&
-        front_risk_level != FrontRiskLevel::EmergencyBrake;
+        !effective_front_risk_emergency;
       const bool normal_side_overtake_zone_allows =
         side_selected_for_execution &&
         side_overtake_entry_target_valid &&
@@ -7146,7 +7247,8 @@ struct MPC
       !suppress_overtake_after_solver_failures && !explicit_overtake_line_owns_plan;
     const int follow_preposition_inner_side =
       behavior_output.overtake_forbidden && !behavior_output.overtake_forbidden_wp ?
-      curve_inner_pass_side(ref_wp_id, N) : 0;
+      curve_inner_pass_side(
+        ref_wp_id, N, cfg.v2x_behavior.overtake_forbidden_curve_lookahead_distance) : 0;
     int follow_preposition_pass_side_sign = behavior_output.overtake_pass_side_sign;
     if (
       follow_preposition_inner_side != 0 &&
@@ -8284,6 +8386,8 @@ private:
     }
 
     overtake_line_state_.phase = next_phase;
+    overtake_line_state_.pass_predicted_overlap_since_sec =
+      std::numeric_limits<double>::quiet_NaN();
     if (next_phase != OvertakeLinePhase::Pass) {
       overtake_line_state_.pass_front_overlap_exclusion_latched = false;
       overtake_line_state_.pass_front_cap_release_active = false;
@@ -9791,6 +9895,17 @@ private:
     committed_pass_request.execution_path_physically_feasible =
       horizon_evaluation.execution_feasible();
     committed_pass_request.actual_wall_contact = actual_wall_physical_contact;
+    committed_pass_request.minimum_motion_corridor_active =
+      cfg.v2x_behavior.overtake_minimum_lateral_motion_enabled &&
+      overtake_line_state_.fixed_pass_corridor_goal_ey.has_value() &&
+      !overtake_line_state_.inter_vehicle_corridor &&
+      !preserve_validated_breakout_line;
+    committed_pass_request.current_body_footprints_separated =
+      behavior_output.locked_target_current_body_footprints_separated;
+    committed_pass_request.footprint_prediction_valid =
+      behavior_output.locked_target_footprint_prediction_valid;
+    committed_pass_request.predicted_body_footprint_sweep_separated =
+      behavior_output.locked_target_predicted_body_footprint_sweep_separated;
     committed_pass_request.lateral_exclusion_latched =
       overtake_line_state_.pass_front_overlap_exclusion_latched;
     committed_pass_request.prior_front_cap_release_active =
@@ -9805,6 +9920,42 @@ private:
       behavior_output.locked_target_position_jump;
     committed_pass_request.target_seen = locked_target_seen;
     committed_pass_request.target_longitudinal_m = locked_target_longitudinal;
+    committed_pass_request.body_longitudinal_clearance_m =
+      0.5 * std::max(0.0, cfg.v2x_gap.vehicle_length) +
+      0.5 * std::max(0.0, model->length);
+    const bool minimum_motion_side_by_side_geometry =
+      committed_pass_request.current_body_footprints_separated &&
+      std::isfinite(committed_pass_request.target_longitudinal_m) &&
+      committed_pass_request.body_longitudinal_clearance_m > 0.0 &&
+      committed_pass_request.target_longitudinal_m <=
+      committed_pass_request.body_longitudinal_clearance_m;
+    const bool raw_predicted_body_overlap =
+      committed_pass_request.footprint_prediction_valid &&
+      !committed_pass_request.predicted_body_footprint_sweep_separated;
+    const bool predicted_overlap_confirmation_monitored =
+      committed_pass_request.minimum_motion_corridor_active &&
+      committed_pass_request.pass_phase &&
+      committed_pass_request.prior_front_cap_release_active &&
+      committed_pass_request.target_seen &&
+      !committed_pass_request.locked_target_position_jump &&
+      !committed_pass_request.actual_wall_contact &&
+      committed_pass_request.current_body_footprints_separated &&
+      raw_predicted_body_overlap &&
+      !minimum_motion_side_by_side_geometry;
+    const auto predicted_overlap_confirmation =
+      overtake_core::update_predicted_footprint_overlap_confirmation(
+      overtake_core::PredictedFootprintOverlapConfirmationRequest{
+        predicted_overlap_confirmation_monitored,
+        now_sec,
+        overtake_line_state_.pass_predicted_overlap_since_sec,
+        cfg.v2x_behavior.overtake_pass_predicted_overlap_confirm_sec});
+    overtake_line_state_.pass_predicted_overlap_since_sec =
+      predicted_overlap_confirmation.overlap_since_sec;
+    // A cap which has not yet been released gets no prediction grace. The timer only
+    // debounces revocation of an already committed release.
+    committed_pass_request.predicted_body_footprint_overlap_confirmed =
+      predicted_overlap_confirmation_monitored ?
+      predicted_overlap_confirmation.confirmed : true;
     committed_pass_request.committed_pass_speed_floor_enabled =
       cfg.v2x_behavior.overtake_committed_pass_speed_floor_enabled;
     committed_pass_request.target_speed_mps = locked_target_speed;
@@ -9837,13 +9988,29 @@ private:
           rclcpp::get_logger("mpc_controller"),
           "OvertakeLine execution front cap: %s, phase=%s, target=%s, lateral=%.2f, "
           "release=%.2f, reapply=%.2f, target_s=%.2f, lateral_complete=%d, "
-          "horizon_clear=%d, reason=%s",
+          "horizon_clear=%d, minimum_motion=%d, footprint_clear=%d, "
+          "footprint_prediction=%d, footprint_sweep_clear=%d, "
+          "side_by_side_escape=%d, predicted_overlap=%d, overlap_confirmed=%d, "
+          "overlap_elapsed=%.2f/%.2f, body_longitudinal=%.2f, "
+          "predicted_s=%.2f, predicted_lateral=%.2f, reason=%s",
           output.front_cap_release_ready ? "Released" : "Reapplied",
           to_string(overtake_line_state_.phase),
           overtake_line_state_.target_vehicle_id.c_str(),
           behavior_output.locked_target_relative_lateral,
           release_clearance, reapply_clearance, locked_target_longitudinal,
           lateral_complete ? 1 : 0, execution_horizon_unconstrained ? 1 : 0,
+          committed_pass_request.minimum_motion_corridor_active ? 1 : 0,
+          committed_pass_request.current_body_footprints_separated ? 1 : 0,
+          committed_pass_request.footprint_prediction_valid ? 1 : 0,
+          committed_pass_request.predicted_body_footprint_sweep_separated ? 1 : 0,
+          committed_pass_policy.minimum_motion_side_by_side_escape_active ? 1 : 0,
+          raw_predicted_body_overlap ? 1 : 0,
+          committed_pass_request.predicted_body_footprint_overlap_confirmed ? 1 : 0,
+          predicted_overlap_confirmation.elapsed_sec,
+          cfg.v2x_behavior.overtake_pass_predicted_overlap_confirm_sec,
+          committed_pass_request.body_longitudinal_clearance_m,
+          behavior_output.locked_target_predicted_longitudinal,
+          behavior_output.locked_target_predicted_relative_lateral,
           overtake_core::to_string(committed_pass_policy.transition_reason));
       }
       overtake_line_state_.pass_front_cap_release_active =
@@ -9991,7 +10158,10 @@ private:
           "current_ey=%.2f, elapsed=%.2f, traveled=%.2f, stalled=%.2f, "
           "v_ref=%.2f, v_limit=%.2f, v_floor=%.2f, floor_active=%d, shift_floor=%d, "
           "recovery_speed=%s, closing=%.2f, cap_release=%d, horizon_release=%d, "
-          "speed_hold=%d, "
+          "speed_hold=%d, minimum_motion_cap=%d, footprint_clear=%d, "
+          "footprint_prediction=%d, footprint_sweep_clear=%d, "
+          "side_by_side_escape=%d, predicted_overlap=%d, overlap_confirmed=%d, "
+          "overlap_elapsed=%.2f/%.2f, "
           "cooldown=%.2f, "
           "max_lat_acc=%.2f, lat_limited=%d, wall_limited=%d, "
           "static_wall_limited=%d, static_margin_degraded=%d, static_reachable=%d, "
@@ -10010,6 +10180,15 @@ private:
           output.front_cap_release_ready ? 1 : 0,
           output.constrained_horizon_front_cap_release_active ? 1 : 0,
           output.committed_pass_speed_hold_active ? 1 : 0,
+          committed_pass_request.minimum_motion_corridor_active ? 1 : 0,
+          committed_pass_request.current_body_footprints_separated ? 1 : 0,
+          committed_pass_request.footprint_prediction_valid ? 1 : 0,
+          committed_pass_request.predicted_body_footprint_sweep_separated ? 1 : 0,
+          committed_pass_policy.minimum_motion_side_by_side_escape_active ? 1 : 0,
+          raw_predicted_body_overlap ? 1 : 0,
+          committed_pass_request.predicted_body_footprint_overlap_confirmed ? 1 : 0,
+          predicted_overlap_confirmation.elapsed_sec,
+          cfg.v2x_behavior.overtake_pass_predicted_overlap_confirm_sec,
           std::max(0.0, overtake_solver_cooldown_until_sec_ - now_sec),
           output.max_required_lateral_accel, output.lateral_accel_limited ? 1 : 0,
           output.wall_clearance_limited ? 1 : 0,
@@ -10124,7 +10303,8 @@ private:
     return std::numeric_limits<double>::infinity();
   }
 
-  int curve_inner_pass_side(const int ref_wp_id, const int N) const
+  int curve_inner_pass_side(
+    const int ref_wp_id, const int N, const double configured_lookahead_distance) const
   {
     if (!cfg.v2x_behavior.overtake_block_inner_curve_pass) {
       return 0;
@@ -10135,8 +10315,7 @@ private:
     }
 
     int lookahead_count = N;
-    const double lookahead_distance =
-      std::max(0.0, cfg.v2x_behavior.overtake_forbidden_curve_lookahead_distance);
+    const double lookahead_distance = std::max(0.0, configured_lookahead_distance);
     if (lookahead_distance > kEps) {
       double distance = 0.0;
       lookahead_count = 1;
@@ -11322,7 +11501,8 @@ private:
         "hard_continue=%d, outer_entry=%d, outer_hard_entry=%d, outer_hard=%d, "
         "inner_entry=%d, inner_hard_entry=%d, inner_hard=%d, "
         "hard_dist=%.2f, hard_avail=%.2f, hard_req=%.2f, "
-        "locked_rel=%.2f, lat_clear=%d, body_clear=%d",
+        "locked_rel=%.2f, lat_clear=%d, body_clear=%d, "
+        "lookahead_inner=%d, inner_pref=%d, front_danger_suppress=%d",
         v2x_behavior_state_initialized ? to_string(v2x_behavior_state) : "None", to_string(final_state),
         output.front_distance, model->wp_id, output.reason.c_str(),
         output.v2x_health.c_str(), output.v2x_receipt_age_sec,
@@ -11346,7 +11526,10 @@ private:
         output.active_hard_curve_required_distance,
         output.locked_target_relative_lateral,
         output.locked_target_current_lateral_clear ? 1 : 0,
-        output.locked_target_body_lateral_clear ? 1 : 0);
+        output.locked_target_body_lateral_clear ? 1 : 0,
+        output.overtake_lookahead_inner_side,
+        output.overtake_inner_preference_selected ? 1 : 0,
+        output.committed_corridor_front_danger_suppressed ? 1 : 0);
       v2x_behavior_state = final_state;
       last_v2x_behavior_state_change_sec = now_sec;
       v2x_behavior_state_initialized = true;
@@ -11369,6 +11552,7 @@ private:
           "health=%s, receipt_age=%.3f, source_age=%.3f, interval=%.3f, "
           "vehicles=%zu, message_vehicles=%zu, jumps=%zu, invalid_velocity=%zu, "
           "message_invalid=%d, front=%d, side=%d, danger=%d, danger_action=%s, "
+          "danger_suppress=%d, "
           "grace=%d, grid_suppress=%d, grid_breakout=%d, "
           "grid_observe=%d, grid_obs=%.2f, grid_peer=%.2f, grid_candidate=%s, "
           "grid_stable=%.2f, "
@@ -11386,8 +11570,11 @@ private:
           "gap=%d, gap_hold=%d, hold_rem=%.2f, fallback=%d, "
           "cooldown=%d, pass=%d, side_clear=%.2f, plan_N=%d, target=%s, locked_seen=%d, "
           "course_reject=%d, locked_s=%.2f, locked_lat=%.2f, "
-          "lat_clear=%d, body_clear=%d, latched=%d, "
+          "lat_clear=%d, body_clear=%d, footprint_clear=%d, "
+          "footprint_prediction=%d, footprint_sweep_clear=%d, "
+          "pred_locked_s=%.2f, pred_locked_lat=%.2f, latched=%d, "
           "left_gap=%d, right_gap=%d, left_q=%.2f, right_q=%.2f, "
+          "lookahead_inner=%d, inner_pref=%d, "
           "side_conflict=%d, replan_window=%d, replan_candidate=%d, "
           "replan_stable=%.2f, replan_vlat=%.2f, replan_vlat_ok=%d, "
           "replan_ready=%d, replan_abort=%d, solver_failures=%d, "
@@ -11412,6 +11599,7 @@ private:
           output.has_front_vehicle ? 1 : 0, output.has_side_vehicle ? 1 : 0,
           output.has_danger_vehicle ? 1 : 0,
           v2x_overtake_core::to_string(output.front_danger_action),
+          output.committed_corridor_front_danger_suppressed ? 1 : 0,
           output.start_grid_grace_active ? 1 : 0,
           output.start_grid_stop_suppressed ? 1 : 0,
           output.start_grid_breakout_active ? 1 : 0,
@@ -11470,11 +11658,18 @@ private:
           output.locked_target_relative_lateral,
           output.locked_target_current_lateral_clear ? 1 : 0,
           output.locked_target_body_lateral_clear ? 1 : 0,
+          output.locked_target_current_body_footprints_separated ? 1 : 0,
+          output.locked_target_footprint_prediction_valid ? 1 : 0,
+          output.locked_target_predicted_body_footprint_sweep_separated ? 1 : 0,
+          output.locked_target_predicted_longitudinal,
+          output.locked_target_predicted_relative_lateral,
           overtake_line_state_.pass_front_overlap_exclusion_latched ? 1 : 0,
           output.overtake_left_gap_available ? 1 : 0,
           output.overtake_right_gap_available ? 1 : 0,
           output.overtake_left_quality,
           output.overtake_right_quality,
+          output.overtake_lookahead_inner_side,
+          output.overtake_inner_preference_selected ? 1 : 0,
           output.overtake_selected_side_conflict ? 1 : 0,
           output.overtake_side_replan_window_active ? 1 : 0,
           output.overtake_side_replan_candidate_sign,
@@ -13231,6 +13426,21 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_minimum_motion_inner_preference_max_extra_shift"] ?
     mpc["v2x_overtake_minimum_motion_inner_preference_max_extra_shift"].as<double>() : 0.0);
+  cfg.mpc.v2x_behavior.overtake_minimum_motion_inner_lookahead_distance = std::max(
+    0.0,
+    mpc["v2x_overtake_minimum_motion_inner_lookahead_distance"] ?
+    mpc["v2x_overtake_minimum_motion_inner_lookahead_distance"].as<double>() : 0.0);
+  cfg.mpc.v2x_behavior.overtake_minimum_motion_inner_min_open_distance = std::max(
+    0.0,
+    mpc["v2x_overtake_minimum_motion_inner_min_open_distance"] ?
+    mpc["v2x_overtake_minimum_motion_inner_min_open_distance"].as<double>() : 0.0);
+  cfg.mpc.v2x_behavior.overtake_minimum_motion_inner_min_corridor_width = std::max(
+    0.0,
+    mpc["v2x_overtake_minimum_motion_inner_min_corridor_width"] ?
+    mpc["v2x_overtake_minimum_motion_inner_min_corridor_width"].as<double>() : 0.0);
+  cfg.mpc.v2x_behavior.overtake_committed_corridor_front_danger_suppression_enabled =
+    mpc["v2x_overtake_committed_corridor_front_danger_suppression_enabled"] ?
+    mpc["v2x_overtake_committed_corridor_front_danger_suppression_enabled"].as<bool>() : false;
   cfg.mpc.v2x_behavior.overtake_velocity_advantage = std::max(
     0.0,
     mpc["v2x_overtake_velocity_advantage"] ?
@@ -13282,6 +13492,10 @@ Config load_config(const std::string & path)
       mpc["v2x_overtake_pass_front_cap_reapply_lateral_clearance"] ?
       mpc["v2x_overtake_pass_front_cap_reapply_lateral_clearance"].as<double>() :
       effective_overtake_front_cap_release_clearance));
+  cfg.mpc.v2x_behavior.overtake_pass_predicted_overlap_confirm_sec = std::max(
+    0.0,
+    mpc["v2x_overtake_pass_predicted_overlap_confirm_sec"] ?
+    mpc["v2x_overtake_pass_predicted_overlap_confirm_sec"].as<double>() : 0.0);
   cfg.mpc.v2x_behavior.overtake_committed_pass_speed_floor_enabled =
     mpc["v2x_overtake_committed_pass_speed_floor_enabled"] ?
     mpc["v2x_overtake_committed_pass_speed_floor_enabled"].as<bool>() : false;
@@ -13902,6 +14116,16 @@ public:
         mpc_cfg_.v2x_behavior.overtake_entry_speed_confirm_sec);
       RCLCPP_INFO(
         get_logger(),
+        "V2X minimum-motion inside preference: lookahead=%.2f m, min_open=%.2f m, "
+        "min_width=%.2f m, max_extra_shift=%.2f m, committed_front_danger_suppress=%d",
+        mpc_cfg_.v2x_behavior.overtake_minimum_motion_inner_lookahead_distance,
+        mpc_cfg_.v2x_behavior.overtake_minimum_motion_inner_min_open_distance,
+        mpc_cfg_.v2x_behavior.overtake_minimum_motion_inner_min_corridor_width,
+        mpc_cfg_.v2x_behavior.overtake_minimum_motion_inner_preference_max_extra_shift,
+        mpc_cfg_.v2x_behavior
+        .overtake_committed_corridor_front_danger_suppression_enabled ? 1 : 0);
+      RCLCPP_INFO(
+        get_logger(),
         "V2X start grid: grace=%.2f s, breakout=%s, side_deadband=%.2f m, "
         "inter_vehicle=%s/min_width=%.2f m/min_open=%.2f m/"
         "longitudinal_span=%.2f m/lookbehind=%.2f m/lateral_radius=%.2f m, "
@@ -13931,7 +14155,8 @@ public:
         "stall=%.2f m/s/%.2f s, "
         "timeout=%.2f s, entry_retry_cooldown=%.2f s, "
         "solver_cooldown=%.2f s, solver_healthy=%d cycles, "
-        "front_cap_clearance=%.2f/%.2f m, body_clearance=%.2f m, "
+        "front_cap_clearance=%.2f/%.2f m, predicted_overlap_confirm=%.2f s, "
+        "body_clearance=%.2f m, "
         "side_quality=%d/adv=%.2f, early_replan=%d/lat=%.2f m/dist=%.2f m/"
         "stable=%.2f s/vlat=%.2f m/s/target=%.2f m",
         mpc_cfg_.v2x_behavior.overtake_line.lateral_offset,
@@ -13952,6 +14177,7 @@ public:
           mpc_cfg_.v2x_behavior.overtake_pass_front_overlap_lateral_clearance,
           mpc_cfg_.v2x_gap.vehicle_radius + mpc_cfg_.v2x_gap.prediction_margin),
         mpc_cfg_.v2x_behavior.overtake_pass_front_cap_reapply_lateral_clearance,
+        mpc_cfg_.v2x_behavior.overtake_pass_predicted_overlap_confirm_sec,
         mpc_cfg_.v2x_gap.vehicle_radius,
         mpc_cfg_.v2x_behavior.overtake_line.side_quality_selection_enabled ? 1 : 0,
         mpc_cfg_.v2x_behavior.overtake_line.side_quality_min_score_advantage,

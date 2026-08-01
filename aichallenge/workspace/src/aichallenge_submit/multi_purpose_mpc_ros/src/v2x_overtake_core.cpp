@@ -295,11 +295,126 @@ bool should_apply_committed_pass_speed_floor(
     request.configured_min_speed_mps > 0.0;
 }
 
+bool course_frame_body_footprints_remain_separated(
+  const CourseFrameFootprintSweepRequest & request) noexcept
+{
+  if (
+    !std::isfinite(request.current_longitudinal_m) ||
+    !std::isfinite(request.current_lateral_m) ||
+    !std::isfinite(request.predicted_longitudinal_m) ||
+    !std::isfinite(request.predicted_lateral_m) ||
+    !std::isfinite(request.longitudinal_clearance_m) ||
+    !std::isfinite(request.lateral_clearance_m) ||
+    request.longitudinal_clearance_m <= 0.0 ||
+    request.lateral_clearance_m <= 0.0)
+  {
+    return false;
+  }
+
+  // Find the open time interval where one relative coordinate lies inside its body extent.
+  // The intersection of both coordinate intervals is a swept body overlap. Strict interval
+  // comparison deliberately treats an exact boundary touch as separated.
+  const auto inside_interval = [](
+      const double current, const double predicted, const double clearance,
+      double & enter, double & exit) noexcept
+    {
+      const double delta = predicted - current;
+      if (std::abs(delta) <= std::numeric_limits<double>::epsilon()) {
+        if (std::abs(current) >= clearance) {
+          return false;
+        }
+        enter = -std::numeric_limits<double>::infinity();
+        exit = std::numeric_limits<double>::infinity();
+        return true;
+      }
+      const double first = (-clearance - current) / delta;
+      const double second = (clearance - current) / delta;
+      enter = std::min(first, second);
+      exit = std::max(first, second);
+      return true;
+    };
+
+  double longitudinal_enter = 0.0;
+  double longitudinal_exit = 0.0;
+  if (!inside_interval(
+      request.current_longitudinal_m, request.predicted_longitudinal_m,
+      request.longitudinal_clearance_m, longitudinal_enter, longitudinal_exit))
+  {
+    return true;
+  }
+  double lateral_enter = 0.0;
+  double lateral_exit = 0.0;
+  if (!inside_interval(
+      request.current_lateral_m, request.predicted_lateral_m,
+      request.lateral_clearance_m, lateral_enter, lateral_exit))
+  {
+    return true;
+  }
+
+  const double overlap_enter = std::max({0.0, longitudinal_enter, lateral_enter});
+  const double overlap_exit = std::min({1.0, longitudinal_exit, lateral_exit});
+  return overlap_enter >= overlap_exit;
+}
+
+PredictedFootprintOverlapConfirmation update_predicted_footprint_overlap_confirmation(
+  const PredictedFootprintOverlapConfirmationRequest & request) noexcept
+{
+  PredictedFootprintOverlapConfirmation result;
+  if (
+    !request.monitor_active || !std::isfinite(request.now_sec) ||
+    !std::isfinite(request.confirm_sec) || request.confirm_sec < 0.0)
+  {
+    return result;
+  }
+
+  result.overlap_since_sec =
+    std::isfinite(request.overlap_since_sec) &&
+    request.overlap_since_sec <= request.now_sec ?
+    request.overlap_since_sec : request.now_sec;
+  result.elapsed_sec = std::max(0.0, request.now_sec - result.overlap_since_sec);
+  result.confirmed = result.elapsed_sec + 1e-9 >= request.confirm_sec;
+  return result;
+}
+
 CommittedPassPolicyResolution resolve_committed_pass_policy(
   const CommittedPassPolicyRequest & request) noexcept
 {
   CommittedPassPolicyResolution resolution;
   resolution.active_execution = request.shiftout_phase || request.pass_phase;
+  const bool minimum_motion_common_guard =
+    request.pass_phase && request.minimum_motion_corridor_active &&
+    request.target_seen && !request.locked_target_position_jump &&
+    !request.actual_wall_contact;
+  const bool minimum_motion_sweep_clear =
+    request.current_body_footprints_separated &&
+    request.footprint_prediction_valid &&
+    request.predicted_body_footprint_sweep_separated;
+  const bool minimum_motion_side_by_side_geometry =
+    request.current_body_footprints_separated &&
+    std::isfinite(request.target_longitudinal_m) &&
+    std::isfinite(request.body_longitudinal_clearance_m) &&
+    request.body_longitudinal_clearance_m > 0.0 &&
+    request.target_longitudinal_m <= request.body_longitudinal_clearance_m;
+  resolution.minimum_motion_side_by_side_escape_active =
+    minimum_motion_common_guard && minimum_motion_side_by_side_geometry &&
+    (request.prior_front_cap_release_active ||
+    (request.lateral_complete && request.execution_path_physically_feasible));
+  resolution.minimum_motion_predicted_overlap_grace_active =
+    minimum_motion_common_guard && request.prior_front_cap_release_active &&
+    request.current_body_footprints_separated &&
+    request.footprint_prediction_valid &&
+    !request.predicted_body_footprint_sweep_separated &&
+    !request.predicted_body_footprint_overlap_confirmed &&
+    !resolution.minimum_motion_side_by_side_escape_active;
+  resolution.minimum_motion_footprint_release_allowed =
+    minimum_motion_common_guard && request.lateral_complete &&
+    request.execution_path_physically_feasible && minimum_motion_sweep_clear;
+  resolution.minimum_motion_footprint_hold_active =
+    minimum_motion_common_guard && request.prior_front_cap_release_active &&
+    request.current_body_footprints_separated &&
+    (minimum_motion_sweep_clear ||
+    resolution.minimum_motion_side_by_side_escape_active ||
+    resolution.minimum_motion_predicted_overlap_grace_active);
   resolution.constrained_horizon_release_allowed =
     request.pass_phase &&
     request.lateral_exclusion_latched &&
@@ -308,16 +423,18 @@ CommittedPassPolicyResolution resolve_committed_pass_policy(
   // Horizon feasibility remains mandatory to acquire a release, but it must not revoke an
   // already committed, body-clear Pass. Path limits and the Recovery FSM continue to own wall
   // and lateral-acceleration safety independently from this locked-target speed cap.
-  resolution.committed_pass_speed_hold_allowed =
+  const bool legacy_committed_pass_speed_hold_allowed =
     request.pass_phase &&
     request.lateral_exclusion_latched &&
     !request.actual_wall_contact &&
     request.prior_front_cap_release_active &&
     request.locked_target_body_lateral_clear &&
     !request.locked_target_position_jump;
+  resolution.committed_pass_speed_hold_allowed =
+    legacy_committed_pass_speed_hold_allowed ||
+    resolution.minimum_motion_footprint_hold_active;
 
-  resolution.front_cap_release_ready = request.preserve_validated_breakout_line ||
-    can_release_overtake_front_cap(
+  const bool legacy_front_cap_release_ready = can_release_overtake_front_cap(
     OvertakeFrontCapReleaseRequest{
       resolution.active_execution,
       request.lateral_complete,
@@ -326,9 +443,17 @@ CommittedPassPolicyResolution resolve_committed_pass_policy(
       request.prior_front_cap_release_active,
       request.lateral_separation_above_reapply_threshold,
       resolution.constrained_horizon_release_allowed,
-      resolution.committed_pass_speed_hold_allowed,
+      legacy_committed_pass_speed_hold_allowed,
       request.target_seen,
       request.target_longitudinal_m});
+  // The validated minimum-motion corridor owns release acquisition and reapplication.
+  // Do not let the legacy lateral-only threshold bypass a predicted body overlap.
+  resolution.front_cap_release_ready = request.preserve_validated_breakout_line ||
+    (request.minimum_motion_corridor_active ?
+    (resolution.minimum_motion_footprint_release_allowed ||
+    resolution.minimum_motion_side_by_side_escape_active ||
+    resolution.minimum_motion_footprint_hold_active) :
+    legacy_front_cap_release_ready);
   resolution.front_cap_state_update_required =
     resolution.active_execution &&
     !request.preserve_validated_breakout_line &&
@@ -336,7 +461,8 @@ CommittedPassPolicyResolution resolve_committed_pass_policy(
   resolution.committed_pass_speed_hold_active =
     resolution.front_cap_release_ready &&
     resolution.committed_pass_speed_hold_allowed &&
-    request.lateral_separation_above_reapply_threshold &&
+    (resolution.minimum_motion_footprint_hold_active ||
+    request.lateral_separation_above_reapply_threshold) &&
     (!request.lateral_complete ||
     (!request.execution_horizon_unconstrained &&
     !resolution.constrained_horizon_release_allowed));
@@ -371,11 +497,33 @@ CommittedPassPolicyResolution resolve_committed_pass_policy(
     return resolution;
   }
   if (resolution.front_cap_release_ready) {
-    resolution.transition_reason = !request.execution_horizon_unconstrained ?
+    resolution.transition_reason = resolution.minimum_motion_side_by_side_escape_active ?
+      CommittedPassFrontCapTransitionReason::MinimumMotionSideBySideForwardEscape :
+      resolution.minimum_motion_footprint_release_allowed ?
+      CommittedPassFrontCapTransitionReason::MinimumMotionFootprintSweepClear :
+      !request.execution_horizon_unconstrained ?
       CommittedPassFrontCapTransitionReason::ConstrainedFeasiblePassHorizonAccepted :
       request.lateral_separation_clear ?
       CommittedPassFrontCapTransitionReason::LateralGoalAndExecutionHorizonClear :
       CommittedPassFrontCapTransitionReason::TargetNoLongerAhead;
+  } else if (request.minimum_motion_corridor_active) {
+    resolution.transition_reason = !request.target_seen ?
+      CommittedPassFrontCapTransitionReason::LockedTargetUnavailable :
+      request.locked_target_position_jump ?
+      CommittedPassFrontCapTransitionReason::LockedTargetPositionJump :
+      request.actual_wall_contact ?
+      CommittedPassFrontCapTransitionReason::ActualWallContact :
+      !request.current_body_footprints_separated ?
+      CommittedPassFrontCapTransitionReason::CurrentFootprintOverlap :
+      !request.footprint_prediction_valid ?
+      CommittedPassFrontCapTransitionReason::FootprintPredictionUnavailable :
+      !request.predicted_body_footprint_sweep_separated ?
+      CommittedPassFrontCapTransitionReason::PredictedFootprintOverlap :
+      !request.lateral_complete ?
+      CommittedPassFrontCapTransitionReason::LateralGoalIncomplete :
+      !request.execution_horizon_unconstrained ?
+      CommittedPassFrontCapTransitionReason::ExecutionHorizonConstrained :
+      CommittedPassFrontCapTransitionReason::LateralClearanceBelowReapplyThreshold;
   } else {
     resolution.transition_reason = !request.target_seen ?
       CommittedPassFrontCapTransitionReason::LockedTargetUnavailable :
@@ -393,12 +541,26 @@ const char * to_string(const CommittedPassFrontCapTransitionReason reason) noexc
   switch (reason) {
     case CommittedPassFrontCapTransitionReason::None:
       return "none";
+    case CommittedPassFrontCapTransitionReason::MinimumMotionFootprintSweepClear:
+      return "minimum-motion body footprint sweep clear";
+    case CommittedPassFrontCapTransitionReason::MinimumMotionSideBySideForwardEscape:
+      return "minimum-motion side-by-side forward escape";
     case CommittedPassFrontCapTransitionReason::ConstrainedFeasiblePassHorizonAccepted:
       return "physical lateral clearance; constrained feasible Pass horizon accepted";
     case CommittedPassFrontCapTransitionReason::LateralGoalAndExecutionHorizonClear:
       return "lateral goal and execution horizon clear";
     case CommittedPassFrontCapTransitionReason::TargetNoLongerAhead:
       return "lateral goal complete and locked target no longer ahead";
+    case CommittedPassFrontCapTransitionReason::CurrentFootprintOverlap:
+      return "current body footprints overlap";
+    case CommittedPassFrontCapTransitionReason::PredictedFootprintOverlap:
+      return "predicted body footprint sweep overlaps";
+    case CommittedPassFrontCapTransitionReason::FootprintPredictionUnavailable:
+      return "body footprint prediction unavailable";
+    case CommittedPassFrontCapTransitionReason::LockedTargetPositionJump:
+      return "locked target position jump";
+    case CommittedPassFrontCapTransitionReason::ActualWallContact:
+      return "actual wall contact";
     case CommittedPassFrontCapTransitionReason::LockedTargetUnavailable:
       return "locked target unavailable";
     case CommittedPassFrontCapTransitionReason::LateralGoalIncomplete:
@@ -1558,13 +1720,28 @@ SideSelection select_minimum_lateral_motion_side(
   const double inner_preference_max_extra_shift_m =
     std::isfinite(request.inner_preference_max_extra_shift_m) ?
     std::max(0.0, request.inner_preference_max_extra_shift_m) : 0.0;
+  const double inner_preference_min_corridor_width_m =
+    std::isfinite(request.inner_preference_min_corridor_width_m) ?
+    std::max(0.0, request.inner_preference_min_corridor_width_m) :
+    std::numeric_limits<double>::infinity();
+  const double inner_preference_min_open_distance_m =
+    std::isfinite(request.inner_preference_min_open_distance_m) ?
+    std::max(0.0, request.inner_preference_min_open_distance_m) :
+    std::numeric_limits<double>::infinity();
   if (
     is_configured_side(request.inner_side) &&
     inner_preference_max_extra_shift_m > 1e-9)
   {
     const auto & inner = request.inner_side == PassSide::Left ? request.left : request.right;
     const auto & outer = request.inner_side == PassSide::Left ? request.right : request.left;
+    const bool inner_space_sufficient =
+      std::isfinite(inner.corridor_width_m) && inner.corridor_width_m >= 0.0 &&
+      inner.corridor_width_m + 1e-9 >= inner_preference_min_corridor_width_m &&
+      std::isfinite(inner.continuous_open_distance_m) &&
+      inner.continuous_open_distance_m >= 0.0 &&
+      inner.continuous_open_distance_m + 1e-9 >= inner_preference_min_open_distance_m;
     if (
+      inner_space_sufficient &&
       inner.required_shift_m <=
       outer.required_shift_m + inner_preference_max_extra_shift_m + 1e-9)
     {
@@ -2640,6 +2817,17 @@ FrontDangerAction resolve_front_danger_action(const FrontDangerActionRequest & r
     return FrontDangerAction::RelativeSpeedLimit;
   }
   return FrontDangerAction::SafetyBrake;
+}
+
+bool can_suppress_committed_corridor_front_danger(
+  const CommittedCorridorFrontDangerSuppressionRequest & request) noexcept
+{
+  return request.enabled && request.active_shiftout_or_pass &&
+         request.nearest_front_matches_locked_target && request.validated_fixed_corridor &&
+         !request.inter_vehicle_corridor && request.target_seen &&
+         !request.target_position_jump && request.current_body_footprints_separated &&
+         request.footprint_prediction_valid &&
+         request.predicted_body_footprint_sweep_separated;
 }
 
 const char * to_string(const FrontDangerAction action) noexcept

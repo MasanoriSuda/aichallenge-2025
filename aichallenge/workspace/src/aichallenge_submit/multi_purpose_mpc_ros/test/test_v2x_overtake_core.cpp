@@ -25,6 +25,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::VehicleRelativeLateralRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ForwardDistanceRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::FrontDangerAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::FrontDangerActionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  CommittedCorridorFrontDangerSuppressionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::FrontHazardHoldRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::FrontHazardTargetContinuityRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ForwardCourseProjectionRequest;
@@ -39,6 +41,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::ShiftOutCompletionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeFrontCapReleaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassPolicyRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassFrontCapTransitionReason;
+using multi_purpose_mpc_ros::v2x_overtake_core::CourseFrameFootprintSweepRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::PredictedFootprintOverlapConfirmationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassFrontOverlapExclusionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ActivePassGapHoldRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ActiveLineGapLossHoldRequest;
@@ -108,6 +112,9 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_start_grid_breakout_spee
 using multi_purpose_mpc_ros::v2x_overtake_core::is_shiftout_complete;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_release_overtake_front_cap;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_committed_pass_policy;
+using multi_purpose_mpc_ros::v2x_overtake_core::course_frame_body_footprints_remain_separated;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  update_predicted_footprint_overlap_confirmation;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_apply_committed_pass_speed_floor;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_exclude_locked_target_from_front_overlap;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_hold_active_pass_after_gap_loss;
@@ -176,6 +183,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::update_committed_pass_progress_w
 using multi_purpose_mpc_ros::v2x_overtake_core::update_front_hazard_hold;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_front_hazard_target_continuity;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_front_danger_action;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  can_suppress_committed_corridor_front_danger;
 using multi_purpose_mpc_ros::v2x_overtake_core::arm_solver_cooldown;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_solver_cooldown_active;
 using multi_purpose_mpc_ros::v2x_overtake_core::rate_limit_solver_fallback_steering_toward_neutral;
@@ -610,6 +619,52 @@ TEST(V2XFrontDangerAction, ClearGeometryDoesNotLimitAndInvalidTargetFailsClosed)
   EXPECT_THROW(resolve_front_danger_action(request), std::invalid_argument);
 }
 
+TEST(V2XFrontDangerAction, ValidatedCommittedCorridorMaySuppressLongitudinalOnlyDanger)
+{
+  CommittedCorridorFrontDangerSuppressionRequest request;
+  request.enabled = true;
+  request.active_shiftout_or_pass = true;
+  request.nearest_front_matches_locked_target = true;
+  request.validated_fixed_corridor = true;
+  request.target_seen = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+
+  EXPECT_TRUE(can_suppress_committed_corridor_front_danger(request));
+}
+
+TEST(V2XFrontDangerAction, CommittedCorridorSuppressionFailsClosedOnUncertaintyOrOverlap)
+{
+  CommittedCorridorFrontDangerSuppressionRequest request;
+  request.enabled = true;
+  request.active_shiftout_or_pass = true;
+  request.nearest_front_matches_locked_target = true;
+  request.validated_fixed_corridor = true;
+  request.target_seen = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+
+  request.footprint_prediction_valid = false;
+  EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = false;
+  EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
+  request.predicted_body_footprint_sweep_separated = true;
+  request.current_body_footprints_separated = false;
+  EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
+  request.current_body_footprints_separated = true;
+  request.target_position_jump = true;
+  EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
+  request.target_position_jump = false;
+  request.inter_vehicle_corridor = true;
+  EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
+  request.inter_vehicle_corridor = false;
+  request.nearest_front_matches_locked_target = false;
+  EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
+}
+
 TEST(V2XOvertakeCoreSpeed, StartWindowMayExceedNormalButNotGlobalHardCap)
 {
   auto request = speed_request();
@@ -859,6 +914,276 @@ TEST(V2XOvertakeCoreSpeed, HoldsCommittedPassReleaseAcrossTransientLineError)
   // A normal unconstrained horizon does not bypass line completion before commitment.
   request.execution_horizon_unconstrained = true;
   EXPECT_FALSE(can_release_overtake_front_cap(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, CourseFrameFootprintSweepUsesLongitudinalAndLateralSeparation)
+{
+  CourseFrameFootprintSweepRequest request;
+  request.current_longitudinal_m = 8.0;
+  request.current_lateral_m = 1.43;
+  request.predicted_longitudinal_m = 5.6;
+  request.predicted_lateral_m = 1.43;
+  request.longitudinal_clearance_m = 1.55;
+  request.lateral_clearance_m = 1.45;
+  EXPECT_TRUE(course_frame_body_footprints_remain_separated(request));
+
+  // Closing through the longitudinal body range while still laterally overlapping is unsafe.
+  request.current_longitudinal_m = 3.4;
+  request.predicted_longitudinal_m = 0.4;
+  EXPECT_FALSE(course_frame_body_footprints_remain_separated(request));
+
+  // A planned lateral separation before longitudinal overlap keeps the swept bodies clear.
+  request.predicted_lateral_m = 1.60;
+  EXPECT_TRUE(course_frame_body_footprints_remain_separated(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, CourseFrameFootprintSweepTreatsBoundaryTouchAsSeparated)
+{
+  CourseFrameFootprintSweepRequest request;
+  request.current_longitudinal_m = 0.0;
+  request.current_lateral_m = 1.45;
+  request.predicted_longitudinal_m = 0.0;
+  request.predicted_lateral_m = 1.45;
+  request.longitudinal_clearance_m = 1.55;
+  request.lateral_clearance_m = 1.45;
+  EXPECT_TRUE(course_frame_body_footprints_remain_separated(request));
+
+  request.current_lateral_m = 1.449;
+  request.predicted_lateral_m = 1.449;
+  EXPECT_FALSE(course_frame_body_footprints_remain_separated(request));
+  request.predicted_lateral_m = std::numeric_limits<double>::infinity();
+  EXPECT_FALSE(course_frame_body_footprints_remain_separated(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, ConfirmsOnlyContinuousPredictedFootprintOverlap)
+{
+  PredictedFootprintOverlapConfirmationRequest request;
+  request.monitor_active = true;
+  request.now_sec = 10.0;
+  request.confirm_sec = 0.25;
+
+  auto confirmation = update_predicted_footprint_overlap_confirmation(request);
+  EXPECT_FALSE(confirmation.confirmed);
+  EXPECT_DOUBLE_EQ(confirmation.overlap_since_sec, 10.0);
+  EXPECT_DOUBLE_EQ(confirmation.elapsed_sec, 0.0);
+
+  request.now_sec = 10.24;
+  request.overlap_since_sec = confirmation.overlap_since_sec;
+  confirmation = update_predicted_footprint_overlap_confirmation(request);
+  EXPECT_FALSE(confirmation.confirmed);
+  EXPECT_NEAR(confirmation.elapsed_sec, 0.24, 1e-9);
+
+  request.now_sec = 10.25;
+  confirmation = update_predicted_footprint_overlap_confirmation(request);
+  EXPECT_TRUE(confirmation.confirmed);
+
+  request.monitor_active = false;
+  confirmation = update_predicted_footprint_overlap_confirmation(request);
+  EXPECT_FALSE(confirmation.confirmed);
+  EXPECT_FALSE(std::isfinite(confirmation.overlap_since_sec));
+}
+
+TEST(V2XOvertakeCoreSpeed, MinimumMotionPassReleasesOnClearBodyFootprintSweep)
+{
+  CommittedPassPolicyRequest request;
+  request.pass_phase = true;
+  request.lateral_complete = true;
+  request.execution_horizon_unconstrained = false;
+  request.execution_path_physically_feasible = true;
+  request.minimum_motion_corridor_active = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+  request.lateral_separation_clear = false;
+  request.lateral_separation_above_reapply_threshold = false;
+  request.target_seen = true;
+  request.target_longitudinal_m = 8.0;
+
+  const auto resolution = resolve_committed_pass_policy(request);
+  EXPECT_TRUE(resolution.minimum_motion_footprint_release_allowed);
+  EXPECT_FALSE(resolution.minimum_motion_footprint_hold_active);
+  EXPECT_TRUE(resolution.front_cap_release_ready);
+  EXPECT_TRUE(resolution.front_cap_state_update_required);
+  EXPECT_EQ(
+    resolution.transition_reason,
+    CommittedPassFrontCapTransitionReason::MinimumMotionFootprintSweepClear);
+}
+
+TEST(V2XOvertakeCoreSpeed, MinimumMotionPassHoldsReleaseAcrossLateralThresholdNoise)
+{
+  CommittedPassPolicyRequest request;
+  request.pass_phase = true;
+  request.lateral_complete = true;
+  request.execution_horizon_unconstrained = false;
+  request.execution_path_physically_feasible = true;
+  request.minimum_motion_corridor_active = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+  request.prior_front_cap_release_active = true;
+  request.lateral_separation_clear = false;
+  request.lateral_separation_above_reapply_threshold = false;
+  request.locked_target_body_lateral_clear = false;
+  request.target_seen = true;
+  request.target_longitudinal_m = 3.4;
+
+  const auto resolution = resolve_committed_pass_policy(request);
+  EXPECT_TRUE(resolution.minimum_motion_footprint_release_allowed);
+  EXPECT_TRUE(resolution.minimum_motion_footprint_hold_active);
+  EXPECT_TRUE(resolution.front_cap_release_ready);
+  EXPECT_FALSE(resolution.front_cap_state_update_required);
+}
+
+TEST(V2XOvertakeCoreSpeed, MinimumMotionPassReappliesForPredictedOrCurrentOverlap)
+{
+  CommittedPassPolicyRequest request;
+  request.pass_phase = true;
+  request.lateral_complete = true;
+  request.execution_horizon_unconstrained = true;
+  request.execution_path_physically_feasible = true;
+  request.minimum_motion_corridor_active = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = false;
+  request.prior_front_cap_release_active = true;
+  request.lateral_separation_clear = true;
+  request.lateral_separation_above_reapply_threshold = true;
+  request.lateral_exclusion_latched = true;
+  request.locked_target_body_lateral_clear = true;
+  request.target_seen = true;
+  request.target_longitudinal_m = 3.4;
+
+  auto resolution = resolve_committed_pass_policy(request);
+  EXPECT_FALSE(resolution.front_cap_release_ready);
+  EXPECT_TRUE(resolution.front_cap_state_update_required);
+  EXPECT_EQ(
+    resolution.transition_reason,
+    CommittedPassFrontCapTransitionReason::PredictedFootprintOverlap);
+
+  request.predicted_body_footprint_sweep_separated = true;
+  request.current_body_footprints_separated = false;
+  resolution = resolve_committed_pass_policy(request);
+  EXPECT_FALSE(resolution.front_cap_release_ready);
+  EXPECT_EQ(
+    resolution.transition_reason,
+    CommittedPassFrontCapTransitionReason::CurrentFootprintOverlap);
+}
+
+TEST(V2XOvertakeCoreSpeed, MinimumMotionPassDebouncesPredictedOverlapAfterRelease)
+{
+  CommittedPassPolicyRequest request;
+  request.pass_phase = true;
+  request.lateral_complete = true;
+  request.execution_horizon_unconstrained = true;
+  request.execution_path_physically_feasible = true;
+  request.minimum_motion_corridor_active = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = false;
+  request.predicted_body_footprint_overlap_confirmed = false;
+  request.target_seen = true;
+  request.target_longitudinal_m = 3.0;
+  request.body_longitudinal_clearance_m = 2.0;
+
+  // Prediction grace is hold-only and cannot acquire an initial release.
+  auto resolution = resolve_committed_pass_policy(request);
+  EXPECT_FALSE(resolution.front_cap_release_ready);
+  EXPECT_FALSE(resolution.minimum_motion_predicted_overlap_grace_active);
+
+  request.prior_front_cap_release_active = true;
+  resolution = resolve_committed_pass_policy(request);
+  EXPECT_TRUE(resolution.minimum_motion_predicted_overlap_grace_active);
+  EXPECT_TRUE(resolution.minimum_motion_footprint_hold_active);
+  EXPECT_TRUE(resolution.front_cap_release_ready);
+  EXPECT_FALSE(resolution.front_cap_state_update_required);
+
+  request.predicted_body_footprint_overlap_confirmed = true;
+  resolution = resolve_committed_pass_policy(request);
+  EXPECT_FALSE(resolution.minimum_motion_predicted_overlap_grace_active);
+  EXPECT_FALSE(resolution.front_cap_release_ready);
+  EXPECT_TRUE(resolution.front_cap_state_update_required);
+  EXPECT_EQ(
+    resolution.transition_reason,
+    CommittedPassFrontCapTransitionReason::PredictedFootprintOverlap);
+}
+
+TEST(V2XOvertakeCoreSpeed, MinimumMotionSideBySidePassEscapesForward)
+{
+  CommittedPassPolicyRequest request;
+  request.pass_phase = true;
+  request.lateral_complete = true;
+  request.execution_horizon_unconstrained = false;
+  request.execution_path_physically_feasible = true;
+  request.minimum_motion_corridor_active = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = false;
+  request.predicted_body_footprint_overlap_confirmed = true;
+  request.target_seen = true;
+  request.target_longitudinal_m = 0.5;
+  request.body_longitudinal_clearance_m = 2.0;
+
+  auto resolution = resolve_committed_pass_policy(request);
+  EXPECT_TRUE(resolution.minimum_motion_side_by_side_escape_active);
+  EXPECT_TRUE(resolution.front_cap_release_ready);
+  EXPECT_TRUE(resolution.front_cap_state_update_required);
+  EXPECT_EQ(
+    resolution.transition_reason,
+    CommittedPassFrontCapTransitionReason::MinimumMotionSideBySideForwardEscape);
+
+  // A missing prediction does not revoke current, physically separated escape geometry.
+  request.prior_front_cap_release_active = true;
+  request.footprint_prediction_valid = false;
+  resolution = resolve_committed_pass_policy(request);
+  EXPECT_TRUE(resolution.minimum_motion_side_by_side_escape_active);
+  EXPECT_TRUE(resolution.front_cap_release_ready);
+  EXPECT_FALSE(resolution.front_cap_state_update_required);
+
+  // The forward escape ends immediately if current body separation is lost.
+  request.current_body_footprints_separated = false;
+  resolution = resolve_committed_pass_policy(request);
+  EXPECT_FALSE(resolution.minimum_motion_side_by_side_escape_active);
+  EXPECT_FALSE(resolution.front_cap_release_ready);
+  EXPECT_EQ(
+    resolution.transition_reason,
+    CommittedPassFrontCapTransitionReason::CurrentFootprintOverlap);
+}
+
+TEST(V2XOvertakeCoreSpeed, MinimumMotionPassFailsClosedOnPredictionAndContinuityGuards)
+{
+  CommittedPassPolicyRequest request;
+  request.pass_phase = true;
+  request.lateral_complete = true;
+  request.execution_horizon_unconstrained = true;
+  request.execution_path_physically_feasible = true;
+  request.minimum_motion_corridor_active = true;
+  request.current_body_footprints_separated = true;
+  request.predicted_body_footprint_sweep_separated = true;
+  request.prior_front_cap_release_active = true;
+  request.target_seen = true;
+  request.target_longitudinal_m = 3.0;
+
+  auto resolution = resolve_committed_pass_policy(request);
+  EXPECT_FALSE(resolution.front_cap_release_ready);
+  EXPECT_EQ(
+    resolution.transition_reason,
+    CommittedPassFrontCapTransitionReason::FootprintPredictionUnavailable);
+
+  request.footprint_prediction_valid = true;
+  request.locked_target_position_jump = true;
+  resolution = resolve_committed_pass_policy(request);
+  EXPECT_FALSE(resolution.front_cap_release_ready);
+  EXPECT_EQ(
+    resolution.transition_reason,
+    CommittedPassFrontCapTransitionReason::LockedTargetPositionJump);
+
+  request.locked_target_position_jump = false;
+  request.actual_wall_contact = true;
+  resolution = resolve_committed_pass_policy(request);
+  EXPECT_FALSE(resolution.front_cap_release_ready);
+  EXPECT_EQ(
+    resolution.transition_reason,
+    CommittedPassFrontCapTransitionReason::ActualWallContact);
 }
 
 TEST(V2XOvertakeCoreSpeed, AppliesCommittedPassFloorOnlyForClearSlowTargetPass)
@@ -1151,6 +1476,14 @@ TEST(V2XOvertakeCoreSpeed, KeepsCommittedPassFrontCapDiagnosticStringsStable)
   using Reason = CommittedPassFrontCapTransitionReason;
   EXPECT_STREQ(
     multi_purpose_mpc_ros::v2x_overtake_core::to_string(
+      Reason::MinimumMotionFootprintSweepClear),
+    "minimum-motion body footprint sweep clear");
+  EXPECT_STREQ(
+    multi_purpose_mpc_ros::v2x_overtake_core::to_string(
+      Reason::MinimumMotionSideBySideForwardEscape),
+    "minimum-motion side-by-side forward escape");
+  EXPECT_STREQ(
+    multi_purpose_mpc_ros::v2x_overtake_core::to_string(
       Reason::ConstrainedFeasiblePassHorizonAccepted),
     "physical lateral clearance; constrained feasible Pass horizon accepted");
   EXPECT_STREQ(
@@ -1160,6 +1493,22 @@ TEST(V2XOvertakeCoreSpeed, KeepsCommittedPassFrontCapDiagnosticStringsStable)
   EXPECT_STREQ(
     multi_purpose_mpc_ros::v2x_overtake_core::to_string(Reason::TargetNoLongerAhead),
     "lateral goal complete and locked target no longer ahead");
+  EXPECT_STREQ(
+    multi_purpose_mpc_ros::v2x_overtake_core::to_string(Reason::CurrentFootprintOverlap),
+    "current body footprints overlap");
+  EXPECT_STREQ(
+    multi_purpose_mpc_ros::v2x_overtake_core::to_string(Reason::PredictedFootprintOverlap),
+    "predicted body footprint sweep overlaps");
+  EXPECT_STREQ(
+    multi_purpose_mpc_ros::v2x_overtake_core::to_string(
+      Reason::FootprintPredictionUnavailable),
+    "body footprint prediction unavailable");
+  EXPECT_STREQ(
+    multi_purpose_mpc_ros::v2x_overtake_core::to_string(Reason::LockedTargetPositionJump),
+    "locked target position jump");
+  EXPECT_STREQ(
+    multi_purpose_mpc_ros::v2x_overtake_core::to_string(Reason::ActualWallContact),
+    "actual wall contact");
   EXPECT_STREQ(
     multi_purpose_mpc_ros::v2x_overtake_core::to_string(Reason::LockedTargetUnavailable),
     "locked target unavailable");
@@ -1961,6 +2310,33 @@ TEST(V2XOvertakeCoreMinimumMotion, PrefersInnerOnlyWithinConfiguredExtraShift)
   EXPECT_EQ(selection.reason, SideSelectionReason::InnerPreference);
 
   request.right.required_shift_m = 0.71;
+  selection = select_minimum_lateral_motion_side(request);
+  EXPECT_EQ(selection.side, PassSide::Left);
+  EXPECT_EQ(selection.reason, SideSelectionReason::HigherQuality);
+}
+
+TEST(V2XOvertakeCoreMinimumMotion, OpenInsidePreferenceRequiresWidthAndContinuity)
+{
+  MinimumLateralMotionSideSelectionRequest request{
+    PassSide::Left,
+    MinimumLateralMotionSideCandidate{PassSide::Left, true, false, 0.20, 0.50, 12.0},
+    MinimumLateralMotionSideCandidate{PassSide::Right, true, false, 0.70, 0.40, 9.0}};
+  request.inner_side = PassSide::Right;
+  request.inner_preference_max_extra_shift_m = 0.60;
+  request.inner_preference_min_corridor_width_m = 0.30;
+  request.inner_preference_min_open_distance_m = 8.0;
+
+  auto selection = select_minimum_lateral_motion_side(request);
+  EXPECT_EQ(selection.side, PassSide::Right);
+  EXPECT_EQ(selection.reason, SideSelectionReason::InnerPreference);
+
+  request.right.continuous_open_distance_m = 7.99;
+  selection = select_minimum_lateral_motion_side(request);
+  EXPECT_EQ(selection.side, PassSide::Left);
+  EXPECT_EQ(selection.reason, SideSelectionReason::HigherQuality);
+
+  request.right.continuous_open_distance_m = 9.0;
+  request.right.corridor_width_m = 0.29;
   selection = select_minimum_lateral_motion_side(request);
   EXPECT_EQ(selection.side, PassSide::Left);
   EXPECT_EQ(selection.reason, SideSelectionReason::HigherQuality);

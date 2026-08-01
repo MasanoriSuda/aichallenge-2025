@@ -104,6 +104,12 @@ void validate_supervisor_config(const SupervisorConfig & config)
     config.safe_stop_clear_confirm_sec,
     "safe-stop clearance confirmation duration");
   validate_nonnegative(config.aggressive_retry_delay_sec, "aggressive retry delay");
+  validate_nonnegative(
+    config.aggressive_retry_min_lateral_change_m,
+    "aggressive retry minimum lateral change");
+  validate_nonnegative(
+    config.aggressive_retry_min_heading_change_rad,
+    "aggressive retry minimum heading change");
   validate_nonnegative(config.gear_report_timeout_sec, "gear report timeout");
   validate_nonnegative(
     config.gear_command_resend_interval_sec,
@@ -141,6 +147,9 @@ void validate_supervisor_config(const SupervisorConfig & config)
   if (config.min_rejoin_alignment_progress_ratio <= 0.0) {
     throw std::invalid_argument("minimum rejoin alignment progress ratio must be positive");
   }
+  validate_nonnegative(
+    config.rejoin_lateral_regression_margin_m,
+    "rejoin lateral regression margin");
   validate_nonnegative(config.rejoin_timeout_sec, "rejoin timeout");
   validate_nonnegative(
     config.rejoin_solver_recovery_timeout_sec,
@@ -171,6 +180,7 @@ bool aggressive_retry_reason_is_recoverable(const RecoveryReason reason) noexcep
     case RecoveryReason::ContactNotImproving:
     case RecoveryReason::DriveGearLost:
     case RecoveryReason::EscapeNotConfirmed:
+    case RecoveryReason::RejoinRegressed:
     case RecoveryReason::RejoinTimedOut:
     case RecoveryReason::RejoinUnsafe:
     case RecoveryReason::RejoinPathBlocked:
@@ -207,6 +217,7 @@ bool aggressive_retry_reason_is_recoverable(const RecoveryReason reason) noexcep
     case RecoveryReason::RejoinComplete:
     case RecoveryReason::SolverRecoveryPending:
     case RecoveryReason::AggressiveRetry:
+    case RecoveryReason::AggressiveRetryAwaitingChange:
     case RecoveryReason::CooldownActive:
     case RecoveryReason::OdometryUnsafe:
     case RecoveryReason::ControlInterrupted:
@@ -535,6 +546,14 @@ RejoinAlignmentProgressObservation RejoinAlignmentProgressTracker::observe(
   observation.alignment_error_ratio = std::max(
     normalized_error(request.lateral_error_m, request.max_lateral_error_m),
     normalized_error(request.heading_error_rad, request.max_heading_error_rad));
+  if (std::abs(request.lateral_error_m) <= request.max_lateral_error_m) {
+    lateral_envelope_captured_ = true;
+  }
+  observation.lateral_envelope_captured = lateral_envelope_captured_;
+  observation.lateral_regression =
+    lateral_envelope_captured_ &&
+    std::abs(request.lateral_error_m) >
+    request.max_lateral_error_m + request.lateral_regression_margin_m;
   if (!best_alignment_error_ratio_.has_value() ||
     best_alignment_error_ratio_.value() - observation.alignment_error_ratio >=
     request.minimum_progress_ratio)
@@ -552,6 +571,7 @@ void RejoinAlignmentProgressTracker::reset() noexcept
 {
   best_alignment_error_ratio_.reset();
   last_progress_sec_.reset();
+  lateral_envelope_captured_ = false;
 }
 
 RecoveryCandidateDirectionPolicy resolve_recovery_candidate_direction_policy(
@@ -560,11 +580,78 @@ RecoveryCandidateDirectionPolicy resolve_recovery_candidate_direction_policy(
   RecoveryCandidateDirectionPolicy policy;
   policy.forward_probe_allowed =
     request.forward_course_escape_allowed ||
-    request.solver_reverse_deadlock_forward_probe_allowed;
+    request.solver_reverse_deadlock_forward_probe_allowed ||
+    request.forward_fallback_unlocked;
   policy.prefer_forward_course_escape =
     request.measured_reverse_course_worsening ||
-    (request.forward_fallback_unlocked && request.course_recovery_guard_active);
+    (request.forward_course_escape_allowed && request.course_recovery_guard_active);
   return policy;
+}
+
+RecoveryRetrySnapshot recovery_retry_snapshot(const RecoveryInput & input) noexcept
+{
+  return RecoveryRetrySnapshot{
+    input.reported_gear,
+    input.maneuver_direction,
+    input.gear_report_fresh,
+    input.solver_healthy,
+    input.stepwise_escape,
+    input.step_contact_improved,
+    input.rear_static_clear,
+    input.rear_v2x_clear,
+    input.rear_information_complete,
+    input.collision_worsening,
+    input.course_progress_worsening,
+    input.rejoin_safe,
+    input.rejoin_forward_clear,
+    input.current_contact_count,
+    input.reverse_steering_tire_angle_rad,
+    input.lateral_error_m,
+    input.heading_error_rad};
+}
+
+bool recovery_retry_snapshot_materially_changed(
+  const RecoveryRetrySnapshot & previous, const RecoveryRetrySnapshot & current,
+  const double minimum_lateral_change_m,
+  const double minimum_heading_change_rad) noexcept
+{
+  if (
+    !finite_nonnegative(minimum_lateral_change_m) ||
+    !finite_nonnegative(minimum_heading_change_rad) ||
+    !std::isfinite(previous.lateral_error_m) ||
+    !std::isfinite(previous.heading_error_rad) ||
+    !std::isfinite(current.lateral_error_m) ||
+    !std::isfinite(current.heading_error_rad))
+  {
+    return false;
+  }
+
+  const bool discrete_change =
+    previous.reported_gear != current.reported_gear ||
+    previous.maneuver_direction != current.maneuver_direction ||
+    previous.gear_report_fresh != current.gear_report_fresh ||
+    previous.solver_healthy != current.solver_healthy ||
+    previous.stepwise_escape != current.stepwise_escape ||
+    previous.step_contact_improved != current.step_contact_improved ||
+    previous.rear_static_clear != current.rear_static_clear ||
+    previous.rear_v2x_clear != current.rear_v2x_clear ||
+    previous.rear_information_complete != current.rear_information_complete ||
+    previous.collision_worsening != current.collision_worsening ||
+    previous.course_progress_worsening != current.course_progress_worsening ||
+    previous.rejoin_safe != current.rejoin_safe ||
+    previous.rejoin_forward_clear != current.rejoin_forward_clear ||
+    previous.current_contact_count != current.current_contact_count;
+  const auto steering_direction = [](const double steering_angle_rad) {
+      return steering_angle_rad > kDistanceComparisonEpsilon ? 1 :
+             steering_angle_rad < -kDistanceComparisonEpsilon ? -1 : 0;
+    };
+  return discrete_change ||
+         steering_direction(previous.maneuver_steering_tire_angle_rad) !=
+         steering_direction(current.maneuver_steering_tire_angle_rad) ||
+         std::abs(current.lateral_error_m - previous.lateral_error_m) +
+         kDistanceComparisonEpsilon >= minimum_lateral_change_m ||
+         std::abs(current.heading_error_rad - previous.heading_error_rad) +
+         kDistanceComparisonEpsilon >= minimum_heading_change_rad;
 }
 
 RecoveryCourseProgressResolution resolve_recovery_course_progress(
@@ -1070,6 +1157,7 @@ void RecoverySupervisor::reset_session() noexcept
   clearance_safe_since_sec_.reset();
   last_gear_request_sec_.reset();
   cooldown_until_sec_.reset();
+  last_aggressive_retry_snapshot_.reset();
   normal_reset_pending_ = false;
   active_stepwise_escape_ = false;
   reassess_after_drive_ = false;
@@ -1124,12 +1212,14 @@ RecoveryAction RecoverySupervisor::update_normal(const RecoveryInput & input)
     // rejoin must not consume the budget of a later, independent obstruction.
     attempt_count_ = 0U;
     escape_step_count_ = 0U;
+    last_aggressive_retry_snapshot_.reset();
     transition(RecoveryState::SuspectStuck, RecoveryReason::StuckConfirmed, input.now_sec);
     return hold_action(RecoveryReason::StuckConfirmed);
   }
   if (input.detector.verdict == StuckVerdict::Suspected) {
     attempt_count_ = 0U;
     escape_step_count_ = 0U;
+    last_aggressive_retry_snapshot_.reset();
     transition(RecoveryState::SuspectStuck, RecoveryReason::StuckSuspected, input.now_sec);
     return normal_action(RecoveryReason::StuckSuspected);
   }
@@ -1297,6 +1387,17 @@ RecoveryAction RecoverySupervisor::update_safe_stop(const RecoveryInput & input)
     return safe_stop_action(state_reason_);
   }
 
+  const auto current_snapshot = recovery_retry_snapshot(input);
+  if (
+    last_aggressive_retry_snapshot_.has_value() &&
+    !recovery_retry_snapshot_materially_changed(
+      last_aggressive_retry_snapshot_.value(), current_snapshot,
+      config_.aggressive_retry_min_lateral_change_m,
+      config_.aggressive_retry_min_heading_change_rad))
+  {
+    return safe_stop_action(RecoveryReason::AggressiveRetryAwaitingChange);
+  }
+
   // A new simulation-race recovery cycle must not inherit a consumed budget
   // or an escape confirmation from the failed primitive. The ROS adapter also
   // resets its pose/contact/candidate anchors on this transition.
@@ -1306,6 +1407,7 @@ RecoveryAction RecoverySupervisor::update_safe_stop(const RecoveryInput & input)
   reassess_after_drive_ = false;
   safe_stop_after_drive_ = false;
   escape_confirmed_before_drive_ = false;
+  last_aggressive_retry_snapshot_ = current_snapshot;
   transition(RecoveryState::StopAndConfirm, RecoveryReason::AggressiveRetry, input.now_sec);
   return hold_action(RecoveryReason::AggressiveRetry);
 }
@@ -1680,7 +1782,23 @@ RecoveryAction RecoverySupervisor::update_low_speed_rejoin(const RecoveryInput &
       input.heading_error_rad,
       config_.max_rejoin_lateral_error_m,
       config_.max_rejoin_heading_error_rad,
-      config_.min_rejoin_alignment_progress_ratio});
+      config_.min_rejoin_alignment_progress_ratio,
+      config_.rejoin_lateral_regression_margin_m});
+  if (alignment_progress.lateral_regression) {
+    if (
+      config_.retry_rejoin_timeout &&
+      (escape_step_count_ < config_.max_escape_steps ||
+      attempt_count_ < config_.max_attempts))
+    {
+      escape_confirmed_before_drive_ = false;
+      transition(
+        RecoveryState::StopAndConfirm, RecoveryReason::RejoinRegressed,
+        input.now_sec);
+      return hold_action(RecoveryReason::RejoinRegressed);
+    }
+    transition(RecoveryState::SafeStop, RecoveryReason::RejoinRegressed, input.now_sec);
+    return safe_stop_action(RecoveryReason::RejoinRegressed);
+  }
   if (alignment_progress.no_progress_duration_sec >= config_.rejoin_timeout_sec) {
     if (
       config_.retry_rejoin_timeout &&
@@ -2344,6 +2462,8 @@ const char * to_string(const RecoveryReason reason) noexcept
       return "rejoin_in_progress";
     case RecoveryReason::RejoinComplete:
       return "rejoin_complete";
+    case RecoveryReason::RejoinRegressed:
+      return "rejoin_regressed";
     case RecoveryReason::RejoinTimedOut:
       return "rejoin_timed_out";
     case RecoveryReason::RejoinUnsafe:
@@ -2354,6 +2474,8 @@ const char * to_string(const RecoveryReason reason) noexcept
       return "solver_recovery_pending";
     case RecoveryReason::AggressiveRetry:
       return "aggressive_retry";
+    case RecoveryReason::AggressiveRetryAwaitingChange:
+      return "aggressive_retry_awaiting_change";
     case RecoveryReason::CooldownActive:
       return "cooldown_active";
     case RecoveryReason::OdometryUnsafe:

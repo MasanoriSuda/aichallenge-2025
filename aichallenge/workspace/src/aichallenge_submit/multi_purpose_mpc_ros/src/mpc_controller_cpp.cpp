@@ -11908,6 +11908,14 @@ Config load_config(const std::string & path)
       out.aggressive_retry_delay_sec = maneuver["aggressive_retry_delay_sec"] ?
         maneuver["aggressive_retry_delay_sec"].as<double>() :
         out.aggressive_retry_delay_sec;
+      out.aggressive_retry_min_lateral_change_m =
+        maneuver["aggressive_retry_min_lateral_change_m"] ?
+        maneuver["aggressive_retry_min_lateral_change_m"].as<double>() :
+        out.aggressive_retry_min_lateral_change_m;
+      out.aggressive_retry_min_heading_change_rad =
+        maneuver["aggressive_retry_min_heading_change_rad"] ?
+        maneuver["aggressive_retry_min_heading_change_rad"].as<double>() :
+        out.aggressive_retry_min_heading_change_rad;
       adapter.fault_retry.enabled = maneuver["race_relaxed_fault_retry_enabled"] ?
         maneuver["race_relaxed_fault_retry_enabled"].as<bool>() : false;
       adapter.fault_retry.clear_confirm_sec = maneuver["fault_retry_clear_confirm_sec"] ?
@@ -12055,6 +12063,9 @@ Config load_config(const std::string & path)
       out.min_rejoin_alignment_progress_ratio = rejoin["min_alignment_progress_ratio"] ?
         rejoin["min_alignment_progress_ratio"].as<double>() :
         out.min_rejoin_alignment_progress_ratio;
+      out.rejoin_lateral_regression_margin_m = rejoin["lateral_regression_margin_m"] ?
+        rejoin["lateral_regression_margin_m"].as<double>() :
+        out.rejoin_lateral_regression_margin_m;
       out.rejoin_timeout_sec = rejoin["timeout_sec"] ?
         rejoin["timeout_sec"].as<double>() : out.rejoin_timeout_sec;
       out.rejoin_solver_recovery_timeout_sec = rejoin["solver_recovery_timeout_sec"] ?
@@ -13653,9 +13664,9 @@ public:
       "Stuck recovery coordinated reverse: enabled=%s, stop=%.2f s, "
       "front_speed<=%.2f m/s, solver_evidence_free=%s/%.2f s, "
       "solver_reverse_only_heading>=%.2f rad, steering_samples=%zu, "
-      "rejoin_solver_wait=%.2f s, rejoin_progress=%.2f/timeout=%.2f s, "
+      "rejoin_solver_wait=%.2f s, rejoin_progress=%.2f/regress=%.2f m/timeout=%.2f s, "
       "recovery_mpc=%s/%zux%.2f m/beam=%zu, "
-      "aggressive_sim=%s/retry=%.2f s/force_rejoin=%zu, "
+      "aggressive_sim=%s/retry=%.2f s/change=%.2f m/%.2f rad/force_rejoin=%zu, "
       "collision_stop_override=%s, escape_distance_tolerance=%.2f m",
       cfg_.stuck_recovery.core.detector.coordinated_stop_recovery_enabled ? "true" : "false",
       cfg_.stuck_recovery.core.detector.coordinated_stop_duration_sec,
@@ -13667,6 +13678,7 @@ public:
       cfg_.stuck_recovery.side_escape_steering_samples,
       cfg_.stuck_recovery.core.supervisor.rejoin_solver_recovery_timeout_sec,
       cfg_.stuck_recovery.core.supervisor.min_rejoin_alignment_progress_ratio,
+      cfg_.stuck_recovery.core.supervisor.rejoin_lateral_regression_margin_m,
       cfg_.stuck_recovery.core.supervisor.rejoin_timeout_sec,
       cfg_.stuck_recovery.recovery_mpc_enabled ? "enabled" : "disabled",
       cfg_.stuck_recovery.recovery_mpc_config.horizon_steps,
@@ -13674,6 +13686,8 @@ public:
       cfg_.stuck_recovery.recovery_mpc_config.beam_width,
       cfg_.stuck_recovery.core.supervisor.aggressive_sim_recovery_enabled ? "true" : "false",
       cfg_.stuck_recovery.core.supervisor.aggressive_retry_delay_sec,
+      cfg_.stuck_recovery.core.supervisor.aggressive_retry_min_lateral_change_m,
+      cfg_.stuck_recovery.core.supervisor.aggressive_retry_min_heading_change_rad,
       cfg_.stuck_recovery.aggressive_force_rejoin_after_retries,
       cfg_.stuck_recovery.collision_deliberate_stop_override_enabled ? "true" : "false",
       cfg_.stuck_recovery.escape_confirm_distance_tolerance_m);
@@ -15912,7 +15926,7 @@ private:
 
     const bool prefer_alternate_forward =
       cfg_.stuck_recovery.core.supervisor.aggressive_sim_recovery_enabled &&
-      recovery_forward_fallback_unlocked_;
+      candidate_direction_policy.prefer_forward_course_escape;
     if (
       snapshot.rear_information_complete && !snapshot.rear_v2x_clear &&
       snapshot.maneuver_direction == stuck_recovery::ManeuverDirection::Reverse &&
@@ -16343,6 +16357,7 @@ private:
     input.recovery.collision_worsening =
       safety.collision_worsening || recovery_reverse_pose_jump_;
     input.recovery.course_progress_worsening = measured_reverse_course_worsening;
+    input.recovery.current_contact_count = safety.current_contact_count;
     const bool fast_continuous_reverse_selected =
       cfg_.stuck_recovery.fast_continuous_reverse_enabled &&
       safety.reverse_candidate_selected && !safety.stepwise_escape &&
@@ -16409,6 +16424,19 @@ private:
 
     auto output = stuck_recovery_core_->update(input);
     update_recovery_observation_anchor(pose, car_->s, output.detector.reject_reason);
+    if (
+      output.action.reason ==
+      stuck_recovery::RecoveryReason::AggressiveRetryAwaitingChange)
+    {
+      RCLCPP_INFO_THROTTLE(
+        get_logger(), *get_clock(), 2000,
+        "Stuck recovery retry paused on unchanged snapshot: state_reason=%s, "
+        "direction=%s, contacts=%zu, e_y=%.3f m, e_psi=%.3f rad",
+        stuck_recovery::to_string(output.state_reason),
+        stuck_recovery::to_string(input.recovery.maneuver_direction),
+        input.recovery.current_contact_count,
+        input.recovery.lateral_error_m, input.recovery.heading_error_rad);
+    }
     const auto previous_state = recovery_last_output_.has_value() ?
       recovery_last_output_->state : stuck_recovery::RecoveryState::Normal;
     const bool started_recovery_episode =
@@ -16467,6 +16495,7 @@ private:
       previous_state == stuck_recovery::RecoveryState::LowSpeedRejoin &&
       output.state == stuck_recovery::RecoveryState::StopAndConfirm &&
       (output.state_reason == stuck_recovery::RecoveryReason::RejoinTimedOut ||
+      output.state_reason == stuck_recovery::RecoveryReason::RejoinRegressed ||
       output.state_reason == stuck_recovery::RecoveryReason::RejoinPathBlocked);
     if (restarted_escape_after_rejoin) {
       recovery_episode_traveled_distance_m_ = 0.0;

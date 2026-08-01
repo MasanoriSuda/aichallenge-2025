@@ -177,6 +177,7 @@ struct RejoinAlignmentProgressRequest
   double max_lateral_error_m{};
   double max_heading_error_rad{};
   double minimum_progress_ratio{};
+  double lateral_regression_margin_m{};
 };
 
 struct RejoinAlignmentProgressObservation
@@ -184,6 +185,8 @@ struct RejoinAlignmentProgressObservation
   double alignment_error_ratio{};
   double no_progress_duration_sec{};
   bool material_progress{false};
+  bool lateral_envelope_captured{false};
+  bool lateral_regression{false};
 };
 
 // Owns the temporal state used by LowSpeedRejoin progress monitoring. Keeping
@@ -199,6 +202,7 @@ public:
 private:
   std::optional<double> best_alignment_error_ratio_;
   std::optional<double> last_progress_sec_;
+  bool lateral_envelope_captured_{false};
 };
 
 struct RecoveryCandidateDirectionPolicyRequest
@@ -220,7 +224,8 @@ struct RecoveryCandidateDirectionPolicy
 };
 
 // Resolve Forward evaluation permission separately from candidate ordering.
-// The current expressions are intentionally preserved by this refactor.
+// An unlocked fallback removes a Reverse-only constraint at the adapter, but
+// does not by itself keep Forward permanently ahead of executable Reverse.
 RecoveryCandidateDirectionPolicy resolve_recovery_candidate_direction_policy(
   const RecoveryCandidateDirectionPolicyRequest & request) noexcept;
 
@@ -538,11 +543,13 @@ enum class RecoveryReason
   EscapeNotConfirmed,
   RejoinInProgress,
   RejoinComplete,
+  RejoinRegressed,
   RejoinTimedOut,
   RejoinUnsafe,
   RejoinPathBlocked,
   SolverRecoveryPending,
   AggressiveRetry,
+  AggressiveRetryAwaitingChange,
   CooldownActive,
   OdometryUnsafe,
   SolverUnsafe,
@@ -565,6 +572,10 @@ struct SupervisorConfig
   // CoreConfig::simulation_only must also be true.
   bool aggressive_sim_recovery_enabled{false};
   double aggressive_retry_delay_sec{0.5};
+  // After one retry of a given recovery snapshot, remain stopped until the
+  // path-relative pose or a discrete safety/candidate field changes.
+  double aggressive_retry_min_lateral_change_m{0.15};
+  double aggressive_retry_min_heading_change_rad{0.10};
   double gear_report_timeout_sec{0.5};
   double gear_command_resend_interval_sec{0.2};
   std::size_t max_gear_command_requests{1U};
@@ -594,6 +605,9 @@ struct SupervisorConfig
   // the rejoin no-progress timeout. A positive threshold prevents pose noise
   // from extending a stalled recovery indefinitely.
   double min_rejoin_alignment_progress_ratio{0.05};
+  // Once the lateral completion envelope has been captured, interrupt Rejoin
+  // when absolute lateral error grows beyond the envelope by this margin.
+  double rejoin_lateral_regression_margin_m{0.20};
   double rejoin_timeout_sec{5.0};
   double rejoin_solver_recovery_timeout_sec{1.0};
   bool retry_rejoin_blocked_path{false};
@@ -638,6 +652,7 @@ struct RecoveryInput
   bool rear_information_complete{false};
   bool collision_worsening{false};
   bool course_progress_worsening{false};
+  std::size_t current_contact_count{};
   bool recovery_escape_confirmed{false};
   // Keep Reverse engaged but command calibrated braking when the predicted
   // stopping point has reached the current continuous-escape target.
@@ -658,6 +673,33 @@ struct RecoveryInput
   double lateral_error_m{};
   double heading_error_rad{};
 };
+
+struct RecoveryRetrySnapshot
+{
+  Gear reported_gear{Gear::Unknown};
+  ManeuverDirection maneuver_direction{ManeuverDirection::Unknown};
+  bool gear_report_fresh{false};
+  bool solver_healthy{false};
+  bool stepwise_escape{false};
+  bool step_contact_improved{false};
+  bool rear_static_clear{false};
+  bool rear_v2x_clear{false};
+  bool rear_information_complete{false};
+  bool collision_worsening{false};
+  bool course_progress_worsening{false};
+  bool rejoin_safe{false};
+  bool rejoin_forward_clear{false};
+  std::size_t current_contact_count{};
+  double maneuver_steering_tire_angle_rad{};
+  double lateral_error_m{};
+  double heading_error_rad{};
+};
+
+RecoveryRetrySnapshot recovery_retry_snapshot(const RecoveryInput & input) noexcept;
+
+bool recovery_retry_snapshot_materially_changed(
+  const RecoveryRetrySnapshot & previous, const RecoveryRetrySnapshot & current,
+  double minimum_lateral_change_m, double minimum_heading_change_rad) noexcept;
 
 struct RecoveryAction
 {
@@ -737,6 +779,7 @@ private:
   std::optional<double> clearance_safe_since_sec_;
   std::optional<double> last_gear_request_sec_;
   std::optional<double> cooldown_until_sec_;
+  std::optional<RecoveryRetrySnapshot> last_aggressive_retry_snapshot_;
   bool normal_reset_pending_{false};
   bool active_stepwise_escape_{false};
   bool reassess_after_drive_{false};

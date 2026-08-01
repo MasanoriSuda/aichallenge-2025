@@ -32,6 +32,7 @@ using multi_purpose_mpc_ros::stuck_recovery::RecoveryActionType;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryCandidateDirectionPolicyRequest;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryInput;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryReason;
+using multi_purpose_mpc_ros::stuck_recovery::RecoveryRetrySnapshot;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryState;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryCourseProgressRequest;
 using multi_purpose_mpc_ros::stuck_recovery::ReverseDirectionPolicyInput;
@@ -59,6 +60,8 @@ using multi_purpose_mpc_ros::stuck_recovery::reverse_stopping_distance_reserve_m
 using multi_purpose_mpc_ros::stuck_recovery::recovery_candidate_commit_allowed;
 using multi_purpose_mpc_ros::stuck_recovery::recovery_reverse_direction_required;
 using multi_purpose_mpc_ros::stuck_recovery::recovery_reverse_intent_latch_allowed;
+using multi_purpose_mpc_ros::stuck_recovery::recovery_retry_snapshot;
+using multi_purpose_mpc_ros::stuck_recovery::recovery_retry_snapshot_materially_changed;
 using multi_purpose_mpc_ros::stuck_recovery::resolve_recovery_candidate_direction_policy;
 using multi_purpose_mpc_ros::stuck_recovery::resolve_recovery_course_progress;
 using multi_purpose_mpc_ros::stuck_recovery::should_release_reverse_only_for_rear_wall;
@@ -141,6 +144,90 @@ TEST(StuckRecoveryRejoinProgress, TracksMaterialImprovementAndResetIndependently
   EXPECT_DOUBLE_EQ(observation.no_progress_duration_sec, 0.0);
 }
 
+TEST(StuckRecoveryRejoinProgress, DetectsLateralRegressionOnlyAfterEnvelopeCapture)
+{
+  RejoinAlignmentProgressTracker tracker;
+  RejoinAlignmentProgressRequest request;
+  request.now_sec = 1.0;
+  request.lateral_error_m = 0.80;
+  request.max_lateral_error_m = 0.50;
+  request.max_heading_error_rad = 0.35;
+  request.minimum_progress_ratio = 0.05;
+  request.lateral_regression_margin_m = 0.20;
+
+  auto observation = tracker.observe(request);
+  EXPECT_FALSE(observation.lateral_envelope_captured);
+  EXPECT_FALSE(observation.lateral_regression);
+
+  request.now_sec = 1.1;
+  request.lateral_error_m = 0.40;
+  observation = tracker.observe(request);
+  EXPECT_TRUE(observation.lateral_envelope_captured);
+  EXPECT_FALSE(observation.lateral_regression);
+
+  request.now_sec = 1.2;
+  request.lateral_error_m = -0.69;
+  EXPECT_FALSE(tracker.observe(request).lateral_regression);
+  request.now_sec = 1.3;
+  request.lateral_error_m = -0.71;
+  EXPECT_TRUE(tracker.observe(request).lateral_regression);
+
+  tracker.reset();
+  request.now_sec = 2.0;
+  request.lateral_error_m = -0.80;
+  observation = tracker.observe(request);
+  EXPECT_FALSE(observation.lateral_envelope_captured);
+  EXPECT_FALSE(observation.lateral_regression);
+}
+
+TEST(StuckRecoveryAggressiveRetrySnapshot, DetectsOnlyMaterialOrDiscreteChange)
+{
+  RecoveryInput input;
+  input.reported_gear = Gear::Drive;
+  input.gear_report_fresh = true;
+  input.solver_healthy = true;
+  input.maneuver_direction = ManeuverDirection::Unknown;
+  input.rear_information_complete = true;
+  input.rear_static_clear = true;
+  input.rear_v2x_clear = true;
+  input.rejoin_safe = true;
+  input.rejoin_forward_clear = false;
+  input.current_contact_count = 3U;
+  input.reverse_steering_tire_angle_rad = 0.25;
+  input.lateral_error_m = 1.0;
+  input.heading_error_rad = 0.5;
+  const RecoveryRetrySnapshot baseline = recovery_retry_snapshot(input);
+
+  input.lateral_error_m = 1.14;
+  input.heading_error_rad = 0.59;
+  auto current = recovery_retry_snapshot(input);
+  EXPECT_FALSE(recovery_retry_snapshot_materially_changed(
+      baseline, current, 0.15, 0.10));
+
+  input.lateral_error_m = 1.15;
+  current = recovery_retry_snapshot(input);
+  EXPECT_TRUE(recovery_retry_snapshot_materially_changed(
+      baseline, current, 0.15, 0.10));
+
+  input.lateral_error_m = 1.0;
+  input.current_contact_count = 2U;
+  current = recovery_retry_snapshot(input);
+  EXPECT_TRUE(recovery_retry_snapshot_materially_changed(
+      baseline, current, 0.15, 0.10));
+
+  input.current_contact_count = 3U;
+  input.maneuver_direction = ManeuverDirection::Reverse;
+  current = recovery_retry_snapshot(input);
+  EXPECT_TRUE(recovery_retry_snapshot_materially_changed(
+      baseline, current, 0.15, 0.10));
+
+  input.maneuver_direction = ManeuverDirection::Unknown;
+  input.reverse_steering_tire_angle_rad = -0.25;
+  current = recovery_retry_snapshot(input);
+  EXPECT_TRUE(recovery_retry_snapshot_materially_changed(
+      baseline, current, 0.15, 0.10));
+}
+
 TEST(StuckRecoveryCandidateDirectionPolicy, SeparatesForwardPermissionFromPreference)
 {
   RecoveryCandidateDirectionPolicyRequest request;
@@ -167,9 +254,11 @@ TEST(StuckRecoveryCandidateDirectionPolicy, SeparatesForwardPermissionFromPrefer
 
   request = RecoveryCandidateDirectionPolicyRequest{};
   request.forward_fallback_unlocked = true;
-  policy = resolve_recovery_candidate_direction_policy(request);
-  EXPECT_FALSE(policy.prefer_forward_course_escape);
   request.course_recovery_guard_active = true;
+  policy = resolve_recovery_candidate_direction_policy(request);
+  EXPECT_TRUE(policy.forward_probe_allowed);
+  EXPECT_FALSE(policy.prefer_forward_course_escape);
+  request.forward_course_escape_allowed = true;
   policy = resolve_recovery_candidate_direction_policy(request);
   EXPECT_TRUE(policy.prefer_forward_course_escape);
 }
@@ -1298,6 +1387,18 @@ TEST(RecoverySupervisorConfig, RejectsNonFiniteOrNegativeConfiguration)
   config = supervisor_config();
   config.aggressive_retry_delay_sec = -0.1;
   EXPECT_THROW(RecoverySupervisor{config}, std::invalid_argument);
+
+  config = supervisor_config();
+  config.aggressive_retry_min_lateral_change_m = -0.1;
+  EXPECT_THROW(RecoverySupervisor{config}, std::invalid_argument);
+
+  config = supervisor_config();
+  config.aggressive_retry_min_heading_change_rad = -0.1;
+  EXPECT_THROW(RecoverySupervisor{config}, std::invalid_argument);
+
+  config = supervisor_config();
+  config.rejoin_lateral_regression_margin_m = -0.1;
+  EXPECT_THROW(RecoverySupervisor{config}, std::invalid_argument);
 }
 
 TEST(RecoverySupervisor, NeverDrivesBeforeFreshMatchingReverseReport)
@@ -2394,6 +2495,57 @@ TEST(RecoverySupervisor, AggressiveSimulationSafeStopRetryDoesNotDependOnSolverH
   EXPECT_EQ(supervisor.state(), RecoveryState::StopAndConfirm);
 }
 
+TEST(RecoverySupervisor, AggressiveSimulationDoesNotRepeatAnUnchangedSnapshot)
+{
+  auto config = supervisor_config();
+  config.aggressive_sim_recovery_enabled = true;
+  config.aggressive_retry_delay_sec = 0.1;
+  config.aggressive_retry_min_lateral_change_m = 0.15;
+  config.aggressive_retry_min_heading_change_rad = 0.10;
+  config.max_attempts = 0U;
+  RecoverySupervisor supervisor(config);
+  double now = 0.0;
+  auto input = healthy_recovery_input(now);
+  input.maneuver_direction = ManeuverDirection::Unknown;
+  advance_to_clearance_check(supervisor, input, now);
+
+  now += 0.01;
+  input.now_sec = now;
+  auto action = supervisor.update(input);
+  ASSERT_EQ(action.reason, RecoveryReason::ManeuverDirectionUnknown);
+  ASSERT_EQ(supervisor.state(), RecoveryState::SafeStop);
+
+  now += 0.11;
+  input.now_sec = now;
+  action = supervisor.update(input);
+  ASSERT_EQ(action.reason, RecoveryReason::AggressiveRetry);
+  ASSERT_EQ(supervisor.state(), RecoveryState::StopAndConfirm);
+
+  now += 0.01;
+  input.now_sec = now;
+  ASSERT_EQ(supervisor.update(input).reason, RecoveryReason::ClearanceCheck);
+  now += 0.01;
+  input.now_sec = now;
+  action = supervisor.update(input);
+  ASSERT_EQ(action.reason, RecoveryReason::ManeuverDirectionUnknown);
+  ASSERT_EQ(supervisor.state(), RecoveryState::SafeStop);
+
+  now += 0.11;
+  input.now_sec = now;
+  action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::SafeStop);
+  EXPECT_EQ(action.reason, RecoveryReason::AggressiveRetryAwaitingChange);
+  EXPECT_EQ(supervisor.state(), RecoveryState::SafeStop);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.lateral_error_m = config.aggressive_retry_min_lateral_change_m;
+  action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
+  EXPECT_EQ(action.reason, RecoveryReason::AggressiveRetry);
+  EXPECT_EQ(supervisor.state(), RecoveryState::StopAndConfirm);
+}
+
 TEST(RecoverySupervisor, AggressiveSimulationKeepsInvalidInputLatched)
 {
   auto config = supervisor_config();
@@ -2668,6 +2820,47 @@ TEST(RecoverySupervisor, ImprovingRejoinIsNotCutOffByTheAbsoluteStateTimeout)
   const auto action = supervisor.update(input);
   EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
   EXPECT_EQ(action.reason, RecoveryReason::RejoinTimedOut);
+  EXPECT_EQ(supervisor.state(), RecoveryState::StopAndConfirm);
+}
+
+TEST(RecoverySupervisor, RejoinLateralRegressionReturnsToBoundedReassessmentImmediately)
+{
+  auto config = supervisor_config();
+  config.retry_rejoin_timeout = true;
+  config.rejoin_timeout_sec = 5.0;
+  config.rejoin_lateral_regression_margin_m = 0.20;
+  config.max_attempts = 2U;
+  RecoverySupervisor supervisor(config);
+  double now = 0.0;
+  auto input = healthy_recovery_input(now);
+  advance_to_reverse(supervisor, input, now);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.recovery_escape_confirmed = true;
+  ASSERT_EQ(supervisor.update(input).reason, RecoveryReason::ReverseEscapeConfirmed);
+  now += 0.01;
+  input.now_sec = now;
+  input.signed_speed_mps = 0.0;
+  ASSERT_EQ(supervisor.update(input).type, RecoveryActionType::RequestDrive);
+  now += 0.01;
+  input.now_sec = now;
+  input.reported_gear = Gear::Drive;
+  input.lateral_error_m = 0.80;
+  input.heading_error_rad = 0.60;
+  ASSERT_EQ(supervisor.update(input).type, RecoveryActionType::LowSpeedRejoin);
+
+  now += 0.10;
+  input.now_sec = now;
+  input.lateral_error_m = 0.40;
+  ASSERT_EQ(supervisor.update(input).type, RecoveryActionType::LowSpeedRejoin);
+
+  now += 0.10;
+  input.now_sec = now;
+  input.lateral_error_m = -0.71;
+  const auto action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
+  EXPECT_EQ(action.reason, RecoveryReason::RejoinRegressed);
   EXPECT_EQ(supervisor.state(), RecoveryState::StopAndConfirm);
 }
 
@@ -3313,6 +3506,10 @@ TEST(StuckRecoveryCore, EnumStringsAreStableAndUnknownSafe)
     to_string(RecoveryReason::SolverRecoveryPending),
     "solver_recovery_pending");
   EXPECT_STREQ(to_string(RecoveryReason::AggressiveRetry), "aggressive_retry");
+  EXPECT_STREQ(
+    to_string(RecoveryReason::AggressiveRetryAwaitingChange),
+    "aggressive_retry_awaiting_change");
+  EXPECT_STREQ(to_string(RecoveryReason::RejoinRegressed), "rejoin_regressed");
   EXPECT_STREQ(
     to_string(ExecutionMode::SimulationOnlyBlocked),
     "simulation_only_blocked");

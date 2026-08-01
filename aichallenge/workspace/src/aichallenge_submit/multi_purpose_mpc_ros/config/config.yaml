@@ -96,6 +96,10 @@ stuck_recovery:
     # remaining latched for the rest of the race.
     aggressive_sim_recovery_enabled: true
     aggressive_retry_delay_sec: 0.5
+    # One retry is allowed for a new snapshot. Further retries wait until the
+    # path-relative pose or a discrete candidate/contact/V2X state changes.
+    aggressive_retry_min_lateral_change_m: 0.15
+    aggressive_retry_min_heading_change_rad: 0.10
     # Simulation-race only: a transient recovery failsafe may retry after every
     # adapter health and one bounded static/V2X maneuver stay valid continuously.
     race_relaxed_fault_retry_enabled: true
@@ -214,8 +218,9 @@ stuck_recovery:
     # A clear current footprint with a blocked forward sweep gets one of the remaining
     # bounded 0.40 m escape-step reassessments instead of driving back into the wall.
     retry_on_blocked_path: true
-    # A timed-out alignment stops first, resets escape progress, and performs
-    # another bounded clearance-selected maneuver while attempt/step budget remains.
+    # A timed-out or laterally regressing alignment stops first, resets escape
+    # progress, and performs another bounded clearance-selected maneuver while
+    # attempt/step budget remains.
     retry_on_timeout: true
     max_lateral_error_m: 0.5
     max_heading_error_rad: 0.35
@@ -224,6 +229,9 @@ stuck_recovery:
     # lateral/heading envelope. This lets a gross-angle kart keep turning while
     # converging but still stops a noisy or genuinely stalled rejoin.
     min_alignment_progress_ratio: 0.05
+    # After entering the 0.5 m lateral envelope, stop and reassess if Rejoin
+    # moves back outside it by more than this margin instead of crossing the course.
+    lateral_regression_margin_m: 0.20
     # Maximum duration without the material alignment progress above.
     timeout_sec: 5.0
     # Hold Drive at zero command briefly while MPC is reinitialized after Recovery.

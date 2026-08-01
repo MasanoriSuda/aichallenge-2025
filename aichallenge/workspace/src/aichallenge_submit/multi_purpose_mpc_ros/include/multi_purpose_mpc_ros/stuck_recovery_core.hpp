@@ -213,6 +213,23 @@ struct CourseDirectedForwardEscapeRequest
 bool course_directed_forward_escape_allowed(
   const CourseDirectedForwardEscapeRequest & request) noexcept;
 
+struct SolverReverseDeadlockForwardProbeRequest
+{
+  bool simulation_environment{false};
+  bool aggressive_sim_recovery_enabled{false};
+  bool recovery_context_active{false};
+  bool solver_reverse_only_episode{false};
+  bool mixed_wall_contact{false};
+  bool course_progress_guard_active{false};
+  std::size_t aggressive_retry_count{};
+};
+
+// A solver Reverse-only episode may deadlock when mixed wall contact makes every Reverse rollout
+// worse. After one bounded retry, permit Forward candidate evaluation only; the caller must still
+// enforce footprint, course-progress, V2X, boost, and gear safety before actuation.
+bool solver_reverse_deadlock_forward_probe_allowed(
+  const SolverReverseDeadlockForwardProbeRequest & request) noexcept;
+
 enum class StuckVerdict
 {
   NotEligible,

@@ -15098,7 +15098,7 @@ private:
     const double recovery_heading_error_rad,
     const double rejoin_steering_angle_rad,
     const bool reverse_only,
-    const bool allow_forward_course_escape,
+    const bool allow_forward_candidate_probe,
     const bool evaluate_rollout) const
   {
     RecoverySafetySnapshot snapshot;
@@ -15111,7 +15111,7 @@ private:
 
     const recovery_footprint::Pose2D recovery_pose{pose.x, pose.y, pose.theta};
     const bool forward_candidate_evaluation_allowed =
-      !reverse_only || allow_forward_course_escape;
+      !reverse_only || allow_forward_candidate_probe;
     const auto wall_proximity = recovery_footprint::classify_nearby_wall(
       *recovery_grid_, recovery_footprint_, recovery_pose,
       cfg_.stuck_recovery.wall_direction_search_margin_m,
@@ -16199,6 +16199,19 @@ private:
         recovery_reverse_intent_latched_,
         coordinated_stop_active,
         solver_reverse_only_candidate});
+    const bool allow_solver_reverse_deadlock_forward_probe =
+      stuck_recovery::solver_reverse_deadlock_forward_probe_allowed(
+      stuck_recovery::SolverReverseDeadlockForwardProbeRequest{
+        use_sim_time_,
+        cfg_.stuck_recovery.core.supervisor.aggressive_sim_recovery_enabled,
+        recovery_context_active,
+        recovery_reverse_only_episode_,
+        current_wall_evidence &&
+        current_wall_region == recovery_footprint::WallRegion::Mixed,
+        course_recovery_guard_active,
+        recovery_aggressive_retry_count_});
+    const bool allow_forward_candidate_probe =
+      allow_forward_course_escape || allow_solver_reverse_deadlock_forward_probe;
     const bool low_speed_recovery_candidate =
       std::abs(actual_v) <= cfg_.stuck_recovery.core.detector.moving_speed_mps &&
       (requested_forward_speed_mps >=
@@ -16233,7 +16246,7 @@ private:
       car_->spatial_state.e_psi,
       checked_rejoin_steering_tire_angle_rad,
       reverse_only,
-      allow_forward_course_escape,
+      allow_forward_candidate_probe,
       recovery_context_active || low_speed_recovery_candidate);
     const bool awsim_recovery_settling =
       last_collision_receipt_steady_.has_value() &&
@@ -16522,7 +16535,7 @@ private:
       RCLCPP_INFO(
         get_logger(), "Stuck recovery maneuver selected: direction=%s, primitive=%s, "
         "steering=%.3f rad, wall=%s, wall_distance=%.3f m, coordinated=%d, "
-        "reverse_only=%d, course_guard=%d, course_improvement=%.3f m, "
+        "reverse_only=%d, forward_probe=%d, course_guard=%d, course_improvement=%.3f m, "
         "recovery_mpc=%d, mpc_desired=%.3f rad, aggressive_retry=%zu",
         stuck_recovery::to_string(safety.maneuver_direction),
         recovery_footprint::to_string(safety.selected_reverse_primitive),
@@ -16530,6 +16543,7 @@ private:
         recovery_footprint::to_string(safety.wall_region), safety.wall_distance_m,
         recovery_coordinated_stop_episode_ ? 1 : 0,
         reverse_only ? 1 : 0,
+        allow_solver_reverse_deadlock_forward_probe ? 1 : 0,
         safety.course_progress_guard_active ? 1 : 0,
         safety.selected_course_lateral_improvement_m,
         safety.recovery_mpc_guidance_used ? 1 : 0,
@@ -16624,7 +16638,7 @@ private:
       RCLCPP_INFO(
         get_logger(),
         "Stuck recovery: mode=%s, state=%s, action=%s, reason=%s, "
-        "coordinated=%d, reverse_only=%d, static=%s, "
+        "coordinated=%d, reverse_only=%d, forward_probe=%d, static=%s, "
         "static_contacts=%zu/%zu/%zu, static_reject_at=%.3f m, checked=%zu, "
         "runtime_contact=%s, current_contacts=%zu, corridor_complete=%d, boost_inactive=%d, "
         "v2x_message_complete=%d, corridor_v2x_clear=%d, "
@@ -16644,6 +16658,7 @@ private:
         stuck_recovery::to_string(output.action.reason),
         recovery_coordinated_stop_episode_ ? 1 : 0,
         reverse_only ? 1 : 0,
+        allow_solver_reverse_deadlock_forward_probe ? 1 : 0,
         recovery_footprint::to_string(safety.static_reject_reason),
         safety.static_initial_contact_count, safety.static_maximum_contact_count,
         safety.static_final_contact_count, safety.static_rejected_at_distance_m,

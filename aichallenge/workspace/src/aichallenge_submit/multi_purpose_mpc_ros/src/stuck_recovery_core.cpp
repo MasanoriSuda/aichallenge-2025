@@ -565,6 +565,18 @@ bool course_directed_forward_escape_allowed(
          !request.solver_reverse_only;
 }
 
+bool solver_reverse_deadlock_forward_probe_allowed(
+  const SolverReverseDeadlockForwardProbeRequest & request) noexcept
+{
+  return request.simulation_environment &&
+         request.aggressive_sim_recovery_enabled &&
+         request.recovery_context_active &&
+         request.solver_reverse_only_episode &&
+         request.mixed_wall_contact &&
+         request.course_progress_guard_active &&
+         request.aggressive_retry_count > 0U;
+}
+
 StuckDetector::StuckDetector(DetectorConfig config)
 : config_(std::move(config))
 {

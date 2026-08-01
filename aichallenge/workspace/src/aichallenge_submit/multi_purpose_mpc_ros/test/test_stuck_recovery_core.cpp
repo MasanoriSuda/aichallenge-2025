@@ -15,6 +15,7 @@ using multi_purpose_mpc_ros::stuck_recovery::CoreConfig;
 using multi_purpose_mpc_ros::stuck_recovery::CoreInput;
 using multi_purpose_mpc_ros::stuck_recovery::CollisionDeliberateStopOverrideRequest;
 using multi_purpose_mpc_ros::stuck_recovery::CourseDirectedForwardEscapeRequest;
+using multi_purpose_mpc_ros::stuck_recovery::SolverReverseDeadlockForwardProbeRequest;
 using multi_purpose_mpc_ros::stuck_recovery::AdaptiveReverseRetryConfig;
 using multi_purpose_mpc_ros::stuck_recovery::AdaptiveReverseRetryTracker;
 using multi_purpose_mpc_ros::stuck_recovery::DetectorConfig;
@@ -44,6 +45,7 @@ using multi_purpose_mpc_ros::stuck_recovery::SupervisorConfig;
 using multi_purpose_mpc_ros::stuck_recovery::SolverForwardFallbackUnlockRequest;
 using multi_purpose_mpc_ros::stuck_recovery::compute_rejoin_steering_tire_angle;
 using multi_purpose_mpc_ros::stuck_recovery::course_directed_forward_escape_allowed;
+using multi_purpose_mpc_ros::stuck_recovery::solver_reverse_deadlock_forward_probe_allowed;
 using multi_purpose_mpc_ros::stuck_recovery::recovery_escape_distance_confirmed;
 using multi_purpose_mpc_ros::stuck_recovery::should_override_deliberate_stop_for_collision;
 using multi_purpose_mpc_ros::stuck_recovery::solver_fallback_requires_reverse_only;
@@ -201,6 +203,50 @@ TEST(StuckRecoveryCourseProgress, NeverRelaxesReversePreferenceOutsideSimulation
   request.course_progress_guard_active = true;
   request.obstacle_reverse_first = false;
   EXPECT_FALSE(course_directed_forward_escape_allowed(request));
+}
+
+TEST(StuckRecoverySolverDeadlock, ProbesForwardAfterMixedContactReverseRetry)
+{
+  SolverReverseDeadlockForwardProbeRequest request;
+  request.simulation_environment = true;
+  request.aggressive_sim_recovery_enabled = true;
+  request.recovery_context_active = true;
+  request.solver_reverse_only_episode = true;
+  request.mixed_wall_contact = true;
+  request.course_progress_guard_active = true;
+  request.aggressive_retry_count = 1U;
+
+  EXPECT_TRUE(solver_reverse_deadlock_forward_probe_allowed(request));
+}
+
+TEST(StuckRecoverySolverDeadlock, ProbeFailsClosedOutsideExactDeadlockContext)
+{
+  SolverReverseDeadlockForwardProbeRequest request;
+  request.simulation_environment = true;
+  request.aggressive_sim_recovery_enabled = true;
+  request.recovery_context_active = true;
+  request.solver_reverse_only_episode = true;
+  request.mixed_wall_contact = true;
+  request.course_progress_guard_active = true;
+  request.aggressive_retry_count = 1U;
+
+  request.aggressive_retry_count = 0U;
+  EXPECT_FALSE(solver_reverse_deadlock_forward_probe_allowed(request));
+  request.aggressive_retry_count = 1U;
+  request.mixed_wall_contact = false;
+  EXPECT_FALSE(solver_reverse_deadlock_forward_probe_allowed(request));
+  request.mixed_wall_contact = true;
+  request.course_progress_guard_active = false;
+  EXPECT_FALSE(solver_reverse_deadlock_forward_probe_allowed(request));
+  request.course_progress_guard_active = true;
+  request.solver_reverse_only_episode = false;
+  EXPECT_FALSE(solver_reverse_deadlock_forward_probe_allowed(request));
+  request.solver_reverse_only_episode = true;
+  request.recovery_context_active = false;
+  EXPECT_FALSE(solver_reverse_deadlock_forward_probe_allowed(request));
+  request.recovery_context_active = true;
+  request.simulation_environment = false;
+  EXPECT_FALSE(solver_reverse_deadlock_forward_probe_allowed(request));
 }
 
 TEST(StuckRecoveryCollisionStopOverride, RequiresSimulationCollisionAndStoppedEgo)

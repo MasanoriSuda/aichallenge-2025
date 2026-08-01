@@ -32,6 +32,8 @@
 
 - 加速度上限は既存MPCの `a_max=1.0 m/s^2` を維持する。
 - 前進escapeとRejoinの速度上限をReverseと同じ2.0 m/sへ揃える。
+- 短い再合流後に再度stuckした場合、Reverse目標を最大8.0 mまで倍増する。
+- 8.0 m目標の停止余裕として、独立hard capを9.0 m、時間上限を8.0秒とする。
 
 ## Verification
 

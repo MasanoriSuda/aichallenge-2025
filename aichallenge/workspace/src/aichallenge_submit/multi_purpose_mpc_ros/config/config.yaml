@@ -112,11 +112,11 @@ stuck_recovery:
     # Accept the configured set of individually fresh vehicle IDs across a
     # transient partial array instead of requiring every ID in the same message.
     tracked_v2x_completeness_enabled: true
-    # Independent hard cap beyond the adaptive 4.0 m target. Continuous Reverse
+    # Independent hard cap beyond the adaptive 8.0 m target. Continuous Reverse
     # begins calibrated braking before the predicted stopping point reaches the
     # active escape target.
-    max_reverse_distance_m: 5.0
-    max_reverse_duration_sec: 6.0
+    max_reverse_distance_m: 9.0
+    max_reverse_duration_sec: 8.0
     # Use the calibrated bounded-recovery actuation; the higher-acceleration
     # A/B candidate increased stopping reserve and shortened each escape step.
     # SIM race: allow one continuous, acceleration-limited escape instead of a
@@ -124,11 +124,11 @@ stuck_recovery:
     fast_continuous_reverse_enabled: true
     fast_rejoin_min_reverse_distance_m: 0.8
     # A rejoin that gets stuck again before 5 m of normal forward travel doubles
-    # the next Reverse target: 0.8 -> 1.6 -> 3.2 -> 4.0 m. Every extended
-    # target still requires a complete static and V2X-clear rear rollout.
+    # the next Reverse target. Fast rejoin grows 0.8 -> 1.6 -> 3.2 -> 6.4 ->
+    # 8.0 m, while the normal target grows 2.0 -> 4.0 -> 8.0 m.
     adaptive_reverse_retry_enabled: true
     adaptive_reverse_retry_multiplier: 2.0
-    adaptive_reverse_retry_max_distance_m: 4.0
+    adaptive_reverse_retry_max_distance_m: 8.0
     adaptive_retry_reset_forward_distance_m: 5.0
     max_reverse_speed_mps: 2.0
     # Positive magnitude only; reverse_acceleration_sign is applied by the ROS/AWSIM adapter.

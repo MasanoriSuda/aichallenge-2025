@@ -8,3 +8,4 @@
 - [x] Recovery中のV2X blockを診断専用へ降格する
 - [x] 単体テストを追加・更新する
 - [x] package build/testを実行する
+- [x] 反復ReverseのA/B上限を8.0 mへ拡張する

@@ -220,6 +220,11 @@ stuck_recovery:
     max_lateral_error_m: 0.5
     max_heading_error_rad: 0.35
     confirm_sec: 0.3
+    # Refresh the timeout only after alignment improves by 5% of the configured
+    # lateral/heading envelope. This lets a gross-angle kart keep turning while
+    # converging but still stops a noisy or genuinely stalled rejoin.
+    min_alignment_progress_ratio: 0.05
+    # Maximum duration without the material alignment progress above.
     timeout_sec: 5.0
     # Hold Drive at zero command briefly while MPC is reinitialized after Recovery.
     solver_recovery_timeout_sec: 1.0

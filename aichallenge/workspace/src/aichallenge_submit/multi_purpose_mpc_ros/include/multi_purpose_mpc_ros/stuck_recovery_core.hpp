@@ -535,6 +535,10 @@ struct SupervisorConfig
   double max_rejoin_lateral_error_m{0.5};
   double max_rejoin_heading_error_rad{0.35};
   double rejoin_confirm_sec{0.3};
+  // Minimum improvement in normalized alignment-envelope units that refreshes
+  // the rejoin no-progress timeout. A positive threshold prevents pose noise
+  // from extending a stalled recovery indefinitely.
+  double min_rejoin_alignment_progress_ratio{0.05};
   double rejoin_timeout_sec{5.0};
   double rejoin_solver_recovery_timeout_sec{1.0};
   bool retry_rejoin_blocked_path{false};
@@ -673,6 +677,8 @@ private:
   std::optional<double> last_update_sec_;
   std::optional<double> stopped_since_sec_;
   std::optional<double> aligned_since_sec_;
+  std::optional<double> best_rejoin_alignment_error_ratio_;
+  std::optional<double> last_rejoin_progress_sec_;
   std::optional<double> solver_unhealthy_since_sec_;
   std::optional<double> clearance_safe_since_sec_;
   std::optional<double> last_gear_request_sec_;

@@ -135,6 +135,12 @@ void validate_supervisor_config(const SupervisorConfig & config)
   validate_nonnegative(config.max_rejoin_lateral_error_m, "maximum rejoin lateral error");
   validate_nonnegative(config.max_rejoin_heading_error_rad, "maximum rejoin heading error");
   validate_nonnegative(config.rejoin_confirm_sec, "rejoin confirmation duration");
+  validate_nonnegative(
+    config.min_rejoin_alignment_progress_ratio,
+    "minimum rejoin alignment progress ratio");
+  if (config.min_rejoin_alignment_progress_ratio <= 0.0) {
+    throw std::invalid_argument("minimum rejoin alignment progress ratio must be positive");
+  }
   validate_nonnegative(config.rejoin_timeout_sec, "rejoin timeout");
   validate_nonnegative(
     config.rejoin_solver_recovery_timeout_sec,
@@ -908,9 +914,12 @@ RecoveryAction RecoverySupervisor::update(const RecoveryInput & input)
     transition(RecoveryState::SafeStop, RecoveryReason::OdometryUnsafe, input.now_sec);
     return safe_stop_action(RecoveryReason::OdometryUnsafe);
   }
-  const bool aggressive_solver_independent_rejoin =
-    config_.aggressive_sim_recovery_enabled && state_ == RecoveryState::LowSpeedRejoin;
-  if (!input.solver_healthy && !aggressive_solver_independent_rejoin) {
+  const bool aggressive_solver_independent_recovery =
+    config_.aggressive_sim_recovery_enabled &&
+    (state_ == RecoveryState::LowSpeedRejoin ||
+    (state_ == RecoveryState::SafeStop &&
+    aggressive_retry_reason_is_recoverable(state_reason_)));
+  if (!input.solver_healthy && !aggressive_solver_independent_recovery) {
     if (
       state_ == RecoveryState::LowSpeedRejoin &&
       config_.rejoin_solver_recovery_timeout_sec > 0.0)
@@ -1009,6 +1018,8 @@ void RecoverySupervisor::reset_session() noexcept
   last_update_sec_.reset();
   stopped_since_sec_.reset();
   aligned_since_sec_.reset();
+  best_rejoin_alignment_error_ratio_.reset();
+  last_rejoin_progress_sec_.reset();
   solver_unhealthy_since_sec_.reset();
   clearance_safe_since_sec_.reset();
   last_gear_request_sec_.reset();
@@ -1615,7 +1626,30 @@ RecoveryAction RecoverySupervisor::update_low_speed_rejoin(const RecoveryInput &
     aligned_since_sec_.reset();
     return hold_action(RecoveryReason::RearInformationIncomplete);
   }
-  if (state_elapsed(input.now_sec) >= config_.rejoin_timeout_sec) {
+
+  const auto normalized_error = [](const double error, const double allowed_error) {
+      if (allowed_error > kDistanceComparisonEpsilon) {
+        return std::abs(error) / allowed_error;
+      }
+      return std::abs(error) <= kDistanceComparisonEpsilon ?
+             0.0 : std::numeric_limits<double>::infinity();
+    };
+  const double alignment_error_ratio = std::max(
+    normalized_error(input.lateral_error_m, config_.max_rejoin_lateral_error_m),
+    normalized_error(input.heading_error_rad, config_.max_rejoin_heading_error_rad));
+  if (!best_rejoin_alignment_error_ratio_.has_value()) {
+    best_rejoin_alignment_error_ratio_ = alignment_error_ratio;
+    last_rejoin_progress_sec_ = input.now_sec;
+  } else if (
+    best_rejoin_alignment_error_ratio_.value() - alignment_error_ratio >=
+    config_.min_rejoin_alignment_progress_ratio)
+  {
+    best_rejoin_alignment_error_ratio_ = alignment_error_ratio;
+    last_rejoin_progress_sec_ = input.now_sec;
+  }
+  const double no_progress_duration_sec = last_rejoin_progress_sec_.has_value() ?
+    input.now_sec - last_rejoin_progress_sec_.value() : state_elapsed(input.now_sec);
+  if (no_progress_duration_sec >= config_.rejoin_timeout_sec) {
     if (
       config_.retry_rejoin_timeout &&
       (escape_step_count_ < config_.max_escape_steps ||
@@ -1683,9 +1717,13 @@ void RecoverySupervisor::transition(
   }
   if (next == RecoveryState::LowSpeedRejoin) {
     aligned_since_sec_.reset();
+    best_rejoin_alignment_error_ratio_.reset();
+    last_rejoin_progress_sec_.reset();
     normal_reset_pending_ = true;
   } else {
     solver_unhealthy_since_sec_.reset();
+    best_rejoin_alignment_error_ratio_.reset();
+    last_rejoin_progress_sec_.reset();
   }
   if (next == RecoveryState::Normal || next == RecoveryState::SafeStop) {
     stopped_since_sec_.reset();

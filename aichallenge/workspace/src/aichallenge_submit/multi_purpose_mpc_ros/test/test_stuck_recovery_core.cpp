@@ -563,6 +563,7 @@ SupervisorConfig supervisor_config()
   config.max_rejoin_lateral_error_m = 0.5;
   config.max_rejoin_heading_error_rad = 0.35;
   config.rejoin_confirm_sec = 0.2;
+  config.min_rejoin_alignment_progress_ratio = 0.05;
   config.rejoin_timeout_sec = 2.0;
   config.cooldown_sec = 0.5;
   return config;
@@ -1203,6 +1204,10 @@ TEST(RecoverySupervisorConfig, RejectsNonFiniteOrNegativeConfiguration)
 
   config = supervisor_config();
   config.rejoin_timeout_sec = std::numeric_limits<double>::infinity();
+  EXPECT_THROW(RecoverySupervisor{config}, std::invalid_argument);
+
+  config = supervisor_config();
+  config.min_rejoin_alignment_progress_ratio = 0.0;
   EXPECT_THROW(RecoverySupervisor{config}, std::invalid_argument);
 
   config = supervisor_config();
@@ -2290,6 +2295,32 @@ TEST(RecoverySupervisor, AggressiveSimulationRetriesRecoverableSafeStopWithFresh
   EXPECT_EQ(supervisor.escape_step_count(), 0U);
 }
 
+TEST(RecoverySupervisor, AggressiveSimulationSafeStopRetryDoesNotDependOnSolverHealth)
+{
+  auto config = supervisor_config();
+  config.aggressive_sim_recovery_enabled = true;
+  config.aggressive_retry_delay_sec = 0.1;
+  config.max_attempts = 0U;
+  RecoverySupervisor supervisor(config);
+  double now = 0.0;
+  auto input = healthy_recovery_input(now);
+  advance_to_clearance_check(supervisor, input, now);
+
+  now += 0.01;
+  input.now_sec = now;
+  auto action = supervisor.update(input);
+  ASSERT_EQ(action.type, RecoveryActionType::SafeStop);
+  ASSERT_EQ(action.reason, RecoveryReason::AttemptLimitReached);
+
+  now += 0.11;
+  input.now_sec = now;
+  input.solver_healthy = false;
+  action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
+  EXPECT_EQ(action.reason, RecoveryReason::AggressiveRetry);
+  EXPECT_EQ(supervisor.state(), RecoveryState::StopAndConfirm);
+}
+
 TEST(RecoverySupervisor, AggressiveSimulationKeepsInvalidInputLatched)
 {
   auto config = supervisor_config();
@@ -2517,6 +2548,54 @@ TEST(RecoverySupervisor, AttemptLimitAndRejoinTimeoutAreLatched)
   action = timeout.update(input);
   EXPECT_EQ(action.type, RecoveryActionType::SafeStop);
   EXPECT_EQ(action.reason, RecoveryReason::RejoinTimedOut);
+}
+
+TEST(RecoverySupervisor, ImprovingRejoinIsNotCutOffByTheAbsoluteStateTimeout)
+{
+  auto config = supervisor_config();
+  config.retry_rejoin_timeout = true;
+  config.rejoin_timeout_sec = 0.1;
+  config.min_rejoin_alignment_progress_ratio = 0.05;
+  config.max_attempts = 2U;
+  RecoverySupervisor supervisor(config);
+  double now = 0.0;
+  auto input = healthy_recovery_input(now);
+  advance_to_reverse(supervisor, input, now);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.recovery_escape_confirmed = true;
+  ASSERT_EQ(supervisor.update(input).reason, RecoveryReason::ReverseEscapeConfirmed);
+  now += 0.01;
+  input.now_sec = now;
+  input.signed_speed_mps = 0.0;
+  ASSERT_EQ(supervisor.update(input).type, RecoveryActionType::RequestDrive);
+  now += 0.01;
+  input.now_sec = now;
+  input.reported_gear = Gear::Drive;
+  input.lateral_error_m = 1.0;
+  input.heading_error_rad = 1.4;
+  ASSERT_EQ(supervisor.update(input).type, RecoveryActionType::LowSpeedRejoin);
+
+  // Total rejoin time exceeds timeout_sec, but every sample makes material
+  // alignment progress and therefore remains under the no-progress timeout.
+  for (const double heading_error : {1.3, 1.2, 1.1}) {
+    now += 0.06;
+    input.now_sec = now;
+    input.heading_error_rad = heading_error;
+    const auto action = supervisor.update(input);
+    EXPECT_EQ(action.type, RecoveryActionType::LowSpeedRejoin);
+    EXPECT_EQ(supervisor.state(), RecoveryState::LowSpeedRejoin);
+  }
+
+  // Once alignment stops improving, the same bounded timeout still returns
+  // to the existing checked recovery reassessment.
+  now += 0.11;
+  input.now_sec = now;
+  const auto action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
+  EXPECT_EQ(action.reason, RecoveryReason::RejoinTimedOut);
+  EXPECT_EQ(supervisor.state(), RecoveryState::StopAndConfirm);
 }
 
 TEST(RecoverySupervisor, ConfiguredRejoinTimeoutReturnsToBoundedReassessment)

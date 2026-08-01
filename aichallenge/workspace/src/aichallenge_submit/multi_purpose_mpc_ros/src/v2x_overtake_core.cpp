@@ -794,6 +794,109 @@ OvertakeMissionPathResolution resolve_overtake_mission_path(
   return resolution;
 }
 
+OvertakeMissionDynamicCorridorResolution resolve_overtake_mission_dynamic_corridor(
+  const OvertakeMissionDynamicCorridorRequest & request) noexcept
+{
+  OvertakeMissionDynamicCorridorResolution resolution;
+  if (
+    std::isnan(request.candidate_goal_lower_m) ||
+    std::isnan(request.candidate_goal_upper_m) ||
+    request.candidate_goal_upper_m < request.candidate_goal_lower_m)
+  {
+    return resolution;
+  }
+
+  auto path_template = request.mission_path;
+  path_template.path_distance_m = 0.0;
+  const auto mission_origin = resolve_overtake_mission_path(path_template);
+  if (!mission_origin.valid) {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  resolution.feasible = true;
+  resolution.goal_lower_m = request.candidate_goal_lower_m;
+  resolution.goal_upper_m = request.candidate_goal_upper_m;
+  constexpr double kCoefficientEpsilon = 1e-9;
+  constexpr double kCorridorEpsilon = 1e-9;
+
+  for (std::size_t i = 0; i < request.samples.size(); ++i) {
+    const auto & sample = request.samples[i];
+    if (!sample.active) {
+      continue;
+    }
+    if (
+      !std::isfinite(sample.path_distance_m) || sample.path_distance_m < 0.0 ||
+      !std::isfinite(sample.lower_lateral_m) ||
+      !std::isfinite(sample.upper_lateral_m) ||
+      sample.upper_lateral_m < sample.lower_lateral_m)
+    {
+      resolution.valid = false;
+      resolution.feasible = false;
+      return resolution;
+    }
+    if (sample.path_distance_m > mission_origin.total_distance_m + kCorridorEpsilon) {
+      continue;
+    }
+
+    auto zero_goal_path = request.mission_path;
+    zero_goal_path.path_distance_m = sample.path_distance_m;
+    zero_goal_path.pass_lateral_m = 0.0;
+    const auto zero_goal = resolve_overtake_mission_path(zero_goal_path);
+    auto unit_goal_path = zero_goal_path;
+    unit_goal_path.pass_lateral_m = 1.0;
+    const auto unit_goal = resolve_overtake_mission_path(unit_goal_path);
+    if (!zero_goal.valid || !unit_goal.valid) {
+      resolution.valid = false;
+      resolution.feasible = false;
+      return resolution;
+    }
+
+    resolution.observed = true;
+    ++resolution.checked_sample_count;
+    const double intercept = zero_goal.lateral_target_m;
+    const double coefficient = unit_goal.lateral_target_m - intercept;
+    if (std::abs(coefficient) <= kCoefficientEpsilon) {
+      if (
+        intercept < sample.lower_lateral_m - kCorridorEpsilon ||
+        intercept > sample.upper_lateral_m + kCorridorEpsilon)
+      {
+        resolution.feasible = false;
+        resolution.first_conflict_index = i;
+        resolution.first_conflict_distance_m = sample.path_distance_m;
+        resolution.first_conflict_lateral_m = intercept;
+        resolution.first_conflict_lower_m = sample.lower_lateral_m;
+        resolution.first_conflict_upper_m = sample.upper_lateral_m;
+        return resolution;
+      }
+      continue;
+    }
+
+    double sample_goal_lower =
+      (sample.lower_lateral_m - intercept) / coefficient;
+    double sample_goal_upper =
+      (sample.upper_lateral_m - intercept) / coefficient;
+    if (sample_goal_upper < sample_goal_lower) {
+      std::swap(sample_goal_lower, sample_goal_upper);
+    }
+    resolution.goal_lower_m = std::max(resolution.goal_lower_m, sample_goal_lower);
+    resolution.goal_upper_m = std::min(resolution.goal_upper_m, sample_goal_upper);
+    if (resolution.goal_upper_m + kCorridorEpsilon < resolution.goal_lower_m) {
+      resolution.feasible = false;
+      resolution.first_conflict_index = i;
+      resolution.first_conflict_distance_m = sample.path_distance_m;
+      const double diagnostic_goal = std::clamp(
+        request.mission_path.pass_lateral_m,
+        request.candidate_goal_lower_m, request.candidate_goal_upper_m);
+      resolution.first_conflict_lateral_m = intercept + coefficient * diagnostic_goal;
+      resolution.first_conflict_lower_m = sample.lower_lateral_m;
+      resolution.first_conflict_upper_m = sample.upper_lateral_m;
+      return resolution;
+    }
+  }
+  return resolution;
+}
+
 double resolve_overtake_line_heading_reference(
   const OvertakeLineHeadingReferenceRequest & request) noexcept
 {

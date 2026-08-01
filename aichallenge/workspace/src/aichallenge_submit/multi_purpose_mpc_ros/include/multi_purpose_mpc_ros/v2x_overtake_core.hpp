@@ -566,6 +566,44 @@ struct OvertakeMissionPathResolution
 OvertakeMissionPathResolution resolve_overtake_mission_path(
   const OvertakeMissionPathRequest & request) noexcept;
 
+struct OvertakeMissionDynamicCorridorSample
+{
+  double path_distance_m{};
+  double lower_lateral_m{};
+  double upper_lateral_m{};
+  bool active{false};
+};
+
+struct OvertakeMissionDynamicCorridorRequest
+{
+  OvertakeMissionPathRequest mission_path;
+  double candidate_goal_lower_m{-std::numeric_limits<double>::infinity()};
+  double candidate_goal_upper_m{std::numeric_limits<double>::infinity()};
+  std::vector<OvertakeMissionDynamicCorridorSample> samples;
+};
+
+struct OvertakeMissionDynamicCorridorResolution
+{
+  bool valid{false};
+  bool observed{false};
+  bool feasible{false};
+  double goal_lower_m{-std::numeric_limits<double>::infinity()};
+  double goal_upper_m{std::numeric_limits<double>::infinity()};
+  std::size_t checked_sample_count{};
+  std::size_t first_conflict_index{std::numeric_limits<std::size_t>::max()};
+  double first_conflict_distance_m{std::numeric_limits<double>::infinity()};
+  double first_conflict_lateral_m{std::numeric_limits<double>::quiet_NaN()};
+  double first_conflict_lower_m{std::numeric_limits<double>::quiet_NaN()};
+  double first_conflict_upper_m{std::numeric_limits<double>::quiet_NaN()};
+};
+
+/// Convert every time-aligned dynamic free-corridor sample into an admissible
+/// interval for the immutable Pass goal. This validates the ShiftOut and
+/// Return ramps as well as the held Pass position; checking only the final
+/// goal misses a body overlap that begins before ShiftOut is complete.
+OvertakeMissionDynamicCorridorResolution resolve_overtake_mission_dynamic_corridor(
+  const OvertakeMissionDynamicCorridorRequest & request) noexcept;
+
 struct OvertakeLineHeadingReferenceRequest
 {
   double previous_lateral_m{};

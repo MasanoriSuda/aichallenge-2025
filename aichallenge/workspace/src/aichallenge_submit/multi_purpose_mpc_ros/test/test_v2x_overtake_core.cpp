@@ -106,6 +106,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeLineTransitionAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeLineTransitionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionPathRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionPathStage;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorSample;
 using multi_purpose_mpc_ros::v2x_overtake_core::PausedMissionExpiryReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::PausedMissionExpiryRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CompletedTargetReacquireSuppressionRequest;
@@ -117,6 +119,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_effective_speed_limit;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_follow_speed_limit;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_apply_generic_follow_cap;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_speed_reference;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_mission_dynamic_corridor;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_start_grid_breakout_speed_reference;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_shiftout_complete;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_release_overtake_front_cap;
@@ -2235,6 +2238,84 @@ TEST(V2XOvertakeCoreSpeed, ResolvesImmutableEndToEndMissionPath)
 
   request.path_distance_m = -0.1;
   EXPECT_FALSE(resolve_overtake_mission_path(request).valid);
+}
+
+TEST(V2XOvertakeCoreSpeed, TightensPassGoalForDynamicShiftOutCorridor)
+{
+  OvertakeMissionDynamicCorridorRequest request;
+  request.mission_path = OvertakeMissionPathRequest{
+    0.0, 0.0, 1.0, 0.0, 4.0, 8.0, 6.0};
+  request.candidate_goal_lower_m = 0.8;
+  request.candidate_goal_upper_m = 2.0;
+  request.samples = {
+    OvertakeMissionDynamicCorridorSample{2.0, 0.7, 2.0, true},
+    OvertakeMissionDynamicCorridorSample{5.0, 1.0, 2.0, true}};
+
+  const auto resolution = resolve_overtake_mission_dynamic_corridor(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.observed);
+  EXPECT_TRUE(resolution.feasible);
+  EXPECT_EQ(resolution.checked_sample_count, 2U);
+  // ShiftOut is 50% complete at 2 m, so a 0.7 m corridor boundary requires
+  // a final goal of at least 1.4 m instead of the nominal 1.0 m.
+  EXPECT_NEAR(resolution.goal_lower_m, 1.4, 1e-12);
+  EXPECT_DOUBLE_EQ(resolution.goal_upper_m, 2.0);
+}
+
+TEST(V2XOvertakeCoreSpeed, RejectsDynamicCorridorOccupiedBeforeShiftCanStart)
+{
+  OvertakeMissionDynamicCorridorRequest request;
+  request.mission_path = OvertakeMissionPathRequest{
+    0.0, 0.0, 1.0, 0.0, 4.0, 8.0, 6.0};
+  request.candidate_goal_lower_m = -2.0;
+  request.candidate_goal_upper_m = 2.0;
+  request.samples = {
+    OvertakeMissionDynamicCorridorSample{0.0, 0.1, 2.0, true}};
+
+  const auto resolution = resolve_overtake_mission_dynamic_corridor(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.observed);
+  EXPECT_FALSE(resolution.feasible);
+  EXPECT_EQ(resolution.first_conflict_index, 0U);
+  EXPECT_DOUBLE_EQ(resolution.first_conflict_distance_m, 0.0);
+  EXPECT_DOUBLE_EQ(resolution.first_conflict_lateral_m, 0.0);
+}
+
+TEST(V2XOvertakeCoreSpeed, ValidatesReturnRampAndIgnoresSamplesAfterMission)
+{
+  OvertakeMissionDynamicCorridorRequest request;
+  request.mission_path = OvertakeMissionPathRequest{
+    0.0, 0.0, 1.0, 0.0, 4.0, 8.0, 6.0};
+  request.candidate_goal_lower_m = 0.5;
+  request.candidate_goal_upper_m = 2.0;
+  request.samples = {
+    OvertakeMissionDynamicCorridorSample{15.0, 0.6, 1.2, true},
+    OvertakeMissionDynamicCorridorSample{19.0, 5.0, 6.0, true},
+    OvertakeMissionDynamicCorridorSample{3.0, -10.0, -9.0, false}};
+
+  const auto resolution = resolve_overtake_mission_dynamic_corridor(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.observed);
+  EXPECT_TRUE(resolution.feasible);
+  EXPECT_EQ(resolution.checked_sample_count, 1U);
+  // Return is 50% complete at 15 m, therefore goal >= 1.2 m keeps ey >= 0.6 m.
+  EXPECT_NEAR(resolution.goal_lower_m, 1.2, 1e-12);
+  EXPECT_DOUBLE_EQ(resolution.goal_upper_m, 2.0);
+}
+
+TEST(V2XOvertakeCoreSpeed, ReportsUnobservedDynamicCorridorWithoutInventingClearance)
+{
+  OvertakeMissionDynamicCorridorRequest request;
+  request.mission_path = OvertakeMissionPathRequest{
+    0.0, 0.0, 1.0, 0.0, 4.0, 8.0, 6.0};
+  request.candidate_goal_lower_m = -2.0;
+  request.candidate_goal_upper_m = 2.0;
+
+  const auto resolution = resolve_overtake_mission_dynamic_corridor(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.observed);
+  EXPECT_TRUE(resolution.feasible);
+  EXPECT_EQ(resolution.checked_sample_count, 0U);
 }
 
 TEST(V2XOvertakeCoreSpeed, ExpiresFollowPrepareByTimeOrDistance)

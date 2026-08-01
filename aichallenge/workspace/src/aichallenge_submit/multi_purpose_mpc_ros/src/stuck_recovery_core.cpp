@@ -191,6 +191,7 @@ bool aggressive_retry_reason_is_recoverable(const RecoveryReason reason) noexcep
     case RecoveryReason::ReverseInProgress:
     case RecoveryReason::ReverseEscapeBraking:
     case RecoveryReason::ReverseEscapeConfirmed:
+    case RecoveryReason::CourseProgressWorsening:
     case RecoveryReason::ForwardInProgress:
     case RecoveryReason::ForwardEscapeConfirmed:
     case RecoveryReason::EscapeStepComplete:
@@ -291,7 +292,6 @@ bool solver_forward_fallback_unlock_allowed(
   return request.simulation_environment &&
          request.aggressive_sim_recovery_enabled &&
          request.aggressive_retry &&
-         request.solver_fallback_active &&
          request.solver_reverse_only_episode &&
          request.wall_absent &&
          request.current_footprint_clear &&
@@ -550,6 +550,25 @@ RecoveryCourseProgressResolution resolve_recovery_course_progress(
     !resolution.guard_active ||
     resolution.lateral_improvement_m + request.worsening_tolerance_m >= 0.0;
   return resolution;
+}
+
+bool measured_reverse_course_progress_worsened(
+  const double maneuver_start_lateral_error_m, const double current_lateral_error_m,
+  const double activation_lateral_error_m, const double worsening_tolerance_m) noexcept
+{
+  if (
+    !std::isfinite(maneuver_start_lateral_error_m) ||
+    !std::isfinite(current_lateral_error_m) ||
+    !finite_nonnegative(activation_lateral_error_m) ||
+    !finite_nonnegative(worsening_tolerance_m))
+  {
+    return false;
+  }
+
+  const double start_error_m = std::abs(maneuver_start_lateral_error_m);
+  const double current_error_m = std::abs(current_lateral_error_m);
+  return current_error_m > activation_lateral_error_m &&
+         current_error_m > start_error_m + worsening_tolerance_m;
 }
 
 bool course_directed_forward_escape_allowed(
@@ -1311,6 +1330,16 @@ RecoveryAction RecoverySupervisor::update_reverse_maneuver(const RecoveryInput &
       RecoveryState::StopBeforeDrive, RecoveryReason::CollisionWorsening,
       input.now_sec);
     return hold_action(RecoveryReason::CollisionWorsening);
+  }
+  if (input.course_progress_worsening) {
+    // The rollout predicted non-worsening course progress, but measured motion
+    // moved farther from the path. Stop in Reverse and reassess from Drive so
+    // the adapter can select its already validated Forward course escape.
+    reassess_after_drive_ = true;
+    transition(
+      RecoveryState::StopBeforeDrive, RecoveryReason::CourseProgressWorsening,
+      input.now_sec);
+    return hold_action(RecoveryReason::CourseProgressWorsening);
   }
   if (config_.max_reverse_speed_mps <= 0.0) {
     transition(
@@ -2211,6 +2240,8 @@ const char * to_string(const RecoveryReason reason) noexcept
       return "reverse_escape_confirmed";
     case RecoveryReason::CollisionWorsening:
       return "collision_worsening";
+    case RecoveryReason::CourseProgressWorsening:
+      return "course_progress_worsening";
     case RecoveryReason::RearHazardAppeared:
       return "rear_hazard_appeared";
     case RecoveryReason::ReverseGearLost:

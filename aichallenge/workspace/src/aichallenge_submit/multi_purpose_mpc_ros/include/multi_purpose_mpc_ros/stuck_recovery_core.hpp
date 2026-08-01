@@ -134,7 +134,6 @@ struct SolverForwardFallbackUnlockRequest
   bool simulation_environment{false};
   bool aggressive_sim_recovery_enabled{false};
   bool aggressive_retry{false};
-  bool solver_fallback_active{false};
   bool solver_reverse_only_episode{false};
   bool wall_absent{false};
   bool current_footprint_clear{false};
@@ -148,7 +147,9 @@ struct SolverForwardFallbackUnlockRequest
 
 // A solver-only Reverse preference may be released only after a complete,
 // failed Reverse attempt reaches the simulation-only aggressive retry gate.
-// The selected Forward primitive is still rechecked by static and V2X rollout.
+// The episode latch is the durable solver evidence: a transient solver recovery
+// after episode entry must not prevent release. The selected Forward primitive
+// is still rechecked by static and V2X rollout.
 bool solver_forward_fallback_unlock_allowed(
   const SolverForwardFallbackUnlockRequest & request) noexcept;
 
@@ -193,6 +194,13 @@ struct RecoveryCourseProgressResolution
 // small numerical tolerance but must not drive the kart farther off course.
 RecoveryCourseProgressResolution resolve_recovery_course_progress(
   const RecoveryCourseProgressRequest & request) noexcept;
+
+// Candidate rollouts are predictive. Stop an executing Reverse maneuver when
+// the measured lateral response materially contradicts that prediction outside
+// the normal rejoin envelope.
+bool measured_reverse_course_progress_worsened(
+  double maneuver_start_lateral_error_m, double current_lateral_error_m,
+  double activation_lateral_error_m, double worsening_tolerance_m) noexcept;
 
 struct CourseDirectedForwardEscapeRequest
 {
@@ -457,6 +465,7 @@ enum class RecoveryReason
   ReverseSpeedLimit,
   ReverseEscapeConfirmed,
   CollisionWorsening,
+  CourseProgressWorsening,
   RearHazardAppeared,
   ReverseGearLost,
   ForwardInProgress,
@@ -569,6 +578,7 @@ struct RecoveryInput
   bool rear_v2x_clear{false};
   bool rear_information_complete{false};
   bool collision_worsening{false};
+  bool course_progress_worsening{false};
   bool recovery_escape_confirmed{false};
   // Keep Reverse engaged but command calibrated braking when the predicted
   // stopping point has reached the current continuous-escape target.

@@ -114,6 +114,7 @@ constexpr double kPi = 3.14159265358979323846;
 constexpr double kV2XReceiptFutureToleranceSec = 0.05;
 constexpr double kV2XSourceFutureToleranceSec = 0.05;
 constexpr double kV2XCourseProgressContinuityToleranceM = 1.5;
+constexpr double kRecoveryMeasuredCourseWorseningToleranceM = 0.10;
 
 double clip(const double value, const double min_value, const double max_value)
 {
@@ -14589,6 +14590,7 @@ private:
     recovery_observation_anchor_pose_.reset();
     recovery_observation_anchor_progress_m_.reset();
     recovery_maneuver_start_pose_.reset();
+    recovery_maneuver_start_lateral_error_m_.reset();
     recovery_last_reverse_pose_.reset();
     recovery_cumulative_reverse_distance_m_ = 0.0;
     recovery_episode_traveled_distance_m_ = 0.0;
@@ -15099,6 +15101,7 @@ private:
     const double rejoin_steering_angle_rad,
     const bool reverse_only,
     const bool allow_forward_candidate_probe,
+    const bool prefer_forward_course_escape,
     const bool evaluate_rollout) const
   {
     RecoverySafetySnapshot snapshot;
@@ -15392,7 +15395,12 @@ private:
           }
           return best_result;
         };
-      if (recovery_selected_reverse_primitive_.has_value()) {
+      if (prefer_forward_course_escape && forward_candidate_evaluation_allowed) {
+        selected_result = select_forward_deadlock_fallback();
+        if (selected_result.has_value()) {
+          first_result = selected_result;
+        }
+      } else if (recovery_selected_reverse_primitive_.has_value()) {
         auto result = evaluate_candidate(recovery_selected_reverse_primitive_.value());
         first_result = result;
         if (result.feasible && course_candidate_allowed(result)) {
@@ -16133,6 +16141,25 @@ private:
     }
     const bool coordinated_stop_active =
       coordinated_stop_candidate || recovery_coordinated_stop_episode_;
+    const bool measured_reverse_course_worsening =
+      use_sim_time_ &&
+      cfg_.stuck_recovery.core.supervisor.aggressive_sim_recovery_enabled &&
+      supervisor_state == stuck_recovery::RecoveryState::ReverseManeuver &&
+      recovery_maneuver_start_lateral_error_m_.has_value() &&
+      stuck_recovery::measured_reverse_course_progress_worsened(
+        recovery_maneuver_start_lateral_error_m_.value(), car_->spatial_state.e_y,
+        cfg_.stuck_recovery.core.supervisor.max_rejoin_lateral_error_m,
+        kRecoveryMeasuredCourseWorseningToleranceM);
+    if (measured_reverse_course_worsening) {
+      recovery_reverse_only_episode_ = false;
+      recovery_reverse_intent_latched_ = false;
+      recovery_forward_fallback_unlocked_ = true;
+      RCLCPP_WARN(
+        get_logger(),
+        "Stuck recovery measured course progress worsened during Reverse: "
+        "start_e_y=%.3f m, current_e_y=%.3f m; stopping and preferring checked Forward escape",
+        recovery_maneuver_start_lateral_error_m_.value(), car_->spatial_state.e_y);
+    }
     bool current_wall_evidence = false;
     auto current_wall_region = recovery_footprint::WallRegion::Unknown;
     if (recovery_grid_ && recovery_footprint_.valid()) {
@@ -16247,6 +16274,8 @@ private:
       checked_rejoin_steering_tire_angle_rad,
       reverse_only,
       allow_forward_candidate_probe,
+      measured_reverse_course_worsening ||
+      (recovery_forward_fallback_unlocked_ && course_recovery_guard_active),
       recovery_context_active || low_speed_recovery_candidate);
     const bool awsim_recovery_settling =
       last_collision_receipt_steady_.has_value() &&
@@ -16301,6 +16330,7 @@ private:
     input.recovery.rear_information_complete = safety.rear_information_complete;
     input.recovery.collision_worsening =
       safety.collision_worsening || recovery_reverse_pose_jump_;
+    input.recovery.course_progress_worsening = measured_reverse_course_worsening;
     const bool fast_continuous_reverse_selected =
       cfg_.stuck_recovery.fast_continuous_reverse_enabled &&
       safety.reverse_candidate_selected && !safety.stepwise_escape &&
@@ -16429,6 +16459,7 @@ private:
     if (restarted_escape_after_rejoin) {
       recovery_episode_traveled_distance_m_ = 0.0;
       recovery_maneuver_start_pose_.reset();
+      recovery_maneuver_start_lateral_error_m_.reset();
       recovery_last_reverse_pose_.reset();
       recovery_cumulative_reverse_distance_m_ = 0.0;
       recovery_reverse_pose_jump_ = false;
@@ -16450,6 +16481,7 @@ private:
       ++recovery_aggressive_retry_count_;
       recovery_episode_traveled_distance_m_ = 0.0;
       recovery_maneuver_start_pose_.reset();
+      recovery_maneuver_start_lateral_error_m_.reset();
       recovery_last_reverse_pose_.reset();
       recovery_cumulative_reverse_distance_m_ = 0.0;
       recovery_reverse_pose_jump_ = false;
@@ -16463,7 +16495,6 @@ private:
       solver_unlock_request.aggressive_sim_recovery_enabled =
         cfg_.stuck_recovery.core.supervisor.aggressive_sim_recovery_enabled;
       solver_unlock_request.aggressive_retry = true;
-      solver_unlock_request.solver_fallback_active = mpc_fallback_active;
       solver_unlock_request.solver_reverse_only_episode = recovery_reverse_only_episode_;
       solver_unlock_request.wall_absent =
         safety.wall_region == recovery_footprint::WallRegion::None;
@@ -16515,6 +16546,7 @@ private:
       recovery_selected_reverse_steering_angle_rad_.reset();
       recovery_selected_stepwise_escape_ = false;
       recovery_maneuver_start_pose_.reset();
+      recovery_maneuver_start_lateral_error_m_.reset();
       recovery_last_reverse_pose_.reset();
       recovery_cumulative_reverse_distance_m_ = 0.0;
       recovery_reverse_pose_jump_ = false;
@@ -16564,6 +16596,7 @@ private:
       maneuver_state && !previous_maneuver_state && !resumed_reverse_maneuver;
     if (started_recovery_maneuver) {
       recovery_maneuver_start_pose_ = pose;
+      recovery_maneuver_start_lateral_error_m_ = car_->spatial_state.e_y;
       recovery_last_reverse_pose_ = pose;
       recovery_cumulative_reverse_distance_m_ = 0.0;
       recovery_reverse_pose_jump_ = false;
@@ -16615,6 +16648,7 @@ private:
       recovery_initial_contact_cells_.reset();
       recovery_previous_contact_cells_.reset();
       recovery_maneuver_start_pose_.reset();
+      recovery_maneuver_start_lateral_error_m_.reset();
       recovery_last_reverse_pose_.reset();
       recovery_cumulative_reverse_distance_m_ = 0.0;
       recovery_episode_traveled_distance_m_ = 0.0;
@@ -16920,7 +16954,7 @@ private:
       pose, steady_now, control_time.seconds(), bounded_distance_m,
       bounded_distance_m, bounded_distance_m,
       car_->spatial_state.e_y, car_->spatial_state.e_psi, 0.0,
-      false, false, true);
+      false, false, false, true);
     const bool drive_gear_fresh =
       recovery_gear_report_fresh(steady_now) && reported_gear_.has_value() &&
       reported_gear_.value() == stuck_recovery::Gear::Drive &&
@@ -17444,6 +17478,7 @@ private:
   std::optional<Pose2D> recovery_observation_anchor_pose_;
   std::optional<double> recovery_observation_anchor_progress_m_;
   std::optional<Pose2D> recovery_maneuver_start_pose_;
+  std::optional<double> recovery_maneuver_start_lateral_error_m_;
   std::optional<Pose2D> recovery_last_reverse_pose_;
   double recovery_cumulative_reverse_distance_m_{0.0};
   double recovery_episode_traveled_distance_m_{0.0};

@@ -45,6 +45,7 @@ using multi_purpose_mpc_ros::stuck_recovery::SupervisorConfig;
 using multi_purpose_mpc_ros::stuck_recovery::SolverForwardFallbackUnlockRequest;
 using multi_purpose_mpc_ros::stuck_recovery::compute_rejoin_steering_tire_angle;
 using multi_purpose_mpc_ros::stuck_recovery::course_directed_forward_escape_allowed;
+using multi_purpose_mpc_ros::stuck_recovery::measured_reverse_course_progress_worsened;
 using multi_purpose_mpc_ros::stuck_recovery::solver_reverse_deadlock_forward_probe_allowed;
 using multi_purpose_mpc_ros::stuck_recovery::recovery_escape_distance_confirmed;
 using multi_purpose_mpc_ros::stuck_recovery::should_override_deliberate_stop_for_collision;
@@ -160,6 +161,24 @@ TEST(StuckRecoveryCourseProgress, AllowsOnlyBoundedNumericalWorseningAndFailsClo
   const auto invalid = resolve_recovery_course_progress(request);
   EXPECT_FALSE(invalid.valid);
   EXPECT_FALSE(invalid.candidate_allowed);
+}
+
+TEST(StuckRecoveryCourseProgress, DetectsMeasuredReverseWorseningOutsideRejoinEnvelope)
+{
+  EXPECT_TRUE(measured_reverse_course_progress_worsened(0.52, 0.63, 0.5, 0.10));
+  EXPECT_TRUE(measured_reverse_course_progress_worsened(-0.52, -0.63, 0.5, 0.10));
+  EXPECT_FALSE(measured_reverse_course_progress_worsened(0.52, 0.619, 0.5, 0.10));
+  EXPECT_FALSE(measured_reverse_course_progress_worsened(0.52, 0.40, 0.5, 0.10));
+  EXPECT_FALSE(measured_reverse_course_progress_worsened(0.20, 0.29, 0.5, 0.10));
+}
+
+TEST(StuckRecoveryCourseProgress, MeasuredReverseWorseningFailsClosedOnInvalidInput)
+{
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_FALSE(measured_reverse_course_progress_worsened(nan, 1.0, 0.5, 0.10));
+  EXPECT_FALSE(measured_reverse_course_progress_worsened(1.0, nan, 0.5, 0.10));
+  EXPECT_FALSE(measured_reverse_course_progress_worsened(1.0, 1.2, -0.5, 0.10));
+  EXPECT_FALSE(measured_reverse_course_progress_worsened(1.0, 1.2, 0.5, -0.10));
 }
 
 TEST(StuckRecoveryCourseProgress, AllowsForwardOnlyForTemporaryObstacleReversePreference)
@@ -1803,6 +1822,37 @@ TEST(RecoverySupervisor, ReverseDurationCollisionAndRearHazardAllStopCreep) {
   EXPECT_EQ(rear_supervisor.state(), RecoveryState::WaitReverseReport);
 }
 
+TEST(RecoverySupervisor, MeasuredReverseCourseWorseningStopsAndReassessesFromDrive)
+{
+  RecoverySupervisor supervisor(supervisor_config());
+  double now = 0.0;
+  auto input = healthy_recovery_input(now);
+  advance_to_reverse(supervisor, input, now);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.course_progress_worsening = true;
+  auto action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
+  EXPECT_EQ(action.reason, RecoveryReason::CourseProgressWorsening);
+  EXPECT_EQ(supervisor.state(), RecoveryState::StopBeforeDrive);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.signed_speed_mps = 0.0;
+  action = supervisor.update(input);
+  ASSERT_EQ(action.type, RecoveryActionType::RequestDrive);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.reported_gear = Gear::Drive;
+  input.course_progress_worsening = false;
+  action = supervisor.update(input);
+  EXPECT_NE(action.type, RecoveryActionType::SafeStop);
+  EXPECT_EQ(action.reason, RecoveryReason::ClearanceCheck);
+  EXPECT_EQ(supervisor.state(), RecoveryState::CheckClearance);
+}
+
 TEST(RecoverySupervisor, StepwiseCollisionWorseningStopsAndReassesses)
 {
   RecoverySupervisor supervisor(supervisor_config());
@@ -2999,7 +3049,6 @@ TEST(StuckRecoveryPolicy, SolverForwardFallbackRequiresCompleteFailedReverseAtte
   request.simulation_environment = true;
   request.aggressive_sim_recovery_enabled = true;
   request.aggressive_retry = true;
-  request.solver_fallback_active = true;
   request.solver_reverse_only_episode = true;
   request.wall_absent = true;
   request.current_footprint_clear = true;
@@ -3027,7 +3076,6 @@ TEST(StuckRecoveryPolicy, SolverForwardFallbackFailsClosedOutsideSimulationSafet
   request.simulation_environment = true;
   request.aggressive_sim_recovery_enabled = true;
   request.aggressive_retry = true;
-  request.solver_fallback_active = true;
   request.solver_reverse_only_episode = true;
   request.wall_absent = true;
   request.current_footprint_clear = true;
@@ -3047,9 +3095,6 @@ TEST(StuckRecoveryPolicy, SolverForwardFallbackFailsClosedOutsideSimulationSafet
   request.aggressive_retry = false;
   EXPECT_FALSE(solver_forward_fallback_unlock_allowed(request));
   request.aggressive_retry = true;
-  request.solver_fallback_active = false;
-  EXPECT_FALSE(solver_forward_fallback_unlock_allowed(request));
-  request.solver_fallback_active = true;
   request.solver_reverse_only_episode = false;
   EXPECT_FALSE(solver_forward_fallback_unlock_allowed(request));
   request.solver_reverse_only_episode = true;

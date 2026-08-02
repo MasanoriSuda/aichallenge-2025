@@ -112,6 +112,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionPathStage;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorSample;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeBodyClearDeadlineRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeKinematicRolloutRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeKinematicSpeedCapSample;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidate;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidateSelectionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PausedMissionExpiryReason;
@@ -127,6 +129,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::should_apply_generic_follow_cap;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_speed_reference;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_mission_dynamic_corridor;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_body_clear_deadline;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_kinematic_rollout;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_overtake_mission_candidate;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_start_grid_breakout_speed_reference;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_shiftout_complete;
@@ -2635,6 +2638,124 @@ TEST(V2XOvertakeCoreSpeed, BodyClearDeadlineUsesBoundedTargetLateralPrediction)
   EXPECT_FALSE(std::isfinite(bounded_resolution.body_clear_time_sec));
 }
 
+TEST(V2XOvertakeCoreSpeed, KinematicRolloutAccountsForControlDelayWhileClosingFast)
+{
+  OvertakeKinematicRolloutRequest request;
+  request.enabled = true;
+  request.mission_path = OvertakeMissionPathRequest{
+    0.0, 0.0, 1.5, 0.0, 4.0, 8.0, 6.0};
+  request.target_longitudinal_m = 6.0;
+  request.current_ego_speed_mps = 8.0;
+  request.target_speed_mps = 3.33;
+  request.candidate_closing_speed_mps = 2.0;
+  request.maximum_ego_speed_mps = 11.0;
+  request.maximum_acceleration_mps2 = 1.0;
+  request.maximum_deceleration_mps2 = 1.35;
+  request.target_lateral_m = 0.0;
+  request.target_lateral_prediction_horizon_sec = 1.0;
+  request.lateral_clearance_m = 1.25;
+  request.hard_longitudinal_distance_m = 2.0;
+  request.deadline_margin_sec = 0.1;
+
+  request.control_delay_sec = 0.0;
+  const auto immediate = resolve_overtake_kinematic_rollout(request);
+  ASSERT_TRUE(immediate.valid);
+  ASSERT_TRUE(immediate.checked);
+  ASSERT_TRUE(std::isfinite(immediate.body_clear_time_sec));
+
+  request.control_delay_sec = 0.125;
+  const auto delayed = resolve_overtake_kinematic_rollout(request);
+  ASSERT_TRUE(delayed.valid);
+  ASSERT_TRUE(std::isfinite(delayed.body_clear_time_sec));
+  EXPECT_GT(delayed.body_clear_time_sec, immediate.body_clear_time_sec);
+  EXPECT_LT(delayed.ego_speed_at_horizon_mps, request.current_ego_speed_mps);
+  EXPECT_LE(delayed.deadline_slack_sec, immediate.deadline_slack_sec);
+}
+
+TEST(V2XOvertakeCoreSpeed, KinematicRolloutAccountsForAccelerationFromLowSpeed)
+{
+  OvertakeKinematicRolloutRequest request;
+  request.enabled = true;
+  request.mission_path = OvertakeMissionPathRequest{
+    0.0, 0.0, 1.5, 0.0, 4.0, 8.0, 6.0};
+  request.target_longitudinal_m = 10.0;
+  request.current_ego_speed_mps = 1.0;
+  request.target_speed_mps = 3.0;
+  request.candidate_closing_speed_mps = 2.0;
+  request.maximum_ego_speed_mps = 11.0;
+  request.maximum_deceleration_mps2 = 1.35;
+  request.target_lateral_m = 0.0;
+  request.lateral_clearance_m = 1.0;
+  request.hard_longitudinal_distance_m = 2.0;
+
+  request.maximum_acceleration_mps2 = 100.0;
+  const auto instantaneous_like = resolve_overtake_kinematic_rollout(request);
+  ASSERT_TRUE(instantaneous_like.valid);
+  ASSERT_TRUE(std::isfinite(instantaneous_like.body_clear_time_sec));
+
+  request.maximum_acceleration_mps2 = 1.0;
+  const auto acceleration_limited = resolve_overtake_kinematic_rollout(request);
+  ASSERT_TRUE(acceleration_limited.valid);
+  ASSERT_TRUE(std::isfinite(acceleration_limited.body_clear_time_sec));
+  EXPECT_GT(
+    acceleration_limited.body_clear_time_sec,
+    instantaneous_like.body_clear_time_sec);
+}
+
+TEST(V2XOvertakeCoreSpeed, KinematicRolloutRespectsPathSpeedCaps)
+{
+  OvertakeKinematicRolloutRequest request;
+  request.enabled = true;
+  request.mission_path = OvertakeMissionPathRequest{
+    0.0, 0.0, 1.5, 0.0, 4.0, 8.0, 6.0};
+  request.target_longitudinal_m = 12.0;
+  request.current_ego_speed_mps = 1.0;
+  request.target_speed_mps = 0.0;
+  request.candidate_closing_speed_mps = 5.0;
+  request.maximum_ego_speed_mps = 11.0;
+  request.maximum_acceleration_mps2 = 10.0;
+  request.maximum_deceleration_mps2 = 2.0;
+  request.target_lateral_m = 0.0;
+  request.lateral_clearance_m = 1.0;
+  request.hard_longitudinal_distance_m = 2.0;
+
+  const auto uncapped = resolve_overtake_kinematic_rollout(request);
+  ASSERT_TRUE(uncapped.valid);
+  ASSERT_TRUE(std::isfinite(uncapped.body_clear_time_sec));
+
+  request.speed_caps = {
+    OvertakeKinematicSpeedCapSample{0.0, 2.0},
+    OvertakeKinematicSpeedCapSample{12.0, 2.0}};
+  const auto capped = resolve_overtake_kinematic_rollout(request);
+  ASSERT_TRUE(capped.valid);
+  ASSERT_TRUE(std::isfinite(capped.body_clear_time_sec));
+  EXPECT_GT(capped.body_clear_time_sec, uncapped.body_clear_time_sec);
+  EXPECT_LE(capped.ego_speed_at_horizon_mps, 2.0 + 1e-9);
+}
+
+TEST(V2XOvertakeCoreSpeed, KinematicRolloutRejectsUnorderedSpeedCaps)
+{
+  OvertakeKinematicRolloutRequest request;
+  request.enabled = true;
+  request.mission_path = OvertakeMissionPathRequest{
+    0.0, 0.0, 1.0, 0.0, 4.0, 8.0, 6.0};
+  request.target_longitudinal_m = 8.0;
+  request.current_ego_speed_mps = 4.0;
+  request.target_speed_mps = 2.0;
+  request.candidate_closing_speed_mps = 1.0;
+  request.maximum_ego_speed_mps = 11.0;
+  request.maximum_acceleration_mps2 = 1.0;
+  request.maximum_deceleration_mps2 = 1.35;
+  request.target_lateral_m = 0.0;
+  request.lateral_clearance_m = 1.0;
+  request.hard_longitudinal_distance_m = 2.0;
+  request.speed_caps = {
+    OvertakeKinematicSpeedCapSample{2.0, 4.0},
+    OvertakeKinematicSpeedCapSample{1.0, 3.0}};
+
+  EXPECT_FALSE(resolve_overtake_kinematic_rollout(request).valid);
+}
+
 TEST(V2XOvertakeCoreSpeed, SelectsEarliestBodyClearBeforeShortestShift)
 {
   OvertakeMissionCandidateSelectionRequest request;
@@ -2671,6 +2792,120 @@ TEST(V2XOvertakeCoreSpeed, SelectsFasterClosingSpeedForOtherwiseEqualCandidates)
   ASSERT_TRUE(selection.found);
   EXPECT_EQ(selection.selected_index, 1U);
   EXPECT_DOUBLE_EQ(selection.candidate.closing_speed_mps, 2.0);
+}
+
+TEST(V2XOvertakeCoreSpeed, GlobalCandidateSelectionPrefersDeadlineReserveAcrossSides)
+{
+  OvertakeMissionCandidate left;
+  left.feasible = true;
+  left.direct_pass = true;
+  left.shift_distance_m = 3.0;
+  left.goal_lateral_m = 0.0;
+  left.lateral_shift_m = 0.0;
+  left.max_required_lateral_accel_mps2 = 1.0;
+  left.body_clear_deadline_checked = true;
+  left.body_clear_deadline_feasible = true;
+  left.predicted_body_clear_time_sec = 0.5;
+  left.predicted_hard_distance_time_sec = 0.65;
+  left.predicted_body_clear_distance_m = 1.5;
+  left.closing_speed_mps = 2.0;
+  left.pass_side_sign = 1;
+  left.body_clear_deadline_slack_sec = 0.15;
+
+  auto right = left;
+  right.direct_pass = false;
+  right.goal_lateral_m = -0.8;
+  right.lateral_shift_m = 0.8;
+  right.predicted_body_clear_time_sec = 0.7;
+  right.predicted_hard_distance_time_sec = 1.2;
+  right.predicted_body_clear_distance_m = 2.0;
+  right.pass_side_sign = -1;
+  right.body_clear_deadline_slack_sec = 0.5;
+
+  OvertakeMissionCandidateSelectionRequest request;
+  request.candidates = {left, right};
+  request.minimum_deadline_slack_sec = 0.25;
+  const auto selection = select_overtake_mission_candidate(request);
+
+  ASSERT_TRUE(selection.valid);
+  ASSERT_TRUE(selection.found);
+  EXPECT_EQ(selection.selected_index, 1U);
+  EXPECT_EQ(selection.candidate.pass_side_sign, -1);
+}
+
+TEST(V2XOvertakeCoreSpeed, GlobalCandidateSelectionRejectsMissedLeftForFeasibleRight)
+{
+  OvertakeMissionCandidate left;
+  left.feasible = true;
+  left.direct_pass = true;
+  left.shift_distance_m = 3.0;
+  left.goal_lateral_m = 0.0;
+  left.lateral_shift_m = 0.0;
+  left.max_required_lateral_accel_mps2 = 1.0;
+  left.body_clear_deadline_checked = true;
+  left.body_clear_deadline_feasible = false;
+  left.predicted_body_clear_time_sec = 0.8;
+  left.predicted_hard_distance_time_sec = 0.6;
+  left.predicted_body_clear_distance_m = 2.0;
+  left.closing_speed_mps = 2.0;
+  left.pass_side_sign = 1;
+  left.body_clear_deadline_slack_sec = -0.2;
+
+  auto right = left;
+  right.direct_pass = false;
+  right.goal_lateral_m = -0.8;
+  right.lateral_shift_m = 0.8;
+  right.body_clear_deadline_feasible = true;
+  right.predicted_body_clear_time_sec = 0.7;
+  right.predicted_hard_distance_time_sec = 1.2;
+  right.pass_side_sign = -1;
+  right.body_clear_deadline_slack_sec = 0.5;
+
+  const auto selection = select_overtake_mission_candidate(
+    OvertakeMissionCandidateSelectionRequest{{left, right}, 0.25});
+
+  ASSERT_TRUE(selection.valid);
+  ASSERT_TRUE(selection.found);
+  EXPECT_EQ(selection.candidate.pass_side_sign, -1);
+  EXPECT_TRUE(selection.candidate.body_clear_deadline_feasible);
+}
+
+TEST(V2XOvertakeCoreSpeed, GlobalCandidateSelectionKeepsBaseLineAfterSlackIsAdequate)
+{
+  OvertakeMissionCandidate base_line;
+  base_line.feasible = true;
+  base_line.direct_pass = true;
+  base_line.shift_distance_m = 4.0;
+  base_line.goal_lateral_m = 0.0;
+  base_line.lateral_shift_m = 0.0;
+  base_line.max_required_lateral_accel_mps2 = 1.0;
+  base_line.body_clear_deadline_checked = true;
+  base_line.body_clear_deadline_feasible = true;
+  base_line.predicted_body_clear_time_sec = 0.8;
+  base_line.predicted_hard_distance_time_sec = 1.3;
+  base_line.predicted_body_clear_distance_m = 2.0;
+  base_line.closing_speed_mps = 1.4;
+  base_line.pass_side_sign = 1;
+  base_line.body_clear_deadline_slack_sec = 0.5;
+
+  auto shifted = base_line;
+  shifted.direct_pass = false;
+  shifted.goal_lateral_m = -0.5;
+  shifted.lateral_shift_m = 0.5;
+  shifted.predicted_body_clear_time_sec = 0.6;
+  shifted.predicted_hard_distance_time_sec = 1.0;
+  shifted.pass_side_sign = -1;
+  shifted.body_clear_deadline_slack_sec = 0.4;
+
+  OvertakeMissionCandidateSelectionRequest request;
+  request.candidates = {shifted, base_line};
+  request.minimum_deadline_slack_sec = 0.25;
+  const auto selection = select_overtake_mission_candidate(request);
+
+  ASSERT_TRUE(selection.valid);
+  ASSERT_TRUE(selection.found);
+  EXPECT_EQ(selection.selected_index, 1U);
+  EXPECT_TRUE(selection.candidate.direct_pass);
 }
 
 TEST(V2XOvertakeCoreSpeed, BodyClearDeadlineIsSoftButFeasibleDeadlineWins)
@@ -4571,6 +4806,7 @@ TEST(V2XOvertakeCoreMissionOwnership, DeadlineFeasibleShiftOutOwnsBehavior)
   request.committed_shiftout_active = true;
   request.validated_fixed_line = true;
   request.mission_side_valid = true;
+  request.body_clear_deadline_checked = true;
   request.body_clear_deadline_feasible = true;
   request.locked_target_seen = true;
 
@@ -4583,6 +4819,7 @@ TEST(V2XOvertakeCoreMissionOwnership, ShiftOutOwnerReleasesForHardAbortOrMissedD
   request.committed_shiftout_active = true;
   request.validated_fixed_line = true;
   request.mission_side_valid = true;
+  request.body_clear_deadline_checked = true;
   request.body_clear_deadline_feasible = true;
   request.locked_target_seen = true;
   ASSERT_TRUE(can_preserve_committed_shiftout_behavior(request));
@@ -4612,6 +4849,10 @@ TEST(V2XOvertakeCoreMissionOwnership, ShiftOutOwnerReleasesForHardAbortOrMissedD
   request.emergency_front_risk = false;
 
   request.solver_recovery_requested = true;
+  EXPECT_FALSE(can_preserve_committed_shiftout_behavior(request));
+
+  request.solver_recovery_requested = false;
+  request.body_clear_deadline_checked = false;
   EXPECT_FALSE(can_preserve_committed_shiftout_behavior(request));
 }
 
@@ -5473,6 +5714,10 @@ TEST(V2XOvertakeCoreContinuity, ReacquiresExecutableSameTargetGapDuringRecovery)
   request.gap_available = true;
   request.execution_allowed = true;
   request.solver_ready = true;
+  request.replacement_mission_available = true;
+  request.replacement_deadline_checked = true;
+  request.replacement_deadline_feasible = true;
+  request.replacement_goal_available = true;
   EXPECT_TRUE(can_reacquire_during_recovery(request));
 
   request.phase_hold_elapsed = false;
@@ -5494,6 +5739,19 @@ TEST(V2XOvertakeCoreContinuity, ReacquiresExecutableSameTargetGapDuringRecovery)
   EXPECT_FALSE(can_reacquire_during_recovery(request));
   request.execution_allowed = true;
   request.solver_ready = false;
+  EXPECT_FALSE(can_reacquire_during_recovery(request));
+
+  request.solver_ready = true;
+  request.replacement_mission_available = false;
+  EXPECT_FALSE(can_reacquire_during_recovery(request));
+  request.replacement_mission_available = true;
+  request.replacement_deadline_checked = false;
+  EXPECT_FALSE(can_reacquire_during_recovery(request));
+  request.replacement_deadline_checked = true;
+  request.replacement_deadline_feasible = false;
+  EXPECT_FALSE(can_reacquire_during_recovery(request));
+  request.replacement_deadline_feasible = true;
+  request.replacement_goal_available = false;
   EXPECT_FALSE(can_reacquire_during_recovery(request));
 }
 

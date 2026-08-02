@@ -923,6 +923,222 @@ OvertakeBodyClearDeadlineResolution resolve_overtake_body_clear_deadline(
   return resolution;
 }
 
+OvertakeKinematicRolloutResolution resolve_overtake_kinematic_rollout(
+  const OvertakeKinematicRolloutRequest & request) noexcept
+{
+  OvertakeKinematicRolloutResolution resolution;
+  if (!request.enabled) {
+    resolution.valid = true;
+    resolution.feasible = true;
+    return resolution;
+  }
+
+  auto mission_origin_request = request.mission_path;
+  mission_origin_request.path_distance_m = 0.0;
+  const auto mission_origin = resolve_overtake_mission_path(mission_origin_request);
+  if (
+    !mission_origin.valid ||
+    !std::isfinite(request.target_longitudinal_m) ||
+    !std::isfinite(request.current_ego_speed_mps) || request.current_ego_speed_mps < 0.0 ||
+    !std::isfinite(request.target_speed_mps) || request.target_speed_mps < 0.0 ||
+    !std::isfinite(request.candidate_closing_speed_mps) ||
+    request.candidate_closing_speed_mps < 0.0 ||
+    !std::isfinite(request.maximum_ego_speed_mps) || request.maximum_ego_speed_mps <= 0.0 ||
+    !std::isfinite(request.maximum_acceleration_mps2) ||
+    request.maximum_acceleration_mps2 < 0.0 ||
+    !std::isfinite(request.maximum_deceleration_mps2) ||
+    request.maximum_deceleration_mps2 < 0.0 ||
+    !std::isfinite(request.control_delay_sec) || request.control_delay_sec < 0.0 ||
+    !std::isfinite(request.target_lateral_m) ||
+    !std::isfinite(request.target_lateral_velocity_mps) ||
+    !std::isfinite(request.target_lateral_prediction_horizon_sec) ||
+    request.target_lateral_prediction_horizon_sec < 0.0 ||
+    !std::isfinite(request.lateral_clearance_m) || request.lateral_clearance_m < 0.0 ||
+    !std::isfinite(request.hard_longitudinal_distance_m) ||
+    request.hard_longitudinal_distance_m < 0.0 ||
+    !std::isfinite(request.deadline_margin_sec) || request.deadline_margin_sec < 0.0 ||
+    !std::isfinite(request.time_step_sec) || request.time_step_sec <= 0.0 ||
+    !std::isfinite(request.maximum_time_sec) || request.maximum_time_sec <= 0.0)
+  {
+    return resolution;
+  }
+
+  double previous_cap_distance = -std::numeric_limits<double>::infinity();
+  for (const auto & sample : request.speed_caps) {
+    if (
+      !std::isfinite(sample.path_distance_m) || sample.path_distance_m < 0.0 ||
+      !std::isfinite(sample.speed_cap_mps) || sample.speed_cap_mps < 0.0 ||
+      sample.path_distance_m + 1e-9 < previous_cap_distance)
+    {
+      return resolution;
+    }
+    previous_cap_distance = sample.path_distance_m;
+  }
+
+  const auto speed_cap_at = [&](const double path_distance_m) {
+      double cap = request.maximum_ego_speed_mps;
+      if (request.speed_caps.empty()) {
+        return cap;
+      }
+      if (path_distance_m <= request.speed_caps.front().path_distance_m + 1e-9) {
+        return std::min(cap, request.speed_caps.front().speed_cap_mps);
+      }
+      for (std::size_t i = 1U; i < request.speed_caps.size(); ++i) {
+        const auto & previous = request.speed_caps[i - 1U];
+        const auto & current = request.speed_caps[i];
+        if (path_distance_m <= current.path_distance_m + 1e-9) {
+          const double span = current.path_distance_m - previous.path_distance_m;
+          const double ratio = span > 1e-9 ?
+            std::clamp((path_distance_m - previous.path_distance_m) / span, 0.0, 1.0) :
+            1.0;
+          const double interpolated = previous.speed_cap_mps +
+            ratio * (current.speed_cap_mps - previous.speed_cap_mps);
+          return std::min(cap, interpolated);
+        }
+      }
+      return std::min(cap, request.speed_caps.back().speed_cap_mps);
+    };
+  const auto target_lateral_at = [&](const double time_sec) {
+      const double prediction_time = std::min(
+        std::max(0.0, time_sec), request.target_lateral_prediction_horizon_sec);
+      return request.target_lateral_m +
+             request.target_lateral_velocity_mps * prediction_time;
+    };
+
+  resolution.valid = true;
+  resolution.checked = true;
+  double ego_speed_mps = request.current_ego_speed_mps;
+  double ego_course_distance_m = 0.0;
+  double mission_distance_m = 0.0;
+  double target_course_distance_m = request.target_longitudinal_m;
+  double previous_time_sec = 0.0;
+  double previous_mission_distance_m = 0.0;
+  double previous_lateral_margin_m =
+    std::abs(target_lateral_at(0.0) - mission_origin.lateral_target_m) -
+    request.lateral_clearance_m;
+  double previous_hard_margin_m =
+    request.target_longitudinal_m - request.hard_longitudinal_distance_m;
+  resolution.currently_laterally_clear = previous_lateral_margin_m >= -1e-9;
+  if (resolution.currently_laterally_clear) {
+    resolution.body_clear_time_sec = 0.0;
+    resolution.body_clear_distance_m = 0.0;
+  }
+  if (previous_hard_margin_m <= 1e-9) {
+    resolution.hard_distance_time_sec = 0.0;
+  }
+
+  const std::size_t maximum_steps = static_cast<std::size_t>(
+    std::ceil(request.maximum_time_sec / request.time_step_sec));
+  for (std::size_t step = 0U; step < maximum_steps; ++step) {
+    const double step_start_sec = static_cast<double>(step) * request.time_step_sec;
+    const double step_end_sec = std::min(
+      request.maximum_time_sec, step_start_sec + request.time_step_sec);
+    const double step_duration_sec = step_end_sec - step_start_sec;
+    if (step_duration_sec <= 0.0) {
+      break;
+    }
+
+    const double hold_duration_sec = std::clamp(
+      request.control_delay_sec - step_start_sec, 0.0, step_duration_sec);
+    const double controlled_duration_sec = step_duration_sec - hold_duration_sec;
+    const double commanded_speed_mps = std::min(
+      speed_cap_at(ego_course_distance_m),
+      std::min(
+        request.maximum_ego_speed_mps,
+        request.target_speed_mps + request.candidate_closing_speed_mps));
+    double next_ego_speed_mps = ego_speed_mps;
+    if (controlled_duration_sec > 0.0) {
+      if (commanded_speed_mps > ego_speed_mps) {
+        next_ego_speed_mps = std::min(
+          commanded_speed_mps,
+          ego_speed_mps + request.maximum_acceleration_mps2 * controlled_duration_sec);
+      } else {
+        next_ego_speed_mps = std::max(
+          commanded_speed_mps,
+          ego_speed_mps - request.maximum_deceleration_mps2 * controlled_duration_sec);
+      }
+    }
+    const double held_distance_m = ego_speed_mps * hold_duration_sec;
+    const double controlled_distance_m =
+      0.5 * (ego_speed_mps + next_ego_speed_mps) * controlled_duration_sec;
+    ego_course_distance_m += held_distance_m + controlled_distance_m;
+    mission_distance_m += controlled_distance_m;
+    target_course_distance_m += request.target_speed_mps * step_duration_sec;
+    ego_speed_mps = next_ego_speed_mps;
+
+    auto path_request = request.mission_path;
+    path_request.path_distance_m = std::min(
+      mission_distance_m, request.mission_path.shift_distance_m);
+    const auto path = resolve_overtake_mission_path(path_request);
+    if (!path.valid) {
+      return OvertakeKinematicRolloutResolution{};
+    }
+    const double lateral_margin_m =
+      std::abs(target_lateral_at(step_end_sec) - path.lateral_target_m) -
+      request.lateral_clearance_m;
+    if (
+      !std::isfinite(resolution.body_clear_time_sec) &&
+      lateral_margin_m >= -1e-9 && previous_lateral_margin_m < 0.0)
+    {
+      const double denominator = lateral_margin_m - previous_lateral_margin_m;
+      const double interpolation = denominator > 1e-12 ?
+        std::clamp(-previous_lateral_margin_m / denominator, 0.0, 1.0) : 1.0;
+      resolution.body_clear_time_sec = previous_time_sec +
+        interpolation * (step_end_sec - previous_time_sec);
+      resolution.body_clear_distance_m = previous_mission_distance_m +
+        interpolation * (mission_distance_m - previous_mission_distance_m);
+    }
+
+    const double lateral_motion_time_sec = std::max(
+      0.15, step_end_sec - request.control_delay_sec);
+    const double required_lateral_accel_mps2 =
+      2.0 * std::abs(path.lateral_target_m - mission_origin.lateral_target_m) /
+      (lateral_motion_time_sec * lateral_motion_time_sec);
+    resolution.max_required_lateral_accel_mps2 = std::max(
+      resolution.max_required_lateral_accel_mps2, required_lateral_accel_mps2);
+
+    const double relative_longitudinal_m =
+      target_course_distance_m - ego_course_distance_m;
+    const double hard_margin_m =
+      relative_longitudinal_m - request.hard_longitudinal_distance_m;
+    if (
+      !std::isfinite(resolution.hard_distance_time_sec) &&
+      hard_margin_m <= 1e-9 && previous_hard_margin_m > 0.0)
+    {
+      const double denominator = previous_hard_margin_m - hard_margin_m;
+      const double interpolation = denominator > 1e-12 ?
+        std::clamp(previous_hard_margin_m / denominator, 0.0, 1.0) : 1.0;
+      resolution.hard_distance_time_sec = previous_time_sec +
+        interpolation * (step_end_sec - previous_time_sec);
+    }
+
+    previous_time_sec = step_end_sec;
+    previous_mission_distance_m = mission_distance_m;
+    previous_lateral_margin_m = lateral_margin_m;
+    previous_hard_margin_m = hard_margin_m;
+    if (
+      std::isfinite(resolution.body_clear_time_sec) &&
+      std::isfinite(resolution.hard_distance_time_sec))
+    {
+      break;
+    }
+  }
+
+  resolution.ego_distance_at_horizon_m = ego_course_distance_m;
+  resolution.ego_speed_at_horizon_mps = ego_speed_mps;
+  if (std::isfinite(resolution.body_clear_time_sec)) {
+    resolution.deadline_slack_sec =
+      std::isfinite(resolution.hard_distance_time_sec) ?
+      resolution.hard_distance_time_sec - resolution.body_clear_time_sec :
+      std::numeric_limits<double>::infinity();
+    resolution.feasible =
+      !std::isfinite(resolution.hard_distance_time_sec) ||
+      resolution.body_clear_time_sec + request.deadline_margin_sec <=
+      resolution.hard_distance_time_sec + 1e-9;
+  }
+  return resolution;
+}
+
 OvertakeMissionDynamicCorridorResolution resolve_overtake_mission_dynamic_corridor(
   const OvertakeMissionDynamicCorridorRequest & request) noexcept
 {
@@ -1062,10 +1278,42 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
   const OvertakeMissionCandidateSelectionRequest & request) noexcept
 {
   OvertakeMissionCandidateSelection selection;
-  selection.valid = true;
   constexpr double kEpsilon = 1e-9;
+  if (
+    !std::isfinite(request.minimum_deadline_slack_sec) ||
+    request.minimum_deadline_slack_sec < 0.0)
+  {
+    return selection;
+  }
+  selection.valid = true;
 
-  const auto numerically_valid = [](const OvertakeMissionCandidate & candidate) {
+  const auto deadline_slack = [](const OvertakeMissionCandidate & candidate) {
+      if (!std::isnan(candidate.body_clear_deadline_slack_sec)) {
+        return candidate.body_clear_deadline_slack_sec;
+      }
+      if (
+        candidate.body_clear_deadline_checked &&
+        !std::isnan(candidate.predicted_hard_distance_time_sec) &&
+        !std::isnan(candidate.predicted_body_clear_time_sec))
+      {
+        if (
+          std::isinf(candidate.predicted_hard_distance_time_sec) &&
+          std::isfinite(candidate.predicted_body_clear_time_sec))
+        {
+          return std::numeric_limits<double>::infinity();
+        }
+        if (
+          std::isfinite(candidate.predicted_hard_distance_time_sec) &&
+          std::isfinite(candidate.predicted_body_clear_time_sec))
+        {
+          return candidate.predicted_hard_distance_time_sec -
+                 candidate.predicted_body_clear_time_sec;
+        }
+      }
+      return -std::numeric_limits<double>::infinity();
+    };
+
+  const auto numerically_valid = [&](const OvertakeMissionCandidate & candidate) {
       const bool finite_deadline_result =
         std::isfinite(candidate.predicted_body_clear_time_sec) &&
         candidate.predicted_body_clear_time_sec >= 0.0 &&
@@ -1084,7 +1332,10 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
       const bool closing_speed_valid =
         std::isnan(candidate.closing_speed_mps) ||
         (std::isfinite(candidate.closing_speed_mps) && candidate.closing_speed_mps >= 0.0);
-      return deadline_valid && closing_speed_valid &&
+      const bool slack_valid =
+        !candidate.body_clear_deadline_checked ||
+        !std::isnan(deadline_slack(candidate));
+      return deadline_valid && closing_speed_valid && slack_valid &&
              std::isfinite(candidate.shift_distance_m) &&
              candidate.shift_distance_m >= 0.0 &&
              std::isfinite(candidate.goal_lateral_m) &&
@@ -1097,6 +1348,12 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
       const OvertakeMissionCandidate & candidate,
       const OvertakeMissionCandidate & incumbent) {
       if (
+        candidate.body_clear_deadline_checked !=
+        incumbent.body_clear_deadline_checked)
+      {
+        return candidate.body_clear_deadline_checked;
+      }
+      if (
         candidate.body_clear_deadline_checked &&
         incumbent.body_clear_deadline_checked)
       {
@@ -1106,6 +1363,33 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
         {
           return candidate.body_clear_deadline_feasible;
         }
+        const double candidate_slack = deadline_slack(candidate);
+        const double incumbent_slack = deadline_slack(incumbent);
+        const bool candidate_has_reserve =
+          candidate.body_clear_deadline_feasible &&
+          candidate_slack + kEpsilon >= request.minimum_deadline_slack_sec;
+        const bool incumbent_has_reserve =
+          incumbent.body_clear_deadline_feasible &&
+          incumbent_slack + kEpsilon >= request.minimum_deadline_slack_sec;
+        if (candidate_has_reserve != incumbent_has_reserve) {
+          return candidate_has_reserve;
+        }
+        if (!candidate_has_reserve && !incumbent_has_reserve) {
+          if (candidate_slack > incumbent_slack + kEpsilon) {
+            return true;
+          }
+          if (incumbent_slack > candidate_slack + kEpsilon) {
+            return false;
+          }
+        }
+      }
+      if (candidate.direct_pass != incumbent.direct_pass) {
+        return candidate.direct_pass;
+      }
+      if (
+        candidate.body_clear_deadline_checked &&
+        incumbent.body_clear_deadline_checked)
+      {
         if (
           candidate.predicted_body_clear_time_sec + kEpsilon <
           incumbent.predicted_body_clear_time_sec)
@@ -1118,9 +1402,6 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
         {
           return false;
         }
-      }
-      if (candidate.direct_pass != incumbent.direct_pass) {
-        return candidate.direct_pass;
       }
       if (candidate.shift_distance_m + kEpsilon < incumbent.shift_distance_m) {
         return true;
@@ -2532,6 +2813,7 @@ bool can_preserve_committed_shiftout_behavior(
   return request.committed_shiftout_active &&
          request.validated_fixed_line &&
          request.mission_side_valid &&
+         request.body_clear_deadline_checked &&
          request.body_clear_deadline_feasible &&
          request.locked_target_seen &&
          !request.locked_target_position_jump &&
@@ -3073,7 +3355,9 @@ bool can_reacquire_during_recovery(const RecoveryReacquireRequest & request) noe
   return request.enabled && request.phase_hold_elapsed && request.stable_target_id &&
          request.same_target && request.target_progress_continuous && request.same_side &&
          !request.target_rear_clear && request.gap_available && request.execution_allowed &&
-         request.solver_ready;
+         request.solver_ready && request.replacement_mission_available &&
+         request.replacement_deadline_checked && request.replacement_deadline_feasible &&
+         request.replacement_goal_available;
 }
 
 bool should_suppress_completed_target_reacquire(

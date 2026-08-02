@@ -464,6 +464,7 @@ mpc:
   v2x_overtake_shiftout_max_closing_speed: 2.0 # [m/s] sim A/B: use available distance budget to establish overlap sooner
   v2x_overtake_body_clear_deadline_enabled: true # select a ShiftOut that clears the target body before the hard longitudinal gap
   v2x_overtake_body_clear_deadline_margin_sec: 0.10 # [s] small execution reserve between predicted lateral clear and hard-gap arrival
+  v2x_overtake_body_clear_minimum_slack_sec: 0.25 # [s] require this rollout reserve and rank it before geometric/inside preference
   v2x_overtake_pass_unlatched_max_closing_speed: 0.5 # [m/s] keep the front cap until physical lateral separation latches
   v2x_overtake_unseparated_front_reserve_distance: 0.25 # [m] taper closing to zero before the moving-front hard stop while bodies overlap laterally
   v2x_overtake_shiftout_adaptive_min_time_sec: 0.5 # [s] avoid an unbounded cap as ShiftOut completes

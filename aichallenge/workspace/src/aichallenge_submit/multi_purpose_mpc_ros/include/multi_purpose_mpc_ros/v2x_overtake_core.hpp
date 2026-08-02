@@ -611,6 +611,58 @@ struct OvertakeBodyClearDeadlineResolution
 OvertakeBodyClearDeadlineResolution resolve_overtake_body_clear_deadline(
   const OvertakeBodyClearDeadlineRequest & request) noexcept;
 
+struct OvertakeKinematicSpeedCapSample
+{
+  double path_distance_m{};
+  double speed_cap_mps{std::numeric_limits<double>::infinity()};
+};
+
+struct OvertakeKinematicRolloutRequest
+{
+  bool enabled{false};
+  OvertakeMissionPathRequest mission_path;
+  double target_longitudinal_m{};
+  double current_ego_speed_mps{};
+  double target_speed_mps{};
+  double candidate_closing_speed_mps{};
+  double maximum_ego_speed_mps{};
+  double maximum_acceleration_mps2{};
+  double maximum_deceleration_mps2{};
+  double control_delay_sec{};
+  double target_lateral_m{};
+  double target_lateral_velocity_mps{};
+  double target_lateral_prediction_horizon_sec{};
+  double lateral_clearance_m{};
+  double hard_longitudinal_distance_m{};
+  double deadline_margin_sec{};
+  std::vector<OvertakeKinematicSpeedCapSample> speed_caps;
+  double time_step_sec{0.05};
+  double maximum_time_sec{15.0};
+};
+
+struct OvertakeKinematicRolloutResolution
+{
+  bool valid{false};
+  bool checked{false};
+  bool feasible{false};
+  bool currently_laterally_clear{false};
+  double body_clear_time_sec{std::numeric_limits<double>::infinity()};
+  double body_clear_distance_m{std::numeric_limits<double>::infinity()};
+  double hard_distance_time_sec{std::numeric_limits<double>::infinity()};
+  double deadline_slack_sec{-std::numeric_limits<double>::infinity()};
+  double max_required_lateral_accel_mps2{};
+  double ego_distance_at_horizon_m{};
+  double ego_speed_at_horizon_mps{};
+};
+
+/// Roll out longitudinal acceleration and delayed lateral mission progress on
+/// one shared time axis. Path speed caps are interpolated by ego course
+/// distance. The returned deadline and lateral-acceleration demand therefore
+/// describe the same candidate motion instead of independent constant-speed
+/// approximations.
+OvertakeKinematicRolloutResolution resolve_overtake_kinematic_rollout(
+  const OvertakeKinematicRolloutRequest & request) noexcept;
+
 struct OvertakeMissionDynamicCorridorSample
 {
   double path_distance_m{};
@@ -668,6 +720,7 @@ struct OvertakeMissionCandidate
   // it here avoids a second, index-coupled metadata vector in the controller.
   int pass_side_sign{0};
   bool current_position_clear{false};
+  double body_clear_deadline_slack_sec{std::numeric_limits<double>::quiet_NaN()};
 };
 
 /// Build a small deterministic longitudinal candidate set from the existing
@@ -680,6 +733,7 @@ std::vector<double> build_overtake_closing_speed_candidates(
 struct OvertakeMissionCandidateSelectionRequest
 {
   std::vector<OvertakeMissionCandidate> candidates;
+  double minimum_deadline_slack_sec{};
 };
 
 struct OvertakeMissionCandidateSelection
@@ -690,11 +744,10 @@ struct OvertakeMissionCandidateSelection
   OvertakeMissionCandidate candidate;
 };
 
-/// Select a deterministic executable mission. When body-clear deadline data is
-/// available, prefer the candidate that establishes physical lateral
-/// separation first. Legacy candidates retain direct-pass, shortest ShiftOut,
-/// minimum lateral-motion and lower-acceleration ordering. Otherwise-identical
-/// spatiotemporal candidates prefer the higher closing speed.
+/// Select a deterministic executable mission. Evaluated, deadline-feasible
+/// candidates and the configured slack reserve precede racing-line retention
+/// and body-clear time. Legacy unchecked candidates retain the prior geometric
+/// ordering. Otherwise-identical candidates prefer the higher closing speed.
 OvertakeMissionCandidateSelection select_overtake_mission_candidate(
   const OvertakeMissionCandidateSelectionRequest & request) noexcept;
 
@@ -1599,6 +1652,7 @@ struct CommittedShiftOutBehaviorOwnershipRequest
   bool explicit_forbidden_waypoint{false};
   bool emergency_front_risk{false};
   bool solver_recovery_requested{false};
+  bool body_clear_deadline_checked{false};
 };
 
 /// Keep Behavior in Overtake while a deadline-feasible, immutable ShiftOut
@@ -1968,9 +2022,14 @@ struct RecoveryReacquireRequest
   bool gap_available{false};
   bool execution_allowed{false};
   bool solver_ready{false};
+  bool replacement_mission_available{false};
+  bool replacement_deadline_checked{false};
+  bool replacement_deadline_feasible{false};
+  bool replacement_goal_available{false};
 };
 
-/// Allow Recovery -> ShiftOut when the same executable pass opportunity becomes available again.
+/// Allow Recovery -> ShiftOut only when the same executable pass opportunity
+/// has a complete, freshly evaluated mission replacement.
 bool can_reacquire_during_recovery(const RecoveryReacquireRequest & request) noexcept;
 
 struct CompletedTargetReacquireSuppressionRequest

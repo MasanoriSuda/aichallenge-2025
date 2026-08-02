@@ -2446,6 +2446,23 @@ OvertakeMissionOwnershipResolution resolve_overtake_mission_ownership(
   return resolution;
 }
 
+bool can_preserve_committed_pass_behavior(
+  const CommittedPassBehaviorOwnershipRequest & request) noexcept
+{
+  return request.committed_pass_active &&
+         request.validated_fixed_line &&
+         request.mission_side_valid &&
+         request.lateral_exclusion_latched &&
+         request.locked_target_seen &&
+         !request.locked_target_position_jump &&
+         !request.locked_target_course_progress_rejected &&
+         request.current_body_footprints_separated &&
+         !request.locked_target_pass_side_intrusion &&
+         !request.explicit_forbidden_waypoint &&
+         !request.emergency_front_risk &&
+         !request.solver_recovery_requested;
+}
+
 OvertakeExecutionSideResolution resolve_overtake_execution_side(
   const OvertakeExecutionSideRequest & request) noexcept
 {

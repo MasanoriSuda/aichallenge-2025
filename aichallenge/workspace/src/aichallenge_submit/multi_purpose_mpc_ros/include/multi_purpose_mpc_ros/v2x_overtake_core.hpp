@@ -1540,6 +1540,31 @@ struct OvertakeMissionOwnershipResolution
 OvertakeMissionOwnershipResolution resolve_overtake_mission_ownership(
   const OvertakeMissionOwnershipRequest & request) noexcept;
 
+struct CommittedPassBehaviorOwnershipRequest
+{
+  bool committed_pass_active{false};
+  bool validated_fixed_line{false};
+  bool mission_side_valid{false};
+  bool lateral_exclusion_latched{false};
+  bool locked_target_seen{false};
+  bool locked_target_position_jump{false};
+  bool locked_target_course_progress_rejected{false};
+  bool current_body_footprints_separated{false};
+  bool locked_target_pass_side_intrusion{false};
+  bool explicit_forbidden_waypoint{false};
+  bool emergency_front_risk{false};
+  bool solver_recovery_requested{false};
+};
+
+/// Keep Behavior in Overtake while a validated Pass owns execution.
+///
+/// Entry-only gap, curve, completion-distance and candidate-quality decisions
+/// are intentionally absent. Live corridor, wall, lateral-acceleration and
+/// solver checks still execute downstream in OvertakeLine. Current physical
+/// overlap and target-continuity failures always release this ownership.
+bool can_preserve_committed_pass_behavior(
+  const CommittedPassBehaviorOwnershipRequest & request) noexcept;
+
 enum class OvertakeExecutionSideSource
 {
   None,

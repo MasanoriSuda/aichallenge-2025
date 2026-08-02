@@ -1799,6 +1799,7 @@ struct V2XBehaviorOutput
   bool overtake_committed_pass_active{false};
   bool overtake_paused_mission_active{false};
   bool overtake_line_owns_locked_target_speed{false};
+  bool overtake_committed_pass_behavior_owner_active{false};
   bool overtake_hard_curve_blocked{false};
   bool active_hard_curve_continuation_allowed{false};
   bool outer_curve_entry_allowed{false};
@@ -7167,15 +7168,30 @@ struct MPC
       return commit_v2x_behavior_state(output, now_sec);
     }
 
-    // A committed locked target can briefly leave both the front and side
-    // corridor classifications in a hairpin. Preserve the same explicit Pass
-    // line instead of dropping to Follow solely because that frame changed.
-    if (
-      committed_active_pass && !has_front_vehicle && !has_side_vehicle &&
-      overtake_zone_allows && overtake_gap_available)
-    {
+    // Entry candidate checks have already produced diagnostics above, but they
+    // do not own a validated Pass. Keep its fixed target/side/line until a hard
+    // current-execution guard releases ownership. The downstream gap planner
+    // and OvertakeLine still evaluate live corridor, wall, lateral acceleration
+    // and solver feasibility before publishing the line.
+    output.overtake_committed_pass_behavior_owner_active =
+      v2x_overtake_core::can_preserve_committed_pass_behavior(
+      v2x_overtake_core::CommittedPassBehaviorOwnershipRequest{
+        overtake_mission_ownership.committed_pass_active,
+        overtake_line_state_.fixed_pass_corridor_goal_ey.has_value(),
+        overtake_line_state_.pass_side_sign != 0,
+        overtake_line_state_.pass_front_overlap_exclusion_latched,
+        output.locked_target_seen,
+        output.locked_target_position_jump,
+        output.locked_target_course_progress_rejected,
+        output.locked_target_current_body_footprints_separated,
+        output.locked_target_pass_side_intrusion,
+        overtake_forbidden_wp,
+        effective_front_risk_emergency,
+        overtake_solver_recovery_active_});
+    if (output.overtake_committed_pass_behavior_owner_active) {
       output.state = V2XBehaviorState::Overtake;
-      output.reason = "committed active pass / " + overtake_block_reason;
+      output.overtake_pass_side_sign = overtake_line_state_.pass_side_sign;
+      output.reason = "committed Pass owns execution / " + overtake_block_reason;
       return commit_v2x_behavior_state(output, now_sec);
     }
 
@@ -12148,7 +12164,7 @@ private:
         "inner_entry=%d, inner_hard_entry=%d, inner_hard=%d, "
         "hard_dist=%.2f, hard_avail=%.2f, hard_req=%.2f, "
         "locked_rel=%.2f, lat_clear=%d, body_clear=%d, "
-        "lookahead_inner=%d, inner_pref=%d, front_danger_suppress=%d",
+        "lookahead_inner=%d, inner_pref=%d, front_danger_suppress=%d, pass_owner=%d",
         v2x_behavior_state_initialized ? to_string(v2x_behavior_state) : "None", to_string(final_state),
         output.front_distance, model->wp_id, output.reason.c_str(),
         output.v2x_health.c_str(), output.v2x_receipt_age_sec,
@@ -12175,7 +12191,8 @@ private:
         output.locked_target_body_lateral_clear ? 1 : 0,
         output.overtake_lookahead_inner_side,
         output.overtake_inner_preference_selected ? 1 : 0,
-        output.committed_corridor_front_danger_suppressed ? 1 : 0);
+        output.committed_corridor_front_danger_suppressed ? 1 : 0,
+        output.overtake_committed_pass_behavior_owner_active ? 1 : 0);
       v2x_behavior_state = final_state;
       last_v2x_behavior_state_change_sec = now_sec;
       v2x_behavior_state_initialized = true;
@@ -12198,7 +12215,7 @@ private:
           "health=%s, receipt_age=%.3f, source_age=%.3f, interval=%.3f, "
           "vehicles=%zu, message_vehicles=%zu, jumps=%zu, invalid_velocity=%zu, "
           "message_invalid=%d, front=%d, side=%d, danger=%d, danger_action=%s, "
-          "danger_suppress=%d, "
+          "danger_suppress=%d, pass_owner=%d, "
           "grace=%d, grid_suppress=%d, grid_breakout=%d, "
           "grid_observe=%d, grid_obs=%.2f, grid_peer=%.2f, grid_candidate=%s, "
           "grid_stable=%.2f, "
@@ -12246,6 +12263,7 @@ private:
           output.has_danger_vehicle ? 1 : 0,
           v2x_overtake_core::to_string(output.front_danger_action),
           output.committed_corridor_front_danger_suppressed ? 1 : 0,
+          output.overtake_committed_pass_behavior_owner_active ? 1 : 0,
           output.start_grid_grace_active ? 1 : 0,
           output.start_grid_stop_suppressed ? 1 : 0,
           output.start_grid_breakout_active ? 1 : 0,

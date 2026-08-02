@@ -101,6 +101,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSideQualitySelectionRequ
 using multi_purpose_mpc_ros::v2x_overtake_core::EarlyShiftOutSideReplanAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::EarlyShiftOutSideReplanRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionOwnershipRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassBehaviorOwnershipRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeExecutionSideRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeExecutionSideSource;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeLineTransitionAction;
@@ -227,6 +228,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::select_overtake_side_by_quality;
 using multi_purpose_mpc_ros::v2x_overtake_core::selected_pass_side_ordering_conflict;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_early_shiftout_side_replan;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_mission_ownership;
+using multi_purpose_mpc_ros::v2x_overtake_core::can_preserve_committed_pass_behavior;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_execution_side;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_resume_paused_pass_directly;
 using multi_purpose_mpc_ros::v2x_overtake_core::clamp_paused_resume_goal_outward;
@@ -4381,6 +4383,97 @@ TEST(V2XOvertakeCoreMissionOwnership, PreviousBehaviorPreservesLegacyContinuatio
   EXPECT_FALSE(result.mission_active);
   EXPECT_TRUE(result.behavior_continuation_assessment_active);
   EXPECT_FALSE(result.behavior_entry_assessment_active);
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, ValidatedPassOwnsBehaviorAcrossEntryRejection)
+{
+  CommittedPassBehaviorOwnershipRequest request;
+  request.committed_pass_active = true;
+  request.validated_fixed_line = true;
+  request.mission_side_valid = true;
+  request.lateral_exclusion_latched = true;
+  request.locked_target_seen = true;
+  request.current_body_footprints_separated = true;
+
+  EXPECT_TRUE(can_preserve_committed_pass_behavior(request));
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, ShiftOutDoesNotBypassEntryOrExecutionGuards)
+{
+  CommittedPassBehaviorOwnershipRequest request;
+  request.committed_pass_active = false;
+  request.validated_fixed_line = true;
+  request.mission_side_valid = true;
+  request.lateral_exclusion_latched = true;
+  request.locked_target_seen = true;
+  request.current_body_footprints_separated = true;
+
+  EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, PassOwnerReleasesForEveryHardAbort)
+{
+  CommittedPassBehaviorOwnershipRequest request;
+  request.committed_pass_active = true;
+  request.validated_fixed_line = true;
+  request.mission_side_valid = true;
+  request.lateral_exclusion_latched = true;
+  request.locked_target_seen = true;
+  request.current_body_footprints_separated = true;
+  ASSERT_TRUE(can_preserve_committed_pass_behavior(request));
+
+  request.locked_target_position_jump = true;
+  EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
+  request.locked_target_position_jump = false;
+
+  request.locked_target_course_progress_rejected = true;
+  EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
+  request.locked_target_course_progress_rejected = false;
+
+  request.current_body_footprints_separated = false;
+  EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
+  request.current_body_footprints_separated = true;
+
+  request.locked_target_pass_side_intrusion = true;
+  EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
+  request.locked_target_pass_side_intrusion = false;
+
+  request.explicit_forbidden_waypoint = true;
+  EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
+  request.explicit_forbidden_waypoint = false;
+
+  request.emergency_front_risk = true;
+  EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
+  request.emergency_front_risk = false;
+
+  request.solver_recovery_requested = true;
+  EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, PassOwnerRequiresValidatedMissionIdentity)
+{
+  CommittedPassBehaviorOwnershipRequest request;
+  request.committed_pass_active = true;
+  request.validated_fixed_line = true;
+  request.mission_side_valid = true;
+  request.lateral_exclusion_latched = true;
+  request.locked_target_seen = true;
+  request.current_body_footprints_separated = true;
+
+  request.validated_fixed_line = false;
+  EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
+  request.validated_fixed_line = true;
+
+  request.mission_side_valid = false;
+  EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
+  request.mission_side_valid = true;
+
+  request.lateral_exclusion_latched = false;
+  EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
+  request.lateral_exclusion_latched = true;
+
+  request.locked_target_seen = false;
+  EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
 }
 
 TEST(V2XOvertakeCoreMissionOwnership, BehaviorOwnsPausedMissionOnlyWithoutMissionSide)

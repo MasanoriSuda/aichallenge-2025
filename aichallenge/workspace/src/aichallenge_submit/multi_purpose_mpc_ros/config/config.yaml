@@ -453,8 +453,9 @@ mpc:
   v2x_overtake_committed_corridor_front_danger_suppression_enabled: true # use 2D footprint sweep, not longitudinal distance alone, on a validated locked pass
   # Competition-simulation only: after a validated minimum-motion Pass has released its front
   # cap, keep advancing while the current kart footprints remain non-overlapping. A predicted
-  # future overlap alone no longer returns the kart to Follow/SafetyBrake; current overlap,
-  # target discontinuity, wall/path infeasibility and solver guards remain active.
+  # future overlap alone no longer returns the kart to Follow/SafetyBrake. A single current-body
+  # boundary sample is debounced below; sustained overlap, target discontinuity, wall/path
+  # infeasibility and solver guards remain active.
   v2x_overtake_committed_pass_attack_mode_enabled: true
   v2x_overtake_velocity_advantage: 1.0      # [m/s] legacy whole-phase cap when stage speed is disabled
   v2x_overtake_stage_speed_enabled: true    # cap ShiftOut/early Pass; release only after the locked target is no longer ahead
@@ -471,6 +472,7 @@ mpc:
   v2x_overtake_line_min_target_separation: 1.50 # [m] combined kart width plus prediction margin
   v2x_overtake_pass_front_overlap_lateral_clearance: 1.50 # [m] current physical clearance required before front-cap release
   v2x_overtake_pass_front_cap_reapply_lateral_clearance: 1.45 # [m] hold committed Pass speed down to the physical combined-width boundary
+  v2x_overtake_pass_current_overlap_confirm_sec: 0.10 # [s] require two V2X observations before revoking an already released Pass on body-boundary overlap
   v2x_overtake_pass_predicted_overlap_confirm_sec: 0.25 # [s] require sustained predicted overlap before recapping an already released Pass
   # Once a low-speed target has full current lateral clearance in ShiftOut, or is physically
   # committed in Pass, do not let a conservative target-speed reference make the ego crawl

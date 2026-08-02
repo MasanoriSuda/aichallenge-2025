@@ -1522,6 +1522,7 @@ struct V2XBehaviorConfig
   double overtake_line_min_target_separation{0.0};
   double overtake_pass_front_overlap_lateral_clearance{0.0};
   double overtake_pass_front_cap_reapply_lateral_clearance{0.0};
+  double overtake_pass_current_overlap_confirm_sec{0.0};
   double overtake_pass_predicted_overlap_confirm_sec{0.0};
   bool overtake_committed_pass_speed_floor_enabled{false};
   double overtake_committed_pass_min_speed{0.0};
@@ -1870,6 +1871,8 @@ struct V2XBehaviorOutput
   bool locked_target_body_lateral_clear{false};
   bool locked_target_above_front_cap_reapply_clearance{false};
   bool locked_target_current_body_footprints_separated{false};
+  bool locked_target_current_body_overlap_confirmed{true};
+  double locked_target_current_body_overlap_elapsed_sec{0.0};
   bool locked_target_footprint_prediction_valid{false};
   bool locked_target_predicted_body_footprint_sweep_separated{false};
   double locked_target_longitudinal{std::numeric_limits<double>::infinity()};
@@ -1908,6 +1911,7 @@ struct OvertakeLineState
   OvertakeLinePhase phase{OvertakeLinePhase::Idle};
   bool pass_front_overlap_exclusion_latched{false};
   bool pass_front_cap_release_active{false};
+  double pass_current_overlap_since_sec{std::numeric_limits<double>::quiet_NaN()};
   double pass_predicted_overlap_since_sec{std::numeric_limits<double>::quiet_NaN()};
   int pass_side_sign{0};
   double target_ey{0.0};
@@ -5280,6 +5284,28 @@ struct MPC
       cfg.v2x_behavior.overtake_minimum_lateral_motion_enabled &&
       overtake_line_state_.fixed_pass_corridor_goal_ey.has_value() &&
       !overtake_line_state_.inter_vehicle_corridor;
+    const bool committed_current_overlap_confirmation_monitored =
+      cfg.v2x_behavior.overtake_committed_pass_attack_mode_enabled &&
+      overtake_mission_ownership.committed_pass_active &&
+      committed_minimum_motion_corridor_active &&
+      overtake_line_state_.pass_front_cap_release_active &&
+      output.locked_target_seen && !output.locked_target_position_jump &&
+      !output.locked_target_current_body_footprints_separated;
+    const auto committed_current_overlap_confirmation =
+      v2x_overtake_core::update_predicted_footprint_overlap_confirmation(
+      v2x_overtake_core::PredictedFootprintOverlapConfirmationRequest{
+        committed_current_overlap_confirmation_monitored,
+        now_sec,
+        overtake_line_state_.pass_current_overlap_since_sec,
+        cfg.v2x_behavior.overtake_pass_current_overlap_confirm_sec});
+    overtake_line_state_.pass_current_overlap_since_sec =
+      committed_current_overlap_confirmation.overlap_since_sec;
+    output.locked_target_current_body_overlap_confirmed =
+      output.locked_target_current_body_footprints_separated ? false :
+      committed_current_overlap_confirmation_monitored ?
+      committed_current_overlap_confirmation.confirmed : true;
+    output.locked_target_current_body_overlap_elapsed_sec =
+      committed_current_overlap_confirmation.elapsed_sec;
     const auto committed_body_geometry =
       v2x_overtake_core::resolve_committed_pass_body_geometry(
       v2x_overtake_core::CommittedPassBodyGeometryRequest{
@@ -5325,6 +5351,7 @@ struct MPC
         output.locked_target_seen,
         output.locked_target_position_jump,
         output.locked_target_current_body_footprints_separated,
+        output.locked_target_current_body_overlap_confirmed,
         output.locked_target_footprint_prediction_valid,
         output.locked_target_predicted_body_footprint_sweep_separated,
         overtake_line_state_.pass_front_cap_release_active,
@@ -7235,10 +7262,13 @@ struct MPC
         overtake_line_state_.fixed_pass_corridor_goal_ey.has_value(),
         overtake_line_state_.pass_side_sign != 0,
         overtake_line_state_.pass_front_overlap_exclusion_latched,
+        overtake_line_state_.pass_front_cap_release_active,
         output.locked_target_seen,
         output.locked_target_position_jump,
         output.locked_target_course_progress_rejected,
         output.locked_target_current_body_footprints_separated,
+        output.locked_target_current_body_overlap_confirmed,
+        cfg.v2x_behavior.overtake_committed_pass_attack_mode_enabled,
         output.locked_target_pass_side_intrusion,
         overtake_forbidden_wp,
         effective_front_risk_emergency,
@@ -8849,6 +8879,8 @@ private:
     }
 
     overtake_line_state_.phase = next_phase;
+    overtake_line_state_.pass_current_overlap_since_sec =
+      std::numeric_limits<double>::quiet_NaN();
     overtake_line_state_.pass_predicted_overlap_since_sec =
       std::numeric_limits<double>::quiet_NaN();
     if (next_phase != OvertakeLinePhase::Pass) {
@@ -8904,6 +8936,8 @@ private:
     overtake_line_state_.phase_last_update_sec = now_sec;
     overtake_line_state_.pass_front_overlap_exclusion_latched = false;
     overtake_line_state_.pass_front_cap_release_active = false;
+    overtake_line_state_.pass_current_overlap_since_sec =
+      std::numeric_limits<double>::quiet_NaN();
     overtake_line_state_.early_side_replanned = true;
     overtake_line_state_.pending_side_replan_sign = 0;
     overtake_line_state_.pending_side_replan_since_sec =
@@ -10614,6 +10648,8 @@ private:
       !preserve_validated_breakout_line;
     committed_pass_request.current_body_footprints_separated =
       behavior_output.locked_target_current_body_footprints_separated;
+    committed_pass_request.current_body_footprint_overlap_confirmed =
+      behavior_output.locked_target_current_body_overlap_confirmed;
     committed_pass_request.footprint_prediction_valid =
       behavior_output.locked_target_footprint_prediction_valid;
     committed_pass_request.predicted_body_footprint_sweep_separated =
@@ -10700,6 +10736,8 @@ private:
           "OvertakeLine execution front cap: %s, phase=%s, target=%s, lateral=%.2f, "
           "release=%.2f, reapply=%.2f, target_s=%.2f, lateral_complete=%d, "
           "horizon_clear=%d, minimum_motion=%d, footprint_clear=%d, "
+          "current_overlap_confirmed=%d, current_overlap_elapsed=%.2f/%.2f, "
+          "current_overlap_grace=%d, "
           "footprint_prediction=%d, footprint_sweep_clear=%d, "
           "side_by_side_escape=%d, attack_hold=%d, predicted_overlap=%d, "
           "overlap_confirmed=%d, "
@@ -10713,6 +10751,10 @@ private:
           lateral_complete ? 1 : 0, execution_horizon_unconstrained ? 1 : 0,
           committed_pass_request.minimum_motion_corridor_active ? 1 : 0,
           committed_pass_request.current_body_footprints_separated ? 1 : 0,
+          committed_pass_request.current_body_footprint_overlap_confirmed ? 1 : 0,
+          behavior_output.locked_target_current_body_overlap_elapsed_sec,
+          cfg.v2x_behavior.overtake_pass_current_overlap_confirm_sec,
+          committed_pass_policy.minimum_motion_current_overlap_grace_active ? 1 : 0,
           committed_pass_request.footprint_prediction_valid ? 1 : 0,
           committed_pass_request.predicted_body_footprint_sweep_separated ? 1 : 0,
           committed_pass_policy.minimum_motion_side_by_side_escape_active ? 1 : 0,
@@ -10900,6 +10942,8 @@ private:
           "unseparated_reserve=%d/protected=%.2f, "
           "cap_release=%d, horizon_release=%d, "
           "speed_hold=%d, minimum_motion_cap=%d, footprint_clear=%d, "
+          "current_overlap_confirmed=%d, current_overlap_elapsed=%.2f/%.2f, "
+          "current_overlap_grace=%d, "
           "footprint_prediction=%d, footprint_sweep_clear=%d, "
           "side_by_side_escape=%d, attack_hold=%d, predicted_overlap=%d, "
           "overlap_confirmed=%d, "
@@ -10927,6 +10971,10 @@ private:
           output.committed_pass_speed_hold_active ? 1 : 0,
           committed_pass_request.minimum_motion_corridor_active ? 1 : 0,
           committed_pass_request.current_body_footprints_separated ? 1 : 0,
+          committed_pass_request.current_body_footprint_overlap_confirmed ? 1 : 0,
+          behavior_output.locked_target_current_body_overlap_elapsed_sec,
+          cfg.v2x_behavior.overtake_pass_current_overlap_confirm_sec,
+          committed_pass_policy.minimum_motion_current_overlap_grace_active ? 1 : 0,
           committed_pass_request.footprint_prediction_valid ? 1 : 0,
           committed_pass_request.predicted_body_footprint_sweep_separated ? 1 : 0,
           committed_pass_policy.minimum_motion_side_by_side_escape_active ? 1 : 0,
@@ -12330,6 +12378,7 @@ private:
           "cooldown=%d, pass=%d, side_clear=%.2f, plan_N=%d, target=%s, locked_seen=%d, "
           "course_reject=%d, locked_s=%.2f, locked_lat=%.2f, "
           "lat_clear=%d, body_clear=%d, footprint_clear=%d, "
+          "current_overlap_confirmed=%d, current_overlap_elapsed=%.2f, "
           "footprint_prediction=%d, footprint_sweep_clear=%d, "
           "pred_locked_s=%.2f, pred_locked_lat=%.2f, latched=%d, "
           "left_gap=%d, right_gap=%d, left_q=%.2f, right_q=%.2f, "
@@ -12420,6 +12469,8 @@ private:
           output.locked_target_current_lateral_clear ? 1 : 0,
           output.locked_target_body_lateral_clear ? 1 : 0,
           output.locked_target_current_body_footprints_separated ? 1 : 0,
+          output.locked_target_current_body_overlap_confirmed ? 1 : 0,
+          output.locked_target_current_body_overlap_elapsed_sec,
           output.locked_target_footprint_prediction_valid ? 1 : 0,
           output.locked_target_predicted_body_footprint_sweep_separated ? 1 : 0,
           output.locked_target_predicted_longitudinal,
@@ -14307,6 +14358,10 @@ Config load_config(const std::string & path)
       mpc["v2x_overtake_pass_front_cap_reapply_lateral_clearance"] ?
       mpc["v2x_overtake_pass_front_cap_reapply_lateral_clearance"].as<double>() :
       effective_overtake_front_cap_release_clearance));
+  cfg.mpc.v2x_behavior.overtake_pass_current_overlap_confirm_sec = std::max(
+    0.0,
+    mpc["v2x_overtake_pass_current_overlap_confirm_sec"] ?
+    mpc["v2x_overtake_pass_current_overlap_confirm_sec"].as<double>() : 0.0);
   cfg.mpc.v2x_behavior.overtake_pass_predicted_overlap_confirm_sec = std::max(
     0.0,
     mpc["v2x_overtake_pass_predicted_overlap_confirm_sec"] ?
@@ -14973,7 +15028,7 @@ public:
         "stall=%.2f m/s/%.2f s, "
         "timeout=%.2f s, entry_retry_cooldown=%.2f s, "
         "solver_cooldown=%.2f s, solver_healthy=%d cycles, "
-        "front_cap_clearance=%.2f/%.2f m, predicted_overlap_confirm=%.2f s, "
+        "front_cap_clearance=%.2f/%.2f m, current/predicted_overlap_confirm=%.2f/%.2f s, "
         "body_clearance=%.2f m, "
         "side_quality=%d/adv=%.2f, early_replan=%d/lat=%.2f m/dist=%.2f m/"
         "stable=%.2f s/vlat=%.2f m/s/target=%.2f m",
@@ -14995,6 +15050,7 @@ public:
           mpc_cfg_.v2x_behavior.overtake_pass_front_overlap_lateral_clearance,
           mpc_cfg_.v2x_gap.vehicle_radius + mpc_cfg_.v2x_gap.prediction_margin),
         mpc_cfg_.v2x_behavior.overtake_pass_front_cap_reapply_lateral_clearance,
+        mpc_cfg_.v2x_behavior.overtake_pass_current_overlap_confirm_sec,
         mpc_cfg_.v2x_behavior.overtake_pass_predicted_overlap_confirm_sec,
         mpc_cfg_.v2x_gap.vehicle_radius,
         mpc_cfg_.v2x_behavior.overtake_line.side_quality_selection_enabled ? 1 : 0,

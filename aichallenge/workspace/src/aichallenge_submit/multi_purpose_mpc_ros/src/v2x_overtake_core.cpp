@@ -406,6 +406,17 @@ CommittedPassPolicyResolution resolve_committed_pass_policy(
     !request.predicted_body_footprint_sweep_separated &&
     !request.predicted_body_footprint_overlap_confirmed &&
     !resolution.minimum_motion_side_by_side_escape_active;
+  // A single V2X sample on the body-boundary must not immediately hand
+  // longitudinal ownership back to Follow. This grace is hold-only and is
+  // available solely to an already released competition-simulation Pass.
+  // Initial acquisition still requires a currently separated footprint sweep.
+  resolution.minimum_motion_current_overlap_grace_active =
+    request.committed_pass_attack_mode_enabled &&
+    minimum_motion_common_guard && request.prior_front_cap_release_active &&
+    !request.current_body_footprints_separated &&
+    !request.current_body_footprint_overlap_confirmed &&
+    request.footprint_prediction_valid &&
+    request.execution_path_physically_feasible;
   // Competition-simulation attack mode is deliberately hold-only. It cannot
   // acquire an initial release from an unsafe prediction. Once the validated
   // Pass has been released, however, a predicted future overlap alone must not
@@ -421,11 +432,12 @@ CommittedPassPolicyResolution resolve_committed_pass_policy(
     request.execution_path_physically_feasible && minimum_motion_sweep_clear;
   resolution.minimum_motion_footprint_hold_active =
     minimum_motion_common_guard && request.prior_front_cap_release_active &&
-    request.current_body_footprints_separated &&
+    ((request.current_body_footprints_separated &&
     (minimum_motion_sweep_clear ||
     resolution.minimum_motion_side_by_side_escape_active ||
     resolution.minimum_motion_predicted_overlap_grace_active ||
-    resolution.minimum_motion_attack_hold_active);
+    resolution.minimum_motion_attack_hold_active)) ||
+    resolution.minimum_motion_current_overlap_grace_active);
   resolution.constrained_horizon_release_allowed =
     request.pass_phase &&
     request.lateral_exclusion_latched &&
@@ -2492,14 +2504,22 @@ OvertakeMissionOwnershipResolution resolve_overtake_mission_ownership(
 bool can_preserve_committed_pass_behavior(
   const CommittedPassBehaviorOwnershipRequest & request) noexcept
 {
+  const bool pass_release_latched =
+    request.lateral_exclusion_latched ||
+    request.minimum_motion_front_cap_release_latched;
+  const bool current_overlap_grace_active =
+    request.committed_pass_attack_mode_enabled &&
+    request.minimum_motion_front_cap_release_latched &&
+    !request.current_body_footprints_separated &&
+    !request.current_body_footprint_overlap_confirmed;
   return request.committed_pass_active &&
          request.validated_fixed_line &&
          request.mission_side_valid &&
-         request.lateral_exclusion_latched &&
+         pass_release_latched &&
          request.locked_target_seen &&
          !request.locked_target_position_jump &&
          !request.locked_target_course_progress_rejected &&
-         request.current_body_footprints_separated &&
+         (request.current_body_footprints_separated || current_overlap_grace_active) &&
          !request.locked_target_pass_side_intrusion &&
          !request.explicit_forbidden_waypoint &&
          !request.emergency_front_risk &&
@@ -3418,10 +3438,18 @@ FrontDangerAction resolve_front_danger_action(const FrontDangerActionRequest & r
 bool can_suppress_committed_corridor_front_danger(
   const CommittedCorridorFrontDangerSuppressionRequest & request) noexcept
 {
+  const bool current_overlap_grace_active =
+    request.committed_pass_attack_mode_enabled && request.pass_phase &&
+    request.prior_front_cap_release_active &&
+    !request.current_body_footprints_separated &&
+    !request.current_body_footprint_overlap_confirmed &&
+    request.footprint_prediction_valid;
+  const bool current_geometry_acceptable =
+    request.current_body_footprints_separated || current_overlap_grace_active;
   const bool attack_path_acceptable =
     request.committed_pass_attack_mode_enabled && request.pass_phase &&
     request.prior_front_cap_release_active &&
-    request.current_body_footprints_separated;
+    current_geometry_acceptable;
   const bool predicted_path_acceptable =
     request.predicted_body_footprint_sweep_separated ||
     (request.prior_front_cap_release_active &&
@@ -3431,7 +3459,7 @@ bool can_suppress_committed_corridor_front_danger(
   return request.enabled && request.active_shiftout_or_pass &&
          request.nearest_front_matches_locked_target && request.validated_fixed_corridor &&
          !request.inter_vehicle_corridor && request.target_seen &&
-         !request.target_position_jump && request.current_body_footprints_separated &&
+         !request.target_position_jump && current_geometry_acceptable &&
          (request.footprint_prediction_valid || attack_path_acceptable) &&
          predicted_path_acceptable;
 }

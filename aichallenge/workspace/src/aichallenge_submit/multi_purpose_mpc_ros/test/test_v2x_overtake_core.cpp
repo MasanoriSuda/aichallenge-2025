@@ -755,6 +755,32 @@ TEST(V2XFrontDangerAction, CommittedPassAttackSuppressesPredictionOnlyDanger)
   EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
 }
 
+TEST(V2XFrontDangerAction, CommittedPassDebouncesCurrentOverlapAfterRelease)
+{
+  CommittedCorridorFrontDangerSuppressionRequest request;
+  request.enabled = true;
+  request.active_shiftout_or_pass = true;
+  request.nearest_front_matches_locked_target = true;
+  request.validated_fixed_corridor = true;
+  request.target_seen = true;
+  request.current_body_footprints_separated = false;
+  request.current_body_footprint_overlap_confirmed = false;
+  request.footprint_prediction_valid = true;
+  request.prior_front_cap_release_active = true;
+  request.pass_phase = true;
+  request.committed_pass_attack_mode_enabled = true;
+
+  EXPECT_TRUE(can_suppress_committed_corridor_front_danger(request));
+
+  request.current_body_footprint_overlap_confirmed = true;
+  EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
+
+  // The grace is hold-only and cannot suppress before initial release.
+  request.current_body_footprint_overlap_confirmed = false;
+  request.prior_front_cap_release_active = false;
+  EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
+}
+
 TEST(V2XFrontDangerAction, ResolvesSharedCommittedPassBodyGeometry)
 {
   CommittedPassBodyGeometryRequest request;
@@ -1226,6 +1252,46 @@ TEST(V2XOvertakeCoreSpeed, MinimumMotionPassDebouncesPredictedOverlapAfterReleas
   EXPECT_EQ(
     resolution.transition_reason,
     CommittedPassFrontCapTransitionReason::PredictedFootprintOverlap);
+}
+
+TEST(V2XOvertakeCoreSpeed, MinimumMotionPassDebouncesCurrentOverlapAfterRelease)
+{
+  CommittedPassPolicyRequest request;
+  request.pass_phase = true;
+  request.lateral_complete = true;
+  request.execution_horizon_unconstrained = true;
+  request.execution_path_physically_feasible = true;
+  request.minimum_motion_corridor_active = true;
+  request.current_body_footprints_separated = false;
+  request.current_body_footprint_overlap_confirmed = false;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = false;
+  request.prior_front_cap_release_active = true;
+  request.target_seen = true;
+  request.target_longitudinal_m = 2.0;
+  request.committed_pass_attack_mode_enabled = true;
+
+  auto resolution = resolve_committed_pass_policy(request);
+  EXPECT_TRUE(resolution.minimum_motion_current_overlap_grace_active);
+  EXPECT_TRUE(resolution.minimum_motion_footprint_hold_active);
+  EXPECT_TRUE(resolution.front_cap_release_ready);
+  EXPECT_FALSE(resolution.front_cap_state_update_required);
+
+  request.current_body_footprint_overlap_confirmed = true;
+  resolution = resolve_committed_pass_policy(request);
+  EXPECT_FALSE(resolution.minimum_motion_current_overlap_grace_active);
+  EXPECT_FALSE(resolution.front_cap_release_ready);
+  EXPECT_TRUE(resolution.front_cap_state_update_required);
+  EXPECT_EQ(
+    resolution.transition_reason,
+    CommittedPassFrontCapTransitionReason::CurrentFootprintOverlap);
+
+  // Current-overlap grace never acquires an initial release.
+  request.current_body_footprint_overlap_confirmed = false;
+  request.prior_front_cap_release_active = false;
+  resolution = resolve_committed_pass_policy(request);
+  EXPECT_FALSE(resolution.minimum_motion_current_overlap_grace_active);
+  EXPECT_FALSE(resolution.front_cap_release_ready);
 }
 
 TEST(V2XOvertakeCoreSpeed, CommittedPassAttackHoldsAcrossConfirmedPredictedOverlap)
@@ -4436,6 +4502,27 @@ TEST(V2XOvertakeCoreMissionOwnership, ValidatedPassOwnsBehaviorAcrossEntryReject
   request.current_body_footprints_separated = true;
 
   EXPECT_TRUE(can_preserve_committed_pass_behavior(request));
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, MinimumMotionReleaseOwnsBehaviorWithoutLegacyLatch)
+{
+  CommittedPassBehaviorOwnershipRequest request;
+  request.committed_pass_active = true;
+  request.validated_fixed_line = true;
+  request.mission_side_valid = true;
+  request.minimum_motion_front_cap_release_latched = true;
+  request.locked_target_seen = true;
+  request.current_body_footprints_separated = true;
+
+  EXPECT_TRUE(can_preserve_committed_pass_behavior(request));
+
+  request.current_body_footprints_separated = false;
+  request.current_body_footprint_overlap_confirmed = false;
+  request.committed_pass_attack_mode_enabled = true;
+  EXPECT_TRUE(can_preserve_committed_pass_behavior(request));
+
+  request.current_body_footprint_overlap_confirmed = true;
+  EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
 }
 
 TEST(V2XOvertakeCoreMissionOwnership, ShiftOutDoesNotBypassEntryOrExecutionGuards)

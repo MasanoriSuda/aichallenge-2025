@@ -1,0 +1,496 @@
+codexに見解見てもらって修正してもらったので確認してもらっていいですか？
+19m 13s考えました
+確認結果
+
+現在のdevelop_july HEADは、
+
+277c46f2557d7381b17550faf9cf49bd2f298298
+20260802-overtake-spatiotemporal-closing-speed
+
+です。
+
+結論からいうと、
+
+Codexの見解修正は妥当で、今回の実装も前回の主要指摘に対して正しい方向です。実験版としてはApprove。提出用race-freezeとしては、まだRequest changesです。
+
+特に、前回私が「固定4 mの候補を1本だけ評価している」と整理した部分は、現行HEADに対しては不正確でした。Codexの訂正どおり、既に左右、複数のShiftOut距離、複数の横目標を探索しており、今回そこへclosing speed軸を追加した形です。
+
+観点	判定
+Codexの原因分析	妥当
+closing speed候補追加	良い
+missionへの速度固定	良い
+ShiftOut ownership	良い
+単体テスト	良い
+時空間予測の整合性	まだ不足
+最新修正の実走証明	なし
+提出freeze	まだ不可
+今回きちんと直った部分
+1. 既存候補探索へclosing speed軸が入った
+
+現在は、各横経路候補について、
+
+ShiftOut距離:
+2.5 / 3.25 / 4.0 / 5.0 m
+
+closing speed:
+0.8 / 1.4 / 2.0 m/s
+
+横目標:
+minimum-motion goal
+target-separation goal
+corridor center
+区間中央・側寄り候補
+
+を組み合わせて評価しています。
+
+選択したcandidateごとに、
+
+body-clear時刻
+hard-distance到達時刻
+body-clear距離
+必要横加速度
+
+を計算し、deadlineを満たす候補、その中でもbody-clearが早い候補を優先します。
+
+これは、上位車ログから学ぶべき、
+
+横へどう動くか
+＋
+どの速度差で動くか
+
+を一緒に選ぶ、という考え方を正しく取り込んでいます。
+
+2. 選んだclosing speedをmissionへ固定している
+
+選択結果は、
+
+SideAssessment
+→ V2XBehaviorOutput
+→ OvertakeLineState
+
+へ渡され、
+
+mission_shift_distance
+mission_closing_speed_limit
+mission_body_clear_deadline_feasible
+
+として保存されます。
+
+実行時も、設定上限の2.0 m/sへ勝手に戻さず、保存したmission値を使います。距離が詰まったときのadaptive closingやunseparated reserveは、そこからさらに低く制限できます。つまり、固定されるのは最低速度ではなく攻撃度の上限です。設計意図はきれいです。
+
+3. deadline成立済みShiftOutがBehaviorを所有する
+
+今回、
+
+固定経路あり
+side固定済み
+body-clear deadline成立
+target継続
+Emergencyではない
+solver recoveryではない
+
+なら、ShiftOut中に新規entry用のgap・curve・候補品質判定が悪化しても、BehaviorをFollowへ戻さないownershipが追加されました。
+
+これは以前の、
+
+ShiftOut開始
+→ 次周期の候補再評価で条件落ち
+→ Overtake -> Follow
+→ 横へ出かけた状態で追従
+
+を直接止める修正です。
+
+アップロードされた上位車ログも、相対接近率、横移動時間、LAT-TTC、追い越し専用横追従、段階的な速度sourceを使い、ENGAGE後も追い越しmissionを維持しています。一方で衝突疑い・スタック・Returnチャタリングもあるため、丸ごとコピーではなく今回のように要素を分離して導入する判断が正しいです。
+
+4. 静的品質は通っている
+
+コミット記録上は、
+
+make autoware-build: 25 packages成功
+multi_purpose_mpc_ros: 25 test targets
+770 tests
+0 errors / 0 failures / 0 skipped
+git diff --check成功
+
+です。
+
+少なくとも、純粋関数化・伝播・基本境界テストはまともです。
+
+ただし、重要な未解決点がある
+P0-1. 同じcandidateを、横と縦で別の速度モデルにより評価している
+
+これが最重要です。
+
+横経路のpreflightでは、必要横加速度を**現在速度current_speed_mps_**で評価しています。
+
+一方、body-clear deadlineでは、
+
+predicted_ego_speed =
+    min(v_max, target_speed + selected_closing_speed)
+
+へ瞬時に到達し、その速度で一定走行する前提です。
+
+実際の車両は、
+
+a_max: 1.0
+a_min: -1.35
+state_prediction_delay_sec: 0.125
+
+で加減速します。
+
+つまり、同じcandidateについて、
+
+横加速度判定: 現在速度
+body-clear判定: target速度＋closingへ瞬時変化
+実走: 加速度制約と遅延を伴う速度
+
+という3種類のモデルが使われています。
+
+例
+
+仮に、
+
+現在速度: 8.0 m/s
+前車速度: 3.33 m/s
+選択closing: 2.0 m/s
+計画上の自車速度: 5.33 m/s
+
+なら、8.0から5.33 m/sまで1.35 m/s²で減速するのに約1.98秒かかります。
+
+その間、瞬時に5.33 m/sへ下がるモデルより、およそ2.6 m余計に前方距離を消費します。現在の追い越しentry最低距離は3.0 mなので、誤差として非常に大きいです。
+
+逆に現在速度が低ければ、計画速度へ瞬時加速する前提によりbody-clear時刻を楽観視します。
+
+必要な修正
+
+deadlineと横加速度を、同じ時間rolloutで評価すべきです。
+
+for (double t = 0.0; t <= horizon; t += 0.05) {
+  ego_v = clamp(
+      ego_v + commanded_accel * dt,
+      previous_v + a_min * dt,
+      previous_v + a_max * dt);
+
+  ego_s += ego_v * dt;
+  ego_d = mission_path(ego_s);
+
+  target_s += filtered_target_s_dot * dt;
+  target_d += filtered_target_d_dot * dt;
+
+  check_body_overlap();
+  check_wall();
+  check_lateral_accel();
+  check_hard_gap();
+}
+
+少なくとも、
+
+現在速度
+a_max / a_min
+0.125秒の制御遅延
+区間速度・曲率速度上限
+candidate closing speed
+
+を同じ予測へ入れる必要があります。
+
+P0-2. 左右の最終選択がdeadlineを見ていない
+
+closing speed込みのcandidate選択は各sideの中では適切です。
+
+しかし左・右の最終選択では、現在も主に、
+
+base racing lineを維持できるか
+必要横移動量
+inner preference
+corridor幅
+continuous open distance
+必要横加速度
+
+で比較しています。body-clear deadline成立可否やdeadline余裕はside選択に渡されていません。
+
+したがって、例えば、
+
+アウト:
+  body-clear deadline成立
+  横移動0.8 m
+
+イン:
+  body-clear deadline不成立
+  横移動0.4 m
+  inner preference対象
+
+なら、イン側が選ばれる余地があります。
+
+選ばれたインcandidateはdeadline不成立なのでShiftOut ownerを得られず、以前と同じ、
+
+ShiftOut
+→ 候補再評価
+→ Follow
+
+へ戻る可能性があります。
+
+必要な修正
+
+最もきれいなのは、左右を分けずに、
+
+side × goal × shift distance × closing speed
+
+を一つのcandidate vectorへ入れてグローバル選択することです。
+
+最低限でもside候補へ、
+
+bool body_clear_deadline_feasible;
+double body_clear_deadline_slack_sec;
+double predicted_body_clear_time_sec;
+
+を追加し、選択優先順位を、
+
+1. deadline成立
+2. deadline slackが十分
+3. base-line維持
+4. body-clearが早い
+5. 横移動が小さい
+6. 横加速度が小さい
+
+にするべきです。
+
+P1. deadline成立余裕が0.10秒しかなく、最速候補を優先しすぎる
+
+現在のdeadline reserveは、
+
+v2x_overtake_body_clear_deadline_margin_sec: 0.10
+
+です。
+
+candidate comparatorはdeadline成立後、最もbody-clearが早い候補を選びます。したがって、
+
+2.0 m/s candidate:
+  deadline余裕 0.11秒
+
+1.4 m/s candidate:
+  deadline余裕 0.45秒
+
+でも、2.0 m/s側を選び得ます。
+
+V2X、操舵遅延、追従誤差、曲率制限を考えると0.10秒はかなり薄いです。
+
+body_clear_timeだけでなく、
+
+deadline_slack =
+    hard_distance_time - body_clear_time;
+
+を保存し、最低0.25～0.4秒程度をA/Bするのがよいです。これは公式値ではなく、まず試すための候補です。
+
+P1. Recoveryからの再取得で古いmission条件を流用する可能性がある
+
+Recovery -> ShiftOut再取得時は、
+
+fixed_pass_corridor_goal_ey =
+    behavior_output.overtake_corridor_center_ey;
+
+へ更新しています。
+
+しかし、この分岐では少なくとも見えているコード上、
+
+mission_shift_distance
+mission_closing_speed_limit
+mission_body_clear_deadline_feasible
+mission_path_frozen
+
+を再計算・再設定していません。
+
+つまり、
+
+旧corridorで選んだclosing/deadline
+→ Recovery
+→ 新しいcorridor goalへ差し替え
+→ 旧deadline成立結果のままShiftOut owner
+
+になるリスクがあります。
+
+修正方針
+
+Recovery再取得は、次のどちらかに限定すべきです。
+
+A. Idleへ戻し、全candidate探索をやり直す
+
+または、
+
+B. side / goal / shift distance / closing speed /
+   deadline / total pathを一括で再計算し、
+   mission stateをatomicに置換する
+
+goalだけの差し替えは避けるべきです。
+
+P1. deadline_checkedが明示されていない
+
+現在は、
+
+mission_body_clear_deadline_feasible{true}
+
+というbool中心です。
+
+normal front entryでは評価されますが、side-only entryや一部fallback経路などでdeadlineを実際に評価していない場合も、デフォルトのtrueと区別できません。
+
+次の2値を分離すべきです。
+
+bool mission_body_clear_deadline_checked;
+bool mission_body_clear_deadline_feasible;
+
+ShiftOut ownerは、
+
+checked && feasible
+
+を要求します。
+
+P1. runtimeで「予測どおり横へ出ているか」を監視していない
+
+今回のログ追加は、
+
+selected side
+shift distance
+closing speed
+predicted body_clear_t
+hard_t
+
+までは良いです。
+
+ただし、本当に必要なのは実行中の、
+
+predicted lateral progress
+actual lateral progress
+predicted body-clear time
+actual body-clear time
+remaining hard-gap time
+remaining deadline slack
+active closing speed
+Behavior owner
+speed owner
+
+です。
+
+選択時はdeadline成立でも、実行中にadaptive closingや曲率速度制限が入れば予測が変わります。残りslackを毎周期更新し、
+
+slack十分:
+  mission継続
+
+slack減少:
+  closing speed調整
+
+deadline不成立:
+  FollowPrepareではなくmission abort
+
+とする必要があります。
+
+上位車のLAT-TTCに相当する機能を丸ごと入れなくても、まずこのdeadline-slack monitorだけでかなり改善できます。
+
+P2. 現在も相手予測は短く、フィルタが弱い
+
+設定は、
+
+v2x_prediction_time: 1.0
+v2x_prediction_use_course_progress: false
+v2x_prediction_use_course_lateral_velocity: false
+
+です。
+
+body-clear predictor内では瞬間的なcourse横速度を利用していますが、1秒を超えると横位置予測はそれ以上進めません。
+
+上位車ログでは、
+
+相手速度の複数フレーム平滑
+corridor rebuild deadband
+corridor拡大レート制限
+lateral TTCのEMA
+
+を使っています。
+
+次段では、単純に既存flagをONへ戻すのではなく、
+
+branch-stable course projection
+filtered s_dot
+filtered d_dot
+prediction confidence
+時間に応じて増える不確実性margin
+
+が必要です。
+
+現時点のレビュー判定
+実験コミットとして
+
+Approveです。
+
+今回の変更は、
+
+既存candidate latticeを正しく理解
+closing speed軸を追加
+candidate評価と実行速度の接続
+missionへの固定
+deadline成立済みShiftOut ownership
+
+まで一貫しており、場当たり的なパラメータ変更ではありません。
+
+提出用race-freezeとして
+
+まだRequest changesです。
+
+最低でも次の2点は先に直したいです。
+
+加減速・遅延・candidate速度を共通化した時系列rollout
+左右をまたいだdeadline-awareなグローバルcandidate選択
+
+その次に、
+
+Recovery再取得時のmission全量再構築
+deadline_checked追加
+runtime deadline slack監視
+
+です。
+
+Codexへ返す修正指示
+現HEADのclosing-speed candidate実装は維持する。
+
+P0:
+1. body-clear deadlineを瞬時定速モデルから時間rolloutへ変更する。
+   - current ego speed
+   - a_max / a_min
+   - state_prediction_delay_sec
+   - local/reference/curvature speed cap
+   - selected closing speed
+   を使用する。
+2. 横加速度preflightも同じcandidate速度rolloutで評価する。
+3. left/rightを含む全candidateを一つのvectorで順位付けする。
+   deadline feasibleとdeadline slackを、inner preferenceやminimum shiftより優先する。
+
+P1:
+4. mission_body_clear_deadline_checkedを追加し、
+   ShiftOut ownerはchecked && feasibleだけ許可する。
+5. Recovery -> ShiftOutではgoalだけ更新しない。
+   全mission candidateを再評価するか、Idleから再entryする。
+6. runtimeでremaining deadline slack、actual lateral progress、
+   predicted/actual body-clear timeをログ・監視する。
+
+回帰テスト:
+- 高速egoから減速が必要なcandidate
+- 低速egoから加速が必要なcandidate
+- 左deadline miss / 右deadline feasible
+- Recovery再取得で旧closing/deadlineを流用しない
+- deadline未評価entryにShiftOut ownerを与えない
+動的合格条件
+
+最新tasklistにもあるとおり、このコミット後のmake dev2はまだ実施されていません。既存のresultは8周・最速46.01秒・最遅108.41秒ですが、今回の修正を認定する結果ではありません。
+
+修正後は12 km/h車相手に20回で、
+
+deadline checked && feasibleでのみShiftOut owner
+body-clear前のFollow/SafetyBrake: 0
+予測body-clearと実測の誤差P95: 0.3秒以内
+Pass -> Return -> Idle: 20/20
+wall Recovery: 0
+solver Recovery: 0
+接触: 0
+同一target再捕捉: 0
+
+を目標にするのがよいです。
+
+今回のCodex修正は明確に前進しています。ただ、今は「時空間候補を選べるようになった」段階で、まだ「その候補が実車両ダイナミクスどおり成立する」ところまでは保証できていません。次は条件追加より、候補評価モデルと実行モデルを同一化する作業が本丸です。

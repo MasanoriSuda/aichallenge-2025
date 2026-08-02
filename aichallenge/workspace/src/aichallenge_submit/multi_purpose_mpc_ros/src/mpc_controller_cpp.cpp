@@ -1508,6 +1508,7 @@ struct V2XBehaviorConfig
   double overtake_minimum_motion_inner_min_open_distance{0.0};
   double overtake_minimum_motion_inner_min_corridor_width{0.0};
   bool overtake_committed_corridor_front_danger_suppression_enabled{false};
+  bool overtake_committed_pass_attack_mode_enabled{false};
   double overtake_velocity_advantage{0.0};
   bool overtake_stage_speed_enabled{false};
   bool overtake_shiftout_adaptive_closing_speed_enabled{false};
@@ -5300,7 +5301,9 @@ struct MPC
         output.locked_target_predicted_body_footprint_sweep_separated,
         overtake_line_state_.pass_front_cap_release_active,
         committed_predicted_overlap_confirmed,
-        committed_body_geometry.side_by_side_escape_active});
+        committed_body_geometry.side_by_side_escape_active,
+        overtake_line_state_.phase == OvertakeLinePhase::Pass,
+        cfg.v2x_behavior.overtake_committed_pass_attack_mode_enabled});
     output.committed_corridor_front_danger_suppressed =
       committed_corridor_front_danger_suppressed;
     const bool effective_front_risk_emergency =
@@ -6183,7 +6186,8 @@ struct MPC
         overtake_core::OvertakeMissionDynamicCorridorResolution first_dynamic_rejection;
         bool first_dynamic_rejection_available = false;
         std::size_t evaluated_goal_count = 0;
-        std::size_t body_clear_deadline_rejection_count = 0;
+        std::size_t body_clear_deadline_miss_count = 0;
+        std::size_t body_clear_deadline_invalid_count = 0;
         double earliest_rejected_body_clear_time =
           std::numeric_limits<double>::infinity();
         double earliest_rejected_hard_distance_time =
@@ -6301,15 +6305,22 @@ struct MPC
                 std::max(0.0, cfg.v2x_behavior.moving_follow_hard_distance),
                 cfg.v2x_behavior.overtake_body_clear_deadline_margin_sec,
                 48U});
-            if (!body_clear_deadline.valid || !body_clear_deadline.feasible) {
-              ++body_clear_deadline_rejection_count;
+            if (!body_clear_deadline.valid) {
+              ++body_clear_deadline_invalid_count;
+              continue;
+            }
+            // A missed body-clear deadline is a ranking penalty, not a mission veto. The
+            // dynamic corridor and footprint/wall preflight above remain the physical entry
+            // gates. This lets the competition-simulation policy choose the least-bad
+            // executable ShiftOut instead of falling back to indefinite Follow.
+            if (!body_clear_deadline.feasible) {
+              ++body_clear_deadline_miss_count;
               earliest_rejected_body_clear_time = std::min(
                 earliest_rejected_body_clear_time,
                 body_clear_deadline.body_clear_time_sec);
               earliest_rejected_hard_distance_time = std::min(
                 earliest_rejected_hard_distance_time,
                 body_clear_deadline.hard_distance_time_sec);
-              continue;
             }
             mission_candidates.push_back(
               overtake_core::OvertakeMissionCandidate{
@@ -6340,8 +6351,8 @@ struct MPC
              << ", side=" << side
              << ", shift_candidates=" << shift_distance_candidates.size()
              << ", goal_candidates=" << evaluated_goal_count
-             << ", body_deadline_rejected=" <<
-            body_clear_deadline_rejection_count
+             << ", body_deadline_missed=" << body_clear_deadline_miss_count
+             << ", body_deadline_invalid=" << body_clear_deadline_invalid_count
              << ", observed=" <<
             (assessment.dynamic_mission_corridor_observed ? 1 : 0)
              << ", samples=" << assessment.dynamic_mission_corridor_samples;
@@ -6358,7 +6369,7 @@ struct MPC
           if (!candidate_gap.feasible && !candidate_gap.reject_reason.empty()) {
             ss << ", planner=" << candidate_gap.reject_reason;
           }
-          if (body_clear_deadline_rejection_count > 0U) {
+          if (body_clear_deadline_miss_count > 0U) {
             ss << ", earliest_body_clear_t=" << earliest_rejected_body_clear_time
                << ", earliest_hard_t=" << earliest_rejected_hard_distance_time;
           }
@@ -6389,6 +6400,8 @@ struct MPC
                           << ", goal=" << preflight.goal_ey
                           << ", lateral_shift=" << assessment.required_lateral_shift
                           << ", ay=" << preflight.max_required_lateral_accel
+                          << ", body_deadline_feasible=" <<
+            (mission_selection.candidate.body_clear_deadline_feasible ? 1 : 0)
                           << ", body_clear_t=" <<
             mission_selection.candidate.predicted_body_clear_time_sec
                           << ", body_clear_s=" <<
@@ -10543,6 +10556,8 @@ private:
       std::max(0.0, cfg.v2x_behavior.moving_front_speed_threshold);
     committed_pass_request.committed_pass_min_speed_mps =
       cfg.v2x_behavior.overtake_committed_pass_min_speed;
+    committed_pass_request.committed_pass_attack_mode_enabled =
+      cfg.v2x_behavior.overtake_committed_pass_attack_mode_enabled;
     const auto committed_pass_policy =
       overtake_core::resolve_committed_pass_policy(committed_pass_request);
     output.front_cap_release_ready = committed_pass_policy.front_cap_release_ready;
@@ -10570,7 +10585,8 @@ private:
           "release=%.2f, reapply=%.2f, target_s=%.2f, lateral_complete=%d, "
           "horizon_clear=%d, minimum_motion=%d, footprint_clear=%d, "
           "footprint_prediction=%d, footprint_sweep_clear=%d, "
-          "side_by_side_escape=%d, predicted_overlap=%d, overlap_confirmed=%d, "
+          "side_by_side_escape=%d, attack_hold=%d, predicted_overlap=%d, "
+          "overlap_confirmed=%d, "
           "overlap_elapsed=%.2f/%.2f, body_longitudinal=%.2f, "
           "predicted_s=%.2f, predicted_lateral=%.2f, reason=%s",
           output.front_cap_release_ready ? "Released" : "Reapplied",
@@ -10584,6 +10600,7 @@ private:
           committed_pass_request.footprint_prediction_valid ? 1 : 0,
           committed_pass_request.predicted_body_footprint_sweep_separated ? 1 : 0,
           committed_pass_policy.minimum_motion_side_by_side_escape_active ? 1 : 0,
+          committed_pass_policy.minimum_motion_attack_hold_active ? 1 : 0,
           committed_body_geometry.raw_predicted_body_overlap ? 1 : 0,
           committed_pass_request.predicted_body_footprint_overlap_confirmed ? 1 : 0,
           predicted_overlap_confirmation.elapsed_sec,
@@ -10766,7 +10783,8 @@ private:
           "cap_release=%d, horizon_release=%d, "
           "speed_hold=%d, minimum_motion_cap=%d, footprint_clear=%d, "
           "footprint_prediction=%d, footprint_sweep_clear=%d, "
-          "side_by_side_escape=%d, predicted_overlap=%d, overlap_confirmed=%d, "
+          "side_by_side_escape=%d, attack_hold=%d, predicted_overlap=%d, "
+          "overlap_confirmed=%d, "
           "overlap_elapsed=%.2f/%.2f, "
           "cooldown=%.2f, "
           "max_lat_acc=%.2f, lat_limited=%d, wall_limited=%d, "
@@ -10793,6 +10811,7 @@ private:
           committed_pass_request.footprint_prediction_valid ? 1 : 0,
           committed_pass_request.predicted_body_footprint_sweep_separated ? 1 : 0,
           committed_pass_policy.minimum_motion_side_by_side_escape_active ? 1 : 0,
+          committed_pass_policy.minimum_motion_attack_hold_active ? 1 : 0,
           committed_body_geometry.raw_predicted_body_overlap ? 1 : 0,
           committed_pass_request.predicted_body_footprint_overlap_confirmed ? 1 : 0,
           predicted_overlap_confirmation.elapsed_sec,
@@ -14089,6 +14108,9 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_committed_corridor_front_danger_suppression_enabled =
     mpc["v2x_overtake_committed_corridor_front_danger_suppression_enabled"] ?
     mpc["v2x_overtake_committed_corridor_front_danger_suppression_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_committed_pass_attack_mode_enabled =
+    mpc["v2x_overtake_committed_pass_attack_mode_enabled"] ?
+    mpc["v2x_overtake_committed_pass_attack_mode_enabled"].as<bool>() : false;
   cfg.mpc.v2x_behavior.overtake_velocity_advantage = std::max(
     0.0,
     mpc["v2x_overtake_velocity_advantage"] ?
@@ -14777,13 +14799,15 @@ public:
       RCLCPP_INFO(
         get_logger(),
         "V2X minimum-motion inside preference: lookahead=%.2f m, min_open=%.2f m, "
-        "min_width=%.2f m, max_extra_shift=%.2f m, committed_front_danger_suppress=%d",
+        "min_width=%.2f m, max_extra_shift=%.2f m, committed_front_danger_suppress=%d, "
+        "committed_pass_attack=%d",
         mpc_cfg_.v2x_behavior.overtake_minimum_motion_inner_lookahead_distance,
         mpc_cfg_.v2x_behavior.overtake_minimum_motion_inner_min_open_distance,
         mpc_cfg_.v2x_behavior.overtake_minimum_motion_inner_min_corridor_width,
         mpc_cfg_.v2x_behavior.overtake_minimum_motion_inner_preference_max_extra_shift,
         mpc_cfg_.v2x_behavior
-        .overtake_committed_corridor_front_danger_suppression_enabled ? 1 : 0);
+        .overtake_committed_corridor_front_danger_suppression_enabled ? 1 : 0,
+        mpc_cfg_.v2x_behavior.overtake_committed_pass_attack_mode_enabled ? 1 : 0);
       RCLCPP_INFO(
         get_logger(),
         "V2X start grid: grace=%.2f s, breakout=%s, side_deadband=%.2f m, "

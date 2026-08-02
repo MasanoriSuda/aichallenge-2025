@@ -302,6 +302,10 @@ struct CommittedPassPolicyRequest
   double target_speed_mps{};
   double slow_target_max_speed_mps{};
   double committed_pass_min_speed_mps{};
+  /// Competition-simulation policy: after a minimum-motion Pass has acquired
+  /// its release, prefer forward completion over a future-overlap prediction.
+  /// Current footprint, wall, path-feasibility and target-continuity guards remain hard.
+  bool committed_pass_attack_mode_enabled{false};
 };
 
 struct CommittedPassPolicyResolution
@@ -311,6 +315,7 @@ struct CommittedPassPolicyResolution
   bool minimum_motion_footprint_hold_active{false};
   bool minimum_motion_side_by_side_escape_active{false};
   bool minimum_motion_predicted_overlap_grace_active{false};
+  bool minimum_motion_attack_hold_active{false};
   bool constrained_horizon_release_allowed{false};
   bool committed_pass_speed_hold_allowed{false};
   bool front_cap_release_ready{false};
@@ -2150,13 +2155,17 @@ struct CommittedCorridorFrontDangerSuppressionRequest
   bool prior_front_cap_release_active{false};
   bool predicted_body_footprint_overlap_confirmed{true};
   bool minimum_motion_side_by_side_escape_active{false};
+  bool pass_phase{false};
+  bool committed_pass_attack_mode_enabled{false};
 };
 
 /// Suppress a longitudinal-only front danger stop only after a normal committed
 /// overtake has a validated fixed corridor and current 2D body footprints are
 /// separated. A previously released minimum-motion Pass may share the same
-/// bounded predicted-overlap confirmation used by its front-cap policy.
-/// Uncertain observations and confirmed overlap fail closed.
+/// bounded predicted-overlap confirmation used by its front-cap policy. In the
+/// optional competition-simulation attack mode, an already released Pass may
+/// ignore future overlap while the current footprints and target continuity
+/// remain valid. Wall/path execution guards remain owned by OvertakeLine.
 bool can_suppress_committed_corridor_front_danger(
   const CommittedCorridorFrontDangerSuppressionRequest & request) noexcept;
 

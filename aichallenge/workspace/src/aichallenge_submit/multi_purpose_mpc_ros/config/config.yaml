@@ -267,7 +267,7 @@ reference_path:
   # csv_path: ""
   csv_path: "env/final_ver3/traj_mincurv.csv"
   domain_csv_path:
-    1: "env/final_ver3/traj_mincurv.csv"
+    1: "env/final_ver3/traj_mincurv_org.csv"
     2: "env/final_ver3/traj_mincurv_org.csv"
     3: "env/final_ver3/traj_mincurv.csv"
   resolution: 0.6
@@ -451,6 +451,11 @@ mpc:
   v2x_overtake_minimum_motion_inner_min_open_distance: 8.0 # [m] inside must stay continuously executable before preference applies
   v2x_overtake_minimum_motion_inner_min_corridor_width: 0.30 # [m] inflated center-line slack required for the aggressive inside choice
   v2x_overtake_committed_corridor_front_danger_suppression_enabled: true # use 2D footprint sweep, not longitudinal distance alone, on a validated locked pass
+  # Competition-simulation only: after a validated minimum-motion Pass has released its front
+  # cap, keep advancing while the current kart footprints remain non-overlapping. A predicted
+  # future overlap alone no longer returns the kart to Follow/SafetyBrake; current overlap,
+  # target discontinuity, wall/path infeasibility and solver guards remain active.
+  v2x_overtake_committed_pass_attack_mode_enabled: true
   v2x_overtake_velocity_advantage: 1.0      # [m/s] legacy whole-phase cap when stage speed is disabled
   v2x_overtake_stage_speed_enabled: true    # cap ShiftOut/early Pass; release only after the locked target is no longer ahead
   v2x_overtake_shiftout_adaptive_closing_speed_enabled: true # preserve entry gap until distance+lateral ShiftOut completes

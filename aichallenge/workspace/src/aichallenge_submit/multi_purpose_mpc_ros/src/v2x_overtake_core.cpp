@@ -406,6 +406,16 @@ CommittedPassPolicyResolution resolve_committed_pass_policy(
     !request.predicted_body_footprint_sweep_separated &&
     !request.predicted_body_footprint_overlap_confirmed &&
     !resolution.minimum_motion_side_by_side_escape_active;
+  // Competition-simulation attack mode is deliberately hold-only. It cannot
+  // acquire an initial release from an unsafe prediction. Once the validated
+  // Pass has been released, however, a predicted future overlap alone must not
+  // hand speed ownership back to Follow. Current 2D overlap, wall contact,
+  // target discontinuity and an infeasible execution path still revoke it.
+  resolution.minimum_motion_attack_hold_active =
+    request.committed_pass_attack_mode_enabled &&
+    minimum_motion_common_guard && request.prior_front_cap_release_active &&
+    request.current_body_footprints_separated &&
+    request.execution_path_physically_feasible;
   resolution.minimum_motion_footprint_release_allowed =
     minimum_motion_common_guard && request.lateral_complete &&
     request.execution_path_physically_feasible && minimum_motion_sweep_clear;
@@ -414,7 +424,8 @@ CommittedPassPolicyResolution resolve_committed_pass_policy(
     request.current_body_footprints_separated &&
     (minimum_motion_sweep_clear ||
     resolution.minimum_motion_side_by_side_escape_active ||
-    resolution.minimum_motion_predicted_overlap_grace_active);
+    resolution.minimum_motion_predicted_overlap_grace_active ||
+    resolution.minimum_motion_attack_hold_active);
   resolution.constrained_horizon_release_allowed =
     request.pass_phase &&
     request.lateral_exclusion_latched &&
@@ -1104,11 +1115,7 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
       selection.candidate = OvertakeMissionCandidate{};
       return selection;
     }
-    if (
-      !candidate.feasible ||
-      (candidate.body_clear_deadline_checked &&
-      !candidate.body_clear_deadline_feasible))
-    {
+    if (!candidate.feasible) {
       continue;
     }
     if (!selection.found || better(candidate, selection.candidate)) {
@@ -3311,16 +3318,21 @@ FrontDangerAction resolve_front_danger_action(const FrontDangerActionRequest & r
 bool can_suppress_committed_corridor_front_danger(
   const CommittedCorridorFrontDangerSuppressionRequest & request) noexcept
 {
+  const bool attack_path_acceptable =
+    request.committed_pass_attack_mode_enabled && request.pass_phase &&
+    request.prior_front_cap_release_active &&
+    request.current_body_footprints_separated;
   const bool predicted_path_acceptable =
     request.predicted_body_footprint_sweep_separated ||
     (request.prior_front_cap_release_active &&
     (!request.predicted_body_footprint_overlap_confirmed ||
-    request.minimum_motion_side_by_side_escape_active));
+    request.minimum_motion_side_by_side_escape_active)) ||
+    attack_path_acceptable;
   return request.enabled && request.active_shiftout_or_pass &&
          request.nearest_front_matches_locked_target && request.validated_fixed_corridor &&
          !request.inter_vehicle_corridor && request.target_seen &&
          !request.target_position_jump && request.current_body_footprints_separated &&
-         request.footprint_prediction_valid &&
+         (request.footprint_prediction_valid || attack_path_acceptable) &&
          predicted_path_acceptable;
 }
 

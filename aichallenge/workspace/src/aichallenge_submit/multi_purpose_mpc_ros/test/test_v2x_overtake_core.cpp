@@ -715,6 +715,39 @@ TEST(V2XFrontDangerAction, CommittedCorridorSharesBoundedPredictedOverlapGrace)
   EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
 }
 
+TEST(V2XFrontDangerAction, CommittedPassAttackSuppressesPredictionOnlyDanger)
+{
+  CommittedCorridorFrontDangerSuppressionRequest request;
+  request.enabled = true;
+  request.active_shiftout_or_pass = true;
+  request.nearest_front_matches_locked_target = true;
+  request.validated_fixed_corridor = true;
+  request.target_seen = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = false;
+  request.prior_front_cap_release_active = true;
+  request.predicted_body_footprint_overlap_confirmed = true;
+  request.pass_phase = true;
+  request.committed_pass_attack_mode_enabled = true;
+
+  EXPECT_TRUE(can_suppress_committed_corridor_front_danger(request));
+
+  // Attack mode never applies before Pass, before initial release, or after
+  // current body overlap/target discontinuity.
+  request.pass_phase = false;
+  EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
+  request.pass_phase = true;
+  request.prior_front_cap_release_active = false;
+  EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
+  request.prior_front_cap_release_active = true;
+  request.current_body_footprints_separated = false;
+  EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
+  request.current_body_footprints_separated = true;
+  request.target_position_jump = true;
+  EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
+}
+
 TEST(V2XFrontDangerAction, ResolvesSharedCommittedPassBodyGeometry)
 {
   CommittedPassBodyGeometryRequest request;
@@ -1186,6 +1219,52 @@ TEST(V2XOvertakeCoreSpeed, MinimumMotionPassDebouncesPredictedOverlapAfterReleas
   EXPECT_EQ(
     resolution.transition_reason,
     CommittedPassFrontCapTransitionReason::PredictedFootprintOverlap);
+}
+
+TEST(V2XOvertakeCoreSpeed, CommittedPassAttackHoldsAcrossConfirmedPredictedOverlap)
+{
+  CommittedPassPolicyRequest request;
+  request.pass_phase = true;
+  request.lateral_complete = true;
+  request.execution_horizon_unconstrained = true;
+  request.execution_path_physically_feasible = true;
+  request.minimum_motion_corridor_active = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = false;
+  request.predicted_body_footprint_overlap_confirmed = true;
+  request.prior_front_cap_release_active = true;
+  request.target_seen = true;
+  request.target_longitudinal_m = 3.0;
+  request.body_longitudinal_clearance_m = 2.0;
+  request.committed_pass_attack_mode_enabled = true;
+
+  auto resolution = resolve_committed_pass_policy(request);
+  EXPECT_TRUE(resolution.minimum_motion_attack_hold_active);
+  EXPECT_TRUE(resolution.minimum_motion_footprint_hold_active);
+  EXPECT_TRUE(resolution.front_cap_release_ready);
+  EXPECT_FALSE(resolution.front_cap_state_update_required);
+
+  // It is hold-only and retains physical execution guards.
+  request.prior_front_cap_release_active = false;
+  resolution = resolve_committed_pass_policy(request);
+  EXPECT_FALSE(resolution.minimum_motion_attack_hold_active);
+  EXPECT_FALSE(resolution.front_cap_release_ready);
+  request.prior_front_cap_release_active = true;
+  request.execution_path_physically_feasible = false;
+  resolution = resolve_committed_pass_policy(request);
+  EXPECT_FALSE(resolution.minimum_motion_attack_hold_active);
+  EXPECT_FALSE(resolution.front_cap_release_ready);
+  request.execution_path_physically_feasible = true;
+  request.actual_wall_contact = true;
+  resolution = resolve_committed_pass_policy(request);
+  EXPECT_FALSE(resolution.minimum_motion_attack_hold_active);
+  EXPECT_FALSE(resolution.front_cap_release_ready);
+  request.actual_wall_contact = false;
+  request.current_body_footprints_separated = false;
+  resolution = resolve_committed_pass_policy(request);
+  EXPECT_FALSE(resolution.minimum_motion_attack_hold_active);
+  EXPECT_FALSE(resolution.front_cap_release_ready);
 }
 
 TEST(V2XOvertakeCoreSpeed, MinimumMotionSideBySidePassEscapesForward)
@@ -2455,6 +2534,30 @@ TEST(V2XOvertakeCoreSpeed, SelectsEarliestBodyClearBeforeShortestShift)
   ASSERT_TRUE(selection.found);
   EXPECT_EQ(selection.selected_index, 1U);
   EXPECT_DOUBLE_EQ(selection.candidate.predicted_body_clear_time_sec, 0.5);
+}
+
+TEST(V2XOvertakeCoreSpeed, BodyClearDeadlineIsSoftButFeasibleDeadlineWins)
+{
+  OvertakeMissionCandidateSelectionRequest request;
+  request.candidates = {
+    OvertakeMissionCandidate{
+      true, false, 2.5, 0.7, 0.7, 3.0, true, false, 0.8, 0.6, 2.0},
+    OvertakeMissionCandidate{
+      true, false, 4.0, 1.5, 1.5, 4.0, true, true, 0.9, 1.5, 2.5}};
+
+  auto selection = select_overtake_mission_candidate(request);
+  ASSERT_TRUE(selection.valid);
+  ASSERT_TRUE(selection.found);
+  EXPECT_EQ(selection.selected_index, 1U);
+
+  // If every physically executable candidate misses the timing estimate, the
+  // selector still returns the earliest-clear option instead of forcing Follow.
+  request.candidates.resize(1U);
+  selection = select_overtake_mission_candidate(request);
+  ASSERT_TRUE(selection.valid);
+  ASSERT_TRUE(selection.found);
+  EXPECT_EQ(selection.selected_index, 0U);
+  EXPECT_FALSE(selection.candidate.body_clear_deadline_feasible);
 }
 
 TEST(V2XOvertakeCoreSpeed, SelectsShortestFeasibleShiftThenMinimumMotion)

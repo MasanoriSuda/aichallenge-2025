@@ -2494,6 +2494,33 @@ TEST(V2XOvertakeCoreSpeed, SelectsDirectPassBeforeShiftOutCandidates)
   EXPECT_TRUE(selection.candidate.direct_pass);
 }
 
+TEST(V2XOvertakeCoreSpeed, PreservesSelectedMissionMetadataWithoutParallelLookup)
+{
+  OvertakeMissionCandidate slower_candidate{
+    true, false, 4.0, -0.8, 0.8, 2.0};
+  slower_candidate.closing_speed_mps = 0.8;
+  slower_candidate.pass_side_sign = -1;
+  slower_candidate.current_position_clear = false;
+
+  OvertakeMissionCandidate selected_candidate{
+    true, false, 4.0, 0.6, 0.6, 2.0};
+  selected_candidate.closing_speed_mps = 2.0;
+  selected_candidate.pass_side_sign = 1;
+  selected_candidate.current_position_clear = true;
+
+  OvertakeMissionCandidateSelectionRequest request;
+  request.candidates = {slower_candidate, selected_candidate};
+
+  const auto selection = select_overtake_mission_candidate(request);
+  ASSERT_TRUE(selection.valid);
+  ASSERT_TRUE(selection.found);
+  EXPECT_EQ(selection.selected_index, 1U);
+  EXPECT_EQ(selection.candidate.pass_side_sign, 1);
+  EXPECT_TRUE(selection.candidate.current_position_clear);
+  EXPECT_DOUBLE_EQ(selection.candidate.goal_lateral_m, 0.6);
+  EXPECT_DOUBLE_EQ(selection.candidate.closing_speed_mps, 2.0);
+}
+
 TEST(V2XOvertakeCoreSpeed, BuildsMinimumMidpointAndMaximumClosingSpeedCandidates)
 {
   const auto candidates = build_overtake_closing_speed_candidates(0.8, 2.0);

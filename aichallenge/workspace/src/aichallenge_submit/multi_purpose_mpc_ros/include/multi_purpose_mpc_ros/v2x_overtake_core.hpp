@@ -664,6 +664,10 @@ struct OvertakeMissionCandidate
   double predicted_hard_distance_time_sec{std::numeric_limits<double>::infinity()};
   double predicted_body_clear_distance_m{std::numeric_limits<double>::infinity()};
   double closing_speed_mps{std::numeric_limits<double>::quiet_NaN()};
+  // Selection-transparent metadata travels with the ranked candidate. Keeping
+  // it here avoids a second, index-coupled metadata vector in the controller.
+  int pass_side_sign{0};
+  bool current_position_clear{false};
 };
 
 /// Build a small deterministic longitudinal candidate set from the existing

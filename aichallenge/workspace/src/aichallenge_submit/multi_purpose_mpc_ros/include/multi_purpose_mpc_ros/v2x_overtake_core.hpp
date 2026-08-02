@@ -739,6 +739,11 @@ struct PassHorizonDecisionRequest
   /// overlap. Revalidate the same side before the normal horizon margin is
   /// exhausted instead of waiting for the speed cap to be reapplied.
   bool predicted_overlap_replan_required{false};
+  /// The admitted rear-clear point has entered the last distance window in
+  /// which a bounded same-side replacement can still be planned. This is an
+  /// early trigger; it must be disabled after the permitted replacement has
+  /// already been committed.
+  bool rear_clear_replan_required{false};
   bool short_horizon_safe{false};
   bool hold_active{false};
   double pass_traveled_m{};
@@ -760,6 +765,43 @@ struct PassHorizonDecisionRequest
 
 PassHorizonAction resolve_pass_horizon_action(
   const PassHorizonDecisionRequest & request) noexcept;
+
+struct PassOuterHorizonSample
+{
+  double path_distance_m{};
+  double reference_curvature_radpm{};
+};
+
+struct PassOuterHorizonRequest
+{
+  bool enabled{false};
+  /// Initial admission infers an outer strategy from the first significant
+  /// curve. A replacement sets this when the original mission already owns an
+  /// outer strategy, even if the replacement starts on a straight.
+  bool outer_strategy_committed{false};
+  bool infer_outer_strategy{false};
+  int pass_side_sign{0};
+  double significant_curvature_radpm{};
+  double validation_distance_m{};
+  std::vector<PassOuterHorizonSample> samples;
+};
+
+struct PassOuterHorizonResolution
+{
+  bool valid{false};
+  bool feasible{false};
+  bool outer_strategy{false};
+  bool role_reversal{false};
+  double first_significant_curve_distance_m{std::numeric_limits<double>::infinity()};
+  double first_role_reversal_distance_m{std::numeric_limits<double>::infinity()};
+};
+
+/// Keep a committed outside pass outside until its predicted rear-clear point.
+/// Intentional inside attacks are not rejected. Initial admission may infer an
+/// outside strategy from the first significant curve; replacement planning
+/// carries the already-committed strategy explicitly.
+PassOuterHorizonResolution evaluate_pass_outer_horizon(
+  const PassOuterHorizonRequest & request) noexcept;
 
 struct SameSideExtensionCommitRequest
 {
@@ -888,6 +930,7 @@ struct OvertakeMissionCandidate
   double prediction_epoch_sec{-std::numeric_limits<double>::infinity()};
   double prediction_horizon_sec{};
   double dynamic_valid_until_sec{-std::numeric_limits<double>::infinity()};
+  bool outer_strategy_committed{false};
 };
 
 /// Build a small deterministic longitudinal candidate set from the existing

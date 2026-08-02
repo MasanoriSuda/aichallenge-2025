@@ -118,6 +118,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeDynamicPassDistanceReque
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicPredictionTimingRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassHorizonAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassHorizonDecisionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::PassOuterHorizonRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::PassOuterHorizonSample;
 using multi_purpose_mpc_ros::v2x_overtake_core::SameSideExtensionCommitRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SameSideReplanShiftDistanceRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidate;
@@ -139,6 +141,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_kinematic_rollo
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_dynamic_pass_distance;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_prediction_timing;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_horizon_action;
+using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_pass_outer_horizon;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_commit_same_side_extension;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_same_side_replan_shift_distance;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_overtake_mission_candidate;
@@ -2866,6 +2869,12 @@ TEST(V2XOvertakeCoreHorizon, SelectsBoundedPassHorizonActions)
     PassHorizonAction::RequestSameSideExtension);
   request.predicted_overlap_replan_required = false;
 
+  request.rear_clear_replan_required = true;
+  EXPECT_EQ(
+    resolve_pass_horizon_action(request),
+    PassHorizonAction::RequestSameSideExtension);
+  request.rear_clear_replan_required = false;
+
   request.pass_traveled_m = 9.5;
   EXPECT_EQ(
     resolve_pass_horizon_action(request),
@@ -2886,6 +2895,62 @@ TEST(V2XOvertakeCoreHorizon, SelectsBoundedPassHorizonActions)
   request.rear_clear_confirmed = false;
   request.pass_traveled_m = 32.0;
   EXPECT_EQ(resolve_pass_horizon_action(request), PassHorizonAction::Abort);
+}
+
+TEST(V2XOvertakeCoreHorizon, KeepsCommittedOuterSideThroughRearClearHorizon)
+{
+  const auto result = evaluate_pass_outer_horizon(
+    PassOuterHorizonRequest{
+      true, false, true, -1, 0.04, 16.0,
+      std::vector<PassOuterHorizonSample>{{0.0, 0.0}, {4.0, 0.12}, {16.0, 0.20}}});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_TRUE(result.feasible);
+  EXPECT_TRUE(result.outer_strategy);
+  EXPECT_FALSE(result.role_reversal);
+  EXPECT_DOUBLE_EQ(result.first_significant_curve_distance_m, 4.0);
+}
+
+TEST(V2XOvertakeCoreHorizon, RejectsOuterSideThatBecomesInsideBeforeRearClear)
+{
+  const auto result = evaluate_pass_outer_horizon(
+    PassOuterHorizonRequest{
+      true, false, true, -1, 0.04, 18.0,
+      std::vector<PassOuterHorizonSample>{
+        {0.0, 0.0}, {4.0, 0.12}, {12.0, -0.15}, {20.0, -0.20}}});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_FALSE(result.feasible);
+  EXPECT_TRUE(result.outer_strategy);
+  EXPECT_TRUE(result.role_reversal);
+  EXPECT_DOUBLE_EQ(result.first_role_reversal_distance_m, 12.0);
+}
+
+TEST(V2XOvertakeCoreHorizon, DoesNotApplyOuterContractToIntentionalInsideAttack)
+{
+  const auto result = evaluate_pass_outer_horizon(
+    PassOuterHorizonRequest{
+      true, false, true, 1, 0.04, 18.0,
+      std::vector<PassOuterHorizonSample>{{3.0, 0.12}, {12.0, -0.15}}});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_TRUE(result.feasible);
+  EXPECT_FALSE(result.outer_strategy);
+  EXPECT_FALSE(result.role_reversal);
+}
+
+TEST(V2XOvertakeCoreHorizon, CarriesOuterContractAcrossStraightReplacementStart)
+{
+  const auto result = evaluate_pass_outer_horizon(
+    PassOuterHorizonRequest{
+      true, true, false, -1, 0.04, 18.0,
+      std::vector<PassOuterHorizonSample>{{0.0, 0.0}, {8.0, -0.12}}});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_FALSE(result.feasible);
+  EXPECT_TRUE(result.outer_strategy);
+  EXPECT_TRUE(result.role_reversal);
+  EXPECT_DOUBLE_EQ(result.first_role_reversal_distance_m, 8.0);
 }
 
 TEST(V2XOvertakeCoreHorizon, CommitsOnlyFreshMatchingForwardExtension)

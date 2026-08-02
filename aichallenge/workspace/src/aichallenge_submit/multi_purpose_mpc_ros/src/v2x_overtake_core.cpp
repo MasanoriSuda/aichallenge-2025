@@ -1296,6 +1296,7 @@ PassHorizonAction resolve_pass_horizon_action(
   const double distance_slack_m = effective_valid_until_m - request.pass_traveled_m;
   const bool revalidation_due =
     request.predicted_overlap_replan_required ||
+    request.rear_clear_replan_required ||
     distance_slack_m <= request.revalidation_lead_distance_m + 1e-9 ||
     request.dynamic_time_remaining_sec <= request.revalidation_lead_time_sec + 1e-9;
   if (!revalidation_due) {
@@ -1306,6 +1307,76 @@ PassHorizonAction resolve_pass_horizon_action(
   }
   return request.short_horizon_safe ?
     PassHorizonAction::EnterHold : PassHorizonAction::Abort;
+}
+
+PassOuterHorizonResolution evaluate_pass_outer_horizon(
+  const PassOuterHorizonRequest & request) noexcept
+{
+  PassOuterHorizonResolution resolution;
+  if (!request.enabled) {
+    resolution.valid = true;
+    resolution.feasible = true;
+    resolution.outer_strategy = request.outer_strategy_committed;
+    return resolution;
+  }
+  if (
+    (request.pass_side_sign != -1 && request.pass_side_sign != 1) ||
+    !std::isfinite(request.significant_curvature_radpm) ||
+    request.significant_curvature_radpm < 0.0 ||
+    !std::isfinite(request.validation_distance_m) ||
+    request.validation_distance_m < 0.0)
+  {
+    return resolution;
+  }
+
+  double previous_distance_m = -std::numeric_limits<double>::infinity();
+  for (const auto & sample : request.samples) {
+    if (
+      !std::isfinite(sample.path_distance_m) || sample.path_distance_m < 0.0 ||
+      !std::isfinite(sample.reference_curvature_radpm) ||
+      sample.path_distance_m + 1e-9 < previous_distance_m)
+    {
+      return PassOuterHorizonResolution{};
+    }
+    previous_distance_m = sample.path_distance_m;
+  }
+
+  resolution.valid = true;
+  resolution.feasible = true;
+  resolution.outer_strategy = request.outer_strategy_committed;
+  bool strategy_classified = request.outer_strategy_committed;
+  for (const auto & sample : request.samples) {
+    if (sample.path_distance_m > request.validation_distance_m + 1e-9) {
+      break;
+    }
+    if (
+      std::abs(sample.reference_curvature_radpm) <=
+      request.significant_curvature_radpm + 1e-12)
+    {
+      continue;
+    }
+    if (!std::isfinite(resolution.first_significant_curve_distance_m)) {
+      resolution.first_significant_curve_distance_m = sample.path_distance_m;
+    }
+    const int inner_side = sample.reference_curvature_radpm > 0.0 ? 1 : -1;
+    if (!strategy_classified && request.infer_outer_strategy) {
+      resolution.outer_strategy = request.pass_side_sign != inner_side;
+      strategy_classified = true;
+      if (!resolution.outer_strategy) {
+        // This mission deliberately starts as an inside attack. The outside
+        // continuity contract does not silently turn that separate strategy
+        // into a rejection rule.
+        return resolution;
+      }
+    }
+    if (resolution.outer_strategy && request.pass_side_sign == inner_side) {
+      resolution.feasible = false;
+      resolution.role_reversal = true;
+      resolution.first_role_reversal_distance_m = sample.path_distance_m;
+      return resolution;
+    }
+  }
+  return resolution;
 }
 
 bool can_commit_same_side_extension(

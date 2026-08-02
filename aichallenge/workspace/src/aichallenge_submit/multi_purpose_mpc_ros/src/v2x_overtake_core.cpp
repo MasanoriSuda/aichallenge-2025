@@ -794,6 +794,112 @@ OvertakeMissionPathResolution resolve_overtake_mission_path(
   return resolution;
 }
 
+OvertakeBodyClearDeadlineResolution resolve_overtake_body_clear_deadline(
+  const OvertakeBodyClearDeadlineRequest & request) noexcept
+{
+  OvertakeBodyClearDeadlineResolution resolution;
+  if (!request.enabled) {
+    resolution.valid = true;
+    resolution.feasible = true;
+    return resolution;
+  }
+
+  auto mission_origin_request = request.mission_path;
+  mission_origin_request.path_distance_m = 0.0;
+  const auto mission_origin = resolve_overtake_mission_path(mission_origin_request);
+  if (
+    !mission_origin.valid ||
+    !std::isfinite(request.target_longitudinal_m) ||
+    !std::isfinite(request.ego_speed_mps) || request.ego_speed_mps <= 1e-6 ||
+    !std::isfinite(request.target_speed_mps) || request.target_speed_mps < 0.0 ||
+    !std::isfinite(request.target_lateral_m) ||
+    !std::isfinite(request.target_lateral_velocity_mps) ||
+    !std::isfinite(request.target_lateral_prediction_horizon_sec) ||
+    request.target_lateral_prediction_horizon_sec < 0.0 ||
+    !std::isfinite(request.lateral_clearance_m) || request.lateral_clearance_m < 0.0 ||
+    !std::isfinite(request.hard_longitudinal_distance_m) ||
+    request.hard_longitudinal_distance_m < 0.0 ||
+    !std::isfinite(request.deadline_margin_sec) || request.deadline_margin_sec < 0.0 ||
+    request.sample_count < 2U)
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  resolution.checked = true;
+  const double closing_speed_mps = request.ego_speed_mps - request.target_speed_mps;
+  if (
+    request.target_longitudinal_m <= request.hard_longitudinal_distance_m + 1e-9)
+  {
+    resolution.hard_distance_time_sec = 0.0;
+  } else if (closing_speed_mps > 1e-6) {
+    resolution.hard_distance_time_sec =
+      (request.target_longitudinal_m - request.hard_longitudinal_distance_m) /
+      closing_speed_mps;
+  }
+
+  const auto target_lateral_at = [&](const double time_sec) {
+      const double prediction_time = std::min(
+        std::max(0.0, time_sec), request.target_lateral_prediction_horizon_sec);
+      return request.target_lateral_m +
+             request.target_lateral_velocity_mps * prediction_time;
+    };
+  const double initial_lateral_separation =
+    std::abs(target_lateral_at(0.0) - mission_origin.lateral_target_m);
+  resolution.currently_laterally_clear =
+    initial_lateral_separation + 1e-9 >= request.lateral_clearance_m;
+  if (resolution.currently_laterally_clear) {
+    resolution.body_clear_time_sec = 0.0;
+    resolution.body_clear_distance_m = 0.0;
+    resolution.feasible = true;
+    return resolution;
+  }
+
+  double previous_distance_m = 0.0;
+  double previous_time_sec = 0.0;
+  double previous_margin_m =
+    initial_lateral_separation - request.lateral_clearance_m;
+  for (std::size_t i = 1U; i <= request.sample_count; ++i) {
+    const double ratio =
+      static_cast<double>(i) / static_cast<double>(request.sample_count);
+    const double distance_m = request.mission_path.shift_distance_m * ratio;
+    auto path_request = request.mission_path;
+    path_request.path_distance_m = distance_m;
+    const auto path = resolve_overtake_mission_path(path_request);
+    if (!path.valid) {
+      resolution.valid = false;
+      resolution.feasible = false;
+      return resolution;
+    }
+    const double time_sec = distance_m / request.ego_speed_mps;
+    const double margin_m =
+      std::abs(target_lateral_at(time_sec) - path.lateral_target_m) -
+      request.lateral_clearance_m;
+    if (margin_m >= -1e-9 && previous_margin_m < 0.0) {
+      const double denominator = margin_m - previous_margin_m;
+      const double interpolation = denominator > 1e-12 ?
+        std::clamp(-previous_margin_m / denominator, 0.0, 1.0) : 1.0;
+      resolution.body_clear_time_sec = previous_time_sec +
+        interpolation * (time_sec - previous_time_sec);
+      resolution.body_clear_distance_m = previous_distance_m +
+        interpolation * (distance_m - previous_distance_m);
+      break;
+    }
+    previous_distance_m = distance_m;
+    previous_time_sec = time_sec;
+    previous_margin_m = margin_m;
+  }
+
+  if (!std::isfinite(resolution.body_clear_time_sec)) {
+    return resolution;
+  }
+  resolution.feasible =
+    !std::isfinite(resolution.hard_distance_time_sec) ||
+    resolution.body_clear_time_sec + request.deadline_margin_sec <=
+    resolution.hard_distance_time_sec + 1e-9;
+  return resolution;
+}
+
 OvertakeMissionDynamicCorridorResolution resolve_overtake_mission_dynamic_corridor(
   const OvertakeMissionDynamicCorridorRequest & request) noexcept
 {
@@ -801,7 +907,9 @@ OvertakeMissionDynamicCorridorResolution resolve_overtake_mission_dynamic_corrid
   if (
     std::isnan(request.candidate_goal_lower_m) ||
     std::isnan(request.candidate_goal_upper_m) ||
-    request.candidate_goal_upper_m < request.candidate_goal_lower_m)
+    request.candidate_goal_upper_m < request.candidate_goal_lower_m ||
+    std::isnan(request.maximum_validation_distance_m) ||
+    request.maximum_validation_distance_m < 0.0)
   {
     return resolution;
   }
@@ -819,6 +927,8 @@ OvertakeMissionDynamicCorridorResolution resolve_overtake_mission_dynamic_corrid
   resolution.goal_upper_m = request.candidate_goal_upper_m;
   constexpr double kCoefficientEpsilon = 1e-9;
   constexpr double kCorridorEpsilon = 1e-9;
+  const double maximum_validation_distance_m = std::min(
+    mission_origin.total_distance_m, request.maximum_validation_distance_m);
 
   for (std::size_t i = 0; i < request.samples.size(); ++i) {
     const auto & sample = request.samples[i];
@@ -835,7 +945,7 @@ OvertakeMissionDynamicCorridorResolution resolve_overtake_mission_dynamic_corrid
       resolution.feasible = false;
       return resolution;
     }
-    if (sample.path_distance_m > mission_origin.total_distance_m + kCorridorEpsilon) {
+    if (sample.path_distance_m > maximum_validation_distance_m + kCorridorEpsilon) {
       continue;
     }
 
@@ -895,6 +1005,119 @@ OvertakeMissionDynamicCorridorResolution resolve_overtake_mission_dynamic_corrid
     }
   }
   return resolution;
+}
+
+OvertakeMissionCandidateSelection select_overtake_mission_candidate(
+  const OvertakeMissionCandidateSelectionRequest & request) noexcept
+{
+  OvertakeMissionCandidateSelection selection;
+  selection.valid = true;
+  constexpr double kEpsilon = 1e-9;
+
+  const auto numerically_valid = [](const OvertakeMissionCandidate & candidate) {
+      const bool finite_deadline_result =
+        std::isfinite(candidate.predicted_body_clear_time_sec) &&
+        candidate.predicted_body_clear_time_sec >= 0.0 &&
+        std::isfinite(candidate.predicted_body_clear_distance_m) &&
+        candidate.predicted_body_clear_distance_m >= 0.0;
+      const bool rejected_deadline_result =
+        !candidate.body_clear_deadline_feasible &&
+        !std::isnan(candidate.predicted_body_clear_time_sec) &&
+        candidate.predicted_body_clear_time_sec >= 0.0 &&
+        !std::isnan(candidate.predicted_body_clear_distance_m) &&
+        candidate.predicted_body_clear_distance_m >= 0.0;
+      const bool deadline_valid = !candidate.body_clear_deadline_checked ||
+        ((finite_deadline_result || rejected_deadline_result) &&
+        !std::isnan(candidate.predicted_hard_distance_time_sec) &&
+        candidate.predicted_hard_distance_time_sec >= 0.0);
+      return deadline_valid && std::isfinite(candidate.shift_distance_m) &&
+             candidate.shift_distance_m >= 0.0 &&
+             std::isfinite(candidate.goal_lateral_m) &&
+             std::isfinite(candidate.lateral_shift_m) &&
+             candidate.lateral_shift_m >= 0.0 &&
+             std::isfinite(candidate.max_required_lateral_accel_mps2) &&
+             candidate.max_required_lateral_accel_mps2 >= 0.0;
+    };
+  const auto better = [&](
+      const OvertakeMissionCandidate & candidate,
+      const OvertakeMissionCandidate & incumbent) {
+      if (
+        candidate.body_clear_deadline_checked &&
+        incumbent.body_clear_deadline_checked)
+      {
+        if (
+          candidate.body_clear_deadline_feasible !=
+          incumbent.body_clear_deadline_feasible)
+        {
+          return candidate.body_clear_deadline_feasible;
+        }
+        if (
+          candidate.predicted_body_clear_time_sec + kEpsilon <
+          incumbent.predicted_body_clear_time_sec)
+        {
+          return true;
+        }
+        if (
+          incumbent.predicted_body_clear_time_sec + kEpsilon <
+          candidate.predicted_body_clear_time_sec)
+        {
+          return false;
+        }
+      }
+      if (candidate.direct_pass != incumbent.direct_pass) {
+        return candidate.direct_pass;
+      }
+      if (candidate.shift_distance_m + kEpsilon < incumbent.shift_distance_m) {
+        return true;
+      }
+      if (incumbent.shift_distance_m + kEpsilon < candidate.shift_distance_m) {
+        return false;
+      }
+      if (candidate.lateral_shift_m + kEpsilon < incumbent.lateral_shift_m) {
+        return true;
+      }
+      if (incumbent.lateral_shift_m + kEpsilon < candidate.lateral_shift_m) {
+        return false;
+      }
+      if (
+        candidate.max_required_lateral_accel_mps2 + kEpsilon <
+        incumbent.max_required_lateral_accel_mps2)
+      {
+        return true;
+      }
+      if (
+        incumbent.max_required_lateral_accel_mps2 + kEpsilon <
+        candidate.max_required_lateral_accel_mps2)
+      {
+        return false;
+      }
+      return std::abs(candidate.goal_lateral_m) + kEpsilon <
+             std::abs(incumbent.goal_lateral_m);
+    };
+
+  for (std::size_t i = 0; i < request.candidates.size(); ++i) {
+    const auto & candidate = request.candidates[i];
+    if (!numerically_valid(candidate)) {
+      selection.valid = false;
+      selection.found = false;
+      selection.selected_index = std::numeric_limits<std::size_t>::max();
+      selection.candidate = OvertakeMissionCandidate{};
+      return selection;
+    }
+    if (
+      !candidate.feasible ||
+      (candidate.body_clear_deadline_checked &&
+      !candidate.body_clear_deadline_feasible))
+    {
+      continue;
+    }
+    if (!selection.found || better(candidate, selection.candidate)) {
+      selection.found = true;
+      selection.selected_index = i;
+      selection.candidate = candidate;
+    }
+  }
+  return selection;
 }
 
 double resolve_overtake_line_heading_reference(

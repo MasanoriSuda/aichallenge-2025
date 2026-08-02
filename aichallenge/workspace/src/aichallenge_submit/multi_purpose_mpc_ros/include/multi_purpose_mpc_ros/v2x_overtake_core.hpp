@@ -566,6 +566,41 @@ struct OvertakeMissionPathResolution
 OvertakeMissionPathResolution resolve_overtake_mission_path(
   const OvertakeMissionPathRequest & request) noexcept;
 
+struct OvertakeBodyClearDeadlineRequest
+{
+  bool enabled{false};
+  OvertakeMissionPathRequest mission_path;
+  double target_longitudinal_m{};
+  double ego_speed_mps{};
+  double target_speed_mps{};
+  double target_lateral_m{};
+  double target_lateral_velocity_mps{};
+  double target_lateral_prediction_horizon_sec{};
+  double lateral_clearance_m{};
+  double hard_longitudinal_distance_m{};
+  double deadline_margin_sec{};
+  std::size_t sample_count{48U};
+};
+
+struct OvertakeBodyClearDeadlineResolution
+{
+  bool valid{false};
+  bool checked{false};
+  bool feasible{false};
+  bool currently_laterally_clear{false};
+  double body_clear_time_sec{std::numeric_limits<double>::infinity()};
+  double body_clear_distance_m{std::numeric_limits<double>::infinity()};
+  double hard_distance_time_sec{std::numeric_limits<double>::infinity()};
+};
+
+/// Predict whether the immutable ShiftOut path establishes physical lateral
+/// body separation before the current closing motion reaches the longitudinal
+/// hard-distance boundary. Target lateral velocity is extrapolated only over
+/// the caller-provided short horizon. Disabled policy preserves the legacy
+/// candidate search without fabricating a deadline result.
+OvertakeBodyClearDeadlineResolution resolve_overtake_body_clear_deadline(
+  const OvertakeBodyClearDeadlineRequest & request) noexcept;
+
 struct OvertakeMissionDynamicCorridorSample
 {
   double path_distance_m{};
@@ -579,6 +614,7 @@ struct OvertakeMissionDynamicCorridorRequest
   OvertakeMissionPathRequest mission_path;
   double candidate_goal_lower_m{-std::numeric_limits<double>::infinity()};
   double candidate_goal_upper_m{std::numeric_limits<double>::infinity()};
+  double maximum_validation_distance_m{std::numeric_limits<double>::infinity()};
   std::vector<OvertakeMissionDynamicCorridorSample> samples;
 };
 
@@ -598,11 +634,46 @@ struct OvertakeMissionDynamicCorridorResolution
 };
 
 /// Convert every time-aligned dynamic free-corridor sample into an admissible
-/// interval for the immutable Pass goal. This validates the ShiftOut and
-/// Return ramps as well as the held Pass position; checking only the final
-/// goal misses a body overlap that begins before ShiftOut is complete.
+/// interval for the immutable Pass goal. maximum_validation_distance_m lets
+/// admission validate ShiftOut and the predicted Pass hold without inventing
+/// an early Return; live Return is triggered and checked after rear-clear.
 OvertakeMissionDynamicCorridorResolution resolve_overtake_mission_dynamic_corridor(
   const OvertakeMissionDynamicCorridorRequest & request) noexcept;
+
+struct OvertakeMissionCandidate
+{
+  bool feasible{false};
+  bool direct_pass{false};
+  double shift_distance_m{};
+  double goal_lateral_m{};
+  double lateral_shift_m{};
+  double max_required_lateral_accel_mps2{};
+  bool body_clear_deadline_checked{false};
+  bool body_clear_deadline_feasible{true};
+  double predicted_body_clear_time_sec{std::numeric_limits<double>::infinity()};
+  double predicted_hard_distance_time_sec{std::numeric_limits<double>::infinity()};
+  double predicted_body_clear_distance_m{std::numeric_limits<double>::infinity()};
+};
+
+struct OvertakeMissionCandidateSelectionRequest
+{
+  std::vector<OvertakeMissionCandidate> candidates;
+};
+
+struct OvertakeMissionCandidateSelection
+{
+  bool valid{false};
+  bool found{false};
+  std::size_t selected_index{std::numeric_limits<std::size_t>::max()};
+  OvertakeMissionCandidate candidate;
+};
+
+/// Select a deterministic executable mission. When body-clear deadline data is
+/// available, prefer the candidate that establishes physical lateral
+/// separation first. Legacy candidates retain direct-pass, shortest ShiftOut,
+/// minimum lateral-motion and lower-acceleration ordering.
+OvertakeMissionCandidateSelection select_overtake_mission_candidate(
+  const OvertakeMissionCandidateSelectionRequest & request) noexcept;
 
 struct OvertakeLineHeadingReferenceRequest
 {

@@ -108,6 +108,9 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionPathRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionPathStage;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorSample;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeBodyClearDeadlineRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidate;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidateSelectionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PausedMissionExpiryReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::PausedMissionExpiryRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CompletedTargetReacquireSuppressionRequest;
@@ -120,6 +123,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_follow_speed_limit;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_apply_generic_follow_cap;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_speed_reference;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_mission_dynamic_corridor;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_body_clear_deadline;
+using multi_purpose_mpc_ros::v2x_overtake_core::select_overtake_mission_candidate;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_start_grid_breakout_speed_reference;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_shiftout_complete;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_release_overtake_front_cap;
@@ -2301,6 +2306,184 @@ TEST(V2XOvertakeCoreSpeed, ValidatesReturnRampAndIgnoresSamplesAfterMission)
   // Return is 50% complete at 15 m, therefore goal >= 1.2 m keeps ey >= 0.6 m.
   EXPECT_NEAR(resolution.goal_lower_m, 1.2, 1e-12);
   EXPECT_DOUBLE_EQ(resolution.goal_upper_m, 2.0);
+}
+
+TEST(V2XOvertakeCoreSpeed, DefersDynamicReturnValidationUntilRearClear)
+{
+  OvertakeMissionDynamicCorridorRequest request;
+  request.mission_path = OvertakeMissionPathRequest{
+    0.0, 0.0, 1.0, 0.0, 4.0, 8.0, 6.0};
+  request.candidate_goal_lower_m = 0.5;
+  request.candidate_goal_upper_m = 2.0;
+  request.maximum_validation_distance_m = 12.0;
+  request.samples = {
+    OvertakeMissionDynamicCorridorSample{5.0, 0.8, 2.0, true},
+    OvertakeMissionDynamicCorridorSample{15.0, -2.0, -1.0, true}};
+
+  const auto resolution = resolve_overtake_mission_dynamic_corridor(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.observed);
+  EXPECT_TRUE(resolution.feasible);
+  EXPECT_EQ(resolution.checked_sample_count, 1U);
+  EXPECT_NEAR(resolution.goal_lower_m, 0.8, 1e-12);
+}
+
+TEST(V2XOvertakeCoreSpeed, SelectsDirectPassBeforeShiftOutCandidates)
+{
+  OvertakeMissionCandidateSelectionRequest request;
+  request.candidates = {
+    OvertakeMissionCandidate{true, false, 2.5, 0.8, 0.8, 4.0},
+    OvertakeMissionCandidate{true, true, 4.0, 0.0, 0.0, 0.0}};
+
+  const auto selection = select_overtake_mission_candidate(request);
+  ASSERT_TRUE(selection.valid);
+  ASSERT_TRUE(selection.found);
+  EXPECT_EQ(selection.selected_index, 1U);
+  EXPECT_TRUE(selection.candidate.direct_pass);
+}
+
+TEST(V2XOvertakeCoreSpeed, BodyClearDeadlineAcceptsClearBeforeHardDistance)
+{
+  OvertakeBodyClearDeadlineRequest request;
+  request.enabled = true;
+  request.mission_path = OvertakeMissionPathRequest{
+    0.0, 0.0, 1.5, 0.0, 4.0, 8.0, 6.0};
+  request.target_longitudinal_m = 5.0;
+  request.ego_speed_mps = 5.0;
+  request.target_speed_mps = 3.0;
+  request.target_lateral_m = 0.0;
+  request.target_lateral_prediction_horizon_sec = 1.0;
+  request.lateral_clearance_m = 1.25;
+  request.hard_longitudinal_distance_m = 2.0;
+  request.deadline_margin_sec = 0.1;
+
+  const auto resolution = resolve_overtake_body_clear_deadline(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.checked);
+  EXPECT_TRUE(resolution.feasible);
+  EXPECT_FALSE(resolution.currently_laterally_clear);
+  EXPECT_LT(resolution.body_clear_time_sec + request.deadline_margin_sec,
+    resolution.hard_distance_time_sec);
+  EXPECT_GT(resolution.body_clear_distance_m, 0.0);
+  EXPECT_LT(resolution.body_clear_distance_m, request.mission_path.shift_distance_m);
+}
+
+TEST(V2XOvertakeCoreSpeed, BodyClearDeadlineRejectsLateShiftOut)
+{
+  OvertakeBodyClearDeadlineRequest request;
+  request.enabled = true;
+  request.mission_path = OvertakeMissionPathRequest{
+    0.0, 0.0, 1.5, 0.0, 4.0, 8.0, 6.0};
+  request.target_longitudinal_m = 3.0;
+  request.ego_speed_mps = 5.0;
+  request.target_speed_mps = 3.0;
+  request.target_lateral_m = 0.0;
+  request.target_lateral_prediction_horizon_sec = 1.0;
+  request.lateral_clearance_m = 1.25;
+  request.hard_longitudinal_distance_m = 2.0;
+  request.deadline_margin_sec = 0.1;
+
+  const auto resolution = resolve_overtake_body_clear_deadline(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.checked);
+  EXPECT_FALSE(resolution.feasible);
+  EXPECT_GT(resolution.body_clear_time_sec + request.deadline_margin_sec,
+    resolution.hard_distance_time_sec);
+}
+
+TEST(V2XOvertakeCoreSpeed, BodyClearDeadlineAcceptsAlreadySeparatedBody)
+{
+  OvertakeBodyClearDeadlineRequest request;
+  request.enabled = true;
+  request.mission_path = OvertakeMissionPathRequest{
+    0.0, 0.0, 1.5, 0.0, 4.0, 8.0, 6.0};
+  request.target_longitudinal_m = 1.0;
+  request.ego_speed_mps = 5.0;
+  request.target_speed_mps = 3.0;
+  request.target_lateral_m = -1.3;
+  request.target_lateral_prediction_horizon_sec = 1.0;
+  request.lateral_clearance_m = 1.25;
+  request.hard_longitudinal_distance_m = 2.0;
+  request.deadline_margin_sec = 0.1;
+
+  const auto resolution = resolve_overtake_body_clear_deadline(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.feasible);
+  EXPECT_TRUE(resolution.currently_laterally_clear);
+  EXPECT_DOUBLE_EQ(resolution.body_clear_time_sec, 0.0);
+  EXPECT_DOUBLE_EQ(resolution.body_clear_distance_m, 0.0);
+}
+
+TEST(V2XOvertakeCoreSpeed, BodyClearDeadlineUsesBoundedTargetLateralPrediction)
+{
+  OvertakeBodyClearDeadlineRequest request;
+  request.enabled = true;
+  request.mission_path = OvertakeMissionPathRequest{
+    0.0, 0.0, 0.1, 0.0, 4.0, 8.0, 6.0};
+  request.target_longitudinal_m = 5.0;
+  request.ego_speed_mps = 5.0;
+  request.target_speed_mps = 3.0;
+  request.target_lateral_m = 0.0;
+  request.target_lateral_velocity_mps = -2.0;
+  request.target_lateral_prediction_horizon_sec = 1.0;
+  request.lateral_clearance_m = 1.0;
+  request.hard_longitudinal_distance_m = 2.0;
+
+  const auto moving_resolution = resolve_overtake_body_clear_deadline(request);
+  ASSERT_TRUE(moving_resolution.valid);
+  EXPECT_TRUE(moving_resolution.feasible);
+  EXPECT_LT(moving_resolution.body_clear_time_sec, 1.0);
+
+  request.target_lateral_prediction_horizon_sec = 0.2;
+  const auto bounded_resolution = resolve_overtake_body_clear_deadline(request);
+  ASSERT_TRUE(bounded_resolution.valid);
+  EXPECT_FALSE(bounded_resolution.feasible);
+  EXPECT_FALSE(std::isfinite(bounded_resolution.body_clear_time_sec));
+}
+
+TEST(V2XOvertakeCoreSpeed, SelectsEarliestBodyClearBeforeShortestShift)
+{
+  OvertakeMissionCandidateSelectionRequest request;
+  request.candidates = {
+    OvertakeMissionCandidate{
+      true, false, 2.5, 0.7, 0.7, 3.0, true, true, 0.8, 1.5, 2.0},
+    OvertakeMissionCandidate{
+      true, false, 4.0, 1.5, 1.5, 4.0, true, true, 0.5, 1.5, 2.5}};
+
+  const auto selection = select_overtake_mission_candidate(request);
+  ASSERT_TRUE(selection.valid);
+  ASSERT_TRUE(selection.found);
+  EXPECT_EQ(selection.selected_index, 1U);
+  EXPECT_DOUBLE_EQ(selection.candidate.predicted_body_clear_time_sec, 0.5);
+}
+
+TEST(V2XOvertakeCoreSpeed, SelectsShortestFeasibleShiftThenMinimumMotion)
+{
+  OvertakeMissionCandidateSelectionRequest request;
+  request.candidates = {
+    OvertakeMissionCandidate{false, false, 2.0, 0.5, 0.5, 2.0},
+    OvertakeMissionCandidate{true, false, 4.0, 0.4, 0.4, 1.0},
+    OvertakeMissionCandidate{true, false, 3.0, 0.9, 0.9, 5.0},
+    OvertakeMissionCandidate{true, false, 3.0, 0.7, 0.7, 5.5}};
+
+  const auto selection = select_overtake_mission_candidate(request);
+  ASSERT_TRUE(selection.valid);
+  ASSERT_TRUE(selection.found);
+  EXPECT_EQ(selection.selected_index, 3U);
+  EXPECT_DOUBLE_EQ(selection.candidate.shift_distance_m, 3.0);
+  EXPECT_DOUBLE_EQ(selection.candidate.lateral_shift_m, 0.7);
+}
+
+TEST(V2XOvertakeCoreSpeed, RejectsNonFiniteMissionCandidateInput)
+{
+  OvertakeMissionCandidateSelectionRequest request;
+  request.candidates = {
+    OvertakeMissionCandidate{
+      true, false, std::numeric_limits<double>::quiet_NaN(), 0.5, 0.5, 2.0}};
+
+  const auto selection = select_overtake_mission_candidate(request);
+  EXPECT_FALSE(selection.valid);
+  EXPECT_FALSE(selection.found);
 }
 
 TEST(V2XOvertakeCoreSpeed, ReportsUnobservedDynamicCorridorWithoutInventingClearance)

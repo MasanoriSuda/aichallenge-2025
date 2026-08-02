@@ -102,6 +102,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::EarlyShiftOutSideReplanAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::EarlyShiftOutSideReplanRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionOwnershipRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassBehaviorOwnershipRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::CommittedShiftOutBehaviorOwnershipRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeExecutionSideRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeExecutionSideSource;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeLineTransitionAction;
@@ -150,6 +151,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::locked_target_intrudes_pass_side
 using multi_purpose_mpc_ros::v2x_overtake_core::can_start_side_overtake;
 using multi_purpose_mpc_ros::v2x_overtake_core::side_only_target_requires_follow;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_unlatched_pass_closing_speed;
+using multi_purpose_mpc_ros::v2x_overtake_core::build_overtake_closing_speed_candidates;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_line_horizon_progress;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_mission_path;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_paused_mission_expiry;
@@ -229,6 +231,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::selected_pass_side_ordering_conf
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_early_shiftout_side_replan;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_mission_ownership;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_preserve_committed_pass_behavior;
+using multi_purpose_mpc_ros::v2x_overtake_core::can_preserve_committed_shiftout_behavior;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_execution_side;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_resume_paused_pass_directly;
 using multi_purpose_mpc_ros::v2x_overtake_core::clamp_paused_resume_goal_outward;
@@ -2425,6 +2428,21 @@ TEST(V2XOvertakeCoreSpeed, SelectsDirectPassBeforeShiftOutCandidates)
   EXPECT_TRUE(selection.candidate.direct_pass);
 }
 
+TEST(V2XOvertakeCoreSpeed, BuildsMinimumMidpointAndMaximumClosingSpeedCandidates)
+{
+  const auto candidates = build_overtake_closing_speed_candidates(0.8, 2.0);
+  ASSERT_EQ(candidates.size(), 3U);
+  EXPECT_DOUBLE_EQ(candidates[0], 0.8);
+  EXPECT_DOUBLE_EQ(candidates[1], 1.4);
+  EXPECT_DOUBLE_EQ(candidates[2], 2.0);
+
+  const auto one_candidate = build_overtake_closing_speed_candidates(1.0, 1.0);
+  ASSERT_EQ(one_candidate.size(), 1U);
+  EXPECT_DOUBLE_EQ(one_candidate.front(), 1.0);
+  EXPECT_TRUE(build_overtake_closing_speed_candidates(2.0, 1.0).empty());
+  EXPECT_TRUE(build_overtake_closing_speed_candidates(-0.1, 1.0).empty());
+}
+
 TEST(V2XOvertakeCoreSpeed, BodyClearDeadlineAcceptsClearBeforeHardDistance)
 {
   OvertakeBodyClearDeadlineRequest request;
@@ -2538,6 +2556,28 @@ TEST(V2XOvertakeCoreSpeed, SelectsEarliestBodyClearBeforeShortestShift)
   ASSERT_TRUE(selection.found);
   EXPECT_EQ(selection.selected_index, 1U);
   EXPECT_DOUBLE_EQ(selection.candidate.predicted_body_clear_time_sec, 0.5);
+}
+
+TEST(V2XOvertakeCoreSpeed, SelectsFasterClosingSpeedForOtherwiseEqualCandidates)
+{
+  OvertakeMissionCandidateSelectionRequest request;
+  request.candidates = {
+    OvertakeMissionCandidate{
+      true, false, 4.0, 1.0, 1.0, 3.0, false, true,
+      std::numeric_limits<double>::infinity(),
+      std::numeric_limits<double>::infinity(),
+      std::numeric_limits<double>::infinity(), 0.8},
+    OvertakeMissionCandidate{
+      true, false, 4.0, 1.0, 1.0, 3.0, false, true,
+      std::numeric_limits<double>::infinity(),
+      std::numeric_limits<double>::infinity(),
+      std::numeric_limits<double>::infinity(), 2.0}};
+
+  const auto selection = select_overtake_mission_candidate(request);
+  ASSERT_TRUE(selection.valid);
+  ASSERT_TRUE(selection.found);
+  EXPECT_EQ(selection.selected_index, 1U);
+  EXPECT_DOUBLE_EQ(selection.candidate.closing_speed_mps, 2.0);
 }
 
 TEST(V2XOvertakeCoreSpeed, BodyClearDeadlineIsSoftButFeasibleDeadlineWins)
@@ -4409,6 +4449,56 @@ TEST(V2XOvertakeCoreMissionOwnership, ShiftOutDoesNotBypassEntryOrExecutionGuard
   request.current_body_footprints_separated = true;
 
   EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, DeadlineFeasibleShiftOutOwnsBehavior)
+{
+  CommittedShiftOutBehaviorOwnershipRequest request;
+  request.committed_shiftout_active = true;
+  request.validated_fixed_line = true;
+  request.mission_side_valid = true;
+  request.body_clear_deadline_feasible = true;
+  request.locked_target_seen = true;
+
+  EXPECT_TRUE(can_preserve_committed_shiftout_behavior(request));
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, ShiftOutOwnerReleasesForHardAbortOrMissedDeadline)
+{
+  CommittedShiftOutBehaviorOwnershipRequest request;
+  request.committed_shiftout_active = true;
+  request.validated_fixed_line = true;
+  request.mission_side_valid = true;
+  request.body_clear_deadline_feasible = true;
+  request.locked_target_seen = true;
+  ASSERT_TRUE(can_preserve_committed_shiftout_behavior(request));
+
+  request.body_clear_deadline_feasible = false;
+  EXPECT_FALSE(can_preserve_committed_shiftout_behavior(request));
+  request.body_clear_deadline_feasible = true;
+
+  request.locked_target_position_jump = true;
+  EXPECT_FALSE(can_preserve_committed_shiftout_behavior(request));
+  request.locked_target_position_jump = false;
+
+  request.locked_target_course_progress_rejected = true;
+  EXPECT_FALSE(can_preserve_committed_shiftout_behavior(request));
+  request.locked_target_course_progress_rejected = false;
+
+  request.locked_target_pass_side_intrusion = true;
+  EXPECT_FALSE(can_preserve_committed_shiftout_behavior(request));
+  request.locked_target_pass_side_intrusion = false;
+
+  request.explicit_forbidden_waypoint = true;
+  EXPECT_FALSE(can_preserve_committed_shiftout_behavior(request));
+  request.explicit_forbidden_waypoint = false;
+
+  request.emergency_front_risk = true;
+  EXPECT_FALSE(can_preserve_committed_shiftout_behavior(request));
+  request.emergency_front_risk = false;
+
+  request.solver_recovery_requested = true;
+  EXPECT_FALSE(can_preserve_committed_shiftout_behavior(request));
 }
 
 TEST(V2XOvertakeCoreMissionOwnership, PassOwnerReleasesForEveryHardAbort)

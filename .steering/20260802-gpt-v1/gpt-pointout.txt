@@ -1,0 +1,603 @@
+上位者のログを持ってきた、この上位者はまだ粗があるものの前方車を捕捉してしっかり抜く構成になっていそう、headに対して足りていないものは何か調査して
+13m 15s考えました
+結論
+
+上位者ログから見える差は、**追い越し経路の形そのものより、「前車を捕捉してから横離隔を作り、抜き切るまでの実行制御を閉ループ化しているか」**です。
+
+現行develop_july HEADは、
+
+a84e84056677e849a6fd78e482adbfcbf50c70e5
+20260802-committed-pass-behavior-ownership
+
+で、全区間mission path、dynamic corridor、body-clear deadline、Pass中のBehavior ownershipまで入り、入口設計はかなり良くなりました。
+
+それでも上位者に対して足りないものを一言でまとめると、
+
+現HEADは「通れる一本の経路を選んで保持する」まではできるが、横移動距離・横移動時間・接近速度・相手の横移動を、走行中に同じ時間軸で制御する実行層がまだ弱い。
+
+です。
+
+フルMPCCへの全面置換が直ちに必要というより、まずはMPCC-liteな時空間候補探索＋追い越し専用MPCモード＋横TTC制御が必要です。
+
+上位者ログから確認できる追い越しの特徴
+
+ログを機械集計すると、次のようになりました。
+
+指標	上位者ログ
+[ENGAGE]	20回
+実際のエンゲージ前方距離	2.06〜19.75 m
+中央値	5.53 m
+動的エンゲージ許容距離	6.44〜19.67 m
+path=dynamic	12回
+path=profile	8回
+[OFFSET-RETURN] ON	12回
+同一pass内のON/OFF揺れをまとめたclear到達episode	少なくとも6回
+ENGAGEからclear開始まで	4.09〜6.80秒、中央値約5.20秒
+LAT-TTC系giveup	15回
+衝突疑いログ	6件、3クラスター
+STUCK検出	5 episode
+
+したがって、この車両も完成度は高くありません。20回仕掛けて、明確にclear→returnへ到達したのは少なくとも6 episodeで、衝突・スタックもあります。
+
+ただし、前車を見つけたあとに「どう抜くか」の処理は、現HEADより一段厚いです。
+
+上位者が持っていて、現HEADに足りないもの
+P0-1. Passだけでなく、ShiftOut中もmissionが縦横制御を所有する仕組み
+
+これは現在の最大差です。
+
+最新HEADのBehavior ownershipは、
+
+committed Pass
+fixed lineあり
+横離隔latch済み
+現在車体が非重複
+
+になって初めて、BehaviorをOvertakeへ維持します。
+
+コード上も、
+
+committed_pass_active
+lateral_exclusion_latched
+current_body_footprints_separated
+
+を要求しています。
+
+つまり、失敗が最も多い、
+
+ShiftOut開始
+→ まだbody_clear=0
+→ 前後距離が縮む
+→ SafetyBrake
+
+の段階には、最新のpass_ownerは効きません。
+
+一方、上位者はENGAGE後、横離隔成立前でもOVERTAKINGを維持しながら、
+
+icc_f3で前車追従＋クリープ
+footprint_taperで接触リスクに応じた減速
+lat_ttc C1で縦間合い確保
+G2-RELEASEで側方確保後に速度解放
+
+と、追い越しmissionを維持したまま縦速度だけ調整しています。
+
+必要な修正
+
+Pass ownerとは別に、CommittedShiftOutOwnerが必要です。
+
+struct CommittedShiftOutOwnershipRequest {
+  bool mission_path_frozen;
+  bool dynamic_corridor_valid;
+  bool target_continuous;
+  bool current_longitudinal_gap_safe;
+  bool body_clear_deadline_still_feasible;
+  bool actual_wall_contact;
+  bool target_intrusion;
+  bool emergency_front_risk;
+  bool solver_recovery_requested;
+};
+
+成立中は、
+
+Behavior = Overtake
+lateral owner = frozen mission
+longitudinal owner = planned closing-speed controller
+
+を維持します。
+
+ただし、SafetyBrakeを単純に無効化するのではありません。
+
+body-clear deadline成立
+→ ShiftOut継続
+
+deadline margin減少
+→ closing speedを連続的に下げる
+
+deadline不成立
+→ FollowPrepareではなくmission abort
+
+という扱いにします。
+
+P0-2. 一本の固定経路を判定するだけでなく、複数の時空間候補から選ぶPlanner
+
+現HEADは大きく改善され、entry時に、
+
+ShiftOut 4 m
+Pass     8 m
+Return   6 m
+合計    18 m
+
+を一体で検証します。また、動的V2X corridorとの全区間整合性も確認します。
+
+さらに、
+
+v2x_overtake_body_clear_deadline_enabled: true
+v2x_overtake_body_clear_deadline_margin_sec: 0.10
+
+も有効です。
+
+ここまでは正しいです。
+
+しかし、現在は基本的に一つの4/8/6 m profileが成立するかを判定しているだけです。成立しなければFollow、成立すればcommitです。
+
+上位者はログ上、
+
+closing_est
+engage_dist_dynamic
+t_reach_profile
+path=dynamic / profile
+
+を持ち、開始距離と横移動到達時間を相手ごとに変えています。実際のENGAGE距離も2〜20 mまで広く分布しています。
+
+固定4 m ShiftOutの問題
+
+例えば横移動1.5 mとして、簡易式、
+
+a_y ≈ 2 × Δd / t²
+t = shift_distance / speed
+
+を使うと、
+
+自車8 m/s、ShiftOut 4 m
+t = 0.5 s
+a_y ≈ 2 × 1.5 / 0.5²
+    = 12 m/s²
+
+現在の上限6 m/s²を大幅に超えます。
+
+自車5 m/s、ShiftOut 4 m
+t = 0.8 s
+a_y ≈ 4.69 m/s²
+
+これは成立します。
+
+つまり、同じ4 mでも速度によって成立性が全く違うのに、現在のprofile長は固定です。
+
+必要な候補
+
+少なくとも次の組合せを入口で試すべきです。
+
+side:
+  left / right
+
+shift_distance:
+  4 / 6 / 8 / 10 m
+
+closing_speed:
+  0.8 / 1.4 / 2.0 m/s
+
+pass_goal:
+  nearest-safe
+  corridor-center寄り
+
+各候補を2〜3秒程度、時間方向に前向きシミュレーションします。
+
+struct OvertakeCandidate {
+  int side;
+  double shift_distance;
+  double pass_distance;
+  double return_distance;
+  double pass_goal_ey;
+  double closing_speed;
+
+  double predicted_body_clear_time;
+  double predicted_rear_clear_time;
+  double predicted_hard_gap_time;
+  double min_wall_clearance;
+  double max_lateral_accel;
+};
+
+採用条件は、
+
+predicted_body_clear_time + reserve
+    < predicted_hard_gap_time
+
+predicted_rear_clear_time
+    < pass_time_budget
+
+Returnまでwall/footprint clear
+
+です。
+
+現HEADのbody-clear deadlineは一候補の拒否判定としては良いですが、次は成立する別候補を探す段階です。
+
+P0-3. 追い越し時だけMPCの横追従能力を上げるExecution Mode
+
+上位者は追い越し時に経路を変えるだけではありません。
+
+q_ey_overtake: 5000000.0
+safety_margin_overtake: 0.8
+psi_bias_max_deg: 20.0
+d_off: 3.0
+ramp_time: 2.5
+funnel_steps: 12
+
+を使い、追い越し経路への追従優先度、ヘディング参照、コリドーmarginをまとめて変更しています。
+
+一方、現HEADは通常走行と同じMPCで、主に横目標だけを変更しています。
+
+現在値は、
+
+Q:  [50000, 1500000, 30000]
+a_max: 1.0
+delta_max_deg: 32.0
+steer_rate_max: 1.2
+
+です。
+
+上位者は、
+
+通常Q[e_y]:       700000
+追い越しQ[e_y]:  5000000
+delta_max_deg:          52
+a_max:                1.37
+
+です。実装が違うため数値を直接コピーはできませんが、上位者は追い越し中だけ横経路を強く追わせる制御モードを明確に持っています。
+
+現HEADに必要なのは、例えば、
+
+v2x_overtake_mpc_weight_schedule_enabled: true
+v2x_overtake_q_ey_scale: 4.0
+v2x_overtake_q_epsi_scale: 1.5
+v2x_overtake_heading_reference_gain: 1.0
+
+のようなA/Bです。
+
+特に見るべきなのは、
+
+mission target ey
+actual ey
+lateral tracking error
+required steering
+actual steering
+body-clear予定時刻
+body-clear実時刻
+
+です。
+
+現在の失敗が「経路は正しいが車体が横へ出るのが遅い」なら、Plannerを追加するだけでは直らず、ここが必要です。
+
+P1-1. Hard abortだけではなく、連続的な横TTC制御
+
+上位者の大きな特徴はLAT-TTCです。
+
+相手との横空間の縮小速度をEMAで計測し、
+
+A:
+  反対側へswitchback可能
+
+B:
+  既にclear済みなので継続
+
+C1:
+  まだ危険ではないが速度cap
+
+C2:
+  criticalなのでgiveup
+
+と段階的に処理しています。
+
+設定も、
+
+ttc_danger_s: 2.0
+ttc_critical_s: 0.8
+min_trend_cycles: 3
+giveup_space_m: 1.45
+switchback_space_m: 1.95
+
+です。
+
+現HEADには、
+
+target pass-side intrusion
+current body overlap
+predicted body sweep
+live corridor unavailable
+wall infeasible
+
+がありますが、多くは継続かRecoveryかの二値判定です。
+
+その中間の、
+
+相手が寄り始めた
+→ closingだけ落とす
+
+さらに寄る
+→ lateral goalは固定したまま速度で時間を稼ぐ
+
+no-return point前で反対側が明確に良い
+→ 1回だけside replan
+
+critical
+→ mission終了
+
+が薄いです。
+
+導入方針
+
+上位者のような無制限switchbackはコピーせず、
+
+side switchは1 mission 1回
+ShiftOut進捗40%未満のみ
+横速度が旧sideへ残っていない
+反対側の全区間candidate成立
+
+を条件にします。
+
+P1-2. 相手車両のcourse-aligned予測とフィルタ
+
+現HEADは、
+
+v2x_prediction_time: 1.0
+v2x_prediction_use_course_progress: false
+v2x_prediction_use_course_lateral_velocity: false
+
+です。
+
+一方、追い越しmissionは18 mあります。
+
+自車速度	18 mの所要時間
+5 m/s	3.6秒
+8 m/s	2.25秒
+11.1 m/s	1.62秒
+
+1秒予測では、mission全体に対する相手運動を表現しきれません。
+
+上位者は、
+
+相手速度の6フレーム平滑
+track tangentとvelocityを切り替えるheading推定
+予測capsule
+corridor再描画deadband 0.3 m
+corridor拡大レート1.0 m/s
+前後車map投入のenter/exit hysteresis
+
+を持っています。
+
+現HEADでは過去にcourse-progress予測を有効化して悪化したためOFFになっていますが、単純にONへ戻すのではなく、
+
+branch-stableなcourse projection
+s_dot / d_dotのfiltered estimate
+heading confidence
+prediction uncertaintyの時間増加
+
+を入れてから再試験すべきです。
+
+概念的には、
+
+target_s(t) = s0 + filtered_s_dot * t;
+target_d(t) = d0 + filtered_d_dot * t;
+
+sigma_s(t) = sigma_s0 + k_s * t;
+sigma_d(t) = sigma_d0 + k_d * t;
+
+です。
+
+P1-3. 横経路と縦速度を同じ候補として選ぶ
+
+最新HEADはBehavior ownershipを整理し、Pass中にgeneric Entry条件でFollowへ落ちる問題へ対処しました。これは重要な改善です。
+
+ただし、状態の所有権を整理したことと、最適な速度profileを持つことは別です。
+
+上位者はログ上、速度ownerを明示的に切り替えています。
+
+icc_f3
+footprint_taper
+lat_ttc C1
+line_cap
+G2 side-clear release
+front-clear
+
+機械集計では、速度source遷移のうち多かったものは、
+
+icc_f3:                  51回
+line_cap:                25回
+front clear:             19回
+lat_ttc C-stage1:        13回
+G2 release:               7回
+footprint taper:          5回
+
+でした。
+
+現HEADも複数の速度capを持っていますが、Plannerが作ったcandidateに、
+
+この時刻まではfront_speed + 0.8
+この地点から+1.4
+body-clear後はbase speed
+Return開始後はrace reference
+
+という速度profileが固定されているわけではありません。
+
+OvertakeCandidateの一部として、
+
+std::vector<double> speed_reference;
+
+または、
+
+double shiftout_closing_speed;
+double body_clear_acceleration;
+double pass_speed_floor;
+
+を持たせるべきです。
+
+P1-4. 「追い越す価値」の時間予算
+
+上位者は、
+
+opp_min_closing: 0.7
+opp_giveup_closing: 0.2
+giveup_cycles: 40
+pass_t_max: 8.0
+engage_cooldown: 4秒
+
+を持っています。
+
+現HEADにも、
+
+entry_min_relative_speed: -0.5
+completion_min_relative_speed: 0.5
+progress_watchdog_distance: 32.0
+
+がありますが、-0.5 m/sでは相手が少し速い場合でもentry可能です。また32 mのprogress watchdogは、12 km/hテンプレ車には長すぎます。
+
+新規entryは、
+
+expected rear-clear time <= 5〜6秒
+
+を要求し、ほぼ同速車には、
+
+安全な機会が来るまでFollow
+
+としたほうがレート戦では強いです。
+
+現HEADのほうが優れている部分
+
+上位者を丸ごと真似るべきではありません。
+
+Returnと再捕捉
+
+上位者ログでは、
+
+OFFSET-RETURN ON
+OFFSET-RETURN OFF
+OFFSET-RETURN ON
+
+という揺れが複数あります。
+
+現HEADは、
+
+rear-clear confirmation latch
+Return後の同一target再捕捉1.5秒抑止
+fixed end-to-end mission path
+
+を持っており、この部分は現HEADの設計のほうがきれいです。
+
+安全性
+
+上位者ログには、
+
+3つの衝突疑いクラスター
+5回のSTUCK episode
+Reverse再試行
+safety marginを0まで緩和
+V2X速度が6 m/s超で0へclamp
+
+があります。
+
+したがってコピーすべきではないのは、
+
+marginを限界まで削る
+深くコミットしてから何度もside反転
+長時間のReverse retry
+
+です。
+
+優先順位
+次のコミットで入れるべきP0
+1. Committed ShiftOut behavior/velocity ownership
+2. shift距離 × closing速度 × sideのcandidate lattice
+3. 追い越し専用MPC weight / heading reference mode
+
+この3つです。
+
+現在の最新コミットはPass ownershipだけなので、body-clear前の失敗を直接は解決していません。
+
+その次のP1
+4. filtered course-aligned target prediction
+5. lateral TTCのcaution / cap / bounded-replan / abort
+6. pass time budgetと失敗後cooldown
+
+です。
+
+フルMPCCはその後
+
+上位者自身もフルMPCCではなく、
+
+動的corridor
++ opponent-relative planner
++ TTC監視
++ overtake専用MPC設定
+
+で追い越しています。
+
+したがって、
+
+この上位者ログは、フルMPCCなしでも現在の追い越しを大幅改善できる証拠
+
+でもあります。
+
+実装後の合格基準
+
+12 km/hテンプレ車で20回実施し、次を計測します。
+
+ENGAGE -> body-clear時間
+body-clear -> rear-clear時間
+rear-clear -> Return完了時間
+SafetyBrake回数
+mission abort理由
+side switch回数
+wall / solver Recovery
+接触
+
+合格目標は、
+
+追い越し完遂:                   20/20
+ENGAGE -> rear-clear:            5秒以内
+body-clear前SafetyBrake:          0
+wall Recovery:                    0
+solver Recovery:                  0
+接触:                             0
+1 mission内side switch:           最大1回
+同一target再entry:                0
+
+です。
+
+上位者ログは、clearへ到達したepisodeではENGAGEから約4.1〜6.8秒、中央値約5.2秒でした。まずこれを衝突・スタックなしで再現するのが現実的な目標です。
+
+最終判定
+
+現HEADはもう「経路を全く作れていない」状態ではありません。
+
+end-to-end mission path
+dynamic corridor
+body-clear deadline
+frozen goal
+completed-target hold
+Pass behavior owner
+
+までは揃っています。
+
+足りないのは、その後段です。
+
+捕捉時点で複数の横・縦候補から最良案を選ぶこと
+body-clear前もmissionを維持して速度だけを調整すること
+追い越し中だけMPCに十分な横追従力を持たせること
+相手の横接近をTTCとして連続的に扱うこと
+
+です。
+
+最新HEADは静的build/testまでは通っていますが、pass_ownerを含む動的検証はまだ未完了です。
+
+チェックイン済み結果も最速47.0秒に対して最遅168.7秒とテールが大きく、最新HEADの認定結果ではありません。
+
+次はmission FSMをさらに増やすより、Committed ShiftOut Owner + 時空間candidate lattice + Overtake専用MPC modeの3点を実装するのが最短です。

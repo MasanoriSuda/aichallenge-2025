@@ -658,7 +658,15 @@ struct OvertakeMissionCandidate
   double predicted_body_clear_time_sec{std::numeric_limits<double>::infinity()};
   double predicted_hard_distance_time_sec{std::numeric_limits<double>::infinity()};
   double predicted_body_clear_distance_m{std::numeric_limits<double>::infinity()};
+  double closing_speed_mps{std::numeric_limits<double>::quiet_NaN()};
 };
+
+/// Build a small deterministic longitudinal candidate set from the existing
+/// ShiftOut bounds. Invalid bounds produce no candidates; equal bounds produce
+/// one candidate. The midpoint adds a useful distance-preserving option without
+/// introducing another tuning parameter.
+std::vector<double> build_overtake_closing_speed_candidates(
+  double minimum_closing_speed_mps, double maximum_closing_speed_mps) noexcept;
 
 struct OvertakeMissionCandidateSelectionRequest
 {
@@ -676,7 +684,8 @@ struct OvertakeMissionCandidateSelection
 /// Select a deterministic executable mission. When body-clear deadline data is
 /// available, prefer the candidate that establishes physical lateral
 /// separation first. Legacy candidates retain direct-pass, shortest ShiftOut,
-/// minimum lateral-motion and lower-acceleration ordering.
+/// minimum lateral-motion and lower-acceleration ordering. Otherwise-identical
+/// spatiotemporal candidates prefer the higher closing speed.
 OvertakeMissionCandidateSelection select_overtake_mission_candidate(
   const OvertakeMissionCandidateSelectionRequest & request) noexcept;
 
@@ -1564,6 +1573,29 @@ struct CommittedPassBehaviorOwnershipRequest
 /// overlap and target-continuity failures always release this ownership.
 bool can_preserve_committed_pass_behavior(
   const CommittedPassBehaviorOwnershipRequest & request) noexcept;
+
+struct CommittedShiftOutBehaviorOwnershipRequest
+{
+  bool committed_shiftout_active{false};
+  bool validated_fixed_line{false};
+  bool mission_side_valid{false};
+  bool body_clear_deadline_feasible{false};
+  bool locked_target_seen{false};
+  bool locked_target_position_jump{false};
+  bool locked_target_course_progress_rejected{false};
+  bool locked_target_pass_side_intrusion{false};
+  bool explicit_forbidden_waypoint{false};
+  bool emergency_front_risk{false};
+  bool solver_recovery_requested{false};
+};
+
+/// Keep Behavior in Overtake while a deadline-feasible, immutable ShiftOut
+/// owns execution. Entry-only gap and candidate-quality re-evaluation cannot
+/// revoke it, while target continuity, emergency, explicit map prohibition and
+/// solver recovery remain hard ownership-release conditions. Live path, wall
+/// and lateral-acceleration checks remain downstream responsibilities.
+bool can_preserve_committed_shiftout_behavior(
+  const CommittedShiftOutBehaviorOwnershipRequest & request) noexcept;
 
 enum class OvertakeExecutionSideSource
 {

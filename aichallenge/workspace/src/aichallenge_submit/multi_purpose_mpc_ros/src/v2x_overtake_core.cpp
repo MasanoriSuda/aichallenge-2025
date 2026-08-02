@@ -1018,6 +1018,34 @@ OvertakeMissionDynamicCorridorResolution resolve_overtake_mission_dynamic_corrid
   return resolution;
 }
 
+std::vector<double> build_overtake_closing_speed_candidates(
+  const double minimum_closing_speed_mps,
+  const double maximum_closing_speed_mps) noexcept
+{
+  std::vector<double> candidates;
+  if (
+    !std::isfinite(minimum_closing_speed_mps) || minimum_closing_speed_mps < 0.0 ||
+    !std::isfinite(maximum_closing_speed_mps) ||
+    maximum_closing_speed_mps < minimum_closing_speed_mps)
+  {
+    return candidates;
+  }
+
+  constexpr double kEpsilon = 1e-9;
+  const auto add_candidate = [&](const double candidate) {
+      const bool duplicate = std::any_of(
+        candidates.begin(), candidates.end(),
+        [&](const double existing) {return std::abs(existing - candidate) <= kEpsilon;});
+      if (!duplicate) {
+        candidates.push_back(candidate);
+      }
+    };
+  add_candidate(minimum_closing_speed_mps);
+  add_candidate(0.5 * (minimum_closing_speed_mps + maximum_closing_speed_mps));
+  add_candidate(maximum_closing_speed_mps);
+  return candidates;
+}
+
 OvertakeMissionCandidateSelection select_overtake_mission_candidate(
   const OvertakeMissionCandidateSelectionRequest & request) noexcept
 {
@@ -1041,7 +1069,11 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
         ((finite_deadline_result || rejected_deadline_result) &&
         !std::isnan(candidate.predicted_hard_distance_time_sec) &&
         candidate.predicted_hard_distance_time_sec >= 0.0);
-      return deadline_valid && std::isfinite(candidate.shift_distance_m) &&
+      const bool closing_speed_valid =
+        std::isnan(candidate.closing_speed_mps) ||
+        (std::isfinite(candidate.closing_speed_mps) && candidate.closing_speed_mps >= 0.0);
+      return deadline_valid && closing_speed_valid &&
+             std::isfinite(candidate.shift_distance_m) &&
              candidate.shift_distance_m >= 0.0 &&
              std::isfinite(candidate.goal_lateral_m) &&
              std::isfinite(candidate.lateral_shift_m) &&
@@ -1101,6 +1133,17 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
         candidate.max_required_lateral_accel_mps2)
       {
         return false;
+      }
+      if (
+        std::isfinite(candidate.closing_speed_mps) &&
+        std::isfinite(incumbent.closing_speed_mps))
+      {
+        if (candidate.closing_speed_mps > incumbent.closing_speed_mps + kEpsilon) {
+          return true;
+        }
+        if (incumbent.closing_speed_mps > candidate.closing_speed_mps + kEpsilon) {
+          return false;
+        }
       }
       return std::abs(candidate.goal_lateral_m) + kEpsilon <
              std::abs(incumbent.goal_lateral_m);
@@ -2457,6 +2500,22 @@ bool can_preserve_committed_pass_behavior(
          !request.locked_target_position_jump &&
          !request.locked_target_course_progress_rejected &&
          request.current_body_footprints_separated &&
+         !request.locked_target_pass_side_intrusion &&
+         !request.explicit_forbidden_waypoint &&
+         !request.emergency_front_risk &&
+         !request.solver_recovery_requested;
+}
+
+bool can_preserve_committed_shiftout_behavior(
+  const CommittedShiftOutBehaviorOwnershipRequest & request) noexcept
+{
+  return request.committed_shiftout_active &&
+         request.validated_fixed_line &&
+         request.mission_side_valid &&
+         request.body_clear_deadline_feasible &&
+         request.locked_target_seen &&
+         !request.locked_target_position_jump &&
+         !request.locked_target_course_progress_rejected &&
          !request.locked_target_pass_side_intrusion &&
          !request.explicit_forbidden_waypoint &&
          !request.emergency_front_risk &&

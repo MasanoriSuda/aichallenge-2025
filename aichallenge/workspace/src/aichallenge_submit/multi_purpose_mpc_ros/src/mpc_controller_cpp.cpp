@@ -1800,6 +1800,7 @@ struct V2XBehaviorOutput
   bool overtake_paused_mission_active{false};
   bool overtake_line_owns_locked_target_speed{false};
   bool overtake_committed_pass_behavior_owner_active{false};
+  bool overtake_committed_shiftout_behavior_owner_active{false};
   bool overtake_hard_curve_blocked{false};
   bool active_hard_curve_continuation_allowed{false};
   bool outer_curve_entry_allowed{false};
@@ -1830,6 +1831,8 @@ struct V2XBehaviorOutput
   double overtake_side_clearance{0.0};
   std::optional<double> overtake_corridor_center_ey;
   double overtake_selected_shift_distance{std::numeric_limits<double>::quiet_NaN()};
+  double overtake_selected_closing_speed{std::numeric_limits<double>::quiet_NaN()};
+  bool overtake_selected_body_clear_deadline_feasible{true};
   double overtake_completion_available_distance{std::numeric_limits<double>::infinity()};
   double overtake_completion_required_distance{0.0};
   double overtake_completion_relative_speed{std::numeric_limits<double>::infinity()};
@@ -1925,6 +1928,8 @@ struct OvertakeLineState
   std::optional<double> fixed_pass_corridor_goal_ey;
   bool mission_path_frozen{false};
   double mission_shift_distance{0.0};
+  double mission_closing_speed_limit{std::numeric_limits<double>::quiet_NaN()};
+  bool mission_body_clear_deadline_feasible{true};
   double mission_path_total_distance{0.0};
   bool inter_vehicle_corridor{false};
   std::string lower_boundary_vehicle_id;
@@ -5795,6 +5800,8 @@ struct MPC
       bool direct_base_line_pass_ready{false};
       double required_lateral_shift{std::numeric_limits<double>::infinity()};
       double selected_shift_distance{std::numeric_limits<double>::quiet_NaN()};
+      double selected_closing_speed{std::numeric_limits<double>::quiet_NaN()};
+      bool selected_body_clear_deadline_feasible{true};
       bool dynamic_mission_corridor_observed{false};
       bool dynamic_mission_corridor_feasible{false};
       std::size_t dynamic_mission_corridor_samples{};
@@ -6174,13 +6181,10 @@ struct MPC
         const double non_negative_preflight_target_speed =
           std::isfinite(preflight_target_speed) ?
           std::max(0.0, preflight_target_speed) : 0.0;
-        // Use the existing ShiftOut closing-speed policy as the longitudinal
-        // prediction speed. This evaluates the path that the controller will
-        // actually request instead of ranking against unrestricted v_max.
-        const double body_clear_prediction_ego_speed = std::max(
-          0.5,
-          non_negative_preflight_target_speed +
-          std::max(0.0, cfg.v2x_behavior.overtake_shiftout_max_closing_speed));
+        const auto closing_speed_candidates =
+          overtake_core::build_overtake_closing_speed_candidates(
+          cfg.v2x_behavior.overtake_shiftout_min_closing_speed,
+          cfg.v2x_behavior.overtake_shiftout_max_closing_speed);
         const double nominal_shift_distance =
           std::max(0.5, cfg.v2x_behavior.overtake_line.shift_distance);
         std::vector<double> shift_distance_candidates;
@@ -6305,60 +6309,74 @@ struct MPC
               model->spatial_state.e_y <= goal_upper + kEps;
             const bool direct_pass =
               std::abs(preflight.goal_ey) <= kEps && current_position_clear;
-            const auto body_clear_deadline =
-              overtake_core::resolve_overtake_body_clear_deadline(
-              overtake_core::OvertakeBodyClearDeadlineRequest{
-                cfg.v2x_behavior.overtake_body_clear_deadline_enabled,
-                overtake_core::OvertakeMissionPathRequest{
-                  0.0,
-                  model->spatial_state.e_y,
-                  preflight.goal_ey,
-                  0.0,
+            for (const double closing_speed : closing_speed_candidates) {
+              // Evaluate the same longitudinal plan that execution can command. The global
+              // speed limit can reduce the effective closing speed, so persist that bounded
+              // value instead of the raw configured candidate.
+              const double body_clear_prediction_ego_speed = std::max(
+                0.5,
+                std::min(
+                  cfg.v_max,
+                  non_negative_preflight_target_speed + closing_speed));
+              const double effective_closing_speed = std::max(
+                0.0,
+                body_clear_prediction_ego_speed - non_negative_preflight_target_speed);
+              const auto body_clear_deadline =
+                overtake_core::resolve_overtake_body_clear_deadline(
+                overtake_core::OvertakeBodyClearDeadlineRequest{
+                  cfg.v2x_behavior.overtake_body_clear_deadline_enabled,
+                  overtake_core::OvertakeMissionPathRequest{
+                    0.0,
+                    model->spatial_state.e_y,
+                    preflight.goal_ey,
+                    0.0,
+                    shift_distance,
+                    pass_distance,
+                    std::max(0.5, cfg.v2x_behavior.overtake_line.return_distance)},
+                  preflight_target_longitudinal,
+                  body_clear_prediction_ego_speed,
+                  non_negative_preflight_target_speed,
+                  preflight_target_course_lateral,
+                  preflight_target_lateral_velocity,
+                  std::max(0.0, cfg.v2x_gap.prediction_time),
+                  std::max(0.0, cfg.v2x_gap.vehicle_radius),
+                  std::max(0.0, cfg.v2x_behavior.moving_follow_hard_distance),
+                  cfg.v2x_behavior.overtake_body_clear_deadline_margin_sec,
+                  48U});
+              if (!body_clear_deadline.valid) {
+                ++body_clear_deadline_invalid_count;
+                continue;
+              }
+              // A missed body-clear deadline is a ranking penalty, not a mission veto. The
+              // dynamic corridor and footprint/wall preflight above remain the physical entry
+              // gates. This lets the competition-simulation policy choose the least-bad
+              // executable ShiftOut instead of falling back to indefinite Follow.
+              if (!body_clear_deadline.feasible) {
+                ++body_clear_deadline_miss_count;
+                earliest_rejected_body_clear_time = std::min(
+                  earliest_rejected_body_clear_time,
+                  body_clear_deadline.body_clear_time_sec);
+                earliest_rejected_hard_distance_time = std::min(
+                  earliest_rejected_hard_distance_time,
+                  body_clear_deadline.hard_distance_time_sec);
+              }
+              mission_candidates.push_back(
+                overtake_core::OvertakeMissionCandidate{
+                  true,
+                  direct_pass,
                   shift_distance,
-                  pass_distance,
-                  std::max(0.5, cfg.v2x_behavior.overtake_line.return_distance)},
-                preflight_target_longitudinal,
-                body_clear_prediction_ego_speed,
-                non_negative_preflight_target_speed,
-                preflight_target_course_lateral,
-                preflight_target_lateral_velocity,
-                std::max(0.0, cfg.v2x_gap.prediction_time),
-                std::max(0.0, cfg.v2x_gap.vehicle_radius),
-                std::max(0.0, cfg.v2x_behavior.moving_follow_hard_distance),
-                cfg.v2x_behavior.overtake_body_clear_deadline_margin_sec,
-                48U});
-            if (!body_clear_deadline.valid) {
-              ++body_clear_deadline_invalid_count;
-              continue;
+                  preflight.goal_ey,
+                  std::abs(preflight.goal_ey - model->spatial_state.e_y),
+                  preflight.max_required_lateral_accel,
+                  body_clear_deadline.checked,
+                  body_clear_deadline.feasible,
+                  body_clear_deadline.body_clear_time_sec,
+                  body_clear_deadline.hard_distance_time_sec,
+                  body_clear_deadline.body_clear_distance_m,
+                  effective_closing_speed});
+              candidate_metadata.push_back(
+                CandidateMetadata{preflight, current_position_clear});
             }
-            // A missed body-clear deadline is a ranking penalty, not a mission veto. The
-            // dynamic corridor and footprint/wall preflight above remain the physical entry
-            // gates. This lets the competition-simulation policy choose the least-bad
-            // executable ShiftOut instead of falling back to indefinite Follow.
-            if (!body_clear_deadline.feasible) {
-              ++body_clear_deadline_miss_count;
-              earliest_rejected_body_clear_time = std::min(
-                earliest_rejected_body_clear_time,
-                body_clear_deadline.body_clear_time_sec);
-              earliest_rejected_hard_distance_time = std::min(
-                earliest_rejected_hard_distance_time,
-                body_clear_deadline.hard_distance_time_sec);
-            }
-            mission_candidates.push_back(
-              overtake_core::OvertakeMissionCandidate{
-                true,
-                direct_pass,
-                shift_distance,
-                preflight.goal_ey,
-                std::abs(preflight.goal_ey - model->spatial_state.e_y),
-                preflight.max_required_lateral_accel,
-                body_clear_deadline.checked,
-                body_clear_deadline.feasible,
-                body_clear_deadline.body_clear_time_sec,
-                body_clear_deadline.hard_distance_time_sec,
-                body_clear_deadline.body_clear_distance_m});
-            candidate_metadata.push_back(
-              CandidateMetadata{preflight, current_position_clear});
           }
         }
 
@@ -6372,6 +6390,7 @@ struct MPC
           ss << "overtake mission candidate search rejected"
              << ", side=" << side
              << ", shift_candidates=" << shift_distance_candidates.size()
+             << ", closing_candidates=" << closing_speed_candidates.size()
              << ", goal_candidates=" << evaluated_goal_count
              << ", body_deadline_missed=" << body_clear_deadline_miss_count
              << ", body_deadline_invalid=" << body_clear_deadline_invalid_count
@@ -6408,6 +6427,10 @@ struct MPC
           assessment.dynamic_mission_corridor_feasible = true;
           assessment.corridor_center_ey = preflight.goal_ey;
           assessment.selected_shift_distance = preflight.shift_distance_m;
+          assessment.selected_closing_speed = mission_selection.candidate.closing_speed_mps;
+          assessment.selected_body_clear_deadline_feasible =
+            !mission_selection.candidate.body_clear_deadline_checked ||
+            mission_selection.candidate.body_clear_deadline_feasible;
           assessment.required_lateral_accel = preflight.max_required_lateral_accel;
           assessment.required_lateral_shift =
             std::abs(preflight.goal_ey - model->spatial_state.e_y);
@@ -6419,6 +6442,7 @@ struct MPC
           selected_reason << assessment.reason
                           << ", mission candidate selected"
                           << ", shift_distance=" << preflight.shift_distance_m
+                          << ", closing=" << assessment.selected_closing_speed
                           << ", goal=" << preflight.goal_ey
                           << ", lateral_shift=" << assessment.required_lateral_shift
                           << ", ay=" << preflight.max_required_lateral_accel
@@ -7043,6 +7067,10 @@ struct MPC
       output.overtake_corridor_center_ey = selected_assessment.corridor_center_ey;
       output.overtake_selected_shift_distance =
         selected_assessment.selected_shift_distance;
+      output.overtake_selected_closing_speed =
+        selected_assessment.selected_closing_speed;
+      output.overtake_selected_body_clear_deadline_feasible =
+        selected_assessment.selected_body_clear_deadline_feasible;
     }
     if (
       start_grid_corridor_selected &&
@@ -7165,6 +7193,33 @@ struct MPC
       update_front_hazard_hold(true, false, nearest_front_id, false);
       output.state = V2XBehaviorState::SafetyBrake;
       output.reason = "start-grid breakout unavailable / " + overtake_block_reason;
+      return commit_v2x_behavior_state(output, now_sec);
+    }
+
+    // A deadline-feasible immutable ShiftOut owns Behavior after admission.
+    // Entry-only gap/candidate re-evaluation cannot replace it with Follow;
+    // hard target, map, emergency and solver conditions still release it. The
+    // downstream OvertakeLine continues to own live corridor, wall and lateral-
+    // acceleration feasibility.
+    output.overtake_committed_shiftout_behavior_owner_active =
+      overtake_core::can_preserve_committed_shiftout_behavior(
+      overtake_core::CommittedShiftOutBehaviorOwnershipRequest{
+        overtake_line_state_.phase == OvertakeLinePhase::ShiftOut,
+        overtake_line_state_.mission_path_frozen &&
+        overtake_line_state_.fixed_pass_corridor_goal_ey.has_value(),
+        overtake_line_state_.pass_side_sign != 0,
+        overtake_line_state_.mission_body_clear_deadline_feasible,
+        output.locked_target_seen,
+        output.locked_target_position_jump,
+        output.locked_target_course_progress_rejected,
+        output.locked_target_pass_side_intrusion,
+        overtake_forbidden_wp,
+        effective_front_risk_emergency,
+        overtake_solver_recovery_active_});
+    if (output.overtake_committed_shiftout_behavior_owner_active) {
+      output.state = V2XBehaviorState::Overtake;
+      output.overtake_pass_side_sign = overtake_line_state_.pass_side_sign;
+      output.reason = "committed ShiftOut owns execution / " + overtake_block_reason;
       return commit_v2x_behavior_state(output, now_sec);
     }
 
@@ -8884,6 +8939,20 @@ private:
     return std::max(0.5, cfg.v2x_behavior.overtake_line.shift_distance);
   }
 
+  double overtake_mission_closing_speed_limit() const
+  {
+    const double configured_max =
+      std::max(0.0, cfg.v2x_behavior.overtake_shiftout_max_closing_speed);
+    if (
+      overtake_line_state_.mission_path_frozen &&
+      std::isfinite(overtake_line_state_.mission_closing_speed_limit) &&
+      overtake_line_state_.mission_closing_speed_limit >= 0.0)
+    {
+      return std::min(configured_max, overtake_line_state_.mission_closing_speed_limit);
+    }
+    return configured_max;
+  }
+
   double overtake_line_phase_distance() const
   {
     const auto & line_cfg = cfg.v2x_behavior.overtake_line;
@@ -10050,6 +10119,15 @@ private:
             std::isfinite(behavior_output.overtake_selected_shift_distance) ?
             std::max(0.5, behavior_output.overtake_selected_shift_distance) :
             std::max(0.5, line_cfg.shift_distance);
+          overtake_line_state_.mission_closing_speed_limit =
+            std::isfinite(behavior_output.overtake_selected_closing_speed) ?
+            std::clamp(
+              behavior_output.overtake_selected_closing_speed,
+              0.0,
+              std::max(0.0, cfg.v2x_behavior.overtake_shiftout_max_closing_speed)) :
+            std::max(0.0, cfg.v2x_behavior.overtake_shiftout_max_closing_speed);
+          overtake_line_state_.mission_body_clear_deadline_feasible =
+            behavior_output.overtake_selected_body_clear_deadline_feasible;
           overtake_line_state_.mission_path_total_distance =
             overtake_line_state_.mission_shift_distance +
             std::max(0.5, line_cfg.pass_distance) +
@@ -10064,7 +10142,7 @@ private:
             rclcpp::get_logger("mpc_controller"),
             "Overtake minimum-motion entry: mode=%s, side=%d, current_ey=%.2f, "
             "goal_ey=%.2f, lateral_shift=%.2f, shift_distance=%.2f, "
-            "path_frozen=%d, path_total=%.2f, "
+            "closing=%.2f, body_deadline=%d, path_frozen=%d, path_total=%.2f, "
             "target=%s, wp_id=%d",
             direct_base_line_pass ? "base-line" :
             direct_same_side_resume ? "same-side-pass-resume" : "minimum-shift",
@@ -10073,6 +10151,8 @@ private:
             std::abs(
               overtake_line_state_.fixed_pass_corridor_goal_ey.value() - current_ey),
             overtake_mission_shift_distance(),
+            overtake_mission_closing_speed_limit(),
+            overtake_line_state_.mission_body_clear_deadline_feasible ? 1 : 0,
             overtake_line_state_.mission_path_frozen ? 1 : 0,
             overtake_line_state_.mission_path_total_distance,
             behavior_output.target_vehicle_id.c_str(), model->wp_id);
@@ -10660,8 +10740,7 @@ private:
       !output.front_cap_release_ready &&
       std::isfinite(locked_target_speed))
     {
-      double closing_speed_limit =
-        std::max(0.0, cfg.v2x_behavior.overtake_shiftout_max_closing_speed);
+      double closing_speed_limit = overtake_mission_closing_speed_limit();
       closing_speed_limit = overtake_core::resolve_unlatched_pass_closing_speed(
         closing_speed_limit,
         cfg.v2x_behavior.overtake_pass_unlatched_max_closing_speed,
@@ -10675,8 +10754,10 @@ private:
         const auto adaptive_closing =
           overtake_core::resolve_adaptive_shiftout_closing_speed(
           overtake_core::AdaptiveShiftOutClosingSpeedRequest{
-            cfg.v2x_behavior.overtake_shiftout_min_closing_speed,
-            cfg.v2x_behavior.overtake_shiftout_max_closing_speed,
+            std::min(
+              cfg.v2x_behavior.overtake_shiftout_min_closing_speed,
+              closing_speed_limit),
+            closing_speed_limit,
             std::max(0.0, locked_target_longitudinal),
             cfg.v2x_behavior.overtake_guard_min_front_distance,
             overtake_shiftout_remaining_distance(current_ey),
@@ -10815,7 +10896,8 @@ private:
           "first_epsi=%.2f, "
           "current_ey=%.2f, elapsed=%.2f, traveled=%.2f, stalled=%.2f, "
           "v_ref=%.2f, v_limit=%.2f, v_floor=%.2f, floor_active=%d, shift_floor=%d, "
-          "recovery_speed=%s, closing=%.2f, unseparated_reserve=%d/protected=%.2f, "
+          "recovery_speed=%s, mission_closing=%.2f, closing=%.2f, "
+          "unseparated_reserve=%d/protected=%.2f, "
           "cap_release=%d, horizon_release=%d, "
           "speed_hold=%d, minimum_motion_cap=%d, footprint_clear=%d, "
           "footprint_prediction=%d, footprint_sweep_clear=%d, "
@@ -10836,6 +10918,7 @@ private:
           output.committed_pass_speed_floor_active ? 1 : 0,
           output.committed_shiftout_speed_floor_active ? 1 : 0,
           output.recovery_moving_follow_profile_used ? "follow" : "fixed",
+          overtake_mission_closing_speed_limit(),
           output.closing_speed_limit,
           output.unseparated_closing_reserve_active ? 1 : 0,
           output.unseparated_protected_front_distance,
@@ -11723,8 +11806,7 @@ private:
       return std::numeric_limits<double>::infinity();
     }
 
-    double closing_speed_limit =
-      cfg.v2x_behavior.overtake_shiftout_max_closing_speed;
+    double closing_speed_limit = overtake_mission_closing_speed_limit();
     closing_speed_limit = v2x_overtake_core::resolve_unlatched_pass_closing_speed(
       closing_speed_limit,
       cfg.v2x_behavior.overtake_pass_unlatched_max_closing_speed,
@@ -11739,8 +11821,10 @@ private:
       const auto adaptive_closing =
         v2x_overtake_core::resolve_adaptive_shiftout_closing_speed(
         v2x_overtake_core::AdaptiveShiftOutClosingSpeedRequest{
-          cfg.v2x_behavior.overtake_shiftout_min_closing_speed,
-          cfg.v2x_behavior.overtake_shiftout_max_closing_speed,
+          std::min(
+            cfg.v2x_behavior.overtake_shiftout_min_closing_speed,
+            closing_speed_limit),
+          closing_speed_limit,
           front_distance,
           cfg.v2x_behavior.overtake_guard_min_front_distance,
           remaining_shiftout_distance,
@@ -12028,8 +12112,16 @@ private:
           const bool front_cap_stage = !output.overtake_front_cap_release_ready;
           const bool physical_shiftout_stage =
             !output.overtake_committed_pass_active;
-          double closing_speed_limit =
-            cfg.v2x_behavior.overtake_shiftout_max_closing_speed;
+          const double selected_or_mission_closing_speed =
+            overtake_line_state_.mission_path_frozen ?
+            overtake_mission_closing_speed_limit() :
+            std::isfinite(output.overtake_selected_closing_speed) ?
+            std::clamp(
+              output.overtake_selected_closing_speed,
+              0.0,
+              std::max(0.0, cfg.v2x_behavior.overtake_shiftout_max_closing_speed)) :
+            overtake_mission_closing_speed_limit();
+          double closing_speed_limit = selected_or_mission_closing_speed;
           closing_speed_limit = overtake_core::resolve_unlatched_pass_closing_speed(
             closing_speed_limit,
             cfg.v2x_behavior.overtake_pass_unlatched_max_closing_speed,
@@ -12045,8 +12137,10 @@ private:
             const auto adaptive_closing =
               v2x_overtake_core::resolve_adaptive_shiftout_closing_speed(
               v2x_overtake_core::AdaptiveShiftOutClosingSpeedRequest{
-                cfg.v2x_behavior.overtake_shiftout_min_closing_speed,
-                cfg.v2x_behavior.overtake_shiftout_max_closing_speed,
+                std::min(
+                  cfg.v2x_behavior.overtake_shiftout_min_closing_speed,
+                  selected_or_mission_closing_speed),
+                selected_or_mission_closing_speed,
                 std::max(0.0, output.front_distance),
                 cfg.v2x_behavior.overtake_guard_min_front_distance,
                 remaining_shiftout_distance,
@@ -12055,9 +12149,9 @@ private:
                 cfg.v2x_behavior.overtake_shiftout_adaptive_min_time_sec});
             closing_speed_limit = adaptive_closing.closing_speed_mps;
             output.overtake_shiftout_adaptive_speed_applied = true;
-            output.overtake_shiftout_closing_speed_limit = closing_speed_limit;
             output.overtake_shiftout_remaining_time = adaptive_closing.remaining_time_sec;
           }
+          output.overtake_shiftout_closing_speed_limit = closing_speed_limit;
           const double front_based_shiftout_cap =
             std::max(0.0, overtake_target_speed) + closing_speed_limit;
           const double entry_speed_floor =
@@ -12164,7 +12258,8 @@ private:
         "inner_entry=%d, inner_hard_entry=%d, inner_hard=%d, "
         "hard_dist=%.2f, hard_avail=%.2f, hard_req=%.2f, "
         "locked_rel=%.2f, lat_clear=%d, body_clear=%d, "
-        "lookahead_inner=%d, inner_pref=%d, front_danger_suppress=%d, pass_owner=%d",
+        "lookahead_inner=%d, inner_pref=%d, front_danger_suppress=%d, "
+        "shift_owner=%d, pass_owner=%d",
         v2x_behavior_state_initialized ? to_string(v2x_behavior_state) : "None", to_string(final_state),
         output.front_distance, model->wp_id, output.reason.c_str(),
         output.v2x_health.c_str(), output.v2x_receipt_age_sec,
@@ -12192,6 +12287,7 @@ private:
         output.overtake_lookahead_inner_side,
         output.overtake_inner_preference_selected ? 1 : 0,
         output.committed_corridor_front_danger_suppressed ? 1 : 0,
+        output.overtake_committed_shiftout_behavior_owner_active ? 1 : 0,
         output.overtake_committed_pass_behavior_owner_active ? 1 : 0);
       v2x_behavior_state = final_state;
       last_v2x_behavior_state_change_sec = now_sec;
@@ -12215,7 +12311,7 @@ private:
           "health=%s, receipt_age=%.3f, source_age=%.3f, interval=%.3f, "
           "vehicles=%zu, message_vehicles=%zu, jumps=%zu, invalid_velocity=%zu, "
           "message_invalid=%d, front=%d, side=%d, danger=%d, danger_action=%s, "
-          "danger_suppress=%d, pass_owner=%d, "
+          "danger_suppress=%d, shift_owner=%d, pass_owner=%d, "
           "grace=%d, grid_suppress=%d, grid_breakout=%d, "
           "grid_observe=%d, grid_obs=%.2f, grid_peer=%.2f, grid_candidate=%s, "
           "grid_stable=%.2f, "
@@ -12263,6 +12359,7 @@ private:
           output.has_danger_vehicle ? 1 : 0,
           v2x_overtake_core::to_string(output.front_danger_action),
           output.committed_corridor_front_danger_suppressed ? 1 : 0,
+          output.overtake_committed_shiftout_behavior_owner_active ? 1 : 0,
           output.overtake_committed_pass_behavior_owner_active ? 1 : 0,
           output.start_grid_grace_active ? 1 : 0,
           output.start_grid_stop_suppressed ? 1 : 0,

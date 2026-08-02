@@ -1,0 +1,730 @@
+153fe98c8f24cc7781d846f57b8fd5aae53ee29cの設計についてレビューをお願いします
+14m 21s考えました
+設計レビュー結果
+
+対象は、
+
+153fe98c8f24cc7781d846f57b8fd5aae53ee29c
+20260802-pass-horizon-replan
+
+です。
+
+総評
+
+方向性は正しいです。設計としては Approve with changes。
+
+今回の設計は、現在の主問題をかなり正確に切り分けています。
+
+ShiftOutを成立させる能力
+
+は前コミットのkinematic rollout＋global candidate選択によって改善し、
+
+ShiftOut 9/9でPass到達
+
+まで来た一方、
+
+Pass完遂 2/9
+最大34.5 mも同じ横目標を保持
+
+となっています。つまり今のボトルネックは入口ではなく、Passをどこまで維持し、どこで再計画し、どこでReturnまたは中止するかです。
+
+評価をまとめると次の通りです。
+
+観点	評価
+問題設定	A
+End-to-end mission化	A-
+same-side extension	A-
+watchdogとの責務分離	A
+状態遷移の厳密さ	B
+動的予測の有効範囲	C+
+Hold／Abortの安全な意味付け	B-
+実装着手可否	修正後に可
+
+このコミット時点では設計資料だけで、Core、Controller integration、テスト、実走は未実施です。
+
+良いところ
+1. 既存watchdogとは別の絶対horizonを持つ判断は正しい
+
+現在の、
+
+v2x_overtake_line_progress_watchdog_distance: 32.0
+v2x_overtake_line_progress_watchdog_min_progress: 0.5
+
+は、「32 m走る間に前後関係が0.5 mも改善しない」という完全停滞を検出するものです。少しずつ接近している限り再装填されるため、34.5 mの長時間Passを止められません。
+
+今回追加するhorizonは、
+
+このmissionは、どこまで経路検証済みなのか
+
+を監視します。
+
+したがって、
+
+progress watchdog:
+    相手との縦関係が改善しているか
+
+validated horizon:
+    検証済み経路の外へ出ていないか
+
+と責務が明確に分かれています。
+
+これは良い設計です。
+
+2. rear-clearまでをcandidate段階で予測するのも正しい
+
+親コミットのkinematic rolloutは、
+
+現在速度
+a_max / a_min
+制御遅延
+経路速度上限
+selected closing speed
+横経路進捗
+
+を50 ms刻みの共通時間軸で評価しています。
+
+そこへ、
+
+side-by-side
+body-clear
+rear-clear
+Return開始地点
+
+を追加するのは自然な拡張です。
+
+特に、
+
+body-clearはできるがrear-clearできない
+
+candidateを入口で識別できるようになるのが重要です。今まではbody-clear後にPassへ入れば、rear-clearできるまで事実上無期限に横位置を保持できました。
+
+3. mid-Passで反対側へ渡らない方針も正しい
+
+Pass中の再計画を、
+
+現在sideのみ
+
+に限定し、
+
+現在goalを第一候補にする
+同じside内で必要最小量だけ調整
+opposite sideは生成しない
+
+という方針は妥当です。
+
+Pass中に、
+
+右側で並走
+→ 左側が広く見えた
+→ コース全幅を横断
+
+すると、対象車の前を横切るか、壁・横加速度・solver制約へ入ります。
+
+上位者ログでも動的な追い越し、明示的なPass時間予算、Return処理はありますが、OFFSET-RETURNのON/OFF反復やswitchback、STUCKも確認できます。したがって、「動的再計画」は必要でも、無制限な左右切替をコピーしない判断が正しいです。
+
+実装前に直すべきP0
+P0-1. 「静的に検証済み」と「動的に検証済み」を分ける
+
+現在の設計では、
+
+mission_validated_pass_distance_m
+
+が一つだけです。
+
+しかし、実際には検証可能範囲が異なります。
+
+静的壁:
+    reference pathとoccupancy mapがあれば先まで検証可能
+
+対象車・第三車両:
+    V2X予測時間までしか信頼できない
+
+現在設定は、
+
+v2x_prediction_time: 1.0
+v2x_prediction_use_course_progress: false
+v2x_prediction_use_course_lateral_velocity: false
+
+です。
+
+一方、提案しているPass上限は最大24 m、10秒、さらにReturn区間もあります。1秒予測で24 m先の動的corridorを「検証済み」と呼ぶことはできません。
+
+したがってmission stateは、少なくとも次へ分けるべきです。
+
+double mission_static_valid_until_pass_m;
+double mission_dynamic_valid_until_pass_m;
+
+double mission_static_valid_until_elapsed_sec;
+double mission_dynamic_valid_until_elapsed_sec;
+
+実効期限は、
+
+validated_until_m = std::min(
+    static_valid_until_m,
+    dynamic_valid_until_m);
+
+です。
+
+推奨する評価契約
+静的壁・曲率・Return:
+    mission全体を検証必須
+
+動的車両:
+    信頼できる予測区間まで検証
+    その終端より前に再評価必須
+
+動的予測がReturn開始時刻まで届かないことだけでcandidateを全棄却すると、再び「永遠にFollowする車」になります。
+
+P0-2. RefreshSameSideとExtendSameSideを同じdecision enumへ入れない
+
+現在案では、
+
+RefreshSameSide
+ExtendSameSide
+
+が同じresolve_committed_pass_horizon()の戻り値です。
+
+ただし両者は意味が違います。
+
+RefreshSameSide:
+    plannerへ再評価を要求する判断
+
+ExtendSameSide:
+    planner結果をmissionへcommitした結果
+
+純粋関数を次の二段に分けるべきです。
+
+enum class PassHorizonAction
+{
+  Keep,
+  Return,
+  RequestSameSideExtension,
+  EnterHold,
+  Abort,
+};
+
+そしてplanner結果は別にします。
+
+struct SameSideExtensionCandidate
+{
+  std::uint64_t source_generation;
+  std::string target_id;
+  int side_sign;
+
+  double goal_ey;
+  double closing_speed_limit;
+
+  double validated_until_pass_m;
+  double validated_until_elapsed_sec;
+
+  double predicted_rear_clear_pass_m;
+  double predicted_rear_clear_elapsed_sec;
+};
+
+適用時には、
+
+generation一致
+target ID一致
+side一致
+現在phaseがPassまたはHold
+新しいvalidated endが現在値より前へ進む
+
+を確認してatomic updateします。
+
+P0-3. mission_validation_generationの意味を明文化する
+
+フィールド名は入っていますが、generationをどう扱うかが未定義です。
+
+必要な契約は次です。
+
+mission作成:
+    generation = 1
+
+same-side extension採用:
+    現generationとcandidate.source_generationが一致する場合だけ適用
+    generation++
+
+rear-clear / Return / Recovery / target変更:
+    pending candidateを無効化
+
+これがないと、
+
+周期Nでextension計算開始
+周期N+1でrear-clear成立
+周期N+2で古いextension結果を適用
+→ ReturnからPassへ戻る
+
+というraceが起こり得ます。
+
+現在のcontrollerが同期処理でも、candidate生成とFSM判定の順序差によって同種の問題は発生します。
+
+P0-4. Pass距離・時間の座標原点を完全に固定する
+
+設計では、
+
+phase_traveled_mとmission_validated_pass_distance_mを同じPass開始点基準にする
+
+と書かれており、これは正しいです。
+
+ただしextensionは現在位置から計算するので、ローカル値を必ずPass原点へ変換します。
+
+new_validated_until_pass_m =
+    current_phase_traveled_m +
+    extension.validated_distance_from_current_m;
+
+同様に時間も、
+
+new_validated_until_elapsed_sec =
+    current_pass_elapsed_sec +
+    extension.validated_time_from_current_sec;
+
+です。
+
+extension採用時に、
+
+phase_traveled = 0
+pass elapsed = 0
+absolute limit timer = 0
+
+へ戻してはいけません。
+
+24 m／10秒のabsolute budgetは、extensionによって絶対に再装填しないことをrequirementsへ明記すべきです。
+
+P0-5. HoldFrozenLineの説明が危険なほど曖昧
+
+設計には、
+
+HoldFrozenLineは通常trajectoryを出さない
+
+とあります。
+
+これは次の意味に書き換える必要があります。
+
+通常/base trajectoryへ戻さない
+固定OvertakeLineは引き続きpublishする
+
+本当にtrajectoryを出さないと、
+
+MPC fallback
+solver failure
+速度0
+FollowPrepare化
+Stuck Recovery
+
+へ流れる可能性があります。
+
+Hold中に保持すべきもの
+target ID
+side
+fixed lateral goal
+lateral ownership
+現在の短区間validated line
+target-speed matchまたはclosing ≈ 0
+Holdへ入れる条件
+現在footprint非重複
+現在の短区間が静的壁clear
+target continuity正常
+targetがselected sideへ侵入していない
+Emergencyではない
+solver正常
+Hold上限
+
+提案の、
+
+1.0秒 または 3.0 m
+
+は初期値として妥当です。
+
+ただしこれは独立した上位Behavior stateではなく、
+
+PassHorizonMode::Normal
+PassHorizonMode::Holding
+
+というPass内部substateにするのがよいです。
+
+P0-6. Abort -> Recoveryを無条件にしない
+
+side-by-side状態でgeneric Recoveryへ入るのは危険です。
+
+Recoveryが基準trajectoryへ戻ろうとすると、
+
+対象車の前を横断
+対象車側へ寄る
+壁側へ押し込まれる
+
+可能性があります。
+
+したがってAbortは二種類に分けるべきです。
+
+AbortToRecovery
+AbortToSafeSeparation
+AbortToRecovery
+対象車が十分前または後ろ
+横断しても車体重複しない
+AbortToSafeSeparation
+まだside-by-side
+現在sideを短時間保持
+closingを0以下へ
+前後分離後にReturnまたはRecovery
+
+「horizon延長に失敗したから即通常経路へ戻る」は、requirements自身が禁止している挙動と実質的に同じです。
+
+P0-7. wall contactとwall marginを同じhard guardへまとめない
+
+requirementsでは、
+
+1. 実車体の壁接触・壁余裕違反
+2. 現在車体の重複とEmergency
+...
+
+となっています。
+
+しかし既存FSMには、
+
+ReturnBeforeWallMarginRecovery
+RecoverWallMargin
+
+が分かれて存在します。rear-clear済みなら、壁margin Recoveryへ入る前にReturnできる設計です。
+
+したがって優先順位は次が適切です。
+
+1. 物理接触 / map外 / 現在footprint検証不能
+2. confirmed current overlap / Emergency
+3. target continuity
+4. solver failure
+5. rear-clear済みならReturnBeforeWallMarginRecovery
+6. margin-only violation
+7. Pass horizon decision
+
+物理接触はhard abort、追加margin不足はReturn優先可能と分けるべきです。
+
+Pro Review Requestの7論点への回答
+1. predicted rear-clear + reserveでPass距離を決めるのは妥当か
+
+妥当です。
+
+ただし式の座標を明確にします。
+
+rear_clear_pass_distance =
+    predicted_ego_distance_at_rear_clear
+    - shift_distance;
+
+confirmation_reserve_distance =
+    predicted_ego_speed_at_rear_clear
+    * (rear_clear_confirm_sec + control_delay_sec);
+
+validated_pass_distance =
+    max(
+      configured_min_pass_distance,
+      rear_clear_pass_distance + confirmation_reserve_distance);
+
+現在の、
+
+predicted_rear_clear_distance
+- shift_distance
++ merge_reserve
+
+でも方向は合っていますが、merge_reserveは固定距離より、
+
+rear-clear確認時間
+＋制御遅延
+
+から速度依存で計算したほうが整合します。
+
+Return distanceはPass距離へ混ぜず、別区間として保持すべきです。
+
+2. 過度にcandidateを棄却しない評価境界はどこか
+
+次の二段階がよいです。
+
+Hard admission
+ShiftOut
+body-clearまで
+rear-clear予測地点
+Returnの静的壁・曲率・横加速度
+
+は成立必須です。
+
+Receding-horizon admission
+
+第三車両を含む動的corridorは、
+
+信頼できるV2X予測範囲まで成立
+かつ
+その終端より前に再計画できるslackあり
+
+なら採用可能です。
+
+つまり、
+
+静的mission全体が成立しない
+→ Reject
+
+遠未来の動的corridorが未観測
+→ 即Rejectではなく、validated horizonを短く設定
+
+とします。
+
+3. HoldFrozenLineを設けるべきか
+
+設けるべきです。ただしPass内部substateです。
+
+別の上位Behavior stateを増やす必要はありません。
+
+OvertakeLinePhase::Pass
+PassHorizonMode::Holding
+
+で十分です。
+
+Holdなしだと、
+
+extension失敗
+Return blocked
+→ Recovery
+
+しかなくなり、side-by-side状態で危険です。
+
+一方、Holdを無制限にすると、今回の34.5 m問題を名前を変えて再発させます。そのため、
+
+最大1秒
+最大3 m
+closing ≈ 0
+短区間の壁・footprint毎周期確認
+
+が必要です。
+
+4. 距離slackと時間slackは両方必要か
+
+両方必要です。
+
+distance_slack =
+    validated_until_pass_m - phase_traveled_m;
+
+time_slack =
+    validated_until_elapsed_sec - pass_elapsed_sec;
+
+判定は正規化して、
+
+normalized_slack = std::min(
+    distance_slack / revalidation_lead_distance,
+    time_slack / revalidation_lead_time);
+
+とできます。
+
+normalized_slack > 1:
+    Keep
+
+normalized_slack <= 1:
+    Request extension
+
+低速・停止時は時間slackが先に効き、高速時は距離slackが先に効きます。どちらか一方だけだと片側のケースを落とします。
+
+5. 24 m・10秒は妥当か
+
+10秒はhard上限として妥当、24 mはhard上限としては少し慎重です。
+
+12 km/h、約3.33 m/sの相手を、closing 1.0～2.0 m/sで抜く場合、Pass中の自車走行距離が24 mを超える正常ケースはあり得ます。
+
+一方、ほぼ同速車は10秒使っても抜けない可能性が高く、入口で拒否すべきです。
+
+初期A/Bとしては、
+
+predicted_pass_time_budget_sec: 8.0
+absolute_pass_time_limit_sec: 10.0
+
+validated_pass_soft_limit_m: 24.0
+absolute_pass_distance_limit_m: 32.0
+
+same_side_extension_max_m: 8.0～12.0
+hold_max_sec: 1.0
+hold_max_distance_m: 3.0
+
+くらいが筋です。
+
+上位者ログにもpass_t_max: 8.0があり、正常な追い越しを時間予算で区切る発想自体は妥当です。
+
+24 mをいきなり絶対hard abortにするより、成功PassのP95距離を測ってからhard化するのが安全です。
+
+6. 最初の最小実装は何か
+
+一度に全機能を入れず、次の順番がよいです。
+
+Phase 1
+rear-clear rollout
+dynamic Pass distance
+Returnの静的preflight
+validated distance/time保存
+Phase 2
+horizon Keep / Return / RequestExtension / Abort
+same-side extensionは1 missionあたり最大1回
+Phase 3
+bounded Hold
+複数回extension
+動的予測不確実性
+
+最初から無制限same-side extensionを入れると、新しい再計画ループのデバッグが難しくなります。
+
+まず1回だけ延長可能にするのがよいです。
+
+7. future corridor不成立時のforward escapeをどこまで許すか
+
+current footprint非重複だけでは不十分です。
+
+forward escapeを許可してよいのは、次を全部満たす場合です。
+
+現在footprint非重複
+target continuity正常
+現在sideの短区間静的corridor成立
+対象がside-by-sideまたは後方へ移行中
+自車が進むほど縦分離が改善
+予測rear-clearが次の動的conflictより先
+第三車両が前方escapeを塞いでいない
+
+上限は、
+
+0.5～0.75秒
+または2～3 m
+
+程度です。
+
+逆に、
+
+targetがまだ明確に前方
+targetがfixed lineへ侵入中
+進むほど縦・横重複が悪化
+壁側escapeしかない
+
+なら許可すべきではありません。
+
+追加すべきmission state
+
+現在案に加えて、次を推奨します。
+
+struct PassMissionValidation
+{
+  std::uint64_t generation;
+
+  double pass_start_time_sec;
+
+  double predicted_rear_clear_pass_m;
+  double predicted_rear_clear_elapsed_sec;
+
+  double static_valid_until_pass_m;
+  double static_valid_until_elapsed_sec;
+
+  double dynamic_valid_until_pass_m;
+  double dynamic_valid_until_elapsed_sec;
+
+  double absolute_pass_distance_limit_m;
+  double absolute_pass_time_limit_sec;
+
+  int extension_count;
+
+  bool hold_active;
+  double hold_start_pass_m;
+  double hold_start_elapsed_sec;
+};
+
+runtime_slackは保存値ではなく、毎周期計算値にしたほうがよいです。
+
+distance_slack =
+    min(static_valid_until, dynamic_valid_until)
+    - phase_traveled;
+
+time_slack =
+    min(static_valid_until_time, dynamic_valid_until_time)
+    - pass_elapsed;
+
+保存すると、更新忘れや古い値の利用が起こります。
+
+追加すべきテスト
+
+現在tasklistのテストに加え、最低限次が必要です。
+
+テスト	確認内容
+V2X予測1秒・mission 20 m	dynamic horizonを完全検証済み扱いしない
+lap seam付近のextension	circular pathの進捗を誤らない
+stale generation	古いextension結果を棄却
+extension後のabsolute limit	24/32 m・10秒を再装填しない
+rear-clear during Hold	即Returnへ遷移
+Return corridor blocker	base trajectoryへ無条件復帰しない
+margin-only violation	rear-clearならReturnをRecoveryより優先
+physical wall contact	Returnよりhard abortを優先
+opposite sideのみ成立	mid-Pass横断しない
+repeated Refresh	40 Hzで全探索を繰り返さない
+target ID change	pending extensionを無効化
+extension goal adjustment	同側でも横目標jumpを発生させない
+Definition of Doneの改善
+
+現在の、
+
+ShiftOut -> Pass 9/9相当を維持
+
+だけだと、追い越しentry自体を減らして見かけ上成功率を上げる可能性があります。
+
+次を記録したほうがよいです。
+
+front target捕捉数
+candidate admission数
+ShiftOut開始数
+Pass到達数
+rear-clear数
+Return完了数
+mission abort数
+same-side extension数
+Hold回数・最大時間
+validated horizon超過最大値
+
+合格基準は例えば、
+
+admitted ShiftOut -> Pass:        100%
+Pass -> Return -> Idle:            90%以上
+validated horizon超過:              0 m
+Hold最大:                           1秒 / 3 m未満
+同一mission extension:              初期版は最大1回
+wall / solver Recovery:             現状より減少
+crash / wall penalty:               増加なし
+クリアラップ:                       45～46秒台維持
+
+です。
+
+最終判定
+
+この設計の本質は、
+
+Passを距離固定の状態ではなく、
+検証期限を持つreceding-horizon missionにする
+
+ことです。
+
+これは現在の問題に対して正しい本命修正です。
+
+特に、
+
+rear-clearまでを入口で予測
+Returnまで静的に検証
+validated horizonを絶対値で管理
+same-sideだけ延長
+mid-Pass横断禁止
+bounded Hold
+既存progress watchdogとの責務分離
+
+は、すべて採用してよいです。
+
+一方で実装前に必ず直すべきなのは、
+
+静的／動的validation horizonの分離
+RequestExtensionとExtend結果の分離
+generation付きatomic update
+Pass原点基準の距離・時間契約
+Hold中も固定lineをpublishする明記
+side-by-side Abortをgeneric Recoveryへ直結しない
+wall contactとmargin-onlyの優先順位分離
+
+です。
+
+したがってレビュー結果は、
+
+設計方針はApprove。上のP0を設計へ反映してから実装開始が妥当。
+
+となります。現状のまま実装すると、34.5 m無期限Passは消せても、代わりに「再計画境界でHold／Abort／Recoveryを往復する車」になるリスクがあります。P0の契約を固めれば、かなり筋の良いreceding-horizon追い越しへ進めます。

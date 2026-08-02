@@ -5,43 +5,108 @@
 - [x] 最新runのPass遷移と失敗理由を整理する
 - [x] 既存progress watchdogとの差を確認する
 - [x] rear-clearまでのend-to-end mission案を定義する
-- [x] runtime horizon decisionを定義する
-- [x] Proレビュー用の論点を作成する
+- [x] Proレビューを実施する
+- [x] 静的・動的validation horizonを分離する
+- [x] horizon actionとextension commitを分離する
+- [x] generationとabsolute Pass原点の契約を定義する
+- [x] Hold中の固定OvertakeLine出力を定義する
+- [x] AbortToRecoveryとAbortToSafeSeparationを分離する
+- [x] wall contactとmargin-only violationの優先順位を分離する
+- [x] Phase 1～3の段階実装を定義する
 
-## Core
+## Phase 1: Mission range
 
-- [ ] rear-clear時刻・距離をkinematic rolloutへ追加する
-- [ ] dynamic Pass距離の上限・validation reserveを純粋関数化する
-- [ ] `resolve_committed_pass_horizon()` を追加する
-- [ ] mission extensionのatomic update requestを定義する
+- [ ] rear-clear時刻・距離・ego speedをkinematic rolloutへ追加する
+- [ ] rear-clear確認時間と制御遅延からconfirmation reserveを計算する
+- [ ] dynamic Pass距離のsoft/hard上限を純粋関数化する
+- [ ] Return区間をPass距離と分けて静的preflightへ追加する
+- [ ] 静的validation距離・時間をcandidateへ追加する
+- [ ] 動的validation距離・時間をcandidateへ追加する
+- [ ] 動的validationの予測生成時刻・絶対失効時刻をcandidateへ追加する
+- [ ] `PassMissionValidation` を定義する
+- [ ] Pass開始点基準のabsolute distance/timeを保存する
+- [ ] runtime slackを保存せず毎周期算出する
 
-## Tests
+## Phase 2: One-shot replan
 
-- [ ] 低速対象をrear-clearできるcandidateを確認する
-- [ ] 最大時間内にrear-clear不能なcandidateを棄却する
-- [ ] validation lead到達前はKeepになることを確認する
-- [ ] validation lead到達後はRefreshSameSideになることを確認する
-- [ ] rear-clear済みかつReturn corridor成立でReturnになることを確認する
-- [ ] opposite-sideだけ成立してもmid-Pass横断しないことを確認する
-- [ ] Return不可・短区間安全ならHoldFrozenLineになることを確認する
-- [ ] absolute Pass上限超過で無期限保持しないことを確認する
-
-## Controller integration
-
-- [ ] candidate Pass距離をpredicted rear-clear基準へ変更する
-- [ ] Returnを含む静的壁・動的corridor preflightを追加する
-- [ ] validated Pass距離・時間をmission stateへ保存する
-- [ ] same-side runtime extensionを接続する
-- [ ] Return / Hold / Abortを既存FSMへ接続する
+- [ ] `PassHorizonAction` の純粋判断関数を追加する
+- [ ] `SameSideExtensionCandidate` を定義する
+- [ ] generation付きatomic updateを実装する
+- [ ] pending中の重複extension要求を抑止する
+- [ ] same-side extensionを1 missionにつき最大1回接続する
+- [ ] opposite-side candidateをPass中に生成しない
+- [ ] extension後もabsolute Pass距離・時間を再装填しない
+- [ ] rear-clear、Return、Recovery、target変更時にpending candidateを無効化する
+- [ ] `AbortToRecovery` と `AbortToSafeSeparation` を接続する
+- [ ] wall contactとmargin-only violationの処理順を分離する
 - [ ] 状態変化ログを追加する
 
-## Verification
+## Phase 3: Bounded fallback
+
+- [ ] `PassHorizonMode::Holding` を追加する
+- [ ] Hold中も固定OvertakeLineをpublishする
+- [ ] Hold中のclosing speedを概ね0へ制限する
+- [ ] Hold上限1.0秒／3.0 mを適用する
+- [ ] Hold中のrear-clear成立で即Returnを評価する
+- [ ] Phase 1～2の結果を確認後、複数回extensionの要否を判断する
+- [ ] 動的予測不確実性をmission admissionへ反映する
+
+## Unit tests
+
+- [ ] 低速対象をrear-clearできるcandidateを確認する
+- [ ] predicted Pass time budget内にrear-clear不能なcandidateを棄却する
+- [ ] V2X予測1秒・mission 20 mを動的に完全検証済み扱いしない
+- [ ] 動的予測終端より前に再計画slackがないcandidateを棄却する
+- [ ] validation lead到達前はKeepになる
+- [ ] validation lead到達後はRequestSameSideExtensionになる
+- [ ] rear-clear済みかつReturn corridor成立でReturnになる
+- [ ] opposite-sideだけ成立してもmid-Pass横断しない
+- [ ] stale generationのextension結果を棄却する
+- [ ] target IDまたはside不一致のextension結果を棄却する
+- [ ] extensionのローカル距離・時間をPass原点へ正しく変換する
+- [ ] extension後もabsolute limitを再装填しない
+- [ ] extension後のvalid-untilが前進しないcandidateを棄却する
+- [ ] lap seam付近でもcircular path進捗を誤らない
+- [ ] Return corridor blocker時にbase trajectoryへ戻らない
+- [ ] margin-only violationかつrear-clear済みならReturnを優先する
+- [ ] physical wall contactはReturnよりhard abortを優先する
+- [ ] side-by-side AbortはSafeSeparationを選ぶ
+- [ ] repeated Refreshで40 Hz全探索を繰り返さない
+- [ ] extension goal adjustmentで同側goal jumpを許さない
+- [ ] Return、Recovery、target変更でpending candidateを無効化する
+- [ ] ShiftOut中に入口の動的予測が失効した場合、Pass進入時に再評価する
+- [ ] commit待ち中に失効したextension candidateを棄却する
+- [ ] Hold条件不成立時はHoldへ入らない
+- [ ] Hold中のrear-clear成立でReturnになる
+- [ ] Hold上限超過で無期限保持しない
+
+## Build verification
 
 - [ ] `git diff --check`
 - [ ] `make autoware-build`
 - [ ] 追い越しコアテスト
+
+## Dynamic verification
+
 - [ ] `make dev2` で6周以上実施する
-- [ ] ShiftOut -> Pass到達率が現行9/9相当を維持する
-- [ ] Pass走行距離がvalidated horizonを超えないことを確認する
-- [ ] Pass -> Return完遂数、SafetyBrake、wall、solver failureを比較する
-- [ ] crash/wallペナルティが増えた場合は採用しない
+- [ ] front target捕捉数を記録する
+- [ ] candidate admission数を記録する
+- [ ] ShiftOut開始数とPass到達数を記録する
+- [ ] rear-clear数とReturn完了数を記録する
+- [ ] mission abort数と理由を記録する
+- [ ] same-side extension数を記録する
+- [ ] Hold回数・最大時間・最大距離を記録する
+- [ ] validated horizon超過最大値を記録する
+- [ ] SafetyBrake、wall、solver failure、crash penaltyを現行runと比較する
+- [ ] クリアラップ45～46秒台を維持する
+
+## Acceptance criteria
+
+- [ ] admitted ShiftOut -> Pass: 100%
+- [ ] Pass -> Return -> Idle: 90%以上
+- [ ] validated horizon超過: 0 m
+- [ ] Hold最大: 1.0秒 / 3.0 m未満
+- [ ] 同一mission extension: 初期版は最大1回
+- [ ] wall / solver Recovery: 現行runより減少
+- [ ] crash / wall penalty: 増加なし
+- [ ] candidate admissionを不当に減らして見かけ上の成功率を上げていない

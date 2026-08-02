@@ -100,6 +100,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSideQualityCandidate;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSideQualitySelectionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::EarlyShiftOutSideReplanAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::EarlyShiftOutSideReplanRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionOwnershipRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeExecutionSideRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeExecutionSideSource;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeLineTransitionAction;
@@ -225,6 +226,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::score_overtake_side_quality;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_overtake_side_by_quality;
 using multi_purpose_mpc_ros::v2x_overtake_core::selected_pass_side_ordering_conflict;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_early_shiftout_side_replan;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_mission_ownership;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_execution_side;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_resume_paused_pass_directly;
 using multi_purpose_mpc_ros::v2x_overtake_core::clamp_paused_resume_goal_outward;
@@ -4294,6 +4296,91 @@ TEST(V2XOvertakeCoreMissionOwnership, MissionLockOwnsPausedMissionSide)
 
   EXPECT_EQ(result.side_sign, 1);
   EXPECT_EQ(result.source, OvertakeExecutionSideSource::MissionLock);
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, IdleUsesEntryAssessmentAndGenericFollowSpeed)
+{
+  const auto result = resolve_overtake_mission_ownership({});
+
+  EXPECT_FALSE(result.mission_active);
+  EXPECT_FALSE(result.committed_execution_active);
+  EXPECT_FALSE(result.committed_pass_active);
+  EXPECT_FALSE(result.paused_mission_active);
+  EXPECT_FALSE(result.behavior_continuation_assessment_active);
+  EXPECT_TRUE(result.behavior_entry_assessment_active);
+  EXPECT_FALSE(result.overtake_line_owns_locked_target_speed);
+  EXPECT_TRUE(result.generic_follow_owns_locked_target_speed);
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, ShiftOutOwnsMatchingLockedTargetSpeed)
+{
+  OvertakeMissionOwnershipRequest request;
+  request.shiftout_phase = true;
+  request.front_matches_locked_target = true;
+  const auto result = resolve_overtake_mission_ownership(request);
+
+  EXPECT_TRUE(result.mission_active);
+  EXPECT_TRUE(result.committed_execution_active);
+  EXPECT_FALSE(result.committed_pass_active);
+  EXPECT_TRUE(result.behavior_continuation_assessment_active);
+  EXPECT_FALSE(result.behavior_entry_assessment_active);
+  EXPECT_TRUE(result.overtake_line_owns_locked_target_speed);
+  EXPECT_FALSE(result.generic_follow_owns_locked_target_speed);
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, PassKeepsExecutionButNotUnrelatedFrontSpeed)
+{
+  OvertakeMissionOwnershipRequest request;
+  request.pass_phase = true;
+  request.front_matches_locked_target = false;
+  const auto result = resolve_overtake_mission_ownership(request);
+
+  EXPECT_TRUE(result.mission_active);
+  EXPECT_TRUE(result.committed_execution_active);
+  EXPECT_TRUE(result.committed_pass_active);
+  EXPECT_TRUE(result.behavior_continuation_assessment_active);
+  EXPECT_FALSE(result.overtake_line_owns_locked_target_speed);
+  EXPECT_TRUE(result.generic_follow_owns_locked_target_speed);
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, FollowPrepareIsPausedContinuation)
+{
+  OvertakeMissionOwnershipRequest request;
+  request.follow_prepare_phase = true;
+  request.front_matches_locked_target = true;
+  const auto result = resolve_overtake_mission_ownership(request);
+
+  EXPECT_TRUE(result.mission_active);
+  EXPECT_FALSE(result.committed_execution_active);
+  EXPECT_TRUE(result.paused_mission_active);
+  EXPECT_TRUE(result.behavior_continuation_assessment_active);
+  EXPECT_TRUE(result.generic_follow_owns_locked_target_speed);
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, ReturnAndRecoveryRemainEntryAssessments)
+{
+  OvertakeMissionOwnershipRequest request;
+  request.return_phase = true;
+  auto result = resolve_overtake_mission_ownership(request);
+  EXPECT_TRUE(result.mission_active);
+  EXPECT_TRUE(result.behavior_entry_assessment_active);
+
+  request.return_phase = false;
+  request.recovery_phase = true;
+  result = resolve_overtake_mission_ownership(request);
+  EXPECT_TRUE(result.mission_active);
+  EXPECT_TRUE(result.behavior_entry_assessment_active);
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, PreviousBehaviorPreservesLegacyContinuation)
+{
+  OvertakeMissionOwnershipRequest request;
+  request.previous_behavior_overtake = true;
+  const auto result = resolve_overtake_mission_ownership(request);
+
+  EXPECT_FALSE(result.mission_active);
+  EXPECT_TRUE(result.behavior_continuation_assessment_active);
+  EXPECT_FALSE(result.behavior_entry_assessment_active);
 }
 
 TEST(V2XOvertakeCoreMissionOwnership, BehaviorOwnsPausedMissionOnlyWithoutMissionSide)

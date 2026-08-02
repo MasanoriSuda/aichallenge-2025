@@ -2422,6 +2422,30 @@ EarlyShiftOutSideReplanResolution resolve_early_shiftout_side_replan(
   return result;
 }
 
+OvertakeMissionOwnershipResolution resolve_overtake_mission_ownership(
+  const OvertakeMissionOwnershipRequest & request) noexcept
+{
+  OvertakeMissionOwnershipResolution resolution;
+  resolution.committed_execution_active = request.shiftout_phase || request.pass_phase;
+  resolution.committed_pass_active = request.pass_phase;
+  resolution.paused_mission_active = request.follow_prepare_phase;
+  resolution.mission_active =
+    resolution.committed_execution_active || resolution.paused_mission_active ||
+    request.return_phase || request.recovery_phase;
+  resolution.behavior_continuation_assessment_active =
+    resolution.committed_execution_active || resolution.paused_mission_active ||
+    request.previous_behavior_overtake;
+  resolution.behavior_entry_assessment_active =
+    !resolution.behavior_continuation_assessment_active;
+  resolution.generic_follow_owns_locked_target_speed =
+    should_apply_generic_follow_cap(
+    GenericFollowCapOwnershipRequest{
+      request.shiftout_phase, request.pass_phase, request.front_matches_locked_target});
+  resolution.overtake_line_owns_locked_target_speed =
+    !resolution.generic_follow_owns_locked_target_speed;
+  return resolution;
+}
+
 OvertakeExecutionSideResolution resolve_overtake_execution_side(
   const OvertakeExecutionSideRequest & request) noexcept
 {

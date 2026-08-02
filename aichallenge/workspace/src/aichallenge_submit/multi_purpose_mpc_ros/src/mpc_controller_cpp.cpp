@@ -1794,6 +1794,11 @@ struct V2XBehaviorOutput
   bool overtake_start_curve_blocked{false};
   bool before_curve_overtake_allowed{false};
   bool continuing_overtake_allowed{false};
+  bool overtake_entry_assessment_active{true};
+  bool overtake_committed_execution_active{false};
+  bool overtake_committed_pass_active{false};
+  bool overtake_paused_mission_active{false};
+  bool overtake_line_owns_locked_target_speed{false};
   bool overtake_hard_curve_blocked{false};
   bool active_hard_curve_continuation_allowed{false};
   bool outer_curve_entry_allowed{false};
@@ -5153,22 +5158,39 @@ struct MPC
     output.front_danger_action = front_danger_action;
     const bool front_danger_requires_safety_brake =
       front_danger_action == v2x_overtake_core::FrontDangerAction::SafetyBrake;
-    const bool active_overtake_line =
-      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
-      overtake_line_state_.phase == OvertakeLinePhase::Pass;
-    const bool paused_overtake_mission =
-      overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare &&
-      !overtake_line_state_.target_vehicle_id.empty() &&
-      overtake_line_state_.pass_side_sign != 0;
-    const bool nearest_front_matches_locked_target =
-      active_overtake_line && !nearest_front_id.empty() &&
+    const bool front_matches_locked_target =
+      !nearest_front_id.empty() &&
       nearest_front_id == overtake_line_state_.target_vehicle_id;
-    const bool generic_follow_cap_allowed_by_owner =
-      v2x_overtake_core::should_apply_generic_follow_cap(
-      v2x_overtake_core::GenericFollowCapOwnershipRequest{
+    const auto overtake_mission_ownership =
+      v2x_overtake_core::resolve_overtake_mission_ownership(
+      v2x_overtake_core::OvertakeMissionOwnershipRequest{
         overtake_line_state_.phase == OvertakeLinePhase::ShiftOut,
         overtake_line_state_.phase == OvertakeLinePhase::Pass,
-        nearest_front_matches_locked_target});
+        overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare &&
+        !overtake_line_state_.target_vehicle_id.empty() &&
+        overtake_line_state_.pass_side_sign != 0,
+        overtake_line_state_.phase == OvertakeLinePhase::Return,
+        overtake_line_state_.phase == OvertakeLinePhase::Recovery,
+        v2x_behavior_state_initialized && v2x_behavior_state == V2XBehaviorState::Overtake,
+        front_matches_locked_target});
+    const bool active_overtake_line =
+      overtake_mission_ownership.committed_execution_active;
+    const bool paused_overtake_mission =
+      overtake_mission_ownership.paused_mission_active;
+    const bool nearest_front_matches_locked_target =
+      overtake_mission_ownership.overtake_line_owns_locked_target_speed;
+    const bool generic_follow_cap_allowed_by_owner =
+      overtake_mission_ownership.generic_follow_owns_locked_target_speed;
+    output.overtake_entry_assessment_active =
+      overtake_mission_ownership.behavior_entry_assessment_active;
+    output.overtake_committed_execution_active =
+      overtake_mission_ownership.committed_execution_active;
+    output.overtake_committed_pass_active =
+      overtake_mission_ownership.committed_pass_active;
+    output.overtake_paused_mission_active =
+      overtake_mission_ownership.paused_mission_active;
+    output.overtake_line_owns_locked_target_speed =
+      overtake_mission_ownership.overtake_line_owns_locked_target_speed;
     const bool generic_follow_cap_allowed =
       generic_follow_cap_allowed_by_owner &&
       (!active_overtake_line || cfg.v2x_behavior.overtake_front_velocity_limit_enabled);
@@ -5255,7 +5277,7 @@ struct MPC
     const auto committed_body_geometry =
       v2x_overtake_core::resolve_committed_pass_body_geometry(
       v2x_overtake_core::CommittedPassBodyGeometryRequest{
-        overtake_line_state_.phase == OvertakeLinePhase::Pass,
+        overtake_mission_ownership.committed_pass_active,
         committed_minimum_motion_corridor_active,
         overtake_line_state_.pass_front_cap_release_active,
         output.locked_target_seen,
@@ -5302,7 +5324,7 @@ struct MPC
         overtake_line_state_.pass_front_cap_release_active,
         committed_predicted_overlap_confirmed,
         committed_body_geometry.side_by_side_escape_active,
-        overtake_line_state_.phase == OvertakeLinePhase::Pass,
+        overtake_mission_ownership.committed_pass_active,
         cfg.v2x_behavior.overtake_committed_pass_attack_mode_enabled});
     output.committed_corridor_front_danger_suppressed =
       committed_corridor_front_danger_suppressed;
@@ -5558,8 +5580,7 @@ struct MPC
     }
 
     const bool continuing_overtake =
-      active_overtake_line || paused_overtake_mission ||
-      (v2x_behavior_state_initialized && v2x_behavior_state == V2XBehaviorState::Overtake);
+      overtake_mission_ownership.behavior_continuation_assessment_active;
     bool overtake_completion_feasible = true;
     double overtake_completion_available_distance = std::numeric_limits<double>::infinity();
     double overtake_completion_required_distance = 0.0;
@@ -5641,7 +5662,7 @@ struct MPC
     const bool committed_active_pass =
       v2x_overtake_core::can_hold_active_pass_after_gap_loss(
         v2x_overtake_core::ActivePassGapHoldRequest{
-          overtake_line_state_.phase == OvertakeLinePhase::Pass,
+          overtake_mission_ownership.committed_pass_active,
           overtake_line_state_.pass_front_overlap_exclusion_latched,
           output.locked_target_seen,
           output.locked_target_position_jump});
@@ -5667,7 +5688,7 @@ struct MPC
       active_target_valid ? std::max(0.0, output.locked_target_longitudinal) : 0.0,
       active_target_valid ? std::max(0.0, output.locked_target_speed) : 0.0,
       overtake_entry_speed_.value_or(std::max(0.0, current_speed_mps_)),
-      overtake_line_state_.phase == OvertakeLinePhase::Pass,
+      overtake_mission_ownership.committed_pass_active,
       output.locked_target_current_lateral_clear ||
       (overtake_line_state_.pass_front_cap_release_active &&
       output.locked_target_above_front_cap_reapply_clearance), 0.0);
@@ -5679,7 +5700,7 @@ struct MPC
       v2x_overtake_core::ActiveHardCurveContinuationRequest{
         cfg.v2x_behavior.overtake_active_hard_curve_completion_enabled,
         continuing_overtake,
-        overtake_line_state_.phase == OvertakeLinePhase::Pass,
+        overtake_mission_ownership.committed_pass_active,
         active_target_valid,
         overtake_line_state_.pass_front_overlap_exclusion_latched,
         hard_overtake_forbidden && !overtake_forbidden_wp &&
@@ -7576,8 +7597,7 @@ struct MPC
       v2x_overtake_core::OvertakeLateralPlannerOwnershipRequest{
         cfg.v2x_behavior.overtake_line.enabled,
         behavior_output.state == V2XBehaviorState::Overtake,
-        overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
-        overtake_line_state_.phase == OvertakeLinePhase::Pass});
+        behavior_output.overtake_committed_execution_active});
     const bool use_gap_planner =
       gap_planner != nullptr &&
       (!cfg.v2x_behavior.enabled || behavior_output.allow_gap_planner) &&
@@ -11981,8 +12001,7 @@ private:
           output.front_speed : overtake_line_state_.target_last_speed;
         if (std::isfinite(overtake_target_speed)) {
           const bool active_overtake_execution =
-            overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
-            overtake_line_state_.phase == OvertakeLinePhase::Pass;
+            output.overtake_committed_execution_active;
           // The explicit OvertakeLine evaluates the current wall/static-wall/lateral-accel
           // horizon later in this control cycle. Consume only its previously authorized
           // release here; the current OvertakeLine reference can immediately reapply the
@@ -11992,13 +12011,13 @@ private:
             overtake_line_state_.pass_front_cap_release_active;
           const bool front_cap_stage = !output.overtake_front_cap_release_ready;
           const bool physical_shiftout_stage =
-            overtake_line_state_.phase != OvertakeLinePhase::Pass;
+            !output.overtake_committed_pass_active;
           double closing_speed_limit =
             cfg.v2x_behavior.overtake_shiftout_max_closing_speed;
           closing_speed_limit = overtake_core::resolve_unlatched_pass_closing_speed(
             closing_speed_limit,
             cfg.v2x_behavior.overtake_pass_unlatched_max_closing_speed,
-            overtake_line_state_.phase == OvertakeLinePhase::Pass,
+            output.overtake_committed_pass_active,
             output.overtake_front_cap_release_ready);
           if (
             physical_shiftout_stage &&

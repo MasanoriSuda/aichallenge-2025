@@ -1509,6 +1509,37 @@ struct EarlyShiftOutSideReplanResolution
 EarlyShiftOutSideReplanResolution resolve_early_shiftout_side_replan(
   const EarlyShiftOutSideReplanRequest & request) noexcept;
 
+struct OvertakeMissionOwnershipRequest
+{
+  bool shiftout_phase{false};
+  bool pass_phase{false};
+  bool follow_prepare_phase{false};
+  bool return_phase{false};
+  bool recovery_phase{false};
+  bool previous_behavior_overtake{false};
+  bool front_matches_locked_target{false};
+};
+
+struct OvertakeMissionOwnershipResolution
+{
+  bool mission_active{false};
+  bool committed_execution_active{false};
+  bool committed_pass_active{false};
+  bool paused_mission_active{false};
+  bool behavior_continuation_assessment_active{false};
+  bool behavior_entry_assessment_active{true};
+  bool overtake_line_owns_locked_target_speed{false};
+  bool generic_follow_owns_locked_target_speed{true};
+};
+
+/// Classify the current OvertakeLine mission and longitudinal speed owner.
+///
+/// This is intentionally policy-neutral: it preserves the existing distinction
+/// between Behavior entry/continuation assessment and committed line execution.
+/// Hard guards remain the responsibility of their existing callers.
+OvertakeMissionOwnershipResolution resolve_overtake_mission_ownership(
+  const OvertakeMissionOwnershipRequest & request) noexcept;
+
 enum class OvertakeExecutionSideSource
 {
   None,

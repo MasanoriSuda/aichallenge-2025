@@ -114,6 +114,11 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorSa
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeBodyClearDeadlineRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeKinematicRolloutRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeKinematicSpeedCapSample;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeDynamicPassDistanceRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::DynamicPredictionTimingRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::PassHorizonAction;
+using multi_purpose_mpc_ros::v2x_overtake_core::PassHorizonDecisionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::SameSideExtensionCommitRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidate;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidateSelectionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PausedMissionExpiryReason;
@@ -130,6 +135,10 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_speed_reference
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_mission_dynamic_corridor;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_body_clear_deadline;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_kinematic_rollout;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_dynamic_pass_distance;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_prediction_timing;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_horizon_action;
+using multi_purpose_mpc_ros::v2x_overtake_core::can_commit_same_side_extension;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_overtake_mission_candidate;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_start_grid_breakout_speed_reference;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_shiftout_complete;
@@ -2754,6 +2763,187 @@ TEST(V2XOvertakeCoreSpeed, KinematicRolloutRejectsUnorderedSpeedCaps)
     OvertakeKinematicSpeedCapSample{1.0, 3.0}};
 
   EXPECT_FALSE(resolve_overtake_kinematic_rollout(request).valid);
+}
+
+TEST(V2XOvertakeCoreSpeed, KinematicRolloutPredictsRearClearOnSharedTimeAxis)
+{
+  OvertakeKinematicRolloutRequest request;
+  request.enabled = true;
+  request.mission_path = OvertakeMissionPathRequest{
+    0.0, 0.0, 1.5, 0.0, 4.0, 8.0, 6.0};
+  request.target_longitudinal_m = 4.0;
+  request.current_ego_speed_mps = 5.0;
+  request.target_speed_mps = 3.0;
+  request.candidate_closing_speed_mps = 2.0;
+  request.maximum_ego_speed_mps = 11.0;
+  request.maximum_acceleration_mps2 = 1.0;
+  request.maximum_deceleration_mps2 = 1.35;
+  request.target_lateral_m = -2.0;
+  request.target_lateral_prediction_horizon_sec = 1.0;
+  request.lateral_clearance_m = 1.0;
+  request.hard_longitudinal_distance_m = 2.0;
+  request.maximum_time_sec = 8.0;
+  request.rear_clear_prediction_enabled = true;
+  request.rear_clear_distance_m = 4.0;
+
+  const auto resolution = resolve_overtake_kinematic_rollout(request);
+  ASSERT_TRUE(resolution.valid);
+  ASSERT_TRUE(resolution.rear_clear_checked);
+  ASSERT_TRUE(resolution.rear_clear_feasible);
+  EXPECT_NEAR(resolution.rear_clear_time_sec, 4.0, 0.06);
+  EXPECT_NEAR(resolution.rear_clear_ego_distance_m, 20.0, 0.30);
+  EXPECT_NEAR(resolution.rear_clear_ego_speed_mps, 5.0, 1e-9);
+
+  request.maximum_time_sec = 3.0;
+  const auto short_budget = resolve_overtake_kinematic_rollout(request);
+  ASSERT_TRUE(short_budget.valid);
+  EXPECT_FALSE(short_budget.rear_clear_feasible);
+  EXPECT_FALSE(std::isfinite(short_budget.rear_clear_time_sec));
+}
+
+TEST(V2XOvertakeCoreSpeed, DynamicPassDistanceAddsSpeedDependentConfirmationReserve)
+{
+  const auto feasible = resolve_overtake_dynamic_pass_distance(
+    OvertakeDynamicPassDistanceRequest{
+      4.0, 8.0, 20.0, 5.0, 0.2, 0.1, 16.0, 18.0});
+  ASSERT_TRUE(feasible.valid);
+  EXPECT_TRUE(feasible.feasible);
+  EXPECT_TRUE(feasible.soft_limit_exceeded);
+  EXPECT_NEAR(feasible.confirmation_reserve_distance_m, 1.5, 1e-9);
+  EXPECT_NEAR(feasible.required_pass_distance_m, 17.5, 1e-9);
+  EXPECT_NEAR(feasible.bounded_pass_distance_m, 17.5, 1e-9);
+
+  const auto over_hard_limit = resolve_overtake_dynamic_pass_distance(
+    OvertakeDynamicPassDistanceRequest{
+      4.0, 8.0, 20.0, 5.0, 0.2, 0.1, 16.0, 17.0});
+  ASSERT_TRUE(over_hard_limit.valid);
+  EXPECT_FALSE(over_hard_limit.feasible);
+}
+
+TEST(V2XOvertakeCoreHorizon, UsesSourceAgeForDynamicPredictionExpiry)
+{
+  const auto fresh = resolve_dynamic_prediction_timing(
+    DynamicPredictionTimingRequest{100.0, 0.4, 1.0});
+  ASSERT_TRUE(fresh.valid);
+  EXPECT_NEAR(fresh.prediction_epoch_sec, 99.6, 1e-9);
+  EXPECT_NEAR(fresh.expiry_sec, 100.6, 1e-9);
+  EXPECT_NEAR(fresh.remaining_sec, 0.6, 1e-9);
+
+  const auto stale_source = resolve_dynamic_prediction_timing(
+    DynamicPredictionTimingRequest{100.0, 1.2, 1.0});
+  ASSERT_TRUE(stale_source.valid);
+  EXPECT_DOUBLE_EQ(stale_source.remaining_sec, 0.0);
+  EXPECT_LT(stale_source.expiry_sec, 100.0);
+}
+
+TEST(V2XOvertakeCoreHorizon, SelectsBoundedPassHorizonActions)
+{
+  PassHorizonDecisionRequest request;
+  request.enabled = true;
+  request.pass_active = true;
+  request.return_corridor_available = true;
+  request.short_horizon_safe = true;
+  request.pass_traveled_m = 5.0;
+  request.pass_elapsed_sec = 2.0;
+  request.static_valid_until_pass_m = 20.0;
+  request.dynamic_valid_until_pass_m = 12.0;
+  request.dynamic_time_remaining_sec = 1.0;
+  request.absolute_distance_limit_m = 32.0;
+  request.absolute_time_limit_sec = 10.0;
+  request.revalidation_lead_distance_m = 3.0;
+  request.revalidation_lead_time_sec = 0.75;
+  request.hold_max_sec = 1.0;
+  request.hold_max_distance_m = 3.0;
+  request.maximum_extension_count = 1;
+
+  EXPECT_EQ(resolve_pass_horizon_action(request), PassHorizonAction::Keep);
+
+  request.pass_traveled_m = 9.5;
+  EXPECT_EQ(
+    resolve_pass_horizon_action(request),
+    PassHorizonAction::RequestSameSideExtension);
+
+  request.extension_count = 1;
+  EXPECT_EQ(resolve_pass_horizon_action(request), PassHorizonAction::EnterHold);
+
+  request.hold_active = true;
+  request.hold_elapsed_sec = 1.0;
+  EXPECT_EQ(resolve_pass_horizon_action(request), PassHorizonAction::Abort);
+
+  request.hold_active = false;
+  request.hold_elapsed_sec = 0.0;
+  request.rear_clear_confirmed = true;
+  EXPECT_EQ(resolve_pass_horizon_action(request), PassHorizonAction::Return);
+
+  request.rear_clear_confirmed = false;
+  request.pass_traveled_m = 32.0;
+  EXPECT_EQ(resolve_pass_horizon_action(request), PassHorizonAction::Abort);
+}
+
+TEST(V2XOvertakeCoreHorizon, CommitsOnlyFreshMatchingForwardExtension)
+{
+  SameSideExtensionCommitRequest request;
+  request.pass_or_hold_active = true;
+  request.target_matches = true;
+  request.side_matches = true;
+  request.replacement_path_valid = true;
+  request.source_generation = 3U;
+  request.current_generation = 3U;
+  request.planner_generated_at_sec = 100.0;
+  request.commit_now_sec = 100.05;
+  request.planner_result_max_age_sec = 0.10;
+  request.prediction_expiry_sec = 100.5;
+  request.current_effective_valid_until_pass_m = 10.0;
+  request.replacement_static_valid_until_pass_m = 18.0;
+  request.replacement_dynamic_valid_until_pass_m = 14.0;
+  request.replacement_pass_hold_distance_m = 18.0;
+  request.absolute_pass_distance_limit_m = 32.0;
+
+  EXPECT_TRUE(can_commit_same_side_extension(request));
+
+  request.current_generation = 4U;
+  EXPECT_FALSE(can_commit_same_side_extension(request));
+  request.current_generation = 3U;
+  request.target_matches = false;
+  EXPECT_FALSE(can_commit_same_side_extension(request));
+  request.target_matches = true;
+  request.side_matches = false;
+  EXPECT_FALSE(can_commit_same_side_extension(request));
+}
+
+TEST(V2XOvertakeCoreHorizon, RejectsStaleOrNonAdvancingExtension)
+{
+  SameSideExtensionCommitRequest request;
+  request.pass_or_hold_active = true;
+  request.target_matches = true;
+  request.side_matches = true;
+  request.replacement_path_valid = true;
+  request.source_generation = 1U;
+  request.current_generation = 1U;
+  request.planner_generated_at_sec = 100.0;
+  request.commit_now_sec = 100.11;
+  request.planner_result_max_age_sec = 0.10;
+  request.prediction_expiry_sec = 101.0;
+  request.current_effective_valid_until_pass_m = 10.0;
+  request.replacement_static_valid_until_pass_m = 18.0;
+  request.replacement_dynamic_valid_until_pass_m = 14.0;
+  request.replacement_pass_hold_distance_m = 18.0;
+  request.absolute_pass_distance_limit_m = 32.0;
+
+  EXPECT_FALSE(can_commit_same_side_extension(request));
+
+  request.commit_now_sec = 100.05;
+  request.prediction_expiry_sec = 100.05;
+  EXPECT_FALSE(can_commit_same_side_extension(request));
+
+  request.prediction_expiry_sec = 101.0;
+  request.replacement_dynamic_valid_until_pass_m = 10.0;
+  EXPECT_FALSE(can_commit_same_side_extension(request));
+
+  request.replacement_dynamic_valid_until_pass_m = 14.0;
+  request.replacement_pass_hold_distance_m = 33.0;
+  request.replacement_static_valid_until_pass_m = 33.0;
+  EXPECT_FALSE(can_commit_same_side_extension(request));
 }
 
 TEST(V2XOvertakeCoreSpeed, SelectsEarliestBodyClearBeforeShortestShift)

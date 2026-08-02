@@ -2,6 +2,7 @@
 #define MULTI_PURPOSE_MPC_ROS__V2X_OVERTAKE_CORE_HPP_
 
 #include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <optional>
 #include <vector>
@@ -638,6 +639,8 @@ struct OvertakeKinematicRolloutRequest
   std::vector<OvertakeKinematicSpeedCapSample> speed_caps;
   double time_step_sec{0.05};
   double maximum_time_sec{15.0};
+  bool rear_clear_prediction_enabled{false};
+  double rear_clear_distance_m{};
 };
 
 struct OvertakeKinematicRolloutResolution
@@ -653,6 +656,12 @@ struct OvertakeKinematicRolloutResolution
   double max_required_lateral_accel_mps2{};
   double ego_distance_at_horizon_m{};
   double ego_speed_at_horizon_mps{};
+  bool rear_clear_checked{false};
+  bool rear_clear_feasible{false};
+  double rear_clear_time_sec{std::numeric_limits<double>::infinity()};
+  double rear_clear_ego_distance_m{std::numeric_limits<double>::infinity()};
+  double rear_clear_mission_distance_m{std::numeric_limits<double>::infinity()};
+  double rear_clear_ego_speed_mps{std::numeric_limits<double>::infinity()};
 };
 
 /// Roll out longitudinal acceleration and delayed lateral mission progress on
@@ -662,6 +671,115 @@ struct OvertakeKinematicRolloutResolution
 /// approximations.
 OvertakeKinematicRolloutResolution resolve_overtake_kinematic_rollout(
   const OvertakeKinematicRolloutRequest & request) noexcept;
+
+struct OvertakeDynamicPassDistanceRequest
+{
+  double shift_distance_m{};
+  double minimum_pass_distance_m{};
+  double rear_clear_ego_distance_m{};
+  double rear_clear_ego_speed_mps{};
+  double rear_clear_confirm_sec{};
+  double control_delay_sec{};
+  double soft_pass_distance_limit_m{std::numeric_limits<double>::infinity()};
+  double hard_pass_distance_limit_m{std::numeric_limits<double>::infinity()};
+};
+
+struct OvertakeDynamicPassDistanceResolution
+{
+  bool valid{false};
+  bool feasible{false};
+  bool soft_limit_exceeded{false};
+  double confirmation_reserve_distance_m{};
+  double required_pass_distance_m{};
+  double bounded_pass_distance_m{};
+};
+
+/// Convert the predicted ego rear-clear position into a Pass hold distance.
+/// The confirmation reserve is speed-dependent and the hard limit is never
+/// silently clamped: an over-budget mission is reported infeasible.
+OvertakeDynamicPassDistanceResolution resolve_overtake_dynamic_pass_distance(
+  const OvertakeDynamicPassDistanceRequest & request) noexcept;
+
+struct DynamicPredictionTimingRequest
+{
+  double planner_now_sec{};
+  double source_age_sec{};
+  double prediction_horizon_sec{};
+};
+
+struct DynamicPredictionTimingResolution
+{
+  bool valid{false};
+  double prediction_epoch_sec{-std::numeric_limits<double>::infinity()};
+  double expiry_sec{-std::numeric_limits<double>::infinity()};
+  double remaining_sec{};
+};
+
+/// Normalize a source-age observation onto the controller clock. Prediction
+/// validity starts at the source epoch, not when the planner happens to run.
+DynamicPredictionTimingResolution resolve_dynamic_prediction_timing(
+  const DynamicPredictionTimingRequest & request) noexcept;
+
+enum class PassHorizonAction
+{
+  Keep,
+  Return,
+  RequestSameSideExtension,
+  EnterHold,
+  Abort,
+};
+
+struct PassHorizonDecisionRequest
+{
+  bool enabled{false};
+  bool pass_active{false};
+  bool rear_clear_confirmed{false};
+  bool return_corridor_available{false};
+  bool short_horizon_safe{false};
+  bool hold_active{false};
+  double pass_traveled_m{};
+  double pass_elapsed_sec{};
+  double static_valid_until_pass_m{};
+  double dynamic_valid_until_pass_m{};
+  double dynamic_time_remaining_sec{};
+  double absolute_distance_limit_m{std::numeric_limits<double>::infinity()};
+  double absolute_time_limit_sec{std::numeric_limits<double>::infinity()};
+  double revalidation_lead_distance_m{};
+  double revalidation_lead_time_sec{};
+  double hold_elapsed_sec{};
+  double hold_traveled_m{};
+  double hold_max_sec{};
+  double hold_max_distance_m{};
+  int extension_count{};
+  int maximum_extension_count{};
+};
+
+PassHorizonAction resolve_pass_horizon_action(
+  const PassHorizonDecisionRequest & request) noexcept;
+
+struct SameSideExtensionCommitRequest
+{
+  bool pass_or_hold_active{false};
+  bool target_matches{false};
+  bool side_matches{false};
+  bool replacement_path_valid{false};
+  std::uint64_t source_generation{};
+  std::uint64_t current_generation{};
+  double planner_generated_at_sec{};
+  double commit_now_sec{};
+  double planner_result_max_age_sec{};
+  double prediction_expiry_sec{};
+  double current_effective_valid_until_pass_m{};
+  double replacement_static_valid_until_pass_m{};
+  double replacement_dynamic_valid_until_pass_m{};
+  double replacement_pass_hold_distance_m{};
+  double absolute_pass_distance_limit_m{std::numeric_limits<double>::infinity()};
+};
+
+/// Validate every identity, freshness and range condition immediately before
+/// an already-computed same-side replacement mission is committed atomically.
+bool can_commit_same_side_extension(
+  const SameSideExtensionCommitRequest & request) noexcept;
 
 struct OvertakeMissionDynamicCorridorSample
 {
@@ -721,6 +839,20 @@ struct OvertakeMissionCandidate
   int pass_side_sign{0};
   bool current_position_clear{false};
   double body_clear_deadline_slack_sec{std::numeric_limits<double>::quiet_NaN()};
+  bool rear_clear_prediction_checked{false};
+  bool rear_clear_prediction_feasible{true};
+  double predicted_rear_clear_time_sec{std::numeric_limits<double>::infinity()};
+  double predicted_rear_clear_ego_distance_m{std::numeric_limits<double>::infinity()};
+  double predicted_rear_clear_speed_mps{std::numeric_limits<double>::infinity()};
+  double pass_hold_distance_m{std::numeric_limits<double>::quiet_NaN()};
+  double return_distance_m{std::numeric_limits<double>::quiet_NaN()};
+  double static_valid_until_pass_m{std::numeric_limits<double>::quiet_NaN()};
+  double dynamic_valid_until_pass_m{std::numeric_limits<double>::quiet_NaN()};
+  double planner_generated_at_sec{-std::numeric_limits<double>::infinity()};
+  double prediction_source_age_sec{std::numeric_limits<double>::infinity()};
+  double prediction_epoch_sec{-std::numeric_limits<double>::infinity()};
+  double prediction_horizon_sec{};
+  double dynamic_valid_until_sec{-std::numeric_limits<double>::infinity()};
 };
 
 /// Build a small deterministic longitudinal candidate set from the existing

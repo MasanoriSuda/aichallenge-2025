@@ -483,6 +483,20 @@ mpc:
   v2x_overtake_committed_pass_min_speed: 3.0 # [m/s] sim race floor around target <= moving-front threshold
   v2x_overtake_line_progress_watchdog_distance: 32.0 # [m] abort a committed single-target Pass with no longitudinal gain
   v2x_overtake_line_progress_watchdog_min_progress: 0.5 # [m] target-distance reduction that rearms the distance watchdog
+  # Receding-horizon Pass mission. Static ShiftOut/Pass/Return geometry is frozen at admission;
+  # the short V2X horizon is refreshed before expiry and can extend the same-side Pass once.
+  v2x_overtake_pass_horizon_enabled: true
+  v2x_overtake_pass_horizon_revalidation_lead_distance: 3.0 # [m]
+  v2x_overtake_pass_horizon_revalidation_lead_time: 0.75 # [s]
+  v2x_overtake_pass_horizon_predicted_time_budget: 8.0 # [s] admission rear-clear budget
+  v2x_overtake_pass_horizon_absolute_time_limit: 10.0 # [s] never rearmed by refresh/extension
+  v2x_overtake_pass_horizon_soft_distance_limit: 24.0 # [m] request early same-side revalidation
+  v2x_overtake_pass_horizon_absolute_distance_limit: 32.0 # [m] never rearmed
+  v2x_overtake_pass_horizon_extension_max_distance: 12.0 # [m] one atomic path replacement
+  v2x_overtake_pass_horizon_max_extensions: 1
+  v2x_overtake_pass_horizon_planner_result_max_age: 0.10 # [s]
+  v2x_overtake_pass_horizon_hold_max_sec: 1.0 # [s] shared by hold/safe-separation
+  v2x_overtake_pass_horizon_hold_max_distance: 3.0 # [m]
   v2x_overtake_completion_guard_enabled: true # require enough distance to clear the target before a hard hairpin
   v2x_overtake_completion_hard_curvature: 0.12 # [rad/m] hard hairpin boundary, separate from soft curve policy
   v2x_overtake_completion_lookahead_distance: 80.0 # [m] search limit for the next hard boundary

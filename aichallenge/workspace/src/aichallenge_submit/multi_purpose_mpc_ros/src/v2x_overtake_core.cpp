@@ -1295,6 +1295,7 @@ PassHorizonAction resolve_pass_horizon_action(
     request.static_valid_until_pass_m, request.dynamic_valid_until_pass_m);
   const double distance_slack_m = effective_valid_until_m - request.pass_traveled_m;
   const bool revalidation_due =
+    request.predicted_overlap_replan_required ||
     distance_slack_m <= request.revalidation_lead_distance_m + 1e-9 ||
     request.dynamic_time_remaining_sec <= request.revalidation_lead_time_sec + 1e-9;
   if (!revalidation_due) {
@@ -1325,10 +1326,14 @@ bool can_commit_same_side_extension(
     !finite_non_negative(request.planner_result_max_age_sec) ||
     !std::isfinite(request.prediction_expiry_sec) ||
     !finite_non_negative(request.current_effective_valid_until_pass_m) ||
+    !finite_non_negative(request.current_pass_hold_distance_m) ||
     !finite_non_negative(request.replacement_static_valid_until_pass_m) ||
     !finite_non_negative(request.replacement_dynamic_valid_until_pass_m) ||
     !finite_non_negative(request.replacement_pass_hold_distance_m) ||
-    !valid_limit(request.absolute_pass_distance_limit_m))
+    !valid_limit(request.absolute_pass_distance_limit_m) ||
+    !std::isfinite(request.current_goal_lateral_m) ||
+    !std::isfinite(request.replacement_goal_lateral_m) ||
+    !valid_limit(request.maximum_lateral_adjustment_m))
   {
     return false;
   }
@@ -1340,16 +1345,56 @@ bool can_commit_same_side_extension(
     request.commit_now_sec >= request.prediction_expiry_sec - 1e-9 ||
     request.replacement_pass_hold_distance_m >
     request.absolute_pass_distance_limit_m + 1e-9 ||
+    request.replacement_pass_hold_distance_m <=
+    request.current_pass_hold_distance_m + 1e-9 ||
     request.replacement_pass_hold_distance_m + 1e-9 <
-    request.replacement_static_valid_until_pass_m)
+    request.replacement_static_valid_until_pass_m ||
+    std::abs(
+      request.replacement_goal_lateral_m - request.current_goal_lateral_m) >
+    request.maximum_lateral_adjustment_m + 1e-9)
   {
     return false;
   }
   const double replacement_effective_valid_until_pass_m = std::min(
     request.replacement_static_valid_until_pass_m,
     request.replacement_dynamic_valid_until_pass_m);
-  return replacement_effective_valid_until_pass_m >
-         request.current_effective_valid_until_pass_m + 1e-9;
+  return replacement_effective_valid_until_pass_m + 1e-9 >=
+         request.current_effective_valid_until_pass_m;
+}
+
+SameSideReplanShiftDistanceResolution resolve_same_side_replan_shift_distance(
+  const SameSideReplanShiftDistanceRequest & request) noexcept
+{
+  SameSideReplanShiftDistanceResolution resolution;
+  if (
+    !std::isfinite(request.current_lateral_m) ||
+    !std::isfinite(request.goal_lateral_m) ||
+    !std::isfinite(request.planning_speed_mps) || request.planning_speed_mps < 0.0 ||
+    !std::isfinite(request.maximum_lateral_accel_mps2) ||
+    request.maximum_lateral_accel_mps2 <= 0.0 ||
+    !std::isfinite(request.minimum_shift_distance_m) ||
+    request.minimum_shift_distance_m < 0.0 ||
+    !std::isfinite(request.maximum_shift_distance_m) ||
+    request.maximum_shift_distance_m < request.minimum_shift_distance_m ||
+    !std::isfinite(request.distance_margin_m) || request.distance_margin_m < 0.0)
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  resolution.lateral_adjustment_m = std::abs(
+    request.goal_lateral_m - request.current_lateral_m);
+  resolution.required_time_sec = std::sqrt(
+    2.0 * resolution.lateral_adjustment_m /
+    request.maximum_lateral_accel_mps2);
+  resolution.required_distance_m =
+    request.planning_speed_mps * resolution.required_time_sec;
+  resolution.shift_distance_m = std::clamp(
+    resolution.required_distance_m + request.distance_margin_m,
+    request.minimum_shift_distance_m, request.maximum_shift_distance_m);
+  resolution.feasible =
+    resolution.required_distance_m <= request.maximum_shift_distance_m + 1e-9;
+  return resolution;
 }
 
 OvertakeMissionDynamicCorridorResolution resolve_overtake_mission_dynamic_corridor(

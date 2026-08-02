@@ -735,6 +735,10 @@ struct PassHorizonDecisionRequest
   bool pass_active{false};
   bool rear_clear_confirmed{false};
   bool return_corridor_available{false};
+  /// A previously released Pass corridor now predicts a persistent body
+  /// overlap. Revalidate the same side before the normal horizon margin is
+  /// exhausted instead of waiting for the speed cap to be reapplied.
+  bool predicted_overlap_replan_required{false};
   bool short_horizon_safe{false};
   bool hold_active{false};
   double pass_traveled_m{};
@@ -770,16 +774,47 @@ struct SameSideExtensionCommitRequest
   double planner_result_max_age_sec{};
   double prediction_expiry_sec{};
   double current_effective_valid_until_pass_m{};
+  double current_pass_hold_distance_m{};
   double replacement_static_valid_until_pass_m{};
   double replacement_dynamic_valid_until_pass_m{};
   double replacement_pass_hold_distance_m{};
   double absolute_pass_distance_limit_m{std::numeric_limits<double>::infinity()};
+  double current_goal_lateral_m{};
+  double replacement_goal_lateral_m{};
+  double maximum_lateral_adjustment_m{std::numeric_limits<double>::infinity()};
 };
 
 /// Validate every identity, freshness and range condition immediately before
 /// an already-computed same-side replacement mission is committed atomically.
 bool can_commit_same_side_extension(
   const SameSideExtensionCommitRequest & request) noexcept;
+
+struct SameSideReplanShiftDistanceRequest
+{
+  double current_lateral_m{};
+  double goal_lateral_m{};
+  double planning_speed_mps{};
+  double maximum_lateral_accel_mps2{};
+  double minimum_shift_distance_m{0.5};
+  double maximum_shift_distance_m{};
+  double distance_margin_m{};
+};
+
+struct SameSideReplanShiftDistanceResolution
+{
+  bool valid{false};
+  bool feasible{false};
+  double lateral_adjustment_m{};
+  double required_time_sec{};
+  double required_distance_m{};
+  double shift_distance_m{};
+};
+
+/// Size the replacement lateral ramp from the required motion and the
+/// configured lateral-acceleration envelope. The result is a path distance,
+/// not a per-cycle goal slew limit.
+SameSideReplanShiftDistanceResolution resolve_same_side_replan_shift_distance(
+  const SameSideReplanShiftDistanceRequest & request) noexcept;
 
 struct OvertakeMissionDynamicCorridorSample
 {

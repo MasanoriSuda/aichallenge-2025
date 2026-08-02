@@ -493,6 +493,7 @@ mpc:
   v2x_overtake_pass_horizon_soft_distance_limit: 24.0 # [m] request early same-side revalidation
   v2x_overtake_pass_horizon_absolute_distance_limit: 32.0 # [m] never rearmed
   v2x_overtake_pass_horizon_extension_max_distance: 12.0 # [m] one atomic path replacement
+  v2x_overtake_pass_horizon_extension_max_lateral_adjustment: 0.60 # [m] bounded same-side goal correction per replacement
   v2x_overtake_pass_horizon_max_extensions: 1
   v2x_overtake_pass_horizon_planner_result_max_age: 0.10 # [s]
   v2x_overtake_pass_horizon_hold_max_sec: 1.0 # [s] shared by hold/safe-separation

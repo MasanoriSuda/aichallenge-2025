@@ -12,6 +12,11 @@
 - [x] Hold中の固定OvertakeLine出力を定義する
 - [x] AbortToRecoveryとAbortToSafeSeparationを分離する
 - [x] wall contactとmargin-only violationの優先順位を分離する
+- [x] planner生成時刻とprediction epochを分離する
+- [x] atomic updateへPass保持距離とReturn pathを追加する
+- [x] fresh horizonなしでPassへ遷移しない契約を定義する
+- [x] 静的geometry validityを距離基準へ限定する
+- [x] AbortToSafeSeparationの上限を定義する
 - [x] Phase 1～3の段階実装を定義する
 
 ## Phase 1: Mission range
@@ -20,18 +25,22 @@
 - [ ] rear-clear確認時間と制御遅延からconfirmation reserveを計算する
 - [ ] dynamic Pass距離のsoft/hard上限を純粋関数化する
 - [ ] Return区間をPass距離と分けて静的preflightへ追加する
-- [ ] 静的validation距離・時間をcandidateへ追加する
+- [ ] 静的validation距離をcandidateへ追加する
 - [ ] 動的validation距離・時間をcandidateへ追加する
-- [ ] 動的validationの予測生成時刻・絶対失効時刻をcandidateへ追加する
+- [ ] planner生成時刻・prediction epoch・source age・絶対失効時刻をcandidateへ追加する
+- [ ] extension planner result max ageを設定化する
+- [ ] `OvertakeMissionPath` にPass保持距離・Return開始位置・Return距離を追加する
 - [ ] `PassMissionValidation` を定義する
 - [ ] Pass開始点基準のabsolute distance/timeを保存する
 - [ ] runtime slackを保存せず毎周期算出する
+- [ ] actual `ShiftOut -> Pass` 時刻を唯一のPass時間原点として保存する
 
 ## Phase 2: One-shot replan
 
 - [ ] `PassHorizonAction` の純粋判断関数を追加する
 - [ ] `SameSideExtensionCandidate` を定義する
 - [ ] generation付きatomic updateを実装する
+- [ ] replacement mission pathを他のmission状態とatomic更新する
 - [ ] pending中の重複extension要求を抑止する
 - [ ] same-side extensionを1 missionにつき最大1回接続する
 - [ ] opposite-side candidateをPass中に生成しない
@@ -39,6 +48,10 @@
 - [ ] rear-clear、Return、Recovery、target変更時にpending candidateを無効化する
 - [ ] `AbortToRecovery` と `AbortToSafeSeparation` を接続する
 - [ ] wall contactとmargin-only violationの処理順を分離する
+- [ ] ShiftOut中のdynamic TTLを監視する
+- [ ] fresh horizonなしでPassへ遷移しない境界処理を接続する
+- [ ] fresh horizon待機を1回、1.0秒／3.0 mに制限する
+- [ ] SafeSeparationを1.0秒／3.0 mに制限し、Holdから上限を再装填しない
 - [ ] 状態変化ログを追加する
 
 ## Phase 3: Bounded fallback
@@ -56,6 +69,9 @@
 - [ ] 低速対象をrear-clearできるcandidateを確認する
 - [ ] predicted Pass time budget内にrear-clear不能なcandidateを棄却する
 - [ ] V2X予測1秒・mission 20 mを動的に完全検証済み扱いしない
+- [ ] V2X source ageを差し引いたprediction epochからdynamic expiryを計算する
+- [ ] planner生成が新しくてもsource predictionが失効済みならcandidateを棄却する
+- [ ] planner result ageが設定上限を超えたcandidateを棄却する
 - [ ] 動的予測終端より前に再計画slackがないcandidateを棄却する
 - [ ] validation lead到達前はKeepになる
 - [ ] validation lead到達後はRequestSameSideExtensionになる
@@ -66,6 +82,7 @@
 - [ ] extensionのローカル距離・時間をPass原点へ正しく変換する
 - [ ] extension後もabsolute limitを再装填しない
 - [ ] extension後のvalid-untilが前進しないcandidateを棄却する
+- [ ] extension commitでPass保持距離・Return開始位置・Return距離も一括更新する
 - [ ] lap seam付近でもcircular path進捗を誤らない
 - [ ] Return corridor blocker時にbase trajectoryへ戻らない
 - [ ] margin-only violationかつrear-clear済みならReturnを優先する
@@ -75,10 +92,16 @@
 - [ ] extension goal adjustmentで同側goal jumpを許さない
 - [ ] Return、Recovery、target変更でpending candidateを無効化する
 - [ ] ShiftOut中に入口の動的予測が失効した場合、Pass進入時に再評価する
+- [ ] dynamic TTLがbody-clear予定時刻未満ならstale予測のままShiftOutを継続しない
+- [ ] fresh Pass horizon未取得時にPassへ遷移しない
+- [ ] fresh horizon待機の再評価回数と時間・距離上限を超えない
 - [ ] commit待ち中に失効したextension candidateを棄却する
+- [ ] actual Pass startがpredicted Pass startからずれてもabsolute timer原点を誤らない
 - [ ] Hold条件不成立時はHoldへ入らない
 - [ ] Hold中のrear-clear成立でReturnになる
 - [ ] Hold上限超過で無期限保持しない
+- [ ] AbortToSafeSeparationが1.0秒／3.0 mを超えない
+- [ ] HoldからSafeSeparationへ移ってもfallback上限を再装填しない
 
 ## Build verification
 
@@ -105,6 +128,8 @@
 - [ ] admitted ShiftOut -> Pass: 100%
 - [ ] Pass -> Return -> Idle: 90%以上
 - [ ] validated horizon超過: 0 m
+- [ ] stale dynamic horizonでのPass遷移: 0回
+- [ ] mission pathとmission generationの不一致: 0回
 - [ ] Hold最大: 1.0秒 / 3.0 m未満
 - [ ] 同一mission extension: 初期版は最大1回
 - [ ] wall / solver Recovery: 現行runより減少

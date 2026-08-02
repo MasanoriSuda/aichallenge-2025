@@ -77,12 +77,31 @@ effective_valid_until_distance = min(
   static_valid_until_pass_m,
   dynamic_valid_until_pass_m)
 
-effective_valid_until_time_sec = min(
-  predicted_pass_start_time_sec + static_valid_until_elapsed_sec,
-  dynamic_valid_until_monotonic_sec)
+dynamic_time_slack_sec =
+  dynamic_valid_until_monotonic_sec - now_monotonic_sec
 ```
 
+静的geometryの有効範囲は距離で管理する。rollout上の到達予測時間は、predicted Pass budgetとabsolute mission timeの評価値であり、静的mapの失効時刻ではない。
+
 動的期限より前に再評価できる距離・時間slackがないcandidateは採用しない。実際のReturn開始はrear-clear観測後のままとする。
+
+動的予測では次の時刻を分ける。
+
+```text
+planner_generated_at_sec
+  planner結果を生成したcontroller monotonic時刻
+
+prediction_epoch_monotonic_sec
+  予測対象状態の基準時刻をcontroller monotonic clockへ正規化した値
+
+prediction_horizon_sec
+  prediction epochから先の予測長
+
+dynamic_valid_until_monotonic_sec =
+  prediction_epoch_monotonic_sec + prediction_horizon_sec
+```
+
+V2X source timestampがcontroller clockと異なる場合は、その値を直接比較しない。planner時点で求めたsource ageを使い、概念的に `prediction_epoch_monotonic = planner_now_monotonic - source_age` とする。planner生成時刻へ予測horizonを足し直してはならない。
 
 ## 3. Mission state
 
@@ -98,10 +117,16 @@ struct PassMissionValidation
   double predicted_rear_clear_elapsed_sec{0.0};
 
   double static_valid_until_pass_m{0.0};
-  double static_valid_until_elapsed_sec{0.0};
   double dynamic_valid_until_pass_m{0.0};
-  double dynamic_validation_stamp_sec{0.0};
+  double planner_generated_at_sec{0.0};
+  double prediction_source_age_sec{0.0};
+  double prediction_epoch_monotonic_sec{0.0};
+  double prediction_horizon_sec{0.0};
   double dynamic_valid_until_monotonic_sec{0.0};
+
+  double validated_pass_hold_distance_m{0.0};
+  double return_start_pass_m{0.0};
+  double return_distance_m{0.0};
 
   double absolute_pass_distance_limit_m{0.0};
   double absolute_pass_time_limit_sec{0.0};
@@ -120,36 +145,35 @@ distance_slack =
   min(static_valid_until_pass_m, dynamic_valid_until_pass_m)
   - phase_traveled_m
 
-static_time_deadline_sec =
-  pass_start_time_sec + static_valid_until_elapsed_sec
+dynamic_time_slack =
+  dynamic_valid_until_monotonic_sec - now_monotonic_sec
 
-time_slack =
-  min(static_time_deadline_sec, dynamic_valid_until_monotonic_sec)
+absolute_time_slack =
+  pass_start_time_sec + absolute_pass_time_limit_sec
   - now_monotonic_sec
 ```
 
 `phase_traveled_m` と全valid-until距離は最初のPass開始点基準とする。extension採用時は現在位置からのローカル値を絶対値へ変換する。
+
+`pass_start_time_sec` は予測値ではなく、実際に最初の `ShiftOut -> Pass` 遷移が成立したcontroller monotonic時刻を一度だけ保存する。入口rolloutのpredicted Pass開始時刻との差をabsolute timerへ持ち込まない。rear-clear予測時間はfreshなPass horizon生成時点からの相対時間として再計算し、実際のPass開始時刻へ変換する。
 
 ```text
 new_static_valid_until_pass_m =
   current_phase_traveled_m
   + extension.static_validated_distance_from_current_m
 
-new_static_valid_until_elapsed_sec =
-  current_pass_elapsed_sec
-  + extension.static_validated_time_from_current_sec
-
 new_dynamic_valid_until_pass_m =
   current_phase_traveled_m
   + extension.dynamic_validated_distance_from_current_m
 
 new_dynamic_valid_until_monotonic_sec =
-  extension.generated_at_sec + extension.dynamic_valid_for_sec
+  extension.prediction_epoch_monotonic_sec
+  + extension.prediction_horizon_sec
 ```
 
 Pass開始距離、Pass開始時刻、absolute budgetはextensionやHoldでリセットしない。
 
-動的予測の時刻基準は、Pass開始ではなく予測生成時刻とする。入口candidateの動的予測がShiftOut中に失効した場合、Pass進入時に即時再評価し、古い1秒予測を新しいPass horizonとして使い回さない。
+動的予測の時刻基準はplanner生成時刻ではなく、V2X source ageを反映したprediction epochとする。入口candidateの動的予測がShiftOut中に失効した場合、Pass進入時に即時再評価し、古い1秒予測を新しいPass horizonとして使い回さない。
 
 ## 4. Horizon actionとplanner結果の分離
 
@@ -169,19 +193,29 @@ enum class PassHorizonAction
 同側延長の探索結果は別構造体で返す。
 
 ```cpp
+struct OvertakeMissionPath
+{
+  double fixed_goal_ey{0.0};
+  double validated_pass_hold_distance_m{0.0};
+  double return_start_pass_m{0.0};
+  double return_distance_m{0.0};
+  // Pass保持区間とReturn区間を含む、実際にpublishする置換経路。
+};
+
 struct SameSideExtensionCandidate
 {
   std::uint64_t source_generation{0};
-  double generated_at_sec{0.0};
-  double dynamic_valid_for_sec{0.0};
+  double planner_generated_at_sec{0.0};
+  double prediction_source_age_sec{0.0};
+  double prediction_epoch_monotonic_sec{0.0};
+  double prediction_horizon_sec{0.0};
   std::string target_id;
   int side_sign{0};
 
-  double goal_ey{0.0};
+  OvertakeMissionPath replacement_path;
   double closing_speed_limit{0.0};
 
   double static_validated_distance_from_current_m{0.0};
-  double static_validated_time_from_current_sec{0.0};
   double dynamic_validated_distance_from_current_m{0.0};
 
   double predicted_rear_clear_distance_from_current_m{0.0};
@@ -192,16 +226,51 @@ struct SameSideExtensionCandidate
 採用条件は次をすべて満たすこととする。
 
 - `source_generation == current generation`
-- `now_sec < generated_at_sec + dynamic_valid_for_sec`
+- `now_sec < prediction_epoch_monotonic_sec + prediction_horizon_sec`
+- `now_sec - planner_generated_at_sec <= extension_planner_result_max_age_sec`
 - target ID一致
 - side一致
 - 現在phaseがPass、またはPass内部Hold
 - 新しい実効valid-untilが現在値より前進
 - absolute distance/time limit以内
 
-採用時はgoal、closing、rear-clear予測、静的期限、動的期限を一括更新し、generationを増やす。
+採用時はreplacement path、fixed goal、closing、Pass保持距離、Return開始位置、Return距離、rear-clear予測、静的期限、動的期限を一括更新し、generationを増やす。pathの一部だけを先行更新してはならない。
 
-## 5. Runtime decision
+## 5. ShiftOut / Pass境界
+
+入口の動的予測はShiftOut中にも期限を消費する。ShiftOut中は次を毎周期確認する。
+
+```text
+remaining_dynamic_ttl =
+  dynamic_valid_until_monotonic_sec - now_monotonic_sec
+
+required_ttl =
+  predicted_time_to_body_clear + revalidation_lead_time
+```
+
+`remaining_dynamic_ttl < required_ttl` になった時点でfresh horizonを要求する。stale予測のままShiftOutを継続しない。
+
+Pass遷移条件は次へ固定する。
+
+```text
+fresh horizon成立
+  -> Pass
+
+fresh horizon未取得
+かつ current footprint非重複
+かつ 固定OvertakeLineの短区間が静的・動的に安全
+  -> ShiftOut完了位置を固定
+  -> closing speed = 0
+  -> 最大1回だけ再評価
+
+短区間も不成立
+  -> side-by-sideならAbortToSafeSeparation
+  -> 前後分離済みならRecovery
+```
+
+fresh horizon待機は1.0秒または3.0 mの早い方で終了し、再装填しない。古いhorizonでPassへ遷移する経路は設けない。
+
+## 6. Runtime decision
 
 判定順序は次とする。
 
@@ -221,8 +290,8 @@ struct SameSideExtensionCandidate
 
 ```text
 normalized_slack = min(
-distance_slack / revalidation_lead_distance,
-time_slack / revalidation_lead_time)
+  distance_slack / revalidation_lead_distance,
+  dynamic_time_slack / revalidation_lead_time)
 
 normalized_slack > 1.0  -> Keep
 normalized_slack <= 1.0 -> RequestSameSideExtension
@@ -230,7 +299,7 @@ normalized_slack <= 1.0 -> RequestSameSideExtension
 
 低速・停止時は時間、高速時は距離の期限が先に効く。
 
-## 6. Same-side extension
+## 7. Same-side extension
 
 Pass中の再評価は現在sideだけを探索する。
 
@@ -244,7 +313,7 @@ Pass中の再評価は現在sideだけを探索する。
 
 mission作成時はgenerationを1とする。rear-clear、Return、Recovery、target変更時はpending extensionを無効化する。
 
-## 7. HoldとAbort
+## 8. HoldとAbort
 
 Holdは上位Behaviorを増やさず、Pass内部substateとする。
 
@@ -279,9 +348,11 @@ AbortToSafeSeparation
   side-by-sideのため現在sideを維持し、closing <= 0で前後分離
 ```
 
-`AbortToSafeSeparation` は新しい無期限待機状態にはしない。短区間の検証と絶対Pass上限を引き続き適用し、前後分離後にReturnまたはRecoveryへ移る。
+`AbortToSafeSeparation` は新しい無期限待機状態にはしない。上限は1.0秒または3.0 mの早い方とする。Holdから連続して入る場合は同一fallback episodeとして開始点を共有し、上限を再装填しない。前後分離後にReturnまたはRecoveryへ移る。
 
-## 8. Wall guardの分離
+上限に達した場合はHoldまたはSafeSeparationへ再入場せず、現在footprintとcorridorを再評価してhard abortへエスカレートする。ここでもabsolute Pass上限は継続する。
+
+## 9. Wall guardの分離
 
 次を混同しない。
 
@@ -290,7 +361,7 @@ AbortToSafeSeparation
 
 既存の `ReturnBeforeWallMarginRecovery` と `RecoverWallMargin` の責務を維持する。
 
-## 9. Existing watchdogとの関係
+## 10. Existing watchdogとの関係
 
 既存watchdogは残す。
 
@@ -300,21 +371,24 @@ AbortToSafeSeparation
 
 新horizonとabsolute limitは、0.5 m進捗による再装填を行わない。
 
-## 10. 初期パラメータ
+## 11. 初期パラメータ
 
 - revalidation lead distance: 3.0 m
 - revalidation lead time: 0.75 s
+- extension planner result max age: 0.10 s
 - predicted Pass time budget: 8.0 s
 - absolute Pass time limit: 10.0 s
 - validated Pass soft distance: 24.0 m
 - absolute Pass distance limit: 32.0 m
 - same-side extension max distance: 8.0～12.0 m
 - Hold上限: 1.0 s / 3.0 m
+- ShiftOut fresh-horizon待機上限: 1.0 s / 3.0 m、再評価1回
+- SafeSeparation上限: 1.0 s / 3.0 m（同一fallback episodeで共有）
 - 初期版extension count: 1
 
 全値を設定化する。24 m到達は即hard abortではなく、extension抑制とReturn／Hold判断を早めるsoft limitとする。
 
-## 11. ログ
+## 12. ログ
 
 状態変化時だけ次を記録する。
 
@@ -325,7 +399,7 @@ target
 side
 pass_traveled
 pass_elapsed
-static_valid_until_distance/time
+static_valid_until_distance
 dynamic_valid_until_distance/time
 effective_slack_distance/time
 predicted_rear_clear_distance/time
@@ -336,18 +410,29 @@ decision
 abort_class
 reason
 mission_generation
+planner_generated_at
+prediction_epoch
+prediction_source_age
+dynamic_expiry
+mission_path_generation
+pass_hold_distance
+return_start_distance
+return_distance
+fallback_episode_elapsed/distance
 ```
 
 40 Hzの毎周期ログにはしない。extension要求、延長採用・棄却、Return、Hold開始・終了、Abort時だけ出す。
 
-## 12. 段階実装
+## 13. 段階実装
 
 ### Phase 1: mission範囲の確立
 
 - rear-clear rollout
 - dynamic Pass distance
 - Return静的preflight
-- 静的・動的validated distance/time保存
+- 静的validated distanceと、動的validated distance/time保存
+- prediction epoch、source age、dynamic expiry保存
+- Pass保持距離とReturn pathを含むmission path保存
 - absolute budget保存
 
 ### Phase 2: 一回だけのreceding-horizon更新
@@ -356,6 +441,7 @@ mission_generation
 - generation付きatomic update
 - same-side extension最大1回
 - side-by-side safe separation
+- fresh horizonなしでPassへ遷移しないShiftOut境界処理
 
 ### Phase 3: bounded fallback
 

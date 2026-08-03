@@ -656,6 +656,7 @@ struct OvertakeKinematicRolloutResolution
   double max_required_lateral_accel_mps2{};
   double ego_distance_at_horizon_m{};
   double ego_speed_at_horizon_mps{};
+  double minimum_ego_speed_mps{std::numeric_limits<double>::infinity()};
   bool rear_clear_checked{false};
   bool rear_clear_feasible{false};
   double rear_clear_time_sec{std::numeric_limits<double>::infinity()};
@@ -992,6 +993,12 @@ struct OvertakeMissionCandidate
   double predicted_rear_clear_time_sec{std::numeric_limits<double>::infinity()};
   double predicted_rear_clear_ego_distance_m{std::numeric_limits<double>::infinity()};
   double predicted_rear_clear_speed_mps{std::numeric_limits<double>::infinity()};
+  double predicted_minimum_ego_speed_mps{std::numeric_limits<double>::infinity()};
+  bool horizon_progress_checked{false};
+  double horizon_progress_score{std::numeric_limits<double>::quiet_NaN()};
+  double horizon_progress_time{std::numeric_limits<double>::quiet_NaN()};
+  double horizon_progress_distance{std::numeric_limits<double>::quiet_NaN()};
+  double horizon_progress_retained_speed{std::numeric_limits<double>::quiet_NaN()};
   double pass_hold_distance_m{std::numeric_limits<double>::quiet_NaN()};
   double return_distance_m{std::numeric_limits<double>::quiet_NaN()};
   double static_valid_until_pass_m{std::numeric_limits<double>::quiet_NaN()};
@@ -1004,6 +1011,63 @@ struct OvertakeMissionCandidate
   bool outer_strategy_committed{false};
 };
 
+struct OvertakeMissionHorizonProgressWeights
+{
+  double rear_clear_time{3.0};
+  double rear_clear_distance{1.0};
+  double retained_speed{1.5};
+  double closing_speed{0.5};
+  double lateral_motion_penalty{0.5};
+  double lateral_accel_penalty{0.25};
+};
+
+enum class OvertakeMissionHorizonProgressRejectReason
+{
+  None,
+  Disabled,
+  InvalidInput,
+  RearClearUnchecked,
+  RearClearInfeasible,
+  RearClearTimeBudget,
+  RearClearDistanceBudget,
+};
+
+struct OvertakeMissionHorizonProgressRequest
+{
+  bool enabled{false};
+  OvertakeMissionCandidate candidate;
+  double rear_clear_time_budget_sec{};
+  double rear_clear_distance_budget_m{};
+  double reference_speed_mps{};
+  double maximum_closing_speed_mps{};
+  double lateral_motion_scale_m{};
+  double maximum_lateral_accel_mps2{};
+  OvertakeMissionHorizonProgressWeights weights;
+};
+
+struct OvertakeMissionHorizonProgressEvaluation
+{
+  bool valid{false};
+  bool checked{false};
+  bool hard_feasible{false};
+  OvertakeMissionHorizonProgressRejectReason reject_reason{
+    OvertakeMissionHorizonProgressRejectReason::InvalidInput};
+  double score{-std::numeric_limits<double>::infinity()};
+  double rear_clear_time_progress{};
+  double rear_clear_distance_progress{};
+  double retained_speed{};
+  double closing_speed_progress{};
+  double lateral_motion_cost{};
+  double lateral_accel_cost{};
+};
+
+/// Rank a physically admitted mission by its ability to reach rear-clear while
+/// retaining speed. Static wall, dynamic corridor and body-clear violations
+/// remain hard constraints in admission; this score only orders candidates
+/// that passed those constraints.
+OvertakeMissionHorizonProgressEvaluation evaluate_overtake_mission_horizon_progress(
+  const OvertakeMissionHorizonProgressRequest & request) noexcept;
+
 /// Build a small deterministic longitudinal candidate set from the existing
 /// ShiftOut bounds. Invalid bounds produce no candidates; equal bounds produce
 /// one candidate. The midpoint adds a useful distance-preserving option without
@@ -1015,6 +1079,14 @@ struct OvertakeMissionCandidateSelectionRequest
 {
   std::vector<OvertakeMissionCandidate> candidates;
   double minimum_deadline_slack_sec{};
+  bool horizon_progress_enabled{false};
+  double horizon_progress_time_budget_sec{};
+  double horizon_progress_distance_budget_m{};
+  double horizon_progress_reference_speed_mps{};
+  double horizon_progress_maximum_closing_speed_mps{};
+  double horizon_progress_lateral_motion_scale_m{};
+  double horizon_progress_maximum_lateral_accel_mps2{};
+  OvertakeMissionHorizonProgressWeights horizon_progress_weights;
 };
 
 struct OvertakeMissionCandidateSelection
@@ -1023,6 +1095,7 @@ struct OvertakeMissionCandidateSelection
   bool found{false};
   std::size_t selected_index{std::numeric_limits<std::size_t>::max()};
   OvertakeMissionCandidate candidate;
+  OvertakeMissionHorizonProgressEvaluation horizon_progress;
 };
 
 /// Select a deterministic executable mission. Evaluated, deadline-feasible

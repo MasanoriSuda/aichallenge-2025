@@ -127,6 +127,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SameSideReplanShiftDistanceRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidate;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidateSelectionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionHorizonProgressRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PausedMissionExpiryReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::PausedMissionExpiryRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CompletedTargetReacquireSuppressionRequest;
@@ -150,6 +151,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::can_commit_same_side_extension;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_safe_separation;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_same_side_replan_shift_distance;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_overtake_mission_candidate;
+using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_overtake_mission_horizon_progress;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_start_grid_breakout_speed_reference;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_shiftout_complete;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_release_overtake_front_cap;
@@ -2688,6 +2690,7 @@ TEST(V2XOvertakeCoreSpeed, KinematicRolloutAccountsForControlDelayWhileClosingFa
   ASSERT_TRUE(std::isfinite(delayed.body_clear_time_sec));
   EXPECT_GT(delayed.body_clear_time_sec, immediate.body_clear_time_sec);
   EXPECT_LT(delayed.ego_speed_at_horizon_mps, request.current_ego_speed_mps);
+  EXPECT_LE(delayed.minimum_ego_speed_mps, delayed.ego_speed_at_horizon_mps + 1e-9);
   EXPECT_LE(delayed.deadline_slack_sec, immediate.deadline_slack_sec);
 }
 
@@ -3220,6 +3223,125 @@ TEST(V2XOvertakeCoreSpeed, SelectsEarliestBodyClearBeforeShortestShift)
   EXPECT_DOUBLE_EQ(selection.candidate.predicted_body_clear_time_sec, 0.5);
 }
 
+TEST(V2XOvertakeCoreSpeed, HorizonProgressScoresRearClearSpeedAndMotion)
+{
+  OvertakeMissionCandidate candidate;
+  candidate.feasible = true;
+  candidate.shift_distance_m = 4.0;
+  candidate.lateral_shift_m = 0.5;
+  candidate.max_required_lateral_accel_mps2 = 2.0;
+  candidate.closing_speed_mps = 2.0;
+  candidate.rear_clear_prediction_checked = true;
+  candidate.rear_clear_prediction_feasible = true;
+  candidate.predicted_rear_clear_time_sec = 4.0;
+  candidate.predicted_rear_clear_ego_distance_m = 20.0;
+  candidate.predicted_rear_clear_speed_mps = 5.0;
+  candidate.predicted_minimum_ego_speed_mps = 4.0;
+
+  OvertakeMissionHorizonProgressRequest request;
+  request.enabled = true;
+  request.candidate = candidate;
+  request.rear_clear_time_budget_sec = 8.0;
+  request.rear_clear_distance_budget_m = 32.0;
+  request.reference_speed_mps = 10.0;
+  request.maximum_closing_speed_mps = 2.0;
+  request.lateral_motion_scale_m = 1.5;
+  request.maximum_lateral_accel_mps2 = 6.0;
+  const auto evaluation = evaluate_overtake_mission_horizon_progress(request);
+
+  ASSERT_TRUE(evaluation.valid);
+  ASSERT_TRUE(evaluation.checked);
+  ASSERT_TRUE(evaluation.hard_feasible);
+  EXPECT_NEAR(evaluation.rear_clear_time_progress, 0.5, 1e-9);
+  EXPECT_NEAR(evaluation.rear_clear_distance_progress, 0.5, 1e-9);
+  EXPECT_NEAR(evaluation.retained_speed, 0.4, 1e-9);
+  EXPECT_NEAR(evaluation.closing_speed_progress, 1.0, 1e-9);
+  EXPECT_NEAR(evaluation.lateral_motion_cost, 1.0 / 3.0, 1e-9);
+  EXPECT_NEAR(evaluation.lateral_accel_cost, 1.0 / 3.0, 1e-9);
+  EXPECT_TRUE(std::isfinite(evaluation.score));
+}
+
+TEST(V2XOvertakeCoreSpeed, HorizonProgressRejectsMissionOutsideRearClearBudget)
+{
+  OvertakeMissionCandidate candidate;
+  candidate.feasible = true;
+  candidate.shift_distance_m = 4.0;
+  candidate.lateral_shift_m = 0.5;
+  candidate.max_required_lateral_accel_mps2 = 2.0;
+  candidate.closing_speed_mps = 2.0;
+  candidate.rear_clear_prediction_checked = true;
+  candidate.rear_clear_prediction_feasible = true;
+  candidate.predicted_rear_clear_time_sec = 8.1;
+  candidate.predicted_rear_clear_ego_distance_m = 20.0;
+  candidate.predicted_rear_clear_speed_mps = 5.0;
+  candidate.predicted_minimum_ego_speed_mps = 4.0;
+
+  OvertakeMissionHorizonProgressRequest request;
+  request.enabled = true;
+  request.candidate = candidate;
+  request.rear_clear_time_budget_sec = 8.0;
+  request.rear_clear_distance_budget_m = 32.0;
+  request.reference_speed_mps = 10.0;
+  request.maximum_closing_speed_mps = 2.0;
+  request.lateral_motion_scale_m = 1.5;
+  request.maximum_lateral_accel_mps2 = 6.0;
+  const auto evaluation = evaluate_overtake_mission_horizon_progress(request);
+
+  ASSERT_TRUE(evaluation.valid);
+  EXPECT_TRUE(evaluation.checked);
+  EXPECT_FALSE(evaluation.hard_feasible);
+}
+
+TEST(V2XOvertakeCoreSpeed, HorizonProgressPrefersRetainedSpeedAcrossPassSides)
+{
+  const auto make_candidate = [](const int side, const double rear_clear_time_sec,
+      const double minimum_speed_mps) {
+      OvertakeMissionCandidate candidate;
+      candidate.feasible = true;
+      candidate.shift_distance_m = 4.0;
+      candidate.goal_lateral_m = side > 0 ? 0.7 : -0.7;
+      candidate.lateral_shift_m = 0.7;
+      candidate.max_required_lateral_accel_mps2 = 2.0;
+      candidate.closing_speed_mps = 2.0;
+      candidate.pass_side_sign = side;
+      candidate.rear_clear_prediction_checked = true;
+      candidate.rear_clear_prediction_feasible = true;
+      candidate.predicted_rear_clear_time_sec = rear_clear_time_sec;
+      candidate.predicted_rear_clear_ego_distance_m = 20.0;
+      candidate.predicted_rear_clear_speed_mps = 5.0;
+      candidate.predicted_minimum_ego_speed_mps = minimum_speed_mps;
+      candidate.pass_hold_distance_m = 18.0;
+      candidate.return_distance_m = 6.0;
+      candidate.static_valid_until_pass_m = 18.0;
+      candidate.dynamic_valid_until_pass_m = 18.0;
+      candidate.planner_generated_at_sec = 10.0;
+      candidate.prediction_source_age_sec = 0.02;
+      candidate.prediction_epoch_sec = 9.98;
+      candidate.prediction_horizon_sec = 8.0;
+      candidate.dynamic_valid_until_sec = 17.98;
+      return candidate;
+    };
+
+  OvertakeMissionCandidateSelectionRequest request;
+  request.candidates = {
+    make_candidate(1, 4.0, 1.0),
+    make_candidate(-1, 4.2, 5.0)};
+  request.horizon_progress_enabled = true;
+  request.horizon_progress_time_budget_sec = 8.0;
+  request.horizon_progress_distance_budget_m = 32.0;
+  request.horizon_progress_reference_speed_mps = 10.0;
+  request.horizon_progress_maximum_closing_speed_mps = 2.0;
+  request.horizon_progress_lateral_motion_scale_m = 1.5;
+  request.horizon_progress_maximum_lateral_accel_mps2 = 6.0;
+
+  const auto selection = select_overtake_mission_candidate(request);
+  ASSERT_TRUE(selection.valid);
+  ASSERT_TRUE(selection.found);
+  EXPECT_EQ(selection.candidate.pass_side_sign, -1);
+  EXPECT_TRUE(selection.horizon_progress.checked);
+  EXPECT_GT(selection.horizon_progress.retained_speed, 0.4);
+}
+
 TEST(V2XOvertakeCoreSpeed, SelectsFasterClosingSpeedForOtherwiseEqualCandidates)
 {
   OvertakeMissionCandidateSelectionRequest request;
@@ -3309,8 +3431,10 @@ TEST(V2XOvertakeCoreSpeed, GlobalCandidateSelectionRejectsMissedLeftForFeasibleR
   right.pass_side_sign = -1;
   right.body_clear_deadline_slack_sec = 0.5;
 
-  const auto selection = select_overtake_mission_candidate(
-    OvertakeMissionCandidateSelectionRequest{{left, right}, 0.25});
+  OvertakeMissionCandidateSelectionRequest request;
+  request.candidates = {left, right};
+  request.minimum_deadline_slack_sec = 0.25;
+  const auto selection = select_overtake_mission_candidate(request);
 
   ASSERT_TRUE(selection.valid);
   ASSERT_TRUE(selection.found);

@@ -1383,6 +1383,13 @@ struct OvertakeLineConfig
   double progress_watchdog_distance{0.0};
   double progress_watchdog_min_progress{0.5};
   bool pass_horizon_enabled{false};
+  bool horizon_progress_enabled{false};
+  double horizon_progress_rear_clear_time_weight{3.0};
+  double horizon_progress_rear_clear_distance_weight{1.0};
+  double horizon_progress_retained_speed_weight{1.5};
+  double horizon_progress_closing_speed_weight{0.5};
+  double horizon_progress_lateral_motion_penalty{0.5};
+  double horizon_progress_lateral_accel_penalty{0.25};
   double pass_horizon_revalidation_lead_distance{3.0};
   double pass_horizon_revalidation_lead_time{0.75};
   double pass_horizon_predicted_time_budget{8.0};
@@ -5974,6 +5981,35 @@ struct MPC
       build_v2x_gap_planner_bounds(
       ref_wp_id, N, lb, ub, static_mission_plan_N);
 
+    const auto select_mission_candidate = [&](const auto & candidates) {
+        overtake_core::OvertakeMissionCandidateSelectionRequest request;
+        request.candidates = candidates;
+        request.minimum_deadline_slack_sec =
+          cfg.v2x_behavior.overtake_body_clear_minimum_slack_sec;
+        request.horizon_progress_enabled =
+          cfg.v2x_behavior.overtake_line.horizon_progress_enabled;
+        request.horizon_progress_time_budget_sec =
+          cfg.v2x_behavior.overtake_line.pass_horizon_predicted_time_budget;
+        request.horizon_progress_distance_budget_m =
+          cfg.v2x_behavior.overtake_line.pass_horizon_absolute_distance_limit;
+        request.horizon_progress_reference_speed_mps = std::max(kEps, cfg.v_max);
+        request.horizon_progress_maximum_closing_speed_mps = std::max(
+          kEps, cfg.v2x_behavior.overtake_shiftout_max_closing_speed);
+        request.horizon_progress_lateral_motion_scale_m = std::max(
+          {0.5, cfg.v2x_behavior.overtake_line.lateral_offset,
+            cfg.v2x_behavior.overtake_line_min_target_separation});
+        request.horizon_progress_maximum_lateral_accel_mps2 = std::max(
+          kEps, cfg.v2x_behavior.overtake_line.max_lateral_accel);
+        request.horizon_progress_weights = {
+          cfg.v2x_behavior.overtake_line.horizon_progress_rear_clear_time_weight,
+          cfg.v2x_behavior.overtake_line.horizon_progress_rear_clear_distance_weight,
+          cfg.v2x_behavior.overtake_line.horizon_progress_retained_speed_weight,
+          cfg.v2x_behavior.overtake_line.horizon_progress_closing_speed_weight,
+          cfg.v2x_behavior.overtake_line.horizon_progress_lateral_motion_penalty,
+          cfg.v2x_behavior.overtake_line.horizon_progress_lateral_accel_penalty};
+        return overtake_core::select_overtake_mission_candidate(request);
+      };
+
     const auto assess_side = [&](const int side) {
       SideAssessment assessment;
       assessment.side = side;
@@ -6574,6 +6610,8 @@ struct MPC
                 rollout.rear_clear_ego_distance_m;
               mission_candidate.predicted_rear_clear_speed_mps =
                 rollout.rear_clear_ego_speed_mps;
+              mission_candidate.predicted_minimum_ego_speed_mps =
+                rollout.minimum_ego_speed_mps;
               mission_candidate.pass_hold_distance_m = selected_pass_distance;
               mission_candidate.return_distance_m =
                 std::max(0.5, cfg.v2x_behavior.overtake_line.return_distance);
@@ -6593,10 +6631,7 @@ struct MPC
           }
         }
 
-        const auto mission_selection = overtake_core::select_overtake_mission_candidate(
-          overtake_core::OvertakeMissionCandidateSelectionRequest{
-            mission_candidates,
-            cfg.v2x_behavior.overtake_body_clear_minimum_slack_sec});
+        const auto mission_selection = select_mission_candidate(mission_candidates);
         if (!mission_selection.valid || !mission_selection.found) {
           assessment.gap_available = false;
           assessment.transient_gap_hold = false;
@@ -6645,7 +6680,17 @@ struct MPC
               side, output.target_vehicle_id, now_sec, assessment.reason);
           }
         } else {
-          const auto & selected_mission = mission_selection.candidate;
+          auto selected_mission = mission_selection.candidate;
+          selected_mission.horizon_progress_checked =
+            mission_selection.horizon_progress.checked;
+          selected_mission.horizon_progress_score =
+            mission_selection.horizon_progress.score;
+          selected_mission.horizon_progress_time =
+            mission_selection.horizon_progress.rear_clear_time_progress;
+          selected_mission.horizon_progress_distance =
+            mission_selection.horizon_progress.rear_clear_distance_progress;
+          selected_mission.horizon_progress_retained_speed =
+            mission_selection.horizon_progress.retained_speed;
           assessment.dynamic_mission_corridor_feasible = true;
           assessment.selected_mission = selected_mission;
           assessment.corridor_center_ey = selected_mission.goal_lateral_m;
@@ -6678,6 +6723,16 @@ struct MPC
             selected_mission.predicted_rear_clear_time_sec
                           << ", rear_clear_s=" <<
             selected_mission.predicted_rear_clear_ego_distance_m
+                          << ", min_v=" <<
+            selected_mission.predicted_minimum_ego_speed_mps
+                          << ", progress_score=" <<
+            mission_selection.horizon_progress.score
+                          << ", progress_time=" <<
+            mission_selection.horizon_progress.rear_clear_time_progress
+                          << ", progress_distance=" <<
+            mission_selection.horizon_progress.rear_clear_distance_progress
+                          << ", retained_speed=" <<
+            mission_selection.horizon_progress.retained_speed
                           << ", pass_hold=" << selected_mission.pass_hold_distance_m
                           << ", static_valid=" <<
             selected_mission.static_valid_until_pass_m
@@ -7242,10 +7297,7 @@ struct MPC
       add_global_mission_candidate(right_assessment);
     }
     const auto global_mission_selection =
-      overtake_core::select_overtake_mission_candidate(
-      overtake_core::OvertakeMissionCandidateSelectionRequest{
-        global_mission_candidates,
-        cfg.v2x_behavior.overtake_body_clear_minimum_slack_sec});
+      select_mission_candidate(global_mission_candidates);
     if (
       global_mission_selection.valid && global_mission_selection.found &&
       global_mission_selection.candidate.pass_side_sign != 0)
@@ -10702,7 +10754,8 @@ private:
             "Overtake minimum-motion entry: mode=%s, side=%d, current_ey=%.2f, "
             "goal_ey=%.2f, lateral_shift=%.2f, shift_distance=%.2f, "
             "closing=%.2f, body_deadline_checked=%d, body_deadline=%d, "
-            "deadline_slack=%.2f, path_frozen=%d, path_total=%.2f, "
+            "deadline_slack=%.2f, progress_score=%.2f, min_v=%.2f, "
+            "path_frozen=%d, path_total=%.2f, "
             "target=%s, wp_id=%d",
             direct_base_line_pass ? "base-line" :
             direct_same_side_resume ? "same-side-pass-resume" : "minimum-shift",
@@ -10715,6 +10768,12 @@ private:
             overtake_line_state_.mission_body_clear_deadline_checked ? 1 : 0,
             overtake_line_state_.mission_body_clear_deadline_feasible ? 1 : 0,
             overtake_line_state_.mission_body_clear_deadline_slack_sec,
+            behavior_output.overtake_selected_mission.has_value() ?
+            behavior_output.overtake_selected_mission->horizon_progress_score :
+            std::numeric_limits<double>::quiet_NaN(),
+            behavior_output.overtake_selected_mission.has_value() ?
+            behavior_output.overtake_selected_mission->predicted_minimum_ego_speed_mps :
+            std::numeric_limits<double>::quiet_NaN(),
             overtake_line_state_.mission_path_frozen ? 1 : 0,
             overtake_line_state_.mission_path_total_distance,
             behavior_output.target_vehicle_id.c_str(), model->wp_id);
@@ -15095,6 +15154,34 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_line.pass_horizon_enabled =
     mpc["v2x_overtake_pass_horizon_enabled"] ?
     mpc["v2x_overtake_pass_horizon_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_line.horizon_progress_enabled =
+    cfg.mpc.v2x_behavior.overtake_line.pass_horizon_enabled &&
+    (mpc["v2x_overtake_horizon_progress_enabled"] ?
+    mpc["v2x_overtake_horizon_progress_enabled"].as<bool>() : false);
+  cfg.mpc.v2x_behavior.overtake_line.horizon_progress_rear_clear_time_weight = std::max(
+    0.0,
+    mpc["v2x_overtake_horizon_progress_rear_clear_time_weight"] ?
+    mpc["v2x_overtake_horizon_progress_rear_clear_time_weight"].as<double>() : 3.0);
+  cfg.mpc.v2x_behavior.overtake_line.horizon_progress_rear_clear_distance_weight = std::max(
+    0.0,
+    mpc["v2x_overtake_horizon_progress_rear_clear_distance_weight"] ?
+    mpc["v2x_overtake_horizon_progress_rear_clear_distance_weight"].as<double>() : 1.0);
+  cfg.mpc.v2x_behavior.overtake_line.horizon_progress_retained_speed_weight = std::max(
+    0.0,
+    mpc["v2x_overtake_horizon_progress_retained_speed_weight"] ?
+    mpc["v2x_overtake_horizon_progress_retained_speed_weight"].as<double>() : 1.5);
+  cfg.mpc.v2x_behavior.overtake_line.horizon_progress_closing_speed_weight = std::max(
+    0.0,
+    mpc["v2x_overtake_horizon_progress_closing_speed_weight"] ?
+    mpc["v2x_overtake_horizon_progress_closing_speed_weight"].as<double>() : 0.5);
+  cfg.mpc.v2x_behavior.overtake_line.horizon_progress_lateral_motion_penalty = std::max(
+    0.0,
+    mpc["v2x_overtake_horizon_progress_lateral_motion_penalty"] ?
+    mpc["v2x_overtake_horizon_progress_lateral_motion_penalty"].as<double>() : 0.5);
+  cfg.mpc.v2x_behavior.overtake_line.horizon_progress_lateral_accel_penalty = std::max(
+    0.0,
+    mpc["v2x_overtake_horizon_progress_lateral_accel_penalty"] ?
+    mpc["v2x_overtake_horizon_progress_lateral_accel_penalty"].as<double>() : 0.25);
   cfg.mpc.v2x_behavior.overtake_line.pass_horizon_revalidation_lead_distance = std::max(
     0.0,
     mpc["v2x_overtake_pass_horizon_revalidation_lead_distance"] ?
@@ -16541,6 +16628,18 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line.safe_separation_front_clear_distance,
         mpc_cfg_.v2x_behavior.overtake_line.safe_separation_max_sec,
         mpc_cfg_.v2x_behavior.overtake_line.safe_separation_max_distance);
+      RCLCPP_INFO(
+        get_logger(),
+        "V2X horizon progress ranking: %s, weights time=%.2f distance=%.2f "
+        "retained_v=%.2f closing=%.2f lateral=%.2f ay=%.2f",
+        mpc_cfg_.v2x_behavior.overtake_line.horizon_progress_enabled ?
+        "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line.horizon_progress_rear_clear_time_weight,
+        mpc_cfg_.v2x_behavior.overtake_line.horizon_progress_rear_clear_distance_weight,
+        mpc_cfg_.v2x_behavior.overtake_line.horizon_progress_retained_speed_weight,
+        mpc_cfg_.v2x_behavior.overtake_line.horizon_progress_closing_speed_weight,
+        mpc_cfg_.v2x_behavior.overtake_line.horizon_progress_lateral_motion_penalty,
+        mpc_cfg_.v2x_behavior.overtake_line.horizon_progress_lateral_accel_penalty);
     }
     if (mpc_cfg_.v2x_behavior.low_speed_avoidance_enabled) {
       RCLCPP_INFO(

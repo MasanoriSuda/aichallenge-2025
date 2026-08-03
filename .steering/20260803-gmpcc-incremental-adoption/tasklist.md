@@ -16,13 +16,13 @@
 
 ## Stage 1: horizon progress evaluation
 
-- [ ] progress evaluationの入出力をpure struct/functionとして定義する
-- [ ] predicted rear-clear time/distanceを候補ごとに計算する
-- [ ] horizon最低速度と必要closingを計算する
-- [ ] scoreとhard reject reasonを実装する
-- [ ] left/right/base-line候補の単体テストを追加する
-- [ ] target横揺れでcommit後sideが変わらないテストを追加する
-- [ ] event logを追加する
+- [x] progress evaluationの入出力をpure struct/functionとして定義する
+- [x] predicted rear-clear time/distanceを候補ごとに計算する（既存rolloutを再利用）
+- [x] horizon最低速度と必要closingを計算する
+- [x] scoreとhard reject reasonを実装する
+- [x] left/right/base-line候補の単体テストを追加・回帰確認する
+- [x] target横揺れでcommit後sideが変わらない既存テストを回帰確認する
+- [x] mission entry event logへscore/minimum speedを追加する
 
 ## Stage 2: speed ownership
 
@@ -40,12 +40,20 @@
 
 ## Verification per stage
 
-- [ ] `test_v2x_overtake_core`
-- [ ] `git diff --check`
-- [ ] `make autoware-build`
+- [x] `test_v2x_overtake_core`（328件成功、最終差分の追加3件も再成功）
+- [x] `git diff --check`
+- [x] `make autoware-build`
 - [ ] `make dev2` 6周
 - [ ] baselineとのmetric比較
 - [ ] wall contact、停止、Reverse、55秒超過ラップの回帰確認
+
+## Implementation note
+
+- global `a_max=1.0`、Pass速度ownership、SafeSeparation、Recoveryは変更していない。
+- Stage 0の動的baselineが未記録のままユーザー指示でStage 1を実装したため、性能DoDは
+  `make dev2`後まで未達扱いとする。
+- 実走ではentry eventの`progress_score`、`min_v`と、左右reason内の
+  `progress_time/progress_distance/retained_speed`を比較する。
 
 ## Deferred experiments
 

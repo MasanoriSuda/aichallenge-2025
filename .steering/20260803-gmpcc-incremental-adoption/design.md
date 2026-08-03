@@ -60,6 +60,37 @@ score = forward_progress
 
 hard constraint違反はscore低下ではなく棄却する。
 
+### Stage 1 implementation (2026-08-03)
+
+現行コードには既に、左右それぞれのgoal/ShiftOut距離/closing速度候補を共通時間軸で
+rear-clearまでrolloutし、full mission preflight後にmissionを固定する機構があった。
+このため、新しいtrajectory生成器は重ねず、既存rolloutへ最低予測速度を追加して
+候補の順序付けだけを次へ変更した。
+
+```text
+normalized_score =
+    3.00 * rear_clear_time_progress
+  + 1.00 * rear_clear_distance_progress
+  + 1.50 * retained_minimum_speed
+  + 0.50 * closing_speed_progress
+  - 0.50 * lateral_motion_cost
+  - 0.25 * lateral_accel_cost
+```
+
+各項は設定されたtime/distance/speed/closing/lateral/acceleration上限で0..1へ正規化する。
+重みは`config.yaml`で変更でき、`v2x_overtake_horizon_progress_enabled`で従来順序へ
+戻せる。
+
+次はscoreへ含めず、従来どおりhard rejectとする。
+
+- rear-clear予測なし、予測不成立、time/distance budget超過
+- body-clear deadline不成立
+- static wall / actual footprint / lateral acceleration不成立
+- dynamic corridor不成立または期限切れ
+
+commit後のmission path/side固定、速度ownership、Recoveryは変更していない。entry eventには
+`progress_score`と`min_v`を追加し、通常周期ログは増やしていない。
+
 ## 4. Stage 2: committed horizon speed ownership
 
 採用時に横mission pathだけでなく、同じgenerationの速度ホライズンを保存する。

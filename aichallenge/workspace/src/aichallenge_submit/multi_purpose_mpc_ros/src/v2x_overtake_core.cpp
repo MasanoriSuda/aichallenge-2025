@@ -1011,6 +1011,7 @@ OvertakeKinematicRolloutResolution resolve_overtake_kinematic_rollout(
   resolution.checked = true;
   resolution.rear_clear_checked = request.rear_clear_prediction_enabled;
   double ego_speed_mps = request.current_ego_speed_mps;
+  resolution.minimum_ego_speed_mps = ego_speed_mps;
   double ego_course_distance_m = 0.0;
   double mission_distance_m = 0.0;
   double target_course_distance_m = request.target_longitudinal_m;
@@ -1081,6 +1082,8 @@ OvertakeKinematicRolloutResolution resolve_overtake_kinematic_rollout(
     mission_distance_m += controlled_distance_m;
     target_course_distance_m += request.target_speed_mps * step_duration_sec;
     ego_speed_mps = next_ego_speed_mps;
+    resolution.minimum_ego_speed_mps = std::min(
+      resolution.minimum_ego_speed_mps, ego_speed_mps);
 
     auto path_request = request.mission_path;
     path_request.path_distance_m = std::min(
@@ -1769,6 +1772,121 @@ std::vector<double> build_overtake_closing_speed_candidates(
   return candidates;
 }
 
+OvertakeMissionHorizonProgressEvaluation evaluate_overtake_mission_horizon_progress(
+  const OvertakeMissionHorizonProgressRequest & request) noexcept
+{
+  OvertakeMissionHorizonProgressEvaluation evaluation;
+  if (!request.enabled) {
+    evaluation.valid = true;
+    evaluation.hard_feasible = true;
+    evaluation.reject_reason = OvertakeMissionHorizonProgressRejectReason::Disabled;
+    evaluation.score = 0.0;
+    return evaluation;
+  }
+
+  const auto finite_non_negative = [](const double value) {
+      return std::isfinite(value) && value >= 0.0;
+    };
+  const auto weight_is_valid = [&](const double value) {
+      return finite_non_negative(value);
+    };
+  if (
+    !finite_non_negative(request.rear_clear_time_budget_sec) ||
+    request.rear_clear_time_budget_sec <= 0.0 ||
+    !finite_non_negative(request.rear_clear_distance_budget_m) ||
+    request.rear_clear_distance_budget_m <= 0.0 ||
+    !finite_non_negative(request.reference_speed_mps) ||
+    request.reference_speed_mps <= 0.0 ||
+    !finite_non_negative(request.maximum_closing_speed_mps) ||
+    request.maximum_closing_speed_mps <= 0.0 ||
+    !finite_non_negative(request.lateral_motion_scale_m) ||
+    request.lateral_motion_scale_m <= 0.0 ||
+    !finite_non_negative(request.maximum_lateral_accel_mps2) ||
+    request.maximum_lateral_accel_mps2 <= 0.0 ||
+    !weight_is_valid(request.weights.rear_clear_time) ||
+    !weight_is_valid(request.weights.rear_clear_distance) ||
+    !weight_is_valid(request.weights.retained_speed) ||
+    !weight_is_valid(request.weights.closing_speed) ||
+    !weight_is_valid(request.weights.lateral_motion_penalty) ||
+    !weight_is_valid(request.weights.lateral_accel_penalty))
+  {
+    evaluation.reject_reason = OvertakeMissionHorizonProgressRejectReason::InvalidInput;
+    return evaluation;
+  }
+  evaluation.valid = true;
+  evaluation.checked = true;
+
+  const auto & candidate = request.candidate;
+  if (!candidate.rear_clear_prediction_checked) {
+    evaluation.reject_reason =
+      OvertakeMissionHorizonProgressRejectReason::RearClearUnchecked;
+    return evaluation;
+  }
+  if (
+    !candidate.rear_clear_prediction_feasible ||
+    !finite_non_negative(candidate.predicted_rear_clear_time_sec) ||
+    !finite_non_negative(candidate.predicted_rear_clear_ego_distance_m) ||
+    !finite_non_negative(candidate.predicted_rear_clear_speed_mps) ||
+    !finite_non_negative(candidate.predicted_minimum_ego_speed_mps) ||
+    !finite_non_negative(candidate.closing_speed_mps) ||
+    !finite_non_negative(candidate.lateral_shift_m) ||
+    !finite_non_negative(candidate.max_required_lateral_accel_mps2))
+  {
+    evaluation.reject_reason =
+      OvertakeMissionHorizonProgressRejectReason::RearClearInfeasible;
+    return evaluation;
+  }
+  if (
+    candidate.predicted_rear_clear_time_sec >
+    request.rear_clear_time_budget_sec + 1e-9)
+  {
+    evaluation.reject_reason =
+      OvertakeMissionHorizonProgressRejectReason::RearClearTimeBudget;
+    return evaluation;
+  }
+  const double pass_origin_shift_distance = candidate.direct_pass ? 0.0 :
+    candidate.shift_distance_m;
+  const double rear_clear_pass_distance_m = std::max(
+    0.0,
+    candidate.predicted_rear_clear_ego_distance_m - pass_origin_shift_distance);
+  if (
+    rear_clear_pass_distance_m >
+    request.rear_clear_distance_budget_m + 1e-9)
+  {
+    evaluation.reject_reason =
+      OvertakeMissionHorizonProgressRejectReason::RearClearDistanceBudget;
+    return evaluation;
+  }
+
+  evaluation.hard_feasible = true;
+  evaluation.reject_reason = OvertakeMissionHorizonProgressRejectReason::None;
+  evaluation.rear_clear_time_progress = std::clamp(
+    1.0 - candidate.predicted_rear_clear_time_sec /
+    request.rear_clear_time_budget_sec, 0.0, 1.0);
+  evaluation.rear_clear_distance_progress = std::clamp(
+    1.0 - rear_clear_pass_distance_m /
+    request.rear_clear_distance_budget_m, 0.0, 1.0);
+  evaluation.retained_speed = std::clamp(
+    candidate.predicted_minimum_ego_speed_mps / request.reference_speed_mps,
+    0.0, 1.0);
+  evaluation.closing_speed_progress = std::clamp(
+    candidate.closing_speed_mps / request.maximum_closing_speed_mps,
+    0.0, 1.0);
+  evaluation.lateral_motion_cost = std::clamp(
+    candidate.lateral_shift_m / request.lateral_motion_scale_m, 0.0, 1.0);
+  evaluation.lateral_accel_cost = std::clamp(
+    candidate.max_required_lateral_accel_mps2 /
+    request.maximum_lateral_accel_mps2, 0.0, 1.0);
+  evaluation.score =
+    request.weights.rear_clear_time * evaluation.rear_clear_time_progress +
+    request.weights.rear_clear_distance * evaluation.rear_clear_distance_progress +
+    request.weights.retained_speed * evaluation.retained_speed +
+    request.weights.closing_speed * evaluation.closing_speed_progress -
+    request.weights.lateral_motion_penalty * evaluation.lateral_motion_cost -
+    request.weights.lateral_accel_penalty * evaluation.lateral_accel_cost;
+  return evaluation;
+}
+
 OvertakeMissionCandidateSelection select_overtake_mission_candidate(
   const OvertakeMissionCandidateSelectionRequest & request) noexcept
 {
@@ -1852,7 +1970,11 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
         std::isfinite(candidate.prediction_horizon_sec) &&
         candidate.prediction_horizon_sec >= 0.0 &&
         std::isfinite(candidate.dynamic_valid_until_sec));
+      const bool progress_speed_valid = !request.horizon_progress_enabled ||
+        (std::isfinite(candidate.predicted_minimum_ego_speed_mps) &&
+        candidate.predicted_minimum_ego_speed_mps >= 0.0);
       return deadline_valid && closing_speed_valid && slack_valid && rear_clear_valid &&
+             progress_speed_valid &&
              std::isfinite(candidate.shift_distance_m) &&
              candidate.shift_distance_m >= 0.0 &&
              std::isfinite(candidate.goal_lateral_m) &&
@@ -1863,7 +1985,9 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
     };
   const auto better = [&](
       const OvertakeMissionCandidate & candidate,
-      const OvertakeMissionCandidate & incumbent) {
+      const OvertakeMissionHorizonProgressEvaluation & candidate_progress,
+      const OvertakeMissionCandidate & incumbent,
+      const OvertakeMissionHorizonProgressEvaluation & incumbent_progress) {
       if (
         candidate.body_clear_deadline_checked !=
         incumbent.body_clear_deadline_checked)
@@ -1898,6 +2022,14 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
           if (incumbent_slack > candidate_slack + kEpsilon) {
             return false;
           }
+        }
+      }
+      if (request.horizon_progress_enabled) {
+        if (candidate_progress.score > incumbent_progress.score + kEpsilon) {
+          return true;
+        }
+        if (incumbent_progress.score > candidate_progress.score + kEpsilon) {
+          return false;
         }
       }
       if (
@@ -1985,13 +2117,39 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
       selection.candidate = OvertakeMissionCandidate{};
       return selection;
     }
-    if (!candidate.feasible) {
+    const auto horizon_progress = evaluate_overtake_mission_horizon_progress(
+      OvertakeMissionHorizonProgressRequest{
+        request.horizon_progress_enabled,
+        candidate,
+        request.horizon_progress_time_budget_sec,
+        request.horizon_progress_distance_budget_m,
+        request.horizon_progress_reference_speed_mps,
+        request.horizon_progress_maximum_closing_speed_mps,
+        request.horizon_progress_lateral_motion_scale_m,
+        request.horizon_progress_maximum_lateral_accel_mps2,
+        request.horizon_progress_weights});
+    if (!horizon_progress.valid) {
+      selection.valid = false;
+      selection.found = false;
+      selection.selected_index = std::numeric_limits<std::size_t>::max();
+      selection.candidate = OvertakeMissionCandidate{};
+      selection.horizon_progress = OvertakeMissionHorizonProgressEvaluation{};
+      return selection;
+    }
+    if (
+      !candidate.feasible ||
+      (request.horizon_progress_enabled && !horizon_progress.hard_feasible))
+    {
       continue;
     }
-    if (!selection.found || better(candidate, selection.candidate)) {
+    if (
+      !selection.found ||
+      better(candidate, horizon_progress, selection.candidate, selection.horizon_progress))
+    {
       selection.found = true;
       selection.selected_index = i;
       selection.candidate = candidate;
+      selection.horizon_progress = horizon_progress;
     }
   }
   return selection;

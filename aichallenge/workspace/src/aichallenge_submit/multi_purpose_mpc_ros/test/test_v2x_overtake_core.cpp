@@ -2906,6 +2906,28 @@ TEST(V2XOvertakeCoreHorizon, SelectsBoundedPassHorizonActions)
   request.extension_count = 1;
   EXPECT_EQ(resolve_pass_horizon_action(request), PassHorizonAction::EnterHold);
 
+  request.longitudinal_refresh_available = true;
+  EXPECT_EQ(resolve_pass_horizon_action(request), PassHorizonAction::Keep);
+
+  request.rear_clear_replan_required = true;
+  EXPECT_EQ(
+    resolve_pass_horizon_action(request),
+    PassHorizonAction::RequestLongitudinalRefresh);
+
+  request.short_horizon_safe = false;
+  EXPECT_EQ(resolve_pass_horizon_action(request), PassHorizonAction::Abort);
+  request.short_horizon_safe = true;
+  request.rear_clear_replan_required = false;
+
+  request.predicted_overlap_replan_required = true;
+  EXPECT_EQ(resolve_pass_horizon_action(request), PassHorizonAction::EnterHold);
+  request.predicted_overlap_replan_required = false;
+
+  request.pass_traveled_m = 20.0;
+  EXPECT_EQ(resolve_pass_horizon_action(request), PassHorizonAction::EnterHold);
+  request.pass_traveled_m = 9.5;
+  request.longitudinal_refresh_available = false;
+
   request.hold_active = true;
   request.hold_elapsed_sec = 1.0;
   EXPECT_EQ(resolve_pass_horizon_action(request), PassHorizonAction::Abort);

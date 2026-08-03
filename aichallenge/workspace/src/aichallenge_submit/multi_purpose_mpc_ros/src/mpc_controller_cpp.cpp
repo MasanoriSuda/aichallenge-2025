@@ -1984,6 +1984,7 @@ struct OvertakeLineState
   double mission_predicted_rear_clear_pass_m{std::numeric_limits<double>::infinity()};
   bool mission_outer_strategy_committed{false};
   int mission_extension_count{0};
+  int mission_longitudinal_refresh_count{0};
   bool pass_horizon_hold_active{false};
   bool pass_horizon_safe_separation_active{false};
   double pass_horizon_safe_separation_start_sec{std::numeric_limits<double>::quiet_NaN()};
@@ -9402,6 +9403,7 @@ private:
       overtake_line_state_.mission_pass_hold_distance >
       line_cfg.pass_horizon_soft_distance_limit + kEps ?
       line_cfg.pass_horizon_max_extensions : 0;
+    overtake_line_state_.mission_longitudinal_refresh_count = 0;
     overtake_line_state_.pass_horizon_hold_active = false;
     overtake_line_state_.pass_horizon_safe_separation_active = false;
     overtake_line_state_.pass_horizon_safe_separation_start_sec =
@@ -11252,7 +11254,8 @@ private:
         }
         return "horizon_margin";
       };
-    const auto try_extend_committed_pass_horizon = [&](std::string & failure_reason) {
+    const auto try_refresh_committed_pass_horizon =
+      [&](const bool longitudinal_only, std::string & failure_reason) {
         const auto fail_extension = [&](const char * reason) {
             failure_reason = reason;
             return false;
@@ -11338,24 +11341,29 @@ private:
         }
         const double previous_goal =
           overtake_line_state_.fixed_pass_corridor_goal_ey.value();
-        const auto replacement_goal =
-          overtake_core::resolve_feasible_pass_side_lateral_goal(
-          overtake_core::FeasiblePassSideLateralGoalRequest{
-            source_side,
-            previous_goal,
-            goal_target_course_lateral,
-            std::max(0.0, cfg.v2x_behavior.overtake_line_min_target_separation),
-            feasible_lower,
-            feasible_upper,
-            true});
-        if (!replacement_goal.target_separation_feasible) {
-          return fail_extension("no wall-feasible same-side separated goal");
+        double replacement_goal_m = previous_goal;
+        if (!longitudinal_only) {
+          const auto replacement_goal =
+            overtake_core::resolve_feasible_pass_side_lateral_goal(
+            overtake_core::FeasiblePassSideLateralGoalRequest{
+              source_side,
+              previous_goal,
+              goal_target_course_lateral,
+              std::max(0.0, cfg.v2x_behavior.overtake_line_min_target_separation),
+              feasible_lower,
+              feasible_upper,
+              true});
+          if (!replacement_goal.target_separation_feasible) {
+            return fail_extension("no wall-feasible same-side separated goal");
+          }
+          replacement_goal_m = replacement_goal.goal_m;
         }
         const double lateral_adjustment = std::abs(
-          replacement_goal.goal_m - previous_goal);
+          replacement_goal_m - previous_goal);
         if (
           lateral_adjustment >
-          line_cfg.pass_horizon_extension_max_lateral_adjustment + kEps)
+          (longitudinal_only ? 0.0 :
+          line_cfg.pass_horizon_extension_max_lateral_adjustment) + kEps)
         {
           return fail_extension("same-side lateral adjustment limit exceeded");
         }
@@ -11366,7 +11374,7 @@ private:
           overtake_core::resolve_same_side_replan_shift_distance(
           overtake_core::SameSideReplanShiftDistanceRequest{
             current_ey,
-            replacement_goal.goal_m,
+            replacement_goal_m,
             std::max(1.0, current_speed_mps_),
             std::max(kEps, line_cfg.max_lateral_accel),
             0.5,
@@ -11381,7 +11389,7 @@ private:
         const overtake_core::OvertakeMissionPathRequest replacement_mission_path{
           0.0,
           current_ey,
-          replacement_goal.goal_m,
+          replacement_goal_m,
           0.0,
           extension_shift_distance,
           extension_pass_limit,
@@ -11432,18 +11440,24 @@ private:
         if (!pass_distance.valid || !pass_distance.feasible) {
           return fail_extension("dynamic rear-clear Pass distance exceeds budget");
         }
+        const double validated_pass_distance_m = longitudinal_only ?
+          std::min(
+          extension_pass_limit,
+          pass_distance.bounded_pass_distance_m +
+          std::max(0.0, line_cfg.pass_horizon_revalidation_lead_distance)) :
+          pass_distance.bounded_pass_distance_m;
         const std::optional<std::pair<double, double>> fixed_replacement_goal_interval{
-          std::make_pair(replacement_goal.goal_m, replacement_goal.goal_m)};
+          std::make_pair(replacement_goal_m, replacement_goal_m)};
         const auto static_preflight = evaluate_overtake_line_entry_preflight(
           ref_wp_id, extension_plan_N, extension_lb, extension_ub,
           overtake_line_state_.pass_side_sign,
           current_ey,
           goal_target_course_lateral,
-          std::optional<double>{replacement_goal.goal_m},
+          std::optional<double>{replacement_goal_m},
           fixed_replacement_goal_interval,
-          std::optional<double>{replacement_goal.goal_m},
+          std::optional<double>{replacement_goal_m},
           extension_shift_distance,
-          pass_distance.bounded_pass_distance_m,
+          validated_pass_distance_m,
           true,
           true,
           true,
@@ -11457,7 +11471,7 @@ private:
 
         const double new_pass_hold_distance =
           pass_traveled + extension_shift_distance +
-          pass_distance.bounded_pass_distance_m;
+          validated_pass_distance_m;
         const double dynamic_validation_distance_m =
           std::max(0.0, current_speed_mps_) * live_prediction_timing.remaining_sec +
           0.5 * std::max(0.0, cfg.a_max) *
@@ -11505,6 +11519,7 @@ private:
         commit_request.current_goal_lateral_m = previous_goal;
         commit_request.replacement_goal_lateral_m = static_preflight.goal_ey;
         commit_request.maximum_lateral_adjustment_m =
+          longitudinal_only ? 0.0 :
           line_cfg.pass_horizon_extension_max_lateral_adjustment;
         const auto commit_resolution =
           overtake_core::evaluate_same_side_extension_commit(commit_request);
@@ -11550,10 +11565,20 @@ private:
           overtake_line_state_.mission_shift_distance +
           overtake_line_state_.mission_pass_hold_distance +
           overtake_line_state_.mission_return_distance;
-        ++overtake_line_state_.mission_extension_count;
+        if (longitudinal_only) {
+          ++overtake_line_state_.mission_longitudinal_refresh_count;
+        } else {
+          ++overtake_line_state_.mission_extension_count;
+        }
         ++overtake_line_state_.mission_generation;
         RCLCPP_INFO(
           rclcpp::get_logger("mpc_controller"),
+          longitudinal_only ?
+          "OvertakeLine Pass longitudinal horizon refreshed: target=%s, side=%d, "
+          "trigger=%s, generation=%lu, pass=%.2f->%.2f, goal=%.2f->%.2f, "
+          "shift=%.2f m, nominal_window=%.2f m, required_window=%.2f m, "
+          "rear_clear=%.2f m/%.2f s, "
+          "dynamic_until=%.2f m/%.2f s, outer_strategy=%d" :
           "OvertakeLine same-side Pass horizon extended: target=%s, side=%d, "
           "trigger=%s, generation=%lu, pass=%.2f->%.2f, goal=%.2f->%.2f, "
           "shift=%.2f m, nominal_window=%.2f m, required_window=%.2f m, "
@@ -11566,7 +11591,7 @@ private:
           pass_traveled, new_pass_hold_distance,
           previous_goal, static_preflight.goal_ey, extension_shift_distance,
           nominal_extension_limit,
-          extension_shift_distance + pass_distance.bounded_pass_distance_m,
+          extension_shift_distance + validated_pass_distance_m,
           overtake_line_state_.mission_predicted_rear_clear_pass_m,
           overtake_line_state_.mission_predicted_rear_clear_time_sec,
           overtake_line_state_.mission_dynamic_valid_until_pass_m,
@@ -11800,8 +11825,6 @@ private:
       }
       if (!overtake_line_state_.pass_horizon_safe_separation_active) {
         rear_clear_window_replan_required =
-          overtake_line_state_.mission_extension_count <
-          line_cfg.pass_horizon_max_extensions &&
           live_rear_clear_prediction_checked &&
           live_rear_clear_prediction_feasible &&
           live_required_rear_clear_pass_m >
@@ -11815,6 +11838,9 @@ private:
           predicted_overlap_replan_required;
         horizon_request.rear_clear_replan_required =
           rear_clear_window_replan_required;
+        horizon_request.longitudinal_refresh_available =
+          live_rear_clear_prediction_checked &&
+          live_rear_clear_prediction_feasible;
         horizon_request.short_horizon_safe = short_horizon_safe;
         horizon_request.hold_active =
           overtake_line_state_.pass_horizon_hold_active;
@@ -11857,7 +11883,7 @@ private:
           overtake_core::PassHorizonAction::RequestSameSideExtension)
         {
           std::string extension_failure_reason;
-          if (!try_extend_committed_pass_horizon(extension_failure_reason)) {
+          if (!try_refresh_committed_pass_horizon(false, extension_failure_reason)) {
             if (!begin_safe_separation(
                 pass_horizon_replan_trigger(), extension_failure_reason))
             {
@@ -11880,6 +11906,33 @@ private:
                 OvertakeLinePhase::Recovery, now_sec, current_ey,
                 overtake_line_state_.pass_side_sign,
                 "Pass horizon extension unavailable and SafeSeparation unsafe");
+              return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
+            }
+          }
+        } else if (
+          horizon_action ==
+          overtake_core::PassHorizonAction::RequestLongitudinalRefresh)
+        {
+          std::string refresh_failure_reason;
+          if (!try_refresh_committed_pass_horizon(true, refresh_failure_reason)) {
+            if (!begin_safe_separation(
+                "rear_clear_refresh", refresh_failure_reason))
+            {
+              RCLCPP_WARN(
+                rclcpp::get_logger("mpc_controller"),
+                "OvertakeLine longitudinal Pass refresh unavailable; Recovery required: "
+                "failure=%s, target=%s, side=%d, traveled=%.2f, static_until=%.2f, "
+                "live_required=%.2f, refresh_count=%d",
+                refresh_failure_reason.c_str(),
+                overtake_line_state_.target_vehicle_id.c_str(),
+                overtake_line_state_.pass_side_sign, pass_traveled,
+                overtake_line_state_.mission_static_valid_until_pass_m,
+                live_required_rear_clear_pass_m,
+                overtake_line_state_.mission_longitudinal_refresh_count);
+              transition_overtake_line_phase(
+                OvertakeLinePhase::Recovery, now_sec, current_ey,
+                overtake_line_state_.pass_side_sign,
+                "longitudinal Pass refresh unavailable and SafeSeparation unsafe");
               return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
             }
           }

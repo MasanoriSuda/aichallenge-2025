@@ -1326,6 +1326,27 @@ PassHorizonAction resolve_pass_horizon_action(
   if (request.extension_count < request.maximum_extension_count) {
     return PassHorizonAction::RequestSameSideExtension;
   }
+  if (
+    request.short_horizon_safe &&
+    request.rear_clear_replan_required &&
+    request.longitudinal_refresh_available)
+  {
+    return PassHorizonAction::RequestLongitudinalRefresh;
+  }
+  const bool admitted_static_path_remaining =
+    request.static_valid_until_pass_m > request.pass_traveled_m + 1e-9;
+  if (
+    request.short_horizon_safe &&
+    request.longitudinal_refresh_available &&
+    !request.predicted_overlap_replan_required &&
+    admitted_static_path_remaining)
+  {
+    // A fresh measured-speed rollout still fits inside the immutable lateral
+    // path. Consuming the admitted static horizon is not another geometric
+    // extension and must not force SafeSeparation merely because the short
+    // prediction TTL entered its proactive lead window.
+    return PassHorizonAction::Keep;
+  }
   return request.short_horizon_safe ?
     PassHorizonAction::EnterHold : PassHorizonAction::Abort;
 }

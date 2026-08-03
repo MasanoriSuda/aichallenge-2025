@@ -747,6 +747,7 @@ enum class PassHorizonAction
   Keep,
   Return,
   RequestSameSideExtension,
+  RequestLongitudinalRefresh,
   EnterHold,
   Abort,
 };
@@ -766,6 +767,11 @@ struct PassHorizonDecisionRequest
   /// early trigger; it must be disabled after the permitted replacement has
   /// already been committed.
   bool rear_clear_replan_required{false};
+  /// A fresh rollout from the measured ego speed can extend the rear-clear
+  /// distance without changing the committed side or lateral goal. Unlike a
+  /// geometric extension, this remains available after extension_count has
+  /// reached maximum_extension_count.
+  bool longitudinal_refresh_available{false};
   bool short_horizon_safe{false};
   bool hold_active{false};
   double pass_traveled_m{};

@@ -1405,6 +1405,7 @@ struct OvertakeLineConfig
   bool safe_separation_enabled{false};
   double safe_separation_speed_delta{0.8};
   double safe_separation_front_clear_distance{2.0};
+  double safe_separation_front_clear_confirm_sec{0.25};
   double safe_separation_max_sec{3.0};
   double safe_separation_max_distance{8.0};
   bool reacquire_enabled{false};
@@ -1987,6 +1988,8 @@ struct OvertakeLineState
   bool pass_horizon_safe_separation_active{false};
   double pass_horizon_safe_separation_start_sec{std::numeric_limits<double>::quiet_NaN()};
   double pass_horizon_safe_separation_start_distance{0.0};
+  double pass_horizon_safe_separation_front_clear_since_sec{
+    std::numeric_limits<double>::quiet_NaN()};
   bool shiftout_fresh_horizon_wait_active{false};
   int shiftout_fresh_horizon_replan_count{0};
   double pass_horizon_fallback_start_sec{std::numeric_limits<double>::quiet_NaN()};
@@ -9202,6 +9205,8 @@ private:
       overtake_line_state_.pass_horizon_safe_separation_start_sec =
         std::numeric_limits<double>::quiet_NaN();
       overtake_line_state_.pass_horizon_safe_separation_start_distance = 0.0;
+      overtake_line_state_.pass_horizon_safe_separation_front_clear_since_sec =
+        std::numeric_limits<double>::quiet_NaN();
       overtake_line_state_.pass_horizon_fallback_start_sec =
         std::numeric_limits<double>::quiet_NaN();
       overtake_line_state_.pass_horizon_fallback_start_distance = 0.0;
@@ -9402,6 +9407,8 @@ private:
     overtake_line_state_.pass_horizon_safe_separation_start_sec =
       std::numeric_limits<double>::quiet_NaN();
     overtake_line_state_.pass_horizon_safe_separation_start_distance = 0.0;
+    overtake_line_state_.pass_horizon_safe_separation_front_clear_since_sec =
+      std::numeric_limits<double>::quiet_NaN();
     overtake_line_state_.shiftout_fresh_horizon_wait_active = false;
     overtake_line_state_.shiftout_fresh_horizon_replan_count = 0;
     overtake_line_state_.pass_horizon_fallback_start_sec =
@@ -11270,7 +11277,9 @@ private:
           overtake_line_state_.mission_generation;
         const std::string source_target_id = overtake_line_state_.target_vehicle_id;
         const int source_side = overtake_line_state_.pass_side_sign;
-        const double planner_generated_at_sec = steady_seconds(SteadyClock::now());
+        const double planner_generated_at_sec = now_sec;
+        const double planner_generated_monotonic_sec =
+          steady_seconds(SteadyClock::now());
         const double pass_traveled = overtake_mission_pass_traveled();
         const double pass_elapsed = std::isfinite(
           overtake_line_state_.mission_pass_start_sec) ?
@@ -11458,7 +11467,15 @@ private:
         const double current_effective_valid_until_pass_m = std::min(
           overtake_line_state_.mission_static_valid_until_pass_m,
           overtake_line_state_.mission_dynamic_valid_until_pass_m);
-        const double commit_now_sec = steady_seconds(SteadyClock::now());
+        const auto commit_clock = overtake_core::resolve_commit_clock_projection(
+          overtake_core::CommitClockProjectionRequest{
+            planner_generated_at_sec,
+            planner_generated_monotonic_sec,
+            steady_seconds(SteadyClock::now())});
+        if (!commit_clock.valid) {
+          return fail_extension("planner commit clock projection invalid");
+        }
+        const double commit_now_sec = commit_clock.commit_clock_sec;
         overtake_core::SameSideExtensionCommitRequest commit_request;
         commit_request.pass_or_hold_active =
           overtake_line_state_.phase == OvertakeLinePhase::Pass;
@@ -11593,6 +11610,8 @@ private:
           overtake_line_state_.pass_horizon_safe_separation_active = true;
           overtake_line_state_.pass_horizon_safe_separation_start_sec = now_sec;
           overtake_line_state_.pass_horizon_safe_separation_start_distance = pass_traveled;
+          overtake_line_state_.pass_horizon_safe_separation_front_clear_since_sec =
+            std::numeric_limits<double>::quiet_NaN();
           RCLCPP_WARN(
             rclcpp::get_logger("mpc_controller"),
             "OvertakeLine SafeSeparation entered: trigger=%s, failure=%s, "
@@ -11617,6 +11636,27 @@ private:
           0.0,
           pass_traveled -
           overtake_line_state_.pass_horizon_safe_separation_start_distance);
+        const bool safe_separation_front_clear =
+          locked_target_seen && std::isfinite(locked_target_longitudinal) &&
+          locked_target_longitudinal >=
+          line_cfg.safe_separation_front_clear_distance - kEps;
+        if (safe_separation_front_clear) {
+          if (!std::isfinite(
+              overtake_line_state_.pass_horizon_safe_separation_front_clear_since_sec))
+          {
+            overtake_line_state_.pass_horizon_safe_separation_front_clear_since_sec = now_sec;
+          }
+        } else {
+          overtake_line_state_.pass_horizon_safe_separation_front_clear_since_sec =
+            std::numeric_limits<double>::quiet_NaN();
+        }
+        const double safe_separation_front_clear_elapsed =
+          safe_separation_front_clear && std::isfinite(
+          overtake_line_state_.pass_horizon_safe_separation_front_clear_since_sec) ?
+          std::max(
+          0.0,
+          now_sec -
+          overtake_line_state_.pass_horizon_safe_separation_front_clear_since_sec) : 0.0;
         const auto safe_separation = overtake_core::resolve_safe_separation(
           overtake_core::SafeSeparationRequest{
             line_cfg.safe_separation_enabled,
@@ -11630,6 +11670,8 @@ private:
             line_cfg.safe_separation_speed_delta,
             std::max(kEps, cfg.v_max),
             line_cfg.safe_separation_front_clear_distance,
+            safe_separation_front_clear_elapsed,
+            line_cfg.safe_separation_front_clear_confirm_sec,
             safe_separation_elapsed,
             safe_separation_traveled,
             line_cfg.safe_separation_max_sec,
@@ -11651,7 +11693,7 @@ private:
           transition_overtake_line_phase(
             OvertakeLinePhase::Recovery, now_sec, current_ey,
             overtake_line_state_.pass_side_sign,
-            "SafeSeparation target clear ahead; recovering behind");
+            "SafeSeparation target clear ahead confirmed; recovering behind");
           return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
         } else if (safe_separation.action == overtake_core::SafeSeparationAction::Abort) {
           transition_overtake_line_phase(
@@ -15241,6 +15283,10 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_safe_separation_front_clear_distance"] ?
     mpc["v2x_overtake_safe_separation_front_clear_distance"].as<double>() : 2.0);
+  cfg.mpc.v2x_behavior.overtake_line.safe_separation_front_clear_confirm_sec = std::max(
+    0.0,
+    mpc["v2x_overtake_safe_separation_front_clear_confirm_sec"] ?
+    mpc["v2x_overtake_safe_separation_front_clear_confirm_sec"].as<double>() : 0.25);
   cfg.mpc.v2x_behavior.overtake_line.safe_separation_max_sec = std::max(
     0.0,
     mpc["v2x_overtake_safe_separation_max_sec"] ?
@@ -16607,7 +16653,7 @@ public:
         "soft/absolute=%.2f/%.2f m, lead=%.2f m/%.2f s, "
         "same-side extension=%.2f m/lateral<=%.2f m x%d, result_age<=%.2f s, "
         "hold<=%.2f s/%.2f m, safe-separation=%s delta=%.2f m/s "
-        "front>=%.2f m limit=%.2f s/%.2f m",
+        "front>=%.2f m confirm=%.2f s limit=%.2f s/%.2f m",
         mpc_cfg_.v2x_behavior.overtake_line.pass_horizon_enabled ?
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.pass_horizon_predicted_time_budget,
@@ -16626,6 +16672,7 @@ public:
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.safe_separation_speed_delta,
         mpc_cfg_.v2x_behavior.overtake_line.safe_separation_front_clear_distance,
+        mpc_cfg_.v2x_behavior.overtake_line.safe_separation_front_clear_confirm_sec,
         mpc_cfg_.v2x_behavior.overtake_line.safe_separation_max_sec,
         mpc_cfg_.v2x_behavior.overtake_line.safe_separation_max_distance);
       RCLCPP_INFO(

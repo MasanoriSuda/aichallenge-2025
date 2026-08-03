@@ -511,6 +511,7 @@ mpc:
   v2x_overtake_safe_separation_enabled: true # retain the committed side when Pass horizon extension is unavailable
   v2x_overtake_safe_separation_speed_delta: 0.8 # [m/s] push longitudinal separation away from side-by-side
   v2x_overtake_safe_separation_front_clear_distance: 2.0 # [m] target-ahead clearance before lateral Recovery
+  v2x_overtake_safe_separation_front_clear_confirm_sec: 0.25 # [s] require continuous target-ahead clearance before Recovery
   v2x_overtake_safe_separation_max_sec: 3.0 # [s] bounded same-side longitudinal separation
   v2x_overtake_safe_separation_max_distance: 8.0 # [m]
   v2x_overtake_completion_guard_enabled: true # require enough distance to clear the target before a hard hairpin

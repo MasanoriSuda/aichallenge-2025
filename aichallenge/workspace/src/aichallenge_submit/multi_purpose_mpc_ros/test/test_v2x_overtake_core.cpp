@@ -116,6 +116,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeKinematicRolloutRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeKinematicSpeedCapSample;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeDynamicPassDistanceRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicPredictionTimingRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::CommitClockProjectionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassHorizonAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassHorizonDecisionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassOuterHorizonRequest;
@@ -144,6 +145,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_body_clear_dead
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_kinematic_rollout;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_dynamic_pass_distance;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_prediction_timing;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_commit_clock_projection;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_horizon_action;
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_pass_outer_horizon;
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_same_side_extension_commit;
@@ -2849,6 +2851,19 @@ TEST(V2XOvertakeCoreHorizon, UsesSourceAgeForDynamicPredictionExpiry)
   EXPECT_LT(stale_source.expiry_sec, 100.0);
 }
 
+TEST(V2XOvertakeCoreHorizon, ProjectsMonotonicPlannerElapsedOntoPredictionClock)
+{
+  const auto projected = resolve_commit_clock_projection(
+    CommitClockProjectionRequest{100.0, 5000.0, 5000.05});
+  ASSERT_TRUE(projected.valid);
+  EXPECT_NEAR(projected.elapsed_sec, 0.05, 1e-9);
+  EXPECT_NEAR(projected.commit_clock_sec, 100.05, 1e-9);
+
+  const auto reversed = resolve_commit_clock_projection(
+    CommitClockProjectionRequest{100.0, 5000.1, 5000.0});
+  EXPECT_FALSE(reversed.valid);
+}
+
 TEST(V2XOvertakeCoreHorizon, SelectsBoundedPassHorizonActions)
 {
   PassHorizonDecisionRequest request;
@@ -3097,6 +3112,7 @@ TEST(V2XOvertakeCoreHorizon, CreatesLongitudinalSafeSeparationOnCommittedSide)
   request.speed_delta_mps = 0.8;
   request.maximum_ego_speed_mps = 11.11;
   request.front_clear_distance_m = 2.0;
+  request.front_clear_confirm_sec = 0.25;
   request.maximum_duration_sec = 3.0;
   request.maximum_distance_m = 8.0;
 
@@ -3119,6 +3135,10 @@ TEST(V2XOvertakeCoreHorizon, CreatesLongitudinalSafeSeparationOnCommittedSide)
   request.rear_clear_confirmed = false;
   request.target_longitudinal_m = 2.0;
   resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::KeepSameSide);
+
+  request.front_clear_elapsed_sec = 0.25;
+  resolution = resolve_safe_separation(request);
   EXPECT_EQ(resolution.action, SafeSeparationAction::RecoverBehind);
 }
 
@@ -3134,6 +3154,7 @@ TEST(V2XOvertakeCoreHorizon, BoundsOrRejectsUnsafeSafeSeparation)
   request.speed_delta_mps = 0.8;
   request.maximum_ego_speed_mps = 11.11;
   request.front_clear_distance_m = 2.0;
+  request.front_clear_confirm_sec = 0.25;
   request.maximum_duration_sec = 3.0;
   request.maximum_distance_m = 8.0;
 

@@ -721,6 +721,27 @@ struct DynamicPredictionTimingResolution
 DynamicPredictionTimingResolution resolve_dynamic_prediction_timing(
   const DynamicPredictionTimingRequest & request) noexcept;
 
+struct CommitClockProjectionRequest
+{
+  double planner_clock_start_sec{};
+  double monotonic_start_sec{};
+  double monotonic_commit_sec{};
+};
+
+struct CommitClockProjectionResolution
+{
+  bool valid{false};
+  double elapsed_sec{};
+  double commit_clock_sec{};
+};
+
+/// Measure planner runtime on a monotonic clock, then project only that elapsed
+/// duration onto the planner clock. This keeps prediction expiry and commit
+/// timestamps comparable without making planner runtime sensitive to ROS time
+/// jumps.
+CommitClockProjectionResolution resolve_commit_clock_projection(
+  const CommitClockProjectionRequest & request) noexcept;
+
 enum class PassHorizonAction
 {
   Keep,
@@ -882,6 +903,8 @@ struct SafeSeparationRequest
   double speed_delta_mps{};
   double maximum_ego_speed_mps{std::numeric_limits<double>::infinity()};
   double front_clear_distance_m{};
+  double front_clear_elapsed_sec{};
+  double front_clear_confirm_sec{};
   double elapsed_sec{};
   double traveled_m{};
   double maximum_duration_sec{};

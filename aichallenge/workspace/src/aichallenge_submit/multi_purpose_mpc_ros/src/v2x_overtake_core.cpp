@@ -1249,6 +1249,24 @@ DynamicPredictionTimingResolution resolve_dynamic_prediction_timing(
   return resolution;
 }
 
+CommitClockProjectionResolution resolve_commit_clock_projection(
+  const CommitClockProjectionRequest & request) noexcept
+{
+  CommitClockProjectionResolution resolution;
+  if (
+    !std::isfinite(request.planner_clock_start_sec) ||
+    !std::isfinite(request.monotonic_start_sec) ||
+    !std::isfinite(request.monotonic_commit_sec) ||
+    request.monotonic_commit_sec < request.monotonic_start_sec)
+  {
+    return resolution;
+  }
+  resolution.elapsed_sec = request.monotonic_commit_sec - request.monotonic_start_sec;
+  resolution.commit_clock_sec = request.planner_clock_start_sec + resolution.elapsed_sec;
+  resolution.valid = std::isfinite(resolution.commit_clock_sec);
+  return resolution;
+}
+
 PassHorizonAction resolve_pass_horizon_action(
   const PassHorizonDecisionRequest & request) noexcept
 {
@@ -1540,6 +1558,8 @@ SafeSeparationResolution resolve_safe_separation(
     !finite_non_negative(request.speed_delta_mps) ||
     !finite_non_negative(request.maximum_ego_speed_mps) ||
     !finite_non_negative(request.front_clear_distance_m) ||
+    !finite_non_negative(request.front_clear_elapsed_sec) ||
+    !finite_non_negative(request.front_clear_confirm_sec) ||
     !finite_non_negative(request.elapsed_sec) ||
     !finite_non_negative(request.traveled_m) ||
     !finite_non_negative(request.maximum_duration_sec) ||
@@ -1556,7 +1576,10 @@ SafeSeparationResolution resolve_safe_separation(
     resolution.action = SafeSeparationAction::Abort;
     return resolution;
   }
-  if (request.target_longitudinal_m >= request.front_clear_distance_m - 1e-9) {
+  if (
+    request.target_longitudinal_m >= request.front_clear_distance_m - 1e-9 &&
+    request.front_clear_elapsed_sec >= request.front_clear_confirm_sec - 1e-9)
+  {
     resolution.action = SafeSeparationAction::RecoverBehind;
     return resolution;
   }

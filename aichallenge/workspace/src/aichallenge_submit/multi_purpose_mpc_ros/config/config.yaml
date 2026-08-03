@@ -496,8 +496,13 @@ mpc:
   v2x_overtake_pass_horizon_extension_max_lateral_adjustment: 0.60 # [m] bounded same-side goal correction per replacement
   v2x_overtake_pass_horizon_max_extensions: 1
   v2x_overtake_pass_horizon_planner_result_max_age: 0.10 # [s]
-  v2x_overtake_pass_horizon_hold_max_sec: 1.0 # [s] shared by hold/safe-separation
+  v2x_overtake_pass_horizon_hold_max_sec: 1.0 # [s] bounded fresh-horizon wait
   v2x_overtake_pass_horizon_hold_max_distance: 3.0 # [m]
+  v2x_overtake_safe_separation_enabled: true # retain the committed side when Pass horizon extension is unavailable
+  v2x_overtake_safe_separation_speed_delta: 0.8 # [m/s] push longitudinal separation away from side-by-side
+  v2x_overtake_safe_separation_front_clear_distance: 2.0 # [m] target-ahead clearance before lateral Recovery
+  v2x_overtake_safe_separation_max_sec: 3.0 # [s] bounded same-side longitudinal separation
+  v2x_overtake_safe_separation_max_distance: 8.0 # [m]
   v2x_overtake_completion_guard_enabled: true # require enough distance to clear the target before a hard hairpin
   v2x_overtake_completion_hard_curvature: 0.12 # [rad/m] hard hairpin boundary, separate from soft curve policy
   v2x_overtake_completion_lookahead_distance: 80.0 # [m] search limit for the next hard boundary

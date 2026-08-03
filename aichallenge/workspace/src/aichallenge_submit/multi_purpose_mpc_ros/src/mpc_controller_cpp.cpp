@@ -1395,6 +1395,11 @@ struct OvertakeLineConfig
   double pass_horizon_planner_result_max_age{0.10};
   double pass_horizon_hold_max_sec{1.0};
   double pass_horizon_hold_max_distance{3.0};
+  bool safe_separation_enabled{false};
+  double safe_separation_speed_delta{0.8};
+  double safe_separation_front_clear_distance{2.0};
+  double safe_separation_max_sec{3.0};
+  double safe_separation_max_distance{8.0};
   bool reacquire_enabled{false};
   double reacquire_window_sec{0.0};
   double reacquire_max_return_progress{0.0};
@@ -1973,6 +1978,8 @@ struct OvertakeLineState
   int mission_extension_count{0};
   bool pass_horizon_hold_active{false};
   bool pass_horizon_safe_separation_active{false};
+  double pass_horizon_safe_separation_start_sec{std::numeric_limits<double>::quiet_NaN()};
+  double pass_horizon_safe_separation_start_distance{0.0};
   bool shiftout_fresh_horizon_wait_active{false};
   int shiftout_fresh_horizon_replan_count{0};
   double pass_horizon_fallback_start_sec{std::numeric_limits<double>::quiet_NaN()};
@@ -9140,6 +9147,9 @@ private:
       overtake_line_state_.pass_front_cap_release_active = false;
       overtake_line_state_.pass_horizon_hold_active = false;
       overtake_line_state_.pass_horizon_safe_separation_active = false;
+      overtake_line_state_.pass_horizon_safe_separation_start_sec =
+        std::numeric_limits<double>::quiet_NaN();
+      overtake_line_state_.pass_horizon_safe_separation_start_distance = 0.0;
       overtake_line_state_.pass_horizon_fallback_start_sec =
         std::numeric_limits<double>::quiet_NaN();
       overtake_line_state_.pass_horizon_fallback_start_distance = 0.0;
@@ -9337,6 +9347,9 @@ private:
       line_cfg.pass_horizon_max_extensions : 0;
     overtake_line_state_.pass_horizon_hold_active = false;
     overtake_line_state_.pass_horizon_safe_separation_active = false;
+    overtake_line_state_.pass_horizon_safe_separation_start_sec =
+      std::numeric_limits<double>::quiet_NaN();
+    overtake_line_state_.pass_horizon_safe_separation_start_distance = 0.0;
     overtake_line_state_.shiftout_fresh_horizon_wait_active = false;
     overtake_line_state_.shiftout_fresh_horizon_replan_count = 0;
     overtake_line_state_.pass_horizon_fallback_start_sec =
@@ -10339,6 +10352,7 @@ private:
     const bool pass_progress_watchdog_active =
       line_cfg.progress_watchdog_distance > 0.0 &&
       overtake_line_state_.phase == OvertakeLinePhase::Pass &&
+      !overtake_line_state_.pass_horizon_safe_separation_active &&
       overtake_line_state_.pass_front_overlap_exclusion_latched &&
       !overtake_line_state_.inter_vehicle_corridor &&
       locked_target_matches &&
@@ -11160,6 +11174,9 @@ private:
     }
 
     bool rear_clear_window_replan_required = false;
+    std::optional<double> safe_separation_velocity_reference;
+    double safe_separation_signed_closing_speed =
+      std::numeric_limits<double>::quiet_NaN();
     const auto pass_horizon_replan_trigger = [&]() -> const char * {
         if (predicted_overlap_replan_required) {
           return "predicted_overlap";
@@ -11413,9 +11430,12 @@ private:
         commit_request.replacement_goal_lateral_m = static_preflight.goal_ey;
         commit_request.maximum_lateral_adjustment_m =
           line_cfg.pass_horizon_extension_max_lateral_adjustment;
-        if (!overtake_core::can_commit_same_side_extension(commit_request))
-        {
-          return fail_extension("stale, non-advancing, or mismatched atomic commit");
+        const auto commit_resolution =
+          overtake_core::evaluate_same_side_extension_commit(commit_request);
+        if (!commit_resolution.accepted) {
+          failure_reason = std::string("atomic commit: ") +
+            overtake_core::to_string(commit_resolution.reason);
+          return false;
         }
         overtake_line_state_.fixed_pass_corridor_goal_ey = static_preflight.goal_ey;
         overtake_line_state_.mission_pass_hold_distance = new_pass_hold_distance;
@@ -11499,15 +11519,95 @@ private:
         overtake_line_state_.pass_horizon_fallback_start_distance) : 0.0;
       const bool short_horizon_safe =
         !actual_wall_physical_contact && !actual_wall_sample_unavailable &&
+        locked_target_seen &&
+        behavior_output.locked_target_current_body_footprints_separated &&
         !behavior_output.locked_target_position_jump &&
         !behavior_output.locked_target_pass_side_intrusion &&
         behavior_output.front_risk_level != FrontRiskLevel::EmergencyBrake &&
         !overtake_solver_recovery_active_;
+      const auto begin_safe_separation =
+        [&](const char * trigger, const std::string & failure_reason) {
+          if (!line_cfg.safe_separation_enabled || !short_horizon_safe) {
+            return false;
+          }
+          overtake_line_state_.pass_horizon_hold_active = false;
+          overtake_line_state_.pass_horizon_safe_separation_active = true;
+          overtake_line_state_.pass_horizon_safe_separation_start_sec = now_sec;
+          overtake_line_state_.pass_horizon_safe_separation_start_distance = pass_traveled;
+          RCLCPP_WARN(
+            rclcpp::get_logger("mpc_controller"),
+            "OvertakeLine SafeSeparation entered: trigger=%s, failure=%s, "
+            "target=%s, side=%d, target_s=%.2f, body_separated=%d, "
+            "limit=%.2f s/%.2f m",
+            trigger, failure_reason.c_str(),
+            overtake_line_state_.target_vehicle_id.c_str(),
+            overtake_line_state_.pass_side_sign, locked_target_longitudinal,
+            behavior_output.locked_target_current_body_footprints_separated ? 1 : 0,
+            line_cfg.safe_separation_max_sec,
+            line_cfg.safe_separation_max_distance);
+          return true;
+        };
+      if (overtake_line_state_.pass_horizon_safe_separation_active) {
+        const double safe_separation_elapsed = std::isfinite(
+          overtake_line_state_.pass_horizon_safe_separation_start_sec) ?
+          std::max(
+          0.0,
+          now_sec - overtake_line_state_.pass_horizon_safe_separation_start_sec) :
+          std::numeric_limits<double>::infinity();
+        const double safe_separation_traveled = std::max(
+          0.0,
+          pass_traveled -
+          overtake_line_state_.pass_horizon_safe_separation_start_distance);
+        const auto safe_separation = overtake_core::resolve_safe_separation(
+          overtake_core::SafeSeparationRequest{
+            line_cfg.safe_separation_enabled,
+            true,
+            short_horizon_safe,
+            locked_target_seen,
+            rear_clear_confirmed,
+            !return_corridor_blocked,
+            locked_target_longitudinal,
+            std::max(0.0, locked_target_speed),
+            line_cfg.safe_separation_speed_delta,
+            std::max(kEps, cfg.v_max),
+            line_cfg.safe_separation_front_clear_distance,
+            safe_separation_elapsed,
+            safe_separation_traveled,
+            line_cfg.safe_separation_max_sec,
+            line_cfg.safe_separation_max_distance});
+        if (safe_separation.action == overtake_core::SafeSeparationAction::KeepSameSide) {
+          safe_separation_velocity_reference =
+            safe_separation.target_velocity_reference_mps;
+          safe_separation_signed_closing_speed =
+            safe_separation.signed_closing_speed_mps;
+        } else if (safe_separation.action == overtake_core::SafeSeparationAction::Return) {
+          transition_overtake_line_phase(
+            OvertakeLinePhase::Return, now_sec, current_ey,
+            overtake_line_state_.pass_side_sign,
+            "SafeSeparation rear-clear; returning");
+          return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
+        } else if (
+          safe_separation.action == overtake_core::SafeSeparationAction::RecoverBehind)
+        {
+          transition_overtake_line_phase(
+            OvertakeLinePhase::Recovery, now_sec, current_ey,
+            overtake_line_state_.pass_side_sign,
+            "SafeSeparation target clear ahead; recovering behind");
+          return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
+        } else if (safe_separation.action == overtake_core::SafeSeparationAction::Abort) {
+          transition_overtake_line_phase(
+            OvertakeLinePhase::Recovery, now_sec, current_ey,
+            overtake_line_state_.pass_side_sign,
+            "SafeSeparation safety/timeout bound reached");
+          return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
+        }
+      }
       double live_required_rear_clear_pass_m =
         std::numeric_limits<double>::infinity();
       bool live_rear_clear_prediction_checked = false;
       bool live_rear_clear_prediction_feasible = false;
       if (
+        !overtake_line_state_.pass_horizon_safe_separation_active &&
         fresh_dynamic_horizon_available && locked_target_seen &&
         std::isfinite(locked_target_longitudinal) &&
         std::isfinite(locked_target_speed) &&
@@ -11519,185 +11619,194 @@ private:
         const double remaining_absolute_time = std::max(
           0.0, line_cfg.pass_horizon_absolute_time_limit - pass_elapsed);
         if (remaining_absolute_distance >= 1.0 && remaining_absolute_time > kEps) {
-          const double live_shift_distance = std::min(
+          const double maximum_live_shift_distance = std::min(
             std::max(0.5, line_cfg.shift_distance),
             remaining_absolute_distance - 0.5);
-          const overtake_core::OvertakeMissionPathRequest live_mission_path{
-            0.0, current_ey,
-            overtake_line_state_.fixed_pass_corridor_goal_ey.value(), 0.0,
-            live_shift_distance,
-            std::max(0.5, remaining_absolute_distance - live_shift_distance),
-            std::max(0.5, overtake_line_state_.mission_return_distance)};
-          const int live_plan_N = std::max(
-            N,
-            static_cast<int>(std::ceil(
-              (remaining_absolute_distance +
-              std::max(0.5, overtake_line_state_.mission_return_distance)) /
-              std::max(0.1, model->reference_path->resolution))) + 2);
-          const auto live_speed_caps = build_overtake_kinematic_speed_caps(
-            ref_wp_id, live_plan_N, live_mission_path);
-          const double current_target_course_lateral =
-            std::isfinite(behavior_output.locked_target_relative_lateral) ?
-            current_ey + behavior_output.locked_target_relative_lateral :
-            behavior_output.locked_target_lateral;
-          const auto live_rollout = overtake_core::resolve_overtake_kinematic_rollout(
-            overtake_core::OvertakeKinematicRolloutRequest{
-              true, live_mission_path,
-              locked_target_longitudinal,
-              std::max(0.0, current_speed_mps_),
-              std::max(0.0, locked_target_speed),
-              overtake_mission_closing_speed_limit(),
-              std::max(kEps, cfg.v_max),
-              std::max(0.0, cfg.a_max),
-              std::max(0.0, -cfg.a_min),
-              std::max(0.0, cfg.state_prediction_delay_sec),
-              current_target_course_lateral,
-              behavior_output.locked_target_lateral_prediction_valid ?
-              behavior_output.locked_target_relative_lateral_velocity : 0.0,
-              std::max(0.0, cfg.v2x_gap.prediction_time),
-              std::max(0.0, cfg.v2x_gap.vehicle_radius),
-              std::max(0.0, cfg.v2x_behavior.moving_follow_hard_distance),
-              std::max(
-                cfg.v2x_behavior.overtake_body_clear_deadline_margin_sec,
-                cfg.v2x_behavior.overtake_body_clear_minimum_slack_sec),
-              live_speed_caps, 0.05, remaining_absolute_time, true,
-              std::max(0.0, line_cfg.return_clear_distance)});
-          if (live_rollout.valid && live_rollout.rear_clear_feasible) {
-            const auto live_pass_distance =
-              overtake_core::resolve_overtake_dynamic_pass_distance(
-              overtake_core::OvertakeDynamicPassDistanceRequest{
-                live_shift_distance, 0.5,
-                live_rollout.rear_clear_ego_distance_m,
-                live_rollout.rear_clear_ego_speed_mps,
-                std::max(0.0, line_cfg.clear_confirm_sec),
+          const auto live_shift_resolution =
+            overtake_core::resolve_same_side_replan_shift_distance(
+            overtake_core::SameSideReplanShiftDistanceRequest{
+              current_ey,
+              overtake_line_state_.fixed_pass_corridor_goal_ey.value(),
+              std::max(1.0, current_speed_mps_),
+              std::max(kEps, line_cfg.max_lateral_accel),
+              0.5,
+              maximum_live_shift_distance,
+              std::max(0.25, model->reference_path->resolution)});
+          if (!live_shift_resolution.valid || !live_shift_resolution.feasible) {
+            live_rear_clear_prediction_checked = false;
+          } else {
+            const double live_shift_distance = live_shift_resolution.shift_distance_m;
+            const overtake_core::OvertakeMissionPathRequest live_mission_path{
+              0.0, current_ey,
+              overtake_line_state_.fixed_pass_corridor_goal_ey.value(), 0.0,
+              live_shift_distance,
+              std::max(0.5, remaining_absolute_distance - live_shift_distance),
+              std::max(0.5, overtake_line_state_.mission_return_distance)};
+            const int live_plan_N = std::max(
+              N,
+              static_cast<int>(std::ceil(
+                (remaining_absolute_distance +
+                std::max(0.5, overtake_line_state_.mission_return_distance)) /
+                std::max(0.1, model->reference_path->resolution))) + 2);
+            const auto live_speed_caps = build_overtake_kinematic_speed_caps(
+              ref_wp_id, live_plan_N, live_mission_path);
+            const double current_target_course_lateral =
+              std::isfinite(behavior_output.locked_target_relative_lateral) ?
+              current_ey + behavior_output.locked_target_relative_lateral :
+              behavior_output.locked_target_lateral;
+            const auto live_rollout = overtake_core::resolve_overtake_kinematic_rollout(
+              overtake_core::OvertakeKinematicRolloutRequest{
+                true, live_mission_path,
+                locked_target_longitudinal,
+                std::max(0.0, current_speed_mps_),
+                std::max(0.0, locked_target_speed),
+                overtake_mission_closing_speed_limit(),
+                std::max(kEps, cfg.v_max),
+                std::max(0.0, cfg.a_max),
+                std::max(0.0, -cfg.a_min),
                 std::max(0.0, cfg.state_prediction_delay_sec),
-                remaining_absolute_distance - live_shift_distance,
-                remaining_absolute_distance - live_shift_distance});
-            if (live_pass_distance.valid && live_pass_distance.feasible) {
-              live_rear_clear_prediction_feasible = true;
-              live_required_rear_clear_pass_m =
-                pass_traveled + live_shift_distance +
-                live_pass_distance.required_pass_distance_m;
+                current_target_course_lateral,
+                behavior_output.locked_target_lateral_prediction_valid ?
+                behavior_output.locked_target_relative_lateral_velocity : 0.0,
+                std::max(0.0, cfg.v2x_gap.prediction_time),
+                std::max(0.0, cfg.v2x_gap.vehicle_radius),
+                std::max(0.0, cfg.v2x_behavior.moving_follow_hard_distance),
+                std::max(
+                  cfg.v2x_behavior.overtake_body_clear_deadline_margin_sec,
+                  cfg.v2x_behavior.overtake_body_clear_minimum_slack_sec),
+                live_speed_caps, 0.05, remaining_absolute_time, true,
+                std::max(0.0, line_cfg.return_clear_distance)});
+            if (live_rollout.valid && live_rollout.rear_clear_feasible) {
+              const auto live_pass_distance =
+                overtake_core::resolve_overtake_dynamic_pass_distance(
+                overtake_core::OvertakeDynamicPassDistanceRequest{
+                  live_shift_distance, 0.5,
+                  live_rollout.rear_clear_ego_distance_m,
+                  live_rollout.rear_clear_ego_speed_mps,
+                  std::max(0.0, line_cfg.clear_confirm_sec),
+                  std::max(0.0, cfg.state_prediction_delay_sec),
+                  remaining_absolute_distance - live_shift_distance,
+                  remaining_absolute_distance - live_shift_distance});
+              if (live_pass_distance.valid && live_pass_distance.feasible) {
+                live_rear_clear_prediction_feasible = true;
+                live_required_rear_clear_pass_m =
+                  pass_traveled + live_shift_distance +
+                  live_pass_distance.required_pass_distance_m;
+              }
             }
           }
         }
       }
-      rear_clear_window_replan_required =
-        overtake_line_state_.mission_extension_count <
-        line_cfg.pass_horizon_max_extensions &&
-        live_rear_clear_prediction_checked &&
-        live_rear_clear_prediction_feasible &&
-        live_required_rear_clear_pass_m >
-        overtake_line_state_.mission_static_valid_until_pass_m + kEps;
-      overtake_core::PassHorizonDecisionRequest horizon_request;
-      horizon_request.enabled = true;
-      horizon_request.pass_active = true;
-      horizon_request.rear_clear_confirmed = rear_clear_confirmed;
-      horizon_request.return_corridor_available = !return_corridor_blocked;
-      horizon_request.predicted_overlap_replan_required =
-        predicted_overlap_replan_required;
-      horizon_request.rear_clear_replan_required =
-        rear_clear_window_replan_required;
-      horizon_request.short_horizon_safe = short_horizon_safe;
-      horizon_request.hold_active =
-        overtake_line_state_.pass_horizon_hold_active;
-      horizon_request.pass_traveled_m = pass_traveled;
-      horizon_request.pass_elapsed_sec = pass_elapsed;
-      horizon_request.static_valid_until_pass_m =
-        overtake_line_state_.mission_static_valid_until_pass_m;
-      horizon_request.dynamic_valid_until_pass_m =
-        fresh_dynamic_horizon_available ?
-        overtake_line_state_.mission_static_valid_until_pass_m :
-        overtake_line_state_.mission_dynamic_valid_until_pass_m;
-      horizon_request.dynamic_time_remaining_sec = std::max(
-        0.0, overtake_line_state_.mission_dynamic_valid_until_sec - now_sec);
-      horizon_request.absolute_distance_limit_m =
-        line_cfg.pass_horizon_absolute_distance_limit;
-      horizon_request.absolute_time_limit_sec =
-        line_cfg.pass_horizon_absolute_time_limit;
-      horizon_request.revalidation_lead_distance_m =
-        line_cfg.pass_horizon_revalidation_lead_distance;
-      horizon_request.revalidation_lead_time_sec =
-        line_cfg.pass_horizon_revalidation_lead_time;
-      horizon_request.hold_elapsed_sec = fallback_elapsed;
-      horizon_request.hold_traveled_m = fallback_distance;
-      horizon_request.hold_max_sec = line_cfg.pass_horizon_hold_max_sec;
-      horizon_request.hold_max_distance_m =
-        line_cfg.pass_horizon_hold_max_distance;
-      horizon_request.extension_count =
-        overtake_line_state_.mission_extension_count;
-      horizon_request.maximum_extension_count =
-        line_cfg.pass_horizon_max_extensions;
-      const auto horizon_action =
-        overtake_core::resolve_pass_horizon_action(horizon_request);
-      if (horizon_action == overtake_core::PassHorizonAction::Return) {
-        transition_overtake_line_phase(
-          OvertakeLinePhase::Return, now_sec, current_ey,
-          overtake_line_state_.pass_side_sign,
-          "rear-clear confirmed within committed Pass horizon");
-      } else if (
-        horizon_action ==
-        overtake_core::PassHorizonAction::RequestSameSideExtension)
-      {
-        std::string extension_failure_reason;
-        if (!try_extend_committed_pass_horizon(extension_failure_reason)) {
-          if (!overtake_line_state_.pass_horizon_hold_active) {
-            overtake_line_state_.pass_horizon_hold_active = true;
-            overtake_line_state_.pass_horizon_safe_separation_active = true;
-            overtake_line_state_.pass_horizon_fallback_start_sec = now_sec;
-            overtake_line_state_.pass_horizon_fallback_start_distance = pass_traveled;
-            RCLCPP_WARN(
-              rclcpp::get_logger("mpc_controller"),
-              "OvertakeLine Pass horizon extension unavailable; bounded hold: "
-              "trigger=%s, failure=%s, target=%s, side=%d, traveled=%.2f, "
-              "static_until=%.2f, "
-              "dynamic_until=%.2f, live_required=%.2f, ttl=%.2f",
-              pass_horizon_replan_trigger(),
-              extension_failure_reason.c_str(),
-              overtake_line_state_.target_vehicle_id.c_str(),
-              overtake_line_state_.pass_side_sign, pass_traveled,
-              overtake_line_state_.mission_static_valid_until_pass_m,
-              overtake_line_state_.mission_dynamic_valid_until_pass_m,
-              live_required_rear_clear_pass_m,
-              std::max(
-                0.0, overtake_line_state_.mission_dynamic_valid_until_sec - now_sec));
+      if (!overtake_line_state_.pass_horizon_safe_separation_active) {
+        rear_clear_window_replan_required =
+          overtake_line_state_.mission_extension_count <
+          line_cfg.pass_horizon_max_extensions &&
+          live_rear_clear_prediction_checked &&
+          live_rear_clear_prediction_feasible &&
+          live_required_rear_clear_pass_m >
+          overtake_line_state_.mission_static_valid_until_pass_m + kEps;
+        overtake_core::PassHorizonDecisionRequest horizon_request;
+        horizon_request.enabled = true;
+        horizon_request.pass_active = true;
+        horizon_request.rear_clear_confirmed = rear_clear_confirmed;
+        horizon_request.return_corridor_available = !return_corridor_blocked;
+        horizon_request.predicted_overlap_replan_required =
+          predicted_overlap_replan_required;
+        horizon_request.rear_clear_replan_required =
+          rear_clear_window_replan_required;
+        horizon_request.short_horizon_safe = short_horizon_safe;
+        horizon_request.hold_active =
+          overtake_line_state_.pass_horizon_hold_active;
+        horizon_request.pass_traveled_m = pass_traveled;
+        horizon_request.pass_elapsed_sec = pass_elapsed;
+        horizon_request.static_valid_until_pass_m =
+          overtake_line_state_.mission_static_valid_until_pass_m;
+        horizon_request.dynamic_valid_until_pass_m =
+          fresh_dynamic_horizon_available ?
+          overtake_line_state_.mission_static_valid_until_pass_m :
+          overtake_line_state_.mission_dynamic_valid_until_pass_m;
+        horizon_request.dynamic_time_remaining_sec = std::max(
+          0.0, overtake_line_state_.mission_dynamic_valid_until_sec - now_sec);
+        horizon_request.absolute_distance_limit_m =
+          line_cfg.pass_horizon_absolute_distance_limit;
+        horizon_request.absolute_time_limit_sec =
+          line_cfg.pass_horizon_absolute_time_limit;
+        horizon_request.revalidation_lead_distance_m =
+          line_cfg.pass_horizon_revalidation_lead_distance;
+        horizon_request.revalidation_lead_time_sec =
+          line_cfg.pass_horizon_revalidation_lead_time;
+        horizon_request.hold_elapsed_sec = fallback_elapsed;
+        horizon_request.hold_traveled_m = fallback_distance;
+        horizon_request.hold_max_sec = line_cfg.pass_horizon_hold_max_sec;
+        horizon_request.hold_max_distance_m =
+          line_cfg.pass_horizon_hold_max_distance;
+        horizon_request.extension_count =
+          overtake_line_state_.mission_extension_count;
+        horizon_request.maximum_extension_count =
+          line_cfg.pass_horizon_max_extensions;
+        const auto horizon_action =
+          overtake_core::resolve_pass_horizon_action(horizon_request);
+        if (horizon_action == overtake_core::PassHorizonAction::Return) {
+          transition_overtake_line_phase(
+            OvertakeLinePhase::Return, now_sec, current_ey,
+            overtake_line_state_.pass_side_sign,
+            "rear-clear confirmed within committed Pass horizon");
+        } else if (
+          horizon_action ==
+          overtake_core::PassHorizonAction::RequestSameSideExtension)
+        {
+          std::string extension_failure_reason;
+          if (!try_extend_committed_pass_horizon(extension_failure_reason)) {
+            if (!begin_safe_separation(
+                pass_horizon_replan_trigger(), extension_failure_reason))
+            {
+              RCLCPP_WARN(
+                rclcpp::get_logger("mpc_controller"),
+                "OvertakeLine Pass horizon extension unavailable; Recovery required: "
+                "trigger=%s, failure=%s, target=%s, side=%d, traveled=%.2f, "
+                "static_until=%.2f, "
+                "dynamic_until=%.2f, live_required=%.2f, ttl=%.2f",
+                pass_horizon_replan_trigger(),
+                extension_failure_reason.c_str(),
+                overtake_line_state_.target_vehicle_id.c_str(),
+                overtake_line_state_.pass_side_sign, pass_traveled,
+                overtake_line_state_.mission_static_valid_until_pass_m,
+                overtake_line_state_.mission_dynamic_valid_until_pass_m,
+                live_required_rear_clear_pass_m,
+                std::max(
+                  0.0, overtake_line_state_.mission_dynamic_valid_until_sec - now_sec));
+              transition_overtake_line_phase(
+                OvertakeLinePhase::Recovery, now_sec, current_ey,
+                overtake_line_state_.pass_side_sign,
+                "Pass horizon extension unavailable and SafeSeparation unsafe");
+              return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
+            }
+          }
+        } else if (horizon_action == overtake_core::PassHorizonAction::EnterHold) {
+          if (!begin_safe_separation("horizon_hold", "bounded Pass horizon exhausted")) {
+            transition_overtake_line_phase(
+              OvertakeLinePhase::Recovery, now_sec, current_ey,
+              overtake_line_state_.pass_side_sign,
+              "Pass horizon hold unsafe; Recovery required");
+            return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
+          }
+        } else if (horizon_action == overtake_core::PassHorizonAction::Abort) {
+          const bool target_is_rear =
+            locked_target_seen && std::isfinite(locked_target_longitudinal) &&
+            locked_target_longitudinal <= 0.0;
+          if (target_is_rear && !return_corridor_blocked) {
+            transition_overtake_line_phase(
+              OvertakeLinePhase::Return, now_sec, current_ey,
+              overtake_line_state_.pass_side_sign,
+              "Pass horizon hard limit; target rear, returning");
+          } else if (!begin_safe_separation("hard_limit", "Pass horizon hard limit")) {
+            transition_overtake_line_phase(
+              OvertakeLinePhase::Recovery, now_sec, current_ey,
+              overtake_line_state_.pass_side_sign,
+              "Pass horizon hard limit; SafeSeparation unsafe");
+            return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
           }
         }
-      } else if (horizon_action == overtake_core::PassHorizonAction::EnterHold) {
-        if (!overtake_line_state_.pass_horizon_hold_active) {
-          overtake_line_state_.pass_horizon_hold_active = true;
-          overtake_line_state_.pass_horizon_safe_separation_active = true;
-          overtake_line_state_.pass_horizon_fallback_start_sec = now_sec;
-          overtake_line_state_.pass_horizon_fallback_start_distance = pass_traveled;
-          RCLCPP_WARN(
-            rclcpp::get_logger("mpc_controller"),
-            "OvertakeLine Pass horizon entered bounded hold: target=%s, side=%d, "
-            "generation=%lu, pass=%.2f m/%.2f s, static_until=%.2f m, "
-            "dynamic_until=%.2f m/%.2f s, extensions=%d",
-            overtake_line_state_.target_vehicle_id.c_str(),
-            overtake_line_state_.pass_side_sign,
-            static_cast<unsigned long>(overtake_line_state_.mission_generation),
-            pass_traveled, pass_elapsed,
-            overtake_line_state_.mission_static_valid_until_pass_m,
-            overtake_line_state_.mission_dynamic_valid_until_pass_m,
-            std::max(
-              0.0, overtake_line_state_.mission_dynamic_valid_until_sec - now_sec),
-            overtake_line_state_.mission_extension_count);
-        }
-      } else if (horizon_action == overtake_core::PassHorizonAction::Abort) {
-        const bool target_is_rear =
-          locked_target_seen && std::isfinite(locked_target_longitudinal) &&
-          locked_target_longitudinal <= 0.0;
-        overtake_line_state_.pass_horizon_hold_active = false;
-        overtake_line_state_.pass_horizon_safe_separation_active = false;
-        transition_overtake_line_phase(
-          target_is_rear && !return_corridor_blocked ?
-          OvertakeLinePhase::Return : OvertakeLinePhase::Recovery,
-          now_sec, current_ey,
-          overtake_line_state_.pass_side_sign,
-          target_is_rear && !return_corridor_blocked ?
-          "Pass horizon hard limit; target rear, returning" :
-          "Pass horizon hard limit; safe-separation exhausted");
       }
     }
     if (
@@ -12070,12 +12179,20 @@ private:
     }
     const bool pass_horizon_speed_hold =
       overtake_line_state_.shiftout_fresh_horizon_wait_active ||
-      overtake_line_state_.pass_horizon_hold_active ||
-      overtake_line_state_.pass_horizon_safe_separation_active;
+      overtake_line_state_.pass_horizon_hold_active;
     if (pass_horizon_speed_hold && std::isfinite(locked_target_speed)) {
       output.closing_speed_limit = 0.0;
       output.target_velocity_reference = std::min(
         cfg.v_max, std::max(0.0, locked_target_speed));
+      output.target_velocity_floor = 0.0;
+    }
+    if (
+      overtake_line_state_.pass_horizon_safe_separation_active &&
+      std::isfinite(locked_target_speed))
+    {
+      output.closing_speed_limit = 0.0;
+      output.target_velocity_reference = safe_separation_velocity_reference.value_or(
+        std::min(cfg.v_max, std::max(0.0, locked_target_speed)));
       output.target_velocity_floor = 0.0;
     }
 
@@ -12178,7 +12295,8 @@ private:
           "recovery_speed=%s, mission_closing=%.2f, closing=%.2f, "
           "unseparated_reserve=%d/protected=%.2f, "
           "cap_release=%d, horizon_release=%d, "
-          "speed_hold=%d, minimum_motion_cap=%d, footprint_clear=%d, "
+          "speed_hold=%d, safe_sep=%d/signed_closing=%.2f, "
+          "minimum_motion_cap=%d, footprint_clear=%d, "
           "current_overlap_confirmed=%d, current_overlap_elapsed=%.2f/%.2f, "
           "current_overlap_grace=%d, "
           "footprint_prediction=%d, footprint_sweep_clear=%d, "
@@ -12206,6 +12324,8 @@ private:
           output.front_cap_release_ready ? 1 : 0,
           output.constrained_horizon_front_cap_release_active ? 1 : 0,
           output.committed_pass_speed_hold_active ? 1 : 0,
+          overtake_line_state_.pass_horizon_safe_separation_active ? 1 : 0,
+          safe_separation_signed_closing_speed,
           committed_pass_request.minimum_motion_corridor_active ? 1 : 0,
           committed_pass_request.current_body_footprints_separated ? 1 : 0,
           committed_pass_request.current_body_footprint_overlap_confirmed ? 1 : 0,
@@ -15023,6 +15143,25 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_pass_horizon_hold_max_distance"] ?
     mpc["v2x_overtake_pass_horizon_hold_max_distance"].as<double>() : 3.0);
+  cfg.mpc.v2x_behavior.overtake_line.safe_separation_enabled =
+    mpc["v2x_overtake_safe_separation_enabled"] ?
+    mpc["v2x_overtake_safe_separation_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_line.safe_separation_speed_delta = std::max(
+    0.0,
+    mpc["v2x_overtake_safe_separation_speed_delta"] ?
+    mpc["v2x_overtake_safe_separation_speed_delta"].as<double>() : 0.8);
+  cfg.mpc.v2x_behavior.overtake_line.safe_separation_front_clear_distance = std::max(
+    0.0,
+    mpc["v2x_overtake_safe_separation_front_clear_distance"] ?
+    mpc["v2x_overtake_safe_separation_front_clear_distance"].as<double>() : 2.0);
+  cfg.mpc.v2x_behavior.overtake_line.safe_separation_max_sec = std::max(
+    0.0,
+    mpc["v2x_overtake_safe_separation_max_sec"] ?
+    mpc["v2x_overtake_safe_separation_max_sec"].as<double>() : 3.0);
+  cfg.mpc.v2x_behavior.overtake_line.safe_separation_max_distance = std::max(
+    0.0,
+    mpc["v2x_overtake_safe_separation_max_distance"] ?
+    mpc["v2x_overtake_safe_separation_max_distance"].as<double>() : 8.0);
   cfg.mpc.v2x_behavior.overtake_line.reacquire_enabled =
     mpc["v2x_overtake_reacquire_enabled"] ?
     mpc["v2x_overtake_reacquire_enabled"].as<bool>() : false;
@@ -16380,7 +16519,8 @@ public:
         "V2X Pass horizon: %s, predicted/absolute=%.2f/%.2f s, "
         "soft/absolute=%.2f/%.2f m, lead=%.2f m/%.2f s, "
         "same-side extension=%.2f m/lateral<=%.2f m x%d, result_age<=%.2f s, "
-        "hold<=%.2f s/%.2f m",
+        "hold<=%.2f s/%.2f m, safe-separation=%s delta=%.2f m/s "
+        "front>=%.2f m limit=%.2f s/%.2f m",
         mpc_cfg_.v2x_behavior.overtake_line.pass_horizon_enabled ?
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.pass_horizon_predicted_time_budget,
@@ -16394,7 +16534,13 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line.pass_horizon_max_extensions,
         mpc_cfg_.v2x_behavior.overtake_line.pass_horizon_planner_result_max_age,
         mpc_cfg_.v2x_behavior.overtake_line.pass_horizon_hold_max_sec,
-        mpc_cfg_.v2x_behavior.overtake_line.pass_horizon_hold_max_distance);
+        mpc_cfg_.v2x_behavior.overtake_line.pass_horizon_hold_max_distance,
+        mpc_cfg_.v2x_behavior.overtake_line.safe_separation_enabled ?
+        "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line.safe_separation_speed_delta,
+        mpc_cfg_.v2x_behavior.overtake_line.safe_separation_front_clear_distance,
+        mpc_cfg_.v2x_behavior.overtake_line.safe_separation_max_sec,
+        mpc_cfg_.v2x_behavior.overtake_line.safe_separation_max_distance);
     }
     if (mpc_cfg_.v2x_behavior.low_speed_avoidance_enabled) {
       RCLCPP_INFO(

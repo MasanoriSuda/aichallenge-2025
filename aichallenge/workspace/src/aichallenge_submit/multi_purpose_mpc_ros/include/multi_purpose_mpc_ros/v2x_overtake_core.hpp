@@ -826,10 +826,81 @@ struct SameSideExtensionCommitRequest
   double maximum_lateral_adjustment_m{std::numeric_limits<double>::infinity()};
 };
 
+enum class SameSideExtensionCommitReason
+{
+  Accepted,
+  PassInactive,
+  TargetMismatch,
+  SideMismatch,
+  ReplacementPathInvalid,
+  GenerationMismatch,
+  InvalidInput,
+  PlannerResultStale,
+  PredictionExpired,
+  AbsoluteDistanceExceeded,
+  PassDistanceNotAdvanced,
+  StaticCoverageInsufficient,
+  LateralAdjustmentExceeded,
+};
+
+struct SameSideExtensionCommitResolution
+{
+  bool accepted{false};
+  SameSideExtensionCommitReason reason{SameSideExtensionCommitReason::InvalidInput};
+};
+
 /// Validate every identity, freshness and range condition immediately before
 /// an already-computed same-side replacement mission is committed atomically.
+SameSideExtensionCommitResolution evaluate_same_side_extension_commit(
+  const SameSideExtensionCommitRequest & request) noexcept;
+
 bool can_commit_same_side_extension(
   const SameSideExtensionCommitRequest & request) noexcept;
+
+const char * to_string(SameSideExtensionCommitReason reason) noexcept;
+
+enum class SafeSeparationAction
+{
+  Inactive,
+  KeepSameSide,
+  Return,
+  RecoverBehind,
+  Abort,
+};
+
+struct SafeSeparationRequest
+{
+  bool enabled{false};
+  bool active{false};
+  bool short_horizon_safe{false};
+  bool target_seen{false};
+  bool rear_clear_confirmed{false};
+  bool return_corridor_available{false};
+  double target_longitudinal_m{};
+  double target_speed_mps{};
+  double speed_delta_mps{};
+  double maximum_ego_speed_mps{std::numeric_limits<double>::infinity()};
+  double front_clear_distance_m{};
+  double elapsed_sec{};
+  double traveled_m{};
+  double maximum_duration_sec{};
+  double maximum_distance_m{};
+};
+
+struct SafeSeparationResolution
+{
+  SafeSeparationAction action{SafeSeparationAction::Inactive};
+  double target_velocity_reference_mps{std::numeric_limits<double>::infinity()};
+  double signed_closing_speed_mps{};
+};
+
+/// Keep the committed pass side while creating longitudinal separation. A
+/// target ahead is allowed to pull away; a target behind is driven farther
+/// rearward. Lateral Return/Recovery is selected only after separation.
+SafeSeparationResolution resolve_safe_separation(
+  const SafeSeparationRequest & request) noexcept;
+
+const char * to_string(SafeSeparationAction action) noexcept;
 
 struct SameSideReplanShiftDistanceRequest
 {

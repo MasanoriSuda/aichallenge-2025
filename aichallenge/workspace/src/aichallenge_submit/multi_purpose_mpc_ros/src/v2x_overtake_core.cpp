@@ -1379,19 +1379,40 @@ PassOuterHorizonResolution evaluate_pass_outer_horizon(
   return resolution;
 }
 
-bool can_commit_same_side_extension(
+SameSideExtensionCommitResolution evaluate_same_side_extension_commit(
   const SameSideExtensionCommitRequest & request) noexcept
 {
+  SameSideExtensionCommitResolution resolution;
   const auto finite_non_negative = [](const double value) {
       return std::isfinite(value) && value >= 0.0;
     };
   const auto valid_limit = [](const double value) {
       return !std::isnan(value) && value >= 0.0;
     };
+  if (!request.pass_or_hold_active) {
+    resolution.reason = SameSideExtensionCommitReason::PassInactive;
+    return resolution;
+  }
+  if (!request.target_matches) {
+    resolution.reason = SameSideExtensionCommitReason::TargetMismatch;
+    return resolution;
+  }
+  if (!request.side_matches) {
+    resolution.reason = SameSideExtensionCommitReason::SideMismatch;
+    return resolution;
+  }
+  if (!request.replacement_path_valid) {
+    resolution.reason = SameSideExtensionCommitReason::ReplacementPathInvalid;
+    return resolution;
+  }
   if (
-    !request.pass_or_hold_active || !request.target_matches || !request.side_matches ||
-    !request.replacement_path_valid || request.source_generation == 0U ||
-    request.source_generation != request.current_generation ||
+    request.source_generation == 0U ||
+    request.source_generation != request.current_generation)
+  {
+    resolution.reason = SameSideExtensionCommitReason::GenerationMismatch;
+    return resolution;
+  }
+  if (
     !std::isfinite(request.planner_generated_at_sec) ||
     !std::isfinite(request.commit_now_sec) ||
     !finite_non_negative(request.planner_result_max_age_sec) ||
@@ -1406,31 +1427,176 @@ bool can_commit_same_side_extension(
     !std::isfinite(request.replacement_goal_lateral_m) ||
     !valid_limit(request.maximum_lateral_adjustment_m))
   {
-    return false;
+    resolution.reason = SameSideExtensionCommitReason::InvalidInput;
+    return resolution;
   }
   const double planner_result_age_sec =
     request.commit_now_sec - request.planner_generated_at_sec;
   if (
     planner_result_age_sec < -1e-9 ||
-    planner_result_age_sec > request.planner_result_max_age_sec + 1e-9 ||
-    request.commit_now_sec >= request.prediction_expiry_sec - 1e-9 ||
+    planner_result_age_sec > request.planner_result_max_age_sec + 1e-9)
+  {
+    resolution.reason = SameSideExtensionCommitReason::PlannerResultStale;
+    return resolution;
+  }
+  if (request.commit_now_sec >= request.prediction_expiry_sec - 1e-9) {
+    resolution.reason = SameSideExtensionCommitReason::PredictionExpired;
+    return resolution;
+  }
+  if (
     request.replacement_pass_hold_distance_m >
-    request.absolute_pass_distance_limit_m + 1e-9 ||
+    request.absolute_pass_distance_limit_m + 1e-9)
+  {
+    resolution.reason = SameSideExtensionCommitReason::AbsoluteDistanceExceeded;
+    return resolution;
+  }
+  if (
     request.replacement_pass_hold_distance_m <=
-    request.current_pass_hold_distance_m + 1e-9 ||
+    request.current_pass_hold_distance_m + 1e-9)
+  {
+    resolution.reason = SameSideExtensionCommitReason::PassDistanceNotAdvanced;
+    return resolution;
+  }
+  if (
     request.replacement_pass_hold_distance_m + 1e-9 <
-    request.replacement_static_valid_until_pass_m ||
+    request.replacement_static_valid_until_pass_m)
+  {
+    resolution.reason = SameSideExtensionCommitReason::StaticCoverageInsufficient;
+    return resolution;
+  }
+  if (
     std::abs(
       request.replacement_goal_lateral_m - request.current_goal_lateral_m) >
     request.maximum_lateral_adjustment_m + 1e-9)
   {
-    return false;
+    resolution.reason = SameSideExtensionCommitReason::LateralAdjustmentExceeded;
+    return resolution;
   }
-  const double replacement_effective_valid_until_pass_m = std::min(
-    request.replacement_static_valid_until_pass_m,
-    request.replacement_dynamic_valid_until_pass_m);
-  return replacement_effective_valid_until_pass_m + 1e-9 >=
-         request.current_effective_valid_until_pass_m;
+
+  // Dynamic validity is a short V2X prediction window regenerated on every
+  // observation. Freshness is enforced by prediction_expiry_sec above. Do not
+  // reject a statically advancing replacement merely because its distance
+  // horizon is a few centimetres shorter at the newer ego speed.
+  resolution.accepted = true;
+  resolution.reason = SameSideExtensionCommitReason::Accepted;
+  return resolution;
+}
+
+bool can_commit_same_side_extension(
+  const SameSideExtensionCommitRequest & request) noexcept
+{
+  return evaluate_same_side_extension_commit(request).accepted;
+}
+
+const char * to_string(const SameSideExtensionCommitReason reason) noexcept
+{
+  switch (reason) {
+    case SameSideExtensionCommitReason::Accepted:
+      return "accepted";
+    case SameSideExtensionCommitReason::PassInactive:
+      return "Pass inactive";
+    case SameSideExtensionCommitReason::TargetMismatch:
+      return "target mismatch";
+    case SameSideExtensionCommitReason::SideMismatch:
+      return "side mismatch";
+    case SameSideExtensionCommitReason::ReplacementPathInvalid:
+      return "replacement path invalid";
+    case SameSideExtensionCommitReason::GenerationMismatch:
+      return "generation mismatch";
+    case SameSideExtensionCommitReason::InvalidInput:
+      return "invalid commit input";
+    case SameSideExtensionCommitReason::PlannerResultStale:
+      return "planner result stale";
+    case SameSideExtensionCommitReason::PredictionExpired:
+      return "prediction expired";
+    case SameSideExtensionCommitReason::AbsoluteDistanceExceeded:
+      return "absolute distance exceeded";
+    case SameSideExtensionCommitReason::PassDistanceNotAdvanced:
+      return "Pass distance not advanced";
+    case SameSideExtensionCommitReason::StaticCoverageInsufficient:
+      return "static coverage insufficient";
+    case SameSideExtensionCommitReason::LateralAdjustmentExceeded:
+      return "lateral adjustment exceeded";
+  }
+  return "unknown";
+}
+
+SafeSeparationResolution resolve_safe_separation(
+  const SafeSeparationRequest & request) noexcept
+{
+  SafeSeparationResolution resolution;
+  if (!request.enabled || !request.active) {
+    return resolution;
+  }
+  const auto finite_non_negative = [](const double value) {
+      return std::isfinite(value) && value >= 0.0;
+    };
+  if (
+    !request.target_seen || !std::isfinite(request.target_longitudinal_m) ||
+    !finite_non_negative(request.target_speed_mps) ||
+    !finite_non_negative(request.speed_delta_mps) ||
+    !finite_non_negative(request.maximum_ego_speed_mps) ||
+    !finite_non_negative(request.front_clear_distance_m) ||
+    !finite_non_negative(request.elapsed_sec) ||
+    !finite_non_negative(request.traveled_m) ||
+    !finite_non_negative(request.maximum_duration_sec) ||
+    !finite_non_negative(request.maximum_distance_m))
+  {
+    resolution.action = SafeSeparationAction::Abort;
+    return resolution;
+  }
+  if (request.rear_clear_confirmed && request.return_corridor_available) {
+    resolution.action = SafeSeparationAction::Return;
+    return resolution;
+  }
+  if (!request.short_horizon_safe) {
+    resolution.action = SafeSeparationAction::Abort;
+    return resolution;
+  }
+  if (request.target_longitudinal_m >= request.front_clear_distance_m - 1e-9) {
+    resolution.action = SafeSeparationAction::RecoverBehind;
+    return resolution;
+  }
+  if (
+    request.elapsed_sec >= request.maximum_duration_sec - 1e-9 ||
+    request.traveled_m >= request.maximum_distance_m - 1e-9)
+  {
+    resolution.action = SafeSeparationAction::Abort;
+    return resolution;
+  }
+
+  resolution.action = SafeSeparationAction::KeepSameSide;
+  if (request.target_longitudinal_m >= 0.0) {
+    resolution.target_velocity_reference_mps = std::min(
+      request.maximum_ego_speed_mps,
+      std::max(0.0, request.target_speed_mps - request.speed_delta_mps));
+    resolution.signed_closing_speed_mps = -std::min(
+      request.speed_delta_mps, request.target_speed_mps);
+  } else {
+    resolution.target_velocity_reference_mps = std::min(
+      request.maximum_ego_speed_mps,
+      request.target_speed_mps + request.speed_delta_mps);
+    resolution.signed_closing_speed_mps =
+      resolution.target_velocity_reference_mps - request.target_speed_mps;
+  }
+  return resolution;
+}
+
+const char * to_string(const SafeSeparationAction action) noexcept
+{
+  switch (action) {
+    case SafeSeparationAction::Inactive:
+      return "inactive";
+    case SafeSeparationAction::KeepSameSide:
+      return "keep same side";
+    case SafeSeparationAction::Return:
+      return "return";
+    case SafeSeparationAction::RecoverBehind:
+      return "recover behind";
+    case SafeSeparationAction::Abort:
+      return "abort";
+  }
+  return "unknown";
 }
 
 SameSideReplanShiftDistanceResolution resolve_same_side_replan_shift_distance(

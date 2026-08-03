@@ -1,0 +1,652 @@
+Fableのレビューは、コース監査・trajectory監査としてはかなり有用です。特に、
+
+コース幅より曲率と連続開放距離が追い越し機会を制限する
+CSV内の速度・加速度列が実行時の正本ではない
+高曲率区間と壁寄りのmincurvラインが追い越しを難しくする
+計画時と実行時で相対速度モデルを揃えるべき
+
+という大枠は妥当です。
+
+ただし、現行HEADの追い越し実装レビューとしては重要な部分が古い、または単純化しすぎています。
+
+現在のdevelop_julyは、
+
+f83d88952754db16668868e492faa6314590fb22
+20260802-pass-early-replan-outer-horizon
+
+です。Fableの説明にあるShiftOut 0.5〜1.2 m/sなどは現設定と一致しません。また、今回のHEADはkinematic rollout、rear-clear予測、early same-side replan、offset曲率評価まで入っています。さらに修正後の動的検証はまだ未実施なので、修正前の走行結果から現HEADの成否を断定することもできません。
+
+私の判定を一言でまとめると、
+
+Fableの「コース上の追い越し難度分析」は概ね正しい。
+「現HEADの追い越し実装の欠陥分析」は半分ほど正しいが、現行コードで修正済みの項目と、明確に誤った前提が混ざっている。
+
+です。
+
+項目別の妥当性
+Fableの指摘	判定	コメント
+コース長346.6 m	正しい	CSV末尾と先頭間の閉路を含めると約346.6 m
+幅より曲率が主制約	概ね正しい	ただし「幅は全く制約でない」は言いすぎ
+開始可能窓は実質3本	参考値として有用	現HEADのhard-curve例外を無視しており過小評価気味
+CSV速度列は実質使われない	正しい	runtime profileで再計算される
+ay_max: 30が楽観的	一部正しい	通常走行用としては攻撃的。ただし追い越し候補は6 m/s²で評価済み
+completion guardが過小評価	残課題として妥当	ただし「最大2.4倍」「front+1.2」は現HEADには古い
+1.5 m latchと1.2 m offsetが矛盾	ほぼ誤り	1.2 mはfallback値。現在はgoal可変＋footprint判定
+V2Xが1 Hzなので速度がゼロ化	誤り	1.0は予測時間・timeout。受信周期ではない
+forbidden_wp_ranges: []は妥当	正しい	現設定と一致
+s=269付近の壁寄りラインが危険	機構として妥当	正確な1.50/2.15 m値はスクリーンショットだけでは再現未確認
+0.12→0.15へ曲率閾値を上げる	後順位のA/B候補	現時点で即変更は危険
+latchを1.2〜1.3 mへ下げる	非推奨	車体幅約1.45 mとの整合を壊す
+正しい指摘
+1. コース長346.6 mは合っている
+
+traj_mincurv.csvはs=0からs=345.624...まであり、末尾から先頭へ戻る閉路がほぼ1 mあるため、総周長は約346.62 mです。Fableの346.6 mは正しいです。
+
+347点という表現は、CSVデータ点、閉路補完点、runtimeのclosure pointのどれを数えるかによる差で、設計判断にはほぼ影響しません。
+
+2. 「全体幅より曲率と連続距離が問題」は妥当
+
+コース全体として横幅があっても、追い越しでは、
+
+ShiftOut
+→ body-clear
+→ rear-clear
+→ Return
+
+を同じ側で連続して成立させる必要があります。
+
+したがって、単一断面で幅が3.4 m以上あるだけでは足りません。
+
+追い越し中に曲率の向きが反転する
+外側として選んだFrenet側が次のカーブでは内側になる
+Return区間が壁や別車両に塞がれる
+追い越しオフセットによって経路曲率が増える
+MPCが横目標へ到達するまでの距離が必要
+
+という制約があるため、Fableの「曲率が本体」という評価は筋が通っています。
+
+ただし現HEADは、この問題に対して既に、
+
+rear-clearまでの全体経路
+outer strategy continuity
+offset経路曲率
+Returnを含むstatic preflight
+
+を評価します。したがって、Fableの図は「簡単に開始できる窓」の可視化としては有用ですが、現在のアルゴリズムが実際に使える全候補を完全に表してはいません。
+
+特に現設定では、
+
+v2x_overtake_hard_curve_entry_enabled: true
+v2x_overtake_outer_curve_hard_continuation_enabled: true
+v2x_overtake_inner_curve_hard_continuation_enabled: true
+
+なので、|κ| > 0.12だから即座に追い越し不能という二値モデルではありません。
+
+3. CSVのvx_mpsとax_mps2が実行時の正本ではないのは正しい
+
+CSVには、
+
+vx_mps ≈ 14.96 m/s
+ax_mps2 = -5.51 m/s²
+
+などが入っています。
+
+しかし現在は起動時に、
+
+runtime_speed_profile::compute(...)
+
+で曲率、a_max、a_min、v_max、ay_maxから速度プロファイルを再計算し、nominal_v_refへ設定します。その後の区間別速度も、runtime profileとのminで適用されます。
+
+さらにref_vel.yamlは全区間40 km/hなので、現状は実質的に、
+
+runtime_speed_profile
+vs
+v_max 40 km/h
+
+の小さいほうが支配します。
+
+したがってFableの、
+
+CSVの速度列・加速度列を調整しても、現在の実行速度へ直接反映されない
+
+という指摘は正しいです。
+
+一部正しいが、現HEADに対して古い指摘
+1. completion guardと実行モデルの不一致
+
+Fableは、
+
+guard:
+  closing ≈ front + 1.2 m/s
+
+実行:
+  ShiftOut 0.5〜1.2
+  Pass未latch 0.5
+
+という不一致を挙げています。
+
+不一致という論点自体は残っています。
+resolve_pass_completion()は依然として、一定のplanned ego speedとfront speedから相対速度を計算し、必要距離を求める粗いモデルです。
+
+ただし数値と影響度は現HEADに対して古いです。
+
+現設定は、
+
+ShiftOut closing:
+  0.8〜2.0 m/s
+
+Pass未latch:
+  0.5 m/s
+
+です。
+
+さらに現在の候補採用は、単純なcompletion guardだけではありません。候補ごとに、
+
+現在速度
+加速1.0 m/s²
+減速1.35 m/s²
+制御遅延0.125秒
+選択closing speed
+経路上の速度上限
+相手横速度
+body-clear時刻
+rear-clear時刻
+hard-distance到達時刻
+offset経路曲率
+
+を50 ms刻みでrolloutします。
+
+今回のHEADではさらに、Pass中の最新状態からrear-clear必要距離を再計算し、現在の検証済み終端を超えると早期extensionを要求します。
+
+したがってFableの、
+
+guardが62 mと判断するが実際には80 m必要なので全て失敗する
+
+という断定は、現行HEAD全体のモデルとしては成立しません。
+
+より正確には、
+
+古いcompletion guardは現在も粗い事前ゲートなので、candidate rolloutと異なる判定を出す可能性が残る。だが、現行の主要なmission成立性評価は既にkinematic rolloutへ移っている。
+
+です。
+
+改善するなら
+
+Fable案のようにcompletion guardを単純に0.5 m/s固定へするのは非推奨です。これでは過度に保守的になり、追い越し開始自体がほぼ消えます。
+
+修正するなら、
+
+legacy completion guard
+    ↓
+選択candidateのkinematic rollout結果を利用
+
+とすべきです。
+
+あるいはcompletion guardを、
+
+明らかに不可能な候補だけを落とす粗い前処理
+
+へ格下げし、最終判断を既存のrear_clear_feasibleに一本化する方がきれいです。
+
+2. ay_max: 30問題
+
+現設定の、
+
+ay_max: 30.0
+
+は、実車品質として見れば約3 gで非常に攻撃的です。R=2.4 mなら、
+
+sqrt(30 × 2.4) ≈ 8.49 m/s
+
+となるので、Fableの指摘どおり通常速度プロファイルをかなり楽観側にします。
+
+ただし、今回の目的はシミュレーションホスト品質です。また、現HEADの追い越しcandidate rolloutは、
+
+min(cfg.ay_max, overtake_line.max_lateral_accel)
+
+を使うため、追い越し経路の曲率速度上限は実質、
+
+6.0 m/s²
+
+で計算されます。
+
+したがって、
+
+ay_max: 30のせいで現HEADの追い越し候補が全て3 g前提になる
+
+わけではありません。
+
+Fableの、
+
+ay_maxを全体で6 m/s²付近へ落とす
+
+は、クリアラップ性能を大きく落とす可能性があります。
+
+現設計の、
+
+通常レースライン: ay_max 30
+追い越し候補:     max lateral accel 6
+
+という分離の方が、シミュレーション競技としては合理的です。
+
+誤っている、または大幅に単純化されている指摘
+1. 「1.5 m latchと1.2 m offsetが矛盾」はほぼ誤り
+
+Fableは、
+
+line offset = 1.2 m
+latch threshold = 1.5 m
+
+したがって永遠にlatchできない
+
+としています。
+
+しかし現HEADでは、1.2 mは固定された最終目標ではありません。
+
+v2x_overtake_line_lateral_offset: 1.2
+
+はfallback nominal値です。実際には、
+
+target位置
+壁境界
+minimum-motion corridor
+target separation 1.50 m
+dynamic corridor
+static footprint
+same-side replan
+
+から、candidateごとに別のgoal_eyが選択されます。
+
+さらにminimum-motion Passの速度解放は、固定1.50 mだけでなく、
+
+現在の車体矩形が非重複
+AND
+予測footprint sweepが非重複
+AND
+実行経路が物理的に成立
+
+でも取得・維持できます。
+
+したがって、
+
+1.2 mへ移動するから1.5 mの相対離隔には絶対届かない
+
+という理解は現在の実装には当てはまりません。
+
+Fableの代替案にも問題がある
+latchを1.2〜1.3 mへ下げる
+
+のは危険です。
+
+現在の車両横幅は約1.45 mであり、1.2〜1.3 mでは中心間距離だけで見ても車体が重なり得ます。
+
+採用すべきなのはFable案の前半、
+
+実測corridorで車体非重複を作れる候補だけcommitする
+
+です。
+
+後半の、
+
+latchを1.2〜1.3へ下げる
+
+は採用しない方がよいです。
+
+2. 「1 Hz V2Xだから速度が周期的にゼロへ戻る」は誤り
+
+設定の、
+
+v2x_prediction_time: 1.0
+v2x_timeout_sec: 1.0
+
+は、
+
+1秒先までの予測時間
+1秒間受信がなければtimeout
+
+という意味です。受信周期1 Hzではありません。
+
+現在コードは、
+
+sample timestamp
+receipt timestamp
+連続サンプル間のdt
+dx / dt, dy / dt
+position jump
+invalid velocity
+course projection
+along-track speed
+course-lateral velocity
+
+を管理しています。
+
+実際のログでも、
+
+receipt/source interval ≈ 0.05〜0.065秒
+invalid_velocity = 0
+
+の観測があります。
+
+したがって、
+
+1 Hzで観測
+→ 毎回速度0
+→ SafetyBrake
+
+という説明は、現HEADの主原因としては成立しません。
+
+狭い意味で残るリスク
+
+完全に無関係ではありません。
+
+新しいIDを初めて受信した周期
+trackがtimeout後に再生成された周期
+不正速度・position jumpを検出した周期
+
+では、速度推定がまだ成立せず0扱いになる可能性があります。
+
+ただしこれは「毎秒繰り返す1 Hz sawtooth」ではなく、track初期化・再取得時の一時的現象です。
+
+修正前にまず、
+
+target ID
+velocity_observation_valid
+receipt interval
+source age
+speed zeroへの遷移理由
+
+をログで確認すべきです。
+
+Fableのコース窓分析について
+「後半51%に開始窓ゼロ」は少し悲観的
+
+Fableの表は、
+
+hard curve境界までに
+ShiftOut + Pass + bufferを全部終える
+
+という静的条件で区切っています。
+
+これは安全側の分析としては良いです。
+
+ただし現HEADでは、
+
+hard curve中のouter continuation
+hard curve entry
+inside hard continuation
+rear-clear予測
+outer role continuity
+Pass horizon extension
+Return corridor判定
+
+があるので、hard curve間の直線長だけで追い越し可能性が完全に決まるわけではありません。
+
+したがってFableの図は、
+
+追い越しを簡単に始められる安全窓
+
+として読むべきであり、
+
+この3区間以外はアルゴリズム上絶対に追い越せない
+
+と読むべきではありません。
+
+壁寄りmincurvラインの指摘は機構として妥当
+
+レーシングラインが片側壁へ寄っている区間では、
+
+minimum-motionで近い側を選ぶ
+→ 必要横離隔を作ろうとする
+→ wall clamp
+→ 横加速度条件超過
+→ Recovery
+
+となる可能性はあります。
+
+ただし現HEADは、candidate採用前とsame-side extension時に、
+
+ShiftOut
+Pass
+Return
+
+全体のstatic footprint preflightを行います。壁に近すぎるcandidateは、本来はcommit前に落ちる設計です。
+
+したがってs=269の正確な左右距離が正しかったとしても、
+
+その地点で必ずwall clamp Recoveryが起きる
+
+とはまだ言えません。
+
+残る問題は、
+
+occupancy mapとAWSIM実壁の差
+MPC追従誤差
+extension後のgoal変化
+0.15 mしかない追加wall margin
+
+です。
+
+Fableが見落としている、現HEADの本当の残課題
+1. SafeSeparationがまだ未実装
+
+f83dの設計資料自身が、
+
+SafeSeparation FSMは今回のnon-goal
+
+と明記しています。
+
+現在、Pass horizonの延長に失敗すると最大1秒／3 mのHoldへ入り、その後、
+
+targetが後方かつReturn可能
+→ Return
+
+それ以外
+→ generic Recovery
+
+となります。
+
+まだ相手とside-by-sideの場合、generic Recoveryが基準線へ戻ろうとして、相手側へ横断するリスクがあります。
+
+これはFableの1 Hz仮説より、現在HEADに対して明確な残課題です。
+
+2. Hold許可条件が設計より少し弱い
+
+現コードのshort_horizon_safeは、
+
+壁接触なし
+map unknownでない
+target jumpなし
+target intrusionなし
+Emergencyなし
+solver Recoveryなし
+
+を確認します。
+
+しかし、この条件単体には、
+
+現在の車体footprintが相手と非重複
+
+が明示的に入っていません。
+
+そのため、境界条件によっては車体重複状態でHoldへ入る余地があります。
+
+これは提出前に、
+
+locked_target_current_body_footprints_separated
+
+をHold条件へ加える価値があります。
+
+3. 相手のコース沿い予測はまだ弱い
+
+現設定は、
+
+v2x_prediction_time: 1.0
+v2x_prediction_use_course_progress: false
+v2x_prediction_use_course_lateral_velocity: false
+
+です。
+
+course projection自体はfront分類に使われていますが、将来予測としては、
+
+現在速度の短時間外挿
+
+が中心です。
+
+ヘアピン中の相手が、
+
+コースに沿って旋回
+曲率に応じて減速
+横位置を変化
+
+する挙動はまだ十分には表現していません。
+
+比較用上位ログでは、相手速度の平滑化、LAT-TTC、Pass時間予算、clearヒステリシスを組み合わせています。この方向性は参考になりますが、別の制御系なので数値の直接コピーはできません。
+
+Fableの推奨案をそのまま採用してよいか
+採用してよい
+completion guardとcandidate modelの統一
+
+ただし0.5 m/s固定ではなく、
+
+selected candidateのkinematic rollout結果
+
+を使うべきです。
+
+corridor実測によるcommit制限
+車体非重複
+＋
+予測sweep非重複
+＋
+Return可能
+
+を必須にする方向は正しいです。現HEADもかなり近いところまで来ています。
+
+曲率窓と追い越しイベントの重ね合わせ
+
+これは非常に有効です。
+
+ただし従来の、
+
+completion_required / available
+
+だけでなく、現在は次も重ねるべきです。
+
+selected mission pass end
+predicted rear-clear pass position
+live required rear-clear pass position
+static valid until
+dynamic valid until
+early replan trigger
+extension result
+outer role reversal reject
+そのまま採用しない方がよい
+V2X速度ゼロ対策を最優先にする
+
+現ログで再現を確認してからです。受信周期1 Hzという前提は誤っています。
+
+latchを1.2〜1.3 mへ下げる
+
+物理車体幅との整合を壊します。
+
+ay_maxを全体で6 m/s²へ下げる
+
+クリアラップ性能を大きく落とす可能性があります。追い越し候補は既に6 m/s²で評価されています。
+
+0.12を即0.15へ変更する
+
+追い越し窓は増えますが、R=6.7〜8.3 m級カーブへより攻撃的に入ることになります。まず現HEADのpost-fix走行を取得してからのA/B項目です。
+
+現時点での優先順位
+P0：まずf83dをそのまま動的検証
+
+今回のHEADは、
+
+修正前:
+same-side extension 0/7
+Pass -> Recovery 6回
+
+を受けて、
+
+early rear-clear replan
+12 mを超えるreplacement
+outer continuity
+offset曲率speed rollout
+
+を入れた版です。修正後のmake dev2はまだ未実施です。
+
+ここで追加修正を混ぜると、f83dの効果が分からなくなります。
+
+最低限、次を集計します。
+
+overtake candidate admission
+ShiftOut開始
+ShiftOut -> Pass
+early rear-clear replan要求
+same-side extension成功／失敗理由
+rear-clear
+Pass -> Return
+Return -> Idle
+Hold回数・時間・距離
+side-by-side状態からのRecovery
+wall / lateral-accel / horizon Recovery
+SafetyBrake
+Reverse
+V2X velocity_valid / zero遷移
+control loop p95 / p99
+P1：f83d後も失敗するならSafeSeparation
+まだside-by-side
+→ 同じ側を維持
+→ closing <= 0
+→ 前後分離
+→ ReturnまたはRecovery
+
+を独立処理にします。
+
+P1：completion guardの一本化
+
+ログで、
+
+legacy completion=false
+candidate rollout=true
+
+が出ているなら、completion guardをcandidate rolloutへ統合します。
+
+P2：相手予測のフィルタとcourse-aligned化
+
+その後に、
+
+filtered s_dot
+filtered d_dot
+branch-stable projection
+prediction uncertainty
+lateral TTC
+
+を検討します。
+
+P3：曲率閾値・smoothing・ay_max
+
+最後にA/Bします。
+
+最終判定
+
+Fableレビューの中で、特に信用してよいのは次です。
+
+コース長と曲率分布
+CSV速度・加速度列の非支配性
+壁寄りmincurvが追い越し側を狭める機構
+completion判定と実行速度を統一すべきという方向
+
+一方、修正して読む必要があるのは次です。
+
+ShiftOut 0.5〜1.2       → 現在は0.8〜2.0
+V2X 1 Hz                → 1.0は予測時間／timeout
+1.2 offset < 1.5 latch  → goal可変＋footprint releaseあり
+Pass完遂ゼロ            → f83d修正前runの話
+hard curve以外3窓だけ   → 現在はhard-entry/continuation例外あり
+ay_max 30がPassを支配   → candidate rolloutは6 m/s²で評価
+
+したがって、
+
+Fableの分析をそのままCodexへの修正指示にするのは避けるべきです。
+
+現時点では、f83dを固定してpost-fix走行を取得し、early replanとextensionが本当に0/7から改善したかを見るのが先です。そのうえで直すなら、Fableが強調した1 Hz V2Xやlatch低下より、SafeSeparationとcompletion guardのcandidate rollout統合の方が、現HEADに対して技術的に優先度が高いです。

@@ -121,6 +121,9 @@ using multi_purpose_mpc_ros::v2x_overtake_core::PassHorizonDecisionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassOuterHorizonRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassOuterHorizonSample;
 using multi_purpose_mpc_ros::v2x_overtake_core::SameSideExtensionCommitRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::SameSideExtensionCommitReason;
+using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationAction;
+using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SameSideReplanShiftDistanceRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidate;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidateSelectionRequest;
@@ -142,7 +145,9 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_dynamic_pass_di
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_prediction_timing;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_horizon_action;
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_pass_outer_horizon;
+using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_same_side_extension_commit;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_commit_same_side_extension;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_safe_separation;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_same_side_replan_shift_distance;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_overtake_mission_candidate;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_start_grid_breakout_speed_reference;
@@ -3023,6 +3028,119 @@ TEST(V2XOvertakeCoreHorizon, RejectsStaleOrNonAdvancingExtension)
   EXPECT_FALSE(can_commit_same_side_extension(request));
 }
 
+TEST(V2XOvertakeCoreHorizon, AcceptsFreshStaticAdvanceWithShorterDynamicWindow)
+{
+  SameSideExtensionCommitRequest request;
+  request.pass_or_hold_active = true;
+  request.target_matches = true;
+  request.side_matches = true;
+  request.replacement_path_valid = true;
+  request.source_generation = 3U;
+  request.current_generation = 3U;
+  request.planner_generated_at_sec = 100.0;
+  request.commit_now_sec = 100.01;
+  request.planner_result_max_age_sec = 0.10;
+  request.prediction_expiry_sec = 100.9;
+  request.current_effective_valid_until_pass_m = 4.0;
+  request.current_pass_hold_distance_m = 15.0;
+  request.replacement_static_valid_until_pass_m = 18.0;
+  request.replacement_dynamic_valid_until_pass_m = 3.9;
+  request.replacement_pass_hold_distance_m = 18.0;
+  request.absolute_pass_distance_limit_m = 32.0;
+  request.current_goal_lateral_m = 0.8;
+  request.replacement_goal_lateral_m = 0.9;
+  request.maximum_lateral_adjustment_m = 0.6;
+
+  const auto resolution = evaluate_same_side_extension_commit(request);
+  EXPECT_TRUE(resolution.accepted);
+  EXPECT_EQ(resolution.reason, SameSideExtensionCommitReason::Accepted);
+}
+
+TEST(V2XOvertakeCoreHorizon, ReportsAtomicCommitRejectionReason)
+{
+  SameSideExtensionCommitRequest request;
+  request.pass_or_hold_active = true;
+  request.target_matches = true;
+  request.side_matches = true;
+  request.replacement_path_valid = true;
+  request.source_generation = 2U;
+  request.current_generation = 2U;
+  request.planner_generated_at_sec = 100.0;
+  request.commit_now_sec = 100.2;
+  request.planner_result_max_age_sec = 0.1;
+  request.prediction_expiry_sec = 101.0;
+  request.current_effective_valid_until_pass_m = 4.0;
+  request.current_pass_hold_distance_m = 12.0;
+  request.replacement_static_valid_until_pass_m = 18.0;
+  request.replacement_dynamic_valid_until_pass_m = 4.0;
+  request.replacement_pass_hold_distance_m = 18.0;
+  request.absolute_pass_distance_limit_m = 32.0;
+  request.maximum_lateral_adjustment_m = 0.6;
+
+  const auto resolution = evaluate_same_side_extension_commit(request);
+  EXPECT_FALSE(resolution.accepted);
+  EXPECT_EQ(resolution.reason, SameSideExtensionCommitReason::PlannerResultStale);
+}
+
+TEST(V2XOvertakeCoreHorizon, CreatesLongitudinalSafeSeparationOnCommittedSide)
+{
+  SafeSeparationRequest request;
+  request.enabled = true;
+  request.active = true;
+  request.short_horizon_safe = true;
+  request.target_seen = true;
+  request.return_corridor_available = true;
+  request.target_speed_mps = 3.3;
+  request.speed_delta_mps = 0.8;
+  request.maximum_ego_speed_mps = 11.11;
+  request.front_clear_distance_m = 2.0;
+  request.maximum_duration_sec = 3.0;
+  request.maximum_distance_m = 8.0;
+
+  request.target_longitudinal_m = 0.5;
+  auto resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::KeepSameSide);
+  EXPECT_NEAR(resolution.target_velocity_reference_mps, 2.5, 1e-9);
+  EXPECT_NEAR(resolution.signed_closing_speed_mps, -0.8, 1e-9);
+
+  request.target_longitudinal_m = -0.5;
+  resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::KeepSameSide);
+  EXPECT_NEAR(resolution.target_velocity_reference_mps, 4.1, 1e-9);
+  EXPECT_NEAR(resolution.signed_closing_speed_mps, 0.8, 1e-9);
+
+  request.rear_clear_confirmed = true;
+  resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::Return);
+
+  request.rear_clear_confirmed = false;
+  request.target_longitudinal_m = 2.0;
+  resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::RecoverBehind);
+}
+
+TEST(V2XOvertakeCoreHorizon, BoundsOrRejectsUnsafeSafeSeparation)
+{
+  SafeSeparationRequest request;
+  request.enabled = true;
+  request.active = true;
+  request.short_horizon_safe = false;
+  request.target_seen = true;
+  request.target_longitudinal_m = 0.0;
+  request.target_speed_mps = 3.0;
+  request.speed_delta_mps = 0.8;
+  request.maximum_ego_speed_mps = 11.11;
+  request.front_clear_distance_m = 2.0;
+  request.maximum_duration_sec = 3.0;
+  request.maximum_distance_m = 8.0;
+
+  EXPECT_EQ(resolve_safe_separation(request).action, SafeSeparationAction::Abort);
+
+  request.short_horizon_safe = true;
+  request.elapsed_sec = 3.0;
+  EXPECT_EQ(resolve_safe_separation(request).action, SafeSeparationAction::Abort);
+}
+
 TEST(V2XOvertakeCoreHorizon, RejectsExcessiveAtomicLateralReplacement)
 {
   SameSideExtensionCommitRequest request;
@@ -3069,6 +3187,17 @@ TEST(V2XOvertakeCoreHorizon, SizesSameSideLateralReplanFromAccelerationEnvelope)
   EXPECT_GT(resolution.shift_distance_m, 2.0);
   EXPECT_LE(resolution.shift_distance_m, 6.0);
 
+  // Pass starts after the original ShiftOut has completed.  A live rollout
+  // already at the committed lateral goal needs only the bounded minimum
+  // correction ramp, not another full configured ShiftOut distance.
+  request.current_lateral_m = request.goal_lateral_m;
+  const auto completed_shiftout = resolve_same_side_replan_shift_distance(request);
+  ASSERT_TRUE(completed_shiftout.valid);
+  EXPECT_TRUE(completed_shiftout.feasible);
+  EXPECT_DOUBLE_EQ(completed_shiftout.lateral_adjustment_m, 0.0);
+  EXPECT_DOUBLE_EQ(completed_shiftout.shift_distance_m, 0.5);
+
+  request.current_lateral_m = -0.9;
   request.maximum_shift_distance_m = 1.0;
   const auto infeasible = resolve_same_side_replan_shift_distance(request);
   ASSERT_TRUE(infeasible.valid);

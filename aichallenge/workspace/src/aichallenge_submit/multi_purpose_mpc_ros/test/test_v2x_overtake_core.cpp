@@ -119,6 +119,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::DynamicPredictionTimingRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommitClockProjectionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassHorizonAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassHorizonDecisionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::PassContinuationPreflightPolicyRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassOuterHorizonRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassOuterHorizonSample;
 using multi_purpose_mpc_ros::v2x_overtake_core::SameSideExtensionCommitRequest;
@@ -147,6 +148,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_dynamic_pass_di
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_prediction_timing;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_commit_clock_projection;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_horizon_action;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_continuation_preflight_policy;
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_pass_outer_horizon;
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_same_side_extension_commit;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_commit_same_side_extension;
@@ -2954,6 +2956,66 @@ TEST(V2XOvertakeCoreHorizon, KeepsCommittedOuterSideThroughRearClearHorizon)
   EXPECT_TRUE(result.outer_strategy);
   EXPECT_FALSE(result.role_reversal);
   EXPECT_DOUBLE_EQ(result.first_significant_curve_distance_m, 4.0);
+}
+
+TEST(V2XOvertakeCoreHorizon, UsesFootprintPolicyOnlyForSafeLongitudinalContinuation)
+{
+  PassContinuationPreflightPolicyRequest request;
+  request.longitudinal_refresh = true;
+  request.short_horizon_safe = true;
+  request.target_observation_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.predicted_body_footprint_available = true;
+  request.predicted_body_footprint_sweep_separated = true;
+
+  const auto result = resolve_pass_continuation_preflight_policy(request);
+
+  EXPECT_TRUE(result.footprint_continuation_active);
+  EXPECT_FALSE(result.enforce_target_center_separation);
+  EXPECT_FALSE(result.enforce_outer_role_continuity);
+}
+
+TEST(V2XOvertakeCoreHorizon, KeepsAdmissionConstraintsForGeometricExtension)
+{
+  PassContinuationPreflightPolicyRequest request;
+  request.longitudinal_refresh = false;
+  request.short_horizon_safe = true;
+  request.target_observation_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.predicted_body_footprint_available = true;
+  request.predicted_body_footprint_sweep_separated = true;
+
+  const auto result = resolve_pass_continuation_preflight_policy(request);
+
+  EXPECT_FALSE(result.footprint_continuation_active);
+  EXPECT_TRUE(result.enforce_target_center_separation);
+  EXPECT_TRUE(result.enforce_outer_role_continuity);
+}
+
+TEST(V2XOvertakeCoreHorizon, KeepsHardConstraintsWhenContinuationFootprintIsUncertain)
+{
+  PassContinuationPreflightPolicyRequest request;
+  request.longitudinal_refresh = true;
+  request.short_horizon_safe = true;
+  request.target_observation_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.predicted_body_footprint_available = true;
+  request.predicted_body_footprint_sweep_separated = false;
+
+  auto result = resolve_pass_continuation_preflight_policy(request);
+  EXPECT_FALSE(result.footprint_continuation_active);
+  EXPECT_TRUE(result.enforce_target_center_separation);
+  EXPECT_TRUE(result.enforce_outer_role_continuity);
+
+  request.predicted_body_footprint_sweep_separated = true;
+  request.current_body_footprints_separated = false;
+  result = resolve_pass_continuation_preflight_policy(request);
+  EXPECT_FALSE(result.footprint_continuation_active);
+
+  request.current_body_footprints_separated = true;
+  request.target_observation_continuous = false;
+  result = resolve_pass_continuation_preflight_policy(request);
+  EXPECT_FALSE(result.footprint_continuation_active);
 }
 
 TEST(V2XOvertakeCoreHorizon, RejectsOuterSideThatBecomesInsideBeforeRearClear)

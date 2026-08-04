@@ -1351,6 +1351,24 @@ PassHorizonAction resolve_pass_horizon_action(
     PassHorizonAction::EnterHold : PassHorizonAction::Abort;
 }
 
+PassContinuationPreflightPolicyResolution resolve_pass_continuation_preflight_policy(
+  const PassContinuationPreflightPolicyRequest & request) noexcept
+{
+  PassContinuationPreflightPolicyResolution resolution;
+  resolution.footprint_continuation_active =
+    request.longitudinal_refresh &&
+    request.short_horizon_safe &&
+    request.target_observation_continuous &&
+    request.current_body_footprints_separated &&
+    request.predicted_body_footprint_available &&
+    request.predicted_body_footprint_sweep_separated;
+  resolution.enforce_target_center_separation =
+    !resolution.footprint_continuation_active;
+  resolution.enforce_outer_role_continuity =
+    !resolution.footprint_continuation_active;
+  return resolution;
+}
+
 PassOuterHorizonResolution evaluate_pass_outer_horizon(
   const PassOuterHorizonRequest & request) noexcept
 {

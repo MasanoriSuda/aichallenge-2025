@@ -2075,6 +2075,12 @@ struct OvertakeLineEntryPreflight
   std::string reason;
 };
 
+struct OvertakeLineEntryPreflightPolicy
+{
+  bool enforce_target_center_separation{true};
+  bool enforce_outer_role_continuity{true};
+};
+
 struct OvertakeLineSideRetryBlock
 {
   std::string target_vehicle_id;
@@ -9853,7 +9859,8 @@ private:
     const bool enforce_lateral_accel = true,
     const bool evaluate_outer_strategy = false,
     const bool infer_outer_strategy = false,
-    const bool outer_strategy_committed = false) const
+    const bool outer_strategy_committed = false,
+    const OvertakeLineEntryPreflightPolicy policy = {}) const
   {
     OvertakeLineEntryPreflight result;
     if (
@@ -9904,7 +9911,8 @@ private:
         return result;
       }
     }
-    const bool enforce_target_separation = std::isfinite(target_lateral);
+    const bool enforce_target_separation =
+      policy.enforce_target_center_separation && std::isfinite(target_lateral);
     const auto feasible_goal =
       overtake_core::resolve_feasible_pass_side_lateral_goal(
       overtake_core::FeasiblePassSideLateralGoalRequest{
@@ -10016,7 +10024,7 @@ private:
       result.outer_role_reversal = outer_horizon.role_reversal;
       result.outer_role_reversal_distance_m =
         outer_horizon.first_role_reversal_distance_m;
-      if (!outer_horizon.feasible) {
+      if (!outer_horizon.feasible && policy.enforce_outer_role_continuity) {
         result.feasible = false;
         std::ostringstream reason;
         reason << "outer pass becomes inside before rear-clear, distance="
@@ -11276,6 +11284,23 @@ private:
         {
           return fail_extension("invalid locked target or committed goal");
         }
+        const bool continuation_short_horizon_safe =
+          !actual_wall_physical_contact && !actual_wall_sample_unavailable &&
+          locked_target_seen &&
+          behavior_output.locked_target_current_body_footprints_separated &&
+          !behavior_output.locked_target_position_jump &&
+          !behavior_output.locked_target_pass_side_intrusion &&
+          behavior_output.front_risk_level != FrontRiskLevel::EmergencyBrake &&
+          !overtake_solver_recovery_active_;
+        const auto continuation_policy =
+          overtake_core::resolve_pass_continuation_preflight_policy(
+          overtake_core::PassContinuationPreflightPolicyRequest{
+            longitudinal_only,
+            continuation_short_horizon_safe,
+            locked_target_matches && locked_target_progress_continuous,
+            behavior_output.locked_target_current_body_footprints_separated,
+            behavior_output.locked_target_footprint_prediction_valid,
+            behavior_output.locked_target_predicted_body_footprint_sweep_separated});
         const std::uint64_t source_generation =
           overtake_line_state_.mission_generation;
         const std::string source_target_id = overtake_line_state_.target_vehicle_id;
@@ -11462,7 +11487,10 @@ private:
           true,
           true,
           false,
-          overtake_line_state_.mission_outer_strategy_committed);
+          overtake_line_state_.mission_outer_strategy_committed,
+          OvertakeLineEntryPreflightPolicy{
+            continuation_policy.enforce_target_center_separation,
+            continuation_policy.enforce_outer_role_continuity});
         if (!static_preflight.feasible) {
           failure_reason = std::string("static full-path preflight: ") +
             static_preflight.reason;
@@ -11578,12 +11606,14 @@ private:
           "trigger=%s, generation=%lu, pass=%.2f->%.2f, goal=%.2f->%.2f, "
           "shift=%.2f m, nominal_window=%.2f m, required_window=%.2f m, "
           "rear_clear=%.2f m/%.2f s, "
-          "dynamic_until=%.2f m/%.2f s, outer_strategy=%d" :
+          "dynamic_until=%.2f m/%.2f s, outer_strategy=%d, "
+          "footprint_policy=%d, outer_role_reversal=%d" :
           "OvertakeLine same-side Pass horizon extended: target=%s, side=%d, "
           "trigger=%s, generation=%lu, pass=%.2f->%.2f, goal=%.2f->%.2f, "
           "shift=%.2f m, nominal_window=%.2f m, required_window=%.2f m, "
           "rear_clear=%.2f m/%.2f s, "
-          "dynamic_until=%.2f m/%.2f s, outer_strategy=%d",
+          "dynamic_until=%.2f m/%.2f s, outer_strategy=%d, "
+          "footprint_policy=%d, outer_role_reversal=%d",
           overtake_line_state_.target_vehicle_id.c_str(),
           overtake_line_state_.pass_side_sign,
           pass_horizon_replan_trigger(),
@@ -11597,7 +11627,9 @@ private:
           overtake_line_state_.mission_dynamic_valid_until_pass_m,
           std::max(
             0.0, overtake_line_state_.mission_dynamic_valid_until_sec - now_sec),
-          overtake_line_state_.mission_outer_strategy_committed ? 1 : 0);
+          overtake_line_state_.mission_outer_strategy_committed ? 1 : 0,
+          continuation_policy.footprint_continuation_active ? 1 : 0,
+          static_preflight.outer_role_reversal ? 1 : 0);
         return true;
       };
 

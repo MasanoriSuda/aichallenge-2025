@@ -794,6 +794,30 @@ struct PassHorizonDecisionRequest
 PassHorizonAction resolve_pass_horizon_action(
   const PassHorizonDecisionRequest & request) noexcept;
 
+struct PassContinuationPreflightPolicyRequest
+{
+  bool longitudinal_refresh{false};
+  bool short_horizon_safe{false};
+  bool target_observation_continuous{false};
+  bool current_body_footprints_separated{false};
+  bool predicted_body_footprint_available{false};
+  bool predicted_body_footprint_sweep_separated{false};
+};
+
+struct PassContinuationPreflightPolicyResolution
+{
+  bool footprint_continuation_active{false};
+  bool enforce_target_center_separation{true};
+  bool enforce_outer_role_continuity{true};
+};
+
+/// Replace semantic center-distance and inside/outside labels with measured
+/// body-footprint separation only when refreshing the longitudinal extent of
+/// an already-admitted, fixed-lateral Pass path. Initial admission and any
+/// geometric replacement keep the original hard constraints.
+PassContinuationPreflightPolicyResolution resolve_pass_continuation_preflight_policy(
+  const PassContinuationPreflightPolicyRequest & request) noexcept;
+
 struct PassOuterHorizonSample
 {
   double path_distance_m{};

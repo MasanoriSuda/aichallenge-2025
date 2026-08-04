@@ -111,6 +111,9 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionPathRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionPathStage;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorSample;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCorridorAdmissionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCorridorSource;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakePassPlanRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeBodyClearDeadlineRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeKinematicRolloutRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeKinematicSpeedCapSample;
@@ -142,6 +145,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_follow_speed_limit;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_apply_generic_follow_cap;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_speed_reference;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_mission_dynamic_corridor;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_mission_corridor_admission;
+using multi_purpose_mpc_ros::v2x_overtake_core::build_overtake_pass_plan;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_body_clear_deadline;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_kinematic_rollout;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_dynamic_pass_distance;
@@ -1182,6 +1187,53 @@ TEST(V2XOvertakeCoreSpeed, MinimumMotionPassReleasesOnClearBodyFootprintSweep)
   EXPECT_EQ(
     resolution.transition_reason,
     CommittedPassFrontCapTransitionReason::MinimumMotionFootprintSweepClear);
+}
+
+TEST(V2XOvertakeCoreSpeed, FrozenMinimumMotionShiftOutReleasesOnClearFootprintSweep)
+{
+  CommittedPassPolicyRequest request;
+  request.validated_frozen_plan = true;
+  request.shiftout_phase = true;
+  request.lateral_complete = false;
+  request.execution_horizon_unconstrained = false;
+  request.execution_path_physically_feasible = true;
+  request.minimum_motion_corridor_active = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+  request.target_seen = true;
+  request.target_longitudinal_m = 5.0;
+
+  auto resolution = resolve_committed_pass_policy(request);
+  EXPECT_TRUE(resolution.minimum_motion_shiftout_release_allowed);
+  EXPECT_TRUE(resolution.front_cap_release_ready);
+  EXPECT_TRUE(resolution.front_cap_state_update_required);
+  EXPECT_EQ(
+    resolution.transition_reason,
+    CommittedPassFrontCapTransitionReason::MinimumMotionFootprintSweepClear);
+
+  request.validated_frozen_plan = false;
+  resolution = resolve_committed_pass_policy(request);
+  EXPECT_FALSE(resolution.minimum_motion_shiftout_release_allowed);
+  EXPECT_FALSE(resolution.front_cap_release_ready);
+
+  request.validated_frozen_plan = true;
+  request.prior_front_cap_release_active = true;
+  request.predicted_body_footprint_sweep_separated = false;
+  resolution = resolve_committed_pass_policy(request);
+  EXPECT_FALSE(resolution.minimum_motion_shiftout_release_allowed);
+  EXPECT_FALSE(resolution.front_cap_release_ready);
+  EXPECT_EQ(
+    resolution.transition_reason,
+    CommittedPassFrontCapTransitionReason::PredictedFootprintOverlap);
+
+  request.predicted_body_footprint_sweep_separated = true;
+  request.actual_wall_contact = true;
+  resolution = resolve_committed_pass_policy(request);
+  EXPECT_FALSE(resolution.front_cap_release_ready);
+  EXPECT_EQ(
+    resolution.transition_reason,
+    CommittedPassFrontCapTransitionReason::ActualWallContact);
 }
 
 TEST(V2XOvertakeCoreSpeed, MinimumMotionPassHoldsReleaseAcrossLateralThresholdNoise)
@@ -2506,6 +2558,84 @@ TEST(V2XOvertakeCoreSpeed, DefersDynamicReturnValidationUntilRearClear)
   EXPECT_TRUE(resolution.feasible);
   EXPECT_EQ(resolution.checked_sample_count, 1U);
   EXPECT_NEAR(resolution.goal_lower_m, 0.8, 1e-12);
+}
+
+TEST(V2XOvertakeCoreSpeed, UsesStaticWallCorridorUntilDynamicSamplesAreObserved)
+{
+  multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorResolution
+    dynamic_corridor;
+  dynamic_corridor.valid = true;
+  dynamic_corridor.observed = false;
+  dynamic_corridor.feasible = true;
+
+  const auto resolution = resolve_overtake_mission_corridor_admission(
+    OvertakeMissionCorridorAdmissionRequest{
+      true, dynamic_corridor, -1.2, 0.7});
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.feasible);
+  EXPECT_EQ(resolution.source, OvertakeMissionCorridorSource::StaticWallFallback);
+  EXPECT_DOUBLE_EQ(resolution.goal_lower_m, -1.2);
+  EXPECT_DOUBLE_EQ(resolution.goal_upper_m, 0.7);
+}
+
+TEST(V2XOvertakeCoreSpeed, PrefersObservedDynamicCorridorAndDoesNotHideConflict)
+{
+  multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorResolution
+    dynamic_corridor;
+  dynamic_corridor.valid = true;
+  dynamic_corridor.observed = true;
+  dynamic_corridor.feasible = true;
+  dynamic_corridor.goal_lower_m = 0.2;
+  dynamic_corridor.goal_upper_m = 0.8;
+
+  auto resolution = resolve_overtake_mission_corridor_admission(
+    OvertakeMissionCorridorAdmissionRequest{
+      true, dynamic_corridor, -1.2, 1.2});
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.feasible);
+  EXPECT_EQ(resolution.source, OvertakeMissionCorridorSource::DynamicObservation);
+  EXPECT_DOUBLE_EQ(resolution.goal_lower_m, 0.2);
+  EXPECT_DOUBLE_EQ(resolution.goal_upper_m, 0.8);
+
+  dynamic_corridor.feasible = false;
+  resolution = resolve_overtake_mission_corridor_admission(
+    OvertakeMissionCorridorAdmissionRequest{
+      true, dynamic_corridor, -1.2, 1.2});
+  EXPECT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.feasible);
+  EXPECT_EQ(resolution.source, OvertakeMissionCorridorSource::None);
+}
+
+TEST(V2XOvertakeCoreSpeed, BuildsAtomicPassPlanFromSelectedMission)
+{
+  OvertakeMissionCandidate mission;
+  mission.feasible = true;
+  mission.pass_side_sign = -1;
+  mission.goal_lateral_m = -0.6;
+  mission.shift_distance_m = 4.0;
+  mission.pass_hold_distance_m = 7.0;
+  mission.return_distance_m = 5.0;
+  mission.closing_speed_mps = 1.5;
+  mission.body_clear_deadline_checked = true;
+  mission.body_clear_deadline_feasible = true;
+  mission.rear_clear_prediction_checked = true;
+  mission.rear_clear_prediction_feasible = true;
+  mission.corridor_source = OvertakeMissionCorridorSource::StaticWallFallback;
+
+  auto plan = build_overtake_pass_plan(
+    OvertakePassPlanRequest{mission, 0.1, 0.0});
+  ASSERT_TRUE(plan.valid);
+  EXPECT_EQ(plan.mission.pass_side_sign, -1);
+  EXPECT_DOUBLE_EQ(plan.path.start_lateral_m, 0.1);
+  EXPECT_DOUBLE_EQ(plan.path.pass_lateral_m, -0.6);
+  EXPECT_DOUBLE_EQ(plan.path.shift_distance_m, 4.0);
+  EXPECT_DOUBLE_EQ(plan.path.pass_distance_m, 7.0);
+  EXPECT_DOUBLE_EQ(plan.path.return_distance_m, 5.0);
+
+  mission.rear_clear_prediction_feasible = false;
+  plan = build_overtake_pass_plan(
+    OvertakePassPlanRequest{mission, 0.1, 0.0});
+  EXPECT_FALSE(plan.valid);
 }
 
 TEST(V2XOvertakeCoreSpeed, SelectsDirectPassBeforeShiftOutCandidates)

@@ -381,10 +381,15 @@ CommittedPassPolicyResolution resolve_committed_pass_policy(
 {
   CommittedPassPolicyResolution resolution;
   resolution.active_execution = request.shiftout_phase || request.pass_phase;
-  const bool minimum_motion_common_guard =
-    request.pass_phase && request.minimum_motion_corridor_active &&
+  const bool minimum_motion_base_guard =
+    resolution.active_execution && request.minimum_motion_corridor_active &&
     request.target_seen && !request.locked_target_position_jump &&
     !request.actual_wall_contact;
+  const bool minimum_motion_pass_guard =
+    request.pass_phase && minimum_motion_base_guard;
+  const bool minimum_motion_shiftout_guard =
+    request.shiftout_phase && request.validated_frozen_plan &&
+    minimum_motion_base_guard;
   const bool minimum_motion_sweep_clear =
     request.current_body_footprints_separated &&
     request.footprint_prediction_valid &&
@@ -396,11 +401,11 @@ CommittedPassPolicyResolution resolve_committed_pass_policy(
     request.body_longitudinal_clearance_m > 0.0 &&
     request.target_longitudinal_m <= request.body_longitudinal_clearance_m;
   resolution.minimum_motion_side_by_side_escape_active =
-    minimum_motion_common_guard && minimum_motion_side_by_side_geometry &&
+    minimum_motion_pass_guard && minimum_motion_side_by_side_geometry &&
     (request.prior_front_cap_release_active ||
     (request.lateral_complete && request.execution_path_physically_feasible));
   resolution.minimum_motion_predicted_overlap_grace_active =
-    minimum_motion_common_guard && request.prior_front_cap_release_active &&
+    minimum_motion_pass_guard && request.prior_front_cap_release_active &&
     request.current_body_footprints_separated &&
     request.footprint_prediction_valid &&
     !request.predicted_body_footprint_sweep_separated &&
@@ -412,7 +417,7 @@ CommittedPassPolicyResolution resolve_committed_pass_policy(
   // Initial acquisition still requires a currently separated footprint sweep.
   resolution.minimum_motion_current_overlap_grace_active =
     request.committed_pass_attack_mode_enabled &&
-    minimum_motion_common_guard && request.prior_front_cap_release_active &&
+    minimum_motion_pass_guard && request.prior_front_cap_release_active &&
     !request.current_body_footprints_separated &&
     !request.current_body_footprint_overlap_confirmed &&
     request.footprint_prediction_valid &&
@@ -424,20 +429,29 @@ CommittedPassPolicyResolution resolve_committed_pass_policy(
   // target discontinuity and an infeasible execution path still revoke it.
   resolution.minimum_motion_attack_hold_active =
     request.committed_pass_attack_mode_enabled &&
-    minimum_motion_common_guard && request.prior_front_cap_release_active &&
+    minimum_motion_pass_guard && request.prior_front_cap_release_active &&
     request.current_body_footprints_separated &&
     request.execution_path_physically_feasible;
-  resolution.minimum_motion_footprint_release_allowed =
-    minimum_motion_common_guard && request.lateral_complete &&
+  resolution.minimum_motion_shiftout_release_allowed =
+    minimum_motion_shiftout_guard &&
     request.execution_path_physically_feasible && minimum_motion_sweep_clear;
-  resolution.minimum_motion_footprint_hold_active =
-    minimum_motion_common_guard && request.prior_front_cap_release_active &&
+  resolution.minimum_motion_footprint_release_allowed =
+    minimum_motion_pass_guard && request.lateral_complete &&
+    request.execution_path_physically_feasible && minimum_motion_sweep_clear;
+  const bool minimum_motion_shiftout_hold =
+    minimum_motion_shiftout_guard &&
+    request.execution_path_physically_feasible && minimum_motion_sweep_clear;
+  const bool minimum_motion_pass_hold =
+    minimum_motion_pass_guard &&
     ((request.current_body_footprints_separated &&
     (minimum_motion_sweep_clear ||
     resolution.minimum_motion_side_by_side_escape_active ||
     resolution.minimum_motion_predicted_overlap_grace_active ||
     resolution.minimum_motion_attack_hold_active)) ||
     resolution.minimum_motion_current_overlap_grace_active);
+  resolution.minimum_motion_footprint_hold_active =
+    request.prior_front_cap_release_active &&
+    (minimum_motion_shiftout_hold || minimum_motion_pass_hold);
   resolution.constrained_horizon_release_allowed =
     request.pass_phase &&
     request.lateral_exclusion_latched &&
@@ -473,7 +487,8 @@ CommittedPassPolicyResolution resolve_committed_pass_policy(
   // Do not let the legacy lateral-only threshold bypass a predicted body overlap.
   resolution.front_cap_release_ready = request.preserve_validated_breakout_line ||
     (request.minimum_motion_corridor_active ?
-    (resolution.minimum_motion_footprint_release_allowed ||
+    (resolution.minimum_motion_shiftout_release_allowed ||
+    resolution.minimum_motion_footprint_release_allowed ||
     resolution.minimum_motion_side_by_side_escape_active ||
     resolution.minimum_motion_footprint_hold_active) :
     legacy_front_cap_release_ready);
@@ -522,6 +537,8 @@ CommittedPassPolicyResolution resolve_committed_pass_policy(
   if (resolution.front_cap_release_ready) {
     resolution.transition_reason = resolution.minimum_motion_side_by_side_escape_active ?
       CommittedPassFrontCapTransitionReason::MinimumMotionSideBySideForwardEscape :
+      resolution.minimum_motion_shiftout_release_allowed ?
+      CommittedPassFrontCapTransitionReason::MinimumMotionFootprintSweepClear :
       resolution.minimum_motion_footprint_release_allowed ?
       CommittedPassFrontCapTransitionReason::MinimumMotionFootprintSweepClear :
       !request.execution_horizon_unconstrained ?
@@ -1804,6 +1821,97 @@ OvertakeMissionDynamicCorridorResolution resolve_overtake_mission_dynamic_corrid
     }
   }
   return resolution;
+}
+
+OvertakeMissionCorridorAdmissionResolution resolve_overtake_mission_corridor_admission(
+  const OvertakeMissionCorridorAdmissionRequest & request) noexcept
+{
+  OvertakeMissionCorridorAdmissionResolution resolution;
+  const bool static_interval_valid =
+    std::isfinite(request.static_goal_lower_m) &&
+    std::isfinite(request.static_goal_upper_m) &&
+    request.static_goal_lower_m <= request.static_goal_upper_m;
+  if (!request.dynamic_corridor.valid || !static_interval_valid) {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  if (!request.entry_gap_available) {
+    return resolution;
+  }
+
+  if (request.dynamic_corridor.observed) {
+    const bool dynamic_interval_valid =
+      request.dynamic_corridor.feasible &&
+      std::isfinite(request.dynamic_corridor.goal_lower_m) &&
+      std::isfinite(request.dynamic_corridor.goal_upper_m) &&
+      request.dynamic_corridor.goal_lower_m <= request.dynamic_corridor.goal_upper_m;
+    if (!dynamic_interval_valid) {
+      return resolution;
+    }
+    resolution.feasible = true;
+    resolution.source = OvertakeMissionCorridorSource::DynamicObservation;
+    resolution.goal_lower_m = request.dynamic_corridor.goal_lower_m;
+    resolution.goal_upper_m = request.dynamic_corridor.goal_upper_m;
+    return resolution;
+  }
+
+  resolution.feasible = true;
+  resolution.source = OvertakeMissionCorridorSource::StaticWallFallback;
+  resolution.goal_lower_m = request.static_goal_lower_m;
+  resolution.goal_upper_m = request.static_goal_upper_m;
+  return resolution;
+}
+
+const char * to_string(const OvertakeMissionCorridorSource source) noexcept
+{
+  switch (source) {
+    case OvertakeMissionCorridorSource::DynamicObservation:
+      return "dynamic";
+    case OvertakeMissionCorridorSource::StaticWallFallback:
+      return "static_fallback";
+    case OvertakeMissionCorridorSource::None:
+    default:
+      return "none";
+  }
+}
+
+OvertakePassPlan build_overtake_pass_plan(
+  const OvertakePassPlanRequest & request) noexcept
+{
+  OvertakePassPlan plan;
+  const auto & mission = request.candidate;
+  if (
+    !mission.feasible || (mission.pass_side_sign != -1 && mission.pass_side_sign != 1) ||
+    !std::isfinite(request.start_lateral_m) ||
+    !std::isfinite(request.return_lateral_m) ||
+    !std::isfinite(mission.goal_lateral_m) ||
+    !std::isfinite(mission.shift_distance_m) || mission.shift_distance_m < 0.5 ||
+    !std::isfinite(mission.pass_hold_distance_m) || mission.pass_hold_distance_m < 0.5 ||
+    !std::isfinite(mission.return_distance_m) || mission.return_distance_m < 0.5 ||
+    !std::isfinite(mission.closing_speed_mps) || mission.closing_speed_mps < 0.0 ||
+    (mission.body_clear_deadline_checked && !mission.body_clear_deadline_feasible) ||
+    (mission.rear_clear_prediction_checked && !mission.rear_clear_prediction_feasible))
+  {
+    return plan;
+  }
+
+  plan.path = OvertakeMissionPathRequest{
+    0.0,
+    request.start_lateral_m,
+    mission.goal_lateral_m,
+    request.return_lateral_m,
+    mission.shift_distance_m,
+    mission.pass_hold_distance_m,
+    mission.return_distance_m};
+  const auto origin = resolve_overtake_mission_path(plan.path);
+  if (!origin.valid) {
+    return plan;
+  }
+
+  plan.valid = true;
+  plan.mission = mission;
+  return plan;
 }
 
 std::vector<double> build_overtake_closing_speed_candidates(

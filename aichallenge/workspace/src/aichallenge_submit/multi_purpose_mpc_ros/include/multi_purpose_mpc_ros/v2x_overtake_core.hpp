@@ -279,6 +279,10 @@ enum class CommittedPassFrontCapTransitionReason
 struct CommittedPassPolicyRequest
 {
   bool preserve_validated_breakout_line{false};
+  /// The side, lateral goal and ShiftOut/Pass/Return distances were admitted
+  /// together and frozen before execution. This is required before ShiftOut
+  /// may acquire longitudinal ownership from a footprint sweep.
+  bool validated_frozen_plan{false};
   bool shiftout_phase{false};
   bool pass_phase{false};
   bool lateral_complete{false};
@@ -316,6 +320,7 @@ struct CommittedPassPolicyRequest
 struct CommittedPassPolicyResolution
 {
   bool active_execution{false};
+  bool minimum_motion_shiftout_release_allowed{false};
   bool minimum_motion_footprint_release_allowed{false};
   bool minimum_motion_footprint_hold_active{false};
   bool minimum_motion_current_overlap_grace_active{false};
@@ -335,10 +340,11 @@ struct CommittedPassPolicyResolution
 };
 
 /// Resolve all longitudinal speed ownership decisions for a committed ShiftOut/Pass.
-/// A minimum-motion Pass may acquire and retain release from a validated body-footprint
-/// sweep instead of the legacy fixed lateral threshold. Other Pass modes retain the
-/// legacy release/reapply hysteresis. The caller remains responsible for state updates,
-/// logging and clamping the resulting reference-only speed floor to hard limits.
+/// A frozen minimum-motion ShiftOut/Pass may acquire and retain release from a
+/// validated body-footprint sweep instead of the legacy fixed lateral
+/// threshold. Other Pass modes retain the legacy release/reapply hysteresis.
+/// The caller remains responsible for state updates, logging and clamping the
+/// resulting reference-only speed floor to hard limits.
 CommittedPassPolicyResolution resolve_committed_pass_policy(
   const CommittedPassPolicyRequest & request) noexcept;
 
@@ -1022,6 +1028,42 @@ struct OvertakeMissionDynamicCorridorResolution
 OvertakeMissionDynamicCorridorResolution resolve_overtake_mission_dynamic_corridor(
   const OvertakeMissionDynamicCorridorRequest & request) noexcept;
 
+enum class OvertakeMissionCorridorSource
+{
+  None,
+  DynamicObservation,
+  StaticWallFallback,
+};
+
+struct OvertakeMissionCorridorAdmissionRequest
+{
+  /// The behavior-level entry guards admitted this side for full mission
+  /// evaluation. The dynamic planner may still have no active sample when its
+  /// short horizon has not reached the candidate path yet.
+  bool entry_gap_available{false};
+  OvertakeMissionDynamicCorridorResolution dynamic_corridor;
+  double static_goal_lower_m{-std::numeric_limits<double>::infinity()};
+  double static_goal_upper_m{std::numeric_limits<double>::infinity()};
+};
+
+struct OvertakeMissionCorridorAdmissionResolution
+{
+  bool valid{false};
+  bool feasible{false};
+  OvertakeMissionCorridorSource source{OvertakeMissionCorridorSource::None};
+  double goal_lower_m{-std::numeric_limits<double>::infinity()};
+  double goal_upper_m{std::numeric_limits<double>::infinity()};
+};
+
+/// Prefer an observed dynamic corridor. A valid but not-yet-observed dynamic
+/// horizon may use the static wall interval so later body, kinematic and full
+/// mission preflights can decide feasibility. An observed dynamic conflict is
+/// never hidden by the fallback.
+OvertakeMissionCorridorAdmissionResolution resolve_overtake_mission_corridor_admission(
+  const OvertakeMissionCorridorAdmissionRequest & request) noexcept;
+
+const char * to_string(OvertakeMissionCorridorSource source) noexcept;
+
 struct OvertakeMissionCandidate
 {
   bool feasible{false};
@@ -1062,7 +1104,27 @@ struct OvertakeMissionCandidate
   double prediction_horizon_sec{};
   double dynamic_valid_until_sec{-std::numeric_limits<double>::infinity()};
   bool outer_strategy_committed{false};
+  OvertakeMissionCorridorSource corridor_source{OvertakeMissionCorridorSource::None};
 };
+
+struct OvertakePassPlanRequest
+{
+  OvertakeMissionCandidate candidate;
+  double start_lateral_m{};
+  double return_lateral_m{};
+};
+
+struct OvertakePassPlan
+{
+  bool valid{false};
+  OvertakeMissionCandidate mission;
+  OvertakeMissionPathRequest path;
+};
+
+/// Validate and freeze the selected side, speed profile and complete
+/// ShiftOut/Pass/Return ey(s) path as one execution plan.
+OvertakePassPlan build_overtake_pass_plan(
+  const OvertakePassPlanRequest & request) noexcept;
 
 struct OvertakeMissionHorizonProgressWeights
 {

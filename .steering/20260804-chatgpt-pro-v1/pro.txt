@@ -1,0 +1,1217 @@
+8m 24s考えました
+結論
+
+「設計が保守的」だけではありません。
+
+人の目には抜けそうなのに追い越しへ入らない主因は、現状では次の順が濃いです。
+
+局所的には空いているが、アルゴリズムが要求する追い越し全区間は成立しない
+追い越し機会を事前に準備せず、“今この瞬間に全条件成立”を要求している
+動的予測・コース投影・各種guardの不整合によるfalse negative
+外まくりが途中でインへ変わるため、候補を正しく棄却している
+純粋にmarginが保守的
+
+つまり、
+
+保守的なパラメータというより、追い越し開始設計が「機会を取りに行くplanner」ではなく、「完成形が今すぐ成立するか検査するvalidator」寄り
+
+なのが本質です。
+
+最新HEADには、実際に「抜けそうなのに候補ゼロ」問題があった
+
+現HEADの直前ログでは、
+
+mission candidate rejection: 447回
+goal_candidates=0:            371回
+dynamic corridor observed=0: 約380回
+
+でした。
+
+重要なのは、observed=0が、
+
+動的障害物を観測して危険だった
+
+という意味ではなく、
+
+約1秒の動的予測範囲が、候補経路へまだ到達していなかった
+
+ケースを大量に含んでいたことです。つまり物理的に抜けないのではなく、予測範囲内に評価点がないことを候補不成立として扱っていたわけです。
+
+最新HEADはここを、
+
+dynamic corridorを観測済みで安全
+  → dynamic interval
+
+dynamic corridorをまだ観測していない
+  → static wall intervalで候補生成を継続
+
+dynamic corridorを観測済みで衝突
+  → 棄却
+
+へ修正しました。
+
+これは明確に、
+
+人間には空いて見えるのに、内部表現上は候補が存在しない
+
+というfalse negativeへの対策です。
+
+したがって、少なくとも直前版では、設計・実装側の甘さがかなりありました。
+
+人が見る「抜けそう」と、アルゴリズムの「抜ける」は違う
+
+人間は画面を見て、主に現在の横幅を判断します。
+
+相手の右が空いている
+壁まで余裕がある
+今なら横へ出られそう
+
+一方、現HEADは追い越し開始前に、概ね次を要求します。
+
+現在の横空間
+ShiftOut中の車体sweep
+body-clearを作るまでの時間
+hard gapへ到達するまでの時間
+rear-clearまでの縦距離
+Pass中の壁・横加速度・操舵曲率
+外側戦略の継続性
+Return経路
+動的予測の有効期限
+
+candidateにはbody-clear時刻、rear-clear時刻、最低速度、Pass保持距離、Return距離、静的・動的horizonなどが保存されています。
+
+したがって、画面上で、
+
+今の断面では2 m空いている
+
+としても、
+
+4 m先で急に狭くなる
+6 m先で外側が内側へ反転する
+横へ出る前に前車へ接近しすぎる
+抜いた後に戻る場所がない
+
+なら、アルゴリズムが行かないのは正しいです。
+
+問題は、正しい棄却と、モデル都合の誤棄却を区別できていないことです。
+
+現在の設計は「入口で厳しく、コミット後は攻撃的」
+
+最新HEADは少し非対称です。
+
+入口
+
+追い越し開始前は、
+
+gap
+dynamic/static corridor
+body-clear deadline
+rear-clear rollout
+wall
+横加速度
+steering curvature
+Return
+course strategy
+
+を通すため、かなり厳しいです。
+
+コミット後
+
+OvertakePassPlanを凍結した後は、
+
+footprintが非重複
+予測sweepも非重複
+経路が物理的に成立
+
+なら、ShiftOut中から前車速度capを解除できます。
+
+つまり現在は、
+
+入口:
+  なかなか入らない
+
+一度入る:
+  かなり強くコミットする
+
+構造です。
+
+この構造だと、短い追い越し窓では、
+
+候補を検証している間に窓が閉じる
+↓
+次の曲線へ入る
+↓
+もう候補が成立しない
+
+となりやすいです。
+
+最大の設計不足は「追い越し準備状態」が弱いこと
+
+今のplannerは基本的に、
+
+今、追い越しmission全体が成立するか
+
+を判定します。
+
+しかしレース用なら、本来は次の二段階が必要です。
+
+Prepare / Armed:
+  次の追い越し窓を予測
+  targetと候補sideを仮保持
+  速度と前後間合いを調整
+  まだ横へは動かない
+
+Commit:
+  窓へ入る直前に最新状態で再検証
+  ShiftOut開始
+
+人間のドライバーは、目の前に空間が現れてから考え始めるのではなく、
+
+次の直線で外から行く
+そのために今は2～3 m間合いを残す
+
+と準備します。
+
+現HEADはcandidate自体は高度になりましたが、この機会スケジューリングがまだ弱いです。
+
+そのため、
+
+見た目では抜けそうなのに行かない
+
+というより、
+
+抜ける窓に入った時点で、まだ候補計算・確認・debounce中
+
+というケースがあり得ます。
+
+外まくりがインになる問題は、「行かない」理由にもなる
+
+前の質問で扱った外→内反転は、追い越し中の破綻だけでなく、開始棄却にも影響します。
+
+例えば、
+
+現在:
+  左側が外まくりとして有利
+
+8 m先:
+  曲率符号が反転
+  同じ左側が次カーブのインになる
+
+予測rear-clear:
+  反転地点より後
+
+なら、現在の固定横目標では、
+
+外側のまま抜き切れない
+
+ため、candidateを棄却するのは合理的です。
+
+ここで問題なのは棄却そのものではなく、
+
+単一の横目標では不成立
+  ↓
+候補なし
+
+で終わり、
+
+外側
+→ 曲率反転前に中央寄り
+→ 次カーブ外側
+
+という複数横knot経路を作れないことです。
+
+したがって、
+
+コースのせいで抜けない
+
+ではなく、
+
+このコースに対して、現行の単一横目標表現では候補を作れない
+
+が正確です。
+
+別要因としてかなり怪しいもの
+1. Entryタイミングが遅い
+
+追い越しの全成立性を確認しているうちに前車へ近づきすぎると、
+
+遠いとき:
+  動的corridorがまだ候補経路へ届かない
+
+近づいたとき:
+  front distance / body-clear deadlineが厳しくなる
+
+という挟み撃ちになります。
+
+最新のstatic fallbackは前半を改善しますが、post-fix実走はまだ未実施です。
+
+2. 現在幅ではなく、inflated footprintで見ている
+
+画面上では空いて見えても、内部では、
+
+自車幅
+相手車幅
+位置誤差margin
+壁margin
+予測移動
+
+を引いた残り幅で評価します。
+
+比較ログでも、見た目上は左右に空きがありそうな場面で、
+
+PLAN-VETO MIN-WIDTH FAIL
+
+が連続し、一定回数・条件が成立してからENGAGEしています。
+
+この種の判定は安全上必要ですが、
+
+一点でも不足したらゼロ
+
+の二値判定だけだと、ノイズで窓を逃します。
+
+3. Dynamic predictionの鮮度・投影
+
+現在の予測が短時間で、コース沿いの相手運動を完全には表していない場合、
+
+実際には相手はコース沿いに曲がる
+予測上は候補側へ侵入するように見える
+
+ことがあります。
+
+これにより、
+
+人には抜けそう
+plannerには将来重複
+
+となります。
+
+4. Legacy gateとcandidate rolloutの二重判定
+
+詳細なkinematic rolloutが成立しても、その前段にある、
+
+completion guard
+curve entry
+front distance
+cooldown
+relative speed confirmation
+
+などのcheap gateが先に落とす可能性があります。
+
+つまり、
+
+高度なplannerなら抜ける
+しかし高度なplannerを呼ぶ前にcheap guardで落ちる
+
+という構造です。
+
+これは典型的な「設計が保守的」というより、多層guardの判定不整合です。
+
+どう切り分けるべきか
+
+次のログ分類だけで、かなり明確になります。
+
+最後に到達した状態	主因
+mission candidate selectedなし	Entry／候補生成が保守的またはfalse negative
+corridor_source=static_fallbackすらなし	behavior-level gap／curve／completion gate
+candidateあり、PassPlan frozenなし	plan構築・state接続不整合
+PassPlan frozenあり、ShiftOutなし	cooldown、solver、hard guard
+ShiftOutあり、Passなし	横移動・速度ownership・body-clear
+Passあり、Returnなし	rear-clear、単一横goal、外→内反転
+candidate rejectがwall中心	本当に狭いか、trajectory基準が悪い
+observed=0中心	予測horizon設計のfalse negative
+rear-clear infeasible中心	closing速度または窓長不足
+
+特に、追い越さなかった場面ごとに、次の1行を出すべきです。
+
+OVERTAKE_NOT_ENGAGED:
+target=d2
+s=123.4
+dominant_stage=mission_preflight
+reason=rear_clear_after_outer_role_expiry
+local_width=2.10
+body_clear_t=0.82
+rear_clear_t=4.91
+outer_valid_for=3.60
+
+現在は個別ログは多いですが、最終的に何が支配理由だったかを人間が復元しづらいです。
+
+改善の優先順位
+P0：追い越し窓を事前にarmする
+
+コース上で、
+
+次にrear-clearまで成立可能な区間
+外側役割が継続する距離
+Return可能位置
+
+を事前計算します。
+
+その窓の10～20 m手前で、
+
+targetを仮lock
+side候補を仮決定
+適切な前後間合いへ速度調整
+
+し、窓入口でcommitします。
+
+P0：棄却理由を段階別に自動集計する
+behavior gate
+corridor admission
+body-clear
+rear-clear
+wall
+lateral acceleration
+outer-role
+return
+debounce/cooldown
+
+をrunごとに集計します。
+
+これなしでmarginを触ると、外しているネジを一生回すことになります。
+
+P1：単一横目標を複数knotへする
+現在位置
+→ 第一カーブ外側
+→ 曲率反転前のneutral
+→ 次カーブ外側またはReturn
+
+を1本のPassPlanとして作ります。
+
+P1：cheap gateをcandidate rolloutへ一本化する
+
+completionなどのcheap gateは、
+
+明らかに不可能な候補だけ除外
+
+へ格下げし、最終判断をkinematic candidateへ寄せます。
+
+最終見解
+
+整理すると、
+
+単に保守的:
+  一部そう
+
+marginが大きすぎる:
+  一部あるが主因とは限らない
+
+設計が甘い:
+  かなりある
+
+他要因:
+  予測horizon、guard不整合、entryタイミングが大きい
+
+外まくり→イン:
+  candidate棄却とPass破綻の両方に効く
+
+です。
+
+現HEADは直前まであった、
+
+動的予測がまだ届かない
+→ 通れない扱い
+
+を直したので、候補生成は改善する可能性があります。
+
+それでもまだ行かないなら、次に疑うべきはmarginではありません。
+
+追い越し窓を事前に準備しないことと、cheap gate・full candidate・コース役割期限の三者が一致していないこと
+
+です。
+
+人の目に抜けそうな区間を、単なる幅ではなく、
+
+どのtargetを
+どのsideから
+どのsでShiftOutし
+どのsまでにrear-clearし
+どのsでReturnするか
+
+という「追い越し窓」としてソフトへ与えるのが、次の本命です。
+
+例えばガラ空きの直線で距離があるのに追い越ししない、空いてるのに直ぐに諦めて追従に倒す、狭い側をあえて選んで詰まってそりゃ詰まるだろ、などいろいろあって低速車の追い越しがうまくいってない
+7m 13s考えました
+結論
+
+その3症状は、同じ原因ではなく、追い越し設計の別々の弱点が同時に出ています。
+
+ベースtrajectoryの微調整や壁marginだけで直る問題ではありません。
+現行HEADは経路候補の安全性確認はかなり高度ですが、
+追い越し機会の捕まえ方・コミット後の粘り方・左右候補の評価関数がまだレース向けに噛み合っていません。
+
+整理するとこうです。
+
+症状	主因
+ガラ空きの直線なのに行かない	Entry前段のfalse negative／追い越し準備状態の不足
+横が空いているのにすぐ追従へ戻る	一時的な認識・corridor変動をhard abort扱いしている
+明らかに狭い側を選んで詰まる	candidate scoreが安全余裕・頑健性を十分評価していない
+外まくりが次のカーブでインになる	単一横目標のPassPlan表現がコースへ適応できない
+追い越し中に低速車と同速になる	横経路と縦速度ownershipがまだ完全には統合されていない
+
+なので、現状は単に「少し保守的」ではありません。
+
+行くべき場面で行かず、行ったら簡単に諦め、ときどき悪い側へ強くコミットする
+
+という、入口・実行・候補選択の契約不整合です。
+
+1. ガラ空きの直線で追い越さない
+
+これはかなり明確に、追い越し開始設計側です。
+
+現行HEADは、左右候補を本格評価する前に、
+
+GapPlanner
+curve / completion policy
+cooldown
+relative-speed confirmation
+execution permission
+
+などを通します。
+
+その後で初めて、
+
+横goal
+ShiftOut距離
+closing speed
+body-clear
+rear-clear
+Return
+
+の候補を評価します。
+
+つまり、詳細なcandidate plannerなら抜ける場面でも、
+
+cheap gateでfalse
+→ candidate plannerを呼ばない
+→ Follow
+
+が起こり得ます。
+
+最新HEADは、動的corridorがまだ観測範囲へ届いていない場合にstatic wall corridorで候補生成を続けるよう修正しています。これは前進です。しかしstatic fallbackも、前段のassessment.gap_availableが成立してから実行されます。したがって、前段のGapPlannerやcompletion gateがfalseなら、ガラ空きでも候補生成へ到達しません。
+
+本質的な不足
+
+現在は基本的に、
+
+今、この瞬間に追い越しmission全体が成立するか
+
+しか見ていません。
+
+レース用なら、その前に、
+
+OvertakeArmed / Prepare
+
+が必要です。
+
+低速車を10～20 m前方で認識
+  ↓
+次の直線・追い越し窓を予測
+  ↓
+左右候補を事前評価
+  ↓
+抜きやすい前後間合いを維持
+  ↓
+窓に入ったら最新状態でcommit
+
+という構造です。
+
+今の車は、窓へ入ってから履歴書を書き始めている感じです。そりゃ面接が終わります。
+
+2. 空いているのにすぐ諦めて追従へ戻る
+
+これはmission continuityの判定が過敏です。
+
+現HEADは一度選んだOvertakePassPlanを固定し、Behavior出力が一時的に落ちても追い越しを継続する仕組みを持っています。これは正しいです。
+
+ただし実行中に次のいずれかが出ると、追い越し継続を失いやすいです。
+
+overtake_execution_corridor_blocked
+target course progress discontinuity
+target position jump
+pass-side intrusion
+live corridor unavailable
+EmergencyBrake
+
+現行コードでは、特にovertake_execution_corridor_blockedやtarget continuity異常がRecovery理由になります。
+
+問題は、
+
+本当に経路が塞がった
+
+のか、
+
+V2Xやcourse projectionが1～2周期揺れただけ
+
+なのかを十分に分けていないことです。
+
+分けるべき3分類
+Hard abort
+
+即中止でよいものです。
+
+現在footprint重複
+実壁接触
+EmergencyBrake
+solver failure
+targetが固定経路へ明確に侵入
+Soft hold / revalidate
+
+すぐ追従へ戻してはいけないものです。
+
+動的corridorが1～2周期未観測
+一時的なcourse progress discontinuity
+短いtarget dropout
+短時間の予測overlap
+
+この場合は、
+
+固定横経路を維持
+closing speedを0付近へ落とす
+0.3～0.5秒だけ再検証
+
+でよいです。
+
+Structural abort
+
+同じmissionでは無理なものです。
+
+Returnまで壁不成立
+rear-clearがabsolute limitを超える
+外側有効期限までに抜けない
+継続的なtarget intrusion
+
+現在は、この3分類の境界がまだ曖昧です。
+
+そのため、画面上は空いているのに、
+
+瞬間的なcorridor unavailable
+→ mission解除
+→ Follow
+
+と見える可能性があります。
+
+3. 狭い側をあえて選ぶ問題
+
+これは左右候補が見えていないのではなく、評価関数が悪い可能性が高いです。
+
+現HEADは左右を両方評価し、各側の最良candidateを最後にグローバル比較しています。したがって、単純に「最初に見つけた側へ行く」実装ではありません。
+
+しかし現在のmission candidateが重視するのは主に、
+
+rear-clear時間
+rear-clear距離
+維持速度
+closing speed
+横移動量
+必要横加速度
+
+です。
+
+一方、candidate構造には、最終選択用の明示的な、
+
+全経路中の最小壁余裕
+全経路中の最小target余裕
+最小corridor幅
+Return余裕
+外側として有効な残距離
+予測期限の余裕
+
+が十分には入っていません。候補にはrear-clear、速度、Pass距離などはありますが、corridor robustnessを代表する指標が乏しいです。
+
+そのため、
+
+狭いがrear-clearが0.3秒速い側
+
+が、
+
+広くて安定しているが横移動が少し多い側
+
+に勝つ可能性があります。
+
+現設定も攻撃寄り
+
+現在は、
+
+v2x_overtake_minimum_motion_inner_preference_max_extra_shift: 0.60
+v2x_overtake_minimum_motion_inner_min_corridor_width: 0.30
+
+です。
+
+つまり、イン側がアウトより最大60 cm余計に横移動しても、最低条件を満たせばインを優遇できる設定です。
+
+最終的にはglobal candidateが上書きしますが、候補生成・side preference・同点近傍の挙動には、この攻撃性が残ります。
+
+上位者ログとの差
+
+比較ログでは、選択側が別車両や幅条件で塞がると、
+
+[K-CHECK] blocked
+[SIDE-FALLBACK] side=1->-1
+[ENGAGE] side=-1
+
+と、反対側へ明示的に切り替えています。完璧な車両ではありませんが、狭い側を採用してから詰まるより、commit前に広い側へfallbackする思想は参考になります。
+
+4. 左右選択は「最速」より先に「頑健性」で順位付けすべき
+
+推奨は、候補選択を次の辞書式にすることです。
+
+1. current / predicted footprint非重複
+2. Returnを含む全経路成立
+3. 外側役割がrear-clearまで継続
+4. 最小物理clearanceが大きい
+5. prediction / horizon slackが大きい
+6. rear-clear時間が短い
+7. 横移動量が小さい
+
+現在は4より6・7が強すぎます。
+
+candidateへ少なくとも次を追加したいです。
+
+double minimum_static_wall_clearance_m;
+double minimum_dynamic_target_clearance_m;
+double minimum_corridor_width_m;
+double return_clearance_slack_m;
+double outer_role_valid_until_pass_m;
+double prediction_time_slack_sec;
+
+そして、
+
+robust_candidate =
+    min_wall_clearance >= 0.20 &&
+    min_target_clearance >= required_body_clearance &&
+    return_clearance_slack >= 0.20;
+
+を先に通します。
+
+その後でrear-clear時間を比較します。
+
+これなら、
+
+0.1秒速いが壁際
+
+より、
+
+0.1秒遅いが広い
+
+を選べます。
+
+6周レースでは、その0.1秒よりRecoveryの100秒の方が、だいたい1000倍まずいです。
+
+5. 外まくりが途中でインになる問題
+
+これは「詰まる」問題の大きな一因ですが、ガラ空き直線で行かない原因ではありません。
+
+現在のOvertakePassPlanは、
+
+ShiftOut
+→ 一つのpass_lateral_mを維持
+→ Return
+
+という形です。
+
+S字では、
+
+第一カーブでは外側
+次の逆カーブでは同じFrenet側が内側
+
+になります。
+
+現HEADはlongitudinal continuation時、車体footprintが安全なら外／内ラベル反転だけでは中止しない方向へ変更しています。これは不要なRecovery低減には効きます。
+
+ただし、
+
+安全に走れる
+
+と、
+
+速く抜ける
+
+は別です。
+
+悪い側を保持すると、
+
+イン側曲率増加
+→ line cap
+→ closing不足
+→ rear-clear遅延
+→ Pass延長
+→ さらに内側化
+
+という悪循環になります。
+
+最終的には、単一横目標ではなく、
+
+外側goal
+→ 曲率反転前にneutral
+→ 次カーブ外側またはReturn
+
+という複数lateral knotが必要です。
+
+今回の3症状からの優先順位
+P0：左右選択のrobustness化
+
+まずこれです。
+
+狭い側を選んで詰まる
+
+のは、避けられる失敗です。
+
+最小壁余裕・最小corridor幅・Return余裕をcandidate scoreへ追加し、速度より優先します。
+
+P0：Entry前のOvertakeArmed
+直線が空いているのに行かない
+
+には、機会を事前準備する状態が必要です。
+
+Armed
+→ candidateを先に作る
+→ 前後間合いを整える
+→ 窓入口でcommit
+
+とします。
+
+P0：Soft holdとHard abortの分離
+空いているのにすぐ諦める
+
+には、
+
+一時的な観測揺れ
+≠
+mission不成立
+
+を実装上分ける必要があります。
+
+P1：外側有効期限
+
+PassPlanへ、
+
+outer_role_valid_until_pass_m
+
+を保存し、rear-clear予測がそこを超えるなら単純なPass延長を禁止します。
+
+P1：複数lateral knot
+
+その後にコース形状へ適応する追い越し経路へ進みます。
+
+Codexへ渡すならこの指示
+現HEADの症状は以下の3系統として分離する。
+
+A. ガラ空き直線でentryしない
+B. committed後に短時間でFollow/Recoveryへ戻る
+C. より狭い側のcandidateを選択する
+
+P0:
+1. behavior cheap gateで落ちた場合も、左右のfull mission candidateを
+   diagnostic/shadow評価し、false-negativeを計測する。
+2. OvertakeArmed状態を追加する。
+   - 次の追い越し窓の10〜20 m前からtarget/side候補を仮保持
+   - commit前は基準trajectoryを維持
+   - 前後間合いだけ調整
+3. candidateへ以下を追加する。
+   - minimum_static_wall_clearance_m
+   - minimum_dynamic_target_clearance_m
+   - minimum_corridor_width_m
+   - return_clearance_slack_m
+   - outer_role_valid_until_pass_m
+   - prediction_time_slack_sec
+4. side選択はrobustnessをrear-clear時間より優先する。
+5. execution_corridor unavailable、短いtarget dropout、
+   course-progress discontinuityには0.3〜0.5秒のSoftHoldを適用する。
+   current overlap / wall contact / Emergency / solver failureのみHardAbort。
+6. rear-clear予測がouter_role_valid_untilを超える場合、
+   単一goalのlongitudinal extensionを禁止する。
+最終判断
+
+あなたの観察はかなり重要です。
+
+この3つが同じrunで出ているなら、現在の低速車追い越しは、
+
+安全条件が厳しすぎるだけではなく、追い越し意思決定の品質が不安定
+
+です。
+
+特に、
+
+空いているのに行かない
+狭い側には行く
+一度行ったらすぐ諦める
+
+は、marginを0.15から0.10へ下げて直す種類の問題ではありません。
+
+先に直すべきは、候補を作るタイミング、候補の順位付け、コミット後の継続契約です。
+
+trajectoryをいじるのは、その3点を直したあとです。今trajectoryを触ると、plannerの判断ミスをコース線形でごまかすことになり、別区間で新しい詰まり方を発明します。
+
+コースに対する追い越し設計が良くないよね
+4m 21s考えました
+
+うん。かなり本丸です。
+
+ただし、より正確には、
+
+コースそのものやtraj_mincurv.csvが悪いというより、単独走行用レーシングラインを基準に、単一の横オフセットを載せて追い越す設計が、この連続ヘアピン／S字コースに適応できていない
+
+という状態です。
+
+現HEADは局所的な安全判定やcandidate探索は相当凝っていますが、コース全体に対する追い越し戦術レイヤーが薄いです。
+
+現行設計の根本的な弱点
+1. 単独走行用trajectoryを追い越し経路の背骨にしている
+
+traj_mincurvは、単独で速く走るために壁際まで使うレーシングラインです。
+
+それに対して現行追い越しは基本的に、
+
+traj_mincurvの進捗s
+＋
+横位置ey
+
+で、
+
+現在ey
+→ pass_lateral_m
+→ 一定距離その位置を保持
+→ ey=0へReturn
+
+という経路を作ります。
+
+最新のOvertakePassPlanでside・goal・ShiftOut・Pass・Return・closing speedを一括固定できるようになったのは良いのですが、Pass中の横目標は依然として基本的に**単一のpass_lateral_m**です。設計資料でも、連続ヘアピンで「外まくりが後半にイン側へ変わる」問題が残ると明記されています。
+
+つまり、
+
+最初のカーブでは良い外まくり
+              ↓
+次の逆カーブでも同じFrenet側を保持
+              ↓
+実質的にはイン側
+              ↓
+曲率増加・壁寄り・速度低下
+
+となります。
+
+これはコースが意地悪なのではなく、経路表現がコース形状に負けています。
+
+2. 「今通れる横幅」ではなく「抜き終わるまで有効な側」を選ぶ必要がある
+
+現行はかなり詳細に、
+
+左右のgap
+横移動量
+corridor幅
+連続開放距離
+横加速度
+body-clear
+rear-clear
+Return
+wall footprint
+
+を評価します。
+
+ただし、候補選択において本当に重要なのは、
+
+この側が今空いているか
+
+だけでなく、
+
+rear-clearする地点まで、この側が有利な役割を維持するか
+
+です。
+
+現状では外側戦略の連続性も検査していますが、固定横目標のlongitudinal refreshでは、物理footprintが安全なら外／内の役割反転を許容する設計になっています。これは不要なRecoveryを減らすには正しい一方、
+
+安全に走れる
+
+と、
+
+速く抜き切れる
+
+を混同しています。
+
+比較ログでも、追い越し中にline_cap(内側ライン曲率減速)へ移り、速度差を失った後、LAT-TTCやfootprint riskで追い越しを中断する流れが確認できます。これは別実装のログなので現HEADの直接証拠ではありませんが、このコースで固定オフセットを維持すると何が起きるかをよく示しています。
+
+3. 左右選択が「頑健さ」より「短時間で抜けそう」に寄りすぎている
+
+あなたが見ている、
+
+狭い側をわざわざ選んで詰まる
+
+も、コース相対設計の弱さです。
+
+現設定には、
+
+v2x_overtake_minimum_motion_inner_preference_max_extra_shift: 0.60
+v2x_overtake_minimum_motion_inner_min_corridor_width: 0.30
+
+があります。
+
+つまり一定条件では、イン側がアウト側より最大60 cm余計に横移動しても、インを優遇する余地があります。最終的にはglobal mission candidate比較が入りますが、候補生成・同点近傍・品質評価では攻撃的なイン側が押し上がり得ます。
+
+現在のcandidate評価はrear-clear時間、速度、横移動、横加速度には強い一方、次のような頑健性指標が第一級の選択条件になっていません。
+
+全経路中の最小壁余裕
+全経路中の最小corridor幅
+Return時の余裕
+予測誤差に対するslack
+外側として有効な残り距離
+
+その結果、
+
+0.2秒速いが壁際の側
+
+が、
+
+0.2秒遅いが広くて安定した側
+
+に勝い得ます。
+
+6周レースでは0.2秒より、1回のRecoveryによる50～100秒の方が圧倒的に重いので、評価関数の優先順位が競技目的と合っていません。
+
+4. 直線を「追い越し窓」として事前利用していない
+
+ガラ空きの直線なのに追い越さないのも、コース戦略レイヤー不足です。
+
+現行は基本的に、
+
+今、前車がいる
+↓
+今の左右候補を評価
+↓
+今からShiftOut・Pass・Returnまで成立するか
+
+を判定しています。
+
+本来はコース上にあらかじめ、
+
+このsからShiftOut可能
+このsまで外側役割が有効
+このsまでにrear-clear必須
+このsからReturn可能
+
+という追い越し窓を持つべきです。
+
+そして窓の10～20 m手前から、
+
+OvertakeArmed
+
+へ入り、
+
+targetを仮ロック
+左右候補を事前評価
+前車との距離を調整
+速度差を作りすぎず温存
+窓入口で再検証してcommit
+
+する必要があります。
+
+今は直線へ入ってから一連のcandidate生成とdebounceを始めるため、短い直線では評価が終わるころには次のカーブです。
+
+現HEADは「局所設計が高度、全体設計が弱い」
+
+現HEADで追加された、
+
+dynamic corridor未観測時のstatic fallback
+immutableなOvertakePassPlan
+ShiftOut中のfootprintベースfront-cap解除
+body-clear／rear-clear rollout
+longitudinal horizon refresh
+SafeSeparation
+
+は、どれも筋の良い改善です。
+
+ただし、これらは主に、
+
+候補ができない
+速度capで失速する
+Passが長引く
+失敗時に危険にReturnする
+
+という局所症状への修正です。
+
+コース戦略としては依然、
+
+単一のレーシングライン
+単一の横目標
+その横目標を一定距離保持
+
+です。
+
+言い換えると、
+
+局所ガードは賢いが、追い越しラインそのものがコースを理解していない
+
+という状態です。
+
+本来あるべき設計
+1. 通常ラインと追い越し用spineを分ける
+通常走行:
+  traj_mincurv
+
+追い越し計画:
+  track center
+  またはfree corridor中心
+
+を使います。
+
+追い越し時までmincurvを唯一の基準にすると、もともと壁へ寄ったラインに対する横オフセットになり、片側候補が不必要に狭くなります。
+
+traj_mincurv.csv自体を中央へ寄せるのではなく、追い越し時だけ別の基準線を使うのがよいです。
+
+2. コース上の追い越し窓を事前計算する
+
+例えば各sに対して、
+
+struct OvertakeWindow
+{
+  double entry_s;
+  double shiftout_end_s;
+  double outer_role_valid_until_s;
+  double latest_rear_clear_s;
+  double return_start_s;
+  double return_end_s;
+
+  double left_min_clearance_m;
+  double right_min_clearance_m;
+  double left_min_corridor_width_m;
+  double right_min_corridor_width_m;
+};
+
+を持ちます。
+
+選択条件は、
+
+予測rear-clear位置
+<
+outer_role_valid_until_s - reserve
+
+を必須にします。
+
+固定外側ラインの有効期限を越えてからrear-clearするcandidateは、最初から不採用です。
+
+3. 単一横目標を複数lateral knotへ変える
+
+最低限、
+
+struct LateralKnot
+{
+  double mission_s;
+  double lateral_m;
+};
+
+を持たせて、
+
+現在位置
+→ 第一カーブの外側
+→ 曲率反転前にneutral
+→ 次カーブの外側またはReturn
+
+という経路にします。
+
+例：
+
+s=0 m:   ey=current
+s=5 m:   ey=外側1.2 m
+s=12 m:  ey=中央寄り0.3 m
+s=18 m:  ey=次カーブ外側-0.8 m
+s=24 m:  ey=base line
+
+これで「外まくりが次のカーブでイン差しになる」問題を構造的に解消できます。
+
+4. candidateは頑健性を先に比較する
+
+辞書式に、
+
+1. 車体footprint安全
+2. Returnまで全経路成立
+3. rear-clearまで外側役割継続
+4. 最小壁余裕
+5. 最小corridor幅
+6. prediction slack
+7. rear-clear時間
+8. 横移動量
+
+の順で選びます。
+
+候補へ、
+
+double minimum_wall_clearance_m;
+double minimum_corridor_width_m;
+double return_clearance_slack_m;
+double outer_role_valid_until_s;
+double prediction_slack_sec;
+
+を追加するべきです。
+
+5. 追い越し窓の前にArmed状態を入れる
+
+FSMは、
+
+Idle
+→ OvertakeArmed
+→ ShiftOut
+→ Pass
+→ Return
+→ Idle
+
+がよいです。
+
+Armed中は横移動せず、
+
+target lock
+side仮選択
+前後間合い調整
+candidateの更新
+直線入口の監視
+
+だけを行います。
+
+まず入れるべき最小修正
+
+いきなり複数knotまで実装する前に、次の3点だけでも効果を確認できます。
+
+1. PassPlanへouter_role_valid_until_sを追加
+2. predicted rear-clearが期限を越えるcandidateを棄却
+3. min wall/corridor/Return slackをrear-clear時間より優先
+
+この版で、
+
+狭い側を選ぶ
+外側がインへ反転して詰まる
+
+が減るか確認します。
+
+その次が、
+
+OvertakeArmed
+
+最後に、
+
+複数lateral knot
+
+です。
+
+最終見解
+
+はい。コースに対する追い越し設計が良くないです。
+
+ただし、それは、
+
+このコースでは追い越せない
+
+という意味ではありません。
+
+正確には、
+
+単独走行用のmincurv trajectoryへ固定横オフセットを載せる方式では、このコースの連続曲率反転、壁寄り区間、短い直線窓を表現できていない
+
+ということです。
+
+今の設計は「安全な局所回避」としてはかなり高度ですが、レース用の追い越しライン計画としてはまだ局所的です。
+
+次に直す本丸はmarginやclosing speedではなく、
+
+追い越し窓
+外側有効期限
+複数横knot
+頑健性優先の候補選択
+
+です。

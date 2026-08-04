@@ -446,6 +446,7 @@ mpc:
   v2x_overtake_gap_lookahead_distance: 24.0 # [m] search farther than MPC horizon for slow-front pass
   v2x_overtake_try_both_sides: true         # before ShiftOut, retry the opposite side if preferred gap is blocked
   v2x_overtake_minimum_lateral_motion_enabled: true # keep the racing line when clear; otherwise use the nearest safe corridor point
+  v2x_overtake_minimum_motion_preferred_clearance_buffer: 0.20 # [m] use spare corridor width away from the target, capped at half the corridor
   v2x_overtake_minimum_motion_inner_preference_max_extra_shift: 0.60 # [m] keep small-wrap default; allow a verified open inside attack
   v2x_overtake_minimum_motion_inner_lookahead_distance: 18.0 # [m] resolve the next curve inside while still on the preceding straight
   v2x_overtake_minimum_motion_inner_min_open_distance: 8.0 # [m] inside must stay continuously executable before preference applies
@@ -470,10 +471,10 @@ mpc:
   v2x_overtake_shiftout_adaptive_min_time_sec: 0.5 # [s] avoid an unbounded cap as ShiftOut completes
   # Minimum-motion mode latches the nearest safe ego-center point. This separation remains the
   # fallback when a fresh planner corridor is unavailable at entry or the mode is disabled.
-  v2x_overtake_line_min_target_separation: 1.50 # [m] combined kart width plus prediction margin
-  v2x_overtake_pass_front_overlap_lateral_clearance: 1.50 # [m] current physical clearance required before front-cap release
-  v2x_overtake_pass_front_cap_reapply_lateral_clearance: 1.45 # [m] hold committed Pass speed down to the physical combined-width boundary
-  v2x_overtake_pass_current_overlap_confirm_sec: 0.10 # [s] require two V2X observations before revoking an already released Pass on body-boundary overlap
+  v2x_overtake_line_min_target_separation: 1.55 # [m] 1.45 m combined kart width plus 0.10 m nominal surface clearance
+  v2x_overtake_pass_front_overlap_lateral_clearance: 1.55 # [m] nominal center separation required before front-cap release
+  v2x_overtake_pass_front_cap_reapply_lateral_clearance: 1.50 # [m] reapply before reaching the 1.45 m physical body boundary
+  v2x_overtake_pass_current_overlap_confirm_sec: 0.05 # [s] revoke on one sustained V2X interval instead of waiting through contact
   v2x_overtake_pass_predicted_overlap_confirm_sec: 0.25 # [s] require sustained predicted overlap before recapping an already released Pass
   # Once a low-speed target has full current lateral clearance in ShiftOut, or is physically
   # committed in Pass, do not let a conservative target-speed reference make the ego crawl
@@ -510,6 +511,8 @@ mpc:
   v2x_overtake_pass_horizon_hold_max_distance: 3.0 # [m]
   v2x_overtake_safe_separation_enabled: true # retain the committed side when Pass horizon extension is unavailable
   v2x_overtake_safe_separation_speed_delta: 0.8 # [m/s] push longitudinal separation away from side-by-side
+  v2x_overtake_safe_separation_forward_escape_enabled: true # preserve speed and finish when a cap-released target is nearly side-by-side
+  v2x_overtake_safe_separation_forward_escape_max_front_distance: 0.75 # [m] target-center window treated as side-by-side forward completion
   v2x_overtake_safe_separation_front_clear_distance: 2.0 # [m] target-ahead clearance before lateral Recovery
   v2x_overtake_safe_separation_front_clear_confirm_sec: 0.25 # [s] require continuous target-ahead clearance before Recovery
   v2x_overtake_safe_separation_max_sec: 3.0 # [s] bounded same-side longitudinal separation

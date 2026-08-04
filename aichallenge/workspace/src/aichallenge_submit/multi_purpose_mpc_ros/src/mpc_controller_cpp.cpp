@@ -1404,6 +1404,8 @@ struct OvertakeLineConfig
   double pass_horizon_hold_max_distance{3.0};
   bool safe_separation_enabled{false};
   double safe_separation_speed_delta{0.8};
+  bool safe_separation_forward_escape_enabled{false};
+  double safe_separation_forward_escape_max_front_distance{0.75};
   double safe_separation_front_clear_distance{2.0};
   double safe_separation_front_clear_confirm_sec{0.25};
   double safe_separation_max_sec{3.0};
@@ -1529,6 +1531,7 @@ struct V2XBehaviorConfig
   double overtake_gap_lookahead_distance{0.0};
   bool overtake_try_both_sides{false};
   bool overtake_minimum_lateral_motion_enabled{false};
+  double overtake_minimum_motion_preferred_clearance_buffer{0.0};
   double overtake_minimum_motion_inner_preference_max_extra_shift{0.0};
   double overtake_minimum_motion_inner_lookahead_distance{0.0};
   double overtake_minimum_motion_inner_min_open_distance{0.0};
@@ -6448,7 +6451,9 @@ struct MPC
           const auto minimum_motion_goal =
             v2x_overtake_core::resolve_minimum_lateral_motion_goal(
             v2x_overtake_core::MinimumLateralMotionGoalRequest{
-              0.0, model->spatial_state.e_y, goal_lower, goal_upper});
+              0.0, model->spatial_state.e_y, goal_lower, goal_upper,
+              side,
+              cfg.v2x_behavior.overtake_minimum_motion_preferred_clearance_buffer});
           std::vector<double> goal_candidates;
           const auto add_goal = [&](const double goal) {
               if (!std::isfinite(goal)) {
@@ -11444,6 +11449,7 @@ private:
     std::optional<double> safe_separation_velocity_reference;
     double safe_separation_signed_closing_speed =
       std::numeric_limits<double>::quiet_NaN();
+    bool safe_separation_forward_escape_active = false;
     const bool pass_short_horizon_safe =
       !actual_wall_physical_contact && !actual_wall_sample_unavailable &&
       locked_target_seen &&
@@ -11491,7 +11497,8 @@ private:
             locked_target_matches && locked_target_progress_continuous,
             behavior_output.locked_target_current_body_footprints_separated,
             behavior_output.locked_target_footprint_prediction_valid,
-            behavior_output.locked_target_predicted_body_footprint_sweep_separated});
+            behavior_output.locked_target_predicted_body_footprint_sweep_separated,
+            predicted_overlap_replan_required});
         const std::uint64_t source_generation =
           overtake_line_state_.mission_generation;
         const std::string source_target_id = overtake_line_state_.target_vehicle_id;
@@ -11888,6 +11895,14 @@ private:
           0.0,
           now_sec -
           overtake_line_state_.pass_horizon_safe_separation_front_clear_since_sec) : 0.0;
+        const bool safe_separation_forward_escape_allowed =
+          line_cfg.safe_separation_forward_escape_enabled &&
+          cfg.v2x_behavior.overtake_committed_pass_attack_mode_enabled &&
+          live_minimum_motion_corridor_active &&
+          overtake_line_state_.pass_front_cap_release_active &&
+          locked_target_matches && locked_target_progress_continuous &&
+          behavior_output.locked_target_current_body_footprints_separated &&
+          !behavior_output.locked_target_position_jump;
         const auto safe_separation = overtake_core::resolve_safe_separation(
           overtake_core::SafeSeparationRequest{
             line_cfg.safe_separation_enabled,
@@ -11906,12 +11921,17 @@ private:
             safe_separation_elapsed,
             safe_separation_traveled,
             line_cfg.safe_separation_max_sec,
-            line_cfg.safe_separation_max_distance});
+            line_cfg.safe_separation_max_distance,
+            std::max(0.0, current_speed_mps_),
+            safe_separation_forward_escape_allowed,
+            line_cfg.safe_separation_forward_escape_max_front_distance});
         if (safe_separation.action == overtake_core::SafeSeparationAction::KeepSameSide) {
           safe_separation_velocity_reference =
             safe_separation.target_velocity_reference_mps;
           safe_separation_signed_closing_speed =
             safe_separation.signed_closing_speed_mps;
+          safe_separation_forward_escape_active =
+            safe_separation.forward_escape_active;
         } else if (safe_separation.action == overtake_core::SafeSeparationAction::Return) {
           transition_overtake_line_phase(
             OvertakeLinePhase::Return, now_sec, current_ey,
@@ -12633,7 +12653,7 @@ private:
           "recovery_speed=%s, mission_closing=%.2f, closing=%.2f, "
           "unseparated_reserve=%d/protected=%.2f, "
           "cap_release=%d, horizon_release=%d, "
-          "speed_hold=%d, safe_sep=%d/signed_closing=%.2f, "
+          "speed_hold=%d, safe_sep=%d/forward=%d/signed_closing=%.2f, "
           "minimum_motion_cap=%d, footprint_clear=%d, "
           "current_overlap_confirmed=%d, current_overlap_elapsed=%.2f/%.2f, "
           "current_overlap_grace=%d, "
@@ -12663,6 +12683,7 @@ private:
           output.constrained_horizon_front_cap_release_active ? 1 : 0,
           output.committed_pass_speed_hold_active ? 1 : 0,
           overtake_line_state_.pass_horizon_safe_separation_active ? 1 : 0,
+          safe_separation_forward_escape_active ? 1 : 0,
           safe_separation_signed_closing_speed,
           committed_pass_request.minimum_motion_corridor_active ? 1 : 0,
           committed_pass_request.current_body_footprints_separated ? 1 : 0,
@@ -15516,6 +15537,15 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_safe_separation_speed_delta"] ?
     mpc["v2x_overtake_safe_separation_speed_delta"].as<double>() : 0.8);
+  cfg.mpc.v2x_behavior.overtake_line.safe_separation_forward_escape_enabled =
+    mpc["v2x_overtake_safe_separation_forward_escape_enabled"] ?
+    mpc["v2x_overtake_safe_separation_forward_escape_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_line.safe_separation_forward_escape_max_front_distance =
+    std::max(
+    0.0,
+    mpc["v2x_overtake_safe_separation_forward_escape_max_front_distance"] ?
+    mpc["v2x_overtake_safe_separation_forward_escape_max_front_distance"].as<double>() :
+    0.75);
   cfg.mpc.v2x_behavior.overtake_line.safe_separation_front_clear_distance = std::max(
     0.0,
     mpc["v2x_overtake_safe_separation_front_clear_distance"] ?
@@ -16072,6 +16102,10 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_minimum_lateral_motion_enabled =
     mpc["v2x_overtake_minimum_lateral_motion_enabled"] ?
     mpc["v2x_overtake_minimum_lateral_motion_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_minimum_motion_preferred_clearance_buffer = std::max(
+    0.0,
+    mpc["v2x_overtake_minimum_motion_preferred_clearance_buffer"] ?
+    mpc["v2x_overtake_minimum_motion_preferred_clearance_buffer"].as<double>() : 0.0);
   cfg.mpc.v2x_behavior.overtake_minimum_motion_inner_preference_max_extra_shift = std::max(
     0.0,
     mpc["v2x_overtake_minimum_motion_inner_preference_max_extra_shift"] ?
@@ -16789,9 +16823,11 @@ public:
         mpc_cfg_.v2x_behavior.overtake_entry_speed_confirm_sec);
       RCLCPP_INFO(
         get_logger(),
-        "V2X minimum-motion inside preference: lookahead=%.2f m, min_open=%.2f m, "
+        "V2X minimum-motion inside preference: clearance_buffer=%.2f m, "
+        "lookahead=%.2f m, min_open=%.2f m, "
         "min_width=%.2f m, max_extra_shift=%.2f m, committed_front_danger_suppress=%d, "
         "committed_pass_attack=%d",
+        mpc_cfg_.v2x_behavior.overtake_minimum_motion_preferred_clearance_buffer,
         mpc_cfg_.v2x_behavior.overtake_minimum_motion_inner_lookahead_distance,
         mpc_cfg_.v2x_behavior.overtake_minimum_motion_inner_min_open_distance,
         mpc_cfg_.v2x_behavior.overtake_minimum_motion_inner_min_corridor_width,
@@ -16890,6 +16926,7 @@ public:
         "soft/absolute=%.2f/%.2f m, lead=%.2f m/%.2f s, "
         "same-side extension=%.2f m/lateral<=%.2f m x%d, result_age<=%.2f s, "
         "hold<=%.2f s/%.2f m, safe-separation=%s delta=%.2f m/s "
+        "forward_escape=%s/front<=%.2f m "
         "front>=%.2f m confirm=%.2f s limit=%.2f s/%.2f m",
         mpc_cfg_.v2x_behavior.overtake_line.pass_horizon_enabled ?
         "enabled" : "disabled",
@@ -16908,6 +16945,10 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line.safe_separation_enabled ?
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.safe_separation_speed_delta,
+        mpc_cfg_.v2x_behavior.overtake_line.safe_separation_forward_escape_enabled ?
+        "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line
+        .safe_separation_forward_escape_max_front_distance,
         mpc_cfg_.v2x_behavior.overtake_line.safe_separation_front_clear_distance,
         mpc_cfg_.v2x_behavior.overtake_line.safe_separation_front_clear_confirm_sec,
         mpc_cfg_.v2x_behavior.overtake_line.safe_separation_max_sec,

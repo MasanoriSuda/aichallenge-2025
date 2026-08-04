@@ -808,6 +808,9 @@ struct PassContinuationPreflightPolicyRequest
   bool current_body_footprints_separated{false};
   bool predicted_body_footprint_available{false};
   bool predicted_body_footprint_sweep_separated{false};
+  /// Use the shared debounce result, not a single prediction sample, when
+  /// deciding whether semantic center separation must be restored.
+  bool predicted_body_overlap_confirmed{false};
 };
 
 struct PassContinuationPreflightPolicyResolution
@@ -949,6 +952,9 @@ struct SafeSeparationRequest
   double traveled_m{};
   double maximum_duration_sec{};
   double maximum_distance_m{};
+  double ego_speed_mps{};
+  bool forward_escape_allowed{false};
+  double forward_escape_max_front_distance_m{};
 };
 
 struct SafeSeparationResolution
@@ -956,6 +962,7 @@ struct SafeSeparationResolution
   SafeSeparationAction action{SafeSeparationAction::Inactive};
   double target_velocity_reference_mps{std::numeric_limits<double>::infinity()};
   double signed_closing_speed_mps{};
+  bool forward_escape_active{false};
 };
 
 /// Keep the committed pass side while creating longitudinal separation. A
@@ -1361,6 +1368,8 @@ struct MinimumLateralMotionGoalRequest
   double current_lateral_m{};
   double feasible_lower_bound_m{};
   double feasible_upper_bound_m{};
+  int pass_side_sign{};
+  double preferred_target_clearance_buffer_m{};
 };
 
 struct MinimumLateralMotionGoalResolution
@@ -1370,11 +1379,13 @@ struct MinimumLateralMotionGoalResolution
   bool current_position_clear{false};
   double goal_m{};
   double required_shift_m{std::numeric_limits<double>::infinity()};
+  double applied_target_clearance_buffer_m{};
 };
 
 /// Keep the base racing line when it lies inside the vehicle/wall-inflated
-/// corridor. Otherwise return the closest corridor boundary, which is the
-/// minimum lateral displacement needed to enter that validated corridor.
+/// corridor after reserving the preferred target-side clearance. Otherwise
+/// return the closest point in that buffered corridor. The buffer is bounded
+/// to half the available width so it cannot consume all wall-side freedom.
 MinimumLateralMotionGoalResolution resolve_minimum_lateral_motion_goal(
   const MinimumLateralMotionGoalRequest & request) noexcept;
 

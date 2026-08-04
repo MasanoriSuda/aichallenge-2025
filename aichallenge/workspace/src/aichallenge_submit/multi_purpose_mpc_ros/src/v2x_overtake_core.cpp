@@ -1382,7 +1382,8 @@ PassContinuationPreflightPolicyResolution resolve_pass_continuation_preflight_po
     request.target_observation_continuous &&
     request.current_body_footprints_separated &&
     request.predicted_body_footprint_available &&
-    request.predicted_body_footprint_sweep_separated;
+    (request.predicted_body_footprint_sweep_separated ||
+    !request.predicted_body_overlap_confirmed);
   resolution.enforce_target_center_separation =
     !resolution.footprint_continuation_active;
   resolution.enforce_outer_role_continuity =
@@ -1623,7 +1624,9 @@ SafeSeparationResolution resolve_safe_separation(
     !finite_non_negative(request.elapsed_sec) ||
     !finite_non_negative(request.traveled_m) ||
     !finite_non_negative(request.maximum_duration_sec) ||
-    !finite_non_negative(request.maximum_distance_m))
+    !finite_non_negative(request.maximum_distance_m) ||
+    !finite_non_negative(request.ego_speed_mps) ||
+    !finite_non_negative(request.forward_escape_max_front_distance_m))
   {
     resolution.action = SafeSeparationAction::Abort;
     return resolution;
@@ -1652,6 +1655,21 @@ SafeSeparationResolution resolve_safe_separation(
   }
 
   resolution.action = SafeSeparationAction::KeepSameSide;
+  if (
+    request.forward_escape_allowed &&
+    request.target_longitudinal_m <=
+    request.forward_escape_max_front_distance_m + 1e-9)
+  {
+    resolution.forward_escape_active = true;
+    resolution.target_velocity_reference_mps = std::min(
+      request.maximum_ego_speed_mps,
+      std::max(
+        request.ego_speed_mps,
+        request.target_speed_mps + request.speed_delta_mps));
+    resolution.signed_closing_speed_mps =
+      resolution.target_velocity_reference_mps - request.target_speed_mps;
+    return resolution;
+  }
   if (request.target_longitudinal_m >= 0.0) {
     resolution.target_velocity_reference_mps = std::min(
       request.maximum_ego_speed_mps,
@@ -2544,21 +2562,43 @@ MinimumLateralMotionGoalResolution resolve_minimum_lateral_motion_goal(
     !std::isfinite(request.current_lateral_m) ||
     !std::isfinite(request.feasible_lower_bound_m) ||
     !std::isfinite(request.feasible_upper_bound_m) ||
+    !std::isfinite(request.preferred_target_clearance_buffer_m) ||
+    request.preferred_target_clearance_buffer_m < 0.0 ||
     request.feasible_upper_bound_m < request.feasible_lower_bound_m)
   {
     return resolution;
   }
 
+  if (
+    request.preferred_target_clearance_buffer_m > 0.0 &&
+    request.pass_side_sign != -1 && request.pass_side_sign != 1)
+  {
+    return resolution;
+  }
+
+  double preferred_lower_bound_m = request.feasible_lower_bound_m;
+  double preferred_upper_bound_m = request.feasible_upper_bound_m;
+  const double corridor_width_m =
+    request.feasible_upper_bound_m - request.feasible_lower_bound_m;
+  resolution.applied_target_clearance_buffer_m = std::min(
+    request.preferred_target_clearance_buffer_m,
+    0.5 * corridor_width_m);
+  if (request.pass_side_sign > 0) {
+    preferred_lower_bound_m += resolution.applied_target_clearance_buffer_m;
+  } else if (request.pass_side_sign < 0) {
+    preferred_upper_bound_m -= resolution.applied_target_clearance_buffer_m;
+  }
+
   resolution.valid = true;
   resolution.base_line_clear =
-    request.feasible_lower_bound_m <= request.base_line_lateral_m + 1e-9 &&
-    request.base_line_lateral_m <= request.feasible_upper_bound_m + 1e-9;
+    preferred_lower_bound_m <= request.base_line_lateral_m + 1e-9 &&
+    request.base_line_lateral_m <= preferred_upper_bound_m + 1e-9;
   resolution.current_position_clear =
-    request.feasible_lower_bound_m <= request.current_lateral_m + 1e-9 &&
-    request.current_lateral_m <= request.feasible_upper_bound_m + 1e-9;
+    preferred_lower_bound_m <= request.current_lateral_m + 1e-9 &&
+    request.current_lateral_m <= preferred_upper_bound_m + 1e-9;
   resolution.goal_m = std::min(
-    request.feasible_upper_bound_m,
-    std::max(request.feasible_lower_bound_m, request.base_line_lateral_m));
+    preferred_upper_bound_m,
+    std::max(preferred_lower_bound_m, request.base_line_lateral_m));
   resolution.required_shift_m = std::abs(resolution.goal_m - request.current_lateral_m);
   return resolution;
 }

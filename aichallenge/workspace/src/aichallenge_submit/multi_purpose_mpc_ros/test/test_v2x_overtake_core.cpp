@@ -3139,7 +3139,7 @@ TEST(V2XOvertakeCoreHorizon, KeepsAdmissionConstraintsForGeometricExtension)
   EXPECT_TRUE(result.enforce_outer_role_continuity);
 }
 
-TEST(V2XOvertakeCoreHorizon, KeepsHardConstraintsWhenContinuationFootprintIsUncertain)
+TEST(V2XOvertakeCoreHorizon, DebouncesPredictedOverlapBeforeRestoringHardConstraints)
 {
   PassContinuationPreflightPolicyRequest request;
   request.longitudinal_refresh = true;
@@ -3150,6 +3150,12 @@ TEST(V2XOvertakeCoreHorizon, KeepsHardConstraintsWhenContinuationFootprintIsUnce
   request.predicted_body_footprint_sweep_separated = false;
 
   auto result = resolve_pass_continuation_preflight_policy(request);
+  EXPECT_TRUE(result.footprint_continuation_active);
+  EXPECT_FALSE(result.enforce_target_center_separation);
+  EXPECT_FALSE(result.enforce_outer_role_continuity);
+
+  request.predicted_body_overlap_confirmed = true;
+  result = resolve_pass_continuation_preflight_policy(request);
   EXPECT_FALSE(result.footprint_continuation_active);
   EXPECT_TRUE(result.enforce_target_center_separation);
   EXPECT_TRUE(result.enforce_outer_role_continuity);
@@ -3371,6 +3377,44 @@ TEST(V2XOvertakeCoreHorizon, CreatesLongitudinalSafeSeparationOnCommittedSide)
   request.front_clear_elapsed_sec = 0.25;
   resolution = resolve_safe_separation(request);
   EXPECT_EQ(resolution.action, SafeSeparationAction::RecoverBehind);
+}
+
+TEST(V2XOvertakeCoreHorizon, PreservesSpeedForSideBySideForwardEscape)
+{
+  SafeSeparationRequest request;
+  request.enabled = true;
+  request.active = true;
+  request.short_horizon_safe = true;
+  request.target_seen = true;
+  request.target_longitudinal_m = 0.5;
+  request.target_speed_mps = 3.3;
+  request.speed_delta_mps = 0.8;
+  request.maximum_ego_speed_mps = 11.11;
+  request.front_clear_distance_m = 2.0;
+  request.front_clear_confirm_sec = 0.25;
+  request.maximum_duration_sec = 3.0;
+  request.maximum_distance_m = 8.0;
+  request.ego_speed_mps = 5.4;
+  request.forward_escape_allowed = true;
+  request.forward_escape_max_front_distance_m = 0.75;
+
+  auto resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::KeepSameSide);
+  EXPECT_TRUE(resolution.forward_escape_active);
+  EXPECT_NEAR(resolution.target_velocity_reference_mps, 5.4, 1e-9);
+  EXPECT_NEAR(resolution.signed_closing_speed_mps, 2.1, 1e-9);
+
+  request.target_longitudinal_m = 0.8;
+  resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::KeepSameSide);
+  EXPECT_FALSE(resolution.forward_escape_active);
+  EXPECT_NEAR(resolution.target_velocity_reference_mps, 2.5, 1e-9);
+
+  request.target_longitudinal_m = 0.5;
+  request.short_horizon_safe = false;
+  resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::Abort);
+  EXPECT_FALSE(resolution.forward_escape_active);
 }
 
 TEST(V2XOvertakeCoreHorizon, BoundsOrRejectsUnsafeSafeSeparation)
@@ -3986,6 +4030,35 @@ TEST(V2XOvertakeCoreMinimumMotion, UsesNearestSafeBoundaryWhenBaseLineIsBlocked)
   EXPECT_FALSE(resolution.base_line_clear);
   EXPECT_DOUBLE_EQ(resolution.goal_m, -0.60);
   EXPECT_DOUBLE_EQ(resolution.required_shift_m, 0.50);
+}
+
+TEST(V2XOvertakeCoreMinimumMotion, UsesSpareWidthForTargetClearance)
+{
+  auto resolution = resolve_minimum_lateral_motion_goal(
+    MinimumLateralMotionGoalRequest{0.0, 0.1, 0.65, 1.40, 1, 0.20});
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.base_line_clear);
+  EXPECT_FALSE(resolution.current_position_clear);
+  EXPECT_DOUBLE_EQ(resolution.applied_target_clearance_buffer_m, 0.20);
+  EXPECT_DOUBLE_EQ(resolution.goal_m, 0.85);
+  EXPECT_DOUBLE_EQ(resolution.required_shift_m, 0.75);
+
+  resolution = resolve_minimum_lateral_motion_goal(
+    MinimumLateralMotionGoalRequest{0.0, -0.1, -1.40, -0.60, -1, 0.20});
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_DOUBLE_EQ(resolution.applied_target_clearance_buffer_m, 0.20);
+  EXPECT_DOUBLE_EQ(resolution.goal_m, -0.80);
+  EXPECT_DOUBLE_EQ(resolution.required_shift_m, 0.70);
+}
+
+TEST(V2XOvertakeCoreMinimumMotion, CapsTargetClearanceAtCorridorMidpoint)
+{
+  const auto resolution = resolve_minimum_lateral_motion_goal(
+    MinimumLateralMotionGoalRequest{0.0, 0.0, 0.65, 0.85, 1, 0.20});
+
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_NEAR(resolution.applied_target_clearance_buffer_m, 0.10, 1e-9);
+  EXPECT_NEAR(resolution.goal_m, 0.75, 1e-9);
 }
 
 TEST(V2XOvertakeCoreMinimumMotion, RejectsInvalidSafeInterval)

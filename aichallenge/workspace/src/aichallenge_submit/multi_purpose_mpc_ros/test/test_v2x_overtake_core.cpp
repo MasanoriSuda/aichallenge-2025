@@ -122,6 +122,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::DynamicPredictionTimingRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommitClockProjectionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassHorizonAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassHorizonDecisionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::RearClearReplanWindowRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassContinuationPreflightPolicyRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassOuterHorizonRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassOuterHorizonSample;
@@ -154,6 +155,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_dynamic_pass_di
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_prediction_timing;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_commit_clock_projection;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_horizon_action;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_rear_clear_replan_window;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_continuation_preflight_policy;
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_pass_outer_horizon;
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_continuous_outer_replan;
@@ -2998,6 +3000,59 @@ TEST(V2XOvertakeCoreHorizon, ProjectsMonotonicPlannerElapsedOntoPredictionClock)
   const auto reversed = resolve_commit_clock_projection(
     CommitClockProjectionRequest{100.0, 5000.1, 5000.0});
   EXPECT_FALSE(reversed.valid);
+}
+
+TEST(V2XOvertakeCoreHorizon, DefersRearClearExtensionUntilCommittedLeadWindow)
+{
+  RearClearReplanWindowRequest request;
+  request.prediction_checked = true;
+  request.prediction_feasible = true;
+  request.required_rear_clear_pass_m = 24.3;
+  request.static_valid_until_pass_m = 21.6;
+  request.pass_traveled_m = 0.0;
+  request.revalidation_lead_distance_m = 3.0;
+
+  const auto at_pass_entry = resolve_rear_clear_replan_window(request);
+  ASSERT_TRUE(at_pass_entry.valid);
+  EXPECT_TRUE(at_pass_entry.beyond_committed_horizon);
+  EXPECT_FALSE(at_pass_entry.replan_due);
+  EXPECT_NEAR(at_pass_entry.remaining_committed_distance_m, 21.6, 1e-9);
+
+  request.pass_traveled_m = 18.59;
+  const auto before_lead = resolve_rear_clear_replan_window(request);
+  ASSERT_TRUE(before_lead.valid);
+  EXPECT_FALSE(before_lead.replan_due);
+  EXPECT_NEAR(before_lead.remaining_committed_distance_m, 3.01, 1e-9);
+
+  request.pass_traveled_m = 18.6;
+  const auto at_lead = resolve_rear_clear_replan_window(request);
+  ASSERT_TRUE(at_lead.valid);
+  EXPECT_TRUE(at_lead.replan_due);
+  EXPECT_NEAR(at_lead.remaining_committed_distance_m, 3.0, 1e-9);
+}
+
+TEST(V2XOvertakeCoreHorizon, DoesNotInventRearClearExtensionWithoutFeasiblePrediction)
+{
+  RearClearReplanWindowRequest request;
+  request.static_valid_until_pass_m = 20.0;
+  request.pass_traveled_m = 5.0;
+  request.revalidation_lead_distance_m = 3.0;
+
+  const auto unchecked = resolve_rear_clear_replan_window(request);
+  ASSERT_TRUE(unchecked.valid);
+  EXPECT_FALSE(unchecked.beyond_committed_horizon);
+  EXPECT_FALSE(unchecked.replan_due);
+
+  request.prediction_checked = true;
+  request.prediction_feasible = true;
+  request.required_rear_clear_pass_m = 19.0;
+  const auto inside_window = resolve_rear_clear_replan_window(request);
+  ASSERT_TRUE(inside_window.valid);
+  EXPECT_FALSE(inside_window.beyond_committed_horizon);
+  EXPECT_FALSE(inside_window.replan_due);
+
+  request.pass_traveled_m = -0.1;
+  EXPECT_FALSE(resolve_rear_clear_replan_window(request).valid);
 }
 
 TEST(V2XOvertakeCoreHorizon, SelectsBoundedPassHorizonActions)

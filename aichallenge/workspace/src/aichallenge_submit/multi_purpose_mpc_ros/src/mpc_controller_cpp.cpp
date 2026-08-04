@@ -1998,6 +1998,7 @@ struct OvertakeLineState
   double mission_last_outer_replan_sec{-std::numeric_limits<double>::infinity()};
   double mission_outer_replan_hold_until_pass_m{0.0};
   int mission_outer_replan_count{0};
+  bool mission_rear_clear_extension_deferred_logged{false};
   int mission_extension_count{0};
   int mission_longitudinal_refresh_count{0};
   bool pass_horizon_hold_active{false};
@@ -9482,6 +9483,7 @@ private:
       -std::numeric_limits<double>::infinity();
     overtake_line_state_.mission_outer_replan_hold_until_pass_m = 0.0;
     overtake_line_state_.mission_outer_replan_count = 0;
+    overtake_line_state_.mission_rear_clear_extension_deferred_logged = false;
     overtake_line_state_.mission_extension_count =
       overtake_line_state_.mission_pass_hold_distance >
       line_cfg.pass_horizon_soft_distance_limit + kEps ?
@@ -12233,11 +12235,37 @@ private:
         }
       }
       if (!overtake_line_state_.pass_horizon_safe_separation_active) {
+        const auto rear_clear_replan_window =
+          overtake_core::resolve_rear_clear_replan_window(
+          overtake_core::RearClearReplanWindowRequest{
+            live_rear_clear_prediction_checked,
+            live_rear_clear_prediction_feasible,
+            live_required_rear_clear_pass_m,
+            overtake_line_state_.mission_static_valid_until_pass_m,
+            pass_traveled,
+            line_cfg.pass_horizon_revalidation_lead_distance});
         rear_clear_window_replan_required =
-          live_rear_clear_prediction_checked &&
-          live_rear_clear_prediction_feasible &&
-          live_required_rear_clear_pass_m >
-          overtake_line_state_.mission_static_valid_until_pass_m + kEps;
+          rear_clear_replan_window.valid && rear_clear_replan_window.replan_due;
+        if (
+          rear_clear_replan_window.valid &&
+          rear_clear_replan_window.beyond_committed_horizon &&
+          !rear_clear_replan_window.replan_due &&
+          !overtake_line_state_.mission_rear_clear_extension_deferred_logged)
+        {
+          overtake_line_state_.mission_rear_clear_extension_deferred_logged = true;
+          RCLCPP_INFO(
+            rclcpp::get_logger("mpc_controller"),
+            "OvertakeLine Pass rear-clear extension deferred: target=%s, side=%d, "
+            "traveled=%.2f m, static_until=%.2f m, remaining=%.2f m, "
+            "live_required=%.2f m, lead=%.2f m",
+            overtake_line_state_.target_vehicle_id.c_str(),
+            overtake_line_state_.pass_side_sign,
+            pass_traveled,
+            overtake_line_state_.mission_static_valid_until_pass_m,
+            rear_clear_replan_window.remaining_committed_distance_m,
+            live_required_rear_clear_pass_m,
+            line_cfg.pass_horizon_revalidation_lead_distance);
+        }
         const auto horizon_request = build_pass_horizon_decision_request(
           rear_clear_confirmed,
           !return_corridor_blocked,

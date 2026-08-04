@@ -761,6 +761,31 @@ enum class PassHorizonAction
   Abort,
 };
 
+struct RearClearReplanWindowRequest
+{
+  bool prediction_checked{false};
+  bool prediction_feasible{false};
+  double required_rear_clear_pass_m{std::numeric_limits<double>::infinity()};
+  double static_valid_until_pass_m{};
+  double pass_traveled_m{};
+  double revalidation_lead_distance_m{};
+};
+
+struct RearClearReplanWindowResolution
+{
+  bool valid{false};
+  bool beyond_committed_horizon{false};
+  bool replan_due{false};
+  double remaining_committed_distance_m{};
+};
+
+/// Separate "rear clear lies beyond the current committed path" from "the
+/// path is close enough to its end that replacement planning is due". This
+/// prevents a long, still-validated Pass corridor from being discarded at
+/// Pass entry merely because rear-clear needs a later extension.
+RearClearReplanWindowResolution resolve_rear_clear_replan_window(
+  const RearClearReplanWindowRequest & request) noexcept;
+
 struct PassHorizonDecisionRequest
 {
   bool enabled{false};

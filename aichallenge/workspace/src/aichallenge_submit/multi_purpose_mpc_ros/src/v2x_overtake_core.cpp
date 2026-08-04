@@ -1299,6 +1299,43 @@ CommitClockProjectionResolution resolve_commit_clock_projection(
   return resolution;
 }
 
+RearClearReplanWindowResolution resolve_rear_clear_replan_window(
+  const RearClearReplanWindowRequest & request) noexcept
+{
+  RearClearReplanWindowResolution resolution;
+  if (
+    !std::isfinite(request.static_valid_until_pass_m) ||
+    request.static_valid_until_pass_m < 0.0 ||
+    !std::isfinite(request.pass_traveled_m) || request.pass_traveled_m < 0.0 ||
+    !std::isfinite(request.revalidation_lead_distance_m) ||
+    request.revalidation_lead_distance_m < 0.0)
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  resolution.remaining_committed_distance_m = std::max(
+    0.0, request.static_valid_until_pass_m - request.pass_traveled_m);
+  if (!request.prediction_checked || !request.prediction_feasible) {
+    return resolution;
+  }
+  if (
+    !std::isfinite(request.required_rear_clear_pass_m) ||
+    request.required_rear_clear_pass_m < 0.0)
+  {
+    return RearClearReplanWindowResolution{};
+  }
+
+  resolution.beyond_committed_horizon =
+    request.required_rear_clear_pass_m >
+    request.static_valid_until_pass_m + 1e-9;
+  resolution.replan_due =
+    resolution.beyond_committed_horizon &&
+    resolution.remaining_committed_distance_m <=
+    request.revalidation_lead_distance_m + 1e-9;
+  return resolution;
+}
+
 PassHorizonAction resolve_pass_horizon_action(
   const PassHorizonDecisionRequest & request) noexcept
 {

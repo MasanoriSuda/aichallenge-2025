@@ -10163,7 +10163,7 @@ private:
     return result;
   }
 
-  OvertakeLineEntryPreflight evaluate_committed_pass_full_path_preflight(
+  OvertakeLineEntryPreflight evaluate_committed_pass_continuation_preflight(
     const int ref_wp_id, const int plan_N, const Eigen::VectorXd & lb,
     const Eigen::VectorXd & ub, const double current_ey,
     const double target_lateral, const double replacement_goal_ey,
@@ -10182,7 +10182,7 @@ private:
       std::optional<double>{replacement_goal_ey},
       shift_distance_m,
       pass_distance_m,
-      true,
+      policy.include_return_path,
       true,
       true,
       false,
@@ -11662,13 +11662,13 @@ private:
           pass_distance.bounded_pass_distance_m +
           std::max(0.0, line_cfg.pass_horizon_revalidation_lead_distance)) :
           pass_distance.bounded_pass_distance_m;
-        const auto static_preflight = evaluate_committed_pass_full_path_preflight(
+        const auto static_preflight = evaluate_committed_pass_continuation_preflight(
           ref_wp_id, extension_plan_N, extension_lb, extension_ub,
           current_ey, goal_target_course_lateral, replacement_goal_m,
           extension_shift_distance, validated_pass_distance_m,
           continuation_policy);
         if (!static_preflight.feasible) {
-          failure_reason = std::string("static full-path preflight: ") +
+          failure_reason = std::string("static Pass-continuation preflight: ") +
             static_preflight.reason;
           return false;
         }

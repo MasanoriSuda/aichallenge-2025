@@ -3105,6 +3105,23 @@ TEST(V2XOvertakeCoreHorizon, UsesFootprintPolicyOnlyForSafeLongitudinalContinuat
   EXPECT_FALSE(result.enforce_outer_role_continuity);
 }
 
+TEST(V2XOvertakeCoreHorizon, DefersReturnForEveryCommittedPassContinuation)
+{
+  PassContinuationPreflightPolicyRequest request;
+
+  auto result = resolve_pass_continuation_preflight_policy(request);
+  EXPECT_FALSE(result.include_return_path);
+
+  request.longitudinal_refresh = true;
+  request.short_horizon_safe = true;
+  request.target_observation_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.predicted_body_footprint_available = true;
+  request.predicted_body_footprint_sweep_separated = true;
+  result = resolve_pass_continuation_preflight_policy(request);
+  EXPECT_FALSE(result.include_return_path);
+}
+
 TEST(V2XOvertakeCoreHorizon, KeepsAdmissionConstraintsForGeometricExtension)
 {
   PassContinuationPreflightPolicyRequest request;

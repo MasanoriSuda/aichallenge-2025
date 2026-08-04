@@ -815,12 +815,16 @@ struct PassContinuationPreflightPolicyResolution
   bool footprint_continuation_active{false};
   bool enforce_target_center_separation{true};
   bool enforce_outer_role_continuity{true};
+  bool include_return_path{false};
 };
 
 /// Replace semantic center-distance and inside/outside labels with measured
 /// body-footprint separation only when refreshing the longitudinal extent of
-/// an already-admitted, fixed-lateral Pass path. Initial admission and any
-/// geometric replacement keep the original hard constraints.
+/// an already-admitted, fixed-lateral Pass path. A geometric replacement keeps
+/// the original target/outer-role constraints. Every active-Pass continuation
+/// validates only the same-side path through rear-clear; Return is regenerated
+/// and validated from the current state after rear-clear. Initial admission is
+/// outside this policy and keeps the full ShiftOut/Pass/Return preflight.
 PassContinuationPreflightPolicyResolution resolve_pass_continuation_preflight_policy(
   const PassContinuationPreflightPolicyRequest & request) noexcept;
 

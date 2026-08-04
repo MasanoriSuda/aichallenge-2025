@@ -1372,6 +1372,10 @@ PassContinuationPreflightPolicyResolution resolve_pass_continuation_preflight_po
   const PassContinuationPreflightPolicyRequest & request) noexcept
 {
   PassContinuationPreflightPolicyResolution resolution;
+  // This resolver is used only after a mission has entered Pass. Validate the
+  // committed side through rear-clear here; Return is rebuilt from the actual
+  // state after rear-clear instead of invalidating a safe ongoing pass early.
+  resolution.include_return_path = false;
   resolution.footprint_continuation_active =
     request.longitudinal_refresh &&
     request.short_horizon_safe &&

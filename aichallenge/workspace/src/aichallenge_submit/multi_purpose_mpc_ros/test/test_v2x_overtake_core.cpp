@@ -125,6 +125,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::PassHorizonDecisionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassContinuationPreflightPolicyRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassOuterHorizonRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassOuterHorizonSample;
+using multi_purpose_mpc_ros::v2x_overtake_core::ContinuousOuterReplanRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SameSideExtensionCommitRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SameSideExtensionCommitReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationAction;
@@ -155,6 +156,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_commit_clock_projection;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_horizon_action;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_continuation_preflight_policy;
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_pass_outer_horizon;
+using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_continuous_outer_replan;
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_same_side_extension_commit;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_commit_same_side_extension;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_safe_separation;
@@ -2817,6 +2819,8 @@ TEST(V2XOvertakeCoreSpeed, KinematicRolloutAccountsForControlDelayWhileClosingFa
   ASSERT_TRUE(immediate.valid);
   ASSERT_TRUE(immediate.checked);
   ASSERT_TRUE(std::isfinite(immediate.body_clear_time_sec));
+  ASSERT_TRUE(std::isfinite(immediate.shift_complete_time_sec));
+  EXPECT_GT(immediate.shift_complete_target_longitudinal_m, 0.0);
 
   request.control_delay_sec = 0.125;
   const auto delayed = resolve_overtake_kinematic_rollout(request);
@@ -3211,6 +3215,56 @@ TEST(V2XOvertakeCoreHorizon, CarriesOuterContractAcrossStraightReplacementStart)
   EXPECT_TRUE(result.outer_strategy);
   EXPECT_TRUE(result.role_reversal);
   EXPECT_DOUBLE_EQ(result.first_role_reversal_distance_m, 8.0);
+}
+
+TEST(V2XOvertakeCoreHorizon, RequestsSustainedOppositeOuterCurveBeforeItArrives)
+{
+  const auto result = evaluate_continuous_outer_replan(
+    ContinuousOuterReplanRequest{
+      true, -1, 0.04, 14.0, 3.0,
+      std::vector<PassOuterHorizonSample>{
+        {0.0, 0.10}, {3.0, 0.08}, {6.0, 0.0},
+        {8.0, -0.12}, {10.0, -0.14}, {12.0, -0.10}, {14.0, 0.0}}});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_TRUE(result.replan_required);
+  EXPECT_EQ(result.desired_outer_side_sign, 1);
+  EXPECT_DOUBLE_EQ(result.first_opposite_curve_distance_m, 8.0);
+  EXPECT_DOUBLE_EQ(result.confirmed_opposite_curve_distance_m, 6.0);
+}
+
+TEST(V2XOvertakeCoreHorizon, RejectsShortOppositeCurvatureNoise)
+{
+  const auto result = evaluate_continuous_outer_replan(
+    ContinuousOuterReplanRequest{
+      true, -1, 0.04, 12.0, 3.0,
+      std::vector<PassOuterHorizonSample>{
+        {0.0, 0.10}, {4.0, 0.08}, {7.0, -0.10}, {8.0, 0.09}, {12.0, 0.08}}});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_FALSE(result.replan_required);
+}
+
+TEST(V2XOvertakeCoreHorizon, KeepsCurrentSideWhenUpcomingOuterRoleMatches)
+{
+  const auto result = evaluate_continuous_outer_replan(
+    ContinuousOuterReplanRequest{
+      true, -1, 0.04, 10.0, 2.0,
+      std::vector<PassOuterHorizonSample>{{0.0, 0.0}, {2.0, 0.10}, {6.0, 0.12}}});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_FALSE(result.replan_required);
+}
+
+TEST(V2XOvertakeCoreHorizon, RejectsInvalidContinuousOuterInput)
+{
+  const auto result = evaluate_continuous_outer_replan(
+    ContinuousOuterReplanRequest{
+      true, 0, 0.04, 10.0, 2.0,
+      std::vector<PassOuterHorizonSample>{{0.0, 0.10}, {3.0, -0.10}}});
+
+  EXPECT_FALSE(result.valid);
+  EXPECT_FALSE(result.replan_required);
 }
 
 TEST(V2XOvertakeCoreHorizon, CommitsOnlyFreshMatchingForwardExtension)

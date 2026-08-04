@@ -1402,6 +1402,14 @@ struct OvertakeLineConfig
   double pass_horizon_planner_result_max_age{0.10};
   double pass_horizon_hold_max_sec{1.0};
   double pass_horizon_hold_max_distance{3.0};
+  bool continuous_outer_replan_enabled{false};
+  double continuous_outer_replan_lookahead_distance{12.0};
+  double continuous_outer_replan_min_curve_distance{3.0};
+  double continuous_outer_replan_min_front_distance{4.0};
+  double continuous_outer_replan_cooldown_sec{1.0};
+  double continuous_outer_replan_max_lateral_adjustment{3.2};
+  double continuous_outer_replan_max_shift_distance{8.0};
+  int continuous_outer_replan_max_count{3};
   bool safe_separation_enabled{false};
   double safe_separation_speed_delta{0.8};
   bool safe_separation_forward_escape_enabled{false};
@@ -1987,6 +1995,9 @@ struct OvertakeLineState
   double mission_predicted_rear_clear_time_sec{std::numeric_limits<double>::infinity()};
   double mission_predicted_rear_clear_pass_m{std::numeric_limits<double>::infinity()};
   bool mission_outer_strategy_committed{false};
+  double mission_last_outer_replan_sec{-std::numeric_limits<double>::infinity()};
+  double mission_outer_replan_hold_until_pass_m{0.0};
+  int mission_outer_replan_count{0};
   int mission_extension_count{0};
   int mission_longitudinal_refresh_count{0};
   bool pass_horizon_hold_active{false};
@@ -6604,7 +6615,10 @@ struct MPC
                 preflight_target_lateral, assessment.corridor_center_ey,
                 std::pair<double, double>{goal_lower, goal_upper},
                 preflight.goal_ey, shift_distance, selected_pass_distance,
-                true, true, true, true, false) :
+                true, true, true, true, false,
+                OvertakeLineEntryPreflightPolicy{
+                  true,
+                  !cfg.v2x_behavior.overtake_line.continuous_outer_replan_enabled}) :
                 preflight;
               if (!full_mission_preflight.feasible) {
                 ++full_mission_preflight_reject_count;
@@ -9464,6 +9478,10 @@ private:
       std::numeric_limits<double>::infinity();
     overtake_line_state_.mission_outer_strategy_committed =
       selected_mission.has_value() && selected_mission->outer_strategy_committed;
+    overtake_line_state_.mission_last_outer_replan_sec =
+      -std::numeric_limits<double>::infinity();
+    overtake_line_state_.mission_outer_replan_hold_until_pass_m = 0.0;
+    overtake_line_state_.mission_outer_replan_count = 0;
     overtake_line_state_.mission_extension_count =
       overtake_line_state_.mission_pass_hold_distance >
       line_cfg.pass_horizon_soft_distance_limit + kEps ?
@@ -10173,13 +10191,14 @@ private:
     const Eigen::VectorXd & ub, const double current_ey,
     const double target_lateral, const double replacement_goal_ey,
     const double shift_distance_m, const double pass_distance_m,
+    const int replacement_side_sign,
     const overtake_core::PassContinuationPreflightPolicyResolution & policy) const
   {
     const std::optional<std::pair<double, double>> fixed_goal_interval{
       std::make_pair(replacement_goal_ey, replacement_goal_ey)};
     return evaluate_overtake_line_entry_preflight(
       ref_wp_id, plan_N, lb, ub,
-      overtake_line_state_.pass_side_sign,
+      replacement_side_sign,
       current_ey,
       target_lateral,
       std::optional<double>{replacement_goal_ey},
@@ -11468,7 +11487,10 @@ private:
         return "horizon_margin";
       };
     const auto try_refresh_committed_pass_horizon =
-      [&](const bool longitudinal_only, std::string & failure_reason) {
+      [&](const bool longitudinal_only,
+        const std::optional<int> strategic_outer_side,
+        const std::optional<double> strategic_shift_distance_limit,
+        std::string & failure_reason) {
         const auto fail_extension = [&](const char * reason) {
             failure_reason = reason;
             return false;
@@ -11489,7 +11511,7 @@ private:
         {
           return fail_extension("invalid locked target or committed goal");
         }
-        const auto continuation_policy =
+        auto continuation_policy =
           overtake_core::resolve_pass_continuation_preflight_policy(
           overtake_core::PassContinuationPreflightPolicyRequest{
             longitudinal_only,
@@ -11503,6 +11525,26 @@ private:
           overtake_line_state_.mission_generation;
         const std::string source_target_id = overtake_line_state_.target_vehicle_id;
         const int source_side = overtake_line_state_.pass_side_sign;
+        const bool strategic_outer_transition = strategic_outer_side.has_value();
+        const int replacement_side = strategic_outer_side.value_or(source_side);
+        if (
+          (replacement_side != -1 && replacement_side != 1) ||
+          strategic_outer_transition != strategic_shift_distance_limit.has_value() ||
+          (strategic_outer_transition &&
+          (replacement_side == source_side ||
+          !std::isfinite(strategic_shift_distance_limit.value()) ||
+          strategic_shift_distance_limit.value() < 0.5)))
+        {
+          return fail_extension("invalid continuous-outer replacement side");
+        }
+        if (strategic_outer_transition) {
+          // The rolling curvature policy already selected the upcoming outer
+          // side. This replacement must still enforce target separation, but
+          // a later curvature-sign change belongs to the next rolling update
+          // rather than invalidating the current transition in advance.
+          continuation_policy.enforce_target_center_separation = true;
+          continuation_policy.enforce_outer_role_continuity = false;
+        }
         const double planner_generated_at_sec = now_sec;
         const double planner_generated_monotonic_sec =
           steady_seconds(SteadyClock::now());
@@ -11569,7 +11611,7 @@ private:
           const auto replacement_goal =
             overtake_core::resolve_feasible_pass_side_lateral_goal(
             overtake_core::FeasiblePassSideLateralGoalRequest{
-              source_side,
+              replacement_side,
               previous_goal,
               goal_target_course_lateral,
               std::max(0.0, cfg.v2x_behavior.overtake_line_min_target_separation),
@@ -11586,11 +11628,18 @@ private:
         if (
           lateral_adjustment >
           (longitudinal_only ? 0.0 :
+          strategic_outer_transition ?
+          line_cfg.continuous_outer_replan_max_lateral_adjustment :
           line_cfg.pass_horizon_extension_max_lateral_adjustment) + kEps)
         {
           return fail_extension("same-side lateral adjustment limit exceeded");
         }
-        const double maximum_shift_distance = std::min(
+        const double maximum_shift_distance = strategic_outer_transition ?
+          std::min({
+            line_cfg.continuous_outer_replan_max_shift_distance,
+            strategic_shift_distance_limit.value(),
+            extension_hard_limit - 0.5}) :
+          std::min(
           std::max(0.5, line_cfg.shift_distance),
           extension_hard_limit - 0.5);
         const auto shift_resolution =
@@ -11650,6 +11699,15 @@ private:
         if (!rollout.valid || !rollout.rear_clear_feasible) {
           return fail_extension("same-side rollout cannot reach rear clearance");
         }
+        if (
+          strategic_outer_transition &&
+          (!std::isfinite(rollout.shift_complete_target_longitudinal_m) ||
+          rollout.shift_complete_target_longitudinal_m + kEps <
+          std::max(0.0, line_cfg.target_intrusion_guard_distance)))
+        {
+          return fail_extension(
+            "continuous-outer transition reaches side-by-side before shift completion");
+        }
         const auto pass_distance = overtake_core::resolve_overtake_dynamic_pass_distance(
           overtake_core::OvertakeDynamicPassDistanceRequest{
             extension_shift_distance,
@@ -11673,6 +11731,7 @@ private:
           ref_wp_id, extension_plan_N, extension_lb, extension_ub,
           current_ey, goal_target_course_lateral, replacement_goal_m,
           extension_shift_distance, validated_pass_distance_m,
+          replacement_side,
           continuation_policy);
         if (!static_preflight.feasible) {
           failure_reason = std::string("static Pass-continuation preflight: ") +
@@ -11731,6 +11790,8 @@ private:
         commit_request.replacement_goal_lateral_m = static_preflight.goal_ey;
         commit_request.maximum_lateral_adjustment_m =
           longitudinal_only ? 0.0 :
+          strategic_outer_transition ?
+          line_cfg.continuous_outer_replan_max_lateral_adjustment :
           line_cfg.pass_horizon_extension_max_lateral_adjustment;
         const auto commit_resolution =
           overtake_core::evaluate_same_side_extension_commit(commit_request);
@@ -11740,6 +11801,16 @@ private:
           return false;
         }
         overtake_line_state_.fixed_pass_corridor_goal_ey = static_preflight.goal_ey;
+        if (strategic_outer_transition) {
+          overtake_line_state_.pass_side_sign = replacement_side;
+          overtake_locked_side_sign_ = replacement_side;
+          overtake_line_state_.pass_front_overlap_exclusion_latched = false;
+          overtake_line_state_.pass_front_cap_release_active = false;
+          overtake_line_state_.pass_current_overlap_since_sec =
+            std::numeric_limits<double>::quiet_NaN();
+          overtake_line_state_.mission_last_outer_replan_sec = now_sec;
+          ++overtake_line_state_.mission_outer_replan_count;
+        }
         overtake_line_state_.mission_pass_hold_distance = new_pass_hold_distance;
         overtake_line_state_.mission_pass_lateral_replan_active =
           shift_resolution.lateral_adjustment_m > 1e-6;
@@ -11783,6 +11854,7 @@ private:
           pass_plan.path.return_distance_m =
             overtake_line_state_.mission_return_distance;
           pass_plan.mission.goal_lateral_m = static_preflight.goal_ey;
+          pass_plan.mission.pass_side_sign = replacement_side;
           pass_plan.mission.pass_hold_distance_m = new_pass_hold_distance;
           pass_plan.mission.return_distance_m =
             overtake_line_state_.mission_return_distance;
@@ -11797,31 +11869,46 @@ private:
           pass_plan.mission.outer_strategy_committed =
             overtake_line_state_.mission_outer_strategy_committed;
         }
-        if (longitudinal_only) {
+        if (strategic_outer_transition) {
+          // A course-role transition is bounded independently. Consuming the
+          // one same-side extension slot here would make a later rear-clear
+          // horizon refresh impossible.
+        } else if (longitudinal_only) {
           ++overtake_line_state_.mission_longitudinal_refresh_count;
         } else {
           ++overtake_line_state_.mission_extension_count;
         }
         ++overtake_line_state_.mission_generation;
-        RCLCPP_INFO(
-          rclcpp::get_logger("mpc_controller"),
+        const char * replacement_trigger = strategic_outer_transition ?
+          "continuous_outer" : pass_horizon_replan_trigger();
+        const char * replacement_log = strategic_outer_transition ?
+          "OvertakeLine continuous outer Pass corridor committed: target=%s, side=%d, "
+          "trigger=%s, generation=%lu, side=%d->%d, pass=%.2f->%.2f, goal=%.2f->%.2f, "
+          "shift=%.2f m, nominal_window=%.2f m, required_window=%.2f m, "
+          "rear_clear=%.2f m/%.2f s, "
+          "dynamic_until=%.2f m/%.2f s, outer_strategy=%d, "
+          "footprint_policy=%d, outer_role_reversal=%d" :
           longitudinal_only ?
           "OvertakeLine Pass longitudinal horizon refreshed: target=%s, side=%d, "
-          "trigger=%s, generation=%lu, pass=%.2f->%.2f, goal=%.2f->%.2f, "
+          "trigger=%s, generation=%lu, side=%d->%d, pass=%.2f->%.2f, goal=%.2f->%.2f, "
           "shift=%.2f m, nominal_window=%.2f m, required_window=%.2f m, "
           "rear_clear=%.2f m/%.2f s, "
           "dynamic_until=%.2f m/%.2f s, outer_strategy=%d, "
           "footprint_policy=%d, outer_role_reversal=%d" :
           "OvertakeLine same-side Pass horizon extended: target=%s, side=%d, "
-          "trigger=%s, generation=%lu, pass=%.2f->%.2f, goal=%.2f->%.2f, "
+          "trigger=%s, generation=%lu, side=%d->%d, pass=%.2f->%.2f, goal=%.2f->%.2f, "
           "shift=%.2f m, nominal_window=%.2f m, required_window=%.2f m, "
           "rear_clear=%.2f m/%.2f s, "
           "dynamic_until=%.2f m/%.2f s, outer_strategy=%d, "
-          "footprint_policy=%d, outer_role_reversal=%d",
+          "footprint_policy=%d, outer_role_reversal=%d";
+        RCLCPP_INFO(
+          rclcpp::get_logger("mpc_controller"),
+          replacement_log,
           overtake_line_state_.target_vehicle_id.c_str(),
           overtake_line_state_.pass_side_sign,
-          pass_horizon_replan_trigger(),
+          replacement_trigger,
           static_cast<unsigned long>(overtake_line_state_.mission_generation),
+          source_side, replacement_side,
           pass_traveled, new_pass_hold_distance,
           previous_goal, static_preflight.goal_ey, extension_shift_distance,
           nominal_extension_limit,
@@ -11954,6 +12041,102 @@ private:
           return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
         }
       }
+
+      // A fixed Frenet-side label stops representing "outside" when the
+      // reference curvature changes sign. Re-evaluate that role while the
+      // target is still safely ahead and commit the complete replacement
+      // corridor atomically. Never cross the target while side-by-side.
+      const bool continuous_outer_replan_eligible =
+        line_cfg.continuous_outer_replan_enabled &&
+        overtake_line_state_.mission_outer_strategy_committed &&
+        !overtake_line_state_.inter_vehicle_corridor &&
+        !overtake_line_state_.pass_horizon_safe_separation_active &&
+        !pass_lateral_replan_in_progress &&
+        pass_traveled + kEps >=
+        overtake_line_state_.mission_outer_replan_hold_until_pass_m &&
+        locked_target_matches && locked_target_progress_continuous &&
+        fresh_dynamic_horizon_available && pass_short_horizon_safe &&
+        behavior_output.locked_target_current_body_footprints_separated &&
+        std::isfinite(locked_target_longitudinal) &&
+        locked_target_longitudinal >=
+        line_cfg.continuous_outer_replan_min_front_distance - kEps &&
+        now_sec - overtake_line_state_.mission_last_outer_replan_sec + kEps >=
+        line_cfg.continuous_outer_replan_cooldown_sec &&
+        overtake_line_state_.mission_outer_replan_count <
+        line_cfg.continuous_outer_replan_max_count;
+      if (continuous_outer_replan_eligible) {
+        const double rolling_lookahead_m =
+          line_cfg.continuous_outer_replan_lookahead_distance;
+        const int rolling_plan_N = std::max(
+          N,
+          static_cast<int>(std::ceil(
+            rolling_lookahead_m /
+            std::max(0.1, model->reference_path->resolution))) + 2);
+        std::vector<overtake_core::PassOuterHorizonSample> rolling_outer_samples;
+        rolling_outer_samples.reserve(static_cast<std::size_t>(rolling_plan_N));
+        for (int i = 0; i < rolling_plan_N; ++i) {
+          const double path_distance = horizon_path_distance_to_index(
+            ref_wp_id, static_cast<std::size_t>(i));
+          if (path_distance > rolling_lookahead_m +
+            std::max(0.05, model->reference_path->resolution))
+          {
+            break;
+          }
+          const auto & waypoint = model->reference_path->get_waypoint(ref_wp_id + i);
+          rolling_outer_samples.push_back(
+            overtake_core::PassOuterHorizonSample{path_distance, waypoint.kappa});
+        }
+        const auto rolling_outer = overtake_core::evaluate_continuous_outer_replan(
+          overtake_core::ContinuousOuterReplanRequest{
+            true,
+            overtake_line_state_.pass_side_sign,
+            std::max(0.0, cfg.v2x_behavior.overtake_max_curvature),
+            rolling_lookahead_m,
+            line_cfg.continuous_outer_replan_min_curve_distance,
+            std::move(rolling_outer_samples)});
+        if (rolling_outer.valid && rolling_outer.replan_required) {
+          // Cool down failed attempts too; otherwise a geometrically impossible
+          // transition would run the full preflight at controller frequency.
+          overtake_line_state_.mission_last_outer_replan_sec = now_sec;
+          const int source_side = overtake_line_state_.pass_side_sign;
+          std::string outer_replan_failure_reason;
+          if (try_refresh_committed_pass_horizon(
+              false,
+              std::optional<int>{rolling_outer.desired_outer_side_sign},
+              std::optional<double>{rolling_outer.first_opposite_curve_distance_m},
+              outer_replan_failure_reason))
+          {
+            // Until ego reaches the curve that motivated this early lateral
+            // transition, the current curve still advertises the old outer
+            // side. Suppress that stale request to avoid side chatter.
+            overtake_line_state_.mission_outer_replan_hold_until_pass_m =
+              pass_traveled + rolling_outer.first_opposite_curve_distance_m;
+            RCLCPP_INFO(
+              rclcpp::get_logger("mpc_controller"),
+              "OvertakeLine rolling outer transition accepted: target=%s, "
+              "side=%d->%d, target_front=%.2f m, curve_in=%.2f m, "
+              "confirmed_curve=%.2f m, hold_until=%.2f m, count=%d",
+              overtake_line_state_.target_vehicle_id.c_str(),
+              source_side, rolling_outer.desired_outer_side_sign,
+              locked_target_longitudinal,
+              rolling_outer.first_opposite_curve_distance_m,
+              rolling_outer.confirmed_opposite_curve_distance_m,
+              overtake_line_state_.mission_outer_replan_hold_until_pass_m,
+              overtake_line_state_.mission_outer_replan_count);
+            return update_overtake_line(
+              behavior_output, ref_wp_id, N, lb, ub, now_sec);
+          }
+          RCLCPP_DEBUG(
+            rclcpp::get_logger("mpc_controller"),
+            "OvertakeLine rolling outer transition rejected: target=%s, "
+            "side=%d->%d, target_front=%.2f m, curve_in=%.2f m, reason=%s",
+            overtake_line_state_.target_vehicle_id.c_str(),
+            source_side, rolling_outer.desired_outer_side_sign,
+            locked_target_longitudinal,
+            rolling_outer.first_opposite_curve_distance_m,
+            outer_replan_failure_reason.c_str());
+        }
+      }
       double live_required_rear_clear_pass_m =
         std::numeric_limits<double>::infinity();
       bool live_rear_clear_prediction_checked = false;
@@ -12081,7 +12264,9 @@ private:
           overtake_core::PassHorizonAction::RequestSameSideExtension)
         {
           std::string extension_failure_reason;
-          if (!try_refresh_committed_pass_horizon(false, extension_failure_reason)) {
+          if (!try_refresh_committed_pass_horizon(
+              false, std::nullopt, std::nullopt, extension_failure_reason))
+          {
             if (!begin_safe_separation(
                 pass_horizon_replan_trigger(), extension_failure_reason))
             {
@@ -12112,7 +12297,9 @@ private:
           overtake_core::PassHorizonAction::RequestLongitudinalRefresh)
         {
           std::string refresh_failure_reason;
-          if (!try_refresh_committed_pass_horizon(true, refresh_failure_reason)) {
+          if (!try_refresh_committed_pass_horizon(
+              true, std::nullopt, std::nullopt, refresh_failure_reason))
+          {
             if (!begin_safe_separation(
                 "rear_clear_refresh", refresh_failure_reason))
             {
@@ -12265,11 +12452,16 @@ private:
       return output;
     }
 
-    const double raw_goal = feasible_goal_for_phase;
-    const double goal_ey = limit_overtake_line_goal_change(raw_goal);
     const bool use_pass_lateral_replan_profile =
       overtake_line_state_.phase == OvertakeLinePhase::Pass &&
       overtake_line_state_.mission_pass_lateral_replan_active;
+    const double raw_goal = feasible_goal_for_phase;
+    // A committed Pass replan already owns a wall- and acceleration-validated
+    // distance-domain ramp. Applying the generic per-cycle goal slew on top of
+    // it stretches that ramp beyond the preflighted shift distance and can
+    // leave ego on the old (now inside) side of the next curve.
+    const double goal_ey = use_pass_lateral_replan_profile ?
+      raw_goal : limit_overtake_line_goal_change(raw_goal);
     const double pass_lateral_replan_traveled = use_pass_lateral_replan_profile ?
       std::max(
       0.0,
@@ -15530,6 +15722,38 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_pass_horizon_hold_max_distance"] ?
     mpc["v2x_overtake_pass_horizon_hold_max_distance"].as<double>() : 3.0);
+  cfg.mpc.v2x_behavior.overtake_line.continuous_outer_replan_enabled =
+    mpc["v2x_overtake_continuous_outer_replan_enabled"] ?
+    mpc["v2x_overtake_continuous_outer_replan_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_line.continuous_outer_replan_lookahead_distance = std::max(
+    0.5,
+    mpc["v2x_overtake_continuous_outer_replan_lookahead_distance"] ?
+    mpc["v2x_overtake_continuous_outer_replan_lookahead_distance"].as<double>() : 12.0);
+  cfg.mpc.v2x_behavior.overtake_line.continuous_outer_replan_min_curve_distance = std::max(
+    0.1,
+    mpc["v2x_overtake_continuous_outer_replan_min_curve_distance"] ?
+    mpc["v2x_overtake_continuous_outer_replan_min_curve_distance"].as<double>() : 3.0);
+  cfg.mpc.v2x_behavior.overtake_line.continuous_outer_replan_min_front_distance = std::max(
+    0.0,
+    mpc["v2x_overtake_continuous_outer_replan_min_front_distance"] ?
+    mpc["v2x_overtake_continuous_outer_replan_min_front_distance"].as<double>() : 4.0);
+  cfg.mpc.v2x_behavior.overtake_line.continuous_outer_replan_cooldown_sec = std::max(
+    0.0,
+    mpc["v2x_overtake_continuous_outer_replan_cooldown_sec"] ?
+    mpc["v2x_overtake_continuous_outer_replan_cooldown_sec"].as<double>() : 1.0);
+  cfg.mpc.v2x_behavior.overtake_line.continuous_outer_replan_max_lateral_adjustment =
+    std::max(
+    0.0,
+    mpc["v2x_overtake_continuous_outer_replan_max_lateral_adjustment"] ?
+    mpc["v2x_overtake_continuous_outer_replan_max_lateral_adjustment"].as<double>() : 3.2);
+  cfg.mpc.v2x_behavior.overtake_line.continuous_outer_replan_max_shift_distance = std::max(
+    0.5,
+    mpc["v2x_overtake_continuous_outer_replan_max_shift_distance"] ?
+    mpc["v2x_overtake_continuous_outer_replan_max_shift_distance"].as<double>() : 8.0);
+  cfg.mpc.v2x_behavior.overtake_line.continuous_outer_replan_max_count = std::max(
+    0,
+    mpc["v2x_overtake_continuous_outer_replan_max_count"] ?
+    mpc["v2x_overtake_continuous_outer_replan_max_count"].as<int>() : 3);
   cfg.mpc.v2x_behavior.overtake_line.safe_separation_enabled =
     mpc["v2x_overtake_safe_separation_enabled"] ?
     mpc["v2x_overtake_safe_separation_enabled"].as<bool>() : false;
@@ -16953,6 +17177,21 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line.safe_separation_front_clear_confirm_sec,
         mpc_cfg_.v2x_behavior.overtake_line.safe_separation_max_sec,
         mpc_cfg_.v2x_behavior.overtake_line.safe_separation_max_distance);
+      RCLCPP_INFO(
+        get_logger(),
+        "V2X continuous outer Pass replan: %s, lookahead=%.2f m, "
+        "curve_run>=%.2f m, target_front>=%.2f m, cooldown=%.2f s, "
+        "lateral<=%.2f m, shift<=%.2f m, count<=%d",
+        mpc_cfg_.v2x_behavior.overtake_line.continuous_outer_replan_enabled ?
+        "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line.continuous_outer_replan_lookahead_distance,
+        mpc_cfg_.v2x_behavior.overtake_line.continuous_outer_replan_min_curve_distance,
+        mpc_cfg_.v2x_behavior.overtake_line.continuous_outer_replan_min_front_distance,
+        mpc_cfg_.v2x_behavior.overtake_line.continuous_outer_replan_cooldown_sec,
+        mpc_cfg_.v2x_behavior.overtake_line
+        .continuous_outer_replan_max_lateral_adjustment,
+        mpc_cfg_.v2x_behavior.overtake_line.continuous_outer_replan_max_shift_distance,
+        mpc_cfg_.v2x_behavior.overtake_line.continuous_outer_replan_max_count);
       RCLCPP_INFO(
         get_logger(),
         "V2X horizon progress ranking: %s, weights time=%.2f distance=%.2f "

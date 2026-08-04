@@ -1044,6 +1044,11 @@ OvertakeKinematicRolloutResolution resolve_overtake_kinematic_rollout(
   double previous_rear_clear_margin_m =
     request.target_longitudinal_m + request.rear_clear_distance_m;
   resolution.currently_laterally_clear = previous_lateral_margin_m >= -1e-9;
+  if (request.mission_path.shift_distance_m <= 1e-9) {
+    resolution.shift_complete_time_sec = 0.0;
+    resolution.shift_complete_target_longitudinal_m =
+      request.target_longitudinal_m;
+  }
   if (resolution.currently_laterally_clear) {
     resolution.body_clear_time_sec = 0.0;
     resolution.body_clear_distance_m = 0.0;
@@ -1135,6 +1140,16 @@ OvertakeKinematicRolloutResolution resolve_overtake_kinematic_rollout(
 
     const double relative_longitudinal_m =
       target_course_distance_m - ego_course_distance_m;
+    if (
+      !std::isfinite(resolution.shift_complete_time_sec) &&
+      mission_distance_m + 1e-9 >= request.mission_path.shift_distance_m)
+    {
+      // Use the end of the first 50 ms integration step that reaches the
+      // lateral-ramp distance. This is conservative for a closing ego and is
+      // sufficient for caller-side no-side-by-side transition admission.
+      resolution.shift_complete_time_sec = step_end_sec;
+      resolution.shift_complete_target_longitudinal_m = relative_longitudinal_m;
+    }
     const double hard_margin_m =
       relative_longitudinal_m - request.hard_longitudinal_distance_m;
     if (
@@ -1457,6 +1472,93 @@ PassOuterHorizonResolution evaluate_pass_outer_horizon(
       resolution.first_role_reversal_distance_m = sample.path_distance_m;
       return resolution;
     }
+  }
+  return resolution;
+}
+
+ContinuousOuterReplanResolution evaluate_continuous_outer_replan(
+  const ContinuousOuterReplanRequest & request) noexcept
+{
+  ContinuousOuterReplanResolution resolution;
+  if (!request.enabled) {
+    resolution.valid = true;
+    return resolution;
+  }
+  if (
+    (request.current_side_sign != -1 && request.current_side_sign != 1) ||
+    !std::isfinite(request.significant_curvature_radpm) ||
+    request.significant_curvature_radpm < 0.0 ||
+    !std::isfinite(request.lookahead_distance_m) ||
+    request.lookahead_distance_m <= 0.0 ||
+    !std::isfinite(request.minimum_opposite_curve_distance_m) ||
+    request.minimum_opposite_curve_distance_m <= 0.0)
+  {
+    return resolution;
+  }
+
+  double previous_distance_m = -std::numeric_limits<double>::infinity();
+  for (const auto & sample : request.samples) {
+    if (
+      !std::isfinite(sample.path_distance_m) || sample.path_distance_m < 0.0 ||
+      !std::isfinite(sample.reference_curvature_radpm) ||
+      sample.path_distance_m + 1e-9 < previous_distance_m)
+    {
+      return ContinuousOuterReplanResolution{};
+    }
+    previous_distance_m = sample.path_distance_m;
+  }
+
+  resolution.valid = true;
+  for (std::size_t start_index = 0U; start_index < request.samples.size(); ++start_index) {
+    const auto & start = request.samples[start_index];
+    if (start.path_distance_m > request.lookahead_distance_m + 1e-9) {
+      break;
+    }
+    if (
+      std::abs(start.reference_curvature_radpm) <=
+      request.significant_curvature_radpm + 1e-12)
+    {
+      continue;
+    }
+    const int inner_side = start.reference_curvature_radpm > 0.0 ? 1 : -1;
+    const int desired_outer_side = -inner_side;
+    if (desired_outer_side == request.current_side_sign) {
+      continue;
+    }
+
+    double confirmed_until_m = start.path_distance_m;
+    for (std::size_t i = start_index + 1U; i < request.samples.size(); ++i) {
+      const auto & sample = request.samples[i];
+      if (sample.path_distance_m > request.lookahead_distance_m + 1e-9) {
+        confirmed_until_m = request.lookahead_distance_m;
+        break;
+      }
+      if (
+        std::abs(sample.reference_curvature_radpm) >
+        request.significant_curvature_radpm + 1e-12)
+      {
+        const int sample_inner_side =
+          sample.reference_curvature_radpm > 0.0 ? 1 : -1;
+        if (-sample_inner_side != desired_outer_side) {
+          break;
+        }
+      }
+      confirmed_until_m = sample.path_distance_m;
+    }
+    const double confirmed_distance_m = std::max(
+      0.0, confirmed_until_m - start.path_distance_m);
+    if (
+      confirmed_distance_m + 1e-9 <
+      request.minimum_opposite_curve_distance_m)
+    {
+      continue;
+    }
+
+    resolution.replan_required = true;
+    resolution.desired_outer_side_sign = desired_outer_side;
+    resolution.first_opposite_curve_distance_m = start.path_distance_m;
+    resolution.confirmed_opposite_curve_distance_m = confirmed_distance_m;
+    return resolution;
   }
   return resolution;
 }

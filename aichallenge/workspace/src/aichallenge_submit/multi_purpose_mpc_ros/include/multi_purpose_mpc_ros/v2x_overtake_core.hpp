@@ -663,6 +663,9 @@ struct OvertakeKinematicRolloutResolution
   double ego_distance_at_horizon_m{};
   double ego_speed_at_horizon_mps{};
   double minimum_ego_speed_mps{std::numeric_limits<double>::infinity()};
+  double shift_complete_time_sec{std::numeric_limits<double>::infinity()};
+  double shift_complete_target_longitudinal_m{
+    std::numeric_limits<double>::infinity()};
   bool rear_clear_checked{false};
   bool rear_clear_feasible{false};
   double rear_clear_time_sec{std::numeric_limits<double>::infinity()};
@@ -867,6 +870,33 @@ struct PassOuterHorizonResolution
 /// carries the already-committed strategy explicitly.
 PassOuterHorizonResolution evaluate_pass_outer_horizon(
   const PassOuterHorizonRequest & request) noexcept;
+
+struct ContinuousOuterReplanRequest
+{
+  bool enabled{false};
+  int current_side_sign{0};
+  double significant_curvature_radpm{};
+  double lookahead_distance_m{};
+  double minimum_opposite_curve_distance_m{};
+  std::vector<PassOuterHorizonSample> samples;
+};
+
+struct ContinuousOuterReplanResolution
+{
+  bool valid{false};
+  bool replan_required{false};
+  int desired_outer_side_sign{0};
+  double first_opposite_curve_distance_m{std::numeric_limits<double>::infinity()};
+  double confirmed_opposite_curve_distance_m{};
+};
+
+/// Find a sustained upcoming curve whose outside lies on the opposite side of
+/// the currently committed Pass corridor. Straights retain the last observed
+/// role, while short opposite-curvature noise is rejected by the continuous
+/// distance requirement. This resolver requests only a replan; wall, target
+/// and longitudinal crossing safety remain caller-owned hard gates.
+ContinuousOuterReplanResolution evaluate_continuous_outer_replan(
+  const ContinuousOuterReplanRequest & request) noexcept;
 
 struct SameSideExtensionCommitRequest
 {

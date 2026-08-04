@@ -509,6 +509,17 @@ mpc:
   v2x_overtake_pass_horizon_planner_result_max_age: 0.10 # [s]
   v2x_overtake_pass_horizon_hold_max_sec: 1.0 # [s] bounded fresh-horizon wait
   v2x_overtake_pass_horizon_hold_max_distance: 3.0 # [m]
+  # Re-evaluate the course-side meaning of an outer Pass over a rolling curvature horizon.
+  # A side transition is admitted only while the locked target remains longitudinally ahead;
+  # side-by-side crossing stays forbidden and all wall/body/rollout guards remain active.
+  v2x_overtake_continuous_outer_replan_enabled: true
+  v2x_overtake_continuous_outer_replan_lookahead_distance: 12.0 # [m]
+  v2x_overtake_continuous_outer_replan_min_curve_distance: 3.0 # [m] reject curvature-sign noise
+  v2x_overtake_continuous_outer_replan_min_front_distance: 4.0 # [m] cross behind, never beside target
+  v2x_overtake_continuous_outer_replan_cooldown_sec: 1.0 # [s]
+  v2x_overtake_continuous_outer_replan_max_lateral_adjustment: 3.2 # [m] full-track transition, wall-preflighted
+  v2x_overtake_continuous_outer_replan_max_shift_distance: 8.0 # [m]
+  v2x_overtake_continuous_outer_replan_max_count: 3
   v2x_overtake_safe_separation_enabled: true # retain the committed side when Pass horizon extension is unavailable
   v2x_overtake_safe_separation_speed_delta: 0.8 # [m/s] push longitudinal separation away from side-by-side
   v2x_overtake_safe_separation_forward_escape_enabled: true # preserve speed and finish when a cap-released target is nearly side-by-side

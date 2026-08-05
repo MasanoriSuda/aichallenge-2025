@@ -127,6 +127,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::PassContinuationPreflightPolicyR
 using multi_purpose_mpc_ros::v2x_overtake_core::PassOuterHorizonRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassOuterHorizonSample;
 using multi_purpose_mpc_ros::v2x_overtake_core::ContinuousOuterReplanRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::ScheduledOuterTransitionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SameSideExtensionCommitRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SameSideExtensionCommitReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationAction;
@@ -159,6 +160,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_rear_clear_replan_window
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_continuation_preflight_policy;
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_pass_outer_horizon;
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_continuous_outer_replan;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_scheduled_outer_transition;
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_same_side_extension_commit;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_commit_same_side_extension;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_safe_separation;
@@ -3322,6 +3324,59 @@ TEST(V2XOvertakeCoreHorizon, RejectsInvalidContinuousOuterInput)
   EXPECT_FALSE(result.replan_required);
 }
 
+TEST(V2XOvertakeCoreHorizon, SchedulesOuterRoleHandoffBeforeReversal)
+{
+  const auto result = resolve_scheduled_outer_transition(
+    ScheduledOuterTransitionRequest{
+      true, true, true, -1, 2.0, 18.0, 0.5, 8.0});
+
+  ASSERT_TRUE(result.valid);
+  ASSERT_TRUE(result.feasible);
+  EXPECT_TRUE(result.transition_required);
+  EXPECT_EQ(result.desired_side_sign, 1);
+  EXPECT_DOUBLE_EQ(result.start_distance_m, 10.0);
+  EXPECT_DOUBLE_EQ(result.deadline_distance_m, 18.0);
+  EXPECT_DOUBLE_EQ(result.available_shift_distance_m, 8.0);
+}
+
+TEST(V2XOvertakeCoreHorizon, DelaysScheduledOuterHandoffUntilBodyClear)
+{
+  const auto result = resolve_scheduled_outer_transition(
+    ScheduledOuterTransitionRequest{
+      true, true, true, 1, 14.0, 18.0, 0.5, 8.0});
+
+  ASSERT_TRUE(result.valid);
+  ASSERT_TRUE(result.feasible);
+  EXPECT_EQ(result.desired_side_sign, -1);
+  EXPECT_DOUBLE_EQ(result.start_distance_m, 14.0);
+  EXPECT_DOUBLE_EQ(result.available_shift_distance_m, 4.0);
+}
+
+TEST(V2XOvertakeCoreHorizon, RejectsOuterHandoffWithoutMinimumShiftWindow)
+{
+  const auto result = resolve_scheduled_outer_transition(
+    ScheduledOuterTransitionRequest{
+      true, true, true, -1, 17.75, 18.0, 0.5, 8.0});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_FALSE(result.feasible);
+  EXPECT_TRUE(result.transition_required);
+  EXPECT_DOUBLE_EQ(result.available_shift_distance_m, 0.25);
+}
+
+TEST(V2XOvertakeCoreHorizon, DoesNotScheduleHandoffWithoutRoleReversal)
+{
+  const auto result = resolve_scheduled_outer_transition(
+    ScheduledOuterTransitionRequest{
+      true, true, false, -1,
+      std::numeric_limits<double>::infinity(),
+      std::numeric_limits<double>::infinity(), 0.5, 8.0});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_TRUE(result.feasible);
+  EXPECT_FALSE(result.transition_required);
+}
+
 TEST(V2XOvertakeCoreHorizon, CommitsOnlyFreshMatchingForwardExtension)
 {
   SameSideExtensionCommitRequest request;
@@ -3883,6 +3938,38 @@ TEST(V2XOvertakeCoreSpeed, GlobalCandidateSelectionKeepsBaseLineAfterSlackIsAdeq
   ASSERT_TRUE(selection.found);
   EXPECT_EQ(selection.selected_index, 1U);
   EXPECT_TRUE(selection.candidate.direct_pass);
+}
+
+TEST(V2XOvertakeCoreSpeed, GlobalCandidateSelectionPrefersMaterialPathClearance)
+{
+  OvertakeMissionCandidate direct;
+  direct.feasible = true;
+  direct.direct_pass = true;
+  direct.shift_distance_m = 3.0;
+  direct.goal_lateral_m = 0.0;
+  direct.lateral_shift_m = 0.0;
+  direct.max_required_lateral_accel_mps2 = 1.0;
+  direct.pass_side_sign = 1;
+  direct.minimum_path_wall_clearance_m = 0.20;
+  direct.minimum_path_corridor_width_m = 2.0;
+  direct.minimum_return_wall_clearance_m = 0.20;
+
+  auto shifted = direct;
+  shifted.direct_pass = false;
+  shifted.goal_lateral_m = -0.5;
+  shifted.lateral_shift_m = 0.5;
+  shifted.pass_side_sign = -1;
+  shifted.minimum_path_wall_clearance_m = 0.50;
+  shifted.minimum_return_wall_clearance_m = 0.50;
+
+  OvertakeMissionCandidateSelectionRequest request;
+  request.candidates = {direct, shifted};
+  request.minimum_clearance_advantage_m = 0.10;
+  const auto selection = select_overtake_mission_candidate(request);
+
+  ASSERT_TRUE(selection.valid);
+  ASSERT_TRUE(selection.found);
+  EXPECT_EQ(selection.candidate.pass_side_sign, -1);
 }
 
 TEST(V2XOvertakeCoreSpeed, BodyClearDeadlineIsSoftButFeasibleDeadlineWins)

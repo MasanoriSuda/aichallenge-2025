@@ -9,30 +9,46 @@
         {
             "vehicle_number": 1,
             "vehicle_name": "GoKart1",
-            "final_position": 2,
+            "final_position": 1,
             "finished": false,
-            "lap_count": 0,
-            "laps": [],
-            "min_lap_time": 0.0,
-            "max_lap_time": 0.0,
-            "avg_lap_time": 0.0,
-            "total_lap_time": 0.0
+            "lap_count": 5,
+            "laps": [
+                83.40380096435547,
+                46.07063674926758,
+                74.7635498046875,
+                47.345909118652347,
+                72.31989288330078
+            ],
+            "min_lap_time": 46.07063674926758,
+            "max_lap_time": 83.40380096435547,
+            "avg_lap_time": 64.78075408935547,
+            "total_lap_time": 323.9037780761719
         },
         {
             "vehicle_number": 2,
             "vehicle_name": "GoKart2",
             "final_position": 2,
             "finished": false,
-            "lap_count": 0,
-            "laps": [],
-            "min_lap_time": 0.0,
-            "max_lap_time": 0.0,
-            "avg_lap_time": 0.0,
-            "total_lap_time": 0.0
+            "lap_count": 3,
+            "laps": [
+                98.25064086914063,
+                110.81373596191406,
+                106.34119415283203
+            ],
+            "min_lap_time": 98.25064086914063,
+            "max_lap_time": 110.81373596191406,
+            "avg_lap_time": 105.13519287109375,
+            "total_lap_time": 315.40557861328127
         }
     ],
-    "laps": [],
-    "min_time": 0.0,
-    "total_lap_time": 0.0,
-    "num_laps": 0
+    "laps": [
+        83.40380096435547,
+        46.07063674926758,
+        74.7635498046875,
+        47.345909118652347,
+        72.31989288330078
+    ],
+    "min_time": 46.07063674926758,
+    "total_lap_time": 323.9037780761719,
+    "num_laps": 5
 }

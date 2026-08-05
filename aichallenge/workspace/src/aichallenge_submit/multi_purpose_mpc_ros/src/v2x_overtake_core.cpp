@@ -1600,6 +1600,57 @@ ContinuousOuterReplanResolution evaluate_continuous_outer_replan(
   return resolution;
 }
 
+ScheduledOuterTransitionResolution resolve_scheduled_outer_transition(
+  const ScheduledOuterTransitionRequest & request) noexcept
+{
+  ScheduledOuterTransitionResolution resolution;
+  if (!request.enabled) {
+    resolution.valid = true;
+    resolution.feasible = true;
+    return resolution;
+  }
+  if (
+    (request.current_side_sign != -1 && request.current_side_sign != 1) ||
+    !std::isfinite(request.minimum_shift_distance_m) ||
+    request.minimum_shift_distance_m <= 0.0 ||
+    !std::isfinite(request.maximum_shift_distance_m) ||
+    request.maximum_shift_distance_m < request.minimum_shift_distance_m)
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  if (!request.outer_strategy || !request.role_reversal) {
+    resolution.feasible = true;
+    return resolution;
+  }
+  if (
+    !std::isfinite(request.body_clear_distance_m) ||
+    request.body_clear_distance_m < 0.0 ||
+    !std::isfinite(request.role_reversal_distance_m) ||
+    request.role_reversal_distance_m < 0.0)
+  {
+    resolution.valid = false;
+    return resolution;
+  }
+
+  resolution.transition_required = true;
+  resolution.desired_side_sign = -request.current_side_sign;
+  resolution.deadline_distance_m = request.role_reversal_distance_m;
+  const double maximum_distance_start_m = std::max(
+    0.0,
+    request.role_reversal_distance_m - request.maximum_shift_distance_m);
+  resolution.start_distance_m = std::max(
+    request.body_clear_distance_m, maximum_distance_start_m);
+  resolution.available_shift_distance_m = std::max(
+    0.0,
+    resolution.deadline_distance_m - resolution.start_distance_m);
+  resolution.feasible =
+    resolution.available_shift_distance_m + 1e-9 >=
+    request.minimum_shift_distance_m;
+  return resolution;
+}
+
 SameSideExtensionCommitResolution evaluate_same_side_extension_commit(
   const SameSideExtensionCommitRequest & request) noexcept
 {
@@ -2225,7 +2276,9 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
   constexpr double kEpsilon = 1e-9;
   if (
     !std::isfinite(request.minimum_deadline_slack_sec) ||
-    request.minimum_deadline_slack_sec < 0.0)
+    request.minimum_deadline_slack_sec < 0.0 ||
+    !std::isfinite(request.minimum_clearance_advantage_m) ||
+    request.minimum_clearance_advantage_m < 0.0)
   {
     return selection;
   }
@@ -2258,6 +2311,9 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
     };
 
   const auto numerically_valid = [&](const OvertakeMissionCandidate & candidate) {
+      const auto non_negative_or_infinity = [](const double value) {
+          return !std::isnan(value) && value >= 0.0;
+        };
       const bool finite_deadline_result =
         std::isfinite(candidate.predicted_body_clear_time_sec) &&
         candidate.predicted_body_clear_time_sec >= 0.0 &&
@@ -2304,8 +2360,20 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
       const bool progress_speed_valid = !request.horizon_progress_enabled ||
         (std::isfinite(candidate.predicted_minimum_ego_speed_mps) &&
         candidate.predicted_minimum_ego_speed_mps >= 0.0);
+      const bool outer_transition_valid = !candidate.outer_transition_required ||
+        ((candidate.outer_transition_side_sign == -1 ||
+        candidate.outer_transition_side_sign == 1) &&
+        candidate.outer_transition_side_sign != candidate.pass_side_sign &&
+        std::isfinite(candidate.outer_transition_start_pass_m) &&
+        candidate.outer_transition_start_pass_m >= 0.0 &&
+        std::isfinite(candidate.outer_transition_deadline_pass_m) &&
+        candidate.outer_transition_deadline_pass_m + 1e-9 >=
+        candidate.outer_transition_start_pass_m);
       return deadline_valid && closing_speed_valid && slack_valid && rear_clear_valid &&
-             progress_speed_valid &&
+             progress_speed_valid && outer_transition_valid &&
+             non_negative_or_infinity(candidate.minimum_path_wall_clearance_m) &&
+             non_negative_or_infinity(candidate.minimum_path_corridor_width_m) &&
+             non_negative_or_infinity(candidate.minimum_return_wall_clearance_m) &&
              std::isfinite(candidate.shift_distance_m) &&
              candidate.shift_distance_m >= 0.0 &&
              std::isfinite(candidate.goal_lateral_m) &&
@@ -2313,6 +2381,19 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
              candidate.lateral_shift_m >= 0.0 &&
              std::isfinite(candidate.max_required_lateral_accel_mps2) &&
              candidate.max_required_lateral_accel_mps2 >= 0.0;
+    };
+  const auto physical_reserve = [](const OvertakeMissionCandidate & candidate) {
+      double reserve = std::numeric_limits<double>::infinity();
+      if (std::isfinite(candidate.minimum_path_wall_clearance_m)) {
+        reserve = std::min(reserve, candidate.minimum_path_wall_clearance_m);
+      }
+      if (std::isfinite(candidate.minimum_path_corridor_width_m)) {
+        reserve = std::min(reserve, 0.5 * candidate.minimum_path_corridor_width_m);
+      }
+      if (std::isfinite(candidate.minimum_return_wall_clearance_m)) {
+        reserve = std::min(reserve, candidate.minimum_return_wall_clearance_m);
+      }
+      return reserve;
     };
   const auto better = [&](
       const OvertakeMissionCandidate & candidate,
@@ -2353,6 +2434,25 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
           if (incumbent_slack > candidate_slack + kEpsilon) {
             return false;
           }
+        }
+      }
+      const double candidate_physical_reserve = physical_reserve(candidate);
+      const double incumbent_physical_reserve = physical_reserve(incumbent);
+      if (
+        std::isfinite(candidate_physical_reserve) &&
+        std::isfinite(incumbent_physical_reserve))
+      {
+        if (
+          candidate_physical_reserve > incumbent_physical_reserve +
+          request.minimum_clearance_advantage_m + kEpsilon)
+        {
+          return true;
+        }
+        if (
+          incumbent_physical_reserve > candidate_physical_reserve +
+          request.minimum_clearance_advantage_m + kEpsilon)
+        {
+          return false;
         }
       }
       if (request.horizon_progress_enabled) {

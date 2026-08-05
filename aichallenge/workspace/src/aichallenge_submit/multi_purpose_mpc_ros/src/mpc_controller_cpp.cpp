@@ -1995,6 +1995,14 @@ struct OvertakeLineState
   double mission_predicted_rear_clear_time_sec{std::numeric_limits<double>::infinity()};
   double mission_predicted_rear_clear_pass_m{std::numeric_limits<double>::infinity()};
   bool mission_outer_strategy_committed{false};
+  bool mission_outer_transition_pending{false};
+  int mission_outer_transition_side_sign{0};
+  double mission_outer_transition_start_pass_m{
+    std::numeric_limits<double>::infinity()};
+  double mission_outer_transition_deadline_pass_m{
+    std::numeric_limits<double>::infinity()};
+  double mission_outer_transition_last_attempt_sec{
+    -std::numeric_limits<double>::infinity()};
   double mission_last_outer_replan_sec{-std::numeric_limits<double>::infinity()};
   double mission_outer_replan_hold_until_pass_m{0.0};
   int mission_outer_replan_count{0};
@@ -2088,6 +2096,9 @@ struct OvertakeLineEntryPreflight
   double checked_distance_m{};
   double required_distance_m{};
   double outer_role_reversal_distance_m{std::numeric_limits<double>::infinity()};
+  double minimum_path_wall_clearance_m{std::numeric_limits<double>::infinity()};
+  double minimum_path_corridor_width_m{std::numeric_limits<double>::infinity()};
+  double minimum_return_wall_clearance_m{std::numeric_limits<double>::infinity()};
   std::string reason;
 };
 
@@ -6026,6 +6037,9 @@ struct MPC
             cfg.v2x_behavior.overtake_line_min_target_separation});
         request.horizon_progress_maximum_lateral_accel_mps2 = std::max(
           kEps, cfg.v2x_behavior.overtake_line.max_lateral_accel);
+        request.minimum_clearance_advantage_m = std::max(
+          0.0,
+          cfg.v2x_behavior.overtake_line.side_quality_min_score_advantage);
         request.horizon_progress_weights = {
           cfg.v2x_behavior.overtake_line.horizon_progress_rear_clear_time_weight,
           cfg.v2x_behavior.overtake_line.horizon_progress_rear_clear_distance_weight,
@@ -6631,6 +6645,39 @@ struct MPC
                 }
                 continue;
               }
+              const double body_clear_pass_distance = std::max(
+                0.0, rollout.body_clear_distance_m - pass_origin_shift_distance);
+              const double outer_role_reversal_pass_distance =
+                std::isfinite(full_mission_preflight.outer_role_reversal_distance_m) ?
+                std::max(
+                  0.0,
+                  full_mission_preflight.outer_role_reversal_distance_m -
+                  pass_origin_shift_distance) :
+                std::numeric_limits<double>::infinity();
+              const auto outer_transition =
+                overtake_core::resolve_scheduled_outer_transition(
+                overtake_core::ScheduledOuterTransitionRequest{
+                  cfg.v2x_behavior.overtake_line.continuous_outer_replan_enabled,
+                  full_mission_preflight.outer_strategy_committed,
+                  full_mission_preflight.outer_role_reversal,
+                  side,
+                  body_clear_pass_distance,
+                  outer_role_reversal_pass_distance,
+                  0.5,
+                  std::max(
+                    0.5,
+                    cfg.v2x_behavior.overtake_line.
+                    continuous_outer_replan_max_shift_distance)});
+              if (
+                !outer_transition.valid ||
+                (outer_transition.transition_required && !outer_transition.feasible))
+              {
+                ++outer_horizon_reject_count;
+                earliest_outer_role_reversal_distance = std::min(
+                  earliest_outer_role_reversal_distance,
+                  full_mission_preflight.outer_role_reversal_distance_m);
+                continue;
+              }
 
               overtake_core::OvertakeMissionCandidate mission_candidate;
               mission_candidate.feasible = rollout.feasible;
@@ -6683,6 +6730,22 @@ struct MPC
               mission_candidate.dynamic_valid_until_sec = prediction_timing.expiry_sec;
               mission_candidate.outer_strategy_committed =
                 full_mission_preflight.outer_strategy_committed;
+              mission_candidate.outer_transition_required =
+                outer_transition.transition_required;
+              mission_candidate.outer_transition_side_sign =
+                outer_transition.desired_side_sign;
+              mission_candidate.outer_transition_start_pass_m =
+                outer_transition.start_distance_m;
+              mission_candidate.outer_transition_deadline_pass_m =
+                outer_transition.deadline_distance_m;
+              mission_candidate.minimum_path_wall_clearance_m =
+                full_mission_preflight.minimum_path_wall_clearance_m;
+              mission_candidate.minimum_path_corridor_width_m =
+                std::min(
+                  full_mission_preflight.minimum_path_corridor_width_m,
+                  std::max(0.0, goal_upper - goal_lower));
+              mission_candidate.minimum_return_wall_clearance_m =
+                full_mission_preflight.minimum_return_wall_clearance_m;
               mission_candidate.corridor_source = corridor_admission.source;
               mission_candidates.push_back(mission_candidate);
             }
@@ -6801,6 +6864,20 @@ struct MPC
             std::max(0.0, selected_mission.dynamic_valid_until_sec - now_sec)
                           << ", outer_strategy=" <<
             (selected_mission.outer_strategy_committed ? 1 : 0)
+                          << ", outer_transition=" <<
+            (selected_mission.outer_transition_required ? 1 : 0)
+                          << ", outer_transition_side=" <<
+            selected_mission.outer_transition_side_sign
+                          << ", outer_transition_start=" <<
+            selected_mission.outer_transition_start_pass_m
+                          << ", outer_transition_deadline=" <<
+            selected_mission.outer_transition_deadline_pass_m
+                          << ", path_wall_clear=" <<
+            selected_mission.minimum_path_wall_clearance_m
+                          << ", corridor_min_width=" <<
+            selected_mission.minimum_path_corridor_width_m
+                          << ", return_wall_clear=" <<
+            selected_mission.minimum_return_wall_clearance_m
                           << ", corridor_source=" <<
             overtake_core::to_string(selected_mission.corridor_source)
                           << ", target_vlat=" << preflight_target_lateral_velocity
@@ -9479,6 +9556,20 @@ private:
       std::numeric_limits<double>::infinity();
     overtake_line_state_.mission_outer_strategy_committed =
       selected_mission.has_value() && selected_mission->outer_strategy_committed;
+    overtake_line_state_.mission_outer_transition_pending =
+      selected_mission.has_value() && selected_mission->outer_transition_required;
+    overtake_line_state_.mission_outer_transition_side_sign =
+      selected_mission.has_value() ? selected_mission->outer_transition_side_sign : 0;
+    overtake_line_state_.mission_outer_transition_start_pass_m =
+      selected_mission.has_value() ?
+      selected_mission->outer_transition_start_pass_m :
+      std::numeric_limits<double>::infinity();
+    overtake_line_state_.mission_outer_transition_deadline_pass_m =
+      selected_mission.has_value() ?
+      selected_mission->outer_transition_deadline_pass_m :
+      std::numeric_limits<double>::infinity();
+    overtake_line_state_.mission_outer_transition_last_attempt_sec =
+      -std::numeric_limits<double>::infinity();
     overtake_line_state_.mission_last_outer_replan_sec =
       -std::numeric_limits<double>::infinity();
     overtake_line_state_.mission_outer_replan_hold_until_pass_m = 0.0;
@@ -9522,7 +9613,9 @@ private:
           rclcpp::get_logger("mpc_controller"),
           "OvertakeLine PassPlan frozen: target=%s, generation=%lu, side=%d, "
           "goal=%.2f, shift=%.2f, pass=%.2f, return=%.2f, closing=%.2f, "
-          "corridor_source=%s",
+          "corridor_source=%s, outer_transition=%d, transition_side=%d, "
+          "transition_window=[%.2f, %.2f], path_wall_clear=%.2f, "
+          "corridor_min_width=%.2f, return_wall_clear=%.2f",
           overtake_line_state_.target_vehicle_id.c_str(),
           static_cast<unsigned long>(overtake_line_state_.mission_generation),
           pass_plan.mission.pass_side_sign,
@@ -9531,7 +9624,14 @@ private:
           pass_plan.path.pass_distance_m,
           pass_plan.path.return_distance_m,
           pass_plan.mission.closing_speed_mps,
-          overtake_core::to_string(pass_plan.mission.corridor_source));
+          overtake_core::to_string(pass_plan.mission.corridor_source),
+          pass_plan.mission.outer_transition_required ? 1 : 0,
+          pass_plan.mission.outer_transition_side_sign,
+          pass_plan.mission.outer_transition_start_pass_m,
+          pass_plan.mission.outer_transition_deadline_pass_m,
+          pass_plan.mission.minimum_path_wall_clearance_m,
+          pass_plan.mission.minimum_path_corridor_width_m,
+          pass_plan.mission.minimum_return_wall_clearance_m);
       }
     }
   }
@@ -10164,6 +10264,36 @@ private:
       min_wall_clearance,
       enforce_lateral_accel ? std::max(0.0, line_cfg.max_lateral_accel) : 0.0,
       std::max(1.0, current_speed_mps_), true, mission_path);
+    const std::size_t clearance_sample_count = std::min({
+      horizon.target_ey.size(), horizon.path_distances.size(),
+      static_cast<std::size_t>(validation_N)});
+    const double return_start_distance =
+      mission_path.shift_distance_m + mission_path.pass_distance_m;
+    for (std::size_t i = 0; i < clearance_sample_count; ++i) {
+      const double target_ey = horizon.target_ey[i];
+      const double lower = lb[static_cast<Eigen::Index>(i)];
+      const double upper = ub[static_cast<Eigen::Index>(i)];
+      if (
+        !std::isfinite(target_ey) || !std::isfinite(lower) ||
+        !std::isfinite(upper) || upper < lower)
+      {
+        continue;
+      }
+      const double wall_clearance = std::max(
+        0.0, std::min(target_ey - lower, upper - target_ey));
+      result.minimum_path_wall_clearance_m = std::min(
+        result.minimum_path_wall_clearance_m, wall_clearance);
+      result.minimum_path_corridor_width_m = std::min(
+        result.minimum_path_corridor_width_m,
+        std::max(0.0, upper - lower));
+      if (
+        include_return_path &&
+        horizon.path_distances[i] + kEps >= return_start_distance)
+      {
+        result.minimum_return_wall_clearance_m = std::min(
+          result.minimum_return_wall_clearance_m, wall_clearance);
+      }
+    }
     result.feasible =
       horizon.execution_feasible() &&
       (!enforce_lateral_accel || !horizon.lateral_accel_limited) &&
@@ -11806,6 +11936,13 @@ private:
         if (strategic_outer_transition) {
           overtake_line_state_.pass_side_sign = replacement_side;
           overtake_locked_side_sign_ = replacement_side;
+          if (
+            overtake_line_state_.mission_outer_transition_pending &&
+            replacement_side ==
+            overtake_line_state_.mission_outer_transition_side_sign)
+          {
+            overtake_line_state_.mission_outer_transition_pending = false;
+          }
           overtake_line_state_.pass_front_overlap_exclusion_latched = false;
           overtake_line_state_.pass_front_cap_release_active = false;
           overtake_line_state_.pass_current_overlap_since_sec =
@@ -11870,6 +12007,8 @@ private:
             overtake_line_state_.mission_predicted_rear_clear_pass_m;
           pass_plan.mission.outer_strategy_committed =
             overtake_line_state_.mission_outer_strategy_committed;
+          pass_plan.mission.outer_transition_required =
+            overtake_line_state_.mission_outer_transition_pending;
         }
         if (strategic_outer_transition) {
           // A course-role transition is bounded independently. Consuming the
@@ -12044,6 +12183,92 @@ private:
         }
       }
 
+      bool scheduled_outer_transition_attempted = false;
+      if (
+        line_cfg.continuous_outer_replan_enabled &&
+        overtake_line_state_.mission_outer_transition_pending)
+      {
+        const double transition_start =
+          overtake_line_state_.mission_outer_transition_start_pass_m;
+        const double transition_deadline =
+          overtake_line_state_.mission_outer_transition_deadline_pass_m;
+        const double remaining_transition_distance =
+          transition_deadline - pass_traveled;
+        if (
+          std::isfinite(transition_deadline) &&
+          remaining_transition_distance < 0.5 - kEps)
+        {
+          RCLCPP_WARN(
+            rclcpp::get_logger("mpc_controller"),
+            "OvertakeLine scheduled outer transition window expired: "
+            "target=%s, side=%d->%d, pass=%.2f m, window=[%.2f, %.2f] m",
+            overtake_line_state_.target_vehicle_id.c_str(),
+            overtake_line_state_.pass_side_sign,
+            overtake_line_state_.mission_outer_transition_side_sign,
+            pass_traveled, transition_start, transition_deadline);
+          // The rolling curvature replan below remains available as a fallback.
+          overtake_line_state_.mission_outer_transition_pending = false;
+        } else {
+          const bool transition_window_open =
+            std::isfinite(transition_start) &&
+            pass_traveled + kEps >= transition_start;
+          const bool transition_attempt_eligible =
+            transition_window_open &&
+            !overtake_line_state_.inter_vehicle_corridor &&
+            !overtake_line_state_.pass_horizon_safe_separation_active &&
+            !pass_lateral_replan_in_progress &&
+            locked_target_matches && locked_target_progress_continuous &&
+            fresh_dynamic_horizon_available && pass_short_horizon_safe &&
+            behavior_output.locked_target_current_body_footprints_separated &&
+            std::isfinite(locked_target_longitudinal) &&
+            locked_target_longitudinal >=
+            std::max(0.5, line_cfg.target_intrusion_guard_distance) - kEps &&
+            now_sec -
+            overtake_line_state_.mission_outer_transition_last_attempt_sec + kEps >=
+            line_cfg.continuous_outer_replan_cooldown_sec &&
+            overtake_line_state_.mission_outer_replan_count <
+            line_cfg.continuous_outer_replan_max_count;
+          if (transition_attempt_eligible) {
+            scheduled_outer_transition_attempted = true;
+            overtake_line_state_.mission_outer_transition_last_attempt_sec = now_sec;
+            const int source_side = overtake_line_state_.pass_side_sign;
+            std::string transition_failure_reason;
+            if (try_refresh_committed_pass_horizon(
+                false,
+                std::optional<int>{
+                  overtake_line_state_.mission_outer_transition_side_sign},
+                std::optional<double>{remaining_transition_distance},
+                transition_failure_reason))
+            {
+              overtake_line_state_.mission_outer_replan_hold_until_pass_m =
+                transition_deadline;
+              RCLCPP_INFO(
+                rclcpp::get_logger("mpc_controller"),
+                "OvertakeLine scheduled outer transition accepted: target=%s, "
+                "side=%d->%d, pass=%.2f m, window=[%.2f, %.2f] m, "
+                "target_front=%.2f m, hold_until=%.2f m",
+                overtake_line_state_.target_vehicle_id.c_str(),
+                source_side, overtake_line_state_.pass_side_sign,
+                pass_traveled, transition_start, transition_deadline,
+                locked_target_longitudinal,
+                overtake_line_state_.mission_outer_replan_hold_until_pass_m);
+              return update_overtake_line(
+                behavior_output, ref_wp_id, N, lb, ub, now_sec);
+            }
+            RCLCPP_INFO(
+              rclcpp::get_logger("mpc_controller"),
+              "OvertakeLine scheduled outer transition rejected: target=%s, "
+              "side=%d->%d, pass=%.2f m, window=[%.2f, %.2f] m, "
+              "target_front=%.2f m, reason=%s",
+              overtake_line_state_.target_vehicle_id.c_str(),
+              source_side,
+              overtake_line_state_.mission_outer_transition_side_sign,
+              pass_traveled, transition_start, transition_deadline,
+              locked_target_longitudinal, transition_failure_reason.c_str());
+          }
+        }
+      }
+
       // A fixed Frenet-side label stops representing "outside" when the
       // reference curvature changes sign. Re-evaluate that role while the
       // target is still safely ahead and commit the complete replacement
@@ -12051,6 +12276,7 @@ private:
       const bool continuous_outer_replan_eligible =
         line_cfg.continuous_outer_replan_enabled &&
         overtake_line_state_.mission_outer_strategy_committed &&
+        !scheduled_outer_transition_attempted &&
         !overtake_line_state_.inter_vehicle_corridor &&
         !overtake_line_state_.pass_horizon_safe_separation_active &&
         !pass_lateral_replan_in_progress &&

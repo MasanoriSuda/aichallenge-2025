@@ -923,6 +923,38 @@ struct ContinuousOuterReplanResolution
 ContinuousOuterReplanResolution evaluate_continuous_outer_replan(
   const ContinuousOuterReplanRequest & request) noexcept;
 
+struct ScheduledOuterTransitionRequest
+{
+  bool enabled{false};
+  bool outer_strategy{false};
+  bool role_reversal{false};
+  int current_side_sign{0};
+  /// All distances use the Pass origin, after the initial ShiftOut.
+  double body_clear_distance_m{std::numeric_limits<double>::infinity()};
+  double role_reversal_distance_m{std::numeric_limits<double>::infinity()};
+  double minimum_shift_distance_m{0.5};
+  double maximum_shift_distance_m{0.5};
+};
+
+struct ScheduledOuterTransitionResolution
+{
+  bool valid{false};
+  bool feasible{false};
+  bool transition_required{false};
+  int desired_side_sign{0};
+  double start_distance_m{std::numeric_limits<double>::infinity()};
+  double deadline_distance_m{std::numeric_limits<double>::infinity()};
+  double available_shift_distance_m{};
+};
+
+/// Convert a full-mission outside-role reversal into a deterministic Pass
+/// handoff window. The handoff cannot start before predicted body clearance
+/// and must leave at least the minimum lateral-shift distance before the old
+/// side becomes inside. Runtime wall/target/acceleration preflight remains the
+/// final authority for the replacement corridor.
+ScheduledOuterTransitionResolution resolve_scheduled_outer_transition(
+  const ScheduledOuterTransitionRequest & request) noexcept;
+
 struct SameSideExtensionCommitRequest
 {
   bool pass_or_hold_active{false};
@@ -1171,6 +1203,13 @@ struct OvertakeMissionCandidate
   double dynamic_valid_until_sec{-std::numeric_limits<double>::infinity()};
   bool outer_strategy_committed{false};
   OvertakeMissionCorridorSource corridor_source{OvertakeMissionCorridorSource::None};
+  bool outer_transition_required{false};
+  int outer_transition_side_sign{0};
+  double outer_transition_start_pass_m{std::numeric_limits<double>::infinity()};
+  double outer_transition_deadline_pass_m{std::numeric_limits<double>::infinity()};
+  double minimum_path_wall_clearance_m{std::numeric_limits<double>::infinity()};
+  double minimum_path_corridor_width_m{std::numeric_limits<double>::infinity()};
+  double minimum_return_wall_clearance_m{std::numeric_limits<double>::infinity()};
 };
 
 struct OvertakePassPlanRequest
@@ -1268,6 +1307,9 @@ struct OvertakeMissionCandidateSelectionRequest
   double horizon_progress_lateral_motion_scale_m{};
   double horizon_progress_maximum_lateral_accel_mps2{};
   OvertakeMissionHorizonProgressWeights horizon_progress_weights;
+  /// Only let physical path reserve override racing progress when the
+  /// difference is material. This preserves aggressive ordering for ties.
+  double minimum_clearance_advantage_m{};
 };
 
 struct OvertakeMissionCandidateSelection

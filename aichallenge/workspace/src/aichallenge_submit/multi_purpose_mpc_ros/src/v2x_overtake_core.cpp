@@ -1651,6 +1651,47 @@ ScheduledOuterTransitionResolution resolve_scheduled_outer_transition(
   return resolution;
 }
 
+ScheduledOuterTransitionRuntimeBudgetResolution
+resolve_scheduled_outer_transition_runtime_budget(
+  const ScheduledOuterTransitionRuntimeBudgetRequest & request) noexcept
+{
+  ScheduledOuterTransitionRuntimeBudgetResolution resolution;
+  if (
+    !std::isfinite(request.remaining_window_distance_m) ||
+    request.remaining_window_distance_m < 0.0 ||
+    !std::isfinite(request.admission_nominal_shift_distance_m) ||
+    request.admission_nominal_shift_distance_m < 0.0 ||
+    !std::isfinite(request.configured_maximum_shift_distance_m) ||
+    request.configured_maximum_shift_distance_m < 0.0 ||
+    std::isnan(request.remaining_absolute_pass_distance_m) ||
+    request.remaining_absolute_pass_distance_m < 0.0 ||
+    !std::isfinite(request.minimum_shift_distance_m) ||
+    request.minimum_shift_distance_m <= 0.0 ||
+    !std::isfinite(request.remaining_pass_reserve_m) ||
+    request.remaining_pass_reserve_m < 0.0)
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  resolution.admission_nominal_shift_distance_m =
+    request.admission_nominal_shift_distance_m;
+  const double absolute_budget =
+    std::isinf(request.remaining_absolute_pass_distance_m) ?
+    std::numeric_limits<double>::infinity() :
+    std::max(
+    0.0,
+    request.remaining_absolute_pass_distance_m - request.remaining_pass_reserve_m);
+  resolution.available_shift_distance_m = std::min({
+    request.remaining_window_distance_m,
+    request.configured_maximum_shift_distance_m,
+    absolute_budget});
+  resolution.feasible =
+    resolution.available_shift_distance_m + 1e-9 >=
+    request.minimum_shift_distance_m;
+  return resolution;
+}
+
 FrozenOuterTransitionGoalResolution resolve_frozen_outer_transition_goal(
   const FrozenOuterTransitionGoalRequest & request) noexcept
 {

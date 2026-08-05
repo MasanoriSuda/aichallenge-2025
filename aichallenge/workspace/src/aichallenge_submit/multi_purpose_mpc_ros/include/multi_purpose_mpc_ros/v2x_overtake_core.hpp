@@ -955,6 +955,33 @@ struct ScheduledOuterTransitionResolution
 ScheduledOuterTransitionResolution resolve_scheduled_outer_transition(
   const ScheduledOuterTransitionRequest & request) noexcept;
 
+struct ScheduledOuterTransitionRuntimeBudgetRequest
+{
+  double remaining_window_distance_m{};
+  double admission_nominal_shift_distance_m{};
+  double configured_maximum_shift_distance_m{};
+  double remaining_absolute_pass_distance_m{std::numeric_limits<double>::infinity()};
+  double minimum_shift_distance_m{0.5};
+  double remaining_pass_reserve_m{0.5};
+};
+
+struct ScheduledOuterTransitionRuntimeBudgetResolution
+{
+  bool valid{false};
+  bool feasible{false};
+  double admission_nominal_shift_distance_m{};
+  double available_shift_distance_m{};
+};
+
+/// Resolve the live maximum distance for a scheduled outside-role handoff.
+/// The admission distance is retained only for diagnostics: runtime speed may
+/// require a longer ramp, so the remaining frozen window is the governing
+/// limit. The continuation planner still performs the acceleration and full
+/// path feasibility checks before committing.
+ScheduledOuterTransitionRuntimeBudgetResolution
+resolve_scheduled_outer_transition_runtime_budget(
+  const ScheduledOuterTransitionRuntimeBudgetRequest & request) noexcept;
+
 struct FrozenOuterTransitionGoalRequest
 {
   int desired_side_sign{0};

@@ -128,6 +128,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::PassOuterHorizonRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassOuterHorizonSample;
 using multi_purpose_mpc_ros::v2x_overtake_core::ContinuousOuterReplanRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ScheduledOuterTransitionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  ScheduledOuterTransitionRuntimeBudgetRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::FrozenOuterTransitionGoalRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SameSideExtensionCommitRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SameSideExtensionCommitReason;
@@ -162,6 +164,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_continuation_prefli
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_pass_outer_horizon;
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_continuous_outer_replan;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_scheduled_outer_transition;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  resolve_scheduled_outer_transition_runtime_budget;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frozen_outer_transition_goal;
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_same_side_extension_commit;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_commit_same_side_extension;
@@ -3377,6 +3381,44 @@ TEST(V2XOvertakeCoreHorizon, DoesNotScheduleHandoffWithoutRoleReversal)
   ASSERT_TRUE(result.valid);
   EXPECT_TRUE(result.feasible);
   EXPECT_FALSE(result.transition_required);
+}
+
+TEST(V2XOvertakeCoreHorizon, ResizesScheduledHandoffForRuntimeSpeedWithinWindow)
+{
+  const auto budget = resolve_scheduled_outer_transition_runtime_budget(
+    ScheduledOuterTransitionRuntimeBudgetRequest{
+      7.99, 1.35, 8.0, 20.0, 0.5, 0.5});
+
+  ASSERT_TRUE(budget.valid);
+  ASSERT_TRUE(budget.feasible);
+  EXPECT_DOUBLE_EQ(budget.admission_nominal_shift_distance_m, 1.35);
+  EXPECT_DOUBLE_EQ(budget.available_shift_distance_m, 7.99);
+
+  SameSideReplanShiftDistanceRequest shift;
+  shift.current_lateral_m = 0.46;
+  shift.goal_lateral_m = -0.43;
+  shift.planning_speed_mps = 3.23;
+  shift.maximum_lateral_accel_mps2 = 6.0;
+  shift.minimum_shift_distance_m = 0.5;
+  shift.maximum_shift_distance_m = budget.available_shift_distance_m;
+  shift.distance_margin_m = 0.25;
+  const auto resized = resolve_same_side_replan_shift_distance(shift);
+
+  ASSERT_TRUE(resized.valid);
+  EXPECT_TRUE(resized.feasible);
+  EXPECT_GT(resized.shift_distance_m, budget.admission_nominal_shift_distance_m);
+  EXPECT_LT(resized.shift_distance_m, budget.available_shift_distance_m);
+}
+
+TEST(V2XOvertakeCoreHorizon, BoundsScheduledHandoffByAbsolutePassReserve)
+{
+  const auto budget = resolve_scheduled_outer_transition_runtime_budget(
+    ScheduledOuterTransitionRuntimeBudgetRequest{
+      7.0, 1.5, 8.0, 2.25, 0.5, 0.5});
+
+  ASSERT_TRUE(budget.valid);
+  ASSERT_TRUE(budget.feasible);
+  EXPECT_DOUBLE_EQ(budget.available_shift_distance_m, 1.75);
 }
 
 TEST(V2XOvertakeCoreHorizon, FreezesMirroredMinimumMotionOuterGoal)

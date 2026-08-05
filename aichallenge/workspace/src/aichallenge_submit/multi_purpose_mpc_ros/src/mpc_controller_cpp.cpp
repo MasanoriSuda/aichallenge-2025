@@ -54,6 +54,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <limits>
 #include <map>
 #include <memory>
@@ -6770,12 +6771,19 @@ struct MPC
                   outer_transition.available_shift_distance_m,
                   cfg.v2x_behavior.overtake_line.
                   continuous_outer_replan_max_shift_distance);
+                // ShiftOut can be admitted while ego is still following at a
+                // low speed.  The scheduled handoff happens later in Pass,
+                // after the closing-speed command has accelerated ego.  Size
+                // the nominal admission ramp for that command speed instead
+                // of freezing a follow-speed-only distance.
+                const double transition_planning_speed = std::max({
+                  1.0, current_speed_mps_, candidate_command_speed});
                 const auto transition_shift =
                   overtake_core::resolve_same_side_replan_shift_distance(
                   overtake_core::SameSideReplanShiftDistanceRequest{
                     full_mission_preflight.goal_ey,
                     frozen_goal.goal_m,
-                    std::max(1.0, current_speed_mps_),
+                    transition_planning_speed,
                     std::max(
                       kEps, cfg.v2x_behavior.overtake_line.max_lateral_accel),
                     0.5,
@@ -12028,7 +12036,15 @@ private:
             maximum_shift_distance,
             std::max(0.25, model->reference_path->resolution)});
         if (!shift_resolution.valid || !shift_resolution.feasible) {
-          return fail_extension("same-side lateral ramp exceeds acceleration budget");
+          std::ostringstream reason;
+          reason << "same-side lateral ramp exceeds acceleration budget"
+                 << ", speed=" << std::fixed << std::setprecision(2)
+                 << std::max(1.0, current_speed_mps_)
+                 << " m/s, lateral=" << shift_resolution.lateral_adjustment_m
+                 << " m, required=" << shift_resolution.required_distance_m
+                 << " m, available=" << maximum_shift_distance << " m";
+          failure_reason = reason.str();
+          return false;
         }
         const double extension_shift_distance = shift_resolution.shift_distance_m;
         const double extension_pass_limit = std::max(
@@ -12489,17 +12505,35 @@ private:
             scheduled_outer_transition_attempted = true;
             overtake_line_state_.mission_outer_transition_last_attempt_sec = now_sec;
             const int source_side = overtake_line_state_.pass_side_sign;
+            const auto live_transition_budget =
+              overtake_core::resolve_scheduled_outer_transition_runtime_budget(
+              overtake_core::ScheduledOuterTransitionRuntimeBudgetRequest{
+                remaining_transition_distance,
+                overtake_line_state_.mission_outer_transition_shift_distance,
+                line_cfg.continuous_outer_replan_max_shift_distance,
+                std::max(
+                  0.0,
+                  line_cfg.pass_horizon_absolute_distance_limit - pass_traveled),
+                0.5,
+                0.5});
+            const double live_transition_shift_limit =
+              live_transition_budget.available_shift_distance_m;
             std::string transition_failure_reason;
-            if (try_refresh_committed_pass_horizon(
+            const bool transition_committed =
+              live_transition_budget.valid && live_transition_budget.feasible &&
+              try_refresh_committed_pass_horizon(
                 false,
                 std::optional<int>{
                   overtake_line_state_.mission_outer_transition_side_sign},
-                std::optional<double>{std::min(
-                  remaining_transition_distance,
-                  overtake_line_state_.mission_outer_transition_shift_distance)},
+                std::optional<double>{live_transition_shift_limit},
                 std::optional<double>{
                   overtake_line_state_.mission_outer_transition_goal_ey},
-                transition_failure_reason))
+                transition_failure_reason);
+            if (!live_transition_budget.valid || !live_transition_budget.feasible) {
+              transition_failure_reason =
+                "scheduled outer transition runtime shift budget unavailable";
+            }
+            if (transition_committed)
             {
               overtake_line_state_.mission_outer_replan_hold_until_pass_m =
                 transition_deadline;
@@ -12507,7 +12541,8 @@ private:
                 rclcpp::get_logger("mpc_controller"),
                 "OvertakeLine scheduled outer transition accepted: target=%s, "
                 "side=%d->%d, pass=%.2f m, window=[%.2f, %.2f] m, "
-                "goal=%.2f, shift_limit=%.2f m, target_front=%.2f m, "
+                "goal=%.2f, shift=%.2f m, nominal_shift=%.2f m, "
+                "available_shift=%.2f m, target_front=%.2f m, "
                 "hold_until=%.2f m",
                 overtake_line_state_.target_vehicle_id.c_str(),
                 source_side, overtake_line_state_.pass_side_sign,
@@ -12515,6 +12550,8 @@ private:
                 overtake_line_state_.fixed_pass_corridor_goal_ey.value_or(
                   std::numeric_limits<double>::quiet_NaN()),
                 overtake_line_state_.mission_pass_lateral_replan_shift_distance,
+                overtake_line_state_.mission_outer_transition_shift_distance,
+                live_transition_shift_limit,
                 locked_target_longitudinal,
                 overtake_line_state_.mission_outer_replan_hold_until_pass_m);
               return update_overtake_line(
@@ -12524,13 +12561,15 @@ private:
               rclcpp::get_logger("mpc_controller"),
               "OvertakeLine scheduled outer transition rejected: target=%s, "
               "side=%d->%d, pass=%.2f m, window=[%.2f, %.2f] m, "
-              "goal=%.2f, shift_limit=%.2f m, target_front=%.2f m, reason=%s",
+              "goal=%.2f, nominal_shift=%.2f m, available_shift=%.2f m, "
+              "target_front=%.2f m, reason=%s",
               overtake_line_state_.target_vehicle_id.c_str(),
               source_side,
               overtake_line_state_.mission_outer_transition_side_sign,
               pass_traveled, transition_start, transition_deadline,
               overtake_line_state_.mission_outer_transition_goal_ey,
               overtake_line_state_.mission_outer_transition_shift_distance,
+              live_transition_shift_limit,
               locked_target_longitudinal, transition_failure_reason.c_str());
           }
         }

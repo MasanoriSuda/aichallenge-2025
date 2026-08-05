@@ -955,6 +955,30 @@ struct ScheduledOuterTransitionResolution
 ScheduledOuterTransitionResolution resolve_scheduled_outer_transition(
   const ScheduledOuterTransitionRequest & request) noexcept;
 
+struct FrozenOuterTransitionGoalRequest
+{
+  int desired_side_sign{0};
+  double source_goal_m{};
+  double feasible_lower_m{};
+  double feasible_upper_m{};
+  double minimum_role_offset_m{0.05};
+  double maximum_lateral_adjustment_m{std::numeric_limits<double>::infinity()};
+};
+
+struct FrozenOuterTransitionGoalResolution
+{
+  bool valid{false};
+  bool feasible{false};
+  double goal_m{std::numeric_limits<double>::quiet_NaN()};
+  double lateral_adjustment_m{std::numeric_limits<double>::infinity()};
+};
+
+/// Freeze the next outside-role goal without using a later target-lateral
+/// observation. Mirroring the admitted goal preserves a minimum-motion line;
+/// wall bounds and the requested Frenet role remain hard constraints.
+FrozenOuterTransitionGoalResolution resolve_frozen_outer_transition_goal(
+  const FrozenOuterTransitionGoalRequest & request) noexcept;
+
 struct SameSideExtensionCommitRequest
 {
   bool pass_or_hold_active{false};
@@ -1207,6 +1231,8 @@ struct OvertakeMissionCandidate
   int outer_transition_side_sign{0};
   double outer_transition_start_pass_m{std::numeric_limits<double>::infinity()};
   double outer_transition_deadline_pass_m{std::numeric_limits<double>::infinity()};
+  double outer_transition_goal_lateral_m{std::numeric_limits<double>::quiet_NaN()};
+  double outer_transition_shift_distance_m{std::numeric_limits<double>::quiet_NaN()};
   double minimum_path_wall_clearance_m{std::numeric_limits<double>::infinity()};
   double minimum_path_corridor_width_m{std::numeric_limits<double>::infinity()};
   double minimum_return_wall_clearance_m{std::numeric_limits<double>::infinity()};

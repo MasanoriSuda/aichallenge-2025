@@ -128,6 +128,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::PassOuterHorizonRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassOuterHorizonSample;
 using multi_purpose_mpc_ros::v2x_overtake_core::ContinuousOuterReplanRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ScheduledOuterTransitionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::FrozenOuterTransitionGoalRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SameSideExtensionCommitRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SameSideExtensionCommitReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationAction;
@@ -161,6 +162,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_continuation_prefli
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_pass_outer_horizon;
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_continuous_outer_replan;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_scheduled_outer_transition;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frozen_outer_transition_goal;
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_same_side_extension_commit;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_commit_same_side_extension;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_safe_separation;
@@ -3375,6 +3377,47 @@ TEST(V2XOvertakeCoreHorizon, DoesNotScheduleHandoffWithoutRoleReversal)
   ASSERT_TRUE(result.valid);
   EXPECT_TRUE(result.feasible);
   EXPECT_FALSE(result.transition_required);
+}
+
+TEST(V2XOvertakeCoreHorizon, FreezesMirroredMinimumMotionOuterGoal)
+{
+  const auto result = resolve_frozen_outer_transition_goal(
+    FrozenOuterTransitionGoalRequest{1, -0.6, -2.0, 1.8, 0.05, 3.2});
+
+  ASSERT_TRUE(result.valid);
+  ASSERT_TRUE(result.feasible);
+  EXPECT_DOUBLE_EQ(result.goal_m, 0.6);
+  EXPECT_DOUBLE_EQ(result.lateral_adjustment_m, 1.2);
+}
+
+TEST(V2XOvertakeCoreHorizon, ClampsFrozenOuterGoalInsideFutureWallBounds)
+{
+  const auto result = resolve_frozen_outer_transition_goal(
+    FrozenOuterTransitionGoalRequest{-1, 1.4, -0.8, 2.0, 0.05, 3.2});
+
+  ASSERT_TRUE(result.valid);
+  ASSERT_TRUE(result.feasible);
+  EXPECT_DOUBLE_EQ(result.goal_m, -0.8);
+  EXPECT_DOUBLE_EQ(result.lateral_adjustment_m, 2.2);
+}
+
+TEST(V2XOvertakeCoreHorizon, RejectsFrozenGoalWhenRequestedRoleDoesNotFit)
+{
+  const auto result = resolve_frozen_outer_transition_goal(
+    FrozenOuterTransitionGoalRequest{1, -0.6, -1.5, 0.02, 0.05, 3.2});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_FALSE(result.feasible);
+}
+
+TEST(V2XOvertakeCoreHorizon, RejectsFrozenGoalBeyondAdjustmentBudget)
+{
+  const auto result = resolve_frozen_outer_transition_goal(
+    FrozenOuterTransitionGoalRequest{1, -1.2, -2.0, 2.0, 0.05, 2.0});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_FALSE(result.feasible);
+  EXPECT_DOUBLE_EQ(result.lateral_adjustment_m, 2.4);
 }
 
 TEST(V2XOvertakeCoreHorizon, CommitsOnlyFreshMatchingForwardExtension)

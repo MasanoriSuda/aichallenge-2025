@@ -2001,6 +2001,10 @@ struct OvertakeLineState
     std::numeric_limits<double>::infinity()};
   double mission_outer_transition_deadline_pass_m{
     std::numeric_limits<double>::infinity()};
+  double mission_outer_transition_goal_ey{
+    std::numeric_limits<double>::quiet_NaN()};
+  double mission_outer_transition_shift_distance{
+    std::numeric_limits<double>::quiet_NaN()};
   double mission_outer_transition_last_attempt_sec{
     -std::numeric_limits<double>::infinity()};
   double mission_last_outer_replan_sec{-std::numeric_limits<double>::infinity()};
@@ -6403,6 +6407,8 @@ struct MPC
         std::size_t rear_clear_reject_count = 0;
         std::size_t full_mission_preflight_reject_count = 0;
         std::size_t outer_horizon_reject_count = 0;
+        std::size_t outer_transition_preflight_reject_count = 0;
+        std::string first_outer_transition_preflight_rejection;
         std::size_t static_corridor_fallback_count = 0;
         double earliest_rejected_body_clear_time =
           std::numeric_limits<double>::infinity();
@@ -6679,6 +6685,168 @@ struct MPC
                 continue;
               }
 
+              double frozen_outer_transition_goal =
+                std::numeric_limits<double>::quiet_NaN();
+              double frozen_outer_transition_shift_distance =
+                std::numeric_limits<double>::quiet_NaN();
+              OvertakeLineEntryPreflight outer_transition_preflight;
+              if (outer_transition.transition_required) {
+                const double transition_start_from_entry_m =
+                  pass_origin_shift_distance + outer_transition.start_distance_m;
+                int transition_start_index = -1;
+                for (int i = 0; i < static_mission_plan_N; ++i) {
+                  if (
+                    horizon_path_distance_to_index(
+                      ref_wp_id, static_cast<std::size_t>(i)) +
+                    std::max(0.05, model->reference_path->resolution) >=
+                    transition_start_from_entry_m)
+                  {
+                    transition_start_index = i;
+                    break;
+                  }
+                }
+                if (transition_start_index < 0) {
+                  ++outer_transition_preflight_reject_count;
+                  if (first_outer_transition_preflight_rejection.empty()) {
+                    first_outer_transition_preflight_rejection =
+                      "handoff origin exceeds mission horizon";
+                  }
+                  continue;
+                }
+
+                const int transition_ref_wp_id = ref_wp_id + transition_start_index;
+                const double remaining_from_transition_m =
+                  std::max(
+                  0.0,
+                  selected_pass_distance - outer_transition.start_distance_m) +
+                  std::max(0.5, cfg.v2x_behavior.overtake_line.return_distance);
+                const int transition_plan_N = std::max(
+                  N,
+                  static_cast<int>(std::ceil(
+                    remaining_from_transition_m /
+                    std::max(0.1, model->reference_path->resolution))) + 2);
+                const auto [transition_lb, transition_ub] =
+                  build_v2x_gap_planner_bounds(
+                  transition_ref_wp_id, 0, Eigen::VectorXd{}, Eigen::VectorXd{},
+                  transition_plan_N);
+                if (transition_lb.size() == 0 || transition_ub.size() == 0) {
+                  ++outer_transition_preflight_reject_count;
+                  if (first_outer_transition_preflight_rejection.empty()) {
+                    first_outer_transition_preflight_rejection =
+                      "handoff wall bounds unavailable";
+                  }
+                  continue;
+                }
+                const double transition_wall_margin =
+                  std::max(0.0, cfg.v2x_behavior.overtake_line.min_wall_clearance);
+                double transition_goal_lower =
+                  transition_lb[0] + transition_wall_margin;
+                double transition_goal_upper =
+                  transition_ub[0] - transition_wall_margin;
+                if (transition_goal_upper < transition_goal_lower) {
+                  transition_goal_lower = transition_lb[0];
+                  transition_goal_upper = transition_ub[0];
+                }
+                const auto frozen_goal =
+                  overtake_core::resolve_frozen_outer_transition_goal(
+                  overtake_core::FrozenOuterTransitionGoalRequest{
+                    outer_transition.desired_side_sign,
+                    full_mission_preflight.goal_ey,
+                    transition_goal_lower,
+                    transition_goal_upper,
+                    0.05,
+                    cfg.v2x_behavior.overtake_line.
+                    continuous_outer_replan_max_lateral_adjustment});
+                if (!frozen_goal.valid || !frozen_goal.feasible) {
+                  ++outer_transition_preflight_reject_count;
+                  if (first_outer_transition_preflight_rejection.empty()) {
+                    first_outer_transition_preflight_rejection =
+                      "frozen opposite-side goal infeasible";
+                  }
+                  continue;
+                }
+
+                const double maximum_transition_shift_distance = std::min(
+                  outer_transition.available_shift_distance_m,
+                  cfg.v2x_behavior.overtake_line.
+                  continuous_outer_replan_max_shift_distance);
+                const auto transition_shift =
+                  overtake_core::resolve_same_side_replan_shift_distance(
+                  overtake_core::SameSideReplanShiftDistanceRequest{
+                    full_mission_preflight.goal_ey,
+                    frozen_goal.goal_m,
+                    std::max(1.0, current_speed_mps_),
+                    std::max(
+                      kEps, cfg.v2x_behavior.overtake_line.max_lateral_accel),
+                    0.5,
+                    maximum_transition_shift_distance,
+                    std::max(0.25, model->reference_path->resolution)});
+                if (!transition_shift.valid || !transition_shift.feasible) {
+                  ++outer_transition_preflight_reject_count;
+                  if (first_outer_transition_preflight_rejection.empty()) {
+                    first_outer_transition_preflight_rejection =
+                      "frozen handoff ramp exceeds acceleration/window";
+                  }
+                  continue;
+                }
+                const double remaining_pass_after_transition =
+                  selected_pass_distance - outer_transition.start_distance_m -
+                  transition_shift.shift_distance_m;
+                if (remaining_pass_after_transition < 0.5 - kEps) {
+                  ++outer_transition_preflight_reject_count;
+                  if (first_outer_transition_preflight_rejection.empty()) {
+                    first_outer_transition_preflight_rejection =
+                      "frozen handoff leaves no rear-clear Pass distance";
+                  }
+                  continue;
+                }
+
+                const double estimated_transition_time_sec =
+                  transition_start_from_entry_m /
+                  std::max(
+                  1.0,
+                  std::max(
+                    current_speed_mps_,
+                    non_negative_preflight_target_speed + effective_closing_speed));
+                const double predicted_transition_target_lateral =
+                  preflight_target_course_lateral +
+                  preflight_target_lateral_velocity * std::min(
+                  estimated_transition_time_sec,
+                  std::max(0.0, cfg.v2x_gap.prediction_time));
+                const std::optional<std::pair<double, double>> frozen_goal_interval{
+                  std::make_pair(frozen_goal.goal_m, frozen_goal.goal_m)};
+                outer_transition_preflight = evaluate_overtake_line_entry_preflight(
+                  transition_ref_wp_id,
+                  transition_plan_N,
+                  transition_lb,
+                  transition_ub,
+                  outer_transition.desired_side_sign,
+                  full_mission_preflight.goal_ey,
+                  predicted_transition_target_lateral,
+                  std::nullopt,
+                  frozen_goal_interval,
+                  std::optional<double>{frozen_goal.goal_m},
+                  transition_shift.shift_distance_m,
+                  remaining_pass_after_transition,
+                  true,
+                  true,
+                  false,
+                  false,
+                  false,
+                  OvertakeLineEntryPreflightPolicy{false, false});
+                if (!outer_transition_preflight.feasible) {
+                  ++outer_transition_preflight_reject_count;
+                  if (first_outer_transition_preflight_rejection.empty()) {
+                    first_outer_transition_preflight_rejection =
+                      outer_transition_preflight.reason;
+                  }
+                  continue;
+                }
+                frozen_outer_transition_goal = frozen_goal.goal_m;
+                frozen_outer_transition_shift_distance =
+                  transition_shift.shift_distance_m;
+              }
+
               overtake_core::OvertakeMissionCandidate mission_candidate;
               mission_candidate.feasible = rollout.feasible;
               mission_candidate.direct_pass = direct_pass;
@@ -6738,14 +6906,32 @@ struct MPC
                 outer_transition.start_distance_m;
               mission_candidate.outer_transition_deadline_pass_m =
                 outer_transition.deadline_distance_m;
+              mission_candidate.outer_transition_goal_lateral_m =
+                frozen_outer_transition_goal;
+              mission_candidate.outer_transition_shift_distance_m =
+                frozen_outer_transition_shift_distance;
               mission_candidate.minimum_path_wall_clearance_m =
+                outer_transition.transition_required ?
+                std::min(
+                  full_mission_preflight.minimum_path_wall_clearance_m,
+                  outer_transition_preflight.minimum_path_wall_clearance_m) :
                 full_mission_preflight.minimum_path_wall_clearance_m;
               mission_candidate.minimum_path_corridor_width_m =
                 std::min(
+                  outer_transition.transition_required ?
+                  std::min(
+                    full_mission_preflight.minimum_path_corridor_width_m,
+                    outer_transition_preflight.minimum_path_corridor_width_m) :
                   full_mission_preflight.minimum_path_corridor_width_m,
                   std::max(0.0, goal_upper - goal_lower));
               mission_candidate.minimum_return_wall_clearance_m =
+                outer_transition.transition_required ?
+                outer_transition_preflight.minimum_return_wall_clearance_m :
                 full_mission_preflight.minimum_return_wall_clearance_m;
+              mission_candidate.max_required_lateral_accel_mps2 = std::max(
+                mission_candidate.max_required_lateral_accel_mps2,
+                outer_transition.transition_required ?
+                outer_transition_preflight.max_required_lateral_accel : 0.0);
               mission_candidate.corridor_source = corridor_admission.source;
               mission_candidates.push_back(mission_candidate);
             }
@@ -6770,6 +6956,8 @@ struct MPC
              << ", full_mission_preflight_rejected=" <<
             full_mission_preflight_reject_count
              << ", outer_horizon_rejected=" << outer_horizon_reject_count
+             << ", outer_transition_preflight_rejected=" <<
+            outer_transition_preflight_reject_count
              << ", static_fallback=" << static_corridor_fallback_count
              << ", observed=" <<
             (assessment.dynamic_mission_corridor_observed ? 1 : 0)
@@ -6777,6 +6965,13 @@ struct MPC
           if (outer_horizon_reject_count > 0U) {
             ss << ", earliest_outer_role_reversal_s="
                << earliest_outer_role_reversal_distance;
+          }
+          if (
+            outer_transition_preflight_reject_count > 0U &&
+            !first_outer_transition_preflight_rejection.empty())
+          {
+            ss << ", outer_transition_reason=" <<
+              first_outer_transition_preflight_rejection;
           }
           if (
             first_dynamic_rejection_available &&
@@ -6872,6 +7067,10 @@ struct MPC
             selected_mission.outer_transition_start_pass_m
                           << ", outer_transition_deadline=" <<
             selected_mission.outer_transition_deadline_pass_m
+                          << ", outer_transition_goal=" <<
+            selected_mission.outer_transition_goal_lateral_m
+                          << ", outer_transition_shift=" <<
+            selected_mission.outer_transition_shift_distance_m
                           << ", path_wall_clear=" <<
             selected_mission.minimum_path_wall_clearance_m
                           << ", corridor_min_width=" <<
@@ -9568,6 +9767,14 @@ private:
       selected_mission.has_value() ?
       selected_mission->outer_transition_deadline_pass_m :
       std::numeric_limits<double>::infinity();
+    overtake_line_state_.mission_outer_transition_goal_ey =
+      selected_mission.has_value() ?
+      selected_mission->outer_transition_goal_lateral_m :
+      std::numeric_limits<double>::quiet_NaN();
+    overtake_line_state_.mission_outer_transition_shift_distance =
+      selected_mission.has_value() ?
+      selected_mission->outer_transition_shift_distance_m :
+      std::numeric_limits<double>::quiet_NaN();
     overtake_line_state_.mission_outer_transition_last_attempt_sec =
       -std::numeric_limits<double>::infinity();
     overtake_line_state_.mission_last_outer_replan_sec =
@@ -9614,7 +9821,8 @@ private:
           "OvertakeLine PassPlan frozen: target=%s, generation=%lu, side=%d, "
           "goal=%.2f, shift=%.2f, pass=%.2f, return=%.2f, closing=%.2f, "
           "corridor_source=%s, outer_transition=%d, transition_side=%d, "
-          "transition_window=[%.2f, %.2f], path_wall_clear=%.2f, "
+          "transition_window=[%.2f, %.2f], transition_goal=%.2f, "
+          "transition_shift=%.2f, path_wall_clear=%.2f, "
           "corridor_min_width=%.2f, return_wall_clear=%.2f",
           overtake_line_state_.target_vehicle_id.c_str(),
           static_cast<unsigned long>(overtake_line_state_.mission_generation),
@@ -9629,6 +9837,8 @@ private:
           pass_plan.mission.outer_transition_side_sign,
           pass_plan.mission.outer_transition_start_pass_m,
           pass_plan.mission.outer_transition_deadline_pass_m,
+          pass_plan.mission.outer_transition_goal_lateral_m,
+          pass_plan.mission.outer_transition_shift_distance_m,
           pass_plan.mission.minimum_path_wall_clearance_m,
           pass_plan.mission.minimum_path_corridor_width_m,
           pass_plan.mission.minimum_return_wall_clearance_m);
@@ -11622,6 +11832,7 @@ private:
       [&](const bool longitudinal_only,
         const std::optional<int> strategic_outer_side,
         const std::optional<double> strategic_shift_distance_limit,
+        const std::optional<double> frozen_strategic_goal,
         std::string & failure_reason) {
         const auto fail_extension = [&](const char * reason) {
             failure_reason = reason;
@@ -11662,19 +11873,23 @@ private:
         if (
           (replacement_side != -1 && replacement_side != 1) ||
           strategic_outer_transition != strategic_shift_distance_limit.has_value() ||
+          (frozen_strategic_goal.has_value() && !strategic_outer_transition) ||
           (strategic_outer_transition &&
           (replacement_side == source_side ||
           !std::isfinite(strategic_shift_distance_limit.value()) ||
-          strategic_shift_distance_limit.value() < 0.5)))
+          strategic_shift_distance_limit.value() < 0.5 ||
+          (frozen_strategic_goal.has_value() &&
+          !std::isfinite(frozen_strategic_goal.value())))))
         {
           return fail_extension("invalid continuous-outer replacement side");
         }
         if (strategic_outer_transition) {
-          // The rolling curvature policy already selected the upcoming outer
-          // side. This replacement must still enforce target separation, but
-          // a later curvature-sign change belongs to the next rolling update
-          // rather than invalidating the current transition in advance.
-          continuation_policy.enforce_target_center_separation = true;
+          // This is a longitudinally-behind cross-track handoff. Requiring the
+          // final goal to remain laterally separated from an ahead target can
+          // push an otherwise valid outer goal through the wall. Current and
+          // predicted footprint separation plus the shift-complete front
+          // distance below remain the hard dynamic gates.
+          continuation_policy.enforce_target_center_separation = false;
           continuation_policy.enforce_outer_role_continuity = false;
         }
         const double planner_generated_at_sec = now_sec;
@@ -11740,20 +11955,48 @@ private:
           overtake_line_state_.fixed_pass_corridor_goal_ey.value();
         double replacement_goal_m = previous_goal;
         if (!longitudinal_only) {
-          const auto replacement_goal =
-            overtake_core::resolve_feasible_pass_side_lateral_goal(
-            overtake_core::FeasiblePassSideLateralGoalRequest{
-              replacement_side,
-              previous_goal,
-              goal_target_course_lateral,
-              std::max(0.0, cfg.v2x_behavior.overtake_line_min_target_separation),
-              feasible_lower,
-              feasible_upper,
-              true});
-          if (!replacement_goal.target_separation_feasible) {
-            return fail_extension("no wall-feasible same-side separated goal");
+          if (frozen_strategic_goal.has_value()) {
+            replacement_goal_m = frozen_strategic_goal.value();
+            if (
+              replacement_goal_m < feasible_lower - kEps ||
+              replacement_goal_m > feasible_upper + kEps ||
+              static_cast<double>(replacement_side) * replacement_goal_m <= 0.0)
+            {
+              return fail_extension("frozen outer goal outside live wall bounds");
+            }
+          } else if (strategic_outer_transition) {
+            const auto rolling_outer_goal =
+              overtake_core::resolve_frozen_outer_transition_goal(
+              overtake_core::FrozenOuterTransitionGoalRequest{
+                replacement_side,
+                previous_goal,
+                feasible_lower,
+                feasible_upper,
+                0.05,
+                line_cfg.continuous_outer_replan_max_lateral_adjustment});
+            if (!rolling_outer_goal.valid || !rolling_outer_goal.feasible) {
+              return fail_extension("rolling opposite-side outer goal infeasible");
+            }
+            replacement_goal_m = rolling_outer_goal.goal_m;
+          } else {
+            const auto replacement_goal =
+              overtake_core::resolve_feasible_pass_side_lateral_goal(
+              overtake_core::FeasiblePassSideLateralGoalRequest{
+                replacement_side,
+                previous_goal,
+                goal_target_course_lateral,
+                std::max(0.0, cfg.v2x_behavior.overtake_line_min_target_separation),
+                feasible_lower,
+                feasible_upper,
+                continuation_policy.enforce_target_center_separation});
+            if (
+              continuation_policy.enforce_target_center_separation &&
+              !replacement_goal.target_separation_feasible)
+            {
+              return fail_extension("no wall-feasible same-side separated goal");
+            }
+            replacement_goal_m = replacement_goal.goal_m;
           }
-          replacement_goal_m = replacement_goal.goal_m;
         }
         const double lateral_adjustment = std::abs(
           replacement_goal_m - previous_goal);
@@ -11942,6 +12185,10 @@ private:
             overtake_line_state_.mission_outer_transition_side_sign)
           {
             overtake_line_state_.mission_outer_transition_pending = false;
+            overtake_line_state_.mission_outer_transition_goal_ey =
+              std::numeric_limits<double>::quiet_NaN();
+            overtake_line_state_.mission_outer_transition_shift_distance =
+              std::numeric_limits<double>::quiet_NaN();
           }
           overtake_line_state_.pass_front_overlap_exclusion_latched = false;
           overtake_line_state_.pass_front_cap_release_active = false;
@@ -12009,6 +12256,10 @@ private:
             overtake_line_state_.mission_outer_strategy_committed;
           pass_plan.mission.outer_transition_required =
             overtake_line_state_.mission_outer_transition_pending;
+          pass_plan.mission.outer_transition_goal_lateral_m =
+            overtake_line_state_.mission_outer_transition_goal_ey;
+          pass_plan.mission.outer_transition_shift_distance_m =
+            overtake_line_state_.mission_outer_transition_shift_distance;
         }
         if (strategic_outer_transition) {
           // A course-role transition is bounded independently. Consuming the
@@ -12208,6 +12459,10 @@ private:
             pass_traveled, transition_start, transition_deadline);
           // The rolling curvature replan below remains available as a fallback.
           overtake_line_state_.mission_outer_transition_pending = false;
+          overtake_line_state_.mission_outer_transition_goal_ey =
+            std::numeric_limits<double>::quiet_NaN();
+          overtake_line_state_.mission_outer_transition_shift_distance =
+            std::numeric_limits<double>::quiet_NaN();
         } else {
           const bool transition_window_open =
             std::isfinite(transition_start) &&
@@ -12220,6 +12475,8 @@ private:
             locked_target_matches && locked_target_progress_continuous &&
             fresh_dynamic_horizon_available && pass_short_horizon_safe &&
             behavior_output.locked_target_current_body_footprints_separated &&
+            behavior_output.locked_target_footprint_prediction_valid &&
+            behavior_output.locked_target_predicted_body_footprint_sweep_separated &&
             std::isfinite(locked_target_longitudinal) &&
             locked_target_longitudinal >=
             std::max(0.5, line_cfg.target_intrusion_guard_distance) - kEps &&
@@ -12237,7 +12494,11 @@ private:
                 false,
                 std::optional<int>{
                   overtake_line_state_.mission_outer_transition_side_sign},
-                std::optional<double>{remaining_transition_distance},
+                std::optional<double>{std::min(
+                  remaining_transition_distance,
+                  overtake_line_state_.mission_outer_transition_shift_distance)},
+                std::optional<double>{
+                  overtake_line_state_.mission_outer_transition_goal_ey},
                 transition_failure_reason))
             {
               overtake_line_state_.mission_outer_replan_hold_until_pass_m =
@@ -12246,10 +12507,14 @@ private:
                 rclcpp::get_logger("mpc_controller"),
                 "OvertakeLine scheduled outer transition accepted: target=%s, "
                 "side=%d->%d, pass=%.2f m, window=[%.2f, %.2f] m, "
-                "target_front=%.2f m, hold_until=%.2f m",
+                "goal=%.2f, shift_limit=%.2f m, target_front=%.2f m, "
+                "hold_until=%.2f m",
                 overtake_line_state_.target_vehicle_id.c_str(),
                 source_side, overtake_line_state_.pass_side_sign,
                 pass_traveled, transition_start, transition_deadline,
+                overtake_line_state_.fixed_pass_corridor_goal_ey.value_or(
+                  std::numeric_limits<double>::quiet_NaN()),
+                overtake_line_state_.mission_pass_lateral_replan_shift_distance,
                 locked_target_longitudinal,
                 overtake_line_state_.mission_outer_replan_hold_until_pass_m);
               return update_overtake_line(
@@ -12259,11 +12524,13 @@ private:
               rclcpp::get_logger("mpc_controller"),
               "OvertakeLine scheduled outer transition rejected: target=%s, "
               "side=%d->%d, pass=%.2f m, window=[%.2f, %.2f] m, "
-              "target_front=%.2f m, reason=%s",
+              "goal=%.2f, shift_limit=%.2f m, target_front=%.2f m, reason=%s",
               overtake_line_state_.target_vehicle_id.c_str(),
               source_side,
               overtake_line_state_.mission_outer_transition_side_sign,
               pass_traveled, transition_start, transition_deadline,
+              overtake_line_state_.mission_outer_transition_goal_ey,
+              overtake_line_state_.mission_outer_transition_shift_distance,
               locked_target_longitudinal, transition_failure_reason.c_str());
           }
         }
@@ -12285,6 +12552,8 @@ private:
         locked_target_matches && locked_target_progress_continuous &&
         fresh_dynamic_horizon_available && pass_short_horizon_safe &&
         behavior_output.locked_target_current_body_footprints_separated &&
+        behavior_output.locked_target_footprint_prediction_valid &&
+        behavior_output.locked_target_predicted_body_footprint_sweep_separated &&
         std::isfinite(locked_target_longitudinal) &&
         locked_target_longitudinal >=
         line_cfg.continuous_outer_replan_min_front_distance - kEps &&
@@ -12332,6 +12601,7 @@ private:
               false,
               std::optional<int>{rolling_outer.desired_outer_side_sign},
               std::optional<double>{rolling_outer.first_opposite_curve_distance_m},
+              std::nullopt,
               outer_replan_failure_reason))
           {
             // Until ego reaches the curve that motivated this early lateral
@@ -12519,7 +12789,8 @@ private:
         {
           std::string extension_failure_reason;
           if (!try_refresh_committed_pass_horizon(
-              false, std::nullopt, std::nullopt, extension_failure_reason))
+              false, std::nullopt, std::nullopt, std::nullopt,
+              extension_failure_reason))
           {
             if (!begin_safe_separation(
                 pass_horizon_replan_trigger(), extension_failure_reason))
@@ -12552,7 +12823,8 @@ private:
         {
           std::string refresh_failure_reason;
           if (!try_refresh_committed_pass_horizon(
-              true, std::nullopt, std::nullopt, refresh_failure_reason))
+              true, std::nullopt, std::nullopt, std::nullopt,
+              refresh_failure_reason))
           {
             if (!begin_safe_separation(
                 "rear_clear_refresh", refresh_failure_reason))

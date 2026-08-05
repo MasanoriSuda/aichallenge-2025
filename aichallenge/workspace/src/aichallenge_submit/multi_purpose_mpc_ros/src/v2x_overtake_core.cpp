@@ -1651,6 +1651,49 @@ ScheduledOuterTransitionResolution resolve_scheduled_outer_transition(
   return resolution;
 }
 
+FrozenOuterTransitionGoalResolution resolve_frozen_outer_transition_goal(
+  const FrozenOuterTransitionGoalRequest & request) noexcept
+{
+  FrozenOuterTransitionGoalResolution resolution;
+  if (
+    (request.desired_side_sign != -1 && request.desired_side_sign != 1) ||
+    !std::isfinite(request.source_goal_m) ||
+    !std::isfinite(request.feasible_lower_m) ||
+    !std::isfinite(request.feasible_upper_m) ||
+    request.feasible_upper_m < request.feasible_lower_m ||
+    !std::isfinite(request.minimum_role_offset_m) ||
+    request.minimum_role_offset_m < 0.0 ||
+    std::isnan(request.maximum_lateral_adjustment_m) ||
+    request.maximum_lateral_adjustment_m < 0.0)
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  double role_lower = request.feasible_lower_m;
+  double role_upper = request.feasible_upper_m;
+  if (request.desired_side_sign > 0) {
+    role_lower = std::max(role_lower, request.minimum_role_offset_m);
+  } else {
+    role_upper = std::min(role_upper, -request.minimum_role_offset_m);
+  }
+  if (role_upper + 1e-9 < role_lower) {
+    return resolution;
+  }
+
+  const double mirrored_goal = -request.source_goal_m;
+  resolution.goal_m = std::clamp(mirrored_goal, role_lower, role_upper);
+  resolution.lateral_adjustment_m = std::abs(
+    resolution.goal_m - request.source_goal_m);
+  const bool role_satisfied =
+    static_cast<double>(request.desired_side_sign) * resolution.goal_m + 1e-9 >=
+    request.minimum_role_offset_m;
+  resolution.feasible = role_satisfied &&
+    resolution.lateral_adjustment_m <=
+    request.maximum_lateral_adjustment_m + 1e-9;
+  return resolution;
+}
+
 SameSideExtensionCommitResolution evaluate_same_side_extension_commit(
   const SameSideExtensionCommitRequest & request) noexcept
 {
@@ -2368,7 +2411,15 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
         candidate.outer_transition_start_pass_m >= 0.0 &&
         std::isfinite(candidate.outer_transition_deadline_pass_m) &&
         candidate.outer_transition_deadline_pass_m + 1e-9 >=
-        candidate.outer_transition_start_pass_m);
+        candidate.outer_transition_start_pass_m &&
+        std::isfinite(candidate.outer_transition_goal_lateral_m) &&
+        static_cast<double>(candidate.outer_transition_side_sign) *
+        candidate.outer_transition_goal_lateral_m > 0.0 &&
+        std::isfinite(candidate.outer_transition_shift_distance_m) &&
+        candidate.outer_transition_shift_distance_m >= 0.5 &&
+        candidate.outer_transition_shift_distance_m <=
+        candidate.outer_transition_deadline_pass_m -
+        candidate.outer_transition_start_pass_m + 1e-9);
       return deadline_valid && closing_speed_valid && slack_valid && rear_clear_valid &&
              progress_speed_valid && outer_transition_valid &&
              non_negative_or_infinity(candidate.minimum_path_wall_clearance_m) &&

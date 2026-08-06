@@ -1111,6 +1111,40 @@ enum class SafeSeparationReason
   ProgressExtension,
 };
 
+struct CommittedPassForwardCompletionRequest
+{
+  bool enabled{false};
+  bool pass_active{false};
+  bool minimum_motion_corridor_active{false};
+  bool prior_front_cap_release_active{false};
+  bool target_seen{false};
+  bool target_continuity_valid{false};
+  bool target_position_jump{false};
+  bool current_body_footprints_separated{false};
+  bool current_body_footprint_overlap_confirmed{true};
+  bool footprint_prediction_valid{false};
+  bool actual_wall_contact{false};
+  bool wall_sample_unavailable{false};
+  bool target_pass_side_intrusion{false};
+  bool emergency_brake{false};
+  bool solver_recovery_active{false};
+  double target_longitudinal_m{};
+  double maximum_front_distance_m{};
+};
+
+struct CommittedPassForwardCompletionResolution
+{
+  bool active{false};
+  bool current_overlap_grace_active{false};
+};
+
+/// Once an already released minimum-motion Pass reaches the bounded
+/// side-by-side window, freeze the committed side and finish longitudinally.
+/// A single current-overlap sample may share the existing confirmation grace;
+/// confirmed overlap and all physical/runtime guards remain fail closed.
+CommittedPassForwardCompletionResolution resolve_committed_pass_forward_completion(
+  const CommittedPassForwardCompletionRequest & request) noexcept;
+
 struct SafeSeparationRequest
 {
   bool enabled{false};
@@ -1154,7 +1188,9 @@ struct SafeSeparationResolution
 /// explicitly authorized forward escape chases a target inside its bounded
 /// front window; otherwise a target ahead is allowed to pull away. A target
 /// behind is driven farther rearward. Lateral Return/Recovery is selected only
-/// after separation or a configured bound.
+/// after separation or a configured bound. An already active forward escape
+/// may finish its current local window after the overall Pass bound is reached,
+/// but may not re-arm that local window beyond the overall bound.
 SafeSeparationResolution resolve_safe_separation(
   const SafeSeparationRequest & request) noexcept;
 

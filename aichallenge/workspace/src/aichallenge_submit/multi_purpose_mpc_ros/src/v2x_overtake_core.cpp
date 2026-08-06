@@ -1931,6 +1931,33 @@ const char * to_string(const SameSideExtensionCommitReason reason) noexcept
   return "unknown";
 }
 
+CommittedPassForwardCompletionResolution resolve_committed_pass_forward_completion(
+  const CommittedPassForwardCompletionRequest & request) noexcept
+{
+  CommittedPassForwardCompletionResolution resolution;
+  const bool base_guard =
+    request.enabled && request.pass_active && request.minimum_motion_corridor_active &&
+    request.prior_front_cap_release_active && request.target_seen &&
+    request.target_continuity_valid && !request.target_position_jump &&
+    !request.actual_wall_contact && !request.wall_sample_unavailable &&
+    !request.target_pass_side_intrusion && !request.emergency_brake &&
+    !request.solver_recovery_active &&
+    std::isfinite(request.target_longitudinal_m) &&
+    std::isfinite(request.maximum_front_distance_m) &&
+    request.maximum_front_distance_m >= 0.0;
+  resolution.current_overlap_grace_active =
+    base_guard && !request.current_body_footprints_separated &&
+    !request.current_body_footprint_overlap_confirmed &&
+    request.footprint_prediction_valid;
+  const bool current_geometry_acceptable =
+    request.current_body_footprints_separated ||
+    resolution.current_overlap_grace_active;
+  resolution.active =
+    base_guard && current_geometry_acceptable &&
+    request.target_longitudinal_m <= request.maximum_front_distance_m + 1e-9;
+  return resolution;
+}
+
 SafeSeparationResolution resolve_safe_separation(
   const SafeSeparationRequest & request) noexcept
 {
@@ -1977,21 +2004,29 @@ SafeSeparationResolution resolve_safe_separation(
     resolution.reason = SafeSeparationReason::ShortHorizonUnsafe;
     return resolution;
   }
-  if (request.absolute_traveled_m >= request.absolute_maximum_distance_m - 1e-9) {
+  const bool forward_escape_active =
+    request.forward_escape_allowed &&
+    request.target_longitudinal_m <=
+    request.forward_escape_max_front_distance_m + 1e-9;
+  const bool absolute_distance_limit_reached =
+    request.absolute_traveled_m >= request.absolute_maximum_distance_m - 1e-9;
+  const bool absolute_time_limit_reached =
+    request.absolute_elapsed_sec >= request.absolute_maximum_duration_sec - 1e-9;
+  // A committed side-by-side escape can begin just before the overall Pass
+  // bound. Let that already-active local window finish instead of dropping to
+  // Recovery beside the target. The local window cannot be re-armed once an
+  // absolute bound has been crossed.
+  if (absolute_distance_limit_reached && !forward_escape_active) {
     resolution.action = SafeSeparationAction::Abort;
     resolution.reason = SafeSeparationReason::AbsoluteDistanceLimit;
     return resolution;
   }
-  if (request.absolute_elapsed_sec >= request.absolute_maximum_duration_sec - 1e-9) {
+  if (absolute_time_limit_reached && !forward_escape_active) {
     resolution.action = SafeSeparationAction::Abort;
     resolution.reason = SafeSeparationReason::AbsoluteTimeLimit;
     return resolution;
   }
 
-  const bool forward_escape_active =
-    request.forward_escape_allowed &&
-    request.target_longitudinal_m <=
-    request.forward_escape_max_front_distance_m + 1e-9;
   const bool local_distance_limit_reached =
     request.traveled_m >= request.maximum_distance_m - 1e-9;
   const bool local_time_limit_reached =
@@ -1999,7 +2034,12 @@ SafeSeparationResolution resolve_safe_separation(
   if (
     local_distance_limit_reached || local_time_limit_reached)
   {
-    if (forward_escape_active && request.forward_progress_extension_allowed) {
+    const bool absolute_limit_reached =
+      absolute_distance_limit_reached || absolute_time_limit_reached;
+    if (
+      forward_escape_active && request.forward_progress_extension_allowed &&
+      !absolute_limit_reached)
+    {
       resolution.action = SafeSeparationAction::KeepSameSide;
       resolution.forward_escape_active = true;
       resolution.progress_extension_requested = true;

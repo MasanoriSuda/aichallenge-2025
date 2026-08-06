@@ -12235,6 +12235,26 @@ private:
         locked_target_longitudinal,
         cfg.v2x_gap.vehicle_length,
         model->length});
+    const auto committed_forward_completion =
+      overtake_core::resolve_committed_pass_forward_completion(
+      overtake_core::CommittedPassForwardCompletionRequest{
+        cfg.v2x_behavior.overtake_committed_pass_attack_mode_enabled,
+        overtake_line_state_.phase == OvertakeLinePhase::Pass,
+        live_minimum_motion_corridor_active,
+        overtake_line_state_.pass_front_cap_release_active,
+        locked_target_seen,
+        locked_target_matches && locked_target_progress_continuous,
+        behavior_output.locked_target_position_jump,
+        behavior_output.locked_target_current_body_footprints_separated,
+        behavior_output.locked_target_current_body_overlap_confirmed,
+        behavior_output.locked_target_footprint_prediction_valid,
+        actual_wall_physical_contact,
+        actual_wall_sample_unavailable,
+        behavior_output.locked_target_pass_side_intrusion,
+        behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake,
+        overtake_solver_recovery_active_,
+        locked_target_longitudinal,
+        line_cfg.safe_separation_forward_escape_max_front_distance});
     const bool pass_lateral_replan_in_progress =
       overtake_line_state_.mission_pass_lateral_replan_active &&
       mission_pass_traveled_m + kEps <
@@ -12242,6 +12262,7 @@ private:
       overtake_line_state_.mission_pass_lateral_replan_shift_distance;
     const bool predicted_overlap_confirmation_monitored =
       !actual_wall_physical_contact &&
+      !committed_forward_completion.active &&
       !pass_lateral_replan_in_progress &&
       live_committed_body_geometry.predicted_overlap_confirmation_eligible;
     const auto predicted_overlap_confirmation =
@@ -12330,10 +12351,13 @@ private:
     double safe_separation_signed_closing_speed =
       std::numeric_limits<double>::quiet_NaN();
     bool safe_separation_forward_escape_active = false;
+    const bool pass_current_body_geometry_safe =
+      behavior_output.locked_target_current_body_footprints_separated ||
+      committed_forward_completion.current_overlap_grace_active;
     const bool pass_short_horizon_safe =
       !actual_wall_physical_contact && !actual_wall_sample_unavailable &&
       locked_target_seen &&
-      behavior_output.locked_target_current_body_footprints_separated &&
+      pass_current_body_geometry_safe &&
       !behavior_output.locked_target_position_jump &&
       !behavior_output.locked_target_pass_side_intrusion &&
       behavior_output.front_risk_level != FrontRiskLevel::EmergencyBrake &&
@@ -12869,6 +12893,13 @@ private:
             behavior_output.locked_target_current_body_footprints_separated,
             trigger, failure_reason);
         };
+      if (
+        committed_forward_completion.active && !rear_clear_confirmed &&
+        !overtake_line_state_.pass_horizon_safe_separation_active)
+      {
+        begin_safe_separation(
+          "side_by_side_commit", "committed forward completion acquired");
+      }
       if (overtake_line_state_.pass_horizon_safe_separation_active) {
         const double safe_separation_elapsed = std::isfinite(
           overtake_line_state_.pass_horizon_safe_separation_start_sec) ?
@@ -12942,12 +12973,7 @@ private:
           overtake_line_state_.pass_horizon_safe_separation_front_clear_since_sec) : 0.0;
         const bool safe_separation_forward_escape_allowed =
           line_cfg.safe_separation_forward_escape_enabled &&
-          cfg.v2x_behavior.overtake_committed_pass_attack_mode_enabled &&
-          live_minimum_motion_corridor_active &&
-          overtake_line_state_.pass_front_cap_release_active &&
-          locked_target_matches && locked_target_progress_continuous &&
-          behavior_output.locked_target_current_body_footprints_separated &&
-          !behavior_output.locked_target_position_jump;
+          committed_forward_completion.active;
         const bool safe_separation_progress_extension_allowed =
           line_cfg.safe_separation_progress_extension_enabled &&
           safe_separation_forward_escape_allowed &&
@@ -13521,14 +13547,11 @@ private:
             return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
           }
         } else if (horizon_action == overtake_core::PassHorizonAction::Abort) {
-          const bool target_is_rear =
-            locked_target_seen && std::isfinite(locked_target_longitudinal) &&
-            locked_target_longitudinal <= 0.0;
-          if (target_is_rear && !return_corridor_blocked) {
+          if (rear_clear_confirmed && !return_corridor_blocked) {
             transition_overtake_line_phase(
               OvertakeLinePhase::Return, now_sec, current_ey,
               overtake_line_state_.pass_side_sign,
-              "Pass horizon hard limit; target rear, returning");
+              "Pass horizon hard limit; rear-clear confirmed, returning");
           } else if (!begin_safe_separation("hard_limit", "Pass horizon hard limit")) {
             transition_overtake_line_phase(
               OvertakeLinePhase::Recovery, now_sec, current_ey,
@@ -13817,7 +13840,7 @@ private:
           "horizon_clear=%d, minimum_motion=%d, frozen_plan=%d, "
           "shiftout_footprint_release=%d, shiftout_overlap_grace=%d, footprint_clear=%d, "
           "current_overlap_confirmed=%d, current_overlap_elapsed=%.2f/%.2f, "
-          "current_overlap_grace=%d, "
+          "current_overlap_grace=%d, forward_commit=%d, "
           "footprint_prediction=%d, footprint_sweep_clear=%d, "
           "side_by_side_escape=%d, attack_hold=%d, predicted_overlap=%d, "
           "overlap_confirmed=%d, "
@@ -13838,6 +13861,7 @@ private:
           behavior_output.locked_target_current_body_overlap_elapsed_sec,
           cfg.v2x_behavior.overtake_pass_current_overlap_confirm_sec,
           committed_pass_policy.minimum_motion_current_overlap_grace_active ? 1 : 0,
+          committed_forward_completion.active ? 1 : 0,
           committed_pass_request.footprint_prediction_valid ? 1 : 0,
           committed_pass_request.predicted_body_footprint_sweep_separated ? 1 : 0,
           committed_pass_policy.minimum_motion_side_by_side_escape_active ? 1 : 0,
@@ -14045,7 +14069,7 @@ private:
           "speed_hold=%d, safe_sep=%d/forward=%d/signed_closing=%.2f, "
           "minimum_motion_cap=%d, footprint_clear=%d, "
           "current_overlap_confirmed=%d, current_overlap_elapsed=%.2f/%.2f, "
-          "current_overlap_grace=%d, "
+          "current_overlap_grace=%d, forward_commit=%d, "
           "footprint_prediction=%d, footprint_sweep_clear=%d, "
           "side_by_side_escape=%d, attack_hold=%d, predicted_overlap=%d, "
           "overlap_confirmed=%d, "
@@ -14080,6 +14104,7 @@ private:
           behavior_output.locked_target_current_body_overlap_elapsed_sec,
           cfg.v2x_behavior.overtake_pass_current_overlap_confirm_sec,
           committed_pass_policy.minimum_motion_current_overlap_grace_active ? 1 : 0,
+          committed_forward_completion.active ? 1 : 0,
           committed_pass_request.footprint_prediction_valid ? 1 : 0,
           committed_pass_request.predicted_body_footprint_sweep_separated ? 1 : 0,
           committed_pass_policy.minimum_motion_side_by_side_escape_active ? 1 : 0,

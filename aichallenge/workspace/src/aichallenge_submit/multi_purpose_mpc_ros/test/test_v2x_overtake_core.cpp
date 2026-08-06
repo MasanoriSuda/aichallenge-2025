@@ -140,6 +140,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::SameSideExtensionCommitReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassForwardCompletionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SameSideReplanShiftDistanceRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidate;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidateSelectionRequest;
@@ -175,6 +176,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frozen_outer_transition_
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_same_side_extension_commit;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_commit_same_side_extension;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_safe_separation;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_committed_pass_forward_completion;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_same_side_replan_shift_distance;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_overtake_mission_candidate;
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_overtake_mission_horizon_progress;
@@ -3701,6 +3703,46 @@ TEST(V2XOvertakeCoreHorizon, ReportsAtomicCommitRejectionReason)
   EXPECT_EQ(resolution.reason, SameSideExtensionCommitReason::PlannerResultStale);
 }
 
+TEST(V2XOvertakeCoreHorizon, CommitsBoundedSideBySideForwardCompletion)
+{
+  CommittedPassForwardCompletionRequest request;
+  request.enabled = true;
+  request.pass_active = true;
+  request.minimum_motion_corridor_active = true;
+  request.prior_front_cap_release_active = true;
+  request.target_seen = true;
+  request.target_continuity_valid = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.target_longitudinal_m = 2.0;
+  request.maximum_front_distance_m = 3.0;
+
+  auto resolution = resolve_committed_pass_forward_completion(request);
+  EXPECT_TRUE(resolution.active);
+  EXPECT_FALSE(resolution.current_overlap_grace_active);
+
+  request.current_body_footprints_separated = false;
+  request.current_body_footprint_overlap_confirmed = false;
+  resolution = resolve_committed_pass_forward_completion(request);
+  EXPECT_TRUE(resolution.active);
+  EXPECT_TRUE(resolution.current_overlap_grace_active);
+
+  request.current_body_footprint_overlap_confirmed = true;
+  resolution = resolve_committed_pass_forward_completion(request);
+  EXPECT_FALSE(resolution.active);
+  EXPECT_FALSE(resolution.current_overlap_grace_active);
+
+  request.current_body_footprints_separated = true;
+  request.target_longitudinal_m = 3.01;
+  resolution = resolve_committed_pass_forward_completion(request);
+  EXPECT_FALSE(resolution.active);
+
+  request.target_longitudinal_m = 2.0;
+  request.actual_wall_contact = true;
+  resolution = resolve_committed_pass_forward_completion(request);
+  EXPECT_FALSE(resolution.active);
+}
+
 TEST(V2XOvertakeCoreHorizon, CreatesLongitudinalSafeSeparationOnCommittedSide)
 {
   SafeSeparationRequest request;
@@ -3860,7 +3902,7 @@ TEST(V2XOvertakeCoreHorizon, ExtendsLocalBoundOnlyForSafeForwardProgress)
   EXPECT_FALSE(resolution.progress_extension_requested);
 }
 
-TEST(V2XOvertakeCoreHorizon, ProgressExtensionCannotOverrideSafetyOrAbsoluteBounds)
+TEST(V2XOvertakeCoreHorizon, ForwardCompletionUsesOnlyCurrentLocalWindowPastAbsoluteBound)
 {
   SafeSeparationRequest request;
   request.enabled = true;
@@ -3887,10 +3929,22 @@ TEST(V2XOvertakeCoreHorizon, ProgressExtensionCannotOverrideSafetyOrAbsoluteBoun
 
   auto resolution = resolve_safe_separation(request);
   EXPECT_EQ(resolution.action, SafeSeparationAction::Abort);
-  EXPECT_EQ(resolution.reason, SafeSeparationReason::AbsoluteDistanceLimit);
+  EXPECT_EQ(resolution.reason, SafeSeparationReason::LocalDistanceLimit);
   EXPECT_FALSE(resolution.progress_extension_requested);
 
+  request.traveled_m = 3.0;
+  resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::KeepSameSide);
+  EXPECT_TRUE(resolution.forward_escape_active);
+  EXPECT_FALSE(resolution.progress_extension_requested);
+
+  request.forward_escape_allowed = false;
+  resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::Abort);
+  EXPECT_EQ(resolution.reason, SafeSeparationReason::AbsoluteDistanceLimit);
+
   request.absolute_traveled_m = 23.0;
+  request.forward_escape_allowed = true;
   request.short_horizon_safe = false;
   resolution = resolve_safe_separation(request);
   EXPECT_EQ(resolution.action, SafeSeparationAction::Abort);

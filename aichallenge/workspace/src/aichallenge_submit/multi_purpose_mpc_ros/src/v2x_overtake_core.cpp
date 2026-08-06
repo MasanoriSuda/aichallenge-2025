@@ -4108,6 +4108,172 @@ EarlyShiftOutSideReplanResolution resolve_early_shiftout_side_replan(
   return result;
 }
 
+OpponentSideReplanResolution resolve_opponent_side_replan(
+  const OpponentSideReplanRequest & request) noexcept
+{
+  OpponentSideReplanResolution result;
+  if (!request.enabled) {
+    result.reason = OpponentSideReplanReason::Disabled;
+    return result;
+  }
+
+  const bool configured_sides =
+    is_configured_side(request.current_side) &&
+    is_configured_side(request.alternate_side) &&
+    request.current_side != request.alternate_side;
+  const bool valid_numeric_input =
+    std::isfinite(request.target_front_distance_m) &&
+    std::isfinite(request.no_return_front_distance_m) &&
+    request.no_return_front_distance_m >= 0.0 &&
+    request.replacement_count >= 0 && request.maximum_replacements >= 0 &&
+    !std::isnan(request.current_physical_reserve_m) &&
+    !std::isnan(request.alternate_physical_reserve_m) &&
+    std::isfinite(request.minimum_reserve_advantage_m) &&
+    request.minimum_reserve_advantage_m >= 0.0 &&
+    std::isfinite(request.candidate_stable_sec) &&
+    request.candidate_stable_sec >= 0.0 &&
+    std::isfinite(request.required_stable_sec) &&
+    request.required_stable_sec >= 0.0;
+  if (!configured_sides || !valid_numeric_input) {
+    result.reason = OpponentSideReplanReason::InvalidInput;
+    return result;
+  }
+  if (!request.frozen_execution_active) {
+    result.action = OpponentSideReplanAction::BlockedByNoReturn;
+    result.reason = OpponentSideReplanReason::InactivePhase;
+    return result;
+  }
+  if (!request.target_continuous || request.target_position_jump) {
+    result.action = OpponentSideReplanAction::BlockedByNoReturn;
+    result.reason = OpponentSideReplanReason::TargetInvalid;
+    return result;
+  }
+  if (request.rear_clear) {
+    result.action = OpponentSideReplanAction::BlockedByNoReturn;
+    result.reason = OpponentSideReplanReason::RearClear;
+    return result;
+  }
+  if (!request.current_body_footprints_separated) {
+    result.action = OpponentSideReplanAction::BlockedByNoReturn;
+    result.reason = OpponentSideReplanReason::BodyOverlap;
+    return result;
+  }
+  if (
+    !request.footprint_prediction_valid ||
+    !request.predicted_body_footprint_sweep_separated)
+  {
+    result.action = OpponentSideReplanAction::BlockedByNoReturn;
+    result.reason = OpponentSideReplanReason::PredictedOverlap;
+    return result;
+  }
+  if (request.target_front_distance_m + 1e-9 < request.no_return_front_distance_m) {
+    result.action = OpponentSideReplanAction::BlockedByNoReturn;
+    result.reason = OpponentSideReplanReason::TargetTooClose;
+    return result;
+  }
+  if (request.replacement_count >= request.maximum_replacements) {
+    result.action = OpponentSideReplanAction::BlockedByNoReturn;
+    result.reason = OpponentSideReplanReason::ReplacementLimit;
+    return result;
+  }
+
+  result.eligible = true;
+  if (!request.alternate_plan_feasible) {
+    result.action = request.current_plan_feasible ?
+      OpponentSideReplanAction::KeepCurrent :
+      OpponentSideReplanAction::FallbackSameSide;
+    result.reason = OpponentSideReplanReason::AlternateUnavailable;
+    return result;
+  }
+
+  if (
+    std::isinf(request.alternate_physical_reserve_m) &&
+    std::isinf(request.current_physical_reserve_m))
+  {
+    result.physical_reserve_advantage_m = 0.0;
+  } else {
+    result.physical_reserve_advantage_m =
+      request.alternate_physical_reserve_m - request.current_physical_reserve_m;
+  }
+  const bool current_infeasible = !request.current_plan_feasible;
+  const bool reserve_advantage =
+    result.physical_reserve_advantage_m + 1e-9 >=
+    request.minimum_reserve_advantage_m;
+  result.replacement_requested = current_infeasible || reserve_advantage;
+  if (!result.replacement_requested) {
+    result.action = OpponentSideReplanAction::KeepCurrent;
+    result.reason = OpponentSideReplanReason::CurrentPlanRetained;
+    return result;
+  }
+  if (request.candidate_stable_sec + 1e-9 < request.required_stable_sec) {
+    result.action = OpponentSideReplanAction::WaitForStability;
+    result.reason = OpponentSideReplanReason::StabilityPending;
+    return result;
+  }
+
+  result.action = OpponentSideReplanAction::ReplaceWithAlternate;
+  result.reason = current_infeasible ?
+    OpponentSideReplanReason::CurrentPlanInfeasible :
+    OpponentSideReplanReason::PhysicalReserveAdvantage;
+  return result;
+}
+
+const char * to_string(const OpponentSideReplanAction action) noexcept
+{
+  switch (action) {
+    case OpponentSideReplanAction::Inactive:
+      return "inactive";
+    case OpponentSideReplanAction::KeepCurrent:
+      return "keep current";
+    case OpponentSideReplanAction::WaitForStability:
+      return "wait for stability";
+    case OpponentSideReplanAction::ReplaceWithAlternate:
+      return "replace with alternate";
+    case OpponentSideReplanAction::FallbackSameSide:
+      return "fallback same side";
+    case OpponentSideReplanAction::BlockedByNoReturn:
+      return "blocked by no-return";
+  }
+  return "unknown";
+}
+
+const char * to_string(const OpponentSideReplanReason reason) noexcept
+{
+  switch (reason) {
+    case OpponentSideReplanReason::None:
+      return "none";
+    case OpponentSideReplanReason::Disabled:
+      return "disabled";
+    case OpponentSideReplanReason::InvalidInput:
+      return "invalid input";
+    case OpponentSideReplanReason::InactivePhase:
+      return "inactive phase";
+    case OpponentSideReplanReason::TargetInvalid:
+      return "target invalid";
+    case OpponentSideReplanReason::BodyOverlap:
+      return "body overlap";
+    case OpponentSideReplanReason::PredictedOverlap:
+      return "predicted overlap";
+    case OpponentSideReplanReason::TargetTooClose:
+      return "target too close";
+    case OpponentSideReplanReason::RearClear:
+      return "rear clear";
+    case OpponentSideReplanReason::ReplacementLimit:
+      return "replacement limit";
+    case OpponentSideReplanReason::AlternateUnavailable:
+      return "alternate unavailable";
+    case OpponentSideReplanReason::CurrentPlanRetained:
+      return "current plan retained";
+    case OpponentSideReplanReason::StabilityPending:
+      return "stability pending";
+    case OpponentSideReplanReason::CurrentPlanInfeasible:
+      return "current plan infeasible";
+    case OpponentSideReplanReason::PhysicalReserveAdvantage:
+      return "physical reserve advantage";
+  }
+  return "unknown";
+}
+
 OvertakeMissionOwnershipResolution resolve_overtake_mission_ownership(
   const OvertakeMissionOwnershipRequest & request) noexcept
 {

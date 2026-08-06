@@ -101,6 +101,9 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSideQualityCandidate;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSideQualitySelectionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::EarlyShiftOutSideReplanAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::EarlyShiftOutSideReplanRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OpponentSideReplanAction;
+using multi_purpose_mpc_ros::v2x_overtake_core::OpponentSideReplanReason;
+using multi_purpose_mpc_ros::v2x_overtake_core::OpponentSideReplanRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionOwnershipRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassBehaviorOwnershipRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommittedShiftOutBehaviorOwnershipRequest;
@@ -276,6 +279,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::score_overtake_side_quality;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_overtake_side_by_quality;
 using multi_purpose_mpc_ros::v2x_overtake_core::selected_pass_side_ordering_conflict;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_early_shiftout_side_replan;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_opponent_side_replan;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_mission_ownership;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_preserve_committed_pass_behavior;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_preserve_committed_shiftout_behavior;
@@ -753,6 +757,8 @@ TEST(V2XFrontDangerAction, ValidatedCommittedCorridorMaySuppressLongitudinalOnly
   request.current_body_footprints_separated = true;
   request.footprint_prediction_valid = true;
   request.predicted_body_footprint_sweep_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
 
   EXPECT_TRUE(can_suppress_committed_corridor_front_danger(request));
 }
@@ -768,6 +774,8 @@ TEST(V2XFrontDangerAction, CommittedCorridorSuppressionFailsClosedOnUncertaintyO
   request.current_body_footprints_separated = true;
   request.footprint_prediction_valid = true;
   request.predicted_body_footprint_sweep_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
 
   request.footprint_prediction_valid = false;
   EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
@@ -778,6 +786,8 @@ TEST(V2XFrontDangerAction, CommittedCorridorSuppressionFailsClosedOnUncertaintyO
   request.current_body_footprints_separated = false;
   EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
   request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
   request.target_position_jump = true;
   EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
   request.target_position_jump = false;
@@ -797,6 +807,8 @@ TEST(V2XFrontDangerAction, CommittedCorridorSharesBoundedPredictedOverlapGrace)
   request.validated_fixed_corridor = true;
   request.target_seen = true;
   request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
   request.footprint_prediction_valid = true;
   request.predicted_body_footprint_sweep_separated = false;
   request.prior_front_cap_release_active = true;
@@ -5984,6 +5996,144 @@ TEST(V2XOvertakeCoreSideReplan, LateralMotionGateKeepsSideForQualityOnlyReplan)
   EXPECT_EQ(
     resolve_early_shiftout_side_replan(request).action,
     EarlyShiftOutSideReplanAction::Abort);
+}
+
+TEST(V2XOvertakeCoreOpponentSideReplan, ReplacesInfeasibleCurrentPlanAfterDebounce)
+{
+  OpponentSideReplanRequest request;
+  request.enabled = true;
+  request.frozen_execution_active = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+  request.target_front_distance_m = 6.0;
+  request.no_return_front_distance_m = 3.5;
+  request.maximum_replacements = 1;
+  request.current_side = PassSide::Left;
+  request.alternate_side = PassSide::Right;
+  request.current_plan_feasible = false;
+  request.alternate_plan_feasible = true;
+  request.current_physical_reserve_m = 0.1;
+  request.alternate_physical_reserve_m = 0.6;
+  request.minimum_reserve_advantage_m = 0.35;
+  request.required_stable_sec = 0.25;
+  request.candidate_stable_sec = 0.24;
+
+  auto result = resolve_opponent_side_replan(request);
+  EXPECT_EQ(result.action, OpponentSideReplanAction::WaitForStability);
+  EXPECT_EQ(result.reason, OpponentSideReplanReason::StabilityPending);
+  EXPECT_TRUE(result.eligible);
+  EXPECT_TRUE(result.replacement_requested);
+
+  request.candidate_stable_sec = 0.25;
+  result = resolve_opponent_side_replan(request);
+  EXPECT_EQ(result.action, OpponentSideReplanAction::ReplaceWithAlternate);
+  EXPECT_EQ(result.reason, OpponentSideReplanReason::CurrentPlanInfeasible);
+}
+
+TEST(V2XOvertakeCoreOpponentSideReplan, RequiresPhysicalReserveAdvantage)
+{
+  OpponentSideReplanRequest request;
+  request.enabled = true;
+  request.frozen_execution_active = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+  request.target_front_distance_m = 8.0;
+  request.no_return_front_distance_m = 3.5;
+  request.maximum_replacements = 1;
+  request.current_side = PassSide::Right;
+  request.alternate_side = PassSide::Left;
+  request.current_plan_feasible = true;
+  request.alternate_plan_feasible = true;
+  request.current_physical_reserve_m = 0.40;
+  request.alternate_physical_reserve_m = 0.70;
+  request.minimum_reserve_advantage_m = 0.35;
+  request.candidate_stable_sec = 1.0;
+  request.required_stable_sec = 0.25;
+
+  auto result = resolve_opponent_side_replan(request);
+  EXPECT_EQ(result.action, OpponentSideReplanAction::KeepCurrent);
+  EXPECT_EQ(result.reason, OpponentSideReplanReason::CurrentPlanRetained);
+
+  request.alternate_physical_reserve_m = 0.75;
+  result = resolve_opponent_side_replan(request);
+  EXPECT_EQ(result.action, OpponentSideReplanAction::ReplaceWithAlternate);
+  EXPECT_EQ(result.reason, OpponentSideReplanReason::PhysicalReserveAdvantage);
+}
+
+TEST(V2XOvertakeCoreOpponentSideReplan, BlocksAtNoReturnAndAfterOneReplacement)
+{
+  OpponentSideReplanRequest request;
+  request.enabled = true;
+  request.frozen_execution_active = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+  request.target_front_distance_m = 3.49;
+  request.no_return_front_distance_m = 3.5;
+  request.maximum_replacements = 1;
+  request.current_side = PassSide::Left;
+  request.alternate_side = PassSide::Right;
+  request.current_plan_feasible = false;
+  request.alternate_plan_feasible = true;
+  request.current_physical_reserve_m = 0.1;
+  request.alternate_physical_reserve_m = 0.8;
+  request.minimum_reserve_advantage_m = 0.35;
+  request.candidate_stable_sec = 0.25;
+  request.required_stable_sec = 0.25;
+
+  auto result = resolve_opponent_side_replan(request);
+  EXPECT_EQ(result.action, OpponentSideReplanAction::BlockedByNoReturn);
+  EXPECT_EQ(result.reason, OpponentSideReplanReason::TargetTooClose);
+
+  request.target_front_distance_m = 6.0;
+  request.replacement_count = 1;
+  result = resolve_opponent_side_replan(request);
+  EXPECT_EQ(result.action, OpponentSideReplanAction::BlockedByNoReturn);
+  EXPECT_EQ(result.reason, OpponentSideReplanReason::ReplacementLimit);
+
+  request.replacement_count = 0;
+  request.current_body_footprints_separated = false;
+  result = resolve_opponent_side_replan(request);
+  EXPECT_EQ(result.action, OpponentSideReplanAction::BlockedByNoReturn);
+  EXPECT_EQ(result.reason, OpponentSideReplanReason::BodyOverlap);
+
+  request.current_body_footprints_separated = true;
+  request.predicted_body_footprint_sweep_separated = false;
+  result = resolve_opponent_side_replan(request);
+  EXPECT_EQ(result.action, OpponentSideReplanAction::BlockedByNoReturn);
+  EXPECT_EQ(result.reason, OpponentSideReplanReason::PredictedOverlap);
+}
+
+TEST(V2XOvertakeCoreOpponentSideReplan, FallsBackOnlyWhenBothPlansAreUnavailable)
+{
+  OpponentSideReplanRequest request;
+  request.enabled = true;
+  request.frozen_execution_active = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+  request.target_front_distance_m = 7.0;
+  request.no_return_front_distance_m = 3.5;
+  request.maximum_replacements = 1;
+  request.current_side = PassSide::Right;
+  request.alternate_side = PassSide::Left;
+  request.current_plan_feasible = false;
+  request.alternate_plan_feasible = false;
+  request.current_physical_reserve_m = 0.0;
+  request.alternate_physical_reserve_m = 0.0;
+  request.minimum_reserve_advantage_m = 0.35;
+  request.required_stable_sec = 0.25;
+
+  const auto result = resolve_opponent_side_replan(request);
+  EXPECT_EQ(result.action, OpponentSideReplanAction::FallbackSameSide);
+  EXPECT_EQ(result.reason, OpponentSideReplanReason::AlternateUnavailable);
+  EXPECT_TRUE(result.eligible);
 }
 
 TEST(V2XOvertakeCoreMissionOwnership, MissionLockOwnsPausedMissionSide)

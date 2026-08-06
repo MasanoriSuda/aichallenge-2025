@@ -593,6 +593,14 @@ mpc:
   v2x_overtake_line_early_side_replan_stable_sec: 0.25 # [s] suppress left/right observation chatter
   v2x_overtake_line_early_side_replan_max_locked_side_lateral_speed: 0.25 # [m/s] do not flip while still moving into the locked side
   v2x_overtake_line_side_replan_target_guard_distance: 8.0 # [m] measured ordering conflict; hard intrusion remains 2 m
+  # Re-evaluate both complete pass plans while the target is still well ahead.
+  # Execution remains frozen unless one stable alternate plan atomically wins.
+  v2x_overtake_opponent_side_replan_enabled: true
+  v2x_overtake_opponent_side_replan_evaluation_interval_sec: 0.15 # [s]
+  v2x_overtake_opponent_side_replan_no_return_front_distance: 3.5 # [m]
+  v2x_overtake_opponent_side_replan_min_reserve_advantage: 0.35 # [m]
+  v2x_overtake_opponent_side_replan_stable_sec: 0.25 # [s]
+  v2x_overtake_opponent_side_replan_max_count: 1
   v2x_overtake_line_return_clear_distance: 2.0 # [m] begin Return after nominal vehicle-length clearance
   v2x_overtake_line_phase_hold_time: 0.3      # [s] minimum phase hold before transition
   v2x_overtake_target_hold_sec: 0.75          # [s] keep a locked Pass across a transient V2X classification loss

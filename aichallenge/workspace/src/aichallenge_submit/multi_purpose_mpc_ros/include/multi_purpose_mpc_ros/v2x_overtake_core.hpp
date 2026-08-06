@@ -2264,6 +2264,80 @@ struct EarlyShiftOutSideReplanResolution
 EarlyShiftOutSideReplanResolution resolve_early_shiftout_side_replan(
   const EarlyShiftOutSideReplanRequest & request) noexcept;
 
+enum class OpponentSideReplanAction
+{
+  Inactive,
+  KeepCurrent,
+  WaitForStability,
+  ReplaceWithAlternate,
+  FallbackSameSide,
+  BlockedByNoReturn,
+};
+
+enum class OpponentSideReplanReason
+{
+  None,
+  Disabled,
+  InvalidInput,
+  InactivePhase,
+  TargetInvalid,
+  BodyOverlap,
+  PredictedOverlap,
+  TargetTooClose,
+  RearClear,
+  ReplacementLimit,
+  AlternateUnavailable,
+  CurrentPlanRetained,
+  StabilityPending,
+  CurrentPlanInfeasible,
+  PhysicalReserveAdvantage,
+};
+
+struct OpponentSideReplanRequest
+{
+  bool enabled{false};
+  bool frozen_execution_active{false};
+  bool target_continuous{false};
+  bool target_position_jump{false};
+  bool current_body_footprints_separated{false};
+  bool footprint_prediction_valid{false};
+  bool predicted_body_footprint_sweep_separated{false};
+  bool rear_clear{false};
+  double target_front_distance_m{std::numeric_limits<double>::infinity()};
+  double no_return_front_distance_m{0.0};
+  int replacement_count{0};
+  int maximum_replacements{0};
+  PassSide current_side{PassSide::None};
+  PassSide alternate_side{PassSide::None};
+  bool current_plan_feasible{false};
+  bool alternate_plan_feasible{false};
+  double current_physical_reserve_m{-std::numeric_limits<double>::infinity()};
+  double alternate_physical_reserve_m{-std::numeric_limits<double>::infinity()};
+  double minimum_reserve_advantage_m{0.0};
+  double candidate_stable_sec{0.0};
+  double required_stable_sec{0.0};
+};
+
+struct OpponentSideReplanResolution
+{
+  OpponentSideReplanAction action{OpponentSideReplanAction::Inactive};
+  OpponentSideReplanReason reason{OpponentSideReplanReason::None};
+  bool eligible{false};
+  bool replacement_requested{false};
+  double physical_reserve_advantage_m{-std::numeric_limits<double>::infinity()};
+};
+
+/// Reconsider a frozen pass side only before the longitudinal no-return point.
+/// The caller owns candidate generation and debounce state; this pure policy
+/// decides whether a complete alternate plan may atomically replace the
+/// current one. It never permits a second replacement or a side change while
+/// current footprints overlap the target.
+OpponentSideReplanResolution resolve_opponent_side_replan(
+  const OpponentSideReplanRequest & request) noexcept;
+
+const char * to_string(OpponentSideReplanAction action) noexcept;
+const char * to_string(OpponentSideReplanReason reason) noexcept;
+
 struct OvertakeMissionOwnershipRequest
 {
   bool shiftout_phase{false};

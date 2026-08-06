@@ -1508,7 +1508,7 @@ struct V2XBehaviorConfig
   double overtake_inner_curve_min_open_distance{0.0};
   bool overtake_inner_curve_precommit_enabled{false};
   double overtake_inner_curve_precommit_min_relative_speed{0.0};
-  double overtake_entry_min_relative_speed{-0.5};
+  double overtake_entry_min_relative_speed{0.3};
   double overtake_entry_speed_confirm_sec{0.3};
   bool overtake_inner_curve_hard_continuation_enabled{false};
   bool overtake_hard_curve_entry_enabled{false};
@@ -1850,6 +1850,7 @@ struct V2XBehaviorOutput
   bool overtake_paused_mission_active{false};
   bool overtake_line_owns_locked_target_speed{false};
   bool validated_overtake_entry_longitudinal_owner{false};
+  bool overtake_entry_prearm_active{false};
   bool overtake_committed_pass_behavior_owner_active{false};
   bool overtake_committed_shiftout_behavior_owner_active{false};
   bool overtake_hard_curve_blocked{false};
@@ -1947,6 +1948,9 @@ struct V2XBehaviorOutput
   double locked_target_speed{std::numeric_limits<double>::infinity()};
   double locked_target_receipt_sec{-std::numeric_limits<double>::infinity()};
   double overtake_entry_target_speed{std::numeric_limits<double>::infinity()};
+  double overtake_entry_relative_speed{std::numeric_limits<double>::quiet_NaN()};
+  double overtake_entry_speed_stable_sec{};
+  double overtake_entry_prearm_target_velocity{std::numeric_limits<double>::infinity()};
   bool lower_boundary_vehicle_seen{false};
   bool upper_boundary_vehicle_seen{false};
   double lower_boundary_vehicle_longitudinal{std::numeric_limits<double>::infinity()};
@@ -8715,6 +8719,7 @@ struct MPC
       cfg.v2x_behavior.follow_preposition_enabled &&
       overtake_line_state_.phase != OvertakeLinePhase::FollowPrepare &&
       behavior_output.state == V2XBehaviorState::Follow &&
+      !behavior_output.overtake_entry_prearm_active &&
       behavior_output.has_front_vehicle &&
       follow_preposition_curve_allowed &&
       follow_preposition_front_distance_ok &&
@@ -8877,7 +8882,8 @@ struct MPC
       v2x_overtake_core::GapPlannerStateBoundsRequest{
         explicit_overtake_line_owns_plan});
     if (
-      behavior_output.state == V2XBehaviorState::Overtake &&
+      (behavior_output.state == V2XBehaviorState::Overtake ||
+      behavior_output.overtake_entry_prearm_active) &&
       std::isfinite(behavior_output.desired_velocity))
     {
       for (int i = 0; i < N; ++i) {
@@ -15150,27 +15156,53 @@ private:
         cfg.v2x_behavior.overtake_entry_min_relative_speed,
         cfg.v2x_behavior.overtake_entry_speed_confirm_sec});
     overtake_entry_speed_ready_since_sec_ = entry_speed_readiness.ready_since_sec;
+    output.overtake_entry_relative_speed = entry_speed_readiness.relative_speed_mps;
+    output.overtake_entry_speed_stable_sec = entry_speed_readiness.stable_sec;
     const bool behavior_overtake_handoff =
       had_previous_state && previous_state == V2XBehaviorState::Overtake;
-    const bool entry_speed_gate_allows =
-      v2x_overtake_core::new_overtake_entry_speed_gate_allows(
-      v2x_overtake_core::NewOvertakeEntrySpeedGateRequest{
+    const auto entry_admission =
+      v2x_overtake_core::resolve_new_overtake_entry_admission(
+      v2x_overtake_core::NewOvertakeEntryAdmissionRequest{
         desired_state == V2XBehaviorState::Overtake,
         overtake_execution_committed,
         behavior_overtake_handoff,
         entry_speed_readiness.ready,
-        output.validated_overtake_entry_longitudinal_owner});
-    if (!entry_speed_gate_allows) {
+        output.validated_overtake_entry_longitudinal_owner,
+        output.start_grid_breakout_active});
+    output.overtake_entry_prearm_active = entry_admission.prearm_active;
+    if (!entry_admission.execution_allowed) {
       final_state = V2XBehaviorState::Follow;
       output.overtake_zone_allows = false;
       std::ostringstream reason;
-      reason << "overtake entry speed not ready"
+      reason << (entry_admission.prearm_active ?
+        "overtake entry pre-arm" : "overtake entry speed not ready")
              << ", target=" << output.target_vehicle_id
              << ", rel=" << entry_speed_readiness.relative_speed_mps
              << ", min=" << cfg.v2x_behavior.overtake_entry_min_relative_speed
              << ", stable=" << entry_speed_readiness.stable_sec
              << "/" << cfg.v2x_behavior.overtake_entry_speed_confirm_sec;
       output.reason = reason.str();
+      if (entry_admission.prearm_active) {
+        // The complete mission was revalidated this cycle, but the measured
+        // closing ability is not ready. Keep the base racing line and let ego
+        // acquire speed before handing lateral ownership to OvertakeLine.
+        // Emergency and mission/corridor checks are evaluated again every
+        // cycle before this exception can remain active.
+        output.allow_gap_planner = false;
+        output.target_velocity_limit = std::numeric_limits<double>::infinity();
+        output.follow_speed_limit_active = false;
+        output.follow_speed_limit_moving_front = false;
+        output.moving_front_clearance_limit_active = false;
+        const double target_speed = std::isfinite(output.overtake_entry_target_speed) ?
+          std::max(0.0, output.overtake_entry_target_speed) : 0.0;
+        output.overtake_entry_prearm_target_velocity = std::min(
+          cfg.v_max,
+          target_speed +
+          std::max(
+            cfg.v2x_behavior.overtake_entry_min_relative_speed,
+            cfg.v2x_behavior.overtake_shiftout_max_closing_speed));
+        output.desired_velocity = output.overtake_entry_prearm_target_velocity;
+      }
     }
     const bool low_speed_avoidance_watchdog_active =
       had_previous_state && previous_state == V2XBehaviorState::LowSpeedAvoidance &&
@@ -15208,6 +15240,18 @@ private:
       if (!more_restrictive && elapsed < cfg.v2x_behavior.state_hold_time) {
         final_state = v2x_behavior_state;
       }
+    }
+    if (
+      output.overtake_entry_prearm_active &&
+      final_state != V2XBehaviorState::Follow)
+    {
+      // A more restrictive held state (SafetyBrake/LowSpeedAvoidance) retains
+      // priority over a newly available pre-arm. Do not advertise longitudinal
+      // ownership until Behavior can actually remain in Follow.
+      output.overtake_entry_prearm_active = false;
+      output.overtake_entry_prearm_target_velocity =
+        std::numeric_limits<double>::infinity();
+      output.desired_velocity = std::numeric_limits<double>::infinity();
     }
 
     if (final_state == V2XBehaviorState::Overtake) {
@@ -15348,7 +15392,10 @@ private:
         !active_pass_gap_hold &&
         (!cfg.v2x_behavior.follow_gap_planner_respect_overtake_forbidden ||
         output.follow_gap_planner_allowed);
-      if (cfg.v2x_behavior.follow_gap_planner_enabled && follow_gap_planner_allowed) {
+      if (
+        !output.overtake_entry_prearm_active &&
+        cfg.v2x_behavior.follow_gap_planner_enabled && follow_gap_planner_allowed)
+      {
         output.allow_gap_planner = true;
       }
     } else if (final_state == V2XBehaviorState::SafetyBrake) {
@@ -15408,7 +15455,7 @@ private:
         "hard_dist=%.2f, hard_avail=%.2f, hard_req=%.2f, "
         "locked_rel=%.2f, lat_clear=%d, body_clear=%d, "
         "lookahead_inner=%d, inner_pref=%d, front_danger_suppress=%d, "
-        "entry_owner=%d, shift_owner=%d, pass_owner=%d",
+        "entry_owner=%d, prearm=%d, shift_owner=%d, pass_owner=%d",
         v2x_behavior_state_initialized ? to_string(v2x_behavior_state) : "None", to_string(final_state),
         output.front_distance, model->wp_id, output.reason.c_str(),
         output.v2x_health.c_str(), output.v2x_receipt_age_sec,
@@ -15437,6 +15484,7 @@ private:
         output.overtake_inner_preference_selected ? 1 : 0,
         output.committed_corridor_front_danger_suppressed ? 1 : 0,
         output.validated_overtake_entry_longitudinal_owner ? 1 : 0,
+        output.overtake_entry_prearm_active ? 1 : 0,
         output.overtake_committed_shiftout_behavior_owner_active ? 1 : 0,
         output.overtake_committed_pass_behavior_owner_active ? 1 : 0);
       v2x_behavior_state = final_state;
@@ -15461,7 +15509,8 @@ private:
           "health=%s, receipt_age=%.3f, source_age=%.3f, interval=%.3f, "
           "vehicles=%zu, message_vehicles=%zu, jumps=%zu, invalid_velocity=%zu, "
           "message_invalid=%d, front=%d, side=%d, danger=%d, danger_action=%s, "
-          "danger_suppress=%d, entry_owner=%d, shift_owner=%d, pass_owner=%d, "
+          "danger_suppress=%d, entry_owner=%d, prearm=%d, entry_rel=%.2f, "
+          "entry_stable=%.2f, prearm_v=%.2f, shift_owner=%d, pass_owner=%d, "
           "grace=%d, grid_suppress=%d, grid_breakout=%d, "
           "grid_observe=%d, grid_obs=%.2f, grid_peer=%.2f, grid_candidate=%s, "
           "grid_stable=%.2f, "
@@ -15514,6 +15563,10 @@ private:
           v2x_overtake_core::to_string(output.front_danger_action),
           output.committed_corridor_front_danger_suppressed ? 1 : 0,
           output.validated_overtake_entry_longitudinal_owner ? 1 : 0,
+          output.overtake_entry_prearm_active ? 1 : 0,
+          output.overtake_entry_relative_speed,
+          output.overtake_entry_speed_stable_sec,
+          output.overtake_entry_prearm_target_velocity,
           output.overtake_committed_shiftout_behavior_owner_active ? 1 : 0,
           output.overtake_committed_pass_behavior_owner_active ? 1 : 0,
           output.start_grid_grace_active ? 1 : 0,
@@ -17398,7 +17451,7 @@ Config load_config(const std::string & path)
   }
   cfg.mpc.v2x_behavior.overtake_entry_min_relative_speed =
     mpc["v2x_overtake_entry_min_relative_speed"] ?
-    mpc["v2x_overtake_entry_min_relative_speed"].as<double>() : -0.5;
+    mpc["v2x_overtake_entry_min_relative_speed"].as<double>() : 0.3;
   if (!std::isfinite(cfg.mpc.v2x_behavior.overtake_entry_min_relative_speed)) {
     throw std::runtime_error(
             "v2x_overtake_entry_min_relative_speed must be finite");
@@ -20803,7 +20856,7 @@ private:
       (behavior.state == V2XBehaviorState::SafetyBrake ||
       behavior.state == V2XBehaviorState::Follow);
     const bool validated_forward_overtake_escape_available =
-      behavior.validated_overtake_entry_longitudinal_owner ||
+      behavior.overtake_entry_prearm_active ||
       ((behavior.overtake_committed_execution_active ||
       behavior.overtake_paused_mission_active) &&
       behavior.locked_target_seen && !behavior.locked_target_position_jump &&

@@ -1958,23 +1958,34 @@ struct OvertakeEntrySpeedReadiness
 OvertakeEntrySpeedReadiness update_overtake_entry_speed_readiness(
   const OvertakeEntrySpeedReadinessRequest & request) noexcept;
 
-struct NewOvertakeEntrySpeedGateRequest
+struct NewOvertakeEntryAdmissionRequest
 {
   bool overtake_requested{false};
   bool execution_committed{false};
   bool behavior_handoff_active{false};
   bool entry_speed_ready{false};
-  /// A complete ShiftOut/Pass/Return mission has already passed its body-clear
-  /// deadline and rear-clear rollout checks. Its own stage-speed policy may
-  /// take ownership without waiting for a second, redundant speed debounce.
+  /// A complete ShiftOut/Pass/Return mission has passed the current geometry,
+  /// body-clear deadline and rear-clear rollout checks. This authorizes
+  /// longitudinal pre-arm, not lateral execution by itself.
   bool validated_mission_ready{false};
+  /// Start-grid breakout owns a separate observation/corridor handshake and
+  /// must not wait for a relative-speed advantage shared by equally launching
+  /// vehicles.
+  bool immediate_execution_override{false};
 };
 
-/// Apply speed readiness only to a fresh Behavior -> Overtake admission.
-/// Committed execution, the accepted Behavior-to-Line handoff, and a fully
-/// validated mission retain ownership.
-bool new_overtake_entry_speed_gate_allows(
-  const NewOvertakeEntrySpeedGateRequest & request) noexcept;
+struct NewOvertakeEntryAdmissionResolution
+{
+  bool execution_allowed{false};
+  bool prearm_active{false};
+};
+
+/// Resolve a fresh Behavior -> Overtake admission without treating a
+/// constant-target-speed mission rollout as proof of measured closing ability.
+/// A validated mission with insufficient relative speed stays on the base line
+/// and receives longitudinal pre-arm ownership until the measured gate passes.
+NewOvertakeEntryAdmissionResolution resolve_new_overtake_entry_admission(
+  const NewOvertakeEntryAdmissionRequest & request) noexcept;
 
 struct OvertakeGuardPhaseRequest
 {

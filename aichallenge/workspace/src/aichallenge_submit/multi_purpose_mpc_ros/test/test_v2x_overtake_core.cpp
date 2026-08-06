@@ -243,9 +243,9 @@ using multi_purpose_mpc_ros::v2x_overtake_core::can_override_completion_for_curv
 using multi_purpose_mpc_ros::v2x_overtake_core::can_precommit_inner_curve_line;
 using multi_purpose_mpc_ros::v2x_overtake_core::overtake_completion_policy_allows_execution;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntrySpeedReadinessRequest;
-using multi_purpose_mpc_ros::v2x_overtake_core::NewOvertakeEntrySpeedGateRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::NewOvertakeEntryAdmissionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_overtake_entry_speed_readiness;
-using multi_purpose_mpc_ros::v2x_overtake_core::new_overtake_entry_speed_gate_allows;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_new_overtake_entry_admission;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   can_hold_committed_execution_after_behavior_drop;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_target_continuity;
@@ -5380,7 +5380,7 @@ TEST(V2XOvertakeCoreEntrySpeed, RejectsLatestRunLargeSpeedDeficit)
   const auto result = update_overtake_entry_speed_readiness(
     OvertakeEntrySpeedReadinessRequest{
       true, false, 100.0, std::numeric_limits<double>::quiet_NaN(),
-      1.39, 3.10, -0.5, 0.3});
+      1.39, 3.10, 0.3, 0.3});
 
   EXPECT_FALSE(result.ready);
   EXPECT_FALSE(std::isfinite(result.ready_since_sec));
@@ -5393,19 +5393,19 @@ TEST(V2XOvertakeCoreEntrySpeed, RequiresContinuousConfirmationForOneTarget)
   auto result = update_overtake_entry_speed_readiness(
     OvertakeEntrySpeedReadinessRequest{
       true, false, 20.0, std::numeric_limits<double>::quiet_NaN(),
-      2.60, 3.00, -0.5, 0.3});
+      3.35, 3.00, 0.3, 0.3});
   EXPECT_FALSE(result.ready);
   EXPECT_DOUBLE_EQ(result.ready_since_sec, 20.0);
 
   result = update_overtake_entry_speed_readiness(
     OvertakeEntrySpeedReadinessRequest{
-      true, true, 20.29, result.ready_since_sec, 2.60, 3.00, -0.5, 0.3});
+      true, true, 20.29, result.ready_since_sec, 3.35, 3.00, 0.3, 0.3});
   EXPECT_FALSE(result.ready);
   EXPECT_NEAR(result.stable_sec, 0.29, 1e-12);
 
   result = update_overtake_entry_speed_readiness(
     OvertakeEntrySpeedReadinessRequest{
-      true, true, 20.30, result.ready_since_sec, 2.60, 3.00, -0.5, 0.3});
+      true, true, 20.30, result.ready_since_sec, 3.35, 3.00, 0.3, 0.3});
   EXPECT_TRUE(result.ready);
   EXPECT_NEAR(result.stable_sec, 0.30, 1e-12);
 }
@@ -5414,48 +5414,66 @@ TEST(V2XOvertakeCoreEntrySpeed, ResetsForSpeedLossTargetChangeAndInvalidData)
 {
   auto result = update_overtake_entry_speed_readiness(
     OvertakeEntrySpeedReadinessRequest{
-      true, true, 10.2, 10.0, 1.39, 3.10, -0.5, 0.3});
+      true, true, 10.2, 10.0, 3.20, 3.10, 0.3, 0.3});
   EXPECT_FALSE(result.ready);
   EXPECT_FALSE(std::isfinite(result.ready_since_sec));
 
   result = update_overtake_entry_speed_readiness(
     OvertakeEntrySpeedReadinessRequest{
-      true, false, 11.0, 10.0, 3.0, 3.0, -0.5, 0.3});
+      true, false, 11.0, 10.0, 3.4, 3.0, 0.3, 0.3});
   EXPECT_FALSE(result.ready);
   EXPECT_DOUBLE_EQ(result.ready_since_sec, 11.0);
 
   result = update_overtake_entry_speed_readiness(
     OvertakeEntrySpeedReadinessRequest{
-      true, true, 11.4, result.ready_since_sec, 3.0,
-      std::numeric_limits<double>::infinity(), -0.5, 0.3});
+      true, true, 11.4, result.ready_since_sec, 3.4,
+      std::numeric_limits<double>::infinity(), 0.3, 0.3});
   EXPECT_FALSE(result.ready);
   EXPECT_FALSE(std::isfinite(result.ready_since_sec));
 }
 
-TEST(V2XOvertakeCoreEntrySpeed, GatesOnlyFreshOvertakeAdmission)
+TEST(V2XOvertakeCoreEntrySpeed, PrearmsValidatedMissionUntilMeasuredSpeedIsReady)
 {
-  NewOvertakeEntrySpeedGateRequest request;
+  NewOvertakeEntryAdmissionRequest request;
   request.overtake_requested = true;
-  EXPECT_FALSE(new_overtake_entry_speed_gate_allows(request));
+  auto result = resolve_new_overtake_entry_admission(request);
+  EXPECT_FALSE(result.execution_allowed);
+  EXPECT_FALSE(result.prearm_active);
+
+  request.validated_mission_ready = true;
+  result = resolve_new_overtake_entry_admission(request);
+  EXPECT_FALSE(result.execution_allowed);
+  EXPECT_TRUE(result.prearm_active);
 
   request.entry_speed_ready = true;
-  EXPECT_TRUE(new_overtake_entry_speed_gate_allows(request));
+  result = resolve_new_overtake_entry_admission(request);
+  EXPECT_TRUE(result.execution_allowed);
+  EXPECT_FALSE(result.prearm_active);
   request.entry_speed_ready = false;
+  request.validated_mission_ready = false;
 
   request.execution_committed = true;
-  EXPECT_TRUE(new_overtake_entry_speed_gate_allows(request));
+  result = resolve_new_overtake_entry_admission(request);
+  EXPECT_TRUE(result.execution_allowed);
+  EXPECT_FALSE(result.prearm_active);
   request.execution_committed = false;
 
   request.behavior_handoff_active = true;
-  EXPECT_TRUE(new_overtake_entry_speed_gate_allows(request));
+  result = resolve_new_overtake_entry_admission(request);
+  EXPECT_TRUE(result.execution_allowed);
+  EXPECT_FALSE(result.prearm_active);
   request.behavior_handoff_active = false;
 
-  request.validated_mission_ready = true;
-  EXPECT_TRUE(new_overtake_entry_speed_gate_allows(request));
-  request.validated_mission_ready = false;
+  request.immediate_execution_override = true;
+  result = resolve_new_overtake_entry_admission(request);
+  EXPECT_TRUE(result.execution_allowed);
+  EXPECT_FALSE(result.prearm_active);
+  request.immediate_execution_override = false;
 
   request.overtake_requested = false;
-  EXPECT_TRUE(new_overtake_entry_speed_gate_allows(request));
+  result = resolve_new_overtake_entry_admission(request);
+  EXPECT_TRUE(result.execution_allowed);
+  EXPECT_FALSE(result.prearm_active);
 }
 
 TEST(V2XOvertakeCoreGuardPhase, KeepsEntryDistanceAndPrepareCheckBeforePassStarts)

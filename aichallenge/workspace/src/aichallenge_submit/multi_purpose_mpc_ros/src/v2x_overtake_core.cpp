@@ -3690,13 +3690,18 @@ OvertakeEntrySpeedReadiness update_overtake_entry_speed_readiness(
   return result;
 }
 
-bool new_overtake_entry_speed_gate_allows(
-  const NewOvertakeEntrySpeedGateRequest & request) noexcept
+NewOvertakeEntryAdmissionResolution resolve_new_overtake_entry_admission(
+  const NewOvertakeEntryAdmissionRequest & request) noexcept
 {
-  return
+  NewOvertakeEntryAdmissionResolution resolution;
+  resolution.execution_allowed =
     !request.overtake_requested || request.execution_committed ||
     request.behavior_handoff_active || request.entry_speed_ready ||
+    request.immediate_execution_override;
+  resolution.prearm_active =
+    request.overtake_requested && !resolution.execution_allowed &&
     request.validated_mission_ready;
+  return resolution;
 }
 
 OvertakeGuardPhaseResolution resolve_overtake_guard_phase(

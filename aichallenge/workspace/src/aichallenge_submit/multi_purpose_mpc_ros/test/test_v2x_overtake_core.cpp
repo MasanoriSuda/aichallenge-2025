@@ -935,6 +935,21 @@ TEST(V2XFrontDangerAction, ResolvesSharedCommittedPassBodyGeometry)
   EXPECT_TRUE(result.raw_predicted_body_overlap);
   EXPECT_TRUE(result.predicted_overlap_confirmation_eligible);
 
+  request.pass_phase = false;
+  request.shiftout_phase = true;
+  request.validated_shiftout_body_clear_deadline = true;
+  result = resolve_committed_pass_body_geometry(request);
+  EXPECT_FALSE(result.side_by_side_escape_active);
+  EXPECT_TRUE(result.predicted_overlap_confirmation_eligible);
+
+  request.validated_shiftout_body_clear_deadline = false;
+  result = resolve_committed_pass_body_geometry(request);
+  EXPECT_FALSE(result.predicted_overlap_confirmation_eligible);
+
+  request.pass_phase = true;
+  request.shiftout_phase = false;
+  request.validated_shiftout_body_clear_deadline = false;
+
   request.target_longitudinal_m = 2.8;
   result = resolve_committed_pass_body_geometry(request);
   EXPECT_TRUE(result.side_by_side_escape_active);
@@ -1321,9 +1336,20 @@ TEST(V2XOvertakeCoreSpeed, FrozenMinimumMotionShiftOutReleasesOnClearFootprintSw
   request.validated_frozen_plan = true;
   request.prior_front_cap_release_active = true;
   request.predicted_body_footprint_sweep_separated = false;
+  request.predicted_body_footprint_overlap_confirmed = false;
   resolution = resolve_committed_pass_policy(request);
   EXPECT_FALSE(resolution.minimum_motion_shiftout_release_allowed);
+  EXPECT_TRUE(resolution.minimum_motion_shiftout_predicted_overlap_grace_active);
+  EXPECT_TRUE(resolution.minimum_motion_footprint_hold_active);
+  EXPECT_TRUE(resolution.front_cap_release_ready);
+  EXPECT_FALSE(resolution.front_cap_state_update_required);
+
+  request.predicted_body_footprint_overlap_confirmed = true;
+  resolution = resolve_committed_pass_policy(request);
+  EXPECT_FALSE(resolution.minimum_motion_shiftout_predicted_overlap_grace_active);
+  EXPECT_FALSE(resolution.minimum_motion_footprint_hold_active);
   EXPECT_FALSE(resolution.front_cap_release_ready);
+  EXPECT_TRUE(resolution.front_cap_state_update_required);
   EXPECT_EQ(
     resolution.transition_reason,
     CommittedPassFrontCapTransitionReason::PredictedFootprintOverlap);
@@ -7179,6 +7205,14 @@ TEST(V2XOvertakeCoreContinuity, ReturnsOnlyAfterRearClearConfirmation)
   EXPECT_EQ(resolve_target_continuity(request), ContinuityAction::Return);
 
   request.side_vehicle_present = true;
+  EXPECT_EQ(resolve_target_continuity(request), ContinuityAction::Hold);
+
+  request.target_seen = false;
+  request.rear_clear_from_last_observation = true;
+  request.target_age_sec = 0.10;
+  EXPECT_EQ(resolve_target_continuity(request), ContinuityAction::Return);
+
+  request.rear_clear_from_last_observation = false;
   EXPECT_EQ(resolve_target_continuity(request), ContinuityAction::Hold);
 
   request.rear_clear_observed = false;

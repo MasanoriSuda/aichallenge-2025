@@ -346,6 +346,7 @@ struct CommittedPassPolicyResolution
 {
   bool active_execution{false};
   bool minimum_motion_shiftout_release_allowed{false};
+  bool minimum_motion_shiftout_predicted_overlap_grace_active{false};
   bool minimum_motion_footprint_release_allowed{false};
   bool minimum_motion_footprint_hold_active{false};
   bool minimum_motion_current_overlap_grace_active{false};
@@ -2752,6 +2753,9 @@ struct ContinuityRequest
   bool target_position_jump{false};
   bool rear_clear_observed{false};
   bool rear_clear_confirmed{false};
+  /// Rear clearance was confirmed from the last continuous course-progress
+  /// observation during the bounded target-hold window.
+  bool rear_clear_from_last_observation{false};
   bool side_vehicle_present{false};
   bool target_seen{false};
   double target_age_sec{};
@@ -3110,7 +3114,9 @@ bool can_suppress_committed_corridor_front_danger(
 
 struct CommittedPassBodyGeometryRequest
 {
+  bool shiftout_phase{false};
   bool pass_phase{false};
+  bool validated_shiftout_body_clear_deadline{false};
   bool minimum_motion_corridor_active{false};
   bool prior_front_cap_release_active{false};
   bool target_seen{false};
@@ -3132,7 +3138,9 @@ struct CommittedPassBodyGeometryResolution
 };
 
 /// Resolve the body geometry shared by behavior-level front danger and the
-/// OvertakeLine front-cap policy. Timer ownership remains with the caller.
+/// OvertakeLine front-cap policy. An already released validated ShiftOut may
+/// share the same bounded predicted-overlap confirmation as Pass. Timer
+/// ownership remains with the caller.
 CommittedPassBodyGeometryResolution resolve_committed_pass_body_geometry(
   const CommittedPassBodyGeometryRequest & request) noexcept;
 

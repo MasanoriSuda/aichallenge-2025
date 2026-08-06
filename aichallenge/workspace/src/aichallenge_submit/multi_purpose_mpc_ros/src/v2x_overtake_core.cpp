@@ -456,6 +456,13 @@ CommittedPassPolicyResolution resolve_committed_pass_policy(
     !request.predicted_body_footprint_sweep_separated &&
     !request.predicted_body_footprint_overlap_confirmed &&
     !resolution.minimum_motion_side_by_side_escape_active;
+  resolution.minimum_motion_shiftout_predicted_overlap_grace_active =
+    minimum_motion_shiftout_guard && request.prior_front_cap_release_active &&
+    request.execution_path_physically_feasible &&
+    request.current_body_footprints_separated &&
+    request.footprint_prediction_valid &&
+    !request.predicted_body_footprint_sweep_separated &&
+    !request.predicted_body_footprint_overlap_confirmed;
   // A single V2X sample on the body-boundary must not immediately hand
   // longitudinal ownership back to Follow. This grace is hold-only and is
   // available solely to an already released competition-simulation Pass.
@@ -485,7 +492,9 @@ CommittedPassPolicyResolution resolve_committed_pass_policy(
     request.execution_path_physically_feasible && minimum_motion_sweep_clear;
   const bool minimum_motion_shiftout_hold =
     minimum_motion_shiftout_guard &&
-    request.execution_path_physically_feasible && minimum_motion_sweep_clear;
+    request.execution_path_physically_feasible &&
+    (minimum_motion_sweep_clear ||
+    resolution.minimum_motion_shiftout_predicted_overlap_grace_active);
   const bool minimum_motion_pass_hold =
     minimum_motion_pass_guard &&
     ((request.current_body_footprints_separated &&
@@ -4848,7 +4857,11 @@ ContinuityAction resolve_target_continuity(const ContinuityRequest & request)
   if (!std::isfinite(request.target_age_sec)) {
     return ContinuityAction::Recovery;
   }
-  if (request.rear_clear_confirmed && !request.side_vehicle_present) {
+  if (
+    request.rear_clear_confirmed &&
+    (!request.side_vehicle_present ||
+    (!request.target_seen && request.rear_clear_from_last_observation)))
+  {
     return ContinuityAction::Return;
   }
   if (
@@ -5294,8 +5307,11 @@ CommittedPassBodyGeometryResolution resolve_committed_pass_body_geometry(
   resolution.raw_predicted_body_overlap =
     request.footprint_prediction_valid &&
     !request.predicted_body_footprint_sweep_separated;
+  const bool prediction_confirmation_phase =
+    request.pass_phase ||
+    (request.shiftout_phase && request.validated_shiftout_body_clear_deadline);
   resolution.predicted_overlap_confirmation_eligible =
-    request.pass_phase &&
+    prediction_confirmation_phase &&
     request.minimum_motion_corridor_active &&
     request.prior_front_cap_release_active &&
     request.target_seen &&

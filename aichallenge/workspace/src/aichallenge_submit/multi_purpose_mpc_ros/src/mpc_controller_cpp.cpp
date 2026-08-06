@@ -5459,7 +5459,12 @@ struct MPC
     const auto committed_body_geometry =
       v2x_overtake_core::resolve_committed_pass_body_geometry(
       v2x_overtake_core::CommittedPassBodyGeometryRequest{
+        overtake_line_state_.phase == OvertakeLinePhase::ShiftOut,
         overtake_mission_ownership.committed_pass_active,
+        overtake_line_state_.phase == OvertakeLinePhase::ShiftOut &&
+        overtake_line_state_.mission_path_frozen &&
+        overtake_line_state_.mission_body_clear_deadline_checked &&
+        overtake_line_state_.mission_body_clear_deadline_feasible,
         committed_minimum_motion_corridor_active,
         overtake_line_state_.pass_front_cap_release_active,
         output.locked_target_seen,
@@ -11285,6 +11290,11 @@ private:
       std::max(0.0, now_sec - overtake_line_state_.target_last_seen_sec) :
       std::numeric_limits<double>::infinity();
     const double return_clear_distance = std::max(0.0, line_cfg.return_clear_distance);
+    const bool rear_clear_from_last_observation =
+      !locked_target_progress_continuous &&
+      std::isfinite(overtake_line_state_.target_last_longitudinal) &&
+      overtake_line_state_.target_last_longitudinal <= -return_clear_distance &&
+      target_age <= std::max(0.0, line_cfg.target_hold_sec) + kEps;
     const bool rear_clear_observed = overtake_line_state_.inter_vehicle_corridor ?
       v2x_overtake_core::is_inter_vehicle_corridor_rear_clear(
         v2x_overtake_core::InterVehicleRearClearRequest{
@@ -11293,8 +11303,9 @@ private:
           behavior_output.lower_boundary_vehicle_longitudinal,
           behavior_output.upper_boundary_vehicle_longitudinal,
           return_clear_distance}) :
-      locked_target_progress_continuous &&
-      behavior_output.locked_target_longitudinal <= -return_clear_distance;
+      ((locked_target_progress_continuous &&
+      behavior_output.locked_target_longitudinal <= -return_clear_distance) ||
+      rear_clear_from_last_observation);
     if (rear_clear_observed) {
       if (!std::isfinite(overtake_line_state_.rear_clear_since_sec)) {
         overtake_line_state_.rear_clear_since_sec = now_sec;
@@ -12011,7 +12022,8 @@ private:
       const auto continuity = overtake_core::resolve_target_continuity(
         overtake_core::ContinuityRequest{
           overtake_solver_recovery_active_, behavior_output.locked_target_position_jump,
-          rear_clear_observed, rear_clear_confirmed, behavior_output.has_side_vehicle,
+          rear_clear_observed, rear_clear_confirmed,
+          rear_clear_from_last_observation, behavior_output.has_side_vehicle,
           locked_target_progress_continuous, target_age, line_cfg.target_hold_sec,
           locked_target_progress_continuous &&
           behavior_output.locked_target_longitudinal <= 0.0,
@@ -12201,7 +12213,12 @@ private:
     const auto live_committed_body_geometry =
       overtake_core::resolve_committed_pass_body_geometry(
       overtake_core::CommittedPassBodyGeometryRequest{
+        overtake_line_state_.phase == OvertakeLinePhase::ShiftOut,
         overtake_line_state_.phase == OvertakeLinePhase::Pass,
+        overtake_line_state_.phase == OvertakeLinePhase::ShiftOut &&
+        overtake_line_state_.mission_path_frozen &&
+        overtake_line_state_.mission_body_clear_deadline_checked &&
+        overtake_line_state_.mission_body_clear_deadline_feasible,
         live_minimum_motion_corridor_active,
         overtake_line_state_.pass_front_cap_release_active,
         locked_target_seen,
@@ -13732,7 +13749,12 @@ private:
     const auto committed_body_geometry =
       overtake_core::resolve_committed_pass_body_geometry(
       overtake_core::CommittedPassBodyGeometryRequest{
+        committed_pass_request.shiftout_phase,
         committed_pass_request.pass_phase,
+        committed_pass_request.shiftout_phase &&
+        committed_pass_request.validated_frozen_plan &&
+        overtake_line_state_.mission_body_clear_deadline_checked &&
+        overtake_line_state_.mission_body_clear_deadline_feasible,
         committed_pass_request.minimum_motion_corridor_active,
         committed_pass_request.prior_front_cap_release_active,
         committed_pass_request.target_seen,
@@ -13787,7 +13809,7 @@ private:
           "OvertakeLine execution front cap: %s, phase=%s, target=%s, lateral=%.2f, "
           "release=%.2f, reapply=%.2f, target_s=%.2f, lateral_complete=%d, "
           "horizon_clear=%d, minimum_motion=%d, frozen_plan=%d, "
-          "shiftout_footprint_release=%d, footprint_clear=%d, "
+          "shiftout_footprint_release=%d, shiftout_overlap_grace=%d, footprint_clear=%d, "
           "current_overlap_confirmed=%d, current_overlap_elapsed=%.2f/%.2f, "
           "current_overlap_grace=%d, "
           "footprint_prediction=%d, footprint_sweep_clear=%d, "
@@ -13804,6 +13826,7 @@ private:
           committed_pass_request.minimum_motion_corridor_active ? 1 : 0,
           committed_pass_request.validated_frozen_plan ? 1 : 0,
           committed_pass_policy.minimum_motion_shiftout_release_allowed ? 1 : 0,
+          committed_pass_policy.minimum_motion_shiftout_predicted_overlap_grace_active ? 1 : 0,
           committed_pass_request.current_body_footprints_separated ? 1 : 0,
           committed_pass_request.current_body_footprint_overlap_confirmed ? 1 : 0,
           behavior_output.locked_target_current_body_overlap_elapsed_sec,

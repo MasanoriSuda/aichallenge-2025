@@ -185,9 +185,8 @@ stuck_recovery:
     margin_m: 0.05
     sweep_interpolation_step_m: 0.05
   rear_safety:
-    # make dev2 publishes one other vehicle per domain and excludes self. Change this to 2 for
-    # make dev3, or 3 for a four-vehicle final; single-vehicle runs fail closed without V2X.
-    expected_v2x_vehicle_count: 1
+    # Peer IDs are learned automatically from structurally valid V2X arrays for the race session.
+    # An empty learned set fails closed unless the simulation-only aggressive override is active.
     self_filter_mode: excluded
     self_vehicle_id: ""
     vehicle_radius_m: 1.45

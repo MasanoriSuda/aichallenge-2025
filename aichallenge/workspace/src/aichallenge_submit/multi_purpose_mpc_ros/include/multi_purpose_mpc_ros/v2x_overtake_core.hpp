@@ -5,10 +5,35 @@
 #include <cstdint>
 #include <limits>
 #include <optional>
+#include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace multi_purpose_mpc_ros::v2x_overtake_core
 {
+
+/// Session-scoped identity discovery for V2X completeness checks.
+///
+/// Only callers that have already validated the enclosing message should call
+/// observe_valid_message().  Learned identities survive individual Recovery
+/// attempts and are cleared only at the race-session boundary.
+class V2XPeerIdentityTracker
+{
+public:
+  /// Add every unique, non-empty identity from a structurally valid message.
+  /// Returns false and leaves the learned set unchanged for invalid input.
+  bool observe_valid_message(const std::vector<std::string> & vehicle_ids);
+
+  /// A complete observation contains each learned identity exactly once and
+  /// contains no unlearned identity.  An empty learned set fails closed.
+  bool is_complete(const std::vector<std::string> & vehicle_ids) const;
+
+  std::size_t learned_vehicle_count() const noexcept;
+  void reset() noexcept;
+
+private:
+  std::unordered_set<std::string> learned_vehicle_ids_;
+};
 
 /// Treat a small negative receipt age as fresh when callback execution races
 /// with the control-cycle ROS-time snapshot. Larger future ages fail closed.

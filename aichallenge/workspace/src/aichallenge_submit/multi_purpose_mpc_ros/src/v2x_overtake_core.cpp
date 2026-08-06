@@ -36,6 +36,51 @@ void validate_speed(const double speed_mps, const char * name)
 
 }  // namespace
 
+bool V2XPeerIdentityTracker::observe_valid_message(
+  const std::vector<std::string> & vehicle_ids)
+{
+  std::unordered_set<std::string> validated_ids;
+  for (const auto & vehicle_id : vehicle_ids) {
+    if (vehicle_id.empty() || !validated_ids.emplace(vehicle_id).second) {
+      return false;
+    }
+  }
+  learned_vehicle_ids_.insert(validated_ids.begin(), validated_ids.end());
+  return true;
+}
+
+bool V2XPeerIdentityTracker::is_complete(
+  const std::vector<std::string> & vehicle_ids) const
+{
+  if (
+    learned_vehicle_ids_.empty() ||
+    vehicle_ids.size() != learned_vehicle_ids_.size())
+  {
+    return false;
+  }
+
+  std::unordered_set<std::string> observed_ids;
+  for (const auto & vehicle_id : vehicle_ids) {
+    if (
+      vehicle_id.empty() || !observed_ids.emplace(vehicle_id).second ||
+      learned_vehicle_ids_.find(vehicle_id) == learned_vehicle_ids_.end())
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+std::size_t V2XPeerIdentityTracker::learned_vehicle_count() const noexcept
+{
+  return learned_vehicle_ids_.size();
+}
+
+void V2XPeerIdentityTracker::reset() noexcept
+{
+  learned_vehicle_ids_.clear();
+}
+
 bool is_v2x_receipt_age_fresh(
   const double age_sec, const double timeout_sec,
   const double future_tolerance_sec) noexcept

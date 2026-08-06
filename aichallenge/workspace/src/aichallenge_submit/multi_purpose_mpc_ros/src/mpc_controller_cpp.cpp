@@ -2339,6 +2339,13 @@ struct V2XGapPlanner
         velocity_observation_valid && !array_header_invalid && !empty_id &&
         !duplicate_id && !invalid_geometry && !source_sample_invalid;
     }
+    last_message_vehicle_ids_.assign(message_ids.begin(), message_ids.end());
+    if (
+      !last_message_has_empty_id_ && !last_message_has_duplicate_id_ &&
+      !last_message_has_invalid_sample_)
+    {
+      peer_identity_tracker_.observe_valid_message(last_message_vehicle_ids_);
+    }
     last_message_recovery_epoch_ = recovery_epoch_;
   }
 
@@ -2416,7 +2423,7 @@ struct V2XGapPlanner
     return output;
   }
 
-  bool has_complete_message(const double now_sec, const std::size_t expected_vehicle_count)
+  bool has_complete_message(const double now_sec)
   {
     std::lock_guard<std::mutex> lock(mutex_);
     if (
@@ -2429,13 +2436,12 @@ struct V2XGapPlanner
     const double age_sec = now_sec - last_message_receipt_sec_.value();
     return overtake_core::is_v2x_receipt_age_fresh(
       age_sec, cfg.timeout_sec, kV2XReceiptFutureToleranceSec) &&
-           last_message_vehicle_count_ == expected_vehicle_count &&
            !last_message_has_empty_id_ && !last_message_has_duplicate_id_ &&
-           !last_message_has_invalid_sample_;
+           !last_message_has_invalid_sample_ &&
+           peer_identity_tracker_.is_complete(last_message_vehicle_ids_);
   }
 
-  bool has_complete_tracked_set(
-    const double now_sec, const std::size_t expected_vehicle_count)
+  bool has_complete_tracked_set(const double now_sec)
   {
     std::lock_guard<std::mutex> lock(mutex_);
     if (
@@ -2445,7 +2451,7 @@ struct V2XGapPlanner
     {
       return false;
     }
-    std::size_t fresh_vehicle_count = 0U;
+    std::vector<std::string> fresh_vehicle_ids;
     for (const auto & item : vehicles_) {
       const auto & tracked = item.second;
       if (tracked.recovery_epoch != recovery_epoch_) {
@@ -2467,9 +2473,9 @@ struct V2XGapPlanner
       {
         return false;
       }
-      ++fresh_vehicle_count;
+      fresh_vehicle_ids.push_back(tracked.id);
     }
-    return fresh_vehicle_count == expected_vehicle_count;
+    return peer_identity_tracker_.is_complete(fresh_vehicle_ids);
   }
 
   void begin_recovery_tracking_epoch()
@@ -2488,6 +2494,8 @@ struct V2XGapPlanner
     last_message_source_stamp_sec_.reset();
     last_message_recovery_epoch_.reset();
     last_message_vehicle_count_ = 0U;
+    last_message_vehicle_ids_.clear();
+    peer_identity_tracker_.reset();
     last_message_has_empty_id_ = false;
     last_message_has_duplicate_id_ = false;
     last_message_has_invalid_sample_ = false;
@@ -3873,6 +3881,8 @@ private:
   std::optional<std::uint64_t> last_message_recovery_epoch_;
   std::uint64_t recovery_epoch_{0U};
   std::size_t last_message_vehicle_count_{0U};
+  std::vector<std::string> last_message_vehicle_ids_;
+  overtake_core::V2XPeerIdentityTracker peer_identity_tracker_;
   bool last_message_has_empty_id_{false};
   bool last_message_has_duplicate_id_{false};
   bool last_message_has_invalid_sample_{false};
@@ -15017,9 +15027,6 @@ struct StuckRecoveryAdapterConfig
   // Non-negative magnitude used by the deterministic Left/Right reverse rollouts.
   double reverse_steering_angle_rad{0.0};
   double boost_status_timeout_sec{0.5};
-  // Total entries expected in each V2X array, including self if that simulator includes self.
-  // -1 means unknown and therefore fail-closed for reverse actuation.
-  int expected_v2x_vehicle_count{-1};
   std::string v2x_self_filter_mode{"unknown"};
   std::string self_vehicle_id;
   double rear_vehicle_radius_m{1.45};
@@ -15543,9 +15550,6 @@ Config load_config(const std::string & path)
 
     const auto rear_safety = recovery["rear_safety"];
     if (rear_safety) {
-      adapter.expected_v2x_vehicle_count = rear_safety["expected_v2x_vehicle_count"] ?
-        rear_safety["expected_v2x_vehicle_count"].as<int>() :
-        adapter.expected_v2x_vehicle_count;
       adapter.v2x_self_filter_mode = rear_safety["self_filter_mode"] ?
         rear_safety["self_filter_mode"].as<std::string>() : adapter.v2x_self_filter_mode;
       adapter.self_vehicle_id = rear_safety["self_vehicle_id"] ?
@@ -15696,7 +15700,6 @@ Config load_config(const std::string & path)
       adapter.reverse_acceleration_sign * adapter.reverse_stop_acceleration_mps2 >= 0.0 ||
       !std::isfinite(adapter.verified_reverse_stop_deceleration_mps2) ||
       adapter.verified_reverse_stop_deceleration_mps2 <= 0.0 ||
-      adapter.expected_v2x_vehicle_count < 0 ||
       adapter.v2x_self_filter_mode == "unknown" ||
       (adapter.v2x_self_filter_mode == "vehicle_id" && adapter.self_vehicle_id.empty())))
     {
@@ -15722,7 +15725,6 @@ Config load_config(const std::string & path)
       adapter.reverse_steering_angle_rad >= 1.5707963267948966 ||
       !std::isfinite(adapter.boost_status_timeout_sec) ||
       adapter.boost_status_timeout_sec <= 0.0 ||
-      adapter.expected_v2x_vehicle_count < -1 ||
       !finite_non_negative(adapter.rear_vehicle_radius_m) ||
       !finite_non_negative(adapter.rear_prediction_margin_sec) ||
       !finite_non_negative(adapter.fast_rejoin_min_reverse_distance_m) ||
@@ -19695,16 +19697,14 @@ private:
 
     snapshot.boost_inactive_confirmed = recovery_boost_inactive_confirmed(steady_now);
     const bool v2x_contract_configured =
-      v2x_gap_planner_ != nullptr && cfg_.stuck_recovery.expected_v2x_vehicle_count >= 0 &&
+      v2x_gap_planner_ != nullptr &&
       cfg_.stuck_recovery.v2x_self_filter_mode != "unknown";
-    const std::size_t expected_vehicle_count =
-      static_cast<std::size_t>(std::max(0, cfg_.stuck_recovery.expected_v2x_vehicle_count));
     const bool complete_current_message =
       v2x_contract_configured &&
-      v2x_gap_planner_->has_complete_message(ros_now_sec, expected_vehicle_count);
+      v2x_gap_planner_->has_complete_message(ros_now_sec);
     const bool complete_tracked_set =
       v2x_contract_configured && cfg_.stuck_recovery.tracked_v2x_completeness_enabled &&
-      v2x_gap_planner_->has_complete_tracked_set(ros_now_sec, expected_vehicle_count);
+      v2x_gap_planner_->has_complete_tracked_set(ros_now_sec);
     snapshot.v2x_message_complete = complete_current_message || complete_tracked_set;
     if (!snapshot.boost_inactive_confirmed) {
       return snapshot;

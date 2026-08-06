@@ -217,7 +217,7 @@ stuck_recovery:
     margin_m: 0.05
     sweep_interpolation_step_m: 0.05
   rear_safety:
-    expected_v2x_vehicle_count: 1
+    # 正常なV2X messageからrace session単位で車両IDを自動学習する。
     self_filter_mode: excluded
     self_vehicle_id: ""
     vehicle_radius_m: 1.45
@@ -362,11 +362,12 @@ sim timeのsource stampをwall-clock受信時刻から引いて全messageをstal
   Side / Mixedの段階離脱は前後方向とも`RequireImprovement`として各swept sampleのcontact非増加と
   局所連続を検証する。
 - `/v2x/vehicle_positions`の最近messageがfreshで、position jumpのない他車の
-  現在位置から選択maneuver duration分を予測した進行方向corridorがclear。さらに、
-  `expected_v2x_vehicle_count`と正確に一致するcomplete messageを必須とする。この値は自車を
-  除いたtopic内の台数で、現行`make dev2`は`1`、`make dev3`は`2`とする。不一致または`-1`では
-  rear informationをunknownとしてReverseを阻止する。source stamp / map frame / covariance / ID
-  も検証し、自車の扱いは`self_filter_mode=excluded`または正確な`vehicle_id`を明示する。
+  現在位置から選択maneuver duration分を予測した進行方向corridorがclear。車両台数は設定せず、
+  race session中の正常messageから車両ID集合を自動学習する。Recovery開始後のlatest message、
+  またはcurrent Recovery epoch内のfreshな追跡集合が全学習済みIDを含む場合だけcompleteとする。
+  学習済みIDが0件、ID欠落、空ID、重複ID、source stamp / map frame / covariance異常ではrear
+  informationをunknownとしてReverseを阻止する。自車の扱いは`self_filter_mode=excluded`または
+  正確な`vehicle_id`を明示する。
 - `/awsim/status`がfreshで`isBoosting=false`。Boost中またはstatus不明時は
   rear information incompleteとする。
 - freshなREVERSE GearReportを確認してから駆動加速度を出す。

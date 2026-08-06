@@ -37,6 +37,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::GenericFollowCapOwnershipRequest
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSpeedReferenceRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSpeedStage;
 using multi_purpose_mpc_ros::v2x_overtake_core::StartGridBreakoutSpeedReferenceRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::V2XPeerIdentityTracker;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_v2x_receipt_age_fresh;
 using multi_purpose_mpc_ros::v2x_overtake_core::ShiftOutCompletionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeFrontCapReleaseRequest;
@@ -364,6 +365,51 @@ TEST(V2XReceiptAge, RejectsStaleInvalidAndExcessivelyFutureReceipt)
     std::numeric_limits<double>::infinity(), 1.0, 0.05));
   EXPECT_FALSE(is_v2x_receipt_age_fresh(0.0, -1.0, 0.05));
   EXPECT_FALSE(is_v2x_receipt_age_fresh(0.0, 1.0, -0.05));
+}
+
+TEST(V2XPeerIdentityTracker, LearnsPeersAndAcceptsOrderIndependentCompleteSet)
+{
+  V2XPeerIdentityTracker tracker;
+  EXPECT_TRUE(tracker.observe_valid_message({"P2", "P3"}));
+  EXPECT_EQ(tracker.learned_vehicle_count(), 2U);
+  EXPECT_TRUE(tracker.is_complete({"P3", "P2"}));
+}
+
+TEST(V2XPeerIdentityTracker, RejectsPartialOrSameCountDifferentIdentity)
+{
+  V2XPeerIdentityTracker tracker;
+  ASSERT_TRUE(tracker.observe_valid_message({"P2", "P3"}));
+  EXPECT_FALSE(tracker.is_complete({"P2"}));
+  EXPECT_FALSE(tracker.is_complete({"P2", "P4"}));
+}
+
+TEST(V2XPeerIdentityTracker, ExpandsTheKnownSetWhenAValidPeerAppears)
+{
+  V2XPeerIdentityTracker tracker;
+  ASSERT_TRUE(tracker.observe_valid_message({"P2"}));
+  ASSERT_TRUE(tracker.observe_valid_message({"P2", "P3"}));
+  EXPECT_EQ(tracker.learned_vehicle_count(), 2U);
+  EXPECT_FALSE(tracker.is_complete({"P2"}));
+  EXPECT_TRUE(tracker.is_complete({"P2", "P3"}));
+}
+
+TEST(V2XPeerIdentityTracker, InvalidAndEmptyEvidenceCannotAuthorizeMotion)
+{
+  V2XPeerIdentityTracker tracker;
+  EXPECT_TRUE(tracker.observe_valid_message({}));
+  EXPECT_FALSE(tracker.is_complete({}));
+  EXPECT_FALSE(tracker.observe_valid_message({"P2", "P2"}));
+  EXPECT_FALSE(tracker.observe_valid_message({""}));
+  EXPECT_EQ(tracker.learned_vehicle_count(), 0U);
+}
+
+TEST(V2XPeerIdentityTracker, ResetClearsTheRaceSessionIdentitySet)
+{
+  V2XPeerIdentityTracker tracker;
+  ASSERT_TRUE(tracker.observe_valid_message({"P2"}));
+  tracker.reset();
+  EXPECT_EQ(tracker.learned_vehicle_count(), 0U);
+  EXPECT_FALSE(tracker.is_complete({"P2"}));
 }
 
 TEST(V2XOvertakeCoreSpeed, UsesCappedNormalSpeedWithoutStartConfiguration)

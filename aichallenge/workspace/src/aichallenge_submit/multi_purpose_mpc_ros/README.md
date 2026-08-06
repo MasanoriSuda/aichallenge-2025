@@ -156,11 +156,12 @@ Straight / Left / Rightを0.40 m評価し、改善量最大の候補を選びま
   stepwise接触離脱は方向にかかわらず現在cellを初期patchの固定1-cell halo内かつ直前patchと
   同一または8近傍の明示Occupiedだけに限定する。接触数増加、非連続なpatch移動、clear後の
   再接触をrejectし、rolloutと実走中監視は同じ判定helperを使う。
-- `/v2x/vehicle_positions`がfreshかつ想定台数分completeで、選択方向へ予測したcorridorに
-  車両がいない。期待値は配列の総entry数（環境が自車を含める場合は自車込み）で、
-  空ID・重複ID・異常sampleもrejectする。`rear_safety.expected_v2x_vehicle_count: -1`の
-  既定値はReverseを阻止する。自車の扱いも`self_filter_mode: unknown`では阻止し、
-  公式確認後に`excluded`または正確な`vehicle_id`を明示する。
+- `/v2x/vehicle_positions`がfreshかつ、レースセッション中の正常messageから自動学習した
+  全車両IDがcompleteで、選択方向へ予測したcorridorに車両がいない。Recovery開始後の
+  latest messageが一部IDを欠く場合は、current Recovery epoch内のfreshな追跡集合が全IDを
+  覆うまでReverseを阻止する。空ID・重複ID・異常sampleからIDを学習せず、学習済みIDが
+  0件の場合もfail-closedとする。自車の扱いは`self_filter_mode: unknown`では阻止し、
+  `excluded`または正確な`vehicle_id`を明示する。
 
 後方clear待ちがtimeoutした場合も、原因がclearanceだけならSafeStop中に再評価を続け、
 0.5秒連続で安全になった後だけRecoveryへ戻ります。gear、odometry、solver、control等の

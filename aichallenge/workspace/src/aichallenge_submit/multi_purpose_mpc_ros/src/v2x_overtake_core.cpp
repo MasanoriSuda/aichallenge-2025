@@ -1935,25 +1935,54 @@ CommittedPassForwardCompletionResolution resolve_committed_pass_forward_completi
   const CommittedPassForwardCompletionRequest & request) noexcept
 {
   CommittedPassForwardCompletionResolution resolution;
+  const auto finite_non_negative = [](const double value) {
+      return std::isfinite(value) && value >= 0.0;
+    };
   const bool base_guard =
     request.enabled && request.pass_active && request.minimum_motion_corridor_active &&
     request.prior_front_cap_release_active && request.target_seen &&
     request.target_continuity_valid && !request.target_position_jump &&
+    request.footprint_prediction_valid &&
+    request.predicted_body_footprint_sweep_separated &&
     !request.actual_wall_contact && !request.wall_sample_unavailable &&
     !request.target_pass_side_intrusion && !request.emergency_brake &&
     !request.solver_recovery_active &&
     std::isfinite(request.target_longitudinal_m) &&
-    std::isfinite(request.maximum_front_distance_m) &&
-    request.maximum_front_distance_m >= 0.0;
+    finite_non_negative(request.maximum_front_distance_m) &&
+    finite_non_negative(request.ego_speed_mps) &&
+    finite_non_negative(request.target_speed_mps) &&
+    finite_non_negative(request.speed_delta_mps) &&
+    finite_non_negative(request.maximum_ego_speed_mps) &&
+    finite_non_negative(request.rear_clear_distance_m) &&
+    finite_non_negative(request.maximum_completion_distance_m);
   resolution.current_overlap_grace_active =
     base_guard && !request.current_body_footprints_separated &&
-    !request.current_body_footprint_overlap_confirmed &&
-    request.footprint_prediction_valid;
+    !request.current_body_footprint_overlap_confirmed;
   const bool current_geometry_acceptable =
     request.current_body_footprints_separated ||
     resolution.current_overlap_grace_active;
+  if (base_guard) {
+    const double forward_speed_mps = std::min(
+      request.maximum_ego_speed_mps,
+      std::max(request.ego_speed_mps, request.target_speed_mps + request.speed_delta_mps));
+    const double closing_speed_mps = forward_speed_mps - request.target_speed_mps;
+    const double relative_distance_m = std::max(
+      0.0, request.target_longitudinal_m + request.rear_clear_distance_m);
+    if (relative_distance_m <= 1e-9) {
+      resolution.required_forward_distance_m = 0.0;
+      resolution.rear_clear_distance_feasible = true;
+    } else if (closing_speed_mps > 1e-6) {
+      resolution.required_forward_distance_m =
+        forward_speed_mps * relative_distance_m / closing_speed_mps;
+      resolution.rear_clear_distance_feasible =
+        std::isfinite(resolution.required_forward_distance_m) &&
+        resolution.required_forward_distance_m <=
+        request.maximum_completion_distance_m + 1e-9;
+    }
+  }
   resolution.active =
     base_guard && current_geometry_acceptable &&
+    resolution.rear_clear_distance_feasible &&
     request.target_longitudinal_m <= request.maximum_front_distance_m + 1e-9;
   return resolution;
 }
@@ -4213,10 +4242,7 @@ OpponentSideReplanResolution resolve_opponent_side_replan(
     result.reason = OpponentSideReplanReason::BodyOverlap;
     return result;
   }
-  if (
-    !request.footprint_prediction_valid ||
-    !request.predicted_body_footprint_sweep_separated)
-  {
+  if (!request.footprint_prediction_valid) {
     result.action = OpponentSideReplanAction::BlockedByNoReturn;
     result.reason = OpponentSideReplanReason::PredictedOverlap;
     return result;
@@ -4250,7 +4276,12 @@ OpponentSideReplanResolution resolve_opponent_side_replan(
     result.physical_reserve_advantage_m =
       request.alternate_physical_reserve_m - request.current_physical_reserve_m;
   }
-  const bool current_infeasible = !request.current_plan_feasible;
+  // A predicted overlap on the frozen side is a reason to assess and prefer a
+  // complete alternate mission before no-return, not a reason to suppress
+  // alternate-side evaluation altogether.
+  const bool current_infeasible =
+    !request.current_plan_feasible ||
+    !request.predicted_body_footprint_sweep_separated;
   const bool reserve_advantage =
     result.physical_reserve_advantage_m + 1e-9 >=
     request.minimum_reserve_advantage_m;

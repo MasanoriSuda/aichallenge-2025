@@ -6030,10 +6030,9 @@ struct MPC
       std::isfinite(output.locked_target_longitudinal) &&
       output.locked_target_longitudinal + kEps >=
       cfg.v2x_behavior.overtake_line.opponent_side_replan_no_return_front_distance;
-    const bool opponent_side_replan_geometry_safe =
+    const bool opponent_side_replan_geometry_observable =
       output.locked_target_current_body_footprints_separated &&
-      output.locked_target_footprint_prediction_valid &&
-      output.locked_target_predicted_body_footprint_sweep_separated;
+      output.locked_target_footprint_prediction_valid;
     const bool opponent_side_replan_count_available =
       overtake_line_state_.opponent_side_replan_count <
       cfg.v2x_behavior.overtake_line.opponent_side_replan_max_count;
@@ -6042,7 +6041,7 @@ struct MPC
       opponent_side_replan_execution_active &&
       opponent_side_replan_target_continuous &&
       opponent_side_replan_before_no_return &&
-      opponent_side_replan_geometry_safe &&
+      opponent_side_replan_geometry_observable &&
       opponent_side_replan_count_available;
     const bool opponent_side_replan_evaluation_due =
       opponent_side_replan_eligible &&
@@ -7692,7 +7691,8 @@ struct MPC
         current_assessment.selected_mission.has_value() &&
         current_assessment.gap_available &&
         execution_allowed_for_side(current_assessment) &&
-        !selected_side_conflict;
+        !selected_side_conflict &&
+        output.locked_target_predicted_body_footprint_sweep_separated;
       const bool alternate_plan_feasible =
         alternate_assessment.selected_mission.has_value() &&
         alternate_assessment.gap_available &&
@@ -7804,7 +7804,7 @@ struct MPC
           overtake_core::OpponentSideReplanReason::TargetInvalid :
           !output.locked_target_current_body_footprints_separated ?
           overtake_core::OpponentSideReplanReason::BodyOverlap :
-          !opponent_side_replan_geometry_safe ?
+          !opponent_side_replan_geometry_observable ?
           overtake_core::OpponentSideReplanReason::PredictedOverlap :
           !opponent_side_replan_before_no_return ?
           overtake_core::OpponentSideReplanReason::TargetTooClose :
@@ -12248,13 +12248,20 @@ private:
         behavior_output.locked_target_current_body_footprints_separated,
         behavior_output.locked_target_current_body_overlap_confirmed,
         behavior_output.locked_target_footprint_prediction_valid,
+        behavior_output.locked_target_predicted_body_footprint_sweep_separated,
         actual_wall_physical_contact,
         actual_wall_sample_unavailable,
         behavior_output.locked_target_pass_side_intrusion,
         behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake,
         overtake_solver_recovery_active_,
         locked_target_longitudinal,
-        line_cfg.safe_separation_forward_escape_max_front_distance});
+        line_cfg.safe_separation_forward_escape_max_front_distance,
+        current_speed_mps_,
+        locked_target_speed,
+        std::max(0.0, line_cfg.safe_separation_speed_delta),
+        std::max(0.0, cfg.v_max),
+        std::max(0.0, line_cfg.return_clear_distance),
+        std::max(0.0, line_cfg.safe_separation_max_distance)});
     const bool pass_lateral_replan_in_progress =
       overtake_line_state_.mission_pass_lateral_replan_active &&
       mission_pass_traveled_m + kEps <
@@ -12897,6 +12904,16 @@ private:
         committed_forward_completion.active && !rear_clear_confirmed &&
         !overtake_line_state_.pass_horizon_safe_separation_active)
       {
+        if (line_cfg.debug_log_enabled) {
+          RCLCPP_INFO(
+            rclcpp::get_logger("mpc_controller"),
+            "OvertakeLine side-by-side completion admitted: target=%s, target_s=%.2f, "
+            "required_forward=%.2f/%.2f m, ego_v=%.2f, target_v=%.2f, wp_id=%d",
+            overtake_line_state_.target_vehicle_id.c_str(), locked_target_longitudinal,
+            committed_forward_completion.required_forward_distance_m,
+            line_cfg.safe_separation_max_distance, current_speed_mps_, locked_target_speed,
+            model->wp_id);
+        }
         begin_safe_separation(
           "side_by_side_commit", "committed forward completion acquired");
       }
@@ -13840,7 +13857,8 @@ private:
           "horizon_clear=%d, minimum_motion=%d, frozen_plan=%d, "
           "shiftout_footprint_release=%d, shiftout_overlap_grace=%d, footprint_clear=%d, "
           "current_overlap_confirmed=%d, current_overlap_elapsed=%.2f/%.2f, "
-          "current_overlap_grace=%d, forward_commit=%d, "
+          "current_overlap_grace=%d, "
+          "forward_commit=%d/required=%.2f/limit=%.2f/distance_ok=%d, "
           "footprint_prediction=%d, footprint_sweep_clear=%d, "
           "side_by_side_escape=%d, attack_hold=%d, predicted_overlap=%d, "
           "overlap_confirmed=%d, "
@@ -13862,6 +13880,9 @@ private:
           cfg.v2x_behavior.overtake_pass_current_overlap_confirm_sec,
           committed_pass_policy.minimum_motion_current_overlap_grace_active ? 1 : 0,
           committed_forward_completion.active ? 1 : 0,
+          committed_forward_completion.required_forward_distance_m,
+          line_cfg.safe_separation_max_distance,
+          committed_forward_completion.rear_clear_distance_feasible ? 1 : 0,
           committed_pass_request.footprint_prediction_valid ? 1 : 0,
           committed_pass_request.predicted_body_footprint_sweep_separated ? 1 : 0,
           committed_pass_policy.minimum_motion_side_by_side_escape_active ? 1 : 0,
@@ -14069,7 +14090,8 @@ private:
           "speed_hold=%d, safe_sep=%d/forward=%d/signed_closing=%.2f, "
           "minimum_motion_cap=%d, footprint_clear=%d, "
           "current_overlap_confirmed=%d, current_overlap_elapsed=%.2f/%.2f, "
-          "current_overlap_grace=%d, forward_commit=%d, "
+          "current_overlap_grace=%d, "
+          "forward_commit=%d/required=%.2f/limit=%.2f/distance_ok=%d, "
           "footprint_prediction=%d, footprint_sweep_clear=%d, "
           "side_by_side_escape=%d, attack_hold=%d, predicted_overlap=%d, "
           "overlap_confirmed=%d, "
@@ -14105,6 +14127,9 @@ private:
           cfg.v2x_behavior.overtake_pass_current_overlap_confirm_sec,
           committed_pass_policy.minimum_motion_current_overlap_grace_active ? 1 : 0,
           committed_forward_completion.active ? 1 : 0,
+          committed_forward_completion.required_forward_distance_m,
+          line_cfg.safe_separation_max_distance,
+          committed_forward_completion.rear_clear_distance_feasible ? 1 : 0,
           committed_pass_request.footprint_prediction_valid ? 1 : 0,
           committed_pass_request.predicted_body_footprint_sweep_separated ? 1 : 0,
           committed_pass_policy.minimum_motion_side_by_side_escape_active ? 1 : 0,
@@ -15220,12 +15245,20 @@ private:
         output.moving_front_clearance_limit_active = false;
         const double target_speed = std::isfinite(output.overtake_entry_target_speed) ?
           std::max(0.0, output.overtake_entry_target_speed) : 0.0;
+        const double selected_closing_speed =
+          output.overtake_selected_mission.has_value() &&
+          std::isfinite(output.overtake_selected_mission->closing_speed_mps) ?
+          std::clamp(
+            output.overtake_selected_mission->closing_speed_mps,
+            0.0,
+            std::max(0.0, cfg.v2x_behavior.overtake_shiftout_max_closing_speed)) :
+          std::max(0.0, cfg.v2x_behavior.overtake_shiftout_max_closing_speed);
         output.overtake_entry_prearm_target_velocity = std::min(
           cfg.v_max,
           target_speed +
           std::max(
             cfg.v2x_behavior.overtake_entry_min_relative_speed,
-            cfg.v2x_behavior.overtake_shiftout_max_closing_speed));
+            selected_closing_speed));
         output.desired_velocity = output.overtake_entry_prearm_target_velocity;
       }
     }

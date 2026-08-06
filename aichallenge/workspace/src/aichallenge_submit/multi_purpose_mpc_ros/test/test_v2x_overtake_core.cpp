@@ -3714,12 +3714,21 @@ TEST(V2XOvertakeCoreHorizon, CommitsBoundedSideBySideForwardCompletion)
   request.target_continuity_valid = true;
   request.current_body_footprints_separated = true;
   request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
   request.target_longitudinal_m = 2.0;
   request.maximum_front_distance_m = 3.0;
+  request.ego_speed_mps = 5.0;
+  request.target_speed_mps = 3.3;
+  request.speed_delta_mps = 0.8;
+  request.maximum_ego_speed_mps = 11.11;
+  request.rear_clear_distance_m = 2.0;
+  request.maximum_completion_distance_m = 12.0;
 
   auto resolution = resolve_committed_pass_forward_completion(request);
   EXPECT_TRUE(resolution.active);
   EXPECT_FALSE(resolution.current_overlap_grace_active);
+  EXPECT_TRUE(resolution.rear_clear_distance_feasible);
+  EXPECT_NEAR(resolution.required_forward_distance_m, 11.7647059, 1e-6);
 
   request.current_body_footprints_separated = false;
   request.current_body_footprint_overlap_confirmed = false;
@@ -3741,6 +3750,25 @@ TEST(V2XOvertakeCoreHorizon, CommitsBoundedSideBySideForwardCompletion)
   request.actual_wall_contact = true;
   resolution = resolve_committed_pass_forward_completion(request);
   EXPECT_FALSE(resolution.active);
+
+  request.actual_wall_contact = false;
+  request.predicted_body_footprint_sweep_separated = false;
+  resolution = resolve_committed_pass_forward_completion(request);
+  EXPECT_FALSE(resolution.active);
+  EXPECT_FALSE(resolution.rear_clear_distance_feasible);
+
+  request.predicted_body_footprint_sweep_separated = true;
+  request.maximum_completion_distance_m = 11.0;
+  resolution = resolve_committed_pass_forward_completion(request);
+  EXPECT_FALSE(resolution.active);
+  EXPECT_FALSE(resolution.rear_clear_distance_feasible);
+  EXPECT_NEAR(resolution.required_forward_distance_m, 11.7647059, 1e-6);
+
+  request.maximum_completion_distance_m = 12.0;
+  request.target_speed_mps = std::numeric_limits<double>::infinity();
+  resolution = resolve_committed_pass_forward_completion(request);
+  EXPECT_FALSE(resolution.active);
+  EXPECT_FALSE(resolution.rear_clear_distance_feasible);
 }
 
 TEST(V2XOvertakeCoreHorizon, CreatesLongitudinalSafeSeparationOnCommittedSide)
@@ -6235,7 +6263,14 @@ TEST(V2XOvertakeCoreOpponentSideReplan, BlocksAtNoReturnAndAfterOneReplacement)
   EXPECT_EQ(result.reason, OpponentSideReplanReason::BodyOverlap);
 
   request.current_body_footprints_separated = true;
+  request.current_plan_feasible = true;
   request.predicted_body_footprint_sweep_separated = false;
+  result = resolve_opponent_side_replan(request);
+  EXPECT_EQ(result.action, OpponentSideReplanAction::ReplaceWithAlternate);
+  EXPECT_EQ(result.reason, OpponentSideReplanReason::CurrentPlanInfeasible);
+  EXPECT_TRUE(result.eligible);
+
+  request.footprint_prediction_valid = false;
   result = resolve_opponent_side_replan(request);
   EXPECT_EQ(result.action, OpponentSideReplanAction::BlockedByNoReturn);
   EXPECT_EQ(result.reason, OpponentSideReplanReason::PredictedOverlap);

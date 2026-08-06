@@ -1123,6 +1123,7 @@ struct CommittedPassForwardCompletionRequest
   bool current_body_footprints_separated{false};
   bool current_body_footprint_overlap_confirmed{true};
   bool footprint_prediction_valid{false};
+  bool predicted_body_footprint_sweep_separated{false};
   bool actual_wall_contact{false};
   bool wall_sample_unavailable{false};
   bool target_pass_side_intrusion{false};
@@ -1130,16 +1131,26 @@ struct CommittedPassForwardCompletionRequest
   bool solver_recovery_active{false};
   double target_longitudinal_m{};
   double maximum_front_distance_m{};
+  double ego_speed_mps{};
+  double target_speed_mps{};
+  double speed_delta_mps{};
+  double maximum_ego_speed_mps{};
+  double rear_clear_distance_m{};
+  double maximum_completion_distance_m{};
 };
 
 struct CommittedPassForwardCompletionResolution
 {
   bool active{false};
   bool current_overlap_grace_active{false};
+  bool rear_clear_distance_feasible{false};
+  double required_forward_distance_m{std::numeric_limits<double>::infinity()};
 };
 
 /// Once an already released minimum-motion Pass reaches the bounded
-/// side-by-side window, freeze the committed side and finish longitudinally.
+/// side-by-side window, freeze the committed side and finish longitudinally
+/// only when the predicted sweep remains separated and the estimated
+/// rear-clear completion distance fits inside the bounded local escape.
 /// A single current-overlap sample may share the existing confirmation grace;
 /// confirmed overlap and all physical/runtime guards remain fail closed.
 CommittedPassForwardCompletionResolution resolve_committed_pass_forward_completion(
@@ -2383,8 +2394,10 @@ struct OpponentSideReplanResolution
 /// Reconsider a frozen pass side only before the longitudinal no-return point.
 /// The caller owns candidate generation and debounce state; this pure policy
 /// decides whether a complete alternate plan may atomically replace the
-/// current one. It never permits a second replacement or a side change while
-/// current footprints overlap the target.
+/// current one. A predicted overlap on the current side makes that plan
+/// infeasible and triggers alternate evaluation; invalid prediction or actual
+/// body overlap remains fail closed. It never permits a second replacement or
+/// a side change while current footprints overlap the target.
 OpponentSideReplanResolution resolve_opponent_side_replan(
   const OpponentSideReplanRequest & request) noexcept;
 

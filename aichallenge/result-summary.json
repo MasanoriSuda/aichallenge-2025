@@ -9,30 +9,50 @@
         {
             "vehicle_number": 1,
             "vehicle_name": "GoKart1",
-            "final_position": 2,
+            "final_position": 1,
             "finished": false,
-            "lap_count": 0,
-            "laps": [],
-            "min_lap_time": 0.0,
-            "max_lap_time": 0.0,
-            "avg_lap_time": 0.0,
-            "total_lap_time": 0.0
+            "lap_count": 7,
+            "laps": [
+                88.91077423095703,
+                70.54586791992188,
+                47.32090377807617,
+                54.93252944946289,
+                47.23588562011719,
+                70.25602722167969,
+                45.96061325073242
+            ],
+            "min_lap_time": 45.96061325073242,
+            "max_lap_time": 88.91077423095703,
+            "avg_lap_time": 60.737518310546878,
+            "total_lap_time": 425.1626281738281
         },
         {
             "vehicle_number": 2,
             "vehicle_name": "GoKart2",
             "final_position": 2,
             "finished": false,
-            "lap_count": 0,
-            "laps": [],
-            "min_lap_time": 0.0,
-            "max_lap_time": 0.0,
-            "avg_lap_time": 0.0,
-            "total_lap_time": 0.0
+            "lap_count": 3,
+            "laps": [
+                163.94435119628907,
+                101.39391326904297,
+                153.99964904785157
+            ],
+            "min_lap_time": 101.39391326904297,
+            "max_lap_time": 163.94435119628907,
+            "avg_lap_time": 139.779296875,
+            "total_lap_time": 419.337890625
         }
     ],
-    "laps": [],
-    "min_time": 0.0,
-    "total_lap_time": 0.0,
-    "num_laps": 0
+    "laps": [
+        88.91077423095703,
+        70.54586791992188,
+        47.32090377807617,
+        54.93252944946289,
+        47.23588562011719,
+        70.25602722167969,
+        45.96061325073242
+    ],
+    "min_time": 45.96061325073242,
+    "total_lap_time": 425.1626281738281,
+    "num_laps": 7
 }

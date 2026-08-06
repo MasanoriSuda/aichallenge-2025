@@ -1959,13 +1959,6 @@ SafeSeparationResolution resolve_safe_separation(
     return resolution;
   }
   if (
-    request.target_longitudinal_m >= request.front_clear_distance_m - 1e-9 &&
-    request.front_clear_elapsed_sec >= request.front_clear_confirm_sec - 1e-9)
-  {
-    resolution.action = SafeSeparationAction::RecoverBehind;
-    return resolution;
-  }
-  if (
     request.elapsed_sec >= request.maximum_duration_sec - 1e-9 ||
     request.traveled_m >= request.maximum_distance_m - 1e-9)
   {
@@ -1987,6 +1980,13 @@ SafeSeparationResolution resolve_safe_separation(
         request.target_speed_mps + request.speed_delta_mps));
     resolution.signed_closing_speed_mps =
       resolution.target_velocity_reference_mps - request.target_speed_mps;
+    return resolution;
+  }
+  if (
+    request.target_longitudinal_m >= request.front_clear_distance_m - 1e-9 &&
+    request.front_clear_elapsed_sec >= request.front_clear_confirm_sec - 1e-9)
+  {
+    resolution.action = SafeSeparationAction::RecoverBehind;
     return resolution;
   }
   if (request.target_longitudinal_m >= 0.0) {

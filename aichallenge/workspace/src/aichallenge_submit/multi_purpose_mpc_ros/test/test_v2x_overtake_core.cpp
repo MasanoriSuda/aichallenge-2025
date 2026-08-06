@@ -3683,15 +3683,15 @@ TEST(V2XOvertakeCoreHorizon, PreservesSpeedForSideBySideForwardEscape)
   request.target_seen = true;
   request.target_longitudinal_m = 0.5;
   request.target_speed_mps = 3.3;
-  request.speed_delta_mps = 0.8;
+  request.speed_delta_mps = 2.0;
   request.maximum_ego_speed_mps = 11.11;
   request.front_clear_distance_m = 2.0;
   request.front_clear_confirm_sec = 0.25;
-  request.maximum_duration_sec = 3.0;
-  request.maximum_distance_m = 8.0;
+  request.maximum_duration_sec = 5.0;
+  request.maximum_distance_m = 12.0;
   request.ego_speed_mps = 5.4;
   request.forward_escape_allowed = true;
-  request.forward_escape_max_front_distance_m = 0.75;
+  request.forward_escape_max_front_distance_m = 3.0;
 
   auto resolution = resolve_safe_separation(request);
   EXPECT_EQ(resolution.action, SafeSeparationAction::KeepSameSide);
@@ -3699,14 +3699,26 @@ TEST(V2XOvertakeCoreHorizon, PreservesSpeedForSideBySideForwardEscape)
   EXPECT_NEAR(resolution.target_velocity_reference_mps, 5.4, 1e-9);
   EXPECT_NEAR(resolution.signed_closing_speed_mps, 2.1, 1e-9);
 
-  request.target_longitudinal_m = 0.8;
+  request.target_longitudinal_m = 2.0;
+  request.front_clear_elapsed_sec = 0.25;
   resolution = resolve_safe_separation(request);
   EXPECT_EQ(resolution.action, SafeSeparationAction::KeepSameSide);
+  EXPECT_TRUE(resolution.forward_escape_active);
+  EXPECT_NEAR(resolution.target_velocity_reference_mps, 5.4, 1e-9);
+
+  request.target_longitudinal_m = 3.01;
+  resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::RecoverBehind);
   EXPECT_FALSE(resolution.forward_escape_active);
-  EXPECT_NEAR(resolution.target_velocity_reference_mps, 2.5, 1e-9);
 
   request.target_longitudinal_m = 0.5;
   request.short_horizon_safe = false;
+  resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::Abort);
+  EXPECT_FALSE(resolution.forward_escape_active);
+
+  request.short_horizon_safe = true;
+  request.elapsed_sec = 5.0;
   resolution = resolve_safe_separation(request);
   EXPECT_EQ(resolution.action, SafeSeparationAction::Abort);
   EXPECT_FALSE(resolution.forward_escape_active);

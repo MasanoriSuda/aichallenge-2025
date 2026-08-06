@@ -1128,9 +1128,11 @@ struct SafeSeparationResolution
   bool forward_escape_active{false};
 };
 
-/// Keep the committed pass side while creating longitudinal separation. A
-/// target ahead is allowed to pull away; a target behind is driven farther
-/// rearward. Lateral Return/Recovery is selected only after separation.
+/// Keep the committed pass side while creating longitudinal separation. An
+/// explicitly authorized forward escape chases a target inside its bounded
+/// front window; otherwise a target ahead is allowed to pull away. A target
+/// behind is driven farther rearward. Lateral Return/Recovery is selected only
+/// after separation or a configured bound.
 SafeSeparationResolution resolve_safe_separation(
   const SafeSeparationRequest & request) noexcept;
 

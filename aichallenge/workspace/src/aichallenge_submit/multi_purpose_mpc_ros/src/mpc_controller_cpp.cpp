@@ -1849,6 +1849,7 @@ struct V2XBehaviorOutput
   bool overtake_committed_pass_active{false};
   bool overtake_paused_mission_active{false};
   bool overtake_line_owns_locked_target_speed{false};
+  bool validated_overtake_entry_longitudinal_owner{false};
   bool overtake_committed_pass_behavior_owner_active{false};
   bool overtake_committed_shiftout_behavior_owner_active{false};
   bool overtake_hard_curve_blocked{false};
@@ -5507,7 +5508,11 @@ struct MPC
         committed_predicted_overlap_confirmed,
         committed_body_geometry.side_by_side_escape_active,
         overtake_mission_ownership.committed_pass_active,
-        cfg.v2x_behavior.overtake_committed_pass_attack_mode_enabled});
+        cfg.v2x_behavior.overtake_committed_pass_attack_mode_enabled,
+        overtake_line_state_.phase == OvertakeLinePhase::ShiftOut &&
+        overtake_line_state_.mission_path_frozen &&
+        overtake_line_state_.mission_body_clear_deadline_checked &&
+        overtake_line_state_.mission_body_clear_deadline_feasible});
     output.committed_corridor_front_danger_suppressed =
       committed_corridor_front_danger_suppressed;
     const bool effective_front_risk_emergency =
@@ -8066,6 +8071,18 @@ struct MPC
       side_selected_for_execution && overtake_gap_available &&
       execution_allowed_for_side(selected_assessment);
     output.overtake_zone_allows = overtake_zone_allows;
+    const bool selected_mission_ready_for_longitudinal_ownership =
+      cfg.v2x_behavior.overtake_committed_pass_attack_mode_enabled &&
+      overtake_gap_available && overtake_zone_allows &&
+      output.overtake_selected_mission.has_value() &&
+      output.overtake_selected_mission->feasible &&
+      output.overtake_selected_mission->body_clear_deadline_checked &&
+      output.overtake_selected_mission->body_clear_deadline_feasible &&
+      output.overtake_selected_mission->rear_clear_prediction_checked &&
+      output.overtake_selected_mission->rear_clear_prediction_feasible &&
+      effective_front_risk_level != FrontRiskLevel::EmergencyBrake;
+    output.validated_overtake_entry_longitudinal_owner =
+      selected_mission_ready_for_longitudinal_ownership;
 
     std::string overtake_block_reason = !overtake_gap_available ?
       selected_assessment.reason :
@@ -8253,14 +8270,29 @@ struct MPC
             "base racing line clear / " : "minimum lateral ShiftOut / ") +
             output.reason;
         }
-        bool front_risk_applied = false;
-        if (apply_follow_velocity_limits(
-            output, nearest_front_distance, nearest_front_speed, front_decel_curve_guard, front_risk,
-            effective_front_risk_level, !generic_follow_cap_allowed, front_risk_applied)) {
-          output.reason += front_risk_applied ?
-            " / " + front_risk_reason(
-            "front risk brake", front_risk, effective_front_risk_level) :
-            output.follow_speed_limit_active ? " / follow speed cap" : " / front decel guard";
+        if (selected_mission_ready_for_longitudinal_ownership) {
+          // The complete mission already checked lateral reachability, body-clear deadline,
+          // rear-clear rollout, wall corridor and Return. Hand longitudinal control directly to
+          // its ShiftOut stage-speed policy; a redundant Follow brake in this admission cycle
+          // can consume the body-clear deadline before OvertakeLine freezes the same mission.
+          output.target_velocity_limit = std::numeric_limits<double>::infinity();
+          output.follow_speed_limit_active = false;
+          output.follow_speed_limit_moving_front = false;
+          output.moving_front_clearance_limit_active = false;
+          output.reason += " / validated mission owns longitudinal entry";
+        } else {
+          bool front_risk_applied = false;
+          if (apply_follow_velocity_limits(
+              output, nearest_front_distance, nearest_front_speed, front_decel_curve_guard,
+              front_risk, effective_front_risk_level, !generic_follow_cap_allowed,
+              front_risk_applied))
+          {
+            output.reason += front_risk_applied ?
+              " / " + front_risk_reason(
+              "front risk brake", front_risk, effective_front_risk_level) :
+              output.follow_speed_limit_active ? " / follow speed cap" :
+              " / front decel guard";
+          }
         }
       } else {
         output.state = V2XBehaviorState::Follow;
@@ -12984,9 +13016,9 @@ private:
           safe_separation.action == overtake_core::SafeSeparationAction::RecoverBehind)
         {
           transition_overtake_line_phase(
-            OvertakeLinePhase::Recovery, now_sec, current_ey,
+            OvertakeLinePhase::FollowPrepare, now_sec, current_ey,
             overtake_line_state_.pass_side_sign,
-            std::string{"SafeSeparation: "} +
+            std::string{"SafeSeparation paused for same-side revalidation: "} +
             overtake_core::to_string(safe_separation.reason));
           return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
         } else if (safe_separation.action == overtake_core::SafeSeparationAction::Abort) {
@@ -15103,7 +15135,8 @@ private:
         desired_state == V2XBehaviorState::Overtake,
         overtake_execution_committed,
         behavior_overtake_handoff,
-        entry_speed_readiness.ready});
+        entry_speed_readiness.ready,
+        output.validated_overtake_entry_longitudinal_owner});
     if (!entry_speed_gate_allows) {
       final_state = V2XBehaviorState::Follow;
       output.overtake_zone_allows = false;
@@ -15352,7 +15385,7 @@ private:
         "hard_dist=%.2f, hard_avail=%.2f, hard_req=%.2f, "
         "locked_rel=%.2f, lat_clear=%d, body_clear=%d, "
         "lookahead_inner=%d, inner_pref=%d, front_danger_suppress=%d, "
-        "shift_owner=%d, pass_owner=%d",
+        "entry_owner=%d, shift_owner=%d, pass_owner=%d",
         v2x_behavior_state_initialized ? to_string(v2x_behavior_state) : "None", to_string(final_state),
         output.front_distance, model->wp_id, output.reason.c_str(),
         output.v2x_health.c_str(), output.v2x_receipt_age_sec,
@@ -15380,6 +15413,7 @@ private:
         output.overtake_lookahead_inner_side,
         output.overtake_inner_preference_selected ? 1 : 0,
         output.committed_corridor_front_danger_suppressed ? 1 : 0,
+        output.validated_overtake_entry_longitudinal_owner ? 1 : 0,
         output.overtake_committed_shiftout_behavior_owner_active ? 1 : 0,
         output.overtake_committed_pass_behavior_owner_active ? 1 : 0);
       v2x_behavior_state = final_state;
@@ -15404,7 +15438,7 @@ private:
           "health=%s, receipt_age=%.3f, source_age=%.3f, interval=%.3f, "
           "vehicles=%zu, message_vehicles=%zu, jumps=%zu, invalid_velocity=%zu, "
           "message_invalid=%d, front=%d, side=%d, danger=%d, danger_action=%s, "
-          "danger_suppress=%d, shift_owner=%d, pass_owner=%d, "
+          "danger_suppress=%d, entry_owner=%d, shift_owner=%d, pass_owner=%d, "
           "grace=%d, grid_suppress=%d, grid_breakout=%d, "
           "grid_observe=%d, grid_obs=%.2f, grid_peer=%.2f, grid_candidate=%s, "
           "grid_stable=%.2f, "
@@ -15456,6 +15490,7 @@ private:
           output.has_danger_vehicle ? 1 : 0,
           v2x_overtake_core::to_string(output.front_danger_action),
           output.committed_corridor_front_danger_suppressed ? 1 : 0,
+          output.validated_overtake_entry_longitudinal_owner ? 1 : 0,
           output.overtake_committed_shiftout_behavior_owner_active ? 1 : 0,
           output.overtake_committed_pass_behavior_owner_active ? 1 : 0,
           output.start_grid_grace_active ? 1 : 0,
@@ -20744,18 +20779,37 @@ private:
       behavior.front_speed <= cfg_.stuck_recovery.coordinated_stop_front_speed_mps &&
       (behavior.state == V2XBehaviorState::SafetyBrake ||
       behavior.state == V2XBehaviorState::Follow);
+    const bool validated_forward_overtake_escape_available =
+      behavior.validated_overtake_entry_longitudinal_owner ||
+      ((behavior.overtake_committed_execution_active ||
+      behavior.overtake_paused_mission_active) &&
+      behavior.locked_target_seen && !behavior.locked_target_position_jump &&
+      behavior.locked_target_current_body_footprints_separated &&
+      !behavior.overtake_execution_corridor_blocked &&
+      !behavior.overtake_forbidden_wp);
     const bool suppress_start_grid_coordinated_recovery =
       start_grid_grace::should_suppress_coordinated_recovery(
       start_grid_grace::CoordinatedRecoveryContext{
         behavior.start_grid_grace_active,
         behavior.start_grid_dynamic_observation_active,
         behavior.start_grid_breakout_active});
+    const bool suppress_validated_forward_escape_coordinated_recovery =
+      stuck_recovery::should_suppress_coordinated_stop_for_validated_forward_escape(
+      coordinated_stop_observation, validated_forward_overtake_escape_available,
+      collision_hint);
     const bool coordinated_stop_candidate =
-      coordinated_stop_observation && !suppress_start_grid_coordinated_recovery;
+      coordinated_stop_observation && !suppress_start_grid_coordinated_recovery &&
+      !suppress_validated_forward_escape_coordinated_recovery;
     if (coordinated_stop_observation && suppress_start_grid_coordinated_recovery) {
       RCLCPP_INFO_THROTTLE(
         get_logger(), *get_clock(), 1000,
         "Stuck recovery coordinated-stop entry suppressed during start-grid launch");
+    }
+    if (suppress_validated_forward_escape_coordinated_recovery) {
+      RCLCPP_INFO_THROTTLE(
+        get_logger(), *get_clock(), 1000,
+        "Stuck recovery coordinated-stop entry suppressed: validated forward "
+        "overtake escape remains available");
     }
     const bool coordinated_stop_active =
       coordinated_stop_candidate || recovery_coordinated_stop_episode_;

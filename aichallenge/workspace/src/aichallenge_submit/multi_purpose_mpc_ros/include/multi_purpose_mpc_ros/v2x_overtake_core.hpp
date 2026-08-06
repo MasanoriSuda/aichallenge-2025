@@ -1963,10 +1963,15 @@ struct NewOvertakeEntrySpeedGateRequest
   bool execution_committed{false};
   bool behavior_handoff_active{false};
   bool entry_speed_ready{false};
+  /// A complete ShiftOut/Pass/Return mission has already passed its body-clear
+  /// deadline and rear-clear rollout checks. Its own stage-speed policy may
+  /// take ownership without waiting for a second, redundant speed debounce.
+  bool validated_mission_ready{false};
 };
 
 /// Apply speed readiness only to a fresh Behavior -> Overtake admission.
-/// Committed execution and the accepted Behavior-to-Line handoff retain ownership.
+/// Committed execution, the accepted Behavior-to-Line handoff, and a fully
+/// validated mission retain ownership.
 bool new_overtake_entry_speed_gate_allows(
   const NewOvertakeEntrySpeedGateRequest & request) noexcept;
 
@@ -3084,6 +3089,10 @@ struct CommittedCorridorFrontDangerSuppressionRequest
   bool minimum_motion_side_by_side_escape_active{false};
   bool pass_phase{false};
   bool committed_pass_attack_mode_enabled{false};
+  /// A frozen ShiftOut mission proved that current separated bodies become
+  /// clear before the hard longitudinal gap. This permits the validated path,
+  /// rather than a longitudinal-only prediction, to own the approach.
+  bool validated_shiftout_body_clear_deadline{false};
 };
 
 /// Suppress a longitudinal-only front danger stop only after a normal committed
@@ -3093,7 +3102,9 @@ struct CommittedCorridorFrontDangerSuppressionRequest
 /// also share the bounded predicted-overlap confirmation used by its front-cap policy. In the
 /// optional competition-simulation attack mode, an already released Pass may
 /// ignore future overlap while the current footprints and target continuity
-/// remain valid. Wall/path execution guards remain owned by OvertakeLine.
+/// remain valid. A frozen ShiftOut with a feasible body-clear deadline may do
+/// the same while current bodies remain separated. Wall/path execution guards
+/// remain owned by OvertakeLine.
 bool can_suppress_committed_corridor_front_danger(
   const CommittedCorridorFrontDangerSuppressionRequest & request) noexcept;
 

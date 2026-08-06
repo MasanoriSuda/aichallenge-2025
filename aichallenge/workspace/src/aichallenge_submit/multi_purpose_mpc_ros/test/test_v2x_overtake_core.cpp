@@ -886,6 +886,35 @@ TEST(V2XFrontDangerAction, CommittedPassDebouncesCurrentOverlapAfterRelease)
   EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
 }
 
+TEST(V2XFrontDangerAction, ValidatedShiftOutDeadlineOwnsPredictionOnlyDanger)
+{
+  CommittedCorridorFrontDangerSuppressionRequest request;
+  request.enabled = true;
+  request.active_shiftout_or_pass = true;
+  request.nearest_front_matches_locked_target = true;
+  request.validated_fixed_corridor = true;
+  request.target_seen = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = false;
+  request.committed_pass_attack_mode_enabled = true;
+  request.validated_shiftout_body_clear_deadline = true;
+
+  EXPECT_TRUE(can_suppress_committed_corridor_front_danger(request));
+
+  // This exception owns only a preflighted ShiftOut while current bodies are
+  // still separate. It cannot hide current overlap or become an unlatched Pass
+  // exception.
+  request.current_body_footprints_separated = false;
+  EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
+  request.current_body_footprints_separated = true;
+  request.validated_shiftout_body_clear_deadline = false;
+  EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
+  request.validated_shiftout_body_clear_deadline = true;
+  request.pass_phase = true;
+  EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
+}
+
 TEST(V2XFrontDangerAction, ResolvesSharedCommittedPassBodyGeometry)
 {
   CommittedPassBodyGeometryRequest request;
@@ -5394,6 +5423,10 @@ TEST(V2XOvertakeCoreEntrySpeed, GatesOnlyFreshOvertakeAdmission)
   request.behavior_handoff_active = true;
   EXPECT_TRUE(new_overtake_entry_speed_gate_allows(request));
   request.behavior_handoff_active = false;
+
+  request.validated_mission_ready = true;
+  EXPECT_TRUE(new_overtake_entry_speed_gate_allows(request));
+  request.validated_mission_ready = false;
 
   request.overtake_requested = false;
   EXPECT_TRUE(new_overtake_entry_speed_gate_allows(request));

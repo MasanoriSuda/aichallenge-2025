@@ -473,7 +473,7 @@ mpc:
   v2x_overtake_line_min_target_separation: 1.55 # [m] 1.45 m combined kart width plus 0.10 m nominal surface clearance
   v2x_overtake_pass_front_overlap_lateral_clearance: 1.55 # [m] nominal center separation required before front-cap release
   v2x_overtake_pass_front_cap_reapply_lateral_clearance: 1.50 # [m] reapply before reaching the 1.45 m physical body boundary
-  v2x_overtake_pass_current_overlap_confirm_sec: 0.05 # [s] revoke on one sustained V2X interval instead of waiting through contact
+  v2x_overtake_pass_current_overlap_confirm_sec: 0.30 # [s] debounce a brief course-frame body-boundary crossing after Pass release
   v2x_overtake_pass_predicted_overlap_confirm_sec: 0.25 # [s] require sustained predicted overlap before recapping an already released Pass
   # Once a low-speed target has full current lateral clearance in ShiftOut, or is physically
   # committed in Pass, do not let a conservative target-speed reference make the ego crawl

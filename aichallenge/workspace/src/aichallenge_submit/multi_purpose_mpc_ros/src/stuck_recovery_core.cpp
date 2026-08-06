@@ -264,6 +264,14 @@ bool should_override_deliberate_stop_for_collision(
          std::abs(request.signed_speed_mps) <= request.stopped_speed_mps;
 }
 
+bool should_suppress_coordinated_stop_for_validated_forward_escape(
+  const bool coordinated_stop_observed,
+  const bool validated_forward_escape_available,
+  const bool collision_hint) noexcept
+{
+  return coordinated_stop_observed && validated_forward_escape_available && !collision_hint;
+}
+
 bool recovery_escape_distance_confirmed(
   const bool current_footprint_clear, const double traveled_distance_m,
   const double target_distance_m, const double tolerance_m) noexcept

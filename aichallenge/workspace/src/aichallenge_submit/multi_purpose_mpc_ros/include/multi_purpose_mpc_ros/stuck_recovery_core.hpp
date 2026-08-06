@@ -105,6 +105,14 @@ struct CollisionDeliberateStopOverrideRequest
 bool should_override_deliberate_stop_for_collision(
   const CollisionDeliberateStopOverrideRequest & request) noexcept;
 
+// A stopped Follow/SafetyBrake observation must not request Reverse while a
+// fully validated forward overtake escape still owns the target. A physical
+// collision hint always releases this suppression so normal recovery evidence
+// can take over.
+bool should_suppress_coordinated_stop_for_validated_forward_escape(
+  bool coordinated_stop_observed, bool validated_forward_escape_available,
+  bool collision_hint) noexcept;
+
 // Accept a bounded measurement/stopping error only after the current vehicle
 // footprint has become clear. The tolerance must never bypass the footprint
 // requirement.

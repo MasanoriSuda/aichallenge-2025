@@ -3686,7 +3686,8 @@ bool new_overtake_entry_speed_gate_allows(
 {
   return
     !request.overtake_requested || request.execution_committed ||
-    request.behavior_handoff_active || request.entry_speed_ready;
+    request.behavior_handoff_active || request.entry_speed_ready ||
+    request.validated_mission_ready;
 }
 
 OvertakeGuardPhaseResolution resolve_overtake_guard_phase(
@@ -5258,17 +5259,22 @@ bool can_suppress_committed_corridor_front_danger(
     request.committed_pass_attack_mode_enabled && request.pass_phase &&
     request.prior_front_cap_release_active &&
     current_geometry_acceptable;
+  const bool validated_shiftout_path_acceptable =
+    request.committed_pass_attack_mode_enabled && !request.pass_phase &&
+    request.validated_shiftout_body_clear_deadline &&
+    request.current_body_footprints_separated;
   const bool predicted_path_acceptable =
     request.predicted_body_footprint_sweep_separated ||
     (request.prior_front_cap_release_active &&
     (!request.predicted_body_footprint_overlap_confirmed ||
     request.minimum_motion_side_by_side_escape_active)) ||
-    attack_path_acceptable;
+    attack_path_acceptable || validated_shiftout_path_acceptable;
   return request.enabled && request.active_shiftout_or_pass &&
          request.nearest_front_matches_locked_target && request.validated_fixed_corridor &&
          !request.inter_vehicle_corridor && request.target_seen &&
          !request.target_position_jump && current_geometry_acceptable &&
-         (request.footprint_prediction_valid || attack_path_acceptable) &&
+         (request.footprint_prediction_valid || attack_path_acceptable ||
+         validated_shiftout_path_acceptable) &&
          predicted_path_acceptable;
 }
 

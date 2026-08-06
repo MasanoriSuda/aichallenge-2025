@@ -53,6 +53,8 @@ using multi_purpose_mpc_ros::stuck_recovery::measured_reverse_course_progress_wo
 using multi_purpose_mpc_ros::stuck_recovery::solver_reverse_deadlock_forward_probe_allowed;
 using multi_purpose_mpc_ros::stuck_recovery::recovery_escape_distance_confirmed;
 using multi_purpose_mpc_ros::stuck_recovery::should_override_deliberate_stop_for_collision;
+using multi_purpose_mpc_ros::stuck_recovery::
+  should_suppress_coordinated_stop_for_validated_forward_escape;
 using multi_purpose_mpc_ros::stuck_recovery::solver_fallback_requires_reverse_only;
 using multi_purpose_mpc_ros::stuck_recovery::solver_forward_fallback_unlock_allowed;
 using multi_purpose_mpc_ros::stuck_recovery::reverse_actuation_calibration_is_valid;
@@ -90,6 +92,18 @@ TEST(StuckRecoveryRejoinSteering, CombinesCurvatureAndSignedPathErrorFeedback)
   EXPECT_LT(compute_rejoin_steering_tire_angle(request).value(), 0.0);
   request.lateral_error_m = -0.2;
   EXPECT_GT(compute_rejoin_steering_tire_angle(request).value(), 0.0);
+}
+
+TEST(StuckRecoveryCoordination, ValidatedForwardEscapeSuppressesOnlyNonCollisionReverse)
+{
+  EXPECT_TRUE(
+    should_suppress_coordinated_stop_for_validated_forward_escape(true, true, false));
+  EXPECT_FALSE(
+    should_suppress_coordinated_stop_for_validated_forward_escape(true, true, true));
+  EXPECT_FALSE(
+    should_suppress_coordinated_stop_for_validated_forward_escape(true, false, false));
+  EXPECT_FALSE(
+    should_suppress_coordinated_stop_for_validated_forward_escape(false, true, false));
 }
 
 TEST(StuckRecoveryRejoinSteering, AppliesLimitAndRejectsInvalidInputs)

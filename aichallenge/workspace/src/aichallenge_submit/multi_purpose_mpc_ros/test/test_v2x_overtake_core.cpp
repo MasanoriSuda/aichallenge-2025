@@ -135,6 +135,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::FrozenOuterTransitionGoalRequest
 using multi_purpose_mpc_ros::v2x_overtake_core::SameSideExtensionCommitRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SameSideExtensionCommitReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationAction;
+using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SameSideReplanShiftDistanceRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidate;
@@ -3663,6 +3664,7 @@ TEST(V2XOvertakeCoreHorizon, CreatesLongitudinalSafeSeparationOnCommittedSide)
   request.rear_clear_confirmed = true;
   resolution = resolve_safe_separation(request);
   EXPECT_EQ(resolution.action, SafeSeparationAction::Return);
+  EXPECT_EQ(resolution.reason, SafeSeparationReason::RearClear);
 
   request.rear_clear_confirmed = false;
   request.target_longitudinal_m = 2.0;
@@ -3672,6 +3674,7 @@ TEST(V2XOvertakeCoreHorizon, CreatesLongitudinalSafeSeparationOnCommittedSide)
   request.front_clear_elapsed_sec = 0.25;
   resolution = resolve_safe_separation(request);
   EXPECT_EQ(resolution.action, SafeSeparationAction::RecoverBehind);
+  EXPECT_EQ(resolution.reason, SafeSeparationReason::TargetClearAhead);
 }
 
 TEST(V2XOvertakeCoreHorizon, PreservesSpeedForSideBySideForwardEscape)
@@ -3744,7 +3747,95 @@ TEST(V2XOvertakeCoreHorizon, BoundsOrRejectsUnsafeSafeSeparation)
 
   request.short_horizon_safe = true;
   request.elapsed_sec = 3.0;
-  EXPECT_EQ(resolve_safe_separation(request).action, SafeSeparationAction::Abort);
+  const auto local_timeout = resolve_safe_separation(request);
+  EXPECT_EQ(local_timeout.action, SafeSeparationAction::Abort);
+  EXPECT_EQ(local_timeout.reason, SafeSeparationReason::LocalTimeLimit);
+}
+
+TEST(V2XOvertakeCoreHorizon, ExtendsLocalBoundOnlyForSafeForwardProgress)
+{
+  SafeSeparationRequest request;
+  request.enabled = true;
+  request.active = true;
+  request.short_horizon_safe = true;
+  request.target_seen = true;
+  request.target_longitudinal_m = 0.6;
+  request.target_speed_mps = 3.3;
+  request.speed_delta_mps = 2.0;
+  request.maximum_ego_speed_mps = 11.11;
+  request.front_clear_distance_m = 2.0;
+  request.front_clear_confirm_sec = 0.25;
+  request.elapsed_sec = 2.4;
+  request.traveled_m = 12.0;
+  request.maximum_duration_sec = 5.0;
+  request.maximum_distance_m = 12.0;
+  request.ego_speed_mps = 5.3;
+  request.forward_escape_allowed = true;
+  request.forward_escape_max_front_distance_m = 3.0;
+  request.absolute_elapsed_sec = 4.6;
+  request.absolute_traveled_m = 23.0;
+  request.absolute_maximum_duration_sec = 10.0;
+  request.absolute_maximum_distance_m = 32.0;
+  request.forward_progress_extension_allowed = true;
+
+  auto resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::KeepSameSide);
+  EXPECT_EQ(resolution.reason, SafeSeparationReason::ProgressExtension);
+  EXPECT_TRUE(resolution.forward_escape_active);
+  EXPECT_TRUE(resolution.progress_extension_requested);
+  EXPECT_NEAR(resolution.target_velocity_reference_mps, 5.3, 1e-9);
+
+  request.forward_progress_extension_allowed = false;
+  resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::Abort);
+  EXPECT_EQ(resolution.reason, SafeSeparationReason::LocalDistanceLimit);
+  EXPECT_FALSE(resolution.progress_extension_requested);
+}
+
+TEST(V2XOvertakeCoreHorizon, ProgressExtensionCannotOverrideSafetyOrAbsoluteBounds)
+{
+  SafeSeparationRequest request;
+  request.enabled = true;
+  request.active = true;
+  request.short_horizon_safe = true;
+  request.target_seen = true;
+  request.target_longitudinal_m = 0.6;
+  request.target_speed_mps = 3.3;
+  request.speed_delta_mps = 2.0;
+  request.maximum_ego_speed_mps = 11.11;
+  request.front_clear_distance_m = 2.0;
+  request.front_clear_confirm_sec = 0.25;
+  request.traveled_m = 12.0;
+  request.maximum_duration_sec = 5.0;
+  request.maximum_distance_m = 12.0;
+  request.ego_speed_mps = 5.3;
+  request.forward_escape_allowed = true;
+  request.forward_escape_max_front_distance_m = 3.0;
+  request.absolute_elapsed_sec = 4.6;
+  request.absolute_traveled_m = 32.0;
+  request.absolute_maximum_duration_sec = 10.0;
+  request.absolute_maximum_distance_m = 32.0;
+  request.forward_progress_extension_allowed = true;
+
+  auto resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::Abort);
+  EXPECT_EQ(resolution.reason, SafeSeparationReason::AbsoluteDistanceLimit);
+  EXPECT_FALSE(resolution.progress_extension_requested);
+
+  request.absolute_traveled_m = 23.0;
+  request.short_horizon_safe = false;
+  resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::Abort);
+  EXPECT_EQ(resolution.reason, SafeSeparationReason::ShortHorizonUnsafe);
+  EXPECT_FALSE(resolution.progress_extension_requested);
+
+  request.rear_clear_confirmed = true;
+  request.return_corridor_available = true;
+  request.short_horizon_safe = true;
+  request.absolute_traveled_m = 32.0;
+  resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::Return);
+  EXPECT_EQ(resolution.reason, SafeSeparationReason::RearClear);
 }
 
 TEST(V2XOvertakeCoreHorizon, RejectsExcessiveAtomicLateralReplacement)

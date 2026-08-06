@@ -1932,6 +1932,9 @@ SafeSeparationResolution resolve_safe_separation(
   const auto finite_non_negative = [](const double value) {
       return std::isfinite(value) && value >= 0.0;
     };
+  const auto non_negative_bound = [](const double value) {
+      return !std::isnan(value) && value >= 0.0;
+    };
   if (
     !request.target_seen || !std::isfinite(request.target_longitudinal_m) ||
     !finite_non_negative(request.target_speed_mps) ||
@@ -1945,33 +1948,70 @@ SafeSeparationResolution resolve_safe_separation(
     !finite_non_negative(request.maximum_duration_sec) ||
     !finite_non_negative(request.maximum_distance_m) ||
     !finite_non_negative(request.ego_speed_mps) ||
-    !finite_non_negative(request.forward_escape_max_front_distance_m))
+    !finite_non_negative(request.forward_escape_max_front_distance_m) ||
+    !finite_non_negative(request.absolute_elapsed_sec) ||
+    !finite_non_negative(request.absolute_traveled_m) ||
+    !non_negative_bound(request.absolute_maximum_duration_sec) ||
+    !non_negative_bound(request.absolute_maximum_distance_m))
   {
     resolution.action = SafeSeparationAction::Abort;
+    resolution.reason = SafeSeparationReason::InvalidInput;
     return resolution;
   }
   if (request.rear_clear_confirmed && request.return_corridor_available) {
     resolution.action = SafeSeparationAction::Return;
+    resolution.reason = SafeSeparationReason::RearClear;
     return resolution;
   }
   if (!request.short_horizon_safe) {
     resolution.action = SafeSeparationAction::Abort;
+    resolution.reason = SafeSeparationReason::ShortHorizonUnsafe;
     return resolution;
   }
-  if (
-    request.elapsed_sec >= request.maximum_duration_sec - 1e-9 ||
-    request.traveled_m >= request.maximum_distance_m - 1e-9)
-  {
+  if (request.absolute_traveled_m >= request.absolute_maximum_distance_m - 1e-9) {
     resolution.action = SafeSeparationAction::Abort;
+    resolution.reason = SafeSeparationReason::AbsoluteDistanceLimit;
+    return resolution;
+  }
+  if (request.absolute_elapsed_sec >= request.absolute_maximum_duration_sec - 1e-9) {
+    resolution.action = SafeSeparationAction::Abort;
+    resolution.reason = SafeSeparationReason::AbsoluteTimeLimit;
+    return resolution;
+  }
+
+  const bool forward_escape_active =
+    request.forward_escape_allowed &&
+    request.target_longitudinal_m <=
+    request.forward_escape_max_front_distance_m + 1e-9;
+  const bool local_distance_limit_reached =
+    request.traveled_m >= request.maximum_distance_m - 1e-9;
+  const bool local_time_limit_reached =
+    request.elapsed_sec >= request.maximum_duration_sec - 1e-9;
+  if (
+    local_distance_limit_reached || local_time_limit_reached)
+  {
+    if (forward_escape_active && request.forward_progress_extension_allowed) {
+      resolution.action = SafeSeparationAction::KeepSameSide;
+      resolution.forward_escape_active = true;
+      resolution.progress_extension_requested = true;
+      resolution.reason = SafeSeparationReason::ProgressExtension;
+      resolution.target_velocity_reference_mps = std::min(
+        request.maximum_ego_speed_mps,
+        std::max(
+          request.ego_speed_mps,
+          request.target_speed_mps + request.speed_delta_mps));
+      resolution.signed_closing_speed_mps =
+        resolution.target_velocity_reference_mps - request.target_speed_mps;
+      return resolution;
+    }
+    resolution.action = SafeSeparationAction::Abort;
+    resolution.reason = local_distance_limit_reached ?
+      SafeSeparationReason::LocalDistanceLimit : SafeSeparationReason::LocalTimeLimit;
     return resolution;
   }
 
   resolution.action = SafeSeparationAction::KeepSameSide;
-  if (
-    request.forward_escape_allowed &&
-    request.target_longitudinal_m <=
-    request.forward_escape_max_front_distance_m + 1e-9)
-  {
+  if (forward_escape_active) {
     resolution.forward_escape_active = true;
     resolution.target_velocity_reference_mps = std::min(
       request.maximum_ego_speed_mps,
@@ -1987,6 +2027,7 @@ SafeSeparationResolution resolve_safe_separation(
     request.front_clear_elapsed_sec >= request.front_clear_confirm_sec - 1e-9)
   {
     resolution.action = SafeSeparationAction::RecoverBehind;
+    resolution.reason = SafeSeparationReason::TargetClearAhead;
     return resolution;
   }
   if (request.target_longitudinal_m >= 0.0) {
@@ -2018,6 +2059,33 @@ const char * to_string(const SafeSeparationAction action) noexcept
       return "recover behind";
     case SafeSeparationAction::Abort:
       return "abort";
+  }
+  return "unknown";
+}
+
+const char * to_string(const SafeSeparationReason reason) noexcept
+{
+  switch (reason) {
+    case SafeSeparationReason::None:
+      return "none";
+    case SafeSeparationReason::InvalidInput:
+      return "invalid input";
+    case SafeSeparationReason::RearClear:
+      return "rear clear";
+    case SafeSeparationReason::ShortHorizonUnsafe:
+      return "short horizon unsafe";
+    case SafeSeparationReason::LocalTimeLimit:
+      return "local time limit";
+    case SafeSeparationReason::LocalDistanceLimit:
+      return "local distance limit";
+    case SafeSeparationReason::AbsoluteTimeLimit:
+      return "absolute Pass time limit";
+    case SafeSeparationReason::AbsoluteDistanceLimit:
+      return "absolute Pass distance limit";
+    case SafeSeparationReason::TargetClearAhead:
+      return "target clear ahead";
+    case SafeSeparationReason::ProgressExtension:
+      return "fresh forward progress extension";
   }
   return "unknown";
 }

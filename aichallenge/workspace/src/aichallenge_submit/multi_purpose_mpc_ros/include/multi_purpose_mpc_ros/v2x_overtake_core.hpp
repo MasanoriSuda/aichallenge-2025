@@ -1096,6 +1096,20 @@ enum class SafeSeparationAction
   Abort,
 };
 
+enum class SafeSeparationReason
+{
+  None,
+  InvalidInput,
+  RearClear,
+  ShortHorizonUnsafe,
+  LocalTimeLimit,
+  LocalDistanceLimit,
+  AbsoluteTimeLimit,
+  AbsoluteDistanceLimit,
+  TargetClearAhead,
+  ProgressExtension,
+};
+
 struct SafeSeparationRequest
 {
   bool enabled{false};
@@ -1118,6 +1132,11 @@ struct SafeSeparationRequest
   double ego_speed_mps{};
   bool forward_escape_allowed{false};
   double forward_escape_max_front_distance_m{};
+  double absolute_elapsed_sec{};
+  double absolute_traveled_m{};
+  double absolute_maximum_duration_sec{std::numeric_limits<double>::infinity()};
+  double absolute_maximum_distance_m{std::numeric_limits<double>::infinity()};
+  bool forward_progress_extension_allowed{false};
 };
 
 struct SafeSeparationResolution
@@ -1126,6 +1145,8 @@ struct SafeSeparationResolution
   double target_velocity_reference_mps{std::numeric_limits<double>::infinity()};
   double signed_closing_speed_mps{};
   bool forward_escape_active{false};
+  bool progress_extension_requested{false};
+  SafeSeparationReason reason{SafeSeparationReason::None};
 };
 
 /// Keep the committed pass side while creating longitudinal separation. An
@@ -1137,6 +1158,8 @@ SafeSeparationResolution resolve_safe_separation(
   const SafeSeparationRequest & request) noexcept;
 
 const char * to_string(SafeSeparationAction action) noexcept;
+
+const char * to_string(SafeSeparationReason reason) noexcept;
 
 struct SameSideReplanShiftDistanceRequest
 {

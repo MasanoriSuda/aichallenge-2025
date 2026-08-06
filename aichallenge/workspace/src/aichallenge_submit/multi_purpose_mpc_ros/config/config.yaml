@@ -527,6 +527,10 @@ mpc:
   v2x_overtake_safe_separation_front_clear_confirm_sec: 0.25 # [s] require continuous target-ahead clearance before Recovery
   v2x_overtake_safe_separation_max_sec: 5.0 # [s] bounded same-side forward completion
   v2x_overtake_safe_separation_max_distance: 12.0 # [m]
+  v2x_overtake_safe_separation_progress_extension_enabled: true # re-arm the local bound only while forward progress is fresh
+  v2x_overtake_safe_separation_progress_extension_min_progress: 0.75 # [m] target distance reduction required in the current local window
+  v2x_overtake_safe_separation_progress_extension_fresh_sec: 0.75 # [s] maximum age of the latest target-distance improvement
+  v2x_overtake_safe_separation_progress_extension_max_count: 1 # absolute Pass limits remain unchanged
   v2x_overtake_completion_guard_enabled: true # require enough distance to clear the target before a hard hairpin
   v2x_overtake_completion_hard_curvature: 0.12 # [rad/m] hard hairpin boundary, separate from soft curve policy
   v2x_overtake_completion_lookahead_distance: 80.0 # [m] search limit for the next hard boundary

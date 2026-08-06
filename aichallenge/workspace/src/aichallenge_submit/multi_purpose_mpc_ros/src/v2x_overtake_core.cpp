@@ -4532,6 +4532,7 @@ bool can_start_low_speed_bypass(const LowSpeedBypassCandidateRequest & request) 
   if (
     !request.enabled || !request.candidate_vehicle_present || request.cooldown_active ||
     request.start_grid_stop_suppressed ||
+    (request.committed_overtake_execution_active && !request.continuing) ||
     !std::isfinite(request.vehicle_speed_mps) || request.vehicle_speed_mps < 0.0 ||
     !std::isfinite(request.maximum_vehicle_speed_mps) ||
     request.maximum_vehicle_speed_mps < 0.0 ||
@@ -4649,6 +4650,13 @@ PassSide select_reachable_low_speed_pass_side(
     return PassSide::Left;
   }
   return PassSide::Right;
+}
+
+bool should_try_alternate_low_speed_pass_side(
+  const bool automatic_side_selection, const bool primary_side_feasible,
+  const int primary_side_sign) noexcept
+{
+  return automatic_side_selection && !primary_side_feasible && primary_side_sign != 0;
 }
 
 bool has_entered_low_speed_pass_corridor(

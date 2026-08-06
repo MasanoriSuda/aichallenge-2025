@@ -4201,8 +4201,8 @@ struct MPC
     const bool auto_side =
       cfg.v2x_gap.low_speed_pass_side == "auto";
     if (
-      !preflight.feasible && auto_side && !low_speed_shift_control_was_active_ &&
-      primary_side != 0)
+      v2x_overtake_core::should_try_alternate_low_speed_pass_side(
+        auto_side, preflight.feasible, primary_side))
     {
       auto alternate = gap_planner->plan_stopped_vehicle_local_path(
         *model, ref_wp_id, N, lb, ub, now_sec, cfg.v2x_behavior, false, -primary_side);
@@ -4335,6 +4335,7 @@ struct MPC
     low_speed_shift_control_was_active_ = false;
     low_speed_shift_rejoin_active_ = false;
     low_speed_shift_handoff_deferred_logged_ = false;
+    low_speed_shift_pass_side_sign_ = 0;
     low_speed_shift_pass_target_ey_ = 0.0;
     low_speed_shift_target_ey_ = 0.0;
     low_speed_shift_velocity_mps_ = 0.0;
@@ -4460,6 +4461,7 @@ struct MPC
     low_speed_shift_control_was_active_ = false;
     low_speed_shift_rejoin_active_ = false;
     low_speed_shift_handoff_deferred_logged_ = false;
+    low_speed_shift_pass_side_sign_ = 0;
     low_speed_shift_pass_target_ey_ = 0.0;
     low_speed_shift_target_ey_ = 0.0;
     low_speed_shift_velocity_mps_ = 0.0;
@@ -5597,6 +5599,13 @@ struct MPC
     // stopped obstacle while the start grace is active. An already active bypass may continue.
     const bool suppress_new_low_speed_bypass_during_start_grid =
       start_grid_grace_active && !continuing_low_speed_avoidance;
+    const bool committed_overtake_execution_owns_stopped_target =
+      overtake_line_state_.mission_path_frozen &&
+      (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+      overtake_line_state_.phase == OvertakeLinePhase::Pass) &&
+      overtake_line_state_.pass_side_sign != 0 &&
+      !overtake_line_state_.target_vehicle_id.empty() &&
+      overtake_line_state_.target_vehicle_id == nearest_low_speed_corridor_id;
     const bool suppress_low_speed_bypass =
       suppress_start_grid_stop_behavior || suppress_new_low_speed_bypass_during_start_grid;
     const bool low_speed_avoidance_candidate =
@@ -5609,6 +5618,7 @@ struct MPC
         suppress_low_speed_bypass,
         overtake_forbidden,
         continuing_low_speed_avoidance,
+        committed_overtake_execution_owns_stopped_target,
         cfg.v2x_behavior.low_speed_avoidance_ignore_soft_curve_forbidden,
         overtake_forbidden_wp,
         nearest_low_speed_corridor_speed,
@@ -8731,10 +8741,26 @@ struct MPC
       planner_output.active && planner_output.feasible &&
       std::isfinite(planner_output.pass_target_ey))
     {
+      const bool pass_side_changed =
+        low_speed_shift_pass_side_sign_ != 0 && planner_output.pass_side_sign != 0 &&
+        planner_output.pass_side_sign != low_speed_shift_pass_side_sign_;
       // The direct controller may outlive the initial stopped target. Keep its
       // target inside the corridor validated against the current vehicle pack.
       low_speed_shift_pass_target_ey_ = planner_output.pass_target_ey;
       low_speed_shift_target_ey_ = low_speed_shift_pass_target_ey_;
+      if (pass_side_changed) {
+        set_low_speed_direct_control_phase(
+          v2x_overtake_core::LowSpeedDirectControlPhase::Shift);
+        RCLCPP_INFO(
+          rclcpp::get_logger("mpc_controller"),
+          "Low-speed direct control switched side after live corridor loss: "
+          "side=%d->%d, target_ey=%.2f, wp_id=%d",
+          low_speed_shift_pass_side_sign_, planner_output.pass_side_sign,
+          low_speed_shift_target_ey_, model->wp_id);
+      }
+      if (planner_output.pass_side_sign != 0) {
+        low_speed_shift_pass_side_sign_ = planner_output.pass_side_sign;
+      }
     }
     const bool live_execution_corridor_valid =
       explicit_overtake_line_owns_plan && use_gap_planner &&
@@ -8861,6 +8887,7 @@ struct MPC
       !low_speed_shift_control_was_active_)
     {
       low_speed_shift_control_active_ = true;
+      low_speed_shift_pass_side_sign_ = planner_output.pass_side_sign;
       low_speed_shift_pass_target_ey_ = planner_output.pass_target_ey;
       low_speed_shift_target_ey_ = low_speed_shift_pass_target_ey_;
       low_speed_shift_rejoin_active_ = false;
@@ -9475,6 +9502,7 @@ struct MPC
         low_speed_shift_control_was_active_ = false;
         low_speed_shift_rejoin_active_ = false;
         low_speed_shift_handoff_deferred_logged_ = false;
+        low_speed_shift_pass_side_sign_ = 0;
         low_speed_shift_steering_limit_rad_ = 0.0;
         low_speed_shift_wall_stop_active_ = false;
         low_speed_shift_corridor_blocked_ = false;
@@ -9606,6 +9634,7 @@ struct MPC
   bool low_speed_shift_control_was_active_{false};
   bool low_speed_shift_rejoin_active_{false};
   bool low_speed_shift_handoff_deferred_logged_{false};
+  int low_speed_shift_pass_side_sign_{0};
   v2x_overtake_core::LowSpeedDirectControlPhase low_speed_direct_control_phase_{
     v2x_overtake_core::LowSpeedDirectControlPhase::Shift};
   double low_speed_shift_pass_target_ey_{0.0};

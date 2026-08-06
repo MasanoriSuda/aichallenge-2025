@@ -296,6 +296,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::StoppedCandidateConfirmationRequ
 using multi_purpose_mpc_ros::v2x_overtake_core::update_stopped_candidate_confirmation;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_yield_overtake_line_to_stopped_bypass;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_reachable_low_speed_pass_side;
+using multi_purpose_mpc_ros::v2x_overtake_core::should_try_alternate_low_speed_pass_side;
 using multi_purpose_mpc_ros::v2x_overtake_core::has_entered_low_speed_pass_corridor;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_low_speed_pass_velocity;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_low_speed_shift_steering;
@@ -6741,6 +6742,17 @@ TEST(V2XOvertakeCoreLowSpeedBypass, StartGridSuppressionBlocksNewCandidate)
   EXPECT_TRUE(can_start_low_speed_bypass(request));
 }
 
+TEST(V2XOvertakeCoreLowSpeedBypass, CommittedGenericExecutionKeepsLateralOwnership)
+{
+  auto request = low_speed_bypass_request();
+  request.committed_overtake_execution_active = true;
+
+  EXPECT_FALSE(can_start_low_speed_bypass(request));
+
+  request.continuing = true;
+  EXPECT_TRUE(can_start_low_speed_bypass(request));
+}
+
 TEST(V2XOvertakeCoreLowSpeedBypass, RaceSessionGateOnlyAppliesWithAwsimStateTracking)
 {
   EXPECT_TRUE(is_v2x_behavior_session_active(false, false, false));
@@ -6887,6 +6899,15 @@ TEST(V2XOvertakeCoreSide, LowSpeedPassUsesWidthOnlyForEqualTransitions)
       LowSpeedPassSideCandidate{true, 2.0, 2.20},
       LowSpeedPassSideCandidate{true, -2.0, 2.60}});
   EXPECT_EQ(side, PassSide::Right);
+}
+
+TEST(V2XOvertakeCoreSide, RechecksOppositeSideWhenLockedLowSpeedSideIsInfeasible)
+{
+  EXPECT_TRUE(should_try_alternate_low_speed_pass_side(true, false, -1));
+  EXPECT_TRUE(should_try_alternate_low_speed_pass_side(true, false, 1));
+  EXPECT_FALSE(should_try_alternate_low_speed_pass_side(false, false, -1));
+  EXPECT_FALSE(should_try_alternate_low_speed_pass_side(true, true, -1));
+  EXPECT_FALSE(should_try_alternate_low_speed_pass_side(true, false, 0));
 }
 
 TEST(V2XOvertakeCoreSide, LowSpeedPassRejectsInvalidFeasibleCandidate)

@@ -2545,6 +2545,7 @@ struct LowSpeedBypassCandidateRequest
   bool start_grid_stop_suppressed{false};
   bool overtake_forbidden{false};
   bool continuing{false};
+  bool committed_overtake_execution_active{false};
   bool ignore_soft_curve_forbidden{false};
   bool explicit_forbidden_wp{false};
   double vehicle_speed_mps{std::numeric_limits<double>::infinity()};
@@ -2622,6 +2623,14 @@ struct LowSpeedPassSideRequest
 /// already declared both candidates feasible.
 PassSide select_reachable_low_speed_pass_side(
   const LowSpeedPassSideRequest & request) noexcept;
+
+/// Re-evaluate the opposite stopped-vehicle pass side whenever the currently
+/// selected side is no longer executable. This deliberately applies after
+/// direct control has started as well as at initial admission; the caller must
+/// still run the complete V2X and static-wall preflight before committing it.
+bool should_try_alternate_low_speed_pass_side(
+  bool automatic_side_selection, bool primary_side_feasible,
+  int primary_side_sign) noexcept;
 
 /// Return true only after ego has physically entered the selected pass
 /// corridor. Until then the corridor must remain a target, not an immediately

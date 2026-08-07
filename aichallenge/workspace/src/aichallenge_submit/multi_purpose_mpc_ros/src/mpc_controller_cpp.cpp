@@ -1916,6 +1916,7 @@ struct V2XBehaviorOutput
   bool overtake_side_replan_abort{false};
   bool opponent_side_replan_evaluated{false};
   bool opponent_side_replan_eligible{false};
+  bool opponent_side_replan_current_feasible{false};
   bool opponent_side_replan_alternate_feasible{false};
   bool opponent_side_replan_ready{false};
   bool opponent_side_replan_no_return{false};
@@ -1927,6 +1928,8 @@ struct V2XBehaviorOutput
   std::optional<overtake_core::OvertakeMissionCandidate> opponent_side_replan_mission;
   overtake_core::OpponentSideReplanReason opponent_side_replan_reason{
     overtake_core::OpponentSideReplanReason::None};
+  overtake_core::OpponentSideReplanAction opponent_side_replan_action{
+    overtake_core::OpponentSideReplanAction::Inactive};
   std::string overtake_left_reason;
   std::string overtake_right_reason;
   std::string target_vehicle_id;
@@ -2090,6 +2093,7 @@ struct OvertakeLineState
   double opponent_side_replan_pending_since_sec{
     std::numeric_limits<double>::quiet_NaN()};
   int opponent_side_replan_count{0};
+  bool dynamic_mission_wait_active{false};
 };
 
 struct OvertakeLineOutput
@@ -6048,7 +6052,8 @@ struct MPC
     const bool opponent_side_replan_execution_active =
       overtake_line_state_.mission_path_frozen && locked_pass_side != 0 &&
       (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
-      overtake_line_state_.phase == OvertakeLinePhase::Pass);
+      overtake_line_state_.phase == OvertakeLinePhase::Pass ||
+      overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare);
     const bool opponent_side_replan_target_continuous =
       output.locked_target_seen && !output.locked_target_position_jump &&
       !output.locked_target_course_progress_rejected;
@@ -6062,15 +6067,21 @@ struct MPC
     const bool opponent_side_replan_count_available =
       overtake_line_state_.opponent_side_replan_count <
       cfg.v2x_behavior.overtake_line.opponent_side_replan_max_count;
-    const bool opponent_side_replan_eligible =
+    // Even after the longitudinal no-return point, a paused mission must keep
+    // assessing its current side so it cannot resume a stale frozen line. The
+    // no-return and replacement-count gates apply only to the cross-track
+    // alternate replacement.
+    const bool opponent_side_replan_assessment_allowed =
       cfg.v2x_behavior.overtake_line.opponent_side_replan_enabled &&
       opponent_side_replan_execution_active &&
       opponent_side_replan_target_continuous &&
+      opponent_side_replan_geometry_observable;
+    const bool opponent_side_replan_eligible =
+      opponent_side_replan_assessment_allowed &&
       opponent_side_replan_before_no_return &&
-      opponent_side_replan_geometry_observable &&
       opponent_side_replan_count_available;
     const bool opponent_side_replan_evaluation_due =
-      opponent_side_replan_eligible &&
+      opponent_side_replan_assessment_allowed &&
       (!std::isfinite(overtake_line_state_.opponent_side_replan_last_evaluation_sec) ||
       now_sec - overtake_line_state_.opponent_side_replan_last_evaluation_sec + kEps >=
       cfg.v2x_behavior.overtake_line.opponent_side_replan_evaluation_interval_sec);
@@ -7788,7 +7799,7 @@ struct MPC
         reserve_advantage = alternate_reserve - current_reserve;
       }
       const bool replacement_requested =
-        alternate_plan_feasible &&
+        opponent_side_replan_eligible && alternate_plan_feasible &&
         (!current_plan_feasible ||
         reserve_advantage + kEps >=
         cfg.v2x_behavior.overtake_line.opponent_side_replan_min_reserve_advantage);
@@ -7862,11 +7873,13 @@ struct MPC
           stable_sec,
           cfg.v2x_behavior.overtake_line.opponent_side_replan_stable_sec});
       output.opponent_side_replan_alternate_feasible = alternate_plan_feasible;
+      output.opponent_side_replan_current_feasible = current_plan_feasible;
       output.opponent_side_replan_candidate_sign = alternate_side;
       output.opponent_side_replan_candidate_stable_sec = stable_sec;
       output.opponent_side_replan_reserve_advantage =
         opponent_replan.physical_reserve_advantage_m;
       output.opponent_side_replan_reason = opponent_replan.reason;
+      output.opponent_side_replan_action = opponent_replan.action;
       output.opponent_side_replan_ready =
         opponent_replan.action ==
         overtake_core::OpponentSideReplanAction::ReplaceWithAlternate;
@@ -7874,7 +7887,7 @@ struct MPC
         output.opponent_side_replan_goal_ey = alternate_assessment.corridor_center_ey;
         output.opponent_side_replan_mission = alternate_assessment.selected_mission;
       }
-    } else if (!opponent_side_replan_eligible) {
+    } else if (!opponent_side_replan_assessment_allowed) {
       overtake_line_state_.opponent_side_replan_pending_sign = 0;
       overtake_line_state_.opponent_side_replan_pending_since_sec =
         std::numeric_limits<double>::quiet_NaN();
@@ -9952,6 +9965,9 @@ private:
     }
 
     overtake_line_state_.phase = next_phase;
+    if (next_phase != OvertakeLinePhase::FollowPrepare) {
+      overtake_line_state_.dynamic_mission_wait_active = false;
+    }
     overtake_line_state_.pass_current_overlap_since_sec =
       std::numeric_limits<double>::quiet_NaN();
     overtake_line_state_.pass_predicted_overlap_since_sec =
@@ -10295,7 +10311,10 @@ private:
     const int previous_side = overtake_line_state_.pass_side_sign;
     const bool active_execution =
       overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
-      overtake_line_state_.phase == OvertakeLinePhase::Pass;
+      overtake_line_state_.phase == OvertakeLinePhase::Pass ||
+      overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare;
+    const bool replacing_paused_mission =
+      overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare;
     const bool valid_side_change =
       (candidate.pass_side_sign == -1 || candidate.pass_side_sign == 1) &&
       candidate.pass_side_sign != previous_side;
@@ -10367,7 +10386,7 @@ private:
       overtake_line_state_.target_ey = current_ey;
       overtake_line_state_.phase_traveled_m = 0.0;
       overtake_line_state_.phase_last_update_sec = now_sec;
-    } else {
+    } else if (overtake_line_state_.phase == OvertakeLinePhase::Pass) {
       const double replacement_shift_distance = std::max(0.5, candidate.shift_distance_m);
       const double remaining_pass_distance =
         replacement_shift_distance + std::max(0.5, candidate.pass_hold_distance_m);
@@ -10390,6 +10409,14 @@ private:
         overtake_line_state_.mission_shift_distance +
         overtake_line_state_.mission_pass_hold_distance +
         overtake_line_state_.mission_return_distance;
+    } else if (replacing_paused_mission) {
+      // FollowPrepare publishes no lateral line. A fully preflighted alternate
+      // therefore restarts ShiftOut from the current pose instead of treating
+      // the pause distance as active Pass progress.
+      transition_overtake_line_phase(
+        OvertakeLinePhase::ShiftOut, now_sec, current_ey,
+        candidate.pass_side_sign,
+        "dynamic wait selected alternate Mission");
     }
 
     if (line_cfg.debug_log_enabled) {
@@ -11613,6 +11640,46 @@ private:
         return output;
       }
     }
+    const auto enter_dynamic_mission_wait = [&](const std::string & reason) {
+        const bool soft_failure_wait_allowed =
+          line_cfg.opponent_side_replan_enabled &&
+          active_execution_phase &&
+          overtake_line_state_.mission_path_frozen &&
+          !overtake_line_state_.target_vehicle_id.empty() &&
+          behavior_output.locked_target_seen &&
+          locked_target_progress_continuous &&
+          !behavior_output.locked_target_position_jump &&
+          !locked_target_progress_rejected &&
+          behavior_output.locked_target_current_body_footprints_separated &&
+          !actual_wall_physical_contact &&
+          !actual_wall_margin_blocked &&
+          !actual_wall_sample_unavailable &&
+          behavior_output.front_risk_level != FrontRiskLevel::EmergencyBrake &&
+          !overtake_solver_recovery_active_ &&
+          !behavior_output.overtake_forbidden_wp &&
+          !rear_clear_confirmed;
+        if (!soft_failure_wait_allowed) {
+          return false;
+        }
+        overtake_line_state_.dynamic_mission_wait_active = true;
+        overtake_line_state_.opponent_side_replan_last_evaluation_sec =
+          -std::numeric_limits<double>::infinity();
+        transition_overtake_line_phase(
+          OvertakeLinePhase::FollowPrepare, now_sec, current_ey,
+          overtake_line_state_.pass_side_sign,
+          std::string{"dynamic Mission wait: "} + reason);
+        if (line_cfg.debug_log_enabled) {
+          RCLCPP_WARN(
+            rclcpp::get_logger("mpc_controller"),
+            "OvertakeLine dynamic mission wait entered: target=%s, side=%d, "
+            "target_s=%.2f, reason=%s, wp_id=%d",
+            overtake_line_state_.target_vehicle_id.c_str(),
+            overtake_line_state_.pass_side_sign,
+            behavior_output.locked_target_longitudinal,
+            reason.c_str(), model->wp_id);
+        }
+        return true;
+      };
     // Complete a committed pass as soon as rear clearance is confirmed. The behavior layer can
     // legitimately keep publishing Overtake through committed-pass continuity, but letting that
     // label win here carries one fixed inside goal through the following hairpin indefinitely.
@@ -11748,6 +11815,9 @@ private:
         case v2x_overtake_core::OvertakeLineTransitionAction::RecoverOccupiedPassSide:
         {
           const int blocked_side = overtake_line_state_.pass_side_sign;
+          if (enter_dynamic_mission_wait("selected pass side became occupied")) {
+            return output;
+          }
           arm_overtake_line_side_retry_block(
             blocked_side, overtake_line_state_.target_vehicle_id, now_sec,
             "selected pass side became occupied");
@@ -11767,6 +11837,9 @@ private:
           break;
         case
           v2x_overtake_core::OvertakeLineTransitionAction::RecoverLongitudinalProgress:
+          if (enter_dynamic_mission_wait("committed pass longitudinal progress stalled")) {
+            return output;
+          }
           transition_overtake_line_phase(
             OvertakeLinePhase::Recovery, now_sec, current_ey,
             overtake_line_state_.pass_side_sign,
@@ -11803,6 +11876,52 @@ private:
       const bool resuming_paused_mission =
         overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare;
       const int mission_side_sign = overtake_line_state_.pass_side_sign;
+      if (resuming_paused_mission && overtake_line_state_.dynamic_mission_wait_active) {
+        const bool dynamic_wait_hard_fault =
+          actual_wall_physical_contact || actual_wall_margin_blocked ||
+          actual_wall_sample_unavailable ||
+          behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake ||
+          overtake_solver_recovery_active_ || behavior_output.overtake_forbidden_wp;
+        const auto dynamic_wait = overtake_core::resolve_dynamic_mission_wait(
+          overtake_core::DynamicMissionWaitRequest{
+            line_cfg.opponent_side_replan_enabled,
+            true,
+            locked_target_progress_continuous,
+            behavior_output.locked_target_position_jump,
+            behavior_output.locked_target_current_body_footprints_separated,
+            dynamic_wait_hard_fault,
+            rear_clear_confirmed,
+            behavior_output.opponent_side_replan_evaluated,
+            behavior_output.opponent_side_replan_current_feasible,
+            behavior_output.opponent_side_replan_ready &&
+            behavior_output.opponent_side_replan_mission.has_value()});
+        if (dynamic_wait.action == overtake_core::DynamicMissionWaitAction::Return) {
+          transition_overtake_line_phase(
+            OvertakeLinePhase::Return, now_sec, current_ey,
+            mission_side_sign, "dynamic Mission wait rear-clear confirmed");
+          return output;
+        }
+        if (dynamic_wait.action == overtake_core::DynamicMissionWaitAction::Recovery) {
+          transition_overtake_line_phase(
+            OvertakeLinePhase::Recovery, now_sec, current_ey,
+            mission_side_sign,
+            std::string{"dynamic Mission wait failed: "} +
+            overtake_core::to_string(dynamic_wait.reason));
+          return output;
+        }
+        if (dynamic_wait.action != overtake_core::DynamicMissionWaitAction::ResumeCurrent) {
+          return output;
+        }
+        overtake_line_state_.dynamic_mission_wait_active = false;
+        if (line_cfg.debug_log_enabled) {
+          RCLCPP_INFO(
+            rclcpp::get_logger("mpc_controller"),
+            "OvertakeLine dynamic mission wait released: target=%s, side=%d, "
+            "reason=%s, wp_id=%d",
+            overtake_line_state_.target_vehicle_id.c_str(), mission_side_sign,
+            overtake_core::to_string(dynamic_wait.reason), model->wp_id);
+        }
+      }
       const bool paused_side_revalidation_matches =
         !resuming_paused_mission || mission_side_sign == 0 ||
         behavior_output.overtake_pass_side_sign == mission_side_sign;
@@ -12146,6 +12265,9 @@ private:
           "overtake explicitly forbidden waypoint" :
           locked_target_progress_continuous ?
           "locked target no longer executable" : "locked target stale or lost";
+        if (enter_dynamic_mission_wait(recovery_reason)) {
+          return output;
+        }
         transition_overtake_line_phase(
           OvertakeLinePhase::Recovery, now_sec, current_ey,
           overtake_line_state_.pass_side_sign, recovery_reason);
@@ -12450,10 +12572,14 @@ private:
           wait_elapsed_sec >= line_cfg.pass_horizon_hold_max_sec - kEps ||
           wait_distance_m >= line_cfg.pass_horizon_hold_max_distance - kEps)
         {
+          const std::string reason =
+            "fresh dynamic Pass horizon unavailable at ShiftOut boundary";
+          if (enter_dynamic_mission_wait(reason)) {
+            return output;
+          }
           transition_overtake_line_phase(
             OvertakeLinePhase::Recovery, now_sec, current_ey,
-            overtake_line_state_.pass_side_sign,
-            "fresh dynamic Pass horizon unavailable at ShiftOut boundary");
+            overtake_line_state_.pass_side_sign, reason);
         }
       } else {
         transition_overtake_line_phase(
@@ -13241,12 +13367,16 @@ private:
         } else if (
           safe_separation.action == overtake_core::SafeSeparationAction::RecoverBehind)
         {
+          const std::string wait_reason =
+            std::string{"SafeSeparation requested revalidation: "} +
+            overtake_core::to_string(safe_separation.reason);
+          if (enter_dynamic_mission_wait(wait_reason)) {
+            return output;
+          }
           transition_overtake_line_phase(
             OvertakeLinePhase::FollowPrepare, now_sec, current_ey,
-            overtake_line_state_.pass_side_sign,
-            std::string{"SafeSeparation paused for same-side revalidation: "} +
-            overtake_core::to_string(safe_separation.reason));
-          return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
+            overtake_line_state_.pass_side_sign, wait_reason);
+          return output;
         } else if (safe_separation.action == overtake_core::SafeSeparationAction::Abort) {
           RCLCPP_WARN(
             rclcpp::get_logger("mpc_controller"),
@@ -13270,11 +13400,15 @@ private:
             pass_traveled,
             overtake_line_state_.pass_horizon_safe_separation_progress_extension_count,
             line_cfg.safe_separation_progress_extension_max_count);
+          const std::string abort_reason =
+            std::string{"SafeSeparation aborted: "} +
+            overtake_core::to_string(safe_separation.reason);
+          if (enter_dynamic_mission_wait(abort_reason)) {
+            return output;
+          }
           transition_overtake_line_phase(
             OvertakeLinePhase::Recovery, now_sec, current_ey,
-            overtake_line_state_.pass_side_sign,
-            std::string{"SafeSeparation aborted: "} +
-            overtake_core::to_string(safe_separation.reason));
+            overtake_line_state_.pass_side_sign, abort_reason);
           return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
         }
       }
@@ -13678,10 +13812,14 @@ private:
                 live_required_rear_clear_pass_m,
                 std::max(
                   0.0, overtake_line_state_.mission_dynamic_valid_until_sec - now_sec));
+              const std::string reason =
+                "Pass horizon extension unavailable and SafeSeparation unsafe";
+              if (enter_dynamic_mission_wait(reason)) {
+                return output;
+              }
               transition_overtake_line_phase(
                 OvertakeLinePhase::Recovery, now_sec, current_ey,
-                overtake_line_state_.pass_side_sign,
-                "Pass horizon extension unavailable and SafeSeparation unsafe");
+                overtake_line_state_.pass_side_sign, reason);
               return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
             }
           }
@@ -13708,19 +13846,26 @@ private:
                 overtake_line_state_.mission_static_valid_until_pass_m,
                 live_required_rear_clear_pass_m,
                 overtake_line_state_.mission_longitudinal_refresh_count);
+              const std::string reason =
+                "longitudinal Pass refresh unavailable and SafeSeparation unsafe";
+              if (enter_dynamic_mission_wait(reason)) {
+                return output;
+              }
               transition_overtake_line_phase(
                 OvertakeLinePhase::Recovery, now_sec, current_ey,
-                overtake_line_state_.pass_side_sign,
-                "longitudinal Pass refresh unavailable and SafeSeparation unsafe");
+                overtake_line_state_.pass_side_sign, reason);
               return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
             }
           }
         } else if (horizon_action == overtake_core::PassHorizonAction::EnterHold) {
           if (!begin_safe_separation("horizon_hold", "bounded Pass horizon exhausted")) {
+            const std::string reason = "Pass horizon hold unsafe; Recovery required";
+            if (enter_dynamic_mission_wait(reason)) {
+              return output;
+            }
             transition_overtake_line_phase(
               OvertakeLinePhase::Recovery, now_sec, current_ey,
-              overtake_line_state_.pass_side_sign,
-              "Pass horizon hold unsafe; Recovery required");
+              overtake_line_state_.pass_side_sign, reason);
             return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
           }
         } else if (horizon_action == overtake_core::PassHorizonAction::Abort) {
@@ -13730,10 +13875,13 @@ private:
               overtake_line_state_.pass_side_sign,
               "Pass horizon hard limit; rear-clear confirmed, returning");
           } else if (!begin_safe_separation("hard_limit", "Pass horizon hard limit")) {
+            const std::string reason = "Pass horizon hard limit; SafeSeparation unsafe";
+            if (enter_dynamic_mission_wait(reason)) {
+              return output;
+            }
             transition_overtake_line_phase(
               OvertakeLinePhase::Recovery, now_sec, current_ey,
-              overtake_line_state_.pass_side_sign,
-              "Pass horizon hard limit; SafeSeparation unsafe");
+              overtake_line_state_.pass_side_sign, reason);
             return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
           }
         }
@@ -15825,8 +15973,10 @@ private:
           "side_conflict=%d, replan_window=%d, replan_candidate=%d, "
           "replan_stable=%.2f, replan_vlat=%.2f, replan_vlat_ok=%d, "
           "replan_ready=%d, replan_abort=%d, "
-          "opp_eval=%d, opp_eligible=%d, opp_alt=%d, opp_stable=%.2f, "
-          "opp_adv=%.2f, opp_ready=%d, opp_no_return=%d, opp_count=%d, opp_reason=%s, "
+          "opp_eval=%d, opp_eligible=%d, opp_current=%d, opp_alt_side=%d, "
+          "opp_alt_ok=%d, opp_stable=%.2f, opp_adv=%.2f, opp_ready=%d, "
+          "opp_no_return=%d, opp_count=%d, opp_action=%s, opp_reason=%s, "
+          "mission_wait=%d, "
           "solver_failures=%d, "
           "left_reason=%s, right_reason=%s, reason=%s, block=%s",
           to_string(desired_state), to_string(final_state), output.allow_gap_planner ? 1 : 0,
@@ -15943,13 +16093,17 @@ private:
           output.overtake_side_replan_abort ? 1 : 0,
           output.opponent_side_replan_evaluated ? 1 : 0,
           output.opponent_side_replan_eligible ? 1 : 0,
+          output.opponent_side_replan_current_feasible ? 1 : 0,
           output.opponent_side_replan_candidate_sign,
+          output.opponent_side_replan_alternate_feasible ? 1 : 0,
           output.opponent_side_replan_candidate_stable_sec,
           output.opponent_side_replan_reserve_advantage,
           output.opponent_side_replan_ready ? 1 : 0,
           output.opponent_side_replan_no_return ? 1 : 0,
           overtake_line_state_.opponent_side_replan_count,
+          overtake_core::to_string(output.opponent_side_replan_action),
           overtake_core::to_string(output.opponent_side_replan_reason),
+          overtake_line_state_.dynamic_mission_wait_active ? 1 : 0,
           infeasibility_counter,
           output.overtake_left_reason.c_str(), output.overtake_right_reason.c_str(),
           output.reason.c_str(), output.overtake_block_reason.c_str());

@@ -104,6 +104,9 @@ using multi_purpose_mpc_ros::v2x_overtake_core::EarlyShiftOutSideReplanRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OpponentSideReplanAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::OpponentSideReplanReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::OpponentSideReplanRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitAction;
+using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitReason;
+using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionOwnershipRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassBehaviorOwnershipRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommittedShiftOutBehaviorOwnershipRequest;
@@ -289,6 +292,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::select_overtake_side_by_quality;
 using multi_purpose_mpc_ros::v2x_overtake_core::selected_pass_side_ordering_conflict;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_early_shiftout_side_replan;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_opponent_side_replan;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_mission_wait;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_mission_ownership;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_preserve_committed_pass_behavior;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_preserve_committed_shiftout_behavior;
@@ -6664,6 +6668,69 @@ TEST(V2XOvertakeCoreOpponentSideReplan, FallsBackOnlyWhenBothPlansAreUnavailable
   EXPECT_EQ(result.action, OpponentSideReplanAction::FallbackSameSide);
   EXPECT_EQ(result.reason, OpponentSideReplanReason::AlternateUnavailable);
   EXPECT_TRUE(result.eligible);
+}
+
+TEST(V2XOvertakeCoreDynamicMissionWait, HoldsUntilFreshCurrentOrAlternatePlanExists)
+{
+  DynamicMissionWaitRequest request;
+  request.enabled = true;
+  request.wait_active = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+
+  auto result = resolve_dynamic_mission_wait(request);
+  EXPECT_EQ(result.action, DynamicMissionWaitAction::Hold);
+  EXPECT_EQ(result.reason, DynamicMissionWaitReason::WaitingForAssessment);
+
+  request.assessment_completed = true;
+  result = resolve_dynamic_mission_wait(request);
+  EXPECT_EQ(result.action, DynamicMissionWaitAction::Hold);
+  EXPECT_EQ(result.reason, DynamicMissionWaitReason::BothPlansUnavailable);
+
+  request.current_plan_feasible = true;
+  result = resolve_dynamic_mission_wait(request);
+  EXPECT_EQ(result.action, DynamicMissionWaitAction::ResumeCurrent);
+  EXPECT_EQ(result.reason, DynamicMissionWaitReason::CurrentPlanRecovered);
+
+  request.current_plan_feasible = false;
+  request.alternate_replacement_ready = true;
+  result = resolve_dynamic_mission_wait(request);
+  EXPECT_EQ(result.action, DynamicMissionWaitAction::ReplaceWithAlternate);
+  EXPECT_EQ(result.reason, DynamicMissionWaitReason::AlternatePlanReady);
+}
+
+TEST(V2XOvertakeCoreDynamicMissionWait, KeepsHardFaultsAndOverlapFailClosed)
+{
+  DynamicMissionWaitRequest request;
+  request.enabled = true;
+  request.wait_active = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.assessment_completed = true;
+  request.current_plan_feasible = true;
+
+  request.hard_fault = true;
+  auto result = resolve_dynamic_mission_wait(request);
+  EXPECT_EQ(result.action, DynamicMissionWaitAction::Recovery);
+  EXPECT_EQ(result.reason, DynamicMissionWaitReason::HardFault);
+
+  request.hard_fault = false;
+  request.current_body_footprints_separated = false;
+  result = resolve_dynamic_mission_wait(request);
+  EXPECT_EQ(result.action, DynamicMissionWaitAction::Recovery);
+  EXPECT_EQ(result.reason, DynamicMissionWaitReason::BodyOverlap);
+
+  request.current_body_footprints_separated = true;
+  request.target_continuous = false;
+  result = resolve_dynamic_mission_wait(request);
+  EXPECT_EQ(result.action, DynamicMissionWaitAction::Recovery);
+  EXPECT_EQ(result.reason, DynamicMissionWaitReason::TargetInvalid);
+
+  request.target_continuous = true;
+  request.rear_clear_confirmed = true;
+  result = resolve_dynamic_mission_wait(request);
+  EXPECT_EQ(result.action, DynamicMissionWaitAction::Return);
+  EXPECT_EQ(result.reason, DynamicMissionWaitReason::RearClear);
 }
 
 TEST(V2XOvertakeCoreMissionOwnership, MissionLockOwnsPausedMissionSide)

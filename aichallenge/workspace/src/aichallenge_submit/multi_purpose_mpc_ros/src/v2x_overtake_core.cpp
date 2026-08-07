@@ -4584,6 +4584,100 @@ const char * to_string(const OpponentSideReplanReason reason) noexcept
   return "unknown";
 }
 
+DynamicMissionWaitResolution resolve_dynamic_mission_wait(
+  const DynamicMissionWaitRequest & request) noexcept
+{
+  DynamicMissionWaitResolution resolution;
+  if (!request.enabled || !request.wait_active) {
+    resolution.reason = DynamicMissionWaitReason::Disabled;
+    return resolution;
+  }
+  if (request.rear_clear_confirmed) {
+    resolution.action = DynamicMissionWaitAction::Return;
+    resolution.reason = DynamicMissionWaitReason::RearClear;
+    return resolution;
+  }
+  if (request.hard_fault) {
+    resolution.action = DynamicMissionWaitAction::Recovery;
+    resolution.reason = DynamicMissionWaitReason::HardFault;
+    return resolution;
+  }
+  if (!request.target_continuous || request.target_position_jump) {
+    resolution.action = DynamicMissionWaitAction::Recovery;
+    resolution.reason = DynamicMissionWaitReason::TargetInvalid;
+    return resolution;
+  }
+  if (!request.current_body_footprints_separated) {
+    resolution.action = DynamicMissionWaitAction::Recovery;
+    resolution.reason = DynamicMissionWaitReason::BodyOverlap;
+    return resolution;
+  }
+  if (request.alternate_replacement_ready) {
+    resolution.action = DynamicMissionWaitAction::ReplaceWithAlternate;
+    resolution.reason = DynamicMissionWaitReason::AlternatePlanReady;
+    return resolution;
+  }
+  if (!request.assessment_completed) {
+    resolution.action = DynamicMissionWaitAction::Hold;
+    resolution.reason = DynamicMissionWaitReason::WaitingForAssessment;
+    return resolution;
+  }
+  if (request.current_plan_feasible) {
+    resolution.action = DynamicMissionWaitAction::ResumeCurrent;
+    resolution.reason = DynamicMissionWaitReason::CurrentPlanRecovered;
+    return resolution;
+  }
+  resolution.action = DynamicMissionWaitAction::Hold;
+  resolution.reason = DynamicMissionWaitReason::BothPlansUnavailable;
+  return resolution;
+}
+
+const char * to_string(const DynamicMissionWaitAction action) noexcept
+{
+  switch (action) {
+    case DynamicMissionWaitAction::Inactive:
+      return "inactive";
+    case DynamicMissionWaitAction::Hold:
+      return "hold";
+    case DynamicMissionWaitAction::ResumeCurrent:
+      return "resume current";
+    case DynamicMissionWaitAction::ReplaceWithAlternate:
+      return "replace with alternate";
+    case DynamicMissionWaitAction::Return:
+      return "return";
+    case DynamicMissionWaitAction::Recovery:
+      return "recovery";
+  }
+  return "unknown";
+}
+
+const char * to_string(const DynamicMissionWaitReason reason) noexcept
+{
+  switch (reason) {
+    case DynamicMissionWaitReason::None:
+      return "none";
+    case DynamicMissionWaitReason::Disabled:
+      return "disabled";
+    case DynamicMissionWaitReason::WaitingForAssessment:
+      return "waiting for assessment";
+    case DynamicMissionWaitReason::BothPlansUnavailable:
+      return "both plans unavailable";
+    case DynamicMissionWaitReason::CurrentPlanRecovered:
+      return "current plan recovered";
+    case DynamicMissionWaitReason::AlternatePlanReady:
+      return "alternate plan ready";
+    case DynamicMissionWaitReason::RearClear:
+      return "rear clear";
+    case DynamicMissionWaitReason::TargetInvalid:
+      return "target invalid";
+    case DynamicMissionWaitReason::BodyOverlap:
+      return "body overlap";
+    case DynamicMissionWaitReason::HardFault:
+      return "hard fault";
+  }
+  return "unknown";
+}
+
 OvertakeMissionOwnershipResolution resolve_overtake_mission_ownership(
   const OvertakeMissionOwnershipRequest & request) noexcept
 {

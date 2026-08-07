@@ -2520,6 +2520,60 @@ OpponentSideReplanResolution resolve_opponent_side_replan(
 const char * to_string(OpponentSideReplanAction action) noexcept;
 const char * to_string(OpponentSideReplanReason reason) noexcept;
 
+enum class DynamicMissionWaitAction
+{
+  Inactive,
+  Hold,
+  ResumeCurrent,
+  ReplaceWithAlternate,
+  Return,
+  Recovery,
+};
+
+enum class DynamicMissionWaitReason
+{
+  None,
+  Disabled,
+  WaitingForAssessment,
+  BothPlansUnavailable,
+  CurrentPlanRecovered,
+  AlternatePlanReady,
+  RearClear,
+  TargetInvalid,
+  BodyOverlap,
+  HardFault,
+};
+
+struct DynamicMissionWaitRequest
+{
+  bool enabled{false};
+  bool wait_active{false};
+  bool target_continuous{false};
+  bool target_position_jump{false};
+  bool current_body_footprints_separated{false};
+  bool hard_fault{false};
+  bool rear_clear_confirmed{false};
+  bool assessment_completed{false};
+  bool current_plan_feasible{false};
+  bool alternate_replacement_ready{false};
+};
+
+struct DynamicMissionWaitResolution
+{
+  DynamicMissionWaitAction action{DynamicMissionWaitAction::Inactive};
+  DynamicMissionWaitReason reason{DynamicMissionWaitReason::None};
+};
+
+/// Hold a paused overtake target while both complete Mission candidates are
+/// unavailable. Only a fresh current-side assessment may resume the old plan;
+/// an already-debounced alternate may replace it atomically. Actual overlap,
+/// target discontinuity and controller/geometry hard faults remain fail closed.
+DynamicMissionWaitResolution resolve_dynamic_mission_wait(
+  const DynamicMissionWaitRequest & request) noexcept;
+
+const char * to_string(DynamicMissionWaitAction action) noexcept;
+const char * to_string(DynamicMissionWaitReason reason) noexcept;
+
 struct OvertakeMissionOwnershipRequest
 {
   bool shiftout_phase{false};

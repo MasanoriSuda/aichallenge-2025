@@ -1938,12 +1938,11 @@ CommittedPassForwardCompletionResolution resolve_committed_pass_forward_completi
   const auto finite_non_negative = [](const double value) {
       return std::isfinite(value) && value >= 0.0;
     };
-  const bool base_guard =
+  const bool base_guard_without_predicted_geometry =
     request.enabled && request.pass_active && request.minimum_motion_corridor_active &&
     request.prior_front_cap_release_active && request.target_seen &&
     request.target_continuity_valid && !request.target_position_jump &&
     request.footprint_prediction_valid &&
-    request.predicted_body_footprint_sweep_separated &&
     !request.actual_wall_contact && !request.wall_sample_unavailable &&
     !request.target_pass_side_intrusion && !request.emergency_brake &&
     !request.solver_recovery_active &&
@@ -1955,6 +1954,15 @@ CommittedPassForwardCompletionResolution resolve_committed_pass_forward_completi
     finite_non_negative(request.maximum_ego_speed_mps) &&
     finite_non_negative(request.rear_clear_distance_m) &&
     finite_non_negative(request.maximum_completion_distance_m);
+  resolution.predicted_overlap_grace_active =
+    base_guard_without_predicted_geometry && request.already_latched &&
+    !request.predicted_body_footprint_sweep_separated &&
+    !request.predicted_body_footprint_overlap_confirmed;
+  const bool predicted_geometry_acceptable =
+    request.predicted_body_footprint_sweep_separated ||
+    resolution.predicted_overlap_grace_active;
+  const bool base_guard =
+    base_guard_without_predicted_geometry && predicted_geometry_acceptable;
   resolution.current_overlap_grace_active =
     base_guard && !request.current_body_footprints_separated &&
     !request.current_body_footprint_overlap_confirmed;
@@ -5436,7 +5444,7 @@ CommittedPassBodyGeometryResolution resolve_committed_pass_body_geometry(
     !request.target_position_jump &&
     request.current_body_footprints_separated &&
     resolution.raw_predicted_body_overlap &&
-    !resolution.side_by_side_escape_active;
+    (!resolution.side_by_side_escape_active || request.forward_completion_latched);
   return resolution;
 }
 

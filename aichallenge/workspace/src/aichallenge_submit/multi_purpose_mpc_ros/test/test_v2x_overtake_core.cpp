@@ -959,6 +959,11 @@ TEST(V2XFrontDangerAction, ResolvesSharedCommittedPassBodyGeometry)
   EXPECT_TRUE(result.side_by_side_escape_active);
   EXPECT_FALSE(result.predicted_overlap_confirmation_eligible);
 
+  request.forward_completion_latched = true;
+  result = resolve_committed_pass_body_geometry(request);
+  EXPECT_TRUE(result.side_by_side_escape_active);
+  EXPECT_TRUE(result.predicted_overlap_confirmation_eligible);
+
   request.current_body_footprints_separated = false;
   result = resolve_committed_pass_body_geometry(request);
   EXPECT_FALSE(result.side_by_side_escape_active);
@@ -3775,6 +3780,7 @@ TEST(V2XOvertakeCoreHorizon, CommitsBoundedSideBySideForwardCompletion)
   request.predicted_body_footprint_sweep_separated = false;
   resolution = resolve_committed_pass_forward_completion(request);
   EXPECT_FALSE(resolution.active);
+  EXPECT_FALSE(resolution.predicted_overlap_grace_active);
 
   request.already_latched = false;
   request.predicted_body_footprint_sweep_separated = true;
@@ -3784,6 +3790,74 @@ TEST(V2XOvertakeCoreHorizon, CommitsBoundedSideBySideForwardCompletion)
   resolution = resolve_committed_pass_forward_completion(request);
   EXPECT_FALSE(resolution.active);
   EXPECT_FALSE(resolution.rear_clear_distance_feasible);
+}
+
+TEST(V2XOvertakeCoreHorizon, DebouncesPredictedOverlapOnlyAfterForwardCompletionLatch)
+{
+  CommittedPassForwardCompletionRequest request;
+  request.enabled = true;
+  request.pass_active = true;
+  request.minimum_motion_corridor_active = true;
+  request.prior_front_cap_release_active = true;
+  request.target_seen = true;
+  request.target_continuity_valid = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = false;
+  request.predicted_body_footprint_overlap_confirmed = false;
+  request.target_longitudinal_m = 0.0;
+  request.maximum_front_distance_m = 3.0;
+  request.ego_speed_mps = 5.0;
+  request.target_speed_mps = 3.3;
+  request.speed_delta_mps = 0.8;
+  request.maximum_ego_speed_mps = 11.11;
+  request.rear_clear_distance_m = 2.0;
+  request.maximum_completion_distance_m = 24.0;
+
+  auto resolution = resolve_committed_pass_forward_completion(request);
+  EXPECT_FALSE(resolution.active);
+  EXPECT_FALSE(resolution.predicted_overlap_grace_active);
+
+  request.already_latched = true;
+  resolution = resolve_committed_pass_forward_completion(request);
+  EXPECT_TRUE(resolution.active);
+  EXPECT_TRUE(resolution.predicted_overlap_grace_active);
+
+  PredictedFootprintOverlapConfirmationRequest confirmation_request;
+  confirmation_request.monitor_active = true;
+  confirmation_request.now_sec = 10.0;
+  confirmation_request.confirm_sec = 0.25;
+  auto confirmation = update_predicted_footprint_overlap_confirmation(confirmation_request);
+  EXPECT_FALSE(confirmation.confirmed);
+
+  confirmation_request.overlap_since_sec = confirmation.overlap_since_sec;
+  confirmation_request.now_sec = 10.24;
+  confirmation = update_predicted_footprint_overlap_confirmation(confirmation_request);
+  EXPECT_FALSE(confirmation.confirmed);
+  request.predicted_body_footprint_overlap_confirmed = confirmation.confirmed;
+  resolution = resolve_committed_pass_forward_completion(request);
+  EXPECT_TRUE(resolution.active);
+
+  confirmation_request.overlap_since_sec = confirmation.overlap_since_sec;
+  confirmation_request.now_sec = 10.25;
+  confirmation = update_predicted_footprint_overlap_confirmation(confirmation_request);
+  EXPECT_TRUE(confirmation.confirmed);
+  request.predicted_body_footprint_overlap_confirmed = confirmation.confirmed;
+  resolution = resolve_committed_pass_forward_completion(request);
+  EXPECT_FALSE(resolution.active);
+  EXPECT_FALSE(resolution.predicted_overlap_grace_active);
+
+  request.predicted_body_footprint_overlap_confirmed = false;
+  request.actual_wall_contact = true;
+  resolution = resolve_committed_pass_forward_completion(request);
+  EXPECT_FALSE(resolution.active);
+  EXPECT_FALSE(resolution.predicted_overlap_grace_active);
+
+  request.actual_wall_contact = false;
+  request.footprint_prediction_valid = false;
+  resolution = resolve_committed_pass_forward_completion(request);
+  EXPECT_FALSE(resolution.active);
+  EXPECT_FALSE(resolution.predicted_overlap_grace_active);
 }
 
 TEST(V2XOvertakeCoreHorizon, CreatesLongitudinalSafeSeparationOnCommittedSide)

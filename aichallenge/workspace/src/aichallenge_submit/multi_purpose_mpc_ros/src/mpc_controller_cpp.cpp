@@ -5498,6 +5498,7 @@ struct MPC
         output.locked_target_current_body_footprints_separated,
         output.locked_target_footprint_prediction_valid,
         output.locked_target_predicted_body_footprint_sweep_separated,
+        overtake_line_state_.pass_forward_completion_latched,
         output.locked_target_longitudinal,
         cfg.v2x_gap.vehicle_length,
         model->length});
@@ -12266,6 +12267,7 @@ private:
         behavior_output.locked_target_current_body_footprints_separated,
         behavior_output.locked_target_footprint_prediction_valid,
         behavior_output.locked_target_predicted_body_footprint_sweep_separated,
+        overtake_line_state_.pass_forward_completion_latched,
         locked_target_longitudinal,
         cfg.v2x_gap.vehicle_length,
         model->length});
@@ -12282,6 +12284,27 @@ private:
       safe_separation_initial_completion_budget;
     const bool forward_completion_was_latched =
       overtake_line_state_.pass_forward_completion_latched;
+    const bool pass_lateral_replan_in_progress =
+      overtake_line_state_.mission_pass_lateral_replan_active &&
+      mission_pass_traveled_m + kEps <
+      overtake_line_state_.mission_pass_lateral_replan_start_m +
+      overtake_line_state_.mission_pass_lateral_replan_shift_distance;
+    const bool predicted_overlap_confirmation_monitored =
+      !actual_wall_physical_contact &&
+      !pass_lateral_replan_in_progress &&
+      live_committed_body_geometry.predicted_overlap_confirmation_eligible;
+    const auto predicted_overlap_confirmation =
+      overtake_core::update_predicted_footprint_overlap_confirmation(
+      overtake_core::PredictedFootprintOverlapConfirmationRequest{
+        predicted_overlap_confirmation_monitored,
+        now_sec,
+        overtake_line_state_.pass_predicted_overlap_since_sec,
+        cfg.v2x_behavior.overtake_pass_predicted_overlap_confirm_sec});
+    overtake_line_state_.pass_predicted_overlap_since_sec =
+      predicted_overlap_confirmation.overlap_since_sec;
+    const bool predicted_overlap_replan_required =
+      predicted_overlap_confirmation_monitored &&
+      predicted_overlap_confirmation.confirmed;
     const auto committed_forward_completion =
       overtake_core::resolve_committed_pass_forward_completion(
       overtake_core::CommittedPassForwardCompletionRequest{
@@ -12296,6 +12319,7 @@ private:
         behavior_output.locked_target_current_body_overlap_confirmed,
         behavior_output.locked_target_footprint_prediction_valid,
         behavior_output.locked_target_predicted_body_footprint_sweep_separated,
+        predicted_overlap_replan_required,
         actual_wall_physical_contact,
         actual_wall_sample_unavailable,
         behavior_output.locked_target_pass_side_intrusion,
@@ -12312,28 +12336,6 @@ private:
         forward_completion_was_latched});
     const bool committed_forward_completion_guard_lost =
       forward_completion_was_latched && !committed_forward_completion.active;
-    const bool pass_lateral_replan_in_progress =
-      overtake_line_state_.mission_pass_lateral_replan_active &&
-      mission_pass_traveled_m + kEps <
-      overtake_line_state_.mission_pass_lateral_replan_start_m +
-      overtake_line_state_.mission_pass_lateral_replan_shift_distance;
-    const bool predicted_overlap_confirmation_monitored =
-      !actual_wall_physical_contact &&
-      !committed_forward_completion.active &&
-      !pass_lateral_replan_in_progress &&
-      live_committed_body_geometry.predicted_overlap_confirmation_eligible;
-    const auto predicted_overlap_confirmation =
-      overtake_core::update_predicted_footprint_overlap_confirmation(
-      overtake_core::PredictedFootprintOverlapConfirmationRequest{
-        predicted_overlap_confirmation_monitored,
-        now_sec,
-        overtake_line_state_.pass_predicted_overlap_since_sec,
-        cfg.v2x_behavior.overtake_pass_predicted_overlap_confirm_sec});
-    overtake_line_state_.pass_predicted_overlap_since_sec =
-      predicted_overlap_confirmation.overlap_since_sec;
-    const bool predicted_overlap_replan_required =
-      predicted_overlap_confirmation_monitored &&
-      predicted_overlap_confirmation.confirmed;
     const double shiftout_lateral_tolerance = std::max(0.15, 0.25 * lateral_offset);
     const bool shiftout_complete =
       overtake_line_state_.phase == OvertakeLinePhase::ShiftOut &&
@@ -13871,6 +13873,7 @@ private:
         committed_pass_request.current_body_footprints_separated,
         committed_pass_request.footprint_prediction_valid,
         committed_pass_request.predicted_body_footprint_sweep_separated,
+        overtake_line_state_.pass_forward_completion_latched,
         committed_pass_request.target_longitudinal_m,
         cfg.v2x_gap.vehicle_length,
         model->length});

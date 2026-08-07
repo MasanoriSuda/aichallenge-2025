@@ -1124,6 +1124,7 @@ struct CommittedPassForwardCompletionRequest
   bool current_body_footprint_overlap_confirmed{true};
   bool footprint_prediction_valid{false};
   bool predicted_body_footprint_sweep_separated{false};
+  bool predicted_body_footprint_overlap_confirmed{true};
   bool actual_wall_contact{false};
   bool wall_sample_unavailable{false};
   bool target_pass_side_intrusion{false};
@@ -1144,16 +1145,19 @@ struct CommittedPassForwardCompletionResolution
 {
   bool active{false};
   bool current_overlap_grace_active{false};
+  bool predicted_overlap_grace_active{false};
   bool rear_clear_distance_feasible{false};
   double required_forward_distance_m{std::numeric_limits<double>::infinity()};
 };
 
 /// Once an already released minimum-motion Pass reaches the bounded
 /// side-by-side window, freeze the committed side and finish longitudinally
-/// only when the predicted sweep remains separated and the estimated
+/// when the predicted sweep remains separated or a latched completion is still
+/// inside the bounded predicted-overlap confirmation window, and the estimated
 /// rear-clear completion distance fits inside the bounded local escape.
 /// A single current-overlap sample may share the existing confirmation grace;
-/// confirmed overlap and all physical/runtime guards remain fail closed.
+/// confirmed predicted/current overlap and all physical/runtime guards remain
+/// fail closed. Initial acquisition never receives prediction grace.
 CommittedPassForwardCompletionResolution resolve_committed_pass_forward_completion(
   const CommittedPassForwardCompletionRequest & request) noexcept;
 
@@ -3216,6 +3220,7 @@ struct CommittedPassBodyGeometryRequest
   bool current_body_footprints_separated{false};
   bool footprint_prediction_valid{false};
   bool predicted_body_footprint_sweep_separated{false};
+  bool forward_completion_latched{false};
   double target_longitudinal_m{};
   double ego_vehicle_length_m{};
   double target_vehicle_length_m{};
@@ -3231,8 +3236,9 @@ struct CommittedPassBodyGeometryResolution
 
 /// Resolve the body geometry shared by behavior-level front danger and the
 /// OvertakeLine front-cap policy. An already released validated ShiftOut may
-/// share the same bounded predicted-overlap confirmation as Pass. Timer
-/// ownership remains with the caller.
+/// share the same bounded predicted-overlap confirmation as Pass. A latched
+/// side-by-side forward completion may also use that confirmation; an unlatched
+/// side-by-side candidate may not. Timer ownership remains with the caller.
 CommittedPassBodyGeometryResolution resolve_committed_pass_body_geometry(
   const CommittedPassBodyGeometryRequest & request) noexcept;
 

@@ -4584,6 +4584,29 @@ const char * to_string(const OpponentSideReplanReason reason) noexcept
   return "unknown";
 }
 
+bool should_observe_locked_target_geometry(
+  const LockedTargetGeometryObservationRequest & request) noexcept
+{
+  const bool execution_phase = request.shiftout_phase || request.pass_phase;
+  const bool paused_frozen_mission =
+    request.follow_prepare_phase && request.mission_path_frozen;
+  return
+    (execution_phase || paused_frozen_mission) &&
+    request.target_id_available && request.vehicle_matches_target;
+}
+
+bool can_enter_dynamic_mission_wait(
+  const DynamicMissionWaitAdmissionRequest & request) noexcept
+{
+  return
+    request.enabled && request.active_execution_phase &&
+    request.mission_path_frozen && request.target_id_available &&
+    request.target_continuous && request.current_body_footprints_separated &&
+    request.footprint_prediction_valid && request.before_no_return &&
+    request.replacement_count_available && !request.hard_fault &&
+    !request.rear_clear_confirmed;
+}
+
 DynamicMissionWaitResolution resolve_dynamic_mission_wait(
   const DynamicMissionWaitRequest & request) noexcept
 {

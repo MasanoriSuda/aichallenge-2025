@@ -2520,6 +2520,42 @@ OpponentSideReplanResolution resolve_opponent_side_replan(
 const char * to_string(OpponentSideReplanAction action) noexcept;
 const char * to_string(OpponentSideReplanReason reason) noexcept;
 
+struct LockedTargetGeometryObservationRequest
+{
+  bool shiftout_phase{false};
+  bool pass_phase{false};
+  bool follow_prepare_phase{false};
+  bool mission_path_frozen{false};
+  bool target_id_available{false};
+  bool vehicle_matches_target{false};
+};
+
+/// Keep target geometry observable while a frozen Mission is paused, without
+/// granting FollowPrepare any of the ShiftOut/Pass speed or brake exemptions.
+bool should_observe_locked_target_geometry(
+  const LockedTargetGeometryObservationRequest & request) noexcept;
+
+struct DynamicMissionWaitAdmissionRequest
+{
+  bool enabled{false};
+  bool active_execution_phase{false};
+  bool mission_path_frozen{false};
+  bool target_id_available{false};
+  bool target_continuous{false};
+  bool current_body_footprints_separated{false};
+  bool footprint_prediction_valid{false};
+  bool before_no_return{false};
+  bool replacement_count_available{false};
+  bool hard_fault{false};
+  bool rear_clear_confirmed{false};
+};
+
+/// Enter a bounded dynamic wait only while a complete alternate Mission can
+/// still be assessed and committed. After no-return, callers must use their
+/// existing same-side forward-completion or RecoverBehind policy.
+bool can_enter_dynamic_mission_wait(
+  const DynamicMissionWaitAdmissionRequest & request) noexcept;
+
 enum class DynamicMissionWaitAction
 {
   Inactive,

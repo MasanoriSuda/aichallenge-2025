@@ -104,6 +104,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::EarlyShiftOutSideReplanRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OpponentSideReplanAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::OpponentSideReplanReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::OpponentSideReplanRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::LockedTargetGeometryObservationRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitAdmissionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitRequest;
@@ -292,6 +294,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::select_overtake_side_by_quality;
 using multi_purpose_mpc_ros::v2x_overtake_core::selected_pass_side_ordering_conflict;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_early_shiftout_side_replan;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_opponent_side_replan;
+using multi_purpose_mpc_ros::v2x_overtake_core::should_observe_locked_target_geometry;
+using multi_purpose_mpc_ros::v2x_overtake_core::can_enter_dynamic_mission_wait;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_mission_wait;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_mission_ownership;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_preserve_committed_pass_behavior;
@@ -6668,6 +6672,69 @@ TEST(V2XOvertakeCoreOpponentSideReplan, FallsBackOnlyWhenBothPlansAreUnavailable
   EXPECT_EQ(result.action, OpponentSideReplanAction::FallbackSameSide);
   EXPECT_EQ(result.reason, OpponentSideReplanReason::AlternateUnavailable);
   EXPECT_TRUE(result.eligible);
+}
+
+TEST(V2XOvertakeCoreDynamicMissionWait, ObservesPausedFrozenMissionTargetGeometry)
+{
+  LockedTargetGeometryObservationRequest request;
+  request.target_id_available = true;
+  request.vehicle_matches_target = true;
+
+  request.shiftout_phase = true;
+  EXPECT_TRUE(should_observe_locked_target_geometry(request));
+
+  request.shiftout_phase = false;
+  request.pass_phase = true;
+  EXPECT_TRUE(should_observe_locked_target_geometry(request));
+
+  request.pass_phase = false;
+  request.follow_prepare_phase = true;
+  EXPECT_FALSE(should_observe_locked_target_geometry(request));
+
+  request.mission_path_frozen = true;
+  EXPECT_TRUE(should_observe_locked_target_geometry(request));
+
+  request.vehicle_matches_target = false;
+  EXPECT_FALSE(should_observe_locked_target_geometry(request));
+}
+
+TEST(V2XOvertakeCoreDynamicMissionWait, AdmitsOnlyObservablePreNoReturnReplacementWindow)
+{
+  DynamicMissionWaitAdmissionRequest request;
+  request.enabled = true;
+  request.active_execution_phase = true;
+  request.mission_path_frozen = true;
+  request.target_id_available = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.before_no_return = true;
+  request.replacement_count_available = true;
+
+  EXPECT_TRUE(can_enter_dynamic_mission_wait(request));
+
+  request.before_no_return = false;
+  EXPECT_FALSE(can_enter_dynamic_mission_wait(request));
+
+  request.before_no_return = true;
+  request.current_body_footprints_separated = false;
+  EXPECT_FALSE(can_enter_dynamic_mission_wait(request));
+
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = false;
+  EXPECT_FALSE(can_enter_dynamic_mission_wait(request));
+
+  request.footprint_prediction_valid = true;
+  request.replacement_count_available = false;
+  EXPECT_FALSE(can_enter_dynamic_mission_wait(request));
+
+  request.replacement_count_available = true;
+  request.hard_fault = true;
+  EXPECT_FALSE(can_enter_dynamic_mission_wait(request));
+
+  request.hard_fault = false;
+  request.rear_clear_confirmed = true;
+  EXPECT_FALSE(can_enter_dynamic_mission_wait(request));
 }
 
 TEST(V2XOvertakeCoreDynamicMissionWait, HoldsUntilFreshCurrentOrAlternatePlanExists)

@@ -5089,10 +5089,15 @@ struct MPC
       const bool active_overtake_execution =
         overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
         overtake_line_state_.phase == OvertakeLinePhase::Pass;
-      const bool is_locked_execution_target =
-        active_overtake_execution &&
-        !overtake_line_state_.target_vehicle_id.empty() &&
-        vehicle.id == overtake_line_state_.target_vehicle_id;
+      const bool is_locked_mission_target =
+        overtake_core::should_observe_locked_target_geometry(
+        overtake_core::LockedTargetGeometryObservationRequest{
+          overtake_line_state_.phase == OvertakeLinePhase::ShiftOut,
+          overtake_line_state_.phase == OvertakeLinePhase::Pass,
+          overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare,
+          overtake_line_state_.mission_path_frozen,
+          !overtake_line_state_.target_vehicle_id.empty(),
+          vehicle.id == overtake_line_state_.target_vehicle_id});
       // Keep the committed ShiftOut/Pass clearance test in the same course
       // frame as the explicit overtake line. A vehicle-local tangent rotates
       // rapidly through a hairpin and can make an already established
@@ -5111,7 +5116,7 @@ struct MPC
       const bool locked_pass_target_currently_laterally_clear =
         v2x_overtake_core::can_exclude_locked_target_from_front_overlap(
         v2x_overtake_core::PassFrontOverlapExclusionRequest{
-          active_overtake_execution, is_locked_execution_target,
+          active_overtake_execution, is_locked_mission_target,
           locked_pass_target_relative_lateral,
           locked_pass_target_required_lateral_clearance, false});
       // Once full inflated clearance has committed the Pass, retain the maneuver down to the
@@ -5125,7 +5130,7 @@ struct MPC
         v2x_overtake_core::PassFrontOverlapExclusionRequest{
           overtake_line_state_.phase == OvertakeLinePhase::Pass &&
           overtake_line_state_.pass_front_overlap_exclusion_latched,
-          is_locked_execution_target,
+          is_locked_mission_target,
           locked_pass_target_relative_lateral,
           locked_pass_target_body_lateral_clearance, false});
       const double locked_pass_target_body_longitudinal_clearance =
@@ -5167,11 +5172,11 @@ struct MPC
         v2x_overtake_core::can_exclude_locked_target_from_front_overlap(
         v2x_overtake_core::PassFrontOverlapExclusionRequest{
           overtake_line_state_.phase == OvertakeLinePhase::Pass,
-          is_locked_execution_target,
+          is_locked_mission_target,
           locked_pass_target_relative_lateral,
           locked_pass_target_required_lateral_clearance,
           overtake_line_state_.pass_front_overlap_exclusion_latched});
-      if (is_locked_execution_target) {
+      if (is_locked_mission_target) {
         output.locked_target_current_lateral_clear =
           locked_pass_target_currently_laterally_clear;
         output.locked_target_body_lateral_clear =
@@ -6090,7 +6095,8 @@ struct MPC
     output.opponent_side_replan_eligible = opponent_side_replan_eligible;
     output.opponent_side_replan_no_return =
       cfg.v2x_behavior.overtake_line.opponent_side_replan_enabled &&
-      opponent_side_replan_execution_active && !opponent_side_replan_eligible;
+      opponent_side_replan_execution_active &&
+      !opponent_side_replan_before_no_return;
     if (
       opponent_side_replan_eligible &&
       overtake_line_state_.opponent_side_replan_pending_sign != 0 &&
@@ -11641,23 +11647,37 @@ private:
       }
     }
     const auto enter_dynamic_mission_wait = [&](const std::string & reason) {
-        const bool soft_failure_wait_allowed =
-          line_cfg.opponent_side_replan_enabled &&
-          active_execution_phase &&
-          overtake_line_state_.mission_path_frozen &&
-          !overtake_line_state_.target_vehicle_id.empty() &&
+        const bool target_continuous =
           behavior_output.locked_target_seen &&
           locked_target_progress_continuous &&
           !behavior_output.locked_target_position_jump &&
-          !locked_target_progress_rejected &&
-          behavior_output.locked_target_current_body_footprints_separated &&
-          !actual_wall_physical_contact &&
-          !actual_wall_margin_blocked &&
-          !actual_wall_sample_unavailable &&
-          behavior_output.front_risk_level != FrontRiskLevel::EmergencyBrake &&
-          !overtake_solver_recovery_active_ &&
-          !behavior_output.overtake_forbidden_wp &&
-          !rear_clear_confirmed;
+          !locked_target_progress_rejected;
+        const bool before_no_return =
+          std::isfinite(behavior_output.locked_target_longitudinal) &&
+          behavior_output.locked_target_longitudinal + kEps >=
+          line_cfg.opponent_side_replan_no_return_front_distance;
+        const bool replacement_count_available =
+          overtake_line_state_.opponent_side_replan_count <
+          line_cfg.opponent_side_replan_max_count;
+        const bool hard_fault =
+          actual_wall_physical_contact || actual_wall_margin_blocked ||
+          actual_wall_sample_unavailable ||
+          behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake ||
+          overtake_solver_recovery_active_ || behavior_output.overtake_forbidden_wp;
+        const bool soft_failure_wait_allowed =
+          overtake_core::can_enter_dynamic_mission_wait(
+          overtake_core::DynamicMissionWaitAdmissionRequest{
+            line_cfg.opponent_side_replan_enabled,
+            active_execution_phase,
+            overtake_line_state_.mission_path_frozen,
+            !overtake_line_state_.target_vehicle_id.empty(),
+            target_continuous,
+            behavior_output.locked_target_current_body_footprints_separated,
+            behavior_output.locked_target_footprint_prediction_valid,
+            before_no_return,
+            replacement_count_available,
+            hard_fault,
+            rear_clear_confirmed});
         if (!soft_failure_wait_allowed) {
           return false;
         }

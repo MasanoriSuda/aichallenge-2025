@@ -1397,6 +1397,8 @@ struct OvertakeLineConfig
   double horizon_progress_closing_speed_weight{0.5};
   double horizon_progress_lateral_motion_penalty{0.5};
   double horizon_progress_lateral_accel_penalty{0.25};
+  bool rear_clear_side_selection_enabled{false};
+  double rear_clear_role_reserve_distance{2.0};
   double pass_horizon_revalidation_lead_distance{3.0};
   double pass_horizon_revalidation_lead_time{0.75};
   double pass_horizon_predicted_time_budget{8.0};
@@ -6189,6 +6191,8 @@ struct MPC
         request.minimum_clearance_advantage_m = std::max(
           0.0,
           cfg.v2x_behavior.overtake_line.side_quality_min_score_advantage);
+        request.rear_clear_side_selection_enabled =
+          cfg.v2x_behavior.overtake_line.rear_clear_side_selection_enabled;
         request.horizon_progress_weights = {
           cfg.v2x_behavior.overtake_line.horizon_progress_rear_clear_time_weight,
           cfg.v2x_behavior.overtake_line.horizon_progress_rear_clear_distance_weight,
@@ -7001,6 +7005,36 @@ struct MPC
                   transition_shift.shift_distance_m;
               }
 
+              overtake_core::PassSideRearClearRoleResolution rear_clear_course_role;
+              if (cfg.v2x_behavior.overtake_line.rear_clear_side_selection_enabled) {
+                const double rear_clear_role_distance_m =
+                  rollout.rear_clear_ego_distance_m +
+                  cfg.v2x_behavior.overtake_line.rear_clear_role_reserve_distance;
+                std::vector<overtake_core::PassOuterHorizonSample> role_samples;
+                role_samples.reserve(static_cast<std::size_t>(static_mission_plan_N));
+                for (int i = 0; i < static_mission_plan_N; ++i) {
+                  const double path_distance = horizon_path_distance_to_index(
+                    ref_wp_id, static_cast<std::size_t>(i));
+                  const auto & waypoint = model->reference_path->get_waypoint(ref_wp_id + i);
+                  role_samples.push_back(
+                    overtake_core::PassOuterHorizonSample{path_distance, waypoint.kappa});
+                  if (path_distance + kEps >= rear_clear_role_distance_m) {
+                    break;
+                  }
+                }
+                rear_clear_course_role = overtake_core::evaluate_pass_side_rear_clear_role(
+                  overtake_core::PassSideRearClearRoleRequest{
+                    side,
+                    std::max(0.0, cfg.v2x_behavior.overtake_max_curvature),
+                    rollout.rear_clear_ego_distance_m,
+                    cfg.v2x_behavior.overtake_line.rear_clear_role_reserve_distance,
+                    std::move(role_samples)});
+                if (!rear_clear_course_role.valid) {
+                  ++full_mission_preflight_reject_count;
+                  continue;
+                }
+              }
+
               overtake_core::OvertakeMissionCandidate mission_candidate;
               mission_candidate.feasible = rollout.feasible;
               mission_candidate.direct_pass = direct_pass;
@@ -7082,6 +7116,18 @@ struct MPC
                 outer_transition.transition_required ?
                 outer_transition_preflight.minimum_return_wall_clearance_m :
                 full_mission_preflight.minimum_return_wall_clearance_m;
+              mission_candidate.rear_clear_course_role_checked =
+                cfg.v2x_behavior.overtake_line.rear_clear_side_selection_enabled;
+              mission_candidate.entry_course_role = rear_clear_course_role.entry_role;
+              mission_candidate.rear_clear_course_role =
+                rear_clear_course_role.rear_clear_role;
+              mission_candidate.full_track_transition_before_rear_clear =
+                outer_transition.transition_required ||
+                rear_clear_course_role.outer_to_inner_before_rear_clear;
+              mission_candidate.inner_to_outer_at_rear_clear =
+                rear_clear_course_role.inner_to_outer_at_rear_clear;
+              mission_candidate.first_course_role_reversal_distance_m =
+                rear_clear_course_role.first_role_reversal_distance_m;
               mission_candidate.max_required_lateral_accel_mps2 = std::max(
                 mission_candidate.max_required_lateral_accel_mps2,
                 outer_transition.transition_required ?
@@ -7231,6 +7277,16 @@ struct MPC
             selected_mission.minimum_path_corridor_width_m
                           << ", return_wall_clear=" <<
             selected_mission.minimum_return_wall_clearance_m
+                          << ", entry_role=" <<
+            overtake_core::to_string(selected_mission.entry_course_role)
+                          << ", rear_clear_role=" <<
+            overtake_core::to_string(selected_mission.rear_clear_course_role)
+                          << ", role_reversal_s=" <<
+            selected_mission.first_course_role_reversal_distance_m
+                          << ", full_track_transition=" <<
+            (selected_mission.full_track_transition_before_rear_clear ? 1 : 0)
+                          << ", inner_to_outer=" <<
+            (selected_mission.inner_to_outer_at_rear_clear ? 1 : 0)
                           << ", corridor_source=" <<
             overtake_core::to_string(selected_mission.corridor_source)
                           << ", target_vlat=" << preflight_target_lateral_velocity
@@ -17184,6 +17240,13 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_horizon_progress_lateral_accel_penalty"] ?
     mpc["v2x_overtake_horizon_progress_lateral_accel_penalty"].as<double>() : 0.25);
+  cfg.mpc.v2x_behavior.overtake_line.rear_clear_side_selection_enabled =
+    mpc["v2x_overtake_rear_clear_side_selection_enabled"] ?
+    mpc["v2x_overtake_rear_clear_side_selection_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_line.rear_clear_role_reserve_distance = std::max(
+    0.0,
+    mpc["v2x_overtake_rear_clear_role_reserve_distance"] ?
+    mpc["v2x_overtake_rear_clear_role_reserve_distance"].as<double>() : 2.0);
   cfg.mpc.v2x_behavior.overtake_line.pass_horizon_revalidation_lead_distance = std::max(
     0.0,
     mpc["v2x_overtake_pass_horizon_revalidation_lead_distance"] ?
@@ -18771,10 +18834,14 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line.continuous_outer_replan_max_count);
       RCLCPP_INFO(
         get_logger(),
-        "V2X horizon progress ranking: %s, weights time=%.2f distance=%.2f "
+        "V2X horizon progress ranking: %s, rear_clear_side=%s/reserve=%.2f m, "
+        "weights time=%.2f distance=%.2f "
         "retained_v=%.2f closing=%.2f lateral=%.2f ay=%.2f",
         mpc_cfg_.v2x_behavior.overtake_line.horizon_progress_enabled ?
         "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line.rear_clear_side_selection_enabled ?
+        "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line.rear_clear_role_reserve_distance,
         mpc_cfg_.v2x_behavior.overtake_line.horizon_progress_rear_clear_time_weight,
         mpc_cfg_.v2x_behavior.overtake_line.horizon_progress_rear_clear_distance_weight,
         mpc_cfg_.v2x_behavior.overtake_line.horizon_progress_retained_speed_weight,

@@ -1567,6 +1567,91 @@ PassOuterHorizonResolution evaluate_pass_outer_horizon(
   return resolution;
 }
 
+const char * to_string(const PassSideCourseRole role) noexcept
+{
+  switch (role) {
+    case PassSideCourseRole::Inner:
+      return "inner";
+    case PassSideCourseRole::Outer:
+      return "outer";
+    case PassSideCourseRole::Unknown:
+    default:
+      return "unknown";
+  }
+}
+
+PassSideRearClearRoleResolution evaluate_pass_side_rear_clear_role(
+  const PassSideRearClearRoleRequest & request) noexcept
+{
+  PassSideRearClearRoleResolution resolution;
+  if (
+    (request.pass_side_sign != -1 && request.pass_side_sign != 1) ||
+    !std::isfinite(request.significant_curvature_radpm) ||
+    request.significant_curvature_radpm < 0.0 ||
+    !std::isfinite(request.predicted_rear_clear_distance_m) ||
+    request.predicted_rear_clear_distance_m < 0.0 ||
+    !std::isfinite(request.reserve_distance_m) || request.reserve_distance_m < 0.0)
+  {
+    return resolution;
+  }
+
+  const double evaluation_distance_m =
+    request.predicted_rear_clear_distance_m + request.reserve_distance_m;
+  double previous_distance_m = -std::numeric_limits<double>::infinity();
+  for (const auto & sample : request.samples) {
+    if (
+      !std::isfinite(sample.path_distance_m) || sample.path_distance_m < 0.0 ||
+      !std::isfinite(sample.reference_curvature_radpm) ||
+      sample.path_distance_m + 1e-9 < previous_distance_m)
+    {
+      return PassSideRearClearRoleResolution{};
+    }
+    previous_distance_m = sample.path_distance_m;
+  }
+  if (
+    request.samples.empty() ||
+    request.samples.back().path_distance_m + 1e-9 < evaluation_distance_m)
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  PassSideCourseRole current_role = PassSideCourseRole::Unknown;
+  for (const auto & sample : request.samples) {
+    if (sample.path_distance_m > evaluation_distance_m + 1e-9) {
+      break;
+    }
+    if (
+      std::abs(sample.reference_curvature_radpm) <=
+      request.significant_curvature_radpm + 1e-12)
+    {
+      continue;
+    }
+
+    const int inner_side = sample.reference_curvature_radpm > 0.0 ? 1 : -1;
+    const PassSideCourseRole sample_role = request.pass_side_sign == inner_side ?
+      PassSideCourseRole::Inner : PassSideCourseRole::Outer;
+    if (resolution.entry_role == PassSideCourseRole::Unknown) {
+      resolution.entry_role = sample_role;
+    } else if (
+      current_role != PassSideCourseRole::Unknown && sample_role != current_role &&
+      !std::isfinite(resolution.first_role_reversal_distance_m))
+    {
+      resolution.first_role_reversal_distance_m = sample.path_distance_m;
+    }
+    current_role = sample_role;
+    resolution.rear_clear_role = sample_role;
+  }
+
+  resolution.outer_to_inner_before_rear_clear =
+    resolution.entry_role == PassSideCourseRole::Outer &&
+    resolution.rear_clear_role == PassSideCourseRole::Inner;
+  resolution.inner_to_outer_at_rear_clear =
+    resolution.entry_role == PassSideCourseRole::Inner &&
+    resolution.rear_clear_role == PassSideCourseRole::Outer;
+  return resolution;
+}
+
 ContinuousOuterReplanResolution evaluate_continuous_outer_replan(
   const ContinuousOuterReplanRequest & request) noexcept
 {
@@ -2698,6 +2783,20 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
       const bool progress_speed_valid = !request.horizon_progress_enabled ||
         (std::isfinite(candidate.predicted_minimum_ego_speed_mps) &&
         candidate.predicted_minimum_ego_speed_mps >= 0.0);
+      const auto course_role_valid = [](const PassSideCourseRole role) {
+          return role == PassSideCourseRole::Unknown ||
+                 role == PassSideCourseRole::Inner ||
+                 role == PassSideCourseRole::Outer;
+        };
+      const bool rear_clear_course_role_valid =
+        !candidate.rear_clear_course_role_checked ||
+        (course_role_valid(candidate.entry_course_role) &&
+        course_role_valid(candidate.rear_clear_course_role) &&
+        !std::isnan(candidate.first_course_role_reversal_distance_m) &&
+        candidate.first_course_role_reversal_distance_m >= 0.0 &&
+        (!candidate.inner_to_outer_at_rear_clear ||
+        (candidate.entry_course_role == PassSideCourseRole::Inner &&
+        candidate.rear_clear_course_role == PassSideCourseRole::Outer)));
       const bool outer_transition_valid = !candidate.outer_transition_required ||
         ((candidate.outer_transition_side_sign == -1 ||
         candidate.outer_transition_side_sign == 1) &&
@@ -2716,7 +2815,7 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
         candidate.outer_transition_deadline_pass_m -
         candidate.outer_transition_start_pass_m + 1e-9);
       return deadline_valid && closing_speed_valid && slack_valid && rear_clear_valid &&
-             progress_speed_valid && outer_transition_valid &&
+             progress_speed_valid && rear_clear_course_role_valid && outer_transition_valid &&
              non_negative_or_infinity(candidate.minimum_path_wall_clearance_m) &&
              non_negative_or_infinity(candidate.minimum_path_corridor_width_m) &&
              non_negative_or_infinity(candidate.minimum_return_wall_clearance_m) &&
@@ -2781,6 +2880,15 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
             return false;
           }
         }
+      }
+      if (
+        request.rear_clear_side_selection_enabled &&
+        candidate.rear_clear_course_role_checked &&
+        incumbent.rear_clear_course_role_checked &&
+        candidate.full_track_transition_before_rear_clear !=
+        incumbent.full_track_transition_before_rear_clear)
+      {
+        return !candidate.full_track_transition_before_rear_clear;
       }
       const double candidate_physical_reserve = physical_reserve(candidate);
       const double incumbent_physical_reserve = physical_reserve(incumbent);
@@ -2879,6 +2987,19 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
         }
         if (incumbent.closing_speed_mps > candidate.closing_speed_mps + kEpsilon) {
           return false;
+        }
+      }
+      if (
+        request.rear_clear_side_selection_enabled &&
+        candidate.rear_clear_course_role_checked &&
+        incumbent.rear_clear_course_role_checked)
+      {
+        const bool candidate_exits_outer =
+          candidate.rear_clear_course_role == PassSideCourseRole::Outer;
+        const bool incumbent_exits_outer =
+          incumbent.rear_clear_course_role == PassSideCourseRole::Outer;
+        if (candidate_exits_outer != incumbent_exits_outer) {
+          return candidate_exits_outer;
         }
       }
       return std::abs(candidate.goal_lateral_m) + kEpsilon <

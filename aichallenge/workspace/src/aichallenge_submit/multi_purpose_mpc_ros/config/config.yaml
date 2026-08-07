@@ -500,6 +500,10 @@ mpc:
   v2x_overtake_horizon_progress_closing_speed_weight: 0.5
   v2x_overtake_horizon_progress_lateral_motion_penalty: 0.5
   v2x_overtake_horizon_progress_lateral_accel_penalty: 0.25
+  # Choose the side by executable rear-clear value instead of treating entry-outside as a default.
+  # A short post-clear reserve catches a curve-sign change immediately after the predicted pass.
+  v2x_overtake_rear_clear_side_selection_enabled: true
+  v2x_overtake_rear_clear_role_reserve_distance: 2.0 # [m]
   v2x_overtake_pass_horizon_revalidation_lead_distance: 3.0 # [m]
   v2x_overtake_pass_horizon_revalidation_lead_time: 0.75 # [s]
   v2x_overtake_pass_horizon_predicted_time_budget: 8.0 # [s] admission rear-clear budget

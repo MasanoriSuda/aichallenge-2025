@@ -130,6 +130,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::RearClearReplanWindowRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassContinuationPreflightPolicyRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassOuterHorizonRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassOuterHorizonSample;
+using multi_purpose_mpc_ros::v2x_overtake_core::PassSideCourseRole;
+using multi_purpose_mpc_ros::v2x_overtake_core::PassSideRearClearRoleRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ContinuousOuterReplanRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ScheduledOuterTransitionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::
@@ -169,6 +171,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_horizon_action;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_rear_clear_replan_window;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_continuation_preflight_policy;
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_pass_outer_horizon;
+using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_pass_side_rear_clear_role;
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_continuous_outer_replan;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_scheduled_outer_transition;
 using multi_purpose_mpc_ros::v2x_overtake_core::
@@ -3406,6 +3409,52 @@ TEST(V2XOvertakeCoreHorizon, CarriesOuterContractAcrossStraightReplacementStart)
   EXPECT_DOUBLE_EQ(result.first_role_reversal_distance_m, 8.0);
 }
 
+TEST(V2XOvertakeCoreHorizon, DetectsOuterToInnerAtRearClearReserve)
+{
+  const auto result = evaluate_pass_side_rear_clear_role(
+    PassSideRearClearRoleRequest{
+      -1, 0.04, 10.0, 3.0,
+      std::vector<PassOuterHorizonSample>{
+        {0.0, 0.0}, {2.0, 0.12}, {10.0, 0.0}, {12.0, -0.15}, {14.0, -0.15}}});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_EQ(result.entry_role, PassSideCourseRole::Outer);
+  EXPECT_EQ(result.rear_clear_role, PassSideCourseRole::Inner);
+  EXPECT_TRUE(result.outer_to_inner_before_rear_clear);
+  EXPECT_FALSE(result.inner_to_outer_at_rear_clear);
+  EXPECT_DOUBLE_EQ(result.first_role_reversal_distance_m, 12.0);
+}
+
+TEST(V2XOvertakeCoreHorizon, KeepsInsideToOutsideExitWithoutTrackTransition)
+{
+  const auto result = evaluate_pass_side_rear_clear_role(
+    PassSideRearClearRoleRequest{
+      1, 0.04, 10.0, 3.0,
+      std::vector<PassOuterHorizonSample>{
+        {0.0, 0.0}, {2.0, 0.12}, {10.0, 0.0}, {12.0, -0.15}, {14.0, -0.15}}});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_EQ(result.entry_role, PassSideCourseRole::Inner);
+  EXPECT_EQ(result.rear_clear_role, PassSideCourseRole::Outer);
+  EXPECT_FALSE(result.outer_to_inner_before_rear_clear);
+  EXPECT_TRUE(result.inner_to_outer_at_rear_clear);
+  EXPECT_DOUBLE_EQ(result.first_role_reversal_distance_m, 12.0);
+}
+
+TEST(V2XOvertakeCoreHorizon, LeavesStraightRearClearRoleUnknown)
+{
+  const auto result = evaluate_pass_side_rear_clear_role(
+    PassSideRearClearRoleRequest{
+      1, 0.04, 8.0, 2.0,
+      std::vector<PassOuterHorizonSample>{{0.0, 0.0}, {5.0, 0.02}, {10.0, 0.0}}});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_EQ(result.entry_role, PassSideCourseRole::Unknown);
+  EXPECT_EQ(result.rear_clear_role, PassSideCourseRole::Unknown);
+  EXPECT_FALSE(result.outer_to_inner_before_rear_clear);
+  EXPECT_FALSE(result.inner_to_outer_at_rear_clear);
+}
+
 TEST(V2XOvertakeCoreHorizon, RequestsSustainedOppositeOuterCurveBeforeItArrives)
 {
   const auto result = evaluate_continuous_outer_replan(
@@ -4488,6 +4537,108 @@ TEST(V2XOvertakeCoreSpeed, GlobalCandidateSelectionPrefersMaterialPathClearance)
   OvertakeMissionCandidateSelectionRequest request;
   request.candidates = {direct, shifted};
   request.minimum_clearance_advantage_m = 0.10;
+  const auto selection = select_overtake_mission_candidate(request);
+
+  ASSERT_TRUE(selection.valid);
+  ASSERT_TRUE(selection.found);
+  EXPECT_EQ(selection.candidate.pass_side_sign, -1);
+}
+
+TEST(V2XOvertakeCoreSpeed, RearClearSideSelectionAvoidsFullTrackTransition)
+{
+  OvertakeMissionCandidate entry_outer;
+  entry_outer.feasible = true;
+  entry_outer.shift_distance_m = 2.0;
+  entry_outer.goal_lateral_m = -0.5;
+  entry_outer.lateral_shift_m = 0.5;
+  entry_outer.max_required_lateral_accel_mps2 = 1.0;
+  entry_outer.pass_side_sign = -1;
+  entry_outer.rear_clear_course_role_checked = true;
+  entry_outer.entry_course_role = PassSideCourseRole::Outer;
+  entry_outer.rear_clear_course_role = PassSideCourseRole::Inner;
+  entry_outer.full_track_transition_before_rear_clear = true;
+  entry_outer.first_course_role_reversal_distance_m = 8.0;
+
+  auto inside_to_outside = entry_outer;
+  inside_to_outside.shift_distance_m = 3.0;
+  inside_to_outside.goal_lateral_m = 0.7;
+  inside_to_outside.lateral_shift_m = 0.7;
+  inside_to_outside.pass_side_sign = 1;
+  inside_to_outside.entry_course_role = PassSideCourseRole::Inner;
+  inside_to_outside.rear_clear_course_role = PassSideCourseRole::Outer;
+  inside_to_outside.full_track_transition_before_rear_clear = false;
+  inside_to_outside.inner_to_outer_at_rear_clear = true;
+
+  OvertakeMissionCandidateSelectionRequest request;
+  request.candidates = {entry_outer, inside_to_outside};
+  request.rear_clear_side_selection_enabled = true;
+  const auto selection = select_overtake_mission_candidate(request);
+
+  ASSERT_TRUE(selection.valid);
+  ASSERT_TRUE(selection.found);
+  EXPECT_EQ(selection.candidate.pass_side_sign, 1);
+  EXPECT_TRUE(selection.candidate.inner_to_outer_at_rear_clear);
+}
+
+TEST(V2XOvertakeCoreSpeed, RearClearSideSelectionUsesExitOuterAsLateTieBreak)
+{
+  OvertakeMissionCandidate stays_inside;
+  stays_inside.feasible = true;
+  stays_inside.shift_distance_m = 3.0;
+  stays_inside.goal_lateral_m = -0.7;
+  stays_inside.lateral_shift_m = 0.7;
+  stays_inside.max_required_lateral_accel_mps2 = 1.0;
+  stays_inside.pass_side_sign = -1;
+  stays_inside.rear_clear_course_role_checked = true;
+  stays_inside.entry_course_role = PassSideCourseRole::Inner;
+  stays_inside.rear_clear_course_role = PassSideCourseRole::Inner;
+
+  auto exits_outer = stays_inside;
+  exits_outer.goal_lateral_m = 0.7;
+  exits_outer.pass_side_sign = 1;
+  exits_outer.rear_clear_course_role = PassSideCourseRole::Outer;
+  exits_outer.inner_to_outer_at_rear_clear = true;
+  exits_outer.first_course_role_reversal_distance_m = 8.0;
+
+  OvertakeMissionCandidateSelectionRequest request;
+  request.candidates = {stays_inside, exits_outer};
+  request.rear_clear_side_selection_enabled = true;
+  const auto selection = select_overtake_mission_candidate(request);
+
+  ASSERT_TRUE(selection.valid);
+  ASSERT_TRUE(selection.found);
+  EXPECT_EQ(selection.candidate.pass_side_sign, 1);
+  EXPECT_EQ(selection.candidate.rear_clear_course_role, PassSideCourseRole::Outer);
+}
+
+TEST(V2XOvertakeCoreSpeed, DisabledRearClearSideSelectionKeepsLegacyGeometryOrder)
+{
+  OvertakeMissionCandidate shorter;
+  shorter.feasible = true;
+  shorter.shift_distance_m = 2.0;
+  shorter.goal_lateral_m = -0.5;
+  shorter.lateral_shift_m = 0.5;
+  shorter.max_required_lateral_accel_mps2 = 1.0;
+  shorter.pass_side_sign = -1;
+  shorter.rear_clear_course_role_checked = true;
+  shorter.entry_course_role = PassSideCourseRole::Outer;
+  shorter.rear_clear_course_role = PassSideCourseRole::Inner;
+  shorter.full_track_transition_before_rear_clear = true;
+  shorter.first_course_role_reversal_distance_m = 8.0;
+
+  auto longer = shorter;
+  longer.shift_distance_m = 3.0;
+  longer.goal_lateral_m = 0.7;
+  longer.lateral_shift_m = 0.7;
+  longer.pass_side_sign = 1;
+  longer.entry_course_role = PassSideCourseRole::Inner;
+  longer.rear_clear_course_role = PassSideCourseRole::Outer;
+  longer.full_track_transition_before_rear_clear = false;
+  longer.inner_to_outer_at_rear_clear = true;
+
+  OvertakeMissionCandidateSelectionRequest request;
+  request.candidates = {shorter, longer};
+  request.rear_clear_side_selection_enabled = false;
   const auto selection = select_overtake_mission_candidate(request);
 
   ASSERT_TRUE(selection.valid);

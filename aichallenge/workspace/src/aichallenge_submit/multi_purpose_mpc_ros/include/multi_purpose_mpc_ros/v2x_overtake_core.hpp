@@ -922,6 +922,43 @@ struct PassOuterHorizonResolution
 PassOuterHorizonResolution evaluate_pass_outer_horizon(
   const PassOuterHorizonRequest & request) noexcept;
 
+enum class PassSideCourseRole
+{
+  Unknown,
+  Inner,
+  Outer,
+};
+
+const char * to_string(PassSideCourseRole role) noexcept;
+
+struct PassSideRearClearRoleRequest
+{
+  int pass_side_sign{0};
+  double significant_curvature_radpm{};
+  double predicted_rear_clear_distance_m{};
+  double reserve_distance_m{};
+  std::vector<PassOuterHorizonSample> samples;
+};
+
+struct PassSideRearClearRoleResolution
+{
+  bool valid{false};
+  PassSideCourseRole entry_role{PassSideCourseRole::Unknown};
+  PassSideCourseRole rear_clear_role{PassSideCourseRole::Unknown};
+  bool outer_to_inner_before_rear_clear{false};
+  bool inner_to_outer_at_rear_clear{false};
+  double first_role_reversal_distance_m{std::numeric_limits<double>::infinity()};
+};
+
+/// Classify a fixed Frenet side over the predicted rear-clear horizon. The
+/// reserve includes a short section after rear-clear so a curve-sign change at
+/// the pass boundary is visible before committing. An outer-to-inner change is
+/// the expensive case: preserving an outside strategy would require crossing
+/// the track while the target may still be alongside. An inner-to-outer change
+/// needs no lateral handoff and is therefore retained as a viable exit path.
+PassSideRearClearRoleResolution evaluate_pass_side_rear_clear_role(
+  const PassSideRearClearRoleRequest & request) noexcept;
+
 struct ContinuousOuterReplanRequest
 {
   bool enabled{false};
@@ -1398,6 +1435,12 @@ struct OvertakeMissionCandidate
   double minimum_path_wall_clearance_m{std::numeric_limits<double>::infinity()};
   double minimum_path_corridor_width_m{std::numeric_limits<double>::infinity()};
   double minimum_return_wall_clearance_m{std::numeric_limits<double>::infinity()};
+  bool rear_clear_course_role_checked{false};
+  PassSideCourseRole entry_course_role{PassSideCourseRole::Unknown};
+  PassSideCourseRole rear_clear_course_role{PassSideCourseRole::Unknown};
+  bool full_track_transition_before_rear_clear{false};
+  bool inner_to_outer_at_rear_clear{false};
+  double first_course_role_reversal_distance_m{std::numeric_limits<double>::infinity()};
 };
 
 struct OvertakePassPlanRequest
@@ -1498,6 +1541,9 @@ struct OvertakeMissionCandidateSelectionRequest
   /// Only let physical path reserve override racing progress when the
   /// difference is material. This preserves aggressive ordering for ties.
   double minimum_clearance_advantage_m{};
+  /// Prefer a side that can reach rear-clear without crossing the full track.
+  /// Entry inner/outer labels alone are intentionally not selection rules.
+  bool rear_clear_side_selection_enabled{false};
 };
 
 struct OvertakeMissionCandidateSelection
@@ -1511,8 +1557,11 @@ struct OvertakeMissionCandidateSelection
 
 /// Select a deterministic executable mission. Evaluated, deadline-feasible
 /// candidates and the configured slack reserve precede racing-line retention
-/// and body-clear time. Legacy unchecked candidates retain the prior geometric
-/// ordering. Otherwise-identical candidates prefer the higher closing speed.
+/// and body-clear time. When rear-clear side selection is enabled, a candidate
+/// that needs no full-track transition before rear-clear precedes an entry-outer
+/// candidate that becomes inner. Legacy unchecked candidates retain the prior
+/// geometric ordering. Otherwise-identical candidates prefer the higher closing
+/// speed, then an outside role at rear-clear.
 OvertakeMissionCandidateSelection select_overtake_mission_candidate(
   const OvertakeMissionCandidateSelectionRequest & request) noexcept;
 

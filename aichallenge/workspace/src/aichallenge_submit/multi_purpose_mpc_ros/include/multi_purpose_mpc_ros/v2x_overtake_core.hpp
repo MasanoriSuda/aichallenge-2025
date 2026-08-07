@@ -1109,6 +1109,7 @@ enum class SafeSeparationReason
   AbsoluteDistanceLimit,
   TargetClearAhead,
   ProgressExtension,
+  DynamicCompletionExtension,
 };
 
 struct CommittedPassForwardCompletionRequest
@@ -1161,6 +1162,35 @@ struct CommittedPassForwardCompletionResolution
 CommittedPassForwardCompletionResolution resolve_committed_pass_forward_completion(
   const CommittedPassForwardCompletionRequest & request) noexcept;
 
+struct DynamicCompletionExtensionRequest
+{
+  bool enabled{false};
+  bool forward_escape_allowed{false};
+  bool fresh_forward_progress{false};
+  bool forward_completion_latched{false};
+  double required_forward_distance_m{std::numeric_limits<double>::infinity()};
+  double forward_speed_mps{};
+  double absolute_elapsed_sec{};
+  double absolute_traveled_m{};
+  double absolute_maximum_duration_sec{std::numeric_limits<double>::infinity()};
+  double absolute_maximum_distance_m{std::numeric_limits<double>::infinity()};
+};
+
+struct DynamicCompletionExtensionResolution
+{
+  bool allowed{false};
+  double required_completion_time_sec{std::numeric_limits<double>::infinity()};
+  double remaining_absolute_time_sec{};
+  double remaining_absolute_distance_m{};
+};
+
+/// Admit another local forward-completion window only when the live rear-clear
+/// estimate still fits inside both immutable absolute Pass bounds. The caller
+/// owns all footprint/corridor guards and reports them through
+/// forward_escape_allowed/fresh_forward_progress.
+DynamicCompletionExtensionResolution resolve_dynamic_completion_extension(
+  const DynamicCompletionExtensionRequest & request) noexcept;
+
 struct SafeSeparationRequest
 {
   bool enabled{false};
@@ -1189,6 +1219,7 @@ struct SafeSeparationRequest
   double absolute_maximum_distance_m{std::numeric_limits<double>::infinity()};
   bool forward_progress_extension_allowed{false};
   bool forward_completion_latched{false};
+  bool dynamic_completion_extension_allowed{false};
 };
 
 struct SafeSeparationResolution

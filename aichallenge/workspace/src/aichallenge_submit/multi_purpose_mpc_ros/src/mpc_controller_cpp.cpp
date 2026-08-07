@@ -1429,6 +1429,7 @@ struct OvertakeLineConfig
   double safe_separation_progress_extension_min_progress{0.75};
   double safe_separation_progress_extension_fresh_sec{0.75};
   int safe_separation_progress_extension_max_count{1};
+  bool safe_separation_dynamic_completion_extension_enabled{false};
   bool reacquire_enabled{false};
   double reacquire_window_sec{0.0};
   double reacquire_max_return_progress{0.0};
@@ -13055,8 +13056,7 @@ private:
         const bool safe_separation_forward_escape_allowed =
           line_cfg.safe_separation_forward_escape_enabled &&
           committed_forward_completion.active;
-        const bool safe_separation_progress_extension_allowed =
-          line_cfg.safe_separation_progress_extension_enabled &&
+        const bool safe_separation_fresh_forward_progress =
           safe_separation_forward_escape_allowed &&
           !behavior_output.overtake_execution_corridor_blocked &&
           behavior_output.locked_target_footprint_prediction_valid &&
@@ -13064,9 +13064,35 @@ private:
           safe_separation_forward_progress + kEps >=
           line_cfg.safe_separation_progress_extension_min_progress &&
           safe_separation_progress_age <=
-          line_cfg.safe_separation_progress_extension_fresh_sec + kEps &&
+          line_cfg.safe_separation_progress_extension_fresh_sec + kEps;
+        const bool safe_separation_progress_extension_allowed =
+          line_cfg.safe_separation_progress_extension_enabled &&
+          safe_separation_fresh_forward_progress &&
           overtake_line_state_.pass_horizon_safe_separation_progress_extension_count <
           line_cfg.safe_separation_progress_extension_max_count;
+        const double safe_separation_forward_speed = std::min(
+          std::max(kEps, cfg.v_max),
+          std::max(
+            std::max(0.0, current_speed_mps_),
+            std::max(0.0, locked_target_speed) +
+            std::max(0.0, line_cfg.safe_separation_speed_delta)));
+        const auto safe_separation_dynamic_completion =
+          overtake_core::resolve_dynamic_completion_extension(
+          overtake_core::DynamicCompletionExtensionRequest{
+            line_cfg.safe_separation_dynamic_completion_extension_enabled,
+            safe_separation_forward_escape_allowed &&
+            !behavior_output.overtake_execution_corridor_blocked &&
+            behavior_output.locked_target_current_body_footprints_separated &&
+            behavior_output.locked_target_footprint_prediction_valid &&
+            behavior_output.locked_target_predicted_body_footprint_sweep_separated,
+            safe_separation_fresh_forward_progress,
+            overtake_line_state_.pass_forward_completion_latched,
+            committed_forward_completion.required_forward_distance_m,
+            safe_separation_forward_speed,
+            pass_elapsed,
+            pass_traveled,
+            line_cfg.pass_horizon_absolute_time_limit,
+            line_cfg.pass_horizon_absolute_distance_limit});
         const auto safe_separation = overtake_core::resolve_safe_separation(
           overtake_core::SafeSeparationRequest{
             line_cfg.safe_separation_enabled,
@@ -13094,7 +13120,8 @@ private:
             line_cfg.pass_horizon_absolute_time_limit,
             line_cfg.pass_horizon_absolute_distance_limit,
             safe_separation_progress_extension_allowed,
-            overtake_line_state_.pass_forward_completion_latched});
+            overtake_line_state_.pass_forward_completion_latched,
+            safe_separation_dynamic_completion.allowed});
         if (safe_separation.action == overtake_core::SafeSeparationAction::KeepSameSide) {
           safe_separation_velocity_reference =
             safe_separation.target_velocity_reference_mps;
@@ -13103,17 +13130,25 @@ private:
           safe_separation_forward_escape_active =
             safe_separation.forward_escape_active;
           if (safe_separation.progress_extension_requested) {
-            ++overtake_line_state_
-              .pass_horizon_safe_separation_progress_extension_count;
+            const bool dynamic_completion_extension =
+              safe_separation.reason ==
+              overtake_core::SafeSeparationReason::DynamicCompletionExtension;
+            if (!dynamic_completion_extension) {
+              ++overtake_line_state_
+                .pass_horizon_safe_separation_progress_extension_count;
+            }
             const char * local_limit =
               safe_separation_traveled >= line_cfg.safe_separation_max_distance - kEps ?
               "distance" : "time";
             RCLCPP_WARN(
               rclcpp::get_logger("mpc_controller"),
-              "OvertakeLine SafeSeparation progress extension: trigger=%s, "
+              "OvertakeLine SafeSeparation %s: trigger=%s, "
               "target=%s, side=%d, target_s=%.2f, progress=%.2f m, "
               "progress_age=%.2f s, local=%.2f s/%.2f m, "
-              "absolute=%.2f s/%.2f m, count=%d/%d",
+              "absolute=%.2f s/%.2f m, required=%.2f m/%.2f s, "
+              "remaining=%.2f m/%.2f s, count=%d/%d",
+              dynamic_completion_extension ?
+              "dynamic completion extension" : "progress extension",
               local_limit,
               overtake_line_state_.target_vehicle_id.c_str(),
               overtake_line_state_.pass_side_sign,
@@ -13124,6 +13159,10 @@ private:
               safe_separation_traveled,
               pass_elapsed,
               pass_traveled,
+              committed_forward_completion.required_forward_distance_m,
+              safe_separation_dynamic_completion.required_completion_time_sec,
+              safe_separation_dynamic_completion.remaining_absolute_distance_m,
+              safe_separation_dynamic_completion.remaining_absolute_time_sec,
               overtake_line_state_
               .pass_horizon_safe_separation_progress_extension_count,
               line_cfg.safe_separation_progress_extension_max_count);
@@ -17277,6 +17316,10 @@ Config load_config(const std::string & path)
     0,
     mpc["v2x_overtake_safe_separation_progress_extension_max_count"] ?
     mpc["v2x_overtake_safe_separation_progress_extension_max_count"].as<int>() : 1);
+  cfg.mpc.v2x_behavior.overtake_line.safe_separation_dynamic_completion_extension_enabled =
+    mpc["v2x_overtake_safe_separation_dynamic_completion_extension_enabled"] ?
+    mpc["v2x_overtake_safe_separation_dynamic_completion_extension_enabled"].as<bool>() :
+    false;
   cfg.mpc.v2x_behavior.overtake_line.reacquire_enabled =
     mpc["v2x_overtake_reacquire_enabled"] ?
     mpc["v2x_overtake_reacquire_enabled"].as<bool>() : false;
@@ -18675,7 +18718,7 @@ public:
         "hold<=%.2f s/%.2f m, safe-separation=%s delta=%.2f m/s "
         "forward_escape=%s/front<=%.2f m "
         "front>=%.2f m confirm=%.2f s limit=%.2f s/%.2f m, "
-        "progress_extension=%s min=%.2f m fresh<=%.2f s x%d",
+        "progress_extension=%s min=%.2f m fresh<=%.2f s x%d, dynamic_completion=%s",
         mpc_cfg_.v2x_behavior.overtake_line.pass_horizon_enabled ?
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.pass_horizon_predicted_time_budget,
@@ -18708,7 +18751,9 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line
         .safe_separation_progress_extension_fresh_sec,
         mpc_cfg_.v2x_behavior.overtake_line
-        .safe_separation_progress_extension_max_count);
+        .safe_separation_progress_extension_max_count,
+        mpc_cfg_.v2x_behavior.overtake_line
+        .safe_separation_dynamic_completion_extension_enabled ? "enabled" : "disabled");
       RCLCPP_INFO(
         get_logger(),
         "V2X continuous outer Pass replan: %s, lookahead=%.2f m, "

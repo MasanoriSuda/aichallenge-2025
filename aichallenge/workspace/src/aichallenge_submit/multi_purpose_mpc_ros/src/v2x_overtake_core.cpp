@@ -1996,6 +1996,53 @@ CommittedPassForwardCompletionResolution resolve_committed_pass_forward_completi
   return resolution;
 }
 
+DynamicCompletionExtensionResolution resolve_dynamic_completion_extension(
+  const DynamicCompletionExtensionRequest & request) noexcept
+{
+  DynamicCompletionExtensionResolution resolution;
+  const auto finite_non_negative = [](const double value) {
+      return std::isfinite(value) && value >= 0.0;
+    };
+  const auto non_negative_bound = [](const double value) {
+      return !std::isnan(value) && value >= 0.0;
+    };
+  if (
+    !finite_non_negative(request.required_forward_distance_m) ||
+    !finite_non_negative(request.forward_speed_mps) ||
+    !finite_non_negative(request.absolute_elapsed_sec) ||
+    !finite_non_negative(request.absolute_traveled_m) ||
+    !non_negative_bound(request.absolute_maximum_duration_sec) ||
+    !non_negative_bound(request.absolute_maximum_distance_m))
+  {
+    return resolution;
+  }
+
+  resolution.remaining_absolute_time_sec =
+    std::isfinite(request.absolute_maximum_duration_sec) ?
+    std::max(
+    0.0, request.absolute_maximum_duration_sec - request.absolute_elapsed_sec) :
+    std::numeric_limits<double>::infinity();
+  resolution.remaining_absolute_distance_m =
+    std::isfinite(request.absolute_maximum_distance_m) ?
+    std::max(
+    0.0, request.absolute_maximum_distance_m - request.absolute_traveled_m) :
+    std::numeric_limits<double>::infinity();
+  if (request.required_forward_distance_m <= 1e-9) {
+    resolution.required_completion_time_sec = 0.0;
+  } else if (request.forward_speed_mps > 1e-6) {
+    resolution.required_completion_time_sec =
+      request.required_forward_distance_m / request.forward_speed_mps;
+  }
+  resolution.allowed =
+    request.enabled && request.forward_escape_allowed &&
+    request.fresh_forward_progress && request.forward_completion_latched &&
+    request.required_forward_distance_m <=
+    resolution.remaining_absolute_distance_m + 1e-9 &&
+    resolution.required_completion_time_sec <=
+    resolution.remaining_absolute_time_sec + 1e-9;
+  return resolution;
+}
+
 SafeSeparationResolution resolve_safe_separation(
   const SafeSeparationRequest & request) noexcept
 {
@@ -2076,13 +2123,17 @@ SafeSeparationResolution resolve_safe_separation(
     const bool absolute_limit_reached =
       absolute_distance_limit_reached || absolute_time_limit_reached;
     if (
-      forward_escape_active && request.forward_progress_extension_allowed &&
+      forward_escape_active &&
+      (request.forward_progress_extension_allowed ||
+      request.dynamic_completion_extension_allowed) &&
       !absolute_limit_reached)
     {
       resolution.action = SafeSeparationAction::KeepSameSide;
       resolution.forward_escape_active = true;
       resolution.progress_extension_requested = true;
-      resolution.reason = SafeSeparationReason::ProgressExtension;
+      resolution.reason = request.forward_progress_extension_allowed ?
+        SafeSeparationReason::ProgressExtension :
+        SafeSeparationReason::DynamicCompletionExtension;
       resolution.target_velocity_reference_mps = std::min(
         request.maximum_ego_speed_mps,
         std::max(
@@ -2174,6 +2225,8 @@ const char * to_string(const SafeSeparationReason reason) noexcept
       return "target clear ahead";
     case SafeSeparationReason::ProgressExtension:
       return "fresh forward progress extension";
+    case SafeSeparationReason::DynamicCompletionExtension:
+      return "dynamic completion extension";
   }
   return "unknown";
 }

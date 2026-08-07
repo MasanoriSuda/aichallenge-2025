@@ -141,6 +141,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassForwardCompletionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::DynamicCompletionExtensionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SameSideReplanShiftDistanceRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidate;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidateSelectionRequest;
@@ -177,6 +178,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_same_side_extension_com
 using multi_purpose_mpc_ros::v2x_overtake_core::can_commit_same_side_extension;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_safe_separation;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_committed_pass_forward_completion;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_completion_extension;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_same_side_replan_shift_distance;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_overtake_mission_candidate;
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_overtake_mission_horizon_progress;
@@ -3860,6 +3862,41 @@ TEST(V2XOvertakeCoreHorizon, DebouncesPredictedOverlapOnlyAfterForwardCompletion
   EXPECT_FALSE(resolution.predicted_overlap_grace_active);
 }
 
+TEST(V2XOvertakeCoreHorizon, ExtendsFromLiveCompletionEstimateInsideAbsoluteBounds)
+{
+  DynamicCompletionExtensionRequest request;
+  request.enabled = true;
+  request.forward_escape_allowed = true;
+  request.fresh_forward_progress = true;
+  request.forward_completion_latched = true;
+  request.required_forward_distance_m = 6.0;
+  request.forward_speed_mps = 5.8;
+  request.absolute_elapsed_sec = 4.65;
+  request.absolute_traveled_m = 25.0;
+  request.absolute_maximum_duration_sec = 10.0;
+  request.absolute_maximum_distance_m = 32.0;
+
+  auto resolution = resolve_dynamic_completion_extension(request);
+  EXPECT_TRUE(resolution.allowed);
+  EXPECT_NEAR(resolution.required_completion_time_sec, 6.0 / 5.8, 1e-9);
+  EXPECT_NEAR(resolution.remaining_absolute_time_sec, 5.35, 1e-9);
+  EXPECT_NEAR(resolution.remaining_absolute_distance_m, 7.0, 1e-9);
+
+  request.required_forward_distance_m = 7.01;
+  resolution = resolve_dynamic_completion_extension(request);
+  EXPECT_FALSE(resolution.allowed);
+
+  request.required_forward_distance_m = 6.0;
+  request.absolute_maximum_duration_sec = 5.0;
+  resolution = resolve_dynamic_completion_extension(request);
+  EXPECT_FALSE(resolution.allowed);
+
+  request.absolute_maximum_duration_sec = 10.0;
+  request.fresh_forward_progress = false;
+  resolution = resolve_dynamic_completion_extension(request);
+  EXPECT_FALSE(resolution.allowed);
+}
+
 TEST(V2XOvertakeCoreHorizon, CreatesLongitudinalSafeSeparationOnCommittedSide)
 {
   SafeSeparationRequest request;
@@ -4023,6 +4060,13 @@ TEST(V2XOvertakeCoreHorizon, ExtendsLocalBoundOnlyForSafeForwardProgress)
   EXPECT_EQ(resolution.action, SafeSeparationAction::Abort);
   EXPECT_EQ(resolution.reason, SafeSeparationReason::LocalDistanceLimit);
   EXPECT_FALSE(resolution.progress_extension_requested);
+
+  request.dynamic_completion_extension_allowed = true;
+  resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::KeepSameSide);
+  EXPECT_EQ(resolution.reason, SafeSeparationReason::DynamicCompletionExtension);
+  EXPECT_TRUE(resolution.forward_escape_active);
+  EXPECT_TRUE(resolution.progress_extension_requested);
 }
 
 TEST(V2XOvertakeCoreHorizon, ForwardCompletionUsesOnlyCurrentLocalWindowPastAbsoluteBound)

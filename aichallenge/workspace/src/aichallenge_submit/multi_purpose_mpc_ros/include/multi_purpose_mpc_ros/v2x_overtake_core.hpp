@@ -1137,6 +1137,7 @@ struct CommittedPassForwardCompletionRequest
   double maximum_ego_speed_mps{};
   double rear_clear_distance_m{};
   double maximum_completion_distance_m{};
+  bool already_latched{false};
 };
 
 struct CommittedPassForwardCompletionResolution
@@ -1183,6 +1184,7 @@ struct SafeSeparationRequest
   double absolute_maximum_duration_sec{std::numeric_limits<double>::infinity()};
   double absolute_maximum_distance_m{std::numeric_limits<double>::infinity()};
   bool forward_progress_extension_allowed{false};
+  bool forward_completion_latched{false};
 };
 
 struct SafeSeparationResolution
@@ -2004,6 +2006,36 @@ struct OvertakeEntrySpeedReadiness
 /// Invalid input, a target change, or a relative-speed deficit resets confirmation.
 OvertakeEntrySpeedReadiness update_overtake_entry_speed_readiness(
   const OvertakeEntrySpeedReadinessRequest & request) noexcept;
+
+struct OvertakeEntryPrearmWindowRequest
+{
+  bool monitor_active{false};
+  bool same_mission{false};
+  double now_sec{};
+  double start_sec{std::numeric_limits<double>::quiet_NaN()};
+  double last_update_sec{std::numeric_limits<double>::quiet_NaN()};
+  double traveled_m{};
+  double ego_speed_mps{};
+  double maximum_duration_sec{};
+  double maximum_distance_m{};
+  double maximum_observation_gap_sec{0.5};
+};
+
+struct OvertakeEntryPrearmWindowResolution
+{
+  bool active{false};
+  bool timed_out{false};
+  double start_sec{std::numeric_limits<double>::quiet_NaN()};
+  double last_update_sec{std::numeric_limits<double>::quiet_NaN()};
+  double traveled_m{};
+  double elapsed_sec{};
+};
+
+/// Bound longitudinal pre-arm to one continuously observed Mission. A target,
+/// side or speed-policy change is supplied as same_mission=false by the caller
+/// and starts a fresh window. Missing/invalid input clears the window.
+OvertakeEntryPrearmWindowResolution update_overtake_entry_prearm_window(
+  const OvertakeEntryPrearmWindowRequest & request) noexcept;
 
 struct NewOvertakeEntryAdmissionRequest
 {

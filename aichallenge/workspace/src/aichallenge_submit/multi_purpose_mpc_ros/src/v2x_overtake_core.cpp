@@ -1982,8 +1982,9 @@ CommittedPassForwardCompletionResolution resolve_committed_pass_forward_completi
   }
   resolution.active =
     base_guard && current_geometry_acceptable &&
-    resolution.rear_clear_distance_feasible &&
-    request.target_longitudinal_m <= request.maximum_front_distance_m + 1e-9;
+    (request.already_latched ||
+    (resolution.rear_clear_distance_feasible &&
+    request.target_longitudinal_m <= request.maximum_front_distance_m + 1e-9));
   return resolution;
 }
 
@@ -2035,8 +2036,9 @@ SafeSeparationResolution resolve_safe_separation(
   }
   const bool forward_escape_active =
     request.forward_escape_allowed &&
+    (request.forward_completion_latched ||
     request.target_longitudinal_m <=
-    request.forward_escape_max_front_distance_m + 1e-9;
+    request.forward_escape_max_front_distance_m + 1e-9);
   const bool absolute_distance_limit_reached =
     request.absolute_traveled_m >= request.absolute_maximum_distance_m - 1e-9;
   const bool absolute_time_limit_reached =
@@ -3756,6 +3758,46 @@ OvertakeEntrySpeedReadiness update_overtake_entry_speed_readiness(
     request.ready_since_sec : request.now_sec;
   result.stable_sec = std::max(0.0, request.now_sec - result.ready_since_sec);
   result.ready = result.stable_sec + 1e-9 >= request.confirm_sec;
+  return result;
+}
+
+OvertakeEntryPrearmWindowResolution update_overtake_entry_prearm_window(
+  const OvertakeEntryPrearmWindowRequest & request) noexcept
+{
+  OvertakeEntryPrearmWindowResolution result;
+  if (
+    !request.monitor_active || !std::isfinite(request.now_sec) ||
+    !std::isfinite(request.ego_speed_mps) || request.ego_speed_mps < 0.0 ||
+    !std::isfinite(request.maximum_duration_sec) ||
+    request.maximum_duration_sec <= 0.0 ||
+    !std::isfinite(request.maximum_distance_m) ||
+    request.maximum_distance_m <= 0.0 ||
+    !std::isfinite(request.maximum_observation_gap_sec) ||
+    request.maximum_observation_gap_sec <= 0.0)
+  {
+    return result;
+  }
+
+  const bool prior_window_valid =
+    request.same_mission && std::isfinite(request.start_sec) &&
+    std::isfinite(request.last_update_sec) && request.start_sec <= request.now_sec &&
+    request.last_update_sec <= request.now_sec && request.traveled_m >= 0.0 &&
+    std::isfinite(request.traveled_m);
+  const double observation_dt = prior_window_valid ?
+    std::max(0.0, request.now_sec - request.last_update_sec) : 0.0;
+  const bool observation_continuous =
+    prior_window_valid &&
+    observation_dt <= request.maximum_observation_gap_sec + 1e-9;
+
+  result.start_sec = observation_continuous ? request.start_sec : request.now_sec;
+  result.last_update_sec = request.now_sec;
+  result.traveled_m = observation_continuous ?
+    request.traveled_m + request.ego_speed_mps * observation_dt : 0.0;
+  result.elapsed_sec = std::max(0.0, request.now_sec - result.start_sec);
+  result.timed_out =
+    result.elapsed_sec + 1e-9 >= request.maximum_duration_sec ||
+    result.traveled_m + 1e-9 >= request.maximum_distance_m;
+  result.active = !result.timed_out;
   return result;
 }
 

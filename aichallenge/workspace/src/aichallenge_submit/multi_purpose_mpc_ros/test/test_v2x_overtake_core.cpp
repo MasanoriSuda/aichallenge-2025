@@ -245,8 +245,10 @@ using multi_purpose_mpc_ros::v2x_overtake_core::can_override_completion_for_curv
 using multi_purpose_mpc_ros::v2x_overtake_core::can_precommit_inner_curve_line;
 using multi_purpose_mpc_ros::v2x_overtake_core::overtake_completion_policy_allows_execution;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntrySpeedReadinessRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntryPrearmWindowRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::NewOvertakeEntryAdmissionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_overtake_entry_speed_readiness;
+using multi_purpose_mpc_ros::v2x_overtake_core::update_overtake_entry_prearm_window;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_new_overtake_entry_admission;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   can_hold_committed_execution_after_behavior_drop;
@@ -3764,7 +3766,20 @@ TEST(V2XOvertakeCoreHorizon, CommitsBoundedSideBySideForwardCompletion)
   EXPECT_FALSE(resolution.rear_clear_distance_feasible);
   EXPECT_NEAR(resolution.required_forward_distance_m, 11.7647059, 1e-6);
 
+  request.already_latched = true;
+  request.target_longitudinal_m = 4.0;
+  resolution = resolve_committed_pass_forward_completion(request);
+  EXPECT_TRUE(resolution.active);
+  EXPECT_FALSE(resolution.rear_clear_distance_feasible);
+
+  request.predicted_body_footprint_sweep_separated = false;
+  resolution = resolve_committed_pass_forward_completion(request);
+  EXPECT_FALSE(resolution.active);
+
+  request.already_latched = false;
+  request.predicted_body_footprint_sweep_separated = true;
   request.maximum_completion_distance_m = 12.0;
+  request.target_longitudinal_m = 2.0;
   request.target_speed_mps = std::numeric_limits<double>::infinity();
   resolution = resolve_committed_pass_forward_completion(request);
   EXPECT_FALSE(resolution.active);
@@ -3851,6 +3866,12 @@ TEST(V2XOvertakeCoreHorizon, PreservesSpeedForSideBySideForwardEscape)
   resolution = resolve_safe_separation(request);
   EXPECT_EQ(resolution.action, SafeSeparationAction::RecoverBehind);
   EXPECT_FALSE(resolution.forward_escape_active);
+
+  request.forward_completion_latched = true;
+  resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::KeepSameSide);
+  EXPECT_TRUE(resolution.forward_escape_active);
+  EXPECT_NEAR(resolution.target_velocity_reference_mps, 5.4, 1e-9);
 
   request.target_longitudinal_m = 0.5;
   request.short_horizon_safe = false;
@@ -5512,6 +5533,79 @@ TEST(V2XOvertakeCoreEntrySpeed, ResetsForSpeedLossTargetChangeAndInvalidData)
       std::numeric_limits<double>::infinity(), 0.3, 0.3});
   EXPECT_FALSE(result.ready);
   EXPECT_FALSE(std::isfinite(result.ready_since_sec));
+}
+
+TEST(V2XOvertakeCoreEntrySpeed, BoundsPrearmToOneContinuousMission)
+{
+  OvertakeEntryPrearmWindowRequest request;
+  request.monitor_active = true;
+  request.now_sec = 10.0;
+  request.ego_speed_mps = 4.0;
+  request.maximum_duration_sec = 2.0;
+  request.maximum_distance_m = 8.0;
+  request.maximum_observation_gap_sec = 0.5;
+
+  auto result = update_overtake_entry_prearm_window(request);
+  EXPECT_TRUE(result.active);
+  EXPECT_DOUBLE_EQ(result.start_sec, 10.0);
+  EXPECT_DOUBLE_EQ(result.traveled_m, 0.0);
+
+  request.same_mission = true;
+  request.now_sec = 10.5;
+  request.start_sec = result.start_sec;
+  request.last_update_sec = result.last_update_sec;
+  request.traveled_m = result.traveled_m;
+  result = update_overtake_entry_prearm_window(request);
+  EXPECT_TRUE(result.active);
+  EXPECT_NEAR(result.elapsed_sec, 0.5, 1e-12);
+  EXPECT_NEAR(result.traveled_m, 2.0, 1e-12);
+
+  request.now_sec = 12.0;
+  request.start_sec = result.start_sec;
+  request.last_update_sec = result.last_update_sec;
+  request.traveled_m = result.traveled_m;
+  result = update_overtake_entry_prearm_window(request);
+  // The 1.5 s observation gap is not allowed to carry Mission ownership.
+  EXPECT_TRUE(result.active);
+  EXPECT_DOUBLE_EQ(result.start_sec, 12.0);
+  EXPECT_DOUBLE_EQ(result.traveled_m, 0.0);
+
+  request.same_mission = false;
+  request.now_sec = 12.1;
+  request.start_sec = result.start_sec;
+  request.last_update_sec = result.last_update_sec;
+  request.traveled_m = result.traveled_m;
+  result = update_overtake_entry_prearm_window(request);
+  EXPECT_TRUE(result.active);
+  EXPECT_DOUBLE_EQ(result.start_sec, 12.1);
+  EXPECT_DOUBLE_EQ(result.traveled_m, 0.0);
+}
+
+TEST(V2XOvertakeCoreEntrySpeed, TimesOutPrearmByDurationOrDistance)
+{
+  OvertakeEntryPrearmWindowRequest request;
+  request.monitor_active = true;
+  request.same_mission = true;
+  request.now_sec = 22.0;
+  request.start_sec = 20.0;
+  request.last_update_sec = 21.9;
+  request.traveled_m = 7.6;
+  request.ego_speed_mps = 4.0;
+  request.maximum_duration_sec = 2.0;
+  request.maximum_distance_m = 8.0;
+  request.maximum_observation_gap_sec = 0.5;
+
+  auto result = update_overtake_entry_prearm_window(request);
+  EXPECT_FALSE(result.active);
+  EXPECT_TRUE(result.timed_out);
+  EXPECT_NEAR(result.elapsed_sec, 2.0, 1e-12);
+  EXPECT_NEAR(result.traveled_m, 8.0, 1e-12);
+
+  request.monitor_active = false;
+  result = update_overtake_entry_prearm_window(request);
+  EXPECT_FALSE(result.active);
+  EXPECT_FALSE(result.timed_out);
+  EXPECT_FALSE(std::isfinite(result.start_sec));
 }
 
 TEST(V2XOvertakeCoreEntrySpeed, PrearmsValidatedMissionUntilMeasuredSpeedIsReady)

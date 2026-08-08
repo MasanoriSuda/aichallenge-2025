@@ -2128,6 +2128,48 @@ DynamicCompletionExtensionResolution resolve_dynamic_completion_extension(
   return resolution;
 }
 
+PassShortHorizonGuardResolution resolve_pass_short_horizon_guard(
+  const PassShortHorizonGuardRequest & request) noexcept
+{
+  PassShortHorizonGuardResolution resolution;
+  if (!request.hard_guard_safe) {
+    return resolution;
+  }
+  if (request.predictive_guard_safe) {
+    resolution.safe = true;
+    return resolution;
+  }
+  const bool finite_grace_window =
+    std::isfinite(request.predictive_guard_loss_elapsed_sec) &&
+    request.predictive_guard_loss_elapsed_sec >= 0.0 &&
+    std::isfinite(request.maximum_prediction_grace_sec) &&
+    request.maximum_prediction_grace_sec >= 0.0;
+  resolution.prediction_grace_active =
+    request.forward_completion_latched &&
+    request.current_body_footprints_separated &&
+    !request.execution_corridor_blocked &&
+    request.fresh_forward_progress && finite_grace_window &&
+    request.predictive_guard_loss_elapsed_sec <=
+    request.maximum_prediction_grace_sec + 1e-9;
+  resolution.safe = resolution.prediction_grace_active;
+  return resolution;
+}
+
+double resolve_active_pass_elapsed(
+  const double accumulated_sec, const bool pass_active,
+  const double active_segment_start_sec, const double now_sec) noexcept
+{
+  const double completed_sec = std::isfinite(accumulated_sec) ?
+    std::max(0.0, accumulated_sec) : 0.0;
+  if (
+    !pass_active || !std::isfinite(active_segment_start_sec) ||
+    !std::isfinite(now_sec))
+  {
+    return completed_sec;
+  }
+  return completed_sec + std::max(0.0, now_sec - active_segment_start_sec);
+}
+
 SafeSeparationResolution resolve_safe_separation(
   const SafeSeparationRequest & request) noexcept
 {

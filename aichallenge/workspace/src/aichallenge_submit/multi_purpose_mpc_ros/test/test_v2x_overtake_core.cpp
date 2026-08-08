@@ -148,6 +148,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassForwardCompletionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::PassShortHorizonGuardRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicCompletionExtensionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SameSideReplanShiftDistanceRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidate;
@@ -185,6 +186,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frozen_outer_transition_
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_same_side_extension_commit;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_commit_same_side_extension;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_safe_separation;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_short_horizon_guard;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_active_pass_elapsed;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_committed_pass_forward_completion;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_completion_extension;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_same_side_replan_shift_distance;
@@ -3952,6 +3955,73 @@ TEST(V2XOvertakeCoreHorizon, ExtendsFromLiveCompletionEstimateInsideAbsoluteBoun
   request.fresh_forward_progress = false;
   resolution = resolve_dynamic_completion_extension(request);
   EXPECT_FALSE(resolution.allowed);
+}
+
+TEST(V2XOvertakeCoreHorizon, GrantsOnlyBoundedPredictionGraceAfterForwardCommit)
+{
+  PassShortHorizonGuardRequest request;
+  request.hard_guard_safe = true;
+  request.predictive_guard_safe = false;
+  request.forward_completion_latched = true;
+  request.current_body_footprints_separated = true;
+  request.execution_corridor_blocked = false;
+  request.fresh_forward_progress = true;
+  request.predictive_guard_loss_elapsed_sec = 0.20;
+  request.maximum_prediction_grace_sec = 0.25;
+
+  auto resolution = resolve_pass_short_horizon_guard(request);
+  EXPECT_TRUE(resolution.safe);
+  EXPECT_TRUE(resolution.prediction_grace_active);
+
+  request.predictive_guard_loss_elapsed_sec = 0.251;
+  resolution = resolve_pass_short_horizon_guard(request);
+  EXPECT_FALSE(resolution.safe);
+  EXPECT_FALSE(resolution.prediction_grace_active);
+
+  request.predictive_guard_loss_elapsed_sec = 0.10;
+  request.fresh_forward_progress = false;
+  resolution = resolve_pass_short_horizon_guard(request);
+  EXPECT_FALSE(resolution.safe);
+
+  request.fresh_forward_progress = true;
+  request.execution_corridor_blocked = true;
+  resolution = resolve_pass_short_horizon_guard(request);
+  EXPECT_FALSE(resolution.safe);
+}
+
+TEST(V2XOvertakeCoreHorizon, NeverGrantsPredictionGraceForHardGuardFailure)
+{
+  PassShortHorizonGuardRequest request;
+  request.hard_guard_safe = false;
+  request.predictive_guard_safe = false;
+  request.forward_completion_latched = true;
+  request.current_body_footprints_separated = true;
+  request.execution_corridor_blocked = false;
+  request.fresh_forward_progress = true;
+  request.predictive_guard_loss_elapsed_sec = 0.0;
+  request.maximum_prediction_grace_sec = 0.25;
+
+  const auto resolution = resolve_pass_short_horizon_guard(request);
+  EXPECT_FALSE(resolution.safe);
+  EXPECT_FALSE(resolution.prediction_grace_active);
+}
+
+TEST(V2XOvertakeCoreHorizon, AcceptsHealthyPredictiveGuardWithoutLatch)
+{
+  PassShortHorizonGuardRequest request;
+  request.hard_guard_safe = true;
+  request.predictive_guard_safe = true;
+
+  const auto resolution = resolve_pass_short_horizon_guard(request);
+  EXPECT_TRUE(resolution.safe);
+  EXPECT_FALSE(resolution.prediction_grace_active);
+}
+
+TEST(V2XOvertakeCoreHorizon, CountsOnlyActivePassSegmentsAgainstTimeBudget)
+{
+  EXPECT_NEAR(resolve_active_pass_elapsed(2.0, true, 8.0, 10.0), 4.0, 1e-9);
+  EXPECT_NEAR(resolve_active_pass_elapsed(2.0, false, 8.0, 20.0), 2.0, 1e-9);
+  EXPECT_NEAR(resolve_active_pass_elapsed(4.0, true, 30.0, 29.0), 4.0, 1e-9);
 }
 
 TEST(V2XOvertakeCoreHorizon, CreatesLongitudinalSafeSeparationOnCommittedSide)

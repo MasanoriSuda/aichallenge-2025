@@ -1432,6 +1432,7 @@ struct OvertakeLineConfig
   double safe_separation_progress_extension_fresh_sec{0.75};
   int safe_separation_progress_extension_max_count{1};
   bool safe_separation_dynamic_completion_extension_enabled{false};
+  double safe_separation_soft_prediction_grace_sec{0.25};
   bool reacquire_enabled{false};
   double reacquire_window_sec{0.0};
   double reacquire_max_return_progress{0.0};
@@ -2018,7 +2019,10 @@ struct OvertakeLineState
     -std::numeric_limits<double>::infinity()};
   double mission_path_total_distance{0.0};
   std::uint64_t mission_generation{0U};
+  // Active Pass phase time only. FollowPrepare and replacement ShiftOut do not
+  // consume the absolute Pass budget.
   double mission_pass_start_sec{std::numeric_limits<double>::quiet_NaN()};
+  double mission_pass_accumulated_sec{0.0};
   double mission_pass_accumulated_m{0.0};
   double mission_pass_hold_distance{0.0};
   bool mission_pass_lateral_replan_active{false};
@@ -2069,6 +2073,8 @@ struct OvertakeLineState
   double pass_horizon_safe_separation_last_progress_sec{
     std::numeric_limits<double>::quiet_NaN()};
   int pass_horizon_safe_separation_progress_extension_count{0};
+  double pass_soft_prediction_guard_loss_since_sec{
+    std::numeric_limits<double>::quiet_NaN()};
   bool shiftout_fresh_horizon_wait_active{false};
   int shiftout_fresh_horizon_replan_count{0};
   double pass_horizon_fallback_start_sec{std::numeric_limits<double>::quiet_NaN()};
@@ -9968,6 +9974,12 @@ private:
     {
       overtake_line_state_.mission_pass_accumulated_m +=
         std::max(0.0, overtake_line_state_.phase_traveled_m);
+      overtake_line_state_.mission_pass_accumulated_sec =
+        overtake_core::resolve_active_pass_elapsed(
+        overtake_line_state_.mission_pass_accumulated_sec, true,
+        overtake_line_state_.mission_pass_start_sec, now_sec);
+      overtake_line_state_.mission_pass_start_sec =
+        std::numeric_limits<double>::quiet_NaN();
     }
 
     overtake_line_state_.phase = next_phase;
@@ -9996,6 +10008,8 @@ private:
       overtake_line_state_.pass_horizon_safe_separation_last_progress_sec =
         std::numeric_limits<double>::quiet_NaN();
       overtake_line_state_.pass_horizon_safe_separation_progress_extension_count = 0;
+      overtake_line_state_.pass_soft_prediction_guard_loss_since_sec =
+        std::numeric_limits<double>::quiet_NaN();
       overtake_line_state_.pass_horizon_fallback_start_sec =
         std::numeric_limits<double>::quiet_NaN();
       overtake_line_state_.pass_horizon_fallback_start_distance = 0.0;
@@ -10003,12 +10017,8 @@ private:
     if (next_phase != OvertakeLinePhase::ShiftOut) {
       overtake_line_state_.shiftout_fresh_horizon_wait_active = false;
     }
-    if (
-      next_phase == OvertakeLinePhase::Pass &&
-      !std::isfinite(overtake_line_state_.mission_pass_start_sec))
-    {
+    if (next_phase == OvertakeLinePhase::Pass) {
       overtake_line_state_.mission_pass_start_sec = now_sec;
-      overtake_line_state_.mission_pass_accumulated_m = 0.0;
     }
     overtake_line_state_.phase_start_sec = now_sec;
     overtake_line_state_.phase_start_ey = current_ey;
@@ -10153,6 +10163,7 @@ private:
       overtake_line_state_.phase == OvertakeLinePhase::Pass ?
       overtake_line_state_.phase_start_sec :
       std::numeric_limits<double>::quiet_NaN();
+    overtake_line_state_.mission_pass_accumulated_sec = 0.0;
     overtake_line_state_.mission_pass_accumulated_m = 0.0;
     overtake_line_state_.mission_pass_hold_distance =
       selected_mission.has_value() &&
@@ -10257,6 +10268,8 @@ private:
     overtake_line_state_.pass_horizon_safe_separation_last_progress_sec =
       std::numeric_limits<double>::quiet_NaN();
     overtake_line_state_.pass_horizon_safe_separation_progress_extension_count = 0;
+    overtake_line_state_.pass_soft_prediction_guard_loss_since_sec =
+      std::numeric_limits<double>::quiet_NaN();
     overtake_line_state_.shiftout_fresh_horizon_wait_active = false;
     overtake_line_state_.shiftout_fresh_horizon_replan_count = 0;
     overtake_line_state_.pass_horizon_fallback_start_sec =
@@ -10342,6 +10355,8 @@ private:
     }
 
     const double prior_pass_start_sec = overtake_line_state_.mission_pass_start_sec;
+    const double prior_pass_accumulated_sec =
+      overtake_line_state_.mission_pass_accumulated_sec;
     const double prior_pass_accumulated_m =
       overtake_line_state_.mission_pass_accumulated_m;
     const double current_pass_traveled_m =
@@ -10364,6 +10379,7 @@ private:
     }
 
     overtake_line_state_.mission_pass_start_sec = prior_pass_start_sec;
+    overtake_line_state_.mission_pass_accumulated_sec = prior_pass_accumulated_sec;
     overtake_line_state_.mission_pass_accumulated_m = prior_pass_accumulated_m;
     overtake_line_state_.mission_extension_count = prior_extension_count;
     overtake_line_state_.mission_longitudinal_refresh_count =
@@ -10447,6 +10463,14 @@ private:
     return std::max(0.0, overtake_line_state_.mission_pass_accumulated_m) +
       (overtake_line_state_.phase == OvertakeLinePhase::Pass ?
       std::max(0.0, overtake_line_state_.phase_traveled_m) : 0.0);
+  }
+
+  double overtake_mission_pass_elapsed(const double now_sec) const
+  {
+    return overtake_core::resolve_active_pass_elapsed(
+      overtake_line_state_.mission_pass_accumulated_sec,
+      overtake_line_state_.phase == OvertakeLinePhase::Pass,
+      overtake_line_state_.mission_pass_start_sec, now_sec);
   }
 
   double overtake_mission_shift_distance() const
@@ -12701,9 +12725,7 @@ private:
         const double planner_generated_monotonic_sec =
           steady_seconds(SteadyClock::now());
         const double pass_traveled = overtake_mission_pass_traveled();
-        const double pass_elapsed = std::isfinite(
-          overtake_line_state_.mission_pass_start_sec) ?
-          std::max(0.0, now_sec - overtake_line_state_.mission_pass_start_sec) : 0.0;
+        const double pass_elapsed = overtake_mission_pass_elapsed(now_sec);
         const double remaining_absolute_distance = std::max(
           0.0,
           line_cfg.pass_horizon_absolute_distance_limit - pass_traveled);
@@ -13134,9 +13156,7 @@ private:
       overtake_line_state_.phase == OvertakeLinePhase::Pass)
     {
       const double pass_traveled = overtake_mission_pass_traveled();
-      const double pass_elapsed = std::isfinite(
-        overtake_line_state_.mission_pass_start_sec) ?
-        std::max(0.0, now_sec - overtake_line_state_.mission_pass_start_sec) : 0.0;
+      const double pass_elapsed = overtake_mission_pass_elapsed(now_sec);
       const double fallback_elapsed = std::isfinite(
         overtake_line_state_.pass_horizon_fallback_start_sec) ?
         std::max(
@@ -13146,12 +13166,12 @@ private:
         std::max(
         0.0, pass_traveled -
         overtake_line_state_.pass_horizon_fallback_start_distance) : 0.0;
-      const bool short_horizon_safe =
+      const bool strict_short_horizon_safe =
         pass_short_horizon_safe && !committed_forward_completion_guard_lost;
       const auto begin_safe_separation =
         [&](const char * trigger, const std::string & failure_reason) {
           return begin_pass_safe_separation(
-            short_horizon_safe, now_sec, pass_traveled,
+            strict_short_horizon_safe, now_sec, pass_traveled,
             locked_target_longitudinal,
             behavior_output.locked_target_current_body_footprints_separated,
             trigger, failure_reason);
@@ -13177,7 +13197,8 @@ private:
         }
       } else if (
         committed_forward_completion.active && !rear_clear_confirmed &&
-        overtake_line_state_.pass_horizon_safe_separation_active && short_horizon_safe)
+        overtake_line_state_.pass_horizon_safe_separation_active &&
+        strict_short_horizon_safe)
       {
         // Admission is a one-way commitment. Once SafeSeparation owns the
         // longitudinal completion, a later distance-estimate fluctuation must
@@ -13234,6 +13255,56 @@ private:
           now_sec -
           overtake_line_state_.pass_horizon_safe_separation_last_progress_sec) :
           std::numeric_limits<double>::infinity();
+        const bool prediction_only_guard_lost =
+          pass_short_horizon_safe && committed_forward_completion_guard_lost &&
+          overtake_line_state_.pass_forward_completion_latched &&
+          behavior_output.locked_target_current_body_footprints_separated &&
+          !behavior_output.overtake_execution_corridor_blocked;
+        if (prediction_only_guard_lost) {
+          if (!std::isfinite(
+              overtake_line_state_.pass_soft_prediction_guard_loss_since_sec))
+          {
+            overtake_line_state_.pass_soft_prediction_guard_loss_since_sec = now_sec;
+            if (line_cfg.debug_log_enabled) {
+              RCLCPP_WARN(
+                rclcpp::get_logger("mpc_controller"),
+                "OvertakeLine prediction-only guard grace started: "
+                "target=%s, side=%d, target_s=%.2f, prediction=%d/sweep_clear=%d, "
+                "progress=%.2f m, wp_id=%d",
+                overtake_line_state_.target_vehicle_id.c_str(),
+                overtake_line_state_.pass_side_sign, locked_target_longitudinal,
+                behavior_output.locked_target_footprint_prediction_valid ? 1 : 0,
+                behavior_output.locked_target_predicted_body_footprint_sweep_separated ? 1 : 0,
+                safe_separation_forward_progress, model->wp_id);
+            }
+          }
+        } else {
+          overtake_line_state_.pass_soft_prediction_guard_loss_since_sec =
+            std::numeric_limits<double>::quiet_NaN();
+        }
+        const double prediction_guard_loss_elapsed_sec =
+          prediction_only_guard_lost && std::isfinite(
+          overtake_line_state_.pass_soft_prediction_guard_loss_since_sec) ?
+          std::max(
+          0.0,
+          now_sec - overtake_line_state_.pass_soft_prediction_guard_loss_since_sec) :
+          0.0;
+        const bool recent_measured_forward_progress =
+          safe_separation_forward_progress >= 0.05 - kEps &&
+          safe_separation_progress_age <=
+          line_cfg.safe_separation_progress_extension_fresh_sec + kEps;
+        const auto short_horizon_guard =
+          overtake_core::resolve_pass_short_horizon_guard(
+          overtake_core::PassShortHorizonGuardRequest{
+            pass_short_horizon_safe,
+            !committed_forward_completion_guard_lost,
+            overtake_line_state_.pass_forward_completion_latched,
+            behavior_output.locked_target_current_body_footprints_separated,
+            behavior_output.overtake_execution_corridor_blocked,
+            recent_measured_forward_progress,
+            prediction_guard_loss_elapsed_sec,
+            line_cfg.safe_separation_soft_prediction_grace_sec});
+        const bool short_horizon_safe = short_horizon_guard.safe;
         const bool safe_separation_front_clear =
           locked_target_seen && std::isfinite(locked_target_longitudinal) &&
           locked_target_longitudinal >=
@@ -13257,7 +13328,8 @@ private:
           overtake_line_state_.pass_horizon_safe_separation_front_clear_since_sec) : 0.0;
         const bool safe_separation_forward_escape_allowed =
           line_cfg.safe_separation_forward_escape_enabled &&
-          committed_forward_completion.active;
+          (committed_forward_completion.active ||
+          short_horizon_guard.prediction_grace_active);
         const bool safe_separation_fresh_forward_progress =
           safe_separation_forward_escape_allowed &&
           !behavior_output.overtake_execution_corridor_blocked &&
@@ -13403,7 +13475,8 @@ private:
             "OvertakeLine SafeSeparation abort: reason=%s, target=%s, side=%d, "
             "target_s=%.2f, forward_allowed=%d, progress=%.2f m, "
             "progress_age=%.2f s, prediction=%d/sweep_clear=%d, corridor_blocked=%d, "
-            "local=%.2f s/%.2f m, absolute=%.2f s/%.2f m, count=%d/%d",
+            "prediction_grace=%d/%.2f s, local=%.2f s/%.2f m, "
+            "active_pass=%.2f s/%.2f m, count=%d/%d",
             overtake_core::to_string(safe_separation.reason),
             overtake_line_state_.target_vehicle_id.c_str(),
             overtake_line_state_.pass_side_sign,
@@ -13414,6 +13487,8 @@ private:
             behavior_output.locked_target_footprint_prediction_valid ? 1 : 0,
             behavior_output.locked_target_predicted_body_footprint_sweep_separated ? 1 : 0,
             behavior_output.overtake_execution_corridor_blocked ? 1 : 0,
+            short_horizon_guard.prediction_grace_active ? 1 : 0,
+            prediction_guard_loss_elapsed_sec,
             safe_separation_elapsed,
             safe_separation_traveled,
             pass_elapsed,
@@ -13791,7 +13866,7 @@ private:
           rear_clear_window_replan_required,
           live_rear_clear_prediction_checked &&
           live_rear_clear_prediction_feasible,
-          short_horizon_safe,
+          strict_short_horizon_safe,
           fresh_dynamic_horizon_available,
           pass_traveled,
           pass_elapsed,
@@ -17557,6 +17632,10 @@ Config load_config(const std::string & path)
     mpc["v2x_overtake_safe_separation_dynamic_completion_extension_enabled"] ?
     mpc["v2x_overtake_safe_separation_dynamic_completion_extension_enabled"].as<bool>() :
     false;
+  cfg.mpc.v2x_behavior.overtake_line.safe_separation_soft_prediction_grace_sec = std::max(
+    0.0,
+    mpc["v2x_overtake_safe_separation_soft_prediction_grace_sec"] ?
+    mpc["v2x_overtake_safe_separation_soft_prediction_grace_sec"].as<double>() : 0.25);
   cfg.mpc.v2x_behavior.overtake_line.reacquire_enabled =
     mpc["v2x_overtake_reacquire_enabled"] ?
     mpc["v2x_overtake_reacquire_enabled"].as<bool>() : false;
@@ -18955,7 +19034,8 @@ public:
         "hold<=%.2f s/%.2f m, safe-separation=%s delta=%.2f m/s "
         "forward_escape=%s/front<=%.2f m "
         "front>=%.2f m confirm=%.2f s limit=%.2f s/%.2f m, "
-        "progress_extension=%s min=%.2f m fresh<=%.2f s x%d, dynamic_completion=%s",
+        "progress_extension=%s min=%.2f m fresh<=%.2f s x%d, "
+        "dynamic_completion=%s prediction_grace<=%.2f s",
         mpc_cfg_.v2x_behavior.overtake_line.pass_horizon_enabled ?
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.pass_horizon_predicted_time_budget,
@@ -18990,7 +19070,8 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line
         .safe_separation_progress_extension_max_count,
         mpc_cfg_.v2x_behavior.overtake_line
-        .safe_separation_dynamic_completion_extension_enabled ? "enabled" : "disabled");
+        .safe_separation_dynamic_completion_extension_enabled ? "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line.safe_separation_soft_prediction_grace_sec);
       RCLCPP_INFO(
         get_logger(),
         "V2X continuous outer Pass replan: %s, lookahead=%.2f m, "

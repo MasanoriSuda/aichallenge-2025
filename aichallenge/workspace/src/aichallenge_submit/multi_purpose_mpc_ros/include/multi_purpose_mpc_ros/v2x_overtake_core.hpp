@@ -1228,6 +1228,37 @@ struct DynamicCompletionExtensionResolution
 DynamicCompletionExtensionResolution resolve_dynamic_completion_extension(
   const DynamicCompletionExtensionRequest & request) noexcept;
 
+struct PassShortHorizonGuardRequest
+{
+  bool hard_guard_safe{false};
+  bool predictive_guard_safe{false};
+  bool forward_completion_latched{false};
+  bool current_body_footprints_separated{false};
+  bool execution_corridor_blocked{true};
+  bool fresh_forward_progress{false};
+  double predictive_guard_loss_elapsed_sec{std::numeric_limits<double>::infinity()};
+  double maximum_prediction_grace_sec{};
+};
+
+struct PassShortHorizonGuardResolution
+{
+  bool safe{false};
+  bool prediction_grace_active{false};
+};
+
+/// Keep an already-latched forward completion alive through a bounded
+/// prediction-only dropout. Physical/runtime faults are represented by
+/// hard_guard_safe and can never receive grace. The caller owns the loss timer
+/// and measured forward-progress observation.
+PassShortHorizonGuardResolution resolve_pass_short_horizon_guard(
+  const PassShortHorizonGuardRequest & request) noexcept;
+
+/// Return cumulative time spent in Pass. Paused phases contribute only the
+/// already accumulated value; an active segment contributes now-start.
+double resolve_active_pass_elapsed(
+  double accumulated_sec, bool pass_active,
+  double active_segment_start_sec, double now_sec) noexcept;
+
 struct SafeSeparationRequest
 {
   bool enabled{false};

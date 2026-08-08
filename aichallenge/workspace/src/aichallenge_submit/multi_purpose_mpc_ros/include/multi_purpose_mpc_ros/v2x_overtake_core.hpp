@@ -457,6 +457,29 @@ struct ActiveLineGapLossHoldResolution
 ActiveLineGapLossHoldResolution resolve_active_line_gap_loss_hold(
   const ActiveLineGapLossHoldRequest & request) noexcept;
 
+struct LiveExecutionCorridorHoldReferenceRequest
+{
+  bool pass_phase{false};
+  bool current_body_footprints_separated{false};
+  double pass_phase_start_sec{std::numeric_limits<double>::quiet_NaN()};
+  double last_valid_corridor_sec{std::numeric_limits<double>::quiet_NaN()};
+};
+
+struct LiveExecutionCorridorHoldReferenceResolution
+{
+  double reference_sec{std::numeric_limits<double>::quiet_NaN()};
+  bool pass_phase_reference_used{false};
+};
+
+/// ShiftOut and Pass have different execution geometry. A physically separated
+/// Pass therefore receives a fresh, bounded live-corridor hold window instead
+/// of inheriting time already consumed by a ShiftOut dropout. A later genuine
+/// corridor-valid observation remains the newest reference. The caller still
+/// owns target-continuity, emergency, wall, solver, and overlap guards.
+LiveExecutionCorridorHoldReferenceResolution
+resolve_live_execution_corridor_hold_reference(
+  const LiveExecutionCorridorHoldReferenceRequest & request) noexcept;
+
 struct OvertakeLateralPlannerOwnershipRequest
 {
   bool explicit_line_enabled{false};

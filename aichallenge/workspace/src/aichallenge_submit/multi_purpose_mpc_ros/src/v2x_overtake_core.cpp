@@ -724,6 +724,29 @@ ActiveLineGapLossHoldResolution resolve_active_line_gap_loss_hold(
   return resolution;
 }
 
+LiveExecutionCorridorHoldReferenceResolution
+resolve_live_execution_corridor_hold_reference(
+  const LiveExecutionCorridorHoldReferenceRequest & request) noexcept
+{
+  LiveExecutionCorridorHoldReferenceResolution resolution;
+  if (std::isfinite(request.last_valid_corridor_sec)) {
+    resolution.reference_sec = request.last_valid_corridor_sec;
+  }
+
+  const bool pass_phase_reference_available =
+    request.pass_phase && request.current_body_footprints_separated &&
+    std::isfinite(request.pass_phase_start_sec);
+  if (
+    pass_phase_reference_available &&
+    (!std::isfinite(resolution.reference_sec) ||
+    request.pass_phase_start_sec > resolution.reference_sec))
+  {
+    resolution.reference_sec = request.pass_phase_start_sec;
+    resolution.pass_phase_reference_used = true;
+  }
+  return resolution;
+}
+
 bool explicit_overtake_line_owns_lateral_plan(
   const OvertakeLateralPlannerOwnershipRequest & request) noexcept
 {

@@ -9075,6 +9075,13 @@ struct MPC
         overtake_line_state_.pass_front_overlap_exclusion_latched});
     const bool committed_execution_corridor_bypass =
       raw_execution_corridor_blocked && !execution_corridor_block_candidate;
+    const auto execution_corridor_hold_reference =
+      v2x_overtake_core::resolve_live_execution_corridor_hold_reference(
+      v2x_overtake_core::LiveExecutionCorridorHoldReferenceRequest{
+        overtake_line_state_.phase == OvertakeLinePhase::Pass,
+        behavior_output.locked_target_current_body_footprints_separated,
+        overtake_line_state_.phase_start_sec,
+        overtake_line_state_.last_valid_execution_corridor_sec});
     const auto execution_corridor_hold =
       v2x_overtake_core::resolve_active_line_gap_loss_hold(
       v2x_overtake_core::ActiveLineGapLossHoldRequest{
@@ -9087,7 +9094,7 @@ struct MPC
         behavior_output.overtake_cooldown_active,
         behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake,
         now_sec,
-        overtake_line_state_.last_valid_execution_corridor_sec,
+        execution_corridor_hold_reference.reference_sec,
         cfg.v2x_behavior.overtake_line.active_gap_loss_hold_sec});
     const bool execution_corridor_held =
       execution_corridor_block_candidate && execution_corridor_hold.active;
@@ -9106,8 +9113,11 @@ struct MPC
       if (execution_corridor_held) {
         RCLCPP_WARN(
           rclcpp::get_logger("mpc_controller"),
-          "OvertakeLine live execution corridor loss held: remaining=%.2f s, wp_id=%d",
-          execution_corridor_hold.remaining_sec, model->wp_id);
+          "OvertakeLine live execution corridor loss held: remaining=%.2f s, "
+          "pass_phase_ref=%d, wp_id=%d",
+          execution_corridor_hold.remaining_sec,
+          execution_corridor_hold_reference.pass_phase_reference_used ? 1 : 0,
+          model->wp_id);
       } else {
         RCLCPP_INFO(
           rclcpp::get_logger("mpc_controller"),

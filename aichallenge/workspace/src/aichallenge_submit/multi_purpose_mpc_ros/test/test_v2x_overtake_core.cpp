@@ -211,6 +211,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::can_hold_active_pass_after_gap_l
 using multi_purpose_mpc_ros::v2x_overtake_core::can_hold_validated_start_grid_breakout;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_resolve_curve_pass_side;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_active_line_gap_loss_hold;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  resolve_live_execution_corridor_hold_reference;
 using multi_purpose_mpc_ros::v2x_overtake_core::explicit_overtake_line_owns_lateral_plan;
 using multi_purpose_mpc_ros::v2x_overtake_core::GapPlannerStateBoundsRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::GapPlannerNoGapVelocityLimitRequest;
@@ -2247,6 +2249,49 @@ TEST(V2XOvertakeCoreSpeed, LiveCorridorLossDoesNotAbortLaterallyCommittedPass)
 
   request.pass_phase = false;
   EXPECT_TRUE(should_block_live_execution_corridor(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, LiveCorridorHoldBudgetIsScopedToSeparatedPassPhase)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    LiveExecutionCorridorHoldReferenceRequest;
+
+  LiveExecutionCorridorHoldReferenceRequest request;
+  request.last_valid_corridor_sec = 10.0;
+  request.pass_phase_start_sec = 11.5;
+
+  auto resolution = resolve_live_execution_corridor_hold_reference(request);
+  EXPECT_DOUBLE_EQ(resolution.reference_sec, 10.0);
+  EXPECT_FALSE(resolution.pass_phase_reference_used);
+
+  request.pass_phase = true;
+  resolution = resolve_live_execution_corridor_hold_reference(request);
+  EXPECT_DOUBLE_EQ(resolution.reference_sec, 10.0);
+  EXPECT_FALSE(resolution.pass_phase_reference_used);
+
+  request.current_body_footprints_separated = true;
+  resolution = resolve_live_execution_corridor_hold_reference(request);
+  EXPECT_DOUBLE_EQ(resolution.reference_sec, 11.5);
+  EXPECT_TRUE(resolution.pass_phase_reference_used);
+
+  request.last_valid_corridor_sec = 12.0;
+  resolution = resolve_live_execution_corridor_hold_reference(request);
+  EXPECT_DOUBLE_EQ(resolution.reference_sec, 12.0);
+  EXPECT_FALSE(resolution.pass_phase_reference_used);
+}
+
+TEST(V2XOvertakeCoreSpeed, LiveCorridorPassReferenceRequiresFinitePhaseStart)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    LiveExecutionCorridorHoldReferenceRequest;
+
+  LiveExecutionCorridorHoldReferenceRequest request;
+  request.pass_phase = true;
+  request.current_body_footprints_separated = true;
+
+  const auto resolution = resolve_live_execution_corridor_hold_reference(request);
+  EXPECT_FALSE(std::isfinite(resolution.reference_sec));
+  EXPECT_FALSE(resolution.pass_phase_reference_used);
 }
 
 TEST(V2XOvertakeCoreSpeed, NoGapVelocityLimitDoesNotOverrideCommittedPassBypass)

@@ -254,6 +254,31 @@ DetectorDecision disabled_decision(const DetectorInput & input) noexcept
 
 }  // namespace
 
+bool should_treat_follow_as_deliberate_stop(
+  const FollowDeliberateStopRequest & request) noexcept
+{
+  if (!request.follow_active || !request.has_front_vehicle) {
+    return false;
+  }
+  if (request.follow_speed_limit_active || request.moving_front_clearance_limit_active) {
+    return true;
+  }
+  if (
+    !std::isfinite(request.requested_forward_speed_mps) ||
+    request.requested_forward_speed_mps <= 0.0)
+  {
+    return false;
+  }
+  constexpr double kEffectiveRestrictionEpsilonMps = 1.0e-3;
+  const auto restricts_forward_demand = [&](const double velocity_mps) {
+      return std::isfinite(velocity_mps) && velocity_mps >= 0.0 &&
+             velocity_mps + kEffectiveRestrictionEpsilonMps <
+             request.requested_forward_speed_mps;
+    };
+  return restricts_forward_demand(request.target_velocity_limit_mps) ||
+         restricts_forward_demand(request.desired_velocity_mps);
+}
+
 bool should_override_deliberate_stop_for_collision(
   const CollisionDeliberateStopOverrideRequest & request) noexcept
 {

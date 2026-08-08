@@ -542,6 +542,9 @@ mpc:
   v2x_overtake_safe_separation_progress_extension_max_count: 1 # absolute Pass limits remain unchanged
   v2x_overtake_safe_separation_dynamic_completion_extension_enabled: true # use live rear-clear estimate after the fixed extension count is exhausted
   v2x_overtake_safe_separation_soft_prediction_grace_sec: 0.25 # [s] prediction-only loss grace after committed forward completion; hard faults remain immediate
+  # Once the target is behind and forward progress remains fresh, let distance/rear-clear
+  # terminate the pass instead of a collision-penalty-sensitive wall-clock timeout.
+  v2x_overtake_safe_separation_rearward_progress_time_grace_enabled: true
   v2x_overtake_safe_separation_full_speed_forward_escape_enabled: true # release target+delta cap after body-clear commit; course/input hard limits still win
   v2x_overtake_safe_separation_mission_aligned_budget_enabled: true # freeze a local window large enough for the selected Mission rear-clear estimate
   v2x_overtake_safe_separation_completion_distance_margin: 1.0 # [m] reserve after the live predicted rear-clear point

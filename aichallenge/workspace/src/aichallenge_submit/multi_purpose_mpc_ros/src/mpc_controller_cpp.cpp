@@ -1434,6 +1434,7 @@ struct OvertakeLineConfig
   bool safe_separation_dynamic_completion_extension_enabled{false};
   double safe_separation_soft_prediction_grace_sec{0.25};
   bool safe_separation_full_speed_forward_escape_enabled{false};
+  bool safe_separation_rearward_progress_time_grace_enabled{false};
   bool safe_separation_mission_aligned_budget_enabled{false};
   double safe_separation_completion_distance_margin{1.0};
   double safe_separation_completion_time_margin_sec{0.5};
@@ -2014,6 +2015,7 @@ struct OvertakeLineState
   bool pass_front_cap_release_active{false};
   double pass_current_overlap_since_sec{std::numeric_limits<double>::quiet_NaN()};
   double pass_predicted_overlap_since_sec{std::numeric_limits<double>::quiet_NaN()};
+  bool pass_rearward_progress_time_grace_was_active{false};
   int pass_side_sign{0};
   double target_ey{0.0};
   double phase_start_sec{-std::numeric_limits<double>::infinity()};
@@ -10155,6 +10157,7 @@ private:
     if (next_phase != OvertakeLinePhase::Pass) {
       overtake_line_state_.pass_front_overlap_exclusion_latched = false;
       overtake_line_state_.pass_front_cap_release_active = false;
+      overtake_line_state_.pass_rearward_progress_time_grace_was_active = false;
       overtake_line_state_.pass_horizon_hold_active = false;
       overtake_line_state_.pass_horizon_safe_separation_active = false;
       overtake_line_state_.pass_forward_completion_latched = false;
@@ -13622,7 +13625,9 @@ private:
             safe_separation_progress_extension_allowed,
             overtake_line_state_.pass_forward_completion_latched,
             safe_separation_dynamic_completion.allowed,
-            line_cfg.safe_separation_full_speed_forward_escape_enabled});
+            line_cfg.safe_separation_full_speed_forward_escape_enabled,
+            line_cfg.safe_separation_rearward_progress_time_grace_enabled,
+            safe_separation_fresh_forward_progress});
         if (safe_separation.action == overtake_core::SafeSeparationAction::KeepSameSide) {
           safe_separation_velocity_reference =
             safe_separation.target_velocity_reference_mps;
@@ -13632,6 +13637,26 @@ private:
             safe_separation.forward_escape_active;
           safe_separation_full_speed_forward_escape_active =
             safe_separation.full_speed_forward_escape_active;
+          const bool rearward_progress_time_grace_active =
+            safe_separation.reason ==
+            overtake_core::SafeSeparationReason::RearwardProgressTimeGrace;
+          if (
+            rearward_progress_time_grace_active &&
+            !overtake_line_state_.pass_rearward_progress_time_grace_was_active)
+          {
+            RCLCPP_WARN(
+              rclcpp::get_logger("mpc_controller"),
+              "OvertakeLine SafeSeparation rearward progress time grace: "
+              "target=%s, side=%d, target_s=%.2f, progress=%.2f m, "
+              "progress_age=%.2f s, local=%.2f s/%.2f m, absolute=%.2f s/%.2f m",
+              overtake_line_state_.target_vehicle_id.c_str(),
+              overtake_line_state_.pass_side_sign, locked_target_longitudinal,
+              safe_separation_forward_progress, safe_separation_progress_age,
+              safe_separation_elapsed, safe_separation_traveled,
+              pass_elapsed, pass_traveled);
+          }
+          overtake_line_state_.pass_rearward_progress_time_grace_was_active =
+            rearward_progress_time_grace_active;
           if (safe_separation.progress_extension_requested) {
             const bool dynamic_completion_extension =
               safe_separation.reason ==
@@ -17928,6 +17953,10 @@ Config load_config(const std::string & path)
     mpc["v2x_overtake_safe_separation_full_speed_forward_escape_enabled"] ?
     mpc["v2x_overtake_safe_separation_full_speed_forward_escape_enabled"].as<bool>() :
     false;
+  cfg.mpc.v2x_behavior.overtake_line.safe_separation_rearward_progress_time_grace_enabled =
+    mpc["v2x_overtake_safe_separation_rearward_progress_time_grace_enabled"] ?
+    mpc["v2x_overtake_safe_separation_rearward_progress_time_grace_enabled"].as<bool>() :
+    false;
   cfg.mpc.v2x_behavior.overtake_line.safe_separation_mission_aligned_budget_enabled =
     mpc["v2x_overtake_safe_separation_mission_aligned_budget_enabled"] ?
     mpc["v2x_overtake_safe_separation_mission_aligned_budget_enabled"].as<bool>() :
@@ -19431,12 +19460,15 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line.safe_separation_soft_prediction_grace_sec);
       RCLCPP_INFO(
         get_logger(),
-        "V2X Pass completion: full_speed_forward=%s, mission_budget=%s "
+        "V2X Pass completion: full_speed_forward=%s, rearward_time_grace=%s, "
+        "mission_budget=%s "
         "margin=%.2f m/%.2f s, contact_continuation=%s max=%.2f s "
         "longitudinal<=%.2f m lateral>=%.2f m closing<=%.2f m/s vlat<=%.2f m/s "
         "ego>=%.2f m/s fresh<=%.2f s bias=%.2f m",
         mpc_cfg_.v2x_behavior.overtake_line
         .safe_separation_full_speed_forward_escape_enabled ? "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line
+        .safe_separation_rearward_progress_time_grace_enabled ? "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line
         .safe_separation_mission_aligned_budget_enabled ? "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.safe_separation_completion_distance_margin,
@@ -21784,10 +21816,20 @@ private:
       std::chrono::duration<double>(
       steady_now - last_collision_receipt_steady_.value()).count() < 5.0;
     const auto & behavior = mpc_->last_v2x_behavior_output();
+    const bool follow_deliberate_stop =
+      stuck_recovery::should_treat_follow_as_deliberate_stop(
+      stuck_recovery::FollowDeliberateStopRequest{
+        behavior.state == V2XBehaviorState::Follow,
+        behavior.has_front_vehicle,
+        behavior.follow_speed_limit_active,
+        behavior.moving_front_clearance_limit_active,
+        behavior.target_velocity_limit,
+        behavior.desired_velocity,
+        requested_forward_speed_mps});
     const bool raw_deliberate_stop =
       behavior.state == V2XBehaviorState::LowSpeedAvoidance ||
       behavior.state == V2XBehaviorState::SafetyBrake ||
-      (behavior.state == V2XBehaviorState::Follow && behavior.has_front_vehicle) ||
+      follow_deliberate_stop ||
       behavior.has_danger_vehicle;
     const bool forward_intent =
       requested_forward_speed_mps >=

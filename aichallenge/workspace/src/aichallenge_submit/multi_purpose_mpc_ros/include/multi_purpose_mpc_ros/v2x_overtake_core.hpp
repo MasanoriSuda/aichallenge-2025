@@ -1170,6 +1170,7 @@ enum class SafeSeparationReason
   TargetClearAhead,
   ProgressExtension,
   DynamicCompletionExtension,
+  RearwardProgressTimeGrace,
 };
 
 struct CommittedPassForwardCompletionRequest
@@ -1312,6 +1313,8 @@ struct SafeSeparationRequest
   bool forward_completion_latched{false};
   bool dynamic_completion_extension_allowed{false};
   bool full_speed_forward_escape_enabled{false};
+  bool rearward_progress_time_grace_enabled{false};
+  bool fresh_forward_progress{false};
 };
 
 struct SafeSeparationResolution

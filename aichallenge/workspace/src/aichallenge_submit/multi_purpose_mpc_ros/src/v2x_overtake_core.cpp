@@ -2282,9 +2282,23 @@ SafeSeparationResolution resolve_safe_separation(
     request.traveled_m >= request.maximum_distance_m - 1e-9;
   const bool local_time_limit_reached =
     request.elapsed_sec >= request.maximum_duration_sec - 1e-9;
+  const bool rearward_progress_time_grace_active =
+    request.rearward_progress_time_grace_enabled && forward_escape_active &&
+    request.target_longitudinal_m < 0.0 &&
+    request.fresh_forward_progress &&
+    !absolute_distance_limit_reached;
   if (
     local_distance_limit_reached || local_time_limit_reached)
   {
+    if (
+      local_time_limit_reached && !local_distance_limit_reached &&
+      rearward_progress_time_grace_active)
+    {
+      resolution.action = SafeSeparationAction::KeepSameSide;
+      resolution.reason = SafeSeparationReason::RearwardProgressTimeGrace;
+      apply_forward_escape_velocity();
+      return resolution;
+    }
     const bool absolute_limit_reached =
       absolute_distance_limit_reached || absolute_time_limit_reached;
     if (
@@ -2495,6 +2509,8 @@ const char * to_string(const SafeSeparationReason reason) noexcept
       return "fresh forward progress extension";
     case SafeSeparationReason::DynamicCompletionExtension:
       return "dynamic completion extension";
+    case SafeSeparationReason::RearwardProgressTimeGrace:
+      return "rearward progress time grace";
   }
   return "unknown";
 }

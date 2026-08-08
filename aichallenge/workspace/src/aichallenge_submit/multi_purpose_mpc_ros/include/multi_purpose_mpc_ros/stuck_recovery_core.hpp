@@ -2,6 +2,7 @@
 #define MULTI_PURPOSE_MPC_ROS__STUCK_RECOVERY_CORE_HPP_
 
 #include <cstddef>
+#include <limits>
 #include <optional>
 
 namespace multi_purpose_mpc_ros::stuck_recovery
@@ -97,6 +98,23 @@ struct CollisionDeliberateStopOverrideRequest
   double signed_speed_mps{};
   double stopped_speed_mps{};
 };
+
+struct FollowDeliberateStopRequest
+{
+  bool follow_active{false};
+  bool has_front_vehicle{false};
+  bool follow_speed_limit_active{false};
+  bool moving_front_clearance_limit_active{false};
+  double target_velocity_limit_mps{std::numeric_limits<double>::infinity()};
+  double desired_velocity_mps{std::numeric_limits<double>::infinity()};
+  double requested_forward_speed_mps{};
+};
+
+// Follow can remain selected briefly after its longitudinal cap has become
+// inactive. Only an effective speed restriction is an intentional stop; the
+// label alone must not reset solver/no-progress recovery observation.
+bool should_treat_follow_as_deliberate_stop(
+  const FollowDeliberateStopRequest & request) noexcept;
 
 // A recent physical collision is stronger evidence than a transient V2X
 // SafetyBrake/Follow classification. This only removes the deliberate-stop

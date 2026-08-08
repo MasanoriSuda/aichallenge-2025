@@ -14,6 +14,7 @@ namespace
 using multi_purpose_mpc_ros::stuck_recovery::CoreConfig;
 using multi_purpose_mpc_ros::stuck_recovery::CoreInput;
 using multi_purpose_mpc_ros::stuck_recovery::CollisionDeliberateStopOverrideRequest;
+using multi_purpose_mpc_ros::stuck_recovery::FollowDeliberateStopRequest;
 using multi_purpose_mpc_ros::stuck_recovery::CourseDirectedForwardEscapeRequest;
 using multi_purpose_mpc_ros::stuck_recovery::SolverReverseDeadlockForwardProbeRequest;
 using multi_purpose_mpc_ros::stuck_recovery::AdaptiveReverseRetryConfig;
@@ -53,6 +54,7 @@ using multi_purpose_mpc_ros::stuck_recovery::measured_reverse_course_progress_wo
 using multi_purpose_mpc_ros::stuck_recovery::solver_reverse_deadlock_forward_probe_allowed;
 using multi_purpose_mpc_ros::stuck_recovery::recovery_escape_distance_confirmed;
 using multi_purpose_mpc_ros::stuck_recovery::should_override_deliberate_stop_for_collision;
+using multi_purpose_mpc_ros::stuck_recovery::should_treat_follow_as_deliberate_stop;
 using multi_purpose_mpc_ros::stuck_recovery::
   should_suppress_coordinated_stop_for_validated_forward_escape;
 using multi_purpose_mpc_ros::stuck_recovery::solver_fallback_requires_reverse_only;
@@ -104,6 +106,36 @@ TEST(StuckRecoveryCoordination, ValidatedForwardEscapeSuppressesOnlyNonCollision
     should_suppress_coordinated_stop_for_validated_forward_escape(true, false, false));
   EXPECT_FALSE(
     should_suppress_coordinated_stop_for_validated_forward_escape(false, true, false));
+}
+
+TEST(StuckRecoveryDeliberateStop, FollowRequiresAnEffectiveLongitudinalRestriction)
+{
+  FollowDeliberateStopRequest request;
+  request.follow_active = true;
+  request.has_front_vehicle = true;
+  request.requested_forward_speed_mps = 11.11;
+
+  EXPECT_FALSE(should_treat_follow_as_deliberate_stop(request));
+
+  request.follow_speed_limit_active = true;
+  EXPECT_TRUE(should_treat_follow_as_deliberate_stop(request));
+  request.follow_speed_limit_active = false;
+
+  request.moving_front_clearance_limit_active = true;
+  EXPECT_TRUE(should_treat_follow_as_deliberate_stop(request));
+  request.moving_front_clearance_limit_active = false;
+
+  request.target_velocity_limit_mps = 3.0;
+  EXPECT_TRUE(should_treat_follow_as_deliberate_stop(request));
+  request.target_velocity_limit_mps = 11.11;
+  EXPECT_FALSE(should_treat_follow_as_deliberate_stop(request));
+
+  request.target_velocity_limit_mps = std::numeric_limits<double>::infinity();
+  request.desired_velocity_mps = 5.0;
+  EXPECT_TRUE(should_treat_follow_as_deliberate_stop(request));
+
+  request.has_front_vehicle = false;
+  EXPECT_FALSE(should_treat_follow_as_deliberate_stop(request));
 }
 
 TEST(StuckRecoveryRejoinSteering, AppliesLimitAndRejectsInvalidInputs)

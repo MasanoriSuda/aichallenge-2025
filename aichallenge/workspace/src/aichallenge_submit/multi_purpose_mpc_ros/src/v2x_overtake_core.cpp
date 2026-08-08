@@ -3943,7 +3943,7 @@ bool overtake_completion_policy_allows_execution(
   const OvertakeCompletionPermissionRequest & request) noexcept
 {
   return
-    request.completion_feasible || request.line_committed ||
+    request.completion_feasible || request.validated_full_mission || request.line_committed ||
     request.curve_continuation_allowed ||
     can_override_completion_for_curve_entry(
     CurveEntryCompletionOverrideRequest{
@@ -4003,7 +4003,7 @@ OvertakeEntryPrearmWindowResolution update_overtake_entry_prearm_window(
   }
 
   const bool prior_window_valid =
-    request.same_mission && std::isfinite(request.start_sec) &&
+    request.same_target && std::isfinite(request.start_sec) &&
     std::isfinite(request.last_update_sec) && request.start_sec <= request.now_sec &&
     request.last_update_sec <= request.now_sec && request.traveled_m >= 0.0 &&
     std::isfinite(request.traveled_m);
@@ -4022,6 +4022,39 @@ OvertakeEntryPrearmWindowResolution update_overtake_entry_prearm_window(
     result.elapsed_sec + 1e-9 >= request.maximum_duration_sec ||
     result.traveled_m + 1e-9 >= request.maximum_distance_m;
   result.active = !result.timed_out;
+  return result;
+}
+
+OvertakeEntryPrearmValidationLeaseResolution resolve_overtake_entry_prearm_validation_lease(
+  const OvertakeEntryPrearmValidationLeaseRequest & request) noexcept
+{
+  OvertakeEntryPrearmValidationLeaseResolution result;
+  if (
+    !request.hard_guard_clear || !std::isfinite(request.now_sec) ||
+    !std::isfinite(request.maximum_hold_sec) || request.maximum_hold_sec < 0.0)
+  {
+    return result;
+  }
+
+  if (request.current_mission_validated) {
+    result.monitor_active = true;
+    result.last_validated_sec = request.now_sec;
+    result.remaining_sec = request.maximum_hold_sec;
+    return result;
+  }
+
+  if (!request.same_target || !std::isfinite(request.last_validated_sec)) {
+    return result;
+  }
+  const double age_sec = request.now_sec - request.last_validated_sec;
+  if (age_sec < 0.0 || age_sec > request.maximum_hold_sec + 1e-9) {
+    return result;
+  }
+
+  result.monitor_active = true;
+  result.hold_active = true;
+  result.last_validated_sec = request.last_validated_sec;
+  result.remaining_sec = std::max(0.0, request.maximum_hold_sec - age_sec);
   return result;
 }
 

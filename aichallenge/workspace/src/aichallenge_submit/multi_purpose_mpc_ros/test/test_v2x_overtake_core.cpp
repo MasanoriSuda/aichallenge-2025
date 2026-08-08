@@ -259,9 +259,12 @@ using multi_purpose_mpc_ros::v2x_overtake_core::can_precommit_inner_curve_line;
 using multi_purpose_mpc_ros::v2x_overtake_core::overtake_completion_policy_allows_execution;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntrySpeedReadinessRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntryPrearmWindowRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntryPrearmValidationLeaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::NewOvertakeEntryAdmissionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_overtake_entry_speed_readiness;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_overtake_entry_prearm_window;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  resolve_overtake_entry_prearm_validation_lease;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_new_overtake_entry_admission;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   can_hold_committed_execution_after_behavior_drop;
@@ -5809,6 +5812,10 @@ TEST(V2XOvertakeCoreCompletion, CompletionPolicyDoesNotLeakRawCurveEntryPermissi
   EXPECT_TRUE(overtake_completion_policy_allows_execution(request));
 
   request.completion_feasible = false;
+  request.validated_full_mission = true;
+  EXPECT_TRUE(overtake_completion_policy_allows_execution(request));
+
+  request.validated_full_mission = false;
   request.curve_continuation_allowed = true;
   EXPECT_TRUE(overtake_completion_policy_allows_execution(request));
 
@@ -5897,7 +5904,7 @@ TEST(V2XOvertakeCoreEntrySpeed, BoundsPrearmToOneContinuousMission)
   EXPECT_DOUBLE_EQ(result.start_sec, 10.0);
   EXPECT_DOUBLE_EQ(result.traveled_m, 0.0);
 
-  request.same_mission = true;
+  request.same_target = true;
   request.now_sec = 10.5;
   request.start_sec = result.start_sec;
   request.last_update_sec = result.last_update_sec;
@@ -5917,7 +5924,7 @@ TEST(V2XOvertakeCoreEntrySpeed, BoundsPrearmToOneContinuousMission)
   EXPECT_DOUBLE_EQ(result.start_sec, 12.0);
   EXPECT_DOUBLE_EQ(result.traveled_m, 0.0);
 
-  request.same_mission = false;
+  request.same_target = false;
   request.now_sec = 12.1;
   request.start_sec = result.start_sec;
   request.last_update_sec = result.last_update_sec;
@@ -5932,7 +5939,7 @@ TEST(V2XOvertakeCoreEntrySpeed, TimesOutPrearmByDurationOrDistance)
 {
   OvertakeEntryPrearmWindowRequest request;
   request.monitor_active = true;
-  request.same_mission = true;
+  request.same_target = true;
   request.now_sec = 22.0;
   request.start_sec = 20.0;
   request.last_update_sec = 21.9;
@@ -5953,6 +5960,59 @@ TEST(V2XOvertakeCoreEntrySpeed, TimesOutPrearmByDurationOrDistance)
   EXPECT_FALSE(result.active);
   EXPECT_FALSE(result.timed_out);
   EXPECT_FALSE(std::isfinite(result.start_sec));
+}
+
+TEST(V2XOvertakeCoreEntrySpeed, HoldsTargetReadinessAcrossShortMissionPlanningMiss)
+{
+  OvertakeEntryPrearmValidationLeaseRequest request;
+  request.current_mission_validated = true;
+  request.hard_guard_clear = true;
+  request.now_sec = 10.0;
+  request.maximum_hold_sec = 0.15;
+
+  auto result = resolve_overtake_entry_prearm_validation_lease(request);
+  EXPECT_TRUE(result.monitor_active);
+  EXPECT_FALSE(result.hold_active);
+  EXPECT_DOUBLE_EQ(result.last_validated_sec, 10.0);
+  EXPECT_NEAR(result.remaining_sec, 0.15, 1e-12);
+
+  request.current_mission_validated = false;
+  request.same_target = true;
+  request.last_validated_sec = result.last_validated_sec;
+  request.now_sec = 10.1;
+  result = resolve_overtake_entry_prearm_validation_lease(request);
+  EXPECT_TRUE(result.monitor_active);
+  EXPECT_TRUE(result.hold_active);
+  EXPECT_DOUBLE_EQ(result.last_validated_sec, 10.0);
+  EXPECT_NEAR(result.remaining_sec, 0.05, 1e-12);
+
+  request.now_sec = 10.151;
+  result = resolve_overtake_entry_prearm_validation_lease(request);
+  EXPECT_FALSE(result.monitor_active);
+  EXPECT_FALSE(result.hold_active);
+  EXPECT_FALSE(std::isfinite(result.last_validated_sec));
+}
+
+TEST(V2XOvertakeCoreEntrySpeed, ValidationLeaseFailsClosedForTargetOrHardGuard)
+{
+  OvertakeEntryPrearmValidationLeaseRequest request;
+  request.same_target = false;
+  request.hard_guard_clear = true;
+  request.now_sec = 20.1;
+  request.last_validated_sec = 20.0;
+  request.maximum_hold_sec = 0.15;
+
+  auto result = resolve_overtake_entry_prearm_validation_lease(request);
+  EXPECT_FALSE(result.monitor_active);
+
+  request.same_target = true;
+  request.hard_guard_clear = false;
+  result = resolve_overtake_entry_prearm_validation_lease(request);
+  EXPECT_FALSE(result.monitor_active);
+
+  request.current_mission_validated = true;
+  result = resolve_overtake_entry_prearm_validation_lease(request);
+  EXPECT_FALSE(result.monitor_active);
 }
 
 TEST(V2XOvertakeCoreEntrySpeed, PrearmsValidatedMissionUntilMeasuredSpeedIsReady)

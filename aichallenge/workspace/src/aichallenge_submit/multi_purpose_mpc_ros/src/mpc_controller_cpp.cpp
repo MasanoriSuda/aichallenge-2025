@@ -1514,6 +1514,7 @@ struct V2XBehaviorConfig
   double overtake_inner_curve_precommit_min_relative_speed{0.0};
   double overtake_entry_min_relative_speed{0.3};
   double overtake_entry_speed_confirm_sec{0.3};
+  double overtake_entry_prearm_validation_hold_sec{0.15};
   double overtake_entry_prearm_max_sec{2.0};
   double overtake_entry_prearm_max_distance{8.0};
   double overtake_entry_prearm_retry_cooldown_sec{0.75};
@@ -1870,6 +1871,7 @@ struct V2XBehaviorOutput
   bool inner_curve_hard_continuation_allowed{false};
   bool overtake_inner_curve_pass{false};
   bool overtake_completion_feasible{true};
+  bool overtake_completion_mission_override{false};
   bool overtake_speed_front_cap_applied{false};
   bool overtake_shiftout_adaptive_speed_applied{false};
   bool overtake_front_cap_release_ready{false};
@@ -1963,6 +1965,8 @@ struct V2XBehaviorOutput
   double overtake_entry_prearm_target_velocity{std::numeric_limits<double>::infinity()};
   double overtake_entry_prearm_elapsed_sec{};
   double overtake_entry_prearm_traveled_m{};
+  bool overtake_entry_prearm_validation_hold_active{false};
+  double overtake_entry_prearm_validation_hold_remaining_sec{};
   bool overtake_entry_prearm_timed_out{false};
   bool overtake_entry_prearm_cooldown_active{false};
   bool lower_boundary_vehicle_seen{false};
@@ -4351,6 +4355,8 @@ struct MPC
     overtake_entry_speed_candidate_closing_speed_ =
       std::numeric_limits<double>::quiet_NaN();
     overtake_entry_speed_ready_since_sec_ = std::numeric_limits<double>::quiet_NaN();
+    overtake_entry_prearm_last_validated_sec_ =
+      -std::numeric_limits<double>::infinity();
     overtake_entry_prearm_start_sec_ = std::numeric_limits<double>::quiet_NaN();
     overtake_entry_prearm_last_update_sec_ = std::numeric_limits<double>::quiet_NaN();
     overtake_entry_prearm_traveled_m_ = 0.0;
@@ -4489,6 +4495,8 @@ struct MPC
     overtake_entry_speed_candidate_closing_speed_ =
       std::numeric_limits<double>::quiet_NaN();
     overtake_entry_speed_ready_since_sec_ = std::numeric_limits<double>::quiet_NaN();
+    overtake_entry_prearm_last_validated_sec_ =
+      -std::numeric_limits<double>::infinity();
     overtake_entry_prearm_start_sec_ = std::numeric_limits<double>::quiet_NaN();
     overtake_entry_prearm_last_update_sec_ = std::numeric_limits<double>::quiet_NaN();
     overtake_entry_prearm_traveled_m_ = 0.0;
@@ -7678,6 +7686,15 @@ struct MPC
             assessment.side,
             inner_curve_pass_side});
       };
+    const auto has_validated_full_mission = [](const SideAssessment & assessment) {
+        return
+          assessment.selected_mission.has_value() &&
+          assessment.selected_mission->feasible &&
+          assessment.selected_mission->body_clear_deadline_checked &&
+          assessment.selected_mission->body_clear_deadline_feasible &&
+          assessment.selected_mission->rear_clear_prediction_checked &&
+          assessment.selected_mission->rear_clear_prediction_feasible;
+      };
     const auto execution_allowed_for_side = [&](const SideAssessment & assessment) {
         if (!assessment.gap_available || assessment.side == 0) {
           return false;
@@ -7712,6 +7729,7 @@ struct MPC
           v2x_overtake_core::overtake_completion_policy_allows_execution(
           v2x_overtake_core::OvertakeCompletionPermissionRequest{
             overtake_completion_feasible,
+            has_validated_full_mission(assessment),
             new_curve_entry_allowed,
             outer_curve.hard_continuation_allowed ||
             inner_curve.hard_continuation_allowed,
@@ -8121,6 +8139,8 @@ struct MPC
       right_assessment :
       (locked_pass_side != 0 ? locked_pass_side : selection_preferred_pass_side) < 0 ?
       right_assessment : left_assessment;
+    output.overtake_completion_mission_override =
+      !overtake_completion_feasible && has_validated_full_mission(selected_assessment);
     output.overtake_base_line_pass_through =
       cfg.v2x_behavior.overtake_minimum_lateral_motion_enabled &&
       !start_grid_breakout_attempt && locked_pass_side == 0 &&
@@ -8188,12 +8208,7 @@ struct MPC
     const bool selected_mission_ready_for_longitudinal_ownership =
       cfg.v2x_behavior.overtake_committed_pass_attack_mode_enabled &&
       overtake_gap_available && overtake_zone_allows &&
-      output.overtake_selected_mission.has_value() &&
-      output.overtake_selected_mission->feasible &&
-      output.overtake_selected_mission->body_clear_deadline_checked &&
-      output.overtake_selected_mission->body_clear_deadline_feasible &&
-      output.overtake_selected_mission->rear_clear_prediction_checked &&
-      output.overtake_selected_mission->rear_clear_prediction_feasible &&
+      has_validated_full_mission(selected_assessment) &&
       effective_front_risk_level != FrontRiskLevel::EmergencyBrake;
     output.validated_overtake_entry_longitudinal_owner =
       selected_mission_ready_for_longitudinal_ownership;
@@ -9772,6 +9787,8 @@ struct MPC
   double overtake_entry_speed_candidate_closing_speed_{
     std::numeric_limits<double>::quiet_NaN()};
   double overtake_entry_speed_ready_since_sec_{std::numeric_limits<double>::quiet_NaN()};
+  double overtake_entry_prearm_last_validated_sec_{
+    -std::numeric_limits<double>::infinity()};
   double overtake_entry_prearm_start_sec_{std::numeric_limits<double>::quiet_NaN()};
   double overtake_entry_prearm_last_update_sec_{std::numeric_limits<double>::quiet_NaN()};
   double overtake_entry_prearm_traveled_m_{0.0};
@@ -15602,23 +15619,44 @@ private:
     const double entry_mission_closing_speed = entry_mission_available ?
       output.overtake_selected_mission->closing_speed_mps :
       std::numeric_limits<double>::quiet_NaN();
-    const bool same_entry_speed_mission =
-      entry_mission_available &&
-      output.target_vehicle_id == overtake_entry_speed_candidate_id_ &&
-      entry_mission_side_sign == overtake_entry_speed_candidate_side_sign_ &&
-      std::isfinite(overtake_entry_speed_candidate_closing_speed_) &&
-      std::abs(
-        entry_mission_closing_speed -
-        overtake_entry_speed_candidate_closing_speed_) <= 0.05;
+    // Relative-speed readiness belongs to the target, not to one lateral
+    // candidate. Re-ranking side/goal/closing policy must not erase measured
+    // evidence that ego is already gaining on the same kart. Lateral handoff
+    // still requires the current cycle's complete validated Mission below.
+    const bool same_entry_speed_target =
+      !overtake_entry_speed_candidate_id_.empty() &&
+      output.target_vehicle_id == overtake_entry_speed_candidate_id_;
     const bool entry_prearm_cooldown_active =
       now_sec < overtake_entry_prearm_cooldown_until_sec_;
-    const bool entry_speed_monitor_active =
-      entry_mission_available && !entry_prearm_cooldown_active;
+    const bool entry_prearm_hard_guard_clear =
+      (output.has_front_vehicle || output.has_side_vehicle) &&
+      !output.target_vehicle_id.empty() &&
+      !output.v2x_message_invalid &&
+      !output.locked_target_position_jump &&
+      !output.overtake_forbidden_wp &&
+      output.front_risk_level != FrontRiskLevel::EmergencyBrake &&
+      !overtake_solver_recovery_active_ &&
+      !overtake_solver_reentry_blocked_;
+    const auto entry_validation_lease =
+      v2x_overtake_core::resolve_overtake_entry_prearm_validation_lease(
+      v2x_overtake_core::OvertakeEntryPrearmValidationLeaseRequest{
+        entry_mission_available && !entry_prearm_cooldown_active,
+        same_entry_speed_target,
+        entry_prearm_hard_guard_clear && !entry_prearm_cooldown_active,
+        now_sec,
+        overtake_entry_prearm_last_validated_sec_,
+        cfg.v2x_behavior.overtake_entry_prearm_validation_hold_sec});
+    overtake_entry_prearm_last_validated_sec_ =
+      entry_validation_lease.last_validated_sec;
+    output.overtake_entry_prearm_validation_hold_active =
+      entry_validation_lease.hold_active;
+    output.overtake_entry_prearm_validation_hold_remaining_sec =
+      entry_validation_lease.remaining_sec;
     const auto entry_prearm_window =
       v2x_overtake_core::update_overtake_entry_prearm_window(
       v2x_overtake_core::OvertakeEntryPrearmWindowRequest{
-        entry_speed_monitor_active,
-        same_entry_speed_mission,
+        entry_validation_lease.monitor_active,
+        same_entry_speed_target,
         now_sec,
         overtake_entry_prearm_start_sec_,
         overtake_entry_prearm_last_update_sec_,
@@ -15649,11 +15687,11 @@ private:
         cfg.v2x_behavior.overtake_entry_prearm_max_distance,
         cfg.v2x_behavior.overtake_entry_prearm_retry_cooldown_sec);
     }
-    if (entry_prearm_window.active) {
+    if (entry_mission_available && entry_prearm_window.active) {
       overtake_entry_speed_candidate_id_ = output.target_vehicle_id;
       overtake_entry_speed_candidate_side_sign_ = entry_mission_side_sign;
       overtake_entry_speed_candidate_closing_speed_ = entry_mission_closing_speed;
-    } else {
+    } else if (!entry_validation_lease.hold_active || !entry_prearm_window.active) {
       overtake_entry_speed_candidate_id_.clear();
       overtake_entry_speed_candidate_side_sign_ = 0;
       overtake_entry_speed_candidate_closing_speed_ =
@@ -15663,7 +15701,7 @@ private:
       v2x_overtake_core::update_overtake_entry_speed_readiness(
       v2x_overtake_core::OvertakeEntrySpeedReadinessRequest{
         entry_prearm_window.active,
-        same_entry_speed_mission,
+        same_entry_speed_target,
         now_sec,
         overtake_entry_speed_ready_since_sec_,
         std::max(0.0, current_speed_mps_),
@@ -15675,7 +15713,7 @@ private:
     output.overtake_entry_speed_stable_sec = entry_speed_readiness.stable_sec;
     const bool behavior_overtake_handoff =
       had_previous_state && previous_state == V2XBehaviorState::Overtake &&
-      entry_mission_available && same_entry_speed_mission;
+      entry_mission_available && same_entry_speed_target;
     const auto entry_admission =
       v2x_overtake_core::resolve_new_overtake_entry_admission(
       v2x_overtake_core::NewOvertakeEntryAdmissionRequest{
@@ -15683,6 +15721,7 @@ private:
         overtake_execution_committed,
         behavior_overtake_handoff,
         entry_speed_readiness.ready,
+        entry_mission_available &&
         output.validated_overtake_entry_longitudinal_owner &&
         entry_prearm_window.active,
         output.start_grid_breakout_active});
@@ -15985,7 +16024,8 @@ private:
         "hard_dist=%.2f, hard_avail=%.2f, hard_req=%.2f, "
         "locked_rel=%.2f, lat_clear=%d, body_clear=%d, "
         "lookahead_inner=%d, inner_pref=%d, front_danger_suppress=%d, "
-        "entry_owner=%d, prearm=%d, shift_owner=%d, pass_owner=%d",
+        "entry_owner=%d, prearm=%d, prearm_lease=%d, "
+        "shift_owner=%d, pass_owner=%d",
         v2x_behavior_state_initialized ? to_string(v2x_behavior_state) : "None", to_string(final_state),
         output.front_distance, model->wp_id, output.reason.c_str(),
         output.v2x_health.c_str(), output.v2x_receipt_age_sec,
@@ -16015,6 +16055,7 @@ private:
         output.committed_corridor_front_danger_suppressed ? 1 : 0,
         output.validated_overtake_entry_longitudinal_owner ? 1 : 0,
         output.overtake_entry_prearm_active ? 1 : 0,
+        output.overtake_entry_prearm_validation_hold_active ? 1 : 0,
         output.overtake_committed_shiftout_behavior_owner_active ? 1 : 0,
         output.overtake_committed_pass_behavior_owner_active ? 1 : 0);
       v2x_behavior_state = final_state;
@@ -16041,6 +16082,7 @@ private:
           "message_invalid=%d, front=%d, side=%d, danger=%d, danger_action=%s, "
           "danger_suppress=%d, entry_owner=%d, prearm=%d, entry_rel=%.2f, "
           "entry_stable=%.2f, prearm_v=%.2f, prearm_window=%.2f s/%.2f m, "
+          "prearm_lease=%d/%.2f, "
           "prearm_timeout=%d, prearm_cooldown=%d, shift_owner=%d, pass_owner=%d, "
           "grace=%d, grid_suppress=%d, grid_breakout=%d, "
           "grid_observe=%d, grid_obs=%.2f, grid_peer=%.2f, grid_candidate=%s, "
@@ -16055,6 +16097,7 @@ private:
           "outer_entry=%d, outer_hard_entry=%d, outer_hard=%d, "
           "inner_entry=%d, inner_hard_entry=%d, inner_hard=%d, "
           "hard_dist=%.2f, hard_avail=%.2f, hard_req=%.2f, completion=%d, "
+          "completion_mission_override=%d, "
           "completion_avail=%.2f, completion_req=%.2f, completion_rel=%.2f, "
           "gap=%d, gap_hold=%d, hold_rem=%.2f, fallback=%d, "
           "cooldown=%d, pass=%d, side_clear=%.2f, plan_N=%d, target=%s, locked_seen=%d, "
@@ -16102,6 +16145,8 @@ private:
           output.overtake_entry_prearm_target_velocity,
           output.overtake_entry_prearm_elapsed_sec,
           output.overtake_entry_prearm_traveled_m,
+          output.overtake_entry_prearm_validation_hold_active ? 1 : 0,
+          output.overtake_entry_prearm_validation_hold_remaining_sec,
           output.overtake_entry_prearm_timed_out ? 1 : 0,
           output.overtake_entry_prearm_cooldown_active ? 1 : 0,
           output.overtake_committed_shiftout_behavior_owner_active ? 1 : 0,
@@ -16149,6 +16194,7 @@ private:
           output.active_hard_curve_available_distance,
           output.active_hard_curve_required_distance,
           output.overtake_completion_feasible ? 1 : 0,
+          output.overtake_completion_mission_override ? 1 : 0,
           output.overtake_completion_available_distance,
           output.overtake_completion_required_distance,
           output.overtake_completion_relative_speed,
@@ -18021,6 +18067,18 @@ Config load_config(const std::string & path)
   }
   cfg.mpc.v2x_behavior.overtake_entry_speed_confirm_sec =
     std::max(0.0, overtake_entry_speed_confirm_sec);
+  const double overtake_entry_prearm_validation_hold_sec =
+    mpc["v2x_overtake_entry_prearm_validation_hold_sec"] ?
+    mpc["v2x_overtake_entry_prearm_validation_hold_sec"].as<double>() : 0.15;
+  if (
+    !std::isfinite(overtake_entry_prearm_validation_hold_sec) ||
+    overtake_entry_prearm_validation_hold_sec < 0.0)
+  {
+    throw std::runtime_error(
+            "v2x_overtake_entry_prearm_validation_hold_sec must be finite and non-negative");
+  }
+  cfg.mpc.v2x_behavior.overtake_entry_prearm_validation_hold_sec =
+    overtake_entry_prearm_validation_hold_sec;
   const auto read_positive_overtake_entry_prearm_value =
     [&mpc](const char * key, const double fallback) {
       const double value = mpc[key] ? mpc[key].as<double>() : fallback;
@@ -18910,11 +18968,12 @@ public:
       RCLCPP_INFO(
         get_logger(),
         "V2X new-entry speed readiness: min_relative_speed=%.2f m/s, confirm=%.2f s, "
-        "prearm=%.2f s/%.2f m, retry_cooldown=%.2f s",
+        "prearm=%.2f s/%.2f m, validation_hold=%.2f s, retry_cooldown=%.2f s",
         mpc_cfg_.v2x_behavior.overtake_entry_min_relative_speed,
         mpc_cfg_.v2x_behavior.overtake_entry_speed_confirm_sec,
         mpc_cfg_.v2x_behavior.overtake_entry_prearm_max_sec,
         mpc_cfg_.v2x_behavior.overtake_entry_prearm_max_distance,
+        mpc_cfg_.v2x_behavior.overtake_entry_prearm_validation_hold_sec,
         mpc_cfg_.v2x_behavior.overtake_entry_prearm_retry_cooldown_sec);
       RCLCPP_INFO(
         get_logger(),

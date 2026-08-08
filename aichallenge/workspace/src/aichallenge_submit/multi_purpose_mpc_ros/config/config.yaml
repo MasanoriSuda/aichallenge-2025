@@ -440,8 +440,9 @@ mpc:
   # it no longer bypasses this gate. Existing ShiftOut/Pass/FollowPrepare missions are not re-gated.
   v2x_overtake_entry_min_relative_speed: 0.3 # [m/s] require measured forward gain before lateral commitment
   v2x_overtake_entry_speed_confirm_sec: 0.3 # [s] prevent one noisy V2X speed sample from admitting a doomed pass
-  v2x_overtake_entry_prearm_max_sec: 2.0 # [s] one validated target/side/speed Mission may own longitudinal pre-arm only this long
-  v2x_overtake_entry_prearm_max_distance: 8.0 # [m] distance bound for the same Mission pre-arm window
+  v2x_overtake_entry_prearm_validation_hold_sec: 0.15 # [s] keep target-scoped speed history across one short planner miss; never execute a stale Mission
+  v2x_overtake_entry_prearm_max_sec: 2.0 # [s] one validated target may own longitudinal pre-arm only this long
+  v2x_overtake_entry_prearm_max_distance: 8.0 # [m] distance bound for the same target pre-arm window
   v2x_overtake_entry_prearm_retry_cooldown_sec: 0.75 # [s] force full Mission re-evaluation after a pre-arm timeout
   v2x_overtake_inner_curve_hard_continuation_enabled: true # keep only the locked inside ShiftOut/Pass through the hard apex
   v2x_overtake_hard_curve_entry_enabled: true # dev3 attack: start an inner/outer pass after hard-curve recognition when gap is valid

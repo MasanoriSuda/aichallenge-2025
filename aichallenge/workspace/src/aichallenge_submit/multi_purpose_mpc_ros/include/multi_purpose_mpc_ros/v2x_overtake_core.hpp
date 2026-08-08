@@ -2077,6 +2077,10 @@ bool can_precommit_inner_curve_line(
 struct OvertakeCompletionPermissionRequest
 {
   bool completion_feasible{false};
+  /// A current ShiftOut/Pass/Return candidate has passed body-clear,
+  /// rear-clear and full-path preflight. This is a stronger admission result
+  /// than the coarse distance-to-next-hard-curve estimate.
+  bool validated_full_mission{false};
   bool curve_entry_allowed{false};
   bool curve_continuation_allowed{false};
   bool line_committed{false};
@@ -2125,7 +2129,7 @@ OvertakeEntrySpeedReadiness update_overtake_entry_speed_readiness(
 struct OvertakeEntryPrearmWindowRequest
 {
   bool monitor_active{false};
-  bool same_mission{false};
+  bool same_target{false};
   double now_sec{};
   double start_sec{std::numeric_limits<double>::quiet_NaN()};
   double last_update_sec{std::numeric_limits<double>::quiet_NaN()};
@@ -2146,11 +2150,35 @@ struct OvertakeEntryPrearmWindowResolution
   double elapsed_sec{};
 };
 
-/// Bound longitudinal pre-arm to one continuously observed Mission. A target,
-/// side or speed-policy change is supplied as same_mission=false by the caller
-/// and starts a fresh window. Missing/invalid input clears the window.
+/// Bound longitudinal pre-arm to one continuously observed target. Lateral
+/// candidate changes do not reset the window; a target change does.
+/// Missing/invalid input clears the window.
 OvertakeEntryPrearmWindowResolution update_overtake_entry_prearm_window(
   const OvertakeEntryPrearmWindowRequest & request) noexcept;
+
+struct OvertakeEntryPrearmValidationLeaseRequest
+{
+  bool current_mission_validated{false};
+  bool same_target{false};
+  bool hard_guard_clear{false};
+  double now_sec{};
+  double last_validated_sec{-std::numeric_limits<double>::infinity()};
+  double maximum_hold_sec{};
+};
+
+struct OvertakeEntryPrearmValidationLeaseResolution
+{
+  bool monitor_active{false};
+  bool hold_active{false};
+  double last_validated_sec{-std::numeric_limits<double>::infinity()};
+  double remaining_sec{};
+};
+
+/// Preserve only target-scoped entry-speed observation across a brief full-
+/// Mission planning miss. A held lease never authorizes lateral execution;
+/// the caller must still require a current validated Mission for handoff.
+OvertakeEntryPrearmValidationLeaseResolution resolve_overtake_entry_prearm_validation_lease(
+  const OvertakeEntryPrearmValidationLeaseRequest & request) noexcept;
 
 struct NewOvertakeEntryAdmissionRequest
 {

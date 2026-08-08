@@ -244,6 +244,13 @@ stuck_recovery:
     # Hold Drive at zero command briefly while MPC is reinitialized after Recovery.
     solver_recovery_timeout_sec: 1.0
     cooldown_sec: 1.0
+    # After a successful Forward escape/rejoin, let normal control establish
+    # forward motion before another no-progress Recovery can arm. Normal
+    # Follow/SafetyBrake remains active, and a new collision, wall contact, or
+    # solver fallback releases this guard immediately.
+    forward_rearm_guard_enabled: true
+    forward_rearm_guard_duration_sec: 3.0
+    forward_rearm_guard_distance_m: 3.0
 
 map:
   # path from pkg share dir

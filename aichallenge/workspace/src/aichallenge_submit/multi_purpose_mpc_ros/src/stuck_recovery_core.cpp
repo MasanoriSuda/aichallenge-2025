@@ -297,6 +297,28 @@ bool should_suppress_coordinated_stop_for_validated_forward_escape(
   return coordinated_stop_observed && validated_forward_escape_available && !collision_hint;
 }
 
+bool forward_recovery_rearm_guard_active(
+  const ForwardRecoveryRearmGuardRequest & request) noexcept
+{
+  if (
+    !request.enabled || !request.simulation_environment || !request.armed ||
+    request.hard_failure_evidence)
+  {
+    return false;
+  }
+  if (
+    !finite_nonnegative(request.elapsed_sec) ||
+    !finite_nonnegative(request.forward_progress_m) ||
+    !finite_nonnegative(request.maximum_duration_sec) ||
+    !finite_nonnegative(request.release_distance_m) ||
+    request.maximum_duration_sec <= 0.0 || request.release_distance_m <= 0.0)
+  {
+    return false;
+  }
+  return request.elapsed_sec < request.maximum_duration_sec &&
+         request.forward_progress_m < request.release_distance_m;
+}
+
 bool recovery_escape_distance_confirmed(
   const bool current_footprint_clear, const double traveled_distance_m,
   const double target_distance_m, const double tolerance_m) noexcept
@@ -901,6 +923,10 @@ DetectorDecision StuckDetector::update(const DetectorInput & input)
   }
   if (!input.odometry_fresh) {
     return reject_and_reset(StuckVerdict::NotEligible, StuckRejectReason::OdometryStale);
+  }
+  if (input.recovery_rearm_guard_active) {
+    return reject_and_reset(
+      StuckVerdict::NotEligible, StuckRejectReason::RecoveryRearmGuard);
   }
   const bool coordinated_stop_candidate =
     input.deliberate_stop && input.coordinated_stop &&
@@ -2273,6 +2299,8 @@ const char * to_string(const StuckRejectReason reason) noexcept
       return "solver_fallback";
     case StuckRejectReason::SolverFallbackMissingWallEvidence:
       return "solver_fallback_missing_wall_evidence";
+    case StuckRejectReason::RecoveryRearmGuard:
+      return "recovery_rearm_guard";
     case StuckRejectReason::DeliberateStop:
       return "deliberate_stop";
     case StuckRejectReason::GearTransition:

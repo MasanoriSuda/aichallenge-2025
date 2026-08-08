@@ -16602,6 +16602,11 @@ struct StuckRecoveryAdapterConfig
   double rejoin_lateral_error_gain_rad_per_m{0.0};
   double rejoin_heading_error_gain{0.0};
   double rejoin_max_steering_tire_angle_rad{0.0};
+  // Simulation-only bounded handoff after a Forward escape. This suppresses
+  // only a new Stuck Recovery episode while normal driving safety remains live.
+  bool forward_rearm_guard_enabled{false};
+  double forward_rearm_guard_duration_sec{0.0};
+  double forward_rearm_guard_distance_m{0.0};
   // Simulation-race fallback: after repeated bounded recovery failures, a
   // contact-free vehicle may enter feedback rejoin even when the short
   // forward swept-footprint prediction intersects a wall.
@@ -17139,6 +17144,17 @@ Config load_config(const std::string & path)
         rejoin["max_steering_tire_angle_rad"] ?
         rejoin["max_steering_tire_angle_rad"].as<double>() :
         adapter.rejoin_max_steering_tire_angle_rad;
+      adapter.forward_rearm_guard_enabled = rejoin["forward_rearm_guard_enabled"] ?
+        rejoin["forward_rearm_guard_enabled"].as<bool>() :
+        adapter.forward_rearm_guard_enabled;
+      adapter.forward_rearm_guard_duration_sec =
+        rejoin["forward_rearm_guard_duration_sec"] ?
+        rejoin["forward_rearm_guard_duration_sec"].as<double>() :
+        adapter.forward_rearm_guard_duration_sec;
+      adapter.forward_rearm_guard_distance_m =
+        rejoin["forward_rearm_guard_distance_m"] ?
+        rejoin["forward_rearm_guard_distance_m"].as<double>() :
+        adapter.forward_rearm_guard_distance_m;
       adapter.aggressive_force_rejoin_after_retries =
         rejoin["aggressive_force_after_retries"] ?
         rejoin["aggressive_force_after_retries"].as<std::size_t>() :
@@ -17305,6 +17321,11 @@ Config load_config(const std::string & path)
       !finite_non_negative(adapter.rejoin_heading_error_gain) ||
       !finite_non_negative(adapter.rejoin_max_steering_tire_angle_rad) ||
       adapter.rejoin_max_steering_tire_angle_rad >= 1.5707963267948966 ||
+      !finite_non_negative(adapter.forward_rearm_guard_duration_sec) ||
+      !finite_non_negative(adapter.forward_rearm_guard_distance_m) ||
+      (adapter.forward_rearm_guard_enabled &&
+      (adapter.forward_rearm_guard_duration_sec <= 0.0 ||
+      adapter.forward_rearm_guard_distance_m <= 0.0)) ||
       !finite_non_negative(adapter.fault_retry.clear_confirm_sec) ||
       !std::isfinite(adapter.fault_retry.max_observation_gap_sec) ||
       adapter.fault_retry.max_observation_gap_sec <= 0.0 ||
@@ -19125,6 +19146,12 @@ public:
       cfg_.stuck_recovery.core.supervisor.stop_confirm_sec);
     RCLCPP_INFO(
       get_logger(),
+      "Stuck recovery Forward rearm guard: enabled=%s, duration=%.2f s, distance=%.2f m",
+      cfg_.stuck_recovery.forward_rearm_guard_enabled ? "true" : "false",
+      cfg_.stuck_recovery.forward_rearm_guard_duration_sec,
+      cfg_.stuck_recovery.forward_rearm_guard_distance_m);
+    RCLCPP_INFO(
+      get_logger(),
       "Stuck recovery continuous Reverse: %s, speed<=%.2f m/s, accel=%.2f m/s^2, "
       "stop_cmd=%.2f m/s^2, verified_stop=%.2f m/s^2, escape=%.2f m, fast_rejoin=%.2f m, "
       "adaptive_retry=%s/x%.2f/max=%.2f m/reset=%.2f m",
@@ -20173,6 +20200,8 @@ private:
     }
     recovery_observation_anchor_pose_.reset();
     recovery_observation_anchor_progress_m_.reset();
+    recovery_forward_rearm_guard_started_.reset();
+    recovery_forward_rearm_guard_start_progress_m_.reset();
     recovery_maneuver_start_pose_.reset();
     recovery_maneuver_start_lateral_error_m_.reset();
     recovery_last_reverse_pose_.reset();
@@ -20554,12 +20583,10 @@ private:
     }
   }
 
-  double recovery_progress_delta(const double current_progress_m) const
+  double recovery_progress_delta_from(
+    const double current_progress_m, const double anchor_progress_m) const
   {
-    if (!recovery_observation_anchor_progress_m_.has_value()) {
-      return 0.0;
-    }
-    double delta = current_progress_m - recovery_observation_anchor_progress_m_.value();
+    double delta = current_progress_m - anchor_progress_m;
     if (!cfg_.reference_path.circular) {
       return delta;
     }
@@ -20577,6 +20604,15 @@ private:
       delta += path_length_m;
     }
     return delta;
+  }
+
+  double recovery_progress_delta(const double current_progress_m) const
+  {
+    if (!recovery_observation_anchor_progress_m_.has_value()) {
+      return 0.0;
+    }
+    return recovery_progress_delta_from(
+      current_progress_m, recovery_observation_anchor_progress_m_.value());
   }
 
   std::optional<double> recovery_rejoin_steering_tire_angle(
@@ -22050,6 +22086,64 @@ private:
       cfg_.stuck_recovery.core.supervisor.awsim_recovery_wait_sec;
     const bool gear_report_fresh = recovery_gear_report_fresh(steady_now);
 
+    if (
+      recovery_forward_rearm_guard_started_.has_value() !=
+      recovery_forward_rearm_guard_start_progress_m_.has_value())
+    {
+      recovery_forward_rearm_guard_started_.reset();
+      recovery_forward_rearm_guard_start_progress_m_.reset();
+    }
+    const bool forward_rearm_guard_armed =
+      recovery_forward_rearm_guard_started_.has_value() &&
+      recovery_forward_rearm_guard_start_progress_m_.has_value();
+    const double forward_rearm_guard_elapsed_sec = forward_rearm_guard_armed ?
+      std::chrono::duration<double>(
+      steady_now - recovery_forward_rearm_guard_started_.value()).count() :
+      0.0;
+    const double raw_forward_rearm_guard_progress_m = forward_rearm_guard_armed ?
+      recovery_progress_delta_from(
+      car_->s, recovery_forward_rearm_guard_start_progress_m_.value()) : 0.0;
+    const double forward_rearm_guard_progress_m =
+      std::isfinite(raw_forward_rearm_guard_progress_m) ?
+      std::max(0.0, raw_forward_rearm_guard_progress_m) :
+      raw_forward_rearm_guard_progress_m;
+    const bool new_collision_since_forward_rearm =
+      forward_rearm_guard_armed && last_collision_receipt_steady_.has_value() &&
+      last_collision_receipt_steady_.value() >=
+      recovery_forward_rearm_guard_started_.value();
+    const bool current_wall_failure = !safety.current_footprint_clear;
+    const bool forward_rearm_hard_failure =
+      new_collision_since_forward_rearm || current_wall_failure || mpc_fallback_active;
+    const bool forward_rearm_guard_active =
+      stuck_recovery::forward_recovery_rearm_guard_active(
+      stuck_recovery::ForwardRecoveryRearmGuardRequest{
+        cfg_.stuck_recovery.forward_rearm_guard_enabled,
+        use_sim_time_,
+        forward_rearm_guard_armed,
+        forward_rearm_hard_failure,
+        forward_rearm_guard_elapsed_sec,
+        forward_rearm_guard_progress_m,
+        cfg_.stuck_recovery.forward_rearm_guard_duration_sec,
+        cfg_.stuck_recovery.forward_rearm_guard_distance_m});
+    if (forward_rearm_guard_armed && !forward_rearm_guard_active) {
+      if (forward_rearm_hard_failure) {
+        RCLCPP_WARN(
+          get_logger(),
+          "Stuck recovery Forward rearm guard released by hard evidence: "
+          "elapsed=%.2f s, progress=%.2f m, collision=%d, wall=%d, solver=%d",
+          forward_rearm_guard_elapsed_sec, forward_rearm_guard_progress_m,
+          new_collision_since_forward_rearm ? 1 : 0,
+          current_wall_failure ? 1 : 0, mpc_fallback_active ? 1 : 0);
+      } else {
+        RCLCPP_INFO(
+          get_logger(),
+          "Stuck recovery Forward rearm guard completed: elapsed=%.2f s, progress=%.2f m",
+          forward_rearm_guard_elapsed_sec, forward_rearm_guard_progress_m);
+      }
+      recovery_forward_rearm_guard_started_.reset();
+      recovery_forward_rearm_guard_start_progress_m_.reset();
+    }
+
     stuck_recovery::CoreInput input;
     input.simulation_environment = use_sim_time_;
     input.detector.now_sec = steady_seconds(steady_now);
@@ -22057,6 +22151,7 @@ private:
     input.detector.control_enabled = enable_control_;
     input.detector.odometry_fresh = true;
     input.detector.solver_fallback = mpc_fallback_active;
+    input.detector.recovery_rearm_guard_active = forward_rearm_guard_active;
     input.detector.deliberate_stop =
       deliberate_stop || recovery_coordinated_stop_episode_ ||
       control_mode_launch_guard_active;
@@ -22195,7 +22290,15 @@ private:
     const bool started_recovery_episode =
       output.state != stuck_recovery::RecoveryState::Normal &&
       previous_state == stuck_recovery::RecoveryState::Normal;
+    const bool completed_forward_rejoin =
+      output.state == stuck_recovery::RecoveryState::Normal &&
+      output.state_reason == stuck_recovery::RecoveryReason::RejoinComplete &&
+      recovery_last_maneuver_direction_.has_value() &&
+      recovery_last_maneuver_direction_.value() ==
+      stuck_recovery::ManeuverDirection::Forward;
     if (started_recovery_episode) {
+      recovery_forward_rearm_guard_started_.reset();
+      recovery_forward_rearm_guard_start_progress_m_.reset();
       const bool adaptive_retry =
         adaptive_reverse_retry_tracker_ &&
         adaptive_reverse_retry_tracker_->on_recovery_started();
@@ -22514,6 +22617,20 @@ private:
       recovery_retry_force_reverse_ = false;
       recovery_last_maneuver_direction_.reset();
       recovery_reset_applied_ = false;
+      if (
+        completed_forward_rejoin &&
+        cfg_.stuck_recovery.forward_rearm_guard_enabled && use_sim_time_ &&
+        std::isfinite(car_->s))
+      {
+        recovery_forward_rearm_guard_started_ = steady_now;
+        recovery_forward_rearm_guard_start_progress_m_ = car_->s;
+        RCLCPP_INFO(
+          get_logger(),
+          "Stuck recovery Forward rearm guard armed after rejoin: "
+          "duration=%.2f s, distance=%.2f m, progress=%.2f m",
+          cfg_.stuck_recovery.forward_rearm_guard_duration_sec,
+          cfg_.stuck_recovery.forward_rearm_guard_distance_m, car_->s);
+      }
     }
 
     if (!last_recovery_execution_mode_.has_value() ||
@@ -23337,6 +23454,8 @@ private:
   recovery_footprint::FootprintExtents recovery_footprint_;
   std::optional<Pose2D> recovery_observation_anchor_pose_;
   std::optional<double> recovery_observation_anchor_progress_m_;
+  std::optional<SteadyClock::time_point> recovery_forward_rearm_guard_started_;
+  std::optional<double> recovery_forward_rearm_guard_start_progress_m_;
   std::optional<Pose2D> recovery_maneuver_start_pose_;
   std::optional<double> recovery_maneuver_start_lateral_error_m_;
   std::optional<Pose2D> recovery_last_reverse_pose_;

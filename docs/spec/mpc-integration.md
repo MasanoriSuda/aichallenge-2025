@@ -128,6 +128,12 @@ Domain 0のreset / teleportは追加しない。gear実制御時だけ
 `/control/command/gear_cmd`をpublishし、`/vehicle/status/gear_status`の
 freshな一致reportを駆動前に必須とする。
 
+Forward escapeから`LowSpeedRejoin -> Normal`を完了した場合に限り、simulationでは
+新しいStuck Recoveryの再アームを時間・コース前進距離の小さい方まで抑制できる。
+これは通常のFollow / SafetyBrakeや制御出力を無効化するものではない。ガード開始後の
+新規collision、現在のwall evidence、MPC solver fallbackを検出した場合は即時解除し、
+Reverse経由のrejoinではアームしない。現行既定値は最大3.0秒または前進3.0 mである。
+
 実行modeは次の順に段階化している。
 
 1. `enabled: false`: Recovery coreをcontrol cycleで評価せず、通常MPCを維持する。
@@ -252,6 +258,9 @@ stuck_recovery:
     timeout_sec: 5.0
     solver_recovery_timeout_sec: 1.0
     cooldown_sec: 1.0
+    forward_rearm_guard_enabled: true
+    forward_rearm_guard_duration_sec: 3.0
+    forward_rearm_guard_distance_m: 3.0
 ```
 
 `race_relaxed_fault_retry_enabled` は `simulation_only: true` の場合だけ使用できる。Recovery fault後も

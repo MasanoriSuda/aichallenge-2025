@@ -15,6 +15,7 @@ using multi_purpose_mpc_ros::stuck_recovery::CoreConfig;
 using multi_purpose_mpc_ros::stuck_recovery::CoreInput;
 using multi_purpose_mpc_ros::stuck_recovery::CollisionDeliberateStopOverrideRequest;
 using multi_purpose_mpc_ros::stuck_recovery::FollowDeliberateStopRequest;
+using multi_purpose_mpc_ros::stuck_recovery::ForwardRecoveryRearmGuardRequest;
 using multi_purpose_mpc_ros::stuck_recovery::CourseDirectedForwardEscapeRequest;
 using multi_purpose_mpc_ros::stuck_recovery::SolverReverseDeadlockForwardProbeRequest;
 using multi_purpose_mpc_ros::stuck_recovery::AdaptiveReverseRetryConfig;
@@ -50,6 +51,7 @@ using multi_purpose_mpc_ros::stuck_recovery::SupervisorConfig;
 using multi_purpose_mpc_ros::stuck_recovery::SolverForwardFallbackUnlockRequest;
 using multi_purpose_mpc_ros::stuck_recovery::compute_rejoin_steering_tire_angle;
 using multi_purpose_mpc_ros::stuck_recovery::course_directed_forward_escape_allowed;
+using multi_purpose_mpc_ros::stuck_recovery::forward_recovery_rearm_guard_active;
 using multi_purpose_mpc_ros::stuck_recovery::measured_reverse_course_progress_worsened;
 using multi_purpose_mpc_ros::stuck_recovery::solver_reverse_deadlock_forward_probe_allowed;
 using multi_purpose_mpc_ros::stuck_recovery::recovery_escape_distance_confirmed;
@@ -106,6 +108,42 @@ TEST(StuckRecoveryCoordination, ValidatedForwardEscapeSuppressesOnlyNonCollision
     should_suppress_coordinated_stop_for_validated_forward_escape(true, false, false));
   EXPECT_FALSE(
     should_suppress_coordinated_stop_for_validated_forward_escape(false, true, false));
+}
+
+TEST(StuckRecoveryCoordination, ForwardRearmGuardIsBoundedAndFailsOpen)
+{
+  ForwardRecoveryRearmGuardRequest request;
+  request.enabled = true;
+  request.simulation_environment = true;
+  request.armed = true;
+  request.elapsed_sec = 2.9;
+  request.forward_progress_m = 2.9;
+  request.maximum_duration_sec = 3.0;
+  request.release_distance_m = 3.0;
+
+  EXPECT_TRUE(forward_recovery_rearm_guard_active(request));
+
+  request.elapsed_sec = 3.0;
+  EXPECT_FALSE(forward_recovery_rearm_guard_active(request));
+  request.elapsed_sec = 0.0;
+  request.forward_progress_m = 3.0;
+  EXPECT_FALSE(forward_recovery_rearm_guard_active(request));
+  request.forward_progress_m = 0.0;
+  request.hard_failure_evidence = true;
+  EXPECT_FALSE(forward_recovery_rearm_guard_active(request));
+
+  request.hard_failure_evidence = false;
+  request.simulation_environment = false;
+  EXPECT_FALSE(forward_recovery_rearm_guard_active(request));
+  request.simulation_environment = true;
+  request.enabled = false;
+  EXPECT_FALSE(forward_recovery_rearm_guard_active(request));
+  request.enabled = true;
+  request.armed = false;
+  EXPECT_FALSE(forward_recovery_rearm_guard_active(request));
+  request.armed = true;
+  request.maximum_duration_sec = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_FALSE(forward_recovery_rearm_guard_active(request));
 }
 
 TEST(StuckRecoveryDeliberateStop, FollowRequiresAnEffectiveLongitudinalRestriction)
@@ -1039,6 +1077,34 @@ TEST(StuckDetector, ConfirmsOnlyAfterSustainedNoProgressAndEvidence)
   EXPECT_DOUBLE_EQ(decision.stationary_duration_sec, 1.0);
   EXPECT_TRUE(decision.forward_intent);
   EXPECT_TRUE(decision.corroborating_evidence);
+}
+
+TEST(StuckDetector, ForwardRearmGuardRequiresFreshObservationAfterRelease)
+{
+  auto config = detector_config();
+  config.stationary_duration_sec = 0.25;
+  StuckDetector detector(config);
+  auto input = eligible_detector_input(20.0);
+  input.recovery_rearm_guard_active = true;
+
+  auto decision = detector.update(input);
+  EXPECT_EQ(decision.verdict, StuckVerdict::NotEligible);
+  EXPECT_EQ(decision.reject_reason, StuckRejectReason::RecoveryRearmGuard);
+
+  input.now_sec = 20.25;
+  decision = detector.update(input);
+  EXPECT_EQ(decision.reject_reason, StuckRejectReason::RecoveryRearmGuard);
+
+  input.recovery_rearm_guard_active = false;
+  input.now_sec = 20.26;
+  decision = detector.update(input);
+  EXPECT_EQ(decision.verdict, StuckVerdict::Moving);
+  EXPECT_EQ(decision.reject_reason, StuckRejectReason::ObservationWindowIncomplete);
+
+  input.now_sec = 20.51;
+  decision = detector.update(input);
+  EXPECT_EQ(decision.verdict, StuckVerdict::Confirmed);
+  EXPECT_EQ(decision.reject_reason, StuckRejectReason::None);
 }
 
 TEST(StuckDetector, TreatsOneKilometerPerHourAsStoppedWithObstacleEvidence)
@@ -3634,6 +3700,9 @@ TEST(StuckRecoveryCore, EnumStringsAreStableAndUnknownSafe)
   using multi_purpose_mpc_ros::stuck_recovery::to_string;
   EXPECT_STREQ(to_string(StuckVerdict::Confirmed), "Confirmed");
   EXPECT_STREQ(to_string(StuckRejectReason::DeliberateStop), "deliberate_stop");
+  EXPECT_STREQ(
+    to_string(StuckRejectReason::RecoveryRearmGuard),
+    "recovery_rearm_guard");
   EXPECT_STREQ(to_string(Gear::Reverse), "Reverse");
   EXPECT_STREQ(to_string(RecoveryState::WaitReverseReport), "WAIT_REVERSE_REPORT");
   EXPECT_STREQ(to_string(RecoveryActionType::ReverseCreep), "ReverseCreep");

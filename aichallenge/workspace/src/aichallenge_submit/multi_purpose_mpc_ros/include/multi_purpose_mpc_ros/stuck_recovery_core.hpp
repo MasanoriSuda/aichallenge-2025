@@ -131,6 +131,26 @@ bool should_suppress_coordinated_stop_for_validated_forward_escape(
   bool coordinated_stop_observed, bool validated_forward_escape_available,
   bool collision_hint) noexcept;
 
+struct ForwardRecoveryRearmGuardRequest
+{
+  bool enabled{false};
+  bool simulation_environment{false};
+  bool armed{false};
+  bool hard_failure_evidence{false};
+  double elapsed_sec{};
+  double forward_progress_m{};
+  double maximum_duration_sec{};
+  double release_distance_m{};
+};
+
+// A completed Forward escape needs a bounded handoff to normal longitudinal
+// control. During that handoff only a new Stuck Recovery episode is suppressed;
+// normal Follow/SafetyBrake remains outside this pure detector gate. New
+// collision, wall, or solver evidence is supplied as hard_failure_evidence and
+// releases the guard immediately.
+bool forward_recovery_rearm_guard_active(
+  const ForwardRecoveryRearmGuardRequest & request) noexcept;
+
 // Accept a bounded measurement/stopping error only after the current vehicle
 // footprint has become clear. The tolerance must never bypass the footprint
 // requirement.
@@ -347,6 +367,7 @@ enum class StuckRejectReason
   NonMonotonicTime,
   SolverFallback,
   SolverFallbackMissingWallEvidence,
+  RecoveryRearmGuard,
   DeliberateStop,
   GearTransition,
   AwsimRecoverySettling,
@@ -398,6 +419,7 @@ struct DetectorInput
   bool control_enabled{false};
   bool odometry_fresh{false};
   bool solver_fallback{false};
+  bool recovery_rearm_guard_active{false};
   bool deliberate_stop{false};
   bool coordinated_stop{false};
   bool gear_transition_active{false};

@@ -2221,6 +2221,21 @@ SafeSeparationResolution resolve_safe_separation(
     (request.forward_completion_latched ||
     request.target_longitudinal_m <=
     request.forward_escape_max_front_distance_m + 1e-9);
+  const auto apply_forward_escape_velocity = [&]() {
+      resolution.forward_escape_active = true;
+      resolution.full_speed_forward_escape_active =
+        request.full_speed_forward_escape_enabled;
+      resolution.target_velocity_reference_mps =
+        request.full_speed_forward_escape_enabled ?
+        request.maximum_ego_speed_mps :
+        std::min(
+        request.maximum_ego_speed_mps,
+        std::max(
+          request.ego_speed_mps,
+          request.target_speed_mps + request.speed_delta_mps));
+      resolution.signed_closing_speed_mps =
+        resolution.target_velocity_reference_mps - request.target_speed_mps;
+    };
   const bool absolute_distance_limit_reached =
     request.absolute_traveled_m >= request.absolute_maximum_distance_m - 1e-9;
   const bool absolute_time_limit_reached =
@@ -2256,18 +2271,11 @@ SafeSeparationResolution resolve_safe_separation(
       !absolute_limit_reached)
     {
       resolution.action = SafeSeparationAction::KeepSameSide;
-      resolution.forward_escape_active = true;
       resolution.progress_extension_requested = true;
       resolution.reason = request.forward_progress_extension_allowed ?
         SafeSeparationReason::ProgressExtension :
         SafeSeparationReason::DynamicCompletionExtension;
-      resolution.target_velocity_reference_mps = std::min(
-        request.maximum_ego_speed_mps,
-        std::max(
-          request.ego_speed_mps,
-          request.target_speed_mps + request.speed_delta_mps));
-      resolution.signed_closing_speed_mps =
-        resolution.target_velocity_reference_mps - request.target_speed_mps;
+      apply_forward_escape_velocity();
       return resolution;
     }
     resolution.action = SafeSeparationAction::Abort;
@@ -2278,14 +2286,7 @@ SafeSeparationResolution resolve_safe_separation(
 
   resolution.action = SafeSeparationAction::KeepSameSide;
   if (forward_escape_active) {
-    resolution.forward_escape_active = true;
-    resolution.target_velocity_reference_mps = std::min(
-      request.maximum_ego_speed_mps,
-      std::max(
-        request.ego_speed_mps,
-        request.target_speed_mps + request.speed_delta_mps));
-    resolution.signed_closing_speed_mps =
-      resolution.target_velocity_reference_mps - request.target_speed_mps;
+    apply_forward_escape_velocity();
     return resolution;
   }
   if (
@@ -2308,6 +2309,123 @@ SafeSeparationResolution resolve_safe_separation(
       request.target_speed_mps + request.speed_delta_mps);
     resolution.signed_closing_speed_mps =
       resolution.target_velocity_reference_mps - request.target_speed_mps;
+  }
+  return resolution;
+}
+
+MissionAlignedSafeSeparationBudgetResolution resolve_mission_aligned_safe_separation_budget(
+  const MissionAlignedSafeSeparationBudgetRequest & request) noexcept
+{
+  MissionAlignedSafeSeparationBudgetResolution resolution;
+  const auto finite_non_negative = [](const double value) {
+      return std::isfinite(value) && value >= 0.0;
+    };
+  const auto non_negative_bound = [](const double value) {
+      return !std::isnan(value) && value >= 0.0;
+    };
+  if (
+    !finite_non_negative(request.configured_maximum_duration_sec) ||
+    !finite_non_negative(request.configured_maximum_distance_m) ||
+    !finite_non_negative(request.current_pass_traveled_m) ||
+    !finite_non_negative(request.completion_distance_margin_m) ||
+    !finite_non_negative(request.completion_time_margin_sec) ||
+    !finite_non_negative(request.forward_speed_mps) ||
+    !finite_non_negative(request.absolute_elapsed_sec) ||
+    !finite_non_negative(request.absolute_traveled_m) ||
+    !non_negative_bound(request.absolute_maximum_duration_sec) ||
+    !non_negative_bound(request.absolute_maximum_distance_m))
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  const double remaining_absolute_distance =
+    std::isfinite(request.absolute_maximum_distance_m) ?
+    std::max(
+    0.0, request.absolute_maximum_distance_m - request.absolute_traveled_m) :
+    std::numeric_limits<double>::infinity();
+  const double remaining_absolute_time =
+    std::isfinite(request.absolute_maximum_duration_sec) ?
+    std::max(0.0, request.absolute_maximum_duration_sec - request.absolute_elapsed_sec) :
+    std::numeric_limits<double>::infinity();
+  double requested_distance = request.configured_maximum_distance_m;
+  if (
+    request.enabled && std::isfinite(request.predicted_rear_clear_pass_m) &&
+    request.predicted_rear_clear_pass_m >= request.current_pass_traveled_m)
+  {
+    requested_distance = std::max(
+      requested_distance,
+      request.predicted_rear_clear_pass_m - request.current_pass_traveled_m +
+      request.completion_distance_margin_m);
+    resolution.mission_aligned = true;
+  }
+  resolution.maximum_distance_m = std::min(requested_distance, remaining_absolute_distance);
+  const double speed_for_time = std::max(1.0, request.forward_speed_mps);
+  const double requested_time = resolution.mission_aligned ?
+    std::max(
+    request.configured_maximum_duration_sec,
+    resolution.maximum_distance_m / speed_for_time +
+    request.completion_time_margin_sec) :
+    request.configured_maximum_duration_sec;
+  resolution.maximum_duration_sec = std::min(requested_time, remaining_absolute_time);
+  return resolution;
+}
+
+RecoverableSideContactResolution resolve_recoverable_side_contact(
+  const RecoverableSideContactRequest & request) noexcept
+{
+  RecoverableSideContactResolution resolution;
+  const auto finite_non_negative = [](const double value) {
+      return std::isfinite(value) && value >= 0.0;
+    };
+  if (
+    !request.enabled || !request.pass_active || !request.forward_completion_latched ||
+    !request.prior_front_cap_release_active || !request.target_seen ||
+    !request.target_continuity_valid || !request.current_body_overlap_confirmed ||
+    (request.pass_side_sign != -1 && request.pass_side_sign != 1) ||
+    !std::isfinite(request.target_longitudinal_m) ||
+    !std::isfinite(request.relative_lateral_m) ||
+    !finite_non_negative(request.longitudinal_closing_speed_mps) ||
+    !finite_non_negative(request.ego_speed_mps) ||
+    !finite_non_negative(request.contact_elapsed_sec) ||
+    !finite_non_negative(request.maximum_duration_sec) ||
+    !finite_non_negative(request.initial_progress_grace_sec) ||
+    !finite_non_negative(request.maximum_absolute_longitudinal_m) ||
+    !finite_non_negative(request.minimum_absolute_lateral_m) ||
+    !finite_non_negative(request.maximum_longitudinal_closing_speed_mps) ||
+    !finite_non_negative(request.maximum_absolute_lateral_velocity_mps) ||
+    !finite_non_negative(request.minimum_ego_speed_mps) ||
+    !finite_non_negative(request.lateral_separation_bias_m))
+  {
+    return resolution;
+  }
+  if (
+    request.relative_lateral_velocity_valid &&
+    (!std::isfinite(request.relative_lateral_velocity_mps) ||
+    std::abs(request.relative_lateral_velocity_mps) >
+    request.maximum_absolute_lateral_velocity_mps + 1e-9))
+  {
+    return resolution;
+  }
+  const bool target_on_opposite_side =
+    static_cast<double>(request.pass_side_sign) * request.relative_lateral_m < 0.0;
+  const bool side_contact_geometry =
+    target_on_opposite_side &&
+    std::abs(request.relative_lateral_m) >= request.minimum_absolute_lateral_m - 1e-9 &&
+    std::abs(request.target_longitudinal_m) <=
+    request.maximum_absolute_longitudinal_m + 1e-9 &&
+    request.longitudinal_closing_speed_mps <=
+    request.maximum_longitudinal_closing_speed_mps + 1e-9;
+  resolution.initial_progress_grace_active =
+    request.contact_elapsed_sec <= request.initial_progress_grace_sec + 1e-9;
+  resolution.active =
+    side_contact_geometry &&
+    request.ego_speed_mps >= request.minimum_ego_speed_mps - 1e-9 &&
+    request.contact_elapsed_sec <= request.maximum_duration_sec + 1e-9 &&
+    (resolution.initial_progress_grace_active || request.fresh_forward_progress);
+  if (resolution.active) {
+    resolution.lateral_separation_bias_m =
+      static_cast<double>(request.pass_side_sign) * request.lateral_separation_bias_m;
   }
   return resolution;
 }
@@ -5759,7 +5877,8 @@ bool can_suppress_committed_corridor_front_danger(
     !request.current_body_footprint_overlap_confirmed &&
     request.footprint_prediction_valid;
   const bool current_geometry_acceptable =
-    request.current_body_footprints_separated || current_overlap_grace_active;
+    request.current_body_footprints_separated || current_overlap_grace_active ||
+    request.recoverable_side_contact_active;
   const bool attack_path_acceptable =
     request.committed_pass_attack_mode_enabled && request.pass_phase &&
     request.prior_front_cap_release_active &&

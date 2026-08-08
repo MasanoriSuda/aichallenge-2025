@@ -510,8 +510,8 @@ mpc:
   v2x_overtake_pass_horizon_predicted_time_budget: 8.0 # [s] admission rear-clear budget
   v2x_overtake_pass_horizon_absolute_time_limit: 10.0 # [s] never rearmed by refresh/extension
   v2x_overtake_pass_horizon_soft_distance_limit: 24.0 # [m] request early same-side revalidation
-  v2x_overtake_pass_horizon_absolute_distance_limit: 32.0 # [m] never rearmed
-  v2x_overtake_pass_horizon_extension_max_distance: 12.0 # [m] nominal early-replan window; validated replacement may grow to the 32 m absolute limit
+  v2x_overtake_pass_horizon_absolute_distance_limit: 40.0 # [m] never rearmed; covers acceleration-limited rear-clear rollouts
+  v2x_overtake_pass_horizon_extension_max_distance: 12.0 # [m] nominal early-replan window; validated replacement may grow to the 40 m absolute limit
   v2x_overtake_pass_horizon_extension_max_lateral_adjustment: 0.60 # [m] bounded same-side goal correction per replacement
   v2x_overtake_pass_horizon_max_extensions: 1
   v2x_overtake_pass_horizon_planner_result_max_age: 0.10 # [s]
@@ -542,6 +542,22 @@ mpc:
   v2x_overtake_safe_separation_progress_extension_max_count: 1 # absolute Pass limits remain unchanged
   v2x_overtake_safe_separation_dynamic_completion_extension_enabled: true # use live rear-clear estimate after the fixed extension count is exhausted
   v2x_overtake_safe_separation_soft_prediction_grace_sec: 0.25 # [s] prediction-only loss grace after committed forward completion; hard faults remain immediate
+  v2x_overtake_safe_separation_full_speed_forward_escape_enabled: true # release target+delta cap after body-clear commit; course/input hard limits still win
+  v2x_overtake_safe_separation_mission_aligned_budget_enabled: true # freeze a local window large enough for the selected Mission rear-clear estimate
+  v2x_overtake_safe_separation_completion_distance_margin: 1.0 # [m] reserve after the live predicted rear-clear point
+  v2x_overtake_safe_separation_completion_time_margin_sec: 0.5 # [s] acceleration/tracking reserve within the absolute Pass bound
+  # Competition-simulation only: tolerate a brief progressing side contact without dropping
+  # the committed target/side. Frontal geometry, wall contact and stalled contact remain hard.
+  v2x_overtake_contact_continuation_enabled: true
+  v2x_overtake_contact_continuation_max_sec: 0.8
+  v2x_overtake_contact_continuation_initial_progress_grace_sec: 0.25
+  v2x_overtake_contact_continuation_max_longitudinal: 2.5 # [m] side-by-side center window
+  v2x_overtake_contact_continuation_min_lateral: 0.75 # [m] smaller separation is treated as frontal contact
+  v2x_overtake_contact_continuation_max_closing_speed: 3.0 # [m/s] faster impact remains fail-closed
+  v2x_overtake_contact_continuation_max_lateral_velocity: 0.5 # [m/s]
+  v2x_overtake_contact_continuation_min_ego_speed: 0.5 # [m/s]
+  v2x_overtake_contact_continuation_progress_fresh_sec: 0.5 # [s]
+  v2x_overtake_contact_continuation_lateral_bias: 0.10 # [m] away from target on the committed side
   v2x_overtake_completion_guard_enabled: true # require enough distance to clear the target before a hard hairpin
   v2x_overtake_completion_hard_curvature: 0.12 # [rad/m] hard hairpin boundary, separate from soft curve policy
   v2x_overtake_completion_lookahead_distance: 80.0 # [m] search limit for the next hard boundary

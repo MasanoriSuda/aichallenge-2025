@@ -1288,6 +1288,7 @@ struct SafeSeparationRequest
   bool forward_progress_extension_allowed{false};
   bool forward_completion_latched{false};
   bool dynamic_completion_extension_allowed{false};
+  bool full_speed_forward_escape_enabled{false};
 };
 
 struct SafeSeparationResolution
@@ -1296,6 +1297,7 @@ struct SafeSeparationResolution
   double target_velocity_reference_mps{std::numeric_limits<double>::infinity()};
   double signed_closing_speed_mps{};
   bool forward_escape_active{false};
+  bool full_speed_forward_escape_active{false};
   bool progress_extension_requested{false};
   SafeSeparationReason reason{SafeSeparationReason::None};
 };
@@ -1309,6 +1311,77 @@ struct SafeSeparationResolution
 /// but may not re-arm that local window beyond the overall bound.
 SafeSeparationResolution resolve_safe_separation(
   const SafeSeparationRequest & request) noexcept;
+
+struct MissionAlignedSafeSeparationBudgetRequest
+{
+  bool enabled{false};
+  double configured_maximum_duration_sec{};
+  double configured_maximum_distance_m{};
+  double predicted_rear_clear_pass_m{std::numeric_limits<double>::infinity()};
+  double current_pass_traveled_m{};
+  double completion_distance_margin_m{};
+  double completion_time_margin_sec{};
+  double forward_speed_mps{};
+  double absolute_elapsed_sec{};
+  double absolute_traveled_m{};
+  double absolute_maximum_duration_sec{std::numeric_limits<double>::infinity()};
+  double absolute_maximum_distance_m{std::numeric_limits<double>::infinity()};
+};
+
+struct MissionAlignedSafeSeparationBudgetResolution
+{
+  bool valid{false};
+  bool mission_aligned{false};
+  double maximum_duration_sec{};
+  double maximum_distance_m{};
+};
+
+/// Freeze a local SafeSeparation window which can cover the Mission's current
+/// rear-clear estimate without crossing the immutable Pass limits. Invalid or
+/// unavailable Mission estimates retain the configured local window.
+MissionAlignedSafeSeparationBudgetResolution resolve_mission_aligned_safe_separation_budget(
+  const MissionAlignedSafeSeparationBudgetRequest & request) noexcept;
+
+struct RecoverableSideContactRequest
+{
+  bool enabled{false};
+  bool pass_active{false};
+  bool forward_completion_latched{false};
+  bool prior_front_cap_release_active{false};
+  bool target_seen{false};
+  bool target_continuity_valid{false};
+  bool current_body_overlap_confirmed{false};
+  int pass_side_sign{};
+  double target_longitudinal_m{};
+  double relative_lateral_m{};
+  double longitudinal_closing_speed_mps{};
+  bool relative_lateral_velocity_valid{false};
+  double relative_lateral_velocity_mps{};
+  double ego_speed_mps{};
+  double contact_elapsed_sec{};
+  bool fresh_forward_progress{false};
+  double maximum_duration_sec{};
+  double initial_progress_grace_sec{};
+  double maximum_absolute_longitudinal_m{};
+  double minimum_absolute_lateral_m{};
+  double maximum_longitudinal_closing_speed_mps{};
+  double maximum_absolute_lateral_velocity_mps{};
+  double minimum_ego_speed_mps{};
+  double lateral_separation_bias_m{};
+};
+
+struct RecoverableSideContactResolution
+{
+  bool active{false};
+  bool initial_progress_grace_active{false};
+  double lateral_separation_bias_m{};
+};
+
+/// Treat only a bounded, progressing side contact as a competition-simulation
+/// Pass continuation. Frontal geometry, target discontinuity and stalled
+/// contact remain fail-closed in the caller.
+RecoverableSideContactResolution resolve_recoverable_side_contact(
+  const RecoverableSideContactRequest & request) noexcept;
 
 const char * to_string(SafeSeparationAction action) noexcept;
 
@@ -3418,6 +3491,7 @@ struct CommittedCorridorFrontDangerSuppressionRequest
   bool minimum_motion_side_by_side_escape_active{false};
   bool pass_phase{false};
   bool committed_pass_attack_mode_enabled{false};
+  bool recoverable_side_contact_active{false};
   /// A frozen ShiftOut mission proved that current separated bodies become
   /// clear before the hard longitudinal gap. This permits the validated path,
   /// rather than a longitudinal-only prediction, to own the approach.

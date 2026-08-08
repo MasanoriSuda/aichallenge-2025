@@ -147,6 +147,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::SameSideExtensionCommitReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::MissionAlignedSafeSeparationBudgetRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::RecoverableSideContactRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassForwardCompletionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassShortHorizonGuardRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicCompletionExtensionRequest;
@@ -186,6 +188,9 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frozen_outer_transition_
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_same_side_extension_commit;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_commit_same_side_extension;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_safe_separation;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  resolve_mission_aligned_safe_separation_budget;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_recoverable_side_contact;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_short_horizon_guard;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_active_pass_elapsed;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_committed_pass_forward_completion;
@@ -906,6 +911,30 @@ TEST(V2XFrontDangerAction, CommittedPassDebouncesCurrentOverlapAfterRelease)
   // The grace is hold-only and cannot suppress before initial release.
   request.current_body_footprint_overlap_confirmed = false;
   request.prior_front_cap_release_active = false;
+  EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
+}
+
+TEST(V2XFrontDangerAction, RecoverableSideContactRetainsCommittedPassOwnership)
+{
+  CommittedCorridorFrontDangerSuppressionRequest request;
+  request.enabled = true;
+  request.active_shiftout_or_pass = true;
+  request.nearest_front_matches_locked_target = true;
+  request.validated_fixed_corridor = true;
+  request.target_seen = true;
+  request.current_body_footprints_separated = false;
+  request.current_body_footprint_overlap_confirmed = true;
+  request.prior_front_cap_release_active = true;
+  request.pass_phase = true;
+  request.committed_pass_attack_mode_enabled = true;
+  request.recoverable_side_contact_active = true;
+
+  EXPECT_TRUE(can_suppress_committed_corridor_front_danger(request));
+
+  request.recoverable_side_contact_active = false;
+  EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
+  request.recoverable_side_contact_active = true;
+  request.target_position_jump = true;
   EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
 }
 
@@ -4125,6 +4154,129 @@ TEST(V2XOvertakeCoreHorizon, PreservesSpeedForSideBySideForwardEscape)
   resolution = resolve_safe_separation(request);
   EXPECT_EQ(resolution.action, SafeSeparationAction::Abort);
   EXPECT_FALSE(resolution.forward_escape_active);
+}
+
+TEST(V2XOvertakeCoreHorizon, ReleasesForwardCompletionToCourseSpeedWhenEnabled)
+{
+  SafeSeparationRequest request;
+  request.enabled = true;
+  request.active = true;
+  request.short_horizon_safe = true;
+  request.target_seen = true;
+  request.target_longitudinal_m = 2.5;
+  request.target_speed_mps = 3.2;
+  request.speed_delta_mps = 2.0;
+  request.maximum_ego_speed_mps = 11.11;
+  request.front_clear_distance_m = 2.0;
+  request.front_clear_confirm_sec = 0.25;
+  request.maximum_duration_sec = 8.0;
+  request.maximum_distance_m = 24.0;
+  request.ego_speed_mps = 4.2;
+  request.forward_escape_allowed = true;
+  request.forward_escape_max_front_distance_m = 3.0;
+  request.forward_completion_latched = true;
+
+  auto resolution = resolve_safe_separation(request);
+  EXPECT_TRUE(resolution.forward_escape_active);
+  EXPECT_FALSE(resolution.full_speed_forward_escape_active);
+  EXPECT_NEAR(resolution.target_velocity_reference_mps, 5.2, 1e-9);
+
+  request.full_speed_forward_escape_enabled = true;
+  resolution = resolve_safe_separation(request);
+  EXPECT_TRUE(resolution.forward_escape_active);
+  EXPECT_TRUE(resolution.full_speed_forward_escape_active);
+  EXPECT_NEAR(resolution.target_velocity_reference_mps, 11.11, 1e-9);
+  EXPECT_NEAR(resolution.signed_closing_speed_mps, 7.91, 1e-9);
+}
+
+TEST(V2XOvertakeCoreHorizon, AlignsSafeSeparationWindowWithMissionRearClear)
+{
+  MissionAlignedSafeSeparationBudgetRequest request;
+  request.enabled = true;
+  request.configured_maximum_duration_sec = 5.0;
+  request.configured_maximum_distance_m = 12.0;
+  request.predicted_rear_clear_pass_m = 25.0;
+  request.current_pass_traveled_m = 5.0;
+  request.completion_distance_margin_m = 1.0;
+  request.completion_time_margin_sec = 0.5;
+  request.forward_speed_mps = 5.0;
+  request.absolute_elapsed_sec = 2.0;
+  request.absolute_traveled_m = 5.0;
+  request.absolute_maximum_duration_sec = 10.0;
+  request.absolute_maximum_distance_m = 40.0;
+
+  auto resolution = resolve_mission_aligned_safe_separation_budget(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.mission_aligned);
+  EXPECT_NEAR(resolution.maximum_distance_m, 21.0, 1e-9);
+  EXPECT_NEAR(resolution.maximum_duration_sec, 5.0, 1e-9);
+
+  request.predicted_rear_clear_pass_m = 60.0;
+  resolution = resolve_mission_aligned_safe_separation_budget(request);
+  EXPECT_NEAR(resolution.maximum_distance_m, 35.0, 1e-9);
+  EXPECT_NEAR(resolution.maximum_duration_sec, 7.5, 1e-9);
+
+  request.enabled = false;
+  resolution = resolve_mission_aligned_safe_separation_budget(request);
+  EXPECT_FALSE(resolution.mission_aligned);
+  EXPECT_NEAR(resolution.maximum_distance_m, 12.0, 1e-9);
+  EXPECT_NEAR(resolution.maximum_duration_sec, 5.0, 1e-9);
+}
+
+TEST(V2XOvertakeCoreHorizon, ContinuesOnlyBoundedProgressingSideContact)
+{
+  RecoverableSideContactRequest request;
+  request.enabled = true;
+  request.pass_active = true;
+  request.forward_completion_latched = true;
+  request.prior_front_cap_release_active = true;
+  request.target_seen = true;
+  request.target_continuity_valid = true;
+  request.current_body_overlap_confirmed = true;
+  request.pass_side_sign = 1;
+  request.target_longitudinal_m = 1.0;
+  request.relative_lateral_m = -1.0;
+  request.longitudinal_closing_speed_mps = 1.0;
+  request.ego_speed_mps = 4.0;
+  request.contact_elapsed_sec = 0.1;
+  request.maximum_duration_sec = 0.8;
+  request.initial_progress_grace_sec = 0.25;
+  request.maximum_absolute_longitudinal_m = 2.5;
+  request.minimum_absolute_lateral_m = 0.75;
+  request.maximum_longitudinal_closing_speed_mps = 3.0;
+  request.maximum_absolute_lateral_velocity_mps = 0.5;
+  request.minimum_ego_speed_mps = 0.5;
+  request.lateral_separation_bias_m = 0.1;
+
+  auto resolution = resolve_recoverable_side_contact(request);
+  EXPECT_TRUE(resolution.active);
+  EXPECT_TRUE(resolution.initial_progress_grace_active);
+  EXPECT_NEAR(resolution.lateral_separation_bias_m, 0.1, 1e-9);
+
+  request.contact_elapsed_sec = 0.4;
+  resolution = resolve_recoverable_side_contact(request);
+  EXPECT_FALSE(resolution.active);
+  request.fresh_forward_progress = true;
+  resolution = resolve_recoverable_side_contact(request);
+  EXPECT_TRUE(resolution.active);
+
+  request.relative_lateral_m = -0.5;
+  EXPECT_FALSE(resolve_recoverable_side_contact(request).active);
+  request.relative_lateral_m = 1.0;
+  EXPECT_FALSE(resolve_recoverable_side_contact(request).active);
+  request.relative_lateral_m = -1.0;
+  request.longitudinal_closing_speed_mps = 3.1;
+  EXPECT_FALSE(resolve_recoverable_side_contact(request).active);
+  request.longitudinal_closing_speed_mps = 1.0;
+  request.relative_lateral_velocity_valid = true;
+  request.relative_lateral_velocity_mps = 0.6;
+  EXPECT_FALSE(resolve_recoverable_side_contact(request).active);
+  request.relative_lateral_velocity_mps = 0.2;
+  request.ego_speed_mps = 0.4;
+  EXPECT_FALSE(resolve_recoverable_side_contact(request).active);
+  request.ego_speed_mps = 4.0;
+  request.contact_elapsed_sec = 0.81;
+  EXPECT_FALSE(resolve_recoverable_side_contact(request).active);
 }
 
 TEST(V2XOvertakeCoreHorizon, BoundsOrRejectsUnsafeSafeSeparation)

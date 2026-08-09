@@ -1547,6 +1547,7 @@ struct V2XBehaviorConfig
   double overtake_inner_curve_precommit_min_relative_speed{0.0};
   double overtake_entry_min_relative_speed{0.3};
   double overtake_entry_speed_confirm_sec{0.3};
+  bool overtake_stationary_blocker_entry_override_enabled{true};
   double overtake_entry_prearm_validation_hold_sec{0.15};
   double overtake_entry_prearm_max_sec{2.0};
   double overtake_entry_prearm_max_distance{8.0};
@@ -2141,6 +2142,11 @@ struct OvertakeLineState
   double pass_horizon_safe_separation_max_distance{};
   double pass_soft_prediction_guard_loss_since_sec{
     std::numeric_limits<double>::quiet_NaN()};
+  double pass_last_clear_target_prediction_sec{
+    std::numeric_limits<double>::quiet_NaN()};
+  double pass_stopped_prediction_lease_start_sec{
+    std::numeric_limits<double>::quiet_NaN()};
+  double pass_stopped_prediction_lease_start_distance{0.0};
   double pass_contact_start_sec{std::numeric_limits<double>::quiet_NaN()};
   double pass_contact_start_target_longitudinal{
     std::numeric_limits<double>::quiet_NaN()};
@@ -10300,6 +10306,11 @@ private:
       overtake_line_state_.pass_horizon_safe_separation_max_distance = 0.0;
       overtake_line_state_.pass_soft_prediction_guard_loss_since_sec =
         std::numeric_limits<double>::quiet_NaN();
+      overtake_line_state_.pass_last_clear_target_prediction_sec =
+        std::numeric_limits<double>::quiet_NaN();
+      overtake_line_state_.pass_stopped_prediction_lease_start_sec =
+        std::numeric_limits<double>::quiet_NaN();
+      overtake_line_state_.pass_stopped_prediction_lease_start_distance = 0.0;
       overtake_line_state_.pass_contact_start_sec =
         std::numeric_limits<double>::quiet_NaN();
       overtake_line_state_.pass_contact_start_target_longitudinal =
@@ -10619,6 +10630,11 @@ private:
     overtake_line_state_.pass_horizon_safe_separation_max_distance = 0.0;
     overtake_line_state_.pass_soft_prediction_guard_loss_since_sec =
       std::numeric_limits<double>::quiet_NaN();
+    overtake_line_state_.pass_last_clear_target_prediction_sec =
+      std::numeric_limits<double>::quiet_NaN();
+    overtake_line_state_.pass_stopped_prediction_lease_start_sec =
+      std::numeric_limits<double>::quiet_NaN();
+    overtake_line_state_.pass_stopped_prediction_lease_start_distance = 0.0;
     overtake_line_state_.pass_contact_start_sec =
       std::numeric_limits<double>::quiet_NaN();
     overtake_line_state_.pass_contact_start_target_longitudinal =
@@ -12077,6 +12093,9 @@ private:
       overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
       overtake_line_state_.phase == OvertakeLinePhase::Pass ||
       overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare;
+    overtake_line_state_.mission_total_start_sec =
+      overtake_core::resolve_mission_total_start_sec(
+      mission_total_budget_phase, overtake_line_state_.mission_total_start_sec, now_sec);
     const double mission_total_elapsed_sec =
       mission_total_budget_phase &&
       std::isfinite(overtake_line_state_.mission_total_start_sec) ?
@@ -13286,6 +13305,30 @@ private:
       (behavior_output.front_risk_level != FrontRiskLevel::EmergencyBrake ||
       behavior_output.recoverable_side_contact_active) &&
       !overtake_solver_recovery_active_;
+    const bool clear_target_prediction_observed =
+      overtake_line_state_.phase == OvertakeLinePhase::Pass &&
+      locked_target_seen &&
+      !behavior_output.locked_target_position_jump &&
+      behavior_output.locked_target_current_body_footprints_separated &&
+      behavior_output.locked_target_footprint_prediction_valid &&
+      behavior_output.locked_target_predicted_body_footprint_sweep_separated;
+    if (clear_target_prediction_observed) {
+      overtake_line_state_.pass_last_clear_target_prediction_sec = now_sec;
+    }
+    if (
+      fresh_dynamic_horizon_available &&
+      std::isfinite(overtake_line_state_.pass_stopped_prediction_lease_start_sec))
+    {
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"),
+        "OvertakeLine stopped-side prediction lease released: "
+        "target=%s, side=%d, reason=fresh prediction restored, wp_id=%d",
+        overtake_line_state_.target_vehicle_id.c_str(),
+        overtake_line_state_.pass_side_sign, model->wp_id);
+      overtake_line_state_.pass_stopped_prediction_lease_start_sec =
+        std::numeric_limits<double>::quiet_NaN();
+      overtake_line_state_.pass_stopped_prediction_lease_start_distance = 0.0;
+    }
     const auto pass_horizon_replan_trigger = [&]() -> const char * {
         if (predicted_overlap_replan_required) {
           return "predicted_overlap";
@@ -13861,6 +13904,86 @@ private:
         overtake_line_state_.pass_horizon_fallback_start_distance) : 0.0;
       const bool strict_short_horizon_safe =
         pass_short_horizon_safe && !committed_forward_completion_guard_lost;
+      const auto retain_stopped_side_prediction_lease =
+        [&](const std::string & failure_reason, const char * trigger) {
+          const bool prediction_refresh_failure =
+            failure_reason == "fresh target prediction unavailable";
+          const double maximum_lease_sec = std::min(
+            std::max(0.0, line_cfg.target_hold_sec),
+            std::max(0.0, line_cfg.pass_horizon_hold_max_sec));
+          const bool lease_started = std::isfinite(
+            overtake_line_state_.pass_stopped_prediction_lease_start_sec);
+          const double lease_elapsed_sec = lease_started ?
+            std::max(
+            0.0,
+            now_sec - overtake_line_state_.pass_stopped_prediction_lease_start_sec) : 0.0;
+          const double lease_traveled_m = lease_started ?
+            std::max(
+            0.0,
+            pass_traveled -
+            overtake_line_state_.pass_stopped_prediction_lease_start_distance) : 0.0;
+          const double target_observation_age_sec = std::isfinite(
+            overtake_line_state_.target_last_seen_sec) ?
+            std::max(0.0, now_sec - overtake_line_state_.target_last_seen_sec) :
+            std::numeric_limits<double>::infinity();
+          const double clear_prediction_age_sec = std::isfinite(
+            overtake_line_state_.pass_last_clear_target_prediction_sec) ?
+            std::max(
+            0.0,
+            now_sec - overtake_line_state_.pass_last_clear_target_prediction_sec) :
+            std::numeric_limits<double>::infinity();
+          const bool lease_allowed =
+            !predicted_overlap_replan_required &&
+            overtake_core::can_lease_stopped_side_pass_prediction(
+            overtake_core::StoppedSidePassPredictionLeaseRequest{
+              maximum_lease_sec > kEps,
+              overtake_line_state_.phase == OvertakeLinePhase::Pass,
+              overtake_line_state_.mission_path_frozen,
+              prediction_refresh_failure,
+              behavior_output.locked_target_current_body_footprints_separated,
+              actual_wall_physical_contact,
+              actual_wall_margin_blocked,
+              actual_wall_sample_unavailable,
+              behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake,
+              overtake_solver_recovery_active_,
+              overtake_line_state_.target_last_speed,
+              std::max(0.0, cfg.v2x_behavior.low_speed_avoidance_max_front_speed),
+              overtake_line_state_.target_last_longitudinal,
+              std::max(
+                0.0, line_cfg.safe_separation_forward_escape_max_front_distance),
+              target_observation_age_sec,
+              clear_prediction_age_sec,
+              lease_elapsed_sec,
+              lease_traveled_m,
+              maximum_lease_sec,
+              std::max(0.0, line_cfg.pass_horizon_hold_max_distance),
+              pass_elapsed,
+              pass_traveled,
+              line_cfg.pass_horizon_absolute_time_limit,
+              line_cfg.pass_horizon_absolute_distance_limit});
+          if (!lease_allowed) {
+            return false;
+          }
+          if (!lease_started) {
+            overtake_line_state_.pass_stopped_prediction_lease_start_sec = now_sec;
+            overtake_line_state_.pass_stopped_prediction_lease_start_distance =
+              pass_traveled;
+            RCLCPP_WARN(
+              rclcpp::get_logger("mpc_controller"),
+              "OvertakeLine stopped-side prediction lease started: "
+              "trigger=%s, target=%s, side=%d, target_s=%.2f, target_v=%.2f, "
+              "observation_age=%.2f, clear_prediction_age=%.2f, limit=%.2f s/%.2f m, "
+              "wp_id=%d",
+              trigger, overtake_line_state_.target_vehicle_id.c_str(),
+              overtake_line_state_.pass_side_sign,
+              overtake_line_state_.target_last_longitudinal,
+              overtake_line_state_.target_last_speed,
+              target_observation_age_sec, clear_prediction_age_sec,
+              maximum_lease_sec, line_cfg.pass_horizon_hold_max_distance,
+              model->wp_id);
+          }
+          return true;
+        };
       const auto begin_safe_separation =
         [&](const char * trigger, const std::string & failure_reason) {
           return begin_pass_safe_separation(
@@ -14672,7 +14795,10 @@ private:
               false, false, std::nullopt, std::nullopt, std::nullopt,
               extension_failure_reason))
           {
-            if (!begin_safe_separation(
+            if (
+              !retain_stopped_side_prediction_lease(
+                extension_failure_reason, pass_horizon_replan_trigger()) &&
+              !begin_safe_separation(
                 pass_horizon_replan_trigger(), extension_failure_reason))
             {
               RCLCPP_WARN(
@@ -14710,7 +14836,10 @@ private:
               true, false, std::nullopt, std::nullopt, std::nullopt,
               refresh_failure_reason))
           {
-            if (!begin_safe_separation(
+            if (
+              !retain_stopped_side_prediction_lease(
+                refresh_failure_reason, "rear_clear_refresh") &&
+              !begin_safe_separation(
                 "rear_clear_refresh", refresh_failure_reason))
             {
               RCLCPP_WARN(
@@ -14736,7 +14865,14 @@ private:
             }
           }
         } else if (horizon_action == overtake_core::PassHorizonAction::EnterHold) {
-          if (!begin_safe_separation("horizon_hold", "bounded Pass horizon exhausted")) {
+          if (
+            !retain_stopped_side_prediction_lease(
+              fresh_dynamic_horizon_available ?
+              "bounded Pass horizon exhausted" :
+              "fresh target prediction unavailable",
+              "horizon_hold") &&
+            !begin_safe_separation("horizon_hold", "bounded Pass horizon exhausted"))
+          {
             const std::string reason = "Pass horizon hold unsafe; Recovery required";
             if (enter_dynamic_mission_wait(reason)) {
               return output;
@@ -14747,7 +14883,16 @@ private:
             return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
           }
         } else if (horizon_action == overtake_core::PassHorizonAction::Abort) {
-          if (rear_clear_confirmed && !return_corridor_blocked) {
+          if (
+            retain_stopped_side_prediction_lease(
+              fresh_dynamic_horizon_available ?
+              "Pass horizon hard limit" :
+              "fresh target prediction unavailable",
+              "horizon_abort"))
+          {
+            // Continue the already admitted same-side path only until the
+            // stopped-target observation/prediction lease expires.
+          } else if (rear_clear_confirmed && !return_corridor_blocked) {
             transition_overtake_line_phase(
               OvertakeLinePhase::Return, now_sec, current_ey,
               overtake_line_state_.pass_side_sign,
@@ -16500,6 +16645,31 @@ private:
     const bool behavior_overtake_handoff =
       had_previous_state && previous_state == V2XBehaviorState::Overtake &&
       entry_mission_available && same_entry_speed_target;
+    const bool stationary_blocker_entry_override =
+      v2x_overtake_core::can_override_entry_speed_for_stationary_blocker(
+      v2x_overtake_core::StationaryBlockerEntryOverrideRequest{
+        cfg.v2x_behavior.overtake_stationary_blocker_entry_override_enabled,
+        entry_mission_available &&
+        output.validated_overtake_entry_longitudinal_owner &&
+        entry_prearm_window.active,
+        entry_prearm_hard_guard_clear && !entry_prearm_cooldown_active,
+        output.has_front_vehicle,
+        output.low_speed_stopped_observation_count,
+        cfg.v2x_behavior.low_speed_avoidance_stopped_confirmation_samples,
+        output.front_speed,
+        cfg.v2x_behavior.moving_front_speed_threshold,
+        output.front_distance,
+        cfg.v2x_behavior.overtake_guard_min_front_distance});
+    if (stationary_blocker_entry_override && !entry_speed_readiness.ready) {
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"),
+        "V2X confirmed stationary blocker direct Overtake handoff: "
+        "target=%s, side=%d, distance=%.2f m, speed=%.2f m/s, stopped=%d/%d",
+        output.target_vehicle_id.c_str(), entry_mission_side_sign,
+        output.front_distance, output.front_speed,
+        output.low_speed_stopped_observation_count,
+        cfg.v2x_behavior.low_speed_avoidance_stopped_confirmation_samples);
+    }
     const auto entry_admission =
       v2x_overtake_core::resolve_new_overtake_entry_admission(
       v2x_overtake_core::NewOvertakeEntryAdmissionRequest{
@@ -16510,7 +16680,7 @@ private:
         entry_mission_available &&
         output.validated_overtake_entry_longitudinal_owner &&
         entry_prearm_window.active,
-        output.start_grid_breakout_active});
+        output.start_grid_breakout_active || stationary_blocker_entry_override});
     output.overtake_entry_prearm_active = entry_admission.prearm_active;
     if (!entry_admission.execution_allowed) {
       final_state = V2XBehaviorState::Follow;
@@ -19019,6 +19189,9 @@ Config load_config(const std::string & path)
   }
   cfg.mpc.v2x_behavior.overtake_entry_speed_confirm_sec =
     std::max(0.0, overtake_entry_speed_confirm_sec);
+  cfg.mpc.v2x_behavior.overtake_stationary_blocker_entry_override_enabled =
+    mpc["v2x_overtake_stationary_blocker_entry_override_enabled"] ?
+    mpc["v2x_overtake_stationary_blocker_entry_override_enabled"].as<bool>() : true;
   const double overtake_entry_prearm_validation_hold_sec =
     mpc["v2x_overtake_entry_prearm_validation_hold_sec"] ?
     mpc["v2x_overtake_entry_prearm_validation_hold_sec"].as<double>() : 0.15;
@@ -19935,9 +20108,12 @@ public:
       RCLCPP_INFO(
         get_logger(),
         "V2X new-entry speed readiness: min_relative_speed=%.2f m/s, confirm=%.2f s, "
-        "prearm=%.2f s/%.2f m, validation_hold=%.2f s, retry_cooldown=%.2f s",
+        "stationary_override=%s, prearm=%.2f s/%.2f m, validation_hold=%.2f s, "
+        "retry_cooldown=%.2f s",
         mpc_cfg_.v2x_behavior.overtake_entry_min_relative_speed,
         mpc_cfg_.v2x_behavior.overtake_entry_speed_confirm_sec,
+        mpc_cfg_.v2x_behavior.overtake_stationary_blocker_entry_override_enabled ?
+        "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_entry_prearm_max_sec,
         mpc_cfg_.v2x_behavior.overtake_entry_prearm_max_distance,
         mpc_cfg_.v2x_behavior.overtake_entry_prearm_validation_hold_sec,

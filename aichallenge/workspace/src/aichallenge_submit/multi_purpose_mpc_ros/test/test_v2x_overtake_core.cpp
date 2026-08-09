@@ -136,6 +136,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::DynamicPredictionTimingRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommitClockProjectionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassHorizonAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassHorizonDecisionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::StoppedSidePassPredictionLeaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RearClearReplanWindowRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassContinuationPreflightPolicyRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassOuterHorizonRequest;
@@ -152,6 +153,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::SameSideExtensionCommitRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SameSideExtensionCommitReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::MissionTotalBudgetAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::MissionTotalBudgetRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_mission_total_start_sec;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationRequest;
@@ -185,6 +187,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_runtime_continu
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_prediction_timing;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_commit_clock_projection;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_horizon_action;
+using multi_purpose_mpc_ros::v2x_overtake_core::can_lease_stopped_side_pass_prediction;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_rear_clear_replan_window;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_continuation_preflight_policy;
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_pass_outer_horizon;
@@ -279,11 +282,14 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntrySpeedReadinessReque
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntryPrearmWindowRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntryPrearmValidationLeaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::NewOvertakeEntryAdmissionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::StationaryBlockerEntryOverrideRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_overtake_entry_speed_readiness;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_overtake_entry_prearm_window;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   resolve_overtake_entry_prearm_validation_lease;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_new_overtake_entry_admission;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  can_override_entry_speed_for_stationary_blocker;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   can_hold_committed_execution_after_behavior_drop;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_target_continuity;
@@ -3498,6 +3504,81 @@ TEST(V2XOvertakeCoreHorizon, SelectsBoundedPassHorizonActions)
   EXPECT_EQ(resolve_pass_horizon_action(request), PassHorizonAction::Abort);
 }
 
+TEST(V2XOvertakeCoreHorizon, LeasesRecentStoppedSideTargetPredictionLoss)
+{
+  StoppedSidePassPredictionLeaseRequest request;
+  request.enabled = true;
+  request.pass_active = true;
+  request.mission_path_frozen = true;
+  request.refresh_failed_for_prediction = true;
+  request.current_body_footprints_separated = true;
+  request.target_speed_mps = 0.13;
+  request.maximum_stopped_target_speed_mps = 0.20;
+  request.target_longitudinal_m = 0.31;
+  request.maximum_absolute_target_longitudinal_m = 0.75;
+  request.target_observation_age_sec = 0.18;
+  request.last_clear_prediction_age_sec = 0.18;
+  request.lease_elapsed_sec = 0.0;
+  request.lease_traveled_m = 0.0;
+  request.maximum_lease_sec = 0.75;
+  request.maximum_lease_distance_m = 3.0;
+  request.pass_elapsed_sec = 5.3;
+  request.pass_traveled_m = 7.5;
+  request.absolute_pass_time_limit_sec = 10.0;
+  request.absolute_pass_distance_limit_m = 40.0;
+
+  EXPECT_TRUE(can_lease_stopped_side_pass_prediction(request));
+}
+
+TEST(V2XOvertakeCoreHorizon, StopsPredictionLeaseAtEveryHardBoundary)
+{
+  StoppedSidePassPredictionLeaseRequest request;
+  request.enabled = true;
+  request.pass_active = true;
+  request.mission_path_frozen = true;
+  request.refresh_failed_for_prediction = true;
+  request.current_body_footprints_separated = true;
+  request.target_speed_mps = 0.10;
+  request.maximum_stopped_target_speed_mps = 0.20;
+  request.target_longitudinal_m = -0.20;
+  request.maximum_absolute_target_longitudinal_m = 0.75;
+  request.target_observation_age_sec = 0.10;
+  request.last_clear_prediction_age_sec = 0.10;
+  request.maximum_lease_sec = 0.75;
+  request.maximum_lease_distance_m = 3.0;
+  request.pass_elapsed_sec = 2.0;
+  request.pass_traveled_m = 5.0;
+  request.absolute_pass_time_limit_sec = 10.0;
+  request.absolute_pass_distance_limit_m = 40.0;
+
+  request.lease_elapsed_sec = 0.75;
+  EXPECT_FALSE(can_lease_stopped_side_pass_prediction(request));
+  request.lease_elapsed_sec = 0.0;
+  request.lease_traveled_m = 3.0;
+  EXPECT_FALSE(can_lease_stopped_side_pass_prediction(request));
+  request.lease_traveled_m = 0.0;
+  request.current_body_footprints_separated = false;
+  EXPECT_FALSE(can_lease_stopped_side_pass_prediction(request));
+  request.current_body_footprints_separated = true;
+  request.actual_wall_margin_blocked = true;
+  EXPECT_FALSE(can_lease_stopped_side_pass_prediction(request));
+  request.actual_wall_margin_blocked = false;
+  request.emergency_brake = true;
+  EXPECT_FALSE(can_lease_stopped_side_pass_prediction(request));
+  request.emergency_brake = false;
+  request.solver_recovery_active = true;
+  EXPECT_FALSE(can_lease_stopped_side_pass_prediction(request));
+  request.solver_recovery_active = false;
+  request.target_speed_mps = 0.21;
+  EXPECT_FALSE(can_lease_stopped_side_pass_prediction(request));
+  request.target_speed_mps = 0.10;
+  request.target_longitudinal_m = 0.76;
+  EXPECT_FALSE(can_lease_stopped_side_pass_prediction(request));
+  request.target_longitudinal_m = 0.20;
+  request.pass_elapsed_sec = 10.0;
+  EXPECT_FALSE(can_lease_stopped_side_pass_prediction(request));
+}
+
 TEST(V2XOvertakeCoreHorizon, KeepsCommittedOuterSideThroughRearClearHorizon)
 {
   const auto result = evaluate_pass_outer_horizon(
@@ -4071,6 +4152,15 @@ TEST(V2XOvertakeCoreHorizon, ExpiresWholeMissionWithoutResettingOnPause)
   resolution = resolve_mission_total_budget(request);
   EXPECT_EQ(resolution.action, MissionTotalBudgetAction::Return);
   EXPECT_TRUE(resolution.expired);
+}
+
+TEST(V2XOvertakeCoreHorizon, InitializesMissingMissionClockOnlyOnce)
+{
+  const double missing = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_TRUE(std::isnan(resolve_mission_total_start_sec(false, missing, 10.0)));
+  EXPECT_DOUBLE_EQ(resolve_mission_total_start_sec(true, missing, 10.0), 10.0);
+  EXPECT_DOUBLE_EQ(resolve_mission_total_start_sec(true, 7.5, 10.0), 7.5);
+  EXPECT_TRUE(std::isnan(resolve_mission_total_start_sec(true, missing, missing)));
 }
 
 TEST(V2XOvertakeCoreHorizon, TerminalBudgetAbortCannotResumeAfterLateralRecovery)
@@ -6555,6 +6645,59 @@ TEST(V2XOvertakeCoreEntrySpeed, PrearmsValidatedMissionUntilMeasuredSpeedIsReady
   result = resolve_new_overtake_entry_admission(request);
   EXPECT_TRUE(result.execution_allowed);
   EXPECT_FALSE(result.prearm_active);
+}
+
+TEST(V2XOvertakeCoreEntrySpeed, AllowsConfirmedStationaryBlockerWithCompleteMission)
+{
+  StationaryBlockerEntryOverrideRequest request;
+  request.enabled = true;
+  request.validated_mission_ready = true;
+  request.hard_guard_clear = true;
+  request.front_vehicle_seen = true;
+  request.stopped_observation_count = 3;
+  request.required_stopped_observation_count = 3;
+  request.front_speed_mps = 0.0;
+  request.maximum_stopped_speed_mps = 1.0;
+  request.front_distance_m = 3.5;
+  request.minimum_entry_distance_m = 3.0;
+
+  EXPECT_TRUE(can_override_entry_speed_for_stationary_blocker(request));
+}
+
+TEST(V2XOvertakeCoreEntrySpeed, StationaryBlockerOverridePreservesEveryHardGate)
+{
+  StationaryBlockerEntryOverrideRequest request;
+  request.enabled = true;
+  request.validated_mission_ready = true;
+  request.hard_guard_clear = true;
+  request.front_vehicle_seen = true;
+  request.stopped_observation_count = 3;
+  request.required_stopped_observation_count = 3;
+  request.front_speed_mps = 0.5;
+  request.maximum_stopped_speed_mps = 1.0;
+  request.front_distance_m = 3.0;
+  request.minimum_entry_distance_m = 3.0;
+
+  request.validated_mission_ready = false;
+  EXPECT_FALSE(can_override_entry_speed_for_stationary_blocker(request));
+  request.validated_mission_ready = true;
+
+  request.hard_guard_clear = false;
+  EXPECT_FALSE(can_override_entry_speed_for_stationary_blocker(request));
+  request.hard_guard_clear = true;
+
+  request.stopped_observation_count = 2;
+  EXPECT_FALSE(can_override_entry_speed_for_stationary_blocker(request));
+  request.stopped_observation_count = 3;
+
+  request.front_speed_mps = 1.01;
+  EXPECT_FALSE(can_override_entry_speed_for_stationary_blocker(request));
+  request.front_speed_mps = 0.5;
+
+  request.front_distance_m = 2.99;
+  EXPECT_FALSE(can_override_entry_speed_for_stationary_blocker(request));
+  request.front_distance_m = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_FALSE(can_override_entry_speed_for_stationary_blocker(request));
 }
 
 TEST(V2XOvertakeCoreGuardPhase, KeepsEntryDistanceAndPrepareCheckBeforePassStarts)

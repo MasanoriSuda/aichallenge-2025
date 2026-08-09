@@ -908,6 +908,42 @@ struct PassHorizonDecisionRequest
 PassHorizonAction resolve_pass_horizon_action(
   const PassHorizonDecisionRequest & request) noexcept;
 
+struct StoppedSidePassPredictionLeaseRequest
+{
+  bool enabled{false};
+  bool pass_active{false};
+  bool mission_path_frozen{false};
+  bool refresh_failed_for_prediction{false};
+  bool current_body_footprints_separated{false};
+  bool actual_wall_physical_contact{false};
+  bool actual_wall_margin_blocked{false};
+  bool actual_wall_sample_unavailable{false};
+  bool emergency_brake{false};
+  bool solver_recovery_active{false};
+  double target_speed_mps{std::numeric_limits<double>::infinity()};
+  double maximum_stopped_target_speed_mps{};
+  double target_longitudinal_m{std::numeric_limits<double>::infinity()};
+  double maximum_absolute_target_longitudinal_m{};
+  double target_observation_age_sec{std::numeric_limits<double>::infinity()};
+  double last_clear_prediction_age_sec{std::numeric_limits<double>::infinity()};
+  double lease_elapsed_sec{};
+  double lease_traveled_m{};
+  double maximum_lease_sec{};
+  double maximum_lease_distance_m{};
+  double pass_elapsed_sec{};
+  double pass_traveled_m{};
+  double absolute_pass_time_limit_sec{std::numeric_limits<double>::infinity()};
+  double absolute_pass_distance_limit_m{std::numeric_limits<double>::infinity()};
+};
+
+/// Keep a frozen same-side Pass through a short behavior/prediction
+/// classification loss only for a recently observed stopped target beside the
+/// ego. The lease never relaxes current footprint, wall, emergency, solver, or
+/// immutable Pass budget gates. A controller must still discard and replan the
+/// path after an external reverse maneuver changes the vehicle pose.
+bool can_lease_stopped_side_pass_prediction(
+  const StoppedSidePassPredictionLeaseRequest & request) noexcept;
+
 struct PassContinuationPreflightPolicyRequest
 {
   bool longitudinal_refresh{false};
@@ -1232,6 +1268,12 @@ struct MissionTotalBudgetResolution
   MissionTotalBudgetAction action{MissionTotalBudgetAction::Inactive};
   bool expired{false};
 };
+
+/// Keep the original same-target Mission clock when one exists, otherwise
+/// start it at the first active execution phase.  Some dedicated entry paths
+/// do not freeze a normal Mission candidate before ShiftOut.
+double resolve_mission_total_start_sec(
+  bool mission_active, double current_start_sec, double now_sec) noexcept;
 
 /// Limit the complete same-target mission, including ShiftOut, Pass and
 /// FollowPrepare. Once expired, rear-clear missions may return; all other
@@ -2441,6 +2483,26 @@ struct NewOvertakeEntryAdmissionResolution
 /// and receives longitudinal pre-arm ownership until the measured gate passes.
 NewOvertakeEntryAdmissionResolution resolve_new_overtake_entry_admission(
   const NewOvertakeEntryAdmissionRequest & request) noexcept;
+
+struct StationaryBlockerEntryOverrideRequest
+{
+  bool enabled{false};
+  bool validated_mission_ready{false};
+  bool hard_guard_clear{false};
+  bool front_vehicle_seen{false};
+  int stopped_observation_count{0};
+  int required_stopped_observation_count{1};
+  double front_speed_mps{std::numeric_limits<double>::infinity()};
+  double maximum_stopped_speed_mps{};
+  double front_distance_m{std::numeric_limits<double>::infinity()};
+  double minimum_entry_distance_m{};
+};
+
+/// Bypass only the measured closing-speed confirmation for a confirmed
+/// stationary blocker.  The caller must provide a current complete Mission
+/// and all normal hard guards; invalid geometry fails closed.
+bool can_override_entry_speed_for_stationary_blocker(
+  const StationaryBlockerEntryOverrideRequest & request) noexcept;
 
 struct OvertakeGuardPhaseRequest
 {

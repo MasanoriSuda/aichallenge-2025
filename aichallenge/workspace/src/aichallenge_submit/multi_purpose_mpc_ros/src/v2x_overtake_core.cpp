@@ -1559,6 +1559,55 @@ PassHorizonAction resolve_pass_horizon_action(
     PassHorizonAction::EnterHold : PassHorizonAction::Abort;
 }
 
+bool can_lease_stopped_side_pass_prediction(
+  const StoppedSidePassPredictionLeaseRequest & request) noexcept
+{
+  const auto finite_non_negative = [](const double value) {
+      return std::isfinite(value) && value >= 0.0;
+    };
+  const auto valid_limit = [](const double value) {
+      return !std::isnan(value) && value >= 0.0;
+    };
+  if (
+    !finite_non_negative(request.maximum_stopped_target_speed_mps) ||
+    !finite_non_negative(request.maximum_absolute_target_longitudinal_m) ||
+    !finite_non_negative(request.target_observation_age_sec) ||
+    !finite_non_negative(request.last_clear_prediction_age_sec) ||
+    !finite_non_negative(request.lease_elapsed_sec) ||
+    !finite_non_negative(request.lease_traveled_m) ||
+    !finite_non_negative(request.maximum_lease_sec) ||
+    !finite_non_negative(request.maximum_lease_distance_m) ||
+    !finite_non_negative(request.pass_elapsed_sec) ||
+    !finite_non_negative(request.pass_traveled_m) ||
+    !valid_limit(request.absolute_pass_time_limit_sec) ||
+    !valid_limit(request.absolute_pass_distance_limit_m))
+  {
+    return false;
+  }
+  if (
+    !request.enabled || !request.pass_active || !request.mission_path_frozen ||
+    !request.refresh_failed_for_prediction ||
+    !request.current_body_footprints_separated ||
+    request.actual_wall_physical_contact || request.actual_wall_margin_blocked ||
+    request.actual_wall_sample_unavailable || request.emergency_brake ||
+    request.solver_recovery_active || !std::isfinite(request.target_speed_mps) ||
+    !std::isfinite(request.target_longitudinal_m))
+  {
+    return false;
+  }
+
+  return request.target_speed_mps <=
+         request.maximum_stopped_target_speed_mps + 1e-9 &&
+         std::abs(request.target_longitudinal_m) <=
+         request.maximum_absolute_target_longitudinal_m + 1e-9 &&
+         request.target_observation_age_sec < request.maximum_lease_sec - 1e-9 &&
+         request.last_clear_prediction_age_sec < request.maximum_lease_sec - 1e-9 &&
+         request.lease_elapsed_sec < request.maximum_lease_sec - 1e-9 &&
+         request.lease_traveled_m < request.maximum_lease_distance_m - 1e-9 &&
+         request.pass_elapsed_sec < request.absolute_pass_time_limit_sec - 1e-9 &&
+         request.pass_traveled_m < request.absolute_pass_distance_limit_m - 1e-9;
+}
+
 PassContinuationPreflightPolicyResolution resolve_pass_continuation_preflight_policy(
   const PassContinuationPreflightPolicyRequest & request) noexcept
 {
@@ -2182,6 +2231,15 @@ MissionTotalBudgetResolution resolve_mission_total_budget(
   resolution.action = request.rear_clear_confirmed && request.return_corridor_available ?
     MissionTotalBudgetAction::Return : MissionTotalBudgetAction::Abort;
   return resolution;
+}
+
+double resolve_mission_total_start_sec(
+  const bool mission_active, const double current_start_sec, const double now_sec) noexcept
+{
+  if (!mission_active || std::isfinite(current_start_sec)) {
+    return current_start_sec;
+  }
+  return std::isfinite(now_sec) ? now_sec : current_start_sec;
 }
 
 CommittedPassForwardCompletionResolution resolve_committed_pass_forward_completion(
@@ -4435,6 +4493,25 @@ NewOvertakeEntryAdmissionResolution resolve_new_overtake_entry_admission(
     request.overtake_requested && !resolution.execution_allowed &&
     request.validated_mission_ready;
   return resolution;
+}
+
+bool can_override_entry_speed_for_stationary_blocker(
+  const StationaryBlockerEntryOverrideRequest & request) noexcept
+{
+  const bool finite_non_negative_geometry =
+    std::isfinite(request.front_speed_mps) && request.front_speed_mps >= 0.0 &&
+    std::isfinite(request.maximum_stopped_speed_mps) &&
+    request.maximum_stopped_speed_mps >= 0.0 &&
+    std::isfinite(request.front_distance_m) && request.front_distance_m >= 0.0 &&
+    std::isfinite(request.minimum_entry_distance_m) &&
+    request.minimum_entry_distance_m >= 0.0;
+  return request.enabled && request.validated_mission_ready &&
+         request.hard_guard_clear && request.front_vehicle_seen &&
+         request.required_stopped_observation_count > 0 &&
+         request.stopped_observation_count >= request.required_stopped_observation_count &&
+         finite_non_negative_geometry &&
+         request.front_speed_mps <= request.maximum_stopped_speed_mps + 1e-9 &&
+         request.front_distance_m + 1e-9 >= request.minimum_entry_distance_m;
 }
 
 OvertakeGuardPhaseResolution resolve_overtake_guard_phase(

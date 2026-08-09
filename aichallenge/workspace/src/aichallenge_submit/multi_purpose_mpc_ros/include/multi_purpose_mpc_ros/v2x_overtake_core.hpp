@@ -3440,6 +3440,7 @@ struct LowSpeedBypassCandidateRequest
   bool overtake_forbidden{false};
   bool continuing{false};
   bool committed_overtake_execution_active{false};
+  bool committed_overtake_handoff_safe{false};
   bool ignore_soft_curve_forbidden{false};
   bool explicit_forbidden_wp{false};
   double vehicle_speed_mps{std::numeric_limits<double>::infinity()};

@@ -8672,15 +8672,32 @@ TEST(V2XOvertakeCoreLowSpeedBypass, StartGridSuppressionBlocksNewCandidate)
   EXPECT_TRUE(can_start_low_speed_bypass(request));
 }
 
-TEST(V2XOvertakeCoreLowSpeedBypass, CommittedGenericExecutionKeepsLateralOwnership)
+TEST(V2XOvertakeCoreLowSpeedBypass, CommittedGenericExecutionRequiresSafeHandoff)
 {
   auto request = low_speed_bypass_request();
   request.committed_overtake_execution_active = true;
 
   EXPECT_FALSE(can_start_low_speed_bypass(request));
 
-  request.continuing = true;
+  request.committed_overtake_handoff_safe = true;
   EXPECT_TRUE(can_start_low_speed_bypass(request));
+
+  request.forward_distance_m = 0.5;
+  EXPECT_TRUE(can_start_low_speed_bypass(request));
+
+  request.committed_overtake_handoff_safe = false;
+  request.continuing = true;
+  request.forward_distance_m = request.minimum_prepare_distance_m;
+  EXPECT_TRUE(can_start_low_speed_bypass(request));
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, DoesNotRelaxPrepareDistanceWithoutCommittedExecution)
+{
+  auto request = low_speed_bypass_request();
+  request.committed_overtake_handoff_safe = true;
+  request.forward_distance_m = request.minimum_prepare_distance_m - 0.01;
+
+  EXPECT_FALSE(can_start_low_speed_bypass(request));
 }
 
 TEST(V2XOvertakeCoreLowSpeedBypass, RaceSessionGateOnlyAppliesWithAwsimStateTracking)

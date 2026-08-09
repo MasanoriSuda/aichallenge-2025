@@ -4326,7 +4326,8 @@ struct MPC
 
   GapPlannerOutput plan_low_speed_local_path_with_static_wall_preflight(
     const int ref_wp_id, const int N, const Eigen::VectorXd & lb,
-    const Eigen::VectorXd & ub, const double now_sec, const bool update_last_target)
+    const Eigen::VectorXd & ub, const double now_sec, const bool update_last_target,
+    const int forced_pass_side_sign = 0)
   {
     if (gap_planner == nullptr) {
       GapPlannerOutput output;
@@ -4335,7 +4336,8 @@ struct MPC
     }
 
     auto candidate = gap_planner->plan_stopped_vehicle_local_path(
-      *model, ref_wp_id, N, lb, ub, now_sec, cfg.v2x_behavior, false);
+      *model, ref_wp_id, N, lb, ub, now_sec, cfg.v2x_behavior, false,
+      forced_pass_side_sign);
     auto preflight = evaluate_low_speed_static_wall_preflight(ref_wp_id, candidate);
     const int primary_side = candidate.pass_side_sign;
     const std::string primary_reason = preflight.reason;
@@ -4345,7 +4347,7 @@ struct MPC
     bool alternate_selected = false;
 
     const bool auto_side =
-      cfg.v2x_gap.low_speed_pass_side == "auto";
+      cfg.v2x_gap.low_speed_pass_side == "auto" && forced_pass_side_sign == 0;
     if (
       v2x_overtake_core::should_try_alternate_low_speed_pass_side(
         auto_side, preflight.feasible, primary_side))
@@ -5877,13 +5879,18 @@ struct MPC
     // stopped obstacle while the start grace is active. An already active bypass may continue.
     const bool suppress_new_low_speed_bypass_during_start_grid =
       start_grid_grace_active && !continuing_low_speed_avoidance;
-    const bool committed_overtake_execution_owns_stopped_target =
+    const bool committed_overtake_execution_matches_stopped_target =
       overtake_line_state_.mission_path_frozen &&
       (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
       overtake_line_state_.phase == OvertakeLinePhase::Pass) &&
       overtake_line_state_.pass_side_sign != 0 &&
       !overtake_line_state_.target_vehicle_id.empty() &&
       overtake_line_state_.target_vehicle_id == nearest_low_speed_corridor_id;
+    const bool committed_overtake_stopped_handoff_safe =
+      committed_overtake_execution_matches_stopped_target &&
+      output.locked_target_seen && !output.locked_target_position_jump &&
+      !output.locked_target_course_progress_rejected &&
+      output.locked_target_current_body_footprints_separated;
     const bool suppress_low_speed_bypass =
       suppress_start_grid_stop_behavior || suppress_new_low_speed_bypass_during_start_grid;
     const bool low_speed_avoidance_candidate =
@@ -5896,7 +5903,8 @@ struct MPC
         suppress_low_speed_bypass,
         overtake_forbidden,
         continuing_low_speed_avoidance,
-        committed_overtake_execution_owns_stopped_target,
+        committed_overtake_execution_matches_stopped_target,
+        committed_overtake_stopped_handoff_safe,
         cfg.v2x_behavior.low_speed_avoidance_ignore_soft_curve_forbidden,
         overtake_forbidden_wp,
         nearest_low_speed_corridor_speed,
@@ -5923,25 +5931,37 @@ struct MPC
           cfg.v2x_behavior.low_speed_avoidance_lookahead_distance);
       const auto candidate_gap = cfg.v2x_behavior.low_speed_local_path_enabled ?
         plan_low_speed_local_path_with_static_wall_preflight(
-          ref_wp_id, N, lb, ub, now_sec, false) :
+          ref_wp_id, N, lb, ub, now_sec, false,
+          committed_overtake_stopped_handoff_safe ?
+          overtake_line_state_.pass_side_sign : 0) :
         gap_planner->plan(
-          *model, ref_wp_id, N, lb, ub, now_sec, false, true, low_speed_gap_max_self_distance);
-      const bool gap_ok = cfg.v2x_behavior.low_speed_local_path_enabled ?
+          *model, ref_wp_id, N, lb, ub, now_sec, false, true,
+          low_speed_gap_max_self_distance,
+          committed_overtake_stopped_handoff_safe ?
+          overtake_line_state_.pass_side_sign : 0);
+      const bool candidate_side_compatible =
+        !committed_overtake_stopped_handoff_safe ||
+        candidate_gap.pass_side_sign == overtake_line_state_.pass_side_sign;
+      const bool gap_ok = candidate_side_compatible &&
+        (cfg.v2x_behavior.low_speed_local_path_enabled ?
         candidate_gap.active && candidate_gap.feasible :
         has_consecutive_sufficient_gap(
           candidate_gap, cfg.v2x_behavior.low_speed_avoidance_min_gap_width,
-          cfg.v2x_behavior.low_speed_avoidance_min_gap_points);
+          cfg.v2x_behavior.low_speed_avoidance_min_gap_points));
       if (gap_ok) {
         if (candidate_gap.pass_side_sign != 0) {
           gap_planner->lock_low_speed_pass_side(candidate_gap.pass_side_sign);
         }
         adopt_low_speed_corridor_vehicle();
         output.state = V2XBehaviorState::LowSpeedAvoidance;
-        output.reason = candidate_gap.pass_side_sign < 0 ?
+        const std::string handoff_prefix = committed_overtake_stopped_handoff_safe ?
+          "confirmed stopped target takeover from committed Overtake / " : "";
+        output.reason = handoff_prefix +
+          (candidate_gap.pass_side_sign < 0 ?
           "low-speed front vehicle and right gap available" :
           candidate_gap.pass_side_sign > 0 ?
           "low-speed front vehicle and left gap available" :
-          "low-speed front vehicle and gap available";
+          "low-speed front vehicle and gap available");
         return commit_v2x_behavior_state(output, now_sec);
       }
       low_speed_avoidance_gap_blocked = !continuing_low_speed_avoidance;

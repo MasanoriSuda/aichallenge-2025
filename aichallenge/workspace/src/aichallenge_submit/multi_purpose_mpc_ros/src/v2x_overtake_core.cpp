@@ -5931,10 +5931,14 @@ bool is_v2x_behavior_session_active(
 
 bool can_start_low_speed_bypass(const LowSpeedBypassCandidateRequest & request) noexcept
 {
+  const bool committed_handoff =
+    request.committed_overtake_execution_active &&
+    request.committed_overtake_handoff_safe && !request.continuing;
   if (
     !request.enabled || !request.candidate_vehicle_present || request.cooldown_active ||
     request.start_grid_stop_suppressed ||
-    (request.committed_overtake_execution_active && !request.continuing) ||
+    (request.committed_overtake_execution_active && !request.continuing &&
+    !request.committed_overtake_handoff_safe) ||
     !std::isfinite(request.vehicle_speed_mps) || request.vehicle_speed_mps < 0.0 ||
     !std::isfinite(request.maximum_vehicle_speed_mps) ||
     request.maximum_vehicle_speed_mps < 0.0 ||
@@ -5951,8 +5955,14 @@ bool can_start_low_speed_bypass(const LowSpeedBypassCandidateRequest & request) 
   const bool curve_policy_allows =
     !request.overtake_forbidden || request.continuing ||
     (request.ignore_soft_curve_forbidden && !request.explicit_forbidden_wp);
+  // A safe same-target handoff already owns a validated lateral mission. It
+  // must not lose the stopped-vehicle path merely because confirmation became
+  // complete after the ordinary 3 m preparation boundary. A new bypass still
+  // uses the configured minimum distance.
+  const double minimum_entry_distance_m =
+    committed_handoff ? 0.0 : request.minimum_prepare_distance_m;
   return curve_policy_allows &&
-         request.forward_distance_m >= request.minimum_prepare_distance_m &&
+         request.forward_distance_m >= minimum_entry_distance_m &&
          request.forward_distance_m <= request.maximum_entry_distance_m;
 }
 

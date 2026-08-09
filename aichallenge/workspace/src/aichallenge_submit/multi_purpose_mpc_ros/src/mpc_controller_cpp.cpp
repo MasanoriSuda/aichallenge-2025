@@ -1380,6 +1380,12 @@ struct OvertakeLineConfig
   double opponent_side_replan_evaluation_interval_sec{0.15};
   double opponent_side_replan_no_return_front_distance{3.5};
   double opponent_side_replan_min_reserve_advantage{0.35};
+  bool opponent_side_replan_dynamic_ranking_enabled{true};
+  double opponent_side_replan_min_rear_clear_time_advantage_sec{1.0};
+  double opponent_side_replan_min_progress_score_advantage{0.35};
+  double opponent_side_replan_max_reserve_regression{0.05};
+  double opponent_side_replan_max_rear_clear_time_regression_sec{0.25};
+  double opponent_side_replan_max_minimum_speed_regression{0.25};
   double opponent_side_replan_stable_sec{0.25};
   int opponent_side_replan_max_count{1};
   double return_clear_distance{4.0};
@@ -1953,6 +1959,15 @@ struct V2XBehaviorOutput
   double opponent_side_replan_candidate_stable_sec{0.0};
   double opponent_side_replan_reserve_advantage{
     -std::numeric_limits<double>::infinity()};
+  double opponent_side_replan_rear_clear_time_advantage{
+    -std::numeric_limits<double>::infinity()};
+  double opponent_side_replan_minimum_speed_advantage{
+    -std::numeric_limits<double>::infinity()};
+  double opponent_side_replan_progress_score_advantage{
+    -std::numeric_limits<double>::infinity()};
+  overtake_core::OpponentSideManeuverPreferenceReason
+  opponent_side_replan_preference_reason{
+    overtake_core::OpponentSideManeuverPreferenceReason::None};
   std::optional<double> opponent_side_replan_goal_ey;
   std::optional<overtake_core::OvertakeMissionCandidate> opponent_side_replan_mission;
   overtake_core::OpponentSideReplanReason opponent_side_replan_reason{
@@ -7955,7 +7970,17 @@ struct MPC
       const auto maneuver_comparison = overtake_core::compare_opponent_side_maneuvers(
         overtake_core::OpponentSideManeuverComparisonRequest{
           current_maneuver, alternate_maneuver,
-          cfg.v2x_behavior.overtake_line.opponent_side_replan_min_reserve_advantage});
+          cfg.v2x_behavior.overtake_line.opponent_side_replan_min_reserve_advantage,
+          cfg.v2x_behavior.overtake_line.opponent_side_replan_dynamic_ranking_enabled,
+          cfg.v2x_behavior.overtake_line
+            .opponent_side_replan_min_rear_clear_time_advantage_sec,
+          cfg.v2x_behavior.overtake_line
+            .opponent_side_replan_min_progress_score_advantage,
+          cfg.v2x_behavior.overtake_line.opponent_side_replan_max_reserve_regression,
+          cfg.v2x_behavior.overtake_line
+            .opponent_side_replan_max_rear_clear_time_regression_sec,
+          cfg.v2x_behavior.overtake_line
+            .opponent_side_replan_max_minimum_speed_regression});
       const bool current_plan_feasible =
         maneuver_comparison.valid && maneuver_comparison.current_feasible;
       const bool alternate_plan_feasible =
@@ -7994,21 +8019,30 @@ struct MPC
             rclcpp::get_logger("mpc_controller"),
             "OvertakeLine opponent side opportunity pending: target=%s, side=%d->%d, "
             "current_ok=%d, alternate_ok=%d, reserve=%.2f->%.2f, advantage=%.2f, "
-            "stable_required=%.2f s, wp_id=%d",
+            "rear_time_adv=%.2f s, min_speed_adv=%.2f m/s, score_adv=%.2f, "
+            "rank=%s, stable_required=%.2f s, wp_id=%d",
             overtake_line_state_.target_vehicle_id.c_str(), locked_pass_side,
             alternate_side, current_plan_feasible ? 1 : 0,
             alternate_plan_feasible ? 1 : 0, current_reserve, alternate_reserve,
-            reserve_advantage,
+            reserve_advantage, maneuver_comparison.rear_clear_time_advantage_sec,
+            maneuver_comparison.minimum_speed_advantage_mps,
+            maneuver_comparison.horizon_progress_score_advantage,
+            overtake_core::to_string(maneuver_comparison.preference_reason),
             cfg.v2x_behavior.overtake_line.opponent_side_replan_stable_sec,
             model->wp_id);
         } else {
           RCLCPP_INFO(
             rclcpp::get_logger("mpc_controller"),
             "OvertakeLine opponent side opportunity released: target=%s, side=%d, "
-            "current_ok=%d, alternate_ok=%d, advantage=%.2f, wp_id=%d",
+            "current_ok=%d, alternate_ok=%d, reserve_adv=%.2f, "
+            "rear_time_adv=%.2f s, min_speed_adv=%.2f m/s, score_adv=%.2f, "
+            "rank=%s, wp_id=%d",
             overtake_line_state_.target_vehicle_id.c_str(), locked_pass_side,
             current_plan_feasible ? 1 : 0, alternate_plan_feasible ? 1 : 0,
-            reserve_advantage, model->wp_id);
+            reserve_advantage, maneuver_comparison.rear_clear_time_advantage_sec,
+            maneuver_comparison.minimum_speed_advantage_mps,
+            maneuver_comparison.horizon_progress_score_advantage,
+            overtake_core::to_string(maneuver_comparison.preference_reason), model->wp_id);
         }
       }
       const double stable_sec = debounce.valid ? debounce.stable_sec : 0.0;
@@ -8034,13 +8068,24 @@ struct MPC
           alternate_reserve,
           cfg.v2x_behavior.overtake_line.opponent_side_replan_min_reserve_advantage,
           stable_sec,
-          cfg.v2x_behavior.overtake_line.opponent_side_replan_stable_sec});
+          cfg.v2x_behavior.overtake_line.opponent_side_replan_stable_sec,
+          maneuver_comparison.valid,
+          maneuver_comparison.alternate_preferred,
+          maneuver_comparison.preference_reason});
       output.opponent_side_replan_alternate_feasible = alternate_plan_feasible;
       output.opponent_side_replan_current_feasible = current_plan_feasible;
       output.opponent_side_replan_candidate_sign = alternate_side;
       output.opponent_side_replan_candidate_stable_sec = stable_sec;
       output.opponent_side_replan_reserve_advantage =
         opponent_replan.physical_reserve_advantage_m;
+      output.opponent_side_replan_rear_clear_time_advantage =
+        maneuver_comparison.rear_clear_time_advantage_sec;
+      output.opponent_side_replan_minimum_speed_advantage =
+        maneuver_comparison.minimum_speed_advantage_mps;
+      output.opponent_side_replan_progress_score_advantage =
+        maneuver_comparison.horizon_progress_score_advantage;
+      output.opponent_side_replan_preference_reason =
+        maneuver_comparison.preference_reason;
       output.opponent_side_replan_reason = opponent_replan.reason;
       output.opponent_side_replan_action = opponent_replan.action;
       output.opponent_side_replan_ready =
@@ -16649,7 +16694,9 @@ private:
           "replan_stable=%.2f, replan_vlat=%.2f, replan_vlat_ok=%d, "
           "replan_ready=%d, replan_abort=%d, "
           "opp_eval=%d, opp_eligible=%d, opp_current=%d, opp_alt_side=%d, "
-          "opp_alt_ok=%d, opp_stable=%.2f, opp_adv=%.2f, opp_ready=%d, "
+          "opp_alt_ok=%d, opp_stable=%.2f, opp_reserve_adv=%.2f, "
+          "opp_time_adv=%.2f, opp_speed_adv=%.2f, opp_score_adv=%.2f, opp_rank=%s, "
+          "opp_ready=%d, "
           "opp_no_return=%d, opp_count=%d, opp_action=%s, opp_reason=%s, "
           "mission_wait=%d, "
           "solver_failures=%d, "
@@ -16776,6 +16823,10 @@ private:
           output.opponent_side_replan_alternate_feasible ? 1 : 0,
           output.opponent_side_replan_candidate_stable_sec,
           output.opponent_side_replan_reserve_advantage,
+          output.opponent_side_replan_rear_clear_time_advantage,
+          output.opponent_side_replan_minimum_speed_advantage,
+          output.opponent_side_replan_progress_score_advantage,
+          overtake_core::to_string(output.opponent_side_replan_preference_reason),
           output.opponent_side_replan_ready ? 1 : 0,
           output.opponent_side_replan_no_return ? 1 : 0,
           overtake_line_state_.opponent_side_replan_count,
@@ -18026,6 +18077,37 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_opponent_side_replan_min_reserve_advantage"] ?
     mpc["v2x_overtake_opponent_side_replan_min_reserve_advantage"].as<double>() : 0.35);
+  cfg.mpc.v2x_behavior.overtake_line.opponent_side_replan_dynamic_ranking_enabled =
+    mpc["v2x_overtake_opponent_side_replan_dynamic_ranking_enabled"] ?
+    mpc["v2x_overtake_opponent_side_replan_dynamic_ranking_enabled"].as<bool>() : true;
+  cfg.mpc.v2x_behavior.overtake_line
+    .opponent_side_replan_min_rear_clear_time_advantage_sec = std::max(
+    0.0,
+    mpc["v2x_overtake_opponent_side_replan_min_rear_clear_time_advantage_sec"] ?
+    mpc["v2x_overtake_opponent_side_replan_min_rear_clear_time_advantage_sec"].as<double>() :
+    1.0);
+  cfg.mpc.v2x_behavior.overtake_line.opponent_side_replan_min_progress_score_advantage =
+    std::max(
+    0.0,
+    mpc["v2x_overtake_opponent_side_replan_min_progress_score_advantage"] ?
+    mpc["v2x_overtake_opponent_side_replan_min_progress_score_advantage"].as<double>() :
+    0.35);
+  cfg.mpc.v2x_behavior.overtake_line.opponent_side_replan_max_reserve_regression = std::max(
+    0.0,
+    mpc["v2x_overtake_opponent_side_replan_max_reserve_regression"] ?
+    mpc["v2x_overtake_opponent_side_replan_max_reserve_regression"].as<double>() : 0.05);
+  cfg.mpc.v2x_behavior.overtake_line
+    .opponent_side_replan_max_rear_clear_time_regression_sec = std::max(
+    0.0,
+    mpc["v2x_overtake_opponent_side_replan_max_rear_clear_time_regression_sec"] ?
+    mpc["v2x_overtake_opponent_side_replan_max_rear_clear_time_regression_sec"].as<double>() :
+    0.25);
+  cfg.mpc.v2x_behavior.overtake_line.opponent_side_replan_max_minimum_speed_regression =
+    std::max(
+    0.0,
+    mpc["v2x_overtake_opponent_side_replan_max_minimum_speed_regression"] ?
+    mpc["v2x_overtake_opponent_side_replan_max_minimum_speed_regression"].as<double>() :
+    0.25);
   cfg.mpc.v2x_behavior.overtake_line.opponent_side_replan_stable_sec = std::max(
     0.0,
     mpc["v2x_overtake_opponent_side_replan_stable_sec"] ?
@@ -19711,12 +19793,23 @@ public:
       RCLCPP_INFO(
         get_logger(),
         "V2X opponent side replan: %s, interval=%.2f s, no_return=%.2f m, "
-        "reserve_advantage=%.2f m, stable=%.2f s, max=%d",
+        "reserve_advantage=%.2f m, ranking=%s/time=%.2f s/score=%.2f, "
+        "max_regression=%.2f m/%.2f s/%.2f mps, stable=%.2f s, max=%d",
         mpc_cfg_.v2x_behavior.overtake_line.opponent_side_replan_enabled ?
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.opponent_side_replan_evaluation_interval_sec,
         mpc_cfg_.v2x_behavior.overtake_line.opponent_side_replan_no_return_front_distance,
         mpc_cfg_.v2x_behavior.overtake_line.opponent_side_replan_min_reserve_advantage,
+        mpc_cfg_.v2x_behavior.overtake_line.opponent_side_replan_dynamic_ranking_enabled ?
+        "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line
+          .opponent_side_replan_min_rear_clear_time_advantage_sec,
+        mpc_cfg_.v2x_behavior.overtake_line.opponent_side_replan_min_progress_score_advantage,
+        mpc_cfg_.v2x_behavior.overtake_line.opponent_side_replan_max_reserve_regression,
+        mpc_cfg_.v2x_behavior.overtake_line
+          .opponent_side_replan_max_rear_clear_time_regression_sec,
+        mpc_cfg_.v2x_behavior.overtake_line
+          .opponent_side_replan_max_minimum_speed_regression,
         mpc_cfg_.v2x_behavior.overtake_line.opponent_side_replan_stable_sec,
         mpc_cfg_.v2x_behavior.overtake_line.opponent_side_replan_max_count);
       RCLCPP_INFO(

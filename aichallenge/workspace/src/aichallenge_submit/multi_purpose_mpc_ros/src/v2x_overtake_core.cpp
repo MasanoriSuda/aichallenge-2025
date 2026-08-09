@@ -4751,6 +4751,7 @@ PassManeuverCandidateAssessment assess_pass_maneuver_candidate(
   result.physical_reserve_m = reserve;
   result.predicted_rear_clear_time_sec = mission.predicted_rear_clear_time_sec;
   result.predicted_minimum_speed_mps = mission.predicted_minimum_ego_speed_mps;
+  result.horizon_progress_score = mission.horizon_progress_score;
   return result;
 }
 
@@ -4758,6 +4759,18 @@ OpponentSideManeuverComparison compare_opponent_side_maneuvers(
   const OpponentSideManeuverComparisonRequest & request) noexcept
 {
   OpponentSideManeuverComparison result;
+  const bool dynamic_settings_valid =
+    !request.dynamic_ranking_enabled ||
+    (std::isfinite(request.minimum_rear_clear_time_advantage_sec) &&
+    request.minimum_rear_clear_time_advantage_sec >= 0.0 &&
+    std::isfinite(request.minimum_progress_score_advantage) &&
+    request.minimum_progress_score_advantage >= 0.0 &&
+    std::isfinite(request.maximum_reserve_regression_m) &&
+    request.maximum_reserve_regression_m >= 0.0 &&
+    std::isfinite(request.maximum_rear_clear_time_regression_sec) &&
+    request.maximum_rear_clear_time_regression_sec >= 0.0 &&
+    std::isfinite(request.maximum_minimum_speed_regression_mps) &&
+    request.maximum_minimum_speed_regression_mps >= 0.0);
   if (
     !request.current.valid || !request.alternate.valid ||
     !is_configured_side(request.current.side) ||
@@ -4766,7 +4779,7 @@ OpponentSideManeuverComparison compare_opponent_side_maneuvers(
     std::isnan(request.current.physical_reserve_m) ||
     std::isnan(request.alternate.physical_reserve_m) ||
     !std::isfinite(request.minimum_reserve_advantage_m) ||
-    request.minimum_reserve_advantage_m < 0.0)
+    request.minimum_reserve_advantage_m < 0.0 || !dynamic_settings_valid)
   {
     return result;
   }
@@ -4783,11 +4796,112 @@ OpponentSideManeuverComparison compare_opponent_side_maneuvers(
     result.physical_reserve_advantage_m =
       request.alternate.physical_reserve_m - request.current.physical_reserve_m;
   }
-  result.alternate_preferred = result.alternate_feasible &&
-    (!result.current_feasible ||
+  if (!result.alternate_feasible) {
+    return result;
+  }
+  if (!result.current_feasible) {
+    result.alternate_preferred = true;
+    result.preference_reason = OpponentSideManeuverPreferenceReason::CurrentInfeasible;
+    return result;
+  }
+
+  if (!request.dynamic_ranking_enabled) {
+    result.alternate_preferred =
+      result.physical_reserve_advantage_m + 1e-9 >=
+      request.minimum_reserve_advantage_m;
+    if (result.alternate_preferred) {
+      result.preference_reason =
+        OpponentSideManeuverPreferenceReason::PhysicalReserveAdvantage;
+    }
+    return result;
+  }
+
+  const bool rear_clear_time_available =
+    std::isfinite(request.current.predicted_rear_clear_time_sec) &&
+    std::isfinite(request.alternate.predicted_rear_clear_time_sec);
+  const bool minimum_speed_available =
+    std::isfinite(request.current.predicted_minimum_speed_mps) &&
+    std::isfinite(request.alternate.predicted_minimum_speed_mps);
+  const bool progress_score_available =
+    std::isfinite(request.current.horizon_progress_score) &&
+    std::isfinite(request.alternate.horizon_progress_score);
+  result.dynamic_metrics_compared =
+    rear_clear_time_available || minimum_speed_available || progress_score_available;
+  if (rear_clear_time_available) {
+    result.rear_clear_time_advantage_sec =
+      request.current.predicted_rear_clear_time_sec -
+      request.alternate.predicted_rear_clear_time_sec;
+  }
+  if (minimum_speed_available) {
+    result.minimum_speed_advantage_mps =
+      request.alternate.predicted_minimum_speed_mps -
+      request.current.predicted_minimum_speed_mps;
+  }
+  if (progress_score_available) {
+    result.horizon_progress_score_advantage =
+      request.alternate.horizon_progress_score -
+      request.current.horizon_progress_score;
+  }
+
+  const bool reserve_regression_allowed =
     result.physical_reserve_advantage_m + 1e-9 >=
-    request.minimum_reserve_advantage_m);
+    -request.maximum_reserve_regression_m;
+  const bool rear_clear_time_regression_allowed =
+    !rear_clear_time_available ||
+    result.rear_clear_time_advantage_sec + 1e-9 >=
+    -request.maximum_rear_clear_time_regression_sec;
+  const bool minimum_speed_regression_allowed =
+    !minimum_speed_available ||
+    result.minimum_speed_advantage_mps + 1e-9 >=
+    -request.maximum_minimum_speed_regression_mps;
+  const bool regressions_allowed =
+    reserve_regression_allowed && rear_clear_time_regression_allowed &&
+    minimum_speed_regression_allowed;
+  if (!regressions_allowed) {
+    return result;
+  }
+
+  const bool rear_clear_time_wins =
+    rear_clear_time_available &&
+    result.rear_clear_time_advantage_sec + 1e-9 >=
+    request.minimum_rear_clear_time_advantage_sec;
+  const bool progress_score_wins =
+    progress_score_available &&
+    result.horizon_progress_score_advantage + 1e-9 >=
+    request.minimum_progress_score_advantage;
+  const bool physical_reserve_wins =
+    result.physical_reserve_advantage_m + 1e-9 >=
+    request.minimum_reserve_advantage_m;
+  result.alternate_preferred =
+    rear_clear_time_wins || progress_score_wins || physical_reserve_wins;
+  if (rear_clear_time_wins) {
+    result.preference_reason =
+      OpponentSideManeuverPreferenceReason::RearClearTimeAdvantage;
+  } else if (progress_score_wins) {
+    result.preference_reason =
+      OpponentSideManeuverPreferenceReason::HorizonProgressAdvantage;
+  } else if (physical_reserve_wins) {
+    result.preference_reason =
+      OpponentSideManeuverPreferenceReason::PhysicalReserveAdvantage;
+  }
   return result;
+}
+
+const char * to_string(const OpponentSideManeuverPreferenceReason reason) noexcept
+{
+  switch (reason) {
+    case OpponentSideManeuverPreferenceReason::None:
+      return "none";
+    case OpponentSideManeuverPreferenceReason::CurrentInfeasible:
+      return "current infeasible";
+    case OpponentSideManeuverPreferenceReason::RearClearTimeAdvantage:
+      return "rear-clear time advantage";
+    case OpponentSideManeuverPreferenceReason::HorizonProgressAdvantage:
+      return "horizon progress advantage";
+    case OpponentSideManeuverPreferenceReason::PhysicalReserveAdvantage:
+      return "physical reserve advantage";
+  }
+  return "unknown";
 }
 
 SideReplanDebounceResolution update_side_replan_debounce(
@@ -4847,7 +4961,11 @@ OpponentSideReplanResolution resolve_opponent_side_replan(
     std::isfinite(request.candidate_stable_sec) &&
     request.candidate_stable_sec >= 0.0 &&
     std::isfinite(request.required_stable_sec) &&
-    request.required_stable_sec >= 0.0;
+    request.required_stable_sec >= 0.0 &&
+    (!request.maneuver_ranking_checked ||
+    !request.alternate_maneuver_preferred ||
+    request.maneuver_preference_reason !=
+    OpponentSideManeuverPreferenceReason::None);
   if (!configured_sides || !valid_numeric_input) {
     result.reason = OpponentSideReplanReason::InvalidInput;
     return result;
@@ -4915,7 +5033,9 @@ OpponentSideReplanResolution resolve_opponent_side_replan(
   const bool reserve_advantage =
     result.physical_reserve_advantage_m + 1e-9 >=
     request.minimum_reserve_advantage_m;
-  result.replacement_requested = current_infeasible || reserve_advantage;
+  result.replacement_requested = request.maneuver_ranking_checked ?
+    request.alternate_maneuver_preferred :
+    (current_infeasible || reserve_advantage);
   if (!result.replacement_requested) {
     result.action = OpponentSideReplanAction::KeepCurrent;
     result.reason = OpponentSideReplanReason::CurrentPlanRetained;
@@ -4928,9 +5048,23 @@ OpponentSideReplanResolution resolve_opponent_side_replan(
   }
 
   result.action = OpponentSideReplanAction::ReplaceWithAlternate;
-  result.reason = current_infeasible ?
-    OpponentSideReplanReason::CurrentPlanInfeasible :
-    OpponentSideReplanReason::PhysicalReserveAdvantage;
+  if (current_infeasible) {
+    result.reason = OpponentSideReplanReason::CurrentPlanInfeasible;
+  } else if (
+    request.maneuver_ranking_checked &&
+    request.maneuver_preference_reason ==
+    OpponentSideManeuverPreferenceReason::RearClearTimeAdvantage)
+  {
+    result.reason = OpponentSideReplanReason::RearClearTimeAdvantage;
+  } else if (
+    request.maneuver_ranking_checked &&
+    request.maneuver_preference_reason ==
+    OpponentSideManeuverPreferenceReason::HorizonProgressAdvantage)
+  {
+    result.reason = OpponentSideReplanReason::HorizonProgressAdvantage;
+  } else {
+    result.reason = OpponentSideReplanReason::PhysicalReserveAdvantage;
+  }
   return result;
 }
 
@@ -4984,6 +5118,10 @@ const char * to_string(const OpponentSideReplanReason reason) noexcept
       return "stability pending";
     case OpponentSideReplanReason::CurrentPlanInfeasible:
       return "current plan infeasible";
+    case OpponentSideReplanReason::RearClearTimeAdvantage:
+      return "rear-clear time advantage";
+    case OpponentSideReplanReason::HorizonProgressAdvantage:
+      return "horizon progress advantage";
     case OpponentSideReplanReason::PhysicalReserveAdvantage:
       return "physical reserve advantage";
   }

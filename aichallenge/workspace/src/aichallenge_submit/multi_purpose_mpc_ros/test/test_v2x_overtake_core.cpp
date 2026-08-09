@@ -104,6 +104,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::EarlyShiftOutSideReplanRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OpponentSideReplanAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::OpponentSideReplanReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::OpponentSideReplanRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OpponentSideManeuverPreferenceReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassManeuverCandidateRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OpponentSideManeuverComparisonRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SideReplanDebounceRequest;
@@ -7034,6 +7035,7 @@ TEST(V2XOvertakeCoreOpponentSideReplan, ProjectsControllerAssessmentIntoManeuver
   mission.minimum_return_wall_clearance_m = 0.70;
   mission.predicted_rear_clear_time_sec = 3.25;
   mission.predicted_minimum_ego_speed_mps = 4.50;
+  mission.horizon_progress_score = 2.75;
 
   PassManeuverCandidateRequest request;
   request.side = PassSide::Left;
@@ -7049,11 +7051,114 @@ TEST(V2XOvertakeCoreOpponentSideReplan, ProjectsControllerAssessmentIntoManeuver
   EXPECT_NEAR(result.physical_reserve_m, 0.50, 1e-9);
   EXPECT_NEAR(result.predicted_rear_clear_time_sec, 3.25, 1e-9);
   EXPECT_NEAR(result.predicted_minimum_speed_mps, 4.50, 1e-9);
+  EXPECT_NEAR(result.horizon_progress_score, 2.75, 1e-9);
 
   request.side_conflict = true;
   result = assess_pass_maneuver_candidate(request);
   EXPECT_TRUE(result.valid);
   EXPECT_FALSE(result.feasible);
+}
+
+TEST(V2XOvertakeCoreOpponentSideReplan, DynamicRankingPrefersMateriallyFasterManeuver)
+{
+  const auto assess = [](const PassSide side, const double reserve, const double rear_time,
+      const double minimum_speed, const double progress_score) {
+      OvertakeMissionCandidate mission;
+      mission.minimum_path_wall_clearance_m = reserve;
+      mission.predicted_rear_clear_time_sec = rear_time;
+      mission.predicted_minimum_ego_speed_mps = minimum_speed;
+      mission.horizon_progress_score = progress_score;
+      return assess_pass_maneuver_candidate(
+        PassManeuverCandidateRequest{side, mission, true, true, false, true});
+    };
+  OpponentSideManeuverComparisonRequest request;
+  request.current = assess(PassSide::Left, 0.50, 4.0, 4.0, 2.0);
+  request.alternate = assess(PassSide::Right, 0.48, 2.8, 3.9, 2.4);
+  request.minimum_reserve_advantage_m = 0.35;
+  request.dynamic_ranking_enabled = true;
+
+  const auto result = compare_opponent_side_maneuvers(request);
+  ASSERT_TRUE(result.valid);
+  EXPECT_TRUE(result.dynamic_metrics_compared);
+  EXPECT_TRUE(result.alternate_preferred);
+  EXPECT_NEAR(result.rear_clear_time_advantage_sec, 1.2, 1e-9);
+  EXPECT_NEAR(result.minimum_speed_advantage_mps, -0.1, 1e-9);
+  EXPECT_NEAR(result.physical_reserve_advantage_m, -0.02, 1e-9);
+  EXPECT_EQ(
+    result.preference_reason,
+    OpponentSideManeuverPreferenceReason::RearClearTimeAdvantage);
+}
+
+TEST(V2XOvertakeCoreOpponentSideReplan, DynamicRankingRejectsFastButTooNarrowManeuver)
+{
+  const auto assess = [](const PassSide side, const double reserve, const double rear_time) {
+      OvertakeMissionCandidate mission;
+      mission.minimum_path_wall_clearance_m = reserve;
+      mission.predicted_rear_clear_time_sec = rear_time;
+      mission.predicted_minimum_ego_speed_mps = 4.0;
+      mission.horizon_progress_score = side == PassSide::Left ? 2.0 : 2.5;
+      return assess_pass_maneuver_candidate(
+        PassManeuverCandidateRequest{side, mission, true, true, false, true});
+    };
+  OpponentSideManeuverComparisonRequest request;
+  request.current = assess(PassSide::Left, 0.50, 4.0);
+  request.alternate = assess(PassSide::Right, 0.40, 2.5);
+  request.minimum_reserve_advantage_m = 0.35;
+  request.dynamic_ranking_enabled = true;
+
+  const auto result = compare_opponent_side_maneuvers(request);
+  ASSERT_TRUE(result.valid);
+  EXPECT_FALSE(result.alternate_preferred);
+  EXPECT_EQ(result.preference_reason, OpponentSideManeuverPreferenceReason::None);
+}
+
+TEST(V2XOvertakeCoreOpponentSideReplan, DynamicRankingRejectsWideButTooSlowManeuver)
+{
+  const auto assess = [](const PassSide side, const double reserve, const double rear_time) {
+      OvertakeMissionCandidate mission;
+      mission.minimum_path_wall_clearance_m = reserve;
+      mission.predicted_rear_clear_time_sec = rear_time;
+      mission.predicted_minimum_ego_speed_mps = 4.0;
+      mission.horizon_progress_score = 2.0;
+      return assess_pass_maneuver_candidate(
+        PassManeuverCandidateRequest{side, mission, true, true, false, true});
+    };
+  OpponentSideManeuverComparisonRequest request;
+  request.current = assess(PassSide::Left, 0.40, 3.0);
+  request.alternate = assess(PassSide::Right, 0.80, 3.5);
+  request.minimum_reserve_advantage_m = 0.35;
+  request.dynamic_ranking_enabled = true;
+
+  const auto result = compare_opponent_side_maneuvers(request);
+  ASSERT_TRUE(result.valid);
+  EXPECT_FALSE(result.alternate_preferred);
+  EXPECT_EQ(result.preference_reason, OpponentSideManeuverPreferenceReason::None);
+}
+
+TEST(V2XOvertakeCoreOpponentSideReplan, DynamicRankingCanSelectHorizonProgressWinner)
+{
+  const auto assess = [](const PassSide side, const double progress_score) {
+      OvertakeMissionCandidate mission;
+      mission.minimum_path_wall_clearance_m = 0.50;
+      mission.predicted_rear_clear_time_sec = 3.0;
+      mission.predicted_minimum_ego_speed_mps = 4.0;
+      mission.horizon_progress_score = progress_score;
+      return assess_pass_maneuver_candidate(
+        PassManeuverCandidateRequest{side, mission, true, true, false, true});
+    };
+  OpponentSideManeuverComparisonRequest request;
+  request.current = assess(PassSide::Left, 2.0);
+  request.alternate = assess(PassSide::Right, 2.5);
+  request.minimum_reserve_advantage_m = 0.35;
+  request.dynamic_ranking_enabled = true;
+
+  const auto result = compare_opponent_side_maneuvers(request);
+  ASSERT_TRUE(result.valid);
+  EXPECT_TRUE(result.alternate_preferred);
+  EXPECT_NEAR(result.horizon_progress_score_advantage, 0.5, 1e-9);
+  EXPECT_EQ(
+    result.preference_reason,
+    OpponentSideManeuverPreferenceReason::HorizonProgressAdvantage);
 }
 
 TEST(V2XOvertakeCoreOpponentSideReplan, ComparesManeuversWithExistingReservePolicy)
@@ -7188,6 +7293,39 @@ TEST(V2XOvertakeCoreOpponentSideReplan, RequiresPhysicalReserveAdvantage)
   result = resolve_opponent_side_replan(request);
   EXPECT_EQ(result.action, OpponentSideReplanAction::ReplaceWithAlternate);
   EXPECT_EQ(result.reason, OpponentSideReplanReason::PhysicalReserveAdvantage);
+}
+
+TEST(V2XOvertakeCoreOpponentSideReplan, CommitsRankedRearClearWinnerAfterDebounce)
+{
+  OpponentSideReplanRequest request;
+  request.enabled = true;
+  request.frozen_execution_active = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+  request.target_front_distance_m = 8.0;
+  request.no_return_front_distance_m = 3.5;
+  request.maximum_replacements = 1;
+  request.current_side = PassSide::Left;
+  request.alternate_side = PassSide::Right;
+  request.current_plan_feasible = true;
+  request.alternate_plan_feasible = true;
+  request.current_physical_reserve_m = 0.50;
+  request.alternate_physical_reserve_m = 0.48;
+  request.minimum_reserve_advantage_m = 0.35;
+  request.candidate_stable_sec = 0.25;
+  request.required_stable_sec = 0.25;
+  request.maneuver_ranking_checked = true;
+  request.alternate_maneuver_preferred = true;
+  request.maneuver_preference_reason =
+    OpponentSideManeuverPreferenceReason::RearClearTimeAdvantage;
+
+  const auto result = resolve_opponent_side_replan(request);
+  EXPECT_EQ(result.action, OpponentSideReplanAction::ReplaceWithAlternate);
+  EXPECT_EQ(result.reason, OpponentSideReplanReason::RearClearTimeAdvantage);
+  EXPECT_TRUE(result.eligible);
+  EXPECT_TRUE(result.replacement_requested);
 }
 
 TEST(V2XOvertakeCoreOpponentSideReplan, BlocksAtNoReturnAndAfterOneReplacement)

@@ -2696,6 +2696,7 @@ struct PassManeuverCandidateAssessment
   double physical_reserve_m{-std::numeric_limits<double>::infinity()};
   double predicted_rear_clear_time_sec{std::numeric_limits<double>::infinity()};
   double predicted_minimum_speed_mps{std::numeric_limits<double>::infinity()};
+  double horizon_progress_score{-std::numeric_limits<double>::infinity()};
   std::optional<OvertakeMissionCandidate> mission;
 };
 
@@ -2710,6 +2711,21 @@ struct OpponentSideManeuverComparisonRequest
   PassManeuverCandidateAssessment current;
   PassManeuverCandidateAssessment alternate;
   double minimum_reserve_advantage_m{0.0};
+  bool dynamic_ranking_enabled{false};
+  double minimum_rear_clear_time_advantage_sec{1.0};
+  double minimum_progress_score_advantage{0.35};
+  double maximum_reserve_regression_m{0.05};
+  double maximum_rear_clear_time_regression_sec{0.25};
+  double maximum_minimum_speed_regression_mps{0.25};
+};
+
+enum class OpponentSideManeuverPreferenceReason
+{
+  None,
+  CurrentInfeasible,
+  RearClearTimeAdvantage,
+  HorizonProgressAdvantage,
+  PhysicalReserveAdvantage,
 };
 
 struct OpponentSideManeuverComparison
@@ -2718,14 +2734,26 @@ struct OpponentSideManeuverComparison
   bool current_feasible{false};
   bool alternate_feasible{false};
   bool alternate_preferred{false};
+  bool dynamic_metrics_compared{false};
   double physical_reserve_advantage_m{-std::numeric_limits<double>::infinity()};
+  double rear_clear_time_advantage_sec{-std::numeric_limits<double>::infinity()};
+  double minimum_speed_advantage_mps{-std::numeric_limits<double>::infinity()};
+  double horizon_progress_score_advantage{
+    -std::numeric_limits<double>::infinity()};
+  OpponentSideManeuverPreferenceReason preference_reason{
+    OpponentSideManeuverPreferenceReason::None};
 };
 
-/// Compare the current and opposite Pass candidates using the existing
-/// physical-reserve policy. no-return and target-continuity policy remain in
+/// Compare the current and opposite Pass candidates. The dynamic policy ranks
+/// physically admitted missions by rear-clear time, the common horizon score,
+/// retained minimum speed and physical reserve. It accepts a switch only when
+/// the winning dimension is material and the other dimensions do not regress
+/// beyond their configured bounds. no-return and target-continuity remain in
 /// resolve_opponent_side_replan().
 OpponentSideManeuverComparison compare_opponent_side_maneuvers(
   const OpponentSideManeuverComparisonRequest & request) noexcept;
+
+const char * to_string(OpponentSideManeuverPreferenceReason reason) noexcept;
 
 struct SideReplanDebounceRequest
 {
@@ -2767,6 +2795,8 @@ enum class OpponentSideReplanReason
   CurrentPlanRetained,
   StabilityPending,
   CurrentPlanInfeasible,
+  RearClearTimeAdvantage,
+  HorizonProgressAdvantage,
   PhysicalReserveAdvantage,
 };
 
@@ -2793,6 +2823,10 @@ struct OpponentSideReplanRequest
   double minimum_reserve_advantage_m{0.0};
   double candidate_stable_sec{0.0};
   double required_stable_sec{0.0};
+  bool maneuver_ranking_checked{false};
+  bool alternate_maneuver_preferred{false};
+  OpponentSideManeuverPreferenceReason maneuver_preference_reason{
+    OpponentSideManeuverPreferenceReason::None};
 };
 
 struct OpponentSideReplanResolution

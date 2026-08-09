@@ -646,6 +646,10 @@ struct OvertakeBodyClearDeadlineRequest
   double hard_longitudinal_distance_m{};
   double deadline_margin_sec{};
   std::size_t sample_count{48U};
+  double target_longitudinal_acceleration_mps2{};
+  double target_longitudinal_acceleration_horizon_sec{};
+  double target_lateral_velocity_decay_time_sec{
+    std::numeric_limits<double>::infinity()};
 };
 
 struct OvertakeBodyClearDeadlineResolution
@@ -696,6 +700,10 @@ struct OvertakeKinematicRolloutRequest
   double maximum_time_sec{15.0};
   bool rear_clear_prediction_enabled{false};
   double rear_clear_distance_m{};
+  double target_longitudinal_acceleration_mps2{};
+  double target_longitudinal_acceleration_horizon_sec{};
+  double target_lateral_velocity_decay_time_sec{
+    std::numeric_limits<double>::infinity()};
 };
 
 struct OvertakeKinematicRolloutResolution
@@ -2120,6 +2128,36 @@ struct CourseLateralPrediction
 CourseLateralPrediction resolve_course_lateral_prediction(
   const CourseLateralPredictionRequest & request) noexcept;
 
+struct OpponentMotionFilterRequest
+{
+  bool previous_estimate_valid{false};
+  double previous_velocity_x_mps{};
+  double previous_velocity_y_mps{};
+  double previous_acceleration_x_mps2{};
+  double previous_acceleration_y_mps2{};
+  double observed_velocity_x_mps{};
+  double observed_velocity_y_mps{};
+  double sample_interval_sec{};
+  double velocity_gain{1.0};
+  double acceleration_gain{1.0};
+  double maximum_acceleration_mps2{std::numeric_limits<double>::infinity()};
+};
+
+struct OpponentMotionFilterResolution
+{
+  bool valid{false};
+  double velocity_x_mps{};
+  double velocity_y_mps{};
+  double acceleration_x_mps2{};
+  double acceleration_y_mps2{};
+};
+
+/// Smooth a finite-difference V2X velocity and estimate bounded acceleration.
+/// The first valid observation initializes velocity and leaves acceleration at
+/// zero. Invalid input is fail-closed so the tracker can reset its estimate.
+OpponentMotionFilterResolution update_opponent_motion_filter(
+  const OpponentMotionFilterRequest & request) noexcept;
+
 struct CoursePoint
 {
   double x_m{};
@@ -2923,6 +2961,7 @@ enum class DynamicMissionWaitAction
   Inactive,
   Hold,
   ResumeCurrent,
+  ReplaceWithCurrent,
   ReplaceWithAlternate,
   Return,
   Recovery,
@@ -2955,6 +2994,7 @@ struct DynamicMissionWaitRequest
   bool current_mission_invalidated{false};
   bool assessment_completed{false};
   bool current_plan_feasible{false};
+  bool current_replacement_ready{false};
   bool alternate_replacement_ready{false};
 };
 

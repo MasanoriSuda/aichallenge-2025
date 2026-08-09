@@ -262,8 +262,10 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_active_hard_curve_contin
 using multi_purpose_mpc_ros::v2x_overtake_core::advance_prediction_time;
 using multi_purpose_mpc_ros::v2x_overtake_core::CourseAlignedPredictionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CourseLateralPredictionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OpponentMotionFilterRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_course_aligned_prediction;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_course_lateral_prediction;
+using multi_purpose_mpc_ros::v2x_overtake_core::update_opponent_motion_filter;
 using multi_purpose_mpc_ros::v2x_overtake_core::project_forward_course_progress;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   is_course_progress_continuity_constraint_rejection;
@@ -458,6 +460,44 @@ TEST(V2XPeerIdentityTracker, ResetClearsTheRaceSessionIdentitySet)
   tracker.reset();
   EXPECT_EQ(tracker.learned_vehicle_count(), 0U);
   EXPECT_FALSE(tracker.is_complete({"P2"}));
+}
+
+TEST(V2XOpponentMotionFilter, SmoothsVelocityAndBoundsAcceleration)
+{
+  OpponentMotionFilterRequest request;
+  request.previous_estimate_valid = true;
+  request.previous_velocity_x_mps = 3.0;
+  request.previous_acceleration_x_mps2 = 0.0;
+  request.observed_velocity_x_mps = 7.0;
+  request.sample_interval_sec = 0.5;
+  request.velocity_gain = 0.25;
+  request.acceleration_gain = 1.0;
+  request.maximum_acceleration_mps2 = 1.5;
+
+  const auto result = update_opponent_motion_filter(request);
+  ASSERT_TRUE(result.valid);
+  EXPECT_NEAR(result.velocity_x_mps, 4.0, 1e-9);
+  EXPECT_NEAR(result.velocity_y_mps, 0.0, 1e-9);
+  EXPECT_NEAR(result.acceleration_x_mps2, 1.5, 1e-9);
+  EXPECT_NEAR(result.acceleration_y_mps2, 0.0, 1e-9);
+}
+
+TEST(V2XOpponentMotionFilter, InitializesFirstVelocityWithoutAccelerationSpike)
+{
+  OpponentMotionFilterRequest request;
+  request.observed_velocity_x_mps = 3.0;
+  request.observed_velocity_y_mps = 0.5;
+  request.sample_interval_sec = 1.0;
+  request.velocity_gain = 0.35;
+  request.acceleration_gain = 0.25;
+  request.maximum_acceleration_mps2 = 3.0;
+
+  const auto result = update_opponent_motion_filter(request);
+  ASSERT_TRUE(result.valid);
+  EXPECT_DOUBLE_EQ(result.velocity_x_mps, 3.0);
+  EXPECT_DOUBLE_EQ(result.velocity_y_mps, 0.5);
+  EXPECT_DOUBLE_EQ(result.acceleration_x_mps2, 0.0);
+  EXPECT_DOUBLE_EQ(result.acceleration_y_mps2, 0.0);
 }
 
 TEST(V2XOvertakeCoreSpeed, UsesCappedNormalSpeedWithoutStartConfiguration)
@@ -3044,6 +3084,28 @@ TEST(V2XOvertakeCoreSpeed, BodyClearDeadlineUsesBoundedTargetLateralPrediction)
   EXPECT_FALSE(std::isfinite(bounded_resolution.body_clear_time_sec));
 }
 
+TEST(V2XOvertakeCoreSpeed, BodyClearDeadlineDecaysTransientTargetLateralVelocity)
+{
+  OvertakeBodyClearDeadlineRequest request;
+  request.enabled = true;
+  request.mission_path = OvertakeMissionPathRequest{
+    0.0, 0.0, 0.1, 0.0, 4.0, 8.0, 6.0};
+  request.target_longitudinal_m = 5.0;
+  request.ego_speed_mps = 5.0;
+  request.target_speed_mps = 3.0;
+  request.target_lateral_m = 0.0;
+  request.target_lateral_velocity_mps = -2.0;
+  request.target_lateral_prediction_horizon_sec = 1.0;
+  request.target_lateral_velocity_decay_time_sec = 0.15;
+  request.lateral_clearance_m = 1.0;
+  request.hard_longitudinal_distance_m = 2.0;
+
+  const auto resolution = resolve_overtake_body_clear_deadline(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.feasible);
+  EXPECT_FALSE(std::isfinite(resolution.body_clear_time_sec));
+}
+
 TEST(V2XOvertakeCoreSpeed, KinematicRolloutAccountsForControlDelayWhileClosingFast)
 {
   OvertakeKinematicRolloutRequest request;
@@ -3199,6 +3261,46 @@ TEST(V2XOvertakeCoreSpeed, KinematicRolloutPredictsRearClearOnSharedTimeAxis)
   ASSERT_TRUE(short_budget.valid);
   EXPECT_FALSE(short_budget.rear_clear_feasible);
   EXPECT_FALSE(std::isfinite(short_budget.rear_clear_time_sec));
+}
+
+TEST(V2XOvertakeCoreSpeed, KinematicRolloutUsesBoundedTargetAcceleration)
+{
+  OvertakeKinematicRolloutRequest request;
+  request.enabled = true;
+  request.mission_path = OvertakeMissionPathRequest{
+    0.0, 0.0, 1.5, 0.0, 1.0, 20.0, 6.0};
+  request.target_longitudinal_m = 4.0;
+  request.current_ego_speed_mps = 5.0;
+  request.target_speed_mps = 3.0;
+  request.candidate_closing_speed_mps = 2.0;
+  request.maximum_ego_speed_mps = 11.0;
+  request.maximum_acceleration_mps2 = 1.0;
+  request.maximum_deceleration_mps2 = 3.0;
+  request.target_lateral_m = -2.0;
+  request.target_lateral_prediction_horizon_sec = 1.0;
+  request.lateral_clearance_m = 1.0;
+  request.hard_longitudinal_distance_m = 2.0;
+  request.maximum_time_sec = 10.0;
+  request.rear_clear_prediction_enabled = true;
+  request.rear_clear_distance_m = 4.0;
+  request.target_longitudinal_acceleration_horizon_sec = 1.0;
+
+  request.target_longitudinal_acceleration_mps2 = 0.0;
+  const auto steady = resolve_overtake_kinematic_rollout(request);
+  ASSERT_TRUE(steady.valid);
+  ASSERT_TRUE(steady.rear_clear_feasible);
+
+  request.target_longitudinal_acceleration_mps2 = 1.0;
+  const auto accelerating = resolve_overtake_kinematic_rollout(request);
+  ASSERT_TRUE(accelerating.valid);
+  ASSERT_TRUE(accelerating.rear_clear_feasible);
+  EXPECT_GT(accelerating.rear_clear_time_sec, steady.rear_clear_time_sec);
+
+  request.target_longitudinal_acceleration_mps2 = -1.0;
+  const auto decelerating = resolve_overtake_kinematic_rollout(request);
+  ASSERT_TRUE(decelerating.valid);
+  ASSERT_TRUE(decelerating.rear_clear_feasible);
+  EXPECT_LT(decelerating.rear_clear_time_sec, steady.rear_clear_time_sec);
 }
 
 TEST(V2XOvertakeCoreSpeed, DynamicPassDistanceAddsSpeedDependentConfirmationReserve)
@@ -7579,6 +7681,11 @@ TEST(V2XOvertakeCoreDynamicMissionWait, InvalidatedGenerationCannotResume)
   result = resolve_dynamic_mission_wait(request);
   EXPECT_EQ(result.action, DynamicMissionWaitAction::Recovery);
   EXPECT_EQ(result.reason, DynamicMissionWaitReason::CurrentMissionInvalidated);
+
+  request.current_replacement_ready = true;
+  result = resolve_dynamic_mission_wait(request);
+  EXPECT_EQ(result.action, DynamicMissionWaitAction::ReplaceWithCurrent);
+  EXPECT_EQ(result.reason, DynamicMissionWaitReason::CurrentPlanRecovered);
 
   request.alternate_replacement_ready = true;
   result = resolve_dynamic_mission_wait(request);

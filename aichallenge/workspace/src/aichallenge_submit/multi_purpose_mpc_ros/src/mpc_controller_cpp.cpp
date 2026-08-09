@@ -1332,6 +1332,11 @@ struct V2XGapPlannerConfig
   bool prediction_use_course_lateral_velocity{false};
   double prediction_course_lateral_velocity_deadband{0.15};
   double prediction_course_lateral_velocity_max{1.0};
+  double prediction_velocity_filter_gain{0.35};
+  double prediction_acceleration_filter_gain{0.25};
+  double prediction_maximum_acceleration{3.0};
+  double prediction_longitudinal_acceleration_horizon{1.0};
+  double prediction_lateral_velocity_decay_time{0.6};
   double prediction_min_ego_speed{1.0};
   double prediction_max_ego_speed{std::numeric_limits<double>::infinity()};
   double timeout_sec{1.0};
@@ -1969,6 +1974,8 @@ struct V2XBehaviorOutput
   opponent_side_replan_preference_reason{
     overtake_core::OpponentSideManeuverPreferenceReason::None};
   std::optional<double> opponent_side_replan_goal_ey;
+  std::optional<overtake_core::OvertakeMissionCandidate>
+  opponent_side_replan_current_mission;
   std::optional<overtake_core::OvertakeMissionCandidate> opponent_side_replan_mission;
   overtake_core::OpponentSideReplanReason opponent_side_replan_reason{
     overtake_core::OpponentSideReplanReason::None};
@@ -1999,6 +2006,8 @@ struct V2XBehaviorOutput
   double locked_target_predicted_longitudinal{
     std::numeric_limits<double>::infinity()};
   double locked_target_speed{std::numeric_limits<double>::infinity()};
+  double locked_target_longitudinal_acceleration{};
+  bool locked_target_longitudinal_acceleration_valid{false};
   double locked_target_receipt_sec{-std::numeric_limits<double>::infinity()};
   double overtake_entry_target_speed{std::numeric_limits<double>::infinity()};
   double overtake_entry_relative_speed{std::numeric_limits<double>::quiet_NaN()};
@@ -2267,6 +2276,8 @@ struct V2XGapPlanner
     double receipt_sec{};
     double vx{};
     double vy{};
+    double ax{};
+    double ay{};
     double velocity_observation_interval_sec{};
     std::uint64_t recovery_epoch{};
     bool recovery_sample_valid{false};
@@ -2274,6 +2285,7 @@ struct V2XGapPlanner
     bool position_jump{false};
     bool invalid_velocity{false};
     bool velocity_observation_valid{false};
+    bool motion_estimate_valid{false};
   };
 
   struct LateralInterval
@@ -2409,10 +2421,13 @@ struct V2XGapPlanner
       }
       double vx = 0.0;
       double vy = 0.0;
+      double ax = 0.0;
+      double ay = 0.0;
       double velocity_observation_interval_sec = 0.0;
       bool position_jump = false;
       bool invalid_velocity = false;
       bool velocity_observation_valid = false;
+      bool motion_estimate_valid = false;
       if (tracked.has_sample) {
         const double dt = sample_stamp - tracked.stamp_sec;
         const double dx = vehicle.position.x - tracked.x;
@@ -2431,16 +2446,40 @@ struct V2XGapPlanner
           last_message_has_invalid_sample_ = true;
         }
         if (dt > kEps && !position_jump) {
-          vx = dx / dt;
-          vy = dy / dt;
-          if (std::hypot(vx, vy) > cfg.v_max_safety) {
+          const double observed_vx = dx / dt;
+          const double observed_vy = dy / dt;
+          if (std::hypot(observed_vx, observed_vy) > cfg.v_max_safety) {
             invalid_velocity = true;
             last_message_has_invalid_sample_ = true;
             vx = 0.0;
             vy = 0.0;
           } else {
-            velocity_observation_valid = true;
-            velocity_observation_interval_sec = dt;
+            const auto filtered_motion =
+              overtake_core::update_opponent_motion_filter(
+              overtake_core::OpponentMotionFilterRequest{
+                tracked.motion_estimate_valid,
+                tracked.vx,
+                tracked.vy,
+                tracked.ax,
+                tracked.ay,
+                observed_vx,
+                observed_vy,
+                dt,
+                cfg.prediction_velocity_filter_gain,
+                cfg.prediction_acceleration_filter_gain,
+                cfg.prediction_maximum_acceleration});
+            if (filtered_motion.valid) {
+              vx = filtered_motion.velocity_x_mps;
+              vy = filtered_motion.velocity_y_mps;
+              ax = filtered_motion.acceleration_x_mps2;
+              ay = filtered_motion.acceleration_y_mps2;
+              motion_estimate_valid = true;
+              velocity_observation_valid = true;
+              velocity_observation_interval_sec = dt;
+            } else {
+              invalid_velocity = true;
+              last_message_has_invalid_sample_ = true;
+            }
           }
         }
       }
@@ -2454,6 +2493,8 @@ struct V2XGapPlanner
       tracked.receipt_sec = receipt_sec;
       tracked.vx = vx;
       tracked.vy = vy;
+      tracked.ax = ax;
+      tracked.ay = ay;
       tracked.velocity_observation_interval_sec = velocity_observation_interval_sec;
       tracked.recovery_epoch = recovery_epoch_;
       tracked.recovery_sample_valid =
@@ -2465,6 +2506,8 @@ struct V2XGapPlanner
       tracked.velocity_observation_valid =
         velocity_observation_valid && !array_header_invalid && !empty_id &&
         !duplicate_id && !invalid_geometry && !source_sample_invalid;
+      tracked.motion_estimate_valid =
+        motion_estimate_valid && tracked.velocity_observation_valid;
     }
     last_message_vehicle_ids_.assign(message_ids.begin(), message_ids.end());
     if (
@@ -4790,6 +4833,8 @@ struct MPC
     double nearest_front_lateral = std::numeric_limits<double>::infinity();
     double nearest_front_lateral_velocity = 0.0;
     bool nearest_front_lateral_velocity_valid = false;
+    double nearest_front_longitudinal_acceleration = 0.0;
+    bool nearest_front_longitudinal_acceleration_valid = false;
     double nearest_front_local_longitudinal = std::numeric_limits<double>::infinity();
     bool nearest_front_progress_used = false;
     std::string nearest_front_id;
@@ -4932,6 +4977,38 @@ struct MPC
           lateral});
       const double front_vehicle_speed = use_course_progress ?
         course_projection.along_track_speed_mps : vehicle_speed;
+      double target_course_tangent_x = cos_yaw;
+      double target_course_tangent_y = sin_yaw;
+      bool target_course_tangent_valid =
+        std::isfinite(target_course_tangent_x) &&
+        std::isfinite(target_course_tangent_y);
+      if (
+        use_course_progress && course_projection.valid &&
+        course_progress_path.size() >= 2U)
+      {
+        const std::size_t from_index = course_projection.segment_index;
+        const std::size_t to_index = from_index + 1U < course_progress_path.size() ?
+          from_index + 1U : (model->reference_path->circular ? 0U : from_index);
+        if (from_index < course_progress_path.size() && to_index != from_index) {
+          const double tangent_dx =
+            course_progress_path[to_index].x_m - course_progress_path[from_index].x_m;
+          const double tangent_dy =
+            course_progress_path[to_index].y_m - course_progress_path[from_index].y_m;
+          const double tangent_norm = std::hypot(tangent_dx, tangent_dy);
+          if (std::isfinite(tangent_norm) && tangent_norm > kEps) {
+            target_course_tangent_x = tangent_dx / tangent_norm;
+            target_course_tangent_y = tangent_dy / tangent_norm;
+          } else {
+            target_course_tangent_valid = false;
+          }
+        }
+      }
+      const bool front_longitudinal_acceleration_valid =
+        vehicle.motion_estimate_valid && target_course_tangent_valid &&
+        std::isfinite(vehicle.ax) && std::isfinite(vehicle.ay);
+      const double front_longitudinal_acceleration =
+        front_longitudinal_acceleration_valid ?
+        target_course_tangent_x * vehicle.ax + target_course_tangent_y * vehicle.ay : 0.0;
       const double vehicle_course_lateral = use_course_progress ?
         front_lateral : model->spatial_state.e_y + lateral;
       const double vehicle_course_longitudinal = use_course_progress ?
@@ -4942,35 +5019,9 @@ struct MPC
         vehicle.velocity_observation_valid && std::isfinite(vehicle.vx) &&
         std::isfinite(vehicle.vy))
       {
-        double target_tangent_x = cos_yaw;
-        double target_tangent_y = sin_yaw;
-        bool target_tangent_valid =
-          std::isfinite(target_tangent_x) && std::isfinite(target_tangent_y);
-        if (
-          use_course_progress && course_projection.valid &&
-          course_progress_path.size() >= 2U)
-        {
-          const std::size_t from_index = course_projection.segment_index;
-          const std::size_t to_index = from_index + 1U < course_progress_path.size() ?
-            from_index + 1U :
-            (model->reference_path->circular ? 0U : from_index);
-          if (from_index < course_progress_path.size() && to_index != from_index) {
-            const double tangent_dx =
-              course_progress_path[to_index].x_m - course_progress_path[from_index].x_m;
-            const double tangent_dy =
-              course_progress_path[to_index].y_m - course_progress_path[from_index].y_m;
-            const double tangent_norm = std::hypot(tangent_dx, tangent_dy);
-            if (std::isfinite(tangent_norm) && tangent_norm > kEps) {
-              target_tangent_x = tangent_dx / tangent_norm;
-              target_tangent_y = tangent_dy / tangent_norm;
-            } else {
-              target_tangent_valid = false;
-            }
-          }
-        }
-        if (target_tangent_valid) {
+        if (target_course_tangent_valid) {
           const double raw_lateral_velocity =
-            -target_tangent_y * vehicle.vx + target_tangent_x * vehicle.vy;
+            -target_course_tangent_y * vehicle.vx + target_course_tangent_x * vehicle.vy;
           const double velocity_deadband = std::max(
             0.0, cfg.v2x_gap.prediction_course_lateral_velocity_deadband);
           const double velocity_limit = std::max(
@@ -5048,6 +5099,10 @@ struct MPC
           output.locked_target_lateral = front_lateral;
           output.locked_target_relative_lateral = front_relative_lateral;
           output.locked_target_speed = front_vehicle_speed;
+          output.locked_target_longitudinal_acceleration =
+            front_longitudinal_acceleration;
+          output.locked_target_longitudinal_acceleration_valid =
+            front_longitudinal_acceleration_valid;
           output.locked_target_receipt_sec = vehicle.receipt_sec;
 
           // Direct FollowPrepare -> Pass resume needs a short-horizon check
@@ -5056,38 +5111,13 @@ struct MPC
           // reference-path normal and extrapolate only for the configured V2X
           // prediction horizon. This gate can only delay a direct resume; it
           // never selects a side or changes the normal gap-planner corridor.
-          double target_tangent_x = cos_yaw;
-          double target_tangent_y = sin_yaw;
-          bool target_tangent_valid =
-            std::isfinite(target_tangent_x) && std::isfinite(target_tangent_y);
           if (
-            use_course_progress && course_projection.valid &&
-            course_progress_path.size() >= 2U)
-          {
-            const std::size_t from_index = course_projection.segment_index;
-            const std::size_t to_index = from_index + 1U < course_progress_path.size() ?
-              from_index + 1U :
-              (model->reference_path->circular ? 0U : from_index);
-            if (from_index < course_progress_path.size() && to_index != from_index) {
-              const double tangent_dx =
-                course_progress_path[to_index].x_m - course_progress_path[from_index].x_m;
-              const double tangent_dy =
-                course_progress_path[to_index].y_m - course_progress_path[from_index].y_m;
-              const double tangent_norm = std::hypot(tangent_dx, tangent_dy);
-              if (std::isfinite(tangent_norm) && tangent_norm > kEps) {
-                target_tangent_x = tangent_dx / tangent_norm;
-                target_tangent_y = tangent_dy / tangent_norm;
-              } else {
-                target_tangent_valid = false;
-              }
-            }
-          }
-          if (
-            vehicle.velocity_observation_valid && target_tangent_valid &&
+            vehicle.velocity_observation_valid && target_course_tangent_valid &&
             std::isfinite(vehicle.vx) && std::isfinite(vehicle.vy))
           {
             const double raw_lateral_velocity =
-              -target_tangent_y * vehicle.vx + target_tangent_x * vehicle.vy;
+              -target_course_tangent_y * vehicle.vx +
+              target_course_tangent_x * vehicle.vy;
             const double velocity_deadband = std::max(
               0.0, cfg.v2x_gap.prediction_course_lateral_velocity_deadband);
             const double velocity_limit = std::max(
@@ -5303,6 +5333,10 @@ struct MPC
           nearest_front_lateral_velocity = observed_course_lateral_velocity;
           nearest_front_lateral_velocity_valid =
             observed_course_lateral_velocity_valid;
+          nearest_front_longitudinal_acceleration =
+            front_longitudinal_acceleration;
+          nearest_front_longitudinal_acceleration_valid =
+            front_longitudinal_acceleration_valid;
           nearest_front_local_longitudinal = longitudinal;
           nearest_front_progress_used = use_course_progress;
           nearest_front_id = vehicle.id;
@@ -6688,6 +6722,17 @@ struct MPC
           output.locked_target_seen &&
           std::isfinite(output.locked_target_speed) ?
           output.locked_target_speed : nearest_front_speed;
+        const bool preflight_target_longitudinal_acceleration_valid =
+          (side_replan_preflight || paused_overtake_mission) &&
+          output.locked_target_seen ?
+          output.locked_target_longitudinal_acceleration_valid :
+          nearest_front_longitudinal_acceleration_valid;
+        const double preflight_target_longitudinal_acceleration =
+          preflight_target_longitudinal_acceleration_valid ?
+          ((side_replan_preflight || paused_overtake_mission) &&
+          output.locked_target_seen ?
+          output.locked_target_longitudinal_acceleration :
+          nearest_front_longitudinal_acceleration) : 0.0;
         const bool preflight_target_lateral_velocity_valid =
           (side_replan_preflight || paused_overtake_mission) &&
           output.locked_target_seen ?
@@ -6943,7 +6988,10 @@ struct MPC
                   cfg.v2x_behavior.overtake_line.pass_horizon_enabled ?
                   cfg.v2x_behavior.overtake_line.pass_horizon_predicted_time_budget : 15.0,
                   cfg.v2x_behavior.overtake_line.pass_horizon_enabled,
-                  std::max(0.0, cfg.v2x_behavior.overtake_line.return_clear_distance)});
+                  std::max(0.0, cfg.v2x_behavior.overtake_line.return_clear_distance),
+                  preflight_target_longitudinal_acceleration,
+                  cfg.v2x_gap.prediction_longitudinal_acceleration_horizon,
+                  cfg.v2x_gap.prediction_lateral_velocity_decay_time});
               if (!rollout.valid) {
                 ++body_clear_deadline_invalid_count;
                 continue;
@@ -8122,6 +8170,9 @@ struct MPC
       output.opponent_side_replan_ready =
         opponent_replan.action ==
         overtake_core::OpponentSideReplanAction::ReplaceWithAlternate;
+      if (current_plan_feasible && current_maneuver.mission.has_value()) {
+        output.opponent_side_replan_current_mission = current_maneuver.mission;
+      }
       if (alternate_plan_feasible && alternate_maneuver.mission.has_value()) {
         output.opponent_side_replan_goal_ey = alternate_assessment.corridor_center_ey;
         output.opponent_side_replan_mission = alternate_maneuver.mission;
@@ -10629,9 +10680,10 @@ private:
     }
   }
 
-  bool replace_frozen_overtake_mission_for_opponent_side(
+  bool replace_frozen_overtake_mission_after_dynamic_replan(
     const overtake_core::OvertakeMissionCandidate & candidate,
-    const double now_sec, const double current_ey)
+    const double now_sec, const double current_ey,
+    const bool allow_same_side_replacement)
   {
     const auto & line_cfg = cfg.v2x_behavior.overtake_line;
     const int previous_side = overtake_line_state_.pass_side_sign;
@@ -10641,16 +10693,19 @@ private:
       overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare;
     const bool replacing_paused_mission =
       overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare;
-    const bool valid_side_change =
+    const bool side_changed = candidate.pass_side_sign != previous_side;
+    const bool valid_replacement_side =
       (candidate.pass_side_sign == -1 || candidate.pass_side_sign == 1) &&
-      candidate.pass_side_sign != previous_side;
+      (side_changed ||
+      (allow_same_side_replacement && current_overtake_mission_invalidated()));
     if (
       !active_execution || !overtake_line_state_.mission_path_frozen ||
       overtake_line_state_.pass_forward_completion_latched ||
       overtake_line_state_.pass_horizon_safe_separation_active ||
-      !valid_side_change ||
-      overtake_line_state_.opponent_side_replan_count >=
+      !valid_replacement_side ||
+      (side_changed && overtake_line_state_.opponent_side_replan_count >=
       line_cfg.opponent_side_replan_max_count)
+      )
     {
       return false;
     }
@@ -10699,7 +10754,8 @@ private:
       prior_longitudinal_refresh_count;
     overtake_line_state_.pass_horizon_safe_separation_progress_extension_count =
       prior_safe_separation_extension_count;
-    overtake_line_state_.opponent_side_replan_count = prior_side_replan_count + 1;
+    overtake_line_state_.opponent_side_replan_count =
+      prior_side_replan_count + (side_changed ? 1 : 0);
     overtake_line_state_.mission_total_start_sec = prior_mission_total_start_sec;
     overtake_line_state_.mission_last_dynamic_corridor_refresh_sec =
       prior_dynamic_corridor_refresh_sec;
@@ -10756,13 +10812,18 @@ private:
       transition_overtake_line_phase(
         OvertakeLinePhase::ShiftOut, now_sec, current_ey,
         candidate.pass_side_sign,
-        "dynamic wait selected alternate Mission");
+        side_changed ? "dynamic wait selected alternate Mission" :
+        "dynamic wait selected fresh same-side Mission");
     }
 
     if (line_cfg.debug_log_enabled) {
       RCLCPP_WARN(
         rclcpp::get_logger("mpc_controller"),
+        side_changed ?
         "OvertakeLine opponent side PassPlan replaced: target=%s, side=%d->%d, "
+        "phase=%s, generation=%lu, goal=%.2f, shift=%.2f, "
+        "pass_traveled=%.2f, count=%d/%d, wp_id=%d" :
+        "OvertakeLine fresh same-side PassPlan replaced: target=%s, side=%d->%d, "
         "phase=%s, generation=%lu, goal=%.2f, shift=%.2f, "
         "pass_traveled=%.2f, count=%d/%d, wp_id=%d",
         overtake_line_state_.target_vehicle_id.c_str(), previous_side,
@@ -12285,8 +12346,8 @@ private:
       behavior_output.opponent_side_replan_ready &&
       behavior_output.opponent_side_replan_mission.has_value())
     {
-      const bool replaced = replace_frozen_overtake_mission_for_opponent_side(
-        behavior_output.opponent_side_replan_mission.value(), now_sec, current_ey);
+      const bool replaced = replace_frozen_overtake_mission_after_dynamic_replan(
+        behavior_output.opponent_side_replan_mission.value(), now_sec, current_ey, false);
       if (replaced) {
         // This branch intentionally skips the old-side behavior continuity
         // decision for one cycle. The replacement candidate was fully
@@ -12327,6 +12388,8 @@ private:
             current_overtake_mission_invalidated(),
             behavior_output.opponent_side_replan_evaluated,
             behavior_output.opponent_side_replan_current_feasible,
+            current_overtake_mission_invalidated() &&
+            behavior_output.opponent_side_replan_current_mission.has_value(),
             behavior_output.opponent_side_replan_ready &&
             behavior_output.opponent_side_replan_mission.has_value()});
         if (dynamic_wait.action == overtake_core::DynamicMissionWaitAction::Return) {
@@ -12341,6 +12404,44 @@ private:
             mission_side_sign,
             std::string{"dynamic Mission wait failed: "} +
             overtake_core::to_string(dynamic_wait.reason));
+          return output;
+        }
+        if (
+          dynamic_wait.action ==
+          overtake_core::DynamicMissionWaitAction::ReplaceWithCurrent)
+        {
+          const bool replaced =
+            behavior_output.opponent_side_replan_current_mission.has_value() &&
+            replace_frozen_overtake_mission_after_dynamic_replan(
+            behavior_output.opponent_side_replan_current_mission.value(),
+            now_sec, current_ey, true);
+          if (replaced) {
+            overtake_line_state_.dynamic_mission_wait_active = false;
+            return output;
+          }
+          transition_overtake_line_phase(
+            OvertakeLinePhase::Recovery, now_sec, current_ey,
+            mission_side_sign,
+            "dynamic Mission wait fresh same-side replacement rejected");
+          return output;
+        }
+        if (
+          dynamic_wait.action ==
+          overtake_core::DynamicMissionWaitAction::ReplaceWithAlternate)
+        {
+          const bool replaced =
+            behavior_output.opponent_side_replan_mission.has_value() &&
+            replace_frozen_overtake_mission_after_dynamic_replan(
+            behavior_output.opponent_side_replan_mission.value(),
+            now_sec, current_ey, false);
+          if (replaced) {
+            overtake_line_state_.dynamic_mission_wait_active = false;
+            return output;
+          }
+          transition_overtake_line_phase(
+            OvertakeLinePhase::Recovery, now_sec, current_ey,
+            mission_side_sign,
+            "dynamic Mission wait alternate replacement rejected");
           return output;
         }
         if (dynamic_wait.action != overtake_core::DynamicMissionWaitAction::ResumeCurrent) {
@@ -12994,7 +13095,11 @@ private:
             0.05,
             runtime_remaining_absolute_time,
             true,
-            std::max(0.0, line_cfg.return_clear_distance)});
+            std::max(0.0, line_cfg.return_clear_distance),
+            behavior_output.locked_target_longitudinal_acceleration_valid ?
+            behavior_output.locked_target_longitudinal_acceleration : 0.0,
+            cfg.v2x_gap.prediction_longitudinal_acceleration_horizon,
+            cfg.v2x_gap.prediction_lateral_velocity_decay_time});
         if (runtime_completion_rollout.valid) {
           runtime_completion_distance = overtake_core::resolve_overtake_dynamic_pass_distance(
             overtake_core::OvertakeDynamicPassDistanceRequest{
@@ -13466,7 +13571,11 @@ private:
               line_cfg.pass_horizon_predicted_time_budget,
               remaining_absolute_time),
             true,
-            std::max(0.0, line_cfg.return_clear_distance)});
+            std::max(0.0, line_cfg.return_clear_distance),
+            behavior_output.locked_target_longitudinal_acceleration_valid ?
+            behavior_output.locked_target_longitudinal_acceleration : 0.0,
+            cfg.v2x_gap.prediction_longitudinal_acceleration_horizon,
+            cfg.v2x_gap.prediction_lateral_velocity_decay_time});
         if (!rollout.valid || !rollout.rear_clear_feasible) {
           return fail_extension("same-side rollout cannot reach rear clearance");
         }
@@ -14475,7 +14584,11 @@ private:
                   cfg.v2x_behavior.overtake_body_clear_deadline_margin_sec,
                   cfg.v2x_behavior.overtake_body_clear_minimum_slack_sec),
                 live_speed_caps, 0.05, remaining_absolute_time, true,
-                std::max(0.0, line_cfg.return_clear_distance)});
+                std::max(0.0, line_cfg.return_clear_distance),
+                behavior_output.locked_target_longitudinal_acceleration_valid ?
+                behavior_output.locked_target_longitudinal_acceleration : 0.0,
+                cfg.v2x_gap.prediction_longitudinal_acceleration_horizon,
+                cfg.v2x_gap.prediction_lateral_velocity_decay_time});
             if (live_rollout.valid && live_rollout.rear_clear_feasible) {
               const auto live_pass_distance =
                 overtake_core::resolve_overtake_dynamic_pass_distance(
@@ -18008,6 +18121,24 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_prediction_course_lateral_velocity_max"] ?
     mpc["v2x_prediction_course_lateral_velocity_max"].as<double>() : 1.0);
+  cfg.mpc.v2x_gap.prediction_velocity_filter_gain = clip(
+    mpc["v2x_prediction_velocity_filter_gain"] ?
+    mpc["v2x_prediction_velocity_filter_gain"].as<double>() : 0.35, 0.0, 1.0);
+  cfg.mpc.v2x_gap.prediction_acceleration_filter_gain = clip(
+    mpc["v2x_prediction_acceleration_filter_gain"] ?
+    mpc["v2x_prediction_acceleration_filter_gain"].as<double>() : 0.25, 0.0, 1.0);
+  cfg.mpc.v2x_gap.prediction_maximum_acceleration = std::max(
+    0.0,
+    mpc["v2x_prediction_maximum_acceleration"] ?
+    mpc["v2x_prediction_maximum_acceleration"].as<double>() : 3.0);
+  cfg.mpc.v2x_gap.prediction_longitudinal_acceleration_horizon = std::max(
+    0.0,
+    mpc["v2x_prediction_longitudinal_acceleration_horizon"] ?
+    mpc["v2x_prediction_longitudinal_acceleration_horizon"].as<double>() : 1.0);
+  cfg.mpc.v2x_gap.prediction_lateral_velocity_decay_time = std::max(
+    0.0,
+    mpc["v2x_prediction_lateral_velocity_decay_time"] ?
+    mpc["v2x_prediction_lateral_velocity_decay_time"].as<double>() : 0.6);
   cfg.mpc.v2x_gap.prediction_min_ego_speed = std::max(
     kEps,
     mpc["v2x_prediction_min_ego_speed"] ?
@@ -19762,6 +19893,15 @@ public:
         mpc_cfg_.v2x_gap.prediction_use_course_lateral_velocity ? 1 : 0,
         mpc_cfg_.v2x_gap.prediction_course_lateral_velocity_deadband,
         mpc_cfg_.v2x_gap.prediction_course_lateral_velocity_max);
+      RCLCPP_INFO(
+        get_logger(),
+        "V2X opponent motion filter: velocity_gain=%.2f, acceleration_gain=%.2f, "
+        "accel_limit=%.2f m/s^2, accel_horizon=%.2f s, lateral_decay=%.2f s",
+        mpc_cfg_.v2x_gap.prediction_velocity_filter_gain,
+        mpc_cfg_.v2x_gap.prediction_acceleration_filter_gain,
+        mpc_cfg_.v2x_gap.prediction_maximum_acceleration,
+        mpc_cfg_.v2x_gap.prediction_longitudinal_acceleration_horizon,
+        mpc_cfg_.v2x_gap.prediction_lateral_velocity_decay_time);
     }
     RCLCPP_INFO(
       get_logger(),

@@ -355,12 +355,18 @@ mpc:
   v2x_prediction_margin: 0.05
   v2x_prediction_time: 1.0
   v2x_prediction_use_path_time: true # align obstacle prediction time with path distance, not waypoint index
-  v2x_prediction_use_course_progress: false # predict moving targets along the reference course
-  # Predict only target lateral motion from consecutive course-relative offsets.
-  # Keep longitudinal course-progress prediction disabled for this isolated A/B.
+  v2x_prediction_use_course_progress: true # follow the bounded course branch instead of Cartesian straight-line extrapolation
+  # Course progress is active; optional direct course-lateral extrapolation stays disabled.
+  # The Pass rollout uses the filtered world velocity projected onto the course instead.
   v2x_prediction_use_course_lateral_velocity: false
   v2x_prediction_course_lateral_velocity_deadband: 0.15 # [m/s]
   v2x_prediction_course_lateral_velocity_max: 1.0       # [m/s]
+  # Filter finite-difference V2X motion before it enters Pass admission/runtime rollout.
+  v2x_prediction_velocity_filter_gain: 0.35 # [0-1] lower rejects one-sample position jitter
+  v2x_prediction_acceleration_filter_gain: 0.25 # [0-1]
+  v2x_prediction_maximum_acceleration: 3.0 # [m/s^2] opponent estimate bound, not an ego command
+  v2x_prediction_longitudinal_acceleration_horizon: 1.0 # [s] then hold predicted target speed
+  v2x_prediction_lateral_velocity_decay_time: 0.6 # [s] lateral intent decays instead of persisting through the full Pass
   v2x_prediction_min_ego_speed: 1.0 # [m/s] avoid singular path-time prediction near standstill
   v2x_timeout_sec: 1.0
   v2x_position_jump_threshold: 5.0

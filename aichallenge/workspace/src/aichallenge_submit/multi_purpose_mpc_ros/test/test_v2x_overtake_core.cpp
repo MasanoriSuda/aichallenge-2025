@@ -142,8 +142,11 @@ using multi_purpose_mpc_ros::v2x_overtake_core::ScheduledOuterTransitionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   ScheduledOuterTransitionRuntimeBudgetRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::FrozenOuterTransitionGoalRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::DynamicCorridorGoalRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SameSideExtensionCommitRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SameSideExtensionCommitReason;
+using multi_purpose_mpc_ros::v2x_overtake_core::MissionTotalBudgetAction;
+using multi_purpose_mpc_ros::v2x_overtake_core::MissionTotalBudgetRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationRequest;
@@ -3823,6 +3826,35 @@ TEST(V2XOvertakeCoreHorizon, AcceptsFreshStaticAdvanceWithShorterDynamicWindow)
   EXPECT_EQ(resolution.reason, SameSideExtensionCommitReason::Accepted);
 }
 
+TEST(V2XOvertakeCoreHorizon, AllowsValidatedGoalOnlyDynamicRefresh)
+{
+  SameSideExtensionCommitRequest request;
+  request.pass_or_hold_active = true;
+  request.target_matches = true;
+  request.side_matches = true;
+  request.replacement_path_valid = true;
+  request.source_generation = 7U;
+  request.current_generation = 7U;
+  request.planner_generated_at_sec = 100.0;
+  request.commit_now_sec = 100.01;
+  request.planner_result_max_age_sec = 0.10;
+  request.prediction_expiry_sec = 100.9;
+  request.current_effective_valid_until_pass_m = 4.0;
+  request.current_pass_hold_distance_m = 18.0;
+  request.require_pass_distance_advance = false;
+  request.replacement_static_valid_until_pass_m = 18.0;
+  request.replacement_dynamic_valid_until_pass_m = 4.0;
+  request.replacement_pass_hold_distance_m = 18.0;
+  request.absolute_pass_distance_limit_m = 32.0;
+  request.current_goal_lateral_m = 0.8;
+  request.replacement_goal_lateral_m = 0.9;
+  request.maximum_lateral_adjustment_m = 0.2;
+
+  const auto resolution = evaluate_same_side_extension_commit(request);
+  EXPECT_TRUE(resolution.accepted);
+  EXPECT_EQ(resolution.reason, SameSideExtensionCommitReason::Accepted);
+}
+
 TEST(V2XOvertakeCoreHorizon, ReportsAtomicCommitRejectionReason)
 {
   SameSideExtensionCommitRequest request;
@@ -3849,6 +3881,61 @@ TEST(V2XOvertakeCoreHorizon, ReportsAtomicCommitRejectionReason)
   EXPECT_EQ(resolution.reason, SameSideExtensionCommitReason::PlannerResultStale);
 }
 
+TEST(V2XOvertakeCoreHorizon, BoundsDynamicCorridorGoalOnCommittedSide)
+{
+  DynamicCorridorGoalRequest request;
+  request.enabled = true;
+  request.pass_active = true;
+  request.pass_side_sign = 1;
+  request.current_goal_m = 0.80;
+  request.desired_goal_m = 1.30;
+  request.feasible_lower_m = -1.0;
+  request.feasible_upper_m = 1.50;
+  request.minimum_adjustment_m = 0.05;
+  request.maximum_adjustment_m = 0.20;
+
+  auto resolution = resolve_dynamic_corridor_goal(request);
+  ASSERT_TRUE(resolution.valid);
+  ASSERT_TRUE(resolution.feasible);
+  EXPECT_TRUE(resolution.update_required);
+  EXPECT_NEAR(resolution.goal_m, 1.00, 1e-9);
+  EXPECT_NEAR(resolution.lateral_adjustment_m, 0.20, 1e-9);
+
+  request.desired_goal_m = 0.82;
+  resolution = resolve_dynamic_corridor_goal(request);
+  ASSERT_TRUE(resolution.feasible);
+  EXPECT_FALSE(resolution.update_required);
+
+  request.feasible_upper_m = -0.10;
+  resolution = resolve_dynamic_corridor_goal(request);
+  EXPECT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.feasible);
+}
+
+TEST(V2XOvertakeCoreHorizon, ExpiresWholeMissionWithoutResettingOnPause)
+{
+  MissionTotalBudgetRequest request;
+  request.enabled = true;
+  request.mission_active = true;
+  request.elapsed_sec = 14.9;
+  request.maximum_duration_sec = 15.0;
+
+  auto resolution = resolve_mission_total_budget(request);
+  EXPECT_EQ(resolution.action, MissionTotalBudgetAction::Keep);
+  EXPECT_FALSE(resolution.expired);
+
+  request.elapsed_sec = 15.0;
+  resolution = resolve_mission_total_budget(request);
+  EXPECT_EQ(resolution.action, MissionTotalBudgetAction::Abort);
+  EXPECT_TRUE(resolution.expired);
+
+  request.rear_clear_confirmed = true;
+  request.return_corridor_available = true;
+  resolution = resolve_mission_total_budget(request);
+  EXPECT_EQ(resolution.action, MissionTotalBudgetAction::Return);
+  EXPECT_TRUE(resolution.expired);
+}
+
 TEST(V2XOvertakeCoreHorizon, CommitsBoundedSideBySideForwardCompletion)
 {
   CommittedPassForwardCompletionRequest request;
@@ -3863,11 +3950,10 @@ TEST(V2XOvertakeCoreHorizon, CommitsBoundedSideBySideForwardCompletion)
   request.predicted_body_footprint_sweep_separated = true;
   request.target_longitudinal_m = 2.0;
   request.maximum_front_distance_m = 3.0;
-  request.ego_speed_mps = 5.0;
-  request.target_speed_mps = 3.3;
-  request.speed_delta_mps = 0.8;
-  request.maximum_ego_speed_mps = 11.11;
-  request.rear_clear_distance_m = 2.0;
+  request.completion_prediction_valid = true;
+  request.completion_rear_clear_feasible = true;
+  request.predicted_required_forward_distance_m = 11.7647059;
+  request.predicted_completion_time_sec = 2.3529412;
   request.maximum_completion_distance_m = 12.0;
 
   auto resolution = resolve_committed_pass_forward_completion(request);
@@ -3875,6 +3961,7 @@ TEST(V2XOvertakeCoreHorizon, CommitsBoundedSideBySideForwardCompletion)
   EXPECT_FALSE(resolution.current_overlap_grace_active);
   EXPECT_TRUE(resolution.rear_clear_distance_feasible);
   EXPECT_NEAR(resolution.required_forward_distance_m, 11.7647059, 1e-6);
+  EXPECT_NEAR(resolution.required_completion_time_sec, 2.3529412, 1e-6);
 
   request.current_body_footprints_separated = false;
   request.current_body_footprint_overlap_confirmed = false;
@@ -3925,7 +4012,7 @@ TEST(V2XOvertakeCoreHorizon, CommitsBoundedSideBySideForwardCompletion)
   request.predicted_body_footprint_sweep_separated = true;
   request.maximum_completion_distance_m = 12.0;
   request.target_longitudinal_m = 2.0;
-  request.target_speed_mps = std::numeric_limits<double>::infinity();
+  request.completion_prediction_valid = false;
   resolution = resolve_committed_pass_forward_completion(request);
   EXPECT_FALSE(resolution.active);
   EXPECT_FALSE(resolution.rear_clear_distance_feasible);
@@ -3946,11 +4033,10 @@ TEST(V2XOvertakeCoreHorizon, DebouncesPredictedOverlapOnlyAfterForwardCompletion
   request.predicted_body_footprint_overlap_confirmed = false;
   request.target_longitudinal_m = 0.0;
   request.maximum_front_distance_m = 3.0;
-  request.ego_speed_mps = 5.0;
-  request.target_speed_mps = 3.3;
-  request.speed_delta_mps = 0.8;
-  request.maximum_ego_speed_mps = 11.11;
-  request.rear_clear_distance_m = 2.0;
+  request.completion_prediction_valid = true;
+  request.completion_rear_clear_feasible = true;
+  request.predicted_required_forward_distance_m = 10.0;
+  request.predicted_completion_time_sec = 2.0;
   request.maximum_completion_distance_m = 24.0;
 
   auto resolution = resolve_committed_pass_forward_completion(request);

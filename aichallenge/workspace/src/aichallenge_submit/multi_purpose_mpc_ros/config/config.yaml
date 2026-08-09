@@ -524,6 +524,17 @@ mpc:
   v2x_overtake_pass_horizon_planner_result_max_age: 0.10 # [s]
   v2x_overtake_pass_horizon_hold_max_sec: 1.0 # [s] bounded fresh-horizon wait
   v2x_overtake_pass_horizon_hold_max_distance: 3.0 # [m]
+  # Keep the chosen side, but move toward the nearest live safe lateral goal at
+  # 5 Hz. Each accepted 5-20 cm correction reruns the full rollout/wall preflight.
+  v2x_overtake_dynamic_corridor_refresh_enabled: true
+  v2x_overtake_dynamic_corridor_refresh_period_sec: 0.20 # [s]
+  v2x_overtake_dynamic_corridor_refresh_min_lateral_adjustment: 0.05 # [m]
+  v2x_overtake_dynamic_corridor_refresh_max_lateral_adjustment: 0.20 # [m/update]
+  v2x_overtake_dynamic_corridor_refresh_max_count: 20
+  # Unlike the active-Pass clock above, this budget includes ShiftOut and
+  # FollowPrepare so a same-target mission cannot reset its way into a loop.
+  v2x_overtake_mission_total_budget_enabled: true
+  v2x_overtake_mission_total_time_limit_sec: 15.0 # [s]
   # Re-evaluate the course-side meaning of an outer Pass over a rolling curvature horizon.
   # A side transition is admitted only while the locked target remains longitudinally ahead;
   # side-by-side crossing stays forbidden and all wall/body/rollout guards remain active.

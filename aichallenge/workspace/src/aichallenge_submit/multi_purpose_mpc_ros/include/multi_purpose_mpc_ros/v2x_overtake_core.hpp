@@ -1092,6 +1092,35 @@ struct FrozenOuterTransitionGoalResolution
 FrozenOuterTransitionGoalResolution resolve_frozen_outer_transition_goal(
   const FrozenOuterTransitionGoalRequest & request) noexcept;
 
+struct DynamicCorridorGoalRequest
+{
+  bool enabled{false};
+  bool pass_active{false};
+  int pass_side_sign{0};
+  double current_goal_m{};
+  double desired_goal_m{};
+  double feasible_lower_m{};
+  double feasible_upper_m{};
+  double minimum_role_offset_m{0.05};
+  double minimum_adjustment_m{0.05};
+  double maximum_adjustment_m{0.20};
+};
+
+struct DynamicCorridorGoalResolution
+{
+  bool valid{false};
+  bool feasible{false};
+  bool update_required{false};
+  double goal_m{std::numeric_limits<double>::quiet_NaN()};
+  double lateral_adjustment_m{std::numeric_limits<double>::infinity()};
+};
+
+/// Bound a live same-side Pass goal update. The side is immutable here: this
+/// helper only permits a small receding-horizon correction inside the current
+/// wall-feasible interval and suppresses sub-threshold goal chatter.
+DynamicCorridorGoalResolution resolve_dynamic_corridor_goal(
+  const DynamicCorridorGoalRequest & request) noexcept;
+
 struct SameSideExtensionCommitRequest
 {
   bool pass_or_hold_active{false};
@@ -1106,6 +1135,7 @@ struct SameSideExtensionCommitRequest
   double prediction_expiry_sec{};
   double current_effective_valid_until_pass_m{};
   double current_pass_hold_distance_m{};
+  bool require_pass_distance_advance{true};
   double replacement_static_valid_until_pass_m{};
   double replacement_dynamic_valid_until_pass_m{};
   double replacement_pass_hold_distance_m{};
@@ -1147,6 +1177,36 @@ bool can_commit_same_side_extension(
   const SameSideExtensionCommitRequest & request) noexcept;
 
 const char * to_string(SameSideExtensionCommitReason reason) noexcept;
+
+enum class MissionTotalBudgetAction
+{
+  Inactive,
+  Keep,
+  Return,
+  Abort,
+};
+
+struct MissionTotalBudgetRequest
+{
+  bool enabled{false};
+  bool mission_active{false};
+  double elapsed_sec{};
+  double maximum_duration_sec{std::numeric_limits<double>::infinity()};
+  bool rear_clear_confirmed{false};
+  bool return_corridor_available{false};
+};
+
+struct MissionTotalBudgetResolution
+{
+  MissionTotalBudgetAction action{MissionTotalBudgetAction::Inactive};
+  bool expired{false};
+};
+
+/// Limit the complete same-target mission, including ShiftOut, Pass and
+/// FollowPrepare. Once expired, rear-clear missions may return; all other
+/// missions must leave the pass attempt instead of resetting a local clock.
+MissionTotalBudgetResolution resolve_mission_total_budget(
+  const MissionTotalBudgetRequest & request) noexcept;
 
 enum class SafeSeparationAction
 {
@@ -1194,11 +1254,14 @@ struct CommittedPassForwardCompletionRequest
   bool solver_recovery_active{false};
   double target_longitudinal_m{};
   double maximum_front_distance_m{};
-  double ego_speed_mps{};
-  double target_speed_mps{};
-  double speed_delta_mps{};
-  double maximum_ego_speed_mps{};
-  double rear_clear_distance_m{};
+  /// Live result from resolve_overtake_kinematic_rollout and
+  /// resolve_overtake_dynamic_pass_distance. Admission and runtime must use
+  /// the same acceleration, control-delay and path-speed-cap model.
+  bool completion_prediction_valid{false};
+  bool completion_rear_clear_feasible{false};
+  double predicted_required_forward_distance_m{
+    std::numeric_limits<double>::infinity()};
+  double predicted_completion_time_sec{std::numeric_limits<double>::infinity()};
   double maximum_completion_distance_m{};
   bool already_latched{false};
 };
@@ -1210,13 +1273,15 @@ struct CommittedPassForwardCompletionResolution
   bool predicted_overlap_grace_active{false};
   bool rear_clear_distance_feasible{false};
   double required_forward_distance_m{std::numeric_limits<double>::infinity()};
+  double required_completion_time_sec{std::numeric_limits<double>::infinity()};
 };
 
 /// Once an already released minimum-motion Pass reaches the bounded
 /// side-by-side window, freeze the committed side and finish longitudinally
 /// when the predicted sweep remains separated or a latched completion is still
 /// inside the bounded predicted-overlap confirmation window, and the estimated
-/// rear-clear completion distance fits inside the bounded local escape.
+/// acceleration-limited rear-clear completion distance fits inside the
+/// bounded local escape.
 /// A single current-overlap sample may share the existing confirmation grace;
 /// confirmed predicted/current overlap and all physical/runtime guards remain
 /// fail closed. Initial acquisition never receives prediction grace.

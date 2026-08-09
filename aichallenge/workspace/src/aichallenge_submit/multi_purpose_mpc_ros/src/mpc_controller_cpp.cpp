@@ -2065,6 +2065,8 @@ struct OvertakeLineState
     -std::numeric_limits<double>::infinity()};
   double mission_path_total_distance{0.0};
   std::uint64_t mission_generation{0U};
+  std::uint64_t invalidated_mission_generation{0U};
+  std::string mission_invalidation_reason;
   // Active Pass phase time only. FollowPrepare and replacement ShiftOut do not
   // consume the absolute Pass budget.
   double mission_total_start_sec{std::numeric_limits<double>::quiet_NaN()};
@@ -6768,6 +6770,7 @@ struct MPC
         std::size_t full_mission_preflight_reject_count = 0;
         std::size_t outer_horizon_reject_count = 0;
         std::size_t outer_transition_preflight_reject_count = 0;
+        std::size_t unvalidated_full_track_transition_reject_count = 0;
         std::string first_outer_transition_preflight_rejection;
         std::size_t static_corridor_fallback_count = 0;
         double earliest_rejected_body_clear_time =
@@ -7246,6 +7249,17 @@ struct MPC
                 }
               }
 
+              const bool full_track_transition_before_rear_clear =
+                outer_transition.transition_required ||
+                rear_clear_course_role.outer_to_inner_before_rear_clear;
+              if (!overtake_core::is_full_track_transition_admitted(
+                  full_track_transition_before_rear_clear,
+                  outer_transition.transition_required))
+              {
+                ++unvalidated_full_track_transition_reject_count;
+                continue;
+              }
+
               overtake_core::OvertakeMissionCandidate mission_candidate;
               mission_candidate.feasible = rollout.feasible;
               mission_candidate.direct_pass = direct_pass;
@@ -7333,8 +7347,7 @@ struct MPC
               mission_candidate.rear_clear_course_role =
                 rear_clear_course_role.rear_clear_role;
               mission_candidate.full_track_transition_before_rear_clear =
-                outer_transition.transition_required ||
-                rear_clear_course_role.outer_to_inner_before_rear_clear;
+                full_track_transition_before_rear_clear;
               mission_candidate.inner_to_outer_at_rear_clear =
                 rear_clear_course_role.inner_to_outer_at_rear_clear;
               mission_candidate.first_course_role_reversal_distance_m =
@@ -7369,6 +7382,8 @@ struct MPC
              << ", outer_horizon_rejected=" << outer_horizon_reject_count
              << ", outer_transition_preflight_rejected=" <<
             outer_transition_preflight_reject_count
+             << ", unvalidated_full_track_transition_rejected=" <<
+            unvalidated_full_track_transition_reject_count
              << ", static_fallback=" << static_corridor_fallback_count
              << ", observed=" <<
             (assessment.dynamic_mission_corridor_observed ? 1 : 0)
@@ -10327,6 +10342,48 @@ private:
     return 0.0;
   }
 
+  bool current_overtake_mission_invalidated() const
+  {
+    return
+      overtake_line_state_.mission_generation > 0U &&
+      overtake_line_state_.invalidated_mission_generation ==
+      overtake_line_state_.mission_generation;
+  }
+
+  void clear_overtake_mission_invalidation()
+  {
+    overtake_line_state_.invalidated_mission_generation = 0U;
+    overtake_line_state_.mission_invalidation_reason.clear();
+    overtake_line_state_.mission_retention_forbidden = false;
+  }
+
+  void invalidate_current_overtake_mission(const std::string & reason)
+  {
+    if (
+      overtake_line_state_.mission_generation == 0U ||
+      !overtake_line_state_.mission_path_frozen)
+    {
+      return;
+    }
+    const bool newly_invalidated = !current_overtake_mission_invalidated();
+    overtake_line_state_.invalidated_mission_generation =
+      overtake_line_state_.mission_generation;
+    overtake_line_state_.mission_invalidation_reason = reason;
+    // A bounded Recovery may still be needed to return to the base line, but
+    // it must not retain and resurrect the failed frozen Mission.
+    overtake_line_state_.mission_retention_forbidden = true;
+    if (newly_invalidated && cfg.v2x_behavior.overtake_line.debug_log_enabled) {
+      RCLCPP_WARN(
+        rclcpp::get_logger("mpc_controller"),
+        "OvertakeLine Mission generation invalidated: target=%s, side=%d, "
+        "generation=%lu, reason=%s, wp_id=%d",
+        overtake_line_state_.target_vehicle_id.c_str(),
+        overtake_line_state_.pass_side_sign,
+        static_cast<unsigned long>(overtake_line_state_.mission_generation),
+        reason.c_str(), model->wp_id);
+    }
+  }
+
   void freeze_selected_overtake_mission(
     const std::optional<overtake_core::OvertakeMissionCandidate> & selected_mission,
     const double now_sec)
@@ -10393,6 +10450,7 @@ private:
       std::max(0.5, line_cfg.return_distance));
     overtake_line_state_.mission_generation =
       std::max<std::uint64_t>(1U, overtake_line_state_.mission_generation + 1U);
+    clear_overtake_mission_invalidation();
     overtake_line_state_.mission_total_start_sec = now_sec;
     overtake_line_state_.mission_pass_start_sec =
       overtake_line_state_.phase == OvertakeLinePhase::Pass ?
@@ -11998,6 +12056,10 @@ private:
       return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
     }
     const auto enter_dynamic_mission_wait = [&](const std::string & reason) {
+        // Entering this wait means the frozen execution path has already
+        // failed a runtime continuation condition.  A fresh feasibility bit
+        // for the same side must not revive that exact path generation.
+        invalidate_current_overtake_mission(reason);
         const bool target_continuous =
           behavior_output.locked_target_seen &&
           locked_target_progress_continuous &&
@@ -12262,6 +12324,7 @@ private:
             behavior_output.locked_target_current_body_footprints_separated,
             dynamic_wait_hard_fault,
             rear_clear_confirmed,
+            current_overtake_mission_invalidated(),
             behavior_output.opponent_side_replan_evaluated,
             behavior_output.opponent_side_replan_current_feasible,
             behavior_output.opponent_side_replan_ready &&
@@ -12292,6 +12355,17 @@ private:
             overtake_line_state_.target_vehicle_id.c_str(), mission_side_sign,
             overtake_core::to_string(dynamic_wait.reason), model->wp_id);
         }
+      }
+      if (resuming_paused_mission && current_overtake_mission_invalidated()) {
+        const std::string reason =
+          overtake_line_state_.mission_invalidation_reason.empty() ?
+          "paused Mission generation invalidated" :
+          std::string{"paused Mission generation invalidated: "} +
+          overtake_line_state_.mission_invalidation_reason;
+        transition_overtake_line_phase(
+          OvertakeLinePhase::Recovery, now_sec, current_ey,
+          mission_side_sign, reason);
+        return output;
       }
       const bool paused_side_revalidation_matches =
         !resuming_paused_mission || mission_side_sign == 0 ||
@@ -13607,6 +13681,7 @@ private:
           ++overtake_line_state_.mission_extension_count;
         }
         ++overtake_line_state_.mission_generation;
+        clear_overtake_mission_invalidation();
         const char * replacement_trigger = strategic_outer_transition ?
           "continuous_outer" : dynamic_corridor_refresh ?
           "dynamic_corridor" : pass_horizon_replan_trigger();

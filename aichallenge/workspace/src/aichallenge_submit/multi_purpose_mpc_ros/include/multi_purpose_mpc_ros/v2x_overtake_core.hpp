@@ -1661,6 +1661,14 @@ struct OvertakeMissionCandidate
   double first_course_role_reversal_distance_m{std::numeric_limits<double>::infinity()};
 };
 
+/// A Mission which changes from outer to inner before rear-clear may only be
+/// admitted when the required full-track handoff has itself been planned and
+/// preflighted.  Otherwise the candidate is executable only up to the role
+/// reversal, not through completion.
+bool is_full_track_transition_admitted(
+  bool full_track_transition_before_rear_clear,
+  bool scheduled_transition_validated) noexcept;
+
 struct OvertakePassPlanRequest
 {
   OvertakeMissionCandidate candidate;
@@ -2927,6 +2935,7 @@ enum class DynamicMissionWaitReason
   WaitingForAssessment,
   BothPlansUnavailable,
   CurrentPlanRecovered,
+  CurrentMissionInvalidated,
   AlternatePlanReady,
   RearClear,
   TargetInvalid,
@@ -2943,6 +2952,7 @@ struct DynamicMissionWaitRequest
   bool current_body_footprints_separated{false};
   bool hard_fault{false};
   bool rear_clear_confirmed{false};
+  bool current_mission_invalidated{false};
   bool assessment_completed{false};
   bool current_plan_feasible{false};
   bool alternate_replacement_ready{false};
@@ -2955,9 +2965,10 @@ struct DynamicMissionWaitResolution
 };
 
 /// Hold a paused overtake target while both complete Mission candidates are
-/// unavailable. Only a fresh current-side assessment may resume the old plan;
-/// an already-debounced alternate may replace it atomically. Actual overlap,
-/// target discontinuity and controller/geometry hard faults remain fail closed.
+/// unavailable. Only a fresh current-side assessment may resume a still-valid
+/// plan; an invalidated generation can only be replaced atomically or ended.
+/// Actual overlap, target discontinuity and controller/geometry hard faults
+/// remain fail closed.
 DynamicMissionWaitResolution resolve_dynamic_mission_wait(
   const DynamicMissionWaitRequest & request) noexcept;
 

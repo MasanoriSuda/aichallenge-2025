@@ -2879,6 +2879,16 @@ TEST(V2XOvertakeCoreSpeed, BuildsAtomicPassPlanFromSelectedMission)
   EXPECT_FALSE(plan.valid);
 }
 
+TEST(V2XOvertakeCoreMissionAdmission, RequiresValidatedFullTrackTransition)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    is_full_track_transition_admitted;
+
+  EXPECT_TRUE(is_full_track_transition_admitted(false, false));
+  EXPECT_TRUE(is_full_track_transition_admitted(true, true));
+  EXPECT_FALSE(is_full_track_transition_admitted(true, false));
+}
+
 TEST(V2XOvertakeCoreSpeed, SelectsDirectPassBeforeShiftOutCandidates)
 {
   OvertakeMissionCandidateSelectionRequest request;
@@ -7549,6 +7559,31 @@ TEST(V2XOvertakeCoreDynamicMissionWait, KeepsHardFaultsAndOverlapFailClosed)
   result = resolve_dynamic_mission_wait(request);
   EXPECT_EQ(result.action, DynamicMissionWaitAction::Return);
   EXPECT_EQ(result.reason, DynamicMissionWaitReason::RearClear);
+}
+
+TEST(V2XOvertakeCoreDynamicMissionWait, InvalidatedGenerationCannotResume)
+{
+  DynamicMissionWaitRequest request;
+  request.enabled = true;
+  request.wait_active = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.current_mission_invalidated = true;
+
+  auto result = resolve_dynamic_mission_wait(request);
+  EXPECT_EQ(result.action, DynamicMissionWaitAction::Hold);
+  EXPECT_EQ(result.reason, DynamicMissionWaitReason::WaitingForAssessment);
+
+  request.assessment_completed = true;
+  request.current_plan_feasible = true;
+  result = resolve_dynamic_mission_wait(request);
+  EXPECT_EQ(result.action, DynamicMissionWaitAction::Recovery);
+  EXPECT_EQ(result.reason, DynamicMissionWaitReason::CurrentMissionInvalidated);
+
+  request.alternate_replacement_ready = true;
+  result = resolve_dynamic_mission_wait(request);
+  EXPECT_EQ(result.action, DynamicMissionWaitAction::ReplaceWithAlternate);
+  EXPECT_EQ(result.reason, DynamicMissionWaitReason::AlternatePlanReady);
 }
 
 TEST(V2XOvertakeCoreMissionOwnership, MissionLockOwnsPausedMissionSide)

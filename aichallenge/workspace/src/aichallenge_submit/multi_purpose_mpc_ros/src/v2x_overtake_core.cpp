@@ -2806,6 +2806,15 @@ const char * to_string(const OvertakeMissionCorridorSource source) noexcept
   }
 }
 
+bool is_full_track_transition_admitted(
+  const bool full_track_transition_before_rear_clear,
+  const bool scheduled_transition_validated) noexcept
+{
+  return
+    !full_track_transition_before_rear_clear ||
+    scheduled_transition_validated;
+}
+
 OvertakePassPlan build_overtake_pass_plan(
   const OvertakePassPlanRequest & request) noexcept
 {
@@ -5214,6 +5223,11 @@ DynamicMissionWaitResolution resolve_dynamic_mission_wait(
     resolution.reason = DynamicMissionWaitReason::WaitingForAssessment;
     return resolution;
   }
+  if (request.current_mission_invalidated) {
+    resolution.action = DynamicMissionWaitAction::Recovery;
+    resolution.reason = DynamicMissionWaitReason::CurrentMissionInvalidated;
+    return resolution;
+  }
   if (request.current_plan_feasible) {
     resolution.action = DynamicMissionWaitAction::ResumeCurrent;
     resolution.reason = DynamicMissionWaitReason::CurrentPlanRecovered;
@@ -5256,6 +5270,8 @@ const char * to_string(const DynamicMissionWaitReason reason) noexcept
       return "both plans unavailable";
     case DynamicMissionWaitReason::CurrentPlanRecovered:
       return "current plan recovered";
+    case DynamicMissionWaitReason::CurrentMissionInvalidated:
+      return "current Mission generation invalidated";
     case DynamicMissionWaitReason::AlternatePlanReady:
       return "alternate plan ready";
     case DynamicMissionWaitReason::RearClear:

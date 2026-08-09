@@ -1383,7 +1383,7 @@ struct OvertakeLineConfig
   double side_replan_target_guard_distance{8.0};
   bool opponent_side_replan_enabled{true};
   double opponent_side_replan_evaluation_interval_sec{0.15};
-  double opponent_side_replan_no_return_front_distance{3.5};
+  double opponent_side_replan_no_return_front_distance{2.0};
   double opponent_side_replan_min_reserve_advantage{0.35};
   bool opponent_side_replan_dynamic_ranking_enabled{true};
   double opponent_side_replan_min_rear_clear_time_advantage_sec{1.0};
@@ -1961,6 +1961,9 @@ struct V2XBehaviorOutput
   bool opponent_side_replan_alternate_feasible{false};
   bool opponent_side_replan_ready{false};
   bool opponent_side_replan_no_return{false};
+  bool opponent_side_replan_early_intrusion_risk{false};
+  overtake_core::PassCommitStage overtake_commit_stage{
+    overtake_core::PassCommitStage::Selectable};
   int opponent_side_replan_candidate_sign{0};
   double opponent_side_replan_candidate_stable_sec{0.0};
   double opponent_side_replan_reserve_advantage{
@@ -6288,13 +6291,37 @@ struct MPC
     const bool opponent_side_replan_target_continuous =
       output.locked_target_seen && !output.locked_target_position_jump &&
       !output.locked_target_course_progress_rejected;
+    const auto pass_commit_stage = overtake_core::resolve_pass_commit_stage(
+      overtake_core::PassCommitStageRequest{
+        opponent_side_replan_execution_active,
+        overtake_line_state_.pass_front_overlap_exclusion_latched,
+        overtake_line_state_.pass_forward_completion_latched,
+        overtake_line_state_.rear_clear_confirmed_latched,
+        output.locked_target_longitudinal,
+        cfg.v2x_behavior.overtake_line.opponent_side_replan_no_return_front_distance});
+    output.overtake_commit_stage = pass_commit_stage.stage;
     const bool opponent_side_replan_before_no_return =
-      std::isfinite(output.locked_target_longitudinal) &&
-      output.locked_target_longitudinal + kEps >=
-      cfg.v2x_behavior.overtake_line.opponent_side_replan_no_return_front_distance;
+      pass_commit_stage.valid && pass_commit_stage.side_replan_allowed &&
+      pass_commit_stage.stage == overtake_core::PassCommitStage::ShiftCommitted;
     const bool opponent_side_replan_geometry_observable =
       output.locked_target_current_body_footprints_separated &&
       output.locked_target_footprint_prediction_valid;
+    const bool opponent_side_replan_early_intrusion_risk =
+      overtake_core::early_pass_side_intrusion_risk(
+      overtake_core::EarlyPassSideIntrusionRiskRequest{
+        cfg.v2x_behavior.overtake_line.opponent_side_replan_enabled,
+        pass_commit_stage.stage,
+        locked_pass_side,
+        output.locked_target_seen,
+        output.locked_target_position_jump,
+        output.locked_target_current_body_footprints_separated,
+        output.locked_target_footprint_prediction_valid,
+        output.locked_target_predicted_body_footprint_sweep_separated,
+        output.locked_target_relative_lateral,
+        output.locked_target_predicted_relative_lateral,
+        cfg.v2x_behavior.overtake_line.target_intrusion_ordering_margin});
+    output.opponent_side_replan_early_intrusion_risk =
+      opponent_side_replan_early_intrusion_risk;
     const bool opponent_side_replan_count_available =
       overtake_line_state_.opponent_side_replan_count <
       cfg.v2x_behavior.overtake_line.opponent_side_replan_max_count;
@@ -6315,7 +6342,11 @@ struct MPC
       opponent_side_replan_assessment_allowed &&
       (!std::isfinite(overtake_line_state_.opponent_side_replan_last_evaluation_sec) ||
       now_sec - overtake_line_state_.opponent_side_replan_last_evaluation_sec + kEps >=
-      cfg.v2x_behavior.overtake_line.opponent_side_replan_evaluation_interval_sec);
+      (opponent_side_replan_early_intrusion_risk ?
+      std::min(
+        0.05,
+        cfg.v2x_behavior.overtake_line.opponent_side_replan_evaluation_interval_sec) :
+      cfg.v2x_behavior.overtake_line.opponent_side_replan_evaluation_interval_sec));
     const bool opponent_side_replan_assessment_requested =
       opponent_side_replan_evaluation_due;
     output.opponent_side_replan_eligible = opponent_side_replan_eligible;
@@ -8050,7 +8081,8 @@ struct MPC
           pass_side(locked_pass_side), current_assessment.selected_mission,
           current_assessment.gap_available,
           execution_allowed_for_side(current_assessment), selected_side_conflict,
-          output.locked_target_predicted_body_footprint_sweep_separated});
+          output.locked_target_predicted_body_footprint_sweep_separated &&
+          !opponent_side_replan_early_intrusion_risk});
       const auto alternate_maneuver = overtake_core::assess_pass_maneuver_candidate(
         overtake_core::PassManeuverCandidateRequest{
           pass_side(alternate_side), alternate_assessment.selected_mission,
@@ -8143,7 +8175,8 @@ struct MPC
           output.locked_target_position_jump,
           output.locked_target_current_body_footprints_separated,
           output.locked_target_footprint_prediction_valid,
-          output.locked_target_predicted_body_footprint_sweep_separated,
+          output.locked_target_predicted_body_footprint_sweep_separated &&
+          !opponent_side_replan_early_intrusion_risk,
           false,
           output.locked_target_longitudinal,
           cfg.v2x_behavior.overtake_line.opponent_side_replan_no_return_front_distance,
@@ -12661,6 +12694,30 @@ private:
         } else {
           overtake_line_state_.lower_boundary_vehicle_id.clear();
           overtake_line_state_.upper_boundary_vehicle_id.clear();
+        }
+        if (
+          overtake_core::should_defer_direct_pass_prediction_handoff(
+            overtake_core::DirectPassPredictionHandoffRequest{
+              direct_base_line_pass,
+              overtake_line_state_.mission_path_frozen,
+              behavior_output.locked_target_seen,
+              !overtake_line_state_.target_vehicle_id.empty()}))
+        {
+          if (line_cfg.debug_log_enabled) {
+            RCLCPP_INFO(
+              rclcpp::get_logger("mpc_controller"),
+              "OvertakeLine direct Pass prediction handoff deferred: "
+              "target=%s, side=%d, generation=%lu, wp_id=%d",
+              overtake_line_state_.target_vehicle_id.c_str(),
+              overtake_line_state_.pass_side_sign,
+              static_cast<unsigned long>(overtake_line_state_.mission_generation),
+              model->wp_id);
+          }
+          // Behavior evaluates locked-target geometry before the line FSM
+          // transitions from Idle to Pass. Publish no explicit lateral line
+          // in this one cycle; the next cycle observes the frozen target and
+          // performs the normal dynamic Pass-horizon checks.
+          return output;
         }
       } else if (overtake_line_state_.pass_side_sign == 0) {
         overtake_line_state_.pass_side_sign = pass_side_sign;
@@ -17279,6 +17336,7 @@ private:
           "side_conflict=%d, replan_window=%d, replan_candidate=%d, "
           "replan_stable=%.2f, replan_vlat=%.2f, replan_vlat_ok=%d, "
           "replan_ready=%d, replan_abort=%d, "
+          "opp_stage=%s, opp_intrusion_risk=%d, "
           "opp_eval=%d, opp_eligible=%d, opp_current=%d, opp_alt_side=%d, "
           "opp_alt_ok=%d, opp_stable=%.2f, opp_reserve_adv=%.2f, "
           "opp_time_adv=%.2f, opp_speed_adv=%.2f, opp_score_adv=%.2f, opp_rank=%s, "
@@ -17402,6 +17460,8 @@ private:
           output.overtake_side_replan_lateral_speed_permitted ? 1 : 0,
           output.overtake_side_replan_ready ? 1 : 0,
           output.overtake_side_replan_abort ? 1 : 0,
+          overtake_core::to_string(output.overtake_commit_stage),
+          output.opponent_side_replan_early_intrusion_risk ? 1 : 0,
           output.opponent_side_replan_evaluated ? 1 : 0,
           output.opponent_side_replan_eligible ? 1 : 0,
           output.opponent_side_replan_current_feasible ? 1 : 0,
@@ -18676,7 +18736,7 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_line.opponent_side_replan_no_return_front_distance = std::max(
     0.0,
     mpc["v2x_overtake_opponent_side_replan_no_return_front_distance"] ?
-    mpc["v2x_overtake_opponent_side_replan_no_return_front_distance"].as<double>() : 3.5);
+    mpc["v2x_overtake_opponent_side_replan_no_return_front_distance"].as<double>() : 2.0);
   cfg.mpc.v2x_behavior.overtake_line.opponent_side_replan_min_reserve_advantage = std::max(
     0.0,
     mpc["v2x_overtake_opponent_side_replan_min_reserve_advantage"] ?

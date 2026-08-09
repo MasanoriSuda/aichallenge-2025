@@ -561,6 +561,76 @@ struct LockedTargetPassSideIntrusionRequest
 bool locked_target_intrudes_pass_side(
   const LockedTargetPassSideIntrusionRequest & request) noexcept;
 
+enum class PassCommitStage
+{
+  Selectable,
+  ShiftCommitted,
+  SideBySideCommitted,
+  RearClear,
+};
+
+struct PassCommitStageRequest
+{
+  bool frozen_execution_active{false};
+  bool lateral_clearance_latched{false};
+  bool forward_completion_latched{false};
+  bool rear_clear{false};
+  double target_front_distance_m{std::numeric_limits<double>::infinity()};
+  double side_by_side_no_return_front_distance_m{0.0};
+};
+
+struct PassCommitStageResolution
+{
+  bool valid{false};
+  PassCommitStage stage{PassCommitStage::Selectable};
+  bool side_replan_allowed{false};
+};
+
+/// Project the existing mission/lateral latches onto one tactical commit
+/// stage. A frozen path can still be replaced atomically while the target is
+/// sufficiently ahead; after lateral/forward commit or the longitudinal
+/// no-return point, the selected side is immutable until rear-clear.
+PassCommitStageResolution resolve_pass_commit_stage(
+  const PassCommitStageRequest & request) noexcept;
+
+const char * to_string(PassCommitStage stage) noexcept;
+
+struct EarlyPassSideIntrusionRiskRequest
+{
+  bool enabled{false};
+  PassCommitStage stage{PassCommitStage::Selectable};
+  int pass_side_sign{0};
+  bool target_seen{false};
+  bool target_position_jump{false};
+  bool current_body_footprints_separated{false};
+  bool footprint_prediction_valid{false};
+  bool predicted_body_footprint_sweep_separated{false};
+  double current_target_relative_lateral_m{std::numeric_limits<double>::infinity()};
+  double predicted_target_relative_lateral_m{std::numeric_limits<double>::infinity()};
+  double ordering_margin_m{0.0};
+};
+
+/// Detect a target moving toward the selected pass line before the legacy
+/// current-position intrusion guard fires. Stability debounce and complete
+/// alternate-mission preflight remain separate mandatory gates.
+bool early_pass_side_intrusion_risk(
+  const EarlyPassSideIntrusionRiskRequest & request) noexcept;
+
+struct DirectPassPredictionHandoffRequest
+{
+  bool direct_pass_entry{false};
+  bool selected_mission_frozen{false};
+  bool locked_target_seen{false};
+  bool target_id_available{false};
+};
+
+/// Behavior computes locked-target geometry from the line state at the start
+/// of a control cycle. A direct Idle -> Pass transition must therefore defer
+/// line execution for one cycle when the selected target has not yet appeared
+/// in that locked output, rather than treating it as a failed prediction.
+bool should_defer_direct_pass_prediction_handoff(
+  const DirectPassPredictionHandoffRequest & request) noexcept;
+
 struct SideOvertakeEntryRequest
 {
   bool continuing_overtake{false};

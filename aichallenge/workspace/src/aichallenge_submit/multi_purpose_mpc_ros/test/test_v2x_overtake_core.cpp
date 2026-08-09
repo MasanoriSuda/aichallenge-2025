@@ -332,6 +332,14 @@ using multi_purpose_mpc_ros::v2x_overtake_core::assess_pass_maneuver_candidate;
 using multi_purpose_mpc_ros::v2x_overtake_core::compare_opponent_side_maneuvers;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_side_replan_debounce;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_opponent_side_replan;
+using multi_purpose_mpc_ros::v2x_overtake_core::PassCommitStage;
+using multi_purpose_mpc_ros::v2x_overtake_core::PassCommitStageRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::EarlyPassSideIntrusionRiskRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::DirectPassPredictionHandoffRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_commit_stage;
+using multi_purpose_mpc_ros::v2x_overtake_core::early_pass_side_intrusion_risk;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  should_defer_direct_pass_prediction_handoff;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_observe_locked_target_geometry;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_enter_dynamic_mission_wait;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_mission_wait;
@@ -9739,6 +9747,107 @@ TEST(V2XOvertakeCoreStartGridCorridor, RequiresBothBoundaryVehiclesRearClear)
   request.lower_vehicle_seen = true;
   request.return_clear_distance_m = -0.1;
   EXPECT_THROW(is_inter_vehicle_corridor_rear_clear(request), std::invalid_argument);
+}
+
+TEST(V2XOvertakeCoreCommitStage, KeepsSideSelectableUntilMissionFreeze)
+{
+  PassCommitStageRequest request;
+  request.target_front_distance_m = 4.0;
+  request.side_by_side_no_return_front_distance_m = 2.0;
+
+  auto resolution = resolve_pass_commit_stage(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_EQ(resolution.stage, PassCommitStage::Selectable);
+  EXPECT_TRUE(resolution.side_replan_allowed);
+
+  request.frozen_execution_active = true;
+  resolution = resolve_pass_commit_stage(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_EQ(resolution.stage, PassCommitStage::ShiftCommitted);
+  EXPECT_TRUE(resolution.side_replan_allowed);
+}
+
+TEST(V2XOvertakeCoreCommitStage, FixesSideAtNoReturnOrLateralCommit)
+{
+  PassCommitStageRequest request;
+  request.frozen_execution_active = true;
+  request.target_front_distance_m = 1.99;
+  request.side_by_side_no_return_front_distance_m = 2.0;
+
+  auto resolution = resolve_pass_commit_stage(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_EQ(resolution.stage, PassCommitStage::SideBySideCommitted);
+  EXPECT_FALSE(resolution.side_replan_allowed);
+
+  request.target_front_distance_m = 4.0;
+  request.lateral_clearance_latched = true;
+  resolution = resolve_pass_commit_stage(request);
+  EXPECT_EQ(resolution.stage, PassCommitStage::SideBySideCommitted);
+
+  request.rear_clear = true;
+  resolution = resolve_pass_commit_stage(request);
+  EXPECT_EQ(resolution.stage, PassCommitStage::RearClear);
+
+  request.side_by_side_no_return_front_distance_m = -0.1;
+  EXPECT_FALSE(resolve_pass_commit_stage(request).valid);
+}
+
+TEST(V2XOvertakeCoreCommitStage, DetectsEarlySelectedSideIntrusion)
+{
+  EarlyPassSideIntrusionRiskRequest request;
+  request.enabled = true;
+  request.stage = PassCommitStage::ShiftCommitted;
+  request.pass_side_sign = 1;
+  request.target_seen = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+  request.current_target_relative_lateral_m = -0.8;
+  request.predicted_target_relative_lateral_m = -0.15;
+  request.ordering_margin_m = 0.1;
+  EXPECT_TRUE(early_pass_side_intrusion_risk(request));
+
+  request.predicted_target_relative_lateral_m = -0.4;
+  EXPECT_FALSE(early_pass_side_intrusion_risk(request));
+
+  request.pass_side_sign = -1;
+  request.current_target_relative_lateral_m = 0.8;
+  request.predicted_target_relative_lateral_m = 0.15;
+  EXPECT_TRUE(early_pass_side_intrusion_risk(request));
+
+  request.stage = PassCommitStage::SideBySideCommitted;
+  EXPECT_FALSE(early_pass_side_intrusion_risk(request));
+}
+
+TEST(V2XOvertakeCoreCommitStage, TreatsPredictedSweepOverlapAsEarlyRisk)
+{
+  EarlyPassSideIntrusionRiskRequest request;
+  request.enabled = true;
+  request.stage = PassCommitStage::ShiftCommitted;
+  request.pass_side_sign = -1;
+  request.target_seen = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = false;
+  request.current_target_relative_lateral_m = 0.8;
+  request.predicted_target_relative_lateral_m = 0.9;
+  request.ordering_margin_m = 0.1;
+  EXPECT_TRUE(early_pass_side_intrusion_risk(request));
+}
+
+TEST(V2XOvertakeCoreCommitStage, DefersOnlyUnobservedDirectPassHandoff)
+{
+  DirectPassPredictionHandoffRequest request;
+  request.direct_pass_entry = true;
+  request.selected_mission_frozen = true;
+  request.target_id_available = true;
+  EXPECT_TRUE(should_defer_direct_pass_prediction_handoff(request));
+
+  request.locked_target_seen = true;
+  EXPECT_FALSE(should_defer_direct_pass_prediction_handoff(request));
+  request.locked_target_seen = false;
+  request.direct_pass_entry = false;
+  EXPECT_FALSE(should_defer_direct_pass_prediction_handoff(request));
 }
 
 }  // namespace

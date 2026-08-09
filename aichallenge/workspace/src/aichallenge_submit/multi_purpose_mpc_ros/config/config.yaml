@@ -652,7 +652,7 @@ mpc:
   # Execution remains frozen unless one stable alternate plan atomically wins.
   v2x_overtake_opponent_side_replan_enabled: true
   v2x_overtake_opponent_side_replan_evaluation_interval_sec: 0.15 # [s]
-  v2x_overtake_opponent_side_replan_no_return_front_distance: 3.5 # [m]
+  v2x_overtake_opponent_side_replan_no_return_front_distance: 2.0 # [m] side fixed only near body-level longitudinal overlap
   v2x_overtake_opponent_side_replan_min_reserve_advantage: 0.35 # [m]
   # Re-rank the two complete Missions with the already-computed rollout metrics.
   # Hard wall/footprint/return feasibility remains an admission requirement.

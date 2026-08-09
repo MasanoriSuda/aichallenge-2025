@@ -817,6 +817,93 @@ bool locked_target_intrudes_pass_side(
   return signed_target_ordering >= -request.ordering_margin_m;
 }
 
+PassCommitStageResolution resolve_pass_commit_stage(
+  const PassCommitStageRequest & request) noexcept
+{
+  PassCommitStageResolution resolution;
+  if (
+    !std::isfinite(request.side_by_side_no_return_front_distance_m) ||
+    request.side_by_side_no_return_front_distance_m < 0.0)
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  if (request.rear_clear) {
+    resolution.stage = PassCommitStage::RearClear;
+    return resolution;
+  }
+  if (!request.frozen_execution_active) {
+    resolution.stage = PassCommitStage::Selectable;
+    resolution.side_replan_allowed = true;
+    return resolution;
+  }
+  if (
+    request.lateral_clearance_latched || request.forward_completion_latched ||
+    (std::isfinite(request.target_front_distance_m) &&
+    request.target_front_distance_m + 1e-9 <
+    request.side_by_side_no_return_front_distance_m))
+  {
+    resolution.stage = PassCommitStage::SideBySideCommitted;
+    return resolution;
+  }
+
+  resolution.stage = PassCommitStage::ShiftCommitted;
+  resolution.side_replan_allowed = true;
+  return resolution;
+}
+
+const char * to_string(const PassCommitStage stage) noexcept
+{
+  switch (stage) {
+    case PassCommitStage::Selectable:
+      return "selectable";
+    case PassCommitStage::ShiftCommitted:
+      return "shift_committed";
+    case PassCommitStage::SideBySideCommitted:
+      return "side_by_side_committed";
+    case PassCommitStage::RearClear:
+      return "rear_clear";
+  }
+  return "unknown";
+}
+
+bool early_pass_side_intrusion_risk(
+  const EarlyPassSideIntrusionRiskRequest & request) noexcept
+{
+  if (
+    !request.enabled || request.stage != PassCommitStage::ShiftCommitted ||
+    (request.pass_side_sign != -1 && request.pass_side_sign != 1) ||
+    !request.target_seen || request.target_position_jump ||
+    !request.current_body_footprints_separated ||
+    !request.footprint_prediction_valid ||
+    !std::isfinite(request.current_target_relative_lateral_m) ||
+    !std::isfinite(request.predicted_target_relative_lateral_m) ||
+    !std::isfinite(request.ordering_margin_m) || request.ordering_margin_m < 0.0)
+  {
+    return false;
+  }
+
+  if (!request.predicted_body_footprint_sweep_separated) {
+    return true;
+  }
+
+  const double side = static_cast<double>(request.pass_side_sign);
+  const double current_ordering = side * request.current_target_relative_lateral_m;
+  const double predicted_ordering = side * request.predicted_target_relative_lateral_m;
+  const bool moving_toward_selected_line = predicted_ordering > current_ordering + 1e-9;
+  const double warning_boundary = -2.0 * request.ordering_margin_m;
+  return moving_toward_selected_line &&
+         predicted_ordering + 1e-9 >= warning_boundary;
+}
+
+bool should_defer_direct_pass_prediction_handoff(
+  const DirectPassPredictionHandoffRequest & request) noexcept
+{
+  return request.direct_pass_entry && request.selected_mission_frozen &&
+         !request.locked_target_seen && request.target_id_available;
+}
+
 bool can_start_side_overtake(const SideOvertakeEntryRequest & request) noexcept
 {
   if (request.continuing_overtake) {

@@ -7,38 +7,42 @@
     },
     "vehicles": [
         {
-            "vehicle_number": 2,
-            "vehicle_name": "GoKart2",
-            "final_position": 1,
-            "finished": false,
-            "lap_count": 1,
-            "laps": [
-                96.77645111083985
-            ],
-            "min_lap_time": 96.77645111083985,
-            "max_lap_time": 96.77645111083985,
-            "avg_lap_time": 96.77645111083985,
-            "total_lap_time": 96.77645111083985
-        },
-        {
             "vehicle_number": 1,
             "vehicle_name": "GoKart1",
+            "final_position": 1,
+            "finished": false,
+            "lap_count": 3,
+            "laps": [
+                75.52812957763672,
+                65.62857055664063,
+                59.79856872558594
+            ],
+            "min_lap_time": 59.79856872558594,
+            "max_lap_time": 75.52812957763672,
+            "avg_lap_time": 66.98509216308594,
+            "total_lap_time": 200.9552764892578
+        },
+        {
+            "vehicle_number": 2,
+            "vehicle_name": "GoKart2",
             "final_position": 2,
             "finished": false,
             "lap_count": 1,
             "laps": [
-                98.22565460205078
+                199.51405334472657
             ],
-            "min_lap_time": 98.22565460205078,
-            "max_lap_time": 98.22565460205078,
-            "avg_lap_time": 98.22565460205078,
-            "total_lap_time": 98.22565460205078
+            "min_lap_time": 199.51405334472657,
+            "max_lap_time": 199.51405334472657,
+            "avg_lap_time": 199.51405334472657,
+            "total_lap_time": 199.51405334472657
         }
     ],
     "laps": [
-        98.22565460205078
+        75.52812957763672,
+        65.62857055664063,
+        59.79856872558594
     ],
-    "min_time": 98.22565460205078,
-    "total_lap_time": 98.22565460205078,
-    "num_laps": 1
+    "min_time": 59.79856872558594,
+    "total_lap_time": 200.9552764892578,
+    "num_laps": 3
 }

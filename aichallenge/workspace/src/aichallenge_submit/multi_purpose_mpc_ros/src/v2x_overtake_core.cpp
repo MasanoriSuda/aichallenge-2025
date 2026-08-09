@@ -1586,7 +1586,9 @@ bool can_lease_stopped_side_pass_prediction(
   }
   if (
     !request.enabled || !request.pass_active || !request.mission_path_frozen ||
-    !request.refresh_failed_for_prediction ||
+    request.refresh_failure_reason != PassRefreshFailureReason::TargetPredictionUnavailable ||
+    !request.target_continuous || !request.course_progress_accepted ||
+    !request.execution_corridor_clear ||
     !request.current_body_footprints_separated ||
     request.actual_wall_physical_contact || request.actual_wall_margin_blocked ||
     request.actual_wall_sample_unavailable || request.emergency_brake ||
@@ -1606,6 +1608,68 @@ bool can_lease_stopped_side_pass_prediction(
          request.lease_traveled_m < request.maximum_lease_distance_m - 1e-9 &&
          request.pass_elapsed_sec < request.absolute_pass_time_limit_sec - 1e-9 &&
          request.pass_traveled_m < request.absolute_pass_distance_limit_m - 1e-9;
+}
+
+const char * to_string(const PassRefreshFailureReason reason) noexcept
+{
+  switch (reason) {
+    case PassRefreshFailureReason::None:
+      return "none";
+    case PassRefreshFailureReason::TargetPredictionUnavailable:
+      return "target_prediction_unavailable";
+    case PassRefreshFailureReason::TargetDiscontinuous:
+      return "target_discontinuous";
+    case PassRefreshFailureReason::CourseProgressRejected:
+      return "course_progress_rejected";
+    case PassRefreshFailureReason::ExecutionCorridorBlocked:
+      return "execution_corridor_blocked";
+    case PassRefreshFailureReason::PredictedOverlap:
+      return "predicted_overlap";
+    case PassRefreshFailureReason::InvalidInput:
+      return "invalid_input";
+    case PassRefreshFailureReason::AbsoluteBudgetExhausted:
+      return "absolute_budget_exhausted";
+    case PassRefreshFailureReason::WallOrBodyFault:
+      return "wall_or_body_fault";
+    case PassRefreshFailureReason::Other:
+      return "other";
+  }
+  return "unknown";
+}
+
+StoppedPredictionLeaseSpeedResolution resolve_stopped_prediction_lease_speed(
+  const StoppedPredictionLeaseSpeedRequest & request) noexcept
+{
+  StoppedPredictionLeaseSpeedResolution resolution;
+  resolution.target_velocity_reference_mps =
+    request.existing_target_velocity_reference_mps;
+  if (!request.active) {
+    resolution.valid =
+      !std::isnan(request.existing_target_velocity_reference_mps) &&
+      request.existing_target_velocity_reference_mps >= 0.0;
+    return resolution;
+  }
+
+  resolution.active = true;
+  const bool valid =
+    std::isfinite(request.current_speed_mps) && request.current_speed_mps >= 0.0 &&
+    std::isfinite(request.lease_start_speed_mps) &&
+    request.lease_start_speed_mps >= 0.0 &&
+    !std::isnan(request.existing_target_velocity_reference_mps) &&
+    request.existing_target_velocity_reference_mps >= 0.0 &&
+    !std::isnan(request.maximum_speed_mps) && request.maximum_speed_mps >= 0.0;
+  if (!valid) {
+    resolution.target_velocity_reference_mps = 0.0;
+    return resolution;
+  }
+
+  resolution.valid = true;
+  resolution.target_velocity_reference_mps = std::min({
+    request.current_speed_mps,
+    request.lease_start_speed_mps,
+    request.existing_target_velocity_reference_mps,
+    request.maximum_speed_mps});
+  return resolution;
 }
 
 PassContinuationPreflightPolicyResolution resolve_pass_continuation_preflight_policy(
@@ -4507,6 +4571,7 @@ bool can_override_entry_speed_for_stationary_blocker(
     request.minimum_entry_distance_m >= 0.0;
   return request.enabled && request.validated_mission_ready &&
          request.hard_guard_clear && request.front_vehicle_seen &&
+         request.stopped_evidence_matches_target &&
          request.required_stopped_observation_count > 0 &&
          request.stopped_observation_count >= request.required_stopped_observation_count &&
          finite_non_negative_geometry &&

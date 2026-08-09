@@ -2034,6 +2034,7 @@ struct V2XBehaviorOutput
   double front_distance{std::numeric_limits<double>::infinity()};
   double front_local_longitudinal{std::numeric_limits<double>::infinity()};
   double front_progress_lateral{std::numeric_limits<double>::infinity()};
+  std::string low_speed_stopped_candidate_id;
   int low_speed_stopped_observation_count{0};
   double low_speed_avoidance_stalled_sec{0.0};
   std::string reason;
@@ -2147,6 +2148,8 @@ struct OvertakeLineState
   double pass_stopped_prediction_lease_start_sec{
     std::numeric_limits<double>::quiet_NaN()};
   double pass_stopped_prediction_lease_start_distance{0.0};
+  double pass_stopped_prediction_lease_start_speed_mps{
+    std::numeric_limits<double>::quiet_NaN()};
   double pass_contact_start_sec{std::numeric_limits<double>::quiet_NaN()};
   double pass_contact_start_target_longitudinal{
     std::numeric_limits<double>::quiet_NaN()};
@@ -5420,6 +5423,7 @@ struct MPC
     output.front_progress_used = nearest_front_progress_used;
     output.front_local_longitudinal = nearest_front_local_longitudinal;
     output.front_progress_lateral = nearest_front_lateral;
+    output.low_speed_stopped_candidate_id = low_speed_stopped_candidate_id_;
     output.low_speed_stopped_observation_count =
       stopped_candidate_confirmation.observation_count;
     output.has_front_vehicle = has_front_vehicle;
@@ -10311,6 +10315,8 @@ private:
       overtake_line_state_.pass_stopped_prediction_lease_start_sec =
         std::numeric_limits<double>::quiet_NaN();
       overtake_line_state_.pass_stopped_prediction_lease_start_distance = 0.0;
+      overtake_line_state_.pass_stopped_prediction_lease_start_speed_mps =
+        std::numeric_limits<double>::quiet_NaN();
       overtake_line_state_.pass_contact_start_sec =
         std::numeric_limits<double>::quiet_NaN();
       overtake_line_state_.pass_contact_start_target_longitudinal =
@@ -10635,6 +10641,8 @@ private:
     overtake_line_state_.pass_stopped_prediction_lease_start_sec =
       std::numeric_limits<double>::quiet_NaN();
     overtake_line_state_.pass_stopped_prediction_lease_start_distance = 0.0;
+    overtake_line_state_.pass_stopped_prediction_lease_start_speed_mps =
+      std::numeric_limits<double>::quiet_NaN();
     overtake_line_state_.pass_contact_start_sec =
       std::numeric_limits<double>::quiet_NaN();
     overtake_line_state_.pass_contact_start_target_longitudinal =
@@ -13328,6 +13336,8 @@ private:
       overtake_line_state_.pass_stopped_prediction_lease_start_sec =
         std::numeric_limits<double>::quiet_NaN();
       overtake_line_state_.pass_stopped_prediction_lease_start_distance = 0.0;
+      overtake_line_state_.pass_stopped_prediction_lease_start_speed_mps =
+        std::numeric_limits<double>::quiet_NaN();
     }
     const auto pass_horizon_replan_trigger = [&]() -> const char * {
         if (predicted_overlap_replan_required) {
@@ -13344,8 +13354,12 @@ private:
         const std::optional<int> strategic_outer_side,
         const std::optional<double> strategic_shift_distance_limit,
         const std::optional<double> frozen_strategic_goal,
+        overtake_core::PassRefreshFailureReason & failure_code,
         std::string & failure_reason) {
-        const auto fail_extension = [&](const char * reason) {
+        failure_code = overtake_core::PassRefreshFailureReason::None;
+        const auto fail_extension = [&failure_code, &failure_reason](
+          const overtake_core::PassRefreshFailureReason code, const char * reason) {
+            failure_code = code;
             failure_reason = reason;
             return false;
           };
@@ -13353,17 +13367,23 @@ private:
           !committed_pass_horizon_enabled ||
           overtake_line_state_.phase != OvertakeLinePhase::Pass)
         {
-          return fail_extension("Pass mission is no longer active");
+          return fail_extension(
+            overtake_core::PassRefreshFailureReason::InvalidInput,
+            "Pass mission is no longer active");
         }
         if (!fresh_dynamic_horizon_available) {
-          return fail_extension("fresh target prediction unavailable");
+          return fail_extension(
+            overtake_core::PassRefreshFailureReason::TargetPredictionUnavailable,
+            "fresh target prediction unavailable");
         }
         if (
           !std::isfinite(locked_target_longitudinal) ||
           !std::isfinite(locked_target_speed) ||
           !overtake_line_state_.fixed_pass_corridor_goal_ey.has_value())
         {
-          return fail_extension("invalid locked target or committed goal");
+          return fail_extension(
+            overtake_core::PassRefreshFailureReason::TargetDiscontinuous,
+            "invalid locked target or committed goal");
         }
         auto continuation_policy =
           overtake_core::resolve_pass_continuation_preflight_policy(
@@ -13395,7 +13415,9 @@ private:
           (frozen_strategic_goal.has_value() &&
           !std::isfinite(frozen_strategic_goal.value())))))
         {
-          return fail_extension("invalid continuous-outer replacement side");
+          return fail_extension(
+            overtake_core::PassRefreshFailureReason::InvalidInput,
+            "invalid continuous-outer replacement side");
         }
         if (strategic_outer_transition) {
           // This is a longitudinally-behind cross-track handoff. Requiring the
@@ -13425,7 +13447,9 @@ private:
           0.0,
           line_cfg.pass_horizon_absolute_time_limit - pass_elapsed);
         if (extension_hard_limit < 1.0 || remaining_absolute_time <= kEps) {
-          return fail_extension("absolute Pass distance/time budget exhausted");
+          return fail_extension(
+            overtake_core::PassRefreshFailureReason::AbsoluteBudgetExhausted,
+            "absolute Pass distance/time budget exhausted");
         }
         const double extension_static_validation_distance =
           extension_hard_limit +
@@ -13453,7 +13477,9 @@ private:
           !std::isfinite(current_target_course_lateral) ||
           !std::isfinite(goal_target_course_lateral))
         {
-          return fail_extension("same-side goal inputs unavailable");
+          return fail_extension(
+            overtake_core::PassRefreshFailureReason::InvalidInput,
+            "same-side goal inputs unavailable");
         }
         double feasible_lower = extension_lb[0] +
           std::max(0.0, line_cfg.min_wall_clearance);
@@ -13474,7 +13500,9 @@ private:
               replacement_goal_m > feasible_upper + kEps ||
               static_cast<double>(replacement_side) * replacement_goal_m <= 0.0)
             {
-              return fail_extension("frozen outer goal outside live wall bounds");
+              return fail_extension(
+                overtake_core::PassRefreshFailureReason::ExecutionCorridorBlocked,
+                "frozen outer goal outside live wall bounds");
             }
           } else if (strategic_outer_transition) {
             const auto rolling_outer_goal =
@@ -13487,7 +13515,9 @@ private:
                 0.05,
                 line_cfg.continuous_outer_replan_max_lateral_adjustment});
             if (!rolling_outer_goal.valid || !rolling_outer_goal.feasible) {
-              return fail_extension("rolling opposite-side outer goal infeasible");
+              return fail_extension(
+                overtake_core::PassRefreshFailureReason::ExecutionCorridorBlocked,
+                "rolling opposite-side outer goal infeasible");
             }
             replacement_goal_m = rolling_outer_goal.goal_m;
           } else {
@@ -13505,7 +13535,9 @@ private:
               continuation_policy.enforce_target_center_separation &&
               !replacement_goal.target_separation_feasible)
             {
-              return fail_extension("no wall-feasible same-side separated goal");
+              return fail_extension(
+                overtake_core::PassRefreshFailureReason::ExecutionCorridorBlocked,
+                "no wall-feasible same-side separated goal");
             }
             if (dynamic_corridor_refresh) {
               const auto dynamic_goal = overtake_core::resolve_dynamic_corridor_goal(
@@ -13521,10 +13553,14 @@ private:
                   line_cfg.dynamic_corridor_refresh_min_lateral_adjustment,
                   line_cfg.dynamic_corridor_refresh_max_lateral_adjustment});
               if (!dynamic_goal.valid || !dynamic_goal.feasible) {
-                return fail_extension("dynamic same-side goal infeasible");
+                return fail_extension(
+                  overtake_core::PassRefreshFailureReason::ExecutionCorridorBlocked,
+                  "dynamic same-side goal infeasible");
               }
               if (!dynamic_goal.update_required) {
-                return fail_extension("dynamic same-side goal change below threshold");
+                return fail_extension(
+                  overtake_core::PassRefreshFailureReason::Other,
+                  "dynamic same-side goal change below threshold");
               }
               replacement_goal_m = dynamic_goal.goal_m;
             } else {
@@ -13543,7 +13579,9 @@ private:
           line_cfg.dynamic_corridor_refresh_max_lateral_adjustment :
           line_cfg.pass_horizon_extension_max_lateral_adjustment) + kEps)
         {
-          return fail_extension("same-side lateral adjustment limit exceeded");
+          return fail_extension(
+            overtake_core::PassRefreshFailureReason::ExecutionCorridorBlocked,
+            "same-side lateral adjustment limit exceeded");
         }
         const double maximum_shift_distance = strategic_outer_transition ?
           std::min({
@@ -13571,6 +13609,7 @@ private:
                  << " m/s, lateral=" << shift_resolution.lateral_adjustment_m
                  << " m, required=" << shift_resolution.required_distance_m
                  << " m, available=" << maximum_shift_distance << " m";
+          failure_code = overtake_core::PassRefreshFailureReason::ExecutionCorridorBlocked;
           failure_reason = reason.str();
           return false;
         }
@@ -13620,7 +13659,9 @@ private:
             cfg.v2x_gap.prediction_longitudinal_acceleration_horizon,
             cfg.v2x_gap.prediction_lateral_velocity_decay_time});
         if (!rollout.valid || !rollout.rear_clear_feasible) {
-          return fail_extension("same-side rollout cannot reach rear clearance");
+          return fail_extension(
+            overtake_core::PassRefreshFailureReason::Other,
+            "same-side rollout cannot reach rear clearance");
         }
         if (
           strategic_outer_transition &&
@@ -13629,6 +13670,7 @@ private:
           std::max(0.0, line_cfg.target_intrusion_guard_distance)))
         {
           return fail_extension(
+            overtake_core::PassRefreshFailureReason::PredictedOverlap,
             "continuous-outer transition reaches side-by-side before shift completion");
         }
         const auto pass_distance = overtake_core::resolve_overtake_dynamic_pass_distance(
@@ -13642,7 +13684,9 @@ private:
             extension_pass_limit,
             extension_pass_limit});
         if (!pass_distance.valid || !pass_distance.feasible) {
-          return fail_extension("dynamic rear-clear Pass distance exceeds budget");
+          return fail_extension(
+            overtake_core::PassRefreshFailureReason::Other,
+            "dynamic rear-clear Pass distance exceeds budget");
         }
         const double rollout_validated_pass_distance_m = longitudinal_only ?
           std::min(
@@ -13665,6 +13709,7 @@ private:
           replacement_side,
           continuation_policy);
         if (!static_preflight.feasible) {
+          failure_code = overtake_core::PassRefreshFailureReason::WallOrBodyFault;
           failure_reason = std::string("static Pass-continuation preflight: ") +
             static_preflight.reason;
           return false;
@@ -13688,7 +13733,9 @@ private:
             planner_generated_monotonic_sec,
             steady_seconds(SteadyClock::now())});
         if (!commit_clock.valid) {
-          return fail_extension("planner commit clock projection invalid");
+          return fail_extension(
+            overtake_core::PassRefreshFailureReason::InvalidInput,
+            "planner commit clock projection invalid");
         }
         const double commit_now_sec = commit_clock.commit_clock_sec;
         overtake_core::SameSideExtensionCommitRequest commit_request;
@@ -13730,6 +13777,7 @@ private:
         const auto commit_resolution =
           overtake_core::evaluate_same_side_extension_commit(commit_request);
         if (!commit_resolution.accepted) {
+          failure_code = overtake_core::PassRefreshFailureReason::Other;
           failure_reason = std::string("atomic commit: ") +
             overtake_core::to_string(commit_resolution.reason);
           return false;
@@ -13904,10 +13952,16 @@ private:
         overtake_line_state_.pass_horizon_fallback_start_distance) : 0.0;
       const bool strict_short_horizon_safe =
         pass_short_horizon_safe && !committed_forward_completion_guard_lost;
+      const auto clear_stopped_side_prediction_lease = [&]() {
+          overtake_line_state_.pass_stopped_prediction_lease_start_sec =
+            std::numeric_limits<double>::quiet_NaN();
+          overtake_line_state_.pass_stopped_prediction_lease_start_distance = 0.0;
+          overtake_line_state_.pass_stopped_prediction_lease_start_speed_mps =
+            std::numeric_limits<double>::quiet_NaN();
+        };
       const auto retain_stopped_side_prediction_lease =
-        [&](const std::string & failure_reason, const char * trigger) {
-          const bool prediction_refresh_failure =
-            failure_reason == "fresh target prediction unavailable";
+        [&](const overtake_core::PassRefreshFailureReason failure_code,
+          const std::string & failure_reason, const char * trigger) {
           const double maximum_lease_sec = std::min(
             std::max(0.0, line_cfg.target_hold_sec),
             std::max(0.0, line_cfg.pass_horizon_hold_max_sec));
@@ -13939,7 +13993,11 @@ private:
               maximum_lease_sec > kEps,
               overtake_line_state_.phase == OvertakeLinePhase::Pass,
               overtake_line_state_.mission_path_frozen,
-              prediction_refresh_failure,
+              failure_code,
+              locked_target_matches && locked_target_progress_continuous &&
+              !behavior_output.locked_target_position_jump,
+              !locked_target_progress_rejected,
+              strict_short_horizon_safe,
               behavior_output.locked_target_current_body_footprints_separated,
               actual_wall_physical_contact,
               actual_wall_margin_blocked,
@@ -13962,22 +14020,31 @@ private:
               line_cfg.pass_horizon_absolute_time_limit,
               line_cfg.pass_horizon_absolute_distance_limit});
           if (!lease_allowed) {
+            if (lease_started) {
+              clear_stopped_side_prediction_lease();
+            }
             return false;
           }
           if (!lease_started) {
             overtake_line_state_.pass_stopped_prediction_lease_start_sec = now_sec;
             overtake_line_state_.pass_stopped_prediction_lease_start_distance =
               pass_traveled;
+            overtake_line_state_.pass_stopped_prediction_lease_start_speed_mps =
+              std::max(0.0, current_speed_mps_);
             RCLCPP_WARN(
               rclcpp::get_logger("mpc_controller"),
               "OvertakeLine stopped-side prediction lease started: "
-              "trigger=%s, target=%s, side=%d, target_s=%.2f, target_v=%.2f, "
+              "trigger=%s, failure=%s/%s, target=%s, side=%d, "
+              "target_s=%.2f, target_v=%.2f, "
+              "ego_v=%.2f, speed_owner=no-positive-accel, "
               "observation_age=%.2f, clear_prediction_age=%.2f, limit=%.2f s/%.2f m, "
               "wp_id=%d",
-              trigger, overtake_line_state_.target_vehicle_id.c_str(),
+              trigger, overtake_core::to_string(failure_code), failure_reason.c_str(),
+              overtake_line_state_.target_vehicle_id.c_str(),
               overtake_line_state_.pass_side_sign,
               overtake_line_state_.target_last_longitudinal,
               overtake_line_state_.target_last_speed,
+              overtake_line_state_.pass_stopped_prediction_lease_start_speed_mps,
               target_observation_age_sec, clear_prediction_age_sec,
               maximum_lease_sec, line_cfg.pass_horizon_hold_max_distance,
               model->wp_id);
@@ -13986,6 +14053,9 @@ private:
         };
       const auto begin_safe_separation =
         [&](const char * trigger, const std::string & failure_reason) {
+          // SafeSeparation becomes the longitudinal owner. Do not retain an
+          // expired prediction-loss speed lease across that ownership change.
+          clear_stopped_side_prediction_lease();
           return begin_pass_safe_separation(
             strict_short_horizon_safe, now_sec, pass_traveled,
             locked_target_longitudinal,
@@ -14442,6 +14512,8 @@ private:
                 0.5});
             const double live_transition_shift_limit =
               live_transition_budget.available_shift_distance_m;
+            overtake_core::PassRefreshFailureReason transition_failure_code{
+              overtake_core::PassRefreshFailureReason::None};
             std::string transition_failure_reason;
             const bool transition_committed =
               live_transition_budget.valid && live_transition_budget.feasible &&
@@ -14452,6 +14524,7 @@ private:
                 std::optional<double>{live_transition_shift_limit},
                 std::optional<double>{
                   overtake_line_state_.mission_outer_transition_goal_ey},
+                transition_failure_code,
                 transition_failure_reason);
             if (!live_transition_budget.valid || !live_transition_budget.feasible) {
               transition_failure_reason =
@@ -14559,12 +14632,15 @@ private:
           // transition would run the full preflight at controller frequency.
           overtake_line_state_.mission_last_outer_replan_sec = now_sec;
           const int source_side = overtake_line_state_.pass_side_sign;
+          overtake_core::PassRefreshFailureReason outer_replan_failure_code{
+            overtake_core::PassRefreshFailureReason::None};
           std::string outer_replan_failure_reason;
           if (try_refresh_committed_pass_horizon(
               false, false,
               std::optional<int>{rolling_outer.desired_outer_side_sign},
               std::optional<double>{rolling_outer.first_opposite_curve_distance_m},
               std::nullopt,
+              outer_replan_failure_code,
               outer_replan_failure_reason))
           {
             // Until ego reaches the curve that motivated this early lateral
@@ -14618,9 +14694,12 @@ private:
       if (dynamic_corridor_refresh_due) {
         // Failed and no-op updates are rate-limited too.
         overtake_line_state_.mission_last_dynamic_corridor_refresh_sec = now_sec;
+        overtake_core::PassRefreshFailureReason dynamic_corridor_failure_code{
+          overtake_core::PassRefreshFailureReason::None};
         std::string dynamic_corridor_failure_reason;
         if (try_refresh_committed_pass_horizon(
             false, true, std::nullopt, std::nullopt, std::nullopt,
+            dynamic_corridor_failure_code,
             dynamic_corridor_failure_reason))
         {
           return update_overtake_line(
@@ -14790,14 +14869,18 @@ private:
           horizon_action ==
           overtake_core::PassHorizonAction::RequestSameSideExtension)
         {
+          overtake_core::PassRefreshFailureReason extension_failure_code{
+            overtake_core::PassRefreshFailureReason::None};
           std::string extension_failure_reason;
           if (!try_refresh_committed_pass_horizon(
               false, false, std::nullopt, std::nullopt, std::nullopt,
+              extension_failure_code,
               extension_failure_reason))
           {
             if (
               !retain_stopped_side_prediction_lease(
-                extension_failure_reason, pass_horizon_replan_trigger()) &&
+                extension_failure_code, extension_failure_reason,
+                pass_horizon_replan_trigger()) &&
               !begin_safe_separation(
                 pass_horizon_replan_trigger(), extension_failure_reason))
             {
@@ -14831,14 +14914,18 @@ private:
           horizon_action ==
           overtake_core::PassHorizonAction::RequestLongitudinalRefresh)
         {
+          overtake_core::PassRefreshFailureReason refresh_failure_code{
+            overtake_core::PassRefreshFailureReason::None};
           std::string refresh_failure_reason;
           if (!try_refresh_committed_pass_horizon(
               true, false, std::nullopt, std::nullopt, std::nullopt,
+              refresh_failure_code,
               refresh_failure_reason))
           {
             if (
               !retain_stopped_side_prediction_lease(
-                refresh_failure_reason, "rear_clear_refresh") &&
+                refresh_failure_code, refresh_failure_reason,
+                "rear_clear_refresh") &&
               !begin_safe_separation(
                 "rear_clear_refresh", refresh_failure_reason))
             {
@@ -14866,11 +14953,6 @@ private:
           }
         } else if (horizon_action == overtake_core::PassHorizonAction::EnterHold) {
           if (
-            !retain_stopped_side_prediction_lease(
-              fresh_dynamic_horizon_available ?
-              "bounded Pass horizon exhausted" :
-              "fresh target prediction unavailable",
-              "horizon_hold") &&
             !begin_safe_separation("horizon_hold", "bounded Pass horizon exhausted"))
           {
             const std::string reason = "Pass horizon hold unsafe; Recovery required";
@@ -14883,16 +14965,7 @@ private:
             return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
           }
         } else if (horizon_action == overtake_core::PassHorizonAction::Abort) {
-          if (
-            retain_stopped_side_prediction_lease(
-              fresh_dynamic_horizon_available ?
-              "Pass horizon hard limit" :
-              "fresh target prediction unavailable",
-              "horizon_abort"))
-          {
-            // Continue the already admitted same-side path only until the
-            // stopped-target observation/prediction lease expires.
-          } else if (rear_clear_confirmed && !return_corridor_blocked) {
+          if (rear_clear_confirmed && !return_corridor_blocked) {
             transition_overtake_line_phase(
               OvertakeLinePhase::Return, now_sec, current_ey,
               overtake_line_state_.pass_side_sign,
@@ -15328,6 +15401,26 @@ private:
       output.target_velocity_reference = safe_separation_velocity_reference.value_or(
         std::min(cfg.v_max, std::max(0.0, locked_target_speed)));
       output.target_velocity_floor = 0.0;
+    }
+    const bool stopped_prediction_lease_active = std::isfinite(
+      overtake_line_state_.pass_stopped_prediction_lease_start_sec);
+    const auto stopped_prediction_lease_speed =
+      overtake_core::resolve_stopped_prediction_lease_speed(
+      overtake_core::StoppedPredictionLeaseSpeedRequest{
+        stopped_prediction_lease_active,
+        std::max(0.0, current_speed_mps_),
+        overtake_line_state_.pass_stopped_prediction_lease_start_speed_mps,
+        output.target_velocity_reference,
+        cfg.v_max});
+    if (stopped_prediction_lease_speed.active) {
+      output.target_velocity_reference =
+        stopped_prediction_lease_speed.target_velocity_reference_mps;
+      output.target_velocity_floor =
+        stopped_prediction_lease_speed.target_velocity_floor_mps;
+      output.closing_speed_limit = std::isfinite(locked_target_speed) ?
+        std::max(
+        0.0, output.target_velocity_reference - std::max(0.0, locked_target_speed)) :
+        0.0;
     }
 
     output.active = true;
@@ -16654,10 +16747,12 @@ private:
         entry_prearm_window.active,
         entry_prearm_hard_guard_clear && !entry_prearm_cooldown_active,
         output.has_front_vehicle,
+        !output.target_vehicle_id.empty() &&
+        output.low_speed_stopped_candidate_id == output.target_vehicle_id,
         output.low_speed_stopped_observation_count,
         cfg.v2x_behavior.low_speed_avoidance_stopped_confirmation_samples,
         output.front_speed,
-        cfg.v2x_behavior.moving_front_speed_threshold,
+        cfg.v2x_behavior.low_speed_avoidance_max_front_speed,
         output.front_distance,
         cfg.v2x_behavior.overtake_guard_min_front_distance});
     if (stationary_blocker_entry_override && !entry_speed_readiness.ready) {

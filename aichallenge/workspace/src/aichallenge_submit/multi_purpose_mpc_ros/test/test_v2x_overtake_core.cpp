@@ -137,6 +137,9 @@ using multi_purpose_mpc_ros::v2x_overtake_core::CommitClockProjectionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassHorizonAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassHorizonDecisionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StoppedSidePassPredictionLeaseRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::PassRefreshFailureReason;
+using multi_purpose_mpc_ros::v2x_overtake_core::StoppedPredictionLeaseSpeedRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_stopped_prediction_lease_speed;
 using multi_purpose_mpc_ros::v2x_overtake_core::RearClearReplanWindowRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassContinuationPreflightPolicyRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassOuterHorizonRequest;
@@ -3510,7 +3513,10 @@ TEST(V2XOvertakeCoreHorizon, LeasesRecentStoppedSideTargetPredictionLoss)
   request.enabled = true;
   request.pass_active = true;
   request.mission_path_frozen = true;
-  request.refresh_failed_for_prediction = true;
+  request.refresh_failure_reason = PassRefreshFailureReason::TargetPredictionUnavailable;
+  request.target_continuous = true;
+  request.course_progress_accepted = true;
+  request.execution_corridor_clear = true;
   request.current_body_footprints_separated = true;
   request.target_speed_mps = 0.13;
   request.maximum_stopped_target_speed_mps = 0.20;
@@ -3536,7 +3542,10 @@ TEST(V2XOvertakeCoreHorizon, StopsPredictionLeaseAtEveryHardBoundary)
   request.enabled = true;
   request.pass_active = true;
   request.mission_path_frozen = true;
-  request.refresh_failed_for_prediction = true;
+  request.refresh_failure_reason = PassRefreshFailureReason::TargetPredictionUnavailable;
+  request.target_continuous = true;
+  request.course_progress_accepted = true;
+  request.execution_corridor_clear = true;
   request.current_body_footprints_separated = true;
   request.target_speed_mps = 0.10;
   request.maximum_stopped_target_speed_mps = 0.20;
@@ -3557,6 +3566,15 @@ TEST(V2XOvertakeCoreHorizon, StopsPredictionLeaseAtEveryHardBoundary)
   request.lease_traveled_m = 3.0;
   EXPECT_FALSE(can_lease_stopped_side_pass_prediction(request));
   request.lease_traveled_m = 0.0;
+  request.target_continuous = false;
+  EXPECT_FALSE(can_lease_stopped_side_pass_prediction(request));
+  request.target_continuous = true;
+  request.course_progress_accepted = false;
+  EXPECT_FALSE(can_lease_stopped_side_pass_prediction(request));
+  request.course_progress_accepted = true;
+  request.execution_corridor_clear = false;
+  EXPECT_FALSE(can_lease_stopped_side_pass_prediction(request));
+  request.execution_corridor_clear = true;
   request.current_body_footprints_separated = false;
   EXPECT_FALSE(can_lease_stopped_side_pass_prediction(request));
   request.current_body_footprints_separated = true;
@@ -3577,6 +3595,87 @@ TEST(V2XOvertakeCoreHorizon, StopsPredictionLeaseAtEveryHardBoundary)
   request.target_longitudinal_m = 0.20;
   request.pass_elapsed_sec = 10.0;
   EXPECT_FALSE(can_lease_stopped_side_pass_prediction(request));
+}
+
+TEST(V2XOvertakeCoreHorizon, GenericRefreshFailuresCannotMasqueradeAsPredictionLoss)
+{
+  StoppedSidePassPredictionLeaseRequest request;
+  request.enabled = true;
+  request.pass_active = true;
+  request.mission_path_frozen = true;
+  request.target_continuous = true;
+  request.course_progress_accepted = true;
+  request.execution_corridor_clear = true;
+  request.current_body_footprints_separated = true;
+  request.target_speed_mps = 0.10;
+  request.maximum_stopped_target_speed_mps = 0.20;
+  request.target_longitudinal_m = 0.20;
+  request.maximum_absolute_target_longitudinal_m = 0.75;
+  request.target_observation_age_sec = 0.10;
+  request.last_clear_prediction_age_sec = 0.10;
+  request.maximum_lease_sec = 0.75;
+  request.maximum_lease_distance_m = 3.0;
+  request.pass_elapsed_sec = 2.0;
+  request.pass_traveled_m = 5.0;
+  request.absolute_pass_time_limit_sec = 10.0;
+  request.absolute_pass_distance_limit_m = 40.0;
+
+  for (const auto reason : {
+      PassRefreshFailureReason::None,
+      PassRefreshFailureReason::TargetDiscontinuous,
+      PassRefreshFailureReason::CourseProgressRejected,
+      PassRefreshFailureReason::ExecutionCorridorBlocked,
+      PassRefreshFailureReason::PredictedOverlap,
+      PassRefreshFailureReason::InvalidInput,
+      PassRefreshFailureReason::AbsoluteBudgetExhausted,
+      PassRefreshFailureReason::WallOrBodyFault,
+      PassRefreshFailureReason::Other})
+  {
+    request.refresh_failure_reason = reason;
+    EXPECT_FALSE(can_lease_stopped_side_pass_prediction(request));
+  }
+}
+
+TEST(V2XOvertakeCoreHorizon, PredictionLeaseOwnsSpeedWithoutAddingAcceleration)
+{
+  StoppedPredictionLeaseSpeedRequest request;
+  request.active = true;
+  request.current_speed_mps = 3.0;
+  request.lease_start_speed_mps = 4.0;
+  request.existing_target_velocity_reference_mps =
+    std::numeric_limits<double>::infinity();
+  request.maximum_speed_mps = 11.11;
+
+  auto result = resolve_stopped_prediction_lease_speed(request);
+  ASSERT_TRUE(result.active);
+  ASSERT_TRUE(result.valid);
+  EXPECT_DOUBLE_EQ(result.target_velocity_reference_mps, 3.0);
+  EXPECT_DOUBLE_EQ(result.target_velocity_floor_mps, 0.0);
+
+  request.current_speed_mps = 5.0;
+  result = resolve_stopped_prediction_lease_speed(request);
+  ASSERT_TRUE(result.valid);
+  EXPECT_DOUBLE_EQ(result.target_velocity_reference_mps, 4.0);
+
+  request.existing_target_velocity_reference_mps = 2.0;
+  result = resolve_stopped_prediction_lease_speed(request);
+  ASSERT_TRUE(result.valid);
+  EXPECT_DOUBLE_EQ(result.target_velocity_reference_mps, 2.0);
+}
+
+TEST(V2XOvertakeCoreHorizon, PredictionLeaseSpeedFailsClosedOnInvalidState)
+{
+  StoppedPredictionLeaseSpeedRequest request;
+  request.active = true;
+  request.current_speed_mps = std::numeric_limits<double>::quiet_NaN();
+  request.lease_start_speed_mps = 3.0;
+  request.maximum_speed_mps = 11.11;
+
+  const auto result = resolve_stopped_prediction_lease_speed(request);
+  EXPECT_TRUE(result.active);
+  EXPECT_FALSE(result.valid);
+  EXPECT_DOUBLE_EQ(result.target_velocity_reference_mps, 0.0);
+  EXPECT_DOUBLE_EQ(result.target_velocity_floor_mps, 0.0);
 }
 
 TEST(V2XOvertakeCoreHorizon, KeepsCommittedOuterSideThroughRearClearHorizon)
@@ -6654,10 +6753,11 @@ TEST(V2XOvertakeCoreEntrySpeed, AllowsConfirmedStationaryBlockerWithCompleteMiss
   request.validated_mission_ready = true;
   request.hard_guard_clear = true;
   request.front_vehicle_seen = true;
+  request.stopped_evidence_matches_target = true;
   request.stopped_observation_count = 3;
   request.required_stopped_observation_count = 3;
   request.front_speed_mps = 0.0;
-  request.maximum_stopped_speed_mps = 1.0;
+  request.maximum_stopped_speed_mps = 0.2;
   request.front_distance_m = 3.5;
   request.minimum_entry_distance_m = 3.0;
 
@@ -6671,10 +6771,11 @@ TEST(V2XOvertakeCoreEntrySpeed, StationaryBlockerOverridePreservesEveryHardGate)
   request.validated_mission_ready = true;
   request.hard_guard_clear = true;
   request.front_vehicle_seen = true;
+  request.stopped_evidence_matches_target = true;
   request.stopped_observation_count = 3;
   request.required_stopped_observation_count = 3;
-  request.front_speed_mps = 0.5;
-  request.maximum_stopped_speed_mps = 1.0;
+  request.front_speed_mps = 0.1;
+  request.maximum_stopped_speed_mps = 0.2;
   request.front_distance_m = 3.0;
   request.minimum_entry_distance_m = 3.0;
 
@@ -6686,17 +6787,57 @@ TEST(V2XOvertakeCoreEntrySpeed, StationaryBlockerOverridePreservesEveryHardGate)
   EXPECT_FALSE(can_override_entry_speed_for_stationary_blocker(request));
   request.hard_guard_clear = true;
 
+  request.stopped_evidence_matches_target = false;
+  EXPECT_FALSE(can_override_entry_speed_for_stationary_blocker(request));
+  request.stopped_evidence_matches_target = true;
+
   request.stopped_observation_count = 2;
   EXPECT_FALSE(can_override_entry_speed_for_stationary_blocker(request));
   request.stopped_observation_count = 3;
 
-  request.front_speed_mps = 1.01;
+  request.front_speed_mps = 0.21;
   EXPECT_FALSE(can_override_entry_speed_for_stationary_blocker(request));
-  request.front_speed_mps = 0.5;
+  request.front_speed_mps = 0.1;
 
   request.front_distance_m = 2.99;
   EXPECT_FALSE(can_override_entry_speed_for_stationary_blocker(request));
   request.front_distance_m = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_FALSE(can_override_entry_speed_for_stationary_blocker(request));
+}
+
+TEST(V2XOvertakeCoreEntrySpeed, RejectsStoppedEvidenceFromDifferentTarget)
+{
+  StationaryBlockerEntryOverrideRequest request;
+  request.enabled = true;
+  request.validated_mission_ready = true;
+  request.hard_guard_clear = true;
+  request.front_vehicle_seen = true;
+  request.stopped_evidence_matches_target = false;
+  request.stopped_observation_count = 3;
+  request.required_stopped_observation_count = 3;
+  request.front_speed_mps = 0.0;
+  request.maximum_stopped_speed_mps = 0.2;
+  request.front_distance_m = 3.5;
+  request.minimum_entry_distance_m = 3.0;
+
+  EXPECT_FALSE(can_override_entry_speed_for_stationary_blocker(request));
+}
+
+TEST(V2XOvertakeCoreEntrySpeed, RejectsTargetAboveConfirmedStoppedThreshold)
+{
+  StationaryBlockerEntryOverrideRequest request;
+  request.enabled = true;
+  request.validated_mission_ready = true;
+  request.hard_guard_clear = true;
+  request.front_vehicle_seen = true;
+  request.stopped_evidence_matches_target = true;
+  request.stopped_observation_count = 3;
+  request.required_stopped_observation_count = 3;
+  request.front_speed_mps = 0.21;
+  request.maximum_stopped_speed_mps = 0.2;
+  request.front_distance_m = 3.5;
+  request.minimum_entry_distance_m = 3.0;
+
   EXPECT_FALSE(can_override_entry_speed_for_stationary_blocker(request));
 }
 

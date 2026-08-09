@@ -908,12 +908,29 @@ struct PassHorizonDecisionRequest
 PassHorizonAction resolve_pass_horizon_action(
   const PassHorizonDecisionRequest & request) noexcept;
 
+enum class PassRefreshFailureReason
+{
+  None,
+  TargetPredictionUnavailable,
+  TargetDiscontinuous,
+  CourseProgressRejected,
+  ExecutionCorridorBlocked,
+  PredictedOverlap,
+  InvalidInput,
+  AbsoluteBudgetExhausted,
+  WallOrBodyFault,
+  Other,
+};
+
 struct StoppedSidePassPredictionLeaseRequest
 {
   bool enabled{false};
   bool pass_active{false};
   bool mission_path_frozen{false};
-  bool refresh_failed_for_prediction{false};
+  PassRefreshFailureReason refresh_failure_reason{PassRefreshFailureReason::None};
+  bool target_continuous{false};
+  bool course_progress_accepted{false};
+  bool execution_corridor_clear{false};
   bool current_body_footprints_separated{false};
   bool actual_wall_physical_contact{false};
   bool actual_wall_margin_blocked{false};
@@ -943,6 +960,34 @@ struct StoppedSidePassPredictionLeaseRequest
 /// path after an external reverse maneuver changes the vehicle pose.
 bool can_lease_stopped_side_pass_prediction(
   const StoppedSidePassPredictionLeaseRequest & request) noexcept;
+
+const char * to_string(PassRefreshFailureReason reason) noexcept;
+
+struct StoppedPredictionLeaseSpeedRequest
+{
+  bool active{false};
+  double current_speed_mps{};
+  double lease_start_speed_mps{};
+  double existing_target_velocity_reference_mps{
+    std::numeric_limits<double>::infinity()};
+  double maximum_speed_mps{std::numeric_limits<double>::infinity()};
+};
+
+struct StoppedPredictionLeaseSpeedResolution
+{
+  bool active{false};
+  bool valid{false};
+  double target_velocity_reference_mps{
+    std::numeric_limits<double>::infinity()};
+  double target_velocity_floor_mps{};
+};
+
+/// Own longitudinal intent while a stopped-side prediction lease is active.
+/// The lease may preserve current forward progress, but must not add positive
+/// acceleration or retain a higher full-attack reference while prediction is
+/// unavailable.
+StoppedPredictionLeaseSpeedResolution resolve_stopped_prediction_lease_speed(
+  const StoppedPredictionLeaseSpeedRequest & request) noexcept;
 
 struct PassContinuationPreflightPolicyRequest
 {
@@ -2490,6 +2535,7 @@ struct StationaryBlockerEntryOverrideRequest
   bool validated_mission_ready{false};
   bool hard_guard_clear{false};
   bool front_vehicle_seen{false};
+  bool stopped_evidence_matches_target{false};
   int stopped_observation_count{0};
   int required_stopped_observation_count{1};
   double front_speed_mps{std::numeric_limits<double>::infinity()};

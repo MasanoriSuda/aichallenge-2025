@@ -7,38 +7,48 @@
     },
     "vehicles": [
         {
-            "vehicle_number": 2,
-            "vehicle_name": "GoKart2",
-            "final_position": 1,
-            "finished": false,
-            "lap_count": 1,
-            "laps": [
-                94.92247009277344
-            ],
-            "min_lap_time": 94.92247009277344,
-            "max_lap_time": 94.92247009277344,
-            "avg_lap_time": 94.92247009277344,
-            "total_lap_time": 94.92247009277344
-        },
-        {
             "vehicle_number": 1,
             "vehicle_name": "GoKart1",
+            "final_position": 1,
+            "finished": false,
+            "lap_count": 5,
+            "laps": [
+                81.67974853515625,
+                45.645545959472659,
+                109.09967803955078,
+                49.646400451660159,
+                60.893802642822269
+            ],
+            "min_lap_time": 45.645545959472659,
+            "max_lap_time": 109.09967803955078,
+            "avg_lap_time": 69.39303588867188,
+            "total_lap_time": 346.9651794433594
+        },
+        {
+            "vehicle_number": 2,
+            "vehicle_name": "GoKart2",
             "final_position": 2,
             "finished": false,
-            "lap_count": 1,
+            "lap_count": 3,
             "laps": [
-                97.49105834960938
+                125.49566650390625,
+                110.16409301757813,
+                114.0369644165039
             ],
-            "min_lap_time": 97.49105834960938,
-            "max_lap_time": 97.49105834960938,
-            "avg_lap_time": 97.49105834960938,
-            "total_lap_time": 97.49105834960938
+            "min_lap_time": 110.16409301757813,
+            "max_lap_time": 125.49566650390625,
+            "avg_lap_time": 116.5655746459961,
+            "total_lap_time": 349.69671630859377
         }
     ],
     "laps": [
-        97.49105834960938
+        81.67974853515625,
+        45.645545959472659,
+        109.09967803955078,
+        49.646400451660159,
+        60.893802642822269
     ],
-    "min_time": 97.49105834960938,
-    "total_lap_time": 97.49105834960938,
-    "num_laps": 1
+    "min_time": 45.645545959472659,
+    "total_lap_time": 346.9651794433594,
+    "num_laps": 5
 }

@@ -131,6 +131,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeBodyClearDeadlineRequest
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeKinematicRolloutRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeKinematicSpeedCapSample;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeDynamicPassDistanceRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeRuntimeContinuationReserveRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicPredictionTimingRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommitClockProjectionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassHorizonAction;
@@ -180,6 +181,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::build_overtake_pass_plan;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_body_clear_deadline;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_kinematic_rollout;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_dynamic_pass_distance;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_runtime_continuation_reserve;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_prediction_timing;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_commit_clock_projection;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_horizon_action;
@@ -3193,19 +3195,35 @@ TEST(V2XOvertakeCoreSpeed, DynamicPassDistanceAddsSpeedDependentConfirmationRese
 {
   const auto feasible = resolve_overtake_dynamic_pass_distance(
     OvertakeDynamicPassDistanceRequest{
-      4.0, 8.0, 20.0, 5.0, 0.2, 0.1, 16.0, 18.0});
+      4.0, 8.0, 20.0, 5.0, 0.2, 0.1, 1.0, 16.0, 19.0});
   ASSERT_TRUE(feasible.valid);
   EXPECT_TRUE(feasible.feasible);
   EXPECT_TRUE(feasible.soft_limit_exceeded);
   EXPECT_NEAR(feasible.confirmation_reserve_distance_m, 1.5, 1e-9);
-  EXPECT_NEAR(feasible.required_pass_distance_m, 17.5, 1e-9);
-  EXPECT_NEAR(feasible.bounded_pass_distance_m, 17.5, 1e-9);
+  EXPECT_NEAR(feasible.required_pass_distance_m, 18.5, 1e-9);
+  EXPECT_NEAR(feasible.bounded_pass_distance_m, 18.5, 1e-9);
 
   const auto over_hard_limit = resolve_overtake_dynamic_pass_distance(
     OvertakeDynamicPassDistanceRequest{
-      4.0, 8.0, 20.0, 5.0, 0.2, 0.1, 16.0, 17.0});
+      4.0, 8.0, 20.0, 5.0, 0.2, 0.1, 1.0, 16.0, 18.0});
   ASSERT_TRUE(over_hard_limit.valid);
   EXPECT_FALSE(over_hard_limit.feasible);
+}
+
+TEST(V2XOvertakeCoreHorizon, AlignsCourseRoleReserveWithRuntimeContinuation)
+{
+  const auto resolution = resolve_overtake_runtime_continuation_reserve(
+    OvertakeRuntimeContinuationReserveRequest{2.0, 3.0, 1.0});
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_NEAR(resolution.reserve_distance_m, 4.0, 1e-9);
+
+  const auto configured_larger = resolve_overtake_runtime_continuation_reserve(
+    OvertakeRuntimeContinuationReserveRequest{5.0, 3.0, 1.0});
+  ASSERT_TRUE(configured_larger.valid);
+  EXPECT_NEAR(configured_larger.reserve_distance_m, 5.0, 1e-9);
+
+  EXPECT_FALSE(resolve_overtake_runtime_continuation_reserve(
+    OvertakeRuntimeContinuationReserveRequest{-1.0, 3.0, 1.0}).valid);
 }
 
 TEST(V2XOvertakeCoreHorizon, UsesSourceAgeForDynamicPredictionExpiry)

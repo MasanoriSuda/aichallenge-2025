@@ -739,6 +739,9 @@ struct OvertakeDynamicPassDistanceRequest
   double rear_clear_ego_speed_mps{};
   double rear_clear_confirm_sec{};
   double control_delay_sec{};
+  /// Keep initial admission consistent with the extra distance reserved by
+  /// runtime SafeSeparation after the predicted rear-clear point.
+  double runtime_completion_reserve_distance_m{};
   double soft_pass_distance_limit_m{std::numeric_limits<double>::infinity()};
   double hard_pass_distance_limit_m{std::numeric_limits<double>::infinity()};
 };
@@ -754,10 +757,30 @@ struct OvertakeDynamicPassDistanceResolution
 };
 
 /// Convert the predicted ego rear-clear position into a Pass hold distance.
-/// The confirmation reserve is speed-dependent and the hard limit is never
-/// silently clamped: an over-budget mission is reported infeasible.
+/// The confirmation reserve is speed-dependent; the runtime completion
+/// reserve aligns initial admission with SafeSeparation. The hard limit is
+/// never silently clamped: an over-budget mission is reported infeasible.
 OvertakeDynamicPassDistanceResolution resolve_overtake_dynamic_pass_distance(
   const OvertakeDynamicPassDistanceRequest & request) noexcept;
+
+struct OvertakeRuntimeContinuationReserveRequest
+{
+  double configured_course_role_reserve_distance_m{};
+  double revalidation_lead_distance_m{};
+  double completion_distance_margin_m{};
+};
+
+struct OvertakeRuntimeContinuationReserveResolution
+{
+  bool valid{false};
+  double reserve_distance_m{};
+};
+
+/// Extend entry-time course-role evaluation through the distance which may be
+/// consumed before runtime revalidation and bounded SafeSeparation complete.
+/// This does not relax any physical guard or absolute Pass limit.
+OvertakeRuntimeContinuationReserveResolution resolve_overtake_runtime_continuation_reserve(
+  const OvertakeRuntimeContinuationReserveRequest & request) noexcept;
 
 struct DynamicPredictionTimingRequest
 {

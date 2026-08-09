@@ -6721,6 +6721,18 @@ struct MPC
           std::max(0.0, current_speed_mps_) * dynamic_validation_time_sec +
           0.5 * std::max(0.0, cfg.a_max) *
           dynamic_validation_time_sec * dynamic_validation_time_sec;
+        const auto runtime_continuation_reserve =
+          overtake_core::resolve_overtake_runtime_continuation_reserve(
+          overtake_core::OvertakeRuntimeContinuationReserveRequest{
+            cfg.v2x_behavior.overtake_line.rear_clear_role_reserve_distance,
+            cfg.v2x_behavior.overtake_line.pass_horizon_revalidation_lead_distance,
+            cfg.v2x_behavior.overtake_line.safe_separation_completion_distance_margin});
+        if (!runtime_continuation_reserve.valid) {
+          assessment.gap_available = false;
+          assessment.reason = "invalid overtake runtime continuation reserve";
+          assessment.guard_reason = assessment.reason;
+          return assessment;
+        }
         if (
           cfg.v2x_behavior.overtake_line.pass_horizon_enabled &&
           (!prediction_timing.valid || prediction_timing.remaining_sec <= kEps))
@@ -6961,6 +6973,8 @@ struct MPC
                   rollout.rear_clear_ego_speed_mps,
                   std::max(0.0, cfg.v2x_behavior.overtake_line.clear_confirm_sec),
                   std::max(0.0, cfg.state_prediction_delay_sec),
+                  cfg.v2x_behavior.overtake_line.
+                  safe_separation_completion_distance_margin,
                   cfg.v2x_behavior.overtake_line.pass_horizon_soft_distance_limit,
                   cfg.v2x_behavior.overtake_line.pass_horizon_absolute_distance_limit}) :
                 overtake_core::OvertakeDynamicPassDistanceResolution{
@@ -7206,7 +7220,7 @@ struct MPC
               if (cfg.v2x_behavior.overtake_line.rear_clear_side_selection_enabled) {
                 const double rear_clear_role_distance_m =
                   rollout.rear_clear_ego_distance_m +
-                  cfg.v2x_behavior.overtake_line.rear_clear_role_reserve_distance;
+                  runtime_continuation_reserve.reserve_distance_m;
                 std::vector<overtake_core::PassOuterHorizonSample> role_samples;
                 role_samples.reserve(static_cast<std::size_t>(static_mission_plan_N));
                 for (int i = 0; i < static_mission_plan_N; ++i) {
@@ -7224,7 +7238,7 @@ struct MPC
                     side,
                     std::max(0.0, cfg.v2x_behavior.overtake_max_curvature),
                     rollout.rear_clear_ego_distance_m,
-                    cfg.v2x_behavior.overtake_line.rear_clear_role_reserve_distance,
+                    runtime_continuation_reserve.reserve_distance_m,
                     std::move(role_samples)});
                 if (!rear_clear_course_role.valid) {
                   ++full_mission_preflight_reject_count;
@@ -7478,6 +7492,8 @@ struct MPC
             overtake_core::to_string(selected_mission.entry_course_role)
                           << ", rear_clear_role=" <<
             overtake_core::to_string(selected_mission.rear_clear_course_role)
+                          << ", runtime_reserve=" <<
+            runtime_continuation_reserve.reserve_distance_m
                           << ", role_reversal_s=" <<
             selected_mission.first_course_role_reversal_distance_m
                           << ", full_track_transition=" <<

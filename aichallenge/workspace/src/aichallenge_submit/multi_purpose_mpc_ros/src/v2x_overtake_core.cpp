@@ -1315,6 +1315,8 @@ OvertakeDynamicPassDistanceResolution resolve_overtake_dynamic_pass_distance(
     request.rear_clear_ego_speed_mps < 0.0 ||
     !std::isfinite(request.rear_clear_confirm_sec) || request.rear_clear_confirm_sec < 0.0 ||
     !std::isfinite(request.control_delay_sec) || request.control_delay_sec < 0.0 ||
+    !std::isfinite(request.runtime_completion_reserve_distance_m) ||
+    request.runtime_completion_reserve_distance_m < 0.0 ||
     !valid_limit(request.soft_pass_distance_limit_m) ||
     !valid_limit(request.hard_pass_distance_limit_m) ||
     request.hard_pass_distance_limit_m + 1e-9 < request.minimum_pass_distance_m)
@@ -1329,13 +1331,36 @@ OvertakeDynamicPassDistanceResolution resolve_overtake_dynamic_pass_distance(
   resolution.required_pass_distance_m = std::max(
     request.minimum_pass_distance_m,
     std::max(0.0, request.rear_clear_ego_distance_m - request.shift_distance_m) +
-    resolution.confirmation_reserve_distance_m);
+    resolution.confirmation_reserve_distance_m +
+    request.runtime_completion_reserve_distance_m);
   resolution.soft_limit_exceeded =
     resolution.required_pass_distance_m > request.soft_pass_distance_limit_m + 1e-9;
   resolution.feasible =
     resolution.required_pass_distance_m <= request.hard_pass_distance_limit_m + 1e-9;
   resolution.bounded_pass_distance_m = resolution.feasible ?
     resolution.required_pass_distance_m : request.hard_pass_distance_limit_m;
+  return resolution;
+}
+
+OvertakeRuntimeContinuationReserveResolution resolve_overtake_runtime_continuation_reserve(
+  const OvertakeRuntimeContinuationReserveRequest & request) noexcept
+{
+  OvertakeRuntimeContinuationReserveResolution resolution;
+  if (
+    !std::isfinite(request.configured_course_role_reserve_distance_m) ||
+    request.configured_course_role_reserve_distance_m < 0.0 ||
+    !std::isfinite(request.revalidation_lead_distance_m) ||
+    request.revalidation_lead_distance_m < 0.0 ||
+    !std::isfinite(request.completion_distance_margin_m) ||
+    request.completion_distance_margin_m < 0.0)
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  resolution.reserve_distance_m = std::max(
+    request.configured_course_role_reserve_distance_m,
+    request.revalidation_lead_distance_m + request.completion_distance_margin_m);
   return resolution;
 }
 

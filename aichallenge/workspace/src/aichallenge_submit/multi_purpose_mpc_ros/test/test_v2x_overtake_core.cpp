@@ -104,6 +104,9 @@ using multi_purpose_mpc_ros::v2x_overtake_core::EarlyShiftOutSideReplanRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OpponentSideReplanAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::OpponentSideReplanReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::OpponentSideReplanRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::PassManeuverCandidateRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OpponentSideManeuverComparisonRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::SideReplanDebounceRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::LockedTargetGeometryObservationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitAdmissionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitAction;
@@ -309,6 +312,9 @@ using multi_purpose_mpc_ros::v2x_overtake_core::score_overtake_side_quality;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_overtake_side_by_quality;
 using multi_purpose_mpc_ros::v2x_overtake_core::selected_pass_side_ordering_conflict;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_early_shiftout_side_replan;
+using multi_purpose_mpc_ros::v2x_overtake_core::assess_pass_maneuver_candidate;
+using multi_purpose_mpc_ros::v2x_overtake_core::compare_opponent_side_maneuvers;
+using multi_purpose_mpc_ros::v2x_overtake_core::update_side_replan_debounce;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_opponent_side_replan;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_observe_locked_target_geometry;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_enter_dynamic_mission_wait;
@@ -3936,6 +3942,23 @@ TEST(V2XOvertakeCoreHorizon, ExpiresWholeMissionWithoutResettingOnPause)
   EXPECT_TRUE(resolution.expired);
 }
 
+TEST(V2XOvertakeCoreHorizon, TerminalBudgetAbortCannotResumeAfterLateralRecovery)
+{
+  const auto budget = resolve_mission_total_budget(
+    MissionTotalBudgetRequest{true, true, 15.0, 15.0, false, false});
+  ASSERT_EQ(budget.action, MissionTotalBudgetAction::Abort);
+  ASSERT_TRUE(budget.expired);
+
+  RecoveryMissionRetentionRequest retention;
+  retention.normal_recovery_complete = true;
+  retention.locked_target_seen = true;
+  retention.target_longitudinal_m = 0.5;
+  retention.return_clear_distance_m = 0.5;
+  retention.mission_retention_forbidden =
+    budget.action == MissionTotalBudgetAction::Abort;
+  EXPECT_FALSE(should_retain_pass_mission_after_recovery(retention));
+}
+
 TEST(V2XOvertakeCoreHorizon, CommitsBoundedSideBySideForwardCompletion)
 {
   CommittedPassForwardCompletionRequest request;
@@ -7003,6 +7026,104 @@ TEST(V2XOvertakeCoreSideReplan, LateralMotionGateKeepsSideForQualityOnlyReplan)
     EarlyShiftOutSideReplanAction::Abort);
 }
 
+TEST(V2XOvertakeCoreOpponentSideReplan, ProjectsControllerAssessmentIntoManeuverMetrics)
+{
+  OvertakeMissionCandidate mission;
+  mission.minimum_path_wall_clearance_m = 0.50;
+  mission.minimum_path_corridor_width_m = 1.20;
+  mission.minimum_return_wall_clearance_m = 0.70;
+  mission.predicted_rear_clear_time_sec = 3.25;
+  mission.predicted_minimum_ego_speed_mps = 4.50;
+
+  PassManeuverCandidateRequest request;
+  request.side = PassSide::Left;
+  request.mission = mission;
+  request.gap_available = true;
+  request.execution_allowed = true;
+  request.runtime_sweep_clear = true;
+
+  auto result = assess_pass_maneuver_candidate(request);
+  ASSERT_TRUE(result.valid);
+  ASSERT_TRUE(result.plan_available);
+  EXPECT_TRUE(result.feasible);
+  EXPECT_NEAR(result.physical_reserve_m, 0.50, 1e-9);
+  EXPECT_NEAR(result.predicted_rear_clear_time_sec, 3.25, 1e-9);
+  EXPECT_NEAR(result.predicted_minimum_speed_mps, 4.50, 1e-9);
+
+  request.side_conflict = true;
+  result = assess_pass_maneuver_candidate(request);
+  EXPECT_TRUE(result.valid);
+  EXPECT_FALSE(result.feasible);
+}
+
+TEST(V2XOvertakeCoreOpponentSideReplan, ComparesManeuversWithExistingReservePolicy)
+{
+  OvertakeMissionCandidate current_mission;
+  current_mission.minimum_path_wall_clearance_m = 0.40;
+  OvertakeMissionCandidate alternate_mission;
+  alternate_mission.minimum_path_wall_clearance_m = 0.70;
+
+  const auto assess = [](const PassSide side, const OvertakeMissionCandidate & mission,
+      const bool sweep_clear) {
+      return assess_pass_maneuver_candidate(
+        PassManeuverCandidateRequest{side, mission, true, true, false, sweep_clear});
+    };
+  const auto current = assess(PassSide::Left, current_mission, true);
+  auto alternate = assess(PassSide::Right, alternate_mission, true);
+
+  auto comparison = compare_opponent_side_maneuvers(
+    OpponentSideManeuverComparisonRequest{current, alternate, 0.35});
+  ASSERT_TRUE(comparison.valid);
+  EXPECT_TRUE(comparison.current_feasible);
+  EXPECT_TRUE(comparison.alternate_feasible);
+  EXPECT_NEAR(comparison.physical_reserve_advantage_m, 0.30, 1e-9);
+  EXPECT_FALSE(comparison.alternate_preferred);
+
+  alternate_mission.minimum_path_wall_clearance_m = 0.75;
+  alternate = assess(PassSide::Right, alternate_mission, true);
+  comparison = compare_opponent_side_maneuvers(
+    OpponentSideManeuverComparisonRequest{current, alternate, 0.35});
+  EXPECT_TRUE(comparison.alternate_preferred);
+
+  const auto blocked_current = assess(PassSide::Left, current_mission, false);
+  comparison = compare_opponent_side_maneuvers(
+    OpponentSideManeuverComparisonRequest{blocked_current, alternate, 0.35});
+  EXPECT_FALSE(comparison.current_feasible);
+  EXPECT_TRUE(comparison.alternate_preferred);
+}
+
+TEST(V2XOvertakeCoreOpponentSideReplan, PreservesContinuousDebounceContract)
+{
+  SideReplanDebounceRequest request;
+  request.opportunity_active = true;
+  request.candidate_side = PassSide::Right;
+  request.now_sec = 10.0;
+
+  auto result = update_side_replan_debounce(request);
+  ASSERT_TRUE(result.valid);
+  EXPECT_TRUE(result.changed);
+  EXPECT_EQ(result.pending_side, PassSide::Right);
+  EXPECT_DOUBLE_EQ(result.pending_since_sec, 10.0);
+  EXPECT_DOUBLE_EQ(result.stable_sec, 0.0);
+
+  request.pending_side = result.pending_side;
+  request.pending_since_sec = result.pending_since_sec;
+  request.now_sec = 10.2;
+  result = update_side_replan_debounce(request);
+  ASSERT_TRUE(result.valid);
+  EXPECT_FALSE(result.changed);
+  EXPECT_NEAR(result.stable_sec, 0.2, 1e-9);
+
+  request.opportunity_active = false;
+  request.now_sec = 10.3;
+  result = update_side_replan_debounce(request);
+  ASSERT_TRUE(result.valid);
+  EXPECT_TRUE(result.changed);
+  EXPECT_EQ(result.pending_side, PassSide::None);
+  EXPECT_TRUE(std::isnan(result.pending_since_sec));
+  EXPECT_DOUBLE_EQ(result.stable_sec, 0.0);
+}
+
 TEST(V2XOvertakeCoreOpponentSideReplan, ReplacesInfeasibleCurrentPlanAfterDebounce)
 {
   OpponentSideReplanRequest request;
@@ -8539,6 +8660,10 @@ TEST(V2XOvertakeCoreRecovery, RetainsOnlyOrdinaryIncompletePassMission)
   EXPECT_FALSE(should_retain_pass_mission_after_recovery(request));
   request.solver_recovery_active = false;
   request.target_position_jump = true;
+  EXPECT_FALSE(should_retain_pass_mission_after_recovery(request));
+
+  request.target_position_jump = false;
+  request.mission_retention_forbidden = true;
   EXPECT_FALSE(should_retain_pass_mission_after_recovery(request));
 }
 

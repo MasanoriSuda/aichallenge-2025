@@ -4719,6 +4719,109 @@ EarlyShiftOutSideReplanResolution resolve_early_shiftout_side_replan(
   return result;
 }
 
+PassManeuverCandidateAssessment assess_pass_maneuver_candidate(
+  const PassManeuverCandidateRequest & request) noexcept
+{
+  PassManeuverCandidateAssessment result;
+  result.side = request.side;
+  result.mission = request.mission;
+  if (!is_configured_side(request.side)) {
+    return result;
+  }
+
+  result.valid = true;
+  result.plan_available = request.mission.has_value();
+  result.feasible = result.plan_available && request.gap_available &&
+    request.execution_allowed && !request.side_conflict && request.runtime_sweep_clear;
+  if (!request.mission.has_value()) {
+    return result;
+  }
+
+  const auto & mission = request.mission.value();
+  double reserve = std::numeric_limits<double>::infinity();
+  if (std::isfinite(mission.minimum_path_wall_clearance_m)) {
+    reserve = std::min(reserve, mission.minimum_path_wall_clearance_m);
+  }
+  if (std::isfinite(mission.minimum_path_corridor_width_m)) {
+    reserve = std::min(reserve, 0.5 * mission.minimum_path_corridor_width_m);
+  }
+  if (std::isfinite(mission.minimum_return_wall_clearance_m)) {
+    reserve = std::min(reserve, mission.minimum_return_wall_clearance_m);
+  }
+  result.physical_reserve_m = reserve;
+  result.predicted_rear_clear_time_sec = mission.predicted_rear_clear_time_sec;
+  result.predicted_minimum_speed_mps = mission.predicted_minimum_ego_speed_mps;
+  return result;
+}
+
+OpponentSideManeuverComparison compare_opponent_side_maneuvers(
+  const OpponentSideManeuverComparisonRequest & request) noexcept
+{
+  OpponentSideManeuverComparison result;
+  if (
+    !request.current.valid || !request.alternate.valid ||
+    !is_configured_side(request.current.side) ||
+    !is_configured_side(request.alternate.side) ||
+    request.current.side == request.alternate.side ||
+    std::isnan(request.current.physical_reserve_m) ||
+    std::isnan(request.alternate.physical_reserve_m) ||
+    !std::isfinite(request.minimum_reserve_advantage_m) ||
+    request.minimum_reserve_advantage_m < 0.0)
+  {
+    return result;
+  }
+
+  result.valid = true;
+  result.current_feasible = request.current.feasible;
+  result.alternate_feasible = request.alternate.feasible;
+  if (
+    std::isinf(request.current.physical_reserve_m) &&
+    std::isinf(request.alternate.physical_reserve_m))
+  {
+    result.physical_reserve_advantage_m = 0.0;
+  } else {
+    result.physical_reserve_advantage_m =
+      request.alternate.physical_reserve_m - request.current.physical_reserve_m;
+  }
+  result.alternate_preferred = result.alternate_feasible &&
+    (!result.current_feasible ||
+    result.physical_reserve_advantage_m + 1e-9 >=
+    request.minimum_reserve_advantage_m);
+  return result;
+}
+
+SideReplanDebounceResolution update_side_replan_debounce(
+  const SideReplanDebounceRequest & request) noexcept
+{
+  SideReplanDebounceResolution result;
+  if (
+    !std::isfinite(request.now_sec) ||
+    (request.opportunity_active && !is_configured_side(request.candidate_side)) ||
+    (request.pending_side != PassSide::None &&
+    !is_configured_side(request.pending_side)) ||
+    (!std::isfinite(request.pending_since_sec) &&
+    !std::isnan(request.pending_since_sec)))
+  {
+    return result;
+  }
+
+  result.valid = true;
+  if (!request.opportunity_active) {
+    result.changed = request.pending_side != PassSide::None;
+    return result;
+  }
+
+  result.pending_side = request.candidate_side;
+  const bool starts_new_opportunity =
+    request.pending_side != request.candidate_side ||
+    !std::isfinite(request.pending_since_sec);
+  result.pending_since_sec = starts_new_opportunity ?
+    request.now_sec : request.pending_since_sec;
+  result.stable_sec = std::max(0.0, request.now_sec - result.pending_since_sec);
+  result.changed = starts_new_opportunity;
+  return result;
+}
+
 OpponentSideReplanResolution resolve_opponent_side_replan(
   const OpponentSideReplanRequest & request) noexcept
 {
@@ -5806,6 +5909,7 @@ bool should_retain_pass_mission_after_recovery(
   const RecoveryMissionRetentionRequest & request) noexcept
 {
   return request.normal_recovery_complete &&
+         !request.mission_retention_forbidden &&
          !request.solver_recovery_active &&
          !request.actual_wall_physical_contact &&
          request.locked_target_seen &&

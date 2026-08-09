@@ -2677,6 +2677,80 @@ enum class OpponentSideReplanAction
   BlockedByNoReturn,
 };
 
+struct PassManeuverCandidateRequest
+{
+  PassSide side{PassSide::None};
+  std::optional<OvertakeMissionCandidate> mission;
+  bool gap_available{false};
+  bool execution_allowed{false};
+  bool side_conflict{false};
+  bool runtime_sweep_clear{false};
+};
+
+struct PassManeuverCandidateAssessment
+{
+  bool valid{false};
+  PassSide side{PassSide::None};
+  bool plan_available{false};
+  bool feasible{false};
+  double physical_reserve_m{-std::numeric_limits<double>::infinity()};
+  double predicted_rear_clear_time_sec{std::numeric_limits<double>::infinity()};
+  double predicted_minimum_speed_mps{std::numeric_limits<double>::infinity()};
+  std::optional<OvertakeMissionCandidate> mission;
+};
+
+/// Project one controller-side Pass assessment into a common maneuver
+/// candidate. This keeps admission unchanged while exposing the longitudinal
+/// metrics required by the next ranking stage.
+PassManeuverCandidateAssessment assess_pass_maneuver_candidate(
+  const PassManeuverCandidateRequest & request) noexcept;
+
+struct OpponentSideManeuverComparisonRequest
+{
+  PassManeuverCandidateAssessment current;
+  PassManeuverCandidateAssessment alternate;
+  double minimum_reserve_advantage_m{0.0};
+};
+
+struct OpponentSideManeuverComparison
+{
+  bool valid{false};
+  bool current_feasible{false};
+  bool alternate_feasible{false};
+  bool alternate_preferred{false};
+  double physical_reserve_advantage_m{-std::numeric_limits<double>::infinity()};
+};
+
+/// Compare the current and opposite Pass candidates using the existing
+/// physical-reserve policy. no-return and target-continuity policy remain in
+/// resolve_opponent_side_replan().
+OpponentSideManeuverComparison compare_opponent_side_maneuvers(
+  const OpponentSideManeuverComparisonRequest & request) noexcept;
+
+struct SideReplanDebounceRequest
+{
+  bool opportunity_active{false};
+  PassSide candidate_side{PassSide::None};
+  PassSide pending_side{PassSide::None};
+  double pending_since_sec{std::numeric_limits<double>::quiet_NaN()};
+  double now_sec{};
+};
+
+struct SideReplanDebounceResolution
+{
+  bool valid{false};
+  bool changed{false};
+  PassSide pending_side{PassSide::None};
+  double pending_since_sec{std::numeric_limits<double>::quiet_NaN()};
+  double stable_sec{0.0};
+};
+
+/// Update the existing continuous-stability debounce without owning any ROS
+/// or controller state. A later change can add dropout hysteresis here without
+/// duplicating FSM logic.
+SideReplanDebounceResolution update_side_replan_debounce(
+  const SideReplanDebounceRequest & request) noexcept;
+
 enum class OpponentSideReplanReason
 {
   None,
@@ -3417,11 +3491,14 @@ struct RecoveryMissionRetentionRequest
   bool overtake_forbidden_waypoint{false};
   double target_longitudinal_m{};
   double return_clear_distance_m{};
+  bool mission_retention_forbidden{false};
 };
 
 /// Preserve the current side/target mission after an ordinary lateral
-/// Recovery only while the same target still requires completion. This is the
-/// existing lifecycle policy extracted from the controller for isolated tests.
+/// Recovery only while the same target still requires completion. A terminal
+/// mission abort (for example the whole-Mission time budget) must not be
+/// resurrected after lateral Recovery completes. This is the existing
+/// lifecycle policy extracted from the controller for isolated tests.
 bool should_retain_pass_mission_after_recovery(
   const RecoveryMissionRetentionRequest & request) noexcept;
 

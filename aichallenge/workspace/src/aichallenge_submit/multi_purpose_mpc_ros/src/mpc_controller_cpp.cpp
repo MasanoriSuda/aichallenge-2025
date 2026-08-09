@@ -13932,6 +13932,17 @@ private:
           overtake_line_state_.mission_outer_strategy_committed ? 1 : 0,
           continuation_policy.footprint_continuation_active ? 1 : 0,
           static_preflight.outer_role_reversal ? 1 : 0);
+        if (std::isfinite(overtake_line_state_.pass_horizon_fallback_start_sec)) {
+          RCLCPP_INFO(
+            rclcpp::get_logger("mpc_controller"),
+            "OvertakeLine Pass refresh replan grace resolved: "
+            "target=%s, side=%d, trigger=%s, wp_id=%d",
+            overtake_line_state_.target_vehicle_id.c_str(),
+            overtake_line_state_.pass_side_sign, replacement_trigger, model->wp_id);
+          overtake_line_state_.pass_horizon_fallback_start_sec =
+            std::numeric_limits<double>::quiet_NaN();
+          overtake_line_state_.pass_horizon_fallback_start_distance = 0.0;
+        }
         return true;
       };
 
@@ -13952,6 +13963,11 @@ private:
         overtake_line_state_.pass_horizon_fallback_start_distance) : 0.0;
       const bool strict_short_horizon_safe =
         pass_short_horizon_safe && !committed_forward_completion_guard_lost;
+      const auto clear_pass_refresh_replan_grace = [&]() {
+          overtake_line_state_.pass_horizon_fallback_start_sec =
+            std::numeric_limits<double>::quiet_NaN();
+          overtake_line_state_.pass_horizon_fallback_start_distance = 0.0;
+        };
       const auto clear_stopped_side_prediction_lease = [&]() {
           overtake_line_state_.pass_stopped_prediction_lease_start_sec =
             std::numeric_limits<double>::quiet_NaN();
@@ -14051,10 +14067,88 @@ private:
           }
           return true;
         };
+      const auto retain_pass_refresh_replan_grace =
+        [&](const overtake_core::PassRefreshFailureReason failure_code,
+          const std::string & failure_reason, const char * trigger) {
+          const bool grace_started = std::isfinite(
+            overtake_line_state_.pass_horizon_fallback_start_sec);
+          const bool grace_allowed =
+            overtake_core::can_hold_pass_during_refresh_replan(
+            overtake_core::PassRefreshReplanGraceRequest{
+              true,
+              overtake_line_state_.phase == OvertakeLinePhase::Pass,
+              overtake_line_state_.mission_path_frozen,
+              failure_code,
+              locked_target_matches && locked_target_progress_continuous &&
+              !behavior_output.locked_target_position_jump,
+              !locked_target_progress_rejected,
+              fresh_dynamic_horizon_available,
+              strict_short_horizon_safe,
+              behavior_output.locked_target_current_body_footprints_separated,
+              behavior_output.locked_target_footprint_prediction_valid,
+              behavior_output.locked_target_predicted_body_footprint_sweep_separated,
+              predicted_overlap_replan_required,
+              behavior_output.overtake_execution_corridor_blocked,
+              actual_wall_physical_contact,
+              actual_wall_margin_blocked,
+              actual_wall_sample_unavailable,
+              behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake,
+              overtake_solver_recovery_active_,
+              fallback_elapsed,
+              fallback_distance,
+              std::max(0.0, line_cfg.pass_horizon_hold_max_sec),
+              std::max(0.0, line_cfg.pass_horizon_hold_max_distance),
+              pass_elapsed,
+              pass_traveled,
+              overtake_line_state_.mission_static_valid_until_pass_m,
+              line_cfg.pass_horizon_absolute_time_limit,
+              line_cfg.pass_horizon_absolute_distance_limit});
+          if (!grace_allowed) {
+            if (grace_started) {
+              RCLCPP_WARN(
+                rclcpp::get_logger("mpc_controller"),
+                "OvertakeLine Pass refresh replan grace ended: "
+                "trigger=%s, failure=%s/%s, target=%s, side=%d, "
+                "elapsed=%.2f/%.2f s, traveled=%.2f/%.2f m, wp_id=%d",
+                trigger, overtake_core::to_string(failure_code),
+                failure_reason.c_str(),
+                overtake_line_state_.target_vehicle_id.c_str(),
+                overtake_line_state_.pass_side_sign,
+                fallback_elapsed, line_cfg.pass_horizon_hold_max_sec,
+                fallback_distance, line_cfg.pass_horizon_hold_max_distance,
+                model->wp_id);
+              clear_pass_refresh_replan_grace();
+            }
+            return false;
+          }
+          if (!grace_started) {
+            overtake_line_state_.pass_horizon_fallback_start_sec = now_sec;
+            overtake_line_state_.pass_horizon_fallback_start_distance = pass_traveled;
+            RCLCPP_WARN(
+              rclcpp::get_logger("mpc_controller"),
+              "OvertakeLine Pass refresh replan grace started: "
+              "trigger=%s, failure=%s/%s, target=%s, side=%d, "
+              "static_remaining=%.2f m, limit=%.2f s/%.2f m, "
+              "speed_owner=normal-pass, wp_id=%d",
+              trigger, overtake_core::to_string(failure_code),
+              failure_reason.c_str(),
+              overtake_line_state_.target_vehicle_id.c_str(),
+              overtake_line_state_.pass_side_sign,
+              std::max(
+                0.0,
+                overtake_line_state_.mission_static_valid_until_pass_m - pass_traveled),
+              line_cfg.pass_horizon_hold_max_sec,
+              line_cfg.pass_horizon_hold_max_distance,
+              model->wp_id);
+          }
+          return true;
+        };
       const auto begin_safe_separation =
         [&](const char * trigger, const std::string & failure_reason) {
           // SafeSeparation becomes the longitudinal owner. Do not retain an
-          // expired prediction-loss speed lease across that ownership change.
+          // expired prediction-loss or refresh-replan lease across that
+          // ownership change.
+          clear_pass_refresh_replan_grace();
           clear_stopped_side_prediction_lease();
           return begin_pass_safe_separation(
             strict_short_horizon_safe, now_sec, pass_traveled,
@@ -14860,6 +14954,22 @@ private:
           now_sec);
         const auto horizon_action =
           overtake_core::resolve_pass_horizon_action(horizon_request);
+        if (
+          (horizon_action == overtake_core::PassHorizonAction::Keep ||
+          horizon_action == overtake_core::PassHorizonAction::Return) &&
+          std::isfinite(overtake_line_state_.pass_horizon_fallback_start_sec))
+        {
+          RCLCPP_INFO(
+            rclcpp::get_logger("mpc_controller"),
+            "OvertakeLine Pass refresh replan grace resolved without replacement: "
+            "target=%s, side=%d, action=%s, wp_id=%d",
+            overtake_line_state_.target_vehicle_id.c_str(),
+            overtake_line_state_.pass_side_sign,
+            horizon_action == overtake_core::PassHorizonAction::Return ?
+            "return" : "committed-prefix-valid",
+            model->wp_id);
+          clear_pass_refresh_replan_grace();
+        }
         if (horizon_action == overtake_core::PassHorizonAction::Return) {
           transition_overtake_line_phase(
             OvertakeLinePhase::Return, now_sec, current_ey,
@@ -14879,6 +14989,9 @@ private:
           {
             if (
               !retain_stopped_side_prediction_lease(
+                extension_failure_code, extension_failure_reason,
+                pass_horizon_replan_trigger()) &&
+              !retain_pass_refresh_replan_grace(
                 extension_failure_code, extension_failure_reason,
                 pass_horizon_replan_trigger()) &&
               !begin_safe_separation(
@@ -14924,6 +15037,9 @@ private:
           {
             if (
               !retain_stopped_side_prediction_lease(
+                refresh_failure_code, refresh_failure_reason,
+                "rear_clear_refresh") &&
+              !retain_pass_refresh_replan_grace(
                 refresh_failure_code, refresh_failure_reason,
                 "rear_clear_refresh") &&
               !begin_safe_separation(
@@ -15522,7 +15638,7 @@ private:
           "recovery_speed=%s, mission_closing=%.2f, closing=%.2f, "
           "unseparated_reserve=%d/protected=%.2f, "
           "cap_release=%d, horizon_release=%d, "
-          "speed_hold=%d, safe_sep=%d/forward=%d/full_speed=%d/"
+          "speed_hold=%d, replan_grace=%d, safe_sep=%d/forward=%d/full_speed=%d/"
           "signed_closing=%.2f/budget=%.2f s/%.2f m, "
           "contact_continue=%d/elapsed=%.2f/progress=%.2f/bias=%.2f, "
           "minimum_motion_cap=%d, footprint_clear=%d, "
@@ -15554,6 +15670,7 @@ private:
           output.front_cap_release_ready ? 1 : 0,
           output.constrained_horizon_front_cap_release_active ? 1 : 0,
           output.committed_pass_speed_hold_active ? 1 : 0,
+          std::isfinite(overtake_line_state_.pass_horizon_fallback_start_sec) ? 1 : 0,
           overtake_line_state_.pass_horizon_safe_separation_active ? 1 : 0,
           safe_separation_forward_escape_active ? 1 : 0,
           safe_separation_full_speed_forward_escape_active ? 1 : 0,

@@ -1637,6 +1637,57 @@ const char * to_string(const PassRefreshFailureReason reason) noexcept
   return "unknown";
 }
 
+bool can_hold_pass_during_refresh_replan(
+  const PassRefreshReplanGraceRequest & request) noexcept
+{
+  const auto finite_non_negative = [](const double value) {
+      return std::isfinite(value) && value >= 0.0;
+    };
+  const auto valid_limit = [](const double value) {
+      return !std::isnan(value) && value >= 0.0;
+    };
+  if (
+    !finite_non_negative(request.grace_elapsed_sec) ||
+    !finite_non_negative(request.grace_traveled_m) ||
+    !finite_non_negative(request.maximum_grace_sec) ||
+    !finite_non_negative(request.maximum_grace_distance_m) ||
+    !finite_non_negative(request.pass_elapsed_sec) ||
+    !finite_non_negative(request.pass_traveled_m) ||
+    !valid_limit(request.static_valid_until_pass_m) ||
+    !valid_limit(request.absolute_pass_time_limit_sec) ||
+    !valid_limit(request.absolute_pass_distance_limit_m))
+  {
+    return false;
+  }
+
+  const bool replannable_failure =
+    request.refresh_failure_reason == PassRefreshFailureReason::ExecutionCorridorBlocked ||
+    request.refresh_failure_reason == PassRefreshFailureReason::WallOrBodyFault ||
+    request.refresh_failure_reason == PassRefreshFailureReason::Other;
+  if (
+    !request.enabled || !request.pass_active || !request.mission_path_frozen ||
+    !replannable_failure || !request.target_continuous ||
+    !request.course_progress_accepted || !request.fresh_target_prediction_available ||
+    !request.short_horizon_safe || !request.current_body_footprints_separated ||
+    !request.footprint_prediction_valid ||
+    !request.predicted_body_footprint_sweep_separated ||
+    request.predicted_overlap_replan_required || request.execution_corridor_blocked ||
+    request.actual_wall_physical_contact || request.actual_wall_margin_blocked ||
+    request.actual_wall_sample_unavailable || request.emergency_brake ||
+    request.solver_recovery_active)
+  {
+    return false;
+  }
+
+  return request.maximum_grace_sec > 1e-9 &&
+         request.maximum_grace_distance_m > 1e-9 &&
+         request.grace_elapsed_sec < request.maximum_grace_sec - 1e-9 &&
+         request.grace_traveled_m < request.maximum_grace_distance_m - 1e-9 &&
+         request.pass_traveled_m < request.static_valid_until_pass_m - 1e-9 &&
+         request.pass_elapsed_sec < request.absolute_pass_time_limit_sec - 1e-9 &&
+         request.pass_traveled_m < request.absolute_pass_distance_limit_m - 1e-9;
+}
+
 StoppedPredictionLeaseSpeedResolution resolve_stopped_prediction_lease_speed(
   const StoppedPredictionLeaseSpeedRequest & request) noexcept
 {

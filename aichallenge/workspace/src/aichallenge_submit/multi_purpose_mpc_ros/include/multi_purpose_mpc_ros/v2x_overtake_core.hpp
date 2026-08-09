@@ -963,6 +963,45 @@ bool can_lease_stopped_side_pass_prediction(
 
 const char * to_string(PassRefreshFailureReason reason) noexcept;
 
+struct PassRefreshReplanGraceRequest
+{
+  bool enabled{false};
+  bool pass_active{false};
+  bool mission_path_frozen{false};
+  PassRefreshFailureReason refresh_failure_reason{PassRefreshFailureReason::None};
+  bool target_continuous{false};
+  bool course_progress_accepted{false};
+  bool fresh_target_prediction_available{false};
+  bool short_horizon_safe{false};
+  bool current_body_footprints_separated{false};
+  bool footprint_prediction_valid{false};
+  bool predicted_body_footprint_sweep_separated{false};
+  bool predicted_overlap_replan_required{false};
+  bool execution_corridor_blocked{false};
+  bool actual_wall_physical_contact{false};
+  bool actual_wall_margin_blocked{false};
+  bool actual_wall_sample_unavailable{false};
+  bool emergency_brake{false};
+  bool solver_recovery_active{false};
+  double grace_elapsed_sec{};
+  double grace_traveled_m{};
+  double maximum_grace_sec{};
+  double maximum_grace_distance_m{};
+  double pass_elapsed_sec{};
+  double pass_traveled_m{};
+  double static_valid_until_pass_m{std::numeric_limits<double>::infinity()};
+  double absolute_pass_time_limit_sec{std::numeric_limits<double>::infinity()};
+  double absolute_pass_distance_limit_m{std::numeric_limits<double>::infinity()};
+};
+
+/// Preserve the currently admitted Pass path for a short, bounded replanning
+/// window.  This never makes a failed replacement path executable: it only
+/// consumes the still-valid prefix of the frozen path while replanning is
+/// retried.  Current/predicted overlap and physical wall faults remain hard
+/// boundaries.
+bool can_hold_pass_during_refresh_replan(
+  const PassRefreshReplanGraceRequest & request) noexcept;
+
 struct StoppedPredictionLeaseSpeedRequest
 {
   bool active{false};

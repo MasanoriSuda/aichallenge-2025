@@ -138,6 +138,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::PassHorizonAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassHorizonDecisionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StoppedSidePassPredictionLeaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassRefreshFailureReason;
+using multi_purpose_mpc_ros::v2x_overtake_core::PassRefreshReplanGraceRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::can_hold_pass_during_refresh_replan;
 using multi_purpose_mpc_ros::v2x_overtake_core::StoppedPredictionLeaseSpeedRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_stopped_prediction_lease_speed;
 using multi_purpose_mpc_ros::v2x_overtake_core::RearClearReplanWindowRequest;
@@ -3634,6 +3636,86 @@ TEST(V2XOvertakeCoreHorizon, GenericRefreshFailuresCannotMasqueradeAsPredictionL
     request.refresh_failure_reason = reason;
     EXPECT_FALSE(can_lease_stopped_side_pass_prediction(request));
   }
+}
+
+TEST(V2XOvertakeCoreHorizon, HoldsSafeFrozenPrefixWhileRefreshReplans)
+{
+  PassRefreshReplanGraceRequest request;
+  request.enabled = true;
+  request.pass_active = true;
+  request.mission_path_frozen = true;
+  request.target_continuous = true;
+  request.course_progress_accepted = true;
+  request.fresh_target_prediction_available = true;
+  request.short_horizon_safe = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+  request.maximum_grace_sec = 1.0;
+  request.maximum_grace_distance_m = 3.0;
+  request.grace_elapsed_sec = 0.25;
+  request.grace_traveled_m = 1.0;
+  request.pass_elapsed_sec = 3.0;
+  request.pass_traveled_m = 10.0;
+  request.static_valid_until_pass_m = 14.0;
+  request.absolute_pass_time_limit_sec = 10.0;
+  request.absolute_pass_distance_limit_m = 40.0;
+
+  for (const auto reason : {
+      PassRefreshFailureReason::ExecutionCorridorBlocked,
+      PassRefreshFailureReason::WallOrBodyFault,
+      PassRefreshFailureReason::Other})
+  {
+    request.refresh_failure_reason = reason;
+    EXPECT_TRUE(can_hold_pass_during_refresh_replan(request));
+  }
+}
+
+TEST(V2XOvertakeCoreHorizon, ReplanGracePreservesEveryHardBoundary)
+{
+  PassRefreshReplanGraceRequest request;
+  request.enabled = true;
+  request.pass_active = true;
+  request.mission_path_frozen = true;
+  request.refresh_failure_reason = PassRefreshFailureReason::WallOrBodyFault;
+  request.target_continuous = true;
+  request.course_progress_accepted = true;
+  request.fresh_target_prediction_available = true;
+  request.short_horizon_safe = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+  request.maximum_grace_sec = 1.0;
+  request.maximum_grace_distance_m = 3.0;
+  request.grace_elapsed_sec = 0.25;
+  request.grace_traveled_m = 1.0;
+  request.pass_elapsed_sec = 3.0;
+  request.pass_traveled_m = 10.0;
+  request.static_valid_until_pass_m = 14.0;
+  request.absolute_pass_time_limit_sec = 10.0;
+  request.absolute_pass_distance_limit_m = 40.0;
+  ASSERT_TRUE(can_hold_pass_during_refresh_replan(request));
+
+  request.predicted_overlap_replan_required = true;
+  EXPECT_FALSE(can_hold_pass_during_refresh_replan(request));
+  request.predicted_overlap_replan_required = false;
+  request.predicted_body_footprint_sweep_separated = false;
+  EXPECT_FALSE(can_hold_pass_during_refresh_replan(request));
+  request.predicted_body_footprint_sweep_separated = true;
+  request.actual_wall_margin_blocked = true;
+  EXPECT_FALSE(can_hold_pass_during_refresh_replan(request));
+  request.actual_wall_margin_blocked = false;
+  request.execution_corridor_blocked = true;
+  EXPECT_FALSE(can_hold_pass_during_refresh_replan(request));
+  request.execution_corridor_blocked = false;
+  request.grace_elapsed_sec = request.maximum_grace_sec;
+  EXPECT_FALSE(can_hold_pass_during_refresh_replan(request));
+  request.grace_elapsed_sec = 0.25;
+  request.pass_traveled_m = request.static_valid_until_pass_m;
+  EXPECT_FALSE(can_hold_pass_during_refresh_replan(request));
+  request.pass_traveled_m = 10.0;
+  request.refresh_failure_reason = PassRefreshFailureReason::TargetPredictionUnavailable;
+  EXPECT_FALSE(can_hold_pass_during_refresh_replan(request));
 }
 
 TEST(V2XOvertakeCoreHorizon, PredictionLeaseOwnsSpeedWithoutAddingAcceleration)

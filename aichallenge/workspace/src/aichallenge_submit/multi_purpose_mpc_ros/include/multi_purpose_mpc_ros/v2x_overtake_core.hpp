@@ -1707,11 +1707,10 @@ struct RecoverableSideContactRequest
 {
   bool enabled{false};
   bool pass_active{false};
-  bool forward_completion_latched{false};
-  bool prior_front_cap_release_active{false};
   bool target_seen{false};
   bool target_continuity_valid{false};
   bool current_body_overlap_confirmed{false};
+  bool near_contact_confirmed{false};
   int pass_side_sign{};
   double target_longitudinal_m{};
   double relative_lateral_m{};
@@ -1735,6 +1734,7 @@ struct RecoverableSideContactResolution
 {
   bool active{false};
   bool initial_progress_grace_active{false};
+  bool near_contact_used{false};
   double lateral_separation_bias_m{};
 };
 
@@ -1743,6 +1743,31 @@ struct RecoverableSideContactResolution
 /// contact remain fail-closed in the caller.
 RecoverableSideContactResolution resolve_recoverable_side_contact(
   const RecoverableSideContactRequest & request) noexcept;
+
+struct WallBoundedContactSeparationRequest
+{
+  bool active{false};
+  int pass_side_sign{};
+  double base_goal_m{};
+  double requested_bias_m{};
+  bool feasible_interval_available{false};
+  double feasible_lower_m{};
+  double feasible_upper_m{};
+};
+
+struct WallBoundedContactSeparationResolution
+{
+  bool valid{false};
+  bool wall_limited{false};
+  double requested_signed_bias_m{};
+  double applied_signed_bias_m{};
+  double goal_m{};
+};
+
+/// Move a committed Pass goal away from the target only within the wall-safe
+/// interval. An invalid or unavailable interval keeps the original goal.
+WallBoundedContactSeparationResolution resolve_wall_bounded_contact_separation(
+  const WallBoundedContactSeparationRequest & request) noexcept;
 
 const char * to_string(SafeSeparationAction action) noexcept;
 

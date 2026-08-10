@@ -2922,9 +2922,9 @@ RecoverableSideContactResolution resolve_recoverable_side_contact(
       return std::isfinite(value) && value >= 0.0;
     };
   if (
-    !request.enabled || !request.pass_active || !request.forward_completion_latched ||
-    !request.prior_front_cap_release_active || !request.target_seen ||
-    !request.target_continuity_valid || !request.current_body_overlap_confirmed ||
+    !request.enabled || !request.pass_active || !request.target_seen ||
+    !request.target_continuity_valid ||
+    (!request.current_body_overlap_confirmed && !request.near_contact_confirmed) ||
     (request.pass_side_sign != -1 && request.pass_side_sign != 1) ||
     !std::isfinite(request.target_longitudinal_m) ||
     !std::isfinite(request.relative_lateral_m) ||
@@ -2961,6 +2961,8 @@ RecoverableSideContactResolution resolve_recoverable_side_contact(
     request.maximum_longitudinal_closing_speed_mps + 1e-9;
   resolution.initial_progress_grace_active =
     request.contact_elapsed_sec <= request.initial_progress_grace_sec + 1e-9;
+  resolution.near_contact_used =
+    request.near_contact_confirmed && !request.current_body_overlap_confirmed;
   resolution.active =
     side_contact_geometry &&
     request.ego_speed_mps >= request.minimum_ego_speed_mps - 1e-9 &&
@@ -2970,6 +2972,60 @@ RecoverableSideContactResolution resolve_recoverable_side_contact(
     resolution.lateral_separation_bias_m =
       static_cast<double>(request.pass_side_sign) * request.lateral_separation_bias_m;
   }
+  return resolution;
+}
+
+WallBoundedContactSeparationResolution resolve_wall_bounded_contact_separation(
+  const WallBoundedContactSeparationRequest & request) noexcept
+{
+  WallBoundedContactSeparationResolution resolution;
+  if (!std::isfinite(request.base_goal_m)) {
+    return resolution;
+  }
+  resolution.goal_m = request.base_goal_m;
+  if (!request.active) {
+    resolution.valid = true;
+    return resolution;
+  }
+  if (
+    (request.pass_side_sign != -1 && request.pass_side_sign != 1) ||
+    !std::isfinite(request.requested_bias_m) || request.requested_bias_m < 0.0)
+  {
+    return resolution;
+  }
+  resolution.requested_signed_bias_m =
+    static_cast<double>(request.pass_side_sign) * request.requested_bias_m;
+  if (
+    !request.feasible_interval_available ||
+    !std::isfinite(request.feasible_lower_m) ||
+    !std::isfinite(request.feasible_upper_m) ||
+    request.feasible_upper_m < request.feasible_lower_m)
+  {
+    resolution.valid = true;
+    resolution.wall_limited = request.requested_bias_m > 1e-9;
+    return resolution;
+  }
+
+  const double requested_goal =
+    request.base_goal_m + resolution.requested_signed_bias_m;
+  double bounded_goal = request.base_goal_m;
+  if (request.pass_side_sign > 0) {
+    // Never use contact separation to pull an already out-of-bounds goal
+    // farther toward the wall.
+    bounded_goal = std::max(
+      request.base_goal_m,
+      std::min(requested_goal, request.feasible_upper_m));
+  } else {
+    bounded_goal = std::min(
+      request.base_goal_m,
+      std::max(requested_goal, request.feasible_lower_m));
+  }
+  resolution.valid = true;
+  resolution.goal_m = bounded_goal;
+  resolution.applied_signed_bias_m = bounded_goal - request.base_goal_m;
+  resolution.wall_limited =
+    std::abs(
+    resolution.applied_signed_bias_m - resolution.requested_signed_bias_m) > 1e-9;
   return resolution;
 }
 

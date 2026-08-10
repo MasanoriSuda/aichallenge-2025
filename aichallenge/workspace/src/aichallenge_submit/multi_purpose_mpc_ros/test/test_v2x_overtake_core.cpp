@@ -166,6 +166,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::MissionAlignedSafeSeparationBudgetRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecoverableSideContactRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::WallBoundedContactSeparationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassForwardCompletionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassShortHorizonGuardRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicCompletionExtensionRequest;
@@ -210,6 +211,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_safe_separation;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   resolve_mission_aligned_safe_separation_budget;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_recoverable_side_contact;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_wall_bounded_contact_separation;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_short_horizon_guard;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_active_pass_elapsed;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_committed_pass_forward_completion;
@@ -4981,8 +4983,6 @@ TEST(V2XOvertakeCoreHorizon, ContinuesOnlyBoundedProgressingSideContact)
   RecoverableSideContactRequest request;
   request.enabled = true;
   request.pass_active = true;
-  request.forward_completion_latched = true;
-  request.prior_front_cap_release_active = true;
   request.target_seen = true;
   request.target_continuity_valid = true;
   request.current_body_overlap_confirmed = true;
@@ -5004,7 +5004,17 @@ TEST(V2XOvertakeCoreHorizon, ContinuesOnlyBoundedProgressingSideContact)
   auto resolution = resolve_recoverable_side_contact(request);
   EXPECT_TRUE(resolution.active);
   EXPECT_TRUE(resolution.initial_progress_grace_active);
+  EXPECT_FALSE(resolution.near_contact_used);
   EXPECT_NEAR(resolution.lateral_separation_bias_m, 0.1, 1e-9);
+
+  request.current_body_overlap_confirmed = false;
+  request.near_contact_confirmed = true;
+  resolution = resolve_recoverable_side_contact(request);
+  EXPECT_TRUE(resolution.active);
+  EXPECT_TRUE(resolution.near_contact_used);
+  request.near_contact_confirmed = false;
+  EXPECT_FALSE(resolve_recoverable_side_contact(request).active);
+  request.current_body_overlap_confirmed = true;
 
   request.contact_elapsed_sec = 0.4;
   resolution = resolve_recoverable_side_contact(request);
@@ -5030,6 +5040,47 @@ TEST(V2XOvertakeCoreHorizon, ContinuesOnlyBoundedProgressingSideContact)
   request.ego_speed_mps = 4.0;
   request.contact_elapsed_sec = 0.81;
   EXPECT_FALSE(resolve_recoverable_side_contact(request).active);
+}
+
+TEST(V2XOvertakeCoreHorizon, BoundsContactSeparationToWallSafeInterval)
+{
+  WallBoundedContactSeparationRequest request;
+  request.active = true;
+  request.pass_side_sign = 1;
+  request.base_goal_m = 1.0;
+  request.requested_bias_m = 0.15;
+  request.feasible_interval_available = true;
+  request.feasible_lower_m = -1.2;
+  request.feasible_upper_m = 1.1;
+
+  auto resolution = resolve_wall_bounded_contact_separation(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.wall_limited);
+  EXPECT_NEAR(resolution.requested_signed_bias_m, 0.15, 1e-9);
+  EXPECT_NEAR(resolution.applied_signed_bias_m, 0.10, 1e-9);
+  EXPECT_NEAR(resolution.goal_m, 1.10, 1e-9);
+
+  request.feasible_upper_m = 1.3;
+  resolution = resolve_wall_bounded_contact_separation(request);
+  EXPECT_FALSE(resolution.wall_limited);
+  EXPECT_NEAR(resolution.applied_signed_bias_m, 0.15, 1e-9);
+  EXPECT_NEAR(resolution.goal_m, 1.15, 1e-9);
+
+  request.pass_side_sign = -1;
+  request.base_goal_m = -1.0;
+  request.feasible_lower_m = -1.08;
+  resolution = resolve_wall_bounded_contact_separation(request);
+  EXPECT_TRUE(resolution.wall_limited);
+  EXPECT_NEAR(resolution.requested_signed_bias_m, -0.15, 1e-9);
+  EXPECT_NEAR(resolution.applied_signed_bias_m, -0.08, 1e-9);
+  EXPECT_NEAR(resolution.goal_m, -1.08, 1e-9);
+
+  request.feasible_interval_available = false;
+  resolution = resolve_wall_bounded_contact_separation(request);
+  EXPECT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.wall_limited);
+  EXPECT_NEAR(resolution.applied_signed_bias_m, 0.0, 1e-9);
+  EXPECT_NEAR(resolution.goal_m, -1.0, 1e-9);
 }
 
 TEST(V2XOvertakeCoreHorizon, BoundsOrRejectsUnsafeSafeSeparation)

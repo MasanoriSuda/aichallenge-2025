@@ -598,7 +598,9 @@ mpc:
   v2x_overtake_contact_continuation_max_lateral_velocity: 0.5 # [m/s]
   v2x_overtake_contact_continuation_min_ego_speed: 0.5 # [m/s]
   v2x_overtake_contact_continuation_progress_fresh_sec: 0.5 # [s]
-  v2x_overtake_contact_continuation_lateral_bias: 0.10 # [m] away from target on the committed side
+  v2x_overtake_contact_continuation_near_gap: 0.05 # [m] confirm side contact before course-frame rectangles overlap
+  v2x_overtake_contact_continuation_near_confirm_sec: 0.10 # [s] reject one-cycle V2X proximity noise
+  v2x_overtake_contact_continuation_lateral_bias: 0.15 # [m] requested separation; runtime clamps it to the wall-safe interval
   v2x_overtake_completion_guard_enabled: true # require enough distance to clear the target before a hard hairpin
   v2x_overtake_completion_hard_curvature: 0.12 # [rad/m] hard hairpin boundary, separate from soft curve policy
   v2x_overtake_completion_lookahead_distance: 80.0 # [m] search limit for the next hard boundary

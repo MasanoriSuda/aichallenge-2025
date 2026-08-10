@@ -5691,6 +5691,95 @@ const char * to_string(const OpponentSideReplanReason reason) noexcept
   return "unknown";
 }
 
+LastFeasibleManeuverResolution resolve_last_feasible_maneuver(
+  const LastFeasibleManeuverRequest & request) noexcept
+{
+  LastFeasibleManeuverResolution resolution;
+  if (!request.enabled || !request.soft_failure) {
+    return resolution;
+  }
+
+  const bool current_age_valid =
+    !request.current_candidate_available ||
+    (std::isfinite(request.current_candidate_age_sec) &&
+    request.current_candidate_age_sec >= 0.0);
+  const bool alternate_age_valid =
+    !request.alternate_candidate_available ||
+    (std::isfinite(request.alternate_candidate_age_sec) &&
+    request.alternate_candidate_age_sec >= 0.0);
+  if (
+    !std::isfinite(request.maximum_candidate_age_sec) ||
+    request.maximum_candidate_age_sec < 0.0 ||
+    !current_age_valid || !alternate_age_valid)
+  {
+    resolution.action = LastFeasibleManeuverAction::Unavailable;
+    return resolution;
+  }
+
+  if (
+    request.hard_fault || !request.target_continuous ||
+    !request.current_body_footprints_separated)
+  {
+    resolution.action = LastFeasibleManeuverAction::BlockedByHardFault;
+    return resolution;
+  }
+
+  const bool current_fresh =
+    request.current_candidate_available &&
+    request.current_candidate_age_sec <= request.maximum_candidate_age_sec;
+  const bool alternate_fresh =
+    request.alternate_candidate_available && request.alternate_candidate_stable &&
+    request.alternate_candidate_age_sec <= request.maximum_candidate_age_sec;
+
+  if (alternate_fresh && request.before_no_return) {
+    resolution.action = LastFeasibleManeuverAction::ReuseAlternate;
+    resolution.replacement_requested = true;
+    resolution.alternate_selected = true;
+    resolution.selected_candidate_age_sec = request.alternate_candidate_age_sec;
+    return resolution;
+  }
+  if (current_fresh) {
+    resolution.action = LastFeasibleManeuverAction::ReuseCurrent;
+    resolution.replacement_requested = true;
+    resolution.selected_candidate_age_sec = request.current_candidate_age_sec;
+    return resolution;
+  }
+  if (alternate_fresh && !request.before_no_return) {
+    resolution.action = LastFeasibleManeuverAction::BlockedByNoReturn;
+    return resolution;
+  }
+  if (
+    request.current_candidate_available ||
+    (request.alternate_candidate_available && request.alternate_candidate_stable))
+  {
+    resolution.action = LastFeasibleManeuverAction::Stale;
+    return resolution;
+  }
+  resolution.action = LastFeasibleManeuverAction::Unavailable;
+  return resolution;
+}
+
+const char * to_string(const LastFeasibleManeuverAction action) noexcept
+{
+  switch (action) {
+    case LastFeasibleManeuverAction::Inactive:
+      return "inactive";
+    case LastFeasibleManeuverAction::ReuseCurrent:
+      return "reuse current";
+    case LastFeasibleManeuverAction::ReuseAlternate:
+      return "reuse alternate";
+    case LastFeasibleManeuverAction::Unavailable:
+      return "unavailable";
+    case LastFeasibleManeuverAction::Stale:
+      return "stale";
+    case LastFeasibleManeuverAction::BlockedByHardFault:
+      return "blocked by hard fault";
+    case LastFeasibleManeuverAction::BlockedByNoReturn:
+      return "blocked by no-return";
+  }
+  return "unknown";
+}
+
 bool should_observe_locked_target_geometry(
   const LockedTargetGeometryObservationRequest & request) noexcept
 {

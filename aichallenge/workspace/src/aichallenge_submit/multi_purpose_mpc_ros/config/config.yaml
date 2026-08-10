@@ -676,7 +676,9 @@ mpc:
   v2x_overtake_opponent_side_replan_max_rear_clear_time_regression_sec: 0.25 # [s]
   v2x_overtake_opponent_side_replan_max_minimum_speed_regression: 0.25 # [m/s]
   v2x_overtake_opponent_side_replan_stable_sec: 0.25 # [s]
-  v2x_overtake_opponent_side_replan_max_count: 1
+  v2x_overtake_opponent_side_replan_max_count: 3 # bounded cross-track replacements per Mission
+  v2x_overtake_last_feasible_maneuver_enabled: true
+  v2x_overtake_last_feasible_maneuver_max_age_sec: 0.50 # [s] cache lifetime for a complete preflighted Mission
   v2x_overtake_line_return_clear_distance: 2.0 # [m] begin Return after nominal vehicle-length clearance
   v2x_overtake_line_phase_hold_time: 0.3      # [s] minimum phase hold before transition
   v2x_overtake_target_hold_sec: 0.75          # [s] keep a locked Pass across a transient V2X classification loss

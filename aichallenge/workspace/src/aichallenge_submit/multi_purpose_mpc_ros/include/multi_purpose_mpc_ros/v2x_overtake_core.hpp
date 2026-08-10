@@ -3204,6 +3204,51 @@ OpponentSideReplanResolution resolve_opponent_side_replan(
 const char * to_string(OpponentSideReplanAction action) noexcept;
 const char * to_string(OpponentSideReplanReason reason) noexcept;
 
+enum class LastFeasibleManeuverAction
+{
+  Inactive,
+  ReuseCurrent,
+  ReuseAlternate,
+  Unavailable,
+  Stale,
+  BlockedByHardFault,
+  BlockedByNoReturn,
+};
+
+struct LastFeasibleManeuverRequest
+{
+  bool enabled{false};
+  bool soft_failure{false};
+  bool hard_fault{false};
+  bool target_continuous{false};
+  bool current_body_footprints_separated{false};
+  bool before_no_return{false};
+  bool current_candidate_available{false};
+  double current_candidate_age_sec{std::numeric_limits<double>::infinity()};
+  bool alternate_candidate_available{false};
+  bool alternate_candidate_stable{false};
+  double alternate_candidate_age_sec{std::numeric_limits<double>::infinity()};
+  double maximum_candidate_age_sec{0.0};
+};
+
+struct LastFeasibleManeuverResolution
+{
+  LastFeasibleManeuverAction action{LastFeasibleManeuverAction::Inactive};
+  bool replacement_requested{false};
+  bool alternate_selected{false};
+  double selected_candidate_age_sec{std::numeric_limits<double>::infinity()};
+};
+
+/// Reuse the newest complete, preflighted Mission when the active Mission
+/// encounters a soft continuation failure. Cross-track replacement remains
+/// bounded by the longitudinal no-return point, while a fresh same-side
+/// candidate may refresh the frozen Mission after no-return. Hard faults,
+/// target discontinuity, and current body overlap always fail closed.
+LastFeasibleManeuverResolution resolve_last_feasible_maneuver(
+  const LastFeasibleManeuverRequest & request) noexcept;
+
+const char * to_string(LastFeasibleManeuverAction action) noexcept;
+
 struct LockedTargetGeometryObservationRequest
 {
   bool shiftout_phase{false};

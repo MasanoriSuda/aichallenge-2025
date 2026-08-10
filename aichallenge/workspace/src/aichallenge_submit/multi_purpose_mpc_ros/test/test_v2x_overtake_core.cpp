@@ -104,6 +104,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::EarlyShiftOutSideReplanRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OpponentSideReplanAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::OpponentSideReplanReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::OpponentSideReplanRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::LastFeasibleManeuverAction;
+using multi_purpose_mpc_ros::v2x_overtake_core::LastFeasibleManeuverRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OpponentSideManeuverPreferenceReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassManeuverCandidateRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OpponentSideManeuverComparisonRequest;
@@ -334,6 +336,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::assess_pass_maneuver_candidate;
 using multi_purpose_mpc_ros::v2x_overtake_core::compare_opponent_side_maneuvers;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_side_replan_debounce;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_opponent_side_replan;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_last_feasible_maneuver;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassCommitStage;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassCommitStageRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::EarlyPassSideIntrusionRiskRequest;
@@ -8285,6 +8288,108 @@ TEST(V2XOvertakeCoreOpponentSideReplan, FallsBackOnlyWhenBothPlansAreUnavailable
   EXPECT_EQ(result.action, OpponentSideReplanAction::FallbackSameSide);
   EXPECT_EQ(result.reason, OpponentSideReplanReason::AlternateUnavailable);
   EXPECT_TRUE(result.eligible);
+}
+
+TEST(V2XOvertakeCoreLastFeasibleManeuver, PrefersStableAlternateBeforeNoReturn)
+{
+  LastFeasibleManeuverRequest request;
+  request.enabled = true;
+  request.soft_failure = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.before_no_return = true;
+  request.current_candidate_available = true;
+  request.current_candidate_age_sec = 0.10;
+  request.alternate_candidate_available = true;
+  request.alternate_candidate_stable = true;
+  request.alternate_candidate_age_sec = 0.20;
+  request.maximum_candidate_age_sec = 0.50;
+
+  const auto result = resolve_last_feasible_maneuver(request);
+  EXPECT_EQ(result.action, LastFeasibleManeuverAction::ReuseAlternate);
+  EXPECT_TRUE(result.replacement_requested);
+  EXPECT_TRUE(result.alternate_selected);
+  EXPECT_DOUBLE_EQ(result.selected_candidate_age_sec, 0.20);
+}
+
+TEST(V2XOvertakeCoreLastFeasibleManeuver, RefreshesSameSideAfterNoReturn)
+{
+  LastFeasibleManeuverRequest request;
+  request.enabled = true;
+  request.soft_failure = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.before_no_return = false;
+  request.current_candidate_available = true;
+  request.current_candidate_age_sec = 0.25;
+  request.alternate_candidate_available = true;
+  request.alternate_candidate_stable = true;
+  request.alternate_candidate_age_sec = 0.10;
+  request.maximum_candidate_age_sec = 0.50;
+
+  const auto result = resolve_last_feasible_maneuver(request);
+  EXPECT_EQ(result.action, LastFeasibleManeuverAction::ReuseCurrent);
+  EXPECT_TRUE(result.replacement_requested);
+  EXPECT_FALSE(result.alternate_selected);
+}
+
+TEST(V2XOvertakeCoreLastFeasibleManeuver, RejectsHardFaultOverlapAndStalePlans)
+{
+  LastFeasibleManeuverRequest request;
+  request.enabled = true;
+  request.soft_failure = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.before_no_return = true;
+  request.current_candidate_available = true;
+  request.current_candidate_age_sec = 0.60;
+  request.maximum_candidate_age_sec = 0.50;
+
+  auto result = resolve_last_feasible_maneuver(request);
+  EXPECT_EQ(result.action, LastFeasibleManeuverAction::Stale);
+  EXPECT_FALSE(result.replacement_requested);
+
+  request.current_candidate_age_sec = 0.10;
+  request.hard_fault = true;
+  result = resolve_last_feasible_maneuver(request);
+  EXPECT_EQ(result.action, LastFeasibleManeuverAction::BlockedByHardFault);
+
+  request.hard_fault = false;
+  request.current_body_footprints_separated = false;
+  result = resolve_last_feasible_maneuver(request);
+  EXPECT_EQ(result.action, LastFeasibleManeuverAction::BlockedByHardFault);
+}
+
+TEST(V2XOvertakeCoreLastFeasibleManeuver, DoesNotCrossTrackAfterNoReturn)
+{
+  LastFeasibleManeuverRequest request;
+  request.enabled = true;
+  request.soft_failure = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.before_no_return = false;
+  request.alternate_candidate_available = true;
+  request.alternate_candidate_stable = true;
+  request.alternate_candidate_age_sec = 0.10;
+  request.maximum_candidate_age_sec = 0.50;
+
+  const auto result = resolve_last_feasible_maneuver(request);
+  EXPECT_EQ(result.action, LastFeasibleManeuverAction::BlockedByNoReturn);
+  EXPECT_FALSE(result.replacement_requested);
+}
+
+TEST(V2XOvertakeCoreLastFeasibleManeuver, AllowsUnavailableCandidatesWithInfiniteAge)
+{
+  LastFeasibleManeuverRequest request;
+  request.enabled = true;
+  request.soft_failure = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.before_no_return = true;
+  request.maximum_candidate_age_sec = 0.50;
+
+  const auto result = resolve_last_feasible_maneuver(request);
+  EXPECT_EQ(result.action, LastFeasibleManeuverAction::Unavailable);
 }
 
 TEST(V2XOvertakeCoreDynamicMissionWait, ObservesPausedFrozenMissionTargetGeometry)

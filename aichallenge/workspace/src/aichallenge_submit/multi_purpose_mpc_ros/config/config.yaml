@@ -448,12 +448,17 @@ mpc:
   v2x_overtake_inner_curve_min_open_distance: 3.0 # [m] otherwise default to a feasible outside curve line
   v2x_overtake_inner_curve_precommit_enabled: true # sim race: lock a verified inside corridor before the short hairpin window closes
   v2x_overtake_inner_curve_precommit_min_relative_speed: -0.5 # [m/s] allow a small initial deficit; reject a front kart pulling away quickly
-  # Every fresh Overtake entry, including minimum-motion and curve attack, passes this final
-  # measured-speed gate. A validated mission pre-arms longitudinal acceleration on the base line;
-  # it no longer bypasses this gate. Existing ShiftOut/Pass/FollowPrepare missions are not re-gated.
+  # Every fresh Overtake entry, including minimum-motion and curve attack, normally passes this
+  # measured-speed gate. A validated mission pre-arms longitudinal acceleration on the base line.
+  # Only confirmed stationary and narrowly scoped close/slow urgent entries may shorten the wait.
+  # Existing ShiftOut/Pass/FollowPrepare missions are not re-gated.
   v2x_overtake_entry_min_relative_speed: 0.3 # [m/s] require measured forward gain before lateral commitment
   v2x_overtake_entry_speed_confirm_sec: 0.3 # [s] prevent one noisy V2X speed sample from admitting a doomed pass
   v2x_overtake_stationary_blocker_entry_override_enabled: true # skip only speed confirmation for a confirmed stopped blocker with a complete current Mission
+  v2x_overtake_slow_blocker_urgent_entry_enabled: true # shorten confirmation only near the 3 m entry boundary with a complete current Mission
+  v2x_overtake_slow_blocker_urgent_entry_max_front_speed: 2.0 # [m/s] do not use the urgent path for a normally moving opponent
+  v2x_overtake_slow_blocker_urgent_entry_distance_margin: 1.0 # [m] urgent window above v2x_overtake_guard_min_front_distance
+  v2x_overtake_slow_blocker_urgent_entry_confirm_sec: 0.05 # [s] retain two-sample-like confirmation at the normal 20 Hz V2X rate
   v2x_overtake_entry_prearm_validation_hold_sec: 0.15 # [s] keep target-scoped speed history across one short planner miss; never execute a stale Mission
   v2x_overtake_entry_prearm_max_sec: 2.0 # [s] one validated target may own longitudinal pre-arm only this long
   v2x_overtake_entry_prearm_max_distance: 8.0 # [m] distance bound for the same target pre-arm window

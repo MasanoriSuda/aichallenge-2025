@@ -288,6 +288,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntryPrearmWindowRequest
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntryPrearmValidationLeaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::NewOvertakeEntryAdmissionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StationaryBlockerEntryOverrideRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::SlowBlockerUrgentEntryOverrideRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_overtake_entry_speed_readiness;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_overtake_entry_prearm_window;
 using multi_purpose_mpc_ros::v2x_overtake_core::
@@ -295,6 +296,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_new_overtake_entry_admission;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   can_override_entry_speed_for_stationary_blocker;
+using multi_purpose_mpc_ros::v2x_overtake_core::can_use_urgent_entry_for_slow_blocker;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   can_hold_committed_execution_after_behavior_drop;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_target_continuity;
@@ -7121,6 +7123,69 @@ TEST(V2XOvertakeCoreEntrySpeed, RejectsTargetAboveConfirmedStoppedThreshold)
   request.minimum_entry_distance_m = 3.0;
 
   EXPECT_FALSE(can_override_entry_speed_for_stationary_blocker(request));
+}
+
+TEST(V2XOvertakeCoreEntrySpeed, AllowsLatestRunSlowBlockerUrgentEntry)
+{
+  SlowBlockerUrgentEntryOverrideRequest request;
+  request.enabled = true;
+  request.validated_mission_ready = true;
+  request.hard_guard_clear = true;
+  request.front_vehicle_seen = true;
+  request.relative_speed_mps = 1.10;
+  request.minimum_relative_speed_mps = 0.3;
+  request.stable_sec = 0.05;
+  request.minimum_stable_sec = 0.05;
+  request.front_speed_mps = 1.69;
+  request.maximum_front_speed_mps = 2.0;
+  request.front_distance_m = 3.55;
+  request.minimum_entry_distance_m = 3.0;
+  request.maximum_entry_distance_m = 4.0;
+
+  EXPECT_TRUE(can_use_urgent_entry_for_slow_blocker(request));
+}
+
+TEST(V2XOvertakeCoreEntrySpeed, SlowBlockerUrgentEntryPreservesNarrowHardGates)
+{
+  SlowBlockerUrgentEntryOverrideRequest request;
+  request.enabled = true;
+  request.validated_mission_ready = true;
+  request.hard_guard_clear = true;
+  request.front_vehicle_seen = true;
+  request.relative_speed_mps = 0.3;
+  request.minimum_relative_speed_mps = 0.3;
+  request.stable_sec = 0.05;
+  request.minimum_stable_sec = 0.05;
+  request.front_speed_mps = 2.0;
+  request.maximum_front_speed_mps = 2.0;
+  request.front_distance_m = 3.0;
+  request.minimum_entry_distance_m = 3.0;
+  request.maximum_entry_distance_m = 4.0;
+
+  request.validated_mission_ready = false;
+  EXPECT_FALSE(can_use_urgent_entry_for_slow_blocker(request));
+  request.validated_mission_ready = true;
+
+  request.hard_guard_clear = false;
+  EXPECT_FALSE(can_use_urgent_entry_for_slow_blocker(request));
+  request.hard_guard_clear = true;
+
+  request.stable_sec = 0.049;
+  EXPECT_FALSE(can_use_urgent_entry_for_slow_blocker(request));
+  request.stable_sec = 0.05;
+
+  request.front_speed_mps = 2.01;
+  EXPECT_FALSE(can_use_urgent_entry_for_slow_blocker(request));
+  request.front_speed_mps = 2.0;
+
+  request.relative_speed_mps = 0.29;
+  EXPECT_FALSE(can_use_urgent_entry_for_slow_blocker(request));
+  request.relative_speed_mps = 0.3;
+
+  request.front_distance_m = 2.99;
+  EXPECT_FALSE(can_use_urgent_entry_for_slow_blocker(request));
+  request.front_distance_m = 4.01;
+  EXPECT_FALSE(can_use_urgent_entry_for_slow_blocker(request));
 }
 
 TEST(V2XOvertakeCoreGuardPhase, KeepsEntryDistanceAndPrepareCheckBeforePassStarts)

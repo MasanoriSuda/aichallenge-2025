@@ -4769,6 +4769,33 @@ bool can_override_entry_speed_for_stationary_blocker(
          request.front_distance_m + 1e-9 >= request.minimum_entry_distance_m;
 }
 
+bool can_use_urgent_entry_for_slow_blocker(
+  const SlowBlockerUrgentEntryOverrideRequest & request) noexcept
+{
+  const bool finite_non_negative_input =
+    std::isfinite(request.relative_speed_mps) &&
+    std::isfinite(request.minimum_relative_speed_mps) &&
+    request.minimum_relative_speed_mps >= 0.0 &&
+    std::isfinite(request.stable_sec) && request.stable_sec >= 0.0 &&
+    std::isfinite(request.minimum_stable_sec) && request.minimum_stable_sec >= 0.0 &&
+    std::isfinite(request.front_speed_mps) && request.front_speed_mps >= 0.0 &&
+    std::isfinite(request.maximum_front_speed_mps) &&
+    request.maximum_front_speed_mps >= 0.0 &&
+    std::isfinite(request.front_distance_m) && request.front_distance_m >= 0.0 &&
+    std::isfinite(request.minimum_entry_distance_m) &&
+    request.minimum_entry_distance_m >= 0.0 &&
+    std::isfinite(request.maximum_entry_distance_m) &&
+    request.maximum_entry_distance_m >= request.minimum_entry_distance_m;
+  return request.enabled && request.validated_mission_ready &&
+         request.hard_guard_clear && request.front_vehicle_seen &&
+         finite_non_negative_input &&
+         request.relative_speed_mps + 1e-9 >= request.minimum_relative_speed_mps &&
+         request.stable_sec + 1e-9 >= request.minimum_stable_sec &&
+         request.front_speed_mps <= request.maximum_front_speed_mps + 1e-9 &&
+         request.front_distance_m + 1e-9 >= request.minimum_entry_distance_m &&
+         request.front_distance_m <= request.maximum_entry_distance_m + 1e-9;
+}
+
 OvertakeGuardPhaseResolution resolve_overtake_guard_phase(
   const OvertakeGuardPhaseRequest & request)
 {

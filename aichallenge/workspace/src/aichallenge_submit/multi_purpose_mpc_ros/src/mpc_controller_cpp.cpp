@@ -1548,6 +1548,10 @@ struct V2XBehaviorConfig
   double overtake_entry_min_relative_speed{0.3};
   double overtake_entry_speed_confirm_sec{0.3};
   bool overtake_stationary_blocker_entry_override_enabled{true};
+  bool overtake_slow_blocker_urgent_entry_enabled{true};
+  double overtake_slow_blocker_urgent_entry_max_front_speed{2.0};
+  double overtake_slow_blocker_urgent_entry_distance_margin{1.0};
+  double overtake_slow_blocker_urgent_entry_confirm_sec{0.05};
   double overtake_entry_prearm_validation_hold_sec{0.15};
   double overtake_entry_prearm_max_sec{2.0};
   double overtake_entry_prearm_max_distance{8.0};
@@ -17094,6 +17098,35 @@ private:
         output.low_speed_stopped_observation_count,
         cfg.v2x_behavior.low_speed_avoidance_stopped_confirmation_samples);
     }
+    const bool slow_blocker_urgent_entry_override =
+      v2x_overtake_core::can_use_urgent_entry_for_slow_blocker(
+      v2x_overtake_core::SlowBlockerUrgentEntryOverrideRequest{
+        cfg.v2x_behavior.overtake_slow_blocker_urgent_entry_enabled,
+        entry_mission_available &&
+        output.validated_overtake_entry_longitudinal_owner &&
+        entry_prearm_window.active,
+        entry_prearm_hard_guard_clear && !entry_prearm_cooldown_active,
+        output.has_front_vehicle,
+        entry_speed_readiness.relative_speed_mps,
+        cfg.v2x_behavior.overtake_entry_min_relative_speed,
+        entry_speed_readiness.stable_sec,
+        cfg.v2x_behavior.overtake_slow_blocker_urgent_entry_confirm_sec,
+        output.front_speed,
+        cfg.v2x_behavior.overtake_slow_blocker_urgent_entry_max_front_speed,
+        output.front_distance,
+        cfg.v2x_behavior.overtake_guard_min_front_distance,
+        cfg.v2x_behavior.overtake_guard_min_front_distance +
+        cfg.v2x_behavior.overtake_slow_blocker_urgent_entry_distance_margin});
+    if (slow_blocker_urgent_entry_override && !entry_speed_readiness.ready) {
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"),
+        "V2X slow blocker urgent Overtake handoff: target=%s, side=%d, "
+        "distance=%.2f m, speed=%.2f m/s, relative=%.2f m/s, stable=%.2f/%.2f s",
+        output.target_vehicle_id.c_str(), entry_mission_side_sign,
+        output.front_distance, output.front_speed,
+        entry_speed_readiness.relative_speed_mps, entry_speed_readiness.stable_sec,
+        cfg.v2x_behavior.overtake_slow_blocker_urgent_entry_confirm_sec);
+    }
     const auto entry_admission =
       v2x_overtake_core::resolve_new_overtake_entry_admission(
       v2x_overtake_core::NewOvertakeEntryAdmissionRequest{
@@ -17104,7 +17137,8 @@ private:
         entry_mission_available &&
         output.validated_overtake_entry_longitudinal_owner &&
         entry_prearm_window.active,
-        output.start_grid_breakout_active || stationary_blocker_entry_override});
+        output.start_grid_breakout_active || stationary_blocker_entry_override ||
+        slow_blocker_urgent_entry_override});
     output.overtake_entry_prearm_active = entry_admission.prearm_active;
     if (!entry_admission.execution_allowed) {
       final_state = V2XBehaviorState::Follow;
@@ -19619,6 +19653,26 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_stationary_blocker_entry_override_enabled =
     mpc["v2x_overtake_stationary_blocker_entry_override_enabled"] ?
     mpc["v2x_overtake_stationary_blocker_entry_override_enabled"].as<bool>() : true;
+  cfg.mpc.v2x_behavior.overtake_slow_blocker_urgent_entry_enabled =
+    mpc["v2x_overtake_slow_blocker_urgent_entry_enabled"] ?
+    mpc["v2x_overtake_slow_blocker_urgent_entry_enabled"].as<bool>() : true;
+  const auto read_non_negative_overtake_entry_value =
+    [&mpc](const char * key, const double fallback) {
+      const double value = mpc[key] ? mpc[key].as<double>() : fallback;
+      if (!std::isfinite(value) || value < 0.0) {
+        throw std::runtime_error(std::string(key) + " must be finite and non-negative");
+      }
+      return value;
+    };
+  cfg.mpc.v2x_behavior.overtake_slow_blocker_urgent_entry_max_front_speed =
+    read_non_negative_overtake_entry_value(
+      "v2x_overtake_slow_blocker_urgent_entry_max_front_speed", 2.0);
+  cfg.mpc.v2x_behavior.overtake_slow_blocker_urgent_entry_distance_margin =
+    read_non_negative_overtake_entry_value(
+      "v2x_overtake_slow_blocker_urgent_entry_distance_margin", 1.0);
+  cfg.mpc.v2x_behavior.overtake_slow_blocker_urgent_entry_confirm_sec =
+    read_non_negative_overtake_entry_value(
+      "v2x_overtake_slow_blocker_urgent_entry_confirm_sec", 0.05);
   const double overtake_entry_prearm_validation_hold_sec =
     mpc["v2x_overtake_entry_prearm_validation_hold_sec"] ?
     mpc["v2x_overtake_entry_prearm_validation_hold_sec"].as<double>() : 0.15;
@@ -20535,12 +20589,18 @@ public:
       RCLCPP_INFO(
         get_logger(),
         "V2X new-entry speed readiness: min_relative_speed=%.2f m/s, confirm=%.2f s, "
-        "stationary_override=%s, prearm=%.2f s/%.2f m, validation_hold=%.2f s, "
+        "stationary_override=%s, slow_urgent=%s/%.2f m/s/%.2f m/%.2f s, "
+        "prearm=%.2f s/%.2f m, validation_hold=%.2f s, "
         "retry_cooldown=%.2f s",
         mpc_cfg_.v2x_behavior.overtake_entry_min_relative_speed,
         mpc_cfg_.v2x_behavior.overtake_entry_speed_confirm_sec,
         mpc_cfg_.v2x_behavior.overtake_stationary_blocker_entry_override_enabled ?
         "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_slow_blocker_urgent_entry_enabled ?
+        "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_slow_blocker_urgent_entry_max_front_speed,
+        mpc_cfg_.v2x_behavior.overtake_slow_blocker_urgent_entry_distance_margin,
+        mpc_cfg_.v2x_behavior.overtake_slow_blocker_urgent_entry_confirm_sec,
         mpc_cfg_.v2x_behavior.overtake_entry_prearm_max_sec,
         mpc_cfg_.v2x_behavior.overtake_entry_prearm_max_distance,
         mpc_cfg_.v2x_behavior.overtake_entry_prearm_validation_hold_sec,

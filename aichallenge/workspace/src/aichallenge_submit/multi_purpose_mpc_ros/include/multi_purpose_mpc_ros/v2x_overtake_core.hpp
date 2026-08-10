@@ -2678,6 +2678,30 @@ struct StationaryBlockerEntryOverrideRequest
 bool can_override_entry_speed_for_stationary_blocker(
   const StationaryBlockerEntryOverrideRequest & request) noexcept;
 
+struct SlowBlockerUrgentEntryOverrideRequest
+{
+  bool enabled{false};
+  bool validated_mission_ready{false};
+  bool hard_guard_clear{false};
+  bool front_vehicle_seen{false};
+  double relative_speed_mps{std::numeric_limits<double>::quiet_NaN()};
+  double minimum_relative_speed_mps{};
+  double stable_sec{};
+  double minimum_stable_sec{};
+  double front_speed_mps{std::numeric_limits<double>::infinity()};
+  double maximum_front_speed_mps{};
+  double front_distance_m{std::numeric_limits<double>::infinity()};
+  double minimum_entry_distance_m{};
+  double maximum_entry_distance_m{};
+};
+
+/// Shorten, but never eliminate, measured-speed confirmation when a complete
+/// current Mission is about to lose its entry window behind a genuinely slow
+/// front vehicle.  This does not weaken Mission, emergency, solver, wall, or
+/// minimum-distance guards owned by the caller.
+bool can_use_urgent_entry_for_slow_blocker(
+  const SlowBlockerUrgentEntryOverrideRequest & request) noexcept;
+
 struct OvertakeGuardPhaseRequest
 {
   bool continuing_overtake{false};

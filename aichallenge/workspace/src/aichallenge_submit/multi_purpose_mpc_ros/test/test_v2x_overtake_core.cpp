@@ -106,6 +106,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OpponentSideReplanReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::OpponentSideReplanRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::LastFeasibleManeuverAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::LastFeasibleManeuverRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::LastFeasibleCacheUpdateRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OpponentSideManeuverPreferenceReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassManeuverCandidateRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OpponentSideManeuverComparisonRequest;
@@ -339,6 +340,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::compare_opponent_side_maneuvers;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_side_replan_debounce;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_opponent_side_replan;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_last_feasible_maneuver;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_last_feasible_cache_update;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassCommitStage;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassCommitStageRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::EarlyPassSideIntrusionRiskRequest;
@@ -8441,6 +8443,51 @@ TEST(V2XOvertakeCoreLastFeasibleManeuver, AllowsUnavailableCandidatesWithInfinit
 
   const auto result = resolve_last_feasible_maneuver(request);
   EXPECT_EQ(result.action, LastFeasibleManeuverAction::Unavailable);
+}
+
+TEST(V2XOvertakeCoreLastFeasibleManeuver, RejectsCandidateAfterMotionFreshnessExpires)
+{
+  LastFeasibleManeuverRequest request;
+  request.enabled = true;
+  request.soft_failure = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.before_no_return = true;
+  request.current_candidate_available = true;
+  request.current_candidate_age_sec = 0.10;
+  request.current_candidate_motion_fresh = false;
+  request.maximum_candidate_age_sec = 0.50;
+
+  const auto result = resolve_last_feasible_maneuver(request);
+  EXPECT_EQ(result.action, LastFeasibleManeuverAction::Stale);
+  EXPECT_FALSE(result.replacement_requested);
+}
+
+TEST(V2XOvertakeCoreLastFeasibleCache, RetainsCandidateAcrossSoftMiss)
+{
+  const auto result = resolve_last_feasible_cache_update(
+    LastFeasibleCacheUpdateRequest{true, false, false});
+  EXPECT_FALSE(result.clear_existing);
+  EXPECT_FALSE(result.store_candidate);
+  EXPECT_TRUE(result.retain_existing);
+}
+
+TEST(V2XOvertakeCoreLastFeasibleCache, ClearsOldIdentityAndStoresFreshCandidate)
+{
+  const auto result = resolve_last_feasible_cache_update(
+    LastFeasibleCacheUpdateRequest{false, false, true});
+  EXPECT_TRUE(result.clear_existing);
+  EXPECT_TRUE(result.store_candidate);
+  EXPECT_FALSE(result.retain_existing);
+}
+
+TEST(V2XOvertakeCoreLastFeasibleCache, ClearsAndRejectsCandidateOnHardInvalidation)
+{
+  const auto result = resolve_last_feasible_cache_update(
+    LastFeasibleCacheUpdateRequest{true, true, true});
+  EXPECT_TRUE(result.clear_existing);
+  EXPECT_FALSE(result.store_candidate);
+  EXPECT_FALSE(result.retain_existing);
 }
 
 TEST(V2XOvertakeCoreDynamicMissionWait, ObservesPausedFrozenMissionTargetGeometry)

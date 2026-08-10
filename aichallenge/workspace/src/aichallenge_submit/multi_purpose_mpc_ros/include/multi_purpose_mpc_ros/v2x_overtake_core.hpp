@@ -3250,9 +3250,11 @@ struct LastFeasibleManeuverRequest
   bool before_no_return{false};
   bool current_candidate_available{false};
   double current_candidate_age_sec{std::numeric_limits<double>::infinity()};
+  bool current_candidate_motion_fresh{true};
   bool alternate_candidate_available{false};
   bool alternate_candidate_stable{false};
   double alternate_candidate_age_sec{std::numeric_limits<double>::infinity()};
+  bool alternate_candidate_motion_fresh{true};
   double maximum_candidate_age_sec{0.0};
 };
 
@@ -3273,6 +3275,26 @@ LastFeasibleManeuverResolution resolve_last_feasible_maneuver(
   const LastFeasibleManeuverRequest & request) noexcept;
 
 const char * to_string(LastFeasibleManeuverAction action) noexcept;
+
+struct LastFeasibleCacheUpdateRequest
+{
+  bool identity_matches{false};
+  bool hard_invalid{false};
+  bool candidate_feasible{false};
+};
+
+struct LastFeasibleCacheUpdateResolution
+{
+  bool clear_existing{false};
+  bool store_candidate{false};
+  bool retain_existing{false};
+};
+
+/// Separate a transient planner miss from an identity/safety invalidation.
+/// A candidate observed after an identity change may be stored immediately,
+/// but a hard-invalid observation is never cached.
+LastFeasibleCacheUpdateResolution resolve_last_feasible_cache_update(
+  const LastFeasibleCacheUpdateRequest & request) noexcept;
 
 struct LockedTargetGeometryObservationRequest
 {

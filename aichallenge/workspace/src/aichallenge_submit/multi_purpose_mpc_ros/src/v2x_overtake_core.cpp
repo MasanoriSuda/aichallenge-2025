@@ -5782,9 +5782,11 @@ LastFeasibleManeuverResolution resolve_last_feasible_maneuver(
 
   const bool current_fresh =
     request.current_candidate_available &&
+    request.current_candidate_motion_fresh &&
     request.current_candidate_age_sec <= request.maximum_candidate_age_sec;
   const bool alternate_fresh =
     request.alternate_candidate_available && request.alternate_candidate_stable &&
+    request.alternate_candidate_motion_fresh &&
     request.alternate_candidate_age_sec <= request.maximum_candidate_age_sec;
 
   if (alternate_fresh && request.before_no_return) {
@@ -5812,6 +5814,17 @@ LastFeasibleManeuverResolution resolve_last_feasible_maneuver(
     return resolution;
   }
   resolution.action = LastFeasibleManeuverAction::Unavailable;
+  return resolution;
+}
+
+LastFeasibleCacheUpdateResolution resolve_last_feasible_cache_update(
+  const LastFeasibleCacheUpdateRequest & request) noexcept
+{
+  LastFeasibleCacheUpdateResolution resolution;
+  resolution.clear_existing = !request.identity_matches || request.hard_invalid;
+  resolution.store_candidate = request.candidate_feasible && !request.hard_invalid;
+  resolution.retain_existing =
+    request.identity_matches && !request.hard_invalid && !request.candidate_feasible;
   return resolution;
 }
 

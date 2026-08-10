@@ -1395,6 +1395,10 @@ struct OvertakeLineConfig
   int opponent_side_replan_max_count{3};
   bool last_feasible_maneuver_enabled{true};
   double last_feasible_maneuver_max_age_sec{0.50};
+  double last_feasible_maneuver_max_ego_distance{1.50};
+  double last_feasible_maneuver_max_ego_lateral_change{0.30};
+  double last_feasible_maneuver_max_target_longitudinal_change{1.00};
+  double last_feasible_maneuver_max_target_lateral_change{0.25};
   double return_clear_distance{4.0};
   double phase_hold_time{0.3};
   double target_hold_sec{0.0};
@@ -2222,11 +2226,29 @@ struct OvertakeLineState
   last_feasible_current_mission;
   double last_feasible_current_mission_sec{
     -std::numeric_limits<double>::infinity()};
+  double last_feasible_current_ego_progress_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double last_feasible_current_ego_lateral_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double last_feasible_current_target_longitudinal_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double last_feasible_current_target_lateral_m{
+    std::numeric_limits<double>::quiet_NaN()};
   std::optional<overtake_core::OvertakeMissionCandidate>
   last_feasible_alternate_mission;
   double last_feasible_alternate_mission_sec{
     -std::numeric_limits<double>::infinity()};
+  double last_feasible_alternate_ego_progress_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double last_feasible_alternate_ego_lateral_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double last_feasible_alternate_target_longitudinal_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double last_feasible_alternate_target_lateral_m{
+    std::numeric_limits<double>::quiet_NaN()};
   bool last_feasible_alternate_mission_stable{false};
+  bool last_feasible_current_soft_miss_active{false};
+  bool last_feasible_alternate_soft_miss_active{false};
   std::string last_feasible_target_vehicle_id;
   std::uint64_t last_feasible_source_generation{0U};
   bool dynamic_mission_wait_active{false};
@@ -8425,42 +8447,130 @@ struct MPC
         overtake_line_state_.target_vehicle_id &&
         overtake_line_state_.last_feasible_source_generation ==
         overtake_line_state_.mission_generation;
-      if (!last_feasible_cache_matches_active_mission) {
-        overtake_line_state_.last_feasible_current_mission.reset();
-        overtake_line_state_.last_feasible_current_mission_sec =
-          -std::numeric_limits<double>::infinity();
-        overtake_line_state_.last_feasible_alternate_mission.reset();
-        overtake_line_state_.last_feasible_alternate_mission_sec =
-          -std::numeric_limits<double>::infinity();
-        overtake_line_state_.last_feasible_alternate_mission_stable = false;
+      const bool last_feasible_cache_hard_invalid =
+        !opponent_side_replan_target_continuous ||
+        output.locked_target_position_jump ||
+        (!output.locked_target_current_body_footprints_separated &&
+        !output.recoverable_side_contact_active);
+      const auto current_cache_update =
+        overtake_core::resolve_last_feasible_cache_update(
+        overtake_core::LastFeasibleCacheUpdateRequest{
+          last_feasible_cache_matches_active_mission,
+          last_feasible_cache_hard_invalid,
+          current_plan_feasible && current_maneuver.mission.has_value()});
+      const auto alternate_cache_update =
+        overtake_core::resolve_last_feasible_cache_update(
+        overtake_core::LastFeasibleCacheUpdateRequest{
+          last_feasible_cache_matches_active_mission,
+          last_feasible_cache_hard_invalid,
+          alternate_plan_feasible && alternate_maneuver.mission.has_value()});
+      if (current_cache_update.clear_existing || alternate_cache_update.clear_existing) {
+        clear_last_feasible_maneuver_cache(
+          last_feasible_cache_hard_invalid ?
+          "hard-invalid observation" : "Mission identity changed");
         overtake_line_state_.last_feasible_target_vehicle_id =
           overtake_line_state_.target_vehicle_id;
         overtake_line_state_.last_feasible_source_generation =
           overtake_line_state_.mission_generation;
       }
-      if (current_plan_feasible && current_maneuver.mission.has_value()) {
+      const double cache_ego_progress_m = overtake_mission_progress_traveled();
+      const double cache_ego_lateral_m = model->spatial_state.e_y;
+      const double cache_target_longitudinal_m = output.locked_target_longitudinal;
+      const double cache_target_lateral_m = output.locked_target_lateral;
+      if (current_cache_update.store_candidate) {
+        const bool cache_created =
+          !overtake_line_state_.last_feasible_current_mission.has_value();
         output.opponent_side_replan_current_mission = current_maneuver.mission;
         overtake_line_state_.last_feasible_current_mission = current_maneuver.mission;
         overtake_line_state_.last_feasible_current_mission_sec = now_sec;
-      } else {
-        // Preserve a candidate between ranking ticks, but never carry it past
-        // an explicit infeasible result from a newer assessment.
-        overtake_line_state_.last_feasible_current_mission.reset();
-        overtake_line_state_.last_feasible_current_mission_sec =
-          -std::numeric_limits<double>::infinity();
+        overtake_line_state_.last_feasible_current_ego_progress_m =
+          cache_ego_progress_m;
+        overtake_line_state_.last_feasible_current_ego_lateral_m = cache_ego_lateral_m;
+        overtake_line_state_.last_feasible_current_target_longitudinal_m =
+          cache_target_longitudinal_m;
+        overtake_line_state_.last_feasible_current_target_lateral_m =
+          cache_target_lateral_m;
+        overtake_line_state_.last_feasible_current_soft_miss_active = false;
+        if (cache_created && cfg.v2x_behavior.overtake_line.debug_log_enabled) {
+          RCLCPP_INFO(
+            rclcpp::get_logger("mpc_controller"),
+            "OvertakeLine last-feasible current cache created: target=%s, "
+            "side=%d, generation=%lu, wp_id=%d",
+            overtake_line_state_.target_vehicle_id.c_str(),
+            current_maneuver.mission->pass_side_sign,
+            static_cast<unsigned long>(overtake_line_state_.mission_generation),
+            model->wp_id);
+        }
+      } else if (
+        current_cache_update.retain_existing &&
+        overtake_line_state_.last_feasible_current_mission.has_value() &&
+        !overtake_line_state_.last_feasible_current_soft_miss_active)
+      {
+        overtake_line_state_.last_feasible_current_soft_miss_active = true;
+        if (cfg.v2x_behavior.overtake_line.debug_log_enabled) {
+          RCLCPP_INFO(
+            rclcpp::get_logger("mpc_controller"),
+            "OvertakeLine last-feasible current cache retained across soft miss: "
+            "target=%s, generation=%lu, age=%.2f s, wp_id=%d",
+            overtake_line_state_.target_vehicle_id.c_str(),
+            static_cast<unsigned long>(overtake_line_state_.mission_generation),
+            std::max(
+              0.0, now_sec - overtake_line_state_.last_feasible_current_mission_sec),
+            model->wp_id);
+        }
       }
-      if (alternate_plan_feasible && alternate_maneuver.mission.has_value()) {
+      if (alternate_cache_update.store_candidate) {
+        const bool cache_created =
+          !overtake_line_state_.last_feasible_alternate_mission.has_value();
+        const bool stable_became_available =
+          !overtake_line_state_.last_feasible_alternate_mission_stable &&
+          output.opponent_side_replan_ready;
         output.opponent_side_replan_goal_ey = alternate_assessment.corridor_center_ey;
         output.opponent_side_replan_mission = alternate_maneuver.mission;
         overtake_line_state_.last_feasible_alternate_mission = alternate_maneuver.mission;
         overtake_line_state_.last_feasible_alternate_mission_sec = now_sec;
+        overtake_line_state_.last_feasible_alternate_ego_progress_m =
+          cache_ego_progress_m;
+        overtake_line_state_.last_feasible_alternate_ego_lateral_m = cache_ego_lateral_m;
+        overtake_line_state_.last_feasible_alternate_target_longitudinal_m =
+          cache_target_longitudinal_m;
+        overtake_line_state_.last_feasible_alternate_target_lateral_m =
+          cache_target_lateral_m;
         overtake_line_state_.last_feasible_alternate_mission_stable =
           output.opponent_side_replan_ready;
-      } else {
-        overtake_line_state_.last_feasible_alternate_mission.reset();
-        overtake_line_state_.last_feasible_alternate_mission_sec =
-          -std::numeric_limits<double>::infinity();
-        overtake_line_state_.last_feasible_alternate_mission_stable = false;
+        overtake_line_state_.last_feasible_alternate_soft_miss_active = false;
+        if (
+          (cache_created || stable_became_available) &&
+          cfg.v2x_behavior.overtake_line.debug_log_enabled)
+        {
+          RCLCPP_INFO(
+            rclcpp::get_logger("mpc_controller"),
+            "OvertakeLine last-feasible alternate cache %s: target=%s, "
+            "side=%d, stable=%d, generation=%lu, wp_id=%d",
+            cache_created ? "created" : "became stable",
+            overtake_line_state_.target_vehicle_id.c_str(),
+            alternate_maneuver.mission->pass_side_sign,
+            output.opponent_side_replan_ready ? 1 : 0,
+            static_cast<unsigned long>(overtake_line_state_.mission_generation),
+            model->wp_id);
+        }
+      } else if (
+        alternate_cache_update.retain_existing &&
+        overtake_line_state_.last_feasible_alternate_mission.has_value() &&
+        !overtake_line_state_.last_feasible_alternate_soft_miss_active)
+      {
+        overtake_line_state_.last_feasible_alternate_soft_miss_active = true;
+        if (cfg.v2x_behavior.overtake_line.debug_log_enabled) {
+          RCLCPP_INFO(
+            rclcpp::get_logger("mpc_controller"),
+            "OvertakeLine last-feasible alternate cache retained across soft miss: "
+            "target=%s, generation=%lu, age=%.2f s, wp_id=%d",
+            overtake_line_state_.target_vehicle_id.c_str(),
+            static_cast<unsigned long>(overtake_line_state_.mission_generation),
+            std::max(
+              0.0, now_sec - overtake_line_state_.last_feasible_alternate_mission_sec),
+            model->wp_id);
+        }
       }
     } else if (!opponent_side_replan_assessment_allowed) {
       overtake_line_state_.opponent_side_replan_pending_sign = 0;
@@ -10816,6 +10926,50 @@ private:
     overtake_line_state_.mission_retention_forbidden = false;
   }
 
+  void clear_last_feasible_maneuver_cache(const std::string & reason)
+  {
+    const bool had_cache =
+      overtake_line_state_.last_feasible_current_mission.has_value() ||
+      overtake_line_state_.last_feasible_alternate_mission.has_value();
+    overtake_line_state_.last_feasible_current_mission.reset();
+    overtake_line_state_.last_feasible_current_mission_sec =
+      -std::numeric_limits<double>::infinity();
+    overtake_line_state_.last_feasible_current_ego_progress_m =
+      std::numeric_limits<double>::quiet_NaN();
+    overtake_line_state_.last_feasible_current_ego_lateral_m =
+      std::numeric_limits<double>::quiet_NaN();
+    overtake_line_state_.last_feasible_current_target_longitudinal_m =
+      std::numeric_limits<double>::quiet_NaN();
+    overtake_line_state_.last_feasible_current_target_lateral_m =
+      std::numeric_limits<double>::quiet_NaN();
+    overtake_line_state_.last_feasible_alternate_mission.reset();
+    overtake_line_state_.last_feasible_alternate_mission_sec =
+      -std::numeric_limits<double>::infinity();
+    overtake_line_state_.last_feasible_alternate_ego_progress_m =
+      std::numeric_limits<double>::quiet_NaN();
+    overtake_line_state_.last_feasible_alternate_ego_lateral_m =
+      std::numeric_limits<double>::quiet_NaN();
+    overtake_line_state_.last_feasible_alternate_target_longitudinal_m =
+      std::numeric_limits<double>::quiet_NaN();
+    overtake_line_state_.last_feasible_alternate_target_lateral_m =
+      std::numeric_limits<double>::quiet_NaN();
+    overtake_line_state_.last_feasible_alternate_mission_stable = false;
+    overtake_line_state_.last_feasible_current_soft_miss_active = false;
+    overtake_line_state_.last_feasible_alternate_soft_miss_active = false;
+    if (
+      had_cache && cfg.v2x_behavior.overtake_line.debug_log_enabled &&
+      model != nullptr)
+    {
+      RCLCPP_WARN(
+        rclcpp::get_logger("mpc_controller"),
+        "OvertakeLine last-feasible cache cleared: target=%s, generation=%lu, "
+        "reason=%s, wp_id=%d",
+        overtake_line_state_.target_vehicle_id.c_str(),
+        static_cast<unsigned long>(overtake_line_state_.mission_generation),
+        reason.c_str(), model->wp_id);
+    }
+  }
+
   void invalidate_current_overtake_mission(const std::string & reason)
   {
     if (
@@ -11120,7 +11274,7 @@ private:
     const bool valid_replacement_side =
       (candidate.pass_side_sign == -1 || candidate.pass_side_sign == 1) &&
       (side_changed ||
-      (allow_same_side_replacement && current_overtake_mission_invalidated()));
+      allow_same_side_replacement);
     if (
       !active_execution || !overtake_line_state_.mission_path_frozen ||
       committed_state_blocks_replacement ||
@@ -11160,11 +11314,26 @@ private:
     const int prior_dynamic_corridor_refresh_count =
       overtake_line_state_.mission_dynamic_corridor_refresh_count;
 
+    // The replacement is transactional: all fallible preparation above is
+    // read-only, and the complete state is restored if the commit cannot
+    // produce the already validated PassPlan.
+    const OvertakeLineState rollback_state = overtake_line_state_;
+    const int rollback_locked_side_sign = overtake_locked_side_sign_;
     freeze_selected_overtake_mission(candidate, now_sec);
     if (
       !overtake_line_state_.mission_plan.has_value() ||
       !overtake_line_state_.mission_plan->valid)
     {
+      overtake_line_state_ = rollback_state;
+      overtake_locked_side_sign_ = rollback_locked_side_sign;
+      RCLCPP_ERROR(
+        rclcpp::get_logger("mpc_controller"),
+        "OvertakeLine Mission replacement commit rolled back: target=%s, "
+        "side=%d, generation=%lu, wp_id=%d",
+        overtake_line_state_.target_vehicle_id.c_str(),
+        candidate.pass_side_sign,
+        static_cast<unsigned long>(overtake_line_state_.mission_generation),
+        model->wp_id);
       return false;
     }
 
@@ -11266,6 +11435,21 @@ private:
     return std::max(0.0, overtake_line_state_.mission_pass_accumulated_m) +
       (overtake_line_state_.phase == OvertakeLinePhase::Pass ?
       std::max(0.0, overtake_line_state_.phase_traveled_m) : 0.0);
+  }
+
+  double overtake_mission_progress_traveled() const
+  {
+    if (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut) {
+      return std::max(0.0, overtake_line_state_.phase_traveled_m);
+    }
+    if (
+      overtake_line_state_.phase == OvertakeLinePhase::Pass ||
+      overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare)
+    {
+      return std::max(0.0, overtake_line_state_.mission_shift_distance) +
+        overtake_mission_pass_traveled();
+    }
+    return overtake_mission_pass_traveled();
   }
 
   double overtake_mission_pass_elapsed(const double now_sec) const
@@ -12568,6 +12752,15 @@ private:
           actual_wall_sample_unavailable ||
           behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake ||
           overtake_solver_recovery_active_ || behavior_output.overtake_forbidden_wp;
+        const bool recoverable_current_geometry =
+          behavior_output.locked_target_current_body_footprints_separated ||
+          behavior_output.recoverable_side_contact_active;
+        if (hard_fault || !target_continuous || !recoverable_current_geometry) {
+          clear_last_feasible_maneuver_cache(
+            hard_fault ? "runtime hard fault" :
+            !target_continuous ? "target discontinuity" :
+            "non-recoverable body overlap");
+        }
         const bool current_available =
           current_candidate_allowed && cache_matches_active_mission &&
           overtake_line_state_.last_feasible_current_mission.has_value();
@@ -12582,34 +12775,87 @@ private:
           std::max(
           0.0, now_sec - overtake_line_state_.last_feasible_alternate_mission_sec) :
           std::numeric_limits<double>::infinity();
+        const double current_ego_progress_m = overtake_mission_progress_traveled();
+        const double current_target_lateral_m = behavior_output.locked_target_lateral;
+        const auto finite_delta = [](const double current, const double anchor) {
+            return std::isfinite(current) && std::isfinite(anchor) ?
+              std::abs(current - anchor) : std::numeric_limits<double>::infinity();
+          };
+        const auto candidate_motion_fresh = [&] (
+          const std::optional<overtake_core::OvertakeMissionCandidate> & candidate,
+          const double ego_progress_anchor, const double ego_lateral_anchor,
+          const double target_longitudinal_anchor,
+          const double target_lateral_anchor) {
+            if (!candidate.has_value()) {
+              return false;
+            }
+            const bool dynamic_valid =
+              std::isfinite(candidate->dynamic_valid_until_sec) &&
+              now_sec <= candidate->dynamic_valid_until_sec + kEps;
+            return
+              dynamic_valid &&
+              finite_delta(current_ego_progress_m, ego_progress_anchor) <=
+              line_cfg.last_feasible_maneuver_max_ego_distance + kEps &&
+              finite_delta(current_ey, ego_lateral_anchor) <=
+              line_cfg.last_feasible_maneuver_max_ego_lateral_change + kEps &&
+              finite_delta(
+              behavior_output.locked_target_longitudinal,
+              target_longitudinal_anchor) <=
+              line_cfg.last_feasible_maneuver_max_target_longitudinal_change + kEps &&
+              finite_delta(current_target_lateral_m, target_lateral_anchor) <=
+              line_cfg.last_feasible_maneuver_max_target_lateral_change + kEps;
+          };
+        const bool current_motion_fresh = current_available && candidate_motion_fresh(
+          overtake_line_state_.last_feasible_current_mission,
+          overtake_line_state_.last_feasible_current_ego_progress_m,
+          overtake_line_state_.last_feasible_current_ego_lateral_m,
+          overtake_line_state_.last_feasible_current_target_longitudinal_m,
+          overtake_line_state_.last_feasible_current_target_lateral_m);
+        const bool alternate_motion_fresh = alternate_available && candidate_motion_fresh(
+          overtake_line_state_.last_feasible_alternate_mission,
+          overtake_line_state_.last_feasible_alternate_ego_progress_m,
+          overtake_line_state_.last_feasible_alternate_ego_lateral_m,
+          overtake_line_state_.last_feasible_alternate_target_longitudinal_m,
+          overtake_line_state_.last_feasible_alternate_target_lateral_m);
+        overtake_core::LastFeasibleManeuverRequest rescue_request;
+        rescue_request.enabled = line_cfg.last_feasible_maneuver_enabled;
+        rescue_request.soft_failure = soft_failure;
+        rescue_request.hard_fault = hard_fault;
+        rescue_request.target_continuous = target_continuous;
+        rescue_request.current_body_footprints_separated = recoverable_current_geometry;
+        rescue_request.before_no_return = before_no_return;
+        rescue_request.current_candidate_available = current_available;
+        rescue_request.current_candidate_age_sec = current_age_sec;
+        rescue_request.current_candidate_motion_fresh = current_motion_fresh;
+        rescue_request.alternate_candidate_available = alternate_available;
+        rescue_request.alternate_candidate_stable =
+          overtake_line_state_.last_feasible_alternate_mission_stable;
+        rescue_request.alternate_candidate_age_sec = alternate_age_sec;
+        rescue_request.alternate_candidate_motion_fresh = alternate_motion_fresh;
+        rescue_request.maximum_candidate_age_sec =
+          line_cfg.last_feasible_maneuver_max_age_sec;
         const auto resolution = overtake_core::resolve_last_feasible_maneuver(
-          overtake_core::LastFeasibleManeuverRequest{
-            line_cfg.last_feasible_maneuver_enabled,
-            soft_failure,
-            hard_fault,
-            target_continuous,
-            behavior_output.locked_target_current_body_footprints_separated,
-            before_no_return,
-            current_available,
-            current_age_sec,
-            alternate_available,
-            overtake_line_state_.last_feasible_alternate_mission_stable,
-            alternate_age_sec,
-            line_cfg.last_feasible_maneuver_max_age_sec});
+          rescue_request);
         if (!resolution.replacement_requested) {
           if (line_cfg.debug_log_enabled && soft_failure) {
             RCLCPP_WARN(
               rclcpp::get_logger("mpc_controller"),
               "OvertakeLine last-feasible maneuver unavailable: target=%s, "
-              "generation=%lu, action=%s, current=%d/%.2f s, alternate=%d/%d/%.2f s, "
+              "generation=%lu, action=%s, current=%d/%.2f s/fresh=%d, "
+              "alternate=%d/%d/%.2f s/fresh=%d, "
               "reason=%s, wp_id=%d",
               overtake_line_state_.target_vehicle_id.c_str(),
               static_cast<unsigned long>(overtake_line_state_.mission_generation),
               overtake_core::to_string(resolution.action),
               current_available ? 1 : 0, current_age_sec,
+              current_motion_fresh ? 1 : 0,
               alternate_available ? 1 : 0,
               overtake_line_state_.last_feasible_alternate_mission_stable ? 1 : 0,
-              alternate_age_sec, reason.c_str(), model->wp_id);
+              alternate_age_sec, alternate_motion_fresh ? 1 : 0,
+              reason.c_str(), model->wp_id);
+          }
+          if (resolution.action == overtake_core::LastFeasibleManeuverAction::Stale) {
+            clear_last_feasible_maneuver_cache("age or motion freshness expired");
           }
           return false;
         }
@@ -12620,9 +12866,57 @@ private:
         if (!candidate.has_value()) {
           return false;
         }
+        const double selected_ego_progress_delta = finite_delta(
+          current_ego_progress_m,
+          resolution.alternate_selected ?
+          overtake_line_state_.last_feasible_alternate_ego_progress_m :
+          overtake_line_state_.last_feasible_current_ego_progress_m);
+        const double selected_target_longitudinal_delta = finite_delta(
+          behavior_output.locked_target_longitudinal,
+          resolution.alternate_selected ?
+          overtake_line_state_.last_feasible_alternate_target_longitudinal_m :
+          overtake_line_state_.last_feasible_current_target_longitudinal_m);
+        const double selected_target_lateral_delta = finite_delta(
+          current_target_lateral_m,
+          resolution.alternate_selected ?
+          overtake_line_state_.last_feasible_alternate_target_lateral_m :
+          overtake_line_state_.last_feasible_current_target_lateral_m);
+        const double required_path_distance =
+          std::max(0.5, candidate->shift_distance_m) +
+          std::max(0.5, candidate->pass_hold_distance_m) +
+          std::max(0.5, candidate->return_distance_m);
+        const int rescue_plan_N = std::max(
+          N,
+          static_cast<int>(std::ceil(
+            required_path_distance /
+            std::max(0.1, model->reference_path->resolution))) + 2);
+        const auto [rescue_lb, rescue_ub] = build_v2x_gap_planner_bounds(
+          ref_wp_id, N, lb, ub, rescue_plan_N);
+        const auto rescue_preflight = evaluate_overtake_line_entry_preflight(
+          ref_wp_id, rescue_plan_N, rescue_lb, rescue_ub,
+          candidate->pass_side_sign, current_ey,
+          current_target_lateral_m,
+          std::optional<double>{candidate->goal_lateral_m},
+          std::pair<double, double>{
+            candidate->goal_lateral_m, candidate->goal_lateral_m},
+          std::optional<double>{candidate->goal_lateral_m},
+          std::max(0.5, candidate->shift_distance_m),
+          std::max(0.5, candidate->pass_hold_distance_m),
+          true, true, false, false, candidate->outer_strategy_committed,
+          OvertakeLineEntryPreflightPolicy{false, false});
+        if (!rescue_preflight.feasible) {
+          RCLCPP_WARN(
+            rclcpp::get_logger("mpc_controller"),
+            "OvertakeLine last-feasible replacement prepare rejected; old Mission retained: "
+            "target=%s, side=%d, generation=%lu, reason=%s, preflight=%s, wp_id=%d",
+            overtake_line_state_.target_vehicle_id.c_str(),
+            candidate->pass_side_sign,
+            static_cast<unsigned long>(overtake_line_state_.mission_generation),
+            reason.c_str(), rescue_preflight.reason.c_str(), model->wp_id);
+          return false;
+        }
         const int previous_side = overtake_line_state_.pass_side_sign;
         const std::uint64_t previous_generation = overtake_line_state_.mission_generation;
-        invalidate_current_overtake_mission(reason);
         const bool replaced = replace_frozen_overtake_mission_after_dynamic_replan(
           candidate.value(), now_sec, current_ey,
           !resolution.alternate_selected,
@@ -12631,12 +12925,24 @@ private:
           RCLCPP_WARN(
             rclcpp::get_logger("mpc_controller"),
             "OvertakeLine last-feasible maneuver rescue accepted: target=%s, "
-            "action=%s, side=%d->%d, age=%.2f s, generation=%lu->%lu, reason=%s, wp_id=%d",
+            "action=%s, side=%d->%d, age=%.2f s, ego_delta=%.2f m, "
+            "target_delta=%.2f/%.2f m, generation=%lu->%lu, reason=%s, wp_id=%d",
             overtake_line_state_.target_vehicle_id.c_str(),
             overtake_core::to_string(resolution.action), previous_side,
             overtake_line_state_.pass_side_sign,
             resolution.selected_candidate_age_sec,
+            selected_ego_progress_delta,
+            selected_target_longitudinal_delta,
+            selected_target_lateral_delta,
             static_cast<unsigned long>(previous_generation),
+            static_cast<unsigned long>(overtake_line_state_.mission_generation),
+            reason.c_str(), model->wp_id);
+        } else {
+          RCLCPP_WARN(
+            rclcpp::get_logger("mpc_controller"),
+            "OvertakeLine last-feasible replacement commit rejected; old Mission retained: "
+            "target=%s, side=%d, generation=%lu, reason=%s, wp_id=%d",
+            overtake_line_state_.target_vehicle_id.c_str(), previous_side,
             static_cast<unsigned long>(overtake_line_state_.mission_generation),
             reason.c_str(), model->wp_id);
         }
@@ -19466,6 +19772,28 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_last_feasible_maneuver_max_age_sec"] ?
     mpc["v2x_overtake_last_feasible_maneuver_max_age_sec"].as<double>() : 0.50);
+  cfg.mpc.v2x_behavior.overtake_line.last_feasible_maneuver_max_ego_distance = std::max(
+    0.0,
+    mpc["v2x_overtake_last_feasible_maneuver_max_ego_distance"] ?
+    mpc["v2x_overtake_last_feasible_maneuver_max_ego_distance"].as<double>() : 1.50);
+  cfg.mpc.v2x_behavior.overtake_line.last_feasible_maneuver_max_ego_lateral_change =
+    std::max(
+    0.0,
+    mpc["v2x_overtake_last_feasible_maneuver_max_ego_lateral_change"] ?
+    mpc["v2x_overtake_last_feasible_maneuver_max_ego_lateral_change"].as<double>() :
+    0.30);
+  cfg.mpc.v2x_behavior.overtake_line
+    .last_feasible_maneuver_max_target_longitudinal_change = std::max(
+    0.0,
+    mpc["v2x_overtake_last_feasible_maneuver_max_target_longitudinal_change"] ?
+    mpc["v2x_overtake_last_feasible_maneuver_max_target_longitudinal_change"].as<double>() :
+    1.00);
+  cfg.mpc.v2x_behavior.overtake_line.last_feasible_maneuver_max_target_lateral_change =
+    std::max(
+    0.0,
+    mpc["v2x_overtake_last_feasible_maneuver_max_target_lateral_change"] ?
+    mpc["v2x_overtake_last_feasible_maneuver_max_target_lateral_change"].as<double>() :
+    0.25);
   cfg.mpc.v2x_behavior.overtake_line.return_clear_distance = std::max(
     0.0,
     mpc["v2x_overtake_line_return_clear_distance"] ?
@@ -21234,10 +21562,18 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line.opponent_side_replan_max_count);
       RCLCPP_INFO(
         get_logger(),
-        "V2X last-feasible maneuver rescue: %s, max_age=%.2f s",
+        "V2X last-feasible maneuver rescue: %s, max_age=%.2f s, "
+        "ego_delta=%.2f m/lateral=%.2f m, target_delta=%.2f m/lateral=%.2f m",
         mpc_cfg_.v2x_behavior.overtake_line.last_feasible_maneuver_enabled ?
         "enabled" : "disabled",
-        mpc_cfg_.v2x_behavior.overtake_line.last_feasible_maneuver_max_age_sec);
+        mpc_cfg_.v2x_behavior.overtake_line.last_feasible_maneuver_max_age_sec,
+        mpc_cfg_.v2x_behavior.overtake_line.last_feasible_maneuver_max_ego_distance,
+        mpc_cfg_.v2x_behavior.overtake_line
+          .last_feasible_maneuver_max_ego_lateral_change,
+        mpc_cfg_.v2x_behavior.overtake_line
+          .last_feasible_maneuver_max_target_longitudinal_change,
+        mpc_cfg_.v2x_behavior.overtake_line
+          .last_feasible_maneuver_max_target_lateral_change);
       RCLCPP_INFO(
         get_logger(),
         "V2X committed Pass speed continuity: %s, min_reference=%.2f m/s, "

@@ -4632,6 +4632,42 @@ TEST(V2XOvertakeCoreHorizon, NeverGrantsPredictionGraceForHardGuardFailure)
   EXPECT_FALSE(resolution.prediction_grace_active);
 }
 
+TEST(V2XOvertakeCoreHorizon, KeepsPhysicallyClearRearwardCompletionWithoutFreshProgress)
+{
+  PassShortHorizonGuardRequest request;
+  request.hard_guard_safe = true;
+  request.predictive_guard_safe = false;
+  request.forward_completion_latched = true;
+  request.current_body_footprints_separated = true;
+  request.execution_corridor_blocked = false;
+  request.fresh_forward_progress = false;
+  request.predictive_guard_loss_elapsed_sec = 1.72;
+  request.maximum_prediction_grace_sec = 0.25;
+  request.side_by_side_rearward_completion_safe = true;
+
+  auto resolution = resolve_pass_short_horizon_guard(request);
+  EXPECT_TRUE(resolution.safe);
+  EXPECT_FALSE(resolution.prediction_grace_active);
+  EXPECT_TRUE(resolution.rearward_completion_active);
+
+  request.predictive_guard_safe = true;
+  resolution = resolve_pass_short_horizon_guard(request);
+  EXPECT_TRUE(resolution.safe);
+  EXPECT_TRUE(resolution.rearward_completion_active);
+
+  request.predictive_guard_safe = false;
+  request.execution_corridor_blocked = true;
+  resolution = resolve_pass_short_horizon_guard(request);
+  EXPECT_FALSE(resolution.safe);
+  EXPECT_FALSE(resolution.rearward_completion_active);
+
+  request.execution_corridor_blocked = false;
+  request.hard_guard_safe = false;
+  resolution = resolve_pass_short_horizon_guard(request);
+  EXPECT_FALSE(resolution.safe);
+  EXPECT_FALSE(resolution.rearward_completion_active);
+}
+
 TEST(V2XOvertakeCoreHorizon, AcceptsHealthyPredictiveGuardWithoutLatch)
 {
   PassShortHorizonGuardRequest request;
@@ -5093,6 +5129,61 @@ TEST(V2XOvertakeCoreHorizon, UsesDistanceAndFreshProgressAfterRearwardTimeLimit)
   resolution = resolve_safe_separation(request);
   EXPECT_EQ(resolution.action, SafeSeparationAction::Abort);
   EXPECT_EQ(resolution.reason, SafeSeparationReason::ShortHorizonUnsafe);
+}
+
+TEST(V2XOvertakeCoreHorizon, FinishesSideBySideRearClearTailWithinAbsoluteBudget)
+{
+  SafeSeparationRequest request;
+  request.enabled = true;
+  request.active = true;
+  request.short_horizon_safe = true;
+  request.target_seen = true;
+  request.target_longitudinal_m = -0.58;
+  request.target_speed_mps = 3.3;
+  request.speed_delta_mps = 2.0;
+  request.maximum_ego_speed_mps = 11.11;
+  request.front_clear_distance_m = 2.0;
+  request.front_clear_confirm_sec = 0.25;
+  request.elapsed_sec = 3.10;
+  request.traveled_m = 12.0;
+  request.maximum_duration_sec = 5.0;
+  request.maximum_distance_m = 12.0;
+  request.ego_speed_mps = 3.45;
+  request.forward_escape_allowed = true;
+  request.forward_escape_max_front_distance_m = 3.0;
+  request.absolute_elapsed_sec = 7.90;
+  request.absolute_traveled_m = 34.1;
+  request.absolute_maximum_duration_sec = 10.0;
+  request.absolute_maximum_distance_m = 40.0;
+  request.forward_completion_latched = true;
+  request.full_speed_forward_escape_enabled = true;
+  request.fresh_forward_progress = false;
+  request.commit_stage = PassCommitStage::SideBySideCommitted;
+  request.side_by_side_rearward_completion_allowed = true;
+
+  auto resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::KeepSameSide);
+  EXPECT_EQ(
+    resolution.reason, SafeSeparationReason::SideBySideRearClearCompletion);
+  EXPECT_TRUE(resolution.forward_escape_active);
+  EXPECT_NEAR(resolution.target_velocity_reference_mps, 11.11, 1e-9);
+
+  request.absolute_traveled_m = 40.0;
+  resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::Abort);
+  EXPECT_EQ(resolution.reason, SafeSeparationReason::AbsoluteDistanceLimit);
+
+  request.absolute_traveled_m = 34.1;
+  request.short_horizon_safe = false;
+  resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::Abort);
+  EXPECT_EQ(resolution.reason, SafeSeparationReason::ShortHorizonUnsafe);
+
+  request.short_horizon_safe = true;
+  request.commit_stage = PassCommitStage::ShiftCommitted;
+  resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::Abort);
+  EXPECT_EQ(resolution.reason, SafeSeparationReason::LocalDistanceLimit);
 }
 
 TEST(V2XOvertakeCoreHorizon, RejectsExcessiveAtomicLateralReplacement)

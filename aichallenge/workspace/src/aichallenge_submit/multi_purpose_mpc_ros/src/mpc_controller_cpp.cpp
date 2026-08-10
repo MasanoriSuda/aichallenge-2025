@@ -2052,6 +2052,7 @@ struct OvertakeLineState
   double pass_current_overlap_since_sec{std::numeric_limits<double>::quiet_NaN()};
   double pass_predicted_overlap_since_sec{std::numeric_limits<double>::quiet_NaN()};
   bool pass_rearward_progress_time_grace_was_active{false};
+  bool pass_side_by_side_rear_clear_tail_was_active{false};
   int pass_side_sign{0};
   double target_ey{0.0};
   double phase_start_sec{-std::numeric_limits<double>::infinity()};
@@ -10412,6 +10413,7 @@ private:
       overtake_line_state_.pass_front_overlap_exclusion_latched = false;
       overtake_line_state_.pass_front_cap_release_active = false;
       overtake_line_state_.pass_rearward_progress_time_grace_was_active = false;
+      overtake_line_state_.pass_side_by_side_rear_clear_tail_was_active = false;
       overtake_line_state_.pass_horizon_hold_active = false;
       overtake_line_state_.pass_horizon_safe_separation_active = false;
       overtake_line_state_.pass_forward_completion_latched = false;
@@ -14448,6 +14450,17 @@ private:
           safe_separation_forward_progress >= 0.05 - kEps &&
           safe_separation_progress_age <=
           line_cfg.safe_separation_progress_extension_fresh_sec + kEps;
+        const bool side_by_side_rearward_physical_completion_safe =
+          behavior_output.overtake_commit_stage ==
+          overtake_core::PassCommitStage::SideBySideCommitted &&
+          locked_target_seen && locked_target_matches &&
+          locked_target_progress_continuous &&
+          std::isfinite(locked_target_longitudinal) &&
+          locked_target_longitudinal <= 0.0 &&
+          behavior_output.locked_target_current_body_footprints_separated &&
+          behavior_output.locked_target_footprint_prediction_valid &&
+          behavior_output.locked_target_predicted_body_footprint_sweep_separated &&
+          !behavior_output.overtake_execution_corridor_blocked;
         const auto short_horizon_guard =
           overtake_core::resolve_pass_short_horizon_guard(
           overtake_core::PassShortHorizonGuardRequest{
@@ -14458,8 +14471,27 @@ private:
             behavior_output.overtake_execution_corridor_blocked,
             recent_measured_forward_progress,
             prediction_guard_loss_elapsed_sec,
-            line_cfg.safe_separation_soft_prediction_grace_sec});
+            line_cfg.safe_separation_soft_prediction_grace_sec,
+            side_by_side_rearward_physical_completion_safe});
         const bool short_horizon_safe = short_horizon_guard.safe;
+        if (
+          short_horizon_guard.rearward_completion_active &&
+          !overtake_line_state_.pass_side_by_side_rear_clear_tail_was_active)
+        {
+          RCLCPP_WARN(
+            rclcpp::get_logger("mpc_controller"),
+            "OvertakeLine SideBySide rear-clear tail active: "
+            "target=%s, side=%d, target_s=%.2f, progress=%.2f m, "
+            "progress_age=%.2f s, local=%.2f s/%.2f m, "
+            "absolute=%.2f s/%.2f m, wp_id=%d",
+            overtake_line_state_.target_vehicle_id.c_str(),
+            overtake_line_state_.pass_side_sign, locked_target_longitudinal,
+            safe_separation_forward_progress, safe_separation_progress_age,
+            safe_separation_elapsed, safe_separation_traveled,
+            pass_elapsed, pass_traveled, model->wp_id);
+        }
+        overtake_line_state_.pass_side_by_side_rear_clear_tail_was_active =
+          short_horizon_guard.rearward_completion_active;
         const bool safe_separation_front_clear =
           locked_target_seen && std::isfinite(locked_target_longitudinal) &&
           locked_target_longitudinal >=
@@ -14485,6 +14517,7 @@ private:
           line_cfg.safe_separation_forward_escape_enabled &&
           (committed_forward_completion.active ||
           short_horizon_guard.prediction_grace_active ||
+          short_horizon_guard.rearward_completion_active ||
           behavior_output.recoverable_side_contact_active);
         const bool safe_separation_fresh_forward_progress =
           safe_separation_forward_escape_allowed &&
@@ -14561,7 +14594,8 @@ private:
             line_cfg.safe_separation_full_speed_forward_escape_enabled,
             line_cfg.safe_separation_rearward_progress_time_grace_enabled,
             safe_separation_fresh_forward_progress,
-            behavior_output.overtake_commit_stage});
+            behavior_output.overtake_commit_stage,
+            short_horizon_guard.rearward_completion_active});
         if (safe_separation.action == overtake_core::SafeSeparationAction::KeepSameSide) {
           safe_separation_velocity_reference =
             safe_separation.target_velocity_reference_mps;

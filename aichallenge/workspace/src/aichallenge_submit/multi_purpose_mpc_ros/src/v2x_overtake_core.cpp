@@ -2558,7 +2558,16 @@ PassShortHorizonGuardResolution resolve_pass_short_horizon_guard(
   if (!request.hard_guard_safe) {
     return resolution;
   }
+  resolution.rearward_completion_active =
+    request.side_by_side_rearward_completion_safe &&
+    request.forward_completion_latched &&
+    request.current_body_footprints_separated &&
+    !request.execution_corridor_blocked;
   if (request.predictive_guard_safe) {
+    resolution.safe = true;
+    return resolution;
+  }
+  if (resolution.rearward_completion_active) {
     resolution.safe = true;
     return resolution;
   }
@@ -2657,8 +2666,13 @@ SafeSeparationResolution resolve_safe_separation(
           request.ego_speed_mps,
           request.target_speed_mps + request.speed_delta_mps));
       resolution.signed_closing_speed_mps =
-        resolution.target_velocity_reference_mps - request.target_speed_mps;
+      resolution.target_velocity_reference_mps - request.target_speed_mps;
     };
+  const bool side_by_side_rear_clear_completion_active =
+    request.side_by_side_rearward_completion_allowed &&
+    request.commit_stage == PassCommitStage::SideBySideCommitted &&
+    request.forward_completion_latched && forward_escape_active &&
+    request.target_longitudinal_m <= 0.0;
   const bool absolute_distance_limit_reached =
     request.absolute_traveled_m >= request.absolute_maximum_distance_m - 1e-9;
   const bool absolute_time_limit_reached =
@@ -2667,12 +2681,18 @@ SafeSeparationResolution resolve_safe_separation(
   // bound. Let that already-active local window finish instead of dropping to
   // Recovery beside the target. The local window cannot be re-armed once an
   // absolute bound has been crossed.
-  if (absolute_distance_limit_reached && !forward_escape_active) {
+  if (
+    absolute_distance_limit_reached &&
+    (!forward_escape_active || side_by_side_rear_clear_completion_active))
+  {
     resolution.action = SafeSeparationAction::Abort;
     resolution.reason = SafeSeparationReason::AbsoluteDistanceLimit;
     return resolution;
   }
-  if (absolute_time_limit_reached && !forward_escape_active) {
+  if (
+    absolute_time_limit_reached &&
+    (!forward_escape_active || side_by_side_rear_clear_completion_active))
+  {
     resolution.action = SafeSeparationAction::Abort;
     resolution.reason = SafeSeparationReason::AbsoluteTimeLimit;
     return resolution;
@@ -2690,6 +2710,15 @@ SafeSeparationResolution resolve_safe_separation(
   if (
     local_distance_limit_reached || local_time_limit_reached)
   {
+    if (
+      side_by_side_rear_clear_completion_active &&
+      !absolute_distance_limit_reached && !absolute_time_limit_reached)
+    {
+      resolution.action = SafeSeparationAction::KeepSameSide;
+      resolution.reason = SafeSeparationReason::SideBySideRearClearCompletion;
+      apply_forward_escape_velocity();
+      return resolution;
+    }
     if (
       local_time_limit_reached && !local_distance_limit_reached &&
       rearward_progress_time_grace_active)
@@ -2921,6 +2950,8 @@ const char * to_string(const SafeSeparationReason reason) noexcept
       return "dynamic completion extension";
     case SafeSeparationReason::RearwardProgressTimeGrace:
       return "rearward progress time grace";
+    case SafeSeparationReason::SideBySideRearClearCompletion:
+      return "side-by-side rear-clear completion";
   }
   return "unknown";
 }

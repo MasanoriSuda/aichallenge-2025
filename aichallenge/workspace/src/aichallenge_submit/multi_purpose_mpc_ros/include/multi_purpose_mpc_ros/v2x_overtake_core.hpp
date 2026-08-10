@@ -1458,6 +1458,7 @@ enum class SafeSeparationReason
   ProgressExtension,
   DynamicCompletionExtension,
   RearwardProgressTimeGrace,
+  SideBySideRearClearCompletion,
 };
 
 struct CommittedPassForwardCompletionRequest
@@ -1557,12 +1558,17 @@ struct PassShortHorizonGuardRequest
   bool fresh_forward_progress{false};
   double predictive_guard_loss_elapsed_sec{std::numeric_limits<double>::infinity()};
   double maximum_prediction_grace_sec{};
+  /// A committed target is already at or behind ego and current/predicted
+  /// body geometry plus the execution corridor remain physically clear. This
+  /// is independent of whether the completion rollout fits the normal budget.
+  bool side_by_side_rearward_completion_safe{false};
 };
 
 struct PassShortHorizonGuardResolution
 {
   bool safe{false};
   bool prediction_grace_active{false};
+  bool rearward_completion_active{false};
 };
 
 /// Keep an already-latched forward completion alive through a bounded
@@ -1611,6 +1617,9 @@ struct SafeSeparationRequest
   bool rearward_progress_time_grace_enabled{false};
   bool fresh_forward_progress{false};
   PassCommitStage commit_stage{PassCommitStage::Selectable};
+  /// Physical rear-clear continuation admitted after tactical no-return. The
+  /// normal local window becomes soft, but absolute Pass bounds remain hard.
+  bool side_by_side_rearward_completion_allowed{false};
 };
 
 struct SafeSeparationResolution

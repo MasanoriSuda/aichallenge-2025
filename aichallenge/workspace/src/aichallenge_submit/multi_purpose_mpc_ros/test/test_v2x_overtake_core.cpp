@@ -4398,6 +4398,7 @@ TEST(V2XOvertakeCoreHorizon, CommitsBoundedSideBySideForwardCompletion)
 
   request.current_body_footprints_separated = false;
   request.current_body_footprint_overlap_confirmed = false;
+  request.side_by_side_committed = true;
   resolution = resolve_committed_pass_forward_completion(request);
   EXPECT_TRUE(resolution.active);
   EXPECT_TRUE(resolution.current_overlap_grace_active);
@@ -4449,6 +4450,35 @@ TEST(V2XOvertakeCoreHorizon, CommitsBoundedSideBySideForwardCompletion)
   resolution = resolve_committed_pass_forward_completion(request);
   EXPECT_FALSE(resolution.active);
   EXPECT_FALSE(resolution.rear_clear_distance_feasible);
+}
+
+TEST(V2XOvertakeCoreHorizon, KeepsCurrentOverlapDebounceAcrossPredictionRefreshLoss)
+{
+  CommittedPassForwardCompletionRequest request;
+  request.enabled = true;
+  request.pass_active = true;
+  request.minimum_motion_corridor_active = true;
+  request.prior_front_cap_release_active = true;
+  request.target_seen = true;
+  request.target_continuity_valid = true;
+  request.current_body_footprints_separated = false;
+  request.current_body_footprint_overlap_confirmed = false;
+  request.footprint_prediction_valid = false;
+  request.target_longitudinal_m = -1.21;
+  request.side_by_side_committed = true;
+
+  auto resolution = resolve_committed_pass_forward_completion(request);
+  EXPECT_TRUE(resolution.current_overlap_grace_active);
+  EXPECT_FALSE(resolution.active);
+
+  request.current_body_footprint_overlap_confirmed = true;
+  resolution = resolve_committed_pass_forward_completion(request);
+  EXPECT_FALSE(resolution.current_overlap_grace_active);
+
+  request.current_body_footprint_overlap_confirmed = false;
+  request.actual_wall_contact = true;
+  resolution = resolve_committed_pass_forward_completion(request);
+  EXPECT_FALSE(resolution.current_overlap_grace_active);
 }
 
 TEST(V2XOvertakeCoreHorizon, DebouncesPredictedOverlapOnlyAfterForwardCompletionLatch)
@@ -4718,6 +4748,37 @@ TEST(V2XOvertakeCoreHorizon, PreservesSpeedForSideBySideForwardEscape)
   resolution = resolve_safe_separation(request);
   EXPECT_EQ(resolution.action, SafeSeparationAction::Abort);
   EXPECT_FALSE(resolution.forward_escape_active);
+}
+
+TEST(V2XOvertakeCoreHorizon, SideBySideCommitNeverRecoversBehind)
+{
+  SafeSeparationRequest request;
+  request.enabled = true;
+  request.active = true;
+  request.short_horizon_safe = true;
+  request.target_seen = true;
+  request.target_longitudinal_m = 3.0;
+  request.target_speed_mps = 3.3;
+  request.speed_delta_mps = 0.8;
+  request.maximum_ego_speed_mps = 11.11;
+  request.front_clear_distance_m = 2.0;
+  request.front_clear_elapsed_sec = 0.25;
+  request.front_clear_confirm_sec = 0.25;
+  request.maximum_duration_sec = 3.0;
+  request.maximum_distance_m = 8.0;
+  request.ego_speed_mps = 4.0;
+  request.commit_stage = PassCommitStage::SideBySideCommitted;
+
+  auto resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::KeepSameSide);
+  EXPECT_EQ(resolution.reason, SafeSeparationReason::None);
+  EXPECT_NEAR(resolution.target_velocity_reference_mps, 4.0, 1e-9);
+  EXPECT_NEAR(resolution.signed_closing_speed_mps, 0.7, 1e-9);
+
+  request.commit_stage = PassCommitStage::ShiftCommitted;
+  resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::RecoverBehind);
+  EXPECT_EQ(resolution.reason, SafeSeparationReason::TargetClearAhead);
 }
 
 TEST(V2XOvertakeCoreHorizon, ReleasesForwardCompletionToCourseSpeedWhenEnabled)
@@ -8485,15 +8546,21 @@ TEST(V2XOvertakeCoreMissionOwnership, WallActionsKeepExistingPriority)
     OvertakeLineTransitionAction::RecoverWallMargin);
 }
 
-TEST(V2XOvertakeCoreMissionOwnership, CompletedPassReturnsBeforeWallRecovery)
+TEST(V2XOvertakeCoreMissionOwnership, CompletedPassHoldsSideUntilNominalRearClear)
 {
   OvertakeLineTransitionRequest request;
   request.actual_wall_margin_blocked = true;
   request.completed_pass_ready_to_return_before_margin_recovery = true;
   EXPECT_EQ(
     resolve_overtake_line_transition(request),
+    OvertakeLineTransitionAction::HoldPassForRearClearBeforeWallMarginRecovery);
+
+  request.rear_clear_confirmed = true;
+  EXPECT_EQ(
+    resolve_overtake_line_transition(request),
     OvertakeLineTransitionAction::ReturnBeforeWallMarginRecovery);
 
+  request.rear_clear_confirmed = false;
   request.completed_pass_ready_to_return_before_margin_recovery = false;
   request.completed_pass_waiting_for_return_corridor = true;
   EXPECT_EQ(
@@ -8574,6 +8641,10 @@ TEST(V2XOvertakeCoreMissionDiagnostics, TransitionActionNamesAreStable)
   EXPECT_STREQ(
     to_string(OvertakeLineTransitionAction::ResumePassForReturnCorridorBlocker),
     "ResumePassForReturnCorridorBlocker");
+  EXPECT_STREQ(
+    to_string(
+      OvertakeLineTransitionAction::HoldPassForRearClearBeforeWallMarginRecovery),
+    "HoldPassForRearClearBeforeWallMarginRecovery");
   EXPECT_STREQ(
     to_string(OvertakeLineTransitionAction::ReturnBeforeWallMarginRecovery),
     "ReturnBeforeWallMarginRecovery");
@@ -8950,16 +9021,55 @@ TEST(V2XOvertakeCoreSide, StartsDirectPassWhenAlreadyInsideValidatedCorridor)
 
 TEST(V2XOvertakeCoreSide, StopsDirectPassWhenLiveCorridorBecomesUnavailable)
 {
-  EXPECT_FALSE(
-    should_stop_low_speed_direct_control_for_corridor(false, false, false, false));
-  EXPECT_FALSE(
-    should_stop_low_speed_direct_control_for_corridor(true, true, false, false));
-  EXPECT_FALSE(
-    should_stop_low_speed_direct_control_for_corridor(true, false, true, true));
-  EXPECT_TRUE(
-    should_stop_low_speed_direct_control_for_corridor(true, false, false, false));
-  EXPECT_TRUE(
-    should_stop_low_speed_direct_control_for_corridor(true, false, true, false));
+  using Request =
+    multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedDirectCorridorStopRequest;
+  EXPECT_FALSE(should_stop_low_speed_direct_control_for_corridor(Request{}));
+
+  Request request;
+  request.direct_control_active = true;
+  request.rejoin_active = true;
+  request.has_front_vehicle = true;
+  EXPECT_FALSE(should_stop_low_speed_direct_control_for_corridor(request));
+
+  request.rejoin_active = false;
+  request.local_path_active = true;
+  request.local_path_feasible = true;
+  EXPECT_FALSE(should_stop_low_speed_direct_control_for_corridor(request));
+
+  request.local_path_feasible = false;
+  EXPECT_TRUE(should_stop_low_speed_direct_control_for_corridor(request));
+
+  request.local_path_active = false;
+  request.has_front_vehicle = false;
+  request.has_side_vehicle = false;
+  request.has_clearance_vehicle = false;
+  EXPECT_FALSE(should_stop_low_speed_direct_control_for_corridor(request));
+
+  request.local_path_active = true;
+  EXPECT_TRUE(should_stop_low_speed_direct_control_for_corridor(request));
+}
+
+TEST(V2XOvertakeCoreSide, RetainsValidatedPassWhileTargetMovesFromFrontToSide)
+{
+  using Request =
+    multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedDirectCorridorStopRequest;
+  Request request;
+  request.direct_control_active = true;
+  request.phase = LowSpeedDirectControlPhase::Pass;
+  request.has_side_vehicle = true;
+  request.retained_pass_path_feasible = true;
+  EXPECT_FALSE(should_stop_low_speed_direct_control_for_corridor(request));
+
+  request.retained_pass_path_feasible = false;
+  EXPECT_TRUE(should_stop_low_speed_direct_control_for_corridor(request));
+
+  request.retained_pass_path_feasible = true;
+  request.phase = LowSpeedDirectControlPhase::Shift;
+  EXPECT_TRUE(should_stop_low_speed_direct_control_for_corridor(request));
+
+  request.phase = LowSpeedDirectControlPhase::Pass;
+  request.has_front_vehicle = true;
+  EXPECT_TRUE(should_stop_low_speed_direct_control_for_corridor(request));
 }
 
 TEST(V2XOvertakeCoreSide, LowSpeedShiftHeadingFeedbackCountersteers)

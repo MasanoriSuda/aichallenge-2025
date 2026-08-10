@@ -4324,6 +4324,38 @@ struct MPC
     return result;
   }
 
+  bool retained_low_speed_pass_path_feasible(
+    const int ref_wp_id, const int N, const Eigen::VectorXd & lb,
+    const Eigen::VectorXd & ub) const
+  {
+    if (
+      N <= 0 || lb.size() < N || ub.size() < N ||
+      low_speed_shift_pass_side_sign_ == 0 ||
+      !std::isfinite(low_speed_shift_pass_target_ey_))
+    {
+      return false;
+    }
+
+    GapPlannerOutput retained_path;
+    retained_path.active = true;
+    retained_path.feasible = true;
+    retained_path.pass_side_sign = low_speed_shift_pass_side_sign_;
+    retained_path.pass_target_ey = low_speed_shift_pass_target_ey_;
+    retained_path.target_ey.assign(
+      static_cast<std::size_t>(N), low_speed_shift_pass_target_ey_);
+    for (int i = 0; i < N; ++i) {
+      if (
+        !std::isfinite(lb[i]) || !std::isfinite(ub[i]) ||
+        low_speed_shift_pass_target_ey_ < lb[i] - kEps ||
+        low_speed_shift_pass_target_ey_ > ub[i] + kEps)
+      {
+        return false;
+      }
+    }
+    return evaluate_low_speed_static_wall_preflight(
+      ref_wp_id, retained_path).feasible;
+  }
+
   GapPlannerOutput plan_low_speed_local_path_with_static_wall_preflight(
     const int ref_wp_id, const int N, const Eigen::VectorXd & lb,
     const Eigen::VectorXd & ub, const double now_sec, const bool update_last_target,
@@ -4492,6 +4524,7 @@ struct MPC
     low_speed_shift_control_was_active_ = false;
     low_speed_shift_rejoin_active_ = false;
     low_speed_shift_handoff_deferred_logged_ = false;
+    low_speed_shift_side_completion_logged_ = false;
     low_speed_shift_pass_side_sign_ = 0;
     low_speed_shift_pass_target_ey_ = 0.0;
     low_speed_shift_target_ey_ = 0.0;
@@ -4627,6 +4660,7 @@ struct MPC
     low_speed_shift_control_was_active_ = false;
     low_speed_shift_rejoin_active_ = false;
     low_speed_shift_handoff_deferred_logged_ = false;
+    low_speed_shift_side_completion_logged_ = false;
     low_speed_shift_pass_side_sign_ = 0;
     low_speed_shift_pass_target_ey_ = 0.0;
     low_speed_shift_target_ey_ = 0.0;
@@ -9213,13 +9247,44 @@ struct MPC
         inter_vehicle_corridor_plan ?
         cfg.v2x_behavior.start_grid_inter_vehicle_lateral_radius : 0.0)) :
       GapPlannerOutput{};
+    const bool retained_pass_candidate =
+      low_speed_shift_control_was_active_ && !low_speed_shift_rejoin_active_ &&
+      low_speed_direct_control_phase_ ==
+      v2x_overtake_core::LowSpeedDirectControlPhase::Pass &&
+      use_low_speed_local_path && !planner_output.active &&
+      !behavior_output.has_front_vehicle &&
+      (behavior_output.has_side_vehicle ||
+      behavior_output.has_low_speed_clearance_vehicle);
+    const bool retained_pass_path_feasible =
+      retained_pass_candidate && retained_low_speed_pass_path_feasible(
+      ref_wp_id, N, lb, ub);
+    if (
+      retained_pass_path_feasible &&
+      !low_speed_shift_side_completion_logged_)
+    {
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"),
+        "Low-speed pass retained for side completion: side=%s, "
+        "target_ey=%.2f, side_vehicle=%d, clearance_vehicle=%d, wp_id=%d",
+        low_speed_pass_side_name(low_speed_shift_pass_side_sign_),
+        low_speed_shift_pass_target_ey_,
+        behavior_output.has_side_vehicle ? 1 : 0,
+        behavior_output.has_low_speed_clearance_vehicle ? 1 : 0,
+        model->wp_id);
+      low_speed_shift_side_completion_logged_ = true;
+    }
     low_speed_shift_corridor_blocked_ =
       v2x_overtake_core::should_stop_low_speed_direct_control_for_corridor(
-      low_speed_shift_control_was_active_, low_speed_shift_rejoin_active_,
-      !low_speed_relevant_vehicle ||
-      (use_low_speed_local_path && planner_output.active),
-      !low_speed_relevant_vehicle ||
-      (use_low_speed_local_path && planner_output.feasible));
+      v2x_overtake_core::LowSpeedDirectCorridorStopRequest{
+        low_speed_shift_control_was_active_,
+        low_speed_shift_rejoin_active_,
+        low_speed_direct_control_phase_,
+        use_low_speed_local_path && planner_output.active,
+        use_low_speed_local_path && planner_output.feasible,
+        behavior_output.has_front_vehicle,
+        behavior_output.has_side_vehicle,
+        behavior_output.has_low_speed_clearance_vehicle,
+        retained_pass_path_feasible});
     if (
       low_speed_shift_control_was_active_ && !low_speed_shift_rejoin_active_ &&
       !low_speed_shift_corridor_blocked_ && use_low_speed_local_path &&
@@ -9388,6 +9453,7 @@ struct MPC
       low_speed_shift_target_ey_ = low_speed_shift_pass_target_ey_;
       low_speed_shift_rejoin_active_ = false;
       low_speed_shift_handoff_deferred_logged_ = false;
+      low_speed_shift_side_completion_logged_ = false;
       low_speed_shift_corridor_blocked_ = false;
       set_low_speed_direct_control_phase(
         v2x_overtake_core::resolve_low_speed_direct_control_entry_phase(
@@ -9998,6 +10064,7 @@ struct MPC
         low_speed_shift_control_was_active_ = false;
         low_speed_shift_rejoin_active_ = false;
         low_speed_shift_handoff_deferred_logged_ = false;
+        low_speed_shift_side_completion_logged_ = false;
         low_speed_shift_pass_side_sign_ = 0;
         low_speed_shift_steering_limit_rad_ = 0.0;
         low_speed_shift_wall_stop_active_ = false;
@@ -10140,6 +10207,7 @@ struct MPC
   bool low_speed_shift_control_was_active_{false};
   bool low_speed_shift_rejoin_active_{false};
   bool low_speed_shift_handoff_deferred_logged_{false};
+  bool low_speed_shift_side_completion_logged_{false};
   int low_speed_shift_pass_side_sign_{0};
   v2x_overtake_core::LowSpeedDirectControlPhase low_speed_direct_control_phase_{
     v2x_overtake_core::LowSpeedDirectControlPhase::Shift};
@@ -12355,6 +12423,14 @@ private:
           break;
         case
           v2x_overtake_core::OvertakeLineTransitionAction::
+          HoldPassForRearClearBeforeWallMarginRecovery:
+          // Keep the frozen pass-side goal. It points back toward the validated
+          // corridor while a premature center-line Return would cross the
+          // target before nominal rear-clear. Physical contact remains the
+          // higher-priority Recovery action.
+          break;
+        case
+          v2x_overtake_core::OvertakeLineTransitionAction::
           ReturnBeforeWallMarginRecovery:
           transition_overtake_line_phase(
             OvertakeLinePhase::Return, now_sec, current_ey,
@@ -13294,7 +13370,9 @@ private:
         runtime_completion_distance.required_pass_distance_m,
         runtime_completion_time_sec,
         bounded_initial_completion_budget,
-        forward_completion_was_latched});
+        forward_completion_was_latched,
+        behavior_output.overtake_commit_stage ==
+        overtake_core::PassCommitStage::SideBySideCommitted});
     const bool committed_forward_completion_guard_lost =
       forward_completion_was_latched && !committed_forward_completion.active;
     const double shiftout_lateral_tolerance = std::max(0.15, 0.25 * lateral_offset);
@@ -14233,16 +14311,23 @@ private:
             behavior_output.locked_target_current_body_footprints_separated,
             trigger, failure_reason);
         };
+      const bool current_overlap_debounce_completion =
+        committed_forward_completion.current_overlap_grace_active &&
+        behavior_output.overtake_commit_stage ==
+        overtake_core::PassCommitStage::SideBySideCommitted;
       if (
-        committed_forward_completion.active && !rear_clear_confirmed &&
+        (committed_forward_completion.active ||
+        current_overlap_debounce_completion) && !rear_clear_confirmed &&
         !overtake_line_state_.pass_horizon_safe_separation_active)
       {
         if (line_cfg.debug_log_enabled) {
           RCLCPP_INFO(
             rclcpp::get_logger("mpc_controller"),
-            "OvertakeLine side-by-side completion admitted: target=%s, target_s=%.2f, "
+            "OvertakeLine side-by-side completion admitted: source=%s, "
+            "target=%s, target_s=%.2f, "
             "rollout=%d/rear_clear=%d, required_forward=%.2f/%.2f m, "
             "required_time=%.2f s, ego_v=%.2f, target_v=%.2f, wp_id=%d",
+            committed_forward_completion.active ? "rollout" : "overlap_debounce",
             overtake_line_state_.target_vehicle_id.c_str(), locked_target_longitudinal,
             runtime_completion_prediction_valid ? 1 : 0,
             runtime_completion_rear_clear_feasible ? 1 : 0,
@@ -14253,9 +14338,17 @@ private:
             model->wp_id);
         }
         if (begin_safe_separation(
-            "side_by_side_commit", "committed forward completion acquired"))
+            current_overlap_debounce_completion ?
+            "side_by_side_overlap_debounce" : "side_by_side_commit",
+            current_overlap_debounce_completion ?
+            "unconfirmed current overlap during prediction refresh loss" :
+            "committed forward completion acquired"))
         {
-          overtake_line_state_.pass_forward_completion_latched = true;
+          // The current-overlap debounce may bridge control ownership but it
+          // must not manufacture a forward-completion prediction latch.
+          if (committed_forward_completion.active) {
+            overtake_line_state_.pass_forward_completion_latched = true;
+          }
         }
       } else if (
         committed_forward_completion.active && !rear_clear_confirmed &&
@@ -14467,7 +14560,8 @@ private:
             safe_separation_dynamic_completion.allowed,
             line_cfg.safe_separation_full_speed_forward_escape_enabled,
             line_cfg.safe_separation_rearward_progress_time_grace_enabled,
-            safe_separation_fresh_forward_progress});
+            safe_separation_fresh_forward_progress,
+            behavior_output.overtake_commit_stage});
         if (safe_separation.action == overtake_core::SafeSeparationAction::KeepSameSide) {
           safe_separation_velocity_reference =
             safe_separation.target_velocity_reference_mps;
@@ -15653,6 +15747,7 @@ private:
         overtake_line_horizon_failure_reason(horizon_evaluation);
       bool rebuild_after_phase_transition = false;
       if (
+        rear_clear_confirmed &&
         completed_pass_ready_to_return_before_margin_recovery &&
         !horizon_evaluation.static_map_physical_infeasible_during_execution)
       {

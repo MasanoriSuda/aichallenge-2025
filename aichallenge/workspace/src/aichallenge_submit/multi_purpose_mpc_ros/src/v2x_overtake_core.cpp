@@ -2451,15 +2451,25 @@ CommittedPassForwardCompletionResolution resolve_committed_pass_forward_completi
   const auto finite_non_negative = [](const double value) {
       return std::isfinite(value) && value >= 0.0;
     };
-  const bool base_guard_without_predicted_geometry =
+  const bool physical_runtime_guard =
     request.enabled && request.pass_active && request.minimum_motion_corridor_active &&
     request.prior_front_cap_release_active && request.target_seen &&
     request.target_continuity_valid && !request.target_position_jump &&
-    request.footprint_prediction_valid &&
     !request.actual_wall_contact && !request.wall_sample_unavailable &&
     !request.target_pass_side_intrusion && !request.emergency_brake &&
     !request.solver_recovery_active &&
-    std::isfinite(request.target_longitudinal_m) &&
+    std::isfinite(request.target_longitudinal_m);
+  // Current overlap is independently debounced from future-sweep overlap.
+  // Once tactical no-return has been crossed, a single body-boundary sample
+  // must not make the physical guard fail before ContactContinuation can
+  // classify a confirmed contact. This grace alone never acquires forward
+  // completion; it only keeps the same-side SafeSeparation bridge available.
+  resolution.current_overlap_grace_active =
+    physical_runtime_guard && request.side_by_side_committed &&
+    !request.current_body_footprints_separated &&
+    !request.current_body_footprint_overlap_confirmed;
+  const bool base_guard_without_predicted_geometry =
+    physical_runtime_guard && request.footprint_prediction_valid &&
     finite_non_negative(request.maximum_front_distance_m) &&
     request.completion_prediction_valid &&
     finite_non_negative(request.predicted_required_forward_distance_m) &&
@@ -2474,9 +2484,6 @@ CommittedPassForwardCompletionResolution resolve_committed_pass_forward_completi
     resolution.predicted_overlap_grace_active;
   const bool base_guard =
     base_guard_without_predicted_geometry && predicted_geometry_acceptable;
-  resolution.current_overlap_grace_active =
-    base_guard && !request.current_body_footprints_separated &&
-    !request.current_body_footprint_overlap_confirmed;
   const bool current_geometry_acceptable =
     request.current_body_footprints_separated ||
     resolution.current_overlap_grace_active;
@@ -2723,16 +2730,26 @@ SafeSeparationResolution resolve_safe_separation(
     request.target_longitudinal_m >= request.front_clear_distance_m - 1e-9 &&
     request.front_clear_elapsed_sec >= request.front_clear_confirm_sec - 1e-9)
   {
-    resolution.action = SafeSeparationAction::RecoverBehind;
-    resolution.reason = SafeSeparationReason::TargetClearAhead;
-    return resolution;
+    if (request.commit_stage != PassCommitStage::SideBySideCommitted) {
+      resolution.action = SafeSeparationAction::RecoverBehind;
+      resolution.reason = SafeSeparationReason::TargetClearAhead;
+      return resolution;
+    }
   }
   if (request.target_longitudinal_m >= 0.0) {
-    resolution.target_velocity_reference_mps = std::min(
-      request.maximum_ego_speed_mps,
-      std::max(0.0, request.target_speed_mps - request.speed_delta_mps));
-    resolution.signed_closing_speed_mps = -std::min(
-      request.speed_delta_mps, request.target_speed_mps);
+    if (request.commit_stage == PassCommitStage::SideBySideCommitted) {
+      resolution.target_velocity_reference_mps = std::min(
+        request.maximum_ego_speed_mps,
+        std::max(request.ego_speed_mps, request.target_speed_mps));
+      resolution.signed_closing_speed_mps =
+        resolution.target_velocity_reference_mps - request.target_speed_mps;
+    } else {
+      resolution.target_velocity_reference_mps = std::min(
+        request.maximum_ego_speed_mps,
+        std::max(0.0, request.target_speed_mps - request.speed_delta_mps));
+      resolution.signed_closing_speed_mps = -std::min(
+        request.speed_delta_mps, request.target_speed_mps);
+    }
   } else {
     resolution.target_velocity_reference_mps = std::min(
       request.maximum_ego_speed_mps,
@@ -5837,6 +5854,8 @@ const char * to_string(const OvertakeLineTransitionAction action) noexcept
       return "RejectEntryWallMargin";
     case OvertakeLineTransitionAction::ResumePassForReturnCorridorBlocker:
       return "ResumePassForReturnCorridorBlocker";
+    case OvertakeLineTransitionAction::HoldPassForRearClearBeforeWallMarginRecovery:
+      return "HoldPassForRearClearBeforeWallMarginRecovery";
     case OvertakeLineTransitionAction::ReturnBeforeWallMarginRecovery:
       return "ReturnBeforeWallMarginRecovery";
     case OvertakeLineTransitionAction::HoldCompletedPassForReturnCorridor:
@@ -5876,7 +5895,9 @@ OvertakeLineTransitionAction resolve_overtake_line_transition(
     request.completed_pass_ready_to_return_before_margin_recovery &&
     !request.actual_wall_sample_unavailable)
   {
-    return OvertakeLineTransitionAction::ReturnBeforeWallMarginRecovery;
+    return request.rear_clear_confirmed ?
+      OvertakeLineTransitionAction::ReturnBeforeWallMarginRecovery :
+      OvertakeLineTransitionAction::HoldPassForRearClearBeforeWallMarginRecovery;
   }
   if (
     request.actual_wall_margin_blocked &&
@@ -6104,11 +6125,28 @@ LowSpeedDirectControlPhase resolve_low_speed_direct_control_entry_phase(
 }
 
 bool should_stop_low_speed_direct_control_for_corridor(
-  const bool direct_control_active, const bool rejoin_active,
-  const bool local_path_active, const bool local_path_feasible) noexcept
+  const LowSpeedDirectCorridorStopRequest & request) noexcept
 {
-  return direct_control_active && !rejoin_active &&
-         (!local_path_active || !local_path_feasible);
+  if (!request.direct_control_active || request.rejoin_active) {
+    return false;
+  }
+  if (request.local_path_active) {
+    return !request.local_path_feasible;
+  }
+  const bool has_relevant_vehicle =
+    request.has_front_vehicle || request.has_side_vehicle ||
+    request.has_clearance_vehicle;
+  if (!has_relevant_vehicle) {
+    // The clear-hold and Rejoin state machine owns this transition. A brief
+    // observation gap must not turn into a hard stop.
+    return false;
+  }
+  const bool completing_validated_pass =
+    request.phase == LowSpeedDirectControlPhase::Pass &&
+    !request.has_front_vehicle &&
+    (request.has_side_vehicle || request.has_clearance_vehicle) &&
+    request.retained_pass_path_feasible;
+  return !completing_validated_pass;
 }
 
 double resolve_low_speed_direct_control_velocity(

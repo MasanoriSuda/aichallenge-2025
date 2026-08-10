@@ -1491,6 +1491,9 @@ struct CommittedPassForwardCompletionRequest
   double predicted_completion_time_sec{std::numeric_limits<double>::infinity()};
   double maximum_completion_distance_m{};
   bool already_latched{false};
+  /// Tactical no-return has already been crossed even if the dedicated
+  /// forward-completion latch could not yet be acquired.
+  bool side_by_side_committed{false};
 };
 
 struct CommittedPassForwardCompletionResolution
@@ -1607,6 +1610,7 @@ struct SafeSeparationRequest
   bool full_speed_forward_escape_enabled{false};
   bool rearward_progress_time_grace_enabled{false};
   bool fresh_forward_progress{false};
+  PassCommitStage commit_stage{PassCommitStage::Selectable};
 };
 
 struct SafeSeparationResolution
@@ -3378,6 +3382,7 @@ enum class OvertakeLineTransitionAction
   RecoverPhysicalWallContact,
   RejectEntryWallMargin,
   ResumePassForReturnCorridorBlocker,
+  HoldPassForRearClearBeforeWallMarginRecovery,
   ReturnBeforeWallMarginRecovery,
   HoldCompletedPassForReturnCorridor,
   RecoverWallMargin,
@@ -3552,12 +3557,26 @@ enum class LowSpeedDirectControlPhase
 LowSpeedDirectControlPhase resolve_low_speed_direct_control_entry_phase(
   bool pass_corridor_entered) noexcept;
 
+struct LowSpeedDirectCorridorStopRequest
+{
+  bool direct_control_active{false};
+  bool rejoin_active{false};
+  LowSpeedDirectControlPhase phase{LowSpeedDirectControlPhase::Shift};
+  bool local_path_active{false};
+  bool local_path_feasible{false};
+  bool has_front_vehicle{false};
+  bool has_side_vehicle{false};
+  bool has_clearance_vehicle{false};
+  bool retained_pass_path_feasible{false};
+};
+
 /// Stop an active stopped-vehicle direct maneuver when its live local corridor
-/// is unavailable. Rejoin is already protected by independent wall guards and
-/// intentionally no longer depends on the passed vehicle corridor.
+/// is unavailable. A validated Pass may finish moving a target from front to
+/// side/rear even after the forward-only local planner becomes inactive.
+/// Rejoin is protected by independent wall guards and no longer depends on the
+/// passed vehicle corridor.
 bool should_stop_low_speed_direct_control_for_corridor(
-  bool direct_control_active, bool rejoin_active,
-  bool local_path_active, bool local_path_feasible) noexcept;
+  const LowSpeedDirectCorridorStopRequest & request) noexcept;
 
 /// Select the bounded direct-control speed without handing ownership to MPC
 /// inside a stopped-vehicle pack.

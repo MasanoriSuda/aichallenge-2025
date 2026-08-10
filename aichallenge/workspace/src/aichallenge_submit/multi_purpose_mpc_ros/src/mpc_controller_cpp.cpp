@@ -14450,7 +14450,7 @@ private:
           safe_separation_forward_progress >= 0.05 - kEps &&
           safe_separation_progress_age <=
           line_cfg.safe_separation_progress_extension_fresh_sec + kEps;
-        const bool side_by_side_rearward_physical_completion_safe =
+        const bool side_by_side_rearward_completion_candidate =
           behavior_output.overtake_commit_stage ==
           overtake_core::PassCommitStage::SideBySideCommitted &&
           locked_target_seen && locked_target_matches &&
@@ -14458,9 +14458,11 @@ private:
           std::isfinite(locked_target_longitudinal) &&
           locked_target_longitudinal <= 0.0 &&
           behavior_output.locked_target_current_body_footprints_separated &&
-          behavior_output.locked_target_footprint_prediction_valid &&
-          behavior_output.locked_target_predicted_body_footprint_sweep_separated &&
           !behavior_output.overtake_execution_corridor_blocked;
+        const bool side_by_side_rearward_physical_completion_safe =
+          side_by_side_rearward_completion_candidate &&
+          behavior_output.locked_target_footprint_prediction_valid &&
+          behavior_output.locked_target_predicted_body_footprint_sweep_separated;
         const auto short_horizon_guard =
           overtake_core::resolve_pass_short_horizon_guard(
           overtake_core::PassShortHorizonGuardRequest{
@@ -14472,7 +14474,8 @@ private:
             recent_measured_forward_progress,
             prediction_guard_loss_elapsed_sec,
             line_cfg.safe_separation_soft_prediction_grace_sec,
-            side_by_side_rearward_physical_completion_safe});
+            side_by_side_rearward_physical_completion_safe,
+            side_by_side_rearward_completion_candidate});
         const bool short_horizon_safe = short_horizon_guard.safe;
         if (
           short_horizon_guard.rearward_completion_active &&
@@ -14481,11 +14484,14 @@ private:
           RCLCPP_WARN(
             rclcpp::get_logger("mpc_controller"),
             "OvertakeLine SideBySide rear-clear tail active: "
-            "target=%s, side=%d, target_s=%.2f, progress=%.2f m, "
+            "target=%s, side=%d, source=%s, target_s=%.2f, progress=%.2f m, "
             "progress_age=%.2f s, local=%.2f s/%.2f m, "
             "absolute=%.2f s/%.2f m, wp_id=%d",
             overtake_line_state_.target_vehicle_id.c_str(),
-            overtake_line_state_.pass_side_sign, locked_target_longitudinal,
+            overtake_line_state_.pass_side_sign,
+            short_horizon_guard.rearward_completion_prediction_grace_active ?
+            "prediction-grace" : "physical",
+            locked_target_longitudinal,
             safe_separation_forward_progress, safe_separation_progress_age,
             safe_separation_elapsed, safe_separation_traveled,
             pass_elapsed, pass_traveled, model->wp_id);

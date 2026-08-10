@@ -2558,17 +2558,14 @@ PassShortHorizonGuardResolution resolve_pass_short_horizon_guard(
   if (!request.hard_guard_safe) {
     return resolution;
   }
-  resolution.rearward_completion_active =
+  const bool physical_rearward_completion_active =
     request.side_by_side_rearward_completion_safe &&
     request.forward_completion_latched &&
     request.current_body_footprints_separated &&
     !request.execution_corridor_blocked;
   if (request.predictive_guard_safe) {
     resolution.safe = true;
-    return resolution;
-  }
-  if (resolution.rearward_completion_active) {
-    resolution.safe = true;
+    resolution.rearward_completion_active = physical_rearward_completion_active;
     return resolution;
   }
   const bool finite_grace_window =
@@ -2583,7 +2580,14 @@ PassShortHorizonGuardResolution resolve_pass_short_horizon_guard(
     request.fresh_forward_progress && finite_grace_window &&
     request.predictive_guard_loss_elapsed_sec <=
     request.maximum_prediction_grace_sec + 1e-9;
-  resolution.safe = resolution.prediction_grace_active;
+  resolution.rearward_completion_prediction_grace_active =
+    request.side_by_side_rearward_completion_prediction_grace_allowed &&
+    resolution.prediction_grace_active;
+  resolution.rearward_completion_active =
+    physical_rearward_completion_active ||
+    resolution.rearward_completion_prediction_grace_active;
+  resolution.safe =
+    resolution.prediction_grace_active || resolution.rearward_completion_active;
   return resolution;
 }
 

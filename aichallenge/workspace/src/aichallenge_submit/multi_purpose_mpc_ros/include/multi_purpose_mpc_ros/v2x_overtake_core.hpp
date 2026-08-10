@@ -1562,6 +1562,11 @@ struct PassShortHorizonGuardRequest
   /// body geometry plus the execution corridor remain physically clear. This
   /// is independent of whether the completion rollout fits the normal budget.
   bool side_by_side_rearward_completion_safe{false};
+  /// The same rearward completion is tactically eligible based on current body
+  /// geometry and corridor state. While the existing bounded prediction-only
+  /// grace is active, this keeps tail ownership without treating an
+  /// unconfirmed predicted overlap as physically clear.
+  bool side_by_side_rearward_completion_prediction_grace_allowed{false};
 };
 
 struct PassShortHorizonGuardResolution
@@ -1569,6 +1574,7 @@ struct PassShortHorizonGuardResolution
   bool safe{false};
   bool prediction_grace_active{false};
   bool rearward_completion_active{false};
+  bool rearward_completion_prediction_grace_active{false};
 };
 
 /// Keep an already-latched forward completion alive through a bounded

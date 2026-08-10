@@ -3596,6 +3596,60 @@ enum class LowSpeedDirectControlPhase
 LowSpeedDirectControlPhase resolve_low_speed_direct_control_entry_phase(
   bool pass_corridor_entered) noexcept;
 
+/// A stopped-vehicle direct pass may select another fully validated side only
+/// while it is still shifting toward the pass corridor. Once Pass owns the
+/// maneuver, crossing the target to a newly selected side is forbidden until
+/// the mission has completed and a fresh mission is admitted.
+bool can_update_low_speed_direct_pass_side(
+  LowSpeedDirectControlPhase phase, int current_side_sign,
+  int candidate_side_sign) noexcept;
+
+enum class LowSpeedRetainedPassRejectReason
+{
+  None,
+  StaticPathInfeasible,
+  TargetIdentityUnavailable,
+  TargetNotSeen,
+  TargetPositionJump,
+  CurrentBodyOverlap,
+  PredictionUnavailable,
+  PredictedFootprintOverlap,
+  SideOrderingConflict,
+  InvalidGeometry,
+};
+
+const char * to_string(LowSpeedRetainedPassRejectReason reason) noexcept;
+
+struct LowSpeedRetainedPassValidationRequest
+{
+  bool static_path_feasible{false};
+  bool target_identity_available{false};
+  bool target_seen{false};
+  bool target_position_jump{false};
+  bool current_body_footprints_separated{false};
+  bool footprint_prediction_valid{false};
+  bool predicted_body_footprint_sweep_separated{false};
+  int pass_side_sign{0};
+  double target_relative_lateral_m{std::numeric_limits<double>::infinity()};
+  double predicted_target_relative_lateral_m{
+    std::numeric_limits<double>::infinity()};
+  double ordering_margin_m{0.0};
+};
+
+struct LowSpeedRetainedPassValidationResult
+{
+  bool valid{false};
+  LowSpeedRetainedPassRejectReason reason{
+    LowSpeedRetainedPassRejectReason::StaticPathInfeasible};
+};
+
+/// Validate the target-aware continuation used after a stopped target moves
+/// from the forward-only local planner into the side-by-side region. Static
+/// wall feasibility alone is insufficient: the same observed target must
+/// remain physically and predictively separated on the committed side.
+LowSpeedRetainedPassValidationResult resolve_low_speed_retained_pass_validation(
+  const LowSpeedRetainedPassValidationRequest & request) noexcept;
+
 struct LowSpeedDirectCorridorStopRequest
 {
   bool direct_control_active{false};

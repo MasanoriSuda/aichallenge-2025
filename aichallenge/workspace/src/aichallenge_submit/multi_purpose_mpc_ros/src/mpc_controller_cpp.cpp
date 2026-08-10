@@ -1879,6 +1879,17 @@ struct V2XBehaviorOutput
   bool low_speed_avoidance_gap_blocked{false};
   bool low_speed_avoidance_stalled{false};
   bool low_speed_avoidance_cooldown_active{false};
+  bool low_speed_locked_target_seen{false};
+  bool low_speed_locked_target_position_jump{false};
+  bool low_speed_locked_target_current_body_footprints_separated{false};
+  bool low_speed_locked_target_footprint_prediction_valid{false};
+  bool low_speed_locked_target_predicted_body_footprint_sweep_separated{false};
+  double low_speed_locked_target_longitudinal{
+    std::numeric_limits<double>::infinity()};
+  double low_speed_locked_target_relative_lateral{
+    std::numeric_limits<double>::infinity()};
+  double low_speed_locked_target_predicted_relative_lateral{
+    std::numeric_limits<double>::infinity()};
   bool follow_speed_limit_active{false};
   bool follow_speed_limit_moving_front{false};
   bool moving_front_clearance_limit_active{false};
@@ -4531,6 +4542,9 @@ struct MPC
     low_speed_shift_handoff_deferred_logged_ = false;
     low_speed_shift_side_completion_logged_ = false;
     low_speed_shift_pass_side_sign_ = 0;
+    low_speed_shift_target_vehicle_id_.clear();
+    low_speed_retained_pass_reject_reason_ =
+      v2x_overtake_core::LowSpeedRetainedPassRejectReason::None;
     low_speed_shift_pass_target_ey_ = 0.0;
     low_speed_shift_target_ey_ = 0.0;
     low_speed_shift_velocity_mps_ = 0.0;
@@ -4667,6 +4681,9 @@ struct MPC
     low_speed_shift_handoff_deferred_logged_ = false;
     low_speed_shift_side_completion_logged_ = false;
     low_speed_shift_pass_side_sign_ = 0;
+    low_speed_shift_target_vehicle_id_.clear();
+    low_speed_retained_pass_reject_reason_ =
+      v2x_overtake_core::LowSpeedRetainedPassRejectReason::None;
     low_speed_shift_pass_target_ey_ = 0.0;
     low_speed_shift_target_ey_ = 0.0;
     low_speed_shift_velocity_mps_ = 0.0;
@@ -5084,6 +5101,61 @@ struct MPC
             clip(raw_lateral_velocity, -velocity_limit, velocity_limit) : 0.0;
           observed_course_lateral_velocity_valid =
             std::isfinite(observed_course_lateral_velocity);
+        }
+      }
+      const bool is_low_speed_locked_target =
+        low_speed_shift_control_was_active_ &&
+        !low_speed_shift_target_vehicle_id_.empty() &&
+        vehicle.id == low_speed_shift_target_vehicle_id_;
+      if (is_low_speed_locked_target) {
+        output.low_speed_locked_target_position_jump = vehicle.position_jump;
+        const bool low_speed_target_geometry_valid =
+          std::isfinite(vehicle_course_longitudinal) &&
+          std::isfinite(front_relative_lateral);
+        output.low_speed_locked_target_seen = low_speed_target_geometry_valid;
+        if (low_speed_target_geometry_valid) {
+          output.low_speed_locked_target_longitudinal = vehicle_course_longitudinal;
+          output.low_speed_locked_target_relative_lateral = front_relative_lateral;
+
+          const double body_longitudinal_clearance =
+            0.5 * std::max(0.0, cfg.v2x_gap.vehicle_length) +
+            0.5 * std::max(0.0, model->length);
+          const double body_lateral_clearance =
+            std::max(0.0, cfg.v2x_gap.vehicle_radius);
+          output.low_speed_locked_target_current_body_footprints_separated =
+            v2x_overtake_core::course_frame_body_footprints_remain_separated(
+            v2x_overtake_core::CourseFrameFootprintSweepRequest{
+              vehicle_course_longitudinal,
+              front_relative_lateral,
+              vehicle_course_longitudinal,
+              front_relative_lateral,
+              body_longitudinal_clearance,
+              body_lateral_clearance});
+
+          const double prediction_time = std::max(0.0, cfg.v2x_gap.prediction_time);
+          output.low_speed_locked_target_footprint_prediction_valid =
+            vehicle.velocity_observation_valid &&
+            observed_course_lateral_velocity_valid &&
+            std::isfinite(front_vehicle_speed) &&
+            std::isfinite(current_speed_mps_) &&
+            std::isfinite(prediction_time);
+          if (output.low_speed_locked_target_footprint_prediction_valid) {
+            const double predicted_longitudinal =
+              vehicle_course_longitudinal +
+              (front_vehicle_speed - current_speed_mps_) * prediction_time;
+            output.low_speed_locked_target_predicted_relative_lateral =
+              front_relative_lateral +
+              observed_course_lateral_velocity * prediction_time;
+            output.low_speed_locked_target_predicted_body_footprint_sweep_separated =
+              v2x_overtake_core::course_frame_body_footprints_remain_separated(
+              v2x_overtake_core::CourseFrameFootprintSweepRequest{
+                vehicle_course_longitudinal,
+                front_relative_lateral,
+                predicted_longitudinal,
+                output.low_speed_locked_target_predicted_relative_lateral,
+                body_longitudinal_clearance,
+                body_lateral_clearance});
+          }
         }
       }
       const bool vehicle_is_locked_target =
@@ -9229,10 +9301,15 @@ struct MPC
         overtake_line_state_.upper_boundary_vehicle_id);
       inter_vehicle_corridor_goal = overtake_line_state_.fixed_pass_corridor_goal_ey;
     }
+    const int low_speed_forced_pass_side =
+      low_speed_shift_control_was_active_ && !low_speed_shift_rejoin_active_ &&
+      low_speed_direct_control_phase_ ==
+      v2x_overtake_core::LowSpeedDirectControlPhase::Pass ?
+      low_speed_shift_pass_side_sign_ : 0;
     const auto planner_output = use_gap_planner ?
       (use_low_speed_local_path ?
       plan_low_speed_local_path_with_static_wall_preflight(
-        ref_wp_id, N, lb, ub, now_sec, true) :
+        ref_wp_id, N, lb, ub, now_sec, true, low_speed_forced_pass_side) :
       gap_planner->plan(
         *model, ref_wp_id, gap_plan_N, gap_plan_lb, gap_plan_ub, now_sec,
         !explicit_overtake_line_owns_plan,
@@ -9260,9 +9337,49 @@ struct MPC
       !behavior_output.has_front_vehicle &&
       (behavior_output.has_side_vehicle ||
       behavior_output.has_low_speed_clearance_vehicle);
-    const bool retained_pass_path_feasible =
+    const bool retained_pass_static_path_feasible =
       retained_pass_candidate && retained_low_speed_pass_path_feasible(
       ref_wp_id, N, lb, ub);
+    const auto retained_pass_validation =
+      v2x_overtake_core::resolve_low_speed_retained_pass_validation(
+      v2x_overtake_core::LowSpeedRetainedPassValidationRequest{
+        retained_pass_static_path_feasible,
+        !low_speed_shift_target_vehicle_id_.empty(),
+        behavior_output.low_speed_locked_target_seen,
+        behavior_output.low_speed_locked_target_position_jump,
+        behavior_output.low_speed_locked_target_current_body_footprints_separated,
+        behavior_output.low_speed_locked_target_footprint_prediction_valid,
+        behavior_output.low_speed_locked_target_predicted_body_footprint_sweep_separated,
+        low_speed_shift_pass_side_sign_,
+        behavior_output.low_speed_locked_target_relative_lateral,
+        behavior_output.low_speed_locked_target_predicted_relative_lateral,
+        cfg.v2x_behavior.overtake_line.target_intrusion_ordering_margin});
+    const bool retained_pass_path_feasible =
+      retained_pass_candidate && retained_pass_validation.valid;
+    if (
+      retained_pass_candidate && !retained_pass_validation.valid &&
+      retained_pass_validation.reason != low_speed_retained_pass_reject_reason_)
+    {
+      RCLCPP_WARN(
+        rclcpp::get_logger("mpc_controller"),
+        "Low-speed retained Pass rejected: target=%s, side=%s, reason=%s, "
+        "seen=%d, current_clear=%d, prediction_valid=%d, predicted_clear=%d, "
+        "relative_lateral=%.2f, predicted_lateral=%.2f, wp_id=%d",
+        low_speed_shift_target_vehicle_id_.empty() ? "<none>" :
+        low_speed_shift_target_vehicle_id_.c_str(),
+        low_speed_pass_side_name(low_speed_shift_pass_side_sign_),
+        v2x_overtake_core::to_string(retained_pass_validation.reason),
+        behavior_output.low_speed_locked_target_seen ? 1 : 0,
+        behavior_output.low_speed_locked_target_current_body_footprints_separated ? 1 : 0,
+        behavior_output.low_speed_locked_target_footprint_prediction_valid ? 1 : 0,
+        behavior_output.low_speed_locked_target_predicted_body_footprint_sweep_separated ? 1 : 0,
+        behavior_output.low_speed_locked_target_relative_lateral,
+        behavior_output.low_speed_locked_target_predicted_relative_lateral,
+        model->wp_id);
+    }
+    low_speed_retained_pass_reject_reason_ = retained_pass_candidate ?
+      retained_pass_validation.reason :
+      v2x_overtake_core::LowSpeedRetainedPassRejectReason::None;
     if (
       retained_pass_path_feasible &&
       !low_speed_shift_side_completion_logged_)
@@ -9299,11 +9416,27 @@ struct MPC
       const bool pass_side_changed =
         low_speed_shift_pass_side_sign_ != 0 && planner_output.pass_side_sign != 0 &&
         planner_output.pass_side_sign != low_speed_shift_pass_side_sign_;
-      // The direct controller may outlive the initial stopped target. Keep its
-      // target inside the corridor validated against the current vehicle pack.
-      low_speed_shift_pass_target_ey_ = planner_output.pass_target_ey;
-      low_speed_shift_target_ey_ = low_speed_shift_pass_target_ey_;
-      if (pass_side_changed) {
+      const bool side_update_allowed =
+        v2x_overtake_core::can_update_low_speed_direct_pass_side(
+        low_speed_direct_control_phase_, low_speed_shift_pass_side_sign_,
+        planner_output.pass_side_sign);
+      if (pass_side_changed && !side_update_allowed) {
+        RCLCPP_WARN(
+          rclcpp::get_logger("mpc_controller"),
+          "Low-speed direct Pass kept committed side: side=%d, rejected_side=%d, "
+          "target=%s, wp_id=%d",
+          low_speed_shift_pass_side_sign_, planner_output.pass_side_sign,
+          low_speed_shift_target_vehicle_id_.empty() ? "<none>" :
+          low_speed_shift_target_vehicle_id_.c_str(), model->wp_id);
+      } else if (side_update_allowed) {
+        // The direct controller may outlive the initial stopped target. Keep
+        // the target inside the same-side corridor validated against the
+        // current vehicle pack. Opposite-side candidates are never installed
+        // after Pass has committed.
+        low_speed_shift_pass_target_ey_ = planner_output.pass_target_ey;
+        low_speed_shift_target_ey_ = low_speed_shift_pass_target_ey_;
+      }
+      if (pass_side_changed && side_update_allowed) {
         set_low_speed_direct_control_phase(
           v2x_overtake_core::LowSpeedDirectControlPhase::Shift);
         RCLCPP_INFO(
@@ -9313,7 +9446,7 @@ struct MPC
           low_speed_shift_pass_side_sign_, planner_output.pass_side_sign,
           low_speed_shift_target_ey_, model->wp_id);
       }
-      if (planner_output.pass_side_sign != 0) {
+      if (side_update_allowed && planner_output.pass_side_sign != 0) {
         low_speed_shift_pass_side_sign_ = planner_output.pass_side_sign;
       }
     }
@@ -9454,6 +9587,12 @@ struct MPC
     {
       low_speed_shift_control_active_ = true;
       low_speed_shift_pass_side_sign_ = planner_output.pass_side_sign;
+      low_speed_shift_target_vehicle_id_ =
+        !behavior_output.low_speed_stopped_candidate_id.empty() ?
+        behavior_output.low_speed_stopped_candidate_id :
+        behavior_output.target_vehicle_id;
+      low_speed_retained_pass_reject_reason_ =
+        v2x_overtake_core::LowSpeedRetainedPassRejectReason::None;
       low_speed_shift_pass_target_ey_ = planner_output.pass_target_ey;
       low_speed_shift_target_ey_ = low_speed_shift_pass_target_ey_;
       low_speed_shift_rejoin_active_ = false;
@@ -10071,6 +10210,9 @@ struct MPC
         low_speed_shift_handoff_deferred_logged_ = false;
         low_speed_shift_side_completion_logged_ = false;
         low_speed_shift_pass_side_sign_ = 0;
+        low_speed_shift_target_vehicle_id_.clear();
+        low_speed_retained_pass_reject_reason_ =
+          v2x_overtake_core::LowSpeedRetainedPassRejectReason::None;
         low_speed_shift_steering_limit_rad_ = 0.0;
         low_speed_shift_wall_stop_active_ = false;
         low_speed_shift_corridor_blocked_ = false;
@@ -10214,6 +10356,10 @@ struct MPC
   bool low_speed_shift_handoff_deferred_logged_{false};
   bool low_speed_shift_side_completion_logged_{false};
   int low_speed_shift_pass_side_sign_{0};
+  std::string low_speed_shift_target_vehicle_id_;
+  v2x_overtake_core::LowSpeedRetainedPassRejectReason
+  low_speed_retained_pass_reject_reason_{
+    v2x_overtake_core::LowSpeedRetainedPassRejectReason::None};
   v2x_overtake_core::LowSpeedDirectControlPhase low_speed_direct_control_phase_{
     v2x_overtake_core::LowSpeedDirectControlPhase::Shift};
   double low_speed_shift_pass_target_ey_{0.0};

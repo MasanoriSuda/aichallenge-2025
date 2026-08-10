@@ -373,6 +373,10 @@ using multi_purpose_mpc_ros::v2x_overtake_core::
   should_stop_low_speed_direct_control_for_corridor;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_low_speed_direct_control_velocity;
 using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedDirectControlPhase;
+using multi_purpose_mpc_ros::v2x_overtake_core::can_update_low_speed_direct_pass_side;
+using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedRetainedPassRejectReason;
+using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedRetainedPassValidationRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_low_speed_retained_pass_validation;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_low_speed_shift_complete;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_begin_low_speed_shift_rejoin;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_release_low_speed_shift_control;
@@ -9213,6 +9217,76 @@ TEST(V2XOvertakeCoreSide, StartsDirectPassWhenAlreadyInsideValidatedCorridor)
   EXPECT_EQ(
     resolve_low_speed_direct_control_entry_phase(true),
     LowSpeedDirectControlPhase::Pass);
+}
+
+TEST(V2XOvertakeCoreSide, FreezesDirectPassSideAfterPassCommit)
+{
+  EXPECT_TRUE(can_update_low_speed_direct_pass_side(
+      LowSpeedDirectControlPhase::Shift, -1, 1));
+  EXPECT_TRUE(can_update_low_speed_direct_pass_side(
+      LowSpeedDirectControlPhase::Pass, -1, -1));
+  EXPECT_FALSE(can_update_low_speed_direct_pass_side(
+      LowSpeedDirectControlPhase::Pass, -1, 1));
+  EXPECT_FALSE(can_update_low_speed_direct_pass_side(
+      LowSpeedDirectControlPhase::Rejoin, -1, 1));
+  EXPECT_FALSE(can_update_low_speed_direct_pass_side(
+      LowSpeedDirectControlPhase::Shift, -1, 0));
+}
+
+TEST(V2XOvertakeCoreSide, ValidatesTargetAwareRetainedDirectPass)
+{
+  LowSpeedRetainedPassValidationRequest request;
+  request.static_path_feasible = true;
+  request.target_identity_available = true;
+  request.target_seen = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+  request.pass_side_sign = -1;
+  request.target_relative_lateral_m = 1.5;
+  request.predicted_target_relative_lateral_m = 1.4;
+  request.ordering_margin_m = 0.1;
+
+  const auto valid = resolve_low_speed_retained_pass_validation(request);
+  EXPECT_TRUE(valid.valid);
+  EXPECT_EQ(valid.reason, LowSpeedRetainedPassRejectReason::None);
+
+  request.target_seen = false;
+  auto rejected = resolve_low_speed_retained_pass_validation(request);
+  EXPECT_FALSE(rejected.valid);
+  EXPECT_EQ(rejected.reason, LowSpeedRetainedPassRejectReason::TargetNotSeen);
+
+  request.target_seen = true;
+  request.current_body_footprints_separated = false;
+  rejected = resolve_low_speed_retained_pass_validation(request);
+  EXPECT_FALSE(rejected.valid);
+  EXPECT_EQ(rejected.reason, LowSpeedRetainedPassRejectReason::CurrentBodyOverlap);
+
+  request.current_body_footprints_separated = true;
+  request.predicted_body_footprint_sweep_separated = false;
+  rejected = resolve_low_speed_retained_pass_validation(request);
+  EXPECT_FALSE(rejected.valid);
+  EXPECT_EQ(
+    rejected.reason, LowSpeedRetainedPassRejectReason::PredictedFootprintOverlap);
+}
+
+TEST(V2XOvertakeCoreSide, RejectsRetainedPassWhenTargetCrossesCommittedSide)
+{
+  LowSpeedRetainedPassValidationRequest request;
+  request.static_path_feasible = true;
+  request.target_identity_available = true;
+  request.target_seen = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+  request.pass_side_sign = -1;
+  request.target_relative_lateral_m = 1.5;
+  request.predicted_target_relative_lateral_m = -0.2;
+  request.ordering_margin_m = 0.1;
+
+  const auto rejected = resolve_low_speed_retained_pass_validation(request);
+  EXPECT_FALSE(rejected.valid);
+  EXPECT_EQ(rejected.reason, LowSpeedRetainedPassRejectReason::SideOrderingConflict);
 }
 
 TEST(V2XOvertakeCoreSide, StopsDirectPassWhenLiveCorridorBecomesUnavailable)

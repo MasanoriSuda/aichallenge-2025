@@ -6186,6 +6186,93 @@ LowSpeedDirectControlPhase resolve_low_speed_direct_control_entry_phase(
          LowSpeedDirectControlPhase::Pass : LowSpeedDirectControlPhase::Shift;
 }
 
+bool can_update_low_speed_direct_pass_side(
+  const LowSpeedDirectControlPhase phase, const int current_side_sign,
+  const int candidate_side_sign) noexcept
+{
+  if (
+    (candidate_side_sign != -1 && candidate_side_sign != 1) ||
+    (current_side_sign != -1 && current_side_sign != 0 && current_side_sign != 1))
+  {
+    return false;
+  }
+  return current_side_sign == 0 || candidate_side_sign == current_side_sign ||
+         phase == LowSpeedDirectControlPhase::Shift;
+}
+
+const char * to_string(const LowSpeedRetainedPassRejectReason reason) noexcept
+{
+  switch (reason) {
+    case LowSpeedRetainedPassRejectReason::None:
+      return "none";
+    case LowSpeedRetainedPassRejectReason::StaticPathInfeasible:
+      return "static path infeasible";
+    case LowSpeedRetainedPassRejectReason::TargetIdentityUnavailable:
+      return "target identity unavailable";
+    case LowSpeedRetainedPassRejectReason::TargetNotSeen:
+      return "locked target not seen";
+    case LowSpeedRetainedPassRejectReason::TargetPositionJump:
+      return "locked target position jump";
+    case LowSpeedRetainedPassRejectReason::CurrentBodyOverlap:
+      return "current body footprint overlap";
+    case LowSpeedRetainedPassRejectReason::PredictionUnavailable:
+      return "target footprint prediction unavailable";
+    case LowSpeedRetainedPassRejectReason::PredictedFootprintOverlap:
+      return "predicted body footprint sweep overlap";
+    case LowSpeedRetainedPassRejectReason::SideOrderingConflict:
+      return "locked target crossed committed pass side";
+    case LowSpeedRetainedPassRejectReason::InvalidGeometry:
+      return "invalid target geometry";
+  }
+  return "unknown";
+}
+
+LowSpeedRetainedPassValidationResult resolve_low_speed_retained_pass_validation(
+  const LowSpeedRetainedPassValidationRequest & request) noexcept
+{
+  const auto reject = [](const LowSpeedRetainedPassRejectReason reason) {
+      return LowSpeedRetainedPassValidationResult{false, reason};
+    };
+  if (!request.static_path_feasible) {
+    return reject(LowSpeedRetainedPassRejectReason::StaticPathInfeasible);
+  }
+  if (!request.target_identity_available) {
+    return reject(LowSpeedRetainedPassRejectReason::TargetIdentityUnavailable);
+  }
+  if (!request.target_seen) {
+    return reject(LowSpeedRetainedPassRejectReason::TargetNotSeen);
+  }
+  if (request.target_position_jump) {
+    return reject(LowSpeedRetainedPassRejectReason::TargetPositionJump);
+  }
+  if (!request.current_body_footprints_separated) {
+    return reject(LowSpeedRetainedPassRejectReason::CurrentBodyOverlap);
+  }
+  if (!request.footprint_prediction_valid) {
+    return reject(LowSpeedRetainedPassRejectReason::PredictionUnavailable);
+  }
+  if (!request.predicted_body_footprint_sweep_separated) {
+    return reject(LowSpeedRetainedPassRejectReason::PredictedFootprintOverlap);
+  }
+  if (
+    (request.pass_side_sign != -1 && request.pass_side_sign != 1) ||
+    !std::isfinite(request.target_relative_lateral_m) ||
+    !std::isfinite(request.predicted_target_relative_lateral_m) ||
+    !std::isfinite(request.ordering_margin_m) || request.ordering_margin_m < 0.0)
+  {
+    return reject(LowSpeedRetainedPassRejectReason::InvalidGeometry);
+  }
+  const double side = static_cast<double>(request.pass_side_sign);
+  if (
+    side * request.target_relative_lateral_m > request.ordering_margin_m + 1e-9 ||
+    side * request.predicted_target_relative_lateral_m >
+    request.ordering_margin_m + 1e-9)
+  {
+    return reject(LowSpeedRetainedPassRejectReason::SideOrderingConflict);
+  }
+  return {true, LowSpeedRetainedPassRejectReason::None};
+}
+
 bool should_stop_low_speed_direct_control_for_corridor(
   const LowSpeedDirectCorridorStopRequest & request) noexcept
 {

@@ -2644,7 +2644,16 @@ SafeSeparationResolution resolve_safe_separation(
     !finite_non_negative(request.absolute_elapsed_sec) ||
     !finite_non_negative(request.absolute_traveled_m) ||
     !non_negative_bound(request.absolute_maximum_duration_sec) ||
-    !non_negative_bound(request.absolute_maximum_distance_m))
+    !non_negative_bound(request.absolute_maximum_distance_m) ||
+    ((request.rearward_progress_loss_disengage_enabled ||
+    request.rearward_progress_loss_disengage_active) &&
+    (!finite_non_negative(request.rearward_progress_loss_progress_age_sec) ||
+    !finite_non_negative(request.rearward_progress_loss_stale_sec) ||
+    !finite_non_negative(request.rearward_progress_loss_regression_m) ||
+    !finite_non_negative(request.rearward_progress_loss_minimum_regression_m) ||
+    !finite_non_negative(request.rearward_progress_loss_disengage_elapsed_sec) ||
+    !finite_non_negative(request.rearward_progress_loss_disengage_max_sec) ||
+    !finite_non_negative(request.rearward_progress_loss_disengage_speed_delta_mps))))
   {
     resolution.action = SafeSeparationAction::Abort;
     resolution.reason = SafeSeparationReason::InvalidInput;
@@ -2653,6 +2662,52 @@ SafeSeparationResolution resolve_safe_separation(
   if (request.rear_clear_confirmed && request.return_corridor_available) {
     resolution.action = SafeSeparationAction::Return;
     resolution.reason = SafeSeparationReason::RearClear;
+    return resolution;
+  }
+  const bool rearward_progress_loss_disengage_candidate =
+    request.rearward_progress_loss_disengage_enabled &&
+    request.commit_stage == PassCommitStage::SideBySideCommitted &&
+    request.forward_completion_latched &&
+    request.target_longitudinal_m < 0.0 &&
+    request.rearward_progress_loss_progress_age_sec + 1e-9 >=
+    request.rearward_progress_loss_stale_sec &&
+    request.rearward_progress_loss_regression_m + 1e-9 >=
+    request.rearward_progress_loss_minimum_regression_m;
+  const bool rearward_progress_loss_disengage_active =
+    request.rearward_progress_loss_disengage_active ||
+    rearward_progress_loss_disengage_candidate;
+  if (rearward_progress_loss_disengage_active) {
+    if (!request.rearward_progress_loss_physical_hold_safe) {
+      resolution.action = SafeSeparationAction::Abort;
+      resolution.reason = SafeSeparationReason::ShortHorizonUnsafe;
+      return resolution;
+    }
+    if (
+      request.target_longitudinal_m >= request.front_clear_distance_m - 1e-9 &&
+      request.front_clear_elapsed_sec >= request.front_clear_confirm_sec - 1e-9)
+    {
+      resolution.action = SafeSeparationAction::RecoverBehind;
+      resolution.reason = SafeSeparationReason::TargetClearAhead;
+      return resolution;
+    }
+    if (
+      request.rearward_progress_loss_disengage_elapsed_sec >=
+      request.rearward_progress_loss_disengage_max_sec - 1e-9)
+    {
+      resolution.action = SafeSeparationAction::Abort;
+      resolution.reason = SafeSeparationReason::RearwardProgressLossDisengagementTimeout;
+      return resolution;
+    }
+    resolution.action = SafeSeparationAction::KeepSameSide;
+    resolution.reason = SafeSeparationReason::RearwardProgressLossDisengagement;
+    resolution.target_velocity_reference_mps = std::min(
+      request.maximum_ego_speed_mps,
+      std::max(
+        0.0,
+        request.target_speed_mps -
+        request.rearward_progress_loss_disengage_speed_delta_mps));
+    resolution.signed_closing_speed_mps =
+      resolution.target_velocity_reference_mps - request.target_speed_mps;
     return resolution;
   }
   if (!request.short_horizon_safe) {
@@ -2964,6 +3019,10 @@ const char * to_string(const SafeSeparationReason reason) noexcept
       return "rearward progress time grace";
     case SafeSeparationReason::SideBySideRearClearCompletion:
       return "side-by-side rear-clear completion";
+    case SafeSeparationReason::RearwardProgressLossDisengagement:
+      return "rearward progress-loss disengagement";
+    case SafeSeparationReason::RearwardProgressLossDisengagementTimeout:
+      return "rearward progress-loss disengagement timeout";
   }
   return "unknown";
 }

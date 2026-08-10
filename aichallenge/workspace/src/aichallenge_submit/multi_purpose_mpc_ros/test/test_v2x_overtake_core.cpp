@@ -5275,6 +5275,78 @@ TEST(V2XOvertakeCoreHorizon, FinishesSideBySideRearClearTailWithinAbsoluteBudget
   EXPECT_EQ(resolution.reason, SafeSeparationReason::LocalDistanceLimit);
 }
 
+TEST(V2XOvertakeCoreHorizon, DisengagesSameSideWhenRearwardProgressIsLost)
+{
+  SafeSeparationRequest request;
+  request.enabled = true;
+  request.active = true;
+  request.short_horizon_safe = false;
+  request.target_seen = true;
+  request.target_longitudinal_m = -0.60;
+  request.target_speed_mps = 3.20;
+  request.speed_delta_mps = 2.0;
+  request.maximum_ego_speed_mps = 11.11;
+  request.front_clear_distance_m = 2.0;
+  request.front_clear_confirm_sec = 0.25;
+  request.elapsed_sec = 4.47;
+  request.traveled_m = 16.54;
+  request.maximum_duration_sec = 5.0;
+  request.maximum_distance_m = 12.0;
+  request.ego_speed_mps = 3.0;
+  request.forward_escape_max_front_distance_m = 3.0;
+  request.absolute_elapsed_sec = 7.70;
+  request.absolute_traveled_m = 34.98;
+  request.absolute_maximum_duration_sec = 10.0;
+  request.absolute_maximum_distance_m = 40.0;
+  request.forward_completion_latched = true;
+  request.commit_stage = PassCommitStage::SideBySideCommitted;
+  request.rearward_progress_loss_disengage_enabled = true;
+  request.rearward_progress_loss_physical_hold_safe = true;
+  request.rearward_progress_loss_progress_age_sec = 4.20;
+  request.rearward_progress_loss_stale_sec = 0.75;
+  request.rearward_progress_loss_regression_m = 0.73;
+  request.rearward_progress_loss_minimum_regression_m = 0.30;
+  request.rearward_progress_loss_disengage_max_sec = 3.0;
+  request.rearward_progress_loss_disengage_speed_delta_mps = 1.50;
+
+  auto resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::KeepSameSide);
+  EXPECT_EQ(
+    resolution.reason,
+    SafeSeparationReason::RearwardProgressLossDisengagement);
+  EXPECT_NEAR(resolution.target_velocity_reference_mps, 1.70, 1e-9);
+  EXPECT_NEAR(resolution.signed_closing_speed_mps, -1.50, 1e-9);
+
+  request.rearward_progress_loss_disengage_active = true;
+  request.target_longitudinal_m = 2.0;
+  request.front_clear_elapsed_sec = 0.25;
+  resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::RecoverBehind);
+  EXPECT_EQ(resolution.reason, SafeSeparationReason::TargetClearAhead);
+
+  request.target_longitudinal_m = -0.60;
+  request.front_clear_elapsed_sec = 0.0;
+  request.rearward_progress_loss_disengage_elapsed_sec = 3.0;
+  resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::Abort);
+  EXPECT_EQ(
+    resolution.reason,
+    SafeSeparationReason::RearwardProgressLossDisengagementTimeout);
+
+  request.rearward_progress_loss_disengage_elapsed_sec = 0.5;
+  request.rearward_progress_loss_physical_hold_safe = false;
+  resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::Abort);
+  EXPECT_EQ(resolution.reason, SafeSeparationReason::ShortHorizonUnsafe);
+
+  request.rearward_progress_loss_physical_hold_safe = true;
+  request.rear_clear_confirmed = true;
+  request.return_corridor_available = true;
+  resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::Return);
+  EXPECT_EQ(resolution.reason, SafeSeparationReason::RearClear);
+}
+
 TEST(V2XOvertakeCoreHorizon, RejectsExcessiveAtomicLateralReplacement)
 {
   SameSideExtensionCommitRequest request;

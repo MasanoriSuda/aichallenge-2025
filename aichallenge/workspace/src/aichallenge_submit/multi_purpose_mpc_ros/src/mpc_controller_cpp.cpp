@@ -1453,6 +1453,11 @@ struct OvertakeLineConfig
   double safe_separation_soft_prediction_grace_sec{0.25};
   bool safe_separation_full_speed_forward_escape_enabled{false};
   bool safe_separation_rearward_progress_time_grace_enabled{false};
+  bool safe_separation_progress_loss_disengage_enabled{false};
+  double safe_separation_progress_loss_stale_sec{0.75};
+  double safe_separation_progress_loss_regression_distance{0.30};
+  double safe_separation_disengage_speed_delta{1.50};
+  double safe_separation_disengage_max_sec{3.0};
   bool safe_separation_mission_aligned_budget_enabled{false};
   double safe_separation_completion_distance_margin{1.0};
   double safe_separation_completion_time_margin_sec{0.5};
@@ -2068,6 +2073,9 @@ struct OvertakeLineState
   double pass_predicted_overlap_since_sec{std::numeric_limits<double>::quiet_NaN()};
   bool pass_rearward_progress_time_grace_was_active{false};
   bool pass_side_by_side_rear_clear_tail_was_active{false};
+  bool pass_rearward_progress_loss_disengage_active{false};
+  double pass_rearward_progress_loss_disengage_start_sec{
+    std::numeric_limits<double>::quiet_NaN()};
   int pass_side_sign{0};
   double target_ey{0.0};
   double phase_start_sec{-std::numeric_limits<double>::infinity()};
@@ -10564,6 +10572,9 @@ private:
       overtake_line_state_.pass_front_cap_release_active = false;
       overtake_line_state_.pass_rearward_progress_time_grace_was_active = false;
       overtake_line_state_.pass_side_by_side_rear_clear_tail_was_active = false;
+      overtake_line_state_.pass_rearward_progress_loss_disengage_active = false;
+      overtake_line_state_.pass_rearward_progress_loss_disengage_start_sec =
+        std::numeric_limits<double>::quiet_NaN();
       overtake_line_state_.pass_horizon_hold_active = false;
       overtake_line_state_.pass_horizon_safe_separation_active = false;
       overtake_line_state_.pass_forward_completion_latched = false;
@@ -10907,6 +10918,9 @@ private:
     overtake_line_state_.pass_horizon_safe_separation_progress_extension_count = 0;
     overtake_line_state_.pass_horizon_safe_separation_max_sec = 0.0;
     overtake_line_state_.pass_horizon_safe_separation_max_distance = 0.0;
+    overtake_line_state_.pass_rearward_progress_loss_disengage_active = false;
+    overtake_line_state_.pass_rearward_progress_loss_disengage_start_sec =
+      std::numeric_limits<double>::quiet_NaN();
     overtake_line_state_.pass_soft_prediction_guard_loss_since_sec =
       std::numeric_limits<double>::quiet_NaN();
     overtake_line_state_.pass_last_clear_target_prediction_sec =
@@ -11921,6 +11935,9 @@ private:
       locked_target_longitudinal;
     overtake_line_state_.pass_horizon_safe_separation_last_progress_sec = now_sec;
     overtake_line_state_.pass_horizon_safe_separation_progress_extension_count = 0;
+    overtake_line_state_.pass_rearward_progress_loss_disengage_active = false;
+    overtake_line_state_.pass_rearward_progress_loss_disengage_start_sec =
+      std::numeric_limits<double>::quiet_NaN();
     const double pass_elapsed = overtake_mission_pass_elapsed(now_sec);
     const auto aligned_budget =
       overtake_core::resolve_mission_aligned_safe_separation_budget(
@@ -14673,6 +14690,33 @@ private:
           0.0,
           now_sec -
           overtake_line_state_.pass_horizon_safe_separation_front_clear_since_sec) : 0.0;
+        const double safe_separation_progress_regression =
+          locked_target_seen && std::isfinite(locked_target_longitudinal) &&
+          std::isfinite(
+          overtake_line_state_.pass_horizon_safe_separation_best_target_longitudinal) ?
+          std::max(
+          0.0,
+          locked_target_longitudinal -
+          overtake_line_state_.pass_horizon_safe_separation_best_target_longitudinal) : 0.0;
+        const double safe_separation_disengage_elapsed =
+          overtake_line_state_.pass_rearward_progress_loss_disengage_active &&
+          std::isfinite(
+          overtake_line_state_.pass_rearward_progress_loss_disengage_start_sec) ?
+          std::max(
+          0.0,
+          now_sec -
+          overtake_line_state_.pass_rearward_progress_loss_disengage_start_sec) : 0.0;
+        const bool safe_separation_disengage_physical_hold_safe =
+          locked_target_seen && locked_target_matches &&
+          locked_target_progress_continuous &&
+          !behavior_output.locked_target_position_jump &&
+          !behavior_output.locked_target_pass_side_intrusion &&
+          behavior_output.locked_target_current_body_footprints_separated &&
+          !behavior_output.overtake_execution_corridor_blocked &&
+          !actual_wall_physical_contact && !actual_wall_margin_blocked &&
+          !actual_wall_sample_unavailable &&
+          behavior_output.front_risk_level != FrontRiskLevel::EmergencyBrake &&
+          !overtake_solver_recovery_active_;
         const bool safe_separation_forward_escape_allowed =
           line_cfg.safe_separation_forward_escape_enabled &&
           (committed_forward_completion.active ||
@@ -14755,7 +14799,17 @@ private:
             line_cfg.safe_separation_rearward_progress_time_grace_enabled,
             safe_separation_fresh_forward_progress,
             behavior_output.overtake_commit_stage,
-            short_horizon_guard.rearward_completion_active});
+            short_horizon_guard.rearward_completion_active,
+            line_cfg.safe_separation_progress_loss_disengage_enabled,
+            overtake_line_state_.pass_rearward_progress_loss_disengage_active,
+            safe_separation_disengage_physical_hold_safe,
+            safe_separation_progress_age,
+            line_cfg.safe_separation_progress_loss_stale_sec,
+            safe_separation_progress_regression,
+            line_cfg.safe_separation_progress_loss_regression_distance,
+            safe_separation_disengage_elapsed,
+            line_cfg.safe_separation_disengage_max_sec,
+            line_cfg.safe_separation_disengage_speed_delta});
         if (safe_separation.action == overtake_core::SafeSeparationAction::KeepSameSide) {
           safe_separation_velocity_reference =
             safe_separation.target_velocity_reference_mps;
@@ -14785,6 +14839,27 @@ private:
           }
           overtake_line_state_.pass_rearward_progress_time_grace_was_active =
             rearward_progress_time_grace_active;
+          const bool rearward_progress_loss_disengage_active =
+            safe_separation.reason ==
+            overtake_core::SafeSeparationReason::RearwardProgressLossDisengagement;
+          if (
+            rearward_progress_loss_disengage_active &&
+            !overtake_line_state_.pass_rearward_progress_loss_disengage_active)
+          {
+            overtake_line_state_.pass_rearward_progress_loss_disengage_active = true;
+            overtake_line_state_.pass_rearward_progress_loss_disengage_start_sec = now_sec;
+            RCLCPP_WARN(
+              rclcpp::get_logger("mpc_controller"),
+              "OvertakeLine rearward progress-loss disengagement started: "
+              "target=%s, side=%d, target_s=%.2f, best_s=%.2f, regression=%.2f m, "
+              "progress_age=%.2f s, target_v=%.2f, yield_v=%.2f, limit=%.2f s, wp_id=%d",
+              overtake_line_state_.target_vehicle_id.c_str(),
+              overtake_line_state_.pass_side_sign, locked_target_longitudinal,
+              overtake_line_state_.pass_horizon_safe_separation_best_target_longitudinal,
+              safe_separation_progress_regression, safe_separation_progress_age,
+              locked_target_speed, safe_separation.target_velocity_reference_mps,
+              line_cfg.safe_separation_disengage_max_sec, model->wp_id);
+          }
           if (safe_separation.progress_extension_requested) {
             const bool dynamic_completion_extension =
               safe_separation.reason ==
@@ -19363,6 +19438,27 @@ Config load_config(const std::string & path)
     mpc["v2x_overtake_safe_separation_rearward_progress_time_grace_enabled"] ?
     mpc["v2x_overtake_safe_separation_rearward_progress_time_grace_enabled"].as<bool>() :
     false;
+  cfg.mpc.v2x_behavior.overtake_line.safe_separation_progress_loss_disengage_enabled =
+    mpc["v2x_overtake_safe_separation_progress_loss_disengage_enabled"] ?
+    mpc["v2x_overtake_safe_separation_progress_loss_disengage_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_line.safe_separation_progress_loss_stale_sec = std::max(
+    0.0,
+    mpc["v2x_overtake_safe_separation_progress_loss_stale_sec"] ?
+    mpc["v2x_overtake_safe_separation_progress_loss_stale_sec"].as<double>() : 0.75);
+  cfg.mpc.v2x_behavior.overtake_line.safe_separation_progress_loss_regression_distance =
+    std::max(
+    0.0,
+    mpc["v2x_overtake_safe_separation_progress_loss_regression_distance"] ?
+    mpc["v2x_overtake_safe_separation_progress_loss_regression_distance"].as<double>() :
+    0.30);
+  cfg.mpc.v2x_behavior.overtake_line.safe_separation_disengage_speed_delta = std::max(
+    0.0,
+    mpc["v2x_overtake_safe_separation_disengage_speed_delta"] ?
+    mpc["v2x_overtake_safe_separation_disengage_speed_delta"].as<double>() : 1.50);
+  cfg.mpc.v2x_behavior.overtake_line.safe_separation_disengage_max_sec = std::max(
+    0.1,
+    mpc["v2x_overtake_safe_separation_disengage_max_sec"] ?
+    mpc["v2x_overtake_safe_separation_disengage_max_sec"].as<double>() : 3.0);
   cfg.mpc.v2x_behavior.overtake_line.safe_separation_mission_aligned_budget_enabled =
     mpc["v2x_overtake_safe_separation_mission_aligned_budget_enabled"] ?
     mpc["v2x_overtake_safe_separation_mission_aligned_budget_enabled"].as<bool>() :
@@ -20947,6 +21043,17 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line.contact_continuation_min_ego_speed,
         mpc_cfg_.v2x_behavior.overtake_line.contact_continuation_progress_fresh_sec,
         mpc_cfg_.v2x_behavior.overtake_line.contact_continuation_lateral_bias);
+      RCLCPP_INFO(
+        get_logger(),
+        "V2X rearward progress-loss disengagement: %s, stale>=%.2f s, "
+        "regression>=%.2f m, target_delta=%.2f m/s, max=%.2f s",
+        mpc_cfg_.v2x_behavior.overtake_line
+        .safe_separation_progress_loss_disengage_enabled ? "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line.safe_separation_progress_loss_stale_sec,
+        mpc_cfg_.v2x_behavior.overtake_line
+        .safe_separation_progress_loss_regression_distance,
+        mpc_cfg_.v2x_behavior.overtake_line.safe_separation_disengage_speed_delta,
+        mpc_cfg_.v2x_behavior.overtake_line.safe_separation_disengage_max_sec);
       RCLCPP_INFO(
         get_logger(),
         "V2X dynamic Pass corridor: %s, period=%.2f s, lateral=%.2f..%.2f m, "

@@ -1459,6 +1459,8 @@ enum class SafeSeparationReason
   DynamicCompletionExtension,
   RearwardProgressTimeGrace,
   SideBySideRearClearCompletion,
+  RearwardProgressLossDisengagement,
+  RearwardProgressLossDisengagementTimeout,
 };
 
 struct CommittedPassForwardCompletionRequest
@@ -1634,6 +1636,20 @@ struct SafeSeparationRequest
   /// Physical rear-clear continuation admitted after tactical no-return. The
   /// normal local window becomes soft, but absolute Pass bounds remain hard.
   bool side_by_side_rearward_completion_allowed{false};
+  /// A bounded same-side disengagement may replace a failed forward escape
+  /// after tactical no-return. It never authorizes a lateral Return across the
+  /// locked target; it lets the target clear ahead before Mission revalidation.
+  bool rearward_progress_loss_disengage_enabled{false};
+  bool rearward_progress_loss_disengage_active{false};
+  bool rearward_progress_loss_physical_hold_safe{false};
+  double rearward_progress_loss_progress_age_sec{
+    std::numeric_limits<double>::infinity()};
+  double rearward_progress_loss_stale_sec{};
+  double rearward_progress_loss_regression_m{};
+  double rearward_progress_loss_minimum_regression_m{};
+  double rearward_progress_loss_disengage_elapsed_sec{};
+  double rearward_progress_loss_disengage_max_sec{};
+  double rearward_progress_loss_disengage_speed_delta_mps{};
 };
 
 struct SafeSeparationResolution

@@ -575,6 +575,14 @@ mpc:
   # Once the target is behind and forward progress remains fresh, let distance/rear-clear
   # terminate the pass instead of a collision-penalty-sensitive wall-clock timeout.
   v2x_overtake_safe_separation_rearward_progress_time_grace_enabled: true
+  # If a committed rearward target starts catching ego on a speed-losing curve,
+  # keep the separated side and let it clear ahead before replanning. This avoids
+  # a lateral Recovery beside the target and close to the wall.
+  v2x_overtake_safe_separation_progress_loss_disengage_enabled: true
+  v2x_overtake_safe_separation_progress_loss_stale_sec: 0.75 # [s]
+  v2x_overtake_safe_separation_progress_loss_regression_distance: 0.30 # [m]
+  v2x_overtake_safe_separation_disengage_speed_delta: 1.50 # [m/s] target passes ahead quickly
+  v2x_overtake_safe_separation_disengage_max_sec: 3.0 # [s] bounded same-side disengagement
   v2x_overtake_safe_separation_full_speed_forward_escape_enabled: true # release target+delta cap after body-clear commit; course/input hard limits still win
   v2x_overtake_safe_separation_mission_aligned_budget_enabled: true # freeze a local window large enough for the selected Mission rear-clear estimate
   v2x_overtake_safe_separation_completion_distance_margin: 1.0 # [m] reserve after the live predicted rear-clear point

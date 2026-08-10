@@ -313,7 +313,7 @@ mpc:
   odom_timeout_sec: 0.5 # [s], steady-clock local safety timeout (not an official limit)
   # Controller/actuation latency compensation after EKF pose timing compensation.
   # 0.125 s reproduces the non-mutating equivalent of the 2025 Pure Pursuit prediction.
-  state_prediction_delay_sec: 0.125
+  state_prediction_delay_sec: 0.1
   state_prediction_simulation_only: true
   min_linearization_speed_mps: 0.5 # [m/s], avoid singular 1/v terms below this speed
   # Keep ego course progress on the same hairpin branch after contact. Reacquire globally only
@@ -523,7 +523,9 @@ mpc:
   # Choose the side by executable rear-clear value instead of treating entry-outside as a default.
   # A short post-clear reserve catches a curve-sign change immediately after the predicted pass.
   v2x_overtake_rear_clear_side_selection_enabled: true
-  v2x_overtake_rear_clear_role_reserve_distance: 2.0 # [m]
+  # The 20260811 run exposed a role reversal just beyond the former effective
+  # 4 m runtime reserve. Observe 6 m past predicted rear-clear before entry.
+  v2x_overtake_rear_clear_role_reserve_distance: 6.0 # [m]
   v2x_overtake_pass_horizon_revalidation_lead_distance: 3.0 # [m]
   v2x_overtake_pass_horizon_revalidation_lead_time: 0.75 # [s]
   v2x_overtake_pass_horizon_predicted_time_budget: 8.0 # [s] admission rear-clear budget
@@ -685,6 +687,9 @@ mpc:
   v2x_overtake_last_feasible_maneuver_max_ego_lateral_change: 0.30 # [m] reject after lateral state changes
   v2x_overtake_last_feasible_maneuver_max_target_longitudinal_change: 1.00 # [m]
   v2x_overtake_last_feasible_maneuver_max_target_lateral_change: 0.25 # [m]
+  # SafeSeparation may reuse a fresh alternate before its debounce completes
+  # only after the target is clearly ahead and current/predicted bodies are clear.
+  v2x_overtake_safe_separation_reselect_min_front_distance: 4.0 # [m]
   v2x_overtake_line_return_clear_distance: 2.0 # [m] begin Return after nominal vehicle-length clearance
   v2x_overtake_line_phase_hold_time: 0.3      # [s] minimum phase hold before transition
   v2x_overtake_target_hold_sec: 0.75          # [s] keep a locked Pass across a transient V2X classification loss
@@ -703,6 +708,10 @@ mpc:
   v2x_overtake_line_entry_retry_cooldown_sec: 1.0 # [s] do not reselect the same target/side after a geometric line failure
   v2x_overtake_follow_prepare_timeout_sec: 4.0 # [s] end a paused mission and compare both sides again
   v2x_overtake_follow_prepare_max_distance: 20.0 # [m] distance bound for one paused mission
+  # Runtime-invalid Missions get a shorter revalidation lease than a normal
+  # paused FollowPrepare. Expiry releases the side lock for a fresh two-side search.
+  v2x_overtake_dynamic_mission_wait_timeout_sec: 0.75 # [s]
+  v2x_overtake_dynamic_mission_wait_max_distance: 4.0 # [m]
   v2x_overtake_completed_target_hold_sec: 1.5 # [s] suppress only new Overtake entry for a just-cleared target
   v2x_overtake_solver_cooldown_sec: 2.0       # [s] suppress immediate re-entry after solver abort
   v2x_overtake_solver_failure_abort_cycles: 8 # consecutive failures before aborting the lateral pass target

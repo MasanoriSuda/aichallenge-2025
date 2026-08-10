@@ -2856,6 +2856,27 @@ SafeSeparationResolution resolve_safe_separation(
   return resolution;
 }
 
+bool can_reselect_from_safe_separation(
+  const SafeSeparationTacticalReselectRequest & request) noexcept
+{
+  if (
+    !std::isfinite(request.target_longitudinal_m) ||
+    !std::isfinite(request.minimum_front_distance_m) ||
+    request.minimum_front_distance_m < 0.0)
+  {
+    return false;
+  }
+  return
+    request.enabled && request.safe_separation_active &&
+    !request.forward_escape_allowed && request.target_continuous &&
+    request.current_body_footprints_separated &&
+    request.footprint_prediction_valid &&
+    request.predicted_body_footprint_sweep_separated &&
+    !request.execution_corridor_blocked && !request.hard_fault &&
+    !request.rear_clear_confirmed &&
+    request.target_longitudinal_m + 1e-9 >= request.minimum_front_distance_m;
+}
+
 MissionAlignedSafeSeparationBudgetResolution resolve_mission_aligned_safe_separation_budget(
   const MissionAlignedSafeSeparationBudgetRequest & request) noexcept
 {
@@ -5785,7 +5806,9 @@ LastFeasibleManeuverResolution resolve_last_feasible_maneuver(
     request.current_candidate_motion_fresh &&
     request.current_candidate_age_sec <= request.maximum_candidate_age_sec;
   const bool alternate_fresh =
-    request.alternate_candidate_available && request.alternate_candidate_stable &&
+    request.alternate_candidate_available &&
+    (request.alternate_candidate_stable ||
+    request.allow_unstable_alternate_reselection) &&
     request.alternate_candidate_motion_fresh &&
     request.alternate_candidate_age_sec <= request.maximum_candidate_age_sec;
 
@@ -5808,7 +5831,9 @@ LastFeasibleManeuverResolution resolve_last_feasible_maneuver(
   }
   if (
     request.current_candidate_available ||
-    (request.alternate_candidate_available && request.alternate_candidate_stable))
+    (request.alternate_candidate_available &&
+    (request.alternate_candidate_stable ||
+    request.allow_unstable_alternate_reselection)))
   {
     resolution.action = LastFeasibleManeuverAction::Stale;
     return resolution;

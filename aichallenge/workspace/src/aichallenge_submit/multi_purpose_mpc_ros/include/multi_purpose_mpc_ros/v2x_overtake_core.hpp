@@ -1673,6 +1673,29 @@ struct SafeSeparationResolution
 SafeSeparationResolution resolve_safe_separation(
   const SafeSeparationRequest & request) noexcept;
 
+struct SafeSeparationTacticalReselectRequest
+{
+  bool enabled{false};
+  bool safe_separation_active{false};
+  bool forward_escape_allowed{false};
+  bool target_continuous{false};
+  bool current_body_footprints_separated{false};
+  bool footprint_prediction_valid{false};
+  bool predicted_body_footprint_sweep_separated{false};
+  bool execution_corridor_blocked{true};
+  bool hard_fault{false};
+  bool rear_clear_confirmed{false};
+  double target_longitudinal_m{};
+  double minimum_front_distance_m{};
+};
+
+/// Re-open lateral planning only after a failed SafeSeparation forward escape
+/// has left the target clearly ahead.  This never authorizes side-by-side
+/// crossing: current and predicted body geometry, corridor state and runtime
+/// hard guards must all remain clear.
+bool can_reselect_from_safe_separation(
+  const SafeSeparationTacticalReselectRequest & request) noexcept;
+
 struct MissionAlignedSafeSeparationBudgetRequest
 {
   bool enabled{false};
@@ -3253,6 +3276,10 @@ struct LastFeasibleManeuverRequest
   bool current_candidate_motion_fresh{true};
   bool alternate_candidate_available{false};
   bool alternate_candidate_stable{false};
+  /// A fresh, complete alternate may skip temporal debounce only when the
+  /// caller has independently admitted a physically separated tactical
+  /// reselection window and will rerun full preflight before commit.
+  bool allow_unstable_alternate_reselection{false};
   double alternate_candidate_age_sec{std::numeric_limits<double>::infinity()};
   bool alternate_candidate_motion_fresh{true};
   double maximum_candidate_age_sec{0.0};

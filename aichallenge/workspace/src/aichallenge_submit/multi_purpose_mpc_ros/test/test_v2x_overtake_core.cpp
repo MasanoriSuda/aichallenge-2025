@@ -165,6 +165,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_mission_total_start_sec;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationTacticalReselectRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::MissionAlignedSafeSeparationBudgetRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecoverableSideContactRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::WallBoundedContactSeparationRequest;
@@ -209,6 +210,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frozen_outer_transition_
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_same_side_extension_commit;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_commit_same_side_extension;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_safe_separation;
+using multi_purpose_mpc_ros::v2x_overtake_core::can_reselect_from_safe_separation;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   resolve_mission_aligned_safe_separation_budget;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_recoverable_side_contact;
@@ -8363,6 +8365,82 @@ TEST(V2XOvertakeCoreLastFeasibleManeuver, PrefersStableAlternateBeforeNoReturn)
   EXPECT_TRUE(result.replacement_requested);
   EXPECT_TRUE(result.alternate_selected);
   EXPECT_DOUBLE_EQ(result.selected_candidate_age_sec, 0.20);
+}
+
+TEST(V2XOvertakeCoreSafeSeparation, TacticalReselectRequiresClearTargetAhead)
+{
+  SafeSeparationTacticalReselectRequest request;
+  request.enabled = true;
+  request.safe_separation_active = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+  request.execution_corridor_blocked = false;
+  request.target_longitudinal_m = 4.0;
+  request.minimum_front_distance_m = 4.0;
+
+  EXPECT_TRUE(can_reselect_from_safe_separation(request));
+
+  request.target_longitudinal_m = 3.99;
+  EXPECT_FALSE(can_reselect_from_safe_separation(request));
+
+  request.target_longitudinal_m = 4.0;
+  request.forward_escape_allowed = true;
+  EXPECT_FALSE(can_reselect_from_safe_separation(request));
+
+  request.forward_escape_allowed = false;
+  request.predicted_body_footprint_sweep_separated = false;
+  EXPECT_FALSE(can_reselect_from_safe_separation(request));
+}
+
+TEST(V2XOvertakeCoreSafeSeparation, TacticalReselectKeepsHardFaultsFailClosed)
+{
+  SafeSeparationTacticalReselectRequest request;
+  request.enabled = true;
+  request.safe_separation_active = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+  request.execution_corridor_blocked = false;
+  request.target_longitudinal_m = 8.0;
+  request.minimum_front_distance_m = 4.0;
+
+  request.hard_fault = true;
+  EXPECT_FALSE(can_reselect_from_safe_separation(request));
+
+  request.hard_fault = false;
+  request.current_body_footprints_separated = false;
+  EXPECT_FALSE(can_reselect_from_safe_separation(request));
+
+  request.current_body_footprints_separated = true;
+  request.rear_clear_confirmed = true;
+  EXPECT_FALSE(can_reselect_from_safe_separation(request));
+}
+
+TEST(V2XOvertakeCoreLastFeasibleManeuver, AllowsFreshUnstableAlternateInAdmittedReselect)
+{
+  LastFeasibleManeuverRequest request;
+  request.enabled = true;
+  request.soft_failure = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.before_no_return = true;
+  request.alternate_candidate_available = true;
+  request.alternate_candidate_stable = false;
+  request.alternate_candidate_age_sec = 0.05;
+  request.maximum_candidate_age_sec = 0.50;
+
+  auto result = resolve_last_feasible_maneuver(request);
+  EXPECT_EQ(result.action, LastFeasibleManeuverAction::Unavailable);
+  EXPECT_FALSE(result.replacement_requested);
+
+  request.allow_unstable_alternate_reselection = true;
+  result = resolve_last_feasible_maneuver(request);
+  EXPECT_EQ(result.action, LastFeasibleManeuverAction::ReuseAlternate);
+  EXPECT_TRUE(result.replacement_requested);
+  EXPECT_TRUE(result.alternate_selected);
 }
 
 TEST(V2XOvertakeCoreLastFeasibleManeuver, RefreshesSameSideAfterNoReturn)

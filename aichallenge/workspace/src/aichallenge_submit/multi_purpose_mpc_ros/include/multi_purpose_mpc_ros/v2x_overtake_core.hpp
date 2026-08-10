@@ -1567,6 +1567,10 @@ struct PassShortHorizonGuardRequest
   /// grace is active, this keeps tail ownership without treating an
   /// unconfirmed predicted overlap as physically clear.
   bool side_by_side_rearward_completion_prediction_grace_allowed{false};
+  /// The target is already rearward and measured longitudinal progress is
+  /// fresh. This admits completion beyond the prediction-only timer while
+  /// current bodies and the execution corridor remain physically clear.
+  bool side_by_side_rearward_progress_completion_allowed{false};
 };
 
 struct PassShortHorizonGuardResolution
@@ -1575,12 +1579,16 @@ struct PassShortHorizonGuardResolution
   bool prediction_grace_active{false};
   bool rearward_completion_active{false};
   bool rearward_completion_prediction_grace_active{false};
+  bool rearward_completion_progress_active{false};
 };
 
 /// Keep an already-latched forward completion alive through a bounded
 /// prediction-only dropout. Physical/runtime faults are represented by
 /// hard_guard_safe and can never receive grace. The caller owns the loss timer
-/// and measured forward-progress observation.
+/// and measured forward-progress observation. Once a side-by-side committed
+/// target is rearward, fresh measured progress may own the bounded rear-clear
+/// tail even if the predictive sweep remains conservative. Current-body and
+/// corridor guards remain mandatory.
 PassShortHorizonGuardResolution resolve_pass_short_horizon_guard(
   const PassShortHorizonGuardRequest & request) noexcept;
 

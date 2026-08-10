@@ -4714,6 +4714,49 @@ TEST(V2XOvertakeCoreHorizon, KeepsRearwardCompletionDuringBoundedPredictionGrace
   EXPECT_FALSE(resolution.rearward_completion_active);
 }
 
+TEST(V2XOvertakeCoreHorizon, KeepsRearwardCompletionDuringFreshMeasuredProgress)
+{
+  PassShortHorizonGuardRequest request;
+  request.hard_guard_safe = true;
+  request.predictive_guard_safe = false;
+  request.forward_completion_latched = true;
+  request.current_body_footprints_separated = true;
+  request.execution_corridor_blocked = false;
+  request.fresh_forward_progress = true;
+  request.predictive_guard_loss_elapsed_sec = 1.70;
+  request.maximum_prediction_grace_sec = 0.25;
+  request.side_by_side_rearward_progress_completion_allowed = true;
+
+  auto resolution = resolve_pass_short_horizon_guard(request);
+  EXPECT_TRUE(resolution.safe);
+  EXPECT_FALSE(resolution.prediction_grace_active);
+  EXPECT_TRUE(resolution.rearward_completion_active);
+  EXPECT_TRUE(resolution.rearward_completion_progress_active);
+
+  request.fresh_forward_progress = false;
+  resolution = resolve_pass_short_horizon_guard(request);
+  EXPECT_FALSE(resolution.safe);
+  EXPECT_FALSE(resolution.rearward_completion_progress_active);
+
+  request.fresh_forward_progress = true;
+  request.current_body_footprints_separated = false;
+  resolution = resolve_pass_short_horizon_guard(request);
+  EXPECT_FALSE(resolution.safe);
+  EXPECT_FALSE(resolution.rearward_completion_progress_active);
+
+  request.current_body_footprints_separated = true;
+  request.execution_corridor_blocked = true;
+  resolution = resolve_pass_short_horizon_guard(request);
+  EXPECT_FALSE(resolution.safe);
+  EXPECT_FALSE(resolution.rearward_completion_progress_active);
+
+  request.execution_corridor_blocked = false;
+  request.hard_guard_safe = false;
+  resolution = resolve_pass_short_horizon_guard(request);
+  EXPECT_FALSE(resolution.safe);
+  EXPECT_FALSE(resolution.rearward_completion_progress_active);
+}
+
 TEST(V2XOvertakeCoreHorizon, AcceptsHealthyPredictiveGuardWithoutLatch)
 {
   PassShortHorizonGuardRequest request;

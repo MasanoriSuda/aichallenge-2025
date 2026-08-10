@@ -2558,14 +2558,21 @@ PassShortHorizonGuardResolution resolve_pass_short_horizon_guard(
   if (!request.hard_guard_safe) {
     return resolution;
   }
-  const bool physical_rearward_completion_active =
-    request.side_by_side_rearward_completion_safe &&
+  const bool rearward_completion_geometry_valid =
     request.forward_completion_latched &&
     request.current_body_footprints_separated &&
     !request.execution_corridor_blocked;
+  const bool physical_rearward_completion_active =
+    request.side_by_side_rearward_completion_safe &&
+    rearward_completion_geometry_valid;
+  resolution.rearward_completion_progress_active =
+    request.side_by_side_rearward_progress_completion_allowed &&
+    request.fresh_forward_progress && rearward_completion_geometry_valid;
   if (request.predictive_guard_safe) {
     resolution.safe = true;
-    resolution.rearward_completion_active = physical_rearward_completion_active;
+    resolution.rearward_completion_active =
+      physical_rearward_completion_active ||
+      resolution.rearward_completion_progress_active;
     return resolution;
   }
   const bool finite_grace_window =
@@ -2585,6 +2592,7 @@ PassShortHorizonGuardResolution resolve_pass_short_horizon_guard(
     resolution.prediction_grace_active;
   resolution.rearward_completion_active =
     physical_rearward_completion_active ||
+    resolution.rearward_completion_progress_active ||
     resolution.rearward_completion_prediction_grace_active;
   resolution.safe =
     resolution.prediction_grace_active || resolution.rearward_completion_active;

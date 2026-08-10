@@ -14625,7 +14625,9 @@ private:
             prediction_guard_loss_elapsed_sec,
             line_cfg.safe_separation_soft_prediction_grace_sec,
             side_by_side_rearward_physical_completion_safe,
-            side_by_side_rearward_completion_candidate});
+            side_by_side_rearward_completion_candidate,
+            side_by_side_rearward_completion_candidate &&
+            recent_measured_forward_progress});
         const bool short_horizon_safe = short_horizon_guard.safe;
         if (
           short_horizon_guard.rearward_completion_active &&
@@ -14639,6 +14641,8 @@ private:
             "absolute=%.2f s/%.2f m, wp_id=%d",
             overtake_line_state_.target_vehicle_id.c_str(),
             overtake_line_state_.pass_side_sign,
+            short_horizon_guard.rearward_completion_progress_active ?
+            "measured-progress" :
             short_horizon_guard.rearward_completion_prediction_grace_active ?
             "prediction-grace" : "physical",
             locked_target_longitudinal,

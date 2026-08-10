@@ -482,6 +482,39 @@ enum class Gear
   Reverse,
 };
 
+enum class ForwardOvertakeHandoffAction
+{
+  ContinueRecovery,
+  HoldStop,
+  RequestDrive,
+  ReleaseRecovery,
+};
+
+struct ForwardOvertakeHandoffRequest
+{
+  bool simulation_environment{false};
+  bool recovery_active{false};
+  bool coordinated_stop_episode{false};
+  bool validated_forward_escape_available{false};
+  bool current_static_footprint_clear{false};
+  bool forward_static_path_clear{false};
+  bool v2x_information_complete{false};
+  bool solver_healthy{false};
+  bool collision_worsening{false};
+  bool reverse_only_episode{false};
+  bool gear_report_fresh{false};
+  Gear reported_gear{Gear::Unknown};
+  double signed_speed_mps{};
+  double stop_speed_mps{};
+};
+
+// A coordinated-stop Recovery may become stale after a complete Overtake
+// Mission appears. Stop a still-reversing vehicle before requesting Drive and
+// release Recovery only after a fresh Drive report. Wall/solver/contact hard
+// failures remain owned by Recovery.
+ForwardOvertakeHandoffAction resolve_forward_overtake_handoff(
+  const ForwardOvertakeHandoffRequest & request) noexcept;
+
 enum class ManeuverDirection
 {
   Unknown,

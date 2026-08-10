@@ -21455,6 +21455,9 @@ private:
     recovery_consecutive_forward_duration_limits_ = 0U;
     recovery_retry_force_reverse_ = false;
     recovery_last_maneuver_direction_.reset();
+    recovery_forward_overtake_handoff_candidate_since_.reset();
+    recovery_forward_overtake_handoff_target_id_.clear();
+    recovery_forward_overtake_handoff_drive_pending_ = false;
     recovery_coordinated_stop_episode_ = false;
     recovery_reverse_only_episode_ = false;
     recovery_reverse_intent_latched_ = false;
@@ -21478,6 +21481,59 @@ private:
     last_gear_report_receipt_steady_.reset();
     last_collision_receipt_steady_.reset();
     RCLCPP_INFO(get_logger(), "Stuck recovery session reset: %s", reason);
+  }
+
+  void complete_stuck_recovery_forward_overtake_handoff(
+    const Pose2D & pose, const SteadyClock::time_point steady_now,
+    const std::string & target_id)
+  {
+    if (stuck_recovery_core_) {
+      stuck_recovery_core_->reset_session();
+    }
+    if (adaptive_reverse_retry_tracker_) {
+      adaptive_reverse_retry_tracker_->on_rejoin_complete();
+    }
+    recovery_observation_anchor_pose_ = pose;
+    recovery_observation_anchor_progress_m_ = car_->s;
+    recovery_forward_rearm_guard_started_ = steady_now;
+    recovery_forward_rearm_guard_start_progress_m_ = car_->s;
+    recovery_maneuver_start_pose_.reset();
+    recovery_maneuver_start_lateral_error_m_.reset();
+    recovery_last_reverse_pose_.reset();
+    recovery_cumulative_reverse_distance_m_ = 0.0;
+    recovery_episode_traveled_distance_m_ = 0.0;
+    recovery_reverse_pose_jump_ = false;
+    recovery_episode_had_contact_evidence_ = false;
+    recovery_aggressive_retry_count_ = 0U;
+    recovery_consecutive_forward_duration_limits_ = 0U;
+    recovery_retry_force_reverse_ = false;
+    recovery_last_maneuver_direction_.reset();
+    recovery_forward_overtake_handoff_candidate_since_.reset();
+    recovery_forward_overtake_handoff_target_id_.clear();
+    recovery_forward_overtake_handoff_drive_pending_ = false;
+    recovery_coordinated_stop_episode_ = false;
+    recovery_reverse_only_episode_ = false;
+    recovery_reverse_intent_latched_ = false;
+    recovery_forward_fallback_unlocked_ = false;
+    recovery_selected_reverse_primitive_.reset();
+    recovery_selected_reverse_steering_angle_rad_.reset();
+    recovery_selected_stepwise_escape_ = false;
+    recovery_initial_contact_cells_.reset();
+    recovery_previous_contact_cells_.reset();
+    recovery_last_output_.reset();
+    recovery_reset_applied_ = false;
+    recovery_rejoin_hold_cycle_ = false;
+    last_recovery_state_.reset();
+    last_recovery_reject_reason_.reset();
+    last_recovery_execution_mode_.reset();
+    // Recovery has already actuated in this race session. Do not re-arm the
+    // one-shot launch boost merely because normal Overtake regains ownership.
+    recovery_boost_suppressed_for_session_ = true;
+    RCLCPP_WARN(
+      get_logger(),
+      "Stuck recovery handed off directly to validated forward Overtake: "
+      "target=%s, progress=%.2f m; LowSpeedRejoin skipped",
+      target_id.c_str(), car_->s);
   }
 
   void arm_start_grid_grace(const rclcpp::Time & start_time, const char * reason)
@@ -23147,6 +23203,28 @@ private:
       behavior.locked_target_current_body_footprints_separated &&
       !behavior.overtake_execution_corridor_blocked &&
       !behavior.overtake_forbidden_wp);
+    const bool validated_prearm_overtake_handoff_available =
+      behavior.overtake_entry_prearm_active &&
+      behavior.validated_overtake_entry_longitudinal_owner &&
+      behavior.overtake_selected_mission.has_value() &&
+      behavior.overtake_selected_mission->feasible &&
+      behavior.overtake_selected_mission->pass_side_sign != 0 &&
+      !behavior.target_vehicle_id.empty() && !behavior.v2x_message_invalid &&
+      !behavior.locked_target_position_jump && !behavior.has_danger_vehicle &&
+      !behavior.overtake_forbidden_wp &&
+      behavior.front_risk_level != FrontRiskLevel::EmergencyBrake;
+    const bool validated_committed_overtake_handoff_available =
+      (behavior.overtake_committed_execution_active ||
+      behavior.overtake_paused_mission_active) &&
+      !behavior.target_vehicle_id.empty() &&
+      behavior.locked_target_seen && !behavior.locked_target_position_jump &&
+      behavior.locked_target_current_body_footprints_separated &&
+      !behavior.overtake_execution_corridor_blocked &&
+      !behavior.overtake_forbidden_wp && !behavior.has_danger_vehicle &&
+      behavior.front_risk_level != FrontRiskLevel::EmergencyBrake;
+    const bool validated_forward_overtake_handoff_available =
+      validated_prearm_overtake_handoff_available ||
+      validated_committed_overtake_handoff_available;
     const bool suppress_start_grid_coordinated_recovery =
       start_grid_grace::should_suppress_coordinated_recovery(
       start_grid_grace::CoordinatedRecoveryContext{
@@ -23575,6 +23653,79 @@ private:
       recovery_last_maneuver_direction_.reset();
       recovery_boost_suppressed_for_session_ = true;
     }
+    const bool raw_forward_overtake_handoff_candidate =
+      output.state != stuck_recovery::RecoveryState::Normal &&
+      recovery_coordinated_stop_episode_ &&
+      validated_forward_overtake_handoff_available &&
+      safety.current_footprint_clear && safety.rejoin_forward_static_clear &&
+      safety.v2x_message_complete && !mpc_fallback_active &&
+      !safety.collision_worsening && !recovery_reverse_only_episode_;
+    if (raw_forward_overtake_handoff_candidate) {
+      if (
+        !recovery_forward_overtake_handoff_candidate_since_.has_value() ||
+        recovery_forward_overtake_handoff_target_id_ != behavior.target_vehicle_id)
+      {
+        recovery_forward_overtake_handoff_candidate_since_ = steady_now;
+        recovery_forward_overtake_handoff_target_id_ = behavior.target_vehicle_id;
+        RCLCPP_INFO(
+          get_logger(),
+          "Stuck recovery forward Overtake handoff candidate armed: "
+          "target=%s, committed=%d, prearm=%d",
+          behavior.target_vehicle_id.c_str(),
+          validated_committed_overtake_handoff_available ? 1 : 0,
+          validated_prearm_overtake_handoff_available ? 1 : 0);
+      }
+    } else if (!recovery_forward_overtake_handoff_drive_pending_) {
+      recovery_forward_overtake_handoff_candidate_since_.reset();
+      recovery_forward_overtake_handoff_target_id_.clear();
+    }
+    const double forward_overtake_handoff_candidate_sec =
+      recovery_forward_overtake_handoff_candidate_since_.has_value() ?
+      std::chrono::duration<double>(
+        steady_now - recovery_forward_overtake_handoff_candidate_since_.value()).count() :
+      0.0;
+    const bool forward_overtake_handoff_confirmed =
+      raw_forward_overtake_handoff_candidate &&
+      (validated_committed_overtake_handoff_available ||
+      forward_overtake_handoff_candidate_sec >=
+      std::max(0.0, mpc_cfg_.v2x_behavior.overtake_entry_prearm_validation_hold_sec));
+    auto forward_overtake_handoff_action =
+      stuck_recovery::resolve_forward_overtake_handoff(
+      stuck_recovery::ForwardOvertakeHandoffRequest{
+        use_sim_time_,
+        output.state != stuck_recovery::RecoveryState::Normal,
+        recovery_coordinated_stop_episode_,
+        forward_overtake_handoff_confirmed,
+        safety.current_footprint_clear,
+        safety.rejoin_forward_static_clear,
+        safety.v2x_message_complete,
+        !mpc_fallback_active,
+        safety.collision_worsening,
+        recovery_reverse_only_episode_,
+        gear_report_fresh,
+        reported_gear_.value_or(stuck_recovery::Gear::Unknown),
+        actual_v,
+        cfg_.stuck_recovery.core.supervisor.stop_speed_mps});
+    const bool forward_overtake_drive_reported =
+      gear_report_fresh && reported_gear_.has_value() &&
+      reported_gear_.value() == stuck_recovery::Gear::Drive;
+    if (recovery_forward_overtake_handoff_drive_pending_) {
+      if (forward_overtake_drive_reported) {
+        recovery_forward_overtake_handoff_drive_pending_ = false;
+      } else {
+        // Once Drive has been requested, never resume Reverse merely because
+        // one V2X cycle loses the candidate. Stop through the gear handshake;
+        // the current Mission is revalidated again before release.
+        forward_overtake_handoff_action =
+          stuck_recovery::ForwardOvertakeHandoffAction::HoldStop;
+      }
+    }
+    if (
+      forward_overtake_handoff_action ==
+      stuck_recovery::ForwardOvertakeHandoffAction::RequestDrive)
+    {
+      recovery_forward_overtake_handoff_drive_pending_ = true;
+    }
     if (
       !force_reverse_retry &&
       !recovery_reverse_intent_latched_ && !recovery_forward_fallback_unlocked_ &&
@@ -23827,7 +23978,11 @@ private:
       recovery_selected_stepwise_escape_ = false;
       recovery_episode_traveled_distance_m_ = 0.0;
     }
-    if (output.action.reset_normal_control && !recovery_reset_applied_) {
+    if (
+      output.action.reset_normal_control && !recovery_reset_applied_ &&
+      forward_overtake_handoff_action !=
+      stuck_recovery::ForwardOvertakeHandoffAction::ReleaseRecovery)
+    {
       mpc_->reset_after_external_maneuver(control_time.seconds(), 0.0);
       last_u_ = Eigen::Vector2d::Zero();
       last_acc_ = 0.0;
@@ -23872,6 +24027,49 @@ private:
           "duration=%.2f s, distance=%.2f m, progress=%.2f m",
           cfg_.stuck_recovery.forward_rearm_guard_duration_sec,
           cfg_.stuck_recovery.forward_rearm_guard_distance_m, car_->s);
+      }
+    }
+
+    if (
+      forward_overtake_handoff_action ==
+      stuck_recovery::ForwardOvertakeHandoffAction::ReleaseRecovery)
+    {
+      const std::string handoff_target = recovery_forward_overtake_handoff_target_id_;
+      complete_stuck_recovery_forward_overtake_handoff(
+        pose, steady_now, handoff_target);
+      return std::nullopt;
+    }
+    if (
+      forward_overtake_handoff_action ==
+      stuck_recovery::ForwardOvertakeHandoffAction::HoldStop)
+    {
+      output.action = stuck_recovery::RecoveryAction{};
+      output.action.type = stuck_recovery::RecoveryActionType::HoldStop;
+      output.action.inhibit_boost = true;
+      output.action.reason = stuck_recovery::RecoveryReason::StopConfirmationPending;
+      RCLCPP_INFO_THROTTLE(
+        get_logger(), *get_clock(), 500,
+        "Stuck recovery stopping for forward Overtake handoff: "
+        "target=%s, gear=%s, speed=%.3f m/s",
+        recovery_forward_overtake_handoff_target_id_.c_str(),
+        stuck_recovery::to_string(
+          reported_gear_.value_or(stuck_recovery::Gear::Unknown)), actual_v);
+    } else if (
+      forward_overtake_handoff_action ==
+      stuck_recovery::ForwardOvertakeHandoffAction::RequestDrive)
+    {
+      output.action = stuck_recovery::RecoveryAction{};
+      output.action.inhibit_boost = true;
+      if (
+        last_commanded_recovery_gear_.has_value() &&
+        last_commanded_recovery_gear_.value() == stuck_recovery::Gear::Drive)
+      {
+        output.action.type = stuck_recovery::RecoveryActionType::HoldStop;
+        output.action.reason = stuck_recovery::RecoveryReason::DriveGearRequested;
+      } else {
+        output.action.type = stuck_recovery::RecoveryActionType::RequestDrive;
+        output.action.requested_gear = stuck_recovery::Gear::Drive;
+        output.action.reason = stuck_recovery::RecoveryReason::DriveGearRequested;
       }
     }
 
@@ -24709,6 +24907,10 @@ private:
   std::size_t recovery_consecutive_forward_duration_limits_{0U};
   bool recovery_retry_force_reverse_{false};
   std::optional<stuck_recovery::ManeuverDirection> recovery_last_maneuver_direction_;
+  std::optional<SteadyClock::time_point>
+  recovery_forward_overtake_handoff_candidate_since_;
+  std::string recovery_forward_overtake_handoff_target_id_;
+  bool recovery_forward_overtake_handoff_drive_pending_{false};
   bool recovery_coordinated_stop_episode_{false};
   bool recovery_reverse_only_episode_{false};
   bool recovery_reverse_intent_latched_{false};

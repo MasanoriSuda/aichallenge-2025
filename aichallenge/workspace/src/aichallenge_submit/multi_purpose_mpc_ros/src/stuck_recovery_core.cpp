@@ -297,6 +297,33 @@ bool should_suppress_coordinated_stop_for_validated_forward_escape(
   return coordinated_stop_observed && validated_forward_escape_available && !collision_hint;
 }
 
+ForwardOvertakeHandoffAction resolve_forward_overtake_handoff(
+  const ForwardOvertakeHandoffRequest & request) noexcept
+{
+  const bool valid_request =
+    request.simulation_environment && request.recovery_active &&
+    request.coordinated_stop_episode && request.validated_forward_escape_available &&
+    request.current_static_footprint_clear && request.forward_static_path_clear &&
+    request.v2x_information_complete && request.solver_healthy &&
+    !request.collision_worsening && !request.reverse_only_episode &&
+    std::isfinite(request.signed_speed_mps) &&
+    std::isfinite(request.stop_speed_mps) && request.stop_speed_mps >= 0.0;
+  if (!valid_request) {
+    return ForwardOvertakeHandoffAction::ContinueRecovery;
+  }
+
+  if (request.gear_report_fresh && request.reported_gear == Gear::Drive) {
+    return request.signed_speed_mps >= -request.stop_speed_mps ?
+      ForwardOvertakeHandoffAction::ReleaseRecovery :
+      ForwardOvertakeHandoffAction::HoldStop;
+  }
+
+  if (std::abs(request.signed_speed_mps) > request.stop_speed_mps) {
+    return ForwardOvertakeHandoffAction::HoldStop;
+  }
+  return ForwardOvertakeHandoffAction::RequestDrive;
+}
+
 bool forward_recovery_rearm_guard_active(
   const ForwardRecoveryRearmGuardRequest & request) noexcept
 {

@@ -16,6 +16,8 @@ using multi_purpose_mpc_ros::stuck_recovery::CoreInput;
 using multi_purpose_mpc_ros::stuck_recovery::CollisionDeliberateStopOverrideRequest;
 using multi_purpose_mpc_ros::stuck_recovery::FollowDeliberateStopRequest;
 using multi_purpose_mpc_ros::stuck_recovery::ForwardRecoveryRearmGuardRequest;
+using multi_purpose_mpc_ros::stuck_recovery::ForwardOvertakeHandoffAction;
+using multi_purpose_mpc_ros::stuck_recovery::ForwardOvertakeHandoffRequest;
 using multi_purpose_mpc_ros::stuck_recovery::CourseDirectedForwardEscapeRequest;
 using multi_purpose_mpc_ros::stuck_recovery::SolverReverseDeadlockForwardProbeRequest;
 using multi_purpose_mpc_ros::stuck_recovery::AdaptiveReverseRetryConfig;
@@ -52,6 +54,7 @@ using multi_purpose_mpc_ros::stuck_recovery::SolverForwardFallbackUnlockRequest;
 using multi_purpose_mpc_ros::stuck_recovery::compute_rejoin_steering_tire_angle;
 using multi_purpose_mpc_ros::stuck_recovery::course_directed_forward_escape_allowed;
 using multi_purpose_mpc_ros::stuck_recovery::forward_recovery_rearm_guard_active;
+using multi_purpose_mpc_ros::stuck_recovery::resolve_forward_overtake_handoff;
 using multi_purpose_mpc_ros::stuck_recovery::measured_reverse_course_progress_worsened;
 using multi_purpose_mpc_ros::stuck_recovery::solver_reverse_deadlock_forward_probe_allowed;
 using multi_purpose_mpc_ros::stuck_recovery::recovery_escape_distance_confirmed;
@@ -108,6 +111,82 @@ TEST(StuckRecoveryCoordination, ValidatedForwardEscapeSuppressesOnlyNonCollision
     should_suppress_coordinated_stop_for_validated_forward_escape(true, false, false));
   EXPECT_FALSE(
     should_suppress_coordinated_stop_for_validated_forward_escape(false, true, false));
+}
+
+TEST(StuckRecoveryCoordination, ForwardOvertakeHandoffStopsBeforeDriveAndThenReleases)
+{
+  ForwardOvertakeHandoffRequest request;
+  request.simulation_environment = true;
+  request.recovery_active = true;
+  request.coordinated_stop_episode = true;
+  request.validated_forward_escape_available = true;
+  request.current_static_footprint_clear = true;
+  request.forward_static_path_clear = true;
+  request.v2x_information_complete = true;
+  request.solver_healthy = true;
+  request.gear_report_fresh = true;
+  request.reported_gear = Gear::Reverse;
+  request.signed_speed_mps = -0.4;
+  request.stop_speed_mps = 0.05;
+
+  EXPECT_EQ(
+    resolve_forward_overtake_handoff(request),
+    ForwardOvertakeHandoffAction::HoldStop);
+
+  request.signed_speed_mps = -0.01;
+  EXPECT_EQ(
+    resolve_forward_overtake_handoff(request),
+    ForwardOvertakeHandoffAction::RequestDrive);
+
+  request.reported_gear = Gear::Drive;
+  EXPECT_EQ(
+    resolve_forward_overtake_handoff(request),
+    ForwardOvertakeHandoffAction::ReleaseRecovery);
+
+  request.signed_speed_mps = 1.0;
+  EXPECT_EQ(
+    resolve_forward_overtake_handoff(request),
+    ForwardOvertakeHandoffAction::ReleaseRecovery);
+}
+
+TEST(StuckRecoveryCoordination, ForwardOvertakeHandoffPreservesHardRecoveryOwners)
+{
+  ForwardOvertakeHandoffRequest request;
+  request.simulation_environment = true;
+  request.recovery_active = true;
+  request.coordinated_stop_episode = true;
+  request.validated_forward_escape_available = true;
+  request.current_static_footprint_clear = true;
+  request.forward_static_path_clear = true;
+  request.v2x_information_complete = true;
+  request.solver_healthy = true;
+  request.gear_report_fresh = true;
+  request.reported_gear = Gear::Drive;
+  request.signed_speed_mps = 0.0;
+  request.stop_speed_mps = 0.05;
+
+  request.collision_worsening = true;
+  EXPECT_EQ(
+    resolve_forward_overtake_handoff(request),
+    ForwardOvertakeHandoffAction::ContinueRecovery);
+  request.collision_worsening = false;
+
+  request.reverse_only_episode = true;
+  EXPECT_EQ(
+    resolve_forward_overtake_handoff(request),
+    ForwardOvertakeHandoffAction::ContinueRecovery);
+  request.reverse_only_episode = false;
+
+  request.solver_healthy = false;
+  EXPECT_EQ(
+    resolve_forward_overtake_handoff(request),
+    ForwardOvertakeHandoffAction::ContinueRecovery);
+  request.solver_healthy = true;
+
+  request.current_static_footprint_clear = false;
+  EXPECT_EQ(
+    resolve_forward_overtake_handoff(request),
+    ForwardOvertakeHandoffAction::ContinueRecovery);
 }
 
 TEST(StuckRecoveryCoordination, ForwardRearmGuardIsBoundedAndFailsOpen)

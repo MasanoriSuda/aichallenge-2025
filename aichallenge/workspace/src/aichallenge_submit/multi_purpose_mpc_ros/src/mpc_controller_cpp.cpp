@@ -13911,21 +13911,19 @@ private:
         const bool safety_pause_resume_pass =
           safety_pause_resume_action ==
           overtake_core::PausedExecutionResumeAction::ResumePass;
+        const auto entry_stage = overtake_core::resolve_overtake_entry_stage(
+          overtake_core::OvertakeEntryStageRequest{
+            direct_base_line_pass,
+            direct_same_side_resume,
+            safety_pause_resume_pass,
+            safety_pause_resume,
+            resuming_paused_mission});
         const bool direct_pass =
-          direct_base_line_pass || direct_same_side_resume || safety_pause_resume_pass;
+          entry_stage.stage == overtake_core::OvertakeEntryStage::Pass;
         transition_overtake_line_phase(
           direct_pass ? OvertakeLinePhase::Pass : OvertakeLinePhase::ShiftOut,
           now_sec, current_ey, pass_side_sign,
-          direct_base_line_pass ?
-          "validated base racing line already clear" :
-          direct_same_side_resume ?
-          "committed pass resumed on validated same side" :
-          safety_pause_resume_pass ?
-          "SafetyBrake-paused pass resumed after lateral clearance" :
-          safety_pause_resume ?
-          "SafetyBrake-paused pass resumed through ShiftOut" :
-          resuming_paused_mission ?
-          "committed pass revalidated after pause" : "overtake selected");
+          overtake_core::to_string(entry_stage.reason));
         overtake_locked_side_sign_ = pass_side_sign;
         // The gap planner bounds already include target-vehicle inflation and wall margin.
         // Freeze the preflighted minimum-motion goal so a moving target cannot drag the line.
@@ -15680,19 +15678,21 @@ private:
           safe_separation_forward_progress >= 0.05 - kEps &&
           safe_separation_progress_age <=
           line_cfg.safe_separation_progress_extension_fresh_sec + kEps;
-        const bool side_by_side_rearward_completion_candidate =
-          behavior_output.overtake_commit_stage ==
-          overtake_core::PassCommitStage::SideBySideCommitted &&
-          locked_target_seen && locked_target_matches &&
-          locked_target_progress_continuous &&
-          std::isfinite(locked_target_longitudinal) &&
-          locked_target_longitudinal <= 0.0 &&
-          behavior_output.locked_target_current_body_footprints_separated &&
-          !behavior_output.overtake_execution_corridor_blocked;
-        const bool side_by_side_rearward_physical_completion_safe =
-          side_by_side_rearward_completion_candidate &&
-          behavior_output.locked_target_footprint_prediction_valid &&
-          behavior_output.locked_target_predicted_body_footprint_sweep_separated;
+        const auto rearward_completion_context =
+          overtake_core::resolve_rearward_pass_completion_context(
+          overtake_core::RearwardPassCompletionContextRequest{
+            true,
+            behavior_output.overtake_commit_stage,
+            locked_target_seen,
+            locked_target_matches,
+            locked_target_progress_continuous,
+            locked_target_longitudinal,
+            overtake_line_state_.pass_forward_completion_latched,
+            recent_measured_forward_progress,
+            behavior_output.locked_target_current_body_footprints_separated,
+            behavior_output.overtake_execution_corridor_blocked,
+            behavior_output.locked_target_footprint_prediction_valid,
+            behavior_output.locked_target_predicted_body_footprint_sweep_separated});
         const auto short_horizon_guard =
           overtake_core::resolve_pass_short_horizon_guard(
           overtake_core::PassShortHorizonGuardRequest{
@@ -15704,10 +15704,9 @@ private:
             recent_measured_forward_progress,
             prediction_guard_loss_elapsed_sec,
             line_cfg.safe_separation_soft_prediction_grace_sec,
-            side_by_side_rearward_physical_completion_safe,
-            side_by_side_rearward_completion_candidate,
-            side_by_side_rearward_completion_candidate &&
-            recent_measured_forward_progress});
+            rearward_completion_context.separated_tail_physical_safe,
+            rearward_completion_context.separated_tail_candidate,
+            rearward_completion_context.separated_tail_progress_allowed});
         const bool short_horizon_safe = short_horizon_guard.safe;
         if (
           short_horizon_guard.rearward_completion_active &&

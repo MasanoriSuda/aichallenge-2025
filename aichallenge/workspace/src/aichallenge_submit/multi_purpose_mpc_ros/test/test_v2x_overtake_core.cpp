@@ -178,6 +178,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::RecoverableSideContactRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::WallBoundedContactSeparationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassForwardCompletionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassShortHorizonGuardRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::RearwardPassCompletionContextRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicCompletionExtensionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SameSideReplanShiftDistanceRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidate;
@@ -368,12 +369,17 @@ using multi_purpose_mpc_ros::v2x_overtake_core::CrossSideMissionReplacementReaso
 using multi_purpose_mpc_ros::v2x_overtake_core::CrossSideMissionReplacementRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::EarlyPassSideIntrusionRiskRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::DirectPassPredictionHandoffRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntryStage;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntryStageReason;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntryStageRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_commit_stage;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_cross_side_no_return_latch;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_cross_side_mission_replacement;
 using multi_purpose_mpc_ros::v2x_overtake_core::early_pass_side_intrusion_risk;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   should_defer_direct_pass_prediction_handoff;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_entry_stage;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_rearward_pass_completion_context;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_observe_locked_target_geometry;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_enter_dynamic_mission_wait;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_mission_wait;
@@ -5276,6 +5282,64 @@ TEST(V2XOvertakeCoreHorizon, ContinuesOnlyBoundedProgressingSideContact)
   request.fresh_forward_progress = true;
   request.contact_elapsed_sec = 2.51;
   EXPECT_FALSE(resolve_recoverable_side_contact(request).active);
+}
+
+TEST(V2XOvertakeCoreHorizon, ClassifiesSharedRearwardCompletionContext)
+{
+  RearwardPassCompletionContextRequest request;
+  request.pass_active = true;
+  request.commit_stage = PassCommitStage::SideBySideCommitted;
+  request.target_seen = true;
+  request.target_matches = true;
+  request.target_continuity_valid = true;
+  request.target_longitudinal_m = -0.6;
+  request.forward_completion_latched = true;
+  request.fresh_forward_progress = true;
+  request.current_body_footprints_separated = true;
+  request.execution_corridor_blocked = false;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+
+  auto resolution = resolve_rearward_pass_completion_context(request);
+  EXPECT_TRUE(resolution.rearward_target);
+  EXPECT_TRUE(resolution.contact_tail_eligible);
+  EXPECT_TRUE(resolution.separated_tail_candidate);
+  EXPECT_TRUE(resolution.separated_tail_physical_safe);
+  EXPECT_TRUE(resolution.separated_tail_progress_allowed);
+
+  request.current_body_footprints_separated = false;
+  resolution = resolve_rearward_pass_completion_context(request);
+  EXPECT_TRUE(resolution.contact_tail_eligible);
+  EXPECT_FALSE(resolution.separated_tail_candidate);
+  EXPECT_FALSE(resolution.separated_tail_physical_safe);
+  EXPECT_FALSE(resolution.separated_tail_progress_allowed);
+
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = false;
+  resolution = resolve_rearward_pass_completion_context(request);
+  EXPECT_TRUE(resolution.separated_tail_candidate);
+  EXPECT_FALSE(resolution.separated_tail_physical_safe);
+  EXPECT_TRUE(resolution.separated_tail_progress_allowed);
+
+  request.fresh_forward_progress = false;
+  resolution = resolve_rearward_pass_completion_context(request);
+  EXPECT_FALSE(resolution.contact_tail_eligible);
+  EXPECT_FALSE(resolution.separated_tail_progress_allowed);
+  EXPECT_TRUE(resolution.separated_tail_candidate);
+
+  request.fresh_forward_progress = true;
+  request.target_longitudinal_m = 0.1;
+  resolution = resolve_rearward_pass_completion_context(request);
+  EXPECT_FALSE(resolution.rearward_target);
+  EXPECT_FALSE(resolution.contact_tail_eligible);
+  EXPECT_FALSE(resolution.separated_tail_candidate);
+
+  request.target_longitudinal_m = -0.6;
+  request.commit_stage = PassCommitStage::ShiftCommitted;
+  EXPECT_FALSE(resolve_rearward_pass_completion_context(request).rearward_target);
+  request.commit_stage = PassCommitStage::SideBySideCommitted;
+  request.target_matches = false;
+  EXPECT_FALSE(resolve_rearward_pass_completion_context(request).rearward_target);
 }
 
 TEST(V2XOvertakeCoreHorizon, BoundsContactSeparationToWallSafeInterval)
@@ -11493,6 +11557,46 @@ TEST(V2XOvertakeCoreCommitStage, DefersOnlyUnobservedDirectPassHandoff)
   request.locked_target_seen = false;
   request.direct_pass_entry = false;
   EXPECT_FALSE(should_defer_direct_pass_prediction_handoff(request));
+}
+
+TEST(V2XOvertakeCoreCommitStage, ResolvesEntryStageWithExistingPrecedence)
+{
+  OvertakeEntryStageRequest request;
+
+  auto resolution = resolve_overtake_entry_stage(request);
+  EXPECT_EQ(resolution.stage, OvertakeEntryStage::ShiftOut);
+  EXPECT_EQ(resolution.reason, OvertakeEntryStageReason::NewMissionShiftOut);
+  EXPECT_STREQ(
+    multi_purpose_mpc_ros::v2x_overtake_core::to_string(resolution.reason),
+    "overtake selected");
+
+  request.resuming_paused_mission = true;
+  resolution = resolve_overtake_entry_stage(request);
+  EXPECT_EQ(resolution.stage, OvertakeEntryStage::ShiftOut);
+  EXPECT_EQ(resolution.reason, OvertakeEntryStageReason::PausedMissionShiftOut);
+
+  request.safety_pause_resume = true;
+  resolution = resolve_overtake_entry_stage(request);
+  EXPECT_EQ(resolution.stage, OvertakeEntryStage::ShiftOut);
+  EXPECT_EQ(resolution.reason, OvertakeEntryStageReason::SafetyPauseShiftOut);
+
+  request.safety_pause_resume_pass = true;
+  resolution = resolve_overtake_entry_stage(request);
+  EXPECT_EQ(resolution.stage, OvertakeEntryStage::Pass);
+  EXPECT_EQ(resolution.reason, OvertakeEntryStageReason::SafetyPauseResumePass);
+
+  request.direct_same_side_resume = true;
+  resolution = resolve_overtake_entry_stage(request);
+  EXPECT_EQ(resolution.stage, OvertakeEntryStage::Pass);
+  EXPECT_EQ(resolution.reason, OvertakeEntryStageReason::SameSideResumePass);
+
+  request.direct_base_line_pass = true;
+  resolution = resolve_overtake_entry_stage(request);
+  EXPECT_EQ(resolution.stage, OvertakeEntryStage::Pass);
+  EXPECT_EQ(resolution.reason, OvertakeEntryStageReason::BaseLineDirectPass);
+  EXPECT_STREQ(
+    multi_purpose_mpc_ros::v2x_overtake_core::to_string(resolution.reason),
+    "validated base racing line already clear");
 }
 
 }  // namespace

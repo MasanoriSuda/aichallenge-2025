@@ -713,6 +713,47 @@ struct DirectPassPredictionHandoffRequest
 bool should_defer_direct_pass_prediction_handoff(
   const DirectPassPredictionHandoffRequest & request) noexcept;
 
+enum class OvertakeEntryStage
+{
+  ShiftOut,
+  Pass,
+};
+
+enum class OvertakeEntryStageReason
+{
+  NewMissionShiftOut,
+  PausedMissionShiftOut,
+  SafetyPauseShiftOut,
+  BaseLineDirectPass,
+  SameSideResumePass,
+  SafetyPauseResumePass,
+};
+
+struct OvertakeEntryStageRequest
+{
+  bool direct_base_line_pass{false};
+  bool direct_same_side_resume{false};
+  bool safety_pause_resume_pass{false};
+  bool safety_pause_resume{false};
+  bool resuming_paused_mission{false};
+};
+
+struct OvertakeEntryStageResolution
+{
+  OvertakeEntryStage stage{OvertakeEntryStage::ShiftOut};
+  OvertakeEntryStageReason reason{OvertakeEntryStageReason::NewMissionShiftOut};
+};
+
+/// Resolve the initial line-execution stage and its diagnostic reason in one
+/// place. Inputs are ordered by the existing controller precedence so a
+/// refactor cannot silently turn a paused ShiftOut into a DirectPass or vice
+/// versa. This policy classifies already-authorized execution only; it does
+/// not admit a new Mission.
+OvertakeEntryStageResolution resolve_overtake_entry_stage(
+  const OvertakeEntryStageRequest & request) noexcept;
+
+const char * to_string(OvertakeEntryStageReason reason) noexcept;
+
 struct SideOvertakeEntryRequest
 {
   bool continuing_overtake{false};
@@ -1714,6 +1755,37 @@ struct DynamicCompletionExtensionResolution
 /// forward_escape_allowed/fresh_forward_progress.
 DynamicCompletionExtensionResolution resolve_dynamic_completion_extension(
   const DynamicCompletionExtensionRequest & request) noexcept;
+
+struct RearwardPassCompletionContextRequest
+{
+  bool pass_active{false};
+  PassCommitStage commit_stage{PassCommitStage::Selectable};
+  bool target_seen{false};
+  bool target_matches{false};
+  bool target_continuity_valid{false};
+  double target_longitudinal_m{std::numeric_limits<double>::infinity()};
+  bool forward_completion_latched{false};
+  bool fresh_forward_progress{false};
+  bool current_body_footprints_separated{false};
+  bool execution_corridor_blocked{true};
+  bool footprint_prediction_valid{false};
+  bool predicted_body_footprint_sweep_separated{false};
+};
+
+struct RearwardPassCompletionContextResolution
+{
+  bool rearward_target{false};
+  bool contact_tail_eligible{false};
+  bool separated_tail_candidate{false};
+  bool separated_tail_physical_safe{false};
+  bool separated_tail_progress_allowed{false};
+};
+
+/// Classify the common rear-clear completion context shared by bounded side
+/// contact and SafeSeparation. Contact-specific lateral/velocity/time guards
+/// and SafeSeparation budgets remain in their owning policies.
+RearwardPassCompletionContextResolution resolve_rearward_pass_completion_context(
+  const RearwardPassCompletionContextRequest & request) noexcept;
 
 struct PassShortHorizonGuardRequest
 {

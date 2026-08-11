@@ -1078,6 +1078,58 @@ bool should_defer_direct_pass_prediction_handoff(
          !request.locked_target_seen && request.target_id_available;
 }
 
+OvertakeEntryStageResolution resolve_overtake_entry_stage(
+  const OvertakeEntryStageRequest & request) noexcept
+{
+  if (request.direct_base_line_pass) {
+    return {
+      OvertakeEntryStage::Pass,
+      OvertakeEntryStageReason::BaseLineDirectPass};
+  }
+  if (request.direct_same_side_resume) {
+    return {
+      OvertakeEntryStage::Pass,
+      OvertakeEntryStageReason::SameSideResumePass};
+  }
+  if (request.safety_pause_resume_pass) {
+    return {
+      OvertakeEntryStage::Pass,
+      OvertakeEntryStageReason::SafetyPauseResumePass};
+  }
+  if (request.safety_pause_resume) {
+    return {
+      OvertakeEntryStage::ShiftOut,
+      OvertakeEntryStageReason::SafetyPauseShiftOut};
+  }
+  if (request.resuming_paused_mission) {
+    return {
+      OvertakeEntryStage::ShiftOut,
+      OvertakeEntryStageReason::PausedMissionShiftOut};
+  }
+  return {
+    OvertakeEntryStage::ShiftOut,
+    OvertakeEntryStageReason::NewMissionShiftOut};
+}
+
+const char * to_string(const OvertakeEntryStageReason reason) noexcept
+{
+  switch (reason) {
+    case OvertakeEntryStageReason::NewMissionShiftOut:
+      return "overtake selected";
+    case OvertakeEntryStageReason::PausedMissionShiftOut:
+      return "committed pass revalidated after pause";
+    case OvertakeEntryStageReason::SafetyPauseShiftOut:
+      return "SafetyBrake-paused pass resumed through ShiftOut";
+    case OvertakeEntryStageReason::BaseLineDirectPass:
+      return "validated base racing line already clear";
+    case OvertakeEntryStageReason::SameSideResumePass:
+      return "committed pass resumed on validated same side";
+    case OvertakeEntryStageReason::SafetyPauseResumePass:
+      return "SafetyBrake-paused pass resumed after lateral clearance";
+  }
+  return "unknown overtake entry stage";
+}
+
 bool can_start_side_overtake(const SideOvertakeEntryRequest & request) noexcept
 {
   if (request.continuing_overtake) {
@@ -2752,6 +2804,36 @@ DynamicCompletionExtensionResolution resolve_dynamic_completion_extension(
   return resolution;
 }
 
+RearwardPassCompletionContextResolution resolve_rearward_pass_completion_context(
+  const RearwardPassCompletionContextRequest & request) noexcept
+{
+  RearwardPassCompletionContextResolution resolution;
+  const bool rearward_context_valid =
+    request.pass_active &&
+    request.commit_stage == PassCommitStage::SideBySideCommitted &&
+    request.target_seen && request.target_matches &&
+    request.target_continuity_valid &&
+    std::isfinite(request.target_longitudinal_m) &&
+    request.target_longitudinal_m <= 0.0;
+  if (!rearward_context_valid) {
+    return resolution;
+  }
+
+  resolution.rearward_target = true;
+  resolution.contact_tail_eligible =
+    request.forward_completion_latched && request.fresh_forward_progress;
+  resolution.separated_tail_candidate =
+    request.current_body_footprints_separated &&
+    !request.execution_corridor_blocked;
+  resolution.separated_tail_physical_safe =
+    resolution.separated_tail_candidate &&
+    request.footprint_prediction_valid &&
+    request.predicted_body_footprint_sweep_separated;
+  resolution.separated_tail_progress_allowed =
+    resolution.separated_tail_candidate && request.fresh_forward_progress;
+  return resolution;
+}
+
 PassShortHorizonGuardResolution resolve_pass_short_horizon_guard(
   const PassShortHorizonGuardRequest & request) noexcept
 {
@@ -3275,12 +3357,20 @@ RecoverableSideContactResolution resolve_recoverable_side_contact(
     request.maximum_longitudinal_closing_speed_mps + 1e-9;
   resolution.initial_progress_grace_active =
     request.contact_elapsed_sec <= request.initial_progress_grace_sec + 1e-9;
+  const auto rearward_completion_context = resolve_rearward_pass_completion_context(
+    RearwardPassCompletionContextRequest{
+      request.pass_active,
+      request.commit_stage,
+      request.target_seen,
+      true,
+      request.target_continuity_valid,
+      request.target_longitudinal_m,
+      request.forward_completion_latched,
+      request.fresh_forward_progress});
   resolution.rearward_completion_active =
     side_contact_geometry &&
     request.ego_speed_mps >= request.minimum_ego_speed_mps - 1e-9 &&
-    request.forward_completion_latched &&
-    request.commit_stage == PassCommitStage::SideBySideCommitted &&
-    request.target_longitudinal_m <= 0.0 && request.fresh_forward_progress &&
+    rearward_completion_context.contact_tail_eligible &&
     request.contact_elapsed_sec <=
     request.rearward_completion_maximum_duration_sec + 1e-9;
   resolution.near_contact_used =

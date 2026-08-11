@@ -1988,6 +1988,10 @@ struct V2XBehaviorOutput
   bool overtake_paused_mission_active{false};
   bool overtake_line_owns_locked_target_speed{false};
   bool validated_overtake_entry_longitudinal_owner{false};
+  bool overtake_entry_setup_available{false};
+  int overtake_entry_setup_side_sign{0};
+  double overtake_entry_setup_closing_speed{
+    std::numeric_limits<double>::quiet_NaN()};
   bool overtake_entry_prearm_active{false};
   bool overtake_committed_pass_behavior_owner_active{false};
   bool overtake_committed_shiftout_behavior_owner_active{false};
@@ -6664,6 +6668,10 @@ struct MPC
       bool direct_tiny_shift_pass_ready{false};
       double required_lateral_shift{std::numeric_limits<double>::infinity()};
       std::optional<overtake_core::OvertakeMissionCandidate> selected_mission;
+      // A body-clear-feasible candidate may prepare longitudinal speed while
+      // rear-clear/Return validation is still pending. It never owns a
+      // lateral line and therefore remains separate from selected_mission.
+      std::optional<overtake_core::OvertakeMissionCandidate> entry_setup_mission;
       bool dynamic_mission_corridor_observed{false};
       bool dynamic_mission_corridor_feasible{false};
       std::size_t dynamic_mission_corridor_samples{};
@@ -6859,12 +6867,14 @@ struct MPC
       build_v2x_gap_planner_bounds(
       ref_wp_id, N, lb, ub, static_mission_plan_N);
 
-    const auto select_mission_candidate = [&](const auto & candidates) {
+    const auto select_mission_candidate = [&](
+      const auto & candidates, const bool require_complete_mission = true) {
         overtake_core::OvertakeMissionCandidateSelectionRequest request;
         request.candidates = candidates;
         request.minimum_deadline_slack_sec =
           cfg.v2x_behavior.overtake_body_clear_minimum_slack_sec;
         request.horizon_progress_enabled =
+          require_complete_mission &&
           cfg.v2x_behavior.overtake_line.horizon_progress_enabled;
         request.horizon_progress_time_budget_sec =
           cfg.v2x_behavior.overtake_line.pass_horizon_predicted_time_budget;
@@ -6882,6 +6892,7 @@ struct MPC
           0.0,
           cfg.v2x_behavior.overtake_line.side_quality_min_score_advantage);
         request.rear_clear_side_selection_enabled =
+          require_complete_mission &&
           cfg.v2x_behavior.overtake_line.rear_clear_side_selection_enabled;
         request.horizon_progress_weights = {
           cfg.v2x_behavior.overtake_line.horizon_progress_rear_clear_time_weight,
@@ -7273,6 +7284,7 @@ struct MPC
         std::sort(shift_distance_candidates.begin(), shift_distance_candidates.end());
 
         std::vector<overtake_core::OvertakeMissionCandidate> mission_candidates;
+        std::vector<overtake_core::OvertakeMissionCandidate> entry_setup_candidates;
         overtake_core::OvertakeMissionDynamicCorridorResolution first_dynamic_rejection;
         bool first_dynamic_rejection_available = false;
         std::size_t evaluated_goal_count = 0;
@@ -7504,6 +7516,40 @@ struct MPC
               {
                 ++rollout_lateral_reject_count;
                 continue;
+              }
+              if (rollout.feasible) {
+                // This preliminary candidate is intentionally incomplete: it
+                // proves only that a current ShiftOut can reach body-clear
+                // before the hard longitudinal gap. Until rear-clear and
+                // Return pass below, it may prepare speed on the base line but
+                // must never be frozen as an executable lateral Mission.
+                overtake_core::OvertakeMissionCandidate setup_candidate;
+                setup_candidate.feasible = true;
+                setup_candidate.shift_distance_m = shift_distance;
+                setup_candidate.goal_lateral_m = preflight.goal_ey;
+                setup_candidate.lateral_shift_m = candidate_entry_lateral_shift;
+                setup_candidate.max_required_lateral_accel_mps2 =
+                  rollout.max_required_lateral_accel_mps2;
+                setup_candidate.body_clear_deadline_checked = rollout.checked;
+                setup_candidate.body_clear_deadline_feasible = true;
+                setup_candidate.predicted_body_clear_time_sec = rollout.body_clear_time_sec;
+                setup_candidate.predicted_hard_distance_time_sec =
+                  rollout.hard_distance_time_sec;
+                setup_candidate.predicted_body_clear_distance_m =
+                  rollout.body_clear_distance_m;
+                setup_candidate.closing_speed_mps = effective_closing_speed;
+                setup_candidate.pass_side_sign = side;
+                setup_candidate.current_position_clear = current_position_clear;
+                setup_candidate.body_clear_deadline_slack_sec = rollout.deadline_slack_sec;
+                setup_candidate.predicted_minimum_ego_speed_mps =
+                  rollout.minimum_ego_speed_mps;
+                setup_candidate.minimum_path_wall_clearance_m =
+                  preflight.minimum_path_wall_clearance_m;
+                setup_candidate.minimum_path_corridor_width_m = std::min(
+                  preflight.minimum_path_corridor_width_m,
+                  std::max(0.0, goal_upper - goal_lower));
+                setup_candidate.corridor_source = corridor_admission.source;
+                entry_setup_candidates.push_back(setup_candidate);
               }
               if (!rollout.feasible) {
                 ++body_clear_deadline_miss_count;
@@ -7911,6 +7957,11 @@ struct MPC
           }
         }
 
+        const auto setup_selection =
+          select_mission_candidate(entry_setup_candidates, false);
+        if (setup_selection.valid && setup_selection.found) {
+          assessment.entry_setup_mission = setup_selection.candidate;
+        }
         const auto mission_selection = select_mission_candidate(mission_candidates);
         if (!mission_selection.valid || !mission_selection.found) {
           assessment.gap_available = false;
@@ -8945,6 +8996,35 @@ struct MPC
         global_mission_selection.candidate.pass_side_sign == minimum_motion_inner_side;
     }
 
+    // Select a target-scoped longitudinal setup independently of the complete
+    // Mission. This is the Pressure/Setup layer: it keeps the racing line and
+    // only builds the measured speed advantage needed by a later atomic
+    // ShiftOut/Pass/Return admission.
+    std::vector<overtake_core::OvertakeMissionCandidate> global_setup_candidates;
+    const auto add_global_setup_candidate = [&](const SideAssessment & assessment) {
+        if (assessment.entry_setup_mission.has_value()) {
+          global_setup_candidates.push_back(assessment.entry_setup_mission.value());
+        }
+      };
+    if (!start_grid_breakout_attempt && !overtake_forbidden_wp) {
+      add_global_setup_candidate(left_assessment);
+      add_global_setup_candidate(right_assessment);
+    }
+    const auto global_setup_selection =
+      select_mission_candidate(global_setup_candidates, false);
+    if (
+      global_setup_selection.valid && global_setup_selection.found &&
+      global_setup_selection.candidate.pass_side_sign != 0 &&
+      global_setup_selection.candidate.body_clear_deadline_checked &&
+      global_setup_selection.candidate.body_clear_deadline_feasible)
+    {
+      output.overtake_entry_setup_available = true;
+      output.overtake_entry_setup_side_sign =
+        global_setup_selection.candidate.pass_side_sign;
+      output.overtake_entry_setup_closing_speed =
+        global_setup_selection.candidate.closing_speed_mps;
+    }
+
     if (
       shiftout_line_active &&
       !overtake_line_state_.mission_path_frozen &&
@@ -9234,6 +9314,12 @@ struct MPC
     // hard target, map, emergency and solver conditions still release it. The
     // downstream OvertakeLine continues to own live corridor, wall and lateral-
     // acceleration feasibility.
+    const bool committed_target_identity_continuous =
+      !overtake_line_state_.target_vehicle_id.empty() &&
+      overtake_line_state_.target_vehicle_id != "__unknown__" &&
+      output.target_vehicle_id == overtake_line_state_.target_vehicle_id &&
+      (output.has_front_vehicle || output.has_side_vehicle) &&
+      !output.v2x_message_invalid;
     output.overtake_committed_shiftout_behavior_owner_active =
       overtake_core::can_preserve_committed_shiftout_behavior(
       overtake_core::CommittedShiftOutBehaviorOwnershipRequest{
@@ -9243,6 +9329,7 @@ struct MPC
         overtake_line_state_.pass_side_sign != 0,
         committed_body_clear_handoff.active,
         output.locked_target_seen,
+        committed_target_identity_continuous,
         output.locked_target_position_jump,
         output.locked_target_course_progress_rejected,
         output.locked_target_pass_side_intrusion,
@@ -9271,6 +9358,7 @@ struct MPC
         overtake_line_state_.pass_front_overlap_exclusion_latched,
         overtake_line_state_.pass_front_cap_release_active,
         output.locked_target_seen,
+        committed_target_identity_continuous,
         output.locked_target_position_jump,
         output.locked_target_course_progress_rejected,
         output.locked_target_current_body_footprints_separated,
@@ -16021,7 +16109,13 @@ private:
             rear_clear_confirmed,
             locked_target_longitudinal,
             line_cfg.safe_separation_forward_escape_max_front_distance,
-            safe_separation_elapsed,
+            // A mature Pass may encounter its first prediction dropout after
+            // the SafeSeparation-entry lease has already elapsed. Bound this
+            // prediction-only bridge from the actual guard-loss instant.
+            prediction_only_guard_lost ?
+            prediction_guard_loss_elapsed_sec : safe_separation_elapsed,
+            prediction_only_guard_lost ?
+            std::max(0.0, current_speed_mps_) * prediction_guard_loss_elapsed_sec :
             safe_separation_traveled,
             line_cfg.safe_separation_tactical_revalidation_max_sec,
             line_cfg.safe_separation_tactical_revalidation_max_distance});
@@ -18776,10 +18870,22 @@ private:
       output.overtake_selected_mission->feasible &&
       output.overtake_selected_mission->pass_side_sign != 0 &&
       std::isfinite(output.overtake_selected_mission->closing_speed_mps);
+    const bool entry_setup_available =
+      !overtake_execution_committed &&
+      output.overtake_entry_setup_available &&
+      output.overtake_entry_setup_side_sign != 0 &&
+      std::isfinite(output.overtake_entry_setup_closing_speed) &&
+      output.overtake_entry_setup_closing_speed >= 0.0 &&
+      (output.has_front_vehicle || output.has_side_vehicle) &&
+      !output.target_vehicle_id.empty();
+    const bool entry_speed_monitor_available =
+      entry_mission_available || entry_setup_available;
     const int entry_mission_side_sign = entry_mission_available ?
-      output.overtake_selected_mission->pass_side_sign : 0;
+      output.overtake_selected_mission->pass_side_sign :
+      entry_setup_available ? output.overtake_entry_setup_side_sign : 0;
     const double entry_mission_closing_speed = entry_mission_available ?
       output.overtake_selected_mission->closing_speed_mps :
+      entry_setup_available ? output.overtake_entry_setup_closing_speed :
       std::numeric_limits<double>::quiet_NaN();
     // Relative-speed readiness belongs to the target, not to one lateral
     // candidate. Re-ranking side/goal/closing policy must not erase measured
@@ -18803,7 +18909,7 @@ private:
     const auto entry_validation_lease =
       v2x_overtake_core::resolve_overtake_entry_prearm_validation_lease(
       v2x_overtake_core::OvertakeEntryPrearmValidationLeaseRequest{
-        entry_mission_available && !entry_prearm_cooldown_active,
+        entry_speed_monitor_available && !entry_prearm_cooldown_active,
         same_entry_speed_target,
         entry_prearm_hard_guard_clear && !entry_prearm_cooldown_active,
         now_sec,
@@ -18854,7 +18960,7 @@ private:
         cfg.v2x_behavior.overtake_entry_prearm_max_distance,
         cfg.v2x_behavior.overtake_entry_prearm_retry_cooldown_sec);
     }
-    if (entry_mission_available && entry_prearm_window.active) {
+    if (entry_speed_monitor_available && entry_prearm_window.active) {
       overtake_entry_speed_candidate_id_ = output.target_vehicle_id;
       overtake_entry_speed_candidate_side_sign_ = entry_mission_side_sign;
       overtake_entry_speed_candidate_closing_speed_ = entry_mission_closing_speed;
@@ -18949,12 +19055,24 @@ private:
         entry_prearm_window.active,
         output.start_grid_breakout_active || stationary_blocker_entry_override ||
         slow_blocker_urgent_entry_override});
-    output.overtake_entry_prearm_active = entry_admission.prearm_active;
-    if (!entry_admission.execution_allowed) {
+    const bool setup_prearm_active =
+      v2x_overtake_core::can_use_overtake_entry_setup_prearm(
+      v2x_overtake_core::OvertakeEntrySetupPrearmRequest{
+        entry_setup_available,
+        entry_mission_available,
+        entry_validation_lease.monitor_active && entry_prearm_window.active,
+        entry_prearm_hard_guard_clear,
+        output.has_front_vehicle,
+        output.front_distance,
+        cfg.v2x_behavior.overtake_guard_min_front_distance});
+    output.overtake_entry_prearm_active =
+      entry_admission.prearm_active || setup_prearm_active;
+    if (!entry_admission.execution_allowed || setup_prearm_active) {
       final_state = V2XBehaviorState::Follow;
       output.overtake_zone_allows = false;
       std::ostringstream reason;
-      reason << (entry_admission.prearm_active ?
+      reason << (setup_prearm_active ?
+        "overtake entry setup" : entry_admission.prearm_active ?
         "overtake entry pre-arm" : "overtake entry speed not ready")
              << ", target=" << output.target_vehicle_id
              << ", rel=" << entry_speed_readiness.relative_speed_mps
@@ -18967,7 +19085,7 @@ private:
              << ", cooldown="
              << (output.overtake_entry_prearm_cooldown_active ? 1 : 0);
       output.reason = reason.str();
-      if (entry_admission.prearm_active) {
+      if (output.overtake_entry_prearm_active) {
         // The complete mission was revalidated this cycle, but the measured
         // closing ability is not ready. Keep the base racing line and let ego
         // acquire speed before handing lateral ownership to OvertakeLine.
@@ -18986,6 +19104,10 @@ private:
           std::clamp(
             output.overtake_selected_mission->closing_speed_mps,
             0.0,
+            std::max(0.0, cfg.v2x_behavior.overtake_shiftout_max_closing_speed)) :
+          std::isfinite(overtake_entry_speed_candidate_closing_speed_) ?
+          std::clamp(
+            overtake_entry_speed_candidate_closing_speed_, 0.0,
             std::max(0.0, cfg.v2x_behavior.overtake_shiftout_max_closing_speed)) :
           std::max(0.0, cfg.v2x_behavior.overtake_shiftout_max_closing_speed);
         output.overtake_entry_prearm_target_velocity = std::min(

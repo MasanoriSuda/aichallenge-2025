@@ -317,6 +317,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntrySpeedReadinessReque
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntryPrearmWindowRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEngagementLeaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntryPrearmValidationLeaseRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntrySetupPrearmRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::NewOvertakeEntryAdmissionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StationaryBlockerEntryOverrideRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SlowBlockerUrgentEntryOverrideRequest;
@@ -325,6 +326,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::update_overtake_entry_prearm_win
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_engagement_lease;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   resolve_overtake_entry_prearm_validation_lease;
+using multi_purpose_mpc_ros::v2x_overtake_core::can_use_overtake_entry_setup_prearm;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_new_overtake_entry_admission;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   can_override_entry_speed_for_stationary_blocker;
@@ -7781,6 +7783,30 @@ TEST(V2XOvertakeCoreEntrySpeed, PrearmsValidatedMissionUntilMeasuredSpeedIsReady
   EXPECT_FALSE(result.prearm_active);
 }
 
+TEST(V2XOvertakeCoreEntrySpeed, BodyClearSetupPrearmsWithoutAuthorizingLateralMission)
+{
+  OvertakeEntrySetupPrearmRequest request;
+  request.setup_candidate_available = true;
+  request.monitor_active = true;
+  request.hard_guard_clear = true;
+  request.front_vehicle_seen = true;
+  request.front_distance_m = 8.0;
+  request.minimum_front_distance_m = 3.0;
+
+  EXPECT_TRUE(can_use_overtake_entry_setup_prearm(request));
+
+  request.complete_mission_available = true;
+  EXPECT_FALSE(can_use_overtake_entry_setup_prearm(request));
+  request.complete_mission_available = false;
+
+  request.front_distance_m = 2.9;
+  EXPECT_FALSE(can_use_overtake_entry_setup_prearm(request));
+  request.front_distance_m = 8.0;
+
+  request.hard_guard_clear = false;
+  EXPECT_FALSE(can_use_overtake_entry_setup_prearm(request));
+}
+
 TEST(V2XOvertakeCoreEntrySpeed, AllowsConfirmedStationaryBlockerWithCompleteMission)
 {
   StationaryBlockerEntryOverrideRequest request;
@@ -9510,6 +9536,33 @@ TEST(V2XOvertakeCoreMissionOwnership, DeadlineFeasibleShiftOutOwnsBehavior)
   request.locked_target_seen = true;
 
   EXPECT_TRUE(can_preserve_committed_shiftout_behavior(request));
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, TargetIdentityBridgesOneGeometryClassificationMiss)
+{
+  CommittedShiftOutBehaviorOwnershipRequest shiftout;
+  shiftout.committed_shiftout_active = true;
+  shiftout.validated_fixed_line = true;
+  shiftout.mission_side_valid = true;
+  shiftout.body_clear_deadline_checked = true;
+  shiftout.body_clear_handoff_active = true;
+  shiftout.target_identity_continuous = true;
+  EXPECT_TRUE(can_preserve_committed_shiftout_behavior(shiftout));
+
+  shiftout.target_identity_continuous = false;
+  EXPECT_FALSE(can_preserve_committed_shiftout_behavior(shiftout));
+
+  CommittedPassBehaviorOwnershipRequest pass;
+  pass.committed_pass_active = true;
+  pass.validated_fixed_line = true;
+  pass.mission_side_valid = true;
+  pass.lateral_exclusion_latched = true;
+  pass.target_identity_continuous = true;
+  pass.current_body_footprints_separated = true;
+  EXPECT_TRUE(can_preserve_committed_pass_behavior(pass));
+
+  pass.locked_target_position_jump = true;
+  EXPECT_FALSE(can_preserve_committed_pass_behavior(pass));
 }
 
 TEST(V2XOvertakeCoreMissionOwnership, ShiftOutOwnerReleasesForHardAbortOrMissedDeadline)

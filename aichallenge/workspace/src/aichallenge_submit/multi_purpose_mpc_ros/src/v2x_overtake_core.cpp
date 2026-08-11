@@ -5375,6 +5375,22 @@ OvertakeEntryPrearmValidationLeaseResolution resolve_overtake_entry_prearm_valid
   return result;
 }
 
+bool can_use_overtake_entry_setup_prearm(
+  const OvertakeEntrySetupPrearmRequest & request) noexcept
+{
+  if (
+    !std::isfinite(request.front_distance_m) || request.front_distance_m < 0.0 ||
+    !std::isfinite(request.minimum_front_distance_m) ||
+    request.minimum_front_distance_m < 0.0)
+  {
+    return false;
+  }
+  return request.setup_candidate_available &&
+         !request.complete_mission_available && request.monitor_active &&
+         request.hard_guard_clear && request.front_vehicle_seen &&
+         request.front_distance_m + 1e-9 >= request.minimum_front_distance_m;
+}
+
 NewOvertakeEntryAdmissionResolution resolve_new_overtake_entry_admission(
   const NewOvertakeEntryAdmissionRequest & request) noexcept
 {
@@ -6554,7 +6570,7 @@ bool can_preserve_committed_pass_behavior(
          request.validated_fixed_line &&
          request.mission_side_valid &&
          (pass_release_latched || body_clear_handoff_owns_pass) &&
-         request.locked_target_seen &&
+         (request.locked_target_seen || request.target_identity_continuous) &&
          !request.locked_target_position_jump &&
          !request.locked_target_course_progress_rejected &&
          (request.current_body_footprints_separated || current_overlap_grace_active) &&
@@ -6572,7 +6588,7 @@ bool can_preserve_committed_shiftout_behavior(
          request.mission_side_valid &&
          request.body_clear_deadline_checked &&
          request.body_clear_handoff_active &&
-         request.locked_target_seen &&
+         (request.locked_target_seen || request.target_identity_continuous) &&
          !request.locked_target_position_jump &&
          !request.locked_target_course_progress_rejected &&
          !request.locked_target_pass_side_intrusion &&

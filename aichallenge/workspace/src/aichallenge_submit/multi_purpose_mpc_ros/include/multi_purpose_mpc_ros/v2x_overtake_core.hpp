@@ -3057,11 +3057,29 @@ struct OvertakeEntryPrearmValidationLeaseResolution
   double remaining_sec{};
 };
 
-/// Preserve only target-scoped entry-speed observation across a brief full-
-/// Mission planning miss. A held lease never authorizes lateral execution;
-/// the caller must still require a current validated Mission for handoff.
+/// Preserve only target-scoped entry-speed observation across a brief setup or
+/// full-Mission planning miss. A held lease never authorizes lateral
+/// execution; the caller must still require a current complete Mission for
+/// handoff.
 OvertakeEntryPrearmValidationLeaseResolution resolve_overtake_entry_prearm_validation_lease(
   const OvertakeEntryPrearmValidationLeaseRequest & request) noexcept;
+
+struct OvertakeEntrySetupPrearmRequest
+{
+  bool setup_candidate_available{false};
+  bool complete_mission_available{false};
+  bool monitor_active{false};
+  bool hard_guard_clear{false};
+  bool front_vehicle_seen{false};
+  double front_distance_m{std::numeric_limits<double>::infinity()};
+  double minimum_front_distance_m{};
+};
+
+/// Admit only bounded longitudinal preparation from a body-clear-feasible
+/// setup candidate. A complete Mission takes the normal entry path instead;
+/// no setup result authorizes a lateral target.
+bool can_use_overtake_entry_setup_prearm(
+  const OvertakeEntrySetupPrearmRequest & request) noexcept;
 
 struct NewOvertakeEntryAdmissionRequest
 {
@@ -3824,6 +3842,10 @@ struct CommittedPassBehaviorOwnershipRequest
   bool lateral_exclusion_latched{false};
   bool minimum_motion_front_cap_release_latched{false};
   bool locked_target_seen{false};
+  /// The frozen Mission target still matches the current front/side target.
+  /// This bridges one course-relative geometry classification miss; it must
+  /// never be asserted for a stale or different target ID.
+  bool target_identity_continuous{false};
   bool locked_target_position_jump{false};
   bool locked_target_course_progress_rejected{false};
   bool current_body_footprints_separated{false};
@@ -3855,6 +3877,8 @@ struct CommittedShiftOutBehaviorOwnershipRequest
   bool mission_side_valid{false};
   bool body_clear_handoff_active{false};
   bool locked_target_seen{false};
+  /// See CommittedPassBehaviorOwnershipRequest::target_identity_continuous.
+  bool target_identity_continuous{false};
   bool locked_target_position_jump{false};
   bool locked_target_course_progress_rejected{false};
   bool locked_target_pass_side_intrusion{false};

@@ -2815,6 +2815,64 @@ double resolve_active_pass_elapsed(
   return completed_sec + std::max(0.0, now_sec - active_segment_start_sec);
 }
 
+SpeedPreservingTacticalRevalidationResolution
+resolve_speed_preserving_tactical_revalidation(
+  const SpeedPreservingTacticalRevalidationRequest & request) noexcept
+{
+  SpeedPreservingTacticalRevalidationResolution resolution;
+  const auto finite_non_negative = [](const double value) {
+      return std::isfinite(value) && value >= 0.0;
+    };
+  if (
+    !std::isfinite(request.target_longitudinal_m) ||
+    !finite_non_negative(request.maximum_absolute_longitudinal_m) ||
+    !finite_non_negative(request.elapsed_sec) ||
+    !finite_non_negative(request.traveled_m) ||
+    !finite_non_negative(request.maximum_duration_sec) ||
+    !finite_non_negative(request.maximum_distance_m))
+  {
+    return resolution;
+  }
+
+  resolution.remaining_sec = std::max(
+    0.0, request.maximum_duration_sec - request.elapsed_sec);
+  resolution.remaining_distance_m = std::max(
+    0.0, request.maximum_distance_m - request.traveled_m);
+  const bool within_longitudinal_window =
+    std::abs(request.target_longitudinal_m) <=
+    request.maximum_absolute_longitudinal_m + 1e-9;
+  const bool inside_budget =
+    request.elapsed_sec < request.maximum_duration_sec - 1e-9 &&
+    request.traveled_m < request.maximum_distance_m - 1e-9;
+  resolution.active =
+    request.enabled && request.safe_separation_active && request.pass_committed &&
+    request.target_continuous && request.current_body_footprints_separated &&
+    request.footprint_prediction_valid && !request.execution_corridor_blocked &&
+    !request.hard_fault && !request.rear_clear_confirmed &&
+    within_longitudinal_window && inside_budget;
+  return resolution;
+}
+
+bool can_return_from_tactical_revalidation(
+  const TacticalRevalidationReturnRequest & request) noexcept
+{
+  if (
+    !std::isfinite(request.target_longitudinal_m) ||
+    !std::isfinite(request.minimum_front_distance_m) ||
+    request.minimum_front_distance_m < 0.0)
+  {
+    return false;
+  }
+  return
+    request.enabled && request.target_continuous &&
+    request.current_body_footprints_separated &&
+    request.footprint_prediction_valid &&
+    request.predicted_body_footprint_sweep_separated &&
+    request.return_corridor_available && !request.execution_corridor_blocked &&
+    !request.hard_fault &&
+    request.target_longitudinal_m + 1e-9 >= request.minimum_front_distance_m;
+}
+
 SafeSeparationResolution resolve_safe_separation(
   const SafeSeparationRequest & request) noexcept
 {
@@ -5066,6 +5124,43 @@ OvertakeEntryPrearmWindowResolution update_overtake_entry_prearm_window(
     result.elapsed_sec + 1e-9 >= request.maximum_duration_sec ||
     result.traveled_m + 1e-9 >= request.maximum_distance_m;
   result.active = !result.timed_out;
+  return result;
+}
+
+OvertakeEngagementLeaseResolution resolve_overtake_engagement_lease(
+  const OvertakeEngagementLeaseRequest & request) noexcept
+{
+  OvertakeEngagementLeaseResolution result;
+  if (
+    !request.enabled || !request.hard_guard_clear || request.explicit_disengage ||
+    !std::isfinite(request.now_sec) || !std::isfinite(request.maximum_hold_sec) ||
+    request.maximum_hold_sec < 0.0)
+  {
+    result.clear_target = request.explicit_disengage || !request.hard_guard_clear;
+    return result;
+  }
+
+  if (request.current_target_relevant) {
+    result.active = true;
+    result.last_relevant_sec = request.now_sec;
+    result.remaining_sec = request.maximum_hold_sec;
+    return result;
+  }
+
+  if (!request.prior_target_engaged || !std::isfinite(request.last_relevant_sec)) {
+    result.clear_target = true;
+    return result;
+  }
+  const double age_sec = request.now_sec - request.last_relevant_sec;
+  if (age_sec < 0.0 || age_sec > request.maximum_hold_sec + 1e-9) {
+    result.clear_target = true;
+    return result;
+  }
+
+  result.active = true;
+  result.hold_active = true;
+  result.last_relevant_sec = request.last_relevant_sec;
+  result.remaining_sec = std::max(0.0, request.maximum_hold_sec - age_sec);
   return result;
 }
 

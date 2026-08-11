@@ -1552,6 +1552,60 @@ enum class SafeSeparationReason
   RearwardProgressLossDisengagementTimeout,
 };
 
+struct SpeedPreservingTacticalRevalidationRequest
+{
+  bool enabled{false};
+  bool safe_separation_active{false};
+  bool pass_committed{false};
+  bool target_continuous{false};
+  bool current_body_footprints_separated{false};
+  bool footprint_prediction_valid{false};
+  bool execution_corridor_blocked{false};
+  bool hard_fault{false};
+  bool rear_clear_confirmed{false};
+  double target_longitudinal_m{};
+  double maximum_absolute_longitudinal_m{};
+  double elapsed_sec{};
+  double traveled_m{};
+  double maximum_duration_sec{};
+  double maximum_distance_m{};
+};
+
+struct SpeedPreservingTacticalRevalidationResolution
+{
+  bool active{false};
+  double remaining_sec{};
+  double remaining_distance_m{};
+};
+
+/// Admit a bounded speed-preserving Pass lease while current bodies and the
+/// wall corridor remain clear. Predicted sweep separation is deliberately not
+/// required: bridging a short prediction-only overlap is the purpose of this
+/// lease. Hard physical/runtime guards remain fail closed.
+SpeedPreservingTacticalRevalidationResolution
+resolve_speed_preserving_tactical_revalidation(
+  const SpeedPreservingTacticalRevalidationRequest & request) noexcept;
+
+struct TacticalRevalidationReturnRequest
+{
+  bool enabled{false};
+  bool target_continuous{false};
+  bool current_body_footprints_separated{false};
+  bool footprint_prediction_valid{false};
+  bool predicted_body_footprint_sweep_separated{false};
+  bool return_corridor_available{false};
+  bool execution_corridor_blocked{false};
+  bool hard_fault{false};
+  double target_longitudinal_m{};
+  double minimum_front_distance_m{};
+};
+
+/// A target that is confirmed clear ahead may leave the committed Pass through
+/// a smooth Return instead of dropping into FollowPrepare, but only with
+/// current and predicted physical separation and a clear Return corridor.
+bool can_return_from_tactical_revalidation(
+  const TacticalRevalidationReturnRequest & request) noexcept;
+
 struct CommittedPassForwardCompletionRequest
 {
   bool enabled{false};
@@ -2789,6 +2843,34 @@ struct OvertakeEntryPrearmWindowResolution
 /// Missing/invalid input clears the window.
 OvertakeEntryPrearmWindowResolution update_overtake_entry_prearm_window(
   const OvertakeEntryPrearmWindowRequest & request) noexcept;
+
+struct OvertakeEngagementLeaseRequest
+{
+  bool enabled{false};
+  bool current_target_relevant{false};
+  bool prior_target_engaged{false};
+  bool hard_guard_clear{false};
+  bool explicit_disengage{false};
+  double now_sec{};
+  double last_relevant_sec{-std::numeric_limits<double>::infinity()};
+  double maximum_hold_sec{};
+};
+
+struct OvertakeEngagementLeaseResolution
+{
+  bool active{false};
+  bool hold_active{false};
+  bool clear_target{false};
+  double last_relevant_sec{-std::numeric_limits<double>::infinity()};
+  double remaining_sec{};
+};
+
+/// Keep target identity and target-scoped entry-speed evidence across one
+/// short front/side classification dropout. A held lease never marks a stale
+/// target as a current front/side vehicle and therefore cannot authorize a
+/// lateral Mission or stale Follow cap.
+OvertakeEngagementLeaseResolution resolve_overtake_engagement_lease(
+  const OvertakeEngagementLeaseRequest & request) noexcept;
 
 struct OvertakeEntryPrearmValidationLeaseRequest
 {

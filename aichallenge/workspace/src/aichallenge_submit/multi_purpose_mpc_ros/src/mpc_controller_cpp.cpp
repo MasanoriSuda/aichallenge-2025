@@ -1470,6 +1470,9 @@ struct OvertakeLineConfig
   bool safe_separation_mission_aligned_budget_enabled{false};
   double safe_separation_completion_distance_margin{1.0};
   double safe_separation_completion_time_margin_sec{0.5};
+  bool safe_separation_tactical_revalidation_enabled{false};
+  double safe_separation_tactical_revalidation_max_sec{0.5};
+  double safe_separation_tactical_revalidation_max_distance{3.0};
   bool contact_continuation_enabled{false};
   double contact_continuation_max_sec{0.8};
   double contact_continuation_initial_progress_grace_sec{0.25};
@@ -1571,6 +1574,7 @@ struct V2XBehaviorConfig
   double overtake_slow_blocker_urgent_entry_distance_margin{1.0};
   double overtake_slow_blocker_urgent_entry_confirm_sec{0.05};
   double overtake_entry_prearm_validation_hold_sec{0.15};
+  double overtake_engagement_hold_sec{0.5};
   double overtake_entry_prearm_max_sec{2.0};
   double overtake_entry_prearm_max_distance{8.0};
   double overtake_entry_prearm_retry_cooldown_sec{0.75};
@@ -2058,6 +2062,9 @@ struct V2XBehaviorOutput
   double overtake_entry_prearm_traveled_m{};
   bool overtake_entry_prearm_validation_hold_active{false};
   double overtake_entry_prearm_validation_hold_remaining_sec{};
+  bool overtake_engagement_hold_active{false};
+  double overtake_engagement_hold_remaining_sec{};
+  bool overtake_engagement_explicit_disengage{false};
   bool overtake_entry_prearm_timed_out{false};
   bool overtake_entry_prearm_cooldown_active{false};
   bool lower_boundary_vehicle_seen{false};
@@ -2091,6 +2098,7 @@ struct OvertakeLineState
   double pass_predicted_overlap_since_sec{std::numeric_limits<double>::quiet_NaN()};
   bool pass_rearward_progress_time_grace_was_active{false};
   bool pass_side_by_side_rear_clear_tail_was_active{false};
+  bool pass_tactical_revalidation_was_active{false};
   bool pass_rearward_progress_loss_disengage_active{false};
   double pass_rearward_progress_loss_disengage_start_sec{
     std::numeric_limits<double>::quiet_NaN()};
@@ -4590,6 +4598,9 @@ struct MPC
     overtake_entry_prearm_last_update_sec_ = std::numeric_limits<double>::quiet_NaN();
     overtake_entry_prearm_traveled_m_ = 0.0;
     overtake_entry_prearm_cooldown_until_sec_ = now_sec;
+    overtake_engagement_target_id_.clear();
+    overtake_engagement_last_relevant_sec_ =
+      -std::numeric_limits<double>::infinity();
     overtake_solver_recovery_active_ = false;
     overtake_solver_reentry_blocked_ = false;
     overtake_solver_recovery_success_count_ = 0;
@@ -4734,6 +4745,9 @@ struct MPC
     overtake_entry_prearm_last_update_sec_ = std::numeric_limits<double>::quiet_NaN();
     overtake_entry_prearm_traveled_m_ = 0.0;
     overtake_entry_prearm_cooldown_until_sec_ = now_sec;
+    overtake_engagement_target_id_.clear();
+    overtake_engagement_last_relevant_sec_ =
+      -std::numeric_limits<double>::infinity();
     overtake_solver_recovery_active_ = false;
     overtake_curve_cooldown_until_sec_ = now_sec;
     overtake_line_side_retry_blocks_ = {};
@@ -9250,6 +9264,7 @@ struct MPC
       output.state = side_target_requires_follow ?
         V2XBehaviorState::Follow : V2XBehaviorState::Cruise;
       if (!side_target_requires_follow) {
+        output.overtake_engagement_explicit_disengage = true;
         output.reason = "rear-side vehicle does not constrain ego";
       } else if (output.reason.empty()) {
         output.reason = "side vehicle";
@@ -10584,6 +10599,9 @@ struct MPC
   double overtake_entry_prearm_traveled_m_{0.0};
   double overtake_entry_prearm_cooldown_until_sec_{
     -std::numeric_limits<double>::infinity()};
+  std::string overtake_engagement_target_id_;
+  double overtake_engagement_last_relevant_sec_{
+    -std::numeric_limits<double>::infinity()};
   bool overtake_solver_recovery_active_{false};
   bool overtake_solver_reentry_blocked_{false};
   int overtake_solver_recovery_success_count_{0};
@@ -10809,6 +10827,7 @@ private:
       overtake_line_state_.pass_front_cap_release_active = false;
       overtake_line_state_.pass_rearward_progress_time_grace_was_active = false;
       overtake_line_state_.pass_side_by_side_rear_clear_tail_was_active = false;
+      overtake_line_state_.pass_tactical_revalidation_was_active = false;
       overtake_line_state_.pass_rearward_progress_loss_disengage_active = false;
       overtake_line_state_.pass_rearward_progress_loss_disengage_start_sec =
         std::numeric_limits<double>::quiet_NaN();
@@ -15469,12 +15488,59 @@ private:
           !actual_wall_sample_unavailable &&
           behavior_output.front_risk_level != FrontRiskLevel::EmergencyBrake &&
           !overtake_solver_recovery_active_;
+        const bool tactical_reselect_hard_fault =
+          actual_wall_physical_contact || actual_wall_margin_blocked ||
+          actual_wall_sample_unavailable ||
+          behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake ||
+          overtake_solver_recovery_active_ || behavior_output.overtake_forbidden_wp;
+        const bool tactical_reselect_target_continuous =
+          locked_target_seen && locked_target_matches &&
+          locked_target_progress_continuous &&
+          !behavior_output.locked_target_position_jump &&
+          !locked_target_progress_rejected;
+        const auto tactical_revalidation =
+          overtake_core::resolve_speed_preserving_tactical_revalidation(
+          overtake_core::SpeedPreservingTacticalRevalidationRequest{
+            line_cfg.safe_separation_tactical_revalidation_enabled,
+            overtake_line_state_.pass_horizon_safe_separation_active,
+            behavior_output.overtake_commit_stage !=
+            overtake_core::PassCommitStage::Selectable,
+            tactical_reselect_target_continuous,
+            behavior_output.locked_target_current_body_footprints_separated,
+            behavior_output.locked_target_footprint_prediction_valid,
+            behavior_output.overtake_execution_corridor_blocked,
+            tactical_reselect_hard_fault,
+            rear_clear_confirmed,
+            locked_target_longitudinal,
+            line_cfg.safe_separation_forward_escape_max_front_distance,
+            safe_separation_elapsed,
+            safe_separation_traveled,
+            line_cfg.safe_separation_tactical_revalidation_max_sec,
+            line_cfg.safe_separation_tactical_revalidation_max_distance});
+        if (
+          tactical_revalidation.active &&
+          !overtake_line_state_.pass_tactical_revalidation_was_active)
+        {
+          RCLCPP_WARN(
+            rclcpp::get_logger("mpc_controller"),
+            "OvertakeLine speed-preserving tactical revalidation: "
+            "target=%s, side=%d, target_s=%.2f, prediction_clear=%d, "
+            "remaining=%.2f s/%.2f m, wp_id=%d",
+            overtake_line_state_.target_vehicle_id.c_str(),
+            overtake_line_state_.pass_side_sign, locked_target_longitudinal,
+            behavior_output.locked_target_predicted_body_footprint_sweep_separated ? 1 : 0,
+            tactical_revalidation.remaining_sec,
+            tactical_revalidation.remaining_distance_m, model->wp_id);
+        }
+        overtake_line_state_.pass_tactical_revalidation_was_active =
+          tactical_revalidation.active;
         const bool safe_separation_forward_escape_allowed =
           line_cfg.safe_separation_forward_escape_enabled &&
           (committed_forward_completion.active ||
           short_horizon_guard.prediction_grace_active ||
           short_horizon_guard.rearward_completion_active ||
-          behavior_output.recoverable_side_contact_active);
+          behavior_output.recoverable_side_contact_active ||
+          tactical_revalidation.active);
         const bool safe_separation_fresh_forward_progress =
           safe_separation_forward_escape_allowed &&
           !behavior_output.overtake_execution_corridor_blocked &&
@@ -15518,16 +15584,6 @@ private:
             pass_traveled,
             line_cfg.pass_horizon_absolute_time_limit,
             line_cfg.pass_horizon_absolute_distance_limit});
-        const bool tactical_reselect_hard_fault =
-          actual_wall_physical_contact || actual_wall_margin_blocked ||
-          actual_wall_sample_unavailable ||
-          behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake ||
-          overtake_solver_recovery_active_ || behavior_output.overtake_forbidden_wp;
-        const bool tactical_reselect_target_continuous =
-          locked_target_seen && locked_target_matches &&
-          locked_target_progress_continuous &&
-          !behavior_output.locked_target_position_jump &&
-          !locked_target_progress_rejected;
         const bool tactical_reselection_admitted =
           overtake_core::can_reselect_from_safe_separation(
           overtake_core::SafeSeparationTacticalReselectRequest{
@@ -15556,7 +15612,7 @@ private:
           overtake_core::SafeSeparationRequest{
             line_cfg.safe_separation_enabled,
             true,
-            short_horizon_safe,
+            short_horizon_safe || tactical_revalidation.active,
             locked_target_seen,
             rear_clear_confirmed,
             !return_corridor_blocked,
@@ -15718,6 +15774,34 @@ private:
           const std::string wait_reason =
             std::string{"SafeSeparation requested revalidation: "} +
             overtake_core::to_string(safe_separation.reason);
+          const bool speed_preserving_return =
+            overtake_core::can_return_from_tactical_revalidation(
+            overtake_core::TacticalRevalidationReturnRequest{
+              line_cfg.safe_separation_tactical_revalidation_enabled,
+              tactical_reselect_target_continuous,
+              behavior_output.locked_target_current_body_footprints_separated,
+              behavior_output.locked_target_footprint_prediction_valid,
+              behavior_output.locked_target_predicted_body_footprint_sweep_separated,
+              !return_corridor_blocked,
+              behavior_output.overtake_execution_corridor_blocked,
+              tactical_reselect_hard_fault,
+              locked_target_longitudinal,
+              line_cfg.safe_separation_front_clear_distance});
+          if (speed_preserving_return) {
+            RCLCPP_WARN(
+              rclcpp::get_logger("mpc_controller"),
+              "OvertakeLine tactical revalidation exits through Return: "
+              "target=%s, side=%d, target_s=%.2f, wp_id=%d",
+              overtake_line_state_.target_vehicle_id.c_str(),
+              overtake_line_state_.pass_side_sign,
+              locked_target_longitudinal, model->wp_id);
+            transition_overtake_line_phase(
+              OvertakeLinePhase::Return, now_sec, current_ey,
+              overtake_line_state_.pass_side_sign,
+              "SafeSeparation target clear ahead; speed-preserving Return");
+            return update_overtake_line(
+              behavior_output, ref_wp_id, N, lb, ub, now_sec);
+          }
           if (enter_dynamic_mission_wait(wait_reason)) {
             return output;
           }
@@ -18051,6 +18135,40 @@ private:
 
   V2XBehaviorOutput commit_v2x_behavior_state(V2XBehaviorOutput output, const double now_sec)
   {
+    const bool current_engagement_target_relevant =
+      !output.target_vehicle_id.empty() &&
+      (output.has_front_vehicle ||
+      (output.has_side_vehicle && !output.overtake_engagement_explicit_disengage));
+    const bool engagement_hard_guard_clear =
+      output.v2x_health == "Healthy" && !output.v2x_message_invalid &&
+      !output.locked_target_position_jump;
+    const auto engagement_lease =
+      v2x_overtake_core::resolve_overtake_engagement_lease(
+      v2x_overtake_core::OvertakeEngagementLeaseRequest{
+        cfg.v2x_behavior.overtake_engagement_hold_sec > kEps,
+        current_engagement_target_relevant,
+        !overtake_engagement_target_id_.empty(),
+        engagement_hard_guard_clear,
+        output.overtake_engagement_explicit_disengage,
+        now_sec,
+        overtake_engagement_last_relevant_sec_,
+        cfg.v2x_behavior.overtake_engagement_hold_sec});
+    if (current_engagement_target_relevant && engagement_lease.active) {
+      overtake_engagement_target_id_ = output.target_vehicle_id;
+      overtake_engagement_last_relevant_sec_ = engagement_lease.last_relevant_sec;
+    } else if (engagement_lease.hold_active) {
+      output.overtake_engagement_hold_active = true;
+      output.overtake_engagement_hold_remaining_sec = engagement_lease.remaining_sec;
+      output.target_vehicle_id = overtake_engagement_target_id_;
+      if (output.state == V2XBehaviorState::Cruise) {
+        output.state = V2XBehaviorState::Follow;
+        output.reason = "overtake engagement lease / " + output.reason;
+      }
+    } else if (engagement_lease.clear_target) {
+      overtake_engagement_target_id_.clear();
+      overtake_engagement_last_relevant_sec_ =
+        -std::numeric_limits<double>::infinity();
+    }
     const V2XBehaviorState desired_state = output.state;
     V2XBehaviorState final_state = output.state;
     const bool had_previous_state = v2x_behavior_state_initialized;
@@ -18084,7 +18202,8 @@ private:
     const bool entry_prearm_cooldown_active =
       now_sec < overtake_entry_prearm_cooldown_until_sec_;
     const bool entry_prearm_hard_guard_clear =
-      (output.has_front_vehicle || output.has_side_vehicle) &&
+      (output.has_front_vehicle || output.has_side_vehicle ||
+      output.overtake_engagement_hold_active) &&
       !output.target_vehicle_id.empty() &&
       !output.v2x_message_invalid &&
       !output.locked_target_position_jump &&
@@ -18100,6 +18219,10 @@ private:
         entry_prearm_hard_guard_clear && !entry_prearm_cooldown_active,
         now_sec,
         overtake_entry_prearm_last_validated_sec_,
+        output.overtake_engagement_hold_active ?
+        std::max(
+          cfg.v2x_behavior.overtake_entry_prearm_validation_hold_sec,
+          cfg.v2x_behavior.overtake_engagement_hold_sec) :
         cfg.v2x_behavior.overtake_entry_prearm_validation_hold_sec});
     overtake_entry_prearm_last_validated_sec_ =
       entry_validation_lease.last_validated_sec;
@@ -18536,7 +18659,7 @@ private:
         "hard_dist=%.2f, hard_avail=%.2f, hard_req=%.2f, "
         "locked_rel=%.2f, lat_clear=%d, body_clear=%d, "
         "lookahead_inner=%d, inner_pref=%d, front_danger_suppress=%d, "
-        "entry_owner=%d, prearm=%d, prearm_lease=%d, "
+        "entry_owner=%d, prearm=%d, prearm_lease=%d, engage_hold=%d/%.2f, "
         "shift_owner=%d, pass_owner=%d",
         v2x_behavior_state_initialized ? to_string(v2x_behavior_state) : "None", to_string(final_state),
         output.front_distance, model->wp_id, output.reason.c_str(),
@@ -18568,6 +18691,8 @@ private:
         output.validated_overtake_entry_longitudinal_owner ? 1 : 0,
         output.overtake_entry_prearm_active ? 1 : 0,
         output.overtake_entry_prearm_validation_hold_active ? 1 : 0,
+        output.overtake_engagement_hold_active ? 1 : 0,
+        output.overtake_engagement_hold_remaining_sec,
         output.overtake_committed_shiftout_behavior_owner_active ? 1 : 0,
         output.overtake_committed_pass_behavior_owner_active ? 1 : 0);
       v2x_behavior_state = final_state;
@@ -18594,7 +18719,7 @@ private:
           "message_invalid=%d, front=%d, side=%d, danger=%d, danger_action=%s, "
           "danger_suppress=%d, entry_owner=%d, prearm=%d, entry_rel=%.2f, "
           "entry_stable=%.2f, prearm_v=%.2f, prearm_window=%.2f s/%.2f m, "
-          "prearm_lease=%d/%.2f, "
+          "prearm_lease=%d/%.2f, engage_hold=%d/%.2f, "
           "prearm_timeout=%d, prearm_cooldown=%d, shift_owner=%d, pass_owner=%d, "
           "grace=%d, grid_suppress=%d, grid_breakout=%d, "
           "grid_observe=%d, grid_obs=%.2f, grid_peer=%.2f, grid_candidate=%s, "
@@ -18663,6 +18788,8 @@ private:
           output.overtake_entry_prearm_traveled_m,
           output.overtake_entry_prearm_validation_hold_active ? 1 : 0,
           output.overtake_entry_prearm_validation_hold_remaining_sec,
+          output.overtake_engagement_hold_active ? 1 : 0,
+          output.overtake_engagement_hold_remaining_sec,
           output.overtake_entry_prearm_timed_out ? 1 : 0,
           output.overtake_entry_prearm_cooldown_active ? 1 : 0,
           output.overtake_committed_shiftout_behavior_owner_active ? 1 : 0,
@@ -20389,6 +20516,19 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_safe_separation_completion_time_margin_sec"] ?
     mpc["v2x_overtake_safe_separation_completion_time_margin_sec"].as<double>() : 0.5);
+  cfg.mpc.v2x_behavior.overtake_line.safe_separation_tactical_revalidation_enabled =
+    mpc["v2x_overtake_safe_separation_tactical_revalidation_enabled"] ?
+    mpc["v2x_overtake_safe_separation_tactical_revalidation_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_line.safe_separation_tactical_revalidation_max_sec = std::max(
+    0.0,
+    mpc["v2x_overtake_safe_separation_tactical_revalidation_max_sec"] ?
+    mpc["v2x_overtake_safe_separation_tactical_revalidation_max_sec"].as<double>() : 0.5);
+  cfg.mpc.v2x_behavior.overtake_line.safe_separation_tactical_revalidation_max_distance =
+    std::max(
+    0.0,
+    mpc["v2x_overtake_safe_separation_tactical_revalidation_max_distance"] ?
+    mpc["v2x_overtake_safe_separation_tactical_revalidation_max_distance"].as<double>() :
+    3.0);
   cfg.mpc.v2x_behavior.overtake_line.contact_continuation_enabled =
     mpc["v2x_overtake_contact_continuation_enabled"] ?
     mpc["v2x_overtake_contact_continuation_enabled"].as<bool>() : false;
@@ -20903,6 +21043,9 @@ Config load_config(const std::string & path)
   }
   cfg.mpc.v2x_behavior.overtake_entry_prearm_validation_hold_sec =
     overtake_entry_prearm_validation_hold_sec;
+  cfg.mpc.v2x_behavior.overtake_engagement_hold_sec =
+    read_non_negative_overtake_entry_value(
+      "v2x_overtake_engagement_hold_sec", 0.5);
   const auto read_positive_overtake_entry_prearm_value =
     [&mpc](const char * key, const double fallback) {
       const double value = mpc[key] ? mpc[key].as<double>() : fallback;
@@ -21809,7 +21952,7 @@ public:
         "V2X new-entry speed readiness: min_relative_speed=%.2f m/s, confirm=%.2f s, "
         "stationary_override=%s, slow_urgent=%s/%.2f m/s/%.2f m/%.2f s, "
         "prearm=%.2f s/%.2f m, validation_hold=%.2f s, "
-        "retry_cooldown=%.2f s",
+        "engagement_hold=%.2f s, retry_cooldown=%.2f s",
         mpc_cfg_.v2x_behavior.overtake_entry_min_relative_speed,
         mpc_cfg_.v2x_behavior.overtake_entry_speed_confirm_sec,
         mpc_cfg_.v2x_behavior.overtake_stationary_blocker_entry_override_enabled ?
@@ -21822,6 +21965,7 @@ public:
         mpc_cfg_.v2x_behavior.overtake_entry_prearm_max_sec,
         mpc_cfg_.v2x_behavior.overtake_entry_prearm_max_distance,
         mpc_cfg_.v2x_behavior.overtake_entry_prearm_validation_hold_sec,
+        mpc_cfg_.v2x_behavior.overtake_engagement_hold_sec,
         mpc_cfg_.v2x_behavior.overtake_entry_prearm_retry_cooldown_sec);
       RCLCPP_INFO(
         get_logger(),
@@ -21975,7 +22119,8 @@ public:
         "forward_escape=%s/front<=%.2f m "
         "front>=%.2f m confirm=%.2f s limit=%.2f s/%.2f m, "
         "progress_extension=%s min=%.2f m fresh<=%.2f s x%d, "
-        "dynamic_completion=%s prediction_grace<=%.2f s",
+        "dynamic_completion=%s prediction_grace<=%.2f s, "
+        "tactical_revalidation=%s/%.2f s/%.2f m",
         mpc_cfg_.v2x_behavior.overtake_line.pass_horizon_enabled ?
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.pass_horizon_predicted_time_budget,
@@ -22011,7 +22156,13 @@ public:
         .safe_separation_progress_extension_max_count,
         mpc_cfg_.v2x_behavior.overtake_line
         .safe_separation_dynamic_completion_extension_enabled ? "enabled" : "disabled",
-        mpc_cfg_.v2x_behavior.overtake_line.safe_separation_soft_prediction_grace_sec);
+        mpc_cfg_.v2x_behavior.overtake_line.safe_separation_soft_prediction_grace_sec,
+        mpc_cfg_.v2x_behavior.overtake_line
+        .safe_separation_tactical_revalidation_enabled ? "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line
+        .safe_separation_tactical_revalidation_max_sec,
+        mpc_cfg_.v2x_behavior.overtake_line
+        .safe_separation_tactical_revalidation_max_distance);
       RCLCPP_INFO(
         get_logger(),
         "V2X Pass completion: full_speed_forward=%s, rearward_time_grace=%s, "

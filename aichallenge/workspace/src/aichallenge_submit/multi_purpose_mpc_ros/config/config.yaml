@@ -460,6 +460,7 @@ mpc:
   v2x_overtake_slow_blocker_urgent_entry_distance_margin: 1.0 # [m] urgent window above v2x_overtake_guard_min_front_distance
   v2x_overtake_slow_blocker_urgent_entry_confirm_sec: 0.05 # [s] retain two-sample-like confirmation at the normal 20 Hz V2X rate
   v2x_overtake_entry_prearm_validation_hold_sec: 0.15 # [s] keep target-scoped speed history across one short planner miss; never execute a stale Mission
+  v2x_overtake_engagement_hold_sec: 0.50 # [s] suppress Cruise chatter across a brief front/side classification dropout; identity only, never stale lateral execution
   v2x_overtake_entry_prearm_max_sec: 2.0 # [s] one validated target may own longitudinal pre-arm only this long
   v2x_overtake_entry_prearm_max_distance: 8.0 # [m] distance bound for the same target pre-arm window
   v2x_overtake_entry_prearm_retry_cooldown_sec: 0.75 # [s] force full Mission re-evaluation after a pre-arm timeout
@@ -589,6 +590,9 @@ mpc:
   v2x_overtake_safe_separation_mission_aligned_budget_enabled: true # freeze a local window large enough for the selected Mission rear-clear estimate
   v2x_overtake_safe_separation_completion_distance_margin: 1.0 # [m] reserve after the live predicted rear-clear point
   v2x_overtake_safe_separation_completion_time_margin_sec: 0.5 # [s] acceleration/tracking reserve within the absolute Pass bound
+  v2x_overtake_safe_separation_tactical_revalidation_enabled: true # preserve the committed Pass line/speed briefly while both sides are re-evaluated
+  v2x_overtake_safe_separation_tactical_revalidation_max_sec: 0.50 # [s] bounded prediction-only revalidation lease
+  v2x_overtake_safe_separation_tactical_revalidation_max_distance: 3.0 # [m] distance bound for the same lease
   # Competition-simulation only: tolerate a brief progressing side contact without dropping
   # the committed target/side. Frontal geometry, wall contact and stalled contact remain hard.
   v2x_overtake_contact_continuation_enabled: true

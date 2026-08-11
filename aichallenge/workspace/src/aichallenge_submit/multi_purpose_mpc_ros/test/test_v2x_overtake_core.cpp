@@ -166,8 +166,12 @@ using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationTacticalReselectRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_speed_preserving_tactical_revalidation;
+using multi_purpose_mpc_ros::v2x_overtake_core::can_return_from_tactical_revalidation;
 using multi_purpose_mpc_ros::v2x_overtake_core::SoftMissionAbortAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::SoftMissionAbortRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::SpeedPreservingTacticalRevalidationRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::TacticalRevalidationReturnRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::MissionAlignedSafeSeparationBudgetRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecoverableSideContactRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::WallBoundedContactSeparationRequest;
@@ -295,12 +299,14 @@ using multi_purpose_mpc_ros::v2x_overtake_core::can_precommit_inner_curve_line;
 using multi_purpose_mpc_ros::v2x_overtake_core::overtake_completion_policy_allows_execution;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntrySpeedReadinessRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntryPrearmWindowRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEngagementLeaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntryPrearmValidationLeaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::NewOvertakeEntryAdmissionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StationaryBlockerEntryOverrideRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SlowBlockerUrgentEntryOverrideRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_overtake_entry_speed_readiness;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_overtake_entry_prearm_window;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_engagement_lease;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   resolve_overtake_entry_prearm_validation_lease;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_new_overtake_entry_admission;
@@ -5499,6 +5505,66 @@ TEST(V2XOvertakeCoreHorizon, DisengagesSameSideWhenRearwardProgressIsLost)
   EXPECT_EQ(resolution.reason, SafeSeparationReason::RearClear);
 }
 
+TEST(V2XOvertakeCoreHorizon, BoundsSpeedPreservingTacticalRevalidation)
+{
+  SpeedPreservingTacticalRevalidationRequest request;
+  request.enabled = true;
+  request.safe_separation_active = true;
+  request.pass_committed = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.target_longitudinal_m = 2.5;
+  request.maximum_absolute_longitudinal_m = 3.0;
+  request.elapsed_sec = 0.2;
+  request.traveled_m = 1.0;
+  request.maximum_duration_sec = 0.5;
+  request.maximum_distance_m = 3.0;
+
+  auto resolution = resolve_speed_preserving_tactical_revalidation(request);
+  EXPECT_TRUE(resolution.active);
+  EXPECT_NEAR(resolution.remaining_sec, 0.3, 1e-12);
+  EXPECT_NEAR(resolution.remaining_distance_m, 2.0, 1e-12);
+
+  // Predicted overlap is intentionally admissible; current overlap is not.
+  request.current_body_footprints_separated = false;
+  resolution = resolve_speed_preserving_tactical_revalidation(request);
+  EXPECT_FALSE(resolution.active);
+  request.current_body_footprints_separated = true;
+
+  request.hard_fault = true;
+  EXPECT_FALSE(resolve_speed_preserving_tactical_revalidation(request).active);
+  request.hard_fault = false;
+  request.elapsed_sec = 0.5;
+  EXPECT_FALSE(resolve_speed_preserving_tactical_revalidation(request).active);
+  request.elapsed_sec = 0.2;
+  request.target_longitudinal_m = 3.01;
+  EXPECT_FALSE(resolve_speed_preserving_tactical_revalidation(request).active);
+}
+
+TEST(V2XOvertakeCoreHorizon, ReturnsDirectlyOnlyWithClearPhysicalRevalidation)
+{
+  TacticalRevalidationReturnRequest request;
+  request.enabled = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+  request.return_corridor_available = true;
+  request.target_longitudinal_m = 2.5;
+  request.minimum_front_distance_m = 2.0;
+
+  EXPECT_TRUE(can_return_from_tactical_revalidation(request));
+  request.predicted_body_footprint_sweep_separated = false;
+  EXPECT_FALSE(can_return_from_tactical_revalidation(request));
+  request.predicted_body_footprint_sweep_separated = true;
+  request.return_corridor_available = false;
+  EXPECT_FALSE(can_return_from_tactical_revalidation(request));
+  request.return_corridor_available = true;
+  request.hard_fault = true;
+  EXPECT_FALSE(can_return_from_tactical_revalidation(request));
+}
+
 TEST(V2XOvertakeCoreHorizon, RejectsExcessiveAtomicLateralReplacement)
 {
   SameSideExtensionCommitRequest request;
@@ -7202,6 +7268,57 @@ TEST(V2XOvertakeCoreEntrySpeed, TimesOutPrearmByDurationOrDistance)
   EXPECT_FALSE(result.active);
   EXPECT_FALSE(result.timed_out);
   EXPECT_FALSE(std::isfinite(result.start_sec));
+}
+
+TEST(V2XOvertakeCoreEntrySpeed, HoldsEngagedTargetAcrossBriefClassificationDropout)
+{
+  OvertakeEngagementLeaseRequest request;
+  request.enabled = true;
+  request.current_target_relevant = true;
+  request.hard_guard_clear = true;
+  request.now_sec = 10.0;
+  request.maximum_hold_sec = 0.5;
+
+  auto result = resolve_overtake_engagement_lease(request);
+  EXPECT_TRUE(result.active);
+  EXPECT_FALSE(result.hold_active);
+  EXPECT_DOUBLE_EQ(result.last_relevant_sec, 10.0);
+
+  request.current_target_relevant = false;
+  request.prior_target_engaged = true;
+  request.last_relevant_sec = result.last_relevant_sec;
+  request.now_sec = 10.2;
+  result = resolve_overtake_engagement_lease(request);
+  EXPECT_TRUE(result.active);
+  EXPECT_TRUE(result.hold_active);
+  EXPECT_NEAR(result.remaining_sec, 0.3, 1e-12);
+
+  request.now_sec = 10.51;
+  result = resolve_overtake_engagement_lease(request);
+  EXPECT_FALSE(result.active);
+  EXPECT_TRUE(result.clear_target);
+}
+
+TEST(V2XOvertakeCoreEntrySpeed, EngagementLeaseFailsClosedForInvalidOrRearTarget)
+{
+  OvertakeEngagementLeaseRequest request;
+  request.enabled = true;
+  request.prior_target_engaged = true;
+  request.hard_guard_clear = true;
+  request.now_sec = 20.1;
+  request.last_relevant_sec = 20.0;
+  request.maximum_hold_sec = 0.5;
+
+  request.explicit_disengage = true;
+  auto result = resolve_overtake_engagement_lease(request);
+  EXPECT_FALSE(result.active);
+  EXPECT_TRUE(result.clear_target);
+
+  request.explicit_disengage = false;
+  request.hard_guard_clear = false;
+  result = resolve_overtake_engagement_lease(request);
+  EXPECT_FALSE(result.active);
+  EXPECT_TRUE(result.clear_target);
 }
 
 TEST(V2XOvertakeCoreEntrySpeed, HoldsTargetReadinessAcrossShortMissionPlanningMiss)

@@ -299,8 +299,8 @@ mpc:
   a_min: -3.0 # m/s^2
   a_max: 1.0 # m/s^2
   domain_a_max:
-    1: 1.0
-    2: 1.37
+    1: 1.37
+    2: 1.0
     3: 1.0
   delta_max_deg: 32.0 # degrees
   steer_rate_max: 1.2 # rad/s

@@ -324,6 +324,28 @@ ForwardOvertakeHandoffAction resolve_forward_overtake_handoff(
   return ForwardOvertakeHandoffAction::RequestDrive;
 }
 
+ForwardOvertakeHandoffAction arbitrate_pending_forward_overtake_drive_request(
+  const ForwardOvertakeHandoffAction validated_action,
+  const bool drive_request_pending,
+  const bool fresh_drive_reported,
+  const bool drive_request_retry_due,
+  const double signed_speed_mps,
+  const double stop_speed_mps) noexcept
+{
+  if (!drive_request_pending || fresh_drive_reported) {
+    return validated_action;
+  }
+  if (
+    !std::isfinite(signed_speed_mps) || !std::isfinite(stop_speed_mps) ||
+    stop_speed_mps < 0.0 || std::abs(signed_speed_mps) > stop_speed_mps)
+  {
+    return ForwardOvertakeHandoffAction::HoldStop;
+  }
+  return drive_request_retry_due ?
+    ForwardOvertakeHandoffAction::RequestDrive :
+    ForwardOvertakeHandoffAction::HoldStop;
+}
+
 bool forward_recovery_rearm_guard_active(
   const ForwardRecoveryRearmGuardRequest & request) noexcept
 {

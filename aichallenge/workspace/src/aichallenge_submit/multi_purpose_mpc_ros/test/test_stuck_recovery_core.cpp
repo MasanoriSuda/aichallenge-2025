@@ -55,6 +55,7 @@ using multi_purpose_mpc_ros::stuck_recovery::compute_rejoin_steering_tire_angle;
 using multi_purpose_mpc_ros::stuck_recovery::course_directed_forward_escape_allowed;
 using multi_purpose_mpc_ros::stuck_recovery::forward_recovery_rearm_guard_active;
 using multi_purpose_mpc_ros::stuck_recovery::resolve_forward_overtake_handoff;
+using multi_purpose_mpc_ros::stuck_recovery::arbitrate_pending_forward_overtake_drive_request;
 using multi_purpose_mpc_ros::stuck_recovery::measured_reverse_course_progress_worsened;
 using multi_purpose_mpc_ros::stuck_recovery::solver_reverse_deadlock_forward_probe_allowed;
 using multi_purpose_mpc_ros::stuck_recovery::recovery_escape_distance_confirmed;
@@ -187,6 +188,28 @@ TEST(StuckRecoveryCoordination, ForwardOvertakeHandoffPreservesHardRecoveryOwner
   EXPECT_EQ(
     resolve_forward_overtake_handoff(request),
     ForwardOvertakeHandoffAction::ContinueRecovery);
+}
+
+TEST(StuckRecoveryCoordination, PendingForwardOvertakeDriveRequestIsRetriedAfterStop)
+{
+  using Action = ForwardOvertakeHandoffAction;
+
+  EXPECT_EQ(
+    arbitrate_pending_forward_overtake_drive_request(
+      Action::ContinueRecovery, true, false, true, -0.2, 0.05),
+    Action::HoldStop);
+  EXPECT_EQ(
+    arbitrate_pending_forward_overtake_drive_request(
+      Action::ContinueRecovery, true, false, false, 0.0, 0.05),
+    Action::HoldStop);
+  EXPECT_EQ(
+    arbitrate_pending_forward_overtake_drive_request(
+      Action::ContinueRecovery, true, false, true, 0.0, 0.05),
+    Action::RequestDrive);
+  EXPECT_EQ(
+    arbitrate_pending_forward_overtake_drive_request(
+      Action::ReleaseRecovery, true, true, true, 0.0, 0.05),
+    Action::ReleaseRecovery);
 }
 
 TEST(StuckRecoveryCoordination, ForwardRearmGuardIsBoundedAndFailsOpen)

@@ -116,6 +116,7 @@ constexpr double kV2XReceiptFutureToleranceSec = 0.05;
 constexpr double kV2XSourceFutureToleranceSec = 0.05;
 constexpr double kV2XCourseProgressContinuityToleranceM = 1.5;
 constexpr double kRecoveryMeasuredCourseWorseningToleranceM = 0.10;
+constexpr double kForwardOvertakeDriveRequestRetrySec = 0.25;
 
 double clip(const double value, const double min_value, const double max_value)
 {
@@ -22985,6 +22986,7 @@ private:
     recovery_forward_overtake_handoff_candidate_since_.reset();
     recovery_forward_overtake_handoff_target_id_.clear();
     recovery_forward_overtake_handoff_drive_pending_ = false;
+    recovery_forward_overtake_handoff_last_drive_request_.reset();
     recovery_coordinated_stop_episode_ = false;
     recovery_reverse_only_episode_ = false;
     recovery_reverse_intent_latched_ = false;
@@ -23038,6 +23040,7 @@ private:
     recovery_forward_overtake_handoff_candidate_since_.reset();
     recovery_forward_overtake_handoff_target_id_.clear();
     recovery_forward_overtake_handoff_drive_pending_ = false;
+    recovery_forward_overtake_handoff_last_drive_request_.reset();
     recovery_coordinated_stop_episode_ = false;
     recovery_reverse_only_episode_ = false;
     recovery_reverse_intent_latched_ = false;
@@ -25236,22 +25239,29 @@ private:
     const bool forward_overtake_drive_reported =
       gear_report_fresh && reported_gear_.has_value() &&
       reported_gear_.value() == stuck_recovery::Gear::Drive;
-    if (recovery_forward_overtake_handoff_drive_pending_) {
-      if (forward_overtake_drive_reported) {
-        recovery_forward_overtake_handoff_drive_pending_ = false;
-      } else {
-        // Once Drive has been requested, never resume Reverse merely because
-        // one V2X cycle loses the candidate. Stop through the gear handshake;
-        // the current Mission is revalidated again before release.
-        forward_overtake_handoff_action =
-          stuck_recovery::ForwardOvertakeHandoffAction::HoldStop;
-      }
+    const bool forward_overtake_drive_request_retry_due =
+      !recovery_forward_overtake_handoff_last_drive_request_.has_value() ||
+      std::chrono::duration<double>(
+      steady_now - recovery_forward_overtake_handoff_last_drive_request_.value()).count() >=
+      kForwardOvertakeDriveRequestRetrySec;
+    forward_overtake_handoff_action =
+      stuck_recovery::arbitrate_pending_forward_overtake_drive_request(
+      forward_overtake_handoff_action,
+      recovery_forward_overtake_handoff_drive_pending_,
+      forward_overtake_drive_reported,
+      forward_overtake_drive_request_retry_due,
+      actual_v,
+      cfg_.stuck_recovery.core.supervisor.stop_speed_mps);
+    if (forward_overtake_drive_reported) {
+      recovery_forward_overtake_handoff_drive_pending_ = false;
+      recovery_forward_overtake_handoff_last_drive_request_.reset();
     }
     if (
       forward_overtake_handoff_action ==
       stuck_recovery::ForwardOvertakeHandoffAction::RequestDrive)
     {
       recovery_forward_overtake_handoff_drive_pending_ = true;
+      recovery_forward_overtake_handoff_last_drive_request_ = steady_now;
     }
     if (
       !force_reverse_retry &&
@@ -25587,17 +25597,11 @@ private:
     {
       output.action = stuck_recovery::RecoveryAction{};
       output.action.inhibit_boost = true;
-      if (
-        last_commanded_recovery_gear_.has_value() &&
-        last_commanded_recovery_gear_.value() == stuck_recovery::Gear::Drive)
-      {
-        output.action.type = stuck_recovery::RecoveryActionType::HoldStop;
-        output.action.reason = stuck_recovery::RecoveryReason::DriveGearRequested;
-      } else {
-        output.action.type = stuck_recovery::RecoveryActionType::RequestDrive;
-        output.action.requested_gear = stuck_recovery::Gear::Drive;
-        output.action.reason = stuck_recovery::RecoveryReason::DriveGearRequested;
-      }
+      // Command history is not vehicle state. A stale earlier Drive command
+      // must not suppress a new request while the fresh report is Reverse.
+      output.action.type = stuck_recovery::RecoveryActionType::RequestDrive;
+      output.action.requested_gear = stuck_recovery::Gear::Drive;
+      output.action.reason = stuck_recovery::RecoveryReason::DriveGearRequested;
     }
 
     if (!last_recovery_execution_mode_.has_value() ||
@@ -26438,6 +26442,8 @@ private:
   recovery_forward_overtake_handoff_candidate_since_;
   std::string recovery_forward_overtake_handoff_target_id_;
   bool recovery_forward_overtake_handoff_drive_pending_{false};
+  std::optional<SteadyClock::time_point>
+  recovery_forward_overtake_handoff_last_drive_request_;
   bool recovery_coordinated_stop_episode_{false};
   bool recovery_reverse_only_episode_{false};
   bool recovery_reverse_intent_latched_{false};

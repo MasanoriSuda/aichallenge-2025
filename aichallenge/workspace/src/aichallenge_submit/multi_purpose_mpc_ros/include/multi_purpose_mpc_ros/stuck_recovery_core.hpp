@@ -515,6 +515,18 @@ struct ForwardOvertakeHandoffRequest
 ForwardOvertakeHandoffAction resolve_forward_overtake_handoff(
   const ForwardOvertakeHandoffRequest & request) noexcept;
 
+// Keep a Drive gear handshake alive after a validated handoff has requested
+// Drive. While the vehicle is still moving, stop first. Once stopped, repeat
+// the idempotent Drive request only when its bounded retry interval is due.
+// A fresh Drive report returns ownership to the current validated action.
+ForwardOvertakeHandoffAction arbitrate_pending_forward_overtake_drive_request(
+  ForwardOvertakeHandoffAction validated_action,
+  bool drive_request_pending,
+  bool fresh_drive_reported,
+  bool drive_request_retry_due,
+  double signed_speed_mps,
+  double stop_speed_mps) noexcept;
+
 enum class ManeuverDirection
 {
   Unknown,

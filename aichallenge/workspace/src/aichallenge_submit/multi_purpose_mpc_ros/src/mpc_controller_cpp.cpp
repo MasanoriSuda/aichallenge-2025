@@ -2093,6 +2093,10 @@ struct V2XBehaviorOutput
 struct OvertakeLineState
 {
   OvertakeLinePhase phase{OvertakeLinePhase::Idle};
+  // FollowPrepare is a pause, not a complete Mission reset. Preserve whether
+  // the interrupted execution came from ShiftOut, Pass or Recovery so the
+  // subsequent resume policy can make an explicit phase-aware decision.
+  OvertakeLinePhase follow_prepare_origin_phase{OvertakeLinePhase::Idle};
   bool pass_front_overlap_exclusion_latched{false};
   bool pass_front_cap_release_active{false};
   double pass_current_overlap_since_sec{std::numeric_limits<double>::quiet_NaN()};
@@ -10805,6 +10809,8 @@ private:
       return;
     }
 
+    const OvertakeLinePhase previous_phase = overtake_line_state_.phase;
+
     if (cfg.v2x_behavior.overtake_line.debug_log_enabled) {
       RCLCPP_INFO(
         rclcpp::get_logger("mpc_controller"),
@@ -10828,6 +10834,11 @@ private:
         std::numeric_limits<double>::quiet_NaN();
     }
 
+    if (next_phase == OvertakeLinePhase::FollowPrepare) {
+      overtake_line_state_.follow_prepare_origin_phase = previous_phase;
+    } else if (previous_phase == OvertakeLinePhase::FollowPrepare) {
+      overtake_line_state_.follow_prepare_origin_phase = OvertakeLinePhase::Idle;
+    }
     overtake_line_state_.phase = next_phase;
     if (next_phase != OvertakeLinePhase::FollowPrepare) {
       overtake_line_state_.dynamic_mission_wait_active = false;
@@ -12891,6 +12902,7 @@ private:
       overtake_line_state_.pass_progress_checkpoint_distance =
         pass_progress_watchdog.progress_checkpoint_distance_m;
     }
+    overtake_core::PausedMissionTerminalResolution paused_mission_terminal;
     if (overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare) {
       const double pause_delta_sec =
         std::isfinite(overtake_line_state_.phase_last_update_sec) ?
@@ -12915,21 +12927,33 @@ private:
       const double pause_max_distance_m = fast_dynamic_reselection_wait ?
         line_cfg.dynamic_mission_wait_max_distance :
         line_cfg.follow_prepare_max_distance;
-      const auto pause_expiry = overtake_core::resolve_paused_mission_expiry(
-        overtake_core::PausedMissionExpiryRequest{
+      const bool paused_target_stale =
+        !locked_target_progress_continuous && target_age > line_cfg.target_hold_sec;
+      paused_mission_terminal = overtake_core::resolve_paused_mission_terminal(
+        overtake_core::PausedMissionTerminalRequest{
           true,
           pause_elapsed_sec,
           overtake_line_state_.phase_traveled_m,
           pause_timeout_sec,
-          pause_max_distance_m});
-      if (pause_expiry != overtake_core::PausedMissionExpiryReason::Active) {
+          pause_max_distance_m,
+          behavior_output.locked_target_position_jump,
+          locked_target_progress_rejected,
+          paused_target_stale,
+          behavior_output.overtake_forbidden_wp,
+          rear_clear_confirmed});
+      if (
+        paused_mission_terminal.action ==
+        overtake_core::PausedMissionTerminalAction::Expire)
+      {
         const int expired_side = overtake_line_state_.pass_side_sign;
         const std::string expired_target = overtake_line_state_.target_vehicle_id;
         const char * expiry_reason = fast_dynamic_reselection_wait ?
-          (pause_expiry == overtake_core::PausedMissionExpiryReason::TimeLimit ?
+          (paused_mission_terminal.reason ==
+          overtake_core::PausedMissionTerminalReason::TimeLimit ?
           "dynamic Mission wait reselect time limit" :
           "dynamic Mission wait reselect distance limit") :
-          (pause_expiry == overtake_core::PausedMissionExpiryReason::TimeLimit ?
+          (paused_mission_terminal.reason ==
+          overtake_core::PausedMissionTerminalReason::TimeLimit ?
           "FollowPrepare mission time limit" :
           "FollowPrepare mission distance limit");
         arm_overtake_line_side_retry_block(
@@ -13586,8 +13610,9 @@ private:
         if (cfg.v2x_behavior.overtake_line.debug_log_enabled) {
           RCLCPP_WARN(
             rclcpp::get_logger("mpc_controller"),
-            "OvertakeLine paused resume held: mission_side=%d, behavior_side=%d, "
-            "wp_id=%d, reason=opposite-side revalidation rejected",
+            "OvertakeLine paused resume held: origin=%s, mission_side=%d, "
+            "behavior_side=%d, wp_id=%d, reason=opposite-side revalidation rejected",
+            to_string(overtake_line_state_.follow_prepare_origin_phase),
             mission_side_sign, behavior_output.overtake_pass_side_sign, model->wp_id);
         }
         // Keep FollowPrepare ownership. A side switch requires the current
@@ -13650,10 +13675,11 @@ private:
           {
             RCLCPP_INFO(
               rclcpp::get_logger("mpc_controller"),
-              "OvertakeLine paused resume guard held: side=%d, current_ey=%.2f, "
+              "OvertakeLine paused resume guard held: origin=%s, side=%d, current_ey=%.2f, "
               "candidate_goal=%.2f, safe_goal=%.2f, rel_lat=%.2f, "
               "pred_rel_lat=%.2f, prediction_valid=%d, ego_v=%.2f, target_v=%.2f, "
               "corridor_valid=%d, wp_id=%d",
+              to_string(overtake_line_state_.follow_prepare_origin_phase),
               mission_side_sign, current_ey, candidate_resume_goal,
               same_side_resume_goal, behavior_output.locked_target_relative_lateral,
               behavior_output.locked_target_predicted_relative_lateral,
@@ -13878,24 +13904,35 @@ private:
         }
       }
     } else if (overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare) {
-      const bool target_stale =
-        !locked_target_progress_continuous && target_age > line_cfg.target_hold_sec;
       if (
-        behavior_output.locked_target_position_jump ||
-        locked_target_progress_rejected || target_stale ||
-        behavior_output.overtake_forbidden_wp)
+        paused_mission_terminal.action ==
+        overtake_core::PausedMissionTerminalAction::Recovery)
       {
-        const char * reason = behavior_output.locked_target_position_jump ?
-          "paused target position jump" :
-          locked_target_progress_rejected ?
-          "paused target course progress discontinuity" :
-          behavior_output.overtake_forbidden_wp ?
-          "paused pass reached explicitly forbidden waypoint" :
-          "paused target stale or lost";
+        const char * reason = "paused target stale or lost";
+        switch (paused_mission_terminal.reason) {
+          case overtake_core::PausedMissionTerminalReason::TargetPositionJump:
+            reason = "paused target position jump";
+            break;
+          case overtake_core::PausedMissionTerminalReason::TargetCourseProgressDiscontinuity:
+            reason = "paused target course progress discontinuity";
+            break;
+          case overtake_core::PausedMissionTerminalReason::ForbiddenWaypoint:
+            reason = "paused pass reached explicitly forbidden waypoint";
+            break;
+          case overtake_core::PausedMissionTerminalReason::TargetStale:
+          case overtake_core::PausedMissionTerminalReason::None:
+          case overtake_core::PausedMissionTerminalReason::TimeLimit:
+          case overtake_core::PausedMissionTerminalReason::DistanceLimit:
+          case overtake_core::PausedMissionTerminalReason::RearClear:
+            break;
+        }
         transition_overtake_line_phase(
           OvertakeLinePhase::Recovery, now_sec, current_ey,
           overtake_line_state_.pass_side_sign, reason);
-      } else if (rear_clear_confirmed) {
+      } else if (
+        paused_mission_terminal.action ==
+        overtake_core::PausedMissionTerminalAction::Return)
+      {
         transition_overtake_line_phase(
           OvertakeLinePhase::Return, now_sec, current_ey,
           overtake_line_state_.pass_side_sign,

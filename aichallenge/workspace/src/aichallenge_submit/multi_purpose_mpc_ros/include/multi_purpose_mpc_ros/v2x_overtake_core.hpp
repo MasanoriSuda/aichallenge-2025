@@ -4231,6 +4231,55 @@ struct PausedMissionExpiryRequest
 PausedMissionExpiryReason resolve_paused_mission_expiry(
   const PausedMissionExpiryRequest & request) noexcept;
 
+enum class PausedMissionTerminalAction
+{
+  Hold,
+  Return,
+  Recovery,
+  Expire,
+};
+
+enum class PausedMissionTerminalReason
+{
+  None,
+  TimeLimit,
+  DistanceLimit,
+  TargetPositionJump,
+  TargetCourseProgressDiscontinuity,
+  TargetStale,
+  ForbiddenWaypoint,
+  RearClear,
+};
+
+struct PausedMissionTerminalRequest
+{
+  bool follow_prepare_active{false};
+  double elapsed_sec{};
+  double traveled_distance_m{};
+  double timeout_sec{};
+  double maximum_distance_m{};
+  bool target_position_jump{false};
+  bool target_course_progress_discontinuity{false};
+  bool target_stale{false};
+  bool forbidden_waypoint{false};
+  bool rear_clear_confirmed{false};
+};
+
+struct PausedMissionTerminalResolution
+{
+  PausedMissionTerminalAction action{PausedMissionTerminalAction::Hold};
+  PausedMissionTerminalReason reason{PausedMissionTerminalReason::None};
+};
+
+/// Resolve terminal handling for one paused pass mission.
+///
+/// Expiry keeps its historical priority over target faults and rear clearance.
+/// A transient pause with no terminal condition remains held for the existing
+/// resume/reselection path owned by the controller.
+PausedMissionTerminalResolution resolve_paused_mission_terminal(
+  const PausedMissionTerminalRequest & request) noexcept;
+const char * to_string(PausedMissionTerminalReason reason) noexcept;
+
 struct CommittedPassProgressWatchdogRequest
 {
   bool active{false};

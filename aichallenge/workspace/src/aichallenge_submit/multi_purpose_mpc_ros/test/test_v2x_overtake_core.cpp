@@ -184,6 +184,9 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidateSelectio
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionHorizonProgressRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PausedMissionExpiryReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::PausedMissionExpiryRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::PausedMissionTerminalAction;
+using multi_purpose_mpc_ros::v2x_overtake_core::PausedMissionTerminalReason;
+using multi_purpose_mpc_ros::v2x_overtake_core::PausedMissionTerminalRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CompletedTargetReacquireSuppressionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SpeedLimitRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StallWatchdogRequest;
@@ -258,6 +261,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::build_overtake_closing_speed_can
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_line_horizon_progress;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_mission_path;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_paused_mission_expiry;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_paused_mission_terminal;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_suppress_completed_target_reacquire;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_line_heading_reference;
 using multi_purpose_mpc_ros::v2x_overtake_core::
@@ -6185,6 +6189,62 @@ TEST(V2XOvertakeCoreSpeed, ExpiresFollowPrepareByTimeOrDistance)
 
   request.follow_prepare_active = false;
   EXPECT_EQ(resolve_paused_mission_expiry(request), PausedMissionExpiryReason::Active);
+}
+
+TEST(V2XOvertakeCoreSpeed, ResolvesPausedMissionTerminalActionsInLegacyPriority)
+{
+  PausedMissionTerminalRequest request;
+  request.follow_prepare_active = true;
+  request.elapsed_sec = 1.0;
+  request.traveled_distance_m = 2.0;
+  request.timeout_sec = 4.0;
+  request.maximum_distance_m = 20.0;
+
+  auto resolution = resolve_paused_mission_terminal(request);
+  EXPECT_EQ(resolution.action, PausedMissionTerminalAction::Hold);
+  EXPECT_EQ(resolution.reason, PausedMissionTerminalReason::None);
+
+  request.rear_clear_confirmed = true;
+  resolution = resolve_paused_mission_terminal(request);
+  EXPECT_EQ(resolution.action, PausedMissionTerminalAction::Return);
+  EXPECT_EQ(resolution.reason, PausedMissionTerminalReason::RearClear);
+
+  request.target_stale = true;
+  resolution = resolve_paused_mission_terminal(request);
+  EXPECT_EQ(resolution.action, PausedMissionTerminalAction::Recovery);
+  EXPECT_EQ(resolution.reason, PausedMissionTerminalReason::TargetStale);
+
+  request.forbidden_waypoint = true;
+  resolution = resolve_paused_mission_terminal(request);
+  EXPECT_EQ(resolution.action, PausedMissionTerminalAction::Recovery);
+  EXPECT_EQ(resolution.reason, PausedMissionTerminalReason::ForbiddenWaypoint);
+
+  request.target_course_progress_discontinuity = true;
+  resolution = resolve_paused_mission_terminal(request);
+  EXPECT_EQ(resolution.action, PausedMissionTerminalAction::Recovery);
+  EXPECT_EQ(
+    resolution.reason,
+    PausedMissionTerminalReason::TargetCourseProgressDiscontinuity);
+
+  request.target_position_jump = true;
+  resolution = resolve_paused_mission_terminal(request);
+  EXPECT_EQ(resolution.action, PausedMissionTerminalAction::Recovery);
+  EXPECT_EQ(resolution.reason, PausedMissionTerminalReason::TargetPositionJump);
+
+  request.traveled_distance_m = 20.0;
+  resolution = resolve_paused_mission_terminal(request);
+  EXPECT_EQ(resolution.action, PausedMissionTerminalAction::Expire);
+  EXPECT_EQ(resolution.reason, PausedMissionTerminalReason::DistanceLimit);
+
+  request.elapsed_sec = 4.0;
+  resolution = resolve_paused_mission_terminal(request);
+  EXPECT_EQ(resolution.action, PausedMissionTerminalAction::Expire);
+  EXPECT_EQ(resolution.reason, PausedMissionTerminalReason::TimeLimit);
+
+  request.follow_prepare_active = false;
+  resolution = resolve_paused_mission_terminal(request);
+  EXPECT_EQ(resolution.action, PausedMissionTerminalAction::Hold);
+  EXPECT_EQ(resolution.reason, PausedMissionTerminalReason::None);
 }
 
 TEST(V2XOvertakeCoreSpeed, SuppressesOnlyNewEntryForCompletedTarget)

@@ -7143,6 +7143,83 @@ PausedMissionExpiryReason resolve_paused_mission_expiry(
   return PausedMissionExpiryReason::Active;
 }
 
+PausedMissionTerminalResolution resolve_paused_mission_terminal(
+  const PausedMissionTerminalRequest & request) noexcept
+{
+  if (!request.follow_prepare_active) {
+    return {};
+  }
+
+  const auto expiry = resolve_paused_mission_expiry(
+    PausedMissionExpiryRequest{
+      true,
+      request.elapsed_sec,
+      request.traveled_distance_m,
+      request.timeout_sec,
+      request.maximum_distance_m});
+  if (expiry == PausedMissionExpiryReason::TimeLimit) {
+    return {
+      PausedMissionTerminalAction::Expire,
+      PausedMissionTerminalReason::TimeLimit};
+  }
+  if (expiry == PausedMissionExpiryReason::DistanceLimit) {
+    return {
+      PausedMissionTerminalAction::Expire,
+      PausedMissionTerminalReason::DistanceLimit};
+  }
+  if (request.target_position_jump) {
+    return {
+      PausedMissionTerminalAction::Recovery,
+      PausedMissionTerminalReason::TargetPositionJump};
+  }
+  if (request.target_course_progress_discontinuity) {
+    return {
+      PausedMissionTerminalAction::Recovery,
+      PausedMissionTerminalReason::TargetCourseProgressDiscontinuity};
+  }
+  // Preserve the existing diagnostic priority when stale and forbidden are
+  // observed in the same cycle: an explicit course restriction is actionable.
+  if (request.forbidden_waypoint) {
+    return {
+      PausedMissionTerminalAction::Recovery,
+      PausedMissionTerminalReason::ForbiddenWaypoint};
+  }
+  if (request.target_stale) {
+    return {
+      PausedMissionTerminalAction::Recovery,
+      PausedMissionTerminalReason::TargetStale};
+  }
+  if (request.rear_clear_confirmed) {
+    return {
+      PausedMissionTerminalAction::Return,
+      PausedMissionTerminalReason::RearClear};
+  }
+  return {};
+}
+
+const char * to_string(const PausedMissionTerminalReason reason) noexcept
+{
+  switch (reason) {
+    case PausedMissionTerminalReason::None:
+      return "none";
+    case PausedMissionTerminalReason::TimeLimit:
+      return "time_limit";
+    case PausedMissionTerminalReason::DistanceLimit:
+      return "distance_limit";
+    case PausedMissionTerminalReason::TargetPositionJump:
+      return "target_position_jump";
+    case PausedMissionTerminalReason::TargetCourseProgressDiscontinuity:
+      return "target_course_progress_discontinuity";
+    case PausedMissionTerminalReason::TargetStale:
+      return "target_stale";
+    case PausedMissionTerminalReason::ForbiddenWaypoint:
+      return "forbidden_waypoint";
+    case PausedMissionTerminalReason::RearClear:
+      return "rear_clear";
+  }
+  return "unknown";
+}
+
 CommittedPassProgressWatchdogResolution update_committed_pass_progress_watchdog(
   const CommittedPassProgressWatchdogRequest & request) noexcept
 {

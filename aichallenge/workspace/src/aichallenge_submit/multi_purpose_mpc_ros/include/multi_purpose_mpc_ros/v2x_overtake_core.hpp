@@ -3833,6 +3833,10 @@ struct CommittedPassBehaviorOwnershipRequest
   bool explicit_forbidden_waypoint{false};
   bool emergency_front_risk{false};
   bool solver_recovery_requested{false};
+  /// A freshly admitted fixed path may own the ShiftOut-to-Pass phase handoff
+  /// before the ordinary lateral/front-cap latch is established. The caller
+  /// must bound this with the predicted hard-distance deadline.
+  bool body_clear_handoff_active{false};
 };
 
 /// Keep Behavior in Overtake while a validated Pass owns execution.
@@ -3849,7 +3853,7 @@ struct CommittedShiftOutBehaviorOwnershipRequest
   bool committed_shiftout_active{false};
   bool validated_fixed_line{false};
   bool mission_side_valid{false};
-  bool body_clear_deadline_feasible{false};
+  bool body_clear_handoff_active{false};
   bool locked_target_seen{false};
   bool locked_target_position_jump{false};
   bool locked_target_course_progress_rejected{false};
@@ -3867,6 +3871,33 @@ struct CommittedShiftOutBehaviorOwnershipRequest
 /// and lateral-acceleration checks remain downstream responsibilities.
 bool can_preserve_committed_shiftout_behavior(
   const CommittedShiftOutBehaviorOwnershipRequest & request) noexcept;
+
+struct BodyClearExecutionHandoffRequest
+{
+  bool committed_execution_active{false};
+  bool body_clear_deadline_checked{false};
+  bool body_clear_deadline_feasible{false};
+  double now_sec{};
+  double hard_deadline_sec{-std::numeric_limits<double>::infinity()};
+  bool current_body_footprints_separated{false};
+  bool current_body_footprint_overlap_confirmed{true};
+};
+
+struct BodyClearExecutionHandoffResolution
+{
+  bool valid{false};
+  bool active{false};
+  bool satisfied{false};
+  bool expired{false};
+  double remaining_sec{};
+};
+
+/// Resolve the bounded longitudinal-ownership handoff between a candidate's
+/// predicted body-clear event and the ordinary Pass latches. The observed
+/// separation is reported independently, but the handoff always ends at the
+/// predicted hard-distance time. Confirmed current overlap is fail closed.
+BodyClearExecutionHandoffResolution resolve_body_clear_execution_handoff(
+  const BodyClearExecutionHandoffRequest & request) noexcept;
 
 enum class OvertakeExecutionSideSource
 {
@@ -4705,10 +4736,10 @@ struct CommittedCorridorFrontDangerSuppressionRequest
   bool pass_phase{false};
   bool committed_pass_attack_mode_enabled{false};
   bool recoverable_side_contact_active{false};
-  /// A frozen ShiftOut mission proved that current separated bodies become
-  /// clear before the hard longitudinal gap. This permits the validated path,
-  /// rather than a longitudinal-only prediction, to own the approach.
-  bool validated_shiftout_body_clear_deadline{false};
+  /// A frozen Mission proved body clear before the hard longitudinal gap and
+  /// its runtime handoff has not expired. This permits the validated path to
+  /// own a prediction-only approach across the ShiftOut-to-Pass boundary.
+  bool validated_body_clear_handoff_active{false};
 };
 
 /// Suppress a longitudinal-only front danger stop only after a normal committed
@@ -4719,8 +4750,9 @@ struct CommittedCorridorFrontDangerSuppressionRequest
 /// optional competition-simulation attack mode, an already released Pass may
 /// ignore future overlap while the current footprints and target continuity
 /// remain valid. A frozen ShiftOut with a feasible body-clear deadline may do
-/// the same while current bodies remain separated. Wall/path execution guards
-/// remain owned by OvertakeLine.
+/// the same while current bodies remain separated. The bounded body-clear
+/// handoff may span ShiftOut and early Pass, but never hides current overlap.
+/// Wall/path execution guards remain owned by OvertakeLine.
 bool can_suppress_committed_corridor_front_danger(
   const CommittedCorridorFrontDangerSuppressionRequest & request) noexcept;
 

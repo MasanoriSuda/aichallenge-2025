@@ -6541,6 +6541,10 @@ bool can_preserve_committed_pass_behavior(
   const bool pass_release_latched =
     request.lateral_exclusion_latched ||
     request.minimum_motion_front_cap_release_latched;
+  const bool body_clear_handoff_owns_pass =
+    request.body_clear_handoff_active &&
+    request.current_body_footprints_separated &&
+    !request.current_body_footprint_overlap_confirmed;
   const bool current_overlap_grace_active =
     request.committed_pass_attack_mode_enabled &&
     request.minimum_motion_front_cap_release_latched &&
@@ -6549,7 +6553,7 @@ bool can_preserve_committed_pass_behavior(
   return request.committed_pass_active &&
          request.validated_fixed_line &&
          request.mission_side_valid &&
-         pass_release_latched &&
+         (pass_release_latched || body_clear_handoff_owns_pass) &&
          request.locked_target_seen &&
          !request.locked_target_position_jump &&
          !request.locked_target_course_progress_rejected &&
@@ -6567,7 +6571,7 @@ bool can_preserve_committed_shiftout_behavior(
          request.validated_fixed_line &&
          request.mission_side_valid &&
          request.body_clear_deadline_checked &&
-         request.body_clear_deadline_feasible &&
+         request.body_clear_handoff_active &&
          request.locked_target_seen &&
          !request.locked_target_position_jump &&
          !request.locked_target_course_progress_rejected &&
@@ -6575,6 +6579,35 @@ bool can_preserve_committed_shiftout_behavior(
          !request.explicit_forbidden_waypoint &&
          !request.emergency_front_risk &&
          !request.solver_recovery_requested;
+}
+
+BodyClearExecutionHandoffResolution resolve_body_clear_execution_handoff(
+  const BodyClearExecutionHandoffRequest & request) noexcept
+{
+  BodyClearExecutionHandoffResolution resolution;
+  if (!request.committed_execution_active) {
+    resolution.valid = true;
+    return resolution;
+  }
+  if (
+    !request.body_clear_deadline_checked ||
+    !request.body_clear_deadline_feasible ||
+    !std::isfinite(request.now_sec) ||
+    !std::isfinite(request.hard_deadline_sec))
+  {
+    resolution.expired =
+      request.body_clear_deadline_checked &&
+      request.body_clear_deadline_feasible;
+    return resolution;
+  }
+
+  resolution.valid = true;
+  resolution.satisfied = request.current_body_footprints_separated;
+  resolution.remaining_sec = std::max(0.0, request.hard_deadline_sec - request.now_sec);
+  resolution.expired = request.now_sec > request.hard_deadline_sec;
+  resolution.active =
+    !request.current_body_footprint_overlap_confirmed && !resolution.expired;
+  return resolution;
 }
 
 OvertakeExecutionSideResolution resolve_overtake_execution_side(
@@ -6667,11 +6700,13 @@ PausedExecutionResumeAction resolve_paused_execution_resume(
   const bool resumable_origin =
     request.origin == PausedExecutionOrigin::ShiftOut ||
     request.origin == PausedExecutionOrigin::Pass;
+  const bool body_clear_execution_ready =
+    request.direct_pass_lateral_clear ||
+    (request.body_clear_deadline_checked && request.body_clear_deadline_feasible);
   if (
     !request.safety_brake_pause || !resumable_origin ||
     request.dynamic_mission_wait_active || !request.validated_frozen_path ||
-    !request.mission_side_valid || !request.body_clear_deadline_checked ||
-    !request.body_clear_deadline_feasible || !request.target_seen ||
+    !request.mission_side_valid || !body_clear_execution_ready || !request.target_seen ||
     request.target_position_jump || request.target_course_progress_discontinuity ||
     request.target_pass_side_intrusion || request.forbidden_waypoint ||
     request.emergency_front_risk || request.solver_recovery_requested ||
@@ -7733,22 +7768,22 @@ bool can_suppress_committed_corridor_front_danger(
     request.committed_pass_attack_mode_enabled && request.pass_phase &&
     request.prior_front_cap_release_active &&
     current_geometry_acceptable;
-  const bool validated_shiftout_path_acceptable =
-    request.committed_pass_attack_mode_enabled && !request.pass_phase &&
-    request.validated_shiftout_body_clear_deadline &&
+  const bool validated_body_clear_handoff_path_acceptable =
+    request.committed_pass_attack_mode_enabled &&
+    request.validated_body_clear_handoff_active &&
     request.current_body_footprints_separated;
   const bool predicted_path_acceptable =
     request.predicted_body_footprint_sweep_separated ||
     (request.prior_front_cap_release_active &&
     (!request.predicted_body_footprint_overlap_confirmed ||
     request.minimum_motion_side_by_side_escape_active)) ||
-    attack_path_acceptable || validated_shiftout_path_acceptable;
+    attack_path_acceptable || validated_body_clear_handoff_path_acceptable;
   return request.enabled && request.active_shiftout_or_pass &&
          request.nearest_front_matches_locked_target && request.validated_fixed_corridor &&
          !request.inter_vehicle_corridor && request.target_seen &&
          !request.target_position_jump && current_geometry_acceptable &&
          (request.footprint_prediction_valid || attack_path_acceptable ||
-         validated_shiftout_path_acceptable) &&
+         validated_body_clear_handoff_path_acceptable) &&
          predicted_path_acceptable;
 }
 

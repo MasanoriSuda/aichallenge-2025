@@ -120,6 +120,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionOwnershipRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassBehaviorOwnershipRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommittedShiftOutBehaviorOwnershipRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::BodyClearExecutionHandoffRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeExecutionSideRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeExecutionSideSource;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeLineTransitionAction;
@@ -206,6 +207,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::
   resolve_static_fallback_entry_motion_admission;
 using multi_purpose_mpc_ros::v2x_overtake_core::build_overtake_pass_plan;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_body_clear_deadline;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_body_clear_execution_handoff;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_kinematic_rollout;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_dynamic_pass_distance;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_runtime_continuation_reserve;
@@ -1073,20 +1075,23 @@ TEST(V2XFrontDangerAction, ValidatedShiftOutDeadlineOwnsPredictionOnlyDanger)
   request.footprint_prediction_valid = true;
   request.predicted_body_footprint_sweep_separated = false;
   request.committed_pass_attack_mode_enabled = true;
-  request.validated_shiftout_body_clear_deadline = true;
+  request.validated_body_clear_handoff_active = true;
 
   EXPECT_TRUE(can_suppress_committed_corridor_front_danger(request));
 
-  // This exception owns only a preflighted ShiftOut while current bodies are
-  // still separate. It cannot hide current overlap or become an unlatched Pass
-  // exception.
+  // This exception spans the ShiftOut-to-Pass phase handoff while current
+  // bodies remain separate. It cannot hide current overlap.
   request.current_body_footprints_separated = false;
   EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
   request.current_body_footprints_separated = true;
-  request.validated_shiftout_body_clear_deadline = false;
+  request.validated_body_clear_handoff_active = false;
   EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
-  request.validated_shiftout_body_clear_deadline = true;
+  request.validated_body_clear_handoff_active = true;
   request.pass_phase = true;
+  EXPECT_TRUE(can_suppress_committed_corridor_front_danger(request));
+
+  request.current_body_footprint_overlap_confirmed = true;
+  request.current_body_footprints_separated = false;
   EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
 }
 
@@ -9493,7 +9498,7 @@ TEST(V2XOvertakeCoreMissionOwnership, DeadlineFeasibleShiftOutOwnsBehavior)
   request.validated_fixed_line = true;
   request.mission_side_valid = true;
   request.body_clear_deadline_checked = true;
-  request.body_clear_deadline_feasible = true;
+  request.body_clear_handoff_active = true;
   request.locked_target_seen = true;
 
   EXPECT_TRUE(can_preserve_committed_shiftout_behavior(request));
@@ -9506,13 +9511,13 @@ TEST(V2XOvertakeCoreMissionOwnership, ShiftOutOwnerReleasesForHardAbortOrMissedD
   request.validated_fixed_line = true;
   request.mission_side_valid = true;
   request.body_clear_deadline_checked = true;
-  request.body_clear_deadline_feasible = true;
+  request.body_clear_handoff_active = true;
   request.locked_target_seen = true;
   ASSERT_TRUE(can_preserve_committed_shiftout_behavior(request));
 
-  request.body_clear_deadline_feasible = false;
+  request.body_clear_handoff_active = false;
   EXPECT_FALSE(can_preserve_committed_shiftout_behavior(request));
-  request.body_clear_deadline_feasible = true;
+  request.body_clear_handoff_active = true;
 
   request.locked_target_position_jump = true;
   EXPECT_FALSE(can_preserve_committed_shiftout_behavior(request));
@@ -9540,6 +9545,67 @@ TEST(V2XOvertakeCoreMissionOwnership, ShiftOutOwnerReleasesForHardAbortOrMissedD
   request.solver_recovery_requested = false;
   request.body_clear_deadline_checked = false;
   EXPECT_FALSE(can_preserve_committed_shiftout_behavior(request));
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, BodyClearHandoffOwnsEarlyPassBeforeLatch)
+{
+  CommittedPassBehaviorOwnershipRequest request;
+  request.committed_pass_active = true;
+  request.validated_fixed_line = true;
+  request.mission_side_valid = true;
+  request.locked_target_seen = true;
+  request.current_body_footprints_separated = true;
+  request.current_body_footprint_overlap_confirmed = false;
+  request.body_clear_handoff_active = true;
+
+  EXPECT_TRUE(can_preserve_committed_pass_behavior(request));
+
+  request.body_clear_handoff_active = false;
+  EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
+  request.body_clear_handoff_active = true;
+  request.current_body_footprints_separated = false;
+  EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
+  request.current_body_footprint_overlap_confirmed = true;
+  EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, RuntimeBodyClearHandoffIsBoundedAndFailClosed)
+{
+  BodyClearExecutionHandoffRequest request;
+  request.committed_execution_active = true;
+  request.body_clear_deadline_checked = true;
+  request.body_clear_deadline_feasible = true;
+  request.now_sec = 10.0;
+  request.hard_deadline_sec = 10.5;
+  request.current_body_footprint_overlap_confirmed = false;
+
+  auto resolution = resolve_body_clear_execution_handoff(request);
+  EXPECT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.active);
+  EXPECT_FALSE(resolution.satisfied);
+  EXPECT_FALSE(resolution.expired);
+  EXPECT_DOUBLE_EQ(resolution.remaining_sec, 0.5);
+
+  request.now_sec = 10.6;
+  resolution = resolve_body_clear_execution_handoff(request);
+  EXPECT_FALSE(resolution.active);
+  EXPECT_TRUE(resolution.expired);
+
+  request.current_body_footprints_separated = true;
+  resolution = resolve_body_clear_execution_handoff(request);
+  EXPECT_FALSE(resolution.active);
+  EXPECT_TRUE(resolution.satisfied);
+  EXPECT_TRUE(resolution.expired);
+
+  request.current_body_footprint_overlap_confirmed = true;
+  resolution = resolve_body_clear_execution_handoff(request);
+  EXPECT_FALSE(resolution.active);
+
+  request.current_body_footprint_overlap_confirmed = false;
+  request.hard_deadline_sec = std::numeric_limits<double>::infinity();
+  resolution = resolve_body_clear_execution_handoff(request);
+  EXPECT_FALSE(resolution.valid);
+  EXPECT_FALSE(resolution.active);
 }
 
 TEST(V2XOvertakeCoreMissionOwnership, PassOwnerReleasesForEveryHardAbort)
@@ -9760,6 +9826,19 @@ TEST(V2XOvertakeCoreMissionOwnership, SafetyBrakePauseResumesOriginalExecution)
   EXPECT_EQ(
     resolve_paused_execution_resume(request),
     PausedExecutionResumeAction::ResumePass);
+
+  // Once current/predicted lateral geometry is already clear, the original
+  // ShiftOut body-clear deadline no longer needs to be re-established.
+  request.body_clear_deadline_checked = false;
+  request.body_clear_deadline_feasible = false;
+  EXPECT_EQ(
+    resolve_paused_execution_resume(request),
+    PausedExecutionResumeAction::ResumePass);
+
+  request.direct_pass_lateral_clear = false;
+  EXPECT_EQ(
+    resolve_paused_execution_resume(request),
+    PausedExecutionResumeAction::Hold);
 }
 
 TEST(V2XOvertakeCoreMissionOwnership, SafetyBrakePauseResumeRejectsHardFaults)

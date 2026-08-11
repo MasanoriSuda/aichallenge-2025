@@ -1991,6 +1991,9 @@ struct V2XBehaviorOutput
   bool overtake_entry_prearm_active{false};
   bool overtake_committed_pass_behavior_owner_active{false};
   bool overtake_committed_shiftout_behavior_owner_active{false};
+  bool overtake_body_clear_handoff_active{false};
+  bool overtake_body_clear_handoff_expired{false};
+  double overtake_body_clear_handoff_remaining_sec{};
   bool overtake_hard_curve_blocked{false};
   bool active_hard_curve_continuation_allowed{false};
   bool outer_curve_entry_allowed{false};
@@ -2194,6 +2197,9 @@ struct OvertakeLineState
   bool mission_body_clear_deadline_feasible{false};
   double mission_body_clear_deadline_slack_sec{
     -std::numeric_limits<double>::infinity()};
+  double mission_body_clear_hard_deadline_sec{
+    -std::numeric_limits<double>::infinity()};
+  bool mission_body_clear_handoff_was_active{false};
   double mission_path_total_distance{0.0};
   std::uint64_t mission_generation{0U};
   std::uint64_t invalidated_mission_generation{0U};
@@ -5888,6 +5894,36 @@ struct MPC
       committed_current_overlap_confirmation.confirmed : true;
     output.locked_target_current_body_overlap_elapsed_sec =
       committed_current_overlap_confirmation.elapsed_sec;
+    const auto committed_body_clear_handoff =
+      resolve_mission_body_clear_handoff(output, now_sec);
+    output.overtake_body_clear_handoff_active = committed_body_clear_handoff.active;
+    output.overtake_body_clear_handoff_expired = committed_body_clear_handoff.expired;
+    output.overtake_body_clear_handoff_remaining_sec =
+      committed_body_clear_handoff.remaining_sec;
+    if (
+      committed_body_clear_handoff.active !=
+      overtake_line_state_.mission_body_clear_handoff_was_active)
+    {
+      if (
+        cfg.v2x_behavior.overtake_line.debug_log_enabled &&
+        (committed_body_clear_handoff.active ||
+        overtake_line_state_.mission_body_clear_handoff_was_active))
+      {
+        RCLCPP_INFO(
+          rclcpp::get_logger("mpc_controller"),
+          "OvertakeLine body-clear handoff %s: target=%s, phase=%s, "
+          "remaining=%.2f, satisfied=%d, expired=%d, overlap=%d",
+          committed_body_clear_handoff.active ? "entered" : "released",
+          overtake_line_state_.target_vehicle_id.c_str(),
+          to_string(overtake_line_state_.phase),
+          committed_body_clear_handoff.remaining_sec,
+          committed_body_clear_handoff.satisfied ? 1 : 0,
+          committed_body_clear_handoff.expired ? 1 : 0,
+          output.locked_target_current_body_overlap_confirmed ? 1 : 0);
+      }
+      overtake_line_state_.mission_body_clear_handoff_was_active =
+        committed_body_clear_handoff.active;
+    }
     const bool near_contact_confirmation_monitored =
       cfg.v2x_behavior.overtake_line.contact_continuation_enabled &&
       overtake_mission_ownership.committed_pass_active &&
@@ -6056,8 +6092,7 @@ struct MPC
         overtake_mission_ownership.committed_pass_active,
         overtake_line_state_.phase == OvertakeLinePhase::ShiftOut &&
         overtake_line_state_.mission_path_frozen &&
-        overtake_line_state_.mission_body_clear_deadline_checked &&
-        overtake_line_state_.mission_body_clear_deadline_feasible,
+        committed_body_clear_handoff.active,
         committed_minimum_motion_corridor_active,
         overtake_line_state_.pass_front_cap_release_active,
         output.locked_target_seen,
@@ -6109,10 +6144,8 @@ struct MPC
         overtake_mission_ownership.committed_pass_active,
         cfg.v2x_behavior.overtake_committed_pass_attack_mode_enabled,
         output.recoverable_side_contact_active,
-        overtake_line_state_.phase == OvertakeLinePhase::ShiftOut &&
         overtake_line_state_.mission_path_frozen &&
-        overtake_line_state_.mission_body_clear_deadline_checked &&
-        overtake_line_state_.mission_body_clear_deadline_feasible});
+        committed_body_clear_handoff.active});
     output.committed_corridor_front_danger_suppressed =
       committed_corridor_front_danger_suppressed;
     const bool effective_front_risk_emergency =
@@ -9132,10 +9165,34 @@ struct MPC
     // pass, not a new overtake entry. Once the emergency clears, restore
     // Overtake ownership from the frozen Mission instead of reapplying the
     // entry-only front-distance guard and falling back to Follow.
+    const double paused_resume_lateral_clearance = std::max(
+      cfg.v2x_behavior.overtake_pass_front_overlap_lateral_clearance,
+      cfg.v2x_gap.vehicle_radius + cfg.v2x_gap.prediction_margin);
+    const bool behavior_safety_pause_direct_pass =
+      overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare &&
+      overtake_line_state_.follow_prepare_cause == FollowPrepareCause::SafetyBrake &&
+      overtake_line_state_.mission_path_frozen &&
+      overtake_line_state_.fixed_pass_corridor_goal_ey.has_value() &&
+      !output.overtake_execution_corridor_blocked &&
+      overtake_core::can_resume_paused_pass_directly(
+      overtake_core::PausedPassDirectResumeRequest{
+        true,
+        overtake_line_state_.pass_side_sign,
+        overtake_line_state_.pass_side_sign,
+        true,
+        output.locked_target_seen,
+        output.locked_target_position_jump,
+        output.locked_target_lateral_prediction_valid,
+        output.locked_target_relative_lateral,
+        output.locked_target_predicted_relative_lateral,
+        paused_resume_lateral_clearance,
+        model->spatial_state.e_y,
+        overtake_line_state_.fixed_pass_corridor_goal_ey.value()});
     const auto paused_safety_resume_action =
       overtake_core::resolve_paused_execution_resume(
       paused_execution_resume_request(
-        output, effective_front_risk_emergency, false, false));
+        output, effective_front_risk_emergency, false,
+        behavior_safety_pause_direct_pass, now_sec));
     if (
       paused_safety_resume_action !=
       overtake_core::PausedExecutionResumeAction::Hold)
@@ -9161,7 +9218,7 @@ struct MPC
         overtake_line_state_.mission_path_frozen &&
         overtake_line_state_.fixed_pass_corridor_goal_ey.has_value(),
         overtake_line_state_.pass_side_sign != 0,
-        overtake_line_state_.mission_body_clear_deadline_feasible,
+        committed_body_clear_handoff.active,
         output.locked_target_seen,
         output.locked_target_position_jump,
         output.locked_target_course_progress_rejected,
@@ -9199,7 +9256,8 @@ struct MPC
         output.locked_target_pass_side_intrusion,
         overtake_forbidden_wp,
         effective_front_risk_emergency,
-        overtake_solver_recovery_active_});
+        overtake_solver_recovery_active_,
+        committed_body_clear_handoff.active});
     if (output.overtake_committed_pass_behavior_owner_active) {
       output.state = V2XBehaviorState::Overtake;
       output.overtake_pass_side_sign = overtake_line_state_.pass_side_sign;
@@ -11156,10 +11214,34 @@ private:
       overtake_line_state_.mission_generation;
   }
 
+  overtake_core::BodyClearExecutionHandoffResolution
+  resolve_mission_body_clear_handoff(
+    const V2XBehaviorOutput & behavior_output, const double now_sec) const
+  {
+    const bool paused_committed_execution =
+      overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare &&
+      (overtake_line_state_.follow_prepare_origin_phase == OvertakeLinePhase::ShiftOut ||
+      overtake_line_state_.follow_prepare_origin_phase == OvertakeLinePhase::Pass);
+    return overtake_core::resolve_body_clear_execution_handoff(
+      overtake_core::BodyClearExecutionHandoffRequest{
+        overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+        overtake_line_state_.phase == OvertakeLinePhase::Pass ||
+        paused_committed_execution,
+        overtake_line_state_.mission_body_clear_deadline_checked,
+        overtake_line_state_.mission_body_clear_deadline_feasible,
+        now_sec,
+        overtake_line_state_.mission_body_clear_hard_deadline_sec,
+        behavior_output.locked_target_current_body_footprints_separated,
+        behavior_output.locked_target_current_body_overlap_confirmed});
+  }
+
   overtake_core::PausedExecutionResumeRequest paused_execution_resume_request(
     const V2XBehaviorOutput & behavior_output, const bool emergency_front_risk,
-    const bool physical_path_hard_fault, const bool direct_pass_lateral_clear) const
+    const bool physical_path_hard_fault, const bool direct_pass_lateral_clear,
+    const double now_sec) const
   {
+    const auto body_clear_handoff =
+      resolve_mission_body_clear_handoff(behavior_output, now_sec);
     return overtake_core::PausedExecutionResumeRequest{
       overtake_line_state_.follow_prepare_cause == FollowPrepareCause::SafetyBrake,
       paused_execution_origin(overtake_line_state_.follow_prepare_origin_phase),
@@ -11168,7 +11250,7 @@ private:
       overtake_line_state_.fixed_pass_corridor_goal_ey.has_value(),
       overtake_line_state_.pass_side_sign != 0,
       overtake_line_state_.mission_body_clear_deadline_checked,
-      overtake_line_state_.mission_body_clear_deadline_feasible,
+      body_clear_handoff.active,
       behavior_output.locked_target_seen,
       behavior_output.locked_target_position_jump,
       behavior_output.locked_target_course_progress_rejected,
@@ -11313,6 +11395,15 @@ private:
       selected_mission.has_value() ?
       selected_mission->body_clear_deadline_slack_sec :
       -std::numeric_limits<double>::infinity();
+    overtake_line_state_.mission_body_clear_hard_deadline_sec =
+      selected_mission.has_value() &&
+      selected_mission->body_clear_deadline_checked &&
+      selected_mission->body_clear_deadline_feasible &&
+      std::isfinite(selected_mission->predicted_hard_distance_time_sec) &&
+      selected_mission->predicted_hard_distance_time_sec >= 0.0 ?
+      now_sec + selected_mission->predicted_hard_distance_time_sec :
+      -std::numeric_limits<double>::infinity();
+    overtake_line_state_.mission_body_clear_handoff_was_active = false;
     overtake_line_state_.mission_path_total_distance =
       overtake_line_state_.mission_shift_distance +
       (selected_mission.has_value() &&
@@ -12912,6 +13003,8 @@ private:
     const double target_age = std::isfinite(overtake_line_state_.target_last_seen_sec) ?
       std::max(0.0, now_sec - overtake_line_state_.target_last_seen_sec) :
       std::numeric_limits<double>::infinity();
+    const auto live_body_clear_handoff =
+      resolve_mission_body_clear_handoff(behavior_output, now_sec);
     const double return_clear_distance = std::max(0.0, line_cfg.return_clear_distance);
     const bool rear_clear_from_last_observation =
       !locked_target_progress_continuous &&
@@ -13885,16 +13978,8 @@ private:
           actual_wall_sample_unavailable ||
           behavior_output.overtake_execution_corridor_blocked ||
           !locked_target_progress_continuous || locked_target_progress_rejected;
-        const auto safety_pause_resume_eligibility =
-          overtake_core::resolve_paused_execution_resume(
-          paused_execution_resume_request(
-            behavior_output,
-            behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake,
-            safety_pause_physical_hard_fault, false));
         const bool safety_pause_direct_pass =
           resume_goal_available &&
-          safety_pause_resume_eligibility !=
-          overtake_core::PausedExecutionResumeAction::Hold &&
           overtake_core::can_resume_paused_pass_directly(
           direct_resume_request(true));
         const auto safety_pause_resume_action =
@@ -13902,7 +13987,7 @@ private:
           paused_execution_resume_request(
             behavior_output,
             behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake,
-            safety_pause_physical_hard_fault, safety_pause_direct_pass));
+            safety_pause_physical_hard_fault, safety_pause_direct_pass, now_sec));
         const bool safety_pause_resume =
           safety_pause_resume_action !=
           overtake_core::PausedExecutionResumeAction::Hold;
@@ -14422,8 +14507,7 @@ private:
         overtake_line_state_.phase == OvertakeLinePhase::Pass,
         overtake_line_state_.phase == OvertakeLinePhase::ShiftOut &&
         overtake_line_state_.mission_path_frozen &&
-        overtake_line_state_.mission_body_clear_deadline_checked &&
-        overtake_line_state_.mission_body_clear_deadline_feasible,
+        live_body_clear_handoff.active,
         live_minimum_motion_corridor_active,
         overtake_line_state_.pass_front_cap_release_active,
         locked_target_seen,
@@ -17080,8 +17164,7 @@ private:
         committed_pass_request.pass_phase,
         committed_pass_request.shiftout_phase &&
         committed_pass_request.validated_frozen_plan &&
-        overtake_line_state_.mission_body_clear_deadline_checked &&
-        overtake_line_state_.mission_body_clear_deadline_feasible,
+        live_body_clear_handoff.active,
         committed_pass_request.minimum_motion_corridor_active,
         committed_pass_request.prior_front_cap_release_active,
         committed_pass_request.target_seen,

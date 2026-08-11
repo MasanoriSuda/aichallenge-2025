@@ -659,6 +659,8 @@ mpc:
   v2x_overtake_line_target_bias: 1.0          # [0-1] explicit line is the sole lateral owner during ShiftOut/Pass
   # Applied to both the legacy lateral bounds and the occupancy-grid vehicle footprint.
   v2x_overtake_line_min_wall_clearance: 0.15  # [m] retain attack candidates but reserve tracking error before final line commit
+  v2x_overtake_line_static_fallback_entry_motion_guard_enabled: true # keep early static fallback, but reject unobserved full-track entry shifts
+  v2x_overtake_line_static_fallback_max_entry_lateral_shift: 1.5 # [m] observed successes=0.68/1.21; failed wall-side entry=3.08
   v2x_overtake_line_max_lateral_accel: 6.0    # [m/s^2] dev3 attack: complete committed ShiftOut in a hairpin
   v2x_overtake_line_max_target_change: 0.04   # [m/cycle] smooth target goal updates across cycles
   v2x_overtake_line_target_intrusion_ordering_margin: 0.10 # [m] abort if the ahead target reaches/crosses ego's selected-side ordering

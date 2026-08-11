@@ -129,6 +129,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorRe
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorSample;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCorridorAdmissionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCorridorSource;
+using multi_purpose_mpc_ros::v2x_overtake_core::StaticFallbackEntryMotionAdmissionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakePassPlanRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeBodyClearDeadlineRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeKinematicRolloutRequest;
@@ -199,6 +200,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::should_apply_generic_follow_cap;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_speed_reference;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_mission_dynamic_corridor;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_mission_corridor_admission;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  resolve_static_fallback_entry_motion_admission;
 using multi_purpose_mpc_ros::v2x_overtake_core::build_overtake_pass_plan;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_body_clear_deadline;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_kinematic_rollout;
@@ -2973,6 +2976,60 @@ TEST(V2XOvertakeCoreSpeed, PrefersObservedDynamicCorridorAndDoesNotHideConflict)
   EXPECT_TRUE(resolution.valid);
   EXPECT_FALSE(resolution.feasible);
   EXPECT_EQ(resolution.source, OvertakeMissionCorridorSource::None);
+}
+
+TEST(V2XOvertakeCoreSpeed, BoundsOnlyNewStaticFallbackEntryMotion)
+{
+  StaticFallbackEntryMotionAdmissionRequest request;
+  request.guard_enabled = true;
+  request.new_mission_entry = true;
+  request.corridor_source = OvertakeMissionCorridorSource::StaticWallFallback;
+  request.maximum_lateral_shift_m = 1.5;
+
+  request.lateral_shift_m = 1.21;
+  auto resolution = resolve_static_fallback_entry_motion_admission(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.guard_applied);
+  EXPECT_TRUE(resolution.admitted);
+
+  request.lateral_shift_m = 3.08;
+  resolution = resolve_static_fallback_entry_motion_admission(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.guard_applied);
+  EXPECT_FALSE(resolution.admitted);
+
+  request.corridor_source = OvertakeMissionCorridorSource::DynamicObservation;
+  resolution = resolve_static_fallback_entry_motion_admission(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.guard_applied);
+  EXPECT_TRUE(resolution.admitted);
+
+  request.corridor_source = OvertakeMissionCorridorSource::StaticWallFallback;
+  request.new_mission_entry = false;
+  resolution = resolve_static_fallback_entry_motion_admission(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.guard_applied);
+  EXPECT_TRUE(resolution.admitted);
+}
+
+TEST(V2XOvertakeCoreSpeed, RejectsInvalidStaticFallbackEntryMotionInput)
+{
+  StaticFallbackEntryMotionAdmissionRequest request;
+  request.guard_enabled = true;
+  request.new_mission_entry = true;
+  request.corridor_source = OvertakeMissionCorridorSource::None;
+  request.lateral_shift_m = 0.5;
+  request.maximum_lateral_shift_m = 1.5;
+
+  auto resolution = resolve_static_fallback_entry_motion_admission(request);
+  EXPECT_FALSE(resolution.valid);
+  EXPECT_FALSE(resolution.admitted);
+
+  request.corridor_source = OvertakeMissionCorridorSource::StaticWallFallback;
+  request.lateral_shift_m = std::numeric_limits<double>::quiet_NaN();
+  resolution = resolve_static_fallback_entry_motion_admission(request);
+  EXPECT_FALSE(resolution.valid);
+  EXPECT_FALSE(resolution.admitted);
 }
 
 TEST(V2XOvertakeCoreSpeed, BuildsAtomicPassPlanFromSelectedMission)

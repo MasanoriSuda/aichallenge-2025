@@ -1371,6 +1371,8 @@ struct OvertakeLineConfig
   double lateral_offset{1.2};
   double target_bias{0.8};
   double min_wall_clearance{0.8};
+  bool static_fallback_entry_motion_guard_enabled{false};
+  double static_fallback_max_entry_lateral_shift{1.5};
   double max_lateral_accel{2.5};
   double max_target_change{0.25};
   double target_intrusion_ordering_margin{0.10};
@@ -7225,6 +7227,7 @@ struct MPC
         std::size_t unvalidated_full_track_transition_reject_count = 0;
         std::string first_outer_transition_preflight_rejection;
         std::size_t static_corridor_fallback_count = 0;
+        std::size_t static_fallback_entry_motion_reject_count = 0;
         double earliest_rejected_body_clear_time =
           std::numeric_limits<double>::infinity();
         double earliest_rejected_hard_distance_time =
@@ -7341,6 +7344,25 @@ struct MPC
               std::pair<double, double>{goal_lower, goal_upper},
               preferred_goal, shift_distance, std::nullopt, false, false);
             if (!preflight.feasible) {
+              continue;
+            }
+            const double candidate_entry_lateral_shift =
+              std::abs(preflight.goal_ey - model->spatial_state.e_y);
+            const auto static_fallback_entry_admission =
+              overtake_core::resolve_static_fallback_entry_motion_admission(
+              overtake_core::StaticFallbackEntryMotionAdmissionRequest{
+                cfg.v2x_behavior.overtake_line.
+                static_fallback_entry_motion_guard_enabled,
+                initial_shiftout_preflight && !side_replan_preflight,
+                corridor_admission.source,
+                candidate_entry_lateral_shift,
+                cfg.v2x_behavior.overtake_line.
+                static_fallback_max_entry_lateral_shift});
+            if (
+              !static_fallback_entry_admission.valid ||
+              !static_fallback_entry_admission.admitted)
+            {
+              ++static_fallback_entry_motion_reject_count;
               continue;
             }
             const bool current_position_clear =
@@ -7840,6 +7862,8 @@ struct MPC
              << ", unvalidated_full_track_transition_rejected=" <<
             unvalidated_full_track_transition_reject_count
              << ", static_fallback=" << static_corridor_fallback_count
+             << ", static_fallback_entry_motion_rejected=" <<
+            static_fallback_entry_motion_reject_count
              << ", observed=" <<
             (assessment.dynamic_mission_corridor_observed ? 1 : 0)
              << ", samples=" << assessment.dynamic_mission_corridor_samples;
@@ -7975,6 +7999,8 @@ struct MPC
             overtake_core::to_string(selected_mission.corridor_source)
                           << ", target_vlat=" << preflight_target_lateral_velocity
                           << ", candidates=" << mission_candidates.size()
+                          << ", static_fallback_entry_motion_rejected=" <<
+            static_fallback_entry_motion_reject_count
                           << ", ShiftOut/Pass/Return static mission validated; "
                           << "live Return deferred until rear-clear";
           assessment.reason = selected_reason.str();
@@ -20400,6 +20426,13 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_line_min_wall_clearance"] ?
     mpc["v2x_overtake_line_min_wall_clearance"].as<double>() : 0.8);
+  cfg.mpc.v2x_behavior.overtake_line.static_fallback_entry_motion_guard_enabled =
+    mpc["v2x_overtake_line_static_fallback_entry_motion_guard_enabled"] ?
+    mpc["v2x_overtake_line_static_fallback_entry_motion_guard_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_line.static_fallback_max_entry_lateral_shift = std::max(
+    0.0,
+    mpc["v2x_overtake_line_static_fallback_max_entry_lateral_shift"] ?
+    mpc["v2x_overtake_line_static_fallback_max_entry_lateral_shift"].as<double>() : 1.5);
   cfg.mpc.v2x_behavior.overtake_line.max_lateral_accel = std::max(
     0.0,
     mpc["v2x_overtake_line_max_lateral_accel"] ?
@@ -22359,6 +22392,12 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line
           .early_side_replan_max_locked_side_lateral_speed,
         mpc_cfg_.v2x_behavior.overtake_line.side_replan_target_guard_distance);
+      RCLCPP_INFO(
+        get_logger(),
+        "V2X static-fallback entry motion guard: %s, max_shift=%.2f m",
+        mpc_cfg_.v2x_behavior.overtake_line.static_fallback_entry_motion_guard_enabled ?
+        "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line.static_fallback_max_entry_lateral_shift);
       RCLCPP_INFO(
         get_logger(),
         "V2X opponent side replan: %s, interval=%.2f s, no_return=%.2f m, "

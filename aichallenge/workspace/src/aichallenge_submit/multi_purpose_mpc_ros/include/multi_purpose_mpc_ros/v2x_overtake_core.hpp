@@ -2094,6 +2094,29 @@ OvertakeMissionCorridorAdmissionResolution resolve_overtake_mission_corridor_adm
 
 const char * to_string(OvertakeMissionCorridorSource source) noexcept;
 
+struct StaticFallbackEntryMotionAdmissionRequest
+{
+  bool guard_enabled{false};
+  bool new_mission_entry{false};
+  OvertakeMissionCorridorSource corridor_source{OvertakeMissionCorridorSource::None};
+  double lateral_shift_m{};
+  double maximum_lateral_shift_m{};
+};
+
+struct StaticFallbackEntryMotionAdmissionResolution
+{
+  bool valid{false};
+  bool admitted{false};
+  bool guard_applied{false};
+};
+
+/// Bound only a new Mission's lateral motion while its vehicle corridor is
+/// still unobserved. Dynamic candidates and active-Mission replans retain
+/// their dedicated feasibility/atomic replacement policies.
+StaticFallbackEntryMotionAdmissionResolution
+resolve_static_fallback_entry_motion_admission(
+  const StaticFallbackEntryMotionAdmissionRequest & request) noexcept;
+
 struct OvertakeMissionCandidate
 {
   bool feasible{false};

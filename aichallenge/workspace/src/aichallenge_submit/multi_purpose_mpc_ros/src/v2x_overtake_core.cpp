@@ -3601,6 +3601,32 @@ const char * to_string(const OvertakeMissionCorridorSource source) noexcept
   }
 }
 
+StaticFallbackEntryMotionAdmissionResolution
+resolve_static_fallback_entry_motion_admission(
+  const StaticFallbackEntryMotionAdmissionRequest & request) noexcept
+{
+  constexpr double kLateralShiftEpsilon = 1e-9;
+  StaticFallbackEntryMotionAdmissionResolution resolution;
+  if (
+    request.corridor_source == OvertakeMissionCorridorSource::None ||
+    !std::isfinite(request.lateral_shift_m) || request.lateral_shift_m < 0.0 ||
+    !std::isfinite(request.maximum_lateral_shift_m) ||
+    request.maximum_lateral_shift_m < 0.0)
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  resolution.guard_applied =
+    request.guard_enabled && request.new_mission_entry &&
+    request.corridor_source == OvertakeMissionCorridorSource::StaticWallFallback;
+  resolution.admitted =
+    !resolution.guard_applied ||
+    request.lateral_shift_m <=
+    request.maximum_lateral_shift_m + kLateralShiftEpsilon;
+  return resolution;
+}
+
 bool is_full_track_transition_admitted(
   const bool full_track_transition_before_rear_clear,
   const bool scheduled_transition_validated) noexcept

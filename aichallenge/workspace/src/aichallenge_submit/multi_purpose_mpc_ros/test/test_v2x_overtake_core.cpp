@@ -2615,6 +2615,36 @@ TEST(V2XOvertakeCoreSpeed, ProjectsStaticClampTargetOntoReachableLateralInterval
   EXPECT_FALSE(resolve_reachable_lateral_target(request).valid);
 }
 
+TEST(V2XOvertakeCoreSpeed, ReachableLateralTargetIncludesCurrentLateralVelocity)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::ReachableLateralTargetRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::resolve_reachable_lateral_target;
+
+  ReachableLateralTargetRequest request;
+  request.current_lateral_m = -1.8;
+  request.desired_lateral_m = -0.8;
+  request.time_to_target_sec = 0.5;
+  request.maximum_lateral_accel_mps2 = 6.0;
+  request.initial_lateral_velocity_mps = -1.0;
+
+  auto result = resolve_reachable_lateral_target(request);
+  ASSERT_TRUE(result.valid);
+  EXPECT_TRUE(result.limited);
+  EXPECT_NEAR(result.target_lateral_m, -1.55, 1e-12);
+  EXPECT_DOUBLE_EQ(result.required_lateral_accel_mps2, 6.0);
+
+  request.desired_lateral_m = -1.8;
+  result = resolve_reachable_lateral_target(request);
+  ASSERT_TRUE(result.valid);
+  EXPECT_FALSE(result.limited);
+  EXPECT_DOUBLE_EQ(result.target_lateral_m, -1.8);
+  EXPECT_NEAR(result.required_lateral_accel_mps2, 4.0, 1e-12);
+
+  request.initial_lateral_velocity_mps =
+    std::numeric_limits<double>::quiet_NaN();
+  EXPECT_FALSE(resolve_reachable_lateral_target(request).valid);
+}
+
 TEST(V2XOvertakeCoreSpeed, PlacesPassGoalBeyondLockedTargetOnSelectedSide)
 {
   PassSideLateralGoalRequest request;
@@ -5540,6 +5570,39 @@ TEST(V2XOvertakeCoreHorizon, BoundsSpeedPreservingTacticalRevalidation)
   request.elapsed_sec = 0.2;
   request.target_longitudinal_m = 3.01;
   EXPECT_FALSE(resolve_speed_preserving_tactical_revalidation(request).active);
+}
+
+TEST(V2XOvertakeCoreHorizon, ContinuesLatchedEscapeOnlyWhilePhysicalGuardsHold)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    LatchedForwardEscapeContinuationRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    can_continue_latched_forward_escape;
+
+  LatchedForwardEscapeContinuationRequest request;
+  request.enabled = true;
+  request.safe_separation_active = true;
+  request.pass_committed = true;
+  request.forward_completion_latched = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+
+  EXPECT_TRUE(can_continue_latched_forward_escape(request));
+
+  // Predicted sweep separation is intentionally not an input. A current
+  // physical overlap, wall/runtime hard fault, or rear-clear still ends it.
+  request.current_body_footprints_separated = false;
+  EXPECT_FALSE(can_continue_latched_forward_escape(request));
+  request.current_body_footprints_separated = true;
+  request.execution_corridor_blocked = true;
+  EXPECT_FALSE(can_continue_latched_forward_escape(request));
+  request.execution_corridor_blocked = false;
+  request.hard_fault = true;
+  EXPECT_FALSE(can_continue_latched_forward_escape(request));
+  request.hard_fault = false;
+  request.rear_clear_confirmed = true;
+  EXPECT_FALSE(can_continue_latched_forward_escape(request));
 }
 
 TEST(V2XOvertakeCoreHorizon, ReturnsDirectlyOnlyWithClearPhysicalRevalidation)

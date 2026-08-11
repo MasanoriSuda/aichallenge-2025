@@ -651,6 +651,7 @@ mpc:
   v2x_overtake_target_ramp_ratio: 1.2         # higher = ramp pass-side target more gently
   v2x_overtake_line_enabled: true            # explicit ShiftOut/Pass/Return lateral line; off keeps legacy behavior
   v2x_overtake_line_shift_distance: 4.0       # [m] dev3 attack: reach the pass-side line promptly
+  v2x_overtake_line_max_shift_distance: 14.0  # [m] allow a high-speed ego to begin a physically feasible early ShiftOut toward a distant stopped vehicle
   v2x_overtake_line_pass_distance: 8.0        # [m] pass-side hold distance hint
   v2x_overtake_line_return_distance: 6.0      # [m] blend back promptly after clearing the target
   v2x_overtake_line_lateral_offset: 1.2       # [m] signed by pass side: left positive, right negative

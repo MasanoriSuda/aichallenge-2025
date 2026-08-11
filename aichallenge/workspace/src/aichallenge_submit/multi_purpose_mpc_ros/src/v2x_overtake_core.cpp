@@ -2853,6 +2853,17 @@ resolve_speed_preserving_tactical_revalidation(
   return resolution;
 }
 
+bool can_continue_latched_forward_escape(
+  const LatchedForwardEscapeContinuationRequest & request) noexcept
+{
+  return
+    request.enabled && request.safe_separation_active && request.pass_committed &&
+    request.forward_completion_latched && request.target_continuous &&
+    request.current_body_footprints_separated &&
+    request.footprint_prediction_valid && !request.execution_corridor_blocked &&
+    !request.hard_fault && !request.rear_clear_confirmed;
+}
+
 bool can_return_from_tactical_revalidation(
   const TacticalRevalidationReturnRequest & request) noexcept
 {
@@ -4189,13 +4200,18 @@ ReachableLateralTargetResolution resolve_reachable_lateral_target(
     !std::isfinite(request.desired_lateral_m) ||
     !std::isfinite(request.time_to_target_sec) || request.time_to_target_sec <= 0.0 ||
     !std::isfinite(request.maximum_lateral_accel_mps2) ||
-    request.maximum_lateral_accel_mps2 <= 0.0)
+    request.maximum_lateral_accel_mps2 <= 0.0 ||
+    !std::isfinite(request.initial_lateral_velocity_mps))
   {
     return result;
   }
 
   result.valid = true;
-  const double lateral_delta = request.desired_lateral_m - request.current_lateral_m;
+  const double zero_acceleration_lateral_m =
+    request.current_lateral_m +
+    request.initial_lateral_velocity_mps * request.time_to_target_sec;
+  const double lateral_delta =
+    request.desired_lateral_m - zero_acceleration_lateral_m;
   result.required_lateral_accel_mps2 =
     2.0 * std::abs(lateral_delta) /
     (request.time_to_target_sec * request.time_to_target_sec);
@@ -4207,7 +4223,7 @@ ReachableLateralTargetResolution resolve_reachable_lateral_target(
   const double reachable_shift =
     0.5 * request.maximum_lateral_accel_mps2 *
     request.time_to_target_sec * request.time_to_target_sec;
-  result.target_lateral_m = request.current_lateral_m +
+  result.target_lateral_m = zero_acceleration_lateral_m +
     std::copysign(reachable_shift, lateral_delta);
   result.required_lateral_accel_mps2 = request.maximum_lateral_accel_mps2;
   result.limited = true;

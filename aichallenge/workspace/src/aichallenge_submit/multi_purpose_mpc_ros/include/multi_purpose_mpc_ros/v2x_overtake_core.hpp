@@ -1586,6 +1586,28 @@ SpeedPreservingTacticalRevalidationResolution
 resolve_speed_preserving_tactical_revalidation(
   const SpeedPreservingTacticalRevalidationRequest & request) noexcept;
 
+struct LatchedForwardEscapeContinuationRequest
+{
+  bool enabled{false};
+  bool safe_separation_active{false};
+  bool pass_committed{false};
+  bool forward_completion_latched{false};
+  bool target_continuous{false};
+  bool current_body_footprints_separated{false};
+  bool footprint_prediction_valid{false};
+  bool execution_corridor_blocked{false};
+  bool hard_fault{false};
+  bool rear_clear_confirmed{false};
+};
+
+/// Preserve an already committed forward escape across a prediction-only
+/// overlap. This is intentionally not time-limited like tactical
+/// revalidation: the existing SafeSeparation local and absolute Mission
+/// budgets remain the bounds. Every current physical/runtime hard guard stays
+/// fail closed.
+bool can_continue_latched_forward_escape(
+  const LatchedForwardEscapeContinuationRequest & request) noexcept;
+
 struct TacticalRevalidationReturnRequest
 {
   bool enabled{false};
@@ -2291,6 +2313,7 @@ struct ReachableLateralTargetRequest
   double desired_lateral_m{};
   double time_to_target_sec{};
   double maximum_lateral_accel_mps2{};
+  double initial_lateral_velocity_mps{};
 };
 
 struct ReachableLateralTargetResolution
@@ -2301,9 +2324,10 @@ struct ReachableLateralTargetResolution
   double required_lateral_accel_mps2{std::numeric_limits<double>::infinity()};
 };
 
-/// Project one lateral target onto the acceleration-reachable interval around
-/// the current offset. Static-map users must validate the returned target again
-/// after projection; reachability alone does not establish wall clearance.
+/// Project one lateral target onto the acceleration-reachable interval from
+/// the current offset and lateral velocity. Static-map users must validate the
+/// returned target again after projection; reachability alone does not
+/// establish wall clearance.
 ReachableLateralTargetResolution resolve_reachable_lateral_target(
   const ReachableLateralTargetRequest & request) noexcept;
 

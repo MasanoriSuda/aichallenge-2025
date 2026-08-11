@@ -1993,6 +1993,7 @@ struct V2XBehaviorOutput
   bool overtake_committed_shiftout_behavior_owner_active{false};
   bool overtake_body_clear_handoff_active{false};
   bool overtake_body_clear_handoff_expired{false};
+  bool overtake_body_clear_handoff_live_deadline_contracted{false};
   double overtake_body_clear_handoff_remaining_sec{};
   bool overtake_hard_curve_blocked{false};
   bool active_hard_curve_continuation_allowed{false};
@@ -2200,6 +2201,8 @@ struct OvertakeLineState
   double mission_body_clear_hard_deadline_sec{
     -std::numeric_limits<double>::infinity()};
   bool mission_body_clear_handoff_was_active{false};
+  bool mission_body_clear_handoff_consumed{false};
+  bool mission_body_clear_prediction_speed_hold_was_active{false};
   double mission_path_total_distance{0.0};
   std::uint64_t mission_generation{0U};
   std::uint64_t invalidated_mission_generation{0U};
@@ -2363,6 +2366,7 @@ struct OvertakeLineOutput
   bool committed_pass_speed_hold_active{false};
   bool committed_pass_speed_floor_active{false};
   bool committed_shiftout_speed_floor_active{false};
+  bool body_clear_handoff_prediction_speed_hold_active{false};
   bool recovery_moving_follow_profile_used{false};
   double contact_requested_lateral_bias{0.0};
   double contact_applied_lateral_bias{0.0};
@@ -4470,8 +4474,8 @@ struct MPC
       const double left_y = std::cos(waypoint.psi);
       path.push_back(
         recovery_footprint::Pose2D{
-          waypoint.x + planner_output.pass_target_ey * left_x,
-          waypoint.y + planner_output.pass_target_ey * left_y,
+          waypoint.x + planner_output.target_ey[index] * left_x,
+          waypoint.y + planner_output.target_ey[index] * left_y,
           waypoint.psi});
     }
 
@@ -4696,7 +4700,8 @@ struct MPC
     low_speed_shift_pass_target_ey_ = 0.0;
     low_speed_shift_target_ey_ = 0.0;
     low_speed_shift_velocity_mps_ = 0.0;
-    low_speed_shift_steering_limit_rad_ = 0.0;
+    low_speed_shift_steering_lower_rad_ = 0.0;
+    low_speed_shift_steering_upper_rad_ = 0.0;
     low_speed_shift_wall_stop_active_ = false;
     low_speed_shift_corridor_blocked_ = false;
     low_speed_direct_control_phase_ =
@@ -4764,16 +4769,19 @@ struct MPC
     return last_control_was_fallback_;
   }
 
-  std::optional<double> low_speed_direct_steering_limit() const
+  std::optional<v2x_overtake_core::LowSpeedDirectSteeringBounds>
+  low_speed_direct_steering_bounds() const
   {
     if (
       !low_speed_shift_control_active_ ||
-      !std::isfinite(low_speed_shift_steering_limit_rad_) ||
-      low_speed_shift_steering_limit_rad_ < 0.0)
+      !std::isfinite(low_speed_shift_steering_lower_rad_) ||
+      !std::isfinite(low_speed_shift_steering_upper_rad_) ||
+      low_speed_shift_steering_lower_rad_ > low_speed_shift_steering_upper_rad_)
     {
       return std::nullopt;
     }
-    return low_speed_shift_steering_limit_rad_;
+    return v2x_overtake_core::LowSpeedDirectSteeringBounds{
+      low_speed_shift_steering_lower_rad_, low_speed_shift_steering_upper_rad_};
   }
 
   bool low_speed_direct_wall_stop_active() const noexcept
@@ -4838,7 +4846,8 @@ struct MPC
     low_speed_shift_pass_target_ey_ = 0.0;
     low_speed_shift_target_ey_ = 0.0;
     low_speed_shift_velocity_mps_ = 0.0;
-    low_speed_shift_steering_limit_rad_ = 0.0;
+    low_speed_shift_steering_lower_rad_ = 0.0;
+    low_speed_shift_steering_upper_rad_ = 0.0;
     low_speed_shift_wall_stop_active_ = false;
     low_speed_shift_corridor_blocked_ = false;
     low_speed_direct_control_phase_ =
@@ -5898,6 +5907,8 @@ struct MPC
       resolve_mission_body_clear_handoff(output, now_sec);
     output.overtake_body_clear_handoff_active = committed_body_clear_handoff.active;
     output.overtake_body_clear_handoff_expired = committed_body_clear_handoff.expired;
+    output.overtake_body_clear_handoff_live_deadline_contracted =
+      committed_body_clear_handoff.live_deadline_contracted;
     output.overtake_body_clear_handoff_remaining_sec =
       committed_body_clear_handoff.remaining_sec;
     if (
@@ -5912,14 +5923,26 @@ struct MPC
         RCLCPP_INFO(
           rclcpp::get_logger("mpc_controller"),
           "OvertakeLine body-clear handoff %s: target=%s, phase=%s, "
-          "remaining=%.2f, satisfied=%d, expired=%d, overlap=%d",
+          "remaining=%.2f, satisfied=%d, expired=%d, overlap=%d, "
+          "live_contracted=%d, release=%s",
           committed_body_clear_handoff.active ? "entered" : "released",
           overtake_line_state_.target_vehicle_id.c_str(),
           to_string(overtake_line_state_.phase),
           committed_body_clear_handoff.remaining_sec,
           committed_body_clear_handoff.satisfied ? 1 : 0,
           committed_body_clear_handoff.expired ? 1 : 0,
-          output.locked_target_current_body_overlap_confirmed ? 1 : 0);
+          output.locked_target_current_body_overlap_confirmed ? 1 : 0,
+          committed_body_clear_handoff.live_deadline_contracted ? 1 : 0,
+          overtake_core::to_string(committed_body_clear_handoff.release_reason));
+      }
+      if (
+        overtake_line_state_.mission_body_clear_handoff_was_active &&
+        !committed_body_clear_handoff.active)
+      {
+        // A handoff is a one-way transfer for one Mission generation. Once it
+        // reaches a normal latch or any release guard, later geometry chatter
+        // must not re-arm the special authority.
+        overtake_line_state_.mission_body_clear_handoff_consumed = true;
       }
       overtake_line_state_.mission_body_clear_handoff_was_active =
         committed_body_clear_handoff.active;
@@ -10104,8 +10127,25 @@ struct MPC
       use_low_speed_local_path && planner_output.active && planner_output.feasible &&
       planner_output.pass_corridor_enforced)
     {
-      set_low_speed_direct_control_phase(
-        v2x_overtake_core::LowSpeedDirectControlPhase::Pass);
+      const bool pass_pose_settled = v2x_overtake_core::is_low_speed_shift_complete(
+        model->spatial_state.e_y, model->spatial_state.e_psi,
+        low_speed_shift_pass_target_ey_,
+        cfg.v2x_behavior.low_speed_avoidance_shift_lateral_tolerance,
+        cfg.v2x_behavior.low_speed_avoidance_shift_heading_tolerance);
+      if (v2x_overtake_core::can_enter_low_speed_direct_pass(
+          v2x_overtake_core::LowSpeedDirectPassAdmissionRequest{
+            low_speed_direct_control_phase_,
+            planner_output.pass_corridor_enforced,
+            pass_pose_settled,
+            behavior_output.low_speed_locked_target_seen,
+            behavior_output.low_speed_locked_target_position_jump,
+            behavior_output.low_speed_locked_target_current_body_footprints_separated,
+            behavior_output.low_speed_locked_target_footprint_prediction_valid,
+            behavior_output.low_speed_locked_target_predicted_body_footprint_sweep_separated}))
+      {
+        set_low_speed_direct_control_phase(
+          v2x_overtake_core::LowSpeedDirectControlPhase::Pass);
+      }
     }
 
     const auto overtake_line_output =
@@ -10550,23 +10590,30 @@ struct MPC
         max_steering,
         cfg.v2x_behavior.low_speed_avoidance_shift_lateral_gain,
         cfg.v2x_behavior.low_speed_avoidance_shift_heading_gain});
-    const double steering_limit = wall_stop_required ? 0.0 :
-      std::abs(v2x_overtake_core::limit_low_speed_shift_steering_by_lateral_acceleration(
+    const auto steering_bounds = wall_stop_required ?
+      v2x_overtake_core::LowSpeedDirectSteeringBounds{0.0, 0.0} :
+      v2x_overtake_core::resolve_low_speed_direct_steering_bounds(
+      previous_steering,
       max_steering,
       current_speed_mps_,
       model->length,
       cfg.v2x_behavior.low_speed_avoidance_max_lateral_accel,
-      cfg.steering_tire_angle_gain_var));
+      cfg.steering_tire_angle_gain_var);
     const double target_steering = clip(
-      unconstrained_target_steering, -steering_limit, steering_limit);
+      unconstrained_target_steering,
+      steering_bounds.lower_rad,
+      steering_bounds.upper_rad);
     const double max_steering_step =
       std::max(0.0, cfg.steer_rate_max) * std::max(0.0, model->Ts);
     const double rate_limited_steering = clip(
       target_steering, previous_steering - max_steering_step,
       previous_steering + max_steering_step);
     const double steering = clip(
-      rate_limited_steering, -steering_limit, steering_limit);
-    low_speed_shift_steering_limit_rad_ = steering_limit;
+      rate_limited_steering,
+      steering_bounds.lower_rad,
+      steering_bounds.upper_rad);
+    low_speed_shift_steering_lower_rad_ = steering_bounds.lower_rad;
+    low_speed_shift_steering_upper_rad_ = steering_bounds.upper_rad;
     double behavior_velocity_limit = cfg.v_max;
     if (std::isfinite(last_v2x_behavior_output_.target_velocity_limit)) {
       behavior_velocity_limit = std::min(
@@ -10591,11 +10638,13 @@ struct MPC
       RCLCPP_INFO(
         rclcpp::get_logger("mpc_controller"),
         "Low-speed pass shift control entered: target_ey=%.2f, speed=%.2f, "
-        "actual_speed=%.2f, steering_target=%.3f/%.3f, max_ay=%.2f, "
+        "actual_speed=%.2f, steering_target=%.3f/%.3f, bounds=[%.3f,%.3f], "
+        "max_ay=%.2f, "
         "lateral_gain=%.2f, heading_gain=%.2f, completion=%.2f m/%.2f rad, "
         "vehicle_clear_hold=%.2f s",
         low_speed_shift_target_ey_, speed, current_speed_mps_,
         unconstrained_target_steering, target_steering,
+        steering_bounds.lower_rad, steering_bounds.upper_rad,
         cfg.v2x_behavior.low_speed_avoidance_max_lateral_accel,
         cfg.v2x_behavior.low_speed_avoidance_shift_lateral_gain,
         cfg.v2x_behavior.low_speed_avoidance_shift_heading_gain,
@@ -10706,7 +10755,8 @@ struct MPC
         low_speed_shift_target_vehicle_id_.clear();
         low_speed_retained_pass_reject_reason_ =
           v2x_overtake_core::LowSpeedRetainedPassRejectReason::None;
-        low_speed_shift_steering_limit_rad_ = 0.0;
+        low_speed_shift_steering_lower_rad_ = 0.0;
+        low_speed_shift_steering_upper_rad_ = 0.0;
         low_speed_shift_wall_stop_active_ = false;
         low_speed_shift_corridor_blocked_ = false;
         low_speed_shift_last_relevant_vehicle_sec_ =
@@ -10861,7 +10911,8 @@ struct MPC
   double low_speed_shift_pass_target_ey_{0.0};
   double low_speed_shift_target_ey_{0.0};
   double low_speed_shift_velocity_mps_{0.0};
-  double low_speed_shift_steering_limit_rad_{0.0};
+  double low_speed_shift_steering_lower_rad_{0.0};
+  double low_speed_shift_steering_upper_rad_{0.0};
   bool low_speed_shift_wall_stop_active_{false};
   bool low_speed_shift_corridor_blocked_{false};
   double low_speed_shift_last_relevant_vehicle_sec_{
@@ -11214,6 +11265,31 @@ private:
       overtake_line_state_.mission_generation;
   }
 
+  double live_body_clear_hard_gap_ttc_sec(
+    const V2XBehaviorOutput & behavior_output) const
+  {
+    if (
+      !behavior_output.locked_target_seen ||
+      behavior_output.locked_target_position_jump ||
+      behavior_output.locked_target_course_progress_rejected ||
+      !std::isfinite(behavior_output.locked_target_longitudinal) ||
+      !std::isfinite(behavior_output.locked_target_speed))
+    {
+      return std::numeric_limits<double>::infinity();
+    }
+    const double hard_distance_m = std::max(
+      0.0, cfg.v2x_behavior.moving_follow_hard_distance);
+    if (behavior_output.locked_target_longitudinal <= hard_distance_m + kEps) {
+      return 0.0;
+    }
+    const double closing_speed_mps =
+      std::max(0.0, current_speed_mps_) -
+      std::max(0.0, behavior_output.locked_target_speed);
+    return closing_speed_mps > kEps ?
+      (behavior_output.locked_target_longitudinal - hard_distance_m) /
+      closing_speed_mps : std::numeric_limits<double>::infinity();
+  }
+
   overtake_core::BodyClearExecutionHandoffResolution
   resolve_mission_body_clear_handoff(
     const V2XBehaviorOutput & behavior_output, const double now_sec) const
@@ -11222,6 +11298,22 @@ private:
       overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare &&
       (overtake_line_state_.follow_prepare_origin_phase == OvertakeLinePhase::ShiftOut ||
       overtake_line_state_.follow_prepare_origin_phase == OvertakeLinePhase::Pass);
+    const bool ordinary_pass_ownership_latched =
+      overtake_line_state_.phase == OvertakeLinePhase::Pass &&
+      behavior_output.locked_target_current_body_footprints_separated &&
+      (overtake_line_state_.pass_front_overlap_exclusion_latched ||
+      (overtake_line_state_.pass_front_cap_release_active &&
+      behavior_output.locked_target_footprint_prediction_valid &&
+      behavior_output.locked_target_predicted_body_footprint_sweep_separated));
+    if (overtake_line_state_.mission_body_clear_handoff_consumed) {
+      overtake_core::BodyClearExecutionHandoffResolution resolution;
+      resolution.valid = true;
+      resolution.satisfied =
+        behavior_output.locked_target_current_body_footprints_separated;
+      resolution.release_reason =
+        overtake_core::BodyClearExecutionHandoffReleaseReason::InactiveExecution;
+      return resolution;
+    }
     return overtake_core::resolve_body_clear_execution_handoff(
       overtake_core::BodyClearExecutionHandoffRequest{
         overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
@@ -11232,7 +11324,11 @@ private:
         now_sec,
         overtake_line_state_.mission_body_clear_hard_deadline_sec,
         behavior_output.locked_target_current_body_footprints_separated,
-        behavior_output.locked_target_current_body_overlap_confirmed});
+        behavior_output.locked_target_current_body_overlap_confirmed,
+        ordinary_pass_ownership_latched,
+        live_body_clear_hard_gap_ttc_sec(behavior_output),
+        std::max(
+          0.0, cfg.v2x_behavior.overtake_body_clear_deadline_margin_sec)});
   }
 
   overtake_core::PausedExecutionResumeRequest paused_execution_resume_request(
@@ -11404,6 +11500,8 @@ private:
       now_sec + selected_mission->predicted_hard_distance_time_sec :
       -std::numeric_limits<double>::infinity();
     overtake_line_state_.mission_body_clear_handoff_was_active = false;
+    overtake_line_state_.mission_body_clear_handoff_consumed = false;
+    overtake_line_state_.mission_body_clear_prediction_speed_hold_was_active = false;
     overtake_line_state_.mission_path_total_distance =
       overtake_line_state_.mission_shift_distance +
       (selected_mission.has_value() &&
@@ -17334,6 +17432,51 @@ private:
       // dedicated hard limit; active ShiftOut/early Pass only shapes the velocity reference.
       output.target_velocity_reference = std::min(
         cfg.v_max, std::max(0.0, locked_target_speed) + closing_speed_limit);
+    }
+    const auto body_clear_handoff_speed_reference =
+      overtake_core::resolve_body_clear_handoff_speed_reference(
+      overtake_core::BodyClearHandoffSpeedReferenceRequest{
+        live_body_clear_handoff.active,
+        behavior_output.locked_target_current_body_footprints_separated,
+        behavior_output.locked_target_footprint_prediction_valid,
+        behavior_output.locked_target_predicted_body_footprint_sweep_separated,
+        std::max(0.0, current_speed_mps_),
+        locked_target_speed,
+        std::max(
+          0.0, cfg.v2x_behavior.overtake_pass_unlatched_max_closing_speed),
+        std::max(0.0, cfg.v_max)});
+    output.body_clear_handoff_prediction_speed_hold_active =
+      body_clear_handoff_speed_reference.hold_active;
+    if (body_clear_handoff_speed_reference.hold_active) {
+      output.target_velocity_reference = std::min(
+        output.target_velocity_reference,
+        body_clear_handoff_speed_reference.target_velocity_reference_mps);
+      output.target_velocity_floor = 0.0;
+      output.closing_speed_limit = std::isfinite(locked_target_speed) ?
+        std::max(
+        0.0, output.target_velocity_reference - std::max(0.0, locked_target_speed)) :
+        0.0;
+    }
+    if (
+      body_clear_handoff_speed_reference.hold_active !=
+      overtake_line_state_.mission_body_clear_prediction_speed_hold_was_active)
+    {
+      if (cfg.v2x_behavior.overtake_line.debug_log_enabled) {
+        RCLCPP_INFO(
+          rclcpp::get_logger("mpc_controller"),
+          "OvertakeLine body-clear prediction speed hold %s: target=%s, "
+          "phase=%s, reference=%.2f, ego_v=%.2f, target_v=%.2f, "
+          "prediction=%d, sweep_clear=%d",
+          body_clear_handoff_speed_reference.hold_active ? "entered" : "released",
+          overtake_line_state_.target_vehicle_id.c_str(),
+          to_string(overtake_line_state_.phase),
+          body_clear_handoff_speed_reference.target_velocity_reference_mps,
+          current_speed_mps_, locked_target_speed,
+          behavior_output.locked_target_footprint_prediction_valid ? 1 : 0,
+          behavior_output.locked_target_predicted_body_footprint_sweep_separated ? 1 : 0);
+      }
+      overtake_line_state_.mission_body_clear_prediction_speed_hold_was_active =
+        body_clear_handoff_speed_reference.hold_active;
     }
     const bool pass_horizon_speed_hold =
       overtake_line_state_.shiftout_fresh_horizon_wait_active ||
@@ -26683,8 +26826,9 @@ private:
       u[1], last_u_[1] - max_steering_step,
       last_u_[1] + max_steering_step);
     u[1] = clip(u[1], -mpc_cfg_.delta_max, mpc_cfg_.delta_max);
-    if (const auto direct_limit = mpc_->low_speed_direct_steering_limit()) {
-      u[1] = clip(u[1], -direct_limit.value(), direct_limit.value());
+    if (const auto direct_bounds = mpc_->low_speed_direct_steering_bounds()) {
+      u[1] = clip(
+        u[1], direct_bounds->lower_rad, direct_bounds->upper_rad);
     }
     const auto recovery_output = evaluate_stuck_recovery(
       pose, actual_v, u, acc, effective_v_max, mpc_fallback_active, steady_now, current_time);
@@ -26694,8 +26838,9 @@ private:
     acc = clip(acc, mpc_cfg_.a_min, mpc_cfg_.a_max);
     u[1] = clip(u[1], -mpc_cfg_.delta_max, mpc_cfg_.delta_max);
     if (!recovery_command_active) {
-      if (const auto direct_limit = mpc_->low_speed_direct_steering_limit()) {
-        u[1] = clip(u[1], -direct_limit.value(), direct_limit.value());
+      if (const auto direct_bounds = mpc_->low_speed_direct_steering_bounds()) {
+        u[1] = clip(
+          u[1], direct_bounds->lower_rad, direct_bounds->upper_rad);
       }
     }
     if (

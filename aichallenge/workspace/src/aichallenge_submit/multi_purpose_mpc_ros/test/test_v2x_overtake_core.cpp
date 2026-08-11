@@ -121,6 +121,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionOwnershipRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassBehaviorOwnershipRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommittedShiftOutBehaviorOwnershipRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::BodyClearExecutionHandoffRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::BodyClearExecutionHandoffReleaseReason;
+using multi_purpose_mpc_ros::v2x_overtake_core::BodyClearHandoffSpeedReferenceRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeExecutionSideRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeExecutionSideSource;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeLineTransitionAction;
@@ -414,7 +416,13 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_low_speed_shift_steering
 using multi_purpose_mpc_ros::v2x_overtake_core::
   limit_low_speed_shift_steering_by_lateral_acceleration;
 using multi_purpose_mpc_ros::v2x_overtake_core::
+  resolve_low_speed_direct_steering_bounds;
+using multi_purpose_mpc_ros::v2x_overtake_core::
   resolve_low_speed_direct_control_entry_phase;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  can_enter_low_speed_direct_pass;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  LowSpeedDirectPassAdmissionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   should_stop_low_speed_direct_control_for_corridor;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_low_speed_direct_control_velocity;
@@ -9608,6 +9616,99 @@ TEST(V2XOvertakeCoreMissionOwnership, RuntimeBodyClearHandoffIsBoundedAndFailClo
   EXPECT_FALSE(resolution.active);
 }
 
+TEST(V2XOvertakeCoreMissionOwnership, BodyClearHandoffTransfersToNormalPassOwnership)
+{
+  BodyClearExecutionHandoffRequest request;
+  request.committed_execution_active = true;
+  request.body_clear_deadline_checked = true;
+  request.body_clear_deadline_feasible = true;
+  request.now_sec = 10.0;
+  request.hard_deadline_sec = 12.0;
+  request.current_body_footprints_separated = true;
+  request.current_body_footprint_overlap_confirmed = false;
+
+  auto resolution = resolve_body_clear_execution_handoff(request);
+  ASSERT_TRUE(resolution.active);
+
+  request.ordinary_pass_ownership_latched = true;
+  resolution = resolve_body_clear_execution_handoff(request);
+  EXPECT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.active);
+  EXPECT_TRUE(resolution.satisfied);
+  EXPECT_EQ(
+    resolution.release_reason,
+    BodyClearExecutionHandoffReleaseReason::NormalPassOwnership);
+  EXPECT_STREQ(
+    multi_purpose_mpc_ros::v2x_overtake_core::to_string(resolution.release_reason),
+    "normal_latch");
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, LiveTtcOnlyContractsFrozenHandoffDeadline)
+{
+  BodyClearExecutionHandoffRequest request;
+  request.committed_execution_active = true;
+  request.body_clear_deadline_checked = true;
+  request.body_clear_deadline_feasible = true;
+  request.now_sec = 10.0;
+  request.hard_deadline_sec = 14.0;
+  request.current_body_footprint_overlap_confirmed = false;
+  request.live_hard_gap_ttc_sec = 1.5;
+  request.execution_margin_sec = 0.1;
+
+  auto resolution = resolve_body_clear_execution_handoff(request);
+  EXPECT_TRUE(resolution.active);
+  EXPECT_TRUE(resolution.live_deadline_contracted);
+  EXPECT_NEAR(resolution.effective_deadline_sec, 11.4, 1e-12);
+  EXPECT_NEAR(resolution.remaining_sec, 1.4, 1e-12);
+
+  request.live_hard_gap_ttc_sec = 8.0;
+  resolution = resolve_body_clear_execution_handoff(request);
+  EXPECT_TRUE(resolution.active);
+  EXPECT_FALSE(resolution.live_deadline_contracted);
+  EXPECT_DOUBLE_EQ(resolution.effective_deadline_sec, 14.0);
+
+  request.now_sec = 14.1;
+  resolution = resolve_body_clear_execution_handoff(request);
+  EXPECT_FALSE(resolution.active);
+  EXPECT_TRUE(resolution.expired);
+  EXPECT_EQ(
+    resolution.release_reason,
+    BodyClearExecutionHandoffReleaseReason::Expired);
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, PredictionUncertaintyHoldsSpeedWithoutDroppingMission)
+{
+  BodyClearHandoffSpeedReferenceRequest request;
+  request.handoff_active = true;
+  request.current_body_footprints_separated = true;
+  request.current_speed_mps = 5.0;
+  request.target_speed_mps = 3.0;
+  request.allowed_closing_speed_mps = 0.5;
+  request.maximum_speed_mps = 11.11;
+
+  auto resolution = resolve_body_clear_handoff_speed_reference(request);
+  EXPECT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.hold_active);
+  EXPECT_DOUBLE_EQ(resolution.target_velocity_reference_mps, 3.5);
+
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+  resolution = resolve_body_clear_handoff_speed_reference(request);
+  EXPECT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.hold_active);
+  EXPECT_TRUE(std::isinf(resolution.target_velocity_reference_mps));
+
+  request.predicted_body_footprint_sweep_separated = false;
+  request.target_speed_mps = std::numeric_limits<double>::infinity();
+  resolution = resolve_body_clear_handoff_speed_reference(request);
+  EXPECT_TRUE(resolution.hold_active);
+  EXPECT_DOUBLE_EQ(resolution.target_velocity_reference_mps, 5.0);
+
+  request.current_body_footprints_separated = false;
+  resolution = resolve_body_clear_handoff_speed_reference(request);
+  EXPECT_FALSE(resolution.hold_active);
+}
+
 TEST(V2XOvertakeCoreMissionOwnership, PassOwnerReleasesForEveryHardAbort)
 {
   CommittedPassBehaviorOwnershipRequest request;
@@ -10363,6 +10464,32 @@ TEST(V2XOvertakeCoreSide, LowSpeedShiftSteeringRespectsActualSpeedLateralAcceler
     std::invalid_argument);
 }
 
+TEST(V2XOvertakeCoreSide, LowSpeedDirectSteeringPreservesCurveTrackingCommand)
+{
+  const auto bounds = resolve_low_speed_direct_steering_bounds(
+    -0.202, 0.559, 8.41, 1.087, 6.0, 1.5);
+  const double correction_limit =
+    std::atan(1.087 * 6.0 / (8.41 * 8.41)) / 1.5;
+
+  EXPECT_NEAR(bounds.lower_rad, -0.202 - correction_limit, 1e-12);
+  EXPECT_NEAR(bounds.upper_rad, -0.202 + correction_limit, 1e-12);
+  EXPECT_LT(bounds.upper_rad, -0.1);
+  EXPECT_GT(bounds.lower_rad, -0.3);
+}
+
+TEST(V2XOvertakeCoreSide, LowSpeedDirectSteeringBoundsRespectPhysicalMaximum)
+{
+  const auto bounds = resolve_low_speed_direct_steering_bounds(
+    -0.54, 0.559, 3.0, 1.087, 6.0, 1.5);
+
+  EXPECT_DOUBLE_EQ(bounds.lower_rad, -0.559);
+  EXPECT_LE(bounds.upper_rad, 0.559);
+  EXPECT_THROW(
+    resolve_low_speed_direct_steering_bounds(
+      0.0, -0.1, 3.0, 1.087, 6.0, 1.5),
+    std::invalid_argument);
+}
+
 TEST(V2XOvertakeCoreSide, SelectsPhaseSpecificDirectControlVelocity)
 {
   EXPECT_DOUBLE_EQ(resolve_low_speed_direct_control_velocity(
@@ -10379,14 +10506,40 @@ TEST(V2XOvertakeCoreSide, SelectsPhaseSpecificDirectControlVelocity)
       LowSpeedDirectControlPhase::Pass, 3.0, -1.0, 4.0, 11.1), std::invalid_argument);
 }
 
-TEST(V2XOvertakeCoreSide, StartsDirectPassWhenAlreadyInsideValidatedCorridor)
+TEST(V2XOvertakeCoreSide, DirectLowSpeedControlAlwaysStartsInShift)
 {
   EXPECT_EQ(
     resolve_low_speed_direct_control_entry_phase(false),
     LowSpeedDirectControlPhase::Shift);
   EXPECT_EQ(
     resolve_low_speed_direct_control_entry_phase(true),
-    LowSpeedDirectControlPhase::Pass);
+    LowSpeedDirectControlPhase::Shift);
+}
+
+TEST(V2XOvertakeCoreSide, DirectLowSpeedPassRequiresSettledPredictedClearance)
+{
+  LowSpeedDirectPassAdmissionRequest request;
+  request.phase = LowSpeedDirectControlPhase::Shift;
+  request.pass_corridor_entered = true;
+  request.pose_settled = true;
+  request.target_seen = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+
+  EXPECT_TRUE(can_enter_low_speed_direct_pass(request));
+
+  request.pose_settled = false;
+  EXPECT_FALSE(can_enter_low_speed_direct_pass(request));
+  request.pose_settled = true;
+  request.predicted_body_footprint_sweep_separated = false;
+  EXPECT_FALSE(can_enter_low_speed_direct_pass(request));
+  request.predicted_body_footprint_sweep_separated = true;
+  request.target_position_jump = true;
+  EXPECT_FALSE(can_enter_low_speed_direct_pass(request));
+  request.target_position_jump = false;
+  request.phase = LowSpeedDirectControlPhase::Pass;
+  EXPECT_FALSE(can_enter_low_speed_direct_pass(request));
 }
 
 TEST(V2XOvertakeCoreSide, FreezesDirectPassSideAfterPassCommit)

@@ -3881,7 +3881,26 @@ struct BodyClearExecutionHandoffRequest
   double hard_deadline_sec{-std::numeric_limits<double>::infinity()};
   bool current_body_footprints_separated{false};
   bool current_body_footprint_overlap_confirmed{true};
+  /// The ordinary Pass/front-cap latch has accepted longitudinal ownership.
+  /// Once true, the special phase-boundary handoff must end immediately.
+  bool ordinary_pass_ownership_latched{false};
+  /// Live time until the configured hard longitudinal gap. Infinity means
+  /// unavailable or non-closing and preserves the frozen absolute deadline.
+  double live_hard_gap_ttc_sec{std::numeric_limits<double>::infinity()};
+  double execution_margin_sec{};
 };
+
+enum class BodyClearExecutionHandoffReleaseReason
+{
+  None,
+  InactiveExecution,
+  InvalidDeadline,
+  NormalPassOwnership,
+  CurrentOverlap,
+  Expired,
+};
+
+const char * to_string(BodyClearExecutionHandoffReleaseReason reason) noexcept;
 
 struct BodyClearExecutionHandoffResolution
 {
@@ -3889,15 +3908,45 @@ struct BodyClearExecutionHandoffResolution
   bool active{false};
   bool satisfied{false};
   bool expired{false};
+  bool live_deadline_contracted{false};
   double remaining_sec{};
+  double effective_deadline_sec{-std::numeric_limits<double>::infinity()};
+  BodyClearExecutionHandoffReleaseReason release_reason{
+    BodyClearExecutionHandoffReleaseReason::None};
 };
 
 /// Resolve the bounded longitudinal-ownership handoff between a candidate's
 /// predicted body-clear event and the ordinary Pass latches. The observed
-/// separation is reported independently, but the handoff always ends at the
-/// predicted hard-distance time. Confirmed current overlap is fail closed.
+/// separation is reported independently. The handoff ends as soon as the
+/// ordinary Pass latch owns execution, on confirmed current overlap, or at the
+/// earlier of the frozen and live-TTC hard-distance deadlines.
 BodyClearExecutionHandoffResolution resolve_body_clear_execution_handoff(
   const BodyClearExecutionHandoffRequest & request) noexcept;
+
+struct BodyClearHandoffSpeedReferenceRequest
+{
+  bool handoff_active{false};
+  bool current_body_footprints_separated{false};
+  bool footprint_prediction_valid{false};
+  bool predicted_body_footprint_sweep_separated{false};
+  double current_speed_mps{};
+  double target_speed_mps{std::numeric_limits<double>::infinity()};
+  double allowed_closing_speed_mps{};
+  double maximum_speed_mps{std::numeric_limits<double>::infinity()};
+};
+
+struct BodyClearHandoffSpeedReferenceResolution
+{
+  bool valid{false};
+  bool hold_active{false};
+  double target_velocity_reference_mps{std::numeric_limits<double>::infinity()};
+};
+
+/// Keep Mission ownership during a bounded body-clear handoff, but do not add
+/// closing speed while its future footprint sweep is unknown or overlapping.
+/// This shapes the velocity reference only; it does not add a hard MPC bound.
+BodyClearHandoffSpeedReferenceResolution resolve_body_clear_handoff_speed_reference(
+  const BodyClearHandoffSpeedReferenceRequest & request) noexcept;
 
 enum class OvertakeExecutionSideSource
 {
@@ -4174,11 +4223,28 @@ enum class LowSpeedDirectControlPhase
   Rejoin,
 };
 
-/// A feasible stopped-vehicle local path must start direct control even when
-/// ego is already inside its pass corridor. In that case Shift is already
-/// complete and Pass owns the first control cycle.
+/// Direct stopped-vehicle control always starts in Shift. Corridor membership
+/// alone does not prove that ego has settled on the pass line or that the
+/// locked vehicle footprint remains separated through the prediction horizon.
 LowSpeedDirectControlPhase resolve_low_speed_direct_control_entry_phase(
   bool pass_corridor_entered) noexcept;
+
+struct LowSpeedDirectPassAdmissionRequest
+{
+  LowSpeedDirectControlPhase phase{LowSpeedDirectControlPhase::Shift};
+  bool pass_corridor_entered{false};
+  bool pose_settled{false};
+  bool target_seen{false};
+  bool target_position_jump{false};
+  bool current_body_footprints_separated{false};
+  bool footprint_prediction_valid{false};
+  bool predicted_body_footprint_sweep_separated{false};
+};
+
+/// Advance from Shift to Pass only after the physical pose and the locked
+/// target's current/predicted body geometry agree with the validated corridor.
+bool can_enter_low_speed_direct_pass(
+  const LowSpeedDirectPassAdmissionRequest & request) noexcept;
 
 /// A stopped-vehicle direct pass may select another fully validated side only
 /// while it is still shifting toward the pass corridor. Once Pass owns the
@@ -4286,6 +4352,20 @@ double resolve_low_speed_shift_steering(
 /// cannot exceed the configured lateral acceleration at the measured speed.
 double limit_low_speed_shift_steering_by_lateral_acceleration(
   double target_steering_rad, double current_speed_mps, double wheelbase_m,
+  double maximum_lateral_acceleration_mps2, double steering_command_gain);
+
+struct LowSpeedDirectSteeringBounds
+{
+  double lower_rad{0.0};
+  double upper_rad{0.0};
+};
+
+/// Limit the additional direct-shift steering around the previous tracking
+/// command. Unlike an absolute zero-centred clamp, this preserves the steering
+/// already required to follow a curve when low-speed avoidance takes control.
+LowSpeedDirectSteeringBounds resolve_low_speed_direct_steering_bounds(
+  double previous_steering_rad, double maximum_steering_rad,
+  double current_speed_mps, double wheelbase_m,
   double maximum_lateral_acceleration_mps2, double steering_command_gain);
 
 bool is_low_speed_shift_complete(

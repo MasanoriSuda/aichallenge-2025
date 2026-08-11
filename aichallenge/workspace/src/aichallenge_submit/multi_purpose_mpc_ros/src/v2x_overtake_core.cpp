@@ -6587,26 +6587,110 @@ BodyClearExecutionHandoffResolution resolve_body_clear_execution_handoff(
   BodyClearExecutionHandoffResolution resolution;
   if (!request.committed_execution_active) {
     resolution.valid = true;
+    resolution.release_reason =
+      BodyClearExecutionHandoffReleaseReason::InactiveExecution;
     return resolution;
   }
   if (
     !request.body_clear_deadline_checked ||
     !request.body_clear_deadline_feasible ||
     !std::isfinite(request.now_sec) ||
-    !std::isfinite(request.hard_deadline_sec))
+    !std::isfinite(request.hard_deadline_sec) ||
+    !std::isfinite(request.execution_margin_sec) ||
+    request.execution_margin_sec < 0.0)
   {
     resolution.expired =
       request.body_clear_deadline_checked &&
       request.body_clear_deadline_feasible;
+    resolution.release_reason =
+      BodyClearExecutionHandoffReleaseReason::InvalidDeadline;
     return resolution;
   }
 
   resolution.valid = true;
   resolution.satisfied = request.current_body_footprints_separated;
-  resolution.remaining_sec = std::max(0.0, request.hard_deadline_sec - request.now_sec);
-  resolution.expired = request.now_sec > request.hard_deadline_sec;
-  resolution.active =
-    !request.current_body_footprint_overlap_confirmed && !resolution.expired;
+  resolution.effective_deadline_sec = request.hard_deadline_sec;
+  if (
+    std::isfinite(request.live_hard_gap_ttc_sec) &&
+    request.live_hard_gap_ttc_sec >= 0.0)
+  {
+    const double live_deadline_sec = request.now_sec + std::max(
+      0.0, request.live_hard_gap_ttc_sec - request.execution_margin_sec);
+    if (live_deadline_sec < resolution.effective_deadline_sec) {
+      resolution.effective_deadline_sec = live_deadline_sec;
+      resolution.live_deadline_contracted = true;
+    }
+  }
+  resolution.remaining_sec = std::max(
+    0.0, resolution.effective_deadline_sec - request.now_sec);
+  resolution.expired = request.now_sec > resolution.effective_deadline_sec;
+  if (request.current_body_footprint_overlap_confirmed) {
+    resolution.release_reason =
+      BodyClearExecutionHandoffReleaseReason::CurrentOverlap;
+  } else if (request.ordinary_pass_ownership_latched) {
+    resolution.release_reason =
+      BodyClearExecutionHandoffReleaseReason::NormalPassOwnership;
+  } else if (resolution.expired) {
+    resolution.release_reason = BodyClearExecutionHandoffReleaseReason::Expired;
+  } else {
+    resolution.active = true;
+  }
+  return resolution;
+}
+
+const char * to_string(const BodyClearExecutionHandoffReleaseReason reason) noexcept
+{
+  switch (reason) {
+    case BodyClearExecutionHandoffReleaseReason::None:
+      return "none";
+    case BodyClearExecutionHandoffReleaseReason::InactiveExecution:
+      return "inactive_execution";
+    case BodyClearExecutionHandoffReleaseReason::InvalidDeadline:
+      return "invalid_deadline";
+    case BodyClearExecutionHandoffReleaseReason::NormalPassOwnership:
+      return "normal_latch";
+    case BodyClearExecutionHandoffReleaseReason::CurrentOverlap:
+      return "current_overlap";
+    case BodyClearExecutionHandoffReleaseReason::Expired:
+      return "expiry";
+  }
+  return "unknown";
+}
+
+BodyClearHandoffSpeedReferenceResolution resolve_body_clear_handoff_speed_reference(
+  const BodyClearHandoffSpeedReferenceRequest & request) noexcept
+{
+  BodyClearHandoffSpeedReferenceResolution resolution;
+  if (
+    !std::isfinite(request.current_speed_mps) || request.current_speed_mps < 0.0 ||
+    std::isnan(request.maximum_speed_mps) || request.maximum_speed_mps < 0.0 ||
+    !std::isfinite(request.allowed_closing_speed_mps) ||
+    request.allowed_closing_speed_mps < 0.0)
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  const bool prediction_clear =
+    request.footprint_prediction_valid &&
+    request.predicted_body_footprint_sweep_separated;
+  resolution.hold_active =
+    request.handoff_active && request.current_body_footprints_separated &&
+    !prediction_clear;
+  if (!resolution.hold_active) {
+    return resolution;
+  }
+
+  double reference_mps = request.current_speed_mps;
+  if (std::isfinite(request.target_speed_mps) && request.target_speed_mps >= 0.0) {
+    reference_mps = std::min(
+      reference_mps,
+      request.target_speed_mps + request.allowed_closing_speed_mps);
+  }
+  if (std::isfinite(request.maximum_speed_mps)) {
+    reference_mps = std::min(reference_mps, request.maximum_speed_mps);
+  }
+  resolution.target_velocity_reference_mps = std::max(0.0, reference_mps);
   return resolution;
 }
 
@@ -7007,10 +7091,20 @@ double resolve_low_speed_pass_velocity(
 }
 
 LowSpeedDirectControlPhase resolve_low_speed_direct_control_entry_phase(
-  const bool pass_corridor_entered) noexcept
+  const bool /*pass_corridor_entered*/) noexcept
 {
-  return pass_corridor_entered ?
-         LowSpeedDirectControlPhase::Pass : LowSpeedDirectControlPhase::Shift;
+  return LowSpeedDirectControlPhase::Shift;
+}
+
+bool can_enter_low_speed_direct_pass(
+  const LowSpeedDirectPassAdmissionRequest & request) noexcept
+{
+  return request.phase == LowSpeedDirectControlPhase::Shift &&
+         request.pass_corridor_entered && request.pose_settled &&
+         request.target_seen && !request.target_position_jump &&
+         request.current_body_footprints_separated &&
+         request.footprint_prediction_valid &&
+         request.predicted_body_footprint_sweep_separated;
 }
 
 bool can_update_low_speed_direct_pass_side(
@@ -7203,6 +7297,29 @@ double limit_low_speed_shift_steering_by_lateral_acceleration(
   return std::clamp(
     target_steering_rad, -maximum_controller_angle_rad,
     maximum_controller_angle_rad);
+}
+
+LowSpeedDirectSteeringBounds resolve_low_speed_direct_steering_bounds(
+  const double previous_steering_rad, const double maximum_steering_rad,
+  const double current_speed_mps, const double wheelbase_m,
+  const double maximum_lateral_acceleration_mps2,
+  const double steering_command_gain)
+{
+  if (
+    !std::isfinite(previous_steering_rad) ||
+    !std::isfinite(maximum_steering_rad) || maximum_steering_rad < 0.0)
+  {
+    throw std::invalid_argument("invalid low-speed steering bounds request");
+  }
+  const double bounded_previous = std::clamp(
+    previous_steering_rad, -maximum_steering_rad, maximum_steering_rad);
+  const double correction_limit = std::abs(
+    limit_low_speed_shift_steering_by_lateral_acceleration(
+      maximum_steering_rad, current_speed_mps, wheelbase_m,
+      maximum_lateral_acceleration_mps2, steering_command_gain));
+  return {
+    std::max(-maximum_steering_rad, bounded_previous - correction_limit),
+    std::min(maximum_steering_rad, bounded_previous + correction_limit)};
 }
 
 bool is_low_speed_shift_complete(

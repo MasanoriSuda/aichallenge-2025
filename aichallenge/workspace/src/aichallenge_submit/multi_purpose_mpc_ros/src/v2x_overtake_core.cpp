@@ -868,6 +868,153 @@ const char * to_string(const PassCommitStage stage) noexcept
   return "unknown";
 }
 
+bool resolve_cross_side_no_return_latch(
+  const CrossSideNoReturnLatchRequest & request) noexcept
+{
+  if (request.previously_latched) {
+    return true;
+  }
+  if (!request.execution_active) {
+    return false;
+  }
+  return request.observed_stage == PassCommitStage::SideBySideCommitted ||
+         request.observed_stage == PassCommitStage::RearClear ||
+         request.safe_separation_active || request.side_replacement_committed;
+}
+
+CrossSideMissionReplacementResolution resolve_cross_side_mission_replacement(
+  const CrossSideMissionReplacementRequest & request) noexcept
+{
+  CrossSideMissionReplacementResolution resolution;
+  const auto finite_non_negative = [](const double value) {
+      return std::isfinite(value) && value >= 0.0;
+    };
+  const auto valid_budget = [](const double value) {
+      return (std::isfinite(value) && value >= 0.0) ||
+             value == std::numeric_limits<double>::infinity();
+    };
+
+  if (!request.active_execution) {
+    resolution.valid = true;
+    resolution.reason = CrossSideMissionReplacementReason::Inactive;
+    return resolution;
+  }
+  if (!request.side_changed) {
+    resolution.valid = true;
+    resolution.admitted = true;
+    resolution.reason = CrossSideMissionReplacementReason::SameSide;
+    return resolution;
+  }
+  if (request.no_return_latched || !request.before_no_return) {
+    resolution.valid = true;
+    resolution.reason = CrossSideMissionReplacementReason::NoReturn;
+    return resolution;
+  }
+  if (request.safe_separation_active) {
+    resolution.valid = true;
+    resolution.reason = CrossSideMissionReplacementReason::SafeSeparation;
+    return resolution;
+  }
+  if (!request.candidate_feasible) {
+    resolution.valid = true;
+    resolution.reason = CrossSideMissionReplacementReason::CandidateInfeasible;
+    return resolution;
+  }
+  if (!request.rear_clear_prediction_checked) {
+    resolution.valid = true;
+    resolution.reason = CrossSideMissionReplacementReason::RearClearUnchecked;
+    return resolution;
+  }
+  if (!request.rear_clear_prediction_feasible) {
+    resolution.valid = true;
+    resolution.reason = CrossSideMissionReplacementReason::RearClearInfeasible;
+    return resolution;
+  }
+  if (
+    !finite_non_negative(request.predicted_rear_clear_time_sec) ||
+    !finite_non_negative(request.predicted_rear_clear_distance_m) ||
+    !finite_non_negative(request.predicted_rear_clear_speed_mps) ||
+    !finite_non_negative(request.predicted_minimum_ego_speed_mps) ||
+    !finite_non_negative(request.minimum_rear_clear_speed_mps) ||
+    !finite_non_negative(request.minimum_ego_speed_mps) ||
+    !valid_budget(request.remaining_time_budget_sec) ||
+    !valid_budget(request.remaining_distance_budget_m))
+  {
+    resolution.reason = CrossSideMissionReplacementReason::InvalidPrediction;
+    return resolution;
+  }
+
+  resolution.valid = true;
+  if (
+    request.predicted_rear_clear_time_sec >
+    request.remaining_time_budget_sec + 1e-9)
+  {
+    resolution.reason = CrossSideMissionReplacementReason::TimeBudgetExceeded;
+    return resolution;
+  }
+  if (
+    request.predicted_rear_clear_distance_m >
+    request.remaining_distance_budget_m + 1e-9)
+  {
+    resolution.reason = CrossSideMissionReplacementReason::DistanceBudgetExceeded;
+    return resolution;
+  }
+  if (
+    request.predicted_minimum_ego_speed_mps + 1e-9 <
+    request.minimum_ego_speed_mps)
+  {
+    resolution.reason = CrossSideMissionReplacementReason::MinimumSpeedInsufficient;
+    return resolution;
+  }
+  if (
+    request.predicted_rear_clear_speed_mps + 1e-9 <
+    request.minimum_rear_clear_speed_mps)
+  {
+    resolution.reason = CrossSideMissionReplacementReason::RearClearSpeedInsufficient;
+    return resolution;
+  }
+
+  resolution.admitted = true;
+  resolution.restart_shiftout = request.pass_phase;
+  resolution.reason = CrossSideMissionReplacementReason::Admitted;
+  return resolution;
+}
+
+const char * to_string(const CrossSideMissionReplacementReason reason) noexcept
+{
+  switch (reason) {
+    case CrossSideMissionReplacementReason::None:
+      return "none";
+    case CrossSideMissionReplacementReason::Inactive:
+      return "inactive";
+    case CrossSideMissionReplacementReason::SameSide:
+      return "same_side";
+    case CrossSideMissionReplacementReason::NoReturn:
+      return "no_return";
+    case CrossSideMissionReplacementReason::SafeSeparation:
+      return "safe_separation";
+    case CrossSideMissionReplacementReason::CandidateInfeasible:
+      return "candidate_infeasible";
+    case CrossSideMissionReplacementReason::RearClearUnchecked:
+      return "rear_clear_unchecked";
+    case CrossSideMissionReplacementReason::RearClearInfeasible:
+      return "rear_clear_infeasible";
+    case CrossSideMissionReplacementReason::InvalidPrediction:
+      return "invalid_prediction";
+    case CrossSideMissionReplacementReason::TimeBudgetExceeded:
+      return "time_budget_exceeded";
+    case CrossSideMissionReplacementReason::DistanceBudgetExceeded:
+      return "distance_budget_exceeded";
+    case CrossSideMissionReplacementReason::MinimumSpeedInsufficient:
+      return "minimum_speed_insufficient";
+    case CrossSideMissionReplacementReason::RearClearSpeedInsufficient:
+      return "rear_clear_speed_insufficient";
+    case CrossSideMissionReplacementReason::Admitted:
+      return "admitted";
+  }
+  return "unknown";
+}
+
 bool early_pass_side_intrusion_risk(
   const EarlyPassSideIntrusionRiskRequest & request) noexcept
 {

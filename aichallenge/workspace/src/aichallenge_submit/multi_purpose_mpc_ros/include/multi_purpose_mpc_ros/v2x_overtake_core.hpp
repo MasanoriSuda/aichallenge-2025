@@ -595,6 +595,78 @@ PassCommitStageResolution resolve_pass_commit_stage(
 
 const char * to_string(PassCommitStage stage) noexcept;
 
+struct CrossSideNoReturnLatchRequest
+{
+  bool execution_active{false};
+  bool previously_latched{false};
+  PassCommitStage observed_stage{PassCommitStage::Selectable};
+  bool safe_separation_active{false};
+  bool side_replacement_committed{false};
+};
+
+/// Keep the cross-track no-return decision monotonic for one frozen Mission.
+/// A target moving longitudinally away after side-by-side commit must not
+/// reopen the opposite side. OvertakeLineState reset owns latch release.
+bool resolve_cross_side_no_return_latch(
+  const CrossSideNoReturnLatchRequest & request) noexcept;
+
+enum class CrossSideMissionReplacementReason
+{
+  None,
+  Inactive,
+  SameSide,
+  NoReturn,
+  SafeSeparation,
+  CandidateInfeasible,
+  RearClearUnchecked,
+  RearClearInfeasible,
+  InvalidPrediction,
+  TimeBudgetExceeded,
+  DistanceBudgetExceeded,
+  MinimumSpeedInsufficient,
+  RearClearSpeedInsufficient,
+  Admitted,
+};
+
+struct CrossSideMissionReplacementRequest
+{
+  bool active_execution{false};
+  bool side_changed{false};
+  bool before_no_return{false};
+  bool no_return_latched{false};
+  bool safe_separation_active{false};
+  bool candidate_feasible{false};
+  bool rear_clear_prediction_checked{false};
+  bool rear_clear_prediction_feasible{false};
+  double predicted_rear_clear_time_sec{std::numeric_limits<double>::infinity()};
+  double predicted_rear_clear_distance_m{std::numeric_limits<double>::infinity()};
+  double predicted_rear_clear_speed_mps{std::numeric_limits<double>::quiet_NaN()};
+  double predicted_minimum_ego_speed_mps{std::numeric_limits<double>::quiet_NaN()};
+  double minimum_rear_clear_speed_mps{0.0};
+  double minimum_ego_speed_mps{0.0};
+  double remaining_time_budget_sec{std::numeric_limits<double>::infinity()};
+  double remaining_distance_budget_m{std::numeric_limits<double>::infinity()};
+  bool pass_phase{false};
+};
+
+struct CrossSideMissionReplacementResolution
+{
+  bool valid{false};
+  bool admitted{false};
+  bool restart_shiftout{false};
+  CrossSideMissionReplacementReason reason{CrossSideMissionReplacementReason::None};
+};
+
+/// Admit an opposite-side replacement only while it is still an early
+/// maneuver and its complete rear-clear rollout fits the remaining runtime
+/// budget without sacrificing the target-matching minimum speed. A Pass-phase
+/// replacement must restart ShiftOut so planning and runtime speed policies
+/// remain identical.
+CrossSideMissionReplacementResolution resolve_cross_side_mission_replacement(
+  const CrossSideMissionReplacementRequest & request) noexcept;
+
+const char * to_string(CrossSideMissionReplacementReason reason) noexcept;
+
 struct EarlyPassSideIntrusionRiskRequest
 {
   bool enabled{false};

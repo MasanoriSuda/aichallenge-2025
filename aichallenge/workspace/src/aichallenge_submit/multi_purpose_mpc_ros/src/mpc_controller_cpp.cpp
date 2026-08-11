@@ -1624,6 +1624,7 @@ struct V2XBehaviorConfig
   bool overtake_try_both_sides{false};
   bool overtake_minimum_lateral_motion_enabled{false};
   double overtake_minimum_motion_preferred_clearance_buffer{0.0};
+  double overtake_minimum_motion_direct_pass_max_lateral_shift{0.0};
   double overtake_minimum_motion_inner_preference_max_extra_shift{0.0};
   double overtake_minimum_motion_inner_lookahead_distance{0.0};
   double overtake_minimum_motion_inner_min_open_distance{0.0};
@@ -2009,6 +2010,7 @@ struct V2XBehaviorOutput
   bool overtake_gap_hold_active{false};
   bool overtake_fallback_target{false};
   bool overtake_base_line_pass_through{false};
+  bool overtake_tiny_shift_direct_pass{false};
   bool overtake_cooldown_active{false};
   bool overtake_return_corridor_blocked{false};
   std::string overtake_return_corridor_blocker_id;
@@ -6603,6 +6605,7 @@ struct MPC
       bool minimum_motion_goal_available{false};
       bool base_line_clear{false};
       bool direct_base_line_pass_ready{false};
+      bool direct_tiny_shift_pass_ready{false};
       double required_lateral_shift{std::numeric_limits<double>::infinity()};
       std::optional<overtake_core::OvertakeMissionCandidate> selected_mission;
       bool dynamic_mission_corridor_observed{false};
@@ -7368,7 +7371,7 @@ struct MPC
             const bool current_position_clear =
               model->spatial_state.e_y >= goal_lower - kEps &&
               model->spatial_state.e_y <= goal_upper + kEps;
-            const bool direct_pass =
+            const bool legacy_base_line_direct_pass =
               std::abs(preflight.goal_ey) <= kEps && current_position_clear;
             const overtake_core::OvertakeMissionPathRequest rollout_mission_path{
               0.0,
@@ -7425,6 +7428,19 @@ struct MPC
                 ++body_clear_deadline_invalid_count;
                 continue;
               }
+              const auto direct_pass_admission =
+                overtake_core::resolve_minimum_motion_direct_pass(
+                overtake_core::MinimumMotionDirectPassRequest{
+                  legacy_base_line_direct_pass,
+                  cfg.v2x_behavior.overtake_minimum_lateral_motion_enabled,
+                  current_position_clear,
+                  rollout.checked && rollout.body_clear_time_sec <= kEps &&
+                  rollout.body_clear_distance_m <= kEps,
+                  candidate_entry_lateral_shift,
+                  cfg.v2x_behavior.
+                  overtake_minimum_motion_direct_pass_max_lateral_shift});
+              const bool direct_pass =
+                direct_pass_admission.valid && direct_pass_admission.direct_pass;
               if (
                 cfg.v2x_behavior.overtake_line.max_lateral_accel > kEps &&
                 rollout.max_required_lateral_accel_mps2 >
@@ -7923,7 +7939,11 @@ struct MPC
           assessment.minimum_motion_goal_available = true;
           assessment.base_line_clear = std::abs(selected_mission.goal_lateral_m) <= kEps;
           assessment.direct_base_line_pass_ready =
-            assessment.base_line_clear && selected_mission.current_position_clear;
+            selected_mission.direct_pass && assessment.base_line_clear &&
+            selected_mission.current_position_clear;
+          assessment.direct_tiny_shift_pass_ready =
+            selected_mission.direct_pass && !assessment.base_line_clear &&
+            selected_mission.current_position_clear;
           std::ostringstream selected_reason;
           selected_reason << assessment.reason
                           << ", mission candidate selected"
@@ -8966,6 +8986,12 @@ struct MPC
       side_selected_for_execution &&
       selected_assessment.minimum_motion_goal_available &&
       selected_assessment.direct_base_line_pass_ready;
+    output.overtake_tiny_shift_direct_pass =
+      cfg.v2x_behavior.overtake_minimum_lateral_motion_enabled &&
+      !start_grid_breakout_attempt && locked_pass_side == 0 &&
+      side_selected_for_execution &&
+      selected_assessment.minimum_motion_goal_available &&
+      selected_assessment.direct_tiny_shift_pass_ready;
     output.overtake_side_clearance = selected_assessment.side_clearance;
     if (selected_assessment.gap_available) {
       output.overtake_corridor_center_ey = selected_assessment.corridor_center_ey;
@@ -9236,7 +9262,9 @@ struct MPC
           output.reason =
             std::string(
             output.overtake_base_line_pass_through ?
-            "base racing line clear / " : "minimum lateral ShiftOut / ") +
+            "base racing line clear / " :
+            output.overtake_tiny_shift_direct_pass ?
+            "tiny-shift corridor clear / " : "minimum lateral ShiftOut / ") +
             output.reason;
         }
         if (selected_mission_ready_for_longitudinal_ownership) {
@@ -13819,6 +13847,11 @@ private:
           behavior_output.overtake_base_line_pass_through &&
           behavior_output.overtake_corridor_center_ey.has_value() &&
           std::abs(behavior_output.overtake_corridor_center_ey.value()) <= kEps;
+        const bool direct_tiny_shift_pass =
+          !resuming_paused_mission &&
+          behavior_output.overtake_tiny_shift_direct_pass &&
+          behavior_output.overtake_selected_mission.has_value() &&
+          behavior_output.overtake_selected_mission->direct_pass;
         const double resume_lateral_clearance = std::max(
           cfg.v2x_behavior.overtake_pass_front_overlap_lateral_clearance,
           cfg.v2x_gap.vehicle_radius + cfg.v2x_gap.prediction_margin);
@@ -13914,6 +13947,7 @@ private:
         const auto entry_stage = overtake_core::resolve_overtake_entry_stage(
           overtake_core::OvertakeEntryStageRequest{
             direct_base_line_pass,
+            direct_tiny_shift_pass,
             direct_same_side_resume,
             safety_pause_resume_pass,
             safety_pause_resume,
@@ -13953,6 +13987,7 @@ private:
             "path_frozen=%d, path_total=%.2f, "
             "target=%s, wp_id=%d",
             direct_base_line_pass ? "base-line" :
+            direct_tiny_shift_pass ? "tiny-shift-direct-pass" :
             (direct_same_side_resume || safety_pause_resume_pass) ?
             "same-side-pass-resume" :
             safety_pause_resume ? "safety-pause-shiftout-resume" : "minimum-shift",
@@ -13996,7 +14031,7 @@ private:
         if (
           overtake_core::should_defer_direct_pass_prediction_handoff(
             overtake_core::DirectPassPredictionHandoffRequest{
-              direct_base_line_pass,
+              direct_base_line_pass || direct_tiny_shift_pass,
               overtake_line_state_.mission_path_frozen,
               behavior_output.locked_target_seen,
               !overtake_line_state_.target_vehicle_id.empty()}))
@@ -21567,6 +21602,10 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_minimum_motion_preferred_clearance_buffer"] ?
     mpc["v2x_overtake_minimum_motion_preferred_clearance_buffer"].as<double>() : 0.0);
+  cfg.mpc.v2x_behavior.overtake_minimum_motion_direct_pass_max_lateral_shift = std::max(
+    0.0,
+    mpc["v2x_overtake_minimum_motion_direct_pass_max_lateral_shift"] ?
+    mpc["v2x_overtake_minimum_motion_direct_pass_max_lateral_shift"].as<double>() : 0.0);
   cfg.mpc.v2x_behavior.overtake_minimum_motion_inner_preference_max_extra_shift = std::max(
     0.0,
     mpc["v2x_overtake_minimum_motion_inner_preference_max_extra_shift"] ?
@@ -22452,10 +22491,12 @@ public:
         mpc_cfg_.v2x_behavior.overtake_unseparated_front_reserve_distance);
       RCLCPP_INFO(
         get_logger(),
-        "V2X overtake minimum lateral motion: %s (base-line direct Pass, nearest-safe goal, "
-        "inner_extra<=%.2f m), body-clear deadline=%s/margin=%.2f s/min_slack=%.2f s",
+        "V2X overtake minimum lateral motion: %s (base-line direct Pass, "
+        "tiny-shift direct Pass<=%.2f m, nearest-safe goal, inner_extra<=%.2f m), "
+        "body-clear deadline=%s/margin=%.2f s/min_slack=%.2f s",
         mpc_cfg_.v2x_behavior.overtake_minimum_lateral_motion_enabled ?
         "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_minimum_motion_direct_pass_max_lateral_shift,
         mpc_cfg_.v2x_behavior.overtake_minimum_motion_inner_preference_max_extra_shift,
         mpc_cfg_.v2x_behavior.overtake_body_clear_deadline_enabled ?
         "enabled" : "disabled",

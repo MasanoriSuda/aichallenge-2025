@@ -60,6 +60,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::FeasiblePassSideLateralGoalReque
 using multi_purpose_mpc_ros::v2x_overtake_core::PassLateralGoalPolicyRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassCorridorCenterRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::MinimumLateralMotionGoalRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::MinimumMotionDirectPassRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::MinimumLateralMotionSideCandidate;
 using multi_purpose_mpc_ros::v2x_overtake_core::MinimumLateralMotionSideSelectionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CompletedPassReturnRequest;
@@ -279,6 +280,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_feasible_pass_side_later
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_lateral_goal_policy;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_corridor_center;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_minimum_lateral_motion_goal;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_minimum_motion_direct_pass;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   should_return_completed_pass_before_margin_recovery;
 using multi_purpose_mpc_ros::v2x_overtake_core::blocks_overtake_return_corridor;
@@ -6627,6 +6629,69 @@ TEST(V2XOvertakeCoreMinimumMotion, RequiresCurrentPositionInsideCorridorForDirec
   EXPECT_DOUBLE_EQ(resolution.required_shift_m, 0.40);
 }
 
+TEST(V2XOvertakeCoreMinimumMotion, AdmitsOnlyPhysicallyClearTinyShiftDirectPass)
+{
+  MinimumMotionDirectPassRequest request;
+  request.tiny_shift_enabled = true;
+  request.current_position_clear = true;
+  request.body_clear_at_entry = true;
+  request.lateral_shift_m = 0.08;
+  request.maximum_tiny_shift_m = 0.20;
+
+  auto resolution = resolve_minimum_motion_direct_pass(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.direct_pass);
+  EXPECT_FALSE(resolution.base_line_direct_pass);
+  EXPECT_TRUE(resolution.tiny_shift_direct_pass);
+
+  request.lateral_shift_m = 0.20;
+  EXPECT_TRUE(resolve_minimum_motion_direct_pass(request).tiny_shift_direct_pass);
+
+  request.lateral_shift_m = 0.21;
+  EXPECT_FALSE(resolve_minimum_motion_direct_pass(request).direct_pass);
+
+  request.lateral_shift_m = 0.08;
+  request.body_clear_at_entry = false;
+  EXPECT_FALSE(resolve_minimum_motion_direct_pass(request).direct_pass);
+
+  request.body_clear_at_entry = true;
+  request.current_position_clear = false;
+  EXPECT_FALSE(resolve_minimum_motion_direct_pass(request).direct_pass);
+
+  request.current_position_clear = true;
+  request.tiny_shift_enabled = false;
+  EXPECT_FALSE(resolve_minimum_motion_direct_pass(request).direct_pass);
+}
+
+TEST(V2XOvertakeCoreMinimumMotion, PreservesLegacyBaseLineDirectPass)
+{
+  MinimumMotionDirectPassRequest request;
+  request.base_line_direct_pass = true;
+  request.lateral_shift_m = 0.40;
+  request.maximum_tiny_shift_m = 0.20;
+
+  const auto resolution = resolve_minimum_motion_direct_pass(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.direct_pass);
+  EXPECT_TRUE(resolution.base_line_direct_pass);
+  EXPECT_FALSE(resolution.tiny_shift_direct_pass);
+}
+
+TEST(V2XOvertakeCoreMinimumMotion, RejectsInvalidTinyShiftInput)
+{
+  MinimumMotionDirectPassRequest request;
+  request.tiny_shift_enabled = true;
+  request.current_position_clear = true;
+  request.body_clear_at_entry = true;
+  request.lateral_shift_m = std::numeric_limits<double>::quiet_NaN();
+  request.maximum_tiny_shift_m = 0.20;
+  EXPECT_FALSE(resolve_minimum_motion_direct_pass(request).valid);
+
+  request.lateral_shift_m = 0.08;
+  request.maximum_tiny_shift_m = -0.1;
+  EXPECT_FALSE(resolve_minimum_motion_direct_pass(request).valid);
+}
+
 TEST(V2XOvertakeCoreMinimumMotion, PrioritizesClearBaseLineBeforeShorterShift)
 {
   const auto selection = select_minimum_lateral_motion_side(
@@ -11589,6 +11654,14 @@ TEST(V2XOvertakeCoreCommitStage, ResolvesEntryStageWithExistingPrecedence)
   resolution = resolve_overtake_entry_stage(request);
   EXPECT_EQ(resolution.stage, OvertakeEntryStage::Pass);
   EXPECT_EQ(resolution.reason, OvertakeEntryStageReason::SameSideResumePass);
+
+  request.direct_tiny_shift_pass = true;
+  resolution = resolve_overtake_entry_stage(request);
+  EXPECT_EQ(resolution.stage, OvertakeEntryStage::Pass);
+  EXPECT_EQ(resolution.reason, OvertakeEntryStageReason::TinyShiftDirectPass);
+  EXPECT_STREQ(
+    multi_purpose_mpc_ros::v2x_overtake_core::to_string(resolution.reason),
+    "validated tiny-shift corridor already clear");
 
   request.direct_base_line_pass = true;
   resolution = resolve_overtake_entry_stage(request);

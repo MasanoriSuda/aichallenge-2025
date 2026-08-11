@@ -725,6 +725,7 @@ enum class OvertakeEntryStageReason
   PausedMissionShiftOut,
   SafetyPauseShiftOut,
   BaseLineDirectPass,
+  TinyShiftDirectPass,
   SameSideResumePass,
   SafetyPauseResumePass,
 };
@@ -732,6 +733,7 @@ enum class OvertakeEntryStageReason
 struct OvertakeEntryStageRequest
 {
   bool direct_base_line_pass{false};
+  bool direct_tiny_shift_pass{false};
   bool direct_same_side_resume{false};
   bool safety_pause_resume_pass{false};
   bool safety_pause_resume{false};
@@ -2551,6 +2553,31 @@ struct MinimumLateralMotionGoalResolution
 /// to half the available width so it cannot consume all wall-side freedom.
 MinimumLateralMotionGoalResolution resolve_minimum_lateral_motion_goal(
   const MinimumLateralMotionGoalRequest & request) noexcept;
+
+struct MinimumMotionDirectPassRequest
+{
+  bool base_line_direct_pass{false};
+  bool tiny_shift_enabled{false};
+  bool current_position_clear{false};
+  bool body_clear_at_entry{false};
+  double lateral_shift_m{};
+  double maximum_tiny_shift_m{};
+};
+
+struct MinimumMotionDirectPassResolution
+{
+  bool valid{false};
+  bool direct_pass{false};
+  bool base_line_direct_pass{false};
+  bool tiny_shift_direct_pass{false};
+};
+
+/// Classify a fully preflighted new Mission as DirectPass when either the
+/// legacy base line is already usable or the ego is physically clear and only
+/// a bounded same-side lateral correction remains. This does not perform or
+/// replace wall, body-clear, rear-clear, or Return validation.
+MinimumMotionDirectPassResolution resolve_minimum_motion_direct_pass(
+  const MinimumMotionDirectPassRequest & request) noexcept;
 
 struct CompletedPassReturnRequest
 {

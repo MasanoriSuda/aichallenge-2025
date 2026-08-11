@@ -1086,6 +1086,11 @@ OvertakeEntryStageResolution resolve_overtake_entry_stage(
       OvertakeEntryStage::Pass,
       OvertakeEntryStageReason::BaseLineDirectPass};
   }
+  if (request.direct_tiny_shift_pass) {
+    return {
+      OvertakeEntryStage::Pass,
+      OvertakeEntryStageReason::TinyShiftDirectPass};
+  }
   if (request.direct_same_side_resume) {
     return {
       OvertakeEntryStage::Pass,
@@ -1122,6 +1127,8 @@ const char * to_string(const OvertakeEntryStageReason reason) noexcept
       return "SafetyBrake-paused pass resumed through ShiftOut";
     case OvertakeEntryStageReason::BaseLineDirectPass:
       return "validated base racing line already clear";
+    case OvertakeEntryStageReason::TinyShiftDirectPass:
+      return "validated tiny-shift corridor already clear";
     case OvertakeEntryStageReason::SameSideResumePass:
       return "committed pass resumed on validated same side";
     case OvertakeEntryStageReason::SafetyPauseResumePass:
@@ -4533,6 +4540,28 @@ MinimumLateralMotionGoalResolution resolve_minimum_lateral_motion_goal(
     preferred_upper_bound_m,
     std::max(preferred_lower_bound_m, request.base_line_lateral_m));
   resolution.required_shift_m = std::abs(resolution.goal_m - request.current_lateral_m);
+  return resolution;
+}
+
+MinimumMotionDirectPassResolution resolve_minimum_motion_direct_pass(
+  const MinimumMotionDirectPassRequest & request) noexcept
+{
+  MinimumMotionDirectPassResolution resolution;
+  if (
+    !std::isfinite(request.lateral_shift_m) || request.lateral_shift_m < 0.0 ||
+    !std::isfinite(request.maximum_tiny_shift_m) || request.maximum_tiny_shift_m < 0.0)
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  resolution.base_line_direct_pass = request.base_line_direct_pass;
+  resolution.tiny_shift_direct_pass =
+    !request.base_line_direct_pass && request.tiny_shift_enabled &&
+    request.current_position_clear && request.body_clear_at_entry &&
+    request.lateral_shift_m <= request.maximum_tiny_shift_m + 1e-9;
+  resolution.direct_pass =
+    resolution.base_line_direct_pass || resolution.tiny_shift_direct_pass;
   return resolution;
 }
 

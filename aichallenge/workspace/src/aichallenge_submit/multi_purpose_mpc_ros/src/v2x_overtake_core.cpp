@@ -1172,6 +1172,8 @@ OvertakeKinematicRolloutResolution resolve_overtake_kinematic_rollout(
     if (
       !std::isfinite(sample.path_distance_m) || sample.path_distance_m < 0.0 ||
       !std::isfinite(sample.speed_cap_mps) || sample.speed_cap_mps < 0.0 ||
+      !std::isfinite(sample.course_progress_ratio) ||
+      sample.course_progress_ratio <= 0.0 ||
       sample.path_distance_m + 1e-9 < previous_cap_distance)
     {
       return resolution;
@@ -1202,6 +1204,27 @@ OvertakeKinematicRolloutResolution resolve_overtake_kinematic_rollout(
       }
       return std::min(cap, request.speed_caps.back().speed_cap_mps);
     };
+  const auto course_progress_ratio_at = [&](const double path_distance_m) {
+      if (request.speed_caps.empty()) {
+        return 1.0;
+      }
+      if (path_distance_m <= request.speed_caps.front().path_distance_m + 1e-9) {
+        return request.speed_caps.front().course_progress_ratio;
+      }
+      for (std::size_t i = 1U; i < request.speed_caps.size(); ++i) {
+        const auto & previous = request.speed_caps[i - 1U];
+        const auto & current = request.speed_caps[i];
+        if (path_distance_m <= current.path_distance_m + 1e-9) {
+          const double span = current.path_distance_m - previous.path_distance_m;
+          const double ratio = span > 1e-9 ?
+            std::clamp((path_distance_m - previous.path_distance_m) / span, 0.0, 1.0) :
+            1.0;
+          return previous.course_progress_ratio +
+                 ratio * (current.course_progress_ratio - previous.course_progress_ratio);
+        }
+      }
+      return request.speed_caps.back().course_progress_ratio;
+    };
   const auto target_lateral_at = [&](const double time_sec) {
       return predict_lateral_with_velocity_decay(
         request.target_lateral_m, request.target_lateral_velocity_mps,
@@ -1215,12 +1238,13 @@ OvertakeKinematicRolloutResolution resolve_overtake_kinematic_rollout(
   double ego_speed_mps = request.current_ego_speed_mps;
   resolution.minimum_ego_speed_mps = ego_speed_mps;
   double ego_course_distance_m = 0.0;
+  double ego_physical_distance_m = 0.0;
   double mission_distance_m = 0.0;
   double target_course_distance_m = request.target_longitudinal_m;
   double target_speed_mps = request.target_speed_mps;
   double previous_time_sec = 0.0;
   double previous_mission_distance_m = 0.0;
-  double previous_ego_course_distance_m = 0.0;
+  double previous_ego_physical_distance_m = 0.0;
   double previous_ego_speed_mps = ego_speed_mps;
   double previous_lateral_margin_m =
     std::abs(target_lateral_at(0.0) - mission_origin.lateral_target_m) -
@@ -1286,7 +1310,10 @@ OvertakeKinematicRolloutResolution resolve_overtake_kinematic_rollout(
     const double held_distance_m = ego_speed_mps * hold_duration_sec;
     const double controlled_distance_m =
       0.5 * (ego_speed_mps + next_ego_speed_mps) * controlled_duration_sec;
-    ego_course_distance_m += held_distance_m + controlled_distance_m;
+    const double physical_ego_distance_m = held_distance_m + controlled_distance_m;
+    const double course_progress_ratio = course_progress_ratio_at(ego_course_distance_m);
+    ego_course_distance_m += physical_ego_distance_m * course_progress_ratio;
+    ego_physical_distance_m += physical_ego_distance_m;
     mission_distance_m += controlled_distance_m;
     const double target_acceleration_duration_sec = std::clamp(
       request.target_longitudinal_acceleration_horizon_sec - step_start_sec,
@@ -1376,8 +1403,8 @@ OvertakeKinematicRolloutResolution resolve_overtake_kinematic_rollout(
         std::clamp(previous_rear_clear_margin_m / denominator, 0.0, 1.0) : 1.0;
       resolution.rear_clear_time_sec = previous_time_sec +
         interpolation * (step_end_sec - previous_time_sec);
-      resolution.rear_clear_ego_distance_m = previous_ego_course_distance_m +
-        interpolation * (ego_course_distance_m - previous_ego_course_distance_m);
+      resolution.rear_clear_ego_distance_m = previous_ego_physical_distance_m +
+        interpolation * (ego_physical_distance_m - previous_ego_physical_distance_m);
       resolution.rear_clear_mission_distance_m = previous_mission_distance_m +
         interpolation * (mission_distance_m - previous_mission_distance_m);
       resolution.rear_clear_ego_speed_mps = previous_ego_speed_mps +
@@ -1386,7 +1413,7 @@ OvertakeKinematicRolloutResolution resolve_overtake_kinematic_rollout(
 
     previous_time_sec = step_end_sec;
     previous_mission_distance_m = mission_distance_m;
-    previous_ego_course_distance_m = ego_course_distance_m;
+    previous_ego_physical_distance_m = ego_physical_distance_m;
     previous_ego_speed_mps = ego_speed_mps;
     previous_lateral_margin_m = lateral_margin_m;
     previous_hard_margin_m = hard_margin_m;
@@ -1403,7 +1430,7 @@ OvertakeKinematicRolloutResolution resolve_overtake_kinematic_rollout(
     }
   }
 
-  resolution.ego_distance_at_horizon_m = ego_course_distance_m;
+  resolution.ego_distance_at_horizon_m = ego_physical_distance_m;
   resolution.ego_speed_at_horizon_mps = ego_speed_mps;
   resolution.rear_clear_feasible =
     request.rear_clear_prediction_enabled &&
@@ -5941,7 +5968,11 @@ DynamicMissionWaitResolution resolve_dynamic_mission_wait(
     return resolution;
   }
   if (request.current_mission_invalidated) {
-    resolution.action = DynamicMissionWaitAction::Recovery;
+    // Invalidation is the expected entry state for a dynamic Mission wait: it
+    // prevents the failed generation from being resumed. Keep waiting for a
+    // fully preflighted replacement until the controller-owned time/distance
+    // lease expires; hard faults above still fail closed immediately.
+    resolution.action = DynamicMissionWaitAction::Hold;
     resolution.reason = DynamicMissionWaitReason::CurrentMissionInvalidated;
     return resolution;
   }

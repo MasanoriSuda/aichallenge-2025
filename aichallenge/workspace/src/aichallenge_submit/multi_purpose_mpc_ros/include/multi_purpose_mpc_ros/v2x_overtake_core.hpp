@@ -745,6 +745,9 @@ struct OvertakeKinematicSpeedCapSample
 {
   double path_distance_m{};
   double speed_cap_mps{std::numeric_limits<double>::infinity()};
+  /// Convert physical ego travel into progress on the reference course.
+  /// For a Frenet offset this is approximately 1 / (1 - kappa * e_y).
+  double course_progress_ratio{1.0};
 };
 
 struct OvertakeKinematicRolloutRequest

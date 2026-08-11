@@ -11846,6 +11846,7 @@ private:
       const double path_distance = horizon_path_distance_to_index(
         ref_wp_id, static_cast<std::size_t>(i));
       double speed_cap = std::max(0.0, cfg.v_max);
+      double course_progress_ratio = 1.0;
       if (std::isfinite(waypoint.v_ref) && waypoint.v_ref >= 0.0) {
         speed_cap = std::min(speed_cap, waypoint.v_ref);
       }
@@ -11870,15 +11871,19 @@ private:
         if (!offset_curve.feasible) {
           speed_cap = 0.0;
         } else if (overtake_curve_ay > kEps) {
+          course_progress_ratio = 1.0 / offset_curve.frenet_denominator;
           speed_cap = std::min(
             speed_cap,
             std::sqrt(
               overtake_curve_ay /
               (std::abs(offset_curve.offset_curvature_radpm) + 1e-12)));
+        } else {
+          course_progress_ratio = 1.0 / offset_curve.frenet_denominator;
         }
       }
       speed_caps.push_back(
-        overtake_core::OvertakeKinematicSpeedCapSample{path_distance, speed_cap});
+        overtake_core::OvertakeKinematicSpeedCapSample{
+          path_distance, speed_cap, course_progress_ratio});
     }
     return speed_caps;
   }

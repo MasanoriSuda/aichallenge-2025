@@ -3297,6 +3297,75 @@ TEST(V2XOvertakeCoreSpeed, KinematicRolloutPredictsRearClearOnSharedTimeAxis)
   EXPECT_FALSE(std::isfinite(short_budget.rear_clear_time_sec));
 }
 
+TEST(V2XOvertakeCoreSpeed, KinematicRolloutUsesOffsetCourseProgressForRearClear)
+{
+  OvertakeKinematicRolloutRequest request;
+  request.enabled = true;
+  request.mission_path = OvertakeMissionPathRequest{
+    0.0, 0.0, 0.0, 0.0, 1.0, 20.0, 6.0};
+  request.target_longitudinal_m = 4.0;
+  request.current_ego_speed_mps = 5.0;
+  request.target_speed_mps = 3.0;
+  request.candidate_closing_speed_mps = 2.0;
+  request.maximum_ego_speed_mps = 11.0;
+  request.maximum_acceleration_mps2 = 1.0;
+  request.maximum_deceleration_mps2 = 3.0;
+  request.target_lateral_m = -2.0;
+  request.target_lateral_prediction_horizon_sec = 1.0;
+  request.lateral_clearance_m = 1.0;
+  request.hard_longitudinal_distance_m = 2.0;
+  request.maximum_time_sec = 12.0;
+  request.rear_clear_prediction_enabled = true;
+  request.rear_clear_distance_m = 4.0;
+
+  request.speed_caps = {
+    OvertakeKinematicSpeedCapSample{0.0, 11.0, 1.0},
+    OvertakeKinematicSpeedCapSample{100.0, 11.0, 1.0}};
+  const auto centerline = resolve_overtake_kinematic_rollout(request);
+  ASSERT_TRUE(centerline.valid);
+  ASSERT_TRUE(centerline.rear_clear_feasible);
+
+  request.speed_caps = {
+    OvertakeKinematicSpeedCapSample{0.0, 11.0, 0.75},
+    OvertakeKinematicSpeedCapSample{100.0, 11.0, 0.75}};
+  const auto outer = resolve_overtake_kinematic_rollout(request);
+  ASSERT_TRUE(outer.valid);
+  ASSERT_TRUE(outer.rear_clear_feasible);
+  EXPECT_GT(outer.rear_clear_time_sec, centerline.rear_clear_time_sec);
+  EXPECT_GT(outer.rear_clear_ego_distance_m, centerline.rear_clear_ego_distance_m);
+
+  request.speed_caps = {
+    OvertakeKinematicSpeedCapSample{0.0, 11.0, 1.25},
+    OvertakeKinematicSpeedCapSample{100.0, 11.0, 1.25}};
+  const auto inner = resolve_overtake_kinematic_rollout(request);
+  ASSERT_TRUE(inner.valid);
+  ASSERT_TRUE(inner.rear_clear_feasible);
+  EXPECT_LT(inner.rear_clear_time_sec, centerline.rear_clear_time_sec);
+  EXPECT_LT(inner.rear_clear_ego_distance_m, centerline.rear_clear_ego_distance_m);
+}
+
+TEST(V2XOvertakeCoreSpeed, KinematicRolloutRejectsInvalidCourseProgressRatio)
+{
+  OvertakeKinematicRolloutRequest request;
+  request.enabled = true;
+  request.mission_path = OvertakeMissionPathRequest{
+    0.0, 0.0, 0.0, 0.0, 1.0, 8.0, 6.0};
+  request.target_longitudinal_m = 4.0;
+  request.current_ego_speed_mps = 5.0;
+  request.target_speed_mps = 3.0;
+  request.candidate_closing_speed_mps = 2.0;
+  request.maximum_ego_speed_mps = 11.0;
+  request.maximum_acceleration_mps2 = 1.0;
+  request.maximum_deceleration_mps2 = 3.0;
+  request.target_lateral_m = -2.0;
+  request.lateral_clearance_m = 1.0;
+  request.hard_longitudinal_distance_m = 2.0;
+  request.speed_caps = {
+    OvertakeKinematicSpeedCapSample{0.0, 11.0, 0.0}};
+
+  EXPECT_FALSE(resolve_overtake_kinematic_rollout(request).valid);
+}
+
 TEST(V2XOvertakeCoreSpeed, KinematicRolloutUsesBoundedTargetAcceleration)
 {
   OvertakeKinematicRolloutRequest request;
@@ -8694,7 +8763,7 @@ TEST(V2XOvertakeCoreDynamicMissionWait, KeepsHardFaultsAndOverlapFailClosed)
   EXPECT_EQ(result.reason, DynamicMissionWaitReason::RearClear);
 }
 
-TEST(V2XOvertakeCoreDynamicMissionWait, InvalidatedGenerationCannotResume)
+TEST(V2XOvertakeCoreDynamicMissionWait, InvalidatedGenerationWaitsForReplacement)
 {
   DynamicMissionWaitRequest request;
   request.enabled = true;
@@ -8710,7 +8779,7 @@ TEST(V2XOvertakeCoreDynamicMissionWait, InvalidatedGenerationCannotResume)
   request.assessment_completed = true;
   request.current_plan_feasible = true;
   result = resolve_dynamic_mission_wait(request);
-  EXPECT_EQ(result.action, DynamicMissionWaitAction::Recovery);
+  EXPECT_EQ(result.action, DynamicMissionWaitAction::Hold);
   EXPECT_EQ(result.reason, DynamicMissionWaitReason::CurrentMissionInvalidated);
 
   request.current_replacement_ready = true;

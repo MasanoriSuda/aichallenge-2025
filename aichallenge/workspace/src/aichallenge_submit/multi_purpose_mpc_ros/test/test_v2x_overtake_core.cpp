@@ -379,6 +379,10 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_execution_side;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_resume_paused_pass_directly;
 using multi_purpose_mpc_ros::v2x_overtake_core::clamp_paused_resume_goal_outward;
 using multi_purpose_mpc_ros::v2x_overtake_core::PausedPassDirectResumeRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::PausedExecutionOrigin;
+using multi_purpose_mpc_ros::v2x_overtake_core::PausedExecutionResumeAction;
+using multi_purpose_mpc_ros::v2x_overtake_core::PausedExecutionResumeRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_paused_execution_resume;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_line_transition;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   should_log_overtake_line_transition_action;
@@ -9507,6 +9511,80 @@ TEST(V2XOvertakeCoreMissionOwnership, DirectPassResumeMirrorsRightSidePrediction
 
   request.target_predicted_relative_lateral_m = 1.20;
   EXPECT_FALSE(can_resume_paused_pass_directly(request));
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, SafetyBrakePauseResumesOriginalExecution)
+{
+  PausedExecutionResumeRequest request;
+  request.safety_brake_pause = true;
+  request.origin = PausedExecutionOrigin::ShiftOut;
+  request.validated_frozen_path = true;
+  request.mission_side_valid = true;
+  request.body_clear_deadline_checked = true;
+  request.body_clear_deadline_feasible = true;
+  request.target_seen = true;
+
+  EXPECT_EQ(
+    resolve_paused_execution_resume(request),
+    PausedExecutionResumeAction::ResumeShiftOut);
+
+  request.origin = PausedExecutionOrigin::Pass;
+  EXPECT_EQ(
+    resolve_paused_execution_resume(request),
+    PausedExecutionResumeAction::ResumeShiftOut);
+
+  request.direct_pass_lateral_clear = true;
+  EXPECT_EQ(
+    resolve_paused_execution_resume(request),
+    PausedExecutionResumeAction::ResumePass);
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, SafetyBrakePauseResumeRejectsHardFaults)
+{
+  PausedExecutionResumeRequest request;
+  request.safety_brake_pause = true;
+  request.origin = PausedExecutionOrigin::Pass;
+  request.validated_frozen_path = true;
+  request.mission_side_valid = true;
+  request.body_clear_deadline_checked = true;
+  request.body_clear_deadline_feasible = true;
+  request.target_seen = true;
+
+  const auto expect_hold = [&]() {
+      EXPECT_EQ(
+        resolve_paused_execution_resume(request),
+        PausedExecutionResumeAction::Hold);
+    };
+
+  request.dynamic_mission_wait_active = true;
+  expect_hold();
+  request.dynamic_mission_wait_active = false;
+  request.target_position_jump = true;
+  expect_hold();
+  request.target_position_jump = false;
+  request.target_course_progress_discontinuity = true;
+  expect_hold();
+  request.target_course_progress_discontinuity = false;
+  request.target_pass_side_intrusion = true;
+  expect_hold();
+  request.target_pass_side_intrusion = false;
+  request.forbidden_waypoint = true;
+  expect_hold();
+  request.forbidden_waypoint = false;
+  request.emergency_front_risk = true;
+  expect_hold();
+  request.emergency_front_risk = false;
+  request.solver_recovery_requested = true;
+  expect_hold();
+  request.solver_recovery_requested = false;
+  request.mission_invalidated = true;
+  expect_hold();
+  request.mission_invalidated = false;
+  request.physical_path_hard_fault = true;
+  expect_hold();
+  request.physical_path_hard_fault = false;
+  request.origin = PausedExecutionOrigin::Recovery;
+  expect_hold();
 }
 
 TEST(V2XOvertakeCoreMissionOwnership, WallActionsKeepExistingPriority)

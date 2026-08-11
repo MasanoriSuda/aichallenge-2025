@@ -6499,6 +6499,42 @@ bool can_resume_paused_pass_directly(
          goal_lateral_clear && predicted_goal_lateral_clear;
 }
 
+PausedExecutionResumeAction resolve_paused_execution_resume(
+  const PausedExecutionResumeRequest & request) noexcept
+{
+  const bool resumable_origin =
+    request.origin == PausedExecutionOrigin::ShiftOut ||
+    request.origin == PausedExecutionOrigin::Pass;
+  if (
+    !request.safety_brake_pause || !resumable_origin ||
+    request.dynamic_mission_wait_active || !request.validated_frozen_path ||
+    !request.mission_side_valid || !request.body_clear_deadline_checked ||
+    !request.body_clear_deadline_feasible || !request.target_seen ||
+    request.target_position_jump || request.target_course_progress_discontinuity ||
+    request.target_pass_side_intrusion || request.forbidden_waypoint ||
+    request.emergency_front_risk || request.solver_recovery_requested ||
+    request.mission_invalidated || request.physical_path_hard_fault)
+  {
+    return PausedExecutionResumeAction::Hold;
+  }
+  return request.direct_pass_lateral_clear ?
+         PausedExecutionResumeAction::ResumePass :
+         PausedExecutionResumeAction::ResumeShiftOut;
+}
+
+const char * to_string(const PausedExecutionResumeAction action) noexcept
+{
+  switch (action) {
+    case PausedExecutionResumeAction::Hold:
+      return "Hold";
+    case PausedExecutionResumeAction::ResumeShiftOut:
+      return "ResumeShiftOut";
+    case PausedExecutionResumeAction::ResumePass:
+      return "ResumePass";
+  }
+  return "Unknown";
+}
+
 const char * to_string(const OvertakeLineTransitionAction action) noexcept
 {
   switch (action) {

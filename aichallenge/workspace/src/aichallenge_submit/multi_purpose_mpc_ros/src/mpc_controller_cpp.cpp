@@ -1745,6 +1745,15 @@ enum class OvertakeLinePhase
   Recovery,
 };
 
+enum class FollowPrepareCause
+{
+  Unspecified,
+  SafetyBrake,
+  DynamicMissionWait,
+  TacticalRevalidation,
+  RecoveryRetention,
+};
+
 enum class V2XTrackingResetPolicy
 {
   PreserveHistory,
@@ -1768,6 +1777,41 @@ const char * to_string(const OvertakeLinePhase phase)
       return "Recovery";
   }
   return "Unknown";
+}
+
+const char * to_string(const FollowPrepareCause cause)
+{
+  switch (cause) {
+    case FollowPrepareCause::Unspecified:
+      return "Unspecified";
+    case FollowPrepareCause::SafetyBrake:
+      return "SafetyBrake";
+    case FollowPrepareCause::DynamicMissionWait:
+      return "DynamicMissionWait";
+    case FollowPrepareCause::TacticalRevalidation:
+      return "TacticalRevalidation";
+    case FollowPrepareCause::RecoveryRetention:
+      return "RecoveryRetention";
+  }
+  return "Unknown";
+}
+
+overtake_core::PausedExecutionOrigin paused_execution_origin(
+  const OvertakeLinePhase phase)
+{
+  switch (phase) {
+    case OvertakeLinePhase::ShiftOut:
+      return overtake_core::PausedExecutionOrigin::ShiftOut;
+    case OvertakeLinePhase::Pass:
+      return overtake_core::PausedExecutionOrigin::Pass;
+    case OvertakeLinePhase::Recovery:
+      return overtake_core::PausedExecutionOrigin::Recovery;
+    case OvertakeLinePhase::Idle:
+    case OvertakeLinePhase::FollowPrepare:
+    case OvertakeLinePhase::Return:
+      return overtake_core::PausedExecutionOrigin::None;
+  }
+  return overtake_core::PausedExecutionOrigin::None;
 }
 
 int behavior_restriction_rank(const V2XBehaviorState state)
@@ -2097,6 +2141,7 @@ struct OvertakeLineState
   // the interrupted execution came from ShiftOut, Pass or Recovery so the
   // subsequent resume policy can make an explicit phase-aware decision.
   OvertakeLinePhase follow_prepare_origin_phase{OvertakeLinePhase::Idle};
+  FollowPrepareCause follow_prepare_cause{FollowPrepareCause::Unspecified};
   bool pass_front_overlap_exclusion_latched{false};
   bool pass_front_cap_release_active{false};
   double pass_current_overlap_since_sec{std::numeric_limits<double>::quiet_NaN()};
@@ -8994,6 +9039,27 @@ struct MPC
       return commit_v2x_behavior_state(output, now_sec);
     }
 
+    // A SafetyBrake is a longitudinal interruption of an already validated
+    // pass, not a new overtake entry. Once the emergency clears, restore
+    // Overtake ownership from the frozen Mission instead of reapplying the
+    // entry-only front-distance guard and falling back to Follow.
+    const auto paused_safety_resume_action =
+      overtake_core::resolve_paused_execution_resume(
+      paused_execution_resume_request(
+        output, effective_front_risk_emergency, false, false));
+    if (
+      paused_safety_resume_action !=
+      overtake_core::PausedExecutionResumeAction::Hold)
+    {
+      output.state = V2XBehaviorState::Overtake;
+      output.overtake_pass_side_sign = overtake_line_state_.pass_side_sign;
+      output.reason =
+        std::string{"SafetyBrake-paused Mission resumes execution / "} +
+        overtake_core::to_string(paused_safety_resume_action) + " / " +
+        overtake_block_reason;
+      return commit_v2x_behavior_state(output, now_sec);
+    }
+
     // A deadline-feasible immutable ShiftOut owns Behavior after admission.
     // Entry-only gap/candidate re-evaluation cannot replace it with Follow;
     // hard target, map, emergency and solver conditions still release it. The
@@ -10800,7 +10866,8 @@ private:
 
   void transition_overtake_line_phase(
     const OvertakeLinePhase next_phase, const double now_sec, const double current_ey,
-    const int pass_side_sign, const std::string & reason)
+    const int pass_side_sign, const std::string & reason,
+    const FollowPrepareCause follow_prepare_cause = FollowPrepareCause::Unspecified)
   {
     if (overtake_line_state_.phase == next_phase) {
       if (pass_side_sign != 0 && overtake_line_state_.pass_side_sign == 0) {
@@ -10814,10 +10881,12 @@ private:
     if (cfg.v2x_behavior.overtake_line.debug_log_enabled) {
       RCLCPP_INFO(
         rclcpp::get_logger("mpc_controller"),
-        "OvertakeLine: %s -> %s, side=%d, ey=%.2f, wp_id=%d, reason=%s",
+        "OvertakeLine: %s -> %s, side=%d, ey=%.2f, wp_id=%d, reason=%s, pause_cause=%s",
         to_string(overtake_line_state_.phase), to_string(next_phase),
         pass_side_sign != 0 ? pass_side_sign : overtake_line_state_.pass_side_sign, current_ey,
-        model->wp_id, reason.c_str());
+        model->wp_id, reason.c_str(),
+        next_phase == OvertakeLinePhase::FollowPrepare ?
+        to_string(follow_prepare_cause) : "n/a");
     }
 
     if (
@@ -10836,8 +10905,10 @@ private:
 
     if (next_phase == OvertakeLinePhase::FollowPrepare) {
       overtake_line_state_.follow_prepare_origin_phase = previous_phase;
+      overtake_line_state_.follow_prepare_cause = follow_prepare_cause;
     } else if (previous_phase == OvertakeLinePhase::FollowPrepare) {
       overtake_line_state_.follow_prepare_origin_phase = OvertakeLinePhase::Idle;
+      overtake_line_state_.follow_prepare_cause = FollowPrepareCause::Unspecified;
     }
     overtake_line_state_.phase = next_phase;
     if (next_phase != OvertakeLinePhase::FollowPrepare) {
@@ -10986,6 +11057,31 @@ private:
       overtake_line_state_.mission_generation > 0U &&
       overtake_line_state_.invalidated_mission_generation ==
       overtake_line_state_.mission_generation;
+  }
+
+  overtake_core::PausedExecutionResumeRequest paused_execution_resume_request(
+    const V2XBehaviorOutput & behavior_output, const bool emergency_front_risk,
+    const bool physical_path_hard_fault, const bool direct_pass_lateral_clear) const
+  {
+    return overtake_core::PausedExecutionResumeRequest{
+      overtake_line_state_.follow_prepare_cause == FollowPrepareCause::SafetyBrake,
+      paused_execution_origin(overtake_line_state_.follow_prepare_origin_phase),
+      overtake_line_state_.dynamic_mission_wait_active,
+      overtake_line_state_.mission_path_frozen &&
+      overtake_line_state_.fixed_pass_corridor_goal_ey.has_value(),
+      overtake_line_state_.pass_side_sign != 0,
+      overtake_line_state_.mission_body_clear_deadline_checked,
+      overtake_line_state_.mission_body_clear_deadline_feasible,
+      behavior_output.locked_target_seen,
+      behavior_output.locked_target_position_jump,
+      behavior_output.locked_target_course_progress_rejected,
+      behavior_output.locked_target_pass_side_intrusion,
+      behavior_output.overtake_forbidden_wp,
+      emergency_front_risk,
+      overtake_solver_recovery_active_ || overtake_solver_reentry_blocked_,
+      current_overtake_mission_invalidated(),
+      physical_path_hard_fault,
+      direct_pass_lateral_clear};
   }
 
   void clear_overtake_mission_invalidation()
@@ -12562,7 +12658,8 @@ private:
         transition_overtake_line_phase(
           OvertakeLinePhase::FollowPrepare, now_sec, current_ey,
           overtake_line_state_.pass_side_sign,
-          "committed pass paused by safety brake");
+          "committed pass paused by safety brake",
+          FollowPrepareCause::SafetyBrake);
       } else if (overtake_line_state_.phase == OvertakeLinePhase::Recovery) {
         if (!overtake_line_state_.recovery_safety_brake_hold_active) {
           RCLCPP_INFO(
@@ -13288,7 +13385,8 @@ private:
         transition_overtake_line_phase(
           OvertakeLinePhase::FollowPrepare, now_sec, current_ey,
           overtake_line_state_.pass_side_sign,
-          std::string{"dynamic Mission wait: "} + reason);
+          std::string{"dynamic Mission wait: "} + reason,
+          FollowPrepareCause::DynamicMissionWait);
         if (line_cfg.debug_log_enabled) {
           RCLCPP_WARN(
             rclcpp::get_logger("mpc_controller"),
@@ -13644,26 +13742,60 @@ private:
         const double resume_lateral_clearance = std::max(
           cfg.v2x_behavior.overtake_pass_front_overlap_lateral_clearance,
           cfg.v2x_gap.vehicle_radius + cfg.v2x_gap.prediction_margin);
+        const bool resume_goal_available =
+          (overtake_line_state_.mission_path_frozen &&
+          overtake_line_state_.fixed_pass_corridor_goal_ey.has_value()) ||
+          behavior_output.overtake_corridor_center_ey.has_value();
+        const auto direct_resume_request = [&](const bool execution_corridor_valid) {
+            return v2x_overtake_core::PausedPassDirectResumeRequest{
+              resuming_paused_mission,
+              mission_side_sign,
+              behavior_output.overtake_pass_side_sign,
+              execution_corridor_valid,
+              behavior_output.locked_target_seen,
+              behavior_output.locked_target_position_jump,
+              behavior_output.locked_target_lateral_prediction_valid,
+              behavior_output.locked_target_relative_lateral,
+              behavior_output.locked_target_predicted_relative_lateral,
+              resume_lateral_clearance,
+              current_ey,
+              same_side_resume_goal};
+          };
         const bool direct_same_side_resume =
-          behavior_output.overtake_corridor_center_ey.has_value() &&
+          resume_goal_available &&
           v2x_overtake_core::can_resume_paused_pass_directly(
-          v2x_overtake_core::PausedPassDirectResumeRequest{
-            resuming_paused_mission,
-            mission_side_sign,
-            behavior_output.overtake_pass_side_sign,
+          direct_resume_request(
             behavior_output.overtake_gap_available &&
-            behavior_output.overtake_zone_allows,
-            behavior_output.locked_target_seen,
-            behavior_output.locked_target_position_jump,
-            behavior_output.locked_target_lateral_prediction_valid,
-            behavior_output.locked_target_relative_lateral,
-            behavior_output.locked_target_predicted_relative_lateral,
-            resume_lateral_clearance,
-            current_ey,
-            same_side_resume_goal});
+            behavior_output.overtake_zone_allows));
+        const bool safety_pause_physical_hard_fault =
+          actual_wall_physical_contact || actual_wall_margin_blocked ||
+          actual_wall_sample_unavailable ||
+          behavior_output.overtake_execution_corridor_blocked ||
+          !locked_target_progress_continuous || locked_target_progress_rejected;
+        const auto safety_pause_resume_eligibility =
+          overtake_core::resolve_paused_execution_resume(
+          paused_execution_resume_request(
+            behavior_output,
+            behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake,
+            safety_pause_physical_hard_fault, false));
+        const bool safety_pause_direct_pass =
+          resume_goal_available &&
+          safety_pause_resume_eligibility !=
+          overtake_core::PausedExecutionResumeAction::Hold &&
+          overtake_core::can_resume_paused_pass_directly(
+          direct_resume_request(true));
+        const auto safety_pause_resume_action =
+          overtake_core::resolve_paused_execution_resume(
+          paused_execution_resume_request(
+            behavior_output,
+            behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake,
+            safety_pause_physical_hard_fault, safety_pause_direct_pass));
+        const bool safety_pause_resume =
+          safety_pause_resume_action !=
+          overtake_core::PausedExecutionResumeAction::Hold;
         if (
           resuming_paused_mission && mission_side_sign != 0 &&
-          !direct_same_side_resume)
+          !direct_same_side_resume && !safety_pause_resume)
         {
           overtake_locked_side_sign_ = mission_side_sign;
           const double debug_period = std::max(
@@ -13676,11 +13808,12 @@ private:
             RCLCPP_INFO(
               rclcpp::get_logger("mpc_controller"),
               "OvertakeLine paused resume guard held: origin=%s, side=%d, current_ey=%.2f, "
-              "candidate_goal=%.2f, safe_goal=%.2f, rel_lat=%.2f, "
+              "cause=%s, candidate_goal=%.2f, safe_goal=%.2f, rel_lat=%.2f, "
               "pred_rel_lat=%.2f, prediction_valid=%d, ego_v=%.2f, target_v=%.2f, "
               "corridor_valid=%d, wp_id=%d",
               to_string(overtake_line_state_.follow_prepare_origin_phase),
-              mission_side_sign, current_ey, candidate_resume_goal,
+              mission_side_sign, current_ey,
+              to_string(overtake_line_state_.follow_prepare_cause), candidate_resume_goal,
               same_side_resume_goal, behavior_output.locked_target_relative_lateral,
               behavior_output.locked_target_predicted_relative_lateral,
               behavior_output.locked_target_lateral_prediction_valid ? 1 : 0,
@@ -13695,7 +13828,11 @@ private:
           // line FSM to bypass this guard through ShiftOut completion.
           return output;
         }
-        const bool direct_pass = direct_base_line_pass || direct_same_side_resume;
+        const bool safety_pause_resume_pass =
+          safety_pause_resume_action ==
+          overtake_core::PausedExecutionResumeAction::ResumePass;
+        const bool direct_pass =
+          direct_base_line_pass || direct_same_side_resume || safety_pause_resume_pass;
         transition_overtake_line_phase(
           direct_pass ? OvertakeLinePhase::Pass : OvertakeLinePhase::ShiftOut,
           now_sec, current_ey, pass_side_sign,
@@ -13703,13 +13840,17 @@ private:
           "validated base racing line already clear" :
           direct_same_side_resume ?
           "committed pass resumed on validated same side" :
+          safety_pause_resume_pass ?
+          "SafetyBrake-paused pass resumed after lateral clearance" :
+          safety_pause_resume ?
+          "SafetyBrake-paused pass resumed through ShiftOut" :
           resuming_paused_mission ?
           "committed pass revalidated after pause" : "overtake selected");
         overtake_locked_side_sign_ = pass_side_sign;
         // The gap planner bounds already include target-vehicle inflation and wall margin.
         // Freeze the preflighted minimum-motion goal so a moving target cannot drag the line.
         overtake_line_state_.fixed_pass_corridor_goal_ey =
-          direct_same_side_resume ?
+          resuming_paused_mission ?
           std::optional<double>{same_side_resume_goal} :
           behavior_output.overtake_corridor_center_ey;
         if (
@@ -13734,7 +13875,9 @@ private:
             "path_frozen=%d, path_total=%.2f, "
             "target=%s, wp_id=%d",
             direct_base_line_pass ? "base-line" :
-            direct_same_side_resume ? "same-side-pass-resume" : "minimum-shift",
+            (direct_same_side_resume || safety_pause_resume_pass) ?
+            "same-side-pass-resume" :
+            safety_pause_resume ? "safety-pause-shiftout-resume" : "minimum-shift",
             pass_side_sign, current_ey,
             overtake_line_state_.fixed_pass_corridor_goal_ey.value(),
             std::abs(
@@ -15903,7 +16046,8 @@ private:
           }
           transition_overtake_line_phase(
             OvertakeLinePhase::FollowPrepare, now_sec, current_ey,
-            overtake_line_state_.pass_side_sign, wait_reason);
+            overtake_line_state_.pass_side_sign, wait_reason,
+            FollowPrepareCause::TacticalRevalidation);
           return output;
         } else if (safe_separation.action == overtake_core::SafeSeparationAction::Abort) {
           RCLCPP_WARN(
@@ -16609,7 +16753,8 @@ private:
           transition_overtake_line_phase(
             OvertakeLinePhase::FollowPrepare, now_sec, current_ey,
             overtake_line_state_.pass_side_sign,
-            "recovery complete; committed pass mission retained");
+            "recovery complete; committed pass mission retained",
+            FollowPrepareCause::RecoveryRetention);
           return output;
         }
         const std::string reason = std::string("recovery ") +

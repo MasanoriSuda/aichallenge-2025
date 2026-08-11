@@ -3782,6 +3782,49 @@ struct PausedPassDirectResumeRequest
 bool can_resume_paused_pass_directly(
   const PausedPassDirectResumeRequest & request) noexcept;
 
+enum class PausedExecutionOrigin
+{
+  None,
+  ShiftOut,
+  Pass,
+  Recovery,
+};
+
+enum class PausedExecutionResumeAction
+{
+  Hold,
+  ResumeShiftOut,
+  ResumePass,
+};
+
+struct PausedExecutionResumeRequest
+{
+  bool safety_brake_pause{false};
+  PausedExecutionOrigin origin{PausedExecutionOrigin::None};
+  bool dynamic_mission_wait_active{false};
+  bool validated_frozen_path{false};
+  bool mission_side_valid{false};
+  bool body_clear_deadline_checked{false};
+  bool body_clear_deadline_feasible{false};
+  bool target_seen{false};
+  bool target_position_jump{false};
+  bool target_course_progress_discontinuity{false};
+  bool target_pass_side_intrusion{false};
+  bool forbidden_waypoint{false};
+  bool emergency_front_risk{false};
+  bool solver_recovery_requested{false};
+  bool mission_invalidated{false};
+  bool physical_path_hard_fault{false};
+  bool direct_pass_lateral_clear{false};
+};
+
+/// Resume only a transient SafetyBrake pause of an already validated frozen
+/// execution. A pause before lateral separation returns to ShiftOut; once the
+/// direct-pass clearance contract is satisfied it may resume Pass immediately.
+PausedExecutionResumeAction resolve_paused_execution_resume(
+  const PausedExecutionResumeRequest & request) noexcept;
+const char * to_string(PausedExecutionResumeAction action) noexcept;
+
 enum class OvertakeLineTransitionAction
 {
   None,

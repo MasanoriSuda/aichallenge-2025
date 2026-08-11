@@ -5192,6 +5192,33 @@ TEST(V2XOvertakeCoreHorizon, ContinuesOnlyBoundedProgressingSideContact)
   request.ego_speed_mps = 4.0;
   request.contact_elapsed_sec = 0.81;
   EXPECT_FALSE(resolve_recoverable_side_contact(request).active);
+
+  request.target_longitudinal_m = -0.6;
+  request.forward_completion_latched = true;
+  request.commit_stage = PassCommitStage::SideBySideCommitted;
+  request.rearward_completion_maximum_duration_sec = 2.5;
+  request.contact_elapsed_sec = 1.5;
+  resolution = resolve_recoverable_side_contact(request);
+  EXPECT_TRUE(resolution.active);
+  EXPECT_TRUE(resolution.rearward_completion_active);
+
+  request.target_longitudinal_m = 0.1;
+  resolution = resolve_recoverable_side_contact(request);
+  EXPECT_FALSE(resolution.active);
+  EXPECT_FALSE(resolution.rearward_completion_active);
+
+  request.target_longitudinal_m = -0.6;
+  request.commit_stage = PassCommitStage::ShiftCommitted;
+  EXPECT_FALSE(resolve_recoverable_side_contact(request).active);
+  request.commit_stage = PassCommitStage::SideBySideCommitted;
+  request.forward_completion_latched = false;
+  EXPECT_FALSE(resolve_recoverable_side_contact(request).active);
+  request.forward_completion_latched = true;
+  request.fresh_forward_progress = false;
+  EXPECT_FALSE(resolve_recoverable_side_contact(request).active);
+  request.fresh_forward_progress = true;
+  request.contact_elapsed_sec = 2.51;
+  EXPECT_FALSE(resolve_recoverable_side_contact(request).active);
 }
 
 TEST(V2XOvertakeCoreHorizon, BoundsContactSeparationToWallSafeInterval)

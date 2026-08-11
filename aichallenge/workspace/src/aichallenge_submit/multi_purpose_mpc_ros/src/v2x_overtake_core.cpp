@@ -3245,6 +3245,7 @@ RecoverableSideContactResolution resolve_recoverable_side_contact(
     !finite_non_negative(request.ego_speed_mps) ||
     !finite_non_negative(request.contact_elapsed_sec) ||
     !finite_non_negative(request.maximum_duration_sec) ||
+    !finite_non_negative(request.rearward_completion_maximum_duration_sec) ||
     !finite_non_negative(request.initial_progress_grace_sec) ||
     !finite_non_negative(request.maximum_absolute_longitudinal_m) ||
     !finite_non_negative(request.minimum_absolute_lateral_m) ||
@@ -3274,13 +3275,22 @@ RecoverableSideContactResolution resolve_recoverable_side_contact(
     request.maximum_longitudinal_closing_speed_mps + 1e-9;
   resolution.initial_progress_grace_active =
     request.contact_elapsed_sec <= request.initial_progress_grace_sec + 1e-9;
+  resolution.rearward_completion_active =
+    side_contact_geometry &&
+    request.ego_speed_mps >= request.minimum_ego_speed_mps - 1e-9 &&
+    request.forward_completion_latched &&
+    request.commit_stage == PassCommitStage::SideBySideCommitted &&
+    request.target_longitudinal_m <= 0.0 && request.fresh_forward_progress &&
+    request.contact_elapsed_sec <=
+    request.rearward_completion_maximum_duration_sec + 1e-9;
   resolution.near_contact_used =
     request.near_contact_confirmed && !request.current_body_overlap_confirmed;
   resolution.active =
-    side_contact_geometry &&
+    (side_contact_geometry &&
     request.ego_speed_mps >= request.minimum_ego_speed_mps - 1e-9 &&
     request.contact_elapsed_sec <= request.maximum_duration_sec + 1e-9 &&
-    (resolution.initial_progress_grace_active || request.fresh_forward_progress);
+    (resolution.initial_progress_grace_active || request.fresh_forward_progress)) ||
+    resolution.rearward_completion_active;
   if (resolution.active) {
     resolution.lateral_separation_bias_m =
       static_cast<double>(request.pass_side_sign) * request.lateral_separation_bias_m;

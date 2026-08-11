@@ -1933,7 +1933,10 @@ struct RecoverableSideContactRequest
   double ego_speed_mps{};
   double contact_elapsed_sec{};
   bool fresh_forward_progress{false};
+  bool forward_completion_latched{false};
+  PassCommitStage commit_stage{PassCommitStage::Selectable};
   double maximum_duration_sec{};
+  double rearward_completion_maximum_duration_sec{};
   double initial_progress_grace_sec{};
   double maximum_absolute_longitudinal_m{};
   double minimum_absolute_lateral_m{};
@@ -1947,13 +1950,16 @@ struct RecoverableSideContactResolution
 {
   bool active{false};
   bool initial_progress_grace_active{false};
+  bool rearward_completion_active{false};
   bool near_contact_used{false};
   double lateral_separation_bias_m{};
 };
 
 /// Treat only a bounded, progressing side contact as a competition-simulation
-/// Pass continuation. Frontal geometry, target discontinuity and stalled
-/// contact remain fail-closed in the caller.
+/// Pass continuation. Once forward completion is latched and the target moves
+/// behind, a separately bounded tail may bridge the remaining body overlap to
+/// the existing rear-clear policy. Frontal geometry, target discontinuity and
+/// stalled contact remain fail-closed in the caller.
 RecoverableSideContactResolution resolve_recoverable_side_contact(
   const RecoverableSideContactRequest & request) noexcept;
 

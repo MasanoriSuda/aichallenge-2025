@@ -597,6 +597,7 @@ mpc:
   # the committed target/side. Frontal geometry, wall contact and stalled contact remain hard.
   v2x_overtake_contact_continuation_enabled: true
   v2x_overtake_contact_continuation_max_sec: 0.8
+  v2x_overtake_contact_continuation_rearward_completion_max_sec: 2.5 # [s] only after side-by-side commit, forward latch and fresh rearward progress
   v2x_overtake_contact_continuation_initial_progress_grace_sec: 0.25
   v2x_overtake_contact_continuation_max_longitudinal: 2.5 # [m] side-by-side center window
   v2x_overtake_contact_continuation_min_lateral: 0.75 # [m] smaller separation is treated as frontal contact

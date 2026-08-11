@@ -1477,6 +1477,7 @@ struct OvertakeLineConfig
   double safe_separation_tactical_revalidation_max_distance{3.0};
   bool contact_continuation_enabled{false};
   double contact_continuation_max_sec{0.8};
+  double contact_continuation_rearward_completion_max_sec{2.5};
   double contact_continuation_initial_progress_grace_sec{0.25};
   double contact_continuation_max_longitudinal{2.5};
   double contact_continuation_min_lateral{0.75};
@@ -2273,6 +2274,7 @@ struct OvertakeLineState
   double pass_contact_last_progress_sec{
     std::numeric_limits<double>::quiet_NaN()};
   bool pass_contact_continuation_was_active{false};
+  bool pass_contact_rearward_completion_was_active{false};
   bool shiftout_fresh_horizon_wait_active{false};
   int shiftout_fresh_horizon_replan_count{0};
   double pass_horizon_fallback_start_sec{std::numeric_limits<double>::quiet_NaN()};
@@ -5982,7 +5984,10 @@ struct MPC
         std::max(0.0, current_speed_mps_),
         contact_elapsed_sec,
         contact_fresh_forward_progress,
+        overtake_line_state_.pass_forward_completion_latched,
+        output.overtake_commit_stage,
         cfg.v2x_behavior.overtake_line.contact_continuation_max_sec,
+        cfg.v2x_behavior.overtake_line.contact_continuation_rearward_completion_max_sec,
         cfg.v2x_behavior.overtake_line.contact_continuation_initial_progress_grace_sec,
         cfg.v2x_behavior.overtake_line.contact_continuation_max_longitudinal,
         cfg.v2x_behavior.overtake_line.contact_continuation_min_lateral,
@@ -6004,7 +6009,8 @@ struct MPC
         rclcpp::get_logger("mpc_controller"),
         "OvertakeLine ContactContinuation %s: target=%s, side=%d, "
         "target_s=%.2f, relative_lateral=%.2f, vlat=%.2f, "
-        "evidence=%s, near=%.2f/%.2f s, elapsed=%.2f, progress=%.2f, ego_v=%.2f",
+        "evidence=%s, near=%.2f/%.2f s, elapsed=%.2f, progress=%.2f, "
+        "rearward_tail=%d, ego_v=%.2f",
         output.recoverable_side_contact_active ? "entered" : "ended",
         overtake_line_state_.target_vehicle_id.c_str(),
         overtake_line_state_.pass_side_sign,
@@ -6015,9 +6021,29 @@ struct MPC
         output.locked_target_current_body_overlap_confirmed ? "overlap" : "none",
         output.locked_target_near_contact_elapsed_sec,
         cfg.v2x_behavior.overtake_line.contact_continuation_near_confirm_sec,
-        contact_elapsed_sec, contact_progress_m, current_speed_mps_);
+        contact_elapsed_sec, contact_progress_m,
+        recoverable_side_contact.rearward_completion_active ? 1 : 0,
+        current_speed_mps_);
       overtake_line_state_.pass_contact_continuation_was_active =
         output.recoverable_side_contact_active;
+    }
+    if (
+      recoverable_side_contact.rearward_completion_active !=
+      overtake_line_state_.pass_contact_rearward_completion_was_active)
+    {
+      RCLCPP_WARN(
+        rclcpp::get_logger("mpc_controller"),
+        "OvertakeLine ContactContinuation rearward completion tail %s: "
+        "target=%s, side=%d, target_s=%.2f, elapsed=%.2f/%.2f s, "
+        "progress=%.2f m, ego_v=%.2f",
+        recoverable_side_contact.rearward_completion_active ? "entered" : "ended",
+        overtake_line_state_.target_vehicle_id.c_str(),
+        overtake_line_state_.pass_side_sign, output.locked_target_longitudinal,
+        contact_elapsed_sec,
+        cfg.v2x_behavior.overtake_line.contact_continuation_rearward_completion_max_sec,
+        contact_progress_m, current_speed_mps_);
+      overtake_line_state_.pass_contact_rearward_completion_was_active =
+        recoverable_side_contact.rearward_completion_active;
     }
     const auto committed_body_geometry =
       v2x_overtake_core::resolve_committed_pass_body_geometry(
@@ -10981,6 +11007,7 @@ private:
       overtake_line_state_.pass_contact_last_progress_sec =
         std::numeric_limits<double>::quiet_NaN();
       overtake_line_state_.pass_contact_continuation_was_active = false;
+      overtake_line_state_.pass_contact_rearward_completion_was_active = false;
       overtake_line_state_.pass_horizon_fallback_start_sec =
         std::numeric_limits<double>::quiet_NaN();
       overtake_line_state_.pass_horizon_fallback_start_distance = 0.0;
@@ -11381,6 +11408,7 @@ private:
     overtake_line_state_.pass_contact_last_progress_sec =
       std::numeric_limits<double>::quiet_NaN();
     overtake_line_state_.pass_contact_continuation_was_active = false;
+    overtake_line_state_.pass_contact_rearward_completion_was_active = false;
     overtake_line_state_.shiftout_fresh_horizon_wait_active = false;
     overtake_line_state_.shiftout_fresh_horizon_replan_count = 0;
     overtake_line_state_.pass_horizon_fallback_start_sec =
@@ -20815,6 +20843,12 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_contact_continuation_max_sec"] ?
     mpc["v2x_overtake_contact_continuation_max_sec"].as<double>() : 0.8);
+  cfg.mpc.v2x_behavior.overtake_line.contact_continuation_rearward_completion_max_sec =
+    std::max(
+    cfg.mpc.v2x_behavior.overtake_line.contact_continuation_max_sec,
+    mpc["v2x_overtake_contact_continuation_rearward_completion_max_sec"] ?
+    mpc["v2x_overtake_contact_continuation_rearward_completion_max_sec"].as<double>() :
+    2.5);
   cfg.mpc.v2x_behavior.overtake_line.contact_continuation_initial_progress_grace_sec = std::max(
     0.0,
     mpc["v2x_overtake_contact_continuation_initial_progress_grace_sec"] ?
@@ -22446,7 +22480,7 @@ public:
         get_logger(),
         "V2X Pass completion: full_speed_forward=%s, rearward_time_grace=%s, "
         "mission_budget=%s "
-        "margin=%.2f m/%.2f s, contact_continuation=%s max=%.2f s "
+        "margin=%.2f m/%.2f s, contact_continuation=%s max=%.2f s/rearward=%.2f s "
         "longitudinal<=%.2f m lateral>=%.2f m closing<=%.2f m/s vlat<=%.2f m/s "
         "ego>=%.2f m/s fresh<=%.2f s near=%.2f m/%.2f s bias=%.2f m",
         mpc_cfg_.v2x_behavior.overtake_line
@@ -22460,6 +22494,8 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line.contact_continuation_enabled ?
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.contact_continuation_max_sec,
+        mpc_cfg_.v2x_behavior.overtake_line
+        .contact_continuation_rearward_completion_max_sec,
         mpc_cfg_.v2x_behavior.overtake_line.contact_continuation_max_longitudinal,
         mpc_cfg_.v2x_behavior.overtake_line.contact_continuation_min_lateral,
         mpc_cfg_.v2x_behavior.overtake_line.contact_continuation_max_closing_speed,

@@ -1,0 +1,858 @@
+common:
+  save_config: false
+
+sim_logger:
+  animation_enabled: false
+
+# Automotive AI Challenge 2026 official AWSIM item interface.
+# Trigger once at the first healthy forward-motion control cycle after Ready.
+awsim_boost:
+  # Default for ROS domains not listed in domain_enabled.
+  enabled: true
+  # Per-vehicle override keyed by ROS_DOMAIN_ID. Change a vehicle to false to disable Boost.
+  domain_enabled:
+    1: true
+    2: true
+    3: true
+  mode: start_once
+  trigger: first_forward_motion
+  motion_speed_threshold_mps: 0.1
+  max_trigger_speed_mps: 1.0
+  motion_trigger_timeout_sec: 0.5
+  status_timeout_sec: 0.5
+  confirmation_timeout_sec: 2.0
+
+# Staged wall/contact-stuck recovery. P1/P2/P3 use the same safety-reviewed recovery in dev3.
+# Unlisted domains and
+# every non-simulation environment remain disabled/fail-closed.
+stuck_recovery:
+  enabled: true
+  domain_enabled:
+    1: true
+    2: true
+    3: true
+  shadow_mode: false
+  simulation_only: true
+  # P1/P2/P3 simulation-only activation. Local AWSIM calibration and the successful bounded
+  # recovery runs use positive acceleration in Reverse and negative acceleration to stop.
+  reverse_actuation_enabled: true
+  reverse_acceleration_sign: 1.0
+  reverse_stop_acceleration_mps2: -1.0
+  # Measured average was 0.628 m/s^2 with the former -0.8 command. Keep the
+  # stopping reserve below that measured result while using the stronger command.
+  verified_reverse_stop_deceleration_mps2: 0.6
+  # Measured command-to-effect delay was about 0.14 s; round up for reserve.
+  reverse_control_latency_sec: 0.2
+  boost_status_timeout_sec: 0.5
+  detector:
+    # A solver failure is eligible only after this duration and still requires forward path
+    # demand, stopped pose/progress, and current footprint-to-wall evidence. A collision hint
+    # alone is intentionally insufficient for this exception.
+    solver_fallback_recovery_enabled: true
+    solver_fallback_duration_sec: 2.0
+    # A wall-free solver fallback must remain motionless with no path progress
+    # for longer, then may use only a statically and V2X-clear reverse rollout.
+    solver_evidence_free_recovery_enabled: true
+    solver_evidence_free_duration_sec: 3.0
+    # AWSIM physical walls and the occupancy map can disagree. With a healthy solver only,
+    # sustained forward intent plus no pose/path progress may confirm a stuck vehicle.
+    evidence_free_recovery_enabled: true
+    evidence_free_duration_sec: 1.5
+    # SIM race: a follower below 1 km/h behind a stopped V2X vehicle joins the
+    # reverse-only, tail-first recovery cascade after a short debounce.
+    coordinated_stop_recovery_enabled: true
+    coordinated_stop_duration_sec: 0.25
+    coordinated_stop_front_speed_mps: 0.28
+    # Simulation race: a recent collision may override SafetyBrake's deliberate-stop veto.
+    # Normal no-progress confirmation and all static/V2X rollout gates still apply.
+    collision_deliberate_stop_override_enabled: true
+    # A longer callback/odometry gap resets both stationary and fallback continuity timers.
+    max_observation_gap_sec: 0.2
+    # 1 km/h = 0.278 m/s. Use 0.28 m/s for entry and a small release hysteresis.
+    stopped_speed_mps: 0.28
+    moving_speed_mps: 0.35
+    forward_intent_speed_mps: 1.0
+    forward_intent_acceleration_mps2: 0.1
+    # Obstacle evidence and no pose/path progress are still required.
+    stationary_duration_sec: 0.25
+    max_pose_displacement_m: 0.15
+    max_progress_delta_m: 0.20
+    # Give AWSIM one short correction window, then begin our bounded escape promptly.
+    awsim_recovery_settle_sec: 0.30
+  gear:
+    report_timeout_sec: 0.5
+    # SIM race treats 1 km/h or less as stopped before requesting Reverse.
+    stop_speed_mps: 0.28
+    stop_confirm_sec: 0.10
+    command_resend_interval_sec: 0.2
+    max_command_requests: 1
+  maneuver:
+    clearance_wait_timeout_sec: 1.0
+    # A timeout caused only by blocked/unknown rear clearance is rechecked while holding stop.
+    # Other SafeStop causes remain latched until the next race session.
+    clearance_safe_stop_recovery_enabled: true
+    safe_stop_clear_confirm_sec: 0.5
+    # Simulation race: recoverable terminal states are paused and reassessed instead of
+    # remaining latched for the rest of the race.
+    aggressive_sim_recovery_enabled: true
+    # Competition simulation: a blocked vehicle must keep moving. V2X overlap
+    # becomes diagnostic-only, every conservative static rejection falls back
+    # to the least-bad short primitive, and SafeStop becomes a retry delay.
+    aggressive_force_motion_enabled: true
+    aggressive_retry_delay_sec: 0.2
+    # Used only when force_motion is disabled. The aggressive race policy
+    # retries even when the snapshot is unchanged.
+    aggressive_retry_min_lateral_change_m: 0.15
+    aggressive_retry_min_heading_change_rad: 0.10
+    # Simulation-race only: a transient recovery failsafe may retry after every
+    # adapter health and one bounded static/V2X maneuver stay valid continuously.
+    race_relaxed_fault_retry_enabled: true
+    fault_retry_clear_confirm_sec: 0.5
+    fault_retry_max_observation_gap_sec: 0.2
+    # Accept the configured set of individually fresh vehicle IDs across a
+    # transient partial array instead of requiring every ID in the same message.
+    tracked_v2x_completeness_enabled: true
+    # Independent hard cap beyond the adaptive 8.0 m target. Continuous Reverse
+    # begins calibrated braking before the predicted stopping point reaches the
+    # active escape target.
+    max_reverse_distance_m: 9.0
+    max_reverse_duration_sec: 8.0
+    # Use the calibrated bounded-recovery actuation; the higher-acceleration
+    # A/B candidate increased stopping reserve and shortened each escape step.
+    # SIM race: allow one continuous, acceleration-limited escape instead of a
+    # 0.4 m Reverse/Drive cascade when the complete rollout is clear.
+    fast_continuous_reverse_enabled: true
+    fast_rejoin_min_reverse_distance_m: 0.8
+    # A rejoin that gets stuck again before 5 m of normal forward travel doubles
+    # the next Reverse target. Fast rejoin grows 0.8 -> 1.6 -> 3.2 -> 6.4 ->
+    # 8.0 m, while the normal target grows 2.0 -> 4.0 -> 8.0 m.
+    adaptive_reverse_retry_enabled: true
+    adaptive_reverse_retry_multiplier: 2.0
+    adaptive_reverse_retry_max_distance_m: 8.0
+    adaptive_retry_reset_forward_distance_m: 5.0
+    max_reverse_speed_mps: 2.0
+    # Positive magnitude only; reverse_acceleration_sign is applied by the ROS/AWSIM adapter.
+    reverse_acceleration_magnitude_mps2: 1.0
+    # Rear-wall/deadlock recovery stays in Drive and performs one bounded creep.
+    # Use the normal MPC acceleration ceiling so a kart resting on another
+    # collider does not spend ten steps producing only millimetres of motion.
+    max_forward_distance_m: 0.6
+    max_forward_duration_sec: 2.0
+    max_forward_speed_mps: 2.0
+    forward_acceleration_magnitude_mps2: 1.0
+    reverse_escape_distance_m: 2.0
+    forward_escape_distance_m: 0.30
+    # Accept bounded odometry/stopping error only after the current footprint is clear.
+    escape_confirm_distance_tolerance_m: 0.10
+    # A tipped/resting kart can produce a valid but ineffective Forward rollout.
+    # After two Forward duration limits, require one checked Reverse cycle
+    # instead of selecting the same Forward primitive without bound.
+    aggressive_forward_retry_limit_before_reverse: 2
+    # A wall-evidenced solver failure with this much heading error also waits for reverse.
+    # Below this threshold, wall direction may select a statically/V2X-clear short forward escape.
+    # Wall-free solver failures are always reverse-only when the detector route above is enabled.
+    solver_reverse_only_heading_error_rad: 1.0
+    # Fail closed before an odometry interval can skip a 0.1 m map cell.
+    max_reverse_pose_step_m: 0.05
+    # Straight is preferred. This magnitude is used only when a safe Left/Right rollout is needed.
+    reverse_steering_angle_rad: 0.25
+    # Look outside the collision footprint only to decide Front versus Rear.
+    # Side, corner/mixed, or no nearby wall remains fail-closed.
+    wall_direction_search_margin_m: 0.50
+    wall_direction_ambiguity_m: 0.02
+    # Front/side/corner contact retreats in 0.40 m verified steps. Episode
+    # distance is retained across reassessment until the 2.0 m target is met.
+    side_escape_enabled: true
+    # Evaluate intermediate steering magnitudes without relaxing the contact policy.
+    side_escape_steering_samples: 5
+    escape_step_distance_m: 0.40
+    # Stopping reserve can end a nominal 0.40 m step before 0.40 m of measured
+    # motion, so retain enough bounded reassessments to reach 2.0 m.
+    # Ten bounded steps cover run-to-run stopping-reserve variation while the
+    # independent 3.0 m total-distance cap remains unchanged.
+    max_escape_steps: 10
+    # Each predicted step must remove at least 5% of its initial occupied contacts.
+    side_escape_min_contact_reduction_ratio: 0.05
+    # Up to two additional non-stepwise maneuvers cover one transient hazard or
+    # rejoin-timeout reassessment. Independent distance/time gates remain active.
+    max_attempts: 3
+  footprint:
+    # Pose-to-collider correspondence is still TBD; these are current vehicle-sheet estimates.
+    front_extent_m: 1.49
+    rear_extent_m: 0.51
+    left_extent_m: 0.725
+    right_extent_m: 0.725
+    margin_m: 0.05
+    sweep_interpolation_step_m: 0.05
+  rear_safety:
+    # Peer IDs are learned automatically from structurally valid V2X arrays for the race session.
+    # An empty learned set fails closed unless the simulation-only aggressive override is active.
+    self_filter_mode: excluded
+    self_vehicle_id: ""
+    vehicle_radius_m: 1.45
+    prediction_margin_sec: 0.1
+  # Simulation-only finite-horizon Recovery controller. It guides the bounded
+  # reverse/forward primitive choice and replans LowSpeedRejoin steering every cycle.
+  # Invalid/no-solution plans fall back to the original primitive/P feedback.
+  recovery_mpc:
+    # output/20260719-121902 produced no rejoin_complete in dev3. Keep this as
+    # an A/B implementation, but use the proven original bounded policy by default.
+    enabled: false
+    horizon_steps: 10
+    travel_step_m: 0.20
+    steering_sample_count: 9
+    beam_width: 48
+    maximum_steering_tire_angle_rad: 0.35
+    maximum_steering_change_rad: 0.12
+    lateral_error_weight: 6.0
+    heading_error_weight: 12.0
+    steering_weight: 0.15
+    steering_change_weight: 1.0
+    terminal_lateral_error_weight: 30.0
+    terminal_heading_error_weight: 40.0
+  rejoin:
+    speed_limit_mps: 2.0
+    # Simulation-only low-speed path feedback. The rate-limited tire angle is
+    # also used for the forward swept-footprint gate before actuation.
+    feedback_steering_enabled: true
+    lateral_error_gain_rad_per_m: 0.60
+    heading_error_gain: 1.20
+    max_steering_tire_angle_rad: 0.35
+    # Check the rate-limited feedback steering command before allowing forward rejoin motion.
+    static_lookahead_m: 0.8
+    # Never bypass the forward swept-footprint check in the bounded policy.
+    aggressive_force_after_retries: 0
+    # A clear current footprint with a blocked forward sweep gets one of the remaining
+    # bounded 0.40 m escape-step reassessments instead of driving back into the wall.
+    retry_on_blocked_path: true
+    # A timed-out or laterally regressing alignment stops first, resets escape
+    # progress, and performs another bounded clearance-selected maneuver while
+    # attempt/step budget remains.
+    retry_on_timeout: true
+    max_lateral_error_m: 0.5
+    max_heading_error_rad: 0.35
+    confirm_sec: 0.3
+    # Refresh the timeout only after alignment improves by 5% of the configured
+    # lateral/heading envelope. This lets a gross-angle kart keep turning while
+    # converging but still stops a noisy or genuinely stalled rejoin.
+    min_alignment_progress_ratio: 0.05
+    # After entering the 0.5 m lateral envelope, stop and reassess if Rejoin
+    # moves back outside it by more than this margin instead of crossing the course.
+    lateral_regression_margin_m: 0.20
+    # Maximum duration without the material alignment progress above.
+    timeout_sec: 5.0
+    # Hold Drive at zero command briefly while MPC is reinitialized after Recovery.
+    solver_recovery_timeout_sec: 1.0
+    cooldown_sec: 1.0
+    # After a successful Forward escape/rejoin, let normal control establish
+    # forward motion before another no-progress Recovery can arm. Normal
+    # Follow/SafetyBrake remains active, and a new collision, wall contact, or
+    # solver fallback releases this guard immediately.
+    forward_rearm_guard_enabled: true
+    forward_rearm_guard_duration_sec: 3.0
+    forward_rearm_guard_distance_m: 3.0
+
+map:
+  # path from pkg share dir
+  yaml_path: "env/final_ver3/occupancy_grid_map.yaml"
+
+waypoints:
+  # path from pkg share dir
+  # csv_path: "maps/occupancy_grid_map_waypoints.csv"
+  csv_path: ""
+
+obstacles:
+  # path from pkg share dir
+  csv_path: "" # If empty, the obstacles information will be subscribed from the topic
+  # csv_path: "maps/occupancy_grid_map_obstacles.csv"
+  radius: 1.25
+
+reference_path:
+  update_by_topic: false # When true, 'circle' must be false
+  # path from pkg share dir
+  # csv_path: ""
+  csv_path: "env/final_ver3/traj_mincurv_ver3_speed_20260810.csv"
+  domain_csv_path:
+    1: "env/final_ver3/traj_mincurv_ver3_speed_20260810.csv"
+    2: "env/final_ver3/traj_mincurv_ver3_speed_20260810.csv"
+    3: "env/final_ver3/traj_mincurv_ver3_speed_20260810.csv"
+  resolution: 0.6
+  smoothing_distance: 2
+  max_width: 6.0
+  circular: true
+  use_path_constraints_topic: false
+  use_border_cells_topic: false
+  # use_path_constraints_topic: true
+  # use_border_cells_topic: true
+
+bicycle_model:
+  length: 1.087
+  # width: 1.45   # real machine width
+  width: 1.45   # +safety margin
+
+mpc:
+  N: 20
+  # Q: [e_y, e_psi, t]
+  # R: [v, delta]
+  # QN: [e_y, e_psi, t]
+  R: [100000.0, 0.0]
+  a_min: -3.0 # m/s^2
+  a_max: 1.37 # m/s^2
+  domain_a_max:
+    1: 1.37
+    2: 1.37
+    3: 1.37
+  delta_max_deg: 32.0 # degrees
+  steer_rate_max: 1.2 # rad/s
+  solver_failure_steering_hold_cycles: 4 # 0.1 s at 40 Hz, then rate-limit steering to neutral
+  # SIM fail-operational fallback: only Cruise with no detected front vehicle
+  # may keep moving, using low-speed path-error steering instead of stopping.
+  solver_failure_crawl_enabled: true
+  solver_failure_crawl_speed_mps: 1.0
+  control_rate: 40.0 # Hz
+  odom_timeout_sec: 0.5 # [s], steady-clock local safety timeout (not an official limit)
+  # Controller/actuation latency compensation after EKF pose timing compensation.
+  # 0.125 s reproduces the non-mutating equivalent of the 2025 Pure Pursuit prediction.
+  state_prediction_delay_sec: 0.1
+  state_prediction_simulation_only: true
+  min_linearization_speed_mps: 0.5 # [m/s], avoid singular 1/v terms below this speed
+  # Keep ego course progress on the same hairpin branch after contact. Reacquire globally only
+  # after the complete local window is farther than the lost threshold.
+  waypoint_local_association_enabled: true
+  waypoint_local_lookbehind_m: 8.0
+  waypoint_local_lookahead_m: 30.0
+  waypoint_local_lost_distance_m: 4.0
+  waypoint_heading_weight_m_per_rad: 2.0
+  waypoint_backward_progress_weight: 0.25
+  waypoint_forward_jump_weight: 1.0
+  waypoint_minimum_forward_reach_m: 1.5
+  waypoint_forward_reach_time_scale: 4.0
+  # 2026-07-17 AWSIM experiment: keep MPC model steering and published steering identical.
+  steering_tire_angle_gain_var: 1.5
+  # steering_tire_angle_gain_var: 1.0
+  # accel_low_pass_gain: 0.1
+  # steer_low_pass_gain: 0.3
+  accel_low_pass_gain: 1.0
+  steer_low_pass_gain: 1.0
+  # One-way input preview: allow earlier braking and same-direction steering increase,
+  # but never early acceleration/unwind. State/dynamics/constraints/V2X/prediction remain
+  # anchored to the closest tracking waypoint. Supported integer range is 0..2.
+  # This does not compensate localization delay; that is handled by state prediction.
+  wp_id_low_offset: 0
+  wp_id_low_speed: 15.0 # km/h
+  wp_id_offset: 0
+  # 1.0 = target the center of path constraints, 0.0 = target the edited trajectory.
+  center_bias: 0.0
+  # 1.0 = current safety margin, 0.0 = no additional safety margin.
+  safety_margin_scale: 0.0
+  # V2X-based rule gap planner. Keep disabled for baseline trajectory tracking.
+  use_v2x_gap_planner: true
+  # Forbidden lateral radius for ego center around a V2X vehicle.
+  # 1.45m = other vehicle half width 0.725m + ego half width 0.725m.
+  # Add a small buffer for low-speed side pass stability.
+  v2x_vehicle_radius: 1.45
+  v2x_vehicle_length: 2.0
+  v2x_prediction_margin: 0.05
+  v2x_prediction_time: 1.0
+  v2x_prediction_use_path_time: true # align obstacle prediction time with path distance, not waypoint index
+  v2x_prediction_use_course_progress: true # follow the bounded course branch instead of Cartesian straight-line extrapolation
+  # Course progress is active; optional direct course-lateral extrapolation stays disabled.
+  # The Pass rollout uses the filtered world velocity projected onto the course instead.
+  v2x_prediction_use_course_lateral_velocity: false
+  v2x_prediction_course_lateral_velocity_deadband: 0.15 # [m/s]
+  v2x_prediction_course_lateral_velocity_max: 1.0       # [m/s]
+  # Filter finite-difference V2X motion before it enters Pass admission/runtime rollout.
+  v2x_prediction_velocity_filter_gain: 0.35 # [0-1] lower rejects one-sample position jitter
+  v2x_prediction_acceleration_filter_gain: 0.25 # [0-1]
+  v2x_prediction_maximum_acceleration: 3.0 # [m/s^2] opponent estimate bound, not an ego command
+  v2x_prediction_longitudinal_acceleration_horizon: 1.0 # [s] then hold predicted target speed
+  v2x_prediction_lateral_velocity_decay_time: 0.6 # [s] lateral intent decays instead of persisting through the full Pass
+  v2x_prediction_min_ego_speed: 1.0 # [m/s] avoid singular path-time prediction near standstill
+  v2x_timeout_sec: 1.0
+  v2x_position_jump_threshold: 5.0
+  v2x_v_max_safety: 30.0
+  v2x_self_filter_radius: 0.3
+  gap_min_width: 1.8
+  gap_target_bias: 0.8
+  no_gap_target_velocity: 2.0
+  # Prefer the vehicle side when a free gap is bounded by a wall and a V2X vehicle.
+  v2x_wall_clearance_margin: 0.72     # [m] aggressive sim: approximately one kart half-width
+  v2x_vehicle_side_target_margin: 0.2 # [m] keep this margin from the inflated vehicle interval
+  v2x_wall_avoidance_bias: 0.0        # 0.0 = gap center, 1.0 = vehicle side
+  # Do not aim for a narrow gap between two moving V2X vehicles at close range.
+  v2x_vehicle_vehicle_gap_enabled: true
+  v2x_vehicle_vehicle_gap_min_distance: 18.0 # [m] only used when vehicle-vehicle gap is enabled
+  v2x_vehicle_vehicle_gap_min_width: 3.2     # [m] only used when vehicle-vehicle gap is enabled
+  v2x_multi_front_gap_enabled: true # evaluate the outside of a two-kart pack; vehicle-vehicle gaps stay disabled
+  v2x_multi_front_gap_distance: 18.0 # [m] with 2+ front vehicles, use no-gap velocity instead
+  # V2X behavior FSM. When true, Cruise/Follow/Overtake/SafetyBrake controls when gap planner is allowed.
+  use_v2x_behavior_fsm: true
+  v2x_behavior_debug_log_enabled: true # Phase4: periodically log why Follow/Overtake was selected
+  v2x_behavior_debug_log_period_sec: 1.0
+  # Project ego and V2X targets onto the same bounded reference-path section.
+  # This preserves along-course ordering through hairpins instead of relying
+  # only on the ego waypoint's Cartesian tangent.
+  v2x_front_progress_detection_enabled: true
+  v2x_front_progress_detection_distance: 24.0 # [m] early Follow/risk/overtake classification
+  v2x_front_progress_lookbehind_distance: 3.0 # [m] keep nearby rear/side classification stable
+  # Keep braking briefly when a dangerous front target crosses the local/progress classifier seam.
+  v2x_front_hazard_hold_enabled: true
+  v2x_front_hazard_hold_sec: 0.25 # [s] sim race: bridge one short V2X dropout without a 1 s full-stop tail
+  v2x_front_hazard_rear_clear_distance: 4.0 # [m] release early only after target is clearly behind
+  v2x_follow_distance: 5.0         # [m] sim race: base Follow range; common-course detection remains 24 m
+  v2x_safety_brake_distance: 2.2  # [m] dev3 attack: retain a small center-distance floor
+  v2x_safety_brake_margin: 0.3    # [m] dev3 attack: dynamic stopping distance still applies
+  v2x_follow_gap_planner_enabled: false # Follow tracks the base path; lateral pass is only Overtake/low-speed avoidance
+  v2x_follow_gap_planner_no_gap_speed_limit_enabled: false # do not yield just because no gap is found
+  v2x_follow_gap_planner_respect_overtake_forbidden: true # do not side-attack in hairpins/forbidden zones
+  v2x_follow_speed_limit_enabled: true  # match front speed only inside the dedicated distance gate
+  v2x_follow_speed_limit_distance: 3.0 # [m] sim race: detect at 24 m, start generic Follow cap at 5 m
+  v2x_follow_velocity: 3.0        # [m/s] slow/stopped-front cap; moving fronts use front speed + margin
+  v2x_follow_preposition_enabled: true # keep Follow slightly off the front vehicle's direct wake
+  v2x_follow_preposition_offset: 0.9 # [m] soft lateral reference offset while following
+  v2x_follow_preposition_min_side_clearance: 1.4 # [m] require pass-side room before offsetting
+  v2x_follow_preposition_target_bias: 0.4 # weak reference only; constraints are not narrowed
+  v2x_follow_preposition_ramp_ratio: 1.4 # higher = slower lateral drift while following
+  v2x_front_decel_guard_enabled: true
+  v2x_front_decel_guard_distance: 0.0     # [m] straight sections do not get a follow speed cap
+  v2x_front_decel_guard_ttc: 0.0          # [s] straight sections do not get a follow speed cap
+  v2x_front_decel_guard_speed_margin: 1.2 # [m/s] target <= front speed + margin
+  v2x_front_decel_guard_min_closing_speed: 2.0 # [m/s] avoid capping while merely tucked in
+  v2x_front_decel_guard_curve_include_slow_front: true # hairpin guard must follow heavily slowing cars too
+  v2x_front_decel_guard_curve_lateral_margin: 1.0 # [m] dev3 attack: do not absorb the adjacent pass lane
+  v2x_front_decel_guard_curve_lookahead_distance: 2.5 # [m] delay curve speed matching until the hairpin
+  v2x_front_decel_guard_curve_distance: 6.0 # [m] retain a close-range curve cap
+  v2x_front_decel_guard_curve_ttc: 1.5       # [s] dev3 attack TTC cap in curves
+  v2x_front_risk_arbitration_enabled: true   # Phase1: required-decel based braking guard
+  v2x_front_risk_brake_prepare_limit_enabled: true # cap speed before the front gap collapses
+  v2x_front_risk_avoid_candidate_limit_enabled: true # cap speed when an avoidable front risk is found
+  v2x_front_risk_comfort_decel: 2.0          # [m/s^2] start smooth speed cap above this
+  v2x_front_risk_hard_decel: 4.0             # [m/s^2] stronger speed cap above this
+  v2x_front_risk_emergency_decel: 10.0       # [m/s^2] dev3 attack: defer emergency arbitration
+  v2x_front_risk_distance_margin: 1.0        # [m] reduced race margin from the front vehicle
+  v2x_front_risk_min_closing_speed: 0.5      # [m/s] ignore nearly matched speed
+  v2x_front_risk_prepare_time: 0.25          # [s] dev3 attack reaction reserve
+  v2x_front_risk_curve_limit_enabled: true   # in curves, cap speed before emergency braking is needed
+  v2x_front_risk_curve_limit_required_decel: 1.8 # [m/s^2] start curve-only cap later
+  v2x_front_risk_curve_limit_decel: 1.8      # [m/s^2] dev3 attack curve decel model
+  v2x_front_risk_curve_limit_speed_margin: 1.0 # [m/s] permit a stronger curve closing margin
+  v2x_safety_brake_velocity: 0.0  # [m/s]
+  # Gap width is measured after inflating V2X vehicles by ego+other half width.
+  # Keep this as center-line slack, not raw vehicle width.
+  v2x_overtake_min_gap_width: 0.1 # [m] sim A/B: allow near-minimum kart-to-wall corridor
+  v2x_overtake_max_curvature: 0.04
+  v2x_overtake_block_inner_curve_pass: true # block inner passes unless the explicit sim-race exception below is satisfied
+  v2x_overtake_outer_curve_entry_enabled: true # sim race: allow a reachable outside pass in a soft curve
+  v2x_overtake_outer_curve_hard_continuation_enabled: true # keep a locked outer ShiftOut/Pass through a hard curve while gap remains
+  v2x_overtake_inner_curve_entry_enabled: true # sim race: use inside only when its continuous corridor is sufficiently open
+  v2x_overtake_inner_curve_min_open_distance: 3.0 # [m] otherwise default to a feasible outside curve line
+  v2x_overtake_inner_curve_precommit_enabled: true # sim race: lock a verified inside corridor before the short hairpin window closes
+  v2x_overtake_inner_curve_precommit_min_relative_speed: -0.5 # [m/s] allow a small initial deficit; reject a front kart pulling away quickly
+  # Every fresh Overtake entry, including minimum-motion and curve attack, normally passes this
+  # measured-speed gate. A validated mission pre-arms longitudinal acceleration on the base line.
+  # Only confirmed stationary and narrowly scoped close/slow urgent entries may shorten the wait.
+  # Existing ShiftOut/Pass/FollowPrepare missions are not re-gated.
+  v2x_overtake_entry_min_relative_speed: 0.3 # [m/s] require measured forward gain before lateral commitment
+  v2x_overtake_entry_speed_confirm_sec: 0.3 # [s] prevent one noisy V2X speed sample from admitting a doomed pass
+  v2x_overtake_stationary_blocker_entry_override_enabled: true # skip only speed confirmation for a confirmed stopped blocker with a complete current Mission
+  v2x_overtake_slow_blocker_urgent_entry_enabled: true # shorten confirmation only near the 3 m entry boundary with a complete current Mission
+  v2x_overtake_slow_blocker_urgent_entry_max_front_speed: 2.0 # [m/s] do not use the urgent path for a normally moving opponent
+  v2x_overtake_slow_blocker_urgent_entry_distance_margin: 1.0 # [m] urgent window above v2x_overtake_guard_min_front_distance
+  v2x_overtake_slow_blocker_urgent_entry_confirm_sec: 0.05 # [s] retain two-sample-like confirmation at the normal 20 Hz V2X rate
+  v2x_overtake_entry_prearm_validation_hold_sec: 0.15 # [s] keep target-scoped speed history across one short planner miss; never execute a stale Mission
+  v2x_overtake_engagement_hold_sec: 0.50 # [s] suppress Cruise chatter across a brief front/side classification dropout; identity only, never stale lateral execution
+  v2x_overtake_entry_prearm_max_sec: 2.0 # [s] one validated target may own longitudinal pre-arm only this long
+  v2x_overtake_entry_prearm_max_distance: 8.0 # [m] distance bound for the same target pre-arm window
+  v2x_overtake_entry_prearm_retry_cooldown_sec: 0.75 # [s] force full Mission re-evaluation after a pre-arm timeout
+  v2x_overtake_inner_curve_hard_continuation_enabled: true # keep only the locked inside ShiftOut/Pass through the hard apex
+  v2x_overtake_hard_curve_entry_enabled: true # dev3 attack: start an inner/outer pass after hard-curve recognition when gap is valid
+  v2x_overtake_forbidden_curve_lookahead_distance: 6.0 # [m] soft entry/continuation policy; hard curve uses completion guard below
+  v2x_overtake_gap_lookahead_distance: 24.0 # [m] search farther than MPC horizon for slow-front pass
+  v2x_overtake_try_both_sides: true         # before ShiftOut, retry the opposite side if preferred gap is blocked
+  v2x_overtake_minimum_lateral_motion_enabled: true # keep the racing line when clear; otherwise use the nearest safe corridor point
+  v2x_overtake_minimum_motion_preferred_clearance_buffer: 0.20 # [m] use spare corridor width away from the target, capped at half the corridor
+  v2x_overtake_minimum_motion_inner_preference_max_extra_shift: 0.60 # [m] keep small-wrap default; allow a verified open inside attack
+  v2x_overtake_minimum_motion_inner_lookahead_distance: 18.0 # [m] resolve the next curve inside while still on the preceding straight
+  v2x_overtake_minimum_motion_inner_min_open_distance: 8.0 # [m] inside must stay continuously executable before preference applies
+  v2x_overtake_minimum_motion_inner_min_corridor_width: 0.30 # [m] inflated center-line slack required for the aggressive inside choice
+  v2x_overtake_committed_corridor_front_danger_suppression_enabled: true # use 2D footprint sweep, not longitudinal distance alone, on a validated locked pass
+  # Competition-simulation only: after a validated minimum-motion Pass has released its front
+  # cap, keep advancing while the current kart footprints remain non-overlapping. A predicted
+  # future overlap alone no longer returns the kart to Follow/SafetyBrake. A single current-body
+  # boundary sample is debounced below; sustained overlap, target discontinuity, wall/path
+  # infeasibility and solver guards remain active.
+  v2x_overtake_committed_pass_attack_mode_enabled: true
+  v2x_overtake_velocity_advantage: 1.0      # [m/s] legacy whole-phase cap when stage speed is disabled
+  v2x_overtake_stage_speed_enabled: true    # cap ShiftOut/early Pass; release only after the locked target is no longer ahead
+  v2x_overtake_shiftout_adaptive_closing_speed_enabled: true # preserve entry gap until distance+lateral ShiftOut completes
+  v2x_overtake_shiftout_min_closing_speed: 0.8 # [m/s] sim A/B: retain useful pass gain near the protected-distance budget
+  v2x_overtake_shiftout_max_closing_speed: 2.0 # [m/s] sim A/B: use available distance budget to establish overlap sooner
+  v2x_overtake_body_clear_deadline_enabled: true # select a ShiftOut that clears the target body before the hard longitudinal gap
+  v2x_overtake_body_clear_deadline_margin_sec: 0.10 # [s] small execution reserve between predicted lateral clear and hard-gap arrival
+  v2x_overtake_body_clear_minimum_slack_sec: 0.25 # [s] require this rollout reserve and rank it before geometric/inside preference
+  v2x_overtake_pass_unlatched_max_closing_speed: 0.5 # [m/s] keep the front cap until physical lateral separation latches
+  v2x_overtake_unseparated_front_reserve_distance: 0.25 # [m] taper closing to zero before the moving-front hard stop while bodies overlap laterally
+  v2x_overtake_shiftout_adaptive_min_time_sec: 0.5 # [s] avoid an unbounded cap as ShiftOut completes
+  # Minimum-motion mode latches the nearest safe ego-center point. This separation remains the
+  # fallback when a fresh planner corridor is unavailable at entry or the mode is disabled.
+  v2x_overtake_line_min_target_separation: 1.55 # [m] 1.45 m combined kart width plus 0.10 m nominal surface clearance
+  v2x_overtake_pass_front_overlap_lateral_clearance: 1.55 # [m] nominal center separation required before front-cap release
+  v2x_overtake_pass_front_cap_reapply_lateral_clearance: 1.50 # [m] reapply before reaching the 1.45 m physical body boundary
+  v2x_overtake_pass_current_overlap_confirm_sec: 0.30 # [s] debounce a brief course-frame body-boundary crossing after Pass release
+  v2x_overtake_pass_predicted_overlap_confirm_sec: 0.25 # [s] require sustained predicted overlap before recapping an already released Pass
+  # Once a low-speed target has full current lateral clearance in ShiftOut, or is physically
+  # committed in Pass, do not let a conservative target-speed reference make the ego crawl
+  # beside it. This is a reference floor only; curvature, front-risk, wall, acceleration and
+  # Emergency hard limits retain priority. ShiftOut front-cap release conditions are unchanged.
+  v2x_overtake_committed_pass_speed_floor_enabled: true
+  v2x_overtake_committed_pass_min_speed: 3.0 # [m/s] sim race floor around target <= moving-front threshold
+  v2x_overtake_line_progress_watchdog_distance: 32.0 # [m] abort a committed single-target Pass with no longitudinal gain
+  v2x_overtake_line_progress_watchdog_min_progress: 0.5 # [m] target-distance reduction that rearms the distance watchdog
+  # Receding-horizon Pass mission. Static ShiftOut/Pass/Return geometry is frozen at admission;
+  # the short V2X horizon is refreshed before expiry and can extend the same-side Pass once.
+  v2x_overtake_pass_horizon_enabled: true
+  # Rank only physically admitted missions by rear-clear progress, retained speed and the
+  # longitudinal/lateral effort needed to finish the pass. This does not relax wall, footprint,
+  # body-clear or dynamic-corridor hard constraints.
+  v2x_overtake_horizon_progress_enabled: true
+  v2x_overtake_horizon_progress_rear_clear_time_weight: 3.0
+  v2x_overtake_horizon_progress_rear_clear_distance_weight: 1.0
+  v2x_overtake_horizon_progress_retained_speed_weight: 1.5
+  v2x_overtake_horizon_progress_closing_speed_weight: 0.5
+  v2x_overtake_horizon_progress_lateral_motion_penalty: 0.5
+  v2x_overtake_horizon_progress_lateral_accel_penalty: 0.25
+  # Choose the side by executable rear-clear value instead of treating entry-outside as a default.
+  # A short post-clear reserve catches a curve-sign change immediately after the predicted pass.
+  v2x_overtake_rear_clear_side_selection_enabled: true
+  # The 20260811 run exposed a role reversal just beyond the former effective
+  # 4 m runtime reserve. Observe 6 m past predicted rear-clear before entry.
+  v2x_overtake_rear_clear_role_reserve_distance: 6.0 # [m]
+  v2x_overtake_pass_horizon_revalidation_lead_distance: 3.0 # [m]
+  v2x_overtake_pass_horizon_revalidation_lead_time: 0.75 # [s]
+  v2x_overtake_pass_horizon_predicted_time_budget: 8.0 # [s] admission rear-clear budget
+  v2x_overtake_pass_horizon_absolute_time_limit: 10.0 # [s] never rearmed by refresh/extension
+  v2x_overtake_pass_horizon_soft_distance_limit: 24.0 # [m] request early same-side revalidation
+  v2x_overtake_pass_horizon_absolute_distance_limit: 40.0 # [m] never rearmed; covers acceleration-limited rear-clear rollouts
+  v2x_overtake_pass_horizon_extension_max_distance: 12.0 # [m] nominal early-replan window; validated replacement may grow to the 40 m absolute limit
+  v2x_overtake_pass_horizon_extension_max_lateral_adjustment: 0.60 # [m] bounded same-side goal correction per replacement
+  v2x_overtake_pass_horizon_max_extensions: 1
+  v2x_overtake_pass_horizon_planner_result_max_age: 0.10 # [s]
+  v2x_overtake_pass_horizon_hold_max_sec: 1.0 # [s] bounded fresh-horizon wait
+  v2x_overtake_pass_horizon_hold_max_distance: 3.0 # [m]
+  # Keep the chosen side, but move toward the nearest live safe lateral goal at
+  # 5 Hz. Each accepted 5-20 cm correction reruns the full rollout/wall preflight.
+  v2x_overtake_dynamic_corridor_refresh_enabled: true
+  v2x_overtake_dynamic_corridor_refresh_period_sec: 0.20 # [s]
+  v2x_overtake_dynamic_corridor_refresh_min_lateral_adjustment: 0.05 # [m]
+  v2x_overtake_dynamic_corridor_refresh_max_lateral_adjustment: 0.20 # [m/update]
+  v2x_overtake_dynamic_corridor_refresh_max_count: 20
+  # Unlike the active-Pass clock above, this budget includes ShiftOut and
+  # FollowPrepare so a same-target mission cannot reset its way into a loop.
+  v2x_overtake_mission_total_budget_enabled: true
+  v2x_overtake_mission_total_time_limit_sec: 15.0 # [s]
+  # Re-evaluate the course-side meaning of an outer Pass over a rolling curvature horizon.
+  # A side transition is admitted only while the locked target remains longitudinally ahead;
+  # side-by-side crossing stays forbidden and all wall/body/rollout guards remain active.
+  v2x_overtake_continuous_outer_replan_enabled: true
+  v2x_overtake_continuous_outer_replan_lookahead_distance: 12.0 # [m]
+  v2x_overtake_continuous_outer_replan_min_curve_distance: 3.0 # [m] reject curvature-sign noise
+  v2x_overtake_continuous_outer_replan_min_front_distance: 4.0 # [m] cross behind, never beside target
+  v2x_overtake_continuous_outer_replan_cooldown_sec: 1.0 # [s]
+  v2x_overtake_continuous_outer_replan_max_lateral_adjustment: 3.2 # [m] full-track transition, wall-preflighted
+  v2x_overtake_continuous_outer_replan_max_shift_distance: 8.0 # [m]
+  v2x_overtake_continuous_outer_replan_max_count: 3
+  v2x_overtake_safe_separation_enabled: true # retain the committed side when Pass horizon extension is unavailable
+  v2x_overtake_safe_separation_speed_delta: 2.0 # [m/s] align bounded forward completion with committed Pass closing speed
+  v2x_overtake_safe_separation_forward_escape_enabled: true # preserve speed and finish while a validated body-clear corridor remains active
+  v2x_overtake_safe_separation_forward_escape_max_front_distance: 3.0 # [m] bounded target-ahead window for forward completion
+  v2x_overtake_safe_separation_front_clear_distance: 2.0 # [m] target-ahead clearance before lateral Recovery
+  v2x_overtake_safe_separation_front_clear_confirm_sec: 0.25 # [s] require continuous target-ahead clearance before Recovery
+  v2x_overtake_safe_separation_max_sec: 5.0 # [s] bounded same-side forward completion
+  v2x_overtake_safe_separation_max_distance: 12.0 # [m]
+  v2x_overtake_safe_separation_progress_extension_enabled: true # re-arm the local bound only while forward progress is fresh
+  v2x_overtake_safe_separation_progress_extension_min_progress: 0.75 # [m] target distance reduction required in the current local window
+  v2x_overtake_safe_separation_progress_extension_fresh_sec: 0.75 # [s] maximum age of the latest target-distance improvement
+  v2x_overtake_safe_separation_progress_extension_max_count: 1 # absolute Pass limits remain unchanged
+  v2x_overtake_safe_separation_dynamic_completion_extension_enabled: true # use live rear-clear estimate after the fixed extension count is exhausted
+  v2x_overtake_safe_separation_soft_prediction_grace_sec: 0.25 # [s] prediction-only loss grace after committed forward completion; hard faults remain immediate
+  # Once the target is behind and forward progress remains fresh, let distance/rear-clear
+  # terminate the pass instead of a collision-penalty-sensitive wall-clock timeout.
+  v2x_overtake_safe_separation_rearward_progress_time_grace_enabled: true
+  # If a committed rearward target starts catching ego on a speed-losing curve,
+  # keep the separated side and let it clear ahead before replanning. This avoids
+  # a lateral Recovery beside the target and close to the wall.
+  v2x_overtake_safe_separation_progress_loss_disengage_enabled: true
+  v2x_overtake_safe_separation_progress_loss_stale_sec: 0.75 # [s]
+  v2x_overtake_safe_separation_progress_loss_regression_distance: 0.30 # [m]
+  v2x_overtake_safe_separation_disengage_speed_delta: 1.50 # [m/s] target passes ahead quickly
+  v2x_overtake_safe_separation_disengage_max_sec: 3.0 # [s] bounded same-side disengagement
+  v2x_overtake_safe_separation_full_speed_forward_escape_enabled: true # release target+delta cap after body-clear commit; course/input hard limits still win
+  v2x_overtake_safe_separation_mission_aligned_budget_enabled: true # freeze a local window large enough for the selected Mission rear-clear estimate
+  v2x_overtake_safe_separation_completion_distance_margin: 1.0 # [m] reserve after the live predicted rear-clear point
+  v2x_overtake_safe_separation_completion_time_margin_sec: 0.5 # [s] acceleration/tracking reserve within the absolute Pass bound
+  v2x_overtake_safe_separation_tactical_revalidation_enabled: true # preserve the committed Pass line/speed briefly while both sides are re-evaluated
+  v2x_overtake_safe_separation_tactical_revalidation_max_sec: 0.50 # [s] bounded prediction-only revalidation lease
+  v2x_overtake_safe_separation_tactical_revalidation_max_distance: 3.0 # [m] distance bound for the same lease
+  # Competition-simulation only: tolerate a brief progressing side contact without dropping
+  # the committed target/side. Frontal geometry, wall contact and stalled contact remain hard.
+  v2x_overtake_contact_continuation_enabled: true
+  v2x_overtake_contact_continuation_max_sec: 0.8
+  v2x_overtake_contact_continuation_initial_progress_grace_sec: 0.25
+  v2x_overtake_contact_continuation_max_longitudinal: 2.5 # [m] side-by-side center window
+  v2x_overtake_contact_continuation_min_lateral: 0.75 # [m] smaller separation is treated as frontal contact
+  v2x_overtake_contact_continuation_max_closing_speed: 3.0 # [m/s] faster impact remains fail-closed
+  v2x_overtake_contact_continuation_max_lateral_velocity: 0.5 # [m/s]
+  v2x_overtake_contact_continuation_min_ego_speed: 0.5 # [m/s]
+  v2x_overtake_contact_continuation_progress_fresh_sec: 0.5 # [s]
+  v2x_overtake_contact_continuation_near_gap: 0.05 # [m] confirm side contact before course-frame rectangles overlap
+  v2x_overtake_contact_continuation_near_confirm_sec: 0.10 # [s] reject one-cycle V2X proximity noise
+  v2x_overtake_contact_continuation_lateral_bias: 0.15 # [m] requested separation; runtime clamps it to the wall-safe interval
+  v2x_overtake_completion_guard_enabled: true # require enough distance to clear the target before a hard hairpin
+  v2x_overtake_completion_hard_curvature: 0.12 # [rad/m] hard hairpin boundary, separate from soft curve policy
+  v2x_overtake_completion_lookahead_distance: 80.0 # [m] search limit for the next hard boundary
+  v2x_overtake_completion_curve_buffer_distance: 2.0 # [m] finish target clearance before the hard boundary
+  v2x_overtake_completion_merge_buffer_distance: 3.0 # [m] reserve after reaching rear-clear position
+  v2x_overtake_completion_min_relative_speed: 0.5 # [m/s] reject passes with no credible longitudinal gain
+  v2x_overtake_guard_enabled: true
+  v2x_overtake_guard_min_gap_width: 0.1       # [m] sim A/B: center-line slack after inflated obstacles
+  v2x_overtake_guard_min_gap_points: 2        # require consecutive horizon points before Overtake
+  v2x_overtake_continue_min_gap_points: 1     # active locked line may survive a one-point hairpin corridor
+  v2x_overtake_guard_min_prepare_distance: 3.0 # [m] dev3 attack: use short straight/curve openings
+  v2x_overtake_guard_max_lateral_shift: 0.0   # [m] disabled; use time-based lateral accel guard instead
+  v2x_overtake_guard_reachable_gap_enabled: true # reject gaps that require excessive lateral accel
+  v2x_overtake_guard_max_lateral_accel: 6.0   # [m/s^2] match the aggressive OvertakeLine execution limit
+  v2x_overtake_guard_min_gap_time: 0.5        # [s] entry still needs time to establish a pass line
+  v2x_overtake_continue_min_gap_time: 0.3     # [s] locked line uses the shorter continuation horizon
+  v2x_overtake_guard_min_speed_for_reachable: 1.0 # [m/s] lower bound for reachability time estimate
+  v2x_overtake_guard_min_front_distance: 3.0  # [m] begin ShiftOut before the closing budget becomes unrecoverable
+  v2x_overtake_continue_min_front_distance: 1.8 # [m] active-pass floor near the nominal body-overlap distance
+  v2x_overtake_close_follow_enabled: true     # side-escape after matching a slow front vehicle
+  v2x_overtake_close_follow_min_front_distance: 2.2 # [m] extra floor; new ShiftOut also requires the normal 3.0m entry distance
+  v2x_overtake_close_follow_max_closing_speed: 1.5 # [m/s] require a controlled closing rate
+  v2x_overtake_close_follow_min_side_clearance: 1.2 # [m] pass-side center corridor before close-follow escape
+  v2x_overtake_before_curve_enabled: true     # allow slow-front overtake in soft curve-lookahead zones
+  v2x_overtake_before_curve_max_front_speed: 12.0 # [m/s] front vehicle is slow enough to justify pass
+  v2x_overtake_before_curve_min_speed_advantage: 1.0 # [m/s] ego must be faster by this margin
+  v2x_overtake_start_curve_clearance_distance: 0.5 # [m] hard-entry policy owns curve attack decisions
+  v2x_overtake_continue_in_forbidden_enabled: true # continue only an active outer-side pass in a soft curve zone
+  v2x_overtake_continue_inner_soft_curve_enabled: true # sim race: finish an already committed Pass through the inner soft-curve tail
+  v2x_overtake_active_hard_curve_completion_enabled: true # dev3 A/B: only an active Pass may finish before the hard boundary
+  v2x_overtake_active_hard_curve_rear_clear_distance: 0.5 # [m] simulation-only active Pass clearance target
+  v2x_overtake_active_hard_curve_buffer_distance: 0.5 # [m] reserve before crossing the hard-curvature boundary
+  v2x_overtake_front_velocity_limit_enabled: true # generic Follow cap for a different front vehicle; risk/decel guards always remain enabled
+  v2x_overtake_fallback_ignore_soft_curve_forbidden: false # avoid wall-side fallback targets in hairpins
+  v2x_overtake_fallback_min_side_clearance: 1.2 # [m] required pass-side clearance for fallback target
+  v2x_overtake_curve_cooldown_enabled: true # suppress immediate re-overtake after a curve-related abort
+  v2x_overtake_curve_cooldown_sec: 0.3      # [s] short anti-chatter window before retrying another gap
+  v2x_side_overtake_enabled: true # treat side-by-side vehicles as overtake candidates, not passive Follow only
+  v2x_side_overtake_ignore_soft_curve_forbidden: false # do not side-pass moving vehicles in hairpins
+  v2x_side_overtake_entry_rear_tolerance: 0.5 # [m] do not start ShiftOut after the side target is already behind
+  v2x_overtake_target_ramp_enabled: true      # start lateral target before the front vehicle enters MPC horizon
+  v2x_overtake_target_ramp_ratio: 1.2         # higher = ramp pass-side target more gently
+  v2x_overtake_line_enabled: true            # explicit ShiftOut/Pass/Return lateral line; off keeps legacy behavior
+  v2x_overtake_line_shift_distance: 4.0       # [m] dev3 attack: reach the pass-side line promptly
+  v2x_overtake_line_max_shift_distance: 14.0  # [m] allow a high-speed ego to begin a physically feasible early ShiftOut toward a distant stopped vehicle
+  v2x_overtake_line_pass_distance: 8.0        # [m] pass-side hold distance hint
+  v2x_overtake_line_return_distance: 6.0      # [m] blend back promptly after clearing the target
+  v2x_overtake_line_lateral_offset: 1.2       # [m] signed by pass side: left positive, right negative
+  v2x_overtake_line_target_bias: 1.0          # [0-1] explicit line is the sole lateral owner during ShiftOut/Pass
+  # Applied to both the legacy lateral bounds and the occupancy-grid vehicle footprint.
+  v2x_overtake_line_min_wall_clearance: 0.15  # [m] retain attack candidates but reserve tracking error before final line commit
+  v2x_overtake_line_max_lateral_accel: 6.0    # [m/s^2] dev3 attack: complete committed ShiftOut in a hairpin
+  v2x_overtake_line_max_target_change: 0.04   # [m/cycle] smooth target goal updates across cycles
+  v2x_overtake_line_target_intrusion_ordering_margin: 0.10 # [m] abort if the ahead target reaches/crosses ego's selected-side ordering
+  v2x_overtake_line_target_intrusion_guard_distance: 2.0 # [m] farther targets may be crossed laterally while ego remains behind
+  v2x_overtake_line_side_quality_selection_enabled: true # compare both sides; inside/outside is not an unconditional preference
+  v2x_overtake_line_side_quality_min_score_advantage: 0.25 # [quality m] hysteresis over geometric tie preference
+  v2x_overtake_line_early_side_replan_enabled: true
+  v2x_overtake_line_early_side_replan_max_lateral_progress: 0.60 # [m] never directly reverse a deeply committed ShiftOut
+  v2x_overtake_line_early_side_replan_max_traveled_distance: 5.0 # [m]
+  v2x_overtake_line_early_side_replan_stable_sec: 0.25 # [s] suppress left/right observation chatter
+  v2x_overtake_line_early_side_replan_max_locked_side_lateral_speed: 0.25 # [m/s] do not flip while still moving into the locked side
+  v2x_overtake_line_side_replan_target_guard_distance: 8.0 # [m] measured ordering conflict; hard intrusion remains 2 m
+  # Re-evaluate both complete pass plans while the target is still well ahead.
+  # Execution remains frozen unless one stable alternate plan atomically wins.
+  v2x_overtake_opponent_side_replan_enabled: true
+  v2x_overtake_opponent_side_replan_evaluation_interval_sec: 0.15 # [s]
+  v2x_overtake_opponent_side_replan_no_return_front_distance: 2.0 # [m] side fixed only near body-level longitudinal overlap
+  v2x_overtake_opponent_side_replan_min_reserve_advantage: 0.35 # [m]
+  # Re-rank the two complete Missions with the already-computed rollout metrics.
+  # Hard wall/footprint/return feasibility remains an admission requirement.
+  v2x_overtake_opponent_side_replan_dynamic_ranking_enabled: true
+  v2x_overtake_opponent_side_replan_min_rear_clear_time_advantage_sec: 1.0 # [s]
+  v2x_overtake_opponent_side_replan_min_progress_score_advantage: 0.35
+  v2x_overtake_opponent_side_replan_max_reserve_regression: 0.05 # [m]
+  v2x_overtake_opponent_side_replan_max_rear_clear_time_regression_sec: 0.25 # [s]
+  v2x_overtake_opponent_side_replan_max_minimum_speed_regression: 0.25 # [m/s]
+  v2x_overtake_opponent_side_replan_stable_sec: 0.25 # [s]
+  v2x_overtake_opponent_side_replan_max_count: 1 # one Mission-wide cross-track replacement
+  v2x_overtake_cross_side_min_terminal_closing_speed: 0.5 # [m/s] dedicated rear-clear terminal advantage; independent of Pass cap
+  v2x_overtake_cross_side_min_wall_tracking_reserve: 0.15 # [m] extra reserve for measured lateral tracking error during a full-track switch
+  v2x_overtake_last_feasible_maneuver_enabled: true
+  v2x_overtake_last_feasible_maneuver_max_age_sec: 0.50 # [s] cache lifetime for a complete preflighted Mission
+  v2x_overtake_last_feasible_maneuver_max_ego_distance: 1.50 # [m] reject a cache after material Mission progress
+  v2x_overtake_last_feasible_maneuver_max_ego_lateral_change: 0.30 # [m] reject after lateral state changes
+  v2x_overtake_last_feasible_maneuver_max_target_longitudinal_change: 1.00 # [m]
+  v2x_overtake_last_feasible_maneuver_max_target_lateral_change: 0.25 # [m]
+  # SafeSeparation may reuse a fresh alternate before its debounce completes
+  # only after the target is clearly ahead and current/predicted bodies are clear.
+  v2x_overtake_safe_separation_reselect_min_front_distance: 4.0 # [m]
+  v2x_overtake_line_return_clear_distance: 2.0 # [m] begin Return after nominal vehicle-length clearance
+  v2x_overtake_line_phase_hold_time: 0.3      # [s] minimum phase hold before transition
+  v2x_overtake_target_hold_sec: 0.75          # [s] keep a locked Pass across a transient V2X classification loss
+  v2x_overtake_active_gap_loss_hold_sec: 2.00 # [s] retain one locked side through the measured WP63-64 hairpin gap dropout
+  v2x_overtake_clear_confirm_sec: 0.10        # [s] short rear-clear debounce before Return
+  v2x_overtake_reacquire_enabled: true        # allow same target/side to return to Pass early in Return
+  v2x_overtake_reacquire_window_sec: 0.50     # [s] maximum Return age for a safe reacquire
+  v2x_overtake_reacquire_max_return_progress: 0.25 # [0-1] do not reverse a mostly completed Return
+  v2x_overtake_recovery_reacquire_enabled: true # resume ShiftOut when the same safe gap reopens during Recovery
+  v2x_overtake_recovery_velocity_limit_enabled: true # explicit abort/return cap; active Pass uses its own locked-target cap
+  v2x_overtake_recovery_velocity: 5.0         # [m/s] dedicated Recovery cap, independent of v2x_follow_velocity
+  v2x_overtake_recovery_stall_speed: 0.15     # [m/s] continuous low speed starts bounded Recovery stall timer
+  v2x_overtake_recovery_stall_timeout_sec: 1.0 # [s] release a line Recovery that cannot restart
+  v2x_overtake_recovery_timeout_sec: 5.0      # [s] absolute bound for one Recovery phase
+  v2x_overtake_recovery_max_observation_gap_sec: 0.2 # [s] reject discontinuous distance integration
+  v2x_overtake_line_entry_retry_cooldown_sec: 1.0 # [s] do not reselect the same target/side after a geometric line failure
+  v2x_overtake_follow_prepare_timeout_sec: 4.0 # [s] end a paused mission and compare both sides again
+  v2x_overtake_follow_prepare_max_distance: 20.0 # [m] distance bound for one paused mission
+  # Runtime-invalid Missions get a shorter revalidation lease than a normal
+  # paused FollowPrepare. Expiry releases the side lock for a fresh two-side search.
+  v2x_overtake_dynamic_mission_wait_timeout_sec: 0.75 # [s]
+  v2x_overtake_dynamic_mission_wait_max_distance: 4.0 # [m]
+  v2x_overtake_completed_target_hold_sec: 1.5 # [s] suppress only new Overtake entry for a just-cleared target
+  v2x_overtake_solver_cooldown_sec: 2.0       # [s] suppress immediate re-entry after solver abort
+  v2x_overtake_solver_failure_abort_cycles: 8 # consecutive failures before aborting the lateral pass target
+  v2x_overtake_solver_recovery_success_cycles: 20 # 0.5 s at 40 Hz before re-entry after solver abort
+  v2x_overtake_line_debug_log_enabled: true   # log phase changes when enabled
+  v2x_moving_front_speed_threshold: 1.0 # [m/s] above this, Follow uses moving-front behavior
+  # Common-course front distance is center-to-center, not bumper clearance.
+  v2x_moving_follow_speed_margin: 0.8   # [m/s] maximum closing margin with enough distance
+  v2x_moving_follow_hard_distance: 2.05 # [m] dev3 attack floor near the nominal 2.0 m body-overlap boundary
+  v2x_moving_follow_target_distance: 3.0 # [m] match front speed here; about 3.0 m bumper clearance
+  v2x_moving_follow_recovery_speed_margin: 0.6 # [m/s] command below front speed near hard distance
+  v2x_moving_follow_distance_gain: 1.0 # [(m/s)/m] signed speed-margin gain around target distance
+  v2x_moving_safety_brake_distance: 2.2 # [m] moving-front hard floor for dev3
+  v2x_moving_safety_brake_margin: 0.3   # [m] added to relative-speed stopping distance
+  v2x_moving_safety_brake_time_headway: 0.3 # [s] speed-dependent emergency margin
+  v2x_start_grid_grace_time: 5.0         # [s] Ready staging plus this duration after Start; static grid only
+  v2x_start_grid_breakout_enabled: true  # sim race: use a feasible side corridor before falling back to Follow
+  v2x_start_grid_breakout_side_deadband: 0.05 # [m] if both gaps work, prefer away from target stagger outside this band
+  v2x_start_grid_inter_vehicle_corridor_enabled: true # sim race: evaluate wall-car/car-car/car-wall equally at launch
+  v2x_start_grid_inter_vehicle_min_gap_width: 0.2 # [m] residual ego-center corridor after vehicle inflation
+  v2x_start_grid_inter_vehicle_min_open_distance: 3.0 # [m] same two boundary vehicles must keep the slot open
+  v2x_start_grid_inter_vehicle_longitudinal_span: 12.0 # [m] start-only persistence that joins staggered rows into three corridor choices
+  v2x_start_grid_inter_vehicle_lookbehind_distance: 4.0 # [m] keep an adjacent staggered-row car as a corridor boundary after it draws slightly behind
+  # Car-car slot only: wall-car candidates use a yaw-unknown rectangular footprint envelope.
+  v2x_start_grid_inter_vehicle_lateral_radius: 1.25 # [m] sim-only inflation before prediction margin; preserves the aggressive inter-vehicle slot
+  v2x_start_grid_dynamic_decision_enabled: true # accelerate on the base line while P2/P3 motion reveals the best launch corridor
+  v2x_start_grid_dynamic_peer_motion_speed: 0.25 # [m/s] begin the short observation window after either peer rolls
+  v2x_start_grid_dynamic_motion_observation_sec: 0.4 # [s] observe moving peers before committing inside/weave/outside
+  v2x_start_grid_dynamic_max_observation_sec: 1.25 # [s] bounded wait; P1 never stops while observing
+  v2x_start_grid_dynamic_candidate_stable_sec: 0.2 # [s] physical corridor must stop flickering before lock
+  v2x_require_gap_for_overtake: true
+  v2x_low_speed_avoidance_enabled: true
+  v2x_low_speed_avoidance_ignore_soft_curve_forbidden: true # gate2: allow stopped-vehicle bypass in curve-lookahead zones
+  use_v2x_local_path_planner: true
+  v2x_low_speed_avoidance_distance: 10.0         # [m] close stopped/slow vehicle bypass range
+  v2x_low_speed_avoidance_lookahead_distance: 18.0 # [m] include multiple stopped vehicles in gate2-like layouts
+  v2x_low_speed_avoidance_velocity: 11.1         # [m/s]
+  v2x_low_speed_avoidance_shift_velocity: 3.0   # [m/s] direct lateral entry
+  v2x_low_speed_avoidance_pass_control_velocity: 6.0 # [m/s] direct stopped-pack pass after corridor entry
+  v2x_low_speed_avoidance_rejoin_control_velocity: 4.0 # [m/s] direct return until MPC probe succeeds
+  v2x_low_speed_avoidance_shift_lateral_gain: 0.4 # [1/m^2] short-shift lateral feedback
+  v2x_low_speed_avoidance_shift_heading_gain: 1.3 # [1/m] damp heading error during the shift
+  v2x_low_speed_avoidance_shift_lateral_tolerance: 0.4 # [m] settle near corridor target before MPC handoff
+  v2x_low_speed_avoidance_shift_heading_tolerance: 0.2 # [rad] do not hand off while still heavily yawed
+  v2x_low_speed_avoidance_shift_clear_hold_sec: 2.0 # [s] ignore brief front/side detection gaps before MPC handoff
+  v2x_low_speed_avoidance_stopped_confirmation_samples: 3 # distinct valid V2X speed samples; control-loop repeats do not count
+  v2x_low_speed_avoidance_stopped_confirmation_max_gap_sec: 1.0 # [s] reset confirmation after a V2X observation gap
+  v2x_low_speed_avoidance_max_lateral_accel: 6.0 # [m/s^2] actual-speed cap for direct shift steering
+  v2x_low_speed_avoidance_max_front_speed: 0.2   # [m/s] only treat truly stopped vehicles as bypass targets
+  v2x_low_speed_avoidance_min_prepare_distance: 3.0 # [m] sim: allow close stopped-front bypass when a corridor is feasible
+  v2x_low_speed_avoidance_min_gap_width: 0.5     # [m] checked after wall clearance shrink
+  v2x_low_speed_avoidance_min_gap_points: 2      # require consecutive safe gap points before entering bypass
+  v2x_low_speed_avoidance_clear_distance: 8.0    # [m] keep low-speed bypass until clear of nearby V2X vehicles
+  # Abort a local stopped-vehicle pass that has physically stopped making progress. The pass
+  # target is reset and held off briefly so side-only stalls can enter bounded stuck recovery.
+  v2x_low_speed_avoidance_stall_speed: 0.15       # [m/s]
+  v2x_low_speed_avoidance_stall_timeout_sec: 1.5  # [s]
+  v2x_low_speed_avoidance_stall_cooldown_sec: 3.0 # [s]
+  v2x_low_speed_avoidance_stall_max_observation_gap_sec: 0.2 # [s]
+  v2x_local_path_pass_clearance: 3.0             # [m] stay on pass-side path after the last stopped vehicle
+  v2x_local_path_return_distance: 6.0            # [m] distance used to blend back to base trajectory
+  v2x_local_path_invert_target: false            # invert local-path lateral target before MPC tracking
+  v2x_low_speed_pass_side: "auto"                # auto, left, right. Auto selects the wider feasible pass side.
+  v2x_low_speed_pass_ramp_ratio: 1.0             # preserve the solver-stable lateral ramp
+  v2x_overtake_forbidden_wp_ranges: []
+  v2x_state_hold_time: 0.1        # [s]
+  use_max_kappa_pred: true
+
+
+  ## ---------- ver3 ------------- ##
+  ## Lap1: 53s, Lap2: 47s
+
+  v_max: 40.0
+  domain_v_max:
+    1: 40.0
+    2: 40.0
+    3: 40.0
+  domain_start_v_max_duration: 40.0
+  domain_start_v_max:
+    1: 40.0
+    2: 40.0
+    3: 40.0
+  ay_max: 30.0  # m/s^2, maximum lateral acceleration in curves
+  Q:  [50000.0, 1500000.0, 30000.0]
+  QN: [30000.0, 30000.0, 300.0]
+
+  ## ---------- 究極 ------------- ##
+  ## Lap1: 53s, Lap2: 47s
+
+  #v_max: 40.0   # km/h
+  #ay_max: 30.0  # m/s^2, maximum lateral acceleration in curves
+  #Q: [600000.0, 100000000.0, 2000000.0]
+  #QN: [1000000.0, 1000000.0, 10000.0]
+
+  ## --- 高速 (gnss delay 0.3) --- ##
+  ## Lap1: 55s, Lap2: 49s
+
+  # v_max: 30.0
+  # ay_max: 9.5
+  # Q: [1000000.0, 100000000.0, 850000.0]
+  # QN: [1000000.0, 1000.0, 10000.0]
+
+  ## --- 高速 (gnss delay 0.4) --- ##
+  ## Lap1: 55s, Lap2: 49s
+
+  # v_max: 30.0
+  # ay_max: 9.5
+  # Q: [1000000.0, 100000000.0, 1850000.0]
+  # QN: [1000000.0, 1000.0, 10000.0]
+
+  ## --- 中高速 --- ##
+  ## Lap1: 59s, Lap2: 54s
+  # v_max: 25.0
+  # ay_max: 7.0
+  # Q: [1000000.0, 100000000.0, 850000.0]
+  # QN: [1000000.0, 1000.0, 10000.0]
+
+  ## --------- 中速 -------------- ##
+  ## Lap1: 67s, Lap2: 64s
+
+  #v_max: 20.0
+  #ay_max: 6.5
+  #Q: [3000000.0, 90000000.0, 100000.0] # 低速だとインを攻めがちなので、あえて外に膨らむパラメータ
+  #QN: [1000000.0, 1000.0, 10000.0]
+
+  ## -------- 低速 -------------- ##
+  ## Lap1: 86s
+
+  # v_max: 15.0
+  # ay_max: 5.5
+  # Q: [5000000.0, 100000000.0, 200000.0] # 低速だとインを攻めがちなので、あえて外に膨らむパラメータ
+  # QN: [1000000.0, 1000.0, 10000.0]
+
+v2x_obstacle_avoidance:
+  vehicle_radius: 0.5          # [m]
+  v_max_safety: 30.0           # [m/s]
+  position_jump_threshold: 5.0 # [m]

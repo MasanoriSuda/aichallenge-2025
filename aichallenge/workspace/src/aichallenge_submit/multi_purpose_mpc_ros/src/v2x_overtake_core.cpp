@@ -886,6 +886,8 @@ CrossSideMissionReplacementResolution resolve_cross_side_mission_replacement(
   const CrossSideMissionReplacementRequest & request) noexcept
 {
   CrossSideMissionReplacementResolution resolution;
+  const bool tactical_rearm_active =
+    request.tactical_no_return_rearmed && request.safe_separation_active;
   const auto finite_non_negative = [](const double value) {
       return std::isfinite(value) && value >= 0.0;
     };
@@ -905,12 +907,18 @@ CrossSideMissionReplacementResolution resolve_cross_side_mission_replacement(
     resolution.reason = CrossSideMissionReplacementReason::SameSide;
     return resolution;
   }
-  if (request.no_return_latched || !request.before_no_return) {
+  if (
+    (request.no_return_latched || !request.before_no_return) &&
+    !tactical_rearm_active)
+  {
     resolution.valid = true;
     resolution.reason = CrossSideMissionReplacementReason::NoReturn;
     return resolution;
   }
-  if (request.safe_separation_active) {
+  if (
+    request.safe_separation_active &&
+    !tactical_rearm_active)
+  {
     resolution.valid = true;
     resolution.reason = CrossSideMissionReplacementReason::SafeSeparation;
     return resolution;
@@ -3068,6 +3076,28 @@ bool can_reselect_from_safe_separation(
     !request.execution_corridor_blocked && !request.hard_fault &&
     !request.rear_clear_confirmed &&
     request.target_longitudinal_m + 1e-9 >= request.minimum_front_distance_m;
+}
+
+SoftMissionAbortAction resolve_soft_mission_abort(
+  const SoftMissionAbortRequest & request) noexcept
+{
+  if (
+    !std::isfinite(request.target_longitudinal_m) ||
+    !std::isfinite(request.minimum_front_distance_m) ||
+    request.minimum_front_distance_m < 0.0)
+  {
+    return SoftMissionAbortAction::Recovery;
+  }
+  const bool physically_clear_follow =
+    request.soft_failure && !request.hard_fault && request.target_continuous &&
+    request.current_body_footprints_separated &&
+    request.footprint_prediction_valid &&
+    request.predicted_body_footprint_sweep_separated &&
+    !request.execution_corridor_blocked && !request.rear_clear_confirmed &&
+    request.target_longitudinal_m + 1e-9 >= request.minimum_front_distance_m;
+  return physically_clear_follow ?
+    SoftMissionAbortAction::SpeedPreservingFollow :
+    SoftMissionAbortAction::Recovery;
 }
 
 MissionAlignedSafeSeparationBudgetResolution resolve_mission_aligned_safe_separation_budget(
@@ -6005,7 +6035,10 @@ LastFeasibleManeuverResolution resolve_last_feasible_maneuver(
     request.alternate_candidate_motion_fresh &&
     request.alternate_candidate_age_sec <= request.maximum_candidate_age_sec;
 
-  if (alternate_fresh && request.before_no_return) {
+  if (
+    alternate_fresh &&
+    (request.before_no_return || request.tactical_no_return_rearmed))
+  {
     resolution.action = LastFeasibleManeuverAction::ReuseAlternate;
     resolution.replacement_requested = true;
     resolution.alternate_selected = true;
@@ -6018,7 +6051,10 @@ LastFeasibleManeuverResolution resolve_last_feasible_maneuver(
     resolution.selected_candidate_age_sec = request.current_candidate_age_sec;
     return resolution;
   }
-  if (alternate_fresh && !request.before_no_return) {
+  if (
+    alternate_fresh && !request.before_no_return &&
+    !request.tactical_no_return_rearmed)
+  {
     resolution.action = LastFeasibleManeuverAction::BlockedByNoReturn;
     return resolution;
   }

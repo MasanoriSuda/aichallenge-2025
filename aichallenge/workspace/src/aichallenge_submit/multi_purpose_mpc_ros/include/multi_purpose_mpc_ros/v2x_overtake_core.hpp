@@ -605,8 +605,9 @@ struct CrossSideNoReturnLatchRequest
 };
 
 /// Keep the cross-track no-return decision monotonic for one frozen Mission.
-/// A target moving longitudinally away after side-by-side commit must not
-/// reopen the opposite side. OvertakeLineState reset owns latch release.
+/// The latch itself is never cleared by target motion; a separately validated
+/// SafeSeparation tactical re-arm may bypass it for one replacement without
+/// mutating it. OvertakeLineState reset owns latch release.
 bool resolve_cross_side_no_return_latch(
   const CrossSideNoReturnLatchRequest & request) noexcept;
 
@@ -637,6 +638,10 @@ struct CrossSideMissionReplacementRequest
   bool before_no_return{false};
   bool no_return_latched{false};
   bool safe_separation_active{false};
+  /// SafeSeparation may explicitly re-open one cross-side choice after the
+  /// target has moved clearly ahead and current/predicted geometry is clear.
+  /// This must never be inferred from the longitudinal distance alone.
+  bool tactical_no_return_rearmed{false};
   bool candidate_feasible{false};
   bool rear_clear_prediction_checked{false};
   bool rear_clear_prediction_feasible{false};
@@ -1779,6 +1784,31 @@ struct SafeSeparationTacticalReselectRequest
 /// hard guards must all remain clear.
 bool can_reselect_from_safe_separation(
   const SafeSeparationTacticalReselectRequest & request) noexcept;
+
+enum class SoftMissionAbortAction
+{
+  Recovery,
+  SpeedPreservingFollow,
+};
+
+struct SoftMissionAbortRequest
+{
+  bool soft_failure{false};
+  bool hard_fault{false};
+  bool target_continuous{false};
+  bool current_body_footprints_separated{false};
+  bool footprint_prediction_valid{false};
+  bool predicted_body_footprint_sweep_separated{false};
+  bool execution_corridor_blocked{true};
+  bool rear_clear_confirmed{false};
+  double target_longitudinal_m{};
+  double minimum_front_distance_m{};
+};
+
+/// Leave a failed, physically clear Mission without applying the Recovery
+/// velocity cap. Hard faults and uncertain geometry remain fail closed.
+SoftMissionAbortAction resolve_soft_mission_abort(
+  const SoftMissionAbortRequest & request) noexcept;
 
 struct MissionAlignedSafeSeparationBudgetRequest
 {
@@ -3355,6 +3385,9 @@ struct LastFeasibleManeuverRequest
   bool target_continuous{false};
   bool current_body_footprints_separated{false};
   bool before_no_return{false};
+  /// Set only by the SafeSeparation tactical reselection gate after the
+  /// target has moved clearly ahead and all runtime geometry guards are clear.
+  bool tactical_no_return_rearmed{false};
   bool current_candidate_available{false};
   double current_candidate_age_sec{std::numeric_limits<double>::infinity()};
   bool current_candidate_motion_fresh{true};
@@ -3379,9 +3412,10 @@ struct LastFeasibleManeuverResolution
 
 /// Reuse the newest complete, preflighted Mission when the active Mission
 /// encounters a soft continuation failure. Cross-track replacement remains
-/// bounded by the longitudinal no-return point, while a fresh same-side
-/// candidate may refresh the frozen Mission after no-return. Hard faults,
-/// target discontinuity, and current body overlap always fail closed.
+/// bounded by the longitudinal no-return point, except for an explicitly
+/// validated SafeSeparation tactical re-arm. A fresh same-side candidate may
+/// refresh the frozen Mission after no-return. Hard faults, target
+/// discontinuity, and current body overlap always fail closed.
 LastFeasibleManeuverResolution resolve_last_feasible_maneuver(
   const LastFeasibleManeuverRequest & request) noexcept;
 

@@ -166,6 +166,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationTacticalReselectRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::SoftMissionAbortAction;
+using multi_purpose_mpc_ros::v2x_overtake_core::SoftMissionAbortRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::MissionAlignedSafeSeparationBudgetRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecoverableSideContactRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::WallBoundedContactSeparationRequest;
@@ -211,6 +213,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_same_side_extension_com
 using multi_purpose_mpc_ros::v2x_overtake_core::can_commit_same_side_extension;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_safe_separation;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_reselect_from_safe_separation;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_soft_mission_abort;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   resolve_mission_aligned_safe_separation_budget;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_recoverable_side_contact;
@@ -8510,6 +8513,34 @@ TEST(V2XOvertakeCoreSafeSeparation, TacticalReselectKeepsHardFaultsFailClosed)
   EXPECT_FALSE(can_reselect_from_safe_separation(request));
 }
 
+TEST(V2XOvertakeCoreSafeSeparation, SoftAbortPreservesSpeedOnlyWhenPhysicallyClear)
+{
+  SoftMissionAbortRequest request;
+  request.soft_failure = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+  request.execution_corridor_blocked = false;
+  request.target_longitudinal_m = 4.0;
+  request.minimum_front_distance_m = 4.0;
+
+  EXPECT_EQ(
+    resolve_soft_mission_abort(request),
+    SoftMissionAbortAction::SpeedPreservingFollow);
+
+  request.target_longitudinal_m = 3.99;
+  EXPECT_EQ(resolve_soft_mission_abort(request), SoftMissionAbortAction::Recovery);
+
+  request.target_longitudinal_m = 4.0;
+  request.predicted_body_footprint_sweep_separated = false;
+  EXPECT_EQ(resolve_soft_mission_abort(request), SoftMissionAbortAction::Recovery);
+
+  request.predicted_body_footprint_sweep_separated = true;
+  request.hard_fault = true;
+  EXPECT_EQ(resolve_soft_mission_abort(request), SoftMissionAbortAction::Recovery);
+}
+
 TEST(V2XOvertakeCoreLastFeasibleManeuver, AllowsFreshUnstableAlternateInAdmittedReselect)
 {
   LastFeasibleManeuverRequest request;
@@ -8598,6 +8629,26 @@ TEST(V2XOvertakeCoreLastFeasibleManeuver, DoesNotCrossTrackAfterNoReturn)
   const auto result = resolve_last_feasible_maneuver(request);
   EXPECT_EQ(result.action, LastFeasibleManeuverAction::BlockedByNoReturn);
   EXPECT_FALSE(result.replacement_requested);
+}
+
+TEST(V2XOvertakeCoreLastFeasibleManeuver, TacticalRearmAllowsAlternateAfterNoReturn)
+{
+  LastFeasibleManeuverRequest request;
+  request.enabled = true;
+  request.soft_failure = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.before_no_return = false;
+  request.tactical_no_return_rearmed = true;
+  request.alternate_candidate_available = true;
+  request.alternate_candidate_stable = true;
+  request.alternate_candidate_age_sec = 0.10;
+  request.maximum_candidate_age_sec = 0.50;
+
+  const auto result = resolve_last_feasible_maneuver(request);
+  EXPECT_EQ(result.action, LastFeasibleManeuverAction::ReuseAlternate);
+  EXPECT_TRUE(result.replacement_requested);
+  EXPECT_TRUE(result.alternate_selected);
 }
 
 TEST(V2XOvertakeCoreLastFeasibleManeuver, AllowsUnavailableCandidatesWithInfiniteAge)
@@ -10769,6 +10820,45 @@ TEST(V2XOvertakeCoreCommitStage, CrossSideReplacementBlocksCommittedOrSafeSepara
   resolution = resolve_cross_side_mission_replacement(request);
   EXPECT_FALSE(resolution.admitted);
   EXPECT_EQ(resolution.reason, CrossSideMissionReplacementReason::SafeSeparation);
+}
+
+TEST(V2XOvertakeCoreCommitStage, TacticalRearmAdmitsSafeSeparationReplacement)
+{
+  CrossSideMissionReplacementRequest request;
+  request.active_execution = true;
+  request.side_changed = true;
+  request.before_no_return = false;
+  request.no_return_latched = true;
+  request.safe_separation_active = true;
+  request.tactical_no_return_rearmed = true;
+  request.candidate_feasible = true;
+  request.rear_clear_prediction_checked = true;
+  request.rear_clear_prediction_feasible = true;
+  request.predicted_rear_clear_time_sec = 2.0;
+  request.predicted_rear_clear_distance_m = 8.0;
+  request.predicted_rear_clear_speed_mps = 4.0;
+  request.predicted_minimum_ego_speed_mps = 3.2;
+  request.minimum_rear_clear_speed_mps = 3.0;
+  request.minimum_ego_speed_mps = 3.0;
+  request.minimum_path_wall_clearance_m = 0.45;
+  request.minimum_required_path_wall_clearance_m = 0.30;
+  request.remaining_time_budget_sec = 3.0;
+  request.remaining_distance_budget_m = 10.0;
+  request.pass_phase = true;
+
+  const auto resolution = resolve_cross_side_mission_replacement(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.admitted);
+  EXPECT_TRUE(resolution.restart_shiftout);
+  EXPECT_EQ(resolution.reason, CrossSideMissionReplacementReason::Admitted);
+
+  request.safe_separation_active = false;
+  const auto outside_safe_separation =
+    resolve_cross_side_mission_replacement(request);
+  EXPECT_FALSE(outside_safe_separation.admitted);
+  EXPECT_EQ(
+    outside_safe_separation.reason,
+    CrossSideMissionReplacementReason::NoReturn);
 }
 
 TEST(V2XOvertakeCoreCommitStage, OuterTransitionLatchBlocksOpponentReturnSwitch)

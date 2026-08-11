@@ -11278,7 +11278,8 @@ private:
     const overtake_core::OvertakeMissionCandidate & candidate,
     const double now_sec, const double current_ey,
     const bool allow_same_side_replacement,
-    const bool allow_committed_same_side_replacement = false)
+    const bool allow_committed_same_side_replacement = false,
+    const bool allow_tactical_no_return_rearm = false)
   {
     const auto & line_cfg = cfg.v2x_behavior.overtake_line;
     const int previous_side = overtake_line_state_.pass_side_sign;
@@ -11326,11 +11327,13 @@ private:
     const double target_speed_mps =
       std::isfinite(overtake_line_state_.target_last_speed) ?
       std::max(0.0, overtake_line_state_.target_last_speed) : 0.0;
-    const bool effective_no_return_latched =
+    const bool historical_no_return_latched =
       overtake_line_state_.opponent_side_replan_no_return_latched ||
-      overtake_line_state_.mission_cross_side_transition_committed ||
       overtake_line_state_.pass_front_overlap_exclusion_latched ||
       overtake_line_state_.pass_forward_completion_latched;
+    const bool effective_no_return_latched =
+      overtake_line_state_.mission_cross_side_transition_committed ||
+      (historical_no_return_latched && !allow_tactical_no_return_rearm);
     const auto resolve_cross_side_admission =
       [&](const overtake_core::OvertakeMissionCandidate & proposed_mission) {
         overtake_core::CrossSideMissionReplacementRequest request;
@@ -11340,6 +11343,7 @@ private:
         request.no_return_latched = effective_no_return_latched;
         request.safe_separation_active =
           overtake_line_state_.pass_horizon_safe_separation_active;
+        request.tactical_no_return_rearmed = allow_tactical_no_return_rearm;
         request.candidate_feasible = proposed_mission.feasible;
         request.rear_clear_prediction_checked =
           proposed_mission.rear_clear_prediction_checked;
@@ -12936,7 +12940,8 @@ private:
     const auto try_last_feasible_maneuver = [&] (
       const std::string & reason, const bool soft_failure,
       const bool current_candidate_allowed,
-      const bool allow_unstable_alternate_reselection) {
+      const bool allow_unstable_alternate_reselection,
+      const bool allow_tactical_no_return_rearm) {
         const bool cache_matches_active_mission =
           overtake_line_state_.last_feasible_target_vehicle_id ==
           overtake_line_state_.target_vehicle_id &&
@@ -13032,6 +13037,8 @@ private:
         rescue_request.target_continuous = target_continuous;
         rescue_request.current_body_footprints_separated = recoverable_current_geometry;
         rescue_request.before_no_return = before_no_return;
+        rescue_request.tactical_no_return_rearmed =
+          allow_tactical_no_return_rearm;
         rescue_request.current_candidate_available = current_available;
         rescue_request.current_candidate_age_sec = current_age_sec;
         rescue_request.current_candidate_motion_fresh = current_motion_fresh;
@@ -13130,7 +13137,8 @@ private:
         const bool replaced = replace_frozen_overtake_mission_after_dynamic_replan(
           candidate.value(), now_sec, current_ey,
           !resolution.alternate_selected,
-          !resolution.alternate_selected);
+          !resolution.alternate_selected,
+          allow_tactical_no_return_rearm && resolution.alternate_selected);
         if (replaced) {
           RCLCPP_WARN(
             rclcpp::get_logger("mpc_controller"),
@@ -15539,7 +15547,7 @@ private:
           tactical_reselection_admitted &&
           overtake_line_state_.last_feasible_alternate_mission.has_value() &&
           try_last_feasible_maneuver(
-            "SafeSeparation tactical alternate reselect", true, false, true))
+            "SafeSeparation tactical alternate reselect", true, false, true, true))
         {
           return update_overtake_line(
             behavior_output, ref_wp_id, N, lb, ub, now_sec);
@@ -15755,12 +15763,43 @@ private:
             overtake_core::SafeSeparationReason::ShortHorizonUnsafe;
           if (
             try_last_feasible_maneuver(
-              abort_reason, soft_maneuver_failure, current_candidate_allowed, false))
+              abort_reason, soft_maneuver_failure, current_candidate_allowed, false, false))
           {
             return update_overtake_line(
               behavior_output, ref_wp_id, N, lb, ub, now_sec);
           }
           if (enter_dynamic_mission_wait(abort_reason)) {
+            return output;
+          }
+          const auto soft_abort_action = overtake_core::resolve_soft_mission_abort(
+            overtake_core::SoftMissionAbortRequest{
+              soft_maneuver_failure,
+              tactical_reselect_hard_fault,
+              tactical_reselect_target_continuous,
+              behavior_output.locked_target_current_body_footprints_separated,
+              behavior_output.locked_target_footprint_prediction_valid,
+              behavior_output.locked_target_predicted_body_footprint_sweep_separated,
+              behavior_output.overtake_execution_corridor_blocked,
+              rear_clear_confirmed,
+              locked_target_longitudinal,
+              line_cfg.safe_separation_reselect_min_front_distance});
+          if (
+            soft_abort_action ==
+            overtake_core::SoftMissionAbortAction::SpeedPreservingFollow)
+          {
+            const int failed_side = overtake_line_state_.pass_side_sign;
+            const std::string failed_target = overtake_line_state_.target_vehicle_id;
+            arm_overtake_line_side_retry_block(
+              failed_side, failed_target, now_sec,
+              "physically clear soft Mission abort");
+            RCLCPP_WARN(
+              rclcpp::get_logger("mpc_controller"),
+              "OvertakeLine soft Mission abort preserves speed: target=%s, "
+              "failed_side=%d, target_s=%.2f, reason=%s, wp_id=%d",
+              failed_target.c_str(), failed_side, locked_target_longitudinal,
+              overtake_core::to_string(safe_separation.reason), model->wp_id);
+            reset_overtake_line_state(
+              now_sec, "physically clear soft Mission abort; resume Follow");
             return output;
           }
           transition_overtake_line_phase(

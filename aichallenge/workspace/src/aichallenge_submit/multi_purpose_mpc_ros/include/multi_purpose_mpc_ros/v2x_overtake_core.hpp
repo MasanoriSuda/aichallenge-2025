@@ -620,7 +620,9 @@ enum class CrossSideMissionReplacementReason
   CandidateInfeasible,
   RearClearUnchecked,
   RearClearInfeasible,
+  AdditionalSideTransitionRequired,
   InvalidPrediction,
+  WallReserveInsufficient,
   TimeBudgetExceeded,
   DistanceBudgetExceeded,
   MinimumSpeedInsufficient,
@@ -638,12 +640,15 @@ struct CrossSideMissionReplacementRequest
   bool candidate_feasible{false};
   bool rear_clear_prediction_checked{false};
   bool rear_clear_prediction_feasible{false};
+  bool candidate_requires_additional_side_transition{false};
   double predicted_rear_clear_time_sec{std::numeric_limits<double>::infinity()};
   double predicted_rear_clear_distance_m{std::numeric_limits<double>::infinity()};
   double predicted_rear_clear_speed_mps{std::numeric_limits<double>::quiet_NaN()};
   double predicted_minimum_ego_speed_mps{std::numeric_limits<double>::quiet_NaN()};
   double minimum_rear_clear_speed_mps{0.0};
   double minimum_ego_speed_mps{0.0};
+  double minimum_path_wall_clearance_m{std::numeric_limits<double>::infinity()};
+  double minimum_required_path_wall_clearance_m{0.0};
   double remaining_time_budget_sec{std::numeric_limits<double>::infinity()};
   double remaining_distance_budget_m{std::numeric_limits<double>::infinity()};
   bool pass_phase{false};
@@ -826,8 +831,12 @@ struct OvertakeKinematicRolloutRequest
 {
   bool enabled{false};
   OvertakeMissionPathRequest mission_path;
+  /// Target position on the shared reference-course progress axis. This is not
+  /// physical distance travelled on the target's own Frenet offset curve.
   double target_longitudinal_m{};
   double current_ego_speed_mps{};
+  /// Target speed on the shared reference-course progress axis. Ego physical
+  /// travel is converted to that axis by speed_caps.course_progress_ratio.
   double target_speed_mps{};
   double candidate_closing_speed_mps{};
   double maximum_ego_speed_mps{};

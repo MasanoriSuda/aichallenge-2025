@@ -930,6 +930,12 @@ CrossSideMissionReplacementResolution resolve_cross_side_mission_replacement(
     resolution.reason = CrossSideMissionReplacementReason::RearClearInfeasible;
     return resolution;
   }
+  if (request.candidate_requires_additional_side_transition) {
+    resolution.valid = true;
+    resolution.reason =
+      CrossSideMissionReplacementReason::AdditionalSideTransitionRequired;
+    return resolution;
+  }
   if (
     !finite_non_negative(request.predicted_rear_clear_time_sec) ||
     !finite_non_negative(request.predicted_rear_clear_distance_m) ||
@@ -937,6 +943,8 @@ CrossSideMissionReplacementResolution resolve_cross_side_mission_replacement(
     !finite_non_negative(request.predicted_minimum_ego_speed_mps) ||
     !finite_non_negative(request.minimum_rear_clear_speed_mps) ||
     !finite_non_negative(request.minimum_ego_speed_mps) ||
+    !finite_non_negative(request.minimum_path_wall_clearance_m) ||
+    !finite_non_negative(request.minimum_required_path_wall_clearance_m) ||
     !valid_budget(request.remaining_time_budget_sec) ||
     !valid_budget(request.remaining_distance_budget_m))
   {
@@ -945,6 +953,13 @@ CrossSideMissionReplacementResolution resolve_cross_side_mission_replacement(
   }
 
   resolution.valid = true;
+  if (
+    request.minimum_path_wall_clearance_m + 1e-9 <
+    request.minimum_required_path_wall_clearance_m)
+  {
+    resolution.reason = CrossSideMissionReplacementReason::WallReserveInsufficient;
+    return resolution;
+  }
   if (
     request.predicted_rear_clear_time_sec >
     request.remaining_time_budget_sec + 1e-9)
@@ -999,8 +1014,12 @@ const char * to_string(const CrossSideMissionReplacementReason reason) noexcept
       return "rear_clear_unchecked";
     case CrossSideMissionReplacementReason::RearClearInfeasible:
       return "rear_clear_infeasible";
+    case CrossSideMissionReplacementReason::AdditionalSideTransitionRequired:
+      return "additional_side_transition_required";
     case CrossSideMissionReplacementReason::InvalidPrediction:
       return "invalid_prediction";
+    case CrossSideMissionReplacementReason::WallReserveInsufficient:
+      return "wall_reserve_insufficient";
     case CrossSideMissionReplacementReason::TimeBudgetExceeded:
       return "time_budget_exceeded";
     case CrossSideMissionReplacementReason::DistanceBudgetExceeded:
@@ -6079,11 +6098,6 @@ DynamicMissionWaitResolution resolve_dynamic_mission_wait(
     resolution.reason = DynamicMissionWaitReason::Disabled;
     return resolution;
   }
-  if (request.rear_clear_confirmed) {
-    resolution.action = DynamicMissionWaitAction::Return;
-    resolution.reason = DynamicMissionWaitReason::RearClear;
-    return resolution;
-  }
   if (request.hard_fault) {
     resolution.action = DynamicMissionWaitAction::Recovery;
     resolution.reason = DynamicMissionWaitReason::HardFault;
@@ -6097,6 +6111,11 @@ DynamicMissionWaitResolution resolve_dynamic_mission_wait(
   if (!request.current_body_footprints_separated) {
     resolution.action = DynamicMissionWaitAction::Recovery;
     resolution.reason = DynamicMissionWaitReason::BodyOverlap;
+    return resolution;
+  }
+  if (request.rear_clear_confirmed) {
+    resolution.action = DynamicMissionWaitAction::Return;
+    resolution.reason = DynamicMissionWaitReason::RearClear;
     return resolution;
   }
   if (request.alternate_replacement_ready) {

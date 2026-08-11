@@ -1392,7 +1392,9 @@ struct OvertakeLineConfig
   double opponent_side_replan_max_rear_clear_time_regression_sec{0.25};
   double opponent_side_replan_max_minimum_speed_regression{0.25};
   double opponent_side_replan_stable_sec{0.25};
-  int opponent_side_replan_max_count{3};
+  int opponent_side_replan_max_count{1};
+  double cross_side_min_terminal_closing_speed{0.5};
+  double cross_side_min_wall_tracking_reserve{0.15};
   bool last_feasible_maneuver_enabled{true};
   double last_feasible_maneuver_max_age_sec{0.50};
   double last_feasible_maneuver_max_ego_distance{1.50};
@@ -2226,6 +2228,10 @@ struct OvertakeLineState
     std::numeric_limits<double>::quiet_NaN()};
   int opponent_side_replan_count{0};
   bool opponent_side_replan_no_return_latched{false};
+  // Shared by opponent-driven and course-role-driven side changes. Once any
+  // subsystem commits a full-track transition, no other subsystem may undo it
+  // before this Mission ends.
+  bool mission_cross_side_transition_committed{false};
   std::optional<overtake_core::OvertakeMissionCandidate>
   last_feasible_current_mission;
   double last_feasible_current_mission_sec{
@@ -6537,14 +6543,16 @@ struct MPC
       overtake_core::resolve_cross_side_no_return_latch(
       overtake_core::CrossSideNoReturnLatchRequest{
         opponent_side_replan_execution_active,
-        overtake_line_state_.opponent_side_replan_no_return_latched,
+        overtake_line_state_.opponent_side_replan_no_return_latched ||
+        overtake_line_state_.mission_cross_side_transition_committed,
         pass_commit_stage.stage,
         overtake_line_state_.pass_horizon_safe_separation_active,
         false});
     const bool opponent_side_replan_before_no_return =
       pass_commit_stage.valid && pass_commit_stage.side_replan_allowed &&
       pass_commit_stage.stage == overtake_core::PassCommitStage::ShiftCommitted &&
-      !overtake_line_state_.opponent_side_replan_no_return_latched;
+      !overtake_line_state_.opponent_side_replan_no_return_latched &&
+      !overtake_line_state_.mission_cross_side_transition_committed;
     const bool opponent_side_replan_geometry_observable =
       output.locked_target_current_body_footprints_separated &&
       output.locked_target_footprint_prediction_valid;
@@ -6565,6 +6573,7 @@ struct MPC
     output.opponent_side_replan_early_intrusion_risk =
       opponent_side_replan_early_intrusion_risk;
     const bool opponent_side_replan_count_available =
+      !overtake_line_state_.mission_cross_side_transition_committed &&
       overtake_line_state_.opponent_side_replan_count <
       cfg.v2x_behavior.overtake_line.opponent_side_replan_max_count;
     // Even after the longitudinal no-return point, a paused mission must keep
@@ -11319,29 +11328,47 @@ private:
       std::max(0.0, overtake_line_state_.target_last_speed) : 0.0;
     const bool effective_no_return_latched =
       overtake_line_state_.opponent_side_replan_no_return_latched ||
+      overtake_line_state_.mission_cross_side_transition_committed ||
       overtake_line_state_.pass_front_overlap_exclusion_latched ||
       overtake_line_state_.pass_forward_completion_latched;
-    const auto cross_side_admission =
-      overtake_core::resolve_cross_side_mission_replacement(
-      overtake_core::CrossSideMissionReplacementRequest{
-        active_execution,
-        side_changed,
-        !effective_no_return_latched,
-        effective_no_return_latched,
-        overtake_line_state_.pass_horizon_safe_separation_active,
-        candidate.feasible,
-        candidate.rear_clear_prediction_checked,
-        candidate.rear_clear_prediction_feasible,
-        candidate.predicted_rear_clear_time_sec,
-        candidate.predicted_rear_clear_ego_distance_m,
-        candidate.predicted_rear_clear_speed_mps,
-        candidate.predicted_minimum_ego_speed_mps,
-        target_speed_mps +
-        std::max(0.0, cfg.v2x_behavior.overtake_pass_unlatched_max_closing_speed),
-        target_speed_mps,
-        remaining_time_budget_sec,
-        remaining_distance_budget_m,
-        overtake_line_state_.phase == OvertakeLinePhase::Pass});
+    const auto resolve_cross_side_admission =
+      [&](const overtake_core::OvertakeMissionCandidate & proposed_mission) {
+        overtake_core::CrossSideMissionReplacementRequest request;
+        request.active_execution = active_execution;
+        request.side_changed = side_changed;
+        request.before_no_return = !effective_no_return_latched;
+        request.no_return_latched = effective_no_return_latched;
+        request.safe_separation_active =
+          overtake_line_state_.pass_horizon_safe_separation_active;
+        request.candidate_feasible = proposed_mission.feasible;
+        request.rear_clear_prediction_checked =
+          proposed_mission.rear_clear_prediction_checked;
+        request.rear_clear_prediction_feasible =
+          proposed_mission.rear_clear_prediction_feasible;
+        request.candidate_requires_additional_side_transition =
+          proposed_mission.outer_transition_required;
+        request.predicted_rear_clear_time_sec =
+          proposed_mission.predicted_rear_clear_time_sec;
+        request.predicted_rear_clear_distance_m =
+          proposed_mission.predicted_rear_clear_ego_distance_m;
+        request.predicted_rear_clear_speed_mps =
+          proposed_mission.predicted_rear_clear_speed_mps;
+        request.predicted_minimum_ego_speed_mps =
+          proposed_mission.predicted_minimum_ego_speed_mps;
+        request.minimum_rear_clear_speed_mps = target_speed_mps +
+          std::max(0.0, line_cfg.cross_side_min_terminal_closing_speed);
+        request.minimum_ego_speed_mps = target_speed_mps;
+        request.minimum_path_wall_clearance_m =
+          proposed_mission.minimum_path_wall_clearance_m;
+        request.minimum_required_path_wall_clearance_m =
+          std::max(0.0, line_cfg.min_wall_clearance) +
+          std::max(0.0, line_cfg.cross_side_min_wall_tracking_reserve);
+        request.remaining_time_budget_sec = remaining_time_budget_sec;
+        request.remaining_distance_budget_m = remaining_distance_budget_m;
+        request.pass_phase = overtake_line_state_.phase == OvertakeLinePhase::Pass;
+        return overtake_core::resolve_cross_side_mission_replacement(request);
+      };
+    const auto cross_side_admission = resolve_cross_side_admission(candidate);
     if (side_changed && !cross_side_admission.admitted) {
       if (line_cfg.debug_log_enabled) {
         RCLCPP_WARN(
@@ -11349,7 +11376,7 @@ private:
           "OvertakeLine cross-side replacement rejected; old Mission retained: "
           "target=%s, side=%d->%d, phase=%s, reason=%s, "
           "rear_clear=%.2f s/%.2f m, min_v=%.2f, rear_v=%.2f, "
-          "remaining=%.2f s/%.2f m, target_v=%.2f, wp_id=%d",
+          "remaining=%.2f s/%.2f m, target_v=%.2f, wall=%.2f/%.2f, wp_id=%d",
           overtake_line_state_.target_vehicle_id.c_str(), previous_side,
           candidate.pass_side_sign, to_string(overtake_line_state_.phase),
           overtake_core::to_string(cross_side_admission.reason),
@@ -11358,7 +11385,9 @@ private:
           candidate.predicted_minimum_ego_speed_mps,
           candidate.predicted_rear_clear_speed_mps,
           remaining_time_budget_sec, remaining_distance_budget_m,
-          target_speed_mps, model->wp_id);
+          target_speed_mps, candidate.minimum_path_wall_clearance_m,
+          line_cfg.min_wall_clearance + line_cfg.cross_side_min_wall_tracking_reserve,
+          model->wp_id);
       }
       return false;
     }
@@ -11366,6 +11395,21 @@ private:
     const auto replacement_plan = overtake_core::build_overtake_pass_plan(
       overtake_core::OvertakePassPlanRequest{candidate, current_ey, 0.0});
     if (!replacement_plan.valid) {
+      return false;
+    }
+    const auto prepared_cross_side_admission =
+      resolve_cross_side_admission(replacement_plan.mission);
+    if (side_changed && !prepared_cross_side_admission.admitted) {
+      if (line_cfg.debug_log_enabled) {
+        RCLCPP_WARN(
+          rclcpp::get_logger("mpc_controller"),
+          "OvertakeLine prepared cross-side Mission rejected; old Mission retained: "
+          "target=%s, side=%d->%d, phase=%s, reason=%s, wp_id=%d",
+          overtake_line_state_.target_vehicle_id.c_str(), previous_side,
+          replacement_plan.mission.pass_side_sign,
+          to_string(overtake_line_state_.phase),
+          overtake_core::to_string(prepared_cross_side_admission.reason), model->wp_id);
+      }
       return false;
     }
 
@@ -11442,6 +11486,7 @@ private:
     overtake_line_state_.upper_boundary_vehicle_id.clear();
     overtake_locked_side_sign_ = candidate.pass_side_sign;
     if (side_changed) {
+      overtake_line_state_.mission_cross_side_transition_committed = true;
       overtake_line_state_.opponent_side_replan_no_return_latched =
         overtake_core::resolve_cross_side_no_return_latch(
         overtake_core::CrossSideNoReturnLatchRequest{
@@ -12904,6 +12949,7 @@ private:
           !locked_target_progress_rejected;
         const bool before_no_return =
           !overtake_line_state_.opponent_side_replan_no_return_latched &&
+          !overtake_line_state_.mission_cross_side_transition_committed &&
           behavior_output.overtake_commit_stage ==
           overtake_core::PassCommitStage::ShiftCommitted &&
           std::isfinite(behavior_output.locked_target_longitudinal) &&
@@ -13124,12 +13170,14 @@ private:
           !locked_target_progress_rejected;
         const bool before_no_return =
           !overtake_line_state_.opponent_side_replan_no_return_latched &&
+          !overtake_line_state_.mission_cross_side_transition_committed &&
           behavior_output.overtake_commit_stage ==
           overtake_core::PassCommitStage::ShiftCommitted &&
           std::isfinite(behavior_output.locked_target_longitudinal) &&
           behavior_output.locked_target_longitudinal + kEps >=
           line_cfg.opponent_side_replan_no_return_front_distance;
         const bool replacement_count_available =
+          !overtake_line_state_.mission_cross_side_transition_committed &&
           overtake_line_state_.opponent_side_replan_count <
           line_cfg.opponent_side_replan_max_count;
         const bool hard_fault =
@@ -14790,8 +14838,20 @@ private:
         }
         overtake_line_state_.fixed_pass_corridor_goal_ey = static_preflight.goal_ey;
         if (strategic_outer_transition) {
+          const bool side_changed = replacement_side != source_side;
           overtake_line_state_.pass_side_sign = replacement_side;
           overtake_locked_side_sign_ = replacement_side;
+          if (side_changed) {
+            overtake_line_state_.mission_cross_side_transition_committed = true;
+            overtake_line_state_.opponent_side_replan_no_return_latched =
+              overtake_core::resolve_cross_side_no_return_latch(
+              overtake_core::CrossSideNoReturnLatchRequest{
+                true,
+                overtake_line_state_.opponent_side_replan_no_return_latched,
+                overtake_core::PassCommitStage::ShiftCommitted,
+                false,
+                true});
+          }
           if (
             overtake_line_state_.mission_outer_transition_pending &&
             replacement_side ==
@@ -15745,6 +15805,7 @@ private:
             pass_traveled + kEps >= transition_start;
           const bool transition_attempt_eligible =
             transition_window_open &&
+            !overtake_line_state_.mission_cross_side_transition_committed &&
             !overtake_line_state_.inter_vehicle_corridor &&
             !overtake_line_state_.pass_horizon_safe_separation_active &&
             !pass_lateral_replan_in_progress &&
@@ -15845,6 +15906,7 @@ private:
       const bool continuous_outer_replan_eligible =
         line_cfg.continuous_outer_replan_enabled &&
         overtake_line_state_.mission_outer_strategy_committed &&
+        !overtake_line_state_.mission_cross_side_transition_committed &&
         !scheduled_outer_transition_attempted &&
         !overtake_line_state_.inter_vehicle_corridor &&
         !overtake_line_state_.pass_horizon_safe_separation_active &&
@@ -18527,7 +18589,8 @@ private:
           "opp_alt_ok=%d, opp_stable=%.2f, opp_reserve_adv=%.2f, "
           "opp_time_adv=%.2f, opp_speed_adv=%.2f, opp_score_adv=%.2f, opp_rank=%s, "
           "opp_ready=%d, "
-          "opp_no_return=%d, opp_count=%d, opp_action=%s, opp_reason=%s, "
+          "opp_no_return=%d, mission_cross_side=%d, opp_count=%d, "
+          "opp_action=%s, opp_reason=%s, "
           "mission_wait=%d, "
           "solver_failures=%d, "
           "left_reason=%s, right_reason=%s, reason=%s, block=%s",
@@ -18661,6 +18724,7 @@ private:
           overtake_core::to_string(output.opponent_side_replan_preference_reason),
           output.opponent_side_replan_ready ? 1 : 0,
           output.opponent_side_replan_no_return ? 1 : 0,
+          overtake_line_state_.mission_cross_side_transition_committed ? 1 : 0,
           overtake_line_state_.opponent_side_replan_count,
           overtake_core::to_string(output.opponent_side_replan_action),
           overtake_core::to_string(output.opponent_side_replan_reason),
@@ -19965,7 +20029,15 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_line.opponent_side_replan_max_count = std::max(
     0,
     mpc["v2x_overtake_opponent_side_replan_max_count"] ?
-    mpc["v2x_overtake_opponent_side_replan_max_count"].as<int>() : 3);
+    mpc["v2x_overtake_opponent_side_replan_max_count"].as<int>() : 1);
+  cfg.mpc.v2x_behavior.overtake_line.cross_side_min_terminal_closing_speed = std::max(
+    0.0,
+    mpc["v2x_overtake_cross_side_min_terminal_closing_speed"] ?
+    mpc["v2x_overtake_cross_side_min_terminal_closing_speed"].as<double>() : 0.5);
+  cfg.mpc.v2x_behavior.overtake_line.cross_side_min_wall_tracking_reserve = std::max(
+    0.0,
+    mpc["v2x_overtake_cross_side_min_wall_tracking_reserve"] ?
+    mpc["v2x_overtake_cross_side_min_wall_tracking_reserve"].as<double>() : 0.15);
   cfg.mpc.v2x_behavior.overtake_line.last_feasible_maneuver_enabled =
     mpc["v2x_overtake_last_feasible_maneuver_enabled"] ?
     mpc["v2x_overtake_last_feasible_maneuver_enabled"].as<bool>() : true;
@@ -20502,6 +20574,22 @@ Config load_config(const std::string & path)
   {
     throw std::runtime_error(
             "mpc.v2x_overtake_recovery_stall_speed must be finite and positive");
+  }
+  if (
+    !std::isfinite(overtake_line.cross_side_min_terminal_closing_speed) ||
+    overtake_line.cross_side_min_terminal_closing_speed < 0.0)
+  {
+    throw std::runtime_error(
+            "mpc.v2x_overtake_cross_side_min_terminal_closing_speed must be finite and "
+            "non-negative");
+  }
+  if (
+    !std::isfinite(overtake_line.cross_side_min_wall_tracking_reserve) ||
+    overtake_line.cross_side_min_wall_tracking_reserve < 0.0)
+  {
+    throw std::runtime_error(
+            "mpc.v2x_overtake_cross_side_min_wall_tracking_reserve must be finite and "
+            "non-negative");
   }
   if (
     !std::isfinite(overtake_line.recovery_stall_timeout_sec) ||
@@ -21779,7 +21867,8 @@ public:
         get_logger(),
         "V2X opponent side replan: %s, interval=%.2f s, no_return=%.2f m, "
         "reserve_advantage=%.2f m, ranking=%s/time=%.2f s/score=%.2f, "
-        "max_regression=%.2f m/%.2f s/%.2f mps, stable=%.2f s, max=%d",
+        "max_regression=%.2f m/%.2f s/%.2f mps, stable=%.2f s, max=%d, "
+        "cross_side_terminal=%.2f mps, wall_tracking_reserve=%.2f m",
         mpc_cfg_.v2x_behavior.overtake_line.opponent_side_replan_enabled ?
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.opponent_side_replan_evaluation_interval_sec,
@@ -21796,7 +21885,9 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line
           .opponent_side_replan_max_minimum_speed_regression,
         mpc_cfg_.v2x_behavior.overtake_line.opponent_side_replan_stable_sec,
-        mpc_cfg_.v2x_behavior.overtake_line.opponent_side_replan_max_count);
+        mpc_cfg_.v2x_behavior.overtake_line.opponent_side_replan_max_count,
+        mpc_cfg_.v2x_behavior.overtake_line.cross_side_min_terminal_closing_speed,
+        mpc_cfg_.v2x_behavior.overtake_line.cross_side_min_wall_tracking_reserve);
       RCLCPP_INFO(
         get_logger(),
         "V2X last-feasible maneuver rescue: %s, max_age=%.2f s, "

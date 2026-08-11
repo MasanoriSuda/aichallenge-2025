@@ -10384,6 +10384,7 @@ TEST(V2XOvertakeCoreContinuity, ReacquiresOnlySameTargetAndSideDuringEarlyReturn
 {
   ReacquireRequest request;
   request.enabled = true;
+  request.return_owner_allows_reacquire = true;
   request.stable_target_id = true;
   request.same_target = true;
   request.same_side = true;
@@ -10394,6 +10395,10 @@ TEST(V2XOvertakeCoreContinuity, ReacquiresOnlySameTargetAndSideDuringEarlyReturn
   request.return_progress = 0.10;
   request.max_return_progress = 0.25;
   EXPECT_TRUE(can_reacquire_during_return(request));
+
+  request.return_owner_allows_reacquire = false;
+  EXPECT_FALSE(can_reacquire_during_return(request));
+  request.return_owner_allows_reacquire = true;
 
   request.rear_clear_confirmed_latched = true;
   EXPECT_FALSE(can_reacquire_during_return(request));

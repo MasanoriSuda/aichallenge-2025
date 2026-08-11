@@ -7103,8 +7103,9 @@ ContinuityAction resolve_target_continuity(const ContinuityRequest & request)
 
 bool can_reacquire_during_return(const ReacquireRequest & request) noexcept
 {
-  return request.enabled && request.stable_target_id && request.same_target &&
-         request.same_side && request.gap_available && request.execution_allowed &&
+  return request.enabled && request.return_owner_allows_reacquire &&
+         request.stable_target_id && request.same_target && request.same_side &&
+         request.gap_available && request.execution_allowed &&
          !request.rear_clear_confirmed_latched &&
          std::isfinite(request.return_elapsed_sec) && request.return_elapsed_sec >= 0.0 &&
          std::isfinite(request.reacquire_window_sec) && request.reacquire_window_sec >= 0.0 &&

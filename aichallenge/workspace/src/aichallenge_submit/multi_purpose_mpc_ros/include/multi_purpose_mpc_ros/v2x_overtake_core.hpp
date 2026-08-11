@@ -4196,6 +4196,10 @@ ContinuityAction resolve_target_continuity(const ContinuityRequest & request);
 struct ReacquireRequest
 {
   bool enabled{false};
+  /// The Return owner permits the current Mission to resume Pass. A tactical
+  /// disengagement owns Return until completion and sets this false so a
+  /// stale pre-Return behavior sample cannot immediately reverse the choice.
+  bool return_owner_allows_reacquire{false};
   bool stable_target_id{false};
   bool same_target{false};
   bool same_side{false};
@@ -4208,8 +4212,9 @@ struct ReacquireRequest
   bool rear_clear_confirmed_latched{false};
 };
 
-/// Allow Return -> Pass only for the same stable target and pass side early in Return,
-/// and never after rear clearance has completed the pass mission.
+/// Allow Return -> Pass only when the Return owner permits it, for the same
+/// stable target and pass side early in Return, and never after rear clearance
+/// has completed the pass mission.
 bool can_reacquire_during_return(const ReacquireRequest & request) noexcept;
 
 struct RecoveryReacquireRequest

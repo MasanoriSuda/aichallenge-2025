@@ -1754,6 +1754,15 @@ enum class FollowPrepareCause
   RecoveryRetention,
 };
 
+enum class ReturnReacquirePolicy
+{
+  /// A newly available same-target/same-side corridor may cancel an early Return.
+  SameTargetEarly,
+  /// The tactical owner deliberately relinquished Pass; finish Return before
+  /// evaluating the target as a new Mission.
+  FinishReturn,
+};
+
 enum class V2XTrackingResetPolicy
 {
   PreserveHistory,
@@ -2142,6 +2151,7 @@ struct OvertakeLineState
   // subsequent resume policy can make an explicit phase-aware decision.
   OvertakeLinePhase follow_prepare_origin_phase{OvertakeLinePhase::Idle};
   FollowPrepareCause follow_prepare_cause{FollowPrepareCause::Unspecified};
+  ReturnReacquirePolicy return_reacquire_policy{ReturnReacquirePolicy::FinishReturn};
   bool pass_front_overlap_exclusion_latched{false};
   bool pass_front_cap_release_active{false};
   double pass_current_overlap_since_sec{std::numeric_limits<double>::quiet_NaN()};
@@ -10868,7 +10878,9 @@ private:
   void transition_overtake_line_phase(
     const OvertakeLinePhase next_phase, const double now_sec, const double current_ey,
     const int pass_side_sign, const std::string & reason,
-    const FollowPrepareCause follow_prepare_cause = FollowPrepareCause::Unspecified)
+    const FollowPrepareCause follow_prepare_cause = FollowPrepareCause::Unspecified,
+    const ReturnReacquirePolicy return_reacquire_policy =
+    ReturnReacquirePolicy::SameTargetEarly)
   {
     if (overtake_line_state_.phase == next_phase) {
       if (pass_side_sign != 0 && overtake_line_state_.pass_side_sign == 0) {
@@ -10912,6 +10924,9 @@ private:
       overtake_line_state_.follow_prepare_cause = FollowPrepareCause::Unspecified;
     }
     overtake_line_state_.phase = next_phase;
+    overtake_line_state_.return_reacquire_policy =
+      next_phase == OvertakeLinePhase::Return ?
+      return_reacquire_policy : ReturnReacquirePolicy::FinishReturn;
     if (next_phase != OvertakeLinePhase::FollowPrepare) {
       overtake_line_state_.dynamic_mission_wait_active = false;
     }
@@ -13972,7 +13987,10 @@ private:
           !rear_clear_observed &&
           overtake_core::can_reacquire_during_return(
             overtake_core::ReacquireRequest{
-              line_cfg.reacquire_enabled, stable_target_id, same_target, same_side,
+              line_cfg.reacquire_enabled,
+              overtake_line_state_.return_reacquire_policy ==
+              ReturnReacquirePolicy::SameTargetEarly,
+              stable_target_id, same_target, same_side,
               behavior_output.overtake_gap_available, behavior_output.overtake_zone_allows,
               return_elapsed, line_cfg.reacquire_window_sec, return_progress,
               line_cfg.reacquire_max_return_progress,
@@ -16048,7 +16066,9 @@ private:
             transition_overtake_line_phase(
               OvertakeLinePhase::Return, now_sec, current_ey,
               overtake_line_state_.pass_side_sign,
-              "SafeSeparation target clear ahead; speed-preserving Return");
+              "SafeSeparation target clear ahead; speed-preserving Return",
+              FollowPrepareCause::Unspecified,
+              ReturnReacquirePolicy::FinishReturn);
             return update_overtake_line(
               behavior_output, ref_wp_id, N, lb, ub, now_sec);
           }

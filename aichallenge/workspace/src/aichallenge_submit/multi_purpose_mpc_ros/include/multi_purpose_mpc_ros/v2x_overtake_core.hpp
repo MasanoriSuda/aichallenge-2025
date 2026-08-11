@@ -2276,6 +2276,21 @@ struct OvertakeMissionCandidateSelection
 OvertakeMissionCandidateSelection select_overtake_mission_candidate(
   const OvertakeMissionCandidateSelectionRequest & request) noexcept;
 
+enum class OvertakeSideRetryFailureClass
+{
+  /// No executable candidate was observed in the current planning sample.
+  /// The scene may open on the next sample, so this must not suppress search.
+  PlanningSearchMiss,
+  /// A selected/committed maneuver reached a physical, execution or bounded
+  /// mission failure. A short same-target/side retry block prevents chatter.
+  PhysicalOrCommittedFailure,
+};
+
+/// Keep opportunistic entry search live across one-sample planning misses,
+/// while retaining cooldown after a real maneuver/execution failure.
+bool should_arm_overtake_side_retry_block(
+  OvertakeSideRetryFailureClass failure_class) noexcept;
+
 struct OvertakeLineHeadingReferenceRequest
 {
   double previous_lateral_m{};

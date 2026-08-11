@@ -4142,6 +4142,13 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
   return selection;
 }
 
+bool should_arm_overtake_side_retry_block(
+  const OvertakeSideRetryFailureClass failure_class) noexcept
+{
+  return failure_class ==
+         OvertakeSideRetryFailureClass::PhysicalOrCommittedFailure;
+}
+
 double resolve_overtake_line_heading_reference(
   const OvertakeLineHeadingReferenceRequest & request) noexcept
 {

@@ -7839,7 +7839,8 @@ struct MPC
           assessment.guard_reason = assessment.reason;
           if (!active_overtake_line) {
             arm_overtake_line_side_retry_block(
-              side, output.target_vehicle_id, now_sec, assessment.reason);
+              side, output.target_vehicle_id, now_sec, assessment.reason,
+              overtake_core::OvertakeSideRetryFailureClass::PlanningSearchMiss);
           }
         } else {
           auto selected_mission = mission_selection.candidate;
@@ -11920,8 +11921,12 @@ private:
 
   void arm_overtake_line_side_retry_block(
     const int pass_side_sign, const std::string & target_vehicle_id,
-    const double now_sec, const std::string & reason)
+    const double now_sec, const std::string & reason,
+    const overtake_core::OvertakeSideRetryFailureClass failure_class)
   {
+    if (!overtake_core::should_arm_overtake_side_retry_block(failure_class)) {
+      return;
+    }
     const double cooldown_sec =
       std::max(0.0, cfg.v2x_behavior.overtake_line.entry_retry_cooldown_sec);
     if (
@@ -13054,7 +13059,8 @@ private:
           "FollowPrepare mission time limit" :
           "FollowPrepare mission distance limit");
         arm_overtake_line_side_retry_block(
-          expired_side, expired_target, now_sec, expiry_reason);
+          expired_side, expired_target, now_sec, expiry_reason,
+          overtake_core::OvertakeSideRetryFailureClass::PhysicalOrCommittedFailure);
         reset_overtake_line_state(now_sec, expiry_reason);
         overtake_locked_side_sign_ = 0;
         return output;
@@ -13099,7 +13105,8 @@ private:
         line_cfg.mission_total_time_limit_sec);
       arm_overtake_line_side_retry_block(
         expired_side, expired_target, now_sec,
-        "same-target Mission total budget expired");
+        "same-target Mission total budget expired",
+        overtake_core::OvertakeSideRetryFailureClass::PhysicalOrCommittedFailure);
       overtake_line_state_.mission_retention_forbidden = true;
       transition_overtake_line_phase(
         OvertakeLinePhase::Recovery, now_sec, current_ey, expired_side,
@@ -13465,7 +13472,8 @@ private:
             contact_pass_side,
             !overtake_line_state_.target_vehicle_id.empty() ?
             overtake_line_state_.target_vehicle_id : behavior_output.target_vehicle_id,
-            now_sec, "actual footprint intersects static wall");
+            now_sec, "actual footprint intersects static wall",
+            overtake_core::OvertakeSideRetryFailureClass::PhysicalOrCommittedFailure);
           transition_overtake_line_phase(
             OvertakeLinePhase::Recovery, now_sec, current_ey,
             contact_pass_side,
@@ -13479,7 +13487,8 @@ private:
             "actual footprint wall margin violated";
           arm_overtake_line_side_retry_block(
             behavior_output.overtake_pass_side_sign,
-            behavior_output.target_vehicle_id, now_sec, reason);
+            behavior_output.target_vehicle_id, now_sec, reason,
+            overtake_core::OvertakeSideRetryFailureClass::PhysicalOrCommittedFailure);
           if (line_cfg.debug_log_enabled) {
             RCLCPP_INFO(
               rclcpp::get_logger("mpc_controller"),
@@ -13528,7 +13537,8 @@ private:
             "actual footprint wall margin violated";
           arm_overtake_line_side_retry_block(
             overtake_line_state_.pass_side_sign,
-            overtake_line_state_.target_vehicle_id, now_sec, reason);
+            overtake_line_state_.target_vehicle_id, now_sec, reason,
+            overtake_core::OvertakeSideRetryFailureClass::PhysicalOrCommittedFailure);
           transition_overtake_line_phase(
             OvertakeLinePhase::Recovery, now_sec, current_ey,
             overtake_line_state_.pass_side_sign, reason);
@@ -13547,7 +13557,8 @@ private:
           }
           arm_overtake_line_side_retry_block(
             blocked_side, overtake_line_state_.target_vehicle_id, now_sec,
-            "selected pass side became occupied");
+            "selected pass side became occupied",
+            overtake_core::OvertakeSideRetryFailureClass::PhysicalOrCommittedFailure);
           transition_overtake_line_phase(
             OvertakeLinePhase::Recovery, now_sec, current_ey,
             blocked_side, "selected pass side became occupied");
@@ -16115,7 +16126,8 @@ private:
             const std::string failed_target = overtake_line_state_.target_vehicle_id;
             arm_overtake_line_side_retry_block(
               failed_side, failed_target, now_sec,
-              "physically clear soft Mission abort");
+              "physically clear soft Mission abort",
+              overtake_core::OvertakeSideRetryFailureClass::PhysicalOrCommittedFailure);
             RCLCPP_WARN(
               rclcpp::get_logger("mpc_controller"),
               "OvertakeLine soft Mission abort preserves speed: target=%s, "
@@ -17227,7 +17239,8 @@ private:
       } else {
         arm_overtake_line_side_retry_block(
           overtake_line_state_.pass_side_sign,
-          overtake_line_state_.target_vehicle_id, now_sec, reason);
+          overtake_line_state_.target_vehicle_id, now_sec, reason,
+          overtake_core::OvertakeSideRetryFailureClass::PhysicalOrCommittedFailure);
         transition_overtake_line_phase(
           OvertakeLinePhase::Recovery, now_sec, current_ey,
           overtake_line_state_.pass_side_sign, reason);

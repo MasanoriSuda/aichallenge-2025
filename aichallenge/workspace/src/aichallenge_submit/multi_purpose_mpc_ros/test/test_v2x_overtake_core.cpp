@@ -182,6 +182,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::SameSideReplanShiftDistanceReque
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidate;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidateSelectionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionHorizonProgressRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSideRetryFailureClass;
 using multi_purpose_mpc_ros::v2x_overtake_core::PausedMissionExpiryReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::PausedMissionExpiryRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PausedMissionTerminalAction;
@@ -231,6 +232,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_committed_pass_forward_c
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_completion_extension;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_same_side_replan_shift_distance;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_overtake_mission_candidate;
+using multi_purpose_mpc_ros::v2x_overtake_core::should_arm_overtake_side_retry_block;
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_overtake_mission_horizon_progress;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_start_grid_breakout_speed_reference;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_shiftout_complete;
@@ -3013,6 +3015,14 @@ TEST(V2XOvertakeCoreMissionAdmission, RequiresValidatedFullTrackTransition)
   EXPECT_TRUE(is_full_track_transition_admitted(false, false));
   EXPECT_TRUE(is_full_track_transition_admitted(true, true));
   EXPECT_FALSE(is_full_track_transition_admitted(true, false));
+}
+
+TEST(V2XOvertakeCoreMissionAdmission, RetryBlockRequiresPhysicalOrCommittedFailure)
+{
+  EXPECT_FALSE(should_arm_overtake_side_retry_block(
+    OvertakeSideRetryFailureClass::PlanningSearchMiss));
+  EXPECT_TRUE(should_arm_overtake_side_retry_block(
+    OvertakeSideRetryFailureClass::PhysicalOrCommittedFailure));
 }
 
 TEST(V2XOvertakeCoreSpeed, SelectsDirectPassBeforeShiftOutCandidates)

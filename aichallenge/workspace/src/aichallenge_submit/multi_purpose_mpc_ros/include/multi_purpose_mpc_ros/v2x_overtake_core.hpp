@@ -3834,6 +3834,57 @@ struct OvertakeMissionOwnershipResolution
 OvertakeMissionOwnershipResolution resolve_overtake_mission_ownership(
   const OvertakeMissionOwnershipRequest & request) noexcept;
 
+struct CommittedBehaviorOwnershipGuardRequest
+{
+  bool locked_target_seen{false};
+  bool target_identity_continuous{false};
+  bool locked_target_position_jump{false};
+  bool locked_target_course_progress_rejected{false};
+  bool locked_target_pass_side_intrusion{false};
+  bool explicit_forbidden_waypoint{false};
+  bool emergency_front_risk{false};
+  bool solver_recovery_requested{false};
+};
+
+struct CommittedBehaviorOwnershipGuardResolution
+{
+  bool target_identity_available{false};
+  bool hard_fault_present{false};
+  bool ownership_allowed{false};
+};
+
+/// Resolve the target-continuity and hard-fault guards shared by committed
+/// ShiftOut and Pass behavior ownership. Phase-specific path and geometry
+/// authority is deliberately handled by the respective caller.
+CommittedBehaviorOwnershipGuardResolution resolve_committed_behavior_ownership_guards(
+  const CommittedBehaviorOwnershipGuardRequest & request) noexcept;
+
+struct CommittedPassGeometryOwnershipRequest
+{
+  bool lateral_exclusion_latched{false};
+  bool minimum_motion_front_cap_release_latched{false};
+  bool current_body_footprints_separated{false};
+  bool current_body_footprint_overlap_confirmed{true};
+  bool committed_pass_attack_mode_enabled{false};
+  bool body_clear_handoff_active{false};
+};
+
+struct CommittedPassGeometryOwnershipResolution
+{
+  bool pass_release_latched{false};
+  bool body_clear_handoff_owns_pass{false};
+  bool current_overlap_grace_active{false};
+  bool pass_authority_available{false};
+  bool current_geometry_acceptable{false};
+  bool ownership_allowed{false};
+};
+
+/// Resolve the current geometry sources which may own a validated Pass.
+/// Confirmed physical overlap remains fail closed; ContactContinuation is not
+/// an ownership source in this behavior-preserving refactor.
+CommittedPassGeometryOwnershipResolution resolve_committed_pass_geometry_ownership(
+  const CommittedPassGeometryOwnershipRequest & request) noexcept;
+
 struct CommittedPassBehaviorOwnershipRequest
 {
   bool committed_pass_active{false};

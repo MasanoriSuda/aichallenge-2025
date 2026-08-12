@@ -118,6 +118,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionOwnershipRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::CommittedBehaviorOwnershipGuardRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassGeometryOwnershipRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassBehaviorOwnershipRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommittedShiftOutBehaviorOwnershipRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::BodyClearExecutionHandoffRequest;
@@ -392,6 +394,10 @@ using multi_purpose_mpc_ros::v2x_overtake_core::should_observe_locked_target_geo
 using multi_purpose_mpc_ros::v2x_overtake_core::can_enter_dynamic_mission_wait;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_mission_wait;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_mission_ownership;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  resolve_committed_behavior_ownership_guards;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  resolve_committed_pass_geometry_ownership;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_preserve_committed_pass_behavior;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_preserve_committed_shiftout_behavior;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_execution_side;
@@ -9480,6 +9486,80 @@ TEST(V2XOvertakeCoreMissionOwnership, PreviousBehaviorPreservesLegacyContinuatio
   EXPECT_FALSE(result.mission_active);
   EXPECT_TRUE(result.behavior_continuation_assessment_active);
   EXPECT_FALSE(result.behavior_entry_assessment_active);
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, ResolvesSharedCommittedExecutionGuards)
+{
+  CommittedBehaviorOwnershipGuardRequest request;
+  request.locked_target_seen = true;
+
+  auto result = resolve_committed_behavior_ownership_guards(request);
+  EXPECT_TRUE(result.target_identity_available);
+  EXPECT_FALSE(result.hard_fault_present);
+  EXPECT_TRUE(result.ownership_allowed);
+
+  request.locked_target_seen = false;
+  request.target_identity_continuous = true;
+  result = resolve_committed_behavior_ownership_guards(request);
+  EXPECT_TRUE(result.target_identity_available);
+  EXPECT_TRUE(result.ownership_allowed);
+
+  request.locked_target_position_jump = true;
+  result = resolve_committed_behavior_ownership_guards(request);
+  EXPECT_TRUE(result.hard_fault_present);
+  EXPECT_FALSE(result.ownership_allowed);
+  request.locked_target_position_jump = false;
+
+  request.locked_target_course_progress_rejected = true;
+  EXPECT_FALSE(resolve_committed_behavior_ownership_guards(request).ownership_allowed);
+  request.locked_target_course_progress_rejected = false;
+  request.locked_target_pass_side_intrusion = true;
+  EXPECT_FALSE(resolve_committed_behavior_ownership_guards(request).ownership_allowed);
+  request.locked_target_pass_side_intrusion = false;
+  request.explicit_forbidden_waypoint = true;
+  EXPECT_FALSE(resolve_committed_behavior_ownership_guards(request).ownership_allowed);
+  request.explicit_forbidden_waypoint = false;
+  request.emergency_front_risk = true;
+  EXPECT_FALSE(resolve_committed_behavior_ownership_guards(request).ownership_allowed);
+  request.emergency_front_risk = false;
+  request.solver_recovery_requested = true;
+  EXPECT_FALSE(resolve_committed_behavior_ownership_guards(request).ownership_allowed);
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, ResolvesCommittedPassGeometrySources)
+{
+  CommittedPassGeometryOwnershipRequest request;
+  request.lateral_exclusion_latched = true;
+  request.current_body_footprints_separated = true;
+
+  auto result = resolve_committed_pass_geometry_ownership(request);
+  EXPECT_TRUE(result.pass_release_latched);
+  EXPECT_FALSE(result.body_clear_handoff_owns_pass);
+  EXPECT_FALSE(result.current_overlap_grace_active);
+  EXPECT_TRUE(result.pass_authority_available);
+  EXPECT_TRUE(result.current_geometry_acceptable);
+  EXPECT_TRUE(result.ownership_allowed);
+
+  request.lateral_exclusion_latched = false;
+  request.current_body_footprint_overlap_confirmed = false;
+  request.body_clear_handoff_active = true;
+  result = resolve_committed_pass_geometry_ownership(request);
+  EXPECT_TRUE(result.body_clear_handoff_owns_pass);
+  EXPECT_TRUE(result.ownership_allowed);
+
+  request.body_clear_handoff_active = false;
+  request.minimum_motion_front_cap_release_latched = true;
+  request.current_body_footprints_separated = false;
+  request.committed_pass_attack_mode_enabled = true;
+  result = resolve_committed_pass_geometry_ownership(request);
+  EXPECT_TRUE(result.current_overlap_grace_active);
+  EXPECT_TRUE(result.ownership_allowed);
+
+  request.current_body_footprint_overlap_confirmed = true;
+  result = resolve_committed_pass_geometry_ownership(request);
+  EXPECT_FALSE(result.current_overlap_grace_active);
+  EXPECT_FALSE(result.current_geometry_acceptable);
+  EXPECT_FALSE(result.ownership_allowed);
 }
 
 TEST(V2XOvertakeCoreMissionOwnership, ValidatedPassOwnsBehaviorAcrossEntryRejection)

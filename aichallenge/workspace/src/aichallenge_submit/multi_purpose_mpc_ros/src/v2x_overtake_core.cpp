@@ -6551,50 +6551,97 @@ OvertakeMissionOwnershipResolution resolve_overtake_mission_ownership(
   return resolution;
 }
 
-bool can_preserve_committed_pass_behavior(
-  const CommittedPassBehaviorOwnershipRequest & request) noexcept
+CommittedBehaviorOwnershipGuardResolution resolve_committed_behavior_ownership_guards(
+  const CommittedBehaviorOwnershipGuardRequest & request) noexcept
 {
-  const bool pass_release_latched =
+  CommittedBehaviorOwnershipGuardResolution resolution;
+  resolution.target_identity_available =
+    request.locked_target_seen || request.target_identity_continuous;
+  resolution.hard_fault_present =
+    request.locked_target_position_jump ||
+    request.locked_target_course_progress_rejected ||
+    request.locked_target_pass_side_intrusion ||
+    request.explicit_forbidden_waypoint ||
+    request.emergency_front_risk ||
+    request.solver_recovery_requested;
+  resolution.ownership_allowed =
+    resolution.target_identity_available && !resolution.hard_fault_present;
+  return resolution;
+}
+
+CommittedPassGeometryOwnershipResolution resolve_committed_pass_geometry_ownership(
+  const CommittedPassGeometryOwnershipRequest & request) noexcept
+{
+  CommittedPassGeometryOwnershipResolution resolution;
+  resolution.pass_release_latched =
     request.lateral_exclusion_latched ||
     request.minimum_motion_front_cap_release_latched;
-  const bool body_clear_handoff_owns_pass =
+  resolution.body_clear_handoff_owns_pass =
     request.body_clear_handoff_active &&
     request.current_body_footprints_separated &&
     !request.current_body_footprint_overlap_confirmed;
-  const bool current_overlap_grace_active =
+  resolution.current_overlap_grace_active =
     request.committed_pass_attack_mode_enabled &&
     request.minimum_motion_front_cap_release_latched &&
     !request.current_body_footprints_separated &&
     !request.current_body_footprint_overlap_confirmed;
+  resolution.pass_authority_available =
+    resolution.pass_release_latched || resolution.body_clear_handoff_owns_pass;
+  resolution.current_geometry_acceptable =
+    request.current_body_footprints_separated ||
+    resolution.current_overlap_grace_active;
+  resolution.ownership_allowed =
+    resolution.pass_authority_available && resolution.current_geometry_acceptable;
+  return resolution;
+}
+
+bool can_preserve_committed_pass_behavior(
+  const CommittedPassBehaviorOwnershipRequest & request) noexcept
+{
+  const auto common_guards = resolve_committed_behavior_ownership_guards(
+    CommittedBehaviorOwnershipGuardRequest{
+      request.locked_target_seen,
+      request.target_identity_continuous,
+      request.locked_target_position_jump,
+      request.locked_target_course_progress_rejected,
+      request.locked_target_pass_side_intrusion,
+      request.explicit_forbidden_waypoint,
+      request.emergency_front_risk,
+      request.solver_recovery_requested});
+  const auto geometry_ownership = resolve_committed_pass_geometry_ownership(
+    CommittedPassGeometryOwnershipRequest{
+      request.lateral_exclusion_latched,
+      request.minimum_motion_front_cap_release_latched,
+      request.current_body_footprints_separated,
+      request.current_body_footprint_overlap_confirmed,
+      request.committed_pass_attack_mode_enabled,
+      request.body_clear_handoff_active});
   return request.committed_pass_active &&
          request.validated_fixed_line &&
          request.mission_side_valid &&
-         (pass_release_latched || body_clear_handoff_owns_pass) &&
-         (request.locked_target_seen || request.target_identity_continuous) &&
-         !request.locked_target_position_jump &&
-         !request.locked_target_course_progress_rejected &&
-         (request.current_body_footprints_separated || current_overlap_grace_active) &&
-         !request.locked_target_pass_side_intrusion &&
-         !request.explicit_forbidden_waypoint &&
-         !request.emergency_front_risk &&
-         !request.solver_recovery_requested;
+         common_guards.ownership_allowed &&
+         geometry_ownership.ownership_allowed;
 }
 
 bool can_preserve_committed_shiftout_behavior(
   const CommittedShiftOutBehaviorOwnershipRequest & request) noexcept
 {
+  const auto common_guards = resolve_committed_behavior_ownership_guards(
+    CommittedBehaviorOwnershipGuardRequest{
+      request.locked_target_seen,
+      request.target_identity_continuous,
+      request.locked_target_position_jump,
+      request.locked_target_course_progress_rejected,
+      request.locked_target_pass_side_intrusion,
+      request.explicit_forbidden_waypoint,
+      request.emergency_front_risk,
+      request.solver_recovery_requested});
   return request.committed_shiftout_active &&
          request.validated_fixed_line &&
          request.mission_side_valid &&
          request.body_clear_deadline_checked &&
          request.body_clear_handoff_active &&
-         (request.locked_target_seen || request.target_identity_continuous) &&
-         !request.locked_target_position_jump &&
-         !request.locked_target_course_progress_rejected &&
-         !request.locked_target_pass_side_intrusion &&
-         !request.explicit_forbidden_waypoint &&
-         !request.emergency_front_risk &&
-         !request.solver_recovery_requested;
+         common_guards.ownership_allowed;
 }
 
 BodyClearExecutionHandoffResolution resolve_body_clear_execution_handoff(

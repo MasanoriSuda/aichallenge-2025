@@ -12176,6 +12176,11 @@ private:
     const double target_speed_mps =
       std::isfinite(overtake_line_state_.target_last_speed) ?
       std::max(0.0, overtake_line_state_.target_last_speed) : 0.0;
+    const double ego_speed_mps = std::isfinite(current_speed_mps_) ?
+      std::max(0.0, current_speed_mps_) : 0.0;
+    const double minimum_horizon_speed_mps =
+      overtake_core::resolve_cross_side_minimum_speed_requirement(
+      ego_speed_mps, target_speed_mps);
     const bool historical_no_return_latched =
       overtake_line_state_.opponent_side_replan_no_return_latched ||
       overtake_line_state_.pass_front_overlap_exclusion_latched ||
@@ -12212,7 +12217,7 @@ private:
           proposed_mission.predicted_minimum_ego_speed_mps;
         request.minimum_rear_clear_speed_mps = target_speed_mps +
           std::max(0.0, line_cfg.cross_side_min_terminal_closing_speed);
-        request.minimum_ego_speed_mps = target_speed_mps;
+        request.minimum_ego_speed_mps = minimum_horizon_speed_mps;
         request.minimum_path_wall_clearance_m =
           proposed_mission.minimum_path_wall_clearance_m;
         request.minimum_required_path_wall_clearance_m =
@@ -12235,7 +12240,8 @@ private:
           "OvertakeLine cross-side replacement rejected; old Mission retained: "
           "target=%s, side=%d->%d, phase=%s, reason=%s, "
           "rear_clear=%.2f s/%.2f m, min_v=%.2f, rear_v=%.2f, "
-          "remaining=%.2f s/%.2f m, target_v=%.2f, wall=%.2f/%.2f, wp_id=%d",
+          "remaining=%.2f s/%.2f m, ego_v=%.2f, target_v=%.2f, "
+          "required_min_v=%.2f, wall=%.2f/%.2f, wp_id=%d",
           overtake_line_state_.target_vehicle_id.c_str(), previous_side,
           candidate.pass_side_sign, to_string(overtake_line_state_.phase),
           overtake_core::to_string(cross_side_admission.reason),
@@ -12244,7 +12250,8 @@ private:
           candidate.predicted_minimum_ego_speed_mps,
           candidate.predicted_rear_clear_speed_mps,
           remaining_time_budget_sec, remaining_distance_budget_m,
-          target_speed_mps, candidate.minimum_path_wall_clearance_m,
+          ego_speed_mps, target_speed_mps, minimum_horizon_speed_mps,
+          candidate.minimum_path_wall_clearance_m,
           line_cfg.min_wall_clearance + line_cfg.cross_side_min_wall_tracking_reserve,
           model->wp_id);
       }
@@ -12268,11 +12275,15 @@ private:
         RCLCPP_WARN(
           rclcpp::get_logger("mpc_controller"),
           "OvertakeLine prepared cross-side Mission rejected; old Mission retained: "
-          "target=%s, side=%d->%d, phase=%s, reason=%s, wp_id=%d",
+          "target=%s, side=%d->%d, phase=%s, reason=%s, "
+          "min_v=%.2f/%.2f, ego_v=%.2f, target_v=%.2f, wp_id=%d",
           overtake_line_state_.target_vehicle_id.c_str(), previous_side,
           replacement_plan.mission.pass_side_sign,
           to_string(overtake_line_state_.phase),
-          overtake_core::to_string(prepared_cross_side_admission.reason), model->wp_id);
+          overtake_core::to_string(prepared_cross_side_admission.reason),
+          replacement_plan.mission.predicted_minimum_ego_speed_mps,
+          minimum_horizon_speed_mps, ego_speed_mps, target_speed_mps,
+          model->wp_id);
       }
       return false;
     }

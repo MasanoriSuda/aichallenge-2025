@@ -382,6 +382,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::PassCommitStageRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CrossSideNoReturnLatchRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CrossSideMissionReplacementReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::CrossSideMissionReplacementRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  resolve_cross_side_minimum_speed_requirement;
 using multi_purpose_mpc_ros::v2x_overtake_core::EarlyPassSideIntrusionRiskRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::DirectPassPredictionHandoffRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntryStage;
@@ -12025,6 +12027,26 @@ TEST(V2XOvertakeCoreCommitStage, CrossSideNoReturnRemainsLatchedWhenTargetMovesA
   EXPECT_TRUE(resolve_cross_side_no_return_latch(request));
 }
 
+TEST(V2XOvertakeCoreCommitStage, CrossSideMinimumSpeedUsesCurrentStateWhenTargetIsFaster)
+{
+  EXPECT_NEAR(
+    resolve_cross_side_minimum_speed_requirement(1.39, 3.02), 1.39, 1e-9);
+  EXPECT_NEAR(
+    resolve_cross_side_minimum_speed_requirement(5.0, 3.02), 3.02, 1e-9);
+  EXPECT_NEAR(
+    resolve_cross_side_minimum_speed_requirement(0.0, 3.02), 0.0, 1e-9);
+}
+
+TEST(V2XOvertakeCoreCommitStage, CrossSideMinimumSpeedRejectsInvalidInputs)
+{
+  EXPECT_FALSE(std::isfinite(
+    resolve_cross_side_minimum_speed_requirement(-0.1, 3.0)));
+  EXPECT_FALSE(std::isfinite(
+    resolve_cross_side_minimum_speed_requirement(1.0, -0.1)));
+  EXPECT_FALSE(std::isfinite(resolve_cross_side_minimum_speed_requirement(
+    std::numeric_limits<double>::quiet_NaN(), 3.0)));
+}
+
 TEST(V2XOvertakeCoreCommitStage, CrossSideReplacementAdmitsCompleteEarlyPassRollout)
 {
   CrossSideMissionReplacementRequest request;
@@ -12044,6 +12066,35 @@ TEST(V2XOvertakeCoreCommitStage, CrossSideReplacementAdmitsCompleteEarlyPassRoll
   request.minimum_required_path_wall_clearance_m = 0.30;
   request.remaining_time_budget_sec = 3.0;
   request.remaining_distance_budget_m = 10.0;
+  request.pass_phase = true;
+
+  const auto resolution = resolve_cross_side_mission_replacement(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.admitted);
+  EXPECT_TRUE(resolution.restart_shiftout);
+  EXPECT_EQ(resolution.reason, CrossSideMissionReplacementReason::Admitted);
+}
+
+TEST(V2XOvertakeCoreCommitStage, CrossSideReplacementAdmitsCurveLimitedCurrentSpeed)
+{
+  CrossSideMissionReplacementRequest request;
+  request.active_execution = true;
+  request.side_changed = true;
+  request.before_no_return = true;
+  request.candidate_feasible = true;
+  request.rear_clear_prediction_checked = true;
+  request.rear_clear_prediction_feasible = true;
+  request.predicted_rear_clear_time_sec = 5.96;
+  request.predicted_rear_clear_distance_m = 20.0;
+  request.predicted_rear_clear_speed_mps = 4.47;
+  request.predicted_minimum_ego_speed_mps = 1.39;
+  request.minimum_rear_clear_speed_mps = 3.52;
+  request.minimum_ego_speed_mps =
+    resolve_cross_side_minimum_speed_requirement(1.39, 3.02);
+  request.minimum_path_wall_clearance_m = 1.50;
+  request.minimum_required_path_wall_clearance_m = 0.35;
+  request.remaining_time_budget_sec = 7.23;
+  request.remaining_distance_budget_m = 30.0;
   request.pass_phase = true;
 
   const auto resolution = resolve_cross_side_mission_replacement(request);

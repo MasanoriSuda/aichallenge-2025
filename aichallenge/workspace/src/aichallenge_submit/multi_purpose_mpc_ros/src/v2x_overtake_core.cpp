@@ -882,6 +882,18 @@ bool resolve_cross_side_no_return_latch(
          request.safe_separation_active || request.side_replacement_committed;
 }
 
+double resolve_cross_side_minimum_speed_requirement(
+  const double current_ego_speed_mps, const double target_speed_mps) noexcept
+{
+  if (
+    !std::isfinite(current_ego_speed_mps) || current_ego_speed_mps < 0.0 ||
+    !std::isfinite(target_speed_mps) || target_speed_mps < 0.0)
+  {
+    return std::numeric_limits<double>::quiet_NaN();
+  }
+  return std::min(current_ego_speed_mps, target_speed_mps);
+}
+
 CrossSideMissionReplacementResolution resolve_cross_side_mission_replacement(
   const CrossSideMissionReplacementRequest & request) noexcept
 {

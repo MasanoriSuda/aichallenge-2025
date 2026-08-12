@@ -611,6 +611,13 @@ struct CrossSideNoReturnLatchRequest
 bool resolve_cross_side_no_return_latch(
   const CrossSideNoReturnLatchRequest & request) noexcept;
 
+/// Require an alternate-side rollout to retain the speed which ego already
+/// has, without incorrectly demanding that a slower ego instantaneously match
+/// a faster target throughout a curve. Rear-clear terminal speed remains a
+/// separate admission condition.
+double resolve_cross_side_minimum_speed_requirement(
+  double current_ego_speed_mps, double target_speed_mps) noexcept;
+
 enum class CrossSideMissionReplacementReason
 {
   None,
@@ -672,9 +679,10 @@ struct CrossSideMissionReplacementResolution
 
 /// Admit an opposite-side replacement only while it is still an early
 /// maneuver and its complete rear-clear rollout fits the remaining runtime
-/// budget without sacrificing the target-matching minimum speed. A Pass-phase
-/// replacement must restart ShiftOut so planning and runtime speed policies
-/// remain identical.
+/// budget without dropping below the caller-provided current-state speed
+/// requirement. Rear-clear terminal speed is checked independently. A
+/// Pass-phase replacement must restart ShiftOut so planning and runtime speed
+/// policies remain identical.
 CrossSideMissionReplacementResolution resolve_cross_side_mission_replacement(
   const CrossSideMissionReplacementRequest & request) noexcept;
 

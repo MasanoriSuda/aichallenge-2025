@@ -3341,8 +3341,11 @@ RecoverableSideContactResolution resolve_recoverable_side_contact(
   if (
     !request.enabled || !request.pass_active || !request.target_seen ||
     !request.target_continuity_valid ||
-    (!request.current_body_overlap_confirmed && !request.near_contact_confirmed) ||
+    (!request.current_body_overlap_confirmed && !request.impact_event_confirmed &&
+    !(request.previously_active && request.evidence_dropout_held)) ||
+    !request.relative_heading_valid || !request.wall_clearance_sufficient ||
     (request.pass_side_sign != -1 && request.pass_side_sign != 1) ||
+    !std::isfinite(request.relative_heading_rad) ||
     !std::isfinite(request.target_longitudinal_m) ||
     !std::isfinite(request.relative_lateral_m) ||
     !finite_non_negative(request.longitudinal_closing_speed_mps) ||
@@ -3357,7 +3360,16 @@ RecoverableSideContactResolution resolve_recoverable_side_contact(
     !finite_non_negative(request.maximum_absolute_lateral_velocity_mps) ||
     !finite_non_negative(request.maximum_release_absolute_lateral_velocity_mps) ||
     !finite_non_negative(request.minimum_ego_speed_mps) ||
+    !finite_non_negative(request.maximum_absolute_relative_heading_rad) ||
+    !finite_non_negative(request.body_longitudinal_clearance_m) ||
+    !finite_non_negative(request.body_lateral_clearance_m) ||
     !finite_non_negative(request.lateral_separation_bias_m))
+  {
+    return resolution;
+  }
+  if (
+    std::abs(request.relative_heading_rad) >
+    request.maximum_absolute_relative_heading_rad + 1e-9)
   {
     return resolution;
   }
@@ -3383,8 +3395,15 @@ RecoverableSideContactResolution resolve_recoverable_side_contact(
   }
   const bool target_on_opposite_side =
     static_cast<double>(request.pass_side_sign) * request.relative_lateral_m < 0.0;
+  const double longitudinal_penetration_m =
+    request.body_longitudinal_clearance_m - std::abs(request.target_longitudinal_m);
+  const double lateral_penetration_m =
+    request.body_lateral_clearance_m - std::abs(request.relative_lateral_m);
+  resolution.side_contact_normal =
+    longitudinal_penetration_m >= -1e-9 && lateral_penetration_m >= -1e-9 &&
+    lateral_penetration_m <= longitudinal_penetration_m + 1e-9;
   const bool side_contact_geometry =
-    target_on_opposite_side &&
+    target_on_opposite_side && resolution.side_contact_normal &&
     std::abs(request.relative_lateral_m) >= request.minimum_absolute_lateral_m - 1e-9 &&
     std::abs(request.target_longitudinal_m) <=
     request.maximum_absolute_longitudinal_m + 1e-9 &&
@@ -3408,8 +3427,11 @@ RecoverableSideContactResolution resolve_recoverable_side_contact(
     rearward_completion_context.contact_tail_eligible &&
     request.contact_elapsed_sec <=
     request.rearward_completion_maximum_duration_sec + 1e-9;
-  resolution.near_contact_used =
-    request.near_contact_confirmed && !request.current_body_overlap_confirmed;
+  resolution.impact_event_used =
+    request.impact_event_confirmed && !request.current_body_overlap_confirmed;
+  resolution.evidence_dropout_active =
+    request.previously_active && request.evidence_dropout_held &&
+    !request.current_body_overlap_confirmed && !request.impact_event_confirmed;
   resolution.active =
     (side_contact_geometry &&
     request.ego_speed_mps >= request.minimum_ego_speed_mps - 1e-9 &&

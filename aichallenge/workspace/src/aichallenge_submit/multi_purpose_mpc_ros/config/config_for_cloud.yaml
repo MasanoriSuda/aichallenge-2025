@@ -616,9 +616,15 @@ mpc:
   v2x_overtake_contact_continuation_max_lateral_velocity: 0.5 # [m/s]
   v2x_overtake_contact_continuation_release_max_lateral_velocity: 0.8 # [m/s] retain an admitted side-by-side forward commit under bounded lateral pressure
   v2x_overtake_contact_continuation_min_ego_speed: 0.5 # [m/s]
+  v2x_overtake_contact_continuation_max_relative_heading: 0.35 # [rad] ~20 deg; inferred from target velocity because V2X has no yaw
+  v2x_overtake_contact_continuation_heading_min_target_speed: 0.5 # [m/s] fail closed when target heading cannot be inferred reliably
+  v2x_overtake_contact_continuation_impact_speed_drop: 1.0 # [m/s] ego speed collapse after near-contact Prearm
+  v2x_overtake_contact_continuation_impact_window_sec: 0.20 # [s] Prearm-to-impact association window
+  v2x_overtake_contact_continuation_evidence_dropout_grace_sec: 0.20 # [s] active-only bridge for one-cycle geometry loss
+  v2x_overtake_contact_continuation_min_wall_clearance: 0.25 # [m] previous-cycle actual-footprint wall admission guard
   v2x_overtake_contact_continuation_progress_fresh_sec: 0.5 # [s]
-  v2x_overtake_contact_continuation_near_gap: 0.05 # [m] confirm side contact before course-frame rectangles overlap
-  v2x_overtake_contact_continuation_near_confirm_sec: 0.10 # [s] reject one-cycle V2X proximity noise
+  v2x_overtake_contact_continuation_near_gap: 0.05 # [m] Prearm only; never releases collision/SafetyBrake guards
+  v2x_overtake_contact_continuation_near_confirm_sec: 0.10 # [s] reject one-cycle V2X proximity noise before Prearm
   v2x_overtake_contact_continuation_lateral_bias: 0.15 # [m] requested separation; runtime clamps it to the wall-safe interval
   v2x_overtake_completion_guard_enabled: true # require enough distance to clear the target before a hard hairpin
   v2x_overtake_completion_hard_curvature: 0.12 # [rad/m] hard hairpin boundary, separate from soft curve policy

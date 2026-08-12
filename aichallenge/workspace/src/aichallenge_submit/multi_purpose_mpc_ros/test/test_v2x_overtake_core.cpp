@@ -9536,6 +9536,7 @@ TEST(V2XOvertakeCoreMissionOwnership, ResolvesCommittedPassGeometrySources)
   EXPECT_TRUE(result.pass_release_latched);
   EXPECT_FALSE(result.body_clear_handoff_owns_pass);
   EXPECT_FALSE(result.current_overlap_grace_active);
+  EXPECT_FALSE(result.recoverable_side_contact_owns_pass);
   EXPECT_TRUE(result.pass_authority_available);
   EXPECT_TRUE(result.current_geometry_acceptable);
   EXPECT_TRUE(result.ownership_allowed);
@@ -9560,6 +9561,13 @@ TEST(V2XOvertakeCoreMissionOwnership, ResolvesCommittedPassGeometrySources)
   EXPECT_FALSE(result.current_overlap_grace_active);
   EXPECT_FALSE(result.current_geometry_acceptable);
   EXPECT_FALSE(result.ownership_allowed);
+
+  request.recoverable_side_contact_active = true;
+  result = resolve_committed_pass_geometry_ownership(request);
+  EXPECT_TRUE(result.recoverable_side_contact_owns_pass);
+  EXPECT_TRUE(result.pass_authority_available);
+  EXPECT_TRUE(result.current_geometry_acceptable);
+  EXPECT_TRUE(result.ownership_allowed);
 }
 
 TEST(V2XOvertakeCoreMissionOwnership, ValidatedPassOwnsBehaviorAcrossEntryRejection)
@@ -9593,6 +9601,64 @@ TEST(V2XOvertakeCoreMissionOwnership, MinimumMotionReleaseOwnsBehaviorWithoutLeg
   EXPECT_TRUE(can_preserve_committed_pass_behavior(request));
 
   request.current_body_footprint_overlap_confirmed = true;
+  EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, RecoverableSideContactOwnsConfirmedOverlap)
+{
+  CommittedPassBehaviorOwnershipRequest request;
+  request.committed_pass_active = true;
+  request.validated_fixed_line = true;
+  request.mission_side_valid = true;
+  request.locked_target_seen = true;
+  request.current_body_footprints_separated = false;
+  request.current_body_footprint_overlap_confirmed = true;
+  request.recoverable_side_contact_active = true;
+
+  // The bounded contact classifier itself supplies Pass authority; it does not
+  // depend on transient lateral/front-cap latch state during physical contact.
+  EXPECT_TRUE(can_preserve_committed_pass_behavior(request));
+
+  request.recoverable_side_contact_active = false;
+  EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, RecoverableContactCannotBypassHardGuards)
+{
+  CommittedPassBehaviorOwnershipRequest request;
+  request.committed_pass_active = true;
+  request.validated_fixed_line = true;
+  request.mission_side_valid = true;
+  request.locked_target_seen = true;
+  request.current_body_footprint_overlap_confirmed = true;
+  request.recoverable_side_contact_active = true;
+  ASSERT_TRUE(can_preserve_committed_pass_behavior(request));
+
+  request.locked_target_seen = false;
+  EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
+  request.locked_target_seen = true;
+
+  request.locked_target_position_jump = true;
+  EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
+  request.locked_target_position_jump = false;
+
+  request.locked_target_course_progress_rejected = true;
+  EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
+  request.locked_target_course_progress_rejected = false;
+
+  request.locked_target_pass_side_intrusion = true;
+  EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
+  request.locked_target_pass_side_intrusion = false;
+
+  request.explicit_forbidden_waypoint = true;
+  EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
+  request.explicit_forbidden_waypoint = false;
+
+  request.emergency_front_risk = true;
+  EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
+  request.emergency_front_risk = false;
+
+  request.solver_recovery_requested = true;
   EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
 }
 

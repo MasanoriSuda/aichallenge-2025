@@ -3867,6 +3867,9 @@ struct CommittedPassGeometryOwnershipRequest
   bool current_body_footprint_overlap_confirmed{true};
   bool committed_pass_attack_mode_enabled{false};
   bool body_clear_handoff_active{false};
+  /// Result of the bounded side-contact classifier. The classifier owns its
+  /// duration, progress, velocity and side-geometry limits.
+  bool recoverable_side_contact_active{false};
 };
 
 struct CommittedPassGeometryOwnershipResolution
@@ -3874,14 +3877,15 @@ struct CommittedPassGeometryOwnershipResolution
   bool pass_release_latched{false};
   bool body_clear_handoff_owns_pass{false};
   bool current_overlap_grace_active{false};
+  bool recoverable_side_contact_owns_pass{false};
   bool pass_authority_available{false};
   bool current_geometry_acceptable{false};
   bool ownership_allowed{false};
 };
 
-/// Resolve the current geometry sources which may own a validated Pass.
-/// Confirmed physical overlap remains fail closed; ContactContinuation is not
-/// an ownership source in this behavior-preserving refactor.
+/// Resolve the current geometry sources which may own a validated Pass. A
+/// confirmed physical overlap is accepted only when the independently bounded
+/// ContactContinuation classifier marks it recoverable.
 CommittedPassGeometryOwnershipResolution resolve_committed_pass_geometry_ownership(
   const CommittedPassGeometryOwnershipRequest & request) noexcept;
 
@@ -3902,6 +3906,7 @@ struct CommittedPassBehaviorOwnershipRequest
   bool current_body_footprints_separated{false};
   bool current_body_footprint_overlap_confirmed{true};
   bool committed_pass_attack_mode_enabled{false};
+  bool recoverable_side_contact_active{false};
   bool locked_target_pass_side_intrusion{false};
   bool explicit_forbidden_waypoint{false};
   bool emergency_front_risk{false};
@@ -3916,8 +3921,9 @@ struct CommittedPassBehaviorOwnershipRequest
 ///
 /// Entry-only gap, curve, completion-distance and candidate-quality decisions
 /// are intentionally absent. Live corridor, wall, lateral-acceleration and
-/// solver checks still execute downstream in OvertakeLine. A confirmed current
-/// physical overlap and target-continuity failures always release this ownership.
+/// solver checks still execute downstream in OvertakeLine. Confirmed current
+/// overlap may retain ownership only through bounded ContactContinuation;
+/// target-continuity and hard-fault failures always release it.
 bool can_preserve_committed_pass_behavior(
   const CommittedPassBehaviorOwnershipRequest & request) noexcept;
 

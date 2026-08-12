@@ -6585,11 +6585,15 @@ CommittedPassGeometryOwnershipResolution resolve_committed_pass_geometry_ownersh
     request.minimum_motion_front_cap_release_latched &&
     !request.current_body_footprints_separated &&
     !request.current_body_footprint_overlap_confirmed;
+  resolution.recoverable_side_contact_owns_pass =
+    request.recoverable_side_contact_active;
   resolution.pass_authority_available =
-    resolution.pass_release_latched || resolution.body_clear_handoff_owns_pass;
+    resolution.pass_release_latched || resolution.body_clear_handoff_owns_pass ||
+    resolution.recoverable_side_contact_owns_pass;
   resolution.current_geometry_acceptable =
     request.current_body_footprints_separated ||
-    resolution.current_overlap_grace_active;
+    resolution.current_overlap_grace_active ||
+    resolution.recoverable_side_contact_owns_pass;
   resolution.ownership_allowed =
     resolution.pass_authority_available && resolution.current_geometry_acceptable;
   return resolution;
@@ -6615,7 +6619,8 @@ bool can_preserve_committed_pass_behavior(
       request.current_body_footprints_separated,
       request.current_body_footprint_overlap_confirmed,
       request.committed_pass_attack_mode_enabled,
-      request.body_clear_handoff_active});
+      request.body_clear_handoff_active,
+      request.recoverable_side_contact_active});
   return request.committed_pass_active &&
          request.validated_fixed_line &&
          request.mission_side_valid &&

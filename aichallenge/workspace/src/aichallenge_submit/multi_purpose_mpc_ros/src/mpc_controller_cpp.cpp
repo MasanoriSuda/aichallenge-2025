@@ -9366,6 +9366,7 @@ struct MPC
         output.locked_target_current_body_footprints_separated,
         output.locked_target_current_body_overlap_confirmed,
         cfg.v2x_behavior.overtake_committed_pass_attack_mode_enabled,
+        output.recoverable_side_contact_active,
         output.locked_target_pass_side_intrusion,
         overtake_forbidden_wp,
         effective_front_risk_emergency,

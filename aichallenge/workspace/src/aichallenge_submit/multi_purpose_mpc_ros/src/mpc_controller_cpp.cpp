@@ -1378,7 +1378,9 @@ struct OvertakeLineConfig
   bool static_fallback_entry_motion_guard_enabled{false};
   double static_fallback_max_entry_lateral_shift{1.5};
   bool progressive_entry_enabled{false};
-  double progressive_entry_static_fallback_max_lateral_shift{2.2};
+  double progressive_entry_min_body_clear_slack_sec{0.6};
+  double progressive_entry_short_continuation_distance{6.0};
+  double progressive_entry_static_fallback_max_lateral_shift{1.8};
   double max_lateral_accel{2.5};
   double max_target_change{0.25};
   double target_intrusion_ordering_margin{0.10};
@@ -7318,6 +7320,8 @@ struct MPC
         std::vector<overtake_core::OvertakeMissionCandidate>
           straight_outer_clearance_mission_candidates;
         std::vector<overtake_core::OvertakeMissionCandidate> entry_setup_candidates;
+        std::vector<overtake_core::OvertakeMissionCandidate>
+          progressive_entry_candidates;
         overtake_core::OvertakeMissionDynamicCorridorResolution first_dynamic_rejection;
         bool first_dynamic_rejection_available = false;
         std::size_t evaluated_goal_count = 0;
@@ -7333,6 +7337,8 @@ struct MPC
         std::size_t static_corridor_fallback_count = 0;
         std::size_t static_fallback_entry_motion_reject_count = 0;
         std::size_t progressive_entry_candidate_count = 0;
+        std::size_t progressive_entry_slack_reject_count = 0;
+        std::size_t progressive_entry_short_continuation_reject_count = 0;
         double earliest_rejected_body_clear_time =
           std::numeric_limits<double>::infinity();
         double earliest_rejected_hard_distance_time =
@@ -7602,8 +7608,7 @@ struct MPC
                 overtake_core::OvertakeMissionCandidate setup_candidate;
                 setup_candidate.feasible = true;
                 setup_candidate.direct_pass = direct_pass;
-                setup_candidate.progressive_entry =
-                  progressive_entry_context && rollout.checked;
+                setup_candidate.progressive_entry = false;
                 setup_candidate.shift_distance_m = shift_distance;
                 setup_candidate.goal_lateral_m = preflight.goal_ey;
                 setup_candidate.lateral_shift_m = candidate_entry_lateral_shift;
@@ -7653,8 +7658,65 @@ struct MPC
                   std::max(0.0, goal_upper - goal_lower));
                 setup_candidate.corridor_source = corridor_admission.source;
                 entry_setup_candidates.push_back(setup_candidate);
-                if (setup_candidate.progressive_entry) {
-                  ++progressive_entry_candidate_count;
+
+                // A progressive entry deliberately defers rear-clear and
+                // Return, but it must not defer the immediate escape path.
+                // Validate through body-clear plus a short same-side segment,
+                // and retain the exact validated Pass distance so runtime
+                // revalidation starts before the unchecked horizon.
+                if (progressive_entry_context && rollout.checked) {
+                  const bool progressive_slack_sufficient =
+                    !std::isnan(rollout.deadline_slack_sec) &&
+                    rollout.deadline_slack_sec + kEps >=
+                    cfg.v2x_behavior.overtake_line.
+                    progressive_entry_min_body_clear_slack_sec;
+                  if (!progressive_slack_sufficient) {
+                    ++progressive_entry_slack_reject_count;
+                  } else {
+                    const double progressive_preflight_shift_distance =
+                      direct_pass ? 0.5 : shift_distance;
+                    const double progressive_required_total_distance =
+                      std::max(0.0, rollout.body_clear_distance_m) +
+                      cfg.v2x_behavior.overtake_line.
+                      progressive_entry_short_continuation_distance;
+                    const double progressive_pass_distance = std::max(
+                      0.5,
+                      progressive_required_total_distance -
+                      progressive_preflight_shift_distance);
+                    const auto progressive_continuation_preflight =
+                      evaluate_overtake_line_entry_preflight(
+                      ref_wp_id, static_mission_plan_N,
+                      static_mission_lb, static_mission_ub,
+                      side, model->spatial_state.e_y,
+                      preflight_target_lateral, assessment.corridor_center_ey,
+                      std::pair<double, double>{goal_lower, goal_upper},
+                      preflight.goal_ey, progressive_preflight_shift_distance,
+                      progressive_pass_distance,
+                      false, true, false, false, false,
+                      OvertakeLineEntryPreflightPolicy{true, false});
+                    if (!progressive_continuation_preflight.feasible) {
+                      ++progressive_entry_short_continuation_reject_count;
+                    } else {
+                      auto progressive_candidate = setup_candidate;
+                      progressive_candidate.progressive_entry = true;
+                      progressive_candidate.static_valid_until_pass_m =
+                        progressive_pass_distance;
+                      progressive_candidate.minimum_path_wall_clearance_m = std::min(
+                        progressive_candidate.minimum_path_wall_clearance_m,
+                        progressive_continuation_preflight.
+                        minimum_path_wall_clearance_m);
+                      progressive_candidate.minimum_path_corridor_width_m = std::min(
+                        progressive_candidate.minimum_path_corridor_width_m,
+                        progressive_continuation_preflight.
+                        minimum_path_corridor_width_m);
+                      progressive_candidate.max_required_lateral_accel_mps2 = std::max(
+                        progressive_candidate.max_required_lateral_accel_mps2,
+                        progressive_continuation_preflight.
+                        max_required_lateral_accel);
+                      progressive_entry_candidates.push_back(progressive_candidate);
+                      ++progressive_entry_candidate_count;
+                    }
+                  }
                 }
               }
               if (!rollout.feasible) {
@@ -8081,6 +8143,8 @@ struct MPC
 
         const auto setup_selection =
           select_mission_candidate(entry_setup_candidates, false);
+        const auto progressive_entry_selection =
+          select_mission_candidate(progressive_entry_candidates, false);
         if (setup_selection.valid && setup_selection.found) {
           assessment.entry_setup_mission = setup_selection.candidate;
         }
@@ -8099,10 +8163,11 @@ struct MPC
           (!complete_mission_selection.valid || !complete_mission_selection.found) &&
           cfg.v2x_behavior.overtake_line.progressive_entry_enabled &&
           initial_shiftout_preflight && !side_replan_preflight &&
-          !active_overtake_line && setup_selection.valid && setup_selection.found &&
-          setup_selection.candidate.progressive_entry;
+          !active_overtake_line && progressive_entry_selection.valid &&
+          progressive_entry_selection.found &&
+          progressive_entry_selection.candidate.progressive_entry;
         if (progressive_entry_selected) {
-          resolved_mission_selection = setup_selection;
+          resolved_mission_selection = progressive_entry_selection;
         }
         if (!resolved_mission_selection.valid || !resolved_mission_selection.found) {
           assessment.gap_available = false;
@@ -8130,6 +8195,10 @@ struct MPC
             static_fallback_entry_motion_reject_count
              << ", progressive_entry_candidates=" <<
             progressive_entry_candidate_count
+             << ", progressive_slack_rejected=" <<
+            progressive_entry_slack_reject_count
+             << ", progressive_short_continuation_rejected=" <<
+            progressive_entry_short_continuation_reject_count
              << ", numeric_candidate_rejected=" <<
             complete_mission_selection.invalid_candidate_count
              << ", observed=" <<
@@ -8290,6 +8359,12 @@ struct MPC
             (selected_mission.progressive_entry ? 1 : 0)
                           << ", progressive_candidates=" <<
             progressive_entry_candidate_count
+                          << ", progressive_min_slack=" <<
+            cfg.v2x_behavior.overtake_line.
+            progressive_entry_min_body_clear_slack_sec
+                          << ", progressive_short_continuation=" <<
+            cfg.v2x_behavior.overtake_line.
+            progressive_entry_short_continuation_distance
                           << ", static_fallback_entry_motion_rejected=" <<
             static_fallback_entry_motion_reject_count
                           << (selected_mission.progressive_entry ?
@@ -21277,12 +21352,24 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_line.progressive_entry_enabled =
     mpc["v2x_overtake_progressive_entry_enabled"] ?
     mpc["v2x_overtake_progressive_entry_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_line.progressive_entry_min_body_clear_slack_sec =
+    std::max(
+    0.0,
+    mpc["v2x_overtake_progressive_entry_min_body_clear_slack_sec"] ?
+    mpc["v2x_overtake_progressive_entry_min_body_clear_slack_sec"].as<double>() :
+    0.6);
+  cfg.mpc.v2x_behavior.overtake_line.progressive_entry_short_continuation_distance =
+    std::max(
+    0.5,
+    mpc["v2x_overtake_progressive_entry_short_continuation_distance"] ?
+    mpc["v2x_overtake_progressive_entry_short_continuation_distance"].as<double>() :
+    6.0);
   cfg.mpc.v2x_behavior.overtake_line.
   progressive_entry_static_fallback_max_lateral_shift = std::max(
     0.0,
     mpc["v2x_overtake_progressive_entry_static_fallback_max_lateral_shift"] ?
     mpc["v2x_overtake_progressive_entry_static_fallback_max_lateral_shift"].as<double>() :
-    2.2);
+    1.8);
   cfg.mpc.v2x_behavior.overtake_line.max_lateral_accel = std::max(
     0.0,
     mpc["v2x_overtake_line_max_lateral_accel"] ?
@@ -23274,9 +23361,12 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line.static_fallback_max_entry_lateral_shift);
       RCLCPP_INFO(
         get_logger(),
-        "V2X progressive overtake entry: %s, static_fallback_max_shift=%.2f m",
+        "V2X progressive overtake entry: %s, min_body_clear_slack=%.2f s, "
+        "short_continuation=%.2f m, static_fallback_max_shift=%.2f m",
         mpc_cfg_.v2x_behavior.overtake_line.progressive_entry_enabled ?
         "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line.progressive_entry_min_body_clear_slack_sec,
+        mpc_cfg_.v2x_behavior.overtake_line.progressive_entry_short_continuation_distance,
         mpc_cfg_.v2x_behavior.overtake_line.
         progressive_entry_static_fallback_max_lateral_shift);
       RCLCPP_INFO(

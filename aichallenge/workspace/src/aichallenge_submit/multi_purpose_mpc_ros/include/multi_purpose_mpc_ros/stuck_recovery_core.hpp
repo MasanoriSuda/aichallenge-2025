@@ -841,8 +841,9 @@ struct RecoveryInput
   bool rejoin_safe{false};
   bool rejoin_forward_clear{true};
   double signed_speed_mps{};
-  // Distance of the current bounded maneuver, including the node-side
-  // stopping reserve when used for actuation limits.
+  // Odometry distance of the current bounded maneuver. Predicted stopping
+  // reserve is deliberately excluded; it is an actuation lookahead, not
+  // physical escape progress.
   double traveled_distance_m{};
   // Distance accumulated across every bounded maneuver in this recovery
   // episode. This prevents a sequence of short steps from being mistaken for

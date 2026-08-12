@@ -675,6 +675,11 @@ TEST(StuckRecoveryEscapeConfirmation, AppliesToleranceOnlyWithClearFootprint)
 {
   EXPECT_TRUE(recovery_escape_distance_confirmed(true, 1.947, 2.0, 0.10));
   EXPECT_FALSE(recovery_escape_distance_confirmed(true, 1.89, 2.0, 0.10));
+  // A predicted 1.9 m stopping reserve must not make 2.0 m of physical
+  // motion satisfy a 4.0 m escape target. Only odometry distance is passed to
+  // this completion contract.
+  EXPECT_FALSE(recovery_escape_distance_confirmed(true, 2.002, 4.0, 0.10));
+  EXPECT_TRUE(recovery_escape_distance_confirmed(true, 3.90, 4.0, 0.10));
   EXPECT_FALSE(recovery_escape_distance_confirmed(false, 2.0, 2.0, 0.10));
   EXPECT_FALSE(recovery_escape_distance_confirmed(true, 1.947, 2.0, -0.10));
 }
@@ -2073,6 +2078,19 @@ TEST(RecoverySupervisor, ContinuousReverseBrakesAndResumesWithoutGearCycle)
   EXPECT_EQ(action.type, RecoveryActionType::ReverseCreep);
   EXPECT_EQ(action.reason, RecoveryReason::ReverseInProgress);
   EXPECT_EQ(supervisor.state(), RecoveryState::ReverseManeuver);
+
+  // Completion is a separate physical-distance input. The braking lookahead
+  // above never changed gear; once odometry confirms the target, the normal
+  // stop-before-Drive transition is allowed.
+  now += 0.01;
+  input.now_sec = now;
+  input.signed_speed_mps = -0.1;
+  input.recovery_escape_confirmed = true;
+  action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
+  EXPECT_EQ(action.reason, RecoveryReason::ReverseEscapeConfirmed);
+  EXPECT_EQ(action.requested_gear, Gear::NoCommand);
+  EXPECT_EQ(supervisor.state(), RecoveryState::StopBeforeDrive);
 }
 
 TEST(RecoverySupervisor, ReverseCreepUsesTheSelectedSteeringAngle)

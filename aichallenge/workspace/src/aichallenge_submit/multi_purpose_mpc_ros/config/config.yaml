@@ -125,6 +125,9 @@ stuck_recovery:
     # If the complete 4 m swept rollout monotonically reduces the initial
     # contact patch, prefer one continuous Reverse over 0.4 m gear cycling.
     continuous_contact_reverse_enabled: true
+    # If only the short swept-footprint is feasible, keep Reverse engaged and
+    # replan the next 0.4 m segment instead of changing Drive/Reverse each step.
+    rolling_stepwise_reverse_enabled: true
     fast_rejoin_min_reverse_distance_m: 4.0
     # A rejoin or aggressive retry before 5 m of normal forward travel doubles
     # the next Reverse target from 4.0 to the 8.0 m cap.

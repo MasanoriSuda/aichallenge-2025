@@ -8670,8 +8670,10 @@ struct MPC
           pass_side(locked_pass_side), current_assessment.selected_mission,
           current_assessment.gap_available,
           execution_allowed_for_side(current_assessment), selected_side_conflict,
-          output.locked_target_predicted_body_footprint_sweep_separated &&
-          !opponent_side_replan_early_intrusion_risk});
+          (paused_overtake_mission &&
+          overtake_line_state_.dynamic_mission_wait_active) ||
+          (output.locked_target_predicted_body_footprint_sweep_separated &&
+          !opponent_side_replan_early_intrusion_risk)});
       const auto alternate_maneuver = overtake_core::assess_pass_maneuver_candidate(
         overtake_core::PassManeuverCandidateRequest{
           pass_side(alternate_side), alternate_assessment.selected_mission,
@@ -13860,6 +13862,7 @@ private:
             target_continuous,
             behavior_output.locked_target_current_body_footprints_separated,
             behavior_output.locked_target_footprint_prediction_valid,
+            true,
             before_no_return,
             replacement_count_available,
             hard_fault,
@@ -14096,10 +14099,30 @@ private:
         overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare;
       const int mission_side_sign = overtake_line_state_.pass_side_sign;
       if (resuming_paused_mission && overtake_line_state_.dynamic_mission_wait_active) {
+        const bool dynamic_wait_cross_side_allowed =
+          !overtake_line_state_.opponent_side_replan_no_return_latched &&
+          !overtake_line_state_.mission_cross_side_transition_committed &&
+          behavior_output.overtake_commit_stage ==
+          overtake_core::PassCommitStage::ShiftCommitted &&
+          overtake_line_state_.opponent_side_replan_count <
+          line_cfg.opponent_side_replan_max_count;
+        const bool fresh_current_replacement_ready =
+          current_overtake_mission_invalidated() &&
+          behavior_output.opponent_side_replan_current_feasible &&
+          behavior_output.opponent_side_replan_current_mission.has_value();
+        const bool fresh_alternate_replacement_ready =
+          dynamic_wait_cross_side_allowed &&
+          behavior_output.opponent_side_replan_ready &&
+          behavior_output.opponent_side_replan_mission.has_value();
+        const bool fresh_replacement_physically_admitted =
+          behavior_output.locked_target_current_body_footprints_separated &&
+          behavior_output.locked_target_footprint_prediction_valid &&
+          (fresh_current_replacement_ready || fresh_alternate_replacement_ready);
         const bool dynamic_wait_hard_fault =
           actual_wall_physical_contact || actual_wall_margin_blocked ||
           actual_wall_sample_unavailable ||
-          behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake ||
+          (behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake &&
+          !fresh_replacement_physically_admitted) ||
           overtake_solver_recovery_active_ || behavior_output.overtake_forbidden_wp;
         const auto dynamic_wait = overtake_core::resolve_dynamic_mission_wait(
           overtake_core::DynamicMissionWaitRequest{
@@ -14111,12 +14134,11 @@ private:
             dynamic_wait_hard_fault,
             rear_clear_confirmed,
             current_overtake_mission_invalidated(),
+            dynamic_wait_cross_side_allowed,
             behavior_output.opponent_side_replan_evaluated,
             behavior_output.opponent_side_replan_current_feasible,
-            current_overtake_mission_invalidated() &&
-            behavior_output.opponent_side_replan_current_mission.has_value(),
-            behavior_output.opponent_side_replan_ready &&
-            behavior_output.opponent_side_replan_mission.has_value()});
+            fresh_current_replacement_ready,
+            fresh_alternate_replacement_ready});
         if (dynamic_wait.action == overtake_core::DynamicMissionWaitAction::Return) {
           transition_overtake_line_phase(
             OvertakeLinePhase::Return, now_sec, current_ey,
@@ -14139,7 +14161,7 @@ private:
             behavior_output.opponent_side_replan_current_mission.has_value() &&
             replace_frozen_overtake_mission_after_dynamic_replan(
             behavior_output.opponent_side_replan_current_mission.value(),
-            now_sec, current_ey, true);
+            now_sec, current_ey, true, true);
           if (replaced) {
             overtake_line_state_.dynamic_mission_wait_active = false;
             return output;

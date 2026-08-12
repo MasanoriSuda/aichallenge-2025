@@ -3735,15 +3735,16 @@ struct DynamicMissionWaitAdmissionRequest
   bool target_continuous{false};
   bool current_body_footprints_separated{false};
   bool footprint_prediction_valid{false};
+  bool same_side_replacement_allowed{false};
   bool before_no_return{false};
   bool replacement_count_available{false};
   bool hard_fault{false};
   bool rear_clear_confirmed{false};
 };
 
-/// Enter a bounded dynamic wait only while a complete alternate Mission can
-/// still be assessed and committed. After no-return, callers must use their
-/// existing same-side forward-completion or RecoverBehind policy.
+/// Enter a bounded dynamic wait while a fresh complete Mission can still be
+/// assessed and committed. Cross-side replacement remains pre-no-return only;
+/// same-side replacement may refresh a failed path after no-return.
 bool can_enter_dynamic_mission_wait(
   const DynamicMissionWaitAdmissionRequest & request) noexcept;
 
@@ -3783,6 +3784,7 @@ struct DynamicMissionWaitRequest
   bool hard_fault{false};
   bool rear_clear_confirmed{false};
   bool current_mission_invalidated{false};
+  bool alternate_replacement_allowed{false};
   bool assessment_completed{false};
   bool current_plan_feasible{false};
   bool current_replacement_ready{false};
@@ -3798,6 +3800,8 @@ struct DynamicMissionWaitResolution
 /// Hold a paused overtake target while both complete Mission candidates are
 /// unavailable. Only a fresh current-side assessment may resume a still-valid
 /// plan; an invalidated generation can only be replaced atomically or ended.
+/// Alternate replacement is separately gated so no-return cannot cause a
+/// side-by-side full-track crossing.
 /// Actual overlap, target discontinuity and controller/geometry hard faults
 /// remain fail closed.
 DynamicMissionWaitResolution resolve_dynamic_mission_wait(

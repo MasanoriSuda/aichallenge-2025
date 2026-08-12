@@ -6406,12 +6406,15 @@ bool should_observe_locked_target_geometry(
 bool can_enter_dynamic_mission_wait(
   const DynamicMissionWaitAdmissionRequest & request) noexcept
 {
+  const bool replacement_window_available =
+    request.same_side_replacement_allowed ||
+    (request.before_no_return && request.replacement_count_available);
   return
     request.enabled && request.active_execution_phase &&
     request.mission_path_frozen && request.target_id_available &&
     request.target_continuous && request.current_body_footprints_separated &&
-    request.footprint_prediction_valid && request.before_no_return &&
-    request.replacement_count_available && !request.hard_fault &&
+    request.footprint_prediction_valid && replacement_window_available &&
+    !request.hard_fault &&
     !request.rear_clear_confirmed;
 }
 
@@ -6443,7 +6446,10 @@ DynamicMissionWaitResolution resolve_dynamic_mission_wait(
     resolution.reason = DynamicMissionWaitReason::RearClear;
     return resolution;
   }
-  if (request.alternate_replacement_ready) {
+  if (
+    request.alternate_replacement_allowed &&
+    request.alternate_replacement_ready)
+  {
     resolution.action = DynamicMissionWaitAction::ReplaceWithAlternate;
     resolution.reason = DynamicMissionWaitReason::AlternatePlanReady;
     return resolution;

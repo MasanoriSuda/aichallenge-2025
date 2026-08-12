@@ -9284,7 +9284,7 @@ TEST(V2XOvertakeCoreDynamicMissionWait, ObservesPausedFrozenMissionTargetGeometr
   EXPECT_FALSE(should_observe_locked_target_geometry(request));
 }
 
-TEST(V2XOvertakeCoreDynamicMissionWait, AdmitsOnlyObservablePreNoReturnReplacementWindow)
+TEST(V2XOvertakeCoreDynamicMissionWait, AdmitsObservableSameSideAfterNoReturn)
 {
   DynamicMissionWaitAdmissionRequest request;
   request.enabled = true;
@@ -9302,7 +9302,15 @@ TEST(V2XOvertakeCoreDynamicMissionWait, AdmitsOnlyObservablePreNoReturnReplaceme
   request.before_no_return = false;
   EXPECT_FALSE(can_enter_dynamic_mission_wait(request));
 
+  request.same_side_replacement_allowed = true;
+  EXPECT_TRUE(can_enter_dynamic_mission_wait(request));
+
+  request.replacement_count_available = false;
+  EXPECT_TRUE(can_enter_dynamic_mission_wait(request));
+
+  request.same_side_replacement_allowed = false;
   request.before_no_return = true;
+  request.replacement_count_available = true;
   request.current_body_footprints_separated = false;
   EXPECT_FALSE(can_enter_dynamic_mission_wait(request));
 
@@ -9346,6 +9354,7 @@ TEST(V2XOvertakeCoreDynamicMissionWait, HoldsUntilFreshCurrentOrAlternatePlanExi
   EXPECT_EQ(result.reason, DynamicMissionWaitReason::CurrentPlanRecovered);
 
   request.current_plan_feasible = false;
+  request.alternate_replacement_allowed = true;
   request.alternate_replacement_ready = true;
   result = resolve_dynamic_mission_wait(request);
   EXPECT_EQ(result.action, DynamicMissionWaitAction::ReplaceWithAlternate);
@@ -9386,6 +9395,7 @@ TEST(V2XOvertakeCoreDynamicMissionWait, KeepsHardFaultsAndOverlapFailClosed)
   EXPECT_EQ(result.reason, DynamicMissionWaitReason::RearClear);
 
   request.hard_fault = true;
+  request.alternate_replacement_allowed = true;
   request.alternate_replacement_ready = true;
   result = resolve_dynamic_mission_wait(request);
   EXPECT_EQ(result.action, DynamicMissionWaitAction::Recovery);
@@ -9423,9 +9433,29 @@ TEST(V2XOvertakeCoreDynamicMissionWait, InvalidatedGenerationWaitsForReplacement
   EXPECT_EQ(result.reason, DynamicMissionWaitReason::CurrentPlanRecovered);
 
   request.alternate_replacement_ready = true;
+  request.alternate_replacement_allowed = true;
   result = resolve_dynamic_mission_wait(request);
   EXPECT_EQ(result.action, DynamicMissionWaitAction::ReplaceWithAlternate);
   EXPECT_EQ(result.reason, DynamicMissionWaitReason::AlternatePlanReady);
+}
+
+TEST(V2XOvertakeCoreDynamicMissionWait, NoReturnUsesFreshSameSideOnly)
+{
+  DynamicMissionWaitRequest request;
+  request.enabled = true;
+  request.wait_active = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.current_mission_invalidated = true;
+  request.assessment_completed = true;
+  request.current_plan_feasible = true;
+  request.current_replacement_ready = true;
+  request.alternate_replacement_allowed = false;
+  request.alternate_replacement_ready = true;
+
+  const auto result = resolve_dynamic_mission_wait(request);
+  EXPECT_EQ(result.action, DynamicMissionWaitAction::ReplaceWithCurrent);
+  EXPECT_EQ(result.reason, DynamicMissionWaitReason::CurrentPlanRecovered);
 }
 
 TEST(V2XOvertakeCoreMissionOwnership, MissionLockOwnsPausedMissionSide)

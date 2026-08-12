@@ -6622,6 +6622,40 @@ TEST(V2XOvertakeCoreMinimumMotion, UsesSpareWidthForTargetClearance)
   EXPECT_DOUBLE_EQ(resolution.required_shift_m, 0.70);
 }
 
+TEST(V2XOvertakeCoreMinimumMotion, AddsStraightOuterClearanceWhenCorridorHasReserve)
+{
+  const auto base = resolve_minimum_lateral_motion_goal(
+    MinimumLateralMotionGoalRequest{0.0, 0.1, 0.65, 1.40, 1, 0.20});
+  const auto biased = resolve_minimum_lateral_motion_goal(
+    MinimumLateralMotionGoalRequest{0.0, 0.1, 0.65, 1.40, 1, 0.30});
+
+  ASSERT_TRUE(base.valid);
+  ASSERT_TRUE(biased.valid);
+  EXPECT_DOUBLE_EQ(base.goal_m, 0.85);
+  EXPECT_DOUBLE_EQ(biased.goal_m, 0.95);
+  EXPECT_NEAR(
+    biased.applied_target_clearance_buffer_m -
+    base.applied_target_clearance_buffer_m,
+    0.10, 1e-9);
+}
+
+TEST(V2XOvertakeCoreMinimumMotion, CapsStraightOuterClearanceInNarrowCorridor)
+{
+  const auto base = resolve_minimum_lateral_motion_goal(
+    MinimumLateralMotionGoalRequest{0.0, 0.0, 0.65, 0.85, 1, 0.20});
+  const auto biased = resolve_minimum_lateral_motion_goal(
+    MinimumLateralMotionGoalRequest{0.0, 0.0, 0.65, 0.85, 1, 0.30});
+
+  ASSERT_TRUE(base.valid);
+  ASSERT_TRUE(biased.valid);
+  EXPECT_NEAR(base.goal_m, 0.75, 1e-9);
+  EXPECT_NEAR(biased.goal_m, 0.75, 1e-9);
+  EXPECT_NEAR(
+    biased.applied_target_clearance_buffer_m -
+    base.applied_target_clearance_buffer_m,
+    0.0, 1e-9);
+}
+
 TEST(V2XOvertakeCoreMinimumMotion, CapsTargetClearanceAtCorridorMidpoint)
 {
   const auto resolution = resolve_minimum_lateral_motion_goal(

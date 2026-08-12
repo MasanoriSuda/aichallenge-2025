@@ -1624,6 +1624,7 @@ struct V2XBehaviorConfig
   bool overtake_try_both_sides{false};
   bool overtake_minimum_lateral_motion_enabled{false};
   double overtake_minimum_motion_preferred_clearance_buffer{0.0};
+  double overtake_minimum_motion_straight_outer_extra_clearance{0.0};
   double overtake_minimum_motion_direct_pass_max_lateral_shift{0.0};
   double overtake_minimum_motion_inner_preference_max_extra_shift{0.0};
   double overtake_minimum_motion_inner_lookahead_distance{0.0};
@@ -6668,6 +6669,10 @@ struct MPC
       bool base_line_clear{false};
       bool direct_base_line_pass_ready{false};
       bool direct_tiny_shift_pass_ready{false};
+      bool straight_outer_clearance_bias_requested{false};
+      bool straight_outer_clearance_bias_applied{false};
+      bool straight_outer_clearance_bias_fallback{false};
+      double straight_outer_clearance_bias_applied_m{0.0};
       double required_lateral_shift{std::numeric_limits<double>::infinity()};
       std::optional<overtake_core::OvertakeMissionCandidate> selected_mission;
       // A body-clear-feasible candidate may prepare longitudinal speed while
@@ -7167,6 +7172,15 @@ struct MPC
         assessment.gap_available && !start_grid_breakout_attempt &&
         (initial_shiftout_preflight || side_replan_preflight);
       if (normal_shiftout_preflight) {
+        const bool straight_entry = inner_curve_pass_side == 0;
+        const bool outer_entry =
+          inner_curve_pass_side != 0 && side != inner_curve_pass_side;
+        const bool straight_outer_clearance_bias_requested =
+          cfg.v2x_behavior.overtake_minimum_lateral_motion_enabled &&
+          cfg.v2x_behavior.overtake_minimum_motion_straight_outer_extra_clearance > kEps &&
+          (straight_entry || outer_entry);
+        assessment.straight_outer_clearance_bias_requested =
+          straight_outer_clearance_bias_requested;
         const double preflight_target_lateral =
           (side_replan_preflight || paused_overtake_mission) &&
           output.locked_target_seen &&
@@ -7286,6 +7300,8 @@ struct MPC
         std::sort(shift_distance_candidates.begin(), shift_distance_candidates.end());
 
         std::vector<overtake_core::OvertakeMissionCandidate> mission_candidates;
+        std::vector<overtake_core::OvertakeMissionCandidate>
+          straight_outer_clearance_mission_candidates;
         std::vector<overtake_core::OvertakeMissionCandidate> entry_setup_candidates;
         overtake_core::OvertakeMissionDynamicCorridorResolution first_dynamic_rejection;
         bool first_dynamic_rejection_available = false;
@@ -7371,12 +7387,28 @@ struct MPC
 
           const double goal_lower = corridor_admission.goal_lower_m;
           const double goal_upper = corridor_admission.goal_upper_m;
-          const auto minimum_motion_goal =
+          const auto base_minimum_motion_goal =
             v2x_overtake_core::resolve_minimum_lateral_motion_goal(
             v2x_overtake_core::MinimumLateralMotionGoalRequest{
               0.0, model->spatial_state.e_y, goal_lower, goal_upper,
               side,
               cfg.v2x_behavior.overtake_minimum_motion_preferred_clearance_buffer});
+          const auto preferred_minimum_motion_goal =
+            v2x_overtake_core::resolve_minimum_lateral_motion_goal(
+            v2x_overtake_core::MinimumLateralMotionGoalRequest{
+              0.0, model->spatial_state.e_y, goal_lower, goal_upper,
+              side,
+              cfg.v2x_behavior.overtake_minimum_motion_preferred_clearance_buffer +
+              (straight_outer_clearance_bias_requested ?
+              cfg.v2x_behavior.overtake_minimum_motion_straight_outer_extra_clearance :
+              0.0)});
+          const double available_straight_outer_clearance_bias_m =
+            straight_outer_clearance_bias_requested &&
+            base_minimum_motion_goal.valid && preferred_minimum_motion_goal.valid ?
+            std::max(
+              0.0,
+              preferred_minimum_motion_goal.applied_target_clearance_buffer_m -
+              base_minimum_motion_goal.applied_target_clearance_buffer_m) : 0.0;
           std::vector<double> goal_candidates;
           const auto add_goal = [&](const double goal) {
               if (!std::isfinite(goal)) {
@@ -7390,8 +7422,11 @@ struct MPC
                 goal_candidates.push_back(bounded);
               }
             };
-          if (minimum_motion_goal.valid) {
-            add_goal(minimum_motion_goal.goal_m);
+          if (preferred_minimum_motion_goal.valid) {
+            add_goal(preferred_minimum_motion_goal.goal_m);
+          }
+          if (base_minimum_motion_goal.valid) {
+            add_goal(base_minimum_motion_goal.goal_m);
           }
           add_goal(overtake_core::resolve_pass_side_lateral_goal(
             overtake_core::PassSideLateralGoalRequest{
@@ -7410,6 +7445,11 @@ struct MPC
 
           for (const double preferred_goal : goal_candidates) {
             ++evaluated_goal_count;
+            const bool straight_outer_clearance_goal =
+              available_straight_outer_clearance_bias_m > kEps &&
+              preferred_minimum_motion_goal.valid &&
+              std::abs(
+                preferred_goal - preferred_minimum_motion_goal.goal_m) <= 1e-6;
             const auto preflight = evaluate_overtake_line_entry_preflight(
               ref_wp_id, overtake_plan_N, overtake_lb, overtake_ub,
               side, model->spatial_state.e_y,
@@ -7949,12 +7989,22 @@ struct MPC
                 rear_clear_course_role.inner_to_outer_at_rear_clear;
               mission_candidate.first_course_role_reversal_distance_m =
                 rear_clear_course_role.first_role_reversal_distance_m;
+              const bool straight_outer_clearance_wall_reserve =
+                straight_outer_clearance_goal &&
+                mission_candidate.minimum_path_wall_clearance_m + kEps >=
+                static_wall_margin + available_straight_outer_clearance_bias_m;
+              mission_candidate.straight_outer_clearance_bias_applied_m =
+                straight_outer_clearance_wall_reserve ?
+                available_straight_outer_clearance_bias_m : 0.0;
               mission_candidate.max_required_lateral_accel_mps2 = std::max(
                 mission_candidate.max_required_lateral_accel_mps2,
                 outer_transition.transition_required ?
                 outer_transition_preflight.max_required_lateral_accel : 0.0);
               mission_candidate.corridor_source = corridor_admission.source;
               mission_candidates.push_back(mission_candidate);
+              if (mission_candidate.straight_outer_clearance_bias_applied_m > kEps) {
+                straight_outer_clearance_mission_candidates.push_back(mission_candidate);
+              }
             }
           }
         }
@@ -7964,7 +8014,16 @@ struct MPC
         if (setup_selection.valid && setup_selection.found) {
           assessment.entry_setup_mission = setup_selection.candidate;
         }
-        const auto mission_selection = select_mission_candidate(mission_candidates);
+        const bool straight_outer_clearance_bias_available =
+          !straight_outer_clearance_mission_candidates.empty();
+        assessment.straight_outer_clearance_bias_applied =
+          straight_outer_clearance_bias_available;
+        assessment.straight_outer_clearance_bias_fallback =
+          assessment.straight_outer_clearance_bias_requested &&
+          !straight_outer_clearance_bias_available;
+        const auto mission_selection = select_mission_candidate(
+          straight_outer_clearance_bias_available ?
+          straight_outer_clearance_mission_candidates : mission_candidates);
         if (!mission_selection.valid || !mission_selection.found) {
           assessment.gap_available = false;
           assessment.transient_gap_hold = false;
@@ -8041,6 +8100,8 @@ struct MPC
             mission_selection.horizon_progress.retained_speed;
           assessment.dynamic_mission_corridor_feasible = true;
           assessment.selected_mission = selected_mission;
+          assessment.straight_outer_clearance_bias_applied_m =
+            selected_mission.straight_outer_clearance_bias_applied_m;
           assessment.corridor_center_ey = selected_mission.goal_lateral_m;
           assessment.required_lateral_accel =
             selected_mission.max_required_lateral_accel_mps2;
@@ -8124,6 +8185,12 @@ struct MPC
             (selected_mission.full_track_transition_before_rear_clear ? 1 : 0)
                           << ", inner_to_outer=" <<
             (selected_mission.inner_to_outer_at_rear_clear ? 1 : 0)
+                          << ", clearance_bias=" <<
+            (assessment.straight_outer_clearance_bias_requested ? 1 : 0)
+                          << "/" <<
+            selected_mission.straight_outer_clearance_bias_applied_m
+                          << "/" <<
+            (assessment.straight_outer_clearance_bias_fallback ? 1 : 0)
                           << ", corridor_source=" <<
             overtake_core::to_string(selected_mission.corridor_source)
                           << ", target_vlat=" << preflight_target_lateral_velocity
@@ -22023,6 +22090,10 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_minimum_motion_preferred_clearance_buffer"] ?
     mpc["v2x_overtake_minimum_motion_preferred_clearance_buffer"].as<double>() : 0.0);
+  cfg.mpc.v2x_behavior.overtake_minimum_motion_straight_outer_extra_clearance = std::max(
+    0.0,
+    mpc["v2x_overtake_minimum_motion_straight_outer_extra_clearance"] ?
+    mpc["v2x_overtake_minimum_motion_straight_outer_extra_clearance"].as<double>() : 0.0);
   cfg.mpc.v2x_behavior.overtake_minimum_motion_direct_pass_max_lateral_shift = std::max(
     0.0,
     mpc["v2x_overtake_minimum_motion_direct_pass_max_lateral_shift"] ?
@@ -22785,10 +22856,12 @@ public:
       RCLCPP_INFO(
         get_logger(),
         "V2X minimum-motion inside preference: clearance_buffer=%.2f m, "
+        "straight_outer_extra=%.2f m, "
         "lookahead=%.2f m, min_open=%.2f m, "
         "min_width=%.2f m, max_extra_shift=%.2f m, committed_front_danger_suppress=%d, "
         "committed_pass_attack=%d",
         mpc_cfg_.v2x_behavior.overtake_minimum_motion_preferred_clearance_buffer,
+        mpc_cfg_.v2x_behavior.overtake_minimum_motion_straight_outer_extra_clearance,
         mpc_cfg_.v2x_behavior.overtake_minimum_motion_inner_lookahead_distance,
         mpc_cfg_.v2x_behavior.overtake_minimum_motion_inner_min_open_distance,
         mpc_cfg_.v2x_behavior.overtake_minimum_motion_inner_min_corridor_width,

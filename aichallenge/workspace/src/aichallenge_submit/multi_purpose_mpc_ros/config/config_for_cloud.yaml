@@ -480,6 +480,7 @@ mpc:
   v2x_overtake_try_both_sides: true         # before ShiftOut, retry the opposite side if preferred gap is blocked
   v2x_overtake_minimum_lateral_motion_enabled: true # keep the racing line when clear; otherwise use the nearest safe corridor point
   v2x_overtake_minimum_motion_preferred_clearance_buffer: 0.20 # [m] use spare corridor width away from the target, capped at half the corridor
+  v2x_overtake_minimum_motion_straight_outer_extra_clearance: 0.10 # [m] prefer this extra target clearance on straight/outer entries only; fall back when the full Mission or wall reserve fails
   v2x_overtake_minimum_motion_direct_pass_max_lateral_shift: 0.20 # [m] enter Pass directly only when already body-clear and the frozen correction is tiny
   v2x_overtake_minimum_motion_inner_preference_max_extra_shift: 0.60 # [m] keep small-wrap default; allow a verified open inside attack
   v2x_overtake_minimum_motion_inner_lookahead_distance: 18.0 # [m] resolve the next curve inside while still on the preceding straight

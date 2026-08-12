@@ -2247,6 +2247,9 @@ struct OvertakeMissionCandidate
   bool full_track_transition_before_rear_clear{false};
   bool inner_to_outer_at_rear_clear{false};
   double first_course_role_reversal_distance_m{std::numeric_limits<double>::infinity()};
+  // Selection-transparent metadata used by the controller's per-side
+  // straight/outer clearance tier. Global side ranking intentionally ignores it.
+  double straight_outer_clearance_bias_applied_m{};
 };
 
 /// A Mission which changes from outer to inner before rear-clear may only be

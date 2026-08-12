@@ -1377,6 +1377,8 @@ struct OvertakeLineConfig
   int runtime_wall_replan_max_count{2};
   bool static_fallback_entry_motion_guard_enabled{false};
   double static_fallback_max_entry_lateral_shift{1.5};
+  bool progressive_entry_enabled{false};
+  double progressive_entry_static_fallback_max_lateral_shift{2.2};
   double max_lateral_accel{2.5};
   double max_target_change{0.25};
   double target_intrusion_ordering_margin{0.10};
@@ -7330,6 +7332,7 @@ struct MPC
         std::string first_outer_transition_preflight_rejection;
         std::size_t static_corridor_fallback_count = 0;
         std::size_t static_fallback_entry_motion_reject_count = 0;
+        std::size_t progressive_entry_candidate_count = 0;
         double earliest_rejected_body_clear_time =
           std::numeric_limits<double>::infinity();
         double earliest_rejected_hard_distance_time =
@@ -7484,11 +7487,29 @@ struct MPC
                 candidate_entry_lateral_shift,
                 cfg.v2x_behavior.overtake_line.
                 static_fallback_max_entry_lateral_shift});
+            const bool complete_entry_motion_admitted =
+              static_fallback_entry_admission.valid &&
+              static_fallback_entry_admission.admitted;
+            const bool progressive_entry_context =
+              cfg.v2x_behavior.overtake_line.progressive_entry_enabled &&
+              initial_shiftout_preflight && !side_replan_preflight &&
+              !active_overtake_line;
+            const bool progressive_static_fallback_motion_admitted =
+              progressive_entry_context &&
+              static_fallback_entry_admission.valid &&
+              corridor_admission.source ==
+              overtake_core::OvertakeMissionCorridorSource::StaticWallFallback &&
+              candidate_entry_lateral_shift <=
+              cfg.v2x_behavior.overtake_line.
+              progressive_entry_static_fallback_max_lateral_shift + kEps;
+            if (!complete_entry_motion_admitted) {
+              ++static_fallback_entry_motion_reject_count;
+            }
             if (
               !static_fallback_entry_admission.valid ||
-              !static_fallback_entry_admission.admitted)
+              (!complete_entry_motion_admitted &&
+              !progressive_static_fallback_motion_admitted))
             {
-              ++static_fallback_entry_motion_reject_count;
               continue;
             }
             const bool current_position_clear =
@@ -7573,13 +7594,16 @@ struct MPC
                 continue;
               }
               if (rollout.feasible) {
-                // This preliminary candidate is intentionally incomplete: it
-                // proves only that a current ShiftOut can reach body-clear
-                // before the hard longitudinal gap. Until rear-clear and
-                // Return pass below, it may prepare speed on the base line but
-                // must never be frozen as an executable lateral Mission.
+                // This candidate proves that the local ShiftOut can reach
+                // body-clear before the hard longitudinal gap.  A new entry
+                // may execute it progressively; rear-clear and Return are then
+                // refreshed by the existing rolling replan.  Active Mission
+                // replacement still requires a complete candidate below.
                 overtake_core::OvertakeMissionCandidate setup_candidate;
                 setup_candidate.feasible = true;
+                setup_candidate.direct_pass = direct_pass;
+                setup_candidate.progressive_entry =
+                  progressive_entry_context && rollout.checked;
                 setup_candidate.shift_distance_m = shift_distance;
                 setup_candidate.goal_lateral_m = preflight.goal_ey;
                 setup_candidate.lateral_shift_m = candidate_entry_lateral_shift;
@@ -7598,6 +7622,30 @@ struct MPC
                 setup_candidate.body_clear_deadline_slack_sec = rollout.deadline_slack_sec;
                 setup_candidate.predicted_minimum_ego_speed_mps =
                   rollout.minimum_ego_speed_mps;
+                setup_candidate.pass_hold_distance_m = std::max(
+                  std::max(0.5, pass_distance),
+                  std::max(
+                    0.5,
+                    cfg.v2x_behavior.overtake_line.
+                    pass_horizon_extension_max_distance));
+                setup_candidate.return_distance_m =
+                  std::max(0.5, cfg.v2x_behavior.overtake_line.return_distance);
+                setup_candidate.static_valid_until_pass_m =
+                  setup_candidate.pass_hold_distance_m;
+                const double setup_pass_origin_shift_distance =
+                  direct_pass ? 0.0 : shift_distance;
+                setup_candidate.dynamic_valid_until_pass_m = std::max(
+                  0.0,
+                  corridor_admission.source ==
+                  overtake_core::OvertakeMissionCorridorSource::DynamicObservation ?
+                  dynamic_validation_distance_m - setup_pass_origin_shift_distance : 0.0);
+                setup_candidate.planner_generated_at_sec = now_sec;
+                setup_candidate.prediction_source_age_sec = prediction_source_age_sec;
+                setup_candidate.prediction_epoch_sec =
+                  prediction_timing.prediction_epoch_sec;
+                setup_candidate.prediction_horizon_sec =
+                  std::max(0.0, cfg.v2x_gap.prediction_time);
+                setup_candidate.dynamic_valid_until_sec = prediction_timing.expiry_sec;
                 setup_candidate.minimum_path_wall_clearance_m =
                   preflight.minimum_path_wall_clearance_m;
                 setup_candidate.minimum_path_corridor_width_m = std::min(
@@ -7605,6 +7653,9 @@ struct MPC
                   std::max(0.0, goal_upper - goal_lower));
                 setup_candidate.corridor_source = corridor_admission.source;
                 entry_setup_candidates.push_back(setup_candidate);
+                if (setup_candidate.progressive_entry) {
+                  ++progressive_entry_candidate_count;
+                }
               }
               if (!rollout.feasible) {
                 ++body_clear_deadline_miss_count;
@@ -7614,6 +7665,12 @@ struct MPC
                 earliest_rejected_hard_distance_time = std::min(
                   earliest_rejected_hard_distance_time,
                   rollout.hard_distance_time_sec);
+              }
+              if (!complete_entry_motion_admitted) {
+                // The wider static fallback allowance is only for a bounded
+                // progressive entry.  Do not mislabel it as a fully validated
+                // rear-clear/Return Mission.
+                continue;
               }
               const double pass_origin_shift_distance = direct_pass ? 0.0 : shift_distance;
               const auto pass_distance_resolution =
@@ -8034,10 +8091,20 @@ struct MPC
         assessment.straight_outer_clearance_bias_fallback =
           assessment.straight_outer_clearance_bias_requested &&
           !straight_outer_clearance_bias_available;
-        const auto mission_selection = select_mission_candidate(
+        const auto complete_mission_selection = select_mission_candidate(
           straight_outer_clearance_bias_available ?
           straight_outer_clearance_mission_candidates : mission_candidates);
-        if (!mission_selection.valid || !mission_selection.found) {
+        auto resolved_mission_selection = complete_mission_selection;
+        const bool progressive_entry_selected =
+          (!complete_mission_selection.valid || !complete_mission_selection.found) &&
+          cfg.v2x_behavior.overtake_line.progressive_entry_enabled &&
+          initial_shiftout_preflight && !side_replan_preflight &&
+          !active_overtake_line && setup_selection.valid && setup_selection.found &&
+          setup_selection.candidate.progressive_entry;
+        if (progressive_entry_selected) {
+          resolved_mission_selection = setup_selection;
+        }
+        if (!resolved_mission_selection.valid || !resolved_mission_selection.found) {
           assessment.gap_available = false;
           assessment.transient_gap_hold = false;
           assessment.gap_hold_remaining_sec = 0.0;
@@ -8061,8 +8128,10 @@ struct MPC
              << ", static_fallback=" << static_corridor_fallback_count
              << ", static_fallback_entry_motion_rejected=" <<
             static_fallback_entry_motion_reject_count
+             << ", progressive_entry_candidates=" <<
+            progressive_entry_candidate_count
              << ", numeric_candidate_rejected=" <<
-            mission_selection.invalid_candidate_count
+            complete_mission_selection.invalid_candidate_count
              << ", observed=" <<
             (assessment.dynamic_mission_corridor_observed ? 1 : 0)
              << ", samples=" << assessment.dynamic_mission_corridor_samples;
@@ -8102,17 +8171,20 @@ struct MPC
               overtake_core::OvertakeSideRetryFailureClass::PlanningSearchMiss);
           }
         } else {
-          auto selected_mission = mission_selection.candidate;
+          auto selected_mission = resolved_mission_selection.candidate;
           selected_mission.horizon_progress_checked =
-            mission_selection.horizon_progress.checked;
+            resolved_mission_selection.horizon_progress.checked;
           selected_mission.horizon_progress_score =
-            mission_selection.horizon_progress.score;
+            resolved_mission_selection.horizon_progress.score;
           selected_mission.horizon_progress_time =
-            mission_selection.horizon_progress.rear_clear_time_progress;
+            resolved_mission_selection.horizon_progress.rear_clear_time_progress;
           selected_mission.horizon_progress_distance =
-            mission_selection.horizon_progress.rear_clear_distance_progress;
+            resolved_mission_selection.horizon_progress.rear_clear_distance_progress;
           selected_mission.horizon_progress_retained_speed =
-            mission_selection.horizon_progress.retained_speed;
+            resolved_mission_selection.horizon_progress.retained_speed;
+          assessment.gap_available = true;
+          assessment.transient_gap_hold = false;
+          assessment.gap_hold_remaining_sec = 0.0;
           assessment.dynamic_mission_corridor_feasible = true;
           assessment.selected_mission = selected_mission;
           assessment.straight_outer_clearance_bias_applied_m =
@@ -8131,9 +8203,11 @@ struct MPC
             selected_mission.current_position_clear;
           std::ostringstream selected_reason;
           selected_reason << assessment.reason
-                          << ", mission candidate selected"
+                          << (progressive_entry_selected ?
+            ", progressive entry candidate selected" :
+            ", complete mission candidate selected")
                           << ", numeric_candidate_rejected=" <<
-            mission_selection.invalid_candidate_count
+            complete_mission_selection.invalid_candidate_count
                           << ", shift_distance=" << selected_mission.shift_distance_m
                           << ", closing=" << selected_mission.closing_speed_mps
                           << ", goal=" << selected_mission.goal_lateral_m
@@ -8156,13 +8230,13 @@ struct MPC
                           << ", min_v=" <<
             selected_mission.predicted_minimum_ego_speed_mps
                           << ", progress_score=" <<
-            mission_selection.horizon_progress.score
+            resolved_mission_selection.horizon_progress.score
                           << ", progress_time=" <<
-            mission_selection.horizon_progress.rear_clear_time_progress
+            resolved_mission_selection.horizon_progress.rear_clear_time_progress
                           << ", progress_distance=" <<
-            mission_selection.horizon_progress.rear_clear_distance_progress
+            resolved_mission_selection.horizon_progress.rear_clear_distance_progress
                           << ", retained_speed=" <<
-            mission_selection.horizon_progress.retained_speed
+            resolved_mission_selection.horizon_progress.retained_speed
                           << ", pass_hold=" << selected_mission.pass_hold_distance_m
                           << ", static_valid=" <<
             selected_mission.static_valid_until_pass_m
@@ -8212,10 +8286,16 @@ struct MPC
             overtake_core::to_string(selected_mission.corridor_source)
                           << ", target_vlat=" << preflight_target_lateral_velocity
                           << ", candidates=" << mission_candidates.size()
+                          << ", progressive_entry=" <<
+            (selected_mission.progressive_entry ? 1 : 0)
+                          << ", progressive_candidates=" <<
+            progressive_entry_candidate_count
                           << ", static_fallback_entry_motion_rejected=" <<
             static_fallback_entry_motion_reject_count
-                          << ", ShiftOut/Pass/Return static mission validated; "
-                          << "live Return deferred until rear-clear";
+                          << (selected_mission.progressive_entry ?
+            ", local ShiftOut/body-clear validated; rear-clear/Return use rolling replan" :
+            ", ShiftOut/Pass/Return static mission validated; "
+            "live Return deferred until rear-clear");
           assessment.reason = selected_reason.str();
           if (
             selected_mission.body_clear_deadline_checked &&
@@ -8587,6 +8667,15 @@ struct MPC
           assessment.selected_mission->rear_clear_prediction_checked &&
           assessment.selected_mission->rear_clear_prediction_feasible;
       };
+    const auto has_executable_mission = [&](const SideAssessment & assessment) {
+        const bool progressive_entry_ready =
+          assessment.selected_mission.has_value() &&
+          assessment.selected_mission->progressive_entry &&
+          assessment.selected_mission->feasible &&
+          assessment.selected_mission->body_clear_deadline_checked &&
+          assessment.selected_mission->body_clear_deadline_feasible;
+        return has_validated_full_mission(assessment) || progressive_entry_ready;
+      };
     const auto execution_allowed_for_side = [&](const SideAssessment & assessment) {
         if (!assessment.gap_available || assessment.side == 0) {
           return false;
@@ -8621,7 +8710,7 @@ struct MPC
           v2x_overtake_core::overtake_completion_policy_allows_execution(
           v2x_overtake_core::OvertakeCompletionPermissionRequest{
             overtake_completion_feasible,
-            has_validated_full_mission(assessment),
+            has_executable_mission(assessment),
             new_curve_entry_allowed,
             outer_curve.hard_continuation_allowed ||
             inner_curve.hard_continuation_allowed,
@@ -9053,7 +9142,10 @@ struct MPC
     // closing-speed lattice with the same total-order comparator. Comparing
     // those two winners is therefore equivalent to one global candidate
     // vector, while preserving side-specific corridor diagnostics.
-    std::vector<overtake_core::OvertakeMissionCandidate> global_mission_candidates;
+    std::vector<overtake_core::OvertakeMissionCandidate>
+      global_complete_mission_candidates;
+    std::vector<overtake_core::OvertakeMissionCandidate>
+      global_progressive_entry_candidates;
     const auto add_global_mission_candidate = [&](const SideAssessment & assessment) {
         const bool selected_side_ordering_blocked =
           side_replan_assessment_requested && selected_side_conflict &&
@@ -9063,15 +9155,28 @@ struct MPC
           assessment.gap_available && execution_allowed_for_side(assessment) &&
           !selected_side_ordering_blocked)
         {
-          global_mission_candidates.push_back(assessment.selected_mission.value());
+          if (assessment.selected_mission->progressive_entry) {
+            global_progressive_entry_candidates.push_back(
+              assessment.selected_mission.value());
+          } else {
+            global_complete_mission_candidates.push_back(
+              assessment.selected_mission.value());
+          }
         }
       };
     if (!start_grid_breakout_attempt) {
       add_global_mission_candidate(left_assessment);
       add_global_mission_candidate(right_assessment);
     }
-    const auto global_mission_selection =
-      select_mission_candidate(global_mission_candidates);
+    // A complete Mission always outranks a progressive entry, even if the
+    // local ShiftOut candidate has a shorter body-clear time.  Only when no
+    // side has a complete Mission do we admit the best bounded entry.
+    const bool global_complete_mission_available =
+      !global_complete_mission_candidates.empty();
+    const auto global_mission_selection = select_mission_candidate(
+      global_complete_mission_available ?
+      global_complete_mission_candidates : global_progressive_entry_candidates,
+      global_complete_mission_available);
     if (
       global_mission_selection.valid && global_mission_selection.found &&
       global_mission_selection.candidate.pass_side_sign != 0)
@@ -9203,7 +9308,7 @@ struct MPC
       (locked_pass_side != 0 ? locked_pass_side : selection_preferred_pass_side) < 0 ?
       right_assessment : left_assessment;
     output.overtake_completion_mission_override =
-      !overtake_completion_feasible && has_validated_full_mission(selected_assessment);
+      !overtake_completion_feasible && has_executable_mission(selected_assessment);
     output.overtake_base_line_pass_through =
       cfg.v2x_behavior.overtake_minimum_lateral_motion_enabled &&
       !start_grid_breakout_attempt && locked_pass_side == 0 &&
@@ -9277,7 +9382,7 @@ struct MPC
     const bool selected_mission_ready_for_longitudinal_ownership =
       cfg.v2x_behavior.overtake_committed_pass_attack_mode_enabled &&
       overtake_gap_available && overtake_zone_allows &&
-      has_validated_full_mission(selected_assessment) &&
+      has_executable_mission(selected_assessment) &&
       effective_front_risk_level != FrontRiskLevel::EmergencyBrake;
     output.validated_overtake_entry_longitudinal_owner =
       selected_mission_ready_for_longitudinal_ownership;
@@ -16720,7 +16825,9 @@ private:
               behavior_output.overtake_execution_corridor_blocked,
               tactical_reselect_hard_fault,
               locked_target_longitudinal,
-              line_cfg.safe_separation_front_clear_distance});
+              std::max(
+                line_cfg.safe_separation_front_clear_distance,
+                line_cfg.safe_separation_reselect_min_front_distance)});
           if (speed_preserving_return) {
             RCLCPP_WARN(
               rclcpp::get_logger("mpc_controller"),
@@ -21167,6 +21274,15 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_line_static_fallback_max_entry_lateral_shift"] ?
     mpc["v2x_overtake_line_static_fallback_max_entry_lateral_shift"].as<double>() : 1.5);
+  cfg.mpc.v2x_behavior.overtake_line.progressive_entry_enabled =
+    mpc["v2x_overtake_progressive_entry_enabled"] ?
+    mpc["v2x_overtake_progressive_entry_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_line.
+  progressive_entry_static_fallback_max_lateral_shift = std::max(
+    0.0,
+    mpc["v2x_overtake_progressive_entry_static_fallback_max_lateral_shift"] ?
+    mpc["v2x_overtake_progressive_entry_static_fallback_max_lateral_shift"].as<double>() :
+    2.2);
   cfg.mpc.v2x_behavior.overtake_line.max_lateral_accel = std::max(
     0.0,
     mpc["v2x_overtake_line_max_lateral_accel"] ?
@@ -23156,6 +23272,13 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line.static_fallback_entry_motion_guard_enabled ?
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.static_fallback_max_entry_lateral_shift);
+      RCLCPP_INFO(
+        get_logger(),
+        "V2X progressive overtake entry: %s, static_fallback_max_shift=%.2f m",
+        mpc_cfg_.v2x_behavior.overtake_line.progressive_entry_enabled ?
+        "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line.
+        progressive_entry_static_fallback_max_lateral_shift);
       RCLCPP_INFO(
         get_logger(),
         "V2X opponent side replan: %s, interval=%.2f s, no_return=%.2f m, "

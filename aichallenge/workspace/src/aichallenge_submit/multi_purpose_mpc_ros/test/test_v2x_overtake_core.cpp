@@ -3102,6 +3102,41 @@ TEST(V2XOvertakeCoreSpeed, BuildsAtomicPassPlanFromSelectedMission)
   EXPECT_FALSE(plan.valid);
 }
 
+TEST(V2XOvertakeCoreSpeed, BuildsProgressiveEntryPlanWithoutRearClearPrediction)
+{
+  OvertakeMissionCandidate mission;
+  mission.feasible = true;
+  mission.progressive_entry = true;
+  mission.pass_side_sign = 1;
+  mission.goal_lateral_m = 0.9;
+  mission.shift_distance_m = 4.0;
+  mission.pass_hold_distance_m = 12.0;
+  mission.return_distance_m = 6.0;
+  mission.closing_speed_mps = 2.0;
+  mission.body_clear_deadline_checked = true;
+  mission.body_clear_deadline_feasible = true;
+  mission.predicted_body_clear_time_sec = 0.8;
+  mission.predicted_hard_distance_time_sec = 1.5;
+  mission.predicted_body_clear_distance_m = 3.0;
+  mission.body_clear_deadline_slack_sec = 0.7;
+  mission.rear_clear_prediction_checked = false;
+  mission.rear_clear_prediction_feasible = true;
+
+  OvertakeMissionCandidateSelectionRequest selection_request;
+  selection_request.candidates = {mission};
+  selection_request.horizon_progress_enabled = false;
+  const auto selection = select_overtake_mission_candidate(selection_request);
+  ASSERT_TRUE(selection.valid);
+  ASSERT_TRUE(selection.found);
+  EXPECT_TRUE(selection.candidate.progressive_entry);
+
+  const auto plan = build_overtake_pass_plan(
+    OvertakePassPlanRequest{selection.candidate, 0.0, 0.0});
+  ASSERT_TRUE(plan.valid);
+  EXPECT_TRUE(plan.mission.progressive_entry);
+  EXPECT_DOUBLE_EQ(plan.path.pass_distance_m, 12.0);
+}
+
 TEST(V2XOvertakeCoreMissionAdmission, RequiresValidatedFullTrackTransition)
 {
   using multi_purpose_mpc_ros::v2x_overtake_core::

@@ -2250,6 +2250,10 @@ struct OvertakeMissionCandidate
   // Selection-transparent metadata used by the controller's per-side
   // straight/outer clearance tier. Global side ranking intentionally ignores it.
   double straight_outer_clearance_bias_applied_m{};
+  // A new-entry-only Mission whose local ShiftOut/body-clear is validated,
+  // while rear-clear and Return are intentionally deferred to rolling replan.
+  // It must never be used as an atomic replacement for an active Mission.
+  bool progressive_entry{false};
 };
 
 /// A Mission which changes from outer to inner before rear-clear may only be

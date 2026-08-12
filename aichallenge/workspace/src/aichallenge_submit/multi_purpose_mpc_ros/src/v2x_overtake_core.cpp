@@ -938,7 +938,10 @@ CrossSideMissionReplacementResolution resolve_cross_side_mission_replacement(
     resolution.reason = CrossSideMissionReplacementReason::RearClearInfeasible;
     return resolution;
   }
-  if (request.candidate_requires_additional_side_transition) {
+  if (
+    request.candidate_requires_additional_side_transition &&
+    !request.candidate_additional_side_transition_preflight_validated)
+  {
     resolution.valid = true;
     resolution.reason =
       CrossSideMissionReplacementReason::AdditionalSideTransitionRequired;
@@ -3748,7 +3751,9 @@ OvertakePassPlan build_overtake_pass_plan(
     !std::isfinite(mission.return_distance_m) || mission.return_distance_m < 0.5 ||
     !std::isfinite(mission.closing_speed_mps) || mission.closing_speed_mps < 0.0 ||
     (mission.body_clear_deadline_checked && !mission.body_clear_deadline_feasible) ||
-    (mission.rear_clear_prediction_checked && !mission.rear_clear_prediction_feasible))
+    (mission.rear_clear_prediction_checked && !mission.rear_clear_prediction_feasible) ||
+    (mission.outer_transition_required &&
+    !mission.outer_transition_preflight_validated))
   {
     return plan;
   }
@@ -4040,7 +4045,8 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
         (candidate.entry_course_role == PassSideCourseRole::Inner &&
         candidate.rear_clear_course_role == PassSideCourseRole::Outer)));
       const bool outer_transition_valid = !candidate.outer_transition_required ||
-        ((candidate.outer_transition_side_sign == -1 ||
+        (candidate.outer_transition_preflight_validated &&
+        (candidate.outer_transition_side_sign == -1 ||
         candidate.outer_transition_side_sign == 1) &&
         candidate.outer_transition_side_sign != candidate.pass_side_sign &&
         std::isfinite(candidate.outer_transition_start_pass_m) &&

@@ -646,6 +646,9 @@ struct CrossSideMissionReplacementRequest
   bool rear_clear_prediction_checked{false};
   bool rear_clear_prediction_feasible{false};
   bool candidate_requires_additional_side_transition{false};
+  /// True only when the additional scheduled transition, its remaining Pass,
+  /// and Return path have already passed the complete static preflight.
+  bool candidate_additional_side_transition_preflight_validated{false};
   double predicted_rear_clear_time_sec{std::numeric_limits<double>::infinity()};
   double predicted_rear_clear_distance_m{std::numeric_limits<double>::infinity()};
   double predicted_rear_clear_speed_mps{std::numeric_limits<double>::quiet_NaN()};
@@ -2233,6 +2236,9 @@ struct OvertakeMissionCandidate
   bool outer_strategy_committed{false};
   OvertakeMissionCorridorSource corridor_source{OvertakeMissionCorridorSource::None};
   bool outer_transition_required{false};
+  /// Provenance for an outer transition frozen into this candidate. The
+  /// controller sets it only after the transition-to-Return preflight passes.
+  bool outer_transition_preflight_validated{false};
   int outer_transition_side_sign{0};
   double outer_transition_start_pass_m{std::numeric_limits<double>::infinity()};
   double outer_transition_deadline_pass_m{std::numeric_limits<double>::infinity()};

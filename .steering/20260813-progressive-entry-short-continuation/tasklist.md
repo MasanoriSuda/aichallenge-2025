@@ -5,6 +5,7 @@
 - [x] body-clear deadline余裕0.6秒をProgressive Entryへ適用する
 - [x] body-clear後6.0 mの同側preflightを追加する
 - [x] static fallback横移動上限を1.8 mへ変更する
+- [x] footprint外側のhard壁余裕を0.20 mへ変更する
 - [x] local/cloud設定と起動ログを更新する
 - [x] format/build/testを実行する
 - [ ] make dev2による動的効果確認
@@ -14,6 +15,7 @@
 - Progressive Entryは0.6秒以上のbody-clear余裕を持つ。
 - Progressive Entryはbody-clear後6.0 mの同側経路が成立する。
 - static fallback Progressive Entryは横移動1.8 m以下に限定される。
+- 追い越し実行中の車体footprint外側に0.20 mの壁余裕を要求する。
 - Complete Missionとentry speed preparationの既存動作を維持する。
 - 対象packageのbuild/testが成功する。
 

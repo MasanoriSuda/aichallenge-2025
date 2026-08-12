@@ -8082,6 +8082,9 @@ struct MPC
                 full_mission_preflight.outer_strategy_committed;
               mission_candidate.outer_transition_required =
                 outer_transition.transition_required;
+              mission_candidate.outer_transition_preflight_validated =
+                outer_transition.transition_required &&
+                outer_transition_preflight.feasible;
               mission_candidate.outer_transition_side_sign =
                 outer_transition.desired_side_sign;
               mission_candidate.outer_transition_start_pass_m =
@@ -12197,6 +12200,8 @@ private:
           proposed_mission.rear_clear_prediction_feasible;
         request.candidate_requires_additional_side_transition =
           proposed_mission.outer_transition_required;
+        request.candidate_additional_side_transition_preflight_validated =
+          proposed_mission.outer_transition_preflight_validated;
         request.predicted_rear_clear_time_sec =
           proposed_mission.predicted_rear_clear_time_sec;
         request.predicted_rear_clear_distance_m =
@@ -12474,15 +12479,17 @@ private:
         side_changed ?
         "OvertakeLine opponent side PassPlan replaced: target=%s, side=%d->%d, "
         "phase=%s, generation=%lu, goal=%.2f, shift=%.2f, "
-        "pass_traveled=%.2f, count=%d/%d, wp_id=%d" :
+        "pass_traveled=%.2f, scheduled_transition=%d/%d, count=%d/%d, wp_id=%d" :
         "OvertakeLine fresh same-side PassPlan replaced: target=%s, side=%d->%d, "
         "phase=%s, generation=%lu, goal=%.2f, shift=%.2f, "
-        "pass_traveled=%.2f, count=%d/%d, wp_id=%d",
+        "pass_traveled=%.2f, scheduled_transition=%d/%d, count=%d/%d, wp_id=%d",
         overtake_line_state_.target_vehicle_id.c_str(), previous_side,
         candidate.pass_side_sign, to_string(overtake_line_state_.phase),
         static_cast<unsigned long>(overtake_line_state_.mission_generation),
         candidate.goal_lateral_m, candidate.shift_distance_m,
         current_pass_traveled_m,
+        candidate.outer_transition_required ? 1 : 0,
+        candidate.outer_transition_preflight_validated ? 1 : 0,
         overtake_line_state_.opponent_side_replan_count,
         line_cfg.opponent_side_replan_max_count, model->wp_id);
     }
@@ -16035,6 +16042,9 @@ private:
             overtake_line_state_.mission_outer_strategy_committed;
           pass_plan.mission.outer_transition_required =
             overtake_line_state_.mission_outer_transition_pending;
+          pass_plan.mission.outer_transition_preflight_validated =
+            overtake_line_state_.mission_outer_transition_pending &&
+            pass_plan.mission.outer_transition_preflight_validated;
           pass_plan.mission.outer_transition_goal_lateral_m =
             overtake_line_state_.mission_outer_transition_goal_ey;
           pass_plan.mission.outer_transition_shift_distance_m =

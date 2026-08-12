@@ -12187,7 +12187,7 @@ TEST(V2XOvertakeCoreCommitStage, CrossSideReplacementRequiresBudgetAndRetainedSp
   EXPECT_EQ(resolution.reason, CrossSideMissionReplacementReason::RearClearSpeedInsufficient);
 }
 
-TEST(V2XOvertakeCoreCommitStage, CrossSideReplacementRejectsASecondTransitionOrWallRisk)
+TEST(V2XOvertakeCoreCommitStage, CrossSideReplacementRequiresPreflightForSecondTransition)
 {
   CrossSideMissionReplacementRequest request;
   request.active_execution = true;
@@ -12214,7 +12214,13 @@ TEST(V2XOvertakeCoreCommitStage, CrossSideReplacementRejectsASecondTransitionOrW
     resolution.reason,
     CrossSideMissionReplacementReason::AdditionalSideTransitionRequired);
 
+  request.candidate_additional_side_transition_preflight_validated = true;
+  resolution = resolve_cross_side_mission_replacement(request);
+  EXPECT_TRUE(resolution.admitted);
+  EXPECT_EQ(resolution.reason, CrossSideMissionReplacementReason::Admitted);
+
   request.candidate_requires_additional_side_transition = false;
+  request.candidate_additional_side_transition_preflight_validated = false;
   request.minimum_path_wall_clearance_m = 0.29;
   resolution = resolve_cross_side_mission_replacement(request);
   EXPECT_FALSE(resolution.admitted);
@@ -12244,10 +12250,23 @@ TEST(V2XOvertakeCoreCommitStage, FrozenCrossSidePlanPreservesAdmissionMetrics)
   candidate.predicted_rear_clear_speed_mps = 4.0;
   candidate.predicted_minimum_ego_speed_mps = 3.2;
   candidate.minimum_path_wall_clearance_m = 0.45;
+  candidate.outer_transition_required = true;
+  candidate.outer_transition_side_sign = -1;
+  candidate.outer_transition_start_pass_m = 2.0;
+  candidate.outer_transition_deadline_pass_m = 5.0;
+  candidate.outer_transition_goal_lateral_m = -0.8;
+  candidate.outer_transition_shift_distance_m = 2.0;
+
+  const auto unvalidated = build_overtake_pass_plan(
+    OvertakePassPlanRequest{candidate, -0.2, 0.0});
+  EXPECT_FALSE(unvalidated.valid);
+
+  candidate.outer_transition_preflight_validated = true;
 
   const auto prepared = build_overtake_pass_plan(
     OvertakePassPlanRequest{candidate, -0.2, 0.0});
   ASSERT_TRUE(prepared.valid);
+  EXPECT_TRUE(prepared.mission.outer_transition_preflight_validated);
 
   CrossSideMissionReplacementRequest request;
   request.active_execution = true;
@@ -12260,6 +12279,8 @@ TEST(V2XOvertakeCoreCommitStage, FrozenCrossSidePlanPreservesAdmissionMetrics)
     prepared.mission.rear_clear_prediction_feasible;
   request.candidate_requires_additional_side_transition =
     prepared.mission.outer_transition_required;
+  request.candidate_additional_side_transition_preflight_validated =
+    prepared.mission.outer_transition_preflight_validated;
   request.predicted_rear_clear_time_sec =
     prepared.mission.predicted_rear_clear_time_sec;
   request.predicted_rear_clear_distance_m =

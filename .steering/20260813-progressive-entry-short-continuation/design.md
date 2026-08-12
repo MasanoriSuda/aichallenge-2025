@@ -22,8 +22,11 @@ entry準備候補と実行可能Progressive候補を別vectorにする。これ�
 - `v2x_overtake_progressive_entry_min_body_clear_slack_sec: 0.6`
 - `v2x_overtake_progressive_entry_short_continuation_distance: 6.0`
 - `v2x_overtake_progressive_entry_static_fallback_max_lateral_shift: 1.8`
+- `v2x_overtake_line_min_wall_clearance: 0.20`
 
 ローカル設定と提出用cloud設定は同値にする。
+
+壁余裕は車体footprint外側へ適用される。従来値から片側5 cmのみ増やし、狭い区間の候補を一気に失わない範囲で実wall接触を抑える。runtime wall preplan reserve 0.10 mは維持するため、事前警告帯は実質0.30 mとなる。
 
 ## ログ
 

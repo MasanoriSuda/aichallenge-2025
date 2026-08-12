@@ -669,9 +669,9 @@ mpc:
   v2x_overtake_line_lateral_offset: 1.2       # [m] signed by pass side: left positive, right negative
   v2x_overtake_line_target_bias: 1.0          # [0-1] explicit line is the sole lateral owner during ShiftOut/Pass
   # Applied to both the legacy lateral bounds and the occupancy-grid vehicle footprint.
-  v2x_overtake_line_min_wall_clearance: 0.15  # [m] retain attack candidates but reserve tracking error before final line commit
-  v2x_overtake_runtime_wall_preplan_enabled: true # preflight a fresh same-side Mission before the 0.15 m hard wall guard trips
-  v2x_overtake_runtime_wall_preplan_reserve: 0.10 # [m] warning band outside the unchanged hard wall margin
+  v2x_overtake_line_min_wall_clearance: 0.20  # [m] footprint-external tracking reserve; retain attack candidates while reducing wall self-contact
+  v2x_overtake_runtime_wall_preplan_enabled: true # preflight a fresh same-side Mission before the 0.20 m hard wall guard trips
+  v2x_overtake_runtime_wall_preplan_reserve: 0.10 # [m] warning band outside the hard wall margin (effective warning at 0.30 m)
   v2x_overtake_runtime_wall_replan_cooldown_sec: 0.50 # [s] suppress warning-boundary replan chatter
   v2x_overtake_runtime_wall_replan_max_count: 2 # bounded same-side wall replans per Mission
   v2x_overtake_line_static_fallback_entry_motion_guard_enabled: true # keep early static fallback, but reject unobserved full-track entry shifts

@@ -190,6 +190,9 @@ using multi_purpose_mpc_ros::v2x_overtake_core::SameSideReplanShiftDistanceReque
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidate;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidateSelectionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionHorizonProgressRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::RuntimeWallPreplanAction;
+using multi_purpose_mpc_ros::v2x_overtake_core::RuntimeWallPreplanRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::CrossSideReplacementRetryThrottleRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSideRetryFailureClass;
 using multi_purpose_mpc_ros::v2x_overtake_core::PausedMissionExpiryReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::PausedMissionExpiryRequest;
@@ -243,6 +246,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_committed_pass_forward_c
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_completion_extension;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_same_side_replan_shift_distance;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_overtake_mission_candidate;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_runtime_wall_preplan;
+using multi_purpose_mpc_ros::v2x_overtake_core::should_throttle_cross_side_replacement_retry;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_arm_overtake_side_retry_block;
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_overtake_mission_horizon_progress;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_start_grid_breakout_speed_reference;
@@ -6340,8 +6345,138 @@ TEST(V2XOvertakeCoreSpeed, RejectsNonFiniteMissionCandidateInput)
       true, false, std::numeric_limits<double>::quiet_NaN(), 0.5, 0.5, 2.0}};
 
   const auto selection = select_overtake_mission_candidate(request);
+  EXPECT_TRUE(selection.valid);
+  EXPECT_FALSE(selection.found);
+  EXPECT_EQ(selection.invalid_candidate_count, 1U);
+}
+
+TEST(V2XOvertakeCoreSpeed, IsolatesInvalidMissionCandidateAndSelectsHealthyPeer)
+{
+  OvertakeMissionCandidate invalid;
+  invalid.feasible = true;
+  invalid.shift_distance_m = std::numeric_limits<double>::quiet_NaN();
+  invalid.goal_lateral_m = 0.8;
+  invalid.lateral_shift_m = 0.8;
+  invalid.max_required_lateral_accel_mps2 = 2.0;
+  invalid.pass_side_sign = 1;
+
+  auto healthy = invalid;
+  healthy.shift_distance_m = 4.0;
+  healthy.goal_lateral_m = -0.7;
+  healthy.lateral_shift_m = 0.7;
+  healthy.pass_side_sign = -1;
+
+  OvertakeMissionCandidateSelectionRequest request;
+  request.candidates = {invalid, healthy};
+  const auto selection = select_overtake_mission_candidate(request);
+
+  ASSERT_TRUE(selection.valid);
+  ASSERT_TRUE(selection.found);
+  EXPECT_EQ(selection.invalid_candidate_count, 1U);
+  EXPECT_EQ(selection.selected_index, 1U);
+  EXPECT_EQ(selection.candidate.pass_side_sign, -1);
+}
+
+TEST(V2XOvertakeCoreSpeed, RejectsInvalidHorizonRequestAtSelectorBoundary)
+{
+  OvertakeMissionCandidate candidate;
+  candidate.feasible = true;
+  candidate.shift_distance_m = 4.0;
+  candidate.goal_lateral_m = 0.7;
+  candidate.lateral_shift_m = 0.7;
+  candidate.max_required_lateral_accel_mps2 = 2.0;
+
+  OvertakeMissionCandidateSelectionRequest request;
+  request.candidates = {candidate};
+  request.horizon_progress_enabled = true;
+  request.horizon_progress_time_budget_sec = 0.0;
+  const auto selection = select_overtake_mission_candidate(request);
+
   EXPECT_FALSE(selection.valid);
   EXPECT_FALSE(selection.found);
+  EXPECT_EQ(selection.invalid_candidate_count, 0U);
+}
+
+TEST(V2XOvertakeCoreWall, RuntimePreplanRequestsThenReplacesFreshSameSide)
+{
+  RuntimeWallPreplanRequest request;
+  request.enabled = true;
+  request.active_execution = true;
+  request.warning_margin_blocked = true;
+  request.target_continuous = true;
+  request.current_body_separated = true;
+  request.target_prediction_valid = true;
+  request.mission_side_sign = -1;
+  request.now_sec = 10.0;
+  request.cooldown_sec = 0.5;
+  request.maximum_replan_count = 2;
+
+  auto resolution = resolve_runtime_wall_preplan(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_EQ(
+    resolution.action, RuntimeWallPreplanAction::RequestFreshSameSideCandidate);
+
+  request.fresh_candidate_available = true;
+  request.candidate_side_sign = -1;
+  resolution = resolve_runtime_wall_preplan(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_EQ(resolution.action, RuntimeWallPreplanAction::ReplaceWithFreshSameSide);
+
+  request.candidate_side_sign = 1;
+  resolution = resolve_runtime_wall_preplan(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_EQ(
+    resolution.action, RuntimeWallPreplanAction::RequestFreshSameSideCandidate);
+}
+
+TEST(V2XOvertakeCoreWall, RuntimePreplanNeverOverridesHardWallOrBounds)
+{
+  RuntimeWallPreplanRequest request;
+  request.enabled = true;
+  request.active_execution = true;
+  request.warning_margin_blocked = true;
+  request.target_continuous = true;
+  request.current_body_separated = true;
+  request.target_prediction_valid = true;
+  request.fresh_candidate_available = true;
+  request.mission_side_sign = 1;
+  request.candidate_side_sign = 1;
+  request.now_sec = 10.0;
+  request.cooldown_sec = 0.5;
+  request.maximum_replan_count = 2;
+
+  request.hard_wall_fault = true;
+  EXPECT_EQ(
+    resolve_runtime_wall_preplan(request).action, RuntimeWallPreplanAction::None);
+  request.hard_wall_fault = false;
+  request.last_replan_sec = 9.75;
+  EXPECT_EQ(
+    resolve_runtime_wall_preplan(request).action, RuntimeWallPreplanAction::None);
+  request.last_replan_sec = -std::numeric_limits<double>::infinity();
+  request.replan_count = 2;
+  EXPECT_EQ(
+    resolve_runtime_wall_preplan(request).action, RuntimeWallPreplanAction::None);
+}
+
+TEST(V2XOvertakeCoreWall, ThrottlesOnlyUnchangedRejectedCrossSideCandidate)
+{
+  CrossSideReplacementRetryThrottleRequest request;
+  request.side_changed = true;
+  request.candidate_side_sign = -1;
+  request.rejected_side_sign = -1;
+  request.candidate_goal_lateral_m = -1.10;
+  request.rejected_goal_lateral_m = -1.12;
+  request.now_sec = 10.10;
+  request.rejected_at_sec = 10.0;
+  request.cooldown_sec = 0.25;
+  request.goal_change_tolerance_m = 0.04;
+  EXPECT_TRUE(should_throttle_cross_side_replacement_retry(request));
+
+  request.candidate_goal_lateral_m = -1.20;
+  EXPECT_FALSE(should_throttle_cross_side_replacement_retry(request));
+  request.candidate_goal_lateral_m = -1.10;
+  request.now_sec = 10.30;
+  EXPECT_FALSE(should_throttle_cross_side_replacement_retry(request));
 }
 
 TEST(V2XOvertakeCoreSpeed, ReportsUnobservedDynamicCorridorWithoutInventingClearance)

@@ -3919,11 +3919,31 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
 {
   OvertakeMissionCandidateSelection selection;
   constexpr double kEpsilon = 1e-9;
+  const auto finite_positive = [](const double value) {
+      return std::isfinite(value) && value > 0.0;
+    };
+  const auto finite_non_negative = [](const double value) {
+      return std::isfinite(value) && value >= 0.0;
+    };
+  const bool horizon_request_valid = !request.horizon_progress_enabled ||
+    (finite_positive(request.horizon_progress_time_budget_sec) &&
+    finite_positive(request.horizon_progress_distance_budget_m) &&
+    finite_positive(request.horizon_progress_reference_speed_mps) &&
+    finite_positive(request.horizon_progress_maximum_closing_speed_mps) &&
+    finite_positive(request.horizon_progress_lateral_motion_scale_m) &&
+    finite_positive(request.horizon_progress_maximum_lateral_accel_mps2) &&
+    finite_non_negative(request.horizon_progress_weights.rear_clear_time) &&
+    finite_non_negative(request.horizon_progress_weights.rear_clear_distance) &&
+    finite_non_negative(request.horizon_progress_weights.retained_speed) &&
+    finite_non_negative(request.horizon_progress_weights.closing_speed) &&
+    finite_non_negative(request.horizon_progress_weights.lateral_motion_penalty) &&
+    finite_non_negative(request.horizon_progress_weights.lateral_accel_penalty));
   if (
     !std::isfinite(request.minimum_deadline_slack_sec) ||
     request.minimum_deadline_slack_sec < 0.0 ||
     !std::isfinite(request.minimum_clearance_advantage_m) ||
-    request.minimum_clearance_advantage_m < 0.0)
+    request.minimum_clearance_advantage_m < 0.0 ||
+    !horizon_request_valid)
   {
     return selection;
   }
@@ -4231,11 +4251,8 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
   for (std::size_t i = 0; i < request.candidates.size(); ++i) {
     const auto & candidate = request.candidates[i];
     if (!numerically_valid(candidate)) {
-      selection.valid = false;
-      selection.found = false;
-      selection.selected_index = std::numeric_limits<std::size_t>::max();
-      selection.candidate = OvertakeMissionCandidate{};
-      return selection;
+      ++selection.invalid_candidate_count;
+      continue;
     }
     const auto horizon_progress = evaluate_overtake_mission_horizon_progress(
       OvertakeMissionHorizonProgressRequest{
@@ -4280,6 +4297,80 @@ bool should_arm_overtake_side_retry_block(
 {
   return failure_class ==
          OvertakeSideRetryFailureClass::PhysicalOrCommittedFailure;
+}
+
+RuntimeWallPreplanResolution resolve_runtime_wall_preplan(
+  const RuntimeWallPreplanRequest & request) noexcept
+{
+  RuntimeWallPreplanResolution resolution;
+  const bool mission_side_valid =
+    request.mission_side_sign == -1 || request.mission_side_sign == 1;
+  const bool candidate_side_valid = !request.fresh_candidate_available ||
+    request.candidate_side_sign == -1 || request.candidate_side_sign == 1;
+  if (
+    !std::isfinite(request.now_sec) ||
+    (!std::isfinite(request.last_replan_sec) &&
+    request.last_replan_sec != -std::numeric_limits<double>::infinity()) ||
+    !std::isfinite(request.cooldown_sec) || request.cooldown_sec < 0.0 ||
+    request.replan_count < 0 || request.maximum_replan_count < 0 ||
+    !candidate_side_valid)
+  {
+    return resolution;
+  }
+  resolution.valid = true;
+  if (
+    !request.enabled || !request.active_execution ||
+    !request.warning_margin_blocked)
+  {
+    return resolution;
+  }
+  if (
+    !mission_side_valid || request.hard_wall_fault ||
+    !request.target_continuous || !request.current_body_separated ||
+    !request.target_prediction_valid ||
+    request.replan_count >= request.maximum_replan_count)
+  {
+    return resolution;
+  }
+  if (
+    std::isfinite(request.last_replan_sec) &&
+    request.now_sec - request.last_replan_sec < request.cooldown_sec)
+  {
+    return resolution;
+  }
+  if (
+    request.fresh_candidate_available &&
+    request.candidate_side_sign == request.mission_side_sign)
+  {
+    resolution.action = RuntimeWallPreplanAction::ReplaceWithFreshSameSide;
+  } else {
+    resolution.action = RuntimeWallPreplanAction::RequestFreshSameSideCandidate;
+  }
+  return resolution;
+}
+
+bool should_throttle_cross_side_replacement_retry(
+  const CrossSideReplacementRetryThrottleRequest & request) noexcept
+{
+  if (
+    !request.side_changed ||
+    (request.candidate_side_sign != -1 && request.candidate_side_sign != 1) ||
+    request.candidate_side_sign != request.rejected_side_sign ||
+    !std::isfinite(request.candidate_goal_lateral_m) ||
+    !std::isfinite(request.rejected_goal_lateral_m) ||
+    !std::isfinite(request.now_sec) ||
+    !std::isfinite(request.rejected_at_sec) ||
+    !std::isfinite(request.cooldown_sec) || request.cooldown_sec <= 0.0 ||
+    !std::isfinite(request.goal_change_tolerance_m) ||
+    request.goal_change_tolerance_m < 0.0)
+  {
+    return false;
+  }
+  const double elapsed_sec = request.now_sec - request.rejected_at_sec;
+  return elapsed_sec >= 0.0 && elapsed_sec < request.cooldown_sec &&
+         std::abs(
+    request.candidate_goal_lateral_m - request.rejected_goal_lateral_m) <=
+         request.goal_change_tolerance_m + 1e-9;
 }
 
 double resolve_overtake_line_heading_reference(

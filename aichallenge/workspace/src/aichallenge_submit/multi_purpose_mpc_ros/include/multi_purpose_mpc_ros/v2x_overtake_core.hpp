@@ -2367,6 +2367,9 @@ struct OvertakeMissionCandidateSelection
 {
   bool valid{false};
   bool found{false};
+  /// Candidate-local numeric faults are isolated instead of poisoning the
+  /// complete left/right search. This counter is diagnostic only.
+  std::size_t invalid_candidate_count{};
   std::size_t selected_index{std::numeric_limits<std::size_t>::max()};
   OvertakeMissionCandidate candidate;
   OvertakeMissionHorizonProgressEvaluation horizon_progress;
@@ -2419,6 +2422,62 @@ double resolve_overtake_line_heading_reference(
 bool should_abort_active_overtake_for_static_wall(
   bool active_execution_phase, bool wall_geometry_available,
   bool sample_valid, bool sample_out_of_map, bool sample_has_contact) noexcept;
+
+enum class RuntimeWallPreplanAction
+{
+  None,
+  RequestFreshSameSideCandidate,
+  ReplaceWithFreshSameSide,
+};
+
+struct RuntimeWallPreplanRequest
+{
+  bool enabled{false};
+  bool active_execution{false};
+  bool warning_margin_blocked{false};
+  bool hard_wall_fault{false};
+  bool target_continuous{false};
+  bool current_body_separated{false};
+  bool target_prediction_valid{false};
+  bool fresh_candidate_available{false};
+  int mission_side_sign{0};
+  int candidate_side_sign{0};
+  double now_sec{};
+  double last_replan_sec{-std::numeric_limits<double>::infinity()};
+  double cooldown_sec{};
+  int replan_count{};
+  int maximum_replan_count{};
+};
+
+struct RuntimeWallPreplanResolution
+{
+  bool valid{false};
+  RuntimeWallPreplanAction action{RuntimeWallPreplanAction::None};
+};
+
+/// Detect the warning band outside the existing hard wall margin. A warning
+/// can request a new candidate or atomically replace with a fresh same-side
+/// Mission, but can never override physical contact or the hard wall guard.
+RuntimeWallPreplanResolution resolve_runtime_wall_preplan(
+  const RuntimeWallPreplanRequest & request) noexcept;
+
+struct CrossSideReplacementRetryThrottleRequest
+{
+  bool side_changed{false};
+  int candidate_side_sign{0};
+  int rejected_side_sign{0};
+  double candidate_goal_lateral_m{};
+  double rejected_goal_lateral_m{};
+  double now_sec{};
+  double rejected_at_sec{-std::numeric_limits<double>::infinity()};
+  double cooldown_sec{};
+  double goal_change_tolerance_m{};
+};
+
+/// Suppress repeated evaluation of the same rejected cross-side candidate.
+/// A materially changed goal is evaluated immediately.
+bool should_throttle_cross_side_replacement_retry(
+  const CrossSideReplacementRetryThrottleRequest & request) noexcept;
 
 /// A static-wall clamp may move a target after the normal lateral-acceleration
 /// limiter has run. Abort the executing line when that adjusted target again

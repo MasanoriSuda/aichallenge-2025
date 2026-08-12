@@ -670,6 +670,10 @@ mpc:
   v2x_overtake_line_target_bias: 1.0          # [0-1] explicit line is the sole lateral owner during ShiftOut/Pass
   # Applied to both the legacy lateral bounds and the occupancy-grid vehicle footprint.
   v2x_overtake_line_min_wall_clearance: 0.15  # [m] retain attack candidates but reserve tracking error before final line commit
+  v2x_overtake_runtime_wall_preplan_enabled: true # preflight a fresh same-side Mission before the 0.15 m hard wall guard trips
+  v2x_overtake_runtime_wall_preplan_reserve: 0.10 # [m] warning band outside the unchanged hard wall margin
+  v2x_overtake_runtime_wall_replan_cooldown_sec: 0.50 # [s] suppress warning-boundary replan chatter
+  v2x_overtake_runtime_wall_replan_max_count: 2 # bounded same-side wall replans per Mission
   v2x_overtake_line_static_fallback_entry_motion_guard_enabled: true # keep early static fallback, but reject unobserved full-track entry shifts
   v2x_overtake_line_static_fallback_max_entry_lateral_shift: 1.5 # [m] observed successes=0.68/1.21; failed wall-side entry=3.08
   v2x_overtake_line_max_lateral_accel: 6.0    # [m/s^2] dev3 attack: complete committed ShiftOut in a hairpin
@@ -702,6 +706,7 @@ mpc:
   v2x_overtake_opponent_side_replan_max_count: 1 # one Mission-wide cross-track replacement
   v2x_overtake_cross_side_min_terminal_closing_speed: 0.5 # [m/s] dedicated rear-clear terminal advantage; independent of Pass cap
   v2x_overtake_cross_side_min_wall_tracking_reserve: 0.15 # [m] extra reserve for measured lateral tracking error during a full-track switch
+  v2x_overtake_cross_side_rejection_cooldown_sec: 0.25 # [s] do not re-evaluate an unchanged rejected alternate at 40 Hz
   v2x_overtake_last_feasible_maneuver_enabled: true
   v2x_overtake_last_feasible_maneuver_max_age_sec: 0.50 # [s] cache lifetime for a complete preflighted Mission
   v2x_overtake_last_feasible_maneuver_max_ego_distance: 1.50 # [m] reject a cache after material Mission progress

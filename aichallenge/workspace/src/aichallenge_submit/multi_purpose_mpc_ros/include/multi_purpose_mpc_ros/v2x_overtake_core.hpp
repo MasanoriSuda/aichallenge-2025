@@ -1640,6 +1640,38 @@ SpeedPreservingTacticalRevalidationResolution
 resolve_speed_preserving_tactical_revalidation(
   const SpeedPreservingTacticalRevalidationRequest & request) noexcept;
 
+struct SafeTrajectoryPrefixLeaseRequest
+{
+  bool enabled{false};
+  bool safe_separation_active{false};
+  bool pass_committed{false};
+  bool mission_path_frozen{false};
+  bool target_continuous{false};
+  bool current_body_footprints_separated{false};
+  bool footprint_prediction_valid{false};
+  bool predicted_body_footprint_sweep_separated{false};
+  bool execution_corridor_blocked{true};
+  bool hard_fault{false};
+  bool rear_clear_confirmed{false};
+  bool fresh_forward_progress{false};
+  double target_longitudinal_m{std::numeric_limits<double>::infinity()};
+  double maximum_front_distance_m{};
+  double validated_prefix_remaining_m{};
+  double minimum_validated_prefix_m{};
+  double absolute_elapsed_sec{};
+  double absolute_traveled_m{};
+  double absolute_maximum_duration_sec{std::numeric_limits<double>::infinity()};
+  double absolute_maximum_distance_m{std::numeric_limits<double>::infinity()};
+};
+
+/// Retain the currently validated lateral trajectory while a fresh complete
+/// Mission is rebuilt. This does not lease an uncertain prediction: current
+/// bodies, the predicted sweep, the execution corridor and a statically
+/// validated path prefix must all remain clear. Absolute Pass bounds remain
+/// immutable and are checked here as well as by SafeSeparation.
+bool can_retain_safe_trajectory_prefix(
+  const SafeTrajectoryPrefixLeaseRequest & request) noexcept;
+
 struct LatchedForwardEscapeContinuationRequest
 {
   bool enabled{false};

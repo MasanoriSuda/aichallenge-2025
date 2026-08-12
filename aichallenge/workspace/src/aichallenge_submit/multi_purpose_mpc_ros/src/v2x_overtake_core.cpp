@@ -2957,6 +2957,42 @@ resolve_speed_preserving_tactical_revalidation(
   return resolution;
 }
 
+bool can_retain_safe_trajectory_prefix(
+  const SafeTrajectoryPrefixLeaseRequest & request) noexcept
+{
+  const auto finite_non_negative = [](const double value) {
+      return std::isfinite(value) && value >= 0.0;
+    };
+  const auto non_negative_bound = [](const double value) {
+      return !std::isnan(value) && value >= 0.0;
+    };
+  if (
+    !std::isfinite(request.target_longitudinal_m) ||
+    !finite_non_negative(request.maximum_front_distance_m) ||
+    !finite_non_negative(request.validated_prefix_remaining_m) ||
+    !finite_non_negative(request.minimum_validated_prefix_m) ||
+    !finite_non_negative(request.absolute_elapsed_sec) ||
+    !finite_non_negative(request.absolute_traveled_m) ||
+    !non_negative_bound(request.absolute_maximum_duration_sec) ||
+    !non_negative_bound(request.absolute_maximum_distance_m))
+  {
+    return false;
+  }
+
+  return
+    request.enabled && request.safe_separation_active && request.pass_committed &&
+    request.mission_path_frozen && request.target_continuous &&
+    request.current_body_footprints_separated && request.footprint_prediction_valid &&
+    request.predicted_body_footprint_sweep_separated &&
+    !request.execution_corridor_blocked && !request.hard_fault &&
+    !request.rear_clear_confirmed && request.fresh_forward_progress &&
+    request.target_longitudinal_m <= request.maximum_front_distance_m + 1e-9 &&
+    request.validated_prefix_remaining_m + 1e-9 >=
+    request.minimum_validated_prefix_m &&
+    request.absolute_elapsed_sec < request.absolute_maximum_duration_sec - 1e-9 &&
+    request.absolute_traveled_m < request.absolute_maximum_distance_m - 1e-9;
+}
+
 bool can_continue_latched_forward_escape(
   const LatchedForwardEscapeContinuationRequest & request) noexcept
 {

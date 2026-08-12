@@ -604,6 +604,13 @@ mpc:
   v2x_overtake_safe_separation_tactical_revalidation_enabled: true # preserve the committed Pass line/speed briefly while both sides are re-evaluated
   v2x_overtake_safe_separation_tactical_revalidation_max_sec: 0.50 # [s] bounded prediction-only revalidation lease
   v2x_overtake_safe_separation_tactical_revalidation_max_distance: 3.0 # [m] distance bound for the same lease
+  # A complete rear-clear rollout may disappear before the current hard-safe path does.
+  # Keep that validated prefix only while measured progress and all physical guards stay clear.
+  v2x_overtake_safe_separation_safe_prefix_enabled: true
+  v2x_overtake_safe_separation_safe_prefix_max_front_distance: 12.0 # [m] never chase an escaped target indefinitely
+  v2x_overtake_safe_separation_safe_prefix_min_remaining_distance: 2.0 # [m] static wall/corridor validated prefix still available
+  v2x_overtake_safe_separation_safe_prefix_replan_lead_sec: 0.50 # [s] try a fresh complete Mission before the local bound
+  v2x_overtake_safe_separation_safe_prefix_replan_lead_distance: 2.0 # [m]
   # Competition-simulation only: tolerate a brief progressing side contact without dropping
   # the committed target/side. Frontal geometry, wall contact and stalled contact remain hard.
   v2x_overtake_contact_continuation_enabled: true
@@ -679,6 +686,8 @@ mpc:
   v2x_overtake_line_min_wall_clearance: 0.20  # [m] footprint-external tracking reserve; retain attack candidates while reducing wall self-contact
   v2x_overtake_runtime_wall_preplan_enabled: true # preflight a fresh same-side Mission before the 0.20 m hard wall guard trips
   v2x_overtake_runtime_wall_preplan_reserve: 0.10 # [m] warning band outside the hard wall margin (effective warning at 0.30 m)
+  v2x_overtake_runtime_wall_preplan_lookahead_sec: 0.35 # [s] speed-scaled early warning; does not change the hard wall guard
+  v2x_overtake_runtime_wall_preplan_prediction_samples: 3
   v2x_overtake_runtime_wall_replan_cooldown_sec: 0.50 # [s] suppress warning-boundary replan chatter
   v2x_overtake_runtime_wall_replan_max_count: 2 # bounded same-side wall replans per Mission
   v2x_overtake_line_static_fallback_entry_motion_guard_enabled: true # keep early static fallback, but reject unobserved full-track entry shifts

@@ -173,7 +173,9 @@ using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationTacticalReselectRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::SafeTrajectoryPrefixLeaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_speed_preserving_tactical_revalidation;
+using multi_purpose_mpc_ros::v2x_overtake_core::can_retain_safe_trajectory_prefix;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_return_from_tactical_revalidation;
 using multi_purpose_mpc_ros::v2x_overtake_core::SoftMissionAbortAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::SoftMissionAbortRequest;
@@ -5517,6 +5519,48 @@ TEST(V2XOvertakeCoreHorizon, BoundsOrRejectsUnsafeSafeSeparation)
   const auto local_timeout = resolve_safe_separation(request);
   EXPECT_EQ(local_timeout.action, SafeSeparationAction::Abort);
   EXPECT_EQ(local_timeout.reason, SafeSeparationReason::LocalTimeLimit);
+}
+
+TEST(V2XOvertakeCoreHorizon, RetainsOnlyHardSafeTrajectoryPrefix)
+{
+  SafeTrajectoryPrefixLeaseRequest request;
+  request.enabled = true;
+  request.safe_separation_active = true;
+  request.pass_committed = true;
+  request.mission_path_frozen = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+  request.execution_corridor_blocked = false;
+  request.hard_fault = false;
+  request.rear_clear_confirmed = false;
+  request.fresh_forward_progress = true;
+  request.target_longitudinal_m = 2.0;
+  request.maximum_front_distance_m = 8.0;
+  request.validated_prefix_remaining_m = 3.0;
+  request.minimum_validated_prefix_m = 2.0;
+  request.absolute_elapsed_sec = 4.0;
+  request.absolute_traveled_m = 18.0;
+  request.absolute_maximum_duration_sec = 10.0;
+  request.absolute_maximum_distance_m = 40.0;
+
+  EXPECT_TRUE(can_retain_safe_trajectory_prefix(request));
+
+  request.predicted_body_footprint_sweep_separated = false;
+  EXPECT_FALSE(can_retain_safe_trajectory_prefix(request));
+  request.predicted_body_footprint_sweep_separated = true;
+  request.validated_prefix_remaining_m = 1.99;
+  EXPECT_FALSE(can_retain_safe_trajectory_prefix(request));
+  request.validated_prefix_remaining_m = 3.0;
+  request.fresh_forward_progress = false;
+  EXPECT_FALSE(can_retain_safe_trajectory_prefix(request));
+  request.fresh_forward_progress = true;
+  request.hard_fault = true;
+  EXPECT_FALSE(can_retain_safe_trajectory_prefix(request));
+  request.hard_fault = false;
+  request.absolute_traveled_m = 40.0;
+  EXPECT_FALSE(can_retain_safe_trajectory_prefix(request));
 }
 
 TEST(V2XOvertakeCoreHorizon, ExtendsLocalBoundOnlyForSafeForwardProgress)

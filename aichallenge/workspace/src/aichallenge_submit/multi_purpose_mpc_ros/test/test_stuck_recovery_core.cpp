@@ -24,6 +24,7 @@ using multi_purpose_mpc_ros::stuck_recovery::AdaptiveReverseRetryConfig;
 using multi_purpose_mpc_ros::stuck_recovery::AdaptiveReverseRetryTracker;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryIncidentLedger;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryIncidentMotion;
+using multi_purpose_mpc_ros::stuck_recovery::RecoveryCollisionWorseningGate;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryRuntimeMotionGuardRequest;
 using multi_purpose_mpc_ros::stuck_recovery::DetectorConfig;
 using multi_purpose_mpc_ros::stuck_recovery::DetectorDecision;
@@ -843,6 +844,33 @@ TEST(StuckRecoveryIncidentLedger, SurvivesRetriesAndResetsOnlyAfterFiveMeters)
   EXPECT_DOUBLE_EQ(snapshot.normal_forward_progress_m, 5.0);
   ledger.reset();
   EXPECT_FALSE(ledger.snapshot(32.0).active);
+}
+
+TEST(StuckRecoveryCollisionWorseningGate, IgnoresOnlyTransientRollingReverseChatter)
+{
+  RecoveryCollisionWorseningGate gate(0.20);
+
+  EXPECT_FALSE(gate.update(10.00, true, true, false));
+  EXPECT_TRUE(gate.pending());
+  EXPECT_FALSE(gate.update(10.10, true, true, false));
+  EXPECT_FALSE(gate.update(10.11, false, true, false));
+  EXPECT_FALSE(gate.pending());
+
+  EXPECT_FALSE(gate.update(11.00, true, true, false));
+  EXPECT_FALSE(gate.update(11.19, true, true, false));
+  EXPECT_TRUE(gate.update(11.20, true, true, false));
+}
+
+TEST(StuckRecoveryCollisionWorseningGate, PreservesImmediateHardAndNonRollingStops)
+{
+  RecoveryCollisionWorseningGate gate(0.20);
+
+  EXPECT_TRUE(gate.update(20.0, true, false, false));
+  EXPECT_FALSE(gate.pending());
+  EXPECT_TRUE(gate.update(21.0, true, true, true));
+  EXPECT_FALSE(gate.pending());
+  EXPECT_TRUE(gate.update(std::numeric_limits<double>::quiet_NaN(), true, true, false));
+  EXPECT_THROW(RecoveryCollisionWorseningGate(-0.1), std::invalid_argument);
 }
 
 TEST(StuckRecoveryRuntimeMotionGuard, AcceptsSteeredTwoMetersPerSecondAtFortyHertz)

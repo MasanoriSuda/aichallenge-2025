@@ -128,13 +128,16 @@ stuck_recovery:
     # If only the short swept-footprint is feasible, keep Reverse engaged and
     # replan the next 0.4 m segment instead of changing Drive/Reverse each step.
     rolling_stepwise_reverse_enabled: true
+    # Ignore only occupancy-cell chatter shorter than this while rolling
+    # Reverse owns the maneuver. Persistent/hard contact faults still stop.
+    rolling_contact_worsening_confirm_sec: 0.20
     fast_rejoin_min_reverse_distance_m: 4.0
-    # A rejoin or aggressive retry before 5 m of normal forward travel doubles
+    # A rejoin or aggressive retry before 2 m of normal forward travel doubles
     # the next Reverse target from 4.0 to the 8.0 m cap.
     adaptive_reverse_retry_enabled: true
     adaptive_reverse_retry_multiplier: 2.0
     adaptive_reverse_retry_max_distance_m: 8.0
-    adaptive_retry_reset_forward_distance_m: 5.0
+    adaptive_retry_reset_forward_distance_m: 2.0
     max_reverse_speed_mps: 2.0
     # Positive magnitude only; reverse_acceleration_sign is applied by the ROS/AWSIM adapter.
     reverse_acceleration_magnitude_mps2: 1.0

@@ -728,6 +728,57 @@ RecoveryIncidentSnapshot RecoveryIncidentLedger::snapshot(const double now_sec) 
   return result;
 }
 
+RecoveryCollisionWorseningGate::RecoveryCollisionWorseningGate(const double confirm_sec)
+: confirm_sec_(confirm_sec)
+{
+  if (!std::isfinite(confirm_sec_) || confirm_sec_ < 0.0) {
+    throw std::invalid_argument(
+            "recovery collision worsening confirmation must be finite and non-negative");
+  }
+}
+
+bool RecoveryCollisionWorseningGate::update(
+  const double now_sec, const bool raw_worsening,
+  const bool rolling_reverse_active, const bool hard_fault) noexcept
+{
+  if (!raw_worsening) {
+    reset();
+    return false;
+  }
+  if (
+    !rolling_reverse_active || hard_fault || confirm_sec_ <= 0.0 ||
+    !std::isfinite(now_sec))
+  {
+    reset();
+    return true;
+  }
+  if (
+    last_update_sec_.has_value() &&
+    now_sec + kTimestampEpsilon < last_update_sec_.value())
+  {
+    // A regressing monotonic timestamp invalidates the confirmation window.
+    // Fail closed instead of granting a fresh grace period indefinitely.
+    reset();
+    return true;
+  }
+  if (!worsening_since_sec_.has_value()) {
+    worsening_since_sec_ = now_sec;
+  }
+  last_update_sec_ = now_sec;
+  return now_sec - worsening_since_sec_.value() + kTimestampEpsilon >= confirm_sec_;
+}
+
+void RecoveryCollisionWorseningGate::reset() noexcept
+{
+  worsening_since_sec_.reset();
+  last_update_sec_.reset();
+}
+
+bool RecoveryCollisionWorseningGate::pending() const noexcept
+{
+  return worsening_since_sec_.has_value();
+}
+
 RecoveryRuntimeMotionGuardResolution resolve_recovery_runtime_motion_guard(
   const RecoveryRuntimeMotionGuardRequest & request) noexcept
 {

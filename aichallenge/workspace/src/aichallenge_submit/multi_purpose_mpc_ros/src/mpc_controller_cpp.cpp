@@ -19708,6 +19708,9 @@ struct StuckRecoveryAdapterConfig
   // Keep Reverse engaged while repeatedly validating short swept-footprint
   // segments when a full-distance rollout is unavailable.
   bool rolling_stepwise_reverse_enabled{false};
+  // Confirmation window for occupancy-cell NewContact/ContactWorsened chatter
+  // while rolling Reverse owns the maneuver. Hard faults remain immediate.
+  double rolling_contact_worsening_confirm_sec{0.0};
   double fast_rejoin_min_reverse_distance_m{0.0};
   stuck_recovery::AdaptiveReverseRetryConfig adaptive_reverse_retry;
   double reverse_escape_distance_m{2.0};
@@ -20131,6 +20134,10 @@ Config load_config(const std::string & path)
       adapter.rolling_stepwise_reverse_enabled =
         maneuver["rolling_stepwise_reverse_enabled"] ?
         maneuver["rolling_stepwise_reverse_enabled"].as<bool>() : false;
+      adapter.rolling_contact_worsening_confirm_sec =
+        maneuver["rolling_contact_worsening_confirm_sec"] ?
+        maneuver["rolling_contact_worsening_confirm_sec"].as<double>() :
+        adapter.rolling_contact_worsening_confirm_sec;
       adapter.fast_rejoin_min_reverse_distance_m =
         maneuver["fast_rejoin_min_reverse_distance_m"] ?
         maneuver["fast_rejoin_min_reverse_distance_m"].as<double>() :
@@ -20384,6 +20391,10 @@ Config load_config(const std::string & path)
     {
       throw std::runtime_error(
               "stuck_recovery rolling stepwise Reverse requires fast continuous Reverse");
+    }
+    if (!finite_non_negative(adapter.rolling_contact_worsening_confirm_sec)) {
+      throw std::runtime_error(
+              "stuck_recovery rolling contact worsening confirmation must be non-negative");
     }
     if (adapter.adaptive_reverse_retry.enabled && !core.simulation_only) {
       throw std::runtime_error(
@@ -22449,6 +22460,9 @@ public:
     recovery_incident_ledger_ =
       std::make_unique<stuck_recovery::RecoveryIncidentLedger>(
       cfg_.stuck_recovery.adaptive_reverse_retry.reset_forward_distance_m);
+    recovery_collision_worsening_gate_ =
+      std::make_unique<stuck_recovery::RecoveryCollisionWorseningGate>(
+      cfg_.stuck_recovery.rolling_contact_worsening_confirm_sec);
     stuck_recovery_actuation_io_enabled_ =
       cfg_.stuck_recovery.core.enabled && !cfg_.stuck_recovery.core.shadow_mode &&
       (!cfg_.stuck_recovery.core.simulation_only || use_sim_time_) &&
@@ -22569,12 +22583,13 @@ public:
     RCLCPP_INFO(
       get_logger(),
       "Stuck recovery continuous Reverse: %s, contact=%s, rolling_stepwise=%s, "
-      "speed<=%.2f m/s, accel=%.2f m/s^2, "
+      "contact_confirm=%.2f s, speed<=%.2f m/s, accel=%.2f m/s^2, "
       "stop_cmd=%.2f m/s^2, verified_stop=%.2f m/s^2, escape=%.2f m, fast_rejoin=%.2f m, "
       "adaptive_retry=%s/x%.2f/max=%.2f m/reset=%.2f m",
       cfg_.stuck_recovery.fast_continuous_reverse_enabled ? "enabled" : "disabled",
       cfg_.stuck_recovery.continuous_contact_reverse_enabled ? "enabled" : "disabled",
       cfg_.stuck_recovery.rolling_stepwise_reverse_enabled ? "enabled" : "disabled",
+      cfg_.stuck_recovery.rolling_contact_worsening_confirm_sec,
       cfg_.stuck_recovery.core.supervisor.max_reverse_speed_mps,
       cfg_.stuck_recovery.core.supervisor.reverse_acceleration_magnitude_mps2,
       cfg_.stuck_recovery.reverse_stop_acceleration_mps2,
@@ -23717,6 +23732,9 @@ private:
     if (recovery_incident_ledger_) {
       recovery_incident_ledger_->reset();
     }
+    if (recovery_collision_worsening_gate_) {
+      recovery_collision_worsening_gate_->reset();
+    }
     recovery_observation_anchor_pose_.reset();
     recovery_observation_anchor_progress_m_.reset();
     recovery_forward_rearm_guard_started_.reset();
@@ -23779,6 +23797,9 @@ private:
     }
     if (recovery_incident_ledger_) {
       recovery_incident_ledger_->on_rejoin_complete();
+    }
+    if (recovery_collision_worsening_gate_) {
+      recovery_collision_worsening_gate_->reset();
     }
     recovery_observation_anchor_pose_ = pose;
     recovery_observation_anchor_progress_m_ = car_->s;
@@ -24357,7 +24378,8 @@ private:
       snapshot.runtime_contact_reject_reason =
         initial_contact_patch != nullptr && current_sample.valid && !current_sample.out_of_map ?
         ((recovery_selected_stepwise_escape_ ||
-        recovery_selected_continuous_contact_escape_) ?
+        recovery_selected_continuous_contact_escape_ ||
+        recovery_rolling_stepwise_reverse_active_) ?
         recovery_footprint::evaluate_improving_contact_transition(
         *recovery_grid_, *initial_contact_patch, *previous_contact_patch,
         current_sample.contact_cells) :
@@ -25936,8 +25958,31 @@ private:
     input.recovery.rear_static_clear = safety.rear_static_clear;
     input.recovery.rear_v2x_clear = safety.rear_v2x_clear;
     input.recovery.rear_information_complete = safety.rear_information_complete;
-    input.recovery.collision_worsening =
+    const bool raw_collision_worsening =
       safety.collision_worsening || recovery_reverse_pose_jump_;
+    const bool soft_runtime_contact_worsening =
+      safety.runtime_contact_reject_reason == recovery_footprint::RejectReason::NewContact ||
+      safety.runtime_contact_reject_reason == recovery_footprint::RejectReason::ContactWorsened;
+    const bool hard_collision_fault =
+      recovery_reverse_pose_jump_ ||
+      (safety.collision_worsening && !soft_runtime_contact_worsening);
+    const bool rolling_reverse_motion_active =
+      supervisor_state == stuck_recovery::RecoveryState::ReverseManeuver &&
+      (recovery_rolling_stepwise_reverse_active_ || rolling_stepwise_reverse_selected);
+    input.recovery.collision_worsening = recovery_collision_worsening_gate_ ?
+      recovery_collision_worsening_gate_->update(
+      steady_seconds(steady_now), raw_collision_worsening,
+      rolling_reverse_motion_active, hard_collision_fault) :
+      raw_collision_worsening;
+    if (raw_collision_worsening && !input.recovery.collision_worsening) {
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 500,
+        "Stuck recovery rolling contact worsening pending: reason=%s, contacts=%zu, "
+        "confirm=%.2f s, gear=Reverse",
+        recovery_footprint::to_string(safety.runtime_contact_reject_reason),
+        safety.current_contact_count,
+        cfg_.stuck_recovery.rolling_contact_worsening_confirm_sec);
+    }
     input.recovery.course_progress_worsening = measured_reverse_course_worsening;
     input.recovery.current_contact_count = safety.current_contact_count;
     const bool fast_continuous_reverse_selected =
@@ -26482,6 +26527,9 @@ private:
       }
       if (recovery_incident_ledger_) {
         recovery_incident_ledger_->on_rejoin_complete();
+      }
+      if (recovery_collision_worsening_gate_) {
+        recovery_collision_worsening_gate_->reset();
       }
       recovery_initial_contact_cells_.reset();
       recovery_previous_contact_cells_.reset();
@@ -27394,6 +27442,8 @@ private:
     adaptive_reverse_retry_tracker_;
   std::unique_ptr<stuck_recovery::RecoveryIncidentLedger>
     recovery_incident_ledger_;
+  std::unique_ptr<stuck_recovery::RecoveryCollisionWorseningGate>
+    recovery_collision_worsening_gate_;
   std::unique_ptr<recovery_footprint::OccupancyGrid> recovery_grid_;
   recovery_footprint::FootprintExtents recovery_footprint_;
   std::optional<Pose2D> recovery_observation_anchor_pose_;

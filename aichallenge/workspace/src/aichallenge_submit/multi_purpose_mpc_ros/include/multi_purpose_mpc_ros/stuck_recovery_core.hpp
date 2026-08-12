@@ -137,6 +137,26 @@ private:
   bool rejoin_completed_{false};
 };
 
+// Filters occupancy-cell chatter only while a rolling Reverse mission owns
+// longitudinal motion. Normal recovery states and hard faults remain fail-fast.
+class RecoveryCollisionWorseningGate
+{
+public:
+  explicit RecoveryCollisionWorseningGate(double confirm_sec);
+
+  bool update(
+    double now_sec, bool raw_worsening, bool rolling_reverse_active,
+    bool hard_fault) noexcept;
+  void reset() noexcept;
+
+  [[nodiscard]] bool pending() const noexcept;
+
+private:
+  double confirm_sec_{};
+  std::optional<double> worsening_since_sec_;
+  std::optional<double> last_update_sec_;
+};
+
 struct RecoveryRuntimeMotionGuardRequest
 {
   double observed_center_motion_m{};

@@ -4354,6 +4354,31 @@ double resolve_low_speed_direct_control_velocity(
   double rejoin_velocity_mps,
   double maximum_velocity_mps);
 
+struct LowSpeedDirectControlEntryFeasibilityRequest
+{
+  double current_speed_mps{};
+  double shift_speed_mps{};
+  double maximum_deceleration_mps2{};
+  double forward_distance_m{};
+  double front_reserve_m{};
+  double control_latency_sec{};
+};
+
+struct LowSpeedDirectControlEntryFeasibility
+{
+  bool valid{false};
+  bool feasible{false};
+  double available_distance_m{};
+  double required_distance_m{};
+};
+
+/// Direct low-speed steering may take ownership only when ego can reach the
+/// Shift speed before consuming the reserved front clearance. When this is
+/// false the same local path remains available to the horizon MPC.
+LowSpeedDirectControlEntryFeasibility
+resolve_low_speed_direct_control_entry_feasibility(
+  const LowSpeedDirectControlEntryFeasibilityRequest & request) noexcept;
+
 struct LowSpeedShiftSteeringRequest
 {
   double current_lateral_m{};
@@ -4384,11 +4409,12 @@ struct LowSpeedDirectSteeringBounds
   double upper_rad{0.0};
 };
 
-/// Limit the additional direct-shift steering around the previous tracking
-/// command. Unlike an absolute zero-centred clamp, this preserves the steering
-/// already required to follow a curve when low-speed avoidance takes control.
+/// Bound direct-shift steering around the nominal curve command, intersected
+/// with the steering-rate interval reachable from the previous command. If
+/// the intervals do not overlap, move one rate-limited step toward nominal.
 LowSpeedDirectSteeringBounds resolve_low_speed_direct_steering_bounds(
-  double previous_steering_rad, double maximum_steering_rad,
+  double previous_steering_rad, double nominal_curve_steering_rad,
+  double maximum_steering_rad, double maximum_steering_step_rad,
   double current_speed_mps, double wheelbase_m,
   double maximum_lateral_acceleration_mps2, double steering_command_gain);
 

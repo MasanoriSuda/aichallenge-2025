@@ -429,6 +429,10 @@ using multi_purpose_mpc_ros::v2x_overtake_core::
   should_stop_low_speed_direct_control_for_corridor;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_low_speed_direct_control_velocity;
 using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedDirectControlPhase;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  LowSpeedDirectControlEntryFeasibilityRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  resolve_low_speed_direct_control_entry_feasibility;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_update_low_speed_direct_pass_side;
 using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedRetainedPassRejectReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedRetainedPassValidationRequest;
@@ -10517,30 +10521,76 @@ TEST(V2XOvertakeCoreSide, LowSpeedShiftSteeringRespectsActualSpeedLateralAcceler
     std::invalid_argument);
 }
 
-TEST(V2XOvertakeCoreSide, LowSpeedDirectSteeringPreservesCurveTrackingCommand)
+TEST(V2XOvertakeCoreSide, LowSpeedDirectSteeringIntersectsCurveAndRateBounds)
 {
   const auto bounds = resolve_low_speed_direct_steering_bounds(
-    -0.202, 0.559, 8.41, 1.087, 6.0, 1.5);
-  const double correction_limit =
-    std::atan(1.087 * 6.0 / (8.41 * 8.41)) / 1.5;
+    -0.202, -0.180, 0.559, 0.030, 8.41, 1.087, 6.0, 1.5);
 
-  EXPECT_NEAR(bounds.lower_rad, -0.202 - correction_limit, 1e-12);
-  EXPECT_NEAR(bounds.upper_rad, -0.202 + correction_limit, 1e-12);
+  EXPECT_NEAR(bounds.lower_rad, -0.232, 1e-12);
+  EXPECT_NEAR(bounds.upper_rad, -0.172, 1e-12);
   EXPECT_LT(bounds.upper_rad, -0.1);
   EXPECT_GT(bounds.lower_rad, -0.3);
+}
+
+TEST(V2XOvertakeCoreSide, LowSpeedDirectSteeringReturnsTowardCurveAfterContaminatedCommand)
+{
+  const double nominal = std::atan(1.087 * 0.12248);
+  const auto bounds = resolve_low_speed_direct_steering_bounds(
+    0.250, nominal, 0.559, 0.030, 9.81, 1.087, 6.0, 1.5);
+
+  EXPECT_NEAR(bounds.lower_rad, 0.220, 1e-12);
+  EXPECT_NEAR(bounds.upper_rad, 0.220, 1e-12);
 }
 
 TEST(V2XOvertakeCoreSide, LowSpeedDirectSteeringBoundsRespectPhysicalMaximum)
 {
   const auto bounds = resolve_low_speed_direct_steering_bounds(
-    -0.54, 0.559, 3.0, 1.087, 6.0, 1.5);
+    -0.54, -0.50, 0.559, 0.030, 3.0, 1.087, 6.0, 1.5);
 
   EXPECT_DOUBLE_EQ(bounds.lower_rad, -0.559);
   EXPECT_LE(bounds.upper_rad, 0.559);
   EXPECT_THROW(
     resolve_low_speed_direct_steering_bounds(
-      0.0, -0.1, 3.0, 1.087, 6.0, 1.5),
+      0.0, 0.0, -0.1, 0.03, 3.0, 1.087, 6.0, 1.5),
     std::invalid_argument);
+}
+
+TEST(V2XOvertakeCoreSide, HighSpeedDirectEntryDefersToMpcWhenBrakingDistanceIsInsufficient)
+{
+  LowSpeedDirectControlEntryFeasibilityRequest request;
+  request.current_speed_mps = 9.81;
+  request.shift_speed_mps = 3.0;
+  request.maximum_deceleration_mps2 = 3.0;
+  request.forward_distance_m = 9.23;
+  request.front_reserve_m = 3.0;
+  request.control_latency_sec = 0.1;
+
+  const auto resolution = resolve_low_speed_direct_control_entry_feasibility(request);
+  EXPECT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.feasible);
+  EXPECT_NEAR(resolution.available_distance_m, 6.23, 1e-12);
+  EXPECT_NEAR(
+    resolution.required_distance_m,
+    9.81 * 0.1 + (9.81 * 9.81 - 3.0 * 3.0) / 6.0,
+    1e-12);
+}
+
+TEST(V2XOvertakeCoreSide, LowSpeedDirectEntryRemainsAvailableWhenBrakingFits)
+{
+  LowSpeedDirectControlEntryFeasibilityRequest request;
+  request.current_speed_mps = 5.5;
+  request.shift_speed_mps = 3.0;
+  request.maximum_deceleration_mps2 = 3.0;
+  request.forward_distance_m = 9.23;
+  request.front_reserve_m = 3.0;
+  request.control_latency_sec = 0.1;
+
+  const auto resolution = resolve_low_speed_direct_control_entry_feasibility(request);
+  EXPECT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.feasible);
+
+  request.maximum_deceleration_mps2 = 0.0;
+  EXPECT_FALSE(resolve_low_speed_direct_control_entry_feasibility(request).valid);
 }
 
 TEST(V2XOvertakeCoreSide, SelectsPhaseSpecificDirectControlVelocity)

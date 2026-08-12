@@ -7261,6 +7261,38 @@ double resolve_low_speed_direct_control_velocity(
   return std::min(selected_velocity_mps, maximum_velocity_mps);
 }
 
+LowSpeedDirectControlEntryFeasibility
+resolve_low_speed_direct_control_entry_feasibility(
+  const LowSpeedDirectControlEntryFeasibilityRequest & request) noexcept
+{
+  LowSpeedDirectControlEntryFeasibility resolution;
+  if (
+    !std::isfinite(request.current_speed_mps) || request.current_speed_mps < 0.0 ||
+    !std::isfinite(request.shift_speed_mps) || request.shift_speed_mps < 0.0 ||
+    !std::isfinite(request.maximum_deceleration_mps2) ||
+    request.maximum_deceleration_mps2 <= 0.0 ||
+    !std::isfinite(request.forward_distance_m) || request.forward_distance_m < 0.0 ||
+    !std::isfinite(request.front_reserve_m) || request.front_reserve_m < 0.0 ||
+    !std::isfinite(request.control_latency_sec) || request.control_latency_sec < 0.0)
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  resolution.available_distance_m = std::max(
+    0.0, request.forward_distance_m - request.front_reserve_m);
+  const double braking_distance_m = request.current_speed_mps > request.shift_speed_mps ?
+    (request.current_speed_mps * request.current_speed_mps -
+    request.shift_speed_mps * request.shift_speed_mps) /
+    (2.0 * request.maximum_deceleration_mps2) : 0.0;
+  resolution.required_distance_m =
+    request.current_speed_mps * request.control_latency_sec +
+    std::max(0.0, braking_distance_m);
+  resolution.feasible =
+    resolution.required_distance_m <= resolution.available_distance_m + 1e-9;
+  return resolution;
+}
+
 double resolve_low_speed_shift_steering(
   const LowSpeedShiftSteeringRequest & request)
 {
@@ -7316,26 +7348,48 @@ double limit_low_speed_shift_steering_by_lateral_acceleration(
 }
 
 LowSpeedDirectSteeringBounds resolve_low_speed_direct_steering_bounds(
-  const double previous_steering_rad, const double maximum_steering_rad,
+  const double previous_steering_rad, const double nominal_curve_steering_rad,
+  const double maximum_steering_rad, const double maximum_steering_step_rad,
   const double current_speed_mps, const double wheelbase_m,
   const double maximum_lateral_acceleration_mps2,
   const double steering_command_gain)
 {
   if (
     !std::isfinite(previous_steering_rad) ||
-    !std::isfinite(maximum_steering_rad) || maximum_steering_rad < 0.0)
+    !std::isfinite(nominal_curve_steering_rad) ||
+    !std::isfinite(maximum_steering_rad) || maximum_steering_rad < 0.0 ||
+    !std::isfinite(maximum_steering_step_rad) || maximum_steering_step_rad < 0.0)
   {
     throw std::invalid_argument("invalid low-speed steering bounds request");
   }
   const double bounded_previous = std::clamp(
     previous_steering_rad, -maximum_steering_rad, maximum_steering_rad);
+  const double bounded_nominal = std::clamp(
+    nominal_curve_steering_rad, -maximum_steering_rad, maximum_steering_rad);
   const double correction_limit = std::abs(
     limit_low_speed_shift_steering_by_lateral_acceleration(
       maximum_steering_rad, current_speed_mps, wheelbase_m,
       maximum_lateral_acceleration_mps2, steering_command_gain));
-  return {
-    std::max(-maximum_steering_rad, bounded_previous - correction_limit),
-    std::min(maximum_steering_rad, bounded_previous + correction_limit)};
+  const double curve_lower = std::max(
+    -maximum_steering_rad, bounded_nominal - correction_limit);
+  const double curve_upper = std::min(
+    maximum_steering_rad, bounded_nominal + correction_limit);
+  const double rate_lower = std::max(
+    -maximum_steering_rad, bounded_previous - maximum_steering_step_rad);
+  const double rate_upper = std::min(
+    maximum_steering_rad, bounded_previous + maximum_steering_step_rad);
+  const double intersection_lower = std::max(curve_lower, rate_lower);
+  const double intersection_upper = std::min(curve_upper, rate_upper);
+  if (intersection_lower <= intersection_upper) {
+    return {intersection_lower, intersection_upper};
+  }
+
+  // The previous command can be outside the curve-centred envelope after a
+  // contact or a planner handoff. Preserve the rate limit for this cycle while
+  // making monotonic progress toward the nominal curve steering.
+  const double rate_limited_nominal = std::clamp(
+    bounded_nominal, rate_lower, rate_upper);
+  return {rate_limited_nominal, rate_limited_nominal};
 }
 
 bool is_low_speed_shift_complete(

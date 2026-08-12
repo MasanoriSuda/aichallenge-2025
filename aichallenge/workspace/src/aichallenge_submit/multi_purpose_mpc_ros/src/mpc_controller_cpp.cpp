@@ -4696,6 +4696,7 @@ struct MPC
     low_speed_shift_control_was_active_ = false;
     low_speed_shift_rejoin_active_ = false;
     low_speed_shift_handoff_deferred_logged_ = false;
+    low_speed_direct_entry_deferred_logged_ = false;
     low_speed_shift_side_completion_logged_ = false;
     low_speed_shift_pass_side_sign_ = 0;
     low_speed_shift_target_vehicle_id_.clear();
@@ -4842,6 +4843,7 @@ struct MPC
     low_speed_shift_control_was_active_ = false;
     low_speed_shift_rejoin_active_ = false;
     low_speed_shift_handoff_deferred_logged_ = false;
+    low_speed_direct_entry_deferred_logged_ = false;
     low_speed_shift_side_completion_logged_ = false;
     low_speed_shift_pass_side_sign_ = 0;
     low_speed_shift_target_vehicle_id_.clear();
@@ -10189,26 +10191,54 @@ struct MPC
       behavior_output.state == V2XBehaviorState::LowSpeedAvoidance &&
       !low_speed_shift_control_was_active_)
     {
-      low_speed_shift_control_active_ = true;
-      low_speed_shift_pass_side_sign_ = planner_output.pass_side_sign;
-      low_speed_shift_target_vehicle_id_ =
-        !behavior_output.low_speed_stopped_candidate_id.empty() ?
-        behavior_output.low_speed_stopped_candidate_id :
-        behavior_output.target_vehicle_id;
-      low_speed_retained_pass_reject_reason_ =
-        v2x_overtake_core::LowSpeedRetainedPassRejectReason::None;
-      low_speed_shift_pass_target_ey_ = planner_output.pass_target_ey;
-      low_speed_shift_target_ey_ = low_speed_shift_pass_target_ey_;
-      low_speed_shift_rejoin_active_ = false;
-      low_speed_shift_handoff_deferred_logged_ = false;
-      low_speed_shift_side_completion_logged_ = false;
-      low_speed_shift_corridor_blocked_ = false;
-      set_low_speed_direct_control_phase(
-        v2x_overtake_core::resolve_low_speed_direct_control_entry_phase(
-          planner_output.pass_corridor_enforced));
-      if (!low_speed_shift_control_was_active_) {
+      const auto direct_entry =
+        v2x_overtake_core::resolve_low_speed_direct_control_entry_feasibility(
+        v2x_overtake_core::LowSpeedDirectControlEntryFeasibilityRequest{
+          std::max(0.0, current_speed_mps_),
+          std::max(0.0, cfg.v2x_behavior.low_speed_avoidance_shift_velocity),
+          std::abs(cfg.a_min),
+          behavior_output.front_distance,
+          std::max(
+            std::max(0.0, cfg.v2x_behavior.low_speed_avoidance_min_prepare_distance),
+            std::max(0.0, cfg.v2x_behavior.moving_follow_hard_distance)),
+          std::max(0.0, cfg.state_prediction_delay_sec)});
+      if (direct_entry.valid && direct_entry.feasible) {
+        low_speed_shift_control_active_ = true;
+        low_speed_shift_pass_side_sign_ = planner_output.pass_side_sign;
+        low_speed_shift_target_vehicle_id_ =
+          !behavior_output.low_speed_stopped_candidate_id.empty() ?
+          behavior_output.low_speed_stopped_candidate_id :
+          behavior_output.target_vehicle_id;
+        low_speed_retained_pass_reject_reason_ =
+          v2x_overtake_core::LowSpeedRetainedPassRejectReason::None;
+        low_speed_shift_pass_target_ey_ = planner_output.pass_target_ey;
+        low_speed_shift_target_ey_ = low_speed_shift_pass_target_ey_;
+        low_speed_shift_rejoin_active_ = false;
+        low_speed_shift_handoff_deferred_logged_ = false;
+        low_speed_direct_entry_deferred_logged_ = false;
+        low_speed_shift_side_completion_logged_ = false;
+        low_speed_shift_corridor_blocked_ = false;
+        set_low_speed_direct_control_phase(
+          v2x_overtake_core::resolve_low_speed_direct_control_entry_phase(
+            planner_output.pass_corridor_enforced));
         low_speed_shift_last_relevant_vehicle_sec_ = now_sec;
+      } else if (!low_speed_direct_entry_deferred_logged_) {
+        RCLCPP_WARN(
+          rclcpp::get_logger("mpc_controller"),
+          "Low-speed direct control deferred to MPC: actual_speed=%.2f, "
+          "shift_speed=%.2f, front_distance=%.2f, required=%.2f, "
+          "available=%.2f, valid=%d",
+          current_speed_mps_,
+          cfg.v2x_behavior.low_speed_avoidance_shift_velocity,
+          behavior_output.front_distance,
+          direct_entry.required_distance_m,
+          direct_entry.available_distance_m,
+          direct_entry.valid ? 1 : 0);
+        low_speed_direct_entry_deferred_logged_ = true;
       }
+    }
+    if (!use_low_speed_local_path) {
+      low_speed_direct_entry_deferred_logged_ = false;
     }
     if (
       low_speed_shift_control_was_active_ && !low_speed_shift_rejoin_active_ &&
@@ -10678,11 +10708,18 @@ struct MPC
         max_steering,
         cfg.v2x_behavior.low_speed_avoidance_shift_lateral_gain,
         cfg.v2x_behavior.low_speed_avoidance_shift_heading_gain});
+    const double max_steering_step =
+      std::max(0.0, cfg.steer_rate_max) * std::max(0.0, model->Ts);
+    const double nominal_curve_steering = std::clamp(
+      std::atan(model->length * reference_waypoint.kappa),
+      -max_steering, max_steering);
     const auto steering_bounds = wall_stop_required ?
       v2x_overtake_core::LowSpeedDirectSteeringBounds{0.0, 0.0} :
       v2x_overtake_core::resolve_low_speed_direct_steering_bounds(
       previous_steering,
+      nominal_curve_steering,
       max_steering,
+      max_steering_step,
       current_speed_mps_,
       model->length,
       cfg.v2x_behavior.low_speed_avoidance_max_lateral_accel,
@@ -10691,8 +10728,6 @@ struct MPC
       unconstrained_target_steering,
       steering_bounds.lower_rad,
       steering_bounds.upper_rad);
-    const double max_steering_step =
-      std::max(0.0, cfg.steer_rate_max) * std::max(0.0, model->Ts);
     const double rate_limited_steering = clip(
       target_steering, previous_steering - max_steering_step,
       previous_steering + max_steering_step);
@@ -10838,6 +10873,7 @@ struct MPC
         low_speed_shift_control_was_active_ = false;
         low_speed_shift_rejoin_active_ = false;
         low_speed_shift_handoff_deferred_logged_ = false;
+        low_speed_direct_entry_deferred_logged_ = false;
         low_speed_shift_side_completion_logged_ = false;
         low_speed_shift_pass_side_sign_ = 0;
         low_speed_shift_target_vehicle_id_.clear();
@@ -10988,6 +11024,7 @@ struct MPC
   bool low_speed_shift_control_was_active_{false};
   bool low_speed_shift_rejoin_active_{false};
   bool low_speed_shift_handoff_deferred_logged_{false};
+  bool low_speed_direct_entry_deferred_logged_{false};
   bool low_speed_shift_side_completion_logged_{false};
   int low_speed_shift_pass_side_sign_{0};
   std::string low_speed_shift_target_vehicle_id_;

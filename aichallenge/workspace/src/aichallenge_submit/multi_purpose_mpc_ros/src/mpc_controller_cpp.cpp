@@ -1587,11 +1587,11 @@ struct V2XBehaviorConfig
   double overtake_slow_blocker_urgent_entry_max_front_speed{2.0};
   double overtake_slow_blocker_urgent_entry_distance_margin{1.0};
   double overtake_slow_blocker_urgent_entry_confirm_sec{0.05};
-  double overtake_entry_prearm_validation_hold_sec{0.15};
+  double overtake_entry_prearm_validation_hold_sec{0.5};
   double overtake_engagement_hold_sec{0.5};
-  double overtake_entry_prearm_max_sec{2.0};
-  double overtake_entry_prearm_max_distance{8.0};
-  double overtake_entry_prearm_retry_cooldown_sec{0.75};
+  double overtake_entry_prearm_max_sec{3.0};
+  double overtake_entry_prearm_max_distance{30.0};
+  double overtake_entry_prearm_retry_cooldown_sec{0.25};
   bool overtake_inner_curve_hard_continuation_enabled{false};
   bool overtake_hard_curve_entry_enabled{false};
   double overtake_forbidden_curve_lookahead_distance{0.0};
@@ -1629,7 +1629,7 @@ struct V2XBehaviorConfig
   bool side_overtake_enabled{false};
   bool side_overtake_ignore_soft_curve_forbidden{true};
   double side_overtake_entry_rear_tolerance{0.5};
-  double overtake_gap_lookahead_distance{0.0};
+  double overtake_gap_lookahead_distance{30.0};
   bool overtake_try_both_sides{false};
   bool overtake_minimum_lateral_motion_enabled{false};
   double overtake_minimum_motion_preferred_clearance_buffer{0.0};
@@ -22341,7 +22341,7 @@ Config load_config(const std::string & path)
       "v2x_overtake_slow_blocker_urgent_entry_confirm_sec", 0.05);
   const double overtake_entry_prearm_validation_hold_sec =
     mpc["v2x_overtake_entry_prearm_validation_hold_sec"] ?
-    mpc["v2x_overtake_entry_prearm_validation_hold_sec"].as<double>() : 0.15;
+    mpc["v2x_overtake_entry_prearm_validation_hold_sec"].as<double>() : 0.5;
   if (
     !std::isfinite(overtake_entry_prearm_validation_hold_sec) ||
     overtake_entry_prearm_validation_hold_sec < 0.0)
@@ -22364,13 +22364,13 @@ Config load_config(const std::string & path)
     };
   cfg.mpc.v2x_behavior.overtake_entry_prearm_max_sec =
     read_positive_overtake_entry_prearm_value(
-      "v2x_overtake_entry_prearm_max_sec", 2.0);
+      "v2x_overtake_entry_prearm_max_sec", 3.0);
   cfg.mpc.v2x_behavior.overtake_entry_prearm_max_distance =
     read_positive_overtake_entry_prearm_value(
-      "v2x_overtake_entry_prearm_max_distance", 8.0);
+      "v2x_overtake_entry_prearm_max_distance", 30.0);
   cfg.mpc.v2x_behavior.overtake_entry_prearm_retry_cooldown_sec =
     read_positive_overtake_entry_prearm_value(
-      "v2x_overtake_entry_prearm_retry_cooldown_sec", 0.75);
+      "v2x_overtake_entry_prearm_retry_cooldown_sec", 0.25);
   cfg.mpc.v2x_behavior.overtake_inner_curve_hard_continuation_enabled =
     mpc["v2x_overtake_inner_curve_hard_continuation_enabled"] ?
     mpc["v2x_overtake_inner_curve_hard_continuation_enabled"].as<bool>() : false;
@@ -22519,7 +22519,7 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_gap_lookahead_distance = std::max(
     0.0,
     mpc["v2x_overtake_gap_lookahead_distance"] ?
-    mpc["v2x_overtake_gap_lookahead_distance"].as<double>() : 0.0);
+    mpc["v2x_overtake_gap_lookahead_distance"].as<double>() : 30.0);
   cfg.mpc.v2x_behavior.overtake_try_both_sides =
     mpc["v2x_overtake_try_both_sides"] ?
     mpc["v2x_overtake_try_both_sides"].as<bool>() : false;

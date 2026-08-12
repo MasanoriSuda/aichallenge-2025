@@ -22,6 +22,9 @@ using multi_purpose_mpc_ros::stuck_recovery::CourseDirectedForwardEscapeRequest;
 using multi_purpose_mpc_ros::stuck_recovery::SolverReverseDeadlockForwardProbeRequest;
 using multi_purpose_mpc_ros::stuck_recovery::AdaptiveReverseRetryConfig;
 using multi_purpose_mpc_ros::stuck_recovery::AdaptiveReverseRetryTracker;
+using multi_purpose_mpc_ros::stuck_recovery::RecoveryIncidentLedger;
+using multi_purpose_mpc_ros::stuck_recovery::RecoveryIncidentMotion;
+using multi_purpose_mpc_ros::stuck_recovery::RecoveryRuntimeMotionGuardRequest;
 using multi_purpose_mpc_ros::stuck_recovery::DetectorConfig;
 using multi_purpose_mpc_ros::stuck_recovery::DetectorDecision;
 using multi_purpose_mpc_ros::stuck_recovery::DetectorInput;
@@ -793,6 +796,78 @@ TEST(StuckRecoveryAdaptiveReverseRetry, SustainedForwardProgressResetsSequence)
   EXPECT_FALSE(tracker.on_recovery_started());
   EXPECT_EQ(tracker.retry_level(), 0U);
   EXPECT_DOUBLE_EQ(tracker.target_distance_m(0.8), 0.8);
+}
+
+TEST(StuckRecoveryAdaptiveReverseRetry, AggressiveRetryImmediatelyEscalatesTarget)
+{
+  AdaptiveReverseRetryTracker tracker(
+    AdaptiveReverseRetryConfig{true, 2.0, 8.0, 5.0});
+
+  EXPECT_FALSE(tracker.on_recovery_started());
+  EXPECT_DOUBLE_EQ(tracker.target_distance_m(4.0), 4.0);
+  EXPECT_TRUE(tracker.on_aggressive_retry());
+  EXPECT_EQ(tracker.retry_level(), 1U);
+  EXPECT_DOUBLE_EQ(tracker.target_distance_m(4.0), 8.0);
+  EXPECT_TRUE(tracker.on_aggressive_retry());
+  EXPECT_DOUBLE_EQ(tracker.target_distance_m(4.0), 8.0);
+}
+
+TEST(StuckRecoveryIncidentLedger, SurvivesRetriesAndResetsOnlyAfterFiveMeters)
+{
+  RecoveryIncidentLedger ledger(5.0);
+  EXPECT_FALSE(ledger.on_recovery_started(10.0));
+  ledger.record_motion(RecoveryIncidentMotion::Reverse, 4.0);
+  ledger.record_aggressive_retry();
+  ledger.record_gear_request();
+  EXPECT_TRUE(ledger.on_recovery_started(20.0));
+  ledger.record_motion(RecoveryIncidentMotion::Forward, 0.5);
+  ledger.on_rejoin_complete();
+
+  auto snapshot = ledger.snapshot(30.0);
+  EXPECT_TRUE(snapshot.active);
+  EXPECT_DOUBLE_EQ(snapshot.elapsed_sec, 20.0);
+  EXPECT_DOUBLE_EQ(snapshot.total_distance_m, 4.5);
+  EXPECT_DOUBLE_EQ(snapshot.reverse_distance_m, 4.0);
+  EXPECT_DOUBLE_EQ(snapshot.forward_distance_m, 0.5);
+  EXPECT_EQ(snapshot.aggressive_retry_count, 1U);
+  EXPECT_EQ(snapshot.gear_request_count, 1U);
+
+  EXPECT_FALSE(ledger.observe_normal_forward_progress(4.9));
+  EXPECT_TRUE(ledger.observe_normal_forward_progress(0.1));
+  snapshot = ledger.snapshot(31.0);
+  EXPECT_DOUBLE_EQ(snapshot.normal_forward_progress_m, 5.0);
+  ledger.reset();
+  EXPECT_FALSE(ledger.snapshot(32.0).active);
+}
+
+TEST(StuckRecoveryRuntimeMotionGuard, AcceptsSteeredTwoMetersPerSecondAtFortyHertz)
+{
+  const auto resolution =
+    multi_purpose_mpc_ros::stuck_recovery::resolve_recovery_runtime_motion_guard(
+    RecoveryRuntimeMotionGuardRequest{
+      0.05, 2.0 / 1.087 * std::tan(0.25) * 0.025, 0.025,
+      2.0, 0.25, 1.087, 1.72, 0.05});
+  EXPECT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.plausible);
+  EXPECT_GT(resolution.maximum_corner_motion_m, 0.05);
+}
+
+TEST(StuckRecoveryRuntimeMotionGuard, AcceptsCallbackJitterButRejectsTeleport)
+{
+  const auto jitter =
+    multi_purpose_mpc_ros::stuck_recovery::resolve_recovery_runtime_motion_guard(
+    RecoveryRuntimeMotionGuardRequest{
+      0.10, 2.0 / 1.087 * std::tan(0.25) * 0.05, 0.05,
+      2.0, 0.25, 1.087, 1.72, 0.05});
+  EXPECT_TRUE(jitter.valid);
+  EXPECT_TRUE(jitter.plausible);
+
+  const auto teleport =
+    multi_purpose_mpc_ros::stuck_recovery::resolve_recovery_runtime_motion_guard(
+    RecoveryRuntimeMotionGuardRequest{
+      0.50, 0.0, 0.025, 2.0, 0.25, 1.087, 1.72, 0.05});
+  EXPECT_TRUE(teleport.valid);
+  EXPECT_FALSE(teleport.plausible);
 }
 
 TEST(StuckRecoveryAdaptiveReverseRetry, DisabledTrackerPreservesBaseTarget)
@@ -1681,6 +1756,44 @@ TEST(RecoverySupervisor, NeverDrivesBeforeFreshMatchingReverseReport)
   EXPECT_EQ(action.type, RecoveryActionType::ReverseCreep);
   EXPECT_DOUBLE_EQ(action.acceleration_magnitude_mps2, 0.3);
   EXPECT_TRUE(action.inhibit_boost);
+}
+
+TEST(RecoverySupervisor, ResendsReverseRequestThreeTimesBeforeTimeout)
+{
+  auto config = supervisor_config();
+  config.max_gear_command_requests = 3U;
+  config.gear_report_timeout_sec = 1.0;
+  RecoverySupervisor supervisor(config);
+  double now = 0.0;
+  auto input = healthy_recovery_input(now);
+  advance_to_clearance_check(supervisor, input, now);
+
+  now += 0.01;
+  input.now_sec = now;
+  auto action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::RequestReverse);
+
+  input.gear_report_fresh = false;
+  for (std::size_t request_index = 1U; request_index < 3U; ++request_index) {
+    now += 0.21;
+    input.now_sec = now;
+    action = supervisor.update(input);
+    EXPECT_EQ(action.type, RecoveryActionType::RequestReverse);
+    EXPECT_EQ(action.requested_gear, Gear::Reverse);
+    expect_zero_drive(action);
+  }
+
+  now += 0.21;
+  input.now_sec = now;
+  action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
+  EXPECT_EQ(supervisor.state(), RecoveryState::WaitReverseReport);
+
+  now += 0.61;
+  input.now_sec = now;
+  action = supervisor.update(input);
+  EXPECT_EQ(action.type, RecoveryActionType::SafeStop);
+  EXPECT_EQ(supervisor.state(), RecoveryState::SafeStop);
 }
 
 TEST(RecoverySupervisor, GearTimeoutAndInvalidFreshReportLatchSafeStop)

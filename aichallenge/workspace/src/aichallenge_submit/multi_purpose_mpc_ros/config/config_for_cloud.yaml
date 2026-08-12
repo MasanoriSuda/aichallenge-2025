@@ -85,7 +85,7 @@ stuck_recovery:
     stop_speed_mps: 0.28
     stop_confirm_sec: 0.10
     command_resend_interval_sec: 0.2
-    max_command_requests: 1
+    max_command_requests: 3
   maneuver:
     clearance_wait_timeout_sec: 1.0
     # A timeout caused only by blocked/unknown rear clearance is rechecked while holding stop.
@@ -122,10 +122,12 @@ stuck_recovery:
     # SIM race: allow one continuous, acceleration-limited escape instead of a
     # 0.4 m Reverse/Drive cascade when the complete rollout is clear.
     fast_continuous_reverse_enabled: true
-    fast_rejoin_min_reverse_distance_m: 0.8
-    # A rejoin that gets stuck again before 5 m of normal forward travel doubles
-    # the next Reverse target. Fast rejoin grows 0.8 -> 1.6 -> 3.2 -> 6.4 ->
-    # 8.0 m, while the normal target grows 2.0 -> 4.0 -> 8.0 m.
+    # If the complete 4 m swept rollout monotonically reduces the initial
+    # contact patch, prefer one continuous Reverse over 0.4 m gear cycling.
+    continuous_contact_reverse_enabled: true
+    fast_rejoin_min_reverse_distance_m: 4.0
+    # A rejoin or aggressive retry before 5 m of normal forward travel doubles
+    # the next Reverse target from 4.0 to the 8.0 m cap.
     adaptive_reverse_retry_enabled: true
     adaptive_reverse_retry_multiplier: 2.0
     adaptive_reverse_retry_max_distance_m: 8.0
@@ -140,7 +142,7 @@ stuck_recovery:
     max_forward_duration_sec: 2.0
     max_forward_speed_mps: 2.0
     forward_acceleration_magnitude_mps2: 1.0
-    reverse_escape_distance_m: 2.0
+    reverse_escape_distance_m: 4.0
     forward_escape_distance_m: 0.30
     # Accept bounded odometry/stopping error only after the current footprint is clear.
     escape_confirm_distance_tolerance_m: 0.10
@@ -152,7 +154,8 @@ stuck_recovery:
     # Below this threshold, wall direction may select a statically/V2X-clear short forward escape.
     # Wall-free solver failures are always reverse-only when the detector route above is enabled.
     solver_reverse_only_heading_error_rad: 1.0
-    # Fail closed before an odometry interval can skip a 0.1 m map cell.
+    # Additional odometry tolerance beyond the kinematically reachable corner
+    # motion per sample. The static swept rollout remains sampled at 0.05 m.
     max_reverse_pose_step_m: 0.05
     # Straight is preferred. This magnitude is used only when a safe Left/Right rollout is needed.
     reverse_steering_angle_rad: 0.25
@@ -160,8 +163,8 @@ stuck_recovery:
     # Side, corner/mixed, or no nearby wall remains fail-closed.
     wall_direction_search_margin_m: 0.50
     wall_direction_ambiguity_m: 0.02
-    # Front/side/corner contact retreats in 0.40 m verified steps. Episode
-    # distance is retained across reassessment until the 2.0 m target is met.
+    # If no complete improving 4 m contact rollout exists, fall back to 0.40 m
+    # verified steps. Incident distance survives reassessment and rejoin.
     side_escape_enabled: true
     # Evaluate intermediate steering magnitudes without relaxing the contact policy.
     side_escape_steering_samples: 5

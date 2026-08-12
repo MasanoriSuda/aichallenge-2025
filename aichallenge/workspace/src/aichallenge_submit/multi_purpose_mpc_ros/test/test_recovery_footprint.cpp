@@ -569,6 +569,27 @@ TEST(RecoveryFootprintInitialContact, ReverseEscapeMayClearExistingContact)
   EXPECT_EQ(result.final_contact_count, 0U);
 }
 
+TEST(RecoveryFootprintInitialContact, FullFourMeterReverseMayClearExistingContact)
+{
+  auto grid = make_grid(150U, 150U, 0.1);
+  set_world_cell(grid, 8.6, 5.0);
+  const recovery::FootprintExtents footprint{0.6, 0.2, 0.2, 0.2, 0.0};
+  auto parameters = straight_parameters(4.0);
+  parameters.rollout_step_m = 0.05;
+  parameters.swept_step_m = 0.05;
+
+  const auto result = recovery::evaluate_recovery_candidate(
+    grid, footprint, recovery::Pose2D{8.0, 5.0, 0.0},
+    recovery::ReversePrimitive::Straight, parameters,
+    recovery::ContactEscapePolicy::RequireImprovement, 0.05);
+
+  EXPECT_TRUE(result.feasible);
+  EXPECT_EQ(result.initial_contact_count, 1U);
+  EXPECT_EQ(result.final_contact_count, 0U);
+  EXPECT_GT(result.contact_reduction, 0U);
+  EXPECT_GE(result.checked_pose_count, 81U);
+}
+
 TEST(RecoveryFootprintInitialContact, ReverseCannotPassThroughRearContact)
 {
   auto grid = make_grid(20U, 20U, 1.0);

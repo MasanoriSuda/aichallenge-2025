@@ -14,6 +14,7 @@ namespace
 
 constexpr double kTimestampEpsilon = 1.0e-9;
 constexpr double kDistanceComparisonEpsilon = 1.0e-9;
+constexpr double kPi = 3.14159265358979323846;
 
 void validate_nonnegative(const double value, const char * name)
 {
@@ -525,6 +526,20 @@ bool AdaptiveReverseRetryTracker::on_recovery_started() noexcept
   return repeated_before_forward_reset;
 }
 
+bool AdaptiveReverseRetryTracker::on_aggressive_retry() noexcept
+{
+  if (!config_.enabled) {
+    reset();
+    return false;
+  }
+  if (retry_level_ < std::numeric_limits<std::size_t>::max()) {
+    ++retry_level_;
+  }
+  recurrence_window_active_ = false;
+  normal_forward_progress_m_ = 0.0;
+  return true;
+}
+
 void AdaptiveReverseRetryTracker::on_rejoin_complete() noexcept
 {
   if (!config_.enabled) {
@@ -601,6 +616,153 @@ double AdaptiveReverseRetryTracker::normal_forward_progress_m() const noexcept
 bool AdaptiveReverseRetryTracker::recurrence_window_active() const noexcept
 {
   return recurrence_window_active_;
+}
+
+RecoveryIncidentLedger::RecoveryIncidentLedger(const double reset_forward_distance_m)
+: reset_forward_distance_m_(reset_forward_distance_m)
+{
+  if (!std::isfinite(reset_forward_distance_m_) || reset_forward_distance_m_ <= 0.0) {
+    throw std::invalid_argument(
+            "recovery incident reset forward distance must be finite and positive");
+  }
+}
+
+bool RecoveryIncidentLedger::on_recovery_started(const double now_sec) noexcept
+{
+  if (!std::isfinite(now_sec)) {
+    return false;
+  }
+  const bool continuing_incident = started_sec_.has_value();
+  if (!continuing_incident) {
+    started_sec_ = now_sec;
+    total_distance_m_ = 0.0;
+    reverse_distance_m_ = 0.0;
+    forward_distance_m_ = 0.0;
+    aggressive_retry_count_ = 0U;
+    gear_request_count_ = 0U;
+  }
+  normal_forward_progress_m_ = 0.0;
+  rejoin_completed_ = false;
+  return continuing_incident;
+}
+
+void RecoveryIncidentLedger::on_rejoin_complete() noexcept
+{
+  if (!started_sec_.has_value()) {
+    return;
+  }
+  rejoin_completed_ = true;
+  normal_forward_progress_m_ = 0.0;
+}
+
+void RecoveryIncidentLedger::record_motion(
+  const RecoveryIncidentMotion motion, const double distance_m) noexcept
+{
+  if (!started_sec_.has_value() || !std::isfinite(distance_m) || distance_m <= 0.0) {
+    return;
+  }
+  total_distance_m_ += distance_m;
+  if (motion == RecoveryIncidentMotion::Reverse) {
+    reverse_distance_m_ += distance_m;
+  } else {
+    forward_distance_m_ += distance_m;
+  }
+}
+
+void RecoveryIncidentLedger::record_aggressive_retry() noexcept
+{
+  if (started_sec_.has_value() && aggressive_retry_count_ <
+    std::numeric_limits<std::size_t>::max())
+  {
+    ++aggressive_retry_count_;
+  }
+}
+
+void RecoveryIncidentLedger::record_gear_request() noexcept
+{
+  if (started_sec_.has_value() && gear_request_count_ <
+    std::numeric_limits<std::size_t>::max())
+  {
+    ++gear_request_count_;
+  }
+}
+
+bool RecoveryIncidentLedger::observe_normal_forward_progress(
+  const double distance_m) noexcept
+{
+  if (
+    !started_sec_.has_value() || !rejoin_completed_ ||
+    !std::isfinite(distance_m) || distance_m <= 0.0)
+  {
+    return false;
+  }
+  normal_forward_progress_m_ += distance_m;
+  return normal_forward_progress_m_ + kDistanceComparisonEpsilon >=
+         reset_forward_distance_m_;
+}
+
+void RecoveryIncidentLedger::reset() noexcept
+{
+  started_sec_.reset();
+  total_distance_m_ = 0.0;
+  reverse_distance_m_ = 0.0;
+  forward_distance_m_ = 0.0;
+  normal_forward_progress_m_ = 0.0;
+  aggressive_retry_count_ = 0U;
+  gear_request_count_ = 0U;
+  rejoin_completed_ = false;
+}
+
+RecoveryIncidentSnapshot RecoveryIncidentLedger::snapshot(const double now_sec) const noexcept
+{
+  RecoveryIncidentSnapshot result;
+  result.active = started_sec_.has_value();
+  result.elapsed_sec = result.active && std::isfinite(now_sec) ?
+    std::max(0.0, now_sec - started_sec_.value()) : 0.0;
+  result.total_distance_m = total_distance_m_;
+  result.reverse_distance_m = reverse_distance_m_;
+  result.forward_distance_m = forward_distance_m_;
+  result.normal_forward_progress_m = normal_forward_progress_m_;
+  result.aggressive_retry_count = aggressive_retry_count_;
+  result.gear_request_count = gear_request_count_;
+  return result;
+}
+
+RecoveryRuntimeMotionGuardResolution resolve_recovery_runtime_motion_guard(
+  const RecoveryRuntimeMotionGuardRequest & request) noexcept
+{
+  RecoveryRuntimeMotionGuardResolution result;
+  if (
+    !std::isfinite(request.observed_center_motion_m) ||
+    request.observed_center_motion_m < 0.0 ||
+    !std::isfinite(request.observed_yaw_motion_rad) ||
+    request.observed_yaw_motion_rad < 0.0 ||
+    !std::isfinite(request.elapsed_sec) || request.elapsed_sec <= 0.0 ||
+    !std::isfinite(request.maximum_speed_mps) || request.maximum_speed_mps < 0.0 ||
+    !std::isfinite(request.maximum_steering_angle_rad) ||
+    request.maximum_steering_angle_rad < 0.0 ||
+    request.maximum_steering_angle_rad >= 0.5 * kPi ||
+    !std::isfinite(request.wheelbase_m) || request.wheelbase_m <= 0.0 ||
+    !std::isfinite(request.footprint_corner_radius_m) ||
+    request.footprint_corner_radius_m < 0.0 ||
+    !std::isfinite(request.odometry_tolerance_m) || request.odometry_tolerance_m < 0.0)
+  {
+    return result;
+  }
+  const double maximum_yaw_rate_radps = request.maximum_speed_mps /
+    request.wheelbase_m * std::tan(request.maximum_steering_angle_rad);
+  const double maximum_yaw_motion_rad = maximum_yaw_rate_radps * request.elapsed_sec;
+  result.observed_corner_motion_m = request.observed_center_motion_m +
+    request.footprint_corner_radius_m * request.observed_yaw_motion_rad;
+  result.maximum_corner_motion_m = request.maximum_speed_mps * request.elapsed_sec +
+    request.footprint_corner_radius_m * maximum_yaw_motion_rad +
+    request.odometry_tolerance_m;
+  result.valid = std::isfinite(result.observed_corner_motion_m) &&
+    std::isfinite(result.maximum_corner_motion_m);
+  result.plausible = result.valid &&
+    result.observed_corner_motion_m <=
+    result.maximum_corner_motion_m + kDistanceComparisonEpsilon;
+  return result;
 }
 
 std::optional<double> compute_rejoin_steering_tire_angle(

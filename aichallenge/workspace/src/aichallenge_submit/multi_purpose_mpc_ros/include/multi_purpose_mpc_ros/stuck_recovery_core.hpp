@@ -72,6 +72,7 @@ public:
   explicit AdaptiveReverseRetryTracker(AdaptiveReverseRetryConfig config);
 
   bool on_recovery_started() noexcept;
+  bool on_aggressive_retry() noexcept;
   void on_rejoin_complete() noexcept;
   bool observe_normal_forward_progress(double distance_m) noexcept;
   void reset() noexcept;
@@ -87,6 +88,77 @@ private:
   double normal_forward_progress_m_{0.0};
   bool recurrence_window_active_{false};
 };
+
+enum class RecoveryIncidentMotion
+{
+  Reverse,
+  Forward,
+};
+
+struct RecoveryIncidentSnapshot
+{
+  bool active{false};
+  double elapsed_sec{};
+  double total_distance_m{};
+  double reverse_distance_m{};
+  double forward_distance_m{};
+  double normal_forward_progress_m{};
+  std::size_t aggressive_retry_count{};
+  std::size_t gear_request_count{};
+};
+
+// Tracks one physical obstruction outside the resettable Supervisor budgets.
+// A successful Rejoin alone does not end the incident: only sustained normal
+// forward motion proves that the kart escaped the same trap.
+class RecoveryIncidentLedger
+{
+public:
+  explicit RecoveryIncidentLedger(double reset_forward_distance_m);
+
+  bool on_recovery_started(double now_sec) noexcept;
+  void on_rejoin_complete() noexcept;
+  void record_motion(RecoveryIncidentMotion motion, double distance_m) noexcept;
+  void record_aggressive_retry() noexcept;
+  void record_gear_request() noexcept;
+  bool observe_normal_forward_progress(double distance_m) noexcept;
+  void reset() noexcept;
+
+  [[nodiscard]] RecoveryIncidentSnapshot snapshot(double now_sec) const noexcept;
+
+private:
+  double reset_forward_distance_m_{};
+  std::optional<double> started_sec_;
+  double total_distance_m_{};
+  double reverse_distance_m_{};
+  double forward_distance_m_{};
+  double normal_forward_progress_m_{};
+  std::size_t aggressive_retry_count_{};
+  std::size_t gear_request_count_{};
+  bool rejoin_completed_{false};
+};
+
+struct RecoveryRuntimeMotionGuardRequest
+{
+  double observed_center_motion_m{};
+  double observed_yaw_motion_rad{};
+  double elapsed_sec{};
+  double maximum_speed_mps{};
+  double maximum_steering_angle_rad{};
+  double wheelbase_m{};
+  double footprint_corner_radius_m{};
+  double odometry_tolerance_m{};
+};
+
+struct RecoveryRuntimeMotionGuardResolution
+{
+  bool valid{false};
+  bool plausible{false};
+  double observed_corner_motion_m{};
+  double maximum_corner_motion_m{};
+};
+
+RecoveryRuntimeMotionGuardResolution resolve_recovery_runtime_motion_guard(
+  const RecoveryRuntimeMotionGuardRequest & request) noexcept;
 
 struct CollisionDeliberateStopOverrideRequest
 {

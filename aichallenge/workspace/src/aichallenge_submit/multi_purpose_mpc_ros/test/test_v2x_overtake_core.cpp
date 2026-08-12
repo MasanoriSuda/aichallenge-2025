@@ -5282,6 +5282,7 @@ TEST(V2XOvertakeCoreHorizon, ContinuesOnlyBoundedProgressingSideContact)
   request.minimum_absolute_lateral_m = 0.75;
   request.maximum_longitudinal_closing_speed_mps = 3.0;
   request.maximum_absolute_lateral_velocity_mps = 0.5;
+  request.maximum_release_absolute_lateral_velocity_mps = 0.8;
   request.minimum_ego_speed_mps = 0.5;
   request.lateral_separation_bias_m = 0.1;
 
@@ -5318,6 +5319,13 @@ TEST(V2XOvertakeCoreHorizon, ContinuesOnlyBoundedProgressingSideContact)
   request.relative_lateral_velocity_valid = true;
   request.relative_lateral_velocity_mps = 0.6;
   EXPECT_FALSE(resolve_recoverable_side_contact(request).active);
+  request.previously_active = true;
+  resolution = resolve_recoverable_side_contact(request);
+  EXPECT_TRUE(resolution.active);
+  EXPECT_TRUE(resolution.lateral_velocity_hysteresis_active);
+  request.relative_lateral_velocity_mps = 0.81;
+  EXPECT_FALSE(resolve_recoverable_side_contact(request).active);
+  request.previously_active = false;
   request.relative_lateral_velocity_mps = 0.2;
   request.ego_speed_mps = 0.4;
   EXPECT_FALSE(resolve_recoverable_side_contact(request).active);

@@ -614,6 +614,7 @@ mpc:
   v2x_overtake_contact_continuation_min_lateral: 0.75 # [m] smaller separation is treated as frontal contact
   v2x_overtake_contact_continuation_max_closing_speed: 3.0 # [m/s] faster impact remains fail-closed
   v2x_overtake_contact_continuation_max_lateral_velocity: 0.5 # [m/s]
+  v2x_overtake_contact_continuation_release_max_lateral_velocity: 0.8 # [m/s] retain an admitted side-by-side forward commit under bounded lateral pressure
   v2x_overtake_contact_continuation_min_ego_speed: 0.5 # [m/s]
   v2x_overtake_contact_continuation_progress_fresh_sec: 0.5 # [s]
   v2x_overtake_contact_continuation_near_gap: 0.05 # [m] confirm side contact before course-frame rectangles overlap

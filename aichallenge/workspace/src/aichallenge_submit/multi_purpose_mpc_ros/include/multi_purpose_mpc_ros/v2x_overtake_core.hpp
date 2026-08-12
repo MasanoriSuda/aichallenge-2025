@@ -2009,6 +2009,10 @@ struct RecoverableSideContactRequest
   bool target_continuity_valid{false};
   bool current_body_overlap_confirmed{false};
   bool near_contact_confirmed{false};
+  /// Prior-cycle classifier state. This may relax only the lateral-velocity
+  /// release threshold; it never bypasses target, geometry, progress or time
+  /// guards.
+  bool previously_active{false};
   int pass_side_sign{};
   double target_longitudinal_m{};
   double relative_lateral_m{};
@@ -2027,6 +2031,7 @@ struct RecoverableSideContactRequest
   double minimum_absolute_lateral_m{};
   double maximum_longitudinal_closing_speed_mps{};
   double maximum_absolute_lateral_velocity_mps{};
+  double maximum_release_absolute_lateral_velocity_mps{};
   double minimum_ego_speed_mps{};
   double lateral_separation_bias_m{};
 };
@@ -2037,6 +2042,7 @@ struct RecoverableSideContactResolution
   bool initial_progress_grace_active{false};
   bool rearward_completion_active{false};
   bool near_contact_used{false};
+  bool lateral_velocity_hysteresis_active{false};
   double lateral_separation_bias_m{};
 };
 
@@ -2044,7 +2050,9 @@ struct RecoverableSideContactResolution
 /// Pass continuation. Once forward completion is latched and the target moves
 /// behind, a separately bounded tail may bridge the remaining body overlap to
 /// the existing rear-clear policy. Frontal geometry, target discontinuity and
-/// stalled contact remain fail-closed in the caller.
+/// stalled contact remain fail-closed in the caller. A previously admitted
+/// contact uses a separate release threshold so a kart pressing laterally at
+/// the entry boundary cannot chatter Pass ownership and SafetyBrake.
 RecoverableSideContactResolution resolve_recoverable_side_contact(
   const RecoverableSideContactRequest & request) noexcept;
 

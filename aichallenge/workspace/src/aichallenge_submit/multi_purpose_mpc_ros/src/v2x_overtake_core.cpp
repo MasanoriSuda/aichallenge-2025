@@ -3355,18 +3355,31 @@ RecoverableSideContactResolution resolve_recoverable_side_contact(
     !finite_non_negative(request.minimum_absolute_lateral_m) ||
     !finite_non_negative(request.maximum_longitudinal_closing_speed_mps) ||
     !finite_non_negative(request.maximum_absolute_lateral_velocity_mps) ||
+    !finite_non_negative(request.maximum_release_absolute_lateral_velocity_mps) ||
     !finite_non_negative(request.minimum_ego_speed_mps) ||
     !finite_non_negative(request.lateral_separation_bias_m))
   {
     return resolution;
   }
-  if (
-    request.relative_lateral_velocity_valid &&
-    (!std::isfinite(request.relative_lateral_velocity_mps) ||
-    std::abs(request.relative_lateral_velocity_mps) >
-    request.maximum_absolute_lateral_velocity_mps + 1e-9))
-  {
-    return resolution;
+  if (request.relative_lateral_velocity_valid) {
+    if (!std::isfinite(request.relative_lateral_velocity_mps)) {
+      return resolution;
+    }
+    const double entry_lateral_velocity_limit =
+      request.maximum_absolute_lateral_velocity_mps;
+    const double release_lateral_velocity_limit = std::max(
+      entry_lateral_velocity_limit,
+      request.maximum_release_absolute_lateral_velocity_mps);
+    const double active_lateral_velocity_limit = request.previously_active ?
+      release_lateral_velocity_limit : entry_lateral_velocity_limit;
+    const double absolute_lateral_velocity =
+      std::abs(request.relative_lateral_velocity_mps);
+    if (absolute_lateral_velocity > active_lateral_velocity_limit + 1e-9) {
+      return resolution;
+    }
+    resolution.lateral_velocity_hysteresis_active =
+      request.previously_active &&
+      absolute_lateral_velocity > entry_lateral_velocity_limit + 1e-9;
   }
   const bool target_on_opposite_side =
     static_cast<double>(request.pass_side_sign) * request.relative_lateral_m < 0.0;

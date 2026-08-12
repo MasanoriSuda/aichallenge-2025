@@ -1494,6 +1494,7 @@ struct OvertakeLineConfig
   double contact_continuation_min_lateral{0.75};
   double contact_continuation_max_closing_speed{3.0};
   double contact_continuation_max_lateral_velocity{0.5};
+  double contact_continuation_release_max_lateral_velocity{0.8};
   double contact_continuation_min_ego_speed{0.5};
   double contact_continuation_progress_fresh_sec{0.5};
   double contact_continuation_near_gap{0.05};
@@ -2061,6 +2062,7 @@ struct V2XBehaviorOutput
   bool committed_corridor_front_danger_suppressed{false};
   bool recoverable_side_contact_active{false};
   bool recoverable_side_contact_near_evidence{false};
+  bool recoverable_side_contact_lateral_velocity_hysteresis_active{false};
   bool locked_target_near_contact_envelope_entered{false};
   bool locked_target_near_contact_confirmed{false};
   double locked_target_near_contact_elapsed_sec{};
@@ -6062,6 +6064,7 @@ struct MPC
         !output.locked_target_course_progress_rejected,
         output.locked_target_current_body_overlap_confirmed,
         output.locked_target_near_contact_confirmed,
+        overtake_line_state_.pass_contact_continuation_was_active,
         overtake_line_state_.pass_side_sign,
         output.locked_target_longitudinal,
         output.locked_target_relative_lateral,
@@ -6080,10 +6083,13 @@ struct MPC
         cfg.v2x_behavior.overtake_line.contact_continuation_min_lateral,
         cfg.v2x_behavior.overtake_line.contact_continuation_max_closing_speed,
         cfg.v2x_behavior.overtake_line.contact_continuation_max_lateral_velocity,
+        cfg.v2x_behavior.overtake_line.contact_continuation_release_max_lateral_velocity,
         cfg.v2x_behavior.overtake_line.contact_continuation_min_ego_speed,
         cfg.v2x_behavior.overtake_line.contact_continuation_lateral_bias});
     output.recoverable_side_contact_active = recoverable_side_contact.active;
     output.recoverable_side_contact_near_evidence = recoverable_side_contact.near_contact_used;
+    output.recoverable_side_contact_lateral_velocity_hysteresis_active =
+      recoverable_side_contact.lateral_velocity_hysteresis_active;
     output.recoverable_side_contact_elapsed_sec = contact_elapsed_sec;
     output.recoverable_side_contact_progress_m = contact_progress_m;
     output.recoverable_side_contact_lateral_bias_m =
@@ -6097,7 +6103,7 @@ struct MPC
         "OvertakeLine ContactContinuation %s: target=%s, side=%d, "
         "target_s=%.2f, relative_lateral=%.2f, vlat=%.2f, "
         "evidence=%s, near=%.2f/%.2f s, elapsed=%.2f, progress=%.2f, "
-        "rearward_tail=%d, ego_v=%.2f",
+        "rearward_tail=%d, vlat_hysteresis=%d, ego_v=%.2f",
         output.recoverable_side_contact_active ? "entered" : "ended",
         overtake_line_state_.target_vehicle_id.c_str(),
         overtake_line_state_.pass_side_sign,
@@ -6110,6 +6116,7 @@ struct MPC
         cfg.v2x_behavior.overtake_line.contact_continuation_near_confirm_sec,
         contact_elapsed_sec, contact_progress_m,
         recoverable_side_contact.rearward_completion_active ? 1 : 0,
+        recoverable_side_contact.lateral_velocity_hysteresis_active ? 1 : 0,
         current_speed_mps_);
       overtake_line_state_.pass_contact_continuation_was_active =
         output.recoverable_side_contact_active;
@@ -18220,7 +18227,8 @@ private:
           "speed_hold=%d, replan_grace=%d, safe_sep=%d/forward=%d/full_speed=%d/"
           "signed_closing=%.2f/budget=%.2f s/%.2f m, "
           "contact_continue=%d/evidence=%s/near=%.2f/%.2f/"
-          "elapsed=%.2f/progress=%.2f/bias=%.2f/%.2f/wall_limited=%d, "
+          "elapsed=%.2f/progress=%.2f/bias=%.2f/%.2f/wall_limited=%d/"
+          "vlat_hysteresis=%d, "
           "minimum_motion_cap=%d, footprint_clear=%d, "
           "current_overlap_confirmed=%d, current_overlap_elapsed=%.2f/%.2f, "
           "current_overlap_grace=%d, "
@@ -18267,6 +18275,7 @@ private:
           output.contact_requested_lateral_bias,
           output.contact_applied_lateral_bias,
           output.contact_lateral_bias_wall_limited ? 1 : 0,
+          behavior_output.recoverable_side_contact_lateral_velocity_hysteresis_active ? 1 : 0,
           committed_pass_request.minimum_motion_corridor_active ? 1 : 0,
           committed_pass_request.current_body_footprints_separated ? 1 : 0,
           committed_pass_request.current_body_footprint_overlap_confirmed ? 1 : 0,
@@ -21865,6 +21874,12 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_contact_continuation_max_lateral_velocity"] ?
     mpc["v2x_overtake_contact_continuation_max_lateral_velocity"].as<double>() : 0.5);
+  cfg.mpc.v2x_behavior.overtake_line.contact_continuation_release_max_lateral_velocity =
+    std::max(
+    cfg.mpc.v2x_behavior.overtake_line.contact_continuation_max_lateral_velocity,
+    mpc["v2x_overtake_contact_continuation_release_max_lateral_velocity"] ?
+    mpc["v2x_overtake_contact_continuation_release_max_lateral_velocity"].as<double>() :
+    0.8);
   cfg.mpc.v2x_behavior.overtake_line.contact_continuation_min_ego_speed = std::max(
     0.0,
     mpc["v2x_overtake_contact_continuation_min_ego_speed"] ?
@@ -23514,7 +23529,8 @@ public:
         "V2X Pass completion: full_speed_forward=%s, rearward_time_grace=%s, "
         "mission_budget=%s "
         "margin=%.2f m/%.2f s, contact_continuation=%s max=%.2f s/rearward=%.2f s "
-        "longitudinal<=%.2f m lateral>=%.2f m closing<=%.2f m/s vlat<=%.2f m/s "
+        "longitudinal<=%.2f m lateral>=%.2f m closing<=%.2f m/s "
+        "vlat<=%.2f/%.2f m/s "
         "ego>=%.2f m/s fresh<=%.2f s near=%.2f m/%.2f s bias=%.2f m",
         mpc_cfg_.v2x_behavior.overtake_line
         .safe_separation_full_speed_forward_escape_enabled ? "enabled" : "disabled",
@@ -23533,6 +23549,8 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line.contact_continuation_min_lateral,
         mpc_cfg_.v2x_behavior.overtake_line.contact_continuation_max_closing_speed,
         mpc_cfg_.v2x_behavior.overtake_line.contact_continuation_max_lateral_velocity,
+        mpc_cfg_.v2x_behavior.overtake_line
+        .contact_continuation_release_max_lateral_velocity,
         mpc_cfg_.v2x_behavior.overtake_line.contact_continuation_min_ego_speed,
         mpc_cfg_.v2x_behavior.overtake_line.contact_continuation_progress_fresh_sec,
         mpc_cfg_.v2x_behavior.overtake_line.contact_continuation_near_gap,

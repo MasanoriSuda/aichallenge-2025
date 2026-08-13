@@ -1418,6 +1418,94 @@ RecedingHorizonLateralResolution optimize_receding_horizon_lateral_trajectory(
   return resolution;
 }
 
+RecedingHorizonWarmStartResolution resample_receding_horizon_warm_start(
+  const RecedingHorizonWarmStartRequest & request) noexcept
+{
+  RecedingHorizonWarmStartResolution resolution;
+  if (
+    !std::isfinite(request.forward_progress_m) || request.forward_progress_m < 0.0 ||
+    request.previous_path_distances_m.size() < 2U ||
+    request.previous_path_distances_m.size() !=
+    request.previous_lateral_targets_m.size() ||
+    request.current_path_distances_m.empty() ||
+    request.current_path_distances_m.size() !=
+    request.current_fallback_targets_m.size())
+  {
+    return resolution;
+  }
+
+  const auto strictly_increasing_finite = [](const std::vector<double> & values) {
+      double previous = -std::numeric_limits<double>::infinity();
+      for (const double value : values) {
+        if (!std::isfinite(value) || value < 0.0 || value <= previous + 1e-9) {
+          return false;
+        }
+        previous = value;
+      }
+      return true;
+    };
+  if (
+    !strictly_increasing_finite(request.previous_path_distances_m) ||
+    !strictly_increasing_finite(request.current_path_distances_m))
+  {
+    return resolution;
+  }
+  for (const double value : request.previous_lateral_targets_m) {
+    if (!std::isfinite(value)) {
+      return resolution;
+    }
+  }
+  for (const double value : request.current_fallback_targets_m) {
+    if (!std::isfinite(value)) {
+      return resolution;
+    }
+  }
+
+  resolution.valid = true;
+  resolution.lateral_targets_m = request.current_fallback_targets_m;
+  const double previous_end_m = request.previous_path_distances_m.back();
+  for (std::size_t i = 0U; i < request.current_path_distances_m.size(); ++i) {
+    const double query_m =
+      request.forward_progress_m + request.current_path_distances_m[i];
+    if (query_m > previous_end_m + 1e-9) {
+      continue;
+    }
+
+    const auto upper = std::lower_bound(
+      request.previous_path_distances_m.begin(),
+      request.previous_path_distances_m.end(), query_m);
+    if (upper == request.previous_path_distances_m.begin()) {
+      resolution.lateral_targets_m[i] =
+        request.previous_lateral_targets_m.front();
+      resolution.used_previous_solution = true;
+      continue;
+    }
+    if (upper == request.previous_path_distances_m.end()) {
+      resolution.lateral_targets_m[i] =
+        request.previous_lateral_targets_m.back();
+      resolution.used_previous_solution = true;
+      continue;
+    }
+
+    const std::size_t upper_index = static_cast<std::size_t>(
+      std::distance(request.previous_path_distances_m.begin(), upper));
+    const std::size_t lower_index = upper_index - 1U;
+    const double lower_distance =
+      request.previous_path_distances_m[lower_index];
+    const double upper_distance =
+      request.previous_path_distances_m[upper_index];
+    const double ratio = std::clamp(
+      (query_m - lower_distance) / (upper_distance - lower_distance),
+      0.0, 1.0);
+    resolution.lateral_targets_m[i] =
+      request.previous_lateral_targets_m[lower_index] + ratio *
+      (request.previous_lateral_targets_m[upper_index] -
+      request.previous_lateral_targets_m[lower_index]);
+    resolution.used_previous_solution = true;
+  }
+  return resolution;
+}
+
 bool can_retain_receding_horizon_execution_lease(
   const RecedingHorizonExecutionLeaseRequest & request) noexcept
 {
@@ -5071,6 +5159,20 @@ MpccLiteShadowResolution evaluate_mpcc_lite_shadow(
   resolution.agrees_with_active_branch = resolution.found &&
     resolution.best.candidate.branch == request.active_branch;
   return resolution;
+}
+
+bool can_reuse_mpcc_lite_shadow_last_feasible(
+  const MpccLiteShadowLeaseRequest & request) noexcept
+{
+  return request.has_last_feasible && request.target_matches &&
+         request.mission_generation_matches && request.phase_matches &&
+         request.side_matches && std::isfinite(request.now_sec) &&
+         std::isfinite(request.last_feasible_sec) &&
+         std::isfinite(request.maximum_age_sec) &&
+         request.maximum_age_sec >= 0.0 &&
+         request.now_sec + 1e-9 >= request.last_feasible_sec &&
+         request.now_sec - request.last_feasible_sec <=
+         request.maximum_age_sec + 1e-9;
 }
 
 bool should_arm_overtake_side_retry_block(

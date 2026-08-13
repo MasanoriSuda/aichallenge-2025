@@ -2448,6 +2448,7 @@ struct OvertakeLineOutput
   std::vector<bool> target_active;
   bool receding_horizon_active{false};
   bool receding_horizon_fallback{false};
+  bool receding_horizon_hard_infeasible{false};
   bool receding_horizon_continuity_lease_active{false};
   bool receding_horizon_last_feasible_hold_active{false};
   double receding_horizon_objective{std::numeric_limits<double>::infinity()};
@@ -2506,6 +2507,7 @@ struct OvertakeRecedingHorizonEvaluation
   bool attempted{false};
   bool active{false};
   bool fallback{false};
+  bool hard_infeasible{false};
   bool last_feasible_hold_active{false};
   double objective{std::numeric_limits<double>::infinity()};
   double maximum_reference_adjustment_m{0.0};
@@ -4782,6 +4784,9 @@ struct MPC
       -std::numeric_limits<double>::infinity();
     mpcc_lite_shadow_last_feasible_resolution_.reset();
     mpcc_lite_shadow_last_feasible_target_id_.clear();
+    mpcc_lite_shadow_last_feasible_generation_ = 0U;
+    mpcc_lite_shadow_last_feasible_phase_ = OvertakeLinePhase::Idle;
+    mpcc_lite_shadow_last_feasible_side_sign_ = 0;
     mpcc_lite_shadow_last_logged_best_ =
       overtake_core::MpccLiteShadowBranch::None;
     mpcc_lite_shadow_last_logged_active_ =
@@ -4981,6 +4986,9 @@ struct MPC
       -std::numeric_limits<double>::infinity();
     mpcc_lite_shadow_last_feasible_resolution_.reset();
     mpcc_lite_shadow_last_feasible_target_id_.clear();
+    mpcc_lite_shadow_last_feasible_generation_ = 0U;
+    mpcc_lite_shadow_last_feasible_phase_ = OvertakeLinePhase::Idle;
+    mpcc_lite_shadow_last_feasible_side_sign_ = 0;
     mpcc_lite_shadow_last_logged_best_ =
       overtake_core::MpccLiteShadowBranch::None;
     mpcc_lite_shadow_last_logged_active_ =
@@ -9699,6 +9707,7 @@ struct MPC
       now_sec - mpcc_lite_shadow_last_evaluation_sec_ + kEps >=
       shadow_cfg.mpcc_lite_shadow_evaluation_interval_sec);
     if (shadow_evaluation_due) {
+      const auto shadow_total_start = std::chrono::steady_clock::now();
       using ShadowBranch = overtake_core::MpccLiteShadowBranch;
       const bool shadow_runtime_hard_fault =
         effective_front_risk_level == FrontRiskLevel::EmergencyBrake ||
@@ -9784,8 +9793,11 @@ struct MPC
       // The control FSM intentionally avoids recomputing the opposite side
       // after commitment. Shadow diagnostics must still compare both branches
       // on the same sample, without arming retry blocks or changing execution.
+      const auto shadow_left_start = std::chrono::steady_clock::now();
       const auto shadow_left_assessment = assess_side(1, true);
+      const auto shadow_left_end = std::chrono::steady_clock::now();
       const auto shadow_right_assessment = assess_side(-1, true);
+      const auto shadow_right_end = std::chrono::steady_clock::now();
       std::vector<overtake_core::MpccLiteShadowCandidate> shadow_candidates;
       shadow_candidates.reserve(4U);
       shadow_candidates.push_back(mission_shadow_candidate(
@@ -9796,7 +9808,19 @@ struct MPC
       std::optional<overtake_core::OvertakeMissionCandidate> hold_mission;
       const SideAssessment & locked_assessment = locked_pass_side < 0 ?
         shadow_right_assessment : shadow_left_assessment;
-      if (locked_pass_side != 0 && locked_assessment.selected_mission.has_value()) {
+      if (
+        locked_pass_side != 0 &&
+        overtake_line_state_.phase != OvertakeLinePhase::Idle &&
+        overtake_line_state_.mission_plan.has_value())
+      {
+        // Hold means continuing the admitted, frozen Mission. Re-assessing the
+        // same side as a fresh entry incorrectly rejects an active Pass as
+        // progressive_entry_incomplete and is not a continuation estimate.
+        hold_mission = overtake_line_state_.mission_plan->mission;
+        hold_mission->progressive_entry = false;
+      } else if (
+        locked_pass_side != 0 && locked_assessment.selected_mission.has_value())
+      {
         hold_mission = locked_assessment.selected_mission;
       } else if (
         overtake_line_state_.last_feasible_current_mission.has_value() &&
@@ -9895,23 +9919,43 @@ struct MPC
         shadow_cfg.horizon_progress_lateral_motion_penalty,
         shadow_cfg.horizon_progress_lateral_accel_penalty,
         0.10};
+      const auto shadow_resolve_start = std::chrono::steady_clock::now();
       auto shadow_resolution =
         overtake_core::evaluate_mpcc_lite_shadow(shadow_request);
+      const auto shadow_resolve_end = std::chrono::steady_clock::now();
       mpcc_lite_shadow_last_evaluation_sec_ = now_sec;
       bool last_feasible_hold = false;
       if (shadow_resolution.valid && shadow_resolution.found) {
         mpcc_lite_shadow_last_feasible_resolution_ = shadow_resolution;
         mpcc_lite_shadow_last_feasible_sec_ = now_sec;
         mpcc_lite_shadow_last_feasible_target_id_ = output.target_vehicle_id;
-      } else if (
-        mpcc_lite_shadow_last_feasible_resolution_.has_value() &&
-        mpcc_lite_shadow_last_feasible_target_id_ == output.target_vehicle_id &&
-        now_sec - mpcc_lite_shadow_last_feasible_sec_ <=
-        shadow_cfg.mpcc_lite_shadow_last_feasible_max_age_sec + kEps)
+        mpcc_lite_shadow_last_feasible_generation_ =
+          overtake_line_state_.mission_generation;
+        mpcc_lite_shadow_last_feasible_phase_ = overtake_line_state_.phase;
+        mpcc_lite_shadow_last_feasible_side_sign_ = locked_pass_side;
+      } else if (overtake_core::can_reuse_mpcc_lite_shadow_last_feasible(
+          overtake_core::MpccLiteShadowLeaseRequest{
+            mpcc_lite_shadow_last_feasible_resolution_.has_value(),
+            mpcc_lite_shadow_last_feasible_target_id_ == output.target_vehicle_id,
+            mpcc_lite_shadow_last_feasible_generation_ ==
+            overtake_line_state_.mission_generation,
+            mpcc_lite_shadow_last_feasible_phase_ == overtake_line_state_.phase,
+            mpcc_lite_shadow_last_feasible_side_sign_ == locked_pass_side,
+            now_sec,
+            mpcc_lite_shadow_last_feasible_sec_,
+            shadow_cfg.mpcc_lite_shadow_last_feasible_max_age_sec}))
       {
         shadow_resolution = mpcc_lite_shadow_last_feasible_resolution_.value();
         last_feasible_hold = true;
       }
+      const auto shadow_total_end = std::chrono::steady_clock::now();
+      const auto elapsed_ms = [](const auto start, const auto end) {
+          return std::chrono::duration<double, std::milli>(end - start).count();
+        };
+      const double shadow_left_ms = elapsed_ms(shadow_left_start, shadow_left_end);
+      const double shadow_right_ms = elapsed_ms(shadow_left_end, shadow_right_end);
+      const double shadow_resolve_ms = elapsed_ms(shadow_resolve_start, shadow_resolve_end);
+      const double shadow_total_ms = elapsed_ms(shadow_total_start, shadow_total_end);
 
       const ShadowBranch best_shadow_branch = shadow_resolution.found ?
         shadow_resolution.best.candidate.branch : ShadowBranch::None;
@@ -9942,7 +9986,10 @@ struct MPC
                    << ", safe_sep=" <<
           (shadow_safe_separation_budget_active ? 1 : 0) << "/" <<
           shadow_safe_separation_time_remaining_sec << "s/" <<
-          shadow_safe_separation_distance_remaining_m << "m";
+          shadow_safe_separation_distance_remaining_m << "m"
+                   << ", timing_ms=" << shadow_total_ms << "/left=" <<
+          shadow_left_ms << "/right=" << shadow_right_ms << "/resolve=" <<
+          shadow_resolve_ms;
         for (const auto & evaluation : shadow_resolution.evaluations) {
           shadow_log << ", " << overtake_core::to_string(evaluation.candidate.branch)
                      << "={seen=" << (evaluation.candidate.assessed ? 1 : 0)
@@ -11893,8 +11940,11 @@ struct MPC
   int overtake_locked_side_sign_{0};
   OvertakeLineState overtake_line_state_;
   std::vector<double> overtake_receding_horizon_warm_start_;
+  std::vector<double> overtake_receding_horizon_path_distances_;
   std::uint64_t overtake_receding_horizon_generation_{0U};
   int overtake_receding_horizon_side_sign_{0};
+  OvertakeLinePhase overtake_receding_horizon_phase_{OvertakeLinePhase::Idle};
+  double overtake_receding_horizon_phase_traveled_m_{0.0};
   double overtake_receding_horizon_last_feasible_sec_{
     -std::numeric_limits<double>::infinity()};
   double mpcc_lite_shadow_last_evaluation_sec_{
@@ -11906,6 +11956,9 @@ struct MPC
   std::optional<overtake_core::MpccLiteShadowResolution>
   mpcc_lite_shadow_last_feasible_resolution_;
   std::string mpcc_lite_shadow_last_feasible_target_id_;
+  std::uint64_t mpcc_lite_shadow_last_feasible_generation_{0U};
+  OvertakeLinePhase mpcc_lite_shadow_last_feasible_phase_{OvertakeLinePhase::Idle};
+  int mpcc_lite_shadow_last_feasible_side_sign_{0};
   overtake_core::MpccLiteShadowBranch mpcc_lite_shadow_last_logged_best_{
     overtake_core::MpccLiteShadowBranch::None};
   overtake_core::MpccLiteShadowBranch mpcc_lite_shadow_last_logged_active_{
@@ -12085,7 +12138,8 @@ private:
         overtake_line_state_.mission_path_frozen,
         overtake_line_state_.pass_side_sign == -1 ||
         overtake_line_state_.pass_side_sign == 1,
-        std::isfinite(overtake_receding_horizon_last_feasible_sec_),
+        std::isfinite(overtake_receding_horizon_last_feasible_sec_) &&
+        overtake_receding_horizon_phase_ == overtake_line_state_.phase,
         overtake_receding_horizon_generation_ ==
         overtake_line_state_.mission_generation,
         overtake_receding_horizon_side_sign_ == overtake_line_state_.pass_side_sign,
@@ -12141,10 +12195,20 @@ private:
     }
     overtake_line_state_ = OvertakeLineState{};
     overtake_receding_horizon_warm_start_.clear();
+    overtake_receding_horizon_path_distances_.clear();
     overtake_receding_horizon_generation_ = 0U;
     overtake_receding_horizon_side_sign_ = 0;
+    overtake_receding_horizon_phase_ = OvertakeLinePhase::Idle;
+    overtake_receding_horizon_phase_traveled_m_ = 0.0;
     overtake_receding_horizon_last_feasible_sec_ =
       -std::numeric_limits<double>::infinity();
+    mpcc_lite_shadow_last_feasible_resolution_.reset();
+    mpcc_lite_shadow_last_feasible_sec_ =
+      -std::numeric_limits<double>::infinity();
+    mpcc_lite_shadow_last_feasible_target_id_.clear();
+    mpcc_lite_shadow_last_feasible_generation_ = 0U;
+    mpcc_lite_shadow_last_feasible_phase_ = OvertakeLinePhase::Idle;
+    mpcc_lite_shadow_last_feasible_side_sign_ = 0;
     overtake_contact_wall_guard_safe_ = false;
     last_overtake_line_transition_action_ =
       v2x_overtake_core::OvertakeLineTransitionAction::None;
@@ -13677,15 +13741,34 @@ private:
       return result;
     }
     result.attempted = true;
-    const auto fail = [&result](const char * reason) {
+    const auto fail = [&result](const char * reason, const bool hard_infeasible) {
         result.fallback = true;
+        result.hard_infeasible = hard_infeasible;
         result.fallback_reason = reason;
       };
 
-    const bool warm_start_compatible =
+    const bool warm_start_context_compatible =
       overtake_receding_horizon_warm_start_.size() == static_cast<std::size_t>(N) &&
+      overtake_receding_horizon_path_distances_.size() == static_cast<std::size_t>(N) &&
       overtake_receding_horizon_generation_ == overtake_line_state_.mission_generation &&
-      overtake_receding_horizon_side_sign_ == overtake_line_state_.pass_side_sign;
+      overtake_receding_horizon_side_sign_ == overtake_line_state_.pass_side_sign &&
+      overtake_receding_horizon_phase_ == overtake_line_state_.phase &&
+      std::isfinite(overtake_receding_horizon_phase_traveled_m_) &&
+      phase_traveled_m + kEps >= overtake_receding_horizon_phase_traveled_m_;
+    const auto aligned_warm_start = warm_start_context_compatible ?
+      overtake_core::resample_receding_horizon_warm_start(
+      overtake_core::RecedingHorizonWarmStartRequest{
+        std::max(
+          0.0,
+          phase_traveled_m - overtake_receding_horizon_phase_traveled_m_),
+        overtake_receding_horizon_path_distances_,
+        overtake_receding_horizon_warm_start_,
+        baseline_horizon.path_distances,
+        baseline_horizon.target_ey}) :
+      overtake_core::RecedingHorizonWarmStartResolution{};
+    const bool warm_start_compatible =
+      aligned_warm_start.valid && aligned_warm_start.used_previous_solution &&
+      aligned_warm_start.lateral_targets_m.size() == static_cast<std::size_t>(N);
     const double maximum_adjustment = std::max(
       0.0, line_cfg.receding_horizon_max_reference_adjustment);
     const double target_prediction_time = std::max(0.0, cfg.v2x_gap.prediction_time);
@@ -13738,7 +13821,7 @@ private:
         !std::isfinite(distance) || !std::isfinite(baseline_target) ||
         !std::isfinite(lower) || !std::isfinite(upper) || upper < lower)
       {
-        fail("invalid sample or wall bounds");
+        fail("invalid sample or wall bounds", true);
         return result;
       }
       lower = std::max(lower, baseline_target - maximum_adjustment);
@@ -13764,7 +13847,7 @@ private:
         }
       }
       if (upper < lower) {
-        fail("target-side separation conflicts with wall/trust bounds");
+        fail("target-side separation conflicts with wall/trust bounds", true);
         return result;
       }
 
@@ -13790,7 +13873,7 @@ private:
       }
       reference = clip(reference, lower, upper);
       const double warm_start = warm_start_compatible ?
-        overtake_receding_horizon_warm_start_[index] : baseline_target;
+        aligned_warm_start.lateral_targets_m[index] : baseline_target;
       request.samples.push_back(
         overtake_core::RecedingHorizonLateralSample{
           distance, lower, upper, reference, clip(warm_start, lower, upper)});
@@ -13822,7 +13905,7 @@ private:
         for (std::size_t i = 0U; i < request.samples.size(); ++i) {
           retained_targets.push_back(
             clip(
-              overtake_receding_horizon_warm_start_[i],
+              aligned_warm_start.lateral_targets_m[i],
               request.samples[i].lower_bound_m,
               request.samples[i].upper_bound_m));
         }
@@ -13864,7 +13947,7 @@ private:
       if (retain_last_feasible("optimizer failed")) {
         return result;
       }
-      fail("optimizer failed");
+      fail("optimizer failed", false);
       return result;
     }
 
@@ -13889,7 +13972,7 @@ private:
       fail(
         !validated_horizon.execution_feasible() ?
         "optimized horizon failed physical revalidation" :
-        "optimized horizon escaped hard bounds");
+        "optimized horizon escaped hard bounds", true);
       return result;
     }
 
@@ -13899,8 +13982,11 @@ private:
       optimized.maximum_reference_adjustment_m;
     result.horizon = std::move(validated_horizon);
     overtake_receding_horizon_warm_start_ = result.horizon.target_ey;
+    overtake_receding_horizon_path_distances_ = result.horizon.path_distances;
     overtake_receding_horizon_generation_ = overtake_line_state_.mission_generation;
     overtake_receding_horizon_side_sign_ = overtake_line_state_.pass_side_sign;
+    overtake_receding_horizon_phase_ = overtake_line_state_.phase;
+    overtake_receding_horizon_phase_traveled_m_ = phase_traveled_m;
     overtake_receding_horizon_last_feasible_sec_ = now_sec;
     return result;
   }
@@ -19308,9 +19394,17 @@ private:
       generating_execution_horizon, now_sec);
     if (receding_horizon.active) {
       horizon_evaluation = receding_horizon.horizon;
+    } else if (receding_horizon.hard_infeasible) {
+      // The baseline is a reference, not an admissible fallback once live
+      // target separation and wall/trust bounds contradict each other. Mark
+      // the execution horizon infeasible so the existing phase rebuild owns
+      // the response instead of feeding the impossible legacy line to MPC.
+      horizon_evaluation.static_map_physical_infeasible_during_execution = true;
     }
     output.receding_horizon_active = receding_horizon.active;
     output.receding_horizon_fallback = receding_horizon.fallback;
+    output.receding_horizon_hard_infeasible =
+      receding_horizon.hard_infeasible;
     output.receding_horizon_last_feasible_hold_active =
       receding_horizon.last_feasible_hold_active;
     output.receding_horizon_objective = receding_horizon.objective;
@@ -19333,7 +19427,7 @@ private:
       behavior_output.overtake_forbidden_wp,
       behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake,
       actual_wall_physical_contact || actual_wall_margin_blocked ||
-      actual_wall_sample_unavailable);
+      actual_wall_sample_unavailable || receding_horizon.hard_infeasible);
     output.target_ey = horizon_evaluation.target_ey;
     output.max_required_lateral_accel =
       horizon_evaluation.max_required_lateral_accel;
@@ -19794,7 +19888,7 @@ private:
           "overlap_confirmed=%d, "
           "overlap_elapsed=%.2f/%.2f, "
           "cooldown=%.2f, "
-          "rh=%d/fallback=%d/hold=%d/lease=%d/reason=%s/obj=%.2f/adjust=%.2f, "
+          "rh=%d/fallback=%d/hard=%d/hold=%d/lease=%d/reason=%s/obj=%.2f/adjust=%.2f, "
           "max_lat_acc=%.2f, lat_limited=%d, wall_limited=%d, "
           "static_wall_limited=%d, static_margin_degraded=%d, static_reachable=%d, "
           "static_wall_infeasible=%d, corridor_goal=%.2f, "
@@ -19869,6 +19963,7 @@ private:
           std::max(0.0, overtake_solver_cooldown_until_sec_ - now_sec),
           output.receding_horizon_active ? 1 : 0,
           output.receding_horizon_fallback ? 1 : 0,
+          output.receding_horizon_hard_infeasible ? 1 : 0,
           output.receding_horizon_last_feasible_hold_active ? 1 : 0,
           output.receding_horizon_continuity_lease_active ? 1 : 0,
           output.receding_horizon_fallback_reason.empty() ?

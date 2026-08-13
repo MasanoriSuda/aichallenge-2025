@@ -885,6 +885,29 @@ struct RecedingHorizonLateralResolution
 RecedingHorizonLateralResolution optimize_receding_horizon_lateral_trajectory(
   const RecedingHorizonLateralRequest & request) noexcept;
 
+struct RecedingHorizonWarmStartRequest
+{
+  double forward_progress_m{};
+  std::vector<double> previous_path_distances_m;
+  std::vector<double> previous_lateral_targets_m;
+  std::vector<double> current_path_distances_m;
+  std::vector<double> current_fallback_targets_m;
+};
+
+struct RecedingHorizonWarmStartResolution
+{
+  bool valid{false};
+  bool used_previous_solution{false};
+  std::vector<double> lateral_targets_m;
+};
+
+/// Shift the prior receding-horizon solution by measured forward progress and
+/// interpolate it at the current horizon samples. Samples beyond the prior
+/// horizon use the current baseline instead of extending a stale terminal
+/// value.
+RecedingHorizonWarmStartResolution resample_receding_horizon_warm_start(
+  const RecedingHorizonWarmStartRequest & request) noexcept;
+
 struct RecedingHorizonExecutionLeaseRequest
 {
   bool enabled{false};
@@ -2786,6 +2809,23 @@ struct MpccLiteShadowResolution
 /// evaluator remains fail closed and is intentionally free of controller state.
 MpccLiteShadowResolution evaluate_mpcc_lite_shadow(
   const MpccLiteShadowRequest & request) noexcept;
+
+struct MpccLiteShadowLeaseRequest
+{
+  bool has_last_feasible{false};
+  bool target_matches{false};
+  bool mission_generation_matches{false};
+  bool phase_matches{false};
+  bool side_matches{false};
+  double now_sec{};
+  double last_feasible_sec{};
+  double maximum_age_sec{};
+};
+
+/// A shadow result is diagnostic state for one exact tactical context. Do not
+/// leak a Return or opposite-side result into another phase or Mission.
+bool can_reuse_mpcc_lite_shadow_last_feasible(
+  const MpccLiteShadowLeaseRequest & request) noexcept;
 
 enum class OvertakeSideRetryFailureClass
 {

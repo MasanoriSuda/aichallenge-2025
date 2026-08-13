@@ -2997,6 +2997,43 @@ TEST(V2XOvertakeCoreSpeed, WarmStartPreservesTemporalTrajectoryContinuity)
   EXPECT_GT(result.lateral_targets_m[2], 0.0);
 }
 
+TEST(V2XOvertakeCoreSpeed, WarmStartIsResampledAtForwardProgress)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonWarmStartRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resample_receding_horizon_warm_start;
+
+  RecedingHorizonWarmStartRequest request;
+  request.forward_progress_m = 1.0;
+  request.previous_path_distances_m = {0.5, 1.5, 2.5, 3.5};
+  request.previous_lateral_targets_m = {0.0, 0.4, 0.8, 1.0};
+  request.current_path_distances_m = {0.5, 1.5, 2.5, 3.5};
+  request.current_fallback_targets_m = {-0.1, -0.2, -0.3, -0.4};
+
+  const auto result = resample_receding_horizon_warm_start(request);
+  ASSERT_TRUE(result.valid);
+  ASSERT_TRUE(result.used_previous_solution);
+  ASSERT_EQ(result.lateral_targets_m.size(), 4U);
+  EXPECT_NEAR(result.lateral_targets_m[0], 0.4, 1e-12);
+  EXPECT_NEAR(result.lateral_targets_m[1], 0.8, 1e-12);
+  EXPECT_NEAR(result.lateral_targets_m[2], 1.0, 1e-12);
+  EXPECT_NEAR(result.lateral_targets_m[3], -0.4, 1e-12);
+}
+
+TEST(V2XOvertakeCoreSpeed, WarmStartRejectsNonMonotonicPriorHorizon)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonWarmStartRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resample_receding_horizon_warm_start;
+
+  RecedingHorizonWarmStartRequest request;
+  request.previous_path_distances_m = {0.5, 0.5};
+  request.previous_lateral_targets_m = {0.0, 0.2};
+  request.current_path_distances_m = {0.5, 1.5};
+  request.current_fallback_targets_m = {0.0, 0.0};
+  EXPECT_FALSE(resample_receding_horizon_warm_start(request).valid);
+}
+
 TEST(V2XOvertakeCoreSpeed, RejectsInfeasibleRecedingHorizonBounds)
 {
   RecedingHorizonLateralRequest request;
@@ -13189,6 +13226,36 @@ TEST(V2XOvertakeCoreMpccLiteShadow, KeepsActiveReturnAdmittedAfterLatchConsumpti
     resolve_mpcc_lite_shadow_return_admission(
       MpccLiteShadowReturnAdmissionRequest{true, true, true, false, true}),
     MpccLiteShadowRejectReason::RuntimeHardFault);
+}
+
+TEST(V2XOvertakeCoreMpccLiteShadow, LastFeasibleLeaseIsScopedToExactMissionContext)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::MpccLiteShadowLeaseRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    can_reuse_mpcc_lite_shadow_last_feasible;
+
+  MpccLiteShadowLeaseRequest request;
+  request.has_last_feasible = true;
+  request.target_matches = true;
+  request.mission_generation_matches = true;
+  request.phase_matches = true;
+  request.side_matches = true;
+  request.now_sec = 10.4;
+  request.last_feasible_sec = 10.0;
+  request.maximum_age_sec = 0.5;
+  EXPECT_TRUE(can_reuse_mpcc_lite_shadow_last_feasible(request));
+
+  request.phase_matches = false;
+  EXPECT_FALSE(can_reuse_mpcc_lite_shadow_last_feasible(request));
+  request.phase_matches = true;
+  request.mission_generation_matches = false;
+  EXPECT_FALSE(can_reuse_mpcc_lite_shadow_last_feasible(request));
+  request.mission_generation_matches = true;
+  request.side_matches = false;
+  EXPECT_FALSE(can_reuse_mpcc_lite_shadow_last_feasible(request));
+  request.side_matches = true;
+  request.now_sec = 10.6;
+  EXPECT_FALSE(can_reuse_mpcc_lite_shadow_last_feasible(request));
 }
 
 }  // namespace

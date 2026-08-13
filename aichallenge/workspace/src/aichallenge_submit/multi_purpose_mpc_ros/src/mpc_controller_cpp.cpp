@@ -2139,6 +2139,11 @@ struct V2XBehaviorOutput
   bool opponent_side_replan_alternate_feasible{false};
   bool opponent_side_replan_ready{false};
   bool mpcc_lite_same_side_replan_ready{false};
+  bool mpcc_lite_cross_side_replan_ready{false};
+  int mpcc_lite_cross_side_candidate_sign{0};
+  double mpcc_lite_cross_side_candidate_stable_sec{0.0};
+  double mpcc_lite_cross_side_score_advantage{
+    -std::numeric_limits<double>::infinity()};
   bool opponent_side_replan_no_return{false};
   bool opponent_side_replan_early_intrusion_risk{false};
   overtake_core::PassCommitStage overtake_commit_stage{
@@ -2161,6 +2166,8 @@ struct V2XBehaviorOutput
   opponent_side_replan_current_mission;
   std::optional<overtake_core::OvertakeMissionCandidate>
   mpcc_lite_same_side_replan_mission;
+  std::optional<overtake_core::OvertakeMissionCandidate>
+  mpcc_lite_cross_side_replan_mission;
   std::optional<overtake_core::OvertakeMissionCandidate> opponent_side_replan_mission;
   overtake_core::OpponentSideReplanReason opponent_side_replan_reason{
     overtake_core::OpponentSideReplanReason::None};
@@ -2410,9 +2417,9 @@ struct OvertakeLineState
     std::numeric_limits<double>::quiet_NaN()};
   int opponent_side_replan_count{0};
   bool opponent_side_replan_no_return_latched{false};
-  // Shared by opponent-driven and course-role-driven side changes. Once any
-  // subsystem commits a full-track transition, no other subsystem may undo it
-  // before this Mission ends.
+  // Shared by one-shot opponent/course-role transitions. Agile MPCC branch
+  // replacement deliberately leaves this false until physical no-return, so
+  // another complete branch may win while the target is still clearly ahead.
   bool mission_cross_side_transition_committed{false};
   std::optional<overtake_core::OvertakeMissionCandidate>
   last_feasible_current_mission;
@@ -4819,6 +4826,9 @@ struct MPC
     mpcc_lite_control_last_feasible_target_id_.clear();
     mpcc_lite_control_last_feasible_entry_sec_ =
       -std::numeric_limits<double>::infinity();
+    mpcc_lite_cross_side_pending_sign_ = 0;
+    mpcc_lite_cross_side_pending_since_sec_ =
+      std::numeric_limits<double>::quiet_NaN();
     mpcc_lite_shadow_last_feasible_target_id_.clear();
     mpcc_lite_shadow_last_feasible_generation_ = 0U;
     mpcc_lite_shadow_last_feasible_phase_ = OvertakeLinePhase::Idle;
@@ -5025,6 +5035,9 @@ struct MPC
     mpcc_lite_control_last_feasible_target_id_.clear();
     mpcc_lite_control_last_feasible_entry_sec_ =
       -std::numeric_limits<double>::infinity();
+    mpcc_lite_cross_side_pending_sign_ = 0;
+    mpcc_lite_cross_side_pending_since_sec_ =
+      std::numeric_limits<double>::quiet_NaN();
     mpcc_lite_shadow_last_feasible_target_id_.clear();
     mpcc_lite_shadow_last_feasible_generation_ = 0U;
     mpcc_lite_shadow_last_feasible_phase_ = OvertakeLinePhase::Idle;
@@ -10135,6 +10148,66 @@ struct MPC
         winning_mission->predicted_rear_clear_time_sec >= 0.0 &&
         std::isfinite(winning_mission->predicted_rear_clear_ego_distance_m) &&
         winning_mission->predicted_rear_clear_ego_distance_m >= 0.0;
+      double active_hold_score = -std::numeric_limits<double>::infinity();
+      bool active_hold_feasible = false;
+      for (const auto & evaluation : shadow_resolution.evaluations) {
+        if (
+          evaluation.candidate.branch == ShadowBranch::CurrentSideHold &&
+          evaluation.hard_feasible)
+        {
+          active_hold_feasible = true;
+          active_hold_score = evaluation.score;
+          break;
+        }
+      }
+      const double cross_side_score_advantage =
+        shadow_resolution.found && std::isfinite(shadow_resolution.best.score) &&
+        active_hold_feasible && std::isfinite(active_hold_score) ?
+        shadow_resolution.best.score - active_hold_score :
+        std::numeric_limits<double>::infinity();
+      const bool cross_side_score_material =
+        !active_hold_feasible ||
+        cross_side_score_advantage + kEps >=
+        shadow_cfg.opponent_side_replan_min_progress_score_advantage;
+      const bool mpcc_cross_side_opportunity =
+        !last_feasible_hold &&
+        (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+        overtake_line_state_.phase == OvertakeLinePhase::Pass) &&
+        locked_pass_side != 0 && best_shadow_side != 0 &&
+        best_shadow_side != locked_pass_side && winning_mission_complete &&
+        opponent_side_replan_target_continuous &&
+        output.locked_target_current_body_footprints_separated &&
+        output.locked_target_footprint_prediction_valid &&
+        opponent_side_replan_before_no_return &&
+        overtake_line_state_.opponent_side_replan_count <
+        shadow_cfg.opponent_side_replan_max_count &&
+        cross_side_score_material;
+      const auto mpcc_cross_side_debounce =
+        overtake_core::update_side_replan_debounce(
+        overtake_core::SideReplanDebounceRequest{
+          mpcc_cross_side_opportunity, pass_side(best_shadow_side),
+          pass_side(mpcc_lite_cross_side_pending_sign_),
+          mpcc_lite_cross_side_pending_since_sec_, now_sec});
+      if (mpcc_cross_side_debounce.valid) {
+        mpcc_lite_cross_side_pending_sign_ =
+          static_cast<int>(mpcc_cross_side_debounce.pending_side);
+        mpcc_lite_cross_side_pending_since_sec_ =
+          mpcc_cross_side_debounce.pending_since_sec;
+      } else {
+        mpcc_lite_cross_side_pending_sign_ = 0;
+        mpcc_lite_cross_side_pending_since_sec_ =
+          std::numeric_limits<double>::quiet_NaN();
+      }
+      const double mpcc_cross_side_stable_sec =
+        mpcc_cross_side_debounce.valid ? mpcc_cross_side_debounce.stable_sec : 0.0;
+      const bool mpcc_cross_side_replan_admitted =
+        mpcc_cross_side_opportunity &&
+        mpcc_cross_side_stable_sec + kEps >=
+        shadow_cfg.opponent_side_replan_stable_sec;
+      output.mpcc_lite_cross_side_candidate_sign =
+        mpcc_cross_side_opportunity ? best_shadow_side : 0;
+      output.mpcc_lite_cross_side_candidate_stable_sec = mpcc_cross_side_stable_sec;
+      output.mpcc_lite_cross_side_score_advantage = cross_side_score_advantage;
       const bool mpcc_same_side_replan_admitted =
         !start_grid_breakout_attempt &&
         (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
@@ -10157,8 +10230,7 @@ struct MPC
           overtake_line_state_.phase == OvertakeLinePhase::Return,
           overtake_line_state_.rear_clear_confirmed_latched,
           mpcc_same_side_replan_admitted,
-          opponent_side_replan_before_no_return &&
-          output.opponent_side_replan_ready,
+          mpcc_cross_side_replan_admitted,
           winning_mission.has_value(),
           winning_mission_complete,
           locked_pass_side,
@@ -10188,11 +10260,21 @@ struct MPC
       {
         output.mpcc_lite_same_side_replan_ready = true;
         output.mpcc_lite_same_side_replan_mission = winning_mission;
+      } else if (
+        authority.action == overtake_core::MpccLiteAuthorityAction::ReplaceActive &&
+        winning_mission.has_value() && authority.selected_side_sign != 0 &&
+        authority.selected_side_sign != locked_pass_side)
+      {
+        output.mpcc_lite_cross_side_replan_ready = true;
+        output.mpcc_lite_cross_side_replan_mission = winning_mission;
       } else if (shadow_runtime_hard_fault) {
         mpcc_lite_control_last_feasible_entry_mission_.reset();
         mpcc_lite_control_last_feasible_target_id_.clear();
         mpcc_lite_control_last_feasible_entry_sec_ =
           -std::numeric_limits<double>::infinity();
+        mpcc_lite_cross_side_pending_sign_ = 0;
+        mpcc_lite_cross_side_pending_since_sec_ =
+          std::numeric_limits<double>::quiet_NaN();
       }
       const bool shadow_agrees = shadow_resolution.found &&
         best_shadow_branch == active_shadow_branch;
@@ -10225,7 +10307,10 @@ struct MPC
           shadow_safe_separation_distance_remaining_m << "m"
                    << ", timing_ms=" << shadow_total_ms << "/left=" <<
           shadow_left_ms << "/right=" << shadow_right_ms << "/resolve=" <<
-          shadow_resolve_ms;
+          shadow_resolve_ms
+                   << ", cross_pending=" << mpcc_lite_cross_side_pending_sign_
+                   << "/" << mpcc_cross_side_stable_sec
+                   << "s, cross_adv=" << cross_side_score_advantage;
         for (const auto & evaluation : shadow_resolution.evaluations) {
           shadow_log << ", " << overtake_core::to_string(evaluation.candidate.branch)
                      << "={seen=" << (evaluation.candidate.assessed ? 1 : 0)
@@ -12277,6 +12362,9 @@ struct MPC
   std::string mpcc_lite_control_last_feasible_target_id_;
   double mpcc_lite_control_last_feasible_entry_sec_{
     -std::numeric_limits<double>::infinity()};
+  int mpcc_lite_cross_side_pending_sign_{0};
+  double mpcc_lite_cross_side_pending_since_sec_{
+    std::numeric_limits<double>::quiet_NaN()};
   std::string mpcc_lite_shadow_last_feasible_target_id_;
   std::uint64_t mpcc_lite_shadow_last_feasible_generation_{0U};
   OvertakeLinePhase mpcc_lite_shadow_last_feasible_phase_{OvertakeLinePhase::Idle};
@@ -12529,6 +12617,9 @@ private:
     mpcc_lite_control_last_feasible_target_id_.clear();
     mpcc_lite_control_last_feasible_entry_sec_ =
       -std::numeric_limits<double>::infinity();
+    mpcc_lite_cross_side_pending_sign_ = 0;
+    mpcc_lite_cross_side_pending_since_sec_ =
+      std::numeric_limits<double>::quiet_NaN();
     mpcc_lite_shadow_last_feasible_sec_ =
       -std::numeric_limits<double>::infinity();
     mpcc_lite_shadow_last_feasible_target_id_.clear();
@@ -13230,7 +13321,8 @@ private:
     const bool allow_same_side_replacement,
     const bool allow_committed_same_side_replacement = false,
     const bool allow_tactical_no_return_rearm = false,
-    const bool preserve_front_cap_release = false)
+    const bool preserve_front_cap_release = false,
+    const bool keep_cross_side_reselection_open = false)
   {
     const auto & line_cfg = cfg.v2x_behavior.overtake_line;
     const int previous_side = overtake_line_state_.pass_side_sign;
@@ -13305,8 +13397,9 @@ private:
       robust_clearance.valid ? robust_clearance.wall_planning_clearance_m : 0.0);
     const bool historical_no_return_latched =
       overtake_line_state_.opponent_side_replan_no_return_latched ||
-      overtake_line_state_.pass_front_overlap_exclusion_latched ||
-      overtake_line_state_.pass_forward_completion_latched;
+      overtake_line_state_.pass_forward_completion_latched ||
+      (!keep_cross_side_reselection_open &&
+      overtake_line_state_.pass_front_overlap_exclusion_latched);
     const bool effective_no_return_latched =
       overtake_line_state_.mission_cross_side_transition_committed ||
       (historical_no_return_latched && !allow_tactical_no_return_rearm);
@@ -13498,7 +13591,8 @@ private:
     overtake_line_state_.upper_boundary_vehicle_id.clear();
     overtake_locked_side_sign_ = candidate.pass_side_sign;
     if (side_changed) {
-      overtake_line_state_.mission_cross_side_transition_committed = true;
+      overtake_line_state_.mission_cross_side_transition_committed =
+        !keep_cross_side_reselection_open;
       overtake_line_state_.opponent_side_replan_no_return_latched =
         overtake_core::resolve_cross_side_no_return_latch(
         overtake_core::CrossSideNoReturnLatchRequest{
@@ -13506,7 +13600,7 @@ private:
           overtake_line_state_.opponent_side_replan_no_return_latched,
           overtake_core::PassCommitStage::ShiftCommitted,
           false,
-          true});
+          !keep_cross_side_reselection_open});
     }
 
     if (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut) {
@@ -16781,6 +16875,28 @@ private:
           overtake_line_state_.pass_side_sign,
           to_string(overtake_line_state_.phase), replacement.goal_lateral_m,
           model->wp_id);
+      }
+    } else if (
+      behavior_output.mpcc_lite_cross_side_replan_ready &&
+      behavior_output.mpcc_lite_cross_side_replan_mission.has_value())
+    {
+      const auto & replacement =
+        behavior_output.mpcc_lite_cross_side_replan_mission.value();
+      const bool replaced = replace_frozen_overtake_mission_after_dynamic_replan(
+        replacement, now_sec, current_ey, false, false, false, false, true);
+      mpcc_lite_cross_side_pending_sign_ = 0;
+      mpcc_lite_cross_side_pending_since_sec_ =
+        std::numeric_limits<double>::quiet_NaN();
+      if (!replaced && line_cfg.debug_log_enabled) {
+        RCLCPP_WARN(
+          rclcpp::get_logger("mpc_controller"),
+          "Overtake MPCC-lite agile cross-side replacement rejected at commit: "
+          "target=%s, side=%d->%d, stable=%.2f s, score_adv=%.2f, wp_id=%d",
+          overtake_line_state_.target_vehicle_id.c_str(),
+          overtake_line_state_.pass_side_sign,
+          behavior_output.mpcc_lite_cross_side_candidate_sign,
+          behavior_output.mpcc_lite_cross_side_candidate_stable_sec,
+          behavior_output.mpcc_lite_cross_side_score_advantage, model->wp_id);
       }
     } else if (
       behavior_output.opponent_side_replan_ready &&

@@ -856,7 +856,7 @@ PassCommitStageResolution resolve_pass_commit_stage(
     return resolution;
   }
   if (
-    request.lateral_clearance_latched || request.forward_completion_latched ||
+    request.forward_completion_latched ||
     (std::isfinite(request.target_front_distance_m) &&
     request.target_front_distance_m + 1e-9 <
     request.side_by_side_no_return_front_distance_m))

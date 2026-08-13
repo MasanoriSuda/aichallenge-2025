@@ -12779,7 +12779,7 @@ TEST(V2XOvertakeCoreCommitStage, KeepsSideSelectableUntilMissionFreeze)
   EXPECT_TRUE(resolution.side_replan_allowed);
 }
 
-TEST(V2XOvertakeCoreCommitStage, FixesSideAtNoReturnOrLateralCommit)
+TEST(V2XOvertakeCoreCommitStage, FixesSideAtNoReturnOrForwardCommit)
 {
   PassCommitStageRequest request;
   request.frozen_execution_active = true;
@@ -12793,6 +12793,11 @@ TEST(V2XOvertakeCoreCommitStage, FixesSideAtNoReturnOrLateralCommit)
 
   request.target_front_distance_m = 4.0;
   request.lateral_clearance_latched = true;
+  resolution = resolve_pass_commit_stage(request);
+  EXPECT_EQ(resolution.stage, PassCommitStage::ShiftCommitted);
+  EXPECT_TRUE(resolution.side_replan_allowed);
+
+  request.forward_completion_latched = true;
   resolution = resolve_pass_commit_stage(request);
   EXPECT_EQ(resolution.stage, PassCommitStage::SideBySideCommitted);
 

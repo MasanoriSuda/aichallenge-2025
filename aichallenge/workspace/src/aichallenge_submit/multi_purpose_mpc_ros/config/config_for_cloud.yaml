@@ -602,7 +602,7 @@ mpc:
   v2x_overtake_safe_separation_dynamic_completion_extension_enabled: true # use live rear-clear estimate after the fixed extension count is exhausted
   v2x_overtake_pass_completion_speed_coupling_enabled: true # predict rear-clear with the full-speed policy that an already separated Pass will execute
   v2x_overtake_mpcc_lite_shadow_enabled: true # Compare left/right/hold/Return on one receding-horizon score
-  v2x_overtake_mpcc_lite_shadow_evaluation_interval_sec: 0.20 # [s] 5 Hz tactical evaluation; low-level MPC keeps the last feasible prefix between updates
+  v2x_overtake_mpcc_lite_shadow_evaluation_interval_sec: 0.15 # [s] ~7 Hz tactical evaluation; low-level MPC keeps the last feasible prefix between updates
   v2x_overtake_mpcc_lite_shadow_log_interval_sec: 1.0 # [s] periodic log; recommendation changes log immediately
   v2x_overtake_mpcc_lite_shadow_last_feasible_max_age_sec: 0.50 # [s] exact-target/phase lease for a temporary optimizer miss
   v2x_overtake_mpcc_lite_control_enabled: true # Allow a hard-feasible prefix to own new ShiftOut side/goal/closing speed
@@ -767,7 +767,7 @@ mpc:
   v2x_overtake_opponent_side_replan_max_rear_clear_time_regression_sec: 0.25 # [s]
   v2x_overtake_opponent_side_replan_max_minimum_speed_regression: 0.25 # [m/s]
   v2x_overtake_opponent_side_replan_stable_sec: 0.10 # [s] commit a validated alternate before intrusion becomes actual overlap
-  v2x_overtake_opponent_side_replan_max_count: 1 # one Mission-wide cross-track replacement
+  v2x_overtake_opponent_side_replan_max_count: 3 # MPCC may reselect while target remains ahead; no-return still freezes side-by-side
   v2x_overtake_cross_side_min_terminal_closing_speed: 0.5 # [m/s] dedicated rear-clear terminal advantage; independent of Pass cap
   v2x_overtake_cross_side_min_wall_tracking_reserve: 0.15 # [m] extra reserve for measured lateral tracking error during a full-track switch
   v2x_overtake_cross_side_rejection_cooldown_sec: 0.25 # [s] do not re-evaluate an unchanged rejected alternate at 40 Hz

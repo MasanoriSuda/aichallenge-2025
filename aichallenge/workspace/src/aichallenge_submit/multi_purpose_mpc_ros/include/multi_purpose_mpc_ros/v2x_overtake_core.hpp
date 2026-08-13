@@ -595,8 +595,9 @@ struct PassCommitStageResolution
 
 /// Project the existing mission/lateral latches onto one tactical commit
 /// stage. A frozen path can still be replaced atomically while the target is
-/// sufficiently ahead; after lateral/forward commit or the longitudinal
-/// no-return point, the selected side is immutable until rear-clear.
+/// sufficiently ahead. Lateral clearance alone does not mean side-by-side:
+/// after forward commit or the longitudinal no-return point, the selected side
+/// is immutable until rear-clear.
 PassCommitStageResolution resolve_pass_commit_stage(
   const PassCommitStageRequest & request) noexcept;
 

@@ -315,11 +315,17 @@ struct CommittedPassPolicyRequest
   bool execution_path_physically_feasible{false};
   bool actual_wall_contact{false};
   bool minimum_motion_corridor_active{false};
+  /// Robust separation is required to acquire the first release.  Once a
+  /// validated Pass owns longitudinal control, these physical fields allow
+  /// the lease to survive noise inside the preferred robust margin without
+  /// relaxing the actual body boundary.
+  bool current_body_footprints_physically_separated{false};
   bool current_body_footprints_separated{false};
   /// A current overlap must remain continuously observed before it revokes an
   /// already released competition-simulation Pass. Defaults fail closed.
   bool current_body_footprint_overlap_confirmed{true};
   bool footprint_prediction_valid{false};
+  bool predicted_body_footprint_sweep_physically_separated{false};
   bool predicted_body_footprint_sweep_separated{false};
   bool predicted_body_footprint_overlap_confirmed{true};
   bool lateral_exclusion_latched{false};
@@ -349,6 +355,7 @@ struct CommittedPassPolicyResolution
   bool minimum_motion_shiftout_predicted_overlap_grace_active{false};
   bool minimum_motion_footprint_release_allowed{false};
   bool minimum_motion_footprint_hold_active{false};
+  bool minimum_motion_physical_clear_hold_active{false};
   bool minimum_motion_current_overlap_grace_active{false};
   bool minimum_motion_side_by_side_escape_active{false};
   bool minimum_motion_predicted_overlap_grace_active{false};
@@ -2534,6 +2541,8 @@ enum class RuntimeWallPreplanAction
   None,
   RequestFreshSameSideCandidate,
   ReplaceWithFreshSameSide,
+  ContractTowardCenter,
+  ReturnToBaseLine,
 };
 
 struct RuntimeWallPreplanRequest
@@ -2546,11 +2555,15 @@ struct RuntimeWallPreplanRequest
   bool current_body_separated{false};
   bool target_prediction_valid{false};
   bool fresh_candidate_available{false};
+  bool center_contraction_available{false};
+  bool speed_preserving_return_available{false};
   int mission_side_sign{0};
   int candidate_side_sign{0};
   double now_sec{};
   double last_replan_sec{-std::numeric_limits<double>::infinity()};
   double cooldown_sec{};
+  double warning_elapsed_sec{};
+  double fallback_delay_sec{};
   int replan_count{};
   int maximum_replan_count{};
 };

@@ -453,6 +453,18 @@ CommittedPassPolicyResolution resolve_committed_pass_policy(
     request.current_body_footprints_separated &&
     request.footprint_prediction_valid &&
     request.predicted_body_footprint_sweep_separated;
+  // Robust separation implies physical separation.  Keep that implication in
+  // the pure policy so existing callers remain fail-safe while allowing the
+  // controller to provide the wider physical-only hold envelope explicitly.
+  const bool current_body_physically_separated =
+    request.current_body_footprints_physically_separated ||
+    request.current_body_footprints_separated;
+  const bool predicted_sweep_physically_separated =
+    request.predicted_body_footprint_sweep_physically_separated ||
+    request.predicted_body_footprint_sweep_separated;
+  const bool minimum_motion_physical_sweep_clear =
+    current_body_physically_separated && request.footprint_prediction_valid &&
+    predicted_sweep_physically_separated;
   const bool minimum_motion_side_by_side_geometry =
     request.current_body_footprints_separated &&
     std::isfinite(request.target_longitudinal_m) &&
@@ -465,9 +477,9 @@ CommittedPassPolicyResolution resolve_committed_pass_policy(
     (request.lateral_complete && request.execution_path_physically_feasible));
   resolution.minimum_motion_predicted_overlap_grace_active =
     minimum_motion_pass_guard && request.prior_front_cap_release_active &&
-    request.current_body_footprints_separated &&
+    current_body_physically_separated &&
     request.footprint_prediction_valid &&
-    !request.predicted_body_footprint_sweep_separated &&
+    !predicted_sweep_physically_separated &&
     !request.predicted_body_footprint_overlap_confirmed &&
     !resolution.minimum_motion_side_by_side_escape_active;
   resolution.minimum_motion_shiftout_predicted_overlap_grace_active =
@@ -484,7 +496,7 @@ CommittedPassPolicyResolution resolve_committed_pass_policy(
   resolution.minimum_motion_current_overlap_grace_active =
     request.committed_pass_attack_mode_enabled &&
     minimum_motion_pass_guard && request.prior_front_cap_release_active &&
-    !request.current_body_footprints_separated &&
+    !current_body_physically_separated &&
     !request.current_body_footprint_overlap_confirmed &&
     request.footprint_prediction_valid &&
     request.execution_path_physically_feasible;
@@ -496,8 +508,12 @@ CommittedPassPolicyResolution resolve_committed_pass_policy(
   resolution.minimum_motion_attack_hold_active =
     request.committed_pass_attack_mode_enabled &&
     minimum_motion_pass_guard && request.prior_front_cap_release_active &&
-    request.current_body_footprints_separated &&
+    current_body_physically_separated &&
     request.execution_path_physically_feasible;
+  resolution.minimum_motion_physical_clear_hold_active =
+    minimum_motion_pass_guard && request.prior_front_cap_release_active &&
+    request.execution_path_physically_feasible &&
+    minimum_motion_physical_sweep_clear;
   resolution.minimum_motion_shiftout_release_allowed =
     minimum_motion_shiftout_guard &&
     request.execution_path_physically_feasible && minimum_motion_sweep_clear;
@@ -511,12 +527,13 @@ CommittedPassPolicyResolution resolve_committed_pass_policy(
     resolution.minimum_motion_shiftout_predicted_overlap_grace_active);
   const bool minimum_motion_pass_hold =
     minimum_motion_pass_guard &&
-    ((request.current_body_footprints_separated &&
+    (resolution.minimum_motion_physical_clear_hold_active ||
+    ((current_body_physically_separated &&
     (minimum_motion_sweep_clear ||
     resolution.minimum_motion_side_by_side_escape_active ||
     resolution.minimum_motion_predicted_overlap_grace_active ||
     resolution.minimum_motion_attack_hold_active)) ||
-    resolution.minimum_motion_current_overlap_grace_active);
+    resolution.minimum_motion_current_overlap_grace_active));
   resolution.minimum_motion_footprint_hold_active =
     request.prior_front_cap_release_active &&
     (minimum_motion_shiftout_hold || minimum_motion_pass_hold);
@@ -621,11 +638,11 @@ CommittedPassPolicyResolution resolve_committed_pass_policy(
       CommittedPassFrontCapTransitionReason::LockedTargetPositionJump :
       request.actual_wall_contact ?
       CommittedPassFrontCapTransitionReason::ActualWallContact :
-      !request.current_body_footprints_separated ?
+      !current_body_physically_separated ?
       CommittedPassFrontCapTransitionReason::CurrentFootprintOverlap :
       !request.footprint_prediction_valid ?
       CommittedPassFrontCapTransitionReason::FootprintPredictionUnavailable :
-      !request.predicted_body_footprint_sweep_separated ?
+      !predicted_sweep_physically_separated ?
       CommittedPassFrontCapTransitionReason::PredictedFootprintOverlap :
       !request.lateral_complete ?
       CommittedPassFrontCapTransitionReason::LateralGoalIncomplete :
@@ -4462,6 +4479,8 @@ RuntimeWallPreplanResolution resolve_runtime_wall_preplan(
     (!std::isfinite(request.last_replan_sec) &&
     request.last_replan_sec != -std::numeric_limits<double>::infinity()) ||
     !std::isfinite(request.cooldown_sec) || request.cooldown_sec < 0.0 ||
+    !std::isfinite(request.warning_elapsed_sec) || request.warning_elapsed_sec < 0.0 ||
+    !std::isfinite(request.fallback_delay_sec) || request.fallback_delay_sec < 0.0 ||
     request.replan_count < 0 || request.maximum_replan_count < 0 ||
     !candidate_side_valid)
   {
@@ -4477,8 +4496,7 @@ RuntimeWallPreplanResolution resolve_runtime_wall_preplan(
   if (
     !mission_side_valid || request.hard_wall_fault ||
     !request.target_continuous || !request.current_body_separated ||
-    !request.target_prediction_valid ||
-    request.replan_count >= request.maximum_replan_count)
+    !request.target_prediction_valid)
   {
     return resolution;
   }
@@ -4486,14 +4504,30 @@ RuntimeWallPreplanResolution resolve_runtime_wall_preplan(
     std::isfinite(request.last_replan_sec) &&
     request.now_sec - request.last_replan_sec < request.cooldown_sec)
   {
+    if (
+      request.warning_elapsed_sec + 1e-9 >= request.fallback_delay_sec &&
+      request.speed_preserving_return_available)
+    {
+      resolution.action = RuntimeWallPreplanAction::ReturnToBaseLine;
+    }
     return resolution;
   }
   if (
     request.fresh_candidate_available &&
+    request.replan_count < request.maximum_replan_count &&
     request.candidate_side_sign == request.mission_side_sign)
   {
     resolution.action = RuntimeWallPreplanAction::ReplaceWithFreshSameSide;
-  } else {
+  } else if (request.warning_elapsed_sec < request.fallback_delay_sec) {
+    resolution.action = RuntimeWallPreplanAction::RequestFreshSameSideCandidate;
+  } else if (
+    request.center_contraction_available &&
+    request.replan_count < request.maximum_replan_count)
+  {
+    resolution.action = RuntimeWallPreplanAction::ContractTowardCenter;
+  } else if (request.speed_preserving_return_available) {
+    resolution.action = RuntimeWallPreplanAction::ReturnToBaseLine;
+  } else if (request.replan_count < request.maximum_replan_count) {
     resolution.action = RuntimeWallPreplanAction::RequestFreshSameSideCandidate;
   }
   return resolution;

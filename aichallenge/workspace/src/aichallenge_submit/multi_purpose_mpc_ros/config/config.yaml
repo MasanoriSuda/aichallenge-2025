@@ -702,6 +702,11 @@ mpc:
   v2x_overtake_runtime_wall_preplan_prediction_samples: 3
   v2x_overtake_runtime_wall_replan_cooldown_sec: 0.50 # [s] suppress warning-boundary replan chatter
   v2x_overtake_runtime_wall_replan_max_count: 2 # bounded same-side wall replans per Mission
+  v2x_overtake_runtime_wall_fallback_delay_sec: 0.15 # [s] wait briefly for a fresh robust Mission before fallback
+  v2x_overtake_runtime_wall_center_contraction_enabled: true # retain side and nominal vehicle gap while moving the frozen goal inward
+  v2x_overtake_runtime_wall_center_contraction_max_adjustment: 0.35 # [m/replan] bounded inward correction, still fully preflighted
+  v2x_overtake_runtime_wall_speed_preserving_return_enabled: true # avoid Recovery when the target is safely ahead and Return is feasible
+  v2x_overtake_runtime_wall_return_min_front_distance: 4.0 # [m] minimum target lead before warning-driven Return
   v2x_overtake_line_static_fallback_entry_motion_guard_enabled: true # keep early static fallback, but reject unobserved full-track entry shifts
   v2x_overtake_line_static_fallback_max_entry_lateral_shift: 1.5 # [m] observed successes=0.68/1.21; failed wall-side entry=3.08
   v2x_overtake_progressive_entry_enabled: true # start a locally valid ShiftOut; replan rear-clear/Return while committed

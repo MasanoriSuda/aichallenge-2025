@@ -1604,6 +1604,42 @@ TEST(V2XOvertakeCoreSpeed, MinimumMotionPassHoldsReleaseAcrossLateralThresholdNo
   EXPECT_FALSE(resolution.front_cap_state_update_required);
 }
 
+TEST(V2XOvertakeCoreSpeed, MinimumMotionPassHoldsPhysicalLeaseInsideRobustMargin)
+{
+  CommittedPassPolicyRequest request;
+  request.pass_phase = true;
+  request.lateral_complete = true;
+  request.execution_horizon_unconstrained = true;
+  request.execution_path_physically_feasible = true;
+  request.minimum_motion_corridor_active = true;
+  request.current_body_footprints_physically_separated = true;
+  request.current_body_footprints_separated = false;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_physically_separated = true;
+  request.predicted_body_footprint_sweep_separated = false;
+  request.prior_front_cap_release_active = true;
+  request.target_seen = true;
+  request.target_longitudinal_m = 3.0;
+
+  auto resolution = resolve_committed_pass_policy(request);
+  EXPECT_TRUE(resolution.minimum_motion_physical_clear_hold_active);
+  EXPECT_TRUE(resolution.minimum_motion_footprint_hold_active);
+  EXPECT_TRUE(resolution.front_cap_release_ready);
+  EXPECT_FALSE(resolution.front_cap_state_update_required);
+
+  // A confirmed physical sweep overlap still revokes the lease. The robust
+  // preferred margin is soft after acquisition; the actual body boundary is not.
+  request.predicted_body_footprint_sweep_physically_separated = false;
+  request.predicted_body_footprint_overlap_confirmed = true;
+  resolution = resolve_committed_pass_policy(request);
+  EXPECT_FALSE(resolution.minimum_motion_physical_clear_hold_active);
+  EXPECT_FALSE(resolution.front_cap_release_ready);
+  EXPECT_TRUE(resolution.front_cap_state_update_required);
+  EXPECT_EQ(
+    resolution.transition_reason,
+    CommittedPassFrontCapTransitionReason::PredictedFootprintOverlap);
+}
+
 TEST(V2XOvertakeCoreSpeed, MinimumMotionPassReappliesForPredictedOrCurrentOverlap)
 {
   CommittedPassPolicyRequest request;
@@ -6594,6 +6630,51 @@ TEST(V2XOvertakeCoreWall, RuntimePreplanRequestsThenReplacesFreshSameSide)
   ASSERT_TRUE(resolution.valid);
   EXPECT_EQ(
     resolution.action, RuntimeWallPreplanAction::RequestFreshSameSideCandidate);
+}
+
+TEST(V2XOvertakeCoreWall, RuntimePreplanFallsBackToContractionThenReturn)
+{
+  RuntimeWallPreplanRequest request;
+  request.enabled = true;
+  request.active_execution = true;
+  request.warning_margin_blocked = true;
+  request.target_continuous = true;
+  request.current_body_separated = true;
+  request.target_prediction_valid = true;
+  request.mission_side_sign = 1;
+  request.now_sec = 10.0;
+  request.cooldown_sec = 0.5;
+  request.warning_elapsed_sec = 0.10;
+  request.fallback_delay_sec = 0.15;
+  request.maximum_replan_count = 2;
+  request.center_contraction_available = true;
+  request.speed_preserving_return_available = true;
+
+  EXPECT_EQ(
+    resolve_runtime_wall_preplan(request).action,
+    RuntimeWallPreplanAction::RequestFreshSameSideCandidate);
+
+  request.warning_elapsed_sec = 0.15;
+  EXPECT_EQ(
+    resolve_runtime_wall_preplan(request).action,
+    RuntimeWallPreplanAction::ContractTowardCenter);
+
+  request.center_contraction_available = false;
+  EXPECT_EQ(
+    resolve_runtime_wall_preplan(request).action,
+    RuntimeWallPreplanAction::ReturnToBaseLine);
+
+  request.center_contraction_available = true;
+  request.replan_count = request.maximum_replan_count;
+  EXPECT_EQ(
+    resolve_runtime_wall_preplan(request).action,
+    RuntimeWallPreplanAction::ReturnToBaseLine);
+
+  request.replan_count = 1;
+  request.last_replan_sec = 9.9;
+  EXPECT_EQ(
+    resolve_runtime_wall_preplan(request).action,
+    RuntimeWallPreplanAction::ReturnToBaseLine);
 }
 
 TEST(V2XOvertakeCoreWall, RuntimePreplanNeverOverridesHardWallOrBounds)

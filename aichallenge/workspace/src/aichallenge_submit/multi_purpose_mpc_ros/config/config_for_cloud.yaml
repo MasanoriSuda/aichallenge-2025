@@ -601,7 +601,7 @@ mpc:
   v2x_overtake_safe_separation_dynamic_completion_extension_enabled: true # use live rear-clear estimate after the fixed extension count is exhausted
   v2x_overtake_pass_completion_speed_coupling_enabled: true # predict rear-clear with the full-speed policy that an already separated Pass will execute
   v2x_overtake_mpcc_lite_shadow_enabled: true # Phase 1: compare left/right/hold/Return without changing control or FSM
-  v2x_overtake_mpcc_lite_shadow_evaluation_interval_sec: 0.125 # [s] 8 Hz tactical shadow evaluation
+  v2x_overtake_mpcc_lite_shadow_evaluation_interval_sec: 1.0 # [s] 1 Hz diagnostic shadow evaluation; no control authority yet
   v2x_overtake_mpcc_lite_shadow_log_interval_sec: 1.0 # [s] periodic log; recommendation changes log immediately
   v2x_overtake_mpcc_lite_shadow_last_feasible_max_age_sec: 0.50 # [s] diagnostic hold only; never controls the vehicle
   v2x_overtake_safe_separation_soft_prediction_grace_sec: 0.25 # [s] prediction-only loss grace after committed forward completion; hard faults remain immediate

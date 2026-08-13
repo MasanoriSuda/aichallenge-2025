@@ -134,6 +134,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionPathStage;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonLateralRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonLateralSample;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonExecutionLeaseRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonTargetBoundsRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassCompletionRolloutSpeedRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorSample;
@@ -3047,6 +3048,83 @@ TEST(V2XOvertakeCoreSpeed, RejectsInfeasibleRecedingHorizonBounds)
   EXPECT_FALSE(result.valid);
   EXPECT_FALSE(result.feasible);
   EXPECT_TRUE(result.lateral_targets_m.empty());
+}
+
+TEST(V2XOvertakeCoreSpeed, KeepsRobustTargetBoundsWhenTheyFit)
+{
+  const auto result =
+    multi_purpose_mpc_ros::v2x_overtake_core::resolve_receding_horizon_target_bounds(
+    RecedingHorizonTargetBoundsRequest{
+      1, -2.0, 2.0, -1.0, 1.0, 0.0, 0.8, 0.7, 0.6, true});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_FALSE(result.robust_degraded);
+  EXPECT_FALSE(result.physical_separation_used);
+  EXPECT_FALSE(result.trust_region_expanded);
+  EXPECT_NEAR(result.lower_bound_m, 0.8, 1e-9);
+  EXPECT_NEAR(result.upper_bound_m, 1.0, 1e-9);
+}
+
+TEST(V2XOvertakeCoreSpeed, DegradesRobustTargetBoundsToConfiguredSeparation)
+{
+  const auto result =
+    multi_purpose_mpc_ros::v2x_overtake_core::resolve_receding_horizon_target_bounds(
+    RecedingHorizonTargetBoundsRequest{
+      1, -2.0, 2.0, -1.0, 1.0, 0.0, 1.2, 0.9, 0.7, true});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_TRUE(result.robust_degraded);
+  EXPECT_FALSE(result.physical_separation_used);
+  EXPECT_FALSE(result.trust_region_expanded);
+  EXPECT_NEAR(result.applied_center_separation_m, 0.9, 1e-9);
+}
+
+TEST(V2XOvertakeCoreSpeed, DegradesConfiguredTargetBoundsToPhysicalSeparation)
+{
+  const auto result =
+    multi_purpose_mpc_ros::v2x_overtake_core::resolve_receding_horizon_target_bounds(
+    RecedingHorizonTargetBoundsRequest{
+      -1, -0.8, 2.0, -0.8, 1.0, 0.0, 1.2, 0.9, 0.7, true});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_TRUE(result.robust_degraded);
+  EXPECT_TRUE(result.physical_separation_used);
+  EXPECT_FALSE(result.trust_region_expanded);
+  EXPECT_NEAR(result.upper_bound_m, -0.7, 1e-9);
+  EXPECT_NEAR(result.applied_center_separation_m, 0.7, 1e-9);
+}
+
+TEST(V2XOvertakeCoreSpeed, ExpandsTrustRegionOnlyForPhysicalTargetSeparation)
+{
+  const auto result =
+    multi_purpose_mpc_ros::v2x_overtake_core::resolve_receding_horizon_target_bounds(
+    RecedingHorizonTargetBoundsRequest{
+      1, -2.0, 1.0, -1.0, 0.6, 0.0, 1.2, 0.9, 0.7, true});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_TRUE(result.robust_degraded);
+  EXPECT_TRUE(result.physical_separation_used);
+  EXPECT_TRUE(result.trust_region_expanded);
+  EXPECT_NEAR(result.lower_bound_m, 0.7, 1e-9);
+  EXPECT_NEAR(result.upper_bound_m, 1.0, 1e-9);
+}
+
+TEST(V2XOvertakeCoreSpeed, RejectsWhenPhysicalTargetSeparationDoesNotFitWallBounds)
+{
+  auto request = RecedingHorizonTargetBoundsRequest{
+    1, -2.0, 0.6, -1.0, 0.5, 0.0, 1.2, 0.9, 0.7, true};
+  auto result =
+    multi_purpose_mpc_ros::v2x_overtake_core::resolve_receding_horizon_target_bounds(
+    request);
+  EXPECT_FALSE(result.valid);
+
+  request.wall_upper_bound_m = 2.0;
+  request.trust_upper_bound_m = 1.0;
+  request.allow_robust_degradation = false;
+  result =
+    multi_purpose_mpc_ros::v2x_overtake_core::resolve_receding_horizon_target_bounds(
+    request);
+  EXPECT_FALSE(result.valid);
 }
 
 TEST(V2XOvertakeCoreSpeed, RetainsRecentFeasibleRecedingHorizonForSameMission)

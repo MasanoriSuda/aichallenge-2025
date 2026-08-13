@@ -1418,6 +1418,89 @@ RecedingHorizonLateralResolution optimize_receding_horizon_lateral_trajectory(
   return resolution;
 }
 
+RecedingHorizonTargetBoundsResolution resolve_receding_horizon_target_bounds(
+  const RecedingHorizonTargetBoundsRequest & request) noexcept
+{
+  RecedingHorizonTargetBoundsResolution resolution;
+  const auto finite = [](const double value) {return std::isfinite(value);};
+  if (
+    (request.pass_side_sign != -1 && request.pass_side_sign != 1) ||
+    !finite(request.wall_lower_bound_m) || !finite(request.wall_upper_bound_m) ||
+    !finite(request.trust_lower_bound_m) || !finite(request.trust_upper_bound_m) ||
+    !finite(request.target_lateral_m) ||
+    !finite(request.robust_center_separation_m) ||
+    !finite(request.configured_center_separation_m) ||
+    !finite(request.physical_center_separation_m) ||
+    request.wall_upper_bound_m + 1e-9 < request.wall_lower_bound_m ||
+    request.robust_center_separation_m < 0.0 ||
+    request.configured_center_separation_m < 0.0 ||
+    request.physical_center_separation_m < 0.0)
+  {
+    return resolution;
+  }
+
+  const double physical_separation = request.physical_center_separation_m;
+  const double configured_separation = std::max(
+    physical_separation, request.configured_center_separation_m);
+  const double robust_separation = std::max(
+    configured_separation, request.robust_center_separation_m);
+  const auto try_bounds = [&](const double base_lower, const double base_upper,
+      const double separation, const bool degraded, const bool physical,
+      const bool trust_expanded) {
+      if (!finite(base_lower) || !finite(base_upper) || base_upper + 1e-9 < base_lower) {
+        return false;
+      }
+      double lower = base_lower;
+      double upper = base_upper;
+      if (request.pass_side_sign > 0) {
+        lower = std::max(lower, request.target_lateral_m + separation);
+      } else {
+        upper = std::min(upper, request.target_lateral_m - separation);
+      }
+      if (upper + 1e-9 < lower) {
+        return false;
+      }
+      resolution.valid = true;
+      resolution.robust_degraded = degraded;
+      resolution.physical_separation_used = physical;
+      resolution.trust_region_expanded = trust_expanded;
+      resolution.lower_bound_m = lower;
+      resolution.upper_bound_m = upper;
+      resolution.applied_center_separation_m = separation;
+      return true;
+    };
+
+  if (try_bounds(
+      request.trust_lower_bound_m, request.trust_upper_bound_m,
+      robust_separation, false, false, false))
+  {
+    return resolution;
+  }
+  if (!request.allow_robust_degradation) {
+    return resolution;
+  }
+  if (
+    configured_separation + 1e-9 < robust_separation &&
+    try_bounds(
+      request.trust_lower_bound_m, request.trust_upper_bound_m,
+      configured_separation, true, false, false))
+  {
+    return resolution;
+  }
+  if (
+    physical_separation + 1e-9 < configured_separation &&
+    try_bounds(
+      request.trust_lower_bound_m, request.trust_upper_bound_m,
+      physical_separation, true, true, false))
+  {
+    return resolution;
+  }
+  (void)try_bounds(
+    request.wall_lower_bound_m, request.wall_upper_bound_m,
+    physical_separation, true, true, true);
+  return resolution;
+}
+
 RecedingHorizonWarmStartResolution resample_receding_horizon_warm_start(
   const RecedingHorizonWarmStartRequest & request) noexcept
 {

@@ -885,6 +885,39 @@ struct RecedingHorizonLateralResolution
 RecedingHorizonLateralResolution optimize_receding_horizon_lateral_trajectory(
   const RecedingHorizonLateralRequest & request) noexcept;
 
+struct RecedingHorizonTargetBoundsRequest
+{
+  int pass_side_sign{};
+  double wall_lower_bound_m{};
+  double wall_upper_bound_m{};
+  double trust_lower_bound_m{};
+  double trust_upper_bound_m{};
+  double target_lateral_m{};
+  double robust_center_separation_m{};
+  double configured_center_separation_m{};
+  double physical_center_separation_m{};
+  bool allow_robust_degradation{false};
+};
+
+struct RecedingHorizonTargetBoundsResolution
+{
+  bool valid{false};
+  bool robust_degraded{false};
+  bool physical_separation_used{false};
+  bool trust_region_expanded{false};
+  double lower_bound_m{};
+  double upper_bound_m{};
+  double applied_center_separation_m{};
+};
+
+/// Apply target-side separation to one live-horizon sample. Robust planning
+/// reserve is preferred, but it may degrade through configured separation to
+/// physical body separation when the selected side still fits inside the
+/// wall-feasible bounds. The trust region is not a physical guard and may be expanded
+/// only for the final physical-separation attempt.
+RecedingHorizonTargetBoundsResolution resolve_receding_horizon_target_bounds(
+  const RecedingHorizonTargetBoundsRequest & request) noexcept;
+
 struct RecedingHorizonWarmStartRequest
 {
   double forward_progress_m{};

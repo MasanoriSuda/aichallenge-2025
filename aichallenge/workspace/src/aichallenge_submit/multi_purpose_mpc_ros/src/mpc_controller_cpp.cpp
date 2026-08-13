@@ -1505,7 +1505,7 @@ struct OvertakeLineConfig
   bool safe_separation_dynamic_completion_extension_enabled{false};
   bool pass_completion_speed_coupling_enabled{false};
   bool mpcc_lite_shadow_enabled{false};
-  double mpcc_lite_shadow_evaluation_interval_sec{0.125};
+  double mpcc_lite_shadow_evaluation_interval_sec{1.0};
   double mpcc_lite_shadow_log_interval_sec{1.0};
   double mpcc_lite_shadow_last_feasible_max_age_sec{0.50};
   double safe_separation_soft_prediction_grace_sec{0.25};
@@ -13797,6 +13797,14 @@ private:
       std::max(0.0, line_cfg.receding_horizon_target_longitudinal_buffer);
     const double significant_curvature = std::max(
       0.0, cfg.v2x_behavior.overtake_max_curvature);
+    const double physical_target_center_separation = std::max(
+      0.0, cfg.v2x_gap.vehicle_radius);
+    const double configured_target_center_separation = std::max(
+      physical_target_center_separation,
+      cfg.v2x_behavior.overtake_line_min_target_separation);
+    bool robust_target_separation_degraded = false;
+    bool physical_target_separation_used = false;
+    bool target_trust_region_expanded = false;
 
     overtake_core::RecedingHorizonLateralRequest request;
     request.enabled = true;
@@ -13824,6 +13832,8 @@ private:
         fail("invalid sample or wall bounds", true);
         return result;
       }
+      const double wall_lower = lower;
+      const double wall_upper = upper;
       lower = std::max(lower, baseline_target - maximum_adjustment);
       upper = std::min(upper, baseline_target + maximum_adjustment);
 
@@ -13840,15 +13850,38 @@ private:
         std::isfinite(target_longitudinal) &&
         std::abs(target_longitudinal) <= target_longitudinal_overlap + kEps;
       if (target_body_overlap_window) {
-        if (overtake_line_state_.pass_side_sign > 0) {
-          lower = std::max(lower, target_lateral + target_center_separation);
-        } else {
-          upper = std::min(upper, target_lateral - target_center_separation);
+        const auto target_bounds =
+          overtake_core::resolve_receding_horizon_target_bounds(
+          overtake_core::RecedingHorizonTargetBoundsRequest{
+            overtake_line_state_.pass_side_sign,
+            wall_lower,
+            wall_upper,
+            lower,
+            upper,
+            target_lateral,
+            target_center_separation,
+            configured_target_center_separation,
+            physical_target_center_separation,
+            line_cfg.robust_clearance_enabled});
+        if (!target_bounds.valid) {
+          fail("physical target separation conflicts with wall bounds", true);
+          return result;
         }
-      }
-      if (upper < lower) {
-        fail("target-side separation conflicts with wall/trust bounds", true);
-        return result;
+        lower = target_bounds.lower_bound_m;
+        upper = target_bounds.upper_bound_m;
+        robust_target_separation_degraded =
+          robust_target_separation_degraded || target_bounds.robust_degraded;
+        physical_target_separation_used =
+          physical_target_separation_used || target_bounds.physical_separation_used;
+        target_trust_region_expanded =
+          target_trust_region_expanded || target_bounds.trust_region_expanded;
+      } else if (upper < lower) {
+        // The trust region is a continuity preference, not a physical guard.
+        // Let the optimizer recover inside the already wall-validated bounds;
+        // the complete trajectory is revalidated below before it can execute.
+        lower = wall_lower;
+        upper = wall_upper;
+        target_trust_region_expanded = true;
       }
 
       double reference = baseline_target;
@@ -13877,6 +13910,20 @@ private:
       request.samples.push_back(
         overtake_core::RecedingHorizonLateralSample{
           distance, lower, upper, reference, clip(warm_start, lower, upper)});
+    }
+
+    if (robust_target_separation_degraded || target_trust_region_expanded) {
+      result.fallback = true;
+      if (physical_target_separation_used) {
+        result.fallback_reason = "robust target separation degraded to physical";
+      } else if (robust_target_separation_degraded) {
+        result.fallback_reason = "robust target separation degraded to configured";
+      } else {
+        result.fallback_reason = "Mission trust region expanded to wall-feasible bounds";
+      }
+      if (target_trust_region_expanded) {
+        result.fallback_reason += "; trust region expanded";
+      }
     }
 
     const auto retain_last_feasible = [&](const char * failure_reason) {
@@ -19401,6 +19448,11 @@ private:
       // the response instead of feeding the impossible legacy line to MPC.
       horizon_evaluation.static_map_physical_infeasible_during_execution = true;
     }
+    const std::string execution_horizon_failure_reason =
+      receding_horizon.hard_infeasible &&
+      !receding_horizon.fallback_reason.empty() ?
+      receding_horizon.fallback_reason :
+      overtake_line_horizon_failure_reason(horizon_evaluation);
     output.receding_horizon_active = receding_horizon.active;
     output.receding_horizon_fallback = receding_horizon.fallback;
     output.receding_horizon_hard_infeasible =
@@ -19803,8 +19855,7 @@ private:
 
     if (!horizon_evaluation.execution_feasible())
     {
-      const char * reason =
-        overtake_line_horizon_failure_reason(horizon_evaluation);
+      const char * reason = execution_horizon_failure_reason.c_str();
       bool rebuild_after_phase_transition = false;
       if (
         rear_clear_confirmed &&
@@ -23546,7 +23597,7 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_line.mpcc_lite_shadow_evaluation_interval_sec = std::max(
     0.05,
     mpc["v2x_overtake_mpcc_lite_shadow_evaluation_interval_sec"] ?
-    mpc["v2x_overtake_mpcc_lite_shadow_evaluation_interval_sec"].as<double>() : 0.125);
+    mpc["v2x_overtake_mpcc_lite_shadow_evaluation_interval_sec"].as<double>() : 1.0);
   cfg.mpc.v2x_behavior.overtake_line.mpcc_lite_shadow_log_interval_sec = std::max(
     0.25,
     mpc["v2x_overtake_mpcc_lite_shadow_log_interval_sec"] ?

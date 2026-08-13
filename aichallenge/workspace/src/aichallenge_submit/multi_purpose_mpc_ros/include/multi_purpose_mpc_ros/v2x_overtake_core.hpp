@@ -2749,6 +2749,8 @@ enum class MpccLiteShadowRejectReason
   HardConstraint,
   InvalidCandidate,
   MissionInfeasible,
+  BodyClearUnchecked,
+  BodyClearInfeasible,
   ProgressiveEntryIncomplete,
   RearClearUnchecked,
   RearClearInfeasible,
@@ -2805,6 +2807,27 @@ struct MpccLiteShadowMissionCandidateRequest
 /// incomplete progressive horizon from physical and remaining-budget faults.
 MpccLiteShadowCandidate build_mpcc_lite_shadow_mission_candidate(
   const MpccLiteShadowMissionCandidateRequest & request) noexcept;
+
+struct MpccLiteRecedingPrefixCandidateRequest
+{
+  MpccLiteShadowBranch branch{MpccLiteShadowBranch::None};
+  bool assessed{false};
+  std::optional<OvertakeMissionCandidate> mission;
+  bool runtime_hard_fault{false};
+  double fallback_wall_clearance_m{};
+  double fallback_target_clearance_m{};
+  /// Terminal progress beyond body-clear. This prevents a short prefix from
+  /// receiving the same score as a completed rear-clear trajectory.
+  double terminal_time_sec{};
+  double terminal_distance_m{};
+};
+
+/// Convert a locally preflighted ShiftOut/body-clear prefix into an MPCC-lite
+/// candidate. Unlike a complete Mission this deliberately does not require
+/// rear-clear or Return to be inside the current horizon. Wall, target,
+/// body-clear and runtime faults remain hard constraints.
+MpccLiteShadowCandidate build_mpcc_lite_receding_prefix_candidate(
+  const MpccLiteRecedingPrefixCandidateRequest & request) noexcept;
 
 struct MpccLiteShadowReturnAdmissionRequest
 {
@@ -2899,6 +2922,47 @@ struct MpccLiteShadowLeaseRequest
 /// leak a Return or opposite-side result into another phase or Mission.
 bool can_reuse_mpcc_lite_shadow_last_feasible(
   const MpccLiteShadowLeaseRequest & request) noexcept;
+
+enum class MpccLiteAuthorityAction
+{
+  None,
+  SelectEntry,
+  KeepCurrent,
+  BeginReturn,
+  ReplaceActive,
+};
+
+const char * to_string(MpccLiteAuthorityAction action) noexcept;
+
+struct MpccLiteAuthorityRequest
+{
+  bool enabled{false};
+  bool resolution_valid{false};
+  bool resolution_found{false};
+  bool runtime_hard_fault{false};
+  bool new_entry_context{false};
+  bool active_mission{false};
+  bool return_active{false};
+  bool return_admitted{false};
+  bool cross_side_replan_admitted{false};
+  bool selected_mission_available{false};
+  bool selected_mission_complete{false};
+  int active_side_sign{0};
+  MpccLiteShadowBranch selected_branch{MpccLiteShadowBranch::None};
+};
+
+struct MpccLiteAuthorityResolution
+{
+  bool valid{false};
+  MpccLiteAuthorityAction action{MpccLiteAuthorityAction::None};
+  int selected_side_sign{0};
+};
+
+/// Give the finite-horizon winner bounded control authority. A local prefix
+/// may start a new entry, but an active cross-side replacement still requires
+/// a complete, atomically preflighted Mission and the existing no-return gate.
+MpccLiteAuthorityResolution resolve_mpcc_lite_authority(
+  const MpccLiteAuthorityRequest & request) noexcept;
 
 enum class OvertakeSideRetryFailureClass
 {

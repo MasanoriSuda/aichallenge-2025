@@ -5005,6 +5005,10 @@ const char * to_string(const MpccLiteShadowRejectReason reason) noexcept
       return "invalid_candidate";
     case MpccLiteShadowRejectReason::MissionInfeasible:
       return "mission_infeasible";
+    case MpccLiteShadowRejectReason::BodyClearUnchecked:
+      return "body_clear_unchecked";
+    case MpccLiteShadowRejectReason::BodyClearInfeasible:
+      return "body_clear_infeasible";
     case MpccLiteShadowRejectReason::ProgressiveEntryIncomplete:
       return "progressive_entry_incomplete";
     case MpccLiteShadowRejectReason::RearClearUnchecked:
@@ -5124,6 +5128,94 @@ MpccLiteShadowCandidate build_mpcc_lite_shadow_mission_candidate(
     request.safe_separation_distance_remaining_m + kEpsilon))
   {
     return reject(MpccLiteShadowRejectReason::SafeSeparationDistanceBudget);
+  }
+  candidate.hard_feasible = true;
+  candidate.admission_reject_reason = MpccLiteShadowRejectReason::None;
+  return candidate;
+}
+
+MpccLiteShadowCandidate build_mpcc_lite_receding_prefix_candidate(
+  const MpccLiteRecedingPrefixCandidateRequest & request) noexcept
+{
+  MpccLiteShadowCandidate candidate;
+  candidate.branch = request.branch;
+  candidate.assessed = request.assessed;
+  const auto reject = [&](const MpccLiteShadowRejectReason reason) {
+      candidate.admission_reject_reason = reason;
+      return candidate;
+    };
+  if (request.branch == MpccLiteShadowBranch::None) {
+    return reject(MpccLiteShadowRejectReason::InvalidCandidate);
+  }
+  if (!request.assessed) {
+    return reject(MpccLiteShadowRejectReason::Unavailable);
+  }
+  if (!request.mission.has_value()) {
+    return reject(MpccLiteShadowRejectReason::PlanningUnavailable);
+  }
+  if (
+    !std::isfinite(request.terminal_time_sec) || request.terminal_time_sec < 0.0 ||
+    !std::isfinite(request.terminal_distance_m) || request.terminal_distance_m < 0.0)
+  {
+    return reject(MpccLiteShadowRejectReason::InvalidCandidate);
+  }
+
+  const auto & mission = request.mission.value();
+  candidate.available = true;
+  candidate.rear_clear_required = true;
+  candidate.rear_clear_feasible = mission.body_clear_deadline_feasible;
+  candidate.predicted_rear_clear_time_sec =
+    mission.predicted_body_clear_time_sec + request.terminal_time_sec;
+  candidate.predicted_rear_clear_distance_m =
+    mission.predicted_body_clear_distance_m + request.terminal_distance_m;
+  candidate.predicted_minimum_speed_mps = mission.predicted_minimum_ego_speed_mps;
+  const auto finite_reserve = [](const double metric, const double fallback) {
+      return std::isfinite(metric) ? std::max(0.0, metric) : std::max(0.0, fallback);
+    };
+  candidate.minimum_wall_clearance_m = std::min(
+    finite_reserve(mission.minimum_path_wall_clearance_m, request.fallback_wall_clearance_m),
+    0.5 * finite_reserve(
+      mission.minimum_path_corridor_width_m,
+      2.0 * request.fallback_wall_clearance_m));
+  candidate.minimum_target_clearance_m = finite_reserve(
+    mission.predicted_minimum_pass_target_surface_clearance_m,
+    request.fallback_target_clearance_m);
+  candidate.maximum_lateral_accel_mps2 = mission.max_required_lateral_accel_mps2;
+  candidate.lateral_motion_m = mission.lateral_shift_m;
+
+  if (!mission.feasible) {
+    return reject(MpccLiteShadowRejectReason::MissionInfeasible);
+  }
+  if (!mission.body_clear_deadline_checked) {
+    return reject(MpccLiteShadowRejectReason::BodyClearUnchecked);
+  }
+  if (!mission.body_clear_deadline_feasible) {
+    return reject(MpccLiteShadowRejectReason::BodyClearInfeasible);
+  }
+  if (!mission.pass_target_clearance_checked) {
+    return reject(MpccLiteShadowRejectReason::TargetClearanceUnchecked);
+  }
+  if (
+    !std::isfinite(mission.predicted_minimum_pass_target_surface_clearance_m) ||
+    mission.predicted_minimum_pass_target_surface_clearance_m < -1e-9)
+  {
+    return reject(MpccLiteShadowRejectReason::HardConstraint);
+  }
+  if (request.runtime_hard_fault) {
+    return reject(MpccLiteShadowRejectReason::RuntimeHardFault);
+  }
+  const bool numeric_valid =
+    std::isfinite(candidate.predicted_rear_clear_time_sec) &&
+    candidate.predicted_rear_clear_time_sec >= 0.0 &&
+    std::isfinite(candidate.predicted_rear_clear_distance_m) &&
+    candidate.predicted_rear_clear_distance_m >= 0.0 &&
+    std::isfinite(candidate.predicted_minimum_speed_mps) &&
+    candidate.predicted_minimum_speed_mps >= 0.0 &&
+    std::isfinite(candidate.maximum_lateral_accel_mps2) &&
+    candidate.maximum_lateral_accel_mps2 >= 0.0 &&
+    std::isfinite(candidate.lateral_motion_m) && candidate.lateral_motion_m >= 0.0;
+  if (!numeric_valid) {
+    return reject(MpccLiteShadowRejectReason::InvalidCandidate);
   }
   candidate.hard_feasible = true;
   candidate.admission_reject_reason = MpccLiteShadowRejectReason::None;
@@ -5310,6 +5402,83 @@ bool can_reuse_mpcc_lite_shadow_last_feasible(
          request.now_sec + 1e-9 >= request.last_feasible_sec &&
          request.now_sec - request.last_feasible_sec <=
          request.maximum_age_sec + 1e-9;
+}
+
+const char * to_string(const MpccLiteAuthorityAction action) noexcept
+{
+  switch (action) {
+    case MpccLiteAuthorityAction::None:
+      return "none";
+    case MpccLiteAuthorityAction::SelectEntry:
+      return "entry";
+    case MpccLiteAuthorityAction::KeepCurrent:
+      return "hold";
+    case MpccLiteAuthorityAction::BeginReturn:
+      return "return";
+    case MpccLiteAuthorityAction::ReplaceActive:
+      return "replace";
+  }
+  return "unknown";
+}
+
+MpccLiteAuthorityResolution resolve_mpcc_lite_authority(
+  const MpccLiteAuthorityRequest & request) noexcept
+{
+  MpccLiteAuthorityResolution resolution;
+  const auto branch_side = [](const MpccLiteShadowBranch branch) {
+      return branch == MpccLiteShadowBranch::Left ? 1 :
+             branch == MpccLiteShadowBranch::Right ? -1 : 0;
+    };
+  const bool active_side_valid =
+    request.active_side_sign == -1 || request.active_side_sign == 0 ||
+    request.active_side_sign == 1;
+  if (!active_side_valid) {
+    return resolution;
+  }
+  resolution.valid = true;
+  if (
+    !request.enabled || !request.resolution_valid || !request.resolution_found ||
+    request.runtime_hard_fault)
+  {
+    return resolution;
+  }
+
+  const int selected_side = branch_side(request.selected_branch);
+  if (request.new_entry_context) {
+    if (selected_side != 0 && request.selected_mission_available) {
+      resolution.action = MpccLiteAuthorityAction::SelectEntry;
+      resolution.selected_side_sign = selected_side;
+    }
+    return resolution;
+  }
+  if (!request.active_mission) {
+    return resolution;
+  }
+  if (
+    request.selected_branch == MpccLiteShadowBranch::CurrentSideHold &&
+    request.active_side_sign != 0)
+  {
+    resolution.action = MpccLiteAuthorityAction::KeepCurrent;
+    resolution.selected_side_sign = request.active_side_sign;
+    return resolution;
+  }
+  if (
+    request.selected_branch == MpccLiteShadowBranch::Return &&
+    (request.return_active || request.return_admitted))
+  {
+    resolution.action = MpccLiteAuthorityAction::BeginReturn;
+    resolution.selected_side_sign = request.active_side_sign;
+    return resolution;
+  }
+  if (
+    selected_side != 0 && selected_side != request.active_side_sign &&
+    request.cross_side_replan_admitted && request.selected_mission_available &&
+    request.selected_mission_complete)
+  {
+    resolution.action = MpccLiteAuthorityAction::ReplaceActive;
+    resolution.selected_side_sign = selected_side;
+  }
+  return resolution;
 }
 
 bool should_arm_overtake_side_retry_block(

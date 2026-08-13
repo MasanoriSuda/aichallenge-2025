@@ -13384,4 +13384,118 @@ TEST(V2XOvertakeCoreMpccLiteShadow, LastFeasibleLeaseIsScopedToExactMissionConte
   EXPECT_FALSE(can_reuse_mpcc_lite_shadow_last_feasible(request));
 }
 
+TEST(V2XOvertakeCoreMpccLite, AdmitsLocallyValidatedRecedingPrefix)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::MpccLiteRecedingPrefixCandidateRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::MpccLiteShadowBranch;
+  using multi_purpose_mpc_ros::v2x_overtake_core::MpccLiteShadowRejectReason;
+  using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidate;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    build_mpcc_lite_receding_prefix_candidate;
+
+  OvertakeMissionCandidate mission;
+  mission.feasible = true;
+  mission.progressive_entry = true;
+  mission.body_clear_deadline_checked = true;
+  mission.body_clear_deadline_feasible = true;
+  mission.predicted_body_clear_time_sec = 1.25;
+  mission.predicted_body_clear_distance_m = 4.0;
+  mission.predicted_minimum_ego_speed_mps = 3.5;
+  mission.pass_target_clearance_checked = true;
+  mission.predicted_minimum_pass_target_surface_clearance_m = 0.18;
+  mission.minimum_path_wall_clearance_m = 0.22;
+  mission.minimum_path_corridor_width_m = 0.60;
+  mission.max_required_lateral_accel_mps2 = 3.0;
+  mission.lateral_shift_m = 0.45;
+
+  MpccLiteRecedingPrefixCandidateRequest request;
+  request.branch = MpccLiteShadowBranch::Left;
+  request.assessed = true;
+  request.mission = mission;
+  request.fallback_wall_clearance_m = 0.20;
+  request.fallback_target_clearance_m = 0.10;
+  request.terminal_time_sec = 0.75;
+  request.terminal_distance_m = 2.0;
+
+  auto candidate = build_mpcc_lite_receding_prefix_candidate(request);
+  EXPECT_TRUE(candidate.available);
+  EXPECT_TRUE(candidate.hard_feasible);
+  EXPECT_TRUE(candidate.rear_clear_required);
+  EXPECT_TRUE(candidate.rear_clear_feasible);
+  EXPECT_DOUBLE_EQ(candidate.predicted_rear_clear_time_sec, 2.0);
+  EXPECT_DOUBLE_EQ(candidate.predicted_rear_clear_distance_m, 6.0);
+  EXPECT_EQ(candidate.admission_reject_reason, MpccLiteShadowRejectReason::None);
+
+  request.mission->body_clear_deadline_checked = false;
+  candidate = build_mpcc_lite_receding_prefix_candidate(request);
+  EXPECT_EQ(
+    candidate.admission_reject_reason,
+    MpccLiteShadowRejectReason::BodyClearUnchecked);
+
+  request.mission->body_clear_deadline_checked = true;
+  request.mission->pass_target_clearance_checked = false;
+  candidate = build_mpcc_lite_receding_prefix_candidate(request);
+  EXPECT_EQ(
+    candidate.admission_reject_reason,
+    MpccLiteShadowRejectReason::TargetClearanceUnchecked);
+
+  request.mission->pass_target_clearance_checked = true;
+  request.mission->predicted_minimum_pass_target_surface_clearance_m = -0.01;
+  candidate = build_mpcc_lite_receding_prefix_candidate(request);
+  EXPECT_EQ(
+    candidate.admission_reject_reason,
+    MpccLiteShadowRejectReason::HardConstraint);
+
+  request.mission->predicted_minimum_pass_target_surface_clearance_m = 0.18;
+  request.runtime_hard_fault = true;
+  candidate = build_mpcc_lite_receding_prefix_candidate(request);
+  EXPECT_EQ(
+    candidate.admission_reject_reason,
+    MpccLiteShadowRejectReason::RuntimeHardFault);
+}
+
+TEST(V2XOvertakeCoreMpccLite, BoundsExecutionAuthorityByMissionStage)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::MpccLiteAuthorityAction;
+  using multi_purpose_mpc_ros::v2x_overtake_core::MpccLiteAuthorityRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::MpccLiteShadowBranch;
+  using multi_purpose_mpc_ros::v2x_overtake_core::resolve_mpcc_lite_authority;
+
+  MpccLiteAuthorityRequest request;
+  request.enabled = true;
+  request.resolution_valid = true;
+  request.resolution_found = true;
+  request.new_entry_context = true;
+  request.selected_mission_available = true;
+  request.selected_branch = MpccLiteShadowBranch::Right;
+
+  auto resolution = resolve_mpcc_lite_authority(request);
+  EXPECT_TRUE(resolution.valid);
+  EXPECT_EQ(resolution.action, MpccLiteAuthorityAction::SelectEntry);
+  EXPECT_EQ(resolution.selected_side_sign, -1);
+
+  request.new_entry_context = false;
+  request.active_mission = true;
+  request.active_side_sign = 1;
+  resolution = resolve_mpcc_lite_authority(request);
+  EXPECT_EQ(resolution.action, MpccLiteAuthorityAction::None);
+
+  request.cross_side_replan_admitted = true;
+  request.selected_mission_complete = true;
+  resolution = resolve_mpcc_lite_authority(request);
+  EXPECT_EQ(resolution.action, MpccLiteAuthorityAction::ReplaceActive);
+  EXPECT_EQ(resolution.selected_side_sign, -1);
+
+  request.selected_branch = MpccLiteShadowBranch::CurrentSideHold;
+  request.cross_side_replan_admitted = false;
+  request.selected_mission_complete = false;
+  resolution = resolve_mpcc_lite_authority(request);
+  EXPECT_EQ(resolution.action, MpccLiteAuthorityAction::KeepCurrent);
+  EXPECT_EQ(resolution.selected_side_sign, 1);
+
+  request.runtime_hard_fault = true;
+  resolution = resolve_mpcc_lite_authority(request);
+  EXPECT_EQ(resolution.action, MpccLiteAuthorityAction::None);
+}
+
 }  // namespace

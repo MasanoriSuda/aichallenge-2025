@@ -1736,6 +1736,32 @@ bool can_retain_receding_horizon_execution_lease(
          request.maximum_age_sec + 1e-9;
 }
 
+bool can_hold_target_bound_pass_for_replan(
+  const TargetBoundPassHoldRequest & request) noexcept
+{
+  const bool current_geometry_recoverable =
+    request.current_body_footprints_separated ||
+    request.recoverable_side_contact_active;
+  if (
+    !request.enabled || !request.pass_phase || !request.mission_path_frozen ||
+    !request.target_bound_failure || !request.physical_hold_path_feasible ||
+    !request.target_progress_continuous || request.target_position_jump ||
+    request.target_course_progress_rejected || !current_geometry_recoverable ||
+    request.actual_wall_contact || request.actual_wall_margin_blocked ||
+    request.actual_wall_sample_unavailable || request.emergency_front_risk ||
+    request.solver_recovery_requested || request.explicit_forbidden_waypoint ||
+    !std::isfinite(request.hold_elapsed_sec) || request.hold_elapsed_sec < 0.0 ||
+    !std::isfinite(request.hold_traveled_m) || request.hold_traveled_m < 0.0 ||
+    !std::isfinite(request.maximum_hold_sec) || request.maximum_hold_sec <= 0.0 ||
+    !std::isfinite(request.maximum_hold_distance_m) ||
+    request.maximum_hold_distance_m <= 0.0)
+  {
+    return false;
+  }
+  return request.hold_elapsed_sec < request.maximum_hold_sec - 1e-9 &&
+         request.hold_traveled_m < request.maximum_hold_distance_m - 1e-9;
+}
+
 OvertakeBodyClearDeadlineResolution resolve_overtake_body_clear_deadline(
   const OvertakeBodyClearDeadlineRequest & request) noexcept
 {

@@ -1066,6 +1066,38 @@ struct RecedingHorizonExecutionLeaseRequest
 bool can_retain_receding_horizon_execution_lease(
   const RecedingHorizonExecutionLeaseRequest & request) noexcept;
 
+struct TargetBoundPassHoldRequest
+{
+  bool enabled{false};
+  bool pass_phase{false};
+  bool mission_path_frozen{false};
+  bool target_bound_failure{false};
+  bool physical_hold_path_feasible{false};
+  bool target_progress_continuous{false};
+  bool target_position_jump{false};
+  bool target_course_progress_rejected{false};
+  bool current_body_footprints_separated{false};
+  bool recoverable_side_contact_active{false};
+  bool actual_wall_contact{false};
+  bool actual_wall_margin_blocked{false};
+  bool actual_wall_sample_unavailable{false};
+  bool emergency_front_risk{false};
+  bool solver_recovery_requested{false};
+  bool explicit_forbidden_waypoint{false};
+  double hold_elapsed_sec{};
+  double hold_traveled_m{};
+  double maximum_hold_sec{};
+  double maximum_hold_distance_m{};
+};
+
+/// Keep a physically feasible same-side Pass prefix while a target-only
+/// receding-horizon conflict is re-optimized. This is deliberately narrower
+/// than the generic continuity lease: predicted target overlap may trigger the
+/// hold, but non-recoverable body overlap and every wall/front hard fault stay
+/// closed. A separately qualified recoverable side contact may continue.
+bool can_hold_target_bound_pass_for_replan(
+  const TargetBoundPassHoldRequest & request) noexcept;
+
 struct OvertakeBodyClearDeadlineRequest
 {
   bool enabled{false};

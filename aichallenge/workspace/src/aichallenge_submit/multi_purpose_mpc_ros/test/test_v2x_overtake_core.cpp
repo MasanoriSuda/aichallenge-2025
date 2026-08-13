@@ -135,6 +135,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionPathStage;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonLateralRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonLateralSample;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonExecutionLeaseRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::TargetBoundPassHoldRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonTargetBoundsRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonElasticTargetBoundsRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonTargetPredictionRequest;
@@ -416,6 +417,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_entry_stage;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   can_retain_receding_horizon_execution_lease;
+using multi_purpose_mpc_ros::v2x_overtake_core::can_hold_target_bound_pass_for_replan;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_completion_rollout_speed;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_rearward_pass_completion_context;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_observe_locked_target_geometry;
@@ -3308,6 +3310,56 @@ TEST(V2XOvertakeCoreSpeed, RecedingHorizonLeaseCannotBypassHardFaults)
   request.target_position_jump = false;
   request.execution_corridor_blocked = true;
   EXPECT_FALSE(can_retain_receding_horizon_execution_lease(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, HoldsPhysicalPassPrefixAcrossTargetOnlyConflict)
+{
+  TargetBoundPassHoldRequest request;
+  request.enabled = true;
+  request.pass_phase = true;
+  request.mission_path_frozen = true;
+  request.target_bound_failure = true;
+  request.physical_hold_path_feasible = true;
+  request.target_progress_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.hold_elapsed_sec = 0.20;
+  request.hold_traveled_m = 1.0;
+  request.maximum_hold_sec = 0.30;
+  request.maximum_hold_distance_m = 3.0;
+
+  EXPECT_TRUE(can_hold_target_bound_pass_for_replan(request));
+
+  request.hold_elapsed_sec = 0.30;
+  EXPECT_FALSE(can_hold_target_bound_pass_for_replan(request));
+  request.hold_elapsed_sec = 0.20;
+  request.hold_traveled_m = 3.0;
+  EXPECT_FALSE(can_hold_target_bound_pass_for_replan(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, TargetBoundPassHoldCannotBypassHardFaults)
+{
+  TargetBoundPassHoldRequest request;
+  request.enabled = true;
+  request.pass_phase = true;
+  request.mission_path_frozen = true;
+  request.target_bound_failure = true;
+  request.physical_hold_path_feasible = true;
+  request.target_progress_continuous = true;
+  request.recoverable_side_contact_active = true;
+  request.hold_elapsed_sec = 0.10;
+  request.hold_traveled_m = 0.5;
+  request.maximum_hold_sec = 0.30;
+  request.maximum_hold_distance_m = 3.0;
+  ASSERT_TRUE(can_hold_target_bound_pass_for_replan(request));
+
+  request.actual_wall_margin_blocked = true;
+  EXPECT_FALSE(can_hold_target_bound_pass_for_replan(request));
+  request.actual_wall_margin_blocked = false;
+  request.emergency_front_risk = true;
+  EXPECT_FALSE(can_hold_target_bound_pass_for_replan(request));
+  request.emergency_front_risk = false;
+  request.target_position_jump = true;
+  EXPECT_FALSE(can_hold_target_bound_pass_for_replan(request));
 }
 
 TEST(V2XOvertakeCoreSpeed, TightensPassGoalForDynamicShiftOutCorridor)

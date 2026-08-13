@@ -13650,6 +13650,11 @@ TEST(V2XOvertakeCoreMpccLite, BoundsExecutionAuthorityByMissionStage)
   EXPECT_TRUE(resolution.valid);
   EXPECT_EQ(resolution.action, MpccLiteAuthorityAction::None);
 
+  request.selected_prefix_execution_admitted = true;
+  resolution = resolve_mpcc_lite_authority(request);
+  EXPECT_EQ(resolution.action, MpccLiteAuthorityAction::None);
+
+  request.selected_prefix_execution_admitted = false;
   request.selected_mission_complete = true;
   resolution = resolve_mpcc_lite_authority(request);
   EXPECT_EQ(resolution.action, MpccLiteAuthorityAction::SelectEntry);
@@ -13662,13 +13667,15 @@ TEST(V2XOvertakeCoreMpccLite, BoundsExecutionAuthorityByMissionStage)
   EXPECT_EQ(resolution.action, MpccLiteAuthorityAction::None);
 
   request.cross_side_replan_admitted = true;
-  request.selected_mission_complete = true;
+  request.selected_mission_complete = false;
+  request.selected_prefix_execution_admitted = true;
   resolution = resolve_mpcc_lite_authority(request);
   EXPECT_EQ(resolution.action, MpccLiteAuthorityAction::ReplaceActive);
   EXPECT_EQ(resolution.selected_side_sign, -1);
 
   request.selected_branch = MpccLiteShadowBranch::CurrentSideHold;
   request.cross_side_replan_admitted = false;
+  request.selected_prefix_execution_admitted = false;
   request.selected_mission_complete = false;
   resolution = resolve_mpcc_lite_authority(request);
   EXPECT_EQ(resolution.action, MpccLiteAuthorityAction::KeepCurrent);
@@ -13689,6 +13696,67 @@ TEST(V2XOvertakeCoreMpccLite, BoundsExecutionAuthorityByMissionStage)
   request.runtime_hard_fault = true;
   resolution = resolve_mpcc_lite_authority(request);
   EXPECT_EQ(resolution.action, MpccLiteAuthorityAction::None);
+}
+
+TEST(V2XOvertakeCoreMpccLite, AdmitsOnlyBoundedHardFeasibleExecutionPrefix)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    MpccLitePrefixExecutionRejectReason;
+  using multi_purpose_mpc_ros::v2x_overtake_core::MpccLitePrefixExecutionRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_mpcc_lite_prefix_execution;
+
+  MpccLitePrefixExecutionRequest request;
+  request.active_execution = true;
+  request.before_no_return = true;
+  request.candidate_progressive = true;
+  request.candidate_feasible = true;
+  request.body_clear_deadline_checked = true;
+  request.body_clear_deadline_feasible = true;
+  request.target_clearance_checked = true;
+  request.minimum_target_surface_clearance_m = 0.18;
+  request.predicted_body_clear_time_sec = 1.2;
+  request.predicted_body_clear_distance_m = 6.0;
+  request.predicted_minimum_ego_speed_mps = 4.8;
+  request.minimum_ego_speed_mps = 4.5;
+  request.minimum_path_wall_clearance_m = 0.45;
+  request.minimum_required_path_wall_clearance_m = 0.35;
+  request.remaining_time_budget_sec = 4.0;
+  request.remaining_distance_budget_m = 20.0;
+  request.pass_phase = true;
+
+  auto resolution = resolve_mpcc_lite_prefix_execution(request);
+  EXPECT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.admitted);
+  EXPECT_TRUE(resolution.restart_shiftout);
+  EXPECT_EQ(resolution.reason, MpccLitePrefixExecutionRejectReason::Admitted);
+
+  request.safe_separation_active = true;
+  resolution = resolve_mpcc_lite_prefix_execution(request);
+  EXPECT_FALSE(resolution.admitted);
+  EXPECT_EQ(resolution.reason, MpccLitePrefixExecutionRejectReason::SafeSeparation);
+
+  request.safe_separation_active = false;
+  request.minimum_target_surface_clearance_m = -0.01;
+  resolution = resolve_mpcc_lite_prefix_execution(request);
+  EXPECT_FALSE(resolution.admitted);
+  EXPECT_EQ(
+    resolution.reason,
+    MpccLitePrefixExecutionRejectReason::TargetClearanceInfeasible);
+
+  request.minimum_target_surface_clearance_m = 0.18;
+  request.minimum_path_wall_clearance_m = 0.30;
+  resolution = resolve_mpcc_lite_prefix_execution(request);
+  EXPECT_FALSE(resolution.admitted);
+  EXPECT_EQ(
+    resolution.reason,
+    MpccLitePrefixExecutionRejectReason::WallReserveInsufficient);
+
+  request.minimum_path_wall_clearance_m = 0.45;
+  request.predicted_body_clear_time_sec = 4.1;
+  resolution = resolve_mpcc_lite_prefix_execution(request);
+  EXPECT_FALSE(resolution.admitted);
+  EXPECT_EQ(resolution.reason, MpccLitePrefixExecutionRejectReason::TimeBudgetExceeded);
 }
 
 }  // namespace

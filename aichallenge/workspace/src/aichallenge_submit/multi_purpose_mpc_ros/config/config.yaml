@@ -763,6 +763,7 @@ mpc:
   v2x_overtake_opponent_side_replan_dynamic_ranking_enabled: true
   v2x_overtake_opponent_side_replan_min_rear_clear_time_advantage_sec: 1.0 # [s]
   v2x_overtake_opponent_side_replan_min_progress_score_advantage: 0.35
+  v2x_overtake_mpcc_lite_decisive_cross_side_score_advantage: 1.0 # one hard-feasible prefix can commit when it decisively beats hold
   v2x_overtake_opponent_side_replan_max_reserve_regression: 0.05 # [m]
   v2x_overtake_opponent_side_replan_max_rear_clear_time_regression_sec: 0.25 # [s]
   v2x_overtake_opponent_side_replan_max_minimum_speed_regression: 0.25 # [m/s]

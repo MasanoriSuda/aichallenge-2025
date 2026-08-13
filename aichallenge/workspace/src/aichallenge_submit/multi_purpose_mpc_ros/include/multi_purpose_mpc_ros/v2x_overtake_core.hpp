@@ -2919,6 +2919,67 @@ struct MpccLiteRecedingPrefixCandidateRequest
 MpccLiteShadowCandidate build_mpcc_lite_receding_prefix_candidate(
   const MpccLiteRecedingPrefixCandidateRequest & request) noexcept;
 
+enum class MpccLitePrefixExecutionRejectReason
+{
+  None,
+  Inactive,
+  NoReturn,
+  SafeSeparation,
+  NotProgressive,
+  CandidateInfeasible,
+  BodyClearUnchecked,
+  BodyClearInfeasible,
+  TargetClearanceUnchecked,
+  TargetClearanceInfeasible,
+  InvalidPrediction,
+  WallReserveInsufficient,
+  TimeBudgetExceeded,
+  DistanceBudgetExceeded,
+  MinimumSpeedInsufficient,
+  Admitted,
+};
+
+struct MpccLitePrefixExecutionRequest
+{
+  bool active_execution{false};
+  bool before_no_return{false};
+  bool safe_separation_active{false};
+  bool candidate_progressive{false};
+  bool candidate_feasible{false};
+  bool body_clear_deadline_checked{false};
+  bool body_clear_deadline_feasible{false};
+  bool target_clearance_checked{false};
+  double minimum_target_surface_clearance_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double predicted_body_clear_time_sec{std::numeric_limits<double>::infinity()};
+  double predicted_body_clear_distance_m{std::numeric_limits<double>::infinity()};
+  double predicted_minimum_ego_speed_mps{std::numeric_limits<double>::quiet_NaN()};
+  double minimum_ego_speed_mps{};
+  double minimum_path_wall_clearance_m{std::numeric_limits<double>::infinity()};
+  double minimum_required_path_wall_clearance_m{};
+  double remaining_time_budget_sec{std::numeric_limits<double>::infinity()};
+  double remaining_distance_budget_m{std::numeric_limits<double>::infinity()};
+  bool pass_phase{false};
+};
+
+struct MpccLitePrefixExecutionResolution
+{
+  bool valid{false};
+  bool admitted{false};
+  bool restart_shiftout{false};
+  MpccLitePrefixExecutionRejectReason reason{
+    MpccLitePrefixExecutionRejectReason::None};
+};
+
+/// Admit a short, hard-feasible receding-horizon prefix without pretending it
+/// contains a rear-clear/Return solution. Its ShiftOut and short same-side
+/// continuation must fit the remaining runtime budget and retain the speed
+/// and physical reserves required at the commit point.
+MpccLitePrefixExecutionResolution resolve_mpcc_lite_prefix_execution(
+  const MpccLitePrefixExecutionRequest & request) noexcept;
+
+const char * to_string(MpccLitePrefixExecutionRejectReason reason) noexcept;
+
 struct MpccLiteShadowReturnAdmissionRequest
 {
   bool phase_relevant{false};
@@ -3038,6 +3099,7 @@ struct MpccLiteAuthorityRequest
   bool cross_side_replan_admitted{false};
   bool selected_mission_available{false};
   bool selected_mission_complete{false};
+  bool selected_prefix_execution_admitted{false};
   int active_side_sign{0};
   MpccLiteShadowBranch selected_branch{MpccLiteShadowBranch::None};
 };
@@ -3049,11 +3111,10 @@ struct MpccLiteAuthorityResolution
   int selected_side_sign{0};
 };
 
-/// Give the finite-horizon winner bounded control authority. A fresh entry and
-/// every active replacement require the same complete rear-clear Mission
-/// contract. Local prefixes remain available for shadow scoring and
-/// longitudinal setup, but cannot acquire lateral execution ownership.
-/// Cross-side replacement additionally retains the existing no-return gate.
+/// Give the finite-horizon winner bounded control authority. Entry and
+/// same-side refresh retain the full rear-clear contract. Before no-return, an
+/// independently admitted receding prefix may own one bounded cross-side
+/// rolling replacement.
 MpccLiteAuthorityResolution resolve_mpcc_lite_authority(
   const MpccLiteAuthorityRequest & request) noexcept;
 

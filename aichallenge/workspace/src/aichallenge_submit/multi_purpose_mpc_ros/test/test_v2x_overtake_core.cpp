@@ -12926,4 +12926,144 @@ TEST(V2XOvertakeCoreCommitStage, ResolvesEntryStageWithExistingPrecedence)
     "validated base racing line already clear");
 }
 
+TEST(V2XOvertakeCoreMpccLiteShadow, SelectsBestCoupledTacticalBranch)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::MpccLiteShadowBranch;
+  using multi_purpose_mpc_ros::v2x_overtake_core::MpccLiteShadowCandidate;
+  using multi_purpose_mpc_ros::v2x_overtake_core::MpccLiteShadowRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_mpcc_lite_shadow;
+
+  const auto candidate = [](const MpccLiteShadowBranch branch) {
+      MpccLiteShadowCandidate value;
+      value.branch = branch;
+      value.available = true;
+      value.hard_feasible = true;
+      value.rear_clear_required = true;
+      value.rear_clear_feasible = true;
+      value.predicted_rear_clear_time_sec = 4.0;
+      value.predicted_rear_clear_distance_m = 16.0;
+      value.predicted_minimum_speed_mps = 6.0;
+      value.minimum_wall_clearance_m = 0.4;
+      value.minimum_target_clearance_m = 0.3;
+      value.maximum_lateral_accel_mps2 = 3.0;
+      value.lateral_motion_m = 1.0;
+      return value;
+    };
+
+  auto left = candidate(MpccLiteShadowBranch::Left);
+  auto right = candidate(MpccLiteShadowBranch::Right);
+  right.predicted_rear_clear_time_sec = 2.0;
+  right.predicted_rear_clear_distance_m = 8.0;
+  right.predicted_minimum_speed_mps = 8.0;
+
+  MpccLiteShadowRequest request;
+  request.enabled = true;
+  request.candidates = {left, right};
+  request.active_branch = MpccLiteShadowBranch::Left;
+  request.rear_clear_time_budget_sec = 8.0;
+  request.rear_clear_distance_budget_m = 32.0;
+  request.reference_speed_mps = 10.0;
+  request.reference_wall_clearance_m = 0.4;
+  request.reference_target_clearance_m = 0.3;
+  request.lateral_motion_scale_m = 2.0;
+  request.maximum_lateral_accel_mps2 = 6.0;
+
+  const auto result = evaluate_mpcc_lite_shadow(request);
+  ASSERT_TRUE(result.valid);
+  ASSERT_TRUE(result.found);
+  EXPECT_EQ(result.best.candidate.branch, MpccLiteShadowBranch::Right);
+  EXPECT_FALSE(result.agrees_with_active_branch);
+  ASSERT_TRUE(result.active_evaluation.has_value());
+  EXPECT_TRUE(result.active_evaluation->hard_feasible);
+}
+
+TEST(V2XOvertakeCoreMpccLiteShadow, RejectsHardFaultAndAdmitsReturn)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::MpccLiteShadowBranch;
+  using multi_purpose_mpc_ros::v2x_overtake_core::MpccLiteShadowCandidate;
+  using multi_purpose_mpc_ros::v2x_overtake_core::MpccLiteShadowRejectReason;
+  using multi_purpose_mpc_ros::v2x_overtake_core::MpccLiteShadowRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_mpcc_lite_shadow;
+
+  MpccLiteShadowCandidate left;
+  left.branch = MpccLiteShadowBranch::Left;
+  left.available = true;
+  left.hard_feasible = false;
+
+  MpccLiteShadowCandidate return_candidate;
+  return_candidate.branch = MpccLiteShadowBranch::Return;
+  return_candidate.available = true;
+  return_candidate.hard_feasible = true;
+  return_candidate.rear_clear_required = false;
+  return_candidate.rear_clear_feasible = true;
+  return_candidate.predicted_minimum_speed_mps = 7.0;
+  return_candidate.minimum_wall_clearance_m = 0.35;
+  return_candidate.minimum_target_clearance_m = 0.5;
+  return_candidate.maximum_lateral_accel_mps2 = 2.0;
+  return_candidate.lateral_motion_m = 0.8;
+
+  MpccLiteShadowRequest request;
+  request.enabled = true;
+  request.candidates = {left, return_candidate};
+  request.active_branch = MpccLiteShadowBranch::CurrentSideHold;
+  request.rear_clear_time_budget_sec = 8.0;
+  request.rear_clear_distance_budget_m = 32.0;
+  request.reference_speed_mps = 10.0;
+  request.reference_wall_clearance_m = 0.4;
+  request.reference_target_clearance_m = 0.3;
+  request.lateral_motion_scale_m = 2.0;
+  request.maximum_lateral_accel_mps2 = 6.0;
+
+  const auto result = evaluate_mpcc_lite_shadow(request);
+  ASSERT_TRUE(result.found);
+  EXPECT_EQ(result.best.candidate.branch, MpccLiteShadowBranch::Return);
+  ASSERT_EQ(result.evaluations.size(), 2U);
+  EXPECT_EQ(
+    result.evaluations.front().reject_reason,
+    MpccLiteShadowRejectReason::HardConstraint);
+}
+
+TEST(V2XOvertakeCoreMpccLiteShadow, PreservesActiveBranchOnEqualScore)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::MpccLiteShadowBranch;
+  using multi_purpose_mpc_ros::v2x_overtake_core::MpccLiteShadowCandidate;
+  using multi_purpose_mpc_ros::v2x_overtake_core::MpccLiteShadowRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_mpcc_lite_shadow;
+
+  MpccLiteShadowCandidate value;
+  value.available = true;
+  value.hard_feasible = true;
+  value.rear_clear_required = true;
+  value.rear_clear_feasible = true;
+  value.predicted_rear_clear_time_sec = 2.0;
+  value.predicted_rear_clear_distance_m = 8.0;
+  value.predicted_minimum_speed_mps = 7.0;
+  value.minimum_wall_clearance_m = 0.4;
+  value.minimum_target_clearance_m = 0.3;
+  value.maximum_lateral_accel_mps2 = 2.0;
+  value.lateral_motion_m = 0.8;
+  auto left = value;
+  left.branch = MpccLiteShadowBranch::Left;
+  auto right = value;
+  right.branch = MpccLiteShadowBranch::Right;
+
+  MpccLiteShadowRequest request;
+  request.enabled = true;
+  request.candidates = {left, right};
+  request.active_branch = MpccLiteShadowBranch::Right;
+  request.rear_clear_time_budget_sec = 8.0;
+  request.rear_clear_distance_budget_m = 32.0;
+  request.reference_speed_mps = 10.0;
+  request.reference_wall_clearance_m = 0.4;
+  request.reference_target_clearance_m = 0.3;
+  request.lateral_motion_scale_m = 2.0;
+  request.maximum_lateral_accel_mps2 = 6.0;
+  request.weights.branch_switch_penalty = 0.0;
+
+  const auto result = evaluate_mpcc_lite_shadow(request);
+  ASSERT_TRUE(result.found);
+  EXPECT_EQ(result.best.candidate.branch, MpccLiteShadowBranch::Right);
+  EXPECT_TRUE(result.agrees_with_active_branch);
+}
+
 }  // namespace

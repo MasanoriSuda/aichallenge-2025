@@ -1504,6 +1504,10 @@ struct OvertakeLineConfig
   int safe_separation_progress_extension_max_count{1};
   bool safe_separation_dynamic_completion_extension_enabled{false};
   bool pass_completion_speed_coupling_enabled{false};
+  bool mpcc_lite_shadow_enabled{false};
+  double mpcc_lite_shadow_evaluation_interval_sec{0.125};
+  double mpcc_lite_shadow_log_interval_sec{1.0};
+  double mpcc_lite_shadow_last_feasible_max_age_sec{0.50};
   double safe_separation_soft_prediction_grace_sec{0.25};
   bool safe_separation_full_speed_forward_escape_enabled{false};
   bool safe_separation_rearward_progress_time_grace_enabled{false};
@@ -4770,6 +4774,20 @@ struct MPC
     v2x_course_progress_tracks_.clear();
     overtake_locked_target_ey_.reset();
     overtake_locked_side_sign_ = 0;
+    mpcc_lite_shadow_last_evaluation_sec_ =
+      -std::numeric_limits<double>::infinity();
+    mpcc_lite_shadow_last_feasible_sec_ =
+      -std::numeric_limits<double>::infinity();
+    mpcc_lite_shadow_last_log_sec_ =
+      -std::numeric_limits<double>::infinity();
+    mpcc_lite_shadow_last_feasible_resolution_.reset();
+    mpcc_lite_shadow_last_feasible_target_id_.clear();
+    mpcc_lite_shadow_last_logged_best_ =
+      overtake_core::MpccLiteShadowBranch::None;
+    mpcc_lite_shadow_last_logged_active_ =
+      overtake_core::MpccLiteShadowBranch::None;
+    mpcc_lite_shadow_last_logged_agreement_ = false;
+    mpcc_lite_shadow_last_logged_hold_ = false;
     overtake_entry_speed_.reset();
     overtake_entry_speed_candidate_id_.clear();
     overtake_entry_speed_candidate_side_sign_ = 0;
@@ -4955,6 +4973,20 @@ struct MPC
     v2x_course_progress_tracks_.clear();
     overtake_locked_target_ey_.reset();
     overtake_locked_side_sign_ = 0;
+    mpcc_lite_shadow_last_evaluation_sec_ =
+      -std::numeric_limits<double>::infinity();
+    mpcc_lite_shadow_last_feasible_sec_ =
+      -std::numeric_limits<double>::infinity();
+    mpcc_lite_shadow_last_log_sec_ =
+      -std::numeric_limits<double>::infinity();
+    mpcc_lite_shadow_last_feasible_resolution_.reset();
+    mpcc_lite_shadow_last_feasible_target_id_.clear();
+    mpcc_lite_shadow_last_logged_best_ =
+      overtake_core::MpccLiteShadowBranch::None;
+    mpcc_lite_shadow_last_logged_active_ =
+      overtake_core::MpccLiteShadowBranch::None;
+    mpcc_lite_shadow_last_logged_agreement_ = false;
+    mpcc_lite_shadow_last_logged_hold_ = false;
     overtake_entry_speed_.reset();
     overtake_entry_speed_candidate_id_.clear();
     overtake_entry_speed_candidate_side_sign_ = 0;
@@ -9653,6 +9685,258 @@ struct MPC
       }
       side_selected_for_execution = false;
     }
+
+    // Phase-1 MPCC-lite is deliberately shadow-only. It compares the already
+    // validated left/right lattice winners with current-side continuation and
+    // Return on one finite-horizon score, but never writes side_selection,
+    // output speed ownership or the executing Mission.
+    const auto & shadow_cfg = cfg.v2x_behavior.overtake_line;
+    const bool shadow_scene_relevant = has_front_vehicle || active_overtake_line;
+    const bool shadow_evaluation_due =
+      shadow_cfg.mpcc_lite_shadow_enabled && shadow_scene_relevant &&
+      (!std::isfinite(mpcc_lite_shadow_last_evaluation_sec_) ||
+      now_sec - mpcc_lite_shadow_last_evaluation_sec_ + kEps >=
+      shadow_cfg.mpcc_lite_shadow_evaluation_interval_sec);
+    if (shadow_evaluation_due) {
+      using ShadowBranch = overtake_core::MpccLiteShadowBranch;
+      const bool shadow_runtime_hard_fault =
+        effective_front_risk_level == FrontRiskLevel::EmergencyBrake ||
+        overtake_solver_recovery_active_;
+      const auto active_shadow_branch = [&]() {
+          if (overtake_line_state_.phase == OvertakeLinePhase::Return) {
+            return ShadowBranch::Return;
+          }
+          if (
+            locked_pass_side != 0 &&
+            overtake_line_state_.phase != OvertakeLinePhase::Idle)
+          {
+            return ShadowBranch::CurrentSideHold;
+          }
+          if (side_selection.side == overtake_core::PassSide::Left) {
+            return ShadowBranch::Left;
+          }
+          if (side_selection.side == overtake_core::PassSide::Right) {
+            return ShadowBranch::Right;
+          }
+          return ShadowBranch::None;
+        }();
+      const double shadow_wall_reference = std::max(
+        0.10, robust_wall_planning_clearance);
+      const double shadow_target_surface_reference = std::max(
+        0.10,
+        robust_target_center_separation -
+        cfg.v2x_behavior.overtake_line_min_target_separation);
+      const auto unavailable_shadow_candidate = [](const ShadowBranch branch) {
+          overtake_core::MpccLiteShadowCandidate candidate;
+          candidate.branch = branch;
+          return candidate;
+        };
+      const auto mission_shadow_candidate = [&]
+        (const ShadowBranch branch,
+        const std::optional<overtake_core::OvertakeMissionCandidate> & mission) {
+          auto candidate = unavailable_shadow_candidate(branch);
+          if (!mission.has_value()) {
+            return candidate;
+          }
+          const auto & value = mission.value();
+          const auto finite_reserve = [](const double metric, const double fallback) {
+              return std::isfinite(metric) ? std::max(0.0, metric) : fallback;
+            };
+          candidate.available = true;
+          candidate.hard_feasible =
+            value.feasible && !value.progressive_entry &&
+            value.rear_clear_prediction_checked &&
+            value.rear_clear_prediction_feasible &&
+            value.pass_target_clearance_checked &&
+            (!value.outer_transition_required ||
+            value.outer_transition_preflight_validated) &&
+            !shadow_runtime_hard_fault;
+          candidate.rear_clear_required = true;
+          candidate.rear_clear_feasible = value.rear_clear_prediction_feasible;
+          candidate.predicted_rear_clear_time_sec =
+            value.predicted_rear_clear_time_sec;
+          candidate.predicted_rear_clear_distance_m =
+            value.predicted_rear_clear_ego_distance_m;
+          candidate.predicted_minimum_speed_mps =
+            value.predicted_minimum_ego_speed_mps;
+          candidate.minimum_wall_clearance_m = std::min(
+            finite_reserve(value.minimum_path_wall_clearance_m, shadow_wall_reference),
+            std::min(
+              finite_reserve(
+                value.minimum_return_wall_clearance_m, shadow_wall_reference),
+              0.5 * finite_reserve(
+                value.minimum_path_corridor_width_m,
+                2.0 * shadow_wall_reference)));
+          candidate.minimum_target_clearance_m = finite_reserve(
+            value.predicted_minimum_pass_target_surface_clearance_m,
+            shadow_target_surface_reference);
+          candidate.maximum_lateral_accel_mps2 =
+            value.max_required_lateral_accel_mps2;
+          candidate.lateral_motion_m = value.lateral_shift_m;
+          return candidate;
+        };
+
+      std::vector<overtake_core::MpccLiteShadowCandidate> shadow_candidates;
+      shadow_candidates.reserve(4U);
+      shadow_candidates.push_back(mission_shadow_candidate(
+        ShadowBranch::Left, left_assessment.selected_mission));
+      shadow_candidates.push_back(mission_shadow_candidate(
+        ShadowBranch::Right, right_assessment.selected_mission));
+
+      std::optional<overtake_core::OvertakeMissionCandidate> hold_mission;
+      const SideAssessment & locked_assessment = locked_pass_side < 0 ?
+        right_assessment : left_assessment;
+      if (locked_pass_side != 0 && locked_assessment.selected_mission.has_value()) {
+        hold_mission = locked_assessment.selected_mission;
+      } else if (
+        overtake_line_state_.last_feasible_current_mission.has_value() &&
+        now_sec - overtake_line_state_.last_feasible_current_mission_sec <=
+        shadow_cfg.last_feasible_maneuver_max_age_sec + kEps)
+      {
+        hold_mission = overtake_line_state_.last_feasible_current_mission;
+      } else if (overtake_line_state_.mission_plan.has_value()) {
+        hold_mission = overtake_line_state_.mission_plan->mission;
+      }
+      auto hold_candidate = mission_shadow_candidate(
+        ShadowBranch::CurrentSideHold, hold_mission);
+      hold_candidate.available =
+        hold_candidate.available && locked_pass_side != 0 &&
+        overtake_line_state_.phase != OvertakeLinePhase::Idle;
+      if (hold_candidate.available && hold_mission.has_value()) {
+        hold_candidate.lateral_motion_m = std::abs(
+          hold_mission->goal_lateral_m - model->spatial_state.e_y);
+      }
+      shadow_candidates.push_back(hold_candidate);
+
+      auto return_candidate = unavailable_shadow_candidate(ShadowBranch::Return);
+      const bool return_phase_relevant =
+        overtake_line_state_.mission_plan.has_value() &&
+        (overtake_line_state_.phase == OvertakeLinePhase::Pass ||
+        overtake_line_state_.phase == OvertakeLinePhase::Return);
+      if (return_phase_relevant) {
+        const auto & mission = overtake_line_state_.mission_plan->mission;
+        const double return_wall_clearance =
+          std::isfinite(mission.minimum_return_wall_clearance_m) ?
+          std::max(0.0, mission.minimum_return_wall_clearance_m) :
+          shadow_wall_reference;
+        const double rearward_target_clearance =
+          output.locked_target_seen &&
+          std::isfinite(output.locked_target_longitudinal) ?
+          std::max(
+            0.0,
+            -output.locked_target_longitudinal -
+            cfg.v2x_behavior.overtake_line.return_clear_distance) :
+          shadow_target_surface_reference;
+        return_candidate.available = true;
+        return_candidate.hard_feasible =
+          overtake_line_state_.rear_clear_confirmed_latched &&
+          !output.overtake_return_corridor_blocked &&
+          !shadow_runtime_hard_fault;
+        return_candidate.rear_clear_required = false;
+        return_candidate.rear_clear_feasible =
+          overtake_line_state_.rear_clear_confirmed_latched;
+        return_candidate.predicted_rear_clear_time_sec = 0.0;
+        return_candidate.predicted_rear_clear_distance_m = 0.0;
+        return_candidate.predicted_minimum_speed_mps =
+          std::max(0.0, current_speed_mps_);
+        return_candidate.minimum_wall_clearance_m = return_wall_clearance;
+        return_candidate.minimum_target_clearance_m = rearward_target_clearance;
+        return_candidate.maximum_lateral_accel_mps2 =
+          mission.max_required_lateral_accel_mps2;
+        return_candidate.lateral_motion_m =
+          std::abs(model->spatial_state.e_y);
+      }
+      shadow_candidates.push_back(return_candidate);
+
+      overtake_core::MpccLiteShadowRequest shadow_request;
+      shadow_request.enabled = true;
+      shadow_request.candidates = std::move(shadow_candidates);
+      shadow_request.active_branch = active_shadow_branch;
+      shadow_request.rear_clear_time_budget_sec =
+        shadow_cfg.pass_horizon_predicted_time_budget;
+      shadow_request.rear_clear_distance_budget_m =
+        shadow_cfg.pass_horizon_absolute_distance_limit;
+      shadow_request.reference_speed_mps = std::max(kEps, cfg.v_max);
+      shadow_request.reference_wall_clearance_m = shadow_wall_reference;
+      shadow_request.reference_target_clearance_m =
+        shadow_target_surface_reference;
+      shadow_request.lateral_motion_scale_m = std::max(
+        {0.5, shadow_cfg.lateral_offset, robust_target_center_separation});
+      shadow_request.maximum_lateral_accel_mps2 = std::max(
+        kEps, shadow_cfg.max_lateral_accel);
+      shadow_request.weights = {
+        shadow_cfg.horizon_progress_rear_clear_time_weight,
+        shadow_cfg.horizon_progress_rear_clear_distance_weight,
+        shadow_cfg.horizon_progress_retained_speed_weight,
+        1.0,
+        1.0,
+        shadow_cfg.horizon_progress_lateral_motion_penalty,
+        shadow_cfg.horizon_progress_lateral_accel_penalty,
+        0.10};
+      auto shadow_resolution =
+        overtake_core::evaluate_mpcc_lite_shadow(shadow_request);
+      mpcc_lite_shadow_last_evaluation_sec_ = now_sec;
+      bool last_feasible_hold = false;
+      if (shadow_resolution.valid && shadow_resolution.found) {
+        mpcc_lite_shadow_last_feasible_resolution_ = shadow_resolution;
+        mpcc_lite_shadow_last_feasible_sec_ = now_sec;
+        mpcc_lite_shadow_last_feasible_target_id_ = output.target_vehicle_id;
+      } else if (
+        mpcc_lite_shadow_last_feasible_resolution_.has_value() &&
+        mpcc_lite_shadow_last_feasible_target_id_ == output.target_vehicle_id &&
+        now_sec - mpcc_lite_shadow_last_feasible_sec_ <=
+        shadow_cfg.mpcc_lite_shadow_last_feasible_max_age_sec + kEps)
+      {
+        shadow_resolution = mpcc_lite_shadow_last_feasible_resolution_.value();
+        last_feasible_hold = true;
+      }
+
+      const ShadowBranch best_shadow_branch = shadow_resolution.found ?
+        shadow_resolution.best.candidate.branch : ShadowBranch::None;
+      const bool shadow_agrees = shadow_resolution.found &&
+        best_shadow_branch == active_shadow_branch;
+      const bool shadow_changed =
+        best_shadow_branch != mpcc_lite_shadow_last_logged_best_ ||
+        active_shadow_branch != mpcc_lite_shadow_last_logged_active_ ||
+        shadow_agrees != mpcc_lite_shadow_last_logged_agreement_ ||
+        last_feasible_hold != mpcc_lite_shadow_last_logged_hold_;
+      const bool shadow_periodic_log_due =
+        !std::isfinite(mpcc_lite_shadow_last_log_sec_) ||
+        now_sec - mpcc_lite_shadow_last_log_sec_ + kEps >=
+        shadow_cfg.mpcc_lite_shadow_log_interval_sec;
+      if (shadow_changed || shadow_periodic_log_due) {
+        std::ostringstream shadow_log;
+        shadow_log << std::fixed << std::setprecision(2)
+                   << "Overtake MPCC-lite shadow: target=" <<
+          (output.target_vehicle_id.empty() ? "none" : output.target_vehicle_id)
+                   << ", phase=" << to_string(overtake_line_state_.phase)
+                   << ", fsm=" << overtake_core::to_string(active_shadow_branch)
+                   << ", best=" << overtake_core::to_string(best_shadow_branch)
+                   << ", agree=" << (shadow_agrees ? 1 : 0)
+                   << ", source=" << (last_feasible_hold ? "last_feasible" : "current")
+                   << ", authority=none";
+        for (const auto & evaluation : shadow_resolution.evaluations) {
+          shadow_log << ", " << overtake_core::to_string(evaluation.candidate.branch)
+                     << "={ok=" << (evaluation.hard_feasible ? 1 : 0)
+                     << ",why=" << overtake_core::to_string(evaluation.reject_reason)
+                     << ",score=" << evaluation.score
+                     << ",rear=" << evaluation.candidate.predicted_rear_clear_time_sec
+                     << "s/" << evaluation.candidate.predicted_rear_clear_distance_m
+                     << "m,min_v=" << evaluation.candidate.predicted_minimum_speed_mps
+                     << ",wall=" << evaluation.candidate.minimum_wall_clearance_m
+                     << ",target=" << evaluation.candidate.minimum_target_clearance_m
+                     << ",ay=" << evaluation.candidate.maximum_lateral_accel_mps2
+                     << ",dy=" << evaluation.candidate.lateral_motion_m << "}";
+        }
+        RCLCPP_INFO(
+          rclcpp::get_logger("mpc_controller"), "%s", shadow_log.str().c_str());
+        mpcc_lite_shadow_last_log_sec_ = now_sec;
+        mpcc_lite_shadow_last_logged_best_ = best_shadow_branch;
+        mpcc_lite_shadow_last_logged_active_ = active_shadow_branch;
+        mpcc_lite_shadow_last_logged_agreement_ = shadow_agrees;
+        mpcc_lite_shadow_last_logged_hold_ = last_feasible_hold;
+      }
+    }
     output.overtake_pass_side_sign = static_cast<int>(side_selection.side);
     const SideAssessment & selected_assessment = output.overtake_pass_side_sign > 0 ?
       left_assessment : output.overtake_pass_side_sign < 0 ?
@@ -11584,6 +11868,21 @@ struct MPC
   int overtake_receding_horizon_side_sign_{0};
   double overtake_receding_horizon_last_feasible_sec_{
     -std::numeric_limits<double>::infinity()};
+  double mpcc_lite_shadow_last_evaluation_sec_{
+    -std::numeric_limits<double>::infinity()};
+  double mpcc_lite_shadow_last_feasible_sec_{
+    -std::numeric_limits<double>::infinity()};
+  double mpcc_lite_shadow_last_log_sec_{
+    -std::numeric_limits<double>::infinity()};
+  std::optional<overtake_core::MpccLiteShadowResolution>
+  mpcc_lite_shadow_last_feasible_resolution_;
+  std::string mpcc_lite_shadow_last_feasible_target_id_;
+  overtake_core::MpccLiteShadowBranch mpcc_lite_shadow_last_logged_best_{
+    overtake_core::MpccLiteShadowBranch::None};
+  overtake_core::MpccLiteShadowBranch mpcc_lite_shadow_last_logged_active_{
+    overtake_core::MpccLiteShadowBranch::None};
+  bool mpcc_lite_shadow_last_logged_agreement_{false};
+  bool mpcc_lite_shadow_last_logged_hold_{false};
   std::uint64_t next_overtake_episode_id_{1U};
   v2x_overtake_core::OvertakeLineTransitionAction last_overtake_line_transition_action_{
     v2x_overtake_core::OvertakeLineTransitionAction::None};
@@ -23117,6 +23416,21 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_line.pass_completion_speed_coupling_enabled =
     mpc["v2x_overtake_pass_completion_speed_coupling_enabled"] ?
     mpc["v2x_overtake_pass_completion_speed_coupling_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_lite_shadow_enabled =
+    mpc["v2x_overtake_mpcc_lite_shadow_enabled"] ?
+    mpc["v2x_overtake_mpcc_lite_shadow_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_lite_shadow_evaluation_interval_sec = std::max(
+    0.05,
+    mpc["v2x_overtake_mpcc_lite_shadow_evaluation_interval_sec"] ?
+    mpc["v2x_overtake_mpcc_lite_shadow_evaluation_interval_sec"].as<double>() : 0.125);
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_lite_shadow_log_interval_sec = std::max(
+    0.25,
+    mpc["v2x_overtake_mpcc_lite_shadow_log_interval_sec"] ?
+    mpc["v2x_overtake_mpcc_lite_shadow_log_interval_sec"].as<double>() : 1.0);
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_lite_shadow_last_feasible_max_age_sec = std::max(
+    0.0,
+    mpc["v2x_overtake_mpcc_lite_shadow_last_feasible_max_age_sec"] ?
+    mpc["v2x_overtake_mpcc_lite_shadow_last_feasible_max_age_sec"].as<double>() : 0.50);
   cfg.mpc.v2x_behavior.overtake_line.safe_separation_soft_prediction_grace_sec = std::max(
     0.0,
     mpc["v2x_overtake_safe_separation_soft_prediction_grace_sec"] ?
@@ -25108,6 +25422,19 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line.horizon_progress_closing_speed_weight,
         mpc_cfg_.v2x_behavior.overtake_line.horizon_progress_lateral_motion_penalty,
         mpc_cfg_.v2x_behavior.overtake_line.horizon_progress_lateral_accel_penalty);
+      RCLCPP_INFO(
+        get_logger(),
+        "V2X MPCC-lite shadow: %s, evaluate=%.3f s (%.1f Hz), log=%.2f s, "
+        "last_feasible<=%.2f s, control_authority=none",
+        mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_shadow_enabled ?
+        "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_shadow_evaluation_interval_sec,
+        1.0 / std::max(
+          0.05,
+          mpc_cfg_.v2x_behavior.overtake_line
+          .mpcc_lite_shadow_evaluation_interval_sec),
+        mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_shadow_log_interval_sec,
+        mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_shadow_last_feasible_max_age_sec);
     }
     if (mpc_cfg_.v2x_behavior.low_speed_avoidance_enabled) {
       RCLCPP_INFO(

@@ -2632,6 +2632,110 @@ struct OvertakeMissionCandidateSelection
 OvertakeMissionCandidateSelection select_overtake_mission_candidate(
   const OvertakeMissionCandidateSelectionRequest & request) noexcept;
 
+enum class MpccLiteShadowBranch
+{
+  None,
+  Left,
+  Right,
+  CurrentSideHold,
+  Return,
+};
+
+const char * to_string(MpccLiteShadowBranch branch) noexcept;
+
+enum class MpccLiteShadowRejectReason
+{
+  None,
+  Disabled,
+  InvalidRequest,
+  Unavailable,
+  HardConstraint,
+  InvalidCandidate,
+  RearClearInfeasible,
+  RearClearTimeBudget,
+  RearClearDistanceBudget,
+};
+
+const char * to_string(MpccLiteShadowRejectReason reason) noexcept;
+
+struct MpccLiteShadowCandidate
+{
+  MpccLiteShadowBranch branch{MpccLiteShadowBranch::None};
+  bool available{false};
+  bool hard_feasible{false};
+  bool rear_clear_required{true};
+  bool rear_clear_feasible{false};
+  double predicted_rear_clear_time_sec{std::numeric_limits<double>::infinity()};
+  double predicted_rear_clear_distance_m{std::numeric_limits<double>::infinity()};
+  double predicted_minimum_speed_mps{};
+  double minimum_wall_clearance_m{};
+  double minimum_target_clearance_m{};
+  double maximum_lateral_accel_mps2{};
+  double lateral_motion_m{};
+};
+
+struct MpccLiteShadowWeights
+{
+  double rear_clear_time{3.0};
+  double rear_clear_distance{1.0};
+  double retained_speed{1.5};
+  double wall_clearance{1.0};
+  double target_clearance{1.0};
+  double lateral_motion_penalty{0.5};
+  double lateral_accel_penalty{0.25};
+  double branch_switch_penalty{0.10};
+};
+
+struct MpccLiteShadowRequest
+{
+  bool enabled{false};
+  std::vector<MpccLiteShadowCandidate> candidates;
+  MpccLiteShadowBranch active_branch{MpccLiteShadowBranch::None};
+  double rear_clear_time_budget_sec{};
+  double rear_clear_distance_budget_m{};
+  double reference_speed_mps{};
+  double reference_wall_clearance_m{};
+  double reference_target_clearance_m{};
+  double lateral_motion_scale_m{};
+  double maximum_lateral_accel_mps2{};
+  MpccLiteShadowWeights weights;
+};
+
+struct MpccLiteShadowEvaluation
+{
+  bool valid{false};
+  bool checked{false};
+  bool hard_feasible{false};
+  MpccLiteShadowRejectReason reject_reason{MpccLiteShadowRejectReason::InvalidCandidate};
+  MpccLiteShadowCandidate candidate;
+  double score{-std::numeric_limits<double>::infinity()};
+  double rear_clear_time_progress{};
+  double rear_clear_distance_progress{};
+  double retained_speed{};
+  double wall_clearance_reserve{};
+  double target_clearance_reserve{};
+  double lateral_motion_cost{};
+  double lateral_accel_cost{};
+  double branch_switch_cost{};
+};
+
+struct MpccLiteShadowResolution
+{
+  bool valid{false};
+  bool found{false};
+  bool agrees_with_active_branch{false};
+  std::vector<MpccLiteShadowEvaluation> evaluations;
+  std::optional<MpccLiteShadowEvaluation> active_evaluation;
+  MpccLiteShadowEvaluation best;
+};
+
+/// Score tactical left/right/current-side/Return branches on one finite-horizon
+/// scale without changing the executing FSM. The caller supplies candidates
+/// already checked against the real path and vehicle geometry. This Phase-1
+/// evaluator remains fail closed and is intentionally free of controller state.
+MpccLiteShadowResolution evaluate_mpcc_lite_shadow(
+  const MpccLiteShadowRequest & request) noexcept;
+
 enum class OvertakeSideRetryFailureClass
 {
   /// No executable candidate was observed in the current planning sample.

@@ -4744,6 +4744,194 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
   return selection;
 }
 
+const char * to_string(const MpccLiteShadowBranch branch) noexcept
+{
+  switch (branch) {
+    case MpccLiteShadowBranch::None:
+      return "none";
+    case MpccLiteShadowBranch::Left:
+      return "left";
+    case MpccLiteShadowBranch::Right:
+      return "right";
+    case MpccLiteShadowBranch::CurrentSideHold:
+      return "hold";
+    case MpccLiteShadowBranch::Return:
+      return "return";
+  }
+  return "unknown";
+}
+
+const char * to_string(const MpccLiteShadowRejectReason reason) noexcept
+{
+  switch (reason) {
+    case MpccLiteShadowRejectReason::None:
+      return "none";
+    case MpccLiteShadowRejectReason::Disabled:
+      return "disabled";
+    case MpccLiteShadowRejectReason::InvalidRequest:
+      return "invalid_request";
+    case MpccLiteShadowRejectReason::Unavailable:
+      return "unavailable";
+    case MpccLiteShadowRejectReason::HardConstraint:
+      return "hard_constraint";
+    case MpccLiteShadowRejectReason::InvalidCandidate:
+      return "invalid_candidate";
+    case MpccLiteShadowRejectReason::RearClearInfeasible:
+      return "rear_clear_infeasible";
+    case MpccLiteShadowRejectReason::RearClearTimeBudget:
+      return "rear_clear_time_budget";
+    case MpccLiteShadowRejectReason::RearClearDistanceBudget:
+      return "rear_clear_distance_budget";
+  }
+  return "unknown";
+}
+
+MpccLiteShadowResolution evaluate_mpcc_lite_shadow(
+  const MpccLiteShadowRequest & request) noexcept
+{
+  MpccLiteShadowResolution resolution;
+  const auto finite_positive = [](const double value) {
+      return std::isfinite(value) && value > 0.0;
+    };
+  const auto finite_non_negative = [](const double value) {
+      return std::isfinite(value) && value >= 0.0;
+    };
+  const auto valid_weight = [&](const double value) {
+      return finite_non_negative(value);
+    };
+  if (!request.enabled) {
+    resolution.valid = true;
+    return resolution;
+  }
+  if (
+    !finite_positive(request.rear_clear_time_budget_sec) ||
+    !finite_positive(request.rear_clear_distance_budget_m) ||
+    !finite_positive(request.reference_speed_mps) ||
+    !finite_positive(request.reference_wall_clearance_m) ||
+    !finite_positive(request.reference_target_clearance_m) ||
+    !finite_positive(request.lateral_motion_scale_m) ||
+    !finite_positive(request.maximum_lateral_accel_mps2) ||
+    !valid_weight(request.weights.rear_clear_time) ||
+    !valid_weight(request.weights.rear_clear_distance) ||
+    !valid_weight(request.weights.retained_speed) ||
+    !valid_weight(request.weights.wall_clearance) ||
+    !valid_weight(request.weights.target_clearance) ||
+    !valid_weight(request.weights.lateral_motion_penalty) ||
+    !valid_weight(request.weights.lateral_accel_penalty) ||
+    !valid_weight(request.weights.branch_switch_penalty))
+  {
+    return resolution;
+  }
+  resolution.valid = true;
+  constexpr double kEpsilon = 1e-9;
+  for (const auto & candidate : request.candidates) {
+    MpccLiteShadowEvaluation evaluation;
+    evaluation.checked = true;
+    evaluation.candidate = candidate;
+    if (candidate.branch == MpccLiteShadowBranch::None) {
+      evaluation.reject_reason = MpccLiteShadowRejectReason::InvalidCandidate;
+    } else if (!candidate.available) {
+      evaluation.valid = true;
+      evaluation.reject_reason = MpccLiteShadowRejectReason::Unavailable;
+    } else if (!candidate.hard_feasible) {
+      evaluation.valid = true;
+      evaluation.reject_reason = MpccLiteShadowRejectReason::HardConstraint;
+    } else {
+      const bool numeric_valid =
+        finite_non_negative(candidate.predicted_minimum_speed_mps) &&
+        finite_non_negative(candidate.minimum_wall_clearance_m) &&
+        finite_non_negative(candidate.minimum_target_clearance_m) &&
+        finite_non_negative(candidate.maximum_lateral_accel_mps2) &&
+        finite_non_negative(candidate.lateral_motion_m) &&
+        (!candidate.rear_clear_required ||
+        (finite_non_negative(candidate.predicted_rear_clear_time_sec) &&
+        finite_non_negative(candidate.predicted_rear_clear_distance_m)));
+      if (!numeric_valid) {
+        evaluation.reject_reason = MpccLiteShadowRejectReason::InvalidCandidate;
+      } else if (candidate.rear_clear_required && !candidate.rear_clear_feasible) {
+        evaluation.valid = true;
+        evaluation.reject_reason = MpccLiteShadowRejectReason::RearClearInfeasible;
+      } else if (
+        candidate.rear_clear_required &&
+        candidate.predicted_rear_clear_time_sec >
+        request.rear_clear_time_budget_sec + kEpsilon)
+      {
+        evaluation.valid = true;
+        evaluation.reject_reason = MpccLiteShadowRejectReason::RearClearTimeBudget;
+      } else if (
+        candidate.rear_clear_required &&
+        candidate.predicted_rear_clear_distance_m >
+        request.rear_clear_distance_budget_m + kEpsilon)
+      {
+        evaluation.valid = true;
+        evaluation.reject_reason = MpccLiteShadowRejectReason::RearClearDistanceBudget;
+      } else {
+        evaluation.valid = true;
+        evaluation.hard_feasible = true;
+        evaluation.reject_reason = MpccLiteShadowRejectReason::None;
+        evaluation.rear_clear_time_progress = candidate.rear_clear_required ?
+          std::clamp(
+          1.0 - candidate.predicted_rear_clear_time_sec /
+          request.rear_clear_time_budget_sec, 0.0, 1.0) : 1.0;
+        evaluation.rear_clear_distance_progress = candidate.rear_clear_required ?
+          std::clamp(
+          1.0 - candidate.predicted_rear_clear_distance_m /
+          request.rear_clear_distance_budget_m, 0.0, 1.0) : 1.0;
+        evaluation.retained_speed = std::clamp(
+          candidate.predicted_minimum_speed_mps / request.reference_speed_mps,
+          0.0, 1.0);
+        evaluation.wall_clearance_reserve = std::clamp(
+          candidate.minimum_wall_clearance_m /
+          request.reference_wall_clearance_m, 0.0, 1.0);
+        evaluation.target_clearance_reserve = std::clamp(
+          candidate.minimum_target_clearance_m /
+          request.reference_target_clearance_m, 0.0, 1.0);
+        evaluation.lateral_motion_cost = std::clamp(
+          candidate.lateral_motion_m / request.lateral_motion_scale_m, 0.0, 1.0);
+        evaluation.lateral_accel_cost = std::clamp(
+          candidate.maximum_lateral_accel_mps2 /
+          request.maximum_lateral_accel_mps2, 0.0, 1.0);
+        evaluation.branch_switch_cost =
+          request.active_branch != MpccLiteShadowBranch::None &&
+          candidate.branch != request.active_branch ? 1.0 : 0.0;
+        evaluation.score =
+          request.weights.rear_clear_time * evaluation.rear_clear_time_progress +
+          request.weights.rear_clear_distance * evaluation.rear_clear_distance_progress +
+          request.weights.retained_speed * evaluation.retained_speed +
+          request.weights.wall_clearance * evaluation.wall_clearance_reserve +
+          request.weights.target_clearance * evaluation.target_clearance_reserve -
+          request.weights.lateral_motion_penalty * evaluation.lateral_motion_cost -
+          request.weights.lateral_accel_penalty * evaluation.lateral_accel_cost -
+          request.weights.branch_switch_penalty * evaluation.branch_switch_cost;
+      }
+    }
+
+    if (candidate.branch == request.active_branch) {
+      resolution.active_evaluation = evaluation;
+    }
+    if (evaluation.valid && evaluation.hard_feasible) {
+      const bool better_score = !resolution.found ||
+        evaluation.score > resolution.best.score + kEpsilon;
+      const bool equal_score = resolution.found &&
+        std::abs(evaluation.score - resolution.best.score) <= kEpsilon;
+      const bool active_tie_break = equal_score &&
+        candidate.branch == request.active_branch &&
+        resolution.best.candidate.branch != request.active_branch;
+      const bool lower_motion_tie_break = equal_score && !active_tie_break &&
+        candidate.lateral_motion_m + kEpsilon <
+        resolution.best.candidate.lateral_motion_m;
+      if (better_score || active_tie_break || lower_motion_tie_break) {
+        resolution.found = true;
+        resolution.best = evaluation;
+      }
+    }
+    resolution.evaluations.push_back(evaluation);
+  }
+  resolution.agrees_with_active_branch = resolution.found &&
+    resolution.best.candidate.branch == request.active_branch;
+  return resolution;
+}
+
 bool should_arm_overtake_side_retry_block(
   const OvertakeSideRetryFailureClass failure_class) noexcept
 {

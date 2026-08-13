@@ -173,7 +173,9 @@ using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationTacticalReselectRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::RobustOvertakeClearanceRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeTrajectoryPrefixLeaseRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_robust_overtake_clearance;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_speed_preserving_tactical_revalidation;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_retain_safe_trajectory_prefix;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_return_from_tactical_revalidation;
@@ -5561,6 +5563,48 @@ TEST(V2XOvertakeCoreHorizon, RetainsOnlyHardSafeTrajectoryPrefix)
   request.hard_fault = false;
   request.absolute_traveled_m = 40.0;
   EXPECT_FALSE(can_retain_safe_trajectory_prefix(request));
+}
+
+TEST(V2XOvertakeCoreHorizon, ResolvesBoundedRobustClearance)
+{
+  RobustOvertakeClearanceRequest request;
+  request.enabled = true;
+  request.ego_speed_mps = 5.0;
+  request.absolute_curvature_radpm = 0.10;
+  request.physical_target_center_separation_m = 1.45;
+  request.configured_target_center_separation_m = 1.55;
+  request.target_surface_base_m = 0.20;
+  request.target_speed_gain_sec = 0.01;
+  request.target_curvature_gain_m2 = 0.30;
+  request.target_surface_max_m = 0.30;
+  request.hard_wall_clearance_m = 0.20;
+  request.wall_base_reserve_m = 0.10;
+  request.wall_speed_gain_sec = 0.01;
+  request.wall_curvature_gain_m2 = 0.50;
+  request.wall_reserve_max_m = 0.20;
+
+  auto resolution = resolve_robust_overtake_clearance(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_NEAR(resolution.target_surface_clearance_m, 0.28, 1e-9);
+  EXPECT_NEAR(resolution.target_center_separation_m, 1.73, 1e-9);
+  EXPECT_NEAR(resolution.wall_tracking_reserve_m, 0.20, 1e-9);
+  EXPECT_NEAR(resolution.wall_planning_clearance_m, 0.40, 1e-9);
+
+  request.ego_speed_mps = 20.0;
+  request.absolute_curvature_radpm = 0.30;
+  resolution = resolve_robust_overtake_clearance(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_NEAR(resolution.target_surface_clearance_m, 0.30, 1e-9);
+  EXPECT_NEAR(resolution.wall_tracking_reserve_m, 0.20, 1e-9);
+
+  request.enabled = false;
+  resolution = resolve_robust_overtake_clearance(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_NEAR(resolution.target_center_separation_m, 1.55, 1e-9);
+  EXPECT_NEAR(resolution.wall_planning_clearance_m, 0.20, 1e-9);
+
+  request.ego_speed_mps = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_FALSE(resolve_robust_overtake_clearance(request).valid);
 }
 
 TEST(V2XOvertakeCoreHorizon, ExtendsLocalBoundOnlyForSafeForwardProgress)

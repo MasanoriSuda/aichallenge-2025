@@ -2957,6 +2957,67 @@ resolve_speed_preserving_tactical_revalidation(
   return resolution;
 }
 
+RobustOvertakeClearanceResolution resolve_robust_overtake_clearance(
+  const RobustOvertakeClearanceRequest & request) noexcept
+{
+  RobustOvertakeClearanceResolution resolution;
+  const auto finite_non_negative = [](const double value) {
+      return std::isfinite(value) && value >= 0.0;
+    };
+  if (
+    !finite_non_negative(request.ego_speed_mps) ||
+    !finite_non_negative(request.absolute_curvature_radpm) ||
+    !finite_non_negative(request.physical_target_center_separation_m) ||
+    !finite_non_negative(request.configured_target_center_separation_m) ||
+    !finite_non_negative(request.target_surface_base_m) ||
+    !finite_non_negative(request.target_speed_gain_sec) ||
+    !finite_non_negative(request.target_curvature_gain_m2) ||
+    !finite_non_negative(request.target_surface_max_m) ||
+    !finite_non_negative(request.hard_wall_clearance_m) ||
+    !finite_non_negative(request.wall_base_reserve_m) ||
+    !finite_non_negative(request.wall_speed_gain_sec) ||
+    !finite_non_negative(request.wall_curvature_gain_m2) ||
+    !finite_non_negative(request.wall_reserve_max_m))
+  {
+    return resolution;
+  }
+
+  const double configured_target_separation = std::max(
+    request.physical_target_center_separation_m,
+    request.configured_target_center_separation_m);
+  if (!request.enabled) {
+    resolution.valid = true;
+    resolution.target_center_separation_m = configured_target_separation;
+    resolution.target_surface_clearance_m = std::max(
+      0.0,
+      configured_target_separation - request.physical_target_center_separation_m);
+    resolution.wall_planning_clearance_m = request.hard_wall_clearance_m;
+    return resolution;
+  }
+
+  const double target_surface_request =
+    request.target_surface_base_m +
+    request.target_speed_gain_sec * request.ego_speed_mps +
+    request.target_curvature_gain_m2 * request.absolute_curvature_radpm;
+  resolution.target_surface_clearance_m = std::clamp(
+    target_surface_request, 0.0, request.target_surface_max_m);
+  resolution.target_center_separation_m = std::max(
+    configured_target_separation,
+    request.physical_target_center_separation_m +
+    resolution.target_surface_clearance_m);
+
+  const double wall_reserve_request =
+    request.wall_base_reserve_m +
+    request.wall_speed_gain_sec * request.ego_speed_mps +
+    request.wall_curvature_gain_m2 * request.absolute_curvature_radpm;
+  resolution.wall_tracking_reserve_m = std::clamp(
+    wall_reserve_request, 0.0, request.wall_reserve_max_m);
+  resolution.wall_planning_clearance_m =
+    request.hard_wall_clearance_m + resolution.wall_tracking_reserve_m;
+  resolution.valid = true;
+  return resolution;
+}
+
 bool can_retain_safe_trajectory_prefix(
   const SafeTrajectoryPrefixLeaseRequest & request) noexcept
 {

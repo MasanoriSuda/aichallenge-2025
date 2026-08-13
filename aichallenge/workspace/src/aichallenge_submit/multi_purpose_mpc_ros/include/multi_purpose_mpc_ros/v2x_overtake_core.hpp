@@ -1640,6 +1640,39 @@ SpeedPreservingTacticalRevalidationResolution
 resolve_speed_preserving_tactical_revalidation(
   const SpeedPreservingTacticalRevalidationRequest & request) noexcept;
 
+struct RobustOvertakeClearanceRequest
+{
+  bool enabled{false};
+  double ego_speed_mps{};
+  double absolute_curvature_radpm{};
+  double physical_target_center_separation_m{};
+  double configured_target_center_separation_m{};
+  double target_surface_base_m{};
+  double target_speed_gain_sec{};
+  double target_curvature_gain_m2{};
+  double target_surface_max_m{};
+  double hard_wall_clearance_m{};
+  double wall_base_reserve_m{};
+  double wall_speed_gain_sec{};
+  double wall_curvature_gain_m2{};
+  double wall_reserve_max_m{};
+};
+
+struct RobustOvertakeClearanceResolution
+{
+  bool valid{false};
+  double target_surface_clearance_m{};
+  double target_center_separation_m{};
+  double wall_tracking_reserve_m{};
+  double wall_planning_clearance_m{};
+};
+
+/// Resolve planning clearance independently from the physical contact guard.
+/// The speed/curvature additions are bounded so a noisy sample cannot grow an
+/// unbounded exclusion envelope.
+RobustOvertakeClearanceResolution resolve_robust_overtake_clearance(
+  const RobustOvertakeClearanceRequest & request) noexcept;
+
 struct SafeTrajectoryPrefixLeaseRequest
 {
   bool enabled{false};

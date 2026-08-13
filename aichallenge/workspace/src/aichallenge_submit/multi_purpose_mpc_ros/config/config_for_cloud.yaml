@@ -509,6 +509,18 @@ mpc:
   v2x_overtake_line_min_target_separation: 1.55 # [m] 1.45 m combined kart width plus 0.10 m nominal surface clearance
   v2x_overtake_pass_front_overlap_lateral_clearance: 1.55 # [m] nominal center separation required before front-cap release
   v2x_overtake_pass_front_cap_reapply_lateral_clearance: 1.50 # [m] reapply before reaching the 1.45 m physical body boundary
+  # Planning margins absorb V2X/localization/map/tracking error. Physical contact and
+  # ContactContinuation still use the actual 1.45 m combined body width.
+  v2x_overtake_robust_clearance_enabled: true
+  v2x_overtake_robust_target_surface_base: 0.20 # [m]
+  v2x_overtake_robust_target_speed_gain: 0.01 # [s], +0.05 m at 5 m/s
+  v2x_overtake_robust_target_curvature_gain: 0.30 # [m^2]
+  v2x_overtake_robust_target_surface_max: 0.30 # [m]
+  v2x_overtake_robust_front_cap_reapply_hysteresis: 0.05 # [m]
+  v2x_overtake_robust_wall_base_reserve: 0.10 # [m], added outside the 0.20 m hard wall guard
+  v2x_overtake_robust_wall_speed_gain: 0.01 # [s]
+  v2x_overtake_robust_wall_curvature_gain: 0.50 # [m^2]
+  v2x_overtake_robust_wall_reserve_max: 0.20 # [m], planning wall clearance is at most 0.40 m
   v2x_overtake_pass_current_overlap_confirm_sec: 0.30 # [s] debounce a brief course-frame body-boundary crossing after Pass release
   v2x_overtake_pass_predicted_overlap_confirm_sec: 0.25 # [s] require sustained predicted overlap before recapping an already released Pass
   # Once a low-speed target has full current lateral clearance in ShiftOut, or is physically

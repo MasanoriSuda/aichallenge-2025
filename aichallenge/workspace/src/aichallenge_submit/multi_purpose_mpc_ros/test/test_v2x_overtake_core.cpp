@@ -13716,6 +13716,16 @@ TEST(V2XOvertakeCoreMpccLite, BoundsExecutionAuthorityByMissionStage)
   request.selected_branch = MpccLiteShadowBranch::Left;
   request.same_side_replan_admitted = true;
   request.selected_mission_available = true;
+  request.selected_mission_complete = false;
+  request.selected_prefix_execution_admitted = true;
+  resolution = resolve_mpcc_lite_authority(request);
+  EXPECT_EQ(resolution.action, MpccLiteAuthorityAction::ReplaceActive);
+  EXPECT_EQ(resolution.selected_side_sign, 1);
+
+  request.selected_prefix_execution_admitted = false;
+  resolution = resolve_mpcc_lite_authority(request);
+  EXPECT_EQ(resolution.action, MpccLiteAuthorityAction::None);
+
   request.selected_mission_complete = true;
   resolution = resolve_mpcc_lite_authority(request);
   EXPECT_EQ(resolution.action, MpccLiteAuthorityAction::ReplaceActive);

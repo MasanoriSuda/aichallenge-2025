@@ -2318,6 +2318,11 @@ struct OvertakeLineState
   double mission_return_distance{0.0};
   double mission_static_valid_until_pass_m{0.0};
   double mission_dynamic_valid_until_pass_m{0.0};
+  // Prediction lease refreshes update mission_planner_generated_at_sec even
+  // when the frozen Mission is unchanged. Keep tactical replacement spacing
+  // on a dedicated clock so an admitted rolling prefix can become executable.
+  double mission_last_tactical_replacement_sec{
+    -std::numeric_limits<double>::infinity()};
   double mission_planner_generated_at_sec{-std::numeric_limits<double>::infinity()};
   double mission_prediction_source_age_sec{std::numeric_limits<double>::infinity()};
   double mission_prediction_epoch_sec{-std::numeric_limits<double>::infinity()};
@@ -8409,9 +8414,12 @@ struct MPC
               const bool full_track_transition_before_rear_clear =
                 outer_transition.transition_required ||
                 rear_clear_course_role.outer_to_inner_before_rear_clear;
+              const bool scheduled_transition_preflight_validated =
+                outer_transition.transition_required &&
+                outer_transition_preflight.feasible;
               if (!overtake_core::is_full_track_transition_admitted(
                   full_track_transition_before_rear_clear,
-                  outer_transition.transition_required))
+                  scheduled_transition_preflight_validated))
               {
                 ++unvalidated_full_track_transition_reject_count;
                 continue;
@@ -10273,9 +10281,10 @@ struct MPC
         (output.locked_target_current_body_footprints_separated ||
         output.recoverable_side_contact_active);
       const double seconds_since_selected_mission =
-        std::isfinite(overtake_line_state_.mission_planner_generated_at_sec) ?
+        std::isfinite(overtake_line_state_.mission_last_tactical_replacement_sec) ?
         std::max(
-          0.0, now_sec - overtake_line_state_.mission_planner_generated_at_sec) :
+          0.0,
+          now_sec - overtake_line_state_.mission_last_tactical_replacement_sec) :
         std::numeric_limits<double>::infinity();
       const bool mpcc_same_side_replan_admitted =
         overtake_core::should_admit_mpcc_lite_same_side_replan(
@@ -13220,6 +13229,7 @@ private:
       selected_mission.has_value() &&
       std::isfinite(selected_mission->dynamic_valid_until_pass_m) ?
       std::max(0.0, selected_mission->dynamic_valid_until_pass_m) : 0.0;
+    overtake_line_state_.mission_last_tactical_replacement_sec = now_sec;
     overtake_line_state_.mission_planner_generated_at_sec =
       selected_mission.has_value() ? selected_mission->planner_generated_at_sec :
       -std::numeric_limits<double>::infinity();

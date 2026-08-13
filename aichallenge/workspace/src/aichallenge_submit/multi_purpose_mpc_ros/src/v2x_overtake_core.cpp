@@ -5709,7 +5709,8 @@ MpccLiteAuthorityResolution resolve_mpcc_lite_authority(
   if (
     selected_side != 0 && selected_side == request.active_side_sign &&
     request.same_side_replan_admitted && request.selected_mission_available &&
-    request.selected_mission_complete)
+    (request.selected_mission_complete ||
+    request.selected_prefix_execution_admitted))
   {
     resolution.action = MpccLiteAuthorityAction::ReplaceActive;
     resolution.selected_side_sign = selected_side;

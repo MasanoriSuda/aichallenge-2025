@@ -3111,10 +3111,10 @@ struct MpccLiteAuthorityResolution
   int selected_side_sign{0};
 };
 
-/// Give the finite-horizon winner bounded control authority. Entry and
-/// same-side refresh retain the full rear-clear contract. Before no-return, an
-/// independently admitted receding prefix may own one bounded cross-side
-/// rolling replacement.
+/// Give the finite-horizon winner bounded control authority. Entry retains the
+/// full rear-clear contract. During active execution, an independently
+/// admitted receding prefix may own one bounded same-side or cross-side rolling
+/// replacement before no-return.
 MpccLiteAuthorityResolution resolve_mpcc_lite_authority(
   const MpccLiteAuthorityRequest & request) noexcept;
 

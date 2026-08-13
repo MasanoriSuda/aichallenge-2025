@@ -918,6 +918,46 @@ struct RecedingHorizonTargetBoundsResolution
 RecedingHorizonTargetBoundsResolution resolve_receding_horizon_target_bounds(
   const RecedingHorizonTargetBoundsRequest & request) noexcept;
 
+struct RecedingHorizonExecutionBoundsRequest
+{
+  int pass_side_sign{};
+  double wall_lower_bound_m{};
+  double wall_upper_bound_m{};
+  bool target_separation_active{false};
+  double target_lateral_m{};
+  double target_center_separation_m{};
+};
+
+struct RecedingHorizonExecutionBoundsResolution
+{
+  bool valid{false};
+  double lower_bound_m{};
+  double upper_bound_m{};
+};
+
+/// Resolve only execution-critical bounds for post-validation. Mission trust
+/// regions intentionally do not enter this interval.
+RecedingHorizonExecutionBoundsResolution resolve_receding_horizon_execution_bounds(
+  const RecedingHorizonExecutionBoundsRequest & request) noexcept;
+
+struct RecedingHorizonBodyClearBoundsReleaseRequest
+{
+  bool pass_phase{false};
+  bool target_seen{false};
+  bool target_position_jump{false};
+  bool current_body_footprints_separated{false};
+  bool footprint_prediction_valid{false};
+  bool predicted_body_footprint_sweep_separated{false};
+  bool predicted_overlap_confirmed{false};
+  bool execution_corridor_blocked{false};
+  bool emergency_front_risk{false};
+};
+
+/// Release opponent bounds after current body clear. A transient predicted
+/// overlap remains released until the shared confirmation clock expires.
+bool can_release_receding_horizon_body_clear_bounds(
+  const RecedingHorizonBodyClearBoundsReleaseRequest & request) noexcept;
+
 struct RecedingHorizonWarmStartRequest
 {
   double forward_progress_m{};

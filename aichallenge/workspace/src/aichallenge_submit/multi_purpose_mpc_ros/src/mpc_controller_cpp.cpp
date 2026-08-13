@@ -2454,9 +2454,12 @@ struct OvertakeLineOutput
   bool receding_horizon_post_validation_repair_active{false};
   bool receding_horizon_hard_wall_clearance_used{false};
   bool receding_horizon_body_clear_bounds_release_used{false};
+  bool receding_horizon_soft_trust_release_used{false};
   double receding_horizon_objective{std::numeric_limits<double>::infinity()};
   double receding_horizon_max_adjustment{0.0};
   double receding_horizon_velocity_limit{std::numeric_limits<double>::infinity()};
+  int receding_horizon_hard_bound_failure_index{-1};
+  std::string receding_horizon_hard_bound_failure_kind;
   std::string receding_horizon_fallback_reason;
   double target_velocity_reference{std::numeric_limits<double>::infinity()};
   double target_velocity_limit{std::numeric_limits<double>::infinity()};
@@ -2516,9 +2519,12 @@ struct OvertakeRecedingHorizonEvaluation
   bool post_validation_repair_active{false};
   bool hard_wall_clearance_used{false};
   bool body_clear_bounds_release_used{false};
+  bool soft_trust_region_release_used{false};
   double objective{std::numeric_limits<double>::infinity()};
   double maximum_reference_adjustment_m{0.0};
   double velocity_limit_mps{std::numeric_limits<double>::infinity()};
+  int hard_bound_failure_index{-1};
+  std::string hard_bound_failure_kind;
   std::string fallback_reason;
   OvertakeLineHorizonEvaluation horizon;
 };
@@ -13730,7 +13736,9 @@ private:
     const double goal_ey, const double planning_wall_clearance,
     const double target_center_separation,
     const double max_lateral_accel, const double speed_for_time,
-    const bool generating_execution_horizon, const double now_sec)
+    const bool generating_execution_horizon,
+    const bool predicted_overlap_replan_required,
+    const double now_sec)
   {
     OvertakeRecedingHorizonEvaluation result;
     result.horizon = baseline_horizon;
@@ -13812,15 +13820,17 @@ private:
       std::max(0.0, model->length)) +
       std::max(0.0, line_cfg.receding_horizon_target_longitudinal_buffer);
     const bool body_clear_pass_bounds_release_eligible =
-      overtake_line_state_.phase == OvertakeLinePhase::Pass &&
-      behavior_output.locked_target_seen &&
-      !behavior_output.locked_target_position_jump &&
-      behavior_output.locked_target_current_body_footprints_separated &&
-      behavior_output.locked_target_footprint_prediction_valid &&
-      behavior_output.locked_target_predicted_body_footprint_sweep_separated &&
-      !behavior_output.overtake_execution_corridor_blocked &&
-      !behavior_output.overtake_forbidden_wp &&
-      behavior_output.front_risk_level != FrontRiskLevel::EmergencyBrake;
+      overtake_core::can_release_receding_horizon_body_clear_bounds(
+      overtake_core::RecedingHorizonBodyClearBoundsReleaseRequest{
+        overtake_line_state_.phase == OvertakeLinePhase::Pass,
+        behavior_output.locked_target_seen,
+        behavior_output.locked_target_position_jump,
+        behavior_output.locked_target_current_body_footprints_separated,
+        behavior_output.locked_target_footprint_prediction_valid,
+        behavior_output.locked_target_predicted_body_footprint_sweep_separated,
+        predicted_overlap_replan_required,
+        behavior_output.overtake_execution_corridor_blocked,
+        behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake});
     const double significant_curvature = std::max(
       0.0, cfg.v2x_behavior.overtake_max_curvature);
     const double physical_target_center_separation = std::max(
@@ -13831,6 +13841,14 @@ private:
     bool robust_target_separation_degraded = false;
     bool physical_target_separation_used = false;
     bool target_trust_region_expanded = false;
+    struct RecedingHorizonTargetExecutionConstraint
+    {
+      bool active{false};
+      double target_lateral_m{};
+      double center_separation_m{};
+    };
+    std::vector<RecedingHorizonTargetExecutionConstraint> target_execution_constraints;
+    target_execution_constraints.reserve(static_cast<std::size_t>(N));
 
     overtake_core::RecedingHorizonLateralRequest request;
     request.enabled = true;
@@ -13877,6 +13895,7 @@ private:
         std::abs(target_longitudinal) <= target_longitudinal_overlap + kEps;
       const bool target_body_overlap_window =
         raw_target_body_overlap_window && !body_clear_pass_bounds_release_eligible;
+      RecedingHorizonTargetExecutionConstraint target_execution_constraint;
       result.body_clear_bounds_release_used =
         result.body_clear_bounds_release_used ||
         (raw_target_body_overlap_window && body_clear_pass_bounds_release_eligible);
@@ -13906,6 +13925,10 @@ private:
           physical_target_separation_used || target_bounds.physical_separation_used;
         target_trust_region_expanded =
           target_trust_region_expanded || target_bounds.trust_region_expanded;
+        target_execution_constraint.active = true;
+        target_execution_constraint.target_lateral_m = target_lateral;
+        target_execution_constraint.center_separation_m =
+          target_bounds.applied_center_separation_m;
       } else if (upper < lower) {
         // The trust region is a continuity preference, not a physical guard.
         // Let the optimizer recover inside the already wall-validated bounds;
@@ -13941,6 +13964,7 @@ private:
       request.samples.push_back(
         overtake_core::RecedingHorizonLateralSample{
           distance, lower, upper, reference, clip(warm_start, lower, upper)});
+      target_execution_constraints.push_back(target_execution_constraint);
     }
 
     if (robust_target_separation_degraded || target_trust_region_expanded) {
@@ -14048,25 +14072,58 @@ private:
         }
         return true;
       };
-    const auto remains_inside_wall_bounds = [
-      &lb, &ub, N](
+    struct RecedingHorizonExecutionBoundsCheck
+    {
+      bool valid{false};
+      int failure_index{-1};
+      std::string failure_kind;
+    };
+    const auto check_execution_bounds = [
+      &lb, &ub, &target_execution_constraints, N,
+      pass_side_sign = overtake_line_state_.pass_side_sign](
         const OvertakeLineHorizonEvaluation & horizon,
         const double wall_clearance) {
-        if (horizon.target_ey.size() != static_cast<std::size_t>(N)) {
-          return false;
+        RecedingHorizonExecutionBoundsCheck check;
+        if (
+          horizon.target_ey.size() != static_cast<std::size_t>(N) ||
+          target_execution_constraints.size() != static_cast<std::size_t>(N))
+        {
+          check.failure_kind = "invalid";
+          return check;
         }
         for (int i = 0; i < N; ++i) {
-          const double lower = lb[i] + wall_clearance;
-          const double upper = ub[i] - wall_clearance;
+          const std::size_t index = static_cast<std::size_t>(i);
+          const double wall_lower = lb[i] + wall_clearance;
+          const double wall_upper = ub[i] - wall_clearance;
+          const auto & target_constraint = target_execution_constraints[index];
+          const auto execution_bounds =
+            overtake_core::resolve_receding_horizon_execution_bounds(
+            overtake_core::RecedingHorizonExecutionBoundsRequest{
+              pass_side_sign,
+              wall_lower,
+              wall_upper,
+              target_constraint.active,
+              target_constraint.target_lateral_m,
+              target_constraint.center_separation_m});
+          if (!execution_bounds.valid) {
+            check.failure_index = i;
+            check.failure_kind = target_constraint.active ? "target" : "wall";
+            return check;
+          }
+          const double target_ey = horizon.target_ey[index];
           if (
-            upper < lower ||
-            horizon.target_ey[static_cast<std::size_t>(i)] < lower - 1e-6 ||
-            horizon.target_ey[static_cast<std::size_t>(i)] > upper + 1e-6)
+            target_ey < execution_bounds.lower_bound_m - 1e-6 ||
+            target_ey > execution_bounds.upper_bound_m + 1e-6)
           {
-            return false;
+            check.failure_index = i;
+            check.failure_kind =
+              target_ey < wall_lower - 1e-6 || target_ey > wall_upper + 1e-6 ?
+              "wall" : "target";
+            return check;
           }
         }
-        return true;
+        check.valid = true;
+        return check;
       };
 
     // Static-map and lateral-acceleration corrections run after the lateral
@@ -14105,8 +14162,9 @@ private:
     OvertakeLineHorizonEvaluation validated_horizon;
     bool validation_accepted = false;
     bool initial_execution_feasible = false;
-    bool initial_inside_optimizer_bounds = false;
     bool saw_physical_infeasibility = false;
+    int hard_bound_failure_index = -1;
+    std::string hard_bound_failure_kind;
     for (const double candidate_speed : validation_speeds) {
       for (const double candidate_wall_clearance : validation_wall_clearances) {
         std::vector<double> validation_targets = optimized.lateral_targets_m;
@@ -14118,20 +14176,18 @@ private:
             std::nullopt, validation_targets);
           const bool inside_optimizer_bounds =
             remains_inside_bounds(candidate_horizon, request.samples);
+          const auto execution_bounds = check_execution_bounds(
+            candidate_horizon, candidate_wall_clearance);
           if (
             candidate_speed == validation_speeds.front() &&
             candidate_wall_clearance == validation_wall_clearances.front() &&
             repair_iteration == 0)
           {
             initial_execution_feasible = candidate_horizon.execution_feasible();
-            initial_inside_optimizer_bounds = inside_optimizer_bounds;
           }
-          const bool body_clear_projection_accepted =
-            body_clear_pass_bounds_release_eligible &&
-            remains_inside_wall_bounds(candidate_horizon, candidate_wall_clearance);
           if (
             candidate_horizon.execution_feasible() &&
-            (inside_optimizer_bounds || body_clear_projection_accepted))
+            execution_bounds.valid)
           {
             validated_horizon = std::move(candidate_horizon);
             validation_accepted = true;
@@ -14142,8 +14198,8 @@ private:
               !inside_optimizer_bounds;
             result.hard_wall_clearance_used =
               candidate_wall_clearance + 1e-6 < planning_wall_clearance;
-            result.body_clear_bounds_release_used =
-              result.body_clear_bounds_release_used || !inside_optimizer_bounds;
+            result.soft_trust_region_release_used =
+              result.soft_trust_region_release_used || !inside_optimizer_bounds;
             if (candidate_speed + 1e-6 < speed_for_time) {
               result.velocity_limit_mps = candidate_speed;
             }
@@ -14152,6 +14208,10 @@ private:
           saw_physical_infeasibility =
             saw_physical_infeasibility ||
             candidate_horizon.static_map_physical_infeasible_during_execution;
+          if (!execution_bounds.valid) {
+            hard_bound_failure_index = execution_bounds.failure_index;
+            hard_bound_failure_kind = execution_bounds.failure_kind;
+          }
           if (
             candidate_horizon.static_map_physical_infeasible_during_execution ||
             candidate_horizon.target_ey.size() != validation_targets.size())
@@ -14177,10 +14237,17 @@ private:
       }
     }
     if (!validation_accepted) {
-      fail(
-        !initial_execution_feasible || saw_physical_infeasibility ?
-        "optimized horizon failed physical revalidation" :
-        "optimized horizon escaped hard bounds", true);
+      result.hard_bound_failure_index = hard_bound_failure_index;
+      result.hard_bound_failure_kind = hard_bound_failure_kind;
+      if (!initial_execution_feasible || saw_physical_infeasibility) {
+        fail("optimized horizon failed physical revalidation", true);
+      } else if (hard_bound_failure_kind == "wall") {
+        fail("optimized horizon escaped wall bounds", true);
+      } else if (hard_bound_failure_kind == "target") {
+        fail("optimized horizon escaped target separation bounds", true);
+      } else {
+        fail("optimized horizon escaped execution bounds", true);
+      }
       return result;
     }
     if (result.post_validation_repair_active) {
@@ -14189,8 +14256,8 @@ private:
     if (result.hard_wall_clearance_used) {
       append_fallback_reason("robust wall reserve degraded to configured hard reserve");
     }
-    if (!initial_inside_optimizer_bounds && result.body_clear_bounds_release_used) {
-      append_fallback_reason("body-clear Pass accepted validated bound projection");
+    if (result.soft_trust_region_release_used) {
+      append_fallback_reason("post-validation left soft Mission trust region");
     }
 
     result.active = true;
@@ -19608,7 +19675,7 @@ private:
       horizon_phase_start_ey, horizon_phase_traveled_m, hold_pass_goal,
       phase_distance, goal_ey, planning_wall_clearance,
       target_center_separation, max_lateral_accel, speed_for_time,
-      generating_execution_horizon, now_sec);
+      generating_execution_horizon, predicted_overlap_replan_required, now_sec);
     if (receding_horizon.active) {
       horizon_evaluation = receding_horizon.horizon;
     } else if (receding_horizon.hard_infeasible) {
@@ -19635,6 +19702,12 @@ private:
       receding_horizon.hard_wall_clearance_used;
     output.receding_horizon_body_clear_bounds_release_used =
       receding_horizon.body_clear_bounds_release_used;
+    output.receding_horizon_soft_trust_release_used =
+      receding_horizon.soft_trust_region_release_used;
+    output.receding_horizon_hard_bound_failure_index =
+      receding_horizon.hard_bound_failure_index;
+    output.receding_horizon_hard_bound_failure_kind =
+      receding_horizon.hard_bound_failure_kind;
     output.receding_horizon_objective = receding_horizon.objective;
     output.receding_horizon_max_adjustment =
       receding_horizon.maximum_reference_adjustment_m;
@@ -20123,7 +20196,8 @@ private:
           "overlap_elapsed=%.2f/%.2f, "
           "cooldown=%.2f, "
           "rh=%d/fallback=%d/hard=%d/hold=%d/lease=%d/repair=%d/"
-          "hard_wall=%d/body_release=%d/speed_cap=%.2f/"
+          "hard_wall=%d/body_release=%d/trust_release=%d/"
+          "hard_kind=%s/hard_i=%d/speed_cap=%.2f/"
           "reason=%s/obj=%.2f/adjust=%.2f, "
           "max_lat_acc=%.2f, lat_limited=%d, wall_limited=%d, "
           "static_wall_limited=%d, static_margin_degraded=%d, static_reachable=%d, "
@@ -20205,6 +20279,10 @@ private:
           output.receding_horizon_post_validation_repair_active ? 1 : 0,
           output.receding_horizon_hard_wall_clearance_used ? 1 : 0,
           output.receding_horizon_body_clear_bounds_release_used ? 1 : 0,
+          output.receding_horizon_soft_trust_release_used ? 1 : 0,
+          output.receding_horizon_hard_bound_failure_kind.empty() ?
+          "none" : output.receding_horizon_hard_bound_failure_kind.c_str(),
+          output.receding_horizon_hard_bound_failure_index,
           output.receding_horizon_velocity_limit,
           output.receding_horizon_fallback_reason.empty() ?
           "none" : output.receding_horizon_fallback_reason.c_str(),

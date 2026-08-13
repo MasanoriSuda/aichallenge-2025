@@ -1501,6 +1501,60 @@ RecedingHorizonTargetBoundsResolution resolve_receding_horizon_target_bounds(
   return resolution;
 }
 
+RecedingHorizonExecutionBoundsResolution resolve_receding_horizon_execution_bounds(
+  const RecedingHorizonExecutionBoundsRequest & request) noexcept
+{
+  RecedingHorizonExecutionBoundsResolution resolution;
+  if (
+    !std::isfinite(request.wall_lower_bound_m) ||
+    !std::isfinite(request.wall_upper_bound_m) ||
+    request.wall_upper_bound_m + 1e-9 < request.wall_lower_bound_m)
+  {
+    return resolution;
+  }
+
+  double lower = request.wall_lower_bound_m;
+  double upper = request.wall_upper_bound_m;
+  if (request.target_separation_active) {
+    if (
+      (request.pass_side_sign != -1 && request.pass_side_sign != 1) ||
+      !std::isfinite(request.target_lateral_m) ||
+      !std::isfinite(request.target_center_separation_m) ||
+      request.target_center_separation_m < 0.0)
+    {
+      return resolution;
+    }
+    if (request.pass_side_sign > 0) {
+      lower = std::max(
+        lower, request.target_lateral_m + request.target_center_separation_m);
+    } else {
+      upper = std::min(
+        upper, request.target_lateral_m - request.target_center_separation_m);
+    }
+  }
+  if (upper + 1e-9 < lower) {
+    return resolution;
+  }
+  resolution.valid = true;
+  resolution.lower_bound_m = lower;
+  resolution.upper_bound_m = upper;
+  return resolution;
+}
+
+bool can_release_receding_horizon_body_clear_bounds(
+  const RecedingHorizonBodyClearBoundsReleaseRequest & request) noexcept
+{
+  return request.pass_phase &&
+         request.target_seen &&
+         !request.target_position_jump &&
+         request.current_body_footprints_separated &&
+         request.footprint_prediction_valid &&
+         (request.predicted_body_footprint_sweep_separated ||
+         !request.predicted_overlap_confirmed) &&
+         !request.execution_corridor_blocked &&
+         !request.emergency_front_risk;
+}
+
 RecedingHorizonWarmStartResolution resample_receding_horizon_warm_start(
   const RecedingHorizonWarmStartRequest & request) noexcept
 {

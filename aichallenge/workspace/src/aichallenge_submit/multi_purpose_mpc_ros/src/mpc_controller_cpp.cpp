@@ -9151,6 +9151,7 @@ struct MPC
             assessment.side,
             inner_curve_pass_side});
       };
+    int mpcc_lite_progressive_entry_authorized_side = 0;
     const auto has_validated_full_mission = [](const SideAssessment & assessment) {
         return
           assessment.selected_mission.has_value() &&
@@ -9168,7 +9169,24 @@ struct MPC
           assessment.selected_mission->predicted_rear_clear_ego_distance_m >= 0.0;
       };
     const auto has_executable_mission = [&](const SideAssessment & assessment) {
-        return has_validated_full_mission(assessment);
+        if (has_validated_full_mission(assessment)) {
+          return true;
+        }
+        if (
+          assessment.side == 0 ||
+          assessment.side != mpcc_lite_progressive_entry_authorized_side ||
+          !assessment.selected_mission.has_value())
+        {
+          return false;
+        }
+        const auto & mission = assessment.selected_mission.value();
+        return mission.progressive_entry && mission.feasible &&
+               mission.body_clear_deadline_checked &&
+               mission.body_clear_deadline_feasible &&
+               mission.pass_target_clearance_checked &&
+               std::isfinite(
+                 mission.predicted_minimum_pass_target_surface_clearance_m) &&
+               mission.predicted_minimum_pass_target_surface_clearance_m >= 0.0;
       };
     const auto execution_allowed_for_side = [&](const SideAssessment & assessment) {
         if (!assessment.gap_available || assessment.side == 0) {
@@ -10171,10 +10189,17 @@ struct MPC
       const double shadow_prefix_time_remaining_sec =
         shadow_mission_budget_active ? shadow_mission_time_remaining_sec :
         std::max(0.0, shadow_cfg.pass_horizon_absolute_time_limit);
+      const bool mpcc_new_entry_prefix_context =
+        locked_pass_side == 0 &&
+        overtake_line_state_.phase == OvertakeLinePhase::Idle &&
+        fresh_overtake_entry_commit_window_open;
+      const double shadow_prefix_target_speed_mps =
+        mpcc_new_entry_prefix_context ? output.overtake_entry_target_speed :
+        output.locked_target_speed;
       const double shadow_prefix_minimum_speed_mps =
         overtake_core::resolve_cross_side_minimum_speed_requirement(
         std::max(0.0, current_speed_mps_),
-        std::max(0.0, output.locked_target_speed));
+        std::max(0.0, shadow_prefix_target_speed_mps));
       overtake_core::MpccLitePrefixExecutionResolution prefix_execution;
       if (
         !last_feasible_hold && winning_mission.has_value() &&
@@ -10185,7 +10210,8 @@ struct MPC
           overtake_core::MpccLitePrefixExecutionRequest{
             overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
             overtake_line_state_.phase == OvertakeLinePhase::Pass,
-            opponent_side_replan_before_no_return,
+            mpcc_new_entry_prefix_context,
+            mpcc_new_entry_prefix_context || opponent_side_replan_before_no_return,
             overtake_line_state_.pass_horizon_safe_separation_active,
             true,
             winning_mission->feasible,
@@ -10325,6 +10351,42 @@ struct MPC
         } else if (!last_feasible_hold) {
           right_assessment = shadow_right_assessment;
         }
+        auto & authoritative_assessment = authority.selected_side_sign > 0 ?
+          left_assessment : right_assessment;
+        authoritative_assessment.side = authority.selected_side_sign;
+        authoritative_assessment.gap_available = true;
+        authoritative_assessment.selected_mission = winning_mission;
+        authoritative_assessment.mpcc_receding_mission = winning_mission;
+        authoritative_assessment.corridor_center_ey =
+          winning_mission->goal_lateral_m;
+        authoritative_assessment.required_lateral_shift =
+          winning_mission->lateral_shift_m;
+        authoritative_assessment.required_lateral_accel =
+          winning_mission->max_required_lateral_accel_mps2;
+        authoritative_assessment.minimum_motion_goal_available = true;
+        authoritative_assessment.base_line_clear =
+          std::abs(winning_mission->goal_lateral_m) <= kEps;
+        authoritative_assessment.direct_base_line_pass_ready =
+          winning_mission->direct_pass &&
+          authoritative_assessment.base_line_clear &&
+          winning_mission->current_position_clear;
+        authoritative_assessment.direct_tiny_shift_pass_ready =
+          winning_mission->direct_pass &&
+          !authoritative_assessment.base_line_clear &&
+          winning_mission->current_position_clear;
+        authoritative_assessment.reason =
+          winning_prefix_execution_admitted ?
+          "MPCC-lite progressive prefix selected for entry" :
+          "MPCC-lite complete Mission selected for entry";
+        authoritative_assessment.guard_reason = authoritative_assessment.reason;
+        side_selection = {
+          pass_side(authority.selected_side_sign),
+          overtake_core::SideSelectionReason::HigherQuality};
+        side_selected_for_execution = true;
+        if (winning_prefix_execution_admitted) {
+          mpcc_lite_progressive_entry_authorized_side =
+            authority.selected_side_sign;
+        }
         auto cached_mission = winning_mission.value();
         cached_mission.pass_side_sign = authority.selected_side_sign;
         // Prefix execution uses the existing progressive-entry rolling
@@ -10440,23 +10502,93 @@ struct MPC
       effective_front_risk_level != FrontRiskLevel::EmergencyBrake &&
       !overtake_solver_recovery_active_ && !overtake_forbidden_wp;
     if (mpcc_entry_cache_fresh && mpcc_entry_context_valid) {
-      const auto & mission = mpcc_lite_control_last_feasible_entry_mission_.value();
-      const bool prediction_fresh =
-        !std::isfinite(mission.dynamic_valid_until_sec) ||
-        now_sec <= mission.dynamic_valid_until_sec + kEps;
-      if (
-        prediction_fresh && !mission.progressive_entry && mission.feasible &&
-        mission.body_clear_deadline_checked &&
-        mission.body_clear_deadline_feasible &&
-        mission.rear_clear_prediction_checked &&
-        mission.rear_clear_prediction_feasible &&
-        std::isfinite(mission.predicted_rear_clear_time_sec) &&
-        mission.predicted_rear_clear_time_sec >= 0.0 &&
-        std::isfinite(mission.predicted_rear_clear_ego_distance_m) &&
-        mission.predicted_rear_clear_ego_distance_m >= 0.0 &&
-        mission.pass_target_clearance_checked &&
-        (mission.pass_side_sign == -1 || mission.pass_side_sign == 1))
+      const auto & cached_mission =
+        mpcc_lite_control_last_feasible_entry_mission_.value();
+      std::optional<overtake_core::OvertakeMissionCandidate> admitted_mission;
+      bool progressive_prefix_admitted = false;
+      const bool cached_prediction_fresh =
+        !std::isfinite(cached_mission.dynamic_valid_until_sec) ||
+        now_sec <= cached_mission.dynamic_valid_until_sec + kEps;
+      const bool cached_complete_mission_valid =
+        cached_prediction_fresh && !cached_mission.progressive_entry &&
+        cached_mission.feasible && cached_mission.body_clear_deadline_checked &&
+        cached_mission.body_clear_deadline_feasible &&
+        cached_mission.rear_clear_prediction_checked &&
+        cached_mission.rear_clear_prediction_feasible &&
+        std::isfinite(cached_mission.predicted_rear_clear_time_sec) &&
+        cached_mission.predicted_rear_clear_time_sec >= 0.0 &&
+        std::isfinite(cached_mission.predicted_rear_clear_ego_distance_m) &&
+        cached_mission.predicted_rear_clear_ego_distance_m >= 0.0 &&
+        cached_mission.pass_target_clearance_checked &&
+        (cached_mission.pass_side_sign == -1 ||
+        cached_mission.pass_side_sign == 1);
+      if (cached_complete_mission_valid) {
+        admitted_mission = cached_mission;
+      } else if (
+        cached_mission.progressive_entry &&
+        (cached_mission.pass_side_sign == -1 ||
+        cached_mission.pass_side_sign == 1))
       {
+        // The lease retains only target/side authority. Never replay the
+        // cached prefix itself: select and re-admit a prefix generated from
+        // the current V2X/track sample on the same side.
+        const auto & current_assessment = cached_mission.pass_side_sign > 0 ?
+          left_assessment : right_assessment;
+        std::optional<overtake_core::OvertakeMissionCandidate> current_prefix;
+        if (
+          current_assessment.selected_mission.has_value() &&
+          current_assessment.selected_mission->progressive_entry)
+        {
+          current_prefix = current_assessment.selected_mission;
+        } else if (
+          current_assessment.mpcc_receding_mission.has_value() &&
+          current_assessment.mpcc_receding_mission->progressive_entry)
+        {
+          current_prefix = current_assessment.mpcc_receding_mission;
+        }
+        if (
+          current_prefix.has_value() &&
+          current_prefix->pass_side_sign == cached_mission.pass_side_sign &&
+          (!std::isfinite(current_prefix->dynamic_valid_until_sec) ||
+          now_sec <= current_prefix->dynamic_valid_until_sec + kEps))
+        {
+          const double minimum_prefix_speed_mps =
+            overtake_core::resolve_cross_side_minimum_speed_requirement(
+            std::max(0.0, current_speed_mps_),
+            std::max(0.0, output.overtake_entry_target_speed));
+          const auto prefix_execution =
+            overtake_core::resolve_mpcc_lite_prefix_execution(
+            overtake_core::MpccLitePrefixExecutionRequest{
+              false,
+              true,
+              true,
+              false,
+              current_prefix->progressive_entry,
+              current_prefix->feasible,
+              current_prefix->body_clear_deadline_checked,
+              current_prefix->body_clear_deadline_feasible,
+              current_prefix->pass_target_clearance_checked,
+              current_prefix->predicted_minimum_pass_target_surface_clearance_m,
+              current_prefix->predicted_body_clear_time_sec,
+              current_prefix->predicted_body_clear_distance_m,
+              current_prefix->predicted_minimum_ego_speed_mps,
+              minimum_prefix_speed_mps,
+              current_prefix->minimum_path_wall_clearance_m,
+              std::max(0.10, robust_wall_planning_clearance),
+              std::max(0.0, shadow_cfg.pass_horizon_absolute_time_limit),
+              std::max(0.0, shadow_cfg.pass_horizon_absolute_distance_limit),
+              false});
+          progressive_prefix_admitted =
+            prefix_execution.valid && prefix_execution.admitted;
+          if (progressive_prefix_admitted) {
+            admitted_mission = current_prefix;
+            mpcc_lite_progressive_entry_authorized_side =
+              cached_mission.pass_side_sign;
+          }
+        }
+      }
+      if (admitted_mission.has_value()) {
+        const auto & mission = admitted_mission.value();
         auto & authoritative_assessment = mission.pass_side_sign > 0 ?
           left_assessment : right_assessment;
         authoritative_assessment.side = mission.pass_side_sign;
@@ -10477,6 +10609,8 @@ struct MPC
           mission.direct_pass && !authoritative_assessment.base_line_clear &&
           mission.current_position_clear;
         authoritative_assessment.reason =
+          progressive_prefix_admitted ?
+          "MPCC-lite fresh progressive prefix lease selected for entry" :
           "MPCC-lite complete Mission selected for entry";
         authoritative_assessment.guard_reason = authoritative_assessment.reason;
         side_selection = {
@@ -13512,6 +13646,7 @@ private:
         return overtake_core::resolve_mpcc_lite_prefix_execution(
           overtake_core::MpccLitePrefixExecutionRequest{
             active_execution && !replacing_paused_mission,
+            false,
             !effective_no_return_latched,
             overtake_line_state_.pass_horizon_safe_separation_active,
             proposed_prefix.progressive_entry,
@@ -22732,7 +22867,17 @@ private:
         entry_prearm_window.active,
         output.start_grid_breakout_active || stationary_blocker_entry_override ||
         slow_blocker_urgent_entry_override});
+    // Setup-only longitudinal pressure is useful while the target is outside
+    // the lateral commit window. Once inside that window, require the same
+    // cycle to carry an executable complete Mission or progressive prefix;
+    // otherwise accelerating straight at the target only creates a later
+    // SafetyBrake.
+    const bool setup_only_prearm_distance_allowed =
+      !output.has_front_vehicle ||
+      output.front_distance >
+      cfg.v2x_behavior.overtake_entry_commit_max_front_distance + kEps;
     const bool setup_prearm_active =
+      setup_only_prearm_distance_allowed &&
       v2x_overtake_core::can_use_overtake_entry_setup_prearm(
       v2x_overtake_core::OvertakeEntrySetupPrearmRequest{
         entry_setup_available,
@@ -22743,6 +22888,7 @@ private:
         output.front_distance,
         cfg.v2x_behavior.overtake_guard_min_front_distance});
     const bool leased_prearm_active =
+      setup_only_prearm_distance_allowed &&
       v2x_overtake_core::can_hold_overtake_entry_prearm(
       v2x_overtake_core::OvertakeEntryPrearmHoldRequest{
         entry_validation_lease.hold_active,
@@ -22775,11 +22921,10 @@ private:
              << (output.overtake_entry_prearm_cooldown_active ? 1 : 0);
       output.reason = reason.str();
       if (output.overtake_entry_prearm_active) {
-        // The complete mission was revalidated this cycle, but the measured
-        // closing ability is not ready. Keep the base racing line and let ego
-        // acquire speed before handing lateral ownership to OvertakeLine.
-        // Emergency and mission/corridor checks are evaluated again every
-        // cycle before this exception can remain active.
+        // A complete Mission or admitted fresh prefix was revalidated this
+        // cycle, or setup-only pressure remains outside the lateral commit
+        // window. Keep the base racing line until measured closing readiness;
+        // hard guards and current prefix feasibility are checked every cycle.
         output.allow_gap_planner = false;
         output.target_velocity_limit = std::numeric_limits<double>::infinity();
         output.follow_speed_limit_active = false;

@@ -5354,10 +5354,10 @@ MpccLitePrefixExecutionResolution resolve_mpcc_lite_prefix_execution(
              value == std::numeric_limits<double>::infinity();
     };
 
-  if (!request.active_execution) {
+  if (!request.active_execution && !request.new_entry_context) {
     return reject(MpccLitePrefixExecutionRejectReason::Inactive);
   }
-  if (!request.before_no_return) {
+  if (request.active_execution && !request.before_no_return) {
     return reject(MpccLitePrefixExecutionRejectReason::NoReturn);
   }
   if (request.safe_separation_active) {
@@ -5429,7 +5429,7 @@ MpccLitePrefixExecutionResolution resolve_mpcc_lite_prefix_execution(
   }
 
   resolution.admitted = true;
-  resolution.restart_shiftout = request.pass_phase;
+  resolution.restart_shiftout = request.active_execution && request.pass_phase;
   resolution.reason = MpccLitePrefixExecutionRejectReason::Admitted;
   return resolution;
 }
@@ -5698,7 +5698,8 @@ MpccLiteAuthorityResolution resolve_mpcc_lite_authority(
   if (request.new_entry_context) {
     if (
       selected_side != 0 && request.selected_mission_available &&
-      request.selected_mission_complete)
+      (request.selected_mission_complete ||
+      request.selected_prefix_execution_admitted))
     {
       resolution.action = MpccLiteAuthorityAction::SelectEntry;
       resolution.selected_side_sign = selected_side;

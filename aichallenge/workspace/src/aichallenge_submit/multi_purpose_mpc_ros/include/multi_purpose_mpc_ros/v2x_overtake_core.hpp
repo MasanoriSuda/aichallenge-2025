@@ -2961,6 +2961,10 @@ enum class MpccLitePrefixExecutionRejectReason
 struct MpccLitePrefixExecutionRequest
 {
   bool active_execution{false};
+  /// A fresh Idle/Follow entry may execute a locally hard-feasible prefix
+  /// before a complete rear-clear/Return Mission exists. It remains distinct
+  /// from an active Mission replacement so no-return semantics stay explicit.
+  bool new_entry_context{false};
   bool before_no_return{false};
   bool safe_separation_active{false};
   bool candidate_progressive{false};
@@ -2991,7 +2995,8 @@ struct MpccLitePrefixExecutionResolution
 };
 
 /// Admit a short, hard-feasible receding-horizon prefix without pretending it
-/// contains a rear-clear/Return solution. Its ShiftOut and short same-side
+/// contains a rear-clear/Return solution. A prefix may start a fresh entry or
+/// replace an active pre-no-return Mission. Its ShiftOut and short same-side
 /// continuation must fit the remaining runtime budget and retain the speed
 /// and physical reserves required at the commit point.
 MpccLitePrefixExecutionResolution resolve_mpcc_lite_prefix_execution(
@@ -3130,10 +3135,10 @@ struct MpccLiteAuthorityResolution
   int selected_side_sign{0};
 };
 
-/// Give the finite-horizon winner bounded control authority. Entry retains the
-/// full rear-clear contract. During active execution, an independently
-/// admitted receding prefix may own one bounded same-side or cross-side rolling
-/// replacement before no-return.
+/// Give the finite-horizon winner bounded control authority. A fresh entry may
+/// use either a complete Mission or an independently admitted progressive
+/// prefix. During active execution, that prefix may own one bounded same-side
+/// or cross-side rolling replacement before no-return.
 MpccLiteAuthorityResolution resolve_mpcc_lite_authority(
   const MpccLiteAuthorityRequest & request) noexcept;
 

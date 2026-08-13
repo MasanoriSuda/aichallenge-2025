@@ -1418,6 +1418,28 @@ RecedingHorizonLateralResolution optimize_receding_horizon_lateral_trajectory(
   return resolution;
 }
 
+bool can_retain_receding_horizon_execution_lease(
+  const RecedingHorizonExecutionLeaseRequest & request) noexcept
+{
+  if (
+    !request.enabled || !request.active_execution_phase ||
+    !request.mission_path_frozen || !request.mission_side_valid ||
+    !request.last_solution_feasible || !request.mission_generation_matches ||
+    !request.mission_side_matches || !request.target_continuous_or_leased ||
+    request.target_position_jump || request.target_course_progress_rejected ||
+    request.execution_corridor_blocked || request.explicit_forbidden_waypoint ||
+    request.emergency_front_risk || request.solver_recovery_requested ||
+    request.hard_wall_fault || !std::isfinite(request.now_sec) ||
+    !std::isfinite(request.last_feasible_sec) ||
+    !std::isfinite(request.maximum_age_sec) || request.maximum_age_sec <= 0.0 ||
+    request.now_sec + 1e-9 < request.last_feasible_sec)
+  {
+    return false;
+  }
+  return request.now_sec - request.last_feasible_sec <=
+         request.maximum_age_sec + 1e-9;
+}
+
 OvertakeBodyClearDeadlineResolution resolve_overtake_body_clear_deadline(
   const OvertakeBodyClearDeadlineRequest & request) noexcept
 {

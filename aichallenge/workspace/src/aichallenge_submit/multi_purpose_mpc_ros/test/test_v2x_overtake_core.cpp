@@ -133,6 +133,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionPathRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionPathStage;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonLateralRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonLateralSample;
+using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonExecutionLeaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorSample;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCorridorAdmissionRequest;
@@ -406,6 +407,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::early_pass_side_intrusion_risk;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   should_defer_direct_pass_prediction_handoff;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_entry_stage;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  can_retain_receding_horizon_execution_lease;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_rearward_pass_completion_context;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_observe_locked_target_geometry;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_enter_dynamic_mission_wait;
@@ -3005,6 +3008,59 @@ TEST(V2XOvertakeCoreSpeed, RejectsInfeasibleRecedingHorizonBounds)
   EXPECT_FALSE(result.valid);
   EXPECT_FALSE(result.feasible);
   EXPECT_TRUE(result.lateral_targets_m.empty());
+}
+
+TEST(V2XOvertakeCoreSpeed, RetainsRecentFeasibleRecedingHorizonForSameMission)
+{
+  RecedingHorizonExecutionLeaseRequest request;
+  request.enabled = true;
+  request.active_execution_phase = true;
+  request.mission_path_frozen = true;
+  request.mission_side_valid = true;
+  request.last_solution_feasible = true;
+  request.mission_generation_matches = true;
+  request.mission_side_matches = true;
+  request.target_continuous_or_leased = true;
+  request.now_sec = 10.20;
+  request.last_feasible_sec = 10.0;
+  request.maximum_age_sec = 0.30;
+
+  EXPECT_TRUE(can_retain_receding_horizon_execution_lease(request));
+
+  request.now_sec = 10.31;
+  EXPECT_FALSE(can_retain_receding_horizon_execution_lease(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, RecedingHorizonLeaseCannotBypassHardFaults)
+{
+  RecedingHorizonExecutionLeaseRequest request;
+  request.enabled = true;
+  request.active_execution_phase = true;
+  request.mission_path_frozen = true;
+  request.mission_side_valid = true;
+  request.last_solution_feasible = true;
+  request.mission_generation_matches = true;
+  request.mission_side_matches = true;
+  request.target_continuous_or_leased = true;
+  request.now_sec = 10.1;
+  request.last_feasible_sec = 10.0;
+  request.maximum_age_sec = 0.30;
+  ASSERT_TRUE(can_retain_receding_horizon_execution_lease(request));
+
+  request.hard_wall_fault = true;
+  EXPECT_FALSE(can_retain_receding_horizon_execution_lease(request));
+  request.hard_wall_fault = false;
+  request.emergency_front_risk = true;
+  EXPECT_FALSE(can_retain_receding_horizon_execution_lease(request));
+  request.emergency_front_risk = false;
+  request.solver_recovery_requested = true;
+  EXPECT_FALSE(can_retain_receding_horizon_execution_lease(request));
+  request.solver_recovery_requested = false;
+  request.target_position_jump = true;
+  EXPECT_FALSE(can_retain_receding_horizon_execution_lease(request));
+  request.target_position_jump = false;
+  request.execution_corridor_blocked = true;
+  EXPECT_FALSE(can_retain_receding_horizon_execution_lease(request));
 }
 
 TEST(V2XOvertakeCoreSpeed, TightensPassGoalForDynamicShiftOutCorridor)

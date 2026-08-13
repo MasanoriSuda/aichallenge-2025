@@ -1411,6 +1411,8 @@ struct OvertakeLineConfig
   double receding_horizon_current_anchor_weight{6.0};
   double receding_horizon_relaxation{0.65};
   double receding_horizon_target_longitudinal_buffer{0.50};
+  bool receding_horizon_continuity_enabled{true};
+  double receding_horizon_continuity_lease_sec{0.30};
   double target_intrusion_ordering_margin{0.10};
   double target_intrusion_guard_distance{std::numeric_limits<double>::infinity()};
   bool side_quality_selection_enabled{true};
@@ -2441,8 +2443,11 @@ struct OvertakeLineOutput
   std::vector<bool> target_active;
   bool receding_horizon_active{false};
   bool receding_horizon_fallback{false};
+  bool receding_horizon_continuity_lease_active{false};
+  bool receding_horizon_last_feasible_hold_active{false};
   double receding_horizon_objective{std::numeric_limits<double>::infinity()};
   double receding_horizon_max_adjustment{0.0};
+  std::string receding_horizon_fallback_reason;
   double target_velocity_reference{std::numeric_limits<double>::infinity()};
   double target_velocity_limit{std::numeric_limits<double>::infinity()};
   double target_velocity_floor{0.0};
@@ -2496,8 +2501,10 @@ struct OvertakeRecedingHorizonEvaluation
   bool attempted{false};
   bool active{false};
   bool fallback{false};
+  bool last_feasible_hold_active{false};
   double objective{std::numeric_limits<double>::infinity()};
   double maximum_reference_adjustment_m{0.0};
+  std::string fallback_reason;
   OvertakeLineHorizonEvaluation horizon;
 };
 
@@ -9857,6 +9864,25 @@ struct MPC
       output.target_vehicle_id == overtake_line_state_.target_vehicle_id &&
       (output.has_front_vehicle || output.has_side_vehicle) &&
       !output.v2x_message_invalid;
+    const double committed_target_observation_age_sec = std::isfinite(
+      overtake_line_state_.target_last_seen_sec) ?
+      std::max(0.0, now_sec - overtake_line_state_.target_last_seen_sec) :
+      std::numeric_limits<double>::infinity();
+    const bool committed_target_observation_leased =
+      !overtake_line_state_.target_vehicle_id.empty() &&
+      overtake_line_state_.target_vehicle_id != "__unknown__" &&
+      committed_target_observation_age_sec <=
+      cfg.v2x_behavior.overtake_line.receding_horizon_continuity_lease_sec + kEps;
+    const bool receding_horizon_behavior_lease =
+      receding_horizon_execution_lease_active(
+      now_sec,
+      output.locked_target_seen || committed_target_identity_continuous ||
+      committed_target_observation_leased,
+      output.locked_target_position_jump,
+      output.locked_target_course_progress_rejected,
+      output.overtake_execution_corridor_blocked,
+      overtake_forbidden_wp,
+      effective_front_risk_emergency);
     output.overtake_committed_shiftout_behavior_owner_active =
       overtake_core::can_preserve_committed_shiftout_behavior(
       overtake_core::CommittedShiftOutBehaviorOwnershipRequest{
@@ -9874,10 +9900,16 @@ struct MPC
         effective_front_risk_emergency,
         overtake_solver_recovery_active_,
         overtake_line_state_.mission_body_clear_deadline_checked});
+    output.overtake_committed_shiftout_behavior_owner_active =
+      output.overtake_committed_shiftout_behavior_owner_active ||
+      (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut &&
+      receding_horizon_behavior_lease);
     if (output.overtake_committed_shiftout_behavior_owner_active) {
       output.state = V2XBehaviorState::Overtake;
       output.overtake_pass_side_sign = overtake_line_state_.pass_side_sign;
-      output.reason = "committed ShiftOut owns execution / " + overtake_block_reason;
+      output.reason = receding_horizon_behavior_lease ?
+        "receding-horizon ShiftOut owns execution / " + overtake_block_reason :
+        "committed ShiftOut owns execution / " + overtake_block_reason;
       return commit_v2x_behavior_state(output, now_sec);
     }
 
@@ -9907,10 +9939,27 @@ struct MPC
         effective_front_risk_emergency,
         overtake_solver_recovery_active_,
         committed_body_clear_handoff.active});
+    const double recent_clear_prediction_age_sec = std::isfinite(
+      overtake_line_state_.pass_last_clear_target_prediction_sec) ?
+      std::max(
+      0.0, now_sec - overtake_line_state_.pass_last_clear_target_prediction_sec) :
+      std::numeric_limits<double>::infinity();
+    const bool receding_horizon_pass_behavior_lease =
+      overtake_line_state_.phase == OvertakeLinePhase::Pass &&
+      receding_horizon_behavior_lease &&
+      (output.locked_target_current_body_footprints_separated ||
+      output.recoverable_side_contact_active ||
+      recent_clear_prediction_age_sec <=
+      cfg.v2x_behavior.overtake_line.receding_horizon_continuity_lease_sec + kEps);
+    output.overtake_committed_pass_behavior_owner_active =
+      output.overtake_committed_pass_behavior_owner_active ||
+      receding_horizon_pass_behavior_lease;
     if (output.overtake_committed_pass_behavior_owner_active) {
       output.state = V2XBehaviorState::Overtake;
       output.overtake_pass_side_sign = overtake_line_state_.pass_side_sign;
-      output.reason = "committed Pass owns execution / " + overtake_block_reason;
+      output.reason = receding_horizon_pass_behavior_lease ?
+        "receding-horizon Pass owns execution / " + overtake_block_reason :
+        "committed Pass owns execution / " + overtake_block_reason;
       return commit_v2x_behavior_state(output, now_sec);
     }
 
@@ -11532,6 +11581,8 @@ struct MPC
   std::vector<double> overtake_receding_horizon_warm_start_;
   std::uint64_t overtake_receding_horizon_generation_{0U};
   int overtake_receding_horizon_side_sign_{0};
+  double overtake_receding_horizon_last_feasible_sec_{
+    -std::numeric_limits<double>::infinity()};
   std::uint64_t next_overtake_episode_id_{1U};
   v2x_overtake_core::OvertakeLineTransitionAction last_overtake_line_transition_action_{
     v2x_overtake_core::OvertakeLineTransitionAction::None};
@@ -11689,6 +11740,39 @@ private:
     }
   }
 
+  bool receding_horizon_execution_lease_active(
+    const double now_sec, const bool target_continuous_or_leased,
+    const bool target_position_jump, const bool target_course_progress_rejected,
+    const bool execution_corridor_blocked, const bool explicit_forbidden_waypoint,
+    const bool emergency_front_risk, const bool hard_wall_fault = false) const
+  {
+    const auto & line_cfg = cfg.v2x_behavior.overtake_line;
+    return overtake_core::can_retain_receding_horizon_execution_lease(
+      overtake_core::RecedingHorizonExecutionLeaseRequest{
+        line_cfg.receding_horizon_enabled &&
+        line_cfg.receding_horizon_continuity_enabled,
+        overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+        overtake_line_state_.phase == OvertakeLinePhase::Pass,
+        overtake_line_state_.mission_path_frozen,
+        overtake_line_state_.pass_side_sign == -1 ||
+        overtake_line_state_.pass_side_sign == 1,
+        std::isfinite(overtake_receding_horizon_last_feasible_sec_),
+        overtake_receding_horizon_generation_ ==
+        overtake_line_state_.mission_generation,
+        overtake_receding_horizon_side_sign_ == overtake_line_state_.pass_side_sign,
+        target_continuous_or_leased,
+        target_position_jump,
+        target_course_progress_rejected,
+        execution_corridor_blocked,
+        explicit_forbidden_waypoint,
+        emergency_front_risk,
+        overtake_solver_recovery_active_,
+        hard_wall_fault,
+        now_sec,
+        overtake_receding_horizon_last_feasible_sec_,
+        line_cfg.receding_horizon_continuity_lease_sec});
+  }
+
   void reset_overtake_line_state(const double now_sec, const std::string & reason)
   {
     if (overtake_solver_recovery_active_) {
@@ -11730,6 +11814,8 @@ private:
     overtake_receding_horizon_warm_start_.clear();
     overtake_receding_horizon_generation_ = 0U;
     overtake_receding_horizon_side_sign_ = 0;
+    overtake_receding_horizon_last_feasible_sec_ =
+      -std::numeric_limits<double>::infinity();
     overtake_contact_wall_guard_safe_ = false;
     last_overtake_line_transition_action_ =
       v2x_overtake_core::OvertakeLineTransitionAction::None;
@@ -13243,7 +13329,7 @@ private:
     const double goal_ey, const double planning_wall_clearance,
     const double target_center_separation,
     const double max_lateral_accel, const double speed_for_time,
-    const bool generating_execution_horizon)
+    const bool generating_execution_horizon, const double now_sec)
   {
     OvertakeRecedingHorizonEvaluation result;
     result.horizon = baseline_horizon;
@@ -13262,6 +13348,10 @@ private:
       return result;
     }
     result.attempted = true;
+    const auto fail = [&result](const char * reason) {
+        result.fallback = true;
+        result.fallback_reason = reason;
+      };
 
     const bool warm_start_compatible =
       overtake_receding_horizon_warm_start_.size() == static_cast<std::size_t>(N) &&
@@ -13319,7 +13409,7 @@ private:
         !std::isfinite(distance) || !std::isfinite(baseline_target) ||
         !std::isfinite(lower) || !std::isfinite(upper) || upper < lower)
       {
-        result.fallback = true;
+        fail("invalid sample or wall bounds");
         return result;
       }
       lower = std::max(lower, baseline_target - maximum_adjustment);
@@ -13345,7 +13435,7 @@ private:
         }
       }
       if (upper < lower) {
-        result.fallback = true;
+        fail("target-side separation conflicts with wall/trust bounds");
         return result;
       }
 
@@ -13377,13 +13467,75 @@ private:
           distance, lower, upper, reference, clip(warm_start, lower, upper)});
     }
 
+    const auto retain_last_feasible = [&](const char * failure_reason) {
+        const double target_age_sec = std::isfinite(
+          overtake_line_state_.target_last_seen_sec) ?
+          std::max(0.0, now_sec - overtake_line_state_.target_last_seen_sec) :
+          std::numeric_limits<double>::infinity();
+        const bool target_continuous_or_leased =
+          target_prediction_valid ||
+          target_age_sec <= line_cfg.receding_horizon_continuity_lease_sec + kEps;
+        if (
+          !warm_start_compatible ||
+          !receding_horizon_execution_lease_active(
+            now_sec, target_continuous_or_leased,
+            behavior_output.locked_target_position_jump,
+            behavior_output.locked_target_course_progress_rejected,
+            behavior_output.overtake_execution_corridor_blocked,
+            behavior_output.overtake_forbidden_wp,
+            behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake))
+        {
+          return false;
+        }
+
+        std::vector<double> retained_targets;
+        retained_targets.reserve(request.samples.size());
+        for (std::size_t i = 0U; i < request.samples.size(); ++i) {
+          retained_targets.push_back(
+            clip(
+              overtake_receding_horizon_warm_start_[i],
+              request.samples[i].lower_bound_m,
+              request.samples[i].upper_bound_m));
+        }
+        auto retained_horizon = evaluate_overtake_line_horizon(
+          ref_wp_id, N, lb, ub, current_ey, phase_start_ey, phase_traveled_m,
+          hold_pass_goal, phase_distance, goal_ey, planning_wall_clearance,
+          max_lateral_accel, speed_for_time, generating_execution_horizon,
+          std::nullopt, retained_targets);
+        bool retained_inside_bounds =
+          retained_horizon.target_ey.size() == request.samples.size();
+        if (retained_inside_bounds) {
+          for (std::size_t i = 0U; i < request.samples.size(); ++i) {
+            if (
+              retained_horizon.target_ey[i] < request.samples[i].lower_bound_m - 1e-6 ||
+              retained_horizon.target_ey[i] > request.samples[i].upper_bound_m + 1e-6)
+            {
+              retained_inside_bounds = false;
+              break;
+            }
+          }
+        }
+        if (!retained_horizon.execution_feasible() || !retained_inside_bounds) {
+          return false;
+        }
+        result.active = true;
+        result.fallback = true;
+        result.last_feasible_hold_active = true;
+        result.fallback_reason = std::string{failure_reason} + "; retained last feasible";
+        result.horizon = std::move(retained_horizon);
+        return true;
+      };
+
     const auto optimized =
       overtake_core::optimize_receding_horizon_lateral_trajectory(request);
     if (
       !optimized.valid || !optimized.feasible ||
       optimized.lateral_targets_m.size() != static_cast<std::size_t>(N))
     {
-      result.fallback = true;
+      if (retain_last_feasible("optimizer failed")) {
+        return result;
+      }
+      fail("optimizer failed");
       return result;
     }
 
@@ -13405,7 +13557,10 @@ private:
       }
     }
     if (!validated_horizon.execution_feasible() || !remains_inside_optimized_bounds) {
-      result.fallback = true;
+      fail(
+        !validated_horizon.execution_feasible() ?
+        "optimized horizon failed physical revalidation" :
+        "optimized horizon escaped hard bounds");
       return result;
     }
 
@@ -13417,6 +13572,7 @@ private:
     overtake_receding_horizon_warm_start_ = result.horizon.target_ey;
     overtake_receding_horizon_generation_ = overtake_line_state_.mission_generation;
     overtake_receding_horizon_side_sign_ = overtake_line_state_.pass_side_sign;
+    overtake_receding_horizon_last_feasible_sec_ = now_sec;
     return result;
   }
 
@@ -15129,7 +15285,9 @@ private:
       transition_overtake_line_phase(
         OvertakeLinePhase::Return, now_sec, current_ey,
         overtake_line_state_.pass_side_sign,
-        "runtime wall warning; no same-side contraction");
+        "runtime wall warning; no same-side contraction",
+        FollowPrepareCause::Unspecified,
+        ReturnReacquirePolicy::FinishReturn);
       return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
     }
     // Complete a committed pass as soon as rear clearance is confirmed. The behavior layer can
@@ -17474,7 +17632,7 @@ private:
         const double validated_prefix_remaining_m = std::max(
           0.0,
           overtake_line_state_.mission_static_valid_until_pass_m - pass_traveled);
-        const bool safe_trajectory_prefix_active =
+        const bool legacy_safe_trajectory_prefix_active =
           overtake_core::can_retain_safe_trajectory_prefix(
           overtake_core::SafeTrajectoryPrefixLeaseRequest{
             line_cfg.safe_separation_safe_prefix_enabled,
@@ -17501,6 +17659,51 @@ private:
             pass_traveled,
             line_cfg.pass_horizon_absolute_time_limit,
             line_cfg.pass_horizon_absolute_distance_limit});
+        const double receding_horizon_clear_prediction_age_sec = std::isfinite(
+          overtake_line_state_.pass_last_clear_target_prediction_sec) ?
+          std::max(
+          0.0, now_sec - overtake_line_state_.pass_last_clear_target_prediction_sec) :
+          std::numeric_limits<double>::infinity();
+        const bool receding_horizon_recent_clear_prediction =
+          receding_horizon_clear_prediction_age_sec <=
+          line_cfg.receding_horizon_continuity_lease_sec + kEps;
+        const bool receding_horizon_target_observation_leased =
+          !overtake_line_state_.target_vehicle_id.empty() &&
+          overtake_line_state_.target_vehicle_id != "__unknown__" &&
+          target_age <= line_cfg.receding_horizon_continuity_lease_sec + kEps;
+        const bool receding_horizon_current_geometry_safe =
+          behavior_output.locked_target_current_robust_footprints_separated ||
+          behavior_output.recoverable_side_contact_active ||
+          (!locked_target_seen && receding_horizon_recent_clear_prediction);
+        const bool receding_horizon_prediction_safe =
+          (behavior_output.locked_target_footprint_prediction_valid &&
+          behavior_output.locked_target_predicted_robust_footprint_sweep_separated) ||
+          behavior_output.recoverable_side_contact_active ||
+          (!locked_target_seen && receding_horizon_recent_clear_prediction);
+        const bool receding_horizon_safe_prefix_active =
+          overtake_line_state_.pass_horizon_safe_separation_active &&
+          overtake_line_state_.phase == OvertakeLinePhase::Pass &&
+          behavior_output.overtake_commit_stage !=
+          overtake_core::PassCommitStage::Selectable &&
+          receding_horizon_current_geometry_safe &&
+          receding_horizon_prediction_safe &&
+          !rear_clear_confirmed &&
+          pass_elapsed <= line_cfg.pass_horizon_absolute_time_limit + kEps &&
+          pass_traveled <= line_cfg.pass_horizon_absolute_distance_limit + kEps &&
+          receding_horizon_execution_lease_active(
+            now_sec,
+            locked_target_seen || receding_horizon_target_observation_leased,
+            behavior_output.locked_target_position_jump,
+            locked_target_progress_rejected,
+            behavior_output.overtake_execution_corridor_blocked ||
+            behavior_output.locked_target_pass_side_intrusion,
+            behavior_output.overtake_forbidden_wp,
+            behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake,
+            actual_wall_physical_contact || actual_wall_margin_blocked ||
+            actual_wall_sample_unavailable);
+        const bool safe_trajectory_prefix_active =
+          legacy_safe_trajectory_prefix_active ||
+          receding_horizon_safe_prefix_active;
         if (
           safe_trajectory_prefix_active &&
           !overtake_line_state_.pass_safe_trajectory_prefix_was_active)
@@ -17509,7 +17712,7 @@ private:
             rclcpp::get_logger("mpc_controller"),
             "OvertakeLine safe trajectory prefix retained: episode=%lu, target=%s, "
             "side=%d, target_s=%.2f, robust_target=%.2f m, robust_wall=%.2f m, "
-            "prefix=%.2f m, progress=%.2f m, "
+            "prefix=%.2f m, progress=%.2f m, source=%s, "
             "progress_age=%.2f s, absolute=%.2f s/%.2f m, wp_id=%d",
             static_cast<unsigned long>(overtake_line_state_.episode_id),
             overtake_line_state_.target_vehicle_id.c_str(),
@@ -17517,6 +17720,7 @@ private:
             behavior_output.robust_target_center_separation,
             behavior_output.robust_wall_planning_clearance,
             validated_prefix_remaining_m, safe_separation_forward_progress,
+            receding_horizon_safe_prefix_active ? "receding-horizon" : "static",
             safe_separation_progress_age, pass_elapsed, pass_traveled, model->wp_id);
         }
         overtake_line_state_.pass_safe_trajectory_prefix_was_active =
@@ -17689,6 +17893,11 @@ private:
           return update_overtake_line(
             behavior_output, ref_wp_id, N, lb, ub, now_sec);
         }
+        const bool safe_separation_target_observation_available =
+          locked_target_seen ||
+          (receding_horizon_safe_prefix_active &&
+          std::isfinite(locked_target_longitudinal) &&
+          std::isfinite(locked_target_speed));
         const auto safe_separation = overtake_core::resolve_safe_separation(
           overtake_core::SafeSeparationRequest{
             line_cfg.safe_separation_enabled,
@@ -17696,7 +17905,7 @@ private:
             short_horizon_safe || tactical_revalidation.active ||
             safe_trajectory_prefix_active ||
             latched_forward_escape_continuation,
-            locked_target_seen,
+            safe_separation_target_observation_available,
             rear_clear_confirmed,
             !return_corridor_blocked,
             locked_target_longitudinal,
@@ -18741,15 +18950,35 @@ private:
       horizon_phase_start_ey, horizon_phase_traveled_m, hold_pass_goal,
       phase_distance, goal_ey, planning_wall_clearance,
       target_center_separation, max_lateral_accel, speed_for_time,
-      generating_execution_horizon);
+      generating_execution_horizon, now_sec);
     if (receding_horizon.active) {
       horizon_evaluation = receding_horizon.horizon;
     }
     output.receding_horizon_active = receding_horizon.active;
     output.receding_horizon_fallback = receding_horizon.fallback;
+    output.receding_horizon_last_feasible_hold_active =
+      receding_horizon.last_feasible_hold_active;
     output.receding_horizon_objective = receding_horizon.objective;
     output.receding_horizon_max_adjustment =
       receding_horizon.maximum_reference_adjustment_m;
+    output.receding_horizon_fallback_reason = receding_horizon.fallback_reason;
+    const double receding_horizon_target_age_sec = std::isfinite(
+      overtake_line_state_.target_last_seen_sec) ?
+      std::max(0.0, now_sec - overtake_line_state_.target_last_seen_sec) :
+      std::numeric_limits<double>::infinity();
+    output.receding_horizon_continuity_lease_active =
+      receding_horizon_execution_lease_active(
+      now_sec,
+      locked_target_progress_continuous ||
+      receding_horizon_target_age_sec <=
+      line_cfg.receding_horizon_continuity_lease_sec + kEps,
+      behavior_output.locked_target_position_jump,
+      locked_target_progress_rejected,
+      behavior_output.overtake_execution_corridor_blocked,
+      behavior_output.overtake_forbidden_wp,
+      behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake,
+      actual_wall_physical_contact || actual_wall_margin_blocked ||
+      actual_wall_sample_unavailable);
     output.target_ey = horizon_evaluation.target_ey;
     output.max_required_lateral_accel =
       horizon_evaluation.max_required_lateral_accel;
@@ -19209,7 +19438,7 @@ private:
           "overlap_confirmed=%d, "
           "overlap_elapsed=%.2f/%.2f, "
           "cooldown=%.2f, "
-          "rh=%d/fallback=%d/obj=%.2f/adjust=%.2f, "
+          "rh=%d/fallback=%d/hold=%d/lease=%d/reason=%s/obj=%.2f/adjust=%.2f, "
           "max_lat_acc=%.2f, lat_limited=%d, wall_limited=%d, "
           "static_wall_limited=%d, static_margin_degraded=%d, static_reachable=%d, "
           "static_wall_infeasible=%d, corridor_goal=%.2f, "
@@ -19278,6 +19507,10 @@ private:
           std::max(0.0, overtake_solver_cooldown_until_sec_ - now_sec),
           output.receding_horizon_active ? 1 : 0,
           output.receding_horizon_fallback ? 1 : 0,
+          output.receding_horizon_last_feasible_hold_active ? 1 : 0,
+          output.receding_horizon_continuity_lease_active ? 1 : 0,
+          output.receding_horizon_fallback_reason.empty() ?
+          "none" : output.receding_horizon_fallback_reason.c_str(),
           output.receding_horizon_objective,
           output.receding_horizon_max_adjustment,
           output.max_required_lateral_accel, output.lateral_accel_limited ? 1 : 0,
@@ -22462,6 +22695,13 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_receding_horizon_target_longitudinal_buffer"] ?
     mpc["v2x_overtake_receding_horizon_target_longitudinal_buffer"].as<double>() : 0.50);
+  cfg.mpc.v2x_behavior.overtake_line.receding_horizon_continuity_enabled =
+    mpc["v2x_overtake_receding_horizon_continuity_enabled"] ?
+    mpc["v2x_overtake_receding_horizon_continuity_enabled"].as<bool>() : true;
+  cfg.mpc.v2x_behavior.overtake_line.receding_horizon_continuity_lease_sec = std::max(
+    0.0,
+    mpc["v2x_overtake_receding_horizon_continuity_lease_sec"] ?
+    mpc["v2x_overtake_receding_horizon_continuity_lease_sec"].as<double>() : 0.30);
   cfg.mpc.v2x_behavior.overtake_line.target_intrusion_ordering_margin = std::max(
     0.0,
     mpc["v2x_overtake_line_target_intrusion_ordering_margin"] ?

@@ -885,6 +885,34 @@ struct RecedingHorizonLateralResolution
 RecedingHorizonLateralResolution optimize_receding_horizon_lateral_trajectory(
   const RecedingHorizonLateralRequest & request) noexcept;
 
+struct RecedingHorizonExecutionLeaseRequest
+{
+  bool enabled{false};
+  bool active_execution_phase{false};
+  bool mission_path_frozen{false};
+  bool mission_side_valid{false};
+  bool last_solution_feasible{false};
+  bool mission_generation_matches{false};
+  bool mission_side_matches{false};
+  bool target_continuous_or_leased{false};
+  bool target_position_jump{false};
+  bool target_course_progress_rejected{false};
+  bool execution_corridor_blocked{false};
+  bool explicit_forbidden_waypoint{false};
+  bool emergency_front_risk{false};
+  bool solver_recovery_requested{false};
+  bool hard_wall_fault{false};
+  double now_sec{};
+  double last_feasible_sec{-std::numeric_limits<double>::infinity()};
+  double maximum_age_sec{};
+};
+
+/// Retain ownership of a physically validated receding-horizon solution only
+/// across a bounded observation/optimizer gap. Mission identity and every
+/// current hard fault remain fail-closed.
+bool can_retain_receding_horizon_execution_lease(
+  const RecedingHorizonExecutionLeaseRequest & request) noexcept;
+
 struct OvertakeBodyClearDeadlineRequest
 {
   bool enabled{false};

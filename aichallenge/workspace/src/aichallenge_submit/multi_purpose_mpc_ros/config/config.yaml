@@ -728,6 +728,8 @@ mpc:
   v2x_overtake_receding_horizon_current_anchor_weight: 6.0
   v2x_overtake_receding_horizon_relaxation: 0.65
   v2x_overtake_receding_horizon_target_longitudinal_buffer: 0.50 # [m] extra fore/aft interval retaining target-side separation
+  v2x_overtake_receding_horizon_continuity_enabled: true # let the latest feasible same-Mission horizon own brief planner/V2X gaps
+  v2x_overtake_receding_horizon_continuity_lease_sec: 0.30 # [s] bounded; hard wall/emergency/solver faults still revoke immediately
   v2x_overtake_line_target_intrusion_ordering_margin: 0.10 # [m] abort if the ahead target reaches/crosses ego's selected-side ordering
   v2x_overtake_line_target_intrusion_guard_distance: 2.0 # [m] farther targets may be crossed laterally while ego remains behind
   v2x_overtake_line_side_quality_selection_enabled: true # compare both sides; inside/outside is not an unconditional preference

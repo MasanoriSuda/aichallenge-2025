@@ -884,6 +884,30 @@ struct OvertakeBodyClearDeadlineResolution
 OvertakeBodyClearDeadlineResolution resolve_overtake_body_clear_deadline(
   const OvertakeBodyClearDeadlineRequest & request) noexcept;
 
+struct OvertakeEntryDeadlineMarginRequest
+{
+  double base_margin_sec{};
+  int pass_side_sign{};
+  double target_lateral_velocity_mps{};
+  double intrusion_gain_sec_per_mps{};
+  double maximum_extra_margin_sec{};
+};
+
+struct OvertakeEntryDeadlineMarginResolution
+{
+  bool valid{false};
+  double target_intrusion_speed_mps{};
+  double extra_margin_sec{};
+  double effective_margin_sec{};
+};
+
+/// Increase entry-time body-clear reserve only when the target is moving into
+/// the selected pass side. A stationary target, or one moving away from that
+/// side, keeps the base margin so urgent stopped-vehicle escapes are not
+/// disabled by a global front-distance threshold.
+OvertakeEntryDeadlineMarginResolution resolve_overtake_entry_deadline_margin(
+  const OvertakeEntryDeadlineMarginRequest & request) noexcept;
+
 struct OvertakeKinematicSpeedCapSample
 {
   double path_distance_m{};
@@ -949,6 +973,9 @@ struct OvertakeKinematicRolloutResolution
   double rear_clear_ego_distance_m{std::numeric_limits<double>::infinity()};
   double rear_clear_mission_distance_m{std::numeric_limits<double>::infinity()};
   double rear_clear_ego_speed_mps{std::numeric_limits<double>::infinity()};
+  bool pass_target_clearance_checked{false};
+  double minimum_pass_target_surface_clearance_m{
+    std::numeric_limits<double>::quiet_NaN()};
 };
 
 /// Roll out longitudinal acceleration and delayed lateral mission progress on
@@ -2363,6 +2390,11 @@ struct OvertakeMissionCandidate
   // while rear-clear and Return are intentionally deferred to rolling replan.
   // It must never be used as an atomic replacement for an active Mission.
   bool progressive_entry{false};
+  /// Minimum predicted physical surface clearance to the target after the
+  /// lateral ShiftOut completes and until rear-clear (or rollout end).
+  bool pass_target_clearance_checked{false};
+  double predicted_minimum_pass_target_surface_clearance_m{
+    std::numeric_limits<double>::quiet_NaN()};
 };
 
 /// A Mission which changes from outer to inner before rear-clear may only be
@@ -2474,6 +2506,9 @@ struct OvertakeMissionCandidateSelectionRequest
   /// Prefer a side that can reach rear-clear without crossing the full track.
   /// Entry inner/outer labels alone are intentionally not selection rules.
   bool rear_clear_side_selection_enabled{false};
+  /// Let a materially larger balanced target/wall reserve override progress.
+  /// Smaller differences retain the existing aggressive progress ordering.
+  double minimum_interaction_clearance_advantage_m{};
 };
 
 struct OvertakeMissionCandidateSelection

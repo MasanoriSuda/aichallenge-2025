@@ -138,6 +138,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCorridorSource;
 using multi_purpose_mpc_ros::v2x_overtake_core::StaticFallbackEntryMotionAdmissionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakePassPlanRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeBodyClearDeadlineRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntryDeadlineMarginRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeKinematicRolloutRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeKinematicSpeedCapSample;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeDynamicPassDistanceRequest;
@@ -218,6 +219,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::
   resolve_static_fallback_entry_motion_admission;
 using multi_purpose_mpc_ros::v2x_overtake_core::build_overtake_pass_plan;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_body_clear_deadline;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_entry_deadline_margin;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_body_clear_execution_handoff;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_kinematic_rollout;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_dynamic_pass_distance;
@@ -3374,6 +3376,32 @@ TEST(V2XOvertakeCoreSpeed, BodyClearDeadlineDecaysTransientTargetLateralVelocity
   EXPECT_FALSE(std::isfinite(resolution.body_clear_time_sec));
 }
 
+TEST(V2XOvertakeCoreSpeed, EntryDeadlineMarginAddsOnlyForSideIntrusion)
+{
+  OvertakeEntryDeadlineMarginRequest request;
+  request.base_margin_sec = 0.25;
+  request.pass_side_sign = 1;
+  request.target_lateral_velocity_mps = 0.4;
+  request.intrusion_gain_sec_per_mps = 1.0;
+  request.maximum_extra_margin_sec = 0.50;
+
+  const auto intruding = resolve_overtake_entry_deadline_margin(request);
+  ASSERT_TRUE(intruding.valid);
+  EXPECT_NEAR(intruding.target_intrusion_speed_mps, 0.4, 1e-9);
+  EXPECT_NEAR(intruding.effective_margin_sec, 0.65, 1e-9);
+
+  request.target_lateral_velocity_mps = -0.4;
+  const auto leaving = resolve_overtake_entry_deadline_margin(request);
+  ASSERT_TRUE(leaving.valid);
+  EXPECT_DOUBLE_EQ(leaving.target_intrusion_speed_mps, 0.0);
+  EXPECT_DOUBLE_EQ(leaving.effective_margin_sec, 0.25);
+
+  request.pass_side_sign = -1;
+  const auto intruding_right = resolve_overtake_entry_deadline_margin(request);
+  ASSERT_TRUE(intruding_right.valid);
+  EXPECT_NEAR(intruding_right.effective_margin_sec, 0.65, 1e-9);
+}
+
 TEST(V2XOvertakeCoreSpeed, KinematicRolloutAccountsForControlDelayWhileClosingFast)
 {
   OvertakeKinematicRolloutRequest request;
@@ -3523,6 +3551,8 @@ TEST(V2XOvertakeCoreSpeed, KinematicRolloutPredictsRearClearOnSharedTimeAxis)
   EXPECT_NEAR(resolution.rear_clear_time_sec, 4.0, 0.06);
   EXPECT_NEAR(resolution.rear_clear_ego_distance_m, 20.0, 0.30);
   EXPECT_NEAR(resolution.rear_clear_ego_speed_mps, 5.0, 1e-9);
+  EXPECT_TRUE(resolution.pass_target_clearance_checked);
+  EXPECT_NEAR(resolution.minimum_pass_target_surface_clearance_m, 2.5, 1e-9);
 
   request.maximum_time_sec = 3.0;
   const auto short_budget = resolve_overtake_kinematic_rollout(request);
@@ -6395,6 +6425,44 @@ TEST(V2XOvertakeCoreSpeed, GlobalCandidateSelectionPrefersMaterialPathClearance)
   ASSERT_TRUE(selection.valid);
   ASSERT_TRUE(selection.found);
   EXPECT_EQ(selection.candidate.pass_side_sign, -1);
+}
+
+TEST(V2XOvertakeCoreSpeed, GlobalCandidateSelectionPrefersFutureInteractionReserve)
+{
+  OvertakeMissionCandidate narrow;
+  narrow.feasible = true;
+  narrow.direct_pass = true;
+  narrow.shift_distance_m = 2.0;
+  narrow.goal_lateral_m = 0.2;
+  narrow.lateral_shift_m = 0.2;
+  narrow.max_required_lateral_accel_mps2 = 1.0;
+  narrow.pass_side_sign = 1;
+  narrow.minimum_path_wall_clearance_m = 0.50;
+  narrow.minimum_path_corridor_width_m = 1.0;
+  narrow.minimum_return_wall_clearance_m = 0.50;
+  narrow.pass_target_clearance_checked = true;
+  narrow.predicted_minimum_pass_target_surface_clearance_m = 0.08;
+
+  auto wide = narrow;
+  wide.direct_pass = false;
+  wide.shift_distance_m = 4.0;
+  wide.goal_lateral_m = -0.8;
+  wide.lateral_shift_m = 0.8;
+  wide.pass_side_sign = -1;
+  wide.predicted_minimum_pass_target_surface_clearance_m = 0.32;
+
+  OvertakeMissionCandidateSelectionRequest request;
+  request.candidates = {narrow, wide};
+  request.minimum_clearance_advantage_m = 0.25;
+  request.minimum_interaction_clearance_advantage_m = 0.10;
+  const auto selection = select_overtake_mission_candidate(request);
+
+  ASSERT_TRUE(selection.valid);
+  ASSERT_TRUE(selection.found);
+  EXPECT_EQ(selection.candidate.pass_side_sign, -1);
+  EXPECT_NEAR(
+    selection.candidate.predicted_minimum_pass_target_surface_clearance_m,
+    0.32, 1e-9);
 }
 
 TEST(V2XOvertakeCoreSpeed, RearClearSideSelectionAvoidsFullTrackTransition)

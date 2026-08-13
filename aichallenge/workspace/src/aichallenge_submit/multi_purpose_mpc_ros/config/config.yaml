@@ -501,6 +501,8 @@ mpc:
   v2x_overtake_body_clear_deadline_enabled: true # select a ShiftOut that clears the target body before the hard longitudinal gap
   v2x_overtake_body_clear_deadline_margin_sec: 0.10 # [s] small execution reserve between predicted lateral clear and hard-gap arrival
   v2x_overtake_body_clear_minimum_slack_sec: 0.25 # [s] require this rollout reserve and rank it before geometric/inside preference
+  v2x_overtake_body_clear_intrusion_margin_gain: 1.0 # [s/(m/s)] add time reserve only when the target moves into the selected side
+  v2x_overtake_body_clear_intrusion_margin_max_extra_sec: 0.50 # [s] bound prediction uncertainty without blocking stationary escapes
   v2x_overtake_pass_unlatched_max_closing_speed: 0.5 # [m/s] keep the front cap until physical lateral separation latches
   v2x_overtake_unseparated_front_reserve_distance: 0.25 # [m] taper closing to zero before the moving-front hard stop while bodies overlap laterally
   v2x_overtake_shiftout_adaptive_min_time_sec: 0.5 # [s] avoid an unbounded cap as ShiftOut completes
@@ -719,6 +721,7 @@ mpc:
   v2x_overtake_line_target_intrusion_guard_distance: 2.0 # [m] farther targets may be crossed laterally while ego remains behind
   v2x_overtake_line_side_quality_selection_enabled: true # compare both sides; inside/outside is not an unconditional preference
   v2x_overtake_line_side_quality_min_score_advantage: 0.25 # [quality m] hysteresis over geometric tie preference
+  v2x_overtake_side_future_interaction_min_advantage: 0.10 # [m] prefer materially larger min(target surface, wall/corridor) reserve
   v2x_overtake_line_early_side_replan_enabled: true
   v2x_overtake_line_early_side_replan_max_lateral_progress: 0.60 # [m] never directly reverse a deeply committed ShiftOut
   v2x_overtake_line_early_side_replan_max_traveled_distance: 5.0 # [m]
@@ -739,7 +742,7 @@ mpc:
   v2x_overtake_opponent_side_replan_max_reserve_regression: 0.05 # [m]
   v2x_overtake_opponent_side_replan_max_rear_clear_time_regression_sec: 0.25 # [s]
   v2x_overtake_opponent_side_replan_max_minimum_speed_regression: 0.25 # [m/s]
-  v2x_overtake_opponent_side_replan_stable_sec: 0.25 # [s]
+  v2x_overtake_opponent_side_replan_stable_sec: 0.10 # [s] commit a validated alternate before intrusion becomes actual overlap
   v2x_overtake_opponent_side_replan_max_count: 1 # one Mission-wide cross-track replacement
   v2x_overtake_cross_side_min_terminal_closing_speed: 0.5 # [m/s] dedicated rear-clear terminal advantage; independent of Pass cap
   v2x_overtake_cross_side_min_wall_tracking_reserve: 0.15 # [m] extra reserve for measured lateral tracking error during a full-track switch

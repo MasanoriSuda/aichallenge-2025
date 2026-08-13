@@ -1385,6 +1385,36 @@ OvertakeBodyClearDeadlineResolution resolve_overtake_body_clear_deadline(
   return resolution;
 }
 
+OvertakeEntryDeadlineMarginResolution resolve_overtake_entry_deadline_margin(
+  const OvertakeEntryDeadlineMarginRequest & request) noexcept
+{
+  OvertakeEntryDeadlineMarginResolution resolution;
+  if (
+    !std::isfinite(request.base_margin_sec) || request.base_margin_sec < 0.0 ||
+    (request.pass_side_sign != -1 && request.pass_side_sign != 1) ||
+    !std::isfinite(request.target_lateral_velocity_mps) ||
+    !std::isfinite(request.intrusion_gain_sec_per_mps) ||
+    request.intrusion_gain_sec_per_mps < 0.0 ||
+    !std::isfinite(request.maximum_extra_margin_sec) ||
+    request.maximum_extra_margin_sec < 0.0)
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  resolution.target_intrusion_speed_mps = std::max(
+    0.0,
+    static_cast<double>(request.pass_side_sign) *
+    request.target_lateral_velocity_mps);
+  resolution.extra_margin_sec = std::min(
+    request.maximum_extra_margin_sec,
+    request.intrusion_gain_sec_per_mps *
+    resolution.target_intrusion_speed_mps);
+  resolution.effective_margin_sec =
+    request.base_margin_sec + resolution.extra_margin_sec;
+  return resolution;
+}
+
 OvertakeKinematicRolloutResolution resolve_overtake_kinematic_rollout(
   const OvertakeKinematicRolloutRequest & request) noexcept
 {
@@ -1523,6 +1553,9 @@ OvertakeKinematicRolloutResolution resolve_overtake_kinematic_rollout(
     resolution.shift_complete_time_sec = 0.0;
     resolution.shift_complete_target_longitudinal_m =
       request.target_longitudinal_m;
+    resolution.pass_target_clearance_checked = true;
+    resolution.minimum_pass_target_surface_clearance_m =
+      previous_lateral_margin_m;
   }
   if (resolution.currently_laterally_clear) {
     resolution.body_clear_time_sec = 0.0;
@@ -1610,6 +1643,16 @@ OvertakeKinematicRolloutResolution resolve_overtake_kinematic_rollout(
     const double lateral_margin_m =
       std::abs(target_lateral_at(step_end_sec) - path.lateral_target_m) -
       request.lateral_clearance_m;
+    if (mission_distance_m + 1e-9 >= request.mission_path.shift_distance_m) {
+      resolution.pass_target_clearance_checked = true;
+      if (std::isnan(resolution.minimum_pass_target_surface_clearance_m)) {
+        resolution.minimum_pass_target_surface_clearance_m = lateral_margin_m;
+      } else {
+        resolution.minimum_pass_target_surface_clearance_m = std::min(
+          resolution.minimum_pass_target_surface_clearance_m,
+          lateral_margin_m);
+      }
+    }
     if (
       !std::isfinite(resolution.body_clear_time_sec) &&
       lateral_margin_m >= -1e-9 && previous_lateral_margin_m < 0.0)
@@ -4109,6 +4152,8 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
     request.minimum_deadline_slack_sec < 0.0 ||
     !std::isfinite(request.minimum_clearance_advantage_m) ||
     request.minimum_clearance_advantage_m < 0.0 ||
+    !std::isfinite(request.minimum_interaction_clearance_advantage_m) ||
+    request.minimum_interaction_clearance_advantage_m < 0.0 ||
     !horizon_request_valid)
   {
     return selection;
@@ -4191,6 +4236,10 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
       const bool progress_speed_valid = !request.horizon_progress_enabled ||
         (std::isfinite(candidate.predicted_minimum_ego_speed_mps) &&
         candidate.predicted_minimum_ego_speed_mps >= 0.0);
+      const bool pass_target_clearance_valid =
+        !candidate.pass_target_clearance_checked ||
+        std::isfinite(
+        candidate.predicted_minimum_pass_target_surface_clearance_m);
       const auto course_role_valid = [](const PassSideCourseRole role) {
           return role == PassSideCourseRole::Unknown ||
                  role == PassSideCourseRole::Inner ||
@@ -4224,7 +4273,8 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
         candidate.outer_transition_deadline_pass_m -
         candidate.outer_transition_start_pass_m + 1e-9);
       return deadline_valid && closing_speed_valid && slack_valid && rear_clear_valid &&
-             progress_speed_valid && rear_clear_course_role_valid && outer_transition_valid &&
+             progress_speed_valid && pass_target_clearance_valid &&
+             rear_clear_course_role_valid && outer_transition_valid &&
              non_negative_or_infinity(candidate.minimum_path_wall_clearance_m) &&
              non_negative_or_infinity(candidate.minimum_path_corridor_width_m) &&
              non_negative_or_infinity(candidate.minimum_return_wall_clearance_m) &&
@@ -4246,6 +4296,19 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
       }
       if (std::isfinite(candidate.minimum_return_wall_clearance_m)) {
         reserve = std::min(reserve, candidate.minimum_return_wall_clearance_m);
+      }
+      return reserve;
+    };
+  const auto interaction_reserve = [&](const OvertakeMissionCandidate & candidate) {
+      double reserve = physical_reserve(candidate);
+      if (
+        candidate.pass_target_clearance_checked &&
+        std::isfinite(
+          candidate.predicted_minimum_pass_target_surface_clearance_m))
+      {
+        reserve = std::min(
+          reserve,
+          candidate.predicted_minimum_pass_target_surface_clearance_m);
       }
       return reserve;
     };
@@ -4298,6 +4361,30 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
         incumbent.full_track_transition_before_rear_clear)
       {
         return !candidate.full_track_transition_before_rear_clear;
+      }
+      if (
+        candidate.pass_target_clearance_checked &&
+        incumbent.pass_target_clearance_checked)
+      {
+        const double candidate_interaction_reserve = interaction_reserve(candidate);
+        const double incumbent_interaction_reserve = interaction_reserve(incumbent);
+        if (
+          std::isfinite(candidate_interaction_reserve) &&
+          std::isfinite(incumbent_interaction_reserve))
+        {
+          if (
+            candidate_interaction_reserve > incumbent_interaction_reserve +
+            request.minimum_interaction_clearance_advantage_m + kEpsilon)
+          {
+            return true;
+          }
+          if (
+            incumbent_interaction_reserve > candidate_interaction_reserve +
+            request.minimum_interaction_clearance_advantage_m + kEpsilon)
+          {
+            return false;
+          }
+        }
       }
       const double candidate_physical_reserve = physical_reserve(candidate);
       const double incumbent_physical_reserve = physical_reserve(incumbent);

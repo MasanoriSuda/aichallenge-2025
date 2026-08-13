@@ -1404,6 +1404,7 @@ struct OvertakeLineConfig
   double target_intrusion_guard_distance{std::numeric_limits<double>::infinity()};
   bool side_quality_selection_enabled{true};
   double side_quality_min_score_advantage{0.25};
+  double side_future_interaction_min_advantage{0.10};
   bool early_side_replan_enabled{true};
   double early_side_replan_max_lateral_progress{0.60};
   double early_side_replan_max_traveled_distance{5.0};
@@ -1678,6 +1679,8 @@ struct V2XBehaviorConfig
   bool overtake_body_clear_deadline_enabled{false};
   double overtake_body_clear_deadline_margin_sec{0.10};
   double overtake_body_clear_minimum_slack_sec{0.25};
+  double overtake_body_clear_intrusion_margin_gain{1.0};
+  double overtake_body_clear_intrusion_margin_max_extra_sec{0.50};
   double overtake_pass_unlatched_max_closing_speed{0.5};
   double overtake_unseparated_front_reserve_distance{0.0};
   double overtake_shiftout_adaptive_min_time_sec{0.5};
@@ -7126,6 +7129,9 @@ struct MPC
         request.rear_clear_side_selection_enabled =
           require_complete_mission &&
           cfg.v2x_behavior.overtake_line.rear_clear_side_selection_enabled;
+        request.minimum_interaction_clearance_advantage_m = std::max(
+          0.0,
+          cfg.v2x_behavior.overtake_line.side_future_interaction_min_advantage);
         request.horizon_progress_weights = {
           cfg.v2x_behavior.overtake_line.horizon_progress_rear_clear_time_weight,
           cfg.v2x_behavior.overtake_line.horizon_progress_rear_clear_distance_weight,
@@ -7456,6 +7462,23 @@ struct MPC
         const double non_negative_preflight_target_speed =
           std::isfinite(preflight_target_speed) ?
           std::max(0.0, preflight_target_speed) : 0.0;
+        const auto entry_deadline_margin =
+          overtake_core::resolve_overtake_entry_deadline_margin(
+          overtake_core::OvertakeEntryDeadlineMarginRequest{
+            std::max(
+              cfg.v2x_behavior.overtake_body_clear_deadline_margin_sec,
+              cfg.v2x_behavior.overtake_body_clear_minimum_slack_sec),
+            side,
+            preflight_target_lateral_velocity,
+            cfg.v2x_behavior.overtake_body_clear_intrusion_margin_gain,
+            cfg.v2x_behavior.
+            overtake_body_clear_intrusion_margin_max_extra_sec});
+        if (!entry_deadline_margin.valid) {
+          assessment.gap_available = false;
+          assessment.reason = "invalid dynamic body-clear deadline margin";
+          assessment.guard_reason = assessment.reason;
+          return assessment;
+        }
         const auto closing_speed_candidates =
           overtake_core::build_overtake_closing_speed_candidates(
           cfg.v2x_behavior.overtake_shiftout_min_closing_speed,
@@ -7769,9 +7792,7 @@ struct MPC
                   std::max(0.0, cfg.v2x_gap.prediction_time),
                   std::max(0.0, cfg.v2x_gap.vehicle_radius),
                   std::max(0.0, cfg.v2x_behavior.moving_follow_hard_distance),
-                  std::max(
-                    cfg.v2x_behavior.overtake_body_clear_deadline_margin_sec,
-                    cfg.v2x_behavior.overtake_body_clear_minimum_slack_sec),
+                  entry_deadline_margin.effective_margin_sec,
                   kinematic_speed_caps,
                   0.05,
                   cfg.v2x_behavior.overtake_line.pass_horizon_enabled ?
@@ -7834,6 +7855,10 @@ struct MPC
                 setup_candidate.body_clear_deadline_slack_sec = rollout.deadline_slack_sec;
                 setup_candidate.predicted_minimum_ego_speed_mps =
                   rollout.minimum_ego_speed_mps;
+                setup_candidate.pass_target_clearance_checked =
+                  rollout.pass_target_clearance_checked;
+                setup_candidate.predicted_minimum_pass_target_surface_clearance_m =
+                  rollout.minimum_pass_target_surface_clearance_m;
                 setup_candidate.pass_hold_distance_m = std::max(
                   std::max(0.5, pass_distance),
                   std::max(
@@ -8269,6 +8294,10 @@ struct MPC
                 rollout.rear_clear_ego_speed_mps;
               mission_candidate.predicted_minimum_ego_speed_mps =
                 rollout.minimum_ego_speed_mps;
+              mission_candidate.pass_target_clearance_checked =
+                rollout.pass_target_clearance_checked;
+              mission_candidate.predicted_minimum_pass_target_surface_clearance_m =
+                rollout.minimum_pass_target_surface_clearance_m;
               mission_candidate.pass_hold_distance_m = selected_pass_distance;
               mission_candidate.return_distance_m =
                 std::max(0.5, cfg.v2x_behavior.overtake_line.return_distance);
@@ -8501,12 +8530,18 @@ struct MPC
             selected_mission.predicted_hard_distance_time_sec
                           << ", deadline_slack=" <<
             selected_mission.body_clear_deadline_slack_sec
+                          << ", deadline_margin=" <<
+            entry_deadline_margin.effective_margin_sec
+                          << ", target_intrusion_v=" <<
+            entry_deadline_margin.target_intrusion_speed_mps
                           << ", rear_clear_t=" <<
             selected_mission.predicted_rear_clear_time_sec
                           << ", rear_clear_s=" <<
             selected_mission.predicted_rear_clear_ego_distance_m
                           << ", min_v=" <<
             selected_mission.predicted_minimum_ego_speed_mps
+                          << ", pass_target_clear=" <<
+            selected_mission.predicted_minimum_pass_target_surface_clearance_m
                           << ", progress_score=" <<
             resolved_mission_selection.horizon_progress.score
                           << ", progress_time=" <<
@@ -22151,6 +22186,10 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_line_side_quality_min_score_advantage"] ?
     mpc["v2x_overtake_line_side_quality_min_score_advantage"].as<double>() : 0.25);
+  cfg.mpc.v2x_behavior.overtake_line.side_future_interaction_min_advantage = std::max(
+    0.0,
+    mpc["v2x_overtake_side_future_interaction_min_advantage"] ?
+    mpc["v2x_overtake_side_future_interaction_min_advantage"].as<double>() : 0.10);
   cfg.mpc.v2x_behavior.overtake_line.early_side_replan_enabled =
     mpc["v2x_overtake_line_early_side_replan_enabled"] ?
     mpc["v2x_overtake_line_early_side_replan_enabled"].as<bool>() : true;
@@ -23387,6 +23426,14 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_body_clear_minimum_slack_sec"] ?
     mpc["v2x_overtake_body_clear_minimum_slack_sec"].as<double>() : 0.25);
+  cfg.mpc.v2x_behavior.overtake_body_clear_intrusion_margin_gain = std::max(
+    0.0,
+    mpc["v2x_overtake_body_clear_intrusion_margin_gain"] ?
+    mpc["v2x_overtake_body_clear_intrusion_margin_gain"].as<double>() : 1.0);
+  cfg.mpc.v2x_behavior.overtake_body_clear_intrusion_margin_max_extra_sec = std::max(
+    0.0,
+    mpc["v2x_overtake_body_clear_intrusion_margin_max_extra_sec"] ?
+    mpc["v2x_overtake_body_clear_intrusion_margin_max_extra_sec"].as<double>() : 0.50);
   cfg.mpc.v2x_behavior.overtake_pass_unlatched_max_closing_speed = std::min(
     cfg.mpc.v2x_behavior.overtake_shiftout_max_closing_speed,
     std::max(
@@ -24177,7 +24224,8 @@ public:
         "solver_cooldown=%.2f s, solver_healthy=%d cycles, "
         "front_cap_clearance=%.2f/%.2f m, current/predicted_overlap_confirm=%.2f/%.2f s, "
         "body_clearance=%.2f m, "
-        "side_quality=%d/adv=%.2f, early_replan=%d/lat=%.2f m/dist=%.2f m/"
+        "side_quality=%d/adv=%.2f/future_interaction=%.2f m, "
+        "early_replan=%d/lat=%.2f m/dist=%.2f m/"
         "stable=%.2f s/vlat=%.2f m/s/target=%.2f m",
         mpc_cfg_.v2x_behavior.overtake_line.lateral_offset,
         mpc_cfg_.v2x_behavior.overtake_line.shift_distance,
@@ -24202,6 +24250,7 @@ public:
         mpc_cfg_.v2x_gap.vehicle_radius,
         mpc_cfg_.v2x_behavior.overtake_line.side_quality_selection_enabled ? 1 : 0,
         mpc_cfg_.v2x_behavior.overtake_line.side_quality_min_score_advantage,
+        mpc_cfg_.v2x_behavior.overtake_line.side_future_interaction_min_advantage,
         mpc_cfg_.v2x_behavior.overtake_line.early_side_replan_enabled ? 1 : 0,
         mpc_cfg_.v2x_behavior.overtake_line.early_side_replan_max_lateral_progress,
         mpc_cfg_.v2x_behavior.overtake_line.early_side_replan_max_traveled_distance,
@@ -24300,7 +24349,8 @@ public:
         get_logger(),
         "V2X overtake minimum lateral motion: %s (base-line direct Pass, "
         "tiny-shift direct Pass<=%.2f m, nearest-safe goal, inner_extra<=%.2f m), "
-        "body-clear deadline=%s/margin=%.2f s/min_slack=%.2f s",
+        "body-clear deadline=%s/margin=%.2f s/min_slack=%.2f s/"
+        "intrusion_gain=%.2f/max_extra=%.2f s",
         mpc_cfg_.v2x_behavior.overtake_minimum_lateral_motion_enabled ?
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_minimum_motion_direct_pass_max_lateral_shift,
@@ -24308,7 +24358,9 @@ public:
         mpc_cfg_.v2x_behavior.overtake_body_clear_deadline_enabled ?
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_body_clear_deadline_margin_sec,
-        mpc_cfg_.v2x_behavior.overtake_body_clear_minimum_slack_sec);
+        mpc_cfg_.v2x_behavior.overtake_body_clear_minimum_slack_sec,
+        mpc_cfg_.v2x_behavior.overtake_body_clear_intrusion_margin_gain,
+        mpc_cfg_.v2x_behavior.overtake_body_clear_intrusion_margin_max_extra_sec);
       RCLCPP_INFO(
         get_logger(),
         "V2X Pass horizon: %s, predicted/absolute=%.2f/%.2f s, "

@@ -4702,6 +4702,9 @@ struct OvertakeMissionOwnershipRequest
   bool recovery_phase{false};
   bool previous_behavior_overtake{false};
   bool front_matches_locked_target{false};
+  /// DynamicMissionWait is a rolling tactical replan, not an ordinary Follow
+  /// pause. Keep longitudinal ownership while a fresh lateral prefix is found.
+  bool rolling_replan_phase{false};
 };
 
 struct OvertakeMissionOwnershipResolution
@@ -4710,6 +4713,7 @@ struct OvertakeMissionOwnershipResolution
   bool committed_execution_active{false};
   bool committed_pass_active{false};
   bool paused_mission_active{false};
+  bool rolling_replan_active{false};
   bool behavior_continuation_assessment_active{false};
   bool behavior_entry_assessment_active{true};
   bool overtake_line_owns_locked_target_speed{false};

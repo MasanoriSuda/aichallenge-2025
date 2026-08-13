@@ -10589,6 +10589,22 @@ TEST(V2XOvertakeCoreMissionOwnership, FollowPrepareIsPausedContinuation)
   EXPECT_TRUE(result.generic_follow_owns_locked_target_speed);
 }
 
+TEST(V2XOvertakeCoreMissionOwnership, RollingReplanRetainsLockedTargetSpeedOwnership)
+{
+  OvertakeMissionOwnershipRequest request;
+  request.follow_prepare_phase = true;
+  request.rolling_replan_phase = true;
+  request.front_matches_locked_target = true;
+  const auto result = resolve_overtake_mission_ownership(request);
+
+  EXPECT_TRUE(result.mission_active);
+  EXPECT_TRUE(result.paused_mission_active);
+  EXPECT_TRUE(result.rolling_replan_active);
+  EXPECT_TRUE(result.behavior_continuation_assessment_active);
+  EXPECT_TRUE(result.overtake_line_owns_locked_target_speed);
+  EXPECT_FALSE(result.generic_follow_owns_locked_target_speed);
+}
+
 TEST(V2XOvertakeCoreMissionOwnership, ReturnAndRecoveryRemainEntryAssessments)
 {
   OvertakeMissionOwnershipRequest request;

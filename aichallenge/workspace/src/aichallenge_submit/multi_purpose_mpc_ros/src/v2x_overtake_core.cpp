@@ -8184,6 +8184,8 @@ OvertakeMissionOwnershipResolution resolve_overtake_mission_ownership(
   resolution.committed_execution_active = request.shiftout_phase || request.pass_phase;
   resolution.committed_pass_active = request.pass_phase;
   resolution.paused_mission_active = request.follow_prepare_phase;
+  resolution.rolling_replan_active =
+    request.follow_prepare_phase && request.rolling_replan_phase;
   resolution.mission_active =
     resolution.committed_execution_active || resolution.paused_mission_active ||
     request.return_phase || request.recovery_phase;
@@ -8195,7 +8197,8 @@ OvertakeMissionOwnershipResolution resolve_overtake_mission_ownership(
   resolution.generic_follow_owns_locked_target_speed =
     should_apply_generic_follow_cap(
     GenericFollowCapOwnershipRequest{
-      request.shiftout_phase, request.pass_phase, request.front_matches_locked_target});
+      request.shiftout_phase, request.pass_phase, request.front_matches_locked_target}) &&
+    !(resolution.rolling_replan_active && request.front_matches_locked_target);
   resolution.overtake_line_owns_locked_target_speed =
     !resolution.generic_follow_owns_locked_target_speed;
   return resolution;

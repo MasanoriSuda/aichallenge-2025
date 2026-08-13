@@ -242,6 +242,24 @@ OvertakeSpeedReferenceResolution resolve_overtake_speed_reference(
   return {std::min(base_reference, front_cap), true};
 }
 
+OvertakeEntryPrearmSpeedReferenceResolution resolve_overtake_entry_prearm_speed_reference(
+  const OvertakeEntryPrearmSpeedReferenceRequest & request)
+{
+  validate_speed(request.base_reference_speed_mps, "base pre-arm reference");
+  validate_speed(request.hard_cap_mps, "pre-arm hard cap");
+  validate_speed(request.prearm_target_speed_mps, "pre-arm target speed");
+
+  const double base_reference =
+    std::min(request.base_reference_speed_mps, request.hard_cap_mps);
+  if (!request.active) {
+    return {base_reference, false};
+  }
+  const double reference = std::min(
+    request.hard_cap_mps,
+    std::max(base_reference, request.prearm_target_speed_mps));
+  return {reference, reference > base_reference + 1e-9};
+}
+
 OvertakeSpeedReferenceResolution resolve_start_grid_breakout_speed_reference(
   const StartGridBreakoutSpeedReferenceRequest & request)
 {
@@ -6955,6 +6973,22 @@ OvertakeEntryPrearmValidationLeaseResolution resolve_overtake_entry_prearm_valid
   result.last_validated_sec = request.last_validated_sec;
   result.remaining_sec = std::max(0.0, request.maximum_hold_sec - age_sec);
   return result;
+}
+
+bool can_hold_overtake_entry_prearm(
+  const OvertakeEntryPrearmHoldRequest & request) noexcept
+{
+  const bool finite_geometry =
+    std::isfinite(request.front_distance_m) && request.front_distance_m >= 0.0 &&
+    std::isfinite(request.minimum_front_distance_m) &&
+    request.minimum_front_distance_m >= 0.0;
+  const bool cached_policy_valid =
+    std::isfinite(request.cached_closing_speed_mps) &&
+    request.cached_closing_speed_mps >= 0.0;
+  return request.validation_lease_active && request.prearm_window_active &&
+         request.same_target && request.hard_guard_clear &&
+         request.front_vehicle_seen && finite_geometry && cached_policy_valid &&
+         request.front_distance_m + 1e-9 >= request.minimum_front_distance_m;
 }
 
 bool can_use_overtake_entry_setup_prearm(

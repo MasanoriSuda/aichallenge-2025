@@ -11581,8 +11581,18 @@ struct MPC
       v2x_overtake_core::GapPlannerStateBoundsRequest{
         explicit_overtake_line_owns_plan});
     if (
-      (behavior_output.state == V2XBehaviorState::Overtake ||
-      behavior_output.overtake_entry_prearm_active) &&
+      behavior_output.overtake_entry_prearm_active &&
+      std::isfinite(behavior_output.desired_velocity))
+    {
+      for (int i = 0; i < N; ++i) {
+        const auto prearm_reference =
+          v2x_overtake_core::resolve_overtake_entry_prearm_speed_reference(
+          v2x_overtake_core::OvertakeEntryPrearmSpeedReferenceRequest{
+            true, ur[2 * i], umax_dyn[2 * i], behavior_output.desired_velocity});
+        ur[2 * i] = prearm_reference.reference_speed_mps;
+      }
+    } else if (
+      behavior_output.state == V2XBehaviorState::Overtake &&
       std::isfinite(behavior_output.desired_velocity))
     {
       for (int i = 0; i < N; ++i) {
@@ -22732,13 +22742,25 @@ private:
         output.has_front_vehicle,
         output.front_distance,
         cfg.v2x_behavior.overtake_guard_min_front_distance});
+    const bool leased_prearm_active =
+      v2x_overtake_core::can_hold_overtake_entry_prearm(
+      v2x_overtake_core::OvertakeEntryPrearmHoldRequest{
+        entry_validation_lease.hold_active,
+        entry_prearm_window.active,
+        same_entry_speed_target,
+        entry_prearm_hard_guard_clear && !entry_prearm_cooldown_active,
+        output.has_front_vehicle,
+        output.front_distance,
+        cfg.v2x_behavior.overtake_guard_min_front_distance,
+        overtake_entry_speed_candidate_closing_speed_});
     output.overtake_entry_prearm_active =
-      entry_admission.prearm_active || setup_prearm_active;
-    if (!entry_admission.execution_allowed || setup_prearm_active) {
+      entry_admission.prearm_active || setup_prearm_active || leased_prearm_active;
+    if (!entry_admission.execution_allowed || setup_prearm_active || leased_prearm_active) {
       final_state = V2XBehaviorState::Follow;
       output.overtake_zone_allows = false;
       std::ostringstream reason;
-      reason << (setup_prearm_active ?
+      reason << (leased_prearm_active ?
+        "overtake entry leased pre-arm" : setup_prearm_active ?
         "overtake entry setup" : entry_admission.prearm_active ?
         "overtake entry pre-arm" : "overtake entry speed not ready")
              << ", target=" << output.target_vehicle_id

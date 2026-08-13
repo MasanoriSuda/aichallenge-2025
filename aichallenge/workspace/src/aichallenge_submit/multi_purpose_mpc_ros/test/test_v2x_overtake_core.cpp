@@ -319,6 +319,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::has_reached_pass_side_lateral_go
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_adaptive_shiftout_closing_speed;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_unseparated_closing_reserve;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_guard_phase;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  resolve_overtake_entry_prearm_speed_reference;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_continue_overtake_in_soft_curve;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_outer_curve_overtake;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_inner_curve_overtake;
@@ -343,6 +345,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntrySpeedReadinessReque
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntryPrearmWindowRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEngagementLeaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntryPrearmValidationLeaseRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntryPrearmHoldRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntrySetupPrearmRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::NewOvertakeEntryAdmissionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StationaryBlockerEntryOverrideRequest;
@@ -352,6 +355,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::update_overtake_entry_prearm_win
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_engagement_lease;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   resolve_overtake_entry_prearm_validation_lease;
+using multi_purpose_mpc_ros::v2x_overtake_core::can_hold_overtake_entry_prearm;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_use_overtake_entry_setup_prearm;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_new_overtake_entry_admission;
 using multi_purpose_mpc_ros::v2x_overtake_core::
@@ -1275,6 +1279,29 @@ TEST(V2XOvertakeCoreSpeed, CapsShiftOutButReleasesFrontCapInPass)
   result = resolve_overtake_speed_reference(request);
   EXPECT_DOUBLE_EQ(result.reference_speed_mps, 11.0);
   EXPECT_FALSE(result.front_cap_applied);
+}
+
+TEST(V2XOvertakeCoreSpeed, EntryPrearmRaisesBaseReferenceWithinDynamicHardCap)
+{
+  const auto raised = resolve_overtake_entry_prearm_speed_reference(
+    {true, 4.0, 8.0, 6.1});
+  EXPECT_NEAR(raised.reference_speed_mps, 6.1, 1e-12);
+  EXPECT_TRUE(raised.reference_floor_applied);
+
+  const auto capped = resolve_overtake_entry_prearm_speed_reference(
+    {true, 4.0, 5.0, 6.1});
+  EXPECT_NEAR(capped.reference_speed_mps, 5.0, 1e-12);
+  EXPECT_TRUE(capped.reference_floor_applied);
+
+  const auto inactive = resolve_overtake_entry_prearm_speed_reference(
+    {false, 4.0, 8.0, 6.1});
+  EXPECT_NEAR(inactive.reference_speed_mps, 4.0, 1e-12);
+  EXPECT_FALSE(inactive.reference_floor_applied);
+
+  const auto already_fast = resolve_overtake_entry_prearm_speed_reference(
+    {true, 7.0, 8.0, 6.1});
+  EXPECT_NEAR(already_fast.reference_speed_mps, 7.0, 1e-12);
+  EXPECT_FALSE(already_fast.reference_floor_applied);
 }
 
 TEST(V2XOvertakeCoreSpeed, ValidatedStartGridBreakoutReleasesRaceReferenceAtEntry)
@@ -8749,6 +8776,36 @@ TEST(V2XOvertakeCoreEntrySpeed, ValidationLeaseFailsClosedForTargetOrHardGuard)
   request.current_mission_validated = true;
   result = resolve_overtake_entry_prearm_validation_lease(request);
   EXPECT_FALSE(result.monitor_active);
+}
+
+TEST(V2XOvertakeCoreEntrySpeed, HoldsOnlyLongitudinalPrearmAcrossBriefPlanningMiss)
+{
+  OvertakeEntryPrearmHoldRequest request;
+  request.validation_lease_active = true;
+  request.prearm_window_active = true;
+  request.same_target = true;
+  request.hard_guard_clear = true;
+  request.front_vehicle_seen = true;
+  request.front_distance_m = 3.2;
+  request.minimum_front_distance_m = 3.0;
+  request.cached_closing_speed_mps = 2.0;
+  EXPECT_TRUE(can_hold_overtake_entry_prearm(request));
+
+  request.same_target = false;
+  EXPECT_FALSE(can_hold_overtake_entry_prearm(request));
+  request.same_target = true;
+
+  request.hard_guard_clear = false;
+  EXPECT_FALSE(can_hold_overtake_entry_prearm(request));
+  request.hard_guard_clear = true;
+
+  request.front_distance_m = 2.99;
+  EXPECT_FALSE(can_hold_overtake_entry_prearm(request));
+  request.front_distance_m = 3.2;
+
+  request.cached_closing_speed_mps =
+    std::numeric_limits<double>::quiet_NaN();
+  EXPECT_FALSE(can_hold_overtake_entry_prearm(request));
 }
 
 TEST(V2XOvertakeCoreEntrySpeed, PrearmsValidatedMissionUntilMeasuredSpeedIsReady)

@@ -152,6 +152,25 @@ struct OvertakeSpeedReferenceResolution
 OvertakeSpeedReferenceResolution resolve_overtake_speed_reference(
   const OvertakeSpeedReferenceRequest & request);
 
+struct OvertakeEntryPrearmSpeedReferenceRequest
+{
+  bool active{false};
+  double base_reference_speed_mps{};
+  double hard_cap_mps{};
+  double prearm_target_speed_mps{};
+};
+
+struct OvertakeEntryPrearmSpeedReferenceResolution
+{
+  double reference_speed_mps{};
+  bool reference_floor_applied{false};
+};
+
+/// A validated entry pre-arm owns a bounded longitudinal reference floor, not
+/// merely a ceiling. The dynamic hard cap remains authoritative.
+OvertakeEntryPrearmSpeedReferenceResolution resolve_overtake_entry_prearm_speed_reference(
+  const OvertakeEntryPrearmSpeedReferenceRequest & request);
+
 struct StartGridBreakoutSpeedReferenceRequest
 {
   bool validated_breakout{false};
@@ -3882,6 +3901,23 @@ struct OvertakeEntryPrearmValidationLeaseResolution
 /// handoff.
 OvertakeEntryPrearmValidationLeaseResolution resolve_overtake_entry_prearm_validation_lease(
   const OvertakeEntryPrearmValidationLeaseRequest & request) noexcept;
+
+struct OvertakeEntryPrearmHoldRequest
+{
+  bool validation_lease_active{false};
+  bool prearm_window_active{false};
+  bool same_target{false};
+  bool hard_guard_clear{false};
+  bool front_vehicle_seen{false};
+  double front_distance_m{std::numeric_limits<double>::infinity()};
+  double minimum_front_distance_m{};
+  double cached_closing_speed_mps{std::numeric_limits<double>::quiet_NaN()};
+};
+
+/// Keep only longitudinal pre-arm ownership across a short same-target
+/// candidate-generation miss. This never authorizes lateral execution.
+bool can_hold_overtake_entry_prearm(
+  const OvertakeEntryPrearmHoldRequest & request) noexcept;
 
 struct OvertakeEntrySetupPrearmRequest
 {

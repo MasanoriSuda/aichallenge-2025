@@ -2456,6 +2456,7 @@ struct OvertakeLineState
     -std::numeric_limits<double>::infinity()};
   int mission_runtime_wall_replan_count{0};
   bool mission_runtime_wall_warning_active{false};
+  bool mission_runtime_wall_return_suppressed_logged{false};
   double mission_runtime_wall_warning_since_sec{
     std::numeric_limits<double>::quiet_NaN()};
   double cross_side_rejection_sec{-std::numeric_limits<double>::infinity()};
@@ -10263,7 +10264,7 @@ struct MPC
         mpcc_cross_side_opportunity ? best_shadow_side : 0;
       output.mpcc_lite_cross_side_candidate_stable_sec = mpcc_cross_side_stable_sec;
       output.mpcc_lite_cross_side_score_advantage = cross_side_score_advantage;
-      const bool mpcc_same_side_replan_admitted =
+      const bool mpcc_same_side_replan_base_admitted =
         !start_grid_breakout_attempt &&
         (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
         overtake_line_state_.phase == OvertakeLinePhase::Pass) &&
@@ -10271,6 +10272,20 @@ struct MPC
         !current_overtake_mission_invalidated() &&
         (output.locked_target_current_body_footprints_separated ||
         output.recoverable_side_contact_active);
+      const double seconds_since_selected_mission =
+        std::isfinite(overtake_line_state_.mission_planner_generated_at_sec) ?
+        std::max(
+          0.0, now_sec - overtake_line_state_.mission_planner_generated_at_sec) :
+        std::numeric_limits<double>::infinity();
+      const bool mpcc_same_side_replan_admitted =
+        overtake_core::should_admit_mpcc_lite_same_side_replan(
+        overtake_core::MpccLiteSameSideReplanAdmissionRequest{
+          mpcc_same_side_replan_base_admitted,
+          active_hold_feasible,
+          cross_side_score_advantage,
+          shadow_cfg.side_quality_min_score_advantage,
+          seconds_since_selected_mission,
+          shadow_cfg.opponent_side_replan_stable_sec});
       const auto authority = overtake_core::resolve_mpcc_lite_authority(
         overtake_core::MpccLiteAuthorityRequest{
           shadow_cfg.mpcc_lite_control_enabled,
@@ -10368,6 +10383,10 @@ struct MPC
                    << "/" << mpcc_cross_side_stable_sec
                    << "s, cross_adv=" << cross_side_score_advantage
                    << ", decisive=" << (mpcc_cross_side_decisive ? 1 : 0)
+                   << ", same_admit=" <<
+          (mpcc_same_side_replan_admitted ? 1 : 0)
+                   << "/adv=" << cross_side_score_advantage
+                   << "/age=" << seconds_since_selected_mission
                    << ", prefix=" <<
           (winning_mission.has_value() && winning_mission->progressive_entry ? 1 : 0)
                    << "/" << (winning_prefix_execution_admitted ? 1 : 0)
@@ -13322,6 +13341,7 @@ private:
       -std::numeric_limits<double>::infinity();
     overtake_line_state_.mission_runtime_wall_replan_count = 0;
     overtake_line_state_.mission_runtime_wall_warning_active = false;
+    overtake_line_state_.mission_runtime_wall_return_suppressed_logged = false;
     overtake_line_state_.mission_runtime_wall_warning_since_sec =
       std::numeric_limits<double>::quiet_NaN();
     overtake_line_state_.cross_side_rejection_sec =
@@ -16436,6 +16456,7 @@ private:
       }
     } else {
       overtake_line_state_.mission_runtime_wall_warning_active = false;
+      overtake_line_state_.mission_runtime_wall_return_suppressed_logged = false;
       overtake_line_state_.mission_runtime_wall_warning_since_sec =
         std::numeric_limits<double>::quiet_NaN();
     }
@@ -16596,6 +16617,7 @@ private:
     if (
       line_cfg.runtime_wall_speed_preserving_return_enabled &&
       overtake_line_state_.phase == OvertakeLinePhase::Pass &&
+      rear_clear_confirmed &&
       actual_wall_preplan_warning && !runtime_wall_hard_fault &&
       locked_target_progress_continuous &&
       behavior_output.locked_target_current_body_footprints_separated &&
@@ -16637,6 +16659,7 @@ private:
       runtime_wall_center_contraction_candidate.has_value();
     runtime_wall_preplan_request.speed_preserving_return_available =
       runtime_wall_return_available;
+    runtime_wall_preplan_request.rear_clear_confirmed = rear_clear_confirmed;
     runtime_wall_preplan_request.mission_side_sign =
       overtake_line_state_.pass_side_sign;
     runtime_wall_preplan_request.candidate_side_sign =
@@ -16778,6 +16801,28 @@ private:
           overtake_line_state_.pass_side_sign,
           runtime_wall_center_contraction_candidate->goal_lateral_m,
           runtime_wall_warning_elapsed_sec, model->wp_id);
+      }
+    } else if (
+      runtime_wall_preplan.valid &&
+      runtime_wall_preplan.action ==
+      overtake_core::RuntimeWallPreplanAction::HoldCurrentSide)
+    {
+      overtake_line_state_.mission_runtime_wall_warning_active = true;
+      if (
+        line_cfg.debug_log_enabled &&
+        !overtake_line_state_.mission_runtime_wall_return_suppressed_logged)
+      {
+        RCLCPP_WARN(
+          rclcpp::get_logger("mpc_controller"),
+          "OvertakeLine runtime wall Return suppressed before rear-clear: "
+          "target=%s, side=%d, target_s=%.2f, elapsed=%.2f s, "
+          "hard_fault=%d, holding=current-side, wp_id=%d",
+          overtake_line_state_.target_vehicle_id.c_str(),
+          overtake_line_state_.pass_side_sign,
+          behavior_output.locked_target_longitudinal,
+          runtime_wall_warning_elapsed_sec,
+          runtime_wall_hard_fault ? 1 : 0, model->wp_id);
+        overtake_line_state_.mission_runtime_wall_return_suppressed_logged = true;
       }
     } else if (
       runtime_wall_preplan.valid &&

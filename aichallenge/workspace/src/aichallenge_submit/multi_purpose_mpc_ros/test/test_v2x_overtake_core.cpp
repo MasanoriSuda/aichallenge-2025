@@ -7165,6 +7165,7 @@ TEST(V2XOvertakeCoreWall, RuntimePreplanRequestsThenReplacesFreshSameSide)
   request.mission_side_sign = -1;
   request.now_sec = 10.0;
   request.cooldown_sec = 0.5;
+  request.fallback_delay_sec = 0.15;
   request.maximum_replan_count = 2;
 
   auto resolution = resolve_runtime_wall_preplan(request);
@@ -7202,6 +7203,7 @@ TEST(V2XOvertakeCoreWall, RuntimePreplanFallsBackToContractionThenReturn)
   request.maximum_replan_count = 2;
   request.center_contraction_available = true;
   request.speed_preserving_return_available = true;
+  request.rear_clear_confirmed = true;
 
   EXPECT_EQ(
     resolve_runtime_wall_preplan(request).action,
@@ -7230,6 +7232,33 @@ TEST(V2XOvertakeCoreWall, RuntimePreplanFallsBackToContractionThenReturn)
     RuntimeWallPreplanAction::ReturnToBaseLine);
 }
 
+TEST(V2XOvertakeCoreWall, RuntimePreplanHoldsCommittedSideUntilRearClear)
+{
+  RuntimeWallPreplanRequest request;
+  request.enabled = true;
+  request.active_execution = true;
+  request.warning_margin_blocked = true;
+  request.target_continuous = true;
+  request.current_body_separated = true;
+  request.target_prediction_valid = true;
+  request.mission_side_sign = 1;
+  request.now_sec = 10.0;
+  request.cooldown_sec = 0.5;
+  request.warning_elapsed_sec = 0.20;
+  request.fallback_delay_sec = 0.15;
+  request.maximum_replan_count = 0;
+  request.speed_preserving_return_available = true;
+
+  EXPECT_EQ(
+    resolve_runtime_wall_preplan(request).action,
+    RuntimeWallPreplanAction::HoldCurrentSide);
+
+  request.rear_clear_confirmed = true;
+  EXPECT_EQ(
+    resolve_runtime_wall_preplan(request).action,
+    RuntimeWallPreplanAction::ReturnToBaseLine);
+}
+
 TEST(V2XOvertakeCoreWall, RuntimePreplanNeverOverridesHardWallOrBounds)
 {
   RuntimeWallPreplanRequest request;
@@ -7244,6 +7273,7 @@ TEST(V2XOvertakeCoreWall, RuntimePreplanNeverOverridesHardWallOrBounds)
   request.candidate_side_sign = 1;
   request.now_sec = 10.0;
   request.cooldown_sec = 0.5;
+  request.fallback_delay_sec = 0.15;
   request.maximum_replan_count = 2;
 
   request.hard_wall_fault = true;
@@ -7255,8 +7285,10 @@ TEST(V2XOvertakeCoreWall, RuntimePreplanNeverOverridesHardWallOrBounds)
     resolve_runtime_wall_preplan(request).action, RuntimeWallPreplanAction::None);
   request.last_replan_sec = -std::numeric_limits<double>::infinity();
   request.replan_count = 2;
+  request.warning_elapsed_sec = request.fallback_delay_sec;
   EXPECT_EQ(
-    resolve_runtime_wall_preplan(request).action, RuntimeWallPreplanAction::None);
+    resolve_runtime_wall_preplan(request).action,
+    RuntimeWallPreplanAction::HoldCurrentSide);
 }
 
 TEST(V2XOvertakeCoreWall, ThrottlesOnlyUnchangedRejectedCrossSideCandidate)
@@ -13696,6 +13728,38 @@ TEST(V2XOvertakeCoreMpccLite, BoundsExecutionAuthorityByMissionStage)
   request.runtime_hard_fault = true;
   resolution = resolve_mpcc_lite_authority(request);
   EXPECT_EQ(resolution.action, MpccLiteAuthorityAction::None);
+}
+
+TEST(V2XOvertakeCoreMpccLite, SameSideRefreshRequiresMaterialGainAndSpacing)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    MpccLiteSameSideReplanAdmissionRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    should_admit_mpcc_lite_same_side_replan;
+
+  MpccLiteSameSideReplanAdmissionRequest request;
+  request.base_admitted = true;
+  request.active_hold_feasible = true;
+  request.candidate_score_advantage = 0.01;
+  request.minimum_score_advantage = 0.25;
+  request.seconds_since_selected_mission = 1.0;
+  request.minimum_replacement_interval_sec = 0.25;
+
+  EXPECT_FALSE(should_admit_mpcc_lite_same_side_replan(request));
+
+  request.candidate_score_advantage = 0.40;
+  request.seconds_since_selected_mission = 0.10;
+  EXPECT_FALSE(should_admit_mpcc_lite_same_side_replan(request));
+
+  request.seconds_since_selected_mission = 0.25;
+  EXPECT_TRUE(should_admit_mpcc_lite_same_side_replan(request));
+
+  request.active_hold_feasible = false;
+  request.candidate_score_advantage = std::numeric_limits<double>::infinity();
+  EXPECT_TRUE(should_admit_mpcc_lite_same_side_replan(request));
+
+  request.base_admitted = false;
+  EXPECT_FALSE(should_admit_mpcc_lite_same_side_replan(request));
 }
 
 TEST(V2XOvertakeCoreMpccLite, AdmitsOnlyBoundedHardFeasibleExecutionPrefix)

@@ -5727,6 +5727,33 @@ MpccLiteAuthorityResolution resolve_mpcc_lite_authority(
   return resolution;
 }
 
+bool should_admit_mpcc_lite_same_side_replan(
+  const MpccLiteSameSideReplanAdmissionRequest & request) noexcept
+{
+  if (
+    !request.base_admitted ||
+    (request.active_hold_feasible &&
+    !std::isfinite(request.candidate_score_advantage)) ||
+    !std::isfinite(request.minimum_score_advantage) ||
+    request.minimum_score_advantage < 0.0 ||
+    !std::isfinite(request.seconds_since_selected_mission) ||
+    request.seconds_since_selected_mission < 0.0 ||
+    !std::isfinite(request.minimum_replacement_interval_sec) ||
+    request.minimum_replacement_interval_sec < 0.0)
+  {
+    return false;
+  }
+  if (
+    request.seconds_since_selected_mission + 1e-9 <
+    request.minimum_replacement_interval_sec)
+  {
+    return false;
+  }
+  return !request.active_hold_feasible ||
+         request.candidate_score_advantage + 1e-9 >=
+         request.minimum_score_advantage;
+}
+
 bool should_arm_overtake_side_retry_block(
   const OvertakeSideRetryFailureClass failure_class) noexcept
 {
@@ -5774,9 +5801,14 @@ RuntimeWallPreplanResolution resolve_runtime_wall_preplan(
   {
     if (
       request.warning_elapsed_sec + 1e-9 >= request.fallback_delay_sec &&
-      request.speed_preserving_return_available)
+      request.speed_preserving_return_available &&
+      request.rear_clear_confirmed)
     {
       resolution.action = RuntimeWallPreplanAction::ReturnToBaseLine;
+    } else if (
+      request.warning_elapsed_sec + 1e-9 >= request.fallback_delay_sec)
+    {
+      resolution.action = RuntimeWallPreplanAction::HoldCurrentSide;
     }
     return resolution;
   }
@@ -5793,10 +5825,16 @@ RuntimeWallPreplanResolution resolve_runtime_wall_preplan(
     request.replan_count < request.maximum_replan_count)
   {
     resolution.action = RuntimeWallPreplanAction::ContractTowardCenter;
-  } else if (request.speed_preserving_return_available) {
+  } else if (
+    request.speed_preserving_return_available && request.rear_clear_confirmed)
+  {
     resolution.action = RuntimeWallPreplanAction::ReturnToBaseLine;
+  } else if (!request.rear_clear_confirmed) {
+    resolution.action = RuntimeWallPreplanAction::HoldCurrentSide;
   } else if (request.replan_count < request.maximum_replan_count) {
     resolution.action = RuntimeWallPreplanAction::RequestFreshSameSideCandidate;
+  } else {
+    resolution.action = RuntimeWallPreplanAction::HoldCurrentSide;
   }
   return resolution;
 }

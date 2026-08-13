@@ -3118,6 +3118,22 @@ struct MpccLiteAuthorityResolution
 MpccLiteAuthorityResolution resolve_mpcc_lite_authority(
   const MpccLiteAuthorityRequest & request) noexcept;
 
+struct MpccLiteSameSideReplanAdmissionRequest
+{
+  bool base_admitted{false};
+  bool active_hold_feasible{false};
+  double candidate_score_advantage{};
+  double minimum_score_advantage{};
+  double seconds_since_selected_mission{};
+  double minimum_replacement_interval_sec{};
+};
+
+/// Prevent a feasible current Mission from being replaced for numerical score
+/// noise or multiple times in one short rolling-planning interval. A candidate
+/// may still replace a hard-infeasible hold without a score advantage.
+bool should_admit_mpcc_lite_same_side_replan(
+  const MpccLiteSameSideReplanAdmissionRequest & request) noexcept;
+
 enum class OvertakeSideRetryFailureClass
 {
   /// No executable candidate was observed in the current planning sample.
@@ -3162,6 +3178,7 @@ enum class RuntimeWallPreplanAction
   RequestFreshSameSideCandidate,
   ReplaceWithFreshSameSide,
   ContractTowardCenter,
+  HoldCurrentSide,
   ReturnToBaseLine,
 };
 
@@ -3177,6 +3194,7 @@ struct RuntimeWallPreplanRequest
   bool fresh_candidate_available{false};
   bool center_contraction_available{false};
   bool speed_preserving_return_available{false};
+  bool rear_clear_confirmed{false};
   int mission_side_sign{0};
   int candidate_side_sign{0};
   double now_sec{};

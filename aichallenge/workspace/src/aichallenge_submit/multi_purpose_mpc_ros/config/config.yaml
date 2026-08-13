@@ -470,9 +470,10 @@ mpc:
   v2x_overtake_slow_blocker_urgent_entry_confirm_sec: 0.05 # [s] retain two-sample-like confirmation at the normal 20 Hz V2X rate
   v2x_overtake_entry_prearm_validation_hold_sec: 0.50 # [s] keep same-target speed history across transient side/candidate replanning; never execute a stale Mission
   v2x_overtake_engagement_hold_sec: 0.50 # [s] suppress Cruise chatter across a brief front/side classification dropout; identity only, never stale lateral execution
-  v2x_overtake_entry_prearm_max_sec: 3.0 # [s] at 40 km/h this approximately matches the 30 m early-planning horizon
-  v2x_overtake_entry_prearm_max_distance: 30.0 # [m] same-target longitudinal pre-arm travel bound; lateral execution still needs a fresh complete Mission
+  v2x_overtake_entry_prearm_max_sec: 3.0 # [s] time bound for far-ahead longitudinal setup
+  v2x_overtake_entry_prearm_max_distance: 15.0 # [m] bounded setup travel while retaining far-ahead observation
   v2x_overtake_entry_prearm_retry_cooldown_sec: 0.25 # [s] retry promptly when a fresh complete Mission becomes feasible
+  v2x_overtake_entry_commit_max_front_distance: 15.0 # [m] fresh lateral Mission ownership starts only inside this range; far candidates remain setup/shadow only
   v2x_overtake_inner_curve_hard_continuation_enabled: true # keep only the locked inside ShiftOut/Pass through the hard apex
   v2x_overtake_hard_curve_entry_enabled: true # dev3 attack: start an inner/outer pass after hard-curve recognition when gap is valid
   v2x_overtake_forbidden_curve_lookahead_distance: 6.0 # [m] soft entry/continuation policy; hard curve uses completion guard below

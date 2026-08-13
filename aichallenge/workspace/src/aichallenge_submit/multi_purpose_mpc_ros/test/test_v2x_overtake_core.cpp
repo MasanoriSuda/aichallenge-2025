@@ -8734,6 +8734,11 @@ TEST(V2XOvertakeCoreEntrySpeed, PrearmsValidatedMissionUntilMeasuredSpeedIsReady
 
   request.entry_speed_ready = true;
   result = resolve_new_overtake_entry_admission(request);
+  EXPECT_FALSE(result.execution_allowed);
+  EXPECT_TRUE(result.prearm_active);
+
+  request.entry_commit_window_open = true;
+  result = resolve_new_overtake_entry_admission(request);
   EXPECT_TRUE(result.execution_allowed);
   EXPECT_FALSE(result.prearm_active);
   request.entry_speed_ready = false;
@@ -13638,6 +13643,10 @@ TEST(V2XOvertakeCoreMpccLite, BoundsExecutionAuthorityByMissionStage)
 
   auto resolution = resolve_mpcc_lite_authority(request);
   EXPECT_TRUE(resolution.valid);
+  EXPECT_EQ(resolution.action, MpccLiteAuthorityAction::None);
+
+  request.selected_mission_complete = true;
+  resolution = resolve_mpcc_lite_authority(request);
   EXPECT_EQ(resolution.action, MpccLiteAuthorityAction::SelectEntry);
   EXPECT_EQ(resolution.selected_side_sign, -1);
 

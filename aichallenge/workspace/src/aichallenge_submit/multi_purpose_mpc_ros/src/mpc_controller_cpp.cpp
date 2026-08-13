@@ -1643,8 +1643,9 @@ struct V2XBehaviorConfig
   double overtake_entry_prearm_validation_hold_sec{0.5};
   double overtake_engagement_hold_sec{0.5};
   double overtake_entry_prearm_max_sec{3.0};
-  double overtake_entry_prearm_max_distance{30.0};
+  double overtake_entry_prearm_max_distance{15.0};
   double overtake_entry_prearm_retry_cooldown_sec{0.25};
+  double overtake_entry_commit_max_front_distance{15.0};
   bool overtake_inner_curve_hard_continuation_enabled{false};
   bool overtake_hard_curve_entry_enabled{false};
   double overtake_forbidden_curve_lookahead_distance{0.0};
@@ -9085,6 +9086,10 @@ struct MPC
     // continuation is legal and immediately returns to Follow.
     const bool curve_line_committed =
       (active_overtake_line || paused_overtake_mission) && locked_pass_side != 0;
+    const bool fresh_overtake_entry_commit_window_open =
+      start_grid_breakout_attempt || curve_line_committed || !has_front_vehicle ||
+      nearest_front_distance <=
+      cfg.v2x_behavior.overtake_entry_commit_max_front_distance + kEps;
     const double curve_entry_max_front_distance =
       std::max(0.0, cfg.v2x_behavior.overtake_guard_min_front_distance) +
       std::max(0.0, cfg.v2x_behavior.overtake_line.shift_distance) +
@@ -9126,20 +9131,21 @@ struct MPC
     const auto has_validated_full_mission = [](const SideAssessment & assessment) {
         return
           assessment.selected_mission.has_value() &&
+          !assessment.selected_mission->progressive_entry &&
           assessment.selected_mission->feasible &&
           assessment.selected_mission->body_clear_deadline_checked &&
           assessment.selected_mission->body_clear_deadline_feasible &&
           assessment.selected_mission->rear_clear_prediction_checked &&
-          assessment.selected_mission->rear_clear_prediction_feasible;
+          assessment.selected_mission->rear_clear_prediction_feasible &&
+          std::isfinite(
+            assessment.selected_mission->predicted_rear_clear_time_sec) &&
+          assessment.selected_mission->predicted_rear_clear_time_sec >= 0.0 &&
+          std::isfinite(
+            assessment.selected_mission->predicted_rear_clear_ego_distance_m) &&
+          assessment.selected_mission->predicted_rear_clear_ego_distance_m >= 0.0;
       };
     const auto has_executable_mission = [&](const SideAssessment & assessment) {
-        const bool progressive_entry_ready =
-          assessment.selected_mission.has_value() &&
-          assessment.selected_mission->progressive_entry &&
-          assessment.selected_mission->feasible &&
-          assessment.selected_mission->body_clear_deadline_checked &&
-          assessment.selected_mission->body_clear_deadline_feasible;
-        return has_validated_full_mission(assessment) || progressive_entry_ready;
+        return has_validated_full_mission(assessment);
       };
     const auto execution_allowed_for_side = [&](const SideAssessment & assessment) {
         if (!assessment.gap_available || assessment.side == 0) {
@@ -9153,6 +9159,9 @@ struct MPC
           // During the short grid grace, do not route that valid side corridor back through the
           // normal 5 m entry, curve-completion, or emergency-follow gates.
           return !overtake_forbidden_wp;
+        }
+        if (!fresh_overtake_entry_commit_window_open) {
+          return false;
         }
         const auto outer_curve = resolve_outer_curve_for_side(assessment);
         const auto inner_curve = resolve_inner_curve_for_side(assessment);
@@ -10121,7 +10130,11 @@ struct MPC
       const bool winning_mission_complete =
         winning_mission.has_value() && !winning_mission->progressive_entry &&
         winning_mission->rear_clear_prediction_checked &&
-        winning_mission->rear_clear_prediction_feasible;
+        winning_mission->rear_clear_prediction_feasible &&
+        std::isfinite(winning_mission->predicted_rear_clear_time_sec) &&
+        winning_mission->predicted_rear_clear_time_sec >= 0.0 &&
+        std::isfinite(winning_mission->predicted_rear_clear_ego_distance_m) &&
+        winning_mission->predicted_rear_clear_ego_distance_m >= 0.0;
       const bool mpcc_same_side_replan_admitted =
         !start_grid_breakout_attempt &&
         (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
@@ -10137,7 +10150,8 @@ struct MPC
           shadow_resolution.found,
           shadow_runtime_hard_fault,
           locked_pass_side == 0 &&
-          overtake_line_state_.phase == OvertakeLinePhase::Idle,
+          overtake_line_state_.phase == OvertakeLinePhase::Idle &&
+          fresh_overtake_entry_commit_window_open,
           locked_pass_side != 0 &&
           overtake_line_state_.phase != OvertakeLinePhase::Idle,
           overtake_line_state_.phase == OvertakeLinePhase::Return,
@@ -10246,6 +10260,7 @@ struct MPC
       locked_pass_side == 0 &&
       overtake_line_state_.phase == OvertakeLinePhase::Idle &&
       has_front_vehicle && !start_grid_breakout_attempt &&
+      fresh_overtake_entry_commit_window_open &&
       !output.target_vehicle_id.empty() &&
       mpcc_lite_control_last_feasible_target_id_ == output.target_vehicle_id &&
       effective_front_risk_level != FrontRiskLevel::EmergencyBrake &&
@@ -10256,9 +10271,15 @@ struct MPC
         !std::isfinite(mission.dynamic_valid_until_sec) ||
         now_sec <= mission.dynamic_valid_until_sec + kEps;
       if (
-        prediction_fresh && mission.feasible &&
+        prediction_fresh && !mission.progressive_entry && mission.feasible &&
         mission.body_clear_deadline_checked &&
         mission.body_clear_deadline_feasible &&
+        mission.rear_clear_prediction_checked &&
+        mission.rear_clear_prediction_feasible &&
+        std::isfinite(mission.predicted_rear_clear_time_sec) &&
+        mission.predicted_rear_clear_time_sec >= 0.0 &&
+        std::isfinite(mission.predicted_rear_clear_ego_distance_m) &&
+        mission.predicted_rear_clear_ego_distance_m >= 0.0 &&
         mission.pass_target_clearance_checked &&
         (mission.pass_side_sign == -1 || mission.pass_side_sign == 1))
       {
@@ -10282,7 +10303,7 @@ struct MPC
           mission.direct_pass && !authoritative_assessment.base_line_clear &&
           mission.current_position_clear;
         authoritative_assessment.reason =
-          "MPCC-lite receding prefix selected for entry";
+          "MPCC-lite complete Mission selected for entry";
         authoritative_assessment.guard_reason = authoritative_assessment.reason;
         side_selection = {
           pass_side(mission.pass_side_sign),
@@ -10418,6 +10439,8 @@ struct MPC
       "inner hard curve entry and reachable gap" :
       selected_inner_curve.hard_continuation_allowed ?
       "continue locked inner line through hard curve" :
+      !fresh_overtake_entry_commit_window_open ?
+      "overtake entry outside commit window" :
       overtake_forbidden_wp ? "overtake forbidden wp" :
       overtake_cooldown_active ? "overtake curve cooldown" :
       output.overtake_completed_target_entry_suppressed ?
@@ -22397,6 +22420,9 @@ private:
         desired_state == V2XBehaviorState::Overtake,
         overtake_execution_committed,
         behavior_overtake_handoff,
+        output.start_grid_breakout_active || !output.has_front_vehicle ||
+        output.front_distance <=
+        cfg.v2x_behavior.overtake_entry_commit_max_front_distance + kEps,
         entry_speed_readiness.ready,
         entry_mission_available &&
         output.validated_overtake_entry_longitudinal_owner &&
@@ -25388,10 +25414,13 @@ Config load_config(const std::string & path)
       "v2x_overtake_entry_prearm_max_sec", 3.0);
   cfg.mpc.v2x_behavior.overtake_entry_prearm_max_distance =
     read_positive_overtake_entry_prearm_value(
-      "v2x_overtake_entry_prearm_max_distance", 30.0);
+      "v2x_overtake_entry_prearm_max_distance", 15.0);
   cfg.mpc.v2x_behavior.overtake_entry_prearm_retry_cooldown_sec =
     read_positive_overtake_entry_prearm_value(
       "v2x_overtake_entry_prearm_retry_cooldown_sec", 0.25);
+  cfg.mpc.v2x_behavior.overtake_entry_commit_max_front_distance =
+    read_positive_overtake_entry_prearm_value(
+      "v2x_overtake_entry_commit_max_front_distance", 15.0);
   cfg.mpc.v2x_behavior.overtake_inner_curve_hard_continuation_enabled =
     mpc["v2x_overtake_inner_curve_hard_continuation_enabled"] ?
     mpc["v2x_overtake_inner_curve_hard_continuation_enabled"].as<bool>() : false;
@@ -26346,7 +26375,7 @@ public:
         get_logger(),
         "V2X new-entry speed readiness: min_relative_speed=%.2f m/s, confirm=%.2f s, "
         "stationary_override=%s, slow_urgent=%s/%.2f m/s/%.2f m/%.2f s, "
-        "prearm=%.2f s/%.2f m, validation_hold=%.2f s, "
+        "prearm=%.2f s/%.2f m, commit<=%.2f m, validation_hold=%.2f s, "
         "engagement_hold=%.2f s, retry_cooldown=%.2f s",
         mpc_cfg_.v2x_behavior.overtake_entry_min_relative_speed,
         mpc_cfg_.v2x_behavior.overtake_entry_speed_confirm_sec,
@@ -26359,6 +26388,7 @@ public:
         mpc_cfg_.v2x_behavior.overtake_slow_blocker_urgent_entry_confirm_sec,
         mpc_cfg_.v2x_behavior.overtake_entry_prearm_max_sec,
         mpc_cfg_.v2x_behavior.overtake_entry_prearm_max_distance,
+        mpc_cfg_.v2x_behavior.overtake_entry_commit_max_front_distance,
         mpc_cfg_.v2x_behavior.overtake_entry_prearm_validation_hold_sec,
         mpc_cfg_.v2x_behavior.overtake_engagement_hold_sec,
         mpc_cfg_.v2x_behavior.overtake_entry_prearm_retry_cooldown_sec);

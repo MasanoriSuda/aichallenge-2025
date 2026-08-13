@@ -3048,10 +3048,11 @@ struct MpccLiteAuthorityResolution
   int selected_side_sign{0};
 };
 
-/// Give the finite-horizon winner bounded control authority. A local prefix
-/// may start a new entry; an active same-side replacement requires explicit
-/// admission, and a cross-side replacement additionally retains the existing
-/// no-return gate. Both active replacements require a complete Mission.
+/// Give the finite-horizon winner bounded control authority. A fresh entry and
+/// every active replacement require the same complete rear-clear Mission
+/// contract. Local prefixes remain available for shadow scoring and
+/// longitudinal setup, but cannot acquire lateral execution ownership.
+/// Cross-side replacement additionally retains the existing no-return gate.
 MpccLiteAuthorityResolution resolve_mpcc_lite_authority(
   const MpccLiteAuthorityRequest & request) noexcept;
 
@@ -3824,6 +3825,9 @@ struct NewOvertakeEntryAdmissionRequest
   bool overtake_requested{false};
   bool execution_committed{false};
   bool behavior_handoff_active{false};
+  /// Far observation and longitudinal setup may remain active outside this
+  /// window, but a fresh lateral Mission must not take execution ownership.
+  bool entry_commit_window_open{false};
   bool entry_speed_ready{false};
   /// A complete ShiftOut/Pass/Return mission has passed the current geometry,
   /// body-clear deadline and rear-clear rollout checks. This authorizes

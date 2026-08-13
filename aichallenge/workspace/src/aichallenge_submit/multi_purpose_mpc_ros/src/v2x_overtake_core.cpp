@@ -5542,7 +5542,10 @@ MpccLiteAuthorityResolution resolve_mpcc_lite_authority(
 
   const int selected_side = branch_side(request.selected_branch);
   if (request.new_entry_context) {
-    if (selected_side != 0 && request.selected_mission_available) {
+    if (
+      selected_side != 0 && request.selected_mission_available &&
+      request.selected_mission_complete)
+    {
       resolution.action = MpccLiteAuthorityAction::SelectEntry;
       resolution.selected_side_sign = selected_side;
     }
@@ -6798,10 +6801,12 @@ NewOvertakeEntryAdmissionResolution resolve_new_overtake_entry_admission(
   const NewOvertakeEntryAdmissionRequest & request) noexcept
 {
   NewOvertakeEntryAdmissionResolution resolution;
+  const bool fresh_entry_ready =
+    request.entry_commit_window_open &&
+    (request.entry_speed_ready || request.immediate_execution_override);
   resolution.execution_allowed =
     !request.overtake_requested || request.execution_committed ||
-    request.behavior_handoff_active || request.entry_speed_ready ||
-    request.immediate_execution_override;
+    request.behavior_handoff_active || fresh_entry_ready;
   resolution.prearm_active =
     request.overtake_requested && !resolution.execution_allowed &&
     request.validated_mission_ready;

@@ -134,6 +134,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionPathStage;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonLateralRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonLateralSample;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonExecutionLeaseRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::PassCompletionRolloutSpeedRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorSample;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCorridorAdmissionRequest;
@@ -409,6 +410,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_entry_stage;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   can_retain_receding_horizon_execution_lease;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_completion_rollout_speed;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_rearward_pass_completion_context;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_observe_locked_target_geometry;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_enter_dynamic_mission_wait;
@@ -5078,6 +5080,60 @@ TEST(V2XOvertakeCoreHorizon, ExtendsFromLiveCompletionEstimateInsideAbsoluteBoun
   request.fresh_forward_progress = false;
   resolution = resolve_dynamic_completion_extension(request);
   EXPECT_FALSE(resolution.allowed);
+}
+
+TEST(V2XOvertakeCoreHorizon, CouplesSeparatedPassRolloutToFullSpeedPolicy)
+{
+  PassCompletionRolloutSpeedRequest request;
+  request.enabled = true;
+  request.pass_active = true;
+  request.full_speed_forward_escape_enabled = true;
+  request.front_cap_released = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+  request.nominal_closing_speed_mps = 2.0;
+  request.target_speed_mps = 3.3;
+  request.maximum_ego_speed_mps = 11.1;
+
+  const auto resolution = resolve_pass_completion_rollout_speed(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.full_speed_coupled);
+  EXPECT_NEAR(resolution.closing_speed_mps, 7.8, 1e-9);
+  EXPECT_NEAR(resolution.ego_speed_target_mps, 11.1, 1e-9);
+}
+
+TEST(V2XOvertakeCoreHorizon, PassRolloutSpeedCouplingCannotBypassHardGuards)
+{
+  PassCompletionRolloutSpeedRequest request;
+  request.enabled = true;
+  request.pass_active = true;
+  request.full_speed_forward_escape_enabled = true;
+  request.front_cap_released = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+  request.nominal_closing_speed_mps = 2.0;
+  request.target_speed_mps = 3.3;
+  request.maximum_ego_speed_mps = 11.1;
+
+  request.hard_fault = true;
+  auto resolution = resolve_pass_completion_rollout_speed(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.full_speed_coupled);
+  EXPECT_NEAR(resolution.closing_speed_mps, 2.0, 1e-9);
+
+  request.hard_fault = false;
+  request.predicted_body_footprint_sweep_separated = false;
+  resolution = resolve_pass_completion_rollout_speed(request);
+  EXPECT_FALSE(resolution.full_speed_coupled);
+  EXPECT_NEAR(resolution.closing_speed_mps, 2.0, 1e-9);
+
+  request.predicted_body_footprint_sweep_separated = true;
+  request.execution_corridor_blocked = true;
+  resolution = resolve_pass_completion_rollout_speed(request);
+  EXPECT_FALSE(resolution.full_speed_coupled);
+  EXPECT_NEAR(resolution.closing_speed_mps, 2.0, 1e-9);
 }
 
 TEST(V2XOvertakeCoreHorizon, GrantsOnlyBoundedPredictionGraceAfterForwardCommit)

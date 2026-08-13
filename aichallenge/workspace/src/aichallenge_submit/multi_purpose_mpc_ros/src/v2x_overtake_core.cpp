@@ -3002,6 +3002,41 @@ CommittedPassForwardCompletionResolution resolve_committed_pass_forward_completi
   return resolution;
 }
 
+PassCompletionRolloutSpeedResolution resolve_pass_completion_rollout_speed(
+  const PassCompletionRolloutSpeedRequest & request) noexcept
+{
+  PassCompletionRolloutSpeedResolution resolution;
+  if (
+    !std::isfinite(request.nominal_closing_speed_mps) ||
+    request.nominal_closing_speed_mps < 0.0 ||
+    !std::isfinite(request.target_speed_mps) || request.target_speed_mps < 0.0 ||
+    !std::isfinite(request.maximum_ego_speed_mps) ||
+    request.maximum_ego_speed_mps <= 0.0)
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  resolution.closing_speed_mps = request.nominal_closing_speed_mps;
+  const bool full_speed_coupling_allowed =
+    request.enabled && request.pass_active &&
+    request.full_speed_forward_escape_enabled && request.front_cap_released &&
+    request.current_body_footprints_separated &&
+    request.footprint_prediction_valid &&
+    request.predicted_body_footprint_sweep_separated &&
+    !request.execution_corridor_blocked && !request.hard_fault;
+  if (full_speed_coupling_allowed) {
+    resolution.full_speed_coupled = true;
+    resolution.closing_speed_mps = std::max(
+      resolution.closing_speed_mps,
+      std::max(0.0, request.maximum_ego_speed_mps - request.target_speed_mps));
+  }
+  resolution.ego_speed_target_mps = std::min(
+    request.maximum_ego_speed_mps,
+    request.target_speed_mps + resolution.closing_speed_mps);
+  return resolution;
+}
+
 DynamicCompletionExtensionResolution resolve_dynamic_completion_extension(
   const DynamicCompletionExtensionRequest & request) noexcept
 {

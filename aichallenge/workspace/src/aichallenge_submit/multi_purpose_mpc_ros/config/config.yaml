@@ -599,6 +599,7 @@ mpc:
   v2x_overtake_safe_separation_progress_extension_fresh_sec: 0.75 # [s] maximum age of the latest target-distance improvement
   v2x_overtake_safe_separation_progress_extension_max_count: 1 # absolute Pass limits remain unchanged
   v2x_overtake_safe_separation_dynamic_completion_extension_enabled: true # use live rear-clear estimate after the fixed extension count is exhausted
+  v2x_overtake_pass_completion_speed_coupling_enabled: true # predict rear-clear with the full-speed policy that an already separated Pass will execute
   v2x_overtake_safe_separation_soft_prediction_grace_sec: 0.25 # [s] prediction-only loss grace after committed forward completion; hard faults remain immediate
   # Once the target is behind and forward progress remains fresh, let distance/rear-clear
   # terminate the pass instead of a collision-penalty-sensitive wall-clock timeout.

@@ -1503,6 +1503,7 @@ struct OvertakeLineConfig
   double safe_separation_progress_extension_fresh_sec{0.75};
   int safe_separation_progress_extension_max_count{1};
   bool safe_separation_dynamic_completion_extension_enabled{false};
+  bool pass_completion_speed_coupling_enabled{false};
   double safe_separation_soft_prediction_grace_sec{0.25};
   bool safe_separation_full_speed_forward_escape_enabled{false};
   bool safe_separation_rearward_progress_time_grace_enabled{false};
@@ -16263,7 +16264,33 @@ private:
       live_prediction_timing.valid && live_prediction_timing.remaining_sec > kEps &&
       runtime_remaining_absolute_distance >= 1.0 &&
       runtime_remaining_absolute_time > kEps;
+    overtake_core::PassCompletionRolloutSpeedResolution runtime_completion_speed;
     if (runtime_completion_prediction_available) {
+      const bool runtime_completion_hard_fault =
+        actual_wall_physical_contact || actual_wall_margin_blocked ||
+        actual_wall_sample_unavailable ||
+        behavior_output.locked_target_pass_side_intrusion ||
+        behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake ||
+        overtake_solver_recovery_active_;
+      runtime_completion_speed =
+        overtake_core::resolve_pass_completion_rollout_speed(
+        overtake_core::PassCompletionRolloutSpeedRequest{
+          line_cfg.pass_completion_speed_coupling_enabled,
+          overtake_line_state_.phase == OvertakeLinePhase::Pass,
+          line_cfg.safe_separation_full_speed_forward_escape_enabled,
+          overtake_line_state_.pass_front_cap_release_active,
+          behavior_output.locked_target_current_robust_footprints_separated,
+          behavior_output.locked_target_footprint_prediction_valid,
+          behavior_output.locked_target_predicted_robust_footprint_sweep_separated,
+          behavior_output.overtake_execution_corridor_blocked,
+          runtime_completion_hard_fault,
+          overtake_mission_closing_speed_limit(),
+          std::max(0.0, locked_target_speed),
+          std::max(kEps, cfg.v_max)});
+      const double runtime_completion_closing_speed =
+        runtime_completion_speed.valid ?
+        runtime_completion_speed.closing_speed_mps :
+        overtake_mission_closing_speed_limit();
       const double maximum_live_shift_distance = std::min(
         std::max(0.5, line_cfg.shift_distance),
         runtime_remaining_absolute_distance - 0.5);
@@ -16304,7 +16331,7 @@ private:
             locked_target_longitudinal,
             std::max(0.0, current_speed_mps_),
             std::max(0.0, locked_target_speed),
-            overtake_mission_closing_speed_limit(),
+            runtime_completion_closing_speed,
             std::max(kEps, cfg.v_max),
             std::max(0.0, cfg.a_max),
             std::max(0.0, -cfg.a_min),
@@ -19432,6 +19459,7 @@ private:
           "current_overlap_confirmed=%d, current_overlap_elapsed=%.2f/%.2f, "
           "current_overlap_grace=%d, "
           "forward_commit=%d/required=%.2f/limit=%.2f/distance_ok=%d, "
+          "completion_rollout=%.2f/coupled=%d/rear=%.2f m/%.2f s, "
           "footprint_prediction=%d, footprint_sweep_clear=%d, "
           "robust_clear=%d/%d target=%.2f wall=%.2f, "
           "side_by_side_escape=%d, attack_hold=%d, predicted_overlap=%d, "
@@ -19492,6 +19520,12 @@ private:
           overtake_line_state_.pass_horizon_safe_separation_max_distance :
           line_cfg.safe_separation_max_distance,
           committed_forward_completion.rear_clear_distance_feasible ? 1 : 0,
+          runtime_completion_speed.valid ?
+          runtime_completion_speed.closing_speed_mps :
+          overtake_mission_closing_speed_limit(),
+          runtime_completion_speed.full_speed_coupled ? 1 : 0,
+          runtime_completion_distance.required_pass_distance_m,
+          runtime_completion_time_sec,
           committed_pass_request.footprint_prediction_valid ? 1 : 0,
           committed_pass_request.predicted_body_footprint_sweep_separated ? 1 : 0,
           behavior_output.locked_target_current_robust_footprints_separated ? 1 : 0,
@@ -23080,6 +23114,9 @@ Config load_config(const std::string & path)
     mpc["v2x_overtake_safe_separation_dynamic_completion_extension_enabled"] ?
     mpc["v2x_overtake_safe_separation_dynamic_completion_extension_enabled"].as<bool>() :
     false;
+  cfg.mpc.v2x_behavior.overtake_line.pass_completion_speed_coupling_enabled =
+    mpc["v2x_overtake_pass_completion_speed_coupling_enabled"] ?
+    mpc["v2x_overtake_pass_completion_speed_coupling_enabled"].as<bool>() : false;
   cfg.mpc.v2x_behavior.overtake_line.safe_separation_soft_prediction_grace_sec = std::max(
     0.0,
     mpc["v2x_overtake_safe_separation_soft_prediction_grace_sec"] ?
@@ -24902,7 +24939,7 @@ public:
         "forward_escape=%s/front<=%.2f m "
         "front>=%.2f m confirm=%.2f s limit=%.2f s/%.2f m, "
         "progress_extension=%s min=%.2f m fresh<=%.2f s x%d, "
-        "dynamic_completion=%s prediction_grace<=%.2f s, "
+        "dynamic_completion=%s speed_coupling=%s prediction_grace<=%.2f s, "
         "tactical_revalidation=%s/%.2f s/%.2f m",
         mpc_cfg_.v2x_behavior.overtake_line.pass_horizon_enabled ?
         "enabled" : "disabled",
@@ -24939,6 +24976,8 @@ public:
         .safe_separation_progress_extension_max_count,
         mpc_cfg_.v2x_behavior.overtake_line
         .safe_separation_dynamic_completion_extension_enabled ? "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line.pass_completion_speed_coupling_enabled ?
+        "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.safe_separation_soft_prediction_grace_sec,
         mpc_cfg_.v2x_behavior.overtake_line
         .safe_separation_tactical_revalidation_enabled ? "enabled" : "disabled",

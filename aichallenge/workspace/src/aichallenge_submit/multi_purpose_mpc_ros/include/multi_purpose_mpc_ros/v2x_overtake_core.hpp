@@ -1907,6 +1907,37 @@ struct CommittedPassForwardCompletionResolution
 CommittedPassForwardCompletionResolution resolve_committed_pass_forward_completion(
   const CommittedPassForwardCompletionRequest & request) noexcept;
 
+struct PassCompletionRolloutSpeedRequest
+{
+  bool enabled{false};
+  bool pass_active{false};
+  bool full_speed_forward_escape_enabled{false};
+  bool front_cap_released{false};
+  bool current_body_footprints_separated{false};
+  bool footprint_prediction_valid{false};
+  bool predicted_body_footprint_sweep_separated{false};
+  bool execution_corridor_blocked{false};
+  bool hard_fault{false};
+  double nominal_closing_speed_mps{};
+  double target_speed_mps{};
+  double maximum_ego_speed_mps{};
+};
+
+struct PassCompletionRolloutSpeedResolution
+{
+  bool valid{false};
+  bool full_speed_coupled{false};
+  double closing_speed_mps{};
+  double ego_speed_target_mps{};
+};
+
+/// Keep the runtime rear-clear rollout consistent with the longitudinal
+/// policy that will actually execute it. Full-speed coupling is available only
+/// on an already separated, prediction-clear Pass; every hard guard falls
+/// back to the nominal Mission closing speed.
+PassCompletionRolloutSpeedResolution resolve_pass_completion_rollout_speed(
+  const PassCompletionRolloutSpeedRequest & request) noexcept;
+
 struct DynamicCompletionExtensionRequest
 {
   bool enabled{false};

@@ -1277,6 +1277,147 @@ OvertakeMissionPathResolution resolve_overtake_mission_path(
   return resolution;
 }
 
+RecedingHorizonLateralResolution optimize_receding_horizon_lateral_trajectory(
+  const RecedingHorizonLateralRequest & request) noexcept
+{
+  RecedingHorizonLateralResolution resolution;
+  if (!request.enabled) {
+    resolution.valid = true;
+    return resolution;
+  }
+  if (
+    !std::isfinite(request.current_lateral_m) ||
+    !std::isfinite(request.reference_weight) || request.reference_weight < 0.0 ||
+    !std::isfinite(request.warm_start_weight) || request.warm_start_weight < 0.0 ||
+    !std::isfinite(request.slope_weight) || request.slope_weight < 0.0 ||
+    !std::isfinite(request.curvature_weight) || request.curvature_weight < 0.0 ||
+    !std::isfinite(request.current_anchor_weight) || request.current_anchor_weight < 0.0 ||
+    !std::isfinite(request.relaxation) || request.relaxation <= 0.0 ||
+    request.relaxation > 1.0 || request.iterations == 0U ||
+    request.samples.size() < 2U)
+  {
+    return resolution;
+  }
+
+  double previous_distance_m = -std::numeric_limits<double>::infinity();
+  for (const auto & sample : request.samples) {
+    if (
+      !std::isfinite(sample.path_distance_m) || sample.path_distance_m < 0.0 ||
+      sample.path_distance_m + 1e-9 < previous_distance_m ||
+      !std::isfinite(sample.lower_bound_m) ||
+      !std::isfinite(sample.upper_bound_m) ||
+      sample.upper_bound_m + 1e-9 < sample.lower_bound_m ||
+      !std::isfinite(sample.reference_lateral_m) ||
+      !std::isfinite(sample.warm_start_lateral_m))
+    {
+      return RecedingHorizonLateralResolution{};
+    }
+    previous_distance_m = sample.path_distance_m;
+  }
+
+  const std::size_t count = request.samples.size();
+  std::vector<double> targets(count, 0.0);
+  for (std::size_t i = 0U; i < count; ++i) {
+    const auto & sample = request.samples[i];
+    targets[i] = std::clamp(
+      sample.warm_start_lateral_m,
+      sample.lower_bound_m, sample.upper_bound_m);
+  }
+
+  // Each update is the exact minimizer of the local quadratic surrogate,
+  // relaxed before projection.  Alternating sweep direction removes the
+  // directional bias of an in-place Gauss-Seidel pass while retaining its
+  // fast convergence for the short MPC horizon.
+  const auto update_sample = [&](const std::size_t i) {
+      const auto & sample = request.samples[i];
+      double weighted_target =
+        request.reference_weight * sample.reference_lateral_m +
+        request.warm_start_weight * sample.warm_start_lateral_m;
+      double total_weight = request.reference_weight + request.warm_start_weight;
+      if (i == 0U && request.current_anchor_weight > 0.0) {
+        weighted_target += request.current_anchor_weight * request.current_lateral_m;
+        total_weight += request.current_anchor_weight;
+      }
+      if (request.slope_weight > 0.0 && i > 0U) {
+        weighted_target += request.slope_weight * targets[i - 1U];
+        total_weight += request.slope_weight;
+      }
+      if (request.slope_weight > 0.0 && i + 1U < count) {
+        weighted_target += request.slope_weight * targets[i + 1U];
+        total_weight += request.slope_weight;
+      }
+      if (request.curvature_weight > 0.0 && i >= 2U) {
+        weighted_target += request.curvature_weight *
+          (2.0 * targets[i - 1U] - targets[i - 2U]);
+        total_weight += request.curvature_weight;
+      }
+      if (request.curvature_weight > 0.0 && i + 2U < count) {
+        weighted_target += request.curvature_weight *
+          (2.0 * targets[i + 1U] - targets[i + 2U]);
+        total_weight += request.curvature_weight;
+      }
+      if (request.curvature_weight > 0.0 && i > 0U && i + 1U < count) {
+        // The centre coefficient of (x[i+1] - 2*x[i] + x[i-1])^2
+        // contributes four times the endpoint coefficient.
+        weighted_target += 2.0 * request.curvature_weight *
+          (targets[i - 1U] + targets[i + 1U]);
+        total_weight += 4.0 * request.curvature_weight;
+      }
+      if (total_weight <= 1e-12) {
+        return;
+      }
+      const double local_minimum = weighted_target / total_weight;
+      const double relaxed = targets[i] +
+        request.relaxation * (local_minimum - targets[i]);
+      targets[i] = std::clamp(
+        relaxed, sample.lower_bound_m, sample.upper_bound_m);
+    };
+
+  for (std::size_t iteration = 0U; iteration < request.iterations; ++iteration) {
+    if (iteration % 2U == 0U) {
+      for (std::size_t i = 0U; i < count; ++i) {
+        update_sample(i);
+      }
+    } else {
+      for (std::size_t i = count; i-- > 0U;) {
+        update_sample(i);
+      }
+    }
+  }
+
+  double objective = 0.0;
+  double maximum_adjustment_m = 0.0;
+  for (std::size_t i = 0U; i < count; ++i) {
+    const auto & sample = request.samples[i];
+    const double reference_error = targets[i] - sample.reference_lateral_m;
+    const double warm_start_error = targets[i] - sample.warm_start_lateral_m;
+    objective += request.reference_weight * reference_error * reference_error;
+    objective += request.warm_start_weight * warm_start_error * warm_start_error;
+    maximum_adjustment_m = std::max(
+      maximum_adjustment_m, std::abs(reference_error));
+    if (i == 0U) {
+      const double anchor_error = targets[i] - request.current_lateral_m;
+      objective += request.current_anchor_weight * anchor_error * anchor_error;
+    }
+    if (i > 0U) {
+      const double slope = targets[i] - targets[i - 1U];
+      objective += request.slope_weight * slope * slope;
+    }
+    if (i > 1U) {
+      const double curvature =
+        targets[i] - 2.0 * targets[i - 1U] + targets[i - 2U];
+      objective += request.curvature_weight * curvature * curvature;
+    }
+  }
+
+  resolution.valid = std::isfinite(objective);
+  resolution.feasible = resolution.valid;
+  resolution.lateral_targets_m = std::move(targets);
+  resolution.objective = objective;
+  resolution.maximum_reference_adjustment_m = maximum_adjustment_m;
+  return resolution;
+}
+
 OvertakeBodyClearDeadlineResolution resolve_overtake_body_clear_deadline(
   const OvertakeBodyClearDeadlineRequest & request) noexcept
 {

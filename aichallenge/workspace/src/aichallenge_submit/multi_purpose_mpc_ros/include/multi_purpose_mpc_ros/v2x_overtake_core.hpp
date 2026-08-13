@@ -845,6 +845,46 @@ struct OvertakeMissionPathResolution
 OvertakeMissionPathResolution resolve_overtake_mission_path(
   const OvertakeMissionPathRequest & request) noexcept;
 
+struct RecedingHorizonLateralSample
+{
+  double path_distance_m{};
+  double lower_bound_m{};
+  double upper_bound_m{};
+  double reference_lateral_m{};
+  double warm_start_lateral_m{};
+};
+
+struct RecedingHorizonLateralRequest
+{
+  bool enabled{false};
+  double current_lateral_m{};
+  double reference_weight{1.0};
+  double warm_start_weight{0.5};
+  double slope_weight{2.0};
+  double curvature_weight{4.0};
+  double current_anchor_weight{4.0};
+  double relaxation{0.65};
+  std::size_t iterations{12U};
+  std::vector<RecedingHorizonLateralSample> samples;
+};
+
+struct RecedingHorizonLateralResolution
+{
+  bool valid{false};
+  bool feasible{false};
+  std::vector<double> lateral_targets_m;
+  double objective{std::numeric_limits<double>::infinity()};
+  double maximum_reference_adjustment_m{};
+};
+
+/// Solve a convex, box-constrained lateral trajectory over the complete live
+/// horizon.  The samples describe one already selected pass-side topology;
+/// target separation and wall clearance therefore enter as hard per-sample
+/// bounds instead of post-hoc abort conditions.  Projected coordinate updates
+/// keep every iterate feasible, and a warm start supplies temporal continuity.
+RecedingHorizonLateralResolution optimize_receding_horizon_lateral_trajectory(
+  const RecedingHorizonLateralRequest & request) noexcept;
+
 struct OvertakeBodyClearDeadlineRequest
 {
   bool enabled{false};

@@ -1400,6 +1400,17 @@ struct OvertakeLineConfig
   double progressive_entry_static_fallback_max_lateral_shift{1.8};
   double max_lateral_accel{2.5};
   double max_target_change{0.25};
+  bool receding_horizon_enabled{false};
+  int receding_horizon_iterations{12};
+  double receding_horizon_max_reference_adjustment{0.35};
+  double receding_horizon_outer_bias{0.20};
+  double receding_horizon_reference_weight{1.0};
+  double receding_horizon_warm_start_weight{0.6};
+  double receding_horizon_slope_weight{3.0};
+  double receding_horizon_curvature_weight{6.0};
+  double receding_horizon_current_anchor_weight{6.0};
+  double receding_horizon_relaxation{0.65};
+  double receding_horizon_target_longitudinal_buffer{0.50};
   double target_intrusion_ordering_margin{0.10};
   double target_intrusion_guard_distance{std::numeric_limits<double>::infinity()};
   bool side_quality_selection_enabled{true};
@@ -2428,6 +2439,10 @@ struct OvertakeLineOutput
   std::vector<double> target_ey;
   std::vector<double> target_epsi;
   std::vector<bool> target_active;
+  bool receding_horizon_active{false};
+  bool receding_horizon_fallback{false};
+  double receding_horizon_objective{std::numeric_limits<double>::infinity()};
+  double receding_horizon_max_adjustment{0.0};
   double target_velocity_reference{std::numeric_limits<double>::infinity()};
   double target_velocity_limit{std::numeric_limits<double>::infinity()};
   double target_velocity_floor{0.0};
@@ -2474,6 +2489,16 @@ struct OvertakeLineHorizonEvaluation
            !static_map_margin_degraded_during_execution &&
            !static_map_physical_infeasible_during_execution;
   }
+};
+
+struct OvertakeRecedingHorizonEvaluation
+{
+  bool attempted{false};
+  bool active{false};
+  bool fallback{false};
+  double objective{std::numeric_limits<double>::infinity()};
+  double maximum_reference_adjustment_m{0.0};
+  OvertakeLineHorizonEvaluation horizon;
 };
 
 struct OvertakeLineEntryPreflight
@@ -11504,6 +11529,9 @@ struct MPC
   std::optional<double> overtake_locked_target_ey_;
   int overtake_locked_side_sign_{0};
   OvertakeLineState overtake_line_state_;
+  std::vector<double> overtake_receding_horizon_warm_start_;
+  std::uint64_t overtake_receding_horizon_generation_{0U};
+  int overtake_receding_horizon_side_sign_{0};
   std::uint64_t next_overtake_episode_id_{1U};
   v2x_overtake_core::OvertakeLineTransitionAction last_overtake_line_transition_action_{
     v2x_overtake_core::OvertakeLineTransitionAction::None};
@@ -11699,6 +11727,9 @@ private:
         overtake_line_state_.pass_side_sign, model->wp_id, reason.c_str());
     }
     overtake_line_state_ = OvertakeLineState{};
+    overtake_receding_horizon_warm_start_.clear();
+    overtake_receding_horizon_generation_ = 0U;
+    overtake_receding_horizon_side_sign_ = 0;
     overtake_contact_wall_guard_safe_ = false;
     last_overtake_line_transition_action_ =
       v2x_overtake_core::OvertakeLineTransitionAction::None;
@@ -13021,6 +13052,8 @@ private:
     const double min_wall_clearance, const double max_lateral_accel,
     const double speed_for_time, const bool enforce_execution_feasibility,
     const std::optional<overtake_core::OvertakeMissionPathRequest> & mission_path =
+    std::nullopt,
+    const std::optional<std::vector<double>> & lateral_target_override =
     std::nullopt) const
   {
     OvertakeLineHorizonEvaluation evaluation;
@@ -13032,6 +13065,14 @@ private:
 
     evaluation.target_ey.assign(static_cast<std::size_t>(N), 0.0);
     evaluation.path_distances.assign(static_cast<std::size_t>(N), 0.0);
+    if (
+      lateral_target_override.has_value() &&
+      lateral_target_override->size() < static_cast<std::size_t>(N))
+    {
+      evaluation.static_map_physical_infeasible_during_execution =
+        enforce_execution_feasibility;
+      return evaluation;
+    }
     const double current_lateral_velocity_mps =
       std::isfinite(model->spatial_state.e_psi) ?
       std::max(0.0, current_speed_mps_) *
@@ -13041,7 +13082,9 @@ private:
         horizon_path_distance_to_index(ref_wp_id, static_cast<std::size_t>(i));
       evaluation.path_distances[static_cast<std::size_t>(i)] = distance;
       double target_ey = 0.0;
-      if (mission_path.has_value()) {
+      if (lateral_target_override.has_value()) {
+        target_ey = lateral_target_override.value()[static_cast<std::size_t>(i)];
+      } else if (mission_path.has_value()) {
         auto path_request = mission_path.value();
         path_request.path_distance_m = distance;
         const auto path_point = overtake_core::resolve_overtake_mission_path(path_request);
@@ -13188,6 +13231,193 @@ private:
       evaluation.target_ey[static_cast<std::size_t>(i)] = target_ey;
     }
     return evaluation;
+  }
+
+  OvertakeRecedingHorizonEvaluation optimize_live_overtake_line_horizon(
+    const V2XBehaviorOutput & behavior_output,
+    const OvertakeLineHorizonEvaluation & baseline_horizon,
+    const int ref_wp_id, const int N, const Eigen::VectorXd & lb,
+    const Eigen::VectorXd & ub, const double current_ey,
+    const double phase_start_ey, const double phase_traveled_m,
+    const bool hold_pass_goal, const double phase_distance,
+    const double goal_ey, const double planning_wall_clearance,
+    const double target_center_separation,
+    const double max_lateral_accel, const double speed_for_time,
+    const bool generating_execution_horizon)
+  {
+    OvertakeRecedingHorizonEvaluation result;
+    result.horizon = baseline_horizon;
+    const auto & line_cfg = cfg.v2x_behavior.overtake_line;
+    const bool active_phase =
+      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+      overtake_line_state_.phase == OvertakeLinePhase::Pass;
+    if (
+      !line_cfg.receding_horizon_enabled || !active_phase ||
+      N < 2 || lb.size() < N || ub.size() < N ||
+      baseline_horizon.target_ey.size() < static_cast<std::size_t>(N) ||
+      baseline_horizon.path_distances.size() < static_cast<std::size_t>(N) ||
+      (overtake_line_state_.pass_side_sign != -1 &&
+      overtake_line_state_.pass_side_sign != 1))
+    {
+      return result;
+    }
+    result.attempted = true;
+
+    const bool warm_start_compatible =
+      overtake_receding_horizon_warm_start_.size() == static_cast<std::size_t>(N) &&
+      overtake_receding_horizon_generation_ == overtake_line_state_.mission_generation &&
+      overtake_receding_horizon_side_sign_ == overtake_line_state_.pass_side_sign;
+    const double maximum_adjustment = std::max(
+      0.0, line_cfg.receding_horizon_max_reference_adjustment);
+    const double target_prediction_time = std::max(0.0, cfg.v2x_gap.prediction_time);
+    const bool target_prediction_valid =
+      behavior_output.locked_target_seen &&
+      !behavior_output.locked_target_position_jump &&
+      std::isfinite(behavior_output.locked_target_longitudinal) &&
+      std::isfinite(behavior_output.locked_target_lateral);
+    const double target_lateral_now =
+      std::isfinite(behavior_output.locked_target_relative_lateral) ?
+      current_ey + behavior_output.locked_target_relative_lateral :
+      behavior_output.locked_target_lateral;
+    const double target_lateral_predicted =
+      behavior_output.locked_target_lateral_prediction_valid &&
+      std::isfinite(behavior_output.locked_target_predicted_relative_lateral) ?
+      current_ey + behavior_output.locked_target_predicted_relative_lateral :
+      target_lateral_now;
+    const double target_longitudinal_predicted =
+      behavior_output.locked_target_footprint_prediction_valid &&
+      std::isfinite(behavior_output.locked_target_predicted_longitudinal) ?
+      behavior_output.locked_target_predicted_longitudinal :
+      behavior_output.locked_target_longitudinal;
+    const double target_longitudinal_overlap =
+      0.5 * (std::max(0.0, cfg.v2x_gap.vehicle_length) +
+      std::max(0.0, model->length)) +
+      std::max(0.0, line_cfg.receding_horizon_target_longitudinal_buffer);
+    const double significant_curvature = std::max(
+      0.0, cfg.v2x_behavior.overtake_max_curvature);
+
+    overtake_core::RecedingHorizonLateralRequest request;
+    request.enabled = true;
+    request.current_lateral_m = current_ey;
+    request.reference_weight = line_cfg.receding_horizon_reference_weight;
+    request.warm_start_weight = line_cfg.receding_horizon_warm_start_weight;
+    request.slope_weight = line_cfg.receding_horizon_slope_weight;
+    request.curvature_weight = line_cfg.receding_horizon_curvature_weight;
+    request.current_anchor_weight = line_cfg.receding_horizon_current_anchor_weight;
+    request.relaxation = line_cfg.receding_horizon_relaxation;
+    request.iterations = static_cast<std::size_t>(
+      std::max(1, line_cfg.receding_horizon_iterations));
+    request.samples.reserve(static_cast<std::size_t>(N));
+
+    for (int i = 0; i < N; ++i) {
+      const std::size_t index = static_cast<std::size_t>(i);
+      const double distance = baseline_horizon.path_distances[index];
+      const double baseline_target = baseline_horizon.target_ey[index];
+      double lower = lb[i] + planning_wall_clearance;
+      double upper = ub[i] - planning_wall_clearance;
+      if (
+        !std::isfinite(distance) || !std::isfinite(baseline_target) ||
+        !std::isfinite(lower) || !std::isfinite(upper) || upper < lower)
+      {
+        result.fallback = true;
+        return result;
+      }
+      lower = std::max(lower, baseline_target - maximum_adjustment);
+      upper = std::min(upper, baseline_target + maximum_adjustment);
+
+      const double time_sec = distance / std::max(1.0, speed_for_time);
+      const double prediction_ratio = target_prediction_time > kEps ?
+        clip(time_sec / target_prediction_time, 0.0, 1.0) : 0.0;
+      const double target_lateral = target_lateral_now + prediction_ratio *
+        (target_lateral_predicted - target_lateral_now);
+      const double target_longitudinal = behavior_output.locked_target_longitudinal +
+        prediction_ratio *
+        (target_longitudinal_predicted - behavior_output.locked_target_longitudinal);
+      const bool target_body_overlap_window =
+        target_prediction_valid && std::isfinite(target_lateral) &&
+        std::isfinite(target_longitudinal) &&
+        std::abs(target_longitudinal) <= target_longitudinal_overlap + kEps;
+      if (target_body_overlap_window) {
+        if (overtake_line_state_.pass_side_sign > 0) {
+          lower = std::max(lower, target_lateral + target_center_separation);
+        } else {
+          upper = std::min(upper, target_lateral - target_center_separation);
+        }
+      }
+      if (upper < lower) {
+        result.fallback = true;
+        return result;
+      }
+
+      double reference = baseline_target;
+      const auto & waypoint = model->reference_path->get_waypoint(ref_wp_id + i);
+      if (
+        std::isfinite(waypoint.kappa) &&
+        std::abs(waypoint.kappa) > significant_curvature + kEps)
+      {
+        const int outer_side = waypoint.kappa > 0.0 ? -1 : 1;
+        const double signed_bias =
+          static_cast<double>(outer_side) * line_cfg.receding_horizon_outer_bias;
+        if (outer_side == overtake_line_state_.pass_side_sign) {
+          reference += signed_bias;
+        } else {
+          // Until rear-clear, do not cross the target merely because course
+          // role has reversed. Contract the old outer line toward the centre;
+          // the discrete homotopy replan remains responsible for a true side
+          // switch before the no-return point.
+          reference -= static_cast<double>(overtake_line_state_.pass_side_sign) *
+            line_cfg.receding_horizon_outer_bias;
+        }
+      }
+      reference = clip(reference, lower, upper);
+      const double warm_start = warm_start_compatible ?
+        overtake_receding_horizon_warm_start_[index] : baseline_target;
+      request.samples.push_back(
+        overtake_core::RecedingHorizonLateralSample{
+          distance, lower, upper, reference, clip(warm_start, lower, upper)});
+    }
+
+    const auto optimized =
+      overtake_core::optimize_receding_horizon_lateral_trajectory(request);
+    if (
+      !optimized.valid || !optimized.feasible ||
+      optimized.lateral_targets_m.size() != static_cast<std::size_t>(N))
+    {
+      result.fallback = true;
+      return result;
+    }
+
+    auto validated_horizon = evaluate_overtake_line_horizon(
+      ref_wp_id, N, lb, ub, current_ey, phase_start_ey, phase_traveled_m,
+      hold_pass_goal, phase_distance, goal_ey, planning_wall_clearance,
+      max_lateral_accel, speed_for_time, generating_execution_horizon,
+      std::nullopt, optimized.lateral_targets_m);
+    bool remains_inside_optimized_bounds =
+      validated_horizon.target_ey.size() == request.samples.size();
+    if (remains_inside_optimized_bounds) {
+      for (std::size_t i = 0U; i < request.samples.size(); ++i) {
+        remains_inside_optimized_bounds =
+          validated_horizon.target_ey[i] >= request.samples[i].lower_bound_m - 1e-6 &&
+          validated_horizon.target_ey[i] <= request.samples[i].upper_bound_m + 1e-6;
+        if (!remains_inside_optimized_bounds) {
+          break;
+        }
+      }
+    }
+    if (!validated_horizon.execution_feasible() || !remains_inside_optimized_bounds) {
+      result.fallback = true;
+      return result;
+    }
+
+    result.active = true;
+    result.objective = optimized.objective;
+    result.maximum_reference_adjustment_m =
+      optimized.maximum_reference_adjustment_m;
+    result.horizon = std::move(validated_horizon);
+    overtake_receding_horizon_warm_start_ = result.horizon.target_ey;
+    overtake_receding_horizon_generation_ = overtake_line_state_.mission_generation;
+    overtake_receding_horizon_side_sign_ = overtake_line_state_.pass_side_sign;
+    return result;
   }
 
   std::vector<overtake_core::OvertakeKinematicSpeedCapSample>
@@ -18499,13 +18729,27 @@ private:
       overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
       overtake_line_state_.phase == OvertakeLinePhase::Pass ||
       overtake_line_state_.phase == OvertakeLinePhase::Return;
-    const auto horizon_evaluation = evaluate_overtake_line_horizon(
+    auto horizon_evaluation = evaluate_overtake_line_horizon(
       ref_wp_id, N, lb, ub, current_ey,
       horizon_phase_start_ey,
       horizon_phase_traveled_m,
       hold_pass_goal,
       phase_distance, goal_ey, planning_wall_clearance, max_lateral_accel,
       speed_for_time, generating_execution_horizon);
+    const auto receding_horizon = optimize_live_overtake_line_horizon(
+      behavior_output, horizon_evaluation, ref_wp_id, N, lb, ub, current_ey,
+      horizon_phase_start_ey, horizon_phase_traveled_m, hold_pass_goal,
+      phase_distance, goal_ey, planning_wall_clearance,
+      target_center_separation, max_lateral_accel, speed_for_time,
+      generating_execution_horizon);
+    if (receding_horizon.active) {
+      horizon_evaluation = receding_horizon.horizon;
+    }
+    output.receding_horizon_active = receding_horizon.active;
+    output.receding_horizon_fallback = receding_horizon.fallback;
+    output.receding_horizon_objective = receding_horizon.objective;
+    output.receding_horizon_max_adjustment =
+      receding_horizon.maximum_reference_adjustment_m;
     output.target_ey = horizon_evaluation.target_ey;
     output.max_required_lateral_accel =
       horizon_evaluation.max_required_lateral_accel;
@@ -18965,6 +19209,7 @@ private:
           "overlap_confirmed=%d, "
           "overlap_elapsed=%.2f/%.2f, "
           "cooldown=%.2f, "
+          "rh=%d/fallback=%d/obj=%.2f/adjust=%.2f, "
           "max_lat_acc=%.2f, lat_limited=%d, wall_limited=%d, "
           "static_wall_limited=%d, static_margin_degraded=%d, static_reachable=%d, "
           "static_wall_infeasible=%d, corridor_goal=%.2f, "
@@ -19031,6 +19276,10 @@ private:
           predicted_overlap_confirmation.elapsed_sec,
           cfg.v2x_behavior.overtake_pass_predicted_overlap_confirm_sec,
           std::max(0.0, overtake_solver_cooldown_until_sec_ - now_sec),
+          output.receding_horizon_active ? 1 : 0,
+          output.receding_horizon_fallback ? 1 : 0,
+          output.receding_horizon_objective,
+          output.receding_horizon_max_adjustment,
           output.max_required_lateral_accel, output.lateral_accel_limited ? 1 : 0,
           output.wall_clearance_limited ? 1 : 0,
           output.static_map_wall_limited ? 1 : 0,
@@ -22170,6 +22419,49 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_line_max_target_change"] ?
     mpc["v2x_overtake_line_max_target_change"].as<double>() : 0.25);
+  cfg.mpc.v2x_behavior.overtake_line.receding_horizon_enabled =
+    mpc["v2x_overtake_receding_horizon_enabled"] ?
+    mpc["v2x_overtake_receding_horizon_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_line.receding_horizon_iterations = std::max(
+    1,
+    mpc["v2x_overtake_receding_horizon_iterations"] ?
+    mpc["v2x_overtake_receding_horizon_iterations"].as<int>() : 12);
+  cfg.mpc.v2x_behavior.overtake_line.receding_horizon_max_reference_adjustment = std::max(
+    0.0,
+    mpc["v2x_overtake_receding_horizon_max_reference_adjustment"] ?
+    mpc["v2x_overtake_receding_horizon_max_reference_adjustment"].as<double>() : 0.35);
+  cfg.mpc.v2x_behavior.overtake_line.receding_horizon_outer_bias = std::max(
+    0.0,
+    mpc["v2x_overtake_receding_horizon_outer_bias"] ?
+    mpc["v2x_overtake_receding_horizon_outer_bias"].as<double>() : 0.20);
+  cfg.mpc.v2x_behavior.overtake_line.receding_horizon_reference_weight = std::max(
+    0.0,
+    mpc["v2x_overtake_receding_horizon_reference_weight"] ?
+    mpc["v2x_overtake_receding_horizon_reference_weight"].as<double>() : 1.0);
+  cfg.mpc.v2x_behavior.overtake_line.receding_horizon_warm_start_weight = std::max(
+    0.0,
+    mpc["v2x_overtake_receding_horizon_warm_start_weight"] ?
+    mpc["v2x_overtake_receding_horizon_warm_start_weight"].as<double>() : 0.6);
+  cfg.mpc.v2x_behavior.overtake_line.receding_horizon_slope_weight = std::max(
+    0.0,
+    mpc["v2x_overtake_receding_horizon_slope_weight"] ?
+    mpc["v2x_overtake_receding_horizon_slope_weight"].as<double>() : 3.0);
+  cfg.mpc.v2x_behavior.overtake_line.receding_horizon_curvature_weight = std::max(
+    0.0,
+    mpc["v2x_overtake_receding_horizon_curvature_weight"] ?
+    mpc["v2x_overtake_receding_horizon_curvature_weight"].as<double>() : 6.0);
+  cfg.mpc.v2x_behavior.overtake_line.receding_horizon_current_anchor_weight = std::max(
+    0.0,
+    mpc["v2x_overtake_receding_horizon_current_anchor_weight"] ?
+    mpc["v2x_overtake_receding_horizon_current_anchor_weight"].as<double>() : 6.0);
+  cfg.mpc.v2x_behavior.overtake_line.receding_horizon_relaxation = clip(
+    mpc["v2x_overtake_receding_horizon_relaxation"] ?
+    mpc["v2x_overtake_receding_horizon_relaxation"].as<double>() : 0.65,
+    0.05, 1.0);
+  cfg.mpc.v2x_behavior.overtake_line.receding_horizon_target_longitudinal_buffer = std::max(
+    0.0,
+    mpc["v2x_overtake_receding_horizon_target_longitudinal_buffer"] ?
+    mpc["v2x_overtake_receding_horizon_target_longitudinal_buffer"].as<double>() : 0.50);
   cfg.mpc.v2x_behavior.overtake_line.target_intrusion_ordering_margin = std::max(
     0.0,
     mpc["v2x_overtake_line_target_intrusion_ordering_margin"] ?

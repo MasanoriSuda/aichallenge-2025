@@ -131,6 +131,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeLineTransitionAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeLineTransitionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionPathRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionPathStage;
+using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonLateralRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonLateralSample;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorSample;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCorridorAdmissionRequest;
@@ -284,6 +286,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_unlatched_pass_closing_s
 using multi_purpose_mpc_ros::v2x_overtake_core::build_overtake_closing_speed_candidates;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_line_horizon_progress;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_mission_path;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  optimize_receding_horizon_lateral_trajectory;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_paused_mission_expiry;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_paused_mission_terminal;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_suppress_completed_target_reacquire;
@@ -2929,6 +2933,78 @@ TEST(V2XOvertakeCoreSpeed, ResolvesImmutableEndToEndMissionPath)
 
   request.path_distance_m = -0.1;
   EXPECT_FALSE(resolve_overtake_mission_path(request).valid);
+}
+
+TEST(V2XOvertakeCoreSpeed, OptimizesBoundedRecedingHorizonAsMultipleLateralKnots)
+{
+  RecedingHorizonLateralRequest request;
+  request.enabled = true;
+  request.current_lateral_m = 0.0;
+  request.reference_weight = 1.0;
+  request.warm_start_weight = 0.0;
+  request.slope_weight = 3.0;
+  request.curvature_weight = 6.0;
+  request.current_anchor_weight = 8.0;
+  request.relaxation = 0.7;
+  request.iterations = 24U;
+  request.samples = {
+    RecedingHorizonLateralSample{0.0, -0.10, 0.10, 0.0, 0.0},
+    RecedingHorizonLateralSample{1.0, 0.20, 1.20, 0.8, 0.8},
+    RecedingHorizonLateralSample{2.0, 0.45, 1.20, 0.9, 0.9},
+    RecedingHorizonLateralSample{3.0, 0.45, 1.10, 0.8, 0.8},
+    RecedingHorizonLateralSample{4.0, 0.10, 0.80, 0.2, 0.2}};
+
+  const auto result = optimize_receding_horizon_lateral_trajectory(request);
+  ASSERT_TRUE(result.valid);
+  ASSERT_TRUE(result.feasible);
+  ASSERT_EQ(result.lateral_targets_m.size(), request.samples.size());
+  for (std::size_t i = 0U; i < request.samples.size(); ++i) {
+    EXPECT_GE(result.lateral_targets_m[i], request.samples[i].lower_bound_m - 1e-12);
+    EXPECT_LE(result.lateral_targets_m[i], request.samples[i].upper_bound_m + 1e-12);
+  }
+  EXPECT_LE(result.lateral_targets_m.front(), 0.10 + 1e-12);
+  EXPECT_GE(result.lateral_targets_m[2], 0.45 - 1e-12);
+  EXPECT_TRUE(std::isfinite(result.objective));
+}
+
+TEST(V2XOvertakeCoreSpeed, WarmStartPreservesTemporalTrajectoryContinuity)
+{
+  RecedingHorizonLateralRequest request;
+  request.enabled = true;
+  request.current_lateral_m = 0.2;
+  request.reference_weight = 0.1;
+  request.warm_start_weight = 8.0;
+  request.slope_weight = 1.0;
+  request.curvature_weight = 1.0;
+  request.current_anchor_weight = 2.0;
+  request.relaxation = 0.7;
+  request.iterations = 16U;
+  request.samples = {
+    RecedingHorizonLateralSample{0.0, -1.0, 1.0, -0.5, 0.2},
+    RecedingHorizonLateralSample{1.0, -1.0, 1.0, -0.5, 0.3},
+    RecedingHorizonLateralSample{2.0, -1.0, 1.0, -0.5, 0.4}};
+
+  const auto result = optimize_receding_horizon_lateral_trajectory(request);
+  ASSERT_TRUE(result.feasible);
+  ASSERT_EQ(result.lateral_targets_m.size(), request.samples.size());
+  EXPECT_GT(result.lateral_targets_m[0], 0.0);
+  EXPECT_GT(result.lateral_targets_m[1], 0.0);
+  EXPECT_GT(result.lateral_targets_m[2], 0.0);
+}
+
+TEST(V2XOvertakeCoreSpeed, RejectsInfeasibleRecedingHorizonBounds)
+{
+  RecedingHorizonLateralRequest request;
+  request.enabled = true;
+  request.current_lateral_m = 0.0;
+  request.samples = {
+    RecedingHorizonLateralSample{0.0, -1.0, 1.0, 0.0, 0.0},
+    RecedingHorizonLateralSample{1.0, 0.5, 0.4, 0.5, 0.5}};
+
+  const auto result = optimize_receding_horizon_lateral_trajectory(request);
+  EXPECT_FALSE(result.valid);
+  EXPECT_FALSE(result.feasible);
+  EXPECT_TRUE(result.lateral_targets_m.empty());
 }
 
 TEST(V2XOvertakeCoreSpeed, TightensPassGoalForDynamicShiftOutCorridor)

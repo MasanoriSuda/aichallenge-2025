@@ -2649,11 +2649,23 @@ enum class MpccLiteShadowRejectReason
   Disabled,
   InvalidRequest,
   Unavailable,
+  PlanningUnavailable,
   HardConstraint,
   InvalidCandidate,
+  MissionInfeasible,
+  ProgressiveEntryIncomplete,
+  RearClearUnchecked,
   RearClearInfeasible,
   RearClearTimeBudget,
   RearClearDistanceBudget,
+  TargetClearanceUnchecked,
+  OuterTransitionUnvalidated,
+  RuntimeHardFault,
+  MissionTotalTimeBudget,
+  SafeSeparationTimeBudget,
+  SafeSeparationDistanceBudget,
+  ReturnNotAdmitted,
+  ReturnCorridorBlocked,
 };
 
 const char * to_string(MpccLiteShadowRejectReason reason) noexcept;
@@ -2661,8 +2673,11 @@ const char * to_string(MpccLiteShadowRejectReason reason) noexcept;
 struct MpccLiteShadowCandidate
 {
   MpccLiteShadowBranch branch{MpccLiteShadowBranch::None};
+  bool assessed{false};
   bool available{false};
   bool hard_feasible{false};
+  MpccLiteShadowRejectReason admission_reject_reason{
+    MpccLiteShadowRejectReason::None};
   bool rear_clear_required{true};
   bool rear_clear_feasible{false};
   double predicted_rear_clear_time_sec{std::numeric_limits<double>::infinity()};
@@ -2673,6 +2688,42 @@ struct MpccLiteShadowCandidate
   double maximum_lateral_accel_mps2{};
   double lateral_motion_m{};
 };
+
+struct MpccLiteShadowMissionCandidateRequest
+{
+  MpccLiteShadowBranch branch{MpccLiteShadowBranch::None};
+  bool assessed{false};
+  std::optional<OvertakeMissionCandidate> mission;
+  bool runtime_hard_fault{false};
+  double fallback_wall_clearance_m{};
+  double fallback_target_clearance_m{};
+  bool mission_time_budget_active{false};
+  double mission_time_remaining_sec{std::numeric_limits<double>::infinity()};
+  bool safe_separation_budget_active{false};
+  double safe_separation_time_remaining_sec{std::numeric_limits<double>::infinity()};
+  double safe_separation_distance_remaining_m{std::numeric_limits<double>::infinity()};
+};
+
+/// Convert one planner Mission into a typed shadow candidate. This function
+/// preserves the first admission failure so runtime logs can distinguish an
+/// incomplete progressive horizon from physical and remaining-budget faults.
+MpccLiteShadowCandidate build_mpcc_lite_shadow_mission_candidate(
+  const MpccLiteShadowMissionCandidateRequest & request) noexcept;
+
+struct MpccLiteShadowReturnAdmissionRequest
+{
+  bool phase_relevant{false};
+  bool return_active{false};
+  bool rear_clear_confirmed{false};
+  bool return_corridor_blocked{false};
+  bool runtime_hard_fault{false};
+};
+
+/// Return execution has already crossed the rear-clear admission boundary.
+/// Recheck its live corridor and runtime faults without requiring a latch that
+/// may be cleared as part of the FSM transition itself.
+MpccLiteShadowRejectReason resolve_mpcc_lite_shadow_return_admission(
+  const MpccLiteShadowReturnAdmissionRequest & request) noexcept;
 
 struct MpccLiteShadowWeights
 {

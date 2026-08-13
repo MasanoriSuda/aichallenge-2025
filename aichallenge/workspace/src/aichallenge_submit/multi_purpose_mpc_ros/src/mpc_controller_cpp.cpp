@@ -7207,7 +7207,7 @@ struct MPC
         return overtake_core::select_overtake_mission_candidate(request);
       };
 
-    const auto assess_side = [&](const int side) {
+    const auto assess_side = [&](const int side, const bool shadow_only) {
       SideAssessment assessment;
       assessment.side = side;
       assessment.side_clearance =
@@ -7217,7 +7217,7 @@ struct MPC
         return assessment;
       }
       const bool retry_block_applies =
-        !start_grid_breakout_attempt && !active_overtake_line &&
+        !shadow_only && !start_grid_breakout_attempt && !active_overtake_line &&
         overtake_line_state_.phase != OvertakeLinePhase::Return;
       if (
         retry_block_applies &&
@@ -7249,6 +7249,7 @@ struct MPC
       // track frame rotate through the first hairpin. Target discontinuity, target replacement,
       // explicit forbidden waypoints, and the normal line completion path remain escape gates.
       if (
+        !shadow_only &&
         overtake_line_state_.mission_path_frozen && shiftout_line_active &&
         locked_pass_side != 0 && side == locked_pass_side &&
         !opponent_side_replan_assessment_requested)
@@ -7271,7 +7272,7 @@ struct MPC
         return assessment;
       }
       if (
-        validated_start_grid_breakout_continuity && locked_pass_side != 0 &&
+        !shadow_only && validated_start_grid_breakout_continuity && locked_pass_side != 0 &&
         side == locked_pass_side)
       {
         assessment.gap_available = true;
@@ -7286,7 +7287,7 @@ struct MPC
       // locked side until rear-clear; wall bounds and the hard execution
       // gates below remain active.
       if (
-        committed_active_pass && locked_pass_side != 0 &&
+        !shadow_only && committed_active_pass && locked_pass_side != 0 &&
         side == locked_pass_side && !opponent_side_replan_assessment_requested)
       {
         assessment.gap_available = true;
@@ -7461,7 +7462,7 @@ struct MPC
         overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare ||
         overtake_line_state_.phase == OvertakeLinePhase::Recovery);
       const bool side_replan_preflight =
-        side_replan_assessment_requested &&
+        (side_replan_assessment_requested || shadow_only) &&
         output.locked_target_seen &&
         std::isfinite(output.locked_target_lateral);
       const bool normal_shiftout_preflight =
@@ -8537,7 +8538,7 @@ struct MPC
           }
           assessment.reason = ss.str();
           assessment.guard_reason = assessment.reason;
-          if (!active_overtake_line) {
+          if (!shadow_only && !active_overtake_line) {
             arm_overtake_line_side_retry_block(
               side, output.target_vehicle_id, now_sec, assessment.reason,
               overtake_core::OvertakeSideRetryFailureClass::PlanningSearchMiss);
@@ -8702,7 +8703,7 @@ struct MPC
       locked_pass_side != 0 && !side_replan_assessment_requested &&
       !paused_overtake_mission)
     {
-      const auto locked_assessment = assess_side(locked_pass_side);
+      const auto locked_assessment = assess_side(locked_pass_side, false);
       if (locked_pass_side > 0) {
         left_assessment = locked_assessment;
       } else {
@@ -8711,7 +8712,7 @@ struct MPC
     } else {
       const int first_side = locked_pass_side != 0 ?
         locked_pass_side : preferred_pass_side != 0 ? preferred_pass_side : 1;
-      const auto first_assessment = assess_side(first_side);
+      const auto first_assessment = assess_side(first_side, false);
       if (first_side > 0) {
         left_assessment = first_assessment;
       } else {
@@ -8723,7 +8724,7 @@ struct MPC
         curve_attack_selection_requested ||
         (start_grid_breakout_attempt && locked_pass_side == 0))
       {
-        const auto alternate_assessment = assess_side(-first_side);
+        const auto alternate_assessment = assess_side(-first_side, false);
         if (first_side > 0) {
           right_assessment = alternate_assessment;
         } else {
@@ -9726,66 +9727,75 @@ struct MPC
         0.10,
         robust_target_center_separation -
         cfg.v2x_behavior.overtake_line_min_target_separation);
+      const bool shadow_mission_budget_active =
+        shadow_cfg.mission_total_budget_enabled &&
+        std::isfinite(overtake_line_state_.mission_total_start_sec) &&
+        (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+        overtake_line_state_.phase == OvertakeLinePhase::Pass ||
+        overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare);
+      const double shadow_mission_time_remaining_sec = shadow_mission_budget_active ?
+        std::max(
+          0.0,
+          shadow_cfg.mission_total_time_limit_sec -
+          std::max(0.0, now_sec - overtake_line_state_.mission_total_start_sec)) :
+        std::numeric_limits<double>::infinity();
+      const bool shadow_safe_separation_budget_active =
+        overtake_line_state_.pass_horizon_safe_separation_active &&
+        std::isfinite(
+          overtake_line_state_.pass_horizon_safe_separation_start_sec);
+      const double shadow_safe_separation_time_remaining_sec =
+        shadow_safe_separation_budget_active ?
+        std::max(
+          0.0,
+          overtake_line_state_.pass_horizon_safe_separation_max_sec -
+          std::max(
+            0.0,
+            now_sec -
+            overtake_line_state_.pass_horizon_safe_separation_start_sec)) :
+        std::numeric_limits<double>::infinity();
+      const double shadow_safe_separation_distance_remaining_m =
+        shadow_safe_separation_budget_active ?
+        std::max(
+          0.0,
+          overtake_line_state_.pass_horizon_safe_separation_max_distance -
+          std::max(
+            0.0,
+            overtake_line_state_.phase_traveled_m -
+            overtake_line_state_.pass_horizon_safe_separation_start_distance)) :
+        std::numeric_limits<double>::infinity();
       const auto unavailable_shadow_candidate = [](const ShadowBranch branch) {
           overtake_core::MpccLiteShadowCandidate candidate;
           candidate.branch = branch;
           return candidate;
         };
       const auto mission_shadow_candidate = [&]
-        (const ShadowBranch branch,
+        (const ShadowBranch branch, const bool assessed,
         const std::optional<overtake_core::OvertakeMissionCandidate> & mission) {
-          auto candidate = unavailable_shadow_candidate(branch);
-          if (!mission.has_value()) {
-            return candidate;
-          }
-          const auto & value = mission.value();
-          const auto finite_reserve = [](const double metric, const double fallback) {
-              return std::isfinite(metric) ? std::max(0.0, metric) : fallback;
-            };
-          candidate.available = true;
-          candidate.hard_feasible =
-            value.feasible && !value.progressive_entry &&
-            value.rear_clear_prediction_checked &&
-            value.rear_clear_prediction_feasible &&
-            value.pass_target_clearance_checked &&
-            (!value.outer_transition_required ||
-            value.outer_transition_preflight_validated) &&
-            !shadow_runtime_hard_fault;
-          candidate.rear_clear_required = true;
-          candidate.rear_clear_feasible = value.rear_clear_prediction_feasible;
-          candidate.predicted_rear_clear_time_sec =
-            value.predicted_rear_clear_time_sec;
-          candidate.predicted_rear_clear_distance_m =
-            value.predicted_rear_clear_ego_distance_m;
-          candidate.predicted_minimum_speed_mps =
-            value.predicted_minimum_ego_speed_mps;
-          candidate.minimum_wall_clearance_m = std::min(
-            finite_reserve(value.minimum_path_wall_clearance_m, shadow_wall_reference),
-            std::min(
-              finite_reserve(
-                value.minimum_return_wall_clearance_m, shadow_wall_reference),
-              0.5 * finite_reserve(
-                value.minimum_path_corridor_width_m,
-                2.0 * shadow_wall_reference)));
-          candidate.minimum_target_clearance_m = finite_reserve(
-            value.predicted_minimum_pass_target_surface_clearance_m,
-            shadow_target_surface_reference);
-          candidate.maximum_lateral_accel_mps2 =
-            value.max_required_lateral_accel_mps2;
-          candidate.lateral_motion_m = value.lateral_shift_m;
-          return candidate;
+          return overtake_core::build_mpcc_lite_shadow_mission_candidate(
+            overtake_core::MpccLiteShadowMissionCandidateRequest{
+              branch, assessed, mission, shadow_runtime_hard_fault,
+              shadow_wall_reference, shadow_target_surface_reference,
+              shadow_mission_budget_active, shadow_mission_time_remaining_sec,
+              shadow_safe_separation_budget_active,
+              shadow_safe_separation_time_remaining_sec,
+              shadow_safe_separation_distance_remaining_m});
         };
 
+      // The control FSM intentionally avoids recomputing the opposite side
+      // after commitment. Shadow diagnostics must still compare both branches
+      // on the same sample, without arming retry blocks or changing execution.
+      const auto shadow_left_assessment = assess_side(1, true);
+      const auto shadow_right_assessment = assess_side(-1, true);
       std::vector<overtake_core::MpccLiteShadowCandidate> shadow_candidates;
       shadow_candidates.reserve(4U);
       shadow_candidates.push_back(mission_shadow_candidate(
-        ShadowBranch::Left, left_assessment.selected_mission));
+        ShadowBranch::Left, true, shadow_left_assessment.selected_mission));
       shadow_candidates.push_back(mission_shadow_candidate(
-        ShadowBranch::Right, right_assessment.selected_mission));
+        ShadowBranch::Right, true, shadow_right_assessment.selected_mission));
 
       std::optional<overtake_core::OvertakeMissionCandidate> hold_mission;
       const SideAssessment & locked_assessment = locked_pass_side < 0 ?
-        right_assessment : left_assessment;
+        shadow_right_assessment : shadow_left_assessment;
       if (locked_pass_side != 0 && locked_assessment.selected_mission.has_value()) {
         hold_mission = locked_assessment.selected_mission;
       } else if (
@@ -9798,7 +9808,10 @@ struct MPC
         hold_mission = overtake_line_state_.mission_plan->mission;
       }
       auto hold_candidate = mission_shadow_candidate(
-        ShadowBranch::CurrentSideHold, hold_mission);
+        ShadowBranch::CurrentSideHold,
+        locked_pass_side != 0 &&
+        overtake_line_state_.phase != OvertakeLinePhase::Idle,
+        hold_mission);
       hold_candidate.available =
         hold_candidate.available && locked_pass_side != 0 &&
         overtake_line_state_.phase != OvertakeLinePhase::Idle;
@@ -9815,6 +9828,8 @@ struct MPC
         overtake_line_state_.phase == OvertakeLinePhase::Return);
       if (return_phase_relevant) {
         const auto & mission = overtake_line_state_.mission_plan->mission;
+        const bool return_active =
+          overtake_line_state_.phase == OvertakeLinePhase::Return;
         const double return_wall_clearance =
           std::isfinite(mission.minimum_return_wall_clearance_m) ?
           std::max(0.0, mission.minimum_return_wall_clearance_m) :
@@ -9827,14 +9842,21 @@ struct MPC
             -output.locked_target_longitudinal -
             cfg.v2x_behavior.overtake_line.return_clear_distance) :
           shadow_target_surface_reference;
+        return_candidate.assessed = true;
         return_candidate.available = true;
+        return_candidate.admission_reject_reason =
+          overtake_core::resolve_mpcc_lite_shadow_return_admission(
+          overtake_core::MpccLiteShadowReturnAdmissionRequest{
+            true, return_active,
+            overtake_line_state_.rear_clear_confirmed_latched,
+            output.overtake_return_corridor_blocked,
+            shadow_runtime_hard_fault});
         return_candidate.hard_feasible =
-          overtake_line_state_.rear_clear_confirmed_latched &&
-          !output.overtake_return_corridor_blocked &&
-          !shadow_runtime_hard_fault;
+          return_candidate.admission_reject_reason ==
+          overtake_core::MpccLiteShadowRejectReason::None;
         return_candidate.rear_clear_required = false;
         return_candidate.rear_clear_feasible =
-          overtake_line_state_.rear_clear_confirmed_latched;
+          return_active || overtake_line_state_.rear_clear_confirmed_latched;
         return_candidate.predicted_rear_clear_time_sec = 0.0;
         return_candidate.predicted_rear_clear_distance_m = 0.0;
         return_candidate.predicted_minimum_speed_mps =
@@ -9914,10 +9936,17 @@ struct MPC
                    << ", best=" << overtake_core::to_string(best_shadow_branch)
                    << ", agree=" << (shadow_agrees ? 1 : 0)
                    << ", source=" << (last_feasible_hold ? "last_feasible" : "current")
-                   << ", authority=none";
+                   << ", authority=none"
+                   << ", both_sides=1"
+                   << ", mission_rem=" << shadow_mission_time_remaining_sec
+                   << ", safe_sep=" <<
+          (shadow_safe_separation_budget_active ? 1 : 0) << "/" <<
+          shadow_safe_separation_time_remaining_sec << "s/" <<
+          shadow_safe_separation_distance_remaining_m << "m";
         for (const auto & evaluation : shadow_resolution.evaluations) {
           shadow_log << ", " << overtake_core::to_string(evaluation.candidate.branch)
-                     << "={ok=" << (evaluation.hard_feasible ? 1 : 0)
+                     << "={seen=" << (evaluation.candidate.assessed ? 1 : 0)
+                     << ",ok=" << (evaluation.hard_feasible ? 1 : 0)
                      << ",why=" << overtake_core::to_string(evaluation.reject_reason)
                      << ",score=" << evaluation.score
                      << ",rear=" << evaluation.candidate.predicted_rear_clear_time_sec

@@ -13066,4 +13066,129 @@ TEST(V2XOvertakeCoreMpccLiteShadow, PreservesActiveBranchOnEqualScore)
   EXPECT_TRUE(result.agrees_with_active_branch);
 }
 
+TEST(V2XOvertakeCoreMpccLiteShadow, ClassifiesMissionAdmissionFailures)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::MpccLiteShadowBranch;
+  using multi_purpose_mpc_ros::v2x_overtake_core::MpccLiteShadowMissionCandidateRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::MpccLiteShadowRejectReason;
+  using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidate;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    build_mpcc_lite_shadow_mission_candidate;
+
+  MpccLiteShadowMissionCandidateRequest request;
+  request.branch = MpccLiteShadowBranch::Left;
+  request.assessed = true;
+  request.fallback_wall_clearance_m = 0.2;
+  request.fallback_target_clearance_m = 0.1;
+
+  auto candidate = build_mpcc_lite_shadow_mission_candidate(request);
+  EXPECT_FALSE(candidate.available);
+  EXPECT_EQ(
+    candidate.admission_reject_reason,
+    MpccLiteShadowRejectReason::PlanningUnavailable);
+
+  OvertakeMissionCandidate mission;
+  mission.feasible = true;
+  mission.progressive_entry = true;
+  request.mission = mission;
+  candidate = build_mpcc_lite_shadow_mission_candidate(request);
+  EXPECT_TRUE(candidate.available);
+  EXPECT_FALSE(candidate.hard_feasible);
+  EXPECT_EQ(
+    candidate.admission_reject_reason,
+    MpccLiteShadowRejectReason::ProgressiveEntryIncomplete);
+
+  request.mission->progressive_entry = false;
+  candidate = build_mpcc_lite_shadow_mission_candidate(request);
+  EXPECT_EQ(
+    candidate.admission_reject_reason,
+    MpccLiteShadowRejectReason::RearClearUnchecked);
+}
+
+TEST(V2XOvertakeCoreMpccLiteShadow, AppliesRemainingMissionAndSafeSeparationBudgets)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::MpccLiteShadowBranch;
+  using multi_purpose_mpc_ros::v2x_overtake_core::MpccLiteShadowMissionCandidateRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::MpccLiteShadowRejectReason;
+  using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidate;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    build_mpcc_lite_shadow_mission_candidate;
+
+  OvertakeMissionCandidate mission;
+  mission.feasible = true;
+  mission.rear_clear_prediction_checked = true;
+  mission.rear_clear_prediction_feasible = true;
+  mission.pass_target_clearance_checked = true;
+  mission.predicted_rear_clear_time_sec = 3.0;
+  mission.predicted_rear_clear_ego_distance_m = 10.0;
+  mission.predicted_minimum_ego_speed_mps = 4.0;
+  mission.predicted_minimum_pass_target_surface_clearance_m = 0.2;
+  mission.max_required_lateral_accel_mps2 = 2.0;
+  mission.lateral_shift_m = 0.5;
+  mission.minimum_path_wall_clearance_m = 0.4;
+  mission.minimum_return_wall_clearance_m = 0.5;
+  mission.minimum_path_corridor_width_m = 1.0;
+
+  MpccLiteShadowMissionCandidateRequest request;
+  request.branch = MpccLiteShadowBranch::CurrentSideHold;
+  request.assessed = true;
+  request.mission = mission;
+  request.fallback_wall_clearance_m = 0.2;
+  request.fallback_target_clearance_m = 0.1;
+  request.mission_time_budget_active = true;
+  request.mission_time_remaining_sec = 2.0;
+
+  auto candidate = build_mpcc_lite_shadow_mission_candidate(request);
+  EXPECT_FALSE(candidate.hard_feasible);
+  EXPECT_EQ(
+    candidate.admission_reject_reason,
+    MpccLiteShadowRejectReason::MissionTotalTimeBudget);
+
+  request.mission_time_remaining_sec = 4.0;
+  request.safe_separation_budget_active = true;
+  request.safe_separation_time_remaining_sec = 2.5;
+  request.safe_separation_distance_remaining_m = 12.0;
+  candidate = build_mpcc_lite_shadow_mission_candidate(request);
+  EXPECT_EQ(
+    candidate.admission_reject_reason,
+    MpccLiteShadowRejectReason::SafeSeparationTimeBudget);
+
+  request.safe_separation_time_remaining_sec = 4.0;
+  request.safe_separation_distance_remaining_m = 9.0;
+  candidate = build_mpcc_lite_shadow_mission_candidate(request);
+  EXPECT_EQ(
+    candidate.admission_reject_reason,
+    MpccLiteShadowRejectReason::SafeSeparationDistanceBudget);
+
+  request.safe_separation_distance_remaining_m = 11.0;
+  candidate = build_mpcc_lite_shadow_mission_candidate(request);
+  EXPECT_TRUE(candidate.hard_feasible);
+  EXPECT_EQ(candidate.admission_reject_reason, MpccLiteShadowRejectReason::None);
+}
+
+TEST(V2XOvertakeCoreMpccLiteShadow, KeepsActiveReturnAdmittedAfterLatchConsumption)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::MpccLiteShadowRejectReason;
+  using multi_purpose_mpc_ros::v2x_overtake_core::MpccLiteShadowReturnAdmissionRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_mpcc_lite_shadow_return_admission;
+
+  EXPECT_EQ(
+    resolve_mpcc_lite_shadow_return_admission(
+      MpccLiteShadowReturnAdmissionRequest{true, true, false, false, false}),
+    MpccLiteShadowRejectReason::None);
+  EXPECT_EQ(
+    resolve_mpcc_lite_shadow_return_admission(
+      MpccLiteShadowReturnAdmissionRequest{true, false, false, false, false}),
+    MpccLiteShadowRejectReason::ReturnNotAdmitted);
+  EXPECT_EQ(
+    resolve_mpcc_lite_shadow_return_admission(
+      MpccLiteShadowReturnAdmissionRequest{true, true, true, true, false}),
+    MpccLiteShadowRejectReason::ReturnCorridorBlocked);
+  EXPECT_EQ(
+    resolve_mpcc_lite_shadow_return_admission(
+      MpccLiteShadowReturnAdmissionRequest{true, true, true, false, true}),
+    MpccLiteShadowRejectReason::RuntimeHardFault);
+}
+
 }  // namespace

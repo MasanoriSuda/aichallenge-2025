@@ -918,6 +918,30 @@ struct RecedingHorizonTargetBoundsResolution
 RecedingHorizonTargetBoundsResolution resolve_receding_horizon_target_bounds(
   const RecedingHorizonTargetBoundsRequest & request) noexcept;
 
+struct RecedingHorizonElasticTargetBoundsRequest
+{
+  RecedingHorizonTargetBoundsRequest preferred_request;
+  double hard_wall_lower_bound_m{};
+  double hard_wall_upper_bound_m{};
+  double hard_trust_lower_bound_m{};
+  double hard_trust_upper_bound_m{};
+  bool elastic_wall_clearance_enabled{false};
+};
+
+struct RecedingHorizonElasticTargetBoundsResolution
+{
+  RecedingHorizonTargetBoundsResolution target_bounds;
+  bool hard_wall_clearance_used{false};
+};
+
+/// Resolve target bounds in the robust/preferred wall interval first. If that
+/// interval cannot contain even the physical target half-space, elastic mode
+/// retries inside the configured hard wall interval. The target resolver still
+/// owns robust -> configured -> physical separation degradation.
+RecedingHorizonElasticTargetBoundsResolution
+resolve_receding_horizon_elastic_target_bounds(
+  const RecedingHorizonElasticTargetBoundsRequest & request) noexcept;
+
 struct RecedingHorizonExecutionBoundsRequest
 {
   int pass_side_sign{};

@@ -136,6 +136,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonLateralRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonLateralSample;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonExecutionLeaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonTargetBoundsRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonElasticTargetBoundsRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonExecutionBoundsRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonBodyClearBoundsReleaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassCompletionRolloutSpeedRequest;
@@ -3128,6 +3129,51 @@ TEST(V2XOvertakeCoreSpeed, RejectsWhenPhysicalTargetSeparationDoesNotFitWallBoun
     multi_purpose_mpc_ros::v2x_overtake_core::resolve_receding_horizon_target_bounds(
     request);
   EXPECT_FALSE(result.valid);
+}
+
+TEST(V2XOvertakeCoreSpeed, ElasticTargetBoundsRetryInsideHardWallInterval)
+{
+  const auto result = multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_receding_horizon_elastic_target_bounds(
+    RecedingHorizonElasticTargetBoundsRequest{
+      RecedingHorizonTargetBoundsRequest{
+        1, -1.0, 0.60, -1.0, 0.50, 0.0, 1.20, 0.90, 0.70, true},
+      -1.20, 1.20, -1.0, 0.80, true});
+
+  ASSERT_TRUE(result.target_bounds.valid);
+  EXPECT_TRUE(result.hard_wall_clearance_used);
+  EXPECT_TRUE(result.target_bounds.robust_degraded);
+  EXPECT_TRUE(result.target_bounds.physical_separation_used);
+  EXPECT_NEAR(result.target_bounds.lower_bound_m, 0.70, 1e-9);
+  EXPECT_NEAR(result.target_bounds.upper_bound_m, 0.80, 1e-9);
+}
+
+TEST(V2XOvertakeCoreSpeed, ElasticTargetBoundsRemainFailClosedWhenDisabled)
+{
+  const auto result = multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_receding_horizon_elastic_target_bounds(
+    RecedingHorizonElasticTargetBoundsRequest{
+      RecedingHorizonTargetBoundsRequest{
+        1, -1.0, 0.60, -1.0, 0.50, 0.0, 1.20, 0.90, 0.70, true},
+      -1.20, 1.20, -1.0, 1.0, false});
+
+  EXPECT_FALSE(result.target_bounds.valid);
+  EXPECT_FALSE(result.hard_wall_clearance_used);
+}
+
+TEST(V2XOvertakeCoreSpeed, ElasticTargetBoundsKeepPreferredWallWhenFeasible)
+{
+  const auto result = multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_receding_horizon_elastic_target_bounds(
+    RecedingHorizonElasticTargetBoundsRequest{
+      RecedingHorizonTargetBoundsRequest{
+        -1, -1.5, 1.5, -1.2, 1.2, 0.0, 0.80, 0.70, 0.60, true},
+      -2.0, 2.0, -1.5, 1.5, true});
+
+  ASSERT_TRUE(result.target_bounds.valid);
+  EXPECT_FALSE(result.hard_wall_clearance_used);
+  EXPECT_FALSE(result.target_bounds.robust_degraded);
+  EXPECT_NEAR(result.target_bounds.upper_bound_m, -0.80, 1e-9);
 }
 
 TEST(V2XOvertakeCoreSpeed, ResolvesExecutionBoundsWithoutMissionTrustRegion)

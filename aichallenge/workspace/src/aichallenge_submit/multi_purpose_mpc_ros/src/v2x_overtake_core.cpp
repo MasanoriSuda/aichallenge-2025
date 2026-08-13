@@ -1501,6 +1501,27 @@ RecedingHorizonTargetBoundsResolution resolve_receding_horizon_target_bounds(
   return resolution;
 }
 
+RecedingHorizonElasticTargetBoundsResolution
+resolve_receding_horizon_elastic_target_bounds(
+  const RecedingHorizonElasticTargetBoundsRequest & request) noexcept
+{
+  RecedingHorizonElasticTargetBoundsResolution resolution;
+  resolution.target_bounds =
+    resolve_receding_horizon_target_bounds(request.preferred_request);
+  if (resolution.target_bounds.valid || !request.elastic_wall_clearance_enabled) {
+    return resolution;
+  }
+
+  auto hard_request = request.preferred_request;
+  hard_request.wall_lower_bound_m = request.hard_wall_lower_bound_m;
+  hard_request.wall_upper_bound_m = request.hard_wall_upper_bound_m;
+  hard_request.trust_lower_bound_m = request.hard_trust_lower_bound_m;
+  hard_request.trust_upper_bound_m = request.hard_trust_upper_bound_m;
+  resolution.target_bounds = resolve_receding_horizon_target_bounds(hard_request);
+  resolution.hard_wall_clearance_used = resolution.target_bounds.valid;
+  return resolution;
+}
+
 RecedingHorizonExecutionBoundsResolution resolve_receding_horizon_execution_bounds(
   const RecedingHorizonExecutionBoundsRequest & request) noexcept
 {

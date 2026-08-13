@@ -5471,6 +5471,15 @@ MpccLiteAuthorityResolution resolve_mpcc_lite_authority(
     return resolution;
   }
   if (
+    selected_side != 0 && selected_side == request.active_side_sign &&
+    request.same_side_replan_admitted && request.selected_mission_available &&
+    request.selected_mission_complete)
+  {
+    resolution.action = MpccLiteAuthorityAction::ReplaceActive;
+    resolution.selected_side_sign = selected_side;
+    return resolution;
+  }
+  if (
     selected_side != 0 && selected_side != request.active_side_sign &&
     request.cross_side_replan_admitted && request.selected_mission_available &&
     request.selected_mission_complete)
@@ -7698,6 +7707,31 @@ bool should_observe_locked_target_geometry(
   return
     (execution_phase || paused_frozen_mission) &&
     request.target_id_available && request.vehicle_matches_target;
+}
+
+LockedTargetNearFieldContinuityResolution resolve_locked_target_near_field_continuity(
+  const LockedTargetNearFieldContinuityRequest & request) noexcept
+{
+  LockedTargetNearFieldContinuityResolution resolution;
+  if (request.course_geometry_valid) {
+    resolution.geometry_valid = true;
+    return resolution;
+  }
+  const bool limits_valid =
+    std::isfinite(request.maximum_distance_m) && request.maximum_distance_m >= 0.0 &&
+    std::isfinite(request.maximum_lateral_m) && request.maximum_lateral_m >= 0.0;
+  const bool local_geometry_valid =
+    std::isfinite(request.local_longitudinal_m) &&
+    std::isfinite(request.local_lateral_m) &&
+    std::isfinite(request.euclidean_distance_m) &&
+    request.euclidean_distance_m >= 0.0;
+  resolution.local_fallback_used =
+    !request.position_jump && limits_valid && local_geometry_valid &&
+    request.euclidean_distance_m <= request.maximum_distance_m + 1e-9 &&
+    std::abs(request.local_longitudinal_m) <= request.maximum_distance_m + 1e-9 &&
+    std::abs(request.local_lateral_m) <= request.maximum_lateral_m + 1e-9;
+  resolution.geometry_valid = resolution.local_fallback_used;
+  return resolution;
 }
 
 bool can_enter_dynamic_mission_wait(

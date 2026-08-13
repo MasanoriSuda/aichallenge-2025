@@ -605,6 +605,7 @@ mpc:
   v2x_overtake_mpcc_lite_shadow_log_interval_sec: 1.0 # [s] periodic log; recommendation changes log immediately
   v2x_overtake_mpcc_lite_shadow_last_feasible_max_age_sec: 0.50 # [s] exact-target/phase lease for a temporary optimizer miss
   v2x_overtake_mpcc_lite_control_enabled: true # Allow a hard-feasible prefix to own new ShiftOut side/goal/closing speed
+  v2x_overtake_mpcc_lite_locked_target_near_field_distance: 6.0 # [m] keep the active target constrained across a transient course-projection miss
   v2x_overtake_mpcc_lite_prefix_terminal_time_sec: 0.75 # [s] terminal progress penalty beyond body-clear for incomplete rear-clear horizon
   v2x_overtake_mpcc_lite_prefix_terminal_distance: 2.0 # [m] terminal progress penalty beyond body-clear for incomplete rear-clear horizon
   v2x_overtake_safe_separation_soft_prediction_grace_sec: 0.25 # [s] prediction-only loss grace after committed forward completion; hard faults remain immediate
@@ -874,7 +875,7 @@ mpc:
   v_max: 40.0
   domain_v_max:
     1: 40.0
-    2: 12.0
+    2: 15.0
     3: 40.0
   domain_start_v_max_duration: 15.0
   domain_start_v_max:

@@ -2944,6 +2944,7 @@ struct MpccLiteAuthorityRequest
   bool active_mission{false};
   bool return_active{false};
   bool return_admitted{false};
+  bool same_side_replan_admitted{false};
   bool cross_side_replan_admitted{false};
   bool selected_mission_available{false};
   bool selected_mission_complete{false};
@@ -2959,8 +2960,9 @@ struct MpccLiteAuthorityResolution
 };
 
 /// Give the finite-horizon winner bounded control authority. A local prefix
-/// may start a new entry, but an active cross-side replacement still requires
-/// a complete, atomically preflighted Mission and the existing no-return gate.
+/// may start a new entry; an active same-side replacement requires explicit
+/// admission, and a cross-side replacement additionally retains the existing
+/// no-return gate. Both active replacements require a complete Mission.
 MpccLiteAuthorityResolution resolve_mpcc_lite_authority(
   const MpccLiteAuthorityRequest & request) noexcept;
 
@@ -4369,6 +4371,29 @@ struct LockedTargetGeometryObservationRequest
 /// granting FollowPrepare any of the ShiftOut/Pass speed or brake exemptions.
 bool should_observe_locked_target_geometry(
   const LockedTargetGeometryObservationRequest & request) noexcept;
+
+struct LockedTargetNearFieldContinuityRequest
+{
+  bool course_geometry_valid{false};
+  bool position_jump{false};
+  double local_longitudinal_m{std::numeric_limits<double>::infinity()};
+  double local_lateral_m{std::numeric_limits<double>::infinity()};
+  double euclidean_distance_m{std::numeric_limits<double>::infinity()};
+  double maximum_distance_m{};
+  double maximum_lateral_m{};
+};
+
+struct LockedTargetNearFieldContinuityResolution
+{
+  bool geometry_valid{false};
+  bool local_fallback_used{false};
+};
+
+/// Preserve a physically close locked target across a transient course
+/// projection miss. The fallback is bounded in both Euclidean/course-local
+/// distance and never overrides a reported position jump.
+LockedTargetNearFieldContinuityResolution resolve_locked_target_near_field_continuity(
+  const LockedTargetNearFieldContinuityRequest & request) noexcept;
 
 struct DynamicMissionWaitAdmissionRequest
 {

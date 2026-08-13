@@ -1509,6 +1509,7 @@ struct OvertakeLineConfig
   double mpcc_lite_shadow_log_interval_sec{1.0};
   double mpcc_lite_shadow_last_feasible_max_age_sec{0.50};
   bool mpcc_lite_control_enabled{false};
+  double mpcc_lite_locked_target_near_field_distance{6.0};
   double mpcc_lite_prefix_terminal_time_sec{0.75};
   double mpcc_lite_prefix_terminal_distance{2.0};
   double safe_separation_soft_prediction_grace_sec{0.25};
@@ -2135,6 +2136,7 @@ struct V2XBehaviorOutput
   bool opponent_side_replan_current_feasible{false};
   bool opponent_side_replan_alternate_feasible{false};
   bool opponent_side_replan_ready{false};
+  bool mpcc_lite_same_side_replan_ready{false};
   bool opponent_side_replan_no_return{false};
   bool opponent_side_replan_early_intrusion_risk{false};
   overtake_core::PassCommitStage overtake_commit_stage{
@@ -2155,6 +2157,8 @@ struct V2XBehaviorOutput
   std::optional<double> opponent_side_replan_goal_ey;
   std::optional<overtake_core::OvertakeMissionCandidate>
   opponent_side_replan_current_mission;
+  std::optional<overtake_core::OvertakeMissionCandidate>
+  mpcc_lite_same_side_replan_mission;
   std::optional<overtake_core::OvertakeMissionCandidate> opponent_side_replan_mission;
   overtake_core::OpponentSideReplanReason opponent_side_replan_reason{
     overtake_core::OpponentSideReplanReason::None};
@@ -2164,6 +2168,7 @@ struct V2XBehaviorOutput
   std::string overtake_right_reason;
   std::string target_vehicle_id;
   bool locked_target_seen{false};
+  bool locked_target_near_field_fallback_used{false};
   bool locked_target_position_jump{false};
   bool locked_target_lateral_prediction_valid{false};
   bool locked_target_course_progress_rejected{false};
@@ -5590,11 +5595,24 @@ struct MPC
         !overtake_line_state_.target_vehicle_id.empty() &&
         vehicle.id == overtake_line_state_.target_vehicle_id)
       {
+        const auto locked_target_continuity =
+          v2x_overtake_core::resolve_locked_target_near_field_continuity(
+          v2x_overtake_core::LockedTargetNearFieldContinuityRequest{
+            front_geometry_valid,
+            vehicle.position_jump,
+            longitudinal,
+            lateral,
+            self_distance,
+            cfg.v2x_behavior.overtake_line.mpcc_lite_locked_target_near_field_distance,
+            corridor_lateral_range});
         output.locked_target_position_jump = vehicle.position_jump;
         output.locked_target_course_progress_rejected =
-          course_progress_continuity_rejected;
-        output.locked_target_seen = front_geometry_valid;
-        if (front_geometry_valid) {
+          course_progress_continuity_rejected &&
+          !locked_target_continuity.local_fallback_used;
+        output.locked_target_seen = locked_target_continuity.geometry_valid;
+        output.locked_target_near_field_fallback_used =
+          locked_target_continuity.local_fallback_used;
+        if (locked_target_continuity.geometry_valid) {
           output.locked_target_longitudinal = front_longitudinal;
           output.locked_target_lateral = front_lateral;
           output.locked_target_relative_lateral = front_relative_lateral;
@@ -10095,6 +10113,14 @@ struct MPC
         winning_mission.has_value() && !winning_mission->progressive_entry &&
         winning_mission->rear_clear_prediction_checked &&
         winning_mission->rear_clear_prediction_feasible;
+      const bool mpcc_same_side_replan_admitted =
+        !start_grid_breakout_attempt &&
+        (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+        overtake_line_state_.phase == OvertakeLinePhase::Pass) &&
+        locked_pass_side != 0 && opponent_side_replan_target_continuous &&
+        !current_overtake_mission_invalidated() &&
+        (output.locked_target_current_body_footprints_separated ||
+        output.recoverable_side_contact_active);
       const auto authority = overtake_core::resolve_mpcc_lite_authority(
         overtake_core::MpccLiteAuthorityRequest{
           shadow_cfg.mpcc_lite_control_enabled,
@@ -10107,6 +10133,7 @@ struct MPC
           overtake_line_state_.phase != OvertakeLinePhase::Idle,
           overtake_line_state_.phase == OvertakeLinePhase::Return,
           overtake_line_state_.rear_clear_confirmed_latched,
+          mpcc_same_side_replan_admitted,
           opponent_side_replan_before_no_return &&
           output.opponent_side_replan_ready,
           winning_mission.has_value(),
@@ -10132,6 +10159,12 @@ struct MPC
           mpcc_lite_control_last_feasible_target_id_ = output.target_vehicle_id;
           mpcc_lite_control_last_feasible_entry_sec_ = now_sec;
         }
+      } else if (
+        authority.action == overtake_core::MpccLiteAuthorityAction::ReplaceActive &&
+        winning_mission.has_value() && authority.selected_side_sign == locked_pass_side)
+      {
+        output.mpcc_lite_same_side_replan_ready = true;
+        output.mpcc_lite_same_side_replan_mission = winning_mission;
       } else if (shadow_runtime_hard_fault) {
         mpcc_lite_control_last_feasible_entry_mission_.reset();
         mpcc_lite_control_last_feasible_target_id_.clear();
@@ -14410,6 +14443,7 @@ private:
     bool validation_accepted = false;
     bool initial_execution_feasible = false;
     bool saw_physical_infeasibility = false;
+    bool target_bound_projection_used = false;
     int hard_bound_failure_index = -1;
     std::string hard_bound_failure_kind;
     for (const double candidate_speed : validation_speeds) {
@@ -14439,7 +14473,7 @@ private:
             validated_horizon = std::move(candidate_horizon);
             validation_accepted = true;
             result.post_validation_repair_active =
-              repair_iteration > 0 ||
+              target_bound_projection_used || repair_iteration > 0 ||
               candidate_speed + 1e-6 < speed_for_time ||
               candidate_wall_clearance + 1e-6 < planning_wall_clearance ||
               !inside_optimizer_bounds;
@@ -14465,6 +14499,38 @@ private:
           {
             break;
           }
+          if (execution_bounds.failure_kind == "target") {
+            std::vector<double> projected_targets = candidate_horizon.target_ey;
+            bool projection_valid = true;
+            bool projection_changed = false;
+            for (int i = 0; i < N; ++i) {
+              const std::size_t index = static_cast<std::size_t>(i);
+              const auto & target_constraint = target_execution_constraints[index];
+              const auto bounds =
+                overtake_core::resolve_receding_horizon_execution_bounds(
+                overtake_core::RecedingHorizonExecutionBoundsRequest{
+                  overtake_line_state_.pass_side_sign,
+                  lb[i] + candidate_wall_clearance,
+                  ub[i] - candidate_wall_clearance,
+                  target_constraint.active,
+                  target_constraint.target_lateral_m,
+                  target_constraint.center_separation_m});
+              if (!bounds.valid) {
+                projection_valid = false;
+                break;
+              }
+              const double projected = std::clamp(
+                projected_targets[index], bounds.lower_bound_m, bounds.upper_bound_m);
+              projection_changed = projection_changed ||
+                std::abs(projected - projected_targets[index]) > 1e-6;
+              projected_targets[index] = projected;
+            }
+            if (projection_valid && projection_changed) {
+              validation_targets = std::move(projected_targets);
+              target_bound_projection_used = true;
+              continue;
+            }
+          }
           bool correction_changed = false;
           for (std::size_t i = 0U; i < validation_targets.size(); ++i) {
             correction_changed = correction_changed ||
@@ -14486,6 +14552,9 @@ private:
     if (!validation_accepted) {
       result.hard_bound_failure_index = hard_bound_failure_index;
       result.hard_bound_failure_kind = hard_bound_failure_kind;
+      if (retain_last_feasible("post-validation failed")) {
+        return result;
+      }
       if (!initial_execution_feasible || saw_physical_infeasibility) {
         fail("optimized horizon failed physical revalidation", true);
       } else if (hard_bound_failure_kind == "wall") {
@@ -14499,6 +14568,9 @@ private:
     }
     if (result.post_validation_repair_active) {
       append_fallback_reason("post-validation trajectory repaired");
+    }
+    if (target_bound_projection_used) {
+      append_fallback_reason("post-validation trajectory projected to execution bounds");
     }
     if (result.hard_wall_clearance_used) {
       append_fallback_reason("robust wall reserve degraded to configured hard reserve");
@@ -16415,6 +16487,24 @@ private:
           break;
         case v2x_overtake_core::OvertakeLineTransitionAction::None:
           break;
+      }
+    } else if (
+      behavior_output.mpcc_lite_same_side_replan_ready &&
+      behavior_output.mpcc_lite_same_side_replan_mission.has_value())
+    {
+      const auto & replacement =
+        behavior_output.mpcc_lite_same_side_replan_mission.value();
+      const bool replaced = replace_frozen_overtake_mission_after_dynamic_replan(
+        replacement, now_sec, current_ey, true, false, false, true);
+      if (!replaced && line_cfg.debug_log_enabled) {
+        RCLCPP_INFO(
+          rclcpp::get_logger("mpc_controller"),
+          "Overtake MPCC-lite same-side replacement retained current Mission: "
+          "target=%s, side=%d, phase=%s, candidate_goal=%.2f, wp_id=%d",
+          overtake_line_state_.target_vehicle_id.c_str(),
+          overtake_line_state_.pass_side_sign,
+          to_string(overtake_line_state_.phase), replacement.goal_lateral_m,
+          model->wp_id);
       }
     } else if (
       behavior_output.opponent_side_replan_ready &&
@@ -22201,7 +22291,7 @@ private:
           "completion_avail=%.2f, completion_req=%.2f, completion_rel=%.2f, "
           "gap=%d, gap_hold=%d, hold_rem=%.2f, fallback=%d, "
           "cooldown=%d, pass=%d, side_clear=%.2f, plan_N=%d, target=%s, locked_seen=%d, "
-          "course_reject=%d, locked_s=%.2f, locked_lat=%.2f, "
+          "course_reject=%d, near_field=%d, locked_s=%.2f, locked_lat=%.2f, "
           "lat_clear=%d, body_clear=%d, footprint_clear=%d, "
           "current_overlap_confirmed=%d, current_overlap_elapsed=%.2f, "
           "footprint_prediction=%d, footprint_sweep_clear=%d, "
@@ -22312,6 +22402,7 @@ private:
           output.overtake_side_clearance, output.overtake_plan_N,
           output.target_vehicle_id.c_str(), output.locked_target_seen ? 1 : 0,
           output.locked_target_course_progress_rejected ? 1 : 0,
+          output.locked_target_near_field_fallback_used ? 1 : 0,
           output.locked_target_longitudinal,
           output.locked_target_relative_lateral,
           output.locked_target_current_lateral_clear ? 1 : 0,
@@ -24123,6 +24214,10 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_line.mpcc_lite_control_enabled =
     mpc["v2x_overtake_mpcc_lite_control_enabled"] ?
     mpc["v2x_overtake_mpcc_lite_control_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_lite_locked_target_near_field_distance = std::max(
+    0.0,
+    mpc["v2x_overtake_mpcc_lite_locked_target_near_field_distance"] ?
+    mpc["v2x_overtake_mpcc_lite_locked_target_near_field_distance"].as<double>() : 6.0);
   cfg.mpc.v2x_behavior.overtake_line.mpcc_lite_prefix_terminal_time_sec = std::max(
     0.0,
     mpc["v2x_overtake_mpcc_lite_prefix_terminal_time_sec"] ?
@@ -26125,7 +26220,8 @@ public:
       RCLCPP_INFO(
         get_logger(),
         "V2X MPCC-lite: %s, evaluate=%.3f s (%.1f Hz), log=%.2f s, "
-        "last_feasible<=%.2f s, control=%s, prefix_terminal=%.2f s/%.2f m",
+        "last_feasible<=%.2f s, control=%s, near_target<=%.2f m, "
+        "prefix_terminal=%.2f s/%.2f m",
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_shadow_enabled ?
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_shadow_evaluation_interval_sec,
@@ -26136,7 +26232,8 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_shadow_log_interval_sec,
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_shadow_last_feasible_max_age_sec,
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_control_enabled ?
-        "entry" : "none",
+        "entry+same_side" : "none",
+        mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_locked_target_near_field_distance,
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_prefix_terminal_time_sec,
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_prefix_terminal_distance);
     }

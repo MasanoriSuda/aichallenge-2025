@@ -113,6 +113,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::PassManeuverCandidateRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OpponentSideManeuverComparisonRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SideReplanDebounceRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::LockedTargetGeometryObservationRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::LockedTargetNearFieldContinuityRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitAdmissionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitReason;
@@ -10086,6 +10087,39 @@ TEST(V2XOvertakeCoreDynamicMissionWait, ObservesPausedFrozenMissionTargetGeometr
   EXPECT_FALSE(should_observe_locked_target_geometry(request));
 }
 
+TEST(V2XOvertakeCoreDynamicMissionWait, KeepsOnlyPhysicallyNearLockedTargetOnProjectionMiss)
+{
+  LockedTargetNearFieldContinuityRequest request;
+  request.local_longitudinal_m = 4.0;
+  request.local_lateral_m = 1.0;
+  request.euclidean_distance_m = std::hypot(4.0, 1.0);
+  request.maximum_distance_m = 6.0;
+  request.maximum_lateral_m = 2.0;
+
+  auto resolution =
+    multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_locked_target_near_field_continuity(request);
+  EXPECT_TRUE(resolution.geometry_valid);
+  EXPECT_TRUE(resolution.local_fallback_used);
+
+  request.position_jump = true;
+  resolution = multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_locked_target_near_field_continuity(request);
+  EXPECT_FALSE(resolution.geometry_valid);
+
+  request.position_jump = false;
+  request.euclidean_distance_m = 6.01;
+  resolution = multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_locked_target_near_field_continuity(request);
+  EXPECT_FALSE(resolution.geometry_valid);
+
+  request.course_geometry_valid = true;
+  resolution = multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_locked_target_near_field_continuity(request);
+  EXPECT_TRUE(resolution.geometry_valid);
+  EXPECT_FALSE(resolution.local_fallback_used);
+}
+
 TEST(V2XOvertakeCoreDynamicMissionWait, AdmitsObservableSameSideAfterNoReturn)
 {
   DynamicMissionWaitAdmissionRequest request;
@@ -13492,6 +13526,18 @@ TEST(V2XOvertakeCoreMpccLite, BoundsExecutionAuthorityByMissionStage)
   resolution = resolve_mpcc_lite_authority(request);
   EXPECT_EQ(resolution.action, MpccLiteAuthorityAction::KeepCurrent);
   EXPECT_EQ(resolution.selected_side_sign, 1);
+
+  request.selected_branch = MpccLiteShadowBranch::Left;
+  request.same_side_replan_admitted = true;
+  request.selected_mission_available = true;
+  request.selected_mission_complete = true;
+  resolution = resolve_mpcc_lite_authority(request);
+  EXPECT_EQ(resolution.action, MpccLiteAuthorityAction::ReplaceActive);
+  EXPECT_EQ(resolution.selected_side_sign, 1);
+
+  request.same_side_replan_admitted = false;
+  resolution = resolve_mpcc_lite_authority(request);
+  EXPECT_EQ(resolution.action, MpccLiteAuthorityAction::None);
 
   request.runtime_hard_fault = true;
   resolution = resolve_mpcc_lite_authority(request);

@@ -137,6 +137,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonLateralSample;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonExecutionLeaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonTargetBoundsRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonElasticTargetBoundsRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonTargetPredictionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonExecutionBoundsRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonBodyClearBoundsReleaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassCompletionRolloutSpeedRequest;
@@ -3174,6 +3175,40 @@ TEST(V2XOvertakeCoreSpeed, ElasticTargetBoundsKeepPreferredWallWhenFeasible)
   EXPECT_FALSE(result.hard_wall_clearance_used);
   EXPECT_FALSE(result.target_bounds.robust_degraded);
   EXPECT_NEAR(result.target_bounds.upper_bound_m, -0.80, 1e-9);
+}
+
+TEST(V2XOvertakeCoreSpeed, CandidateSpeedRecomputesTargetOverlapWindow)
+{
+  RecedingHorizonTargetPredictionRequest request{
+    true, 3.0, 6.0, 6.0, 1.0, 0.0, 0.2, 3.0, 1.0, 2.0};
+  auto result = multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_receding_horizon_target_prediction(request);
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_TRUE(result.body_overlap_window);
+  EXPECT_NEAR(result.prediction_time_sec, 0.5, 1e-9);
+  EXPECT_NEAR(result.target_lateral_m, 0.1, 1e-9);
+  EXPECT_NEAR(result.target_longitudinal_m, 2.0, 1e-9);
+
+  request.candidate_ego_speed_mps = 4.0;
+  result = multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_receding_horizon_target_prediction(request);
+  ASSERT_TRUE(result.valid);
+  EXPECT_FALSE(result.body_overlap_window);
+  EXPECT_NEAR(result.prediction_time_sec, 0.75, 1e-9);
+  EXPECT_NEAR(result.target_lateral_m, 0.15, 1e-9);
+  EXPECT_NEAR(result.target_longitudinal_m, 3.0, 1e-9);
+}
+
+TEST(V2XOvertakeCoreSpeed, CandidateSpeedTargetPredictionRejectsInvalidInput)
+{
+  const auto result = multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_receding_horizon_target_prediction(
+    RecedingHorizonTargetPredictionRequest{
+      true, 3.0, 6.0, 0.0, 1.0, 0.0, 0.2, 3.0, 1.0, 2.0});
+
+  EXPECT_FALSE(result.valid);
+  EXPECT_FALSE(result.body_overlap_window);
 }
 
 TEST(V2XOvertakeCoreSpeed, ResolvesExecutionBoundsWithoutMissionTrustRegion)

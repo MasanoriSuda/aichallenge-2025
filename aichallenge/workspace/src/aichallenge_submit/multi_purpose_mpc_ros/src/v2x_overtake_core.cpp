@@ -1522,6 +1522,56 @@ resolve_receding_horizon_elastic_target_bounds(
   return resolution;
 }
 
+RecedingHorizonTargetPredictionResolution
+resolve_receding_horizon_target_prediction(
+  const RecedingHorizonTargetPredictionRequest & request) noexcept
+{
+  RecedingHorizonTargetPredictionResolution resolution;
+  const auto finite = [](const double value) {return std::isfinite(value);};
+  if (
+    !request.target_prediction_valid || !finite(request.path_distance_m) ||
+    !finite(request.nominal_ego_speed_mps) ||
+    !finite(request.candidate_ego_speed_mps) ||
+    !finite(request.prediction_horizon_sec) ||
+    !finite(request.target_lateral_now_m) ||
+    !finite(request.target_lateral_predicted_m) ||
+    !finite(request.target_longitudinal_now_m) ||
+    !finite(request.target_longitudinal_predicted_m) ||
+    !finite(request.longitudinal_overlap_threshold_m) ||
+    request.path_distance_m < 0.0 || request.nominal_ego_speed_mps <= 0.0 ||
+    request.candidate_ego_speed_mps <= 0.0 ||
+    request.prediction_horizon_sec < 0.0 ||
+    request.longitudinal_overlap_threshold_m < 0.0)
+  {
+    return resolution;
+  }
+
+  const double unbounded_prediction_time =
+    request.path_distance_m / request.candidate_ego_speed_mps;
+  const double prediction_time = request.prediction_horizon_sec > 1e-9 ?
+    std::min(unbounded_prediction_time, request.prediction_horizon_sec) : 0.0;
+  const double prediction_ratio = request.prediction_horizon_sec > 1e-9 ?
+    std::clamp(
+    unbounded_prediction_time / request.prediction_horizon_sec, 0.0, 1.0) : 0.0;
+  const double nominal_target_longitudinal =
+    request.target_longitudinal_now_m + prediction_ratio *
+    (request.target_longitudinal_predicted_m -
+    request.target_longitudinal_now_m);
+
+  resolution.valid = true;
+  resolution.prediction_time_sec = prediction_time;
+  resolution.prediction_ratio = prediction_ratio;
+  resolution.target_lateral_m = request.target_lateral_now_m + prediction_ratio *
+    (request.target_lateral_predicted_m - request.target_lateral_now_m);
+  resolution.target_longitudinal_m = nominal_target_longitudinal +
+    (request.nominal_ego_speed_mps - request.candidate_ego_speed_mps) *
+    prediction_time;
+  resolution.body_overlap_window =
+    std::abs(resolution.target_longitudinal_m) <=
+    request.longitudinal_overlap_threshold_m + 1e-9;
+  return resolution;
+}
+
 RecedingHorizonExecutionBoundsResolution resolve_receding_horizon_execution_bounds(
   const RecedingHorizonExecutionBoundsRequest & request) noexcept
 {

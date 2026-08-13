@@ -942,6 +942,39 @@ RecedingHorizonElasticTargetBoundsResolution
 resolve_receding_horizon_elastic_target_bounds(
   const RecedingHorizonElasticTargetBoundsRequest & request) noexcept;
 
+struct RecedingHorizonTargetPredictionRequest
+{
+  bool target_prediction_valid{false};
+  double path_distance_m{};
+  double nominal_ego_speed_mps{};
+  double candidate_ego_speed_mps{};
+  double prediction_horizon_sec{};
+  double target_lateral_now_m{};
+  double target_lateral_predicted_m{};
+  double target_longitudinal_now_m{};
+  double target_longitudinal_predicted_m{};
+  double longitudinal_overlap_threshold_m{};
+};
+
+struct RecedingHorizonTargetPredictionResolution
+{
+  bool valid{false};
+  bool body_overlap_window{false};
+  double prediction_time_sec{};
+  double prediction_ratio{};
+  double target_lateral_m{};
+  double target_longitudinal_m{};
+};
+
+/// Re-evaluate the target pose for one path sample at a candidate ego speed.
+/// The supplied longitudinal prediction is relative to the nominal ego speed;
+/// changing speed therefore needs an explicit relative-progress correction.
+/// This keeps lateral reachability repair and target overlap constraints on
+/// the same time axis.
+RecedingHorizonTargetPredictionResolution
+resolve_receding_horizon_target_prediction(
+  const RecedingHorizonTargetPredictionRequest & request) noexcept;
+
 struct RecedingHorizonExecutionBoundsRequest
 {
   int pass_side_sign{};

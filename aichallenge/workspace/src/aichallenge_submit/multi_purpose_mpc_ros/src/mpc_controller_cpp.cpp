@@ -14150,6 +14150,22 @@ private:
       std::max(1, line_cfg.receding_horizon_iterations));
     request.samples.reserve(static_cast<std::size_t>(N));
 
+    const auto resolve_target_prediction = [&] (
+        const double distance, const double candidate_speed) {
+        return overtake_core::resolve_receding_horizon_target_prediction(
+          overtake_core::RecedingHorizonTargetPredictionRequest{
+            target_prediction_valid,
+            distance,
+            std::max(1.0, speed_for_time),
+            std::max(1.0, candidate_speed),
+            target_prediction_time,
+            target_lateral_now,
+            target_lateral_predicted,
+            behavior_output.locked_target_longitudinal,
+            target_longitudinal_predicted,
+            target_longitudinal_overlap});
+      };
+
     for (int i = 0; i < N; ++i) {
       const std::size_t index = static_cast<std::size_t>(i);
       const double distance = baseline_horizon.path_distances[index];
@@ -14181,18 +14197,12 @@ private:
       double lower = std::max(wall_lower, baseline_target - maximum_adjustment);
       double upper = std::min(wall_upper, baseline_target + maximum_adjustment);
 
-      const double time_sec = distance / std::max(1.0, speed_for_time);
-      const double prediction_ratio = target_prediction_time > kEps ?
-        clip(time_sec / target_prediction_time, 0.0, 1.0) : 0.0;
-      const double target_lateral = target_lateral_now + prediction_ratio *
-        (target_lateral_predicted - target_lateral_now);
-      const double target_longitudinal = behavior_output.locked_target_longitudinal +
-        prediction_ratio *
-        (target_longitudinal_predicted - behavior_output.locked_target_longitudinal);
+      const auto target_prediction =
+        resolve_target_prediction(distance, speed_for_time);
+      const double target_lateral = target_prediction.valid ?
+        target_prediction.target_lateral_m : target_lateral_now;
       const bool raw_target_body_overlap_window =
-        target_prediction_valid && std::isfinite(target_lateral) &&
-        std::isfinite(target_longitudinal) &&
-        std::abs(target_longitudinal) <= target_longitudinal_overlap + kEps;
+        target_prediction.valid && target_prediction.body_overlap_window;
       const bool target_body_overlap_window =
         raw_target_body_overlap_window && !body_clear_pass_bounds_release_eligible;
       RecedingHorizonTargetExecutionConstraint target_execution_constraint;
@@ -14438,14 +14448,16 @@ private:
       std::string failure_kind;
     };
     const auto check_execution_bounds = [
-      &lb, &ub, &target_execution_constraints, N,
+      &lb, &ub, N,
       pass_side_sign = overtake_line_state_.pass_side_sign](
         const OvertakeLineHorizonEvaluation & horizon,
-        const double wall_clearance) {
+        const double wall_clearance,
+        const std::vector<RecedingHorizonTargetExecutionConstraint> &
+        execution_target_constraints) {
         RecedingHorizonExecutionBoundsCheck check;
         if (
           horizon.target_ey.size() != static_cast<std::size_t>(N) ||
-          target_execution_constraints.size() != static_cast<std::size_t>(N))
+          execution_target_constraints.size() != static_cast<std::size_t>(N))
         {
           check.failure_kind = "invalid";
           return check;
@@ -14454,7 +14466,7 @@ private:
           const std::size_t index = static_cast<std::size_t>(i);
           const double wall_lower = lb[i] + wall_clearance;
           const double wall_upper = ub[i] - wall_clearance;
-          const auto & target_constraint = target_execution_constraints[index];
+          const auto & target_constraint = execution_target_constraints[index];
           const auto execution_bounds =
             overtake_core::resolve_receding_horizon_execution_bounds(
             overtake_core::RecedingHorizonExecutionBoundsRequest{
@@ -14483,6 +14495,32 @@ private:
         }
         check.valid = true;
         return check;
+      };
+
+    const auto build_validation_target_constraints = [&] (
+        const double candidate_speed) {
+        std::vector<RecedingHorizonTargetExecutionConstraint> constraints;
+        constraints.reserve(static_cast<std::size_t>(N));
+        for (int i = 0; i < N; ++i) {
+          const std::size_t index = static_cast<std::size_t>(i);
+          const auto target_prediction = resolve_target_prediction(
+            baseline_horizon.path_distances[index], candidate_speed);
+          RecedingHorizonTargetExecutionConstraint constraint;
+          constraint.active =
+            target_prediction.valid && target_prediction.body_overlap_window &&
+            !body_clear_pass_bounds_release_eligible;
+          constraint.target_lateral_m = target_prediction.valid ?
+            target_prediction.target_lateral_m : target_lateral_now;
+          constraint.preferred_center_separation_m =
+            target_execution_constraints[index].active ?
+            target_execution_constraints[index].preferred_center_separation_m :
+            configured_target_center_separation;
+          constraint.hard_center_separation_m =
+            elastic_clearance_enabled ? physical_target_center_separation :
+            constraint.preferred_center_separation_m;
+          constraints.push_back(constraint);
+        }
+        return constraints;
       };
 
     // Static-map and lateral-acceleration corrections run after the lateral
@@ -14518,6 +14556,8 @@ private:
     }
 
     OvertakeLineHorizonEvaluation validated_horizon;
+    std::vector<RecedingHorizonTargetExecutionConstraint>
+    validated_target_execution_constraints;
     bool validation_accepted = false;
     bool initial_execution_feasible = false;
     bool saw_physical_infeasibility = false;
@@ -14525,6 +14565,8 @@ private:
     int hard_bound_failure_index = -1;
     std::string hard_bound_failure_kind;
     for (const double candidate_speed : validation_speeds) {
+      const auto validation_target_execution_constraints =
+        build_validation_target_constraints(candidate_speed);
       for (const double candidate_wall_clearance : validation_wall_clearances) {
         std::vector<double> validation_targets = optimized.lateral_targets_m;
         for (int repair_iteration = 0; repair_iteration < 3; ++repair_iteration) {
@@ -14536,7 +14578,8 @@ private:
           const bool inside_optimizer_bounds =
             remains_inside_bounds(candidate_horizon, request.samples);
           const auto execution_bounds = check_execution_bounds(
-            candidate_horizon, candidate_wall_clearance);
+            candidate_horizon, candidate_wall_clearance,
+            validation_target_execution_constraints);
           if (
             candidate_speed == validation_speeds.front() &&
             candidate_wall_clearance == validation_wall_clearances.front() &&
@@ -14549,6 +14592,8 @@ private:
             execution_bounds.valid)
           {
             validated_horizon = std::move(candidate_horizon);
+            validated_target_execution_constraints =
+              validation_target_execution_constraints;
             validation_accepted = true;
             result.post_validation_repair_active =
               target_bound_projection_used || repair_iteration > 0 ||
@@ -14563,7 +14608,8 @@ private:
             if (elastic_clearance_enabled) {
               for (int i = 0; i < N; ++i) {
                 const std::size_t index = static_cast<std::size_t>(i);
-                const auto & target_constraint = target_execution_constraints[index];
+                const auto & target_constraint =
+                  validated_target_execution_constraints[index];
                 if (!target_constraint.active) {
                   continue;
                 }
@@ -14610,7 +14656,8 @@ private:
             bool projection_changed = false;
             for (int i = 0; i < N; ++i) {
               const std::size_t index = static_cast<std::size_t>(i);
-              const auto & target_constraint = target_execution_constraints[index];
+              const auto & target_constraint =
+                validation_target_execution_constraints[index];
               const auto bounds =
                 overtake_core::resolve_receding_horizon_execution_bounds(
                 overtake_core::RecedingHorizonExecutionBoundsRequest{
@@ -19318,6 +19365,37 @@ private:
           const bool current_candidate_allowed =
             safe_separation.reason !=
             overtake_core::SafeSeparationReason::ShortHorizonUnsafe;
+          const bool fresh_same_side_soft_abort_replan_available =
+            soft_maneuver_failure && !tactical_reselect_hard_fault &&
+            tactical_reselect_target_continuous &&
+            behavior_output.locked_target_current_body_footprints_separated &&
+            behavior_output.locked_target_footprint_prediction_valid &&
+            behavior_output.locked_target_predicted_body_footprint_sweep_separated &&
+            !behavior_output.overtake_execution_corridor_blocked &&
+            fresh_same_side_candidate_available &&
+            fresh_same_side_candidate.has_value() &&
+            fresh_same_side_candidate->planner_generated_at_sec >
+            overtake_line_state_.mission_planner_generated_at_sec + kEps;
+          if (fresh_same_side_soft_abort_replan_available) {
+            const bool preserve_front_cap_release =
+              overtake_line_state_.pass_front_cap_release_active;
+            const bool replaced =
+              replace_frozen_overtake_mission_after_dynamic_replan(
+              fresh_same_side_candidate.value(), now_sec, current_ey,
+              true, true, false, preserve_front_cap_release);
+            if (replaced) {
+              RCLCPP_WARN(
+                rclcpp::get_logger("mpc_controller"),
+                "OvertakeLine SafeSeparation soft abort same-side replan accepted: "
+                "target=%s, side=%d, reason=%s, goal=%.2f, wp_id=%d",
+                overtake_line_state_.target_vehicle_id.c_str(),
+                overtake_line_state_.pass_side_sign,
+                overtake_core::to_string(safe_separation.reason),
+                fresh_same_side_candidate->goal_lateral_m, model->wp_id);
+              return update_overtake_line(
+                behavior_output, ref_wp_id, N, lb, ub, now_sec);
+            }
+          }
           if (
             try_last_feasible_maneuver(
               abort_reason, soft_maneuver_failure, current_candidate_allowed, false, false))
@@ -20578,6 +20656,56 @@ private:
           output.target_velocity_limit,
           std::max(0.0, line_cfg.recovery_velocity));
       } else {
+        const bool recoverable_target_bound_replan =
+          receding_horizon.hard_infeasible &&
+          receding_horizon.hard_bound_failure_kind == "target" &&
+          active_execution_phase && locked_target_progress_continuous &&
+          !behavior_output.locked_target_position_jump &&
+          !locked_target_progress_rejected &&
+          (behavior_output.locked_target_current_body_footprints_separated ||
+          behavior_output.recoverable_side_contact_active) &&
+          !actual_wall_physical_contact && !actual_wall_margin_blocked &&
+          !actual_wall_sample_unavailable &&
+          behavior_output.front_risk_level != FrontRiskLevel::EmergencyBrake &&
+          !overtake_solver_recovery_active_ &&
+          !behavior_output.overtake_forbidden_wp;
+        if (recoverable_target_bound_replan) {
+          const bool fresh_same_side_replan_available_now =
+            fresh_same_side_candidate_available &&
+            fresh_same_side_candidate.has_value() &&
+            fresh_same_side_candidate->planner_generated_at_sec >
+            overtake_line_state_.mission_planner_generated_at_sec + kEps;
+          if (fresh_same_side_replan_available_now) {
+            const bool preserve_front_cap_release =
+              overtake_line_state_.phase == OvertakeLinePhase::Pass &&
+              overtake_line_state_.pass_front_cap_release_active;
+            const bool replaced =
+              replace_frozen_overtake_mission_after_dynamic_replan(
+              fresh_same_side_candidate.value(), now_sec, current_ey,
+              true, true, false, preserve_front_cap_release);
+            if (replaced) {
+              RCLCPP_WARN(
+                rclcpp::get_logger("mpc_controller"),
+                "OvertakeLine target-bound failure same-side replan accepted: "
+                "target=%s, side=%d, goal=%.2f, reason=%s, wp_id=%d",
+                overtake_line_state_.target_vehicle_id.c_str(),
+                overtake_line_state_.pass_side_sign,
+                fresh_same_side_candidate->goal_lateral_m, reason, model->wp_id);
+              return update_overtake_line(
+                behavior_output, ref_wp_id, N, lb, ub, now_sec);
+            }
+          }
+          if (
+            try_last_feasible_maneuver(
+              reason, true, false, true, false))
+          {
+            return update_overtake_line(
+              behavior_output, ref_wp_id, N, lb, ub, now_sec);
+          }
+          if (enter_dynamic_mission_wait(reason)) {
+            return output;
+          }
+        }
         arm_overtake_line_side_retry_block(
           overtake_line_state_.pass_side_sign,
           overtake_line_state_.target_vehicle_id, now_sec, reason,

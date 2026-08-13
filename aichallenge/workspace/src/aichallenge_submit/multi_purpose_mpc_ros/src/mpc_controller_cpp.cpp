@@ -14567,7 +14567,11 @@ private:
                 if (!target_constraint.active) {
                   continue;
                 }
-                const double target_ey = candidate_horizon.target_ey[index];
+                // candidate_horizon has already been moved into
+                // validated_horizon above. Reading its vectors here is
+                // undefined behavior and caused an intermittent SIGSEGV when
+                // an elastic target constraint became active.
+                const double target_ey = validated_horizon.target_ey[index];
                 const double preferred_boundary =
                   target_constraint.target_lateral_m +
                   static_cast<double>(overtake_line_state_.pass_side_sign) *

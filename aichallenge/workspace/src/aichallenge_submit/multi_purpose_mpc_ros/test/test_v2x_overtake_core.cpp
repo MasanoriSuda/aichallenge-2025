@@ -211,6 +211,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidateSelectio
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionHorizonProgressRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RuntimeWallPreplanAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::RuntimeWallPreplanRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::PassEntryPhysicalGateAction;
+using multi_purpose_mpc_ros::v2x_overtake_core::PassEntryPhysicalGateRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CrossSideReplacementRetryThrottleRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSideRetryFailureClass;
 using multi_purpose_mpc_ros::v2x_overtake_core::PausedMissionExpiryReason;
@@ -269,6 +271,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_completion_exten
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_same_side_replan_shift_distance;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_overtake_mission_candidate;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_runtime_wall_preplan;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_entry_physical_gate;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_throttle_cross_side_replacement_retry;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_arm_overtake_side_retry_block;
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_overtake_mission_horizon_progress;
@@ -7533,6 +7536,54 @@ TEST(V2XOvertakeCoreWall, RuntimePreplanNeverOverridesHardWallOrBounds)
   EXPECT_EQ(
     resolve_runtime_wall_preplan(request).action,
     RuntimeWallPreplanAction::HoldCurrentSide);
+}
+
+TEST(V2XOvertakeCoreWall, PassEntryPhysicalGateHoldsThenReselects)
+{
+  PassEntryPhysicalGateRequest request;
+  request.enabled = true;
+  request.at_pass_boundary = true;
+  request.warning_margin_blocked = true;
+  request.hold_elapsed_sec = 0.20;
+  request.hold_traveled_m = 0.80;
+  request.maximum_hold_sec = 1.0;
+  request.maximum_hold_distance_m = 3.0;
+
+  auto resolution = resolve_pass_entry_physical_gate(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_EQ(resolution.action, PassEntryPhysicalGateAction::HoldForReplan);
+
+  request.hold_elapsed_sec = 1.0;
+  resolution = resolve_pass_entry_physical_gate(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_EQ(resolution.action, PassEntryPhysicalGateAction::Reselect);
+
+  request.hold_elapsed_sec = 0.20;
+  request.hold_traveled_m = 3.0;
+  resolution = resolve_pass_entry_physical_gate(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_EQ(resolution.action, PassEntryPhysicalGateAction::Reselect);
+}
+
+TEST(V2XOvertakeCoreWall, PassEntryPhysicalGateDefersHardFaultToExistingGuard)
+{
+  PassEntryPhysicalGateRequest request;
+  request.enabled = true;
+  request.at_pass_boundary = true;
+  request.warning_margin_blocked = true;
+  request.maximum_hold_sec = 1.0;
+  request.maximum_hold_distance_m = 3.0;
+
+  request.hard_wall_fault = true;
+  auto resolution = resolve_pass_entry_physical_gate(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_EQ(resolution.action, PassEntryPhysicalGateAction::Inactive);
+
+  request.hard_wall_fault = false;
+  request.warning_margin_blocked = false;
+  resolution = resolve_pass_entry_physical_gate(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_EQ(resolution.action, PassEntryPhysicalGateAction::Inactive);
 }
 
 TEST(V2XOvertakeCoreWall, ThrottlesOnlyUnchangedRejectedCrossSideCandidate)

@@ -1382,6 +1382,7 @@ struct OvertakeLineConfig
   double robust_wall_curvature_gain{0.50};
   double robust_wall_reserve_max{0.20};
   bool runtime_wall_preplan_enabled{true};
+  bool pass_entry_physical_gate_enabled{true};
   double runtime_wall_preplan_reserve{0.10};
   double runtime_wall_preplan_lookahead_sec{0.35};
   int runtime_wall_preplan_prediction_samples{3};
@@ -2525,6 +2526,11 @@ struct OvertakeLineState
   bool mission_runtime_wall_return_suppressed_logged{false};
   double mission_runtime_wall_warning_since_sec{
     std::numeric_limits<double>::quiet_NaN()};
+  bool shiftout_pass_entry_physical_hold_active{false};
+  double shiftout_pass_entry_physical_hold_start_sec{
+    std::numeric_limits<double>::quiet_NaN()};
+  double shiftout_pass_entry_physical_hold_start_distance{0.0};
+  double shiftout_pass_entry_physical_hold_start_speed_mps{0.0};
   double cross_side_rejection_sec{-std::numeric_limits<double>::infinity()};
   int cross_side_rejection_side_sign{0};
   double cross_side_rejection_goal_lateral_m{
@@ -2543,6 +2549,7 @@ struct OvertakeLineOutput
   bool receding_horizon_continuity_lease_active{false};
   bool receding_horizon_last_feasible_hold_active{false};
   bool receding_horizon_post_validation_repair_active{false};
+  bool pass_entry_physical_gate_active{false};
   bool receding_horizon_hard_wall_clearance_used{false};
   bool receding_horizon_soft_target_clearance_release_used{false};
   bool receding_horizon_rear_clear_bounds_release_used{false};
@@ -13600,6 +13607,11 @@ private:
     }
     if (next_phase != OvertakeLinePhase::ShiftOut) {
       overtake_line_state_.shiftout_fresh_horizon_wait_active = false;
+      overtake_line_state_.shiftout_pass_entry_physical_hold_active = false;
+      overtake_line_state_.shiftout_pass_entry_physical_hold_start_sec =
+        std::numeric_limits<double>::quiet_NaN();
+      overtake_line_state_.shiftout_pass_entry_physical_hold_start_distance = 0.0;
+      overtake_line_state_.shiftout_pass_entry_physical_hold_start_speed_mps = 0.0;
     }
     if (next_phase == OvertakeLinePhase::Pass) {
       overtake_line_state_.mission_pass_start_sec = now_sec;
@@ -14116,6 +14128,11 @@ private:
     overtake_line_state_.pass_contact_rearward_completion_was_active = false;
     overtake_line_state_.shiftout_fresh_horizon_wait_active = false;
     overtake_line_state_.shiftout_fresh_horizon_replan_count = 0;
+    overtake_line_state_.shiftout_pass_entry_physical_hold_active = false;
+    overtake_line_state_.shiftout_pass_entry_physical_hold_start_sec =
+      std::numeric_limits<double>::quiet_NaN();
+    overtake_line_state_.shiftout_pass_entry_physical_hold_start_distance = 0.0;
+    overtake_line_state_.shiftout_pass_entry_physical_hold_start_speed_mps = 0.0;
     overtake_line_state_.pass_horizon_fallback_start_sec =
       std::numeric_limits<double>::quiet_NaN();
     overtake_line_state_.pass_horizon_fallback_start_distance = 0.0;
@@ -16315,6 +16332,13 @@ private:
     const auto & line_cfg = cfg.v2x_behavior.overtake_line;
     if (!line_cfg.safe_separation_enabled || !short_horizon_safe) {
       return false;
+    }
+    // This helper can be requested on every control cycle while a live
+    // horizon remains unavailable. Keep the original lifecycle clock and
+    // distance budget; restarting them here made SafeSeparation effectively
+    // unbounded and also emitted an "entered" warning at control rate.
+    if (overtake_line_state_.pass_horizon_safe_separation_active) {
+      return true;
     }
     overtake_line_state_.pass_horizon_hold_active = false;
     overtake_line_state_.pass_horizon_safe_separation_active = true;
@@ -19240,8 +19264,120 @@ private:
           overtake_mission_shift_distance(), current_ey,
           feasible_goal_for_phase, shiftout_lateral_tolerance,
           overtake_line_state_.pass_side_sign});
+    bool pass_entry_physical_hold_active = false;
+    const bool pass_entry_gate_was_active =
+      overtake_line_state_.shiftout_pass_entry_physical_hold_active;
+    const bool pass_entry_gate_at_boundary =
+      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut &&
+      (shiftout_complete || pass_entry_gate_was_active);
+    const double pass_entry_gate_elapsed_sec =
+      pass_entry_gate_was_active && std::isfinite(
+      overtake_line_state_.shiftout_pass_entry_physical_hold_start_sec) ?
+      std::max(
+      0.0, now_sec -
+      overtake_line_state_.shiftout_pass_entry_physical_hold_start_sec) : 0.0;
+    const double pass_entry_gate_traveled_m = pass_entry_gate_was_active ?
+      std::max(
+      0.0,
+      overtake_line_state_.phase_traveled_m -
+      overtake_line_state_.shiftout_pass_entry_physical_hold_start_distance) : 0.0;
+    const auto pass_entry_physical_gate =
+      overtake_core::resolve_pass_entry_physical_gate(
+      overtake_core::PassEntryPhysicalGateRequest{
+        line_cfg.pass_entry_physical_gate_enabled,
+        pass_entry_gate_at_boundary,
+        actual_wall_preplan_warning,
+        runtime_wall_hard_fault,
+        pass_entry_gate_elapsed_sec,
+        pass_entry_gate_traveled_m,
+        std::max(0.0, line_cfg.pass_horizon_hold_max_sec),
+        std::max(0.0, line_cfg.pass_horizon_hold_max_distance)});
+    if (
+      pass_entry_physical_gate.valid &&
+      pass_entry_physical_gate.action ==
+      overtake_core::PassEntryPhysicalGateAction::HoldForReplan)
+    {
+      pass_entry_physical_hold_active = true;
+      if (!pass_entry_gate_was_active) {
+        overtake_line_state_.shiftout_pass_entry_physical_hold_active = true;
+        overtake_line_state_.shiftout_pass_entry_physical_hold_start_sec = now_sec;
+        overtake_line_state_.shiftout_pass_entry_physical_hold_start_distance =
+          overtake_line_state_.phase_traveled_m;
+        overtake_line_state_.shiftout_pass_entry_physical_hold_start_speed_mps =
+          std::max(0.0, current_speed_mps_);
+        overtake_line_state_.opponent_side_replan_last_evaluation_sec =
+          -std::numeric_limits<double>::infinity();
+        RCLCPP_WARN(
+          rclcpp::get_logger("mpc_controller"),
+          "OvertakeLine Pass entry physical gate held: target=%s, side=%d, "
+          "speed=%.2f, predicted=%d, ttc=%.2f s, limit=%.2f s/%.2f m, wp_id=%d",
+          overtake_line_state_.target_vehicle_id.c_str(),
+          overtake_line_state_.pass_side_sign, current_speed_mps_,
+          actual_wall_preplan_prediction_warning ? 1 : 0,
+          actual_wall_preplan_prediction_ttc_sec,
+          line_cfg.pass_horizon_hold_max_sec,
+          line_cfg.pass_horizon_hold_max_distance, model->wp_id);
+      }
+    } else if (
+      pass_entry_physical_gate.valid &&
+      pass_entry_physical_gate.action ==
+      overtake_core::PassEntryPhysicalGateAction::Reselect)
+    {
+      const std::string reason = "Pass entry physical wall gate unresolved";
+      RCLCPP_WARN(
+        rclcpp::get_logger("mpc_controller"),
+        "OvertakeLine Pass entry physical gate expired: target=%s, side=%d, "
+        "elapsed=%.2f s, traveled=%.2f m, action=reselect, wp_id=%d",
+        overtake_line_state_.target_vehicle_id.c_str(),
+        overtake_line_state_.pass_side_sign, pass_entry_gate_elapsed_sec,
+        pass_entry_gate_traveled_m, model->wp_id);
+      if (enter_dynamic_mission_wait(reason)) {
+        return output;
+      }
+      transition_overtake_line_phase(
+        OvertakeLinePhase::Recovery, now_sec, current_ey,
+        overtake_line_state_.pass_side_sign, reason);
+      return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
+    } else if (pass_entry_gate_was_active) {
+      const bool dp_source_refreshed_during_hold = std::isfinite(
+        overtake_line_state_.mission_frenet_dp_last_source_generated_sec) &&
+        std::isfinite(
+        overtake_line_state_.shiftout_pass_entry_physical_hold_start_sec) &&
+        overtake_line_state_.mission_frenet_dp_last_source_generated_sec >
+        overtake_line_state_.shiftout_pass_entry_physical_hold_start_sec + kEps;
+      if (
+        overtake_line_state_.mission_frenet_dp_execution_active &&
+        !dp_source_refreshed_during_hold)
+      {
+        // The vehicle moved on a measured-state hold while this DP prefix was
+        // blocked. Do not resume it at a later path index. The live optimizer
+        // rebuilds from current_ey, or a rolling refresh installs a new prefix.
+        overtake_line_state_.mission_frenet_dp_execution_active = false;
+        overtake_line_state_.mission_frenet_dp_path_distances_m.clear();
+        overtake_line_state_.mission_frenet_dp_lateral_path_m.clear();
+        overtake_line_state_.mission_frenet_dp_last_runtime_validation_sec =
+          -std::numeric_limits<double>::infinity();
+      }
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"),
+        "OvertakeLine Pass entry physical gate released: target=%s, side=%d, "
+        "elapsed=%.2f s, traveled=%.2f m, fresh_horizon=%d, dp_refreshed=%d, "
+        "wp_id=%d",
+        overtake_line_state_.target_vehicle_id.c_str(),
+        overtake_line_state_.pass_side_sign, pass_entry_gate_elapsed_sec,
+        pass_entry_gate_traveled_m, fresh_dynamic_horizon_available ? 1 : 0,
+        dp_source_refreshed_during_hold ? 1 : 0, model->wp_id);
+      overtake_line_state_.shiftout_pass_entry_physical_hold_active = false;
+      overtake_line_state_.shiftout_pass_entry_physical_hold_start_sec =
+        std::numeric_limits<double>::quiet_NaN();
+      overtake_line_state_.shiftout_pass_entry_physical_hold_start_distance = 0.0;
+      overtake_line_state_.shiftout_pass_entry_physical_hold_start_speed_mps = 0.0;
+    }
     if (shiftout_complete) {
-      if (fresh_dynamic_horizon_available) {
+      if (pass_entry_physical_hold_active) {
+        // Keep ShiftOut ownership. A bounded, physically revalidated lateral
+        // hold is built below while the rolling planner searches again.
+      } else if (fresh_dynamic_horizon_available) {
         if (overtake_line_state_.shiftout_fresh_horizon_wait_active) {
           RCLCPP_INFO(
             rclcpp::get_logger("mpc_controller"),
@@ -21769,13 +21905,16 @@ private:
     output.contact_applied_lateral_bias =
       contact_separation.applied_signed_bias_m;
     output.contact_lateral_bias_wall_limited = contact_separation.wall_limited;
-    const double raw_goal = rolling_replan_hold_active ? current_ey :
+    const bool lateral_execution_hold_active =
+      rolling_replan_hold_active || pass_entry_physical_hold_active;
+    output.pass_entry_physical_gate_active = pass_entry_physical_hold_active;
+    const double raw_goal = lateral_execution_hold_active ? current_ey :
       contact_separation.valid ? contact_separation.goal_m : feasible_goal_for_phase;
     // A committed Pass replan already owns a wall- and acceleration-validated
     // distance-domain ramp. Applying the generic per-cycle goal slew on top of
     // it stretches that ramp beyond the preflighted shift distance and can
     // leave ego on the old (now inside) side of the next curve.
-    const double goal_ey = rolling_replan_hold_active ? raw_goal :
+    const double goal_ey = lateral_execution_hold_active ? raw_goal :
       use_pass_lateral_replan_profile ?
       raw_goal : limit_overtake_line_goal_change(raw_goal);
     const double pass_lateral_replan_traveled = use_pass_lateral_replan_profile ?
@@ -21783,21 +21922,21 @@ private:
       0.0,
       overtake_mission_pass_traveled() -
       overtake_line_state_.mission_pass_lateral_replan_start_m) : 0.0;
-    const double horizon_phase_start_ey = rolling_replan_hold_active ? current_ey :
+    const double horizon_phase_start_ey = lateral_execution_hold_active ? current_ey :
       use_pass_lateral_replan_profile ?
       overtake_line_state_.mission_pass_lateral_replan_start_ey :
       overtake_line_state_.phase_start_ey;
-    const double horizon_phase_traveled_m = rolling_replan_hold_active ? 0.0 :
+    const double horizon_phase_traveled_m = lateral_execution_hold_active ? 0.0 :
       use_pass_lateral_replan_profile ?
       pass_lateral_replan_traveled : overtake_line_state_.phase_traveled_m;
-    const double phase_distance = rolling_replan_hold_active ?
+    const double phase_distance = lateral_execution_hold_active ?
       std::max(0.5, line_cfg.pass_horizon_hold_max_distance) :
       use_pass_lateral_replan_profile ?
       std::max(
       0.5, overtake_line_state_.mission_pass_lateral_replan_shift_distance) :
       overtake_line_phase_distance();
     const bool hold_pass_goal =
-      rolling_replan_hold_active ||
+      lateral_execution_hold_active ||
       (overtake_line_state_.phase == OvertakeLinePhase::Pass &&
       (!use_pass_lateral_replan_profile ||
       pass_lateral_replan_traveled >= phase_distance - kEps));
@@ -21831,7 +21970,7 @@ private:
       overtake_line_state_.pass_side_sign &&
       (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
       overtake_line_state_.phase == OvertakeLinePhase::Pass) &&
-      !rolling_replan_hold_active && !use_pass_lateral_replan_profile &&
+      !lateral_execution_hold_active && !use_pass_lateral_replan_profile &&
       !behavior_output.recoverable_side_contact_active;
     const auto frenet_dp_execution_reference =
       overtake_core::resolve_frenet_dp_execution_reference(
@@ -21872,13 +22011,49 @@ private:
       phase_distance, goal_ey, planning_wall_clearance, max_lateral_accel,
       speed_for_time, generating_execution_horizon, std::nullopt,
       execution_lateral_override);
-    auto receding_horizon = optimize_live_overtake_line_horizon(
-      behavior_output, horizon_evaluation, ref_wp_id, N, lb, ub, current_ey,
-      horizon_phase_start_ey, horizon_phase_traveled_m, hold_pass_goal,
-      phase_distance, goal_ey, planning_wall_clearance,
-      target_center_separation, max_lateral_accel, speed_for_time,
-      generating_execution_horizon, predicted_overlap_replan_required,
-      rear_clear_confirmed, now_sec);
+    OvertakeRecedingHorizonEvaluation receding_horizon;
+    if (pass_entry_physical_hold_active) {
+      bool hard_wall_clearance_used = false;
+      if (
+        !horizon_evaluation.execution_feasible() &&
+        min_wall_clearance + kEps < planning_wall_clearance)
+      {
+        horizon_evaluation = evaluate_overtake_line_horizon(
+          ref_wp_id, N, lb, ub, current_ey, current_ey, 0.0, true,
+          std::max(0.5, line_cfg.pass_horizon_hold_max_distance), current_ey,
+          min_wall_clearance, max_lateral_accel, speed_for_time, true,
+          std::nullopt, legacy_lateral_targets);
+        hard_wall_clearance_used = horizon_evaluation.execution_feasible();
+      }
+      if (!horizon_evaluation.execution_feasible()) {
+        const std::string reason =
+          "Pass entry physical gate has no valid current-side prefix";
+        if (enter_dynamic_mission_wait(reason)) {
+          return output;
+        }
+        transition_overtake_line_phase(
+          OvertakeLinePhase::Recovery, now_sec, current_ey,
+          overtake_line_state_.pass_side_sign, reason);
+        return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
+      }
+      receding_horizon.active = true;
+      receding_horizon.fallback = true;
+      receding_horizon.last_feasible_hold_active = true;
+      receding_horizon.hard_wall_clearance_used = hard_wall_clearance_used;
+      receding_horizon.velocity_limit_mps =
+        std::numeric_limits<double>::infinity();
+      receding_horizon.fallback_reason =
+        "Pass entry physical gate retained current-side prefix";
+      receding_horizon.horizon = horizon_evaluation;
+    } else {
+      receding_horizon = optimize_live_overtake_line_horizon(
+        behavior_output, horizon_evaluation, ref_wp_id, N, lb, ub, current_ey,
+        horizon_phase_start_ey, horizon_phase_traveled_m, hold_pass_goal,
+        phase_distance, goal_ey, planning_wall_clearance,
+        target_center_separation, max_lateral_accel, speed_for_time,
+        generating_execution_horizon, predicted_overlap_replan_required,
+        rear_clear_confirmed, now_sec);
+    }
     const bool optimized_target_bound_failure =
       receding_horizon.hard_infeasible &&
       receding_horizon.hard_bound_failure_kind == "target";
@@ -22648,6 +22823,36 @@ private:
           std::max(0.0, locked_target_speed) + rolling_closing_speed));
       output.target_velocity_floor = 0.0;
     }
+    const bool pass_entry_hold_speed_safe =
+      pass_entry_physical_hold_active &&
+      locked_target_progress_continuous &&
+      behavior_output.locked_target_current_body_footprints_separated &&
+      behavior_output.locked_target_footprint_prediction_valid &&
+      behavior_output.locked_target_predicted_body_footprint_sweep_separated &&
+      !actual_wall_physical_contact && !actual_wall_margin_blocked &&
+      !actual_wall_sample_unavailable &&
+      behavior_output.front_risk_level != FrontRiskLevel::EmergencyBrake &&
+      !overtake_solver_recovery_active_ && !behavior_output.overtake_forbidden_wp;
+    if (pass_entry_hold_speed_safe) {
+      const double retained_speed = std::min(
+        cfg.v_max,
+        std::max(
+          std::max(0.0, current_speed_mps_),
+          std::max(
+            0.0,
+            overtake_line_state_.shiftout_pass_entry_physical_hold_start_speed_mps)));
+      output.target_velocity_floor = std::max(
+        output.target_velocity_floor, retained_speed);
+      if (std::isfinite(output.target_velocity_reference)) {
+        output.target_velocity_reference = std::max(
+          output.target_velocity_reference, retained_speed);
+      }
+      if (std::isfinite(locked_target_speed)) {
+        output.closing_speed_limit = std::max(
+          output.closing_speed_limit,
+          std::max(0.0, retained_speed - std::max(0.0, locked_target_speed)));
+      }
+    }
 
     output.active = true;
     output.target_epsi.assign(N, 0.0);
@@ -22801,7 +23006,8 @@ private:
           "recovery_speed=%s, mission_closing=%.2f, closing=%.2f, "
           "unseparated_reserve=%d/protected=%.2f, "
           "cap_release=%d, horizon_release=%d, "
-          "speed_hold=%d, replan_grace=%d, safe_sep=%d/forward=%d/full_speed=%d/"
+          "speed_hold=%d, replan_grace=%d, pass_entry_gate=%d, "
+          "safe_sep=%d/forward=%d/full_speed=%d/"
           "signed_closing=%.2f/budget=%.2f s/%.2f m, "
           "contact_continue=%d/evidence=%s/near=%.2f/%.2f/"
           "elapsed=%.2f/progress=%.2f/bias=%.2f/%.2f/wall_limited=%d/"
@@ -22843,6 +23049,7 @@ private:
           output.constrained_horizon_front_cap_release_active ? 1 : 0,
           output.committed_pass_speed_hold_active ? 1 : 0,
           std::isfinite(overtake_line_state_.pass_horizon_fallback_start_sec) ? 1 : 0,
+          output.pass_entry_physical_gate_active ? 1 : 0,
           overtake_line_state_.pass_horizon_safe_separation_active ? 1 : 0,
           safe_separation_forward_escape_active ? 1 : 0,
           safe_separation_full_speed_forward_escape_active ? 1 : 0,
@@ -26022,6 +26229,9 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_line.runtime_wall_preplan_enabled =
     mpc["v2x_overtake_runtime_wall_preplan_enabled"] ?
     mpc["v2x_overtake_runtime_wall_preplan_enabled"].as<bool>() : true;
+  cfg.mpc.v2x_behavior.overtake_line.pass_entry_physical_gate_enabled =
+    mpc["v2x_overtake_pass_entry_physical_gate_enabled"] ?
+    mpc["v2x_overtake_pass_entry_physical_gate_enabled"].as<bool>() : true;
   cfg.mpc.v2x_behavior.overtake_line.runtime_wall_preplan_reserve = std::max(
     0.0,
     mpc["v2x_overtake_runtime_wall_preplan_reserve"] ?
@@ -28550,7 +28760,8 @@ public:
         get_logger(),
         "V2X safe trajectory prefix: %s, front<=%.2f m, remaining>=%.2f m, "
         "replan_lead=%.2f s/%.2f m; wall_preplan=%.2f m + %.2f s x%d, "
-        "fallback=%.2f s/center=%s %.2f m/return=%s front>=%.2f m",
+        "pass_entry_gate=%s, fallback=%.2f s/center=%s %.2f m/return=%s "
+        "front>=%.2f m",
         mpc_cfg_.v2x_behavior.overtake_line.safe_separation_safe_prefix_enabled ?
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.safe_separation_safe_prefix_max_front_distance,
@@ -28562,6 +28773,8 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line.runtime_wall_preplan_reserve,
         mpc_cfg_.v2x_behavior.overtake_line.runtime_wall_preplan_lookahead_sec,
         mpc_cfg_.v2x_behavior.overtake_line.runtime_wall_preplan_prediction_samples,
+        mpc_cfg_.v2x_behavior.overtake_line.pass_entry_physical_gate_enabled ?
+        "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.runtime_wall_fallback_delay_sec,
         mpc_cfg_.v2x_behavior.overtake_line.runtime_wall_center_contraction_enabled ?
         "enabled" : "disabled",

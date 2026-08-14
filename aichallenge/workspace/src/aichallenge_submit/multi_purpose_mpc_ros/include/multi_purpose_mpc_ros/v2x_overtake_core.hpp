@@ -3570,6 +3570,37 @@ struct RuntimeWallPreplanResolution
 RuntimeWallPreplanResolution resolve_runtime_wall_preplan(
   const RuntimeWallPreplanRequest & request) noexcept;
 
+enum class PassEntryPhysicalGateAction
+{
+  Inactive,
+  HoldForReplan,
+  Reselect,
+};
+
+struct PassEntryPhysicalGateRequest
+{
+  bool enabled{false};
+  bool at_pass_boundary{false};
+  bool warning_margin_blocked{false};
+  bool hard_wall_fault{false};
+  double hold_elapsed_sec{};
+  double hold_traveled_m{};
+  double maximum_hold_sec{};
+  double maximum_hold_distance_m{};
+};
+
+struct PassEntryPhysicalGateResolution
+{
+  bool valid{false};
+  PassEntryPhysicalGateAction action{PassEntryPhysicalGateAction::Inactive};
+};
+
+/// Keep a ShiftOut at its last physically valid lateral position when the
+/// warning band predicts a near-term wall conflict. The warning cannot admit
+/// Pass; an expired bounded hold requests a new Mission instead.
+PassEntryPhysicalGateResolution resolve_pass_entry_physical_gate(
+  const PassEntryPhysicalGateRequest & request) noexcept;
+
 struct CrossSideReplacementRetryThrottleRequest
 {
   bool side_changed{false};

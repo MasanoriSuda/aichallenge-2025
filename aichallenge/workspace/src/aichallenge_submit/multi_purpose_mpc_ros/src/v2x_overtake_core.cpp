@@ -6602,6 +6602,39 @@ RuntimeWallPreplanResolution resolve_runtime_wall_preplan(
   return resolution;
 }
 
+PassEntryPhysicalGateResolution resolve_pass_entry_physical_gate(
+  const PassEntryPhysicalGateRequest & request) noexcept
+{
+  PassEntryPhysicalGateResolution resolution;
+  const auto finite_non_negative = [](const double value) {
+      return std::isfinite(value) && value >= 0.0;
+    };
+  if (
+    !finite_non_negative(request.hold_elapsed_sec) ||
+    !finite_non_negative(request.hold_traveled_m) ||
+    !finite_non_negative(request.maximum_hold_sec) ||
+    !finite_non_negative(request.maximum_hold_distance_m))
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  if (
+    !request.enabled || !request.at_pass_boundary ||
+    !request.warning_margin_blocked || request.hard_wall_fault)
+  {
+    return resolution;
+  }
+
+  const bool hold_expired =
+    request.hold_elapsed_sec + 1e-9 >= request.maximum_hold_sec ||
+    request.hold_traveled_m + 1e-9 >= request.maximum_hold_distance_m;
+  resolution.action = hold_expired ?
+    PassEntryPhysicalGateAction::Reselect :
+    PassEntryPhysicalGateAction::HoldForReplan;
+  return resolution;
+}
+
 bool should_throttle_cross_side_replacement_retry(
   const CrossSideReplacementRetryThrottleRequest & request) noexcept
 {

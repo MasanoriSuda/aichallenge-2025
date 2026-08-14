@@ -2771,6 +2771,47 @@ struct FrenetDpExecutionRefreshResolution
 FrenetDpExecutionRefreshResolution resolve_frenet_dp_execution_refresh(
   const FrenetDpExecutionRefreshRequest & request) noexcept;
 
+struct FrenetDpPassAuthorityRequest
+{
+  bool enabled{false};
+  bool pass_active{false};
+  bool target_matches{false};
+  bool target_continuous{false};
+  bool target_position_jump{false};
+  bool target_course_progress_rejected{false};
+  bool path_side_matches{false};
+  bool current_body_separated{false};
+  bool recoverable_side_contact{false};
+  bool actual_wall_physical_contact{false};
+  bool wall_margin_blocked{false};
+  bool wall_sample_unavailable{false};
+  bool emergency_front_risk{false};
+  bool solver_recovery_active{false};
+  bool forbidden_waypoint{false};
+  double now_sec{};
+  double last_refresh_sec{-std::numeric_limits<double>::infinity()};
+  double maximum_path_age_sec{};
+  double traveled_distance_m{};
+  double minimum_remaining_distance_m{};
+  std::vector<double> path_distances_m;
+  std::vector<double> lateral_path_m;
+};
+
+struct FrenetDpPassAuthorityResolution
+{
+  bool valid{false};
+  bool authority_active{false};
+  double path_age_sec{std::numeric_limits<double>::infinity()};
+  double remaining_distance_m{};
+};
+
+/// Decide whether an already admitted same-target/same-side DP prefix owns
+/// bounded Pass continuation.  This suppresses only the legacy single-goal
+/// rebuild; wall, body, target-continuity, emergency and solver hard faults
+/// revoke authority immediately.
+FrenetDpPassAuthorityResolution resolve_frenet_dp_pass_authority(
+  const FrenetDpPassAuthorityRequest & request) noexcept;
+
 enum class OvertakeMissionCorridorSource
 {
   None,

@@ -4659,6 +4659,51 @@ FrenetDpExecutionRefreshResolution resolve_frenet_dp_execution_refresh(
   return resolution;
 }
 
+FrenetDpPassAuthorityResolution resolve_frenet_dp_pass_authority(
+  const FrenetDpPassAuthorityRequest & request) noexcept
+{
+  FrenetDpPassAuthorityResolution resolution;
+  if (
+    !std::isfinite(request.now_sec) ||
+    !std::isfinite(request.maximum_path_age_sec) ||
+    request.maximum_path_age_sec < 0.0 ||
+    !std::isfinite(request.traveled_distance_m) ||
+    request.traveled_distance_m < 0.0 ||
+    !std::isfinite(request.minimum_remaining_distance_m) ||
+    request.minimum_remaining_distance_m < 0.0)
+  {
+    return resolution;
+  }
+  resolution.valid = true;
+  if (!request.enabled) {
+    return resolution;
+  }
+  if (
+    !std::isfinite(request.last_refresh_sec) ||
+    request.now_sec + 1e-9 < request.last_refresh_sec ||
+    !is_valid_frenet_dp_execution_path(
+      request.path_distances_m, request.lateral_path_m))
+  {
+    return resolution;
+  }
+
+  resolution.path_age_sec = request.now_sec - request.last_refresh_sec;
+  resolution.remaining_distance_m = std::max(
+    0.0, request.path_distances_m.back() - request.traveled_distance_m);
+  const bool current_body_safe =
+    request.current_body_separated || request.recoverable_side_contact;
+  resolution.authority_active =
+    request.pass_active && request.target_matches && request.target_continuous &&
+    !request.target_position_jump && !request.target_course_progress_rejected &&
+    request.path_side_matches && current_body_safe &&
+    !request.actual_wall_physical_contact && !request.wall_margin_blocked &&
+    !request.wall_sample_unavailable && !request.emergency_front_risk &&
+    !request.solver_recovery_active && !request.forbidden_waypoint &&
+    resolution.path_age_sec <= request.maximum_path_age_sec + 1e-9 &&
+    resolution.remaining_distance_m + 1e-9 >= request.minimum_remaining_distance_m;
+  return resolution;
+}
+
 FrenetDpCorridorResolution solve_frenet_dp_corridor(
   const FrenetDpCorridorRequest & request) noexcept
 {

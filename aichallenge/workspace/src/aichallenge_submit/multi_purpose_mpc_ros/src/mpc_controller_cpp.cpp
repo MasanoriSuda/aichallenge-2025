@@ -2333,6 +2333,7 @@ struct OvertakeLineState
   double mission_frenet_dp_last_refresh_log_sec{
     -std::numeric_limits<double>::infinity()};
   int mission_frenet_dp_refresh_count{0};
+  bool mission_frenet_dp_pass_authority_was_active{false};
   double mission_shift_distance{0.0};
   double mission_closing_speed_limit{std::numeric_limits<double>::quiet_NaN()};
   bool mission_body_clear_deadline_checked{false};
@@ -2364,6 +2365,9 @@ struct OvertakeLineState
   double mission_pass_lateral_replan_shift_distance{0.0};
   double mission_return_start_pass_m{0.0};
   double mission_return_distance{0.0};
+  bool mission_return_preflight_reference_active{false};
+  std::vector<double> mission_return_preflight_path_distances_m{};
+  std::vector<double> mission_return_preflight_lateral_path_m{};
   double mission_static_valid_until_pass_m{0.0};
   double mission_dynamic_valid_until_pass_m{0.0};
   // Prediction lease refreshes update mission_planner_generated_at_sec even
@@ -13350,6 +13354,7 @@ private:
     overtake_line_state_.pass_predicted_overlap_since_sec =
       std::numeric_limits<double>::quiet_NaN();
     if (next_phase != OvertakeLinePhase::Pass) {
+      overtake_line_state_.mission_frenet_dp_pass_authority_was_active = false;
       overtake_line_state_.pass_front_overlap_exclusion_latched = false;
       overtake_line_state_.pass_front_cap_release_active = false;
       overtake_line_state_.pass_rearward_progress_time_grace_was_active = false;
@@ -13413,6 +13418,11 @@ private:
       overtake_line_state_.pass_target_bound_replan_hold_start_speed_mps = 0.0;
       overtake_line_state_.pass_target_bound_replan_clear_since_sec =
         std::numeric_limits<double>::quiet_NaN();
+    }
+    if (next_phase != OvertakeLinePhase::Return) {
+      overtake_line_state_.mission_return_preflight_reference_active = false;
+      overtake_line_state_.mission_return_preflight_path_distances_m.clear();
+      overtake_line_state_.mission_return_preflight_lateral_path_m.clear();
     }
     if (next_phase != OvertakeLinePhase::ShiftOut) {
       overtake_line_state_.shiftout_fresh_horizon_wait_active = false;
@@ -16605,6 +16615,7 @@ private:
 
         bool return_feasible = false;
         double admitted_return_distance = candidate_distance;
+        OvertakeLineHorizonEvaluation admitted_return_horizon;
         double distance = candidate_distance;
         while (true) {
           const auto return_horizon = evaluate_overtake_line_horizon(
@@ -16615,6 +16626,7 @@ private:
           if (return_horizon.execution_feasible()) {
             return_feasible = true;
             admitted_return_distance = distance;
+            admitted_return_horizon = return_horizon;
             break;
           }
           if (distance >= maximum_return_distance - kEps) {
@@ -16655,6 +16667,33 @@ private:
             admitted_return_distance, current_speed_mps_, model->wp_id);
         }
         overtake_line_state_.mission_return_distance = admitted_return_distance;
+        const bool admitted_reference_valid =
+          overtake_core::is_valid_frenet_dp_execution_path(
+          admitted_return_horizon.path_distances,
+          admitted_return_horizon.target_ey);
+        overtake_line_state_.mission_return_preflight_reference_active =
+          admitted_reference_valid;
+        if (admitted_reference_valid) {
+          overtake_line_state_.mission_return_preflight_path_distances_m =
+            std::move(admitted_return_horizon.path_distances);
+          overtake_line_state_.mission_return_preflight_lateral_path_m =
+            std::move(admitted_return_horizon.target_ey);
+          if (line_cfg.debug_log_enabled) {
+            RCLCPP_INFO(
+              rclcpp::get_logger("mpc_controller"),
+              "OvertakeLine Return preflight reference committed: "
+              "target=%s, side=%d, points=%zu, coverage=%.2f m, "
+              "distance=%.2f m, wp_id=%d",
+              overtake_line_state_.target_vehicle_id.c_str(),
+              overtake_line_state_.pass_side_sign,
+              overtake_line_state_.mission_return_preflight_path_distances_m.size(),
+              overtake_line_state_.mission_return_preflight_path_distances_m.back(),
+              admitted_return_distance, model->wp_id);
+          }
+        } else {
+          overtake_line_state_.mission_return_preflight_path_distances_m.clear();
+          overtake_line_state_.mission_return_preflight_lateral_path_m.clear();
+        }
         transition_overtake_line_phase(
           OvertakeLinePhase::Return, now_sec, current_ey,
           overtake_line_state_.pass_side_sign, reason,
@@ -17278,6 +17317,63 @@ private:
           overtake_line_state_.mission_frenet_dp_last_refresh_log_sec = now_sec;
         }
     }
+    const auto dp_pass_authority =
+      overtake_core::resolve_frenet_dp_pass_authority(
+      overtake_core::FrenetDpPassAuthorityRequest{
+        line_cfg.mpcc_frenet_dp_execution_enabled &&
+        line_cfg.mpcc_frenet_dp_rolling_refresh_enabled,
+        overtake_line_state_.phase == OvertakeLinePhase::Pass,
+        locked_target_matches && locked_target_progress_continuous &&
+        behavior_output.target_vehicle_id ==
+        overtake_line_state_.target_vehicle_id,
+        locked_target_progress_continuous,
+        behavior_output.locked_target_position_jump,
+        locked_target_progress_rejected,
+        overtake_line_state_.mission_frenet_dp_execution_active &&
+        overtake_line_state_.mission_frenet_dp_side_sign ==
+        overtake_line_state_.pass_side_sign,
+        behavior_output.locked_target_current_body_footprints_separated,
+        behavior_output.recoverable_side_contact_active,
+        actual_wall_physical_contact,
+        actual_wall_margin_blocked,
+        actual_wall_sample_unavailable,
+        behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake,
+        overtake_solver_recovery_active_,
+        behavior_output.overtake_forbidden_wp,
+        now_sec,
+        overtake_line_state_.mission_frenet_dp_last_refresh_sec,
+        line_cfg.mpcc_frenet_dp_last_path_max_age_sec,
+        overtake_line_state_.mission_frenet_dp_execution_traveled_m,
+        std::max(0.5, line_cfg.mpcc_lite_prefix_terminal_distance),
+        overtake_line_state_.mission_frenet_dp_path_distances_m,
+        overtake_line_state_.mission_frenet_dp_lateral_path_m});
+    if (
+      line_cfg.debug_log_enabled && dp_pass_authority.valid &&
+      dp_pass_authority.authority_active !=
+      overtake_line_state_.mission_frenet_dp_pass_authority_was_active)
+    {
+      if (dp_pass_authority.authority_active) {
+        RCLCPP_INFO(
+          rclcpp::get_logger("mpc_controller"),
+          "OvertakeLine DP Pass authority retained: target=%s, side=%d, "
+          "age=%.2f s, remaining=%.2f m, wp_id=%d",
+          overtake_line_state_.target_vehicle_id.c_str(),
+          overtake_line_state_.pass_side_sign,
+          dp_pass_authority.path_age_sec,
+          dp_pass_authority.remaining_distance_m, model->wp_id);
+      } else {
+        RCLCPP_INFO(
+          rclcpp::get_logger("mpc_controller"),
+          "OvertakeLine DP Pass authority released: target=%s, side=%d, "
+          "age=%.2f s, remaining=%.2f m, wp_id=%d",
+          overtake_line_state_.target_vehicle_id.c_str(),
+          overtake_line_state_.pass_side_sign,
+          dp_pass_authority.path_age_sec,
+          dp_pass_authority.remaining_distance_m, model->wp_id);
+      }
+    }
+    overtake_line_state_.mission_frenet_dp_pass_authority_was_active =
+      dp_pass_authority.valid && dp_pass_authority.authority_active;
     const bool runtime_wall_hard_fault =
       actual_wall_physical_contact || actual_wall_margin_blocked ||
       actual_wall_sample_unavailable;
@@ -21198,7 +21294,9 @@ private:
           overtake_core::PassRefreshFailureReason extension_failure_code{
             overtake_core::PassRefreshFailureReason::None};
           std::string extension_failure_reason;
-          if (!try_refresh_committed_pass_horizon(
+          if (
+            !dp_pass_authority.authority_active &&
+            !try_refresh_committed_pass_horizon(
               false, false, std::nullopt, std::nullopt, std::nullopt,
               extension_failure_code,
               extension_failure_reason))
@@ -21246,7 +21344,9 @@ private:
           overtake_core::PassRefreshFailureReason refresh_failure_code{
             overtake_core::PassRefreshFailureReason::None};
           std::string refresh_failure_reason;
-          if (!try_refresh_committed_pass_horizon(
+          if (
+            !dp_pass_authority.authority_active &&
+            !try_refresh_committed_pass_horizon(
               true, false, std::nullopt, std::nullopt, std::nullopt,
               refresh_failure_code,
               refresh_failure_reason))
@@ -21537,6 +21637,23 @@ private:
       frenet_dp_execution_reference.valid && frenet_dp_execution_reference.active ?
       std::optional<std::vector<double>>{
       frenet_dp_execution_reference.lateral_targets_m} : std::nullopt;
+    const auto return_preflight_execution_reference =
+      overtake_core::resolve_frenet_dp_execution_reference(
+      overtake_core::FrenetDpExecutionReferenceRequest{
+        overtake_line_state_.phase == OvertakeLinePhase::Return &&
+        overtake_line_state_.mission_return_preflight_reference_active,
+        overtake_line_state_.phase_traveled_m,
+        2U,
+        overtake_line_state_.mission_return_preflight_path_distances_m,
+        overtake_line_state_.mission_return_preflight_lateral_path_m,
+        execution_horizon_distances,
+        legacy_lateral_targets});
+    const std::optional<std::vector<double>> execution_lateral_override =
+      frenet_dp_lateral_override.has_value() ? frenet_dp_lateral_override :
+      return_preflight_execution_reference.valid &&
+      return_preflight_execution_reference.active ?
+      std::optional<std::vector<double>>{
+      return_preflight_execution_reference.lateral_targets_m} : std::nullopt;
     auto horizon_evaluation = evaluate_overtake_line_horizon(
       ref_wp_id, N, lb, ub, current_ey,
       horizon_phase_start_ey,
@@ -21544,7 +21661,7 @@ private:
       hold_pass_goal,
       phase_distance, goal_ey, planning_wall_clearance, max_lateral_accel,
       speed_for_time, generating_execution_horizon, std::nullopt,
-      frenet_dp_lateral_override);
+      execution_lateral_override);
     auto receding_horizon = optimize_live_overtake_line_horizon(
       behavior_output, horizon_evaluation, ref_wp_id, N, lb, ub, current_ey,
       horizon_phase_start_ey, horizon_phase_traveled_m, hold_pass_goal,

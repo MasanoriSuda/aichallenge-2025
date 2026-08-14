@@ -14500,4 +14500,100 @@ TEST(V2XOvertakeCoreFrenetDpExecution, RefreshRetainsOldPathUntilIntervalAndNewS
   EXPECT_TRUE(resolution.refresh);
 }
 
+TEST(V2XOvertakeCoreFrenetDpExecution, FreshSafePrefixOwnsPassContinuation)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpPassAuthorityRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frenet_dp_pass_authority;
+
+  FrenetDpPassAuthorityRequest request;
+  request.enabled = true;
+  request.pass_active = true;
+  request.target_matches = true;
+  request.target_continuous = true;
+  request.path_side_matches = true;
+  request.current_body_separated = true;
+  request.now_sec = 10.20;
+  request.last_refresh_sec = 10.00;
+  request.maximum_path_age_sec = 0.50;
+  request.traveled_distance_m = 2.0;
+  request.minimum_remaining_distance_m = 1.0;
+  request.path_distances_m = {0.0, 4.0, 12.0};
+  request.lateral_path_m = {0.2, 0.8, 0.8};
+
+  const auto resolution = resolve_frenet_dp_pass_authority(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.authority_active);
+  EXPECT_NEAR(resolution.path_age_sec, 0.20, 1e-9);
+  EXPECT_NEAR(resolution.remaining_distance_m, 10.0, 1e-9);
+}
+
+TEST(V2XOvertakeCoreFrenetDpExecution, HardFaultsRevokePassAuthority)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpPassAuthorityRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frenet_dp_pass_authority;
+
+  FrenetDpPassAuthorityRequest request;
+  request.enabled = true;
+  request.pass_active = true;
+  request.target_matches = true;
+  request.target_continuous = true;
+  request.path_side_matches = true;
+  request.current_body_separated = true;
+  request.now_sec = 20.1;
+  request.last_refresh_sec = 20.0;
+  request.maximum_path_age_sec = 0.5;
+  request.minimum_remaining_distance_m = 0.5;
+  request.path_distances_m = {0.0, 3.0, 8.0};
+  request.lateral_path_m = {-0.2, -0.7, -0.7};
+
+  const auto expect_revoked = [&](auto mutate) {
+      auto revoked = request;
+      mutate(revoked);
+      const auto resolution = resolve_frenet_dp_pass_authority(revoked);
+      ASSERT_TRUE(resolution.valid);
+      EXPECT_FALSE(resolution.authority_active);
+    };
+  expect_revoked([](auto & value) {value.target_matches = false;});
+  expect_revoked([](auto & value) {value.target_continuous = false;});
+  expect_revoked([](auto & value) {value.target_position_jump = true;});
+  expect_revoked([](auto & value) {value.target_course_progress_rejected = true;});
+  expect_revoked([](auto & value) {value.path_side_matches = false;});
+  expect_revoked([](auto & value) {value.current_body_separated = false;});
+  expect_revoked([](auto & value) {value.actual_wall_physical_contact = true;});
+  expect_revoked([](auto & value) {value.wall_margin_blocked = true;});
+  expect_revoked([](auto & value) {value.wall_sample_unavailable = true;});
+  expect_revoked([](auto & value) {value.emergency_front_risk = true;});
+  expect_revoked([](auto & value) {value.solver_recovery_active = true;});
+  expect_revoked([](auto & value) {value.forbidden_waypoint = true;});
+  expect_revoked([](auto & value) {value.last_refresh_sec = 19.0;});
+  expect_revoked([](auto & value) {value.traveled_distance_m = 7.75;});
+
+  request.current_body_separated = false;
+  request.recoverable_side_contact = true;
+  EXPECT_TRUE(resolve_frenet_dp_pass_authority(request).authority_active);
+}
+
+TEST(V2XOvertakeCoreFrenetDpExecution, ReturnReferenceKeepsAdmittedPrefix)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpExecutionReferenceRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frenet_dp_execution_reference;
+
+  FrenetDpExecutionReferenceRequest request;
+  request.enabled = true;
+  request.traveled_distance_m = 1.0;
+  request.source_path_distances_m = {0.0, 2.0, 4.0, 6.0};
+  request.source_lateral_path_m = {1.0, 0.8, 0.3, 0.0};
+  request.horizon_path_distances_m = {0.0, 1.0, 2.0, 3.0};
+  request.fallback_lateral_targets_m = {0.9, 0.6, 0.2, 0.0};
+
+  const auto resolution = resolve_frenet_dp_execution_reference(request);
+  ASSERT_TRUE(resolution.valid);
+  ASSERT_TRUE(resolution.active);
+  ASSERT_TRUE(resolution.coverage_complete);
+  EXPECT_NEAR(resolution.lateral_targets_m[0], 0.9, 1e-9);
+  EXPECT_NEAR(resolution.lateral_targets_m[1], 0.8, 1e-9);
+  EXPECT_NEAR(resolution.lateral_targets_m[2], 0.55, 1e-9);
+  EXPECT_NEAR(resolution.lateral_targets_m[3], 0.3, 1e-9);
+}
+
 }  // namespace

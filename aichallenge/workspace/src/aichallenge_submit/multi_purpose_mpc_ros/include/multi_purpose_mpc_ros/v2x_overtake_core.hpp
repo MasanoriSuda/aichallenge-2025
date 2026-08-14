@@ -2694,6 +2694,27 @@ bool is_valid_frenet_dp_execution_path(
   const std::vector<double> & path_distances_m,
   const std::vector<double> & lateral_path_m) noexcept;
 
+struct FrenetDpTransitionPathRequest
+{
+  double start_lateral_m{};
+  double goal_lateral_m{};
+  double transition_distance_m{};
+  std::vector<double> path_distances_m;
+};
+
+struct FrenetDpTransitionPathResolution
+{
+  bool valid{false};
+  std::vector<double> path_distances_m;
+  std::vector<double> lateral_path_m;
+};
+
+/// Build a current-state distance-domain DP reference for a validated lateral
+/// transition.  The smoothstep shape matches the explicit OvertakeLine ramp
+/// and holds the goal after transition_distance_m.
+FrenetDpTransitionPathResolution build_frenet_dp_transition_path(
+  const FrenetDpTransitionPathRequest & request) noexcept;
+
 struct FrenetDpExecutionReferenceRequest
 {
   bool enabled{false};

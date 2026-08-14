@@ -4513,6 +4513,43 @@ bool is_valid_frenet_dp_execution_path(
   return true;
 }
 
+FrenetDpTransitionPathResolution build_frenet_dp_transition_path(
+  const FrenetDpTransitionPathRequest & request) noexcept
+{
+  FrenetDpTransitionPathResolution resolution;
+  if (
+    !std::isfinite(request.start_lateral_m) ||
+    !std::isfinite(request.goal_lateral_m) ||
+    !std::isfinite(request.transition_distance_m) ||
+    request.transition_distance_m <= 0.0 ||
+    request.path_distances_m.size() < 2U)
+  {
+    return resolution;
+  }
+
+  resolution.path_distances_m = request.path_distances_m;
+  resolution.lateral_path_m.reserve(request.path_distances_m.size());
+  double previous_distance = -std::numeric_limits<double>::infinity();
+  for (const double distance : request.path_distances_m) {
+    if (
+      !std::isfinite(distance) || distance < 0.0 ||
+      distance <= previous_distance + 1e-9)
+    {
+      return FrenetDpTransitionPathResolution{};
+    }
+    const double progress = resolve_overtake_line_horizon_progress(
+      OvertakeLineHorizonProgressRequest{
+        false, 0.0, distance, request.transition_distance_m});
+    resolution.lateral_path_m.push_back(
+      request.start_lateral_m +
+      progress * (request.goal_lateral_m - request.start_lateral_m));
+    previous_distance = distance;
+  }
+  resolution.valid = is_valid_frenet_dp_execution_path(
+    resolution.path_distances_m, resolution.lateral_path_m);
+  return resolution;
+}
+
 FrenetDpExecutionReferenceResolution resolve_frenet_dp_execution_reference(
   const FrenetDpExecutionReferenceRequest & request) noexcept
 {

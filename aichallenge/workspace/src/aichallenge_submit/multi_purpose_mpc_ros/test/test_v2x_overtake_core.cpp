@@ -14423,6 +14423,44 @@ TEST(V2XOvertakeCoreFrenetDpExecution, RefreshRequiresFreshExactSameSidePath)
   EXPECT_FALSE(resolution.refresh);
 }
 
+TEST(V2XOvertakeCoreFrenetDpExecution, BuildsCurrentStateTransitionPath)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpTransitionPathRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::build_frenet_dp_transition_path;
+
+  FrenetDpTransitionPathRequest request;
+  request.start_lateral_m = 1.0;
+  request.goal_lateral_m = 0.7;
+  request.transition_distance_m = 4.0;
+  request.path_distances_m = {0.0, 1.0, 2.0, 4.0, 6.0};
+
+  const auto resolution = build_frenet_dp_transition_path(request);
+  ASSERT_TRUE(resolution.valid);
+  ASSERT_EQ(resolution.path_distances_m.size(), 5U);
+  ASSERT_EQ(resolution.lateral_path_m.size(), 5U);
+  EXPECT_DOUBLE_EQ(resolution.lateral_path_m.front(), 1.0);
+  EXPECT_NEAR(resolution.lateral_path_m[2], 0.85, 1e-9);
+  EXPECT_DOUBLE_EQ(resolution.lateral_path_m[3], 0.7);
+  EXPECT_DOUBLE_EQ(resolution.lateral_path_m.back(), 0.7);
+}
+
+TEST(V2XOvertakeCoreFrenetDpExecution, RejectsMalformedTransitionPath)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpTransitionPathRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::build_frenet_dp_transition_path;
+
+  FrenetDpTransitionPathRequest request;
+  request.start_lateral_m = 0.2;
+  request.goal_lateral_m = 0.8;
+  request.transition_distance_m = 3.0;
+  request.path_distances_m = {0.0, 1.0, 1.0, 3.0};
+  EXPECT_FALSE(build_frenet_dp_transition_path(request).valid);
+
+  request.path_distances_m = {0.0, 1.0, 3.0};
+  request.transition_distance_m = 0.0;
+  EXPECT_FALSE(build_frenet_dp_transition_path(request).valid);
+}
+
 TEST(V2XOvertakeCoreFrenetDpExecution, RefreshRetainsOldPathUntilIntervalAndNewSource)
 {
   using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpExecutionRefreshRequest;

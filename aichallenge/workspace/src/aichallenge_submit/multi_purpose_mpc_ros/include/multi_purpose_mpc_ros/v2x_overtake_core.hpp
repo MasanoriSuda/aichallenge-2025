@@ -5102,6 +5102,26 @@ struct DynamicMissionWaitForwardPrefixResolution
 DynamicMissionWaitForwardPrefixResolution resolve_dynamic_mission_wait_forward_prefix(
   const DynamicMissionWaitForwardPrefixRequest & request) noexcept;
 
+struct DynamicMissionWaitForwardAuthorityRequest
+{
+  bool wait_active{false};
+  /// The previous runtime prefix was wall-feasible and retained the complete
+  /// frozen-Mission closing-speed request.
+  bool full_closing_prefix_active{false};
+  bool target_continuous{false};
+  bool target_position_jump{false};
+  bool current_body_footprints_separated{false};
+  bool footprint_prediction_valid{false};
+  bool predicted_body_footprint_sweep_separated{false};
+};
+
+/// Carry a wall-validated DynamicMissionWait forward prefix across the
+/// Behavior arbitration and a same-side Pass-plan replacement. Current target
+/// and body geometry must still be valid; the prior prefix alone is never
+/// sufficient to retain authority.
+bool can_handoff_dynamic_mission_wait_forward_authority(
+  const DynamicMissionWaitForwardAuthorityRequest & request) noexcept;
+
 struct OvertakeMissionOwnershipRequest
 {
   bool shiftout_phase{false};
@@ -6227,6 +6247,9 @@ struct CommittedCorridorFrontDangerSuppressionRequest
 {
   bool enabled{false};
   bool active_shiftout_or_pass{false};
+  /// A wall-validated DynamicMissionWait prefix owns forward motion while the
+  /// lateral plan is being atomically replaced in FollowPrepare.
+  bool dynamic_wait_forward_authority_active{false};
   bool nearest_front_matches_locked_target{false};
   bool validated_fixed_corridor{false};
   bool inter_vehicle_corridor{false};

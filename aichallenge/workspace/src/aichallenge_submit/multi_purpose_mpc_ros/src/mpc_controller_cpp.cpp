@@ -6621,11 +6621,23 @@ struct MPC
       committed_predicted_overlap_confirmation_monitored ?
       committed_predicted_overlap_confirmation.confirmed :
       committed_body_geometry.raw_predicted_body_overlap;
+    const bool dynamic_wait_forward_authority_active =
+      v2x_overtake_core::can_handoff_dynamic_mission_wait_forward_authority(
+      v2x_overtake_core::DynamicMissionWaitForwardAuthorityRequest{
+        overtake_line_state_.dynamic_mission_wait_active,
+        overtake_line_state_.dynamic_mission_wait_full_closing_was_active,
+        output.locked_target_seen &&
+        !output.locked_target_course_progress_rejected,
+        output.locked_target_position_jump,
+        output.locked_target_current_body_footprints_separated,
+        output.locked_target_footprint_prediction_valid,
+        output.locked_target_predicted_body_footprint_sweep_separated});
     const bool committed_corridor_front_danger_suppressed =
       v2x_overtake_core::can_suppress_committed_corridor_front_danger(
       v2x_overtake_core::CommittedCorridorFrontDangerSuppressionRequest{
         cfg.v2x_behavior.overtake_committed_corridor_front_danger_suppression_enabled,
         active_overtake_line,
+        dynamic_wait_forward_authority_active,
         nearest_front_matches_locked_target,
         cfg.v2x_behavior.overtake_minimum_lateral_motion_enabled &&
         overtake_line_state_.fixed_pass_corridor_goal_ey.has_value() &&
@@ -14241,7 +14253,8 @@ private:
     const bool allow_tactical_no_return_rearm = false,
     const bool preserve_front_cap_release = false,
     const bool keep_cross_side_reselection_open = false,
-    const bool allow_progressive_prefix_replacement = false)
+    const bool allow_progressive_prefix_replacement = false,
+    const bool seed_dynamic_wait_front_cap_release = false)
   {
     const auto & line_cfg = cfg.v2x_behavior.overtake_line;
     const int previous_side = overtake_line_state_.pass_side_sign;
@@ -14260,6 +14273,9 @@ private:
       replacing_paused_mission &&
       paused_replacement_execution_mode ==
       overtake_core::PausedReplacementExecutionMode::ContinuePass;
+    const bool dynamic_wait_front_cap_release_handoff =
+      seed_dynamic_wait_front_cap_release && paused_pass_continuation &&
+      !side_changed;
     if (
       overtake_core::should_throttle_cross_side_replacement_retry(
         overtake_core::CrossSideReplacementRetryThrottleRequest{
@@ -14573,7 +14589,8 @@ private:
     overtake_line_state_.opponent_side_replan_last_evaluation_sec = now_sec;
     overtake_line_state_.pass_front_overlap_exclusion_latched = false;
     overtake_line_state_.pass_front_cap_release_active =
-      preserve_front_cap_release && prior_front_cap_release_active;
+      (preserve_front_cap_release && prior_front_cap_release_active) ||
+      dynamic_wait_front_cap_release_handoff;
     overtake_line_state_.pass_current_overlap_since_sec =
       std::numeric_limits<double>::quiet_NaN();
     overtake_line_state_.pass_near_contact_since_sec =
@@ -14755,10 +14772,12 @@ private:
         side_changed ?
         "OvertakeLine opponent side PassPlan replaced: target=%s, side=%d->%d, "
         "phase=%s, generation=%lu, mode=%s, goal=%.2f, dy=%.2f, shift=%.2f, "
-        "pass_traveled=%.2f, scheduled_transition=%d/%d, count=%d/%d, wp_id=%d" :
+        "pass_traveled=%.2f, scheduled_transition=%d/%d, count=%d/%d, "
+        "front_cap_handoff=%d, wp_id=%d" :
         "OvertakeLine fresh same-side PassPlan replaced: target=%s, side=%d->%d, "
         "phase=%s, generation=%lu, mode=%s, goal=%.2f, dy=%.2f, shift=%.2f, "
-        "pass_traveled=%.2f, scheduled_transition=%d/%d, count=%d/%d, wp_id=%d",
+        "pass_traveled=%.2f, scheduled_transition=%d/%d, count=%d/%d, "
+        "front_cap_handoff=%d, wp_id=%d",
         overtake_line_state_.target_vehicle_id.c_str(), previous_side,
         candidate.pass_side_sign, to_string(overtake_line_state_.phase),
         static_cast<unsigned long>(overtake_line_state_.mission_generation),
@@ -14771,7 +14790,8 @@ private:
         candidate.outer_transition_required ? 1 : 0,
         candidate.outer_transition_preflight_validated ? 1 : 0,
         overtake_line_state_.opponent_side_replan_count,
-        line_cfg.opponent_side_replan_max_count, model->wp_id);
+        line_cfg.opponent_side_replan_max_count,
+        dynamic_wait_front_cap_release_handoff ? 1 : 0, model->wp_id);
     }
     return true;
   }
@@ -18343,11 +18363,22 @@ private:
             return DynamicMissionWaitExecution::Handled;
           case overtake_core::DynamicMissionWaitAction::ReplaceWithCurrent:
           {
+            const bool forward_authority_handoff =
+              v2x_overtake_core::can_handoff_dynamic_mission_wait_forward_authority(
+              v2x_overtake_core::DynamicMissionWaitForwardAuthorityRequest{
+                overtake_line_state_.dynamic_mission_wait_active,
+                overtake_line_state_.dynamic_mission_wait_full_closing_was_active,
+                locked_target_progress_continuous,
+                behavior_output.locked_target_position_jump,
+                behavior_output.locked_target_current_body_footprints_separated,
+                behavior_output.locked_target_footprint_prediction_valid,
+                behavior_output.locked_target_predicted_body_footprint_sweep_separated});
             const bool replaced =
               behavior_output.opponent_side_replan_current_mission.has_value() &&
               replace_frozen_overtake_mission_after_dynamic_replan(
               behavior_output.opponent_side_replan_current_mission.value(),
-              now_sec, current_ey, true, true);
+              now_sec, current_ey, true, true, false, false, false, false,
+              forward_authority_handoff);
             if (replaced) {
               overtake_line_state_.dynamic_mission_wait_active = false;
             } else {

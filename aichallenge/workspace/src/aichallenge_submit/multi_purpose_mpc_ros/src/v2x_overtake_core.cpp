@@ -9009,6 +9009,16 @@ DynamicMissionWaitForwardPrefixResolution resolve_dynamic_mission_wait_forward_p
   return resolution;
 }
 
+bool can_handoff_dynamic_mission_wait_forward_authority(
+  const DynamicMissionWaitForwardAuthorityRequest & request) noexcept
+{
+  return request.wait_active && request.full_closing_prefix_active &&
+         request.target_continuous && !request.target_position_jump &&
+         request.current_body_footprints_separated &&
+         request.footprint_prediction_valid &&
+         request.predicted_body_footprint_sweep_separated;
+}
+
 OvertakeMissionOwnershipResolution resolve_overtake_mission_ownership(
   const OvertakeMissionOwnershipRequest & request) noexcept
 {
@@ -10537,7 +10547,10 @@ bool can_suppress_committed_corridor_front_danger(
     (!request.predicted_body_footprint_overlap_confirmed ||
     request.minimum_motion_side_by_side_escape_active)) ||
     attack_path_acceptable || validated_body_clear_handoff_path_acceptable;
-  return request.enabled && request.active_shiftout_or_pass &&
+  const bool validated_execution_authority =
+    request.active_shiftout_or_pass ||
+    request.dynamic_wait_forward_authority_active;
+  return request.enabled && validated_execution_authority &&
          request.nearest_front_matches_locked_target && request.validated_fixed_corridor &&
          !request.inter_vehicle_corridor && request.target_seen &&
          !request.target_position_jump && current_geometry_acceptable &&

@@ -119,6 +119,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitRuntimeOwnersh
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitForwardAuthorityRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitForwardPrefixRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionOwnershipRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommittedBehaviorOwnershipGuardRequest;
@@ -439,6 +440,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::should_observe_locked_target_geo
 using multi_purpose_mpc_ros::v2x_overtake_core::can_enter_dynamic_mission_wait;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_execute_dynamic_mission_wait_runtime;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_mission_wait;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  can_handoff_dynamic_mission_wait_forward_authority;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_mission_wait_forward_prefix;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_mission_ownership;
 using multi_purpose_mpc_ros::v2x_overtake_core::
@@ -985,6 +988,24 @@ TEST(V2XFrontDangerAction, ValidatedCommittedCorridorMaySuppressLongitudinalOnly
   request.predicted_body_footprint_sweep_separated = true;
 
   EXPECT_TRUE(can_suppress_committed_corridor_front_danger(request));
+}
+
+TEST(V2XFrontDangerAction, DynamicWaitForwardAuthorityMaySuppressLongitudinalOnlyDanger)
+{
+  CommittedCorridorFrontDangerSuppressionRequest request;
+  request.enabled = true;
+  request.dynamic_wait_forward_authority_active = true;
+  request.nearest_front_matches_locked_target = true;
+  request.validated_fixed_corridor = true;
+  request.target_seen = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+
+  EXPECT_TRUE(can_suppress_committed_corridor_front_danger(request));
+
+  request.dynamic_wait_forward_authority_active = false;
+  EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
 }
 
 TEST(V2XFrontDangerAction, CommittedCorridorSuppressionFailsClosedOnUncertaintyOrOverlap)
@@ -10941,6 +10962,31 @@ TEST(V2XOvertakeCoreDynamicMissionWait, ForwardPrefixRejectsWallAndIdentityFault
   request.hard_fault = true;
   result = resolve_dynamic_mission_wait_forward_prefix(request);
   EXPECT_FALSE(result.active);
+}
+
+TEST(V2XOvertakeCoreDynamicMissionWait, ForwardAuthorityHandoffFailsClosed)
+{
+  DynamicMissionWaitForwardAuthorityRequest request;
+  request.wait_active = true;
+  request.full_closing_prefix_active = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+
+  EXPECT_TRUE(can_handoff_dynamic_mission_wait_forward_authority(request));
+
+  request.current_body_footprints_separated = false;
+  EXPECT_FALSE(can_handoff_dynamic_mission_wait_forward_authority(request));
+  request.current_body_footprints_separated = true;
+  request.predicted_body_footprint_sweep_separated = false;
+  EXPECT_FALSE(can_handoff_dynamic_mission_wait_forward_authority(request));
+  request.predicted_body_footprint_sweep_separated = true;
+  request.target_position_jump = true;
+  EXPECT_FALSE(can_handoff_dynamic_mission_wait_forward_authority(request));
+  request.target_position_jump = false;
+  request.full_closing_prefix_active = false;
+  EXPECT_FALSE(can_handoff_dynamic_mission_wait_forward_authority(request));
 }
 
 TEST(V2XOvertakeCoreMissionOwnership, MissionLockOwnsPausedMissionSide)

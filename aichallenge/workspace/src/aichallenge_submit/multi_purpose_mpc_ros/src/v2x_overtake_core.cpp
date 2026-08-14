@@ -6620,7 +6620,7 @@ PassEntryPhysicalGateResolution resolve_pass_entry_physical_gate(
 
   resolution.valid = true;
   if (
-    !request.enabled || !request.at_pass_boundary ||
+    !request.enabled || !request.inside_entry_window ||
     !request.warning_margin_blocked || request.hard_wall_fault)
   {
     return resolution;
@@ -8953,6 +8953,53 @@ const char * to_string(const DynamicMissionWaitReason reason) noexcept
   return "unknown";
 }
 
+DynamicMissionWaitForwardPrefixResolution resolve_dynamic_mission_wait_forward_prefix(
+  const DynamicMissionWaitForwardPrefixRequest & request) noexcept
+{
+  DynamicMissionWaitForwardPrefixResolution resolution;
+  const auto finite_non_negative = [](const double value) {
+      return std::isfinite(value) && value >= 0.0;
+    };
+  if (
+    !finite_non_negative(request.current_ego_speed_mps) ||
+    !finite_non_negative(request.target_speed_mps) ||
+    !finite_non_negative(request.mission_closing_speed_mps) ||
+    !finite_non_negative(request.unlatched_closing_speed_mps) ||
+    !finite_non_negative(request.maximum_closing_speed_mps) ||
+    !finite_non_negative(request.maximum_vehicle_speed_mps))
+  {
+    return resolution;
+  }
+  resolution.valid = true;
+  if (
+    !request.enabled || !request.wait_active || !request.target_continuous ||
+    !request.current_body_footprints_separated ||
+    !request.footprint_prediction_valid || !request.prefix_wall_feasible ||
+    request.hard_fault)
+  {
+    return resolution;
+  }
+
+  resolution.active = true;
+  resolution.full_closing_authority =
+    request.predicted_body_footprint_sweep_separated;
+  const double requested_closing = resolution.full_closing_authority ?
+    request.mission_closing_speed_mps : request.unlatched_closing_speed_mps;
+  resolution.closing_speed_mps = std::clamp(
+    requested_closing, 0.0, request.maximum_closing_speed_mps);
+  resolution.target_velocity_reference_mps = std::min(
+    request.maximum_vehicle_speed_mps,
+    request.target_speed_mps + resolution.closing_speed_mps);
+  resolution.speed_floor_active = resolution.full_closing_authority;
+  resolution.target_velocity_floor_mps = resolution.speed_floor_active ?
+    std::min(
+    request.maximum_vehicle_speed_mps,
+    std::max(
+      request.current_ego_speed_mps,
+      resolution.target_velocity_reference_mps)) : 0.0;
+  return resolution;
+}
+
 OvertakeMissionOwnershipResolution resolve_overtake_mission_ownership(
   const OvertakeMissionOwnershipRequest & request) noexcept
 {
@@ -10078,12 +10125,18 @@ PausedMissionTerminalResolution resolve_paused_mission_terminal(
       request.traveled_distance_m,
       request.timeout_sec,
       request.maximum_distance_m});
-  if (expiry == PausedMissionExpiryReason::TimeLimit) {
+  if (
+    !request.retain_until_rear_clear_on_expiry &&
+    expiry == PausedMissionExpiryReason::TimeLimit)
+  {
     return {
       PausedMissionTerminalAction::Expire,
       PausedMissionTerminalReason::TimeLimit};
   }
-  if (expiry == PausedMissionExpiryReason::DistanceLimit) {
+  if (
+    !request.retain_until_rear_clear_on_expiry &&
+    expiry == PausedMissionExpiryReason::DistanceLimit)
+  {
     return {
       PausedMissionTerminalAction::Expire,
       PausedMissionTerminalReason::DistanceLimit};
@@ -10115,6 +10168,14 @@ PausedMissionTerminalResolution resolve_paused_mission_terminal(
       PausedMissionTerminalAction::Return,
       PausedMissionTerminalReason::RearClear};
   }
+  if (
+    request.retain_until_rear_clear_on_expiry &&
+    expiry != PausedMissionExpiryReason::Active)
+  {
+    return {
+      PausedMissionTerminalAction::Hold,
+      PausedMissionTerminalReason::RearClearPendingAfterLimit};
+  }
   return {};
 }
 
@@ -10137,6 +10198,8 @@ const char * to_string(const PausedMissionTerminalReason reason) noexcept
       return "forbidden_waypoint";
     case PausedMissionTerminalReason::RearClear:
       return "rear_clear";
+    case PausedMissionTerminalReason::RearClearPendingAfterLimit:
+      return "rear_clear_pending_after_limit";
   }
   return "unknown";
 }

@@ -3580,7 +3580,7 @@ enum class PassEntryPhysicalGateAction
 struct PassEntryPhysicalGateRequest
 {
   bool enabled{false};
-  bool at_pass_boundary{false};
+  bool inside_entry_window{false};
   bool warning_margin_blocked{false};
   bool hard_wall_fault{false};
   double hold_elapsed_sec{};
@@ -3595,9 +3595,9 @@ struct PassEntryPhysicalGateResolution
   PassEntryPhysicalGateAction action{PassEntryPhysicalGateAction::Inactive};
 };
 
-/// Keep a ShiftOut at its last physically valid lateral position when the
-/// warning band predicts a near-term wall conflict. The warning cannot admit
-/// Pass; an expired bounded hold requests a new Mission instead.
+/// Keep the vehicle at its last physically valid lateral position when the
+/// warning band predicts a near-term wall conflict at the ShiftOut boundary or
+/// during a bounded early-Pass lease. An expired hold requests a new Mission.
 PassEntryPhysicalGateResolution resolve_pass_entry_physical_gate(
   const PassEntryPhysicalGateRequest & request) noexcept;
 
@@ -5052,6 +5052,42 @@ DynamicMissionWaitResolution resolve_dynamic_mission_wait(
 const char * to_string(DynamicMissionWaitAction action) noexcept;
 const char * to_string(DynamicMissionWaitReason reason) noexcept;
 
+struct DynamicMissionWaitForwardPrefixRequest
+{
+  bool enabled{false};
+  bool wait_active{false};
+  bool target_continuous{false};
+  bool current_body_footprints_separated{false};
+  bool footprint_prediction_valid{false};
+  bool predicted_body_footprint_sweep_separated{false};
+  bool prefix_wall_feasible{false};
+  bool hard_fault{false};
+  double current_ego_speed_mps{};
+  double target_speed_mps{};
+  double mission_closing_speed_mps{};
+  double unlatched_closing_speed_mps{};
+  double maximum_closing_speed_mps{};
+  double maximum_vehicle_speed_mps{};
+};
+
+struct DynamicMissionWaitForwardPrefixResolution
+{
+  bool valid{false};
+  bool active{false};
+  bool full_closing_authority{false};
+  bool speed_floor_active{false};
+  double closing_speed_mps{};
+  double target_velocity_reference_mps{};
+  double target_velocity_floor_mps{};
+};
+
+/// Keep a rolling replan on its freshly wall-validated current-side prefix.
+/// A clear predicted footprint sweep retains the frozen Mission closing
+/// request. A prediction conflict keeps lateral authority but falls back to
+/// the bounded unlatched closing request without a speed floor.
+DynamicMissionWaitForwardPrefixResolution resolve_dynamic_mission_wait_forward_prefix(
+  const DynamicMissionWaitForwardPrefixRequest & request) noexcept;
+
 struct OvertakeMissionOwnershipRequest
 {
   bool shiftout_phase{false};
@@ -5924,6 +5960,7 @@ enum class PausedMissionTerminalReason
   TargetStale,
   ForbiddenWaypoint,
   RearClear,
+  RearClearPendingAfterLimit,
 };
 
 struct PausedMissionTerminalRequest
@@ -5938,6 +5975,7 @@ struct PausedMissionTerminalRequest
   bool target_stale{false};
   bool forbidden_waypoint{false};
   bool rear_clear_confirmed{false};
+  bool retain_until_rear_clear_on_expiry{false};
 };
 
 struct PausedMissionTerminalResolution
@@ -5948,9 +5986,10 @@ struct PausedMissionTerminalResolution
 
 /// Resolve terminal handling for one paused pass mission.
 ///
-/// Expiry keeps its historical priority over target faults and rear clearance.
-/// A transient pause with no terminal condition remains held for the existing
-/// resume/reselection path owned by the controller.
+/// Expiry keeps its historical priority unless rear-clear retention is
+/// explicitly requested. In that mode, target faults still recover and
+/// rear-clear still returns, but an otherwise healthy expired pause is held for
+/// the controller's total Mission budget and replan path.
 PausedMissionTerminalResolution resolve_paused_mission_terminal(
   const PausedMissionTerminalRequest & request) noexcept;
 const char * to_string(PausedMissionTerminalReason reason) noexcept;

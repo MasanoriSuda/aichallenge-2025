@@ -118,6 +118,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitAdmissionReque
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitForwardPrefixRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionOwnershipRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommittedBehaviorOwnershipGuardRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassGeometryOwnershipRequest;
@@ -436,6 +437,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_rearward_pass_completion
 using multi_purpose_mpc_ros::v2x_overtake_core::should_observe_locked_target_geometry;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_enter_dynamic_mission_wait;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_mission_wait;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_mission_wait_forward_prefix;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_mission_ownership;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   resolve_committed_behavior_ownership_guards;
@@ -7542,7 +7544,7 @@ TEST(V2XOvertakeCoreWall, PassEntryPhysicalGateHoldsThenReselects)
 {
   PassEntryPhysicalGateRequest request;
   request.enabled = true;
-  request.at_pass_boundary = true;
+  request.inside_entry_window = true;
   request.warning_margin_blocked = true;
   request.hold_elapsed_sec = 0.20;
   request.hold_traveled_m = 0.80;
@@ -7569,7 +7571,7 @@ TEST(V2XOvertakeCoreWall, PassEntryPhysicalGateDefersHardFaultToExistingGuard)
 {
   PassEntryPhysicalGateRequest request;
   request.enabled = true;
-  request.at_pass_boundary = true;
+  request.inside_entry_window = true;
   request.warning_margin_blocked = true;
   request.maximum_hold_sec = 1.0;
   request.maximum_hold_distance_m = 3.0;
@@ -7581,6 +7583,12 @@ TEST(V2XOvertakeCoreWall, PassEntryPhysicalGateDefersHardFaultToExistingGuard)
 
   request.hard_wall_fault = false;
   request.warning_margin_blocked = false;
+  resolution = resolve_pass_entry_physical_gate(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_EQ(resolution.action, PassEntryPhysicalGateAction::Inactive);
+
+  request.warning_margin_blocked = true;
+  request.inside_entry_window = false;
   resolution = resolve_pass_entry_physical_gate(request);
   ASSERT_TRUE(resolution.valid);
   EXPECT_EQ(resolution.action, PassEntryPhysicalGateAction::Inactive);
@@ -7697,6 +7705,40 @@ TEST(V2XOvertakeCoreSpeed, ResolvesPausedMissionTerminalActionsInLegacyPriority)
   resolution = resolve_paused_mission_terminal(request);
   EXPECT_EQ(resolution.action, PausedMissionTerminalAction::Hold);
   EXPECT_EQ(resolution.reason, PausedMissionTerminalReason::None);
+}
+
+TEST(V2XOvertakeCoreSpeed, RetainsHealthyExpiredPausedMissionUntilRearClear)
+{
+  PausedMissionTerminalRequest request;
+  request.follow_prepare_active = true;
+  request.elapsed_sec = 4.0;
+  request.traveled_distance_m = 20.0;
+  request.timeout_sec = 4.0;
+  request.maximum_distance_m = 20.0;
+  request.retain_until_rear_clear_on_expiry = true;
+
+  auto resolution = resolve_paused_mission_terminal(request);
+  EXPECT_EQ(resolution.action, PausedMissionTerminalAction::Hold);
+  EXPECT_EQ(
+    resolution.reason,
+    PausedMissionTerminalReason::RearClearPendingAfterLimit);
+
+  request.rear_clear_confirmed = true;
+  resolution = resolve_paused_mission_terminal(request);
+  EXPECT_EQ(resolution.action, PausedMissionTerminalAction::Return);
+  EXPECT_EQ(resolution.reason, PausedMissionTerminalReason::RearClear);
+
+  request.rear_clear_confirmed = false;
+  request.target_position_jump = true;
+  resolution = resolve_paused_mission_terminal(request);
+  EXPECT_EQ(resolution.action, PausedMissionTerminalAction::Recovery);
+  EXPECT_EQ(resolution.reason, PausedMissionTerminalReason::TargetPositionJump);
+
+  request.target_position_jump = false;
+  request.retain_until_rear_clear_on_expiry = false;
+  resolution = resolve_paused_mission_terminal(request);
+  EXPECT_EQ(resolution.action, PausedMissionTerminalAction::Expire);
+  EXPECT_EQ(resolution.reason, PausedMissionTerminalReason::TimeLimit);
 }
 
 TEST(V2XOvertakeCoreSpeed, SuppressesOnlyNewEntryForCompletedTarget)
@@ -10787,6 +10829,92 @@ TEST(V2XOvertakeCoreDynamicMissionWait, NoReturnUsesFreshSameSideOnly)
   const auto result = resolve_dynamic_mission_wait(request);
   EXPECT_EQ(result.action, DynamicMissionWaitAction::ReplaceWithCurrent);
   EXPECT_EQ(result.reason, DynamicMissionWaitReason::CurrentPlanRecovered);
+}
+
+TEST(V2XOvertakeCoreDynamicMissionWait, ForwardPrefixKeepsMissionClosingWhenSweepIsClear)
+{
+  DynamicMissionWaitForwardPrefixRequest request;
+  request.enabled = true;
+  request.wait_active = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+  request.prefix_wall_feasible = true;
+  request.current_ego_speed_mps = 5.5;
+  request.target_speed_mps = 4.0;
+  request.mission_closing_speed_mps = 2.0;
+  request.unlatched_closing_speed_mps = 0.5;
+  request.maximum_closing_speed_mps = 2.0;
+  request.maximum_vehicle_speed_mps = 11.0;
+
+  const auto result = resolve_dynamic_mission_wait_forward_prefix(request);
+  EXPECT_TRUE(result.valid);
+  EXPECT_TRUE(result.active);
+  EXPECT_TRUE(result.full_closing_authority);
+  EXPECT_TRUE(result.speed_floor_active);
+  EXPECT_DOUBLE_EQ(result.closing_speed_mps, 2.0);
+  EXPECT_DOUBLE_EQ(result.target_velocity_reference_mps, 6.0);
+  EXPECT_DOUBLE_EQ(result.target_velocity_floor_mps, 6.0);
+}
+
+TEST(V2XOvertakeCoreDynamicMissionWait, ForwardPrefixLimitsClosingOnPredictedOverlap)
+{
+  DynamicMissionWaitForwardPrefixRequest request;
+  request.enabled = true;
+  request.wait_active = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = false;
+  request.prefix_wall_feasible = true;
+  request.current_ego_speed_mps = 5.5;
+  request.target_speed_mps = 4.0;
+  request.mission_closing_speed_mps = 2.0;
+  request.unlatched_closing_speed_mps = 0.5;
+  request.maximum_closing_speed_mps = 2.0;
+  request.maximum_vehicle_speed_mps = 11.0;
+
+  const auto result = resolve_dynamic_mission_wait_forward_prefix(request);
+  EXPECT_TRUE(result.valid);
+  EXPECT_TRUE(result.active);
+  EXPECT_FALSE(result.full_closing_authority);
+  EXPECT_FALSE(result.speed_floor_active);
+  EXPECT_DOUBLE_EQ(result.closing_speed_mps, 0.5);
+  EXPECT_DOUBLE_EQ(result.target_velocity_reference_mps, 4.5);
+  EXPECT_DOUBLE_EQ(result.target_velocity_floor_mps, 0.0);
+}
+
+TEST(V2XOvertakeCoreDynamicMissionWait, ForwardPrefixRejectsWallAndIdentityFaults)
+{
+  DynamicMissionWaitForwardPrefixRequest request;
+  request.enabled = true;
+  request.wait_active = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+  request.prefix_wall_feasible = false;
+  request.current_ego_speed_mps = 5.5;
+  request.target_speed_mps = 4.0;
+  request.mission_closing_speed_mps = 2.0;
+  request.unlatched_closing_speed_mps = 0.5;
+  request.maximum_closing_speed_mps = 2.0;
+  request.maximum_vehicle_speed_mps = 11.0;
+
+  auto result = resolve_dynamic_mission_wait_forward_prefix(request);
+  EXPECT_TRUE(result.valid);
+  EXPECT_FALSE(result.active);
+
+  request.prefix_wall_feasible = true;
+  request.target_continuous = false;
+  result = resolve_dynamic_mission_wait_forward_prefix(request);
+  EXPECT_FALSE(result.active);
+
+  request.target_continuous = true;
+  request.hard_fault = true;
+  result = resolve_dynamic_mission_wait_forward_prefix(request);
+  EXPECT_FALSE(result.active);
 }
 
 TEST(V2XOvertakeCoreMissionOwnership, MissionLockOwnsPausedMissionSide)

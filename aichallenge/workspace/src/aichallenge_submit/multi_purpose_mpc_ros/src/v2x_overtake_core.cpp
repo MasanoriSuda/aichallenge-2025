@@ -3346,6 +3346,58 @@ double resolve_mission_total_start_sec(
   return std::isfinite(now_sec) ? now_sec : current_start_sec;
 }
 
+DynamicMissionWaitDeadlineExtensionResolution
+resolve_dynamic_mission_wait_deadline_extension(
+  const DynamicMissionWaitDeadlineExtensionRequest & request) noexcept
+{
+  DynamicMissionWaitDeadlineExtensionResolution resolution;
+  const auto finite_non_negative = [](const double value) {
+      return std::isfinite(value) && value >= 0.0;
+    };
+  if (
+    !finite_non_negative(request.mission_elapsed_sec) ||
+    !finite_non_negative(request.base_maximum_duration_sec) ||
+    !finite_non_negative(request.prior_extension_sec) ||
+    !finite_non_negative(request.completion_reserve_sec) ||
+    !finite_non_negative(request.maximum_total_extension_sec) ||
+    request.prior_extension_sec > request.maximum_total_extension_sec + 1e-9)
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  resolution.extension_sec = request.prior_extension_sec;
+  resolution.effective_maximum_duration_sec =
+    request.base_maximum_duration_sec + resolution.extension_sec;
+  resolution.remaining_before_extension_sec = std::max(
+    0.0,
+    resolution.effective_maximum_duration_sec - request.mission_elapsed_sec);
+  if (!request.enabled || !request.paused_same_side_pass_continuation) {
+    return resolution;
+  }
+  if (
+    !request.rear_clear_prediction_valid ||
+    !finite_non_negative(request.predicted_rear_clear_time_sec))
+  {
+    resolution.valid = false;
+    return resolution;
+  }
+
+  resolution.required_remaining_sec =
+    request.predicted_rear_clear_time_sec + request.completion_reserve_sec;
+  const double required_additional_sec = std::max(
+    0.0,
+    resolution.required_remaining_sec - resolution.remaining_before_extension_sec);
+  resolution.extension_sec = std::min(
+    request.maximum_total_extension_sec,
+    request.prior_extension_sec + required_additional_sec);
+  resolution.effective_maximum_duration_sec =
+    request.base_maximum_duration_sec + resolution.extension_sec;
+  resolution.extended =
+    resolution.extension_sec > request.prior_extension_sec + 1e-9;
+  return resolution;
+}
+
 CommittedPassForwardCompletionResolution resolve_committed_pass_forward_completion(
   const CommittedPassForwardCompletionRequest & request) noexcept
 {
@@ -9012,11 +9064,11 @@ DynamicMissionWaitForwardPrefixResolution resolve_dynamic_mission_wait_forward_p
 bool can_handoff_dynamic_mission_wait_forward_authority(
   const DynamicMissionWaitForwardAuthorityRequest & request) noexcept
 {
-  return request.wait_active && request.full_closing_prefix_active &&
+  return request.wait_active && request.wall_validated_forward_prefix_active &&
          request.target_continuous && !request.target_position_jump &&
          request.current_body_footprints_separated &&
          request.footprint_prediction_valid &&
-         request.predicted_body_footprint_sweep_separated;
+         request.predicted_body_footprint_path_acceptable;
 }
 
 OvertakeMissionOwnershipResolution resolve_overtake_mission_ownership(
@@ -10543,6 +10595,7 @@ bool can_suppress_committed_corridor_front_danger(
     request.current_body_footprints_separated;
   const bool predicted_path_acceptable =
     request.predicted_body_footprint_sweep_separated ||
+    request.dynamic_wait_forward_authority_active ||
     (request.prior_front_cap_release_active &&
     (!request.predicted_body_footprint_overlap_confirmed ||
     request.minimum_motion_side_by_side_escape_active)) ||

@@ -1943,6 +1943,37 @@ double resolve_mission_total_start_sec(
 MissionTotalBudgetResolution resolve_mission_total_budget(
   const MissionTotalBudgetRequest & request) noexcept;
 
+struct DynamicMissionWaitDeadlineExtensionRequest
+{
+  bool enabled{false};
+  bool paused_same_side_pass_continuation{false};
+  bool rear_clear_prediction_valid{false};
+  double mission_elapsed_sec{};
+  double base_maximum_duration_sec{};
+  double prior_extension_sec{};
+  double predicted_rear_clear_time_sec{};
+  double completion_reserve_sec{};
+  double maximum_total_extension_sec{};
+};
+
+struct DynamicMissionWaitDeadlineExtensionResolution
+{
+  bool valid{false};
+  bool extended{false};
+  double extension_sec{};
+  double effective_maximum_duration_sec{};
+  double remaining_before_extension_sec{};
+  double required_remaining_sec{};
+};
+
+/// A fresh same-side Pass continuation may arrive near the original Mission
+/// deadline after spending time in DynamicMissionWait. Extend only enough to
+/// cover its newly validated rear-clear prediction, with a cumulative cap so
+/// repeated replans cannot reset the same-target Mission indefinitely.
+DynamicMissionWaitDeadlineExtensionResolution
+resolve_dynamic_mission_wait_deadline_extension(
+  const DynamicMissionWaitDeadlineExtensionRequest & request) noexcept;
+
 enum class SafeSeparationAction
 {
   Inactive,
@@ -5096,23 +5127,27 @@ struct DynamicMissionWaitForwardPrefixResolution
 };
 
 /// Keep a rolling replan on its freshly wall-validated current-side prefix.
-/// A clear predicted footprint sweep retains the frozen Mission closing
-/// request. A prediction conflict keeps lateral authority but falls back to
-/// the bounded unlatched closing request without a speed floor.
+/// A clear or confirmation-filtered acceptable predicted footprint path
+/// retains the frozen Mission closing request. A confirmed prediction
+/// conflict keeps lateral authority but falls back to the bounded unlatched
+/// closing request without a speed floor.
 DynamicMissionWaitForwardPrefixResolution resolve_dynamic_mission_wait_forward_prefix(
   const DynamicMissionWaitForwardPrefixRequest & request) noexcept;
 
 struct DynamicMissionWaitForwardAuthorityRequest
 {
   bool wait_active{false};
-  /// The previous runtime prefix was wall-feasible and retained the complete
-  /// frozen-Mission closing-speed request.
-  bool full_closing_prefix_active{false};
+  /// The previous runtime prefix was wall-feasible. Prediction authority is
+  /// checked independently so a bounded prefix can recover immediately when
+  /// its predicted conflict clears.
+  bool wall_validated_forward_prefix_active{false};
   bool target_continuous{false};
   bool target_position_jump{false};
   bool current_body_footprints_separated{false};
   bool footprint_prediction_valid{false};
-  bool predicted_body_footprint_sweep_separated{false};
+  /// True for a clear sweep or for an unconfirmed transient predicted
+  /// overlap. A continuously confirmed overlap must set this false.
+  bool predicted_body_footprint_path_acceptable{false};
 };
 
 /// Carry a wall-validated DynamicMissionWait forward prefix across the
@@ -6248,7 +6283,8 @@ struct CommittedCorridorFrontDangerSuppressionRequest
   bool enabled{false};
   bool active_shiftout_or_pass{false};
   /// A wall-validated DynamicMissionWait prefix owns forward motion while the
-  /// lateral plan is being atomically replaced in FollowPrepare.
+  /// lateral plan is being atomically replaced in FollowPrepare. This already
+  /// includes the shared predicted-overlap confirmation result.
   bool dynamic_wait_forward_authority_active{false};
   bool nearest_front_matches_locked_target{false};
   bool validated_fixed_corridor{false};

@@ -2361,6 +2361,10 @@ struct OvertakeLineState
   // Active Pass phase time only. FollowPrepare and replacement ShiftOut do not
   // consume the absolute Pass budget.
   double mission_total_start_sec{std::numeric_limits<double>::quiet_NaN()};
+  // DynamicMissionWait may spend most of the original same-target budget
+  // producing a fresh Pass continuation. This bounded cumulative extension
+  // never resets the Mission clock.
+  double mission_total_deadline_extension_sec{0.0};
   // Terminal mission aborts may still need a bounded lateral Recovery, but
   // that Recovery must never resurrect the expired Mission.
   bool mission_retention_forbidden{false};
@@ -2524,6 +2528,8 @@ struct OvertakeLineState
   bool dynamic_mission_wait_rear_clear_extension_logged{false};
   bool dynamic_mission_wait_forward_prefix_was_active{false};
   bool dynamic_mission_wait_full_closing_was_active{false};
+  double dynamic_mission_wait_predicted_overlap_since_sec{
+    std::numeric_limits<double>::quiet_NaN()};
   double mission_last_runtime_wall_replan_sec{
     -std::numeric_limits<double>::infinity()};
   int mission_runtime_wall_replan_count{0};
@@ -6621,17 +6627,38 @@ struct MPC
       committed_predicted_overlap_confirmation_monitored ?
       committed_predicted_overlap_confirmation.confirmed :
       committed_body_geometry.raw_predicted_body_overlap;
+    const bool dynamic_wait_predicted_overlap_confirmation_monitored =
+      overtake_line_state_.dynamic_mission_wait_active &&
+      output.locked_target_seen &&
+      !output.locked_target_course_progress_rejected &&
+      !output.locked_target_position_jump &&
+      output.locked_target_current_body_footprints_separated &&
+      output.locked_target_footprint_prediction_valid &&
+      !output.locked_target_predicted_body_footprint_sweep_separated;
+    const auto dynamic_wait_predicted_overlap_confirmation =
+      v2x_overtake_core::update_predicted_footprint_overlap_confirmation(
+      v2x_overtake_core::PredictedFootprintOverlapConfirmationRequest{
+        dynamic_wait_predicted_overlap_confirmation_monitored,
+        now_sec,
+        overtake_line_state_.dynamic_mission_wait_predicted_overlap_since_sec,
+        cfg.v2x_behavior.overtake_pass_predicted_overlap_confirm_sec});
+    overtake_line_state_.dynamic_mission_wait_predicted_overlap_since_sec =
+      dynamic_wait_predicted_overlap_confirmation.overlap_since_sec;
+    const bool dynamic_wait_predicted_path_acceptable =
+      output.locked_target_predicted_body_footprint_sweep_separated ||
+      (dynamic_wait_predicted_overlap_confirmation_monitored &&
+      !dynamic_wait_predicted_overlap_confirmation.confirmed);
     const bool dynamic_wait_forward_authority_active =
       v2x_overtake_core::can_handoff_dynamic_mission_wait_forward_authority(
       v2x_overtake_core::DynamicMissionWaitForwardAuthorityRequest{
         overtake_line_state_.dynamic_mission_wait_active,
-        overtake_line_state_.dynamic_mission_wait_full_closing_was_active,
+        overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active,
         output.locked_target_seen &&
         !output.locked_target_course_progress_rejected,
         output.locked_target_position_jump,
         output.locked_target_current_body_footprints_separated,
         output.locked_target_footprint_prediction_valid,
-        output.locked_target_predicted_body_footprint_sweep_separated});
+        dynamic_wait_predicted_path_acceptable});
     const bool committed_corridor_front_danger_suppressed =
       v2x_overtake_core::can_suppress_committed_corridor_front_danger(
       v2x_overtake_core::CommittedCorridorFrontDangerSuppressionRequest{
@@ -10349,7 +10376,10 @@ struct MPC
       const double shadow_mission_time_remaining_sec = shadow_mission_budget_active ?
         std::max(
           0.0,
-          shadow_cfg.mission_total_time_limit_sec -
+          shadow_cfg.mission_total_time_limit_sec +
+          std::max(
+            0.0,
+            overtake_line_state_.mission_total_deadline_extension_sec) -
           std::max(0.0, now_sec - overtake_line_state_.mission_total_start_sec)) :
         std::numeric_limits<double>::infinity();
       const bool shadow_safe_separation_budget_active =
@@ -13531,6 +13561,12 @@ private:
     if (next_phase == OvertakeLinePhase::FollowPrepare) {
       overtake_line_state_.follow_prepare_origin_phase = previous_phase;
       overtake_line_state_.follow_prepare_cause = follow_prepare_cause;
+      if (previous_phase != OvertakeLinePhase::FollowPrepare) {
+        overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active = false;
+        overtake_line_state_.dynamic_mission_wait_full_closing_was_active = false;
+        overtake_line_state_.dynamic_mission_wait_predicted_overlap_since_sec =
+          std::numeric_limits<double>::quiet_NaN();
+      }
     } else if (previous_phase == OvertakeLinePhase::FollowPrepare) {
       overtake_line_state_.follow_prepare_origin_phase = OvertakeLinePhase::Idle;
       overtake_line_state_.follow_prepare_cause = FollowPrepareCause::Unspecified;
@@ -13544,6 +13580,8 @@ private:
       overtake_line_state_.dynamic_mission_wait_rear_clear_extension_logged = false;
       overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active = false;
       overtake_line_state_.dynamic_mission_wait_full_closing_was_active = false;
+      overtake_line_state_.dynamic_mission_wait_predicted_overlap_since_sec =
+        std::numeric_limits<double>::quiet_NaN();
     }
     overtake_line_state_.pass_current_overlap_since_sec =
       std::numeric_limits<double>::quiet_NaN();
@@ -14005,6 +14043,7 @@ private:
       std::max<std::uint64_t>(1U, overtake_line_state_.mission_generation + 1U);
     clear_overtake_mission_invalidation();
     overtake_line_state_.mission_total_start_sec = now_sec;
+    overtake_line_state_.mission_total_deadline_extension_sec = 0.0;
     overtake_line_state_.mission_pass_start_sec =
       overtake_line_state_.phase == OvertakeLinePhase::Pass ?
       overtake_line_state_.phase_start_sec :
@@ -14159,6 +14198,8 @@ private:
     overtake_line_state_.dynamic_mission_wait_rear_clear_extension_logged = false;
     overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active = false;
     overtake_line_state_.dynamic_mission_wait_full_closing_was_active = false;
+    overtake_line_state_.dynamic_mission_wait_predicted_overlap_since_sec =
+      std::numeric_limits<double>::quiet_NaN();
     overtake_line_state_.pass_horizon_fallback_start_sec =
       std::numeric_limits<double>::quiet_NaN();
     overtake_line_state_.pass_horizon_fallback_start_distance = 0.0;
@@ -14527,6 +14568,32 @@ private:
       overtake_line_state_.pass_front_cap_release_active;
     const double prior_mission_total_start_sec =
       overtake_line_state_.mission_total_start_sec;
+    const double prior_mission_total_deadline_extension_sec =
+      std::max(
+      0.0, overtake_line_state_.mission_total_deadline_extension_sec);
+    const double mission_elapsed_before_replacement_sec =
+      std::isfinite(prior_mission_total_start_sec) ?
+      std::max(0.0, now_sec - prior_mission_total_start_sec) : 0.0;
+    const double maximum_dynamic_wait_deadline_extension_sec = std::min(
+      4.0,
+      std::max(1.0, 0.25 * line_cfg.mission_total_time_limit_sec));
+    const auto dynamic_wait_deadline_extension =
+      overtake_core::resolve_dynamic_mission_wait_deadline_extension(
+      overtake_core::DynamicMissionWaitDeadlineExtensionRequest{
+        line_cfg.mission_total_budget_enabled,
+        overtake_line_state_.dynamic_mission_wait_active &&
+        paused_pass_continuation && !side_changed,
+        candidate.rear_clear_prediction_checked &&
+        candidate.rear_clear_prediction_feasible,
+        mission_elapsed_before_replacement_sec,
+        line_cfg.mission_total_time_limit_sec,
+        prior_mission_total_deadline_extension_sec,
+        candidate.predicted_rear_clear_time_sec,
+        std::max(
+          0.25,
+          std::max(0.0, line_cfg.clear_confirm_sec) +
+          std::max(0.0, cfg.state_prediction_delay_sec)),
+        maximum_dynamic_wait_deadline_extension_sec});
     const double prior_dynamic_corridor_refresh_sec =
       overtake_line_state_.mission_last_dynamic_corridor_refresh_sec;
     const int prior_dynamic_corridor_refresh_count =
@@ -14570,6 +14637,10 @@ private:
     overtake_line_state_.opponent_side_replan_count =
       prior_side_replan_count + (side_changed ? 1 : 0);
     overtake_line_state_.mission_total_start_sec = prior_mission_total_start_sec;
+    overtake_line_state_.mission_total_deadline_extension_sec =
+      dynamic_wait_deadline_extension.valid ?
+      dynamic_wait_deadline_extension.extension_sec :
+      prior_mission_total_deadline_extension_sec;
     overtake_line_state_.mission_last_dynamic_corridor_refresh_sec =
       prior_dynamic_corridor_refresh_sec;
     overtake_line_state_.mission_dynamic_corridor_refresh_count =
@@ -14773,11 +14844,11 @@ private:
         "OvertakeLine opponent side PassPlan replaced: target=%s, side=%d->%d, "
         "phase=%s, generation=%lu, mode=%s, goal=%.2f, dy=%.2f, shift=%.2f, "
         "pass_traveled=%.2f, scheduled_transition=%d/%d, count=%d/%d, "
-        "front_cap_handoff=%d, wp_id=%d" :
+        "front_cap_handoff=%d, deadline_extend=%.2f/%.2f, wp_id=%d" :
         "OvertakeLine fresh same-side PassPlan replaced: target=%s, side=%d->%d, "
         "phase=%s, generation=%lu, mode=%s, goal=%.2f, dy=%.2f, shift=%.2f, "
         "pass_traveled=%.2f, scheduled_transition=%d/%d, count=%d/%d, "
-        "front_cap_handoff=%d, wp_id=%d",
+        "front_cap_handoff=%d, deadline_extend=%.2f/%.2f, wp_id=%d",
         overtake_line_state_.target_vehicle_id.c_str(), previous_side,
         candidate.pass_side_sign, to_string(overtake_line_state_.phase),
         static_cast<unsigned long>(overtake_line_state_.mission_generation),
@@ -14791,7 +14862,11 @@ private:
         candidate.outer_transition_preflight_validated ? 1 : 0,
         overtake_line_state_.opponent_side_replan_count,
         line_cfg.opponent_side_replan_max_count,
-        dynamic_wait_front_cap_release_handoff ? 1 : 0, model->wp_id);
+        dynamic_wait_front_cap_release_handoff ? 1 : 0,
+        dynamic_wait_deadline_extension.valid ?
+        dynamic_wait_deadline_extension.extension_sec :
+        prior_mission_total_deadline_extension_sec,
+        maximum_dynamic_wait_deadline_extension_sec, model->wp_id);
     }
     return true;
   }
@@ -17129,12 +17204,15 @@ private:
       std::isfinite(overtake_line_state_.mission_total_start_sec) ?
       std::max(0.0, now_sec - overtake_line_state_.mission_total_start_sec) :
       std::numeric_limits<double>::quiet_NaN();
+    const double effective_mission_total_time_limit_sec =
+      line_cfg.mission_total_time_limit_sec +
+      std::max(0.0, overtake_line_state_.mission_total_deadline_extension_sec);
     const auto mission_total_budget = overtake_core::resolve_mission_total_budget(
       overtake_core::MissionTotalBudgetRequest{
         line_cfg.mission_total_budget_enabled,
         mission_total_budget_phase,
         mission_total_elapsed_sec,
-        line_cfg.mission_total_time_limit_sec,
+        effective_mission_total_time_limit_sec,
         rear_clear_confirmed,
         !return_corridor_blocked});
     if (mission_total_budget.action == overtake_core::MissionTotalBudgetAction::Return) {
@@ -17150,10 +17228,11 @@ private:
       RCLCPP_WARN(
         rclcpp::get_logger("mpc_controller"),
         "OvertakeLine same-target Mission total budget expired: target=%s, "
-        "side=%d, phase=%s, elapsed=%.2f/%.2f s",
+        "side=%d, phase=%s, elapsed=%.2f/%.2f s, extension=%.2f s",
         expired_target.c_str(), expired_side,
         to_string(overtake_line_state_.phase), mission_total_elapsed_sec,
-        line_cfg.mission_total_time_limit_sec);
+        effective_mission_total_time_limit_sec,
+        overtake_line_state_.mission_total_deadline_extension_sec);
       arm_overtake_line_side_retry_block(
         expired_side, expired_target, now_sec,
         "same-target Mission total budget expired",
@@ -18160,6 +18239,28 @@ private:
         model->wp_id);
     }
 
+    const auto dynamic_wait_predicted_path_acceptable = [&, this]() {
+        const bool confirmation_monitored =
+          overtake_line_state_.dynamic_mission_wait_active &&
+          locked_target_progress_continuous &&
+          !behavior_output.locked_target_position_jump &&
+          !locked_target_progress_rejected &&
+          behavior_output.locked_target_current_body_footprints_separated &&
+          behavior_output.locked_target_footprint_prediction_valid &&
+          !behavior_output.locked_target_predicted_body_footprint_sweep_separated;
+        const auto confirmation =
+          overtake_core::update_predicted_footprint_overlap_confirmation(
+          overtake_core::PredictedFootprintOverlapConfirmationRequest{
+            confirmation_monitored,
+            now_sec,
+            overtake_line_state_.dynamic_mission_wait_predicted_overlap_since_sec,
+            cfg.v2x_behavior.overtake_pass_predicted_overlap_confirm_sec});
+        overtake_line_state_.dynamic_mission_wait_predicted_overlap_since_sec =
+          confirmation.overlap_since_sec;
+        return behavior_output.locked_target_predicted_body_footprint_sweep_separated ||
+               (confirmation_monitored && !confirmation.confirmed);
+      };
+
     const auto publish_dynamic_wait_forward_prefix = [&, this](
       const bool dynamic_wait_hard_fault, const int mission_side_sign) {
         const std::vector<double> current_side_targets(
@@ -18189,6 +18290,8 @@ private:
           std::max(0.0, behavior_output.locked_target_speed) :
           (std::isfinite(overtake_line_state_.target_last_speed) ?
           std::max(0.0, overtake_line_state_.target_last_speed) : 0.0);
+        const bool predicted_path_acceptable =
+          dynamic_wait_predicted_path_acceptable();
         const auto prefix_policy =
           overtake_core::resolve_dynamic_mission_wait_forward_prefix(
           overtake_core::DynamicMissionWaitForwardPrefixRequest{
@@ -18199,7 +18302,7 @@ private:
             !locked_target_progress_rejected,
             behavior_output.locked_target_current_body_footprints_separated,
             behavior_output.locked_target_footprint_prediction_valid,
-            behavior_output.locked_target_predicted_body_footprint_sweep_separated,
+            predicted_path_acceptable,
             prefix_horizon.execution_feasible(),
             dynamic_wait_hard_fault,
             std::max(0.0, current_speed_mps_),
@@ -18229,6 +18332,8 @@ private:
           }
           overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active = false;
           overtake_line_state_.dynamic_mission_wait_full_closing_was_active = false;
+          overtake_line_state_.dynamic_mission_wait_predicted_overlap_since_sec =
+            std::numeric_limits<double>::quiet_NaN();
           return false;
         }
 
@@ -18367,12 +18472,12 @@ private:
               v2x_overtake_core::can_handoff_dynamic_mission_wait_forward_authority(
               v2x_overtake_core::DynamicMissionWaitForwardAuthorityRequest{
                 overtake_line_state_.dynamic_mission_wait_active,
-                overtake_line_state_.dynamic_mission_wait_full_closing_was_active,
+                overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active,
                 locked_target_progress_continuous,
                 behavior_output.locked_target_position_jump,
                 behavior_output.locked_target_current_body_footprints_separated,
                 behavior_output.locked_target_footprint_prediction_valid,
-                behavior_output.locked_target_predicted_body_footprint_sweep_separated});
+                dynamic_wait_predicted_path_acceptable()});
             const bool replaced =
               behavior_output.opponent_side_replan_current_mission.has_value() &&
               replace_frozen_overtake_mission_after_dynamic_replan(
@@ -18975,11 +19080,15 @@ private:
             behavior_output.overtake_corridor_center_ey;
           const double prior_mission_total_start_sec =
             overtake_line_state_.mission_total_start_sec;
+          const double prior_mission_total_deadline_extension_sec =
+            overtake_line_state_.mission_total_deadline_extension_sec;
           freeze_selected_overtake_mission(
             behavior_output.overtake_selected_mission, now_sec);
           if (std::isfinite(prior_mission_total_start_sec)) {
             overtake_line_state_.mission_total_start_sec =
               prior_mission_total_start_sec;
+            overtake_line_state_.mission_total_deadline_extension_sec =
+              prior_mission_total_deadline_extension_sec;
           }
         }
       }

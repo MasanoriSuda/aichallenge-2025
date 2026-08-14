@@ -186,6 +186,10 @@ using multi_purpose_mpc_ros::v2x_overtake_core::SameSideExtensionCommitRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SameSideExtensionCommitReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::MissionTotalBudgetAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::MissionTotalBudgetRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  DynamicMissionWaitDeadlineExtensionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  resolve_dynamic_mission_wait_deadline_extension;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_mission_total_start_sec;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationReason;
@@ -1000,10 +1004,15 @@ TEST(V2XFrontDangerAction, DynamicWaitForwardAuthorityMaySuppressLongitudinalOnl
   request.target_seen = true;
   request.current_body_footprints_separated = true;
   request.footprint_prediction_valid = true;
-  request.predicted_body_footprint_sweep_separated = true;
+  // The authority already contains the shared, unconfirmed-overlap grace;
+  // downstream arbitration must not re-read the raw conflicting sample.
+  request.predicted_body_footprint_sweep_separated = false;
 
   EXPECT_TRUE(can_suppress_committed_corridor_front_danger(request));
 
+  request.footprint_prediction_valid = false;
+  EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
+  request.footprint_prediction_valid = true;
   request.dynamic_wait_forward_authority_active = false;
   EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
 }
@@ -5418,6 +5427,64 @@ TEST(V2XOvertakeCoreHorizon, InitializesMissingMissionClockOnlyOnce)
   EXPECT_DOUBLE_EQ(resolve_mission_total_start_sec(true, missing, 10.0), 10.0);
   EXPECT_DOUBLE_EQ(resolve_mission_total_start_sec(true, 7.5, 10.0), 7.5);
   EXPECT_TRUE(std::isnan(resolve_mission_total_start_sec(true, missing, missing)));
+}
+
+TEST(V2XOvertakeCoreHorizon, ExtendsFreshDynamicWaitPassOnlyByRequiredRemainder)
+{
+  DynamicMissionWaitDeadlineExtensionRequest request;
+  request.enabled = true;
+  request.paused_same_side_pass_continuation = true;
+  request.rear_clear_prediction_valid = true;
+  request.mission_elapsed_sec = 13.0;
+  request.base_maximum_duration_sec = 15.0;
+  request.predicted_rear_clear_time_sec = 3.0;
+  request.completion_reserve_sec = 0.25;
+  request.maximum_total_extension_sec = 3.75;
+
+  auto resolution = resolve_dynamic_mission_wait_deadline_extension(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.extended);
+  EXPECT_DOUBLE_EQ(resolution.remaining_before_extension_sec, 2.0);
+  EXPECT_DOUBLE_EQ(resolution.required_remaining_sec, 3.25);
+  EXPECT_DOUBLE_EQ(resolution.extension_sec, 1.25);
+  EXPECT_DOUBLE_EQ(resolution.effective_maximum_duration_sec, 16.25);
+
+  request.prior_extension_sec = resolution.extension_sec;
+  request.mission_elapsed_sec = 14.0;
+  request.predicted_rear_clear_time_sec = 4.0;
+  resolution = resolve_dynamic_mission_wait_deadline_extension(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.extended);
+  EXPECT_DOUBLE_EQ(resolution.extension_sec, 3.25);
+}
+
+TEST(V2XOvertakeCoreHorizon, DynamicWaitDeadlineExtensionIsBoundedAndFailsClosed)
+{
+  DynamicMissionWaitDeadlineExtensionRequest request;
+  request.enabled = true;
+  request.paused_same_side_pass_continuation = true;
+  request.rear_clear_prediction_valid = true;
+  request.mission_elapsed_sec = 15.0;
+  request.base_maximum_duration_sec = 15.0;
+  request.predicted_rear_clear_time_sec = 10.0;
+  request.completion_reserve_sec = 0.25;
+  request.maximum_total_extension_sec = 3.75;
+
+  auto resolution = resolve_dynamic_mission_wait_deadline_extension(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.extended);
+  EXPECT_DOUBLE_EQ(resolution.extension_sec, 3.75);
+
+  request.rear_clear_prediction_valid = false;
+  resolution = resolve_dynamic_mission_wait_deadline_extension(request);
+  EXPECT_FALSE(resolution.valid);
+
+  request.rear_clear_prediction_valid = true;
+  request.paused_same_side_pass_continuation = false;
+  resolution = resolve_dynamic_mission_wait_deadline_extension(request);
+  EXPECT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.extended);
+  EXPECT_DOUBLE_EQ(resolution.extension_sec, 0.0);
 }
 
 TEST(V2XOvertakeCoreHorizon, TerminalBudgetAbortCannotResumeAfterLateralRecovery)
@@ -10968,25 +11035,62 @@ TEST(V2XOvertakeCoreDynamicMissionWait, ForwardAuthorityHandoffFailsClosed)
 {
   DynamicMissionWaitForwardAuthorityRequest request;
   request.wait_active = true;
-  request.full_closing_prefix_active = true;
+  request.wall_validated_forward_prefix_active = true;
   request.target_continuous = true;
   request.current_body_footprints_separated = true;
   request.footprint_prediction_valid = true;
-  request.predicted_body_footprint_sweep_separated = true;
+  request.predicted_body_footprint_path_acceptable = true;
 
   EXPECT_TRUE(can_handoff_dynamic_mission_wait_forward_authority(request));
 
   request.current_body_footprints_separated = false;
   EXPECT_FALSE(can_handoff_dynamic_mission_wait_forward_authority(request));
   request.current_body_footprints_separated = true;
-  request.predicted_body_footprint_sweep_separated = false;
+  request.predicted_body_footprint_path_acceptable = false;
   EXPECT_FALSE(can_handoff_dynamic_mission_wait_forward_authority(request));
-  request.predicted_body_footprint_sweep_separated = true;
+  request.predicted_body_footprint_path_acceptable = true;
   request.target_position_jump = true;
   EXPECT_FALSE(can_handoff_dynamic_mission_wait_forward_authority(request));
   request.target_position_jump = false;
-  request.full_closing_prefix_active = false;
+  request.wall_validated_forward_prefix_active = false;
   EXPECT_FALSE(can_handoff_dynamic_mission_wait_forward_authority(request));
+}
+
+TEST(V2XOvertakeCoreDynamicMissionWait, PredictedOverlapRequiresContinuousConfirmation)
+{
+  DynamicMissionWaitForwardAuthorityRequest authority;
+  authority.wait_active = true;
+  authority.wall_validated_forward_prefix_active = true;
+  authority.target_continuous = true;
+  authority.current_body_footprints_separated = true;
+  authority.footprint_prediction_valid = true;
+
+  PredictedFootprintOverlapConfirmationRequest confirmation;
+  confirmation.monitor_active = true;
+  confirmation.now_sec = 10.0;
+  confirmation.confirm_sec = 0.25;
+  auto overlap = update_predicted_footprint_overlap_confirmation(confirmation);
+  EXPECT_FALSE(overlap.confirmed);
+  authority.predicted_body_footprint_path_acceptable = !overlap.confirmed;
+  EXPECT_TRUE(can_handoff_dynamic_mission_wait_forward_authority(authority));
+
+  confirmation.overlap_since_sec = overlap.overlap_since_sec;
+  confirmation.now_sec = 10.24;
+  overlap = update_predicted_footprint_overlap_confirmation(confirmation);
+  EXPECT_FALSE(overlap.confirmed);
+  authority.predicted_body_footprint_path_acceptable = !overlap.confirmed;
+  EXPECT_TRUE(can_handoff_dynamic_mission_wait_forward_authority(authority));
+
+  confirmation.overlap_since_sec = overlap.overlap_since_sec;
+  confirmation.now_sec = 10.25;
+  overlap = update_predicted_footprint_overlap_confirmation(confirmation);
+  EXPECT_TRUE(overlap.confirmed);
+  authority.predicted_body_footprint_path_acceptable = !overlap.confirmed;
+  EXPECT_FALSE(can_handoff_dynamic_mission_wait_forward_authority(authority));
+
+  confirmation.monitor_active = false;
+  overlap = update_predicted_footprint_overlap_confirmation(confirmation);
+  EXPECT_TRUE(std::isnan(overlap.overlap_since_sec));
 }
 
 TEST(V2XOvertakeCoreMissionOwnership, MissionLockOwnsPausedMissionSide)

@@ -14146,4 +14146,196 @@ TEST(V2XOvertakeCoreFrenetDpCorridor, AdmitsMovingCorridorWithoutFixedGoalInters
   EXPECT_LE(midpoint, 1.60);
 }
 
+TEST(V2XOvertakeCoreFrenetDpExecution, ResamplesCoveredPrefixAndKeepsFallbackTail)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpExecutionReferenceRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frenet_dp_execution_reference;
+
+  FrenetDpExecutionReferenceRequest request;
+  request.enabled = true;
+  request.traveled_distance_m = 1.0;
+  request.source_path_distances_m = {0.0, 2.0, 4.0};
+  request.source_lateral_path_m = {0.0, 1.0, 1.5};
+  request.horizon_path_distances_m = {0.0, 1.0, 2.0, 4.0};
+  request.fallback_lateral_targets_m = {0.2, 0.4, 0.6, 0.8};
+
+  const auto resolution = resolve_frenet_dp_execution_reference(request);
+  ASSERT_TRUE(resolution.valid);
+  ASSERT_TRUE(resolution.active);
+  EXPECT_FALSE(resolution.coverage_complete);
+  EXPECT_EQ(resolution.covered_sample_count, 3U);
+  ASSERT_EQ(resolution.lateral_targets_m.size(), 4U);
+  EXPECT_NEAR(resolution.lateral_targets_m[0], 0.5, 1e-9);
+  EXPECT_NEAR(resolution.lateral_targets_m[1], 1.0, 1e-9);
+  EXPECT_NEAR(resolution.lateral_targets_m[2], 1.25, 1e-9);
+  EXPECT_NEAR(resolution.lateral_targets_m[3], 0.8, 1e-9);
+  EXPECT_NEAR(resolution.remaining_distance_m, 3.0, 1e-9);
+}
+
+TEST(V2XOvertakeCoreFrenetDpExecution, ExhaustedPathFallsBackWithoutExtrapolation)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpExecutionReferenceRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frenet_dp_execution_reference;
+
+  FrenetDpExecutionReferenceRequest request;
+  request.enabled = true;
+  request.traveled_distance_m = 4.1;
+  request.source_path_distances_m = {0.0, 2.0, 4.0};
+  request.source_lateral_path_m = {0.0, 1.0, 1.5};
+  request.horizon_path_distances_m = {0.0, 1.0, 2.0};
+  request.fallback_lateral_targets_m = {0.3, 0.4, 0.5};
+
+  const auto resolution = resolve_frenet_dp_execution_reference(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.active);
+  EXPECT_EQ(resolution.covered_sample_count, 0U);
+  EXPECT_EQ(resolution.lateral_targets_m, request.fallback_lateral_targets_m);
+  EXPECT_DOUBLE_EQ(resolution.remaining_distance_m, 0.0);
+}
+
+TEST(V2XOvertakeCoreFrenetDpExecution, RejectsNonMonotonicSourcePath)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpExecutionReferenceRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frenet_dp_execution_reference;
+
+  FrenetDpExecutionReferenceRequest request;
+  request.enabled = true;
+  request.source_path_distances_m = {0.0, 2.0, 2.0};
+  request.source_lateral_path_m = {0.0, 1.0, 1.2};
+  request.horizon_path_distances_m = {0.0, 1.0};
+  request.fallback_lateral_targets_m = {0.0, 0.2};
+
+  const auto resolution = resolve_frenet_dp_execution_reference(request);
+  EXPECT_FALSE(resolution.valid);
+  EXPECT_FALSE(resolution.active);
+  EXPECT_EQ(resolution.lateral_targets_m, request.fallback_lateral_targets_m);
+}
+
+TEST(V2XOvertakeCoreFrenetDpExecution, DisabledModeKeepsLegacyReference)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpExecutionReferenceRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frenet_dp_execution_reference;
+
+  FrenetDpExecutionReferenceRequest request;
+  request.enabled = false;
+  request.horizon_path_distances_m = {0.0, 1.0};
+  request.fallback_lateral_targets_m = {0.1, 0.2};
+
+  const auto resolution = resolve_frenet_dp_execution_reference(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.active);
+  EXPECT_EQ(resolution.lateral_targets_m, request.fallback_lateral_targets_m);
+}
+
+TEST(V2XOvertakeCoreFrenetDpExecution, FullWallTailKeepsPathBeyondTargetWindow)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpCorridorRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorSample;
+  using multi_purpose_mpc_ros::v2x_overtake_core::solve_frenet_dp_corridor;
+
+  FrenetDpCorridorRequest request;
+  request.enabled = true;
+  request.current_lateral_m = 0.0;
+  request.maximum_lateral_slope = 0.60;
+  request.left.side_sign = 1;
+  request.left.samples = {
+    OvertakeMissionDynamicCorridorSample{0.0, -1.5, 1.5, true},
+    OvertakeMissionDynamicCorridorSample{2.0, -1.5, 1.5, true},
+    OvertakeMissionDynamicCorridorSample{4.0, 0.8, 1.4, true},
+    OvertakeMissionDynamicCorridorSample{6.0, 0.8, 1.4, true},
+    OvertakeMissionDynamicCorridorSample{8.0, -1.3, 1.3, true},
+    OvertakeMissionDynamicCorridorSample{12.0, -1.2, 1.2, true},
+    OvertakeMissionDynamicCorridorSample{16.0, -1.1, 1.1, true}};
+
+  const auto resolution = solve_frenet_dp_corridor(request);
+  ASSERT_TRUE(resolution.valid);
+  ASSERT_TRUE(resolution.left.feasible);
+  ASSERT_EQ(
+    resolution.left.path_distances_m.size(), request.left.samples.size());
+  EXPECT_DOUBLE_EQ(resolution.left.path_distances_m.back(), 16.0);
+  EXPECT_GE(resolution.left.lateral_path_m[2], 0.8);
+  EXPECT_GE(resolution.left.lateral_path_m[3], 0.8);
+  // With no incentive to cross the course after the target window, the
+  // motion cost retains the admitted side through the wall-only tail.
+  EXPECT_GT(resolution.left.lateral_path_m.back(), 0.0);
+}
+
+TEST(V2XOvertakeCoreFrenetDpExecution, RefreshRequiresFreshExactSameSidePath)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpExecutionRefreshRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frenet_dp_execution_refresh;
+
+  FrenetDpExecutionRefreshRequest request;
+  request.enabled = true;
+  request.active_execution = true;
+  request.target_matches = true;
+  request.prediction_fresh = true;
+  request.active_side_sign = 1;
+  request.candidate_side_sign = 1;
+  request.now_sec = 10.0;
+  request.last_refresh_sec = 9.8;
+  request.minimum_refresh_interval_sec = 0.10;
+  request.candidate_generated_at_sec = 9.95;
+  request.last_source_generated_at_sec = 9.7;
+  request.candidate_path_distances_m = {0.0, 5.0, 12.0};
+  request.candidate_lateral_path_m = {0.1, 0.8, 0.8};
+
+  auto resolution = resolve_frenet_dp_execution_refresh(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.refresh);
+
+  request.candidate_side_sign = -1;
+  resolution = resolve_frenet_dp_execution_refresh(request);
+  EXPECT_FALSE(resolution.refresh);
+
+  request.candidate_side_sign = 1;
+  request.target_matches = false;
+  resolution = resolve_frenet_dp_execution_refresh(request);
+  EXPECT_FALSE(resolution.refresh);
+
+  request.target_matches = true;
+  request.prediction_fresh = false;
+  resolution = resolve_frenet_dp_execution_refresh(request);
+  EXPECT_FALSE(resolution.refresh);
+}
+
+TEST(V2XOvertakeCoreFrenetDpExecution, RefreshRetainsOldPathUntilIntervalAndNewSource)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpExecutionRefreshRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frenet_dp_execution_refresh;
+
+  FrenetDpExecutionRefreshRequest request;
+  request.enabled = true;
+  request.active_execution = true;
+  request.target_matches = true;
+  request.prediction_fresh = true;
+  request.active_side_sign = -1;
+  request.candidate_side_sign = -1;
+  request.now_sec = 20.05;
+  request.last_refresh_sec = 20.0;
+  request.minimum_refresh_interval_sec = 0.10;
+  request.candidate_generated_at_sec = 20.04;
+  request.last_source_generated_at_sec = 19.9;
+  request.candidate_path_distances_m = {0.0, 4.0, 10.0};
+  request.candidate_lateral_path_m = {-0.1, -0.7, -0.7};
+
+  auto resolution = resolve_frenet_dp_execution_refresh(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.refresh);
+
+  request.now_sec = 20.10;
+  request.candidate_generated_at_sec = 19.9;
+  resolution = resolve_frenet_dp_execution_refresh(request);
+  EXPECT_FALSE(resolution.refresh);
+
+  request.candidate_generated_at_sec = 20.09;
+  request.candidate_path_distances_m = {0.0, 4.0, 4.0};
+  resolution = resolve_frenet_dp_execution_refresh(request);
+  EXPECT_FALSE(resolution.refresh);
+
+  request.candidate_path_distances_m = {0.0, 4.0, 10.0};
+  resolution = resolve_frenet_dp_execution_refresh(request);
+  EXPECT_TRUE(resolution.refresh);
+}
+
 }  // namespace

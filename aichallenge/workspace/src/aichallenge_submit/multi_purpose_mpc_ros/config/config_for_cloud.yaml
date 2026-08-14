@@ -611,6 +611,9 @@ mpc:
   v2x_overtake_mpcc_lite_prefix_terminal_distance: 2.0 # [m] terminal progress penalty beyond body-clear for incomplete rear-clear horizon
   v2x_overtake_mpcc_lite_same_side_max_lateral_adjustment: 0.35 # [m] paused Pass keeps its current side/line; only a small revalidated correction is allowed
   v2x_overtake_mpcc_frenet_dp_corridor_enabled: true # solve a continuous stage-wise left/right corridor before freezing one lateral goal
+  v2x_overtake_mpcc_frenet_dp_execution_enabled: true # execute the target corridor plus robust-wall tail through ShiftOut/Pass
+  v2x_overtake_mpcc_frenet_dp_rolling_refresh_enabled: true # atomically refresh only a fresh same-target/same-side DP path
+  v2x_overtake_mpcc_frenet_dp_rolling_refresh_interval_sec: 0.10 # [s] keep the last feasible path between updates
   v2x_overtake_mpcc_frenet_dp_lateral_bins: 12 # lateral discretization per dynamic corridor sample
   v2x_overtake_mpcc_frenet_dp_max_lateral_slope: 0.45 # [m/m] reject disconnected or excessively sharp corridor transitions
   v2x_overtake_mpcc_frenet_dp_current_anchor_weight: 2.0

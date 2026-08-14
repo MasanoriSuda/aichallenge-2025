@@ -2651,6 +2651,68 @@ double sample_frenet_dp_corridor_path(
   const FrenetDpCorridorBranchResolution & branch,
   double path_distance_m) noexcept;
 
+/// Validate a distance-domain lateral reference produced by the Frenet DP.
+/// Distances must be finite, non-negative and strictly increasing.
+bool is_valid_frenet_dp_execution_path(
+  const std::vector<double> & path_distances_m,
+  const std::vector<double> & lateral_path_m) noexcept;
+
+struct FrenetDpExecutionReferenceRequest
+{
+  bool enabled{false};
+  double traveled_distance_m{};
+  std::size_t minimum_covered_sample_count{2U};
+  std::vector<double> source_path_distances_m;
+  std::vector<double> source_lateral_path_m;
+  std::vector<double> horizon_path_distances_m;
+  std::vector<double> fallback_lateral_targets_m;
+};
+
+struct FrenetDpExecutionReferenceResolution
+{
+  bool valid{false};
+  bool active{false};
+  bool coverage_complete{false};
+  std::size_t covered_sample_count{};
+  double remaining_distance_m{};
+  std::vector<double> lateral_targets_m;
+};
+
+/// Align a frozen DP path with the current receding horizon. Covered samples
+/// use the interpolated DP reference; an uncovered tail retains the caller's
+/// legacy lateral targets. Once the useful prefix is exhausted, the complete
+/// result falls back without extrapolating the last DP point indefinitely.
+FrenetDpExecutionReferenceResolution resolve_frenet_dp_execution_reference(
+  const FrenetDpExecutionReferenceRequest & request) noexcept;
+
+struct FrenetDpExecutionRefreshRequest
+{
+  bool enabled{false};
+  bool active_execution{false};
+  bool target_matches{false};
+  bool prediction_fresh{false};
+  int active_side_sign{};
+  int candidate_side_sign{};
+  double now_sec{};
+  double last_refresh_sec{-std::numeric_limits<double>::infinity()};
+  double minimum_refresh_interval_sec{};
+  double candidate_generated_at_sec{-std::numeric_limits<double>::infinity()};
+  double last_source_generated_at_sec{-std::numeric_limits<double>::infinity()};
+  std::vector<double> candidate_path_distances_m;
+  std::vector<double> candidate_lateral_path_m;
+};
+
+struct FrenetDpExecutionRefreshResolution
+{
+  bool valid{false};
+  bool refresh{false};
+};
+
+/// Admit an atomic same-target/same-side refresh of the active DP execution
+/// reference.  A rejected refresh never invalidates the current feasible path.
+FrenetDpExecutionRefreshResolution resolve_frenet_dp_execution_refresh(
+  const FrenetDpExecutionRefreshRequest & request) noexcept;
+
 enum class OvertakeMissionCorridorSource
 {
   None,
@@ -2810,6 +2872,8 @@ struct OvertakeMissionCandidate
   bool frenet_dp_corridor_feasible{false};
   bool frenet_dp_prefix_bridge{false};
   double frenet_dp_normalized_cost{std::numeric_limits<double>::quiet_NaN()};
+  std::vector<double> frenet_dp_path_distances_m{};
+  std::vector<double> frenet_dp_lateral_path_m{};
 };
 
 /// A Mission which changes from outer to inner before rear-clear may only be

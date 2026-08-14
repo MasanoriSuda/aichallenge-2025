@@ -4438,6 +4438,140 @@ double sample_frenet_dp_corridor_path(
     (branch.lateral_path_m[upper_index] - branch.lateral_path_m[lower_index]);
 }
 
+bool is_valid_frenet_dp_execution_path(
+  const std::vector<double> & path_distances_m,
+  const std::vector<double> & lateral_path_m) noexcept
+{
+  if (
+    path_distances_m.size() < 2U ||
+    path_distances_m.size() != lateral_path_m.size())
+  {
+    return false;
+  }
+  double previous_distance = -std::numeric_limits<double>::infinity();
+  for (std::size_t i = 0U; i < path_distances_m.size(); ++i) {
+    const double distance = path_distances_m[i];
+    if (
+      !std::isfinite(distance) || distance < 0.0 ||
+      !std::isfinite(lateral_path_m[i]) ||
+      (i > 0U && distance <= previous_distance + 1e-9))
+    {
+      return false;
+    }
+    previous_distance = distance;
+  }
+  return true;
+}
+
+FrenetDpExecutionReferenceResolution resolve_frenet_dp_execution_reference(
+  const FrenetDpExecutionReferenceRequest & request) noexcept
+{
+  FrenetDpExecutionReferenceResolution resolution;
+  resolution.lateral_targets_m = request.fallback_lateral_targets_m;
+  if (!request.enabled) {
+    resolution.valid = true;
+    return resolution;
+  }
+  if (
+    !std::isfinite(request.traveled_distance_m) || request.traveled_distance_m < 0.0 ||
+    request.horizon_path_distances_m.empty() ||
+    request.horizon_path_distances_m.size() != request.fallback_lateral_targets_m.size() ||
+    !is_valid_frenet_dp_execution_path(
+      request.source_path_distances_m, request.source_lateral_path_m))
+  {
+    return resolution;
+  }
+  double previous_horizon_distance = -std::numeric_limits<double>::infinity();
+  for (std::size_t i = 0U; i < request.horizon_path_distances_m.size(); ++i) {
+    const double horizon_distance = request.horizon_path_distances_m[i];
+    if (
+      !std::isfinite(horizon_distance) || horizon_distance < 0.0 ||
+      !std::isfinite(request.fallback_lateral_targets_m[i]) ||
+      (i > 0U && horizon_distance + 1e-9 < previous_horizon_distance))
+    {
+      return resolution;
+    }
+    previous_horizon_distance = horizon_distance;
+  }
+
+  resolution.valid = true;
+  const double path_end_distance = request.source_path_distances_m.back();
+  resolution.remaining_distance_m = std::max(
+    0.0, path_end_distance - request.traveled_distance_m);
+  FrenetDpCorridorBranchResolution branch;
+  branch.feasible = true;
+  branch.path_distances_m = request.source_path_distances_m;
+  branch.lateral_path_m = request.source_lateral_path_m;
+  for (std::size_t i = 0U; i < request.horizon_path_distances_m.size(); ++i) {
+    const double source_distance =
+      request.traveled_distance_m + request.horizon_path_distances_m[i];
+    if (source_distance > path_end_distance + 1e-9) {
+      continue;
+    }
+    const double lateral_target = sample_frenet_dp_corridor_path(branch, source_distance);
+    if (!std::isfinite(lateral_target)) {
+      resolution.valid = false;
+      resolution.active = false;
+      resolution.coverage_complete = false;
+      resolution.covered_sample_count = 0U;
+      resolution.lateral_targets_m = request.fallback_lateral_targets_m;
+      return resolution;
+    }
+    resolution.lateral_targets_m[i] = lateral_target;
+    ++resolution.covered_sample_count;
+  }
+  const std::size_t required_coverage = std::min(
+    std::max<std::size_t>(1U, request.minimum_covered_sample_count),
+    request.horizon_path_distances_m.size());
+  resolution.active = resolution.covered_sample_count >= required_coverage;
+  resolution.coverage_complete =
+    resolution.covered_sample_count == request.horizon_path_distances_m.size();
+  if (!resolution.active) {
+    resolution.lateral_targets_m = request.fallback_lateral_targets_m;
+  }
+  return resolution;
+}
+
+FrenetDpExecutionRefreshResolution resolve_frenet_dp_execution_refresh(
+  const FrenetDpExecutionRefreshRequest & request) noexcept
+{
+  FrenetDpExecutionRefreshResolution resolution;
+  if (
+    !std::isfinite(request.now_sec) ||
+    !std::isfinite(request.minimum_refresh_interval_sec) ||
+    request.minimum_refresh_interval_sec < 0.0 ||
+    (request.active_side_sign != -1 && request.active_side_sign != 0 &&
+    request.active_side_sign != 1) ||
+    (request.candidate_side_sign != -1 && request.candidate_side_sign != 0 &&
+    request.candidate_side_sign != 1))
+  {
+    return resolution;
+  }
+  resolution.valid = true;
+  if (!request.enabled) {
+    return resolution;
+  }
+  const bool refresh_interval_elapsed =
+    !std::isfinite(request.last_refresh_sec) ||
+    (request.now_sec + 1e-9 >= request.last_refresh_sec &&
+    request.now_sec - request.last_refresh_sec + 1e-9 >=
+    request.minimum_refresh_interval_sec);
+  const bool source_is_newer =
+    std::isfinite(request.candidate_generated_at_sec) &&
+    (!std::isfinite(request.last_source_generated_at_sec) ||
+    request.candidate_generated_at_sec >
+    request.last_source_generated_at_sec + 1e-9);
+  resolution.refresh =
+    request.active_execution && request.target_matches &&
+    request.prediction_fresh && request.active_side_sign != 0 &&
+    request.candidate_side_sign == request.active_side_sign &&
+    refresh_interval_elapsed && source_is_newer &&
+    is_valid_frenet_dp_execution_path(
+      request.candidate_path_distances_m,
+      request.candidate_lateral_path_m);
+  return resolution;
+}
+
 FrenetDpCorridorResolution solve_frenet_dp_corridor(
   const FrenetDpCorridorRequest & request) noexcept
 {
@@ -5104,7 +5238,10 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
         !candidate.frenet_dp_corridor_checked ||
         (candidate.frenet_dp_corridor_feasible &&
         std::isfinite(candidate.frenet_dp_normalized_cost) &&
-        candidate.frenet_dp_normalized_cost >= 0.0);
+        candidate.frenet_dp_normalized_cost >= 0.0 &&
+        is_valid_frenet_dp_execution_path(
+          candidate.frenet_dp_path_distances_m,
+          candidate.frenet_dp_lateral_path_m));
       const auto course_role_valid = [](const PassSideCourseRole role) {
           return role == PassSideCourseRole::Unknown ||
                  role == PassSideCourseRole::Inner ||

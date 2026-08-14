@@ -4469,6 +4469,32 @@ resolve_static_fallback_entry_motion_admission(
   return resolution;
 }
 
+RollingSameSideLateralAdmissionResolution
+resolve_rolling_same_side_lateral_admission(
+  const RollingSameSideLateralAdmissionRequest & request) noexcept
+{
+  constexpr double kLateralAdjustmentEpsilon = 1e-9;
+  RollingSameSideLateralAdmissionResolution resolution;
+  if (
+    !std::isfinite(request.current_lateral_m) ||
+    !std::isfinite(request.candidate_goal_lateral_m) ||
+    !std::isfinite(request.maximum_lateral_adjustment_m) ||
+    request.maximum_lateral_adjustment_m < 0.0)
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  resolution.guard_applied = request.guard_enabled;
+  resolution.lateral_adjustment_m = std::abs(
+    request.candidate_goal_lateral_m - request.current_lateral_m);
+  resolution.admitted =
+    !resolution.guard_applied ||
+    resolution.lateral_adjustment_m <=
+    request.maximum_lateral_adjustment_m + kLateralAdjustmentEpsilon;
+  return resolution;
+}
+
 bool is_full_track_transition_admitted(
   const bool full_track_transition_before_rear_clear,
   const bool scheduled_transition_validated) noexcept

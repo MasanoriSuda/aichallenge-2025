@@ -2628,6 +2628,29 @@ StaticFallbackEntryMotionAdmissionResolution
 resolve_static_fallback_entry_motion_admission(
   const StaticFallbackEntryMotionAdmissionRequest & request) noexcept;
 
+struct RollingSameSideLateralAdmissionRequest
+{
+  bool guard_enabled{false};
+  double current_lateral_m{};
+  double candidate_goal_lateral_m{};
+  double maximum_lateral_adjustment_m{};
+};
+
+struct RollingSameSideLateralAdmissionResolution
+{
+  bool valid{false};
+  bool admitted{false};
+  bool guard_applied{false};
+  double lateral_adjustment_m{};
+};
+
+/// Bound a tactical same-side continuation to a small correction from the
+/// current measured lateral position. This guard is deliberately independent
+/// of pass-side sign so left and right continuations remain symmetric.
+RollingSameSideLateralAdmissionResolution
+resolve_rolling_same_side_lateral_admission(
+  const RollingSameSideLateralAdmissionRequest & request) noexcept;
+
 struct OvertakeMissionCandidate
 {
   bool feasible{false};

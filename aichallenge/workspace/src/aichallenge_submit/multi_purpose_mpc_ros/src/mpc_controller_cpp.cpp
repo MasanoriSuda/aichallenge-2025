@@ -1514,6 +1514,7 @@ struct OvertakeLineConfig
   double mpcc_lite_locked_target_near_field_distance{6.0};
   double mpcc_lite_prefix_terminal_time_sec{0.75};
   double mpcc_lite_prefix_terminal_distance{2.0};
+  double mpcc_lite_same_side_max_lateral_adjustment{0.35};
   double safe_separation_soft_prediction_grace_sec{0.25};
   bool safe_separation_full_speed_forward_escape_enabled{false};
   bool safe_separation_rearward_progress_time_grace_enabled{false};
@@ -7773,6 +7774,7 @@ struct MPC
         overtake_core::OvertakeMissionDynamicCorridorResolution first_dynamic_rejection;
         bool first_dynamic_rejection_available = false;
         std::size_t evaluated_goal_count = 0;
+        std::size_t rolling_lateral_adjustment_reject_count = 0;
         std::size_t body_clear_deadline_miss_count = 0;
         std::size_t body_clear_deadline_invalid_count = 0;
         std::size_t rollout_lateral_reject_count = 0;
@@ -7891,6 +7893,12 @@ struct MPC
                 goal_candidates.push_back(bounded);
               }
             };
+          // A paused Pass already owns a usable lateral position. Revalidate
+          // that current line first instead of treating the pause as a fresh
+          // ShiftOut toward a distant corridor goal.
+          if (rolling_current_side_prefix_assessment) {
+            add_goal(model->spatial_state.e_y);
+          }
           if (preferred_minimum_motion_goal.valid) {
             add_goal(preferred_minimum_motion_goal.goal_m);
           }
@@ -7913,6 +7921,21 @@ struct MPC
             goal_lower + 0.25 * (goal_upper - goal_lower));
 
           for (const double preferred_goal : goal_candidates) {
+            const auto early_lateral_admission =
+              overtake_core::resolve_rolling_same_side_lateral_admission(
+              overtake_core::RollingSameSideLateralAdmissionRequest{
+                rolling_current_side_prefix_assessment,
+                model->spatial_state.e_y,
+                preferred_goal,
+                cfg.v2x_behavior.overtake_line.
+                mpcc_lite_same_side_max_lateral_adjustment});
+            if (
+              !early_lateral_admission.valid ||
+              !early_lateral_admission.admitted)
+            {
+              ++rolling_lateral_adjustment_reject_count;
+              continue;
+            }
             ++evaluated_goal_count;
             const bool straight_outer_clearance_goal =
               available_straight_outer_clearance_bias_m > kEps &&
@@ -7930,6 +7953,21 @@ struct MPC
             }
             const double candidate_entry_lateral_shift =
               std::abs(preflight.goal_ey - model->spatial_state.e_y);
+            const auto validated_lateral_admission =
+              overtake_core::resolve_rolling_same_side_lateral_admission(
+              overtake_core::RollingSameSideLateralAdmissionRequest{
+                rolling_current_side_prefix_assessment,
+                model->spatial_state.e_y,
+                preflight.goal_ey,
+                cfg.v2x_behavior.overtake_line.
+                mpcc_lite_same_side_max_lateral_adjustment});
+            if (
+              !validated_lateral_admission.valid ||
+              !validated_lateral_admission.admitted)
+            {
+              ++rolling_lateral_adjustment_reject_count;
+              continue;
+            }
             const auto static_fallback_entry_admission =
               overtake_core::resolve_static_fallback_entry_motion_admission(
               overtake_core::StaticFallbackEntryMotionAdmissionRequest{
@@ -8650,6 +8688,8 @@ struct MPC
              << ", shift_candidates=" << shift_distance_candidates.size()
              << ", closing_candidates=" << closing_speed_candidates.size()
              << ", goal_candidates=" << evaluated_goal_count
+             << ", rolling_lateral_rejected=" <<
+            rolling_lateral_adjustment_reject_count
              << ", body_deadline_missed=" << body_clear_deadline_miss_count
              << ", body_deadline_invalid=" << body_clear_deadline_invalid_count
              << ", rollout_lateral_rejected=" << rollout_lateral_reject_count
@@ -14184,10 +14224,10 @@ private:
         rclcpp::get_logger("mpc_controller"),
         side_changed ?
         "OvertakeLine opponent side PassPlan replaced: target=%s, side=%d->%d, "
-        "phase=%s, generation=%lu, mode=%s, goal=%.2f, shift=%.2f, "
+        "phase=%s, generation=%lu, mode=%s, goal=%.2f, dy=%.2f, shift=%.2f, "
         "pass_traveled=%.2f, scheduled_transition=%d/%d, count=%d/%d, wp_id=%d" :
         "OvertakeLine fresh same-side PassPlan replaced: target=%s, side=%d->%d, "
-        "phase=%s, generation=%lu, mode=%s, goal=%.2f, shift=%.2f, "
+        "phase=%s, generation=%lu, mode=%s, goal=%.2f, dy=%.2f, shift=%.2f, "
         "pass_traveled=%.2f, scheduled_transition=%d/%d, count=%d/%d, wp_id=%d",
         overtake_line_state_.target_vehicle_id.c_str(), previous_side,
         candidate.pass_side_sign, to_string(overtake_line_state_.phase),
@@ -14195,7 +14235,8 @@ private:
         paused_pass_continuation ?
         overtake_core::to_string(paused_replacement_execution_mode) :
         (progressive_prefix_replacement ? "receding-prefix" : "complete-mission"),
-        candidate.goal_lateral_m, candidate.shift_distance_m,
+        candidate.goal_lateral_m,
+        std::abs(candidate.goal_lateral_m - current_ey), candidate.shift_distance_m,
         current_pass_traveled_m,
         candidate.outer_transition_required ? 1 : 0,
         candidate.outer_transition_preflight_validated ? 1 : 0,
@@ -25463,6 +25504,12 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_mpcc_lite_prefix_terminal_distance"] ?
     mpc["v2x_overtake_mpcc_lite_prefix_terminal_distance"].as<double>() : 2.0);
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_lite_same_side_max_lateral_adjustment =
+    std::max(
+    0.0,
+    mpc["v2x_overtake_mpcc_lite_same_side_max_lateral_adjustment"] ?
+    mpc["v2x_overtake_mpcc_lite_same_side_max_lateral_adjustment"].as<double>() :
+    0.35);
   cfg.mpc.v2x_behavior.overtake_line.safe_separation_soft_prediction_grace_sec = std::max(
     0.0,
     mpc["v2x_overtake_safe_separation_soft_prediction_grace_sec"] ?
@@ -27467,7 +27514,7 @@ public:
         get_logger(),
         "V2X MPCC-lite: %s, evaluate=%.3f s (%.1f Hz), log=%.2f s, "
         "last_feasible<=%.2f s, control=%s, near_target<=%.2f m, "
-        "prefix_terminal=%.2f s/%.2f m",
+        "prefix_terminal=%.2f s/%.2f m, same_side_dy<=%.2f m",
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_shadow_enabled ?
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_shadow_evaluation_interval_sec,
@@ -27481,7 +27528,9 @@ public:
         "entry+same_side" : "none",
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_locked_target_near_field_distance,
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_prefix_terminal_time_sec,
-        mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_prefix_terminal_distance);
+        mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_prefix_terminal_distance,
+        mpc_cfg_.v2x_behavior.overtake_line.
+        mpcc_lite_same_side_max_lateral_adjustment);
     }
     if (mpc_cfg_.v2x_behavior.low_speed_avoidance_enabled) {
       RCLCPP_INFO(

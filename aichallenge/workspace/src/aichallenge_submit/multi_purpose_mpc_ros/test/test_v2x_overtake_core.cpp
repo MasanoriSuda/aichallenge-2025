@@ -147,6 +147,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorSa
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCorridorAdmissionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCorridorSource;
 using multi_purpose_mpc_ros::v2x_overtake_core::StaticFallbackEntryMotionAdmissionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::RollingSameSideLateralAdmissionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakePassPlanRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeBodyClearDeadlineRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntryDeadlineMarginRequest;
@@ -228,6 +229,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_mission_dynamic
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_mission_corridor_admission;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   resolve_static_fallback_entry_motion_admission;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  resolve_rolling_same_side_lateral_admission;
 using multi_purpose_mpc_ros::v2x_overtake_core::build_overtake_pass_plan;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_body_clear_deadline;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_entry_deadline_margin;
@@ -3571,6 +3574,55 @@ TEST(V2XOvertakeCoreSpeed, RejectsInvalidStaticFallbackEntryMotionInput)
   request.corridor_source = OvertakeMissionCorridorSource::StaticWallFallback;
   request.lateral_shift_m = std::numeric_limits<double>::quiet_NaN();
   resolution = resolve_static_fallback_entry_motion_admission(request);
+  EXPECT_FALSE(resolution.valid);
+  EXPECT_FALSE(resolution.admitted);
+}
+
+TEST(V2XOvertakeCoreSpeed, BoundsRollingSameSideLateralAdjustmentSymmetrically)
+{
+  RollingSameSideLateralAdmissionRequest request;
+  request.guard_enabled = true;
+  request.maximum_lateral_adjustment_m = 0.35;
+
+  request.current_lateral_m = 1.92;
+  request.candidate_goal_lateral_m = 0.45;
+  auto resolution = resolve_rolling_same_side_lateral_admission(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.guard_applied);
+  EXPECT_NEAR(resolution.lateral_adjustment_m, 1.47, 1e-9);
+  EXPECT_FALSE(resolution.admitted);
+
+  request.candidate_goal_lateral_m = 1.70;
+  resolution = resolve_rolling_same_side_lateral_admission(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_NEAR(resolution.lateral_adjustment_m, 0.22, 1e-9);
+  EXPECT_TRUE(resolution.admitted);
+
+  request.current_lateral_m = -1.92;
+  request.candidate_goal_lateral_m = -1.70;
+  resolution = resolve_rolling_same_side_lateral_admission(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_NEAR(resolution.lateral_adjustment_m, 0.22, 1e-9);
+  EXPECT_TRUE(resolution.admitted);
+}
+
+TEST(V2XOvertakeCoreSpeed, RollingSameSideLateralGuardIsScopedAndFailClosed)
+{
+  RollingSameSideLateralAdmissionRequest request;
+  request.guard_enabled = false;
+  request.current_lateral_m = 1.92;
+  request.candidate_goal_lateral_m = 0.45;
+  request.maximum_lateral_adjustment_m = 0.35;
+
+  auto resolution = resolve_rolling_same_side_lateral_admission(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.guard_applied);
+  EXPECT_TRUE(resolution.admitted);
+
+  request.guard_enabled = true;
+  request.maximum_lateral_adjustment_m =
+    std::numeric_limits<double>::quiet_NaN();
+  resolution = resolve_rolling_same_side_lateral_admission(request);
   EXPECT_FALSE(resolution.valid);
   EXPECT_FALSE(resolution.admitted);
 }

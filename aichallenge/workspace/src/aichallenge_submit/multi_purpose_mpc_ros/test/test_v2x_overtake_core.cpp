@@ -136,6 +136,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonLateralRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonLateralSample;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonExecutionLeaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::TargetBoundPassHoldRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::TargetBoundPassHoldLifecycleRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonTargetBoundsRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonElasticTargetBoundsRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonTargetPredictionRequest;
@@ -426,6 +427,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_entry_stage;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   can_retain_receding_horizon_execution_lease;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_hold_target_bound_pass_for_replan;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_target_bound_pass_hold_lifecycle;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_completion_rollout_speed;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_rearward_pass_completion_context;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_observe_locked_target_geometry;
@@ -3431,6 +3433,80 @@ TEST(V2XOvertakeCoreSpeed, TargetBoundPassHoldCannotBypassHardFaults)
   request.emergency_front_risk = false;
   request.target_position_jump = true;
   EXPECT_FALSE(can_hold_target_bound_pass_for_replan(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, TargetBoundPassHoldLifecycleRequiresStableFreshHorizon)
+{
+  TargetBoundPassHoldLifecycleRequest request;
+  request.target_bound_failure = true;
+  request.now_sec = 10.0;
+  request.clear_stable_sec = 0.20;
+
+  auto resolution = resolve_target_bound_pass_hold_lifecycle(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.hold_active);
+  EXPECT_TRUE(resolution.started);
+  EXPECT_FALSE(resolution.released);
+  EXPECT_FALSE(std::isfinite(resolution.clear_since_sec));
+
+  request.hold_active = true;
+  request.target_bound_failure = false;
+  request.fresh_horizon_active = true;
+  request.now_sec = 10.05;
+  resolution = resolve_target_bound_pass_hold_lifecycle(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.hold_active);
+  EXPECT_FALSE(resolution.released);
+  EXPECT_DOUBLE_EQ(resolution.clear_since_sec, 10.05);
+
+  request.clear_since_sec = resolution.clear_since_sec;
+  request.now_sec = 10.24;
+  resolution = resolve_target_bound_pass_hold_lifecycle(request);
+  EXPECT_TRUE(resolution.hold_active);
+  EXPECT_FALSE(resolution.released);
+
+  request.now_sec = 10.25;
+  resolution = resolve_target_bound_pass_hold_lifecycle(request);
+  EXPECT_FALSE(resolution.hold_active);
+  EXPECT_TRUE(resolution.released);
+}
+
+TEST(V2XOvertakeCoreSpeed, TargetBoundPassHoldLifecycleDoesNotRearmOnChatter)
+{
+  TargetBoundPassHoldLifecycleRequest request;
+  request.hold_active = true;
+  request.fresh_horizon_active = true;
+  request.now_sec = 5.0;
+  request.clear_stable_sec = 0.20;
+
+  auto resolution = resolve_target_bound_pass_hold_lifecycle(request);
+  ASSERT_TRUE(resolution.valid);
+  ASSERT_TRUE(resolution.hold_active);
+  ASSERT_DOUBLE_EQ(resolution.clear_since_sec, 5.0);
+
+  request.target_bound_failure = true;
+  request.fresh_horizon_active = false;
+  request.clear_since_sec = resolution.clear_since_sec;
+  request.now_sec = 5.10;
+  resolution = resolve_target_bound_pass_hold_lifecycle(request);
+  EXPECT_TRUE(resolution.hold_active);
+  EXPECT_FALSE(resolution.started);
+  EXPECT_FALSE(resolution.released);
+  EXPECT_FALSE(std::isfinite(resolution.clear_since_sec));
+}
+
+TEST(V2XOvertakeCoreSpeed, TargetBoundPassHoldLifecycleRejectsInvalidTiming)
+{
+  TargetBoundPassHoldLifecycleRequest request;
+  request.hold_active = true;
+  request.fresh_horizon_active = true;
+  request.now_sec = 1.0;
+  request.clear_since_sec = 2.0;
+  request.clear_stable_sec = 0.20;
+
+  const auto resolution = resolve_target_bound_pass_hold_lifecycle(request);
+  EXPECT_FALSE(resolution.valid);
+  EXPECT_FALSE(resolution.hold_active);
 }
 
 TEST(V2XOvertakeCoreSpeed, TightensPassGoalForDynamicShiftOutCorridor)

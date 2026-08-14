@@ -1139,6 +1139,33 @@ struct TargetBoundPassHoldRequest
 bool can_hold_target_bound_pass_for_replan(
   const TargetBoundPassHoldRequest & request) noexcept;
 
+struct TargetBoundPassHoldLifecycleRequest
+{
+  bool hold_active{false};
+  bool target_bound_failure{false};
+  bool fresh_horizon_active{false};
+  double now_sec{};
+  double clear_since_sec{std::numeric_limits<double>::quiet_NaN()};
+  double clear_stable_sec{};
+};
+
+struct TargetBoundPassHoldLifecycleResolution
+{
+  bool valid{false};
+  bool hold_active{false};
+  bool started{false};
+  bool released{false};
+  double clear_since_sec{std::numeric_limits<double>::quiet_NaN()};
+};
+
+/// Preserve one cumulative target-bound Pass-prefix budget across intermittent
+/// feasible optimizer results. A target-bound failure clears the stability
+/// timer, while a fresh horizon must remain continuous for clear_stable_sec
+/// before the budget is released. This prevents one-cycle solution chatter
+/// from silently rearming the bounded forward-continuation window.
+TargetBoundPassHoldLifecycleResolution resolve_target_bound_pass_hold_lifecycle(
+  const TargetBoundPassHoldLifecycleRequest & request) noexcept;
+
 struct OvertakeBodyClearDeadlineRequest
 {
   bool enabled{false};

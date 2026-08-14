@@ -1794,6 +1794,45 @@ bool can_hold_target_bound_pass_for_replan(
          request.hold_traveled_m < request.maximum_hold_distance_m - 1e-9;
 }
 
+TargetBoundPassHoldLifecycleResolution resolve_target_bound_pass_hold_lifecycle(
+  const TargetBoundPassHoldLifecycleRequest & request) noexcept
+{
+  TargetBoundPassHoldLifecycleResolution resolution;
+  if (
+    !std::isfinite(request.now_sec) ||
+    !std::isfinite(request.clear_stable_sec) || request.clear_stable_sec < 0.0 ||
+    (std::isfinite(request.clear_since_sec) &&
+    request.clear_since_sec > request.now_sec + 1e-9))
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  if (request.target_bound_failure) {
+    resolution.hold_active = true;
+    resolution.started = !request.hold_active;
+    return resolution;
+  }
+  if (!request.hold_active) {
+    return resolution;
+  }
+  if (!request.fresh_horizon_active) {
+    resolution.released = true;
+    return resolution;
+  }
+
+  const double clear_since_sec = std::isfinite(request.clear_since_sec) ?
+    request.clear_since_sec : request.now_sec;
+  if (request.now_sec - clear_since_sec + 1e-9 >= request.clear_stable_sec) {
+    resolution.released = true;
+    return resolution;
+  }
+
+  resolution.hold_active = true;
+  resolution.clear_since_sec = clear_since_sec;
+  return resolution;
+}
+
 OvertakeBodyClearDeadlineResolution resolve_overtake_body_clear_deadline(
   const OvertakeBodyClearDeadlineRequest & request) noexcept
 {

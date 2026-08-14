@@ -1144,6 +1144,11 @@ struct TargetBoundPassHoldLifecycleRequest
   bool hold_active{false};
   bool target_bound_failure{false};
   bool fresh_horizon_active{false};
+  /// An explicit non-target hard failure revokes the cumulative hold.  A
+  /// cycle with neither a fresh horizon nor this flag is only a neutral
+  /// planner/tactical gap and retains the original budget bookkeeping.
+  bool hard_failure{false};
+  bool budget_exhausted{false};
   double now_sec{};
   double clear_since_sec{std::numeric_limits<double>::quiet_NaN()};
   double clear_stable_sec{};
@@ -1155,14 +1160,19 @@ struct TargetBoundPassHoldLifecycleResolution
   bool hold_active{false};
   bool started{false};
   bool released{false};
+  bool revoked{false};
+  bool exhausted{false};
   double clear_since_sec{std::numeric_limits<double>::quiet_NaN()};
 };
 
 /// Preserve one cumulative target-bound Pass-prefix budget across intermittent
 /// feasible optimizer results. A target-bound failure clears the stability
 /// timer, while a fresh horizon must remain continuous for clear_stable_sec
-/// before the budget is released. This prevents one-cycle solution chatter
-/// from silently rearming the bounded forward-continuation window.
+/// before the budget is released. A neutral planner gap retains bookkeeping;
+/// only an explicit non-target hard failure revokes it. Budget exhaustion
+/// terminates retained bookkeeping even during a neutral gap. This prevents
+/// solution/tactical chatter from silently rearming the bounded forward-
+/// continuation window.
 TargetBoundPassHoldLifecycleResolution resolve_target_bound_pass_hold_lifecycle(
   const TargetBoundPassHoldLifecycleRequest & request) noexcept;
 

@@ -1808,6 +1808,14 @@ TargetBoundPassHoldLifecycleResolution resolve_target_bound_pass_hold_lifecycle(
   }
 
   resolution.valid = true;
+  if (request.hard_failure) {
+    resolution.revoked = request.hold_active;
+    return resolution;
+  }
+  if (request.budget_exhausted) {
+    resolution.exhausted = request.hold_active;
+    return resolution;
+  }
   if (request.target_bound_failure) {
     resolution.hold_active = true;
     resolution.started = !request.hold_active;
@@ -1817,7 +1825,10 @@ TargetBoundPassHoldLifecycleResolution resolve_target_bound_pass_hold_lifecycle(
     return resolution;
   }
   if (!request.fresh_horizon_active) {
-    resolution.released = true;
+    // A planner/tactical cycle may provide neither a target-bound failure nor
+    // a fresh executable horizon. Keep the original cumulative hold budget,
+    // but leave execution authority to the caller for this neutral gap.
+    resolution.hold_active = true;
     return resolution;
   }
 

@@ -3495,6 +3495,54 @@ TEST(V2XOvertakeCoreSpeed, TargetBoundPassHoldLifecycleDoesNotRearmOnChatter)
   EXPECT_FALSE(std::isfinite(resolution.clear_since_sec));
 }
 
+TEST(V2XOvertakeCoreSpeed, TargetBoundPassHoldLifecycleRetainsNeutralPlannerGap)
+{
+  TargetBoundPassHoldLifecycleRequest request;
+  request.hold_active = true;
+  request.now_sec = 7.0;
+  request.clear_since_sec = 6.9;
+  request.clear_stable_sec = 0.20;
+
+  const auto resolution = resolve_target_bound_pass_hold_lifecycle(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.hold_active);
+  EXPECT_FALSE(resolution.started);
+  EXPECT_FALSE(resolution.released);
+  EXPECT_FALSE(resolution.revoked);
+  EXPECT_FALSE(std::isfinite(resolution.clear_since_sec));
+}
+
+TEST(V2XOvertakeCoreSpeed, TargetBoundPassHoldLifecycleRevokesExplicitHardFailure)
+{
+  TargetBoundPassHoldLifecycleRequest request;
+  request.hold_active = true;
+  request.hard_failure = true;
+  request.now_sec = 8.0;
+  request.clear_stable_sec = 0.20;
+
+  const auto resolution = resolve_target_bound_pass_hold_lifecycle(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.hold_active);
+  EXPECT_FALSE(resolution.released);
+  EXPECT_TRUE(resolution.revoked);
+}
+
+TEST(V2XOvertakeCoreSpeed, TargetBoundPassHoldLifecycleEndsAtBudgetDuringNeutralGap)
+{
+  TargetBoundPassHoldLifecycleRequest request;
+  request.hold_active = true;
+  request.budget_exhausted = true;
+  request.now_sec = 9.0;
+  request.clear_stable_sec = 0.20;
+
+  const auto resolution = resolve_target_bound_pass_hold_lifecycle(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.hold_active);
+  EXPECT_FALSE(resolution.released);
+  EXPECT_FALSE(resolution.revoked);
+  EXPECT_TRUE(resolution.exhausted);
+}
+
 TEST(V2XOvertakeCoreSpeed, TargetBoundPassHoldLifecycleRejectsInvalidTiming)
 {
   TargetBoundPassHoldLifecycleRequest request;

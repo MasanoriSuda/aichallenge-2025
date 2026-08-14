@@ -4988,6 +4988,19 @@ enum class PausedExecutionOrigin
   Recovery,
 };
 
+enum class PausedReplacementExecutionMode
+{
+  RestartShiftOut,
+  ContinuePass,
+};
+
+/// A fresh same-side Mission selected while a Pass is paused is a remaining
+/// Pass trajectory, not a new overtake entry. Cross-side replacement and a
+/// paused ShiftOut still need ShiftOut execution semantics.
+PausedReplacementExecutionMode resolve_paused_replacement_execution_mode(
+  PausedExecutionOrigin origin, bool side_changed) noexcept;
+const char * to_string(PausedReplacementExecutionMode mode) noexcept;
+
 enum class PausedExecutionResumeAction
 {
   Hold,

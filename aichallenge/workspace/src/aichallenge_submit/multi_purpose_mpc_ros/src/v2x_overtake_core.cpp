@@ -8499,6 +8499,25 @@ bool can_resume_paused_pass_directly(
          goal_lateral_clear && predicted_goal_lateral_clear;
 }
 
+PausedReplacementExecutionMode resolve_paused_replacement_execution_mode(
+  const PausedExecutionOrigin origin, const bool side_changed) noexcept
+{
+  return origin == PausedExecutionOrigin::Pass && !side_changed ?
+         PausedReplacementExecutionMode::ContinuePass :
+         PausedReplacementExecutionMode::RestartShiftOut;
+}
+
+const char * to_string(const PausedReplacementExecutionMode mode) noexcept
+{
+  switch (mode) {
+    case PausedReplacementExecutionMode::RestartShiftOut:
+      return "restart-shiftout";
+    case PausedReplacementExecutionMode::ContinuePass:
+      return "pass-continuation";
+  }
+  return "unknown";
+}
+
 PausedExecutionResumeAction resolve_paused_execution_resume(
   const PausedExecutionResumeRequest & request) noexcept
 {

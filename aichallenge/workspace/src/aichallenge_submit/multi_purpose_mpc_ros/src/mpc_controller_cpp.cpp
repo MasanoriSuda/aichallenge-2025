@@ -13695,6 +13695,14 @@ private:
     const bool replacing_paused_mission =
       overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare;
     const bool side_changed = candidate.pass_side_sign != previous_side;
+    const auto paused_replacement_execution_mode =
+      overtake_core::resolve_paused_replacement_execution_mode(
+      paused_execution_origin(overtake_line_state_.follow_prepare_origin_phase),
+      side_changed);
+    const bool paused_pass_continuation =
+      replacing_paused_mission &&
+      paused_replacement_execution_mode ==
+      overtake_core::PausedReplacementExecutionMode::ContinuePass;
     if (
       overtake_core::should_throttle_cross_side_replacement_retry(
         overtake_core::CrossSideReplacementRetryThrottleRequest{
@@ -13797,7 +13805,8 @@ private:
             minimum_cross_side_wall_clearance,
             remaining_time_budget_sec,
             remaining_distance_budget_m,
-            overtake_line_state_.phase == OvertakeLinePhase::Pass});
+            overtake_line_state_.phase == OvertakeLinePhase::Pass ||
+            paused_pass_continuation});
       };
     const auto resolve_cross_side_admission =
       [&](const overtake_core::OvertakeMissionCandidate & proposed_mission) {
@@ -14031,6 +14040,55 @@ private:
           !keep_cross_side_reselection_open});
     }
 
+    const auto configure_same_side_pass_continuation = [&]() {
+        const double replacement_shift_distance =
+          std::max(0.5, candidate.shift_distance_m);
+        const double remaining_pass_distance =
+          replacement_shift_distance +
+          std::max(0.5, candidate.pass_hold_distance_m);
+        const double new_return_start_pass_m =
+          current_pass_traveled_m + remaining_pass_distance;
+        overtake_line_state_.mission_pass_lateral_replan_active =
+          std::abs(candidate.goal_lateral_m - current_ey) > 1e-6;
+        overtake_line_state_.mission_pass_lateral_replan_start_m =
+          current_pass_traveled_m;
+        overtake_line_state_.mission_pass_lateral_replan_start_ey = current_ey;
+        overtake_line_state_.mission_pass_lateral_replan_shift_distance =
+          replacement_shift_distance;
+        overtake_line_state_.mission_pass_hold_distance = new_return_start_pass_m;
+        overtake_line_state_.mission_return_start_pass_m = new_return_start_pass_m;
+        overtake_line_state_.mission_static_valid_until_pass_m =
+          new_return_start_pass_m;
+        overtake_line_state_.mission_dynamic_valid_until_pass_m =
+          current_pass_traveled_m +
+          std::max(0.0, candidate.dynamic_valid_until_pass_m);
+        overtake_line_state_.mission_predicted_rear_clear_time_sec =
+          current_pass_elapsed_sec + candidate.predicted_rear_clear_time_sec;
+        overtake_line_state_.mission_predicted_rear_clear_pass_m =
+          new_return_start_pass_m;
+        overtake_line_state_.mission_path_total_distance =
+          overtake_line_state_.mission_shift_distance +
+          overtake_line_state_.mission_pass_hold_distance +
+          overtake_line_state_.mission_return_distance;
+        if (overtake_line_state_.mission_plan.has_value()) {
+          auto & pass_plan = overtake_line_state_.mission_plan.value();
+          pass_plan.path.pass_distance_m = new_return_start_pass_m;
+          pass_plan.path.return_distance_m =
+            overtake_line_state_.mission_return_distance;
+          pass_plan.mission.pass_hold_distance_m = new_return_start_pass_m;
+          pass_plan.mission.return_distance_m =
+            overtake_line_state_.mission_return_distance;
+          pass_plan.mission.static_valid_until_pass_m =
+            overtake_line_state_.mission_static_valid_until_pass_m;
+          pass_plan.mission.dynamic_valid_until_pass_m =
+            overtake_line_state_.mission_dynamic_valid_until_pass_m;
+          pass_plan.mission.predicted_rear_clear_time_sec =
+            overtake_line_state_.mission_predicted_rear_clear_time_sec;
+          pass_plan.mission.predicted_rear_clear_ego_distance_m =
+            overtake_line_state_.mission_predicted_rear_clear_pass_m;
+        }
+      };
+
     if (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut) {
       overtake_line_state_.phase_start_sec = now_sec;
       overtake_line_state_.phase_start_ey = current_ey;
@@ -14099,28 +14157,17 @@ private:
           overtake_line_state_.mission_predicted_rear_clear_pass_m;
       }
     } else if (overtake_line_state_.phase == OvertakeLinePhase::Pass) {
-      const double replacement_shift_distance = std::max(0.5, candidate.shift_distance_m);
-      const double remaining_pass_distance =
-        replacement_shift_distance + std::max(0.5, candidate.pass_hold_distance_m);
-      const double new_return_start_pass_m =
-        current_pass_traveled_m + remaining_pass_distance;
-      overtake_line_state_.mission_pass_lateral_replan_active =
-        std::abs(candidate.goal_lateral_m - current_ey) > 1e-6;
-      overtake_line_state_.mission_pass_lateral_replan_start_m = current_pass_traveled_m;
-      overtake_line_state_.mission_pass_lateral_replan_start_ey = current_ey;
-      overtake_line_state_.mission_pass_lateral_replan_shift_distance =
-        replacement_shift_distance;
-      overtake_line_state_.mission_pass_hold_distance = new_return_start_pass_m;
-      overtake_line_state_.mission_return_start_pass_m = new_return_start_pass_m;
-      overtake_line_state_.mission_static_valid_until_pass_m = new_return_start_pass_m;
-      overtake_line_state_.mission_dynamic_valid_until_pass_m =
-        current_pass_traveled_m +
-        std::max(0.0, candidate.dynamic_valid_until_pass_m);
-      overtake_line_state_.mission_predicted_rear_clear_pass_m = new_return_start_pass_m;
-      overtake_line_state_.mission_path_total_distance =
-        overtake_line_state_.mission_shift_distance +
-        overtake_line_state_.mission_pass_hold_distance +
-        overtake_line_state_.mission_return_distance;
+      configure_same_side_pass_continuation();
+    } else if (paused_pass_continuation) {
+      // The lateral line disappeared only because execution was paused. The
+      // fresh same-side candidate describes the remaining Pass horizon from
+      // the current pose; restarting entry ShiftOut here loses completed Pass
+      // progress and applies the wrong longitudinal ownership.
+      transition_overtake_line_phase(
+        OvertakeLinePhase::Pass, now_sec, current_ey,
+        candidate.pass_side_sign,
+        "dynamic wait selected current-state Pass continuation");
+      configure_same_side_pass_continuation();
     } else if (replacing_paused_mission) {
       // FollowPrepare publishes no lateral line. A fully preflighted alternate
       // therefore restarts ShiftOut from the current pose instead of treating
@@ -14145,7 +14192,9 @@ private:
         overtake_line_state_.target_vehicle_id.c_str(), previous_side,
         candidate.pass_side_sign, to_string(overtake_line_state_.phase),
         static_cast<unsigned long>(overtake_line_state_.mission_generation),
-        progressive_prefix_replacement ? "receding-prefix" : "complete-mission",
+        paused_pass_continuation ?
+        overtake_core::to_string(paused_replacement_execution_mode) :
+        (progressive_prefix_replacement ? "receding-prefix" : "complete-mission"),
         candidate.goal_lateral_m, candidate.shift_distance_m,
         current_pass_traveled_m,
         candidate.outer_transition_required ? 1 : 0,

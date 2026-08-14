@@ -439,9 +439,12 @@ using multi_purpose_mpc_ros::v2x_overtake_core::can_resume_paused_pass_directly;
 using multi_purpose_mpc_ros::v2x_overtake_core::clamp_paused_resume_goal_outward;
 using multi_purpose_mpc_ros::v2x_overtake_core::PausedPassDirectResumeRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PausedExecutionOrigin;
+using multi_purpose_mpc_ros::v2x_overtake_core::PausedReplacementExecutionMode;
 using multi_purpose_mpc_ros::v2x_overtake_core::PausedExecutionResumeAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::PausedExecutionResumeRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_paused_execution_resume;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  resolve_paused_replacement_execution_mode;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_line_transition;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   should_log_overtake_line_transition_action;
@@ -11286,6 +11289,27 @@ TEST(V2XOvertakeCoreMissionOwnership, SafetyBrakePauseResumesOriginalExecution)
   EXPECT_EQ(
     resolve_paused_execution_resume(request),
     PausedExecutionResumeAction::Hold);
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, SameSidePassReplacementContinuesPass)
+{
+  EXPECT_EQ(
+    resolve_paused_replacement_execution_mode(
+      PausedExecutionOrigin::Pass, false),
+    PausedReplacementExecutionMode::ContinuePass);
+
+  EXPECT_EQ(
+    resolve_paused_replacement_execution_mode(
+      PausedExecutionOrigin::Pass, true),
+    PausedReplacementExecutionMode::RestartShiftOut);
+  EXPECT_EQ(
+    resolve_paused_replacement_execution_mode(
+      PausedExecutionOrigin::ShiftOut, false),
+    PausedReplacementExecutionMode::RestartShiftOut);
+  EXPECT_EQ(
+    resolve_paused_replacement_execution_mode(
+      PausedExecutionOrigin::Recovery, false),
+    PausedReplacementExecutionMode::RestartShiftOut);
 }
 
 TEST(V2XOvertakeCoreMissionOwnership, SafetyBrakePauseResumeRejectsHardFaults)

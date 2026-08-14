@@ -610,6 +610,16 @@ mpc:
   v2x_overtake_mpcc_lite_prefix_terminal_time_sec: 0.75 # [s] terminal progress penalty beyond body-clear for incomplete rear-clear horizon
   v2x_overtake_mpcc_lite_prefix_terminal_distance: 2.0 # [m] terminal progress penalty beyond body-clear for incomplete rear-clear horizon
   v2x_overtake_mpcc_lite_same_side_max_lateral_adjustment: 0.35 # [m] paused Pass keeps its current side/line; only a small revalidated correction is allowed
+  v2x_overtake_mpcc_frenet_dp_corridor_enabled: true # solve a continuous stage-wise left/right corridor before freezing one lateral goal
+  v2x_overtake_mpcc_frenet_dp_lateral_bins: 12 # lateral discretization per dynamic corridor sample
+  v2x_overtake_mpcc_frenet_dp_max_lateral_slope: 0.45 # [m/m] reject disconnected or excessively sharp corridor transitions
+  v2x_overtake_mpcc_frenet_dp_current_anchor_weight: 2.0
+  v2x_overtake_mpcc_frenet_dp_lateral_motion_weight: 3.0
+  v2x_overtake_mpcc_frenet_dp_previous_path_weight: 1.0
+  v2x_overtake_mpcc_frenet_dp_corridor_width_weight: 0.25
+  v2x_overtake_mpcc_frenet_dp_branch_switch_penalty: 1.0
+  v2x_overtake_mpcc_frenet_dp_shadow_score_penalty: 1.0
+  v2x_overtake_mpcc_frenet_dp_last_path_max_age_sec: 0.50 # [s] warm-start/hysteresis is exact-target and exact-side only
   v2x_overtake_safe_separation_soft_prediction_grace_sec: 0.25 # [s] prediction-only loss grace after committed forward completion; hard faults remain immediate
   # Once the target is behind and forward progress remains fresh, let distance/rear-clear
   # terminate the pass instead of a collision-penalty-sensitive wall-clock timeout.

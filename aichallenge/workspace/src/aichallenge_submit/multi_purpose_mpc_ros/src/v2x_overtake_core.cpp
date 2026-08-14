@@ -4404,6 +4404,288 @@ OvertakeMissionDynamicCorridorResolution resolve_overtake_mission_dynamic_corrid
   return resolution;
 }
 
+double sample_frenet_dp_corridor_path(
+  const FrenetDpCorridorBranchResolution & branch,
+  const double path_distance_m) noexcept
+{
+  if (
+    !branch.feasible || !std::isfinite(path_distance_m) || path_distance_m < 0.0 ||
+    branch.path_distances_m.empty() ||
+    branch.path_distances_m.size() != branch.lateral_path_m.size())
+  {
+    return std::numeric_limits<double>::quiet_NaN();
+  }
+  if (path_distance_m <= branch.path_distances_m.front()) {
+    return branch.lateral_path_m.front();
+  }
+  if (path_distance_m >= branch.path_distances_m.back()) {
+    return branch.lateral_path_m.back();
+  }
+  const auto upper = std::upper_bound(
+    branch.path_distances_m.begin(), branch.path_distances_m.end(), path_distance_m);
+  const std::size_t upper_index = static_cast<std::size_t>(
+    std::distance(branch.path_distances_m.begin(), upper));
+  const std::size_t lower_index = upper_index - 1U;
+  const double lower_distance = branch.path_distances_m[lower_index];
+  const double upper_distance = branch.path_distances_m[upper_index];
+  const double span = upper_distance - lower_distance;
+  if (span <= 1e-9) {
+    return branch.lateral_path_m[upper_index];
+  }
+  const double ratio = std::clamp(
+    (path_distance_m - lower_distance) / span, 0.0, 1.0);
+  return branch.lateral_path_m[lower_index] + ratio *
+    (branch.lateral_path_m[upper_index] - branch.lateral_path_m[lower_index]);
+}
+
+FrenetDpCorridorResolution solve_frenet_dp_corridor(
+  const FrenetDpCorridorRequest & request) noexcept
+{
+  FrenetDpCorridorResolution resolution;
+  const auto finite_non_negative = [](const double value) {
+      return std::isfinite(value) && value >= 0.0;
+    };
+  if (!request.enabled) {
+    resolution.valid = true;
+    return resolution;
+  }
+  if (
+    !std::isfinite(request.current_lateral_m) ||
+    (request.current_side_sign != -1 && request.current_side_sign != 0 &&
+    request.current_side_sign != 1) ||
+    request.lateral_bin_count < 2U || request.lateral_bin_count > 64U ||
+    !std::isfinite(request.maximum_lateral_slope) ||
+    request.maximum_lateral_slope <= 0.0 ||
+    !finite_non_negative(request.current_anchor_weight) ||
+    !finite_non_negative(request.lateral_motion_weight) ||
+    !finite_non_negative(request.previous_path_weight) ||
+    !finite_non_negative(request.corridor_width_weight) ||
+    !finite_non_negative(request.branch_switch_penalty) ||
+    (request.previous_side_sign != -1 && request.previous_side_sign != 0 &&
+    request.previous_side_sign != 1) ||
+    request.previous_path_distances_m.size() !=
+    request.previous_lateral_path_m.size())
+  {
+    return resolution;
+  }
+  double previous_path_distance = -std::numeric_limits<double>::infinity();
+  for (std::size_t i = 0U; i < request.previous_path_distances_m.size(); ++i) {
+    if (
+      !std::isfinite(request.previous_path_distances_m[i]) ||
+      request.previous_path_distances_m[i] < 0.0 ||
+      request.previous_path_distances_m[i] + 1e-9 < previous_path_distance ||
+      !std::isfinite(request.previous_lateral_path_m[i]))
+    {
+      return resolution;
+    }
+    previous_path_distance = request.previous_path_distances_m[i];
+  }
+  if (
+    (request.left.side_sign != 0 && request.left.side_sign != 1) ||
+    (request.right.side_sign != 0 && request.right.side_sign != -1))
+  {
+    return resolution;
+  }
+
+  const auto sample_previous_path = [&](const double distance) {
+      if (
+        request.previous_path_distances_m.empty() ||
+        request.previous_side_sign == 0)
+      {
+        return std::numeric_limits<double>::quiet_NaN();
+      }
+      if (distance <= request.previous_path_distances_m.front()) {
+        return request.previous_lateral_path_m.front();
+      }
+      if (distance >= request.previous_path_distances_m.back()) {
+        return request.previous_lateral_path_m.back();
+      }
+      const auto upper = std::upper_bound(
+        request.previous_path_distances_m.begin(),
+        request.previous_path_distances_m.end(), distance);
+      const std::size_t upper_index = static_cast<std::size_t>(
+        std::distance(request.previous_path_distances_m.begin(), upper));
+      const std::size_t lower_index = upper_index - 1U;
+      const double lower_distance = request.previous_path_distances_m[lower_index];
+      const double upper_distance = request.previous_path_distances_m[upper_index];
+      const double ratio = (distance - lower_distance) /
+        std::max(1e-9, upper_distance - lower_distance);
+      return request.previous_lateral_path_m[lower_index] + ratio *
+        (request.previous_lateral_path_m[upper_index] -
+        request.previous_lateral_path_m[lower_index]);
+    };
+
+  const auto solve_branch = [&](const FrenetDpCorridorBranchInput & input) {
+      FrenetDpCorridorBranchResolution branch;
+      branch.side_sign = input.side_sign;
+      if ((input.side_sign != -1 && input.side_sign != 1) || input.samples.size() < 2U) {
+        return branch;
+      }
+      branch.checked = true;
+      double last_distance = -std::numeric_limits<double>::infinity();
+      for (const auto & sample : input.samples) {
+        if (
+          !sample.active || !std::isfinite(sample.path_distance_m) ||
+          sample.path_distance_m < 0.0 ||
+          sample.path_distance_m <= last_distance + 1e-9 ||
+          !std::isfinite(sample.lower_lateral_m) ||
+          !std::isfinite(sample.upper_lateral_m) ||
+          sample.upper_lateral_m < sample.lower_lateral_m)
+        {
+          return branch;
+        }
+        last_distance = sample.path_distance_m;
+      }
+
+      const std::size_t stage_count = input.samples.size();
+      const std::size_t bin_count = request.lateral_bin_count;
+      const double infinity = std::numeric_limits<double>::infinity();
+      std::vector<std::vector<double>> values(
+        stage_count, std::vector<double>(bin_count, 0.0));
+      std::vector<std::vector<double>> costs(
+        stage_count, std::vector<double>(bin_count, infinity));
+      std::vector<std::vector<std::size_t>> predecessors(
+        stage_count, std::vector<std::size_t>(bin_count, bin_count));
+      branch.minimum_corridor_width_m = infinity;
+      for (std::size_t stage = 0U; stage < stage_count; ++stage) {
+        const auto & sample = input.samples[stage];
+        const double width = sample.upper_lateral_m - sample.lower_lateral_m;
+        branch.minimum_corridor_width_m = std::min(
+          branch.minimum_corridor_width_m, width);
+        for (std::size_t bin = 0U; bin < bin_count; ++bin) {
+          const double ratio = static_cast<double>(bin) /
+            static_cast<double>(bin_count - 1U);
+          values[stage][bin] = sample.lower_lateral_m + ratio * width;
+        }
+      }
+
+      const auto node_cost = [&](const std::size_t stage, const double lateral) {
+          const auto & sample = input.samples[stage];
+          const double width = sample.upper_lateral_m - sample.lower_lateral_m;
+          double cost = request.corridor_width_weight / std::max(0.10, width);
+          if (request.previous_side_sign == input.side_sign) {
+            const double previous = sample_previous_path(sample.path_distance_m);
+            if (std::isfinite(previous)) {
+              const double error = lateral - previous;
+              cost += request.previous_path_weight * error * error;
+            }
+          }
+          return cost;
+        };
+
+      for (std::size_t bin = 0U; bin < bin_count; ++bin) {
+        const double lateral = values[0U][bin];
+        const double anchor_error = lateral - request.current_lateral_m;
+        costs[0U][bin] = node_cost(0U, lateral) +
+          request.current_anchor_weight * anchor_error * anchor_error +
+          (request.current_side_sign != 0 &&
+          request.current_side_sign != input.side_sign ?
+          request.branch_switch_penalty : 0.0);
+      }
+
+      for (std::size_t stage = 1U; stage < stage_count; ++stage) {
+        const double distance_step = std::max(
+          0.10,
+          input.samples[stage].path_distance_m -
+          input.samples[stage - 1U].path_distance_m);
+        for (std::size_t bin = 0U; bin < bin_count; ++bin) {
+          const double lateral = values[stage][bin];
+          const double local_node_cost = node_cost(stage, lateral);
+          for (std::size_t previous_bin = 0U; previous_bin < bin_count; ++previous_bin) {
+            if (!std::isfinite(costs[stage - 1U][previous_bin])) {
+              continue;
+            }
+            const double delta = lateral - values[stage - 1U][previous_bin];
+            const double slope = std::abs(delta) / distance_step;
+            if (slope > request.maximum_lateral_slope + 1e-9) {
+              continue;
+            }
+            const double candidate_cost = costs[stage - 1U][previous_bin] +
+              local_node_cost +
+              request.lateral_motion_weight * delta * delta / distance_step;
+            if (candidate_cost + 1e-12 < costs[stage][bin]) {
+              costs[stage][bin] = candidate_cost;
+              predecessors[stage][bin] = previous_bin;
+            }
+          }
+        }
+      }
+
+      const auto best_terminal = std::min_element(
+        costs.back().begin(), costs.back().end());
+      if (best_terminal == costs.back().end() || !std::isfinite(*best_terminal)) {
+        return branch;
+      }
+      std::size_t selected_bin = static_cast<std::size_t>(
+        std::distance(costs.back().begin(), best_terminal));
+      branch.path_distances_m.resize(stage_count);
+      branch.lateral_path_m.resize(stage_count);
+      for (std::size_t stage = stage_count; stage-- > 0U;) {
+        branch.path_distances_m[stage] = input.samples[stage].path_distance_m;
+        branch.lateral_path_m[stage] = values[stage][selected_bin];
+        if (stage > 0U) {
+          selected_bin = predecessors[stage][selected_bin];
+          if (selected_bin >= bin_count) {
+            branch.feasible = false;
+            branch.path_distances_m.clear();
+            branch.lateral_path_m.clear();
+            return branch;
+          }
+        }
+      }
+      branch.maximum_lateral_slope = 0.0;
+      for (std::size_t stage = 1U; stage < stage_count; ++stage) {
+        const double distance_step = std::max(
+          0.10,
+          branch.path_distances_m[stage] - branch.path_distances_m[stage - 1U]);
+        branch.maximum_lateral_slope = std::max(
+          branch.maximum_lateral_slope,
+          std::abs(branch.lateral_path_m[stage] -
+          branch.lateral_path_m[stage - 1U]) / distance_step);
+      }
+      branch.normalized_cost = *best_terminal / static_cast<double>(stage_count);
+      branch.feasible = std::isfinite(branch.normalized_cost);
+      return branch;
+    };
+
+  resolution.valid = true;
+  resolution.left = solve_branch(request.left);
+  resolution.right = solve_branch(request.right);
+  resolution.checked = resolution.left.checked || resolution.right.checked;
+  const bool left_feasible = resolution.left.feasible;
+  const bool right_feasible = resolution.right.feasible;
+  resolution.feasible = left_feasible || right_feasible;
+  if (!resolution.feasible) {
+    return resolution;
+  }
+  constexpr double kTieEpsilon = 1e-9;
+  if (left_feasible && !right_feasible) {
+    resolution.selected_side_sign = 1;
+  } else if (!left_feasible && right_feasible) {
+    resolution.selected_side_sign = -1;
+  } else if (
+    resolution.left.normalized_cost + kTieEpsilon <
+    resolution.right.normalized_cost)
+  {
+    resolution.selected_side_sign = 1;
+  } else if (
+    resolution.right.normalized_cost + kTieEpsilon <
+    resolution.left.normalized_cost)
+  {
+    resolution.selected_side_sign = -1;
+  } else if (request.current_side_sign != 0) {
+    resolution.selected_side_sign = request.current_side_sign;
+  } else {
+    const double left_initial_motion = std::abs(
+      resolution.left.lateral_path_m.front() - request.current_lateral_m);
+    const double right_initial_motion = std::abs(
+      resolution.right.lateral_path_m.front() - request.current_lateral_m);
+    resolution.selected_side_sign =
+      left_initial_motion <= right_initial_motion ? 1 : -1;
+  }
+  return resolution;
+}
+
 OvertakeMissionCorridorAdmissionResolution resolve_overtake_mission_corridor_admission(
   const OvertakeMissionCorridorAdmissionRequest & request) noexcept
 {
@@ -4818,6 +5100,11 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
         !candidate.pass_target_clearance_checked ||
         std::isfinite(
         candidate.predicted_minimum_pass_target_surface_clearance_m);
+      const bool frenet_dp_corridor_valid =
+        !candidate.frenet_dp_corridor_checked ||
+        (candidate.frenet_dp_corridor_feasible &&
+        std::isfinite(candidate.frenet_dp_normalized_cost) &&
+        candidate.frenet_dp_normalized_cost >= 0.0);
       const auto course_role_valid = [](const PassSideCourseRole role) {
           return role == PassSideCourseRole::Unknown ||
                  role == PassSideCourseRole::Inner ||
@@ -4852,6 +5139,7 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
         candidate.outer_transition_start_pass_m + 1e-9);
       return deadline_valid && closing_speed_valid && slack_valid && rear_clear_valid &&
              progress_speed_valid && pass_target_clearance_valid &&
+             frenet_dp_corridor_valid &&
              rear_clear_course_role_valid && outer_transition_valid &&
              non_negative_or_infinity(candidate.minimum_path_wall_clearance_m) &&
              non_negative_or_infinity(candidate.minimum_path_corridor_width_m) &&
@@ -5190,6 +5478,8 @@ const char * to_string(const MpccLiteShadowRejectReason reason) noexcept
       return "return_not_admitted";
     case MpccLiteShadowRejectReason::ReturnCorridorBlocked:
       return "return_corridor_blocked";
+    case MpccLiteShadowRejectReason::FrenetCorridorInfeasible:
+      return "frenet_corridor_infeasible";
   }
   return "unknown";
 }
@@ -5237,9 +5527,17 @@ MpccLiteShadowCandidate build_mpcc_lite_shadow_mission_candidate(
     request.fallback_target_clearance_m);
   candidate.maximum_lateral_accel_mps2 = mission.max_required_lateral_accel_mps2;
   candidate.lateral_motion_m = mission.lateral_shift_m;
+  candidate.frenet_dp_corridor_checked = mission.frenet_dp_corridor_checked;
+  candidate.frenet_dp_corridor_feasible = mission.frenet_dp_corridor_feasible;
+  candidate.frenet_dp_prefix_bridge = mission.frenet_dp_prefix_bridge;
+  candidate.frenet_dp_normalized_cost =
+    mission.frenet_dp_corridor_checked ? mission.frenet_dp_normalized_cost : 0.0;
 
   if (!mission.feasible) {
     return reject(MpccLiteShadowRejectReason::MissionInfeasible);
+  }
+  if (mission.frenet_dp_corridor_checked && !mission.frenet_dp_corridor_feasible) {
+    return reject(MpccLiteShadowRejectReason::FrenetCorridorInfeasible);
   }
   if (mission.progressive_entry) {
     return reject(MpccLiteShadowRejectReason::ProgressiveEntryIncomplete);
@@ -5337,9 +5635,17 @@ MpccLiteShadowCandidate build_mpcc_lite_receding_prefix_candidate(
     request.fallback_target_clearance_m);
   candidate.maximum_lateral_accel_mps2 = mission.max_required_lateral_accel_mps2;
   candidate.lateral_motion_m = mission.lateral_shift_m;
+  candidate.frenet_dp_corridor_checked = mission.frenet_dp_corridor_checked;
+  candidate.frenet_dp_corridor_feasible = mission.frenet_dp_corridor_feasible;
+  candidate.frenet_dp_prefix_bridge = mission.frenet_dp_prefix_bridge;
+  candidate.frenet_dp_normalized_cost =
+    mission.frenet_dp_corridor_checked ? mission.frenet_dp_normalized_cost : 0.0;
 
   if (!mission.feasible) {
     return reject(MpccLiteShadowRejectReason::MissionInfeasible);
+  }
+  if (mission.frenet_dp_corridor_checked && !mission.frenet_dp_corridor_feasible) {
+    return reject(MpccLiteShadowRejectReason::FrenetCorridorInfeasible);
   }
   if (!mission.body_clear_deadline_checked) {
     return reject(MpccLiteShadowRejectReason::BodyClearUnchecked);
@@ -5563,7 +5869,8 @@ MpccLiteShadowResolution evaluate_mpcc_lite_shadow(
     !valid_weight(request.weights.target_clearance) ||
     !valid_weight(request.weights.lateral_motion_penalty) ||
     !valid_weight(request.weights.lateral_accel_penalty) ||
-    !valid_weight(request.weights.branch_switch_penalty))
+    !valid_weight(request.weights.branch_switch_penalty) ||
+    !valid_weight(request.weights.frenet_dp_corridor_penalty))
   {
     return resolution;
   }
@@ -5592,11 +5899,19 @@ MpccLiteShadowResolution evaluate_mpcc_lite_shadow(
         finite_non_negative(candidate.minimum_target_clearance_m) &&
         finite_non_negative(candidate.maximum_lateral_accel_mps2) &&
         finite_non_negative(candidate.lateral_motion_m) &&
+        (!candidate.frenet_dp_corridor_checked ||
+        finite_non_negative(candidate.frenet_dp_normalized_cost)) &&
         (!candidate.rear_clear_required ||
         (finite_non_negative(candidate.predicted_rear_clear_time_sec) &&
         finite_non_negative(candidate.predicted_rear_clear_distance_m)));
       if (!numeric_valid) {
         evaluation.reject_reason = MpccLiteShadowRejectReason::InvalidCandidate;
+      } else if (
+        candidate.frenet_dp_corridor_checked &&
+        !candidate.frenet_dp_corridor_feasible)
+      {
+        evaluation.valid = true;
+        evaluation.reject_reason = MpccLiteShadowRejectReason::FrenetCorridorInfeasible;
       } else if (candidate.rear_clear_required && !candidate.rear_clear_feasible) {
         evaluation.valid = true;
         evaluation.reject_reason = MpccLiteShadowRejectReason::RearClearInfeasible;
@@ -5643,6 +5958,9 @@ MpccLiteShadowResolution evaluate_mpcc_lite_shadow(
         evaluation.branch_switch_cost =
           request.active_branch != MpccLiteShadowBranch::None &&
           candidate.branch != request.active_branch ? 1.0 : 0.0;
+        evaluation.frenet_dp_corridor_cost =
+          candidate.frenet_dp_corridor_checked ?
+          std::clamp(candidate.frenet_dp_normalized_cost, 0.0, 1.0) : 0.0;
         evaluation.score =
           request.weights.rear_clear_time * evaluation.rear_clear_time_progress +
           request.weights.rear_clear_distance * evaluation.rear_clear_distance_progress +
@@ -5651,7 +5969,9 @@ MpccLiteShadowResolution evaluate_mpcc_lite_shadow(
           request.weights.target_clearance * evaluation.target_clearance_reserve -
           request.weights.lateral_motion_penalty * evaluation.lateral_motion_cost -
           request.weights.lateral_accel_penalty * evaluation.lateral_accel_cost -
-          request.weights.branch_switch_penalty * evaluation.branch_switch_cost;
+          request.weights.branch_switch_penalty * evaluation.branch_switch_cost -
+          request.weights.frenet_dp_corridor_penalty *
+          evaluation.frenet_dp_corridor_cost;
       }
     }
 

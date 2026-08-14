@@ -2590,6 +2590,67 @@ struct OvertakeMissionDynamicCorridorResolution
 OvertakeMissionDynamicCorridorResolution resolve_overtake_mission_dynamic_corridor(
   const OvertakeMissionDynamicCorridorRequest & request) noexcept;
 
+struct FrenetDpCorridorBranchInput
+{
+  int side_sign{};
+  std::vector<OvertakeMissionDynamicCorridorSample> samples;
+};
+
+struct FrenetDpCorridorRequest
+{
+  bool enabled{false};
+  double current_lateral_m{};
+  int current_side_sign{};
+  std::size_t lateral_bin_count{12U};
+  double maximum_lateral_slope{0.45};
+  double current_anchor_weight{2.0};
+  double lateral_motion_weight{3.0};
+  double previous_path_weight{1.0};
+  double corridor_width_weight{0.25};
+  double branch_switch_penalty{1.0};
+  int previous_side_sign{};
+  std::vector<double> previous_path_distances_m;
+  std::vector<double> previous_lateral_path_m;
+  FrenetDpCorridorBranchInput left;
+  FrenetDpCorridorBranchInput right;
+};
+
+struct FrenetDpCorridorBranchResolution
+{
+  bool checked{false};
+  bool feasible{false};
+  int side_sign{};
+  double normalized_cost{std::numeric_limits<double>::infinity()};
+  double minimum_corridor_width_m{};
+  double maximum_lateral_slope{};
+  std::vector<double> path_distances_m;
+  std::vector<double> lateral_path_m;
+};
+
+struct FrenetDpCorridorResolution
+{
+  bool valid{false};
+  bool checked{false};
+  bool feasible{false};
+  int selected_side_sign{};
+  FrenetDpCorridorBranchResolution left;
+  FrenetDpCorridorBranchResolution right;
+};
+
+/// Select a continuous Frenet homotopy before the existing box-constrained
+/// lateral optimizer. Left and right are solved independently, so the DP can
+/// never cut through the target footprint to change sides. The selected path
+/// is a topology/reference result; wall, vehicle and kinematic hard guards are
+/// still revalidated by the caller before execution.
+FrenetDpCorridorResolution solve_frenet_dp_corridor(
+  const FrenetDpCorridorRequest & request) noexcept;
+
+/// Interpolate one admitted DP branch at a path distance. Invalid or
+/// infeasible branches return NaN.
+double sample_frenet_dp_corridor_path(
+  const FrenetDpCorridorBranchResolution & branch,
+  double path_distance_m) noexcept;
+
 enum class OvertakeMissionCorridorSource
 {
   None,
@@ -2743,6 +2804,12 @@ struct OvertakeMissionCandidate
   bool pass_target_clearance_checked{false};
   double predicted_minimum_pass_target_surface_clearance_m{
     std::numeric_limits<double>::quiet_NaN()};
+  /// A stage-wise Frenet corridor can admit a receding prefix even when no
+  /// immutable pass_lateral value exists across the complete horizon.
+  bool frenet_dp_corridor_checked{false};
+  bool frenet_dp_corridor_feasible{false};
+  bool frenet_dp_prefix_bridge{false};
+  double frenet_dp_normalized_cost{std::numeric_limits<double>::quiet_NaN()};
 };
 
 /// A Mission which changes from outer to inner before rear-clear may only be
@@ -2917,6 +2984,7 @@ enum class MpccLiteShadowRejectReason
   SafeSeparationDistanceBudget,
   ReturnNotAdmitted,
   ReturnCorridorBlocked,
+  FrenetCorridorInfeasible,
 };
 
 const char * to_string(MpccLiteShadowRejectReason reason) noexcept;
@@ -2938,6 +3006,10 @@ struct MpccLiteShadowCandidate
   double minimum_target_clearance_m{};
   double maximum_lateral_accel_mps2{};
   double lateral_motion_m{};
+  bool frenet_dp_corridor_checked{false};
+  bool frenet_dp_corridor_feasible{false};
+  bool frenet_dp_prefix_bridge{false};
+  double frenet_dp_normalized_cost{};
 };
 
 struct MpccLiteShadowMissionCandidateRequest
@@ -3073,6 +3145,7 @@ struct MpccLiteShadowWeights
   double lateral_motion_penalty{0.5};
   double lateral_accel_penalty{0.25};
   double branch_switch_penalty{0.10};
+  double frenet_dp_corridor_penalty{1.0};
 };
 
 struct MpccLiteShadowRequest
@@ -3106,6 +3179,7 @@ struct MpccLiteShadowEvaluation
   double lateral_motion_cost{};
   double lateral_accel_cost{};
   double branch_switch_cost{};
+  double frenet_dp_corridor_cost{};
 };
 
 struct MpccLiteShadowResolution

@@ -1515,6 +1515,16 @@ struct OvertakeLineConfig
   double mpcc_lite_prefix_terminal_time_sec{0.75};
   double mpcc_lite_prefix_terminal_distance{2.0};
   double mpcc_lite_same_side_max_lateral_adjustment{0.35};
+  bool mpcc_frenet_dp_corridor_enabled{false};
+  int mpcc_frenet_dp_lateral_bins{12};
+  double mpcc_frenet_dp_max_lateral_slope{0.45};
+  double mpcc_frenet_dp_current_anchor_weight{2.0};
+  double mpcc_frenet_dp_lateral_motion_weight{3.0};
+  double mpcc_frenet_dp_previous_path_weight{1.0};
+  double mpcc_frenet_dp_corridor_width_weight{0.25};
+  double mpcc_frenet_dp_branch_switch_penalty{1.0};
+  double mpcc_frenet_dp_shadow_score_penalty{1.0};
+  double mpcc_frenet_dp_last_path_max_age_sec{0.50};
   double safe_separation_soft_prediction_grace_sec{0.25};
   bool safe_separation_full_speed_forward_escape_enabled{false};
   bool safe_separation_rearward_progress_time_grace_enabled{false};
@@ -4848,6 +4858,12 @@ struct MPC
     mpcc_lite_control_last_feasible_target_id_.clear();
     mpcc_lite_control_last_feasible_entry_sec_ =
       -std::numeric_limits<double>::infinity();
+    mpcc_frenet_dp_last_path_distances_.clear();
+    mpcc_frenet_dp_last_lateral_path_.clear();
+    mpcc_frenet_dp_last_target_id_.clear();
+    mpcc_frenet_dp_last_side_sign_ = 0;
+    mpcc_frenet_dp_last_feasible_sec_ =
+      -std::numeric_limits<double>::infinity();
     mpcc_lite_cross_side_pending_sign_ = 0;
     mpcc_lite_cross_side_pending_since_sec_ =
       std::numeric_limits<double>::quiet_NaN();
@@ -5056,6 +5072,12 @@ struct MPC
     mpcc_lite_control_last_feasible_entry_mission_.reset();
     mpcc_lite_control_last_feasible_target_id_.clear();
     mpcc_lite_control_last_feasible_entry_sec_ =
+      -std::numeric_limits<double>::infinity();
+    mpcc_frenet_dp_last_path_distances_.clear();
+    mpcc_frenet_dp_last_lateral_path_.clear();
+    mpcc_frenet_dp_last_target_id_.clear();
+    mpcc_frenet_dp_last_side_sign_ = 0;
+    mpcc_frenet_dp_last_feasible_sec_ =
       -std::numeric_limits<double>::infinity();
     mpcc_lite_cross_side_pending_sign_ = 0;
     mpcc_lite_cross_side_pending_since_sec_ =
@@ -7081,6 +7103,10 @@ struct MPC
       bool dynamic_mission_corridor_observed{false};
       bool dynamic_mission_corridor_feasible{false};
       std::size_t dynamic_mission_corridor_samples{};
+      std::vector<overtake_core::OvertakeMissionDynamicCorridorSample>
+      dynamic_mission_corridor_profile;
+      overtake_core::FrenetDpCorridorBranchResolution frenet_dp_corridor;
+      bool frenet_dp_prefix_bridge{false};
       std::optional<double> corridor_center_ey;
       bool vehicle_vehicle_corridor{false};
       std::string lower_boundary_vehicle_id;
@@ -7605,6 +7631,52 @@ struct MPC
            << " / " << assessment.guard_reason;
         assessment.reason = ss.str();
       }
+      assessment.dynamic_mission_corridor_profile = dynamic_mission_corridor_samples;
+      if (
+        cfg.v2x_behavior.overtake_line.mpcc_frenet_dp_corridor_enabled &&
+        dynamic_mission_corridor_samples.size() >= 2U)
+      {
+        overtake_core::FrenetDpCorridorRequest dp_request;
+        dp_request.enabled = true;
+        dp_request.current_lateral_m = model->spatial_state.e_y;
+        dp_request.current_side_sign = locked_pass_side;
+        dp_request.lateral_bin_count = static_cast<std::size_t>(
+          cfg.v2x_behavior.overtake_line.mpcc_frenet_dp_lateral_bins);
+        dp_request.maximum_lateral_slope =
+          cfg.v2x_behavior.overtake_line.mpcc_frenet_dp_max_lateral_slope;
+        dp_request.current_anchor_weight =
+          cfg.v2x_behavior.overtake_line.mpcc_frenet_dp_current_anchor_weight;
+        dp_request.lateral_motion_weight =
+          cfg.v2x_behavior.overtake_line.mpcc_frenet_dp_lateral_motion_weight;
+        dp_request.previous_path_weight =
+          cfg.v2x_behavior.overtake_line.mpcc_frenet_dp_previous_path_weight;
+        dp_request.corridor_width_weight =
+          cfg.v2x_behavior.overtake_line.mpcc_frenet_dp_corridor_width_weight;
+        dp_request.branch_switch_penalty =
+          cfg.v2x_behavior.overtake_line.mpcc_frenet_dp_branch_switch_penalty;
+        const bool previous_path_fresh =
+          mpcc_frenet_dp_last_side_sign_ == side &&
+          mpcc_frenet_dp_last_target_id_ == output.target_vehicle_id &&
+          std::isfinite(mpcc_frenet_dp_last_feasible_sec_) &&
+          now_sec >= mpcc_frenet_dp_last_feasible_sec_ &&
+          now_sec - mpcc_frenet_dp_last_feasible_sec_ <=
+          cfg.v2x_behavior.overtake_line.mpcc_frenet_dp_last_path_max_age_sec + kEps;
+        if (previous_path_fresh) {
+          dp_request.previous_side_sign = mpcc_frenet_dp_last_side_sign_;
+          dp_request.previous_path_distances_m = mpcc_frenet_dp_last_path_distances_;
+          dp_request.previous_lateral_path_m = mpcc_frenet_dp_last_lateral_path_;
+        }
+        if (side > 0) {
+          dp_request.left.side_sign = side;
+          dp_request.left.samples = dynamic_mission_corridor_samples;
+        } else {
+          dp_request.right.side_sign = side;
+          dp_request.right.samples = dynamic_mission_corridor_samples;
+        }
+        const auto dp_resolution = overtake_core::solve_frenet_dp_corridor(dp_request);
+        assessment.frenet_dp_corridor = side > 0 ?
+          dp_resolution.left : dp_resolution.right;
+      }
       const bool initial_shiftout_preflight =
         !active_overtake_line && has_front_vehicle &&
         std::isfinite(nearest_front_lateral) &&
@@ -7835,13 +7907,34 @@ struct MPC
             static_goal_lower = overtake_lb[0];
             static_goal_upper = overtake_ub[0];
           }
-          const auto corridor_admission =
+          auto corridor_admission =
             overtake_core::resolve_overtake_mission_corridor_admission(
             overtake_core::OvertakeMissionCorridorAdmissionRequest{
               assessment.gap_available,
               dynamic_corridor,
               static_goal_lower,
               static_goal_upper});
+          bool stagewise_corridor_prefix_only = false;
+          if (
+            (!corridor_admission.valid || !corridor_admission.feasible) &&
+            assessment.frenet_dp_corridor.checked &&
+            assessment.frenet_dp_corridor.feasible &&
+            !assessment.frenet_dp_corridor.path_distances_m.empty() &&
+            shift_distance <= assessment.frenet_dp_corridor.path_distances_m.back() + kEps)
+          {
+            const double dp_goal = overtake_core::sample_frenet_dp_corridor_path(
+              assessment.frenet_dp_corridor, shift_distance);
+            if (std::isfinite(dp_goal)) {
+              corridor_admission.valid = true;
+              corridor_admission.feasible = true;
+              corridor_admission.source =
+                overtake_core::OvertakeMissionCorridorSource::DynamicObservation;
+              corridor_admission.goal_lower_m = dp_goal;
+              corridor_admission.goal_upper_m = dp_goal;
+              stagewise_corridor_prefix_only = true;
+              assessment.frenet_dp_prefix_bridge = true;
+            }
+          }
           if (!corridor_admission.valid || !corridor_admission.feasible) {
             if (!first_dynamic_rejection_available) {
               first_dynamic_rejection = dynamic_corridor;
@@ -8149,6 +8242,14 @@ struct MPC
                   preflight.minimum_path_corridor_width_m,
                   std::max(0.0, goal_upper - goal_lower));
                 setup_candidate.corridor_source = corridor_admission.source;
+                setup_candidate.frenet_dp_corridor_checked =
+                  assessment.frenet_dp_corridor.checked;
+                setup_candidate.frenet_dp_corridor_feasible =
+                  assessment.frenet_dp_corridor.feasible;
+                setup_candidate.frenet_dp_prefix_bridge =
+                  stagewise_corridor_prefix_only;
+                setup_candidate.frenet_dp_normalized_cost =
+                  assessment.frenet_dp_corridor.normalized_cost;
                 entry_setup_candidates.push_back(setup_candidate);
 
                 // A progressive entry deliberately defers rear-clear and
@@ -8222,6 +8323,12 @@ struct MPC
                 earliest_rejected_hard_distance_time = std::min(
                   earliest_rejected_hard_distance_time,
                   rollout.hard_distance_time_sec);
+              }
+              if (stagewise_corridor_prefix_only) {
+                // A connected stage-wise corridor proves only the receding
+                // prefix. It cannot be promoted to a frozen complete Mission
+                // with one immutable lateral goal.
+                continue;
               }
               if (!complete_entry_motion_admitted) {
                 // The wider static fallback allowance is only for a bounded
@@ -8637,6 +8744,13 @@ struct MPC
                 outer_transition.transition_required ?
                 outer_transition_preflight.max_required_lateral_accel : 0.0);
               mission_candidate.corridor_source = corridor_admission.source;
+              mission_candidate.frenet_dp_corridor_checked =
+                assessment.frenet_dp_corridor.checked;
+              mission_candidate.frenet_dp_corridor_feasible =
+                assessment.frenet_dp_corridor.feasible;
+              mission_candidate.frenet_dp_prefix_bridge = false;
+              mission_candidate.frenet_dp_normalized_cost =
+                assessment.frenet_dp_corridor.normalized_cost;
               mission_candidates.push_back(mission_candidate);
               if (mission_candidate.straight_outer_clearance_bias_applied_m > kEps) {
                 straight_outer_clearance_mission_candidates.push_back(mission_candidate);
@@ -10219,7 +10333,8 @@ struct MPC
         1.0,
         shadow_cfg.horizon_progress_lateral_motion_penalty,
         shadow_cfg.horizon_progress_lateral_accel_penalty,
-        0.10};
+        0.10,
+        shadow_cfg.mpcc_frenet_dp_shadow_score_penalty};
       const auto shadow_resolve_start = std::chrono::steady_clock::now();
       auto shadow_resolution =
         overtake_core::evaluate_mpcc_lite_shadow(shadow_request);
@@ -10276,6 +10391,19 @@ struct MPC
       const int best_shadow_side =
         best_shadow_branch == ShadowBranch::Left ? 1 :
         best_shadow_branch == ShadowBranch::Right ? -1 : 0;
+      const auto & best_dp_corridor = best_shadow_side > 0 ?
+        shadow_left_assessment.frenet_dp_corridor :
+        shadow_right_assessment.frenet_dp_corridor;
+      if (
+        !last_feasible_hold && best_shadow_side != 0 &&
+        best_dp_corridor.checked && best_dp_corridor.feasible)
+      {
+        mpcc_frenet_dp_last_path_distances_ = best_dp_corridor.path_distances_m;
+        mpcc_frenet_dp_last_lateral_path_ = best_dp_corridor.lateral_path_m;
+        mpcc_frenet_dp_last_target_id_ = output.target_vehicle_id;
+        mpcc_frenet_dp_last_side_sign_ = best_shadow_side;
+        mpcc_frenet_dp_last_feasible_sec_ = now_sec;
+      }
       const bool cached_entry_matches_last_feasible =
         last_feasible_hold && best_shadow_side != 0 &&
         mpcc_lite_control_last_feasible_entry_mission_.has_value() &&
@@ -10551,6 +10679,12 @@ struct MPC
         mpcc_lite_control_last_feasible_target_id_.clear();
         mpcc_lite_control_last_feasible_entry_sec_ =
           -std::numeric_limits<double>::infinity();
+        mpcc_frenet_dp_last_path_distances_.clear();
+        mpcc_frenet_dp_last_lateral_path_.clear();
+        mpcc_frenet_dp_last_target_id_.clear();
+        mpcc_frenet_dp_last_side_sign_ = 0;
+        mpcc_frenet_dp_last_feasible_sec_ =
+          -std::numeric_limits<double>::infinity();
         mpcc_lite_cross_side_pending_sign_ = 0;
         mpcc_lite_cross_side_pending_since_sec_ =
           std::numeric_limits<double>::quiet_NaN();
@@ -10613,7 +10747,12 @@ struct MPC
                      << ",wall=" << evaluation.candidate.minimum_wall_clearance_m
                      << ",target=" << evaluation.candidate.minimum_target_clearance_m
                      << ",ay=" << evaluation.candidate.maximum_lateral_accel_mps2
-                     << ",dy=" << evaluation.candidate.lateral_motion_m << "}";
+                     << ",dy=" << evaluation.candidate.lateral_motion_m
+                     << ",dp=" <<
+          (evaluation.candidate.frenet_dp_corridor_checked ? 1 : 0) << "/" <<
+          (evaluation.candidate.frenet_dp_corridor_feasible ? 1 : 0) << "/" <<
+          evaluation.candidate.frenet_dp_normalized_cost << "/" <<
+          (evaluation.candidate.frenet_dp_prefix_bridge ? 1 : 0) << "}";
         }
         RCLCPP_INFO(
           rclcpp::get_logger("mpc_controller"), "%s", shadow_log.str().c_str());
@@ -12761,6 +12900,12 @@ struct MPC
   std::string mpcc_lite_control_last_feasible_target_id_;
   double mpcc_lite_control_last_feasible_entry_sec_{
     -std::numeric_limits<double>::infinity()};
+  std::vector<double> mpcc_frenet_dp_last_path_distances_;
+  std::vector<double> mpcc_frenet_dp_last_lateral_path_;
+  std::string mpcc_frenet_dp_last_target_id_;
+  int mpcc_frenet_dp_last_side_sign_{0};
+  double mpcc_frenet_dp_last_feasible_sec_{
+    -std::numeric_limits<double>::infinity()};
   int mpcc_lite_cross_side_pending_sign_{0};
   double mpcc_lite_cross_side_pending_since_sec_{
     std::numeric_limits<double>::quiet_NaN()};
@@ -13015,6 +13160,12 @@ private:
     mpcc_lite_control_last_feasible_entry_mission_.reset();
     mpcc_lite_control_last_feasible_target_id_.clear();
     mpcc_lite_control_last_feasible_entry_sec_ =
+      -std::numeric_limits<double>::infinity();
+    mpcc_frenet_dp_last_path_distances_.clear();
+    mpcc_frenet_dp_last_lateral_path_.clear();
+    mpcc_frenet_dp_last_target_id_.clear();
+    mpcc_frenet_dp_last_side_sign_ = 0;
+    mpcc_frenet_dp_last_feasible_sec_ =
       -std::numeric_limits<double>::infinity();
     mpcc_lite_cross_side_pending_sign_ = 0;
     mpcc_lite_cross_side_pending_since_sec_ =
@@ -25580,6 +25731,45 @@ Config load_config(const std::string & path)
     mpc["v2x_overtake_mpcc_lite_same_side_max_lateral_adjustment"] ?
     mpc["v2x_overtake_mpcc_lite_same_side_max_lateral_adjustment"].as<double>() :
     0.35);
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_corridor_enabled =
+    mpc["v2x_overtake_mpcc_frenet_dp_corridor_enabled"] ?
+    mpc["v2x_overtake_mpcc_frenet_dp_corridor_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_lateral_bins = std::clamp(
+    mpc["v2x_overtake_mpcc_frenet_dp_lateral_bins"] ?
+    mpc["v2x_overtake_mpcc_frenet_dp_lateral_bins"].as<int>() : 12,
+    2, 64);
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_max_lateral_slope = std::max(
+    0.01,
+    mpc["v2x_overtake_mpcc_frenet_dp_max_lateral_slope"] ?
+    mpc["v2x_overtake_mpcc_frenet_dp_max_lateral_slope"].as<double>() : 0.45);
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_current_anchor_weight = std::max(
+    0.0,
+    mpc["v2x_overtake_mpcc_frenet_dp_current_anchor_weight"] ?
+    mpc["v2x_overtake_mpcc_frenet_dp_current_anchor_weight"].as<double>() : 2.0);
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_lateral_motion_weight = std::max(
+    0.0,
+    mpc["v2x_overtake_mpcc_frenet_dp_lateral_motion_weight"] ?
+    mpc["v2x_overtake_mpcc_frenet_dp_lateral_motion_weight"].as<double>() : 3.0);
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_previous_path_weight = std::max(
+    0.0,
+    mpc["v2x_overtake_mpcc_frenet_dp_previous_path_weight"] ?
+    mpc["v2x_overtake_mpcc_frenet_dp_previous_path_weight"].as<double>() : 1.0);
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_corridor_width_weight = std::max(
+    0.0,
+    mpc["v2x_overtake_mpcc_frenet_dp_corridor_width_weight"] ?
+    mpc["v2x_overtake_mpcc_frenet_dp_corridor_width_weight"].as<double>() : 0.25);
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_branch_switch_penalty = std::max(
+    0.0,
+    mpc["v2x_overtake_mpcc_frenet_dp_branch_switch_penalty"] ?
+    mpc["v2x_overtake_mpcc_frenet_dp_branch_switch_penalty"].as<double>() : 1.0);
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_shadow_score_penalty = std::max(
+    0.0,
+    mpc["v2x_overtake_mpcc_frenet_dp_shadow_score_penalty"] ?
+    mpc["v2x_overtake_mpcc_frenet_dp_shadow_score_penalty"].as<double>() : 1.0);
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_last_path_max_age_sec = std::max(
+    0.0,
+    mpc["v2x_overtake_mpcc_frenet_dp_last_path_max_age_sec"] ?
+    mpc["v2x_overtake_mpcc_frenet_dp_last_path_max_age_sec"].as<double>() : 0.50);
   cfg.mpc.v2x_behavior.overtake_line.safe_separation_soft_prediction_grace_sec = std::max(
     0.0,
     mpc["v2x_overtake_safe_separation_soft_prediction_grace_sec"] ?
@@ -27601,6 +27791,22 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_prefix_terminal_distance,
         mpc_cfg_.v2x_behavior.overtake_line.
         mpcc_lite_same_side_max_lateral_adjustment);
+      RCLCPP_INFO(
+        get_logger(),
+        "V2X MPCC Frenet DP corridor: %s, bins=%d, slope<=%.2f m/m, "
+        "weights anchor=%.2f/motion=%.2f/previous=%.2f/width=%.2f/switch=%.2f, "
+        "shadow_penalty=%.2f, warm_age<=%.2f s",
+        mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_corridor_enabled ?
+        "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_lateral_bins,
+        mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_max_lateral_slope,
+        mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_current_anchor_weight,
+        mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_lateral_motion_weight,
+        mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_previous_path_weight,
+        mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_corridor_width_weight,
+        mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_branch_switch_penalty,
+        mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_shadow_score_penalty,
+        mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_last_path_max_age_sec);
     }
     if (mpc_cfg_.v2x_behavior.low_speed_avoidance_enabled) {
       RCLCPP_INFO(

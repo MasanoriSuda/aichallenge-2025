@@ -14037,4 +14037,113 @@ TEST(V2XOvertakeCoreMpccLite, AdmitsOnlyBoundedHardFeasibleExecutionPrefix)
   EXPECT_EQ(resolution.reason, MpccLitePrefixExecutionRejectReason::Inactive);
 }
 
+TEST(V2XOvertakeCoreFrenetDpCorridor, SelectsContinuousWiderHomotopy)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpCorridorRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorSample;
+  using multi_purpose_mpc_ros::v2x_overtake_core::solve_frenet_dp_corridor;
+
+  FrenetDpCorridorRequest request;
+  request.enabled = true;
+  request.current_lateral_m = 0.0;
+  request.left.side_sign = 1;
+  request.right.side_sign = -1;
+  for (const double distance : {0.0, 2.0, 4.0, 6.0}) {
+    request.left.samples.push_back(
+      OvertakeMissionDynamicCorridorSample{distance, 0.70, 1.40, true});
+    request.right.samples.push_back(
+      OvertakeMissionDynamicCorridorSample{distance, -1.05, -0.75, true});
+  }
+
+  const auto resolution = solve_frenet_dp_corridor(request);
+  ASSERT_TRUE(resolution.valid);
+  ASSERT_TRUE(resolution.checked);
+  ASSERT_TRUE(resolution.feasible);
+  EXPECT_TRUE(resolution.left.feasible);
+  EXPECT_TRUE(resolution.right.feasible);
+  EXPECT_EQ(resolution.selected_side_sign, 1);
+  EXPECT_LT(resolution.left.normalized_cost, resolution.right.normalized_cost);
+}
+
+TEST(V2XOvertakeCoreFrenetDpCorridor, PreviousPathAndSideProvideHysteresis)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpCorridorRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorSample;
+  using multi_purpose_mpc_ros::v2x_overtake_core::solve_frenet_dp_corridor;
+
+  FrenetDpCorridorRequest request;
+  request.enabled = true;
+  request.current_lateral_m = 0.0;
+  request.current_side_sign = -1;
+  request.previous_side_sign = -1;
+  request.left.side_sign = 1;
+  request.right.side_sign = -1;
+  for (const double distance : {0.0, 2.0, 4.0, 6.0}) {
+    request.left.samples.push_back(
+      OvertakeMissionDynamicCorridorSample{distance, 0.60, 1.20, true});
+    request.right.samples.push_back(
+      OvertakeMissionDynamicCorridorSample{distance, -1.20, -0.60, true});
+    request.previous_path_distances_m.push_back(distance);
+    request.previous_lateral_path_m.push_back(-0.75);
+  }
+
+  const auto resolution = solve_frenet_dp_corridor(request);
+  ASSERT_TRUE(resolution.feasible);
+  EXPECT_EQ(resolution.selected_side_sign, -1);
+  EXPECT_LT(resolution.right.normalized_cost, resolution.left.normalized_cost);
+}
+
+TEST(V2XOvertakeCoreFrenetDpCorridor, RejectsDisconnectedLateralSequence)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpCorridorRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorSample;
+  using multi_purpose_mpc_ros::v2x_overtake_core::solve_frenet_dp_corridor;
+
+  FrenetDpCorridorRequest request;
+  request.enabled = true;
+  request.current_lateral_m = 0.0;
+  request.maximum_lateral_slope = 0.20;
+  request.left.side_sign = 1;
+  request.right.side_sign = -1;
+  request.left.samples = {
+    OvertakeMissionDynamicCorridorSample{0.0, 0.80, 1.00, true},
+    OvertakeMissionDynamicCorridorSample{1.0, 2.00, 2.20, true},
+    OvertakeMissionDynamicCorridorSample{2.0, 2.00, 2.20, true}};
+
+  const auto resolution = solve_frenet_dp_corridor(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.checked);
+  EXPECT_FALSE(resolution.feasible);
+  EXPECT_TRUE(resolution.left.checked);
+  EXPECT_FALSE(resolution.left.feasible);
+}
+
+TEST(V2XOvertakeCoreFrenetDpCorridor, AdmitsMovingCorridorWithoutFixedGoalIntersection)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpCorridorRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorSample;
+  using multi_purpose_mpc_ros::v2x_overtake_core::sample_frenet_dp_corridor_path;
+  using multi_purpose_mpc_ros::v2x_overtake_core::solve_frenet_dp_corridor;
+
+  FrenetDpCorridorRequest request;
+  request.enabled = true;
+  request.current_lateral_m = 0.5;
+  request.maximum_lateral_slope = 0.40;
+  request.left.side_sign = 1;
+  request.right.side_sign = -1;
+  request.left.samples = {
+    OvertakeMissionDynamicCorridorSample{0.0, 0.50, 1.00, true},
+    OvertakeMissionDynamicCorridorSample{2.0, 0.80, 1.30, true},
+    OvertakeMissionDynamicCorridorSample{4.0, 1.10, 1.60, true}};
+
+  const auto resolution = solve_frenet_dp_corridor(request);
+  ASSERT_TRUE(resolution.feasible);
+  ASSERT_TRUE(resolution.left.feasible);
+  ASSERT_EQ(resolution.left.lateral_path_m.size(), 3U);
+  const double midpoint = sample_frenet_dp_corridor_path(resolution.left, 3.0);
+  EXPECT_TRUE(std::isfinite(midpoint));
+  EXPECT_GE(midpoint, 0.80);
+  EXPECT_LE(midpoint, 1.60);
+}
+
 }  // namespace

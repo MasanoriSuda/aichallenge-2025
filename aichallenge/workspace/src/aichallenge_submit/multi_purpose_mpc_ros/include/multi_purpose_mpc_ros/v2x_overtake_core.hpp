@@ -2781,6 +2781,8 @@ struct FrenetDpPassAuthorityRequest
   bool target_course_progress_rejected{false};
   bool path_side_matches{false};
   bool current_body_separated{false};
+  bool target_prediction_valid{false};
+  bool predicted_body_sweep_separated{false};
   bool recoverable_side_contact{false};
   bool actual_wall_physical_contact{false};
   bool wall_margin_blocked{false};
@@ -2791,6 +2793,8 @@ struct FrenetDpPassAuthorityRequest
   double now_sec{};
   double last_refresh_sec{-std::numeric_limits<double>::infinity()};
   double maximum_path_age_sec{};
+  double last_runtime_validation_sec{-std::numeric_limits<double>::infinity()};
+  double maximum_runtime_validation_age_sec{};
   double traveled_distance_m{};
   double minimum_remaining_distance_m{};
   std::vector<double> path_distances_m;
@@ -2801,7 +2805,11 @@ struct FrenetDpPassAuthorityResolution
 {
   bool valid{false};
   bool authority_active{false};
+  bool source_fresh{false};
+  bool runtime_validation_fresh{false};
+  bool authority_from_runtime_validation{false};
   double path_age_sec{std::numeric_limits<double>::infinity()};
+  double runtime_validation_age_sec{std::numeric_limits<double>::infinity()};
   double remaining_distance_m{};
 };
 

@@ -4667,6 +4667,8 @@ FrenetDpPassAuthorityResolution resolve_frenet_dp_pass_authority(
     !std::isfinite(request.now_sec) ||
     !std::isfinite(request.maximum_path_age_sec) ||
     request.maximum_path_age_sec < 0.0 ||
+    !std::isfinite(request.maximum_runtime_validation_age_sec) ||
+    request.maximum_runtime_validation_age_sec < 0.0 ||
     !std::isfinite(request.traveled_distance_m) ||
     request.traveled_distance_m < 0.0 ||
     !std::isfinite(request.minimum_remaining_distance_m) ||
@@ -4688,19 +4690,38 @@ FrenetDpPassAuthorityResolution resolve_frenet_dp_pass_authority(
   }
 
   resolution.path_age_sec = request.now_sec - request.last_refresh_sec;
+  if (
+    std::isfinite(request.last_runtime_validation_sec) &&
+    request.now_sec + 1e-9 >= request.last_runtime_validation_sec)
+  {
+    resolution.runtime_validation_age_sec =
+      request.now_sec - request.last_runtime_validation_sec;
+  }
   resolution.remaining_distance_m = std::max(
     0.0, request.path_distances_m.back() - request.traveled_distance_m);
-  const bool current_body_safe =
-    request.current_body_separated || request.recoverable_side_contact;
+  resolution.source_fresh =
+    resolution.path_age_sec <= request.maximum_path_age_sec + 1e-9;
+  resolution.runtime_validation_fresh =
+    resolution.runtime_validation_age_sec <=
+    request.maximum_runtime_validation_age_sec + 1e-9;
+  const bool target_execution_safe =
+    request.recoverable_side_contact ||
+    (request.current_body_separated &&
+    ((request.target_prediction_valid &&
+    request.predicted_body_sweep_separated) ||
+    resolution.runtime_validation_fresh));
   resolution.authority_active =
     request.pass_active && request.target_matches && request.target_continuous &&
     !request.target_position_jump && !request.target_course_progress_rejected &&
-    request.path_side_matches && current_body_safe &&
+    request.path_side_matches && target_execution_safe &&
     !request.actual_wall_physical_contact && !request.wall_margin_blocked &&
     !request.wall_sample_unavailable && !request.emergency_front_risk &&
     !request.solver_recovery_active && !request.forbidden_waypoint &&
-    resolution.path_age_sec <= request.maximum_path_age_sec + 1e-9 &&
+    (resolution.source_fresh || resolution.runtime_validation_fresh) &&
     resolution.remaining_distance_m + 1e-9 >= request.minimum_remaining_distance_m;
+  resolution.authority_from_runtime_validation =
+    resolution.authority_active && !resolution.source_fresh &&
+    resolution.runtime_validation_fresh;
   return resolution;
 }
 

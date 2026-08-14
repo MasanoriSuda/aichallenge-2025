@@ -623,6 +623,7 @@ mpc:
   v2x_overtake_mpcc_frenet_dp_branch_switch_penalty: 1.0
   v2x_overtake_mpcc_frenet_dp_shadow_score_penalty: 1.0
   v2x_overtake_mpcc_frenet_dp_last_path_max_age_sec: 0.50 # [s] warm-start/hysteresis is exact-target and exact-side only
+  v2x_overtake_mpcc_frenet_dp_runtime_validation_lease_sec: 0.20 # [s] short 40 Hz lease renewed only after wall/target/horizon revalidation
   v2x_overtake_safe_separation_soft_prediction_grace_sec: 0.25 # [s] prediction-only loss grace after committed forward completion; hard faults remain immediate
   # Once the target is behind and forward progress remains fresh, let distance/rear-clear
   # terminate the pass instead of a collision-penalty-sensitive wall-clock timeout.

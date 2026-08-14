@@ -1017,9 +1017,10 @@ struct RecedingHorizonExecutionBoundsResolution
 RecedingHorizonExecutionBoundsResolution resolve_receding_horizon_execution_bounds(
   const RecedingHorizonExecutionBoundsRequest & request) noexcept;
 
-struct RecedingHorizonBodyClearBoundsReleaseRequest
+struct RecedingHorizonRearClearBoundsReleaseRequest
 {
   bool pass_phase{false};
+  bool rear_clear_confirmed{false};
   bool target_seen{false};
   bool target_position_jump{false};
   bool current_body_footprints_separated{false};
@@ -1030,10 +1031,30 @@ struct RecedingHorizonBodyClearBoundsReleaseRequest
   bool emergency_front_risk{false};
 };
 
-/// Release opponent bounds after current body clear. A transient predicted
-/// overlap remains released until the shared confirmation clock expires.
-bool can_release_receding_horizon_body_clear_bounds(
-  const RecedingHorizonBodyClearBoundsReleaseRequest & request) noexcept;
+/// Release opponent bounds only after longitudinal rear-clear is confirmed.
+/// Body-clear may release a longitudinal speed cap, but it must not remove the
+/// lateral obstacle while the locked target is still alongside or ahead.
+bool can_release_receding_horizon_rear_clear_bounds(
+  const RecedingHorizonRearClearBoundsReleaseRequest & request) noexcept;
+
+struct RearClearReturnDeferralHoldRequest
+{
+  bool pass_phase{false};
+  bool rear_clear_confirmed{false};
+  bool return_preflight_deferred{false};
+  bool current_side_horizon_feasible{false};
+  bool wall_physical_contact{false};
+  bool wall_sample_unavailable{false};
+  bool emergency_front_risk{false};
+  bool solver_recovery_active{false};
+  bool overtake_forbidden{false};
+};
+
+/// A failed Return preflight is a lateral replan request, not a Pass failure.
+/// Keep the acquired side only while a freshly validated current-side horizon
+/// exists and no higher-priority hard fault owns the controller.
+bool can_hold_pass_during_rear_clear_return_deferral(
+  const RearClearReturnDeferralHoldRequest & request) noexcept;
 
 struct RecedingHorizonWarmStartRequest
 {

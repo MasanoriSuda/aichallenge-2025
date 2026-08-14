@@ -1630,10 +1630,11 @@ RecedingHorizonExecutionBoundsResolution resolve_receding_horizon_execution_boun
   return resolution;
 }
 
-bool can_release_receding_horizon_body_clear_bounds(
-  const RecedingHorizonBodyClearBoundsReleaseRequest & request) noexcept
+bool can_release_receding_horizon_rear_clear_bounds(
+  const RecedingHorizonRearClearBoundsReleaseRequest & request) noexcept
 {
   return request.pass_phase &&
+         request.rear_clear_confirmed &&
          request.target_seen &&
          !request.target_position_jump &&
          request.current_body_footprints_separated &&
@@ -1642,6 +1643,19 @@ bool can_release_receding_horizon_body_clear_bounds(
          !request.predicted_overlap_confirmed) &&
          !request.execution_corridor_blocked &&
          !request.emergency_front_risk;
+}
+
+bool can_hold_pass_during_rear_clear_return_deferral(
+  const RearClearReturnDeferralHoldRequest & request) noexcept
+{
+  return request.pass_phase && request.rear_clear_confirmed &&
+         request.return_preflight_deferred &&
+         request.current_side_horizon_feasible &&
+         !request.wall_physical_contact &&
+         !request.wall_sample_unavailable &&
+         !request.emergency_front_risk &&
+         !request.solver_recovery_active &&
+         !request.overtake_forbidden;
 }
 
 RecedingHorizonWarmStartResolution resample_receding_horizon_warm_start(

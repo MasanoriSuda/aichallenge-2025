@@ -140,7 +140,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonTargetBoundsReque
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonElasticTargetBoundsRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonTargetPredictionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonExecutionBoundsRequest;
-using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonBodyClearBoundsReleaseRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonRearClearBoundsReleaseRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::RearClearReturnDeferralHoldRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassCompletionRolloutSpeedRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorSample;
@@ -3268,28 +3269,65 @@ TEST(V2XOvertakeCoreSpeed, RejectsExecutionBoundsWhenTargetConflictsWithWall)
   EXPECT_FALSE(result.valid);
 }
 
-TEST(V2XOvertakeCoreSpeed, BodyClearReleaseUsesConfirmedPredictedOverlap)
+TEST(V2XOvertakeCoreSpeed, OpponentBoundsRemainUntilRearClear)
 {
-  RecedingHorizonBodyClearBoundsReleaseRequest request{
-    true, true, false, true, true, false, false, false, false};
+  RecedingHorizonRearClearBoundsReleaseRequest request{
+    true, false, true, false, true, true, false, false, false, false};
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::v2x_overtake_core::
+    can_release_receding_horizon_rear_clear_bounds(request));
+
+  request.rear_clear_confirmed = true;
   EXPECT_TRUE(
     multi_purpose_mpc_ros::v2x_overtake_core::
-    can_release_receding_horizon_body_clear_bounds(request));
+    can_release_receding_horizon_rear_clear_bounds(request));
 
   request.predicted_overlap_confirmed = true;
   EXPECT_FALSE(
     multi_purpose_mpc_ros::v2x_overtake_core::
-    can_release_receding_horizon_body_clear_bounds(request));
+    can_release_receding_horizon_rear_clear_bounds(request));
 
   request.predicted_body_footprint_sweep_separated = true;
   EXPECT_TRUE(
     multi_purpose_mpc_ros::v2x_overtake_core::
-    can_release_receding_horizon_body_clear_bounds(request));
+    can_release_receding_horizon_rear_clear_bounds(request));
 
   request.target_position_jump = true;
   EXPECT_FALSE(
     multi_purpose_mpc_ros::v2x_overtake_core::
-    can_release_receding_horizon_body_clear_bounds(request));
+    can_release_receding_horizon_rear_clear_bounds(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, ReturnDeferralRetainsOnlyValidatedRearClearPass)
+{
+  RearClearReturnDeferralHoldRequest request{
+    true, true, true, true, false, false, false, false, false};
+  EXPECT_TRUE(
+    multi_purpose_mpc_ros::v2x_overtake_core::
+    can_hold_pass_during_rear_clear_return_deferral(request));
+
+  request.rear_clear_confirmed = false;
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::v2x_overtake_core::
+    can_hold_pass_during_rear_clear_return_deferral(request));
+  request.rear_clear_confirmed = true;
+
+  request.current_side_horizon_feasible = false;
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::v2x_overtake_core::
+    can_hold_pass_during_rear_clear_return_deferral(request));
+  request.current_side_horizon_feasible = true;
+
+  request.wall_physical_contact = true;
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::v2x_overtake_core::
+    can_hold_pass_during_rear_clear_return_deferral(request));
+  request.wall_physical_contact = false;
+
+  request.emergency_front_risk = true;
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::v2x_overtake_core::
+    can_hold_pass_during_rear_clear_return_deferral(request));
 }
 
 TEST(V2XOvertakeCoreSpeed, RetainsRecentFeasibleRecedingHorizonForSameMission)

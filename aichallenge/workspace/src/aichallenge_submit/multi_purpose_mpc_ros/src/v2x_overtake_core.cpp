@@ -4973,6 +4973,99 @@ FrenetDpCorridorResolution solve_frenet_dp_corridor(
   return resolution;
 }
 
+FrenetDpLongitudinalProfileResolution select_frenet_dp_longitudinal_profile(
+  const FrenetDpLongitudinalProfileRequest & request) noexcept
+{
+  FrenetDpLongitudinalProfileResolution resolution;
+  if (!request.enabled) {
+    resolution.valid = true;
+    return resolution;
+  }
+  if (
+    !std::isfinite(request.current_ego_speed_mps) ||
+    request.current_ego_speed_mps < 0.0 ||
+    !std::isfinite(request.lateral_cost_slack) ||
+    request.lateral_cost_slack < 0.0 || request.candidates.empty())
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  for (const auto & candidate : request.candidates) {
+    if (!candidate.checked) {
+      continue;
+    }
+    ++resolution.checked_candidate_count;
+    if (
+      !std::isfinite(candidate.ego_speed_mps) || candidate.ego_speed_mps < 0.0 ||
+      !std::isfinite(candidate.closing_speed_mps) || candidate.closing_speed_mps < 0.0 ||
+      (candidate.feasible &&
+      (!std::isfinite(candidate.lateral_normalized_cost) ||
+      candidate.lateral_normalized_cost < 0.0)))
+    {
+      resolution.valid = false;
+      resolution.checked = false;
+      resolution.feasible = false;
+      return resolution;
+    }
+    resolution.checked = true;
+    if (!candidate.feasible) {
+      continue;
+    }
+    ++resolution.feasible_candidate_count;
+    resolution.minimum_lateral_cost = std::min(
+      resolution.minimum_lateral_cost, candidate.lateral_normalized_cost);
+  }
+  if (!resolution.checked || resolution.feasible_candidate_count == 0U) {
+    return resolution;
+  }
+
+  constexpr double kTieEpsilon = 1e-9;
+  for (std::size_t i = 0U; i < request.candidates.size(); ++i) {
+    const auto & candidate = request.candidates[i];
+    if (
+      !candidate.checked || !candidate.feasible ||
+      candidate.lateral_normalized_cost >
+      resolution.minimum_lateral_cost + request.lateral_cost_slack + kTieEpsilon)
+    {
+      continue;
+    }
+    if (resolution.selected_candidate_index == std::numeric_limits<std::size_t>::max()) {
+      resolution.selected_candidate_index = i;
+      continue;
+    }
+    const auto & selected = request.candidates[resolution.selected_candidate_index];
+    const double candidate_speed_advantage = candidate.ego_speed_mps - selected.ego_speed_mps;
+    if (candidate_speed_advantage > kTieEpsilon) {
+      resolution.selected_candidate_index = i;
+      continue;
+    }
+    if (std::abs(candidate_speed_advantage) <= kTieEpsilon) {
+      const double candidate_speed_change =
+        std::abs(candidate.ego_speed_mps - request.current_ego_speed_mps);
+      const double selected_speed_change =
+        std::abs(selected.ego_speed_mps - request.current_ego_speed_mps);
+      if (
+        candidate_speed_change + kTieEpsilon < selected_speed_change ||
+        (std::abs(candidate_speed_change - selected_speed_change) <= kTieEpsilon &&
+        candidate.lateral_normalized_cost + kTieEpsilon <
+        selected.lateral_normalized_cost))
+      {
+        resolution.selected_candidate_index = i;
+      }
+    }
+  }
+  if (resolution.selected_candidate_index == std::numeric_limits<std::size_t>::max()) {
+    return resolution;
+  }
+  const auto & selected = request.candidates[resolution.selected_candidate_index];
+  resolution.feasible = true;
+  resolution.selected_ego_speed_mps = selected.ego_speed_mps;
+  resolution.selected_closing_speed_mps = selected.closing_speed_mps;
+  resolution.selected_lateral_cost = selected.lateral_normalized_cost;
+  return resolution;
+}
+
 OvertakeMissionCorridorAdmissionResolution resolve_overtake_mission_corridor_admission(
   const OvertakeMissionCorridorAdmissionRequest & request) noexcept
 {

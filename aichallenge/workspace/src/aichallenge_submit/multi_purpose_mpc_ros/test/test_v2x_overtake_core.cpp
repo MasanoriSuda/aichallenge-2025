@@ -14242,6 +14242,76 @@ TEST(V2XOvertakeCoreFrenetDpCorridor, RejectsDisconnectedLateralSequence)
   EXPECT_FALSE(resolution.left.feasible);
 }
 
+TEST(V2XOvertakeCoreFrenetDpLongitudinalProfile, SelectsFastestWithinLateralCostSlack)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpLongitudinalProfileCandidate;
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpLongitudinalProfileRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::select_frenet_dp_longitudinal_profile;
+
+  FrenetDpLongitudinalProfileRequest request;
+  request.enabled = true;
+  request.current_ego_speed_mps = 4.0;
+  request.lateral_cost_slack = 0.25;
+  request.candidates = {
+    FrenetDpLongitudinalProfileCandidate{true, true, 5.0, 2.0, 1.20},
+    FrenetDpLongitudinalProfileCandidate{true, true, 4.5, 1.5, 1.00},
+    FrenetDpLongitudinalProfileCandidate{true, true, 3.0, 0.0, 0.95}};
+
+  const auto resolution = select_frenet_dp_longitudinal_profile(request);
+  ASSERT_TRUE(resolution.valid);
+  ASSERT_TRUE(resolution.checked);
+  ASSERT_TRUE(resolution.feasible);
+  EXPECT_EQ(resolution.feasible_candidate_count, 3U);
+  EXPECT_EQ(resolution.selected_candidate_index, 0U);
+  EXPECT_DOUBLE_EQ(resolution.selected_ego_speed_mps, 5.0);
+  EXPECT_DOUBLE_EQ(resolution.selected_closing_speed_mps, 2.0);
+}
+
+TEST(V2XOvertakeCoreFrenetDpLongitudinalProfile, UsesRobustSlowerTimingWhenAttackCostIsHigh)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpLongitudinalProfileCandidate;
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpLongitudinalProfileRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::select_frenet_dp_longitudinal_profile;
+
+  FrenetDpLongitudinalProfileRequest request;
+  request.enabled = true;
+  request.current_ego_speed_mps = 4.0;
+  request.lateral_cost_slack = 0.25;
+  request.candidates = {
+    FrenetDpLongitudinalProfileCandidate{true, true, 5.0, 2.0, 1.40},
+    FrenetDpLongitudinalProfileCandidate{true, true, 4.2, 1.2, 1.05},
+    FrenetDpLongitudinalProfileCandidate{true, true, 3.0, 0.0, 1.00}};
+
+  const auto resolution = select_frenet_dp_longitudinal_profile(request);
+  ASSERT_TRUE(resolution.feasible);
+  EXPECT_EQ(resolution.selected_candidate_index, 1U);
+  EXPECT_DOUBLE_EQ(resolution.selected_ego_speed_mps, 4.2);
+  EXPECT_DOUBLE_EQ(resolution.selected_closing_speed_mps, 1.2);
+}
+
+TEST(V2XOvertakeCoreFrenetDpLongitudinalProfile, RejectsInvalidAndNoFeasibleProfiles)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpLongitudinalProfileCandidate;
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpLongitudinalProfileRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::select_frenet_dp_longitudinal_profile;
+
+  FrenetDpLongitudinalProfileRequest request;
+  request.enabled = true;
+  request.current_ego_speed_mps = 4.0;
+  request.lateral_cost_slack = 0.25;
+  request.candidates = {
+    FrenetDpLongitudinalProfileCandidate{true, false, 5.0, 2.0, 1.0},
+    FrenetDpLongitudinalProfileCandidate{false, false, 3.0, 0.0, 1.0}};
+  const auto no_feasible = select_frenet_dp_longitudinal_profile(request);
+  EXPECT_TRUE(no_feasible.valid);
+  EXPECT_TRUE(no_feasible.checked);
+  EXPECT_FALSE(no_feasible.feasible);
+
+  request.candidates[0] =
+    FrenetDpLongitudinalProfileCandidate{true, true, -1.0, 1.0, 1.0};
+  EXPECT_FALSE(select_frenet_dp_longitudinal_profile(request).valid);
+}
+
 TEST(V2XOvertakeCoreFrenetDpCorridor, AdmitsMovingCorridorWithoutFixedGoalIntersection)
 {
   using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpCorridorRequest;

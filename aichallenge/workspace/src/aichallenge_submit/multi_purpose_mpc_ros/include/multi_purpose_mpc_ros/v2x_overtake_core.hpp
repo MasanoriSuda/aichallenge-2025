@@ -2664,6 +2664,45 @@ struct FrenetDpCorridorBranchResolution
   std::vector<double> lateral_path_m;
 };
 
+struct FrenetDpLongitudinalProfileCandidate
+{
+  bool checked{false};
+  bool feasible{false};
+  double ego_speed_mps{};
+  double closing_speed_mps{};
+  double lateral_normalized_cost{std::numeric_limits<double>::infinity()};
+};
+
+struct FrenetDpLongitudinalProfileRequest
+{
+  bool enabled{false};
+  double current_ego_speed_mps{};
+  double lateral_cost_slack{};
+  std::vector<FrenetDpLongitudinalProfileCandidate> candidates;
+};
+
+struct FrenetDpLongitudinalProfileResolution
+{
+  bool valid{false};
+  bool checked{false};
+  bool feasible{false};
+  std::size_t checked_candidate_count{};
+  std::size_t feasible_candidate_count{};
+  std::size_t selected_candidate_index{std::numeric_limits<std::size_t>::max()};
+  double minimum_lateral_cost{std::numeric_limits<double>::infinity()};
+  double selected_ego_speed_mps{};
+  double selected_closing_speed_mps{};
+  double selected_lateral_cost{std::numeric_limits<double>::infinity()};
+};
+
+/// Select one time-aligned longitudinal profile for the lateral Frenet DP.
+/// Profiles outside lateral_cost_slack of the best lateral solution are
+/// rejected, then the fastest remaining profile wins. This preserves an
+/// aggressive pass when it is comparably robust while allowing a short hold
+/// or intermediate arrival when the attack timing closes the corridor.
+FrenetDpLongitudinalProfileResolution select_frenet_dp_longitudinal_profile(
+  const FrenetDpLongitudinalProfileRequest & request) noexcept;
+
 struct FrenetDpCorridorResolution
 {
   bool valid{false};

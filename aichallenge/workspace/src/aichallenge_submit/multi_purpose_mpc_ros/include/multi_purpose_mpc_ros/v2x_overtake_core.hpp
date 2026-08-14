@@ -4990,6 +4990,20 @@ struct DynamicMissionWaitAdmissionRequest
 bool can_enter_dynamic_mission_wait(
   const DynamicMissionWaitAdmissionRequest & request) noexcept;
 
+struct DynamicMissionWaitRuntimeOwnershipRequest
+{
+  bool behavior_overtake{false};
+  bool tactical_rolling_replan_runtime_active{false};
+  bool dynamic_mission_wait_active{false};
+};
+
+/// Route an already-active dynamic wait to its execution owner without
+/// broadening authority to an ordinary tactical rolling replan.  Fully
+/// preflighted Mission replacement branches are evaluated before this
+/// predicate by the controller.
+bool should_execute_dynamic_mission_wait_runtime(
+  const DynamicMissionWaitRuntimeOwnershipRequest & request) noexcept;
+
 enum class DynamicMissionWaitAction
 {
   Inactive,

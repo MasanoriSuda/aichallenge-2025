@@ -18582,8 +18582,11 @@ private:
         }
       }
     } else if (
-      behavior_overtake &&
-      !tactical_rolling_replan_runtime_active)
+      overtake_core::should_execute_dynamic_mission_wait_runtime(
+        overtake_core::DynamicMissionWaitRuntimeOwnershipRequest{
+          behavior_overtake,
+          tactical_rolling_replan_runtime_active,
+          overtake_line_state_.dynamic_mission_wait_active}))
     {
       const bool resuming_paused_mission =
         overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare;

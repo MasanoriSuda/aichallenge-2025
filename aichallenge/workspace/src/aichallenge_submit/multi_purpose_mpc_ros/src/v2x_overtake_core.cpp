@@ -8838,6 +8838,15 @@ bool can_enter_dynamic_mission_wait(
     !request.rear_clear_confirmed;
 }
 
+bool should_execute_dynamic_mission_wait_runtime(
+  const DynamicMissionWaitRuntimeOwnershipRequest & request) noexcept
+{
+  return
+    request.behavior_overtake &&
+    (!request.tactical_rolling_replan_runtime_active ||
+    request.dynamic_mission_wait_active);
+}
+
 DynamicMissionWaitResolution resolve_dynamic_mission_wait(
   const DynamicMissionWaitRequest & request) noexcept
 {

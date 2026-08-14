@@ -115,6 +115,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::SideReplanDebounceRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::LockedTargetGeometryObservationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::LockedTargetNearFieldContinuityRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitAdmissionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitRuntimeOwnershipRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitRequest;
@@ -436,6 +437,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_completion_rollout_
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_rearward_pass_completion_context;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_observe_locked_target_geometry;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_enter_dynamic_mission_wait;
+using multi_purpose_mpc_ros::v2x_overtake_core::should_execute_dynamic_mission_wait_runtime;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_mission_wait;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_mission_wait_forward_prefix;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_mission_ownership;
@@ -10702,6 +10704,30 @@ TEST(V2XOvertakeCoreDynamicMissionWait, AdmitsObservableSameSideAfterNoReturn)
   request.hard_fault = false;
   request.rear_clear_confirmed = true;
   EXPECT_FALSE(can_enter_dynamic_mission_wait(request));
+}
+
+TEST(V2XOvertakeCoreDynamicMissionWait, RoutesOnlyOwnedRuntimeStatesToExecutor)
+{
+  DynamicMissionWaitRuntimeOwnershipRequest request;
+  request.behavior_overtake = true;
+
+  // Preserve the established non-tactical execution path.
+  EXPECT_TRUE(should_execute_dynamic_mission_wait_runtime(request));
+
+  // The active wait is itself a tactical rolling replan and must still reach
+  // its executor after higher-priority replacement commits were unavailable.
+  request.tactical_rolling_replan_runtime_active = true;
+  request.dynamic_mission_wait_active = true;
+  EXPECT_TRUE(should_execute_dynamic_mission_wait_runtime(request));
+
+  // Do not grant wait authority to an ordinary rolling replan.
+  request.dynamic_mission_wait_active = false;
+  EXPECT_FALSE(should_execute_dynamic_mission_wait_runtime(request));
+
+  // SafetyBrake/Cruise/Follow behavior must not publish a forward prefix.
+  request.behavior_overtake = false;
+  request.dynamic_mission_wait_active = true;
+  EXPECT_FALSE(should_execute_dynamic_mission_wait_runtime(request));
 }
 
 TEST(V2XOvertakeCoreDynamicMissionWait, HoldsUntilFreshCurrentOrAlternatePlanExists)

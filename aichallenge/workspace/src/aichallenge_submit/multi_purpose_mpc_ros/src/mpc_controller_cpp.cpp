@@ -1876,6 +1876,20 @@ const char * to_string(const FollowPrepareCause cause)
   return "Unknown";
 }
 
+bool is_tactical_rolling_replan_cause(const FollowPrepareCause cause)
+{
+  switch (cause) {
+    case FollowPrepareCause::DynamicMissionWait:
+    case FollowPrepareCause::TacticalRevalidation:
+    case FollowPrepareCause::RecoveryRetention:
+      return true;
+    case FollowPrepareCause::Unspecified:
+    case FollowPrepareCause::SafetyBrake:
+      return false;
+  }
+  return false;
+}
+
 overtake_core::PausedExecutionOrigin paused_execution_origin(
   const OvertakeLinePhase phase)
 {
@@ -6072,6 +6086,10 @@ struct MPC
     const bool front_matches_locked_target =
       !nearest_front_id.empty() &&
       nearest_front_id == overtake_line_state_.target_vehicle_id;
+    const bool tactical_rolling_replan_active =
+      overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare &&
+      is_tactical_rolling_replan_cause(
+      overtake_line_state_.follow_prepare_cause);
     const auto overtake_mission_ownership =
       v2x_overtake_core::resolve_overtake_mission_ownership(
       v2x_overtake_core::OvertakeMissionOwnershipRequest{
@@ -6084,8 +6102,7 @@ struct MPC
         overtake_line_state_.phase == OvertakeLinePhase::Recovery,
         v2x_behavior_state_initialized && v2x_behavior_state == V2XBehaviorState::Overtake,
         front_matches_locked_target,
-        overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare &&
-        overtake_line_state_.dynamic_mission_wait_active});
+        tactical_rolling_replan_active});
     const bool active_overtake_line =
       overtake_mission_ownership.committed_execution_active;
     const bool paused_overtake_mission =
@@ -7304,9 +7321,26 @@ struct MPC
         assessment.reason = "invalid pass side";
         return assessment;
       }
+      // FollowPrepare is a short tactical pause, not a new overtake entry.  The
+      // original entry gap may have rotated away or moved behind ego while the
+      // current side is still physically usable.  Allow only the locked side to
+      // reach the normal current-state prefix preflight; this flag does not
+      // bypass wall, target-sweep, body-clear, speed or acceleration checks.
+      const bool rolling_current_side_prefix_assessment =
+        tactical_rolling_replan_active && shadow_only &&
+        locked_pass_side != 0 && side == locked_pass_side &&
+        output.locked_target_seen &&
+        !output.locked_target_position_jump &&
+        !output.locked_target_course_progress_rejected &&
+        output.locked_target_current_body_footprints_separated &&
+        output.locked_target_footprint_prediction_valid &&
+        !output.locked_target_pass_side_intrusion &&
+        !overtake_forbidden_wp && !effective_front_risk_emergency &&
+        !overtake_solver_recovery_active_;
       const bool retry_block_applies =
         !shadow_only && !start_grid_breakout_attempt && !active_overtake_line &&
-        overtake_line_state_.phase != OvertakeLinePhase::Return;
+        overtake_line_state_.phase != OvertakeLinePhase::Return &&
+        !rolling_current_side_prefix_assessment;
       if (
         retry_block_applies &&
         is_overtake_line_side_retry_blocked(
@@ -7386,7 +7420,8 @@ struct MPC
       if (
         !has_front_vehicle &&
         !(has_side_vehicle && cfg.v2x_behavior.side_overtake_enabled) &&
-        !(opponent_side_replan_assessment_requested && active_target_valid))
+        !(opponent_side_replan_assessment_requested && active_target_valid) &&
+        !rolling_current_side_prefix_assessment)
       {
         assessment.reason = "no relevant overtake target";
         return assessment;
@@ -7394,7 +7429,9 @@ struct MPC
       if (!cfg.v2x_behavior.require_gap_for_overtake && !cfg.v2x_behavior.overtake_guard_enabled) {
         assessment.gap_available = true;
         assessment.reason = "gap check disabled";
-        return assessment;
+        if (!rolling_current_side_prefix_assessment) {
+          return assessment;
+        }
       }
 
       const int overtake_plan_N = v2x_overtake_gap_plan_horizon(N);
@@ -7446,9 +7483,21 @@ struct MPC
       }
       const int planned_pass_side_sign =
         infer_gap_pass_side(candidate_gap, model->spatial_state.e_y);
+      const bool rolling_gap_side_mismatch =
+        rolling_current_side_prefix_assessment &&
+        planned_pass_side_sign != 0 && planned_pass_side_sign != side;
       if (planned_pass_side_sign != 0 && planned_pass_side_sign != side) {
-        assessment.reason = "planner returned opposite pass side";
-        return assessment;
+        if (!rolling_current_side_prefix_assessment) {
+          assessment.reason = "planner returned opposite pass side";
+          return assessment;
+        }
+        // The old target-relative gap now belongs to the opposite side.  Do
+        // not reuse those bounds for the locked side; fall back to static wall
+        // bounds and let the dynamic target rollout validate a fresh prefix.
+        dynamic_mission_corridor_samples.clear();
+        assessment.corridor_center_ey.reset();
+        assessment.continuous_corridor_distance = 0.0;
+        assessment.corridor_width = 0.0;
       }
       if (cfg.v2x_behavior.overtake_guard_enabled) {
         assessment.gap_available = overtake_guard_allows(
@@ -7515,6 +7564,18 @@ struct MPC
         !effective_front_risk_emergency)
       {
         assessment.reason += " / start-grid requires validated corridor";
+      }
+      if (
+        rolling_current_side_prefix_assessment &&
+        (!assessment.gap_available || rolling_gap_side_mismatch))
+      {
+        const std::string entry_rejection = assessment.reason;
+        assessment.gap_available = true;
+        assessment.fallback_target = false;
+        assessment.transient_gap_hold = false;
+        assessment.reason =
+          "rolling current-state same-side prefix preflight / " + entry_rejection;
+        assessment.guard_reason = assessment.reason;
       }
       const bool transient_gap_failure =
         assessment.guard_reason.find("overtake guard gap width") != std::string::npos ||
@@ -9293,8 +9354,7 @@ struct MPC
           pass_side(locked_pass_side), current_assessment.selected_mission,
           current_assessment.gap_available,
           execution_allowed_for_side(current_assessment), selected_side_conflict,
-          (paused_overtake_mission &&
-          overtake_line_state_.dynamic_mission_wait_active) ||
+          (paused_overtake_mission && tactical_rolling_replan_active) ||
           (output.locked_target_predicted_body_footprint_sweep_separated &&
           !opponent_side_replan_early_intrusion_risk)});
       const auto alternate_maneuver = overtake_core::assess_pass_maneuver_candidate(
@@ -9824,8 +9884,7 @@ struct MPC
     // before no-return; it does not claim that rear-clear/Return is solved.
     const auto & shadow_cfg = cfg.v2x_behavior.overtake_line;
     const bool mpcc_rolling_replan_context =
-      overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare &&
-      overtake_line_state_.dynamic_mission_wait_active;
+      tactical_rolling_replan_active;
     const bool shadow_scene_relevant =
       has_front_vehicle || active_overtake_line || paused_overtake_mission;
     const bool shadow_evaluation_due =
@@ -9954,8 +10013,11 @@ struct MPC
       auto shadow_left_assessment = left_assessment;
       const bool shadow_compare_both_sides =
         locked_pass_side == 0 || opponent_side_replan_before_no_return;
+      const bool shadow_reassess_left =
+        shadow_compare_both_sides ||
+        (mpcc_rolling_replan_context && locked_pass_side > 0);
       if (
-        shadow_compare_both_sides &&
+        shadow_reassess_left &&
         (shadow_left_assessment.side != 1 ||
         (!shadow_left_assessment.selected_mission.has_value() &&
         !shadow_left_assessment.mpcc_receding_mission.has_value())))
@@ -9964,8 +10026,11 @@ struct MPC
       }
       const auto shadow_left_end = std::chrono::steady_clock::now();
       auto shadow_right_assessment = right_assessment;
+      const bool shadow_reassess_right =
+        shadow_compare_both_sides ||
+        (mpcc_rolling_replan_context && locked_pass_side < 0);
       if (
-        shadow_compare_both_sides &&
+        shadow_reassess_right &&
         (shadow_right_assessment.side != -1 ||
         (!shadow_right_assessment.selected_mission.has_value() &&
         !shadow_right_assessment.mpcc_receding_mission.has_value())))
@@ -10026,9 +10091,10 @@ struct MPC
       hold_candidate.available =
         hold_candidate.available && locked_pass_side != 0 &&
         overtake_line_state_.phase != OvertakeLinePhase::Idle;
-      if (mpcc_rolling_replan_context && current_overtake_mission_invalidated()) {
-        // The failed generation remains a geometric anchor for the bounded
-        // physical hold line, but it must not outrank a fresh rolling prefix.
+      if (mpcc_rolling_replan_context) {
+        // A paused frozen Mission remains a geometric anchor for the bounded
+        // physical hold line only.  It must not outrank a fresh current-state
+        // prefix, even when the old generation has not yet been invalidated.
         hold_candidate.available = false;
         hold_candidate.hard_feasible = false;
         hold_candidate.admission_reject_reason =
@@ -10347,7 +10413,7 @@ struct MPC
           seconds_since_selected_mission,
           shadow_cfg.opponent_side_replan_stable_sec});
       const bool rolling_same_side_replan_admitted =
-        mpcc_rolling_replan_context && current_overtake_mission_invalidated() &&
+        mpcc_rolling_replan_context &&
         best_shadow_side == locked_pass_side && winning_prefix_execution_admitted;
       const bool mpcc_same_side_replan_admitted =
         regular_mpcc_same_side_replan_admitted ||
@@ -10466,6 +10532,8 @@ struct MPC
                    << "Overtake MPCC-lite shadow: target=" <<
           (output.target_vehicle_id.empty() ? "none" : output.target_vehicle_id)
                    << ", phase=" << to_string(overtake_line_state_.phase)
+                   << ", rolling=" << (mpcc_rolling_replan_context ? 1 : 0)
+                   << "/" << to_string(overtake_line_state_.follow_prepare_cause)
                    << ", fsm=" << overtake_core::to_string(active_shadow_branch)
                    << ", best=" << overtake_core::to_string(best_shadow_branch)
                    << ", agree=" << (shadow_agrees ? 1 : 0)
@@ -10875,8 +10943,7 @@ struct MPC
     // for a fresh same-side or pre-no-return cross-side prefix. Hard guards
     // still release ownership immediately.
     const bool rolling_replan_behavior_owner =
-      overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare &&
-      overtake_line_state_.dynamic_mission_wait_active &&
+      tactical_rolling_replan_active &&
       overtake_line_state_.pass_side_sign != 0 &&
       output.locked_target_seen &&
       !output.locked_target_position_jump &&
@@ -13700,13 +13767,21 @@ private:
       (historical_no_return_latched && !allow_tactical_no_return_rearm);
     const bool progressive_prefix_replacement =
       allow_progressive_prefix_replacement && candidate.progressive_entry;
+    const bool paused_tactical_prefix_replacement =
+      replacing_paused_mission &&
+      is_tactical_rolling_replan_cause(
+      overtake_line_state_.follow_prepare_cause);
+    const bool same_side_prefix_continuation =
+      progressive_prefix_replacement && !side_changed &&
+      allow_same_side_replacement;
     const auto resolve_prefix_admission =
       [&](const overtake_core::OvertakeMissionCandidate & proposed_prefix) {
         return overtake_core::resolve_mpcc_lite_prefix_execution(
           overtake_core::MpccLitePrefixExecutionRequest{
-            active_execution && !replacing_paused_mission,
+            active_execution &&
+            (!replacing_paused_mission || paused_tactical_prefix_replacement),
             false,
-            !effective_no_return_latched,
+            !effective_no_return_latched || same_side_prefix_continuation,
             overtake_line_state_.pass_horizon_safe_separation_active,
             proposed_prefix.progressive_entry,
             proposed_prefix.feasible,
@@ -16247,16 +16322,18 @@ private:
         pass_progress_watchdog.progress_checkpoint_distance_m;
     }
     overtake_core::PausedMissionTerminalResolution paused_mission_terminal;
-    const bool rolling_replan_runtime_hard_fault =
+    const bool tactical_rolling_replan_runtime_active =
       overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare &&
-      overtake_line_state_.dynamic_mission_wait_active &&
+      is_tactical_rolling_replan_cause(
+      overtake_line_state_.follow_prepare_cause);
+    const bool rolling_replan_runtime_hard_fault =
+      tactical_rolling_replan_runtime_active &&
       (actual_wall_physical_contact || actual_wall_margin_blocked ||
       actual_wall_sample_unavailable ||
       behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake ||
       overtake_solver_recovery_active_ || behavior_output.overtake_forbidden_wp);
     const bool rolling_replan_hold_active =
-      overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare &&
-      overtake_line_state_.dynamic_mission_wait_active &&
+      tactical_rolling_replan_runtime_active &&
       locked_target_progress_continuous &&
       !behavior_output.locked_target_position_jump &&
       !locked_target_progress_rejected &&
@@ -16283,7 +16360,7 @@ private:
         std::isfinite(overtake_line_state_.phase_start_sec) ?
         std::max(0.0, now_sec - overtake_line_state_.phase_start_sec) : 0.0;
       const bool fast_dynamic_reselection_wait =
-        overtake_line_state_.dynamic_mission_wait_active;
+        tactical_rolling_replan_runtime_active;
       const double pause_timeout_sec = fast_dynamic_reselection_wait ?
         line_cfg.dynamic_mission_wait_timeout_sec :
         line_cfg.follow_prepare_timeout_sec;
@@ -17324,8 +17401,7 @@ private:
       }
     } else if (
       behavior_overtake &&
-      !(overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare &&
-      overtake_line_state_.dynamic_mission_wait_active))
+      !tactical_rolling_replan_runtime_active)
     {
       const bool resuming_paused_mission =
         overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare;

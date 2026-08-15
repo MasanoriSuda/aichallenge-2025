@@ -15471,6 +15471,108 @@ TEST(V2XOvertakeCoreFrenetDpCorridor, LimitsHardWallClearanceToNearHorizon)
   EXPECT_FALSE(resolve_frenet_dp_horizon_clearance(request).valid);
 }
 
+TEST(V2XOvertakeCoreFrenetDpCorridor, ConstrainsLeftCorridorWithTimedTargetBody)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    FrenetDpTargetConstrainedCorridorRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    OvertakeMissionDynamicCorridorSample;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    constrain_frenet_dp_corridor_to_target;
+
+  FrenetDpTargetConstrainedCorridorRequest request;
+  request.enabled = true;
+  request.pass_side_sign = 1;
+  request.nominal_ego_speed_mps = 2.0;
+  request.candidate_ego_speed_mps = 2.0;
+  request.prediction_horizon_sec = 1.0;
+  request.maximum_prediction_time_sec = 2.0;
+  request.target_lateral_now_m = 0.0;
+  request.target_lateral_predicted_m = 0.2;
+  request.target_longitudinal_now_m = 0.0;
+  request.target_longitudinal_predicted_m = 0.0;
+  request.longitudinal_overlap_threshold_m = 2.0;
+  request.physical_center_separation_m = 1.0;
+  request.robust_center_separation_m = 1.2;
+  for (const double distance_m : {0.0, 1.0, 2.0}) {
+    OvertakeMissionDynamicCorridorSample sample;
+    sample.path_distance_m = distance_m;
+    sample.lower_lateral_m = -2.0;
+    sample.upper_lateral_m = 2.0;
+    sample.active = true;
+    sample.preferred_lower_lateral_m = -1.5;
+    sample.preferred_upper_lateral_m = 1.5;
+    sample.preferred_bounds_valid = true;
+    request.samples.push_back(sample);
+  }
+
+  const auto resolution = constrain_frenet_dp_corridor_to_target(request);
+  ASSERT_TRUE(resolution.valid);
+  ASSERT_TRUE(resolution.feasible);
+  ASSERT_EQ(resolution.constrained_sample_count, 3U);
+  ASSERT_EQ(resolution.preferred_constrained_sample_count, 3U);
+  ASSERT_EQ(resolution.samples.size(), 3U);
+  EXPECT_NEAR(resolution.samples[0].lower_lateral_m, 1.0, 1e-9);
+  EXPECT_NEAR(resolution.samples[1].lower_lateral_m, 1.1, 1e-9);
+  EXPECT_NEAR(resolution.samples[2].lower_lateral_m, 1.2, 1e-9);
+  EXPECT_NEAR(resolution.samples[1].preferred_lower_lateral_m, 1.3, 1e-9);
+  EXPECT_TRUE(resolution.samples[1].target_active);
+}
+
+TEST(V2XOvertakeCoreFrenetDpCorridor, ConstrainsRightCorridorAndKeepsHardFallback)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    FrenetDpTargetConstrainedCorridorRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    OvertakeMissionDynamicCorridorSample;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    constrain_frenet_dp_corridor_to_target;
+
+  OvertakeMissionDynamicCorridorSample sample;
+  sample.path_distance_m = 0.0;
+  sample.lower_lateral_m = -1.1;
+  sample.upper_lateral_m = 2.0;
+  sample.active = true;
+  sample.preferred_lower_lateral_m = -1.1;
+  sample.preferred_upper_lateral_m = 1.5;
+  sample.preferred_bounds_valid = true;
+  FrenetDpTargetConstrainedCorridorRequest request{
+    true, -1, 2.0, 2.0, 1.0, 2.0, 0.0, -0.2, 0.0, 0.0,
+    2.0, 1.0, 1.2, {sample}};
+
+  const auto resolution = constrain_frenet_dp_corridor_to_target(request);
+  ASSERT_TRUE(resolution.valid);
+  ASSERT_TRUE(resolution.feasible);
+  ASSERT_EQ(resolution.samples.size(), 1U);
+  EXPECT_NEAR(resolution.samples[0].upper_lateral_m, -1.0, 1e-9);
+  EXPECT_FALSE(resolution.samples[0].preferred_bounds_valid);
+}
+
+TEST(V2XOvertakeCoreFrenetDpCorridor, RejectsPhysicalTargetWallConflict)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    FrenetDpTargetConstrainedCorridorRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    OvertakeMissionDynamicCorridorSample;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    constrain_frenet_dp_corridor_to_target;
+
+  OvertakeMissionDynamicCorridorSample sample;
+  sample.path_distance_m = 0.0;
+  sample.lower_lateral_m = -1.0;
+  sample.upper_lateral_m = 0.9;
+  sample.active = true;
+  const FrenetDpTargetConstrainedCorridorRequest request{
+    true, 1, 2.0, 2.0, 1.0, 2.0, 0.0, 0.0, 0.0, 0.0,
+    2.0, 1.0, 1.2, {sample}};
+
+  const auto resolution = constrain_frenet_dp_corridor_to_target(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.feasible);
+  EXPECT_EQ(resolution.failure_index, 0U);
+  EXPECT_TRUE(resolution.samples.empty());
+}
+
 TEST(V2XOvertakeCoreFrenetDpCorridor, SoftReservePullsPathInsidePreferredInterval)
 {
   using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpCorridorRequest;

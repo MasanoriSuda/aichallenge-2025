@@ -7754,6 +7754,8 @@ struct MPC
       {
         std::vector<overtake_core::OvertakeMissionDynamicCorridorSample> dynamic;
         std::vector<overtake_core::OvertakeMissionDynamicCorridorSample> execution;
+        bool target_constraint_checked{false};
+        bool target_constraint_feasible{true};
       };
       const double planner_target_separation = std::max(
         0.0, cfg.v2x_gap.vehicle_radius) +
@@ -7765,7 +7767,8 @@ struct MPC
       const double hard_horizon_distance = std::max(
         0.0,
         cfg.v2x_behavior.overtake_line.mpcc_frenet_dp_hard_horizon_distance);
-      const auto build_gap_corridor_profiles = [&](const GapPlannerOutput & gap) {
+      const auto build_gap_corridor_profiles = [&](
+        const GapPlannerOutput & gap, const double candidate_ego_speed_mps) {
           GapCorridorProfiles profiles;
           for (std::size_t i = 0; i < gap.target_active.size(); ++i) {
             const auto & course_waypoint =
@@ -7835,6 +7838,109 @@ struct MPC
               }
             }
           }
+          // GapPlanner already carries an inflated obstacle interval, but its
+          // rollout and the runtime atomic-promotion check historically used
+          // different arrival-time models. Intersect the generated DP domain
+          // with the exact runtime target prediction before solving so initial,
+          // direct-Pass and rolling candidates share one physical boundary.
+          const bool locked_target_constraint_inputs_valid =
+            output.locked_target_seen &&
+            !output.locked_target_position_jump &&
+            std::isfinite(output.locked_target_longitudinal) &&
+            std::isfinite(output.locked_target_lateral) &&
+            output.locked_target_footprint_prediction_valid &&
+            std::isfinite(output.locked_target_predicted_longitudinal);
+          const bool nearest_front_constraint_inputs_valid =
+            !locked_target_constraint_inputs_valid &&
+            has_front_vehicle &&
+            std::isfinite(nearest_front_distance) &&
+            std::isfinite(nearest_front_lateral) &&
+            std::isfinite(nearest_front_speed);
+          const bool target_constraint_inputs_valid =
+            cfg.v2x_behavior.overtake_line.
+            mpcc_frenet_dp_target_bound_promotion_enabled &&
+            (locked_target_constraint_inputs_valid ||
+            nearest_front_constraint_inputs_valid) &&
+            std::isfinite(candidate_ego_speed_mps) &&
+            candidate_ego_speed_mps > kEps &&
+            cfg.v2x_gap.prediction_time > kEps;
+          if (!target_constraint_inputs_valid) {
+            return profiles;
+          }
+          profiles.target_constraint_checked = true;
+          const double target_lateral_now =
+            locked_target_constraint_inputs_valid ?
+            (std::isfinite(output.locked_target_relative_lateral) ?
+            model->spatial_state.e_y + output.locked_target_relative_lateral :
+            output.locked_target_lateral) :
+            (nearest_front_progress_used ?
+            nearest_front_lateral :
+            model->spatial_state.e_y + nearest_front_lateral);
+          const double target_lateral_predicted =
+            locked_target_constraint_inputs_valid &&
+            output.locked_target_lateral_prediction_valid &&
+            std::isfinite(output.locked_target_predicted_relative_lateral) ?
+            model->spatial_state.e_y +
+            output.locked_target_predicted_relative_lateral :
+            target_lateral_now +
+            (nearest_front_constraint_inputs_valid &&
+            nearest_front_lateral_velocity_valid ?
+            nearest_front_lateral_velocity *
+            std::max(0.0, cfg.v2x_gap.prediction_time) : 0.0);
+          const double target_longitudinal_now =
+            locked_target_constraint_inputs_valid ?
+            output.locked_target_longitudinal :
+            nearest_front_distance;
+          const double target_longitudinal_predicted =
+            locked_target_constraint_inputs_valid ?
+            output.locked_target_predicted_longitudinal :
+            nearest_front_distance +
+            (nearest_front_speed - current_speed_mps_) *
+            std::max(0.0, cfg.v2x_gap.prediction_time);
+          const double nominal_ego_speed_mps = std::max(1.0, current_speed_mps_);
+          const double maximum_prediction_time_sec = std::max(
+            std::max(0.0, cfg.v2x_gap.prediction_time),
+            std::max(
+              0.0,
+              cfg.v2x_behavior.overtake_line.
+              receding_horizon_encounter_prediction_max_sec));
+          const double longitudinal_overlap_threshold_m =
+            0.5 * (std::max(0.0, cfg.v2x_gap.vehicle_length) +
+            std::max(0.0, model->length)) +
+            std::max(
+              0.0,
+              cfg.v2x_behavior.overtake_line.
+              receding_horizon_target_longitudinal_buffer);
+          const auto constrain_samples = [&](const auto & samples) {
+              return overtake_core::constrain_frenet_dp_corridor_to_target(
+                overtake_core::FrenetDpTargetConstrainedCorridorRequest{
+                  true,
+                  side,
+                  nominal_ego_speed_mps,
+                  std::max(1.0, candidate_ego_speed_mps),
+                  std::max(0.0, cfg.v2x_gap.prediction_time),
+                  maximum_prediction_time_sec,
+                  target_lateral_now,
+                  target_lateral_predicted,
+                  target_longitudinal_now,
+                  target_longitudinal_predicted,
+                  longitudinal_overlap_threshold_m,
+                  physical_target_separation,
+                  robust_target_center_separation,
+                  samples});
+            };
+          const auto constrained_dynamic = constrain_samples(profiles.dynamic);
+          const auto constrained_execution = constrain_samples(profiles.execution);
+          profiles.target_constraint_feasible =
+            constrained_dynamic.valid && constrained_dynamic.feasible &&
+            constrained_execution.valid && constrained_execution.feasible;
+          if (!profiles.target_constraint_feasible) {
+            profiles.dynamic.clear();
+            profiles.execution.clear();
+            return profiles;
+          }
+          profiles.dynamic = constrained_dynamic.samples;
+          profiles.execution = constrained_execution.samples;
           return profiles;
         };
       const auto solve_side_frenet_dp = [&](
@@ -7910,7 +8016,8 @@ struct MPC
       GapPlannerOutput candidate_gap = gap_planner->plan(
         *model, ref_wp_id, overtake_plan_N, overtake_lb, overtake_ub, now_sec, false, false,
         std::numeric_limits<double>::infinity(), side, required_gap_width);
-      auto selected_profiles = build_gap_corridor_profiles(candidate_gap);
+      auto selected_profiles = build_gap_corridor_profiles(
+        candidate_gap, std::max(1.0, current_speed_mps_));
       std::optional<overtake_core::FrenetDpCorridorBranchResolution>
       selected_timing_dp_corridor;
 
@@ -7975,7 +8082,8 @@ struct MPC
             now_sec, false, false, std::numeric_limits<double>::infinity(), side,
             required_gap_width, false, std::nullopt, std::nullopt,
             0.0, 0.0, 0.0, evaluation.ego_speed_mps);
-          evaluation.profiles = build_gap_corridor_profiles(evaluation.gap);
+          evaluation.profiles = build_gap_corridor_profiles(
+            evaluation.gap, std::max(1.0, evaluation.ego_speed_mps));
           evaluation.corridor = solve_side_frenet_dp(evaluation.profiles.execution);
           const int timing_side = infer_gap_pass_side(
             evaluation.gap, model->spatial_state.e_y);
@@ -18360,6 +18468,7 @@ private:
     bool dp_refresh_used_active_prefix = false;
     bool dp_refresh_used_active_tail = false;
     bool dp_refresh_used_physical_clearance = false;
+    bool dp_refresh_rebased_from_measured_state = false;
     std::size_t dp_refresh_source_covered_sample_count = 0U;
     std::vector<double> dp_refresh_stitched_distances;
     std::vector<double> dp_refresh_stitched_lateral;
@@ -18386,6 +18495,22 @@ private:
       const auto &candidate = *dp_refresh_candidate;
       overtake_line_state_.mission_frenet_dp_last_candidate_validation_sec =
           now_sec;
+      // Once runtime target-bound validation has paused execution, preserving
+      // the old prefix preserves the very conflict that the fresh candidate is
+      // intended to repair. Re-anchor at measured e_y for this case; healthy
+      // rolling refreshes keep the old prefix for continuity.
+      dp_refresh_rebased_from_measured_state =
+        line_cfg.mpcc_frenet_dp_target_bound_promotion_enabled &&
+        overtake_line_state_.target_bound_execution_replan_hold_active;
+      const std::vector<double> empty_active_path;
+      const auto &refresh_active_distances =
+        dp_refresh_rebased_from_measured_state ?
+        empty_active_path :
+        overtake_line_state_.mission_frenet_dp_path_distances_m;
+      const auto &refresh_active_lateral =
+        dp_refresh_rebased_from_measured_state ?
+        empty_active_path :
+        overtake_line_state_.mission_frenet_dp_lateral_path_m;
       const auto stitched_candidate =
           overtake_core::stitch_frenet_dp_execution_refresh_path(
               overtake_core::FrenetDpExecutionRefreshStitchRequest{
@@ -18393,8 +18518,8 @@ private:
                   overtake_line_state_.mission_frenet_dp_execution_traveled_m,
                   line_cfg.mpcc_frenet_dp_refresh_preserved_prefix_distance,
                   line_cfg.mpcc_frenet_dp_refresh_blend_end_distance,
-                  overtake_line_state_.mission_frenet_dp_path_distances_m,
-                  overtake_line_state_.mission_frenet_dp_lateral_path_m,
+                  refresh_active_distances,
+                  refresh_active_lateral,
                   candidate.frenet_dp_path_distances_m,
                   candidate.frenet_dp_lateral_path_m});
       if (stitched_candidate.valid) {
@@ -18422,7 +18547,8 @@ private:
                   overtake_line_state_.mission_frenet_dp_path_distances_m,
                   overtake_line_state_.mission_frenet_dp_lateral_path_m,
                   candidate_horizon_distances, candidate_fallback_targets});
-      if (active_tail_reference.valid && active_tail_reference.active &&
+      if (!dp_refresh_rebased_from_measured_state &&
+          active_tail_reference.valid && active_tail_reference.active &&
           active_tail_reference.lateral_targets_m.size() ==
               candidate_fallback_targets.size()) {
         candidate_fallback_targets = active_tail_reference.lateral_targets_m;
@@ -18626,7 +18752,8 @@ private:
               rclcpp::get_logger("mpc_controller"),
               "OvertakeLine DP rolling candidate retained as pending: "
               "target=%s, side=%d, source=%s, reference=%d, horizon=%d, "
-              "source_coverage=%zu/%d, stitched=%d/old_prefix=%d/old_tail=%d, "
+              "source_coverage=%zu/%d, stitched=%d/old_prefix=%d/old_tail=%d/"
+              "measured_rebase=%d, "
               "physical=%d, target_bound=%d/%zu/min=%.2f, target_ok=%d, "
               "hard_fault=%d, active_remaining=%.2f m, wp_id=%d",
               overtake_line_state_.target_vehicle_id.c_str(),
@@ -18639,6 +18766,7 @@ private:
               stitched_candidate.valid ? 1 : 0,
               dp_refresh_used_active_prefix ? 1 : 0,
               dp_refresh_used_active_tail ? 1 : 0,
+              dp_refresh_rebased_from_measured_state ? 1 : 0,
               dp_refresh_used_physical_clearance ? 1 : 0,
               candidate_target_bound_horizon_feasible ? 1 : 0,
               candidate_target_bound_horizon.failure_index,
@@ -18721,7 +18849,7 @@ private:
             "OvertakeLine DP execution rolling refresh: target=%s, side=%d, "
             "source=%s, tactic=%s/%zu knots, points=%zu, distance=%.2f m, "
             "old_remaining=%.2f m, source_coverage=%zu/%d, "
-            "stitched_old=%d, old_tail=%d, physical=%d, "
+            "stitched_old=%d, old_tail=%d, measured_rebase=%d, physical=%d, "
             "closing=%.2f m/s, count=%d, wp_id=%d",
             overtake_line_state_.target_vehicle_id.c_str(),
             overtake_line_state_.mission_frenet_dp_side_sign,
@@ -18735,6 +18863,7 @@ private:
             dp_refresh_source_covered_sample_count, N,
             dp_refresh_used_active_prefix ? 1 : 0,
             dp_refresh_used_active_tail ? 1 : 0,
+            dp_refresh_rebased_from_measured_state ? 1 : 0,
             dp_refresh_used_physical_clearance ? 1 : 0,
             overtake_line_state_.mission_closing_speed_limit,
             overtake_line_state_.mission_frenet_dp_refresh_count, model->wp_id);

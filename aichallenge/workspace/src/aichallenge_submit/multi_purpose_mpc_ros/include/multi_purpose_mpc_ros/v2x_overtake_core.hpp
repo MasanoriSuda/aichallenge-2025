@@ -2828,6 +2828,40 @@ struct FrenetDpHorizonClearanceResolution
 FrenetDpHorizonClearanceResolution resolve_frenet_dp_horizon_clearance(
   const FrenetDpHorizonClearanceRequest & request) noexcept;
 
+struct FrenetDpTargetConstrainedCorridorRequest
+{
+  bool enabled{false};
+  int pass_side_sign{};
+  double nominal_ego_speed_mps{};
+  double candidate_ego_speed_mps{};
+  double prediction_horizon_sec{};
+  double maximum_prediction_time_sec{};
+  double target_lateral_now_m{};
+  double target_lateral_predicted_m{};
+  double target_longitudinal_now_m{};
+  double target_longitudinal_predicted_m{};
+  double longitudinal_overlap_threshold_m{};
+  double physical_center_separation_m{};
+  double robust_center_separation_m{};
+  std::vector<OvertakeMissionDynamicCorridorSample> samples;
+};
+
+struct FrenetDpTargetConstrainedCorridorResolution
+{
+  bool valid{false};
+  bool feasible{false};
+  std::size_t constrained_sample_count{};
+  std::size_t preferred_constrained_sample_count{};
+  std::size_t failure_index{std::numeric_limits<std::size_t>::max()};
+  std::vector<OvertakeMissionDynamicCorridorSample> samples;
+};
+
+/// Intersect a distance-domain DP corridor with the same time-aligned target
+/// body prediction used by runtime promotion. Physical separation is a hard
+/// bound; additional robust separation remains a soft preferred interval.
+FrenetDpTargetConstrainedCorridorResolution constrain_frenet_dp_corridor_to_target(
+  const FrenetDpTargetConstrainedCorridorRequest & request) noexcept;
+
 struct OvertakeMissionDynamicCorridorRequest
 {
   OvertakeMissionPathRequest mission_path;

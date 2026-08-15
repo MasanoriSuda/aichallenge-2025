@@ -5214,6 +5214,120 @@ FrenetDpHorizonClearanceResolution resolve_frenet_dp_horizon_clearance(
   return resolution;
 }
 
+FrenetDpTargetConstrainedCorridorResolution constrain_frenet_dp_corridor_to_target(
+  const FrenetDpTargetConstrainedCorridorRequest & request) noexcept
+{
+  constexpr double kBoundEpsilon = 1e-9;
+  FrenetDpTargetConstrainedCorridorResolution resolution;
+  resolution.samples = request.samples;
+  if (!request.enabled) {
+    resolution.valid = true;
+    resolution.feasible = true;
+    return resolution;
+  }
+  const auto finite_positive = [](const double value) {
+      return std::isfinite(value) && value > 0.0;
+    };
+  const auto finite_non_negative = [](const double value) {
+      return std::isfinite(value) && value >= 0.0;
+    };
+  if (
+    (request.pass_side_sign != -1 && request.pass_side_sign != 1) ||
+    !finite_positive(request.nominal_ego_speed_mps) ||
+    !finite_positive(request.candidate_ego_speed_mps) ||
+    !finite_positive(request.prediction_horizon_sec) ||
+    !std::isfinite(request.maximum_prediction_time_sec) ||
+    request.maximum_prediction_time_sec + kBoundEpsilon <
+    request.prediction_horizon_sec ||
+    !std::isfinite(request.target_lateral_now_m) ||
+    !std::isfinite(request.target_lateral_predicted_m) ||
+    !std::isfinite(request.target_longitudinal_now_m) ||
+    !std::isfinite(request.target_longitudinal_predicted_m) ||
+    !finite_non_negative(request.longitudinal_overlap_threshold_m) ||
+    !finite_non_negative(request.physical_center_separation_m) ||
+    !finite_non_negative(request.robust_center_separation_m))
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  resolution.feasible = true;
+  const double robust_center_separation_m = std::max(
+    request.physical_center_separation_m,
+    request.robust_center_separation_m);
+  for (std::size_t i = 0U; i < resolution.samples.size(); ++i) {
+    auto & sample = resolution.samples[i];
+    if (
+      !finite_non_negative(sample.path_distance_m) ||
+      !std::isfinite(sample.lower_lateral_m) ||
+      !std::isfinite(sample.upper_lateral_m) ||
+      sample.upper_lateral_m + kBoundEpsilon < sample.lower_lateral_m ||
+      (sample.preferred_bounds_valid &&
+      (!std::isfinite(sample.preferred_lower_lateral_m) ||
+      !std::isfinite(sample.preferred_upper_lateral_m))))
+    {
+      return FrenetDpTargetConstrainedCorridorResolution{};
+    }
+    if (!sample.active) {
+      continue;
+    }
+    const auto prediction = resolve_receding_horizon_target_prediction(
+      RecedingHorizonTargetPredictionRequest{
+        true,
+        sample.path_distance_m,
+        request.nominal_ego_speed_mps,
+        request.candidate_ego_speed_mps,
+        request.prediction_horizon_sec,
+        request.maximum_prediction_time_sec,
+        request.target_lateral_now_m,
+        request.target_lateral_predicted_m,
+        request.target_longitudinal_now_m,
+        request.target_longitudinal_predicted_m,
+        request.longitudinal_overlap_threshold_m});
+    if (!prediction.valid) {
+      return FrenetDpTargetConstrainedCorridorResolution{};
+    }
+    if (!prediction.body_overlap_window) {
+      continue;
+    }
+
+    ++resolution.constrained_sample_count;
+    sample.target_active = true;
+    if (request.pass_side_sign > 0) {
+      sample.lower_lateral_m = std::max(
+        sample.lower_lateral_m,
+        prediction.target_lateral_m + request.physical_center_separation_m);
+    } else {
+      sample.upper_lateral_m = std::min(
+        sample.upper_lateral_m,
+        prediction.target_lateral_m - request.physical_center_separation_m);
+    }
+    if (sample.upper_lateral_m + kBoundEpsilon < sample.lower_lateral_m) {
+      resolution.feasible = false;
+      resolution.failure_index = i;
+      resolution.samples.clear();
+      return resolution;
+    }
+
+    if (sample.preferred_bounds_valid) {
+      ++resolution.preferred_constrained_sample_count;
+      if (request.pass_side_sign > 0) {
+        sample.preferred_lower_lateral_m = std::max(
+          sample.preferred_lower_lateral_m,
+          prediction.target_lateral_m + robust_center_separation_m);
+      } else {
+        sample.preferred_upper_lateral_m = std::min(
+          sample.preferred_upper_lateral_m,
+          prediction.target_lateral_m - robust_center_separation_m);
+      }
+      sample.preferred_bounds_valid =
+        sample.preferred_upper_lateral_m + kBoundEpsilon >=
+        sample.preferred_lower_lateral_m;
+    }
+  }
+  return resolution;
+}
+
 FrenetDpCorridorResolution solve_frenet_dp_corridor(
   const FrenetDpCorridorRequest & request) noexcept
 {

@@ -391,8 +391,10 @@ using multi_purpose_mpc_ros::v2x_overtake_core::update_committed_pass_progress_w
 using multi_purpose_mpc_ros::v2x_overtake_core::update_front_hazard_hold;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_front_hazard_target_continuity;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_front_danger_action;
+using multi_purpose_mpc_ros::v2x_overtake_core::FrontDangerTargetIdentityRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   can_suppress_committed_corridor_front_danger;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_front_danger_target_identity;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_committed_pass_body_geometry;
 using multi_purpose_mpc_ros::v2x_overtake_core::arm_solver_cooldown;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_solver_cooldown_active;
@@ -1166,6 +1168,72 @@ TEST(V2XFrontDangerAction, RecoverableSideContactRetainsCommittedPassOwnership)
   request.recoverable_side_contact_active = true;
   request.target_position_jump = true;
   EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
+}
+
+TEST(V2XFrontDangerAction, PassOriginContactBreaksDynamicWaitAuthorityCycle)
+{
+  CommittedCorridorFrontDangerSuppressionRequest request;
+  request.enabled = true;
+  request.active_shiftout_or_pass = false;
+  request.dynamic_wait_forward_authority_active = false;
+  request.nearest_front_matches_locked_target = true;
+  request.validated_fixed_corridor = true;
+  request.target_seen = true;
+  request.current_body_footprints_separated = false;
+  request.current_body_footprint_overlap_confirmed = true;
+  request.pass_phase = true;
+  request.recoverable_side_contact_active = true;
+
+  // The classifier-approved contact is the bootstrap authority. Requiring a
+  // previously published wait prefix here would recreate the runtime cycle.
+  EXPECT_TRUE(can_suppress_committed_corridor_front_danger(request));
+
+  request.pass_phase = false;
+  EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
+  request.pass_phase = true;
+  request.nearest_front_matches_locked_target = false;
+  EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
+  request.nearest_front_matches_locked_target = true;
+  request.inter_vehicle_corridor = true;
+  EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
+}
+
+TEST(V2XFrontDangerAction, MatchesCurrentOrActiveHeldHazardByTargetId)
+{
+  FrontDangerTargetIdentityRequest request;
+  request.locked_target_id = "d2";
+  request.nearest_front_id = "d2";
+  auto result = resolve_front_danger_target_identity(request);
+  EXPECT_TRUE(result.current_front_matches_locked_target);
+  EXPECT_FALSE(result.held_hazard_matches_locked_target);
+
+  request.hazard_hold_active = true;
+  request.hazard_hold_target_id = "d3";
+  result = resolve_front_danger_target_identity(request);
+  EXPECT_TRUE(result.current_front_matches_locked_target);
+  EXPECT_FALSE(result.held_hazard_matches_locked_target);
+
+  request.nearest_front_id = "d3";
+  result = resolve_front_danger_target_identity(request);
+  EXPECT_FALSE(result.current_front_matches_locked_target);
+  EXPECT_FALSE(result.held_hazard_matches_locked_target);
+
+  request.hazard_hold_target_id = "d2";
+  request.hazard_hold_active = false;
+  result = resolve_front_danger_target_identity(request);
+  EXPECT_FALSE(result.held_hazard_matches_locked_target);
+  request.hazard_hold_active = true;
+  result = resolve_front_danger_target_identity(request);
+  EXPECT_TRUE(result.held_hazard_matches_locked_target);
+  EXPECT_FALSE(result.current_front_matches_locked_target);
+
+  request.hazard_hold_target_id = "d3";
+  result = resolve_front_danger_target_identity(request);
+  EXPECT_FALSE(result.held_hazard_matches_locked_target);
+  request.locked_target_id.clear();
+  result = resolve_front_danger_target_identity(request);
+  EXPECT_FALSE(result.current_front_matches_locked_target);
+  EXPECT_FALSE(result.held_hazard_matches_locked_target);
 }
 
 TEST(V2XFrontDangerAction, ValidatedShiftOutDeadlineOwnsPredictionOnlyDanger)

@@ -6356,6 +6356,8 @@ struct CommittedCorridorFrontDangerSuppressionRequest
   /// lateral plan is being atomically replaced in FollowPrepare. This already
   /// includes the shared predicted-overlap confirmation result.
   bool dynamic_wait_forward_authority_active{false};
+  /// The current or held hazard identity selected by the caller matches the
+  /// locked Mission target. Resolve each source separately, never by speed ownership.
   bool nearest_front_matches_locked_target{false};
   bool validated_fixed_corridor{false};
   bool inter_vehicle_corridor{false};
@@ -6368,6 +6370,7 @@ struct CommittedCorridorFrontDangerSuppressionRequest
   bool prior_front_cap_release_active{false};
   bool predicted_body_footprint_overlap_confirmed{true};
   bool minimum_motion_side_by_side_escape_active{false};
+  /// Pass or a Pass-origin DynamicMissionWait contact context.
   bool pass_phase{false};
   bool committed_pass_attack_mode_enabled{false};
   bool recoverable_side_contact_active{false};
@@ -6387,9 +6390,30 @@ struct CommittedCorridorFrontDangerSuppressionRequest
 /// remain valid. A frozen ShiftOut with a feasible body-clear deadline may do
 /// the same while current bodies remain separated. The bounded body-clear
 /// handoff may span ShiftOut and early Pass, but never hides current overlap.
+/// A Pass-origin DynamicMissionWait may bootstrap this authority only through
+/// the independently bounded recoverable side-contact classifier.
 /// Wall/path execution guards remain owned by OvertakeLine.
 bool can_suppress_committed_corridor_front_danger(
   const CommittedCorridorFrontDangerSuppressionRequest & request) noexcept;
+
+struct FrontDangerTargetIdentityRequest
+{
+  std::string locked_target_id;
+  std::string nearest_front_id;
+  bool hazard_hold_active{false};
+  std::string hazard_hold_target_id;
+};
+
+struct FrontDangerTargetIdentityResolution
+{
+  bool current_front_matches_locked_target{false};
+  bool held_hazard_matches_locked_target{false};
+};
+
+/// Match current and held front-danger ownership independently by vehicle
+/// identity, never by longitudinal speed-policy ownership.
+FrontDangerTargetIdentityResolution resolve_front_danger_target_identity(
+  const FrontDangerTargetIdentityRequest & request) noexcept;
 
 struct CommittedPassBodyGeometryRequest
 {

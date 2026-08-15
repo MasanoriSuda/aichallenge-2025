@@ -6196,8 +6196,6 @@ struct MPC
       overtake_mission_ownership.committed_execution_active;
     const bool paused_overtake_mission =
       overtake_mission_ownership.paused_mission_active;
-    const bool nearest_front_matches_locked_target =
-      overtake_mission_ownership.overtake_line_owns_locked_target_speed;
     const bool generic_follow_cap_allowed_by_owner =
       overtake_mission_ownership.generic_follow_owns_locked_target_speed;
     output.overtake_entry_assessment_active =
@@ -6679,13 +6677,22 @@ struct MPC
         output.locked_target_current_body_footprints_separated,
         output.locked_target_footprint_prediction_valid,
         dynamic_wait_predicted_path_acceptable});
-    const bool committed_corridor_front_danger_suppressed =
-      v2x_overtake_core::can_suppress_committed_corridor_front_danger(
+    const bool front_hazard_hold_was_active =
+      cfg.v2x_behavior.front_hazard_hold_enabled &&
+      std::isfinite(now_sec) && now_sec < front_hazard_hold_until_sec_;
+    const auto front_danger_target_identity =
+      v2x_overtake_core::resolve_front_danger_target_identity(
+      v2x_overtake_core::FrontDangerTargetIdentityRequest{
+        overtake_line_state_.target_vehicle_id,
+        nearest_front_id,
+        front_hazard_hold_was_active,
+        front_hazard_hold_target_id_});
+    auto committed_corridor_front_danger_request =
       v2x_overtake_core::CommittedCorridorFrontDangerSuppressionRequest{
         cfg.v2x_behavior.overtake_committed_corridor_front_danger_suppression_enabled,
         active_overtake_line,
         dynamic_wait_forward_authority_active,
-        nearest_front_matches_locked_target,
+        front_danger_target_identity.current_front_matches_locked_target,
         cfg.v2x_behavior.overtake_minimum_lateral_motion_enabled &&
         overtake_line_state_.fixed_pass_corridor_goal_ey.has_value() &&
         !start_grid_breakout_line_target_matches,
@@ -6703,17 +6710,28 @@ struct MPC
         cfg.v2x_behavior.overtake_committed_pass_attack_mode_enabled,
         output.recoverable_side_contact_active,
         overtake_line_state_.mission_path_frozen &&
-        committed_body_clear_handoff.active});
+        committed_body_clear_handoff.active};
+    const bool committed_corridor_current_front_danger_suppressed =
+      v2x_overtake_core::can_suppress_committed_corridor_front_danger(
+      committed_corridor_front_danger_request);
+    committed_corridor_front_danger_request.nearest_front_matches_locked_target =
+      front_danger_target_identity.held_hazard_matches_locked_target;
+    const bool committed_corridor_held_front_danger_suppressed =
+      v2x_overtake_core::can_suppress_committed_corridor_front_danger(
+      committed_corridor_front_danger_request);
+    const bool committed_corridor_front_danger_suppressed =
+      committed_corridor_current_front_danger_suppressed ||
+      committed_corridor_held_front_danger_suppressed;
     output.committed_corridor_front_danger_suppressed =
       committed_corridor_front_danger_suppressed;
     const bool effective_front_risk_emergency =
-      front_risk_emergency && !committed_corridor_front_danger_suppressed;
+      front_risk_emergency && !committed_corridor_current_front_danger_suppressed;
     const FrontRiskLevel effective_front_risk_level =
-      committed_corridor_front_danger_suppressed && front_risk_emergency ?
+      committed_corridor_current_front_danger_suppressed && front_risk_emergency ?
       FrontRiskLevel::AvoidCandidate : front_risk_level;
     const bool effective_front_danger_requires_safety_brake =
       front_danger_requires_safety_brake &&
-      !committed_corridor_front_danger_suppressed;
+      !committed_corridor_current_front_danger_suppressed;
     output.front_risk_level = effective_front_risk_level;
     // A latched start-grid breakout owns longitudinal separation while its side corridor
     // remains valid. Do not pull it back behind the rolling grid target.
@@ -6752,11 +6770,15 @@ struct MPC
         "start-grid front risk emergency", front_risk, front_risk_level);
       return commit_v2x_behavior_state(output, now_sec);
     }
-    const bool front_hazard_hold_was_active =
-      cfg.v2x_behavior.front_hazard_hold_enabled &&
-      now_sec < front_hazard_hold_until_sec_;
+    // Releasing a same-target hold is valid for the admitted side contact, but a
+    // different current front emergency must first replace/refresh the held target.
+    const bool held_contact_observed_safe =
+      committed_corridor_held_front_danger_suppressed &&
+      (!has_front_vehicle ||
+      front_danger_target_identity.current_front_matches_locked_target ||
+      !front_risk_emergency);
     const bool held_target_observed_safe =
-      committed_corridor_front_danger_suppressed ||
+      held_contact_observed_safe ||
       (front_hazard_hold_was_active && has_front_vehicle &&
       !front_hazard_hold_target_id_.empty() &&
       nearest_front_id == front_hazard_hold_target_id_ &&
@@ -6769,7 +6791,7 @@ struct MPC
       !suppress_start_grid_stop_behavior && !start_grid_breakout_attempt;
     const bool refresh_held_near_field_target =
       front_hazard_hold_was_active && held_target_near_field_conflict &&
-      !committed_corridor_front_danger_suppressed &&
+      !committed_corridor_held_front_danger_suppressed &&
       !held_target_rear_clear &&
       !suppress_start_grid_stop_behavior && !start_grid_breakout_attempt;
     const bool refresh_held_front_hazard =

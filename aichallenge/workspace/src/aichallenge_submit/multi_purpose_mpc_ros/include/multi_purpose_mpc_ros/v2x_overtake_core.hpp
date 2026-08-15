@@ -2005,6 +2005,7 @@ enum class SafeSeparationReason
   SideBySideRearClearCompletion,
   RearwardProgressLossDisengagement,
   RearwardProgressLossDisengagementTimeout,
+  TargetAheadPassContinuation,
 };
 
 struct SpeedPreservingTacticalRevalidationRequest
@@ -2040,6 +2041,37 @@ struct SpeedPreservingTacticalRevalidationResolution
 SpeedPreservingTacticalRevalidationResolution
 resolve_speed_preserving_tactical_revalidation(
   const SpeedPreservingTacticalRevalidationRequest & request) noexcept;
+
+enum class TargetAheadPassContinuationAction
+{
+  Inactive,
+  HoldSameSide,
+  ForwardEscape,
+};
+
+struct TargetAheadPassContinuationRequest
+{
+  bool enabled{false};
+  bool safe_separation_active{false};
+  bool pass_committed{false};
+  bool target_continuous{false};
+  bool current_body_footprints_separated{false};
+  bool footprint_prediction_valid{false};
+  bool predicted_body_footprint_sweep_separated{false};
+  bool execution_corridor_blocked{true};
+  bool hard_fault{false};
+  bool rear_clear_confirmed{false};
+  bool absolute_budget_available{false};
+  double target_longitudinal_m{};
+  double maximum_front_distance_m{};
+};
+
+/// Classify a committed Pass whose locked target remains ahead. A physically
+/// and predictively clear corridor may continue forward; prediction-only
+/// overlap retains speed on the same side while replanning. Current-body,
+/// wall/corridor and runtime hard faults never receive this lease.
+TargetAheadPassContinuationAction resolve_target_ahead_pass_continuation(
+  const TargetAheadPassContinuationRequest & request) noexcept;
 
 struct RobustOvertakeClearanceRequest
 {
@@ -2387,6 +2419,7 @@ struct SafeSeparationRequest
   double maximum_distance_m{};
   double ego_speed_mps{};
   bool forward_escape_allowed{false};
+  bool target_ahead_hold_allowed{false};
   double forward_escape_max_front_distance_m{};
   double absolute_elapsed_sec{};
   double absolute_traveled_m{};

@@ -3781,6 +3781,32 @@ bool can_continue_latched_forward_escape(
     !request.hard_fault && !request.rear_clear_confirmed;
 }
 
+TargetAheadPassContinuationAction resolve_target_ahead_pass_continuation(
+  const TargetAheadPassContinuationRequest & request) noexcept
+{
+  if (
+    !std::isfinite(request.target_longitudinal_m) ||
+    !std::isfinite(request.maximum_front_distance_m) ||
+    request.maximum_front_distance_m < 0.0)
+  {
+    return TargetAheadPassContinuationAction::Inactive;
+  }
+  const bool physically_admitted =
+    request.enabled && request.safe_separation_active && request.pass_committed &&
+    request.target_continuous && request.current_body_footprints_separated &&
+    request.footprint_prediction_valid && !request.execution_corridor_blocked &&
+    !request.hard_fault && !request.rear_clear_confirmed &&
+    request.absolute_budget_available &&
+    request.target_longitudinal_m >= 0.0 &&
+    request.target_longitudinal_m <= request.maximum_front_distance_m + 1e-9;
+  if (!physically_admitted) {
+    return TargetAheadPassContinuationAction::Inactive;
+  }
+  return request.predicted_body_footprint_sweep_separated ?
+    TargetAheadPassContinuationAction::ForwardEscape :
+    TargetAheadPassContinuationAction::HoldSameSide;
+}
+
 bool can_return_from_tactical_revalidation(
   const TacticalRevalidationReturnRequest & request) noexcept
 {
@@ -4024,6 +4050,15 @@ SafeSeparationResolution resolve_safe_separation(
   resolution.action = SafeSeparationAction::KeepSameSide;
   if (forward_escape_active) {
     apply_forward_escape_velocity();
+    return resolution;
+  }
+  if (request.target_ahead_hold_allowed && request.target_longitudinal_m >= 0.0) {
+    resolution.reason = SafeSeparationReason::TargetAheadPassContinuation;
+    resolution.target_velocity_reference_mps = std::min(
+      request.maximum_ego_speed_mps,
+      std::max(request.ego_speed_mps, request.target_speed_mps));
+    resolution.signed_closing_speed_mps =
+      resolution.target_velocity_reference_mps - request.target_speed_mps;
     return resolution;
   }
   if (
@@ -4379,6 +4414,8 @@ const char * to_string(const SafeSeparationReason reason) noexcept
       return "rearward progress-loss disengagement";
     case SafeSeparationReason::RearwardProgressLossDisengagementTimeout:
       return "rearward progress-loss disengagement timeout";
+    case SafeSeparationReason::TargetAheadPassContinuation:
+      return "target-ahead Pass continuation";
   }
   return "unknown";
 }

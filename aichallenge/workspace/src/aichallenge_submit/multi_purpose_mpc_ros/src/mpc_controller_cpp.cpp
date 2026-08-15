@@ -1503,6 +1503,8 @@ struct OvertakeLineConfig
   double safe_separation_speed_delta{0.8};
   bool safe_separation_forward_escape_enabled{false};
   double safe_separation_forward_escape_max_front_distance{0.75};
+  bool safe_separation_target_ahead_continuation_enabled{false};
+  double safe_separation_target_ahead_continuation_max_front_distance{6.0};
   double safe_separation_front_clear_distance{2.0};
   double safe_separation_front_clear_confirm_sec{0.25};
   double safe_separation_max_sec{3.0};
@@ -20411,6 +20413,7 @@ private:
       std::numeric_limits<double>::quiet_NaN();
     bool safe_separation_forward_escape_active = false;
     bool safe_separation_full_speed_forward_escape_active = false;
+    bool safe_separation_target_ahead_hold_active = false;
     const bool pass_current_body_geometry_safe =
       behavior_output.locked_target_current_body_footprints_separated ||
       committed_forward_completion.current_overlap_grace_active ||
@@ -21727,6 +21730,31 @@ private:
         }
         overtake_line_state_.pass_latched_forward_escape_was_active =
           latched_forward_escape_continuation;
+        const auto target_ahead_pass_continuation =
+          overtake_core::resolve_target_ahead_pass_continuation(
+          overtake_core::TargetAheadPassContinuationRequest{
+            line_cfg.safe_separation_target_ahead_continuation_enabled,
+            overtake_line_state_.pass_horizon_safe_separation_active,
+            behavior_output.overtake_commit_stage !=
+            overtake_core::PassCommitStage::Selectable,
+            tactical_reselect_target_continuous,
+            behavior_output.locked_target_current_body_footprints_separated,
+            behavior_output.locked_target_footprint_prediction_valid,
+            behavior_output.locked_target_predicted_body_footprint_sweep_separated &&
+            !behavior_output.locked_target_pass_side_intrusion,
+            behavior_output.overtake_execution_corridor_blocked,
+            tactical_reselect_hard_fault,
+            rear_clear_confirmed,
+            pass_elapsed < line_cfg.pass_horizon_absolute_time_limit - kEps &&
+            pass_traveled < line_cfg.pass_horizon_absolute_distance_limit - kEps,
+            locked_target_longitudinal,
+            line_cfg.safe_separation_target_ahead_continuation_max_front_distance});
+        const bool target_ahead_forward_escape =
+          target_ahead_pass_continuation ==
+          overtake_core::TargetAheadPassContinuationAction::ForwardEscape;
+        const bool target_ahead_same_side_hold =
+          target_ahead_pass_continuation ==
+          overtake_core::TargetAheadPassContinuationAction::HoldSameSide;
         const bool safe_separation_forward_escape_allowed =
           line_cfg.safe_separation_forward_escape_enabled &&
           (committed_forward_completion.active ||
@@ -21735,7 +21763,18 @@ private:
           behavior_output.recoverable_side_contact_active ||
           tactical_revalidation.active ||
           safe_trajectory_prefix_active ||
-          latched_forward_escape_continuation);
+          latched_forward_escape_continuation ||
+          target_ahead_forward_escape);
+        const double safe_separation_forward_escape_max_front_distance =
+          target_ahead_forward_escape ?
+          std::max(
+            line_cfg.safe_separation_forward_escape_max_front_distance,
+            line_cfg.safe_separation_target_ahead_continuation_max_front_distance) :
+          safe_trajectory_prefix_active ?
+          std::max(
+            line_cfg.safe_separation_forward_escape_max_front_distance,
+            line_cfg.safe_separation_safe_prefix_max_front_distance) :
+          line_cfg.safe_separation_forward_escape_max_front_distance;
         const bool safe_separation_fresh_forward_progress =
           safe_separation_forward_escape_allowed &&
           !behavior_output.overtake_execution_corridor_blocked &&
@@ -21814,7 +21853,8 @@ private:
             true,
             short_horizon_safe || tactical_revalidation.active ||
             safe_trajectory_prefix_active ||
-            latched_forward_escape_continuation,
+            latched_forward_escape_continuation ||
+            target_ahead_forward_escape || target_ahead_same_side_hold,
             safe_separation_target_observation_available,
             rear_clear_confirmed,
             !return_corridor_blocked,
@@ -21831,11 +21871,8 @@ private:
             overtake_line_state_.pass_horizon_safe_separation_max_distance,
             std::max(0.0, current_speed_mps_),
             safe_separation_forward_escape_allowed,
-            safe_trajectory_prefix_active ?
-            std::max(
-              line_cfg.safe_separation_forward_escape_max_front_distance,
-              line_cfg.safe_separation_safe_prefix_max_front_distance) :
-            line_cfg.safe_separation_forward_escape_max_front_distance,
+            target_ahead_same_side_hold,
+            safe_separation_forward_escape_max_front_distance,
             pass_elapsed,
             pass_traveled,
             line_cfg.pass_horizon_absolute_time_limit,
@@ -21867,6 +21904,9 @@ private:
             safe_separation.forward_escape_active;
           safe_separation_full_speed_forward_escape_active =
             safe_separation.full_speed_forward_escape_active;
+          safe_separation_target_ahead_hold_active =
+            safe_separation.reason ==
+            overtake_core::SafeSeparationReason::TargetAheadPassContinuation;
           const bool rearward_progress_time_grace_active =
             safe_separation.reason ==
             overtake_core::SafeSeparationReason::RearwardProgressTimeGrace;
@@ -24040,7 +24080,7 @@ private:
           "unseparated_reserve=%d/protected=%.2f, "
           "cap_release=%d, horizon_release=%d, "
           "speed_hold=%d, replan_grace=%d, pass_entry_gate=%d, "
-          "safe_sep=%d/forward=%d/full_speed=%d/"
+          "safe_sep=%d/forward=%d/full_speed=%d/target_hold=%d/"
           "signed_closing=%.2f/budget=%.2f s/%.2f m, "
           "contact_continue=%d/evidence=%s/near=%.2f/%.2f/"
           "elapsed=%.2f/progress=%.2f/bias=%.2f/%.2f/wall_limited=%d/"
@@ -24086,6 +24126,7 @@ private:
           overtake_line_state_.pass_horizon_safe_separation_active ? 1 : 0,
           safe_separation_forward_escape_active ? 1 : 0,
           safe_separation_full_speed_forward_escape_active ? 1 : 0,
+          safe_separation_target_ahead_hold_active ? 1 : 0,
           safe_separation_signed_closing_speed,
           overtake_line_state_.pass_horizon_safe_separation_max_sec,
           overtake_line_state_.pass_horizon_safe_separation_max_distance,
@@ -27794,6 +27835,16 @@ Config load_config(const std::string & path)
     mpc["v2x_overtake_safe_separation_forward_escape_max_front_distance"] ?
     mpc["v2x_overtake_safe_separation_forward_escape_max_front_distance"].as<double>() :
     0.75);
+  cfg.mpc.v2x_behavior.overtake_line.safe_separation_target_ahead_continuation_enabled =
+    mpc["v2x_overtake_safe_separation_target_ahead_continuation_enabled"] ?
+    mpc["v2x_overtake_safe_separation_target_ahead_continuation_enabled"].as<bool>() :
+    false;
+  cfg.mpc.v2x_behavior.overtake_line
+  .safe_separation_target_ahead_continuation_max_front_distance = std::max(
+    0.0,
+    mpc["v2x_overtake_safe_separation_target_ahead_continuation_max_front_distance"] ?
+    mpc["v2x_overtake_safe_separation_target_ahead_continuation_max_front_distance"]
+    .as<double>() : 6.0);
   cfg.mpc.v2x_behavior.overtake_line.safe_separation_front_clear_distance = std::max(
     0.0,
     mpc["v2x_overtake_safe_separation_front_clear_distance"] ?
@@ -29851,6 +29902,13 @@ public:
         .safe_separation_tactical_revalidation_max_sec,
         mpc_cfg_.v2x_behavior.overtake_line
         .safe_separation_tactical_revalidation_max_distance);
+      RCLCPP_INFO(
+        get_logger(),
+        "V2X target-ahead Pass continuation: %s, front<=%.2f m",
+        mpc_cfg_.v2x_behavior.overtake_line
+        .safe_separation_target_ahead_continuation_enabled ? "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line
+        .safe_separation_target_ahead_continuation_max_front_distance);
       RCLCPP_INFO(
         get_logger(),
         "V2X target-bound Pass execution prefix: %s, limit=%.2f s/%.2f m, "

@@ -196,6 +196,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationTacticalReselectRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::TargetAheadPassContinuationAction;
+using multi_purpose_mpc_ros::v2x_overtake_core::TargetAheadPassContinuationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RobustOvertakeClearanceRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeTrajectoryPrefixLeaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_robust_overtake_clearance;
@@ -268,6 +270,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frozen_outer_transition_
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_same_side_extension_commit;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_commit_same_side_extension;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_safe_separation;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_target_ahead_pass_continuation;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_reselect_from_safe_separation;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_soft_mission_abort;
 using multi_purpose_mpc_ros::v2x_overtake_core::
@@ -6083,6 +6086,74 @@ TEST(V2XOvertakeCoreHorizon, CreatesLongitudinalSafeSeparationOnCommittedSide)
   resolution = resolve_safe_separation(request);
   EXPECT_EQ(resolution.action, SafeSeparationAction::RecoverBehind);
   EXPECT_EQ(resolution.reason, SafeSeparationReason::TargetClearAhead);
+}
+
+TEST(V2XOvertakeCoreHorizon, KeepsCommittedTargetAheadPassUntilRearClearOrHardFault)
+{
+  TargetAheadPassContinuationRequest continuation;
+  continuation.enabled = true;
+  continuation.safe_separation_active = true;
+  continuation.pass_committed = true;
+  continuation.target_continuous = true;
+  continuation.current_body_footprints_separated = true;
+  continuation.footprint_prediction_valid = true;
+  continuation.execution_corridor_blocked = false;
+  continuation.absolute_budget_available = true;
+  continuation.target_longitudinal_m = 4.0;
+  continuation.maximum_front_distance_m = 6.0;
+
+  EXPECT_EQ(
+    resolve_target_ahead_pass_continuation(continuation),
+    TargetAheadPassContinuationAction::HoldSameSide);
+
+  continuation.predicted_body_footprint_sweep_separated = true;
+  EXPECT_EQ(
+    resolve_target_ahead_pass_continuation(continuation),
+    TargetAheadPassContinuationAction::ForwardEscape);
+
+  continuation.execution_corridor_blocked = true;
+  EXPECT_EQ(
+    resolve_target_ahead_pass_continuation(continuation),
+    TargetAheadPassContinuationAction::Inactive);
+  continuation.execution_corridor_blocked = false;
+  continuation.absolute_budget_available = false;
+  EXPECT_EQ(
+    resolve_target_ahead_pass_continuation(continuation),
+    TargetAheadPassContinuationAction::Inactive);
+  continuation.absolute_budget_available = true;
+  continuation.target_longitudinal_m = 6.01;
+  EXPECT_EQ(
+    resolve_target_ahead_pass_continuation(continuation),
+    TargetAheadPassContinuationAction::Inactive);
+}
+
+TEST(V2XOvertakeCoreHorizon, TargetAheadHoldDoesNotBackOffBeforeRearClear)
+{
+  SafeSeparationRequest request;
+  request.enabled = true;
+  request.active = true;
+  request.short_horizon_safe = true;
+  request.target_seen = true;
+  request.return_corridor_available = true;
+  request.target_longitudinal_m = 4.0;
+  request.target_speed_mps = 3.3;
+  request.speed_delta_mps = 2.0;
+  request.maximum_ego_speed_mps = 11.11;
+  request.front_clear_distance_m = 2.0;
+  request.front_clear_elapsed_sec = 0.25;
+  request.front_clear_confirm_sec = 0.25;
+  request.maximum_duration_sec = 5.0;
+  request.maximum_distance_m = 12.0;
+  request.ego_speed_mps = 5.0;
+  request.target_ahead_hold_allowed = true;
+  request.commit_stage = PassCommitStage::ShiftCommitted;
+
+  const auto resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::KeepSameSide);
+  EXPECT_EQ(
+    resolution.reason, SafeSeparationReason::TargetAheadPassContinuation);
+  EXPECT_NEAR(resolution.target_velocity_reference_mps, 5.0, 1e-9);
+  EXPECT_GE(resolution.signed_closing_speed_mps, 0.0);
 }
 
 TEST(V2XOvertakeCoreHorizon, PreservesSpeedForSideBySideForwardEscape)

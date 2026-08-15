@@ -591,6 +591,8 @@ mpc:
   v2x_overtake_safe_separation_speed_delta: 2.0 # [m/s] align bounded forward completion with committed Pass closing speed
   v2x_overtake_safe_separation_forward_escape_enabled: true # preserve speed and finish while a validated body-clear corridor remains active
   v2x_overtake_safe_separation_forward_escape_max_front_distance: 3.0 # [m] bounded target-ahead window for forward completion
+  v2x_overtake_safe_separation_target_ahead_continuation_enabled: true # do not Return while a committed, physically clear target remains just ahead
+  v2x_overtake_safe_separation_target_ahead_continuation_max_front_distance: 6.0 # [m] bounded chase/hold window; normal Pass budgets remain hard
   v2x_overtake_safe_separation_front_clear_distance: 2.0 # [m] target-ahead clearance before lateral Recovery
   v2x_overtake_safe_separation_front_clear_confirm_sec: 0.25 # [s] require continuous target-ahead clearance before Recovery
   v2x_overtake_safe_separation_max_sec: 5.0 # [s] bounded same-side forward completion

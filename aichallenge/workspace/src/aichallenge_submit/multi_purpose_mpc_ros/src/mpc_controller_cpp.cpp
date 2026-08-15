@@ -2212,6 +2212,8 @@ struct V2XBehaviorOutput
   mpcc_lite_same_side_replan_mission;
   std::optional<overtake_core::OvertakeMissionCandidate>
   mpcc_lite_cross_side_replan_mission;
+  overtake_core::MpccLiteCompletionPredictionResolution
+  mpcc_lite_completion_prediction;
   std::optional<overtake_core::OvertakeMissionCandidate> opponent_side_replan_mission;
   overtake_core::OpponentSideReplanReason opponent_side_replan_reason{
     overtake_core::OpponentSideReplanReason::None};
@@ -10741,14 +10743,18 @@ struct MPC
       if (!winning_mission.has_value() && cached_entry_matches_last_feasible) {
         winning_mission = mpcc_lite_control_last_feasible_entry_mission_;
       }
+      const auto is_complete_rear_clear_mission =
+        [](const std::optional<overtake_core::OvertakeMissionCandidate> & mission) {
+          return mission.has_value() && !mission->progressive_entry &&
+                 mission->rear_clear_prediction_checked &&
+                 mission->rear_clear_prediction_feasible &&
+                 std::isfinite(mission->predicted_rear_clear_time_sec) &&
+                 mission->predicted_rear_clear_time_sec >= 0.0 &&
+                 std::isfinite(mission->predicted_rear_clear_ego_distance_m) &&
+                 mission->predicted_rear_clear_ego_distance_m >= 0.0;
+        };
       const bool winning_mission_complete =
-        winning_mission.has_value() && !winning_mission->progressive_entry &&
-        winning_mission->rear_clear_prediction_checked &&
-        winning_mission->rear_clear_prediction_feasible &&
-        std::isfinite(winning_mission->predicted_rear_clear_time_sec) &&
-        winning_mission->predicted_rear_clear_time_sec >= 0.0 &&
-        std::isfinite(winning_mission->predicted_rear_clear_ego_distance_m) &&
-        winning_mission->predicted_rear_clear_ego_distance_m >= 0.0;
+        is_complete_rear_clear_mission(winning_mission);
       const double shadow_pass_traveled_m =
         std::max(0.0, overtake_line_state_.mission_pass_accumulated_m) +
         (overtake_line_state_.phase == OvertakeLinePhase::Pass ?
@@ -10774,45 +10780,96 @@ struct MPC
         overtake_core::resolve_cross_side_minimum_speed_requirement(
         std::max(0.0, current_speed_mps_),
         std::max(0.0, shadow_prefix_target_speed_mps));
-      overtake_core::MpccLitePrefixExecutionResolution prefix_execution;
       const bool winning_prefix_same_side =
         best_shadow_side != 0 && best_shadow_side == locked_pass_side;
       const bool prefix_active_execution_context =
         overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
         overtake_line_state_.phase == OvertakeLinePhase::Pass ||
         mpcc_rolling_replan_context;
-      const bool prefix_side_change_allowed =
-        mpcc_new_entry_prefix_context || winning_prefix_same_side ||
-        opponent_side_replan_before_no_return;
-      if (
-        !last_feasible_hold && winning_mission.has_value() &&
-        winning_mission->progressive_entry && shadow_resolution.found &&
-        shadow_resolution.best.candidate.hard_feasible)
-      {
-        prefix_execution = overtake_core::resolve_mpcc_lite_prefix_execution(
-          overtake_core::MpccLitePrefixExecutionRequest{
-            prefix_active_execution_context,
-            mpcc_new_entry_prefix_context,
-            prefix_side_change_allowed,
-            overtake_line_state_.pass_horizon_safe_separation_active,
-            true,
-            winning_mission->feasible,
-            winning_mission->body_clear_deadline_checked,
-            winning_mission->body_clear_deadline_feasible,
-            winning_mission->pass_target_clearance_checked,
-            winning_mission->predicted_minimum_pass_target_surface_clearance_m,
-            winning_mission->predicted_body_clear_time_sec,
-            winning_mission->predicted_body_clear_distance_m,
-            winning_mission->predicted_minimum_ego_speed_mps,
-            shadow_prefix_minimum_speed_mps,
-            winning_mission->minimum_path_wall_clearance_m,
-            shadow_wall_reference,
-            shadow_prefix_time_remaining_sec,
-            shadow_pass_distance_remaining_m,
-            overtake_line_state_.phase == OvertakeLinePhase::Pass});
-      }
+      const auto resolve_prefix_execution_for =
+        [&](const std::optional<overtake_core::OvertakeMissionCandidate> & mission,
+        const bool hard_feasible, const bool same_side) {
+          overtake_core::MpccLitePrefixExecutionResolution resolution;
+          if (
+            last_feasible_hold || !hard_feasible || !mission.has_value() ||
+            !mission->progressive_entry)
+          {
+            return resolution;
+          }
+          return overtake_core::resolve_mpcc_lite_prefix_execution(
+            overtake_core::MpccLitePrefixExecutionRequest{
+              prefix_active_execution_context,
+              mpcc_new_entry_prefix_context,
+              mpcc_new_entry_prefix_context || same_side ||
+              opponent_side_replan_before_no_return,
+              overtake_line_state_.pass_horizon_safe_separation_active,
+              true,
+              mission->feasible,
+              mission->body_clear_deadline_checked,
+              mission->body_clear_deadline_feasible,
+              mission->pass_target_clearance_checked,
+              mission->predicted_minimum_pass_target_surface_clearance_m,
+              mission->predicted_body_clear_time_sec,
+              mission->predicted_body_clear_distance_m,
+              mission->predicted_minimum_ego_speed_mps,
+              shadow_prefix_minimum_speed_mps,
+              mission->minimum_path_wall_clearance_m,
+              shadow_wall_reference,
+              shadow_prefix_time_remaining_sec,
+              shadow_pass_distance_remaining_m,
+              overtake_line_state_.phase == OvertakeLinePhase::Pass});
+        };
+      const auto prefix_execution = resolve_prefix_execution_for(
+        winning_mission,
+        shadow_resolution.found && shadow_resolution.best.hard_feasible,
+        winning_prefix_same_side);
       const bool winning_prefix_execution_admitted =
         prefix_execution.valid && prefix_execution.admitted;
+
+      const ShadowBranch current_side_branch = locked_pass_side > 0 ?
+        ShadowBranch::Left : locked_pass_side < 0 ?
+        ShadowBranch::Right : ShadowBranch::None;
+      const overtake_core::MpccLiteShadowEvaluation * current_side_evaluation = nullptr;
+      for (const auto & evaluation : shadow_resolution.evaluations) {
+        if (evaluation.candidate.branch == current_side_branch) {
+          current_side_evaluation = &evaluation;
+          break;
+        }
+      }
+      const auto current_side_mission = locked_pass_side > 0 ?
+        assessment_mission(shadow_left_assessment) : locked_pass_side < 0 ?
+        assessment_mission(shadow_right_assessment) : winning_mission;
+      const bool current_side_hard_feasible = current_side_evaluation != nullptr &&
+        current_side_evaluation->hard_feasible;
+      const auto current_side_prefix_execution = resolve_prefix_execution_for(
+        current_side_mission, current_side_hard_feasible, true);
+      const bool current_side_prefix_admitted =
+        current_side_prefix_execution.valid &&
+        current_side_prefix_execution.admitted;
+      const bool current_side_complete =
+        is_complete_rear_clear_mission(current_side_mission);
+      const bool use_current_side_prediction = locked_pass_side != 0;
+      const auto * completion_evaluation = use_current_side_prediction ?
+        current_side_evaluation : shadow_resolution.found ?
+        &shadow_resolution.best : nullptr;
+      output.mpcc_lite_completion_prediction =
+        overtake_core::resolve_mpcc_lite_completion_prediction(
+        overtake_core::MpccLiteCompletionPredictionRequest{
+          !last_feasible_hold && shadow_resolution.found &&
+          (!use_current_side_prediction || current_side_evaluation != nullptr),
+          use_current_side_prediction ? current_side_hard_feasible :
+          shadow_resolution.found && shadow_resolution.best.hard_feasible,
+          use_current_side_prediction ? current_side_complete :
+          winning_mission_complete,
+          use_current_side_prediction ? current_side_prefix_admitted :
+          winning_prefix_execution_admitted,
+          use_current_side_prediction ? locked_pass_side : best_shadow_side,
+          completion_evaluation != nullptr ?
+          completion_evaluation->candidate.predicted_rear_clear_time_sec :
+          std::numeric_limits<double>::infinity(),
+          completion_evaluation != nullptr ?
+          completion_evaluation->candidate.predicted_rear_clear_distance_m :
+          std::numeric_limits<double>::infinity()});
       double active_hold_score = -std::numeric_limits<double>::infinity();
       bool active_hold_feasible = false;
       for (const auto & evaluation : shadow_resolution.evaluations) {
@@ -14574,12 +14631,11 @@ private:
     const double mission_elapsed_before_replacement_sec =
       std::isfinite(prior_mission_total_start_sec) ?
       std::max(0.0, now_sec - prior_mission_total_start_sec) : 0.0;
-    const double maximum_dynamic_wait_deadline_extension_sec = std::min(
-      4.0,
-      std::max(1.0, 0.25 * line_cfg.mission_total_time_limit_sec));
+    const double maximum_completion_deadline_extension_sec =
+      maximum_mission_completion_deadline_extension_sec();
     const auto dynamic_wait_deadline_extension =
-      overtake_core::resolve_dynamic_mission_wait_deadline_extension(
-      overtake_core::DynamicMissionWaitDeadlineExtensionRequest{
+      overtake_core::resolve_mission_completion_deadline_extension(
+      overtake_core::MissionCompletionDeadlineExtensionRequest{
         line_cfg.mission_total_budget_enabled,
         overtake_line_state_.dynamic_mission_wait_active &&
         paused_pass_continuation && !side_changed,
@@ -14589,11 +14645,8 @@ private:
         line_cfg.mission_total_time_limit_sec,
         prior_mission_total_deadline_extension_sec,
         candidate.predicted_rear_clear_time_sec,
-        std::max(
-          0.25,
-          std::max(0.0, line_cfg.clear_confirm_sec) +
-          std::max(0.0, cfg.state_prediction_delay_sec)),
-        maximum_dynamic_wait_deadline_extension_sec});
+        mission_completion_reserve_sec(),
+        maximum_completion_deadline_extension_sec});
     const double prior_dynamic_corridor_refresh_sec =
       overtake_line_state_.mission_last_dynamic_corridor_refresh_sec;
     const int prior_dynamic_corridor_refresh_count =
@@ -14866,9 +14919,26 @@ private:
         dynamic_wait_deadline_extension.valid ?
         dynamic_wait_deadline_extension.extension_sec :
         prior_mission_total_deadline_extension_sec,
-        maximum_dynamic_wait_deadline_extension_sec, model->wp_id);
+        maximum_completion_deadline_extension_sec, model->wp_id);
     }
     return true;
+  }
+
+  double mission_completion_reserve_sec() const
+  {
+    return std::max(
+      0.25,
+      std::max(0.0, cfg.v2x_behavior.overtake_line.clear_confirm_sec) +
+      std::max(0.0, cfg.state_prediction_delay_sec));
+  }
+
+  double maximum_mission_completion_deadline_extension_sec() const
+  {
+    return std::min(
+      4.0,
+      std::max(
+        1.0,
+        0.25 * cfg.v2x_behavior.overtake_line.mission_total_time_limit_sec));
   }
 
   double overtake_mission_pass_traveled() const
@@ -17204,6 +17274,68 @@ private:
       std::isfinite(overtake_line_state_.mission_total_start_sec) ?
       std::max(0.0, now_sec - overtake_line_state_.mission_total_start_sec) :
       std::numeric_limits<double>::quiet_NaN();
+    const auto & completion_prediction =
+      behavior_output.mpcc_lite_completion_prediction;
+    const bool completion_deadline_refresh_allowed =
+      overtake_line_state_.phase == OvertakeLinePhase::Pass &&
+      overtake_line_state_.mission_path_frozen &&
+      completion_prediction.valid &&
+      completion_prediction.side_sign == overtake_line_state_.pass_side_sign &&
+      behavior_output.locked_target_seen && locked_target_progress_continuous &&
+      !behavior_output.locked_target_position_jump &&
+      !locked_target_progress_rejected &&
+      (behavior_output.locked_target_current_body_footprints_separated ||
+      behavior_output.recoverable_side_contact_active) &&
+      behavior_output.locked_target_footprint_prediction_valid &&
+      !actual_wall_physical_contact && !actual_wall_margin_blocked &&
+      !actual_wall_sample_unavailable &&
+      behavior_output.front_risk_level != FrontRiskLevel::EmergencyBrake &&
+      !overtake_solver_recovery_active_ &&
+      !behavior_output.overtake_forbidden_wp;
+    if (completion_deadline_refresh_allowed) {
+      const double prior_deadline_extension_sec = std::max(
+        0.0, overtake_line_state_.mission_total_deadline_extension_sec);
+      const auto completion_deadline_extension =
+        overtake_core::resolve_mission_completion_deadline_extension(
+        overtake_core::MissionCompletionDeadlineExtensionRequest{
+          line_cfg.mission_total_budget_enabled,
+          true,
+          true,
+          mission_total_elapsed_sec,
+          line_cfg.mission_total_time_limit_sec,
+          prior_deadline_extension_sec,
+          completion_prediction.predicted_completion_time_sec,
+          mission_completion_reserve_sec(),
+          maximum_mission_completion_deadline_extension_sec()});
+      if (
+        completion_deadline_extension.valid &&
+        completion_deadline_extension.extended)
+      {
+        overtake_line_state_.mission_total_deadline_extension_sec =
+          completion_deadline_extension.extension_sec;
+        if (
+          line_cfg.debug_log_enabled &&
+          (prior_deadline_extension_sec <= kEps ||
+          completion_deadline_extension.extension_sec -
+          prior_deadline_extension_sec >= 0.25 - kEps))
+        {
+          RCLCPP_INFO(
+            rclcpp::get_logger("mpc_controller"),
+            "OvertakeLine Mission completion deadline extended: target=%s, "
+            "side=%d, source=%s, elapsed=%.2f s, predicted=%.2f s/%.2f m, "
+            "extension=%.2f->%.2f/%.2f s, wp_id=%d",
+            overtake_line_state_.target_vehicle_id.c_str(),
+            overtake_line_state_.pass_side_sign,
+            overtake_core::to_string(completion_prediction.source),
+            mission_total_elapsed_sec,
+            completion_prediction.predicted_completion_time_sec,
+            completion_prediction.predicted_completion_distance_m,
+            prior_deadline_extension_sec,
+            completion_deadline_extension.extension_sec,
+            maximum_mission_completion_deadline_extension_sec(), model->wp_id);
+        }
+      }
+    }
     const double effective_mission_total_time_limit_sec =
       line_cfg.mission_total_time_limit_sec +
       std::max(0.0, overtake_line_state_.mission_total_deadline_extension_sec);

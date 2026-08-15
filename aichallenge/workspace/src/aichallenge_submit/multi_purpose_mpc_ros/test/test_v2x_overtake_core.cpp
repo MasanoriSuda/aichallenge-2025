@@ -187,9 +187,9 @@ using multi_purpose_mpc_ros::v2x_overtake_core::SameSideExtensionCommitReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::MissionTotalBudgetAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::MissionTotalBudgetRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::
-  DynamicMissionWaitDeadlineExtensionRequest;
+  MissionCompletionDeadlineExtensionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::
-  resolve_dynamic_mission_wait_deadline_extension;
+  resolve_mission_completion_deadline_extension;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_mission_total_start_sec;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationReason;
@@ -5429,19 +5429,19 @@ TEST(V2XOvertakeCoreHorizon, InitializesMissingMissionClockOnlyOnce)
   EXPECT_TRUE(std::isnan(resolve_mission_total_start_sec(true, missing, missing)));
 }
 
-TEST(V2XOvertakeCoreHorizon, ExtendsFreshDynamicWaitPassOnlyByRequiredRemainder)
+TEST(V2XOvertakeCoreHorizon, ExtendsSameSidePassOnlyByRequiredRemainder)
 {
-  DynamicMissionWaitDeadlineExtensionRequest request;
+  MissionCompletionDeadlineExtensionRequest request;
   request.enabled = true;
-  request.paused_same_side_pass_continuation = true;
-  request.rear_clear_prediction_valid = true;
+  request.same_side_pass_continuation = true;
+  request.completion_prediction_valid = true;
   request.mission_elapsed_sec = 13.0;
   request.base_maximum_duration_sec = 15.0;
-  request.predicted_rear_clear_time_sec = 3.0;
+  request.predicted_completion_time_sec = 3.0;
   request.completion_reserve_sec = 0.25;
   request.maximum_total_extension_sec = 3.75;
 
-  auto resolution = resolve_dynamic_mission_wait_deadline_extension(request);
+  auto resolution = resolve_mission_completion_deadline_extension(request);
   ASSERT_TRUE(resolution.valid);
   EXPECT_TRUE(resolution.extended);
   EXPECT_DOUBLE_EQ(resolution.remaining_before_extension_sec, 2.0);
@@ -5451,37 +5451,37 @@ TEST(V2XOvertakeCoreHorizon, ExtendsFreshDynamicWaitPassOnlyByRequiredRemainder)
 
   request.prior_extension_sec = resolution.extension_sec;
   request.mission_elapsed_sec = 14.0;
-  request.predicted_rear_clear_time_sec = 4.0;
-  resolution = resolve_dynamic_mission_wait_deadline_extension(request);
+  request.predicted_completion_time_sec = 4.0;
+  resolution = resolve_mission_completion_deadline_extension(request);
   ASSERT_TRUE(resolution.valid);
   EXPECT_TRUE(resolution.extended);
   EXPECT_DOUBLE_EQ(resolution.extension_sec, 3.25);
 }
 
-TEST(V2XOvertakeCoreHorizon, DynamicWaitDeadlineExtensionIsBoundedAndFailsClosed)
+TEST(V2XOvertakeCoreHorizon, CompletionDeadlineExtensionIsBoundedAndFailsClosed)
 {
-  DynamicMissionWaitDeadlineExtensionRequest request;
+  MissionCompletionDeadlineExtensionRequest request;
   request.enabled = true;
-  request.paused_same_side_pass_continuation = true;
-  request.rear_clear_prediction_valid = true;
+  request.same_side_pass_continuation = true;
+  request.completion_prediction_valid = true;
   request.mission_elapsed_sec = 15.0;
   request.base_maximum_duration_sec = 15.0;
-  request.predicted_rear_clear_time_sec = 10.0;
+  request.predicted_completion_time_sec = 10.0;
   request.completion_reserve_sec = 0.25;
   request.maximum_total_extension_sec = 3.75;
 
-  auto resolution = resolve_dynamic_mission_wait_deadline_extension(request);
+  auto resolution = resolve_mission_completion_deadline_extension(request);
   ASSERT_TRUE(resolution.valid);
   EXPECT_TRUE(resolution.extended);
   EXPECT_DOUBLE_EQ(resolution.extension_sec, 3.75);
 
-  request.rear_clear_prediction_valid = false;
-  resolution = resolve_dynamic_mission_wait_deadline_extension(request);
+  request.completion_prediction_valid = false;
+  resolution = resolve_mission_completion_deadline_extension(request);
   EXPECT_FALSE(resolution.valid);
 
-  request.rear_clear_prediction_valid = true;
-  request.paused_same_side_pass_continuation = false;
-  resolution = resolve_dynamic_mission_wait_deadline_extension(request);
+  request.completion_prediction_valid = true;
+  request.same_side_pass_continuation = false;
+  resolution = resolve_mission_completion_deadline_extension(request);
   EXPECT_TRUE(resolution.valid);
   EXPECT_FALSE(resolution.extended);
   EXPECT_DOUBLE_EQ(resolution.extension_sec, 0.0);
@@ -14257,6 +14257,53 @@ TEST(V2XOvertakeCoreMpccLiteShadow, LastFeasibleLeaseIsScopedToExactMissionConte
   request.side_matches = true;
   request.now_sec = 10.6;
   EXPECT_FALSE(can_reuse_mpcc_lite_shadow_last_feasible(request));
+}
+
+TEST(V2XOvertakeCoreMpccLiteShadow, TypesFreshCompletionPredictionAuthority)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    MpccLiteCompletionPredictionRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    MpccLiteCompletionPredictionSource;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_mpcc_lite_completion_prediction;
+
+  MpccLiteCompletionPredictionRequest request;
+  request.fresh_resolution = true;
+  request.hard_feasible = true;
+  request.complete_rear_clear_mission = true;
+  request.side_sign = 1;
+  request.predicted_completion_time_sec = 0.75;
+  request.predicted_completion_distance_m = 2.0;
+
+  auto resolution = resolve_mpcc_lite_completion_prediction(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_EQ(
+    resolution.source,
+    MpccLiteCompletionPredictionSource::CompleteRearClear);
+  EXPECT_EQ(resolution.side_sign, 1);
+  EXPECT_DOUBLE_EQ(resolution.predicted_completion_time_sec, 0.75);
+  EXPECT_DOUBLE_EQ(resolution.predicted_completion_distance_m, 2.0);
+
+  request.complete_rear_clear_mission = false;
+  request.receding_prefix_execution_admitted = true;
+  resolution = resolve_mpcc_lite_completion_prediction(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_EQ(
+    resolution.source,
+    MpccLiteCompletionPredictionSource::RecedingPrefix);
+
+  request.fresh_resolution = false;
+  EXPECT_FALSE(resolve_mpcc_lite_completion_prediction(request).valid);
+  request.fresh_resolution = true;
+  request.hard_feasible = false;
+  EXPECT_FALSE(resolve_mpcc_lite_completion_prediction(request).valid);
+  request.hard_feasible = true;
+  request.complete_rear_clear_mission = true;
+  EXPECT_FALSE(resolve_mpcc_lite_completion_prediction(request).valid);
+  request.complete_rear_clear_mission = false;
+  request.side_sign = 0;
+  EXPECT_FALSE(resolve_mpcc_lite_completion_prediction(request).valid);
 }
 
 TEST(V2XOvertakeCoreMpccLite, AdmitsLocallyValidatedRecedingPrefix)

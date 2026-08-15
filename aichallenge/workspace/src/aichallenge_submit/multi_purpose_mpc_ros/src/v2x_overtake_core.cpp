@@ -3346,11 +3346,11 @@ double resolve_mission_total_start_sec(
   return std::isfinite(now_sec) ? now_sec : current_start_sec;
 }
 
-DynamicMissionWaitDeadlineExtensionResolution
-resolve_dynamic_mission_wait_deadline_extension(
-  const DynamicMissionWaitDeadlineExtensionRequest & request) noexcept
+MissionCompletionDeadlineExtensionResolution
+resolve_mission_completion_deadline_extension(
+  const MissionCompletionDeadlineExtensionRequest & request) noexcept
 {
-  DynamicMissionWaitDeadlineExtensionResolution resolution;
+  MissionCompletionDeadlineExtensionResolution resolution;
   const auto finite_non_negative = [](const double value) {
       return std::isfinite(value) && value >= 0.0;
     };
@@ -3372,19 +3372,19 @@ resolve_dynamic_mission_wait_deadline_extension(
   resolution.remaining_before_extension_sec = std::max(
     0.0,
     resolution.effective_maximum_duration_sec - request.mission_elapsed_sec);
-  if (!request.enabled || !request.paused_same_side_pass_continuation) {
+  if (!request.enabled || !request.same_side_pass_continuation) {
     return resolution;
   }
   if (
-    !request.rear_clear_prediction_valid ||
-    !finite_non_negative(request.predicted_rear_clear_time_sec))
+    !request.completion_prediction_valid ||
+    !finite_non_negative(request.predicted_completion_time_sec))
   {
     resolution.valid = false;
     return resolution;
   }
 
   resolution.required_remaining_sec =
-    request.predicted_rear_clear_time_sec + request.completion_reserve_sec;
+    request.predicted_completion_time_sec + request.completion_reserve_sec;
   const double required_additional_sec = std::max(
     0.0,
     resolution.required_remaining_sec - resolution.remaining_before_extension_sec);
@@ -6434,6 +6434,49 @@ MpccLiteShadowResolution evaluate_mpcc_lite_shadow(
   resolution.agrees_with_active_branch = resolution.found &&
     resolution.best.candidate.branch == request.active_branch;
   return resolution;
+}
+
+MpccLiteCompletionPredictionResolution resolve_mpcc_lite_completion_prediction(
+  const MpccLiteCompletionPredictionRequest & request) noexcept
+{
+  MpccLiteCompletionPredictionResolution resolution;
+  const bool source_valid =
+    request.complete_rear_clear_mission !=
+    request.receding_prefix_execution_admitted;
+  if (
+    !request.fresh_resolution || !request.hard_feasible || !source_valid ||
+    (request.side_sign != -1 && request.side_sign != 1) ||
+    !std::isfinite(request.predicted_completion_time_sec) ||
+    request.predicted_completion_time_sec < 0.0 ||
+    !std::isfinite(request.predicted_completion_distance_m) ||
+    request.predicted_completion_distance_m < 0.0)
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  resolution.source = request.complete_rear_clear_mission ?
+    MpccLiteCompletionPredictionSource::CompleteRearClear :
+    MpccLiteCompletionPredictionSource::RecedingPrefix;
+  resolution.side_sign = request.side_sign;
+  resolution.predicted_completion_time_sec =
+    request.predicted_completion_time_sec;
+  resolution.predicted_completion_distance_m =
+    request.predicted_completion_distance_m;
+  return resolution;
+}
+
+const char * to_string(const MpccLiteCompletionPredictionSource source) noexcept
+{
+  switch (source) {
+    case MpccLiteCompletionPredictionSource::None:
+      return "none";
+    case MpccLiteCompletionPredictionSource::CompleteRearClear:
+      return "complete-rear-clear";
+    case MpccLiteCompletionPredictionSource::RecedingPrefix:
+      return "receding-prefix";
+  }
+  return "unknown";
 }
 
 bool can_reuse_mpcc_lite_shadow_last_feasible(

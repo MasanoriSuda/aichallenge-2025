@@ -1943,20 +1943,20 @@ double resolve_mission_total_start_sec(
 MissionTotalBudgetResolution resolve_mission_total_budget(
   const MissionTotalBudgetRequest & request) noexcept;
 
-struct DynamicMissionWaitDeadlineExtensionRequest
+struct MissionCompletionDeadlineExtensionRequest
 {
   bool enabled{false};
-  bool paused_same_side_pass_continuation{false};
-  bool rear_clear_prediction_valid{false};
+  bool same_side_pass_continuation{false};
+  bool completion_prediction_valid{false};
   double mission_elapsed_sec{};
   double base_maximum_duration_sec{};
   double prior_extension_sec{};
-  double predicted_rear_clear_time_sec{};
+  double predicted_completion_time_sec{};
   double completion_reserve_sec{};
   double maximum_total_extension_sec{};
 };
 
-struct DynamicMissionWaitDeadlineExtensionResolution
+struct MissionCompletionDeadlineExtensionResolution
 {
   bool valid{false};
   bool extended{false};
@@ -1966,13 +1966,13 @@ struct DynamicMissionWaitDeadlineExtensionResolution
   double required_remaining_sec{};
 };
 
-/// A fresh same-side Pass continuation may arrive near the original Mission
-/// deadline after spending time in DynamicMissionWait. Extend only enough to
-/// cover its newly validated rear-clear prediction, with a cumulative cap so
-/// repeated replans cannot reset the same-target Mission indefinitely.
-DynamicMissionWaitDeadlineExtensionResolution
-resolve_dynamic_mission_wait_deadline_extension(
-  const DynamicMissionWaitDeadlineExtensionRequest & request) noexcept;
+/// A fresh same-side Pass continuation or an executing Pass may receive an
+/// updated finite-horizon completion prediction near the original Mission
+/// deadline. Extend only enough to cover that prediction, with a cumulative
+/// cap so repeated replans cannot reset the same-target Mission indefinitely.
+MissionCompletionDeadlineExtensionResolution
+resolve_mission_completion_deadline_extension(
+  const MissionCompletionDeadlineExtensionRequest & request) noexcept;
 
 enum class SafeSeparationAction
 {
@@ -3432,6 +3432,43 @@ struct MpccLiteShadowResolution
   std::optional<MpccLiteShadowEvaluation> active_evaluation;
   MpccLiteShadowEvaluation best;
 };
+
+enum class MpccLiteCompletionPredictionSource
+{
+  None,
+  CompleteRearClear,
+  RecedingPrefix,
+};
+
+struct MpccLiteCompletionPredictionRequest
+{
+  bool fresh_resolution{false};
+  bool hard_feasible{false};
+  bool complete_rear_clear_mission{false};
+  bool receding_prefix_execution_admitted{false};
+  int side_sign{0};
+  double predicted_completion_time_sec{std::numeric_limits<double>::infinity()};
+  double predicted_completion_distance_m{std::numeric_limits<double>::infinity()};
+};
+
+struct MpccLiteCompletionPredictionResolution
+{
+  bool valid{false};
+  MpccLiteCompletionPredictionSource source{
+    MpccLiteCompletionPredictionSource::None};
+  int side_sign{0};
+  double predicted_completion_time_sec{std::numeric_limits<double>::infinity()};
+  double predicted_completion_distance_m{std::numeric_limits<double>::infinity()};
+};
+
+/// Convert a selected MPCC-lite branch into typed completion evidence. A
+/// complete rear-clear rollout and an admitted receding prefix remain
+/// distinguishable; stale or hard-infeasible shadow results never gain runtime
+/// deadline authority.
+MpccLiteCompletionPredictionResolution resolve_mpcc_lite_completion_prediction(
+  const MpccLiteCompletionPredictionRequest & request) noexcept;
+
+const char * to_string(MpccLiteCompletionPredictionSource source) noexcept;
 
 /// Score tactical left/right/current-side/Return branches on one finite-horizon
 /// scale without changing the executing FSM. The caller supplies candidates

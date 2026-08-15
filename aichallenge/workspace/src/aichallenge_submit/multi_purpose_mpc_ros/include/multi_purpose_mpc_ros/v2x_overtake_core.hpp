@@ -2630,6 +2630,11 @@ struct OvertakeMissionDynamicCorridorSample
   double lower_lateral_m{};
   double upper_lateral_m{};
   bool active{false};
+  // Optional course metadata for the curve-aware Frenet DP.  Legacy callers
+  // leave course_metadata_valid false and retain the original corridor cost.
+  double reference_curvature_radpm{};
+  bool target_active{false};
+  bool course_metadata_valid{false};
 };
 
 struct OvertakeMissionDynamicCorridorRequest
@@ -2669,6 +2674,17 @@ struct FrenetDpCorridorBranchInput
   std::vector<OvertakeMissionDynamicCorridorSample> samples;
 };
 
+enum class FrenetDpTacticalStrategy
+{
+  Legacy,
+  StraightDashi,
+  InsideDive,
+  SweepDive,
+  OuterSweep,
+};
+
+const char * to_string(FrenetDpTacticalStrategy strategy) noexcept;
+
 struct FrenetDpCorridorRequest
 {
   bool enabled{false};
@@ -2681,6 +2697,11 @@ struct FrenetDpCorridorRequest
   double previous_path_weight{1.0};
   double corridor_width_weight{0.25};
   double branch_switch_penalty{1.0};
+  bool curve_strategy_enabled{false};
+  double significant_curvature_radpm{0.08};
+  double tactical_reference_weight{1.0};
+  double tactical_edge_fraction{0.45};
+  double inside_radius_penalty_weight{1.0};
   int previous_side_sign{};
   std::vector<double> previous_path_distances_m;
   std::vector<double> previous_lateral_path_m;
@@ -2696,6 +2717,10 @@ struct FrenetDpCorridorBranchResolution
   double normalized_cost{std::numeric_limits<double>::infinity()};
   double minimum_corridor_width_m{};
   double maximum_lateral_slope{};
+  FrenetDpTacticalStrategy tactical_strategy{FrenetDpTacticalStrategy::Legacy};
+  bool curve_observed{false};
+  std::size_t tactical_knot_count{};
+  double tactical_reference_cost{};
   std::vector<double> path_distances_m;
   std::vector<double> lateral_path_m;
 };
@@ -3086,6 +3111,9 @@ struct OvertakeMissionCandidate
   bool frenet_dp_corridor_feasible{false};
   bool frenet_dp_prefix_bridge{false};
   double frenet_dp_normalized_cost{std::numeric_limits<double>::quiet_NaN()};
+  FrenetDpTacticalStrategy frenet_dp_tactical_strategy{
+    FrenetDpTacticalStrategy::Legacy};
+  std::size_t frenet_dp_tactical_knot_count{};
   std::vector<double> frenet_dp_path_distances_m{};
   std::vector<double> frenet_dp_lateral_path_m{};
 };

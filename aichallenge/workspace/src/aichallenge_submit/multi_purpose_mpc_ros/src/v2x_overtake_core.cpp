@@ -4795,6 +4795,23 @@ FrenetDpExecutionAuthorityResolution resolve_frenet_dp_execution_authority(
   return resolution;
 }
 
+const char * to_string(const FrenetDpTacticalStrategy strategy) noexcept
+{
+  switch (strategy) {
+    case FrenetDpTacticalStrategy::StraightDashi:
+      return "straight_dashi";
+    case FrenetDpTacticalStrategy::InsideDive:
+      return "inside_dive";
+    case FrenetDpTacticalStrategy::SweepDive:
+      return "sweep_dive";
+    case FrenetDpTacticalStrategy::OuterSweep:
+      return "outer_sweep";
+    case FrenetDpTacticalStrategy::Legacy:
+    default:
+      return "legacy";
+  }
+}
+
 FrenetDpCorridorResolution solve_frenet_dp_corridor(
   const FrenetDpCorridorRequest & request) noexcept
 {
@@ -4818,6 +4835,11 @@ FrenetDpCorridorResolution solve_frenet_dp_corridor(
     !finite_non_negative(request.previous_path_weight) ||
     !finite_non_negative(request.corridor_width_weight) ||
     !finite_non_negative(request.branch_switch_penalty) ||
+    !finite_non_negative(request.significant_curvature_radpm) ||
+    !finite_non_negative(request.tactical_reference_weight) ||
+    !std::isfinite(request.tactical_edge_fraction) ||
+    request.tactical_edge_fraction < 0.0 || request.tactical_edge_fraction > 1.0 ||
+    !finite_non_negative(request.inside_radius_penalty_weight) ||
     (request.previous_side_sign != -1 && request.previous_side_sign != 0 &&
     request.previous_side_sign != 1) ||
     request.previous_path_distances_m.size() !=
@@ -4873,13 +4895,15 @@ FrenetDpCorridorResolution solve_frenet_dp_corridor(
     };
 
   const auto solve_branch = [&](const FrenetDpCorridorBranchInput & input) {
-      FrenetDpCorridorBranchResolution branch;
-      branch.side_sign = input.side_sign;
+      FrenetDpCorridorBranchResolution invalid_branch;
+      invalid_branch.side_sign = input.side_sign;
       if ((input.side_sign != -1 && input.side_sign != 1) || input.samples.size() < 2U) {
-        return branch;
+        return invalid_branch;
       }
-      branch.checked = true;
+      invalid_branch.checked = true;
       double last_distance = -std::numeric_limits<double>::infinity();
+      bool course_metadata_observed = false;
+      bool curve_observed = false;
       for (const auto & sample : input.samples) {
         if (
           !sample.active || !std::isfinite(sample.path_distance_m) ||
@@ -4887,10 +4911,18 @@ FrenetDpCorridorResolution solve_frenet_dp_corridor(
           sample.path_distance_m <= last_distance + 1e-9 ||
           !std::isfinite(sample.lower_lateral_m) ||
           !std::isfinite(sample.upper_lateral_m) ||
-          sample.upper_lateral_m < sample.lower_lateral_m)
+          sample.upper_lateral_m < sample.lower_lateral_m ||
+          (sample.course_metadata_valid &&
+          !std::isfinite(sample.reference_curvature_radpm)))
         {
-          return branch;
+          return invalid_branch;
         }
+        course_metadata_observed =
+          course_metadata_observed || sample.course_metadata_valid;
+        curve_observed = curve_observed ||
+          (sample.course_metadata_valid &&
+          std::abs(sample.reference_curvature_radpm) >
+          request.significant_curvature_radpm + 1e-12);
         last_distance = sample.path_distance_m;
       }
 
@@ -4899,16 +4931,11 @@ FrenetDpCorridorResolution solve_frenet_dp_corridor(
       const double infinity = std::numeric_limits<double>::infinity();
       std::vector<std::vector<double>> values(
         stage_count, std::vector<double>(bin_count, 0.0));
-      std::vector<std::vector<double>> costs(
-        stage_count, std::vector<double>(bin_count, infinity));
-      std::vector<std::vector<std::size_t>> predecessors(
-        stage_count, std::vector<std::size_t>(bin_count, bin_count));
-      branch.minimum_corridor_width_m = infinity;
+      double minimum_corridor_width = infinity;
       for (std::size_t stage = 0U; stage < stage_count; ++stage) {
         const auto & sample = input.samples[stage];
         const double width = sample.upper_lateral_m - sample.lower_lateral_m;
-        branch.minimum_corridor_width_m = std::min(
-          branch.minimum_corridor_width_m, width);
+        minimum_corridor_width = std::min(minimum_corridor_width, width);
         for (std::size_t bin = 0U; bin < bin_count; ++bin) {
           const double ratio = static_cast<double>(bin) /
             static_cast<double>(bin_count - 1U);
@@ -4916,93 +4943,271 @@ FrenetDpCorridorResolution solve_frenet_dp_corridor(
         }
       }
 
-      const auto node_cost = [&](const std::size_t stage, const double lateral) {
+      struct CurveSegment
+      {
+        std::size_t start{};
+        std::size_t apex{};
+        std::size_t end{};
+        int inner_side{};
+      };
+      std::vector<CurveSegment> segments;
+      if (request.curve_strategy_enabled && course_metadata_observed) {
+        std::size_t stage = 0U;
+        while (stage < stage_count) {
           const auto & sample = input.samples[stage];
-          const double width = sample.upper_lateral_m - sample.lower_lateral_m;
-          double cost = request.corridor_width_weight / std::max(0.10, width);
-          if (request.previous_side_sign == input.side_sign) {
-            const double previous = sample_previous_path(sample.path_distance_m);
-            if (std::isfinite(previous)) {
-              const double error = lateral - previous;
-              cost += request.previous_path_weight * error * error;
+          const bool significant = sample.course_metadata_valid &&
+            std::abs(sample.reference_curvature_radpm) >
+            request.significant_curvature_radpm + 1e-12;
+          if (!significant) {
+            ++stage;
+            continue;
+          }
+          const int inner_side = sample.reference_curvature_radpm > 0.0 ? 1 : -1;
+          CurveSegment segment{stage, stage, stage, inner_side};
+          double apex_curvature = std::abs(sample.reference_curvature_radpm);
+          ++stage;
+          while (stage < stage_count) {
+            const auto & next = input.samples[stage];
+            const bool same_curve = next.course_metadata_valid &&
+              std::abs(next.reference_curvature_radpm) >
+              request.significant_curvature_radpm + 1e-12 &&
+              (next.reference_curvature_radpm > 0.0 ? 1 : -1) == inner_side;
+            if (!same_curve) {
+              break;
+            }
+            segment.end = stage;
+            const double curvature = std::abs(next.reference_curvature_radpm);
+            if (curvature > apex_curvature + 1e-12) {
+              apex_curvature = curvature;
+              segment.apex = stage;
+            }
+            ++stage;
+          }
+          segments.push_back(segment);
+        }
+      }
+
+      std::vector<FrenetDpTacticalStrategy> strategies;
+      if (!request.curve_strategy_enabled || !course_metadata_observed) {
+        strategies.push_back(FrenetDpTacticalStrategy::Legacy);
+      } else if (!curve_observed || segments.empty()) {
+        strategies.push_back(FrenetDpTacticalStrategy::StraightDashi);
+      } else {
+        strategies = {
+          FrenetDpTacticalStrategy::InsideDive,
+          FrenetDpTacticalStrategy::SweepDive,
+          FrenetDpTacticalStrategy::OuterSweep};
+      }
+
+      const auto find_segment = [&](const std::size_t stage) -> const CurveSegment * {
+          for (const auto & segment : segments) {
+            if (stage >= segment.start && stage <= segment.end) {
+              return &segment;
             }
           }
-          return cost;
+          return nullptr;
         };
 
-      for (std::size_t bin = 0U; bin < bin_count; ++bin) {
-        const double lateral = values[0U][bin];
-        const double anchor_error = lateral - request.current_lateral_m;
-        costs[0U][bin] = node_cost(0U, lateral) +
-          request.current_anchor_weight * anchor_error * anchor_error +
-          (request.current_side_sign != 0 &&
-          request.current_side_sign != input.side_sign ?
-          request.branch_switch_penalty : 0.0);
-      }
-
-      for (std::size_t stage = 1U; stage < stage_count; ++stage) {
-        const double distance_step = std::max(
-          0.10,
-          input.samples[stage].path_distance_m -
-          input.samples[stage - 1U].path_distance_m);
-        for (std::size_t bin = 0U; bin < bin_count; ++bin) {
-          const double lateral = values[stage][bin];
-          const double local_node_cost = node_cost(stage, lateral);
-          for (std::size_t previous_bin = 0U; previous_bin < bin_count; ++previous_bin) {
-            if (!std::isfinite(costs[stage - 1U][previous_bin])) {
-              continue;
-            }
-            const double delta = lateral - values[stage - 1U][previous_bin];
-            const double slope = std::abs(delta) / distance_step;
-            if (slope > request.maximum_lateral_slope + 1e-9) {
-              continue;
-            }
-            const double candidate_cost = costs[stage - 1U][previous_bin] +
-              local_node_cost +
-              request.lateral_motion_weight * delta * delta / distance_step;
-            if (candidate_cost + 1e-12 < costs[stage][bin]) {
-              costs[stage][bin] = candidate_cost;
-              predecessors[stage][bin] = previous_bin;
+      const auto tactical_desired_side = [&](
+        const FrenetDpTacticalStrategy strategy, const std::size_t stage) {
+          const auto & sample = input.samples[stage];
+          const CurveSegment * segment = find_segment(stage);
+          if (
+            strategy == FrenetDpTacticalStrategy::Legacy ||
+            strategy == FrenetDpTacticalStrategy::StraightDashi ||
+            segment == nullptr)
+          {
+            return 0;
+          }
+          int desired_side = -segment->inner_side;
+          if (strategy == FrenetDpTacticalStrategy::InsideDive) {
+            desired_side = stage <= segment->apex ?
+              segment->inner_side : -segment->inner_side;
+          } else if (strategy == FrenetDpTacticalStrategy::SweepDive) {
+            if (stage < segment->apex) {
+              desired_side = -segment->inner_side;
+            } else {
+              desired_side = sample.target_active ?
+                segment->inner_side : -segment->inner_side;
             }
           }
-        }
-      }
+          return desired_side;
+        };
 
-      const auto best_terminal = std::min_element(
-        costs.back().begin(), costs.back().end());
-      if (best_terminal == costs.back().end() || !std::isfinite(*best_terminal)) {
-        return branch;
-      }
-      std::size_t selected_bin = static_cast<std::size_t>(
-        std::distance(costs.back().begin(), best_terminal));
-      branch.path_distances_m.resize(stage_count);
-      branch.lateral_path_m.resize(stage_count);
-      for (std::size_t stage = stage_count; stage-- > 0U;) {
-        branch.path_distances_m[stage] = input.samples[stage].path_distance_m;
-        branch.lateral_path_m[stage] = values[stage][selected_bin];
-        if (stage > 0U) {
-          selected_bin = predecessors[stage][selected_bin];
-          if (selected_bin >= bin_count) {
-            branch.feasible = false;
-            branch.path_distances_m.clear();
-            branch.lateral_path_m.clear();
+      const auto tactical_reference = [&](
+        const FrenetDpTacticalStrategy strategy, const std::size_t stage) {
+          const auto & sample = input.samples[stage];
+          if (strategy == FrenetDpTacticalStrategy::Legacy) {
+            return std::numeric_limits<double>::quiet_NaN();
+          }
+          const int desired_side = tactical_desired_side(strategy, stage);
+          if (desired_side == 0) {
+            return std::clamp(
+              request.current_lateral_m,
+              sample.lower_lateral_m, sample.upper_lateral_m);
+          }
+          // The tactical reference is allowed to lie outside this branch's
+          // current free interval.  That distance is useful: it makes an
+          // outer-only corridor expensive for an inside-dive strategy (and
+          // vice versa).  The selected DP state itself remains hard-clamped to
+          // the supplied wall/target cells.
+          const double lateral_extent = std::max({
+            0.10,
+            std::abs(sample.lower_lateral_m),
+            std::abs(sample.upper_lateral_m)});
+          return static_cast<double>(desired_side) *
+            request.tactical_edge_fraction * lateral_extent;
+        };
+
+      const auto solve_strategy = [&](const FrenetDpTacticalStrategy strategy) {
+          FrenetDpCorridorBranchResolution branch;
+          branch.checked = true;
+          branch.side_sign = input.side_sign;
+          branch.minimum_corridor_width_m = minimum_corridor_width;
+          branch.tactical_strategy = strategy;
+          branch.curve_observed = curve_observed;
+          std::vector<std::vector<double>> costs(
+            stage_count, std::vector<double>(bin_count, infinity));
+          std::vector<std::vector<std::size_t>> predecessors(
+            stage_count, std::vector<std::size_t>(bin_count, bin_count));
+          std::vector<double> references(stage_count, 0.0);
+          int previous_reference_role = 0;
+          for (std::size_t stage = 0U; stage < stage_count; ++stage) {
+            references[stage] = tactical_reference(strategy, stage);
+            const int reference_role = tactical_desired_side(strategy, stage);
+            if (
+              reference_role != 0 &&
+              (previous_reference_role == 0 || reference_role != previous_reference_role))
+            {
+              ++branch.tactical_knot_count;
+            }
+            if (reference_role != 0) {
+              previous_reference_role = reference_role;
+            }
+          }
+          if (strategy == FrenetDpTacticalStrategy::StraightDashi) {
+            branch.tactical_knot_count = 1U;
+          }
+
+          const auto node_cost = [&](const std::size_t stage, const double lateral) {
+              const auto & sample = input.samples[stage];
+              const double width = sample.upper_lateral_m - sample.lower_lateral_m;
+              double cost = request.corridor_width_weight / std::max(0.10, width);
+              if (request.previous_side_sign == input.side_sign) {
+                const double previous = sample_previous_path(sample.path_distance_m);
+                if (std::isfinite(previous)) {
+                  const double error = lateral - previous;
+                  cost += request.previous_path_weight * error * error;
+                }
+              }
+              if (std::isfinite(references[stage])) {
+                const double tactical_error = lateral - references[stage];
+                cost += request.tactical_reference_weight *
+                  tactical_error * tactical_error;
+              }
+              if (
+                sample.course_metadata_valid &&
+                std::abs(sample.reference_curvature_radpm) >
+                request.significant_curvature_radpm + 1e-12)
+              {
+                cost += request.inside_radius_penalty_weight * std::max(
+                  0.0, sample.reference_curvature_radpm * lateral);
+              }
+              return cost;
+            };
+
+          for (std::size_t bin = 0U; bin < bin_count; ++bin) {
+            const double lateral = values[0U][bin];
+            const double anchor_error = lateral - request.current_lateral_m;
+            costs[0U][bin] = node_cost(0U, lateral) +
+              request.current_anchor_weight * anchor_error * anchor_error +
+              (request.current_side_sign != 0 &&
+              request.current_side_sign != input.side_sign ?
+              request.branch_switch_penalty : 0.0);
+          }
+
+          for (std::size_t stage = 1U; stage < stage_count; ++stage) {
+            const double distance_step = std::max(
+              0.10,
+              input.samples[stage].path_distance_m -
+              input.samples[stage - 1U].path_distance_m);
+            for (std::size_t bin = 0U; bin < bin_count; ++bin) {
+              const double lateral = values[stage][bin];
+              const double local_node_cost = node_cost(stage, lateral);
+              for (std::size_t previous_bin = 0U; previous_bin < bin_count; ++previous_bin) {
+                if (!std::isfinite(costs[stage - 1U][previous_bin])) {
+                  continue;
+                }
+                const double delta = lateral - values[stage - 1U][previous_bin];
+                const double slope = std::abs(delta) / distance_step;
+                if (slope > request.maximum_lateral_slope + 1e-9) {
+                  continue;
+                }
+                const double candidate_cost = costs[stage - 1U][previous_bin] +
+                  local_node_cost +
+                  request.lateral_motion_weight * delta * delta / distance_step;
+                if (candidate_cost + 1e-12 < costs[stage][bin]) {
+                  costs[stage][bin] = candidate_cost;
+                  predecessors[stage][bin] = previous_bin;
+                }
+              }
+            }
+          }
+
+          const auto best_terminal = std::min_element(
+            costs.back().begin(), costs.back().end());
+          if (best_terminal == costs.back().end() || !std::isfinite(*best_terminal)) {
             return branch;
           }
+          std::size_t selected_bin = static_cast<std::size_t>(
+            std::distance(costs.back().begin(), best_terminal));
+          branch.path_distances_m.resize(stage_count);
+          branch.lateral_path_m.resize(stage_count);
+          for (std::size_t stage = stage_count; stage-- > 0U;) {
+            branch.path_distances_m[stage] = input.samples[stage].path_distance_m;
+            branch.lateral_path_m[stage] = values[stage][selected_bin];
+            if (std::isfinite(references[stage])) {
+              const double error = branch.lateral_path_m[stage] - references[stage];
+              branch.tactical_reference_cost += error * error;
+            }
+            if (stage > 0U) {
+              selected_bin = predecessors[stage][selected_bin];
+              if (selected_bin >= bin_count) {
+                branch.path_distances_m.clear();
+                branch.lateral_path_m.clear();
+                return branch;
+              }
+            }
+          }
+          branch.maximum_lateral_slope = 0.0;
+          for (std::size_t stage = 1U; stage < stage_count; ++stage) {
+            const double distance_step = std::max(
+              0.10,
+              branch.path_distances_m[stage] - branch.path_distances_m[stage - 1U]);
+            branch.maximum_lateral_slope = std::max(
+              branch.maximum_lateral_slope,
+              std::abs(branch.lateral_path_m[stage] -
+              branch.lateral_path_m[stage - 1U]) / distance_step);
+          }
+          branch.tactical_reference_cost /= static_cast<double>(stage_count);
+          branch.normalized_cost = *best_terminal / static_cast<double>(stage_count);
+          branch.feasible = std::isfinite(branch.normalized_cost);
+          return branch;
+        };
+
+      FrenetDpCorridorBranchResolution best = invalid_branch;
+      constexpr double kStrategyTieEpsilon = 1e-9;
+      for (const auto strategy : strategies) {
+        auto candidate = solve_strategy(strategy);
+        if (
+          candidate.feasible &&
+          (!best.feasible ||
+          candidate.normalized_cost + kStrategyTieEpsilon < best.normalized_cost))
+        {
+          best = std::move(candidate);
         }
       }
-      branch.maximum_lateral_slope = 0.0;
-      for (std::size_t stage = 1U; stage < stage_count; ++stage) {
-        const double distance_step = std::max(
-          0.10,
-          branch.path_distances_m[stage] - branch.path_distances_m[stage - 1U]);
-        branch.maximum_lateral_slope = std::max(
-          branch.maximum_lateral_slope,
-          std::abs(branch.lateral_path_m[stage] -
-          branch.lateral_path_m[stage - 1U]) / distance_step);
-      }
-      branch.normalized_cost = *best_terminal / static_cast<double>(stage_count);
-      branch.feasible = std::isfinite(branch.normalized_cost);
-      return branch;
+      return best;
     };
 
   resolution.valid = true;

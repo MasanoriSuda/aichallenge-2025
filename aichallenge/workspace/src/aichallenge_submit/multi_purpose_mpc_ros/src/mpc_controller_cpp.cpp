@@ -1533,6 +1533,11 @@ struct OvertakeLineConfig
   double mpcc_frenet_dp_previous_path_weight{1.0};
   double mpcc_frenet_dp_corridor_width_weight{0.25};
   double mpcc_frenet_dp_branch_switch_penalty{1.0};
+  bool mpcc_frenet_dp_curve_strategy_enabled{false};
+  double mpcc_frenet_dp_significant_curvature{0.04};
+  double mpcc_frenet_dp_tactical_reference_weight{0.80};
+  double mpcc_frenet_dp_tactical_edge_fraction{0.35};
+  double mpcc_frenet_dp_inside_radius_penalty_weight{0.75};
   double mpcc_frenet_dp_shadow_score_penalty{1.0};
   double mpcc_frenet_dp_last_path_max_age_sec{0.50};
   double mpcc_frenet_dp_runtime_validation_lease_sec{0.30};
@@ -7666,13 +7671,15 @@ struct MPC
       const auto build_gap_corridor_profiles = [&](const GapPlannerOutput & gap) {
           GapCorridorProfiles profiles;
           for (std::size_t i = 0; i < gap.target_active.size(); ++i) {
+            const auto & course_waypoint =
+              model->reference_path->get_waypoint(ref_wp_id + static_cast<int>(i));
             if (
               gap.target_active[i] && i < gap.lb.size() && i < gap.ub.size())
             {
               profiles.dynamic.push_back(
                 overtake_core::OvertakeMissionDynamicCorridorSample{
-                  horizon_path_distance_to_index(ref_wp_id, i),
-                  gap.lb[i], gap.ub[i], true});
+                  horizon_path_distance_to_index(ref_wp_id, i), gap.lb[i], gap.ub[i], true,
+                  course_waypoint.kappa, true, true});
             }
             // Target prediction is short, but the execution path must remain
             // valid through rear-clear. Outside target overlap retain only the
@@ -7692,8 +7699,8 @@ struct MPC
               } else if (!profiles.execution.empty() || i == 0U) {
                 profiles.execution.push_back(
                   overtake_core::OvertakeMissionDynamicCorridorSample{
-                    horizon_path_distance_to_index(ref_wp_id, i),
-                    dp_lower, dp_upper, true});
+                    horizon_path_distance_to_index(ref_wp_id, i), dp_lower, dp_upper, true,
+                    course_waypoint.kappa, gap.target_active[i], true});
               }
             }
           }
@@ -7726,6 +7733,17 @@ struct MPC
             cfg.v2x_behavior.overtake_line.mpcc_frenet_dp_corridor_width_weight;
           request.branch_switch_penalty =
             cfg.v2x_behavior.overtake_line.mpcc_frenet_dp_branch_switch_penalty;
+          request.curve_strategy_enabled =
+            cfg.v2x_behavior.overtake_line.mpcc_frenet_dp_curve_strategy_enabled;
+          request.significant_curvature_radpm =
+            cfg.v2x_behavior.overtake_line.mpcc_frenet_dp_significant_curvature;
+          request.tactical_reference_weight =
+            cfg.v2x_behavior.overtake_line.mpcc_frenet_dp_tactical_reference_weight;
+          request.tactical_edge_fraction =
+            cfg.v2x_behavior.overtake_line.mpcc_frenet_dp_tactical_edge_fraction;
+          request.inside_radius_penalty_weight =
+            cfg.v2x_behavior.overtake_line.
+            mpcc_frenet_dp_inside_radius_penalty_weight;
           const bool previous_path_fresh =
             mpcc_frenet_dp_last_side_sign_ == side &&
             mpcc_frenet_dp_last_target_id_ == output.target_vehicle_id &&
@@ -8608,6 +8626,10 @@ struct MPC
                   stagewise_corridor_prefix_only;
                 setup_candidate.frenet_dp_normalized_cost =
                   assessment.frenet_dp_corridor.normalized_cost;
+                setup_candidate.frenet_dp_tactical_strategy =
+                  assessment.frenet_dp_corridor.tactical_strategy;
+                setup_candidate.frenet_dp_tactical_knot_count =
+                  assessment.frenet_dp_corridor.tactical_knot_count;
                 setup_candidate.frenet_dp_path_distances_m =
                   assessment.frenet_dp_corridor.path_distances_m;
                 setup_candidate.frenet_dp_lateral_path_m =
@@ -9113,6 +9135,10 @@ struct MPC
               mission_candidate.frenet_dp_prefix_bridge = false;
               mission_candidate.frenet_dp_normalized_cost =
                 assessment.frenet_dp_corridor.normalized_cost;
+              mission_candidate.frenet_dp_tactical_strategy =
+                assessment.frenet_dp_corridor.tactical_strategy;
+              mission_candidate.frenet_dp_tactical_knot_count =
+                assessment.frenet_dp_corridor.tactical_knot_count;
               mission_candidate.frenet_dp_path_distances_m =
                 assessment.frenet_dp_corridor.path_distances_m;
               mission_candidate.frenet_dp_lateral_path_m =
@@ -9203,7 +9229,12 @@ struct MPC
             assessment.frenet_dp_longitudinal_profile_count
              << ", timing_v=" << assessment.frenet_dp_selected_ego_speed_mps
              << ", timing_closing=" <<
-            assessment.frenet_dp_selected_closing_speed_mps;
+            assessment.frenet_dp_selected_closing_speed_mps
+             << ", dp_tactic=" <<
+            overtake_core::to_string(
+              assessment.frenet_dp_corridor.tactical_strategy)
+             << ", dp_knots=" <<
+            assessment.frenet_dp_corridor.tactical_knot_count;
           if (outer_horizon_reject_count > 0U) {
             ss << ", earliest_outer_role_reversal_s="
                << earliest_outer_role_reversal_distance;
@@ -9287,6 +9318,11 @@ struct MPC
             assessment.frenet_dp_longitudinal_profile_count
                           << ", timing_v=" <<
             assessment.frenet_dp_selected_ego_speed_mps
+                          << ", dp_tactic=" <<
+            overtake_core::to_string(
+              assessment.frenet_dp_corridor.tactical_strategy)
+                          << ", dp_knots=" <<
+            assessment.frenet_dp_corridor.tactical_knot_count
                           << ", goal=" << selected_mission.goal_lateral_m
                           << ", lateral_shift=" << assessment.required_lateral_shift
                           << ", ay=" << selected_mission.max_required_lateral_accel_mps2
@@ -18082,12 +18118,15 @@ private:
         RCLCPP_INFO(
             rclcpp::get_logger("mpc_controller"),
             "OvertakeLine DP execution rolling refresh: target=%s, side=%d, "
-            "source=%s, points=%zu, distance=%.2f m, old_remaining=%.2f m, "
+            "source=%s, tactic=%s/%zu knots, points=%zu, distance=%.2f m, "
+            "old_remaining=%.2f m, "
             "closing=%.2f m/s, count=%d, wp_id=%d",
             overtake_line_state_.target_vehicle_id.c_str(),
             overtake_line_state_.mission_frenet_dp_side_sign,
             dp_refresh_uses_receding_prefix ? "receding_prefix"
                                             : "complete_mission",
+            overtake_core::to_string(candidate.frenet_dp_tactical_strategy),
+            candidate.frenet_dp_tactical_knot_count,
             overtake_line_state_.mission_frenet_dp_path_distances_m.size(),
             overtake_line_state_.mission_frenet_dp_path_distances_m.back(),
             old_remaining_distance,
@@ -27750,6 +27789,27 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_mpcc_frenet_dp_branch_switch_penalty"] ?
     mpc["v2x_overtake_mpcc_frenet_dp_branch_switch_penalty"].as<double>() : 1.0);
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_curve_strategy_enabled =
+    mpc["v2x_overtake_mpcc_frenet_dp_curve_strategy_enabled"] ?
+    mpc["v2x_overtake_mpcc_frenet_dp_curve_strategy_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_significant_curvature = std::max(
+    0.0,
+    mpc["v2x_overtake_mpcc_frenet_dp_significant_curvature"] ?
+    mpc["v2x_overtake_mpcc_frenet_dp_significant_curvature"].as<double>() : 0.04);
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_tactical_reference_weight = std::max(
+    0.0,
+    mpc["v2x_overtake_mpcc_frenet_dp_tactical_reference_weight"] ?
+    mpc["v2x_overtake_mpcc_frenet_dp_tactical_reference_weight"].as<double>() : 0.80);
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_tactical_edge_fraction = std::clamp(
+    mpc["v2x_overtake_mpcc_frenet_dp_tactical_edge_fraction"] ?
+    mpc["v2x_overtake_mpcc_frenet_dp_tactical_edge_fraction"].as<double>() : 0.35,
+    0.0, 1.0);
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_inside_radius_penalty_weight =
+    std::max(
+    0.0,
+    mpc["v2x_overtake_mpcc_frenet_dp_inside_radius_penalty_weight"] ?
+    mpc["v2x_overtake_mpcc_frenet_dp_inside_radius_penalty_weight"].as<double>() :
+    0.75);
   cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_shadow_score_penalty = std::max(
     0.0,
     mpc["v2x_overtake_mpcc_frenet_dp_shadow_score_penalty"] ?
@@ -29815,6 +29875,7 @@ public:
         "V2X MPCC Frenet DP corridor: %s, execution=%s, rolling_refresh=%s/%.2f s, "
         "bins=%d, slope<=%.2f m/m, "
         "weights anchor=%.2f/motion=%.2f/previous=%.2f/width=%.2f/switch=%.2f, "
+        "curve_strategy=%s/kappa>=%.3f/reference=%.2f/edge=%.2f/inside=%.2f, "
         "shadow_penalty=%.2f, warm_age<=%.2f s, runtime_lease<=%.2f s, "
         "longitudinal_timing=%s/cost_slack=%.2f",
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_corridor_enabled ?
@@ -29831,6 +29892,13 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_previous_path_weight,
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_corridor_width_weight,
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_branch_switch_penalty,
+        mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_curve_strategy_enabled ?
+        "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_significant_curvature,
+        mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_tactical_reference_weight,
+        mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_tactical_edge_fraction,
+        mpc_cfg_.v2x_behavior.overtake_line.
+        mpcc_frenet_dp_inside_radius_penalty_weight,
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_shadow_score_penalty,
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_last_path_max_age_sec,
         mpc_cfg_.v2x_behavior.overtake_line.

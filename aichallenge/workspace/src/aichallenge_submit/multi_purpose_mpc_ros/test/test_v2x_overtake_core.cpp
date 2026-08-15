@@ -14899,6 +14899,114 @@ TEST(V2XOvertakeCoreFrenetDpCorridor, AdmitsMovingCorridorWithoutFixedGoalInters
   EXPECT_LE(midpoint, 1.60);
 }
 
+TEST(V2XOvertakeCoreFrenetDpCorridor, StraightCourseKeepsMinimumMotionTactic)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpCorridorRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpTacticalStrategy;
+  using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorSample;
+  using multi_purpose_mpc_ros::v2x_overtake_core::solve_frenet_dp_corridor;
+
+  FrenetDpCorridorRequest request;
+  request.enabled = true;
+  request.curve_strategy_enabled = true;
+  request.current_lateral_m = 0.30;
+  request.significant_curvature_radpm = 0.04;
+  request.tactical_reference_weight = 2.0;
+  request.left.side_sign = 1;
+  request.left.samples = {
+    OvertakeMissionDynamicCorridorSample{0.0, -0.5, 0.8, true, 0.0, true, true},
+    OvertakeMissionDynamicCorridorSample{2.0, -0.5, 0.8, true, 0.01, true, true},
+    OvertakeMissionDynamicCorridorSample{4.0, -0.5, 0.8, true, 0.0, false, true}};
+
+  const auto resolution = solve_frenet_dp_corridor(request);
+  ASSERT_TRUE(resolution.valid);
+  ASSERT_TRUE(resolution.left.feasible);
+  EXPECT_EQ(
+    resolution.left.tactical_strategy,
+    FrenetDpTacticalStrategy::StraightDashi);
+  EXPECT_FALSE(resolution.left.curve_observed);
+  EXPECT_EQ(resolution.left.tactical_knot_count, 1U);
+  for (const double lateral : resolution.left.lateral_path_m) {
+    EXPECT_NEAR(lateral, request.current_lateral_m, 0.15);
+  }
+}
+
+TEST(V2XOvertakeCoreFrenetDpCorridor, SelectsThreeKnotSweepDiveThroughMovingCurveGap)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpCorridorRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpTacticalStrategy;
+  using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorSample;
+  using multi_purpose_mpc_ros::v2x_overtake_core::solve_frenet_dp_corridor;
+
+  FrenetDpCorridorRequest request;
+  request.enabled = true;
+  request.curve_strategy_enabled = true;
+  request.current_lateral_m = -0.8;
+  request.lateral_bin_count = 16U;
+  request.maximum_lateral_slope = 0.50;
+  request.significant_curvature_radpm = 0.04;
+  request.tactical_reference_weight = 4.0;
+  request.tactical_edge_fraction = 0.50;
+  request.inside_radius_penalty_weight = 0.0;
+  request.left.side_sign = 1;
+  request.left.samples = {
+    OvertakeMissionDynamicCorridorSample{0.0, -1.4, -0.4, true, 0.05, true, true},
+    OvertakeMissionDynamicCorridorSample{3.0, -1.4, -0.4, true, 0.08, true, true},
+    OvertakeMissionDynamicCorridorSample{6.0, 0.4, 1.4, true, 0.12, true, true},
+    OvertakeMissionDynamicCorridorSample{9.0, -1.4, -0.4, true, 0.06, false, true}};
+
+  const auto resolution = solve_frenet_dp_corridor(request);
+  ASSERT_TRUE(resolution.valid);
+  ASSERT_TRUE(resolution.left.feasible);
+  EXPECT_EQ(
+    resolution.left.tactical_strategy,
+    FrenetDpTacticalStrategy::SweepDive);
+  EXPECT_TRUE(resolution.left.curve_observed);
+  EXPECT_EQ(resolution.left.tactical_knot_count, 3U);
+  ASSERT_EQ(resolution.left.lateral_path_m.size(), 4U);
+  EXPECT_LT(resolution.left.lateral_path_m[0], 0.0);
+  EXPECT_LT(resolution.left.lateral_path_m[1], 0.0);
+  EXPECT_GT(resolution.left.lateral_path_m[2], 0.0);
+  EXPECT_LT(resolution.left.lateral_path_m[3], 0.0);
+}
+
+TEST(V2XOvertakeCoreFrenetDpCorridor, CurveGuidanceIsSymmetricForOppositeTurns)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpCorridorRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorSample;
+  using multi_purpose_mpc_ros::v2x_overtake_core::solve_frenet_dp_corridor;
+
+  const auto solve_turn = [&](const double curvature_sign) {
+      FrenetDpCorridorRequest request;
+      request.enabled = true;
+      request.curve_strategy_enabled = true;
+      request.current_lateral_m = 0.0;
+      request.lateral_bin_count = 17U;
+      request.significant_curvature_radpm = 0.04;
+      request.tactical_reference_weight = 2.0;
+      request.inside_radius_penalty_weight = 0.75;
+      request.left.side_sign = 1;
+      request.left.samples = {
+        OvertakeMissionDynamicCorridorSample{
+          0.0, -1.2, 1.2, true, 0.06 * curvature_sign, true, true},
+        OvertakeMissionDynamicCorridorSample{
+          3.0, -1.2, 1.2, true, 0.12 * curvature_sign, true, true},
+        OvertakeMissionDynamicCorridorSample{
+          6.0, -1.2, 1.2, true, 0.07 * curvature_sign, false, true}};
+      return solve_frenet_dp_corridor(request).left;
+    };
+
+  const auto left_turn = solve_turn(1.0);
+  const auto right_turn = solve_turn(-1.0);
+  ASSERT_TRUE(left_turn.feasible);
+  ASSERT_TRUE(right_turn.feasible);
+  EXPECT_EQ(left_turn.tactical_strategy, right_turn.tactical_strategy);
+  ASSERT_EQ(left_turn.lateral_path_m.size(), right_turn.lateral_path_m.size());
+  for (std::size_t i = 0U; i < left_turn.lateral_path_m.size(); ++i) {
+    EXPECT_NEAR(left_turn.lateral_path_m[i], -right_turn.lateral_path_m[i], 1e-9);
+  }
+}
+
 TEST(V2XOvertakeCoreFrenetDpExecution, ResamplesCoveredPrefixAndKeepsFallbackTail)
 {
   using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpExecutionReferenceRequest;

@@ -2553,6 +2553,13 @@ struct OvertakeLineState
   std::string last_feasible_target_vehicle_id;
   std::uint64_t last_feasible_source_generation{0U};
   bool dynamic_mission_wait_active{false};
+  // True only when the paused Pass consumed its immutable absolute horizon.
+  // A generic same-side feasibility bit must not revive that generation.
+  bool dynamic_mission_wait_terminal_budget_abort{false};
+  // At most one strictly revalidated local prefix may bridge a terminal
+  // budget event in an episode. A second terminal event must choose another
+  // complete Mission or release to a fresh left/right search.
+  bool terminal_pass_budget_rearm_consumed{false};
   bool dynamic_mission_wait_rear_clear_extension_logged{false};
   bool dynamic_mission_wait_forward_prefix_was_active{false};
   bool dynamic_mission_wait_continuous_dp_was_active{false};
@@ -13969,6 +13976,7 @@ private:
       return_reacquire_policy : ReturnReacquirePolicy::FinishReturn;
     if (next_phase != OvertakeLinePhase::FollowPrepare) {
       overtake_line_state_.dynamic_mission_wait_active = false;
+      overtake_line_state_.dynamic_mission_wait_terminal_budget_abort = false;
       overtake_line_state_.dynamic_mission_wait_rear_clear_extension_logged = false;
       overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active = false;
       overtake_line_state_.dynamic_mission_wait_continuous_dp_was_active = false;
@@ -18067,7 +18075,8 @@ private:
         }
         return replaced;
       };
-    const auto enter_dynamic_mission_wait = [&](const std::string &reason) {
+    const auto enter_dynamic_mission_wait = [&](
+      const std::string &reason, const bool terminal_budget_abort = false) {
       // Entering this wait means the frozen execution path has already
       // failed a runtime continuation condition.  A fresh feasibility bit
       // for the same side must not revive that exact path generation.
@@ -18111,6 +18120,8 @@ private:
         return false;
       }
       overtake_line_state_.dynamic_mission_wait_active = true;
+      overtake_line_state_.dynamic_mission_wait_terminal_budget_abort =
+        terminal_budget_abort;
       overtake_line_state_.dynamic_mission_wait_rear_clear_extension_logged =
           false;
       overtake_line_state_.opponent_side_replan_last_evaluation_sec =
@@ -18124,10 +18135,11 @@ private:
         RCLCPP_WARN(
             rclcpp::get_logger("mpc_controller"),
             "OvertakeLine dynamic mission wait entered: target=%s, side=%d, "
-            "target_s=%.2f, reason=%s, wp_id=%d",
+            "target_s=%.2f, terminal_budget=%d, reason=%s, wp_id=%d",
             overtake_line_state_.target_vehicle_id.c_str(),
             overtake_line_state_.pass_side_sign,
-            behavior_output.locked_target_longitudinal, reason.c_str(),
+            behavior_output.locked_target_longitudinal,
+            terminal_budget_abort ? 1 : 0, reason.c_str(),
             model->wp_id);
       }
       return true;
@@ -19202,22 +19214,99 @@ private:
           (behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake &&
           !fresh_replacement_physically_admitted) ||
           overtake_solver_recovery_active_ || behavior_output.overtake_forbidden_wp;
-        const auto dynamic_wait = overtake_core::resolve_dynamic_mission_wait(
-          overtake_core::DynamicMissionWaitRequest{
-            line_cfg.opponent_side_replan_enabled,
-            true,
-            locked_target_progress_continuous,
-            behavior_output.locked_target_position_jump,
-            behavior_output.locked_target_current_body_footprints_separated,
-            dynamic_wait_hard_fault,
-            rear_clear_confirmed,
-            current_overtake_mission_invalidated(),
-            dynamic_wait_cross_side_allowed,
-            behavior_output.opponent_side_replan_evaluated,
-            behavior_output.opponent_side_replan_current_feasible,
-            fresh_current_replacement_ready,
-            fresh_alternate_replacement_ready,
-            behavior_output.recoverable_side_contact_active});
+        bool terminal_current_rearm_active = false;
+        if (
+          overtake_line_state_.dynamic_mission_wait_terminal_budget_abort &&
+          !overtake_line_state_.terminal_pass_budget_rearm_consumed &&
+          fresh_current_replacement_ready && fresh_same_side_candidate_available &&
+          behavior_output.opponent_side_replan_current_mission.has_value() &&
+          locked_target_progress_continuous &&
+          !behavior_output.locked_target_position_jump &&
+          !locked_target_progress_rejected &&
+          behavior_output.locked_target_current_body_footprints_separated &&
+          behavior_output.locked_target_footprint_prediction_valid &&
+          behavior_output.locked_target_predicted_body_footprint_sweep_separated &&
+          !behavior_output.overtake_execution_corridor_blocked &&
+          !dynamic_wait_hard_fault &&
+          std::isfinite(behavior_output.locked_target_longitudinal) &&
+          behavior_output.locked_target_longitudinal + kEps >=
+          line_cfg.opponent_side_replan_no_return_front_distance)
+        {
+          const auto & current_candidate =
+            behavior_output.opponent_side_replan_current_mission.value();
+          const double target_speed_mps =
+            std::isfinite(behavior_output.locked_target_speed) ?
+            std::max(0.0, behavior_output.locked_target_speed) :
+            (std::isfinite(overtake_line_state_.target_last_speed) ?
+            std::max(0.0, overtake_line_state_.target_last_speed) : 0.0);
+          overtake_core::MpccLitePrefixExecutionRequest prefix_request;
+          prefix_request.active_execution = true;
+          prefix_request.before_no_return = true;
+          prefix_request.safe_separation_active = true;
+          prefix_request.safe_separation_tactical_rearmed = true;
+          prefix_request.candidate_progressive = current_candidate.progressive_entry;
+          prefix_request.candidate_feasible = current_candidate.feasible;
+          prefix_request.body_clear_deadline_checked =
+            current_candidate.body_clear_deadline_checked;
+          prefix_request.body_clear_deadline_feasible =
+            current_candidate.body_clear_deadline_feasible;
+          prefix_request.target_clearance_checked =
+            current_candidate.pass_target_clearance_checked;
+          prefix_request.minimum_target_surface_clearance_m =
+            current_candidate.predicted_minimum_pass_target_surface_clearance_m;
+          prefix_request.predicted_body_clear_time_sec =
+            current_candidate.predicted_body_clear_time_sec;
+          prefix_request.predicted_body_clear_distance_m =
+            current_candidate.predicted_body_clear_distance_m;
+          prefix_request.predicted_minimum_ego_speed_mps =
+            current_candidate.predicted_minimum_ego_speed_mps;
+          prefix_request.minimum_ego_speed_mps =
+            overtake_core::resolve_cross_side_minimum_speed_requirement(
+            std::max(0.0, current_speed_mps_), target_speed_mps);
+          prefix_request.minimum_path_wall_clearance_m =
+            current_candidate.minimum_path_wall_clearance_m;
+          prefix_request.minimum_required_path_wall_clearance_m =
+            std::max(0.10, planning_wall_clearance);
+          prefix_request.remaining_time_budget_sec =
+            std::max(0.0, line_cfg.dynamic_mission_wait_timeout_sec);
+          prefix_request.remaining_distance_budget_m =
+            std::max(0.0, line_cfg.dynamic_mission_wait_max_distance);
+          prefix_request.pass_phase = true;
+          const auto prefix_admission =
+            overtake_core::resolve_mpcc_lite_prefix_execution(prefix_request);
+          terminal_current_rearm_active =
+            prefix_admission.valid && prefix_admission.admitted;
+        }
+
+        overtake_core::DynamicMissionWaitRequest wait_request;
+        wait_request.enabled = line_cfg.opponent_side_replan_enabled;
+        wait_request.wait_active = true;
+        wait_request.target_continuous = locked_target_progress_continuous;
+        wait_request.target_position_jump =
+          behavior_output.locked_target_position_jump;
+        wait_request.current_body_footprints_separated =
+          behavior_output.locked_target_current_body_footprints_separated;
+        wait_request.hard_fault = dynamic_wait_hard_fault;
+        wait_request.rear_clear_confirmed = rear_clear_confirmed;
+        wait_request.current_mission_invalidated =
+          current_overtake_mission_invalidated();
+        wait_request.alternate_replacement_allowed =
+          dynamic_wait_cross_side_allowed;
+        wait_request.assessment_completed =
+          behavior_output.opponent_side_replan_evaluated;
+        wait_request.current_plan_feasible =
+          behavior_output.opponent_side_replan_current_feasible;
+        wait_request.current_replacement_ready = fresh_current_replacement_ready;
+        wait_request.alternate_replacement_ready =
+          fresh_alternate_replacement_ready;
+        wait_request.terminal_budget_abort =
+          overtake_line_state_.dynamic_mission_wait_terminal_budget_abort;
+        wait_request.current_replacement_tactical_rearmed =
+          terminal_current_rearm_active;
+        wait_request.recoverable_side_contact_active =
+          behavior_output.recoverable_side_contact_active;
+        const auto dynamic_wait =
+          overtake_core::resolve_dynamic_mission_wait(wait_request);
 
         switch (dynamic_wait.action) {
           case overtake_core::DynamicMissionWaitAction::Return:
@@ -19249,8 +19338,11 @@ private:
               replace_frozen_overtake_mission_after_dynamic_replan(
               behavior_output.opponent_side_replan_current_mission.value(),
               now_sec, current_ey, true, true, false, false, false, false,
-              forward_authority_handoff);
+              forward_authority_handoff, terminal_current_rearm_active);
             if (replaced) {
+              if (terminal_current_rearm_active) {
+                overtake_line_state_.terminal_pass_budget_rearm_consumed = true;
+              }
               overtake_line_state_.dynamic_mission_wait_active = false;
             } else {
               transition_overtake_line_phase(
@@ -19275,6 +19367,30 @@ private:
                 mission_side_sign,
                 "dynamic Mission wait alternate replacement rejected");
             }
+            return DynamicMissionWaitExecution::Handled;
+          }
+          case overtake_core::DynamicMissionWaitAction::ReleaseForFreshSearch:
+          {
+            const int failed_side = overtake_line_state_.pass_side_sign;
+            const std::string failed_target =
+              overtake_line_state_.target_vehicle_id;
+            const std::string release_reason =
+              "terminal Pass budget expired; fresh side search";
+            arm_overtake_line_side_retry_block(
+              failed_side, failed_target, now_sec, release_reason,
+              overtake_core::OvertakeSideRetryFailureClass::PhysicalOrCommittedFailure);
+            RCLCPP_WARN(
+              rclcpp::get_logger("mpc_controller"),
+              "OvertakeLine terminal dynamic wait released: target=%s, "
+              "failed_side=%d, current_ready=%d/rearm=%d, alternate_ready=%d, "
+              "reason=%s, wp_id=%d",
+              failed_target.c_str(), failed_side,
+              fresh_current_replacement_ready ? 1 : 0,
+              terminal_current_rearm_active ? 1 : 0,
+              fresh_alternate_replacement_ready ? 1 : 0,
+              overtake_core::to_string(dynamic_wait.reason), model->wp_id);
+            reset_overtake_line_state(now_sec, release_reason);
+            overtake_locked_side_sign_ = 0;
             return DynamicMissionWaitExecution::Handled;
           }
           case overtake_core::DynamicMissionWaitAction::Hold:
@@ -22466,6 +22582,11 @@ private:
           const std::string abort_reason =
             std::string{"SafeSeparation aborted: "} +
             overtake_core::to_string(safe_separation.reason);
+          const bool terminal_pass_budget_abort =
+            safe_separation.reason ==
+            overtake_core::SafeSeparationReason::AbsoluteTimeLimit ||
+            safe_separation.reason ==
+            overtake_core::SafeSeparationReason::AbsoluteDistanceLimit;
           const bool soft_maneuver_failure =
             safe_separation.reason == overtake_core::SafeSeparationReason::ShortHorizonUnsafe ||
             safe_separation.reason == overtake_core::SafeSeparationReason::LocalTimeLimit ||
@@ -22537,7 +22658,7 @@ private:
               overtake_line_state_.pass_side_sign, locked_target_longitudinal,
               overtake_core::to_string(safe_separation.reason), model->wp_id);
           } else {
-            if (enter_dynamic_mission_wait(abort_reason)) {
+            if (enter_dynamic_mission_wait(abort_reason, terminal_pass_budget_abort)) {
               return output;
             }
             const auto soft_abort_action = overtake_core::resolve_soft_mission_abort(

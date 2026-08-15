@@ -11318,6 +11318,45 @@ TEST(V2XOvertakeCoreDynamicMissionWait, NoReturnUsesFreshSameSideOnly)
   EXPECT_EQ(result.reason, DynamicMissionWaitReason::CurrentPlanRecovered);
 }
 
+TEST(V2XOvertakeCoreDynamicMissionWait, TerminalBudgetRequiresRearmOrFreshSearch)
+{
+  DynamicMissionWaitRequest request;
+  request.enabled = true;
+  request.wait_active = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.current_mission_invalidated = true;
+  request.terminal_budget_abort = true;
+  request.current_plan_feasible = true;
+  request.current_replacement_ready = true;
+
+  auto result = resolve_dynamic_mission_wait(request);
+  EXPECT_EQ(result.action, DynamicMissionWaitAction::Hold);
+  EXPECT_EQ(result.reason, DynamicMissionWaitReason::WaitingForAssessment);
+
+  request.assessment_completed = true;
+  result = resolve_dynamic_mission_wait(request);
+  EXPECT_EQ(result.action, DynamicMissionWaitAction::ReleaseForFreshSearch);
+  EXPECT_EQ(result.reason, DynamicMissionWaitReason::TerminalBudgetExpired);
+
+  request.current_replacement_tactical_rearmed = true;
+  result = resolve_dynamic_mission_wait(request);
+  EXPECT_EQ(result.action, DynamicMissionWaitAction::ReplaceWithCurrent);
+  EXPECT_EQ(result.reason, DynamicMissionWaitReason::CurrentPlanRecovered);
+
+  request.current_replacement_tactical_rearmed = false;
+  request.alternate_replacement_allowed = true;
+  request.alternate_replacement_ready = true;
+  result = resolve_dynamic_mission_wait(request);
+  EXPECT_EQ(result.action, DynamicMissionWaitAction::ReplaceWithAlternate);
+  EXPECT_EQ(result.reason, DynamicMissionWaitReason::AlternatePlanReady);
+
+  request.hard_fault = true;
+  result = resolve_dynamic_mission_wait(request);
+  EXPECT_EQ(result.action, DynamicMissionWaitAction::Recovery);
+  EXPECT_EQ(result.reason, DynamicMissionWaitReason::HardFault);
+}
+
 TEST(V2XOvertakeCoreDynamicMissionWait, ForwardPrefixKeepsMissionClosingWhenSweepIsClear)
 {
   DynamicMissionWaitForwardPrefixRequest request;

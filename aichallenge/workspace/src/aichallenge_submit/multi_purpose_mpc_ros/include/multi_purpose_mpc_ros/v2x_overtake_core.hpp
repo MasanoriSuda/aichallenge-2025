@@ -5370,6 +5370,7 @@ enum class DynamicMissionWaitAction
   ResumeCurrent,
   ReplaceWithCurrent,
   ReplaceWithAlternate,
+  ReleaseForFreshSearch,
   Return,
   Recovery,
 };
@@ -5383,6 +5384,7 @@ enum class DynamicMissionWaitReason
   CurrentPlanRecovered,
   CurrentMissionInvalidated,
   AlternatePlanReady,
+  TerminalBudgetExpired,
   RearClear,
   TargetInvalid,
   BodyOverlap,
@@ -5404,6 +5406,13 @@ struct DynamicMissionWaitRequest
   bool current_plan_feasible{false};
   bool current_replacement_ready{false};
   bool alternate_replacement_ready{false};
+  /// The previous Pass generation consumed its immutable absolute time or
+  /// distance budget. It must not be revived by ordinary current-side
+  /// feasibility alone.
+  bool terminal_budget_abort{false};
+  /// A fresh same-side progressive prefix was revalidated against the target,
+  /// wall, speed and a new bounded local execution lease.
+  bool current_replacement_tactical_rearmed{false};
   /// Current overlap was accepted by the independently bounded
   /// ContactContinuation classifier.
   bool recoverable_side_contact_active{false};
@@ -5418,6 +5427,10 @@ struct DynamicMissionWaitResolution
 /// Hold a paused overtake target while both complete Mission candidates are
 /// unavailable. Only a fresh current-side assessment may resume a still-valid
 /// plan; an invalidated generation can only be replaced atomically or ended.
+/// A terminal budget abort additionally requires an explicitly re-armed
+/// current-side prefix. Once one left/right assessment completes without an
+/// admissible replacement, it releases the failed side for a fresh search
+/// instead of waiting for the Mission-wide deadline.
 /// Alternate replacement is separately gated so no-return cannot cause a
 /// side-by-side full-track crossing.
 /// Actual overlap, target discontinuity and controller/geometry hard faults

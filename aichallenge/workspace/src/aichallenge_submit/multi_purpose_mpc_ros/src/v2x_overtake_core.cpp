@@ -9564,7 +9564,11 @@ DynamicMissionWaitResolution resolve_dynamic_mission_wait(
     resolution.reason = DynamicMissionWaitReason::AlternatePlanReady;
     return resolution;
   }
-  if (request.current_replacement_ready) {
+  if (
+    request.current_replacement_ready &&
+    (!request.terminal_budget_abort ||
+    request.current_replacement_tactical_rearmed))
+  {
     resolution.action = DynamicMissionWaitAction::ReplaceWithCurrent;
     resolution.reason = DynamicMissionWaitReason::CurrentPlanRecovered;
     return resolution;
@@ -9572,6 +9576,14 @@ DynamicMissionWaitResolution resolve_dynamic_mission_wait(
   if (!request.assessment_completed) {
     resolution.action = DynamicMissionWaitAction::Hold;
     resolution.reason = DynamicMissionWaitReason::WaitingForAssessment;
+    return resolution;
+  }
+  if (request.terminal_budget_abort) {
+    // The immutable Pass budget has already expired. A generic feasible bit
+    // cannot revive that generation, and waiting until the Mission-wide
+    // deadline only repeats Pass/FollowPrepare without changing the scene.
+    resolution.action = DynamicMissionWaitAction::ReleaseForFreshSearch;
+    resolution.reason = DynamicMissionWaitReason::TerminalBudgetExpired;
     return resolution;
   }
   if (request.current_mission_invalidated) {
@@ -9606,6 +9618,8 @@ const char * to_string(const DynamicMissionWaitAction action) noexcept
       return "replace with current";
     case DynamicMissionWaitAction::ReplaceWithAlternate:
       return "replace with alternate";
+    case DynamicMissionWaitAction::ReleaseForFreshSearch:
+      return "release for fresh search";
     case DynamicMissionWaitAction::Return:
       return "return";
     case DynamicMissionWaitAction::Recovery:
@@ -9631,6 +9645,8 @@ const char * to_string(const DynamicMissionWaitReason reason) noexcept
       return "current Mission generation invalidated";
     case DynamicMissionWaitReason::AlternatePlanReady:
       return "alternate plan ready";
+    case DynamicMissionWaitReason::TerminalBudgetExpired:
+      return "terminal Pass budget expired";
     case DynamicMissionWaitReason::RearClear:
       return "rear clear";
     case DynamicMissionWaitReason::TargetInvalid:

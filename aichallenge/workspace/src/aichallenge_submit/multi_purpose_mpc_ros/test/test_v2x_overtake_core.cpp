@@ -121,6 +121,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitForwardAuthorityRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitForwardPrefixRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::DynamicMissionWaitRetentionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionOwnershipRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommittedBehaviorOwnershipGuardRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassGeometryOwnershipRequest;
@@ -138,8 +139,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionPathStage;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonLateralRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonLateralSample;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonExecutionLeaseRequest;
-using multi_purpose_mpc_ros::v2x_overtake_core::TargetBoundPassHoldRequest;
-using multi_purpose_mpc_ros::v2x_overtake_core::TargetBoundPassHoldLifecycleRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::TargetBoundExecutionHoldRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::TargetBoundExecutionHoldLifecycleRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonTargetBoundsRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonElasticTargetBoundsRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonTargetPredictionRequest;
@@ -436,8 +437,10 @@ using multi_purpose_mpc_ros::v2x_overtake_core::
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_entry_stage;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   can_retain_receding_horizon_execution_lease;
-using multi_purpose_mpc_ros::v2x_overtake_core::can_hold_target_bound_pass_for_replan;
-using multi_purpose_mpc_ros::v2x_overtake_core::resolve_target_bound_pass_hold_lifecycle;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  can_hold_target_bound_execution_for_replan;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  resolve_target_bound_execution_hold_lifecycle;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_completion_rollout_speed;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_rearward_pass_completion_context;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_observe_locked_target_geometry;
@@ -447,6 +450,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_mission_wait;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   can_handoff_dynamic_mission_wait_forward_authority;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_mission_wait_forward_prefix;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  can_retain_dynamic_mission_wait_until_rear_clear;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_mission_ownership;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   resolve_committed_behavior_ownership_guards;
@@ -3422,11 +3427,11 @@ TEST(V2XOvertakeCoreSpeed, RecedingHorizonLeaseCannotBypassHardFaults)
   EXPECT_FALSE(can_retain_receding_horizon_execution_lease(request));
 }
 
-TEST(V2XOvertakeCoreSpeed, HoldsPhysicalPassPrefixAcrossTargetOnlyConflict)
+TEST(V2XOvertakeCoreSpeed, HoldsCommittedExecutionPrefixAcrossTargetOnlyConflict)
 {
-  TargetBoundPassHoldRequest request;
+  TargetBoundExecutionHoldRequest request;
   request.enabled = true;
-  request.pass_phase = true;
+  request.committed_execution_phase = true;
   request.mission_path_frozen = true;
   request.target_bound_failure = true;
   request.physical_hold_path_feasible = true;
@@ -3437,20 +3442,24 @@ TEST(V2XOvertakeCoreSpeed, HoldsPhysicalPassPrefixAcrossTargetOnlyConflict)
   request.maximum_hold_sec = 0.30;
   request.maximum_hold_distance_m = 3.0;
 
-  EXPECT_TRUE(can_hold_target_bound_pass_for_replan(request));
+  EXPECT_TRUE(can_hold_target_bound_execution_for_replan(request));
+
+  request.committed_execution_phase = false;
+  EXPECT_FALSE(can_hold_target_bound_execution_for_replan(request));
+  request.committed_execution_phase = true;
 
   request.hold_elapsed_sec = 0.30;
-  EXPECT_FALSE(can_hold_target_bound_pass_for_replan(request));
+  EXPECT_FALSE(can_hold_target_bound_execution_for_replan(request));
   request.hold_elapsed_sec = 0.20;
   request.hold_traveled_m = 3.0;
-  EXPECT_FALSE(can_hold_target_bound_pass_for_replan(request));
+  EXPECT_FALSE(can_hold_target_bound_execution_for_replan(request));
 }
 
-TEST(V2XOvertakeCoreSpeed, TargetBoundPassHoldCannotBypassHardFaults)
+TEST(V2XOvertakeCoreSpeed, TargetBoundExecutionHoldCannotBypassHardFaults)
 {
-  TargetBoundPassHoldRequest request;
+  TargetBoundExecutionHoldRequest request;
   request.enabled = true;
-  request.pass_phase = true;
+  request.committed_execution_phase = true;
   request.mission_path_frozen = true;
   request.target_bound_failure = true;
   request.physical_hold_path_feasible = true;
@@ -3460,26 +3469,26 @@ TEST(V2XOvertakeCoreSpeed, TargetBoundPassHoldCannotBypassHardFaults)
   request.hold_traveled_m = 0.5;
   request.maximum_hold_sec = 0.30;
   request.maximum_hold_distance_m = 3.0;
-  ASSERT_TRUE(can_hold_target_bound_pass_for_replan(request));
+  ASSERT_TRUE(can_hold_target_bound_execution_for_replan(request));
 
   request.actual_wall_margin_blocked = true;
-  EXPECT_FALSE(can_hold_target_bound_pass_for_replan(request));
+  EXPECT_FALSE(can_hold_target_bound_execution_for_replan(request));
   request.actual_wall_margin_blocked = false;
   request.emergency_front_risk = true;
-  EXPECT_FALSE(can_hold_target_bound_pass_for_replan(request));
+  EXPECT_FALSE(can_hold_target_bound_execution_for_replan(request));
   request.emergency_front_risk = false;
   request.target_position_jump = true;
-  EXPECT_FALSE(can_hold_target_bound_pass_for_replan(request));
+  EXPECT_FALSE(can_hold_target_bound_execution_for_replan(request));
 }
 
-TEST(V2XOvertakeCoreSpeed, TargetBoundPassHoldLifecycleRequiresStableFreshHorizon)
+TEST(V2XOvertakeCoreSpeed, TargetBoundExecutionHoldLifecycleRequiresStableFreshHorizon)
 {
-  TargetBoundPassHoldLifecycleRequest request;
+  TargetBoundExecutionHoldLifecycleRequest request;
   request.target_bound_failure = true;
   request.now_sec = 10.0;
   request.clear_stable_sec = 0.20;
 
-  auto resolution = resolve_target_bound_pass_hold_lifecycle(request);
+  auto resolution = resolve_target_bound_execution_hold_lifecycle(request);
   ASSERT_TRUE(resolution.valid);
   EXPECT_TRUE(resolution.hold_active);
   EXPECT_TRUE(resolution.started);
@@ -3490,7 +3499,7 @@ TEST(V2XOvertakeCoreSpeed, TargetBoundPassHoldLifecycleRequiresStableFreshHorizo
   request.target_bound_failure = false;
   request.fresh_horizon_active = true;
   request.now_sec = 10.05;
-  resolution = resolve_target_bound_pass_hold_lifecycle(request);
+  resolution = resolve_target_bound_execution_hold_lifecycle(request);
   ASSERT_TRUE(resolution.valid);
   EXPECT_TRUE(resolution.hold_active);
   EXPECT_FALSE(resolution.released);
@@ -3498,25 +3507,25 @@ TEST(V2XOvertakeCoreSpeed, TargetBoundPassHoldLifecycleRequiresStableFreshHorizo
 
   request.clear_since_sec = resolution.clear_since_sec;
   request.now_sec = 10.24;
-  resolution = resolve_target_bound_pass_hold_lifecycle(request);
+  resolution = resolve_target_bound_execution_hold_lifecycle(request);
   EXPECT_TRUE(resolution.hold_active);
   EXPECT_FALSE(resolution.released);
 
   request.now_sec = 10.25;
-  resolution = resolve_target_bound_pass_hold_lifecycle(request);
+  resolution = resolve_target_bound_execution_hold_lifecycle(request);
   EXPECT_FALSE(resolution.hold_active);
   EXPECT_TRUE(resolution.released);
 }
 
-TEST(V2XOvertakeCoreSpeed, TargetBoundPassHoldLifecycleDoesNotRearmOnChatter)
+TEST(V2XOvertakeCoreSpeed, TargetBoundExecutionHoldLifecycleDoesNotRearmOnChatter)
 {
-  TargetBoundPassHoldLifecycleRequest request;
+  TargetBoundExecutionHoldLifecycleRequest request;
   request.hold_active = true;
   request.fresh_horizon_active = true;
   request.now_sec = 5.0;
   request.clear_stable_sec = 0.20;
 
-  auto resolution = resolve_target_bound_pass_hold_lifecycle(request);
+  auto resolution = resolve_target_bound_execution_hold_lifecycle(request);
   ASSERT_TRUE(resolution.valid);
   ASSERT_TRUE(resolution.hold_active);
   ASSERT_DOUBLE_EQ(resolution.clear_since_sec, 5.0);
@@ -3525,22 +3534,22 @@ TEST(V2XOvertakeCoreSpeed, TargetBoundPassHoldLifecycleDoesNotRearmOnChatter)
   request.fresh_horizon_active = false;
   request.clear_since_sec = resolution.clear_since_sec;
   request.now_sec = 5.10;
-  resolution = resolve_target_bound_pass_hold_lifecycle(request);
+  resolution = resolve_target_bound_execution_hold_lifecycle(request);
   EXPECT_TRUE(resolution.hold_active);
   EXPECT_FALSE(resolution.started);
   EXPECT_FALSE(resolution.released);
   EXPECT_FALSE(std::isfinite(resolution.clear_since_sec));
 }
 
-TEST(V2XOvertakeCoreSpeed, TargetBoundPassHoldLifecycleRetainsNeutralPlannerGap)
+TEST(V2XOvertakeCoreSpeed, TargetBoundExecutionHoldLifecycleRetainsNeutralPlannerGap)
 {
-  TargetBoundPassHoldLifecycleRequest request;
+  TargetBoundExecutionHoldLifecycleRequest request;
   request.hold_active = true;
   request.now_sec = 7.0;
   request.clear_since_sec = 6.9;
   request.clear_stable_sec = 0.20;
 
-  const auto resolution = resolve_target_bound_pass_hold_lifecycle(request);
+  const auto resolution = resolve_target_bound_execution_hold_lifecycle(request);
   ASSERT_TRUE(resolution.valid);
   EXPECT_TRUE(resolution.hold_active);
   EXPECT_FALSE(resolution.started);
@@ -3549,30 +3558,30 @@ TEST(V2XOvertakeCoreSpeed, TargetBoundPassHoldLifecycleRetainsNeutralPlannerGap)
   EXPECT_FALSE(std::isfinite(resolution.clear_since_sec));
 }
 
-TEST(V2XOvertakeCoreSpeed, TargetBoundPassHoldLifecycleRevokesExplicitHardFailure)
+TEST(V2XOvertakeCoreSpeed, TargetBoundExecutionHoldLifecycleRevokesExplicitHardFailure)
 {
-  TargetBoundPassHoldLifecycleRequest request;
+  TargetBoundExecutionHoldLifecycleRequest request;
   request.hold_active = true;
   request.hard_failure = true;
   request.now_sec = 8.0;
   request.clear_stable_sec = 0.20;
 
-  const auto resolution = resolve_target_bound_pass_hold_lifecycle(request);
+  const auto resolution = resolve_target_bound_execution_hold_lifecycle(request);
   ASSERT_TRUE(resolution.valid);
   EXPECT_FALSE(resolution.hold_active);
   EXPECT_FALSE(resolution.released);
   EXPECT_TRUE(resolution.revoked);
 }
 
-TEST(V2XOvertakeCoreSpeed, TargetBoundPassHoldLifecycleEndsAtBudgetDuringNeutralGap)
+TEST(V2XOvertakeCoreSpeed, TargetBoundExecutionHoldLifecycleEndsAtBudgetDuringNeutralGap)
 {
-  TargetBoundPassHoldLifecycleRequest request;
+  TargetBoundExecutionHoldLifecycleRequest request;
   request.hold_active = true;
   request.budget_exhausted = true;
   request.now_sec = 9.0;
   request.clear_stable_sec = 0.20;
 
-  const auto resolution = resolve_target_bound_pass_hold_lifecycle(request);
+  const auto resolution = resolve_target_bound_execution_hold_lifecycle(request);
   ASSERT_TRUE(resolution.valid);
   EXPECT_FALSE(resolution.hold_active);
   EXPECT_FALSE(resolution.released);
@@ -3580,16 +3589,16 @@ TEST(V2XOvertakeCoreSpeed, TargetBoundPassHoldLifecycleEndsAtBudgetDuringNeutral
   EXPECT_TRUE(resolution.exhausted);
 }
 
-TEST(V2XOvertakeCoreSpeed, TargetBoundPassHoldLifecycleRejectsInvalidTiming)
+TEST(V2XOvertakeCoreSpeed, TargetBoundExecutionHoldLifecycleRejectsInvalidTiming)
 {
-  TargetBoundPassHoldLifecycleRequest request;
+  TargetBoundExecutionHoldLifecycleRequest request;
   request.hold_active = true;
   request.fresh_horizon_active = true;
   request.now_sec = 1.0;
   request.clear_since_sec = 2.0;
   request.clear_stable_sec = 0.20;
 
-  const auto resolution = resolve_target_bound_pass_hold_lifecycle(request);
+  const auto resolution = resolve_target_bound_execution_hold_lifecycle(request);
   EXPECT_FALSE(resolution.valid);
   EXPECT_FALSE(resolution.hold_active);
 }
@@ -7829,6 +7838,29 @@ TEST(V2XOvertakeCoreSpeed, RetainsHealthyExpiredPausedMissionUntilRearClear)
   resolution = resolve_paused_mission_terminal(request);
   EXPECT_EQ(resolution.action, PausedMissionTerminalAction::Expire);
   EXPECT_EQ(resolution.reason, PausedMissionTerminalReason::TimeLimit);
+}
+
+TEST(V2XOvertakeCoreSpeed, RetainsDynamicWaitOnlyForCommittedForwardExecution)
+{
+  DynamicMissionWaitRetentionRequest request;
+  request.tactical_wait_active = true;
+  request.forward_prefix_active = true;
+
+  EXPECT_FALSE(can_retain_dynamic_mission_wait_until_rear_clear(request));
+
+  request.pass_origin = true;
+  EXPECT_TRUE(can_retain_dynamic_mission_wait_until_rear_clear(request));
+
+  request.pass_origin = false;
+  request.committed_execution = true;
+  EXPECT_TRUE(can_retain_dynamic_mission_wait_until_rear_clear(request));
+
+  request.forward_prefix_active = false;
+  EXPECT_FALSE(can_retain_dynamic_mission_wait_until_rear_clear(request));
+
+  request.forward_prefix_active = true;
+  request.tactical_wait_active = false;
+  EXPECT_FALSE(can_retain_dynamic_mission_wait_until_rear_clear(request));
 }
 
 TEST(V2XOvertakeCoreSpeed, SuppressesOnlyNewEntryForCompletedTarget)

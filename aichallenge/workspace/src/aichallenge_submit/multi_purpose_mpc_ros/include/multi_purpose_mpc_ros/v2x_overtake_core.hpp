@@ -1107,10 +1107,10 @@ struct RecedingHorizonExecutionLeaseRequest
 bool can_retain_receding_horizon_execution_lease(
   const RecedingHorizonExecutionLeaseRequest & request) noexcept;
 
-struct TargetBoundPassHoldRequest
+struct TargetBoundExecutionHoldRequest
 {
   bool enabled{false};
-  bool pass_phase{false};
+  bool committed_execution_phase{false};
   bool mission_path_frozen{false};
   bool target_bound_failure{false};
   bool physical_hold_path_feasible{false};
@@ -1131,15 +1131,17 @@ struct TargetBoundPassHoldRequest
   double maximum_hold_distance_m{};
 };
 
-/// Keep a physically feasible same-side Pass prefix while a target-only
-/// receding-horizon conflict is re-optimized. This is deliberately narrower
-/// than the generic continuity lease: predicted target overlap may trigger the
-/// hold, but non-recoverable body overlap and every wall/front hard fault stay
-/// closed. A separately qualified recoverable side contact may continue.
-bool can_hold_target_bound_pass_for_replan(
-  const TargetBoundPassHoldRequest & request) noexcept;
+/// Keep a physically feasible same-side execution prefix while a target-only
+/// receding-horizon conflict is re-optimized. Callers may admit Pass or a
+/// completed ShiftOut, but must not admit an incomplete lateral transition.
+/// This is deliberately narrower than the generic continuity lease: predicted
+/// target overlap may trigger the hold, but non-recoverable body overlap and
+/// every wall/front hard fault stay closed. A separately qualified recoverable
+/// side contact may continue.
+bool can_hold_target_bound_execution_for_replan(
+  const TargetBoundExecutionHoldRequest & request) noexcept;
 
-struct TargetBoundPassHoldLifecycleRequest
+struct TargetBoundExecutionHoldLifecycleRequest
 {
   bool hold_active{false};
   bool target_bound_failure{false};
@@ -1154,7 +1156,7 @@ struct TargetBoundPassHoldLifecycleRequest
   double clear_stable_sec{};
 };
 
-struct TargetBoundPassHoldLifecycleResolution
+struct TargetBoundExecutionHoldLifecycleResolution
 {
   bool valid{false};
   bool hold_active{false};
@@ -1165,7 +1167,7 @@ struct TargetBoundPassHoldLifecycleResolution
   double clear_since_sec{std::numeric_limits<double>::quiet_NaN()};
 };
 
-/// Preserve one cumulative target-bound Pass-prefix budget across intermittent
+/// Preserve one cumulative target-bound execution-prefix budget across intermittent
 /// feasible optimizer results. A target-bound failure clears the stability
 /// timer, while a fresh horizon must remain continuous for clear_stable_sec
 /// before the budget is released. A neutral planner gap retains bookkeeping;
@@ -1173,8 +1175,8 @@ struct TargetBoundPassHoldLifecycleResolution
 /// terminates retained bookkeeping even during a neutral gap. This prevents
 /// solution/tactical chatter from silently rearming the bounded forward-
 /// continuation window.
-TargetBoundPassHoldLifecycleResolution resolve_target_bound_pass_hold_lifecycle(
-  const TargetBoundPassHoldLifecycleRequest & request) noexcept;
+TargetBoundExecutionHoldLifecycleResolution resolve_target_bound_execution_hold_lifecycle(
+  const TargetBoundExecutionHoldLifecycleRequest & request) noexcept;
 
 struct OvertakeBodyClearDeadlineRequest
 {
@@ -6099,6 +6101,22 @@ struct PausedMissionTerminalResolution
 PausedMissionTerminalResolution resolve_paused_mission_terminal(
   const PausedMissionTerminalRequest & request) noexcept;
 const char * to_string(PausedMissionTerminalReason reason) noexcept;
+
+struct DynamicMissionWaitRetentionRequest
+{
+  bool tactical_wait_active{false};
+  bool pass_origin{false};
+  bool committed_execution{false};
+  bool forward_prefix_active{false};
+};
+
+/// Allow a short DynamicMissionWait lease to outlive its re-selection limit
+/// only when execution has already committed and a physically validated
+/// forward prefix still owns the output. Pre-commit ShiftOut waits therefore
+/// expire into a fresh left/right search instead of consuming the Mission-wide
+/// time budget as a passive FollowPrepare.
+bool can_retain_dynamic_mission_wait_until_rear_clear(
+  const DynamicMissionWaitRetentionRequest & request) noexcept;
 
 struct CommittedPassProgressWatchdogRequest
 {

@@ -1768,14 +1768,15 @@ bool can_retain_receding_horizon_execution_lease(
          request.maximum_age_sec + 1e-9;
 }
 
-bool can_hold_target_bound_pass_for_replan(
-  const TargetBoundPassHoldRequest & request) noexcept
+bool can_hold_target_bound_execution_for_replan(
+  const TargetBoundExecutionHoldRequest & request) noexcept
 {
   const bool current_geometry_recoverable =
     request.current_body_footprints_separated ||
     request.recoverable_side_contact_active;
   if (
-    !request.enabled || !request.pass_phase || !request.mission_path_frozen ||
+    !request.enabled || !request.committed_execution_phase ||
+    !request.mission_path_frozen ||
     !request.target_bound_failure || !request.physical_hold_path_feasible ||
     !request.target_progress_continuous || request.target_position_jump ||
     request.target_course_progress_rejected || !current_geometry_recoverable ||
@@ -1794,10 +1795,10 @@ bool can_hold_target_bound_pass_for_replan(
          request.hold_traveled_m < request.maximum_hold_distance_m - 1e-9;
 }
 
-TargetBoundPassHoldLifecycleResolution resolve_target_bound_pass_hold_lifecycle(
-  const TargetBoundPassHoldLifecycleRequest & request) noexcept
+TargetBoundExecutionHoldLifecycleResolution resolve_target_bound_execution_hold_lifecycle(
+  const TargetBoundExecutionHoldLifecycleRequest & request) noexcept
 {
-  TargetBoundPassHoldLifecycleResolution resolution;
+  TargetBoundExecutionHoldLifecycleResolution resolution;
   if (
     !std::isfinite(request.now_sec) ||
     !std::isfinite(request.clear_stable_sec) || request.clear_stable_sec < 0.0 ||
@@ -10291,6 +10292,14 @@ PausedMissionTerminalResolution resolve_paused_mission_terminal(
       PausedMissionTerminalReason::RearClearPendingAfterLimit};
   }
   return {};
+}
+
+bool can_retain_dynamic_mission_wait_until_rear_clear(
+  const DynamicMissionWaitRetentionRequest & request) noexcept
+{
+  return
+    request.tactical_wait_active && request.forward_prefix_active &&
+    (request.pass_origin || request.committed_execution);
 }
 
 const char * to_string(const PausedMissionTerminalReason reason) noexcept

@@ -6665,7 +6665,14 @@ MpccLitePrefixExecutionResolution resolve_mpcc_lite_prefix_execution(
   if (request.active_execution && !request.before_no_return) {
     return reject(MpccLitePrefixExecutionRejectReason::NoReturn);
   }
-  if (request.safe_separation_active) {
+  const bool safe_separation_tactical_rearm_active =
+    request.safe_separation_active &&
+    request.safe_separation_tactical_rearmed &&
+    request.active_execution && request.before_no_return && request.pass_phase;
+  if (
+    request.safe_separation_active &&
+    !safe_separation_tactical_rearm_active)
+  {
     return reject(MpccLitePrefixExecutionRejectReason::SafeSeparation);
   }
   if (!request.candidate_progressive) {

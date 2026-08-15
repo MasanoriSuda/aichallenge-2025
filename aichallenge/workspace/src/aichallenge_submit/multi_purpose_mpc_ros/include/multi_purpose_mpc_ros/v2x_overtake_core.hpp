@@ -3574,6 +3574,11 @@ struct MpccLitePrefixExecutionRequest
   bool new_entry_context{false};
   bool before_no_return{false};
   bool safe_separation_active{false};
+  /// A runtime completion replan may replace SafeSeparation with a freshly
+  /// validated same-side prefix while the target is still ahead. The caller
+  /// must re-check target continuity, predicted separation and hard faults;
+  /// this flag never authorizes an opposite-side prefix by itself.
+  bool safe_separation_tactical_rearmed{false};
   bool candidate_progressive{false};
   bool candidate_feasible{false};
   bool body_clear_deadline_checked{false};
@@ -3603,9 +3608,11 @@ struct MpccLitePrefixExecutionResolution
 
 /// Admit a short, hard-feasible receding-horizon prefix without pretending it
 /// contains a rear-clear/Return solution. A prefix may start a fresh entry or
-/// replace an active pre-no-return Mission. Its ShiftOut and short same-side
-/// continuation must fit the remaining runtime budget and retain the speed
-/// and physical reserves required at the commit point.
+/// replace an active pre-no-return Mission. SafeSeparation remains fail-closed
+/// unless the caller explicitly re-arms a Pass-phase same-side runtime
+/// completion replacement. Its ShiftOut and short continuation must fit the
+/// remaining runtime budget and retain the speed and physical reserves
+/// required at the commit point.
 MpccLitePrefixExecutionResolution resolve_mpcc_lite_prefix_execution(
   const MpccLitePrefixExecutionRequest & request) noexcept;
 

@@ -15001,7 +15001,26 @@ TEST(V2XOvertakeCoreMpccLite, AdmitsOnlyBoundedHardFeasibleExecutionPrefix)
   EXPECT_FALSE(resolution.admitted);
   EXPECT_EQ(resolution.reason, MpccLitePrefixExecutionRejectReason::SafeSeparation);
 
+  request.safe_separation_tactical_rearmed = true;
+  resolution = resolve_mpcc_lite_prefix_execution(request);
+  EXPECT_TRUE(resolution.admitted);
+  EXPECT_TRUE(resolution.restart_shiftout);
+  EXPECT_EQ(resolution.reason, MpccLitePrefixExecutionRejectReason::Admitted);
+
+  request.pass_phase = false;
+  resolution = resolve_mpcc_lite_prefix_execution(request);
+  EXPECT_FALSE(resolution.admitted);
+  EXPECT_EQ(resolution.reason, MpccLitePrefixExecutionRejectReason::SafeSeparation);
+
+  request.pass_phase = true;
+  request.before_no_return = false;
+  resolution = resolve_mpcc_lite_prefix_execution(request);
+  EXPECT_FALSE(resolution.admitted);
+  EXPECT_EQ(resolution.reason, MpccLitePrefixExecutionRejectReason::NoReturn);
+
+  request.before_no_return = true;
   request.safe_separation_active = false;
+  request.safe_separation_tactical_rearmed = false;
   request.minimum_target_surface_clearance_m = -0.01;
   resolution = resolve_mpcc_lite_prefix_execution(request);
   EXPECT_FALSE(resolution.admitted);
@@ -15037,6 +15056,75 @@ TEST(V2XOvertakeCoreMpccLite, AdmitsOnlyBoundedHardFeasibleExecutionPrefix)
   resolution = resolve_mpcc_lite_prefix_execution(request);
   EXPECT_FALSE(resolution.admitted);
   EXPECT_EQ(resolution.reason, MpccLitePrefixExecutionRejectReason::Inactive);
+}
+
+TEST(V2XOvertakeCoreMpccLite, RuntimeCompletionRearmPromotesSameSidePrefix)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::MpccLiteAuthorityAction;
+  using multi_purpose_mpc_ros::v2x_overtake_core::MpccLiteAuthorityRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::MpccLitePrefixExecutionRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::MpccLiteShadowBranch;
+  using multi_purpose_mpc_ros::v2x_overtake_core::resolve_mpcc_lite_authority;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_mpcc_lite_prefix_execution;
+
+  RuntimeCompletionTacticalRearmRequest rearm;
+  rearm.replan_pending = true;
+  rearm.pass_phase = true;
+  rearm.safe_separation_active = true;
+  rearm.commit_stage = PassCommitStage::ShiftCommitted;
+  rearm.target_continuous = true;
+  rearm.current_body_footprints_separated = true;
+  rearm.footprint_prediction_valid = true;
+  rearm.predicted_footprint_sweep_separated = true;
+  rearm.target_longitudinal_m = 4.0;
+  rearm.minimum_front_distance_m = 1.0;
+
+  MpccLitePrefixExecutionRequest prefix;
+  prefix.active_execution = true;
+  prefix.before_no_return = true;
+  prefix.safe_separation_active = true;
+  prefix.safe_separation_tactical_rearmed =
+    can_rearm_runtime_completion_tactical_replan(rearm);
+  prefix.candidate_progressive = true;
+  prefix.candidate_feasible = true;
+  prefix.body_clear_deadline_checked = true;
+  prefix.body_clear_deadline_feasible = true;
+  prefix.target_clearance_checked = true;
+  prefix.minimum_target_surface_clearance_m = 0.18;
+  prefix.predicted_body_clear_time_sec = 1.2;
+  prefix.predicted_body_clear_distance_m = 6.0;
+  prefix.predicted_minimum_ego_speed_mps = 4.8;
+  prefix.minimum_ego_speed_mps = 4.5;
+  prefix.minimum_path_wall_clearance_m = 0.45;
+  prefix.minimum_required_path_wall_clearance_m = 0.35;
+  prefix.remaining_time_budget_sec = 4.0;
+  prefix.remaining_distance_budget_m = 20.0;
+  prefix.pass_phase = true;
+
+  const auto prefix_resolution = resolve_mpcc_lite_prefix_execution(prefix);
+  ASSERT_TRUE(prefix_resolution.admitted);
+
+  MpccLiteAuthorityRequest authority;
+  authority.enabled = true;
+  authority.resolution_valid = true;
+  authority.resolution_found = true;
+  authority.active_mission = true;
+  authority.same_side_replan_admitted = true;
+  authority.selected_mission_available = true;
+  authority.selected_prefix_execution_admitted = prefix_resolution.admitted;
+  authority.active_side_sign = 1;
+  authority.selected_branch = MpccLiteShadowBranch::Left;
+
+  const auto authority_resolution = resolve_mpcc_lite_authority(authority);
+  ASSERT_TRUE(authority_resolution.valid);
+  EXPECT_EQ(authority_resolution.action, MpccLiteAuthorityAction::ReplaceActive);
+  EXPECT_EQ(authority_resolution.selected_side_sign, 1);
+
+  rearm.predicted_footprint_sweep_separated = false;
+  prefix.safe_separation_tactical_rearmed =
+    can_rearm_runtime_completion_tactical_replan(rearm);
+  EXPECT_FALSE(resolve_mpcc_lite_prefix_execution(prefix).admitted);
 }
 
 TEST(V2XOvertakeCoreFrenetDpCorridor, SelectsContinuousWiderHomotopy)

@@ -11087,28 +11087,43 @@ struct MPC
           {
             return resolution;
           }
-          return overtake_core::resolve_mpcc_lite_prefix_execution(
-            overtake_core::MpccLitePrefixExecutionRequest{
-              prefix_active_execution_context,
-              mpcc_new_entry_prefix_context,
-              mpcc_new_entry_prefix_context || same_side ||
-              opponent_side_replan_before_no_return,
-              overtake_line_state_.pass_horizon_safe_separation_active,
-              true,
-              mission->feasible,
-              mission->body_clear_deadline_checked,
-              mission->body_clear_deadline_feasible,
-              mission->pass_target_clearance_checked,
-              mission->predicted_minimum_pass_target_surface_clearance_m,
-              mission->predicted_body_clear_time_sec,
-              mission->predicted_body_clear_distance_m,
-              mission->predicted_minimum_ego_speed_mps,
-              shadow_prefix_minimum_speed_mps,
-              mission->minimum_path_wall_clearance_m,
-              shadow_wall_reference,
-              shadow_prefix_time_remaining_sec,
-              shadow_pass_distance_remaining_m,
-              overtake_line_state_.phase == OvertakeLinePhase::Pass});
+          overtake_core::MpccLitePrefixExecutionRequest request;
+          request.active_execution = prefix_active_execution_context;
+          request.new_entry_context = mpcc_new_entry_prefix_context;
+          request.before_no_return = mpcc_new_entry_prefix_context || same_side ||
+            opponent_side_replan_before_no_return;
+          request.safe_separation_active =
+            overtake_line_state_.pass_horizon_safe_separation_active;
+          // Runtime completion recovery may continue only on the currently
+          // committed side. Opposite-side progressive prefixes still require
+          // SafeSeparation to end or a complete Mission to be admitted.
+          request.safe_separation_tactical_rearmed =
+            same_side && runtime_completion_tactical_rearm;
+          request.candidate_progressive = true;
+          request.candidate_feasible = mission->feasible;
+          request.body_clear_deadline_checked =
+            mission->body_clear_deadline_checked;
+          request.body_clear_deadline_feasible =
+            mission->body_clear_deadline_feasible;
+          request.target_clearance_checked =
+            mission->pass_target_clearance_checked;
+          request.minimum_target_surface_clearance_m =
+            mission->predicted_minimum_pass_target_surface_clearance_m;
+          request.predicted_body_clear_time_sec =
+            mission->predicted_body_clear_time_sec;
+          request.predicted_body_clear_distance_m =
+            mission->predicted_body_clear_distance_m;
+          request.predicted_minimum_ego_speed_mps =
+            mission->predicted_minimum_ego_speed_mps;
+          request.minimum_ego_speed_mps = shadow_prefix_minimum_speed_mps;
+          request.minimum_path_wall_clearance_m =
+            mission->minimum_path_wall_clearance_m;
+          request.minimum_required_path_wall_clearance_m = shadow_wall_reference;
+          request.remaining_time_budget_sec = shadow_prefix_time_remaining_sec;
+          request.remaining_distance_budget_m = shadow_pass_distance_remaining_m;
+          request.pass_phase =
+            overtake_line_state_.phase == OvertakeLinePhase::Pass;
+          return overtake_core::resolve_mpcc_lite_prefix_execution(request);
         };
       const auto prefix_execution = resolve_prefix_execution_for(
         winning_mission,
@@ -11513,28 +11528,37 @@ struct MPC
             overtake_core::resolve_cross_side_minimum_speed_requirement(
             std::max(0.0, current_speed_mps_),
             std::max(0.0, output.overtake_entry_target_speed));
+          overtake_core::MpccLitePrefixExecutionRequest prefix_request;
+          prefix_request.new_entry_context = true;
+          prefix_request.before_no_return = true;
+          prefix_request.candidate_progressive =
+            current_prefix->progressive_entry;
+          prefix_request.candidate_feasible = current_prefix->feasible;
+          prefix_request.body_clear_deadline_checked =
+            current_prefix->body_clear_deadline_checked;
+          prefix_request.body_clear_deadline_feasible =
+            current_prefix->body_clear_deadline_feasible;
+          prefix_request.target_clearance_checked =
+            current_prefix->pass_target_clearance_checked;
+          prefix_request.minimum_target_surface_clearance_m =
+            current_prefix->predicted_minimum_pass_target_surface_clearance_m;
+          prefix_request.predicted_body_clear_time_sec =
+            current_prefix->predicted_body_clear_time_sec;
+          prefix_request.predicted_body_clear_distance_m =
+            current_prefix->predicted_body_clear_distance_m;
+          prefix_request.predicted_minimum_ego_speed_mps =
+            current_prefix->predicted_minimum_ego_speed_mps;
+          prefix_request.minimum_ego_speed_mps = minimum_prefix_speed_mps;
+          prefix_request.minimum_path_wall_clearance_m =
+            current_prefix->minimum_path_wall_clearance_m;
+          prefix_request.minimum_required_path_wall_clearance_m =
+            std::max(0.10, robust_wall_planning_clearance);
+          prefix_request.remaining_time_budget_sec =
+            std::max(0.0, shadow_cfg.pass_horizon_absolute_time_limit);
+          prefix_request.remaining_distance_budget_m =
+            std::max(0.0, shadow_cfg.pass_horizon_absolute_distance_limit);
           const auto prefix_execution =
-            overtake_core::resolve_mpcc_lite_prefix_execution(
-            overtake_core::MpccLitePrefixExecutionRequest{
-              false,
-              true,
-              true,
-              false,
-              current_prefix->progressive_entry,
-              current_prefix->feasible,
-              current_prefix->body_clear_deadline_checked,
-              current_prefix->body_clear_deadline_feasible,
-              current_prefix->pass_target_clearance_checked,
-              current_prefix->predicted_minimum_pass_target_surface_clearance_m,
-              current_prefix->predicted_body_clear_time_sec,
-              current_prefix->predicted_body_clear_distance_m,
-              current_prefix->predicted_minimum_ego_speed_mps,
-              minimum_prefix_speed_mps,
-              current_prefix->minimum_path_wall_clearance_m,
-              std::max(0.10, robust_wall_planning_clearance),
-              std::max(0.0, shadow_cfg.pass_horizon_absolute_time_limit),
-              std::max(0.0, shadow_cfg.pass_horizon_absolute_distance_limit),
-              false});
+            overtake_core::resolve_mpcc_lite_prefix_execution(prefix_request);
           progressive_prefix_admitted =
             prefix_execution.valid && prefix_execution.admitted;
           if (progressive_prefix_admitted) {
@@ -14694,7 +14718,8 @@ private:
     const bool preserve_front_cap_release = false,
     const bool keep_cross_side_reselection_open = false,
     const bool allow_progressive_prefix_replacement = false,
-    const bool seed_dynamic_wait_front_cap_release = false)
+    const bool seed_dynamic_wait_front_cap_release = false,
+    const bool allow_safe_separation_prefix_tactical_rearm = false)
   {
     const auto & line_cfg = cfg.v2x_behavior.overtake_line;
     const int previous_side = overtake_line_state_.pass_side_sign;
@@ -14797,29 +14822,43 @@ private:
       allow_same_side_replacement;
     const auto resolve_prefix_admission =
       [&](const overtake_core::OvertakeMissionCandidate & proposed_prefix) {
-        return overtake_core::resolve_mpcc_lite_prefix_execution(
-          overtake_core::MpccLitePrefixExecutionRequest{
-            active_execution &&
-            (!replacing_paused_mission || paused_tactical_prefix_replacement),
-            false,
-            !effective_no_return_latched || same_side_prefix_continuation,
-            overtake_line_state_.pass_horizon_safe_separation_active,
-            proposed_prefix.progressive_entry,
-            proposed_prefix.feasible,
-            proposed_prefix.body_clear_deadline_checked,
-            proposed_prefix.body_clear_deadline_feasible,
-            proposed_prefix.pass_target_clearance_checked,
-            proposed_prefix.predicted_minimum_pass_target_surface_clearance_m,
-            proposed_prefix.predicted_body_clear_time_sec,
-            proposed_prefix.predicted_body_clear_distance_m,
-            proposed_prefix.predicted_minimum_ego_speed_mps,
-            minimum_horizon_speed_mps,
-            proposed_prefix.minimum_path_wall_clearance_m,
-            minimum_cross_side_wall_clearance,
-            remaining_time_budget_sec,
-            remaining_distance_budget_m,
-            overtake_line_state_.phase == OvertakeLinePhase::Pass ||
-            paused_pass_continuation});
+        overtake_core::MpccLitePrefixExecutionRequest request;
+        request.active_execution = active_execution &&
+          (!replacing_paused_mission || paused_tactical_prefix_replacement);
+        request.before_no_return =
+          !effective_no_return_latched || same_side_prefix_continuation;
+        request.safe_separation_active =
+          overtake_line_state_.pass_horizon_safe_separation_active;
+        request.safe_separation_tactical_rearmed =
+          same_side_prefix_continuation &&
+          allow_safe_separation_prefix_tactical_rearm;
+        request.candidate_progressive = proposed_prefix.progressive_entry;
+        request.candidate_feasible = proposed_prefix.feasible;
+        request.body_clear_deadline_checked =
+          proposed_prefix.body_clear_deadline_checked;
+        request.body_clear_deadline_feasible =
+          proposed_prefix.body_clear_deadline_feasible;
+        request.target_clearance_checked =
+          proposed_prefix.pass_target_clearance_checked;
+        request.minimum_target_surface_clearance_m =
+          proposed_prefix.predicted_minimum_pass_target_surface_clearance_m;
+        request.predicted_body_clear_time_sec =
+          proposed_prefix.predicted_body_clear_time_sec;
+        request.predicted_body_clear_distance_m =
+          proposed_prefix.predicted_body_clear_distance_m;
+        request.predicted_minimum_ego_speed_mps =
+          proposed_prefix.predicted_minimum_ego_speed_mps;
+        request.minimum_ego_speed_mps = minimum_horizon_speed_mps;
+        request.minimum_path_wall_clearance_m =
+          proposed_prefix.minimum_path_wall_clearance_m;
+        request.minimum_required_path_wall_clearance_m =
+          minimum_cross_side_wall_clearance;
+        request.remaining_time_budget_sec = remaining_time_budget_sec;
+        request.remaining_distance_budget_m = remaining_distance_budget_m;
+        request.pass_phase =
+          overtake_line_state_.phase == OvertakeLinePhase::Pass ||
+          paused_pass_continuation;
+        return overtake_core::resolve_mpcc_lite_prefix_execution(request);
       };
     const auto resolve_cross_side_admission =
       [&](const overtake_core::OvertakeMissionCandidate & proposed_mission) {
@@ -15239,11 +15278,13 @@ private:
         "OvertakeLine opponent side PassPlan replaced: target=%s, side=%d->%d, "
         "phase=%s, generation=%lu, mode=%s, goal=%.2f, dy=%.2f, shift=%.2f, "
         "pass_traveled=%.2f, scheduled_transition=%d/%d, count=%d/%d, "
-        "front_cap_handoff=%d, deadline_extend=%.2f/%.2f, wp_id=%d" :
+        "safe_sep_rearm=%d, front_cap_handoff=%d, "
+        "deadline_extend=%.2f/%.2f, wp_id=%d" :
         "OvertakeLine fresh same-side PassPlan replaced: target=%s, side=%d->%d, "
         "phase=%s, generation=%lu, mode=%s, goal=%.2f, dy=%.2f, shift=%.2f, "
         "pass_traveled=%.2f, scheduled_transition=%d/%d, count=%d/%d, "
-        "front_cap_handoff=%d, deadline_extend=%.2f/%.2f, wp_id=%d",
+        "safe_sep_rearm=%d, front_cap_handoff=%d, "
+        "deadline_extend=%.2f/%.2f, wp_id=%d",
         overtake_line_state_.target_vehicle_id.c_str(), previous_side,
         candidate.pass_side_sign, to_string(overtake_line_state_.phase),
         static_cast<unsigned long>(overtake_line_state_.mission_generation),
@@ -15257,6 +15298,7 @@ private:
         candidate.outer_transition_preflight_validated ? 1 : 0,
         overtake_line_state_.opponent_side_replan_count,
         line_cfg.opponent_side_replan_max_count,
+        allow_safe_separation_prefix_tactical_rearm ? 1 : 0,
         dynamic_wait_front_cap_release_handoff ? 1 : 0,
         dynamic_wait_deadline_extension.valid ?
         dynamic_wait_deadline_extension.extension_sec :
@@ -19278,7 +19320,7 @@ private:
       !actual_wall_sample_unavailable &&
       behavior_output.front_risk_level != FrontRiskLevel::EmergencyBrake &&
       !overtake_solver_recovery_active_ && !behavior_output.overtake_forbidden_wp;
-    const bool runtime_completion_cross_side_rescue_active =
+    const bool runtime_completion_tactical_rearm_active =
       overtake_core::can_rearm_runtime_completion_tactical_replan(
       overtake_core::RuntimeCompletionTacticalRearmRequest{
         overtake_line_state_.pass_runtime_completion_replan_pending,
@@ -19304,7 +19346,7 @@ private:
       runtime_completion_same_side_rescue_active;
     const bool tactical_cross_side_replan_rescue_allowed =
       target_bound_cross_side_rescue_allowed ||
-      runtime_completion_cross_side_rescue_active;
+      runtime_completion_tactical_rearm_active;
     if (transition_action != v2x_overtake_core::OvertakeLineTransitionAction::None) {
       switch (transition_action) {
         case v2x_overtake_core::OvertakeLineTransitionAction::RecoverPhysicalWallContact:
@@ -19434,7 +19476,8 @@ private:
         behavior_output.mpcc_lite_same_side_replan_mission.value();
       const bool replaced = replace_frozen_overtake_mission_after_dynamic_replan(
         replacement, now_sec, current_ey, true,
-        tactical_same_side_replan_rescue_active, false, true, false, true);
+        tactical_same_side_replan_rescue_active, false, true, false, true,
+        false, runtime_completion_tactical_rearm_active);
       if (!replaced && line_cfg.debug_log_enabled) {
         RCLCPP_INFO(
           rclcpp::get_logger("mpc_controller"),

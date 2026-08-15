@@ -15131,12 +15131,12 @@ TEST(V2XOvertakeCoreFrenetDpExecution, RefreshRetainsOldPathUntilIntervalAndNewS
 
 TEST(V2XOvertakeCoreFrenetDpExecution, FreshSafePrefixOwnsPassContinuation)
 {
-  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpPassAuthorityRequest;
-  using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frenet_dp_pass_authority;
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpExecutionAuthorityRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frenet_dp_execution_authority;
 
-  FrenetDpPassAuthorityRequest request;
+  FrenetDpExecutionAuthorityRequest request;
   request.enabled = true;
-  request.pass_active = true;
+  request.active_execution = true;
   request.target_matches = true;
   request.target_continuous = true;
   request.path_side_matches = true;
@@ -15152,21 +15152,54 @@ TEST(V2XOvertakeCoreFrenetDpExecution, FreshSafePrefixOwnsPassContinuation)
   request.path_distances_m = {0.0, 4.0, 12.0};
   request.lateral_path_m = {0.2, 0.8, 0.8};
 
-  const auto resolution = resolve_frenet_dp_pass_authority(request);
+  const auto resolution = resolve_frenet_dp_execution_authority(request);
   ASSERT_TRUE(resolution.valid);
   EXPECT_TRUE(resolution.authority_active);
   EXPECT_NEAR(resolution.path_age_sec, 0.20, 1e-9);
   EXPECT_NEAR(resolution.remaining_distance_m, 10.0, 1e-9);
 }
 
+TEST(V2XOvertakeCoreFrenetDpExecution, SafePrefixBridgesRollingReplanPause)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpExecutionAuthorityRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frenet_dp_execution_authority;
+
+  FrenetDpExecutionAuthorityRequest request;
+  request.enabled = true;
+  request.rolling_replan_pause_active = true;
+  request.target_matches = true;
+  request.target_continuous = true;
+  request.path_side_matches = true;
+  request.current_body_separated = true;
+  request.target_prediction_valid = true;
+  request.predicted_body_sweep_separated = true;
+  request.now_sec = 12.20;
+  request.last_refresh_sec = 12.00;
+  request.maximum_path_age_sec = 0.50;
+  request.last_runtime_validation_sec = 12.15;
+  request.maximum_runtime_validation_age_sec = 0.20;
+  request.traveled_distance_m = 3.0;
+  request.minimum_remaining_distance_m = 1.0;
+  request.path_distances_m = {0.0, 5.0, 14.0};
+  request.lateral_path_m = {-0.1, -0.8, -0.8};
+
+  const auto retained = resolve_frenet_dp_execution_authority(request);
+  ASSERT_TRUE(retained.valid);
+  EXPECT_TRUE(retained.authority_active);
+  EXPECT_TRUE(retained.runtime_validation_fresh);
+
+  request.rolling_replan_pause_active = false;
+  EXPECT_FALSE(resolve_frenet_dp_execution_authority(request).authority_active);
+}
+
 TEST(V2XOvertakeCoreFrenetDpExecution, HardFaultsRevokePassAuthority)
 {
-  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpPassAuthorityRequest;
-  using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frenet_dp_pass_authority;
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpExecutionAuthorityRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frenet_dp_execution_authority;
 
-  FrenetDpPassAuthorityRequest request;
+  FrenetDpExecutionAuthorityRequest request;
   request.enabled = true;
-  request.pass_active = true;
+  request.active_execution = true;
   request.target_matches = true;
   request.target_continuous = true;
   request.path_side_matches = true;
@@ -15184,7 +15217,7 @@ TEST(V2XOvertakeCoreFrenetDpExecution, HardFaultsRevokePassAuthority)
   const auto expect_revoked = [&](auto mutate) {
       auto revoked = request;
       mutate(revoked);
-      const auto resolution = resolve_frenet_dp_pass_authority(revoked);
+      const auto resolution = resolve_frenet_dp_execution_authority(revoked);
       ASSERT_TRUE(resolution.valid);
       EXPECT_FALSE(resolution.authority_active);
     };
@@ -15207,17 +15240,17 @@ TEST(V2XOvertakeCoreFrenetDpExecution, HardFaultsRevokePassAuthority)
 
   request.current_body_separated = false;
   request.recoverable_side_contact = true;
-  EXPECT_TRUE(resolve_frenet_dp_pass_authority(request).authority_active);
+  EXPECT_TRUE(resolve_frenet_dp_execution_authority(request).authority_active);
 }
 
 TEST(V2XOvertakeCoreFrenetDpExecution, RuntimeValidationBridgesOptimizerMiss)
 {
-  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpPassAuthorityRequest;
-  using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frenet_dp_pass_authority;
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpExecutionAuthorityRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frenet_dp_execution_authority;
 
-  FrenetDpPassAuthorityRequest request;
+  FrenetDpExecutionAuthorityRequest request;
   request.enabled = true;
-  request.pass_active = true;
+  request.active_execution = true;
   request.target_matches = true;
   request.target_continuous = true;
   request.path_side_matches = true;
@@ -15234,7 +15267,7 @@ TEST(V2XOvertakeCoreFrenetDpExecution, RuntimeValidationBridgesOptimizerMiss)
   request.path_distances_m = {0.0, 8.0, 20.0};
   request.lateral_path_m = {0.4, 0.9, 0.9};
 
-  const auto retained = resolve_frenet_dp_pass_authority(request);
+  const auto retained = resolve_frenet_dp_execution_authority(request);
   ASSERT_TRUE(retained.valid);
   EXPECT_TRUE(retained.authority_active);
   EXPECT_FALSE(retained.source_fresh);
@@ -15245,14 +15278,14 @@ TEST(V2XOvertakeCoreFrenetDpExecution, RuntimeValidationBridgesOptimizerMiss)
   // The path-specific runtime validation may bridge a coarse prediction-only
   // overlap, but never a current physical body overlap.
   request.predicted_body_sweep_separated = false;
-  EXPECT_TRUE(resolve_frenet_dp_pass_authority(request).authority_active);
+  EXPECT_TRUE(resolve_frenet_dp_execution_authority(request).authority_active);
   request.current_body_separated = false;
-  EXPECT_FALSE(resolve_frenet_dp_pass_authority(request).authority_active);
+  EXPECT_FALSE(resolve_frenet_dp_execution_authority(request).authority_active);
   request.current_body_separated = true;
   request.predicted_body_sweep_separated = true;
 
   request.now_sec = 31.20;
-  const auto expired = resolve_frenet_dp_pass_authority(request);
+  const auto expired = resolve_frenet_dp_execution_authority(request);
   ASSERT_TRUE(expired.valid);
   EXPECT_FALSE(expired.authority_active);
   EXPECT_FALSE(expired.source_fresh);
@@ -15260,7 +15293,7 @@ TEST(V2XOvertakeCoreFrenetDpExecution, RuntimeValidationBridgesOptimizerMiss)
 
   request.now_sec = 31.0;
   request.actual_wall_physical_contact = true;
-  EXPECT_FALSE(resolve_frenet_dp_pass_authority(request).authority_active);
+  EXPECT_FALSE(resolve_frenet_dp_execution_authority(request).authority_active);
 }
 
 TEST(V2XOvertakeCoreFrenetDpExecution, ReturnReferenceKeepsAdmittedPrefix)

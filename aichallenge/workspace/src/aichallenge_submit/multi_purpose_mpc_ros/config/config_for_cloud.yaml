@@ -611,7 +611,7 @@ mpc:
   v2x_overtake_mpcc_lite_prefix_terminal_distance: 2.0 # [m] terminal progress penalty beyond body-clear for incomplete rear-clear horizon
   v2x_overtake_mpcc_lite_same_side_max_lateral_adjustment: 0.35 # [m] paused Pass keeps its current side/line; only a small revalidated correction is allowed
   v2x_overtake_mpcc_frenet_dp_corridor_enabled: true # solve a continuous stage-wise left/right corridor before freezing one lateral goal
-  v2x_overtake_mpcc_frenet_dp_execution_enabled: true # execute the target corridor plus robust-wall tail through ShiftOut/Pass
+  v2x_overtake_mpcc_frenet_dp_execution_enabled: true # execute the target corridor through ShiftOut/Pass and retain its validated prefix during soft rolling replan
   v2x_overtake_mpcc_frenet_dp_rolling_refresh_enabled: true # atomically refresh only a fresh same-target/same-side DP path
   v2x_overtake_mpcc_frenet_dp_rolling_refresh_interval_sec: 0.10 # [s] keep the last feasible path between updates
   v2x_overtake_mpcc_frenet_dp_lateral_bins: 12 # lateral discretization per dynamic corridor sample
@@ -623,7 +623,7 @@ mpc:
   v2x_overtake_mpcc_frenet_dp_branch_switch_penalty: 1.0
   v2x_overtake_mpcc_frenet_dp_shadow_score_penalty: 1.0
   v2x_overtake_mpcc_frenet_dp_last_path_max_age_sec: 0.50 # [s] warm-start/hysteresis is exact-target and exact-side only
-  v2x_overtake_mpcc_frenet_dp_runtime_validation_lease_sec: 0.20 # [s] short 40 Hz lease renewed only after wall/target/horizon revalidation
+  v2x_overtake_mpcc_frenet_dp_runtime_validation_lease_sec: 0.20 # [s] short 40 Hz lease renewed after wall/target/horizon revalidation; bridges Behavior/FSM boundaries
   v2x_overtake_mpcc_frenet_dp_longitudinal_timing_enabled: true # solve attack/intermediate/hold target timing before rejecting the lateral DP corridor
   v2x_overtake_mpcc_frenet_dp_longitudinal_cost_slack: 0.25 # fastest profile may win only this far above the best normalized lateral DP cost
   v2x_overtake_safe_separation_soft_prediction_grace_sec: 0.25 # [s] prediction-only loss grace after committed forward completion; hard faults remain immediate

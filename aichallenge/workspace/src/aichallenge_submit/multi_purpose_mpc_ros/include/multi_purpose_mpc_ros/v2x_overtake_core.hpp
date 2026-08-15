@@ -2846,10 +2846,11 @@ struct FrenetDpExecutionRefreshResolution
 FrenetDpExecutionRefreshResolution resolve_frenet_dp_execution_refresh(
   const FrenetDpExecutionRefreshRequest & request) noexcept;
 
-struct FrenetDpPassAuthorityRequest
+struct FrenetDpExecutionAuthorityRequest
 {
   bool enabled{false};
-  bool pass_active{false};
+  bool active_execution{false};
+  bool rolling_replan_pause_active{false};
   bool target_matches{false};
   bool target_continuous{false};
   bool target_position_jump{false};
@@ -2876,7 +2877,7 @@ struct FrenetDpPassAuthorityRequest
   std::vector<double> lateral_path_m;
 };
 
-struct FrenetDpPassAuthorityResolution
+struct FrenetDpExecutionAuthorityResolution
 {
   bool valid{false};
   bool authority_active{false};
@@ -2889,11 +2890,12 @@ struct FrenetDpPassAuthorityResolution
 };
 
 /// Decide whether an already admitted same-target/same-side DP prefix owns
-/// bounded Pass continuation.  This suppresses only the legacy single-goal
-/// rebuild; wall, body, target-continuity, emergency and solver hard faults
-/// revoke authority immediately.
-FrenetDpPassAuthorityResolution resolve_frenet_dp_pass_authority(
-  const FrenetDpPassAuthorityRequest & request) noexcept;
+/// bounded ShiftOut/Pass execution or a soft rolling-replan pause. This
+/// suppresses only the legacy single-goal rebuild; wall, body,
+/// target-continuity, emergency and solver hard faults revoke authority
+/// immediately.
+FrenetDpExecutionAuthorityResolution resolve_frenet_dp_execution_authority(
+  const FrenetDpExecutionAuthorityRequest & request) noexcept;
 
 enum class OvertakeMissionCorridorSource
 {

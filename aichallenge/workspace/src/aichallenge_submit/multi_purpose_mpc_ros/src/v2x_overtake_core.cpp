@@ -4713,10 +4713,10 @@ FrenetDpExecutionRefreshResolution resolve_frenet_dp_execution_refresh(
   return resolution;
 }
 
-FrenetDpPassAuthorityResolution resolve_frenet_dp_pass_authority(
-  const FrenetDpPassAuthorityRequest & request) noexcept
+FrenetDpExecutionAuthorityResolution resolve_frenet_dp_execution_authority(
+  const FrenetDpExecutionAuthorityRequest & request) noexcept
 {
-  FrenetDpPassAuthorityResolution resolution;
+  FrenetDpExecutionAuthorityResolution resolution;
   if (
     !std::isfinite(request.now_sec) ||
     !std::isfinite(request.maximum_path_age_sec) ||
@@ -4765,7 +4765,8 @@ FrenetDpPassAuthorityResolution resolve_frenet_dp_pass_authority(
     request.predicted_body_sweep_separated) ||
     resolution.runtime_validation_fresh));
   resolution.authority_active =
-    request.pass_active && request.target_matches && request.target_continuous &&
+    (request.active_execution || request.rolling_replan_pause_active) &&
+    request.target_matches && request.target_continuous &&
     !request.target_position_jump && !request.target_course_progress_rejected &&
     request.path_side_matches && target_execution_safe &&
     !request.actual_wall_physical_contact && !request.wall_margin_blocked &&

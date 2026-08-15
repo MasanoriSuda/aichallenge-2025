@@ -6364,6 +6364,56 @@ TEST(V2XOvertakeCoreHorizon, AlignsSafeSeparationWindowWithMissionRearClear)
   EXPECT_NEAR(resolution.maximum_duration_sec, 5.0, 1e-9);
 }
 
+TEST(V2XOvertakeCoreHorizon, RefreshesSafeSeparationFromRuntimeRearClear)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    RuntimeSafeSeparationBudgetRefreshRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    refresh_runtime_safe_separation_budget;
+
+  RuntimeSafeSeparationBudgetRefreshRequest request;
+  request.enabled = true;
+  request.safe_separation_active = true;
+  request.runtime_prediction_valid = true;
+  request.runtime_rear_clear_feasible = true;
+  request.local_elapsed_sec = 1.0;
+  request.local_traveled_m = 5.0;
+  request.current_maximum_duration_sec = 5.0;
+  request.current_maximum_distance_m = 12.0;
+  request.runtime_remaining_duration_sec = 5.5;
+  request.runtime_remaining_distance_m = 20.0;
+  request.absolute_elapsed_sec = 3.0;
+  request.absolute_traveled_m = 10.0;
+  request.absolute_maximum_duration_sec = 10.0;
+  request.absolute_maximum_distance_m = 40.0;
+
+  auto resolution = refresh_runtime_safe_separation_budget(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.refreshed);
+  EXPECT_NEAR(resolution.maximum_duration_sec, 6.5, 1e-9);
+  EXPECT_NEAR(resolution.maximum_distance_m, 25.0, 1e-9);
+
+  // The runtime request is larger than the immutable remaining Pass budget.
+  request.runtime_remaining_duration_sec = 20.0;
+  request.runtime_remaining_distance_m = 50.0;
+  resolution = refresh_runtime_safe_separation_budget(request);
+  EXPECT_NEAR(resolution.maximum_duration_sec, 8.0, 1e-9);
+  EXPECT_NEAR(resolution.maximum_distance_m, 35.0, 1e-9);
+
+  // A soft prediction miss keeps the last budget; it never rearms the window.
+  request.runtime_prediction_valid = false;
+  resolution = refresh_runtime_safe_separation_budget(request);
+  EXPECT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.refreshed);
+  EXPECT_NEAR(resolution.maximum_duration_sec, 5.0, 1e-9);
+  EXPECT_NEAR(resolution.maximum_distance_m, 12.0, 1e-9);
+
+  request.runtime_prediction_valid = true;
+  request.runtime_rear_clear_feasible = false;
+  resolution = refresh_runtime_safe_separation_budget(request);
+  EXPECT_FALSE(resolution.refreshed);
+}
+
 TEST(V2XOvertakeCoreHorizon, ContinuesOnlyBoundedProgressingSideContact)
 {
   RecoverableSideContactRequest request;

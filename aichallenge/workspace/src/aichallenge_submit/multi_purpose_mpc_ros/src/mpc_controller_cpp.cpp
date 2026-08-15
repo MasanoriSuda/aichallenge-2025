@@ -2453,6 +2453,10 @@ struct OvertakeLineState
   int pass_horizon_safe_separation_progress_extension_count{0};
   double pass_horizon_safe_separation_max_sec{};
   double pass_horizon_safe_separation_max_distance{};
+  double pass_runtime_completion_replan_last_request_sec{
+    -std::numeric_limits<double>::infinity()};
+  double pass_runtime_budget_last_log_sec{
+    -std::numeric_limits<double>::infinity()};
   double pass_soft_prediction_guard_loss_since_sec{
     std::numeric_limits<double>::quiet_NaN()};
   double pass_last_clear_target_prediction_sec{
@@ -20223,12 +20227,12 @@ private:
               runtime_completion_rollout.rear_clear_ego_speed_mps,
               std::max(0.0, line_cfg.clear_confirm_sec),
               std::max(0.0, cfg.state_prediction_delay_sec),
+              std::max(
+                0.0, line_cfg.safe_separation_completion_distance_margin),
               std::min(
                 bounded_initial_completion_budget,
                 runtime_remaining_absolute_distance),
-              std::min(
-                bounded_initial_completion_budget,
-                runtime_remaining_absolute_distance)});
+              runtime_remaining_absolute_distance});
           if (
             runtime_completion_distance.valid &&
             std::isfinite(runtime_completion_rollout.rear_clear_time_sec))
@@ -20248,6 +20252,72 @@ private:
       runtime_completion_prediction_valid &&
       runtime_completion_rollout.rear_clear_feasible &&
       runtime_completion_distance.feasible;
+    const bool runtime_completion_budget_infeasible =
+      overtake_line_state_.phase == OvertakeLinePhase::Pass &&
+      runtime_completion_rollout.valid &&
+      (!runtime_completion_rollout.rear_clear_feasible ||
+      (runtime_completion_distance.valid && !runtime_completion_distance.feasible));
+    if (overtake_line_state_.pass_horizon_safe_separation_active) {
+      const double runtime_safe_separation_elapsed = std::isfinite(
+        overtake_line_state_.pass_horizon_safe_separation_start_sec) ?
+        std::max(
+        0.0,
+        now_sec - overtake_line_state_.pass_horizon_safe_separation_start_sec) : 0.0;
+      const double runtime_safe_separation_traveled = std::max(
+        0.0,
+        mission_pass_traveled_m -
+        overtake_line_state_.pass_horizon_safe_separation_start_distance);
+      const auto refreshed_budget =
+        overtake_core::refresh_runtime_safe_separation_budget(
+        overtake_core::RuntimeSafeSeparationBudgetRefreshRequest{
+          line_cfg.safe_separation_mission_aligned_budget_enabled,
+          true,
+          runtime_completion_prediction_valid,
+          runtime_completion_rear_clear_feasible,
+          runtime_safe_separation_elapsed,
+          runtime_safe_separation_traveled,
+          overtake_line_state_.pass_horizon_safe_separation_max_sec,
+          overtake_line_state_.pass_horizon_safe_separation_max_distance,
+          runtime_completion_time_sec,
+          runtime_completion_distance.required_pass_distance_m,
+          runtime_pass_elapsed,
+          mission_pass_traveled_m,
+          line_cfg.pass_horizon_absolute_time_limit,
+          line_cfg.pass_horizon_absolute_distance_limit});
+      if (refreshed_budget.valid && refreshed_budget.refreshed) {
+        const double previous_max_sec =
+          overtake_line_state_.pass_horizon_safe_separation_max_sec;
+        const double previous_max_distance =
+          overtake_line_state_.pass_horizon_safe_separation_max_distance;
+        overtake_line_state_.pass_horizon_safe_separation_max_sec =
+          refreshed_budget.maximum_duration_sec;
+        overtake_line_state_.pass_horizon_safe_separation_max_distance =
+          refreshed_budget.maximum_distance_m;
+        const double runtime_budget_log_period = std::max(
+          0.25, cfg.v2x_behavior.debug_log_period_sec);
+        if (
+          line_cfg.debug_log_enabled &&
+          now_sec - overtake_line_state_.pass_runtime_budget_last_log_sec + kEps >=
+          runtime_budget_log_period)
+        {
+          overtake_line_state_.pass_runtime_budget_last_log_sec = now_sec;
+          RCLCPP_INFO(
+            rclcpp::get_logger("mpc_controller"),
+            "OvertakeLine SafeSeparation runtime budget refreshed: "
+            "target=%s, side=%d, local=%.2f s/%.2f m, "
+            "limit=%.2f->%.2f s/%.2f->%.2f m, required=%.2f s/%.2f m, "
+            "absolute=%.2f s/%.2f m, wp_id=%d",
+            overtake_line_state_.target_vehicle_id.c_str(),
+            overtake_line_state_.pass_side_sign,
+            runtime_safe_separation_elapsed, runtime_safe_separation_traveled,
+            previous_max_sec, refreshed_budget.maximum_duration_sec,
+            previous_max_distance, refreshed_budget.maximum_distance_m,
+            runtime_completion_time_sec,
+            runtime_completion_distance.required_pass_distance_m,
+            runtime_pass_elapsed, mission_pass_traveled_m, model->wp_id);
+        }
+      }
+    }
     const bool forward_completion_was_latched =
       overtake_line_state_.pass_forward_completion_latched;
     const bool pass_lateral_replan_in_progress =
@@ -21752,6 +21822,40 @@ private:
           line_cfg.safe_separation_safe_prefix_replan_lead_sec + kEps ||
           safe_prefix_remaining_local_distance <=
           line_cfg.safe_separation_safe_prefix_replan_lead_distance + kEps);
+        const bool runtime_completion_replan_due =
+          runtime_completion_budget_infeasible && safe_trajectory_prefix_active &&
+          now_sec -
+          overtake_line_state_.pass_runtime_completion_replan_last_request_sec + kEps >=
+          std::max(0.05, line_cfg.mpcc_lite_shadow_evaluation_interval_sec);
+        if (runtime_completion_replan_due) {
+          overtake_line_state_.pass_runtime_completion_replan_last_request_sec = now_sec;
+          // Re-run the left/right shadow immediately. Until an alternate
+          // complete Mission is atomically accepted, SafeSeparation and the
+          // last physical prefix keep longitudinal/lateral authority.
+          overtake_line_state_.opponent_side_replan_last_evaluation_sec =
+            -std::numeric_limits<double>::infinity();
+          if (
+            try_last_feasible_maneuver(
+              "runtime rear-clear exceeds remaining absolute Pass budget",
+              true, false, true, false))
+          {
+            return update_overtake_line(
+              behavior_output, ref_wp_id, N, lb, ub, now_sec);
+          }
+          if (line_cfg.debug_log_enabled) {
+            RCLCPP_WARN(
+              rclcpp::get_logger("mpc_controller"),
+              "OvertakeLine runtime completion requested immediate tactical replan: "
+              "target=%s, side=%d, required=%.2f m/%.2f s, "
+              "remaining=%.2f m/%.2f s, prefix=retained, wp_id=%d",
+              overtake_line_state_.target_vehicle_id.c_str(),
+              overtake_line_state_.pass_side_sign,
+              runtime_completion_distance.required_pass_distance_m,
+              runtime_completion_time_sec,
+              runtime_remaining_absolute_distance,
+              runtime_remaining_absolute_time, model->wp_id);
+          }
+        }
         if (
           safe_prefix_replan_due &&
           try_last_feasible_maneuver(

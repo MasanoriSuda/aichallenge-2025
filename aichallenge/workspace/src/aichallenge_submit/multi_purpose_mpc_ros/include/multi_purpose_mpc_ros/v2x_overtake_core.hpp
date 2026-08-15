@@ -2559,6 +2559,40 @@ struct MissionAlignedSafeSeparationBudgetResolution
 MissionAlignedSafeSeparationBudgetResolution resolve_mission_aligned_safe_separation_budget(
   const MissionAlignedSafeSeparationBudgetRequest & request) noexcept;
 
+struct RuntimeSafeSeparationBudgetRefreshRequest
+{
+  bool enabled{false};
+  bool safe_separation_active{false};
+  bool runtime_prediction_valid{false};
+  bool runtime_rear_clear_feasible{false};
+  double local_elapsed_sec{};
+  double local_traveled_m{};
+  double current_maximum_duration_sec{};
+  double current_maximum_distance_m{};
+  /// Distance and time still required from the current vehicle state.
+  double runtime_remaining_duration_sec{};
+  double runtime_remaining_distance_m{};
+  double absolute_elapsed_sec{};
+  double absolute_traveled_m{};
+  double absolute_maximum_duration_sec{std::numeric_limits<double>::infinity()};
+  double absolute_maximum_distance_m{std::numeric_limits<double>::infinity()};
+};
+
+struct RuntimeSafeSeparationBudgetRefreshResolution
+{
+  bool valid{false};
+  bool refreshed{false};
+  double maximum_duration_sec{};
+  double maximum_distance_m{};
+};
+
+/// Grow an active SafeSeparation window to cover a fresh runtime rear-clear
+/// rollout. The window is measured from the original SafeSeparation start and
+/// therefore includes the already consumed local time/distance. It is never
+/// restarted and never exceeds the immutable absolute Pass limits.
+RuntimeSafeSeparationBudgetRefreshResolution refresh_runtime_safe_separation_budget(
+  const RuntimeSafeSeparationBudgetRefreshRequest & request) noexcept;
+
 struct RecoverableSideContactRequest
 {
   bool enabled{false};

@@ -4215,6 +4215,70 @@ MissionAlignedSafeSeparationBudgetResolution resolve_mission_aligned_safe_separa
   return resolution;
 }
 
+RuntimeSafeSeparationBudgetRefreshResolution refresh_runtime_safe_separation_budget(
+  const RuntimeSafeSeparationBudgetRefreshRequest & request) noexcept
+{
+  RuntimeSafeSeparationBudgetRefreshResolution resolution;
+  const auto finite_non_negative = [](const double value) {
+      return std::isfinite(value) && value >= 0.0;
+    };
+  const auto non_negative_bound = [](const double value) {
+      return !std::isnan(value) && value >= 0.0;
+    };
+  if (
+    !finite_non_negative(request.local_elapsed_sec) ||
+    !finite_non_negative(request.local_traveled_m) ||
+    !finite_non_negative(request.current_maximum_duration_sec) ||
+    !finite_non_negative(request.current_maximum_distance_m) ||
+    !finite_non_negative(request.runtime_remaining_duration_sec) ||
+    !finite_non_negative(request.runtime_remaining_distance_m) ||
+    !finite_non_negative(request.absolute_elapsed_sec) ||
+    !finite_non_negative(request.absolute_traveled_m) ||
+    !non_negative_bound(request.absolute_maximum_duration_sec) ||
+    !non_negative_bound(request.absolute_maximum_distance_m))
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  resolution.maximum_duration_sec = request.current_maximum_duration_sec;
+  resolution.maximum_distance_m = request.current_maximum_distance_m;
+  if (
+    !request.enabled || !request.safe_separation_active ||
+    !request.runtime_prediction_valid || !request.runtime_rear_clear_feasible)
+  {
+    return resolution;
+  }
+
+  const double remaining_absolute_time =
+    std::isfinite(request.absolute_maximum_duration_sec) ?
+    std::max(0.0, request.absolute_maximum_duration_sec - request.absolute_elapsed_sec) :
+    std::numeric_limits<double>::infinity();
+  const double remaining_absolute_distance =
+    std::isfinite(request.absolute_maximum_distance_m) ?
+    std::max(0.0, request.absolute_maximum_distance_m - request.absolute_traveled_m) :
+    std::numeric_limits<double>::infinity();
+  const double absolute_local_time_cap =
+    request.local_elapsed_sec + remaining_absolute_time;
+  const double absolute_local_distance_cap =
+    request.local_traveled_m + remaining_absolute_distance;
+  const double requested_local_time =
+    request.local_elapsed_sec + request.runtime_remaining_duration_sec;
+  const double requested_local_distance =
+    request.local_traveled_m + request.runtime_remaining_distance_m;
+
+  resolution.maximum_duration_sec = std::min(
+    std::max(request.current_maximum_duration_sec, requested_local_time),
+    absolute_local_time_cap);
+  resolution.maximum_distance_m = std::min(
+    std::max(request.current_maximum_distance_m, requested_local_distance),
+    absolute_local_distance_cap);
+  resolution.refreshed =
+    resolution.maximum_duration_sec > request.current_maximum_duration_sec + 1e-9 ||
+    resolution.maximum_distance_m > request.current_maximum_distance_m + 1e-9;
+  return resolution;
+}
+
 RecoverableSideContactResolution resolve_recoverable_side_contact(
   const RecoverableSideContactRequest & request) noexcept
 {

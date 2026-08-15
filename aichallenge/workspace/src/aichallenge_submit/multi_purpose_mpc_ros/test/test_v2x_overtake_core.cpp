@@ -8125,11 +8125,35 @@ TEST(V2XOvertakeCoreSpeed, RetainsDynamicWaitOnlyForCommittedForwardExecution)
   EXPECT_FALSE(can_retain_dynamic_mission_wait_until_rear_clear(request));
 
   request.pass_origin = true;
+  EXPECT_FALSE(can_retain_dynamic_mission_wait_until_rear_clear(request));
+
+  request.full_closing_authority = true;
+  EXPECT_FALSE(can_retain_dynamic_mission_wait_until_rear_clear(request));
+
+  request.target_progress_recent = true;
+  EXPECT_TRUE(can_retain_dynamic_mission_wait_until_rear_clear(request));
+
+  request.full_closing_authority = false;
+  request.continuous_dp_execution_active = true;
   EXPECT_TRUE(can_retain_dynamic_mission_wait_until_rear_clear(request));
 
   request.pass_origin = false;
   request.committed_execution = true;
   EXPECT_TRUE(can_retain_dynamic_mission_wait_until_rear_clear(request));
+
+  request.target_progress_recent = false;
+  EXPECT_FALSE(can_retain_dynamic_mission_wait_until_rear_clear(request));
+
+  request.target_progress_recent = true;
+  request.continuous_dp_execution_active = false;
+  EXPECT_FALSE(can_retain_dynamic_mission_wait_until_rear_clear(request));
+
+  request.full_closing_authority = true;
+  EXPECT_TRUE(can_retain_dynamic_mission_wait_until_rear_clear(request));
+
+  request.runtime_hard_fault = true;
+  EXPECT_FALSE(can_retain_dynamic_mission_wait_until_rear_clear(request));
+  request.runtime_hard_fault = false;
 
   request.forward_prefix_active = false;
   EXPECT_FALSE(can_retain_dynamic_mission_wait_until_rear_clear(request));

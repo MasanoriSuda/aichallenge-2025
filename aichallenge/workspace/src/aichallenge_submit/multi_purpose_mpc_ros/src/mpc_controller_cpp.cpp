@@ -2564,6 +2564,10 @@ struct OvertakeLineState
   bool dynamic_mission_wait_forward_prefix_was_active{false};
   bool dynamic_mission_wait_continuous_dp_was_active{false};
   bool dynamic_mission_wait_full_closing_was_active{false};
+  double dynamic_mission_wait_best_target_longitudinal_m{
+    std::numeric_limits<double>::infinity()};
+  double dynamic_mission_wait_last_progress_sec{
+    std::numeric_limits<double>::quiet_NaN()};
   bool dynamic_mission_wait_pass_forward_completion_latched{false};
   double dynamic_mission_wait_predicted_overlap_since_sec{
     std::numeric_limits<double>::quiet_NaN()};
@@ -13981,6 +13985,10 @@ private:
       overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active = false;
       overtake_line_state_.dynamic_mission_wait_continuous_dp_was_active = false;
       overtake_line_state_.dynamic_mission_wait_full_closing_was_active = false;
+      overtake_line_state_.dynamic_mission_wait_best_target_longitudinal_m =
+        std::numeric_limits<double>::infinity();
+      overtake_line_state_.dynamic_mission_wait_last_progress_sec =
+        std::numeric_limits<double>::quiet_NaN();
       overtake_line_state_.dynamic_mission_wait_pass_forward_completion_latched = false;
       overtake_line_state_.dynamic_mission_wait_predicted_overlap_since_sec =
         std::numeric_limits<double>::quiet_NaN();
@@ -14628,6 +14636,10 @@ private:
     overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active = false;
     overtake_line_state_.dynamic_mission_wait_continuous_dp_was_active = false;
     overtake_line_state_.dynamic_mission_wait_full_closing_was_active = false;
+    overtake_line_state_.dynamic_mission_wait_best_target_longitudinal_m =
+      std::numeric_limits<double>::infinity();
+    overtake_line_state_.dynamic_mission_wait_last_progress_sec =
+      std::numeric_limits<double>::quiet_NaN();
     overtake_line_state_.dynamic_mission_wait_pass_forward_completion_latched = false;
     overtake_line_state_.dynamic_mission_wait_predicted_overlap_since_sec =
       std::numeric_limits<double>::quiet_NaN();
@@ -17646,26 +17658,67 @@ private:
           overtake_line_state_.mission_frenet_dp_side_sign ==
               overtake_line_state_.pass_side_sign &&
           continuous_dp_runtime_lease_fresh;
+      constexpr double kDynamicMissionWaitProgressStepM = 0.10;
+      const bool dynamic_wait_target_observation_valid =
+          fast_dynamic_reselection_wait && locked_target_progress_continuous &&
+          !behavior_output.locked_target_position_jump &&
+          !locked_target_progress_rejected &&
+          std::isfinite(behavior_output.locked_target_longitudinal) &&
+          std::isfinite(now_sec);
+      if (
+        dynamic_wait_target_observation_valid &&
+        (!std::isfinite(
+            overtake_line_state_.dynamic_mission_wait_best_target_longitudinal_m) ||
+          behavior_output.locked_target_longitudinal +
+          kDynamicMissionWaitProgressStepM <=
+          overtake_line_state_.dynamic_mission_wait_best_target_longitudinal_m))
+      {
+        overtake_line_state_.dynamic_mission_wait_best_target_longitudinal_m =
+          behavior_output.locked_target_longitudinal;
+        overtake_line_state_.dynamic_mission_wait_last_progress_sec = now_sec;
+      }
+      const double dynamic_wait_progress_age_sec =
+          dynamic_wait_target_observation_valid &&
+          std::isfinite(
+            overtake_line_state_.dynamic_mission_wait_last_progress_sec) &&
+          now_sec + kEps >=
+            overtake_line_state_.dynamic_mission_wait_last_progress_sec ?
+          std::max(
+            0.0, now_sec -
+            overtake_line_state_.dynamic_mission_wait_last_progress_sec) :
+          std::numeric_limits<double>::infinity();
+      const bool dynamic_wait_target_progress_recent =
+          std::isfinite(dynamic_wait_progress_age_sec) &&
+          dynamic_wait_progress_age_sec <= pause_timeout_sec + kEps;
       // A pre-commit ShiftOut wait is only a short side-selection lease.  Do
       // not turn it into a passive Mission-wide FollowPrepare.  Pass/no-return
-      // execution may outlive the short lease while the previous cycle still
-      // owned a physically validated forward prefix. A full continuous DP
-      // prefix is itself committed execution even if the pause originated in
-      // ShiftOut; hard faults and the total Mission budget remain
-      // authoritative.
+      // execution may outlive the short lease only while the previous cycle
+      // owns useful closing/continuous-DP authority and target separation is
+      // still improving. This prevents an active but stale prefix from
+      // consuming the Mission-wide budget after a wall-gate failure.
+      overtake_core::DynamicMissionWaitRetentionRequest retention_request;
+      retention_request.tactical_wait_active = fast_dynamic_reselection_wait;
+      retention_request.pass_origin =
+        overtake_line_state_.follow_prepare_origin_phase ==
+        OvertakeLinePhase::Pass;
+      retention_request.committed_execution =
+        overtake_line_state_.opponent_side_replan_no_return_latched ||
+        overtake_line_state_.mission_cross_side_transition_committed ||
+        overtake_line_state_.pass_forward_completion_latched ||
+        validated_continuous_dp_wait_execution;
+      retention_request.forward_prefix_active =
+        overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active;
+      retention_request.full_closing_authority =
+        overtake_line_state_.dynamic_mission_wait_full_closing_was_active;
+      retention_request.continuous_dp_execution_active =
+        validated_continuous_dp_wait_execution;
+      retention_request.runtime_hard_fault =
+        rolling_replan_runtime_hard_fault;
+      retention_request.target_progress_recent =
+        dynamic_wait_target_progress_recent;
       const bool retain_dynamic_wait_until_rear_clear =
-          overtake_core::can_retain_dynamic_mission_wait_until_rear_clear(
-              overtake_core::DynamicMissionWaitRetentionRequest{
-                  fast_dynamic_reselection_wait,
-                  overtake_line_state_.follow_prepare_origin_phase ==
-                      OvertakeLinePhase::Pass,
-                  overtake_line_state_.opponent_side_replan_no_return_latched ||
-                      overtake_line_state_
-                          .mission_cross_side_transition_committed ||
-                      overtake_line_state_.pass_forward_completion_latched ||
-                      validated_continuous_dp_wait_execution,
-                  overtake_line_state_
-                      .dynamic_mission_wait_forward_prefix_was_active});
+        overtake_core::can_retain_dynamic_mission_wait_until_rear_clear(
+          retention_request);
       paused_mission_terminal = overtake_core::resolve_paused_mission_terminal(
           overtake_core::PausedMissionTerminalRequest{
               true, pause_elapsed_sec, overtake_line_state_.phase_traveled_m,
@@ -17684,19 +17737,22 @@ private:
         RCLCPP_WARN(
             rclcpp::get_logger("mpc_controller"),
             "OvertakeLine dynamic Mission wait retained until rear-clear: "
-            "target=%s, side=%d, origin=%s, prefix=%d, continuous_dp=%d, "
-            "elapsed=%.2f/%.2f s, traveled=%.2f/%.2f m, total_budget=%.2f s, "
-            "wp_id=%d",
+            "target=%s, side=%d, origin=%s, prefix=%d/full=%d, "
+            "continuous_dp=%d, progress_recent=%d/age=%.2f s, "
+            "elapsed=%.2f/%.2f s, traveled=%.2f/%.2f m, "
+            "total_budget=%.2f s, wp_id=%d",
             overtake_line_state_.target_vehicle_id.c_str(),
             overtake_line_state_.pass_side_sign,
             to_string(overtake_line_state_.follow_prepare_origin_phase),
             overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active
                 ? 1
                 : 0,
-            validated_continuous_dp_wait_execution ? 1 : 0, pause_elapsed_sec,
-            pause_timeout_sec, overtake_line_state_.phase_traveled_m,
-            pause_max_distance_m, line_cfg.mission_total_time_limit_sec,
-            model->wp_id);
+            overtake_line_state_.dynamic_mission_wait_full_closing_was_active ? 1 : 0,
+            validated_continuous_dp_wait_execution ? 1 : 0,
+            dynamic_wait_target_progress_recent ? 1 : 0,
+            dynamic_wait_progress_age_sec, pause_elapsed_sec, pause_timeout_sec,
+            overtake_line_state_.phase_traveled_m, pause_max_distance_m,
+            line_cfg.mission_total_time_limit_sec, model->wp_id);
       }
       if (paused_mission_terminal.action ==
           overtake_core::PausedMissionTerminalAction::Expire) {
@@ -17717,13 +17773,17 @@ private:
           RCLCPP_INFO(
             rclcpp::get_logger("mpc_controller"),
             "OvertakeLine dynamic Mission wait released for fresh search: "
-            "target=%s, side=%d, origin=%s, prefix=%d, elapsed=%.2f s, "
-            "traveled=%.2f m, reason=%s, wp_id=%d",
+            "target=%s, side=%d, origin=%s, prefix=%d/full=%d, "
+            "continuous_dp=%d, progress_recent=%d/age=%.2f s, "
+            "elapsed=%.2f s, traveled=%.2f m, reason=%s, wp_id=%d",
             expired_target.c_str(), expired_side,
             to_string(overtake_line_state_.follow_prepare_origin_phase),
             overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active ? 1 : 0,
-            pause_elapsed_sec, overtake_line_state_.phase_traveled_m,
-            expiry_reason, model->wp_id);
+            overtake_line_state_.dynamic_mission_wait_full_closing_was_active ? 1 : 0,
+            validated_continuous_dp_wait_execution ? 1 : 0,
+            dynamic_wait_target_progress_recent ? 1 : 0,
+            dynamic_wait_progress_age_sec, pause_elapsed_sec,
+            overtake_line_state_.phase_traveled_m, expiry_reason, model->wp_id);
         }
         arm_overtake_line_side_retry_block(
           expired_side, expired_target, now_sec, expiry_reason,
@@ -18124,6 +18184,13 @@ private:
         terminal_budget_abort;
       overtake_line_state_.dynamic_mission_wait_rear_clear_extension_logged =
           false;
+      overtake_line_state_.dynamic_mission_wait_best_target_longitudinal_m =
+        std::isfinite(behavior_output.locked_target_longitudinal) ?
+        behavior_output.locked_target_longitudinal :
+        std::numeric_limits<double>::infinity();
+      overtake_line_state_.dynamic_mission_wait_last_progress_sec =
+        std::isfinite(behavior_output.locked_target_longitudinal) ?
+        now_sec : std::numeric_limits<double>::quiet_NaN();
       overtake_line_state_.opponent_side_replan_last_evaluation_sec =
           -std::numeric_limits<double>::infinity();
       transition_overtake_line_phase(

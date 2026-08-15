@@ -6422,13 +6422,24 @@ struct DynamicMissionWaitRetentionRequest
   bool pass_origin{false};
   bool committed_execution{false};
   bool forward_prefix_active{false};
+  /// The latest wall-validated prefix owns the complete Mission closing
+  /// request instead of the bounded unlatched fallback.
+  bool full_closing_authority{false};
+  /// A continuous lateral path remains valid under its short runtime lease.
+  bool continuous_dp_execution_active{false};
+  /// Current measured wall/target/controller state has no hard execution fault.
+  bool runtime_hard_fault{false};
+  /// Target longitudinal separation improved recently enough that extending
+  /// the short re-selection lease is still advancing the pass.
+  bool target_progress_recent{false};
 };
 
 /// Allow a short DynamicMissionWait lease to outlive its re-selection limit
 /// only when execution has already committed and a physically validated
-/// forward prefix still owns the output. Pre-commit ShiftOut waits therefore
-/// expire into a fresh left/right search instead of consuming the Mission-wide
-/// time budget as a passive FollowPrepare.
+/// forward prefix still owns useful execution authority while longitudinal
+/// progress remains recent. Pre-commit ShiftOut waits and stale/degraded Pass
+/// prefixes therefore expire into a fresh left/right search instead of
+/// consuming the Mission-wide time budget as a passive FollowPrepare.
 bool can_retain_dynamic_mission_wait_until_rear_clear(
   const DynamicMissionWaitRetentionRequest & request) noexcept;
 

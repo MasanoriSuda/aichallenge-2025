@@ -10910,7 +10910,10 @@ bool can_retain_dynamic_mission_wait_until_rear_clear(
 {
   return
     request.tactical_wait_active && request.forward_prefix_active &&
-    (request.pass_origin || request.committed_execution);
+    (request.pass_origin || request.committed_execution) &&
+    (request.full_closing_authority ||
+    request.continuous_dp_execution_active) &&
+    !request.runtime_hard_fault && request.target_progress_recent;
 }
 
 const char * to_string(const PausedMissionTerminalReason reason) noexcept

@@ -2671,6 +2671,29 @@ struct FrenetDpExecutionCorridorBoundsResolution
 FrenetDpExecutionCorridorBoundsResolution resolve_frenet_dp_execution_corridor_bounds(
   const FrenetDpExecutionCorridorBoundsRequest & request) noexcept;
 
+struct FrenetDpHorizonClearanceRequest
+{
+  double path_distance_m{};
+  double hard_horizon_distance_m{};
+  double physical_wall_clearance_m{};
+  double robust_wall_clearance_m{};
+};
+
+struct FrenetDpHorizonClearanceResolution
+{
+  bool valid{false};
+  bool hard_horizon_active{false};
+  double hard_wall_clearance_m{};
+  double preferred_wall_clearance_m{};
+};
+
+/// Keep execution clearance hard only over the near receding horizon.  The
+/// same clearance becomes a soft preference farther ahead so a remote narrow
+/// corner cannot reject an immediately executable attack.  Raw track and
+/// target-side bounds remain hard in both regions.
+FrenetDpHorizonClearanceResolution resolve_frenet_dp_horizon_clearance(
+  const FrenetDpHorizonClearanceRequest & request) noexcept;
+
 struct OvertakeMissionDynamicCorridorRequest
 {
   OvertakeMissionPathRequest mission_path;

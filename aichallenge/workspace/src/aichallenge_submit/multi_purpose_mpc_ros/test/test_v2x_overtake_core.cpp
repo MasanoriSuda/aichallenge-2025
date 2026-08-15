@@ -14824,6 +14824,35 @@ TEST(V2XOvertakeCoreFrenetDpCorridor, AlignsHardBoundsAndKeepsRobustReserveSoft)
   EXPECT_FALSE(narrow.preferred_bounds_valid);
 }
 
+TEST(V2XOvertakeCoreFrenetDpCorridor, LimitsHardWallClearanceToNearHorizon)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpHorizonClearanceRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frenet_dp_horizon_clearance;
+
+  FrenetDpHorizonClearanceRequest request{19.9, 20.0, 0.20, 0.40};
+  auto resolution = resolve_frenet_dp_horizon_clearance(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.hard_horizon_active);
+  EXPECT_DOUBLE_EQ(resolution.hard_wall_clearance_m, 0.20);
+  EXPECT_DOUBLE_EQ(resolution.preferred_wall_clearance_m, 0.40);
+
+  request.path_distance_m = 20.0;
+  resolution = resolve_frenet_dp_horizon_clearance(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.hard_horizon_active);
+  EXPECT_DOUBLE_EQ(resolution.hard_wall_clearance_m, 0.20);
+
+  request.path_distance_m = 20.1;
+  resolution = resolve_frenet_dp_horizon_clearance(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.hard_horizon_active);
+  EXPECT_DOUBLE_EQ(resolution.hard_wall_clearance_m, 0.0);
+  EXPECT_DOUBLE_EQ(resolution.preferred_wall_clearance_m, 0.20);
+
+  request.path_distance_m = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_FALSE(resolve_frenet_dp_horizon_clearance(request).valid);
+}
+
 TEST(V2XOvertakeCoreFrenetDpCorridor, SoftReservePullsPathInsidePreferredInterval)
 {
   using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpCorridorRequest;

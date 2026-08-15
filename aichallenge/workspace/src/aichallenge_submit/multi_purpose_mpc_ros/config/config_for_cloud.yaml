@@ -621,6 +621,7 @@ mpc:
   v2x_overtake_mpcc_frenet_dp_previous_path_weight: 1.0
   v2x_overtake_mpcc_frenet_dp_corridor_width_weight: 0.25
   v2x_overtake_mpcc_frenet_dp_preferred_corridor_weight: 4.0 # prefer robust wall/target reserve without rejecting a physically feasible attack corridor
+  v2x_overtake_mpcc_frenet_dp_hard_horizon_distance: 20.0 # [m] physical wall reserve is hard nearby and soft over the rest of the 30 m lookahead
   v2x_overtake_mpcc_frenet_dp_branch_switch_penalty: 1.0
   v2x_overtake_mpcc_frenet_dp_curve_strategy_enabled: true # straight=min-motion; curves compare inside-dive, sweep-dive and outer-sweep references
   v2x_overtake_mpcc_frenet_dp_significant_curvature: 0.04 # [1/m] matches the existing curve-role threshold

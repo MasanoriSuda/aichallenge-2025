@@ -1533,6 +1533,7 @@ struct OvertakeLineConfig
   double mpcc_frenet_dp_previous_path_weight{1.0};
   double mpcc_frenet_dp_corridor_width_weight{0.25};
   double mpcc_frenet_dp_preferred_corridor_weight{4.0};
+  double mpcc_frenet_dp_hard_horizon_distance{20.0};
   double mpcc_frenet_dp_branch_switch_penalty{1.0};
   bool mpcc_frenet_dp_curve_strategy_enabled{false};
   double mpcc_frenet_dp_significant_curvature{0.04};
@@ -7681,25 +7682,43 @@ struct MPC
         std::max(0.0, cfg.v2x_gap.vehicle_radius);
       const double hard_wall_clearance =
         std::max(0.0, cfg.v2x_behavior.overtake_line.min_wall_clearance);
+      const double hard_horizon_distance = std::max(
+        0.0,
+        cfg.v2x_behavior.overtake_line.mpcc_frenet_dp_hard_horizon_distance);
       const auto build_gap_corridor_profiles = [&](const GapPlannerOutput & gap) {
           GapCorridorProfiles profiles;
           for (std::size_t i = 0; i < gap.target_active.size(); ++i) {
             const auto & course_waypoint =
               model->reference_path->get_waypoint(ref_wp_id + static_cast<int>(i));
+            const double path_distance =
+              horizon_path_distance_to_index(ref_wp_id, i);
+            const auto horizon_clearance =
+              overtake_core::resolve_frenet_dp_horizon_clearance(
+              overtake_core::FrenetDpHorizonClearanceRequest{
+                path_distance, hard_horizon_distance, hard_wall_clearance,
+                robust_wall_planning_clearance});
+            if (!horizon_clearance.valid) {
+              profiles.dynamic.clear();
+              profiles.execution.clear();
+              return profiles;
+            }
+            const auto resolve_sample_bounds = [&](const bool target_active) {
+                return overtake_core::resolve_frenet_dp_execution_corridor_bounds(
+                  overtake_core::FrenetDpExecutionCorridorBoundsRequest{
+                    side, gap.lb[i], gap.ub[i], target_active,
+                    planner_target_separation, physical_target_separation,
+                    robust_target_center_separation,
+                    horizon_clearance.hard_wall_clearance_m,
+                    horizon_clearance.preferred_wall_clearance_m});
+              };
             if (
               gap.target_active[i] && i < gap.lb.size() && i < gap.ub.size())
             {
-              const auto bounds =
-                overtake_core::resolve_frenet_dp_execution_corridor_bounds(
-                overtake_core::FrenetDpExecutionCorridorBoundsRequest{
-                  side, gap.lb[i], gap.ub[i], true,
-                  planner_target_separation, physical_target_separation,
-                  robust_target_center_separation, hard_wall_clearance,
-                  robust_wall_planning_clearance});
+              const auto bounds = resolve_sample_bounds(true);
               if (bounds.valid) {
                 profiles.dynamic.push_back(
                   overtake_core::OvertakeMissionDynamicCorridorSample{
-                    horizon_path_distance_to_index(ref_wp_id, i),
+                    path_distance,
                     bounds.hard_lower_lateral_m, bounds.hard_upper_lateral_m, true,
                     course_waypoint.kappa, true, true,
                     bounds.preferred_lower_lateral_m,
@@ -7712,17 +7731,13 @@ struct MPC
               }
             }
             // Target prediction is short, but the execution path must remain
-            // valid through rear-clear. Hard bounds match physical execution;
-            // robust wall/target reserve remains a soft preference. Never
-            // reconnect after an infeasible stage.
+            // valid through rear-clear. The near horizon matches physical
+            // execution; farther samples retain raw wall/target topology and
+            // treat execution clearance as a soft preference until rolling
+            // refresh brings them into the hard horizon. Never reconnect after
+            // an infeasible stage.
             if (i < gap.lb.size() && i < gap.ub.size()) {
-              const auto bounds =
-                overtake_core::resolve_frenet_dp_execution_corridor_bounds(
-                overtake_core::FrenetDpExecutionCorridorBoundsRequest{
-                  side, gap.lb[i], gap.ub[i], gap.target_active[i],
-                  planner_target_separation, physical_target_separation,
-                  robust_target_center_separation, hard_wall_clearance,
-                  robust_wall_planning_clearance});
+              const auto bounds = resolve_sample_bounds(gap.target_active[i]);
               if (!bounds.valid)
               {
                 profiles.dynamic.clear();
@@ -7731,7 +7746,7 @@ struct MPC
               } else if (!profiles.execution.empty() || i == 0U) {
                 profiles.execution.push_back(
                   overtake_core::OvertakeMissionDynamicCorridorSample{
-                    horizon_path_distance_to_index(ref_wp_id, i),
+                    path_distance,
                     bounds.hard_lower_lateral_m, bounds.hard_upper_lateral_m, true,
                     course_waypoint.kappa, gap.target_active[i], true,
                     bounds.preferred_lower_lateral_m,
@@ -27887,6 +27902,10 @@ Config load_config(const std::string & path)
     mpc["v2x_overtake_mpcc_frenet_dp_tactical_strategy_switch_penalty"] ?
     mpc["v2x_overtake_mpcc_frenet_dp_tactical_strategy_switch_penalty"].as<double>() :
     1.0);
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_hard_horizon_distance = std::max(
+    0.0,
+    mpc["v2x_overtake_mpcc_frenet_dp_hard_horizon_distance"] ?
+    mpc["v2x_overtake_mpcc_frenet_dp_hard_horizon_distance"].as<double>() : 20.0);
   cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_shadow_score_penalty = std::max(
     0.0,
     mpc["v2x_overtake_mpcc_frenet_dp_shadow_score_penalty"] ?
@@ -29954,7 +29973,7 @@ public:
         "weights anchor=%.2f/motion=%.2f/previous=%.2f/width=%.2f/"
         "reserve=%.2f/side_switch=%.2f, "
         "curve_strategy=%s/kappa>=%.3f/reference=%.2f/edge=%.2f/inside=%.2f/"
-        "tactic_switch=%.2f, "
+        "tactic_switch=%.2f, hard_horizon=%.1f m, "
         "shadow_penalty=%.2f, warm_age<=%.2f s, runtime_lease<=%.2f s, "
         "longitudinal_timing=%s/cost_slack=%.2f",
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_corridor_enabled ?
@@ -29981,6 +30000,7 @@ public:
         mpcc_frenet_dp_inside_radius_penalty_weight,
         mpc_cfg_.v2x_behavior.overtake_line.
         mpcc_frenet_dp_tactical_strategy_switch_penalty,
+        mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_hard_horizon_distance,
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_shadow_score_penalty,
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_last_path_max_age_sec,
         mpc_cfg_.v2x_behavior.overtake_line.

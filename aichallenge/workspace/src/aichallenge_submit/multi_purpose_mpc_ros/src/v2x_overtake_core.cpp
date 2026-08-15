@@ -4879,6 +4879,33 @@ FrenetDpExecutionCorridorBoundsResolution resolve_frenet_dp_execution_corridor_b
   return resolution;
 }
 
+FrenetDpHorizonClearanceResolution resolve_frenet_dp_horizon_clearance(
+  const FrenetDpHorizonClearanceRequest & request) noexcept
+{
+  FrenetDpHorizonClearanceResolution resolution;
+  const auto finite_non_negative = [](const double value) {
+      return std::isfinite(value) && value >= 0.0;
+    };
+  if (
+    !finite_non_negative(request.path_distance_m) ||
+    !finite_non_negative(request.hard_horizon_distance_m) ||
+    !finite_non_negative(request.physical_wall_clearance_m) ||
+    !finite_non_negative(request.robust_wall_clearance_m))
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  resolution.hard_horizon_active =
+    request.path_distance_m <= request.hard_horizon_distance_m + 1e-9;
+  resolution.hard_wall_clearance_m = resolution.hard_horizon_active ?
+    request.physical_wall_clearance_m : 0.0;
+  resolution.preferred_wall_clearance_m = resolution.hard_horizon_active ?
+    std::max(request.physical_wall_clearance_m, request.robust_wall_clearance_m) :
+    request.physical_wall_clearance_m;
+  return resolution;
+}
+
 FrenetDpCorridorResolution solve_frenet_dp_corridor(
   const FrenetDpCorridorRequest & request) noexcept
 {

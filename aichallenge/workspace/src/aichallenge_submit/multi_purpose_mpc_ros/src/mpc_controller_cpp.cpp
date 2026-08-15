@@ -13138,6 +13138,36 @@ struct MPC
     current_control = std::move(padded_control);
   }
 
+  std::optional<double> solver_fallback_path_steering_target(
+    const double current_speed_mps, const double max_steering_rad) const
+  {
+    if (
+      model == nullptr || model->current_waypoint == nullptr ||
+      !std::isfinite(model->spatial_state.e_y) ||
+      !std::isfinite(model->spatial_state.e_psi) ||
+      !std::isfinite(model->current_waypoint->kappa) ||
+      !std::isfinite(model->length) || model->length <= 0.0 ||
+      !std::isfinite(current_speed_mps) || current_speed_mps < 0.0 ||
+      !std::isfinite(max_steering_rad) || max_steering_rad < 0.0)
+    {
+      return std::nullopt;
+    }
+
+    // A solver failure must not erase the curvature command while the vehicle is
+    // already committed to a bend. Reuse the spatial feedback law from the
+    // low-speed rejoin controller, then apply the normal MPC lateral-acceleration
+    // envelope at the measured speed. The caller still rate-limits the transition.
+    const double path_target = v2x_overtake_core::resolve_low_speed_shift_steering(
+      v2x_overtake_core::LowSpeedShiftSteeringRequest{
+        model->spatial_state.e_y, model->spatial_state.e_psi, 0.0,
+        model->current_waypoint->kappa, model->length, max_steering_rad,
+        cfg.v2x_behavior.low_speed_avoidance_shift_lateral_gain,
+        cfg.v2x_behavior.low_speed_avoidance_shift_heading_gain});
+    return v2x_overtake_core::limit_low_speed_shift_steering_by_lateral_acceleration(
+      path_target, current_speed_mps, model->length, cfg.ay_max,
+      cfg.steering_tire_angle_gain_var);
+  }
+
   std::pair<Eigen::Vector2d, double> safe_failure_control(const std::string & reason)
   {
     last_control_was_fallback_ = true;
@@ -13167,16 +13197,23 @@ struct MPC
     const bool force_neutralize_overtake_fallback =
       overtake_recovery_phase || overtake_solver_recovery_active_ ||
       overtake_solver_reentry_blocked_;
-    const bool neutralize_fallback =
-      v2x_overtake_core::should_neutralize_solver_fallback_steering(
-        v2x_overtake_core::SolverFallbackNeutralizationRequest{
+    const bool release_fallback_hold =
+      v2x_overtake_core::should_release_solver_fallback_steering_hold(
+        v2x_overtake_core::SolverFallbackSteeringHoldRequest{
           failure_count, cfg.solver_failure_steering_hold_cycles,
           force_neutralize_overtake_fallback});
-    const double fallback_steering = neutralize_fallback ?
-      v2x_overtake_core::rate_limit_solver_fallback_steering_toward_neutral(
+    std::optional<double> path_steering_target;
+    if (release_fallback_hold && !force_neutralize_overtake_fallback) {
+      path_steering_target =
+        solver_fallback_path_steering_target(current_speed, max_steering);
+    }
+    const double fallback_steering_target = path_steering_target.value_or(0.0);
+    const double fallback_steering = release_fallback_hold ?
+      v2x_overtake_core::rate_limit_solver_fallback_steering_toward_target(
         v2x_overtake_core::SolverFallbackSteeringRequest{
           std::isfinite(previous_steering) ? previous_steering : 0.0,
-          max_steering, std::max(0.0, cfg.steer_rate_max), time_step}) :
+          fallback_steering_target, max_steering,
+          std::max(0.0, cfg.steer_rate_max), time_step}) :
       (std::isfinite(previous_steering) ?
        clip(previous_steering, -max_steering, max_steering) : 0.0);
     previous_steering = fallback_steering;
@@ -13222,17 +13259,19 @@ struct MPC
       overtake_solver_reentry_blocked_ = gate.blocked;
       overtake_solver_recovery_success_count_ = gate.consecutive_successes;
     }
-    const bool neutralization_just_started =
-      !force_neutralize_overtake_fallback && neutralize_fallback &&
+    const bool hold_release_just_started =
+      !force_neutralize_overtake_fallback && release_fallback_hold &&
       cfg.solver_failure_steering_hold_cycles < std::numeric_limits<int>::max() &&
       failure_count == cfg.solver_failure_steering_hold_cycles + 1;
-    if (infeasibility_counter == 0 || neutralization_just_started || failure_count % 10 == 0) {
+    if (infeasibility_counter == 0 || hold_release_just_started || failure_count % 10 == 0) {
+      const char * steering_mode = !release_fallback_hold ? "hold" :
+        path_steering_target.has_value() ? "path-track" : "neutralize";
       RCLCPP_ERROR(
         rclcpp::get_logger("mpc_controller"),
         "MPC control failed; using deceleration fallback: reason=%s, failures=%d, "
-        "speed=%.3f, steering=%.3f, steering_mode=%s",
+        "speed=%.3f, steering=%.3f, steering_target=%.3f, steering_mode=%s",
         reason.c_str(), failure_count, fallback_speed, fallback_steering,
-        neutralize_fallback ? "neutralize" : "hold");
+        fallback_steering_target, steering_mode);
     }
     infeasibility_counter = failure_count;
     Eigen::Vector2d fallback;
@@ -30211,7 +30250,8 @@ public:
     }
     RCLCPP_INFO(
       get_logger(),
-      "MPC solver fallback steering: hold=%d cycles, neutralize_rate=%.3f rad/s, "
+      "MPC solver fallback steering: hold=%d cycles, post_hold=path-track, "
+      "recovery=neutral, transition_rate=%.3f rad/s, "
       "sim_crawl=%d/%.2f m/s",
       mpc_cfg_.solver_failure_steering_hold_cycles, mpc_cfg_.steer_rate_max,
       mpc_cfg_.solver_failure_crawl_enabled ? 1 : 0,

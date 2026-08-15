@@ -313,7 +313,7 @@ mpc:
     3: 1.0
   delta_max_deg: 32.0 # degrees
   steer_rate_max: 1.2 # rad/s
-  solver_failure_steering_hold_cycles: 4 # 0.1 s at 40 Hz, then rate-limit steering to neutral
+  solver_failure_steering_hold_cycles: 4 # 0.1 s at 40 Hz, then path-track; Recovery targets neutral
   # SIM fail-operational fallback: only Cruise with no detected front vehicle
   # may keep moving, using low-speed path-error steering instead of stopping.
   solver_failure_crawl_enabled: true

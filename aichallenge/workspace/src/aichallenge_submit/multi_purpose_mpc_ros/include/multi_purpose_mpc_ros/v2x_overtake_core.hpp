@@ -6804,27 +6804,28 @@ SolverReentryGateResolution update_solver_reentry_gate(
 struct SolverFallbackSteeringRequest
 {
   double current_steering_rad{};
+  double target_steering_rad{};
   double max_steering_rad{};
   double steer_rate_radps{};
   double step_sec{};
 };
 
-/// Move a solver-fallback steering command toward neutral without exceeding the rate limit.
-double rate_limit_solver_fallback_steering_toward_neutral(
+/// Move a solver-fallback steering command toward a bounded target without exceeding the rate.
+double rate_limit_solver_fallback_steering_toward_target(
   const SolverFallbackSteeringRequest & request);
 
-struct SolverFallbackNeutralizationRequest
+struct SolverFallbackSteeringHoldRequest
 {
   int consecutive_failures{0};
   int steering_hold_cycles{0};
-  bool force_neutralize{false};
+  bool force_release{false};
 };
 
-/// Select neutral steering recovery after a bounded failure hold window.
+/// Release the last-feasible steering hold after a bounded failure window.
 ///
-/// force_neutralize bypasses the hold window. Negative counters throw std::invalid_argument.
-bool should_neutralize_solver_fallback_steering(
-  const SolverFallbackNeutralizationRequest & request);
+/// force_release bypasses the hold window. Negative counters throw std::invalid_argument.
+bool should_release_solver_fallback_steering_hold(
+  const SolverFallbackSteeringHoldRequest & request);
 
 struct StartGridCorridorScoreRequest
 {

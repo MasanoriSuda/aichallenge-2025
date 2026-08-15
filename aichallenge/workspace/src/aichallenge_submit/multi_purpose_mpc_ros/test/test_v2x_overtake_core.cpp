@@ -83,7 +83,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::RecoveryExitReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecoveryPolicyRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecoveryMissionRetentionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SolverCooldownRequest;
-using multi_purpose_mpc_ros::v2x_overtake_core::SolverFallbackNeutralizationRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::SolverFallbackSteeringHoldRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SolverFallbackSteeringRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SolverReentryGateRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StartGridCorridorScoreRequest;
@@ -406,8 +406,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_front_danger_target_iden
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_committed_pass_body_geometry;
 using multi_purpose_mpc_ros::v2x_overtake_core::arm_solver_cooldown;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_solver_cooldown_active;
-using multi_purpose_mpc_ros::v2x_overtake_core::rate_limit_solver_fallback_steering_toward_neutral;
-using multi_purpose_mpc_ros::v2x_overtake_core::should_neutralize_solver_fallback_steering;
+using multi_purpose_mpc_ros::v2x_overtake_core::rate_limit_solver_fallback_steering_toward_target;
+using multi_purpose_mpc_ros::v2x_overtake_core::should_release_solver_fallback_steering_hold;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_solver_reentry_gate;
 using multi_purpose_mpc_ros::v2x_overtake_core::score_start_grid_corridor;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_try_unvalidated_overtake_fallback;
@@ -13769,45 +13769,50 @@ TEST(V2XOvertakeCoreRecovery, SaturatesReentrySuccessCountWithoutOverflow)
   EXPECT_EQ(resolution.consecutive_successes, 20);
 }
 
-TEST(V2XOvertakeCoreRecovery, RateLimitsFallbackSteeringTowardNeutral)
+TEST(V2XOvertakeCoreRecovery, RateLimitsFallbackSteeringTowardTarget)
 {
-  SolverFallbackSteeringRequest request{-0.179, 0.559, 1.2, 0.025};
+  SolverFallbackSteeringRequest request{-0.179, 0.0, 0.559, 1.2, 0.025};
   EXPECT_NEAR(
-    rate_limit_solver_fallback_steering_toward_neutral(request), -0.149, 1e-12);
+    rate_limit_solver_fallback_steering_toward_target(request), -0.149, 1e-12);
 
   request.current_steering_rad = 0.02;
-  EXPECT_DOUBLE_EQ(rate_limit_solver_fallback_steering_toward_neutral(request), 0.0);
+  EXPECT_DOUBLE_EQ(rate_limit_solver_fallback_steering_toward_target(request), 0.0);
+
+  request.current_steering_rad = 0.14;
+  request.target_steering_rad = -0.12;
+  EXPECT_NEAR(rate_limit_solver_fallback_steering_toward_target(request), 0.11, 1e-12);
 
   request.current_steering_rad = 1.0;
+  request.target_steering_rad = -1.0;
   request.step_sec = 0.0;
-  EXPECT_DOUBLE_EQ(rate_limit_solver_fallback_steering_toward_neutral(request), 0.559);
+  EXPECT_DOUBLE_EQ(rate_limit_solver_fallback_steering_toward_target(request), 0.559);
 
   request.steer_rate_radps = -1.0;
   EXPECT_THROW(
-    rate_limit_solver_fallback_steering_toward_neutral(request), std::invalid_argument);
+    rate_limit_solver_fallback_steering_toward_target(request), std::invalid_argument);
 }
 
-TEST(V2XOvertakeCoreRecovery, NeutralizesFallbackAfterBoundedHoldWindow)
+TEST(V2XOvertakeCoreRecovery, ReleasesFallbackSteeringAfterBoundedHoldWindow)
 {
-  SolverFallbackNeutralizationRequest request{1, 4, false};
-  EXPECT_FALSE(should_neutralize_solver_fallback_steering(request));
+  SolverFallbackSteeringHoldRequest request{1, 4, false};
+  EXPECT_FALSE(should_release_solver_fallback_steering_hold(request));
 
   request.consecutive_failures = 4;
-  EXPECT_FALSE(should_neutralize_solver_fallback_steering(request));
+  EXPECT_FALSE(should_release_solver_fallback_steering_hold(request));
 
   request.consecutive_failures = 5;
-  EXPECT_TRUE(should_neutralize_solver_fallback_steering(request));
+  EXPECT_TRUE(should_release_solver_fallback_steering_hold(request));
 
   request.consecutive_failures = 1;
-  request.force_neutralize = true;
-  EXPECT_TRUE(should_neutralize_solver_fallback_steering(request));
+  request.force_release = true;
+  EXPECT_TRUE(should_release_solver_fallback_steering_hold(request));
 
   request.consecutive_failures = -1;
-  EXPECT_THROW(should_neutralize_solver_fallback_steering(request), std::invalid_argument);
+  EXPECT_THROW(should_release_solver_fallback_steering_hold(request), std::invalid_argument);
 
   request.consecutive_failures = 0;
   request.steering_hold_cycles = -1;
-  EXPECT_THROW(should_neutralize_solver_fallback_steering(request), std::invalid_argument);
+  EXPECT_THROW(should_release_solver_fallback_steering_hold(request), std::invalid_argument);
 }
 
 TEST(V2XOvertakeCoreStartGridCorridor, PrefersShortestLateralTravelBeforeExtraWidth)

@@ -11411,11 +11411,14 @@ SolverReentryGateResolution update_solver_reentry_gate(
   return {true, successes, false};
 }
 
-double rate_limit_solver_fallback_steering_toward_neutral(
+double rate_limit_solver_fallback_steering_toward_target(
   const SolverFallbackSteeringRequest & request)
 {
   if (!std::isfinite(request.current_steering_rad)) {
     throw std::invalid_argument("Solver fallback steering must be finite");
+  }
+  if (!std::isfinite(request.target_steering_rad)) {
+    throw std::invalid_argument("Solver fallback steering target must be finite");
   }
   if (!std::isfinite(request.max_steering_rad) || request.max_steering_rad < 0.0) {
     throw std::invalid_argument("Solver fallback maximum steering must be finite and non-negative");
@@ -11429,18 +11432,21 @@ double rate_limit_solver_fallback_steering_toward_neutral(
 
   const double steering = std::clamp(
     request.current_steering_rad, -request.max_steering_rad, request.max_steering_rad);
+  const double target = std::clamp(
+    request.target_steering_rad, -request.max_steering_rad, request.max_steering_rad);
   const double max_step = request.steer_rate_radps * request.step_sec;
   if (!std::isfinite(max_step)) {
     throw std::invalid_argument("Solver fallback steering step overflowed");
   }
-  if (std::abs(steering) <= max_step) {
-    return 0.0;
+  const double target_delta = target - steering;
+  if (std::abs(target_delta) <= max_step) {
+    return target;
   }
-  return steering - std::copysign(max_step, steering);
+  return steering + std::copysign(max_step, target_delta);
 }
 
-bool should_neutralize_solver_fallback_steering(
-  const SolverFallbackNeutralizationRequest & request)
+bool should_release_solver_fallback_steering_hold(
+  const SolverFallbackSteeringHoldRequest & request)
 {
   if (request.consecutive_failures < 0) {
     throw std::invalid_argument("Solver fallback failure count must be non-negative");
@@ -11448,7 +11454,7 @@ bool should_neutralize_solver_fallback_steering(
   if (request.steering_hold_cycles < 0) {
     throw std::invalid_argument("Solver fallback steering hold cycles must be non-negative");
   }
-  return request.force_neutralize ||
+  return request.force_release ||
          request.consecutive_failures > request.steering_hold_cycles;
 }
 

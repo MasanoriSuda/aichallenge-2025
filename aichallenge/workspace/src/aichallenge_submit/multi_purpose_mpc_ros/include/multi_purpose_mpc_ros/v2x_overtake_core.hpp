@@ -3038,6 +3038,34 @@ struct FrenetDpExecutionReferenceResolution
 FrenetDpExecutionReferenceResolution resolve_frenet_dp_execution_reference(
   const FrenetDpExecutionReferenceRequest & request) noexcept;
 
+struct FrenetDpExecutionRefreshStitchRequest
+{
+  double current_lateral_m{};
+  double active_traveled_distance_m{};
+  double preserved_prefix_distance_m{};
+  double blend_end_distance_m{};
+  std::vector<double> active_path_distances_m;
+  std::vector<double> active_lateral_path_m;
+  std::vector<double> candidate_path_distances_m;
+  std::vector<double> candidate_lateral_path_m;
+};
+
+struct FrenetDpExecutionRefreshStitchResolution
+{
+  bool valid{false};
+  bool used_active_path{false};
+  std::vector<double> path_distances_m;
+  std::vector<double> lateral_path_m;
+};
+
+/// Rebase a rolling DP candidate on the measured state and the unconsumed
+/// prefix of the last feasible path.  The old prefix is preserved briefly,
+/// then smoothstep-blended into the newly optimized downstream path.  This is
+/// reference stitching only; the caller must still run all hard execution
+/// validation before atomically promoting the result.
+FrenetDpExecutionRefreshStitchResolution stitch_frenet_dp_execution_refresh_path(
+  const FrenetDpExecutionRefreshStitchRequest & request) noexcept;
+
 struct FrenetDpExecutionRefreshRequest
 {
   bool enabled{false};

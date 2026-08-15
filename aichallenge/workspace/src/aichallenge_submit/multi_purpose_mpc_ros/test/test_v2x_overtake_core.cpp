@@ -15874,6 +15874,61 @@ TEST(V2XOvertakeCoreFrenetDpExecution, BuildsCurrentStateTransitionPath)
   EXPECT_DOUBLE_EQ(resolution.lateral_path_m.back(), 0.7);
 }
 
+TEST(V2XOvertakeCoreFrenetDpExecution, StitchesOldPrefixIntoRollingCandidate)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    FrenetDpExecutionRefreshStitchRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    stitch_frenet_dp_execution_refresh_path;
+
+  FrenetDpExecutionRefreshStitchRequest request;
+  request.current_lateral_m = 0.55;
+  request.active_traveled_distance_m = 2.0;
+  request.preserved_prefix_distance_m = 1.0;
+  request.blend_end_distance_m = 4.0;
+  request.active_path_distances_m = {0.0, 2.0, 4.0, 6.0};
+  request.active_lateral_path_m = {0.0, 0.5, 0.8, 1.0};
+  request.candidate_path_distances_m = {0.0, 1.0, 2.5, 4.0, 8.0};
+  request.candidate_lateral_path_m = {0.2, 0.2, 0.2, 0.2, 0.2};
+
+  const auto result = stitch_frenet_dp_execution_refresh_path(request);
+  ASSERT_TRUE(result.valid);
+  EXPECT_TRUE(result.used_active_path);
+  ASSERT_EQ(result.lateral_path_m.size(), 5U);
+  EXPECT_DOUBLE_EQ(result.lateral_path_m.front(), request.current_lateral_m);
+  EXPECT_NEAR(result.lateral_path_m[1], 0.65, 1e-9);
+  EXPECT_GT(result.lateral_path_m[2], 0.2);
+  EXPECT_DOUBLE_EQ(result.lateral_path_m[3], 0.2);
+  EXPECT_DOUBLE_EQ(result.lateral_path_m.back(), 0.2);
+}
+
+TEST(V2XOvertakeCoreFrenetDpExecution, StitchesMeasuredPrefixWithoutOldPath)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    FrenetDpExecutionRefreshStitchRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    stitch_frenet_dp_execution_refresh_path;
+
+  FrenetDpExecutionRefreshStitchRequest request;
+  request.current_lateral_m = -0.4;
+  request.active_traveled_distance_m = 0.0;
+  request.preserved_prefix_distance_m = 1.0;
+  request.blend_end_distance_m = 3.0;
+  request.candidate_path_distances_m = {0.0, 1.0, 2.0, 3.0};
+  request.candidate_lateral_path_m = {-0.8, -0.8, -0.8, -0.8};
+
+  const auto result = stitch_frenet_dp_execution_refresh_path(request);
+  ASSERT_TRUE(result.valid);
+  EXPECT_FALSE(result.used_active_path);
+  EXPECT_DOUBLE_EQ(result.lateral_path_m[0], -0.4);
+  EXPECT_DOUBLE_EQ(result.lateral_path_m[1], -0.4);
+  EXPECT_GT(result.lateral_path_m[2], -0.8);
+  EXPECT_DOUBLE_EQ(result.lateral_path_m[3], -0.8);
+
+  request.blend_end_distance_m = request.preserved_prefix_distance_m;
+  EXPECT_FALSE(stitch_frenet_dp_execution_refresh_path(request).valid);
+}
+
 TEST(V2XOvertakeCoreFrenetDpExecution, RejectsMalformedTransitionPath)
 {
   using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpTransitionPathRequest;

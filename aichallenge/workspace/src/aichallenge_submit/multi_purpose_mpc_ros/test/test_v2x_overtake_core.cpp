@@ -6101,6 +6101,7 @@ TEST(V2XOvertakeCoreHorizon, KeepsCommittedTargetAheadPassUntilRearClearOrHardFa
   continuation.absolute_budget_available = true;
   continuation.target_longitudinal_m = 4.0;
   continuation.maximum_front_distance_m = 6.0;
+  continuation.closing_speed_guard_distance_m = 1.5;
 
   EXPECT_EQ(
     resolve_target_ahead_pass_continuation(continuation),
@@ -6110,6 +6111,12 @@ TEST(V2XOvertakeCoreHorizon, KeepsCommittedTargetAheadPassUntilRearClearOrHardFa
   EXPECT_EQ(
     resolve_target_ahead_pass_continuation(continuation),
     TargetAheadPassContinuationAction::ForwardEscape);
+
+  continuation.predicted_body_footprint_sweep_separated = false;
+  continuation.target_longitudinal_m = 1.5;
+  EXPECT_EQ(
+    resolve_target_ahead_pass_continuation(continuation),
+    TargetAheadPassContinuationAction::GuardClosingSpeed);
 
   continuation.execution_corridor_blocked = true;
   EXPECT_EQ(
@@ -6146,6 +6153,8 @@ TEST(V2XOvertakeCoreHorizon, TargetAheadHoldDoesNotBackOffBeforeRearClear)
   request.maximum_distance_m = 12.0;
   request.ego_speed_mps = 5.0;
   request.target_ahead_hold_allowed = true;
+  request.target_ahead_hold_maximum_closing_speed_mps =
+    std::numeric_limits<double>::infinity();
   request.commit_stage = PassCommitStage::ShiftCommitted;
 
   const auto resolution = resolve_safe_separation(request);
@@ -6154,6 +6163,14 @@ TEST(V2XOvertakeCoreHorizon, TargetAheadHoldDoesNotBackOffBeforeRearClear)
     resolution.reason, SafeSeparationReason::TargetAheadPassContinuation);
   EXPECT_NEAR(resolution.target_velocity_reference_mps, 5.0, 1e-9);
   EXPECT_GE(resolution.signed_closing_speed_mps, 0.0);
+
+  request.target_ahead_hold_maximum_closing_speed_mps = 0.2;
+  const auto guarded_resolution = resolve_safe_separation(request);
+  EXPECT_EQ(guarded_resolution.action, SafeSeparationAction::KeepSameSide);
+  EXPECT_EQ(
+    guarded_resolution.reason, SafeSeparationReason::TargetAheadPassContinuation);
+  EXPECT_NEAR(guarded_resolution.target_velocity_reference_mps, 3.5, 1e-9);
+  EXPECT_NEAR(guarded_resolution.signed_closing_speed_mps, 0.2, 1e-9);
 }
 
 TEST(V2XOvertakeCoreHorizon, PreservesSpeedForSideBySideForwardEscape)

@@ -3787,7 +3787,9 @@ TargetAheadPassContinuationAction resolve_target_ahead_pass_continuation(
   if (
     !std::isfinite(request.target_longitudinal_m) ||
     !std::isfinite(request.maximum_front_distance_m) ||
-    request.maximum_front_distance_m < 0.0)
+    request.maximum_front_distance_m < 0.0 ||
+    !std::isfinite(request.closing_speed_guard_distance_m) ||
+    request.closing_speed_guard_distance_m < 0.0)
   {
     return TargetAheadPassContinuationAction::Inactive;
   }
@@ -3802,9 +3804,13 @@ TargetAheadPassContinuationAction resolve_target_ahead_pass_continuation(
   if (!physically_admitted) {
     return TargetAheadPassContinuationAction::Inactive;
   }
-  return request.predicted_body_footprint_sweep_separated ?
-    TargetAheadPassContinuationAction::ForwardEscape :
-    TargetAheadPassContinuationAction::HoldSameSide;
+  if (request.predicted_body_footprint_sweep_separated) {
+    return TargetAheadPassContinuationAction::ForwardEscape;
+  }
+  return request.target_longitudinal_m <=
+         request.closing_speed_guard_distance_m + 1e-9 ?
+         TargetAheadPassContinuationAction::GuardClosingSpeed :
+         TargetAheadPassContinuationAction::HoldSameSide;
 }
 
 bool can_return_from_tactical_revalidation(
@@ -3870,6 +3876,7 @@ SafeSeparationResolution resolve_safe_separation(
     !finite_non_negative(request.maximum_duration_sec) ||
     !finite_non_negative(request.maximum_distance_m) ||
     !finite_non_negative(request.ego_speed_mps) ||
+    !non_negative_bound(request.target_ahead_hold_maximum_closing_speed_mps) ||
     !finite_non_negative(request.forward_escape_max_front_distance_m) ||
     !finite_non_negative(request.absolute_elapsed_sec) ||
     !finite_non_negative(request.absolute_traveled_m) ||
@@ -4054,9 +4061,14 @@ SafeSeparationResolution resolve_safe_separation(
   }
   if (request.target_ahead_hold_allowed && request.target_longitudinal_m >= 0.0) {
     resolution.reason = SafeSeparationReason::TargetAheadPassContinuation;
+    const double speed_preserving_reference_mps =
+      std::max(request.ego_speed_mps, request.target_speed_mps);
+    const double closing_limited_reference_mps =
+      request.target_speed_mps +
+      request.target_ahead_hold_maximum_closing_speed_mps;
     resolution.target_velocity_reference_mps = std::min(
       request.maximum_ego_speed_mps,
-      std::max(request.ego_speed_mps, request.target_speed_mps));
+      std::min(speed_preserving_reference_mps, closing_limited_reference_mps));
     resolution.signed_closing_speed_mps =
       resolution.target_velocity_reference_mps - request.target_speed_mps;
     return resolution;

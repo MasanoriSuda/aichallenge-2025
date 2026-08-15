@@ -1505,6 +1505,8 @@ struct OvertakeLineConfig
   double safe_separation_forward_escape_max_front_distance{0.75};
   bool safe_separation_target_ahead_continuation_enabled{false};
   double safe_separation_target_ahead_continuation_max_front_distance{6.0};
+  double safe_separation_target_ahead_closing_guard_distance{1.5};
+  double safe_separation_target_ahead_guard_max_closing_speed{0.2};
   double safe_separation_front_clear_distance{2.0};
   double safe_separation_front_clear_confirm_sec{0.25};
   double safe_separation_max_sec{3.0};
@@ -7359,10 +7361,18 @@ struct MPC
         pass_commit_stage.stage,
         overtake_line_state_.pass_horizon_safe_separation_active,
         false});
+    const bool target_bound_tactical_rearm =
+      overtake_line_state_.target_bound_execution_replan_hold_active &&
+      pass_commit_stage.stage == overtake_core::PassCommitStage::ShiftCommitted &&
+      !overtake_line_state_.mission_cross_side_transition_committed &&
+      std::isfinite(output.locked_target_longitudinal) &&
+      output.locked_target_longitudinal + kEps >=
+      cfg.v2x_behavior.overtake_line.opponent_side_replan_no_return_front_distance;
     const bool opponent_side_replan_before_no_return =
       pass_commit_stage.valid && pass_commit_stage.side_replan_allowed &&
       pass_commit_stage.stage == overtake_core::PassCommitStage::ShiftCommitted &&
-      !overtake_line_state_.opponent_side_replan_no_return_latched &&
+      (!overtake_line_state_.opponent_side_replan_no_return_latched ||
+      target_bound_tactical_rearm) &&
       !overtake_line_state_.mission_cross_side_transition_committed;
     const bool opponent_side_replan_geometry_observable =
       output.locked_target_current_body_footprints_separated &&
@@ -19131,6 +19141,16 @@ private:
         return DynamicMissionWaitExecution::Handled;
       };
 
+    const bool target_bound_replan_rescue_active =
+      overtake_line_state_.target_bound_execution_replan_hold_active;
+    const bool target_bound_cross_side_rescue_allowed =
+      target_bound_replan_rescue_active &&
+      !overtake_line_state_.mission_cross_side_transition_committed &&
+      behavior_output.overtake_commit_stage ==
+      overtake_core::PassCommitStage::ShiftCommitted &&
+      std::isfinite(behavior_output.locked_target_longitudinal) &&
+      behavior_output.locked_target_longitudinal + kEps >=
+      line_cfg.opponent_side_replan_no_return_front_distance;
     if (transition_action != v2x_overtake_core::OvertakeLineTransitionAction::None) {
       switch (transition_action) {
         case v2x_overtake_core::OvertakeLineTransitionAction::RecoverPhysicalWallContact:
@@ -19259,7 +19279,8 @@ private:
       const auto & replacement =
         behavior_output.mpcc_lite_same_side_replan_mission.value();
       const bool replaced = replace_frozen_overtake_mission_after_dynamic_replan(
-        replacement, now_sec, current_ey, true, false, false, true, false, true);
+        replacement, now_sec, current_ey, true,
+        target_bound_replan_rescue_active, false, true, false, true);
       if (!replaced && line_cfg.debug_log_enabled) {
         RCLCPP_INFO(
           rclcpp::get_logger("mpc_controller"),
@@ -19277,7 +19298,8 @@ private:
       const auto & replacement =
         behavior_output.mpcc_lite_cross_side_replan_mission.value();
       const bool replaced = replace_frozen_overtake_mission_after_dynamic_replan(
-        replacement, now_sec, current_ey, false, false, false, false, true, true);
+        replacement, now_sec, current_ey, false, false,
+        target_bound_cross_side_rescue_allowed, false, true, true);
       mpcc_lite_cross_side_pending_sign_ = 0;
       mpcc_lite_cross_side_pending_since_sec_ =
         std::numeric_limits<double>::quiet_NaN();
@@ -19297,7 +19319,8 @@ private:
       behavior_output.opponent_side_replan_mission.has_value())
     {
       const bool replaced = replace_frozen_overtake_mission_after_dynamic_replan(
-        behavior_output.opponent_side_replan_mission.value(), now_sec, current_ey, false);
+        behavior_output.opponent_side_replan_mission.value(), now_sec, current_ey,
+        false, false, target_bound_cross_side_rescue_allowed);
       if (replaced) {
         // This branch intentionally skips the old-side behavior continuity
         // decision for one cycle. The replacement candidate was fully
@@ -20414,6 +20437,7 @@ private:
     bool safe_separation_forward_escape_active = false;
     bool safe_separation_full_speed_forward_escape_active = false;
     bool safe_separation_target_ahead_hold_active = false;
+    bool safe_separation_target_ahead_closing_guard_active = false;
     const bool pass_current_body_geometry_safe =
       behavior_output.locked_target_current_body_footprints_separated ||
       committed_forward_completion.current_overlap_grace_active ||
@@ -21748,13 +21772,17 @@ private:
             pass_elapsed < line_cfg.pass_horizon_absolute_time_limit - kEps &&
             pass_traveled < line_cfg.pass_horizon_absolute_distance_limit - kEps,
             locked_target_longitudinal,
-            line_cfg.safe_separation_target_ahead_continuation_max_front_distance});
+            line_cfg.safe_separation_target_ahead_continuation_max_front_distance,
+            line_cfg.safe_separation_target_ahead_closing_guard_distance});
         const bool target_ahead_forward_escape =
           target_ahead_pass_continuation ==
           overtake_core::TargetAheadPassContinuationAction::ForwardEscape;
         const bool target_ahead_same_side_hold =
           target_ahead_pass_continuation ==
           overtake_core::TargetAheadPassContinuationAction::HoldSameSide;
+        const bool target_ahead_closing_guard =
+          target_ahead_pass_continuation ==
+          overtake_core::TargetAheadPassContinuationAction::GuardClosingSpeed;
         const bool safe_separation_forward_escape_allowed =
           line_cfg.safe_separation_forward_escape_enabled &&
           (committed_forward_completion.active ||
@@ -21854,7 +21882,8 @@ private:
             short_horizon_safe || tactical_revalidation.active ||
             safe_trajectory_prefix_active ||
             latched_forward_escape_continuation ||
-            target_ahead_forward_escape || target_ahead_same_side_hold,
+            target_ahead_forward_escape || target_ahead_same_side_hold ||
+            target_ahead_closing_guard,
             safe_separation_target_observation_available,
             rear_clear_confirmed,
             !return_corridor_blocked,
@@ -21871,7 +21900,10 @@ private:
             overtake_line_state_.pass_horizon_safe_separation_max_distance,
             std::max(0.0, current_speed_mps_),
             safe_separation_forward_escape_allowed,
-            target_ahead_same_side_hold,
+            target_ahead_same_side_hold || target_ahead_closing_guard,
+            target_ahead_closing_guard ?
+            line_cfg.safe_separation_target_ahead_guard_max_closing_speed :
+            std::numeric_limits<double>::infinity(),
             safe_separation_forward_escape_max_front_distance,
             pass_elapsed,
             pass_traveled,
@@ -21907,6 +21939,8 @@ private:
           safe_separation_target_ahead_hold_active =
             safe_separation.reason ==
             overtake_core::SafeSeparationReason::TargetAheadPassContinuation;
+          safe_separation_target_ahead_closing_guard_active =
+            safe_separation_target_ahead_hold_active && target_ahead_closing_guard;
           const bool rearward_progress_time_grace_active =
             safe_separation.reason ==
             overtake_core::SafeSeparationReason::RearwardProgressTimeGrace;
@@ -23093,6 +23127,31 @@ private:
           std::numeric_limits<double>::quiet_NaN();
       };
     if (optimized_target_bound_failure) {
+      // Prefer a freshly validated same-side Mission over consuming the
+      // physical-prefix hold. This path was produced after the frozen Mission
+      // and is allowed to replace it even while SafeSeparation owns Pass.
+      if (
+        fresh_same_side_candidate_available &&
+        fresh_same_side_candidate.has_value())
+      {
+        const bool preserve_front_cap_release =
+          overtake_line_state_.phase == OvertakeLinePhase::Pass &&
+          overtake_line_state_.pass_front_cap_release_active;
+        const bool replaced = replace_frozen_overtake_mission_after_dynamic_replan(
+          fresh_same_side_candidate.value(), now_sec, current_ey,
+          true, true, false, preserve_front_cap_release);
+        if (replaced) {
+          RCLCPP_WARN(
+            rclcpp::get_logger("mpc_controller"),
+            "OvertakeLine target-bound escalation accepted fresh same-side Mission: "
+            "target=%s, side=%d, goal=%.2f, wp_id=%d",
+            overtake_line_state_.target_vehicle_id.c_str(),
+            overtake_line_state_.pass_side_sign,
+            fresh_same_side_candidate->goal_lateral_m, model->wp_id);
+          return update_overtake_line(
+            behavior_output, ref_wp_id, N, lb, ub, now_sec);
+        }
+      }
       std::vector<double> physical_hold_targets(
         static_cast<std::size_t>(N), current_ey);
       const bool previous_horizon_matches =
@@ -23219,6 +23278,11 @@ private:
             lifecycle.clear_since_sec;
         }
         if (!hold_was_active) {
+          // The behavior/MPCC assessment already ran for this control cycle.
+          // Re-arm it so the next cycle evaluates both sides immediately
+          // rather than waiting for the normal periodic interval.
+          overtake_line_state_.opponent_side_replan_last_evaluation_sec =
+            -std::numeric_limits<double>::infinity();
           overtake_line_state_.target_bound_execution_replan_hold_start_sec = now_sec;
           overtake_line_state_.target_bound_execution_replan_hold_start_distance =
             execution_traveled_now;
@@ -23228,7 +23292,7 @@ private:
             rclcpp::get_logger("mpc_controller"),
             "OvertakeLine target-bound execution hold started: "
             "target=%s, side=%d, phase=%s, speed=%.2f, "
-            "limit=%.2f s/%.2f m, wp_id=%d",
+            "limit=%.2f s/%.2f m, tactical_replan=immediate, wp_id=%d",
             overtake_line_state_.target_vehicle_id.c_str(),
             overtake_line_state_.pass_side_sign,
             to_string(overtake_line_state_.phase), current_speed_mps_,
@@ -24080,7 +24144,7 @@ private:
           "unseparated_reserve=%d/protected=%.2f, "
           "cap_release=%d, horizon_release=%d, "
           "speed_hold=%d, replan_grace=%d, pass_entry_gate=%d, "
-          "safe_sep=%d/forward=%d/full_speed=%d/target_hold=%d/"
+          "safe_sep=%d/forward=%d/full_speed=%d/target_hold=%d/target_guard=%d/"
           "signed_closing=%.2f/budget=%.2f s/%.2f m, "
           "contact_continue=%d/evidence=%s/near=%.2f/%.2f/"
           "elapsed=%.2f/progress=%.2f/bias=%.2f/%.2f/wall_limited=%d/"
@@ -24127,6 +24191,7 @@ private:
           safe_separation_forward_escape_active ? 1 : 0,
           safe_separation_full_speed_forward_escape_active ? 1 : 0,
           safe_separation_target_ahead_hold_active ? 1 : 0,
+          safe_separation_target_ahead_closing_guard_active ? 1 : 0,
           safe_separation_signed_closing_speed,
           overtake_line_state_.pass_horizon_safe_separation_max_sec,
           overtake_line_state_.pass_horizon_safe_separation_max_distance,
@@ -27845,6 +27910,18 @@ Config load_config(const std::string & path)
     mpc["v2x_overtake_safe_separation_target_ahead_continuation_max_front_distance"] ?
     mpc["v2x_overtake_safe_separation_target_ahead_continuation_max_front_distance"]
     .as<double>() : 6.0);
+  cfg.mpc.v2x_behavior.overtake_line
+  .safe_separation_target_ahead_closing_guard_distance = std::max(
+    0.0,
+    mpc["v2x_overtake_safe_separation_target_ahead_closing_guard_distance"] ?
+    mpc["v2x_overtake_safe_separation_target_ahead_closing_guard_distance"]
+    .as<double>() : 1.5);
+  cfg.mpc.v2x_behavior.overtake_line
+  .safe_separation_target_ahead_guard_max_closing_speed = std::max(
+    0.0,
+    mpc["v2x_overtake_safe_separation_target_ahead_guard_max_closing_speed"] ?
+    mpc["v2x_overtake_safe_separation_target_ahead_guard_max_closing_speed"]
+    .as<double>() : 0.2);
   cfg.mpc.v2x_behavior.overtake_line.safe_separation_front_clear_distance = std::max(
     0.0,
     mpc["v2x_overtake_safe_separation_front_clear_distance"] ?
@@ -29904,11 +29981,16 @@ public:
         .safe_separation_tactical_revalidation_max_distance);
       RCLCPP_INFO(
         get_logger(),
-        "V2X target-ahead Pass continuation: %s, front<=%.2f m",
+        "V2X target-ahead Pass continuation: %s, front<=%.2f m, "
+        "closing_guard<=%.2f m/%.2f mps",
         mpc_cfg_.v2x_behavior.overtake_line
         .safe_separation_target_ahead_continuation_enabled ? "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line
-        .safe_separation_target_ahead_continuation_max_front_distance);
+        .safe_separation_target_ahead_continuation_max_front_distance,
+        mpc_cfg_.v2x_behavior.overtake_line
+        .safe_separation_target_ahead_closing_guard_distance,
+        mpc_cfg_.v2x_behavior.overtake_line
+        .safe_separation_target_ahead_guard_max_closing_speed);
       RCLCPP_INFO(
         get_logger(),
         "V2X target-bound Pass execution prefix: %s, limit=%.2f s/%.2f m, "

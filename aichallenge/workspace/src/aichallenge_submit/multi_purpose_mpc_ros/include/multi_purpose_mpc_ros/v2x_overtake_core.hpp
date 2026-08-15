@@ -2046,6 +2046,7 @@ enum class TargetAheadPassContinuationAction
 {
   Inactive,
   HoldSameSide,
+  GuardClosingSpeed,
   ForwardEscape,
 };
 
@@ -2064,6 +2065,7 @@ struct TargetAheadPassContinuationRequest
   bool absolute_budget_available{false};
   double target_longitudinal_m{};
   double maximum_front_distance_m{};
+  double closing_speed_guard_distance_m{};
 };
 
 /// Classify a committed Pass whose locked target remains ahead. A physically
@@ -2420,6 +2422,8 @@ struct SafeSeparationRequest
   double ego_speed_mps{};
   bool forward_escape_allowed{false};
   bool target_ahead_hold_allowed{false};
+  double target_ahead_hold_maximum_closing_speed_mps{
+    std::numeric_limits<double>::infinity()};
   double forward_escape_max_front_distance_m{};
   double absolute_elapsed_sec{};
   double absolute_traveled_m{};

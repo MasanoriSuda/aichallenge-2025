@@ -67,7 +67,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::CompletedPassReturnRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ReturnCorridorOccupancyRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::EarlyReturnCancellationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::AdaptiveShiftOutClosingSpeedRequest;
-using multi_purpose_mpc_ros::v2x_overtake_core::UnseparatedClosingReserveRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::LateralClearanceClosingReserveRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntryFrontDistanceReserveRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeGuardPhaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeCurveContinuationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OuterCurveOvertakeRequest;
@@ -338,7 +339,9 @@ using multi_purpose_mpc_ros::v2x_overtake_core::blocks_overtake_return_corridor;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_cancel_early_overtake_return;
 using multi_purpose_mpc_ros::v2x_overtake_core::has_reached_pass_side_lateral_goal;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_adaptive_shiftout_closing_speed;
-using multi_purpose_mpc_ros::v2x_overtake_core::resolve_unseparated_closing_reserve;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_lateral_clearance_closing_reserve;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  resolve_overtake_entry_front_distance_reserve;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_guard_phase;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   resolve_overtake_entry_prearm_speed_reference;
@@ -8578,10 +8581,13 @@ TEST(V2XOvertakeCoreSpeed, UnseparatedReserveCanRemoveClosingAtProtectedDistance
   EXPECT_DOUBLE_EQ(result.closing_speed_mps, 0.5);
 }
 
-TEST(V2XOvertakeCoreSpeed, UnseparatedClosingReserveOwnsProtectionBudget)
+TEST(V2XOvertakeCoreSpeed, LateralClearanceClosingReserveOwnsProtectionBeforeOverlap)
 {
-  UnseparatedClosingReserveRequest request;
-  request.target_longitudinal_m = 2.3;
+  LateralClearanceClosingReserveRequest request;
+  // The bodies are still longitudinally disjoint at 2.6 m center distance,
+  // but lateral clearance has not been established. The reserve must already
+  // own closing speed instead of waiting for actual footprint overlap.
+  request.target_longitudinal_m = 2.6;
   request.current_closing_speed_limit_mps = 0.5;
   request.moving_front_hard_distance_m = 2.0;
   request.body_longitudinal_clearance_m = 2.05;
@@ -8592,18 +8598,70 @@ TEST(V2XOvertakeCoreSpeed, UnseparatedClosingReserveOwnsProtectionBudget)
   request.minimum_time_sec = 0.5;
   request.limiting_tolerance_mps = 1e-12;
 
-  auto result = resolve_unseparated_closing_reserve(request);
+  auto result = resolve_lateral_clearance_closing_reserve(request);
   EXPECT_TRUE(result.eligible);
   EXPECT_TRUE(result.limited);
   EXPECT_DOUBLE_EQ(result.protected_front_distance_m, 2.3);
+  EXPECT_NEAR(result.closing_speed_limit_mps, 0.375, 1e-9);
+
+  request.target_longitudinal_m = 2.3;
+  result = resolve_lateral_clearance_closing_reserve(request);
+  EXPECT_TRUE(result.eligible);
+  EXPECT_TRUE(result.limited);
   EXPECT_DOUBLE_EQ(result.closing_speed_limit_mps, 0.0);
 
-  request.current_body_footprints_separated = true;
-  result = resolve_unseparated_closing_reserve(request);
+  request.lateral_body_separation_established = true;
+  result = resolve_lateral_clearance_closing_reserve(request);
   EXPECT_FALSE(result.eligible);
   EXPECT_FALSE(result.limited);
   EXPECT_DOUBLE_EQ(result.closing_speed_limit_mps, 0.5);
   EXPECT_DOUBLE_EQ(result.protected_front_distance_m, 0.0);
+}
+
+TEST(V2XOvertakeCoreSpeed, EntryReserveUsesBodyClearTimeAndClosingProfile)
+{
+  OvertakeEntryFrontDistanceReserveRequest request;
+  request.enabled = true;
+  request.front_distance_m = 4.5;
+  request.configured_minimum_front_distance_m = 4.5;
+  request.body_longitudinal_clearance_m = 2.05;
+  request.reserve_distance_m = 0.25;
+  request.current_closing_speed_mps = 0.8;
+  request.planned_closing_speed_mps = 2.0;
+  request.predicted_body_clear_time_sec = 1.0;
+  request.prediction_margin_time_sec = 0.25;
+
+  auto result = resolve_overtake_entry_front_distance_reserve(request);
+  ASSERT_TRUE(result.valid);
+  EXPECT_TRUE(result.applied);
+  EXPECT_FALSE(result.admitted);
+  EXPECT_DOUBLE_EQ(result.closing_speed_for_budget_mps, 2.0);
+  EXPECT_DOUBLE_EQ(result.closing_distance_budget_m, 2.5);
+  EXPECT_DOUBLE_EQ(result.required_front_distance_m, 4.8);
+
+  request.front_distance_m = 5.0;
+  result = resolve_overtake_entry_front_distance_reserve(request);
+  EXPECT_TRUE(result.admitted);
+}
+
+TEST(V2XOvertakeCoreSpeed, EntryReserveReleasesAfterLateralBodySeparation)
+{
+  OvertakeEntryFrontDistanceReserveRequest request;
+  request.enabled = true;
+  request.lateral_body_separation_established = true;
+  request.front_distance_m = 2.5;
+  request.configured_minimum_front_distance_m = 4.5;
+  request.body_longitudinal_clearance_m = 2.05;
+  request.reserve_distance_m = 0.25;
+  request.current_closing_speed_mps = 2.0;
+  request.planned_closing_speed_mps = 2.0;
+  request.predicted_body_clear_time_sec = 0.0;
+  request.prediction_margin_time_sec = 0.25;
+
+  const auto result = resolve_overtake_entry_front_distance_reserve(request);
+  ASSERT_TRUE(result.valid);
+  EXPECT_FALSE(result.applied);
+  EXPECT_TRUE(result.admitted);
 }
 
 TEST(V2XOvertakeCoreSpeed, RejectsInvalidAdaptiveShiftOutRange)

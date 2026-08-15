@@ -7569,13 +7569,62 @@ AdaptiveShiftOutClosingSpeedResolution resolve_adaptive_shiftout_closing_speed(
     distance_budget};
 }
 
-UnseparatedClosingReserveResolution resolve_unseparated_closing_reserve(
-  const UnseparatedClosingReserveRequest & request)
+OvertakeEntryFrontDistanceReserveResolution
+resolve_overtake_entry_front_distance_reserve(
+  const OvertakeEntryFrontDistanceReserveRequest & request) noexcept
 {
-  UnseparatedClosingReserveResolution resolution;
+  OvertakeEntryFrontDistanceReserveResolution resolution;
+  if (
+    !std::isfinite(request.front_distance_m) || request.front_distance_m < 0.0 ||
+    !std::isfinite(request.configured_minimum_front_distance_m) ||
+    request.configured_minimum_front_distance_m < 0.0 ||
+    !std::isfinite(request.body_longitudinal_clearance_m) ||
+    request.body_longitudinal_clearance_m < 0.0 ||
+    !std::isfinite(request.reserve_distance_m) || request.reserve_distance_m < 0.0 ||
+    !std::isfinite(request.current_closing_speed_mps) ||
+    request.current_closing_speed_mps < 0.0 ||
+    !std::isfinite(request.planned_closing_speed_mps) ||
+    request.planned_closing_speed_mps < 0.0 ||
+    !std::isfinite(request.predicted_body_clear_time_sec) ||
+    request.predicted_body_clear_time_sec < 0.0 ||
+    !std::isfinite(request.prediction_margin_time_sec) ||
+    request.prediction_margin_time_sec < 0.0)
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  resolution.admitted = true;
+  resolution.required_front_distance_m = request.configured_minimum_front_distance_m;
+  if (!request.enabled || request.lateral_body_separation_established) {
+    return resolution;
+  }
+
+  resolution.applied = true;
+  resolution.closing_speed_for_budget_mps = std::max(
+    request.current_closing_speed_mps, request.planned_closing_speed_mps);
+  resolution.closing_distance_budget_m =
+    resolution.closing_speed_for_budget_mps *
+    (request.predicted_body_clear_time_sec + request.prediction_margin_time_sec);
+  if (!std::isfinite(resolution.closing_distance_budget_m)) {
+    return OvertakeEntryFrontDistanceReserveResolution{};
+  }
+  resolution.required_front_distance_m = std::max(
+    request.configured_minimum_front_distance_m,
+    request.body_longitudinal_clearance_m + request.reserve_distance_m +
+    resolution.closing_distance_budget_m);
+  resolution.admitted =
+    request.front_distance_m + 1e-9 >= resolution.required_front_distance_m;
+  return resolution;
+}
+
+LateralClearanceClosingReserveResolution resolve_lateral_clearance_closing_reserve(
+  const LateralClearanceClosingReserveRequest & request)
+{
+  LateralClearanceClosingReserveResolution resolution;
   resolution.closing_speed_limit_mps = request.current_closing_speed_limit_mps;
   resolution.eligible =
-    !request.current_body_footprints_separated &&
+    !request.lateral_body_separation_established &&
     std::isfinite(request.target_longitudinal_m) &&
     request.target_longitudinal_m > 0.0;
   if (!resolution.eligible) {

@@ -415,7 +415,7 @@ mpc:
   v2x_follow_gap_planner_no_gap_speed_limit_enabled: false # do not yield just because no gap is found
   v2x_follow_gap_planner_respect_overtake_forbidden: true # do not side-attack in hairpins/forbidden zones
   v2x_follow_speed_limit_enabled: true  # match front speed only inside the dedicated distance gate
-  v2x_follow_speed_limit_distance: 3.0 # [m] sim race: detect at 24 m, start generic Follow cap at 5 m
+  v2x_follow_speed_limit_distance: 4.5 # [m] center distance: shape closing before the 4.0 m follow target
   v2x_follow_velocity: 3.0        # [m/s] slow/stopped-front cap; moving fronts use front speed + margin
   v2x_follow_preposition_enabled: true # keep Follow slightly off the front vehicle's direct wake
   v2x_follow_preposition_offset: 0.9 # [m] soft lateral reference offset while following
@@ -704,10 +704,10 @@ mpc:
   v2x_overtake_guard_min_gap_time: 0.5        # [s] entry still needs time to establish a pass line
   v2x_overtake_continue_min_gap_time: 0.3     # [s] locked line uses the shorter continuation horizon
   v2x_overtake_guard_min_speed_for_reachable: 1.0 # [m/s] lower bound for reachability time estimate
-  v2x_overtake_guard_min_front_distance: 3.0  # [m] begin ShiftOut before the closing budget becomes unrecoverable
+  v2x_overtake_guard_min_front_distance: 4.5  # [m] center distance floor; keep about 2.5 m surface gap at entry
   v2x_overtake_continue_min_front_distance: 1.8 # [m] active-pass floor near the nominal body-overlap distance
   v2x_overtake_close_follow_enabled: true     # side-escape after matching a slow front vehicle
-  v2x_overtake_close_follow_min_front_distance: 2.2 # [m] extra floor; new ShiftOut also requires the normal 3.0m entry distance
+  v2x_overtake_close_follow_min_front_distance: 2.2 # [m] extra floor; new ShiftOut also requires the normal 4.5 m entry distance
   v2x_overtake_close_follow_max_closing_speed: 1.5 # [m/s] require a controlled closing rate
   v2x_overtake_close_follow_min_side_clearance: 1.2 # [m] pass-side center corridor before close-follow escape
   v2x_overtake_before_curve_enabled: true     # allow slow-front overtake in soft curve-lookahead zones
@@ -857,7 +857,7 @@ mpc:
   # Common-course front distance is center-to-center, not bumper clearance.
   v2x_moving_follow_speed_margin: 0.8   # [m/s] maximum closing margin with enough distance
   v2x_moving_follow_hard_distance: 2.05 # [m] dev3 attack floor near the nominal 2.0 m body-overlap boundary
-  v2x_moving_follow_target_distance: 3.0 # [m] match front speed here; about 3.0 m bumper clearance
+  v2x_moving_follow_target_distance: 4.0 # [m] center distance; about 2.0 m nominal bumper clearance
   v2x_moving_follow_recovery_speed_margin: 0.6 # [m/s] command below front speed near hard distance
   v2x_moving_follow_distance_gain: 1.0 # [(m/s)/m] signed speed-margin gain around target distance
   v2x_moving_safety_brake_distance: 2.2 # [m] moving-front hard floor for dev3

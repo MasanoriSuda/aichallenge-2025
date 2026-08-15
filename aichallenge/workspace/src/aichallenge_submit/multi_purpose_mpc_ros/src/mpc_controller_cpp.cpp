@@ -8300,6 +8300,7 @@ struct MPC
         std::size_t rolling_lateral_adjustment_reject_count = 0;
         std::size_t body_clear_deadline_miss_count = 0;
         std::size_t body_clear_deadline_invalid_count = 0;
+        std::size_t entry_front_distance_reserve_reject_count = 0;
         std::size_t rollout_lateral_reject_count = 0;
         std::size_t rear_clear_reject_count = 0;
         std::size_t full_mission_preflight_reject_count = 0;
@@ -8315,6 +8316,8 @@ struct MPC
         double earliest_rejected_body_clear_time =
           std::numeric_limits<double>::infinity();
         double earliest_rejected_hard_distance_time =
+          std::numeric_limits<double>::infinity();
+        double minimum_rejected_entry_front_distance =
           std::numeric_limits<double>::infinity();
         double earliest_outer_role_reversal_distance =
           std::numeric_limits<double>::infinity();
@@ -8631,7 +8634,46 @@ struct MPC
                 ++rollout_lateral_reject_count;
                 continue;
               }
+              overtake_core::OvertakeEntryFrontDistanceReserveResolution
+                entry_front_distance_reserve;
               if (rollout.feasible) {
+                const double body_longitudinal_clearance =
+                  0.5 * std::max(0.0, cfg.v2x_gap.vehicle_length) +
+                  0.5 * std::max(0.0, model->length);
+                entry_front_distance_reserve =
+                  overtake_core::resolve_overtake_entry_front_distance_reserve(
+                  overtake_core::OvertakeEntryFrontDistanceReserveRequest{
+                    cfg.v2x_behavior.overtake_body_clear_deadline_enabled &&
+                    initial_shiftout_preflight && !side_replan_preflight &&
+                    !start_grid_breakout_attempt,
+                    rollout.currently_laterally_clear,
+                    std::max(0.0, preflight_target_longitudinal),
+                    std::max(
+                      0.0, cfg.v2x_behavior.overtake_guard_min_front_distance),
+                    body_longitudinal_clearance,
+                    std::max(
+                      0.0,
+                      cfg.v2x_behavior.overtake_unseparated_front_reserve_distance),
+                    std::max(
+                      0.0,
+                      current_speed_mps_ - non_negative_preflight_target_speed),
+                    effective_closing_speed,
+                    rollout.body_clear_time_sec,
+                    entry_deadline_margin.effective_margin_sec});
+                if (!entry_front_distance_reserve.valid) {
+                  ++body_clear_deadline_invalid_count;
+                  continue;
+                }
+                if (
+                  entry_front_distance_reserve.applied &&
+                  !entry_front_distance_reserve.admitted)
+                {
+                  ++entry_front_distance_reserve_reject_count;
+                  minimum_rejected_entry_front_distance = std::min(
+                    minimum_rejected_entry_front_distance,
+                    entry_front_distance_reserve.required_front_distance_m);
+                  continue;
+                }
                 // This candidate proves that the local ShiftOut can reach
                 // body-clear before the hard longitudinal gap.  A new entry
                 // may execute it progressively; rear-clear and Return are then
@@ -8709,6 +8751,10 @@ struct MPC
                   assessment.frenet_dp_corridor.path_distances_m;
                 setup_candidate.frenet_dp_lateral_path_m =
                   assessment.frenet_dp_corridor.lateral_path_m;
+                setup_candidate.entry_front_distance_reserve_applied =
+                  entry_front_distance_reserve.applied;
+                setup_candidate.required_entry_front_distance_m =
+                  entry_front_distance_reserve.required_front_distance_m;
                 entry_setup_candidates.push_back(setup_candidate);
 
                 // A progressive entry deliberately defers rear-clear and
@@ -9130,6 +9176,10 @@ struct MPC
                 rollout.pass_target_clearance_checked;
               mission_candidate.predicted_minimum_pass_target_surface_clearance_m =
                 rollout.minimum_pass_target_surface_clearance_m;
+              mission_candidate.entry_front_distance_reserve_applied =
+                entry_front_distance_reserve.applied;
+              mission_candidate.required_entry_front_distance_m =
+                entry_front_distance_reserve.required_front_distance_m;
               mission_candidate.pass_hold_distance_m = selected_pass_distance;
               mission_candidate.return_distance_m =
                 std::max(0.5, cfg.v2x_behavior.overtake_line.return_distance);
@@ -9273,6 +9323,10 @@ struct MPC
             rolling_lateral_adjustment_reject_count
              << ", body_deadline_missed=" << body_clear_deadline_miss_count
              << ", body_deadline_invalid=" << body_clear_deadline_invalid_count
+             << ", entry_front_reserve_rejected=" <<
+            entry_front_distance_reserve_reject_count
+             << ", min_required_entry_front=" <<
+            minimum_rejected_entry_front_distance
              << ", rollout_lateral_rejected=" << rollout_lateral_reject_count
              << ", rear_clear_rejected=" << rear_clear_reject_count
              << ", full_mission_preflight_rejected=" <<
@@ -9413,6 +9467,10 @@ struct MPC
             selected_mission.body_clear_deadline_slack_sec
                           << ", deadline_margin=" <<
             entry_deadline_margin.effective_margin_sec
+                          << ", entry_front=" << preflight_target_longitudinal
+                          << "/" << selected_mission.required_entry_front_distance_m
+                          << ", entry_reserve=" <<
+            (selected_mission.entry_front_distance_reserve_applied ? 1 : 0)
                           << ", target_intrusion_v=" <<
             entry_deadline_margin.target_intrusion_speed_mps
                           << ", rear_clear_t=" <<
@@ -23848,9 +23906,9 @@ private:
         std::max(0.5, overtake_line_state_.mission_pass_hold_distance) -
         overtake_mission_pass_traveled());
       const auto separation_reserve =
-        overtake_core::resolve_unseparated_closing_reserve(
-        overtake_core::UnseparatedClosingReserveRequest{
-          committed_pass_request.current_body_footprints_separated,
+        overtake_core::resolve_lateral_clearance_closing_reserve(
+        overtake_core::LateralClearanceClosingReserveRequest{
+          committed_pass_request.locked_target_body_lateral_clear,
           locked_target_longitudinal,
           closing_speed_limit,
           cfg.v2x_behavior.moving_follow_hard_distance,

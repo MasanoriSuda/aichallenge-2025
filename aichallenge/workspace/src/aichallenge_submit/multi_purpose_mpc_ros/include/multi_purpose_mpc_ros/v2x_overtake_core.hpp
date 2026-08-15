@@ -3238,6 +3238,11 @@ struct OvertakeMissionCandidate
   std::size_t frenet_dp_tactical_knot_count{};
   std::vector<double> frenet_dp_path_distances_m{};
   std::vector<double> frenet_dp_lateral_path_m{};
+  /// New-entry reserve needed to become laterally body-clear before closing
+  /// consumes the longitudinal clearance. This is selection-transparent
+  /// metadata for diagnostics; active Mission replans do not reapply it.
+  bool entry_front_distance_reserve_applied{false};
+  double required_entry_front_distance_m{};
 };
 
 /// A Mission which changes from outer to inner before rear-clear may only be
@@ -4110,9 +4115,41 @@ struct AdaptiveShiftOutClosingSpeedResolution
 AdaptiveShiftOutClosingSpeedResolution resolve_adaptive_shiftout_closing_speed(
   const AdaptiveShiftOutClosingSpeedRequest & request);
 
-struct UnseparatedClosingReserveRequest
+struct OvertakeEntryFrontDistanceReserveRequest
 {
-  bool current_body_footprints_separated{false};
+  bool enabled{false};
+  bool lateral_body_separation_established{false};
+  double front_distance_m{};
+  double configured_minimum_front_distance_m{};
+  double body_longitudinal_clearance_m{};
+  double reserve_distance_m{};
+  double current_closing_speed_mps{};
+  double planned_closing_speed_mps{};
+  double predicted_body_clear_time_sec{};
+  double prediction_margin_time_sec{};
+};
+
+struct OvertakeEntryFrontDistanceReserveResolution
+{
+  bool valid{false};
+  bool applied{false};
+  bool admitted{false};
+  double closing_speed_for_budget_mps{};
+  double closing_distance_budget_m{};
+  double required_front_distance_m{};
+};
+
+/// Require enough center-to-center distance for the selected longitudinal
+/// profile to establish physical lateral body separation before consuming the
+/// protected front reserve. This entry-only policy complements the kinematic
+/// rollout with an explicit execution-error budget.
+OvertakeEntryFrontDistanceReserveResolution
+resolve_overtake_entry_front_distance_reserve(
+  const OvertakeEntryFrontDistanceReserveRequest & request) noexcept;
+
+struct LateralClearanceClosingReserveRequest
+{
+  bool lateral_body_separation_established{false};
   double target_longitudinal_m{};
   double current_closing_speed_limit_mps{};
   double moving_front_hard_distance_m{};
@@ -4125,7 +4162,7 @@ struct UnseparatedClosingReserveRequest
   double limiting_tolerance_mps{};
 };
 
-struct UnseparatedClosingReserveResolution
+struct LateralClearanceClosingReserveResolution
 {
   bool eligible{false};
   bool limited{false};
@@ -4133,11 +4170,13 @@ struct UnseparatedClosingReserveResolution
   double protected_front_distance_m{};
 };
 
-/// Reduce only the positive closing-speed budget while the ego and target
-/// body rectangles have not separated. The returned limit never asks the ego
-/// to travel below target speed; zero means speed matching.
-UnseparatedClosingReserveResolution resolve_unseparated_closing_reserve(
-  const UnseparatedClosingReserveRequest & request);
+/// Reduce only the positive closing-speed budget until physical lateral body
+/// separation is established. Longitudinal non-overlap alone must not disable
+/// this protection while ego is still approaching directly behind the target.
+/// The returned limit never asks ego to travel below target speed; zero means
+/// speed matching.
+LateralClearanceClosingReserveResolution resolve_lateral_clearance_closing_reserve(
+  const LateralClearanceClosingReserveRequest & request);
 
 struct PredictionTimeRequest
 {

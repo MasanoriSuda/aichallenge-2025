@@ -4755,6 +4755,10 @@ struct NewOvertakeEntryAdmissionRequest
   /// must not wait for a relative-speed advantage shared by equally launching
   /// vehicles.
   bool immediate_execution_override{false};
+  /// A current executable Mission has already proven its body-clear timing
+  /// and longitudinal closing reserve. This is deliberately distinct from
+  /// validated_mission_ready: the latter may own longitudinal pre-arm only.
+  bool validated_mission_execution_override{false};
 };
 
 struct NewOvertakeEntryAdmissionResolution
@@ -4769,6 +4773,29 @@ struct NewOvertakeEntryAdmissionResolution
 /// and receives longitudinal pre-arm ownership until the measured gate passes.
 NewOvertakeEntryAdmissionResolution resolve_new_overtake_entry_admission(
   const NewOvertakeEntryAdmissionRequest & request) noexcept;
+
+struct ValidatedMissionEntryOverrideRequest
+{
+  bool enabled{false};
+  bool mission_available{false};
+  bool hard_guard_clear{false};
+  bool entry_commit_window_open{false};
+  bool current_position_clear{false};
+  bool body_clear_deadline_checked{false};
+  bool body_clear_deadline_feasible{false};
+  bool entry_front_distance_reserve_applied{false};
+  double front_distance_m{std::numeric_limits<double>::infinity()};
+  double required_front_distance_m{std::numeric_limits<double>::infinity()};
+  double planned_closing_speed_mps{std::numeric_limits<double>::quiet_NaN()};
+  double minimum_planned_closing_speed_mps{};
+};
+
+/// Allow a current executable Mission to start lateral motion before measured
+/// relative speed has settled. The Mission must already prove body clearance
+/// and the longitudinal distance consumed by its planned closing profile.
+/// Current hard guards and the normal 15 m commit window remain mandatory.
+bool can_use_validated_mission_entry_override(
+  const ValidatedMissionEntryOverrideRequest & request) noexcept;
 
 struct StationaryBlockerEntryOverrideRequest
 {

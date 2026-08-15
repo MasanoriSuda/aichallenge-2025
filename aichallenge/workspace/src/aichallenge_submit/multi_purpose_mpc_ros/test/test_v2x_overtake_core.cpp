@@ -372,6 +372,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntryPrearmValidationLea
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntryPrearmHoldRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntrySetupPrearmRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::NewOvertakeEntryAdmissionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::ValidatedMissionEntryOverrideRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StationaryBlockerEntryOverrideRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SlowBlockerUrgentEntryOverrideRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_overtake_entry_speed_readiness;
@@ -382,6 +383,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::
 using multi_purpose_mpc_ros::v2x_overtake_core::can_hold_overtake_entry_prearm;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_use_overtake_entry_setup_prearm;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_new_overtake_entry_admission;
+using multi_purpose_mpc_ros::v2x_overtake_core::can_use_validated_mission_entry_override;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   can_override_entry_speed_for_stationary_blocker;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_use_urgent_entry_for_slow_blocker;
@@ -9737,10 +9739,62 @@ TEST(V2XOvertakeCoreEntrySpeed, PrearmsValidatedMissionUntilMeasuredSpeedIsReady
   EXPECT_FALSE(result.prearm_active);
   request.immediate_execution_override = false;
 
+  request.validated_mission_execution_override = true;
+  result = resolve_new_overtake_entry_admission(request);
+  EXPECT_TRUE(result.execution_allowed);
+  EXPECT_FALSE(result.prearm_active);
+  request.validated_mission_execution_override = false;
+
   request.overtake_requested = false;
   result = resolve_new_overtake_entry_admission(request);
   EXPECT_TRUE(result.execution_allowed);
   EXPECT_FALSE(result.prearm_active);
+}
+
+TEST(V2XOvertakeCoreEntrySpeed, ValidatedMissionCanOwnImmediateLateralEntry)
+{
+  ValidatedMissionEntryOverrideRequest request;
+  request.enabled = true;
+  request.mission_available = true;
+  request.hard_guard_clear = true;
+  request.entry_commit_window_open = true;
+  request.body_clear_deadline_checked = true;
+  request.body_clear_deadline_feasible = true;
+  request.entry_front_distance_reserve_applied = true;
+  request.front_distance_m = 8.0;
+  request.required_front_distance_m = 6.5;
+  request.planned_closing_speed_mps = 2.0;
+  request.minimum_planned_closing_speed_mps = 0.3;
+
+  EXPECT_TRUE(can_use_validated_mission_entry_override(request));
+
+  request.front_distance_m = 6.49;
+  EXPECT_FALSE(can_use_validated_mission_entry_override(request));
+  request.front_distance_m = 8.0;
+
+  request.body_clear_deadline_feasible = false;
+  EXPECT_FALSE(can_use_validated_mission_entry_override(request));
+  request.body_clear_deadline_feasible = true;
+
+  request.hard_guard_clear = false;
+  EXPECT_FALSE(can_use_validated_mission_entry_override(request));
+}
+
+TEST(V2XOvertakeCoreEntrySpeed, CurrentClearMissionDoesNotNeedEntryReserve)
+{
+  ValidatedMissionEntryOverrideRequest request;
+  request.enabled = true;
+  request.mission_available = true;
+  request.hard_guard_clear = true;
+  request.entry_commit_window_open = true;
+  request.current_position_clear = true;
+  request.planned_closing_speed_mps = 2.0;
+  request.minimum_planned_closing_speed_mps = 0.3;
+
+  EXPECT_TRUE(can_use_validated_mission_entry_override(request));
+
+  request.planned_closing_speed_mps = 0.2;
+  EXPECT_FALSE(can_use_validated_mission_entry_override(request));
 }
 
 TEST(V2XOvertakeCoreEntrySpeed, BodyClearSetupPrearmsWithoutAuthorizingLateralMission)

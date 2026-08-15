@@ -8582,7 +8582,8 @@ NewOvertakeEntryAdmissionResolution resolve_new_overtake_entry_admission(
   NewOvertakeEntryAdmissionResolution resolution;
   const bool fresh_entry_ready =
     request.entry_commit_window_open &&
-    (request.entry_speed_ready || request.immediate_execution_override);
+    (request.entry_speed_ready || request.immediate_execution_override ||
+    request.validated_mission_execution_override);
   resolution.execution_allowed =
     !request.overtake_requested || request.execution_committed ||
     request.behavior_handoff_active || fresh_entry_ready;
@@ -8590,6 +8591,32 @@ NewOvertakeEntryAdmissionResolution resolve_new_overtake_entry_admission(
     request.overtake_requested && !resolution.execution_allowed &&
     request.validated_mission_ready;
   return resolution;
+}
+
+bool can_use_validated_mission_entry_override(
+  const ValidatedMissionEntryOverrideRequest & request) noexcept
+{
+  const bool finite_speed_input =
+    std::isfinite(request.planned_closing_speed_mps) &&
+    request.planned_closing_speed_mps >= 0.0 &&
+    std::isfinite(request.minimum_planned_closing_speed_mps) &&
+    request.minimum_planned_closing_speed_mps >= 0.0;
+  const bool finite_reserve_input =
+    std::isfinite(request.front_distance_m) && request.front_distance_m >= 0.0 &&
+    std::isfinite(request.required_front_distance_m) &&
+    request.required_front_distance_m >= 0.0;
+  const bool body_clear_proven =
+    request.current_position_clear ||
+    (request.body_clear_deadline_checked && request.body_clear_deadline_feasible);
+  const bool front_reserve_proven =
+    request.current_position_clear ||
+    (request.entry_front_distance_reserve_applied && finite_reserve_input &&
+    request.front_distance_m + 1e-9 >= request.required_front_distance_m);
+  return request.enabled && request.mission_available &&
+         request.hard_guard_clear && request.entry_commit_window_open &&
+         finite_speed_input && body_clear_proven && front_reserve_proven &&
+         request.planned_closing_speed_mps + 1e-9 >=
+         request.minimum_planned_closing_speed_mps;
 }
 
 bool can_override_entry_speed_for_stationary_blocker(

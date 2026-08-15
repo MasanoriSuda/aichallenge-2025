@@ -1679,6 +1679,7 @@ struct V2XBehaviorConfig
   double overtake_inner_curve_precommit_min_relative_speed{0.0};
   double overtake_entry_min_relative_speed{0.3};
   double overtake_entry_speed_confirm_sec{0.3};
+  bool overtake_validated_mission_immediate_entry_enabled{false};
   bool overtake_stationary_blocker_entry_override_enabled{true};
   bool overtake_slow_blocker_urgent_entry_enabled{true};
   double overtake_slow_blocker_urgent_entry_max_front_speed{2.0};
@@ -2112,6 +2113,7 @@ struct V2XBehaviorOutput
   bool overtake_paused_mission_active{false};
   bool overtake_line_owns_locked_target_speed{false};
   bool validated_overtake_entry_longitudinal_owner{false};
+  bool validated_overtake_entry_immediate_execution{false};
   bool overtake_entry_setup_available{false};
   int overtake_entry_setup_side_sign{0};
   double overtake_entry_setup_closing_speed{
@@ -15479,6 +15481,23 @@ private:
     return configured_max;
   }
 
+  bool validated_mission_entry_closing_owns_shiftout() const
+  {
+    if (
+      !cfg.v2x_behavior.overtake_validated_mission_immediate_entry_enabled ||
+      overtake_line_state_.phase != OvertakeLinePhase::ShiftOut ||
+      !overtake_line_state_.mission_path_frozen ||
+      !overtake_line_state_.mission_plan.has_value())
+    {
+      return false;
+    }
+    const auto & mission = overtake_line_state_.mission_plan->mission;
+    return mission.current_position_clear ||
+           (mission.entry_front_distance_reserve_applied &&
+           mission.body_clear_deadline_checked &&
+           mission.body_clear_deadline_feasible);
+  }
+
   double overtake_line_phase_distance() const
   {
     const auto & line_cfg = cfg.v2x_behavior.overtake_line;
@@ -24597,6 +24616,7 @@ private:
       if (
         overtake_line_state_.phase == OvertakeLinePhase::ShiftOut &&
         cfg.v2x_behavior.overtake_shiftout_adaptive_closing_speed_enabled &&
+        !validated_mission_entry_closing_owns_shiftout() &&
         std::isfinite(locked_target_longitudinal))
       {
         const auto adaptive_closing =
@@ -26365,21 +26385,49 @@ private:
         entry_speed_readiness.relative_speed_mps, entry_speed_readiness.stable_sec,
         cfg.v2x_behavior.overtake_slow_blocker_urgent_entry_confirm_sec);
     }
+    const bool fresh_entry_commit_window_open =
+      output.start_grid_breakout_active || !output.has_front_vehicle ||
+      output.front_distance <=
+      cfg.v2x_behavior.overtake_entry_commit_max_front_distance + kEps;
+    bool validated_mission_entry_override = false;
+    if (entry_mission_available) {
+      const auto & mission = output.overtake_selected_mission.value();
+      validated_mission_entry_override =
+        v2x_overtake_core::can_use_validated_mission_entry_override(
+        v2x_overtake_core::ValidatedMissionEntryOverrideRequest{
+          cfg.v2x_behavior.overtake_validated_mission_immediate_entry_enabled,
+          entry_mission_available &&
+          output.validated_overtake_entry_longitudinal_owner,
+          entry_prearm_hard_guard_clear,
+          fresh_entry_commit_window_open,
+          mission.current_position_clear,
+          mission.body_clear_deadline_checked,
+          mission.body_clear_deadline_feasible,
+          mission.entry_front_distance_reserve_applied,
+          output.front_distance,
+          mission.required_entry_front_distance_m,
+          mission.closing_speed_mps,
+          std::max(0.0, cfg.v2x_behavior.overtake_entry_min_relative_speed)});
+    }
+    output.validated_overtake_entry_immediate_execution =
+      validated_mission_entry_override;
     const auto entry_admission =
       v2x_overtake_core::resolve_new_overtake_entry_admission(
       v2x_overtake_core::NewOvertakeEntryAdmissionRequest{
         desired_state == V2XBehaviorState::Overtake,
         overtake_execution_committed,
         behavior_overtake_handoff,
-        output.start_grid_breakout_active || !output.has_front_vehicle ||
-        output.front_distance <=
-        cfg.v2x_behavior.overtake_entry_commit_max_front_distance + kEps,
+        fresh_entry_commit_window_open,
         entry_speed_readiness.ready,
         entry_mission_available &&
         output.validated_overtake_entry_longitudinal_owner &&
         entry_prearm_window.active,
         output.start_grid_breakout_active || stationary_blocker_entry_override ||
-        slow_blocker_urgent_entry_override});
+        slow_blocker_urgent_entry_override,
+        validated_mission_entry_override});
+    if (validated_mission_entry_override && !entry_speed_readiness.ready) {
+      output.reason += " / validated Mission immediate entry";
+    }
     // Setup-only longitudinal pressure is useful while the target is outside
     // the lateral commit window. Once inside that window, require the same
     // cycle to carry an executable complete Mission or progressive prefix;
@@ -26585,6 +26633,7 @@ private:
           if (
             physical_shiftout_stage &&
             cfg.v2x_behavior.overtake_shiftout_adaptive_closing_speed_enabled &&
+            !validated_mission_entry_closing_owns_shiftout() &&
             std::isfinite(output.front_distance))
           {
             const double remaining_shiftout_distance =
@@ -26717,7 +26766,8 @@ private:
         "hard_dist=%.2f, hard_avail=%.2f, hard_req=%.2f, "
         "locked_rel=%.2f, lat_clear=%d, body_clear=%d, "
         "lookahead_inner=%d, inner_pref=%d, front_danger_suppress=%d, "
-        "entry_owner=%d, prearm=%d, prearm_lease=%d, engage_hold=%d/%.2f, "
+        "entry_owner=%d, entry_immediate=%d, prearm=%d, prearm_lease=%d, "
+        "engage_hold=%d/%.2f, "
         "shift_owner=%d, pass_owner=%d",
         v2x_behavior_state_initialized ? to_string(v2x_behavior_state) : "None", to_string(final_state),
         output.front_distance, model->wp_id, output.reason.c_str(),
@@ -26747,6 +26797,7 @@ private:
         output.overtake_inner_preference_selected ? 1 : 0,
         output.committed_corridor_front_danger_suppressed ? 1 : 0,
         output.validated_overtake_entry_longitudinal_owner ? 1 : 0,
+        output.validated_overtake_entry_immediate_execution ? 1 : 0,
         output.overtake_entry_prearm_active ? 1 : 0,
         output.overtake_entry_prearm_validation_hold_active ? 1 : 0,
         output.overtake_engagement_hold_active ? 1 : 0,
@@ -26775,7 +26826,8 @@ private:
           "health=%s, receipt_age=%.3f, source_age=%.3f, interval=%.3f, "
           "vehicles=%zu, message_vehicles=%zu, jumps=%zu, invalid_velocity=%zu, "
           "message_invalid=%d, front=%d, side=%d, danger=%d, danger_action=%s, "
-          "danger_suppress=%d, entry_owner=%d, prearm=%d, entry_rel=%.2f, "
+          "danger_suppress=%d, entry_owner=%d, entry_immediate=%d, prearm=%d, "
+          "entry_rel=%.2f, "
           "entry_stable=%.2f, prearm_v=%.2f, prearm_window=%.2f s/%.2f m, "
           "prearm_lease=%d/%.2f, engage_hold=%d/%.2f, "
           "prearm_timeout=%d, prearm_cooldown=%d, shift_owner=%d, pass_owner=%d, "
@@ -26838,6 +26890,7 @@ private:
           v2x_overtake_core::to_string(output.front_danger_action),
           output.committed_corridor_front_danger_suppressed ? 1 : 0,
           output.validated_overtake_entry_longitudinal_owner ? 1 : 0,
+          output.validated_overtake_entry_immediate_execution ? 1 : 0,
           output.overtake_entry_prearm_active ? 1 : 0,
           output.overtake_entry_relative_speed,
           output.overtake_entry_speed_stable_sec,
@@ -29535,6 +29588,9 @@ Config load_config(const std::string & path)
   }
   cfg.mpc.v2x_behavior.overtake_entry_speed_confirm_sec =
     std::max(0.0, overtake_entry_speed_confirm_sec);
+  cfg.mpc.v2x_behavior.overtake_validated_mission_immediate_entry_enabled =
+    mpc["v2x_overtake_validated_mission_immediate_entry_enabled"] ?
+    mpc["v2x_overtake_validated_mission_immediate_entry_enabled"].as<bool>() : false;
   cfg.mpc.v2x_behavior.overtake_stationary_blocker_entry_override_enabled =
     mpc["v2x_overtake_stationary_blocker_entry_override_enabled"] ?
     mpc["v2x_overtake_stationary_blocker_entry_override_enabled"].as<bool>() : true;
@@ -30547,11 +30603,14 @@ public:
       RCLCPP_INFO(
         get_logger(),
         "V2X new-entry speed readiness: min_relative_speed=%.2f m/s, confirm=%.2f s, "
-        "stationary_override=%s, slow_urgent=%s/%.2f m/s/%.2f m/%.2f s, "
+        "validated_mission_immediate=%s, stationary_override=%s, "
+        "slow_urgent=%s/%.2f m/s/%.2f m/%.2f s, "
         "prearm=%.2f s/%.2f m, commit<=%.2f m, validation_hold=%.2f s, "
         "engagement_hold=%.2f s, retry_cooldown=%.2f s",
         mpc_cfg_.v2x_behavior.overtake_entry_min_relative_speed,
         mpc_cfg_.v2x_behavior.overtake_entry_speed_confirm_sec,
+        mpc_cfg_.v2x_behavior.overtake_validated_mission_immediate_entry_enabled ?
+        "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_stationary_blocker_entry_override_enabled ?
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_slow_blocker_urgent_entry_enabled ?

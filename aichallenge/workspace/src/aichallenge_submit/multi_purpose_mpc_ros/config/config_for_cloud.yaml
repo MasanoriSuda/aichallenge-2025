@@ -463,6 +463,7 @@ mpc:
   # Existing ShiftOut/Pass/FollowPrepare missions are not re-gated.
   v2x_overtake_entry_min_relative_speed: 0.3 # [m/s] require measured forward gain before lateral commitment
   v2x_overtake_entry_speed_confirm_sec: 0.3 # [s] prevent one noisy V2X speed sample from admitting a doomed pass
+  v2x_overtake_validated_mission_immediate_entry_enabled: true # let a current body-clear/front-reserve validated Mission own entry without waiting for measured gain
   v2x_overtake_stationary_blocker_entry_override_enabled: true # skip only speed confirmation for a confirmed stopped blocker with a complete current Mission
   v2x_overtake_slow_blocker_urgent_entry_enabled: true # shorten confirmation only near the 3 m entry boundary with a complete current Mission
   v2x_overtake_slow_blocker_urgent_entry_max_front_speed: 2.0 # [m/s] do not use the urgent path for a normally moving opponent

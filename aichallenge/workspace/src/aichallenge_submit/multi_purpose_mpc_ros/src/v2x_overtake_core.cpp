@@ -4812,6 +4812,73 @@ const char * to_string(const FrenetDpTacticalStrategy strategy) noexcept
   }
 }
 
+FrenetDpExecutionCorridorBoundsResolution resolve_frenet_dp_execution_corridor_bounds(
+  const FrenetDpExecutionCorridorBoundsRequest & request) noexcept
+{
+  FrenetDpExecutionCorridorBoundsResolution resolution;
+  const auto finite_non_negative = [](const double value) {
+      return std::isfinite(value) && value >= 0.0;
+    };
+  if (
+    (request.pass_side_sign != -1 && request.pass_side_sign != 1) ||
+    !std::isfinite(request.raw_lower_lateral_m) ||
+    !std::isfinite(request.raw_upper_lateral_m) ||
+    request.raw_upper_lateral_m < request.raw_lower_lateral_m ||
+    !finite_non_negative(request.planner_target_separation_m) ||
+    !finite_non_negative(request.physical_target_separation_m) ||
+    !finite_non_negative(request.robust_target_separation_m) ||
+    !finite_non_negative(request.hard_wall_clearance_m) ||
+    !finite_non_negative(request.robust_wall_clearance_m))
+  {
+    return resolution;
+  }
+
+  const double hard_target_extra = request.target_active ? std::max(
+    0.0, request.physical_target_separation_m -
+    request.planner_target_separation_m) : 0.0;
+  const double preferred_target_extra = request.target_active ? std::max(
+    0.0, request.robust_target_separation_m -
+    request.planner_target_separation_m) : 0.0;
+
+  if (request.target_active && request.pass_side_sign > 0) {
+    resolution.hard_lower_lateral_m =
+      request.raw_lower_lateral_m + hard_target_extra;
+    resolution.hard_upper_lateral_m =
+      request.raw_upper_lateral_m - request.hard_wall_clearance_m;
+    resolution.preferred_lower_lateral_m =
+      request.raw_lower_lateral_m + preferred_target_extra;
+    resolution.preferred_upper_lateral_m =
+      request.raw_upper_lateral_m - request.robust_wall_clearance_m;
+  } else if (request.target_active) {
+    resolution.hard_lower_lateral_m =
+      request.raw_lower_lateral_m + request.hard_wall_clearance_m;
+    resolution.hard_upper_lateral_m =
+      request.raw_upper_lateral_m - hard_target_extra;
+    resolution.preferred_lower_lateral_m =
+      request.raw_lower_lateral_m + request.robust_wall_clearance_m;
+    resolution.preferred_upper_lateral_m =
+      request.raw_upper_lateral_m - preferred_target_extra;
+  } else {
+    resolution.hard_lower_lateral_m =
+      request.raw_lower_lateral_m + request.hard_wall_clearance_m;
+    resolution.hard_upper_lateral_m =
+      request.raw_upper_lateral_m - request.hard_wall_clearance_m;
+    resolution.preferred_lower_lateral_m =
+      request.raw_lower_lateral_m + request.robust_wall_clearance_m;
+    resolution.preferred_upper_lateral_m =
+      request.raw_upper_lateral_m - request.robust_wall_clearance_m;
+  }
+  resolution.valid =
+    resolution.hard_upper_lateral_m + 1e-9 >= resolution.hard_lower_lateral_m;
+  if (!resolution.valid) {
+    return resolution;
+  }
+  resolution.preferred_bounds_valid =
+    resolution.preferred_upper_lateral_m + 1e-9 >=
+    resolution.preferred_lower_lateral_m;
+  return resolution;
+}
+
 FrenetDpCorridorResolution solve_frenet_dp_corridor(
   const FrenetDpCorridorRequest & request) noexcept
 {
@@ -4834,12 +4901,14 @@ FrenetDpCorridorResolution solve_frenet_dp_corridor(
     !finite_non_negative(request.lateral_motion_weight) ||
     !finite_non_negative(request.previous_path_weight) ||
     !finite_non_negative(request.corridor_width_weight) ||
+    !finite_non_negative(request.preferred_corridor_weight) ||
     !finite_non_negative(request.branch_switch_penalty) ||
     !finite_non_negative(request.significant_curvature_radpm) ||
     !finite_non_negative(request.tactical_reference_weight) ||
     !std::isfinite(request.tactical_edge_fraction) ||
     request.tactical_edge_fraction < 0.0 || request.tactical_edge_fraction > 1.0 ||
     !finite_non_negative(request.inside_radius_penalty_weight) ||
+    !finite_non_negative(request.tactical_strategy_switch_penalty) ||
     (request.previous_side_sign != -1 && request.previous_side_sign != 0 &&
     request.previous_side_sign != 1) ||
     request.previous_path_distances_m.size() !=
@@ -4912,6 +4981,10 @@ FrenetDpCorridorResolution solve_frenet_dp_corridor(
           !std::isfinite(sample.lower_lateral_m) ||
           !std::isfinite(sample.upper_lateral_m) ||
           sample.upper_lateral_m < sample.lower_lateral_m ||
+          (sample.preferred_bounds_valid &&
+          (!std::isfinite(sample.preferred_lower_lateral_m) ||
+          !std::isfinite(sample.preferred_upper_lateral_m) ||
+          sample.preferred_upper_lateral_m < sample.preferred_lower_lateral_m)) ||
           (sample.course_metadata_valid &&
           !std::isfinite(sample.reference_curvature_radpm)))
         {
@@ -5093,6 +5166,15 @@ FrenetDpCorridorResolution solve_frenet_dp_corridor(
               const auto & sample = input.samples[stage];
               const double width = sample.upper_lateral_m - sample.lower_lateral_m;
               double cost = request.corridor_width_weight / std::max(0.10, width);
+              if (sample.preferred_bounds_valid) {
+                const double preferred_error =
+                  lateral < sample.preferred_lower_lateral_m ?
+                  sample.preferred_lower_lateral_m - lateral :
+                  lateral > sample.preferred_upper_lateral_m ?
+                  lateral - sample.preferred_upper_lateral_m : 0.0;
+                cost += request.preferred_corridor_weight *
+                  preferred_error * preferred_error;
+              }
               if (request.previous_side_sign == input.side_sign) {
                 const double previous = sample_previous_path(sample.path_distance_m);
                 if (std::isfinite(previous)) {
@@ -5191,6 +5273,12 @@ FrenetDpCorridorResolution solve_frenet_dp_corridor(
           }
           branch.tactical_reference_cost /= static_cast<double>(stage_count);
           branch.normalized_cost = *best_terminal / static_cast<double>(stage_count);
+          if (
+            request.previous_tactical_strategy != FrenetDpTacticalStrategy::Legacy &&
+            strategy != request.previous_tactical_strategy)
+          {
+            branch.normalized_cost += request.tactical_strategy_switch_penalty;
+          }
           branch.feasible = std::isfinite(branch.normalized_cost);
           return branch;
         };
@@ -10699,6 +10787,12 @@ bool should_retain_pass_mission_after_recovery(
          !request.overtake_forbidden_waypoint &&
          std::isfinite(request.target_longitudinal_m) &&
          request.target_longitudinal_m > -request.return_clear_distance_m;
+}
+
+bool should_terminate_recovery_retained_mission(
+  const bool recovery_retention_active, const bool runtime_hard_fault) noexcept
+{
+  return recovery_retention_active && runtime_hard_fault;
 }
 
 StallWatchdogResolution update_stall_watchdog(const StallWatchdogRequest & request)

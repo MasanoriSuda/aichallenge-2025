@@ -620,12 +620,14 @@ mpc:
   v2x_overtake_mpcc_frenet_dp_lateral_motion_weight: 3.0
   v2x_overtake_mpcc_frenet_dp_previous_path_weight: 1.0
   v2x_overtake_mpcc_frenet_dp_corridor_width_weight: 0.25
+  v2x_overtake_mpcc_frenet_dp_preferred_corridor_weight: 4.0 # prefer robust wall/target reserve without rejecting a physically feasible attack corridor
   v2x_overtake_mpcc_frenet_dp_branch_switch_penalty: 1.0
   v2x_overtake_mpcc_frenet_dp_curve_strategy_enabled: true # straight=min-motion; curves compare inside-dive, sweep-dive and outer-sweep references
   v2x_overtake_mpcc_frenet_dp_significant_curvature: 0.04 # [1/m] matches the existing curve-role threshold
   v2x_overtake_mpcc_frenet_dp_tactical_reference_weight: 0.80 # course tactic guides DP but never relaxes wall/target bounds
   v2x_overtake_mpcc_frenet_dp_tactical_edge_fraction: 0.35 # fraction of observed lateral extent; selected DP cells remain inside hard bounds
   v2x_overtake_mpcc_frenet_dp_inside_radius_penalty_weight: 0.75 # approximate retained-speed cost for small-radius inside paths
+  v2x_overtake_mpcc_frenet_dp_tactical_strategy_switch_penalty: 1.0 # suppress sweep/inside/sweep churn while the previous tactic remains feasible
   v2x_overtake_mpcc_frenet_dp_shadow_score_penalty: 1.0
   v2x_overtake_mpcc_frenet_dp_last_path_max_age_sec: 0.50 # [s] warm-start/hysteresis is exact-target and exact-side only
   v2x_overtake_mpcc_frenet_dp_runtime_validation_lease_sec: 0.30 # [s] measured 0.21-0.23 s validation jitter plus one 40 Hz cycle; only runtime-validated active paths qualify

@@ -13206,6 +13206,16 @@ TEST(V2XOvertakeCoreRecovery, RetainsOnlyOrdinaryIncompletePassMission)
   EXPECT_FALSE(should_retain_pass_mission_after_recovery(request));
 }
 
+TEST(V2XOvertakeCoreRecovery, TerminatesOnlyRetainedMissionWithPersistentHardFault)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    should_terminate_recovery_retained_mission;
+
+  EXPECT_TRUE(should_terminate_recovery_retained_mission(true, true));
+  EXPECT_FALSE(should_terminate_recovery_retained_mission(true, false));
+  EXPECT_FALSE(should_terminate_recovery_retained_mission(false, true));
+}
+
 TEST(V2XOvertakeCoreRecovery, RejectsInvalidPolicyConfiguration)
 {
   auto request = recovery_request();
@@ -14774,6 +14784,102 @@ TEST(V2XOvertakeCoreFrenetDpCorridor, PreviousPathAndSideProvideHysteresis)
   ASSERT_TRUE(resolution.feasible);
   EXPECT_EQ(resolution.selected_side_sign, -1);
   EXPECT_LT(resolution.right.normalized_cost, resolution.left.normalized_cost);
+}
+
+TEST(V2XOvertakeCoreFrenetDpCorridor, AlignsHardBoundsAndKeepsRobustReserveSoft)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    FrenetDpExecutionCorridorBoundsRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_frenet_dp_execution_corridor_bounds;
+
+  FrenetDpExecutionCorridorBoundsRequest request{
+    1, 0.0, 2.30, true, 1.50, 1.45, 1.75, 0.20, 0.40};
+  const auto left = resolve_frenet_dp_execution_corridor_bounds(request);
+  ASSERT_TRUE(left.valid);
+  EXPECT_DOUBLE_EQ(left.hard_lower_lateral_m, 0.0);
+  EXPECT_NEAR(left.hard_upper_lateral_m, 2.10, 1e-9);
+  ASSERT_TRUE(left.preferred_bounds_valid);
+  EXPECT_NEAR(left.preferred_lower_lateral_m, 0.25, 1e-9);
+  EXPECT_NEAR(left.preferred_upper_lateral_m, 1.90, 1e-9);
+
+  request.pass_side_sign = -1;
+  request.raw_lower_lateral_m = -2.30;
+  request.raw_upper_lateral_m = 0.0;
+  const auto right = resolve_frenet_dp_execution_corridor_bounds(request);
+  ASSERT_TRUE(right.valid);
+  EXPECT_NEAR(right.hard_lower_lateral_m, -2.10, 1e-9);
+  EXPECT_DOUBLE_EQ(right.hard_upper_lateral_m, 0.0);
+  ASSERT_TRUE(right.preferred_bounds_valid);
+  EXPECT_NEAR(right.preferred_lower_lateral_m, -1.90, 1e-9);
+  EXPECT_NEAR(right.preferred_upper_lateral_m, -0.25, 1e-9);
+
+  // A narrow interval may lose the robust reserve but must remain available
+  // when its physical hard interval is still feasible.
+  request.pass_side_sign = 1;
+  request.raw_lower_lateral_m = 0.0;
+  request.raw_upper_lateral_m = 0.50;
+  const auto narrow = resolve_frenet_dp_execution_corridor_bounds(request);
+  EXPECT_TRUE(narrow.valid);
+  EXPECT_FALSE(narrow.preferred_bounds_valid);
+}
+
+TEST(V2XOvertakeCoreFrenetDpCorridor, SoftReservePullsPathInsidePreferredInterval)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpCorridorRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorSample;
+  using multi_purpose_mpc_ros::v2x_overtake_core::solve_frenet_dp_corridor;
+
+  FrenetDpCorridorRequest request;
+  request.enabled = true;
+  request.current_lateral_m = 0.0;
+  request.current_anchor_weight = 0.0;
+  request.lateral_motion_weight = 0.0;
+  request.corridor_width_weight = 0.0;
+  request.preferred_corridor_weight = 20.0;
+  request.left.side_sign = 1;
+  for (const double distance : {0.0, 2.0, 4.0}) {
+    request.left.samples.push_back(
+      OvertakeMissionDynamicCorridorSample{
+        distance, -1.0, 1.0, true, 0.0, false, false, 0.40, 0.80, true});
+  }
+
+  const auto resolution = solve_frenet_dp_corridor(request);
+  ASSERT_TRUE(resolution.left.feasible);
+  for (const double lateral : resolution.left.lateral_path_m) {
+    EXPECT_GE(lateral, 0.40 - 1e-9);
+    EXPECT_LE(lateral, 0.80 + 1e-9);
+  }
+}
+
+TEST(V2XOvertakeCoreFrenetDpCorridor, KeepsFreshTacticalStrategyAcrossSmallReplans)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpCorridorRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpTacticalStrategy;
+  using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorSample;
+  using multi_purpose_mpc_ros::v2x_overtake_core::solve_frenet_dp_corridor;
+
+  FrenetDpCorridorRequest request;
+  request.enabled = true;
+  request.curve_strategy_enabled = true;
+  request.current_lateral_m = 0.0;
+  request.lateral_bin_count = 17U;
+  request.significant_curvature_radpm = 0.04;
+  request.tactical_reference_weight = 1.0;
+  request.inside_radius_penalty_weight = 0.0;
+  request.previous_tactical_strategy = FrenetDpTacticalStrategy::OuterSweep;
+  request.tactical_strategy_switch_penalty = 100.0;
+  request.left.side_sign = 1;
+  request.left.samples = {
+    OvertakeMissionDynamicCorridorSample{0.0, -1.2, 1.2, true, 0.06, true, true},
+    OvertakeMissionDynamicCorridorSample{3.0, -1.2, 1.2, true, 0.10, true, true},
+    OvertakeMissionDynamicCorridorSample{6.0, -1.2, 1.2, true, 0.06, false, true}};
+
+  const auto resolution = solve_frenet_dp_corridor(request);
+  ASSERT_TRUE(resolution.left.feasible);
+  EXPECT_EQ(
+    resolution.left.tactical_strategy,
+    FrenetDpTacticalStrategy::OuterSweep);
 }
 
 TEST(V2XOvertakeCoreFrenetDpCorridor, RejectsDisconnectedLateralSequence)

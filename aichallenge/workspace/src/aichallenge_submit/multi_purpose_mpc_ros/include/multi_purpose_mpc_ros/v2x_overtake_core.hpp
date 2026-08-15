@@ -2635,7 +2635,41 @@ struct OvertakeMissionDynamicCorridorSample
   double reference_curvature_radpm{};
   bool target_active{false};
   bool course_metadata_valid{false};
+  // Hard bounds are stored in lower_lateral_m/upper_lateral_m.  The preferred
+  // interval represents robust wall/target reserve and is a soft DP cost only.
+  double preferred_lower_lateral_m{-std::numeric_limits<double>::infinity()};
+  double preferred_upper_lateral_m{std::numeric_limits<double>::infinity()};
+  bool preferred_bounds_valid{false};
 };
+
+struct FrenetDpExecutionCorridorBoundsRequest
+{
+  int pass_side_sign{};
+  double raw_lower_lateral_m{};
+  double raw_upper_lateral_m{};
+  bool target_active{false};
+  double planner_target_separation_m{};
+  double physical_target_separation_m{};
+  double robust_target_separation_m{};
+  double hard_wall_clearance_m{};
+  double robust_wall_clearance_m{};
+};
+
+struct FrenetDpExecutionCorridorBoundsResolution
+{
+  bool valid{false};
+  double hard_lower_lateral_m{};
+  double hard_upper_lateral_m{};
+  bool preferred_bounds_valid{false};
+  double preferred_lower_lateral_m{};
+  double preferred_upper_lateral_m{};
+};
+
+/// Convert raw gap-planner bounds into execution-aligned hard bounds and a
+/// soft robust-reserve interval.  An unavailable preferred interval never
+/// invalidates a physically feasible hard corridor.
+FrenetDpExecutionCorridorBoundsResolution resolve_frenet_dp_execution_corridor_bounds(
+  const FrenetDpExecutionCorridorBoundsRequest & request) noexcept;
 
 struct OvertakeMissionDynamicCorridorRequest
 {
@@ -2696,13 +2730,16 @@ struct FrenetDpCorridorRequest
   double lateral_motion_weight{3.0};
   double previous_path_weight{1.0};
   double corridor_width_weight{0.25};
+  double preferred_corridor_weight{4.0};
   double branch_switch_penalty{1.0};
   bool curve_strategy_enabled{false};
   double significant_curvature_radpm{0.08};
   double tactical_reference_weight{1.0};
   double tactical_edge_fraction{0.45};
   double inside_radius_penalty_weight{1.0};
+  double tactical_strategy_switch_penalty{1.0};
   int previous_side_sign{};
+  FrenetDpTacticalStrategy previous_tactical_strategy{FrenetDpTacticalStrategy::Legacy};
   std::vector<double> previous_path_distances_m;
   std::vector<double> previous_lateral_path_m;
   FrenetDpCorridorBranchInput left;
@@ -6268,6 +6305,11 @@ struct RecoveryMissionRetentionRequest
 /// lifecycle policy extracted from the controller for isolated tests.
 bool should_retain_pass_mission_after_recovery(
   const RecoveryMissionRetentionRequest & request) noexcept;
+
+/// A hard fault that survives a completed Recovery invalidates the retained
+/// Mission; sending the same frozen path through Recovery again only loops.
+bool should_terminate_recovery_retained_mission(
+  bool recovery_retention_active, bool runtime_hard_fault) noexcept;
 
 struct RecoveryVelocityLimitRequest
 {

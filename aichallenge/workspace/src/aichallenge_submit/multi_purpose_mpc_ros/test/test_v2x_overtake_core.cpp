@@ -3597,6 +3597,66 @@ TEST(V2XOvertakeCoreSpeed, TargetBoundExecutionHoldCannotBypassHardFaults)
   EXPECT_FALSE(can_hold_target_bound_execution_for_replan(request));
 }
 
+TEST(V2XOvertakeCoreSpeed, TargetBoundExecutionHoldExtendsOnlyWithFreshPassProgress)
+{
+  TargetBoundExecutionHoldRequest request;
+  request.enabled = true;
+  request.committed_execution_phase = true;
+  request.mission_path_frozen = true;
+  request.target_bound_failure = true;
+  request.physical_hold_path_feasible = true;
+  request.target_progress_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.hold_elapsed_sec = 1.50;
+  request.hold_traveled_m = 8.0;
+  request.maximum_hold_sec = 1.50;
+  request.maximum_hold_distance_m = 8.0;
+  request.forward_progress_extension_enabled = true;
+  request.pass_phase = true;
+  request.fresh_forward_progress = true;
+  request.mission_elapsed_sec = 4.0;
+  request.mission_traveled_m = 18.0;
+  request.absolute_maximum_sec = 10.0;
+  request.absolute_maximum_distance_m = 40.0;
+
+  EXPECT_TRUE(target_bound_execution_hold_budget_available(request));
+  EXPECT_TRUE(can_hold_target_bound_execution_for_replan(request));
+
+  request.fresh_forward_progress = false;
+  EXPECT_FALSE(target_bound_execution_hold_budget_available(request));
+  EXPECT_FALSE(can_hold_target_bound_execution_for_replan(request));
+
+  request.fresh_forward_progress = true;
+  request.pass_phase = false;
+  EXPECT_FALSE(target_bound_execution_hold_budget_available(request));
+  request.pass_phase = true;
+
+  request.mission_elapsed_sec = 10.0;
+  EXPECT_FALSE(target_bound_execution_hold_budget_available(request));
+  request.mission_elapsed_sec = 4.0;
+  request.mission_traveled_m = 40.0;
+  EXPECT_FALSE(target_bound_execution_hold_budget_available(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, TargetBoundExecutionProgressCannotRearmConsumedGeneration)
+{
+  TargetBoundExecutionHoldRequest request;
+  request.hold_elapsed_sec = 2.0;
+  request.hold_traveled_m = 9.0;
+  request.maximum_hold_sec = 1.50;
+  request.maximum_hold_distance_m = 8.0;
+  request.forward_progress_extension_enabled = true;
+  request.pass_phase = true;
+  request.fresh_forward_progress = true;
+  request.mission_elapsed_sec = 4.0;
+  request.mission_traveled_m = 18.0;
+  request.absolute_maximum_sec = 10.0;
+  request.absolute_maximum_distance_m = 40.0;
+  request.mission_hold_budget_exhausted = true;
+
+  EXPECT_FALSE(target_bound_execution_hold_budget_available(request));
+}
+
 TEST(V2XOvertakeCoreSpeed, TargetBoundExecutionHoldLifecycleRequiresStableFreshHorizon)
 {
   TargetBoundExecutionHoldLifecycleRequest request;

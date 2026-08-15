@@ -1422,6 +1422,8 @@ struct OvertakeLineConfig
   double receding_horizon_target_bound_prefix_max_sec{1.50};
   double receding_horizon_target_bound_prefix_max_distance{8.0};
   double receding_horizon_target_bound_prefix_clear_stable_sec{0.20};
+  bool receding_horizon_target_bound_prefix_progress_extension_enabled{true};
+  double receding_horizon_target_bound_prefix_progress_fresh_sec{0.75};
   double target_intrusion_ordering_margin{0.10};
   double target_intrusion_guard_distance{std::numeric_limits<double>::infinity()};
   bool side_quality_selection_enabled{true};
@@ -2496,6 +2498,13 @@ struct OvertakeLineState
   double target_bound_execution_replan_hold_start_speed_mps{0.0};
   double target_bound_execution_replan_clear_since_sec{
     std::numeric_limits<double>::quiet_NaN()};
+  double target_bound_execution_replan_start_target_longitudinal{
+    std::numeric_limits<double>::quiet_NaN()};
+  double target_bound_execution_replan_best_target_longitudinal{
+    std::numeric_limits<double>::infinity()};
+  double target_bound_execution_replan_last_progress_sec{
+    std::numeric_limits<double>::quiet_NaN()};
+  bool target_bound_execution_replan_progress_extension_was_active{false};
   std::uint64_t target_bound_execution_replan_exhausted_generation{0U};
   double return_preflight_last_log_sec{-std::numeric_limits<double>::infinity()};
   bool inter_vehicle_corridor{false};
@@ -14126,6 +14135,14 @@ private:
       overtake_line_state_.target_bound_execution_replan_hold_start_speed_mps = 0.0;
       overtake_line_state_.target_bound_execution_replan_clear_since_sec =
         std::numeric_limits<double>::quiet_NaN();
+      overtake_line_state_.target_bound_execution_replan_start_target_longitudinal =
+        std::numeric_limits<double>::quiet_NaN();
+      overtake_line_state_.target_bound_execution_replan_best_target_longitudinal =
+        std::numeric_limits<double>::infinity();
+      overtake_line_state_.target_bound_execution_replan_last_progress_sec =
+        std::numeric_limits<double>::quiet_NaN();
+      overtake_line_state_.target_bound_execution_replan_progress_extension_was_active =
+        false;
     }
     if (next_phase != OvertakeLinePhase::Return) {
       overtake_line_state_.mission_return_preflight_reference_active = false;
@@ -23670,6 +23687,51 @@ private:
     const bool optimized_target_bound_failure =
       receding_horizon.hard_infeasible &&
       receding_horizon.hard_bound_failure_kind == "target";
+    constexpr double kTargetBoundProgressStepM = 0.05;
+    const bool target_bound_progress_observation_valid =
+      overtake_line_state_.target_bound_execution_replan_hold_active &&
+      overtake_line_state_.phase == OvertakeLinePhase::Pass &&
+      locked_target_progress_continuous &&
+      !behavior_output.locked_target_position_jump &&
+      !locked_target_progress_rejected &&
+      std::isfinite(behavior_output.locked_target_longitudinal);
+    if (
+      target_bound_progress_observation_valid &&
+      behavior_output.locked_target_longitudinal + kTargetBoundProgressStepM <=
+      overtake_line_state_.target_bound_execution_replan_best_target_longitudinal)
+    {
+      overtake_line_state_.target_bound_execution_replan_best_target_longitudinal =
+        behavior_output.locked_target_longitudinal;
+      overtake_line_state_.target_bound_execution_replan_last_progress_sec = now_sec;
+    }
+    const double target_bound_forward_progress_m =
+      std::isfinite(
+        overtake_line_state_.target_bound_execution_replan_start_target_longitudinal) &&
+      std::isfinite(
+        overtake_line_state_.target_bound_execution_replan_best_target_longitudinal) ?
+      std::max(
+        0.0,
+        overtake_line_state_.target_bound_execution_replan_start_target_longitudinal -
+        overtake_line_state_.target_bound_execution_replan_best_target_longitudinal) : 0.0;
+    const double target_bound_progress_age_sec =
+      std::isfinite(
+        overtake_line_state_.target_bound_execution_replan_last_progress_sec) ?
+      std::max(
+        0.0,
+        now_sec -
+        overtake_line_state_.target_bound_execution_replan_last_progress_sec) :
+      std::numeric_limits<double>::infinity();
+    const bool target_bound_fresh_forward_progress =
+      target_bound_forward_progress_m + kEps >= kTargetBoundProgressStepM &&
+      target_bound_progress_age_sec <=
+      line_cfg.receding_horizon_target_bound_prefix_progress_fresh_sec + kEps;
+    const double target_bound_mission_elapsed_sec =
+      overtake_line_state_.phase == OvertakeLinePhase::Pass ?
+      overtake_mission_pass_elapsed(now_sec) : 0.0;
+    const double target_bound_mission_traveled_m =
+      overtake_line_state_.phase == OvertakeLinePhase::Pass ?
+      overtake_mission_pass_traveled() :
+      std::max(0.0, overtake_line_state_.phase_traveled_m);
     const auto clear_target_bound_execution_prefix_state = [this]() {
         overtake_line_state_.target_bound_execution_replan_hold_active = false;
         overtake_line_state_.target_bound_execution_replan_prefix_executing = false;
@@ -23679,6 +23741,14 @@ private:
         overtake_line_state_.target_bound_execution_replan_hold_start_speed_mps = 0.0;
         overtake_line_state_.target_bound_execution_replan_clear_since_sec =
           std::numeric_limits<double>::quiet_NaN();
+        overtake_line_state_.target_bound_execution_replan_start_target_longitudinal =
+          std::numeric_limits<double>::quiet_NaN();
+        overtake_line_state_.target_bound_execution_replan_best_target_longitudinal =
+          std::numeric_limits<double>::infinity();
+        overtake_line_state_.target_bound_execution_replan_last_progress_sec =
+          std::numeric_limits<double>::quiet_NaN();
+        overtake_line_state_.target_bound_execution_replan_progress_extension_was_active =
+          false;
       };
     if (optimized_target_bound_failure) {
       // Prefer a freshly validated same-side Mission over consuming the
@@ -23774,20 +23844,11 @@ private:
           0.0,
           execution_traveled_now -
           overtake_line_state_.target_bound_execution_replan_hold_start_distance) : 0.0;
-      const bool hold_budget_exhausted_now =
-        hold_was_active &&
-        (hold_elapsed_sec + kEps >=
-        std::max(0.0, line_cfg.receding_horizon_target_bound_prefix_max_sec) ||
-        hold_traveled_m + kEps >=
-        std::max(
-        0.0, line_cfg.receding_horizon_target_bound_prefix_max_distance));
       const bool hold_budget_consumed_for_generation =
         overtake_line_state_.mission_generation > 0U &&
         overtake_line_state_.target_bound_execution_replan_exhausted_generation ==
         overtake_line_state_.mission_generation;
-      const bool physical_hold_allowed =
-        overtake_core::can_hold_target_bound_execution_for_replan(
-        overtake_core::TargetBoundExecutionHoldRequest{
+      const overtake_core::TargetBoundExecutionHoldRequest hold_request{
           line_cfg.receding_horizon_enabled &&
           line_cfg.receding_horizon_target_bound_prefix_enabled,
           committed_execution_phase,
@@ -23810,7 +23871,45 @@ private:
           std::max(0.0, line_cfg.receding_horizon_target_bound_prefix_max_sec),
           std::max(
             0.0, line_cfg.receding_horizon_target_bound_prefix_max_distance),
-          hold_budget_consumed_for_generation});
+          line_cfg.receding_horizon_target_bound_prefix_progress_extension_enabled,
+          overtake_line_state_.phase == OvertakeLinePhase::Pass,
+          target_bound_fresh_forward_progress,
+          target_bound_mission_elapsed_sec,
+          target_bound_mission_traveled_m,
+          std::max(0.0, line_cfg.pass_horizon_absolute_time_limit),
+          std::max(0.0, line_cfg.pass_horizon_absolute_distance_limit),
+          hold_budget_consumed_for_generation};
+      const bool hold_budget_exhausted_now =
+        hold_was_active &&
+        !overtake_core::target_bound_execution_hold_budget_available(hold_request);
+      const bool physical_hold_allowed =
+        overtake_core::can_hold_target_bound_execution_for_replan(hold_request);
+      const bool short_repair_budget_available =
+        hold_elapsed_sec <
+        line_cfg.receding_horizon_target_bound_prefix_max_sec - kEps &&
+        hold_traveled_m <
+        line_cfg.receding_horizon_target_bound_prefix_max_distance - kEps;
+      const bool progress_extension_active =
+        hold_was_active && physical_hold_allowed && !short_repair_budget_available;
+      if (
+        progress_extension_active &&
+        !overtake_line_state_
+        .target_bound_execution_replan_progress_extension_was_active)
+      {
+        RCLCPP_WARN(
+          rclcpp::get_logger("mpc_controller"),
+          "OvertakeLine target-bound execution progress extension active: "
+          "target=%s, side=%d, progress=%.2f m/age=%.2f s, "
+          "Mission=%.2f s/%.2f m, absolute=%.2f s/%.2f m, wp_id=%d",
+          overtake_line_state_.target_vehicle_id.c_str(),
+          overtake_line_state_.pass_side_sign,
+          target_bound_forward_progress_m, target_bound_progress_age_sec,
+          target_bound_mission_elapsed_sec, target_bound_mission_traveled_m,
+          line_cfg.pass_horizon_absolute_time_limit,
+          line_cfg.pass_horizon_absolute_distance_limit, model->wp_id);
+      }
+      overtake_line_state_.target_bound_execution_replan_progress_extension_was_active =
+        progress_extension_active;
       if (physical_hold_allowed) {
         const auto lifecycle =
           overtake_core::resolve_target_bound_execution_hold_lifecycle(
@@ -23842,6 +23941,17 @@ private:
             execution_traveled_now;
           overtake_line_state_.target_bound_execution_replan_hold_start_speed_mps =
             std::max(0.0, current_speed_mps_);
+          overtake_line_state_.target_bound_execution_replan_start_target_longitudinal =
+            std::isfinite(behavior_output.locked_target_longitudinal) ?
+            behavior_output.locked_target_longitudinal :
+            std::numeric_limits<double>::quiet_NaN();
+          overtake_line_state_.target_bound_execution_replan_best_target_longitudinal =
+            std::isfinite(behavior_output.locked_target_longitudinal) ?
+            behavior_output.locked_target_longitudinal :
+            std::numeric_limits<double>::infinity();
+          overtake_line_state_.target_bound_execution_replan_last_progress_sec =
+            std::isfinite(behavior_output.locked_target_longitudinal) ?
+            now_sec : std::numeric_limits<double>::quiet_NaN();
           RCLCPP_WARN(
             rclcpp::get_logger("mpc_controller"),
             "OvertakeLine target-bound execution hold started: "
@@ -23881,11 +23991,13 @@ private:
               rclcpp::get_logger("mpc_controller"),
               "OvertakeLine target-bound execution hold budget exhausted: "
               "target=%s, side=%d, generation=%lu, elapsed=%.2f s, "
-              "traveled=%.2f m, wp_id=%d",
+              "traveled=%.2f m, progress=%.2f m/age=%.2f s, wp_id=%d",
               overtake_line_state_.target_vehicle_id.c_str(),
               overtake_line_state_.pass_side_sign,
               static_cast<unsigned long>(overtake_line_state_.mission_generation),
-              hold_elapsed_sec, hold_traveled_m, model->wp_id);
+              hold_elapsed_sec, hold_traveled_m,
+              target_bound_forward_progress_m, target_bound_progress_age_sec,
+              model->wp_id);
           } else {
             RCLCPP_WARN(
               rclcpp::get_logger("mpc_controller"),
@@ -23929,12 +24041,27 @@ private:
         locked_target_progress_rejected ||
         (!behavior_output.locked_target_current_body_footprints_separated &&
         !behavior_output.recoverable_side_contact_active);
-      const bool hold_budget_exhausted =
-        hold_elapsed_sec + kEps >=
-        std::max(0.0, line_cfg.receding_horizon_target_bound_prefix_max_sec) ||
-        hold_traveled_m + kEps >=
-        std::max(
+      overtake_core::TargetBoundExecutionHoldRequest budget_request;
+      budget_request.hold_elapsed_sec = hold_elapsed_sec;
+      budget_request.hold_traveled_m = hold_traveled_m;
+      budget_request.maximum_hold_sec = std::max(
+        0.0, line_cfg.receding_horizon_target_bound_prefix_max_sec);
+      budget_request.maximum_hold_distance_m = std::max(
         0.0, line_cfg.receding_horizon_target_bound_prefix_max_distance);
+      budget_request.forward_progress_extension_enabled =
+        line_cfg.receding_horizon_target_bound_prefix_progress_extension_enabled;
+      budget_request.pass_phase =
+        overtake_line_state_.phase == OvertakeLinePhase::Pass;
+      budget_request.fresh_forward_progress = target_bound_fresh_forward_progress;
+      budget_request.mission_elapsed_sec = target_bound_mission_elapsed_sec;
+      budget_request.mission_traveled_m = target_bound_mission_traveled_m;
+      budget_request.absolute_maximum_sec = std::max(
+        0.0, line_cfg.pass_horizon_absolute_time_limit);
+      budget_request.absolute_maximum_distance_m = std::max(
+        0.0, line_cfg.pass_horizon_absolute_distance_limit);
+      budget_request.mission_hold_budget_exhausted = false;
+      const bool hold_budget_exhausted =
+        !overtake_core::target_bound_execution_hold_budget_available(budget_request);
       const auto lifecycle = overtake_core::resolve_target_bound_execution_hold_lifecycle(
         overtake_core::TargetBoundExecutionHoldLifecycleRequest{
           true,
@@ -28121,6 +28248,17 @@ Config load_config(const std::string & path)
     mpc["v2x_overtake_receding_horizon_target_bound_prefix_clear_stable_sec"] ?
     mpc["v2x_overtake_receding_horizon_target_bound_prefix_clear_stable_sec"].as<double>() :
     0.20);
+  cfg.mpc.v2x_behavior.overtake_line
+    .receding_horizon_target_bound_prefix_progress_extension_enabled =
+    mpc["v2x_overtake_receding_horizon_target_bound_prefix_progress_extension_enabled"] ?
+    mpc["v2x_overtake_receding_horizon_target_bound_prefix_progress_extension_enabled"]
+    .as<bool>() : true;
+  cfg.mpc.v2x_behavior.overtake_line
+    .receding_horizon_target_bound_prefix_progress_fresh_sec = std::max(
+    0.0,
+    mpc["v2x_overtake_receding_horizon_target_bound_prefix_progress_fresh_sec"] ?
+    mpc["v2x_overtake_receding_horizon_target_bound_prefix_progress_fresh_sec"]
+    .as<double>() : 0.75);
   cfg.mpc.v2x_behavior.overtake_line.target_intrusion_ordering_margin = std::max(
     0.0,
     mpc["v2x_overtake_line_target_intrusion_ordering_margin"] ?
@@ -30569,7 +30707,7 @@ public:
       RCLCPP_INFO(
         get_logger(),
         "V2X target-bound Pass execution prefix: %s, limit=%.2f s/%.2f m, "
-        "fresh_clear>=%.2f s",
+        "fresh_clear>=%.2f s, progress_extension=%s/fresh<=%.2f s",
         mpc_cfg_.v2x_behavior.overtake_line
         .receding_horizon_target_bound_prefix_enabled ? "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line
@@ -30577,7 +30715,12 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line
         .receding_horizon_target_bound_prefix_max_distance,
         mpc_cfg_.v2x_behavior.overtake_line
-        .receding_horizon_target_bound_prefix_clear_stable_sec);
+        .receding_horizon_target_bound_prefix_clear_stable_sec,
+        mpc_cfg_.v2x_behavior.overtake_line
+        .receding_horizon_target_bound_prefix_progress_extension_enabled ?
+        "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line
+        .receding_horizon_target_bound_prefix_progress_fresh_sec);
       RCLCPP_INFO(
         get_logger(),
         "V2X safe trajectory prefix: %s, front<=%.2f m, remaining>=%.2f m, "

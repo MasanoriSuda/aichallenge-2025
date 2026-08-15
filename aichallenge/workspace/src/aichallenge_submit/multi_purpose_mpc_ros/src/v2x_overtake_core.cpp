@@ -1802,6 +1802,39 @@ bool can_retain_receding_horizon_execution_lease(
          request.maximum_age_sec + 1e-9;
 }
 
+bool target_bound_execution_hold_budget_available(
+  const TargetBoundExecutionHoldRequest & request) noexcept
+{
+  if (
+    !std::isfinite(request.hold_elapsed_sec) || request.hold_elapsed_sec < 0.0 ||
+    !std::isfinite(request.hold_traveled_m) || request.hold_traveled_m < 0.0 ||
+    !std::isfinite(request.maximum_hold_sec) || request.maximum_hold_sec <= 0.0 ||
+    !std::isfinite(request.maximum_hold_distance_m) ||
+    request.maximum_hold_distance_m <= 0.0 ||
+    request.mission_hold_budget_exhausted)
+  {
+    return false;
+  }
+  const bool short_repair_budget_available =
+    request.hold_elapsed_sec < request.maximum_hold_sec - 1e-9 &&
+    request.hold_traveled_m < request.maximum_hold_distance_m - 1e-9;
+  if (short_repair_budget_available) {
+    return true;
+  }
+
+  const bool progress_extension_timing_valid =
+    std::isfinite(request.mission_elapsed_sec) && request.mission_elapsed_sec >= 0.0 &&
+    std::isfinite(request.mission_traveled_m) && request.mission_traveled_m >= 0.0 &&
+    std::isfinite(request.absolute_maximum_sec) && request.absolute_maximum_sec > 0.0 &&
+    std::isfinite(request.absolute_maximum_distance_m) &&
+    request.absolute_maximum_distance_m > 0.0;
+  return request.forward_progress_extension_enabled && request.pass_phase &&
+         request.fresh_forward_progress && progress_extension_timing_valid &&
+         request.mission_elapsed_sec < request.absolute_maximum_sec - 1e-9 &&
+         request.mission_traveled_m <
+         request.absolute_maximum_distance_m - 1e-9;
+}
+
 bool can_hold_target_bound_execution_for_replan(
   const TargetBoundExecutionHoldRequest & request) noexcept
 {
@@ -1816,18 +1849,11 @@ bool can_hold_target_bound_execution_for_replan(
     request.target_course_progress_rejected || !current_geometry_recoverable ||
     request.actual_wall_contact || request.actual_wall_margin_blocked ||
     request.actual_wall_sample_unavailable || request.emergency_front_risk ||
-    request.solver_recovery_requested || request.explicit_forbidden_waypoint ||
-    !std::isfinite(request.hold_elapsed_sec) || request.hold_elapsed_sec < 0.0 ||
-    !std::isfinite(request.hold_traveled_m) || request.hold_traveled_m < 0.0 ||
-    !std::isfinite(request.maximum_hold_sec) || request.maximum_hold_sec <= 0.0 ||
-    !std::isfinite(request.maximum_hold_distance_m) ||
-    request.maximum_hold_distance_m <= 0.0 ||
-    request.mission_hold_budget_exhausted)
+    request.solver_recovery_requested || request.explicit_forbidden_waypoint)
   {
     return false;
   }
-  return request.hold_elapsed_sec < request.maximum_hold_sec - 1e-9 &&
-         request.hold_traveled_m < request.maximum_hold_distance_m - 1e-9;
+  return target_bound_execution_hold_budget_available(request);
 }
 
 TargetBoundExecutionHoldLifecycleResolution resolve_target_bound_execution_hold_lifecycle(

@@ -1158,6 +1158,16 @@ struct TargetBoundExecutionHoldRequest
   double hold_traveled_m{};
   double maximum_hold_sec{};
   double maximum_hold_distance_m{};
+  /// Once the short optimizer repair deadline expires, a committed Pass may
+  /// retain the same physical prefix only while measured longitudinal
+  /// progress is fresh and the immutable Mission budget remains available.
+  bool forward_progress_extension_enabled{false};
+  bool pass_phase{false};
+  bool fresh_forward_progress{false};
+  double mission_elapsed_sec{};
+  double mission_traveled_m{};
+  double absolute_maximum_sec{};
+  double absolute_maximum_distance_m{};
   /// The current Mission generation already consumed its target-bound hold
   /// budget. A replacement generation is required before another hold.
   bool mission_hold_budget_exhausted{false};
@@ -1169,7 +1179,12 @@ struct TargetBoundExecutionHoldRequest
 /// This is deliberately narrower than the generic continuity lease: predicted
 /// target overlap may trigger the hold, but non-recoverable body overlap and
 /// every wall/front hard fault stay closed. A separately qualified recoverable
-/// side contact may continue.
+/// side contact may continue. The normal limit is a short optimizer-repair
+/// deadline. A Pass can outlive that deadline only through fresh measured
+/// progress and only inside the immutable Mission-wide time/distance limits.
+bool target_bound_execution_hold_budget_available(
+  const TargetBoundExecutionHoldRequest & request) noexcept;
+
 bool can_hold_target_bound_execution_for_replan(
   const TargetBoundExecutionHoldRequest & request) noexcept;
 

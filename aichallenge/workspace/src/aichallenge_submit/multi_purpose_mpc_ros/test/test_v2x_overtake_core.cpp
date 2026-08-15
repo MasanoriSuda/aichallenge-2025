@@ -15129,10 +15129,57 @@ TEST(V2XOvertakeCoreFrenetDpExecution, RefreshRetainsOldPathUntilIntervalAndNewS
   EXPECT_TRUE(resolution.refresh);
 }
 
-TEST(V2XOvertakeCoreFrenetDpExecution, FreshSafePrefixOwnsPassContinuation)
-{
-  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpExecutionAuthorityRequest;
-  using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frenet_dp_execution_authority;
+TEST(V2XOvertakeCoreFrenetDpExecution,
+     PromotesOnlyFullyRuntimeValidatedRefresh) {
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+      FrenetDpAtomicRefreshPromotionRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+      resolve_frenet_dp_atomic_refresh_promotion;
+
+  FrenetDpAtomicRefreshPromotionRequest request;
+  request.refresh_requested = true;
+  request.reference_valid = true;
+  request.reference_active = true;
+  request.reference_coverage_complete = true;
+  request.execution_horizon_feasible = true;
+  request.target_matches = true;
+  request.target_continuous = true;
+  request.target_prediction_valid = true;
+  request.current_body_separated = true;
+
+  auto resolution = resolve_frenet_dp_atomic_refresh_promotion(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.reference_ready);
+  EXPECT_TRUE(resolution.target_ready);
+  EXPECT_TRUE(resolution.hard_fault_free);
+  EXPECT_TRUE(resolution.promote);
+
+  request.reference_coverage_complete = false;
+  EXPECT_FALSE(resolve_frenet_dp_atomic_refresh_promotion(request).promote);
+  request.reference_coverage_complete = true;
+
+  request.execution_horizon_feasible = false;
+  EXPECT_FALSE(resolve_frenet_dp_atomic_refresh_promotion(request).promote);
+  request.execution_horizon_feasible = true;
+
+  request.target_position_jump = true;
+  EXPECT_FALSE(resolve_frenet_dp_atomic_refresh_promotion(request).promote);
+  request.target_position_jump = false;
+
+  request.current_body_separated = false;
+  EXPECT_FALSE(resolve_frenet_dp_atomic_refresh_promotion(request).promote);
+  request.recoverable_side_contact = true;
+  EXPECT_TRUE(resolve_frenet_dp_atomic_refresh_promotion(request).promote);
+
+  request.hard_fault = true;
+  EXPECT_FALSE(resolve_frenet_dp_atomic_refresh_promotion(request).promote);
+}
+
+TEST(V2XOvertakeCoreFrenetDpExecution, FreshSafePrefixOwnsPassContinuation) {
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+      FrenetDpExecutionAuthorityRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+      resolve_frenet_dp_execution_authority;
 
   FrenetDpExecutionAuthorityRequest request;
   request.enabled = true;
@@ -15159,9 +15206,9 @@ TEST(V2XOvertakeCoreFrenetDpExecution, FreshSafePrefixOwnsPassContinuation)
   EXPECT_NEAR(resolution.remaining_distance_m, 10.0, 1e-9);
 }
 
-TEST(V2XOvertakeCoreFrenetDpExecution, SafePrefixBridgesRollingReplanPause)
-{
-  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpExecutionAuthorityRequest;
+TEST(V2XOvertakeCoreFrenetDpExecution, SafePrefixBridgesRollingReplanPause) {
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+      FrenetDpExecutionAuthorityRequest;
   using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frenet_dp_execution_authority;
 
   FrenetDpExecutionAuthorityRequest request;

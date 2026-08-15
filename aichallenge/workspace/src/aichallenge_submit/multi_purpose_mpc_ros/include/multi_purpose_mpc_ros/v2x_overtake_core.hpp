@@ -2844,10 +2844,40 @@ struct FrenetDpExecutionRefreshResolution
 /// Admit an atomic same-target/same-side refresh of the active DP execution
 /// reference.  A rejected refresh never invalidates the current feasible path.
 FrenetDpExecutionRefreshResolution resolve_frenet_dp_execution_refresh(
-  const FrenetDpExecutionRefreshRequest & request) noexcept;
+    const FrenetDpExecutionRefreshRequest &request) noexcept;
 
-struct FrenetDpExecutionAuthorityRequest
-{
+struct FrenetDpAtomicRefreshPromotionRequest {
+  bool refresh_requested{false};
+  bool reference_valid{false};
+  bool reference_active{false};
+  bool reference_coverage_complete{false};
+  bool execution_horizon_feasible{false};
+  bool target_matches{false};
+  bool target_continuous{false};
+  bool target_position_jump{false};
+  bool target_course_progress_rejected{false};
+  bool target_prediction_valid{false};
+  bool current_body_separated{false};
+  bool recoverable_side_contact{false};
+  bool hard_fault{false};
+};
+
+struct FrenetDpAtomicRefreshPromotionResolution {
+  bool valid{false};
+  bool promote{false};
+  bool reference_ready{false};
+  bool target_ready{false};
+  bool hard_fault_free{false};
+};
+
+/// Promote a pending rolling-refresh path only after it has earned a complete
+/// current-state control-horizon validation. A rejected pending candidate must
+/// never revoke or mutate the previously validated active execution path.
+FrenetDpAtomicRefreshPromotionResolution
+resolve_frenet_dp_atomic_refresh_promotion(
+    const FrenetDpAtomicRefreshPromotionRequest &request) noexcept;
+
+struct FrenetDpExecutionAuthorityRequest {
   bool enabled{false};
   bool active_execution{false};
   bool rolling_replan_pause_active{false};

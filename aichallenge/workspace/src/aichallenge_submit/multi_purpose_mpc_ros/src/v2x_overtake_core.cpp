@@ -4698,48 +4698,63 @@ FrenetDpExecutionRefreshResolution resolve_frenet_dp_execution_refresh(
     request.now_sec - request.last_refresh_sec + 1e-9 >=
     request.minimum_refresh_interval_sec);
   const bool source_is_newer =
-    std::isfinite(request.candidate_generated_at_sec) &&
-    (!std::isfinite(request.last_source_generated_at_sec) ||
-    request.candidate_generated_at_sec >
-    request.last_source_generated_at_sec + 1e-9);
+      std::isfinite(request.candidate_generated_at_sec) &&
+      (!std::isfinite(request.last_source_generated_at_sec) ||
+       request.candidate_generated_at_sec >
+           request.last_source_generated_at_sec + 1e-9);
   resolution.refresh =
-    request.active_execution && request.target_matches &&
-    request.prediction_fresh && request.active_side_sign != 0 &&
-    request.candidate_side_sign == request.active_side_sign &&
-    refresh_interval_elapsed && source_is_newer &&
-    is_valid_frenet_dp_execution_path(
-      request.candidate_path_distances_m,
-      request.candidate_lateral_path_m);
+      request.active_execution && request.target_matches &&
+      request.prediction_fresh && request.active_side_sign != 0 &&
+      request.candidate_side_sign == request.active_side_sign &&
+      refresh_interval_elapsed && source_is_newer &&
+      is_valid_frenet_dp_execution_path(request.candidate_path_distances_m,
+                                        request.candidate_lateral_path_m);
+  return resolution;
+}
+
+FrenetDpAtomicRefreshPromotionResolution
+resolve_frenet_dp_atomic_refresh_promotion(
+    const FrenetDpAtomicRefreshPromotionRequest &request) noexcept {
+  FrenetDpAtomicRefreshPromotionResolution resolution;
+  resolution.valid = true;
+  resolution.reference_ready =
+      request.reference_valid && request.reference_active &&
+      request.reference_coverage_complete && request.execution_horizon_feasible;
+  resolution.target_ready =
+      request.target_matches && request.target_continuous &&
+      !request.target_position_jump &&
+      !request.target_course_progress_rejected &&
+      request.target_prediction_valid &&
+      (request.current_body_separated || request.recoverable_side_contact);
+  resolution.hard_fault_free = !request.hard_fault;
+  resolution.promote = request.refresh_requested &&
+                       resolution.reference_ready && resolution.target_ready &&
+                       resolution.hard_fault_free;
   return resolution;
 }
 
 FrenetDpExecutionAuthorityResolution resolve_frenet_dp_execution_authority(
-  const FrenetDpExecutionAuthorityRequest & request) noexcept
-{
+    const FrenetDpExecutionAuthorityRequest &request) noexcept {
   FrenetDpExecutionAuthorityResolution resolution;
-  if (
-    !std::isfinite(request.now_sec) ||
-    !std::isfinite(request.maximum_path_age_sec) ||
-    request.maximum_path_age_sec < 0.0 ||
-    !std::isfinite(request.maximum_runtime_validation_age_sec) ||
-    request.maximum_runtime_validation_age_sec < 0.0 ||
-    !std::isfinite(request.traveled_distance_m) ||
-    request.traveled_distance_m < 0.0 ||
-    !std::isfinite(request.minimum_remaining_distance_m) ||
-    request.minimum_remaining_distance_m < 0.0)
-  {
+  if (!std::isfinite(request.now_sec) ||
+      !std::isfinite(request.maximum_path_age_sec) ||
+      request.maximum_path_age_sec < 0.0 ||
+      !std::isfinite(request.maximum_runtime_validation_age_sec) ||
+      request.maximum_runtime_validation_age_sec < 0.0 ||
+      !std::isfinite(request.traveled_distance_m) ||
+      request.traveled_distance_m < 0.0 ||
+      !std::isfinite(request.minimum_remaining_distance_m) ||
+      request.minimum_remaining_distance_m < 0.0) {
     return resolution;
   }
   resolution.valid = true;
   if (!request.enabled) {
     return resolution;
   }
-  if (
-    !std::isfinite(request.last_refresh_sec) ||
-    request.now_sec + 1e-9 < request.last_refresh_sec ||
-    !is_valid_frenet_dp_execution_path(
-      request.path_distances_m, request.lateral_path_m))
-  {
+  if (!std::isfinite(request.last_refresh_sec) ||
+      request.now_sec + 1e-9 < request.last_refresh_sec ||
+      !is_valid_frenet_dp_execution_path(request.path_distances_m,
+                                         request.lateral_path_m)) {
     return resolution;
   }
 

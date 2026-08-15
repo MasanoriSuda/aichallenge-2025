@@ -623,7 +623,7 @@ mpc:
   v2x_overtake_mpcc_frenet_dp_branch_switch_penalty: 1.0
   v2x_overtake_mpcc_frenet_dp_shadow_score_penalty: 1.0
   v2x_overtake_mpcc_frenet_dp_last_path_max_age_sec: 0.50 # [s] warm-start/hysteresis is exact-target and exact-side only
-  v2x_overtake_mpcc_frenet_dp_runtime_validation_lease_sec: 0.20 # [s] short 40 Hz lease renewed after wall/target/horizon revalidation; bridges Behavior/FSM boundaries
+  v2x_overtake_mpcc_frenet_dp_runtime_validation_lease_sec: 0.30 # [s] measured 0.21-0.23 s validation jitter plus one 40 Hz cycle; only runtime-validated active paths qualify
   v2x_overtake_mpcc_frenet_dp_longitudinal_timing_enabled: true # solve attack/intermediate/hold target timing before rejecting the lateral DP corridor
   v2x_overtake_mpcc_frenet_dp_longitudinal_cost_slack: 0.25 # fastest profile may win only this far above the best normalized lateral DP cost
   v2x_overtake_safe_separation_soft_prediction_grace_sec: 0.25 # [s] prediction-only loss grace after committed forward completion; hard faults remain immediate

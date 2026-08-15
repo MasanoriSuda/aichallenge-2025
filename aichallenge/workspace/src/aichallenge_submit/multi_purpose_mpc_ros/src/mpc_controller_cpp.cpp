@@ -1534,6 +1534,7 @@ struct OvertakeLineConfig
   bool mpcc_frenet_dp_rolling_refresh_enabled{false};
   bool mpcc_frenet_dp_primary_execution_enabled{false};
   bool mpcc_frenet_dp_target_bound_promotion_enabled{false};
+  bool mpcc_frenet_dp_measured_rebase_retry_enabled{false};
   double mpcc_frenet_dp_rolling_refresh_interval_sec{0.10};
   double mpcc_frenet_dp_refresh_preserved_prefix_distance{1.0};
   double mpcc_frenet_dp_refresh_blend_end_distance{4.0};
@@ -18511,7 +18512,7 @@ private:
         dp_refresh_rebased_from_measured_state ?
         empty_active_path :
         overtake_line_state_.mission_frenet_dp_lateral_path_m;
-      const auto stitched_candidate =
+      auto stitched_candidate =
           overtake_core::stitch_frenet_dp_execution_refresh_path(
               overtake_core::FrenetDpExecutionRefreshStitchRequest{
                   current_ey,
@@ -18554,7 +18555,7 @@ private:
         candidate_fallback_targets = active_tail_reference.lateral_targets_m;
         dp_refresh_used_active_tail = true;
       }
-      const auto candidate_reference =
+      auto candidate_reference =
           overtake_core::resolve_frenet_dp_execution_reference(
               overtake_core::FrenetDpExecutionReferenceRequest{
                   stitched_candidate.valid, 0.0, 2U,
@@ -18563,7 +18564,7 @@ private:
                   candidate_horizon_distances, candidate_fallback_targets});
       dp_refresh_source_covered_sample_count =
           candidate_reference.covered_sample_count;
-      const bool candidate_executable_horizon_complete =
+      bool candidate_executable_horizon_complete =
           candidate_reference.valid && candidate_reference.active &&
           candidate_reference.lateral_targets_m.size() ==
               candidate_horizon_distances.size() &&
@@ -18571,17 +18572,6 @@ private:
               candidate_reference.lateral_targets_m.begin(),
               candidate_reference.lateral_targets_m.end(),
               [](const double lateral_m) {return std::isfinite(lateral_m);});
-      OvertakeLineHorizonEvaluation candidate_horizon;
-      if (candidate_executable_horizon_complete) {
-        candidate_horizon = evaluate_overtake_line_horizon(
-            ref_wp_id, N, lb, ub, current_ey, current_ey, 0.0, false,
-            dp_refresh_stitched_distances.back(),
-            candidate.goal_lateral_m, planning_wall_clearance,
-            std::max(0.0, line_cfg.max_lateral_accel),
-            std::max(1.0, current_speed_mps_), true, std::nullopt,
-            std::optional<std::vector<double>>{
-                candidate_reference.lateral_targets_m});
-      }
       const auto refresh_horizon_is_unmodified_and_feasible =
           [](const OvertakeLineHorizonEvaluation &horizon) {
             return horizon.execution_feasible() &&
@@ -18589,40 +18579,62 @@ private:
                    !horizon.static_map_wall_limited &&
                    !horizon.lateral_accel_limited;
           };
-      bool candidate_horizon_unmodified_and_feasible =
-          refresh_horizon_is_unmodified_and_feasible(candidate_horizon);
-      if (
-        !candidate_horizon_unmodified_and_feasible &&
-        candidate_executable_horizon_complete &&
-        min_wall_clearance + kEps < planning_wall_clearance)
-      {
-        auto physical_candidate_horizon = evaluate_overtake_line_horizon(
+      const auto evaluate_candidate_execution_horizon =
+        [&](const auto &reference, const auto &stitched,
+        const bool executable_horizon_complete,
+        bool &used_physical_clearance) {
+          OvertakeLineHorizonEvaluation horizon;
+          used_physical_clearance = false;
+          if (!executable_horizon_complete || !stitched.valid) {
+            return horizon;
+          }
+          horizon = evaluate_overtake_line_horizon(
             ref_wp_id, N, lb, ub, current_ey, current_ey, 0.0, false,
-            dp_refresh_stitched_distances.back(),
-            candidate.goal_lateral_m, min_wall_clearance,
+            stitched.path_distances_m.back(),
+            candidate.goal_lateral_m, planning_wall_clearance,
             std::max(0.0, line_cfg.max_lateral_accel),
             std::max(1.0, current_speed_mps_), true, std::nullopt,
             std::optional<std::vector<double>>{
-                candidate_reference.lateral_targets_m});
-        if (refresh_horizon_is_unmodified_and_feasible(physical_candidate_horizon)) {
-          candidate_horizon = std::move(physical_candidate_horizon);
-          candidate_horizon_unmodified_and_feasible = true;
-          dp_refresh_used_physical_clearance = true;
-        }
-      }
-      candidate_horizon_unmodified_and_feasible =
-          stitched_candidate.valid &&
-          candidate_horizon.execution_feasible() &&
-          !candidate_horizon.wall_clearance_limited &&
-          !candidate_horizon.static_map_wall_limited &&
-          !candidate_horizon.lateral_accel_limited;
-      overtake_core::FrenetDpTargetBoundHorizonResolution
-      candidate_target_bound_horizon;
-      if (!line_cfg.mpcc_frenet_dp_target_bound_promotion_enabled) {
-        candidate_target_bound_horizon =
-          overtake_core::validate_frenet_dp_target_bound_horizon(
-          overtake_core::FrenetDpTargetBoundHorizonRequest{});
-      } else if (candidate_executable_horizon_complete) {
+              reference.lateral_targets_m});
+          if (
+            !refresh_horizon_is_unmodified_and_feasible(horizon) &&
+            min_wall_clearance + kEps < planning_wall_clearance)
+          {
+            auto physical_horizon = evaluate_overtake_line_horizon(
+              ref_wp_id, N, lb, ub, current_ey, current_ey, 0.0, false,
+              stitched.path_distances_m.back(),
+              candidate.goal_lateral_m, min_wall_clearance,
+              std::max(0.0, line_cfg.max_lateral_accel),
+              std::max(1.0, current_speed_mps_), true, std::nullopt,
+              std::optional<std::vector<double>>{
+                reference.lateral_targets_m});
+            if (refresh_horizon_is_unmodified_and_feasible(physical_horizon)) {
+              horizon = std::move(physical_horizon);
+              used_physical_clearance = true;
+            }
+          }
+          return horizon;
+        };
+      auto candidate_horizon = evaluate_candidate_execution_horizon(
+        candidate_reference, stitched_candidate,
+        candidate_executable_horizon_complete,
+        dp_refresh_used_physical_clearance);
+      bool candidate_horizon_unmodified_and_feasible =
+        stitched_candidate.valid &&
+        refresh_horizon_is_unmodified_and_feasible(candidate_horizon);
+      const auto evaluate_candidate_target_bound_horizon =
+        [&](const std::vector<double> &candidate_lateral_targets) {
+          overtake_core::FrenetDpTargetBoundHorizonResolution resolution;
+          if (!line_cfg.mpcc_frenet_dp_target_bound_promotion_enabled) {
+            return overtake_core::validate_frenet_dp_target_bound_horizon(
+              overtake_core::FrenetDpTargetBoundHorizonRequest{});
+          }
+          if (
+            candidate_lateral_targets.size() !=
+            candidate_horizon_distances.size())
+          {
+            return resolution;
+          }
         const bool target_prediction_input_valid =
           behavior_output.locked_target_seen &&
           !behavior_output.locked_target_position_jump &&
@@ -18701,18 +18713,21 @@ private:
           }
         }
         if (all_target_predictions_valid) {
-          candidate_target_bound_horizon =
-            overtake_core::validate_frenet_dp_target_bound_horizon(
+          resolution = overtake_core::validate_frenet_dp_target_bound_horizon(
             overtake_core::FrenetDpTargetBoundHorizonRequest{
               true,
               candidate.pass_side_sign,
               std::max(0.0, cfg.v2x_gap.vehicle_radius),
-              candidate_reference.lateral_targets_m,
+              candidate_lateral_targets,
               target_lateral_path_m,
               target_separation_active});
         }
-      }
-      const bool candidate_target_bound_horizon_feasible =
+        return resolution;
+      };
+      auto candidate_target_bound_horizon =
+        evaluate_candidate_target_bound_horizon(
+          candidate_reference.lateral_targets_m);
+      bool candidate_target_bound_horizon_feasible =
         candidate_target_bound_horizon.valid &&
         candidate_target_bound_horizon.feasible;
       const bool candidate_runtime_hard_fault =
@@ -18721,7 +18736,7 @@ private:
           behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake ||
           overtake_solver_recovery_active_ ||
           behavior_output.overtake_forbidden_wp;
-      const auto promotion =
+      auto promotion =
           overtake_core::resolve_frenet_dp_atomic_refresh_promotion(
               overtake_core::FrenetDpAtomicRefreshPromotionRequest{
                   true, candidate_reference.valid, candidate_reference.active,
@@ -18737,6 +18752,92 @@ private:
                       .locked_target_current_body_footprints_separated,
                   behavior_output.recoverable_side_contact_active,
                   candidate_runtime_hard_fault});
+      const auto measured_rebase_retry =
+        overtake_core::resolve_frenet_dp_measured_rebase_retry(
+          overtake_core::FrenetDpMeasuredRebaseRetryRequest{
+            line_cfg.mpcc_frenet_dp_measured_rebase_retry_enabled,
+            true,
+            promotion.promote,
+            exact_dp_refresh_target_match,
+            locked_target_progress_continuous,
+            behavior_output.locked_target_position_jump,
+            locked_target_progress_rejected,
+            behavior_output.locked_target_footprint_prediction_valid,
+            behavior_output.locked_target_current_body_footprints_separated,
+            behavior_output.recoverable_side_contact_active,
+            candidate_runtime_hard_fault});
+      if (
+        measured_rebase_retry.valid && measured_rebase_retry.retry &&
+        !dp_refresh_rebased_from_measured_state)
+      {
+        dp_refresh_rebased_from_measured_state = true;
+        stitched_candidate =
+          overtake_core::stitch_frenet_dp_execution_refresh_path(
+            overtake_core::FrenetDpExecutionRefreshStitchRequest{
+              current_ey,
+              0.0,
+              line_cfg.mpcc_frenet_dp_refresh_preserved_prefix_distance,
+              line_cfg.mpcc_frenet_dp_refresh_blend_end_distance,
+              empty_active_path,
+              empty_active_path,
+              candidate.frenet_dp_path_distances_m,
+              candidate.frenet_dp_lateral_path_m});
+        dp_refresh_used_active_prefix = false;
+        dp_refresh_used_active_tail = false;
+        dp_refresh_used_physical_clearance = false;
+        dp_refresh_stitched_distances.clear();
+        dp_refresh_stitched_lateral.clear();
+        if (stitched_candidate.valid) {
+          dp_refresh_stitched_distances = stitched_candidate.path_distances_m;
+          dp_refresh_stitched_lateral = stitched_candidate.lateral_path_m;
+        }
+        candidate_fallback_targets.assign(
+          candidate_horizon_distances.size(), current_ey);
+        candidate_reference =
+          overtake_core::resolve_frenet_dp_execution_reference(
+            overtake_core::FrenetDpExecutionReferenceRequest{
+              stitched_candidate.valid, 0.0, 2U,
+              dp_refresh_stitched_distances,
+              dp_refresh_stitched_lateral,
+              candidate_horizon_distances, candidate_fallback_targets});
+        dp_refresh_source_covered_sample_count =
+          candidate_reference.covered_sample_count;
+        candidate_executable_horizon_complete =
+          candidate_reference.valid && candidate_reference.active &&
+          candidate_reference.lateral_targets_m.size() ==
+            candidate_horizon_distances.size() &&
+          std::all_of(
+            candidate_reference.lateral_targets_m.begin(),
+            candidate_reference.lateral_targets_m.end(),
+            [](const double lateral_m) {return std::isfinite(lateral_m);});
+        candidate_horizon = evaluate_candidate_execution_horizon(
+          candidate_reference, stitched_candidate,
+          candidate_executable_horizon_complete,
+          dp_refresh_used_physical_clearance);
+        candidate_horizon_unmodified_and_feasible =
+          stitched_candidate.valid &&
+          refresh_horizon_is_unmodified_and_feasible(candidate_horizon);
+        candidate_target_bound_horizon =
+          evaluate_candidate_target_bound_horizon(
+            candidate_reference.lateral_targets_m);
+        candidate_target_bound_horizon_feasible =
+          candidate_target_bound_horizon.valid &&
+          candidate_target_bound_horizon.feasible;
+        promotion = overtake_core::resolve_frenet_dp_atomic_refresh_promotion(
+          overtake_core::FrenetDpAtomicRefreshPromotionRequest{
+            true, candidate_reference.valid, candidate_reference.active,
+            candidate_executable_horizon_complete,
+            candidate_horizon_unmodified_and_feasible,
+            candidate_target_bound_horizon_feasible,
+            exact_dp_refresh_target_match,
+            locked_target_progress_continuous,
+            behavior_output.locked_target_position_jump,
+            locked_target_progress_rejected,
+            behavior_output.locked_target_footprint_prediction_valid,
+            behavior_output.locked_target_current_body_footprints_separated,
+            behavior_output.recoverable_side_contact_active,
+            candidate_runtime_hard_fault});
+      }
       if (!promotion.promote) {
         const double rejection_log_period =
             std::max(0.5, cfg.v2x_behavior.debug_log_period_sec);
@@ -29117,6 +29218,9 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_target_bound_promotion_enabled =
     mpc["v2x_overtake_mpcc_frenet_dp_target_bound_promotion_enabled"] ?
     mpc["v2x_overtake_mpcc_frenet_dp_target_bound_promotion_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_measured_rebase_retry_enabled =
+    mpc["v2x_overtake_mpcc_frenet_dp_measured_rebase_retry_enabled"] ?
+    mpc["v2x_overtake_mpcc_frenet_dp_measured_rebase_retry_enabled"].as<bool>() : false;
   cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_rolling_refresh_interval_sec = std::max(
     0.0,
     mpc["v2x_overtake_mpcc_frenet_dp_rolling_refresh_interval_sec"] ?
@@ -31298,6 +31402,7 @@ public:
         get_logger(),
         "V2X MPCC Frenet DP corridor: %s, execution=%s, "
         "rolling_refresh=%s/%.2f s, primary_execution=%s, target_bound=%s, "
+        "measured_rebase_retry=%s, "
         "stitch=%.2f->%.2f m, bins=%d, slope<=%.2f m/m, "
         "weights anchor=%.2f/motion=%.2f/previous=%.2f/width=%.2f/"
         "reserve=%.2f/side_switch=%.2f, "
@@ -31316,6 +31421,8 @@ public:
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.
         mpcc_frenet_dp_target_bound_promotion_enabled ? "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line.
+        mpcc_frenet_dp_measured_rebase_retry_enabled ? "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.
         mpcc_frenet_dp_refresh_preserved_prefix_distance,
         mpc_cfg_.v2x_behavior.overtake_line.

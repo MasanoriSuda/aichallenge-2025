@@ -16321,6 +16321,67 @@ TEST(V2XOvertakeCoreFrenetDpExecution,
     resolve_frenet_dp_atomic_refresh_promotion(promotion_request).promote);
 }
 
+TEST(V2XOvertakeCoreFrenetDpExecution,
+     RetriesMeasuredRebaseOnlyForContinuousRecoverableTarget)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    FrenetDpMeasuredRebaseRetryRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_frenet_dp_measured_rebase_retry;
+
+  FrenetDpMeasuredRebaseRetryRequest request;
+  request.enabled = true;
+  request.refresh_requested = true;
+  request.target_matches = true;
+  request.target_continuous = true;
+  request.target_prediction_valid = true;
+  request.current_body_separated = true;
+
+  auto resolution = resolve_frenet_dp_measured_rebase_retry(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.retry);
+
+  request.normal_candidate_promoted = true;
+  EXPECT_FALSE(resolve_frenet_dp_measured_rebase_retry(request).retry);
+  request.normal_candidate_promoted = false;
+
+  request.current_body_separated = false;
+  EXPECT_FALSE(resolve_frenet_dp_measured_rebase_retry(request).retry);
+  request.recoverable_side_contact = true;
+  EXPECT_TRUE(resolve_frenet_dp_measured_rebase_retry(request).retry);
+
+  request.target_position_jump = true;
+  EXPECT_FALSE(resolve_frenet_dp_measured_rebase_retry(request).retry);
+  request.target_position_jump = false;
+
+  request.target_course_progress_rejected = true;
+  EXPECT_FALSE(resolve_frenet_dp_measured_rebase_retry(request).retry);
+  request.target_course_progress_rejected = false;
+
+  request.hard_fault = true;
+  EXPECT_FALSE(resolve_frenet_dp_measured_rebase_retry(request).retry);
+}
+
+TEST(V2XOvertakeCoreFrenetDpExecution,
+     MeasuredRebaseRetryCanBeDisabled)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    FrenetDpMeasuredRebaseRetryRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_frenet_dp_measured_rebase_retry;
+
+  FrenetDpMeasuredRebaseRetryRequest request;
+  request.refresh_requested = true;
+  request.target_matches = true;
+  request.target_continuous = true;
+  request.target_prediction_valid = true;
+  request.current_body_separated = true;
+
+  const auto resolution = resolve_frenet_dp_measured_rebase_retry(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.retry);
+}
+
 TEST(V2XOvertakeCoreFrenetDpExecution, FreshSafePrefixOwnsPassContinuation) {
   using multi_purpose_mpc_ros::v2x_overtake_core::
       FrenetDpExecutionAuthorityRequest;

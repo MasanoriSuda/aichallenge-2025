@@ -5041,6 +5041,25 @@ resolve_frenet_dp_atomic_refresh_promotion(
   return resolution;
 }
 
+FrenetDpMeasuredRebaseRetryResolution
+resolve_frenet_dp_measured_rebase_retry(
+    const FrenetDpMeasuredRebaseRetryRequest &request) noexcept {
+  FrenetDpMeasuredRebaseRetryResolution resolution;
+  resolution.valid = true;
+  if (!request.enabled || !request.refresh_requested ||
+      request.normal_candidate_promoted || request.hard_fault) {
+    return resolution;
+  }
+  const bool recoverable_geometry =
+      request.current_body_separated || request.recoverable_side_contact;
+  resolution.retry =
+      request.target_matches && request.target_continuous &&
+      !request.target_position_jump &&
+      !request.target_course_progress_rejected &&
+      request.target_prediction_valid && recoverable_geometry;
+  return resolution;
+}
+
 FrenetDpExecutionAuthorityResolution resolve_frenet_dp_execution_authority(
     const FrenetDpExecutionAuthorityRequest &request) noexcept {
   FrenetDpExecutionAuthorityResolution resolution;

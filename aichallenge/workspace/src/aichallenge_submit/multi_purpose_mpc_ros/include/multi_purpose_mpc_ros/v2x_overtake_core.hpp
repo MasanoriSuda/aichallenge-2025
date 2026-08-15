@@ -3190,6 +3190,32 @@ FrenetDpAtomicRefreshPromotionResolution
 resolve_frenet_dp_atomic_refresh_promotion(
     const FrenetDpAtomicRefreshPromotionRequest &request) noexcept;
 
+struct FrenetDpMeasuredRebaseRetryRequest {
+  bool enabled{false};
+  bool refresh_requested{false};
+  bool normal_candidate_promoted{false};
+  bool target_matches{false};
+  bool target_continuous{false};
+  bool target_position_jump{false};
+  bool target_course_progress_rejected{false};
+  bool target_prediction_valid{false};
+  bool current_body_separated{false};
+  bool recoverable_side_contact{false};
+  bool hard_fault{false};
+};
+
+struct FrenetDpMeasuredRebaseRetryResolution {
+  bool valid{false};
+  bool retry{false};
+};
+
+/// Decide whether a rejected rolling refresh may be rebuilt directly from
+/// measured e_y. This never relaxes promotion constraints: the rebuilt path
+/// must subsequently pass the same wall, kinematic and target-bound checks.
+FrenetDpMeasuredRebaseRetryResolution
+resolve_frenet_dp_measured_rebase_retry(
+    const FrenetDpMeasuredRebaseRetryRequest &request) noexcept;
+
 struct FrenetDpExecutionAuthorityRequest {
   bool enabled{false};
   bool active_execution{false};

@@ -1129,6 +1129,9 @@ struct TargetBoundExecutionHoldRequest
   double hold_traveled_m{};
   double maximum_hold_sec{};
   double maximum_hold_distance_m{};
+  /// The current Mission generation already consumed its target-bound hold
+  /// budget. A replacement generation is required before another hold.
+  bool mission_hold_budget_exhausted{false};
 };
 
 /// Keep a physically feasible same-side execution prefix while a target-only
@@ -5115,6 +5118,9 @@ struct DynamicMissionWaitRequest
   bool current_plan_feasible{false};
   bool current_replacement_ready{false};
   bool alternate_replacement_ready{false};
+  /// Current overlap was accepted by the independently bounded
+  /// ContactContinuation classifier.
+  bool recoverable_side_contact_active{false};
 };
 
 struct DynamicMissionWaitResolution
@@ -5129,7 +5135,8 @@ struct DynamicMissionWaitResolution
 /// Alternate replacement is separately gated so no-return cannot cause a
 /// side-by-side full-track crossing.
 /// Actual overlap, target discontinuity and controller/geometry hard faults
-/// remain fail closed.
+/// remain fail closed unless the bounded ContactContinuation classifier
+/// accepts the current side contact.
 DynamicMissionWaitResolution resolve_dynamic_mission_wait(
   const DynamicMissionWaitRequest & request) noexcept;
 
@@ -5152,6 +5159,9 @@ struct DynamicMissionWaitForwardPrefixRequest
   double unlatched_closing_speed_mps{};
   double maximum_closing_speed_mps{};
   double maximum_vehicle_speed_mps{};
+  /// A bounded side-contact continuation may retain the current-side forward
+  /// prefix without a separated-body prediction.
+  bool recoverable_side_contact_active{false};
 };
 
 struct DynamicMissionWaitForwardPrefixResolution
@@ -5208,6 +5218,8 @@ struct OvertakeMissionOwnershipRequest
   /// DynamicMissionWait is a rolling tactical replan, not an ordinary Follow
   /// pause. Keep longitudinal ownership while a fresh lateral prefix is found.
   bool rolling_replan_phase{false};
+  /// The tactical pause interrupted Pass rather than pre-commit ShiftOut.
+  bool follow_prepare_origin_pass{false};
 };
 
 struct OvertakeMissionOwnershipResolution
@@ -5215,6 +5227,9 @@ struct OvertakeMissionOwnershipResolution
   bool mission_active{false};
   bool committed_execution_active{false};
   bool committed_pass_active{false};
+  /// Narrow contact-classifier context. This does not broadly restore Pass
+  /// behavior ownership while FollowPrepare is active.
+  bool committed_pass_contact_context_active{false};
   bool paused_mission_active{false};
   bool rolling_replan_active{false};
   bool behavior_continuation_assessment_active{false};

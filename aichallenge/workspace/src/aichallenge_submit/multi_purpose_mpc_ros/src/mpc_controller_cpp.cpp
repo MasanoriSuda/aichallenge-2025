@@ -2471,6 +2471,7 @@ struct OvertakeLineState
   double target_bound_execution_replan_hold_start_speed_mps{0.0};
   double target_bound_execution_replan_clear_since_sec{
     std::numeric_limits<double>::quiet_NaN()};
+  std::uint64_t target_bound_execution_replan_exhausted_generation{0U};
   double return_preflight_last_log_sec{-std::numeric_limits<double>::infinity()};
   bool inter_vehicle_corridor{false};
   std::string lower_boundary_vehicle_id;
@@ -2530,6 +2531,7 @@ struct OvertakeLineState
   bool dynamic_mission_wait_rear_clear_extension_logged{false};
   bool dynamic_mission_wait_forward_prefix_was_active{false};
   bool dynamic_mission_wait_full_closing_was_active{false};
+  bool dynamic_mission_wait_pass_forward_completion_latched{false};
   double dynamic_mission_wait_predicted_overlap_since_sec{
     std::numeric_limits<double>::quiet_NaN()};
   double mission_last_runtime_wall_replan_sec{
@@ -6186,7 +6188,10 @@ struct MPC
         overtake_line_state_.phase == OvertakeLinePhase::Recovery,
         v2x_behavior_state_initialized && v2x_behavior_state == V2XBehaviorState::Overtake,
         front_matches_locked_target,
-        tactical_rolling_replan_active});
+        tactical_rolling_replan_active,
+        overtake_line_state_.follow_prepare_origin_phase ==
+        OvertakeLinePhase::Pass &&
+        overtake_line_state_.dynamic_mission_wait_active});
     const bool active_overtake_line =
       overtake_mission_ownership.committed_execution_active;
     const bool paused_overtake_mission =
@@ -6201,6 +6206,8 @@ struct MPC
       overtake_mission_ownership.committed_execution_active;
     output.overtake_committed_pass_active =
       overtake_mission_ownership.committed_pass_active;
+    const bool committed_pass_contact_context_active =
+      overtake_mission_ownership.committed_pass_contact_context_active;
     output.overtake_paused_mission_active =
       overtake_mission_ownership.paused_mission_active;
     output.overtake_line_owns_locked_target_speed =
@@ -6356,7 +6363,7 @@ struct MPC
     }
     const bool near_contact_confirmation_monitored =
       cfg.v2x_behavior.overtake_line.contact_continuation_enabled &&
-      overtake_mission_ownership.committed_pass_active &&
+      committed_pass_contact_context_active &&
       output.locked_target_seen && !output.locked_target_position_jump &&
       !output.locked_target_course_progress_rejected &&
       output.locked_target_near_contact_envelope_entered &&
@@ -6423,7 +6430,7 @@ struct MPC
       raw_contact_evidence_confirmed || contact_evidence_dropout_held;
     const bool contact_observed =
       cfg.v2x_behavior.overtake_line.contact_continuation_enabled &&
-      overtake_mission_ownership.committed_pass_active &&
+      committed_pass_contact_context_active &&
       output.locked_target_seen && !output.locked_target_position_jump &&
       !output.locked_target_course_progress_rejected &&
       side_contact_evidence_confirmed &&
@@ -6474,11 +6481,22 @@ struct MPC
       contact_progress_m >= 0.05 - kEps &&
       contact_progress_age_sec <=
       cfg.v2x_behavior.overtake_line.contact_continuation_progress_fresh_sec + kEps;
+    const bool contact_forward_completion_latched =
+      overtake_line_state_.pass_forward_completion_latched ||
+      overtake_line_state_.dynamic_mission_wait_pass_forward_completion_latched;
+    const auto contact_commit_stage = overtake_core::resolve_pass_commit_stage(
+      overtake_core::PassCommitStageRequest{
+        committed_pass_contact_context_active,
+        overtake_line_state_.pass_front_overlap_exclusion_latched,
+        contact_forward_completion_latched,
+        overtake_line_state_.rear_clear_confirmed_latched,
+        output.locked_target_longitudinal,
+        cfg.v2x_behavior.overtake_line.opponent_side_replan_no_return_front_distance});
     const auto recoverable_side_contact =
       v2x_overtake_core::resolve_recoverable_side_contact(
       v2x_overtake_core::RecoverableSideContactRequest{
         cfg.v2x_behavior.overtake_line.contact_continuation_enabled,
-        overtake_mission_ownership.committed_pass_active,
+        committed_pass_contact_context_active,
         output.locked_target_seen,
         !output.locked_target_position_jump &&
         !output.locked_target_course_progress_rejected,
@@ -6499,8 +6517,8 @@ struct MPC
         std::max(0.0, current_speed_mps_),
         contact_elapsed_sec,
         contact_fresh_forward_progress,
-        overtake_line_state_.pass_forward_completion_latched,
-        output.overtake_commit_stage,
+        contact_forward_completion_latched,
+        contact_commit_stage.stage,
         cfg.v2x_behavior.overtake_line.contact_continuation_max_sec,
         cfg.v2x_behavior.overtake_line.contact_continuation_rearward_completion_max_sec,
         cfg.v2x_behavior.overtake_line.contact_continuation_initial_progress_grace_sec,
@@ -6596,7 +6614,7 @@ struct MPC
       v2x_overtake_core::resolve_committed_pass_body_geometry(
       v2x_overtake_core::CommittedPassBodyGeometryRequest{
         overtake_line_state_.phase == OvertakeLinePhase::ShiftOut,
-        overtake_mission_ownership.committed_pass_active,
+        committed_pass_contact_context_active,
         overtake_line_state_.phase == OvertakeLinePhase::ShiftOut &&
         overtake_line_state_.mission_path_frozen &&
         committed_body_clear_handoff.active,
@@ -6607,7 +6625,7 @@ struct MPC
         output.locked_target_current_body_footprints_separated,
         output.locked_target_footprint_prediction_valid,
         output.locked_target_predicted_body_footprint_sweep_separated,
-        overtake_line_state_.pass_forward_completion_latched,
+        contact_forward_completion_latched,
         output.locked_target_longitudinal,
         cfg.v2x_gap.vehicle_length,
         model->length});
@@ -6681,7 +6699,7 @@ struct MPC
         overtake_line_state_.pass_front_cap_release_active,
         committed_predicted_overlap_confirmed,
         committed_body_geometry.side_by_side_escape_active,
-        overtake_mission_ownership.committed_pass_active,
+        committed_pass_contact_context_active,
         cfg.v2x_behavior.overtake_committed_pass_attack_mode_enabled,
         output.recoverable_side_contact_active,
         overtake_line_state_.mission_path_frozen &&
@@ -11592,10 +11610,15 @@ struct MPC
     // current-execution guard releases ownership. The downstream gap planner
     // and OvertakeLine still evaluate live corridor, wall, lateral acceleration
     // and solver feasibility before publishing the line.
+    const bool committed_pass_behavior_context_active =
+      overtake_mission_ownership.committed_pass_active ||
+      (committed_pass_contact_context_active &&
+      overtake_line_state_.dynamic_mission_wait_active &&
+      output.recoverable_side_contact_active);
     output.overtake_committed_pass_behavior_owner_active =
       v2x_overtake_core::can_preserve_committed_pass_behavior(
       v2x_overtake_core::CommittedPassBehaviorOwnershipRequest{
-        overtake_mission_ownership.committed_pass_active,
+        committed_pass_behavior_context_active,
         overtake_line_state_.fixed_pass_corridor_goal_ey.has_value(),
         overtake_line_state_.pass_side_sign != 0,
         overtake_line_state_.pass_front_overlap_exclusion_latched,
@@ -13618,6 +13641,10 @@ private:
     if (next_phase == OvertakeLinePhase::FollowPrepare) {
       overtake_line_state_.follow_prepare_origin_phase = previous_phase;
       overtake_line_state_.follow_prepare_cause = follow_prepare_cause;
+      overtake_line_state_.dynamic_mission_wait_pass_forward_completion_latched =
+        previous_phase == OvertakeLinePhase::Pass &&
+        follow_prepare_cause == FollowPrepareCause::DynamicMissionWait &&
+        overtake_line_state_.pass_forward_completion_latched;
       if (previous_phase != OvertakeLinePhase::FollowPrepare) {
         overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active = false;
         overtake_line_state_.dynamic_mission_wait_full_closing_was_active = false;
@@ -13637,6 +13664,7 @@ private:
       overtake_line_state_.dynamic_mission_wait_rear_clear_extension_logged = false;
       overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active = false;
       overtake_line_state_.dynamic_mission_wait_full_closing_was_active = false;
+      overtake_line_state_.dynamic_mission_wait_pass_forward_completion_latched = false;
       overtake_line_state_.dynamic_mission_wait_predicted_overlap_since_sec =
         std::numeric_limits<double>::quiet_NaN();
     }
@@ -14260,6 +14288,7 @@ private:
     overtake_line_state_.dynamic_mission_wait_rear_clear_extension_logged = false;
     overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active = false;
     overtake_line_state_.dynamic_mission_wait_full_closing_was_active = false;
+    overtake_line_state_.dynamic_mission_wait_pass_forward_completion_latched = false;
     overtake_line_state_.dynamic_mission_wait_predicted_overlap_since_sec =
       std::numeric_limits<double>::quiet_NaN();
     overtake_line_state_.pass_horizon_fallback_start_sec =
@@ -16845,12 +16874,18 @@ private:
     const bool active_execution_phase =
       overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
       overtake_line_state_.phase == OvertakeLinePhase::Pass;
+    const bool pass_origin_dynamic_wait_active =
+      overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare &&
+      overtake_line_state_.follow_prepare_origin_phase == OvertakeLinePhase::Pass &&
+      overtake_line_state_.follow_prepare_cause == FollowPrepareCause::DynamicMissionWait &&
+      overtake_line_state_.dynamic_mission_wait_active;
     const bool starting_execution_phase =
       behavior_overtake &&
       (overtake_line_state_.phase == OvertakeLinePhase::Idle ||
       overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare);
     const bool execution_phase_or_starting =
-      active_execution_phase || starting_execution_phase;
+      active_execution_phase || starting_execution_phase ||
+      pass_origin_dynamic_wait_active;
     const bool wall_monitor_active =
       execution_phase_or_starting ||
       overtake_line_state_.phase == OvertakeLinePhase::Return ||
@@ -16888,7 +16923,10 @@ private:
         physical_sample.valid && !physical_sample.out_of_map &&
         !physical_sample.contact_cells.empty();
 
-      if (overtake_line_state_.phase == OvertakeLinePhase::Pass) {
+      if (
+        overtake_line_state_.phase == OvertakeLinePhase::Pass ||
+        pass_origin_dynamic_wait_active)
+      {
         auto contact_clearance_footprint = overtake_static_wall_footprint_;
         const double contact_wall_clearance = std::max(
           min_wall_clearance,
@@ -17165,13 +17203,16 @@ private:
       (behavior_output.locked_target_current_body_overlap_confirmed &&
       !behavior_output.recoverable_side_contact_active) ||
       overtake_solver_recovery_active_ || behavior_output.overtake_forbidden_wp);
+    const bool rolling_replan_target_geometry_acceptable =
+      behavior_output.recoverable_side_contact_active ||
+      (behavior_output.locked_target_current_body_footprints_separated &&
+      behavior_output.locked_target_footprint_prediction_valid);
     const bool rolling_replan_hold_active =
       tactical_rolling_replan_runtime_active &&
       locked_target_progress_continuous &&
       !behavior_output.locked_target_position_jump &&
       !locked_target_progress_rejected &&
-      behavior_output.locked_target_current_body_footprints_separated &&
-      behavior_output.locked_target_footprint_prediction_valid &&
+      rolling_replan_target_geometry_acceptable &&
       !actual_wall_physical_contact && !actual_wall_margin_blocked &&
       !actual_wall_sample_unavailable &&
       behavior_output.front_risk_level != FrontRiskLevel::EmergencyBrake &&
@@ -18424,26 +18465,37 @@ private:
 
     const auto publish_dynamic_wait_forward_prefix = [&, this](
       const bool dynamic_wait_hard_fault, const int mission_side_sign) {
-        const std::vector<double> current_side_targets(
-          static_cast<std::size_t>(N), current_ey);
         const double prefix_distance = std::max(
           0.5, line_cfg.mpcc_lite_prefix_terminal_distance);
         const double prefix_speed = std::max(1.0, current_speed_mps_);
+        const bool contact_prefix_active =
+          behavior_output.recoverable_side_contact_active;
+        const double prefix_goal_ey = current_ey +
+          (contact_prefix_active ?
+          behavior_output.recoverable_side_contact_lateral_bias_m : 0.0);
+        const double prefix_wall_clearance = contact_prefix_active ?
+          std::max(
+          planning_wall_clearance,
+          cfg.v2x_behavior.overtake_line.contact_continuation_min_wall_clearance) :
+          planning_wall_clearance;
         auto prefix_horizon = evaluate_overtake_line_horizon(
-          ref_wp_id, N, lb, ub, current_ey, current_ey, 0.0, true,
-          prefix_distance, current_ey, planning_wall_clearance,
-          line_cfg.max_lateral_accel, prefix_speed, true,
-          std::nullopt, current_side_targets);
+          ref_wp_id, N, lb, ub, current_ey, current_ey, 0.0, false,
+          prefix_distance, prefix_goal_ey, prefix_wall_clearance,
+          line_cfg.max_lateral_accel, prefix_speed, true);
         bool physical_margin_fallback = false;
+        const double physical_prefix_wall_clearance = contact_prefix_active ?
+          std::max(
+          min_wall_clearance,
+          cfg.v2x_behavior.overtake_line.contact_continuation_min_wall_clearance) :
+          min_wall_clearance;
         if (
           !prefix_horizon.execution_feasible() &&
-          min_wall_clearance + kEps < planning_wall_clearance)
+          physical_prefix_wall_clearance + kEps < prefix_wall_clearance)
         {
           prefix_horizon = evaluate_overtake_line_horizon(
-            ref_wp_id, N, lb, ub, current_ey, current_ey, 0.0, true,
-            prefix_distance, current_ey, min_wall_clearance,
-            line_cfg.max_lateral_accel, prefix_speed, true,
-            std::nullopt, current_side_targets);
+            ref_wp_id, N, lb, ub, current_ey, current_ey, 0.0, false,
+            prefix_distance, prefix_goal_ey, physical_prefix_wall_clearance,
+            line_cfg.max_lateral_accel, prefix_speed, true);
           physical_margin_fallback = prefix_horizon.execution_feasible();
         }
         const double target_speed =
@@ -18473,7 +18525,8 @@ private:
               0.0, cfg.v2x_behavior.overtake_pass_unlatched_max_closing_speed),
             std::max(
               0.0, cfg.v2x_behavior.overtake_shiftout_max_closing_speed),
-            std::max(0.0, cfg.v_max)});
+            std::max(0.0, cfg.v_max),
+            contact_prefix_active});
         if (!prefix_policy.valid || !prefix_policy.active) {
           if (
             line_cfg.debug_log_enabled &&
@@ -18542,14 +18595,16 @@ private:
             rclcpp::get_logger("mpc_controller"),
             "OvertakeLine dynamic Mission forward prefix active: "
             "target=%s, side=%d, closing=%.2f, full=%d, "
-            "v_ref=%.2f, v_floor=%.2f, wall=%s, distance=%.2f m, wp_id=%d",
+            "v_ref=%.2f, v_floor=%.2f, wall=%s, distance=%.2f m, "
+            "contact=%d, bias=%.2f m, wp_id=%d",
             overtake_line_state_.target_vehicle_id.c_str(), mission_side_sign,
             prefix_policy.closing_speed_mps,
             prefix_policy.full_closing_authority ? 1 : 0,
             prefix_policy.target_velocity_reference_mps,
             output.target_velocity_floor,
             physical_margin_fallback ? "physical" : "robust",
-            prefix_distance, model->wp_id);
+            prefix_distance, contact_prefix_active ? 1 : 0,
+            prefix_goal_ey - current_ey, model->wp_id);
         }
         overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active = true;
         overtake_line_state_.dynamic_mission_wait_full_closing_was_active =
@@ -18612,7 +18667,8 @@ private:
             behavior_output.opponent_side_replan_evaluated,
             behavior_output.opponent_side_replan_current_feasible,
             fresh_current_replacement_ready,
-            fresh_alternate_replacement_ready});
+            fresh_alternate_replacement_ready,
+            behavior_output.recoverable_side_contact_active});
 
         switch (dynamic_wait.action) {
           case overtake_core::DynamicMissionWaitAction::Return:
@@ -22423,7 +22479,10 @@ private:
     const bool lateral_execution_hold_active =
       rolling_replan_hold_active || pass_entry_physical_hold_active;
     output.pass_entry_physical_gate_active = pass_entry_physical_hold_active;
-    const double raw_goal = lateral_execution_hold_active ? current_ey :
+    const double raw_goal =
+      behavior_output.recoverable_side_contact_active && contact_separation.valid ?
+      contact_separation.goal_m :
+      lateral_execution_hold_active ? current_ey :
       contact_separation.valid ? contact_separation.goal_m : feasible_goal_for_phase;
     // A committed Pass replan already owns a wall- and acceleration-validated
     // distance-domain ramp. Applying the generic per-cycle goal slew on top of
@@ -22651,6 +22710,17 @@ private:
           0.0,
           execution_traveled_now -
           overtake_line_state_.target_bound_execution_replan_hold_start_distance) : 0.0;
+      const bool hold_budget_exhausted_now =
+        hold_was_active &&
+        (hold_elapsed_sec + kEps >=
+        std::max(0.0, line_cfg.receding_horizon_target_bound_prefix_max_sec) ||
+        hold_traveled_m + kEps >=
+        std::max(
+        0.0, line_cfg.receding_horizon_target_bound_prefix_max_distance));
+      const bool hold_budget_consumed_for_generation =
+        overtake_line_state_.mission_generation > 0U &&
+        overtake_line_state_.target_bound_execution_replan_exhausted_generation ==
+        overtake_line_state_.mission_generation;
       const bool physical_hold_allowed =
         overtake_core::can_hold_target_bound_execution_for_replan(
         overtake_core::TargetBoundExecutionHoldRequest{
@@ -22675,7 +22745,8 @@ private:
           hold_traveled_m,
           std::max(0.0, line_cfg.receding_horizon_target_bound_prefix_max_sec),
           std::max(
-            0.0, line_cfg.receding_horizon_target_bound_prefix_max_distance)});
+            0.0, line_cfg.receding_horizon_target_bound_prefix_max_distance),
+          hold_budget_consumed_for_generation});
       if (physical_hold_allowed) {
         const auto lifecycle =
           overtake_core::resolve_target_bound_execution_hold_lifecycle(
@@ -22728,14 +22799,28 @@ private:
         receding_horizon.horizon = std::move(physical_hold_horizon);
       } else {
         if (hold_was_active) {
-          RCLCPP_WARN(
-            rclcpp::get_logger("mpc_controller"),
-            "OvertakeLine target-bound execution hold ended without replacement: "
-            "target=%s, side=%d, phase=%s, elapsed=%.2f s, traveled=%.2f m, wp_id=%d",
-            overtake_line_state_.target_vehicle_id.c_str(),
-            overtake_line_state_.pass_side_sign,
-            to_string(overtake_line_state_.phase), hold_elapsed_sec,
-            hold_traveled_m, model->wp_id);
+          if (hold_budget_exhausted_now) {
+            overtake_line_state_.target_bound_execution_replan_exhausted_generation =
+              overtake_line_state_.mission_generation;
+            RCLCPP_WARN(
+              rclcpp::get_logger("mpc_controller"),
+              "OvertakeLine target-bound execution hold budget exhausted: "
+              "target=%s, side=%d, generation=%lu, elapsed=%.2f s, "
+              "traveled=%.2f m, wp_id=%d",
+              overtake_line_state_.target_vehicle_id.c_str(),
+              overtake_line_state_.pass_side_sign,
+              static_cast<unsigned long>(overtake_line_state_.mission_generation),
+              hold_elapsed_sec, hold_traveled_m, model->wp_id);
+          } else {
+            RCLCPP_WARN(
+              rclcpp::get_logger("mpc_controller"),
+              "OvertakeLine target-bound execution hold ended without replacement: "
+              "target=%s, side=%d, phase=%s, elapsed=%.2f s, traveled=%.2f m, wp_id=%d",
+              overtake_line_state_.target_vehicle_id.c_str(),
+              overtake_line_state_.pass_side_sign,
+              to_string(overtake_line_state_.phase), hold_elapsed_sec,
+              hold_traveled_m, model->wp_id);
+          }
         }
         clear_target_bound_execution_prefix_state();
       }
@@ -22809,12 +22894,17 @@ private:
             overtake_line_state_.pass_side_sign, hold_elapsed_sec,
             hold_traveled_m, model->wp_id);
         } else if (lifecycle.valid && lifecycle.exhausted) {
+          overtake_line_state_.target_bound_execution_replan_exhausted_generation =
+            overtake_line_state_.mission_generation;
           RCLCPP_WARN(
             rclcpp::get_logger("mpc_controller"),
             "OvertakeLine target-bound execution hold budget exhausted during planner gap: "
-            "target=%s, side=%d, elapsed=%.2f s, traveled=%.2f m, wp_id=%d",
+            "target=%s, side=%d, generation=%lu, elapsed=%.2f s, "
+            "traveled=%.2f m, wp_id=%d",
             overtake_line_state_.target_vehicle_id.c_str(),
-            overtake_line_state_.pass_side_sign, hold_elapsed_sec,
+            overtake_line_state_.pass_side_sign,
+            static_cast<unsigned long>(overtake_line_state_.mission_generation),
+            hold_elapsed_sec,
             hold_traveled_m, model->wp_id);
         } else if (!lifecycle.valid) {
           RCLCPP_WARN(

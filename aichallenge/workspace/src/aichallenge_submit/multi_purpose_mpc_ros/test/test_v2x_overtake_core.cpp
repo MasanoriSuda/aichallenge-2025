@@ -3453,6 +3453,10 @@ TEST(V2XOvertakeCoreSpeed, HoldsCommittedExecutionPrefixAcrossTargetOnlyConflict
   request.hold_elapsed_sec = 0.20;
   request.hold_traveled_m = 3.0;
   EXPECT_FALSE(can_hold_target_bound_execution_for_replan(request));
+
+  request.hold_traveled_m = 1.0;
+  request.mission_hold_budget_exhausted = true;
+  EXPECT_FALSE(can_hold_target_bound_execution_for_replan(request));
 }
 
 TEST(V2XOvertakeCoreSpeed, TargetBoundExecutionHoldCannotBypassHardFaults)
@@ -10880,7 +10884,7 @@ TEST(V2XOvertakeCoreDynamicMissionWait, HoldsUntilFreshCurrentOrAlternatePlanExi
   EXPECT_EQ(result.reason, DynamicMissionWaitReason::AlternatePlanReady);
 }
 
-TEST(V2XOvertakeCoreDynamicMissionWait, KeepsHardFaultsAndOverlapFailClosed)
+TEST(V2XOvertakeCoreDynamicMissionWait, KeepsHardFaultsAndUnclassifiedOverlapFailClosed)
 {
   DynamicMissionWaitRequest request;
   request.enabled = true;
@@ -10900,6 +10904,16 @@ TEST(V2XOvertakeCoreDynamicMissionWait, KeepsHardFaultsAndOverlapFailClosed)
   result = resolve_dynamic_mission_wait(request);
   EXPECT_EQ(result.action, DynamicMissionWaitAction::Recovery);
   EXPECT_EQ(result.reason, DynamicMissionWaitReason::BodyOverlap);
+
+  request.recoverable_side_contact_active = true;
+  result = resolve_dynamic_mission_wait(request);
+  EXPECT_EQ(result.action, DynamicMissionWaitAction::ResumeCurrent);
+  EXPECT_EQ(result.reason, DynamicMissionWaitReason::CurrentPlanRecovered);
+  request.rear_clear_confirmed = true;
+  result = resolve_dynamic_mission_wait(request);
+  EXPECT_EQ(result.action, DynamicMissionWaitAction::ResumeCurrent);
+  request.rear_clear_confirmed = false;
+  request.recoverable_side_contact_active = false;
 
   request.current_body_footprints_separated = true;
   request.target_continuous = false;
@@ -11029,6 +11043,33 @@ TEST(V2XOvertakeCoreDynamicMissionWait, ForwardPrefixLimitsClosingOnPredictedOve
   EXPECT_DOUBLE_EQ(result.closing_speed_mps, 0.5);
   EXPECT_DOUBLE_EQ(result.target_velocity_reference_mps, 4.5);
   EXPECT_DOUBLE_EQ(result.target_velocity_floor_mps, 0.0);
+}
+
+TEST(V2XOvertakeCoreDynamicMissionWait, RecoverableContactKeepsForwardPrefix)
+{
+  DynamicMissionWaitForwardPrefixRequest request;
+  request.enabled = true;
+  request.wait_active = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = false;
+  request.footprint_prediction_valid = false;
+  request.prefix_wall_feasible = true;
+  request.current_ego_speed_mps = 4.5;
+  request.target_speed_mps = 4.0;
+  request.mission_closing_speed_mps = 2.0;
+  request.unlatched_closing_speed_mps = 0.5;
+  request.maximum_closing_speed_mps = 2.0;
+  request.maximum_vehicle_speed_mps = 11.0;
+  request.recoverable_side_contact_active = true;
+
+  const auto result = resolve_dynamic_mission_wait_forward_prefix(request);
+  EXPECT_TRUE(result.valid);
+  EXPECT_TRUE(result.active);
+  EXPECT_TRUE(result.full_closing_authority);
+  EXPECT_TRUE(result.speed_floor_active);
+  EXPECT_DOUBLE_EQ(result.closing_speed_mps, 2.0);
+  EXPECT_DOUBLE_EQ(result.target_velocity_reference_mps, 6.0);
+  EXPECT_DOUBLE_EQ(result.target_velocity_floor_mps, 6.0);
 }
 
 TEST(V2XOvertakeCoreDynamicMissionWait, ForwardPrefixRejectsWallAndIdentityFaults)
@@ -11207,6 +11248,22 @@ TEST(V2XOvertakeCoreMissionOwnership, RollingReplanRetainsLockedTargetSpeedOwner
   EXPECT_TRUE(result.behavior_continuation_assessment_active);
   EXPECT_TRUE(result.overtake_line_owns_locked_target_speed);
   EXPECT_FALSE(result.generic_follow_owns_locked_target_speed);
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, PassOriginRollingWaitKeepsOnlyContactContext)
+{
+  OvertakeMissionOwnershipRequest request;
+  request.follow_prepare_phase = true;
+  request.rolling_replan_phase = true;
+  request.follow_prepare_origin_pass = true;
+
+  auto result = resolve_overtake_mission_ownership(request);
+  EXPECT_FALSE(result.committed_pass_active);
+  EXPECT_TRUE(result.committed_pass_contact_context_active);
+
+  request.follow_prepare_origin_pass = false;
+  result = resolve_overtake_mission_ownership(request);
+  EXPECT_FALSE(result.committed_pass_contact_context_active);
 }
 
 TEST(V2XOvertakeCoreMissionOwnership, ReturnAndRecoveryRemainEntryAssessments)

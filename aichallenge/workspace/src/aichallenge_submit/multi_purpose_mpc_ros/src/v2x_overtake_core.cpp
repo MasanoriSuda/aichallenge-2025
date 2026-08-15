@@ -1787,7 +1787,8 @@ bool can_hold_target_bound_execution_for_replan(
     !std::isfinite(request.hold_traveled_m) || request.hold_traveled_m < 0.0 ||
     !std::isfinite(request.maximum_hold_sec) || request.maximum_hold_sec <= 0.0 ||
     !std::isfinite(request.maximum_hold_distance_m) ||
-    request.maximum_hold_distance_m <= 0.0)
+    request.maximum_hold_distance_m <= 0.0 ||
+    request.mission_hold_budget_exhausted)
   {
     return false;
   }
@@ -8961,12 +8962,18 @@ DynamicMissionWaitResolution resolve_dynamic_mission_wait(
     resolution.reason = DynamicMissionWaitReason::TargetInvalid;
     return resolution;
   }
-  if (!request.current_body_footprints_separated) {
+  if (
+    !request.current_body_footprints_separated &&
+    !request.recoverable_side_contact_active)
+  {
     resolution.action = DynamicMissionWaitAction::Recovery;
     resolution.reason = DynamicMissionWaitReason::BodyOverlap;
     return resolution;
   }
-  if (request.rear_clear_confirmed) {
+  if (
+    request.rear_clear_confirmed &&
+    request.current_body_footprints_separated)
+  {
     resolution.action = DynamicMissionWaitAction::Return;
     resolution.reason = DynamicMissionWaitReason::RearClear;
     return resolution;
@@ -9076,10 +9083,16 @@ DynamicMissionWaitForwardPrefixResolution resolve_dynamic_mission_wait_forward_p
     return resolution;
   }
   resolution.valid = true;
+  const bool current_geometry_recoverable =
+    request.current_body_footprints_separated ||
+    request.recoverable_side_contact_active;
+  const bool target_prediction_available =
+    request.recoverable_side_contact_active ||
+    request.footprint_prediction_valid;
   if (
     !request.enabled || !request.wait_active || !request.target_continuous ||
-    !request.current_body_footprints_separated ||
-    !request.footprint_prediction_valid || !request.prefix_wall_feasible ||
+    !current_geometry_recoverable || !target_prediction_available ||
+    !request.prefix_wall_feasible ||
     request.hard_fault)
   {
     return resolution;
@@ -9087,6 +9100,7 @@ DynamicMissionWaitForwardPrefixResolution resolve_dynamic_mission_wait_forward_p
 
   resolution.active = true;
   resolution.full_closing_authority =
+    request.recoverable_side_contact_active ||
     request.predicted_body_footprint_sweep_separated;
   const double requested_closing = resolution.full_closing_authority ?
     request.mission_closing_speed_mps : request.unlatched_closing_speed_mps;
@@ -9124,6 +9138,9 @@ OvertakeMissionOwnershipResolution resolve_overtake_mission_ownership(
   resolution.paused_mission_active = request.follow_prepare_phase;
   resolution.rolling_replan_active =
     request.follow_prepare_phase && request.rolling_replan_phase;
+  resolution.committed_pass_contact_context_active =
+    resolution.committed_pass_active ||
+    (resolution.rolling_replan_active && request.follow_prepare_origin_pass);
   resolution.mission_active =
     resolution.committed_execution_active || resolution.paused_mission_active ||
     request.return_phase || request.recovery_phase;

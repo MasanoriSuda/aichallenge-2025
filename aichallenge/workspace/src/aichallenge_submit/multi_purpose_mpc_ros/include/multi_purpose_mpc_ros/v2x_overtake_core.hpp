@@ -3098,7 +3098,9 @@ struct FrenetDpAtomicRefreshPromotionRequest {
   bool refresh_requested{false};
   bool reference_valid{false};
   bool reference_active{false};
-  bool reference_coverage_complete{false};
+  // The fresh source prefix may use a previous feasible/Mission tail. This bit
+  // describes the combined executable horizon, not source-path coverage.
+  bool executable_horizon_complete{false};
   bool execution_horizon_feasible{false};
   bool target_matches{false};
   bool target_continuous{false};
@@ -3118,9 +3120,10 @@ struct FrenetDpAtomicRefreshPromotionResolution {
   bool hard_fault_free{false};
 };
 
-/// Promote a pending rolling-refresh path only after it has earned a complete
-/// current-state control-horizon validation. A rejected pending candidate must
-/// never revoke or mutate the previously validated active execution path.
+/// Promote a pending rolling-refresh path only after the combined fresh prefix
+/// and last-feasible tail earned a complete current-state control-horizon
+/// validation. A rejected pending candidate must never revoke or mutate the
+/// previously validated active execution path.
 FrenetDpAtomicRefreshPromotionResolution
 resolve_frenet_dp_atomic_refresh_promotion(
     const FrenetDpAtomicRefreshPromotionRequest &request) noexcept;
@@ -3256,6 +3259,39 @@ struct RollingSameSideLateralAdmissionResolution
 RollingSameSideLateralAdmissionResolution
 resolve_rolling_same_side_lateral_admission(
   const RollingSameSideLateralAdmissionRequest & request) noexcept;
+
+struct RecedingExecutionPrefixAssessmentRequest
+{
+  bool enabled{false};
+  bool shadow_assessment{false};
+  bool tactical_replan_pause{false};
+  bool active_shiftout_or_pass{false};
+  bool side_matches{false};
+  bool target_seen{false};
+  bool target_position_jump{false};
+  bool target_course_progress_rejected{false};
+  bool current_body_separated{false};
+  bool recoverable_side_contact{false};
+  bool target_prediction_valid{false};
+  bool forbidden_waypoint{false};
+  bool emergency_front_risk{false};
+  bool solver_recovery_active{false};
+};
+
+struct RecedingExecutionPrefixAssessmentResolution
+{
+  bool valid{false};
+  bool admitted{false};
+  bool primary_execution{false};
+};
+
+/// Decide whether the same-side current-state prefix planner may run. The
+/// planner is intentionally active during a healthy ShiftOut/Pass as well as
+/// during a tactical replan pause. Target intrusion is not a rejection here:
+/// the fresh target bounds decide whether a new prefix is feasible.
+RecedingExecutionPrefixAssessmentResolution
+resolve_receding_execution_prefix_assessment(
+  const RecedingExecutionPrefixAssessmentRequest & request) noexcept;
 
 struct OvertakeMissionCandidate
 {

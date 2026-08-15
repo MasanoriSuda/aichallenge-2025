@@ -1532,6 +1532,7 @@ struct OvertakeLineConfig
   bool mpcc_frenet_dp_corridor_enabled{false};
   bool mpcc_frenet_dp_execution_enabled{false};
   bool mpcc_frenet_dp_rolling_refresh_enabled{false};
+  bool mpcc_frenet_dp_primary_execution_enabled{false};
   double mpcc_frenet_dp_rolling_refresh_interval_sec{0.10};
   double mpcc_frenet_dp_refresh_preserved_prefix_distance{1.0};
   double mpcc_frenet_dp_refresh_blend_end_distance{4.0};
@@ -7618,17 +7619,33 @@ struct MPC
       // current side is still physically usable.  Allow only the locked side to
       // reach the normal current-state prefix preflight; this flag does not
       // bypass wall, target-sweep, body-clear, speed or acceleration checks.
+      const bool active_receding_execution_phase =
+        overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+        overtake_line_state_.phase == OvertakeLinePhase::Pass;
+      const auto receding_prefix_assessment =
+        overtake_core::resolve_receding_execution_prefix_assessment(
+        overtake_core::RecedingExecutionPrefixAssessmentRequest{
+          tactical_rolling_replan_active ||
+          cfg.v2x_behavior.overtake_line.
+          mpcc_frenet_dp_primary_execution_enabled,
+          shadow_only,
+          tactical_rolling_replan_active,
+          active_receding_execution_phase,
+          locked_pass_side != 0 && side == locked_pass_side,
+          output.locked_target_seen,
+          output.locked_target_position_jump,
+          output.locked_target_course_progress_rejected,
+          output.locked_target_current_body_footprints_separated,
+          output.recoverable_side_contact_active,
+          output.locked_target_footprint_prediction_valid,
+          overtake_forbidden_wp,
+          effective_front_risk_emergency,
+          overtake_solver_recovery_active_});
       const bool rolling_current_side_prefix_assessment =
-        tactical_rolling_replan_active && shadow_only &&
-        locked_pass_side != 0 && side == locked_pass_side &&
-        output.locked_target_seen &&
-        !output.locked_target_position_jump &&
-        !output.locked_target_course_progress_rejected &&
-        output.locked_target_current_body_footprints_separated &&
-        output.locked_target_footprint_prediction_valid &&
-        !output.locked_target_pass_side_intrusion &&
-        !overtake_forbidden_wp && !effective_front_risk_emergency &&
-        !overtake_solver_recovery_active_;
+        receding_prefix_assessment.valid && receding_prefix_assessment.admitted;
+      const bool primary_execution_prefix_assessment =
+        rolling_current_side_prefix_assessment &&
+        receding_prefix_assessment.primary_execution;
       const bool retry_block_applies =
         !shadow_only && !start_grid_breakout_attempt && !active_overtake_line &&
         overtake_line_state_.phase != OvertakeLinePhase::Return &&
@@ -7679,7 +7696,7 @@ struct MPC
       }
       if (
         output.locked_target_pass_side_intrusion && locked_pass_side != 0 &&
-        side == locked_pass_side)
+        side == locked_pass_side && !rolling_current_side_prefix_assessment)
       {
         assessment.reason = "locked target entered selected pass-side line";
         assessment.guard_reason = assessment.reason;
@@ -8123,7 +8140,10 @@ struct MPC
         assessment.fallback_target = false;
         assessment.transient_gap_hold = false;
         assessment.reason =
-          "rolling current-state same-side prefix preflight / " + entry_rejection;
+          std::string{
+          primary_execution_prefix_assessment ?
+          "primary active same-side prefix preflight / " :
+          "rolling current-state same-side prefix preflight / "} + entry_rejection;
         assessment.guard_reason = assessment.reason;
       }
       const bool transient_gap_failure =
@@ -18318,7 +18338,9 @@ private:
         nullptr;
     bool dp_refresh_uses_receding_prefix = false;
     bool dp_refresh_used_active_prefix = false;
+    bool dp_refresh_used_active_tail = false;
     bool dp_refresh_used_physical_clearance = false;
+    std::size_t dp_refresh_source_covered_sample_count = 0U;
     std::vector<double> dp_refresh_stitched_distances;
     std::vector<double> dp_refresh_stitched_lateral;
     if (fresh_same_side_dp_prefix.has_value()) {
@@ -18369,6 +18391,23 @@ private:
             horizon_path_distance_to_index(ref_wp_id,
                                            static_cast<std::size_t>(i));
       }
+      const auto active_tail_reference =
+          overtake_core::resolve_frenet_dp_execution_reference(
+              overtake_core::FrenetDpExecutionReferenceRequest{
+                  overtake_line_state_.mission_frenet_dp_execution_active &&
+                      overtake_line_state_.mission_frenet_dp_side_sign ==
+                          overtake_line_state_.pass_side_sign,
+                  overtake_line_state_.mission_frenet_dp_execution_traveled_m,
+                  2U,
+                  overtake_line_state_.mission_frenet_dp_path_distances_m,
+                  overtake_line_state_.mission_frenet_dp_lateral_path_m,
+                  candidate_horizon_distances, candidate_fallback_targets});
+      if (active_tail_reference.valid && active_tail_reference.active &&
+          active_tail_reference.lateral_targets_m.size() ==
+              candidate_fallback_targets.size()) {
+        candidate_fallback_targets = active_tail_reference.lateral_targets_m;
+        dp_refresh_used_active_tail = true;
+      }
       const auto candidate_reference =
           overtake_core::resolve_frenet_dp_execution_reference(
               overtake_core::FrenetDpExecutionReferenceRequest{
@@ -18376,9 +18415,18 @@ private:
                   dp_refresh_stitched_distances,
                   dp_refresh_stitched_lateral,
                   candidate_horizon_distances, candidate_fallback_targets});
+      dp_refresh_source_covered_sample_count =
+          candidate_reference.covered_sample_count;
+      const bool candidate_executable_horizon_complete =
+          candidate_reference.valid && candidate_reference.active &&
+          candidate_reference.lateral_targets_m.size() ==
+              candidate_horizon_distances.size() &&
+          std::all_of(
+              candidate_reference.lateral_targets_m.begin(),
+              candidate_reference.lateral_targets_m.end(),
+              [](const double lateral_m) {return std::isfinite(lateral_m);});
       OvertakeLineHorizonEvaluation candidate_horizon;
-      if (candidate_reference.valid && candidate_reference.active &&
-          candidate_reference.coverage_complete) {
+      if (candidate_executable_horizon_complete) {
         candidate_horizon = evaluate_overtake_line_horizon(
             ref_wp_id, N, lb, ub, current_ey, current_ey, 0.0, false,
             dp_refresh_stitched_distances.back(),
@@ -18399,8 +18447,7 @@ private:
           refresh_horizon_is_unmodified_and_feasible(candidate_horizon);
       if (
         !candidate_horizon_unmodified_and_feasible &&
-        candidate_reference.valid && candidate_reference.active &&
-        candidate_reference.coverage_complete &&
+        candidate_executable_horizon_complete &&
         min_wall_clearance + kEps < planning_wall_clearance)
       {
         auto physical_candidate_horizon = evaluate_overtake_line_horizon(
@@ -18433,7 +18480,7 @@ private:
           overtake_core::resolve_frenet_dp_atomic_refresh_promotion(
               overtake_core::FrenetDpAtomicRefreshPromotionRequest{
                   true, candidate_reference.valid, candidate_reference.active,
-                  candidate_reference.coverage_complete,
+                  candidate_executable_horizon_complete,
                   candidate_horizon_unmodified_and_feasible,
                   exact_dp_refresh_target_match,
                   locked_target_progress_continuous,
@@ -18459,7 +18506,8 @@ private:
               rclcpp::get_logger("mpc_controller"),
               "OvertakeLine DP rolling candidate retained as pending: "
               "target=%s, side=%d, source=%s, reference=%d, horizon=%d, "
-              "stitched=%d/old_prefix=%d, physical=%d, target_ok=%d, "
+              "source_coverage=%zu/%d, stitched=%d/old_prefix=%d/old_tail=%d, "
+              "physical=%d, target_ok=%d, "
               "hard_fault=%d, active_remaining=%.2f m, wp_id=%d",
               overtake_line_state_.target_vehicle_id.c_str(),
               candidate.pass_side_sign,
@@ -18467,8 +18515,10 @@ private:
                                               : "complete_mission",
               promotion.reference_ready ? 1 : 0,
               candidate_horizon_unmodified_and_feasible ? 1 : 0,
+              dp_refresh_source_covered_sample_count, N,
               stitched_candidate.valid ? 1 : 0,
               dp_refresh_used_active_prefix ? 1 : 0,
+              dp_refresh_used_active_tail ? 1 : 0,
               dp_refresh_used_physical_clearance ? 1 : 0,
               promotion.target_ready ? 1 : 0, promotion.hard_fault_free ? 0 : 1,
               overtake_line_state_.mission_frenet_dp_path_distances_m.empty()
@@ -18547,7 +18597,8 @@ private:
             rclcpp::get_logger("mpc_controller"),
             "OvertakeLine DP execution rolling refresh: target=%s, side=%d, "
             "source=%s, tactic=%s/%zu knots, points=%zu, distance=%.2f m, "
-            "old_remaining=%.2f m, stitched_old=%d, physical=%d, "
+            "old_remaining=%.2f m, source_coverage=%zu/%d, "
+            "stitched_old=%d, old_tail=%d, physical=%d, "
             "closing=%.2f m/s, count=%d, wp_id=%d",
             overtake_line_state_.target_vehicle_id.c_str(),
             overtake_line_state_.mission_frenet_dp_side_sign,
@@ -18558,7 +18609,9 @@ private:
             overtake_line_state_.mission_frenet_dp_path_distances_m.size(),
             overtake_line_state_.mission_frenet_dp_path_distances_m.back(),
             old_remaining_distance,
+            dp_refresh_source_covered_sample_count, N,
             dp_refresh_used_active_prefix ? 1 : 0,
+            dp_refresh_used_active_tail ? 1 : 0,
             dp_refresh_used_physical_clearance ? 1 : 0,
             overtake_line_state_.mission_closing_speed_limit,
             overtake_line_state_.mission_frenet_dp_refresh_count, model->wp_id);
@@ -28772,6 +28825,9 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_rolling_refresh_enabled =
     mpc["v2x_overtake_mpcc_frenet_dp_rolling_refresh_enabled"] ?
     mpc["v2x_overtake_mpcc_frenet_dp_rolling_refresh_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_primary_execution_enabled =
+    mpc["v2x_overtake_mpcc_frenet_dp_primary_execution_enabled"] ?
+    mpc["v2x_overtake_mpcc_frenet_dp_primary_execution_enabled"].as<bool>() : false;
   cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_rolling_refresh_interval_sec = std::max(
     0.0,
     mpc["v2x_overtake_mpcc_frenet_dp_rolling_refresh_interval_sec"] ?
@@ -30945,7 +31001,8 @@ public:
         mpcc_lite_same_side_max_lateral_adjustment);
       RCLCPP_INFO(
         get_logger(),
-        "V2X MPCC Frenet DP corridor: %s, execution=%s, rolling_refresh=%s/%.2f s, "
+        "V2X MPCC Frenet DP corridor: %s, execution=%s, "
+        "rolling_refresh=%s/%.2f s, primary_execution=%s, "
         "stitch=%.2f->%.2f m, bins=%d, slope<=%.2f m/m, "
         "weights anchor=%.2f/motion=%.2f/previous=%.2f/width=%.2f/"
         "reserve=%.2f/side_switch=%.2f, "
@@ -30960,6 +31017,8 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_rolling_refresh_enabled ?
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_rolling_refresh_interval_sec,
+        mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_primary_execution_enabled ?
+        "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.
         mpcc_frenet_dp_refresh_preserved_prefix_distance,
         mpc_cfg_.v2x_behavior.overtake_line.

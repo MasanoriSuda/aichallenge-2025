@@ -4977,7 +4977,7 @@ resolve_frenet_dp_atomic_refresh_promotion(
   resolution.valid = true;
   resolution.reference_ready =
       request.reference_valid && request.reference_active &&
-      request.reference_coverage_complete && request.execution_horizon_feasible;
+      request.executable_horizon_complete && request.execution_horizon_feasible;
   resolution.target_ready =
       request.target_matches && request.target_continuous &&
       !request.target_position_jump &&
@@ -5838,6 +5838,29 @@ resolve_rolling_same_side_lateral_admission(
     !resolution.guard_applied ||
     resolution.lateral_adjustment_m <=
     request.maximum_lateral_adjustment_m + kLateralAdjustmentEpsilon;
+  return resolution;
+}
+
+RecedingExecutionPrefixAssessmentResolution
+resolve_receding_execution_prefix_assessment(
+  const RecedingExecutionPrefixAssessmentRequest & request) noexcept
+{
+  RecedingExecutionPrefixAssessmentResolution resolution;
+  resolution.valid = true;
+  const bool execution_context =
+    request.tactical_replan_pause || request.active_shiftout_or_pass;
+  const bool current_geometry_observable =
+    request.current_body_separated || request.recoverable_side_contact;
+  const bool hard_fault =
+    request.target_position_jump || request.target_course_progress_rejected ||
+    request.forbidden_waypoint || request.emergency_front_risk ||
+    request.solver_recovery_active;
+  resolution.admitted =
+    request.enabled && request.shadow_assessment && execution_context &&
+    request.side_matches && request.target_seen && current_geometry_observable &&
+    request.target_prediction_valid && !hard_fault;
+  resolution.primary_execution =
+    resolution.admitted && request.active_shiftout_or_pass;
   return resolution;
 }
 

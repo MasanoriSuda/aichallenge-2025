@@ -4011,6 +4011,45 @@ TEST(V2XOvertakeCoreSpeed, RollingSameSideLateralGuardIsScopedAndFailClosed)
   EXPECT_FALSE(resolution.admitted);
 }
 
+TEST(V2XOvertakeCoreSpeed, RecedingPrefixRunsDuringHealthyActiveExecution)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    RecedingExecutionPrefixAssessmentRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_receding_execution_prefix_assessment;
+
+  RecedingExecutionPrefixAssessmentRequest request;
+  request.enabled = true;
+  request.shadow_assessment = true;
+  request.active_shiftout_or_pass = true;
+  request.side_matches = true;
+  request.target_seen = true;
+  request.current_body_separated = true;
+  request.target_prediction_valid = true;
+
+  auto resolution = resolve_receding_execution_prefix_assessment(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.admitted);
+  EXPECT_TRUE(resolution.primary_execution);
+
+  request.active_shiftout_or_pass = false;
+  request.tactical_replan_pause = true;
+  resolution = resolve_receding_execution_prefix_assessment(request);
+  EXPECT_TRUE(resolution.admitted);
+  EXPECT_FALSE(resolution.primary_execution);
+
+  request.current_body_separated = false;
+  request.recoverable_side_contact = true;
+  resolution = resolve_receding_execution_prefix_assessment(request);
+  EXPECT_TRUE(resolution.admitted);
+
+  request.target_position_jump = true;
+  EXPECT_FALSE(resolve_receding_execution_prefix_assessment(request).admitted);
+  request.target_position_jump = false;
+  request.emergency_front_risk = true;
+  EXPECT_FALSE(resolve_receding_execution_prefix_assessment(request).admitted);
+}
+
 TEST(V2XOvertakeCoreSpeed, BuildsAtomicPassPlanFromSelectedMission)
 {
   OvertakeMissionCandidate mission;
@@ -15986,7 +16025,7 @@ TEST(V2XOvertakeCoreFrenetDpExecution, RefreshRetainsOldPathUntilIntervalAndNewS
 }
 
 TEST(V2XOvertakeCoreFrenetDpExecution,
-     PromotesOnlyFullyRuntimeValidatedRefresh) {
+     PromotesOnlyFullyRuntimeValidatedCombinedHorizon) {
   using multi_purpose_mpc_ros::v2x_overtake_core::
       FrenetDpAtomicRefreshPromotionRequest;
   using multi_purpose_mpc_ros::v2x_overtake_core::
@@ -15996,7 +16035,7 @@ TEST(V2XOvertakeCoreFrenetDpExecution,
   request.refresh_requested = true;
   request.reference_valid = true;
   request.reference_active = true;
-  request.reference_coverage_complete = true;
+  request.executable_horizon_complete = true;
   request.execution_horizon_feasible = true;
   request.target_matches = true;
   request.target_continuous = true;
@@ -16010,9 +16049,9 @@ TEST(V2XOvertakeCoreFrenetDpExecution,
   EXPECT_TRUE(resolution.hard_fault_free);
   EXPECT_TRUE(resolution.promote);
 
-  request.reference_coverage_complete = false;
+  request.executable_horizon_complete = false;
   EXPECT_FALSE(resolve_frenet_dp_atomic_refresh_promotion(request).promote);
-  request.reference_coverage_complete = true;
+  request.executable_horizon_complete = true;
 
   request.execution_horizon_feasible = false;
   EXPECT_FALSE(resolve_frenet_dp_atomic_refresh_promotion(request).promote);
@@ -16029,6 +16068,48 @@ TEST(V2XOvertakeCoreFrenetDpExecution,
 
   request.hard_fault = true;
   EXPECT_FALSE(resolve_frenet_dp_atomic_refresh_promotion(request).promote);
+}
+
+TEST(V2XOvertakeCoreFrenetDpExecution,
+     PromotesShortFreshPrefixWhenValidatedTailCompletesHorizon)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    FrenetDpAtomicRefreshPromotionRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    FrenetDpExecutionReferenceRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_frenet_dp_atomic_refresh_promotion;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_frenet_dp_execution_reference;
+
+  FrenetDpExecutionReferenceRequest reference_request;
+  reference_request.enabled = true;
+  reference_request.source_path_distances_m = {0.0, 1.0, 2.0};
+  reference_request.source_lateral_path_m = {0.2, 0.5, 0.7};
+  reference_request.horizon_path_distances_m = {0.0, 1.0, 2.0, 3.0, 4.0};
+  reference_request.fallback_lateral_targets_m = {0.1, 0.2, 0.3, 0.4, 0.5};
+  const auto reference =
+    resolve_frenet_dp_execution_reference(reference_request);
+  ASSERT_TRUE(reference.valid);
+  ASSERT_TRUE(reference.active);
+  ASSERT_FALSE(reference.coverage_complete);
+  ASSERT_EQ(reference.lateral_targets_m.size(), 5U);
+
+  FrenetDpAtomicRefreshPromotionRequest promotion_request;
+  promotion_request.refresh_requested = true;
+  promotion_request.reference_valid = reference.valid;
+  promotion_request.reference_active = reference.active;
+  promotion_request.executable_horizon_complete =
+    reference.lateral_targets_m.size() ==
+    reference_request.horizon_path_distances_m.size();
+  promotion_request.execution_horizon_feasible = true;
+  promotion_request.target_matches = true;
+  promotion_request.target_continuous = true;
+  promotion_request.target_prediction_valid = true;
+  promotion_request.current_body_separated = true;
+
+  EXPECT_TRUE(
+    resolve_frenet_dp_atomic_refresh_promotion(promotion_request).promote);
 }
 
 TEST(V2XOvertakeCoreFrenetDpExecution, FreshSafePrefixOwnsPassContinuation) {

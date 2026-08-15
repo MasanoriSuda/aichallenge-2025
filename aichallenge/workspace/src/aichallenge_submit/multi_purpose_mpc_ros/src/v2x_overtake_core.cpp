@@ -1551,6 +1551,7 @@ resolve_receding_horizon_target_prediction(
     !finite(request.nominal_ego_speed_mps) ||
     !finite(request.candidate_ego_speed_mps) ||
     !finite(request.prediction_horizon_sec) ||
+    !finite(request.maximum_prediction_time_sec) ||
     !finite(request.target_lateral_now_m) ||
     !finite(request.target_lateral_predicted_m) ||
     !finite(request.target_longitudinal_now_m) ||
@@ -1558,33 +1559,39 @@ resolve_receding_horizon_target_prediction(
     !finite(request.longitudinal_overlap_threshold_m) ||
     request.path_distance_m < 0.0 || request.nominal_ego_speed_mps <= 0.0 ||
     request.candidate_ego_speed_mps <= 0.0 ||
-    request.prediction_horizon_sec < 0.0 ||
+    request.prediction_horizon_sec <= 0.0 ||
+    request.maximum_prediction_time_sec < request.prediction_horizon_sec ||
     request.longitudinal_overlap_threshold_m < 0.0)
   {
     return resolution;
   }
 
-  const double unbounded_prediction_time =
+  const double sample_arrival_time =
     request.path_distance_m / request.candidate_ego_speed_mps;
-  const double prediction_time = request.prediction_horizon_sec > 1e-9 ?
-    std::min(unbounded_prediction_time, request.prediction_horizon_sec) : 0.0;
-  const double prediction_ratio = request.prediction_horizon_sec > 1e-9 ?
-    std::clamp(
-    unbounded_prediction_time / request.prediction_horizon_sec, 0.0, 1.0) : 0.0;
+  const bool prediction_truncated =
+    sample_arrival_time > request.maximum_prediction_time_sec + 1e-9;
+  const double prediction_time = std::min(
+    sample_arrival_time, request.maximum_prediction_time_sec);
+  const double prediction_ratio =
+    prediction_time / request.prediction_horizon_sec;
+  const double lateral_prediction_ratio = std::clamp(prediction_ratio, 0.0, 1.0);
   const double nominal_target_longitudinal =
     request.target_longitudinal_now_m + prediction_ratio *
     (request.target_longitudinal_predicted_m -
     request.target_longitudinal_now_m);
 
   resolution.valid = true;
+  resolution.prediction_truncated = prediction_truncated;
+  resolution.sample_arrival_time_sec = sample_arrival_time;
   resolution.prediction_time_sec = prediction_time;
   resolution.prediction_ratio = prediction_ratio;
-  resolution.target_lateral_m = request.target_lateral_now_m + prediction_ratio *
+  resolution.target_lateral_m =
+    request.target_lateral_now_m + lateral_prediction_ratio *
     (request.target_lateral_predicted_m - request.target_lateral_now_m);
   resolution.target_longitudinal_m = nominal_target_longitudinal +
     (request.nominal_ego_speed_mps - request.candidate_ego_speed_mps) *
     prediction_time;
-  resolution.body_overlap_window =
+  resolution.body_overlap_window = !prediction_truncated &&
     std::abs(resolution.target_longitudinal_m) <=
     request.longitudinal_overlap_threshold_m + 1e-9;
   return resolution;

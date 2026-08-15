@@ -969,6 +969,7 @@ struct RecedingHorizonTargetPredictionRequest
   double nominal_ego_speed_mps{};
   double candidate_ego_speed_mps{};
   double prediction_horizon_sec{};
+  double maximum_prediction_time_sec{};
   double target_lateral_now_m{};
   double target_lateral_predicted_m{};
   double target_longitudinal_now_m{};
@@ -980,6 +981,8 @@ struct RecedingHorizonTargetPredictionResolution
 {
   bool valid{false};
   bool body_overlap_window{false};
+  bool prediction_truncated{false};
+  double sample_arrival_time_sec{};
   double prediction_time_sec{};
   double prediction_ratio{};
   double target_lateral_m{};
@@ -987,10 +990,12 @@ struct RecedingHorizonTargetPredictionResolution
 };
 
 /// Re-evaluate the target pose for one path sample at a candidate ego speed.
-/// The supplied longitudinal prediction is relative to the nominal ego speed;
-/// changing speed therefore needs an explicit relative-progress correction.
-/// This keeps lateral reachability repair and target overlap constraints on
-/// the same time axis.
+/// The supplied longitudinal prediction is relative to the nominal ego speed.
+/// Its rate is extrapolated to the path-sample arrival time and then corrected
+/// for candidate ego speed. Lateral intent is held after the base prediction
+/// horizon. Samples beyond maximum_prediction_time_sec are deliberately not a
+/// hard encounter constraint; the receding horizon will admit them once they
+/// enter the bounded prediction window.
 RecedingHorizonTargetPredictionResolution
 resolve_receding_horizon_target_prediction(
   const RecedingHorizonTargetPredictionRequest & request) noexcept;

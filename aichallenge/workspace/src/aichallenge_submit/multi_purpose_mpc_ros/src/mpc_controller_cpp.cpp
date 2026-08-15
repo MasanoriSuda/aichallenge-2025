@@ -1415,6 +1415,7 @@ struct OvertakeLineConfig
   double receding_horizon_current_anchor_weight{6.0};
   double receding_horizon_relaxation{0.65};
   double receding_horizon_target_longitudinal_buffer{0.50};
+  double receding_horizon_encounter_prediction_max_sec{3.0};
   bool receding_horizon_continuity_enabled{true};
   double receding_horizon_continuity_lease_sec{0.30};
   bool receding_horizon_target_bound_prefix_enabled{false};
@@ -2657,6 +2658,10 @@ struct OvertakeRecedingHorizonEvaluation
   double maximum_reference_adjustment_m{0.0};
   double velocity_limit_mps{std::numeric_limits<double>::infinity()};
   int hard_bound_failure_index{-1};
+  std::size_t target_constraint_sample_count{0U};
+  std::size_t target_prediction_truncated_sample_count{0U};
+  double last_target_constraint_distance_m{0.0};
+  double maximum_sample_arrival_time_sec{0.0};
   std::string hard_bound_failure_kind;
   std::string fallback_reason;
   OvertakeLineHorizonEvaluation horizon;
@@ -15665,6 +15670,9 @@ private:
     const double maximum_adjustment = std::max(
       0.0, line_cfg.receding_horizon_max_reference_adjustment);
     const double target_prediction_time = std::max(0.0, cfg.v2x_gap.prediction_time);
+    const double encounter_prediction_max_time = std::max(
+      target_prediction_time,
+      line_cfg.receding_horizon_encounter_prediction_max_sec);
     const bool target_prediction_valid =
       behavior_output.locked_target_seen &&
       !behavior_output.locked_target_position_jump &&
@@ -15746,6 +15754,7 @@ private:
             std::max(1.0, speed_for_time),
             std::max(1.0, candidate_speed),
             target_prediction_time,
+            encounter_prediction_max_time,
             target_lateral_now,
             target_lateral_predicted,
             behavior_output.locked_target_longitudinal,
@@ -15786,6 +15795,14 @@ private:
 
       const auto target_prediction =
         resolve_target_prediction(distance, speed_for_time);
+      if (target_prediction.valid) {
+        result.maximum_sample_arrival_time_sec = std::max(
+          result.maximum_sample_arrival_time_sec,
+          target_prediction.sample_arrival_time_sec);
+        if (target_prediction.prediction_truncated) {
+          ++result.target_prediction_truncated_sample_count;
+        }
+      }
       const double target_lateral = target_prediction.valid ?
         target_prediction.target_lateral_m : target_lateral_now;
       const bool raw_target_body_overlap_window =
@@ -15797,6 +15814,8 @@ private:
         result.rear_clear_bounds_release_used ||
         (raw_target_body_overlap_window && rear_clear_pass_bounds_release_eligible);
       if (target_body_overlap_window) {
+        ++result.target_constraint_sample_count;
+        result.last_target_constraint_distance_m = distance;
         const auto elastic_target_bounds =
           overtake_core::resolve_receding_horizon_elastic_target_bounds(
           overtake_core::RecedingHorizonElasticTargetBoundsRequest{
@@ -23292,12 +23311,18 @@ private:
             rclcpp::get_logger("mpc_controller"),
             "OvertakeLine target-bound execution hold started: "
             "target=%s, side=%d, phase=%s, speed=%.2f, "
-            "limit=%.2f s/%.2f m, tactical_replan=immediate, wp_id=%d",
+            "limit=%.2f s/%.2f m, tactical_replan=immediate, "
+            "encounter_samples=%zu, encounter_last=%.2f m, "
+            "prediction_truncated=%zu, horizon_time=%.2f s, wp_id=%d",
             overtake_line_state_.target_vehicle_id.c_str(),
             overtake_line_state_.pass_side_sign,
             to_string(overtake_line_state_.phase), current_speed_mps_,
             line_cfg.receding_horizon_target_bound_prefix_max_sec,
-            line_cfg.receding_horizon_target_bound_prefix_max_distance, model->wp_id);
+            line_cfg.receding_horizon_target_bound_prefix_max_distance,
+            receding_horizon.target_constraint_sample_count,
+            receding_horizon.last_target_constraint_distance_m,
+            receding_horizon.target_prediction_truncated_sample_count,
+            receding_horizon.maximum_sample_arrival_time_sec, model->wp_id);
         }
         // The target-only conflict is a replan trigger, not a phase change.
         // Keep the previous physical prefix and retain execution speed ownership,
@@ -27528,6 +27553,11 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_receding_horizon_target_longitudinal_buffer"] ?
     mpc["v2x_overtake_receding_horizon_target_longitudinal_buffer"].as<double>() : 0.50);
+  cfg.mpc.v2x_behavior.overtake_line.receding_horizon_encounter_prediction_max_sec =
+    std::max(
+    0.0,
+    mpc["v2x_overtake_receding_horizon_encounter_prediction_max_sec"] ?
+    mpc["v2x_overtake_receding_horizon_encounter_prediction_max_sec"].as<double>() : 3.0);
   cfg.mpc.v2x_behavior.overtake_line.receding_horizon_continuity_enabled =
     mpc["v2x_overtake_receding_horizon_continuity_enabled"] ?
     mpc["v2x_overtake_receding_horizon_continuity_enabled"].as<bool>() : true;
@@ -29991,6 +30021,15 @@ public:
         .safe_separation_target_ahead_closing_guard_distance,
         mpc_cfg_.v2x_behavior.overtake_line
         .safe_separation_target_ahead_guard_max_closing_speed);
+      RCLCPP_INFO(
+        get_logger(),
+        "V2X receding-horizon encounter prediction: base=%.2f s, max=%.2f s, "
+        "longitudinal_buffer=%.2f m",
+        mpc_cfg_.v2x_gap.prediction_time,
+        mpc_cfg_.v2x_behavior.overtake_line
+        .receding_horizon_encounter_prediction_max_sec,
+        mpc_cfg_.v2x_behavior.overtake_line
+        .receding_horizon_target_longitudinal_buffer);
       RCLCPP_INFO(
         get_logger(),
         "V2X target-bound Pass execution prefix: %s, limit=%.2f s/%.2f m, "

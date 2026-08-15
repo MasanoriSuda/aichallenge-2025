@@ -3333,7 +3333,7 @@ TEST(V2XOvertakeCoreSpeed, ElasticTargetBoundsKeepPreferredWallWhenFeasible)
 TEST(V2XOvertakeCoreSpeed, CandidateSpeedRecomputesTargetOverlapWindow)
 {
   RecedingHorizonTargetPredictionRequest request{
-    true, 3.0, 6.0, 6.0, 1.0, 0.0, 0.2, 3.0, 1.0, 2.0};
+    true, 3.0, 6.0, 6.0, 1.0, 3.0, 0.0, 0.2, 3.0, 1.0, 2.0};
   auto result = multi_purpose_mpc_ros::v2x_overtake_core::
     resolve_receding_horizon_target_prediction(request);
 
@@ -3358,9 +3358,43 @@ TEST(V2XOvertakeCoreSpeed, CandidateSpeedTargetPredictionRejectsInvalidInput)
   const auto result = multi_purpose_mpc_ros::v2x_overtake_core::
     resolve_receding_horizon_target_prediction(
     RecedingHorizonTargetPredictionRequest{
-      true, 3.0, 6.0, 0.0, 1.0, 0.0, 0.2, 3.0, 1.0, 2.0});
+      true, 3.0, 6.0, 0.0, 1.0, 3.0, 0.0, 0.2, 3.0, 1.0, 2.0});
 
   EXPECT_FALSE(result.valid);
+  EXPECT_FALSE(result.body_overlap_window);
+}
+
+TEST(V2XOvertakeCoreSpeed, ExtrapolatesLongitudinalEncounterPastBasePrediction)
+{
+  const auto result = multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_receding_horizon_target_prediction(
+    RecedingHorizonTargetPredictionRequest{
+      true, 12.0, 6.0, 6.0, 1.0, 3.0, 0.0, 0.4, 5.0, 3.0, 1.5});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_FALSE(result.prediction_truncated);
+  EXPECT_NEAR(result.sample_arrival_time_sec, 2.0, 1e-9);
+  EXPECT_NEAR(result.prediction_time_sec, 2.0, 1e-9);
+  EXPECT_NEAR(result.prediction_ratio, 2.0, 1e-9);
+  // Lateral intent stops at the bounded one-second prediction endpoint.
+  EXPECT_NEAR(result.target_lateral_m, 0.4, 1e-9);
+  // Relative longitudinal motion continues: 5 -> 3 m in one second,
+  // therefore it reaches 1 m at the two-second sample.
+  EXPECT_NEAR(result.target_longitudinal_m, 1.0, 1e-9);
+  EXPECT_TRUE(result.body_overlap_window);
+}
+
+TEST(V2XOvertakeCoreSpeed, DropsHardEncounterConstraintPastMaximumPredictionTime)
+{
+  const auto result = multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_receding_horizon_target_prediction(
+    RecedingHorizonTargetPredictionRequest{
+      true, 24.0, 6.0, 6.0, 1.0, 3.0, 0.0, 0.4, 5.0, 3.0, 10.0});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_TRUE(result.prediction_truncated);
+  EXPECT_NEAR(result.sample_arrival_time_sec, 4.0, 1e-9);
+  EXPECT_NEAR(result.prediction_time_sec, 3.0, 1e-9);
   EXPECT_FALSE(result.body_overlap_window);
 }
 

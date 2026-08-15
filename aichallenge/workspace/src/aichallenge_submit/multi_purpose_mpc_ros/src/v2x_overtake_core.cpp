@@ -3801,6 +3801,23 @@ bool can_return_from_tactical_revalidation(
     request.target_longitudinal_m + 1e-9 >= request.minimum_front_distance_m;
 }
 
+bool can_return_after_confirmed_target_clear(
+  const ConfirmedTargetClearReturnRequest & request) noexcept
+{
+  if (
+    !std::isfinite(request.target_longitudinal_m) ||
+    !std::isfinite(request.minimum_front_distance_m) ||
+    request.minimum_front_distance_m < 0.0)
+  {
+    return false;
+  }
+  return
+    request.enabled && request.target_clear_ahead_confirmed &&
+    request.target_continuous && request.current_body_footprints_separated &&
+    request.return_corridor_available && !request.hard_fault &&
+    request.target_longitudinal_m + 1e-9 >= request.minimum_front_distance_m;
+}
+
 SafeSeparationResolution resolve_safe_separation(
   const SafeSeparationRequest & request) noexcept
 {
@@ -4913,6 +4930,9 @@ FrenetDpCorridorResolution solve_frenet_dp_corridor(
   const auto finite_non_negative = [](const double value) {
       return std::isfinite(value) && value >= 0.0;
     };
+  const auto non_negative_bound = [](const double value) {
+      return !std::isnan(value) && value >= 0.0;
+    };
   if (!request.enabled) {
     resolution.valid = true;
     return resolution;
@@ -4931,6 +4951,7 @@ FrenetDpCorridorResolution solve_frenet_dp_corridor(
     !finite_non_negative(request.preferred_corridor_weight) ||
     !finite_non_negative(request.branch_switch_penalty) ||
     !finite_non_negative(request.significant_curvature_radpm) ||
+    !non_negative_bound(request.tactical_horizon_distance_m) ||
     !finite_non_negative(request.tactical_reference_weight) ||
     !std::isfinite(request.tactical_edge_fraction) ||
     request.tactical_edge_fraction < 0.0 || request.tactical_edge_fraction > 1.0 ||
@@ -5000,6 +5021,9 @@ FrenetDpCorridorResolution solve_frenet_dp_corridor(
       double last_distance = -std::numeric_limits<double>::infinity();
       bool course_metadata_observed = false;
       bool curve_observed = false;
+      const auto within_tactical_horizon = [&](const double path_distance_m) {
+          return path_distance_m <= request.tactical_horizon_distance_m + 1e-9;
+        };
       for (const auto & sample : input.samples) {
         if (
           !sample.active || !std::isfinite(sample.path_distance_m) ||
@@ -5017,12 +5041,14 @@ FrenetDpCorridorResolution solve_frenet_dp_corridor(
         {
           return invalid_branch;
         }
-        course_metadata_observed =
-          course_metadata_observed || sample.course_metadata_valid;
-        curve_observed = curve_observed ||
-          (sample.course_metadata_valid &&
-          std::abs(sample.reference_curvature_radpm) >
-          request.significant_curvature_radpm + 1e-12);
+        if (within_tactical_horizon(sample.path_distance_m)) {
+          course_metadata_observed =
+            course_metadata_observed || sample.course_metadata_valid;
+          curve_observed = curve_observed ||
+            (sample.course_metadata_valid &&
+            std::abs(sample.reference_curvature_radpm) >
+            request.significant_curvature_radpm + 1e-12);
+        }
         last_distance = sample.path_distance_m;
       }
 
@@ -5055,6 +5081,9 @@ FrenetDpCorridorResolution solve_frenet_dp_corridor(
         std::size_t stage = 0U;
         while (stage < stage_count) {
           const auto & sample = input.samples[stage];
+          if (!within_tactical_horizon(sample.path_distance_m)) {
+            break;
+          }
           const bool significant = sample.course_metadata_valid &&
             std::abs(sample.reference_curvature_radpm) >
             request.significant_curvature_radpm + 1e-12;
@@ -5068,6 +5097,9 @@ FrenetDpCorridorResolution solve_frenet_dp_corridor(
           ++stage;
           while (stage < stage_count) {
             const auto & next = input.samples[stage];
+            if (!within_tactical_horizon(next.path_distance_m)) {
+              break;
+            }
             const bool same_curve = next.course_metadata_valid &&
               std::abs(next.reference_curvature_radpm) >
               request.significant_curvature_radpm + 1e-12 &&
@@ -5111,6 +5143,9 @@ FrenetDpCorridorResolution solve_frenet_dp_corridor(
       const auto tactical_desired_side = [&](
         const FrenetDpTacticalStrategy strategy, const std::size_t stage) {
           const auto & sample = input.samples[stage];
+          if (!within_tactical_horizon(sample.path_distance_m)) {
+            return 0;
+          }
           const CurveSegment * segment = find_segment(stage);
           if (
             strategy == FrenetDpTacticalStrategy::Legacy ||
@@ -5137,7 +5172,10 @@ FrenetDpCorridorResolution solve_frenet_dp_corridor(
       const auto tactical_reference = [&](
         const FrenetDpTacticalStrategy strategy, const std::size_t stage) {
           const auto & sample = input.samples[stage];
-          if (strategy == FrenetDpTacticalStrategy::Legacy) {
+          if (
+            strategy == FrenetDpTacticalStrategy::Legacy ||
+            !within_tactical_horizon(sample.path_distance_m))
+          {
             return std::numeric_limits<double>::quiet_NaN();
           }
           const int desired_side = tactical_desired_side(strategy, stage);
@@ -5215,6 +5253,7 @@ FrenetDpCorridorResolution solve_frenet_dp_corridor(
                   tactical_error * tactical_error;
               }
               if (
+                within_tactical_horizon(sample.path_distance_m) &&
                 sample.course_metadata_valid &&
                 std::abs(sample.reference_curvature_radpm) >
                 request.significant_curvature_radpm + 1e-12)

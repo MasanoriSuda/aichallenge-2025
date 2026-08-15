@@ -202,6 +202,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_robust_overtake_clearanc
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_speed_preserving_tactical_revalidation;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_retain_safe_trajectory_prefix;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_return_from_tactical_revalidation;
+using multi_purpose_mpc_ros::v2x_overtake_core::can_return_after_confirmed_target_clear;
+using multi_purpose_mpc_ros::v2x_overtake_core::ConfirmedTargetClearReturnRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SoftMissionAbortAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::SoftMissionAbortRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SpeedPreservingTacticalRevalidationRequest;
@@ -6962,6 +6964,31 @@ TEST(V2XOvertakeCoreHorizon, ReturnsDirectlyOnlyWithClearPhysicalRevalidation)
   request.return_corridor_available = true;
   request.hard_fault = true;
   EXPECT_FALSE(can_return_from_tactical_revalidation(request));
+}
+
+TEST(V2XOvertakeCoreHorizon, ConfirmedTargetClearUsesCurrentReturnGeometry)
+{
+  ConfirmedTargetClearReturnRequest request;
+  request.enabled = true;
+  request.target_clear_ahead_confirmed = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.return_corridor_available = true;
+  request.target_longitudinal_m = 2.0;
+  request.minimum_front_distance_m = 2.0;
+
+  EXPECT_TRUE(can_return_after_confirmed_target_clear(request));
+  request.target_longitudinal_m = 1.99;
+  EXPECT_FALSE(can_return_after_confirmed_target_clear(request));
+  request.target_longitudinal_m = 2.0;
+  request.return_corridor_available = false;
+  EXPECT_FALSE(can_return_after_confirmed_target_clear(request));
+  request.return_corridor_available = true;
+  request.current_body_footprints_separated = false;
+  EXPECT_FALSE(can_return_after_confirmed_target_clear(request));
+  request.current_body_footprints_separated = true;
+  request.hard_fault = true;
+  EXPECT_FALSE(can_return_after_confirmed_target_clear(request));
 }
 
 TEST(V2XOvertakeCoreHorizon, RejectsExcessiveAtomicLateralReplacement)
@@ -15064,6 +15091,39 @@ TEST(V2XOvertakeCoreFrenetDpCorridor, StraightCourseKeepsMinimumMotionTactic)
   for (const double lateral : resolution.left.lateral_path_m) {
     EXPECT_NEAR(lateral, request.current_lateral_m, 0.15);
   }
+}
+
+TEST(V2XOvertakeCoreFrenetDpCorridor, FarCurveDoesNotOverrideNearTacticalHorizon)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpCorridorRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpTacticalStrategy;
+  using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorSample;
+  using multi_purpose_mpc_ros::v2x_overtake_core::solve_frenet_dp_corridor;
+
+  FrenetDpCorridorRequest request;
+  request.enabled = true;
+  request.curve_strategy_enabled = true;
+  request.current_lateral_m = 0.25;
+  request.significant_curvature_radpm = 0.04;
+  request.tactical_horizon_distance_m = 20.0;
+  request.tactical_reference_weight = 2.0;
+  request.inside_radius_penalty_weight = 10.0;
+  request.left.side_sign = 1;
+  request.left.samples = {
+    OvertakeMissionDynamicCorridorSample{0.0, -0.8, 0.8, true, 0.0, true, true},
+    OvertakeMissionDynamicCorridorSample{10.0, -0.8, 0.8, true, 0.01, true, true},
+    OvertakeMissionDynamicCorridorSample{20.0, -0.8, 0.8, true, 0.0, false, true},
+    OvertakeMissionDynamicCorridorSample{25.0, -0.8, 0.8, true, 0.12, true, true},
+    OvertakeMissionDynamicCorridorSample{30.0, -0.8, 0.8, true, 0.10, true, true}};
+
+  const auto resolution = solve_frenet_dp_corridor(request);
+  ASSERT_TRUE(resolution.valid);
+  ASSERT_TRUE(resolution.left.feasible);
+  EXPECT_EQ(
+    resolution.left.tactical_strategy,
+    FrenetDpTacticalStrategy::StraightDashi);
+  EXPECT_FALSE(resolution.left.curve_observed);
+  EXPECT_EQ(resolution.left.path_distances_m.size(), request.left.samples.size());
 }
 
 TEST(V2XOvertakeCoreFrenetDpCorridor, SelectsThreeKnotSweepDiveThroughMovingCurveGap)

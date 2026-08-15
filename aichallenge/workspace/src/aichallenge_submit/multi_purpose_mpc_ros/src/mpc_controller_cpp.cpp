@@ -1534,6 +1534,7 @@ struct OvertakeLineConfig
   double mpcc_frenet_dp_corridor_width_weight{0.25};
   double mpcc_frenet_dp_preferred_corridor_weight{4.0};
   double mpcc_frenet_dp_hard_horizon_distance{20.0};
+  double mpcc_frenet_dp_tactical_horizon_distance{20.0};
   double mpcc_frenet_dp_branch_switch_penalty{1.0};
   bool mpcc_frenet_dp_curve_strategy_enabled{false};
   double mpcc_frenet_dp_significant_curvature{0.04};
@@ -7483,7 +7484,7 @@ struct MPC
       (cfg.v2x_behavior.overtake_inner_curve_entry_enabled ||
       cfg.v2x_behavior.overtake_outer_curve_entry_enabled);
     const int preferred_pass_side = geometric_preferred_pass_side;
-    const int overtake_plan_N = v2x_overtake_gap_plan_horizon(N);
+    const int overtake_plan_N = v2x_overtake_gap_plan_horizon(ref_wp_id, N);
     output.overtake_plan_N = overtake_plan_N;
     const auto [overtake_lb, overtake_ub] =
       build_v2x_gap_planner_bounds(ref_wp_id, N, lb, ub, overtake_plan_N);
@@ -7495,11 +7496,8 @@ struct MPC
       cfg.v2x_behavior.overtake_line.pass_distance,
       cfg.v2x_behavior.overtake_line.pass_horizon_absolute_distance_limit) +
       std::max(0.5, cfg.v2x_behavior.overtake_line.return_distance);
-    const int static_mission_plan_N = std::max(
-      overtake_plan_N,
-      static_cast<int>(std::ceil(
-        static_mission_validation_distance /
-        std::max(0.1, model->reference_path->resolution))) + 2);
+    const int static_mission_plan_N = path_horizon_steps_for_distance(
+      ref_wp_id, overtake_plan_N, static_mission_validation_distance);
     const auto [static_mission_lb, static_mission_ub] =
       build_v2x_gap_planner_bounds(
       ref_wp_id, N, lb, ub, static_mission_plan_N);
@@ -7666,7 +7664,7 @@ struct MPC
         }
       }
 
-      const int overtake_plan_N = v2x_overtake_gap_plan_horizon(N);
+      const int overtake_plan_N = v2x_overtake_gap_plan_horizon(ref_wp_id, N);
       const double required_gap_width = std::max(
         cfg.v2x_behavior.overtake_min_gap_width,
         cfg.v2x_behavior.overtake_guard_min_gap_width);
@@ -7790,6 +7788,8 @@ struct MPC
             cfg.v2x_behavior.overtake_line.mpcc_frenet_dp_curve_strategy_enabled;
           request.significant_curvature_radpm =
             cfg.v2x_behavior.overtake_line.mpcc_frenet_dp_significant_curvature;
+          request.tactical_horizon_distance_m =
+            cfg.v2x_behavior.overtake_line.mpcc_frenet_dp_tactical_horizon_distance;
           request.tactical_reference_weight =
             cfg.v2x_behavior.overtake_line.mpcc_frenet_dp_tactical_reference_weight;
           request.tactical_edge_fraction =
@@ -12340,7 +12340,8 @@ struct MPC
       follow_preposition_side_clearance >=
       cfg.v2x_behavior.follow_preposition_min_side_clearance &&
       cfg.v2x_behavior.follow_preposition_offset > kEps;
-    const int gap_plan_N = use_overtake_lookahead ? v2x_overtake_gap_plan_horizon(N) : N;
+    const int gap_plan_N = use_overtake_lookahead ?
+      v2x_overtake_gap_plan_horizon(ref_wp_id, N) : N;
     const auto [gap_plan_lb, gap_plan_ub] = use_overtake_lookahead ?
       build_v2x_gap_planner_bounds(ref_wp_id, N, lb, ub, gap_plan_N) :
       std::pair<Eigen::VectorXd, Eigen::VectorXd>{lb, ub};
@@ -21977,7 +21978,19 @@ private:
           const std::string wait_reason =
             std::string{"SafeSeparation requested revalidation: "} +
             overtake_core::to_string(safe_separation.reason);
-          const bool speed_preserving_return =
+          const bool confirmed_target_clear_return =
+            overtake_core::can_return_after_confirmed_target_clear(
+            overtake_core::ConfirmedTargetClearReturnRequest{
+              line_cfg.safe_separation_tactical_revalidation_enabled,
+              safe_separation.reason ==
+              overtake_core::SafeSeparationReason::TargetClearAhead,
+              tactical_reselect_target_continuous,
+              behavior_output.locked_target_current_body_footprints_separated,
+              !return_corridor_blocked,
+              tactical_reselect_hard_fault,
+              locked_target_longitudinal,
+              line_cfg.safe_separation_front_clear_distance});
+          const bool speed_preserving_return = confirmed_target_clear_return ||
             overtake_core::can_return_from_tactical_revalidation(
             overtake_core::TacticalRevalidationReturnRequest{
               line_cfg.safe_separation_tactical_revalidation_enabled,
@@ -22001,23 +22014,26 @@ private:
               overtake_line_state_.pass_side_sign,
               locked_target_longitudinal, model->wp_id);
             if (begin_validated_return(
-                "SafeSeparation target clear ahead; speed-preserving Return",
+                confirmed_target_clear_return ?
+                "SafeSeparation confirmed target clear; speed-preserving Return" :
+                "SafeSeparation tactical revalidation; speed-preserving Return",
                 ReturnReacquirePolicy::FinishReturn))
             {
               return update_overtake_line(
                 behavior_output, ref_wp_id, N, lb, ub, now_sec);
             }
           }
-          if (!speed_preserving_return && enter_dynamic_mission_wait(wait_reason)) {
+          // A Return proposal can still fail its full runtime path validation.
+          // In that case retain the normal wait/follow fallback instead of
+          // silently remaining in Pass with no selected action.
+          if (enter_dynamic_mission_wait(wait_reason)) {
             return output;
           }
-          if (!speed_preserving_return) {
-            transition_overtake_line_phase(
-              OvertakeLinePhase::FollowPrepare, now_sec, current_ey,
-              overtake_line_state_.pass_side_sign, wait_reason,
-              FollowPrepareCause::TacticalRevalidation);
-            return output;
-          }
+          transition_overtake_line_phase(
+            OvertakeLinePhase::FollowPrepare, now_sec, current_ey,
+            overtake_line_state_.pass_side_sign, wait_reason,
+            FollowPrepareCause::TacticalRevalidation);
+          return output;
         } else if (safe_separation.action == overtake_core::SafeSeparationAction::Abort) {
           RCLCPP_WARN(
             rclcpp::get_logger("mpc_controller"),
@@ -24343,16 +24359,43 @@ private:
     return false;
   }
 
-  int v2x_overtake_gap_plan_horizon(const int N) const
+  int path_horizon_steps_for_distance(
+    const int ref_wp_id, const int minimum_steps, const double requested_distance_m) const
   {
-    const double lookahead_distance =
-      std::max(0.0, cfg.v2x_behavior.overtake_gap_lookahead_distance);
-    if (lookahead_distance <= kEps) {
-      return N;
+    const int base_steps = std::max(1, minimum_steps);
+    const double target_distance = std::max(0.0, requested_distance_m);
+    if (target_distance <= kEps) {
+      return base_steps;
     }
-    const int lookahead_steps = static_cast<int>(
-      std::ceil(lookahead_distance / std::max(0.1, model->reference_path->resolution))) + 2;
-    return std::max(N, lookahead_steps);
+
+    // reference_path.resolution describes the resampling configuration, but
+    // externally supplied racing trajectories are not guaranteed to retain
+    // that spacing.  Count actual waypoint arc length so a 30 m tactical
+    // horizon cannot silently become a roughly 50 m horizon.
+    constexpr int kMaximumHorizonSteps = 512;
+    double covered_distance = 0.0;
+    int steps = 0;
+    while (
+      steps < kMaximumHorizonSteps &&
+      (steps < base_steps || covered_distance + kEps < target_distance))
+    {
+      const auto & p0 = model->reference_path->get_waypoint(ref_wp_id + steps);
+      const auto & p1 = model->reference_path->get_waypoint(ref_wp_id + steps + 1);
+      const double segment_distance = p0.distance_to(p1);
+      if (!std::isfinite(segment_distance) || segment_distance < 0.0) {
+        return base_steps;
+      }
+      covered_distance += segment_distance;
+      ++steps;
+    }
+    return std::max(base_steps, steps);
+  }
+
+  int v2x_overtake_gap_plan_horizon(const int ref_wp_id, const int N) const
+  {
+    return path_horizon_steps_for_distance(
+      ref_wp_id, N,
+      std::max(0.0, cfg.v2x_behavior.overtake_gap_lookahead_distance));
   }
 
   std::pair<Eigen::VectorXd, Eigen::VectorXd> build_v2x_gap_planner_bounds(
@@ -27906,6 +27949,10 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_mpcc_frenet_dp_hard_horizon_distance"] ?
     mpc["v2x_overtake_mpcc_frenet_dp_hard_horizon_distance"].as<double>() : 20.0);
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_tactical_horizon_distance = std::max(
+    0.0,
+    mpc["v2x_overtake_mpcc_frenet_dp_tactical_horizon_distance"] ?
+    mpc["v2x_overtake_mpcc_frenet_dp_tactical_horizon_distance"].as<double>() : 20.0);
   cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_shadow_score_penalty = std::max(
     0.0,
     mpc["v2x_overtake_mpcc_frenet_dp_shadow_score_penalty"] ?
@@ -29973,7 +30020,7 @@ public:
         "weights anchor=%.2f/motion=%.2f/previous=%.2f/width=%.2f/"
         "reserve=%.2f/side_switch=%.2f, "
         "curve_strategy=%s/kappa>=%.3f/reference=%.2f/edge=%.2f/inside=%.2f/"
-        "tactic_switch=%.2f, hard_horizon=%.1f m, "
+        "tactic_switch=%.2f, hard_horizon=%.1f m, tactical_horizon=%.1f m, "
         "shadow_penalty=%.2f, warm_age<=%.2f s, runtime_lease<=%.2f s, "
         "longitudinal_timing=%s/cost_slack=%.2f",
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_corridor_enabled ?
@@ -30001,6 +30048,7 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line.
         mpcc_frenet_dp_tactical_strategy_switch_penalty,
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_hard_horizon_distance,
+        mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_tactical_horizon_distance,
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_shadow_score_penalty,
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_last_path_max_age_sec,
         mpc_cfg_.v2x_behavior.overtake_line.

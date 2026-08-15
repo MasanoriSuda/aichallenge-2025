@@ -2148,6 +2148,25 @@ struct TacticalRevalidationReturnRequest
 bool can_return_from_tactical_revalidation(
   const TacticalRevalidationReturnRequest & request) noexcept;
 
+struct ConfirmedTargetClearReturnRequest
+{
+  bool enabled{false};
+  bool target_clear_ahead_confirmed{false};
+  bool target_continuous{false};
+  bool current_body_footprints_separated{false};
+  bool return_corridor_available{false};
+  bool hard_fault{false};
+  double target_longitudinal_m{};
+  double minimum_front_distance_m{};
+};
+
+/// Once SafeSeparation has already confirmed that the target remains clear
+/// ahead, leave the failed Pass through a physically valid Return without
+/// requiring the old pass-side prediction to stay clear.  Current overlap,
+/// Return-corridor blockage and hard faults still fail closed.
+bool can_return_after_confirmed_target_clear(
+  const ConfirmedTargetClearReturnRequest & request) noexcept;
+
 struct CommittedPassForwardCompletionRequest
 {
   bool enabled{false};
@@ -2757,6 +2776,7 @@ struct FrenetDpCorridorRequest
   double branch_switch_penalty{1.0};
   bool curve_strategy_enabled{false};
   double significant_curvature_radpm{0.08};
+  double tactical_horizon_distance_m{std::numeric_limits<double>::infinity()};
   double tactical_reference_weight{1.0};
   double tactical_edge_fraction{0.45};
   double inside_radius_penalty_weight{1.0};

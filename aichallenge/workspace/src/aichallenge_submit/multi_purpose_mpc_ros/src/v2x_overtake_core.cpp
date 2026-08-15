@@ -4970,6 +4970,54 @@ FrenetDpExecutionRefreshResolution resolve_frenet_dp_execution_refresh(
   return resolution;
 }
 
+FrenetDpTargetBoundHorizonResolution validate_frenet_dp_target_bound_horizon(
+  const FrenetDpTargetBoundHorizonRequest & request) noexcept
+{
+  constexpr double kSeparationEpsilon = 1e-9;
+  FrenetDpTargetBoundHorizonResolution resolution;
+  if (!request.enabled) {
+    resolution.valid = true;
+    resolution.feasible = true;
+    return resolution;
+  }
+  if (
+    (request.pass_side_sign != -1 && request.pass_side_sign != 1) ||
+    !std::isfinite(request.required_center_separation_m) ||
+    request.required_center_separation_m < 0.0 ||
+    request.candidate_lateral_path_m.empty() ||
+    request.candidate_lateral_path_m.size() != request.target_lateral_path_m.size() ||
+    request.candidate_lateral_path_m.size() != request.target_separation_active.size())
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  resolution.feasible = true;
+  for (std::size_t i = 0U; i < request.candidate_lateral_path_m.size(); ++i) {
+    const double candidate_lateral_m = request.candidate_lateral_path_m[i];
+    const double target_lateral_m = request.target_lateral_path_m[i];
+    if (!std::isfinite(candidate_lateral_m) || !std::isfinite(target_lateral_m)) {
+      return FrenetDpTargetBoundHorizonResolution{};
+    }
+    if (!request.target_separation_active[i]) {
+      continue;
+    }
+    ++resolution.constrained_sample_count;
+    const double signed_separation_m = static_cast<double>(request.pass_side_sign) *
+      (candidate_lateral_m - target_lateral_m);
+    resolution.minimum_signed_separation_m = std::min(
+      resolution.minimum_signed_separation_m, signed_separation_m);
+    if (
+      resolution.feasible &&
+      signed_separation_m + kSeparationEpsilon < request.required_center_separation_m)
+    {
+      resolution.feasible = false;
+      resolution.failure_index = i;
+    }
+  }
+  return resolution;
+}
+
 FrenetDpAtomicRefreshPromotionResolution
 resolve_frenet_dp_atomic_refresh_promotion(
     const FrenetDpAtomicRefreshPromotionRequest &request) noexcept {
@@ -4978,12 +5026,14 @@ resolve_frenet_dp_atomic_refresh_promotion(
   resolution.reference_ready =
       request.reference_valid && request.reference_active &&
       request.executable_horizon_complete && request.execution_horizon_feasible;
+  resolution.target_bound_ready = request.target_bound_horizon_feasible;
   resolution.target_ready =
       request.target_matches && request.target_continuous &&
       !request.target_position_jump &&
       !request.target_course_progress_rejected &&
       request.target_prediction_valid &&
-      (request.current_body_separated || request.recoverable_side_contact);
+      (request.current_body_separated || request.recoverable_side_contact) &&
+      resolution.target_bound_ready;
   resolution.hard_fault_free = !request.hard_fault;
   resolution.promote = request.refresh_requested &&
                        resolution.reference_ready && resolution.target_ready &&

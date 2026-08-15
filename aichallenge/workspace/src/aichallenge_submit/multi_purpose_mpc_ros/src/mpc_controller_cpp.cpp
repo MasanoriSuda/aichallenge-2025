@@ -1533,6 +1533,7 @@ struct OvertakeLineConfig
   bool mpcc_frenet_dp_execution_enabled{false};
   bool mpcc_frenet_dp_rolling_refresh_enabled{false};
   bool mpcc_frenet_dp_primary_execution_enabled{false};
+  bool mpcc_frenet_dp_target_bound_promotion_enabled{false};
   double mpcc_frenet_dp_rolling_refresh_interval_sec{0.10};
   double mpcc_frenet_dp_refresh_preserved_prefix_distance{1.0};
   double mpcc_frenet_dp_refresh_blend_end_distance{4.0};
@@ -18489,6 +18490,105 @@ private:
           !candidate_horizon.wall_clearance_limited &&
           !candidate_horizon.static_map_wall_limited &&
           !candidate_horizon.lateral_accel_limited;
+      overtake_core::FrenetDpTargetBoundHorizonResolution
+      candidate_target_bound_horizon;
+      if (!line_cfg.mpcc_frenet_dp_target_bound_promotion_enabled) {
+        candidate_target_bound_horizon =
+          overtake_core::validate_frenet_dp_target_bound_horizon(
+          overtake_core::FrenetDpTargetBoundHorizonRequest{});
+      } else if (candidate_executable_horizon_complete) {
+        const bool target_prediction_input_valid =
+          behavior_output.locked_target_seen &&
+          !behavior_output.locked_target_position_jump &&
+          std::isfinite(behavior_output.locked_target_longitudinal) &&
+          std::isfinite(behavior_output.locked_target_lateral) &&
+          behavior_output.locked_target_footprint_prediction_valid &&
+          std::isfinite(behavior_output.locked_target_predicted_longitudinal) &&
+          cfg.v2x_gap.prediction_time > kEps;
+        const double target_lateral_now =
+          std::isfinite(behavior_output.locked_target_relative_lateral) ?
+          current_ey + behavior_output.locked_target_relative_lateral :
+          behavior_output.locked_target_lateral;
+        const double target_lateral_predicted =
+          behavior_output.locked_target_lateral_prediction_valid &&
+          std::isfinite(behavior_output.locked_target_predicted_relative_lateral) ?
+          current_ey + behavior_output.locked_target_predicted_relative_lateral :
+          target_lateral_now;
+        const double nominal_ego_speed_mps = std::max(1.0, current_speed_mps_);
+        const double candidate_ego_speed_mps =
+          std::isfinite(behavior_output.locked_target_speed) &&
+          std::isfinite(candidate.closing_speed_mps) ?
+          std::max(
+          1.0,
+          std::max(0.0, behavior_output.locked_target_speed) +
+          std::max(0.0, candidate.closing_speed_mps)) :
+          nominal_ego_speed_mps;
+        const double maximum_prediction_time_sec = std::max(
+          std::max(0.0, cfg.v2x_gap.prediction_time),
+          std::max(0.0, line_cfg.receding_horizon_encounter_prediction_max_sec));
+        const double longitudinal_overlap_threshold_m =
+          0.5 * (std::max(0.0, cfg.v2x_gap.vehicle_length) +
+          std::max(0.0, model->length)) +
+          std::max(0.0, line_cfg.receding_horizon_target_longitudinal_buffer);
+        const bool release_target_bounds_after_rear_clear =
+          overtake_core::can_release_receding_horizon_rear_clear_bounds(
+          overtake_core::RecedingHorizonRearClearBoundsReleaseRequest{
+            overtake_line_state_.phase == OvertakeLinePhase::Pass,
+            rear_clear_confirmed,
+            behavior_output.locked_target_seen,
+            behavior_output.locked_target_position_jump,
+            behavior_output.locked_target_current_body_footprints_separated,
+            behavior_output.locked_target_footprint_prediction_valid,
+            behavior_output.locked_target_predicted_body_footprint_sweep_separated,
+            false,
+            behavior_output.overtake_execution_corridor_blocked,
+            behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake});
+        std::vector<double> target_lateral_path_m;
+        std::vector<bool> target_separation_active;
+        target_lateral_path_m.reserve(candidate_horizon_distances.size());
+        target_separation_active.reserve(candidate_horizon_distances.size());
+        bool all_target_predictions_valid = target_prediction_input_valid;
+        if (all_target_predictions_valid) {
+          for (const double distance_m : candidate_horizon_distances) {
+            const auto prediction =
+              overtake_core::resolve_receding_horizon_target_prediction(
+              overtake_core::RecedingHorizonTargetPredictionRequest{
+                true,
+                distance_m,
+                nominal_ego_speed_mps,
+                candidate_ego_speed_mps,
+                std::max(0.0, cfg.v2x_gap.prediction_time),
+                maximum_prediction_time_sec,
+                target_lateral_now,
+                target_lateral_predicted,
+                behavior_output.locked_target_longitudinal,
+                behavior_output.locked_target_predicted_longitudinal,
+                longitudinal_overlap_threshold_m});
+            if (!prediction.valid) {
+              all_target_predictions_valid = false;
+              break;
+            }
+            target_lateral_path_m.push_back(prediction.target_lateral_m);
+            target_separation_active.push_back(
+              prediction.body_overlap_window &&
+              !release_target_bounds_after_rear_clear);
+          }
+        }
+        if (all_target_predictions_valid) {
+          candidate_target_bound_horizon =
+            overtake_core::validate_frenet_dp_target_bound_horizon(
+            overtake_core::FrenetDpTargetBoundHorizonRequest{
+              true,
+              candidate.pass_side_sign,
+              std::max(0.0, cfg.v2x_gap.vehicle_radius),
+              candidate_reference.lateral_targets_m,
+              target_lateral_path_m,
+              target_separation_active});
+        }
+      }
+      const bool candidate_target_bound_horizon_feasible =
+        candidate_target_bound_horizon.valid &&
+        candidate_target_bound_horizon.feasible;
       const bool candidate_runtime_hard_fault =
           actual_wall_physical_contact || actual_wall_margin_blocked ||
           actual_wall_sample_unavailable ||
@@ -18501,6 +18601,7 @@ private:
                   true, candidate_reference.valid, candidate_reference.active,
                   candidate_executable_horizon_complete,
                   candidate_horizon_unmodified_and_feasible,
+                  candidate_target_bound_horizon_feasible,
                   exact_dp_refresh_target_match,
                   locked_target_progress_continuous,
                   behavior_output.locked_target_position_jump,
@@ -18526,7 +18627,7 @@ private:
               "OvertakeLine DP rolling candidate retained as pending: "
               "target=%s, side=%d, source=%s, reference=%d, horizon=%d, "
               "source_coverage=%zu/%d, stitched=%d/old_prefix=%d/old_tail=%d, "
-              "physical=%d, target_ok=%d, "
+              "physical=%d, target_bound=%d/%zu/min=%.2f, target_ok=%d, "
               "hard_fault=%d, active_remaining=%.2f m, wp_id=%d",
               overtake_line_state_.target_vehicle_id.c_str(),
               candidate.pass_side_sign,
@@ -18539,6 +18640,9 @@ private:
               dp_refresh_used_active_prefix ? 1 : 0,
               dp_refresh_used_active_tail ? 1 : 0,
               dp_refresh_used_physical_clearance ? 1 : 0,
+              candidate_target_bound_horizon_feasible ? 1 : 0,
+              candidate_target_bound_horizon.failure_index,
+              candidate_target_bound_horizon.minimum_signed_separation_m,
               promotion.target_ready ? 1 : 0, promotion.hard_fault_free ? 0 : 1,
               overtake_line_state_.mission_frenet_dp_path_distances_m.empty()
                   ? 0.0
@@ -28881,6 +28985,9 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_primary_execution_enabled =
     mpc["v2x_overtake_mpcc_frenet_dp_primary_execution_enabled"] ?
     mpc["v2x_overtake_mpcc_frenet_dp_primary_execution_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_target_bound_promotion_enabled =
+    mpc["v2x_overtake_mpcc_frenet_dp_target_bound_promotion_enabled"] ?
+    mpc["v2x_overtake_mpcc_frenet_dp_target_bound_promotion_enabled"].as<bool>() : false;
   cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_rolling_refresh_interval_sec = std::max(
     0.0,
     mpc["v2x_overtake_mpcc_frenet_dp_rolling_refresh_interval_sec"] ?
@@ -31061,7 +31168,7 @@ public:
       RCLCPP_INFO(
         get_logger(),
         "V2X MPCC Frenet DP corridor: %s, execution=%s, "
-        "rolling_refresh=%s/%.2f s, primary_execution=%s, "
+        "rolling_refresh=%s/%.2f s, primary_execution=%s, target_bound=%s, "
         "stitch=%.2f->%.2f m, bins=%d, slope<=%.2f m/m, "
         "weights anchor=%.2f/motion=%.2f/previous=%.2f/width=%.2f/"
         "reserve=%.2f/side_switch=%.2f, "
@@ -31078,6 +31185,8 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_rolling_refresh_interval_sec,
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_primary_execution_enabled ?
         "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line.
+        mpcc_frenet_dp_target_bound_promotion_enabled ? "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.
         mpcc_frenet_dp_refresh_preserved_prefix_distance,
         mpc_cfg_.v2x_behavior.overtake_line.

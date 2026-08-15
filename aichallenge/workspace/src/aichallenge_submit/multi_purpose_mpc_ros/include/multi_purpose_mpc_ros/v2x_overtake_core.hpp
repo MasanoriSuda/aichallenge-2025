@@ -3094,6 +3094,32 @@ struct FrenetDpExecutionRefreshResolution
 FrenetDpExecutionRefreshResolution resolve_frenet_dp_execution_refresh(
     const FrenetDpExecutionRefreshRequest &request) noexcept;
 
+struct FrenetDpTargetBoundHorizonRequest
+{
+  bool enabled{false};
+  int pass_side_sign{};
+  double required_center_separation_m{};
+  std::vector<double> candidate_lateral_path_m;
+  std::vector<double> target_lateral_path_m;
+  std::vector<bool> target_separation_active;
+};
+
+struct FrenetDpTargetBoundHorizonResolution
+{
+  bool valid{false};
+  bool feasible{false};
+  std::size_t constrained_sample_count{};
+  std::size_t failure_index{std::numeric_limits<std::size_t>::max()};
+  double minimum_signed_separation_m{std::numeric_limits<double>::infinity()};
+};
+
+/// Verify that a pending distance-domain DP execution prefix remains on the
+/// committed side of every time-aligned target body-overlap sample. This is a
+/// hard physical-body check performed before atomic refresh promotion; robust
+/// clearance remains a soft receding-horizon preference.
+FrenetDpTargetBoundHorizonResolution validate_frenet_dp_target_bound_horizon(
+  const FrenetDpTargetBoundHorizonRequest & request) noexcept;
+
 struct FrenetDpAtomicRefreshPromotionRequest {
   bool refresh_requested{false};
   bool reference_valid{false};
@@ -3102,6 +3128,7 @@ struct FrenetDpAtomicRefreshPromotionRequest {
   // describes the combined executable horizon, not source-path coverage.
   bool executable_horizon_complete{false};
   bool execution_horizon_feasible{false};
+  bool target_bound_horizon_feasible{false};
   bool target_matches{false};
   bool target_continuous{false};
   bool target_position_jump{false};
@@ -3117,6 +3144,7 @@ struct FrenetDpAtomicRefreshPromotionResolution {
   bool promote{false};
   bool reference_ready{false};
   bool target_ready{false};
+  bool target_bound_ready{false};
   bool hard_fault_free{false};
 };
 

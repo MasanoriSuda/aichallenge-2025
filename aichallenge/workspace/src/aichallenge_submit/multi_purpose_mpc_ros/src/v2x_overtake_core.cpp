@@ -917,6 +917,33 @@ bool resolve_cross_side_no_return_latch(
          request.safe_separation_active || request.side_replacement_committed;
 }
 
+bool can_rearm_runtime_completion_tactical_replan(
+  const RuntimeCompletionTacticalRearmRequest & request) noexcept
+{
+  if (
+    !request.replan_pending || !request.pass_phase ||
+    !request.safe_separation_active ||
+    request.commit_stage != PassCommitStage::ShiftCommitted ||
+    !request.target_continuous ||
+    !request.current_body_footprints_separated ||
+    !request.footprint_prediction_valid ||
+    !request.predicted_footprint_sweep_separated ||
+    request.execution_corridor_blocked || request.hard_fault ||
+    request.cross_side_transition_committed)
+  {
+    return false;
+  }
+  if (
+    !std::isfinite(request.target_longitudinal_m) ||
+    !std::isfinite(request.minimum_front_distance_m) ||
+    request.minimum_front_distance_m < 0.0)
+  {
+    return false;
+  }
+  return request.target_longitudinal_m + 1e-9 >=
+         request.minimum_front_distance_m;
+}
+
 double resolve_cross_side_minimum_speed_requirement(
   const double current_ego_speed_mps, const double target_speed_mps) noexcept
 {

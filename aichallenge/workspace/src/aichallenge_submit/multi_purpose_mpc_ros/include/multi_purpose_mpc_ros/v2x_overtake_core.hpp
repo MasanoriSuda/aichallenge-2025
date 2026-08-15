@@ -638,6 +638,30 @@ struct CrossSideNoReturnLatchRequest
 bool resolve_cross_side_no_return_latch(
   const CrossSideNoReturnLatchRequest & request) noexcept;
 
+struct RuntimeCompletionTacticalRearmRequest
+{
+  bool replan_pending{false};
+  bool pass_phase{false};
+  bool safe_separation_active{false};
+  PassCommitStage commit_stage{PassCommitStage::Selectable};
+  bool target_continuous{false};
+  bool current_body_footprints_separated{false};
+  bool footprint_prediction_valid{false};
+  bool predicted_footprint_sweep_separated{false};
+  bool execution_corridor_blocked{false};
+  bool hard_fault{false};
+  bool cross_side_transition_committed{false};
+  double target_longitudinal_m{std::numeric_limits<double>::infinity()};
+  double minimum_front_distance_m{0.0};
+};
+
+/// Re-open left/right branch assessment for one runtime-completion replan.
+/// SafeSeparation normally latches cross-side no-return, but that latch may be
+/// bypassed while the target is still clearly ahead and all current/predicted
+/// geometry guards remain valid. Side-by-side and hard-fault cases stay closed.
+bool can_rearm_runtime_completion_tactical_replan(
+  const RuntimeCompletionTacticalRearmRequest & request) noexcept;
+
 /// Require an alternate-side rollout to retain the speed which ego already
 /// has, without incorrectly demanding that a slower ego instantaneously match
 /// a faster target throughout a curve. Rear-clear terminal speed remains a

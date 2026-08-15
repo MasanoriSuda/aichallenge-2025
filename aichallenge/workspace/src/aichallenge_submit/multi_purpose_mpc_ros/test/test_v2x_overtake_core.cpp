@@ -429,6 +429,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_last_feasible_cache_upda
 using multi_purpose_mpc_ros::v2x_overtake_core::PassCommitStage;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassCommitStageRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CrossSideNoReturnLatchRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::RuntimeCompletionTacticalRearmRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CrossSideMissionReplacementReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::CrossSideMissionReplacementRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::
@@ -440,6 +441,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntryStageReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntryStageRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_commit_stage;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_cross_side_no_return_latch;
+using multi_purpose_mpc_ros::v2x_overtake_core::can_rearm_runtime_completion_tactical_replan;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_cross_side_mission_replacement;
 using multi_purpose_mpc_ros::v2x_overtake_core::early_pass_side_intrusion_risk;
 using multi_purpose_mpc_ros::v2x_overtake_core::
@@ -13954,6 +13956,56 @@ TEST(V2XOvertakeCoreCommitStage, CrossSideNoReturnRemainsLatchedWhenTargetMovesA
   request.previously_latched = true;
   request.observed_stage = PassCommitStage::ShiftCommitted;
   EXPECT_TRUE(resolve_cross_side_no_return_latch(request));
+}
+
+TEST(V2XOvertakeCoreCommitStage, RuntimeCompletionRearmRequiresClearTargetAhead)
+{
+  RuntimeCompletionTacticalRearmRequest request;
+  request.replan_pending = true;
+  request.pass_phase = true;
+  request.safe_separation_active = true;
+  request.commit_stage = PassCommitStage::ShiftCommitted;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_footprint_sweep_separated = true;
+  request.target_longitudinal_m = 4.0;
+  request.minimum_front_distance_m = 1.0;
+
+  EXPECT_TRUE(can_rearm_runtime_completion_tactical_replan(request));
+
+  request.target_longitudinal_m = 0.5;
+  EXPECT_FALSE(can_rearm_runtime_completion_tactical_replan(request));
+
+  request.target_longitudinal_m = 4.0;
+  request.predicted_footprint_sweep_separated = false;
+  EXPECT_FALSE(can_rearm_runtime_completion_tactical_replan(request));
+}
+
+TEST(V2XOvertakeCoreCommitStage, RuntimeCompletionRearmRejectsCommittedOrHardFault)
+{
+  RuntimeCompletionTacticalRearmRequest request;
+  request.replan_pending = true;
+  request.pass_phase = true;
+  request.safe_separation_active = true;
+  request.commit_stage = PassCommitStage::ShiftCommitted;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_footprint_sweep_separated = true;
+  request.target_longitudinal_m = 4.0;
+  request.minimum_front_distance_m = 1.0;
+
+  request.commit_stage = PassCommitStage::SideBySideCommitted;
+  EXPECT_FALSE(can_rearm_runtime_completion_tactical_replan(request));
+
+  request.commit_stage = PassCommitStage::ShiftCommitted;
+  request.hard_fault = true;
+  EXPECT_FALSE(can_rearm_runtime_completion_tactical_replan(request));
+
+  request.hard_fault = false;
+  request.cross_side_transition_committed = true;
+  EXPECT_FALSE(can_rearm_runtime_completion_tactical_replan(request));
 }
 
 TEST(V2XOvertakeCoreCommitStage, CrossSideMinimumSpeedUsesCurrentStateWhenTargetIsFaster)

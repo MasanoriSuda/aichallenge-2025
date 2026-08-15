@@ -2455,6 +2455,9 @@ struct OvertakeLineState
   double pass_horizon_safe_separation_max_distance{};
   double pass_runtime_completion_replan_last_request_sec{
     -std::numeric_limits<double>::infinity()};
+  bool pass_runtime_completion_replan_pending{false};
+  double pass_runtime_completion_replan_pending_since_sec{
+    std::numeric_limits<double>::quiet_NaN()};
   double pass_runtime_budget_last_log_sec{
     -std::numeric_limits<double>::infinity()};
   double pass_soft_prediction_guard_loss_since_sec{
@@ -7377,11 +7380,27 @@ struct MPC
       std::isfinite(output.locked_target_longitudinal) &&
       output.locked_target_longitudinal + kEps >=
       cfg.v2x_behavior.overtake_line.opponent_side_replan_no_return_front_distance;
+    const bool runtime_completion_tactical_rearm =
+      overtake_core::can_rearm_runtime_completion_tactical_replan(
+      overtake_core::RuntimeCompletionTacticalRearmRequest{
+        overtake_line_state_.pass_runtime_completion_replan_pending,
+        overtake_line_state_.phase == OvertakeLinePhase::Pass,
+        overtake_line_state_.pass_horizon_safe_separation_active,
+        pass_commit_stage.stage,
+        opponent_side_replan_target_continuous,
+        output.locked_target_current_body_footprints_separated,
+        output.locked_target_footprint_prediction_valid,
+        output.locked_target_predicted_body_footprint_sweep_separated,
+        output.overtake_execution_corridor_blocked,
+        overtake_solver_recovery_active_ || overtake_forbidden_wp,
+        overtake_line_state_.mission_cross_side_transition_committed,
+        output.locked_target_longitudinal,
+        cfg.v2x_behavior.overtake_line.opponent_side_replan_no_return_front_distance});
     const bool opponent_side_replan_before_no_return =
       pass_commit_stage.valid && pass_commit_stage.side_replan_allowed &&
       pass_commit_stage.stage == overtake_core::PassCommitStage::ShiftCommitted &&
       (!overtake_line_state_.opponent_side_replan_no_return_latched ||
-      target_bound_tactical_rearm) &&
+      target_bound_tactical_rearm || runtime_completion_tactical_rearm) &&
       !overtake_line_state_.mission_cross_side_transition_committed;
     const bool opponent_side_replan_geometry_observable =
       output.locked_target_current_body_footprints_separated &&
@@ -10837,10 +10856,14 @@ struct MPC
       hold_candidate.available =
         hold_candidate.available && locked_pass_side != 0 &&
         overtake_line_state_.phase != OvertakeLinePhase::Idle;
-      if (mpcc_rolling_replan_context) {
+      if (
+        mpcc_rolling_replan_context ||
+        overtake_line_state_.pass_runtime_completion_replan_pending)
+      {
         // A paused frozen Mission remains a geometric anchor for the bounded
-        // physical hold line only.  It must not outrank a fresh current-state
-        // prefix, even when the old generation has not yet been invalidated.
+        // physical hold line only. Runtime completion replanning applies the
+        // same rule: stale entry-time rear-clear estimates must not outrank a
+        // fresh current-state prefix.
         hold_candidate.available = false;
         hold_candidate.hard_feasible = false;
         hold_candidate.admission_reject_reason =
@@ -10941,7 +10964,9 @@ struct MPC
           overtake_line_state_.mission_generation;
         mpcc_lite_shadow_last_feasible_phase_ = overtake_line_state_.phase;
         mpcc_lite_shadow_last_feasible_side_sign_ = locked_pass_side;
-      } else if (overtake_core::can_reuse_mpcc_lite_shadow_last_feasible(
+      } else if (
+        !overtake_line_state_.pass_runtime_completion_replan_pending &&
+        overtake_core::can_reuse_mpcc_lite_shadow_last_feasible(
           overtake_core::MpccLiteShadowLeaseRequest{
             mpcc_lite_shadow_last_feasible_resolution_.has_value(),
             mpcc_lite_shadow_last_feasible_target_id_ == output.target_vehicle_id,
@@ -11371,6 +11396,9 @@ struct MPC
           (shadow_safe_separation_budget_active ? 1 : 0) << "/" <<
           shadow_safe_separation_time_remaining_sec << "s/" <<
           shadow_safe_separation_distance_remaining_m << "m"
+                   << ", runtime_replan=" <<
+          (overtake_line_state_.pass_runtime_completion_replan_pending ? 1 : 0)
+                   << "/rearm=" << (runtime_completion_tactical_rearm ? 1 : 0)
                    << ", timing_ms=" << shadow_total_ms << "/left=" <<
           shadow_left_ms << "/right=" << shadow_right_ms << "/resolve=" <<
           shadow_resolve_ms
@@ -13975,6 +14003,9 @@ private:
       overtake_line_state_.pass_horizon_safe_separation_progress_extension_count = 0;
       overtake_line_state_.pass_horizon_safe_separation_max_sec = 0.0;
       overtake_line_state_.pass_horizon_safe_separation_max_distance = 0.0;
+      overtake_line_state_.pass_runtime_completion_replan_pending = false;
+      overtake_line_state_.pass_runtime_completion_replan_pending_since_sec =
+        std::numeric_limits<double>::quiet_NaN();
       overtake_line_state_.pass_soft_prediction_guard_loss_since_sec =
         std::numeric_limits<double>::quiet_NaN();
       overtake_line_state_.pass_last_clear_target_prediction_sec =
@@ -14523,6 +14554,9 @@ private:
     overtake_line_state_.pass_horizon_safe_separation_progress_extension_count = 0;
     overtake_line_state_.pass_horizon_safe_separation_max_sec = 0.0;
     overtake_line_state_.pass_horizon_safe_separation_max_distance = 0.0;
+    overtake_line_state_.pass_runtime_completion_replan_pending = false;
+    overtake_line_state_.pass_runtime_completion_replan_pending_since_sec =
+      std::numeric_limits<double>::quiet_NaN();
     overtake_line_state_.pass_rearward_progress_loss_disengage_active = false;
     overtake_line_state_.pass_rearward_progress_loss_disengage_start_sec =
       std::numeric_limits<double>::quiet_NaN();
@@ -19232,6 +19266,45 @@ private:
       std::isfinite(behavior_output.locked_target_longitudinal) &&
       behavior_output.locked_target_longitudinal + kEps >=
       line_cfg.opponent_side_replan_no_return_front_distance;
+    const bool runtime_completion_same_side_rescue_active =
+      overtake_line_state_.pass_runtime_completion_replan_pending &&
+      overtake_line_state_.phase == OvertakeLinePhase::Pass &&
+      overtake_line_state_.pass_horizon_safe_separation_active &&
+      locked_target_progress_continuous &&
+      !behavior_output.locked_target_position_jump &&
+      (behavior_output.locked_target_current_body_footprints_separated ||
+      behavior_output.recoverable_side_contact_active) &&
+      !actual_wall_physical_contact && !actual_wall_margin_blocked &&
+      !actual_wall_sample_unavailable &&
+      behavior_output.front_risk_level != FrontRiskLevel::EmergencyBrake &&
+      !overtake_solver_recovery_active_ && !behavior_output.overtake_forbidden_wp;
+    const bool runtime_completion_cross_side_rescue_active =
+      overtake_core::can_rearm_runtime_completion_tactical_replan(
+      overtake_core::RuntimeCompletionTacticalRearmRequest{
+        overtake_line_state_.pass_runtime_completion_replan_pending,
+        overtake_line_state_.phase == OvertakeLinePhase::Pass,
+        overtake_line_state_.pass_horizon_safe_separation_active,
+        behavior_output.overtake_commit_stage,
+        locked_target_progress_continuous &&
+        !behavior_output.locked_target_position_jump &&
+        !locked_target_progress_rejected,
+        behavior_output.locked_target_current_body_footprints_separated,
+        behavior_output.locked_target_footprint_prediction_valid,
+        behavior_output.locked_target_predicted_body_footprint_sweep_separated,
+        behavior_output.overtake_execution_corridor_blocked,
+        actual_wall_physical_contact || actual_wall_margin_blocked ||
+        actual_wall_sample_unavailable ||
+        behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake ||
+        overtake_solver_recovery_active_ || behavior_output.overtake_forbidden_wp,
+        overtake_line_state_.mission_cross_side_transition_committed,
+        behavior_output.locked_target_longitudinal,
+        line_cfg.opponent_side_replan_no_return_front_distance});
+    const bool tactical_same_side_replan_rescue_active =
+      target_bound_replan_rescue_active ||
+      runtime_completion_same_side_rescue_active;
+    const bool tactical_cross_side_replan_rescue_allowed =
+      target_bound_cross_side_rescue_allowed ||
+      runtime_completion_cross_side_rescue_active;
     if (transition_action != v2x_overtake_core::OvertakeLineTransitionAction::None) {
       switch (transition_action) {
         case v2x_overtake_core::OvertakeLineTransitionAction::RecoverPhysicalWallContact:
@@ -19361,7 +19434,7 @@ private:
         behavior_output.mpcc_lite_same_side_replan_mission.value();
       const bool replaced = replace_frozen_overtake_mission_after_dynamic_replan(
         replacement, now_sec, current_ey, true,
-        target_bound_replan_rescue_active, false, true, false, true);
+        tactical_same_side_replan_rescue_active, false, true, false, true);
       if (!replaced && line_cfg.debug_log_enabled) {
         RCLCPP_INFO(
           rclcpp::get_logger("mpc_controller"),
@@ -19380,7 +19453,7 @@ private:
         behavior_output.mpcc_lite_cross_side_replan_mission.value();
       const bool replaced = replace_frozen_overtake_mission_after_dynamic_replan(
         replacement, now_sec, current_ey, false, false,
-        target_bound_cross_side_rescue_allowed, false, true, true);
+        tactical_cross_side_replan_rescue_allowed, false, true, true);
       mpcc_lite_cross_side_pending_sign_ = 0;
       mpcc_lite_cross_side_pending_since_sec_ =
         std::numeric_limits<double>::quiet_NaN();
@@ -19401,7 +19474,7 @@ private:
     {
       const bool replaced = replace_frozen_overtake_mission_after_dynamic_replan(
         behavior_output.opponent_side_replan_mission.value(), now_sec, current_ey,
-        false, false, target_bound_cross_side_rescue_allowed);
+        false, false, tactical_cross_side_replan_rescue_allowed);
       if (replaced) {
         // This branch intentionally skips the old-side behavior continuity
         // decision for one cycle. The replacement candidate was fully
@@ -21822,11 +21895,23 @@ private:
           line_cfg.safe_separation_safe_prefix_replan_lead_sec + kEps ||
           safe_prefix_remaining_local_distance <=
           line_cfg.safe_separation_safe_prefix_replan_lead_distance + kEps);
+        if (
+          overtake_line_state_.pass_runtime_completion_replan_pending &&
+          (runtime_completion_rear_clear_feasible ||
+          !safe_trajectory_prefix_active))
+        {
+          overtake_line_state_.pass_runtime_completion_replan_pending = false;
+          overtake_line_state_.pass_runtime_completion_replan_pending_since_sec =
+            std::numeric_limits<double>::quiet_NaN();
+        }
+        const double tactical_replan_interval_sec = std::max(
+          0.05, line_cfg.mpcc_lite_shadow_evaluation_interval_sec);
         const bool runtime_completion_replan_due =
           runtime_completion_budget_infeasible && safe_trajectory_prefix_active &&
+          !overtake_line_state_.pass_runtime_completion_replan_pending &&
           now_sec -
           overtake_line_state_.pass_runtime_completion_replan_last_request_sec + kEps >=
-          std::max(0.05, line_cfg.mpcc_lite_shadow_evaluation_interval_sec);
+          tactical_replan_interval_sec;
         if (runtime_completion_replan_due) {
           overtake_line_state_.pass_runtime_completion_replan_last_request_sec = now_sec;
           // Re-run the left/right shadow immediately. Until an alternate
@@ -21837,15 +21922,24 @@ private:
           if (
             try_last_feasible_maneuver(
               "runtime rear-clear exceeds remaining absolute Pass budget",
-              true, false, true, false))
+              true, false, true, true))
           {
             return update_overtake_line(
               behavior_output, ref_wp_id, N, lb, ub, now_sec);
           }
+          overtake_line_state_.pass_runtime_completion_replan_pending = true;
+          overtake_line_state_.pass_runtime_completion_replan_pending_since_sec =
+            now_sec;
+          // A valid frozen entry-time estimate is not a fresh runtime answer.
+          // Do not let the shadow last-feasible lease restore that stale hold
+          // while current-state branches are being evaluated.
+          mpcc_lite_shadow_last_feasible_resolution_.reset();
+          mpcc_lite_shadow_last_feasible_sec_ =
+            -std::numeric_limits<double>::infinity();
           if (line_cfg.debug_log_enabled) {
             RCLCPP_WARN(
               rclcpp::get_logger("mpc_controller"),
-              "OvertakeLine runtime completion requested immediate tactical replan: "
+              "OvertakeLine runtime completion tactical replan armed: "
               "target=%s, side=%d, required=%.2f m/%.2f s, "
               "remaining=%.2f m/%.2f s, prefix=retained, wp_id=%d",
               overtake_line_state_.target_vehicle_id.c_str(),
@@ -21856,14 +21950,23 @@ private:
               runtime_remaining_absolute_time, model->wp_id);
           }
         }
-        if (
+        const bool safe_prefix_refresh_due =
           safe_prefix_replan_due &&
+          !overtake_line_state_.pass_runtime_completion_replan_pending &&
+          now_sec -
+          overtake_line_state_.pass_runtime_completion_replan_last_request_sec + kEps >=
+          tactical_replan_interval_sec;
+        if (
+          safe_prefix_refresh_due &&
           try_last_feasible_maneuver(
             "safe trajectory prefix complete-Mission refresh",
             true, true, false, false))
         {
           return update_overtake_line(
             behavior_output, ref_wp_id, N, lb, ub, now_sec);
+        }
+        if (safe_prefix_refresh_due) {
+          overtake_line_state_.pass_runtime_completion_replan_last_request_sec = now_sec;
         }
         const auto tactical_revalidation =
           overtake_core::resolve_speed_preserving_tactical_revalidation(

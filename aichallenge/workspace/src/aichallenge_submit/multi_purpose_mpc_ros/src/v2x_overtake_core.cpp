@@ -4876,7 +4876,12 @@ FrenetDpExecutionRefreshStitchResolution stitch_frenet_dp_execution_refresh_path
     !std::isfinite(request.blend_end_distance_m) ||
     request.blend_end_distance_m <= request.preserved_prefix_distance_m + 1e-9 ||
     !is_valid_frenet_dp_execution_path(
-      request.candidate_path_distances_m, request.candidate_lateral_path_m))
+      request.candidate_path_distances_m, request.candidate_lateral_path_m) ||
+    (request.measured_state_reachability_enabled &&
+    (!std::isfinite(request.current_lateral_velocity_mps) ||
+    !std::isfinite(request.current_speed_mps) || request.current_speed_mps <= 0.0 ||
+    !std::isfinite(request.maximum_lateral_accel_mps2) ||
+    request.maximum_lateral_accel_mps2 <= 0.0)))
   {
     return resolution;
   }
@@ -4888,11 +4893,19 @@ FrenetDpExecutionRefreshStitchResolution stitch_frenet_dp_execution_refresh_path
   active_branch.path_distances_m = request.active_path_distances_m;
   active_branch.lateral_path_m = request.active_lateral_path_m;
 
+  resolution.measured_state_reachability_used =
+    request.measured_state_reachability_enabled;
   resolution.path_distances_m = request.candidate_path_distances_m;
   resolution.lateral_path_m.reserve(request.candidate_lateral_path_m.size());
   for (std::size_t i = 0U; i < request.candidate_path_distances_m.size(); ++i) {
     const double distance_m = request.candidate_path_distances_m[i];
     double anchor_lateral_m = request.current_lateral_m;
+    double time_to_target_sec = 0.0;
+    if (request.measured_state_reachability_enabled) {
+      time_to_target_sec = std::max(0.15, distance_m / request.current_speed_mps);
+      anchor_lateral_m = request.current_lateral_m +
+        request.current_lateral_velocity_mps * time_to_target_sec;
+    }
     if (active_path_valid) {
       const double active_query_m = request.active_traveled_distance_m + distance_m;
       if (active_query_m <= request.active_path_distances_m.back() + 1e-9) {
@@ -4907,7 +4920,7 @@ FrenetDpExecutionRefreshStitchResolution stitch_frenet_dp_execution_refresh_path
         resolution.used_active_path = true;
       }
     }
-    if (i == 0U) {
+    if (i == 0U && !request.measured_state_reachability_enabled) {
       anchor_lateral_m = request.current_lateral_m;
     }
 
@@ -4922,9 +4935,35 @@ FrenetDpExecutionRefreshStitchResolution stitch_frenet_dp_execution_refresh_path
       const double smoothstep = ratio * ratio * (3.0 - 2.0 * ratio);
       anchor_weight = 1.0 - smoothstep;
     }
-    resolution.lateral_path_m.push_back(
+    double stitched_lateral_m =
       anchor_weight * anchor_lateral_m +
-      (1.0 - anchor_weight) * request.candidate_lateral_path_m[i]);
+      (1.0 - anchor_weight) * request.candidate_lateral_path_m[i];
+    if (request.measured_state_reachability_enabled) {
+      const double zero_acceleration_lateral_m =
+        request.current_lateral_m +
+        request.current_lateral_velocity_mps * time_to_target_sec;
+      const double unconstrained_lateral_accel_mps2 =
+        2.0 * std::abs(stitched_lateral_m - zero_acceleration_lateral_m) /
+        (time_to_target_sec * time_to_target_sec);
+      resolution.maximum_unconstrained_lateral_accel_mps2 = std::max(
+        resolution.maximum_unconstrained_lateral_accel_mps2,
+        unconstrained_lateral_accel_mps2);
+      const auto reachable_target = resolve_reachable_lateral_target(
+        ReachableLateralTargetRequest{
+          request.current_lateral_m, stitched_lateral_m, time_to_target_sec,
+          request.maximum_lateral_accel_mps2,
+          request.current_lateral_velocity_mps});
+      if (!reachable_target.valid) {
+        resolution.valid = false;
+        resolution.path_distances_m.clear();
+        resolution.lateral_path_m.clear();
+        return resolution;
+      }
+      resolution.lateral_reachability_constrained =
+        resolution.lateral_reachability_constrained || reachable_target.limited;
+      stitched_lateral_m = reachable_target.target_lateral_m;
+    }
+    resolution.lateral_path_m.push_back(stitched_lateral_m);
   }
   resolution.valid = is_valid_frenet_dp_execution_path(
     resolution.path_distances_m, resolution.lateral_path_m);

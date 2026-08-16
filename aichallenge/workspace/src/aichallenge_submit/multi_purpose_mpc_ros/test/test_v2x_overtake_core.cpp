@@ -16219,6 +16219,113 @@ TEST(V2XOvertakeCoreFrenetDpExecution, StitchesMeasuredPrefixWithoutOldPath)
   EXPECT_FALSE(stitch_frenet_dp_execution_refresh_path(request).valid);
 }
 
+TEST(V2XOvertakeCoreFrenetDpExecution, StitchesMeasuredVelocityReachablePrefix)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    FrenetDpExecutionRefreshStitchRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    stitch_frenet_dp_execution_refresh_path;
+
+  FrenetDpExecutionRefreshStitchRequest request;
+  request.current_lateral_m = 0.0;
+  request.active_traveled_distance_m = 0.0;
+  request.preserved_prefix_distance_m = 1.0;
+  request.blend_end_distance_m = 3.0;
+  request.measured_state_reachability_enabled = true;
+  request.current_lateral_velocity_mps = 1.0;
+  request.current_speed_mps = 2.0;
+  request.maximum_lateral_accel_mps2 = 2.0;
+  request.candidate_path_distances_m = {1.0, 2.0, 3.0};
+  request.candidate_lateral_path_m = {-2.0, -2.0, -2.0};
+
+  const auto result = stitch_frenet_dp_execution_refresh_path(request);
+  ASSERT_TRUE(result.valid);
+  EXPECT_FALSE(result.used_active_path);
+  EXPECT_TRUE(result.measured_state_reachability_used);
+  EXPECT_TRUE(result.lateral_reachability_constrained);
+  ASSERT_EQ(result.lateral_path_m.size(), 3U);
+  // The preserved prefix follows measured lateral velocity instead of
+  // demanding that it stop at the current lateral offset.
+  EXPECT_NEAR(result.lateral_path_m[0], 0.5, 1e-9);
+  EXPECT_NEAR(result.lateral_path_m[1], 0.0, 1e-9);
+  EXPECT_NEAR(result.lateral_path_m[2], -0.75, 1e-9);
+  EXPECT_NEAR(
+    result.maximum_unconstrained_lateral_accel_mps2,
+    28.0 / 9.0, 1e-9);
+
+  for (std::size_t i = 0U; i < result.lateral_path_m.size(); ++i) {
+    const double time_sec =
+      request.candidate_path_distances_m[i] / request.current_speed_mps;
+    const double zero_acceleration_lateral =
+      request.current_lateral_m +
+      request.current_lateral_velocity_mps * time_sec;
+    const double required_lateral_accel =
+      2.0 * std::abs(result.lateral_path_m[i] - zero_acceleration_lateral) /
+      (time_sec * time_sec);
+    EXPECT_LE(
+      required_lateral_accel,
+      request.maximum_lateral_accel_mps2 + 1e-9);
+  }
+}
+
+TEST(V2XOvertakeCoreFrenetDpExecution, ProjectsStaleActivePrefixToMeasuredEnvelope)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    FrenetDpExecutionRefreshStitchRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    stitch_frenet_dp_execution_refresh_path;
+
+  FrenetDpExecutionRefreshStitchRequest request;
+  request.current_lateral_m = 0.0;
+  request.active_traveled_distance_m = 0.0;
+  request.preserved_prefix_distance_m = 1.0;
+  request.blend_end_distance_m = 2.0;
+  request.measured_state_reachability_enabled = true;
+  request.current_lateral_velocity_mps = 0.0;
+  request.current_speed_mps = 2.0;
+  request.maximum_lateral_accel_mps2 = 1.0;
+  request.active_path_distances_m = {0.0, 1.0, 2.0};
+  request.active_lateral_path_m = {2.0, 2.0, 2.0};
+  request.candidate_path_distances_m = {0.5, 1.0, 2.0};
+  request.candidate_lateral_path_m = {0.0, 0.0, 0.0};
+
+  const auto result = stitch_frenet_dp_execution_refresh_path(request);
+  ASSERT_TRUE(result.valid);
+  EXPECT_TRUE(result.used_active_path);
+  EXPECT_TRUE(result.measured_state_reachability_used);
+  EXPECT_TRUE(result.lateral_reachability_constrained);
+  ASSERT_EQ(result.lateral_path_m.size(), 3U);
+  EXPECT_NEAR(result.lateral_path_m[0], 0.03125, 1e-9);
+  EXPECT_NEAR(result.lateral_path_m[1], 0.125, 1e-9);
+  EXPECT_DOUBLE_EQ(result.lateral_path_m[2], 0.0);
+  EXPECT_GT(result.maximum_unconstrained_lateral_accel_mps2, 1.0);
+}
+
+TEST(V2XOvertakeCoreFrenetDpExecution, RejectsInvalidMeasuredStitchDynamics)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    FrenetDpExecutionRefreshStitchRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    stitch_frenet_dp_execution_refresh_path;
+
+  FrenetDpExecutionRefreshStitchRequest request;
+  request.current_lateral_m = 0.0;
+  request.active_traveled_distance_m = 0.0;
+  request.preserved_prefix_distance_m = 1.0;
+  request.blend_end_distance_m = 2.0;
+  request.measured_state_reachability_enabled = true;
+  request.current_lateral_velocity_mps = 0.0;
+  request.current_speed_mps = 0.0;
+  request.maximum_lateral_accel_mps2 = 1.0;
+  request.candidate_path_distances_m = {0.5, 1.0};
+  request.candidate_lateral_path_m = {0.0, 0.0};
+  EXPECT_FALSE(stitch_frenet_dp_execution_refresh_path(request).valid);
+
+  request.current_speed_mps = 2.0;
+  request.maximum_lateral_accel_mps2 = 0.0;
+  EXPECT_FALSE(stitch_frenet_dp_execution_refresh_path(request).valid);
+}
+
 TEST(V2XOvertakeCoreFrenetDpExecution, RejectsMalformedTransitionPath)
 {
   using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpTransitionPathRequest;

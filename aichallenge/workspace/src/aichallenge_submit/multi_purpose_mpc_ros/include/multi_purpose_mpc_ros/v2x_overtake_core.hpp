@@ -3116,6 +3116,10 @@ struct FrenetDpExecutionRefreshStitchRequest
   double active_traveled_distance_m{};
   double preserved_prefix_distance_m{};
   double blend_end_distance_m{};
+  bool measured_state_reachability_enabled{false};
+  double current_lateral_velocity_mps{};
+  double current_speed_mps{};
+  double maximum_lateral_accel_mps2{};
   std::vector<double> active_path_distances_m;
   std::vector<double> active_lateral_path_m;
   std::vector<double> candidate_path_distances_m;
@@ -3126,15 +3130,20 @@ struct FrenetDpExecutionRefreshStitchResolution
 {
   bool valid{false};
   bool used_active_path{false};
+  bool measured_state_reachability_used{false};
+  bool lateral_reachability_constrained{false};
+  double maximum_unconstrained_lateral_accel_mps2{};
   std::vector<double> path_distances_m;
   std::vector<double> lateral_path_m;
 };
 
 /// Rebase a rolling DP candidate on the measured state and the unconsumed
 /// prefix of the last feasible path.  The old prefix is preserved briefly,
-/// then smoothstep-blended into the newly optimized downstream path.  This is
-/// reference stitching only; the caller must still run all hard execution
-/// validation before atomically promoting the result.
+/// then smoothstep-blended into the newly optimized downstream path.  When
+/// measured-state reachability is enabled, the blend is projected onto the
+/// same constant-acceleration envelope used by DP sample generation.  The
+/// caller must still run all hard execution validation before atomically
+/// promoting the result.
 FrenetDpExecutionRefreshStitchResolution stitch_frenet_dp_execution_refresh_path(
   const FrenetDpExecutionRefreshStitchRequest & request) noexcept;
 

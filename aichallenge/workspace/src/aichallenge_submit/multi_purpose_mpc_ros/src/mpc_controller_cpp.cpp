@@ -18564,9 +18564,45 @@ private:
     bool dp_refresh_used_active_tail = false;
     bool dp_refresh_used_physical_clearance = false;
     bool dp_refresh_rebased_from_measured_state = false;
+    bool dp_refresh_stitch_reachability_used = false;
+    bool dp_refresh_stitch_reachability_constrained = false;
+    double dp_refresh_stitch_maximum_unconstrained_ay = 0.0;
     std::size_t dp_refresh_source_covered_sample_count = 0U;
     std::vector<double> dp_refresh_stitched_distances;
     std::vector<double> dp_refresh_stitched_lateral;
+    const double dp_refresh_stitch_maximum_lateral_accel =
+      std::max(0.0, line_cfg.max_lateral_accel) *
+      line_cfg.mpcc_frenet_dp_execution_lateral_accel_reserve_ratio;
+    const double dp_refresh_measured_lateral_velocity =
+      std::isfinite(model->spatial_state.e_psi) ?
+      std::max(0.0, current_speed_mps_) *
+      std::sin(model->spatial_state.e_psi) : 0.0;
+    const auto stitch_dp_refresh_candidate = [&]
+      (const std::vector<double> & active_distances,
+      const std::vector<double> & active_lateral,
+      const std::vector<double> & candidate_distances,
+      const std::vector<double> & candidate_lateral,
+      const double active_traveled_distance) {
+        overtake_core::FrenetDpExecutionRefreshStitchRequest request;
+        request.current_lateral_m = current_ey;
+        request.active_traveled_distance_m = active_traveled_distance;
+        request.preserved_prefix_distance_m =
+          line_cfg.mpcc_frenet_dp_refresh_preserved_prefix_distance;
+        request.blend_end_distance_m =
+          line_cfg.mpcc_frenet_dp_refresh_blend_end_distance;
+        request.measured_state_reachability_enabled =
+          line_cfg.mpcc_frenet_dp_execution_envelope_enabled;
+        request.current_lateral_velocity_mps =
+          dp_refresh_measured_lateral_velocity;
+        request.current_speed_mps = std::max(1.0, current_speed_mps_);
+        request.maximum_lateral_accel_mps2 =
+          dp_refresh_stitch_maximum_lateral_accel;
+        request.active_path_distances_m = active_distances;
+        request.active_lateral_path_m = active_lateral;
+        request.candidate_path_distances_m = candidate_distances;
+        request.candidate_lateral_path_m = candidate_lateral;
+        return overtake_core::stitch_frenet_dp_execution_refresh_path(request);
+      };
     if (fresh_same_side_dp_prefix.has_value()) {
       const auto refresh =
           resolve_dp_refresh(fresh_same_side_dp_prefix.value());
@@ -18606,17 +18642,17 @@ private:
         dp_refresh_rebased_from_measured_state ?
         empty_active_path :
         overtake_line_state_.mission_frenet_dp_lateral_path_m;
-      auto stitched_candidate =
-          overtake_core::stitch_frenet_dp_execution_refresh_path(
-              overtake_core::FrenetDpExecutionRefreshStitchRequest{
-                  current_ey,
-                  overtake_line_state_.mission_frenet_dp_execution_traveled_m,
-                  line_cfg.mpcc_frenet_dp_refresh_preserved_prefix_distance,
-                  line_cfg.mpcc_frenet_dp_refresh_blend_end_distance,
-                  refresh_active_distances,
-                  refresh_active_lateral,
-                  candidate.frenet_dp_path_distances_m,
-                  candidate.frenet_dp_lateral_path_m});
+      auto stitched_candidate = stitch_dp_refresh_candidate(
+        refresh_active_distances, refresh_active_lateral,
+        candidate.frenet_dp_path_distances_m,
+        candidate.frenet_dp_lateral_path_m,
+        overtake_line_state_.mission_frenet_dp_execution_traveled_m);
+      dp_refresh_stitch_reachability_used =
+        stitched_candidate.measured_state_reachability_used;
+      dp_refresh_stitch_reachability_constrained =
+        stitched_candidate.lateral_reachability_constrained;
+      dp_refresh_stitch_maximum_unconstrained_ay =
+        stitched_candidate.maximum_unconstrained_lateral_accel_mps2;
       if (stitched_candidate.valid) {
         dp_refresh_used_active_prefix = stitched_candidate.used_active_path;
         dp_refresh_stitched_distances = stitched_candidate.path_distances_m;
@@ -18865,17 +18901,16 @@ private:
         !dp_refresh_rebased_from_measured_state)
       {
         dp_refresh_rebased_from_measured_state = true;
-        stitched_candidate =
-          overtake_core::stitch_frenet_dp_execution_refresh_path(
-            overtake_core::FrenetDpExecutionRefreshStitchRequest{
-              current_ey,
-              0.0,
-              line_cfg.mpcc_frenet_dp_refresh_preserved_prefix_distance,
-              line_cfg.mpcc_frenet_dp_refresh_blend_end_distance,
-              empty_active_path,
-              empty_active_path,
-              candidate.frenet_dp_path_distances_m,
-              candidate.frenet_dp_lateral_path_m});
+        stitched_candidate = stitch_dp_refresh_candidate(
+          empty_active_path, empty_active_path,
+          candidate.frenet_dp_path_distances_m,
+          candidate.frenet_dp_lateral_path_m, 0.0);
+        dp_refresh_stitch_reachability_used =
+          stitched_candidate.measured_state_reachability_used;
+        dp_refresh_stitch_reachability_constrained =
+          stitched_candidate.lateral_reachability_constrained;
+        dp_refresh_stitch_maximum_unconstrained_ay =
+          stitched_candidate.maximum_unconstrained_lateral_accel_mps2;
         dp_refresh_used_active_prefix = false;
         dp_refresh_used_active_tail = false;
         dp_refresh_used_physical_clearance = false;
@@ -18948,7 +18983,8 @@ private:
               "OvertakeLine DP rolling candidate retained as pending: "
               "target=%s, side=%d, source=%s, reference=%d, horizon=%d, "
               "source_coverage=%zu/%d, stitched=%d/old_prefix=%d/old_tail=%d/"
-              "measured_rebase=%d, "
+              "measured_rebase=%d/stitch_reachable=%d/stitch_clipped=%d/"
+              "stitch_raw_ay=%.2f, "
               "physical=%d, target_bound=%d/%zu/min=%.2f, target_ok=%d, "
               "hard_fault=%d, execution_limits=wall:%d/static:%d/ay:%d/"
               "static_physical:%d/static_clamp_ay:%d/max_ay:%.2f/plan_ay:%.2f, "
@@ -18964,6 +19000,9 @@ private:
               dp_refresh_used_active_prefix ? 1 : 0,
               dp_refresh_used_active_tail ? 1 : 0,
               dp_refresh_rebased_from_measured_state ? 1 : 0,
+              dp_refresh_stitch_reachability_used ? 1 : 0,
+              dp_refresh_stitch_reachability_constrained ? 1 : 0,
+              dp_refresh_stitch_maximum_unconstrained_ay,
               dp_refresh_used_physical_clearance ? 1 : 0,
               candidate_target_bound_horizon_feasible ? 1 : 0,
               candidate_target_bound_horizon.failure_index,
@@ -19054,7 +19093,9 @@ private:
             "OvertakeLine DP execution rolling refresh: target=%s, side=%d, "
             "source=%s, tactic=%s/%zu knots, points=%zu, distance=%.2f m, "
             "old_remaining=%.2f m, source_coverage=%zu/%d, "
-            "stitched_old=%d, old_tail=%d, measured_rebase=%d, physical=%d, "
+            "stitched_old=%d, old_tail=%d, measured_rebase=%d, "
+            "stitch_reachable=%d, stitch_clipped=%d, stitch_raw_ay=%.2f, "
+            "physical=%d, "
             "closing=%.2f m/s, count=%d, wp_id=%d",
             overtake_line_state_.target_vehicle_id.c_str(),
             overtake_line_state_.mission_frenet_dp_side_sign,
@@ -19069,6 +19110,9 @@ private:
             dp_refresh_used_active_prefix ? 1 : 0,
             dp_refresh_used_active_tail ? 1 : 0,
             dp_refresh_rebased_from_measured_state ? 1 : 0,
+            dp_refresh_stitch_reachability_used ? 1 : 0,
+            dp_refresh_stitch_reachability_constrained ? 1 : 0,
+            dp_refresh_stitch_maximum_unconstrained_ay,
             dp_refresh_used_physical_clearance ? 1 : 0,
             overtake_line_state_.mission_closing_speed_limit,
             overtake_line_state_.mission_frenet_dp_refresh_count, model->wp_id);

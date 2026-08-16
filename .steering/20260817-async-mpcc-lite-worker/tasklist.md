@@ -5,6 +5,7 @@
 - [x] Add detached V2X planner and MPC tactical snapshot support.
 - [x] Route MPCC-lite tactical refresh through the worker.
 - [x] Add target/generation/phase/side/age admission checks and diagnostics.
+- [x] Enable the async worker in the normal `make dev` / `make dev2` configuration.
 - [x] Build and run package tests.
 - [x] Record verification and commit the scoped change.
 
@@ -29,3 +30,7 @@
 Dynamic acceptance remains a `make dev2` task. Confirm that
 `Overtake MPCC-lite async` reports adopted results, bounded pending/replaced
 counts and lower control-callback overrun frequency than the 18.7% baseline.
+
+The first trial at `output/20260817-005244` logged `async=disabled` because the
+enable flag was present only in `config_for_cloud.yaml`. The same flag is now
+also present in `config.yaml`, which is selected by the normal MPC launch.

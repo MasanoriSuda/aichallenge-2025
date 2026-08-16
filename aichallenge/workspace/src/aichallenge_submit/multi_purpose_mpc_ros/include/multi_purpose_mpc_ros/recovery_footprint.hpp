@@ -218,6 +218,17 @@ struct LateralClearanceResult
   std::size_t checked_pose_count{};
 };
 
+/// One connected collision-free lateral interval at a fixed reference pose.
+struct LateralClearIntervalResult
+{
+  bool valid{false};
+  bool feasible{false};
+  bool preferred_lateral_contained{false};
+  double lower_lateral_offset_m{};
+  double upper_lateral_offset_m{};
+  std::size_t checked_pose_count{};
+};
+
 struct FeasibilityResult
 {
   bool feasible{false};
@@ -310,6 +321,15 @@ LateralClearanceResult clamp_lateral_offset_to_static_map(
   const Pose2D & reference_pose, double desired_lateral_offset_m,
   double fallback_lateral_offset_m, double additional_lateral_clearance_m,
   double sample_step_m);
+
+/// Sample a bounded Frenet interval and return one connected collision-free
+/// component. If several components exist, the one nearest preferred_lateral
+/// is selected; components are never bridged across occupied/unknown cells.
+LateralClearIntervalResult find_clear_lateral_interval(
+  const OccupancyGrid & grid, const FootprintExtents & footprint,
+  const Pose2D & reference_pose, double lower_lateral_offset_m,
+  double upper_lateral_offset_m, double preferred_lateral_offset_m,
+  double additional_lateral_clearance_m, double sample_step_m);
 
 /// Classify the nearest occupied/unknown map cells in the vehicle frame.
 ///

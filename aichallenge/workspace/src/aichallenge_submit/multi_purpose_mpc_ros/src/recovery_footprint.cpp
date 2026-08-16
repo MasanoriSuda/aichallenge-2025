@@ -913,6 +913,110 @@ LateralClearanceResult clamp_lateral_offset_to_static_map(
   return result;
 }
 
+LateralClearIntervalResult find_clear_lateral_interval(
+  const OccupancyGrid & grid, const FootprintExtents & footprint,
+  const Pose2D & reference_pose, const double lower_lateral_offset_m,
+  const double upper_lateral_offset_m, const double preferred_lateral_offset_m,
+  const double additional_lateral_clearance_m, const double sample_step_m)
+{
+  LateralClearIntervalResult result;
+  if (
+    !grid.valid() || !footprint.valid() || !valid_pose(reference_pose) ||
+    !finite(lower_lateral_offset_m) || !finite(upper_lateral_offset_m) ||
+    upper_lateral_offset_m < lower_lateral_offset_m ||
+    !finite(preferred_lateral_offset_m) ||
+    !finite(additional_lateral_clearance_m) || additional_lateral_clearance_m < 0.0 ||
+    !finite(sample_step_m) || sample_step_m <= 0.0)
+  {
+    return result;
+  }
+
+  FootprintExtents clearance_footprint = footprint;
+  clearance_footprint.left_extent_m += additional_lateral_clearance_m;
+  clearance_footprint.right_extent_m += additional_lateral_clearance_m;
+  if (!clearance_footprint.valid()) {
+    return result;
+  }
+
+  const auto segment_count = subdivision_count(
+    upper_lateral_offset_m - lower_lateral_offset_m, sample_step_m);
+  if (!segment_count.has_value() || segment_count.value() + 1U > kMaximumSamples) {
+    return result;
+  }
+
+  struct ClearRun
+  {
+    double lower{};
+    double upper{};
+  };
+  std::vector<ClearRun> clear_runs;
+  bool active_run{false};
+  double active_run_lower{0.0};
+  const double left_x = -std::sin(reference_pose.yaw_rad);
+  const double left_y = std::cos(reference_pose.yaw_rad);
+  result.valid = true;
+  for (std::size_t index = 0U; index <= segment_count.value(); ++index) {
+    const double ratio = segment_count.value() == 0U ? 0.0 :
+      static_cast<double>(index) / static_cast<double>(segment_count.value());
+    const double lateral_offset = lower_lateral_offset_m +
+      ratio * (upper_lateral_offset_m - lower_lateral_offset_m);
+    const Pose2D candidate_pose{
+      reference_pose.x_m + lateral_offset * left_x,
+      reference_pose.y_m + lateral_offset * left_y,
+      reference_pose.yaw_rad};
+    const auto sample = sample_footprint(grid, clearance_footprint, candidate_pose);
+    ++result.checked_pose_count;
+    const bool clear =
+      sample.valid && !sample.out_of_map && sample.contact_cells.empty();
+    if (clear && !active_run) {
+      active_run = true;
+      active_run_lower = lateral_offset;
+    }
+    if (!clear && active_run) {
+      const double previous_ratio = index == 0U ? 0.0 :
+        static_cast<double>(index - 1U) /
+        static_cast<double>(segment_count.value());
+      const double previous_lateral = lower_lateral_offset_m +
+        previous_ratio * (upper_lateral_offset_m - lower_lateral_offset_m);
+      clear_runs.push_back(ClearRun{active_run_lower, previous_lateral});
+      active_run = false;
+    }
+  }
+  if (active_run) {
+    clear_runs.push_back(ClearRun{active_run_lower, upper_lateral_offset_m});
+  }
+  if (clear_runs.empty()) {
+    return result;
+  }
+
+  const auto distance_to_run = [&](const ClearRun & run) {
+      if (preferred_lateral_offset_m < run.lower) {
+        return run.lower - preferred_lateral_offset_m;
+      }
+      if (preferred_lateral_offset_m > run.upper) {
+        return preferred_lateral_offset_m - run.upper;
+      }
+      return 0.0;
+    };
+  const auto selected = std::min_element(
+    clear_runs.begin(), clear_runs.end(),
+    [&](const ClearRun & lhs, const ClearRun & rhs) {
+      const double lhs_distance = distance_to_run(lhs);
+      const double rhs_distance = distance_to_run(rhs);
+      if (std::abs(lhs_distance - rhs_distance) > kNumericalEpsilon) {
+        return lhs_distance < rhs_distance;
+      }
+      return lhs.upper - lhs.lower > rhs.upper - rhs.lower;
+    });
+  result.feasible = true;
+  result.lower_lateral_offset_m = selected->lower;
+  result.upper_lateral_offset_m = selected->upper;
+  result.preferred_lateral_contained =
+    preferred_lateral_offset_m + kNumericalEpsilon >= selected->lower &&
+    preferred_lateral_offset_m <= selected->upper + kNumericalEpsilon;
+  return result;
+}
+
 WallProximityResult classify_nearby_wall(
   const OccupancyGrid & grid, const FootprintExtents & footprint,
   const Pose2D & pose, const double search_margin_m, const double ambiguity_m)

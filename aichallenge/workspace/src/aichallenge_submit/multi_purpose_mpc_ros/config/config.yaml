@@ -621,6 +621,7 @@ mpc:
   v2x_overtake_mpcc_frenet_dp_primary_execution_enabled: true # evaluate a fresh current-state same-side prefix during healthy ShiftOut/Pass, not only after failure
   v2x_overtake_mpcc_frenet_dp_target_bound_promotion_enabled: true # require time-aligned physical target separation before a rolling DP prefix can replace last-feasible execution
   v2x_overtake_mpcc_frenet_dp_measured_rebase_retry_enabled: true # if old-path stitching fails full validation, retry once from measured e_y without relaxing any hard gate
+  v2x_overtake_mpcc_frenet_dp_execution_envelope_enabled: true # constrain DP samples by static footprint walls and measured-state lateral reachability before solve
   v2x_overtake_mpcc_frenet_dp_rolling_refresh_interval_sec: 0.10 # [s] keep the last feasible path between updates
   v2x_overtake_mpcc_frenet_dp_refresh_preserved_prefix_distance: 1.0 # [m] retain the current feasible path immediately ahead of ego
   v2x_overtake_mpcc_frenet_dp_refresh_blend_end_distance: 4.0 # [m] smoothstep into the newly optimized downstream path by this distance

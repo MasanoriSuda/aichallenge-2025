@@ -1535,6 +1535,7 @@ struct OvertakeLineConfig
   bool mpcc_frenet_dp_primary_execution_enabled{false};
   bool mpcc_frenet_dp_target_bound_promotion_enabled{false};
   bool mpcc_frenet_dp_measured_rebase_retry_enabled{false};
+  bool mpcc_frenet_dp_execution_envelope_enabled{false};
   double mpcc_frenet_dp_rolling_refresh_interval_sec{0.10};
   double mpcc_frenet_dp_refresh_preserved_prefix_distance{1.0};
   double mpcc_frenet_dp_refresh_blend_end_distance{4.0};
@@ -7569,6 +7570,71 @@ struct MPC
       build_v2x_gap_planner_bounds(
       ref_wp_id, N, lb, ub, static_mission_plan_N);
 
+    const double hard_wall_clearance =
+      std::max(0.0, cfg.v2x_behavior.overtake_line.min_wall_clearance);
+    const double hard_horizon_distance = std::max(
+      0.0,
+      cfg.v2x_behavior.overtake_line.mpcc_frenet_dp_hard_horizon_distance);
+    struct StaticDpLateralEnvelope
+    {
+      bool checked{false};
+      recovery_footprint::LateralClearIntervalResult hard;
+      recovery_footprint::LateralClearIntervalResult preferred;
+    };
+    std::vector<StaticDpLateralEnvelope> static_dp_lateral_envelopes(
+      static_cast<std::size_t>(std::max(0, overtake_plan_N)));
+    const bool execution_envelope_enabled =
+      cfg.v2x_behavior.overtake_line.mpcc_frenet_dp_execution_envelope_enabled;
+    bool static_dp_lateral_envelopes_initialized = false;
+    const auto ensure_static_dp_lateral_envelopes = [&]() {
+        if (static_dp_lateral_envelopes_initialized) {
+          return;
+        }
+        static_dp_lateral_envelopes_initialized = true;
+        if (
+          !execution_envelope_enabled || overtake_static_wall_grid_ == nullptr ||
+          !overtake_static_wall_footprint_.valid())
+        {
+          return;
+        }
+        const double sample_step = std::clamp(
+          0.5 * overtake_static_wall_grid_->resolution_m, 0.02, 0.10);
+        for (int i = 0; i < overtake_plan_N; ++i) {
+          if (overtake_lb.size() <= i || overtake_ub.size() <= i) {
+            break;
+          }
+          const double path_distance = horizon_path_distance_to_index(
+            ref_wp_id, static_cast<std::size_t>(i));
+          const auto horizon_clearance =
+            overtake_core::resolve_frenet_dp_horizon_clearance(
+            overtake_core::FrenetDpHorizonClearanceRequest{
+              path_distance, hard_horizon_distance, hard_wall_clearance,
+              robust_wall_planning_clearance});
+          if (!horizon_clearance.valid) {
+            continue;
+          }
+          const auto & waypoint = model->reference_path->get_waypoint(ref_wp_id + i);
+          const recovery_footprint::Pose2D reference_pose{
+            waypoint.x, waypoint.y, waypoint.psi};
+          auto & envelope = static_dp_lateral_envelopes[static_cast<std::size_t>(i)];
+          envelope.checked = true;
+          const double preferred_lateral = std::clamp(
+            model->spatial_state.e_y, overtake_lb[i], overtake_ub[i]);
+          envelope.hard = recovery_footprint::find_clear_lateral_interval(
+            *overtake_static_wall_grid_, overtake_static_wall_footprint_,
+            reference_pose, overtake_lb[i], overtake_ub[i], preferred_lateral,
+            horizon_clearance.hard_wall_clearance_m, sample_step);
+          envelope.preferred = recovery_footprint::find_clear_lateral_interval(
+            *overtake_static_wall_grid_, overtake_static_wall_footprint_,
+            reference_pose, overtake_lb[i], overtake_ub[i], preferred_lateral,
+            horizon_clearance.preferred_wall_clearance_m, sample_step);
+        }
+      };
+    const double measured_lateral_velocity_mps =
+      std::isfinite(model->spatial_state.e_psi) ?
+      std::max(0.0, current_speed_mps_) *
+      std::sin(model->spatial_state.e_psi) : 0.0;
+
     const auto select_mission_candidate = [&](
       const auto & candidates, const bool require_complete_mission = true) {
         overtake_core::OvertakeMissionCandidateSelectionRequest request;
@@ -7747,10 +7813,10 @@ struct MPC
         }
       }
 
-      const int overtake_plan_N = v2x_overtake_gap_plan_horizon(ref_wp_id, N);
       const double required_gap_width = std::max(
         cfg.v2x_behavior.overtake_min_gap_width,
         cfg.v2x_behavior.overtake_guard_min_gap_width);
+      ensure_static_dp_lateral_envelopes();
       struct GapCorridorProfiles
       {
         std::vector<overtake_core::OvertakeMissionDynamicCorridorSample> dynamic;
@@ -7763,11 +7829,6 @@ struct MPC
         std::max(0.0, cfg.v2x_gap.prediction_margin);
       const double physical_target_separation =
         std::max(0.0, cfg.v2x_gap.vehicle_radius);
-      const double hard_wall_clearance =
-        std::max(0.0, cfg.v2x_behavior.overtake_line.min_wall_clearance);
-      const double hard_horizon_distance = std::max(
-        0.0,
-        cfg.v2x_behavior.overtake_line.mpcc_frenet_dp_hard_horizon_distance);
       const auto build_gap_corridor_profiles = [&](
         const GapPlannerOutput & gap, const double candidate_ego_speed_mps) {
           GapCorridorProfiles profiles;
@@ -7786,28 +7847,65 @@ struct MPC
               profiles.execution.clear();
               return profiles;
             }
-            const auto resolve_sample_bounds = [&](const bool target_active) {
-                return overtake_core::resolve_frenet_dp_execution_corridor_bounds(
+            const auto build_execution_sample = [&](const bool target_active) {
+                std::optional<overtake_core::OvertakeMissionDynamicCorridorSample> sample;
+                const auto bounds =
+                  overtake_core::resolve_frenet_dp_execution_corridor_bounds(
                   overtake_core::FrenetDpExecutionCorridorBoundsRequest{
                     side, gap.lb[i], gap.ub[i], target_active,
                     planner_target_separation, physical_target_separation,
                     robust_target_center_separation,
                     horizon_clearance.hard_wall_clearance_m,
                     horizon_clearance.preferred_wall_clearance_m});
+                if (!bounds.valid) {
+                  return sample;
+                }
+                overtake_core::OvertakeMissionDynamicCorridorSample candidate_sample{
+                  path_distance,
+                  bounds.hard_lower_lateral_m, bounds.hard_upper_lateral_m, true,
+                  course_waypoint.kappa, target_active, true,
+                  bounds.preferred_lower_lateral_m,
+                  bounds.preferred_upper_lateral_m,
+                  bounds.preferred_bounds_valid};
+                const StaticDpLateralEnvelope * static_envelope = nullptr;
+                if (i < static_dp_lateral_envelopes.size()) {
+                  static_envelope = &static_dp_lateral_envelopes[i];
+                }
+                const bool static_checked =
+                  static_envelope != nullptr && static_envelope->checked;
+                const auto execution_envelope =
+                  overtake_core::resolve_frenet_dp_execution_envelope(
+                  overtake_core::FrenetDpExecutionEnvelopeRequest{
+                    execution_envelope_enabled,
+                    candidate_sample,
+                    model->spatial_state.e_y,
+                    measured_lateral_velocity_mps,
+                    std::max(1.0, current_speed_mps_),
+                    std::max(0.0, cfg.v2x_behavior.overtake_line.max_lateral_accel),
+                    static_checked,
+                    static_checked && static_envelope->hard.valid &&
+                    static_envelope->hard.feasible,
+                    static_checked ? static_envelope->hard.lower_lateral_offset_m : 0.0,
+                    static_checked ? static_envelope->hard.upper_lateral_offset_m : 0.0,
+                    static_checked,
+                    static_checked && static_envelope->preferred.valid &&
+                    static_envelope->preferred.feasible,
+                    static_checked ?
+                    static_envelope->preferred.lower_lateral_offset_m : 0.0,
+                    static_checked ?
+                    static_envelope->preferred.upper_lateral_offset_m : 0.0});
+                if (!execution_envelope.valid || !execution_envelope.feasible) {
+                  return sample;
+                }
+                sample = execution_envelope.sample;
+                return sample;
               };
             if (
               gap.target_active[i] && i < gap.lb.size() && i < gap.ub.size())
             {
-              const auto bounds = resolve_sample_bounds(true);
-              if (bounds.valid) {
-                profiles.dynamic.push_back(
-                  overtake_core::OvertakeMissionDynamicCorridorSample{
-                    path_distance,
-                    bounds.hard_lower_lateral_m, bounds.hard_upper_lateral_m, true,
-                    course_waypoint.kappa, true, true,
-                    bounds.preferred_lower_lateral_m,
-                    bounds.preferred_upper_lateral_m,
-                    bounds.preferred_bounds_valid});
+              const auto sample = build_execution_sample(true);
+              if (sample.has_value()) {
+                profiles.dynamic.push_back(sample.value());
               } else {
                 profiles.dynamic.clear();
                 profiles.execution.clear();
@@ -7821,21 +7919,14 @@ struct MPC
             // refresh brings them into the hard horizon. Never reconnect after
             // an infeasible stage.
             if (i < gap.lb.size() && i < gap.ub.size()) {
-              const auto bounds = resolve_sample_bounds(gap.target_active[i]);
-              if (!bounds.valid)
+              const auto sample = build_execution_sample(gap.target_active[i]);
+              if (!sample.has_value())
               {
                 profiles.dynamic.clear();
                 profiles.execution.clear();
                 return profiles;
               } else if (!profiles.execution.empty() || i == 0U) {
-                profiles.execution.push_back(
-                  overtake_core::OvertakeMissionDynamicCorridorSample{
-                    path_distance,
-                    bounds.hard_lower_lateral_m, bounds.hard_upper_lateral_m, true,
-                    course_waypoint.kappa, gap.target_active[i], true,
-                    bounds.preferred_lower_lateral_m,
-                    bounds.preferred_upper_lateral_m,
-                    bounds.preferred_bounds_valid});
+                profiles.execution.push_back(sample.value());
               }
             }
           }
@@ -18856,7 +18947,9 @@ private:
               "source_coverage=%zu/%d, stitched=%d/old_prefix=%d/old_tail=%d/"
               "measured_rebase=%d, "
               "physical=%d, target_bound=%d/%zu/min=%.2f, target_ok=%d, "
-              "hard_fault=%d, active_remaining=%.2f m, wp_id=%d",
+              "hard_fault=%d, execution_limits=wall:%d/static:%d/ay:%d/"
+              "static_physical:%d/static_clamp_ay:%d/max_ay:%.2f, "
+              "active_remaining=%.2f m, wp_id=%d",
               overtake_line_state_.target_vehicle_id.c_str(),
               candidate.pass_side_sign,
               dp_refresh_uses_receding_prefix ? "receding_prefix"
@@ -18873,6 +18966,12 @@ private:
               candidate_target_bound_horizon.failure_index,
               candidate_target_bound_horizon.minimum_signed_separation_m,
               promotion.target_ready ? 1 : 0, promotion.hard_fault_free ? 0 : 1,
+              candidate_horizon.wall_clearance_limited ? 1 : 0,
+              candidate_horizon.static_map_wall_limited ? 1 : 0,
+              candidate_horizon.lateral_accel_limited ? 1 : 0,
+              candidate_horizon.static_map_physical_infeasible_during_execution ? 1 : 0,
+              candidate_horizon.static_clamp_lateral_accel_infeasible ? 1 : 0,
+              candidate_horizon.max_required_lateral_accel,
               overtake_line_state_.mission_frenet_dp_path_distances_m.empty()
                   ? 0.0
                   : std::max(
@@ -29221,6 +29320,9 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_measured_rebase_retry_enabled =
     mpc["v2x_overtake_mpcc_frenet_dp_measured_rebase_retry_enabled"] ?
     mpc["v2x_overtake_mpcc_frenet_dp_measured_rebase_retry_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_execution_envelope_enabled =
+    mpc["v2x_overtake_mpcc_frenet_dp_execution_envelope_enabled"] ?
+    mpc["v2x_overtake_mpcc_frenet_dp_execution_envelope_enabled"].as<bool>() : false;
   cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_rolling_refresh_interval_sec = std::max(
     0.0,
     mpc["v2x_overtake_mpcc_frenet_dp_rolling_refresh_interval_sec"] ?
@@ -31402,7 +31504,7 @@ public:
         get_logger(),
         "V2X MPCC Frenet DP corridor: %s, execution=%s, "
         "rolling_refresh=%s/%.2f s, primary_execution=%s, target_bound=%s, "
-        "measured_rebase_retry=%s, "
+        "measured_rebase_retry=%s, execution_envelope=%s, "
         "stitch=%.2f->%.2f m, bins=%d, slope<=%.2f m/m, "
         "weights anchor=%.2f/motion=%.2f/previous=%.2f/width=%.2f/"
         "reserve=%.2f/side_switch=%.2f, "
@@ -31423,6 +31525,8 @@ public:
         mpcc_frenet_dp_target_bound_promotion_enabled ? "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.
         mpcc_frenet_dp_measured_rebase_retry_enabled ? "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line.
+        mpcc_frenet_dp_execution_envelope_enabled ? "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.
         mpcc_frenet_dp_refresh_preserved_prefix_distance,
         mpc_cfg_.v2x_behavior.overtake_line.

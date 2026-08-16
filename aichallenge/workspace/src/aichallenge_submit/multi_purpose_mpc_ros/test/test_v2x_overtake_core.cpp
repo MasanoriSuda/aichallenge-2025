@@ -15471,6 +15471,71 @@ TEST(V2XOvertakeCoreFrenetDpCorridor, LimitsHardWallClearanceToNearHorizon)
   EXPECT_FALSE(resolve_frenet_dp_horizon_clearance(request).valid);
 }
 
+TEST(V2XOvertakeCoreFrenetDpCorridor, IntersectsStaticAndReachableExecutionEnvelope)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpExecutionEnvelopeRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorSample;
+  using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frenet_dp_execution_envelope;
+
+  OvertakeMissionDynamicCorridorSample sample;
+  sample.path_distance_m = 5.0;
+  sample.lower_lateral_m = -2.0;
+  sample.upper_lateral_m = 2.0;
+  sample.active = true;
+  sample.preferred_lower_lateral_m = -1.5;
+  sample.preferred_upper_lateral_m = 1.5;
+  sample.preferred_bounds_valid = true;
+  FrenetDpExecutionEnvelopeRequest request;
+  request.enabled = true;
+  request.sample = sample;
+  request.current_lateral_m = 0.0;
+  request.current_lateral_velocity_mps = 0.0;
+  request.current_speed_mps = 5.0;
+  request.maximum_lateral_accel_mps2 = 2.0;
+  request.static_hard_bounds_checked = true;
+  request.static_hard_bounds_feasible = true;
+  request.static_hard_lower_m = -0.8;
+  request.static_hard_upper_m = 1.5;
+  request.static_preferred_bounds_checked = true;
+  request.static_preferred_bounds_feasible = true;
+  request.static_preferred_lower_m = -0.6;
+  request.static_preferred_upper_m = 0.5;
+
+  const auto resolution = resolve_frenet_dp_execution_envelope(request);
+  ASSERT_TRUE(resolution.valid);
+  ASSERT_TRUE(resolution.feasible);
+  EXPECT_TRUE(resolution.static_wall_constrained);
+  EXPECT_TRUE(resolution.reachability_constrained);
+  EXPECT_DOUBLE_EQ(resolution.arrival_time_sec, 1.0);
+  EXPECT_DOUBLE_EQ(resolution.reachable_lower_m, -1.0);
+  EXPECT_DOUBLE_EQ(resolution.reachable_upper_m, 1.0);
+  EXPECT_DOUBLE_EQ(resolution.sample.lower_lateral_m, -0.8);
+  EXPECT_DOUBLE_EQ(resolution.sample.upper_lateral_m, 1.0);
+  ASSERT_TRUE(resolution.sample.preferred_bounds_valid);
+  EXPECT_DOUBLE_EQ(resolution.sample.preferred_lower_lateral_m, -0.6);
+  EXPECT_DOUBLE_EQ(resolution.sample.preferred_upper_lateral_m, 0.5);
+}
+
+TEST(V2XOvertakeCoreFrenetDpCorridor, RejectsUnreachableExecutionEnvelope)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpExecutionEnvelopeRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorSample;
+  using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frenet_dp_execution_envelope;
+
+  FrenetDpExecutionEnvelopeRequest request;
+  request.enabled = true;
+  request.sample = OvertakeMissionDynamicCorridorSample{0.0, 1.0, 2.0, true};
+  request.current_lateral_m = 0.0;
+  request.current_lateral_velocity_mps = 0.0;
+  request.current_speed_mps = 5.0;
+  request.maximum_lateral_accel_mps2 = 2.0;
+
+  const auto resolution = resolve_frenet_dp_execution_envelope(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.feasible);
+  EXPECT_NEAR(resolution.reachable_upper_m, 0.0225, 1e-9);
+}
+
 TEST(V2XOvertakeCoreFrenetDpCorridor, ConstrainsLeftCorridorWithTimedTargetBody)
 {
   using multi_purpose_mpc_ros::v2x_overtake_core::

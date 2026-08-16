@@ -2828,6 +2828,42 @@ struct FrenetDpHorizonClearanceResolution
 FrenetDpHorizonClearanceResolution resolve_frenet_dp_horizon_clearance(
   const FrenetDpHorizonClearanceRequest & request) noexcept;
 
+struct FrenetDpExecutionEnvelopeRequest
+{
+  bool enabled{false};
+  OvertakeMissionDynamicCorridorSample sample;
+  double current_lateral_m{};
+  double current_lateral_velocity_mps{};
+  double current_speed_mps{};
+  double maximum_lateral_accel_mps2{};
+  bool static_hard_bounds_checked{false};
+  bool static_hard_bounds_feasible{false};
+  double static_hard_lower_m{};
+  double static_hard_upper_m{};
+  bool static_preferred_bounds_checked{false};
+  bool static_preferred_bounds_feasible{false};
+  double static_preferred_lower_m{};
+  double static_preferred_upper_m{};
+};
+
+struct FrenetDpExecutionEnvelopeResolution
+{
+  bool valid{false};
+  bool feasible{false};
+  bool static_wall_constrained{false};
+  bool reachability_constrained{false};
+  double arrival_time_sec{};
+  double reachable_lower_m{};
+  double reachable_upper_m{};
+  OvertakeMissionDynamicCorridorSample sample;
+};
+
+/// Intersect one DP sample with the connected static-map interval and the
+/// lateral interval reachable from the measured state. This is the same
+/// constant-acceleration envelope used by execution post-validation.
+FrenetDpExecutionEnvelopeResolution resolve_frenet_dp_execution_envelope(
+  const FrenetDpExecutionEnvelopeRequest & request) noexcept;
+
 struct FrenetDpTargetConstrainedCorridorRequest
 {
   bool enabled{false};

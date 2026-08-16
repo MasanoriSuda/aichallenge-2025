@@ -451,6 +451,52 @@ TEST(RecoveryFootprintLateralClearance, InvalidSearchFailsClosed)
   EXPECT_FALSE(result.feasible);
 }
 
+TEST(RecoveryFootprintLateralInterval, SelectsConnectedComponentNearestPreference)
+{
+  auto grid = make_grid(200U, 200U, 0.1);
+  for (std::size_t column = 0U; column < grid.width; ++column) {
+    set_world_cell(grid, 0.1 * static_cast<double>(column), 10.0);
+  }
+
+  const auto result = recovery::find_clear_lateral_interval(
+    grid, recovery::FootprintExtents{0.2, 0.2, 0.2, 0.2, 0.0},
+    recovery::Pose2D{10.0, 10.0, 0.0}, -2.0, 2.0, 1.0, 0.0, 0.05);
+
+  ASSERT_TRUE(result.valid);
+  ASSERT_TRUE(result.feasible);
+  EXPECT_TRUE(result.preferred_lateral_contained);
+  EXPECT_GT(result.lower_lateral_offset_m, 0.0);
+  EXPECT_GE(result.upper_lateral_offset_m, 1.0);
+}
+
+TEST(RecoveryFootprintLateralInterval, AppliesAdditionalWallClearance)
+{
+  auto grid = make_grid(200U, 200U, 0.1);
+  for (std::size_t column = 0U; column < grid.width; ++column) {
+    set_world_cell(grid, 0.1 * static_cast<double>(column), 10.0);
+  }
+  const recovery::Pose2D pose{10.0, 8.0, 0.0};
+  const recovery::FootprintExtents footprint{0.5, 0.5, 0.5, 0.5, 0.0};
+  const auto physical = recovery::find_clear_lateral_interval(
+    grid, footprint, pose, -1.0, 1.5, 0.0, 0.0, 0.05);
+  const auto reserved = recovery::find_clear_lateral_interval(
+    grid, footprint, pose, -1.0, 1.5, 0.0, 0.25, 0.05);
+
+  ASSERT_TRUE(physical.feasible);
+  ASSERT_TRUE(reserved.feasible);
+  EXPECT_LT(reserved.upper_lateral_offset_m, physical.upper_lateral_offset_m);
+}
+
+TEST(RecoveryFootprintLateralInterval, InvalidInputFailsClosed)
+{
+  const auto result = recovery::find_clear_lateral_interval(
+    make_grid(), compact_footprint(), recovery::Pose2D{10.0, 10.0, 0.0},
+    1.0, -1.0, 0.0, 0.0, 0.05);
+
+  EXPECT_FALSE(result.valid);
+  EXPECT_FALSE(result.feasible);
+}
+
 TEST(RecoveryFootprintPathClearance, AcceptsClearSweptPath)
 {
   const std::vector<recovery::Pose2D> path{

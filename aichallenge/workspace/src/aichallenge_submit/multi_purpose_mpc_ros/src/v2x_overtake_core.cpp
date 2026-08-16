@@ -5233,6 +5233,121 @@ FrenetDpHorizonClearanceResolution resolve_frenet_dp_horizon_clearance(
   return resolution;
 }
 
+FrenetDpExecutionEnvelopeResolution resolve_frenet_dp_execution_envelope(
+  const FrenetDpExecutionEnvelopeRequest & request) noexcept
+{
+  constexpr double kBoundEpsilon = 1e-9;
+  FrenetDpExecutionEnvelopeResolution resolution;
+  resolution.sample = request.sample;
+  if (!request.enabled) {
+    resolution.valid = true;
+    resolution.feasible = request.sample.active;
+    return resolution;
+  }
+  const auto finite_non_negative = [](const double value) {
+      return std::isfinite(value) && value >= 0.0;
+    };
+  if (
+    !request.sample.active ||
+    !finite_non_negative(request.sample.path_distance_m) ||
+    !std::isfinite(request.sample.lower_lateral_m) ||
+    !std::isfinite(request.sample.upper_lateral_m) ||
+    request.sample.upper_lateral_m + kBoundEpsilon <
+    request.sample.lower_lateral_m ||
+    (request.sample.preferred_bounds_valid &&
+    (!std::isfinite(request.sample.preferred_lower_lateral_m) ||
+    !std::isfinite(request.sample.preferred_upper_lateral_m) ||
+    request.sample.preferred_upper_lateral_m + kBoundEpsilon <
+    request.sample.preferred_lower_lateral_m)) ||
+    !std::isfinite(request.current_lateral_m) ||
+    !std::isfinite(request.current_lateral_velocity_mps) ||
+    !std::isfinite(request.current_speed_mps) || request.current_speed_mps <= 0.0 ||
+    !finite_non_negative(request.maximum_lateral_accel_mps2) ||
+    (request.static_hard_bounds_checked && request.static_hard_bounds_feasible &&
+    (!std::isfinite(request.static_hard_lower_m) ||
+    !std::isfinite(request.static_hard_upper_m) ||
+    request.static_hard_upper_m + kBoundEpsilon < request.static_hard_lower_m)) ||
+    (request.static_preferred_bounds_checked &&
+    request.static_preferred_bounds_feasible &&
+    (!std::isfinite(request.static_preferred_lower_m) ||
+    !std::isfinite(request.static_preferred_upper_m) ||
+    request.static_preferred_upper_m + kBoundEpsilon <
+    request.static_preferred_lower_m)))
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  if (request.static_hard_bounds_checked) {
+    if (!request.static_hard_bounds_feasible) {
+      return resolution;
+    }
+    const double prior_lower = resolution.sample.lower_lateral_m;
+    const double prior_upper = resolution.sample.upper_lateral_m;
+    resolution.sample.lower_lateral_m = std::max(
+      resolution.sample.lower_lateral_m, request.static_hard_lower_m);
+    resolution.sample.upper_lateral_m = std::min(
+      resolution.sample.upper_lateral_m, request.static_hard_upper_m);
+    resolution.static_wall_constrained =
+      resolution.sample.lower_lateral_m > prior_lower + kBoundEpsilon ||
+      resolution.sample.upper_lateral_m < prior_upper - kBoundEpsilon;
+  }
+
+  resolution.arrival_time_sec = std::max(
+    0.15, request.sample.path_distance_m / request.current_speed_mps);
+  const double zero_acceleration_lateral =
+    request.current_lateral_m +
+    request.current_lateral_velocity_mps * resolution.arrival_time_sec;
+  const double maximum_displacement =
+    0.5 * request.maximum_lateral_accel_mps2 *
+    resolution.arrival_time_sec * resolution.arrival_time_sec;
+  resolution.reachable_lower_m = zero_acceleration_lateral - maximum_displacement;
+  resolution.reachable_upper_m = zero_acceleration_lateral + maximum_displacement;
+  const double prior_lower = resolution.sample.lower_lateral_m;
+  const double prior_upper = resolution.sample.upper_lateral_m;
+  resolution.sample.lower_lateral_m = std::max(
+    resolution.sample.lower_lateral_m, resolution.reachable_lower_m);
+  resolution.sample.upper_lateral_m = std::min(
+    resolution.sample.upper_lateral_m, resolution.reachable_upper_m);
+  resolution.reachability_constrained =
+    resolution.sample.lower_lateral_m > prior_lower + kBoundEpsilon ||
+    resolution.sample.upper_lateral_m < prior_upper - kBoundEpsilon;
+  if (
+    resolution.sample.upper_lateral_m + kBoundEpsilon <
+    resolution.sample.lower_lateral_m)
+  {
+    return resolution;
+  }
+
+  if (resolution.sample.preferred_bounds_valid) {
+    if (request.static_preferred_bounds_checked) {
+      if (!request.static_preferred_bounds_feasible) {
+        resolution.sample.preferred_bounds_valid = false;
+      } else {
+        resolution.sample.preferred_lower_lateral_m = std::max(
+          resolution.sample.preferred_lower_lateral_m,
+          request.static_preferred_lower_m);
+        resolution.sample.preferred_upper_lateral_m = std::min(
+          resolution.sample.preferred_upper_lateral_m,
+          request.static_preferred_upper_m);
+      }
+    }
+    if (resolution.sample.preferred_bounds_valid) {
+      resolution.sample.preferred_lower_lateral_m = std::max(
+        resolution.sample.preferred_lower_lateral_m,
+        resolution.sample.lower_lateral_m);
+      resolution.sample.preferred_upper_lateral_m = std::min(
+        resolution.sample.preferred_upper_lateral_m,
+        resolution.sample.upper_lateral_m);
+      resolution.sample.preferred_bounds_valid =
+        resolution.sample.preferred_upper_lateral_m + kBoundEpsilon >=
+        resolution.sample.preferred_lower_lateral_m;
+    }
+  }
+  resolution.feasible = true;
+  return resolution;
+}
+
 FrenetDpTargetConstrainedCorridorResolution constrain_frenet_dp_corridor_to_target(
   const FrenetDpTargetConstrainedCorridorRequest & request) noexcept
 {

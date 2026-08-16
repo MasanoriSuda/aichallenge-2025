@@ -1965,7 +1965,8 @@ bool target_bound_execution_hold_budget_available(
     std::isfinite(request.absolute_maximum_sec) && request.absolute_maximum_sec > 0.0 &&
     std::isfinite(request.absolute_maximum_distance_m) &&
     request.absolute_maximum_distance_m > 0.0;
-  return request.forward_progress_extension_enabled && request.pass_phase &&
+  return request.forward_progress_extension_enabled && !request.wall_preplan_warning &&
+         request.pass_phase &&
          request.fresh_forward_progress && progress_extension_timing_valid &&
          request.mission_elapsed_sec < request.absolute_maximum_sec - 1e-9 &&
          request.mission_traveled_m <
@@ -7821,6 +7822,98 @@ RuntimeWallPreplanResolution resolve_runtime_wall_preplan(
   } else {
     resolution.action = RuntimeWallPreplanAction::HoldCurrentSide;
   }
+  return resolution;
+}
+
+RuntimeWallCenterContractionGoalResolution resolve_runtime_wall_center_contraction_goal(
+  const RuntimeWallCenterContractionGoalRequest & request) noexcept
+{
+  RuntimeWallCenterContractionGoalResolution resolution;
+  const bool pass_side_valid =
+    request.pass_side_sign == -1 || request.pass_side_sign == 1;
+  const auto finite_non_negative = [](const double value) {
+      return std::isfinite(value) && value >= 0.0;
+    };
+  if (
+    !pass_side_valid || !std::isfinite(request.current_ego_lateral_m) ||
+    !std::isfinite(request.current_target_lateral_m) ||
+    !std::isfinite(request.predicted_target_lateral_m) ||
+    !std::isfinite(request.previous_goal_m) ||
+    !finite_non_negative(request.physical_target_center_separation_m) ||
+    !finite_non_negative(request.nominal_target_center_separation_m) ||
+    request.nominal_target_center_separation_m + 1e-9 <
+    request.physical_target_center_separation_m ||
+    !std::isfinite(request.wall_lower_bound_m) ||
+    !std::isfinite(request.wall_upper_bound_m) ||
+    request.wall_upper_bound_m < request.wall_lower_bound_m ||
+    !finite_non_negative(request.maximum_centerward_adjustment_m))
+  {
+    resolution.reason = "invalid center contraction inputs";
+    return resolution;
+  }
+
+  resolution.guarded_target_lateral_m = request.pass_side_sign > 0 ?
+    std::max(request.current_target_lateral_m, request.predicted_target_lateral_m) :
+    std::min(request.current_target_lateral_m, request.predicted_target_lateral_m);
+  const double desired_goal = request.previous_goal_m -
+    static_cast<double>(request.pass_side_sign) *
+    request.maximum_centerward_adjustment_m;
+  const auto centerward_candidate = [&](const double separation_m) {
+      return resolve_feasible_pass_side_lateral_goal(
+        FeasiblePassSideLateralGoalRequest{
+          request.pass_side_sign,
+          desired_goal,
+          resolution.guarded_target_lateral_m,
+          separation_m,
+          request.wall_lower_bound_m,
+          request.wall_upper_bound_m,
+          true});
+    };
+  const auto is_bounded_centerward_goal = [&](
+      const FeasiblePassSideLateralGoalResolution & candidate) {
+      if (!candidate.target_separation_feasible || !std::isfinite(candidate.goal_m)) {
+        return false;
+      }
+      const double adjustment = std::abs(candidate.goal_m - request.previous_goal_m);
+      return adjustment > 0.01 &&
+             adjustment <= request.maximum_centerward_adjustment_m + 1e-9 &&
+             std::abs(candidate.goal_m) + 0.01 < std::abs(request.previous_goal_m);
+    };
+
+  const auto nominal_candidate = centerward_candidate(
+    request.nominal_target_center_separation_m);
+  if (is_bounded_centerward_goal(nominal_candidate)) {
+    resolution.valid = true;
+    resolution.goal_m = nominal_candidate.goal_m;
+    resolution.applied_target_center_separation_m =
+      request.nominal_target_center_separation_m;
+    resolution.reason = "nominal target clearance center contraction";
+    return resolution;
+  }
+
+  const double current_selected_side_offset =
+    static_cast<double>(request.pass_side_sign) *
+    (request.current_ego_lateral_m - request.current_target_lateral_m);
+  const bool physical_fallback_context =
+    request.current_body_footprints_separated &&
+    current_selected_side_offset > 1e-6;
+  if (physical_fallback_context) {
+    const auto physical_candidate = centerward_candidate(
+      request.physical_target_center_separation_m);
+    if (is_bounded_centerward_goal(physical_candidate)) {
+      resolution.valid = true;
+      resolution.used_physical_clearance = true;
+      resolution.goal_m = physical_candidate.goal_m;
+      resolution.applied_target_center_separation_m =
+        request.physical_target_center_separation_m;
+      resolution.reason = "physical target clearance center contraction";
+      return resolution;
+    }
+  }
+
+  resolution.reason = physical_fallback_context ?
+    "no wall-feasible physical-clearance centerward goal" :
+    "physical-clearance fallback context unavailable";
   return resolution;
 }
 

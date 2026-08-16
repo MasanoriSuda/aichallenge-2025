@@ -1223,6 +1223,9 @@ struct TargetBoundExecutionHoldRequest
   bool mission_path_frozen{false};
   bool target_bound_failure{false};
   bool physical_hold_path_feasible{false};
+  /// A non-hard wall warning may use the short optimizer repair window, but
+  /// must not extend the same lateral prefix through the Mission-wide budget.
+  bool wall_preplan_warning{false};
   bool target_progress_continuous{false};
   bool target_position_jump{false};
   bool target_course_progress_rejected{false};
@@ -4190,6 +4193,39 @@ struct RuntimeWallPreplanResolution
 /// Mission, but can never override physical contact or the hard wall guard.
 RuntimeWallPreplanResolution resolve_runtime_wall_preplan(
   const RuntimeWallPreplanRequest & request) noexcept;
+
+struct RuntimeWallCenterContractionGoalRequest
+{
+  int pass_side_sign{0};
+  bool current_body_footprints_separated{false};
+  double current_ego_lateral_m{};
+  double current_target_lateral_m{};
+  double predicted_target_lateral_m{};
+  double previous_goal_m{};
+  double physical_target_center_separation_m{};
+  double nominal_target_center_separation_m{};
+  double wall_lower_bound_m{};
+  double wall_upper_bound_m{};
+  double maximum_centerward_adjustment_m{};
+};
+
+struct RuntimeWallCenterContractionGoalResolution
+{
+  bool valid{false};
+  bool used_physical_clearance{false};
+  double goal_m{};
+  double guarded_target_lateral_m{};
+  double applied_target_center_separation_m{};
+  std::string reason;
+};
+
+/// Move an executing same-side Pass away from an approaching wall. Prefer the
+/// nominal target clearance; when it cannot produce any centerward motion,
+/// permit the physical body boundary only if the current bodies are separated
+/// and the ego remains on the selected side of the target. The returned goal
+/// still requires full wall/kinematic preflight by the caller.
+RuntimeWallCenterContractionGoalResolution resolve_runtime_wall_center_contraction_goal(
+  const RuntimeWallCenterContractionGoalRequest & request) noexcept;
 
 enum class PassEntryPhysicalGateAction
 {

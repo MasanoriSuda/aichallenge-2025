@@ -228,6 +228,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidateSelectio
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionHorizonProgressRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RuntimeWallPreplanAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::RuntimeWallPreplanRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::RuntimeWallCenterContractionGoalRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassEntryPhysicalGateAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassEntryPhysicalGateRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CrossSideReplacementRetryThrottleRequest;
@@ -289,6 +290,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_completion_exten
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_same_side_replan_shift_distance;
 using multi_purpose_mpc_ros::v2x_overtake_core::select_overtake_mission_candidate;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_runtime_wall_preplan;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_runtime_wall_center_contraction_goal;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_entry_physical_gate;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_throttle_cross_side_replacement_retry;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_arm_overtake_side_retry_block;
@@ -3866,6 +3868,41 @@ TEST(V2XOvertakeCoreSpeed, TargetBoundExecutionHoldExtendsOnlyWithFreshPassProgr
   request.mission_elapsed_sec = 4.0;
   request.mission_traveled_m = 40.0;
   EXPECT_FALSE(target_bound_execution_hold_budget_available(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, TargetBoundExecutionProgressExtensionStopsAtWallWarning)
+{
+  TargetBoundExecutionHoldRequest request;
+  request.enabled = true;
+  request.safe_execution_prefix_available = true;
+  request.mission_path_frozen = true;
+  request.target_bound_failure = true;
+  request.physical_hold_path_feasible = true;
+  request.target_progress_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.hold_elapsed_sec = 1.50;
+  request.hold_traveled_m = 8.0;
+  request.maximum_hold_sec = 1.50;
+  request.maximum_hold_distance_m = 8.0;
+  request.forward_progress_extension_enabled = true;
+  request.pass_phase = true;
+  request.fresh_forward_progress = true;
+  request.mission_elapsed_sec = 4.0;
+  request.mission_traveled_m = 18.0;
+  request.absolute_maximum_sec = 10.0;
+  request.absolute_maximum_distance_m = 40.0;
+
+  ASSERT_TRUE(can_hold_target_bound_execution_for_replan(request));
+  request.wall_preplan_warning = true;
+  EXPECT_FALSE(target_bound_execution_hold_budget_available(request));
+  EXPECT_FALSE(can_hold_target_bound_execution_for_replan(request));
+
+  // The warning does not turn a soft prediction into a hard fault. A short
+  // optimizer repair window remains available before progress extension.
+  request.hold_elapsed_sec = 0.20;
+  request.hold_traveled_m = 1.0;
+  EXPECT_TRUE(target_bound_execution_hold_budget_available(request));
+  EXPECT_TRUE(can_hold_target_bound_execution_for_replan(request));
 }
 
 TEST(V2XOvertakeCoreSpeed, TargetBoundExecutionProgressCannotRearmConsumedGeneration)
@@ -8137,6 +8174,59 @@ TEST(V2XOvertakeCoreWall, RuntimePreplanRequestsThenReplacesFreshSameSide)
   ASSERT_TRUE(resolution.valid);
   EXPECT_EQ(
     resolution.action, RuntimeWallPreplanAction::RequestFreshSameSideCandidate);
+}
+
+TEST(V2XOvertakeCoreWall, RuntimeWallContractionPrefersNominalClearance)
+{
+  RuntimeWallCenterContractionGoalRequest request;
+  request.pass_side_sign = 1;
+  request.current_body_footprints_separated = true;
+  request.current_ego_lateral_m = 1.90;
+  request.current_target_lateral_m = 0.0;
+  request.predicted_target_lateral_m = 0.0;
+  request.previous_goal_m = 1.90;
+  request.physical_target_center_separation_m = 1.45;
+  request.nominal_target_center_separation_m = 1.55;
+  request.wall_lower_bound_m = -1.50;
+  request.wall_upper_bound_m = 1.80;
+  request.maximum_centerward_adjustment_m = 0.35;
+
+  const auto resolution = resolve_runtime_wall_center_contraction_goal(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.used_physical_clearance);
+  EXPECT_NEAR(resolution.goal_m, 1.55, 1e-9);
+  EXPECT_NEAR(resolution.applied_target_center_separation_m, 1.55, 1e-9);
+}
+
+TEST(V2XOvertakeCoreWall, RuntimeWallContractionFallsBackToPhysicalClearance)
+{
+  RuntimeWallCenterContractionGoalRequest request;
+  request.pass_side_sign = 1;
+  request.current_body_footprints_separated = true;
+  request.current_ego_lateral_m = 1.60;
+  request.current_target_lateral_m = 0.0;
+  request.predicted_target_lateral_m = 0.0;
+  request.previous_goal_m = 1.60;
+  request.physical_target_center_separation_m = 1.45;
+  request.nominal_target_center_separation_m = 1.55;
+  request.wall_lower_bound_m = -1.50;
+  request.wall_upper_bound_m = 1.50;
+  request.maximum_centerward_adjustment_m = 0.35;
+
+  auto resolution = resolve_runtime_wall_center_contraction_goal(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.used_physical_clearance);
+  EXPECT_NEAR(resolution.goal_m, 1.45, 1e-9);
+  EXPECT_NEAR(resolution.applied_target_center_separation_m, 1.45, 1e-9);
+
+  request.current_body_footprints_separated = false;
+  resolution = resolve_runtime_wall_center_contraction_goal(request);
+  EXPECT_FALSE(resolution.valid);
+
+  request.current_body_footprints_separated = true;
+  request.current_target_lateral_m = 1.70;
+  resolution = resolve_runtime_wall_center_contraction_goal(request);
+  EXPECT_FALSE(resolution.valid);
 }
 
 TEST(V2XOvertakeCoreWall, RuntimePreplanFallsBackToContractionThenReturn)

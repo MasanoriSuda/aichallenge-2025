@@ -20062,6 +20062,9 @@ private:
     std::optional<overtake_core::OvertakeMissionCandidate>
     runtime_wall_center_contraction_candidate;
     std::string runtime_wall_center_contraction_reject_reason;
+    bool runtime_wall_center_contraction_used_physical_clearance = false;
+    double runtime_wall_center_contraction_separation_m =
+      std::numeric_limits<double>::quiet_NaN();
     if (
       line_cfg.runtime_wall_center_contraction_enabled &&
       active_execution_phase && actual_wall_preplan_warning &&
@@ -20086,12 +20089,11 @@ private:
         std::isfinite(behavior_output.locked_target_predicted_relative_lateral) ?
         current_ey + behavior_output.locked_target_predicted_relative_lateral :
         current_target_course_lateral;
-      const double guarded_target_course_lateral = pass_side > 0 ?
-        std::max(current_target_course_lateral, predicted_target_course_lateral) :
-        std::min(current_target_course_lateral, predicted_target_course_lateral);
+      const double physical_target_separation = std::max(
+        0.0, cfg.v2x_gap.vehicle_radius);
       const double nominal_target_separation = std::max(
         std::max(0.0, cfg.v2x_behavior.overtake_line_min_target_separation),
-        std::max(0.0, cfg.v2x_gap.vehicle_radius) +
+        physical_target_separation +
         std::max(0.0, cfg.v2x_gap.prediction_margin));
       const double maximum_adjustment = std::max(
         0.0, line_cfg.runtime_wall_center_contraction_max_adjustment);
@@ -20118,7 +20120,8 @@ private:
       if (
         maximum_adjustment <= kEps ||
         !std::isfinite(previous_goal) ||
-        !std::isfinite(guarded_target_course_lateral) ||
+        !std::isfinite(current_target_course_lateral) ||
+        !std::isfinite(predicted_target_course_lateral) ||
         contraction_lb.size() == 0 || contraction_ub.size() == 0)
       {
         runtime_wall_center_contraction_reject_reason = "invalid contraction inputs";
@@ -20129,34 +20132,30 @@ private:
           runtime_wall_center_contraction_reject_reason =
             "robust wall interval unavailable";
         } else {
-          const double desired_goal = previous_goal -
-            static_cast<double>(pass_side) * maximum_adjustment;
           const auto contracted_goal =
-            overtake_core::resolve_feasible_pass_side_lateral_goal(
-            overtake_core::FeasiblePassSideLateralGoalRequest{
+            overtake_core::resolve_runtime_wall_center_contraction_goal(
+            overtake_core::RuntimeWallCenterContractionGoalRequest{
               pass_side,
-              desired_goal,
-              guarded_target_course_lateral,
+              behavior_output.locked_target_current_body_footprints_separated,
+              current_ey,
+              current_target_course_lateral,
+              predicted_target_course_lateral,
+              previous_goal,
+              physical_target_separation,
               nominal_target_separation,
               contraction_lower,
               contraction_upper,
-              true});
-          const double adjustment = std::abs(contracted_goal.goal_m - previous_goal);
-          const bool moved_toward_center =
-            std::abs(contracted_goal.goal_m) + 0.01 < std::abs(previous_goal);
-          if (!contracted_goal.target_separation_feasible) {
-            runtime_wall_center_contraction_reject_reason =
-              "nominal target separation unavailable";
-          } else if (
-            !std::isfinite(contracted_goal.goal_m) || adjustment <= 0.01 ||
-            adjustment > maximum_adjustment + kEps || !moved_toward_center)
-          {
-            runtime_wall_center_contraction_reject_reason =
-              "no bounded centerward goal";
+              maximum_adjustment});
+          if (!contracted_goal.valid) {
+            runtime_wall_center_contraction_reject_reason = contracted_goal.reason;
           } else {
+            runtime_wall_center_contraction_used_physical_clearance =
+              contracted_goal.used_physical_clearance;
+            runtime_wall_center_contraction_separation_m =
+              contracted_goal.applied_target_center_separation_m;
             const auto contraction_preflight = evaluate_overtake_line_entry_preflight(
               ref_wp_id, contraction_plan_N, contraction_lb, contraction_ub,
-              pass_side, current_ey, guarded_target_course_lateral,
+              pass_side, current_ey, contracted_goal.guarded_target_lateral_m,
               std::optional<double>{contracted_goal.goal_m},
               std::optional<std::pair<double, double>>{
                 std::make_pair(contracted_goal.goal_m, contracted_goal.goal_m)},
@@ -20407,13 +20406,16 @@ private:
             rclcpp::get_logger("mpc_controller"),
             "OvertakeLine runtime wall center contraction accepted: target=%s, "
             "side=%d, goal=%.2f->%.2f, adjustment=%.2f, elapsed=%.2f s, "
-            "count=%d/%d, front_cap_preserved=%d, wp_id=%d",
+            "clearance=%s/%.2f m, count=%d/%d, front_cap_preserved=%d, wp_id=%d",
             overtake_line_state_.target_vehicle_id.c_str(),
             overtake_line_state_.pass_side_sign, previous_goal,
             runtime_wall_center_contraction_candidate->goal_lateral_m,
             std::abs(
               runtime_wall_center_contraction_candidate->goal_lateral_m - previous_goal),
             runtime_wall_warning_elapsed_sec,
+            runtime_wall_center_contraction_used_physical_clearance ?
+            "physical" : "nominal",
+            runtime_wall_center_contraction_separation_m,
             overtake_line_state_.mission_runtime_wall_replan_count,
             line_cfg.runtime_wall_replan_max_count,
             preserve_front_cap_release ? 1 : 0, model->wp_id);
@@ -20444,12 +20446,15 @@ private:
           rclcpp::get_logger("mpc_controller"),
           "OvertakeLine runtime wall Return suppressed before rear-clear: "
           "target=%s, side=%d, target_s=%.2f, elapsed=%.2f s, "
-          "hard_fault=%d, holding=current-side, wp_id=%d",
+          "hard_fault=%d, contraction=%s, holding=current-side, wp_id=%d",
           overtake_line_state_.target_vehicle_id.c_str(),
           overtake_line_state_.pass_side_sign,
           behavior_output.locked_target_longitudinal,
           runtime_wall_warning_elapsed_sec,
-          runtime_wall_hard_fault ? 1 : 0, model->wp_id);
+          runtime_wall_hard_fault ? 1 : 0,
+          runtime_wall_center_contraction_reject_reason.empty() ?
+          "unavailable" : runtime_wall_center_contraction_reject_reason.c_str(),
+          model->wp_id);
         overtake_line_state_.mission_runtime_wall_return_suppressed_logged = true;
       }
     } else if (
@@ -25363,6 +25368,7 @@ private:
           overtake_line_state_.mission_path_frozen,
           true,
           physical_hold_horizon.execution_feasible(),
+          actual_wall_preplan_warning,
           locked_target_progress_continuous,
           behavior_output.locked_target_position_jump,
           locked_target_progress_rejected,
@@ -25563,6 +25569,7 @@ private:
       budget_request.forward_progress_extension_enabled =
         !target_bound_shiftout_freeze &&
         line_cfg.receding_horizon_target_bound_prefix_progress_extension_enabled;
+      budget_request.wall_preplan_warning = actual_wall_preplan_warning;
       budget_request.pass_phase =
         overtake_line_state_.phase == OvertakeLinePhase::Pass;
       budget_request.fresh_forward_progress = target_bound_fresh_forward_progress;

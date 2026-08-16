@@ -17,6 +17,7 @@ find_package(ament_cmake_auto REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(osqp REQUIRED)
+find_package(Threads REQUIRED)
 find_package(yaml-cpp REQUIRED)
 ament_auto_find_build_dependencies()
 
@@ -70,6 +71,12 @@ target_link_libraries(${PROJECT_NAME}_persistent_osqp
   osqp::osqp
 )
 
+ament_auto_add_library(${PROJECT_NAME}_latest_only_worker SHARED
+  NO_TARGET_LINK_LIBRARIES
+  src/latest_only_worker.cpp
+)
+target_link_libraries(${PROJECT_NAME}_latest_only_worker Threads::Threads)
+
 ament_auto_add_library(${PROJECT_NAME}_mpc_waypoint_preview SHARED
   NO_TARGET_LINK_LIBRARIES
   src/mpc_waypoint_preview.cpp
@@ -116,6 +123,7 @@ target_link_libraries(mpc_controller_cpp
   ${PROJECT_NAME}_awsim_control_mode_guard
   ${PROJECT_NAME}_path_core
   ${PROJECT_NAME}_persistent_osqp
+  ${PROJECT_NAME}_latest_only_worker
   ${PROJECT_NAME}_mpc_state_prediction
   ${PROJECT_NAME}_runtime_speed_profile
   ${PROJECT_NAME}_mpc_waypoint_association
@@ -215,6 +223,15 @@ if(BUILD_TESTING)
   if(TARGET test_persistent_osqp)
     target_link_libraries(test_persistent_osqp
       ${PROJECT_NAME}_persistent_osqp
+    )
+  endif()
+
+  ament_add_gtest(test_latest_only_worker
+    test/test_latest_only_worker.cpp
+  )
+  if(TARGET test_latest_only_worker)
+    target_link_libraries(test_latest_only_worker
+      ${PROJECT_NAME}_latest_only_worker
     )
   endif()
 

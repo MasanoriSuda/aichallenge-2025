@@ -9,6 +9,7 @@
 #include <geometry_msgs/msg/vector3.hpp>
 #include <multi_purpose_mpc_ros/awsim_boost_start_dash.hpp>
 #include <multi_purpose_mpc_ros/awsim_control_mode_guard.hpp>
+#include <multi_purpose_mpc_ros/latest_only_worker.hpp>
 #include <multi_purpose_mpc_ros/mpc_state_prediction.hpp>
 #include <multi_purpose_mpc_ros/mpc_velocity_limit.hpp>
 #include <multi_purpose_mpc_ros/mpc_waypoint_association.hpp>
@@ -1335,6 +1336,7 @@ struct OvertakeLineConfig
   bool safe_separation_dynamic_completion_extension_enabled{false};
   bool pass_completion_speed_coupling_enabled{false};
   bool mpcc_lite_shadow_enabled{false};
+  bool mpcc_lite_async_worker_enabled{false};
   double mpcc_lite_shadow_evaluation_interval_sec{1.0};
   double mpcc_lite_shadow_log_interval_sec{1.0};
   double mpcc_lite_shadow_last_feasible_max_age_sec{0.50};
@@ -2127,6 +2129,29 @@ struct V2XBehaviorOutput
   std::string overtake_block_reason;
 };
 
+struct MpccLiteAsyncResult
+{
+  std::uint64_t sequence{0U};
+  std::uint64_t context_epoch{0U};
+  std::uint64_t mission_generation{0U};
+  std::string target_id;
+  OvertakeLinePhase phase{OvertakeLinePhase::Idle};
+  int locked_side_sign{0};
+  double snapshot_sec{-std::numeric_limits<double>::infinity()};
+  double compute_ms{};
+  bool success{false};
+  std::string failure_reason;
+  V2XBehaviorOutput behavior;
+};
+
+struct MpccLiteAsyncMailbox
+{
+  std::mutex mutex;
+  std::uint64_t latest_submitted_sequence{0U};
+  std::uint64_t context_epoch{0U};
+  std::optional<MpccLiteAsyncResult> latest_result;
+};
+
 struct OvertakeLineState
 {
   OvertakeLinePhase phase{OvertakeLinePhase::Idle};
@@ -2652,6 +2677,40 @@ struct V2XGapPlanner
   explicit V2XGapPlanner(
     const V2XGapPlannerConfig & cfg_in, const bool track_recovery_completeness = false)
   : cfg(cfg_in), track_recovery_completeness_(track_recovery_completeness) {}
+
+  /// Detach the small mutable V2X planning state for a background tactical
+  /// rollout. The worker never shares continuity/logging maps with the live
+  /// subscriber path, while the immutable reference path remains external.
+  std::unique_ptr<V2XGapPlanner> tactical_snapshot()
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto snapshot = std::make_unique<V2XGapPlanner>(
+      cfg, track_recovery_completeness_);
+    snapshot->vehicles_ = vehicles_;
+    snapshot->last_message_receipt_sec_ = last_message_receipt_sec_;
+    snapshot->last_message_receipt_interval_sec_ =
+      last_message_receipt_interval_sec_;
+    snapshot->last_message_source_stamp_sec_ = last_message_source_stamp_sec_;
+    snapshot->last_message_recovery_epoch_ = last_message_recovery_epoch_;
+    snapshot->recovery_epoch_ = recovery_epoch_;
+    snapshot->last_message_vehicle_count_ = last_message_vehicle_count_;
+    snapshot->last_message_vehicle_ids_ = last_message_vehicle_ids_;
+    snapshot->peer_identity_tracker_ = peer_identity_tracker_;
+    snapshot->last_message_has_empty_id_ = last_message_has_empty_id_;
+    snapshot->last_message_has_duplicate_id_ = last_message_has_duplicate_id_;
+    snapshot->last_message_has_invalid_sample_ = last_message_has_invalid_sample_;
+    snapshot->last_target_ey_ = last_target_ey_;
+    snapshot->low_speed_locked_target_ey_ = low_speed_locked_target_ey_;
+    snapshot->low_speed_locked_side_sign_ = low_speed_locked_side_sign_;
+    snapshot->last_logged_local_path_side_ = last_logged_local_path_side_;
+    snapshot->last_logged_local_path_target_ey_ =
+      last_logged_local_path_target_ey_;
+    snapshot->last_logged_local_path_corridor_enforced_ =
+      last_logged_local_path_corridor_enforced_;
+    snapshot->last_logged_course_lateral_motion_sign_ =
+      last_logged_course_lateral_motion_sign_;
+    return snapshot;
+  }
 
   void update(const V2XVehiclePositionArray & msg, const double receipt_sec)
   {
@@ -4444,7 +4503,8 @@ struct MPC
 {
   MPC(
     BicycleModel * model_in, const MpcConfig & cfg_in, const bool use_obstacle_avoidance_in,
-    const bool use_path_constraints_topic_in)
+    const bool use_path_constraints_topic_in,
+    const bool enable_async_tactical_worker = true)
   : model(model_in),
     cfg(cfg_in),
     start_grid_grace_guard_(cfg_in.v2x_behavior.start_grid_grace_time),
@@ -4460,7 +4520,179 @@ struct MPC
     {
       throw std::invalid_argument("MPC waypoint preview offsets must be within [0, 2]");
     }
-    model->reference_path->update_simple_path_constraints(cfg.N, model->safety_margin);
+    if (enable_async_tactical_worker) {
+      model->reference_path->update_simple_path_constraints(cfg.N, model->safety_margin);
+    }
+    if (
+      enable_async_tactical_worker &&
+      cfg.v2x_behavior.overtake_line.mpcc_lite_async_worker_enabled)
+    {
+      mpcc_lite_async_mailbox_ = std::make_shared<MpccLiteAsyncMailbox>();
+      mpcc_lite_async_mailbox_->context_epoch = mpcc_lite_async_context_epoch_;
+      mpcc_lite_async_worker_ = std::make_unique<LatestOnlyWorker>();
+    }
+  }
+
+  std::shared_ptr<MPC> tactical_snapshot(
+    BicycleModel * model_snapshot, V2XGapPlanner * gap_planner_snapshot) const
+  {
+    auto snapshot = std::make_shared<MPC>(
+      model_snapshot, cfg, use_obstacle_avoidance,
+      use_path_constraints_topic, false);
+    // Background evaluation is diagnostic/control data, not a second ROS
+    // behavior publisher. Keep its normal FSM/debug logs silent; the live
+    // controller publishes one compact worker status line instead.
+    snapshot->cfg.v2x_behavior.debug_log_enabled = false;
+    snapshot->cfg.v2x_behavior.overtake_line.debug_log_enabled = false;
+    snapshot->start_grid_grace_guard_ = start_grid_grace_guard_;
+    snapshot->gap_planner = gap_planner_snapshot;
+    if (overtake_static_wall_grid_ != nullptr) {
+      snapshot->overtake_static_wall_grid_snapshot_owner_ =
+        std::make_shared<recovery_footprint::OccupancyGrid>(
+        *overtake_static_wall_grid_);
+      snapshot->overtake_static_wall_grid_ =
+        snapshot->overtake_static_wall_grid_snapshot_owner_.get();
+    }
+    snapshot->overtake_static_wall_footprint_ = overtake_static_wall_footprint_;
+    snapshot->actual_wall_monitor_pose_ = actual_wall_monitor_pose_;
+    snapshot->v2x_race_session_active_ = v2x_race_session_active_;
+    snapshot->v2x_behavior_state = v2x_behavior_state;
+    snapshot->last_v2x_behavior_output_ = last_v2x_behavior_output_;
+    snapshot->v2x_course_progress_tracks_ = v2x_course_progress_tracks_;
+    snapshot->v2x_behavior_state_initialized = v2x_behavior_state_initialized;
+    snapshot->last_v2x_behavior_state_change_sec = last_v2x_behavior_state_change_sec;
+    snapshot->last_v2x_behavior_debug_log_sec_ = last_v2x_behavior_debug_log_sec_;
+    snapshot->low_speed_avoidance_stall_since_sec_ = low_speed_avoidance_stall_since_sec_;
+    snapshot->low_speed_avoidance_stall_last_update_sec_ =
+      low_speed_avoidance_stall_last_update_sec_;
+    snapshot->low_speed_avoidance_stall_cooldown_until_sec_ =
+      low_speed_avoidance_stall_cooldown_until_sec_;
+    snapshot->front_hazard_hold_until_sec_ = front_hazard_hold_until_sec_;
+    snapshot->front_hazard_hold_target_id_ = front_hazard_hold_target_id_;
+    snapshot->start_grid_stop_suppressed_ = start_grid_stop_suppressed_;
+    snapshot->start_grid_emergency_override_logged_ =
+      start_grid_emergency_override_logged_;
+    snapshot->start_grid_initial_target_id_ = start_grid_initial_target_id_;
+    snapshot->start_grid_breakout_target_id_ = start_grid_breakout_target_id_;
+    snapshot->start_grid_breakout_side_sign_ = start_grid_breakout_side_sign_;
+    snapshot->start_grid_dynamic_decision_pending_ =
+      start_grid_dynamic_decision_pending_;
+    snapshot->start_grid_dynamic_observation_start_sec_ =
+      start_grid_dynamic_observation_start_sec_;
+    snapshot->start_grid_dynamic_peer_motion_start_sec_ =
+      start_grid_dynamic_peer_motion_start_sec_;
+    snapshot->start_grid_dynamic_candidate_since_sec_ =
+      start_grid_dynamic_candidate_since_sec_;
+    snapshot->start_grid_dynamic_candidate_key_ = start_grid_dynamic_candidate_key_;
+    snapshot->low_speed_stopped_candidate_id_ = low_speed_stopped_candidate_id_;
+    snapshot->low_speed_stopped_observation_count_ =
+      low_speed_stopped_observation_count_;
+    snapshot->low_speed_stopped_last_observation_sec_ =
+      low_speed_stopped_last_observation_sec_;
+    snapshot->last_low_speed_static_wall_preflight_log_sec_ =
+      last_low_speed_static_wall_preflight_log_sec_;
+    snapshot->last_low_speed_static_wall_preflight_log_signature_ =
+      last_low_speed_static_wall_preflight_log_signature_;
+    snapshot->overtake_locked_target_ey_ = overtake_locked_target_ey_;
+    snapshot->overtake_locked_side_sign_ = overtake_locked_side_sign_;
+    snapshot->overtake_line_state_ = overtake_line_state_;
+    snapshot->overtake_receding_horizon_warm_start_ =
+      overtake_receding_horizon_warm_start_;
+    snapshot->overtake_receding_horizon_path_distances_ =
+      overtake_receding_horizon_path_distances_;
+    snapshot->overtake_receding_horizon_generation_ =
+      overtake_receding_horizon_generation_;
+    snapshot->overtake_receding_horizon_side_sign_ =
+      overtake_receding_horizon_side_sign_;
+    snapshot->overtake_receding_horizon_phase_ = overtake_receding_horizon_phase_;
+    snapshot->overtake_receding_horizon_phase_traveled_m_ =
+      overtake_receding_horizon_phase_traveled_m_;
+    snapshot->overtake_receding_horizon_last_feasible_sec_ =
+      overtake_receding_horizon_last_feasible_sec_;
+    snapshot->mpcc_lite_shadow_last_evaluation_sec_ =
+      -std::numeric_limits<double>::infinity();
+    snapshot->mpcc_lite_shadow_last_feasible_sec_ =
+      mpcc_lite_shadow_last_feasible_sec_;
+    snapshot->mpcc_lite_shadow_last_log_sec_ = mpcc_lite_shadow_last_log_sec_;
+    snapshot->mpcc_lite_shadow_last_feasible_resolution_ =
+      mpcc_lite_shadow_last_feasible_resolution_;
+    snapshot->mpcc_lite_control_last_feasible_entry_mission_ =
+      mpcc_lite_control_last_feasible_entry_mission_;
+    snapshot->mpcc_lite_control_last_feasible_target_id_ =
+      mpcc_lite_control_last_feasible_target_id_;
+    snapshot->mpcc_lite_control_last_feasible_entry_sec_ =
+      mpcc_lite_control_last_feasible_entry_sec_;
+    snapshot->mpcc_frenet_dp_last_path_distances_ =
+      mpcc_frenet_dp_last_path_distances_;
+    snapshot->mpcc_frenet_dp_last_lateral_path_ =
+      mpcc_frenet_dp_last_lateral_path_;
+    snapshot->mpcc_frenet_dp_last_target_id_ = mpcc_frenet_dp_last_target_id_;
+    snapshot->mpcc_frenet_dp_last_side_sign_ = mpcc_frenet_dp_last_side_sign_;
+    snapshot->mpcc_frenet_dp_last_tactical_strategy_ =
+      mpcc_frenet_dp_last_tactical_strategy_;
+    snapshot->mpcc_frenet_dp_last_feasible_sec_ =
+      mpcc_frenet_dp_last_feasible_sec_;
+    snapshot->mpcc_lite_cross_side_pending_sign_ =
+      mpcc_lite_cross_side_pending_sign_;
+    snapshot->mpcc_lite_cross_side_pending_since_sec_ =
+      mpcc_lite_cross_side_pending_since_sec_;
+    snapshot->mpcc_lite_shadow_last_feasible_target_id_ =
+      mpcc_lite_shadow_last_feasible_target_id_;
+    snapshot->mpcc_lite_shadow_last_feasible_generation_ =
+      mpcc_lite_shadow_last_feasible_generation_;
+    snapshot->mpcc_lite_shadow_last_feasible_phase_ =
+      mpcc_lite_shadow_last_feasible_phase_;
+    snapshot->mpcc_lite_shadow_last_feasible_side_sign_ =
+      mpcc_lite_shadow_last_feasible_side_sign_;
+    snapshot->next_overtake_episode_id_ = next_overtake_episode_id_;
+    snapshot->last_overtake_line_transition_action_ =
+      last_overtake_line_transition_action_;
+    snapshot->overtake_entry_speed_ = overtake_entry_speed_;
+    snapshot->overtake_entry_speed_candidate_id_ = overtake_entry_speed_candidate_id_;
+    snapshot->overtake_entry_speed_candidate_side_sign_ =
+      overtake_entry_speed_candidate_side_sign_;
+    snapshot->overtake_entry_speed_candidate_closing_speed_ =
+      overtake_entry_speed_candidate_closing_speed_;
+    snapshot->overtake_entry_speed_ready_since_sec_ =
+      overtake_entry_speed_ready_since_sec_;
+    snapshot->overtake_entry_prearm_last_validated_sec_ =
+      overtake_entry_prearm_last_validated_sec_;
+    snapshot->overtake_entry_prearm_start_sec_ = overtake_entry_prearm_start_sec_;
+    snapshot->overtake_entry_prearm_last_update_sec_ =
+      overtake_entry_prearm_last_update_sec_;
+    snapshot->overtake_entry_prearm_traveled_m_ =
+      overtake_entry_prearm_traveled_m_;
+    snapshot->overtake_entry_prearm_cooldown_until_sec_ =
+      overtake_entry_prearm_cooldown_until_sec_;
+    snapshot->overtake_engagement_target_id_ = overtake_engagement_target_id_;
+    snapshot->overtake_engagement_last_relevant_sec_ =
+      overtake_engagement_last_relevant_sec_;
+    snapshot->overtake_solver_recovery_active_ = overtake_solver_recovery_active_;
+    snapshot->overtake_solver_reentry_blocked_ = overtake_solver_reentry_blocked_;
+    snapshot->overtake_solver_recovery_success_count_ =
+      overtake_solver_recovery_success_count_;
+    snapshot->overtake_solver_cooldown_until_sec_ =
+      overtake_solver_cooldown_until_sec_;
+    snapshot->overtake_curve_cooldown_until_sec_ = overtake_curve_cooldown_until_sec_;
+    snapshot->overtake_line_side_retry_blocks_ = overtake_line_side_retry_blocks_;
+    snapshot->completed_overtake_target_block_ = completed_overtake_target_block_;
+    snapshot->previous_steering = previous_steering;
+    snapshot->current_speed_mps_ = current_speed_mps_;
+    snapshot->overtake_contact_wall_guard_safe_ = overtake_contact_wall_guard_safe_;
+    snapshot->mpcc_lite_async_worker_context_ = true;
+    return snapshot;
+  }
+
+  void invalidate_mpcc_lite_async_results()
+  {
+    ++mpcc_lite_async_context_epoch_;
+    if (mpcc_lite_async_mailbox_ == nullptr) {
+      return;
+    }
+    std::lock_guard<std::mutex> lock(mpcc_lite_async_mailbox_->mutex);
+    mpcc_lite_async_mailbox_->context_epoch = mpcc_lite_async_context_epoch_;
+    mpcc_lite_async_mailbox_->latest_submitted_sequence = 0U;
+    mpcc_lite_async_mailbox_->latest_result.reset();
   }
 
   void set_gap_planner(V2XGapPlanner * planner)
@@ -4999,6 +5231,106 @@ struct MPC
         line_cfg.robust_wall_speed_gain,
         line_cfg.robust_wall_curvature_gain,
         line_cfg.robust_wall_reserve_max});
+  }
+
+  std::optional<MpccLiteAsyncResult> take_mpcc_lite_async_result()
+  {
+    if (mpcc_lite_async_mailbox_ == nullptr) {
+      return std::nullopt;
+    }
+    std::lock_guard<std::mutex> lock(mpcc_lite_async_mailbox_->mutex);
+    if (
+      !mpcc_lite_async_mailbox_->latest_result.has_value() ||
+      mpcc_lite_async_mailbox_->latest_result->sequence <=
+      mpcc_lite_async_last_consumed_sequence_)
+    {
+      return std::nullopt;
+    }
+    auto result = std::move(mpcc_lite_async_mailbox_->latest_result.value());
+    mpcc_lite_async_mailbox_->latest_result.reset();
+    mpcc_lite_async_last_consumed_sequence_ = result.sequence;
+    return result;
+  }
+
+  bool submit_mpcc_lite_async_snapshot(
+    const int ref_wp_id, const int horizon_size,
+    const Eigen::VectorXd & lower_bound, const Eigen::VectorXd & upper_bound,
+    const double now_sec, const std::string & target_id,
+    const std::uint64_t mission_generation, const OvertakeLinePhase phase,
+    const int locked_side_sign)
+  {
+    const auto snapshot_start = std::chrono::steady_clock::now();
+    if (
+      mpcc_lite_async_worker_ == nullptr || mpcc_lite_async_mailbox_ == nullptr ||
+      model == nullptr || model->reference_path == nullptr || gap_planner == nullptr)
+    {
+      return false;
+    }
+
+    const std::uint64_t sequence = mpcc_lite_async_next_sequence_++;
+    const std::uint64_t context_epoch = mpcc_lite_async_context_epoch_;
+    // ReferencePath is mutable on the live callback (runtime speed profile,
+    // path constraints, and trajectory replacement). A deep snapshot both
+    // removes the data race and keeps a replaced trajectory alive until this
+    // rollout finishes.
+    auto reference_path_snapshot =
+      std::make_shared<ReferencePath>(*model->reference_path);
+    auto model_snapshot = std::make_shared<BicycleModel>(*model);
+    model_snapshot->reference_path = reference_path_snapshot.get();
+    model_snapshot->current_waypoint =
+      &model_snapshot->reference_path->waypoints.at(
+      static_cast<std::size_t>(model_snapshot->wp_id));
+    auto gap_snapshot = std::shared_ptr<V2XGapPlanner>(
+      gap_planner->tactical_snapshot());
+    auto planner_snapshot = tactical_snapshot(
+      model_snapshot.get(), gap_snapshot.get());
+    planner_snapshot->reference_path_snapshot_owner_ = reference_path_snapshot;
+    auto mailbox = mpcc_lite_async_mailbox_;
+    {
+      std::lock_guard<std::mutex> lock(mailbox->mutex);
+      mailbox->context_epoch = context_epoch;
+      mailbox->latest_submitted_sequence = sequence;
+    }
+
+    const auto submission = mpcc_lite_async_worker_->submit_latest(
+      [planner_snapshot, model_snapshot, gap_snapshot, mailbox,
+      ref_wp_id, horizon_size, lower_bound, upper_bound, now_sec,
+      target_id, mission_generation, phase, locked_side_sign,
+      sequence, context_epoch]() mutable {
+        static_cast<void>(model_snapshot);
+        static_cast<void>(gap_snapshot);
+        const auto start = std::chrono::steady_clock::now();
+        MpccLiteAsyncResult result;
+        result.sequence = sequence;
+        result.context_epoch = context_epoch;
+        result.mission_generation = mission_generation;
+        result.target_id = target_id;
+        result.phase = phase;
+        result.locked_side_sign = locked_side_sign;
+        result.snapshot_sec = now_sec;
+        try {
+          result.behavior = planner_snapshot->evaluate_v2x_behavior(
+            ref_wp_id, horizon_size, lower_bound, upper_bound, now_sec);
+          result.success = true;
+        } catch (const std::exception & error) {
+          result.failure_reason = error.what();
+        } catch (...) {
+          result.failure_reason = "unknown tactical worker exception";
+        }
+        result.compute_ms = std::chrono::duration<double, std::milli>(
+          std::chrono::steady_clock::now() - start).count();
+        std::lock_guard<std::mutex> lock(mailbox->mutex);
+        if (
+          mailbox->context_epoch == context_epoch &&
+          mailbox->latest_submitted_sequence == sequence)
+        {
+          mailbox->latest_result = std::move(result);
+        }
+      });
+    mpcc_lite_async_last_snapshot_ms_ =
+      std::chrono::duration<double, std::milli>(
+      std::chrono::steady_clock::now() - snapshot_start).count();
+    return submission.accepted;
   }
 
   void reset_after_external_maneuver(const double now_sec, const double steering)
@@ -10700,12 +11032,198 @@ struct MPC
       tactical_rolling_replan_active;
     const bool shadow_scene_relevant =
       has_front_vehicle || active_overtake_line || paused_overtake_mission;
+    const bool async_shadow_enabled =
+      shadow_cfg.mpcc_lite_async_worker_enabled &&
+      !mpcc_lite_async_worker_context_;
     const bool shadow_evaluation_due =
       shadow_cfg.mpcc_lite_shadow_enabled && shadow_scene_relevant &&
+      (!async_shadow_enabled || mpcc_lite_async_worker_context_) &&
       (!std::isfinite(mpcc_lite_shadow_last_evaluation_sec_) ||
       now_sec - mpcc_lite_shadow_last_evaluation_sec_ + kEps >=
       shadow_cfg.mpcc_lite_shadow_evaluation_interval_sec);
     auto mpcc_authority_action = overtake_core::MpccLiteAuthorityAction::None;
+    if (async_shadow_enabled) {
+      auto async_result = take_mpcc_lite_async_result();
+      if (async_result.has_value()) {
+        const double result_age_sec =
+          now_sec >= async_result->snapshot_sec ?
+          now_sec - async_result->snapshot_sec :
+          std::numeric_limits<double>::infinity();
+        mpcc_lite_async_last_compute_ms_ = async_result->compute_ms;
+        mpcc_lite_async_last_result_age_sec_ = result_age_sec;
+        const bool target_matches =
+          async_result->target_id == output.target_vehicle_id &&
+          async_result->behavior.target_vehicle_id == output.target_vehicle_id;
+        const bool context_matches =
+          async_result->context_epoch == mpcc_lite_async_context_epoch_ &&
+          async_result->mission_generation ==
+          overtake_line_state_.mission_generation &&
+          async_result->phase == overtake_line_state_.phase &&
+          async_result->locked_side_sign == locked_pass_side;
+        const bool result_fresh =
+          std::isfinite(result_age_sec) && result_age_sec >= 0.0 &&
+          result_age_sec <=
+          shadow_cfg.mpcc_lite_shadow_last_feasible_max_age_sec + kEps;
+        const bool current_hard_fault =
+          effective_front_risk_level == FrontRiskLevel::EmergencyBrake ||
+          overtake_solver_recovery_active_;
+        const bool adopt_async_result =
+          async_result->success && target_matches && context_matches &&
+          result_fresh && !current_hard_fault;
+        if (adopt_async_result) {
+          ++mpcc_lite_async_adopted_count_;
+          const auto & async_behavior = async_result->behavior;
+          output.opponent_side_replan_current_dp_prefix =
+            async_behavior.opponent_side_replan_current_dp_prefix;
+          output.mpcc_lite_completion_prediction =
+            async_behavior.mpcc_lite_completion_prediction;
+          output.mpcc_lite_same_side_replan_ready =
+            async_behavior.mpcc_lite_same_side_replan_ready;
+          output.mpcc_lite_cross_side_replan_ready =
+            async_behavior.mpcc_lite_cross_side_replan_ready;
+          output.mpcc_lite_same_side_replan_mission =
+            async_behavior.mpcc_lite_same_side_replan_mission;
+          output.mpcc_lite_cross_side_replan_mission =
+            async_behavior.mpcc_lite_cross_side_replan_mission;
+          output.mpcc_lite_cross_side_candidate_sign =
+            async_behavior.mpcc_lite_cross_side_candidate_sign;
+          output.mpcc_lite_cross_side_candidate_stable_sec =
+            async_behavior.mpcc_lite_cross_side_candidate_stable_sec;
+          output.mpcc_lite_cross_side_score_advantage =
+            async_behavior.mpcc_lite_cross_side_score_advantage;
+
+          const auto async_entry_mission =
+            async_behavior.overtake_selected_mission;
+          const int async_entry_side =
+            async_behavior.overtake_pass_side_sign;
+          const bool async_entry_context =
+            locked_pass_side == 0 &&
+            overtake_line_state_.phase == OvertakeLinePhase::Idle &&
+            fresh_overtake_entry_commit_window_open &&
+            (async_entry_side == -1 || async_entry_side == 1) &&
+            async_entry_mission.has_value() &&
+            async_entry_mission->pass_side_sign == async_entry_side &&
+            async_entry_mission->feasible &&
+            (!std::isfinite(async_entry_mission->dynamic_valid_until_sec) ||
+            now_sec <= async_entry_mission->dynamic_valid_until_sec + kEps);
+          if (async_entry_context) {
+            auto & authoritative_assessment = async_entry_side > 0 ?
+              left_assessment : right_assessment;
+            authoritative_assessment.side = async_entry_side;
+            authoritative_assessment.gap_available = true;
+            authoritative_assessment.selected_mission = async_entry_mission;
+            authoritative_assessment.mpcc_receding_mission = async_entry_mission;
+            authoritative_assessment.corridor_center_ey =
+              async_entry_mission->goal_lateral_m;
+            authoritative_assessment.required_lateral_shift =
+              async_entry_mission->lateral_shift_m;
+            authoritative_assessment.required_lateral_accel =
+              async_entry_mission->max_required_lateral_accel_mps2;
+            authoritative_assessment.minimum_motion_goal_available = true;
+            authoritative_assessment.base_line_clear =
+              std::abs(async_entry_mission->goal_lateral_m) <= kEps;
+            authoritative_assessment.direct_base_line_pass_ready =
+              async_entry_mission->direct_pass &&
+              authoritative_assessment.base_line_clear &&
+              async_entry_mission->current_position_clear;
+            authoritative_assessment.direct_tiny_shift_pass_ready =
+              async_entry_mission->direct_pass &&
+              !authoritative_assessment.base_line_clear &&
+              async_entry_mission->current_position_clear;
+            authoritative_assessment.reason =
+              "MPCC-lite asynchronous tactical result selected for entry";
+            authoritative_assessment.guard_reason =
+              authoritative_assessment.reason;
+            side_selection = {
+              pass_side(async_entry_side),
+              overtake_core::SideSelectionReason::HigherQuality};
+            side_selected_for_execution = true;
+            if (async_entry_mission->progressive_entry) {
+              mpcc_lite_progressive_entry_authorized_side = async_entry_side;
+            }
+            mpcc_lite_control_last_feasible_entry_mission_ =
+              async_entry_mission;
+            mpcc_lite_control_last_feasible_target_id_ = output.target_vehicle_id;
+            mpcc_lite_control_last_feasible_entry_sec_ = now_sec;
+            mpcc_authority_action =
+              overtake_core::MpccLiteAuthorityAction::SelectEntry;
+          } else if (
+            output.mpcc_lite_same_side_replan_ready ||
+            output.mpcc_lite_cross_side_replan_ready)
+          {
+            mpcc_authority_action =
+              overtake_core::MpccLiteAuthorityAction::ReplaceActive;
+          }
+
+          const auto adopted_path_mission =
+            output.mpcc_lite_same_side_replan_mission.has_value() ?
+            output.mpcc_lite_same_side_replan_mission :
+            output.mpcc_lite_cross_side_replan_mission;
+          if (
+            adopted_path_mission.has_value() &&
+            overtake_core::is_valid_frenet_dp_execution_path(
+              adopted_path_mission->frenet_dp_path_distances_m,
+              adopted_path_mission->frenet_dp_lateral_path_m))
+          {
+            mpcc_frenet_dp_last_path_distances_ =
+              adopted_path_mission->frenet_dp_path_distances_m;
+            mpcc_frenet_dp_last_lateral_path_ =
+              adopted_path_mission->frenet_dp_lateral_path_m;
+            mpcc_frenet_dp_last_target_id_ = output.target_vehicle_id;
+            mpcc_frenet_dp_last_side_sign_ =
+              adopted_path_mission->pass_side_sign;
+            mpcc_frenet_dp_last_tactical_strategy_ =
+              adopted_path_mission->frenet_dp_tactical_strategy;
+            mpcc_frenet_dp_last_feasible_sec_ = now_sec;
+          }
+        } else {
+          ++mpcc_lite_async_discarded_count_;
+          if (!async_result->success) {
+            ++mpcc_lite_async_failed_count_;
+          }
+        }
+      }
+
+      const bool async_submission_due =
+        shadow_cfg.mpcc_lite_shadow_enabled && shadow_scene_relevant &&
+        (!std::isfinite(mpcc_lite_shadow_last_evaluation_sec_) ||
+        now_sec - mpcc_lite_shadow_last_evaluation_sec_ + kEps >=
+        shadow_cfg.mpcc_lite_shadow_evaluation_interval_sec);
+      if (
+        async_submission_due &&
+        submit_mpcc_lite_async_snapshot(
+          ref_wp_id, N, lb, ub, now_sec, output.target_vehicle_id,
+          overtake_line_state_.mission_generation,
+          overtake_line_state_.phase, locked_pass_side))
+      {
+        mpcc_lite_shadow_last_evaluation_sec_ = now_sec;
+      }
+
+      if (
+        !std::isfinite(mpcc_lite_async_last_status_log_sec_) ||
+        now_sec - mpcc_lite_async_last_status_log_sec_ + kEps >=
+        shadow_cfg.mpcc_lite_shadow_log_interval_sec)
+      {
+        const auto worker_stats = mpcc_lite_async_worker_ != nullptr ?
+          mpcc_lite_async_worker_->stats() : LatestOnlyWorker::Stats{};
+        RCLCPP_INFO(
+          rclcpp::get_logger("mpc_controller"),
+          "Overtake MPCC-lite async: submitted=%lu, replaced=%lu, "
+          "completed=%lu, running=%d, pending=%d, adopted=%lu, "
+          "discarded=%lu, failed=%lu, snapshot=%.2f ms, compute=%.2f ms, age=%.3f s",
+          static_cast<unsigned long>(worker_stats.submitted),
+          static_cast<unsigned long>(worker_stats.replaced),
+          static_cast<unsigned long>(worker_stats.completed),
+          worker_stats.running ? 1 : 0, worker_stats.pending ? 1 : 0,
+          static_cast<unsigned long>(mpcc_lite_async_adopted_count_),
+          static_cast<unsigned long>(mpcc_lite_async_discarded_count_),
+          static_cast<unsigned long>(mpcc_lite_async_failed_count_),
+          mpcc_lite_async_last_snapshot_ms_,
+          mpcc_lite_async_last_compute_ms_,
+          mpcc_lite_async_last_result_age_sec_);
+        mpcc_lite_async_last_status_log_sec_ = now_sec;
+      }
+    }
     if (shadow_evaluation_due) {
       const auto shadow_total_start = std::chrono::steady_clock::now();
       using ShadowBranch = overtake_core::MpccLiteShadowBranch;
@@ -11475,7 +11993,10 @@ struct MPC
         !std::isfinite(mpcc_lite_shadow_last_log_sec_) ||
         now_sec - mpcc_lite_shadow_last_log_sec_ + kEps >=
         shadow_cfg.mpcc_lite_shadow_log_interval_sec;
-      if (shadow_changed || shadow_periodic_log_due) {
+      if (
+        !mpcc_lite_async_worker_context_ &&
+        (shadow_changed || shadow_periodic_log_due))
+      {
         std::ostringstream shadow_log;
         shadow_log << std::fixed << std::setprecision(2)
                    << "Overtake MPCC-lite shadow: target=" <<
@@ -13776,6 +14297,9 @@ struct MPC
   start_grid_grace::Guard start_grid_grace_guard_;
   V2XGapPlanner * gap_planner{};
   const recovery_footprint::OccupancyGrid * overtake_static_wall_grid_{};
+  std::shared_ptr<ReferencePath> reference_path_snapshot_owner_;
+  std::shared_ptr<recovery_footprint::OccupancyGrid>
+  overtake_static_wall_grid_snapshot_owner_;
   recovery_footprint::FootprintExtents overtake_static_wall_footprint_;
   std::optional<recovery_footprint::Pose2D> actual_wall_monitor_pose_;
   bool use_obstacle_avoidance{};
@@ -13858,6 +14382,21 @@ struct MPC
     overtake_core::MpccLiteShadowBranch::None};
   bool mpcc_lite_shadow_last_logged_agreement_{false};
   bool mpcc_lite_shadow_last_logged_hold_{false};
+  bool mpcc_lite_async_worker_context_{false};
+  std::shared_ptr<MpccLiteAsyncMailbox> mpcc_lite_async_mailbox_;
+  std::unique_ptr<LatestOnlyWorker> mpcc_lite_async_worker_;
+  std::uint64_t mpcc_lite_async_next_sequence_{1U};
+  std::uint64_t mpcc_lite_async_context_epoch_{1U};
+  std::uint64_t mpcc_lite_async_last_consumed_sequence_{0U};
+  std::uint64_t mpcc_lite_async_adopted_count_{0U};
+  std::uint64_t mpcc_lite_async_discarded_count_{0U};
+  std::uint64_t mpcc_lite_async_failed_count_{0U};
+  double mpcc_lite_async_last_compute_ms_{0.0};
+  double mpcc_lite_async_last_snapshot_ms_{0.0};
+  double mpcc_lite_async_last_result_age_sec_{
+    std::numeric_limits<double>::infinity()};
+  double mpcc_lite_async_last_status_log_sec_{
+    -std::numeric_limits<double>::infinity()};
   std::uint64_t next_overtake_episode_id_{1U};
   v2x_overtake_core::OvertakeLineTransitionAction last_overtake_line_transition_action_{
     v2x_overtake_core::OvertakeLineTransitionAction::None};
@@ -14056,6 +14595,14 @@ private:
 
   void reset_overtake_line_state(const double now_sec, const std::string & reason)
   {
+    const bool reset_changes_async_context =
+      overtake_line_state_.phase != OvertakeLinePhase::Idle ||
+      !overtake_line_state_.target_vehicle_id.empty() ||
+      overtake_line_state_.mission_generation != 0U ||
+      reason != "not overtaking";
+    if (!mpcc_lite_async_worker_context_ && reset_changes_async_context) {
+      invalidate_mpcc_lite_async_results();
+    }
     if (overtake_solver_recovery_active_) {
       const auto gate = v2x_overtake_core::update_solver_reentry_gate(
         v2x_overtake_core::SolverReentryGateRequest{
@@ -29317,6 +29864,9 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_line.mpcc_lite_shadow_enabled =
     mpc["v2x_overtake_mpcc_lite_shadow_enabled"] ?
     mpc["v2x_overtake_mpcc_lite_shadow_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_lite_async_worker_enabled =
+    mpc["v2x_overtake_mpcc_lite_async_worker_enabled"] ?
+    mpc["v2x_overtake_mpcc_lite_async_worker_enabled"].as<bool>() : false;
   cfg.mpc.v2x_behavior.overtake_line.mpcc_lite_shadow_evaluation_interval_sec = std::max(
     0.05,
     mpc["v2x_overtake_mpcc_lite_shadow_evaluation_interval_sec"] ?
@@ -31542,10 +32092,12 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line.horizon_progress_lateral_accel_penalty);
       RCLCPP_INFO(
         get_logger(),
-        "V2X MPCC-lite: %s, evaluate=%.3f s (%.1f Hz), log=%.2f s, "
+        "V2X MPCC-lite: %s, async=%s, evaluate=%.3f s (%.1f Hz), log=%.2f s, "
         "last_feasible<=%.2f s, control=%s, near_target<=%.2f m, "
         "prefix_terminal=%.2f s/%.2f m, same_side_dy<=%.2f m",
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_shadow_enabled ?
+        "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_async_worker_enabled ?
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_shadow_evaluation_interval_sec,
         1.0 / std::max(

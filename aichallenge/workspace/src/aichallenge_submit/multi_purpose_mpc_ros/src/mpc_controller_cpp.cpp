@@ -14,6 +14,7 @@
 #include <multi_purpose_mpc_ros/mpc_waypoint_association.hpp>
 #include <multi_purpose_mpc_ros/mpc_waypoint_preview.hpp>
 #include <multi_purpose_mpc_ros/path_core.hpp>
+#include <multi_purpose_mpc_ros/persistent_osqp.hpp>
 #include <multi_purpose_mpc_ros/recovery_footprint.hpp>
 #include <multi_purpose_mpc_ros/recovery_mpc.hpp>
 #include <multi_purpose_mpc_ros/runtime_speed_profile.hpp>
@@ -42,7 +43,6 @@
 #include <Eigen/Sparse>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/core.hpp>
-#include <osqp.h>
 
 #include <algorithm>
 #include <array>
@@ -104,6 +104,7 @@ namespace mpc_velocity_limit = ::multi_purpose_mpc_ros::mpc_velocity_limit;
 namespace mpc_waypoint_association = ::multi_purpose_mpc_ros::mpc_waypoint_association;
 namespace mpc_waypoint_preview = ::multi_purpose_mpc_ros::mpc_waypoint_preview;
 namespace overtake_core = ::multi_purpose_mpc_ros::v2x_overtake_core;
+namespace persistent_osqp = ::multi_purpose_mpc_ros::persistent_osqp;
 namespace recovery_footprint = ::multi_purpose_mpc_ros::recovery_footprint;
 namespace recovery_mpc = ::multi_purpose_mpc_ros::recovery_mpc;
 namespace runtime_speed_profile = ::multi_purpose_mpc_ros::runtime_speed_profile;
@@ -117,6 +118,34 @@ constexpr double kV2XSourceFutureToleranceSec = 0.05;
 constexpr double kV2XCourseProgressContinuityToleranceM = 1.5;
 constexpr double kRecoveryMeasuredCourseWorseningToleranceM = 0.10;
 constexpr double kForwardOvertakeDriveRequestRetrySec = 0.25;
+constexpr double kOsqpWarmStartMaximumAgeSec = 0.5;
+
+template<typename Callback>
+class ScopeExit
+{
+public:
+  explicit ScopeExit(Callback callback)
+  : callback_(std::move(callback))
+  {
+  }
+
+  ScopeExit(const ScopeExit &) = delete;
+  ScopeExit & operator=(const ScopeExit &) = delete;
+
+  ~ScopeExit()
+  {
+    callback_();
+  }
+
+private:
+  Callback callback_;
+};
+
+template<typename Callback>
+ScopeExit<Callback> make_scope_exit(Callback callback)
+{
+  return ScopeExit<Callback>(std::move(callback));
+}
 
 double clip(const double value, const double min_value, const double max_value)
 {
@@ -241,224 +270,6 @@ std::unordered_map<std::string, std::vector<double>> read_csv_columns(const std:
   }
 
   return columns;
-}
-
-struct OsqpSolveResult
-{
-  Eigen::VectorXd solution;
-  c_int status{};
-  double max_constraint_violation{};
-};
-
-struct OsqpSolveOutcome
-{
-  std::optional<OsqpSolveResult> result;
-  std::string failure_detail;
-};
-
-OsqpSolveOutcome osqp_failure(std::string detail)
-{
-  return OsqpSolveOutcome{std::nullopt, std::move(detail)};
-}
-
-std::string describe_osqp_info(const OSQPInfo * info)
-{
-  if (info == nullptr) {
-    return "info=unavailable";
-  }
-  std::ostringstream detail;
-  detail << "status=" << info->status
-         << ", status_val=" << info->status_val
-         << ", iter=" << info->iter
-         << ", pri_res=" << info->pri_res
-         << ", dua_res=" << info->dua_res;
-  return detail.str();
-}
-
-struct CscDeleter
-{
-  void operator()(csc * matrix) const noexcept
-  {
-    c_free(matrix);
-  }
-};
-
-struct OsqpWorkspaceDeleter
-{
-  void operator()(OSQPWorkspace * workspace) const noexcept
-  {
-    if (workspace != nullptr) {
-      static_cast<void>(osqp_cleanup(workspace));
-    }
-  }
-};
-
-bool sparse_values_are_finite(const Eigen::SparseMatrix<double> & matrix)
-{
-  for (int i = 0; i < matrix.nonZeros(); ++i) {
-    if (!std::isfinite(matrix.valuePtr()[i])) {
-      return false;
-    }
-  }
-  return true;
-}
-
-OsqpSolveOutcome solve_osqp(
-  Eigen::SparseMatrix<double> P, Eigen::SparseMatrix<double> A, const Eigen::VectorXd & q,
-  const Eigen::VectorXd & l, const Eigen::VectorXd & u)
-{
-  P.makeCompressed();
-  A.makeCompressed();
-
-  if (
-    P.rows() <= 0 || P.rows() != P.cols() || q.size() != P.cols() || A.rows() <= 0 ||
-    A.cols() != P.cols() || A.rows() != l.size() || l.size() != u.size() ||
-    !sparse_values_are_finite(P) || !sparse_values_are_finite(A) || !q.allFinite())
-  {
-    return osqp_failure("stage=validation, reason=invalid dimensions or non-finite matrix/vector");
-  }
-  for (int i = 0; i < l.size(); ++i) {
-    if (std::isnan(l[i]) || std::isnan(u[i]) || l[i] > u[i]) {
-      std::ostringstream detail;
-      detail << "stage=validation, reason=invalid bounds, index=" << i
-             << ", lower=" << l[i] << ", upper=" << u[i];
-      return osqp_failure(detail.str());
-    }
-  }
-
-  std::vector<c_float> p_x(P.nonZeros());
-  std::vector<c_int> p_i(P.nonZeros());
-  std::vector<c_int> p_p(P.cols() + 1);
-  for (int i = 0; i < P.nonZeros(); ++i) {
-    p_x[i] = static_cast<c_float>(P.valuePtr()[i]);
-    p_i[i] = static_cast<c_int>(P.innerIndexPtr()[i]);
-  }
-  for (int i = 0; i < P.cols() + 1; ++i) {
-    p_p[i] = static_cast<c_int>(P.outerIndexPtr()[i]);
-  }
-
-  std::vector<c_float> a_x(A.nonZeros());
-  std::vector<c_int> a_i(A.nonZeros());
-  std::vector<c_int> a_p(A.cols() + 1);
-  for (int i = 0; i < A.nonZeros(); ++i) {
-    a_x[i] = static_cast<c_float>(A.valuePtr()[i]);
-    a_i[i] = static_cast<c_int>(A.innerIndexPtr()[i]);
-  }
-  for (int i = 0; i < A.cols() + 1; ++i) {
-    a_p[i] = static_cast<c_int>(A.outerIndexPtr()[i]);
-  }
-
-  std::vector<c_float> q_data(q.size());
-  std::vector<c_float> l_data(l.size());
-  std::vector<c_float> u_data(u.size());
-  for (int i = 0; i < q.size(); ++i) {
-    q_data[i] = static_cast<c_float>(q[i]);
-  }
-  for (int i = 0; i < l.size(); ++i) {
-    l_data[i] = static_cast<c_float>(l[i]);
-    u_data[i] = static_cast<c_float>(u[i]);
-  }
-
-  std::unique_ptr<csc, CscDeleter> P_csc(csc_matrix(
-      static_cast<c_int>(P.rows()), static_cast<c_int>(P.cols()),
-      static_cast<c_int>(P.nonZeros()), p_x.data(), p_i.data(), p_p.data()));
-  std::unique_ptr<csc, CscDeleter> A_csc(csc_matrix(
-      static_cast<c_int>(A.rows()), static_cast<c_int>(A.cols()),
-      static_cast<c_int>(A.nonZeros()), a_x.data(), a_i.data(), a_p.data()));
-  if (!P_csc || !A_csc) {
-    return osqp_failure("stage=csc, reason=matrix allocation failed");
-  }
-
-  OSQPData data;
-  data.n = static_cast<c_int>(P.cols());
-  data.m = static_cast<c_int>(A.rows());
-  data.P = P_csc.get();
-  data.A = A_csc.get();
-  data.q = q_data.data();
-  data.l = l_data.data();
-  data.u = u_data.data();
-
-  OSQPSettings settings;
-  osqp_set_default_settings(&settings);
-  settings.verbose = false;
-
-  OSQPWorkspace * raw_work = nullptr;
-  const c_int setup_exit_flag = osqp_setup(&raw_work, &data, &settings);
-  std::unique_ptr<OSQPWorkspace, OsqpWorkspaceDeleter> work(raw_work);
-  if (setup_exit_flag != 0 || !work) {
-    std::ostringstream detail;
-    detail << "stage=setup, exit_flag=" << setup_exit_flag;
-    return osqp_failure(detail.str());
-  }
-  const c_int solve_exit_flag = osqp_solve(work.get());
-  if (solve_exit_flag != 0) {
-    std::ostringstream detail;
-    detail << "stage=solve, exit_flag=" << solve_exit_flag << ", "
-           << describe_osqp_info(work->info);
-    return osqp_failure(detail.str());
-  }
-  if (work->info == nullptr) {
-    return osqp_failure("stage=solve, reason=missing solver info");
-  }
-  if (
-    work->info->status_val != OSQP_SOLVED &&
-    work->info->status_val != OSQP_SOLVED_INACCURATE)
-  {
-    return osqp_failure("stage=status, " + describe_osqp_info(work->info));
-  }
-  if (work->solution == nullptr || work->solution->x == nullptr) {
-    return osqp_failure(
-      "stage=solution, reason=missing primal solution, " + describe_osqp_info(work->info));
-  }
-
-  const c_int status = work->info->status_val;
-  Eigen::VectorXd solution(P.cols());
-  for (int i = 0; i < solution.size(); ++i) {
-    solution[i] = static_cast<double>(work->solution->x[i]);
-  }
-  if (!solution.allFinite()) {
-    return osqp_failure(
-      "stage=solution, reason=non-finite primal solution, " + describe_osqp_info(work->info));
-  }
-
-  const Eigen::VectorXd constraint_values = A * solution;
-  if (constraint_values.size() != l.size() || !constraint_values.allFinite()) {
-    return osqp_failure(
-      "stage=constraint_check, reason=invalid projected constraints, " +
-      describe_osqp_info(work->info));
-  }
-
-  double max_constraint_violation = 0.0;
-  double max_projected_abs = 0.0;
-  for (int i = 0; i < constraint_values.size(); ++i) {
-    double projected_value = constraint_values[i];
-    if (std::isfinite(l[i])) {
-      projected_value = std::max(projected_value, l[i]);
-    }
-    if (std::isfinite(u[i])) {
-      projected_value = std::min(projected_value, u[i]);
-    }
-    max_constraint_violation =
-      std::max(max_constraint_violation, std::abs(constraint_values[i] - projected_value));
-    max_projected_abs = std::max(max_projected_abs, std::abs(projected_value));
-  }
-  const double constraint_scale =
-    std::max(constraint_values.cwiseAbs().maxCoeff(), max_projected_abs);
-  const double inaccurate_multiplier = status == OSQP_SOLVED_INACCURATE ? 10.0 : 1.0;
-  const double constraint_tolerance =
-    inaccurate_multiplier *
-    (static_cast<double>(settings.eps_abs) +
-    static_cast<double>(settings.eps_rel) * constraint_scale);
-  if (max_constraint_violation > constraint_tolerance) {
-    std::ostringstream detail;
-    detail << "stage=constraint_check, max_violation=" << max_constraint_violation
-           << ", tolerance=" << constraint_tolerance << ", "
-           << describe_osqp_info(work->info);
-    return osqp_failure(detail.str());
-  }
-
-  return OsqpSolveOutcome{
-    OsqpSolveResult{solution, status, max_constraint_violation}, std::string{}};
 }
 
 std::pair<std::vector<double>, std::vector<double>> load_waypoints(const std::string & csv_path)
@@ -4611,6 +4422,24 @@ struct MpcProblem
   int ref_wp_id{};
 };
 
+struct MpcOsqpTelemetryWindow
+{
+  std::uint64_t solve_count{};
+  std::uint64_t failure_count{};
+  std::uint64_t setup_count{};
+  std::uint64_t update_count{};
+  std::uint64_t rebuild_count{};
+  std::uint64_t warm_start_count{};
+  std::uint64_t warm_start_reject_count{};
+  std::uint64_t cold_reset_count{};
+  std::uint64_t total_iterations{};
+  int maximum_iterations{};
+  double total_ms{};
+  double maximum_total_ms{};
+  double solve_ms{};
+  double maximum_solve_ms{};
+};
+
 struct MPC
 {
   MPC(
@@ -5050,6 +4879,7 @@ struct MPC
     low_speed_direct_control_phase_ =
       v2x_overtake_core::LowSpeedDirectControlPhase::Shift;
     low_speed_shift_last_relevant_vehicle_sec_ = std::numeric_limits<double>::quiet_NaN();
+    reset_osqp_history();
     reset_overtake_line_state(
       now_sec, active ? "AWSIM race session started" : "AWSIM race session inactive");
     if (gap_planner != nullptr) {
@@ -5093,6 +4923,7 @@ struct MPC
 
   void reset_control_history(const double steering)
   {
+    reset_osqp_history();
     previous_steering = std::isfinite(steering) ?
       clip(steering, -std::abs(cfg.delta_max), std::abs(cfg.delta_max)) : 0.0;
     current_control = Eigen::VectorXd::Zero(2 * std::max(0, cfg.N));
@@ -13241,19 +13072,23 @@ struct MPC
     for (int row = 0; row < nx_N; ++row) {
       a_triplets.emplace_back(row, row, -1.0);
     }
-    for (int r = 0; r < nx_N; ++r) {
-      for (int c = 0; c < nx_N; ++c) {
-        const double value = A_dense(r, c);
-        if (value != 0.0) {
-          a_triplets.emplace_back(r, c, value);
+    // Keep every entry in the known per-stage model blocks, including numeric
+    // zeros. Curvature and low-speed linearization can make individual terms
+    // cross zero; retaining the fixed block sparsity lets OSQP update numeric
+    // values without rebuilding the workspace at each straight/curve boundary.
+    for (int n = 0; n < N; ++n) {
+      for (int r = 0; r < nx; ++r) {
+        for (int c = 0; c < nx; ++c) {
+          a_triplets.emplace_back(
+            (n + 1) * nx + r, n * nx + c,
+            A_dense((n + 1) * nx + r, n * nx + c));
         }
       }
-    }
-    for (int r = 0; r < nx_N; ++r) {
-      for (int c = 0; c < nu_N; ++c) {
-        const double value = B_dense(r, c);
-        if (value != 0.0) {
-          a_triplets.emplace_back(r, nx_N + c, value);
+      for (int r = 0; r < nx; ++r) {
+        for (int c = 0; c < nu; ++c) {
+          a_triplets.emplace_back(
+            (n + 1) * nx + r, nx_N + n * nu + c,
+            B_dense((n + 1) * nx + r, n * nu + c));
         }
       }
     }
@@ -13332,18 +13167,119 @@ struct MPC
     return MpcProblem{q, l, u, P, A_full, N, tracking_wp_id, preview_wp_id, ref_wp_id};
   }
 
-  OsqpSolveOutcome solve_problem(const MpcProblem & problem)
+  void record_osqp_telemetry(
+    const persistent_osqp::SolveOutcome & outcome, const double now_sec)
   {
-    auto outcome = solve_osqp(problem.P, problem.A, problem.q, problem.l, problem.u);
+    auto & window = osqp_telemetry_window_;
+    ++window.solve_count;
+    window.failure_count += outcome.result.has_value() ? 0U : 1U;
+    window.setup_count += outcome.telemetry.setup_performed ? 1U : 0U;
+    window.update_count += outcome.telemetry.update_performed ? 1U : 0U;
+    window.rebuild_count +=
+      (outcome.telemetry.structural_rebuild || outcome.telemetry.update_rebuild) ? 1U : 0U;
+    window.warm_start_count += outcome.telemetry.warm_start_applied ? 1U : 0U;
+    window.warm_start_reject_count += outcome.telemetry.warm_start_rejected ? 1U : 0U;
+    window.cold_reset_count += outcome.telemetry.cold_reset_after_failure ? 1U : 0U;
+    window.total_iterations += static_cast<std::uint64_t>(
+      std::max(0, outcome.telemetry.iterations));
+    window.maximum_iterations = std::max(
+      window.maximum_iterations, outcome.telemetry.iterations);
+    window.total_ms += outcome.telemetry.total_ms;
+    window.maximum_total_ms = std::max(
+      window.maximum_total_ms, outcome.telemetry.total_ms);
+    window.solve_ms += outcome.telemetry.solve_ms;
+    window.maximum_solve_ms = std::max(
+      window.maximum_solve_ms, outcome.telemetry.solve_ms);
+
+    if (!std::isfinite(now_sec)) {
+      return;
+    }
+    if (
+      !std::isfinite(last_osqp_telemetry_log_sec_) ||
+      now_sec < last_osqp_telemetry_log_sec_)
+    {
+      last_osqp_telemetry_log_sec_ = now_sec;
+      return;
+    }
+    if (now_sec - last_osqp_telemetry_log_sec_ < 1.0) {
+      return;
+    }
+    if (
+      cfg.v2x_behavior.overtake_line.debug_log_enabled &&
+      window.solve_count > 0U)
+    {
+      const double denominator = static_cast<double>(window.solve_count);
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"),
+        "OSQP runtime: cycles=%zu, failures=%zu, setup=%zu, update=%zu, "
+        "rebuild=%zu, warm=%zu, warm_reject=%zu, cold_reset=%zu, "
+        "total_ms=%.3f/%.3f(avg/max), solve_ms=%.3f/%.3f(avg/max), "
+        "iterations=%.1f/%d(avg/max)",
+        static_cast<std::size_t>(window.solve_count),
+        static_cast<std::size_t>(window.failure_count),
+        static_cast<std::size_t>(window.setup_count),
+        static_cast<std::size_t>(window.update_count),
+        static_cast<std::size_t>(window.rebuild_count),
+        static_cast<std::size_t>(window.warm_start_count),
+        static_cast<std::size_t>(window.warm_start_reject_count),
+        static_cast<std::size_t>(window.cold_reset_count),
+        window.total_ms / denominator, window.maximum_total_ms,
+        window.solve_ms / denominator, window.maximum_solve_ms,
+        static_cast<double>(window.total_iterations) / denominator,
+        window.maximum_iterations);
+    }
+    window = MpcOsqpTelemetryWindow{};
+    last_osqp_telemetry_log_sec_ = now_sec;
+  }
+
+  void reset_osqp_history()
+  {
+    persistent_osqp_solver_.reset();
+    last_osqp_solution_.reset();
+    last_osqp_solution_sec_ = -std::numeric_limits<double>::infinity();
+  }
+
+  persistent_osqp::SolveOutcome solve_problem(
+    const MpcProblem & problem, const double now_sec)
+  {
+    std::optional<persistent_osqp::WarmStart> warm_start;
+    const bool previous_solution_fresh =
+      std::isfinite(now_sec) && std::isfinite(last_osqp_solution_sec_) &&
+      now_sec >= last_osqp_solution_sec_ &&
+      now_sec - last_osqp_solution_sec_ <= kOsqpWarmStartMaximumAgeSec;
+    if (last_osqp_solution_.has_value() && previous_solution_fresh) {
+      warm_start = persistent_osqp::shift_mpc_warm_start(
+        last_osqp_solution_.value(), static_cast<std::size_t>(problem.N));
+      if (!warm_start.has_value()) {
+        last_osqp_solution_.reset();
+      }
+    } else if (last_osqp_solution_.has_value()) {
+      last_osqp_solution_.reset();
+    }
+
+    auto outcome = persistent_osqp_solver_.solve(
+      problem.P, problem.A, problem.q, problem.l, problem.u, warm_start);
     if (
       outcome.result.has_value() &&
-      outcome.result->solution.size() != problem.P.rows())
+      outcome.result->primal.size() != problem.P.rows())
     {
       std::ostringstream detail;
       detail << "stage=solution, reason=unexpected solution size, actual="
-             << outcome.result->solution.size() << ", expected=" << problem.P.rows();
-      return osqp_failure(detail.str());
+             << outcome.result->primal.size() << ", expected=" << problem.P.rows();
+      outcome.failure_detail = detail.str();
+      outcome.result.reset();
+      outcome.telemetry.cold_reset_after_failure = true;
+      persistent_osqp_solver_.reset();
     }
+    if (outcome.result.has_value()) {
+      last_osqp_solution_ = persistent_osqp::WarmStart{
+        outcome.result->primal, outcome.result->dual};
+      last_osqp_solution_sec_ = now_sec;
+    } else {
+      last_osqp_solution_.reset();
+      last_osqp_solution_sec_ = -std::numeric_limits<double>::infinity();
+    }
+    record_osqp_telemetry(outcome, now_sec);
     return outcome;
   }
 
@@ -13707,7 +13643,7 @@ struct MPC
         return low_speed_shift_control(tracking_waypoint);
       }
       const bool low_speed_shift_handoff_requested = low_speed_shift_control_was_active_;
-      auto outcome = solve_problem(problem);
+      auto outcome = solve_problem(problem, now_sec);
       if (!outcome.result.has_value()) {
         if (low_speed_shift_handoff_requested) {
           low_speed_shift_control_active_ = true;
@@ -13722,7 +13658,7 @@ struct MPC
         }
         throw std::runtime_error("OSQP failed: " + outcome.failure_detail);
       }
-      Eigen::VectorXd dec = outcome.result->solution;
+      Eigen::VectorXd dec = outcome.result->primal;
       Eigen::VectorXd control_signals = dec.tail(N * nu);
 
       for (int i = 1; i < control_signals.size(); i += 2) {
@@ -13995,6 +13931,11 @@ struct MPC
   int overtake_infeasibility_counter_{0};
   int last_solved_wp_id{0};
   Eigen::VectorXd current_control;
+  persistent_osqp::PersistentOsqpSolver persistent_osqp_solver_;
+  std::optional<persistent_osqp::WarmStart> last_osqp_solution_;
+  double last_osqp_solution_sec_{-std::numeric_limits<double>::infinity()};
+  MpcOsqpTelemetryWindow osqp_telemetry_window_;
+  double last_osqp_telemetry_log_sec_{std::numeric_limits<double>::quiet_NaN()};
   std::optional<double> failure_fallback_speed_;
   bool last_control_was_fallback_{false};
 
@@ -35563,9 +35504,48 @@ private:
     return true;
   }
 
+  void record_control_callback_duration(const SteadyClock::time_point start)
+  {
+    const auto finished = SteadyClock::now();
+    const double elapsed_ms =
+      std::chrono::duration<double, std::milli>(finished - start).count();
+    const double period_ms = 1000.0 / std::max(1.0, mpc_cfg_.control_rate);
+    ++control_callback_count_;
+    control_callback_total_ms_ += elapsed_ms;
+    control_callback_maximum_ms_ = std::max(control_callback_maximum_ms_, elapsed_ms);
+    control_callback_overrun_count_ += elapsed_ms > period_ms ? 1U : 0U;
+
+    if (!last_control_callback_telemetry_steady_.has_value()) {
+      last_control_callback_telemetry_steady_ = finished;
+      return;
+    }
+    const double window_sec = std::chrono::duration<double>(
+      finished - last_control_callback_telemetry_steady_.value()).count();
+    if (window_sec < 1.0) {
+      return;
+    }
+    if (mpc_cfg_.v2x_behavior.debug_log_enabled && control_callback_count_ > 0U) {
+      RCLCPP_INFO(
+        get_logger(),
+        "Control callback runtime: cycles=%zu, elapsed_ms=%.3f/%.3f(avg/max), "
+        "period_ms=%.3f, overruns=%zu",
+        static_cast<std::size_t>(control_callback_count_),
+        control_callback_total_ms_ / static_cast<double>(control_callback_count_),
+        control_callback_maximum_ms_, period_ms,
+        static_cast<std::size_t>(control_callback_overrun_count_));
+    }
+    control_callback_count_ = 0U;
+    control_callback_overrun_count_ = 0U;
+    control_callback_total_ms_ = 0.0;
+    control_callback_maximum_ms_ = 0.0;
+    last_control_callback_telemetry_steady_ = finished;
+  }
+
   void control()
   {
     const auto steady_now = SteadyClock::now();
+    [[maybe_unused]] const auto callback_duration_guard = make_scope_exit(
+      [this, steady_now]() {record_control_callback_duration(steady_now);});
     const auto control_time = now();
     const bool missing_odometry = !odom_ || !last_odom_receipt_steady_.has_value();
     const double odometry_age_sec = missing_odometry ?
@@ -36031,6 +36011,11 @@ private:
   bool domain_manual_reset_ready_{false};
   std::string last_awsim_state_;
   int loop_{0};
+  std::uint64_t control_callback_count_{0U};
+  std::uint64_t control_callback_overrun_count_{0U};
+  double control_callback_total_ms_{0.0};
+  double control_callback_maximum_ms_{0.0};
+  std::optional<SteadyClock::time_point> last_control_callback_telemetry_steady_;
   double last_acc_{0.0};
   Eigen::Vector2d last_u_{0.0, 0.0};
   ColorRGBA pred_marker_color_;

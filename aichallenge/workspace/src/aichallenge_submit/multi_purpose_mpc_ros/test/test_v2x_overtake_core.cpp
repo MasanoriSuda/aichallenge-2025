@@ -149,6 +149,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonTargetPredictionR
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonExecutionBoundsRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::WallCorridorBoundRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StagewiseMpcCorridorBoundsRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::TargetBoundMpcGateRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonRearClearBoundsReleaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RearClearReturnDeferralHoldRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassCompletionRolloutSpeedRequest;
@@ -3526,6 +3527,98 @@ TEST(V2XOvertakeCoreSpeed, RejectsMalformedStagewiseCorridor)
       true, {-1.0, -1.0}, {1.0, 1.0}, {-0.5}, {0.5}, {0.0, 0.0}});
 
   EXPECT_FALSE(result.valid);
+}
+
+TEST(V2XOvertakeCoreSpeed, TargetBoundMpcGateRequiresContinuousConfirmation)
+{
+  auto result =
+    multi_purpose_mpc_ros::v2x_overtake_core::update_target_bound_mpc_gate(
+    TargetBoundMpcGateRequest{
+      true, true, false, 10.0, std::numeric_limits<double>::quiet_NaN(),
+      -std::numeric_limits<double>::infinity(), 0.20, 0.50});
+  EXPECT_FALSE(result.target_bound_enabled);
+  EXPECT_TRUE(result.confirmation_pending);
+  EXPECT_NEAR(result.candidate_since_sec, 10.0, 1e-9);
+
+  result = multi_purpose_mpc_ros::v2x_overtake_core::update_target_bound_mpc_gate(
+    TargetBoundMpcGateRequest{
+      true, true, false, 10.19, result.candidate_since_sec,
+      result.suppressed_until_sec, 0.20, 0.50});
+  EXPECT_FALSE(result.target_bound_enabled);
+
+  result = multi_purpose_mpc_ros::v2x_overtake_core::update_target_bound_mpc_gate(
+    TargetBoundMpcGateRequest{
+      true, true, false, 10.20, result.candidate_since_sec,
+      result.suppressed_until_sec, 0.20, 0.50});
+  EXPECT_TRUE(result.target_bound_enabled);
+  EXPECT_FALSE(result.confirmation_pending);
+}
+
+TEST(V2XOvertakeCoreSpeed, TargetBoundMpcGateDropoutRequiresFreshConfirmation)
+{
+  auto result =
+    multi_purpose_mpc_ros::v2x_overtake_core::update_target_bound_mpc_gate(
+    TargetBoundMpcGateRequest{
+      true, false, false, 11.0, 10.0,
+      -std::numeric_limits<double>::infinity(), 0.20, 0.50});
+  EXPECT_FALSE(result.target_bound_enabled);
+  EXPECT_FALSE(std::isfinite(result.candidate_since_sec));
+
+  result = multi_purpose_mpc_ros::v2x_overtake_core::update_target_bound_mpc_gate(
+    TargetBoundMpcGateRequest{
+      true, true, false, 11.01, result.candidate_since_sec,
+      result.suppressed_until_sec, 0.20, 0.50});
+  EXPECT_FALSE(result.target_bound_enabled);
+  EXPECT_TRUE(result.confirmation_pending);
+  EXPECT_NEAR(result.candidate_since_sec, 11.01, 1e-9);
+}
+
+TEST(V2XOvertakeCoreSpeed, TargetBoundMpcGateSolverFallbackUsesWallOnlyCooldown)
+{
+  auto result =
+    multi_purpose_mpc_ros::v2x_overtake_core::update_target_bound_mpc_gate(
+    TargetBoundMpcGateRequest{
+      true, true, true, 12.0, 11.0,
+      -std::numeric_limits<double>::infinity(), 0.20, 0.50});
+  EXPECT_FALSE(result.target_bound_enabled);
+  EXPECT_TRUE(result.solver_suppressed);
+  EXPECT_NEAR(result.suppressed_until_sec, 12.50, 1e-9);
+  EXPECT_FALSE(std::isfinite(result.candidate_since_sec));
+
+  result = multi_purpose_mpc_ros::v2x_overtake_core::update_target_bound_mpc_gate(
+    TargetBoundMpcGateRequest{
+      true, true, false, 12.49, result.candidate_since_sec,
+      result.suppressed_until_sec, 0.20, 0.50});
+  EXPECT_FALSE(result.target_bound_enabled);
+  EXPECT_TRUE(result.solver_suppressed);
+
+  result = multi_purpose_mpc_ros::v2x_overtake_core::update_target_bound_mpc_gate(
+    TargetBoundMpcGateRequest{
+      true, true, false, 12.50, result.candidate_since_sec,
+      result.suppressed_until_sec, 0.20, 0.50});
+  EXPECT_FALSE(result.target_bound_enabled);
+  EXPECT_TRUE(result.confirmation_pending);
+  EXPECT_NEAR(result.candidate_since_sec, 12.50, 1e-9);
+}
+
+TEST(V2XOvertakeCoreSpeed, TargetBoundMpcGateRetainsCooldownAcrossMissionBoundary)
+{
+  auto result =
+    multi_purpose_mpc_ros::v2x_overtake_core::update_target_bound_mpc_gate(
+    TargetBoundMpcGateRequest{
+      false, false, true, 13.0, 12.0,
+      std::numeric_limits<double>::quiet_NaN(), 0.20, 0.50});
+  EXPECT_FALSE(result.target_bound_enabled);
+  EXPECT_TRUE(result.solver_suppressed);
+  EXPECT_NEAR(result.suppressed_until_sec, 13.50, 1e-9);
+  EXPECT_FALSE(std::isfinite(result.candidate_since_sec));
+
+  result = multi_purpose_mpc_ros::v2x_overtake_core::update_target_bound_mpc_gate(
+    TargetBoundMpcGateRequest{
+      true, true, false, 13.25, result.candidate_since_sec,
+      result.suppressed_until_sec, 0.20, 0.50});
+  EXPECT_FALSE(result.target_bound_enabled);
+  EXPECT_TRUE(result.solver_suppressed);
 }
 
 TEST(V2XOvertakeCoreSpeed, OpponentBoundsRemainUntilRearClear)

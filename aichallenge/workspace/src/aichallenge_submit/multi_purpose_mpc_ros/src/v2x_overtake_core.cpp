@@ -1755,6 +1755,52 @@ StagewiseMpcCorridorBoundsResolution resolve_stagewise_mpc_corridor_bounds(
   return resolution;
 }
 
+TargetBoundMpcGateResolution update_target_bound_mpc_gate(
+  const TargetBoundMpcGateRequest & request) noexcept
+{
+  TargetBoundMpcGateResolution resolution;
+  resolution.suppressed_until_sec = std::isnan(request.suppressed_until_sec) ?
+    -std::numeric_limits<double>::infinity() : request.suppressed_until_sec;
+  if (
+    !std::isfinite(request.now_sec) || !std::isfinite(request.confirm_sec) ||
+    request.confirm_sec < 0.0 || !std::isfinite(request.solver_cooldown_sec) ||
+    request.solver_cooldown_sec < 0.0)
+  {
+    return resolution;
+  }
+
+  if (request.solver_fallback) {
+    resolution.suppressed_until_sec = std::max(
+      resolution.suppressed_until_sec,
+      request.now_sec + request.solver_cooldown_sec);
+    resolution.solver_suppressed = true;
+    return resolution;
+  }
+
+  if (!request.mission_active) {
+    return resolution;
+  }
+
+  if (request.now_sec + 1e-9 < resolution.suppressed_until_sec) {
+    resolution.solver_suppressed = true;
+    return resolution;
+  }
+
+  if (!request.candidate_target_bound) {
+    return resolution;
+  }
+
+  resolution.candidate_since_sec =
+    std::isfinite(request.candidate_since_sec) ?
+    request.candidate_since_sec : request.now_sec;
+  const double confirmed_for_sec = std::max(
+    0.0, request.now_sec - resolution.candidate_since_sec);
+  resolution.target_bound_enabled =
+    confirmed_for_sec + 1e-9 >= request.confirm_sec;
+  resolution.confirmation_pending = !resolution.target_bound_enabled;
+  return resolution;
+}
+
 bool can_release_receding_horizon_rear_clear_bounds(
   const RecedingHorizonRearClearBoundsReleaseRequest & request) noexcept
 {

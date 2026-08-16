@@ -1096,6 +1096,33 @@ struct StagewiseMpcCorridorBoundsResolution
 StagewiseMpcCorridorBoundsResolution resolve_stagewise_mpc_corridor_bounds(
   const StagewiseMpcCorridorBoundsRequest & request) noexcept;
 
+struct TargetBoundMpcGateRequest
+{
+  bool mission_active{false};
+  bool candidate_target_bound{false};
+  bool solver_fallback{false};
+  double now_sec{};
+  double candidate_since_sec{std::numeric_limits<double>::quiet_NaN()};
+  double suppressed_until_sec{-std::numeric_limits<double>::infinity()};
+  double confirm_sec{};
+  double solver_cooldown_sec{};
+};
+
+struct TargetBoundMpcGateResolution
+{
+  bool target_bound_enabled{false};
+  bool confirmation_pending{false};
+  bool solver_suppressed{false};
+  double candidate_since_sec{std::numeric_limits<double>::quiet_NaN()};
+  double suppressed_until_sec{-std::numeric_limits<double>::infinity()};
+};
+
+/// Promote fresh opponent bounds only after continuous confirmation. Candidate
+/// loss releases immediately; a solver fallback starts a wall-only cooldown
+/// and requires a fresh confirmation after that cooldown.
+TargetBoundMpcGateResolution update_target_bound_mpc_gate(
+  const TargetBoundMpcGateRequest & request) noexcept;
+
 struct RecedingHorizonRearClearBoundsReleaseRequest
 {
   bool pass_phase{false};

@@ -1351,6 +1351,8 @@ struct OvertakeLineConfig
   bool mpcc_frenet_dp_corridor_enabled{false};
   bool mpcc_frenet_dp_execution_enabled{false};
   bool mpcc_stage_corridor_mpc_constraints_enabled{false};
+  double mpcc_stage_corridor_target_bound_confirm_sec{0.20};
+  double mpcc_stage_corridor_target_bound_solver_cooldown_sec{0.50};
   bool mpcc_frenet_dp_rolling_refresh_enabled{false};
   bool mpcc_frenet_dp_primary_execution_enabled{false};
   bool mpcc_frenet_dp_target_bound_promotion_enabled{false};
@@ -2517,6 +2519,8 @@ struct OvertakeLineOutput
   std::vector<bool> target_active;
   bool stage_corridor_constraints_active{false};
   bool stage_corridor_target_bound_active{false};
+  std::vector<double> stage_wall_corridor_lower_ey;
+  std::vector<double> stage_wall_corridor_upper_ey;
   std::vector<double> stage_corridor_lower_ey;
   std::vector<double> stage_corridor_upper_ey;
   bool receding_horizon_active{false};
@@ -2567,6 +2571,8 @@ struct OvertakeLineHorizonEvaluation
   std::vector<double> path_distances;
   bool stage_corridor_constraints_active{false};
   bool stage_corridor_target_bound_active{false};
+  std::vector<double> stage_wall_corridor_lower_ey;
+  std::vector<double> stage_wall_corridor_upper_ey;
   std::vector<double> stage_corridor_lower_ey;
   std::vector<double> stage_corridor_upper_ey;
   double max_required_lateral_accel{0.0};
@@ -5237,6 +5243,15 @@ struct MPC
     infeasibility_counter = 0;
     overtake_infeasibility_counter_ = 0;
     last_control_was_fallback_ = true;
+    stage_corridor_mpc_constraints_was_active_ = false;
+    stage_corridor_mpc_target_bound_was_active_ = false;
+    stage_corridor_mpc_target_bound_solver_suppressed_was_active_ = false;
+    stage_corridor_target_bound_candidate_since_sec_ =
+      std::numeric_limits<double>::quiet_NaN();
+    stage_corridor_target_bound_suppressed_until_sec_ =
+      -std::numeric_limits<double>::infinity();
+    stage_corridor_mpc_constraints_last_log_sec_ =
+      -std::numeric_limits<double>::infinity();
   }
 
   bool last_control_was_fallback() const
@@ -13546,6 +13561,35 @@ struct MPC
       cfg.v2x_behavior.overtake_line.mpcc_stage_corridor_mpc_constraints_enabled &&
       overtake_line_output.active &&
       overtake_line_output.stage_corridor_constraints_active;
+    const bool stage_corridor_target_bound_candidate =
+      stage_corridor_requested &&
+      overtake_line_output.stage_corridor_target_bound_active;
+    const bool stage_corridor_target_bound_solver_fallback =
+      last_control_was_fallback_ &&
+      stage_corridor_mpc_target_bound_was_active_;
+    const auto target_bound_gate = overtake_core::update_target_bound_mpc_gate(
+      overtake_core::TargetBoundMpcGateRequest{
+        stage_corridor_requested,
+        stage_corridor_target_bound_candidate,
+        stage_corridor_target_bound_solver_fallback,
+        now_sec,
+        stage_corridor_target_bound_candidate_since_sec_,
+        stage_corridor_target_bound_suppressed_until_sec_,
+        cfg.v2x_behavior.overtake_line.mpcc_stage_corridor_target_bound_confirm_sec,
+        cfg.v2x_behavior.overtake_line.
+        mpcc_stage_corridor_target_bound_solver_cooldown_sec});
+    stage_corridor_target_bound_candidate_since_sec_ =
+      target_bound_gate.candidate_since_sec;
+    stage_corridor_target_bound_suppressed_until_sec_ =
+      target_bound_gate.suppressed_until_sec;
+    const bool stage_corridor_target_bound_effective =
+      stage_corridor_requested && target_bound_gate.target_bound_enabled;
+    const auto & selected_stage_lower = stage_corridor_target_bound_effective ?
+      overtake_line_output.stage_corridor_lower_ey :
+      overtake_line_output.stage_wall_corridor_lower_ey;
+    const auto & selected_stage_upper = stage_corridor_target_bound_effective ?
+      overtake_line_output.stage_corridor_upper_ey :
+      overtake_line_output.stage_wall_corridor_upper_ey;
     std::vector<double> base_stage_lower;
     std::vector<double> base_stage_upper;
     std::vector<double> stage_corridor_reference;
@@ -13566,8 +13610,8 @@ struct MPC
         stage_corridor_requested,
         base_stage_lower,
         base_stage_upper,
-        overtake_line_output.stage_corridor_lower_ey,
-        overtake_line_output.stage_corridor_upper_ey,
+        selected_stage_lower,
+        selected_stage_upper,
         stage_corridor_reference});
     if (!stage_corridor.valid || !stage_corridor.feasible) {
       std::ostringstream reason;
@@ -13588,8 +13632,11 @@ struct MPC
     const bool stage_corridor_log_due =
       stage_corridor.active != stage_corridor_mpc_constraints_was_active_ ||
       (stage_corridor.active &&
-      overtake_line_output.stage_corridor_target_bound_active !=
+      stage_corridor_target_bound_effective !=
       stage_corridor_mpc_target_bound_was_active_) ||
+      (stage_corridor.active &&
+      target_bound_gate.solver_suppressed !=
+      stage_corridor_mpc_target_bound_solver_suppressed_was_active_) ||
       (stage_corridor.active &&
       (!std::isfinite(stage_corridor_mpc_constraints_last_log_sec_) ||
       now_sec - stage_corridor_mpc_constraints_last_log_sec_ >= 1.0));
@@ -13600,9 +13647,15 @@ struct MPC
       RCLCPP_INFO(
         rclcpp::get_logger("mpc_controller"),
         "Overtake stage corridor MPC constraints: active=%d, target_bound=%d, "
+        "candidate=%d, confirm_pending=%d, solver_suppressed=%d/%.2f s, "
         "samples=%zu, min_width=%.2f m, phase=%s, wp_id=%d",
         stage_corridor.active ? 1 : 0,
-        overtake_line_output.stage_corridor_target_bound_active ? 1 : 0,
+        stage_corridor_target_bound_effective ? 1 : 0,
+        stage_corridor_target_bound_candidate ? 1 : 0,
+        target_bound_gate.confirmation_pending ? 1 : 0,
+        target_bound_gate.solver_suppressed ? 1 : 0,
+        target_bound_gate.solver_suppressed ?
+        std::max(0.0, target_bound_gate.suppressed_until_sec - now_sec) : 0.0,
         stage_corridor.applied_sample_count,
         stage_corridor.minimum_width_m,
         to_string(overtake_line_state_.phase), model->wp_id);
@@ -13610,8 +13663,9 @@ struct MPC
     }
     stage_corridor_mpc_constraints_was_active_ = stage_corridor.active;
     stage_corridor_mpc_target_bound_was_active_ =
-      stage_corridor.active &&
-      overtake_line_output.stage_corridor_target_bound_active;
+      stage_corridor.active && stage_corridor_target_bound_effective;
+    stage_corridor_mpc_target_bound_solver_suppressed_was_active_ =
+      stage_corridor.active && target_bound_gate.solver_suppressed;
     if (std::isfinite(overtake_line_output.target_velocity_reference)) {
       for (int i = 0; i < N; ++i) {
         ur[2 * i] = std::min({
@@ -14624,6 +14678,11 @@ struct MPC
   bool last_control_was_fallback_{false};
   bool stage_corridor_mpc_constraints_was_active_{false};
   bool stage_corridor_mpc_target_bound_was_active_{false};
+  bool stage_corridor_mpc_target_bound_solver_suppressed_was_active_{false};
+  double stage_corridor_target_bound_candidate_since_sec_{
+    std::numeric_limits<double>::quiet_NaN()};
+  double stage_corridor_target_bound_suppressed_until_sec_{
+    -std::numeric_limits<double>::infinity()};
   double stage_corridor_mpc_constraints_last_log_sec_{
     -std::numeric_limits<double>::infinity()};
 
@@ -16536,6 +16595,8 @@ private:
     evaluation.target_ey.assign(static_cast<std::size_t>(N), 0.0);
     evaluation.path_distances.assign(static_cast<std::size_t>(N), 0.0);
     if (enforce_execution_feasibility) {
+      evaluation.stage_wall_corridor_lower_ey.reserve(static_cast<std::size_t>(N));
+      evaluation.stage_wall_corridor_upper_ey.reserve(static_cast<std::size_t>(N));
       evaluation.stage_corridor_lower_ey.reserve(static_cast<std::size_t>(N));
       evaluation.stage_corridor_upper_ey.reserve(static_cast<std::size_t>(N));
     }
@@ -16590,6 +16651,8 @@ private:
         evaluation.wall_clearance_limited = true;
       }
       if (enforce_execution_feasibility) {
+        evaluation.stage_wall_corridor_lower_ey.push_back(lower);
+        evaluation.stage_wall_corridor_upper_ey.push_back(upper);
         evaluation.stage_corridor_lower_ey.push_back(lower);
         evaluation.stage_corridor_upper_ey.push_back(upper);
       }
@@ -16716,6 +16779,8 @@ private:
     }
     evaluation.stage_corridor_constraints_active =
       enforce_execution_feasibility &&
+      evaluation.stage_wall_corridor_lower_ey.size() == static_cast<std::size_t>(N) &&
+      evaluation.stage_wall_corridor_upper_ey.size() == static_cast<std::size_t>(N) &&
       evaluation.stage_corridor_lower_ey.size() == static_cast<std::size_t>(N) &&
       evaluation.stage_corridor_upper_ey.size() == static_cast<std::size_t>(N);
     return evaluation;
@@ -25591,6 +25656,10 @@ private:
       horizon_evaluation.stage_corridor_constraints_active;
     output.stage_corridor_target_bound_active =
       horizon_evaluation.stage_corridor_target_bound_active;
+    output.stage_wall_corridor_lower_ey =
+      horizon_evaluation.stage_wall_corridor_lower_ey;
+    output.stage_wall_corridor_upper_ey =
+      horizon_evaluation.stage_wall_corridor_upper_ey;
     output.stage_corridor_lower_ey =
       horizon_evaluation.stage_corridor_lower_ey;
     output.stage_corridor_upper_ey =
@@ -30129,6 +30198,18 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_line.mpcc_stage_corridor_mpc_constraints_enabled =
     mpc["v2x_overtake_mpcc_stage_corridor_mpc_constraints_enabled"] ?
     mpc["v2x_overtake_mpcc_stage_corridor_mpc_constraints_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_stage_corridor_target_bound_confirm_sec =
+    std::max(
+    0.0,
+    mpc["v2x_overtake_mpcc_stage_corridor_target_bound_confirm_sec"] ?
+    mpc["v2x_overtake_mpcc_stage_corridor_target_bound_confirm_sec"].as<double>() :
+    0.20);
+  cfg.mpc.v2x_behavior.overtake_line.
+  mpcc_stage_corridor_target_bound_solver_cooldown_sec = std::max(
+    0.0,
+    mpc["v2x_overtake_mpcc_stage_corridor_target_bound_solver_cooldown_sec"] ?
+    mpc["v2x_overtake_mpcc_stage_corridor_target_bound_solver_cooldown_sec"].as<double>() :
+    0.50);
   cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_rolling_refresh_enabled =
     mpc["v2x_overtake_mpcc_frenet_dp_rolling_refresh_enabled"] ?
     mpc["v2x_overtake_mpcc_frenet_dp_rolling_refresh_enabled"].as<bool>() : false;
@@ -32347,6 +32428,7 @@ public:
       RCLCPP_INFO(
         get_logger(),
         "V2X MPCC Frenet DP corridor: %s, execution=%s/mpc_bounds=%s, "
+        "target_gate=%.2f s/solver_cooldown=%.2f s, "
         "rolling_refresh=%s/%.2f s, primary_execution=%s, target_bound=%s, "
         "measured_rebase_retry=%s, execution_envelope=%s/ay_reserve=%.2f, "
         "stitch=%.2f->%.2f m, bins=%d, slope<=%.2f m/m, "
@@ -32362,6 +32444,10 @@ public:
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.
         mpcc_stage_corridor_mpc_constraints_enabled ? "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line.
+        mpcc_stage_corridor_target_bound_confirm_sec,
+        mpc_cfg_.v2x_behavior.overtake_line.
+        mpcc_stage_corridor_target_bound_solver_cooldown_sec,
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_rolling_refresh_enabled ?
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_rolling_refresh_interval_sec,

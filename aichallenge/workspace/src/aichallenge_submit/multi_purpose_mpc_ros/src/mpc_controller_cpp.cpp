@@ -20062,15 +20062,19 @@ private:
     std::optional<overtake_core::OvertakeMissionCandidate>
     runtime_wall_center_contraction_candidate;
     std::string runtime_wall_center_contraction_reject_reason;
-    bool runtime_wall_center_contraction_used_physical_clearance = false;
-    double runtime_wall_center_contraction_separation_m =
-      std::numeric_limits<double>::quiet_NaN();
-    if (
+    const bool runtime_wall_center_contraction_evaluated =
       line_cfg.runtime_wall_center_contraction_enabled &&
       active_execution_phase && actual_wall_preplan_warning &&
       !runtime_wall_hard_fault &&
       runtime_wall_warning_elapsed_sec + kEps >=
-      line_cfg.runtime_wall_fallback_delay_sec &&
+      line_cfg.runtime_wall_fallback_delay_sec;
+    bool runtime_wall_center_contraction_used_physical_clearance = false;
+    double runtime_wall_center_contraction_separation_m =
+      std::numeric_limits<double>::quiet_NaN();
+    double runtime_wall_escape_prefix_distance_m =
+      std::numeric_limits<double>::quiet_NaN();
+    if (
+      runtime_wall_center_contraction_evaluated &&
       overtake_line_state_.mission_path_frozen &&
       overtake_line_state_.mission_plan.has_value() &&
       overtake_line_state_.fixed_pass_corridor_goal_ey.has_value() &&
@@ -20099,7 +20103,7 @@ private:
         0.0, line_cfg.runtime_wall_center_contraction_max_adjustment);
       const double shift_distance = std::max(0.5, line_cfg.shift_distance);
       const auto & prior_candidate = overtake_line_state_.mission_plan->mission;
-      const double pass_distance =
+      double pass_distance =
         std::isfinite(prior_candidate.pass_hold_distance_m) ?
         std::max(0.5, prior_candidate.pass_hold_distance_m) :
         std::max(0.5, line_cfg.pass_distance);
@@ -20107,12 +20111,29 @@ private:
         std::isfinite(prior_candidate.return_distance_m) ?
         std::max(0.5, prior_candidate.return_distance_m) :
         std::max(0.5, line_cfg.return_distance);
-      const double required_path_distance =
-        shift_distance + pass_distance + return_distance;
+      if (overtake_line_state_.phase == OvertakeLinePhase::Pass) {
+        const double current_pass_traveled = overtake_mission_pass_traveled();
+        const double prior_return_start_pass_m =
+          std::isfinite(overtake_line_state_.mission_return_start_pass_m) ?
+          std::max(0.5, overtake_line_state_.mission_return_start_pass_m) :
+          current_pass_traveled + shift_distance + pass_distance;
+        // configure_same_side_pass_continuation() adds the replacement ShiftOut
+        // distance to this remaining Pass distance.  Subtract it here so a
+        // short wall-escape prefix does not silently extend the old Mission by
+        // a complete extra Pass segment.
+        pass_distance = std::max(
+          0.5,
+          prior_return_start_pass_m - current_pass_traveled - shift_distance);
+      }
+      const double prefix_hold_distance = std::max(
+        0.5, std::min(1.0, 0.25 * shift_distance));
+      const double required_prefix_distance =
+        shift_distance + prefix_hold_distance;
+      runtime_wall_escape_prefix_distance_m = required_prefix_distance;
       const int contraction_plan_N = std::max(
         N,
         static_cast<int>(std::ceil(
-          required_path_distance /
+          required_prefix_distance /
           std::max(0.1, model->reference_path->resolution))) + 2);
       const auto [contraction_lb, contraction_ub] =
         build_v2x_gap_planner_bounds(
@@ -20160,8 +20181,8 @@ private:
               std::optional<std::pair<double, double>>{
                 std::make_pair(contracted_goal.goal_m, contracted_goal.goal_m)},
               std::optional<double>{contracted_goal.goal_m},
-              shift_distance, pass_distance,
-              true, true, false, false, false,
+              shift_distance, prefix_hold_distance,
+              false, true, false, false, false,
               OvertakeLineEntryPreflightPolicy{false, false});
             if (!contraction_preflight.feasible) {
               runtime_wall_center_contraction_reject_reason =
@@ -20179,6 +20200,12 @@ private:
                   std::isfinite(distance) && distance >= 0.0 &&
                   distance > previous_path_distance + 1e-9)
                 {
+                  if (
+                    distance > required_prefix_distance +
+                    std::max(0.05, model->reference_path->resolution))
+                  {
+                    break;
+                  }
                   contraction_path_distances.push_back(distance);
                   previous_path_distance = distance;
                 }
@@ -20222,8 +20249,9 @@ private:
                   contraction_preflight.minimum_path_wall_clearance_m;
                 candidate.minimum_path_corridor_width_m =
                   contraction_preflight.minimum_path_corridor_width_m;
-                candidate.minimum_return_wall_clearance_m =
-                  contraction_preflight.minimum_return_wall_clearance_m;
+                // Return is intentionally outside this local prefix.  Keep the
+                // prior Mission's value until the rolling planner publishes a
+                // fresh remainder instead of claiming that Return was checked.
                 candidate.frenet_dp_corridor_checked = true;
                 candidate.frenet_dp_corridor_feasible = true;
                 candidate.frenet_dp_prefix_bridge = true;
@@ -20238,6 +20266,14 @@ private:
           }
         }
       }
+    }
+    if (
+      runtime_wall_center_contraction_evaluated &&
+      !runtime_wall_center_contraction_candidate.has_value() &&
+      runtime_wall_center_contraction_reject_reason.empty())
+    {
+      runtime_wall_center_contraction_reject_reason =
+        "wall-escape prefix prerequisites unavailable";
     }
 
     bool runtime_wall_return_available = false;
@@ -20282,6 +20318,8 @@ private:
       behavior_output.locked_target_footprint_prediction_valid;
     runtime_wall_preplan_request.fresh_candidate_available =
       fresh_same_side_candidate_available;
+    runtime_wall_preplan_request.center_contraction_evaluated =
+      runtime_wall_center_contraction_evaluated;
     runtime_wall_preplan_request.center_contraction_available =
       runtime_wall_center_contraction_candidate.has_value();
     runtime_wall_preplan_request.speed_preserving_return_available =
@@ -20404,15 +20442,17 @@ private:
         if (line_cfg.debug_log_enabled) {
           RCLCPP_WARN(
             rclcpp::get_logger("mpc_controller"),
-            "OvertakeLine runtime wall center contraction accepted: target=%s, "
+            "OvertakeLine runtime wall escape prefix accepted: target=%s, "
             "side=%d, goal=%.2f->%.2f, adjustment=%.2f, elapsed=%.2f s, "
-            "clearance=%s/%.2f m, count=%d/%d, front_cap_preserved=%d, wp_id=%d",
+            "prefix=%.2f m, clearance=%s/%.2f m, count=%d/%d, "
+            "front_cap_preserved=%d, wp_id=%d",
             overtake_line_state_.target_vehicle_id.c_str(),
             overtake_line_state_.pass_side_sign, previous_goal,
             runtime_wall_center_contraction_candidate->goal_lateral_m,
             std::abs(
               runtime_wall_center_contraction_candidate->goal_lateral_m - previous_goal),
             runtime_wall_warning_elapsed_sec,
+            runtime_wall_escape_prefix_distance_m,
             runtime_wall_center_contraction_used_physical_clearance ?
             "physical" : "nominal",
             runtime_wall_center_contraction_separation_m,
@@ -20425,13 +20465,52 @@ private:
       if (line_cfg.debug_log_enabled) {
         RCLCPP_WARN(
           rclcpp::get_logger("mpc_controller"),
-          "OvertakeLine runtime wall center contraction commit rejected: "
+          "OvertakeLine runtime wall escape prefix commit rejected: "
           "target=%s, side=%d, goal=%.2f, elapsed=%.2f s, wp_id=%d",
           overtake_line_state_.target_vehicle_id.c_str(),
           overtake_line_state_.pass_side_sign,
           runtime_wall_center_contraction_candidate->goal_lateral_m,
           runtime_wall_warning_elapsed_sec, model->wp_id);
       }
+      const int exit_side = overtake_line_state_.pass_side_sign;
+      const std::string exit_reason = "wall-escape prefix commit rejected";
+      if (enter_dynamic_mission_wait(exit_reason)) {
+        return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
+      }
+      transition_overtake_line_phase(
+        OvertakeLinePhase::Recovery, now_sec, current_ey, exit_side, exit_reason);
+      return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
+    } else if (
+      runtime_wall_preplan.valid &&
+      runtime_wall_preplan.action ==
+      overtake_core::RuntimeWallPreplanAction::ExitCurrentMission)
+    {
+      const int exit_side = overtake_line_state_.pass_side_sign;
+      const std::string exit_reason =
+        runtime_wall_center_contraction_reject_reason.empty() ?
+        "wall-escape prefix unavailable" :
+        runtime_wall_center_contraction_reject_reason;
+      if (line_cfg.debug_log_enabled) {
+        RCLCPP_WARN(
+          rclcpp::get_logger("mpc_controller"),
+          "OvertakeLine runtime wall escape prefix unavailable: target=%s, "
+          "side=%d, elapsed=%.2f s, count=%d/%d, reason=%s, "
+          "action=exit-current-mission, wp_id=%d",
+          overtake_line_state_.target_vehicle_id.c_str(), exit_side,
+          runtime_wall_warning_elapsed_sec,
+          overtake_line_state_.mission_runtime_wall_replan_count,
+          line_cfg.runtime_wall_replan_max_count, exit_reason.c_str(),
+          model->wp_id);
+      }
+      if (enter_dynamic_mission_wait(
+          std::string{"runtime wall escape prefix unavailable: "} + exit_reason))
+      {
+        return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
+      }
+      transition_overtake_line_phase(
+        OvertakeLinePhase::Recovery, now_sec, current_ey, exit_side,
+        std::string{"runtime wall escape prefix unavailable: "} + exit_reason);
+      return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
     } else if (
       runtime_wall_preplan.valid &&
       runtime_wall_preplan.action ==

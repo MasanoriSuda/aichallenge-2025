@@ -4155,6 +4155,7 @@ enum class RuntimeWallPreplanAction
   ReplaceWithFreshSameSide,
   ContractTowardCenter,
   HoldCurrentSide,
+  ExitCurrentMission,
   ReturnToBaseLine,
 };
 
@@ -4168,6 +4169,7 @@ struct RuntimeWallPreplanRequest
   bool current_body_separated{false};
   bool target_prediction_valid{false};
   bool fresh_candidate_available{false};
+  bool center_contraction_evaluated{false};
   bool center_contraction_available{false};
   bool speed_preserving_return_available{false};
   bool rear_clear_confirmed{false};
@@ -4223,7 +4225,8 @@ struct RuntimeWallCenterContractionGoalResolution
 /// nominal target clearance; when it cannot produce any centerward motion,
 /// permit the physical body boundary only if the current bodies are separated
 /// and the ego remains on the selected side of the target. The returned goal
-/// still requires full wall/kinematic preflight by the caller.
+/// still requires wall/kinematic preflight for the executable local prefix by
+/// the caller; it does not validate the remaining Pass or Return path.
 RuntimeWallCenterContractionGoalResolution resolve_runtime_wall_center_contraction_goal(
   const RuntimeWallCenterContractionGoalRequest & request) noexcept;
 

@@ -8302,6 +8302,67 @@ TEST(V2XOvertakeCoreWall, RuntimePreplanHoldsCommittedSideUntilRearClear)
     RuntimeWallPreplanAction::ReturnToBaseLine);
 }
 
+TEST(V2XOvertakeCoreWall, RuntimePreplanExitsAfterEscapePrefixFailure)
+{
+  RuntimeWallPreplanRequest request;
+  request.enabled = true;
+  request.active_execution = true;
+  request.warning_margin_blocked = true;
+  request.target_continuous = true;
+  request.current_body_separated = true;
+  request.target_prediction_valid = true;
+  request.center_contraction_evaluated = true;
+  request.mission_side_sign = 1;
+  request.now_sec = 10.0;
+  request.cooldown_sec = 0.5;
+  request.warning_elapsed_sec = 0.20;
+  request.fallback_delay_sec = 0.15;
+  request.maximum_replan_count = 2;
+
+  EXPECT_EQ(
+    resolve_runtime_wall_preplan(request).action,
+    RuntimeWallPreplanAction::ExitCurrentMission);
+
+  request.center_contraction_available = true;
+  EXPECT_EQ(
+    resolve_runtime_wall_preplan(request).action,
+    RuntimeWallPreplanAction::ContractTowardCenter);
+
+  request.replan_count = request.maximum_replan_count;
+  EXPECT_EQ(
+    resolve_runtime_wall_preplan(request).action,
+    RuntimeWallPreplanAction::ExitCurrentMission);
+}
+
+TEST(V2XOvertakeCoreWall, RuntimePreplanExecutesAcceptedPrefixDuringCooldown)
+{
+  RuntimeWallPreplanRequest request;
+  request.enabled = true;
+  request.active_execution = true;
+  request.warning_margin_blocked = true;
+  request.target_continuous = true;
+  request.current_body_separated = true;
+  request.target_prediction_valid = true;
+  request.center_contraction_evaluated = true;
+  request.mission_side_sign = 1;
+  request.now_sec = 10.0;
+  request.last_replan_sec = 9.9;
+  request.cooldown_sec = 0.5;
+  request.warning_elapsed_sec = 0.20;
+  request.fallback_delay_sec = 0.15;
+  request.replan_count = 1;
+  request.maximum_replan_count = 2;
+
+  EXPECT_EQ(
+    resolve_runtime_wall_preplan(request).action,
+    RuntimeWallPreplanAction::HoldCurrentSide);
+
+  request.last_replan_sec = 9.0;
+  EXPECT_EQ(
+    resolve_runtime_wall_preplan(request).action,
+    RuntimeWallPreplanAction::ExitCurrentMission);
+}
+
 TEST(V2XOvertakeCoreWall, RuntimePreplanNeverOverridesHardWallOrBounds)
 {
   RuntimeWallPreplanRequest request;

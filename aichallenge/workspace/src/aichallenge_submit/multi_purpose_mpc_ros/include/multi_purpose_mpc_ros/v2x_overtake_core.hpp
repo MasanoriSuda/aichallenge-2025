@@ -6584,6 +6584,36 @@ struct ForwardDistanceResolution
 /// Configuration errors throw std::invalid_argument.
 ForwardDistanceResolution integrate_forward_distance(const ForwardDistanceRequest & request);
 
+struct ReturnHandoffConvergenceRequest
+{
+  bool return_active{false};
+  bool phase_hold_elapsed{false};
+  bool return_corridor_blocked{false};
+  bool solver_ready{false};
+  double now_sec{};
+  double convergence_since_sec{std::numeric_limits<double>::quiet_NaN()};
+  double lateral_error_m{};
+  double heading_error_rad{};
+  double lateral_tolerance_m{};
+  double heading_tolerance_rad{};
+  double confirmation_sec{};
+};
+
+struct ReturnHandoffConvergenceResolution
+{
+  bool observation_valid{false};
+  bool instantaneously_converged{false};
+  bool handoff_confirmed{false};
+  double convergence_since_sec{std::numeric_limits<double>::quiet_NaN()};
+  double converged_duration_sec{};
+};
+
+/// Confirm that Return has physically converged to the base path before
+/// releasing lateral ownership. A distance-only Return completion must not
+/// hand an offset or misaligned vehicle back to the ordinary path tracker.
+ReturnHandoffConvergenceResolution update_return_handoff_convergence(
+  const ReturnHandoffConvergenceRequest & request);
+
 enum class PausedMissionExpiryReason
 {
   Active,

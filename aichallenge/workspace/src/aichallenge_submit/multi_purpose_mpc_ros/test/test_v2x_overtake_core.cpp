@@ -23,6 +23,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::CommittedExecutionContinuityRequ
 using multi_purpose_mpc_ros::v2x_overtake_core::CoursePoint;
 using multi_purpose_mpc_ros::v2x_overtake_core::VehicleRelativeLateralRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ForwardDistanceRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::ReturnHandoffConvergenceRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::FrontDangerAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::FrontDangerActionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::
@@ -393,6 +394,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_target_continuity;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_reacquire_during_return;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_reacquire_during_recovery;
 using multi_purpose_mpc_ros::v2x_overtake_core::integrate_forward_distance;
+using multi_purpose_mpc_ros::v2x_overtake_core::update_return_handoff_convergence;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_recovery_velocity_limit;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_recovery_policy;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_retain_pass_mission_after_recovery;
@@ -13576,6 +13578,101 @@ TEST(V2XOvertakeCoreRecovery, RejectsGapRollbackAndInvalidObservationWithoutDist
   resolution = integrate_forward_distance(request);
   EXPECT_FALSE(resolution.observation_accepted);
   EXPECT_DOUBLE_EQ(resolution.accumulated_distance_m, 1.25);
+}
+
+TEST(V2XOvertakeCoreReturn, ConfirmsOnlyStableLateralAndHeadingConvergence)
+{
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  ReturnHandoffConvergenceRequest request;
+  request.return_active = true;
+  request.phase_hold_elapsed = true;
+  request.solver_ready = true;
+  request.now_sec = 10.0;
+  request.convergence_since_sec = nan;
+  request.lateral_error_m = 0.10;
+  request.heading_error_rad = 0.05;
+  request.lateral_tolerance_m = 0.20;
+  request.heading_tolerance_rad = 0.12;
+  request.confirmation_sec = 0.15;
+
+  auto resolution = update_return_handoff_convergence(request);
+  EXPECT_TRUE(resolution.observation_valid);
+  EXPECT_TRUE(resolution.instantaneously_converged);
+  EXPECT_FALSE(resolution.handoff_confirmed);
+  EXPECT_DOUBLE_EQ(resolution.convergence_since_sec, 10.0);
+
+  request.now_sec = 10.15;
+  request.convergence_since_sec = resolution.convergence_since_sec;
+  resolution = update_return_handoff_convergence(request);
+  EXPECT_TRUE(resolution.handoff_confirmed);
+  EXPECT_NEAR(resolution.converged_duration_sec, 0.15, 1e-12);
+}
+
+TEST(V2XOvertakeCoreReturn, DoesNotCompleteFromDistanceOrLateralPositionAlone)
+{
+  ReturnHandoffConvergenceRequest request;
+  request.return_active = true;
+  request.phase_hold_elapsed = true;
+  request.solver_ready = true;
+  request.now_sec = 20.0;
+  request.convergence_since_sec = 19.0;
+  request.lateral_error_m = 0.05;
+  request.heading_error_rad = 0.30;
+  request.lateral_tolerance_m = 0.20;
+  request.heading_tolerance_rad = 0.12;
+  request.confirmation_sec = 0.15;
+
+  auto resolution = update_return_handoff_convergence(request);
+  EXPECT_FALSE(resolution.instantaneously_converged);
+  EXPECT_FALSE(resolution.handoff_confirmed);
+  EXPECT_TRUE(std::isnan(resolution.convergence_since_sec));
+
+  request.heading_error_rad = 0.05;
+  request.return_corridor_blocked = true;
+  resolution = update_return_handoff_convergence(request);
+  EXPECT_FALSE(resolution.handoff_confirmed);
+
+  request.return_corridor_blocked = false;
+  request.solver_ready = false;
+  resolution = update_return_handoff_convergence(request);
+  EXPECT_FALSE(resolution.handoff_confirmed);
+}
+
+TEST(V2XOvertakeCoreReturn, InvalidObservationResetsConvergenceClock)
+{
+  ReturnHandoffConvergenceRequest request;
+  request.return_active = true;
+  request.phase_hold_elapsed = true;
+  request.solver_ready = true;
+  request.now_sec = 30.0;
+  request.convergence_since_sec = 29.0;
+  request.lateral_error_m = std::numeric_limits<double>::quiet_NaN();
+  request.heading_error_rad = 0.0;
+  request.lateral_tolerance_m = 0.20;
+  request.heading_tolerance_rad = 0.12;
+  request.confirmation_sec = 0.15;
+
+  const auto resolution = update_return_handoff_convergence(request);
+  EXPECT_FALSE(resolution.observation_valid);
+  EXPECT_FALSE(resolution.handoff_confirmed);
+  EXPECT_TRUE(std::isnan(resolution.convergence_since_sec));
+}
+
+TEST(V2XOvertakeCoreReturn, RejectsInvalidConvergenceConfiguration)
+{
+  ReturnHandoffConvergenceRequest request;
+  request.lateral_tolerance_m = -0.1;
+  request.heading_tolerance_rad = 0.12;
+  request.confirmation_sec = 0.15;
+  EXPECT_THROW(update_return_handoff_convergence(request), std::invalid_argument);
+
+  request.lateral_tolerance_m = 0.20;
+  request.heading_tolerance_rad = -0.1;
+  EXPECT_THROW(update_return_handoff_convergence(request), std::invalid_argument);
+
+  request.heading_tolerance_rad = 0.12;
+  request.confirmation_sec = -0.1;
+  EXPECT_THROW(update_return_handoff_convergence(request), std::invalid_argument);
 }
 
 TEST(V2XOvertakeCoreRecovery, KeepsConfiguredVelocityCeilingAtZeroVehicleSpeed)

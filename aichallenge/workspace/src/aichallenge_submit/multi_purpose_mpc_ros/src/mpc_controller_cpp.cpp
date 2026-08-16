@@ -1368,6 +1368,9 @@ struct OvertakeLineConfig
   double max_shift_distance{14.0};
   double pass_distance{8.0};
   double return_distance{10.0};
+  double return_handoff_lateral_tolerance{0.20};
+  double return_handoff_heading_tolerance{0.12};
+  double return_handoff_confirm_sec{0.15};
   double lateral_offset{1.2};
   double target_bias{0.8};
   double min_wall_clearance{0.8};
@@ -2409,6 +2412,8 @@ struct OvertakeLineState
   double mission_pass_lateral_replan_shift_distance{0.0};
   double mission_return_start_pass_m{0.0};
   double mission_return_distance{0.0};
+  double return_handoff_converged_since_sec{std::numeric_limits<double>::quiet_NaN()};
+  bool return_handoff_deferred_logged{false};
   bool mission_return_preflight_reference_active{false};
   std::vector<double> mission_return_preflight_path_distances_m{};
   std::vector<double> mission_return_preflight_lateral_path_m{};
@@ -14377,6 +14382,9 @@ private:
       overtake_line_state_.mission_return_preflight_path_distances_m.clear();
       overtake_line_state_.mission_return_preflight_lateral_path_m.clear();
     }
+    overtake_line_state_.return_handoff_converged_since_sec =
+      std::numeric_limits<double>::quiet_NaN();
+    overtake_line_state_.return_handoff_deferred_logged = false;
     if (
       next_phase != OvertakeLinePhase::ShiftOut &&
       next_phase != OvertakeLinePhase::Pass)
@@ -23999,18 +24007,56 @@ private:
         }
       }
     }
-    if (
-      overtake_line_state_.phase == OvertakeLinePhase::Return && phase_hold_elapsed &&
-      !return_corridor_blocked &&
-      (overtake_line_state_.phase_traveled_m >=
-      std::max(0.5, overtake_line_state_.mission_return_distance) ||
-      std::abs(current_ey) < 0.15)) {
-      if (overtake_line_state_.rear_clear_confirmed_latched) {
-        arm_completed_overtake_target_block(
-          overtake_line_state_.target_vehicle_id, now_sec);
+    if (overtake_line_state_.phase == OvertakeLinePhase::Return) {
+      const bool return_solver_ready =
+        !overtake_solver_recovery_active_ && !last_control_was_fallback_;
+      const auto return_handoff = overtake_core::update_return_handoff_convergence(
+        overtake_core::ReturnHandoffConvergenceRequest{
+          true, phase_hold_elapsed, return_corridor_blocked,
+          return_solver_ready, now_sec,
+          overtake_line_state_.return_handoff_converged_since_sec,
+          current_ey, model->spatial_state.e_psi,
+          line_cfg.return_handoff_lateral_tolerance,
+          line_cfg.return_handoff_heading_tolerance,
+          line_cfg.return_handoff_confirm_sec});
+      overtake_line_state_.return_handoff_converged_since_sec =
+        return_handoff.convergence_since_sec;
+      const bool return_distance_reached =
+        overtake_line_state_.phase_traveled_m >=
+        std::max(0.5, overtake_line_state_.mission_return_distance);
+      if (
+        return_distance_reached && !return_handoff.handoff_confirmed &&
+        !overtake_line_state_.return_handoff_deferred_logged)
+      {
+        RCLCPP_WARN(
+          rclcpp::get_logger("mpc_controller"),
+          "OvertakeLine Return handoff deferred: ey=%.2f/%.2f m, "
+          "epsi=%.3f/%.3f rad, stable=%.2f/%.2f s, corridor_blocked=%d, "
+          "solver_ready=%d, traveled=%.2f/%.2f m, wp_id=%d",
+          current_ey, line_cfg.return_handoff_lateral_tolerance,
+          model->spatial_state.e_psi, line_cfg.return_handoff_heading_tolerance,
+          return_handoff.converged_duration_sec, line_cfg.return_handoff_confirm_sec,
+          return_corridor_blocked ? 1 : 0, return_solver_ready ? 1 : 0,
+          overtake_line_state_.phase_traveled_m,
+          std::max(0.5, overtake_line_state_.mission_return_distance), model->wp_id);
+        overtake_line_state_.return_handoff_deferred_logged = true;
       }
-      reset_overtake_line_state(now_sec, "return complete");
-      return output;
+      if (return_handoff.handoff_confirmed) {
+        RCLCPP_INFO(
+          rclcpp::get_logger("mpc_controller"),
+          "OvertakeLine Return handoff confirmed: ey=%.2f m, epsi=%.3f rad, "
+          "stable=%.2f s, traveled=%.2f/%.2f m, wp_id=%d",
+          current_ey, model->spatial_state.e_psi,
+          return_handoff.converged_duration_sec,
+          overtake_line_state_.phase_traveled_m,
+          std::max(0.5, overtake_line_state_.mission_return_distance), model->wp_id);
+        if (overtake_line_state_.rear_clear_confirmed_latched) {
+          arm_completed_overtake_target_block(
+            overtake_line_state_.target_vehicle_id, now_sec);
+        }
+        reset_overtake_line_state(now_sec, "return handoff converged");
+        return output;
+      }
     }
 
     v2x_overtake_core::RecoveryPolicyResolution recovery_policy;
@@ -28715,6 +28761,18 @@ Config load_config(const std::string & path)
     0.5,
     mpc["v2x_overtake_line_return_distance"] ?
     mpc["v2x_overtake_line_return_distance"].as<double>() : 10.0);
+  cfg.mpc.v2x_behavior.overtake_line.return_handoff_lateral_tolerance = std::max(
+    0.0,
+    mpc["v2x_overtake_return_handoff_lateral_tolerance"] ?
+    mpc["v2x_overtake_return_handoff_lateral_tolerance"].as<double>() : 0.20);
+  cfg.mpc.v2x_behavior.overtake_line.return_handoff_heading_tolerance = std::max(
+    0.0,
+    mpc["v2x_overtake_return_handoff_heading_tolerance"] ?
+    mpc["v2x_overtake_return_handoff_heading_tolerance"].as<double>() : 0.12);
+  cfg.mpc.v2x_behavior.overtake_line.return_handoff_confirm_sec = std::max(
+    0.0,
+    mpc["v2x_overtake_return_handoff_confirm_sec"] ?
+    mpc["v2x_overtake_return_handoff_confirm_sec"].as<double>() : 0.15);
   cfg.mpc.v2x_behavior.overtake_line.lateral_offset = std::max(
     0.0,
     mpc["v2x_overtake_line_lateral_offset"] ?
@@ -31204,6 +31262,13 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line
           .early_side_replan_max_locked_side_lateral_speed,
         mpc_cfg_.v2x_behavior.overtake_line.side_replan_target_guard_distance);
+      RCLCPP_INFO(
+        get_logger(),
+        "V2X Return handoff convergence: lateral=%.2f m, heading=%.3f rad, "
+        "confirm=%.2f s (distance-only completion disabled)",
+        mpc_cfg_.v2x_behavior.overtake_line.return_handoff_lateral_tolerance,
+        mpc_cfg_.v2x_behavior.overtake_line.return_handoff_heading_tolerance,
+        mpc_cfg_.v2x_behavior.overtake_line.return_handoff_confirm_sec);
       RCLCPP_INFO(
         get_logger(),
         "V2X robust clearance: %s, target_surface=%.2f + %.3f*v + %.2f*|kappa| "

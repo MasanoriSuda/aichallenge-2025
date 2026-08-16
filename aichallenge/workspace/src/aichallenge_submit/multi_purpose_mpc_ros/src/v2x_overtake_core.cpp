@@ -11301,6 +11301,47 @@ ForwardDistanceResolution integrate_forward_distance(const ForwardDistanceReques
   return resolution;
 }
 
+ReturnHandoffConvergenceResolution update_return_handoff_convergence(
+  const ReturnHandoffConvergenceRequest & request)
+{
+  if (!std::isfinite(request.lateral_tolerance_m) || request.lateral_tolerance_m < 0.0) {
+    throw std::invalid_argument("Return handoff lateral tolerance must be finite and non-negative");
+  }
+  if (!std::isfinite(request.heading_tolerance_rad) || request.heading_tolerance_rad < 0.0) {
+    throw std::invalid_argument("Return handoff heading tolerance must be finite and non-negative");
+  }
+  if (!std::isfinite(request.confirmation_sec) || request.confirmation_sec < 0.0) {
+    throw std::invalid_argument("Return handoff confirmation must be finite and non-negative");
+  }
+
+  ReturnHandoffConvergenceResolution resolution;
+  resolution.observation_valid =
+    std::isfinite(request.now_sec) && std::isfinite(request.lateral_error_m) &&
+    std::isfinite(request.heading_error_rad);
+  if (!resolution.observation_valid || !request.return_active) {
+    return resolution;
+  }
+
+  resolution.instantaneously_converged =
+    request.phase_hold_elapsed && !request.return_corridor_blocked && request.solver_ready &&
+    std::abs(request.lateral_error_m) <= request.lateral_tolerance_m &&
+    std::abs(request.heading_error_rad) <= request.heading_tolerance_rad;
+  if (!resolution.instantaneously_converged) {
+    return resolution;
+  }
+
+  const bool previous_clock_valid =
+    std::isfinite(request.convergence_since_sec) &&
+    request.convergence_since_sec <= request.now_sec;
+  resolution.convergence_since_sec = previous_clock_valid ?
+    request.convergence_since_sec : request.now_sec;
+  resolution.converged_duration_sec = std::max(
+    0.0, request.now_sec - resolution.convergence_since_sec);
+  resolution.handoff_confirmed =
+    resolution.converged_duration_sec + 1e-9 >= request.confirmation_sec;
+  return resolution;
+}
+
 PausedMissionExpiryReason resolve_paused_mission_expiry(
   const PausedMissionExpiryRequest & request) noexcept
 {

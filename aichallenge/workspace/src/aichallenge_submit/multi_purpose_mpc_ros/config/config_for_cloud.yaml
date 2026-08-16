@@ -741,6 +741,9 @@ mpc:
   v2x_overtake_line_max_shift_distance: 14.0  # [m] allow a high-speed ego to begin a physically feasible early ShiftOut toward a distant stopped vehicle
   v2x_overtake_line_pass_distance: 8.0        # [m] pass-side hold distance hint
   v2x_overtake_line_return_distance: 6.0      # [m] blend back promptly after clearing the target
+  v2x_overtake_return_handoff_lateral_tolerance: 0.20 # [m] require actual base-line convergence before releasing Return
+  v2x_overtake_return_handoff_heading_tolerance: 0.12 # [rad] reject distance-only handoff while the kart remains misaligned
+  v2x_overtake_return_handoff_confirm_sec: 0.15 # [s] continuous convergence required before normal MPC resumes
   v2x_overtake_line_lateral_offset: 1.2       # [m] signed by pass side: left positive, right negative
   v2x_overtake_line_target_bias: 1.0          # [0-1] explicit line is the sole lateral owner during ShiftOut/Pass
   # Applied to both the legacy lateral bounds and the occupancy-grid vehicle footprint.

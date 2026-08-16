@@ -1236,6 +1236,8 @@ struct OvertakeLineConfig
   bool receding_horizon_target_bound_prefix_enabled{false};
   double receding_horizon_target_bound_prefix_max_sec{1.50};
   double receding_horizon_target_bound_prefix_max_distance{8.0};
+  double receding_horizon_target_bound_shiftout_prefix_max_sec{0.35};
+  double receding_horizon_target_bound_shiftout_prefix_max_distance{2.0};
   double receding_horizon_target_bound_prefix_clear_stable_sec{0.20};
   bool receding_horizon_target_bound_prefix_progress_extension_enabled{true};
   double receding_horizon_target_bound_prefix_progress_fresh_sec{0.75};
@@ -2594,6 +2596,33 @@ struct OvertakeLineHorizonEvaluation
   }
 };
 
+enum class OvertakeRecedingHorizonFailureKind
+{
+  None,
+  Target,
+  Wall,
+  Physical,
+  Invalid,
+};
+
+const char * overtake_receding_horizon_failure_kind_name(
+  const OvertakeRecedingHorizonFailureKind kind) noexcept
+{
+  switch (kind) {
+    case OvertakeRecedingHorizonFailureKind::None:
+      return "none";
+    case OvertakeRecedingHorizonFailureKind::Target:
+      return "target";
+    case OvertakeRecedingHorizonFailureKind::Wall:
+      return "wall";
+    case OvertakeRecedingHorizonFailureKind::Physical:
+      return "physical";
+    case OvertakeRecedingHorizonFailureKind::Invalid:
+      return "invalid";
+  }
+  return "invalid";
+}
+
 struct OvertakeRecedingHorizonEvaluation
 {
   bool attempted{false};
@@ -2614,6 +2643,8 @@ struct OvertakeRecedingHorizonEvaluation
   std::size_t target_prediction_truncated_sample_count{0U};
   double last_target_constraint_distance_m{0.0};
   double maximum_sample_arrival_time_sec{0.0};
+  OvertakeRecedingHorizonFailureKind hard_failure_kind{
+    OvertakeRecedingHorizonFailureKind::None};
   std::string hard_bound_failure_kind;
   std::string fallback_reason;
   OvertakeLineHorizonEvaluation horizon;
@@ -16818,9 +16849,18 @@ private:
       return result;
     }
     result.attempted = true;
-    const auto fail = [&result](const char * reason, const bool hard_infeasible) {
+    const auto fail = [&result](
+        const char * reason, const bool hard_infeasible,
+        const OvertakeRecedingHorizonFailureKind failure_kind =
+        OvertakeRecedingHorizonFailureKind::None,
+        const int failure_index = -1) {
         result.fallback = true;
         result.hard_infeasible = hard_infeasible;
+        result.hard_failure_kind = hard_infeasible ? failure_kind :
+          OvertakeRecedingHorizonFailureKind::None;
+        result.hard_bound_failure_index = hard_infeasible ? failure_index : -1;
+        result.hard_bound_failure_kind = hard_infeasible ?
+          overtake_receding_horizon_failure_kind_name(failure_kind) : "";
         result.fallback_reason = reason;
       };
     const auto append_fallback_reason = [&result](const std::string & reason) {
@@ -16957,12 +16997,20 @@ private:
       const double hard_wall_upper = ub[i] - hard_wall_clearance;
       double wall_lower = lb[i] + planning_wall_clearance;
       double wall_upper = ub[i] - planning_wall_clearance;
+      if (!std::isfinite(distance) || !std::isfinite(baseline_target))
+      {
+        fail(
+          "invalid receding-horizon sample", true,
+          OvertakeRecedingHorizonFailureKind::Invalid, i);
+        return result;
+      }
       if (
-        !std::isfinite(distance) || !std::isfinite(baseline_target) ||
         !std::isfinite(hard_wall_lower) || !std::isfinite(hard_wall_upper) ||
         hard_wall_upper < hard_wall_lower)
       {
-        fail("invalid sample or hard wall bounds", true);
+        fail(
+          "invalid hard wall bounds", true,
+          OvertakeRecedingHorizonFailureKind::Wall, i);
         return result;
       }
       if (
@@ -16970,7 +17018,9 @@ private:
         wall_upper < wall_lower)
       {
         if (!elastic_clearance_enabled) {
-          fail("invalid sample or wall bounds", true);
+          fail(
+            "invalid sample or wall bounds", true,
+            OvertakeRecedingHorizonFailureKind::Wall, i);
           return result;
         }
         wall_lower = hard_wall_lower;
@@ -17029,7 +17079,13 @@ private:
           result.hard_wall_clearance_used = true;
         }
         if (!target_bounds.valid) {
-          fail("physical target separation conflicts with wall bounds", true);
+          // The wall interval itself is valid. The infeasibility is created
+          // only by the predicted opponent separation interval, so route it
+          // through the bounded target-only prefix/replan policy instead of
+          // discarding the Mission as an unclassified hard fault.
+          fail(
+            "physical target separation conflicts with wall bounds", true,
+            OvertakeRecedingHorizonFailureKind::Target, i);
           return result;
         }
         lower = target_bounds.lower_bound_m;
@@ -17252,7 +17308,8 @@ private:
     {
       bool valid{false};
       int failure_index{-1};
-      std::string failure_kind;
+      OvertakeRecedingHorizonFailureKind failure_kind{
+        OvertakeRecedingHorizonFailureKind::None};
       std::vector<double> lower_bounds_m;
       std::vector<double> upper_bounds_m;
     };
@@ -17270,7 +17327,7 @@ private:
           horizon.target_ey.size() != static_cast<std::size_t>(N) ||
           execution_target_constraints.size() != static_cast<std::size_t>(N))
         {
-          check.failure_kind = "invalid";
+          check.failure_kind = OvertakeRecedingHorizonFailureKind::Invalid;
           return check;
         }
         for (int i = 0; i < N; ++i) {
@@ -17289,7 +17346,9 @@ private:
               target_constraint.hard_center_separation_m});
           if (!execution_bounds.valid) {
             check.failure_index = i;
-            check.failure_kind = target_constraint.active ? "target" : "wall";
+            check.failure_kind = target_constraint.active ?
+              OvertakeRecedingHorizonFailureKind::Target :
+              OvertakeRecedingHorizonFailureKind::Wall;
             return check;
           }
           check.lower_bounds_m.push_back(execution_bounds.lower_bound_m);
@@ -17302,7 +17361,8 @@ private:
             check.failure_index = i;
             check.failure_kind =
               target_ey < wall_lower - 1e-6 || target_ey > wall_upper + 1e-6 ?
-              "wall" : "target";
+              OvertakeRecedingHorizonFailureKind::Wall :
+              OvertakeRecedingHorizonFailureKind::Target;
             return check;
           }
         }
@@ -17376,7 +17436,8 @@ private:
     bool saw_physical_infeasibility = false;
     bool target_bound_projection_used = false;
     int hard_bound_failure_index = -1;
-    std::string hard_bound_failure_kind;
+    OvertakeRecedingHorizonFailureKind hard_bound_failure_kind{
+      OvertakeRecedingHorizonFailureKind::None};
     for (const double candidate_speed : validation_speeds) {
       const auto validation_target_execution_constraints =
         build_validation_target_constraints(candidate_speed);
@@ -17474,7 +17535,10 @@ private:
           {
             break;
           }
-          if (execution_bounds.failure_kind == "target") {
+          if (
+            execution_bounds.failure_kind ==
+            OvertakeRecedingHorizonFailureKind::Target)
+          {
             std::vector<double> projected_targets = candidate_horizon.target_ey;
             bool projection_valid = true;
             bool projection_changed = false;
@@ -17527,18 +17591,37 @@ private:
     }
     if (!validation_accepted) {
       result.hard_bound_failure_index = hard_bound_failure_index;
-      result.hard_bound_failure_kind = hard_bound_failure_kind;
+      result.hard_failure_kind = hard_bound_failure_kind;
+      result.hard_bound_failure_kind =
+        overtake_receding_horizon_failure_kind_name(hard_bound_failure_kind);
       if (retain_last_feasible("post-validation failed")) {
         return result;
       }
       if (!initial_execution_feasible || saw_physical_infeasibility) {
-        fail("optimized horizon failed physical revalidation", true);
-      } else if (hard_bound_failure_kind == "wall") {
-        fail("optimized horizon escaped wall bounds", true);
-      } else if (hard_bound_failure_kind == "target") {
-        fail("optimized horizon escaped target separation bounds", true);
+        fail(
+          "optimized horizon failed physical revalidation", true,
+          OvertakeRecedingHorizonFailureKind::Physical,
+          hard_bound_failure_index);
+      } else if (
+        hard_bound_failure_kind == OvertakeRecedingHorizonFailureKind::Wall)
+      {
+        fail(
+          "optimized horizon escaped wall bounds", true,
+          OvertakeRecedingHorizonFailureKind::Wall,
+          hard_bound_failure_index);
+      } else if (
+        hard_bound_failure_kind == OvertakeRecedingHorizonFailureKind::Target)
+      {
+        fail(
+          "optimized horizon escaped target separation bounds", true,
+          OvertakeRecedingHorizonFailureKind::Target,
+          hard_bound_failure_index);
       } else {
-        fail("optimized horizon escaped execution bounds", true);
+        fail(
+          "optimized horizon escaped execution bounds", true,
+          hard_bound_failure_kind == OvertakeRecedingHorizonFailureKind::None ?
+          OvertakeRecedingHorizonFailureKind::Invalid : hard_bound_failure_kind,
+          hard_bound_failure_index);
       }
       return result;
     }
@@ -25096,7 +25179,8 @@ private:
     }
     const bool optimized_target_bound_failure =
       receding_horizon.hard_infeasible &&
-      receding_horizon.hard_bound_failure_kind == "target";
+      receding_horizon.hard_failure_kind ==
+      OvertakeRecedingHorizonFailureKind::Target;
     constexpr double kTargetBoundProgressStepM = 0.05;
     const bool target_bound_progress_observation_valid =
       overtake_line_state_.target_bound_execution_replan_hold_active &&
@@ -25142,6 +25226,19 @@ private:
       overtake_line_state_.phase == OvertakeLinePhase::Pass ?
       overtake_mission_pass_traveled() :
       std::max(0.0, overtake_line_state_.phase_traveled_m);
+    const bool target_bound_shiftout_freeze =
+      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut &&
+      !shiftout_complete;
+    const double target_bound_hold_max_sec = std::max(
+      0.0,
+      target_bound_shiftout_freeze ?
+      line_cfg.receding_horizon_target_bound_shiftout_prefix_max_sec :
+      line_cfg.receding_horizon_target_bound_prefix_max_sec);
+    const double target_bound_hold_max_distance = std::max(
+      0.0,
+      target_bound_shiftout_freeze ?
+      line_cfg.receding_horizon_target_bound_shiftout_prefix_max_distance :
+      line_cfg.receding_horizon_target_bound_prefix_max_distance);
     const auto clear_target_bound_execution_prefix_state = [this]() {
         overtake_line_state_.target_bound_execution_replan_hold_active = false;
         overtake_line_state_.target_bound_execution_replan_prefix_executing = false;
@@ -25196,7 +25293,11 @@ private:
         overtake_receding_horizon_phase_ == overtake_line_state_.phase &&
         std::isfinite(overtake_receding_horizon_phase_traveled_m_) &&
         horizon_phase_traveled_m + kEps >= overtake_receding_horizon_phase_traveled_m_;
-      if (previous_horizon_matches) {
+      // An incomplete ShiftOut must not continue a stale lateral ramp toward
+      // the newly predicted target. Freeze measured e_y for a short repair
+      // window. A Pass/completed ShiftOut can retain its aligned same-side
+      // prefix because the lateral separation maneuver is already committed.
+      if (previous_horizon_matches && !target_bound_shiftout_freeze) {
         const auto aligned_hold =
           overtake_core::resample_receding_horizon_warm_start(
           overtake_core::RecedingHorizonWarmStartRequest{
@@ -25217,8 +25318,7 @@ private:
       }
       auto physical_hold_horizon = evaluate_overtake_line_horizon(
         ref_wp_id, N, lb, ub, current_ey, current_ey, 0.0, true,
-        std::max(
-          0.5, line_cfg.receding_horizon_target_bound_prefix_max_distance), current_ey,
+        std::max(0.5, target_bound_hold_max_distance), current_ey,
         planning_wall_clearance, max_lateral_accel, speed_for_time, true,
         std::nullopt, physical_hold_targets);
       if (
@@ -25227,18 +25327,16 @@ private:
       {
         physical_hold_horizon = evaluate_overtake_line_horizon(
           ref_wp_id, N, lb, ub, current_ey, current_ey, 0.0, true,
-          std::max(
-            0.5, line_cfg.receding_horizon_target_bound_prefix_max_distance), current_ey,
+          std::max(0.5, target_bound_hold_max_distance), current_ey,
           min_wall_clearance, max_lateral_accel, speed_for_time, true,
           std::nullopt, physical_hold_targets);
       }
 
       const bool hold_was_active =
         overtake_line_state_.target_bound_execution_replan_hold_active;
-      const bool committed_execution_phase =
+      const bool safe_execution_prefix_available =
         overtake_line_state_.phase == OvertakeLinePhase::Pass ||
-        (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut &&
-        shiftout_complete);
+        overtake_line_state_.phase == OvertakeLinePhase::ShiftOut;
       const double execution_traveled_now =
         overtake_line_state_.phase == OvertakeLinePhase::Pass ?
         overtake_mission_pass_traveled() :
@@ -25261,7 +25359,7 @@ private:
       const overtake_core::TargetBoundExecutionHoldRequest hold_request{
           line_cfg.receding_horizon_enabled &&
           line_cfg.receding_horizon_target_bound_prefix_enabled,
-          committed_execution_phase,
+          safe_execution_prefix_available,
           overtake_line_state_.mission_path_frozen,
           true,
           physical_hold_horizon.execution_feasible(),
@@ -25278,9 +25376,9 @@ private:
           behavior_output.overtake_forbidden_wp,
           hold_elapsed_sec,
           hold_traveled_m,
-          std::max(0.0, line_cfg.receding_horizon_target_bound_prefix_max_sec),
-          std::max(
-            0.0, line_cfg.receding_horizon_target_bound_prefix_max_distance),
+          target_bound_hold_max_sec,
+          target_bound_hold_max_distance,
+          !target_bound_shiftout_freeze &&
           line_cfg.receding_horizon_target_bound_prefix_progress_extension_enabled,
           overtake_line_state_.phase == OvertakeLinePhase::Pass,
           target_bound_fresh_forward_progress,
@@ -25295,10 +25393,8 @@ private:
       const bool physical_hold_allowed =
         overtake_core::can_hold_target_bound_execution_for_replan(hold_request);
       const bool short_repair_budget_available =
-        hold_elapsed_sec <
-        line_cfg.receding_horizon_target_bound_prefix_max_sec - kEps &&
-        hold_traveled_m <
-        line_cfg.receding_horizon_target_bound_prefix_max_distance - kEps;
+        hold_elapsed_sec < target_bound_hold_max_sec - kEps &&
+        hold_traveled_m < target_bound_hold_max_distance - kEps;
       const bool progress_extension_active =
         hold_was_active && physical_hold_allowed && !short_repair_budget_available;
       if (
@@ -25365,15 +25461,19 @@ private:
           RCLCPP_WARN(
             rclcpp::get_logger("mpc_controller"),
             "OvertakeLine target-bound execution hold started: "
-            "target=%s, side=%d, phase=%s, speed=%.2f, "
+            "target=%s, side=%d, phase=%s, mode=%s, failure=%s[%d], speed=%.2f, "
             "limit=%.2f s/%.2f m, tactical_replan=immediate, "
             "encounter_samples=%zu, encounter_last=%.2f m, "
             "prediction_truncated=%zu, horizon_time=%.2f s, wp_id=%d",
             overtake_line_state_.target_vehicle_id.c_str(),
             overtake_line_state_.pass_side_sign,
-            to_string(overtake_line_state_.phase), current_speed_mps_,
-            line_cfg.receding_horizon_target_bound_prefix_max_sec,
-            line_cfg.receding_horizon_target_bound_prefix_max_distance,
+            to_string(overtake_line_state_.phase),
+            target_bound_shiftout_freeze ? "freeze-current" : "last-feasible",
+            overtake_receding_horizon_failure_kind_name(
+              receding_horizon.hard_failure_kind),
+            receding_horizon.hard_bound_failure_index, current_speed_mps_,
+            target_bound_hold_max_sec,
+            target_bound_hold_max_distance,
             receding_horizon.target_constraint_sample_count,
             receding_horizon.last_target_constraint_distance_m,
             receding_horizon.target_prediction_truncated_sample_count,
@@ -25390,6 +25490,8 @@ private:
         receding_horizon.velocity_limit_mps =
           std::numeric_limits<double>::infinity();
         receding_horizon.fallback_reason =
+          target_bound_shiftout_freeze ?
+          "target-bound ShiftOut freeze while replan pending" :
           "target-bound physical execution hold while replan pending";
         receding_horizon.horizon = std::move(physical_hold_horizon);
       } else {
@@ -25455,10 +25557,11 @@ private:
       budget_request.hold_elapsed_sec = hold_elapsed_sec;
       budget_request.hold_traveled_m = hold_traveled_m;
       budget_request.maximum_hold_sec = std::max(
-        0.0, line_cfg.receding_horizon_target_bound_prefix_max_sec);
+        0.0, target_bound_hold_max_sec);
       budget_request.maximum_hold_distance_m = std::max(
-        0.0, line_cfg.receding_horizon_target_bound_prefix_max_distance);
+        0.0, target_bound_hold_max_distance);
       budget_request.forward_progress_extension_enabled =
+        !target_bound_shiftout_freeze &&
         line_cfg.receding_horizon_target_bound_prefix_progress_extension_enabled;
       budget_request.pass_phase =
         overtake_line_state_.phase == OvertakeLinePhase::Pass;
@@ -25588,6 +25691,8 @@ private:
         receding_horizon.velocity_limit_mps =
           std::numeric_limits<double>::infinity();
         receding_horizon.hard_bound_failure_index = -1;
+        receding_horizon.hard_failure_kind =
+          OvertakeRecedingHorizonFailureKind::None;
         receding_horizon.hard_bound_failure_kind.clear();
         receding_horizon.fallback_reason =
           "rear-clear Return deferred; retained current-side Pass";
@@ -26158,7 +26263,8 @@ private:
       } else {
         const bool recoverable_target_bound_replan =
           receding_horizon.hard_infeasible &&
-          receding_horizon.hard_bound_failure_kind == "target" &&
+          receding_horizon.hard_failure_kind ==
+          OvertakeRecedingHorizonFailureKind::Target &&
           active_execution_phase && locked_target_progress_continuous &&
           !behavior_output.locked_target_position_jump &&
           !locked_target_progress_rejected &&
@@ -29711,6 +29817,18 @@ Config load_config(const std::string & path)
       mpc["v2x_overtake_receding_horizon_target_bound_prefix_max_distance"].as<double>() :
       8.0);
   cfg.mpc.v2x_behavior.overtake_line
+    .receding_horizon_target_bound_shiftout_prefix_max_sec = std::max(
+    0.0,
+    mpc["v2x_overtake_receding_horizon_target_bound_shiftout_prefix_max_sec"] ?
+    mpc["v2x_overtake_receding_horizon_target_bound_shiftout_prefix_max_sec"]
+    .as<double>() : 0.35);
+  cfg.mpc.v2x_behavior.overtake_line
+    .receding_horizon_target_bound_shiftout_prefix_max_distance = std::max(
+    0.0,
+    mpc["v2x_overtake_receding_horizon_target_bound_shiftout_prefix_max_distance"] ?
+    mpc["v2x_overtake_receding_horizon_target_bound_shiftout_prefix_max_distance"]
+    .as<double>() : 2.0);
+  cfg.mpc.v2x_behavior.overtake_line
     .receding_horizon_target_bound_prefix_clear_stable_sec = std::max(
     0.0,
     mpc["v2x_overtake_receding_horizon_target_bound_prefix_clear_stable_sec"] ?
@@ -32250,14 +32368,19 @@ public:
         .receding_horizon_target_longitudinal_buffer);
       RCLCPP_INFO(
         get_logger(),
-        "V2X target-bound Pass execution prefix: %s, limit=%.2f s/%.2f m, "
-        "fresh_clear>=%.2f s, progress_extension=%s/fresh<=%.2f s",
+        "V2X target-bound execution prefix: %s, Pass=%.2f s/%.2f m, "
+        "ShiftOut-freeze=%.2f s/%.2f m, fresh_clear>=%.2f s, "
+        "Pass-progress-extension=%s/fresh<=%.2f s",
         mpc_cfg_.v2x_behavior.overtake_line
         .receding_horizon_target_bound_prefix_enabled ? "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line
         .receding_horizon_target_bound_prefix_max_sec,
         mpc_cfg_.v2x_behavior.overtake_line
         .receding_horizon_target_bound_prefix_max_distance,
+        mpc_cfg_.v2x_behavior.overtake_line
+        .receding_horizon_target_bound_shiftout_prefix_max_sec,
+        mpc_cfg_.v2x_behavior.overtake_line
+        .receding_horizon_target_bound_shiftout_prefix_max_distance,
         mpc_cfg_.v2x_behavior.overtake_line
         .receding_horizon_target_bound_prefix_clear_stable_sec,
         mpc_cfg_.v2x_behavior.overtake_line

@@ -1979,7 +1979,7 @@ bool can_hold_target_bound_execution_for_replan(
     request.current_body_footprints_separated ||
     request.recoverable_side_contact_active;
   if (
-    !request.enabled || !request.committed_execution_phase ||
+    !request.enabled || !request.safe_execution_prefix_available ||
     !request.mission_path_frozen ||
     !request.target_bound_failure || !request.physical_hold_path_feasible ||
     !request.target_progress_continuous || request.target_position_jump ||

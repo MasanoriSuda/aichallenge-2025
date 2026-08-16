@@ -1216,7 +1216,10 @@ bool can_retain_receding_horizon_execution_lease(
 struct TargetBoundExecutionHoldRequest
 {
   bool enabled{false};
-  bool committed_execution_phase{false};
+  /// The caller has produced a wall-validated prefix which is safe to hold.
+  /// This may be a committed Pass/completed ShiftOut prefix, or a bounded
+  /// current-lateral freeze while an incomplete ShiftOut is replanned.
+  bool safe_execution_prefix_available{false};
   bool mission_path_frozen{false};
   bool target_bound_failure{false};
   bool physical_hold_path_feasible{false};
@@ -1252,7 +1255,9 @@ struct TargetBoundExecutionHoldRequest
 
 /// Keep a physically feasible same-side execution prefix while a target-only
 /// receding-horizon conflict is re-optimized. Callers may admit Pass or a
-/// completed ShiftOut, but must not admit an incomplete lateral transition.
+/// completed ShiftOut. An incomplete ShiftOut may only be admitted when its
+/// supplied prefix freezes the measured lateral position and uses a separate
+/// short, non-extendable budget.
 /// This is deliberately narrower than the generic continuity lease: predicted
 /// target overlap may trigger the hold, but non-recoverable body overlap and
 /// every wall/front hard fault stay closed. A separately qualified recoverable

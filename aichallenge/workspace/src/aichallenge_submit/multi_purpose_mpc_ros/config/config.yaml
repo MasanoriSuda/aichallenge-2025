@@ -607,7 +607,7 @@ mpc:
   v2x_overtake_safe_separation_dynamic_completion_extension_enabled: true # use live rear-clear estimate after the fixed extension count is exhausted
   v2x_overtake_pass_completion_speed_coupling_enabled: true # predict rear-clear with the full-speed policy that an already separated Pass will execute
   v2x_overtake_mpcc_lite_shadow_enabled: true # Compare left/right/hold/Return on one receding-horizon score
-  v2x_overtake_mpcc_lite_async_worker_enabled: true # latest-only tactical rollout; 40 Hz tracking callback never waits
+  v2x_overtake_mpcc_lite_async_worker_enabled: true # worker exclusively generates tactical candidates; 40 Hz callback only consumes a fresh matching result
   v2x_overtake_mpcc_lite_async_load_shedding_enabled: true # extend the tactical interval when measured worker cost exceeds its CPU budget
   v2x_overtake_mpcc_lite_async_target_worker_utilization: 0.35 # fraction of one CPU budgeted to background tactical rollout
   v2x_overtake_mpcc_lite_async_max_evaluation_interval_sec: 0.30 # [s] bounded below the 0.50 s result admission lease

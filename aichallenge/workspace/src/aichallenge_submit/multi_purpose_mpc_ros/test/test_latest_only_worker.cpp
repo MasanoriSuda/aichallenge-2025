@@ -46,6 +46,30 @@ TEST(LatestOnlyWorkerInterval, BoundsIntervalAtConfiguredMaximum)
     0.30);
 }
 
+TEST(LatestOnlyWorkerOwnership, DefersOrdinaryLiveTacticalGeneration)
+{
+  EXPECT_TRUE(
+    multi_purpose_mpc_ros::defer_live_tactical_generation(true, false, false));
+}
+
+TEST(LatestOnlyWorkerOwnership, KeepsCompleteGenerationInsideWorkerSnapshot)
+{
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::defer_live_tactical_generation(true, true, false));
+}
+
+TEST(LatestOnlyWorkerOwnership, KeepsSynchronousFallbackWhenWorkerIsDisabled)
+{
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::defer_live_tactical_generation(false, false, false));
+}
+
+TEST(LatestOnlyWorkerOwnership, KeepsDedicatedStartGridAssessmentLive)
+{
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::defer_live_tactical_generation(true, false, true));
+}
+
 TEST(LatestOnlyWorker, ReplacesPendingJobWithoutWaitingForRunningJob)
 {
   multi_purpose_mpc_ros::LatestOnlyWorker worker;

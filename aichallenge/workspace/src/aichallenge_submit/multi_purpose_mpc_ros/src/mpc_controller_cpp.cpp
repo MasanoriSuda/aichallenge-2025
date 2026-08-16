@@ -1869,6 +1869,61 @@ struct ReachableGapMetrics
   std::size_t max_required_lateral_accel_index{0};
 };
 
+/// Complete tactical result for one pass side.  It is intentionally copyable:
+/// the asynchronous MPCC-lite worker publishes both sides atomically so the
+/// live callback never has to rebuild the missing half of a stale decision.
+struct V2XTacticalSideAssessment
+{
+  int side{0};
+  bool gap_available{false};
+  bool fallback_target{false};
+  bool transient_gap_hold{false};
+  double gap_hold_remaining_sec{0.0};
+  double side_clearance{0.0};
+  double corridor_width{0.0};
+  double continuous_corridor_distance{0.0};
+  double required_lateral_accel{0.0};
+  bool minimum_motion_goal_available{false};
+  bool base_line_clear{false};
+  bool direct_base_line_pass_ready{false};
+  bool direct_tiny_shift_pass_ready{false};
+  bool straight_outer_clearance_bias_requested{false};
+  bool straight_outer_clearance_bias_applied{false};
+  bool straight_outer_clearance_bias_fallback{false};
+  double straight_outer_clearance_bias_applied_m{0.0};
+  double required_lateral_shift{std::numeric_limits<double>::infinity()};
+  std::optional<overtake_core::OvertakeMissionCandidate> selected_mission;
+  // Locally validated ShiftOut/body-clear prefix for receding-horizon
+  // tactical selection. It may start a new progressive entry, but is not a
+  // complete active-Mission replacement.
+  std::optional<overtake_core::OvertakeMissionCandidate> mpcc_receding_mission;
+  // A body-clear-feasible candidate may prepare longitudinal speed while
+  // rear-clear/Return validation is still pending. It never owns a lateral
+  // line and therefore remains separate from selected_mission.
+  std::optional<overtake_core::OvertakeMissionCandidate> entry_setup_mission;
+  bool dynamic_mission_corridor_observed{false};
+  bool dynamic_mission_corridor_feasible{false};
+  std::size_t dynamic_mission_corridor_samples{};
+  std::vector<overtake_core::OvertakeMissionDynamicCorridorSample>
+  dynamic_mission_corridor_profile;
+  overtake_core::FrenetDpCorridorBranchResolution frenet_dp_corridor;
+  bool frenet_dp_longitudinal_timing_checked{false};
+  bool frenet_dp_longitudinal_timing_feasible{false};
+  std::size_t frenet_dp_longitudinal_profile_count{};
+  std::size_t frenet_dp_longitudinal_feasible_profile_count{};
+  double frenet_dp_selected_ego_speed_mps{
+    std::numeric_limits<double>::quiet_NaN()};
+  double frenet_dp_selected_closing_speed_mps{
+    std::numeric_limits<double>::quiet_NaN()};
+  bool frenet_dp_prefix_bridge{false};
+  std::optional<double> corridor_center_ey;
+  bool vehicle_vehicle_corridor{false};
+  std::string lower_boundary_vehicle_id;
+  std::string upper_boundary_vehicle_id;
+  std::string guard_reason;
+  std::string reason{"not evaluated"};
+};
+
 struct V2XBehaviorOutput
 {
   V2XBehaviorState state{V2XBehaviorState::Cruise};
@@ -1991,6 +2046,8 @@ struct V2XBehaviorOutput
   double active_hard_curve_required_distance{std::numeric_limits<double>::infinity()};
   bool overtake_left_gap_available{false};
   bool overtake_right_gap_available{false};
+  V2XTacticalSideAssessment overtake_left_tactical_assessment;
+  V2XTacticalSideAssessment overtake_right_tactical_assessment;
   double overtake_left_quality{-std::numeric_limits<double>::infinity()};
   double overtake_right_quality{-std::numeric_limits<double>::infinity()};
   bool overtake_selected_side_conflict{false};
@@ -7484,58 +7541,7 @@ struct MPC
       active_hard_curve_continuation.completion.required_distance_m;
     output.overtake_inner_curve_pass = continuing_inner_curve_pass;
 
-    struct SideAssessment
-    {
-      int side{0};
-      bool gap_available{false};
-      bool fallback_target{false};
-      bool transient_gap_hold{false};
-      double gap_hold_remaining_sec{0.0};
-      double side_clearance{0.0};
-      double corridor_width{0.0};
-      double continuous_corridor_distance{0.0};
-      double required_lateral_accel{0.0};
-      bool minimum_motion_goal_available{false};
-      bool base_line_clear{false};
-      bool direct_base_line_pass_ready{false};
-      bool direct_tiny_shift_pass_ready{false};
-      bool straight_outer_clearance_bias_requested{false};
-      bool straight_outer_clearance_bias_applied{false};
-      bool straight_outer_clearance_bias_fallback{false};
-      double straight_outer_clearance_bias_applied_m{0.0};
-      double required_lateral_shift{std::numeric_limits<double>::infinity()};
-      std::optional<overtake_core::OvertakeMissionCandidate> selected_mission;
-      // Locally validated ShiftOut/body-clear prefix for receding-horizon
-      // tactical selection. It may start a new progressive entry, but is not
-      // a complete active-Mission replacement.
-      std::optional<overtake_core::OvertakeMissionCandidate>
-      mpcc_receding_mission;
-      // A body-clear-feasible candidate may prepare longitudinal speed while
-      // rear-clear/Return validation is still pending. It never owns a
-      // lateral line and therefore remains separate from selected_mission.
-      std::optional<overtake_core::OvertakeMissionCandidate> entry_setup_mission;
-      bool dynamic_mission_corridor_observed{false};
-      bool dynamic_mission_corridor_feasible{false};
-      std::size_t dynamic_mission_corridor_samples{};
-      std::vector<overtake_core::OvertakeMissionDynamicCorridorSample>
-      dynamic_mission_corridor_profile;
-      overtake_core::FrenetDpCorridorBranchResolution frenet_dp_corridor;
-      bool frenet_dp_longitudinal_timing_checked{false};
-      bool frenet_dp_longitudinal_timing_feasible{false};
-      std::size_t frenet_dp_longitudinal_profile_count{};
-      std::size_t frenet_dp_longitudinal_feasible_profile_count{};
-      double frenet_dp_selected_ego_speed_mps{
-        std::numeric_limits<double>::quiet_NaN()};
-      double frenet_dp_selected_closing_speed_mps{
-        std::numeric_limits<double>::quiet_NaN()};
-      bool frenet_dp_prefix_bridge{false};
-      std::optional<double> corridor_center_ey;
-      bool vehicle_vehicle_corridor{false};
-      std::string lower_boundary_vehicle_id;
-      std::string upper_boundary_vehicle_id;
-      std::string guard_reason;
-      std::string reason{"not evaluated"};
-    };
+    using SideAssessment = V2XTacticalSideAssessment;
 
     // FollowPrepare is still an active committed mission even though the
     // Behavior FSM temporarily left Overtake. Use the OvertakeLine-owned side
@@ -7847,6 +7853,15 @@ struct MPC
         return overtake_core::select_overtake_mission_candidate(request);
       };
 
+    const auto & shadow_cfg = cfg.v2x_behavior.overtake_line;
+    const bool async_shadow_enabled =
+      shadow_cfg.mpcc_lite_async_worker_enabled &&
+      !mpcc_lite_async_worker_context_;
+    const bool defer_live_side_generation =
+      defer_live_tactical_generation(
+        shadow_cfg.mpcc_lite_async_worker_enabled,
+        mpcc_lite_async_worker_context_, start_grid_breakout_attempt);
+
     const auto assess_side = [&](const int side, const bool shadow_only) {
       SideAssessment assessment;
       assessment.side = side;
@@ -7983,6 +7998,16 @@ struct MPC
         if (!rolling_current_side_prefix_assessment) {
           return assessment;
         }
+      }
+      if (!shadow_only && defer_live_side_generation) {
+        // The worker publishes a complete assessment for both sides.  Do not
+        // repeat static-envelope, GapPlanner, Frenet-DP and Mission rollout in
+        // the 40 Hz callback while waiting for that result. Frozen ShiftOut or
+        // Pass continuity has already returned above, so an active feasible
+        // Mission remains executable without blocking here.
+        assessment.reason = "tactical candidate generation owned by async worker";
+        assessment.guard_reason = assessment.reason;
+        return assessment;
       }
 
       const double required_gap_width = std::max(
@@ -10489,6 +10514,57 @@ struct MPC
                inner_curve.hard_entry_allowed || inner_curve.hard_continuation_allowed ||
                side_fallback_soft_curve_allowed);
       };
+    std::optional<MpccLiteAsyncResult> accepted_async_tactical_result;
+    if (async_shadow_enabled) {
+      auto async_result = take_mpcc_lite_async_result();
+      if (async_result.has_value()) {
+        const double result_age_sec =
+          now_sec >= async_result->snapshot_sec ?
+          now_sec - async_result->snapshot_sec :
+          std::numeric_limits<double>::infinity();
+        mpcc_lite_async_last_compute_ms_ = async_result->compute_ms;
+        mpcc_lite_async_last_result_age_sec_ = result_age_sec;
+        const bool target_matches =
+          async_result->target_id == output.target_vehicle_id &&
+          async_result->behavior.target_vehicle_id == output.target_vehicle_id;
+        const bool context_matches =
+          async_result->context_epoch == mpcc_lite_async_context_epoch_ &&
+          async_result->mission_generation ==
+          overtake_line_state_.mission_generation &&
+          async_result->phase == overtake_line_state_.phase &&
+          async_result->locked_side_sign == locked_pass_side;
+        const bool result_fresh =
+          std::isfinite(result_age_sec) && result_age_sec >= 0.0 &&
+          result_age_sec <=
+          shadow_cfg.mpcc_lite_shadow_last_feasible_max_age_sec + kEps;
+        const bool current_hard_fault =
+          effective_front_risk_level == FrontRiskLevel::EmergencyBrake ||
+          overtake_solver_recovery_active_;
+        const bool adopt_async_result =
+          async_result->success && target_matches && context_matches &&
+          result_fresh && !current_hard_fault;
+        if (adopt_async_result) {
+          ++mpcc_lite_async_adopted_count_;
+          // Import both branches before any live side comparison. The current
+          // callback still applies its own curve, target and emergency gates,
+          // but no longer rebuilds the worker's DP/Mission candidates.
+          if (async_result->behavior.overtake_left_tactical_assessment.side == 1) {
+            left_assessment =
+              std::move(async_result->behavior.overtake_left_tactical_assessment);
+          }
+          if (async_result->behavior.overtake_right_tactical_assessment.side == -1) {
+            right_assessment =
+              std::move(async_result->behavior.overtake_right_tactical_assessment);
+          }
+          accepted_async_tactical_result = std::move(async_result.value());
+        } else {
+          ++mpcc_lite_async_discarded_count_;
+          if (!async_result->success) {
+            ++mpcc_lite_async_failed_count_;
+          }
+        }
+      }
+    }
     if (opponent_side_replan_assessment_requested && locked_pass_side != 0) {
       overtake_line_state_.opponent_side_replan_last_evaluation_sec = now_sec;
       output.opponent_side_replan_evaluated = true;
@@ -11030,14 +11106,10 @@ struct MPC
     // MPCC-lite compares short locally validated prefixes as well as complete
     // Missions. A hard-feasible prefix may own a bounded rolling replacement
     // before no-return; it does not claim that rear-clear/Return is solved.
-    const auto & shadow_cfg = cfg.v2x_behavior.overtake_line;
     const bool mpcc_rolling_replan_context =
       tactical_rolling_replan_active;
     const bool shadow_scene_relevant =
       has_front_vehicle || active_overtake_line || paused_overtake_mission;
-    const bool async_shadow_enabled =
-      shadow_cfg.mpcc_lite_async_worker_enabled &&
-      !mpcc_lite_async_worker_context_;
     const bool shadow_evaluation_due =
       shadow_cfg.mpcc_lite_shadow_enabled && shadow_scene_relevant &&
       (!async_shadow_enabled || mpcc_lite_async_worker_context_) &&
@@ -11046,70 +11118,43 @@ struct MPC
       shadow_cfg.mpcc_lite_shadow_evaluation_interval_sec);
     auto mpcc_authority_action = overtake_core::MpccLiteAuthorityAction::None;
     if (async_shadow_enabled) {
-      auto async_result = take_mpcc_lite_async_result();
-      if (async_result.has_value()) {
-        const double result_age_sec =
-          now_sec >= async_result->snapshot_sec ?
-          now_sec - async_result->snapshot_sec :
-          std::numeric_limits<double>::infinity();
-        mpcc_lite_async_last_compute_ms_ = async_result->compute_ms;
-        mpcc_lite_async_last_result_age_sec_ = result_age_sec;
-        const bool target_matches =
-          async_result->target_id == output.target_vehicle_id &&
-          async_result->behavior.target_vehicle_id == output.target_vehicle_id;
-        const bool context_matches =
-          async_result->context_epoch == mpcc_lite_async_context_epoch_ &&
-          async_result->mission_generation ==
-          overtake_line_state_.mission_generation &&
-          async_result->phase == overtake_line_state_.phase &&
-          async_result->locked_side_sign == locked_pass_side;
-        const bool result_fresh =
-          std::isfinite(result_age_sec) && result_age_sec >= 0.0 &&
-          result_age_sec <=
-          shadow_cfg.mpcc_lite_shadow_last_feasible_max_age_sec + kEps;
-        const bool current_hard_fault =
-          effective_front_risk_level == FrontRiskLevel::EmergencyBrake ||
-          overtake_solver_recovery_active_;
-        const bool adopt_async_result =
-          async_result->success && target_matches && context_matches &&
-          result_fresh && !current_hard_fault;
-        if (adopt_async_result) {
-          ++mpcc_lite_async_adopted_count_;
-          const auto & async_behavior = async_result->behavior;
-          output.opponent_side_replan_current_dp_prefix =
-            async_behavior.opponent_side_replan_current_dp_prefix;
-          output.mpcc_lite_completion_prediction =
-            async_behavior.mpcc_lite_completion_prediction;
-          output.mpcc_lite_same_side_replan_ready =
-            async_behavior.mpcc_lite_same_side_replan_ready;
-          output.mpcc_lite_cross_side_replan_ready =
-            async_behavior.mpcc_lite_cross_side_replan_ready;
-          output.mpcc_lite_same_side_replan_mission =
-            async_behavior.mpcc_lite_same_side_replan_mission;
-          output.mpcc_lite_cross_side_replan_mission =
-            async_behavior.mpcc_lite_cross_side_replan_mission;
-          output.mpcc_lite_cross_side_candidate_sign =
-            async_behavior.mpcc_lite_cross_side_candidate_sign;
-          output.mpcc_lite_cross_side_candidate_stable_sec =
-            async_behavior.mpcc_lite_cross_side_candidate_stable_sec;
-          output.mpcc_lite_cross_side_score_advantage =
-            async_behavior.mpcc_lite_cross_side_score_advantage;
+      if (accepted_async_tactical_result.has_value()) {
+        const auto & async_result = accepted_async_tactical_result.value();
+        const auto & async_behavior = async_result.behavior;
+        output.opponent_side_replan_current_dp_prefix =
+          async_behavior.opponent_side_replan_current_dp_prefix;
+        output.mpcc_lite_completion_prediction =
+          async_behavior.mpcc_lite_completion_prediction;
+        output.mpcc_lite_same_side_replan_ready =
+          async_behavior.mpcc_lite_same_side_replan_ready;
+        output.mpcc_lite_cross_side_replan_ready =
+          async_behavior.mpcc_lite_cross_side_replan_ready;
+        output.mpcc_lite_same_side_replan_mission =
+          async_behavior.mpcc_lite_same_side_replan_mission;
+        output.mpcc_lite_cross_side_replan_mission =
+          async_behavior.mpcc_lite_cross_side_replan_mission;
+        output.mpcc_lite_cross_side_candidate_sign =
+          async_behavior.mpcc_lite_cross_side_candidate_sign;
+        output.mpcc_lite_cross_side_candidate_stable_sec =
+          async_behavior.mpcc_lite_cross_side_candidate_stable_sec;
+        output.mpcc_lite_cross_side_score_advantage =
+          async_behavior.mpcc_lite_cross_side_score_advantage;
 
-          const auto async_entry_mission =
-            async_behavior.overtake_selected_mission;
-          const int async_entry_side =
-            async_behavior.overtake_pass_side_sign;
-          const bool async_entry_context =
-            locked_pass_side == 0 &&
-            overtake_line_state_.phase == OvertakeLinePhase::Idle &&
-            fresh_overtake_entry_commit_window_open &&
-            (async_entry_side == -1 || async_entry_side == 1) &&
-            async_entry_mission.has_value() &&
-            async_entry_mission->pass_side_sign == async_entry_side &&
-            async_entry_mission->feasible &&
-            (!std::isfinite(async_entry_mission->dynamic_valid_until_sec) ||
-            now_sec <= async_entry_mission->dynamic_valid_until_sec + kEps);
-          if (async_entry_context) {
+        const auto async_entry_mission =
+          async_behavior.overtake_selected_mission;
+        const int async_entry_side =
+          async_behavior.overtake_pass_side_sign;
+        const bool async_entry_context =
+          locked_pass_side == 0 &&
+          overtake_line_state_.phase == OvertakeLinePhase::Idle &&
+          fresh_overtake_entry_commit_window_open &&
+          (async_entry_side == -1 || async_entry_side == 1) &&
+          async_entry_mission.has_value() &&
+          async_entry_mission->pass_side_sign == async_entry_side &&
+          async_entry_mission->feasible &&
+          (!std::isfinite(async_entry_mission->dynamic_valid_until_sec) ||
+          now_sec <= async_entry_mission->dynamic_valid_until_sec + kEps);
+        if (async_entry_context) {
             auto & authoritative_assessment = async_entry_side > 0 ?
               left_assessment : right_assessment;
             authoritative_assessment.side = async_entry_side;
@@ -11150,40 +11195,34 @@ struct MPC
             mpcc_lite_control_last_feasible_entry_sec_ = now_sec;
             mpcc_authority_action =
               overtake_core::MpccLiteAuthorityAction::SelectEntry;
-          } else if (
-            output.mpcc_lite_same_side_replan_ready ||
-            output.mpcc_lite_cross_side_replan_ready)
-          {
-            mpcc_authority_action =
-              overtake_core::MpccLiteAuthorityAction::ReplaceActive;
-          }
+        } else if (
+          output.mpcc_lite_same_side_replan_ready ||
+          output.mpcc_lite_cross_side_replan_ready)
+        {
+          mpcc_authority_action =
+            overtake_core::MpccLiteAuthorityAction::ReplaceActive;
+        }
 
-          const auto adopted_path_mission =
-            output.mpcc_lite_same_side_replan_mission.has_value() ?
-            output.mpcc_lite_same_side_replan_mission :
-            output.mpcc_lite_cross_side_replan_mission;
-          if (
-            adopted_path_mission.has_value() &&
-            overtake_core::is_valid_frenet_dp_execution_path(
-              adopted_path_mission->frenet_dp_path_distances_m,
-              adopted_path_mission->frenet_dp_lateral_path_m))
-          {
-            mpcc_frenet_dp_last_path_distances_ =
-              adopted_path_mission->frenet_dp_path_distances_m;
-            mpcc_frenet_dp_last_lateral_path_ =
-              adopted_path_mission->frenet_dp_lateral_path_m;
-            mpcc_frenet_dp_last_target_id_ = output.target_vehicle_id;
-            mpcc_frenet_dp_last_side_sign_ =
-              adopted_path_mission->pass_side_sign;
-            mpcc_frenet_dp_last_tactical_strategy_ =
-              adopted_path_mission->frenet_dp_tactical_strategy;
-            mpcc_frenet_dp_last_feasible_sec_ = now_sec;
-          }
-        } else {
-          ++mpcc_lite_async_discarded_count_;
-          if (!async_result->success) {
-            ++mpcc_lite_async_failed_count_;
-          }
+        const auto adopted_path_mission =
+          output.mpcc_lite_same_side_replan_mission.has_value() ?
+          output.mpcc_lite_same_side_replan_mission :
+          output.mpcc_lite_cross_side_replan_mission;
+        if (
+          adopted_path_mission.has_value() &&
+          overtake_core::is_valid_frenet_dp_execution_path(
+            adopted_path_mission->frenet_dp_path_distances_m,
+            adopted_path_mission->frenet_dp_lateral_path_m))
+        {
+          mpcc_frenet_dp_last_path_distances_ =
+            adopted_path_mission->frenet_dp_path_distances_m;
+          mpcc_frenet_dp_last_lateral_path_ =
+            adopted_path_mission->frenet_dp_lateral_path_m;
+          mpcc_frenet_dp_last_target_id_ = output.target_vehicle_id;
+          mpcc_frenet_dp_last_side_sign_ =
+            adopted_path_mission->pass_side_sign;
+          mpcc_frenet_dp_last_tactical_strategy_ =
+            adopted_path_mission->frenet_dp_tactical_strategy;
+          mpcc_frenet_dp_last_feasible_sec_ = now_sec;
         }
       }
 
@@ -12231,6 +12270,19 @@ struct MPC
     }
     // The diagnostic fields were initially populated before MPCC authority.
     // Refresh them so logs describe the branch that can actually execute.
+    if (mpcc_lite_async_worker_context_) {
+      output.overtake_left_tactical_assessment = left_assessment;
+      output.overtake_right_tactical_assessment = right_assessment;
+      // These full profiles are only intermediate worker diagnostics. The
+      // selected/receding Missions already carry their executable DP paths,
+      // so do not copy the unused corridor samples back into the live thread.
+      output.overtake_left_tactical_assessment.
+      dynamic_mission_corridor_profile.clear();
+      output.overtake_right_tactical_assessment.
+      dynamic_mission_corridor_profile.clear();
+      output.overtake_left_tactical_assessment.frenet_dp_corridor = {};
+      output.overtake_right_tactical_assessment.frenet_dp_corridor = {};
+    }
     output.overtake_left_gap_available = left_assessment.gap_available;
     output.overtake_right_gap_available = right_assessment.gap_available;
     output.overtake_left_reason = side_reason(left_assessment);
@@ -32120,7 +32172,8 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line.horizon_progress_lateral_accel_penalty);
       RCLCPP_INFO(
         get_logger(),
-        "V2X MPCC-lite: %s, async=%s, load_shedding=%s/target=%.2f/max=%.3f s, "
+        "V2X MPCC-lite: %s, async=%s/tactical_owner=%s, "
+        "load_shedding=%s/target=%.2f/max=%.3f s, "
         "evaluate=%.3f s (%.1f Hz), log=%.2f s, "
         "last_feasible<=%.2f s, control=%s, near_target<=%.2f m, "
         "prefix_terminal=%.2f s/%.2f m, same_side_dy<=%.2f m",
@@ -32128,6 +32181,8 @@ public:
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_async_worker_enabled ?
         "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_async_worker_enabled ?
+        "worker" : "live",
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_async_load_shedding_enabled ?
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_async_target_worker_utilization,

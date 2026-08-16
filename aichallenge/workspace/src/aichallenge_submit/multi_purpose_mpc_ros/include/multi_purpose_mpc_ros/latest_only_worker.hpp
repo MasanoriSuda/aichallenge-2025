@@ -25,6 +25,14 @@ struct LatestOnlyWorkerIntervalRequest
 double resolve_latest_only_worker_interval(
   const LatestOnlyWorkerIntervalRequest & request);
 
+/// In asynchronous mode the live callback consumes tactical results instead
+/// of repeating the worker's side/corridor/Mission generation.  A worker
+/// snapshot must still execute that generation, and the start-grid exception
+/// retains its dedicated live corridor assessment.
+bool defer_live_tactical_generation(
+  bool async_worker_enabled, bool worker_context,
+  bool start_grid_breakout_attempt);
+
 /// One-running/one-pending worker for receding-horizon planning. Submitting a
 /// newer job replaces only the pending job and never waits for the running job.
 class LatestOnlyWorker

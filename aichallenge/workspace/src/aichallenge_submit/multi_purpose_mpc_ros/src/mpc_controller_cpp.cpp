@@ -2516,6 +2516,7 @@ struct OvertakeLineOutput
   std::vector<double> target_epsi;
   std::vector<bool> target_active;
   bool stage_corridor_constraints_active{false};
+  bool stage_corridor_target_bound_active{false};
   std::vector<double> stage_corridor_lower_ey;
   std::vector<double> stage_corridor_upper_ey;
   bool receding_horizon_active{false};
@@ -2565,6 +2566,7 @@ struct OvertakeLineHorizonEvaluation
   std::vector<double> target_ey;
   std::vector<double> path_distances;
   bool stage_corridor_constraints_active{false};
+  bool stage_corridor_target_bound_active{false};
   std::vector<double> stage_corridor_lower_ey;
   std::vector<double> stage_corridor_upper_ey;
   double max_required_lateral_accel{0.0};
@@ -13586,6 +13588,9 @@ struct MPC
     const bool stage_corridor_log_due =
       stage_corridor.active != stage_corridor_mpc_constraints_was_active_ ||
       (stage_corridor.active &&
+      overtake_line_output.stage_corridor_target_bound_active !=
+      stage_corridor_mpc_target_bound_was_active_) ||
+      (stage_corridor.active &&
       (!std::isfinite(stage_corridor_mpc_constraints_last_log_sec_) ||
       now_sec - stage_corridor_mpc_constraints_last_log_sec_ >= 1.0));
     if (
@@ -13594,15 +13599,19 @@ struct MPC
     {
       RCLCPP_INFO(
         rclcpp::get_logger("mpc_controller"),
-        "Overtake stage corridor MPC constraints: active=%d, samples=%zu, "
-        "min_width=%.2f m, phase=%s, wp_id=%d",
+        "Overtake stage corridor MPC constraints: active=%d, target_bound=%d, "
+        "samples=%zu, min_width=%.2f m, phase=%s, wp_id=%d",
         stage_corridor.active ? 1 : 0,
+        overtake_line_output.stage_corridor_target_bound_active ? 1 : 0,
         stage_corridor.applied_sample_count,
         stage_corridor.minimum_width_m,
         to_string(overtake_line_state_.phase), model->wp_id);
       stage_corridor_mpc_constraints_last_log_sec_ = now_sec;
     }
     stage_corridor_mpc_constraints_was_active_ = stage_corridor.active;
+    stage_corridor_mpc_target_bound_was_active_ =
+      stage_corridor.active &&
+      overtake_line_output.stage_corridor_target_bound_active;
     if (std::isfinite(overtake_line_output.target_velocity_reference)) {
       for (int i = 0; i < N; ++i) {
         ur[2 * i] = std::min({
@@ -14614,6 +14623,7 @@ struct MPC
   std::optional<double> failure_fallback_speed_;
   bool last_control_was_fallback_{false};
   bool stage_corridor_mpc_constraints_was_active_{false};
+  bool stage_corridor_mpc_target_bound_was_active_{false};
   double stage_corridor_mpc_constraints_last_log_sec_{
     -std::numeric_limits<double>::infinity()};
 
@@ -16525,6 +16535,10 @@ private:
 
     evaluation.target_ey.assign(static_cast<std::size_t>(N), 0.0);
     evaluation.path_distances.assign(static_cast<std::size_t>(N), 0.0);
+    if (enforce_execution_feasibility) {
+      evaluation.stage_corridor_lower_ey.reserve(static_cast<std::size_t>(N));
+      evaluation.stage_corridor_upper_ey.reserve(static_cast<std::size_t>(N));
+    }
     if (
       lateral_target_override.has_value() &&
       lateral_target_override->size() < static_cast<std::size_t>(N))
@@ -16562,12 +16576,22 @@ private:
         target_ey = phase_start_ey + progress * (goal_ey - phase_start_ey);
       }
 
-      double lower = lb[i] + min_wall_clearance;
-      double upper = ub[i] - min_wall_clearance;
-      if (upper < lower) {
-        lower = lb[i];
-        upper = ub[i];
+      const auto wall_corridor = overtake_core::resolve_wall_corridor_bound(
+        overtake_core::WallCorridorBoundRequest{
+          lb[i], ub[i], min_wall_clearance});
+      if (!wall_corridor.valid) {
+        evaluation.static_map_physical_infeasible_during_execution =
+          enforce_execution_feasibility;
+        return evaluation;
+      }
+      const double lower = wall_corridor.lower_m;
+      const double upper = wall_corridor.upper_m;
+      if (wall_corridor.margin_degraded) {
         evaluation.wall_clearance_limited = true;
+      }
+      if (enforce_execution_feasibility) {
+        evaluation.stage_corridor_lower_ey.push_back(lower);
+        evaluation.stage_corridor_upper_ey.push_back(upper);
       }
 
       const double unclipped_target = target_ey;
@@ -16690,6 +16714,10 @@ private:
         evaluation.max_required_lateral_accel, required_lateral_accel);
       evaluation.target_ey[static_cast<std::size_t>(i)] = target_ey;
     }
+    evaluation.stage_corridor_constraints_active =
+      enforce_execution_feasibility &&
+      evaluation.stage_corridor_lower_ey.size() == static_cast<std::size_t>(N) &&
+      evaluation.stage_corridor_upper_ey.size() == static_cast<std::size_t>(N);
     return evaluation;
   }
 
@@ -17115,6 +17143,11 @@ private:
         result.last_feasible_hold_active = true;
         result.fallback_reason = std::string{failure_reason} + "; retained last feasible";
         retained_horizon.stage_corridor_constraints_active = true;
+        retained_horizon.stage_corridor_target_bound_active = std::any_of(
+          target_execution_constraints.begin(), target_execution_constraints.end(),
+          [](const RecedingHorizonTargetExecutionConstraint & constraint) {
+            return constraint.active;
+          });
         retained_horizon.stage_corridor_lower_ey = std::move(retained_stage_lower);
         retained_horizon.stage_corridor_upper_ey = std::move(retained_stage_upper);
         result.horizon = std::move(retained_horizon);
@@ -17308,6 +17341,12 @@ private:
           {
             validated_horizon = std::move(candidate_horizon);
             validated_horizon.stage_corridor_constraints_active = true;
+            validated_horizon.stage_corridor_target_bound_active = std::any_of(
+              validation_target_execution_constraints.begin(),
+              validation_target_execution_constraints.end(),
+              [](const RecedingHorizonTargetExecutionConstraint & constraint) {
+                return constraint.active;
+              });
             validated_horizon.stage_corridor_lower_ey =
               execution_bounds.lower_bounds_m;
             validated_horizon.stage_corridor_upper_ey =
@@ -25550,6 +25589,8 @@ private:
     output.target_ey = horizon_evaluation.target_ey;
     output.stage_corridor_constraints_active =
       horizon_evaluation.stage_corridor_constraints_active;
+    output.stage_corridor_target_bound_active =
+      horizon_evaluation.stage_corridor_target_bound_active;
     output.stage_corridor_lower_ey =
       horizon_evaluation.stage_corridor_lower_ey;
     output.stage_corridor_upper_ey =

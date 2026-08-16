@@ -1046,6 +1046,27 @@ struct RecedingHorizonExecutionBoundsResolution
 RecedingHorizonExecutionBoundsResolution resolve_receding_horizon_execution_bounds(
   const RecedingHorizonExecutionBoundsRequest & request) noexcept;
 
+struct WallCorridorBoundRequest
+{
+  double base_lower_m{};
+  double base_upper_m{};
+  double clearance_m{};
+};
+
+struct WallCorridorBoundResolution
+{
+  bool valid{false};
+  bool margin_degraded{false};
+  double lower_m{};
+  double upper_m{};
+};
+
+/// Contract one track interval by the requested wall clearance. If the
+/// planning margin cannot fit, preserve the physical track interval and mark
+/// the degradation instead of manufacturing an empty MPC constraint.
+WallCorridorBoundResolution resolve_wall_corridor_bound(
+  const WallCorridorBoundRequest & request) noexcept;
+
 struct StagewiseMpcCorridorBoundsRequest
 {
   bool enabled{false};

@@ -1664,6 +1664,30 @@ RecedingHorizonExecutionBoundsResolution resolve_receding_horizon_execution_boun
   return resolution;
 }
 
+WallCorridorBoundResolution resolve_wall_corridor_bound(
+  const WallCorridorBoundRequest & request) noexcept
+{
+  WallCorridorBoundResolution resolution;
+  if (
+    !std::isfinite(request.base_lower_m) ||
+    !std::isfinite(request.base_upper_m) ||
+    !std::isfinite(request.clearance_m) || request.clearance_m < 0.0 ||
+    request.base_upper_m + 1e-9 < request.base_lower_m)
+  {
+    return resolution;
+  }
+
+  resolution.lower_m = request.base_lower_m + request.clearance_m;
+  resolution.upper_m = request.base_upper_m - request.clearance_m;
+  if (resolution.upper_m < resolution.lower_m) {
+    resolution.lower_m = request.base_lower_m;
+    resolution.upper_m = request.base_upper_m;
+    resolution.margin_degraded = true;
+  }
+  resolution.valid = true;
+  return resolution;
+}
+
 StagewiseMpcCorridorBoundsResolution resolve_stagewise_mpc_corridor_bounds(
   const StagewiseMpcCorridorBoundsRequest & request) noexcept
 {

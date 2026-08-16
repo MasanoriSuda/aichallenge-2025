@@ -147,6 +147,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonTargetBoundsReque
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonElasticTargetBoundsRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonTargetPredictionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonExecutionBoundsRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::WallCorridorBoundRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StagewiseMpcCorridorBoundsRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonRearClearBoundsReleaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RearClearReturnDeferralHoldRequest;
@@ -3428,6 +3429,40 @@ TEST(V2XOvertakeCoreSpeed, RejectsExecutionBoundsWhenTargetConflictsWithWall)
       -1, -0.5, 1.5, true, 0.4, 1.0});
 
   EXPECT_FALSE(result.valid);
+}
+
+TEST(V2XOvertakeCoreSpeed, ContractsWallCorridorByPlanningClearance)
+{
+  const auto result =
+    multi_purpose_mpc_ros::v2x_overtake_core::resolve_wall_corridor_bound(
+    WallCorridorBoundRequest{-2.0, 2.0, 0.2});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_FALSE(result.margin_degraded);
+  EXPECT_NEAR(result.lower_m, -1.8, 1e-9);
+  EXPECT_NEAR(result.upper_m, 1.8, 1e-9);
+}
+
+TEST(V2XOvertakeCoreSpeed, KeepsPhysicalWallCorridorWhenMarginCannotFit)
+{
+  const auto result =
+    multi_purpose_mpc_ros::v2x_overtake_core::resolve_wall_corridor_bound(
+    WallCorridorBoundRequest{-0.1, 0.1, 0.2});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_TRUE(result.margin_degraded);
+  EXPECT_NEAR(result.lower_m, -0.1, 1e-9);
+  EXPECT_NEAR(result.upper_m, 0.1, 1e-9);
+}
+
+TEST(V2XOvertakeCoreSpeed, RejectsInvalidWallCorridorInput)
+{
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::v2x_overtake_core::resolve_wall_corridor_bound(
+      WallCorridorBoundRequest{1.0, -1.0, 0.2}).valid);
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::v2x_overtake_core::resolve_wall_corridor_bound(
+      WallCorridorBoundRequest{-1.0, 1.0, -0.1}).valid);
 }
 
 TEST(V2XOvertakeCoreSpeed, AppliesStagewiseCorridorToTrackingBounds)

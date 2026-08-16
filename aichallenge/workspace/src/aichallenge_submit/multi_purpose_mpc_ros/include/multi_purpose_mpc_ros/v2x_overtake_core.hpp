@@ -2836,6 +2836,7 @@ struct FrenetDpExecutionEnvelopeRequest
   double current_lateral_velocity_mps{};
   double current_speed_mps{};
   double maximum_lateral_accel_mps2{};
+  double lateral_accel_reserve_ratio{1.0};
   bool static_hard_bounds_checked{false};
   bool static_hard_bounds_feasible{false};
   double static_hard_lower_m{};
@@ -2853,14 +2854,15 @@ struct FrenetDpExecutionEnvelopeResolution
   bool static_wall_constrained{false};
   bool reachability_constrained{false};
   double arrival_time_sec{};
+  double effective_maximum_lateral_accel_mps2{};
   double reachable_lower_m{};
   double reachable_upper_m{};
   OvertakeMissionDynamicCorridorSample sample;
 };
 
 /// Intersect one DP sample with the connected static-map interval and the
-/// lateral interval reachable from the measured state. This is the same
-/// constant-acceleration envelope used by execution post-validation.
+/// lateral interval reachable from the measured state. A planning reserve may
+/// keep the generated path inside the execution post-validation boundary.
 FrenetDpExecutionEnvelopeResolution resolve_frenet_dp_execution_envelope(
   const FrenetDpExecutionEnvelopeRequest & request) noexcept;
 

@@ -1536,6 +1536,7 @@ struct OvertakeLineConfig
   bool mpcc_frenet_dp_target_bound_promotion_enabled{false};
   bool mpcc_frenet_dp_measured_rebase_retry_enabled{false};
   bool mpcc_frenet_dp_execution_envelope_enabled{false};
+  double mpcc_frenet_dp_execution_lateral_accel_reserve_ratio{1.0};
   double mpcc_frenet_dp_rolling_refresh_interval_sec{0.10};
   double mpcc_frenet_dp_refresh_preserved_prefix_distance{1.0};
   double mpcc_frenet_dp_refresh_blend_end_distance{4.0};
@@ -7882,6 +7883,8 @@ struct MPC
                     measured_lateral_velocity_mps,
                     std::max(1.0, current_speed_mps_),
                     std::max(0.0, cfg.v2x_behavior.overtake_line.max_lateral_accel),
+                    cfg.v2x_behavior.overtake_line.
+                    mpcc_frenet_dp_execution_lateral_accel_reserve_ratio,
                     static_checked,
                     static_checked && static_envelope->hard.valid &&
                     static_envelope->hard.feasible,
@@ -18948,7 +18951,7 @@ private:
               "measured_rebase=%d, "
               "physical=%d, target_bound=%d/%zu/min=%.2f, target_ok=%d, "
               "hard_fault=%d, execution_limits=wall:%d/static:%d/ay:%d/"
-              "static_physical:%d/static_clamp_ay:%d/max_ay:%.2f, "
+              "static_physical:%d/static_clamp_ay:%d/max_ay:%.2f/plan_ay:%.2f, "
               "active_remaining=%.2f m, wp_id=%d",
               overtake_line_state_.target_vehicle_id.c_str(),
               candidate.pass_side_sign,
@@ -18972,6 +18975,8 @@ private:
               candidate_horizon.static_map_physical_infeasible_during_execution ? 1 : 0,
               candidate_horizon.static_clamp_lateral_accel_infeasible ? 1 : 0,
               candidate_horizon.max_required_lateral_accel,
+              std::max(0.0, line_cfg.max_lateral_accel) *
+              line_cfg.mpcc_frenet_dp_execution_lateral_accel_reserve_ratio,
               overtake_line_state_.mission_frenet_dp_path_distances_m.empty()
                   ? 0.0
                   : std::max(
@@ -29323,6 +29328,12 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_execution_envelope_enabled =
     mpc["v2x_overtake_mpcc_frenet_dp_execution_envelope_enabled"] ?
     mpc["v2x_overtake_mpcc_frenet_dp_execution_envelope_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_line.
+  mpcc_frenet_dp_execution_lateral_accel_reserve_ratio = std::clamp(
+    mpc["v2x_overtake_mpcc_frenet_dp_execution_lateral_accel_reserve_ratio"] ?
+    mpc["v2x_overtake_mpcc_frenet_dp_execution_lateral_accel_reserve_ratio"].as<double>() :
+    1.0,
+    0.10, 1.0);
   cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_rolling_refresh_interval_sec = std::max(
     0.0,
     mpc["v2x_overtake_mpcc_frenet_dp_rolling_refresh_interval_sec"] ?
@@ -31504,7 +31515,7 @@ public:
         get_logger(),
         "V2X MPCC Frenet DP corridor: %s, execution=%s, "
         "rolling_refresh=%s/%.2f s, primary_execution=%s, target_bound=%s, "
-        "measured_rebase_retry=%s, execution_envelope=%s, "
+        "measured_rebase_retry=%s, execution_envelope=%s/ay_reserve=%.2f, "
         "stitch=%.2f->%.2f m, bins=%d, slope<=%.2f m/m, "
         "weights anchor=%.2f/motion=%.2f/previous=%.2f/width=%.2f/"
         "reserve=%.2f/side_switch=%.2f, "
@@ -31527,6 +31538,8 @@ public:
         mpcc_frenet_dp_measured_rebase_retry_enabled ? "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.
         mpcc_frenet_dp_execution_envelope_enabled ? "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line.
+        mpcc_frenet_dp_execution_lateral_accel_reserve_ratio,
         mpc_cfg_.v2x_behavior.overtake_line.
         mpcc_frenet_dp_refresh_preserved_prefix_distance,
         mpc_cfg_.v2x_behavior.overtake_line.

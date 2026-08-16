@@ -5263,6 +5263,9 @@ FrenetDpExecutionEnvelopeResolution resolve_frenet_dp_execution_envelope(
     !std::isfinite(request.current_lateral_velocity_mps) ||
     !std::isfinite(request.current_speed_mps) || request.current_speed_mps <= 0.0 ||
     !finite_non_negative(request.maximum_lateral_accel_mps2) ||
+    !std::isfinite(request.lateral_accel_reserve_ratio) ||
+    request.lateral_accel_reserve_ratio <= 0.0 ||
+    request.lateral_accel_reserve_ratio > 1.0 + kBoundEpsilon ||
     (request.static_hard_bounds_checked && request.static_hard_bounds_feasible &&
     (!std::isfinite(request.static_hard_lower_m) ||
     !std::isfinite(request.static_hard_upper_m) ||
@@ -5295,11 +5298,13 @@ FrenetDpExecutionEnvelopeResolution resolve_frenet_dp_execution_envelope(
 
   resolution.arrival_time_sec = std::max(
     0.15, request.sample.path_distance_m / request.current_speed_mps);
+  resolution.effective_maximum_lateral_accel_mps2 =
+    request.maximum_lateral_accel_mps2 * request.lateral_accel_reserve_ratio;
   const double zero_acceleration_lateral =
     request.current_lateral_m +
     request.current_lateral_velocity_mps * resolution.arrival_time_sec;
   const double maximum_displacement =
-    0.5 * request.maximum_lateral_accel_mps2 *
+    0.5 * resolution.effective_maximum_lateral_accel_mps2 *
     resolution.arrival_time_sec * resolution.arrival_time_sec;
   resolution.reachable_lower_m = zero_acceleration_lateral - maximum_displacement;
   resolution.reachable_upper_m = zero_acceleration_lateral + maximum_displacement;

@@ -15507,6 +15507,7 @@ TEST(V2XOvertakeCoreFrenetDpCorridor, IntersectsStaticAndReachableExecutionEnvel
   EXPECT_TRUE(resolution.static_wall_constrained);
   EXPECT_TRUE(resolution.reachability_constrained);
   EXPECT_DOUBLE_EQ(resolution.arrival_time_sec, 1.0);
+  EXPECT_DOUBLE_EQ(resolution.effective_maximum_lateral_accel_mps2, 2.0);
   EXPECT_DOUBLE_EQ(resolution.reachable_lower_m, -1.0);
   EXPECT_DOUBLE_EQ(resolution.reachable_upper_m, 1.0);
   EXPECT_DOUBLE_EQ(resolution.sample.lower_lateral_m, -0.8);
@@ -15514,6 +15515,35 @@ TEST(V2XOvertakeCoreFrenetDpCorridor, IntersectsStaticAndReachableExecutionEnvel
   ASSERT_TRUE(resolution.sample.preferred_bounds_valid);
   EXPECT_DOUBLE_EQ(resolution.sample.preferred_lower_lateral_m, -0.6);
   EXPECT_DOUBLE_EQ(resolution.sample.preferred_upper_lateral_m, 0.5);
+}
+
+TEST(V2XOvertakeCoreFrenetDpCorridor, ReservesExecutionLateralAccelerationHeadroom)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpExecutionEnvelopeRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorSample;
+  using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frenet_dp_execution_envelope;
+
+  FrenetDpExecutionEnvelopeRequest request;
+  request.enabled = true;
+  request.sample = OvertakeMissionDynamicCorridorSample{5.0, -2.0, 2.0, true};
+  request.current_lateral_m = 0.0;
+  request.current_lateral_velocity_mps = 0.0;
+  request.current_speed_mps = 5.0;
+  request.maximum_lateral_accel_mps2 = 2.0;
+  request.lateral_accel_reserve_ratio = 0.90;
+
+  const auto resolution = resolve_frenet_dp_execution_envelope(request);
+  ASSERT_TRUE(resolution.valid);
+  ASSERT_TRUE(resolution.feasible);
+  EXPECT_DOUBLE_EQ(resolution.arrival_time_sec, 1.0);
+  EXPECT_DOUBLE_EQ(resolution.effective_maximum_lateral_accel_mps2, 1.8);
+  EXPECT_DOUBLE_EQ(resolution.reachable_lower_m, -0.9);
+  EXPECT_DOUBLE_EQ(resolution.reachable_upper_m, 0.9);
+  EXPECT_DOUBLE_EQ(resolution.sample.lower_lateral_m, -0.9);
+  EXPECT_DOUBLE_EQ(resolution.sample.upper_lateral_m, 0.9);
+
+  request.lateral_accel_reserve_ratio = 1.01;
+  EXPECT_FALSE(resolve_frenet_dp_execution_envelope(request).valid);
 }
 
 TEST(V2XOvertakeCoreFrenetDpCorridor, RejectsUnreachableExecutionEnvelope)

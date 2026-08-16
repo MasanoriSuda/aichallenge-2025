@@ -1337,6 +1337,9 @@ struct OvertakeLineConfig
   bool pass_completion_speed_coupling_enabled{false};
   bool mpcc_lite_shadow_enabled{false};
   bool mpcc_lite_async_worker_enabled{false};
+  bool mpcc_lite_async_load_shedding_enabled{false};
+  double mpcc_lite_async_target_worker_utilization{0.35};
+  double mpcc_lite_async_max_evaluation_interval_sec{0.30};
   double mpcc_lite_shadow_evaluation_interval_sec{1.0};
   double mpcc_lite_shadow_log_interval_sec{1.0};
   double mpcc_lite_shadow_last_feasible_max_age_sec{0.50};
@@ -11184,11 +11187,19 @@ struct MPC
         }
       }
 
+      mpcc_lite_async_effective_interval_sec_ =
+        resolve_latest_only_worker_interval(
+        LatestOnlyWorkerIntervalRequest{
+          shadow_cfg.mpcc_lite_async_load_shedding_enabled,
+          shadow_cfg.mpcc_lite_shadow_evaluation_interval_sec,
+          shadow_cfg.mpcc_lite_async_max_evaluation_interval_sec,
+          shadow_cfg.mpcc_lite_async_target_worker_utilization,
+          mpcc_lite_async_last_compute_ms_});
       const bool async_submission_due =
         shadow_cfg.mpcc_lite_shadow_enabled && shadow_scene_relevant &&
         (!std::isfinite(mpcc_lite_shadow_last_evaluation_sec_) ||
         now_sec - mpcc_lite_shadow_last_evaluation_sec_ + kEps >=
-        shadow_cfg.mpcc_lite_shadow_evaluation_interval_sec);
+        mpcc_lite_async_effective_interval_sec_);
       if (
         async_submission_due &&
         submit_mpcc_lite_async_snapshot(
@@ -11210,7 +11221,8 @@ struct MPC
           rclcpp::get_logger("mpc_controller"),
           "Overtake MPCC-lite async: submitted=%lu, replaced=%lu, "
           "completed=%lu, running=%d, pending=%d, adopted=%lu, "
-          "discarded=%lu, failed=%lu, snapshot=%.2f ms, compute=%.2f ms, age=%.3f s",
+          "discarded=%lu, failed=%lu, interval=%.3f s, snapshot=%.2f ms, "
+          "compute=%.2f ms, age=%.3f s",
           static_cast<unsigned long>(worker_stats.submitted),
           static_cast<unsigned long>(worker_stats.replaced),
           static_cast<unsigned long>(worker_stats.completed),
@@ -11218,6 +11230,7 @@ struct MPC
           static_cast<unsigned long>(mpcc_lite_async_adopted_count_),
           static_cast<unsigned long>(mpcc_lite_async_discarded_count_),
           static_cast<unsigned long>(mpcc_lite_async_failed_count_),
+          mpcc_lite_async_effective_interval_sec_,
           mpcc_lite_async_last_snapshot_ms_,
           mpcc_lite_async_last_compute_ms_,
           mpcc_lite_async_last_result_age_sec_);
@@ -14393,6 +14406,7 @@ struct MPC
   std::uint64_t mpcc_lite_async_failed_count_{0U};
   double mpcc_lite_async_last_compute_ms_{0.0};
   double mpcc_lite_async_last_snapshot_ms_{0.0};
+  double mpcc_lite_async_effective_interval_sec_{0.0};
   double mpcc_lite_async_last_result_age_sec_{
     std::numeric_limits<double>::infinity()};
   double mpcc_lite_async_last_status_log_sec_{
@@ -29867,10 +29881,24 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_line.mpcc_lite_async_worker_enabled =
     mpc["v2x_overtake_mpcc_lite_async_worker_enabled"] ?
     mpc["v2x_overtake_mpcc_lite_async_worker_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_lite_async_load_shedding_enabled =
+    mpc["v2x_overtake_mpcc_lite_async_load_shedding_enabled"] ?
+    mpc["v2x_overtake_mpcc_lite_async_load_shedding_enabled"].as<bool>() : false;
   cfg.mpc.v2x_behavior.overtake_line.mpcc_lite_shadow_evaluation_interval_sec = std::max(
     0.05,
     mpc["v2x_overtake_mpcc_lite_shadow_evaluation_interval_sec"] ?
     mpc["v2x_overtake_mpcc_lite_shadow_evaluation_interval_sec"].as<double>() : 1.0);
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_lite_async_target_worker_utilization =
+    std::clamp(
+    mpc["v2x_overtake_mpcc_lite_async_target_worker_utilization"] ?
+    mpc["v2x_overtake_mpcc_lite_async_target_worker_utilization"].as<double>() : 0.35,
+    0.05, 1.0);
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_lite_async_max_evaluation_interval_sec =
+    std::max(
+    cfg.mpc.v2x_behavior.overtake_line.mpcc_lite_shadow_evaluation_interval_sec,
+    mpc["v2x_overtake_mpcc_lite_async_max_evaluation_interval_sec"] ?
+    mpc["v2x_overtake_mpcc_lite_async_max_evaluation_interval_sec"].as<double>() :
+    0.30);
   cfg.mpc.v2x_behavior.overtake_line.mpcc_lite_shadow_log_interval_sec = std::max(
     0.25,
     mpc["v2x_overtake_mpcc_lite_shadow_log_interval_sec"] ?
@@ -32092,13 +32120,18 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line.horizon_progress_lateral_accel_penalty);
       RCLCPP_INFO(
         get_logger(),
-        "V2X MPCC-lite: %s, async=%s, evaluate=%.3f s (%.1f Hz), log=%.2f s, "
+        "V2X MPCC-lite: %s, async=%s, load_shedding=%s/target=%.2f/max=%.3f s, "
+        "evaluate=%.3f s (%.1f Hz), log=%.2f s, "
         "last_feasible<=%.2f s, control=%s, near_target<=%.2f m, "
         "prefix_terminal=%.2f s/%.2f m, same_side_dy<=%.2f m",
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_shadow_enabled ?
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_async_worker_enabled ?
         "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_async_load_shedding_enabled ?
+        "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_async_target_worker_utilization,
+        mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_async_max_evaluation_interval_sec,
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_shadow_evaluation_interval_sec,
         1.0 / std::max(
           0.05,

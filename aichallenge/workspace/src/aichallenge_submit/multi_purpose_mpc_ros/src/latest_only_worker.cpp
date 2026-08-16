@@ -1,9 +1,38 @@
 #include <multi_purpose_mpc_ros/latest_only_worker.hpp>
 
+#include <algorithm>
+#include <cmath>
 #include <utility>
 
 namespace multi_purpose_mpc_ros
 {
+
+double resolve_latest_only_worker_interval(
+  const LatestOnlyWorkerIntervalRequest & request)
+{
+  constexpr double kMinimumIntervalSec = 1.0e-3;
+  constexpr double kMinimumUtilization = 1.0e-3;
+  const double base_interval_sec =
+    std::isfinite(request.base_interval_sec) ?
+    std::max(kMinimumIntervalSec, request.base_interval_sec) : 0.20;
+  const double maximum_interval_sec =
+    std::isfinite(request.maximum_interval_sec) ?
+    std::max(base_interval_sec, request.maximum_interval_sec) : base_interval_sec;
+  if (
+    !request.load_shedding_enabled || !std::isfinite(request.last_compute_ms) ||
+    request.last_compute_ms <= 0.0)
+  {
+    return base_interval_sec;
+  }
+  const double target_worker_utilization =
+    std::isfinite(request.target_worker_utilization) ?
+    std::clamp(request.target_worker_utilization, kMinimumUtilization, 1.0) : 1.0;
+  const double compute_budget_interval_sec =
+    request.last_compute_ms * 1.0e-3 / target_worker_utilization;
+  return std::clamp(
+    std::max(base_interval_sec, compute_budget_interval_sec),
+    base_interval_sec, maximum_interval_sec);
+}
 
 LatestOnlyWorker::LatestOnlyWorker()
 : thread_([this]() {run();})

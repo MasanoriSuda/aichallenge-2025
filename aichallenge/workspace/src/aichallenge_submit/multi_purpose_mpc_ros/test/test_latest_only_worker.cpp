@@ -14,6 +14,38 @@ namespace
 
 using namespace std::chrono_literals;
 
+TEST(LatestOnlyWorkerInterval, UsesBaseIntervalUntilComputeCostIsAvailable)
+{
+  EXPECT_DOUBLE_EQ(
+    multi_purpose_mpc_ros::resolve_latest_only_worker_interval(
+      {true, 0.20, 0.30, 0.35, 0.0}),
+    0.20);
+}
+
+TEST(LatestOnlyWorkerInterval, PreservesBaseIntervalWhenLoadSheddingIsDisabled)
+{
+  EXPECT_DOUBLE_EQ(
+    multi_purpose_mpc_ros::resolve_latest_only_worker_interval(
+      {false, 0.20, 0.30, 0.35, 150.0}),
+    0.20);
+}
+
+TEST(LatestOnlyWorkerInterval, ExtendsIntervalToRespectComputeBudget)
+{
+  EXPECT_NEAR(
+    multi_purpose_mpc_ros::resolve_latest_only_worker_interval(
+      {true, 0.20, 0.30, 0.35, 84.0}),
+    0.24, 1.0e-12);
+}
+
+TEST(LatestOnlyWorkerInterval, BoundsIntervalAtConfiguredMaximum)
+{
+  EXPECT_DOUBLE_EQ(
+    multi_purpose_mpc_ros::resolve_latest_only_worker_interval(
+      {true, 0.20, 0.30, 0.35, 150.0}),
+    0.30);
+}
+
 TEST(LatestOnlyWorker, ReplacesPendingJobWithoutWaitingForRunningJob)
 {
   multi_purpose_mpc_ros::LatestOnlyWorker worker;

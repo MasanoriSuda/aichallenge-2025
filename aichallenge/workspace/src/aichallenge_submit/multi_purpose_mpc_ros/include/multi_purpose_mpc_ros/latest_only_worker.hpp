@@ -10,6 +10,21 @@
 namespace multi_purpose_mpc_ros
 {
 
+struct LatestOnlyWorkerIntervalRequest
+{
+  bool load_shedding_enabled{false};
+  double base_interval_sec{0.20};
+  double maximum_interval_sec{0.30};
+  double target_worker_utilization{0.35};
+  double last_compute_ms{0.0};
+};
+
+/// Resolve a bounded submission interval from the most recent worker cost.
+/// This does not delay the control callback; it only controls when the next
+/// latest-only snapshot may be queued.
+double resolve_latest_only_worker_interval(
+  const LatestOnlyWorkerIntervalRequest & request);
+
 /// One-running/one-pending worker for receding-horizon planning. Submitting a
 /// newer job replaces only the pending job and never waits for the running job.
 class LatestOnlyWorker

@@ -1046,6 +1046,35 @@ struct RecedingHorizonExecutionBoundsResolution
 RecedingHorizonExecutionBoundsResolution resolve_receding_horizon_execution_bounds(
   const RecedingHorizonExecutionBoundsRequest & request) noexcept;
 
+struct StagewiseMpcCorridorBoundsRequest
+{
+  bool enabled{false};
+  std::vector<double> base_lower_m;
+  std::vector<double> base_upper_m;
+  std::vector<double> corridor_lower_m;
+  std::vector<double> corridor_upper_m;
+  std::vector<double> reference_lateral_m;
+};
+
+struct StagewiseMpcCorridorBoundsResolution
+{
+  bool valid{false};
+  bool active{false};
+  bool feasible{false};
+  std::size_t applied_sample_count{};
+  std::size_t first_infeasible_index{std::numeric_limits<std::size_t>::max()};
+  double minimum_width_m{std::numeric_limits<double>::infinity()};
+  std::vector<double> lower_m;
+  std::vector<double> upper_m;
+  std::vector<double> reference_lateral_m;
+};
+
+/// Intersect a validated overtake corridor with the tracking MPC state bounds.
+/// The lateral reference remains soft and is only clipped into the resulting
+/// hard interval. Disabled input returns the base bounds unchanged.
+StagewiseMpcCorridorBoundsResolution resolve_stagewise_mpc_corridor_bounds(
+  const StagewiseMpcCorridorBoundsRequest & request) noexcept;
+
 struct RecedingHorizonRearClearBoundsReleaseRequest
 {
   bool pass_phase{false};

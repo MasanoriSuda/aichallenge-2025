@@ -147,6 +147,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonTargetBoundsReque
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonElasticTargetBoundsRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonTargetPredictionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonExecutionBoundsRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::StagewiseMpcCorridorBoundsRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonRearClearBoundsReleaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RearClearReturnDeferralHoldRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassCompletionRolloutSpeedRequest;
@@ -3425,6 +3426,69 @@ TEST(V2XOvertakeCoreSpeed, RejectsExecutionBoundsWhenTargetConflictsWithWall)
     multi_purpose_mpc_ros::v2x_overtake_core::resolve_receding_horizon_execution_bounds(
     RecedingHorizonExecutionBoundsRequest{
       -1, -0.5, 1.5, true, 0.4, 1.0});
+
+  EXPECT_FALSE(result.valid);
+}
+
+TEST(V2XOvertakeCoreSpeed, AppliesStagewiseCorridorToTrackingBounds)
+{
+  const auto result =
+    multi_purpose_mpc_ros::v2x_overtake_core::resolve_stagewise_mpc_corridor_bounds(
+    StagewiseMpcCorridorBoundsRequest{
+      true,
+      {-2.0, -2.0, -2.0},
+      {2.0, 2.0, 2.0},
+      {-1.0, 0.4, 0.8},
+      {1.0, 1.4, 1.8},
+      {0.0, 0.2, 2.0}});
+
+  ASSERT_TRUE(result.valid);
+  ASSERT_TRUE(result.active);
+  ASSERT_TRUE(result.feasible);
+  EXPECT_EQ(result.applied_sample_count, 3U);
+  ASSERT_EQ(result.lower_m.size(), 3U);
+  EXPECT_NEAR(result.lower_m[1], 0.4, 1e-9);
+  EXPECT_NEAR(result.upper_m[1], 1.4, 1e-9);
+  EXPECT_NEAR(result.reference_lateral_m[1], 0.4, 1e-9);
+  EXPECT_NEAR(result.reference_lateral_m[2], 1.8, 1e-9);
+  EXPECT_NEAR(result.minimum_width_m, 1.0, 1e-9);
+}
+
+TEST(V2XOvertakeCoreSpeed, DisabledStagewiseCorridorPreservesBaseBounds)
+{
+  const auto result =
+    multi_purpose_mpc_ros::v2x_overtake_core::resolve_stagewise_mpc_corridor_bounds(
+    StagewiseMpcCorridorBoundsRequest{
+      false, {-2.0, -1.0}, {2.0, 1.0}, {}, {}, {0.5, -0.5}});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_FALSE(result.active);
+  ASSERT_TRUE(result.feasible);
+  EXPECT_EQ(result.applied_sample_count, 0U);
+  EXPECT_EQ(result.lower_m, (std::vector<double>{-2.0, -1.0}));
+  EXPECT_EQ(result.upper_m, (std::vector<double>{2.0, 1.0}));
+  EXPECT_EQ(result.reference_lateral_m, (std::vector<double>{0.5, -0.5}));
+}
+
+TEST(V2XOvertakeCoreSpeed, RejectsEmptyStagewiseCorridorIntersection)
+{
+  const auto result =
+    multi_purpose_mpc_ros::v2x_overtake_core::resolve_stagewise_mpc_corridor_bounds(
+    StagewiseMpcCorridorBoundsRequest{
+      true, {-1.0, -1.0}, {1.0, 1.0}, {-0.5, 1.2}, {0.5, 1.5}, {0.0, 1.3}});
+
+  ASSERT_TRUE(result.valid);
+  ASSERT_TRUE(result.active);
+  EXPECT_FALSE(result.feasible);
+  EXPECT_EQ(result.first_infeasible_index, 1U);
+}
+
+TEST(V2XOvertakeCoreSpeed, RejectsMalformedStagewiseCorridor)
+{
+  const auto result =
+    multi_purpose_mpc_ros::v2x_overtake_core::resolve_stagewise_mpc_corridor_bounds(
+    StagewiseMpcCorridorBoundsRequest{
+      true, {-1.0, -1.0}, {1.0, 1.0}, {-0.5}, {0.5}, {0.0, 0.0}});
 
   EXPECT_FALSE(result.valid);
 }

@@ -1664,6 +1664,73 @@ RecedingHorizonExecutionBoundsResolution resolve_receding_horizon_execution_boun
   return resolution;
 }
 
+StagewiseMpcCorridorBoundsResolution resolve_stagewise_mpc_corridor_bounds(
+  const StagewiseMpcCorridorBoundsRequest & request) noexcept
+{
+  StagewiseMpcCorridorBoundsResolution resolution;
+  const std::size_t sample_count = request.base_lower_m.size();
+  if (
+    sample_count == 0U || request.base_upper_m.size() != sample_count ||
+    request.reference_lateral_m.size() != sample_count)
+  {
+    return resolution;
+  }
+  if (
+    request.enabled &&
+    (request.corridor_lower_m.size() != sample_count ||
+    request.corridor_upper_m.size() != sample_count))
+  {
+    return resolution;
+  }
+
+  resolution.lower_m.reserve(sample_count);
+  resolution.upper_m.reserve(sample_count);
+  resolution.reference_lateral_m.reserve(sample_count);
+  for (std::size_t index = 0U; index < sample_count; ++index) {
+    const double base_lower = request.base_lower_m[index];
+    const double base_upper = request.base_upper_m[index];
+    const double reference = request.reference_lateral_m[index];
+    if (
+      !std::isfinite(base_lower) || !std::isfinite(base_upper) ||
+      base_upper + 1e-9 < base_lower || !std::isfinite(reference))
+    {
+      return StagewiseMpcCorridorBoundsResolution{};
+    }
+    double lower = base_lower;
+    double upper = base_upper;
+    if (request.enabled) {
+      const double corridor_lower = request.corridor_lower_m[index];
+      const double corridor_upper = request.corridor_upper_m[index];
+      if (
+        !std::isfinite(corridor_lower) || !std::isfinite(corridor_upper) ||
+        corridor_upper + 1e-9 < corridor_lower)
+      {
+        return StagewiseMpcCorridorBoundsResolution{};
+      }
+      lower = std::max(lower, corridor_lower);
+      upper = std::min(upper, corridor_upper);
+      if (upper + 1e-9 < lower) {
+        resolution.valid = true;
+        resolution.active = true;
+        resolution.feasible = false;
+        resolution.first_infeasible_index = index;
+        return resolution;
+      }
+      ++resolution.applied_sample_count;
+    }
+    resolution.minimum_width_m = std::min(
+      resolution.minimum_width_m, std::max(0.0, upper - lower));
+    resolution.lower_m.push_back(lower);
+    resolution.upper_m.push_back(upper);
+    resolution.reference_lateral_m.push_back(std::clamp(reference, lower, upper));
+  }
+
+  resolution.valid = true;
+  resolution.active = request.enabled;
+  resolution.feasible = true;
+  return resolution;
+}
+
 bool can_release_receding_horizon_rear_clear_bounds(
   const RecedingHorizonRearClearBoundsReleaseRequest & request) noexcept
 {

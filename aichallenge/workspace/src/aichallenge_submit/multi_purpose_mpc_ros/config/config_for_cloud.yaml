@@ -621,6 +621,7 @@ mpc:
   v2x_overtake_mpcc_lite_same_side_max_lateral_adjustment: 0.35 # [m] paused Pass keeps its current side/line; only a small revalidated correction is allowed
   v2x_overtake_mpcc_frenet_dp_corridor_enabled: true # solve a continuous stage-wise left/right corridor before freezing one lateral goal
   v2x_overtake_mpcc_frenet_dp_execution_enabled: true # execute the target corridor through ShiftOut/Pass and retain its validated prefix during soft rolling replan
+  v2x_overtake_mpcc_stage_corridor_mpc_constraints_enabled: true # apply validated per-stage wall/opponent corridor directly to the tracking MPC e_y bounds
   v2x_overtake_mpcc_frenet_dp_rolling_refresh_enabled: true # atomically refresh only a fresh same-target/same-side DP path
   v2x_overtake_mpcc_frenet_dp_primary_execution_enabled: true # evaluate a fresh current-state same-side prefix during healthy ShiftOut/Pass, not only after failure
   v2x_overtake_mpcc_frenet_dp_target_bound_promotion_enabled: true # require time-aligned physical target separation before a rolling DP prefix can replace last-feasible execution

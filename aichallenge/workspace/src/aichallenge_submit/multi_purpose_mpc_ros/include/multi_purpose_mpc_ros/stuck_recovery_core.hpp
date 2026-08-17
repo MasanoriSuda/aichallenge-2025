@@ -784,6 +784,36 @@ enum class RecoveryReason
   SessionReset,
 };
 
+enum class ForwardRecoveryFailureCause
+{
+  None,
+  CollisionWorsening,
+  DurationLimit,
+};
+
+/// Preserve a failed Forward recovery cycle until the later aggressive-retry
+/// boundary consumes it. Recovery state/reason fields are overwritten while
+/// stopping and reassessing, so the adapter must not infer this history from
+/// the most recent supervisor output.
+class ForwardRecoveryFailureTracker
+{
+public:
+  void observe_transition(
+    RecoveryState previous_state, RecoveryState current_state,
+    RecoveryReason reason) noexcept;
+  [[nodiscard]] bool consume_aggressive_retry(std::size_t retry_limit) noexcept;
+  void reset() noexcept;
+
+  [[nodiscard]] std::size_t consecutive_failed_cycles() const noexcept;
+  [[nodiscard]] bool current_cycle_failed() const noexcept;
+  [[nodiscard]] ForwardRecoveryFailureCause last_failure_cause() const noexcept;
+
+private:
+  std::size_t consecutive_failed_cycles_{0U};
+  bool current_cycle_failed_{false};
+  ForwardRecoveryFailureCause last_failure_cause_{ForwardRecoveryFailureCause::None};
+};
+
 struct SupervisorConfig
 {
   double awsim_recovery_wait_sec{1.2};
@@ -1080,6 +1110,7 @@ const char * to_string(ManeuverDirection direction) noexcept;
 const char * to_string(RecoveryState state) noexcept;
 const char * to_string(RecoveryActionType action) noexcept;
 const char * to_string(RecoveryReason reason) noexcept;
+const char * to_string(ForwardRecoveryFailureCause cause) noexcept;
 const char * to_string(ExecutionMode mode) noexcept;
 
 }  // namespace multi_purpose_mpc_ros::stuck_recovery

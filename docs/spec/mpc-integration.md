@@ -163,6 +163,13 @@ Forward escapeから`LowSpeedRejoin -> Normal`を完了した場合に限り、s
 新規collision、現在のwall evidence、MPC solver fallbackを検出した場合は即時解除し、
 Reverse経由のrejoinではアームしない。現行既定値は最大3.0秒または前進3.0 mである。
 
+stepwise Forward復帰が`collision_worsening`または`forward_duration_limit`で失敗した場合は、
+その事実を後続の`StopAndReassess` / `SafeStop`とは別のtrackerへ保持する。同一aggressive retry
+cycle内の複数stepは1失敗として数え、`aggressive_forward_retry_limit_before_reverse`へ達した
+次cycleは既存のswept-footprint / V2X安全判定を維持したままReverse候補だけを評価する。
+Reverse maneuver終了、Forward escape成功、Recovery終了、または新規episode開始で連続数をresetする。
+最後のFSM reasonや再評価中のcandidate directionから過去のForward失敗を逆算しない。
+
 実行modeは次の順に段階化している。
 
 1. `enabled: false`: Recovery coreをcontrol cycleで評価せず、通常MPCを維持する。

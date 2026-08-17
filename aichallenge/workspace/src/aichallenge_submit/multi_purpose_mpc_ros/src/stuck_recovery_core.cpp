@@ -2719,6 +2719,76 @@ bool recovery_reverse_direction_required(
          input.obstacle_reverse_first));
 }
 
+void ForwardRecoveryFailureTracker::observe_transition(
+  const RecoveryState previous_state, const RecoveryState current_state,
+  const RecoveryReason reason) noexcept
+{
+  if (
+    previous_state == RecoveryState::ReverseManeuver &&
+    current_state != RecoveryState::ReverseManeuver)
+  {
+    reset();
+    return;
+  }
+
+  if (previous_state != RecoveryState::ForwardManeuver) {
+    return;
+  }
+
+  switch (reason) {
+    case RecoveryReason::CollisionWorsening:
+      current_cycle_failed_ = true;
+      last_failure_cause_ = ForwardRecoveryFailureCause::CollisionWorsening;
+      return;
+    case RecoveryReason::ForwardDurationLimit:
+      current_cycle_failed_ = true;
+      last_failure_cause_ = ForwardRecoveryFailureCause::DurationLimit;
+      return;
+    case RecoveryReason::ForwardEscapeConfirmed:
+      reset();
+      return;
+    default:
+      return;
+  }
+}
+
+bool ForwardRecoveryFailureTracker::consume_aggressive_retry(
+  const std::size_t retry_limit) noexcept
+{
+  if (!current_cycle_failed_) {
+    return false;
+  }
+
+  if (consecutive_failed_cycles_ < std::numeric_limits<std::size_t>::max()) {
+    ++consecutive_failed_cycles_;
+  }
+  current_cycle_failed_ = false;
+  return retry_limit > 0U && consecutive_failed_cycles_ >= retry_limit;
+}
+
+void ForwardRecoveryFailureTracker::reset() noexcept
+{
+  consecutive_failed_cycles_ = 0U;
+  current_cycle_failed_ = false;
+  last_failure_cause_ = ForwardRecoveryFailureCause::None;
+}
+
+std::size_t ForwardRecoveryFailureTracker::consecutive_failed_cycles() const noexcept
+{
+  return consecutive_failed_cycles_;
+}
+
+bool ForwardRecoveryFailureTracker::current_cycle_failed() const noexcept
+{
+  return current_cycle_failed_;
+}
+
+ForwardRecoveryFailureCause
+ForwardRecoveryFailureTracker::last_failure_cause() const noexcept
+{
+  return last_failure_cause_;
+}
+
 const char * to_string(const RecoveryState state) noexcept
 {
   switch (state) {
@@ -2910,6 +2980,19 @@ const char * to_string(const RecoveryReason reason) noexcept
       return "non_monotonic_time";
     case RecoveryReason::SessionReset:
       return "session_reset";
+  }
+  return "unknown";
+}
+
+const char * to_string(const ForwardRecoveryFailureCause cause) noexcept
+{
+  switch (cause) {
+    case ForwardRecoveryFailureCause::None:
+      return "none";
+    case ForwardRecoveryFailureCause::CollisionWorsening:
+      return "collision_worsening";
+    case ForwardRecoveryFailureCause::DurationLimit:
+      return "forward_duration_limit";
   }
   return "unknown";
 }

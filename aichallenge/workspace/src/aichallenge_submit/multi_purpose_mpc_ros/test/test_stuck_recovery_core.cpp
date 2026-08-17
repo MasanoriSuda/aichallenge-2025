@@ -17,6 +17,8 @@ using multi_purpose_mpc_ros::stuck_recovery::CollisionDeliberateStopOverrideRequ
 using multi_purpose_mpc_ros::stuck_recovery::ClearForwardEscapeProgressTracker;
 using multi_purpose_mpc_ros::stuck_recovery::ClearForwardEscapeProgressUpdate;
 using multi_purpose_mpc_ros::stuck_recovery::FollowDeliberateStopRequest;
+using multi_purpose_mpc_ros::stuck_recovery::ForwardRecoveryFailureCause;
+using multi_purpose_mpc_ros::stuck_recovery::ForwardRecoveryFailureTracker;
 using multi_purpose_mpc_ros::stuck_recovery::ForwardRecoveryRearmGuardRequest;
 using multi_purpose_mpc_ros::stuck_recovery::ForwardOvertakeHandoffAction;
 using multi_purpose_mpc_ros::stuck_recovery::ForwardOvertakeHandoffRequest;
@@ -1059,6 +1061,77 @@ TEST(StuckRecoveryReverseIntent, RequiresExplicitFailureBeforeForwardFallback)
   EXPECT_TRUE(recovery_reverse_direction_required(input));
   input.forward_fallback_unlocked = true;
   EXPECT_TRUE(recovery_reverse_direction_required(input));
+}
+
+TEST(StuckRecoveryForwardFailure, SurvivesReassessmentAndForcesConfiguredRetry)
+{
+  ForwardRecoveryFailureTracker tracker;
+
+  tracker.observe_transition(
+    RecoveryState::ForwardManeuver, RecoveryState::StopAndReassess,
+    RecoveryReason::CollisionWorsening);
+  EXPECT_TRUE(tracker.current_cycle_failed());
+  EXPECT_EQ(
+    tracker.last_failure_cause(),
+    ForwardRecoveryFailureCause::CollisionWorsening);
+
+  tracker.observe_transition(
+    RecoveryState::CheckClearance, RecoveryState::SafeStop,
+    RecoveryReason::EscapeStepLimitReached);
+  EXPECT_TRUE(tracker.current_cycle_failed());
+  EXPECT_FALSE(tracker.consume_aggressive_retry(2U));
+  EXPECT_EQ(tracker.consecutive_failed_cycles(), 1U);
+
+  tracker.observe_transition(
+    RecoveryState::ForwardManeuver, RecoveryState::StopAndReassess,
+    RecoveryReason::ForwardDurationLimit);
+  EXPECT_TRUE(tracker.consume_aggressive_retry(2U));
+  EXPECT_EQ(tracker.consecutive_failed_cycles(), 2U);
+  EXPECT_EQ(
+    tracker.last_failure_cause(), ForwardRecoveryFailureCause::DurationLimit);
+}
+
+TEST(StuckRecoveryForwardFailure, CountsMultipleFailedStepsOncePerRetryCycle)
+{
+  ForwardRecoveryFailureTracker tracker;
+
+  tracker.observe_transition(
+    RecoveryState::ForwardManeuver, RecoveryState::StopAndReassess,
+    RecoveryReason::CollisionWorsening);
+  tracker.observe_transition(
+    RecoveryState::ForwardManeuver, RecoveryState::StopAndReassess,
+    RecoveryReason::ForwardDurationLimit);
+
+  EXPECT_FALSE(tracker.consume_aggressive_retry(2U));
+  EXPECT_EQ(tracker.consecutive_failed_cycles(), 1U);
+  EXPECT_FALSE(tracker.current_cycle_failed());
+  EXPECT_FALSE(tracker.consume_aggressive_retry(2U));
+  EXPECT_EQ(tracker.consecutive_failed_cycles(), 1U);
+}
+
+TEST(StuckRecoveryForwardFailure, ReverseOrForwardSuccessBreaksFailureSequence)
+{
+  ForwardRecoveryFailureTracker tracker;
+  tracker.observe_transition(
+    RecoveryState::ForwardManeuver, RecoveryState::StopAndReassess,
+    RecoveryReason::CollisionWorsening);
+  EXPECT_FALSE(tracker.consume_aggressive_retry(2U));
+
+  tracker.observe_transition(
+    RecoveryState::ReverseManeuver, RecoveryState::StopAndReassess,
+    RecoveryReason::ReverseDistanceLimit);
+  EXPECT_EQ(tracker.consecutive_failed_cycles(), 0U);
+  EXPECT_EQ(tracker.last_failure_cause(), ForwardRecoveryFailureCause::None);
+
+  tracker.observe_transition(
+    RecoveryState::ForwardManeuver, RecoveryState::StopAndReassess,
+    RecoveryReason::ForwardDurationLimit);
+  EXPECT_FALSE(tracker.consume_aggressive_retry(2U));
+  tracker.observe_transition(
+    RecoveryState::ForwardManeuver, RecoveryState::StopBeforeDrive,
+    RecoveryReason::ForwardEscapeConfirmed);
+  EXPECT_EQ(tracker.consecutive_failed_cycles(), 0U);
+  EXPECT_FALSE(tracker.current_cycle_failed());
 }
 
 DetectorConfig detector_config()

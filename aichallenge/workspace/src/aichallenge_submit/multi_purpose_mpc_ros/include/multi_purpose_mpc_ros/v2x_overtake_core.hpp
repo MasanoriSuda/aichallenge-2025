@@ -6376,6 +6376,7 @@ struct StoppedVehicleLineOwnershipRequest
   bool low_speed_direct_control_active{false};
   bool committed_pass_mission_active{false};
   bool overtake_behavior_active{false};
+  bool validated_overtake_mission_available{false};
   bool has_front_vehicle{false};
   double front_distance_m{std::numeric_limits<double>::infinity()};
   double front_speed_mps{std::numeric_limits<double>::infinity()};
@@ -6385,7 +6386,8 @@ struct StoppedVehicleLineOwnershipRequest
 
 /// Yield the generic OvertakeLine only when the stopped-vehicle bypass owns
 /// the lateral plan. A candidate without a feasible local path must not erase
-/// a committed generic pass mission.
+/// a committed generic pass mission or a complete generic Mission that is
+/// ready for immediate execution.
 bool should_yield_overtake_line_to_stopped_bypass(
   const StoppedVehicleLineOwnershipRequest & request) noexcept;
 

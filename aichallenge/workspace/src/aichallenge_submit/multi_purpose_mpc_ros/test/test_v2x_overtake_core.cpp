@@ -13271,6 +13271,23 @@ TEST(V2XOvertakeCoreLowSpeedBypass, CandidateOwnsLineWhenLowSpeedBypassIsActive)
   EXPECT_TRUE(should_yield_overtake_line_to_stopped_bypass(request));
 }
 
+TEST(V2XOvertakeCoreLowSpeedBypass, CompleteImmediateMissionKeepsGenericLineOwnership)
+{
+  StoppedVehicleLineOwnershipRequest request;
+  request.low_speed_candidate = true;
+  request.overtake_behavior_active = true;
+  request.validated_overtake_mission_available = true;
+
+  EXPECT_FALSE(should_yield_overtake_line_to_stopped_bypass(request));
+
+  request.overtake_behavior_active = false;
+  EXPECT_TRUE(should_yield_overtake_line_to_stopped_bypass(request));
+
+  request.overtake_behavior_active = true;
+  request.low_speed_behavior_active = true;
+  EXPECT_TRUE(should_yield_overtake_line_to_stopped_bypass(request));
+}
+
 TEST(V2XOvertakeCoreLowSpeedBypass, ConfirmsOnlyDistinctConsecutiveStoppedObservations)
 {
   StoppedCandidateConfirmationRequest request;

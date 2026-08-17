@@ -11072,6 +11072,12 @@ bool should_yield_overtake_line_to_stopped_bypass(
   if (request.committed_pass_mission_active) {
     return false;
   }
+  if (
+    request.overtake_behavior_active &&
+    request.validated_overtake_mission_available)
+  {
+    return false;
+  }
   if (request.low_speed_candidate) {
     return true;
   }

@@ -19184,6 +19184,11 @@ private:
         !overtake_line_state_.target_vehicle_id.empty() &&
         overtake_line_state_.pass_side_sign != 0,
         behavior_output.state == V2XBehaviorState::Overtake,
+        behavior_output.validated_overtake_entry_longitudinal_owner &&
+        behavior_output.validated_overtake_entry_immediate_execution &&
+        behavior_output.overtake_selected_mission.has_value() &&
+        behavior_output.overtake_selected_mission->feasible &&
+        behavior_output.overtake_selected_mission->pass_side_sign != 0,
         behavior_output.has_front_vehicle,
         behavior_output.front_distance,
         behavior_output.front_speed,
@@ -36590,6 +36595,17 @@ private:
       !behavior.locked_target_position_jump && !behavior.has_danger_vehicle &&
       !behavior.overtake_forbidden_wp &&
       behavior.front_risk_level != FrontRiskLevel::EmergencyBrake;
+    const bool validated_immediate_overtake_handoff_available =
+      behavior.state == V2XBehaviorState::Overtake &&
+      behavior.validated_overtake_entry_longitudinal_owner &&
+      behavior.validated_overtake_entry_immediate_execution &&
+      behavior.overtake_selected_mission.has_value() &&
+      behavior.overtake_selected_mission->feasible &&
+      behavior.overtake_selected_mission->pass_side_sign != 0 &&
+      !behavior.target_vehicle_id.empty() && !behavior.v2x_message_invalid &&
+      !behavior.locked_target_position_jump && !behavior.has_danger_vehicle &&
+      !behavior.overtake_forbidden_wp &&
+      behavior.front_risk_level != FrontRiskLevel::EmergencyBrake;
     const bool validated_committed_overtake_handoff_available =
       (behavior.overtake_committed_execution_active ||
       behavior.overtake_paused_mission_active) &&
@@ -36601,6 +36617,7 @@ private:
       behavior.front_risk_level != FrontRiskLevel::EmergencyBrake;
     const bool validated_forward_overtake_handoff_available =
       validated_prearm_overtake_handoff_available ||
+      validated_immediate_overtake_handoff_available ||
       validated_committed_overtake_handoff_available;
     const bool suppress_start_grid_coordinated_recovery =
       start_grid_grace::should_suppress_coordinated_recovery(
@@ -37171,9 +37188,10 @@ private:
         RCLCPP_INFO(
           get_logger(),
           "Stuck recovery forward Overtake handoff candidate armed: "
-          "target=%s, committed=%d, prearm=%d",
+          "target=%s, committed=%d, immediate=%d, prearm=%d",
           behavior.target_vehicle_id.c_str(),
           validated_committed_overtake_handoff_available ? 1 : 0,
+          validated_immediate_overtake_handoff_available ? 1 : 0,
           validated_prearm_overtake_handoff_available ? 1 : 0);
       }
     } else if (!recovery_forward_overtake_handoff_drive_pending_) {
@@ -37188,6 +37206,7 @@ private:
     const bool forward_overtake_handoff_confirmed =
       raw_forward_overtake_handoff_candidate &&
       (validated_committed_overtake_handoff_available ||
+      validated_immediate_overtake_handoff_available ||
       forward_overtake_handoff_candidate_sec >=
       std::max(0.0, mpc_cfg_.v2x_behavior.overtake_entry_prearm_validation_hold_sec));
     auto forward_overtake_handoff_action =

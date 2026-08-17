@@ -410,6 +410,12 @@ mpc:
   v2x_multi_front_gap_distance: 18.0 # [m] with 2+ front vehicles, use no-gap velocity instead
   # V2X behavior FSM. When true, Cruise/Follow/Overtake/SafetyBrake controls when gap planner is allowed.
   use_v2x_behavior_fsm: true
+  # Phase 1 of Cruise-centred dynamic-obstacle planning: a confirmed stopped/slow V2X
+  # target is evaluated by the ordinary all-vehicle MPCC-lite left/right planner before
+  # the legacy stopped-vehicle local bypass may take lateral ownership.
+  v2x_dynamic_obstacle_cruise_authority_enabled: true
+  v2x_dynamic_obstacle_cruise_corridor_promotion_max_speed: 2.0 # [m/s] include crashed/5 km/h karts in the wider future-course target set
+  v2x_dynamic_obstacle_cruise_corridor_promotion_distance: 15.0 # [m] give the ordinary planner time to form a complete bypass Mission
   v2x_behavior_debug_log_enabled: true # Phase4: periodically log why Follow/Overtake was selected
   v2x_behavior_debug_log_period_sec: 1.0
   # Project ego and V2X targets onto the same bounded reference-path section.

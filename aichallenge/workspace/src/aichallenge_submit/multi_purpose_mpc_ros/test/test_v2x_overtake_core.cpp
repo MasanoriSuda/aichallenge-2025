@@ -15,6 +15,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::PassSide;
 using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedPassSideCandidate;
 using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedPassSideRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedBypassCandidateRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::DynamicObstacleCruiseAuthorityRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedShiftSteeringRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StoppedVehicleLineOwnershipRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ContinuityAction;
@@ -498,6 +499,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::
   should_log_overtake_line_transition_action;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_v2x_behavior_session_active;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_start_low_speed_bypass;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_obstacle_cruise_authority;
 using multi_purpose_mpc_ros::v2x_overtake_core::StoppedCandidateConfirmationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_stopped_candidate_confirmation;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_yield_overtake_line_to_stopped_bypass;
@@ -13184,6 +13186,38 @@ TEST(V2XOvertakeCoreLowSpeedBypass, AcceptsCloseStoppedVehicleAtPrepareBoundary)
   EXPECT_TRUE(can_start_low_speed_bypass(request));
   request.forward_distance_m = request.maximum_entry_distance_m;
   EXPECT_TRUE(can_start_low_speed_bypass(request));
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, DynamicObstacleCruiseGetsFirstRefusalForNewEncounter)
+{
+  const auto resolution = resolve_dynamic_obstacle_cruise_authority(
+    DynamicObstacleCruiseAuthorityRequest{true, true, true, false});
+
+  EXPECT_TRUE(resolution.promote_to_dynamic_front);
+  EXPECT_TRUE(resolution.defer_legacy_low_speed_entry);
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, DynamicObstacleCruiseRequiresConfirmedNearestTarget)
+{
+  auto request = DynamicObstacleCruiseAuthorityRequest{true, true, false, false};
+  auto resolution = resolve_dynamic_obstacle_cruise_authority(request);
+  EXPECT_FALSE(resolution.promote_to_dynamic_front);
+  EXPECT_FALSE(resolution.defer_legacy_low_speed_entry);
+
+  request.stopped_candidate_confirmed = true;
+  request.low_speed_corridor_vehicle_is_nearest = false;
+  resolution = resolve_dynamic_obstacle_cruise_authority(request);
+  EXPECT_FALSE(resolution.promote_to_dynamic_front);
+  EXPECT_FALSE(resolution.defer_legacy_low_speed_entry);
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, ExistingLegacyAvoidanceKeepsItsLateralOwner)
+{
+  const auto resolution = resolve_dynamic_obstacle_cruise_authority(
+    DynamicObstacleCruiseAuthorityRequest{true, true, true, true});
+
+  EXPECT_FALSE(resolution.promote_to_dynamic_front);
+  EXPECT_FALSE(resolution.defer_legacy_low_speed_entry);
 }
 
 TEST(V2XOvertakeCoreLowSpeedBypass, RejectsBumperTouchAndMovingVehicle)

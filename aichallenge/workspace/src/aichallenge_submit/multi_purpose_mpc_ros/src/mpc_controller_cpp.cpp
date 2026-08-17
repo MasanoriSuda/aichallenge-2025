@@ -1466,6 +1466,9 @@ struct V2XBehaviorConfig
   bool enabled{false};
   bool debug_log_enabled{false};
   double debug_log_period_sec{1.0};
+  bool dynamic_obstacle_cruise_authority_enabled{false};
+  double dynamic_obstacle_cruise_corridor_promotion_max_speed{2.0};
+  double dynamic_obstacle_cruise_corridor_promotion_distance{15.0};
   bool front_progress_detection_enabled{false};
   double front_progress_detection_distance{0.0};
   double front_progress_lookbehind_distance{3.0};
@@ -1980,6 +1983,8 @@ struct V2XBehaviorOutput
   std::string start_grid_lower_boundary_vehicle_id;
   std::string start_grid_upper_boundary_vehicle_id;
   bool low_speed_avoidance_candidate{false};
+  bool dynamic_obstacle_cruise_authority_active{false};
+  std::string dynamic_obstacle_cruise_target_id;
   bool low_speed_avoidance_gap_blocked{false};
   bool low_speed_avoidance_stalled{false};
   bool low_speed_avoidance_cooldown_active{false};
@@ -5849,6 +5854,10 @@ struct MPC
     double nearest_low_speed_corridor_distance = std::numeric_limits<double>::infinity();
     double nearest_low_speed_corridor_speed = std::numeric_limits<double>::infinity();
     double nearest_low_speed_corridor_lateral = std::numeric_limits<double>::infinity();
+    double nearest_low_speed_corridor_lateral_velocity = 0.0;
+    bool nearest_low_speed_corridor_lateral_velocity_valid = false;
+    double nearest_low_speed_corridor_longitudinal_acceleration = 0.0;
+    bool nearest_low_speed_corridor_longitudinal_acceleration_valid = false;
     double nearest_low_speed_corridor_local_longitudinal =
       std::numeric_limits<double>::infinity();
     double nearest_low_speed_corridor_receipt_sec =
@@ -6254,20 +6263,40 @@ struct MPC
         use_course_progress ? within_progress_corridor : within_local_corridor;
       const double low_speed_candidate_speed = std::isfinite(front_vehicle_speed) ?
         std::max(0.0, front_vehicle_speed) : std::numeric_limits<double>::infinity();
+      const double dynamic_obstacle_corridor_max_speed =
+        cfg.v2x_behavior.dynamic_obstacle_cruise_authority_enabled ?
+        std::max(
+        cfg.v2x_behavior.low_speed_avoidance_max_front_speed,
+        cfg.v2x_behavior.dynamic_obstacle_cruise_corridor_promotion_max_speed) :
+        cfg.v2x_behavior.low_speed_avoidance_max_front_speed;
+      const double dynamic_obstacle_corridor_distance =
+        cfg.v2x_behavior.dynamic_obstacle_cruise_authority_enabled ?
+        std::max(
+        cfg.v2x_behavior.low_speed_avoidance_distance,
+        cfg.v2x_behavior.dynamic_obstacle_cruise_corridor_promotion_distance) :
+        cfg.v2x_behavior.low_speed_avoidance_distance;
       if (
-        cfg.v2x_behavior.low_speed_avoidance_enabled &&
+        (cfg.v2x_behavior.low_speed_avoidance_enabled ||
+        cfg.v2x_behavior.dynamic_obstacle_cruise_authority_enabled) &&
         vehicle.velocity_observation_valid &&
         within_low_speed_course_corridor &&
         clearance_longitudinal > 0.0 &&
-        clearance_longitudinal <= cfg.v2x_behavior.low_speed_avoidance_distance &&
+        clearance_longitudinal <= dynamic_obstacle_corridor_distance &&
         std::isfinite(low_speed_candidate_speed) &&
-        low_speed_candidate_speed <= cfg.v2x_behavior.low_speed_avoidance_max_front_speed &&
+        low_speed_candidate_speed <= dynamic_obstacle_corridor_max_speed &&
         clearance_longitudinal < nearest_low_speed_corridor_distance)
       {
         has_low_speed_corridor_vehicle = true;
         nearest_low_speed_corridor_distance = clearance_longitudinal;
         nearest_low_speed_corridor_speed = low_speed_candidate_speed;
         nearest_low_speed_corridor_lateral = front_lateral;
+        nearest_low_speed_corridor_lateral_velocity = observed_course_lateral_velocity;
+        nearest_low_speed_corridor_lateral_velocity_valid =
+          observed_course_lateral_velocity_valid;
+        nearest_low_speed_corridor_longitudinal_acceleration =
+          front_longitudinal_acceleration;
+        nearest_low_speed_corridor_longitudinal_acceleration_valid =
+          front_longitudinal_acceleration_valid;
         nearest_low_speed_corridor_local_longitudinal = longitudinal;
         nearest_low_speed_corridor_receipt_sec = vehicle.receipt_sec;
         nearest_low_speed_corridor_progress_used = use_course_progress;
@@ -6536,6 +6565,36 @@ struct MPC
       stopped_candidate_confirmation.last_observation_sec;
     const bool low_speed_stopped_candidate_confirmed =
       continuing_low_speed_avoidance || stopped_candidate_confirmation.confirmed;
+
+    const auto dynamic_obstacle_cruise_authority =
+      v2x_overtake_core::resolve_dynamic_obstacle_cruise_authority(
+      v2x_overtake_core::DynamicObstacleCruiseAuthorityRequest{
+        cfg.v2x_behavior.dynamic_obstacle_cruise_authority_enabled,
+        low_speed_corridor_vehicle_is_nearest,
+        low_speed_stopped_candidate_confirmed,
+        continuing_low_speed_avoidance});
+    if (dynamic_obstacle_cruise_authority.promote_to_dynamic_front) {
+      // GapPlanner constrains its horizon with every active V2X footprint.
+      // Promote the wider course-corridor observation only as the tactical
+      // target, so the ordinary left/right MPCC-lite Mission generator gets
+      // first authority before any stopped-vehicle special case.
+      has_front_vehicle = true;
+      nearest_front_distance = nearest_low_speed_corridor_distance;
+      nearest_front_speed = nearest_low_speed_corridor_speed;
+      nearest_front_lateral = nearest_low_speed_corridor_lateral;
+      nearest_front_lateral_velocity = nearest_low_speed_corridor_lateral_velocity;
+      nearest_front_lateral_velocity_valid =
+        nearest_low_speed_corridor_lateral_velocity_valid;
+      nearest_front_longitudinal_acceleration =
+        nearest_low_speed_corridor_longitudinal_acceleration;
+      nearest_front_longitudinal_acceleration_valid =
+        nearest_low_speed_corridor_longitudinal_acceleration_valid;
+      nearest_front_local_longitudinal = nearest_low_speed_corridor_local_longitudinal;
+      nearest_front_progress_used = nearest_low_speed_corridor_progress_used;
+      nearest_front_id = nearest_low_speed_corridor_id;
+      output.dynamic_obstacle_cruise_authority_active = true;
+      output.dynamic_obstacle_cruise_target_id = nearest_low_speed_corridor_id;
+    }
 
     output.front_distance = nearest_front_distance;
     output.start_grid_dynamic_peer_speed = start_grid_peer_max_speed;
@@ -7323,7 +7382,9 @@ struct MPC
         nearest_low_speed_corridor_distance,
         cfg.v2x_behavior.low_speed_avoidance_min_prepare_distance,
         cfg.v2x_behavior.low_speed_avoidance_distance});
-    output.low_speed_avoidance_candidate = low_speed_avoidance_candidate;
+    output.low_speed_avoidance_candidate =
+      low_speed_avoidance_candidate &&
+      !dynamic_obstacle_cruise_authority.defer_legacy_low_speed_entry;
     const auto adopt_low_speed_corridor_vehicle = [&]() {
         output.has_front_vehicle = true;
         output.front_distance = nearest_low_speed_corridor_distance;
@@ -7335,7 +7396,10 @@ struct MPC
         output.target_vehicle_id = nearest_low_speed_corridor_id;
       };
     bool low_speed_avoidance_gap_blocked = false;
-    if (low_speed_avoidance_candidate) {
+    if (
+      low_speed_avoidance_candidate &&
+      !dynamic_obstacle_cruise_authority.defer_legacy_low_speed_entry)
+    {
       const double low_speed_gap_max_self_distance =
         std::max(
           cfg.v2x_behavior.low_speed_avoidance_distance + model->length,
@@ -12816,6 +12880,9 @@ struct MPC
           cfg.v2x_behavior.overtake_guard_enabled ?
           overtake_block_reason :
           "front vehicle and gap available";
+        if (output.dynamic_obstacle_cruise_authority_active) {
+          output.reason = "all-V2X dynamic-obstacle cruise / " + output.reason;
+        }
         if (
           cfg.v2x_behavior.overtake_minimum_lateral_motion_enabled &&
           !start_grid_breakout_attempt && locked_pass_side == 0)
@@ -12857,6 +12924,11 @@ struct MPC
         // `before_curve_overtake_allowed` is a relaxation that has already passed.  If
         // execution is still rejected, report the guard that actually rejected it.
         output.reason = overtake_block_reason;
+        if (output.dynamic_obstacle_cruise_authority_active) {
+          output.reason =
+            "all-V2X dynamic-obstacle planner found no executable corridor / " +
+            output.reason;
+        }
         bool front_risk_applied = false;
         if (apply_follow_velocity_limits(
             output, nearest_front_distance, nearest_front_speed, front_decel_curve_guard, front_risk,
@@ -32024,6 +32096,33 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_behavior_debug_log_period_sec"] ?
     mpc["v2x_behavior_debug_log_period_sec"].as<double>() : 1.0);
+  cfg.mpc.v2x_behavior.dynamic_obstacle_cruise_authority_enabled =
+    mpc["v2x_dynamic_obstacle_cruise_authority_enabled"] ?
+    mpc["v2x_dynamic_obstacle_cruise_authority_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.dynamic_obstacle_cruise_corridor_promotion_max_speed =
+    mpc["v2x_dynamic_obstacle_cruise_corridor_promotion_max_speed"] ?
+    mpc["v2x_dynamic_obstacle_cruise_corridor_promotion_max_speed"].as<double>() : 2.0;
+  if (
+    !std::isfinite(
+      cfg.mpc.v2x_behavior.dynamic_obstacle_cruise_corridor_promotion_max_speed) ||
+    cfg.mpc.v2x_behavior.dynamic_obstacle_cruise_corridor_promotion_max_speed < 0.0)
+  {
+    throw std::runtime_error(
+            "mpc.v2x_dynamic_obstacle_cruise_corridor_promotion_max_speed must be finite "
+            "and non-negative");
+  }
+  cfg.mpc.v2x_behavior.dynamic_obstacle_cruise_corridor_promotion_distance =
+    mpc["v2x_dynamic_obstacle_cruise_corridor_promotion_distance"] ?
+    mpc["v2x_dynamic_obstacle_cruise_corridor_promotion_distance"].as<double>() : 15.0;
+  if (
+    !std::isfinite(
+      cfg.mpc.v2x_behavior.dynamic_obstacle_cruise_corridor_promotion_distance) ||
+    cfg.mpc.v2x_behavior.dynamic_obstacle_cruise_corridor_promotion_distance <= 0.0)
+  {
+    throw std::runtime_error(
+            "mpc.v2x_dynamic_obstacle_cruise_corridor_promotion_distance must be finite "
+            "and positive");
+  }
   cfg.mpc.v2x_behavior.front_progress_detection_enabled =
     mpc["v2x_front_progress_detection_enabled"] ?
     mpc["v2x_front_progress_detection_enabled"].as<bool>() : false;
@@ -33402,6 +33501,14 @@ public:
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_inner_curve_precommit_min_relative_speed,
         mpc_cfg_.v2x_behavior.overtake_inner_curve_min_open_distance);
+      RCLCPP_INFO(
+        get_logger(),
+        "V2X all-vehicle dynamic-obstacle Cruise authority: %s, "
+        "corridor_promotion_max_speed=%.2f m/s, distance=%.2f m",
+        mpc_cfg_.v2x_behavior.dynamic_obstacle_cruise_authority_enabled ?
+        "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.dynamic_obstacle_cruise_corridor_promotion_max_speed,
+        mpc_cfg_.v2x_behavior.dynamic_obstacle_cruise_corridor_promotion_distance);
       RCLCPP_INFO(
         get_logger(),
         "V2X new-entry speed readiness: min_relative_speed=%.2f m/s, confirm=%.2f s, "

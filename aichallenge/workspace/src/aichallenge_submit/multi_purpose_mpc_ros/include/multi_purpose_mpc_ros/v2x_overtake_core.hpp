@@ -6345,6 +6345,31 @@ struct LowSpeedBypassCandidateRequest
 /// the future course corridor to start lateral planning before center overlap.
 bool can_start_low_speed_bypass(const LowSpeedBypassCandidateRequest & request) noexcept;
 
+struct DynamicObstacleCruiseAuthorityRequest
+{
+  bool enabled{false};
+  bool low_speed_corridor_vehicle_is_nearest{false};
+  bool stopped_candidate_confirmed{false};
+  bool continuing_legacy_low_speed_avoidance{false};
+};
+
+struct DynamicObstacleCruiseAuthorityResolution
+{
+  /// Promote the wider course-corridor observation into the ordinary front
+  /// target used by the receding-horizon left/right Mission evaluation.
+  bool promote_to_dynamic_front{false};
+  /// A new stopped/slow encounter must not be consumed by the legacy local
+  /// bypass before the ordinary dynamic-obstacle planner gets first refusal.
+  bool defer_legacy_low_speed_entry{false};
+};
+
+/// Give the ordinary all-V2X receding-horizon planner first authority over a
+/// confirmed stopped/slow blocker. Existing legacy low-speed control is kept
+/// until it completes so enabling the policy cannot switch lateral owners in
+/// the middle of an already executing maneuver.
+DynamicObstacleCruiseAuthorityResolution resolve_dynamic_obstacle_cruise_authority(
+  const DynamicObstacleCruiseAuthorityRequest & request) noexcept;
+
 struct StoppedCandidateConfirmationRequest
 {
   bool candidate_present{false};

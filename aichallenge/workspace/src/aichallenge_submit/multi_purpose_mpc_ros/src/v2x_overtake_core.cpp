@@ -11026,6 +11026,19 @@ bool can_start_low_speed_bypass(const LowSpeedBypassCandidateRequest & request) 
          request.forward_distance_m <= request.maximum_entry_distance_m;
 }
 
+DynamicObstacleCruiseAuthorityResolution resolve_dynamic_obstacle_cruise_authority(
+  const DynamicObstacleCruiseAuthorityRequest & request) noexcept
+{
+  DynamicObstacleCruiseAuthorityResolution resolution;
+  const bool ordinary_dynamic_planner_owns_new_encounter =
+    request.enabled && request.low_speed_corridor_vehicle_is_nearest &&
+    request.stopped_candidate_confirmed &&
+    !request.continuing_legacy_low_speed_avoidance;
+  resolution.promote_to_dynamic_front = ordinary_dynamic_planner_owns_new_encounter;
+  resolution.defer_legacy_low_speed_entry = ordinary_dynamic_planner_owns_new_encounter;
+  return resolution;
+}
+
 StoppedCandidateConfirmationResult update_stopped_candidate_confirmation(
   const StoppedCandidateConfirmationRequest & request) noexcept
 {

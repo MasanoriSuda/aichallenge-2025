@@ -10,6 +10,7 @@
 #include <multi_purpose_mpc_ros/awsim_boost_start_dash.hpp>
 #include <multi_purpose_mpc_ros/awsim_control_mode_guard.hpp>
 #include <multi_purpose_mpc_ros/latest_only_worker.hpp>
+#include <multi_purpose_mpc_ros/mpcc_progress.hpp>
 #include <multi_purpose_mpc_ros/mpc_state_prediction.hpp>
 #include <multi_purpose_mpc_ros/mpc_velocity_limit.hpp>
 #include <multi_purpose_mpc_ros/mpc_waypoint_association.hpp>
@@ -106,6 +107,7 @@ namespace mpc_waypoint_association = ::multi_purpose_mpc_ros::mpc_waypoint_assoc
 namespace mpc_waypoint_preview = ::multi_purpose_mpc_ros::mpc_waypoint_preview;
 namespace overtake_core = ::multi_purpose_mpc_ros::v2x_overtake_core;
 namespace persistent_osqp = ::multi_purpose_mpc_ros::persistent_osqp;
+namespace mpcc_progress = ::multi_purpose_mpc_ros::mpcc_progress;
 namespace recovery_footprint = ::multi_purpose_mpc_ros::recovery_footprint;
 namespace recovery_mpc = ::multi_purpose_mpc_ros::recovery_mpc;
 namespace runtime_speed_profile = ::multi_purpose_mpc_ros::runtime_speed_profile;
@@ -4554,6 +4556,9 @@ struct MpcConfig
   double state_prediction_delay_sec{0.0};
   bool state_prediction_simulation_only{true};
   double min_linearization_speed_mps{0.5};
+  bool progress_contouring_mpcc_enabled{false};
+  bool progress_contouring_mpcc_overtake_only{true};
+  mpcc_progress::Config progress_contouring;
   mpc_waypoint_association::Config waypoint_association;
   double steering_tire_angle_gain_var{};
   double accel_low_pass_gain{};
@@ -4587,6 +4592,7 @@ struct MpcProblem
   int tracking_wp_id{};
   int preview_wp_id{};
   int ref_wp_id{};
+  bool progress_contouring_active{false};
 };
 
 struct MpcOsqpTelemetryWindow
@@ -12981,8 +12987,12 @@ struct MPC
     }
     kappa_pred[N - 1] = std::tan(current_control[nu * N - 1]) / model->length;
 
-    Eigen::MatrixXd A_dense = Eigen::MatrixXd::Zero(nx_N, nx_N);
-    Eigen::MatrixXd B_dense = Eigen::MatrixXd::Zero(nx_N, nu_N);
+    // Keep stage geometry separate from dynamics construction. The legacy
+    // spatial-time model and the progress-contouring model share the same
+    // corridor/reference generation below, then select one 3x2 dynamics block.
+    std::vector<double> stage_distance_m(static_cast<std::size_t>(N));
+    std::vector<double> stage_tracking_speed_mps(static_cast<std::size_t>(N));
+    std::vector<double> stage_tracking_curvature_radpm(static_cast<std::size_t>(N));
     for (int n = 0; n < N; ++n) {
       const auto & tracking_waypoint =
         model->reference_path->get_waypoint(tracking_wp_id + n);
@@ -12997,14 +13007,11 @@ struct MPC
       const double preview_v = clip(preview_waypoint.v_ref, umin[0], umax[0]);
       const auto input_reference = mpc_waypoint_preview::resolve_input_reference(
         tracking_v, tracking_kappa, preview_v, preview_kappa);
-      const auto [f, A_lin, B_lin] =
-        model->linearize(tracking_v, tracking_kappa, delta_s);
-      A_dense.block<nx, nx>((n + 1) * nx, n * nx) = A_lin;
-      B_dense.block<nx, nu>((n + 1) * nx, n * nu) = B_lin;
+      stage_distance_m[static_cast<std::size_t>(n)] = delta_s;
+      stage_tracking_speed_mps[static_cast<std::size_t>(n)] = tracking_v;
+      stage_tracking_curvature_radpm[static_cast<std::size_t>(n)] = tracking_kappa;
       ur.segment<nu>(n * nu) =
         Eigen::Vector2d(input_reference.velocity_mps, input_reference.curvature_radpm);
-      uq.segment<nx>(n * nx) =
-        B_lin * Eigen::Vector2d(tracking_v, tracking_kappa) - f;
 
       double max_kappa_pred = std::abs(kappa_pred[n]);
       if (cfg.use_max_kappa_pred) {
@@ -13818,6 +13825,81 @@ struct MPC
       xr[nx + i * nx] = clip(xr[nx + i * nx], lb[i], ub[i]);
     }
 
+    const bool progress_contouring_execution_phase =
+      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+      overtake_line_state_.phase == OvertakeLinePhase::Pass ||
+      overtake_line_state_.phase == OvertakeLinePhase::Return;
+    const bool progress_contouring_active =
+      cfg.progress_contouring_mpcc_enabled &&
+      (!cfg.progress_contouring_mpcc_overtake_only || progress_contouring_execution_phase);
+    std::optional<std::vector<double>> progress_reference;
+    if (progress_contouring_active) {
+      progress_reference = mpcc_progress::build_progress_reference(
+        model->s, stage_distance_m);
+      if (!progress_reference.has_value() ||
+        progress_reference->size() != static_cast<std::size_t>(N + 1))
+      {
+        throw std::runtime_error("progress MPCC rejected invalid progress reference");
+      }
+      for (int state_index = 0; state_index < N + 1; ++state_index) {
+        const double reference_progress =
+          progress_reference->at(static_cast<std::size_t>(state_index));
+        const auto bounds = mpcc_progress::resolve_progress_bounds(
+          model->s, reference_progress, cfg.progress_contouring);
+        if (!bounds.has_value()) {
+          throw std::runtime_error("progress MPCC rejected invalid trust region");
+        }
+        xr[state_index * nx + 2] = reference_progress;
+        xmin_dyn[state_index * nx + 2] = bounds->lower_m;
+        xmax_dyn[state_index * nx + 2] = bounds->upper_m;
+      }
+    }
+
+    Eigen::MatrixXd A_dense = Eigen::MatrixXd::Zero(nx_N, nx_N);
+    Eigen::MatrixXd B_dense = Eigen::MatrixXd::Zero(nx_N, nu_N);
+    std::vector<double> dynamics_stage_dt_sec(
+      static_cast<std::size_t>(N), model->Ts);
+    for (int n = 0; n < N; ++n) {
+      if (progress_contouring_active) {
+        const double reference_lateral = n == 0 ?
+          model->spatial_state.e_y : xr[n * nx];
+        const double reference_heading = n == 0 ?
+          model->spatial_state.e_psi : xr[n * nx + 1];
+        const auto linearization = mpcc_progress::linearize_temporal_frenet(
+          mpcc_progress::LinearizationRequest{
+            reference_lateral,
+            reference_heading,
+            progress_reference->at(static_cast<std::size_t>(n)),
+            ur[n * nu],
+            stage_tracking_curvature_radpm[static_cast<std::size_t>(n)],
+            stage_distance_m[static_cast<std::size_t>(n)],
+            cfg.progress_contouring});
+        if (!linearization.has_value()) {
+          std::ostringstream reason;
+          reason << "progress MPCC temporal Frenet linearization rejected stage " << n;
+          throw std::runtime_error(reason.str());
+        }
+        A_dense.block<nx, nx>((n + 1) * nx, n * nx) =
+          linearization->state_matrix;
+        B_dense.block<nx, nu>((n + 1) * nx, n * nu) =
+          linearization->input_matrix;
+        uq.segment<nx>(n * nx) = linearization->equality_offset;
+        dynamics_stage_dt_sec[static_cast<std::size_t>(n)] =
+          linearization->stage_dt_sec;
+      } else {
+        const auto [f, A_lin, B_lin] = model->linearize(
+          stage_tracking_speed_mps[static_cast<std::size_t>(n)],
+          stage_tracking_curvature_radpm[static_cast<std::size_t>(n)],
+          stage_distance_m[static_cast<std::size_t>(n)]);
+        A_dense.block<nx, nx>((n + 1) * nx, n * nx) = A_lin;
+        B_dense.block<nx, nu>((n + 1) * nx, n * nu) = B_lin;
+        uq.segment<nx>(n * nx) =
+          B_lin * Eigen::Vector2d(
+          stage_tracking_speed_mps[static_cast<std::size_t>(n)],
+          stage_tracking_curvature_radpm[static_cast<std::size_t>(n)]) - f;
+      }
+    }
+
     validate_mpc_preflight(lb, ub, xr, ur, umax_dyn, N, nx);
 
     std::vector<Eigen::Triplet<double>> a_triplets;
@@ -13861,7 +13943,12 @@ struct MPC
     A_full.setFromTriplets(a_triplets.begin(), a_triplets.end());
 
     Eigen::Vector3d x0;
-    x0 << model->spatial_state.e_y, model->spatial_state.e_psi, model->spatial_state.t;
+    x0 << model->spatial_state.e_y, model->spatial_state.e_psi,
+      progress_contouring_active ? model->s : model->spatial_state.t;
+    if (progress_contouring_active) {
+      xmin_dyn[2] = model->s;
+      xmax_dyn[2] = model->s;
+    }
     Eigen::VectorXd leq(nx_N);
     leq.segment<3>(0) = -x0;
     leq.segment(3, uq.size()) = uq;
@@ -13872,13 +13959,21 @@ struct MPC
     lineq_basic << xmin_dyn, umin_dyn;
     uineq_basic << xmax_dyn, umax_dyn;
 
-    const double max_delta_change = cfg.steer_rate_max * model->Ts;
-    const double max_kappa_change = std::tan(max_delta_change) / model->length;
     const double previous_kappa = std::tan(previous_steering) / model->length;
-    Eigen::VectorXd lineq_rate = Eigen::VectorXd::Constant(N, -max_kappa_change);
-    Eigen::VectorXd uineq_rate = Eigen::VectorXd::Constant(N, max_kappa_change);
-    lineq_rate[0] = previous_kappa - max_kappa_change;
-    uineq_rate[0] = previous_kappa + max_kappa_change;
+    Eigen::VectorXd lineq_rate(N);
+    Eigen::VectorXd uineq_rate(N);
+    const double first_max_kappa_change =
+      std::tan(cfg.steer_rate_max * model->Ts) / model->length;
+    lineq_rate[0] = previous_kappa - first_max_kappa_change;
+    uineq_rate[0] = previous_kappa + first_max_kappa_change;
+    for (int i = 1; i < N; ++i) {
+      const double stage_dt = progress_contouring_active ?
+        dynamics_stage_dt_sec[static_cast<std::size_t>(i - 1)] : model->Ts;
+      const double max_kappa_change =
+        std::tan(cfg.steer_rate_max * stage_dt) / model->length;
+      lineq_rate[i] = -max_kappa_change;
+      uineq_rate[i] = max_kappa_change;
+    }
 
     Eigen::VectorXd l(leq.size() + lineq_basic.size() + lineq_rate.size());
     Eigen::VectorXd u(ueq.size() + uineq_basic.size() + uineq_rate.size());
@@ -13888,11 +13983,15 @@ struct MPC
     std::vector<Eigen::Triplet<double>> p_triplets;
     for (int n = 0; n < N; ++n) {
       for (int i = 0; i < 3; ++i) {
-        p_triplets.emplace_back(n * 3 + i, n * 3 + i, cfg.Q[i]);
+        const double weight = progress_contouring_active && i == 2 ?
+          cfg.progress_contouring.lag_weight : cfg.Q[i];
+        p_triplets.emplace_back(n * 3 + i, n * 3 + i, weight);
       }
     }
     for (int i = 0; i < 3; ++i) {
-      p_triplets.emplace_back(N * 3 + i, N * 3 + i, cfg.QN[i]);
+      const double weight = progress_contouring_active && i == 2 ?
+        cfg.progress_contouring.terminal_lag_weight : cfg.QN[i];
+      p_triplets.emplace_back(N * 3 + i, N * 3 + i, weight);
     }
     const int input_offset = nx_N;
     for (int n = 0; n < N; ++n) {
@@ -13908,15 +14007,34 @@ struct MPC
       for (int i = 0; i < 3; ++i) {
         q[n * 3 + i] = -cfg.Q[i] * xr[n * 3 + i];
       }
+      if (progress_contouring_active) {
+        const auto progress_cost = mpcc_progress::resolve_progress_cost(
+          progress_reference->at(static_cast<std::size_t>(n)), false,
+          cfg.progress_contouring);
+        if (!progress_cost.has_value()) {
+          throw std::runtime_error("progress MPCC rejected invalid stage cost");
+        }
+        q[n * 3 + 2] = progress_cost->linear_coefficient;
+      }
     }
     q.segment<3>(N * 3) = -(cfg.QN.asDiagonal() * xr.segment<3>(N * 3));
+    if (progress_contouring_active) {
+      const auto terminal_progress_cost = mpcc_progress::resolve_progress_cost(
+        progress_reference->back(), true, cfg.progress_contouring);
+      if (!terminal_progress_cost.has_value()) {
+        throw std::runtime_error("progress MPCC rejected invalid terminal cost");
+      }
+      q[N * 3 + 2] = terminal_progress_cost->linear_coefficient;
+    }
     for (int n = 0; n < N; ++n) {
       for (int i = 0; i < 2; ++i) {
         q[nx_N + n * 2 + i] = -cfg.R[i] * ur[n * 2 + i];
       }
     }
 
-    return MpcProblem{q, l, u, P, A_full, N, tracking_wp_id, preview_wp_id, ref_wp_id};
+    return MpcProblem{
+      q, l, u, P, A_full, N, tracking_wp_id, preview_wp_id, ref_wp_id,
+      progress_contouring_active};
   }
 
   void record_osqp_telemetry(
@@ -13989,11 +14107,30 @@ struct MPC
     persistent_osqp_solver_.reset();
     last_osqp_solution_.reset();
     last_osqp_solution_sec_ = -std::numeric_limits<double>::infinity();
+    last_osqp_progress_contouring_mode_.reset();
   }
 
   persistent_osqp::SolveOutcome solve_problem(
     const MpcProblem & problem, const double now_sec)
   {
+    const bool progress_mode_changed =
+      !last_osqp_progress_contouring_mode_.has_value() ||
+      last_osqp_progress_contouring_mode_.value() != problem.progress_contouring_active;
+    if (progress_mode_changed) {
+      // Both modes intentionally keep a 3x2 sparse QP, but state[2] means
+      // elapsed time in legacy mode and physical course progress in MPCC mode.
+      // Never reinterpret one mode's primal/dual warm-start as the other.
+      persistent_osqp_solver_.reset();
+      last_osqp_solution_.reset();
+      last_osqp_solution_sec_ = -std::numeric_limits<double>::infinity();
+      last_osqp_progress_contouring_mode_ = problem.progress_contouring_active;
+      if (cfg.v2x_behavior.overtake_line.debug_log_enabled) {
+        RCLCPP_INFO(
+          rclcpp::get_logger("mpc_controller"),
+          "MPC formulation switched: progress_contouring=%d, warm-start reset",
+          problem.progress_contouring_active ? 1 : 0);
+      }
+    }
     std::optional<persistent_osqp::WarmStart> warm_start;
     const bool previous_solution_fresh =
       std::isfinite(now_sec) && std::isfinite(last_osqp_solution_sec_) &&
@@ -14705,6 +14842,7 @@ struct MPC
   persistent_osqp::PersistentOsqpSolver persistent_osqp_solver_;
   std::optional<persistent_osqp::WarmStart> last_osqp_solution_;
   double last_osqp_solution_sec_{-std::numeric_limits<double>::infinity()};
+  std::optional<bool> last_osqp_progress_contouring_mode_;
   MpcOsqpTelemetryWindow osqp_telemetry_window_;
   double last_osqp_telemetry_log_sec_{std::numeric_limits<double>::quiet_NaN()};
   std::optional<double> failure_fallback_speed_;
@@ -29706,6 +29844,45 @@ Config load_config(const std::string & path)
   {
     throw std::runtime_error("mpc.min_linearization_speed_mps must be finite and positive");
   }
+  cfg.mpc.progress_contouring_mpcc_enabled =
+    mpc["progress_contouring_mpcc_enabled"] ?
+    mpc["progress_contouring_mpcc_enabled"].as<bool>() : false;
+  cfg.mpc.progress_contouring_mpcc_overtake_only =
+    mpc["progress_contouring_mpcc_overtake_only"] ?
+    mpc["progress_contouring_mpcc_overtake_only"].as<bool>() : true;
+  auto & progress_contouring = cfg.mpc.progress_contouring;
+  progress_contouring.minimum_reference_speed_mps = cfg.mpc.min_linearization_speed_mps;
+  progress_contouring.minimum_frenet_denominator =
+    mpc["progress_contouring_minimum_frenet_denominator"] ?
+    mpc["progress_contouring_minimum_frenet_denominator"].as<double>() : 0.20;
+  progress_contouring.minimum_stage_dt_sec =
+    mpc["progress_contouring_minimum_stage_dt_sec"] ?
+    mpc["progress_contouring_minimum_stage_dt_sec"].as<double>() : 0.01;
+  progress_contouring.maximum_stage_dt_sec =
+    mpc["progress_contouring_maximum_stage_dt_sec"] ?
+    mpc["progress_contouring_maximum_stage_dt_sec"].as<double>() : 0.25;
+  progress_contouring.trust_region_backward_m =
+    mpc["progress_contouring_trust_region_backward_m"] ?
+    mpc["progress_contouring_trust_region_backward_m"].as<double>() : 12.0;
+  progress_contouring.trust_region_forward_m =
+    mpc["progress_contouring_trust_region_forward_m"] ?
+    mpc["progress_contouring_trust_region_forward_m"].as<double>() : 2.0;
+  progress_contouring.lag_weight =
+    mpc["progress_contouring_lag_weight"] ?
+    mpc["progress_contouring_lag_weight"].as<double>() : 5000.0;
+  progress_contouring.terminal_lag_weight =
+    mpc["progress_contouring_terminal_lag_weight"] ?
+    mpc["progress_contouring_terminal_lag_weight"].as<double>() : 2500.0;
+  progress_contouring.progress_reward_weight =
+    mpc["progress_contouring_progress_reward_weight"] ?
+    mpc["progress_contouring_progress_reward_weight"].as<double>() : 2000.0;
+  progress_contouring.terminal_progress_reward_weight =
+    mpc["progress_contouring_terminal_progress_reward_weight"] ?
+    mpc["progress_contouring_terminal_progress_reward_weight"].as<double>() : 5000.0;
+  if (!mpcc_progress::resolve_progress_cost(0.0, false, progress_contouring).has_value()) {
+    throw std::runtime_error(
+            "mpc.progress_contouring_* values must be finite and within range");
+  }
   auto & waypoint_association = cfg.mpc.waypoint_association;
   waypoint_association.enabled = mpc["waypoint_local_association_enabled"] ?
     mpc["waypoint_local_association_enabled"].as<bool>() : false;
@@ -32077,6 +32254,18 @@ public:
       mpc_cfg_.v2x_behavior.start_grid_grace_time > 0.0));
 
     create_map_ref_path_car_mpc();
+    RCLCPP_INFO(
+      get_logger(),
+      "Progress-contouring MPCC: %s, scope=%s, lag=%.1f/%.1f, "
+      "reward=%.1f/%.1f, trust=-%.1f/+%.1f m",
+      mpc_cfg_.progress_contouring_mpcc_enabled ? "enabled" : "disabled",
+      mpc_cfg_.progress_contouring_mpcc_overtake_only ? "overtake" : "all",
+      mpc_cfg_.progress_contouring.lag_weight,
+      mpc_cfg_.progress_contouring.terminal_lag_weight,
+      mpc_cfg_.progress_contouring.progress_reward_weight,
+      mpc_cfg_.progress_contouring.terminal_progress_reward_weight,
+      mpc_cfg_.progress_contouring.trust_region_backward_m,
+      mpc_cfg_.progress_contouring.trust_region_forward_m);
     setup_parameters_callback();
     setup_pub_sub();
     if (ref_vel_config_path_.has_value()) {

@@ -71,6 +71,14 @@ target_link_libraries(${PROJECT_NAME}_persistent_osqp
   osqp::osqp
 )
 
+ament_auto_add_library(${PROJECT_NAME}_mpcc_progress SHARED
+  NO_TARGET_LINK_LIBRARIES
+  src/mpcc_progress.cpp
+)
+target_include_directories(${PROJECT_NAME}_mpcc_progress PUBLIC
+  ${EIGEN3_INCLUDE_DIRS}
+)
+
 ament_auto_add_library(${PROJECT_NAME}_latest_only_worker SHARED
   NO_TARGET_LINK_LIBRARIES
   src/latest_only_worker.cpp
@@ -122,6 +130,7 @@ target_link_libraries(mpc_controller_cpp
   ${PROJECT_NAME}_awsim_boost_start_dash
   ${PROJECT_NAME}_awsim_control_mode_guard
   ${PROJECT_NAME}_path_core
+  ${PROJECT_NAME}_mpcc_progress
   ${PROJECT_NAME}_persistent_osqp
   ${PROJECT_NAME}_latest_only_worker
   ${PROJECT_NAME}_mpc_state_prediction
@@ -223,6 +232,15 @@ if(BUILD_TESTING)
   if(TARGET test_persistent_osqp)
     target_link_libraries(test_persistent_osqp
       ${PROJECT_NAME}_persistent_osqp
+    )
+  endif()
+
+  ament_add_gtest(test_mpcc_progress
+    test/test_mpcc_progress.cpp
+  )
+  if(TARGET test_mpcc_progress)
+    target_link_libraries(test_mpcc_progress
+      ${PROJECT_NAME}_mpcc_progress
     )
   endif()
 

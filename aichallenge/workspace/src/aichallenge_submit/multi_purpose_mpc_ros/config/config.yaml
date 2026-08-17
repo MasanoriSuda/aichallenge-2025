@@ -325,6 +325,20 @@ mpc:
   state_prediction_delay_sec: 0.13
   state_prediction_simulation_only: true
   min_linearization_speed_mps: 0.5 # [m/s], avoid singular 1/v terms below this speed
+  # First real contouring-progress MPCC stage. During ShiftOut/Pass/Return the
+  # third state changes from fixed-distance elapsed time to physical course
+  # progress. Existing DP stage corridor remains the hard lateral constraint.
+  progress_contouring_mpcc_enabled: true
+  progress_contouring_mpcc_overtake_only: true
+  progress_contouring_minimum_frenet_denominator: 0.20
+  progress_contouring_minimum_stage_dt_sec: 0.01
+  progress_contouring_maximum_stage_dt_sec: 0.25
+  progress_contouring_trust_region_backward_m: 12.0
+  progress_contouring_trust_region_forward_m: 2.0
+  progress_contouring_lag_weight: 5000.0
+  progress_contouring_terminal_lag_weight: 2500.0
+  progress_contouring_progress_reward_weight: 2000.0
+  progress_contouring_terminal_progress_reward_weight: 5000.0
   # Keep ego course progress on the same hairpin branch after contact. Reacquire globally only
   # after the complete local window is farther than the lost threshold.
   waypoint_local_association_enabled: true

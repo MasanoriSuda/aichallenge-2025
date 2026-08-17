@@ -107,6 +107,27 @@ C++ 本番ノードの経路入力・solver処理には、次の安全化を適�
 - Python `path_constraints_provider` も circular CSV の重複終点を同じ許容差で除去し、C++側は受信したrows/colsが内部ReferencePathと一致しない制約を拒否する。
 - solver fallback と `/control/mpc/stop_request` はlegacy boost arbitrationより優先し、boostを必ず無効化する。low-pass gainは `[0,1]` に限定し、filter後にも加速度、操舵角、操舵変化量を制限する。
 
+### Contouring-progress MPCC 第1段階（2026-08-17、2025由来の暫定）
+
+追い越しの`ShiftOut`、`Pass`、`Return`では、従来の空間領域
+`[e_y, e_psi, t]`モデルから、時間領域Frenet
+`[e_y, e_psi, s]`モデルへ切り替えられる。入力次元は従来どおり
+`[v, kappa]`であり、QPの3状態・2入力の固定疎構造、Persistent OSQP、
+primal/dual shift warm-startを維持する。
+
+第3状態`s`は速度入力とFrenet kinematic modelで結合され、stage progressの
+lag cost、前進reward、asymmetric trust regionを持つ。既存Frenet DPの
+stage corridorは`e_y`のhard boundとしてそのまま使う。これによりDPが
+左右topologyを決め、MPCCが回廊内の横位置、姿勢、速度、進捗を同時に解く。
+
+legacyとprogress modeでは第3状態の意味が異なるため、mode遷移時はOSQP
+workspaceとwarm-startを一度resetする。設定
+`progress_contouring_mpcc_enabled`で従来MPCへ戻せる。
+
+これは本格MPCCへの第1段階であり、複数回RTI-SQP、terminal velocity cost、
+dynamic bicycle / tire modelは未導入である。2026公式制御仕様ではなく、
+2025 AWSIM由来のシミュレーション競技向け暫定実装として扱う。
+
 ### Wall / Contact Stuck Recovery（Implementation Complete / dev3 Enabled）
 
 前進専用の現行MPCは、正面が壁に押し付けられると後退できない。

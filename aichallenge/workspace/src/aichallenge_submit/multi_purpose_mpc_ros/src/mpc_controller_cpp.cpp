@@ -1208,6 +1208,7 @@ struct OvertakeLineConfig
   double runtime_wall_fallback_delay_sec{0.025};
   bool runtime_wall_center_contraction_enabled{true};
   double runtime_wall_center_contraction_max_adjustment{0.35};
+  double runtime_wall_prefix_terminal_distance{0.25};
   bool runtime_wall_speed_preserving_return_enabled{true};
   double runtime_wall_return_min_front_distance{4.0};
   bool static_fallback_entry_motion_guard_enabled{false};
@@ -2498,6 +2499,7 @@ struct OvertakeLineState
   double mission_last_runtime_wall_replan_sec{
     -std::numeric_limits<double>::infinity()};
   int mission_runtime_wall_replan_count{0};
+  bool mission_runtime_wall_escape_prefix_active{false};
   bool mission_runtime_wall_warning_active{false};
   bool mission_runtime_wall_return_suppressed_logged{false};
   double mission_runtime_wall_warning_since_sec{
@@ -15087,6 +15089,7 @@ private:
       next_phase != OvertakeLinePhase::ShiftOut &&
       next_phase != OvertakeLinePhase::Pass)
     {
+      overtake_line_state_.mission_runtime_wall_escape_prefix_active = false;
       overtake_line_state_.target_bound_execution_replan_hold_active = false;
       overtake_line_state_.target_bound_execution_replan_prefix_executing = false;
       overtake_line_state_.target_bound_execution_replan_hold_start_sec =
@@ -15668,6 +15671,7 @@ private:
     overtake_line_state_.mission_last_runtime_wall_replan_sec =
       -std::numeric_limits<double>::infinity();
     overtake_line_state_.mission_runtime_wall_replan_count = 0;
+    overtake_line_state_.mission_runtime_wall_escape_prefix_active = false;
     overtake_line_state_.mission_runtime_wall_warning_active = false;
     overtake_line_state_.mission_runtime_wall_return_suppressed_logged = false;
     overtake_line_state_.mission_runtime_wall_warning_since_sec =
@@ -19992,6 +19996,10 @@ private:
       overtake_line_state_.mission_frenet_dp_side_sign =
           candidate.pass_side_sign;
       overtake_line_state_.mission_frenet_dp_execution_traveled_m = 0.0;
+      // A rolling optimizer replacement owns a complete fresh path, so it no
+      // longer needs the short-terminal authority reserved for a local wall
+      // escape bridge.
+      overtake_line_state_.mission_runtime_wall_escape_prefix_active = false;
       overtake_line_state_.mission_frenet_dp_last_refresh_sec = now_sec;
       // Candidate promotion is atomic: the pending path was revalidated
       // against the current wall/kinematic/target horizon above, so its
@@ -20060,6 +20068,13 @@ private:
         overtake_line_state_.mission_frenet_dp_last_refresh_log_sec = now_sec;
       }
     }
+    const bool runtime_wall_escape_prefix_candidate =
+      overtake_line_state_.mission_runtime_wall_escape_prefix_active &&
+      overtake_line_state_.mission_frenet_dp_execution_active;
+    const double dp_execution_terminal_distance =
+      runtime_wall_escape_prefix_candidate ?
+      std::max(0.0, line_cfg.runtime_wall_prefix_terminal_distance) :
+      std::max(0.5, line_cfg.mpcc_lite_prefix_terminal_distance);
     const auto dp_execution_authority =
         overtake_core::resolve_frenet_dp_execution_authority(
             overtake_core::FrenetDpExecutionAuthorityRequest{
@@ -20095,7 +20110,7 @@ private:
                     .mission_frenet_dp_last_runtime_validation_sec,
                 line_cfg.mpcc_frenet_dp_runtime_validation_lease_sec,
                 overtake_line_state_.mission_frenet_dp_execution_traveled_m,
-                std::max(0.5, line_cfg.mpcc_lite_prefix_terminal_distance),
+                dp_execution_terminal_distance,
                 overtake_line_state_.mission_frenet_dp_path_distances_m,
                 overtake_line_state_.mission_frenet_dp_lateral_path_m});
     if (
@@ -20112,7 +20127,7 @@ private:
           "OvertakeLine DP execution authority retained: target=%s, side=%d, "
           "phase=%s, "
           "source=%s, source_age=%.2f s, runtime_age=%.2f s, "
-          "remaining=%.2f m, wp_id=%d",
+          "remaining=%.2f m, terminal=%.2f m, wall_escape=%d, wp_id=%d",
           overtake_line_state_.target_vehicle_id.c_str(),
           overtake_line_state_.pass_side_sign,
           execution_origin_dynamic_wait_active ? "RollingReplan" :
@@ -20121,17 +20136,22 @@ private:
           "runtime_revalidation" : "fresh_optimizer",
           dp_execution_authority.path_age_sec,
           dp_execution_authority.runtime_validation_age_sec,
-          dp_execution_authority.remaining_distance_m, model->wp_id);
+          dp_execution_authority.remaining_distance_m,
+          dp_execution_terminal_distance,
+          runtime_wall_escape_prefix_candidate ? 1 : 0, model->wp_id);
       } else {
         RCLCPP_INFO(
           rclcpp::get_logger("mpc_controller"),
           "OvertakeLine DP execution authority released: target=%s, side=%d, "
-          "source_age=%.2f s, runtime_age=%.2f s, remaining=%.2f m, wp_id=%d",
+          "source_age=%.2f s, runtime_age=%.2f s, remaining=%.2f m, "
+          "terminal=%.2f m, wall_escape=%d, wp_id=%d",
           overtake_line_state_.target_vehicle_id.c_str(),
           overtake_line_state_.pass_side_sign,
           dp_execution_authority.path_age_sec,
           dp_execution_authority.runtime_validation_age_sec,
-          dp_execution_authority.remaining_distance_m, model->wp_id);
+          dp_execution_authority.remaining_distance_m,
+          dp_execution_terminal_distance,
+          runtime_wall_escape_prefix_candidate ? 1 : 0, model->wp_id);
       }
     }
     overtake_line_state_.mission_frenet_dp_execution_authority_was_active =
@@ -20551,6 +20571,7 @@ private:
       overtake_line_state_.mission_last_runtime_wall_replan_sec = now_sec;
       overtake_line_state_.mission_runtime_wall_warning_active = true;
       if (replaced) {
+        overtake_line_state_.mission_runtime_wall_escape_prefix_active = true;
         overtake_line_state_.mission_runtime_wall_replan_count =
           prior_wall_replan_count + 1;
         if (line_cfg.debug_log_enabled) {
@@ -22036,7 +22057,16 @@ private:
         feasible_lower,
         feasible_upper,
         enforce_locked_target_separation});
-    const double feasible_goal_for_phase = lateral_goal_policy.execution_goal_m;
+    // The frozen lateral corridor belongs only to ShiftOut/Pass. Return and
+    // Recovery must keep targeting the base line after their preflighted
+    // distance-domain reference is consumed; otherwise the legacy fallback
+    // steers back toward the old pass goal and Return can remain active for a
+    // complete lap.
+    const bool pass_lateral_goal_phase =
+      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+      overtake_line_state_.phase == OvertakeLinePhase::Pass;
+    const double feasible_goal_for_phase = pass_lateral_goal_phase ?
+      lateral_goal_policy.execution_goal_m : overtake_line_goal_ey();
     const double mission_pass_traveled_m = overtake_mission_pass_traveled();
     const bool committed_pass_horizon_enabled =
       line_cfg.pass_horizon_enabled && overtake_line_state_.mission_path_frozen &&
@@ -22418,6 +22448,9 @@ private:
     const bool pass_entry_gate_inside_window =
       pass_entry_gate_at_shiftout_boundary || pass_entry_gate_in_early_pass ||
       pass_entry_gate_was_active;
+    const bool runtime_wall_escape_prefix_execution_active =
+      overtake_line_state_.mission_runtime_wall_escape_prefix_active &&
+      dp_execution_authority.valid && dp_execution_authority.authority_active;
     const double pass_entry_gate_elapsed_sec =
       pass_entry_gate_was_active && std::isfinite(
       overtake_line_state_.shiftout_pass_entry_physical_hold_start_sec) ?
@@ -22434,7 +22467,8 @@ private:
       overtake_core::PassEntryPhysicalGateRequest{
         line_cfg.pass_entry_physical_gate_enabled,
         pass_entry_gate_inside_window,
-        actual_wall_preplan_warning,
+        actual_wall_preplan_warning &&
+        !runtime_wall_escape_prefix_execution_active,
         runtime_wall_hard_fault,
         pass_entry_gate_elapsed_sec,
         pass_entry_gate_traveled_m,
@@ -29907,6 +29941,10 @@ Config load_config(const std::string & path)
     mpc["v2x_overtake_runtime_wall_center_contraction_max_adjustment"] ?
     mpc["v2x_overtake_runtime_wall_center_contraction_max_adjustment"].as<double>() :
     0.35);
+  cfg.mpc.v2x_behavior.overtake_line.runtime_wall_prefix_terminal_distance = std::max(
+    0.0,
+    mpc["v2x_overtake_runtime_wall_prefix_terminal_distance"] ?
+    mpc["v2x_overtake_runtime_wall_prefix_terminal_distance"].as<double>() : 0.25);
   cfg.mpc.v2x_behavior.overtake_line.runtime_wall_speed_preserving_return_enabled =
     mpc["v2x_overtake_runtime_wall_speed_preserving_return_enabled"] ?
     mpc["v2x_overtake_runtime_wall_speed_preserving_return_enabled"].as<bool>() : true;
@@ -32600,7 +32638,7 @@ public:
         "V2X safe trajectory prefix: %s, front<=%.2f m, remaining>=%.2f m, "
         "replan_lead=%.2f s/%.2f m; wall_preplan=%.2f m + %.2f s x%d, "
         "pass_entry_gate=%s lease=%.2f s/%.2f m, "
-        "fallback=%.2f s/center=%s %.2f m/return=%s "
+        "fallback=%.2f s/center=%s %.2f m/prefix_terminal=%.2f m/return=%s "
         "front>=%.2f m",
         mpc_cfg_.v2x_behavior.overtake_line.safe_separation_safe_prefix_enabled ?
         "enabled" : "disabled",
@@ -32622,6 +32660,7 @@ public:
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line
         .runtime_wall_center_contraction_max_adjustment,
+        mpc_cfg_.v2x_behavior.overtake_line.runtime_wall_prefix_terminal_distance,
         mpc_cfg_.v2x_behavior.overtake_line.runtime_wall_speed_preserving_return_enabled ?
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.runtime_wall_return_min_front_distance);

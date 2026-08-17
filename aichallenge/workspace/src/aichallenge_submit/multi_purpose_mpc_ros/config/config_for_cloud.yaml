@@ -768,6 +768,7 @@ mpc:
   v2x_overtake_runtime_wall_fallback_delay_sec: 0.025 # [s] one 40 Hz cycle for a fresh Mission, then evaluate the local prefix
   v2x_overtake_runtime_wall_center_contraction_enabled: true # retain side and nominal vehicle gap while moving the frozen goal inward
   v2x_overtake_runtime_wall_center_contraction_max_adjustment: 0.35 # [m/replan] bounded inward correction, still fully preflighted
+  v2x_overtake_runtime_wall_prefix_terminal_distance: 0.25 # [m] consume a validated local escape prefix almost to its endpoint
   v2x_overtake_runtime_wall_speed_preserving_return_enabled: true # avoid Recovery when the target is safely ahead and Return is feasible
   v2x_overtake_runtime_wall_return_min_front_distance: 4.0 # [m] minimum target lead before warning-driven Return
   v2x_overtake_line_static_fallback_entry_motion_guard_enabled: true # keep early static fallback, but reject unobserved full-track entry shifts

@@ -17142,6 +17142,44 @@ TEST(V2XOvertakeCoreFrenetDpExecution, FreshSafePrefixOwnsPassContinuation) {
   EXPECT_NEAR(resolution.remaining_distance_m, 10.0, 1e-9);
 }
 
+TEST(V2XOvertakeCoreFrenetDpExecution,
+     WallEscapeTerminalConsumesValidatedPrefixPastNormalTerminal)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpExecutionAuthorityRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frenet_dp_execution_authority;
+
+  FrenetDpExecutionAuthorityRequest request;
+  request.enabled = true;
+  request.active_execution = true;
+  request.target_matches = true;
+  request.target_continuous = true;
+  request.path_side_matches = true;
+  request.current_body_separated = true;
+  request.target_prediction_valid = true;
+  request.predicted_body_sweep_separated = true;
+  request.now_sec = 10.20;
+  request.last_refresh_sec = 10.00;
+  request.maximum_path_age_sec = 0.50;
+  request.maximum_runtime_validation_age_sec = 0.20;
+  request.traveled_distance_m = 2.35;
+  request.minimum_remaining_distance_m = 2.0;
+  request.path_distances_m = {0.0, 2.0, 4.26};
+  request.lateral_path_m = {1.79, 1.45, 1.20};
+
+  auto resolution = resolve_frenet_dp_execution_authority(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_NEAR(resolution.remaining_distance_m, 1.91, 1e-9);
+  EXPECT_FALSE(resolution.authority_active);
+
+  request.minimum_remaining_distance_m = 0.25;
+  resolution = resolve_frenet_dp_execution_authority(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.authority_active);
+
+  request.actual_wall_physical_contact = true;
+  EXPECT_FALSE(resolve_frenet_dp_execution_authority(request).authority_active);
+}
+
 TEST(V2XOvertakeCoreFrenetDpExecution, SafePrefixBridgesRollingReplanPause) {
   using multi_purpose_mpc_ros::v2x_overtake_core::
       FrenetDpExecutionAuthorityRequest;

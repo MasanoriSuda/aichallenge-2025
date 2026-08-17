@@ -132,6 +132,14 @@ workspaceとwarm-startを一度resetする。設定
 縮退する。また、周回境界でcourse progress originがwrapした場合は、同じprogress
 mode中でもOSQP warm-startをresetする。
 
+追い越しhorizonのstatic-wall検証は、横位置`d(s)`だけでなくその勾配が作る
+Frenet path headingも車体矩形のyawへ反映する。横位置の平行移動はbase pathの
+法線を維持し、車体yawだけを`d(s)`のheading offsetで補正する。wall側で不成立な
+stageはbase line方向にだけ補正し、補正後の全profileを同じheading規約で再検証する。
+solved MPCC trajectoryのauthority判定も同じheading helperを使うため、計画時には
+通過可能だった軌道が実行時だけ`solution hard wall contact`となる不整合を避ける。
+occupied / unknown / out-of-map、物理footprint、設定したhard wall marginは緩和しない。
+
 これは本格MPCCへの第1段階であり、複数回RTI-SQP、terminal velocity cost、
 dynamic bicycle / tire modelは未導入である。2026公式制御仕様ではなく、
 2025 AWSIM由来のシミュレーション競技向け暫定実装として扱う。

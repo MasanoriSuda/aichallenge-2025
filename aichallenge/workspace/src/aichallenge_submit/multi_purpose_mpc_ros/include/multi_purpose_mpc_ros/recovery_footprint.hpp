@@ -322,6 +322,19 @@ LateralClearanceResult clamp_lateral_offset_to_static_map(
   double fallback_lateral_offset_m, double additional_lateral_clearance_m,
   double sample_step_m);
 
+/// Heading-aware variant for a Frenet lateral profile.
+///
+/// The footprint centre is translated along the base reference pose's normal,
+/// while its yaw is `reference_pose.yaw_rad + path_heading_offset_rad`. This
+/// distinction is required for a path with non-zero d'(s): rotating the base
+/// pose before applying the lateral translation would move the centre in the
+/// wrong frame. Search remains monotonic from desired toward fallback.
+LateralClearanceResult clamp_lateral_offset_to_static_map_with_heading(
+  const OccupancyGrid & grid, const FootprintExtents & footprint,
+  const Pose2D & reference_pose, double desired_lateral_offset_m,
+  double fallback_lateral_offset_m, double path_heading_offset_rad,
+  double additional_lateral_clearance_m, double sample_step_m);
+
 /// Sample a bounded Frenet interval and return one connected collision-free
 /// component. If several components exist, the one nearest preferred_lateral
 /// is selected; components are never bridged across occupied/unknown cells.

@@ -15089,7 +15089,10 @@ struct MPC
           reject_reason = "solution heading unavailable";
           return false;
         }
-        heading_offset = std::atan2(delta_lateral, delta_distance);
+        heading_offset = overtake_core::resolve_overtake_line_heading_reference(
+          overtake_core::OvertakeLineHeadingReferenceRequest{
+            trajectory.lateral_m[first], trajectory.lateral_m[second],
+            delta_distance, waypoint.kappa});
       }
       const recovery_footprint::Pose2D pose{
         waypoint.x - lateral * std::sin(waypoint.psi),
@@ -17747,34 +17750,73 @@ private:
         enforce_execution_feasibility;
       return evaluation;
     }
+    const auto resolve_nominal_lateral_target = [&] (const double distance) {
+        if (lateral_target_override.has_value()) {
+          return std::optional<double>{};
+        }
+        if (mission_path.has_value()) {
+          auto path_request = mission_path.value();
+          path_request.path_distance_m = distance;
+          const auto path_point = overtake_core::resolve_overtake_mission_path(path_request);
+          if (!path_point.valid) {
+            return std::optional<double>{};
+          }
+          return std::optional<double>{path_point.lateral_target_m};
+        }
+        const double progress =
+          overtake_core::resolve_overtake_line_horizon_progress(
+          overtake_core::OvertakeLineHorizonProgressRequest{
+            pass_phase, phase_traveled_m, distance, phase_distance});
+        return std::optional<double>{
+          phase_start_ey + progress * (goal_ey - phase_start_ey)};
+      };
+    // Build the complete d(s) profile first. Static-wall footprint yaw depends
+    // on its derivative, so validating points while the future profile is
+    // still unknown is optimistic during a ShiftOut or rolling replan.
+    for (int i = 0; i < N; ++i) {
+      const std::size_t index = static_cast<std::size_t>(i);
+      const double distance = horizon_path_distance_to_index(ref_wp_id, index);
+      evaluation.path_distances[index] = distance;
+      if (lateral_target_override.has_value()) {
+        evaluation.target_ey[index] = lateral_target_override.value()[index];
+      } else {
+        const auto target = resolve_nominal_lateral_target(distance);
+        if (!target.has_value() || !std::isfinite(target.value())) {
+          evaluation.static_map_physical_infeasible_during_execution =
+            enforce_execution_feasibility;
+          return evaluation;
+        }
+        evaluation.target_ey[index] = target.value();
+      }
+    }
+    const auto profile_heading_offset = [&] (
+        const std::size_t index, const std::vector<double> & lateral_profile) {
+        if (
+          lateral_profile.size() != static_cast<std::size_t>(N) || N < 2 ||
+          index >= lateral_profile.size())
+        {
+          return 0.0;
+        }
+        const bool use_forward = index + 1U < lateral_profile.size();
+        const std::size_t previous = use_forward ? index : index - 1U;
+        const std::size_t current = use_forward ? index + 1U : index;
+        const double delta_s =
+          evaluation.path_distances[current] - evaluation.path_distances[previous];
+        const auto & waypoint = model->reference_path->get_waypoint(
+          ref_wp_id + static_cast<int>(index));
+        return overtake_core::resolve_overtake_line_heading_reference(
+          overtake_core::OvertakeLineHeadingReferenceRequest{
+            lateral_profile[previous], lateral_profile[current], delta_s,
+            waypoint.kappa});
+      };
     const double current_lateral_velocity_mps =
       std::isfinite(model->spatial_state.e_psi) ?
       std::max(0.0, current_speed_mps_) *
       std::sin(model->spatial_state.e_psi) : 0.0;
     for (int i = 0; i < N; ++i) {
-      const double distance =
-        horizon_path_distance_to_index(ref_wp_id, static_cast<std::size_t>(i));
-      evaluation.path_distances[static_cast<std::size_t>(i)] = distance;
-      double target_ey = 0.0;
-      if (lateral_target_override.has_value()) {
-        target_ey = lateral_target_override.value()[static_cast<std::size_t>(i)];
-      } else if (mission_path.has_value()) {
-        auto path_request = mission_path.value();
-        path_request.path_distance_m = distance;
-        const auto path_point = overtake_core::resolve_overtake_mission_path(path_request);
-        if (!path_point.valid) {
-          evaluation.static_map_physical_infeasible_during_execution =
-            enforce_execution_feasibility;
-          return evaluation;
-        }
-        target_ey = path_point.lateral_target_m;
-      } else {
-        const double progress =
-          overtake_core::resolve_overtake_line_horizon_progress(
-          overtake_core::OvertakeLineHorizonProgressRequest{
-            pass_phase, phase_traveled_m, distance, phase_distance});
-        target_ey = phase_start_ey + progress * (goal_ey - phase_start_ey);
-      }
+      const std::size_t index = static_cast<std::size_t>(i);
+      const double distance = evaluation.path_distances[index];
+      double target_ey = evaluation.target_ey[index];
 
       const auto wall_corridor = overtake_core::resolve_wall_corridor_bound(
         overtake_core::WallCorridorBoundRequest{
@@ -17832,17 +17874,21 @@ private:
         const auto & waypoint = model->reference_path->get_waypoint(ref_wp_id + i);
         const recovery_footprint::Pose2D reference_pose{
           waypoint.x, waypoint.y, waypoint.psi};
+        const double path_heading_offset = profile_heading_offset(
+          index, evaluation.target_ey);
         const double fallback_ey = clip(0.0, lower, upper);
         const double sample_step = std::clamp(
           0.5 * overtake_static_wall_grid_->resolution_m, 0.02, 0.10);
         auto static_clearance =
-          recovery_footprint::clamp_lateral_offset_to_static_map(
+          recovery_footprint::clamp_lateral_offset_to_static_map_with_heading(
           *overtake_static_wall_grid_, overtake_static_wall_footprint_, reference_pose,
-          target_ey, fallback_ey, min_wall_clearance, sample_step);
+          target_ey, fallback_ey, path_heading_offset, min_wall_clearance,
+          sample_step);
         if (static_clearance.valid && !static_clearance.feasible) {
-          static_clearance = recovery_footprint::clamp_lateral_offset_to_static_map(
+          static_clearance =
+            recovery_footprint::clamp_lateral_offset_to_static_map_with_heading(
             *overtake_static_wall_grid_, overtake_static_wall_footprint_, reference_pose,
-            target_ey, fallback_ey, 0.0, sample_step);
+            target_ey, fallback_ey, path_heading_offset, 0.0, sample_step);
           evaluation.static_map_margin_degraded = true;
           evaluation.static_map_margin_degraded_during_execution =
             evaluation.static_map_margin_degraded_during_execution ||
@@ -17877,9 +17923,10 @@ private:
                 clip(reachable_target.target_lateral_m, lower, upper);
               const double reachable_fallback = clip(current_ey, lower, upper);
               const auto physical_clearance =
-                recovery_footprint::clamp_lateral_offset_to_static_map(
+                recovery_footprint::clamp_lateral_offset_to_static_map_with_heading(
                 *overtake_static_wall_grid_, overtake_static_wall_footprint_, reference_pose,
-                reachable_desired, reachable_fallback, 0.0, sample_step);
+                reachable_desired, reachable_fallback, path_heading_offset,
+                0.0, sample_step);
               if (physical_clearance.valid && physical_clearance.feasible) {
                 const auto validated_reachability =
                   overtake_core::resolve_reachable_lateral_target(
@@ -17915,6 +17962,111 @@ private:
       evaluation.max_required_lateral_accel = std::max(
         evaluation.max_required_lateral_accel, required_lateral_accel);
       evaluation.target_ey[static_cast<std::size_t>(i)] = target_ey;
+    }
+    if (
+      enforce_execution_feasibility && overtake_static_wall_grid_ != nullptr &&
+      overtake_static_wall_footprint_.valid())
+    {
+      const double sample_step = std::clamp(
+        0.5 * overtake_static_wall_grid_->resolution_m, 0.02, 0.10);
+      // A centreward repair changes d'(s), so recompute path yaw and validate
+      // again. The search is monotonic toward the base line and never relaxes
+      // the configured hard wall margin.
+      for (int repair_iteration = 0; repair_iteration < 3; ++repair_iteration) {
+        bool profile_clear = true;
+        bool profile_adjusted = false;
+        for (int i = 0; i < N; ++i) {
+          const std::size_t index = static_cast<std::size_t>(i);
+          const auto & waypoint = model->reference_path->get_waypoint(ref_wp_id + i);
+          const recovery_footprint::Pose2D reference_pose{
+            waypoint.x, waypoint.y, waypoint.psi};
+          const double path_heading_offset = profile_heading_offset(
+            index, evaluation.target_ey);
+          const double lower = evaluation.stage_wall_corridor_lower_ey[index];
+          const double upper = evaluation.stage_wall_corridor_upper_ey[index];
+          const double fallback_ey = clip(0.0, lower, upper);
+          auto clearance =
+            recovery_footprint::clamp_lateral_offset_to_static_map_with_heading(
+            *overtake_static_wall_grid_, overtake_static_wall_footprint_,
+            reference_pose, evaluation.target_ey[index], fallback_ey,
+            path_heading_offset, min_wall_clearance, sample_step);
+          if (clearance.valid && !clearance.feasible) {
+            clearance =
+              recovery_footprint::clamp_lateral_offset_to_static_map_with_heading(
+              *overtake_static_wall_grid_, overtake_static_wall_footprint_,
+              reference_pose, evaluation.target_ey[index], fallback_ey,
+              path_heading_offset, 0.0, sample_step);
+            evaluation.static_map_margin_degraded = true;
+            evaluation.static_map_margin_degraded_during_execution = true;
+          }
+          if (!clearance.valid || !clearance.feasible) {
+            evaluation.static_map_wall_infeasible = true;
+            evaluation.static_map_physical_infeasible_during_execution = true;
+            return evaluation;
+          }
+          if (clearance.adjusted) {
+            profile_clear = false;
+            profile_adjusted = true;
+            evaluation.target_ey[index] = clearance.lateral_offset_m;
+            evaluation.static_map_wall_limited = true;
+            evaluation.wall_clearance_limited = true;
+            evaluation.static_map_reachable_projection_used = true;
+          }
+        }
+        if (profile_clear) {
+          break;
+        }
+        if (!profile_adjusted) {
+          evaluation.static_map_physical_infeasible_during_execution = true;
+          return evaluation;
+        }
+      }
+
+      auto clearance_footprint = overtake_static_wall_footprint_;
+      clearance_footprint.left_extent_m += min_wall_clearance;
+      clearance_footprint.right_extent_m += min_wall_clearance;
+      for (int i = 0; i < N; ++i) {
+        const std::size_t index = static_cast<std::size_t>(i);
+        const auto & waypoint = model->reference_path->get_waypoint(ref_wp_id + i);
+        const double lateral = evaluation.target_ey[index];
+        const double path_heading_offset = profile_heading_offset(
+          index, evaluation.target_ey);
+        const recovery_footprint::Pose2D pose{
+          waypoint.x - lateral * std::sin(waypoint.psi),
+          waypoint.y + lateral * std::cos(waypoint.psi),
+          wrap_to_pi(waypoint.psi + path_heading_offset)};
+        const auto sample = recovery_footprint::sample_footprint(
+          *overtake_static_wall_grid_, clearance_footprint, pose);
+        if (!sample.valid || sample.out_of_map || !sample.contact_cells.empty()) {
+          const auto physical_sample = recovery_footprint::sample_footprint(
+            *overtake_static_wall_grid_, overtake_static_wall_footprint_, pose);
+          if (
+            !physical_sample.valid || physical_sample.out_of_map ||
+            !physical_sample.contact_cells.empty())
+          {
+            evaluation.static_map_physical_infeasible_during_execution = true;
+            return evaluation;
+          }
+          evaluation.static_map_margin_degraded = true;
+          evaluation.static_map_margin_degraded_during_execution = true;
+        }
+
+        const double time_to_target = std::max(
+          0.15, evaluation.path_distances[index] / speed_for_time);
+        const double zero_acceleration_lateral =
+          current_ey + current_lateral_velocity_mps * time_to_target;
+        const double required_lateral_accel =
+          2.0 * std::abs(lateral - zero_acceleration_lateral) /
+          (time_to_target * time_to_target);
+        evaluation.max_required_lateral_accel = std::max(
+          evaluation.max_required_lateral_accel, required_lateral_accel);
+        if (
+          max_lateral_accel > kEps &&
+          required_lateral_accel > max_lateral_accel + 1e-6)
+        {
+          evaluation.static_clamp_lateral_accel_infeasible = true;
+        }
+      }
     }
     evaluation.stage_corridor_constraints_active =
       enforce_execution_feasibility &&

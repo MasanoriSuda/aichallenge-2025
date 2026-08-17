@@ -864,11 +864,24 @@ LateralClearanceResult clamp_lateral_offset_to_static_map(
   const double fallback_lateral_offset_m, const double additional_lateral_clearance_m,
   const double sample_step_m)
 {
+  return clamp_lateral_offset_to_static_map_with_heading(
+    grid, footprint, reference_pose, desired_lateral_offset_m,
+    fallback_lateral_offset_m, 0.0, additional_lateral_clearance_m,
+    sample_step_m);
+}
+
+LateralClearanceResult clamp_lateral_offset_to_static_map_with_heading(
+  const OccupancyGrid & grid, const FootprintExtents & footprint,
+  const Pose2D & reference_pose, const double desired_lateral_offset_m,
+  const double fallback_lateral_offset_m, const double path_heading_offset_rad,
+  const double additional_lateral_clearance_m, const double sample_step_m)
+{
   LateralClearanceResult result;
   result.lateral_offset_m = fallback_lateral_offset_m;
   if (
     !grid.valid() || !footprint.valid() || !valid_pose(reference_pose) ||
     !finite(desired_lateral_offset_m) || !finite(fallback_lateral_offset_m) ||
+    !finite(path_heading_offset_rad) ||
     !finite(additional_lateral_clearance_m) || additional_lateral_clearance_m < 0.0 ||
     !finite(sample_step_m) || sample_step_m <= 0.0)
   {
@@ -900,7 +913,7 @@ LateralClearanceResult clamp_lateral_offset_to_static_map(
     const Pose2D candidate_pose{
       reference_pose.x_m + lateral_offset * left_x,
       reference_pose.y_m + lateral_offset * left_y,
-      reference_pose.yaw_rad};
+      wrap_to_pi(reference_pose.yaw_rad + path_heading_offset_rad)};
     const auto sample = sample_footprint(grid, clearance_footprint, candidate_pose);
     ++result.checked_pose_count;
     if (sample.valid && !sample.out_of_map && sample.contact_cells.empty()) {

@@ -441,6 +441,34 @@ TEST(RecoveryFootprintLateralClearance, KeepsAlreadyClearTarget)
   EXPECT_EQ(result.checked_pose_count, 1U);
 }
 
+TEST(RecoveryFootprintLateralClearance, AccountsForFrenetPathHeadingWithoutRotatingOffsetFrame)
+{
+  auto grid = make_grid(200U, 200U, 0.1);
+  for (std::size_t column = 0U; column < grid.width; ++column) {
+    const auto wall = grid.world_to_grid(0.1 * static_cast<double>(column), 10.0);
+    ASSERT_TRUE(wall.has_value());
+    grid.cells[wall->row * grid.width + wall->column] = recovery::CellState::Occupied;
+  }
+  const recovery::FootprintExtents footprint{1.0, 1.0, 0.2, 0.2, 0.0};
+  const recovery::Pose2D reference_pose{10.0, 8.0, 0.0};
+
+  const auto base_heading = recovery::clamp_lateral_offset_to_static_map(
+    grid, footprint, reference_pose, 1.20, 0.0, 0.0, 0.05);
+  const auto path_heading =
+    recovery::clamp_lateral_offset_to_static_map_with_heading(
+    grid, footprint, reference_pose, 1.20, 0.0, kPi / 4.0, 0.0, 0.05);
+
+  ASSERT_TRUE(base_heading.valid);
+  ASSERT_TRUE(base_heading.feasible);
+  EXPECT_FALSE(base_heading.adjusted);
+  EXPECT_DOUBLE_EQ(base_heading.lateral_offset_m, 1.20);
+  ASSERT_TRUE(path_heading.valid);
+  ASSERT_TRUE(path_heading.feasible);
+  EXPECT_TRUE(path_heading.adjusted);
+  EXPECT_LT(path_heading.lateral_offset_m, base_heading.lateral_offset_m);
+  EXPECT_GT(path_heading.lateral_offset_m, 0.0);
+}
+
 TEST(RecoveryFootprintLateralClearance, InvalidSearchFailsClosed)
 {
   const auto result = recovery::clamp_lateral_offset_to_static_map(

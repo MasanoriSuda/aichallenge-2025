@@ -8198,6 +8198,47 @@ TEST(V2XOvertakeCoreWall, RuntimeWallContractionPrefersNominalClearance)
   EXPECT_NEAR(resolution.applied_target_center_separation_m, 1.55, 1e-9);
 }
 
+TEST(V2XOvertakeCoreWall, RuntimeWallEscapePrefixFitsPredictedDistance)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::RuntimeWallEscapePrefixHorizonRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::resolve_runtime_wall_escape_prefix_horizon;
+
+  RuntimeWallEscapePrefixHorizonRequest request;
+  request.configured_shift_distance_m = 4.0;
+  request.nominal_hold_distance_m = 1.0;
+  request.current_speed_mps = 8.0;
+
+  auto resolution = resolve_runtime_wall_escape_prefix_horizon(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_DOUBLE_EQ(resolution.shift_distance_m, 4.0);
+  EXPECT_DOUBLE_EQ(resolution.hold_distance_m, 1.0);
+  EXPECT_DOUBLE_EQ(resolution.total_distance_m, 5.0);
+  EXPECT_TRUE(std::isinf(resolution.available_distance_m));
+
+  request.prediction_warning = true;
+  request.predicted_wall_ttc_sec = 0.35;
+  resolution = resolve_runtime_wall_escape_prefix_horizon(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_NEAR(resolution.available_distance_m, 2.8, 1e-9);
+  EXPECT_NEAR(resolution.shift_distance_m, 1.8, 1e-9);
+  EXPECT_NEAR(resolution.hold_distance_m, 1.0, 1e-9);
+  EXPECT_NEAR(resolution.total_distance_m, 2.8, 1e-9);
+}
+
+TEST(V2XOvertakeCoreWall, RuntimeWallEscapePrefixRejectsInvalidTiming)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::RuntimeWallEscapePrefixHorizonRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::resolve_runtime_wall_escape_prefix_horizon;
+
+  RuntimeWallEscapePrefixHorizonRequest request;
+  request.configured_shift_distance_m = 4.0;
+  request.nominal_hold_distance_m = 1.0;
+  request.current_speed_mps = 8.0;
+  request.prediction_warning = true;
+  request.predicted_wall_ttc_sec = -0.1;
+  EXPECT_FALSE(resolve_runtime_wall_escape_prefix_horizon(request).valid);
+}
+
 TEST(V2XOvertakeCoreWall, RuntimeWallContractionFallsBackToPhysicalClearance)
 {
   RuntimeWallCenterContractionGoalRequest request;
@@ -16353,6 +16394,18 @@ TEST(V2XOvertakeCoreFrenetDpCorridor, StraightCourseKeepsMinimumMotionTactic)
   for (const double lateral : resolution.left.lateral_path_m) {
     EXPECT_NEAR(lateral, request.current_lateral_m, 0.15);
   }
+}
+
+TEST(V2XOvertakeCoreFrenetDpCorridor, SamplesValidatedExecutionPathDirectly)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::sample_frenet_lateral_path;
+
+  const std::vector<double> distances{0.5, 2.0, 4.0};
+  const std::vector<double> lateral{0.1, 0.7, 1.1};
+  EXPECT_NEAR(sample_frenet_lateral_path(distances, lateral, 0.0), 0.1, 1e-9);
+  EXPECT_NEAR(sample_frenet_lateral_path(distances, lateral, 1.25), 0.4, 1e-9);
+  EXPECT_NEAR(sample_frenet_lateral_path(distances, lateral, 5.0), 1.1, 1e-9);
+  EXPECT_TRUE(std::isnan(sample_frenet_lateral_path({0.5, 0.5}, lateral, 1.0)));
 }
 
 TEST(V2XOvertakeCoreFrenetDpCorridor, FarCurveDoesNotOverrideNearTacticalHorizon)

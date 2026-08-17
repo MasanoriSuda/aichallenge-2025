@@ -760,12 +760,13 @@ mpc:
   v2x_overtake_pass_entry_physical_gate_enabled: true # hold the last physical lateral prefix at the ShiftOut boundary and during the bounded early-Pass lease
   v2x_overtake_pass_entry_physical_gate_lease_sec: 2.5 # [s] keep the physical gate eligible after Pass begins; warning hold still uses its shorter existing budget
   v2x_overtake_pass_entry_physical_gate_lease_distance: 12.0 # [m]
-  v2x_overtake_runtime_wall_preplan_reserve: 0.10 # [m] warning band outside the hard wall margin (effective warning at 0.30 m)
-  v2x_overtake_runtime_wall_preplan_lookahead_sec: 0.35 # [s] speed-scaled early warning; does not change the hard wall guard
-  v2x_overtake_runtime_wall_preplan_prediction_samples: 3
+  # Minimum extra band; robust planning currently raises total warning clearance to about 0.40 m.
+  v2x_overtake_runtime_wall_preplan_reserve: 0.10 # [m]
+  v2x_overtake_runtime_wall_preplan_lookahead_sec: 0.80 # [s] path-aware early warning; does not change the hard wall guard
+  v2x_overtake_runtime_wall_preplan_prediction_samples: 8
   v2x_overtake_runtime_wall_replan_cooldown_sec: 0.50 # [s] suppress warning-boundary replan chatter
   v2x_overtake_runtime_wall_replan_max_count: 2 # bounded same-side wall replans per Mission
-  v2x_overtake_runtime_wall_fallback_delay_sec: 0.15 # [s] wait briefly for a fresh robust Mission before fallback
+  v2x_overtake_runtime_wall_fallback_delay_sec: 0.025 # [s] one 40 Hz cycle for a fresh Mission, then evaluate the local prefix
   v2x_overtake_runtime_wall_center_contraction_enabled: true # retain side and nominal vehicle gap while moving the frozen goal inward
   v2x_overtake_runtime_wall_center_contraction_max_adjustment: 0.35 # [m/replan] bounded inward correction, still fully preflighted
   v2x_overtake_runtime_wall_speed_preserving_return_enabled: true # avoid Recovery when the target is safely ahead and Return is feasible

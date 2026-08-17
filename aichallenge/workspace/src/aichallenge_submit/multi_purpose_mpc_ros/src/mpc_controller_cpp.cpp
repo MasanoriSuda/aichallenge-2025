@@ -1201,11 +1201,11 @@ struct OvertakeLineConfig
   double pass_entry_physical_gate_lease_sec{2.5};
   double pass_entry_physical_gate_lease_distance{12.0};
   double runtime_wall_preplan_reserve{0.10};
-  double runtime_wall_preplan_lookahead_sec{0.35};
-  int runtime_wall_preplan_prediction_samples{3};
+  double runtime_wall_preplan_lookahead_sec{0.80};
+  int runtime_wall_preplan_prediction_samples{8};
   double runtime_wall_replan_cooldown_sec{0.50};
   int runtime_wall_replan_max_count{2};
-  double runtime_wall_fallback_delay_sec{0.15};
+  double runtime_wall_fallback_delay_sec{0.025};
   bool runtime_wall_center_contraction_enabled{true};
   double runtime_wall_center_contraction_max_adjustment{0.35};
   bool runtime_wall_speed_preserving_return_enabled{true};
@@ -18134,6 +18134,96 @@ private:
     return true;
   }
 
+  std::optional<recovery_footprint::Pose2D> sample_overtake_wall_prediction_pose(
+    const int ref_wp_id, const double prediction_distance_m,
+    const double current_ey) const
+  {
+    if (
+      model == nullptr || model->reference_path == nullptr ||
+      !std::isfinite(prediction_distance_m) || prediction_distance_m < 0.0 ||
+      !std::isfinite(current_ey))
+    {
+      return std::nullopt;
+    }
+
+    const auto sample_lateral = [&](const double distance_m) {
+        const bool dp_path_available =
+          (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+          overtake_line_state_.phase == OvertakeLinePhase::Pass) &&
+          overtake_line_state_.mission_frenet_dp_execution_active &&
+          overtake_line_state_.mission_frenet_dp_side_sign ==
+          overtake_line_state_.pass_side_sign &&
+          overtake_core::is_valid_frenet_dp_execution_path(
+          overtake_line_state_.mission_frenet_dp_path_distances_m,
+          overtake_line_state_.mission_frenet_dp_lateral_path_m);
+        if (dp_path_available) {
+          const double lateral = overtake_core::sample_frenet_lateral_path(
+            overtake_line_state_.mission_frenet_dp_path_distances_m,
+            overtake_line_state_.mission_frenet_dp_lateral_path_m,
+            overtake_line_state_.mission_frenet_dp_execution_traveled_m +
+            distance_m);
+          if (std::isfinite(lateral)) {
+            return lateral;
+          }
+        }
+
+        const double goal_ey =
+          overtake_line_state_.fixed_pass_corridor_goal_ey.value_or(current_ey);
+        if (
+          overtake_line_state_.phase != OvertakeLinePhase::ShiftOut ||
+          !std::isfinite(goal_ey))
+        {
+          return std::isfinite(goal_ey) ? goal_ey : current_ey;
+        }
+        const double remaining_shift_distance = std::max(
+          0.5,
+          std::max(0.5, overtake_line_state_.mission_shift_distance) -
+          std::max(0.0, overtake_line_state_.phase_traveled_m));
+        const double progress = overtake_core::resolve_overtake_line_horizon_progress(
+          overtake_core::OvertakeLineHorizonProgressRequest{
+            false, 0.0, std::max(0.0, distance_m), remaining_shift_distance});
+        return current_ey + progress * (goal_ey - current_ey);
+      };
+
+    constexpr int kMaximumPredictionSteps = 512;
+    double covered_distance = 0.0;
+    for (int offset = 0; offset < kMaximumPredictionSteps; ++offset) {
+      const auto & p0 = model->reference_path->get_waypoint(ref_wp_id + offset);
+      const auto & p1 = model->reference_path->get_waypoint(ref_wp_id + offset + 1);
+      const double segment_distance = p0.distance_to(p1);
+      if (!std::isfinite(segment_distance) || segment_distance <= kEps) {
+        continue;
+      }
+      if (covered_distance + segment_distance + kEps < prediction_distance_m) {
+        covered_distance += segment_distance;
+        continue;
+      }
+
+      const double ratio = std::clamp(
+        (prediction_distance_m - covered_distance) / segment_distance, 0.0, 1.0);
+      const double base_x = p0.x + ratio * (p1.x - p0.x);
+      const double base_y = p0.y + ratio * (p1.y - p0.y);
+      const double base_yaw = p0.psi + ratio * wrap_to_pi(p1.psi - p0.psi);
+      const double lateral = sample_lateral(prediction_distance_m);
+      const double heading_probe_distance = std::max(
+        0.10, std::min(0.50, model->reference_path->resolution));
+      const double next_lateral = sample_lateral(
+        prediction_distance_m + heading_probe_distance);
+      if (!std::isfinite(lateral) || !std::isfinite(next_lateral)) {
+        return std::nullopt;
+      }
+      const double heading_offset = std::atan2(
+        next_lateral - lateral, heading_probe_distance);
+      const double left_x = -std::sin(base_yaw);
+      const double left_y = std::cos(base_yaw);
+      return recovery_footprint::Pose2D{
+        base_x + lateral * left_x,
+        base_y + lateral * left_y,
+        wrap_to_pi(base_yaw + heading_offset)};
+    }
+    return std::nullopt;
+  }
+
   OvertakeLineOutput update_overtake_line(
     const V2XBehaviorOutput & behavior_output, const int ref_wp_id, const int N,
     const Eigen::VectorXd & lb, const Eigen::VectorXd & ub, const double now_sec)
@@ -18425,6 +18515,7 @@ private:
     bool actual_wall_margin_blocked = false;
     bool actual_wall_preplan_warning = false;
     bool actual_wall_preplan_prediction_warning = false;
+    bool actual_wall_preplan_prediction_path_aware = false;
     double actual_wall_preplan_prediction_ttc_sec =
       std::numeric_limits<double>::infinity();
     bool contact_continuation_wall_margin_clear = false;
@@ -18510,9 +18601,15 @@ private:
                 static_cast<double>(sample_index) / static_cast<double>(samples);
               const double prediction_distance_m =
                 std::max(0.0, current_speed_mps_) * prediction_time_sec;
-              auto predicted_pose = actual_pose;
-              predicted_pose.x_m += prediction_distance_m * std::cos(actual_pose.yaw_rad);
-              predicted_pose.y_m += prediction_distance_m * std::sin(actual_pose.yaw_rad);
+              const auto path_prediction = sample_overtake_wall_prediction_pose(
+                ref_wp_id, prediction_distance_m, current_ey);
+              auto predicted_pose = path_prediction.value_or(actual_pose);
+              if (!path_prediction.has_value()) {
+                predicted_pose.x_m +=
+                  prediction_distance_m * std::cos(actual_pose.yaw_rad);
+                predicted_pose.y_m +=
+                  prediction_distance_m * std::sin(actual_pose.yaw_rad);
+              }
               const auto predicted_warning_sample = recovery_footprint::sample_footprint(
                 *overtake_static_wall_grid_, warning_footprint, predicted_pose);
               if (
@@ -18521,6 +18618,8 @@ private:
               {
                 actual_wall_preplan_warning = true;
                 actual_wall_preplan_prediction_warning = true;
+                actual_wall_preplan_prediction_path_aware =
+                  path_prediction.has_value();
                 actual_wall_preplan_prediction_ttc_sec = prediction_time_sec;
                 break;
               }
@@ -20073,6 +20172,8 @@ private:
       std::numeric_limits<double>::quiet_NaN();
     double runtime_wall_escape_prefix_distance_m =
       std::numeric_limits<double>::quiet_NaN();
+    double runtime_wall_escape_available_distance_m =
+      std::numeric_limits<double>::infinity();
     if (
       runtime_wall_center_contraction_evaluated &&
       overtake_line_state_.mission_path_frozen &&
@@ -20101,7 +20202,22 @@ private:
         std::max(0.0, cfg.v2x_gap.prediction_margin));
       const double maximum_adjustment = std::max(
         0.0, line_cfg.runtime_wall_center_contraction_max_adjustment);
-      const double shift_distance = std::max(0.5, line_cfg.shift_distance);
+      const double configured_shift_distance = std::max(0.5, line_cfg.shift_distance);
+      const double nominal_prefix_hold_distance = std::max(
+        0.5, std::min(1.0, 0.25 * configured_shift_distance));
+      const auto prefix_horizon =
+        overtake_core::resolve_runtime_wall_escape_prefix_horizon(
+        overtake_core::RuntimeWallEscapePrefixHorizonRequest{
+          configured_shift_distance,
+          nominal_prefix_hold_distance,
+          std::max(0.0, current_speed_mps_),
+          actual_wall_preplan_prediction_warning,
+          actual_wall_preplan_prediction_ttc_sec});
+      const double shift_distance = prefix_horizon.valid ?
+        prefix_horizon.shift_distance_m : configured_shift_distance;
+      runtime_wall_escape_available_distance_m = prefix_horizon.valid ?
+        prefix_horizon.available_distance_m :
+        std::numeric_limits<double>::infinity();
       const auto & prior_candidate = overtake_line_state_.mission_plan->mission;
       double pass_distance =
         std::isfinite(prior_candidate.pass_hold_distance_m) ?
@@ -20125,16 +20241,13 @@ private:
           0.5,
           prior_return_start_pass_m - current_pass_traveled - shift_distance);
       }
-      const double prefix_hold_distance = std::max(
-        0.5, std::min(1.0, 0.25 * shift_distance));
+      const double prefix_hold_distance = prefix_horizon.valid ?
+        prefix_horizon.hold_distance_m : nominal_prefix_hold_distance;
       const double required_prefix_distance =
         shift_distance + prefix_hold_distance;
       runtime_wall_escape_prefix_distance_m = required_prefix_distance;
-      const int contraction_plan_N = std::max(
-        N,
-        static_cast<int>(std::ceil(
-          required_prefix_distance /
-          std::max(0.1, model->reference_path->resolution))) + 2);
+      const int contraction_plan_N = path_horizon_steps_for_distance(
+        ref_wp_id, N, required_prefix_distance);
       const auto [contraction_lb, contraction_ub] =
         build_v2x_gap_planner_bounds(
         ref_wp_id, N, lb, ub, contraction_plan_N);
@@ -20358,13 +20471,14 @@ private:
           RCLCPP_WARN(
             rclcpp::get_logger("mpc_controller"),
             "OvertakeLine runtime wall preplan warning: episode=%lu, target=%s, side=%d, "
-            "reserve=%.2f, predicted=%d, ttc=%.2f s, elapsed=%.2f s, "
+            "reserve=%.2f, predicted=%d, path_aware=%d, ttc=%.2f s, elapsed=%.2f s, "
             "action=request_fresh_same_side, count=%d/%d, wp_id=%d",
             static_cast<unsigned long>(overtake_line_state_.episode_id),
             overtake_line_state_.target_vehicle_id.c_str(),
             overtake_line_state_.pass_side_sign,
             runtime_wall_preplan_reserve,
             actual_wall_preplan_prediction_warning ? 1 : 0,
+            actual_wall_preplan_prediction_path_aware ? 1 : 0,
             actual_wall_preplan_prediction_ttc_sec,
             runtime_wall_warning_elapsed_sec,
             overtake_line_state_.mission_runtime_wall_replan_count,
@@ -20444,7 +20558,8 @@ private:
             rclcpp::get_logger("mpc_controller"),
             "OvertakeLine runtime wall escape prefix accepted: target=%s, "
             "side=%d, goal=%.2f->%.2f, adjustment=%.2f, elapsed=%.2f s, "
-            "prefix=%.2f m, clearance=%s/%.2f m, count=%d/%d, "
+            "prefix=%.2f/available=%.2f m, ttc=%.2f s, "
+            "clearance=%s/%.2f m, count=%d/%d, "
             "front_cap_preserved=%d, wp_id=%d",
             overtake_line_state_.target_vehicle_id.c_str(),
             overtake_line_state_.pass_side_sign, previous_goal,
@@ -20453,6 +20568,8 @@ private:
               runtime_wall_center_contraction_candidate->goal_lateral_m - previous_goal),
             runtime_wall_warning_elapsed_sec,
             runtime_wall_escape_prefix_distance_m,
+            runtime_wall_escape_available_distance_m,
+            actual_wall_preplan_prediction_ttc_sec,
             runtime_wall_center_contraction_used_physical_clearance ?
             "physical" : "nominal",
             runtime_wall_center_contraction_separation_m,
@@ -20494,10 +20611,14 @@ private:
         RCLCPP_WARN(
           rclcpp::get_logger("mpc_controller"),
           "OvertakeLine runtime wall escape prefix unavailable: target=%s, "
-          "side=%d, elapsed=%.2f s, count=%d/%d, reason=%s, "
+          "side=%d, elapsed=%.2f s, prefix=%.2f/available=%.2f m, "
+          "ttc=%.2f s, count=%d/%d, reason=%s, "
           "action=exit-current-mission, wp_id=%d",
           overtake_line_state_.target_vehicle_id.c_str(), exit_side,
           runtime_wall_warning_elapsed_sec,
+          runtime_wall_escape_prefix_distance_m,
+          runtime_wall_escape_available_distance_m,
+          actual_wall_preplan_prediction_ttc_sec,
           overtake_line_state_.mission_runtime_wall_replan_count,
           line_cfg.runtime_wall_replan_max_count, exit_reason.c_str(),
           model->wp_id);
@@ -29760,11 +29881,11 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_line.runtime_wall_preplan_lookahead_sec = std::max(
     0.0,
     mpc["v2x_overtake_runtime_wall_preplan_lookahead_sec"] ?
-    mpc["v2x_overtake_runtime_wall_preplan_lookahead_sec"].as<double>() : 0.35);
+    mpc["v2x_overtake_runtime_wall_preplan_lookahead_sec"].as<double>() : 0.80);
   cfg.mpc.v2x_behavior.overtake_line.runtime_wall_preplan_prediction_samples = std::max(
     1,
     mpc["v2x_overtake_runtime_wall_preplan_prediction_samples"] ?
-    mpc["v2x_overtake_runtime_wall_preplan_prediction_samples"].as<int>() : 3);
+    mpc["v2x_overtake_runtime_wall_preplan_prediction_samples"].as<int>() : 8);
   cfg.mpc.v2x_behavior.overtake_line.runtime_wall_replan_cooldown_sec = std::max(
     0.0,
     mpc["v2x_overtake_runtime_wall_replan_cooldown_sec"] ?
@@ -29776,7 +29897,7 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_line.runtime_wall_fallback_delay_sec = std::max(
     0.0,
     mpc["v2x_overtake_runtime_wall_fallback_delay_sec"] ?
-    mpc["v2x_overtake_runtime_wall_fallback_delay_sec"].as<double>() : 0.15);
+    mpc["v2x_overtake_runtime_wall_fallback_delay_sec"].as<double>() : 0.025);
   cfg.mpc.v2x_behavior.overtake_line.runtime_wall_center_contraction_enabled =
     mpc["v2x_overtake_runtime_wall_center_contraction_enabled"] ?
     mpc["v2x_overtake_runtime_wall_center_contraction_enabled"].as<bool>() : true;

@@ -4840,34 +4840,45 @@ double sample_frenet_dp_corridor_path(
   const FrenetDpCorridorBranchResolution & branch,
   const double path_distance_m) noexcept
 {
+  if (!branch.feasible) {
+    return std::numeric_limits<double>::quiet_NaN();
+  }
+  return sample_frenet_lateral_path(
+    branch.path_distances_m, branch.lateral_path_m, path_distance_m);
+}
+
+double sample_frenet_lateral_path(
+  const std::vector<double> & path_distances_m,
+  const std::vector<double> & lateral_path_m,
+  const double path_distance_m) noexcept
+{
   if (
-    !branch.feasible || !std::isfinite(path_distance_m) || path_distance_m < 0.0 ||
-    branch.path_distances_m.empty() ||
-    branch.path_distances_m.size() != branch.lateral_path_m.size())
+    !std::isfinite(path_distance_m) || path_distance_m < 0.0 ||
+    !is_valid_frenet_dp_execution_path(path_distances_m, lateral_path_m))
   {
     return std::numeric_limits<double>::quiet_NaN();
   }
-  if (path_distance_m <= branch.path_distances_m.front()) {
-    return branch.lateral_path_m.front();
+  if (path_distance_m <= path_distances_m.front()) {
+    return lateral_path_m.front();
   }
-  if (path_distance_m >= branch.path_distances_m.back()) {
-    return branch.lateral_path_m.back();
+  if (path_distance_m >= path_distances_m.back()) {
+    return lateral_path_m.back();
   }
   const auto upper = std::upper_bound(
-    branch.path_distances_m.begin(), branch.path_distances_m.end(), path_distance_m);
+    path_distances_m.begin(), path_distances_m.end(), path_distance_m);
   const std::size_t upper_index = static_cast<std::size_t>(
-    std::distance(branch.path_distances_m.begin(), upper));
+    std::distance(path_distances_m.begin(), upper));
   const std::size_t lower_index = upper_index - 1U;
-  const double lower_distance = branch.path_distances_m[lower_index];
-  const double upper_distance = branch.path_distances_m[upper_index];
+  const double lower_distance = path_distances_m[lower_index];
+  const double upper_distance = path_distances_m[upper_index];
   const double span = upper_distance - lower_distance;
   if (span <= 1e-9) {
-    return branch.lateral_path_m[upper_index];
+    return lateral_path_m[upper_index];
   }
   const double ratio = std::clamp(
     (path_distance_m - lower_distance) / span, 0.0, 1.0);
-  return branch.lateral_path_m[lower_index] + ratio *
-    (branch.lateral_path_m[upper_index] - branch.lateral_path_m[lower_index]);
+  return lateral_path_m[lower_index] + ratio *
+    (lateral_path_m[upper_index] - lateral_path_m[lower_index]);
 }
 
 bool is_valid_frenet_dp_execution_path(
@@ -7824,6 +7835,47 @@ RuntimeWallPreplanResolution resolve_runtime_wall_preplan(
   } else {
     resolution.action = RuntimeWallPreplanAction::HoldCurrentSide;
   }
+  return resolution;
+}
+
+RuntimeWallEscapePrefixHorizonResolution resolve_runtime_wall_escape_prefix_horizon(
+  const RuntimeWallEscapePrefixHorizonRequest & request) noexcept
+{
+  RuntimeWallEscapePrefixHorizonResolution resolution;
+  if (
+    !std::isfinite(request.configured_shift_distance_m) ||
+    request.configured_shift_distance_m < 0.5 ||
+    !std::isfinite(request.nominal_hold_distance_m) ||
+    request.nominal_hold_distance_m < 0.5 ||
+    !std::isfinite(request.current_speed_mps) || request.current_speed_mps < 0.0 ||
+    (request.prediction_warning &&
+    (!std::isfinite(request.predicted_wall_ttc_sec) ||
+    request.predicted_wall_ttc_sec < 0.0)))
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  if (request.prediction_warning) {
+    resolution.available_distance_m = std::max(
+      0.0, request.current_speed_mps * request.predicted_wall_ttc_sec);
+  }
+  resolution.shift_distance_m = std::isfinite(resolution.available_distance_m) ?
+    std::max(
+    0.5,
+    std::min(
+      request.configured_shift_distance_m,
+      resolution.available_distance_m - request.nominal_hold_distance_m)) :
+    request.configured_shift_distance_m;
+  resolution.hold_distance_m = std::isfinite(resolution.available_distance_m) ?
+    std::max(
+    0.5,
+    std::min(
+      request.nominal_hold_distance_m,
+      resolution.available_distance_m - resolution.shift_distance_m)) :
+    request.nominal_hold_distance_m;
+  resolution.total_distance_m =
+    resolution.shift_distance_m + resolution.hold_distance_m;
   return resolution;
 }
 

@@ -3140,6 +3140,14 @@ double sample_frenet_dp_corridor_path(
   const FrenetDpCorridorBranchResolution & branch,
   double path_distance_m) noexcept;
 
+/// Interpolate a validated distance-domain lateral path. This is shared by
+/// the DP execution reference and short-horizon runtime safety prediction so
+/// both consumers observe exactly the same frozen path.
+double sample_frenet_lateral_path(
+  const std::vector<double> & path_distances_m,
+  const std::vector<double> & lateral_path_m,
+  double path_distance_m) noexcept;
+
 /// Validate a distance-domain lateral reference produced by the Frenet DP.
 /// Distances must be finite, non-negative and strictly increasing.
 bool is_valid_frenet_dp_execution_path(
@@ -4195,6 +4203,30 @@ struct RuntimeWallPreplanResolution
 /// Mission, but can never override physical contact or the hard wall guard.
 RuntimeWallPreplanResolution resolve_runtime_wall_preplan(
   const RuntimeWallPreplanRequest & request) noexcept;
+
+struct RuntimeWallEscapePrefixHorizonRequest
+{
+  double configured_shift_distance_m{};
+  double nominal_hold_distance_m{};
+  double current_speed_mps{};
+  bool prediction_warning{false};
+  double predicted_wall_ttc_sec{std::numeric_limits<double>::infinity()};
+};
+
+struct RuntimeWallEscapePrefixHorizonResolution
+{
+  bool valid{false};
+  double shift_distance_m{};
+  double hold_distance_m{};
+  double total_distance_m{};
+  double available_distance_m{std::numeric_limits<double>::infinity()};
+};
+
+/// Fit a local centerward transition inside the distance remaining to the
+/// predicted wall-warning footprint. Hard wall and lateral-acceleration
+/// feasibility remain the caller's responsibility.
+RuntimeWallEscapePrefixHorizonResolution resolve_runtime_wall_escape_prefix_horizon(
+  const RuntimeWallEscapePrefixHorizonRequest & request) noexcept;
 
 struct RuntimeWallCenterContractionGoalRequest
 {

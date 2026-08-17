@@ -4882,6 +4882,7 @@ struct MPC
   void invalidate_mpcc_lite_async_results()
   {
     ++mpcc_lite_async_context_epoch_;
+    mpcc_lite_async_last_accepted_result_.reset();
     if (mpcc_lite_async_mailbox_ == nullptr) {
       return;
     }
@@ -10817,8 +10818,27 @@ struct MPC
                inner_curve.hard_entry_allowed || inner_curve.hard_continuation_allowed ||
                side_fallback_soft_curve_allowed);
       };
-    std::optional<MpccLiteAsyncResult> accepted_async_tactical_result;
+    const MpccLiteAsyncResult * accepted_async_tactical_result = nullptr;
     if (async_shadow_enabled) {
+      const bool current_async_hard_fault =
+        effective_front_risk_level == FrontRiskLevel::EmergencyBrake ||
+        overtake_solver_recovery_active_;
+      const auto async_result_usable = [&](const MpccLiteAsyncResult & result) {
+          return overtake_core::can_reuse_async_tactical_result(
+            overtake_core::AsyncTacticalResultLeaseRequest{
+              true,
+              result.success,
+              result.target_id == output.target_vehicle_id &&
+              result.behavior.target_vehicle_id == output.target_vehicle_id,
+              result.context_epoch == mpcc_lite_async_context_epoch_,
+              result.mission_generation == overtake_line_state_.mission_generation,
+              result.phase == overtake_line_state_.phase,
+              result.locked_side_sign == locked_pass_side,
+              current_async_hard_fault,
+              now_sec,
+              result.snapshot_sec,
+              shadow_cfg.mpcc_lite_shadow_last_feasible_max_age_sec});
+        };
       auto async_result = take_mpcc_lite_async_result();
       if (async_result.has_value()) {
         const double result_age_sec =
@@ -10827,44 +10847,45 @@ struct MPC
           std::numeric_limits<double>::infinity();
         mpcc_lite_async_last_compute_ms_ = async_result->compute_ms;
         mpcc_lite_async_last_result_age_sec_ = result_age_sec;
-        const bool target_matches =
-          async_result->target_id == output.target_vehicle_id &&
-          async_result->behavior.target_vehicle_id == output.target_vehicle_id;
-        const bool context_matches =
-          async_result->context_epoch == mpcc_lite_async_context_epoch_ &&
-          async_result->mission_generation ==
-          overtake_line_state_.mission_generation &&
-          async_result->phase == overtake_line_state_.phase &&
-          async_result->locked_side_sign == locked_pass_side;
-        const bool result_fresh =
-          std::isfinite(result_age_sec) && result_age_sec >= 0.0 &&
-          result_age_sec <=
-          shadow_cfg.mpcc_lite_shadow_last_feasible_max_age_sec + kEps;
-        const bool current_hard_fault =
-          effective_front_risk_level == FrontRiskLevel::EmergencyBrake ||
-          overtake_solver_recovery_active_;
-        const bool adopt_async_result =
-          async_result->success && target_matches && context_matches &&
-          result_fresh && !current_hard_fault;
+        const bool adopt_async_result = async_result_usable(async_result.value());
         if (adopt_async_result) {
           ++mpcc_lite_async_adopted_count_;
-          // Import both branches before any live side comparison. The current
-          // callback still applies its own curve, target and emergency gates,
-          // but no longer rebuilds the worker's DP/Mission candidates.
-          if (async_result->behavior.overtake_left_tactical_assessment.side == 1) {
-            left_assessment =
-              std::move(async_result->behavior.overtake_left_tactical_assessment);
-          }
-          if (async_result->behavior.overtake_right_tactical_assessment.side == -1) {
-            right_assessment =
-              std::move(async_result->behavior.overtake_right_tactical_assessment);
-          }
-          accepted_async_tactical_result = std::move(async_result.value());
+          mpcc_lite_async_last_accepted_result_ = std::move(async_result.value());
+          accepted_async_tactical_result =
+            &mpcc_lite_async_last_accepted_result_.value();
         } else {
           ++mpcc_lite_async_discarded_count_;
           if (!async_result->success) {
             ++mpcc_lite_async_failed_count_;
           }
+        }
+      }
+      if (
+        accepted_async_tactical_result == nullptr &&
+        mpcc_lite_async_last_accepted_result_.has_value())
+      {
+        if (async_result_usable(mpcc_lite_async_last_accepted_result_.value())) {
+          accepted_async_tactical_result =
+            &mpcc_lite_async_last_accepted_result_.value();
+          ++mpcc_lite_async_reused_count_;
+          mpcc_lite_async_last_result_age_sec_ = std::max(
+            0.0,
+            now_sec - mpcc_lite_async_last_accepted_result_->snapshot_sec);
+        } else {
+          mpcc_lite_async_last_accepted_result_.reset();
+        }
+      }
+      if (accepted_async_tactical_result != nullptr) {
+        // Import both branches before any live side comparison. The live
+        // callback still applies current curve, target and emergency gates.
+        // Copying keeps the accepted result available to the intervening
+        // 40 Hz callbacks until the next 5 Hz worker completion.
+        const auto & async_behavior = accepted_async_tactical_result->behavior;
+        if (async_behavior.overtake_left_tactical_assessment.side == 1) {
+          left_assessment = async_behavior.overtake_left_tactical_assessment;
+        }
+        if (async_behavior.overtake_right_tactical_assessment.side == -1) {
+          right_assessment = async_behavior.overtake_right_tactical_assessment;
         }
       }
     }
@@ -11421,8 +11442,8 @@ struct MPC
       shadow_cfg.mpcc_lite_shadow_evaluation_interval_sec);
     auto mpcc_authority_action = overtake_core::MpccLiteAuthorityAction::None;
     if (async_shadow_enabled) {
-      if (accepted_async_tactical_result.has_value()) {
-        const auto & async_result = accepted_async_tactical_result.value();
+      if (accepted_async_tactical_result != nullptr) {
+        const auto & async_result = *accepted_async_tactical_result;
         const auto & async_behavior = async_result.behavior;
         output.opponent_side_replan_current_dp_prefix =
           async_behavior.opponent_side_replan_current_dp_prefix;
@@ -11562,7 +11583,7 @@ struct MPC
         RCLCPP_INFO(
           rclcpp::get_logger("mpc_controller"),
           "Overtake MPCC-lite async: submitted=%lu, replaced=%lu, "
-          "completed=%lu, running=%d, pending=%d, adopted=%lu, "
+          "completed=%lu, running=%d, pending=%d, adopted=%lu, reused=%lu, cache=%d, "
           "discarded=%lu, failed=%lu, interval=%.3f s, snapshot=%.2f ms, "
           "compute=%.2f ms, age=%.3f s",
           static_cast<unsigned long>(worker_stats.submitted),
@@ -11570,6 +11591,8 @@ struct MPC
           static_cast<unsigned long>(worker_stats.completed),
           worker_stats.running ? 1 : 0, worker_stats.pending ? 1 : 0,
           static_cast<unsigned long>(mpcc_lite_async_adopted_count_),
+          static_cast<unsigned long>(mpcc_lite_async_reused_count_),
+          accepted_async_tactical_result != nullptr ? 1 : 0,
           static_cast<unsigned long>(mpcc_lite_async_discarded_count_),
           static_cast<unsigned long>(mpcc_lite_async_failed_count_),
           mpcc_lite_async_effective_interval_sec_,
@@ -15624,6 +15647,7 @@ struct MPC
   std::uint64_t mpcc_lite_async_context_epoch_{1U};
   std::uint64_t mpcc_lite_async_last_consumed_sequence_{0U};
   std::uint64_t mpcc_lite_async_adopted_count_{0U};
+  std::uint64_t mpcc_lite_async_reused_count_{0U};
   std::uint64_t mpcc_lite_async_discarded_count_{0U};
   std::uint64_t mpcc_lite_async_failed_count_{0U};
   double mpcc_lite_async_last_compute_ms_{0.0};
@@ -15633,6 +15657,7 @@ struct MPC
     std::numeric_limits<double>::infinity()};
   double mpcc_lite_async_last_status_log_sec_{
     -std::numeric_limits<double>::infinity()};
+  std::optional<MpccLiteAsyncResult> mpcc_lite_async_last_accepted_result_;
   std::uint64_t next_overtake_episode_id_{1U};
   v2x_overtake_core::OvertakeLineTransitionAction last_overtake_line_transition_action_{
     v2x_overtake_core::OvertakeLineTransitionAction::None};
@@ -15828,6 +15853,17 @@ private:
     const bool emergency_front_risk, const bool hard_wall_fault = false) const
   {
     const auto & line_cfg = cfg.v2x_behavior.overtake_line;
+    const double execution_lease_sec =
+      overtake_core::resolve_async_execution_lease_duration_sec(
+      overtake_core::AsyncExecutionLeaseDurationRequest{
+        line_cfg.receding_horizon_continuity_lease_sec,
+        line_cfg.mpcc_lite_async_worker_enabled,
+        std::max(
+          line_cfg.mpcc_lite_shadow_evaluation_interval_sec,
+          mpcc_lite_async_effective_interval_sec_),
+        mpcc_lite_async_last_compute_ms_,
+        model != nullptr ? model->Ts : 0.025,
+        line_cfg.mpcc_lite_shadow_last_feasible_max_age_sec});
     return overtake_core::can_retain_receding_horizon_execution_lease(
       overtake_core::RecedingHorizonExecutionLeaseRequest{
         line_cfg.receding_horizon_enabled &&
@@ -15852,7 +15888,7 @@ private:
         hard_wall_fault,
         now_sec,
         overtake_receding_horizon_last_feasible_sec_,
-        line_cfg.receding_horizon_continuity_lease_sec});
+        execution_lease_sec});
   }
 
   void reset_overtake_line_state(const double now_sec, const std::string & reason)

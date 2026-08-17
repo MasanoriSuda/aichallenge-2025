@@ -462,6 +462,11 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_entry_stage;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_hold_fresh_shiftout_for_wall;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   can_retain_receding_horizon_execution_lease;
+using multi_purpose_mpc_ros::v2x_overtake_core::AsyncTacticalResultLeaseRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::can_reuse_async_tactical_result;
+using multi_purpose_mpc_ros::v2x_overtake_core::AsyncExecutionLeaseDurationRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  resolve_async_execution_lease_duration_sec;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   can_hold_target_bound_execution_for_replan;
 using multi_purpose_mpc_ros::v2x_overtake_core::
@@ -3741,6 +3746,56 @@ TEST(V2XOvertakeCoreSpeed, RecedingHorizonLeaseCannotBypassHardFaults)
   request.target_position_jump = false;
   request.execution_corridor_blocked = true;
   EXPECT_FALSE(can_retain_receding_horizon_execution_lease(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, ReusesFreshAsyncTacticalResultForExactContext)
+{
+  AsyncTacticalResultLeaseRequest request;
+  request.enabled = true;
+  request.result_success = true;
+  request.target_matches = true;
+  request.context_epoch_matches = true;
+  request.mission_generation_matches = true;
+  request.phase_matches = true;
+  request.side_matches = true;
+  request.now_sec = 10.45;
+  request.snapshot_sec = 10.0;
+  request.maximum_age_sec = 0.50;
+
+  EXPECT_TRUE(can_reuse_async_tactical_result(request));
+
+  request.now_sec = 10.501;
+  EXPECT_FALSE(can_reuse_async_tactical_result(request));
+  request.now_sec = 10.20;
+  request.phase_matches = false;
+  EXPECT_FALSE(can_reuse_async_tactical_result(request));
+  request.phase_matches = true;
+  request.current_hard_fault = true;
+  EXPECT_FALSE(can_reuse_async_tactical_result(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, AsyncExecutionLeaseCoversWorkerCadenceWithinResultAge)
+{
+  AsyncExecutionLeaseDurationRequest request;
+  request.configured_lease_sec = 0.30;
+  request.async_worker_enabled = true;
+  request.evaluation_interval_sec = 0.20;
+  request.last_compute_ms = 80.0;
+  request.control_period_sec = 0.025;
+  request.maximum_result_age_sec = 0.50;
+
+  EXPECT_NEAR(resolve_async_execution_lease_duration_sec(request), 0.50, 1e-9);
+
+  request.evaluation_interval_sec = 0.10;
+  request.last_compute_ms = 20.0;
+  EXPECT_NEAR(resolve_async_execution_lease_duration_sec(request), 0.30, 1e-9);
+
+  request.async_worker_enabled = false;
+  EXPECT_NEAR(resolve_async_execution_lease_duration_sec(request), 0.30, 1e-9);
+
+  request.async_worker_enabled = true;
+  request.maximum_result_age_sec = 0.20;
+  EXPECT_NEAR(resolve_async_execution_lease_duration_sec(request), 0.20, 1e-9);
 }
 
 TEST(V2XOvertakeCoreSpeed, HoldsCommittedExecutionPrefixAcrossTargetOnlyConflict)

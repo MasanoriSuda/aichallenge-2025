@@ -1227,6 +1227,42 @@ struct RecedingHorizonExecutionLeaseRequest
 bool can_retain_receding_horizon_execution_lease(
   const RecedingHorizonExecutionLeaseRequest & request) noexcept;
 
+struct AsyncTacticalResultLeaseRequest
+{
+  bool enabled{false};
+  bool result_success{false};
+  bool target_matches{false};
+  bool context_epoch_matches{false};
+  bool mission_generation_matches{false};
+  bool phase_matches{false};
+  bool side_matches{false};
+  bool current_hard_fault{false};
+  double now_sec{};
+  double snapshot_sec{-std::numeric_limits<double>::infinity()};
+  double maximum_age_sec{};
+};
+
+/// Retain an already accepted asynchronous tactical result between worker
+/// completions. Exact planning context and current hard guards are mandatory;
+/// the lease only bridges the worker/control-rate mismatch.
+bool can_reuse_async_tactical_result(
+  const AsyncTacticalResultLeaseRequest & request) noexcept;
+
+struct AsyncExecutionLeaseDurationRequest
+{
+  double configured_lease_sec{};
+  bool async_worker_enabled{false};
+  double evaluation_interval_sec{};
+  double last_compute_ms{};
+  double control_period_sec{};
+  double maximum_result_age_sec{};
+};
+
+/// Cover one replaced/missed latest-only worker result without allowing an
+/// execution prefix to outlive the bounded tactical-result lease.
+double resolve_async_execution_lease_duration_sec(
+  const AsyncExecutionLeaseDurationRequest & request) noexcept;
+
 struct TargetBoundExecutionHoldRequest
 {
   bool enabled{false};

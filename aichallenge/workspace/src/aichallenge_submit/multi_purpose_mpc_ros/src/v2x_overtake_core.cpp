@@ -1946,6 +1946,50 @@ bool can_retain_receding_horizon_execution_lease(
          request.maximum_age_sec + 1e-9;
 }
 
+bool can_reuse_async_tactical_result(
+  const AsyncTacticalResultLeaseRequest & request) noexcept
+{
+  if (
+    !request.enabled || !request.result_success || !request.target_matches ||
+    !request.context_epoch_matches || !request.mission_generation_matches ||
+    !request.phase_matches || !request.side_matches || request.current_hard_fault ||
+    !std::isfinite(request.now_sec) || !std::isfinite(request.snapshot_sec) ||
+    !std::isfinite(request.maximum_age_sec) || request.maximum_age_sec <= 0.0 ||
+    request.now_sec + 1e-9 < request.snapshot_sec)
+  {
+    return false;
+  }
+  return request.now_sec - request.snapshot_sec <=
+         request.maximum_age_sec + 1e-9;
+}
+
+double resolve_async_execution_lease_duration_sec(
+  const AsyncExecutionLeaseDurationRequest & request) noexcept
+{
+  const double configured =
+    std::isfinite(request.configured_lease_sec) ?
+    std::max(0.0, request.configured_lease_sec) : 0.0;
+  if (!request.async_worker_enabled) {
+    return configured;
+  }
+  const double maximum_age =
+    std::isfinite(request.maximum_result_age_sec) &&
+    request.maximum_result_age_sec > 0.0 ?
+    request.maximum_result_age_sec : configured;
+  const double evaluation_interval =
+    std::isfinite(request.evaluation_interval_sec) ?
+    std::max(0.0, request.evaluation_interval_sec) : 0.0;
+  const double compute_sec =
+    std::isfinite(request.last_compute_ms) ?
+    std::max(0.0, request.last_compute_ms) * 1e-3 : 0.0;
+  const double control_period =
+    std::isfinite(request.control_period_sec) ?
+    std::max(0.0, request.control_period_sec) : 0.0;
+  const double refresh_budget =
+    2.0 * evaluation_interval + compute_sec + 2.0 * control_period;
+  return std::clamp(refresh_budget, std::min(configured, maximum_age), maximum_age);
+}
+
 bool target_bound_execution_hold_budget_available(
   const TargetBoundExecutionHoldRequest & request) noexcept
 {

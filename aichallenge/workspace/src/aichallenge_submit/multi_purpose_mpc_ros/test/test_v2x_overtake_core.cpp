@@ -3706,6 +3706,31 @@ TEST(V2XOvertakeCoreSpeed, OpponentBoundsRemainUntilRearClear)
     can_release_receding_horizon_rear_clear_bounds(request));
 }
 
+TEST(V2XOvertakeCoreSpeed, ReturnUsesLatchedRearClearWithoutLiveTargetObservation)
+{
+  RecedingHorizonRearClearBoundsReleaseRequest request;
+  request.return_phase = true;
+  request.rear_clear_confirmed = true;
+  request.target_seen = false;
+  request.current_body_footprints_separated = false;
+  request.footprint_prediction_valid = false;
+
+  EXPECT_TRUE(
+    multi_purpose_mpc_ros::v2x_overtake_core::
+    can_release_receding_horizon_rear_clear_bounds(request));
+
+  request.execution_corridor_blocked = true;
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::v2x_overtake_core::
+    can_release_receding_horizon_rear_clear_bounds(request));
+
+  request.execution_corridor_blocked = false;
+  request.target_position_jump = true;
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::v2x_overtake_core::
+    can_release_receding_horizon_rear_clear_bounds(request));
+}
+
 TEST(V2XOvertakeCoreSpeed, ReturnDeferralRetainsOnlyValidatedRearClearPass)
 {
   RearClearReturnDeferralHoldRequest request{

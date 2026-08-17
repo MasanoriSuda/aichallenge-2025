@@ -1750,6 +1750,31 @@ const char * to_string(const OvertakeLinePhase phase)
   return "Unknown";
 }
 
+bool is_overtake_target_interaction_phase(const OvertakeLinePhase phase)
+{
+  return phase == OvertakeLinePhase::ShiftOut || phase == OvertakeLinePhase::Pass;
+}
+
+bool is_overtake_receding_horizon_execution_phase(const OvertakeLinePhase phase)
+{
+  return is_overtake_target_interaction_phase(phase) ||
+         phase == OvertakeLinePhase::Return;
+}
+
+bool is_solved_overtake_trajectory_handoff_compatible(
+  const OvertakeLinePhase source, const OvertakeLinePhase current)
+{
+  if (
+    !is_overtake_receding_horizon_execution_phase(source) ||
+    !is_overtake_receding_horizon_execution_phase(current))
+  {
+    return false;
+  }
+  return source == current ||
+         (source == OvertakeLinePhase::ShiftOut && current == OvertakeLinePhase::Pass) ||
+         (source == OvertakeLinePhase::Pass && current == OvertakeLinePhase::Return);
+}
+
 const char * to_string(const FollowPrepareCause cause)
 {
   switch (cause) {
@@ -14455,8 +14480,7 @@ struct MPC
     const bool progress_execution_context_active =
       progress_contouring_active && overtake_line_output.active &&
       stage_corridor.active &&
-      (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
-      overtake_line_state_.phase == OvertakeLinePhase::Pass) &&
+      is_overtake_receding_horizon_execution_phase(overtake_line_state_.phase) &&
       !overtake_line_state_.target_vehicle_id.empty() &&
       overtake_line_state_.mission_generation > 0U &&
       overtake_line_state_.pass_side_sign != 0;
@@ -14959,17 +14983,9 @@ struct MPC
       reject_reason = "solved trajectory context mismatch";
       return std::nullopt;
     }
-    const bool source_phase_active =
-      trajectory.phase == OvertakeLinePhase::ShiftOut ||
-      trajectory.phase == OvertakeLinePhase::Pass;
-    const bool current_phase_active =
-      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
-      overtake_line_state_.phase == OvertakeLinePhase::Pass;
-    const bool phase_handoff_compatible =
-      trajectory.phase == overtake_line_state_.phase ||
-      (trajectory.phase == OvertakeLinePhase::ShiftOut &&
-      overtake_line_state_.phase == OvertakeLinePhase::Pass);
-    if (!source_phase_active || !current_phase_active || !phase_handoff_compatible) {
+    if (!is_solved_overtake_trajectory_handoff_compatible(
+        trajectory.phase, overtake_line_state_.phase))
+    {
       reject_reason = "solved trajectory phase handoff mismatch";
       return std::nullopt;
     }
@@ -17495,6 +17511,11 @@ private:
       return std::max(0.0, overtake_line_state_.mission_shift_distance) +
         overtake_mission_pass_traveled();
     }
+    if (overtake_line_state_.phase == OvertakeLinePhase::Return) {
+      return std::max(0.0, overtake_line_state_.mission_shift_distance) +
+             std::max(0.0, overtake_line_state_.mission_pass_accumulated_m) +
+             std::max(0.0, overtake_line_state_.phase_traveled_m);
+    }
     return overtake_mission_pass_traveled();
   }
 
@@ -18176,8 +18197,7 @@ private:
     result.horizon = baseline_horizon;
     const auto & line_cfg = cfg.v2x_behavior.overtake_line;
     const bool active_phase =
-      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
-      overtake_line_state_.phase == OvertakeLinePhase::Pass;
+      is_overtake_receding_horizon_execution_phase(overtake_line_state_.phase);
     if (
       !line_cfg.receding_horizon_enabled || !active_phase ||
       N < 2 || lb.size() < N || ub.size() < N ||
@@ -18275,11 +18295,13 @@ private:
       0.5 * (std::max(0.0, cfg.v2x_gap.vehicle_length) +
       std::max(0.0, model->length)) +
       std::max(0.0, line_cfg.receding_horizon_target_longitudinal_buffer);
-    const bool rear_clear_pass_bounds_release_eligible =
+    const bool return_phase = overtake_line_state_.phase == OvertakeLinePhase::Return;
+    const bool rear_clear_execution_bounds_release_eligible =
       overtake_core::can_release_receding_horizon_rear_clear_bounds(
       overtake_core::RecedingHorizonRearClearBoundsReleaseRequest{
         overtake_line_state_.phase == OvertakeLinePhase::Pass,
-        rear_clear_confirmed,
+        rear_clear_confirmed ||
+        (return_phase && overtake_line_state_.rear_clear_confirmed_latched),
         behavior_output.locked_target_seen,
         behavior_output.locked_target_position_jump,
         behavior_output.locked_target_current_body_footprints_separated,
@@ -18287,7 +18309,8 @@ private:
         behavior_output.locked_target_predicted_body_footprint_sweep_separated,
         predicted_overlap_replan_required,
         behavior_output.overtake_execution_corridor_blocked,
-        behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake});
+        behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake,
+        return_phase});
     const double significant_curvature = std::max(
       0.0, cfg.v2x_behavior.overtake_max_curvature);
     const double physical_target_center_separation = std::max(
@@ -18397,11 +18420,11 @@ private:
       const bool raw_target_body_overlap_window =
         target_prediction.valid && target_prediction.body_overlap_window;
       const bool target_body_overlap_window =
-        raw_target_body_overlap_window && !rear_clear_pass_bounds_release_eligible;
+        raw_target_body_overlap_window && !rear_clear_execution_bounds_release_eligible;
       RecedingHorizonTargetExecutionConstraint target_execution_constraint;
       result.rear_clear_bounds_release_used =
         result.rear_clear_bounds_release_used ||
-        (raw_target_body_overlap_window && rear_clear_pass_bounds_release_eligible);
+        (raw_target_body_overlap_window && rear_clear_execution_bounds_release_eligible);
       if (target_body_overlap_window) {
         ++result.target_constraint_sample_count;
         result.last_target_constraint_distance_m = distance;
@@ -18471,6 +18494,7 @@ private:
       double reference = baseline_target;
       const auto & waypoint = model->reference_path->get_waypoint(ref_wp_id + i);
       if (
+        !return_phase &&
         std::isfinite(waypoint.kappa) &&
         std::abs(waypoint.kappa) > significant_curvature + kEps)
       {
@@ -18737,7 +18761,7 @@ private:
           RecedingHorizonTargetExecutionConstraint constraint;
           constraint.active =
             target_prediction.valid && target_prediction.body_overlap_window &&
-            !rear_clear_pass_bounds_release_eligible;
+            !rear_clear_execution_bounds_release_eligible;
           constraint.target_lateral_m = target_prediction.valid ?
             target_prediction.target_lateral_m : target_lateral_now;
           constraint.preferred_center_separation_m =
@@ -19933,9 +19957,10 @@ private:
     const bool execution_phase_or_starting =
       active_execution_phase || starting_execution_phase ||
       execution_origin_dynamic_wait_active;
+    const bool return_execution_phase =
+      overtake_line_state_.phase == OvertakeLinePhase::Return;
     const bool wall_monitor_active =
-      execution_phase_or_starting ||
-      overtake_line_state_.phase == OvertakeLinePhase::Return ||
+      execution_phase_or_starting || return_execution_phase ||
       overtake_line_state_.phase == OvertakeLinePhase::Recovery;
     bool actual_wall_sample_unavailable = false;
     bool actual_wall_physical_contact = false;
@@ -21614,7 +21639,8 @@ private:
     const bool dp_execution_authority_active =
       dp_execution_authority.valid && dp_execution_authority.authority_active;
     const bool solved_execution_validation_requested =
-      active_execution_phase && !runtime_wall_hard_fault &&
+      is_overtake_receding_horizon_execution_phase(overtake_line_state_.phase) &&
+      !runtime_wall_hard_fault &&
       (nominal_wall_preplan_warning || !dp_execution_authority_active);
     if (solved_execution_validation_requested) {
       std::vector<double> current_path_distances;
@@ -21629,7 +21655,14 @@ private:
       aligned_solved_execution = align_solved_mpcc_execution_trajectory(
         current_path_distances, current_fallback_lateral, now_sec,
         solved_execution_wall_authority_reason);
-      const bool target_context_safe =
+      const bool return_context_safe =
+        return_execution_phase &&
+        overtake_line_state_.rear_clear_confirmed_latched &&
+        !return_corridor_blocked &&
+        !behavior_output.locked_target_position_jump &&
+        behavior_output.front_risk_level != FrontRiskLevel::EmergencyBrake &&
+        !overtake_solver_recovery_active_ && !behavior_output.overtake_forbidden_wp;
+      const bool target_context_safe = return_execution_phase ? return_context_safe :
         locked_target_matches && locked_target_progress_continuous &&
         !behavior_output.locked_target_position_jump &&
         !locked_target_progress_rejected &&

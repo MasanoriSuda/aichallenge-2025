@@ -1836,16 +1836,20 @@ TargetBoundMpcGateResolution update_target_bound_mpc_gate(
 bool can_release_receding_horizon_rear_clear_bounds(
   const RecedingHorizonRearClearBoundsReleaseRequest & request) noexcept
 {
-  return request.pass_phase &&
-         request.rear_clear_confirmed &&
-         request.target_seen &&
-         !request.target_position_jump &&
-         request.current_body_footprints_separated &&
+  if (
+    (!request.pass_phase && !request.return_phase) ||
+    !request.rear_clear_confirmed || request.target_position_jump ||
+    request.execution_corridor_blocked || request.emergency_front_risk)
+  {
+    return false;
+  }
+  if (request.return_phase) {
+    return true;
+  }
+  return request.target_seen && request.current_body_footprints_separated &&
          request.footprint_prediction_valid &&
          (request.predicted_body_footprint_sweep_separated ||
-         !request.predicted_overlap_confirmed) &&
-         !request.execution_corridor_blocked &&
-         !request.emergency_front_risk;
+         !request.predicted_overlap_confirmed);
 }
 
 bool can_hold_pass_during_rear_clear_return_deferral(

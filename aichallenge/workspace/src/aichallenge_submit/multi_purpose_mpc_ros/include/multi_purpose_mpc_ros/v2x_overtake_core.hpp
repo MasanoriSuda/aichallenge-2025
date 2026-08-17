@@ -1169,11 +1169,17 @@ struct RecedingHorizonRearClearBoundsReleaseRequest
   bool predicted_overlap_confirmed{false};
   bool execution_corridor_blocked{false};
   bool emergency_front_risk{false};
+  /// Return is admitted only after rear-clear.  Its already-passed target must
+  /// not remain as a lateral obstacle merely because the live V2X observation
+  /// expires while ego converges to the base line.
+  bool return_phase{false};
 };
 
 /// Release opponent bounds only after longitudinal rear-clear is confirmed.
 /// Body-clear may release a longitudinal speed cap, but it must not remove the
-/// lateral obstacle while the locked target is still alongside or ahead.
+/// lateral obstacle while the locked target is still alongside or ahead.  An
+/// admitted Return may use its latched rear-clear evidence without requiring a
+/// continuing observation of the now-rearward target.
 bool can_release_receding_horizon_rear_clear_bounds(
   const RecedingHorizonRearClearBoundsReleaseRequest & request) noexcept;
 

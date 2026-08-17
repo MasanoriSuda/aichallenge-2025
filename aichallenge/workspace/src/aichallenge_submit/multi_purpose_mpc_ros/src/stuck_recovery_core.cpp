@@ -861,6 +861,44 @@ RecoveryRuntimeMotionGuardResolution resolve_recovery_runtime_motion_guard(
   return result;
 }
 
+AwsimRecoveryPoseHandoffResolution resolve_awsim_recovery_pose_handoff(
+  const AwsimRecoveryPoseHandoffRequest & request) noexcept
+{
+  AwsimRecoveryPoseHandoffResolution result;
+  if (
+    !request.waiting_for_awsim_recovery ||
+    !std::isfinite(request.lateral_error_m) ||
+    !std::isfinite(request.heading_error_rad) ||
+    !std::isfinite(request.maximum_position_displacement_m) ||
+    request.maximum_position_displacement_m < 0.0 ||
+    !std::isfinite(request.maximum_rejoin_lateral_error_m) ||
+    request.maximum_rejoin_lateral_error_m < 0.0 ||
+    !std::isfinite(request.maximum_rejoin_heading_error_rad) ||
+    request.maximum_rejoin_heading_error_rad < 0.0)
+  {
+    return result;
+  }
+  if (
+    request.anchor_valid &&
+    (!std::isfinite(request.position_displacement_m) ||
+    request.position_displacement_m < 0.0 ||
+    !std::isfinite(request.yaw_displacement_rad) ||
+    request.yaw_displacement_rad < 0.0))
+  {
+    return result;
+  }
+
+  result.valid = true;
+  result.external_pose_change = request.anchor_valid &&
+    (request.position_displacement_m > request.maximum_position_displacement_m ||
+    request.yaw_displacement_rad > request.maximum_rejoin_heading_error_rad);
+  result.rejoin_alignment_valid =
+    std::abs(request.lateral_error_m) <= request.maximum_rejoin_lateral_error_m &&
+    std::abs(request.heading_error_rad) <= request.maximum_rejoin_heading_error_rad;
+  result.direction_reassessment_required = !result.rejoin_alignment_valid;
+  return result;
+}
+
 std::optional<double> compute_rejoin_steering_tire_angle(
   const RejoinSteeringRequest & request) noexcept
 {
@@ -1649,11 +1687,15 @@ RecoveryAction RecoverySupervisor::update_wait_awsim(const RecoveryInput & input
   }
   // AWSIM wall recovery can rotate or nudge a still-colliding vehicle enough
   // to reset the detector's observation window. Only leave Recovery when the
-  // current footprint is actually clear; otherwise continue with the bounded
-  // maneuver after the AWSIM settling interval.
+  // current footprint is clear and the externally moved pose is aligned with
+  // the path; otherwise choose a fresh bounded maneuver from the new pose.
   if (
     input.detector.verdict != StuckVerdict::Confirmed &&
-    input.awsim_recovery_resolved)
+    input.awsim_recovery_resolved &&
+    std::isfinite(input.lateral_error_m) &&
+    std::isfinite(input.heading_error_rad) &&
+    std::abs(input.lateral_error_m) <= config_.max_rejoin_lateral_error_m &&
+    std::abs(input.heading_error_rad) <= config_.max_rejoin_heading_error_rad)
   {
     transition(RecoveryState::Normal, RecoveryReason::AwsimRecoveryResolved, input.now_sec);
     cooldown_until_sec_ = input.now_sec + config_.cooldown_sec;

@@ -180,6 +180,33 @@ struct RecoveryRuntimeMotionGuardResolution
 RecoveryRuntimeMotionGuardResolution resolve_recovery_runtime_motion_guard(
   const RecoveryRuntimeMotionGuardRequest & request) noexcept;
 
+struct AwsimRecoveryPoseHandoffRequest
+{
+  bool waiting_for_awsim_recovery{false};
+  bool anchor_valid{false};
+  double position_displacement_m{};
+  double yaw_displacement_rad{};
+  double lateral_error_m{};
+  double heading_error_rad{};
+  double maximum_position_displacement_m{};
+  double maximum_rejoin_lateral_error_m{};
+  double maximum_rejoin_heading_error_rad{};
+};
+
+struct AwsimRecoveryPoseHandoffResolution
+{
+  bool valid{false};
+  bool external_pose_change{false};
+  bool rejoin_alignment_valid{false};
+  bool direction_reassessment_required{false};
+};
+
+// AWSIM may move or rotate the kart while Recovery is deliberately holding.
+// Classify that external handoff independently from ordinary odometry motion,
+// and never treat a clear but path-misaligned pose as a completed recovery.
+AwsimRecoveryPoseHandoffResolution resolve_awsim_recovery_pose_handoff(
+  const AwsimRecoveryPoseHandoffRequest & request) noexcept;
+
 struct CollisionDeliberateStopOverrideRequest
 {
   bool enabled{false};

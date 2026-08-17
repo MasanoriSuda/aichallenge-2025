@@ -1095,6 +1095,18 @@ struct BicycleModel
     current_waypoint = &reference_path->waypoints.at(wp_id);
   }
 
+  void force_global_waypoint_reassociation(
+    const double speed_mps, const double dt_sec)
+  {
+    waypoint_association_initialized = false;
+    wp_id = get_closest_waypoint(
+      temporal_state.x, temporal_state.y, temporal_state.psi,
+      speed_mps, dt_sec, true);
+    s = get_s_at_waypoint(wp_id);
+    current_waypoint = &reference_path->waypoints.at(wp_id);
+    spatial_state = t2s(*current_waypoint, temporal_state);
+  }
+
   std::tuple<Eigen::Vector3d, Eigen::Matrix3d, Eigen::Matrix<double, 3, 2>> linearize(
     const double v_ref, const double kappa_ref, const double delta_s) const
   {
@@ -33884,6 +33896,8 @@ private:
     }
     recovery_observation_anchor_pose_.reset();
     recovery_observation_anchor_progress_m_.reset();
+    recovery_awsim_wait_anchor_pose_.reset();
+    recovery_awsim_pose_reassociated_ = false;
     recovery_forward_rearm_guard_started_.reset();
     recovery_forward_rearm_guard_start_progress_m_.reset();
     recovery_maneuver_start_pose_.reset();
@@ -33951,6 +33965,8 @@ private:
     }
     recovery_observation_anchor_pose_ = pose;
     recovery_observation_anchor_progress_m_ = car_->s;
+    recovery_awsim_wait_anchor_pose_.reset();
+    recovery_awsim_pose_reassociated_ = false;
     recovery_forward_rearm_guard_started_ = steady_now;
     recovery_forward_rearm_guard_start_progress_m_ = car_->s;
     recovery_maneuver_start_pose_.reset();
@@ -35588,6 +35604,61 @@ private:
     }
   }
 
+  stuck_recovery::AwsimRecoveryPoseHandoffResolution assess_awsim_recovery_pose_handoff(
+    const Pose2D & pose) const
+  {
+    const bool anchor_valid = recovery_awsim_wait_anchor_pose_.has_value();
+    const double position_displacement_m = anchor_valid ? std::hypot(
+      pose.x - recovery_awsim_wait_anchor_pose_->x,
+      pose.y - recovery_awsim_wait_anchor_pose_->y) : 0.0;
+    const double yaw_displacement_rad = anchor_valid ? std::abs(
+      wrap_to_pi(pose.theta - recovery_awsim_wait_anchor_pose_->theta)) : 0.0;
+    return stuck_recovery::resolve_awsim_recovery_pose_handoff(
+      stuck_recovery::AwsimRecoveryPoseHandoffRequest{
+        true,
+        anchor_valid,
+        position_displacement_m,
+        yaw_displacement_rad,
+        car_->spatial_state.e_y,
+        car_->spatial_state.e_psi,
+        cfg_.stuck_recovery.core.detector.max_pose_displacement_m,
+        cfg_.stuck_recovery.core.supervisor.max_rejoin_lateral_error_m,
+        cfg_.stuck_recovery.core.supervisor.max_rejoin_heading_error_rad});
+  }
+
+  void refresh_recovery_after_awsim_pose_handoff(
+    const Pose2D & pose, const RecoverySafetySnapshot & safety,
+    const bool coordinated_stop_active, const bool solver_reverse_only_candidate)
+  {
+    recovery_observation_anchor_pose_ = pose;
+    recovery_observation_anchor_progress_m_ = car_->s;
+    recovery_maneuver_start_pose_.reset();
+    recovery_maneuver_start_lateral_error_m_.reset();
+    recovery_last_reverse_pose_.reset();
+    recovery_last_motion_steady_.reset();
+    recovery_cumulative_reverse_distance_m_ = 0.0;
+    recovery_episode_traveled_distance_m_ = 0.0;
+    recovery_clear_forward_progress_.reset();
+    recovery_runtime_observed_corner_motion_m_ = 0.0;
+    recovery_runtime_maximum_corner_motion_m_ = 0.0;
+    recovery_reverse_pose_jump_ = false;
+    recovery_initial_contact_cells_ = safety.current_contact_cells;
+    recovery_previous_contact_cells_ = safety.current_contact_cells;
+    recovery_selected_reverse_primitive_.reset();
+    recovery_selected_reverse_steering_angle_rad_.reset();
+    recovery_selected_stepwise_escape_ = false;
+    recovery_selected_continuous_contact_escape_ = false;
+    recovery_rolling_stepwise_reverse_active_ = false;
+    recovery_rolling_stepwise_replan_anchor_m_ = 0.0;
+    recovery_forward_failure_tracker_.reset();
+    recovery_retry_force_reverse_ = false;
+    recovery_last_maneuver_direction_.reset();
+    recovery_coordinated_stop_episode_ = coordinated_stop_active;
+    recovery_reverse_only_episode_ = solver_reverse_only_candidate;
+    recovery_reverse_intent_latched_ = false;
+    recovery_forward_fallback_unlocked_ = false;
+  }
+
   std::optional<stuck_recovery::CoreOutput> evaluate_stuck_recovery(
     const Pose2D & pose, const double actual_v, const Eigen::Vector2d & normal_u,
     const double normal_acc, const double path_forward_intent_speed_mps,
@@ -35601,10 +35672,35 @@ private:
       recovery_observation_anchor_pose_ = pose;
       recovery_observation_anchor_progress_m_ = car_->s;
     }
+    const auto supervisor_state = stuck_recovery_core_->supervisor().state();
+    auto awsim_pose_handoff =
+      stuck_recovery::AwsimRecoveryPoseHandoffResolution{};
+    if (supervisor_state == stuck_recovery::RecoveryState::WaitAwsimRecovery) {
+      awsim_pose_handoff = assess_awsim_recovery_pose_handoff(pose);
+      if (
+        awsim_pose_handoff.external_pose_change &&
+        !recovery_awsim_pose_reassociated_)
+      {
+        const auto & wait_anchor = recovery_awsim_wait_anchor_pose_.value();
+        const double position_displacement_m = std::hypot(
+          pose.x - wait_anchor.x, pose.y - wait_anchor.y);
+        const double yaw_displacement_rad = std::abs(
+          wrap_to_pi(pose.theta - wait_anchor.theta));
+        car_->force_global_waypoint_reassociation(
+          std::abs(actual_v), 1.0 / std::max(1.0, mpc_cfg_.control_rate));
+        recovery_awsim_pose_reassociated_ = true;
+        awsim_pose_handoff = assess_awsim_recovery_pose_handoff(pose);
+        RCLCPP_WARN(
+          get_logger(),
+          "AWSIM recovery pose handoff detected: displacement=%.3f m, yaw=%.3f rad, "
+          "e_y=%.3f m, e_psi=%.3f rad; waypoint association refreshed",
+          position_displacement_m, yaw_displacement_rad,
+          car_->spatial_state.e_y, car_->spatial_state.e_psi);
+      }
+    }
     const auto & anchor_pose = recovery_observation_anchor_pose_.value();
     const double pose_displacement_m = std::hypot(pose.x - anchor_pose.x, pose.y - anchor_pose.y);
     const double progress_delta_m = recovery_progress_delta(car_->s);
-    const auto supervisor_state = stuck_recovery_core_->supervisor().state();
     if (
       supervisor_state == stuck_recovery::RecoveryState::Normal &&
       adaptive_reverse_retry_tracker_)
@@ -36218,6 +36314,7 @@ private:
     }
     input.recovery.awsim_recovery_resolved =
       safety.current_footprint_clear &&
+      (!awsim_pose_handoff.valid || awsim_pose_handoff.rejoin_alignment_valid) &&
       (recovery_episode_had_contact_evidence_ ||
       std::abs(progress_delta_m) >=
       cfg_.stuck_recovery.core.detector.max_progress_delta_m);
@@ -36232,6 +36329,41 @@ private:
 
     auto output = stuck_recovery_core_->update(input);
     update_recovery_observation_anchor(pose, car_->s, output.detector.reject_reason);
+    const bool entered_awsim_recovery_wait =
+      supervisor_state != stuck_recovery::RecoveryState::WaitAwsimRecovery &&
+      output.state == stuck_recovery::RecoveryState::WaitAwsimRecovery;
+    if (entered_awsim_recovery_wait) {
+      recovery_awsim_wait_anchor_pose_ = pose;
+      recovery_awsim_pose_reassociated_ = false;
+    }
+    const bool completed_awsim_recovery_wait =
+      supervisor_state == stuck_recovery::RecoveryState::WaitAwsimRecovery &&
+      output.state != stuck_recovery::RecoveryState::WaitAwsimRecovery;
+    if (completed_awsim_recovery_wait) {
+      refresh_recovery_after_awsim_pose_handoff(
+        pose, safety, coordinated_stop_active, solver_reverse_only_candidate);
+      const bool reset_external_control =
+        awsim_pose_handoff.external_pose_change ||
+        awsim_pose_handoff.direction_reassessment_required;
+      if (reset_external_control) {
+        mpc_->reset_after_external_maneuver(control_time.seconds(), 0.0);
+        last_u_ = Eigen::Vector2d::Zero();
+        last_acc_ = 0.0;
+        recovery_reset_applied_ =
+          output.state != stuck_recovery::RecoveryState::Normal;
+      }
+      RCLCPP_WARN(
+        get_logger(),
+        "AWSIM recovery pose handoff completed: external_change=%d, aligned=%d, "
+        "direction_reassessment=%d, next_state=%s, e_y=%.3f m, e_psi=%.3f rad",
+        awsim_pose_handoff.external_pose_change ? 1 : 0,
+        awsim_pose_handoff.rejoin_alignment_valid ? 1 : 0,
+        awsim_pose_handoff.direction_reassessment_required ? 1 : 0,
+        stuck_recovery::to_string(output.state),
+        car_->spatial_state.e_y, car_->spatial_state.e_psi);
+      recovery_awsim_wait_anchor_pose_.reset();
+      recovery_awsim_pose_reassociated_ = false;
+    }
     if (
       output.action.reason ==
       stuck_recovery::RecoveryReason::AggressiveRetryAwaitingChange)
@@ -37645,6 +37777,8 @@ private:
   recovery_footprint::FootprintExtents recovery_footprint_;
   std::optional<Pose2D> recovery_observation_anchor_pose_;
   std::optional<double> recovery_observation_anchor_progress_m_;
+  std::optional<Pose2D> recovery_awsim_wait_anchor_pose_;
+  bool recovery_awsim_pose_reassociated_{false};
   std::optional<SteadyClock::time_point> recovery_forward_rearm_guard_started_;
   std::optional<double> recovery_forward_rearm_guard_start_progress_m_;
   std::optional<Pose2D> recovery_maneuver_start_pose_;

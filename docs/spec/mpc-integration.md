@@ -467,7 +467,13 @@ contact candidateを失い、駆動前にSafeStopへ落ちる競合を避ける�
 
 AWSIM標準wall recoveryによるpose / yaw変化でdetectorの観測windowがresetされても、現在footprintに
 map contactが残る場合は`awsim_recovery_resolved`としない。待機時間終了後に
-`STOP_AND_CONFIRM`へ進め、現在footprintがclearの場合だけ通常制御へ戻す。
+`STOP_AND_CONFIRM`へ進める。現在footprintがclearでも、横偏差またはheading誤差がrejoin許容外なら
+通常制御へ直帰しない。`WAIT_AWSIM_RECOVERY`中の位置変化がdetectorのpose閾値を超えるか、yaw変化が
+rejoin heading閾値を超えた場合は外部pose handoffとして扱い、現在poseでwaypointをglobal再対応する。
+待機解除時には補正前の観測anchor、maneuver距離、contact baseline、選択済みprimitive、direction latch、
+Forward失敗履歴を破棄し、現在snapshotから方向を再評価する。これによりAWSIM補正で車体が反転した場合に、
+補正前の通常rejoinまたは同一方向retryを継続しない。footprint clearかつ横・heading誤差がともに許容内の
+場合だけ`awsim_recovery_resolved`として通常制御へ戻す。
 
 Recovery開始後はそのrace sessionのStart Boostを再発動せず、LowSpeedRejoin前に
 MPC prediction / control history / solver fallback、V2X behavior、OvertakeLine、pass-side / target

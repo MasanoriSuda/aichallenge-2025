@@ -30,6 +30,7 @@ using multi_purpose_mpc_ros::stuck_recovery::RecoveryIncidentLedger;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryIncidentMotion;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryCollisionWorseningGate;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryRuntimeMotionGuardRequest;
+using multi_purpose_mpc_ros::stuck_recovery::AwsimRecoveryPoseHandoffRequest;
 using multi_purpose_mpc_ros::stuck_recovery::DetectorConfig;
 using multi_purpose_mpc_ros::stuck_recovery::DetectorDecision;
 using multi_purpose_mpc_ros::stuck_recovery::DetectorInput;
@@ -976,6 +977,44 @@ TEST(StuckRecoveryRuntimeMotionGuard, AcceptsCallbackJitterButRejectsTeleport)
   EXPECT_FALSE(teleport.plausible);
 }
 
+TEST(AwsimRecoveryPoseHandoff, DetectsRelocationAndRequiresFreshDirectionWhenReversed)
+{
+  const auto resolution =
+    multi_purpose_mpc_ros::stuck_recovery::resolve_awsim_recovery_pose_handoff(
+    AwsimRecoveryPoseHandoffRequest{
+      true, true, 1.8, 3.05, 0.12, 3.02, 0.15, 0.5, 0.35});
+
+  EXPECT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.external_pose_change);
+  EXPECT_FALSE(resolution.rejoin_alignment_valid);
+  EXPECT_TRUE(resolution.direction_reassessment_required);
+}
+
+TEST(AwsimRecoveryPoseHandoff, AllowsAlignedRelocationAfterGlobalReassociation)
+{
+  const auto resolution =
+    multi_purpose_mpc_ros::stuck_recovery::resolve_awsim_recovery_pose_handoff(
+    AwsimRecoveryPoseHandoffRequest{
+      true, true, 2.0, 0.8, 0.1, 0.2, 0.15, 0.5, 0.35});
+
+  EXPECT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.external_pose_change);
+  EXPECT_TRUE(resolution.rejoin_alignment_valid);
+  EXPECT_FALSE(resolution.direction_reassessment_required);
+}
+
+TEST(AwsimRecoveryPoseHandoff, RejectsNonFiniteAnchorObservation)
+{
+  const auto resolution =
+    multi_purpose_mpc_ros::stuck_recovery::resolve_awsim_recovery_pose_handoff(
+    AwsimRecoveryPoseHandoffRequest{
+      true, true, std::numeric_limits<double>::quiet_NaN(), 0.0,
+      0.0, 0.0, 0.15, 0.5, 0.35});
+
+  EXPECT_FALSE(resolution.valid);
+  EXPECT_FALSE(resolution.external_pose_change);
+}
+
 TEST(StuckRecoveryAdaptiveReverseRetry, DisabledTrackerPreservesBaseTarget)
 {
   AdaptiveReverseRetryTracker tracker(
@@ -1308,6 +1347,30 @@ TEST(RecoverySupervisor, AwsimMotionOnlyResolvesAfterFootprintClears)
   EXPECT_EQ(action.type, RecoveryActionType::NormalControl);
   EXPECT_EQ(action.reason, RecoveryReason::AwsimRecoveryResolved);
   EXPECT_EQ(cleared.state(), RecoveryState::Normal);
+}
+
+TEST(RecoverySupervisor, AwsimClearButReversedPoseRequiresDirectionReassessment)
+{
+  RecoverySupervisor supervisor(supervisor_config());
+  double now = 0.0;
+  auto input = healthy_recovery_input(now);
+  supervisor.update(input);
+  now += 0.01;
+  input.now_sec = now;
+  supervisor.update(input);
+
+  now += 0.01;
+  input.now_sec = now;
+  input.detector.verdict = StuckVerdict::Moving;
+  input.awsim_recovery_resolved = true;
+  input.rejoin_safe = true;
+  input.lateral_error_m = 0.1;
+  input.heading_error_rad = 3.0;
+  const auto action = supervisor.update(input);
+
+  EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
+  EXPECT_EQ(action.reason, RecoveryReason::StopConfirmationPending);
+  EXPECT_EQ(supervisor.state(), RecoveryState::StopAndConfirm);
 }
 
 TEST(RecoverySupervisor, EvidenceFreePoseNudgeDoesNotResolveWithoutPathProgress)

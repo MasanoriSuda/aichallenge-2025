@@ -114,6 +114,27 @@ struct ExecutionTrajectory
   double minimum_lateral_bound_reserve_m{};
 };
 
+enum class ExecutionTrajectoryRejection
+{
+  None,
+  InvalidInput,
+  InvalidPathDistance,
+  InvalidLateralBounds,
+  NonFiniteState,
+  ProgressRegressed,
+  LateralOutOfBounds,
+  EmptyTrajectory,
+};
+
+struct ExecutionTrajectoryDiagnostic
+{
+  ExecutionTrajectoryRejection rejection{ExecutionTrajectoryRejection::None};
+  int stage{-1};
+};
+
+const char * execution_trajectory_rejection_name(
+  ExecutionTrajectoryRejection rejection) noexcept;
+
 /// Extract the state stages which were actually admitted by the MPCC QP.
 /// The QP layout is [N+1 x (e_y,e_psi,s), N x (v,kappa)]. Stage zero is the
 /// measured equality, so the returned execution path contains stages 1..N.
@@ -122,6 +143,7 @@ std::optional<ExecutionTrajectory> extract_execution_trajectory(
   const std::vector<double> & path_distance_m,
   const std::vector<double> & lateral_lower_m,
   const std::vector<double> & lateral_upper_m,
-  double bound_tolerance_m = 1e-5) noexcept;
+  double bound_tolerance_m = 1e-5,
+  ExecutionTrajectoryDiagnostic * diagnostic = nullptr) noexcept;
 
 }  // namespace multi_purpose_mpc_ros::mpcc_progress

@@ -192,10 +192,32 @@ TEST(MpccProgress, RejectsExecutionTrajectoryOutsideAppliedBounds)
     0.9, 0.02, 11.0,
     5.0, 0.0,
     5.0, 0.0;
-  EXPECT_FALSE(
+  multi_purpose_mpc_ros::mpcc_progress::ExecutionTrajectoryDiagnostic diagnostic;
+  EXPECT_FALSE(multi_purpose_mpc_ros::mpcc_progress::extract_execution_trajectory(
+    primal, 2, {0.5, 1.0}, {-0.5, -0.5}, {0.8, 0.8}, 1e-5,
+    &diagnostic).has_value());
+  EXPECT_EQ(
+    diagnostic.rejection,
+    multi_purpose_mpc_ros::mpcc_progress::ExecutionTrajectoryRejection::
+    LateralOutOfBounds);
+  EXPECT_EQ(diagnostic.stage, 1);
+}
+
+TEST(MpccProgress, AcceptsExecutionTrajectoryInsideSolverResidualTolerance)
+{
+  Eigen::VectorXd primal(13);
+  primal <<
+    0.0, 0.0, 10.0,
+    0.2, 0.01, 10.5,
+    0.801, 0.02, 10.499,
+    5.0, 0.0,
+    5.0, 0.0;
+  const auto result =
     multi_purpose_mpc_ros::mpcc_progress::extract_execution_trajectory(
-      primal, 2, {0.5, 1.0}, {-0.5, -0.5}, {0.8, 0.8}, 1e-5)
-    .has_value());
+    primal, 2, {0.5, 1.0}, {-0.5, -0.5}, {0.8, 0.8}, 0.0011);
+  ASSERT_TRUE(result.has_value());
+  EXPECT_DOUBLE_EQ(result->lateral_m.back(), 0.801);
+  EXPECT_DOUBLE_EQ(result->minimum_lateral_bound_reserve_m, 0.0);
 }
 
 }  // namespace

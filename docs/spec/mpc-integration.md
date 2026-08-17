@@ -134,10 +134,17 @@ mode中でもOSQP warm-startをresetする。
 
 追い越しhorizonのstatic-wall検証は、横位置`d(s)`だけでなくその勾配が作る
 Frenet path headingも車体矩形のyawへ反映する。横位置の平行移動はbase pathの
-法線を維持し、車体yawだけを`d(s)`のheading offsetで補正する。wall側で不成立な
-stageはbase line方向にだけ補正し、補正後の全profileを同じheading規約で再検証する。
-solved MPCC trajectoryのauthority判定も同じheading helperを使うため、計画時には
-通過可能だった軌道が実行時だけ`solution hard wall contact`となる不整合を避ける。
+法線を維持し、車体yawだけを`d(s)`のheading offsetで補正する。stage 0は現在横位置
+から最初のtarget、以降は直前stageからのbackward differenceを使い、実際の
+`target_epsi`生成と同じ規約にする。wall側で不成立な場合は単一stageだけを動かさず、
+全profileをcurrent-side holdまたは滑らかなbase-line復帰へ同じ比率で収縮し、各候補を
+static mapと横加速度で再検証する。全速度・hard wall reserve候補を試した後も新解が
+成立しない一周期では、同じhard wall / target boundで再検証済みのlast-feasibleまたは
+baseline profileだけを保持し、即座にRecoveryへ落として速度を失うことを避ける。
+solved MPCC trajectoryのauthority判定も現在位置から始まる同じbackward heading規約を
+使うため、計画時には通過可能だった軌道が実行時だけ`solution hard wall contact`となる
+不整合を避ける。周期debugの`profile_keep`は採用profileの元経路保持率で、1.0が無補正、
+0.0が安全側fallbackまでの収縮を示す。
 occupied / unknown / out-of-map、物理footprint、設定したhard wall marginは緩和しない。
 
 これは本格MPCCへの第1段階であり、複数回RTI-SQP、terminal velocity cost、

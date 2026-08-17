@@ -218,6 +218,25 @@ struct LateralClearanceResult
   std::size_t checked_pose_count{};
 };
 
+/// One stage of a Frenet lateral profile relative to a base-path pose.
+struct LateralProfileSample
+{
+  Pose2D reference_pose;
+  double path_distance_m{};
+  double lateral_offset_m{};
+  double base_curvature_radpm{};
+};
+
+/// Result of validating a complete lateral profile with its induced yaw.
+struct LateralProfileClearanceResult
+{
+  bool valid{false};
+  bool clear{false};
+  std::size_t checked_pose_count{};
+  std::size_t rejected_path_index{};
+  double rejected_heading_offset_rad{};
+};
+
 /// One connected collision-free lateral interval at a fixed reference pose.
 struct LateralClearIntervalResult
 {
@@ -334,6 +353,18 @@ LateralClearanceResult clamp_lateral_offset_to_static_map_with_heading(
   const Pose2D & reference_pose, double desired_lateral_offset_m,
   double fallback_lateral_offset_m, double path_heading_offset_rad,
   double additional_lateral_clearance_m, double sample_step_m);
+
+/// Validate a complete Frenet lateral profile against the static map.
+///
+/// Stage zero derives d'(s) from current_lateral_offset_m to samples[0].
+/// Later stages use the preceding sample, matching the controller's executed
+/// target_epsi construction. Lateral translation remains in each base pose's
+/// normal frame while the footprint yaw includes the Frenet heading offset.
+LateralProfileClearanceResult evaluate_lateral_profile_static_map(
+  const OccupancyGrid & grid, const FootprintExtents & footprint,
+  double current_lateral_offset_m,
+  const std::vector<LateralProfileSample> & samples,
+  double additional_lateral_clearance_m);
 
 /// Sample a bounded Frenet interval and return one connected collision-free
 /// component. If several components exist, the one nearest preferred_lateral

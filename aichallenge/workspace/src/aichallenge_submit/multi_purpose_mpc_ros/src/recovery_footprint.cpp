@@ -926,6 +926,80 @@ LateralClearanceResult clamp_lateral_offset_to_static_map_with_heading(
   return result;
 }
 
+LateralProfileClearanceResult evaluate_lateral_profile_static_map(
+  const OccupancyGrid & grid, const FootprintExtents & footprint,
+  const double current_lateral_offset_m,
+  const std::vector<LateralProfileSample> & samples,
+  const double additional_lateral_clearance_m)
+{
+  LateralProfileClearanceResult result;
+  if (
+    !grid.valid() || !footprint.valid() || !finite(current_lateral_offset_m) ||
+    samples.empty() || !finite(additional_lateral_clearance_m) ||
+    additional_lateral_clearance_m < 0.0)
+  {
+    return result;
+  }
+
+  auto clearance_footprint = footprint;
+  clearance_footprint.left_extent_m += additional_lateral_clearance_m;
+  clearance_footprint.right_extent_m += additional_lateral_clearance_m;
+  if (!clearance_footprint.valid()) {
+    return result;
+  }
+
+  double previous_distance_m = 0.0;
+  double previous_lateral_m = current_lateral_offset_m;
+  for (std::size_t index = 0U; index < samples.size(); ++index) {
+    const auto & profile_sample = samples[index];
+    const double delta_s_m = profile_sample.path_distance_m - previous_distance_m;
+    if (
+      !valid_pose(profile_sample.reference_pose) ||
+      !finite(profile_sample.path_distance_m) || delta_s_m <= kNumericalEpsilon ||
+      !finite(profile_sample.lateral_offset_m) ||
+      !finite(profile_sample.base_curvature_radpm))
+    {
+      result.rejected_path_index = index;
+      return result;
+    }
+
+    const double lateral_gradient =
+      (profile_sample.lateral_offset_m - previous_lateral_m) / delta_s_m;
+    double tangential_scale =
+      1.0 - profile_sample.base_curvature_radpm * profile_sample.lateral_offset_m;
+    if (std::abs(tangential_scale) < 1e-3) {
+      tangential_scale = std::copysign(
+        1e-3, tangential_scale == 0.0 ? 1.0 : tangential_scale);
+    }
+    const double heading_offset_rad = std::atan2(lateral_gradient, tangential_scale);
+    const double base_yaw = profile_sample.reference_pose.yaw_rad;
+    const Pose2D pose{
+      profile_sample.reference_pose.x_m -
+      profile_sample.lateral_offset_m * std::sin(base_yaw),
+      profile_sample.reference_pose.y_m +
+      profile_sample.lateral_offset_m * std::cos(base_yaw),
+      wrap_to_pi(base_yaw + heading_offset_rad)};
+    const auto footprint_sample = sample_footprint(grid, clearance_footprint, pose);
+    ++result.checked_pose_count;
+    if (
+      !footprint_sample.valid || footprint_sample.out_of_map ||
+      !footprint_sample.contact_cells.empty())
+    {
+      result.valid = true;
+      result.rejected_path_index = index;
+      result.rejected_heading_offset_rad = heading_offset_rad;
+      return result;
+    }
+    previous_distance_m = profile_sample.path_distance_m;
+    previous_lateral_m = profile_sample.lateral_offset_m;
+  }
+
+  result.valid = true;
+  result.clear = true;
+  result.rejected_path_index = samples.size() - 1U;
+  return result;
+}
+
 LateralClearIntervalResult find_clear_lateral_interval(
   const OccupancyGrid & grid, const FootprintExtents & footprint,
   const Pose2D & reference_pose, const double lower_lateral_offset_m,

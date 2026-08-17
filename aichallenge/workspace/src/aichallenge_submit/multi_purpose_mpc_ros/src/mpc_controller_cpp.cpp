@@ -2590,6 +2590,7 @@ struct OvertakeLineOutput
   bool static_map_margin_degraded{false};
   bool static_map_reachable_projection_used{false};
   bool static_map_wall_infeasible{false};
+  double static_map_profile_retention_ratio{1.0};
 };
 
 struct OvertakeLineHorizonEvaluation
@@ -2612,6 +2613,9 @@ struct OvertakeLineHorizonEvaluation
   bool static_clamp_lateral_accel_infeasible{false};
   bool static_map_margin_degraded_during_execution{false};
   bool static_map_physical_infeasible_during_execution{false};
+  int static_map_failure_index{-1};
+  double static_map_failure_heading_offset_rad{0.0};
+  double static_map_profile_retention_ratio{1.0};
 
   bool execution_feasible() const
   {
@@ -15075,25 +15079,22 @@ struct MPC
 
       const auto & waypoint = model->reference_path->get_waypoint(ref_wp_id + i);
       double heading_offset = 0.0;
-      if (horizon_size > 1) {
-        const std::size_t first = i + 1 < horizon_size ? index : index - 1U;
-        const std::size_t second = i + 1 < horizon_size ? index + 1U : index;
-        const double delta_distance =
-          path_distance_m[second] - path_distance_m[first];
-        const double delta_lateral =
-          trajectory.lateral_m[second] - trajectory.lateral_m[first];
-        if (
-          !std::isfinite(delta_distance) || delta_distance <= 1e-6 ||
-          !std::isfinite(delta_lateral))
-        {
-          reject_reason = "solution heading unavailable";
-          return false;
-        }
-        heading_offset = overtake_core::resolve_overtake_line_heading_reference(
-          overtake_core::OvertakeLineHeadingReferenceRequest{
-            trajectory.lateral_m[first], trajectory.lateral_m[second],
-            delta_distance, waypoint.kappa});
+      const double previous_lateral = index == 0U ?
+        model->spatial_state.e_y : trajectory.lateral_m[index - 1U];
+      const double previous_distance = index == 0U ?
+        0.0 : path_distance_m[index - 1U];
+      const double delta_distance = path_distance_m[index] - previous_distance;
+      if (
+        !std::isfinite(previous_lateral) || !std::isfinite(delta_distance) ||
+        delta_distance <= 1e-6)
+      {
+        reject_reason = "solution heading unavailable";
+        return false;
       }
+      heading_offset = overtake_core::resolve_overtake_line_heading_reference(
+        overtake_core::OvertakeLineHeadingReferenceRequest{
+          previous_lateral, trajectory.lateral_m[index],
+          delta_distance, waypoint.kappa});
       const recovery_footprint::Pose2D pose{
         waypoint.x - lateral * std::sin(waypoint.psi),
         waypoint.y + lateral * std::cos(waypoint.psi),
@@ -17792,21 +17793,21 @@ private:
     const auto profile_heading_offset = [&] (
         const std::size_t index, const std::vector<double> & lateral_profile) {
         if (
-          lateral_profile.size() != static_cast<std::size_t>(N) || N < 2 ||
+          lateral_profile.size() != static_cast<std::size_t>(N) ||
           index >= lateral_profile.size())
         {
           return 0.0;
         }
-        const bool use_forward = index + 1U < lateral_profile.size();
-        const std::size_t previous = use_forward ? index : index - 1U;
-        const std::size_t current = use_forward ? index + 1U : index;
-        const double delta_s =
-          evaluation.path_distances[current] - evaluation.path_distances[previous];
+        const double previous_lateral = index == 0U ?
+          current_ey : lateral_profile[index - 1U];
+        const double previous_distance = index == 0U ?
+          0.0 : evaluation.path_distances[index - 1U];
+        const double delta_s = evaluation.path_distances[index] - previous_distance;
         const auto & waypoint = model->reference_path->get_waypoint(
           ref_wp_id + static_cast<int>(index));
         return overtake_core::resolve_overtake_line_heading_reference(
           overtake_core::OvertakeLineHeadingReferenceRequest{
-            lateral_profile[previous], lateral_profile[current], delta_s,
+            previous_lateral, lateral_profile[index], delta_s,
             waypoint.kappa});
       };
     const double current_lateral_velocity_mps =
@@ -17869,7 +17870,8 @@ private:
 
       if (
         overtake_static_wall_grid_ != nullptr &&
-        overtake_static_wall_footprint_.valid())
+        overtake_static_wall_footprint_.valid() &&
+        !enforce_execution_feasibility)
       {
         const auto & waypoint = model->reference_path->get_waypoint(ref_wp_id + i);
         const recovery_footprint::Pose2D reference_pose{
@@ -17967,105 +17969,183 @@ private:
       enforce_execution_feasibility && overtake_static_wall_grid_ != nullptr &&
       overtake_static_wall_footprint_.valid())
     {
-      const double sample_step = std::clamp(
-        0.5 * overtake_static_wall_grid_->resolution_m, 0.02, 0.10);
-      // A centreward repair changes d'(s), so recompute path yaw and validate
-      // again. The search is monotonic toward the base line and never relaxes
-      // the configured hard wall margin.
-      for (int repair_iteration = 0; repair_iteration < 3; ++repair_iteration) {
-        bool profile_clear = true;
-        bool profile_adjusted = false;
-        for (int i = 0; i < N; ++i) {
-          const std::size_t index = static_cast<std::size_t>(i);
-          const auto & waypoint = model->reference_path->get_waypoint(ref_wp_id + i);
-          const recovery_footprint::Pose2D reference_pose{
-            waypoint.x, waypoint.y, waypoint.psi};
-          const double path_heading_offset = profile_heading_offset(
-            index, evaluation.target_ey);
-          const double lower = evaluation.stage_wall_corridor_lower_ey[index];
-          const double upper = evaluation.stage_wall_corridor_upper_ey[index];
-          const double fallback_ey = clip(0.0, lower, upper);
-          auto clearance =
-            recovery_footprint::clamp_lateral_offset_to_static_map_with_heading(
-            *overtake_static_wall_grid_, overtake_static_wall_footprint_,
-            reference_pose, evaluation.target_ey[index], fallback_ey,
-            path_heading_offset, min_wall_clearance, sample_step);
-          if (clearance.valid && !clearance.feasible) {
-            clearance =
-              recovery_footprint::clamp_lateral_offset_to_static_map_with_heading(
-              *overtake_static_wall_grid_, overtake_static_wall_footprint_,
-              reference_pose, evaluation.target_ey[index], fallback_ey,
-              path_heading_offset, 0.0, sample_step);
-            evaluation.static_map_margin_degraded = true;
-            evaluation.static_map_margin_degraded_during_execution = true;
+      struct CoupledProfileSearchResult
+      {
+        bool valid{true};
+        bool feasible{false};
+        bool map_clear_candidate_seen{false};
+        std::vector<double> profile;
+        double retention_ratio{0.0};
+        double maximum_lateral_accel{0.0};
+        int failure_index{-1};
+        double failure_heading_offset_rad{0.0};
+      };
+      const auto make_profile_samples = [&] (
+          const std::vector<double> & profile) {
+          std::vector<recovery_footprint::LateralProfileSample> samples;
+          if (profile.size() != static_cast<std::size_t>(N)) {
+            return samples;
           }
-          if (!clearance.valid || !clearance.feasible) {
-            evaluation.static_map_wall_infeasible = true;
-            evaluation.static_map_physical_infeasible_during_execution = true;
-            return evaluation;
+          samples.reserve(profile.size());
+          for (int i = 0; i < N; ++i) {
+            const std::size_t index = static_cast<std::size_t>(i);
+            const auto & waypoint = model->reference_path->get_waypoint(ref_wp_id + i);
+            samples.push_back(
+              recovery_footprint::LateralProfileSample{
+                {waypoint.x, waypoint.y, waypoint.psi},
+                evaluation.path_distances[index], profile[index], waypoint.kappa});
           }
-          if (clearance.adjusted) {
-            profile_clear = false;
-            profile_adjusted = true;
-            evaluation.target_ey[index] = clearance.lateral_offset_m;
-            evaluation.static_map_wall_limited = true;
-            evaluation.wall_clearance_limited = true;
-            evaluation.static_map_reachable_projection_used = true;
+          return samples;
+        };
+      const auto maximum_profile_lateral_accel = [&] (
+          const std::vector<double> & profile) {
+          double maximum_required = 0.0;
+          if (profile.size() != static_cast<std::size_t>(N)) {
+            return std::numeric_limits<double>::infinity();
           }
-        }
-        if (profile_clear) {
-          break;
-        }
-        if (!profile_adjusted) {
-          evaluation.static_map_physical_infeasible_during_execution = true;
-          return evaluation;
+          for (int i = 0; i < N; ++i) {
+            const std::size_t index = static_cast<std::size_t>(i);
+            const double time_to_target = std::max(
+              0.15, evaluation.path_distances[index] / speed_for_time);
+            const double zero_acceleration_lateral =
+              current_ey + current_lateral_velocity_mps * time_to_target;
+            const double required_lateral_accel =
+              2.0 * std::abs(profile[index] - zero_acceleration_lateral) /
+              (time_to_target * time_to_target);
+            maximum_required = std::max(maximum_required, required_lateral_accel);
+          }
+          return maximum_required;
+        };
+
+      std::vector<double> current_side_fallback(static_cast<std::size_t>(N), current_ey);
+      std::vector<double> smooth_center_fallback(static_cast<std::size_t>(N), current_ey);
+      const double first_distance = evaluation.path_distances.front();
+      const double fallback_span = std::max(
+        kEps, evaluation.path_distances.back() - first_distance);
+      for (int i = 0; i < N; ++i) {
+        const std::size_t index = static_cast<std::size_t>(i);
+        const double lower = evaluation.stage_wall_corridor_lower_ey[index];
+        const double upper = evaluation.stage_wall_corridor_upper_ey[index];
+        current_side_fallback[index] = clip(current_ey, lower, upper);
+        const double linear_progress = std::clamp(
+          (evaluation.path_distances[index] - first_distance) / fallback_span,
+          0.0, 1.0);
+        const double smooth_progress =
+          linear_progress * linear_progress * (3.0 - 2.0 * linear_progress);
+        const double centre_lateral = clip(0.0, lower, upper);
+        smooth_center_fallback[index] = clip(
+          current_ey + smooth_progress * (centre_lateral - current_ey),
+          lower, upper);
+      }
+
+      const auto search_coupled_profile = [&] (const double wall_clearance) {
+          CoupledProfileSearchResult search;
+          constexpr std::array<double, 5> kRetentionRatios{
+            1.0, 0.75, 0.50, 0.25, 0.0};
+          const std::array<const std::vector<double> *, 2> fallbacks{
+            &current_side_fallback, &smooth_center_fallback};
+          for (const double retention_ratio : kRetentionRatios) {
+            for (std::size_t fallback_index = 0U;
+              fallback_index < fallbacks.size(); ++fallback_index)
+            {
+              if (retention_ratio >= 1.0 - kEps && fallback_index > 0U) {
+                continue;
+              }
+              std::vector<double> candidate(static_cast<std::size_t>(N), 0.0);
+              for (int i = 0; i < N; ++i) {
+                const std::size_t index = static_cast<std::size_t>(i);
+                candidate[index] =
+                  (*fallbacks[fallback_index])[index] + retention_ratio *
+                  (evaluation.target_ey[index] - (*fallbacks[fallback_index])[index]);
+              }
+              const auto profile_samples = make_profile_samples(candidate);
+              const auto map_clearance =
+                recovery_footprint::evaluate_lateral_profile_static_map(
+                *overtake_static_wall_grid_, overtake_static_wall_footprint_,
+                current_ey, profile_samples, wall_clearance);
+              if (!map_clearance.valid) {
+                search.valid = false;
+                search.failure_index = static_cast<int>(map_clearance.rejected_path_index);
+                search.failure_heading_offset_rad =
+                  map_clearance.rejected_heading_offset_rad;
+                return search;
+              }
+              if (!map_clearance.clear) {
+                search.failure_index = static_cast<int>(map_clearance.rejected_path_index);
+                search.failure_heading_offset_rad =
+                  map_clearance.rejected_heading_offset_rad;
+                continue;
+              }
+              search.map_clear_candidate_seen = true;
+              const double required_lateral_accel =
+                maximum_profile_lateral_accel(candidate);
+              search.maximum_lateral_accel = required_lateral_accel;
+              if (
+                !std::isfinite(required_lateral_accel) ||
+                (max_lateral_accel > kEps &&
+                required_lateral_accel > max_lateral_accel + 1e-6))
+              {
+                continue;
+              }
+              search.feasible = true;
+              search.profile = std::move(candidate);
+              search.retention_ratio = retention_ratio;
+              return search;
+            }
+          }
+          return search;
+        };
+
+      const auto margin_profile = search_coupled_profile(min_wall_clearance);
+      CoupledProfileSearchResult accepted_profile = margin_profile;
+      bool accepted_only_without_margin = false;
+      if (!margin_profile.feasible && min_wall_clearance > kEps) {
+        const auto physical_profile = search_coupled_profile(0.0);
+        if (physical_profile.feasible) {
+          accepted_profile = physical_profile;
+          accepted_only_without_margin = true;
+        } else if (!physical_profile.valid) {
+          accepted_profile = physical_profile;
+        } else {
+          accepted_profile.map_clear_candidate_seen =
+            accepted_profile.map_clear_candidate_seen ||
+            physical_profile.map_clear_candidate_seen;
+          accepted_profile.failure_index = physical_profile.failure_index;
+          accepted_profile.failure_heading_offset_rad =
+            physical_profile.failure_heading_offset_rad;
+          accepted_profile.maximum_lateral_accel =
+            physical_profile.maximum_lateral_accel;
         }
       }
 
-      auto clearance_footprint = overtake_static_wall_footprint_;
-      clearance_footprint.left_extent_m += min_wall_clearance;
-      clearance_footprint.right_extent_m += min_wall_clearance;
-      for (int i = 0; i < N; ++i) {
-        const std::size_t index = static_cast<std::size_t>(i);
-        const auto & waypoint = model->reference_path->get_waypoint(ref_wp_id + i);
-        const double lateral = evaluation.target_ey[index];
-        const double path_heading_offset = profile_heading_offset(
-          index, evaluation.target_ey);
-        const recovery_footprint::Pose2D pose{
-          waypoint.x - lateral * std::sin(waypoint.psi),
-          waypoint.y + lateral * std::cos(waypoint.psi),
-          wrap_to_pi(waypoint.psi + path_heading_offset)};
-        const auto sample = recovery_footprint::sample_footprint(
-          *overtake_static_wall_grid_, clearance_footprint, pose);
-        if (!sample.valid || sample.out_of_map || !sample.contact_cells.empty()) {
-          const auto physical_sample = recovery_footprint::sample_footprint(
-            *overtake_static_wall_grid_, overtake_static_wall_footprint_, pose);
-          if (
-            !physical_sample.valid || physical_sample.out_of_map ||
-            !physical_sample.contact_cells.empty())
-          {
-            evaluation.static_map_physical_infeasible_during_execution = true;
-            return evaluation;
-          }
+      evaluation.static_map_failure_index = accepted_profile.failure_index;
+      evaluation.static_map_failure_heading_offset_rad =
+        accepted_profile.failure_heading_offset_rad;
+      if (accepted_profile.feasible) {
+        evaluation.target_ey = std::move(accepted_profile.profile);
+        evaluation.max_required_lateral_accel =
+          accepted_profile.maximum_lateral_accel;
+        evaluation.static_map_profile_retention_ratio =
+          accepted_profile.retention_ratio;
+        if (accepted_profile.retention_ratio < 1.0 - 1e-6) {
+          evaluation.static_map_wall_limited = true;
+          evaluation.wall_clearance_limited = true;
+          evaluation.static_map_reachable_projection_used = true;
+        }
+        if (accepted_only_without_margin) {
           evaluation.static_map_margin_degraded = true;
           evaluation.static_map_margin_degraded_during_execution = true;
         }
-
-        const double time_to_target = std::max(
-          0.15, evaluation.path_distances[index] / speed_for_time);
-        const double zero_acceleration_lateral =
-          current_ey + current_lateral_velocity_mps * time_to_target;
-        const double required_lateral_accel =
-          2.0 * std::abs(lateral - zero_acceleration_lateral) /
-          (time_to_target * time_to_target);
-        evaluation.max_required_lateral_accel = std::max(
-          evaluation.max_required_lateral_accel, required_lateral_accel);
-        if (
-          max_lateral_accel > kEps &&
-          required_lateral_accel > max_lateral_accel + 1e-6)
-        {
-          evaluation.static_clamp_lateral_accel_infeasible = true;
-        }
+      } else if (!accepted_profile.valid) {
+        evaluation.static_map_wall_infeasible = true;
+        evaluation.static_map_physical_infeasible_during_execution = true;
+      } else if (accepted_profile.map_clear_candidate_seen) {
+        evaluation.static_clamp_lateral_accel_infeasible = true;
+        evaluation.max_required_lateral_accel =
+          accepted_profile.maximum_lateral_accel;
+      } else {
+        evaluation.static_map_wall_infeasible = true;
+        evaluation.static_map_physical_infeasible_during_execution = true;
       }
     }
     evaluation.stage_corridor_constraints_active =
@@ -18534,6 +18614,10 @@ private:
         result.active = true;
         result.fallback = true;
         result.last_feasible_hold_active = true;
+        result.hard_infeasible = false;
+        result.hard_failure_kind = OvertakeRecedingHorizonFailureKind::None;
+        result.hard_bound_failure_index = -1;
+        result.hard_bound_failure_kind.clear();
         result.fallback_reason = std::string{failure_reason} + "; retained last feasible";
         retained_horizon.stage_corridor_constraints_active = true;
         retained_horizon.stage_corridor_target_bound_active = std::any_of(
@@ -18708,6 +18792,7 @@ private:
     bool saw_physical_infeasibility = false;
     bool target_bound_projection_used = false;
     int hard_bound_failure_index = -1;
+    int physical_failure_index = -1;
     OvertakeRecedingHorizonFailureKind hard_bound_failure_kind{
       OvertakeRecedingHorizonFailureKind::None};
     for (const double candidate_speed : validation_speeds) {
@@ -18797,6 +18882,12 @@ private:
           saw_physical_infeasibility =
             saw_physical_infeasibility ||
             candidate_horizon.static_map_physical_infeasible_during_execution;
+          if (
+            candidate_horizon.static_map_physical_infeasible_during_execution &&
+            candidate_horizon.static_map_failure_index >= 0)
+          {
+            physical_failure_index = candidate_horizon.static_map_failure_index;
+          }
           if (!execution_bounds.valid) {
             hard_bound_failure_index = execution_bounds.failure_index;
             hard_bound_failure_kind = execution_bounds.failure_kind;
@@ -18853,11 +18944,11 @@ private:
             break;
           }
         }
-        if (validation_accepted || saw_physical_infeasibility) {
+        if (validation_accepted) {
           break;
         }
       }
-      if (validation_accepted || saw_physical_infeasibility) {
+      if (validation_accepted) {
         break;
       }
     }
@@ -18869,11 +18960,41 @@ private:
       if (retain_last_feasible("post-validation failed")) {
         return result;
       }
+      if (saw_physical_infeasibility && baseline_horizon.execution_feasible()) {
+        const auto baseline_target_constraints =
+          build_validation_target_constraints(speed_for_time);
+        const auto baseline_execution_bounds = check_execution_bounds(
+          baseline_horizon, hard_wall_clearance, baseline_target_constraints);
+        if (baseline_execution_bounds.valid) {
+          result.active = true;
+          result.fallback = true;
+          result.last_feasible_hold_active = true;
+          result.hard_infeasible = false;
+          result.hard_failure_kind = OvertakeRecedingHorizonFailureKind::None;
+          result.hard_bound_failure_index = -1;
+          result.hard_bound_failure_kind.clear();
+          result.fallback_reason =
+            "post-validation failed; retained validated baseline profile";
+          result.horizon = baseline_horizon;
+          result.horizon.stage_corridor_constraints_active = true;
+          result.horizon.stage_corridor_target_bound_active = std::any_of(
+            baseline_target_constraints.begin(), baseline_target_constraints.end(),
+            [](const RecedingHorizonTargetExecutionConstraint & constraint) {
+              return constraint.active;
+            });
+          result.horizon.stage_corridor_lower_ey =
+            baseline_execution_bounds.lower_bounds_m;
+          result.horizon.stage_corridor_upper_ey =
+            baseline_execution_bounds.upper_bounds_m;
+          return result;
+        }
+      }
       if (!initial_execution_feasible || saw_physical_infeasibility) {
         fail(
           "optimized horizon failed physical revalidation", true,
           OvertakeRecedingHorizonFailureKind::Physical,
-          hard_bound_failure_index);
+          physical_failure_index >= 0 ?
+          physical_failure_index : hard_bound_failure_index);
       } else if (
         hard_bound_failure_kind == OvertakeRecedingHorizonFailureKind::Wall)
       {
@@ -22398,6 +22519,8 @@ private:
           prefix_horizon.static_map_reachable_projection_used;
         output.static_map_wall_infeasible =
           prefix_horizon.static_map_wall_infeasible;
+        output.static_map_profile_retention_ratio =
+          prefix_horizon.static_map_profile_retention_ratio;
 
         const bool prefix_state_changed =
           !overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active ||
@@ -27514,6 +27637,8 @@ private:
       horizon_evaluation.static_map_reachable_projection_used;
     output.static_map_wall_infeasible =
       horizon_evaluation.static_map_wall_infeasible;
+    output.static_map_profile_retention_ratio =
+      horizon_evaluation.static_map_profile_retention_ratio;
     const bool execution_horizon_unconstrained =
       horizon_evaluation.execution_feasible() &&
       !horizon_evaluation.lateral_accel_limited &&
@@ -28114,7 +28239,7 @@ private:
           "reason=%s/obj=%.2f/adjust=%.2f, "
           "max_lat_acc=%.2f, lat_limited=%d, wall_limited=%d, "
           "static_wall_limited=%d, static_margin_degraded=%d, static_reachable=%d, "
-          "static_wall_infeasible=%d, corridor_goal=%.2f, "
+          "static_wall_infeasible=%d, profile_keep=%.2f, corridor_goal=%.2f, "
           "inter_vehicle=%d, boundaries=[%s,%s]",
           to_string(overtake_line_state_.phase), overtake_line_state_.pass_side_sign, goal_ey,
           output.target_ey.empty() ? 0.0 : output.target_ey.front(),
@@ -28211,6 +28336,7 @@ private:
           output.static_map_margin_degraded ? 1 : 0,
           output.static_map_reachable_projection_used ? 1 : 0,
           output.static_map_wall_infeasible ? 1 : 0,
+          output.static_map_profile_retention_ratio,
           overtake_line_state_.fixed_pass_corridor_goal_ey.value_or(
             std::numeric_limits<double>::quiet_NaN()),
           overtake_line_state_.inter_vehicle_corridor ? 1 : 0,

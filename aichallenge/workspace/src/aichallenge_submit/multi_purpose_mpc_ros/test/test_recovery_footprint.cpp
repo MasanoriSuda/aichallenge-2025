@@ -469,6 +469,51 @@ TEST(RecoveryFootprintLateralClearance, AccountsForFrenetPathHeadingWithoutRotat
   EXPECT_GT(path_heading.lateral_offset_m, 0.0);
 }
 
+TEST(RecoveryFootprintLateralProfile, UsesCurrentToFirstStageHeading)
+{
+  auto grid = make_grid(200U, 200U, 0.1);
+  for (std::size_t column = 0U; column < grid.width; ++column) {
+    const auto wall = grid.world_to_grid(0.1 * static_cast<double>(column), 10.0);
+    ASSERT_TRUE(wall.has_value());
+    grid.cells[wall->row * grid.width + wall->column] = recovery::CellState::Occupied;
+  }
+  const recovery::FootprintExtents footprint{1.0, 1.0, 0.2, 0.2, 0.0};
+  const std::vector<recovery::LateralProfileSample> steep_profile{
+    {{10.0, 8.0, 0.0}, 1.0, 1.20, 0.0},
+    {{11.0, 8.0, 0.0}, 2.0, 1.20, 0.0}};
+  const std::vector<recovery::LateralProfileSample> contracted_profile{
+    {{10.0, 8.0, 0.0}, 1.0, 0.60, 0.0},
+    {{11.0, 8.0, 0.0}, 2.0, 0.60, 0.0}};
+
+  const auto steep = recovery::evaluate_lateral_profile_static_map(
+    grid, footprint, 0.0, steep_profile, 0.0);
+  const auto contracted = recovery::evaluate_lateral_profile_static_map(
+    grid, footprint, 0.0, contracted_profile, 0.0);
+
+  ASSERT_TRUE(steep.valid);
+  EXPECT_FALSE(steep.clear);
+  EXPECT_EQ(steep.rejected_path_index, 0U);
+  EXPECT_GT(steep.rejected_heading_offset_rad, 0.0);
+  ASSERT_TRUE(contracted.valid);
+  EXPECT_TRUE(contracted.clear);
+  EXPECT_EQ(contracted.checked_pose_count, contracted_profile.size());
+}
+
+TEST(RecoveryFootprintLateralProfile, RejectsNonIncreasingPathDistance)
+{
+  const auto grid = make_grid(20U, 20U, 0.1);
+  const recovery::FootprintExtents footprint{0.2, 0.2, 0.1, 0.1, 0.0};
+  const std::vector<recovery::LateralProfileSample> profile{
+    {{0.5, 0.5, 0.0}, 0.0, 0.0, 0.0}};
+
+  const auto result = recovery::evaluate_lateral_profile_static_map(
+    grid, footprint, 0.0, profile, 0.0);
+
+  EXPECT_FALSE(result.valid);
+  EXPECT_FALSE(result.clear);
+  EXPECT_EQ(result.rejected_path_index, 0U);
+}
+
 TEST(RecoveryFootprintLateralClearance, InvalidSearchFailsClosed)
 {
   const auto result = recovery::clamp_lateral_offset_to_static_map(

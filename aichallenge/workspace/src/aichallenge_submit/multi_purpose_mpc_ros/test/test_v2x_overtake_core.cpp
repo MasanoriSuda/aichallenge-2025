@@ -179,6 +179,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::can_hold_pass_during_refresh_rep
 using multi_purpose_mpc_ros::v2x_overtake_core::StoppedPredictionLeaseSpeedRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_stopped_prediction_lease_speed;
 using multi_purpose_mpc_ros::v2x_overtake_core::RearClearReplanWindowRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::RuntimeRearClearPredictionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassContinuationPreflightPolicyRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassOuterHorizonRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassOuterHorizonSample;
@@ -267,6 +268,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_commit_clock_projection;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_horizon_action;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_lease_stopped_side_pass_prediction;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_rear_clear_replan_window;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_runtime_rear_clear_prediction;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_continuation_preflight_policy;
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_pass_outer_horizon;
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_pass_side_rear_clear_role;
@@ -5083,6 +5085,52 @@ TEST(V2XOvertakeCoreHorizon, DefersRearClearExtensionUntilCommittedLeadWindow)
   ASSERT_TRUE(at_lead.valid);
   EXPECT_TRUE(at_lead.replan_due);
   EXPECT_NEAR(at_lead.remaining_committed_distance_m, 3.0, 1e-9);
+}
+
+TEST(V2XOvertakeCoreHorizon, UsesSharedRuntimeCompletionForRearClearHorizon)
+{
+  RuntimeRearClearPredictionRequest request;
+  request.enabled = true;
+  request.fresh_dynamic_horizon_available = true;
+  request.completion_prediction_available = true;
+  request.completion_prediction_valid = true;
+  request.completion_rear_clear_feasible = true;
+  request.pass_traveled_m = 8.18;
+  request.remaining_lateral_transition_distance_m = 0.50;
+  request.remaining_pass_hold_distance_m = 19.09;
+
+  const auto resolution = resolve_runtime_rear_clear_prediction(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.checked);
+  EXPECT_TRUE(resolution.feasible);
+  EXPECT_NEAR(resolution.required_rear_clear_pass_m, 27.77, 1e-9);
+}
+
+TEST(V2XOvertakeCoreHorizon, RuntimeRearClearPredictionFailsClosed)
+{
+  RuntimeRearClearPredictionRequest request;
+  request.enabled = true;
+  request.fresh_dynamic_horizon_available = true;
+  request.completion_prediction_available = true;
+  request.completion_prediction_valid = false;
+  request.completion_rear_clear_feasible = true;
+
+  auto resolution = resolve_runtime_rear_clear_prediction(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.checked);
+  EXPECT_FALSE(resolution.feasible);
+  EXPECT_FALSE(std::isfinite(resolution.required_rear_clear_pass_m));
+
+  request.completion_prediction_valid = true;
+  request.completion_rear_clear_feasible = false;
+  resolution = resolve_runtime_rear_clear_prediction(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.checked);
+  EXPECT_FALSE(resolution.feasible);
+
+  request.completion_rear_clear_feasible = true;
+  request.pass_traveled_m = -0.1;
+  EXPECT_FALSE(resolve_runtime_rear_clear_prediction(request).valid);
 }
 
 TEST(V2XOvertakeCoreHorizon, DoesNotInventRearClearExtensionWithoutFeasiblePrediction)

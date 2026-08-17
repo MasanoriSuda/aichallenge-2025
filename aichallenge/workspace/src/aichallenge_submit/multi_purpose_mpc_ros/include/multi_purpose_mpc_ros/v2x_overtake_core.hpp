@@ -1623,6 +1623,33 @@ enum class PassHorizonAction
   Abort,
 };
 
+struct RuntimeRearClearPredictionRequest
+{
+  bool enabled{false};
+  bool fresh_dynamic_horizon_available{false};
+  bool completion_prediction_available{false};
+  bool completion_prediction_valid{false};
+  bool completion_rear_clear_feasible{false};
+  double pass_traveled_m{};
+  double remaining_lateral_transition_distance_m{};
+  double remaining_pass_hold_distance_m{std::numeric_limits<double>::infinity()};
+};
+
+struct RuntimeRearClearPredictionResolution
+{
+  bool valid{false};
+  bool checked{false};
+  bool feasible{false};
+  double required_rear_clear_pass_m{std::numeric_limits<double>::infinity()};
+};
+
+/// Convert the single execution-coupled runtime completion prediction into an
+/// absolute Pass-origin rear-clear distance.  This resolver deliberately does
+/// not perform another rollout: forward-completion admission, SafeSeparation
+/// budgets and horizon extension must consume the same longitudinal model.
+RuntimeRearClearPredictionResolution resolve_runtime_rear_clear_prediction(
+  const RuntimeRearClearPredictionRequest & request) noexcept;
+
 struct RearClearReplanWindowRequest
 {
   bool prediction_checked{false};

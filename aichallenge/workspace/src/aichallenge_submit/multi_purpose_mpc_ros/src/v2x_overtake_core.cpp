@@ -2703,6 +2703,40 @@ CommitClockProjectionResolution resolve_commit_clock_projection(
   return resolution;
 }
 
+RuntimeRearClearPredictionResolution resolve_runtime_rear_clear_prediction(
+  const RuntimeRearClearPredictionRequest & request) noexcept
+{
+  RuntimeRearClearPredictionResolution resolution;
+  resolution.valid = true;
+  resolution.checked =
+    request.enabled && request.fresh_dynamic_horizon_available &&
+    request.completion_prediction_available;
+  if (!resolution.checked) {
+    return resolution;
+  }
+  if (
+    !request.completion_prediction_valid ||
+    !request.completion_rear_clear_feasible)
+  {
+    return resolution;
+  }
+  if (
+    !std::isfinite(request.pass_traveled_m) || request.pass_traveled_m < 0.0 ||
+    !std::isfinite(request.remaining_lateral_transition_distance_m) ||
+    request.remaining_lateral_transition_distance_m < 0.0 ||
+    !std::isfinite(request.remaining_pass_hold_distance_m) ||
+    request.remaining_pass_hold_distance_m < 0.0)
+  {
+    return RuntimeRearClearPredictionResolution{};
+  }
+
+  resolution.feasible = true;
+  resolution.required_rear_clear_pass_m =
+    request.pass_traveled_m + request.remaining_lateral_transition_distance_m +
+    request.remaining_pass_hold_distance_m;
+  return resolution;
+}
+
 RearClearReplanWindowResolution resolve_rear_clear_replan_window(
   const RearClearReplanWindowRequest & request) noexcept
 {

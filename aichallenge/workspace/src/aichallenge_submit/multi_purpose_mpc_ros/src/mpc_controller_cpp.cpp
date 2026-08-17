@@ -23768,6 +23768,8 @@ private:
     overtake_core::OvertakeKinematicRolloutResolution runtime_completion_rollout;
     overtake_core::OvertakeDynamicPassDistanceResolution runtime_completion_distance;
     double runtime_completion_time_sec = std::numeric_limits<double>::infinity();
+    double runtime_completion_lateral_transition_distance_m =
+      std::numeric_limits<double>::infinity();
     const double runtime_pass_elapsed = overtake_mission_pass_elapsed(now_sec);
     const double runtime_remaining_absolute_distance = std::isfinite(
       line_cfg.pass_horizon_absolute_distance_limit) ?
@@ -23826,6 +23828,8 @@ private:
           maximum_live_shift_distance,
           std::max(0.25, model->reference_path->resolution)});
       if (live_shift.valid && live_shift.feasible) {
+        runtime_completion_lateral_transition_distance_m =
+          live_shift.shift_distance_m;
         const overtake_core::OvertakeMissionPathRequest live_mission_path{
           0.0,
           current_ey,
@@ -26402,105 +26406,23 @@ private:
           overtake_line_state_.pass_side_sign,
           dynamic_corridor_failure_reason.c_str());
       }
-      double live_required_rear_clear_pass_m =
-        std::numeric_limits<double>::infinity();
-      bool live_rear_clear_prediction_checked = false;
-      bool live_rear_clear_prediction_feasible = false;
-      if (
-        !overtake_line_state_.pass_horizon_safe_separation_active &&
-        fresh_dynamic_horizon_available && locked_target_seen &&
-        std::isfinite(locked_target_longitudinal) &&
-        std::isfinite(locked_target_speed) &&
-        overtake_line_state_.fixed_pass_corridor_goal_ey.has_value())
-      {
-        live_rear_clear_prediction_checked = true;
-        const double remaining_absolute_distance = std::max(
-          0.0, line_cfg.pass_horizon_absolute_distance_limit - pass_traveled);
-        const double remaining_absolute_time = std::max(
-          0.0, line_cfg.pass_horizon_absolute_time_limit - pass_elapsed);
-        if (remaining_absolute_distance >= 1.0 && remaining_absolute_time > kEps) {
-          const double maximum_live_shift_distance = std::min(
-            std::max(0.5, line_cfg.shift_distance),
-            remaining_absolute_distance - 0.5);
-          const auto live_shift_resolution =
-            overtake_core::resolve_same_side_replan_shift_distance(
-            overtake_core::SameSideReplanShiftDistanceRequest{
-              current_ey,
-              overtake_line_state_.fixed_pass_corridor_goal_ey.value(),
-              std::max(1.0, current_speed_mps_),
-              std::max(kEps, line_cfg.max_lateral_accel),
-              0.5,
-              maximum_live_shift_distance,
-              std::max(0.25, model->reference_path->resolution)});
-          if (!live_shift_resolution.valid || !live_shift_resolution.feasible) {
-            live_rear_clear_prediction_checked = false;
-          } else {
-            const double live_shift_distance = live_shift_resolution.shift_distance_m;
-            const overtake_core::OvertakeMissionPathRequest live_mission_path{
-              0.0, current_ey,
-              overtake_line_state_.fixed_pass_corridor_goal_ey.value(), 0.0,
-              live_shift_distance,
-              std::max(0.5, remaining_absolute_distance - live_shift_distance),
-              std::max(0.5, overtake_line_state_.mission_return_distance)};
-            const int live_plan_N = std::max(
-              N,
-              static_cast<int>(std::ceil(
-                (remaining_absolute_distance +
-                std::max(0.5, overtake_line_state_.mission_return_distance)) /
-                std::max(0.1, model->reference_path->resolution))) + 2);
-            const auto live_speed_caps = build_overtake_kinematic_speed_caps(
-              ref_wp_id, live_plan_N, live_mission_path);
-            const double current_target_course_lateral =
-              std::isfinite(behavior_output.locked_target_relative_lateral) ?
-              current_ey + behavior_output.locked_target_relative_lateral :
-              behavior_output.locked_target_lateral;
-            const auto live_rollout = overtake_core::resolve_overtake_kinematic_rollout(
-              overtake_core::OvertakeKinematicRolloutRequest{
-                true, live_mission_path,
-                locked_target_longitudinal,
-                std::max(0.0, current_speed_mps_),
-                std::max(0.0, locked_target_speed),
-                overtake_mission_closing_speed_limit(),
-                std::max(kEps, cfg.v_max),
-                std::max(0.0, cfg.a_max),
-                std::max(0.0, -cfg.a_min),
-                std::max(0.0, cfg.state_prediction_delay_sec),
-                current_target_course_lateral,
-                behavior_output.locked_target_lateral_prediction_valid ?
-                behavior_output.locked_target_relative_lateral_velocity : 0.0,
-                std::max(0.0, cfg.v2x_gap.prediction_time),
-                std::max(0.0, cfg.v2x_gap.vehicle_radius),
-                std::max(0.0, cfg.v2x_behavior.moving_follow_hard_distance),
-                std::max(
-                  cfg.v2x_behavior.overtake_body_clear_deadline_margin_sec,
-                  cfg.v2x_behavior.overtake_body_clear_minimum_slack_sec),
-                live_speed_caps, 0.05, remaining_absolute_time, true,
-                std::max(0.0, line_cfg.return_clear_distance),
-                behavior_output.locked_target_longitudinal_acceleration_valid ?
-                behavior_output.locked_target_longitudinal_acceleration : 0.0,
-                cfg.v2x_gap.prediction_longitudinal_acceleration_horizon,
-                cfg.v2x_gap.prediction_lateral_velocity_decay_time});
-            if (live_rollout.valid && live_rollout.rear_clear_feasible) {
-              const auto live_pass_distance =
-                overtake_core::resolve_overtake_dynamic_pass_distance(
-                overtake_core::OvertakeDynamicPassDistanceRequest{
-                  live_shift_distance, 0.5,
-                  live_rollout.rear_clear_ego_distance_m,
-                  live_rollout.rear_clear_ego_speed_mps,
-                  std::max(0.0, line_cfg.clear_confirm_sec),
-                  std::max(0.0, cfg.state_prediction_delay_sec),
-                  remaining_absolute_distance - live_shift_distance,
-                  remaining_absolute_distance - live_shift_distance});
-              if (live_pass_distance.valid && live_pass_distance.feasible) {
-                live_rear_clear_prediction_feasible = true;
-                live_required_rear_clear_pass_m =
-                  pass_traveled + live_shift_distance +
-                  live_pass_distance.required_pass_distance_m;
-              }
-            }
-          }
-        }
-      }
+      const auto live_rear_clear_prediction =
+        overtake_core::resolve_runtime_rear_clear_prediction(
+        overtake_core::RuntimeRearClearPredictionRequest{
+          !overtake_line_state_.pass_horizon_safe_separation_active,
+          fresh_dynamic_horizon_available,
+          runtime_completion_prediction_available,
+          runtime_completion_prediction_valid,
+          runtime_completion_rear_clear_feasible,
+          pass_traveled,
+          runtime_completion_lateral_transition_distance_m,
+          runtime_completion_distance.required_pass_distance_m});
+      const bool live_rear_clear_prediction_checked =
+        live_rear_clear_prediction.valid && live_rear_clear_prediction.checked;
+      const bool live_rear_clear_prediction_feasible =
+        live_rear_clear_prediction.valid && live_rear_clear_prediction.feasible;
+      const double live_required_rear_clear_pass_m =
+        live_rear_clear_prediction.required_rear_clear_pass_m;
       if (!overtake_line_state_.pass_horizon_safe_separation_active) {
         const auto rear_clear_replan_window =
           overtake_core::resolve_rear_clear_replan_window(

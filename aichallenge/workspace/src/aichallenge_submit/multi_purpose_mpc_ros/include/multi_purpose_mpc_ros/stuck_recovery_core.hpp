@@ -243,6 +243,35 @@ struct ForwardRecoveryRearmGuardRequest
 bool forward_recovery_rearm_guard_active(
   const ForwardRecoveryRearmGuardRequest & request) noexcept;
 
+struct ClearForwardEscapeProgressUpdate
+{
+  bool recovery_active{false};
+  bool forward_maneuver{false};
+  bool reverse_maneuver{false};
+  bool current_footprint_clear{false};
+  bool motion_sample_valid{true};
+  double accepted_motion_step_m{};
+};
+
+// Retains only physical Forward motion observed while the footprint stayed
+// clear at both ends of a control interval. Stop/reassess states preserve the
+// distance, whereas renewed contact, Reverse, invalid odometry, or Recovery
+// completion resets it. This avoids losing a nearly completed escape at every
+// bounded Forward duration boundary without allowing contact motion to count.
+class ClearForwardEscapeProgressTracker
+{
+public:
+  double update(const ClearForwardEscapeProgressUpdate & update) noexcept;
+  void reset() noexcept;
+
+  [[nodiscard]] double distance_m() const noexcept;
+  [[nodiscard]] bool previous_footprint_clear() const noexcept;
+
+private:
+  double distance_m_{0.0};
+  bool previous_footprint_clear_{false};
+};
+
 // Accept a bounded measurement/stopping error only after the current vehicle
 // footprint has become clear. The tolerance must never bypass the footprint
 // requirement.

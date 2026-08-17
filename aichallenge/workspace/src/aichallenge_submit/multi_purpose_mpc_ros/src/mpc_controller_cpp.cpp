@@ -33892,6 +33892,7 @@ private:
     recovery_last_motion_steady_.reset();
     recovery_cumulative_reverse_distance_m_ = 0.0;
     recovery_episode_traveled_distance_m_ = 0.0;
+    recovery_clear_forward_progress_.reset();
     recovery_runtime_observed_corner_motion_m_ = 0.0;
     recovery_runtime_maximum_corner_motion_m_ = 0.0;
     recovery_reverse_pose_jump_ = false;
@@ -33958,6 +33959,7 @@ private:
     recovery_last_motion_steady_.reset();
     recovery_cumulative_reverse_distance_m_ = 0.0;
     recovery_episode_traveled_distance_m_ = 0.0;
+    recovery_clear_forward_progress_.reset();
     recovery_runtime_observed_corner_motion_m_ = 0.0;
     recovery_runtime_maximum_corner_motion_m_ = 0.0;
     recovery_reverse_pose_jump_ = false;
@@ -35634,6 +35636,8 @@ private:
           cfg_.stuck_recovery.adaptive_reverse_retry.reset_forward_distance_m);
       }
     }
+    double accepted_recovery_motion_step_m = 0.0;
+    bool recovery_motion_sample_valid = true;
     const bool recovery_motion_phase =
       recovery_maneuver_start_pose_.has_value() &&
       (supervisor_state == stuck_recovery::RecoveryState::ReverseManeuver ||
@@ -35676,7 +35680,9 @@ private:
         recovery_runtime_maximum_corner_motion_m_ = motion_guard.maximum_corner_motion_m;
         if (!motion_guard.valid || !motion_guard.plausible) {
           recovery_reverse_pose_jump_ = true;
+          recovery_motion_sample_valid = false;
         } else {
+          accepted_recovery_motion_step_m = pose_step_m;
           recovery_cumulative_reverse_distance_m_ += pose_step_m;
           recovery_episode_traveled_distance_m_ += pose_step_m;
           if (recovery_incident_ledger_) {
@@ -35986,6 +35992,15 @@ private:
       reverse_only,
       candidate_direction_policy,
       recovery_context_active || low_speed_recovery_candidate);
+    const double clear_forward_escape_progress_m =
+      recovery_clear_forward_progress_.update(
+      stuck_recovery::ClearForwardEscapeProgressUpdate{
+        recovery_context_active,
+        supervisor_state == stuck_recovery::RecoveryState::ForwardManeuver,
+        supervisor_state == stuck_recovery::RecoveryState::ReverseManeuver,
+        safety.current_footprint_clear,
+        recovery_motion_sample_valid,
+        accepted_recovery_motion_step_m});
     const bool awsim_recovery_settling =
       last_collision_receipt_steady_.has_value() &&
       std::chrono::duration<double>(
@@ -36164,6 +36179,10 @@ private:
     // it must never count as traveled distance; after stopping short the same
     // ReverseManeuver resumes until odometry reaches the target.
     const double actual_escape_traveled_distance_m = traveled_distance_m;
+    const double escape_confirmation_progress_m =
+      escape_direction == stuck_recovery::ManeuverDirection::Forward ?
+      std::max(actual_escape_traveled_distance_m, clear_forward_escape_progress_m) :
+      actual_escape_traveled_distance_m;
     const double predicted_stop_distance_m =
       actual_escape_traveled_distance_m + applied_stopping_reserve_m;
     const bool aggressive_force_rejoin =
@@ -36174,7 +36193,7 @@ private:
       safety.current_footprint_clear && rejoin_steering_tire_angle.has_value();
     input.recovery.recovery_escape_confirmed =
       stuck_recovery::recovery_escape_distance_confirmed(
-      safety.current_footprint_clear, actual_escape_traveled_distance_m,
+      safety.current_footprint_clear, escape_confirmation_progress_m,
       escape_distance_target_m,
       cfg_.stuck_recovery.escape_confirm_distance_tolerance_m) ||
       aggressive_force_rejoin;
@@ -36238,6 +36257,7 @@ private:
       recovery_last_maneuver_direction_.value() ==
       stuck_recovery::ManeuverDirection::Forward;
     if (started_recovery_episode) {
+      recovery_clear_forward_progress_.reset();
       recovery_forward_rearm_guard_started_.reset();
       recovery_forward_rearm_guard_start_progress_m_.reset();
       const bool continuing_incident = recovery_incident_ledger_ &&
@@ -36386,6 +36406,7 @@ private:
       output.state_reason == stuck_recovery::RecoveryReason::RejoinRegressed ||
       output.state_reason == stuck_recovery::RecoveryReason::RejoinPathBlocked);
     if (restarted_escape_after_rejoin) {
+      recovery_clear_forward_progress_.reset();
       recovery_episode_traveled_distance_m_ = 0.0;
       recovery_maneuver_start_pose_.reset();
       recovery_maneuver_start_lateral_error_m_.reset();
@@ -36654,6 +36675,7 @@ private:
       recovery_rolling_stepwise_reverse_active_ = false;
       recovery_rolling_stepwise_replan_anchor_m_ = 0.0;
       recovery_episode_traveled_distance_m_ = 0.0;
+      recovery_clear_forward_progress_.reset();
     }
     if (
       output.action.reset_normal_control && !recovery_reset_applied_ &&
@@ -36686,6 +36708,7 @@ private:
       recovery_last_motion_steady_.reset();
       recovery_cumulative_reverse_distance_m_ = 0.0;
       recovery_episode_traveled_distance_m_ = 0.0;
+      recovery_clear_forward_progress_.reset();
       recovery_reverse_pose_jump_ = false;
       recovery_selected_reverse_primitive_.reset();
       recovery_selected_reverse_steering_angle_rad_.reset();
@@ -36777,7 +36800,7 @@ private:
         "wall=%s, wall_distance=%.3f, direction=%s, primitive=%s, steering=%.3f, "
         "course_guard=%d, course_rejected=%d, course_improvement=%.3f m, "
         "stepwise=%d, continuous=%d, brake=%d, adaptive_retry=%zu, contact_reduction=%zu, "
-        "step=%zu/%zu, maneuver_distance=%.3f m, "
+        "step=%zu/%zu, maneuver_distance=%.3f m, clear_forward=%.3f m, "
         "episode_distance=%.3f m, stopping_reserve=%.3f m, "
         "incident=%d/%.2f s/%.3f/%.3f/%.3f m/%zu retry/%zu gear, "
         "runtime_motion=%.3f/%.3f m, "
@@ -36824,7 +36847,8 @@ private:
         safety.contact_reduction,
         stuck_recovery_core_->supervisor().escape_step_count(),
         cfg_.stuck_recovery.core.supervisor.max_escape_steps,
-        traveled_distance_m, episode_traveled_distance_m, applied_stopping_reserve_m,
+        traveled_distance_m, clear_forward_escape_progress_m,
+        episode_traveled_distance_m, applied_stopping_reserve_m,
         recovery_incident.active ? 1 : 0, recovery_incident.elapsed_sec,
         recovery_incident.total_distance_m, recovery_incident.reverse_distance_m,
         recovery_incident.forward_distance_m, recovery_incident.aggressive_retry_count,
@@ -37647,6 +37671,7 @@ private:
   std::optional<SteadyClock::time_point> recovery_last_motion_steady_;
   double recovery_cumulative_reverse_distance_m_{0.0};
   double recovery_episode_traveled_distance_m_{0.0};
+  stuck_recovery::ClearForwardEscapeProgressTracker recovery_clear_forward_progress_;
   double recovery_runtime_observed_corner_motion_m_{};
   double recovery_runtime_maximum_corner_motion_m_{};
   bool recovery_reverse_pose_jump_{false};

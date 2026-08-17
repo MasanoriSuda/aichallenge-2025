@@ -369,6 +369,51 @@ bool forward_recovery_rearm_guard_active(
          request.forward_progress_m < request.release_distance_m;
 }
 
+double ClearForwardEscapeProgressTracker::update(
+  const ClearForwardEscapeProgressUpdate & update) noexcept
+{
+  if (
+    !update.recovery_active || update.reverse_maneuver ||
+    !update.current_footprint_clear)
+  {
+    reset();
+    return distance_m_;
+  }
+
+  if (update.forward_maneuver) {
+    if (
+      !update.motion_sample_valid ||
+      !finite_nonnegative(update.accepted_motion_step_m))
+    {
+      reset();
+      previous_footprint_clear_ = true;
+      return distance_m_;
+    }
+    if (previous_footprint_clear_) {
+      distance_m_ += update.accepted_motion_step_m;
+    }
+  }
+
+  previous_footprint_clear_ = true;
+  return distance_m_;
+}
+
+void ClearForwardEscapeProgressTracker::reset() noexcept
+{
+  distance_m_ = 0.0;
+  previous_footprint_clear_ = false;
+}
+
+double ClearForwardEscapeProgressTracker::distance_m() const noexcept
+{
+  return distance_m_;
+}
+
+bool ClearForwardEscapeProgressTracker::previous_footprint_clear() const noexcept
+{
+  return previous_footprint_clear_;
+}
+
 bool recovery_escape_distance_confirmed(
   const bool current_footprint_clear, const double traveled_distance_m,
   const double target_distance_m, const double tolerance_m) noexcept

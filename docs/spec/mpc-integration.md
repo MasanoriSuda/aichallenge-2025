@@ -477,6 +477,13 @@ ForwardManeuver中のstatic / V2X hazardは駆動を即時停止するが、終�
 map footprintがclearでも近傍wallがLeft / Right / Mixedなら0.40 m stepwise候補を使い、
 単発4秒の非stepwise後退で2.0 m未達となる状態を避ける。
 
+stepwise Forwardでは、現在footprintがclearな区間だけの妥当性確認済みodometry移動を
+`STOP_AND_REASSESS` / `CHECK_CLEARANCE`を跨いで累積し、1回のduration limit直前で失った
+数cmを次のmaneuverでやり直さない。clearへ移る境界周期の距離は加算せず、接触再発、Reverse、
+odometry motion guard不成立、Recovery終了で累積値を0へ戻す。Forward escape確認では現在
+maneuver距離とこのclear累積距離の大きい方を使う。Reverseの距離確認、swept-footprint、V2X、
+step / attempt上限は従来どおりであり、予測停止距離を物理移動として加算しない。
+
 `retry_on_timeout=true`では、LowSpeedRejoin timeout時にattemptまたはescape-step budgetが残る場合、
 停止してescape確認ラッチとepisode距離をresetし、新しいstatic / V2X候補を選択する。以前の2.0 mを
 次のescape完了条件へ流用しない。retry無効、budget消費済み、gear / solver / odometry / collision

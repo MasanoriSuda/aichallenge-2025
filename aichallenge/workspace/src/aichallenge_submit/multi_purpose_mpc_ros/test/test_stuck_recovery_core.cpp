@@ -14,6 +14,8 @@ namespace
 using multi_purpose_mpc_ros::stuck_recovery::CoreConfig;
 using multi_purpose_mpc_ros::stuck_recovery::CoreInput;
 using multi_purpose_mpc_ros::stuck_recovery::CollisionDeliberateStopOverrideRequest;
+using multi_purpose_mpc_ros::stuck_recovery::ClearForwardEscapeProgressTracker;
+using multi_purpose_mpc_ros::stuck_recovery::ClearForwardEscapeProgressUpdate;
 using multi_purpose_mpc_ros::stuck_recovery::FollowDeliberateStopRequest;
 using multi_purpose_mpc_ros::stuck_recovery::ForwardRecoveryRearmGuardRequest;
 using multi_purpose_mpc_ros::stuck_recovery::ForwardOvertakeHandoffAction;
@@ -683,6 +685,75 @@ TEST(StuckRecoveryEscapeConfirmation, AppliesToleranceOnlyWithClearFootprint)
   EXPECT_TRUE(recovery_escape_distance_confirmed(true, 3.90, 4.0, 0.10));
   EXPECT_FALSE(recovery_escape_distance_confirmed(false, 2.0, 2.0, 0.10));
   EXPECT_FALSE(recovery_escape_distance_confirmed(true, 1.947, 2.0, -0.10));
+}
+
+TEST(StuckRecoveryClearForwardProgress, AccumulatesAcrossClearReassessment)
+{
+  ClearForwardEscapeProgressTracker tracker;
+  ClearForwardEscapeProgressUpdate update;
+  update.recovery_active = true;
+  update.current_footprint_clear = true;
+
+  // A clear CheckClearance sample arms the interval boundary. The first
+  // bounded Forward step can then count only motion wholly inside clear space.
+  EXPECT_DOUBLE_EQ(tracker.update(update), 0.0);
+  update.forward_maneuver = true;
+  update.accepted_motion_step_m = 0.195;
+  EXPECT_DOUBLE_EQ(tracker.update(update), 0.195);
+
+  // StopAndReassess preserves physical clear progress instead of resetting it.
+  update.forward_maneuver = false;
+  update.accepted_motion_step_m = 0.0;
+  EXPECT_DOUBLE_EQ(tracker.update(update), 0.195);
+
+  update.forward_maneuver = true;
+  update.accepted_motion_step_m = 0.179;
+  EXPECT_NEAR(tracker.update(update), 0.374, 1e-12);
+  EXPECT_TRUE(recovery_escape_distance_confirmed(
+    true, tracker.distance_m(), 0.30, 0.10));
+}
+
+TEST(StuckRecoveryClearForwardProgress, ResetsOnContactReverseAndInvalidMotion)
+{
+  ClearForwardEscapeProgressTracker tracker;
+  ClearForwardEscapeProgressUpdate update;
+  update.recovery_active = true;
+  update.current_footprint_clear = true;
+  tracker.update(update);
+  update.forward_maneuver = true;
+  update.accepted_motion_step_m = 0.15;
+  EXPECT_DOUBLE_EQ(tracker.update(update), 0.15);
+
+  update.current_footprint_clear = false;
+  EXPECT_DOUBLE_EQ(tracker.update(update), 0.0);
+  EXPECT_FALSE(tracker.previous_footprint_clear());
+
+  // Do not credit the full control interval that crossed from contact into
+  // clear space. Only the following entirely-clear interval may accumulate.
+  update.current_footprint_clear = true;
+  update.forward_maneuver = true;
+  update.accepted_motion_step_m = 0.10;
+  EXPECT_DOUBLE_EQ(tracker.update(update), 0.0);
+  update.accepted_motion_step_m = 0.10;
+  EXPECT_DOUBLE_EQ(tracker.update(update), 0.10);
+  update.forward_maneuver = false;
+  update.reverse_maneuver = true;
+  EXPECT_DOUBLE_EQ(tracker.update(update), 0.0);
+
+  update.reverse_maneuver = false;
+  update.forward_maneuver = false;
+  tracker.update(update);
+  update.forward_maneuver = true;
+  update.motion_sample_valid = false;
+  update.accepted_motion_step_m = 0.10;
+  EXPECT_DOUBLE_EQ(tracker.update(update), 0.0);
+
+  update.motion_sample_valid = true;
+  update.accepted_motion_step_m = 0.05;
+  EXPECT_DOUBLE_EQ(tracker.update(update), 0.05);
+  update.forward_maneuver = false;
+  update.recovery_active = false;
+  EXPECT_DOUBLE_EQ(tracker.update(update), 0.0);
 }
 
 TEST(StuckRecoveryV2XClockDomain, AcceptsMonotonicSimulationSourceStamps)

@@ -20,6 +20,8 @@ struct Config
   double terminal_lag_weight{2500.0};
   double progress_reward_weight{2000.0};
   double terminal_progress_reward_weight{5000.0};
+  int rti_sqp_iterations{2};
+  double rti_sqp_mixing{0.65};
 };
 
 struct StageDistanceResolution
@@ -48,7 +50,8 @@ struct LinearizationRequest
   double reference_heading_rad{};
   double reference_progress_m{};
   double reference_speed_mps{};
-  double reference_curvature_radpm{};
+  double reference_path_curvature_radpm{};
+  double reference_input_curvature_radpm{};
   double stage_distance_m{};
   Config config;
 };
@@ -96,5 +99,11 @@ struct ProgressCost
 /// 0.5*w*(s-s_ref)^2 - reward*s up to an irrelevant constant.
 std::optional<ProgressCost> resolve_progress_cost(
   double reference_progress_m, bool terminal, const Config & config) noexcept;
+
+/// Form the next RTI-SQP linearization point without replacing a feasible
+/// trajectory in one jump. alpha=1 adopts the QP solution directly.
+std::optional<Eigen::VectorXd> damp_rti_sqp_iterate(
+  const Eigen::VectorXd & linearization_point,
+  const Eigen::VectorXd & qp_solution, double alpha) noexcept;
 
 }  // namespace multi_purpose_mpc_ros::mpcc_progress

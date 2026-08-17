@@ -28,7 +28,10 @@ bool finite_config(const Config & config) noexcept
     std::isfinite(config.terminal_lag_weight) && config.terminal_lag_weight > 0.0 &&
     std::isfinite(config.progress_reward_weight) && config.progress_reward_weight >= 0.0 &&
     std::isfinite(config.terminal_progress_reward_weight) &&
-    config.terminal_progress_reward_weight >= 0.0;
+    config.terminal_progress_reward_weight >= 0.0 &&
+    config.rti_sqp_iterations >= 1 && config.rti_sqp_iterations <= 3 &&
+    std::isfinite(config.rti_sqp_mixing) && config.rti_sqp_mixing > 0.0 &&
+    config.rti_sqp_mixing <= 1.0;
 }
 
 }  // namespace
@@ -84,7 +87,8 @@ std::optional<Linearization> linearize_temporal_frenet(
     !std::isfinite(request.reference_heading_rad) ||
     !std::isfinite(request.reference_progress_m) ||
     !std::isfinite(request.reference_speed_mps) ||
-    !std::isfinite(request.reference_curvature_radpm) ||
+    !std::isfinite(request.reference_path_curvature_radpm) ||
+    !std::isfinite(request.reference_input_curvature_radpm) ||
     !std::isfinite(request.stage_distance_m) || request.stage_distance_m <= 0.0)
   {
     return std::nullopt;
@@ -98,8 +102,9 @@ std::optional<Linearization> linearize_temporal_frenet(
     request.config.maximum_stage_dt_sec);
   const double lateral = request.reference_lateral_m;
   const double heading = request.reference_heading_rad;
-  const double curvature = request.reference_curvature_radpm;
-  const double denominator = 1.0 - curvature * lateral;
+  const double path_curvature = request.reference_path_curvature_radpm;
+  const double input_curvature = request.reference_input_curvature_radpm;
+  const double denominator = 1.0 - path_curvature * lateral;
   if (
     !std::isfinite(denominator) ||
     denominator <= request.config.minimum_frenet_denominator)
@@ -111,24 +116,25 @@ std::optional<Linearization> linearize_temporal_frenet(
   const double cos_heading = std::cos(heading);
   const double progress_rate = reference_speed * cos_heading / denominator;
   const double lateral_rate = reference_speed * sin_heading;
-  const double heading_rate = reference_speed * curvature - curvature * progress_rate;
+  const double heading_rate =
+    reference_speed * input_curvature - path_curvature * progress_rate;
 
-  const double ds_dey = reference_speed * cos_heading * curvature /
+  const double ds_dey = reference_speed * cos_heading * path_curvature /
     (denominator * denominator);
   const double ds_depsi = -reference_speed * sin_heading / denominator;
   const double ds_dv = cos_heading / denominator;
 
   Eigen::Matrix3d continuous_state = Eigen::Matrix3d::Zero();
   continuous_state(0, 1) = reference_speed * cos_heading;
-  continuous_state(1, 0) = -curvature * ds_dey;
-  continuous_state(1, 1) = -curvature * ds_depsi;
+  continuous_state(1, 0) = -path_curvature * ds_dey;
+  continuous_state(1, 1) = -path_curvature * ds_depsi;
   continuous_state(2, 0) = ds_dey;
   continuous_state(2, 1) = ds_depsi;
 
   Eigen::Matrix<double, 3, 2> continuous_input =
     Eigen::Matrix<double, 3, 2>::Zero();
   continuous_input(0, 0) = sin_heading;
-  continuous_input(1, 0) = curvature - curvature * ds_dv;
+  continuous_input(1, 0) = input_curvature - path_curvature * ds_dv;
   continuous_input(1, 1) = reference_speed;
   continuous_input(2, 0) = ds_dv;
 
@@ -139,7 +145,7 @@ std::optional<Linearization> linearize_temporal_frenet(
 
   const Eigen::Vector3d reference_state(
     lateral, heading, request.reference_progress_m);
-  const Eigen::Vector2d reference_input(reference_speed, curvature);
+  const Eigen::Vector2d reference_input(reference_speed, input_curvature);
   const Eigen::Vector3d next_reference(
     lateral + stage_dt * lateral_rate,
     heading + stage_dt * heading_rate,
@@ -218,6 +224,26 @@ std::optional<ProgressCost> resolve_progress_cost(
     !std::isfinite(result.quadratic_weight) ||
     !std::isfinite(result.linear_coefficient))
   {
+    return std::nullopt;
+  }
+  return result;
+}
+
+std::optional<Eigen::VectorXd> damp_rti_sqp_iterate(
+  const Eigen::VectorXd & linearization_point,
+  const Eigen::VectorXd & qp_solution, const double alpha) noexcept
+{
+  if (
+    linearization_point.size() <= 0 ||
+    linearization_point.size() != qp_solution.size() ||
+    !linearization_point.allFinite() || !qp_solution.allFinite() ||
+    !std::isfinite(alpha) || alpha <= 0.0 || alpha > 1.0)
+  {
+    return std::nullopt;
+  }
+  Eigen::VectorXd result =
+    alpha * qp_solution + (1.0 - alpha) * linearization_point;
+  if (!result.allFinite()) {
     return std::nullopt;
   }
   return result;

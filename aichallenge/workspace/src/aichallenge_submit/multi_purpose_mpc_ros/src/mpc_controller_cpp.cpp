@@ -4606,6 +4606,9 @@ struct MpcProblem
   int ref_wp_id{};
   bool progress_contouring_active{false};
   double progress_origin_m{std::numeric_limits<double>::quiet_NaN()};
+  std::vector<double> progress_stage_distance_m;
+  std::vector<double> progress_path_curvature_radpm;
+  Eigen::VectorXd progress_linearization_point;
 };
 
 struct ProgressContouringMpcPreparation
@@ -4636,6 +4639,15 @@ struct MpcOsqpTelemetryWindow
   double maximum_total_ms{};
   double solve_ms{};
   double maximum_solve_ms{};
+};
+
+struct MpcRtiSqpTelemetryWindow
+{
+  std::uint64_t progress_cycles{};
+  std::uint64_t refinement_attempt_count{};
+  std::uint64_t refinement_success_count{};
+  std::uint64_t first_feasible_fallback_count{};
+  std::uint64_t relinearization_reject_count{};
 };
 
 struct MPC
@@ -13034,6 +13046,7 @@ struct MPC
           result.progress_reference_m[static_cast<std::size_t>(stage)],
           input_reference[stage * nu],
           stage_curvature_radpm[static_cast<std::size_t>(stage)],
+          input_reference[stage * nu + 1],
           result.stage_distance_m[static_cast<std::size_t>(stage)],
           cfg.progress_contouring});
       if (!linearization.has_value()) {
@@ -14148,10 +14161,21 @@ struct MPC
       }
     }
 
+    Eigen::VectorXd progress_linearization_point;
+    if (progress_contouring_active) {
+      progress_linearization_point.resize(nx_N + nu_N);
+      progress_linearization_point << xr, ur;
+    }
+
     return MpcProblem{
       q, l, u, P, A_full, N, tracking_wp_id, preview_wp_id, ref_wp_id,
       progress_contouring_active,
-      progress_contouring_active ? model->s : std::numeric_limits<double>::quiet_NaN()};
+      progress_contouring_active ? model->s : std::numeric_limits<double>::quiet_NaN(),
+      progress_contouring_active ? progress_preparation->stage_distance_m :
+      std::vector<double>{},
+      progress_contouring_active ? stage_tracking_curvature_radpm :
+      std::vector<double>{},
+      std::move(progress_linearization_point)};
   }
 
   void record_osqp_telemetry(
@@ -14228,6 +14252,132 @@ struct MPC
     last_osqp_progress_origin_m_.reset();
   }
 
+  bool relinearize_progress_problem(
+    MpcProblem & problem, const Eigen::VectorXd & linearization_point,
+    std::string & reject_reason) const
+  {
+    constexpr int nx = 3;
+    constexpr int nu = 2;
+    reject_reason.clear();
+    const int nx_N = nx * (problem.N + 1);
+    const int nu_N = nu * problem.N;
+    const int rate_offset = nx_N + nx_N + nu_N;
+    if (
+      !problem.progress_contouring_active || problem.N <= 0 ||
+      linearization_point.size() != nx_N + nu_N ||
+      !linearization_point.allFinite() ||
+      problem.progress_stage_distance_m.size() != static_cast<std::size_t>(problem.N) ||
+      problem.progress_path_curvature_radpm.size() !=
+      static_cast<std::size_t>(problem.N) ||
+      problem.A.rows() <= rate_offset + problem.N - 1 ||
+      problem.l.size() != problem.A.rows() || problem.u.size() != problem.A.rows() ||
+      model == nullptr || !std::isfinite(model->length) || model->length <= 0.0)
+    {
+      reject_reason = "malformed RTI-SQP relinearization problem";
+      return false;
+    }
+
+    std::vector<mpcc_progress::Linearization> linearizations;
+    linearizations.reserve(static_cast<std::size_t>(problem.N));
+    for (int stage = 0; stage < problem.N; ++stage) {
+      const int state_offset = stage * nx;
+      const int input_offset = nx_N + stage * nu;
+      const auto linearization = mpcc_progress::linearize_temporal_frenet(
+        mpcc_progress::LinearizationRequest{
+          linearization_point[state_offset],
+          linearization_point[state_offset + 1],
+          linearization_point[state_offset + 2],
+          linearization_point[input_offset],
+          problem.progress_path_curvature_radpm[static_cast<std::size_t>(stage)],
+          linearization_point[input_offset + 1],
+          problem.progress_stage_distance_m[static_cast<std::size_t>(stage)],
+          cfg.progress_contouring});
+      if (!linearization.has_value()) {
+        reject_reason = "RTI-SQP temporal Frenet linearization rejected stage " +
+          std::to_string(stage);
+        return false;
+      }
+      linearizations.push_back(linearization.value());
+    }
+
+    Eigen::SparseMatrix<double> refined_constraints = problem.A;
+    for (int stage = 0; stage < problem.N; ++stage) {
+      const auto & linearization = linearizations[static_cast<std::size_t>(stage)];
+      const int equality_row = (stage + 1) * nx;
+      const int state_column = stage * nx;
+      const int input_column = nx_N + stage * nu;
+      for (int row = 0; row < nx; ++row) {
+        for (int column = 0; column < nx; ++column) {
+          refined_constraints.coeffRef(equality_row + row, state_column + column) =
+            linearization.state_matrix(row, column);
+        }
+        for (int column = 0; column < nu; ++column) {
+          refined_constraints.coeffRef(equality_row + row, input_column + column) =
+            linearization.input_matrix(row, column);
+        }
+        problem.l[equality_row + row] = linearization.equality_offset[row];
+        problem.u[equality_row + row] = linearization.equality_offset[row];
+      }
+    }
+    refined_constraints.makeCompressed();
+    problem.A = std::move(refined_constraints);
+
+    for (int rate_stage = 1; rate_stage < problem.N; ++rate_stage) {
+      const double stage_dt =
+        linearizations[static_cast<std::size_t>(rate_stage - 1)].stage_dt_sec;
+      const double maximum_curvature_change =
+        std::tan(std::max(0.0, cfg.steer_rate_max) * stage_dt) / model->length;
+      if (!std::isfinite(maximum_curvature_change) || maximum_curvature_change < 0.0) {
+        reject_reason = "invalid RTI-SQP steering-rate bound";
+        return false;
+      }
+      problem.l[rate_offset + rate_stage] = -maximum_curvature_change;
+      problem.u[rate_offset + rate_stage] = maximum_curvature_change;
+    }
+    return true;
+  }
+
+  void record_rti_sqp_telemetry(
+    const double now_sec, const bool refinement_attempted,
+    const bool refinement_succeeded, const bool first_feasible_fallback,
+    const bool relinearization_rejected)
+  {
+    auto & window = rti_sqp_telemetry_window_;
+    ++window.progress_cycles;
+    window.refinement_attempt_count += refinement_attempted ? 1U : 0U;
+    window.refinement_success_count += refinement_succeeded ? 1U : 0U;
+    window.first_feasible_fallback_count += first_feasible_fallback ? 1U : 0U;
+    window.relinearization_reject_count += relinearization_rejected ? 1U : 0U;
+    if (!std::isfinite(now_sec)) {
+      return;
+    }
+    if (
+      !std::isfinite(last_rti_sqp_telemetry_log_sec_) ||
+      now_sec < last_rti_sqp_telemetry_log_sec_)
+    {
+      last_rti_sqp_telemetry_log_sec_ = now_sec;
+      return;
+    }
+    if (now_sec - last_rti_sqp_telemetry_log_sec_ < 1.0) {
+      return;
+    }
+    if (cfg.v2x_behavior.overtake_line.debug_log_enabled) {
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"),
+        "MPCC RTI-SQP: cycles=%zu, attempts=%zu, refined=%zu, "
+        "first_feasible=%zu, relinearize_reject=%zu, iterations=%d, alpha=%.2f",
+        static_cast<std::size_t>(window.progress_cycles),
+        static_cast<std::size_t>(window.refinement_attempt_count),
+        static_cast<std::size_t>(window.refinement_success_count),
+        static_cast<std::size_t>(window.first_feasible_fallback_count),
+        static_cast<std::size_t>(window.relinearization_reject_count),
+        cfg.progress_contouring.rti_sqp_iterations,
+        cfg.progress_contouring.rti_sqp_mixing);
+    }
+    window = MpcRtiSqpTelemetryWindow{};
+    last_rti_sqp_telemetry_log_sec_ = now_sec;
+  }
+
   persistent_osqp::SolveOutcome solve_problem(
     const MpcProblem & problem, const double now_sec)
   {
@@ -14287,30 +14437,121 @@ struct MPC
       last_osqp_solution_.reset();
     }
 
-    auto outcome = persistent_osqp_solver_.solve(
-      problem.P, problem.A, problem.q, problem.l, problem.u, warm_start);
-    if (
-      outcome.result.has_value() &&
-      outcome.result->primal.size() != problem.P.rows())
-    {
-      std::ostringstream detail;
-      detail << "stage=solution, reason=unexpected solution size, actual="
-             << outcome.result->primal.size() << ", expected=" << problem.P.rows();
-      outcome.failure_detail = detail.str();
-      outcome.result.reset();
-      outcome.telemetry.cold_reset_after_failure = true;
-      persistent_osqp_solver_.reset();
-    }
-    if (outcome.result.has_value()) {
-      last_osqp_solution_ = persistent_osqp::WarmStart{
-        outcome.result->primal, outcome.result->dual};
-      last_osqp_solution_sec_ = now_sec;
-    } else {
+    const auto solve_once = [this, now_sec](
+      const MpcProblem & qp_problem,
+      const std::optional<persistent_osqp::WarmStart> & qp_warm_start)
+      {
+        auto outcome = persistent_osqp_solver_.solve(
+          qp_problem.P, qp_problem.A, qp_problem.q, qp_problem.l, qp_problem.u,
+          qp_warm_start);
+        if (
+          outcome.result.has_value() &&
+          outcome.result->primal.size() != qp_problem.P.rows())
+        {
+          std::ostringstream detail;
+          detail << "stage=solution, reason=unexpected solution size, actual="
+                 << outcome.result->primal.size() << ", expected="
+                 << qp_problem.P.rows();
+          outcome.failure_detail = detail.str();
+          outcome.result.reset();
+          outcome.telemetry.cold_reset_after_failure = true;
+          persistent_osqp_solver_.reset();
+        }
+        record_osqp_telemetry(outcome, now_sec);
+        return outcome;
+      };
+
+    auto first_outcome = solve_once(problem, warm_start);
+    if (!first_outcome.result.has_value()) {
       last_osqp_solution_.reset();
       last_osqp_solution_sec_ = -std::numeric_limits<double>::infinity();
+      if (problem.progress_contouring_active) {
+        record_rti_sqp_telemetry(now_sec, false, false, false, false);
+      }
+      return first_outcome;
     }
-    record_osqp_telemetry(outcome, now_sec);
-    return outcome;
+
+    auto best_outcome = std::move(first_outcome);
+    bool refinement_attempted = false;
+    bool refinement_succeeded = false;
+    bool first_feasible_fallback = false;
+    bool relinearization_rejected = false;
+    if (
+      problem.progress_contouring_active &&
+      cfg.progress_contouring.rti_sqp_iterations > 1)
+    {
+      Eigen::VectorXd linearization_point = problem.progress_linearization_point;
+      if (
+        warm_start.has_value() &&
+        warm_start->primal.size() == problem.P.rows() &&
+        warm_start->primal.allFinite())
+      {
+        linearization_point = warm_start->primal;
+      }
+      // Stage zero is a measured hard equality. A shifted solution starts at
+      // the previous cycle's predicted stage one, so rebase it before damping
+      // to avoid linearizing the first dynamics row around a future pose.
+      if (
+        linearization_point.size() >= 3 &&
+        problem.progress_linearization_point.size() == linearization_point.size())
+      {
+        linearization_point.head<3>() =
+          problem.progress_linearization_point.head<3>();
+      }
+      for (
+        int iteration = 1;
+        iteration < cfg.progress_contouring.rti_sqp_iterations; ++iteration)
+      {
+        const auto damped_point = mpcc_progress::damp_rti_sqp_iterate(
+          linearization_point, best_outcome.result->primal,
+          cfg.progress_contouring.rti_sqp_mixing);
+        if (!damped_point.has_value()) {
+          relinearization_rejected = true;
+          first_feasible_fallback = true;
+          break;
+        }
+        MpcProblem refined_problem = problem;
+        std::string relinearization_reject_reason;
+        if (!relinearize_progress_problem(
+            refined_problem, damped_point.value(), relinearization_reject_reason))
+        {
+          relinearization_rejected = true;
+          first_feasible_fallback = true;
+          if (
+            cfg.v2x_behavior.overtake_line.debug_log_enabled &&
+            (!std::isfinite(rti_sqp_reject_last_log_sec_) ||
+            now_sec - rti_sqp_reject_last_log_sec_ >= 1.0))
+          {
+            RCLCPP_WARN(
+              rclcpp::get_logger("mpc_controller"),
+              "MPCC RTI-SQP refinement rejected; using first feasible solution: %s",
+              relinearization_reject_reason.c_str());
+            rti_sqp_reject_last_log_sec_ = now_sec;
+          }
+          break;
+        }
+        refinement_attempted = true;
+        const std::optional<persistent_osqp::WarmStart> refinement_warm_start{
+          persistent_osqp::WarmStart{
+            best_outcome.result->primal, best_outcome.result->dual}};
+        auto refinement_outcome = solve_once(refined_problem, refinement_warm_start);
+        if (!refinement_outcome.result.has_value()) {
+          first_feasible_fallback = true;
+          break;
+        }
+        linearization_point = damped_point.value();
+        best_outcome = std::move(refinement_outcome);
+        refinement_succeeded = true;
+      }
+      record_rti_sqp_telemetry(
+        now_sec, refinement_attempted, refinement_succeeded,
+        first_feasible_fallback, relinearization_rejected);
+    }
+
+    last_osqp_solution_ = persistent_osqp::WarmStart{
+      best_outcome.result->primal, best_outcome.result->dual};
+    last_osqp_solution_sec_ = now_sec;
+    return best_outcome;
   }
 
   void ensure_current_control_horizon()
@@ -14987,6 +15228,9 @@ struct MPC
   std::optional<double> last_osqp_progress_origin_m_;
   MpcOsqpTelemetryWindow osqp_telemetry_window_;
   double last_osqp_telemetry_log_sec_{std::numeric_limits<double>::quiet_NaN()};
+  MpcRtiSqpTelemetryWindow rti_sqp_telemetry_window_;
+  double last_rti_sqp_telemetry_log_sec_{std::numeric_limits<double>::quiet_NaN()};
+  double rti_sqp_reject_last_log_sec_{std::numeric_limits<double>::quiet_NaN()};
   double progress_contouring_fallback_last_log_sec_{
     -std::numeric_limits<double>::infinity()};
   double progress_contouring_stage_normalization_last_log_sec_{
@@ -30025,6 +30269,12 @@ Config load_config(const std::string & path)
   progress_contouring.terminal_progress_reward_weight =
     mpc["progress_contouring_terminal_progress_reward_weight"] ?
     mpc["progress_contouring_terminal_progress_reward_weight"].as<double>() : 5000.0;
+  progress_contouring.rti_sqp_iterations =
+    mpc["progress_contouring_rti_sqp_iterations"] ?
+    mpc["progress_contouring_rti_sqp_iterations"].as<int>() : 2;
+  progress_contouring.rti_sqp_mixing =
+    mpc["progress_contouring_rti_sqp_mixing"] ?
+    mpc["progress_contouring_rti_sqp_mixing"].as<double>() : 0.65;
   if (!mpcc_progress::resolve_progress_cost(0.0, false, progress_contouring).has_value()) {
     throw std::runtime_error(
             "mpc.progress_contouring_* values must be finite and within range");
@@ -32403,7 +32653,7 @@ public:
     RCLCPP_INFO(
       get_logger(),
       "Progress-contouring MPCC: %s, scope=%s, lag=%.1f/%.1f, "
-      "reward=%.1f/%.1f, trust=-%.1f/+%.1f m",
+      "reward=%.1f/%.1f, trust=-%.1f/+%.1f m, rti_sqp=%d@%.2f",
       mpc_cfg_.progress_contouring_mpcc_enabled ? "enabled" : "disabled",
       mpc_cfg_.progress_contouring_mpcc_overtake_only ? "overtake" : "all",
       mpc_cfg_.progress_contouring.lag_weight,
@@ -32411,7 +32661,9 @@ public:
       mpc_cfg_.progress_contouring.progress_reward_weight,
       mpc_cfg_.progress_contouring.terminal_progress_reward_weight,
       mpc_cfg_.progress_contouring.trust_region_backward_m,
-      mpc_cfg_.progress_contouring.trust_region_forward_m);
+      mpc_cfg_.progress_contouring.trust_region_forward_m,
+      mpc_cfg_.progress_contouring.rti_sqp_iterations,
+      mpc_cfg_.progress_contouring.rti_sqp_mixing);
     setup_parameters_callback();
     setup_pub_sub();
     if (ref_vel_config_path_.has_value()) {

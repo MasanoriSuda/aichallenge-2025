@@ -14,7 +14,7 @@ using multi_purpose_mpc_ros::mpcc_progress::LinearizationRequest;
 TEST(MpccProgress, StraightLinearizationAdvancesPhysicalProgress)
 {
   const auto result = multi_purpose_mpc_ros::mpcc_progress::linearize_temporal_frenet(
-    LinearizationRequest{0.0, 0.0, 10.0, 5.0, 0.0, 0.5, Config{}});
+    LinearizationRequest{0.0, 0.0, 10.0, 5.0, 0.0, 0.0, 0.5, Config{}});
   ASSERT_TRUE(result.has_value());
   EXPECT_NEAR(result->stage_dt_sec, 0.1, 1e-12);
   EXPECT_NEAR(result->state_matrix(0, 1), 0.5, 1e-12);
@@ -33,7 +33,7 @@ TEST(MpccProgress, StraightLinearizationAdvancesPhysicalProgress)
 TEST(MpccProgress, CurvedReferenceIsAnEquilibriumInContourAndHeading)
 {
   const auto result = multi_purpose_mpc_ros::mpcc_progress::linearize_temporal_frenet(
-    LinearizationRequest{0.0, 0.0, 20.0, 5.0, 0.1, 0.5, Config{}});
+    LinearizationRequest{0.0, 0.0, 20.0, 5.0, 0.1, 0.1, 0.5, Config{}});
   ASSERT_TRUE(result.has_value());
   const Eigen::Vector3d state(0.0, 0.0, 20.0);
   const Eigen::Vector2d input(5.0, 0.1);
@@ -48,8 +48,23 @@ TEST(MpccProgress, CurvedReferenceIsAnEquilibriumInContourAndHeading)
 TEST(MpccProgress, RejectsSingularFrenetReference)
 {
   const auto result = multi_purpose_mpc_ros::mpcc_progress::linearize_temporal_frenet(
-    LinearizationRequest{10.0, 0.0, 0.0, 5.0, 0.1, 0.5, Config{}});
+    LinearizationRequest{10.0, 0.0, 0.0, 5.0, 0.1, 0.1, 0.5, Config{}});
   EXPECT_FALSE(result.has_value());
+}
+
+TEST(MpccProgress, SeparatesPathAndInputCurvatureDuringRelinearization)
+{
+  const auto result = multi_purpose_mpc_ros::mpcc_progress::linearize_temporal_frenet(
+    LinearizationRequest{0.0, 0.0, 20.0, 5.0, 0.1, 0.15, 0.5, Config{}});
+  ASSERT_TRUE(result.has_value());
+  const Eigen::Vector3d state(0.0, 0.0, 20.0);
+  const Eigen::Vector2d input(5.0, 0.15);
+  const Eigen::Vector3d next =
+    result->state_matrix * state + result->input_matrix * input -
+    result->equality_offset;
+  EXPECT_NEAR(next[0], 0.0, 1e-12);
+  EXPECT_NEAR(next[1], 0.025, 1e-12);
+  EXPECT_NEAR(next[2], 20.5, 1e-12);
 }
 
 TEST(MpccProgress, BuildsUnwrappedProgressReference)
@@ -123,6 +138,29 @@ TEST(MpccProgress, ProgressRewardMovesCostAheadOfLagReference)
   const double unconstrained_optimum =
     -result->linear_coefficient / result->quadratic_weight;
   EXPECT_NEAR(unconstrained_optimum, 5.2, 1e-12);
+}
+
+TEST(MpccProgress, DampsRtiSqpLinearizationPoint)
+{
+  Eigen::VectorXd previous(3);
+  previous << 0.0, 2.0, 4.0;
+  Eigen::VectorXd solution(3);
+  solution << 2.0, 4.0, 8.0;
+  const auto result = multi_purpose_mpc_ros::mpcc_progress::damp_rti_sqp_iterate(
+    previous, solution, 0.65);
+  ASSERT_TRUE(result.has_value());
+  EXPECT_NEAR((*result)[0], 1.3, 1e-12);
+  EXPECT_NEAR((*result)[1], 3.3, 1e-12);
+  EXPECT_NEAR((*result)[2], 6.6, 1e-12);
+}
+
+TEST(MpccProgress, RejectsMalformedRtiSqpUpdate)
+{
+  const Eigen::VectorXd finite = Eigen::VectorXd::Ones(3);
+  EXPECT_FALSE(multi_purpose_mpc_ros::mpcc_progress::damp_rti_sqp_iterate(
+    finite, Eigen::VectorXd::Ones(2), 0.65).has_value());
+  EXPECT_FALSE(multi_purpose_mpc_ros::mpcc_progress::damp_rti_sqp_iterate(
+    finite, finite, 0.0).has_value());
 }
 
 }  // namespace

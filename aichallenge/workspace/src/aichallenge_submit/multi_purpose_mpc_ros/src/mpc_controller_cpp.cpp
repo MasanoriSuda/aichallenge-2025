@@ -21619,6 +21619,42 @@ private:
             resuming_paused_mission});
         const bool direct_pass =
           entry_stage.stage == overtake_core::OvertakeEntryStage::Pass;
+        const bool current_wall_warning =
+          actual_wall_preplan_warning &&
+          !actual_wall_preplan_prediction_warning &&
+          actual_wall_preplan_prediction_ttc_sec <= kEps;
+        const bool hold_fresh_shiftout_for_wall =
+          overtake_core::should_hold_fresh_shiftout_for_wall(
+          overtake_core::FreshShiftOutWallEntryRequest{
+            !resuming_paused_mission,
+            !direct_pass,
+            actual_wall_physical_contact,
+            current_wall_warning});
+        if (hold_fresh_shiftout_for_wall) {
+          overtake_locked_side_sign_ = 0;
+          const double debug_period = std::max(
+            0.1, cfg.v2x_behavior.debug_log_period_sec);
+          if (
+            line_cfg.debug_log_enabled &&
+            (!std::isfinite(last_overtake_line_debug_log_sec_) ||
+            now_sec - last_overtake_line_debug_log_sec_ >= debug_period))
+          {
+            RCLCPP_WARN(
+              rclcpp::get_logger("mpc_controller"),
+              "OvertakeLine fresh ShiftOut held by current wall state: "
+              "physical=%d, current_warning=%d, ttc=%.2f s, side=%d, "
+              "current_ey=%.2f, wp_id=%d",
+              actual_wall_physical_contact ? 1 : 0,
+              current_wall_warning ? 1 : 0,
+              actual_wall_preplan_prediction_ttc_sec,
+              pass_side_sign, current_ey, model->wp_id);
+            last_overtake_line_debug_log_sec_ = now_sec;
+          }
+          // Do not freeze or latch the selected Mission.  Normal path
+          // tracking/recovery can clear the current wall state, then the next
+          // cycle may admit a freshly validated lateral entry.
+          return output;
+        }
         transition_overtake_line_phase(
           direct_pass ? OvertakeLinePhase::Pass : OvertakeLinePhase::ShiftOut,
           now_sec, current_ey, pass_side_sign,

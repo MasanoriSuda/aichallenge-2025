@@ -1214,6 +1214,13 @@ const char * to_string(const OvertakeEntryStageReason reason) noexcept
   return "unknown overtake entry stage";
 }
 
+bool should_hold_fresh_shiftout_for_wall(
+  const FreshShiftOutWallEntryRequest & request) noexcept
+{
+  return request.fresh_mission && request.shiftout_entry &&
+         (request.actual_wall_physical_contact || request.current_wall_warning);
+}
+
 bool can_start_side_overtake(const SideOvertakeEntryRequest & request) noexcept
 {
   if (request.continuing_overtake) {

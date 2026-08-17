@@ -818,6 +818,20 @@ OvertakeEntryStageResolution resolve_overtake_entry_stage(
 
 const char * to_string(OvertakeEntryStageReason reason) noexcept;
 
+struct FreshShiftOutWallEntryRequest
+{
+  bool fresh_mission{false};
+  bool shiftout_entry{false};
+  bool actual_wall_physical_contact{false};
+  bool current_wall_warning{false};
+};
+
+/// Hold only a fresh lateral ShiftOut when the current footprint is already
+/// in wall contact or the current (not predicted) robust wall reserve is
+/// exhausted. Direct Pass and resumed/committed Missions retain ownership.
+bool should_hold_fresh_shiftout_for_wall(
+  const FreshShiftOutWallEntryRequest & request) noexcept;
+
 struct SideOvertakeEntryRequest
 {
   bool continuing_overtake{false};

@@ -448,6 +448,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::DirectPassPredictionHandoffReque
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntryStage;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntryStageReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntryStageRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::FreshShiftOutWallEntryRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_commit_stage;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_cross_side_no_return_latch;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_rearm_runtime_completion_tactical_replan;
@@ -456,6 +457,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::early_pass_side_intrusion_risk;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   should_defer_direct_pass_prediction_handoff;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_entry_stage;
+using multi_purpose_mpc_ros::v2x_overtake_core::should_hold_fresh_shiftout_for_wall;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   can_retain_receding_horizon_execution_lease;
 using multi_purpose_mpc_ros::v2x_overtake_core::
@@ -15174,6 +15176,29 @@ TEST(V2XOvertakeCoreCommitStage, ResolvesEntryStageWithExistingPrecedence)
   EXPECT_STREQ(
     multi_purpose_mpc_ros::v2x_overtake_core::to_string(resolution.reason),
     "validated base racing line already clear");
+}
+
+TEST(V2XOvertakeCoreCommitStage, HoldsOnlyFreshLateralEntryAtCurrentWall)
+{
+  FreshShiftOutWallEntryRequest request;
+  request.fresh_mission = true;
+  request.shiftout_entry = true;
+
+  EXPECT_FALSE(should_hold_fresh_shiftout_for_wall(request));
+
+  request.actual_wall_physical_contact = true;
+  EXPECT_TRUE(should_hold_fresh_shiftout_for_wall(request));
+
+  request.actual_wall_physical_contact = false;
+  request.current_wall_warning = true;
+  EXPECT_TRUE(should_hold_fresh_shiftout_for_wall(request));
+
+  request.shiftout_entry = false;
+  EXPECT_FALSE(should_hold_fresh_shiftout_for_wall(request));
+
+  request.shiftout_entry = true;
+  request.fresh_mission = false;
+  EXPECT_FALSE(should_hold_fresh_shiftout_for_wall(request));
 }
 
 TEST(V2XOvertakeCoreMpccLiteShadow, SelectsBestCoupledTacticalBranch)

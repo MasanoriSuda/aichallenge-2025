@@ -2678,6 +2678,9 @@ struct OvertakeRecedingHorizonEvaluation
 struct OvertakeLineEntryPreflight
 {
   bool feasible{true};
+  bool target_separation_degraded_to_physical{false};
+  double applied_target_center_separation_m{
+    std::numeric_limits<double>::quiet_NaN()};
   bool outer_strategy_committed{false};
   bool outer_role_reversal{false};
   double goal_ey{};
@@ -2696,6 +2699,10 @@ struct OvertakeLineEntryPreflightPolicy
 {
   bool enforce_target_center_separation{true};
   bool enforce_outer_role_continuity{true};
+  /// A bounded receding prefix may use the physical kart separation when the
+  /// preferred robust reserve alone makes the side infeasible. Complete
+  /// ShiftOut/Pass/Return admission deliberately leaves this false.
+  bool allow_physical_target_separation_fallback{false};
 };
 
 struct OvertakeLineSideRetryBlock
@@ -7796,9 +7803,13 @@ struct MPC
         soft_overtake_forbidden, hard_overtake_forbidden, overtake_forbidden_wp) ?
       curve_inner_pass_side(
         ref_wp_id, N, cfg.v2x_behavior.overtake_forbidden_curve_lookahead_distance) : 0;
-    const int minimum_motion_inner_side =
-      inner_curve_pass_side != 0 ? inner_curve_pass_side : lookahead_inner_curve_pass_side;
-    output.overtake_lookahead_inner_side = minimum_motion_inner_side;
+    // A distant curve role is useful diagnostic context, but it must not turn
+    // an otherwise straight entry into a fixed inside preference. Complete
+    // Mission ranking already evaluates rear-clear role transitions. Keeping
+    // this preference local lets current physical room decide between two
+    // executable straight-entry candidates.
+    const int minimum_motion_inner_side = inner_curve_pass_side;
+    output.overtake_lookahead_inner_side = lookahead_inner_curve_pass_side;
     const bool continuing_inner_curve_pass =
       is_inner_curve_pass(overtake_locked_side_sign_, inner_curve_pass_side);
     const bool slow_front_overtake_candidate =
@@ -8141,6 +8152,8 @@ struct MPC
         request.minimum_clearance_advantage_m = std::max(
           0.0,
           cfg.v2x_behavior.overtake_line.side_quality_min_score_advantage);
+        request.entry_side_clearance_selection_enabled =
+          inner_curve_pass_side == 0 && locked_pass_side == 0;
         request.rear_clear_side_selection_enabled =
           require_complete_mission &&
           cfg.v2x_behavior.overtake_line.rear_clear_side_selection_enabled;
@@ -9068,6 +9081,9 @@ struct MPC
         overtake_core::OvertakeMissionDynamicCorridorResolution first_dynamic_rejection;
         bool first_dynamic_rejection_available = false;
         std::size_t evaluated_goal_count = 0;
+        std::size_t entry_preflight_reject_count = 0;
+        std::size_t physical_target_separation_fallback_count = 0;
+        std::string first_entry_preflight_rejection;
         std::size_t rolling_lateral_adjustment_reject_count = 0;
         std::size_t body_clear_deadline_miss_count = 0;
         std::size_t body_clear_deadline_invalid_count = 0;
@@ -9092,6 +9108,15 @@ struct MPC
           std::numeric_limits<double>::infinity();
         double earliest_outer_role_reversal_distance =
           std::numeric_limits<double>::infinity();
+        const bool progressive_entry_context =
+          cfg.v2x_behavior.overtake_line.progressive_entry_enabled &&
+          initial_shiftout_preflight && !side_replan_preflight &&
+          !active_overtake_line;
+        const bool mpcc_receding_prefix_context =
+          cfg.v2x_behavior.overtake_line.mpcc_lite_control_enabled &&
+          shadow_only;
+        const bool bounded_prefix_context =
+          progressive_entry_context || mpcc_receding_prefix_context;
         for (const double shift_distance : shift_distance_candidates) {
           const double pass_distance =
             std::max(0.5, cfg.v2x_behavior.overtake_line.pass_distance);
@@ -9265,9 +9290,19 @@ struct MPC
               side, model->spatial_state.e_y,
               preflight_target_lateral, assessment.corridor_center_ey,
               std::pair<double, double>{goal_lower, goal_upper},
-              preferred_goal, shift_distance, std::nullopt, false, false);
+              preferred_goal, shift_distance, std::nullopt, false, false,
+              false, false, false,
+              OvertakeLineEntryPreflightPolicy{
+                true, true, bounded_prefix_context});
             if (!preflight.feasible) {
+              ++entry_preflight_reject_count;
+              if (first_entry_preflight_rejection.empty()) {
+                first_entry_preflight_rejection = preflight.reason;
+              }
               continue;
+            }
+            if (preflight.target_separation_degraded_to_physical) {
+              ++physical_target_separation_fallback_count;
             }
             const double candidate_entry_lateral_shift =
               std::abs(preflight.goal_ey - model->spatial_state.e_y);
@@ -9299,15 +9334,6 @@ struct MPC
             const bool complete_entry_motion_admitted =
               static_fallback_entry_admission.valid &&
               static_fallback_entry_admission.admitted;
-            const bool progressive_entry_context =
-              cfg.v2x_behavior.overtake_line.progressive_entry_enabled &&
-              initial_shiftout_preflight && !side_replan_preflight &&
-              !active_overtake_line;
-            const bool mpcc_receding_prefix_context =
-              cfg.v2x_behavior.overtake_line.mpcc_lite_control_enabled &&
-              shadow_only;
-            const bool bounded_prefix_context =
-              progressive_entry_context || mpcc_receding_prefix_context;
             const bool progressive_static_fallback_motion_admitted =
               bounded_prefix_context &&
               static_fallback_entry_admission.valid &&
@@ -9468,6 +9494,8 @@ struct MPC
                   rollout.body_clear_distance_m;
                 setup_candidate.closing_speed_mps = effective_closing_speed;
                 setup_candidate.pass_side_sign = side;
+                setup_candidate.entry_side_clearance_m =
+                  std::max(0.0, assessment.side_clearance);
                 setup_candidate.current_position_clear = current_position_clear;
                 setup_candidate.body_clear_deadline_slack_sec = rollout.deadline_slack_sec;
                 setup_candidate.predicted_minimum_ego_speed_mps =
@@ -9562,7 +9590,7 @@ struct MPC
                       preflight.goal_ey, progressive_preflight_shift_distance,
                       progressive_pass_distance,
                       false, true, false, false, false,
-                      OvertakeLineEntryPreflightPolicy{true, false});
+                      OvertakeLineEntryPreflightPolicy{true, false, true});
                     if (!progressive_continuation_preflight.feasible) {
                       ++progressive_entry_short_continuation_reject_count;
                     } else {
@@ -9928,6 +9956,8 @@ struct MPC
                 rollout.body_clear_distance_m;
               mission_candidate.closing_speed_mps = effective_closing_speed;
               mission_candidate.pass_side_sign = side;
+              mission_candidate.entry_side_clearance_m =
+                std::max(0.0, assessment.side_clearance);
               mission_candidate.current_position_clear = current_position_clear;
               mission_candidate.body_clear_deadline_slack_sec = rollout.deadline_slack_sec;
               mission_candidate.rear_clear_prediction_checked =
@@ -10090,6 +10120,9 @@ struct MPC
              << ", shift_candidates=" << shift_distance_candidates.size()
              << ", closing_candidates=" << closing_speed_candidates.size()
              << ", goal_candidates=" << evaluated_goal_count
+             << ", entry_preflight_rejected=" << entry_preflight_reject_count
+             << ", physical_target_fallback=" <<
+            physical_target_separation_fallback_count
              << ", rolling_lateral_rejected=" <<
             rolling_lateral_adjustment_reject_count
              << ", body_deadline_missed=" << body_clear_deadline_miss_count
@@ -10138,6 +10171,12 @@ struct MPC
           if (outer_horizon_reject_count > 0U) {
             ss << ", earliest_outer_role_reversal_s="
                << earliest_outer_role_reversal_distance;
+          }
+          if (
+            entry_preflight_reject_count > 0U &&
+            !first_entry_preflight_rejection.empty())
+          {
+            ss << ", entry_preflight_reason=" << first_entry_preflight_rejection;
           }
           if (
             outer_transition_preflight_reject_count > 0U &&
@@ -10225,6 +10264,10 @@ struct MPC
             assessment.frenet_dp_corridor.tactical_knot_count
                           << ", goal=" << selected_mission.goal_lateral_m
                           << ", lateral_shift=" << assessment.required_lateral_shift
+                          << ", entry_side_clearance=" <<
+            selected_mission.entry_side_clearance_m
+                          << ", physical_target_fallback=" <<
+            physical_target_separation_fallback_count
                           << ", ay=" << selected_mission.max_required_lateral_accel_mps2
                           << ", body_deadline_feasible=" <<
             (selected_mission.body_clear_deadline_feasible ? 1 : 0)
@@ -10615,6 +10658,7 @@ struct MPC
         if (cfg.v2x_behavior.overtake_minimum_lateral_motion_enabled) {
           ss << ", min_shift=" << assessment.required_lateral_shift
              << ", base_clear=" << assessment.base_line_clear
+             << ", entry_side_clearance=" << assessment.side_clearance
              << ", inner=" <<
             (minimum_motion_inner_side != 0 && assessment.side == minimum_motion_inner_side);
         }
@@ -18868,7 +18912,7 @@ private:
     }
     const bool enforce_target_separation =
       policy.enforce_target_center_separation && std::isfinite(target_lateral);
-    const auto feasible_goal =
+    const auto robust_feasible_goal =
       overtake_core::resolve_feasible_pass_side_lateral_goal(
       overtake_core::FeasiblePassSideLateralGoalRequest{
         pass_side_sign,
@@ -18878,11 +18922,40 @@ private:
         feasible_lower,
         feasible_upper,
         enforce_target_separation});
-    result.goal_ey = feasible_goal.goal_m;
-    if (enforce_target_separation && !feasible_goal.target_separation_feasible) {
-      result.feasible = false;
-      result.reason = "target separation does not fit wall-feasible bounds";
-      return result;
+    result.goal_ey = robust_feasible_goal.goal_m;
+    result.applied_target_center_separation_m = target_center_separation;
+    if (
+      enforce_target_separation &&
+      !robust_feasible_goal.target_separation_feasible)
+    {
+      const double physical_target_center_separation = std::max(
+        0.0, cfg.v2x_gap.vehicle_radius);
+      const bool physical_fallback_available =
+        policy.allow_physical_target_separation_fallback &&
+        physical_target_center_separation + kEps < target_center_separation;
+      if (physical_fallback_available) {
+        const auto physical_feasible_goal =
+          overtake_core::resolve_feasible_pass_side_lateral_goal(
+          overtake_core::FeasiblePassSideLateralGoalRequest{
+            pass_side_sign,
+            raw_goal,
+            target_lateral,
+            physical_target_center_separation,
+            feasible_lower,
+            feasible_upper,
+            true});
+        if (physical_feasible_goal.target_separation_feasible) {
+          result.goal_ey = physical_feasible_goal.goal_m;
+          result.target_separation_degraded_to_physical = true;
+          result.applied_target_center_separation_m =
+            physical_target_center_separation;
+        }
+      }
+      if (!result.target_separation_degraded_to_physical) {
+        result.feasible = false;
+        result.reason = "target separation does not fit wall-feasible bounds";
+        return result;
+      }
     }
     if (!std::isfinite(result.goal_ey)) {
       result.feasible = false;

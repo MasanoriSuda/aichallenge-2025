@@ -6759,6 +6759,7 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
              progress_speed_valid && pass_target_clearance_valid &&
              frenet_dp_corridor_valid &&
              rear_clear_course_role_valid && outer_transition_valid &&
+             non_negative_or_infinity(candidate.entry_side_clearance_m) &&
              non_negative_or_infinity(candidate.minimum_path_wall_clearance_m) &&
              non_negative_or_infinity(candidate.minimum_path_corridor_width_m) &&
              non_negative_or_infinity(candidate.minimum_return_wall_clearance_m) &&
@@ -6845,6 +6846,24 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
         incumbent.full_track_transition_before_rear_clear)
       {
         return !candidate.full_track_transition_before_rear_clear;
+      }
+      if (
+        request.entry_side_clearance_selection_enabled &&
+        std::isfinite(candidate.entry_side_clearance_m) &&
+        std::isfinite(incumbent.entry_side_clearance_m))
+      {
+        if (
+          candidate.entry_side_clearance_m > incumbent.entry_side_clearance_m +
+          request.minimum_clearance_advantage_m + kEpsilon)
+        {
+          return true;
+        }
+        if (
+          incumbent.entry_side_clearance_m > candidate.entry_side_clearance_m +
+          request.minimum_clearance_advantage_m + kEpsilon)
+        {
+          return false;
+        }
       }
       if (
         candidate.pass_target_clearance_checked &&

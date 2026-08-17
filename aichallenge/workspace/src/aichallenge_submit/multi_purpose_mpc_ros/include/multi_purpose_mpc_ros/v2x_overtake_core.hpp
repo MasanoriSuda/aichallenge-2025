@@ -3588,6 +3588,10 @@ struct OvertakeMissionCandidate
   // Selection-transparent metadata travels with the ranked candidate. Keeping
   // it here avoids a second, index-coupled metadata vector in the controller.
   int pass_side_sign{0};
+  /// Instantaneous inflated target-to-wall room on this side at entry. It is
+  /// only a ranking input for an unlocked straight entry; all candidates have
+  /// already passed their wall, target and completion admission checks.
+  double entry_side_clearance_m{std::numeric_limits<double>::infinity()};
   bool current_position_clear{false};
   double body_clear_deadline_slack_sec{std::numeric_limits<double>::quiet_NaN()};
   bool rear_clear_prediction_checked{false};
@@ -3766,6 +3770,11 @@ struct OvertakeMissionCandidateSelectionRequest
   /// Only let physical path reserve override racing progress when the
   /// difference is material. This preserves aggressive ordering for ties.
   double minimum_clearance_advantage_m{};
+  /// At an unlocked straight entry, prefer materially larger current
+  /// target-to-wall room before comparing racing progress. Curve and active
+  /// Mission selection leave this disabled and continue to use the full
+  /// horizon course-role policy.
+  bool entry_side_clearance_selection_enabled{false};
   /// Prefer a side that can reach rear-clear without crossing the full track.
   /// Entry inner/outer labels alone are intentionally not selection rules.
   bool rear_clear_side_selection_enabled{false};

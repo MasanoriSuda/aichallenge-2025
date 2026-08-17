@@ -7815,6 +7815,73 @@ TEST(V2XOvertakeCoreSpeed, SelectsFasterClosingSpeedForOtherwiseEqualCandidates)
   EXPECT_DOUBLE_EQ(selection.candidate.closing_speed_mps, 2.0);
 }
 
+TEST(V2XOvertakeCoreSpeed, StraightEntryPrefersMateriallyWiderPhysicalSide)
+{
+  OvertakeMissionCandidate left;
+  left.feasible = true;
+  left.shift_distance_m = 3.0;
+  left.goal_lateral_m = 0.7;
+  left.lateral_shift_m = 0.7;
+  left.max_required_lateral_accel_mps2 = 2.0;
+  left.closing_speed_mps = 2.0;
+  left.pass_side_sign = 1;
+  left.entry_side_clearance_m = 2.0;
+
+  auto right = left;
+  right.shift_distance_m = 4.0;
+  right.goal_lateral_m = -0.8;
+  right.lateral_shift_m = 0.8;
+  right.closing_speed_mps = 1.0;
+  right.pass_side_sign = -1;
+  right.entry_side_clearance_m = 2.4;
+
+  OvertakeMissionCandidateSelectionRequest request;
+  request.candidates = {left, right};
+  request.minimum_clearance_advantage_m = 0.25;
+  request.entry_side_clearance_selection_enabled = true;
+
+  auto selection = select_overtake_mission_candidate(request);
+  ASSERT_TRUE(selection.valid);
+  ASSERT_TRUE(selection.found);
+  EXPECT_EQ(selection.candidate.pass_side_sign, -1);
+
+  // The same candidates on a curve retain complete-horizon progress ordering.
+  request.entry_side_clearance_selection_enabled = false;
+  selection = select_overtake_mission_candidate(request);
+  ASSERT_TRUE(selection.valid);
+  ASSERT_TRUE(selection.found);
+  EXPECT_EQ(selection.candidate.pass_side_sign, 1);
+}
+
+TEST(V2XOvertakeCoreSpeed, StraightEntryIgnoresSubthresholdWidthDifference)
+{
+  OvertakeMissionCandidate left;
+  left.feasible = true;
+  left.shift_distance_m = 3.0;
+  left.goal_lateral_m = 0.7;
+  left.lateral_shift_m = 0.7;
+  left.max_required_lateral_accel_mps2 = 2.0;
+  left.pass_side_sign = 1;
+  left.entry_side_clearance_m = 2.0;
+
+  auto right = left;
+  right.shift_distance_m = 4.0;
+  right.goal_lateral_m = -0.8;
+  right.lateral_shift_m = 0.8;
+  right.pass_side_sign = -1;
+  right.entry_side_clearance_m = 2.2;
+
+  OvertakeMissionCandidateSelectionRequest request;
+  request.candidates = {left, right};
+  request.minimum_clearance_advantage_m = 0.25;
+  request.entry_side_clearance_selection_enabled = true;
+
+  const auto selection = select_overtake_mission_candidate(request);
+  ASSERT_TRUE(selection.valid);
+  ASSERT_TRUE(selection.found);
+  EXPECT_EQ(selection.candidate.pass_side_sign, 1);
+}
+
 TEST(V2XOvertakeCoreSpeed, GlobalCandidateSelectionPrefersDeadlineReserveAcrossSides)
 {
   OvertakeMissionCandidate left;

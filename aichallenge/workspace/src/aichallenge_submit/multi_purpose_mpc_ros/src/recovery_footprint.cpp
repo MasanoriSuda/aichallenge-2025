@@ -1000,10 +1000,11 @@ LateralProfileClearanceResult evaluate_lateral_profile_static_map(
   return result;
 }
 
-LateralClearIntervalResult find_clear_lateral_interval(
+LateralClearIntervalResult find_clear_lateral_interval_with_heading(
   const OccupancyGrid & grid, const FootprintExtents & footprint,
   const Pose2D & reference_pose, const double lower_lateral_offset_m,
   const double upper_lateral_offset_m, const double preferred_lateral_offset_m,
+  const double path_heading_offset_rad,
   const double additional_lateral_clearance_m, const double sample_step_m)
 {
   LateralClearIntervalResult result;
@@ -1011,7 +1012,7 @@ LateralClearIntervalResult find_clear_lateral_interval(
     !grid.valid() || !footprint.valid() || !valid_pose(reference_pose) ||
     !finite(lower_lateral_offset_m) || !finite(upper_lateral_offset_m) ||
     upper_lateral_offset_m < lower_lateral_offset_m ||
-    !finite(preferred_lateral_offset_m) ||
+    !finite(preferred_lateral_offset_m) || !finite(path_heading_offset_rad) ||
     !finite(additional_lateral_clearance_m) || additional_lateral_clearance_m < 0.0 ||
     !finite(sample_step_m) || sample_step_m <= 0.0)
   {
@@ -1050,7 +1051,7 @@ LateralClearIntervalResult find_clear_lateral_interval(
     const Pose2D candidate_pose{
       reference_pose.x_m + lateral_offset * left_x,
       reference_pose.y_m + lateral_offset * left_y,
-      reference_pose.yaw_rad};
+      wrap_to_pi(reference_pose.yaw_rad + path_heading_offset_rad)};
     const auto sample = sample_footprint(grid, clearance_footprint, candidate_pose);
     ++result.checked_pose_count;
     const bool clear =
@@ -1102,6 +1103,18 @@ LateralClearIntervalResult find_clear_lateral_interval(
     preferred_lateral_offset_m + kNumericalEpsilon >= selected->lower &&
     preferred_lateral_offset_m <= selected->upper + kNumericalEpsilon;
   return result;
+}
+
+LateralClearIntervalResult find_clear_lateral_interval(
+  const OccupancyGrid & grid, const FootprintExtents & footprint,
+  const Pose2D & reference_pose, const double lower_lateral_offset_m,
+  const double upper_lateral_offset_m, const double preferred_lateral_offset_m,
+  const double additional_lateral_clearance_m, const double sample_step_m)
+{
+  return find_clear_lateral_interval_with_heading(
+    grid, footprint, reference_pose, lower_lateral_offset_m,
+    upper_lateral_offset_m, preferred_lateral_offset_m, 0.0,
+    additional_lateral_clearance_m, sample_step_m);
 }
 
 WallProximityResult classify_nearby_wall(

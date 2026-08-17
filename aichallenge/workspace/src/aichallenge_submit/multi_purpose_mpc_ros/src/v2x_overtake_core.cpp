@@ -12087,9 +12087,10 @@ bool should_retain_pass_mission_after_recovery(
 }
 
 bool should_terminate_recovery_retained_mission(
-  const bool recovery_retention_active, const bool runtime_hard_fault) noexcept
+  const bool recovery_retention_active,
+  const bool continuation_hard_infeasible) noexcept
 {
-  return recovery_retention_active && runtime_hard_fault;
+  return recovery_retention_active && continuation_hard_infeasible;
 }
 
 StallWatchdogResolution update_stall_watchdog(const StallWatchdogRequest & request)

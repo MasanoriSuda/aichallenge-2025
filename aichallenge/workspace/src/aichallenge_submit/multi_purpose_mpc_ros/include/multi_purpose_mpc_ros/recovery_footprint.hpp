@@ -375,6 +375,19 @@ LateralClearIntervalResult find_clear_lateral_interval(
   double upper_lateral_offset_m, double preferred_lateral_offset_m,
   double additional_lateral_clearance_m, double sample_step_m);
 
+/// Heading-aware connected lateral interval used by receding-horizon execution.
+///
+/// Lateral translation remains in the base reference pose's normal frame,
+/// while the footprint yaw includes path_heading_offset_rad. This lets the
+/// optimizer use the same oriented rectangular footprint as final profile
+/// validation instead of admitting a base-yaw-only wall interval.
+LateralClearIntervalResult find_clear_lateral_interval_with_heading(
+  const OccupancyGrid & grid, const FootprintExtents & footprint,
+  const Pose2D & reference_pose, double lower_lateral_offset_m,
+  double upper_lateral_offset_m, double preferred_lateral_offset_m,
+  double path_heading_offset_rad, double additional_lateral_clearance_m,
+  double sample_step_m);
+
 /// Classify the nearest occupied/unknown map cells in the vehicle frame.
 ///
 /// search_margin_m expands the normal vehicle footprint only for wall lookup;

@@ -570,6 +570,36 @@ TEST(RecoveryFootprintLateralInterval, InvalidInputFailsClosed)
   EXPECT_FALSE(result.feasible);
 }
 
+TEST(RecoveryFootprintLateralInterval, HeadingAwareIntervalAccountsForLongitudinalExtent)
+{
+  auto grid = make_grid(200U, 200U, 0.1);
+  for (std::size_t column = 0U; column < grid.width; ++column) {
+    set_world_cell(grid, 0.1 * static_cast<double>(column), 10.0);
+  }
+  const recovery::Pose2D pose{10.0, 8.0, 0.0};
+  const recovery::FootprintExtents footprint{1.0, 1.0, 0.2, 0.2, 0.0};
+  const auto aligned = recovery::find_clear_lateral_interval_with_heading(
+    grid, footprint, pose, -0.5, 1.8, 0.0, 0.0, 0.0, 0.05);
+  const auto rotated = recovery::find_clear_lateral_interval_with_heading(
+    grid, footprint, pose, -0.5, 1.8, 0.0, 0.5, 0.0, 0.05);
+
+  ASSERT_TRUE(aligned.valid);
+  ASSERT_TRUE(aligned.feasible);
+  ASSERT_TRUE(rotated.valid);
+  ASSERT_TRUE(rotated.feasible);
+  EXPECT_LT(rotated.upper_lateral_offset_m, aligned.upper_lateral_offset_m - 0.2);
+}
+
+TEST(RecoveryFootprintLateralInterval, HeadingAwareInvalidHeadingFailsClosed)
+{
+  const auto result = recovery::find_clear_lateral_interval_with_heading(
+    make_grid(), compact_footprint(), recovery::Pose2D{10.0, 10.0, 0.0},
+    -1.0, 1.0, 0.0, std::numeric_limits<double>::quiet_NaN(), 0.0, 0.05);
+
+  EXPECT_FALSE(result.valid);
+  EXPECT_FALSE(result.feasible);
+}
+
 TEST(RecoveryFootprintPathClearance, AcceptsClearSweptPath)
 {
   const std::vector<recovery::Pose2D> path{

@@ -7117,10 +7117,11 @@ struct RecoveryMissionRetentionRequest
 bool should_retain_pass_mission_after_recovery(
   const RecoveryMissionRetentionRequest & request) noexcept;
 
-/// A hard fault that survives a completed Recovery invalidates the retained
-/// Mission; sending the same frozen path through Recovery again only loops.
+/// A hard runtime or future execution-path fault that survives a completed
+/// Recovery invalidates the retained Mission; sending the same frozen path
+/// through Recovery again only loops.
 bool should_terminate_recovery_retained_mission(
-  bool recovery_retention_active, bool runtime_hard_fault) noexcept;
+  bool recovery_retention_active, bool continuation_hard_infeasible) noexcept;
 
 struct RecoveryVelocityLimitRequest
 {

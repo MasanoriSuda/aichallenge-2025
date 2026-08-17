@@ -22,6 +22,26 @@ struct Config
   double terminal_progress_reward_weight{5000.0};
 };
 
+struct StageDistanceResolution
+{
+  std::vector<double> distance_m;
+  std::size_t normalized_stage_count{};
+  double minimum_stage_distance_m{};
+};
+
+/// Resolve stage distances for temporal progress dynamics. A finite zero-length
+/// stage can appear at a circular path seam when the closure point is repeated.
+/// Such stages are lifted only to the distance implied by the minimum speed and
+/// minimum integration period. Negative and non-finite distances remain invalid.
+std::optional<StageDistanceResolution> resolve_stage_distances(
+  const std::vector<double> & raw_stage_distance_m, const Config & config) noexcept;
+
+/// Detect a course-progress discontinuity that makes an earlier MPCC warm-start
+/// unsafe to reinterpret, notably the positive-to-zero wrap at a lap boundary.
+bool progress_origin_discontinuous(
+  double previous_progress_m, double current_progress_m,
+  double maximum_continuous_step_m) noexcept;
+
 struct LinearizationRequest
 {
   double reference_lateral_m{};

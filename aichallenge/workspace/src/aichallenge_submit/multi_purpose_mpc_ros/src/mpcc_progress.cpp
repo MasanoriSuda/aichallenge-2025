@@ -33,6 +33,48 @@ bool finite_config(const Config & config) noexcept
 
 }  // namespace
 
+std::optional<StageDistanceResolution> resolve_stage_distances(
+  const std::vector<double> & raw_stage_distance_m, const Config & config) noexcept
+{
+  if (!finite_config(config) || raw_stage_distance_m.empty()) {
+    return std::nullopt;
+  }
+  const double minimum_stage_distance =
+    config.minimum_reference_speed_mps * config.minimum_stage_dt_sec;
+  if (!std::isfinite(minimum_stage_distance) || minimum_stage_distance <= 0.0) {
+    return std::nullopt;
+  }
+
+  StageDistanceResolution result;
+  result.distance_m.reserve(raw_stage_distance_m.size());
+  result.minimum_stage_distance_m = minimum_stage_distance;
+  for (const double raw_distance : raw_stage_distance_m) {
+    if (!std::isfinite(raw_distance) || raw_distance < 0.0) {
+      return std::nullopt;
+    }
+    if (raw_distance < minimum_stage_distance) {
+      result.distance_m.push_back(minimum_stage_distance);
+      ++result.normalized_stage_count;
+    } else {
+      result.distance_m.push_back(raw_distance);
+    }
+  }
+  return result;
+}
+
+bool progress_origin_discontinuous(
+  const double previous_progress_m, const double current_progress_m,
+  const double maximum_continuous_step_m) noexcept
+{
+  if (
+    !std::isfinite(previous_progress_m) || !std::isfinite(current_progress_m) ||
+    !std::isfinite(maximum_continuous_step_m) || maximum_continuous_step_m <= 0.0)
+  {
+    return true;
+  }
+  return std::abs(current_progress_m - previous_progress_m) > maximum_continuous_step_m;
+}
+
 std::optional<Linearization> linearize_temporal_frenet(
   const LinearizationRequest & request) noexcept
 {

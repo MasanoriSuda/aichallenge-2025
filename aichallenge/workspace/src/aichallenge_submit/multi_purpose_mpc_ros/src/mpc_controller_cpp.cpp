@@ -4593,6 +4593,19 @@ struct MpcProblem
   int preview_wp_id{};
   int ref_wp_id{};
   bool progress_contouring_active{false};
+  double progress_origin_m{std::numeric_limits<double>::quiet_NaN()};
+};
+
+struct ProgressContouringMpcPreparation
+{
+  std::vector<double> stage_distance_m;
+  std::vector<double> progress_reference_m;
+  std::vector<mpcc_progress::ProgressBounds> progress_bounds;
+  std::vector<mpcc_progress::Linearization> linearizations;
+  std::vector<mpcc_progress::ProgressCost> stage_costs;
+  mpcc_progress::ProgressCost terminal_cost;
+  std::size_t normalized_stage_count{};
+  double minimum_stage_distance_m{};
 };
 
 struct MpcOsqpTelemetryWindow
@@ -12941,6 +12954,102 @@ struct MPC
     return commit_v2x_behavior_state(output, now_sec);
   }
 
+  std::optional<ProgressContouringMpcPreparation> prepare_progress_contouring_mpc(
+    const int N, const Eigen::VectorXd & state_reference,
+    const Eigen::VectorXd & input_reference,
+    const std::vector<double> & raw_stage_distance_m,
+    const std::vector<double> & stage_curvature_radpm,
+    std::string & reject_reason) const
+  {
+    constexpr int nx = 3;
+    constexpr int nu = 2;
+    reject_reason.clear();
+    if (
+      N <= 0 || state_reference.size() != nx * (N + 1) ||
+      input_reference.size() != nu * N ||
+      raw_stage_distance_m.size() != static_cast<std::size_t>(N) ||
+      stage_curvature_radpm.size() != static_cast<std::size_t>(N))
+    {
+      reject_reason = "malformed progress preparation horizon";
+      return std::nullopt;
+    }
+
+    const auto stage_distance = mpcc_progress::resolve_stage_distances(
+      raw_stage_distance_m, cfg.progress_contouring);
+    if (!stage_distance.has_value()) {
+      reject_reason = "invalid progress stage distance";
+      return std::nullopt;
+    }
+    const auto progress_reference = mpcc_progress::build_progress_reference(
+      model->s, stage_distance->distance_m);
+    if (
+      !progress_reference.has_value() ||
+      progress_reference->size() != static_cast<std::size_t>(N + 1))
+    {
+      reject_reason = "invalid progress reference";
+      return std::nullopt;
+    }
+
+    ProgressContouringMpcPreparation result;
+    result.stage_distance_m = stage_distance->distance_m;
+    result.progress_reference_m = progress_reference.value();
+    result.normalized_stage_count = stage_distance->normalized_stage_count;
+    result.minimum_stage_distance_m = stage_distance->minimum_stage_distance_m;
+    result.progress_bounds.reserve(static_cast<std::size_t>(N + 1));
+    for (int state_index = 0; state_index < N + 1; ++state_index) {
+      const auto bounds = mpcc_progress::resolve_progress_bounds(
+        model->s, result.progress_reference_m[static_cast<std::size_t>(state_index)],
+        cfg.progress_contouring);
+      if (!bounds.has_value()) {
+        reject_reason = "invalid progress trust region at stage " +
+          std::to_string(state_index);
+        return std::nullopt;
+      }
+      result.progress_bounds.push_back(bounds.value());
+    }
+
+    result.linearizations.reserve(static_cast<std::size_t>(N));
+    result.stage_costs.reserve(static_cast<std::size_t>(N));
+    for (int stage = 0; stage < N; ++stage) {
+      const double reference_lateral = stage == 0 ?
+        model->spatial_state.e_y : state_reference[stage * nx];
+      const double reference_heading = stage == 0 ?
+        model->spatial_state.e_psi : state_reference[stage * nx + 1];
+      const auto linearization = mpcc_progress::linearize_temporal_frenet(
+        mpcc_progress::LinearizationRequest{
+          reference_lateral,
+          reference_heading,
+          result.progress_reference_m[static_cast<std::size_t>(stage)],
+          input_reference[stage * nu],
+          stage_curvature_radpm[static_cast<std::size_t>(stage)],
+          result.stage_distance_m[static_cast<std::size_t>(stage)],
+          cfg.progress_contouring});
+      if (!linearization.has_value()) {
+        reject_reason = "temporal Frenet linearization rejected stage " +
+          std::to_string(stage);
+        return std::nullopt;
+      }
+      result.linearizations.push_back(linearization.value());
+
+      const auto cost = mpcc_progress::resolve_progress_cost(
+        result.progress_reference_m[static_cast<std::size_t>(stage)], false,
+        cfg.progress_contouring);
+      if (!cost.has_value()) {
+        reject_reason = "invalid progress cost at stage " + std::to_string(stage);
+        return std::nullopt;
+      }
+      result.stage_costs.push_back(cost.value());
+    }
+    const auto terminal_cost = mpcc_progress::resolve_progress_cost(
+      result.progress_reference_m.back(), true, cfg.progress_contouring);
+    if (!terminal_cost.has_value()) {
+      reject_reason = "invalid terminal progress cost";
+      return std::nullopt;
+    }
+    result.terminal_cost = terminal_cost.value();
+    return result;
+  }
+
   MpcProblem init_problem(
     const int N, const double safety_margin, const double now_sec, const int tracking_wp_id,
     const int preview_wp_id)
@@ -13829,29 +13938,50 @@ struct MPC
       overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
       overtake_line_state_.phase == OvertakeLinePhase::Pass ||
       overtake_line_state_.phase == OvertakeLinePhase::Return;
-    const bool progress_contouring_active =
+    const bool progress_contouring_requested =
       cfg.progress_contouring_mpcc_enabled &&
       (!cfg.progress_contouring_mpcc_overtake_only || progress_contouring_execution_phase);
-    std::optional<std::vector<double>> progress_reference;
+    std::string progress_contouring_reject_reason;
+    const auto progress_preparation = progress_contouring_requested ?
+      prepare_progress_contouring_mpc(
+        N, xr, ur, stage_distance_m, stage_tracking_curvature_radpm,
+        progress_contouring_reject_reason) :
+      std::optional<ProgressContouringMpcPreparation>{};
+    const bool progress_contouring_active =
+      progress_contouring_requested && progress_preparation.has_value();
+    if (
+      progress_contouring_requested && !progress_contouring_active &&
+      (!std::isfinite(progress_contouring_fallback_last_log_sec_) ||
+      now_sec - progress_contouring_fallback_last_log_sec_ >= 1.0))
+    {
+      RCLCPP_WARN(
+        rclcpp::get_logger("mpc_controller"),
+        "Progress-contouring MPCC preparation rejected; using legacy MPC for this cycle: %s",
+        progress_contouring_reject_reason.c_str());
+      progress_contouring_fallback_last_log_sec_ = now_sec;
+    }
+    if (
+      progress_contouring_active && progress_preparation->normalized_stage_count > 0U &&
+      (!std::isfinite(progress_contouring_stage_normalization_last_log_sec_) ||
+      now_sec - progress_contouring_stage_normalization_last_log_sec_ >= 1.0))
+    {
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"),
+        "Progress-contouring MPCC circular seam normalized: stages=%zu, minimum=%.4f m, "
+        "wp_id=%d",
+        progress_preparation->normalized_stage_count,
+        progress_preparation->minimum_stage_distance_m, model->wp_id);
+      progress_contouring_stage_normalization_last_log_sec_ = now_sec;
+    }
     if (progress_contouring_active) {
-      progress_reference = mpcc_progress::build_progress_reference(
-        model->s, stage_distance_m);
-      if (!progress_reference.has_value() ||
-        progress_reference->size() != static_cast<std::size_t>(N + 1))
-      {
-        throw std::runtime_error("progress MPCC rejected invalid progress reference");
-      }
       for (int state_index = 0; state_index < N + 1; ++state_index) {
         const double reference_progress =
-          progress_reference->at(static_cast<std::size_t>(state_index));
-        const auto bounds = mpcc_progress::resolve_progress_bounds(
-          model->s, reference_progress, cfg.progress_contouring);
-        if (!bounds.has_value()) {
-          throw std::runtime_error("progress MPCC rejected invalid trust region");
-        }
+          progress_preparation->progress_reference_m[static_cast<std::size_t>(state_index)];
+        const auto & bounds =
+          progress_preparation->progress_bounds[static_cast<std::size_t>(state_index)];
         xr[state_index * nx + 2] = reference_progress;
-        xmin_dyn[state_index * nx + 2] = bounds->lower_m;
-        xmax_dyn[state_index * nx + 2] = bounds->upper_m;
+        xmin_dyn[state_index * nx + 2] = bounds.lower_m;
+        xmax_dyn[state_index * nx + 2] = bounds.upper_m;
       }
     }
 
@@ -13861,31 +13991,15 @@ struct MPC
       static_cast<std::size_t>(N), model->Ts);
     for (int n = 0; n < N; ++n) {
       if (progress_contouring_active) {
-        const double reference_lateral = n == 0 ?
-          model->spatial_state.e_y : xr[n * nx];
-        const double reference_heading = n == 0 ?
-          model->spatial_state.e_psi : xr[n * nx + 1];
-        const auto linearization = mpcc_progress::linearize_temporal_frenet(
-          mpcc_progress::LinearizationRequest{
-            reference_lateral,
-            reference_heading,
-            progress_reference->at(static_cast<std::size_t>(n)),
-            ur[n * nu],
-            stage_tracking_curvature_radpm[static_cast<std::size_t>(n)],
-            stage_distance_m[static_cast<std::size_t>(n)],
-            cfg.progress_contouring});
-        if (!linearization.has_value()) {
-          std::ostringstream reason;
-          reason << "progress MPCC temporal Frenet linearization rejected stage " << n;
-          throw std::runtime_error(reason.str());
-        }
+        const auto & linearization =
+          progress_preparation->linearizations[static_cast<std::size_t>(n)];
         A_dense.block<nx, nx>((n + 1) * nx, n * nx) =
-          linearization->state_matrix;
+          linearization.state_matrix;
         B_dense.block<nx, nu>((n + 1) * nx, n * nu) =
-          linearization->input_matrix;
-        uq.segment<nx>(n * nx) = linearization->equality_offset;
+          linearization.input_matrix;
+        uq.segment<nx>(n * nx) = linearization.equality_offset;
         dynamics_stage_dt_sec[static_cast<std::size_t>(n)] =
-          linearization->stage_dt_sec;
+          linearization.stage_dt_sec;
       } else {
         const auto [f, A_lin, B_lin] = model->linearize(
           stage_tracking_speed_mps[static_cast<std::size_t>(n)],
@@ -14008,23 +14122,13 @@ struct MPC
         q[n * 3 + i] = -cfg.Q[i] * xr[n * 3 + i];
       }
       if (progress_contouring_active) {
-        const auto progress_cost = mpcc_progress::resolve_progress_cost(
-          progress_reference->at(static_cast<std::size_t>(n)), false,
-          cfg.progress_contouring);
-        if (!progress_cost.has_value()) {
-          throw std::runtime_error("progress MPCC rejected invalid stage cost");
-        }
-        q[n * 3 + 2] = progress_cost->linear_coefficient;
+        q[n * 3 + 2] =
+          progress_preparation->stage_costs[static_cast<std::size_t>(n)].linear_coefficient;
       }
     }
     q.segment<3>(N * 3) = -(cfg.QN.asDiagonal() * xr.segment<3>(N * 3));
     if (progress_contouring_active) {
-      const auto terminal_progress_cost = mpcc_progress::resolve_progress_cost(
-        progress_reference->back(), true, cfg.progress_contouring);
-      if (!terminal_progress_cost.has_value()) {
-        throw std::runtime_error("progress MPCC rejected invalid terminal cost");
-      }
-      q[N * 3 + 2] = terminal_progress_cost->linear_coefficient;
+      q[N * 3 + 2] = progress_preparation->terminal_cost.linear_coefficient;
     }
     for (int n = 0; n < N; ++n) {
       for (int i = 0; i < 2; ++i) {
@@ -14034,7 +14138,8 @@ struct MPC
 
     return MpcProblem{
       q, l, u, P, A_full, N, tracking_wp_id, preview_wp_id, ref_wp_id,
-      progress_contouring_active};
+      progress_contouring_active,
+      progress_contouring_active ? model->s : std::numeric_limits<double>::quiet_NaN()};
   }
 
   void record_osqp_telemetry(
@@ -14108,6 +14213,7 @@ struct MPC
     last_osqp_solution_.reset();
     last_osqp_solution_sec_ = -std::numeric_limits<double>::infinity();
     last_osqp_progress_contouring_mode_.reset();
+    last_osqp_progress_origin_m_.reset();
   }
 
   persistent_osqp::SolveOutcome solve_problem(
@@ -14116,20 +14222,43 @@ struct MPC
     const bool progress_mode_changed =
       !last_osqp_progress_contouring_mode_.has_value() ||
       last_osqp_progress_contouring_mode_.value() != problem.progress_contouring_active;
-    if (progress_mode_changed) {
+    const double maximum_continuous_progress_step_m = std::max(
+      2.0, cfg.progress_contouring.trust_region_backward_m);
+    const bool progress_origin_discontinuous =
+      problem.progress_contouring_active &&
+      last_osqp_progress_origin_m_.has_value() &&
+      mpcc_progress::progress_origin_discontinuous(
+        last_osqp_progress_origin_m_.value(), problem.progress_origin_m,
+        maximum_continuous_progress_step_m);
+    if (progress_mode_changed || progress_origin_discontinuous) {
       // Both modes intentionally keep a 3x2 sparse QP, but state[2] means
       // elapsed time in legacy mode and physical course progress in MPCC mode.
-      // Never reinterpret one mode's primal/dual warm-start as the other.
+      // Never reinterpret one mode's primal/dual warm-start as the other, or
+      // carry an unwrapped progress solution across the lap-origin reset.
       persistent_osqp_solver_.reset();
       last_osqp_solution_.reset();
       last_osqp_solution_sec_ = -std::numeric_limits<double>::infinity();
       last_osqp_progress_contouring_mode_ = problem.progress_contouring_active;
       if (cfg.v2x_behavior.overtake_line.debug_log_enabled) {
-        RCLCPP_INFO(
-          rclcpp::get_logger("mpc_controller"),
-          "MPC formulation switched: progress_contouring=%d, warm-start reset",
-          problem.progress_contouring_active ? 1 : 0);
+        if (progress_origin_discontinuous && !progress_mode_changed) {
+          RCLCPP_INFO(
+            rclcpp::get_logger("mpc_controller"),
+            "MPC progress origin discontinuity: previous=%.2f m, current=%.2f m, "
+            "warm-start reset",
+            last_osqp_progress_origin_m_.value(), problem.progress_origin_m);
+        } else {
+          RCLCPP_INFO(
+            rclcpp::get_logger("mpc_controller"),
+            "MPC formulation switched: progress_contouring=%d, warm-start reset",
+            problem.progress_contouring_active ? 1 : 0);
+        }
       }
+    }
+    last_osqp_progress_contouring_mode_ = problem.progress_contouring_active;
+    if (problem.progress_contouring_active && std::isfinite(problem.progress_origin_m)) {
+      last_osqp_progress_origin_m_ = problem.progress_origin_m;
+    } else {
+      last_osqp_progress_origin_m_.reset();
     }
     std::optional<persistent_osqp::WarmStart> warm_start;
     const bool previous_solution_fresh =
@@ -14843,8 +14972,13 @@ struct MPC
   std::optional<persistent_osqp::WarmStart> last_osqp_solution_;
   double last_osqp_solution_sec_{-std::numeric_limits<double>::infinity()};
   std::optional<bool> last_osqp_progress_contouring_mode_;
+  std::optional<double> last_osqp_progress_origin_m_;
   MpcOsqpTelemetryWindow osqp_telemetry_window_;
   double last_osqp_telemetry_log_sec_{std::numeric_limits<double>::quiet_NaN()};
+  double progress_contouring_fallback_last_log_sec_{
+    -std::numeric_limits<double>::infinity()};
+  double progress_contouring_stage_normalization_last_log_sec_{
+    -std::numeric_limits<double>::infinity()};
   std::optional<double> failure_fallback_speed_;
   bool last_control_was_fallback_{false};
   bool stage_corridor_mpc_constraints_was_active_{false};

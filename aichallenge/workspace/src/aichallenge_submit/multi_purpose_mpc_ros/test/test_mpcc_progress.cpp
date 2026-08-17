@@ -62,6 +62,42 @@ TEST(MpccProgress, BuildsUnwrappedProgressReference)
   EXPECT_NEAR(result->at(3), 101.0, 1e-12);
 }
 
+TEST(MpccProgress, NormalizesCircularSeamWithoutExpandingItToNominalSpacing)
+{
+  Config config;
+  config.minimum_reference_speed_mps = 0.5;
+  config.minimum_stage_dt_sec = 0.01;
+  const auto result = multi_purpose_mpc_ros::mpcc_progress::resolve_stage_distances(
+    std::vector<double>{0.999, 0.0, 1.001}, config);
+  ASSERT_TRUE(result.has_value());
+  EXPECT_EQ(result->normalized_stage_count, 1U);
+  EXPECT_NEAR(result->minimum_stage_distance_m, 0.005, 1e-12);
+  ASSERT_EQ(result->distance_m.size(), 3U);
+  EXPECT_NEAR(result->distance_m[0], 0.999, 1e-12);
+  EXPECT_NEAR(result->distance_m[1], 0.005, 1e-12);
+  EXPECT_NEAR(result->distance_m[2], 1.001, 1e-12);
+
+  const auto progress = multi_purpose_mpc_ros::mpcc_progress::build_progress_reference(
+    348.0, result->distance_m);
+  ASSERT_TRUE(progress.has_value());
+  EXPECT_NEAR(progress->back(), 350.005, 1e-12);
+}
+
+TEST(MpccProgress, RejectsCorruptStageDistanceInsteadOfRepairingIt)
+{
+  const auto result = multi_purpose_mpc_ros::mpcc_progress::resolve_stage_distances(
+    std::vector<double>{1.0, -0.1, 1.0}, Config{});
+  EXPECT_FALSE(result.has_value());
+}
+
+TEST(MpccProgress, DetectsLapProgressWrapForWarmStartReset)
+{
+  EXPECT_TRUE(multi_purpose_mpc_ros::mpcc_progress::progress_origin_discontinuous(
+    348.0, 0.0, 12.0));
+  EXPECT_FALSE(multi_purpose_mpc_ros::mpcc_progress::progress_origin_discontinuous(
+    348.0, 349.0, 12.0));
+}
+
 TEST(MpccProgress, TrustRegionKeepsMeasuredProgressFeasible)
 {
   Config config;

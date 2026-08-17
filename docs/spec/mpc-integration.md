@@ -124,6 +124,14 @@ legacyとprogress modeでは第3状態の意味が異なるため、mode遷移�
 workspaceとwarm-startを一度resetする。設定
 `progress_contouring_mpcc_enabled`で従来MPCへ戻せる。
 
+循環経路の内部horizonに有限な0 m stageが現れた場合は、progress用コピーだけを
+`minimum_reference_speed_mps * minimum_stage_dt_sec`へ正規化する。負値や
+非有限値は修復しない。progress reference、trust region、全stage線形化、costは
+一度`ProgressContouringMpcPreparation`へ構築し、全項目が成立した場合だけQPへ
+適用する。不成立周期は制御全体のdeceleration fallbackへ送らず、legacy MPCへ
+縮退する。また、周回境界でcourse progress originがwrapした場合は、同じprogress
+mode中でもOSQP warm-startをresetする。
+
 これは本格MPCCへの第1段階であり、複数回RTI-SQP、terminal velocity cost、
 dynamic bicycle / tire modelは未導入である。2026公式制御仕様ではなく、
 2025 AWSIM由来のシミュレーション競技向け暫定実装として扱う。

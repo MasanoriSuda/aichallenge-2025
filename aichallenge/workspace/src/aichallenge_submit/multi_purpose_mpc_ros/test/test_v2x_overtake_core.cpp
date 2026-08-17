@@ -16,6 +16,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedPassSideCandidate;
 using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedPassSideRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedBypassCandidateRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicObstacleCruiseAuthorityRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::DynamicObstacleCruiseActivationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedShiftSteeringRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StoppedVehicleLineOwnershipRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ContinuityAction;
@@ -500,6 +501,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::
 using multi_purpose_mpc_ros::v2x_overtake_core::is_v2x_behavior_session_active;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_start_low_speed_bypass;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_obstacle_cruise_authority;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_obstacle_cruise_activation;
 using multi_purpose_mpc_ros::v2x_overtake_core::StoppedCandidateConfirmationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_stopped_candidate_confirmation;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_yield_overtake_line_to_stopped_bypass;
@@ -13191,7 +13193,7 @@ TEST(V2XOvertakeCoreLowSpeedBypass, AcceptsCloseStoppedVehicleAtPrepareBoundary)
 TEST(V2XOvertakeCoreLowSpeedBypass, DynamicObstacleCruiseGetsFirstRefusalForNewEncounter)
 {
   const auto resolution = resolve_dynamic_obstacle_cruise_authority(
-    DynamicObstacleCruiseAuthorityRequest{true, true, true, false});
+    DynamicObstacleCruiseAuthorityRequest{true, true, true, true, false});
 
   EXPECT_TRUE(resolution.promote_to_dynamic_front);
   EXPECT_TRUE(resolution.defer_legacy_low_speed_entry);
@@ -13199,13 +13201,19 @@ TEST(V2XOvertakeCoreLowSpeedBypass, DynamicObstacleCruiseGetsFirstRefusalForNewE
 
 TEST(V2XOvertakeCoreLowSpeedBypass, DynamicObstacleCruiseRequiresConfirmedNearestTarget)
 {
-  auto request = DynamicObstacleCruiseAuthorityRequest{true, true, false, false};
+  auto request = DynamicObstacleCruiseAuthorityRequest{true, true, true, false, false};
   auto resolution = resolve_dynamic_obstacle_cruise_authority(request);
   EXPECT_FALSE(resolution.promote_to_dynamic_front);
   EXPECT_FALSE(resolution.defer_legacy_low_speed_entry);
 
-  request.stopped_candidate_confirmed = true;
-  request.low_speed_corridor_vehicle_is_nearest = false;
+  request.candidate_confirmation_ready = true;
+  request.dynamic_corridor_vehicle_is_nearest = false;
+  resolution = resolve_dynamic_obstacle_cruise_authority(request);
+  EXPECT_FALSE(resolution.promote_to_dynamic_front);
+  EXPECT_FALSE(resolution.defer_legacy_low_speed_entry);
+
+  request.dynamic_corridor_vehicle_is_nearest = true;
+  request.activation_predicted = false;
   resolution = resolve_dynamic_obstacle_cruise_authority(request);
   EXPECT_FALSE(resolution.promote_to_dynamic_front);
   EXPECT_FALSE(resolution.defer_legacy_low_speed_entry);
@@ -13214,10 +13222,76 @@ TEST(V2XOvertakeCoreLowSpeedBypass, DynamicObstacleCruiseRequiresConfirmedNeares
 TEST(V2XOvertakeCoreLowSpeedBypass, ExistingLegacyAvoidanceKeepsItsLateralOwner)
 {
   const auto resolution = resolve_dynamic_obstacle_cruise_authority(
-    DynamicObstacleCruiseAuthorityRequest{true, true, true, true});
+    DynamicObstacleCruiseAuthorityRequest{true, true, true, true, true});
 
   EXPECT_FALSE(resolution.promote_to_dynamic_front);
   EXPECT_FALSE(resolution.defer_legacy_low_speed_entry);
+}
+
+DynamicObstacleCruiseActivationRequest predictive_dynamic_obstacle_request()
+{
+  DynamicObstacleCruiseActivationRequest request;
+  request.enabled = true;
+  request.candidate_present = true;
+  request.velocity_observation_valid = true;
+  request.future_path_overlap = true;
+  request.forward_distance_m = 22.0;
+  request.maximum_scan_distance_m = 24.0;
+  request.ego_speed_mps = 10.0;
+  request.target_speed_mps = 4.0;
+  request.entry_front_reserve_m = 4.5;
+  request.activation_horizon_sec = 3.0;
+  request.minimum_closing_speed_mps = 0.5;
+  return request;
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, PredictiveDynamicObstacleActivatesByTimeToEntry)
+{
+  const auto resolution = resolve_dynamic_obstacle_cruise_activation(
+    predictive_dynamic_obstacle_request());
+
+  EXPECT_TRUE(resolution.active);
+  EXPECT_FALSE(resolution.inside_entry_reserve);
+  EXPECT_NEAR(resolution.closing_speed_mps, 6.0, 1e-9);
+  EXPECT_NEAR(resolution.time_to_entry_sec, 17.5 / 6.0, 1e-9);
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, PredictiveDynamicObstacleDoesNotUseDistanceAlone)
+{
+  auto request = predictive_dynamic_obstacle_request();
+  request.ego_speed_mps = 4.2;
+  request.target_speed_mps = 4.0;
+
+  const auto resolution = resolve_dynamic_obstacle_cruise_activation(request);
+  EXPECT_FALSE(resolution.active);
+  EXPECT_NEAR(resolution.closing_speed_mps, 0.2, 1e-9);
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, PredictiveDynamicObstacleRejectsNonOverlappingPath)
+{
+  auto request = predictive_dynamic_obstacle_request();
+  request.future_path_overlap = false;
+  EXPECT_FALSE(resolve_dynamic_obstacle_cruise_activation(request).active);
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, PredictiveDynamicObstacleDefersToStartGridBreakout)
+{
+  auto request = predictive_dynamic_obstacle_request();
+  request.start_grid_grace_active = true;
+  EXPECT_FALSE(resolve_dynamic_obstacle_cruise_activation(request).active);
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, PredictiveDynamicObstacleAdmitsStoppedCloseBlocker)
+{
+  auto request = predictive_dynamic_obstacle_request();
+  request.forward_distance_m = request.entry_front_reserve_m;
+  request.ego_speed_mps = 0.0;
+  request.target_speed_mps = 0.0;
+
+  const auto resolution = resolve_dynamic_obstacle_cruise_activation(request);
+  EXPECT_TRUE(resolution.active);
+  EXPECT_TRUE(resolution.inside_entry_reserve);
+  EXPECT_DOUBLE_EQ(resolution.time_to_entry_sec, 0.0);
 }
 
 TEST(V2XOvertakeCoreLowSpeedBypass, RejectsBumperTouchAndMovingVehicle)

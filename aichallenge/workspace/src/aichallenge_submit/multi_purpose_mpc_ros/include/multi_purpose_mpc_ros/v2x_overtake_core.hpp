@@ -6348,8 +6348,9 @@ bool can_start_low_speed_bypass(const LowSpeedBypassCandidateRequest & request) 
 struct DynamicObstacleCruiseAuthorityRequest
 {
   bool enabled{false};
-  bool low_speed_corridor_vehicle_is_nearest{false};
-  bool stopped_candidate_confirmed{false};
+  bool dynamic_corridor_vehicle_is_nearest{false};
+  bool activation_predicted{false};
+  bool candidate_confirmation_ready{false};
   bool continuing_legacy_low_speed_avoidance{false};
 };
 
@@ -6364,11 +6365,45 @@ struct DynamicObstacleCruiseAuthorityResolution
 };
 
 /// Give the ordinary all-V2X receding-horizon planner first authority over a
-/// confirmed stopped/slow blocker. Existing legacy low-speed control is kept
-/// until it completes so enabling the policy cannot switch lateral owners in
-/// the middle of an already executing maneuver.
+/// predicted course blocker. Existing legacy low-speed control is kept until
+/// it completes so enabling the policy cannot switch lateral owners in the
+/// middle of an already executing maneuver.
 DynamicObstacleCruiseAuthorityResolution resolve_dynamic_obstacle_cruise_authority(
   const DynamicObstacleCruiseAuthorityRequest & request) noexcept;
+
+struct DynamicObstacleCruiseActivationRequest
+{
+  bool enabled{false};
+  bool start_grid_grace_active{false};
+  bool candidate_present{false};
+  bool velocity_observation_valid{false};
+  bool future_path_overlap{false};
+  bool position_jump{false};
+  double forward_distance_m{std::numeric_limits<double>::infinity()};
+  double maximum_scan_distance_m{std::numeric_limits<double>::infinity()};
+  double ego_speed_mps{};
+  double target_speed_mps{};
+  double entry_front_reserve_m{};
+  double activation_horizon_sec{};
+  double minimum_closing_speed_mps{};
+};
+
+struct DynamicObstacleCruiseActivationResolution
+{
+  bool active{false};
+  bool inside_entry_reserve{false};
+  double closing_speed_mps{};
+  double time_to_entry_sec{std::numeric_limits<double>::infinity()};
+};
+
+/// Start tactical evaluation when the target is predicted to enter the
+/// overtake-entry reserve within the configured time horizon. The scan
+/// distance only bounds computation; it does not independently activate the
+/// planner. A target already inside the reserve is admitted even when both
+/// vehicles are stationary, which lets a confirmed stopped blocker be routed
+/// to the ordinary dynamic planner after race start.
+DynamicObstacleCruiseActivationResolution resolve_dynamic_obstacle_cruise_activation(
+  const DynamicObstacleCruiseActivationRequest & request) noexcept;
 
 struct StoppedCandidateConfirmationRequest
 {

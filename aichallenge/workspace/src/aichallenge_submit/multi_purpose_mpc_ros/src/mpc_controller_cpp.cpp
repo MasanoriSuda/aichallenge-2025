@@ -1468,7 +1468,8 @@ struct V2XBehaviorConfig
   double debug_log_period_sec{1.0};
   bool dynamic_obstacle_cruise_authority_enabled{false};
   double dynamic_obstacle_cruise_corridor_promotion_max_speed{2.0};
-  double dynamic_obstacle_cruise_corridor_promotion_distance{15.0};
+  double dynamic_obstacle_cruise_activation_horizon_sec{3.0};
+  double dynamic_obstacle_cruise_min_closing_speed{0.5};
   bool front_progress_detection_enabled{false};
   double front_progress_detection_distance{0.0};
   double front_progress_lookbehind_distance{3.0};
@@ -1985,6 +1986,9 @@ struct V2XBehaviorOutput
   bool low_speed_avoidance_candidate{false};
   bool dynamic_obstacle_cruise_authority_active{false};
   std::string dynamic_obstacle_cruise_target_id;
+  double dynamic_obstacle_cruise_closing_speed{0.0};
+  double dynamic_obstacle_cruise_time_to_entry{
+    std::numeric_limits<double>::infinity()};
   bool low_speed_avoidance_gap_blocked{false};
   bool low_speed_avoidance_stalled{false};
   bool low_speed_avoidance_cooldown_active{false};
@@ -5850,14 +5854,28 @@ struct MPC
     double nearest_front_local_longitudinal = std::numeric_limits<double>::infinity();
     bool nearest_front_progress_used = false;
     std::string nearest_front_id;
+    struct DynamicCorridorObservation
+    {
+      bool present{false};
+      double distance{std::numeric_limits<double>::infinity()};
+      double speed{std::numeric_limits<double>::infinity()};
+      double lateral{std::numeric_limits<double>::infinity()};
+      double lateral_velocity{0.0};
+      bool lateral_velocity_valid{false};
+      double longitudinal_acceleration{0.0};
+      bool longitudinal_acceleration_valid{false};
+      double local_longitudinal{std::numeric_limits<double>::infinity()};
+      double receipt_sec{std::numeric_limits<double>::quiet_NaN()};
+      bool progress_used{false};
+      std::string id;
+      bool requires_low_speed_confirmation{false};
+      double closing_speed{0.0};
+      double time_to_entry{std::numeric_limits<double>::infinity()};
+    } nearest_dynamic_corridor;
     bool has_low_speed_corridor_vehicle = false;
     double nearest_low_speed_corridor_distance = std::numeric_limits<double>::infinity();
     double nearest_low_speed_corridor_speed = std::numeric_limits<double>::infinity();
     double nearest_low_speed_corridor_lateral = std::numeric_limits<double>::infinity();
-    double nearest_low_speed_corridor_lateral_velocity = 0.0;
-    bool nearest_low_speed_corridor_lateral_velocity_valid = false;
-    double nearest_low_speed_corridor_longitudinal_acceleration = 0.0;
-    bool nearest_low_speed_corridor_longitudinal_acceleration_valid = false;
     double nearest_low_speed_corridor_local_longitudinal =
       std::numeric_limits<double>::infinity();
     double nearest_low_speed_corridor_receipt_sec =
@@ -6259,44 +6277,95 @@ struct MPC
 
       const double clearance_longitudinal =
         use_course_progress ? front_longitudinal : longitudinal;
-      const bool within_low_speed_course_corridor =
+      const bool within_course_corridor =
         use_course_progress ? within_progress_corridor : within_local_corridor;
       const double low_speed_candidate_speed = std::isfinite(front_vehicle_speed) ?
         std::max(0.0, front_vehicle_speed) : std::numeric_limits<double>::infinity();
-      const double dynamic_obstacle_corridor_max_speed =
-        cfg.v2x_behavior.dynamic_obstacle_cruise_authority_enabled ?
-        std::max(
-        cfg.v2x_behavior.low_speed_avoidance_max_front_speed,
-        cfg.v2x_behavior.dynamic_obstacle_cruise_corridor_promotion_max_speed) :
-        cfg.v2x_behavior.low_speed_avoidance_max_front_speed;
-      const double dynamic_obstacle_corridor_distance =
-        cfg.v2x_behavior.dynamic_obstacle_cruise_authority_enabled ?
-        std::max(
-        cfg.v2x_behavior.low_speed_avoidance_distance,
-        cfg.v2x_behavior.dynamic_obstacle_cruise_corridor_promotion_distance) :
-        cfg.v2x_behavior.low_speed_avoidance_distance;
+
+      // Predict whether the target's lateral sweep intersects the nominal
+      // racing-line envelope. The tactical horizon is intentionally longer
+      // than the footprint extrapolation horizon; V2X lateral velocity is
+      // only extrapolated for the already bounded prediction_time.
+      const double dynamic_lateral_prediction_time = std::min(
+        std::max(0.0, cfg.v2x_gap.prediction_time),
+        std::max(0.0, cfg.v2x_behavior.dynamic_obstacle_cruise_activation_horizon_sec));
+      const double dynamic_predicted_lateral =
+        observed_course_lateral_velocity_valid ?
+        front_lateral + observed_course_lateral_velocity * dynamic_lateral_prediction_time :
+        front_lateral;
+      const bool dynamic_lateral_sweep_crosses_line =
+        std::isfinite(front_lateral) && std::isfinite(dynamic_predicted_lateral) &&
+        front_lateral * dynamic_predicted_lateral <= 0.0;
+      const double dynamic_lateral_sweep_min_abs =
+        dynamic_lateral_sweep_crosses_line ? 0.0 :
+        std::min(std::abs(front_lateral), std::abs(dynamic_predicted_lateral));
+      const bool dynamic_future_path_overlap =
+        std::isfinite(dynamic_lateral_sweep_min_abs) &&
+        dynamic_lateral_sweep_min_abs <= robust_target_center_separation;
+      const auto dynamic_activation =
+        v2x_overtake_core::resolve_dynamic_obstacle_cruise_activation(
+        v2x_overtake_core::DynamicObstacleCruiseActivationRequest{
+          cfg.v2x_behavior.dynamic_obstacle_cruise_authority_enabled,
+          start_grid_grace_active,
+          within_course_corridor,
+          vehicle.velocity_observation_valid,
+          dynamic_future_path_overlap,
+          vehicle.position_jump,
+          clearance_longitudinal,
+          front_detection_distance,
+          std::max(0.0, current_speed_mps_),
+          low_speed_candidate_speed,
+          std::max(0.0, cfg.v2x_behavior.overtake_guard_min_front_distance),
+          cfg.v2x_behavior.dynamic_obstacle_cruise_activation_horizon_sec,
+          cfg.v2x_behavior.dynamic_obstacle_cruise_min_closing_speed});
+      const bool dynamic_candidate_is_better =
+        dynamic_activation.active &&
+        (!nearest_dynamic_corridor.present ||
+        dynamic_activation.time_to_entry_sec + kEps <
+        nearest_dynamic_corridor.time_to_entry ||
+        (std::abs(
+          dynamic_activation.time_to_entry_sec -
+          nearest_dynamic_corridor.time_to_entry) <= kEps &&
+        clearance_longitudinal < nearest_dynamic_corridor.distance));
+      if (dynamic_candidate_is_better) {
+        nearest_dynamic_corridor.present = true;
+        nearest_dynamic_corridor.distance = clearance_longitudinal;
+        nearest_dynamic_corridor.speed = low_speed_candidate_speed;
+        nearest_dynamic_corridor.lateral = front_lateral;
+        nearest_dynamic_corridor.lateral_velocity = observed_course_lateral_velocity;
+        nearest_dynamic_corridor.lateral_velocity_valid =
+          observed_course_lateral_velocity_valid;
+        nearest_dynamic_corridor.longitudinal_acceleration =
+          front_longitudinal_acceleration;
+        nearest_dynamic_corridor.longitudinal_acceleration_valid =
+          front_longitudinal_acceleration_valid;
+        nearest_dynamic_corridor.local_longitudinal = longitudinal;
+        nearest_dynamic_corridor.receipt_sec = vehicle.receipt_sec;
+        nearest_dynamic_corridor.progress_used = use_course_progress;
+        nearest_dynamic_corridor.id = vehicle.id;
+        nearest_dynamic_corridor.requires_low_speed_confirmation =
+          low_speed_candidate_speed <=
+          cfg.v2x_behavior.dynamic_obstacle_cruise_corridor_promotion_max_speed;
+        nearest_dynamic_corridor.closing_speed = dynamic_activation.closing_speed_mps;
+        nearest_dynamic_corridor.time_to_entry = dynamic_activation.time_to_entry_sec;
+      }
+
+      // Retain the narrow legacy stopped-vehicle candidate independently. It
+      // is now only a fallback after the ordinary dynamic planner declines.
       if (
-        (cfg.v2x_behavior.low_speed_avoidance_enabled ||
-        cfg.v2x_behavior.dynamic_obstacle_cruise_authority_enabled) &&
+        cfg.v2x_behavior.low_speed_avoidance_enabled &&
         vehicle.velocity_observation_valid &&
-        within_low_speed_course_corridor &&
+        within_course_corridor &&
         clearance_longitudinal > 0.0 &&
-        clearance_longitudinal <= dynamic_obstacle_corridor_distance &&
+        clearance_longitudinal <= cfg.v2x_behavior.low_speed_avoidance_distance &&
         std::isfinite(low_speed_candidate_speed) &&
-        low_speed_candidate_speed <= dynamic_obstacle_corridor_max_speed &&
+        low_speed_candidate_speed <= cfg.v2x_behavior.low_speed_avoidance_max_front_speed &&
         clearance_longitudinal < nearest_low_speed_corridor_distance)
       {
         has_low_speed_corridor_vehicle = true;
         nearest_low_speed_corridor_distance = clearance_longitudinal;
         nearest_low_speed_corridor_speed = low_speed_candidate_speed;
         nearest_low_speed_corridor_lateral = front_lateral;
-        nearest_low_speed_corridor_lateral_velocity = observed_course_lateral_velocity;
-        nearest_low_speed_corridor_lateral_velocity_valid =
-          observed_course_lateral_velocity_valid;
-        nearest_low_speed_corridor_longitudinal_acceleration =
-          front_longitudinal_acceleration;
-        nearest_low_speed_corridor_longitudinal_acceleration_valid =
-          front_longitudinal_acceleration_valid;
         nearest_low_speed_corridor_local_longitudinal = longitudinal;
         nearest_low_speed_corridor_receipt_sec = vehicle.receipt_sec;
         nearest_low_speed_corridor_progress_used = use_course_progress;
@@ -6537,25 +6606,41 @@ struct MPC
       has_low_speed_corridor_vehicle &&
       (!has_front_vehicle || nearest_low_speed_corridor_id == nearest_front_id ||
       nearest_low_speed_corridor_distance <= nearest_front_distance + kEps);
+    const bool dynamic_corridor_vehicle_is_nearest =
+      nearest_dynamic_corridor.present &&
+      (!has_front_vehicle || nearest_dynamic_corridor.id == nearest_front_id ||
+      nearest_dynamic_corridor.distance <= nearest_front_distance + kEps);
+    const bool confirmation_uses_dynamic_candidate =
+      dynamic_corridor_vehicle_is_nearest &&
+      nearest_dynamic_corridor.requires_low_speed_confirmation;
+    const bool confirmation_uses_legacy_candidate =
+      !confirmation_uses_dynamic_candidate && low_speed_corridor_vehicle_is_nearest;
     const bool stopped_candidate_observed =
-      low_speed_corridor_vehicle_is_nearest &&
-      !nearest_low_speed_corridor_id.empty() &&
-      std::isfinite(nearest_low_speed_corridor_receipt_sec);
+      (confirmation_uses_dynamic_candidate || confirmation_uses_legacy_candidate) &&
+      !(confirmation_uses_dynamic_candidate ?
+      nearest_dynamic_corridor.id : nearest_low_speed_corridor_id).empty() &&
+      std::isfinite(
+      confirmation_uses_dynamic_candidate ?
+      nearest_dynamic_corridor.receipt_sec : nearest_low_speed_corridor_receipt_sec);
+    const std::string & stopped_candidate_id = confirmation_uses_dynamic_candidate ?
+      nearest_dynamic_corridor.id : nearest_low_speed_corridor_id;
+    const double stopped_candidate_receipt_sec = confirmation_uses_dynamic_candidate ?
+      nearest_dynamic_corridor.receipt_sec : nearest_low_speed_corridor_receipt_sec;
     const bool same_stopped_candidate =
       stopped_candidate_observed &&
-      nearest_low_speed_corridor_id == low_speed_stopped_candidate_id_;
+      stopped_candidate_id == low_speed_stopped_candidate_id_;
     const auto stopped_candidate_confirmation =
       v2x_overtake_core::update_stopped_candidate_confirmation(
       v2x_overtake_core::StoppedCandidateConfirmationRequest{
         stopped_candidate_observed,
         same_stopped_candidate,
-        nearest_low_speed_corridor_receipt_sec,
+        stopped_candidate_receipt_sec,
         low_speed_stopped_last_observation_sec_,
         low_speed_stopped_observation_count_,
         cfg.v2x_behavior.low_speed_avoidance_stopped_confirmation_samples,
         cfg.v2x_behavior.low_speed_avoidance_stopped_confirmation_max_gap_sec});
     if (stopped_candidate_observed) {
-      low_speed_stopped_candidate_id_ = nearest_low_speed_corridor_id;
+      low_speed_stopped_candidate_id_ = stopped_candidate_id;
     } else {
       low_speed_stopped_candidate_id_.clear();
     }
@@ -6565,13 +6650,18 @@ struct MPC
       stopped_candidate_confirmation.last_observation_sec;
     const bool low_speed_stopped_candidate_confirmed =
       continuing_low_speed_avoidance || stopped_candidate_confirmation.confirmed;
+    const bool dynamic_candidate_confirmation_ready =
+      nearest_dynamic_corridor.present &&
+      (!nearest_dynamic_corridor.requires_low_speed_confirmation ||
+      low_speed_stopped_candidate_confirmed);
 
     const auto dynamic_obstacle_cruise_authority =
       v2x_overtake_core::resolve_dynamic_obstacle_cruise_authority(
       v2x_overtake_core::DynamicObstacleCruiseAuthorityRequest{
         cfg.v2x_behavior.dynamic_obstacle_cruise_authority_enabled,
-        low_speed_corridor_vehicle_is_nearest,
-        low_speed_stopped_candidate_confirmed,
+        dynamic_corridor_vehicle_is_nearest,
+        nearest_dynamic_corridor.present,
+        dynamic_candidate_confirmation_ready,
         continuing_low_speed_avoidance});
     if (dynamic_obstacle_cruise_authority.promote_to_dynamic_front) {
       // GapPlanner constrains its horizon with every active V2X footprint.
@@ -6579,22 +6669,35 @@ struct MPC
       // target, so the ordinary left/right MPCC-lite Mission generator gets
       // first authority before any stopped-vehicle special case.
       has_front_vehicle = true;
-      nearest_front_distance = nearest_low_speed_corridor_distance;
-      nearest_front_speed = nearest_low_speed_corridor_speed;
-      nearest_front_lateral = nearest_low_speed_corridor_lateral;
-      nearest_front_lateral_velocity = nearest_low_speed_corridor_lateral_velocity;
+      nearest_front_distance = nearest_dynamic_corridor.distance;
+      nearest_front_speed = nearest_dynamic_corridor.speed;
+      nearest_front_lateral = nearest_dynamic_corridor.lateral;
+      nearest_front_lateral_velocity = nearest_dynamic_corridor.lateral_velocity;
       nearest_front_lateral_velocity_valid =
-        nearest_low_speed_corridor_lateral_velocity_valid;
+        nearest_dynamic_corridor.lateral_velocity_valid;
       nearest_front_longitudinal_acceleration =
-        nearest_low_speed_corridor_longitudinal_acceleration;
+        nearest_dynamic_corridor.longitudinal_acceleration;
       nearest_front_longitudinal_acceleration_valid =
-        nearest_low_speed_corridor_longitudinal_acceleration_valid;
-      nearest_front_local_longitudinal = nearest_low_speed_corridor_local_longitudinal;
-      nearest_front_progress_used = nearest_low_speed_corridor_progress_used;
-      nearest_front_id = nearest_low_speed_corridor_id;
+        nearest_dynamic_corridor.longitudinal_acceleration_valid;
+      nearest_front_local_longitudinal = nearest_dynamic_corridor.local_longitudinal;
+      nearest_front_progress_used = nearest_dynamic_corridor.progress_used;
+      nearest_front_id = nearest_dynamic_corridor.id;
       output.dynamic_obstacle_cruise_authority_active = true;
-      output.dynamic_obstacle_cruise_target_id = nearest_low_speed_corridor_id;
+      output.dynamic_obstacle_cruise_target_id = nearest_dynamic_corridor.id;
+      output.dynamic_obstacle_cruise_closing_speed =
+        nearest_dynamic_corridor.closing_speed;
+      output.dynamic_obstacle_cruise_time_to_entry =
+        nearest_dynamic_corridor.time_to_entry;
     }
+    const auto dynamic_obstacle_reason_prefix = [&output]() {
+        std::ostringstream reason;
+        reason << "all-V2X predictive dynamic-obstacle cruise"
+               << "(closing=" << std::fixed << std::setprecision(2)
+               << output.dynamic_obstacle_cruise_closing_speed
+               << "m/s, entry_t=" << output.dynamic_obstacle_cruise_time_to_entry
+               << "s) / ";
+        return reason.str();
+      };
 
     output.front_distance = nearest_front_distance;
     output.start_grid_dynamic_peer_speed = start_grid_peer_max_speed;
@@ -12881,7 +12984,7 @@ struct MPC
           overtake_block_reason :
           "front vehicle and gap available";
         if (output.dynamic_obstacle_cruise_authority_active) {
-          output.reason = "all-V2X dynamic-obstacle cruise / " + output.reason;
+          output.reason = dynamic_obstacle_reason_prefix() + output.reason;
         }
         if (
           cfg.v2x_behavior.overtake_minimum_lateral_motion_enabled &&
@@ -12926,8 +13029,8 @@ struct MPC
         output.reason = overtake_block_reason;
         if (output.dynamic_obstacle_cruise_authority_active) {
           output.reason =
-            "all-V2X dynamic-obstacle planner found no executable corridor / " +
-            output.reason;
+            dynamic_obstacle_reason_prefix() +
+            "planner found no executable corridor / " + output.reason;
         }
         bool front_risk_applied = false;
         if (apply_follow_velocity_limits(
@@ -32111,17 +32214,28 @@ Config load_config(const std::string & path)
             "mpc.v2x_dynamic_obstacle_cruise_corridor_promotion_max_speed must be finite "
             "and non-negative");
   }
-  cfg.mpc.v2x_behavior.dynamic_obstacle_cruise_corridor_promotion_distance =
-    mpc["v2x_dynamic_obstacle_cruise_corridor_promotion_distance"] ?
-    mpc["v2x_dynamic_obstacle_cruise_corridor_promotion_distance"].as<double>() : 15.0;
+  cfg.mpc.v2x_behavior.dynamic_obstacle_cruise_activation_horizon_sec =
+    mpc["v2x_dynamic_obstacle_cruise_activation_horizon_sec"] ?
+    mpc["v2x_dynamic_obstacle_cruise_activation_horizon_sec"].as<double>() : 3.0;
   if (
     !std::isfinite(
-      cfg.mpc.v2x_behavior.dynamic_obstacle_cruise_corridor_promotion_distance) ||
-    cfg.mpc.v2x_behavior.dynamic_obstacle_cruise_corridor_promotion_distance <= 0.0)
+      cfg.mpc.v2x_behavior.dynamic_obstacle_cruise_activation_horizon_sec) ||
+    cfg.mpc.v2x_behavior.dynamic_obstacle_cruise_activation_horizon_sec <= 0.0)
   {
     throw std::runtime_error(
-            "mpc.v2x_dynamic_obstacle_cruise_corridor_promotion_distance must be finite "
+            "mpc.v2x_dynamic_obstacle_cruise_activation_horizon_sec must be finite "
             "and positive");
+  }
+  cfg.mpc.v2x_behavior.dynamic_obstacle_cruise_min_closing_speed =
+    mpc["v2x_dynamic_obstacle_cruise_min_closing_speed"] ?
+    mpc["v2x_dynamic_obstacle_cruise_min_closing_speed"].as<double>() : 0.5;
+  if (
+    !std::isfinite(cfg.mpc.v2x_behavior.dynamic_obstacle_cruise_min_closing_speed) ||
+    cfg.mpc.v2x_behavior.dynamic_obstacle_cruise_min_closing_speed < 0.0)
+  {
+    throw std::runtime_error(
+            "mpc.v2x_dynamic_obstacle_cruise_min_closing_speed must be finite and "
+            "non-negative");
   }
   cfg.mpc.v2x_behavior.front_progress_detection_enabled =
     mpc["v2x_front_progress_detection_enabled"] ?
@@ -33504,11 +33618,14 @@ public:
       RCLCPP_INFO(
         get_logger(),
         "V2X all-vehicle dynamic-obstacle Cruise authority: %s, "
-        "corridor_promotion_max_speed=%.2f m/s, distance=%.2f m",
+        "slow_confirmation_max_speed=%.2f m/s, activation_horizon=%.2f s, "
+        "min_closing=%.2f m/s, scan_distance=%.2f m",
         mpc_cfg_.v2x_behavior.dynamic_obstacle_cruise_authority_enabled ?
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.dynamic_obstacle_cruise_corridor_promotion_max_speed,
-        mpc_cfg_.v2x_behavior.dynamic_obstacle_cruise_corridor_promotion_distance);
+        mpc_cfg_.v2x_behavior.dynamic_obstacle_cruise_activation_horizon_sec,
+        mpc_cfg_.v2x_behavior.dynamic_obstacle_cruise_min_closing_speed,
+        mpc_cfg_.v2x_behavior.front_progress_detection_distance);
       RCLCPP_INFO(
         get_logger(),
         "V2X new-entry speed readiness: min_relative_speed=%.2f m/s, confirm=%.2f s, "

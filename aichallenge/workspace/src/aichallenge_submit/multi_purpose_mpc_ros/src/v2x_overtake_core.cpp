@@ -11031,11 +11031,57 @@ DynamicObstacleCruiseAuthorityResolution resolve_dynamic_obstacle_cruise_authori
 {
   DynamicObstacleCruiseAuthorityResolution resolution;
   const bool ordinary_dynamic_planner_owns_new_encounter =
-    request.enabled && request.low_speed_corridor_vehicle_is_nearest &&
-    request.stopped_candidate_confirmed &&
+    request.enabled && request.dynamic_corridor_vehicle_is_nearest &&
+    request.activation_predicted && request.candidate_confirmation_ready &&
     !request.continuing_legacy_low_speed_avoidance;
   resolution.promote_to_dynamic_front = ordinary_dynamic_planner_owns_new_encounter;
   resolution.defer_legacy_low_speed_entry = ordinary_dynamic_planner_owns_new_encounter;
+  return resolution;
+}
+
+DynamicObstacleCruiseActivationResolution resolve_dynamic_obstacle_cruise_activation(
+  const DynamicObstacleCruiseActivationRequest & request) noexcept
+{
+  DynamicObstacleCruiseActivationResolution resolution;
+  if (
+    !request.enabled || request.start_grid_grace_active || !request.candidate_present ||
+    !request.velocity_observation_valid || !request.future_path_overlap ||
+    request.position_jump || !std::isfinite(request.forward_distance_m) ||
+    request.forward_distance_m <= 0.0 ||
+    !std::isfinite(request.maximum_scan_distance_m) ||
+    request.maximum_scan_distance_m <= 0.0 ||
+    request.forward_distance_m > request.maximum_scan_distance_m ||
+    !std::isfinite(request.ego_speed_mps) || request.ego_speed_mps < 0.0 ||
+    !std::isfinite(request.target_speed_mps) || request.target_speed_mps < 0.0 ||
+    !std::isfinite(request.entry_front_reserve_m) ||
+    request.entry_front_reserve_m < 0.0 ||
+    !std::isfinite(request.activation_horizon_sec) ||
+    request.activation_horizon_sec < 0.0 ||
+    !std::isfinite(request.minimum_closing_speed_mps) ||
+    request.minimum_closing_speed_mps < 0.0)
+  {
+    return resolution;
+  }
+
+  resolution.inside_entry_reserve =
+    request.forward_distance_m <= request.entry_front_reserve_m;
+  resolution.closing_speed_mps =
+    std::max(0.0, request.ego_speed_mps - request.target_speed_mps);
+  if (resolution.inside_entry_reserve) {
+    resolution.active = true;
+    resolution.time_to_entry_sec = 0.0;
+    return resolution;
+  }
+  if (resolution.closing_speed_mps < request.minimum_closing_speed_mps) {
+    return resolution;
+  }
+
+  const double distance_to_entry =
+    request.forward_distance_m - request.entry_front_reserve_m;
+  resolution.time_to_entry_sec = distance_to_entry / std::max(
+    resolution.closing_speed_mps, std::numeric_limits<double>::epsilon());
+  resolution.active =
+    resolution.time_to_entry_sec <= request.activation_horizon_sec;
   return resolution;
 }
 

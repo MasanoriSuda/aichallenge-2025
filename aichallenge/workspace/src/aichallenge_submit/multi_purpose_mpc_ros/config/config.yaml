@@ -311,8 +311,8 @@ mpc:
     1: 1.37
     2: 1.37
     3: 1.0
-  delta_max_deg: 32.0 # degrees
-  steer_rate_max: 1.2 # rad/s
+  delta_max_deg: 21.0 # degrees
+  steer_rate_max: 1.05 # rad/s
   solver_failure_steering_hold_cycles: 4 # 0.1 s at 40 Hz, then path-track; Recovery targets neutral
   # SIM fail-operational fallback: only Cruise with no detected front vehicle
   # may keep moving, using low-speed path-error steering instead of stopping.
@@ -322,7 +322,7 @@ mpc:
   odom_timeout_sec: 0.5 # [s], steady-clock local safety timeout (not an official limit)
   # Controller/actuation latency compensation after EKF pose timing compensation.
   # 0.125 s reproduces the non-mutating equivalent of the 2025 Pure Pursuit prediction.
-  state_prediction_delay_sec: 0.1
+  state_prediction_delay_sec: 0.13
   state_prediction_simulation_only: true
   min_linearization_speed_mps: 0.5 # [m/s], avoid singular 1/v terms below this speed
   # Keep ego course progress on the same hairpin branch after contact. Reacquire globally only

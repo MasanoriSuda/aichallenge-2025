@@ -8346,6 +8346,10 @@ struct MPC
       const auto build_gap_corridor_profiles = [&](
         const GapPlannerOutput & gap, const double candidate_ego_speed_mps) {
           GapCorridorProfiles profiles;
+          const auto target_prediction_speed =
+            overtake_core::resolve_conservative_prediction_speed(
+            overtake_core::ConservativePredictionSpeedRequest{
+              std::max(0.0, current_speed_mps_), candidate_ego_speed_mps, 1.0});
           for (std::size_t i = 0; i < gap.target_active.size(); ++i) {
             const auto & course_waypoint =
               model->reference_path->get_waypoint(ref_wp_id + static_cast<int>(i));
@@ -8469,8 +8473,7 @@ struct MPC
             mpcc_frenet_dp_target_bound_promotion_enabled &&
             (locked_target_constraint_inputs_valid ||
             nearest_front_constraint_inputs_valid) &&
-            std::isfinite(candidate_ego_speed_mps) &&
-            candidate_ego_speed_mps > kEps &&
+            target_prediction_speed.valid &&
             cfg.v2x_gap.prediction_time > kEps;
           if (!target_constraint_inputs_valid) {
             return profiles;
@@ -8525,7 +8528,7 @@ struct MPC
                   true,
                   side,
                   nominal_ego_speed_mps,
-                  std::max(1.0, candidate_ego_speed_mps),
+                  target_prediction_speed.prediction_ego_speed_mps,
                   std::max(0.0, cfg.v2x_gap.prediction_time),
                   maximum_prediction_time_sec,
                   target_lateral_now,
@@ -20659,6 +20662,9 @@ private:
     bool dp_refresh_stitch_reachability_used = false;
     bool dp_refresh_stitch_reachability_constrained = false;
     double dp_refresh_stitch_maximum_unconstrained_ay = 0.0;
+    double dp_refresh_target_prediction_speed_mps =
+      std::numeric_limits<double>::quiet_NaN();
+    bool dp_refresh_current_momentum_retained = false;
     std::size_t dp_refresh_source_covered_sample_count = 0U;
     std::vector<double> dp_refresh_stitched_distances;
     std::vector<double> dp_refresh_stitched_lateral;
@@ -20842,8 +20848,8 @@ private:
         candidate_executable_horizon_complete,
         dp_refresh_used_physical_clearance);
       bool candidate_horizon_unmodified_and_feasible =
-        stitched_candidate.valid &&
-        refresh_horizon_is_unmodified_and_feasible(candidate_horizon);
+          stitched_candidate.valid &&
+          refresh_horizon_is_unmodified_and_feasible(candidate_horizon);
       const auto evaluate_candidate_target_bound_horizon =
         [&](const std::vector<double> &candidate_lateral_targets) {
           overtake_core::FrenetDpTargetBoundHorizonResolution resolution;
@@ -20875,7 +20881,7 @@ private:
           current_ey + behavior_output.locked_target_predicted_relative_lateral :
           target_lateral_now;
         const double nominal_ego_speed_mps = std::max(1.0, current_speed_mps_);
-        const double candidate_ego_speed_mps =
+        const double planned_candidate_ego_speed_mps =
           std::isfinite(behavior_output.locked_target_speed) &&
           std::isfinite(candidate.closing_speed_mps) ?
           std::max(
@@ -20883,6 +20889,18 @@ private:
           std::max(0.0, behavior_output.locked_target_speed) +
           std::max(0.0, candidate.closing_speed_mps)) :
           nominal_ego_speed_mps;
+        const auto target_prediction_speed =
+          overtake_core::resolve_conservative_prediction_speed(
+          overtake_core::ConservativePredictionSpeedRequest{
+            std::max(0.0, current_speed_mps_),
+            planned_candidate_ego_speed_mps, 1.0});
+        if (!target_prediction_speed.valid) {
+          return resolution;
+        }
+        dp_refresh_target_prediction_speed_mps =
+          target_prediction_speed.prediction_ego_speed_mps;
+        dp_refresh_current_momentum_retained =
+          target_prediction_speed.current_momentum_retained;
         const double maximum_prediction_time_sec = std::max(
           std::max(0.0, cfg.v2x_gap.prediction_time),
           std::max(0.0, line_cfg.receding_horizon_encounter_prediction_max_sec));
@@ -20916,7 +20934,7 @@ private:
                 true,
                 distance_m,
                 nominal_ego_speed_mps,
-                candidate_ego_speed_mps,
+                target_prediction_speed.prediction_ego_speed_mps,
                 std::max(0.0, cfg.v2x_gap.prediction_time),
                 maximum_prediction_time_sec,
                 target_lateral_now,
@@ -21078,6 +21096,7 @@ private:
               "measured_rebase=%d/stitch_reachable=%d/stitch_clipped=%d/"
               "stitch_raw_ay=%.2f, "
               "physical=%d, target_bound=%d/%zu/min=%.2f, target_ok=%d, "
+              "target_prediction_v=%.2f/momentum=%d, "
               "hard_fault=%d, execution_limits=wall:%d/static:%d/ay:%d/"
               "static_physical:%d/static_clamp_ay:%d/max_ay:%.2f/plan_ay:%.2f, "
               "active_remaining=%.2f m, wp_id=%d",
@@ -21099,7 +21118,10 @@ private:
               candidate_target_bound_horizon_feasible ? 1 : 0,
               candidate_target_bound_horizon.failure_index,
               candidate_target_bound_horizon.minimum_signed_separation_m,
-              promotion.target_ready ? 1 : 0, promotion.hard_fault_free ? 0 : 1,
+              promotion.target_ready ? 1 : 0,
+              dp_refresh_target_prediction_speed_mps,
+              dp_refresh_current_momentum_retained ? 1 : 0,
+              promotion.hard_fault_free ? 0 : 1,
               candidate_horizon.wall_clearance_limited ? 1 : 0,
               candidate_horizon.static_map_wall_limited ? 1 : 0,
               candidate_horizon.lateral_accel_limited ? 1 : 0,
@@ -21191,7 +21213,7 @@ private:
             "old_remaining=%.2f m, source_coverage=%zu/%d, "
             "stitched_old=%d, old_tail=%d, measured_rebase=%d, "
             "stitch_reachable=%d, stitch_clipped=%d, stitch_raw_ay=%.2f, "
-            "physical=%d, "
+            "physical=%d, target_prediction_v=%.2f/momentum=%d, "
             "closing=%.2f m/s, count=%d, wp_id=%d",
             overtake_line_state_.target_vehicle_id.c_str(),
             overtake_line_state_.mission_frenet_dp_side_sign,
@@ -21210,6 +21232,8 @@ private:
             dp_refresh_stitch_reachability_constrained ? 1 : 0,
             dp_refresh_stitch_maximum_unconstrained_ay,
             dp_refresh_used_physical_clearance ? 1 : 0,
+            dp_refresh_target_prediction_speed_mps,
+            dp_refresh_current_momentum_retained ? 1 : 0,
             overtake_line_state_.mission_closing_speed_limit,
             overtake_line_state_.mission_frenet_dp_refresh_count, model->wp_id);
         overtake_line_state_.mission_frenet_dp_last_refresh_log_sec = now_sec;

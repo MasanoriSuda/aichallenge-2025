@@ -3378,6 +3378,47 @@ TEST(V2XOvertakeCoreSpeed, CandidateSpeedRecomputesTargetOverlapWindow)
   EXPECT_NEAR(result.target_longitudinal_m, 3.0, 1e-9);
 }
 
+TEST(V2XOvertakeCoreSpeed, PredictionSpeedRetainsCurrentClosingMomentum)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    ConservativePredictionSpeedRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_conservative_prediction_speed;
+
+  auto result = resolve_conservative_prediction_speed(
+    ConservativePredictionSpeedRequest{5.0, 4.0, 1.0});
+  ASSERT_TRUE(result.valid);
+  EXPECT_TRUE(result.current_momentum_retained);
+  EXPECT_NEAR(result.prediction_ego_speed_mps, 5.0, 1e-9);
+
+  result = resolve_conservative_prediction_speed(
+    ConservativePredictionSpeedRequest{3.0, 5.0, 1.0});
+  ASSERT_TRUE(result.valid);
+  EXPECT_FALSE(result.current_momentum_retained);
+  EXPECT_NEAR(result.prediction_ego_speed_mps, 5.0, 1e-9);
+
+  result = resolve_conservative_prediction_speed(
+    ConservativePredictionSpeedRequest{0.2, 0.4, 1.0});
+  ASSERT_TRUE(result.valid);
+  EXPECT_FALSE(result.current_momentum_retained);
+  EXPECT_NEAR(result.prediction_ego_speed_mps, 1.0, 1e-9);
+}
+
+TEST(V2XOvertakeCoreSpeed, PredictionSpeedRejectsInvalidInput)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    ConservativePredictionSpeedRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_conservative_prediction_speed;
+
+  EXPECT_FALSE(
+    resolve_conservative_prediction_speed(
+      ConservativePredictionSpeedRequest{-0.1, 4.0, 1.0}).valid);
+  EXPECT_FALSE(
+    resolve_conservative_prediction_speed(
+      ConservativePredictionSpeedRequest{5.0, 4.0, 0.0}).valid);
+}
+
 TEST(V2XOvertakeCoreSpeed, CandidateSpeedTargetPredictionRejectsInvalidInput)
 {
   const auto result = multi_purpose_mpc_ros::v2x_overtake_core::

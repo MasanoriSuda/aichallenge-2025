@@ -1574,6 +1574,31 @@ resolve_receding_horizon_elastic_target_bounds(
   return resolution;
 }
 
+ConservativePredictionSpeedResolution resolve_conservative_prediction_speed(
+  const ConservativePredictionSpeedRequest & request) noexcept
+{
+  ConservativePredictionSpeedResolution resolution;
+  if (
+    !std::isfinite(request.current_ego_speed_mps) ||
+    !std::isfinite(request.planned_ego_speed_mps) ||
+    !std::isfinite(request.minimum_speed_mps) ||
+    request.current_ego_speed_mps < 0.0 ||
+    request.planned_ego_speed_mps < 0.0 ||
+    request.minimum_speed_mps <= 0.0)
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  resolution.current_momentum_retained =
+    request.current_ego_speed_mps > request.planned_ego_speed_mps + 1e-9 &&
+    request.current_ego_speed_mps > request.minimum_speed_mps + 1e-9;
+  resolution.prediction_ego_speed_mps = std::max(
+    request.minimum_speed_mps,
+    std::max(request.current_ego_speed_mps, request.planned_ego_speed_mps));
+  return resolution;
+}
+
 RecedingHorizonTargetPredictionResolution
 resolve_receding_horizon_target_prediction(
   const RecedingHorizonTargetPredictionRequest & request) noexcept

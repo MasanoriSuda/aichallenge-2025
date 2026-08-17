@@ -1000,6 +1000,26 @@ RecedingHorizonElasticTargetBoundsResolution
 resolve_receding_horizon_elastic_target_bounds(
   const RecedingHorizonElasticTargetBoundsRequest & request) noexcept;
 
+struct ConservativePredictionSpeedRequest
+{
+  double current_ego_speed_mps{};
+  double planned_ego_speed_mps{};
+  double minimum_speed_mps{1.0};
+};
+
+struct ConservativePredictionSpeedResolution
+{
+  bool valid{false};
+  bool current_momentum_retained{false};
+  double prediction_ego_speed_mps{};
+};
+
+/// Resolve the ego speed used by spatial opponent prediction. A lower planned
+/// speed must not assume that current closing momentum disappears instantly;
+/// a faster plan still owns the prediction when it exceeds current speed.
+ConservativePredictionSpeedResolution resolve_conservative_prediction_speed(
+  const ConservativePredictionSpeedRequest & request) noexcept;
+
 struct RecedingHorizonTargetPredictionRequest
 {
   bool target_prediction_valid{false};

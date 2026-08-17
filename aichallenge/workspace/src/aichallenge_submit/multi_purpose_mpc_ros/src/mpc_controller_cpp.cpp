@@ -4609,6 +4609,37 @@ struct MpcProblem
   std::vector<double> progress_stage_distance_m;
   std::vector<double> progress_path_curvature_radpm;
   Eigen::VectorXd progress_linearization_point;
+  bool progress_execution_context_active{false};
+  std::string progress_execution_target_id;
+  std::uint64_t progress_execution_mission_generation{0U};
+  OvertakeLinePhase progress_execution_phase{OvertakeLinePhase::Idle};
+  int progress_execution_side_sign{0};
+  double progress_execution_phase_traveled_m{};
+  std::vector<double> progress_execution_path_distance_m;
+  std::vector<double> progress_execution_lateral_lower_m;
+  std::vector<double> progress_execution_lateral_upper_m;
+};
+
+struct SolvedMpccExecutionTrajectory
+{
+  std::string target_id;
+  std::uint64_t mission_generation{0U};
+  OvertakeLinePhase phase{OvertakeLinePhase::Idle};
+  int side_sign{0};
+  double solved_sec{-std::numeric_limits<double>::infinity()};
+  double source_phase_traveled_m{};
+  double minimum_qp_bound_reserve_m{};
+  std::vector<double> path_distance_m;
+  std::vector<double> lateral_m;
+  std::vector<double> progress_m;
+};
+
+struct AlignedMpccExecutionTrajectory
+{
+  double age_sec{std::numeric_limits<double>::infinity()};
+  double advanced_distance_m{};
+  double minimum_qp_bound_reserve_m{};
+  std::vector<double> lateral_m;
 };
 
 struct ProgressContouringMpcPreparation
@@ -4760,6 +4791,8 @@ struct MPC
       overtake_receding_horizon_phase_traveled_m_;
     snapshot->overtake_receding_horizon_last_feasible_sec_ =
       overtake_receding_horizon_last_feasible_sec_;
+    snapshot->solved_mpcc_execution_trajectory_ =
+      solved_mpcc_execution_trajectory_;
     snapshot->mpcc_lite_shadow_last_evaluation_sec_ =
       -std::numeric_limits<double>::infinity();
     snapshot->mpcc_lite_shadow_last_feasible_sec_ =
@@ -14167,6 +14200,29 @@ struct MPC
       progress_linearization_point << xr, ur;
     }
 
+    const bool progress_execution_context_active =
+      progress_contouring_active && overtake_line_output.active &&
+      stage_corridor.active &&
+      (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+      overtake_line_state_.phase == OvertakeLinePhase::Pass) &&
+      !overtake_line_state_.target_vehicle_id.empty() &&
+      overtake_line_state_.mission_generation > 0U &&
+      overtake_line_state_.pass_side_sign != 0;
+    std::vector<double> progress_execution_path_distance_m;
+    std::vector<double> progress_execution_lateral_lower_m;
+    std::vector<double> progress_execution_lateral_upper_m;
+    if (progress_execution_context_active) {
+      progress_execution_path_distance_m.reserve(static_cast<std::size_t>(N));
+      progress_execution_lateral_lower_m.reserve(static_cast<std::size_t>(N));
+      progress_execution_lateral_upper_m.reserve(static_cast<std::size_t>(N));
+      for (int i = 0; i < N; ++i) {
+        progress_execution_path_distance_m.push_back(
+          horizon_path_distance_to_index(ref_wp_id, static_cast<std::size_t>(i)));
+        progress_execution_lateral_lower_m.push_back(lb[i]);
+        progress_execution_lateral_upper_m.push_back(ub[i]);
+      }
+    }
+
     return MpcProblem{
       q, l, u, P, A_full, N, tracking_wp_id, preview_wp_id, ref_wp_id,
       progress_contouring_active,
@@ -14175,7 +14231,17 @@ struct MPC
       std::vector<double>{},
       progress_contouring_active ? stage_tracking_curvature_radpm :
       std::vector<double>{},
-      std::move(progress_linearization_point)};
+      std::move(progress_linearization_point),
+      progress_execution_context_active,
+      progress_execution_context_active ? overtake_line_state_.target_vehicle_id : "",
+      progress_execution_context_active ? overtake_line_state_.mission_generation : 0U,
+      progress_execution_context_active ? overtake_line_state_.phase :
+      OvertakeLinePhase::Idle,
+      progress_execution_context_active ? overtake_line_state_.pass_side_sign : 0,
+      progress_execution_context_active ? overtake_line_state_.phase_traveled_m : 0.0,
+      std::move(progress_execution_path_distance_m),
+      std::move(progress_execution_lateral_lower_m),
+      std::move(progress_execution_lateral_upper_m)};
   }
 
   void record_osqp_telemetry(
@@ -14250,6 +14316,8 @@ struct MPC
     last_osqp_solution_sec_ = -std::numeric_limits<double>::infinity();
     last_osqp_progress_contouring_mode_.reset();
     last_osqp_progress_origin_m_.reset();
+    solved_mpcc_execution_trajectory_.reset();
+    solved_mpcc_execution_authority_was_active_ = false;
   }
 
   bool relinearize_progress_problem(
@@ -14552,6 +14620,172 @@ struct MPC
       best_outcome.result->primal, best_outcome.result->dual};
     last_osqp_solution_sec_ = now_sec;
     return best_outcome;
+  }
+
+  void record_solved_mpcc_execution_trajectory(
+    const MpcProblem & problem, const Eigen::VectorXd & primal,
+    const double now_sec)
+  {
+    if (!problem.progress_execution_context_active) {
+      return;
+    }
+    const auto trajectory = mpcc_progress::extract_execution_trajectory(
+      primal, problem.N, problem.progress_execution_path_distance_m,
+      problem.progress_execution_lateral_lower_m,
+      problem.progress_execution_lateral_upper_m, 1e-5);
+    if (!trajectory.has_value()) {
+      if (
+        cfg.v2x_behavior.overtake_line.debug_log_enabled &&
+        (!std::isfinite(solved_mpcc_execution_reject_last_log_sec_) ||
+        now_sec - solved_mpcc_execution_reject_last_log_sec_ >= 1.0))
+      {
+        RCLCPP_WARN(
+          rclcpp::get_logger("mpc_controller"),
+          "MPCC solved execution trajectory rejected during extraction: "
+          "target=%s, generation=%lu, side=%d, phase=%s, wp_id=%d",
+          problem.progress_execution_target_id.c_str(),
+          static_cast<unsigned long>(problem.progress_execution_mission_generation),
+          problem.progress_execution_side_sign,
+          to_string(problem.progress_execution_phase), model->wp_id);
+        solved_mpcc_execution_reject_last_log_sec_ = now_sec;
+      }
+      return;
+    }
+    solved_mpcc_execution_trajectory_ = SolvedMpccExecutionTrajectory{
+      problem.progress_execution_target_id,
+      problem.progress_execution_mission_generation,
+      problem.progress_execution_phase,
+      problem.progress_execution_side_sign,
+      now_sec,
+      problem.progress_execution_phase_traveled_m,
+      trajectory->minimum_lateral_bound_reserve_m,
+      trajectory->path_distance_m,
+      trajectory->lateral_m,
+      trajectory->progress_m};
+  }
+
+  std::optional<AlignedMpccExecutionTrajectory>
+  align_solved_mpcc_execution_trajectory(
+    const std::vector<double> & current_path_distance_m,
+    const std::vector<double> & fallback_lateral_m,
+    const double now_sec, std::string & reject_reason) const
+  {
+    constexpr double kMaximumSolutionAgeSec = 0.15;
+    reject_reason.clear();
+    if (!solved_mpcc_execution_trajectory_.has_value()) {
+      reject_reason = "no solved trajectory";
+      return std::nullopt;
+    }
+    const auto & trajectory = solved_mpcc_execution_trajectory_.value();
+    const double age_sec = now_sec - trajectory.solved_sec;
+    if (
+      !std::isfinite(now_sec) || !std::isfinite(age_sec) || age_sec < 0.0 ||
+      age_sec > kMaximumSolutionAgeSec)
+    {
+      reject_reason = "solved trajectory stale";
+      return std::nullopt;
+    }
+    if (
+      trajectory.target_id.empty() ||
+      trajectory.target_id != overtake_line_state_.target_vehicle_id ||
+      trajectory.mission_generation != overtake_line_state_.mission_generation ||
+      trajectory.side_sign != overtake_line_state_.pass_side_sign ||
+      trajectory.phase != overtake_line_state_.phase)
+    {
+      reject_reason = "solved trajectory context mismatch";
+      return std::nullopt;
+    }
+    const double advanced_distance_m =
+      overtake_line_state_.phase_traveled_m - trajectory.source_phase_traveled_m;
+    if (!std::isfinite(advanced_distance_m) || advanced_distance_m < -1e-3) {
+      reject_reason = "solved trajectory progress regressed";
+      return std::nullopt;
+    }
+    const auto aligned = overtake_core::resample_receding_horizon_warm_start(
+      overtake_core::RecedingHorizonWarmStartRequest{
+        std::max(0.0, advanced_distance_m), trajectory.path_distance_m,
+        trajectory.lateral_m, current_path_distance_m, fallback_lateral_m});
+    if (
+      !aligned.valid || !aligned.used_previous_solution ||
+      aligned.lateral_targets_m.size() != current_path_distance_m.size())
+    {
+      reject_reason = "solved trajectory resampling failed";
+      return std::nullopt;
+    }
+    return AlignedMpccExecutionTrajectory{
+      age_sec, std::max(0.0, advanced_distance_m),
+      trajectory.minimum_qp_bound_reserve_m,
+      aligned.lateral_targets_m};
+  }
+
+  bool solved_mpcc_execution_path_wall_safe(
+    const AlignedMpccExecutionTrajectory & trajectory,
+    const std::vector<double> & path_distance_m,
+    const int ref_wp_id, const int horizon_size,
+    const Eigen::VectorXd & lower_bound,
+    const Eigen::VectorXd & upper_bound,
+    const double hard_wall_clearance_m,
+    std::string & reject_reason) const
+  {
+    if (
+      model == nullptr || model->reference_path == nullptr ||
+      overtake_static_wall_grid_ == nullptr ||
+      !overtake_static_wall_footprint_.valid() || horizon_size <= 0 ||
+      trajectory.lateral_m.size() != static_cast<std::size_t>(horizon_size) ||
+      path_distance_m.size() != trajectory.lateral_m.size() ||
+      lower_bound.size() < horizon_size || upper_bound.size() < horizon_size ||
+      !std::isfinite(hard_wall_clearance_m) || hard_wall_clearance_m < 0.0)
+    {
+      reject_reason = "solution wall validation input invalid";
+      return false;
+    }
+
+    auto clearance_footprint = overtake_static_wall_footprint_;
+    clearance_footprint.left_extent_m += hard_wall_clearance_m;
+    clearance_footprint.right_extent_m += hard_wall_clearance_m;
+    for (int i = 0; i < horizon_size; ++i) {
+      const std::size_t index = static_cast<std::size_t>(i);
+      const double lateral = trajectory.lateral_m[index];
+      const double lower = lower_bound[i] + hard_wall_clearance_m;
+      const double upper = upper_bound[i] - hard_wall_clearance_m;
+      if (
+        !std::isfinite(lateral) || !std::isfinite(lower) ||
+        !std::isfinite(upper) || lower > upper ||
+        lateral < lower - 1e-6 || lateral > upper + 1e-6)
+      {
+        reject_reason = "current wall bounds rejected solution";
+        return false;
+      }
+
+      const auto & waypoint = model->reference_path->get_waypoint(ref_wp_id + i);
+      double heading_offset = 0.0;
+      if (i + 1 < horizon_size) {
+        const double delta_distance =
+          path_distance_m[index + 1U] - path_distance_m[index];
+        const double delta_lateral = trajectory.lateral_m[index + 1U] - lateral;
+        if (
+          !std::isfinite(delta_distance) || delta_distance <= 1e-6 ||
+          !std::isfinite(delta_lateral))
+        {
+          reject_reason = "solution heading unavailable";
+          return false;
+        }
+        heading_offset = std::atan2(delta_lateral, delta_distance);
+      }
+      const recovery_footprint::Pose2D pose{
+        waypoint.x - lateral * std::sin(waypoint.psi),
+        waypoint.y + lateral * std::cos(waypoint.psi),
+        wrap_to_pi(waypoint.psi + heading_offset)};
+      const auto sample = recovery_footprint::sample_footprint(
+        *overtake_static_wall_grid_, clearance_footprint, pose);
+      if (!sample.valid || sample.out_of_map || !sample.contact_cells.empty()) {
+        reject_reason = !sample.valid || sample.out_of_map ?
+          "solution wall sample unavailable" : "solution hard wall contact";
+        return false;
+      }
+    }
+    reject_reason = "physical solution horizon accepted";
+    return true;
   }
 
   void ensure_current_control_horizon()
@@ -14930,6 +15164,7 @@ struct MPC
         throw std::runtime_error("OSQP failed: " + outcome.failure_detail);
       }
       Eigen::VectorXd dec = outcome.result->primal;
+      record_solved_mpcc_execution_trajectory(problem, dec, now_sec);
       Eigen::VectorXd control_signals = dec.tail(N * nu);
 
       for (int i = 1; i < control_signals.size(); i += 2) {
@@ -15231,6 +15466,12 @@ struct MPC
   MpcRtiSqpTelemetryWindow rti_sqp_telemetry_window_;
   double last_rti_sqp_telemetry_log_sec_{std::numeric_limits<double>::quiet_NaN()};
   double rti_sqp_reject_last_log_sec_{std::numeric_limits<double>::quiet_NaN()};
+  std::optional<SolvedMpccExecutionTrajectory> solved_mpcc_execution_trajectory_;
+  double solved_mpcc_execution_reject_last_log_sec_{
+    -std::numeric_limits<double>::infinity()};
+  double solved_mpcc_execution_authority_last_log_sec_{
+    -std::numeric_limits<double>::infinity()};
+  bool solved_mpcc_execution_authority_was_active_{false};
   double progress_contouring_fallback_last_log_sec_{
     -std::numeric_limits<double>::infinity()};
   double progress_contouring_stage_normalization_last_log_sec_{
@@ -17412,7 +17653,7 @@ private:
       overtake_receding_horizon_phase_ == overtake_line_state_.phase &&
       std::isfinite(overtake_receding_horizon_phase_traveled_m_) &&
       phase_traveled_m + kEps >= overtake_receding_horizon_phase_traveled_m_;
-    const auto aligned_warm_start = warm_start_context_compatible ?
+    auto aligned_warm_start = warm_start_context_compatible ?
       overtake_core::resample_receding_horizon_warm_start(
       overtake_core::RecedingHorizonWarmStartRequest{
         std::max(
@@ -17423,6 +17664,18 @@ private:
         baseline_horizon.path_distances,
         baseline_horizon.target_ey}) :
       overtake_core::RecedingHorizonWarmStartResolution{};
+    std::string solved_warm_start_reject_reason;
+    const auto solved_warm_start = align_solved_mpcc_execution_trajectory(
+      baseline_horizon.path_distances, baseline_horizon.target_ey, now_sec,
+      solved_warm_start_reject_reason);
+    if (
+      solved_warm_start.has_value() &&
+      solved_warm_start->lateral_m.size() == static_cast<std::size_t>(N))
+    {
+      aligned_warm_start.valid = true;
+      aligned_warm_start.used_previous_solution = true;
+      aligned_warm_start.lateral_targets_m = solved_warm_start->lateral_m;
+    }
     const bool warm_start_compatible =
       aligned_warm_start.valid && aligned_warm_start.used_previous_solution &&
       aligned_warm_start.lateral_targets_m.size() == static_cast<std::size_t>(N);
@@ -20690,6 +20943,80 @@ private:
     const bool runtime_wall_hard_fault =
       actual_wall_physical_contact || actual_wall_margin_blocked ||
       actual_wall_sample_unavailable;
+    const bool nominal_wall_preplan_warning = actual_wall_preplan_warning;
+    bool solved_execution_wall_authority_active = false;
+    std::string solved_execution_wall_authority_reason = "warning inactive";
+    std::optional<AlignedMpccExecutionTrajectory> aligned_solved_execution;
+    if (nominal_wall_preplan_warning && !runtime_wall_hard_fault) {
+      std::vector<double> current_path_distances;
+      std::vector<double> current_fallback_lateral;
+      current_path_distances.reserve(static_cast<std::size_t>(N));
+      current_fallback_lateral.reserve(static_cast<std::size_t>(N));
+      for (int i = 0; i < N; ++i) {
+        current_path_distances.push_back(
+          horizon_path_distance_to_index(ref_wp_id, static_cast<std::size_t>(i)));
+        current_fallback_lateral.push_back(current_ey);
+      }
+      aligned_solved_execution = align_solved_mpcc_execution_trajectory(
+        current_path_distances, current_fallback_lateral, now_sec,
+        solved_execution_wall_authority_reason);
+      const bool target_context_safe =
+        locked_target_matches && locked_target_progress_continuous &&
+        !behavior_output.locked_target_position_jump &&
+        !locked_target_progress_rejected &&
+        behavior_output.locked_target_footprint_prediction_valid &&
+        (behavior_output.locked_target_current_body_footprints_separated ||
+        behavior_output.recoverable_side_contact_active) &&
+        behavior_output.front_risk_level != FrontRiskLevel::EmergencyBrake &&
+        !overtake_solver_recovery_active_ && !behavior_output.overtake_forbidden_wp;
+      if (!target_context_safe) {
+        solved_execution_wall_authority_reason = "runtime context hard guard";
+      } else if (
+        aligned_solved_execution.has_value() &&
+        solved_mpcc_execution_path_wall_safe(
+          aligned_solved_execution.value(), current_path_distances,
+          ref_wp_id, N, lb, ub, min_wall_clearance,
+          solved_execution_wall_authority_reason))
+      {
+        solved_execution_wall_authority_active = true;
+        // The warning belongs to the nominal Mission path.  The actual QP
+        // path has now passed the current hard footprint check, so retain
+        // execution and let the next RTI-SQP cycle keep optimizing it.
+        actual_wall_preplan_warning = false;
+      }
+    }
+    const bool solved_authority_log_due =
+      solved_execution_wall_authority_active !=
+      solved_mpcc_execution_authority_was_active_ ||
+      (solved_execution_wall_authority_active &&
+      (!std::isfinite(solved_mpcc_execution_authority_last_log_sec_) ||
+      now_sec - solved_mpcc_execution_authority_last_log_sec_ >= 1.0));
+    if (line_cfg.debug_log_enabled && solved_authority_log_due) {
+      if (solved_execution_wall_authority_active && aligned_solved_execution.has_value()) {
+        RCLCPP_INFO(
+          rclcpp::get_logger("mpc_controller"),
+          "MPCC solved trajectory owns soft wall preplan: target=%s, "
+          "generation=%lu, side=%d, phase=%s, age=%.3f s, advance=%.2f m, "
+          "qp_reserve=%.3f m, points=%zu, wp_id=%d",
+          overtake_line_state_.target_vehicle_id.c_str(),
+          static_cast<unsigned long>(overtake_line_state_.mission_generation),
+          overtake_line_state_.pass_side_sign, to_string(overtake_line_state_.phase),
+          aligned_solved_execution->age_sec,
+          aligned_solved_execution->advanced_distance_m,
+          aligned_solved_execution->minimum_qp_bound_reserve_m,
+          aligned_solved_execution->lateral_m.size(), model->wp_id);
+      } else {
+        RCLCPP_INFO(
+          rclcpp::get_logger("mpc_controller"),
+          "MPCC solved trajectory released soft wall preplan authority: "
+          "reason=%s, hard_fault=%d, wp_id=%d",
+          solved_execution_wall_authority_reason.c_str(),
+          runtime_wall_hard_fault ? 1 : 0, model->wp_id);
+      }
+      solved_mpcc_execution_authority_last_log_sec_ = now_sec;
+    }
+    solved_mpcc_execution_authority_was_active_ =
+      solved_execution_wall_authority_active;
     if (actual_wall_preplan_warning) {
       if (!std::isfinite(overtake_line_state_.mission_runtime_wall_warning_since_sec)) {
         overtake_line_state_.mission_runtime_wall_warning_since_sec = now_sec;

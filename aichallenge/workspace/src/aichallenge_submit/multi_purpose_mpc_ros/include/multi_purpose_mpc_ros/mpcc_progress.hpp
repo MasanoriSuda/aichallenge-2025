@@ -106,4 +106,22 @@ std::optional<Eigen::VectorXd> damp_rti_sqp_iterate(
   const Eigen::VectorXd & linearization_point,
   const Eigen::VectorXd & qp_solution, double alpha) noexcept;
 
+struct ExecutionTrajectory
+{
+  std::vector<double> path_distance_m;
+  std::vector<double> lateral_m;
+  std::vector<double> progress_m;
+  double minimum_lateral_bound_reserve_m{};
+};
+
+/// Extract the state stages which were actually admitted by the MPCC QP.
+/// The QP layout is [N+1 x (e_y,e_psi,s), N x (v,kappa)]. Stage zero is the
+/// measured equality, so the returned execution path contains stages 1..N.
+std::optional<ExecutionTrajectory> extract_execution_trajectory(
+  const Eigen::VectorXd & primal, int horizon_size,
+  const std::vector<double> & path_distance_m,
+  const std::vector<double> & lateral_lower_m,
+  const std::vector<double> & lateral_upper_m,
+  double bound_tolerance_m = 1e-5) noexcept;
+
 }  // namespace multi_purpose_mpc_ros::mpcc_progress

@@ -163,4 +163,39 @@ TEST(MpccProgress, RejectsMalformedRtiSqpUpdate)
     finite, finite, 0.0).has_value());
 }
 
+TEST(MpccProgress, ExtractsBoundedExecutionTrajectoryFromQpPrimal)
+{
+  // N=2: 3 states x 3 stages followed by 2 inputs x 2 stages.
+  Eigen::VectorXd primal(13);
+  primal <<
+    0.0, 0.0, 10.0,
+    0.2, 0.01, 10.5,
+    0.4, 0.02, 11.0,
+    5.0, 0.0,
+    5.0, 0.0;
+  const auto result =
+    multi_purpose_mpc_ros::mpcc_progress::extract_execution_trajectory(
+    primal, 2, {0.5, 1.0}, {-0.5, -0.5}, {0.8, 0.8}, 1e-5);
+  ASSERT_TRUE(result.has_value());
+  ASSERT_EQ(result->lateral_m.size(), 2U);
+  EXPECT_DOUBLE_EQ(result->lateral_m[0], 0.2);
+  EXPECT_DOUBLE_EQ(result->progress_m[1], 11.0);
+  EXPECT_NEAR(result->minimum_lateral_bound_reserve_m, 0.4, 1e-12);
+}
+
+TEST(MpccProgress, RejectsExecutionTrajectoryOutsideAppliedBounds)
+{
+  Eigen::VectorXd primal(13);
+  primal <<
+    0.0, 0.0, 10.0,
+    0.2, 0.01, 10.5,
+    0.9, 0.02, 11.0,
+    5.0, 0.0,
+    5.0, 0.0;
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::mpcc_progress::extract_execution_trajectory(
+      primal, 2, {0.5, 1.0}, {-0.5, -0.5}, {0.8, 0.8}, 1e-5)
+    .has_value());
+}
+
 }  // namespace

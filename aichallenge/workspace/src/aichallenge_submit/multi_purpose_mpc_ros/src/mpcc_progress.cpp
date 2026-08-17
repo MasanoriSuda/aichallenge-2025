@@ -249,4 +249,70 @@ std::optional<Eigen::VectorXd> damp_rti_sqp_iterate(
   return result;
 }
 
+std::optional<ExecutionTrajectory> extract_execution_trajectory(
+  const Eigen::VectorXd & primal, const int horizon_size,
+  const std::vector<double> & path_distance_m,
+  const std::vector<double> & lateral_lower_m,
+  const std::vector<double> & lateral_upper_m,
+  const double bound_tolerance_m) noexcept
+{
+  constexpr int nx = 3;
+  constexpr int nu = 2;
+  if (
+    horizon_size <= 0 ||
+    primal.size() != nx * (horizon_size + 1) + nu * horizon_size ||
+    !primal.allFinite() ||
+    path_distance_m.size() != static_cast<std::size_t>(horizon_size) ||
+    lateral_lower_m.size() != path_distance_m.size() ||
+    lateral_upper_m.size() != path_distance_m.size() ||
+    !std::isfinite(bound_tolerance_m) || bound_tolerance_m < 0.0)
+  {
+    return std::nullopt;
+  }
+
+  ExecutionTrajectory result;
+  result.path_distance_m = path_distance_m;
+  result.lateral_m.reserve(path_distance_m.size());
+  result.progress_m.reserve(path_distance_m.size());
+  result.minimum_lateral_bound_reserve_m =
+    std::numeric_limits<double>::infinity();
+  double previous_distance = -std::numeric_limits<double>::infinity();
+  double previous_progress = primal[2];
+  for (int stage = 0; stage < horizon_size; ++stage) {
+    const std::size_t index = static_cast<std::size_t>(stage);
+    const double distance = path_distance_m[index];
+    const double lower = lateral_lower_m[index];
+    const double upper = lateral_upper_m[index];
+    const double lateral = primal[(stage + 1) * nx];
+    const double progress = primal[(stage + 1) * nx + 2];
+    if (
+      !std::isfinite(distance) || distance < 0.0 ||
+      distance <= previous_distance || !std::isfinite(lower) ||
+      !std::isfinite(upper) || lower > upper ||
+      !std::isfinite(lateral) || !std::isfinite(progress) ||
+      progress + bound_tolerance_m < previous_progress ||
+      lateral < lower - bound_tolerance_m ||
+      lateral > upper + bound_tolerance_m)
+    {
+      return std::nullopt;
+    }
+    result.lateral_m.push_back(lateral);
+    result.progress_m.push_back(progress);
+    result.minimum_lateral_bound_reserve_m = std::min(
+      result.minimum_lateral_bound_reserve_m,
+      std::min(lateral - lower, upper - lateral));
+    previous_distance = distance;
+    previous_progress = progress;
+  }
+  if (
+    result.lateral_m.empty() ||
+    !std::isfinite(result.minimum_lateral_bound_reserve_m))
+  {
+    return std::nullopt;
+  }
+  result.minimum_lateral_bound_reserve_m = std::max(
+    0.0, result.minimum_lateral_bound_reserve_m);
+  return result;
+}
+
 }  // namespace multi_purpose_mpc_ros::mpcc_progress

@@ -63,6 +63,59 @@ bool V2XPeerIdentityTracker::observe_valid_message(
   return true;
 }
 
+const char * to_string(const ExtendedMpccBranchCandidateSource source) noexcept
+{
+  switch (source) {
+    case ExtendedMpccBranchCandidateSource::None:
+      return "none";
+    case ExtendedMpccBranchCandidateSource::CompleteSelectedMission:
+      return "complete";
+    case ExtendedMpccBranchCandidateSource::RecedingPrefix:
+      return "receding-prefix";
+    case ExtendedMpccBranchCandidateSource::SelectedProgressivePrefix:
+      return "selected-prefix";
+  }
+  return "unknown";
+}
+
+ExtendedMpccBranchCandidateResolution resolve_extended_mpcc_branch_candidate(
+  const ExtendedMpccBranchCandidateRequest & request) noexcept
+{
+  ExtendedMpccBranchCandidateResolution resolution;
+  if (request.side_sign != -1 && request.side_sign != 1) {
+    return resolution;
+  }
+  resolution.valid = true;
+  const auto matches_side = [&request](
+    const std::optional<OvertakeMissionCandidate> & candidate) {
+      return candidate.has_value() && candidate->feasible &&
+             candidate->pass_side_sign == request.side_sign;
+    };
+  if (matches_side(request.selected_mission) &&
+    !request.selected_mission->progressive_entry)
+  {
+    resolution.source =
+      ExtendedMpccBranchCandidateSource::CompleteSelectedMission;
+    resolution.candidate = request.selected_mission;
+    return resolution;
+  }
+  if (matches_side(request.receding_mission)) {
+    resolution.source = ExtendedMpccBranchCandidateSource::RecedingPrefix;
+    resolution.prefix_only = request.receding_mission->progressive_entry;
+    resolution.candidate = request.receding_mission;
+    return resolution;
+  }
+  if (matches_side(request.selected_mission) &&
+    request.selected_mission->progressive_entry)
+  {
+    resolution.source =
+      ExtendedMpccBranchCandidateSource::SelectedProgressivePrefix;
+    resolution.prefix_only = true;
+    resolution.candidate = request.selected_mission;
+  }
+  return resolution;
+}
+
 bool V2XPeerIdentityTracker::is_complete(
   const std::vector<std::string> & vehicle_ids) const
 {

@@ -376,6 +376,8 @@ struct ExtendedBranchEvaluation
   int side_sign{};
   bool attempted{false};
   bool feasible{false};
+  bool prefix_only{false};
+  std::string candidate_source{"none"};
   double objective{std::numeric_limits<double>::infinity()};
   double minimum_lateral_bound_reserve_m{};
   double terminal_progress_m{};

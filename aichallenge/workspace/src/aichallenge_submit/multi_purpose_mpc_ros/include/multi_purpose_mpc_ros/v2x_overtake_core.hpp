@@ -3807,6 +3807,40 @@ struct OvertakeMissionCandidate
   double required_entry_front_distance_m{};
 };
 
+enum class ExtendedMpccBranchCandidateSource
+{
+  None,
+  CompleteSelectedMission,
+  RecedingPrefix,
+  SelectedProgressivePrefix,
+};
+
+const char * to_string(ExtendedMpccBranchCandidateSource source) noexcept;
+
+struct ExtendedMpccBranchCandidateRequest
+{
+  int side_sign{};
+  std::optional<OvertakeMissionCandidate> selected_mission;
+  std::optional<OvertakeMissionCandidate> receding_mission;
+};
+
+struct ExtendedMpccBranchCandidateResolution
+{
+  bool valid{false};
+  bool prefix_only{false};
+  ExtendedMpccBranchCandidateSource source{
+    ExtendedMpccBranchCandidateSource::None};
+  std::optional<OvertakeMissionCandidate> candidate;
+};
+
+/// Resolve the executable candidate presented to one isolated extended-MPCC
+/// branch. A complete selected Mission has precedence, followed by a fresh
+/// receding prefix and finally a selected progressive prefix. Prefix metadata
+/// is retained so downstream admission never mistakes it for rear-clear and
+/// Return authority.
+ExtendedMpccBranchCandidateResolution resolve_extended_mpcc_branch_candidate(
+  const ExtendedMpccBranchCandidateRequest & request) noexcept;
+
 /// A Mission which changes from outer to inner before rear-clear may only be
 /// admitted when the required full-track handoff has itself been planned and
 /// preflighted.  Otherwise the candidate is executable only up to the role

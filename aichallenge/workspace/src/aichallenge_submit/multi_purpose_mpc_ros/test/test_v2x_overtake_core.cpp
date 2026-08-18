@@ -16383,6 +16383,113 @@ TEST(V2XOvertakeCoreMpccLite, SameSideRefreshRequiresMaterialGainAndSpacing)
   EXPECT_FALSE(should_admit_mpcc_lite_same_side_replan(request));
 }
 
+TEST(V2XOvertakeCoreMpccLite, ExtendedBranchPrefersCompleteMission)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    ExtendedMpccBranchCandidateRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    ExtendedMpccBranchCandidateSource;
+  using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidate;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_extended_mpcc_branch_candidate;
+
+  OvertakeMissionCandidate complete;
+  complete.feasible = true;
+  complete.pass_side_sign = 1;
+  complete.goal_lateral_m = 0.7;
+  OvertakeMissionCandidate receding = complete;
+  receding.progressive_entry = true;
+  receding.goal_lateral_m = 0.4;
+
+  const auto resolution = resolve_extended_mpcc_branch_candidate(
+    ExtendedMpccBranchCandidateRequest{1, complete, receding});
+  ASSERT_TRUE(resolution.valid);
+  ASSERT_TRUE(resolution.candidate.has_value());
+  EXPECT_FALSE(resolution.prefix_only);
+  EXPECT_EQ(
+    resolution.source,
+    ExtendedMpccBranchCandidateSource::CompleteSelectedMission);
+  EXPECT_DOUBLE_EQ(resolution.candidate->goal_lateral_m, 0.7);
+}
+
+TEST(V2XOvertakeCoreMpccLite, ExtendedBranchUsesFreshRecedingPrefix)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    ExtendedMpccBranchCandidateRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    ExtendedMpccBranchCandidateSource;
+  using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidate;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_extended_mpcc_branch_candidate;
+
+  OvertakeMissionCandidate unavailable_complete;
+  unavailable_complete.feasible = false;
+  unavailable_complete.pass_side_sign = -1;
+  OvertakeMissionCandidate receding;
+  receding.feasible = true;
+  receding.progressive_entry = true;
+  receding.pass_side_sign = -1;
+
+  const auto resolution = resolve_extended_mpcc_branch_candidate(
+    ExtendedMpccBranchCandidateRequest{-1, unavailable_complete, receding});
+  ASSERT_TRUE(resolution.valid);
+  ASSERT_TRUE(resolution.candidate.has_value());
+  EXPECT_TRUE(resolution.prefix_only);
+  EXPECT_EQ(
+    resolution.source, ExtendedMpccBranchCandidateSource::RecedingPrefix);
+}
+
+TEST(V2XOvertakeCoreMpccLite, ExtendedBranchFallsBackToSelectedPrefix)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    ExtendedMpccBranchCandidateRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    ExtendedMpccBranchCandidateSource;
+  using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidate;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_extended_mpcc_branch_candidate;
+
+  OvertakeMissionCandidate selected_prefix;
+  selected_prefix.feasible = true;
+  selected_prefix.progressive_entry = true;
+  selected_prefix.pass_side_sign = 1;
+
+  const auto resolution = resolve_extended_mpcc_branch_candidate(
+    ExtendedMpccBranchCandidateRequest{1, selected_prefix, std::nullopt});
+  ASSERT_TRUE(resolution.valid);
+  ASSERT_TRUE(resolution.candidate.has_value());
+  EXPECT_TRUE(resolution.prefix_only);
+  EXPECT_EQ(
+    resolution.source,
+    ExtendedMpccBranchCandidateSource::SelectedProgressivePrefix);
+}
+
+TEST(V2XOvertakeCoreMpccLite, ExtendedBranchRejectsInvalidOrWrongSideCandidates)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    ExtendedMpccBranchCandidateRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    ExtendedMpccBranchCandidateSource;
+  using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidate;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_extended_mpcc_branch_candidate;
+
+  OvertakeMissionCandidate wrong_side;
+  wrong_side.feasible = true;
+  wrong_side.pass_side_sign = -1;
+  const auto wrong_side_resolution = resolve_extended_mpcc_branch_candidate(
+    ExtendedMpccBranchCandidateRequest{1, wrong_side, wrong_side});
+  ASSERT_TRUE(wrong_side_resolution.valid);
+  EXPECT_FALSE(wrong_side_resolution.candidate.has_value());
+  EXPECT_EQ(
+    wrong_side_resolution.source, ExtendedMpccBranchCandidateSource::None);
+
+  const auto invalid_side_resolution = resolve_extended_mpcc_branch_candidate(
+    ExtendedMpccBranchCandidateRequest{0, wrong_side, wrong_side});
+  EXPECT_FALSE(invalid_side_resolution.valid);
+  EXPECT_FALSE(invalid_side_resolution.candidate.has_value());
+}
+
 TEST(V2XOvertakeCoreMpccLite, AdmitsOnlyBoundedHardFeasibleExecutionPrefix)
 {
   using multi_purpose_mpc_ros::v2x_overtake_core::

@@ -5691,15 +5691,19 @@ struct MPC
   {
     mpcc_progress::ExtendedBranchEvaluation evaluation;
     evaluation.side_sign = assessment.side;
-    const auto & candidate = assessment.selected_mission;
-    if (
-      (assessment.side != -1 && assessment.side != 1) ||
-      !candidate.has_value() || !candidate->feasible ||
-      candidate->pass_side_sign != assessment.side || candidate->progressive_entry)
-    {
-      evaluation.failure_reason = candidate.has_value() && candidate->progressive_entry ?
-        "progressive prefix is not a complete branch" :
-        "complete Mission unavailable";
+    const auto candidate_resolution =
+      overtake_core::resolve_extended_mpcc_branch_candidate(
+      overtake_core::ExtendedMpccBranchCandidateRequest{
+        assessment.side, assessment.selected_mission,
+        assessment.mpcc_receding_mission});
+    evaluation.candidate_source =
+      overtake_core::to_string(candidate_resolution.source);
+    evaluation.prefix_only = candidate_resolution.prefix_only;
+    const auto & candidate = candidate_resolution.candidate;
+    if (!candidate_resolution.valid || !candidate.has_value()) {
+      evaluation.failure_reason = candidate_resolution.valid ?
+        "no complete or receding branch candidate" :
+        "invalid branch side";
       return evaluation;
     }
     evaluation.attempted = true;
@@ -5741,6 +5745,13 @@ struct MPC
       overtake_line_state_.target_last_speed = source_behavior.locked_target_speed;
       overtake_locked_side_sign_ = assessment.side;
       freeze_selected_overtake_mission(candidate, now_sec);
+      if (
+        !overtake_line_state_.mission_path_frozen ||
+        !overtake_line_state_.mission_plan.has_value())
+      {
+        evaluation.failure_reason = "branch candidate could not freeze execution path";
+        return evaluation;
+      }
 
       V2XBehaviorOutput behavior = source_behavior;
       behavior.state = V2XBehaviorState::Overtake;
@@ -5912,23 +5923,29 @@ struct MPC
     const auto & selected_assessment = selection.selected_side_sign > 0 ?
       behavior.overtake_left_tactical_assessment :
       behavior.overtake_right_tactical_assessment;
-    if (
-      !selected_assessment.selected_mission.has_value() ||
-      !selected_assessment.selected_mission->feasible ||
-      selected_assessment.selected_mission->pass_side_sign !=
-      selection.selected_side_sign)
-    {
+    const auto candidate_resolution =
+      overtake_core::resolve_extended_mpcc_branch_candidate(
+      overtake_core::ExtendedMpccBranchCandidateRequest{
+        selection.selected_side_sign, selected_assessment.selected_mission,
+        selected_assessment.mpcc_receding_mission});
+    if (!candidate_resolution.valid || !candidate_resolution.candidate.has_value()) {
       return;
     }
+    const auto & selected_mission = candidate_resolution.candidate;
+    const bool base_line = std::abs(selected_mission->goal_lateral_m) <= kEps;
     behavior.overtake_pass_side_sign = selection.selected_side_sign;
-    behavior.overtake_gap_available = selected_assessment.gap_available;
+    behavior.overtake_gap_available = true;
     behavior.overtake_side_clearance = selected_assessment.side_clearance;
-    behavior.overtake_corridor_center_ey = selected_assessment.corridor_center_ey;
-    behavior.overtake_selected_mission = selected_assessment.selected_mission;
+    behavior.overtake_corridor_center_ey =
+      selected_assessment.corridor_center_ey.value_or(
+      selected_mission->goal_lateral_m);
+    behavior.overtake_selected_mission = selected_mission;
     behavior.overtake_base_line_pass_through =
-      selected_assessment.direct_base_line_pass_ready;
+      selected_mission->direct_pass && base_line &&
+      selected_mission->current_position_clear;
     behavior.overtake_tiny_shift_direct_pass =
-      selected_assessment.direct_tiny_shift_pass_ready;
+      selected_mission->direct_pass && !base_line &&
+      selected_mission->current_position_clear;
     behavior.overtake_fallback_target = selected_assessment.fallback_target;
     behavior.overtake_gap_hold_active = selected_assessment.transient_gap_hold;
     behavior.overtake_gap_hold_remaining_sec =
@@ -5936,7 +5953,7 @@ struct MPC
     const int active_side = overtake_line_state_.pass_side_sign;
     if (active_side != 0 && selection.selected_side_sign == active_side) {
       behavior.mpcc_lite_same_side_replan_mission =
-        selected_assessment.selected_mission;
+        selected_mission;
       behavior.mpcc_lite_same_side_replan_ready = true;
       behavior.mpcc_lite_cross_side_replan_ready = false;
       behavior.mpcc_lite_cross_side_replan_mission.reset();
@@ -5946,7 +5963,7 @@ struct MPC
       !behavior.opponent_side_replan_no_return)
     {
       behavior.mpcc_lite_cross_side_replan_mission =
-        selected_assessment.selected_mission;
+        selected_mission;
       behavior.mpcc_lite_cross_side_replan_ready = true;
       behavior.mpcc_lite_cross_side_candidate_sign = selection.selected_side_sign;
       behavior.mpcc_lite_same_side_replan_ready = false;
@@ -12108,6 +12125,49 @@ struct MPC
           async_behavior.overtake_selected_mission;
         const int async_entry_side =
           async_behavior.overtake_pass_side_sign;
+        const auto async_entry_prefix_resolution = [&]() {
+            overtake_core::MpccLitePrefixExecutionResolution resolution;
+            if (!async_entry_mission.has_value()) {
+              return resolution;
+            }
+            if (!async_entry_mission->progressive_entry) {
+              resolution.valid = true;
+              resolution.admitted = true;
+              return resolution;
+            }
+            overtake_core::MpccLitePrefixExecutionRequest request;
+            request.new_entry_context = true;
+            request.before_no_return = true;
+            request.candidate_progressive = true;
+            request.candidate_feasible = async_entry_mission->feasible;
+            request.body_clear_deadline_checked =
+              async_entry_mission->body_clear_deadline_checked;
+            request.body_clear_deadline_feasible =
+              async_entry_mission->body_clear_deadline_feasible;
+            request.target_clearance_checked =
+              async_entry_mission->pass_target_clearance_checked;
+            request.minimum_target_surface_clearance_m =
+              async_entry_mission->predicted_minimum_pass_target_surface_clearance_m;
+            request.predicted_body_clear_time_sec =
+              async_entry_mission->predicted_body_clear_time_sec;
+            request.predicted_body_clear_distance_m =
+              async_entry_mission->predicted_body_clear_distance_m;
+            request.predicted_minimum_ego_speed_mps =
+              async_entry_mission->predicted_minimum_ego_speed_mps;
+            request.minimum_ego_speed_mps =
+              overtake_core::resolve_cross_side_minimum_speed_requirement(
+              std::max(0.0, current_speed_mps_),
+              std::max(0.0, output.overtake_entry_target_speed));
+            request.minimum_path_wall_clearance_m =
+              async_entry_mission->minimum_path_wall_clearance_m;
+            request.minimum_required_path_wall_clearance_m =
+              std::max(0.10, robust_wall_planning_clearance);
+            request.remaining_time_budget_sec =
+              std::max(0.0, shadow_cfg.pass_horizon_absolute_time_limit);
+            request.remaining_distance_budget_m =
+              std::max(0.0, shadow_cfg.pass_horizon_absolute_distance_limit);
+            return overtake_core::resolve_mpcc_lite_prefix_execution(request);
+          }();
         const bool async_entry_context =
           locked_pass_side == 0 &&
           overtake_line_state_.phase == OvertakeLinePhase::Idle &&
@@ -12116,6 +12176,8 @@ struct MPC
           async_entry_mission.has_value() &&
           async_entry_mission->pass_side_sign == async_entry_side &&
           async_entry_mission->feasible &&
+          async_entry_prefix_resolution.valid &&
+          async_entry_prefix_resolution.admitted &&
           (!std::isfinite(async_entry_mission->dynamic_valid_until_sec) ||
           now_sec <= async_entry_mission->dynamic_valid_until_sec + kEps);
         if (async_entry_context) {
@@ -12226,7 +12288,8 @@ struct MPC
           "completed=%lu, running=%d, pending=%d, adopted=%lu, reused=%lu, cache=%d, "
           "discarded=%lu, failed=%lu, interval=%.3f s, snapshot=%.2f ms, "
           "compute=%.2f ms, age=%.3f s, "
-          "dual=L%d/%d/%.1f/%.2f,R%d/%d/%.1f/%.2f,select=%d/%s",
+          "dual=L%d/%d/%s/p%d/%.1f/%.2f/%s,"
+          "R%d/%d/%s/p%d/%.1f/%.2f/%s,select=%d/%s",
           static_cast<unsigned long>(worker_stats.submitted),
           static_cast<unsigned long>(worker_stats.replaced),
           static_cast<unsigned long>(worker_stats.completed),
@@ -12242,12 +12305,20 @@ struct MPC
           mpcc_lite_async_last_result_age_sec_,
           output.extended_mpcc_left_branch.attempted ? 1 : 0,
           output.extended_mpcc_left_branch.feasible ? 1 : 0,
+          output.extended_mpcc_left_branch.candidate_source.c_str(),
+          output.extended_mpcc_left_branch.prefix_only ? 1 : 0,
           output.extended_mpcc_left_branch.objective,
           output.extended_mpcc_left_branch.minimum_lateral_bound_reserve_m,
+          output.extended_mpcc_left_branch.failure_reason.empty() ?
+          "ok" : output.extended_mpcc_left_branch.failure_reason.c_str(),
           output.extended_mpcc_right_branch.attempted ? 1 : 0,
           output.extended_mpcc_right_branch.feasible ? 1 : 0,
+          output.extended_mpcc_right_branch.candidate_source.c_str(),
+          output.extended_mpcc_right_branch.prefix_only ? 1 : 0,
           output.extended_mpcc_right_branch.objective,
           output.extended_mpcc_right_branch.minimum_lateral_bound_reserve_m,
+          output.extended_mpcc_right_branch.failure_reason.empty() ?
+          "ok" : output.extended_mpcc_right_branch.failure_reason.c_str(),
           output.extended_mpcc_branch_selection.selected_side_sign,
           mpcc_progress::extended_branch_selection_reason_name(
             output.extended_mpcc_branch_selection.reason));

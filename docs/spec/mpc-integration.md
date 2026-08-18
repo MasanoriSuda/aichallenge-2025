@@ -175,6 +175,38 @@ odometry/NaN fail-safeは維持したまま、追い越し中の重複計算だ�
 fresh/reuse、condition/deadline skip、cache hit率を実走比較する。core solverの別thread化、
 command 40 Hzとsolver 20 Hzの完全分離は本Stageには含めない。
 
+### MPCC execution authority hardening（2026-08-19、2025由来の暫定）
+
+Frenet DPが生成した追い越しprefixをMPC/MPCCへ渡す前に、計画の採用と実行を
+別の権限として扱う。`v2x_overtake_mpcc_frenet_dp_last_path_max_age_sec`はoptimizer
+sourceの絶対実行期限であり、実行周期のwall/target再検証で期限を延長しない。
+`runtime_validation_lease_sec`は、sourceが期限内である間のtarget予測揺れだけを橋渡しする。
+
+実行権限は、同一target/side、target continuity、現在・予測車体分離、wall、Emergency、
+禁止waypoint、残りprefix距離に加え、次をすべて満たす場合だけ有効とする。
+
+- 実測`e_y`とactive prefixの差が
+  `v2x_overtake_mpcc_frenet_dp_max_tracking_lateral_error_m`以下。
+- 実測`e_psi`とprefix勾配・course曲率から求めたheadingの差が
+  `v2x_overtake_mpcc_frenet_dp_max_tracking_heading_error_rad`以下。
+- extended dynamics solverのcircuit breakerが非active。ただし
+  `v2x_overtake_mpcc_frenet_dp_block_on_extended_solver_degraded=false`のA/B設定を除く。
+
+権限が有効でも、DPまたは直近のphysically validated solved trajectoryの各stage横目標は、
+採用済みMission profileから`v2x_overtake_mpcc_lite_same_side_max_lateral_adjustment`以内へ
+制限する。これを越えるtopology変更は実行時上書きとして通さず、新しいMissionとして
+再採用する必要がある。信頼幅を適用した後も従来のwall、target、横加速度horizon検証を
+最終hard guardとして維持する。
+
+source期限切れ、追従乖離、solver劣化、または信頼幅入力不正時は、追い越しMission自体を
+即破棄せず、その周期の実行参照だけを信頼幅内のsolved trajectoryまたはlegacy Mission
+profileへ縮退する。これにより、古い攻撃的DP経路をlegacy 3-state solverへそのまま渡す
+handoffを禁止する。診断は`DP execution authority retained/released`の`tracking`、
+`solver_degraded`と、`DP execution`の`authority`、`trust_adjusted`、`age`で確認する。
+
+この処理は2025 AWSIM競技シミュレーションで観測したMPC→MPCC切替時の逸走対策であり、
+2026公式仕様ではない。
+
 ### Wall / Contact Stuck Recovery（Implementation Complete / dev3 Enabled）
 
 前進専用の現行MPCは、正面が壁に押し付けられると後退できない。

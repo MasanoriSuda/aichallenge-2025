@@ -733,8 +733,11 @@ mpc:
   v2x_overtake_mpcc_frenet_dp_inside_radius_penalty_weight: 0.75 # approximate retained-speed cost for small-radius inside paths
   v2x_overtake_mpcc_frenet_dp_tactical_strategy_switch_penalty: 1.0 # suppress sweep/inside/sweep churn while the previous tactic remains feasible
   v2x_overtake_mpcc_frenet_dp_shadow_score_penalty: 1.0
-  v2x_overtake_mpcc_frenet_dp_last_path_max_age_sec: 0.50 # [s] warm-start/hysteresis is exact-target and exact-side only
-  v2x_overtake_mpcc_frenet_dp_runtime_validation_lease_sec: 0.30 # [s] measured 0.21-0.23 s validation jitter plus one 40 Hz cycle; only runtime-validated active paths qualify
+  v2x_overtake_mpcc_frenet_dp_last_path_max_age_sec: 0.50 # [s] absolute execution age; runtime validation cannot extend an expired optimizer source
+  v2x_overtake_mpcc_frenet_dp_runtime_validation_lease_sec: 0.30 # [s] target-prediction jitter bridge while the optimizer source remains fresh
+  v2x_overtake_mpcc_frenet_dp_max_tracking_lateral_error_m: 0.50 # [m] revoke DP ownership when measured e_y no longer follows the active prefix
+  v2x_overtake_mpcc_frenet_dp_max_tracking_heading_error_rad: 0.35 # [rad] measured-to-prefix heading disagreement limit
+  v2x_overtake_mpcc_frenet_dp_block_on_extended_solver_degraded: true # use a trust-bounded solved/legacy profile while the extended solver circuit is open
   v2x_overtake_mpcc_frenet_dp_longitudinal_timing_enabled: true # solve attack/intermediate/hold target timing before rejecting the lateral DP corridor
   v2x_overtake_mpcc_frenet_dp_longitudinal_cost_slack: 0.25 # fastest profile may win only this far above the best normalized lateral DP cost
   v2x_overtake_safe_separation_soft_prediction_grace_sec: 0.25 # [s] prediction-only loss grace after committed forward completion; hard faults remain immediate

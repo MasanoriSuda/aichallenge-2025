@@ -3424,6 +3424,29 @@ struct FrenetDpExecutionReferenceResolution
 FrenetDpExecutionReferenceResolution resolve_frenet_dp_execution_reference(
   const FrenetDpExecutionReferenceRequest & request) noexcept;
 
+struct FrenetDpExecutionTrustEnvelopeRequest
+{
+  bool enabled{false};
+  double maximum_lateral_adjustment_m{};
+  std::vector<double> candidate_lateral_targets_m;
+  std::vector<double> nominal_lateral_targets_m;
+};
+
+struct FrenetDpExecutionTrustEnvelopeResolution
+{
+  bool valid{false};
+  bool active{false};
+  bool adjusted{false};
+  double maximum_applied_adjustment_m{};
+  std::vector<double> lateral_targets_m;
+};
+
+/// Bound an optimizer-produced execution profile around the already admitted
+/// Mission profile. A topology change larger than this envelope must be
+/// promoted as a new Mission instead of leaking through a per-stage override.
+FrenetDpExecutionTrustEnvelopeResolution resolve_frenet_dp_execution_trust_envelope(
+  const FrenetDpExecutionTrustEnvelopeRequest & request) noexcept;
+
 struct FrenetDpExecutionRefreshStitchRequest
 {
   double current_lateral_m{};
@@ -3605,6 +3628,8 @@ struct FrenetDpExecutionAuthorityRequest {
   double minimum_remaining_distance_m{};
   std::vector<double> path_distances_m;
   std::vector<double> lateral_path_m;
+  bool execution_tracking_safe{true};
+  bool solver_degraded{false};
 };
 
 struct FrenetDpExecutionAuthorityResolution
@@ -3620,10 +3645,11 @@ struct FrenetDpExecutionAuthorityResolution
 };
 
 /// Decide whether an already admitted same-target/same-side DP prefix owns
-/// bounded ShiftOut/Pass execution or a soft rolling-replan pause. This
-/// suppresses only the legacy single-goal rebuild; wall, body,
-/// target-continuity, emergency and solver hard faults revoke authority
-/// immediately.
+/// bounded ShiftOut/Pass execution or a soft rolling-replan pause. Optimizer
+/// source age is an absolute execution limit: runtime validation may bridge
+/// target-prediction jitter but may not extend an expired source path. Wall,
+/// body, target-continuity, tracking, emergency and solver faults revoke
+/// authority immediately.
 FrenetDpExecutionAuthorityResolution resolve_frenet_dp_execution_authority(
   const FrenetDpExecutionAuthorityRequest & request) noexcept;
 

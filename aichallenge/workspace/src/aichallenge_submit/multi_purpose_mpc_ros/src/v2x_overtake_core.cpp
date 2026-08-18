@@ -5295,6 +5295,49 @@ FrenetDpExecutionReferenceResolution resolve_frenet_dp_execution_reference(
   return resolution;
 }
 
+FrenetDpExecutionTrustEnvelopeResolution resolve_frenet_dp_execution_trust_envelope(
+  const FrenetDpExecutionTrustEnvelopeRequest & request) noexcept
+{
+  FrenetDpExecutionTrustEnvelopeResolution resolution;
+  resolution.lateral_targets_m = request.nominal_lateral_targets_m;
+  if (!request.enabled) {
+    resolution.valid = true;
+    return resolution;
+  }
+  if (
+    !std::isfinite(request.maximum_lateral_adjustment_m) ||
+    request.maximum_lateral_adjustment_m < 0.0 ||
+    request.candidate_lateral_targets_m.empty() ||
+    request.candidate_lateral_targets_m.size() !=
+    request.nominal_lateral_targets_m.size())
+  {
+    return resolution;
+  }
+
+  resolution.lateral_targets_m.clear();
+  resolution.lateral_targets_m.reserve(request.candidate_lateral_targets_m.size());
+  for (std::size_t i = 0U; i < request.candidate_lateral_targets_m.size(); ++i) {
+    const double candidate = request.candidate_lateral_targets_m[i];
+    const double nominal = request.nominal_lateral_targets_m[i];
+    if (!std::isfinite(candidate) || !std::isfinite(nominal)) {
+      resolution.lateral_targets_m = request.nominal_lateral_targets_m;
+      return resolution;
+    }
+    const double bounded = std::clamp(
+      candidate,
+      nominal - request.maximum_lateral_adjustment_m,
+      nominal + request.maximum_lateral_adjustment_m);
+    const double applied_adjustment = std::abs(bounded - nominal);
+    resolution.maximum_applied_adjustment_m = std::max(
+      resolution.maximum_applied_adjustment_m, applied_adjustment);
+    resolution.adjusted = resolution.adjusted || std::abs(bounded - candidate) > 1e-9;
+    resolution.lateral_targets_m.push_back(bounded);
+  }
+  resolution.valid = true;
+  resolution.active = true;
+  return resolution;
+}
+
 FrenetDpExecutionRefreshStitchResolution stitch_frenet_dp_execution_refresh_path(
   const FrenetDpExecutionRefreshStitchRequest & request) noexcept
 {
@@ -5585,11 +5628,10 @@ FrenetDpExecutionAuthorityResolution resolve_frenet_dp_execution_authority(
     !request.actual_wall_physical_contact && !request.wall_margin_blocked &&
     !request.wall_sample_unavailable && !request.emergency_front_risk &&
     !request.solver_recovery_active && !request.forbidden_waypoint &&
-    (resolution.source_fresh || resolution.runtime_validation_fresh) &&
+    request.execution_tracking_safe && !request.solver_degraded &&
+    resolution.source_fresh &&
     resolution.remaining_distance_m + 1e-9 >= request.minimum_remaining_distance_m;
-  resolution.authority_from_runtime_validation =
-    resolution.authority_active && !resolution.source_fresh &&
-    resolution.runtime_validation_fresh;
+  resolution.authority_from_runtime_validation = false;
   return resolution;
 }
 

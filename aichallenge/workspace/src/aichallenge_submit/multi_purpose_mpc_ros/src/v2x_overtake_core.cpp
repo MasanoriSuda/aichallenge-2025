@@ -2022,13 +2022,16 @@ double resolve_async_execution_lease_duration_sec(
 bool target_bound_execution_hold_budget_available(
   const TargetBoundExecutionHoldRequest & request) noexcept
 {
+  const bool latched_pass_extension_requested =
+    request.forward_progress_extension_enabled && request.pass_phase &&
+    request.latched_pass_clearance_acquired;
   if (
     !std::isfinite(request.hold_elapsed_sec) || request.hold_elapsed_sec < 0.0 ||
     !std::isfinite(request.hold_traveled_m) || request.hold_traveled_m < 0.0 ||
     !std::isfinite(request.maximum_hold_sec) || request.maximum_hold_sec <= 0.0 ||
     !std::isfinite(request.maximum_hold_distance_m) ||
     request.maximum_hold_distance_m <= 0.0 ||
-    request.mission_hold_budget_exhausted)
+    (request.mission_hold_budget_exhausted && !latched_pass_extension_requested))
   {
     return false;
   }
@@ -2045,12 +2048,25 @@ bool target_bound_execution_hold_budget_available(
     std::isfinite(request.absolute_maximum_sec) && request.absolute_maximum_sec > 0.0 &&
     std::isfinite(request.absolute_maximum_distance_m) &&
     request.absolute_maximum_distance_m > 0.0;
+  const bool absolute_mission_budget_available =
+    progress_extension_timing_valid &&
+    request.mission_elapsed_sec < request.absolute_maximum_sec - 1e-9 &&
+    request.mission_traveled_m <
+    request.absolute_maximum_distance_m - 1e-9;
+  // Once Pass has physically cleared the target laterally, a future
+  // target-wall prediction conflict is a tactical replan trigger rather than
+  // a reason to discard the current same-side path. The caller still proves
+  // the retained prefix wall-feasible and can_hold... still rejects every
+  // current body/wall/front hard fault. Keep this bounded by the immutable
+  // Mission lifetime, but do not require a fresh 5 cm progress pulse or a
+  // warning-free nominal Mission path.
+  if (latched_pass_extension_requested && absolute_mission_budget_available) {
+    return true;
+  }
   return request.forward_progress_extension_enabled && !request.wall_preplan_warning &&
          request.pass_phase &&
          request.fresh_forward_progress && progress_extension_timing_valid &&
-         request.mission_elapsed_sec < request.absolute_maximum_sec - 1e-9 &&
-         request.mission_traveled_m <
-         request.absolute_maximum_distance_m - 1e-9;
+         absolute_mission_budget_available;
 }
 
 bool can_hold_target_bound_execution_for_replan(

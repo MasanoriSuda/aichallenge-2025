@@ -2704,6 +2704,53 @@ struct OvertakeRecedingHorizonEvaluation
   OvertakeLineHorizonEvaluation horizon;
 };
 
+// Static-map footprint scans are expensive compared with the 25 ms control
+// period. Consecutive receding horizons revisit almost all of the same course
+// samples, so keep a compact, controller-local cache. The fine quantization is
+// only used to find a reusable conservative envelope; the complete candidate
+// trajectory still passes the existing footprint revalidation before it can
+// own control.
+struct PhysicalWallEnvelopeCacheKey
+{
+  int waypoint_id{};
+  std::int64_t lower_mm{};
+  std::int64_t upper_mm{};
+  std::int64_t preferred_mm{};
+  std::int64_t heading_0p1_mrad{};
+  std::int64_t clearance_mm{};
+  std::int64_t sample_step_mm{};
+
+  bool operator==(const PhysicalWallEnvelopeCacheKey & other) const noexcept
+  {
+    return waypoint_id == other.waypoint_id &&
+           lower_mm == other.lower_mm && upper_mm == other.upper_mm &&
+           preferred_mm == other.preferred_mm &&
+           heading_0p1_mrad == other.heading_0p1_mrad &&
+           clearance_mm == other.clearance_mm &&
+           sample_step_mm == other.sample_step_mm;
+  }
+};
+
+struct PhysicalWallEnvelopeCacheKeyHash
+{
+  std::size_t operator()(const PhysicalWallEnvelopeCacheKey & key) const noexcept
+  {
+    std::size_t seed = 0U;
+    const auto combine = [&seed](auto value) {
+        const std::size_t hash = std::hash<decltype(value)>{}(value);
+        seed ^= hash + 0x9e3779b9U + (seed << 6U) + (seed >> 2U);
+      };
+    combine(key.waypoint_id);
+    combine(key.lower_mm);
+    combine(key.upper_mm);
+    combine(key.preferred_mm);
+    combine(key.heading_0p1_mrad);
+    combine(key.clearance_mm);
+    combine(key.sample_step_mm);
+    return seed;
+  }
+};
+
 struct OvertakeLineEntryPreflight
 {
   bool feasible{true};
@@ -4939,6 +4986,9 @@ struct MPC
   {
     overtake_static_wall_grid_ = grid;
     overtake_static_wall_footprint_ = footprint;
+    physical_wall_envelope_cache_.clear();
+    physical_wall_envelope_cache_hit_count_ = 0U;
+    physical_wall_envelope_cache_miss_count_ = 0U;
   }
 
   void update_actual_pose_for_wall_monitor(
@@ -15626,6 +15676,12 @@ struct MPC
   std::shared_ptr<recovery_footprint::OccupancyGrid>
   overtake_static_wall_grid_snapshot_owner_;
   recovery_footprint::FootprintExtents overtake_static_wall_footprint_;
+  std::unordered_map<
+    PhysicalWallEnvelopeCacheKey,
+    recovery_footprint::LateralClearIntervalResult,
+    PhysicalWallEnvelopeCacheKeyHash> physical_wall_envelope_cache_;
+  std::uint64_t physical_wall_envelope_cache_hit_count_{0U};
+  std::uint64_t physical_wall_envelope_cache_miss_count_{0U};
   std::optional<recovery_footprint::Pose2D> actual_wall_monitor_pose_;
   bool use_obstacle_avoidance{};
   bool use_path_constraints_topic{};
@@ -18178,6 +18234,98 @@ private:
     return evaluation;
   }
 
+  recovery_footprint::LateralClearIntervalResult
+  find_cached_physical_wall_envelope(
+    const int waypoint_id,
+    const recovery_footprint::Pose2D & reference_pose,
+    const double lower_lateral_offset_m,
+    const double upper_lateral_offset_m,
+    const double preferred_lateral_offset_m,
+    const double path_heading_offset_rad,
+    const double additional_lateral_clearance_m,
+    const double sample_step_m)
+  {
+    const auto evaluate = [&]() {
+        return recovery_footprint::find_clear_lateral_interval_with_heading(
+          *overtake_static_wall_grid_, overtake_static_wall_footprint_,
+          reference_pose, lower_lateral_offset_m, upper_lateral_offset_m,
+          preferred_lateral_offset_m, path_heading_offset_rad,
+          additional_lateral_clearance_m, sample_step_m);
+      };
+    // A tactical snapshot is single-use and owns a private grid copy. Avoid
+    // populating a cache which cannot be reused, and keep all live cache
+    // mutation on the controller thread.
+    if (mpcc_lite_async_worker_context_) {
+      return evaluate();
+    }
+
+    const int waypoint_count = model->reference_path->n_waypoints;
+    int normalized_waypoint_id = waypoint_id;
+    if (waypoint_count > 0) {
+      if (model->reference_path->circular) {
+        normalized_waypoint_id %= waypoint_count;
+        if (normalized_waypoint_id < 0) {
+          normalized_waypoint_id += waypoint_count;
+        }
+      } else {
+        normalized_waypoint_id = std::clamp(
+          normalized_waypoint_id, 0, waypoint_count - 1);
+      }
+    }
+    const auto quantize = [](const double value, const double scale) {
+        return static_cast<std::int64_t>(std::llround(value * scale));
+      };
+    const PhysicalWallEnvelopeCacheKey key{
+      normalized_waypoint_id,
+      quantize(lower_lateral_offset_m, 1000.0),
+      quantize(upper_lateral_offset_m, 1000.0),
+      quantize(preferred_lateral_offset_m, 1000.0),
+      quantize(path_heading_offset_rad, 10000.0),
+      quantize(additional_lateral_clearance_m, 1000.0),
+      quantize(sample_step_m, 1000.0)};
+    const auto cached = physical_wall_envelope_cache_.find(key);
+    if (cached != physical_wall_envelope_cache_.end()) {
+      auto conservative = cached->second;
+      // Account for all lateral/clearance quantization and intersect with the
+      // exact current scalar interval. The later complete-profile validator
+      // remains authoritative for heading interpolation and swept footprint.
+      constexpr double kCacheReuseGuardM = 0.002;
+      conservative.lower_lateral_offset_m = std::max(
+        lower_lateral_offset_m,
+        conservative.lower_lateral_offset_m + kCacheReuseGuardM);
+      conservative.upper_lateral_offset_m = std::min(
+        upper_lateral_offset_m,
+        conservative.upper_lateral_offset_m - kCacheReuseGuardM);
+      if (
+        conservative.valid && conservative.feasible &&
+        conservative.upper_lateral_offset_m + kEps >=
+        conservative.lower_lateral_offset_m)
+      {
+        conservative.preferred_lateral_contained =
+          preferred_lateral_offset_m + kEps >=
+          conservative.lower_lateral_offset_m &&
+          preferred_lateral_offset_m <=
+          conservative.upper_lateral_offset_m + kEps;
+        conservative.checked_pose_count = 0U;
+        ++physical_wall_envelope_cache_hit_count_;
+        return conservative;
+      }
+    }
+
+    ++physical_wall_envelope_cache_miss_count_;
+    auto evaluated = evaluate();
+    if (evaluated.valid && evaluated.feasible) {
+      constexpr std::size_t kMaximumCacheEntries = 4096U;
+      if (physical_wall_envelope_cache_.size() >= kMaximumCacheEntries) {
+        // Bound memory and stale mission-specific quantization. Clearing is
+        // intentionally rare and leaves the current exact result available.
+        physical_wall_envelope_cache_.clear();
+      }
+      physical_wall_envelope_cache_[key] = evaluated;
+    }
+    return evaluated;
+  }
+
   OvertakeRecedingHorizonEvaluation optimize_live_overtake_line_horizon(
     const V2XBehaviorOutput & behavior_output,
     const OvertakeLineHorizonEvaluation & baseline_horizon,
@@ -18443,8 +18591,8 @@ private:
             const double local_upper = std::min(
               scalar_upper, baseline_target + maximum_adjustment);
             auto interval =
-              recovery_footprint::find_clear_lateral_interval_with_heading(
-              *overtake_static_wall_grid_, overtake_static_wall_footprint_,
+              find_cached_physical_wall_envelope(
+              ref_wp_id + i,
               reference_pose, local_lower, local_upper, baseline_target,
               heading_offset, clearance, physical_wall_envelope_sample_step);
             bool trust_region_expanded = false;
@@ -18452,8 +18600,8 @@ private:
               (!interval.valid || !interval.feasible) &&
               (local_lower > scalar_lower + kEps || local_upper < scalar_upper - kEps))
             {
-              interval = recovery_footprint::find_clear_lateral_interval_with_heading(
-                *overtake_static_wall_grid_, overtake_static_wall_footprint_,
+              interval = find_cached_physical_wall_envelope(
+                ref_wp_id + i,
                 reference_pose, scalar_lower, scalar_upper, baseline_target,
                 heading_offset, clearance, physical_wall_envelope_sample_step);
               trust_region_expanded = interval.valid && interval.feasible;
@@ -27321,6 +27469,8 @@ private:
           !target_bound_shiftout_freeze &&
           line_cfg.receding_horizon_target_bound_prefix_progress_extension_enabled,
           overtake_line_state_.phase == OvertakeLinePhase::Pass,
+          overtake_line_state_.phase == OvertakeLinePhase::Pass &&
+          overtake_line_state_.pass_front_overlap_exclusion_latched,
           target_bound_fresh_forward_progress,
           target_bound_mission_elapsed_sec,
           target_bound_mission_traveled_m,
@@ -27344,11 +27494,13 @@ private:
       {
         RCLCPP_WARN(
           rclcpp::get_logger("mpc_controller"),
-          "OvertakeLine target-bound execution progress extension active: "
-          "target=%s, side=%d, progress=%.2f m/age=%.2f s, "
+          "OvertakeLine target-bound Mission extension active: "
+          "target=%s, side=%d, mode=%s, progress=%.2f m/age=%.2f s, "
           "Mission=%.2f s/%.2f m, absolute=%.2f s/%.2f m, wp_id=%d",
           overtake_line_state_.target_vehicle_id.c_str(),
           overtake_line_state_.pass_side_sign,
+          overtake_line_state_.pass_front_overlap_exclusion_latched ?
+          "latched-clearance" : "fresh-progress",
           target_bound_forward_progress_m, target_bound_progress_age_sec,
           target_bound_mission_elapsed_sec, target_bound_mission_traveled_m,
           line_cfg.pass_horizon_absolute_time_limit,
@@ -27506,6 +27658,9 @@ private:
       budget_request.wall_preplan_warning = actual_wall_preplan_warning;
       budget_request.pass_phase =
         overtake_line_state_.phase == OvertakeLinePhase::Pass;
+      budget_request.latched_pass_clearance_acquired =
+        overtake_line_state_.phase == OvertakeLinePhase::Pass &&
+        overtake_line_state_.pass_front_overlap_exclusion_latched;
       budget_request.fresh_forward_progress = target_bound_fresh_forward_progress;
       budget_request.mission_elapsed_sec = target_bound_mission_elapsed_sec;
       budget_request.mission_traveled_m = target_bound_mission_traveled_m;

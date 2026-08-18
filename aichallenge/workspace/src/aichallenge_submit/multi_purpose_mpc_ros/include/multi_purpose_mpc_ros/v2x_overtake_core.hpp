@@ -1322,6 +1322,12 @@ struct TargetBoundExecutionHoldRequest
   /// progress is fresh and the immutable Mission budget remains available.
   bool forward_progress_extension_enabled{false};
   bool pass_phase{false};
+  /// Pass already acquired the physical lateral-clearance latch. A future
+  /// target-wall prediction conflict may then retain the current same-side
+  /// physical prefix inside the immutable Mission budget, even if the short
+  /// repair window was previously consumed. Current body/wall hard guards in
+  /// can_hold_target_bound_execution_for_replan() remain mandatory.
+  bool latched_pass_clearance_acquired{false};
   bool fresh_forward_progress{false};
   double mission_elapsed_sec{};
   double mission_traveled_m{};

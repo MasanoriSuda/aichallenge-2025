@@ -1833,6 +1833,19 @@ TargetBoundMpcGateResolution update_target_bound_mpc_gate(
   return resolution;
 }
 
+bool can_release_tracking_mpc_target_bound(
+  const TrackingMpcTargetBoundReleaseRequest & request) noexcept
+{
+  return request.pass_phase && request.lateral_clearance_latched &&
+         request.target_seen && !request.target_position_jump &&
+         !request.target_course_progress_rejected &&
+         request.current_body_footprints_separated &&
+         request.predicted_footprint_sweep_valid &&
+         request.predicted_body_footprint_sweep_separated &&
+         !request.execution_corridor_blocked &&
+         !request.emergency_front_risk;
+}
+
 bool can_release_receding_horizon_rear_clear_bounds(
   const RecedingHorizonRearClearBoundsReleaseRequest & request) noexcept
 {

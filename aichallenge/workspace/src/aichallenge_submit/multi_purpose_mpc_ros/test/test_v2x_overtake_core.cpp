@@ -3677,6 +3677,54 @@ TEST(V2XOvertakeCoreSpeed, TargetBoundMpcGateRetainsCooldownAcrossMissionBoundar
   EXPECT_TRUE(result.solver_suppressed);
 }
 
+TEST(V2XOvertakeCoreSpeed, LatchedSeparatedPassReleasesTrackingTargetBound)
+{
+  multi_purpose_mpc_ros::v2x_overtake_core::
+  TrackingMpcTargetBoundReleaseRequest request;
+  request.pass_phase = true;
+  request.lateral_clearance_latched = true;
+  request.target_seen = true;
+  request.current_body_footprints_separated = true;
+  request.predicted_footprint_sweep_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+
+  EXPECT_TRUE(
+    multi_purpose_mpc_ros::v2x_overtake_core::
+    can_release_tracking_mpc_target_bound(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, TrackingTargetBoundReturnsOnPassUncertainty)
+{
+  multi_purpose_mpc_ros::v2x_overtake_core::
+  TrackingMpcTargetBoundReleaseRequest request;
+  request.pass_phase = true;
+  request.lateral_clearance_latched = true;
+  request.target_seen = true;
+  request.current_body_footprints_separated = true;
+  request.predicted_footprint_sweep_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+
+  request.predicted_body_footprint_sweep_separated = false;
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::v2x_overtake_core::
+    can_release_tracking_mpc_target_bound(request));
+  request.predicted_body_footprint_sweep_separated = true;
+  request.target_position_jump = true;
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::v2x_overtake_core::
+    can_release_tracking_mpc_target_bound(request));
+  request.target_position_jump = false;
+  request.execution_corridor_blocked = true;
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::v2x_overtake_core::
+    can_release_tracking_mpc_target_bound(request));
+  request.execution_corridor_blocked = false;
+  request.emergency_front_risk = true;
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::v2x_overtake_core::
+    can_release_tracking_mpc_target_bound(request));
+}
+
 TEST(V2XOvertakeCoreSpeed, OpponentBoundsRemainUntilRearClear)
 {
   RecedingHorizonRearClearBoundsReleaseRequest request{

@@ -2705,27 +2705,22 @@ struct OvertakeRecedingHorizonEvaluation
 };
 
 // Static-map footprint scans are expensive compared with the 25 ms control
-// period. Consecutive receding horizons revisit almost all of the same course
-// samples, so keep a compact, controller-local cache. The fine quantization is
-// only used to find a reusable conservative envelope; the complete candidate
-// trajectory still passes the existing footprint revalidation before it can
-// own control.
+// period. Cache the static collision-free components, not Mission-dependent
+// preferred/local intervals. A heading bucket is evaluated with an expanded
+// footprint so every exact heading represented by that bucket is conservative.
+// The complete candidate trajectory still passes the existing footprint
+// revalidation before it can own control.
 struct PhysicalWallEnvelopeCacheKey
 {
   int waypoint_id{};
-  std::int64_t lower_mm{};
-  std::int64_t upper_mm{};
-  std::int64_t preferred_mm{};
-  std::int64_t heading_0p1_mrad{};
+  std::int64_t heading_bucket{};
   std::int64_t clearance_mm{};
   std::int64_t sample_step_mm{};
 
   bool operator==(const PhysicalWallEnvelopeCacheKey & other) const noexcept
   {
     return waypoint_id == other.waypoint_id &&
-           lower_mm == other.lower_mm && upper_mm == other.upper_mm &&
-           preferred_mm == other.preferred_mm &&
-           heading_0p1_mrad == other.heading_0p1_mrad &&
+           heading_bucket == other.heading_bucket &&
            clearance_mm == other.clearance_mm &&
            sample_step_mm == other.sample_step_mm;
   }
@@ -2741,14 +2736,28 @@ struct PhysicalWallEnvelopeCacheKeyHash
         seed ^= hash + 0x9e3779b9U + (seed << 6U) + (seed >> 2U);
       };
     combine(key.waypoint_id);
-    combine(key.lower_mm);
-    combine(key.upper_mm);
-    combine(key.preferred_mm);
-    combine(key.heading_0p1_mrad);
+    combine(key.heading_bucket);
     combine(key.clearance_mm);
     combine(key.sample_step_mm);
     return seed;
   }
+};
+
+struct PhysicalWallEnvelopeCacheEntry
+{
+  double searched_lower_m{};
+  double searched_upper_m{};
+  recovery_footprint::LateralClearRunsResult runs;
+};
+
+struct PhysicalWallEnvelopeCacheTelemetry
+{
+  std::uint64_t request_count{};
+  std::uint64_t hit_count{};
+  std::uint64_t miss_count{};
+  std::uint64_t evaluation_count{};
+  std::uint64_t scanned_pose_count{};
+  std::size_t entry_count{};
 };
 
 struct OvertakeLineEntryPreflight
@@ -4987,8 +4996,29 @@ struct MPC
     overtake_static_wall_grid_ = grid;
     overtake_static_wall_footprint_ = footprint;
     physical_wall_envelope_cache_.clear();
+    physical_wall_envelope_cache_request_count_ = 0U;
     physical_wall_envelope_cache_hit_count_ = 0U;
     physical_wall_envelope_cache_miss_count_ = 0U;
+    physical_wall_envelope_cache_evaluation_count_ = 0U;
+    physical_wall_envelope_cache_scanned_pose_count_ = 0U;
+  }
+
+  PhysicalWallEnvelopeCacheTelemetry take_physical_wall_envelope_cache_telemetry()
+  {
+    PhysicalWallEnvelopeCacheTelemetry telemetry;
+    telemetry.request_count = physical_wall_envelope_cache_request_count_;
+    telemetry.hit_count = physical_wall_envelope_cache_hit_count_;
+    telemetry.miss_count = physical_wall_envelope_cache_miss_count_;
+    telemetry.evaluation_count = physical_wall_envelope_cache_evaluation_count_;
+    telemetry.scanned_pose_count =
+      physical_wall_envelope_cache_scanned_pose_count_;
+    telemetry.entry_count = physical_wall_envelope_cache_.size();
+    physical_wall_envelope_cache_request_count_ = 0U;
+    physical_wall_envelope_cache_hit_count_ = 0U;
+    physical_wall_envelope_cache_miss_count_ = 0U;
+    physical_wall_envelope_cache_evaluation_count_ = 0U;
+    physical_wall_envelope_cache_scanned_pose_count_ = 0U;
+    return telemetry;
   }
 
   void update_actual_pose_for_wall_monitor(
@@ -14095,9 +14125,23 @@ struct MPC
       cfg.v2x_behavior.overtake_line.mpcc_stage_corridor_mpc_constraints_enabled &&
       overtake_line_output.active &&
       overtake_line_output.stage_corridor_constraints_active;
+    const bool tracking_mpc_target_bound_released =
+      overtake_core::can_release_tracking_mpc_target_bound(
+      overtake_core::TrackingMpcTargetBoundReleaseRequest{
+        overtake_line_state_.phase == OvertakeLinePhase::Pass,
+        overtake_line_state_.pass_front_overlap_exclusion_latched,
+        behavior_output.locked_target_seen,
+        behavior_output.locked_target_position_jump,
+        behavior_output.locked_target_course_progress_rejected,
+        behavior_output.locked_target_current_body_footprints_separated,
+        behavior_output.locked_target_footprint_prediction_valid,
+        behavior_output.locked_target_predicted_body_footprint_sweep_separated,
+        behavior_output.overtake_execution_corridor_blocked,
+        behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake});
     const bool stage_corridor_target_bound_candidate =
       stage_corridor_requested &&
-      overtake_line_output.stage_corridor_target_bound_active;
+      overtake_line_output.stage_corridor_target_bound_active &&
+      !tracking_mpc_target_bound_released;
     const bool stage_corridor_target_bound_solver_fallback =
       last_control_was_fallback_ &&
       stage_corridor_mpc_target_bound_was_active_;
@@ -14181,11 +14225,13 @@ struct MPC
       RCLCPP_INFO(
         rclcpp::get_logger("mpc_controller"),
         "Overtake stage corridor MPC constraints: active=%d, target_bound=%d, "
-        "candidate=%d, confirm_pending=%d, solver_suppressed=%d/%.2f s, "
+        "candidate=%d, pass_release=%d, confirm_pending=%d, "
+        "solver_suppressed=%d/%.2f s, "
         "samples=%zu, min_width=%.2f m, phase=%s, wp_id=%d",
         stage_corridor.active ? 1 : 0,
         stage_corridor_target_bound_effective ? 1 : 0,
         stage_corridor_target_bound_candidate ? 1 : 0,
+        tracking_mpc_target_bound_released ? 1 : 0,
         target_bound_gate.confirmation_pending ? 1 : 0,
         target_bound_gate.solver_suppressed ? 1 : 0,
         target_bound_gate.solver_suppressed ?
@@ -15678,10 +15724,13 @@ struct MPC
   recovery_footprint::FootprintExtents overtake_static_wall_footprint_;
   std::unordered_map<
     PhysicalWallEnvelopeCacheKey,
-    recovery_footprint::LateralClearIntervalResult,
+    PhysicalWallEnvelopeCacheEntry,
     PhysicalWallEnvelopeCacheKeyHash> physical_wall_envelope_cache_;
+  std::uint64_t physical_wall_envelope_cache_request_count_{0U};
   std::uint64_t physical_wall_envelope_cache_hit_count_{0U};
   std::uint64_t physical_wall_envelope_cache_miss_count_{0U};
+  std::uint64_t physical_wall_envelope_cache_evaluation_count_{0U};
+  std::uint64_t physical_wall_envelope_cache_scanned_pose_count_{0U};
   std::optional<recovery_footprint::Pose2D> actual_wall_monitor_pose_;
   bool use_obstacle_avoidance{};
   bool use_path_constraints_topic{};
@@ -18238,25 +18287,63 @@ private:
   find_cached_physical_wall_envelope(
     const int waypoint_id,
     const recovery_footprint::Pose2D & reference_pose,
-    const double lower_lateral_offset_m,
-    const double upper_lateral_offset_m,
+    const double scan_lower_lateral_offset_m,
+    const double scan_upper_lateral_offset_m,
+    const double query_lower_lateral_offset_m,
+    const double query_upper_lateral_offset_m,
     const double preferred_lateral_offset_m,
     const double path_heading_offset_rad,
     const double additional_lateral_clearance_m,
     const double sample_step_m)
   {
-    const auto evaluate = [&]() {
-        return recovery_footprint::find_clear_lateral_interval_with_heading(
-          *overtake_static_wall_grid_, overtake_static_wall_footprint_,
+    constexpr double kHeadingBucketWidthRad = 0.01;
+    constexpr double kCacheBoundaryGuardM = 0.001;
+    const auto heading_bucket = static_cast<std::int64_t>(
+      std::llround(path_heading_offset_rad / kHeadingBucketWidthRad));
+    const double bucket_heading_rad =
+      static_cast<double>(heading_bucket) * kHeadingBucketWidthRad;
+    const auto clearance_mm = static_cast<std::int64_t>(
+      std::ceil(std::max(0.0, additional_lateral_clearance_m) * 1000.0 - 1e-9));
+    const double bucket_clearance_m =
+      static_cast<double>(clearance_mm) / 1000.0;
+    const auto sample_step_mm = std::max<std::int64_t>(
+      1, static_cast<std::int64_t>(
+        std::floor(std::max(0.001, sample_step_m) * 1000.0 + 1e-9)));
+    const double bucket_sample_step_m =
+      static_cast<double>(sample_step_mm) / 1000.0;
+    const double maximum_longitudinal_extent = std::max(
+      overtake_static_wall_footprint_.front_extent_m,
+      overtake_static_wall_footprint_.rear_extent_m) +
+      overtake_static_wall_footprint_.margin_m;
+    const double maximum_lateral_extent = std::max(
+      overtake_static_wall_footprint_.left_extent_m,
+      overtake_static_wall_footprint_.right_extent_m) +
+      overtake_static_wall_footprint_.margin_m + bucket_clearance_m;
+    const double footprint_radius_m = std::hypot(
+      maximum_longitudinal_extent, maximum_lateral_extent);
+    const double heading_bucket_guard_m =
+      2.0 * footprint_radius_m *
+      std::sin(0.25 * kHeadingBucketWidthRad);
+    recovery_footprint::FootprintExtents bucket_footprint =
+      overtake_static_wall_footprint_;
+    bucket_footprint.margin_m += heading_bucket_guard_m;
+    const auto evaluate = [&] (
+        const double lower_lateral_offset_m,
+        const double upper_lateral_offset_m) {
+        return recovery_footprint::find_clear_lateral_runs_with_heading(
+          *overtake_static_wall_grid_, bucket_footprint,
           reference_pose, lower_lateral_offset_m, upper_lateral_offset_m,
-          preferred_lateral_offset_m, path_heading_offset_rad,
-          additional_lateral_clearance_m, sample_step_m);
+          bucket_heading_rad, bucket_clearance_m, bucket_sample_step_m);
       };
     // A tactical snapshot is single-use and owns a private grid copy. Avoid
     // populating a cache which cannot be reused, and keep all live cache
     // mutation on the controller thread.
     if (mpcc_lite_async_worker_context_) {
-      return evaluate();
+      const auto runs = evaluate(
+        scan_lower_lateral_offset_m, scan_upper_lateral_offset_m);
+      return recovery_footprint::select_lateral_clear_interval(
+        runs, query_lower_lateral_offset_m, query_upper_lateral_offset_m,
+        preferred_lateral_offset_m, kCacheBoundaryGuardM);
     }
 
     const int waypoint_count = model->reference_path->n_waypoints;
@@ -18272,58 +18359,55 @@ private:
           normalized_waypoint_id, 0, waypoint_count - 1);
       }
     }
-    const auto quantize = [](const double value, const double scale) {
-        return static_cast<std::int64_t>(std::llround(value * scale));
-      };
     const PhysicalWallEnvelopeCacheKey key{
       normalized_waypoint_id,
-      quantize(lower_lateral_offset_m, 1000.0),
-      quantize(upper_lateral_offset_m, 1000.0),
-      quantize(preferred_lateral_offset_m, 1000.0),
-      quantize(path_heading_offset_rad, 10000.0),
-      quantize(additional_lateral_clearance_m, 1000.0),
-      quantize(sample_step_m, 1000.0)};
+      heading_bucket,
+      clearance_mm,
+      sample_step_mm};
+    ++physical_wall_envelope_cache_request_count_;
     const auto cached = physical_wall_envelope_cache_.find(key);
-    if (cached != physical_wall_envelope_cache_.end()) {
-      auto conservative = cached->second;
-      // Account for all lateral/clearance quantization and intersect with the
-      // exact current scalar interval. The later complete-profile validator
-      // remains authoritative for heading interpolation and swept footprint.
-      constexpr double kCacheReuseGuardM = 0.002;
-      conservative.lower_lateral_offset_m = std::max(
-        lower_lateral_offset_m,
-        conservative.lower_lateral_offset_m + kCacheReuseGuardM);
-      conservative.upper_lateral_offset_m = std::min(
-        upper_lateral_offset_m,
-        conservative.upper_lateral_offset_m - kCacheReuseGuardM);
-      if (
-        conservative.valid && conservative.feasible &&
-        conservative.upper_lateral_offset_m + kEps >=
-        conservative.lower_lateral_offset_m)
-      {
-        conservative.preferred_lateral_contained =
-          preferred_lateral_offset_m + kEps >=
-          conservative.lower_lateral_offset_m &&
-          preferred_lateral_offset_m <=
-          conservative.upper_lateral_offset_m + kEps;
-        conservative.checked_pose_count = 0U;
-        ++physical_wall_envelope_cache_hit_count_;
-        return conservative;
-      }
+    if (
+      cached != physical_wall_envelope_cache_.end() &&
+      cached->second.searched_lower_m <= scan_lower_lateral_offset_m + kEps &&
+      cached->second.searched_upper_m + kEps >= scan_upper_lateral_offset_m)
+    {
+      ++physical_wall_envelope_cache_hit_count_;
+      return recovery_footprint::select_lateral_clear_interval(
+        cached->second.runs,
+        query_lower_lateral_offset_m, query_upper_lateral_offset_m,
+        preferred_lateral_offset_m, kCacheBoundaryGuardM);
     }
 
     ++physical_wall_envelope_cache_miss_count_;
-    auto evaluated = evaluate();
-    if (evaluated.valid && evaluated.feasible) {
+    ++physical_wall_envelope_cache_evaluation_count_;
+    const double evaluation_lower = cached == physical_wall_envelope_cache_.end() ?
+      scan_lower_lateral_offset_m :
+      std::min(scan_lower_lateral_offset_m, cached->second.searched_lower_m);
+    const double evaluation_upper = cached == physical_wall_envelope_cache_.end() ?
+      scan_upper_lateral_offset_m :
+      std::max(scan_upper_lateral_offset_m, cached->second.searched_upper_m);
+    auto evaluated = evaluate(evaluation_lower, evaluation_upper);
+    physical_wall_envelope_cache_scanned_pose_count_ += evaluated.checked_pose_count;
+    if (evaluated.valid) {
       constexpr std::size_t kMaximumCacheEntries = 4096U;
-      if (physical_wall_envelope_cache_.size() >= kMaximumCacheEntries) {
-        // Bound memory and stale mission-specific quantization. Clearing is
-        // intentionally rare and leaves the current exact result available.
-        physical_wall_envelope_cache_.clear();
+      if (
+        cached == physical_wall_envelope_cache_.end() &&
+        physical_wall_envelope_cache_.size() >= kMaximumCacheEntries)
+      {
+        // Do not flush the entire course cache at the capacity boundary.
+        // Removing one old entry avoids the periodic full-cache thrash seen
+        // with the former Mission-specific key.
+        physical_wall_envelope_cache_.erase(
+          physical_wall_envelope_cache_.begin());
       }
-      physical_wall_envelope_cache_[key] = evaluated;
+      physical_wall_envelope_cache_[key] = PhysicalWallEnvelopeCacheEntry{
+        evaluation_lower, evaluation_upper, std::move(evaluated)};
+      return recovery_footprint::select_lateral_clear_interval(
+        physical_wall_envelope_cache_.at(key).runs,
+        query_lower_lateral_offset_m, query_upper_lateral_offset_m,
+        preferred_lateral_offset_m, kCacheBoundaryGuardM);
     }
-    return evaluated;
+    return recovery_footprint::LateralClearIntervalResult{};
   }
 
   OvertakeRecedingHorizonEvaluation optimize_live_overtake_line_horizon(
@@ -18593,7 +18677,8 @@ private:
             auto interval =
               find_cached_physical_wall_envelope(
               ref_wp_id + i,
-              reference_pose, local_lower, local_upper, baseline_target,
+              reference_pose, scalar_lower, scalar_upper,
+              local_lower, local_upper, baseline_target,
               heading_offset, clearance, physical_wall_envelope_sample_step);
             bool trust_region_expanded = false;
             if (
@@ -18602,7 +18687,8 @@ private:
             {
               interval = find_cached_physical_wall_envelope(
                 ref_wp_id + i,
-                reference_pose, scalar_lower, scalar_upper, baseline_target,
+                reference_pose, scalar_lower, scalar_upper,
+                scalar_lower, scalar_upper, baseline_target,
                 heading_offset, clearance, physical_wall_envelope_sample_step);
               trust_region_expanded = interval.valid && interval.feasible;
             }
@@ -38915,6 +39001,9 @@ private:
     if (window_sec < 1.0) {
       return;
     }
+    const auto wall_cache_telemetry = mpc_ != nullptr ?
+      mpc_->take_physical_wall_envelope_cache_telemetry() :
+      PhysicalWallEnvelopeCacheTelemetry{};
     if (mpc_cfg_.v2x_behavior.debug_log_enabled && control_callback_count_ > 0U) {
       RCLCPP_INFO(
         get_logger(),
@@ -38924,6 +39013,22 @@ private:
         control_callback_total_ms_ / static_cast<double>(control_callback_count_),
         control_callback_maximum_ms_, period_ms,
         static_cast<std::size_t>(control_callback_overrun_count_));
+      if (wall_cache_telemetry.request_count > 0U) {
+        const double hit_rate =
+          static_cast<double>(wall_cache_telemetry.hit_count) /
+          static_cast<double>(wall_cache_telemetry.request_count);
+        RCLCPP_INFO(
+          get_logger(),
+          "Physical wall envelope cache: requests=%zu, hits=%zu, misses=%zu, "
+          "hit_rate=%.3f, scans=%zu, poses=%zu, entries=%zu",
+          static_cast<std::size_t>(wall_cache_telemetry.request_count),
+          static_cast<std::size_t>(wall_cache_telemetry.hit_count),
+          static_cast<std::size_t>(wall_cache_telemetry.miss_count),
+          hit_rate,
+          static_cast<std::size_t>(wall_cache_telemetry.evaluation_count),
+          static_cast<std::size_t>(wall_cache_telemetry.scanned_pose_count),
+          wall_cache_telemetry.entry_count);
+      }
     }
     control_callback_count_ = 0U;
     control_callback_overrun_count_ = 0U;

@@ -248,6 +248,24 @@ struct LateralClearIntervalResult
   std::size_t checked_pose_count{};
 };
 
+struct LateralClearRun
+{
+  double lower_lateral_offset_m{};
+  double upper_lateral_offset_m{};
+};
+
+/// All connected collision-free lateral components from one static-map scan.
+///
+/// Keeping the components separate allows a caller to cache static geometry
+/// independently of a changing Mission preferred offset. Components must not
+/// be joined across occupied or unknown cells.
+struct LateralClearRunsResult
+{
+  bool valid{false};
+  std::vector<LateralClearRun> clear_runs;
+  std::size_t checked_pose_count{};
+};
+
 struct FeasibilityResult
 {
   bool feasible{false};
@@ -387,6 +405,20 @@ LateralClearIntervalResult find_clear_lateral_interval_with_heading(
   double upper_lateral_offset_m, double preferred_lateral_offset_m,
   double path_heading_offset_rad, double additional_lateral_clearance_m,
   double sample_step_m);
+
+/// Heading-aware scan returning every connected collision-free component.
+LateralClearRunsResult find_clear_lateral_runs_with_heading(
+  const OccupancyGrid & grid, const FootprintExtents & footprint,
+  const Pose2D & reference_pose, double lower_lateral_offset_m,
+  double upper_lateral_offset_m, double path_heading_offset_rad,
+  double additional_lateral_clearance_m, double sample_step_m);
+
+/// Select the component nearest preferred_lateral_offset_m after intersecting
+/// cached runs with the current Mission query interval.
+LateralClearIntervalResult select_lateral_clear_interval(
+  const LateralClearRunsResult & runs, double lower_lateral_offset_m,
+  double upper_lateral_offset_m, double preferred_lateral_offset_m,
+  double boundary_guard_m = 0.0);
 
 /// Classify the nearest occupied/unknown map cells in the vehicle frame.
 ///

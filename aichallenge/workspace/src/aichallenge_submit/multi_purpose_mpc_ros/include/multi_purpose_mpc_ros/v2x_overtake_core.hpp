@@ -1157,6 +1157,27 @@ struct TargetBoundMpcGateResolution
 TargetBoundMpcGateResolution update_target_bound_mpc_gate(
   const TargetBoundMpcGateRequest & request) noexcept;
 
+struct TrackingMpcTargetBoundReleaseRequest
+{
+  bool pass_phase{false};
+  bool lateral_clearance_latched{false};
+  bool target_seen{false};
+  bool target_position_jump{false};
+  bool target_course_progress_rejected{false};
+  bool current_body_footprints_separated{false};
+  bool predicted_footprint_sweep_valid{false};
+  bool predicted_body_footprint_sweep_separated{false};
+  bool execution_corridor_blocked{false};
+  bool emergency_front_risk{false};
+};
+
+/// Once a validated Pass has acquired physical lateral clearance, opponent
+/// bounds remain in the receding-horizon planner but need not be duplicated as
+/// hard state bounds in the lower-level tracking MPC. Any continuity or
+/// overlap uncertainty restores the target bounds immediately.
+bool can_release_tracking_mpc_target_bound(
+  const TrackingMpcTargetBoundReleaseRequest & request) noexcept;
+
 struct RecedingHorizonRearClearBoundsReleaseRequest
 {
   bool pass_phase{false};

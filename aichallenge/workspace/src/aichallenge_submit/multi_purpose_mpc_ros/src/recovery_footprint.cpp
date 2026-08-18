@@ -1000,19 +1000,18 @@ LateralProfileClearanceResult evaluate_lateral_profile_static_map(
   return result;
 }
 
-LateralClearIntervalResult find_clear_lateral_interval_with_heading(
+LateralClearRunsResult find_clear_lateral_runs_with_heading(
   const OccupancyGrid & grid, const FootprintExtents & footprint,
   const Pose2D & reference_pose, const double lower_lateral_offset_m,
-  const double upper_lateral_offset_m, const double preferred_lateral_offset_m,
-  const double path_heading_offset_rad,
+  const double upper_lateral_offset_m, const double path_heading_offset_rad,
   const double additional_lateral_clearance_m, const double sample_step_m)
 {
-  LateralClearIntervalResult result;
+  LateralClearRunsResult result;
   if (
     !grid.valid() || !footprint.valid() || !valid_pose(reference_pose) ||
     !finite(lower_lateral_offset_m) || !finite(upper_lateral_offset_m) ||
     upper_lateral_offset_m < lower_lateral_offset_m ||
-    !finite(preferred_lateral_offset_m) || !finite(path_heading_offset_rad) ||
+    !finite(path_heading_offset_rad) ||
     !finite(additional_lateral_clearance_m) || additional_lateral_clearance_m < 0.0 ||
     !finite(sample_step_m) || sample_step_m <= 0.0)
   {
@@ -1032,12 +1031,6 @@ LateralClearIntervalResult find_clear_lateral_interval_with_heading(
     return result;
   }
 
-  struct ClearRun
-  {
-    double lower{};
-    double upper{};
-  };
-  std::vector<ClearRun> clear_runs;
   bool active_run{false};
   double active_run_lower{0.0};
   const double left_x = -std::sin(reference_pose.yaw_rad);
@@ -1066,43 +1059,106 @@ LateralClearIntervalResult find_clear_lateral_interval_with_heading(
         static_cast<double>(segment_count.value());
       const double previous_lateral = lower_lateral_offset_m +
         previous_ratio * (upper_lateral_offset_m - lower_lateral_offset_m);
-      clear_runs.push_back(ClearRun{active_run_lower, previous_lateral});
+      result.clear_runs.push_back(
+        LateralClearRun{active_run_lower, previous_lateral});
       active_run = false;
     }
   }
   if (active_run) {
-    clear_runs.push_back(ClearRun{active_run_lower, upper_lateral_offset_m});
+    result.clear_runs.push_back(
+      LateralClearRun{active_run_lower, upper_lateral_offset_m});
   }
-  if (clear_runs.empty()) {
+  return result;
+}
+
+LateralClearIntervalResult select_lateral_clear_interval(
+  const LateralClearRunsResult & runs, const double lower_lateral_offset_m,
+  const double upper_lateral_offset_m, const double preferred_lateral_offset_m,
+  const double boundary_guard_m)
+{
+  LateralClearIntervalResult result;
+  if (
+    !runs.valid || !finite(lower_lateral_offset_m) ||
+    !finite(upper_lateral_offset_m) ||
+    upper_lateral_offset_m < lower_lateral_offset_m ||
+    !finite(preferred_lateral_offset_m) ||
+    !finite(boundary_guard_m) || boundary_guard_m < 0.0)
+  {
+    return result;
+  }
+  result.valid = true;
+  result.checked_pose_count = runs.checked_pose_count;
+
+  std::vector<LateralClearRun> intersected_runs;
+  intersected_runs.reserve(runs.clear_runs.size());
+  for (const auto & run : runs.clear_runs) {
+    if (
+      !finite(run.lower_lateral_offset_m) ||
+      !finite(run.upper_lateral_offset_m) ||
+      run.upper_lateral_offset_m < run.lower_lateral_offset_m)
+    {
+      return LateralClearIntervalResult{};
+    }
+    const double lower = std::max(
+      lower_lateral_offset_m,
+      run.lower_lateral_offset_m + boundary_guard_m);
+    const double upper = std::min(
+      upper_lateral_offset_m,
+      run.upper_lateral_offset_m - boundary_guard_m);
+    if (upper + kNumericalEpsilon >= lower) {
+      intersected_runs.push_back(LateralClearRun{lower, upper});
+    }
+  }
+  if (intersected_runs.empty()) {
     return result;
   }
 
-  const auto distance_to_run = [&](const ClearRun & run) {
-      if (preferred_lateral_offset_m < run.lower) {
-        return run.lower - preferred_lateral_offset_m;
+  const auto distance_to_run = [&](const LateralClearRun & run) {
+      if (preferred_lateral_offset_m < run.lower_lateral_offset_m) {
+        return run.lower_lateral_offset_m - preferred_lateral_offset_m;
       }
-      if (preferred_lateral_offset_m > run.upper) {
-        return preferred_lateral_offset_m - run.upper;
+      if (preferred_lateral_offset_m > run.upper_lateral_offset_m) {
+        return preferred_lateral_offset_m - run.upper_lateral_offset_m;
       }
       return 0.0;
     };
   const auto selected = std::min_element(
-    clear_runs.begin(), clear_runs.end(),
-    [&](const ClearRun & lhs, const ClearRun & rhs) {
+    intersected_runs.begin(), intersected_runs.end(),
+    [&](const LateralClearRun & lhs, const LateralClearRun & rhs) {
       const double lhs_distance = distance_to_run(lhs);
       const double rhs_distance = distance_to_run(rhs);
       if (std::abs(lhs_distance - rhs_distance) > kNumericalEpsilon) {
         return lhs_distance < rhs_distance;
       }
-      return lhs.upper - lhs.lower > rhs.upper - rhs.lower;
+      return
+        lhs.upper_lateral_offset_m - lhs.lower_lateral_offset_m >
+        rhs.upper_lateral_offset_m - rhs.lower_lateral_offset_m;
     });
   result.feasible = true;
-  result.lower_lateral_offset_m = selected->lower;
-  result.upper_lateral_offset_m = selected->upper;
+  result.lower_lateral_offset_m = selected->lower_lateral_offset_m;
+  result.upper_lateral_offset_m = selected->upper_lateral_offset_m;
   result.preferred_lateral_contained =
-    preferred_lateral_offset_m + kNumericalEpsilon >= selected->lower &&
-    preferred_lateral_offset_m <= selected->upper + kNumericalEpsilon;
+    preferred_lateral_offset_m + kNumericalEpsilon >=
+    selected->lower_lateral_offset_m &&
+    preferred_lateral_offset_m <=
+    selected->upper_lateral_offset_m + kNumericalEpsilon;
   return result;
+}
+
+LateralClearIntervalResult find_clear_lateral_interval_with_heading(
+  const OccupancyGrid & grid, const FootprintExtents & footprint,
+  const Pose2D & reference_pose, const double lower_lateral_offset_m,
+  const double upper_lateral_offset_m, const double preferred_lateral_offset_m,
+  const double path_heading_offset_rad,
+  const double additional_lateral_clearance_m, const double sample_step_m)
+{
+  const auto runs = find_clear_lateral_runs_with_heading(
+    grid, footprint, reference_pose, lower_lateral_offset_m,
+    upper_lateral_offset_m, path_heading_offset_rad,
+    additional_lateral_clearance_m, sample_step_m);
+  return select_lateral_clear_interval(
+    runs, lower_lateral_offset_m, upper_lateral_offset_m,
+    preferred_lateral_offset_m);
 }
 
 LateralClearIntervalResult find_clear_lateral_interval(

@@ -542,6 +542,48 @@ TEST(RecoveryFootprintLateralInterval, SelectsConnectedComponentNearestPreferenc
   EXPECT_GE(result.upper_lateral_offset_m, 1.0);
 }
 
+TEST(RecoveryFootprintLateralInterval, ReusesScannedRunsForDifferentMissionPreferences)
+{
+  auto grid = make_grid(200U, 200U, 0.1);
+  for (std::size_t column = 0U; column < grid.width; ++column) {
+    set_world_cell(grid, 0.1 * static_cast<double>(column), 10.0);
+  }
+  const auto footprint =
+    recovery::FootprintExtents{0.2, 0.2, 0.2, 0.2, 0.0};
+  const auto pose = recovery::Pose2D{10.0, 10.0, 0.0};
+  const auto runs = recovery::find_clear_lateral_runs_with_heading(
+    grid, footprint, pose, -2.0, 2.0, 0.0, 0.0, 0.05);
+
+  ASSERT_TRUE(runs.valid);
+  ASSERT_GE(runs.clear_runs.size(), 2U);
+  const auto negative = recovery::select_lateral_clear_interval(
+    runs, -2.0, 2.0, -1.0);
+  const auto positive = recovery::select_lateral_clear_interval(
+    runs, -2.0, 2.0, 1.0);
+
+  ASSERT_TRUE(negative.feasible);
+  ASSERT_TRUE(positive.feasible);
+  EXPECT_LT(negative.upper_lateral_offset_m, 0.0);
+  EXPECT_GT(positive.lower_lateral_offset_m, 0.0);
+  EXPECT_EQ(negative.checked_pose_count, runs.checked_pose_count);
+  EXPECT_EQ(positive.checked_pose_count, runs.checked_pose_count);
+}
+
+TEST(RecoveryFootprintLateralInterval, CachedRunSelectionAppliesBoundaryGuard)
+{
+  recovery::LateralClearRunsResult runs;
+  runs.valid = true;
+  runs.clear_runs.push_back(recovery::LateralClearRun{-1.0, 1.0});
+
+  const auto result = recovery::select_lateral_clear_interval(
+    runs, -1.0, 1.0, 0.0, 0.05);
+
+  ASSERT_TRUE(result.valid);
+  ASSERT_TRUE(result.feasible);
+  EXPECT_NEAR(result.lower_lateral_offset_m, -0.95, 1e-9);
+  EXPECT_NEAR(result.upper_lateral_offset_m, 0.95, 1e-9);
+}
+
 TEST(RecoveryFootprintLateralInterval, AppliesAdditionalWallClearance)
 {
   auto grid = make_grid(200U, 200U, 0.1);

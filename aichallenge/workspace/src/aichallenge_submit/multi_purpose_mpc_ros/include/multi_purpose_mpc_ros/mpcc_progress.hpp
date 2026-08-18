@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <limits>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace multi_purpose_mpc_ros::mpcc_progress
@@ -369,6 +370,59 @@ enum class RtiRefinementDecision
 /// refinement is skipped or later fails.
 RtiRefinementDecision resolve_rti_refinement(
   const RtiRefinementRequest & request) noexcept;
+
+struct ExtendedBranchEvaluation
+{
+  int side_sign{};
+  bool attempted{false};
+  bool feasible{false};
+  double objective{std::numeric_limits<double>::infinity()};
+  double minimum_lateral_bound_reserve_m{};
+  double terminal_progress_m{};
+  double terminal_velocity_mps{};
+  double solve_ms{};
+  int iterations{};
+  std::string failure_reason;
+};
+
+struct ExtendedBranchSelectionRequest
+{
+  ExtendedBranchEvaluation left;
+  ExtendedBranchEvaluation right;
+  int current_side_sign{};
+  int fallback_side_sign{};
+  bool no_return{false};
+  double minimum_objective_advantage{};
+  double minimum_lateral_bound_reserve_m{};
+};
+
+enum class ExtendedBranchSelectionReason
+{
+  None,
+  OnlyLeftFeasible,
+  OnlyRightFeasible,
+  LowerObjective,
+  CurrentSideHysteresis,
+  NoReturnCurrentSide,
+  FallbackTieBreak,
+};
+
+struct ExtendedBranchSelectionResolution
+{
+  bool valid{false};
+  int selected_side_sign{};
+  double objective_advantage{};
+  ExtendedBranchSelectionReason reason{ExtendedBranchSelectionReason::None};
+};
+
+/// Select one complete extended-MPCC branch.  Lower objective is better.
+/// A committed current side remains authoritative after no-return and also
+/// receives an objective hysteresis before a pre-commit cross-side switch.
+ExtendedBranchSelectionResolution select_extended_branch(
+  const ExtendedBranchSelectionRequest & request) noexcept;
+
+const char * extended_branch_selection_reason_name(
+  ExtendedBranchSelectionReason reason) noexcept;
 
 struct ExecutionTrajectory
 {

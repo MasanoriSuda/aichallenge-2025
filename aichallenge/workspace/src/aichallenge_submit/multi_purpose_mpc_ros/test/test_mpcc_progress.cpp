@@ -565,4 +565,70 @@ TEST(MpccProgress, AcceptsExecutionTrajectoryInsideSolverResidualTolerance)
   EXPECT_DOUBLE_EQ(result->minimum_lateral_bound_reserve_m, 0.0);
 }
 
+TEST(MpccProgress, SelectsOnlyFeasibleExtendedBranch)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::ExtendedBranchEvaluation;
+  using multi_purpose_mpc_ros::mpcc_progress::ExtendedBranchSelectionReason;
+  using multi_purpose_mpc_ros::mpcc_progress::ExtendedBranchSelectionRequest;
+  ExtendedBranchEvaluation left;
+  left.side_sign = 1;
+  left.attempted = true;
+  ExtendedBranchEvaluation right;
+  right.side_sign = -1;
+  right.attempted = true;
+  right.feasible = true;
+  right.objective = 12.0;
+  right.minimum_lateral_bound_reserve_m = 0.20;
+  const auto result = multi_purpose_mpc_ros::mpcc_progress::select_extended_branch(
+    ExtendedBranchSelectionRequest{
+      left, right, 0, 1, false, 1.0, 0.05});
+  ASSERT_TRUE(result.valid);
+  EXPECT_EQ(result.selected_side_sign, -1);
+  EXPECT_EQ(result.reason, ExtendedBranchSelectionReason::OnlyRightFeasible);
+}
+
+TEST(MpccProgress, RetainsCurrentExtendedBranchWithinObjectiveHysteresis)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::ExtendedBranchEvaluation;
+  using multi_purpose_mpc_ros::mpcc_progress::ExtendedBranchSelectionReason;
+  using multi_purpose_mpc_ros::mpcc_progress::ExtendedBranchSelectionRequest;
+  ExtendedBranchEvaluation left;
+  left.side_sign = 1;
+  left.attempted = true;
+  left.feasible = true;
+  left.objective = 10.0;
+  left.minimum_lateral_bound_reserve_m = 0.20;
+  ExtendedBranchEvaluation right = left;
+  right.side_sign = -1;
+  right.objective = 9.5;
+  const auto result = multi_purpose_mpc_ros::mpcc_progress::select_extended_branch(
+    ExtendedBranchSelectionRequest{
+      left, right, 1, 1, false, 1.0, 0.05});
+  ASSERT_TRUE(result.valid);
+  EXPECT_EQ(result.selected_side_sign, 1);
+  EXPECT_EQ(result.reason, ExtendedBranchSelectionReason::CurrentSideHysteresis);
+}
+
+TEST(MpccProgress, KeepsCurrentExtendedBranchAfterNoReturn)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::ExtendedBranchEvaluation;
+  using multi_purpose_mpc_ros::mpcc_progress::ExtendedBranchSelectionReason;
+  using multi_purpose_mpc_ros::mpcc_progress::ExtendedBranchSelectionRequest;
+  ExtendedBranchEvaluation left;
+  left.side_sign = 1;
+  left.attempted = true;
+  left.feasible = true;
+  left.objective = 100.0;
+  left.minimum_lateral_bound_reserve_m = 0.20;
+  ExtendedBranchEvaluation right = left;
+  right.side_sign = -1;
+  right.objective = 1.0;
+  const auto result = multi_purpose_mpc_ros::mpcc_progress::select_extended_branch(
+    ExtendedBranchSelectionRequest{
+      left, right, 1, -1, true, 0.0, 0.05});
+  ASSERT_TRUE(result.valid);
+  EXPECT_EQ(result.selected_side_sign, 1);
+  EXPECT_EQ(result.reason, ExtendedBranchSelectionReason::NoReturnCurrentSide);
+}
+
 }  // namespace

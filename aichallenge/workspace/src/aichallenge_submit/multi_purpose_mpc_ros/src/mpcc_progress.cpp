@@ -773,6 +773,123 @@ RtiRefinementDecision resolve_rti_refinement(
     RtiRefinementDecision::Refine : RtiRefinementDecision::SkipCondition;
 }
 
+ExtendedBranchSelectionResolution select_extended_branch(
+  const ExtendedBranchSelectionRequest & request) noexcept
+{
+  ExtendedBranchSelectionResolution resolution;
+  if (
+    !std::isfinite(request.minimum_objective_advantage) ||
+    request.minimum_objective_advantage < 0.0 ||
+    !std::isfinite(request.minimum_lateral_bound_reserve_m) ||
+    request.minimum_lateral_bound_reserve_m < 0.0 ||
+    (request.current_side_sign != -1 && request.current_side_sign != 0 &&
+    request.current_side_sign != 1) ||
+    (request.fallback_side_sign != -1 && request.fallback_side_sign != 0 &&
+    request.fallback_side_sign != 1))
+  {
+    return resolution;
+  }
+  const auto eligible = [&request](const ExtendedBranchEvaluation & branch) {
+      return
+        (branch.side_sign == -1 || branch.side_sign == 1) &&
+        branch.attempted && branch.feasible && std::isfinite(branch.objective) &&
+        std::isfinite(branch.minimum_lateral_bound_reserve_m) &&
+        branch.minimum_lateral_bound_reserve_m + 1e-9 >=
+        request.minimum_lateral_bound_reserve_m;
+    };
+  const bool left_feasible = eligible(request.left) && request.left.side_sign == 1;
+  const bool right_feasible = eligible(request.right) && request.right.side_sign == -1;
+  const auto branch_for_side = [&request](const int side)
+    -> const ExtendedBranchEvaluation * {
+      if (side == 1 && request.left.side_sign == 1) {
+        return &request.left;
+      }
+      if (side == -1 && request.right.side_sign == -1) {
+        return &request.right;
+      }
+      return nullptr;
+    };
+  const auto side_feasible = [&](const int side) {
+      return side == 1 ? left_feasible : side == -1 ? right_feasible : false;
+    };
+  if (
+    request.no_return && request.current_side_sign != 0 &&
+    side_feasible(request.current_side_sign))
+  {
+    resolution.valid = true;
+    resolution.selected_side_sign = request.current_side_sign;
+    resolution.reason = ExtendedBranchSelectionReason::NoReturnCurrentSide;
+    return resolution;
+  }
+  if (!left_feasible && !right_feasible) {
+    return resolution;
+  }
+  if (left_feasible != right_feasible) {
+    resolution.valid = true;
+    resolution.selected_side_sign = left_feasible ? 1 : -1;
+    resolution.reason = left_feasible ?
+      ExtendedBranchSelectionReason::OnlyLeftFeasible :
+      ExtendedBranchSelectionReason::OnlyRightFeasible;
+    return resolution;
+  }
+
+  const double left_objective = request.left.objective;
+  const double right_objective = request.right.objective;
+  const int objective_best_side = left_objective <= right_objective ? 1 : -1;
+  const int other_side = -objective_best_side;
+  const auto * best = branch_for_side(objective_best_side);
+  const auto * other = branch_for_side(other_side);
+  if (best == nullptr || other == nullptr) {
+    return resolution;
+  }
+  resolution.objective_advantage = other->objective - best->objective;
+  if (
+    request.current_side_sign != 0 && side_feasible(request.current_side_sign) &&
+    objective_best_side != request.current_side_sign &&
+    resolution.objective_advantage + 1e-9 < request.minimum_objective_advantage)
+  {
+    resolution.valid = true;
+    resolution.selected_side_sign = request.current_side_sign;
+    resolution.reason = ExtendedBranchSelectionReason::CurrentSideHysteresis;
+    return resolution;
+  }
+  if (
+    std::abs(left_objective - right_objective) <= 1e-9 &&
+    request.fallback_side_sign != 0 && side_feasible(request.fallback_side_sign))
+  {
+    resolution.valid = true;
+    resolution.selected_side_sign = request.fallback_side_sign;
+    resolution.reason = ExtendedBranchSelectionReason::FallbackTieBreak;
+    return resolution;
+  }
+  resolution.valid = true;
+  resolution.selected_side_sign = objective_best_side;
+  resolution.reason = ExtendedBranchSelectionReason::LowerObjective;
+  return resolution;
+}
+
+const char * extended_branch_selection_reason_name(
+  const ExtendedBranchSelectionReason reason) noexcept
+{
+  switch (reason) {
+    case ExtendedBranchSelectionReason::None:
+      return "none";
+    case ExtendedBranchSelectionReason::OnlyLeftFeasible:
+      return "only left feasible";
+    case ExtendedBranchSelectionReason::OnlyRightFeasible:
+      return "only right feasible";
+    case ExtendedBranchSelectionReason::LowerObjective:
+      return "lower objective";
+    case ExtendedBranchSelectionReason::CurrentSideHysteresis:
+      return "current-side hysteresis";
+    case ExtendedBranchSelectionReason::NoReturnCurrentSide:
+      return "no-return current side";
+    case ExtendedBranchSelectionReason::FallbackTieBreak:
+      return "fallback tie-break";
+  }
+  return "unknown";
+}
+
 std::optional<ExecutionTrajectory> extract_execution_trajectory(
   const Eigen::VectorXd & primal, const int horizon_size,
   const std::vector<double> & path_distance_m,

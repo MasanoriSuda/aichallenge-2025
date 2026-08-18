@@ -56,6 +56,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <iomanip>
 #include <iterator>
 #include <limits>
@@ -2112,6 +2113,9 @@ struct V2XBehaviorOutput
   V2XTacticalSideAssessment overtake_right_tactical_assessment;
   double overtake_left_quality{-std::numeric_limits<double>::infinity()};
   double overtake_right_quality{-std::numeric_limits<double>::infinity()};
+  mpcc_progress::ExtendedBranchEvaluation extended_mpcc_left_branch;
+  mpcc_progress::ExtendedBranchEvaluation extended_mpcc_right_branch;
+  mpcc_progress::ExtendedBranchSelectionResolution extended_mpcc_branch_selection;
   bool overtake_selected_side_conflict{false};
   int overtake_lookahead_inner_side{0};
   bool overtake_inner_preference_selected{false};
@@ -4707,6 +4711,9 @@ struct MpcConfig
   double min_linearization_speed_mps{0.5};
   bool progress_contouring_mpcc_enabled{false};
   bool progress_contouring_mpcc_overtake_only{true};
+  bool progress_contouring_dual_branch_enabled{false};
+  double progress_contouring_dual_branch_minimum_objective_advantage{1.0};
+  double progress_contouring_dual_branch_minimum_bound_reserve_m{0.02};
   mpcc_progress::Config progress_contouring;
   mpc_waypoint_association::Config waypoint_association;
   double steering_tire_angle_gain_var{};
@@ -5064,6 +5071,8 @@ struct MPC
     snapshot->overtake_line_side_retry_blocks_ = overtake_line_side_retry_blocks_;
     snapshot->completed_overtake_target_block_ = completed_overtake_target_block_;
     snapshot->previous_steering = previous_steering;
+    snapshot->current_control = current_control;
+    snapshot->current_prediction = current_prediction;
     snapshot->current_speed_mps_ = current_speed_mps_;
     snapshot->overtake_contact_wall_guard_safe_ = overtake_contact_wall_guard_safe_;
     snapshot->mpcc_lite_async_worker_context_ = true;
@@ -5675,6 +5684,276 @@ struct MPC
     return result;
   }
 
+  mpcc_progress::ExtendedBranchEvaluation evaluate_extended_mpcc_branch(
+    const V2XBehaviorOutput & source_behavior,
+    const V2XTacticalSideAssessment & assessment,
+    const int horizon_size, const double now_sec)
+  {
+    mpcc_progress::ExtendedBranchEvaluation evaluation;
+    evaluation.side_sign = assessment.side;
+    const auto & candidate = assessment.selected_mission;
+    if (
+      (assessment.side != -1 && assessment.side != 1) ||
+      !candidate.has_value() || !candidate->feasible ||
+      candidate->pass_side_sign != assessment.side || candidate->progressive_entry)
+    {
+      evaluation.failure_reason = candidate.has_value() && candidate->progressive_entry ?
+        "progressive prefix is not a complete branch" :
+        "complete Mission unavailable";
+      return evaluation;
+    }
+    evaluation.attempted = true;
+    try {
+      model->get_current_waypoint();
+      const int tracking_wp_id = model->wp_id;
+      const int remaining_segments =
+        std::max(0, model->reference_path->n_waypoints - 1 - tracking_wp_id);
+      const int N = model->reference_path->circular ?
+        std::min(cfg.N, horizon_size) :
+        std::min({cfg.N, horizon_size, remaining_segments});
+      if (N < 2) {
+        evaluation.failure_reason = "branch horizon has fewer than two stages";
+        return evaluation;
+      }
+      ensure_current_control_horizon();
+      const auto & tracking_waypoint =
+        model->reference_path->get_waypoint(tracking_wp_id);
+      model->spatial_state = model->t2s(tracking_waypoint, model->temporal_state);
+
+      const bool preserve_active_phase =
+        overtake_line_state_.pass_side_sign == assessment.side &&
+        (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+        overtake_line_state_.phase == OvertakeLinePhase::Pass);
+      if (!preserve_active_phase) {
+        overtake_line_state_.phase =
+          candidate->direct_pass && candidate->current_position_clear ?
+          OvertakeLinePhase::Pass : OvertakeLinePhase::ShiftOut;
+      }
+      overtake_line_state_.phase_start_sec = now_sec;
+      overtake_line_state_.phase_start_ey = model->spatial_state.e_y;
+      overtake_line_state_.phase_traveled_m = 0.0;
+      overtake_line_state_.phase_last_update_sec = now_sec;
+      overtake_line_state_.target_vehicle_id = source_behavior.target_vehicle_id;
+      overtake_line_state_.target_last_seen_sec = now_sec;
+      overtake_line_state_.target_last_longitudinal =
+        source_behavior.locked_target_longitudinal;
+      overtake_line_state_.target_last_lateral = source_behavior.locked_target_lateral;
+      overtake_line_state_.target_last_speed = source_behavior.locked_target_speed;
+      overtake_locked_side_sign_ = assessment.side;
+      freeze_selected_overtake_mission(candidate, now_sec);
+
+      V2XBehaviorOutput behavior = source_behavior;
+      behavior.state = V2XBehaviorState::Overtake;
+      behavior.allow_gap_planner = true;
+      behavior.overtake_pass_side_sign = assessment.side;
+      behavior.overtake_gap_available = true;
+      behavior.overtake_selected_mission = candidate;
+      behavior.overtake_corridor_center_ey = assessment.corridor_center_ey;
+      behavior.overtake_committed_execution_active = true;
+      behavior.overtake_committed_pass_active =
+        overtake_line_state_.phase == OvertakeLinePhase::Pass;
+      behavior.overtake_line_owns_locked_target_speed = true;
+      last_v2x_behavior_output_ = behavior;
+      v2x_behavior_state = V2XBehaviorState::Overtake;
+      v2x_behavior_state_initialized = true;
+      stage_corridor_target_bound_candidate_since_sec_ =
+        now_sec - std::max(
+        0.0,
+        cfg.v2x_behavior.overtake_line.mpcc_stage_corridor_target_bound_confirm_sec);
+      stage_corridor_target_bound_suppressed_until_sec_ =
+        -std::numeric_limits<double>::infinity();
+
+      const MpcProblem legacy = init_problem(
+        N, model->safety_margin, now_sec, tracking_wp_id,
+        get_preview_wp_id(tracking_wp_id), &behavior);
+      if (!legacy.progress_contouring_active) {
+        evaluation.failure_reason = "progress-contouring branch unavailable";
+        return evaluation;
+      }
+      std::string reject_reason;
+      const auto extended = build_extended_progress_problem(legacy, reject_reason);
+      if (!extended.has_value()) {
+        evaluation.failure_reason = reject_reason.empty() ?
+          "extended branch build failed" : reject_reason;
+        return evaluation;
+      }
+      const auto outcome = solve_extended_progress_problem(extended.value(), now_sec);
+      evaluation.solve_ms = outcome.telemetry.solve_ms;
+      evaluation.iterations = outcome.telemetry.iterations;
+      if (!outcome.result.has_value()) {
+        evaluation.failure_reason = outcome.failure_detail;
+        return evaluation;
+      }
+      const auto & primal = outcome.result->primal;
+      constexpr int nx = mpcc_progress::kExtendedStateDimension;
+      const int nx_N = nx * (N + 1);
+      if (primal.size() != extended->P.rows() || primal.size() <= nx * N + 4) {
+        evaluation.failure_reason = "extended branch solution size mismatch";
+        return evaluation;
+      }
+      double quadratic_cost = 0.0;
+      for (int outer = 0; outer < extended->P.outerSize(); ++outer) {
+        for (Eigen::SparseMatrix<double>::InnerIterator it(extended->P, outer); it; ++it) {
+          const double contribution = primal[it.row()] * it.value() * primal[it.col()];
+          quadratic_cost += it.row() == it.col() ? 0.5 * contribution : contribution;
+        }
+      }
+      evaluation.objective = quadratic_cost + extended->q.dot(primal);
+      evaluation.minimum_lateral_bound_reserve_m =
+        std::numeric_limits<double>::infinity();
+      for (int stage = 1; stage < N + 1; ++stage) {
+        const int lateral_index = nx * stage + mpcc_progress::kExtendedLateralIndex;
+        const int box_row = nx_N + lateral_index;
+        const double lateral = primal[lateral_index];
+        const double lower = extended->l[box_row];
+        const double upper = extended->u[box_row];
+        if (
+          !std::isfinite(lateral) || !std::isfinite(lower) || !std::isfinite(upper) ||
+          lower > upper)
+        {
+          evaluation.failure_reason = "extended branch lateral bounds invalid";
+          return evaluation;
+        }
+        evaluation.minimum_lateral_bound_reserve_m = std::min(
+          evaluation.minimum_lateral_bound_reserve_m,
+          std::min(lateral - lower, upper - lateral));
+      }
+      const int terminal = nx * N;
+      evaluation.terminal_progress_m =
+        primal[terminal + mpcc_progress::kExtendedProgressIndex];
+      evaluation.terminal_velocity_mps =
+        primal[terminal + mpcc_progress::kExtendedVelocityIndex];
+      evaluation.feasible =
+        std::isfinite(evaluation.objective) &&
+        std::isfinite(evaluation.minimum_lateral_bound_reserve_m) &&
+        std::isfinite(evaluation.terminal_progress_m) &&
+        std::isfinite(evaluation.terminal_velocity_mps);
+      if (!evaluation.feasible) {
+        evaluation.failure_reason = "extended branch metrics are non-finite";
+      }
+    } catch (const std::exception & error) {
+      evaluation.failure_reason = error.what();
+    } catch (...) {
+      evaluation.failure_reason = "unknown extended branch exception";
+    }
+    return evaluation;
+  }
+
+  mpcc_progress::ExtendedBranchEvaluation evaluate_isolated_extended_mpcc_branch(
+    const V2XBehaviorOutput & behavior,
+    const V2XTacticalSideAssessment & assessment,
+    const int horizon_size, const double now_sec)
+  {
+    mpcc_progress::ExtendedBranchEvaluation evaluation;
+    evaluation.side_sign = assessment.side;
+    try {
+      if (model == nullptr || model->reference_path == nullptr || gap_planner == nullptr) {
+        evaluation.failure_reason = "branch snapshot dependencies unavailable";
+        return evaluation;
+      }
+      auto reference_path_owner =
+        std::make_shared<ReferencePath>(*model->reference_path);
+      auto model_owner = std::make_shared<BicycleModel>(*model);
+      model_owner->reference_path = reference_path_owner.get();
+      model_owner->current_waypoint =
+        &model_owner->reference_path->waypoints.at(
+        static_cast<std::size_t>(model_owner->wp_id));
+      auto gap_owner = std::shared_ptr<V2XGapPlanner>(gap_planner->tactical_snapshot());
+      auto branch = tactical_snapshot(model_owner.get(), gap_owner.get());
+      branch->reference_path_snapshot_owner_ = reference_path_owner;
+      return branch->evaluate_extended_mpcc_branch(
+        behavior, assessment, horizon_size, now_sec);
+    } catch (const std::exception & error) {
+      evaluation.failure_reason = error.what();
+    } catch (...) {
+      evaluation.failure_reason = "unknown isolated branch exception";
+    }
+    return evaluation;
+  }
+
+  void evaluate_and_select_extended_mpcc_branches(
+    V2XBehaviorOutput & behavior, const int horizon_size, const double now_sec)
+  {
+    if (
+      !cfg.progress_contouring_dual_branch_enabled ||
+      !cfg.progress_contouring_mpcc_enabled ||
+      !cfg.progress_contouring.extended_dynamics_enabled ||
+      !mpcc_lite_async_worker_context_)
+    {
+      return;
+    }
+    // Build and solve independent left/right MPC snapshots concurrently. This
+    // method itself runs only in LatestOnlyWorker, so waiting for both futures
+    // never blocks the 40 Hz control callback. Publish neither result until
+    // both futures have completed, preserving one atomic observation epoch.
+    auto left_future = std::async(
+      std::launch::async,
+      [this, &behavior, horizon_size, now_sec]() {
+        return evaluate_isolated_extended_mpcc_branch(
+          behavior, behavior.overtake_left_tactical_assessment,
+          horizon_size, now_sec);
+      });
+    behavior.extended_mpcc_right_branch = evaluate_isolated_extended_mpcc_branch(
+      behavior, behavior.overtake_right_tactical_assessment, horizon_size, now_sec);
+    behavior.extended_mpcc_left_branch = left_future.get();
+    behavior.extended_mpcc_branch_selection = mpcc_progress::select_extended_branch(
+      mpcc_progress::ExtendedBranchSelectionRequest{
+        behavior.extended_mpcc_left_branch,
+        behavior.extended_mpcc_right_branch,
+        overtake_line_state_.pass_side_sign,
+        behavior.overtake_pass_side_sign,
+        behavior.opponent_side_replan_no_return,
+        cfg.progress_contouring_dual_branch_minimum_objective_advantage,
+        cfg.progress_contouring_dual_branch_minimum_bound_reserve_m});
+    const auto & selection = behavior.extended_mpcc_branch_selection;
+    if (!selection.valid || selection.selected_side_sign == 0) {
+      return;
+    }
+    const auto & selected_assessment = selection.selected_side_sign > 0 ?
+      behavior.overtake_left_tactical_assessment :
+      behavior.overtake_right_tactical_assessment;
+    if (
+      !selected_assessment.selected_mission.has_value() ||
+      !selected_assessment.selected_mission->feasible ||
+      selected_assessment.selected_mission->pass_side_sign !=
+      selection.selected_side_sign)
+    {
+      return;
+    }
+    behavior.overtake_pass_side_sign = selection.selected_side_sign;
+    behavior.overtake_gap_available = selected_assessment.gap_available;
+    behavior.overtake_side_clearance = selected_assessment.side_clearance;
+    behavior.overtake_corridor_center_ey = selected_assessment.corridor_center_ey;
+    behavior.overtake_selected_mission = selected_assessment.selected_mission;
+    behavior.overtake_base_line_pass_through =
+      selected_assessment.direct_base_line_pass_ready;
+    behavior.overtake_tiny_shift_direct_pass =
+      selected_assessment.direct_tiny_shift_pass_ready;
+    behavior.overtake_fallback_target = selected_assessment.fallback_target;
+    behavior.overtake_gap_hold_active = selected_assessment.transient_gap_hold;
+    behavior.overtake_gap_hold_remaining_sec =
+      selected_assessment.gap_hold_remaining_sec;
+    const int active_side = overtake_line_state_.pass_side_sign;
+    if (active_side != 0 && selection.selected_side_sign == active_side) {
+      behavior.mpcc_lite_same_side_replan_mission =
+        selected_assessment.selected_mission;
+      behavior.mpcc_lite_same_side_replan_ready = true;
+      behavior.mpcc_lite_cross_side_replan_ready = false;
+      behavior.mpcc_lite_cross_side_replan_mission.reset();
+      behavior.mpcc_lite_cross_side_candidate_sign = 0;
+    } else if (
+      active_side != 0 && selection.selected_side_sign != active_side &&
+      !behavior.opponent_side_replan_no_return)
+    {
+      behavior.mpcc_lite_cross_side_replan_mission =
+        selected_assessment.selected_mission;
+      behavior.mpcc_lite_cross_side_replan_ready = true;
+      behavior.mpcc_lite_cross_side_candidate_sign = selection.selected_side_sign;
+      behavior.mpcc_lite_same_side_replan_ready = false;
+      behavior.mpcc_lite_same_side_replan_mission.reset();
+    }
+  }
+
   bool submit_mpcc_lite_async_snapshot(
     const int ref_wp_id, const int horizon_size,
     const Eigen::VectorXd & lower_bound, const Eigen::VectorXd & upper_bound,
@@ -5734,6 +6013,8 @@ struct MPC
         try {
           result.behavior = planner_snapshot->evaluate_v2x_behavior(
             ref_wp_id, horizon_size, lower_bound, upper_bound, now_sec);
+          planner_snapshot->evaluate_and_select_extended_mpcc_branches(
+            result.behavior, horizon_size, now_sec);
           result.success = true;
         } catch (const std::exception & error) {
           result.failure_reason = error.what();
@@ -11240,6 +11521,12 @@ struct MPC
         if (async_behavior.overtake_right_tactical_assessment.side == -1) {
           right_assessment = async_behavior.overtake_right_tactical_assessment;
         }
+        output.extended_mpcc_left_branch =
+          async_behavior.extended_mpcc_left_branch;
+        output.extended_mpcc_right_branch =
+          async_behavior.extended_mpcc_right_branch;
+        output.extended_mpcc_branch_selection =
+          async_behavior.extended_mpcc_branch_selection;
       }
     }
     if (opponent_side_replan_assessment_requested && locked_pass_side != 0) {
@@ -11938,7 +12225,8 @@ struct MPC
           "Overtake MPCC-lite async: submitted=%lu, replaced=%lu, "
           "completed=%lu, running=%d, pending=%d, adopted=%lu, reused=%lu, cache=%d, "
           "discarded=%lu, failed=%lu, interval=%.3f s, snapshot=%.2f ms, "
-          "compute=%.2f ms, age=%.3f s",
+          "compute=%.2f ms, age=%.3f s, "
+          "dual=L%d/%d/%.1f/%.2f,R%d/%d/%.1f/%.2f,select=%d/%s",
           static_cast<unsigned long>(worker_stats.submitted),
           static_cast<unsigned long>(worker_stats.replaced),
           static_cast<unsigned long>(worker_stats.completed),
@@ -11951,7 +12239,18 @@ struct MPC
           mpcc_lite_async_effective_interval_sec_,
           mpcc_lite_async_last_snapshot_ms_,
           mpcc_lite_async_last_compute_ms_,
-          mpcc_lite_async_last_result_age_sec_);
+          mpcc_lite_async_last_result_age_sec_,
+          output.extended_mpcc_left_branch.attempted ? 1 : 0,
+          output.extended_mpcc_left_branch.feasible ? 1 : 0,
+          output.extended_mpcc_left_branch.objective,
+          output.extended_mpcc_left_branch.minimum_lateral_bound_reserve_m,
+          output.extended_mpcc_right_branch.attempted ? 1 : 0,
+          output.extended_mpcc_right_branch.feasible ? 1 : 0,
+          output.extended_mpcc_right_branch.objective,
+          output.extended_mpcc_right_branch.minimum_lateral_bound_reserve_m,
+          output.extended_mpcc_branch_selection.selected_side_sign,
+          mpcc_progress::extended_branch_selection_reason_name(
+            output.extended_mpcc_branch_selection.reason));
         mpcc_lite_async_last_status_log_sec_ = now_sec;
       }
     }
@@ -13664,7 +13963,8 @@ struct MPC
 
   MpcProblem init_problem(
     const int N, const double safety_margin, const double now_sec, const int tracking_wp_id,
-    const int preview_wp_id)
+    const int preview_wp_id,
+    const V2XBehaviorOutput * const behavior_override = nullptr)
   {
     constexpr int nx = 3;
     constexpr int nu = 2;
@@ -13780,7 +14080,8 @@ struct MPC
 
     const std::uint64_t wall_cache_miss_count_before_problem =
       physical_wall_envelope_cache_miss_count_;
-    auto behavior_output = evaluate_v2x_behavior(ref_wp_id, N, lb, ub, now_sec);
+    auto behavior_output = behavior_override != nullptr ?
+      *behavior_override : evaluate_v2x_behavior(ref_wp_id, N, lb, ub, now_sec);
     prewarm_overtake_entry_wall_cache(
       behavior_output, ref_wp_id, N, lb, ub, now_sec);
     const bool low_speed_relevant_vehicle =
@@ -33275,6 +33576,28 @@ Config load_config(const std::string & path)
   cfg.mpc.progress_contouring_mpcc_overtake_only =
     mpc["progress_contouring_mpcc_overtake_only"] ?
     mpc["progress_contouring_mpcc_overtake_only"].as<bool>() : true;
+  cfg.mpc.progress_contouring_dual_branch_enabled =
+    mpc["progress_contouring_dual_branch_enabled"] ?
+    mpc["progress_contouring_dual_branch_enabled"].as<bool>() : false;
+  cfg.mpc.progress_contouring_dual_branch_minimum_objective_advantage =
+    mpc["progress_contouring_dual_branch_minimum_objective_advantage"] ?
+    mpc["progress_contouring_dual_branch_minimum_objective_advantage"].as<double>() :
+    1.0;
+  cfg.mpc.progress_contouring_dual_branch_minimum_bound_reserve_m =
+    mpc["progress_contouring_dual_branch_minimum_bound_reserve_m"] ?
+    mpc["progress_contouring_dual_branch_minimum_bound_reserve_m"].as<double>() :
+    0.02;
+  if (
+    !std::isfinite(
+      cfg.mpc.progress_contouring_dual_branch_minimum_objective_advantage) ||
+    cfg.mpc.progress_contouring_dual_branch_minimum_objective_advantage < 0.0 ||
+    !std::isfinite(
+      cfg.mpc.progress_contouring_dual_branch_minimum_bound_reserve_m) ||
+    cfg.mpc.progress_contouring_dual_branch_minimum_bound_reserve_m < 0.0)
+  {
+    throw std::runtime_error(
+            "mpc.progress_contouring_dual_branch_* values must be finite and nonnegative");
+  }
   auto & progress_contouring = cfg.mpc.progress_contouring;
   progress_contouring.minimum_reference_speed_mps = cfg.mpc.min_linearization_speed_mps;
   progress_contouring.minimum_frenet_denominator =
@@ -35907,7 +36230,7 @@ public:
       "Extended velocity-progress MPCC: %s, tracking=%.1f/%.1f stage, "
       "%.1f/%.1f terminal (lateral/heading), failure_cooldown=%.2f s, "
       "reentry_success=%zu, wall_tracking=%.2f m/min_scale=%.2f, "
-      "mode_handoff=%.2f s",
+      "mode_handoff=%.2f s, dual_branch=%s/advantage>=%.2f/reserve>=%.2f m",
       mpc_cfg_.progress_contouring.extended_dynamics_enabled ? "enabled" : "disabled",
       mpc_cfg_.progress_contouring.extended_lateral_tracking_weight,
       mpc_cfg_.progress_contouring.extended_heading_tracking_weight,
@@ -35917,7 +36240,10 @@ public:
       mpc_cfg_.progress_contouring.extended_reentry_success_cycles,
       mpc_cfg_.progress_contouring.extended_wall_tracking_reference_reserve_m,
       mpc_cfg_.progress_contouring.extended_wall_tracking_minimum_weight_scale,
-      mpc_cfg_.progress_contouring.extended_mode_handoff_sec);
+      mpc_cfg_.progress_contouring.extended_mode_handoff_sec,
+      mpc_cfg_.progress_contouring_dual_branch_enabled ? "enabled" : "disabled",
+      mpc_cfg_.progress_contouring_dual_branch_minimum_objective_advantage,
+      mpc_cfg_.progress_contouring_dual_branch_minimum_bound_reserve_m);
     setup_parameters_callback();
     setup_pub_sub();
     if (ref_vel_config_path_.has_value()) {

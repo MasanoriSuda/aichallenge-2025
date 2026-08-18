@@ -330,6 +330,11 @@ mpc:
   # progress. Existing DP stage corridor remains the hard lateral constraint.
   progress_contouring_mpcc_enabled: true
   progress_contouring_mpcc_overtake_only: true
+  # The latest-only worker solves complete left/right Missions with the same
+  # 5x3 MPCC before one assessment is atomically promoted to the live callback.
+  progress_contouring_dual_branch_enabled: true
+  progress_contouring_dual_branch_minimum_objective_advantage: 1.0
+  progress_contouring_dual_branch_minimum_bound_reserve_m: 0.02
   progress_contouring_minimum_frenet_denominator: 0.20
   progress_contouring_minimum_stage_dt_sec: 0.01
   progress_contouring_maximum_stage_dt_sec: 0.25

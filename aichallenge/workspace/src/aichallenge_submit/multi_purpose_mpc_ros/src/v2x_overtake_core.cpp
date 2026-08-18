@@ -1009,6 +1009,37 @@ double resolve_cross_side_minimum_speed_requirement(
   return std::min(current_ego_speed_mps, target_speed_mps);
 }
 
+SnapshotMinimumSpeedAdmissionResolution resolve_snapshot_minimum_speed_admission(
+  const SnapshotMinimumSpeedAdmissionRequest & request) noexcept
+{
+  SnapshotMinimumSpeedAdmissionResolution resolution;
+  const bool planning_requirement_available =
+    std::isfinite(request.planning_requirement_mps) &&
+    request.planning_requirement_mps >= 0.0;
+  const bool planning_requirement_absent =
+    std::isnan(request.planning_requirement_mps);
+  if (
+    !std::isfinite(request.predicted_minimum_speed_mps) ||
+    request.predicted_minimum_speed_mps < 0.0 ||
+    !std::isfinite(request.live_requirement_mps) ||
+    request.live_requirement_mps < 0.0 ||
+    (!planning_requirement_available && !planning_requirement_absent) ||
+    !std::isfinite(request.tolerance_mps) || request.tolerance_mps < 0.0)
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  resolution.used_planning_requirement = planning_requirement_available;
+  resolution.effective_requirement_mps = planning_requirement_available ?
+    request.planning_requirement_mps : request.live_requirement_mps;
+  resolution.margin_mps =
+    request.predicted_minimum_speed_mps - resolution.effective_requirement_mps;
+  resolution.admitted =
+    resolution.margin_mps + request.tolerance_mps >= 0.0;
+  return resolution;
+}
+
 CrossSideMissionReplacementResolution resolve_cross_side_mission_replacement(
   const CrossSideMissionReplacementRequest & request) noexcept
 {
@@ -1078,14 +1109,22 @@ CrossSideMissionReplacementResolution resolve_cross_side_mission_replacement(
     !finite_non_negative(request.predicted_rear_clear_time_sec) ||
     !finite_non_negative(request.predicted_rear_clear_distance_m) ||
     !finite_non_negative(request.predicted_rear_clear_speed_mps) ||
-    !finite_non_negative(request.predicted_minimum_ego_speed_mps) ||
     !finite_non_negative(request.minimum_rear_clear_speed_mps) ||
-    !finite_non_negative(request.minimum_ego_speed_mps) ||
     !finite_non_negative(request.minimum_path_wall_clearance_m) ||
     !finite_non_negative(request.minimum_required_path_wall_clearance_m) ||
     !valid_budget(request.remaining_time_budget_sec) ||
     !valid_budget(request.remaining_distance_budget_m))
   {
+    resolution.reason = CrossSideMissionReplacementReason::InvalidPrediction;
+    return resolution;
+  }
+  const auto minimum_speed_admission = resolve_snapshot_minimum_speed_admission(
+    SnapshotMinimumSpeedAdmissionRequest{
+      request.predicted_minimum_ego_speed_mps,
+      request.planning_minimum_ego_speed_mps,
+      request.minimum_ego_speed_mps,
+      request.minimum_speed_tolerance_mps});
+  if (!minimum_speed_admission.valid) {
     resolution.reason = CrossSideMissionReplacementReason::InvalidPrediction;
     return resolution;
   }
@@ -1112,10 +1151,7 @@ CrossSideMissionReplacementResolution resolve_cross_side_mission_replacement(
     resolution.reason = CrossSideMissionReplacementReason::DistanceBudgetExceeded;
     return resolution;
   }
-  if (
-    request.predicted_minimum_ego_speed_mps + 1e-9 <
-    request.minimum_ego_speed_mps)
-  {
+  if (!minimum_speed_admission.admitted) {
     resolution.reason = CrossSideMissionReplacementReason::MinimumSpeedInsufficient;
     return resolution;
   }
@@ -7580,13 +7616,21 @@ MpccLitePrefixExecutionResolution resolve_mpcc_lite_prefix_execution(
   if (
     !finite_non_negative(request.predicted_body_clear_time_sec) ||
     !finite_non_negative(request.predicted_body_clear_distance_m) ||
-    !finite_non_negative(request.predicted_minimum_ego_speed_mps) ||
-    !finite_non_negative(request.minimum_ego_speed_mps) ||
     !finite_non_negative(request.minimum_path_wall_clearance_m) ||
     !finite_non_negative(request.minimum_required_path_wall_clearance_m) ||
     !valid_budget(request.remaining_time_budget_sec) ||
     !valid_budget(request.remaining_distance_budget_m))
   {
+    resolution.reason = MpccLitePrefixExecutionRejectReason::InvalidPrediction;
+    return resolution;
+  }
+  const auto minimum_speed_admission = resolve_snapshot_minimum_speed_admission(
+    SnapshotMinimumSpeedAdmissionRequest{
+      request.predicted_minimum_ego_speed_mps,
+      request.planning_minimum_ego_speed_mps,
+      request.minimum_ego_speed_mps,
+      request.minimum_speed_tolerance_mps});
+  if (!minimum_speed_admission.valid) {
     resolution.reason = MpccLitePrefixExecutionRejectReason::InvalidPrediction;
     return resolution;
   }
@@ -7614,10 +7658,7 @@ MpccLitePrefixExecutionResolution resolve_mpcc_lite_prefix_execution(
     resolution.reason = MpccLitePrefixExecutionRejectReason::DistanceBudgetExceeded;
     return resolution;
   }
-  if (
-    request.predicted_minimum_ego_speed_mps + 1e-9 <
-    request.minimum_ego_speed_mps)
-  {
+  if (!minimum_speed_admission.admitted) {
     resolution.reason = MpccLitePrefixExecutionRejectReason::MinimumSpeedInsufficient;
     return resolution;
   }

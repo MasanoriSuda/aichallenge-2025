@@ -15409,6 +15409,50 @@ TEST(V2XOvertakeCoreCommitStage, CrossSideMinimumSpeedRejectsInvalidInputs)
     std::numeric_limits<double>::quiet_NaN(), 3.0)));
 }
 
+TEST(V2XOvertakeCoreCommitStage, MinimumSpeedAdmissionUsesPlanningSnapshot)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    SnapshotMinimumSpeedAdmissionRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_snapshot_minimum_speed_admission;
+
+  SnapshotMinimumSpeedAdmissionRequest request;
+  request.predicted_minimum_speed_mps = 2.37;
+  request.planning_requirement_mps = 2.36;
+  request.live_requirement_mps = 2.59;
+  request.tolerance_mps = 0.02;
+
+  auto resolution = resolve_snapshot_minimum_speed_admission(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.admitted);
+  EXPECT_TRUE(resolution.used_planning_requirement);
+  EXPECT_DOUBLE_EQ(resolution.effective_requirement_mps, 2.36);
+
+  request.predicted_minimum_speed_mps = 2.33;
+  resolution = resolve_snapshot_minimum_speed_admission(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.admitted);
+}
+
+TEST(V2XOvertakeCoreCommitStage, MinimumSpeedAdmissionFallsBackToLiveRequirement)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    SnapshotMinimumSpeedAdmissionRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_snapshot_minimum_speed_admission;
+
+  SnapshotMinimumSpeedAdmissionRequest request;
+  request.predicted_minimum_speed_mps = 2.37;
+  request.live_requirement_mps = 2.59;
+  request.tolerance_mps = 0.02;
+
+  const auto resolution = resolve_snapshot_minimum_speed_admission(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.admitted);
+  EXPECT_FALSE(resolution.used_planning_requirement);
+  EXPECT_DOUBLE_EQ(resolution.effective_requirement_mps, 2.59);
+}
+
 TEST(V2XOvertakeCoreCommitStage, CrossSideReplacementAdmitsCompleteEarlyPassRollout)
 {
   CrossSideMissionReplacementRequest request;
@@ -15464,6 +15508,16 @@ TEST(V2XOvertakeCoreCommitStage, CrossSideReplacementAdmitsCurveLimitedCurrentSp
   EXPECT_TRUE(resolution.admitted);
   EXPECT_TRUE(resolution.restart_shiftout);
   EXPECT_EQ(resolution.reason, CrossSideMissionReplacementReason::Admitted);
+
+  request.planning_minimum_ego_speed_mps = request.minimum_ego_speed_mps;
+  request.minimum_ego_speed_mps = 1.62;
+  request.minimum_speed_tolerance_mps = 0.02;
+  const auto rebased_resolution = resolve_cross_side_mission_replacement(request);
+  ASSERT_TRUE(rebased_resolution.valid);
+  EXPECT_TRUE(rebased_resolution.admitted);
+  EXPECT_EQ(
+    rebased_resolution.reason,
+    CrossSideMissionReplacementReason::Admitted);
 }
 
 TEST(V2XOvertakeCoreCommitStage, CrossSideReplacementBlocksCommittedOrSafeSeparation)
@@ -16523,6 +16577,26 @@ TEST(V2XOvertakeCoreMpccLite, AdmitsOnlyBoundedHardFeasibleExecutionPrefix)
   EXPECT_TRUE(resolution.admitted);
   EXPECT_TRUE(resolution.restart_shiftout);
   EXPECT_EQ(resolution.reason, MpccLitePrefixExecutionRejectReason::Admitted);
+
+  request.predicted_minimum_ego_speed_mps = 2.37;
+  request.planning_minimum_ego_speed_mps = 2.36;
+  request.minimum_ego_speed_mps = 2.59;
+  request.minimum_speed_tolerance_mps = 0.02;
+  resolution = resolve_mpcc_lite_prefix_execution(request);
+  EXPECT_TRUE(resolution.admitted);
+  EXPECT_EQ(resolution.reason, MpccLitePrefixExecutionRejectReason::Admitted);
+
+  request.predicted_minimum_ego_speed_mps = 2.33;
+  resolution = resolve_mpcc_lite_prefix_execution(request);
+  EXPECT_FALSE(resolution.admitted);
+  EXPECT_EQ(
+    resolution.reason,
+    MpccLitePrefixExecutionRejectReason::MinimumSpeedInsufficient);
+
+  request.predicted_minimum_ego_speed_mps = 4.8;
+  request.planning_minimum_ego_speed_mps =
+    std::numeric_limits<double>::quiet_NaN();
+  request.minimum_ego_speed_mps = 4.5;
 
   request.safe_separation_active = true;
   resolution = resolve_mpcc_lite_prefix_execution(request);

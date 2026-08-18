@@ -1373,6 +1373,7 @@ struct OvertakeLineConfig
   double mpcc_lite_locked_target_near_field_distance{6.0};
   double mpcc_lite_prefix_terminal_time_sec{0.75};
   double mpcc_lite_prefix_terminal_distance{2.0};
+  double mpcc_lite_prefix_minimum_speed_tolerance_mps{0.02};
   double mpcc_lite_same_side_max_lateral_adjustment{0.35};
   bool mpcc_frenet_dp_corridor_enabled{false};
   bool mpcc_frenet_dp_execution_enabled{false};
@@ -10088,6 +10089,10 @@ struct MPC
                 setup_candidate.body_clear_deadline_slack_sec = rollout.deadline_slack_sec;
                 setup_candidate.predicted_minimum_ego_speed_mps =
                   rollout.minimum_ego_speed_mps;
+                setup_candidate.planning_minimum_ego_speed_requirement_mps =
+                  overtake_core::resolve_cross_side_minimum_speed_requirement(
+                  std::max(0.0, current_speed_mps_),
+                  non_negative_preflight_target_speed);
                 setup_candidate.pass_target_clearance_checked =
                   rollout.pass_target_clearance_checked;
                 setup_candidate.predicted_minimum_pass_target_surface_clearance_m =
@@ -10567,6 +10572,10 @@ struct MPC
                 rollout.rear_clear_ego_speed_mps;
               mission_candidate.predicted_minimum_ego_speed_mps =
                 rollout.minimum_ego_speed_mps;
+              mission_candidate.planning_minimum_ego_speed_requirement_mps =
+                overtake_core::resolve_cross_side_minimum_speed_requirement(
+                std::max(0.0, current_speed_mps_),
+                non_negative_preflight_target_speed);
               mission_candidate.pass_target_clearance_checked =
                 rollout.pass_target_clearance_checked;
               mission_candidate.predicted_minimum_pass_target_surface_clearance_m =
@@ -12158,6 +12167,10 @@ struct MPC
               overtake_core::resolve_cross_side_minimum_speed_requirement(
               std::max(0.0, current_speed_mps_),
               std::max(0.0, output.overtake_entry_target_speed));
+            request.planning_minimum_ego_speed_mps =
+              async_entry_mission->planning_minimum_ego_speed_requirement_mps;
+            request.minimum_speed_tolerance_mps =
+              shadow_cfg.mpcc_lite_prefix_minimum_speed_tolerance_mps;
             request.minimum_path_wall_clearance_m =
               async_entry_mission->minimum_path_wall_clearance_m;
             request.minimum_required_path_wall_clearance_m =
@@ -12819,6 +12832,10 @@ struct MPC
           request.predicted_minimum_ego_speed_mps =
             mission->predicted_minimum_ego_speed_mps;
           request.minimum_ego_speed_mps = shadow_prefix_minimum_speed_mps;
+          request.planning_minimum_ego_speed_mps =
+            mission->planning_minimum_ego_speed_requirement_mps;
+          request.minimum_speed_tolerance_mps =
+            shadow_cfg.mpcc_lite_prefix_minimum_speed_tolerance_mps;
           request.minimum_path_wall_clearance_m =
             mission->minimum_path_wall_clearance_m;
           request.minimum_required_path_wall_clearance_m = shadow_wall_reference;
@@ -13255,6 +13272,10 @@ struct MPC
           prefix_request.predicted_minimum_ego_speed_mps =
             current_prefix->predicted_minimum_ego_speed_mps;
           prefix_request.minimum_ego_speed_mps = minimum_prefix_speed_mps;
+          prefix_request.planning_minimum_ego_speed_mps =
+            current_prefix->planning_minimum_ego_speed_requirement_mps;
+          prefix_request.minimum_speed_tolerance_mps =
+            shadow_cfg.mpcc_lite_prefix_minimum_speed_tolerance_mps;
           prefix_request.minimum_path_wall_clearance_m =
             current_prefix->minimum_path_wall_clearance_m;
           prefix_request.minimum_required_path_wall_clearance_m =
@@ -18559,6 +18580,10 @@ private:
         request.predicted_minimum_ego_speed_mps =
           proposed_prefix.predicted_minimum_ego_speed_mps;
         request.minimum_ego_speed_mps = minimum_horizon_speed_mps;
+        request.planning_minimum_ego_speed_mps =
+          proposed_prefix.planning_minimum_ego_speed_requirement_mps;
+        request.minimum_speed_tolerance_mps =
+          line_cfg.mpcc_lite_prefix_minimum_speed_tolerance_mps;
         request.minimum_path_wall_clearance_m =
           proposed_prefix.minimum_path_wall_clearance_m;
         request.minimum_required_path_wall_clearance_m =
@@ -18600,6 +18625,10 @@ private:
         request.minimum_rear_clear_speed_mps = target_speed_mps +
           std::max(0.0, line_cfg.cross_side_min_terminal_closing_speed);
         request.minimum_ego_speed_mps = minimum_horizon_speed_mps;
+        request.planning_minimum_ego_speed_mps =
+          proposed_mission.planning_minimum_ego_speed_requirement_mps;
+        request.minimum_speed_tolerance_mps =
+          line_cfg.mpcc_lite_prefix_minimum_speed_tolerance_mps;
         request.minimum_path_wall_clearance_m =
           proposed_mission.minimum_path_wall_clearance_m;
         request.minimum_required_path_wall_clearance_m =
@@ -18617,13 +18646,16 @@ private:
           rclcpp::get_logger("mpc_controller"),
           "Overtake MPCC-lite prefix replacement rejected; current feasible "
           "Mission retained: target=%s, side=%d->%d, phase=%s, reason=%s, "
-          "body_clear=%.2f s/%.2f m, min_v=%.2f/%.2f, wall=%.2f/%.2f, wp_id=%d",
+          "body_clear=%.2f s/%.2f m, min_v=%.3f/planned=%.3f/live=%.3f, "
+          "wall=%.2f/%.2f, wp_id=%d",
           overtake_line_state_.target_vehicle_id.c_str(), previous_side,
           candidate.pass_side_sign, to_string(overtake_line_state_.phase),
           overtake_core::to_string(prefix_admission.reason),
           candidate.predicted_body_clear_time_sec,
           candidate.predicted_body_clear_distance_m,
-          candidate.predicted_minimum_ego_speed_mps, minimum_horizon_speed_mps,
+          candidate.predicted_minimum_ego_speed_mps,
+          candidate.planning_minimum_ego_speed_requirement_mps,
+          minimum_horizon_speed_mps,
           candidate.minimum_path_wall_clearance_m,
           minimum_cross_side_wall_clearance, model->wp_id);
       }
@@ -18644,7 +18676,7 @@ private:
           "target=%s, side=%d->%d, phase=%s, reason=%s, "
           "rear_clear=%.2f s/%.2f m, min_v=%.2f, rear_v=%.2f, "
           "remaining=%.2f s/%.2f m, ego_v=%.2f, target_v=%.2f, "
-          "required_min_v=%.2f, wall=%.2f/%.2f, wp_id=%d",
+          "required_min_v=planned=%.3f/live=%.3f, wall=%.2f/%.2f, wp_id=%d",
           overtake_line_state_.target_vehicle_id.c_str(), previous_side,
           candidate.pass_side_sign, to_string(overtake_line_state_.phase),
           overtake_core::to_string(cross_side_admission.reason),
@@ -18653,7 +18685,9 @@ private:
           candidate.predicted_minimum_ego_speed_mps,
           candidate.predicted_rear_clear_speed_mps,
           remaining_time_budget_sec, remaining_distance_budget_m,
-          ego_speed_mps, target_speed_mps, minimum_horizon_speed_mps,
+          ego_speed_mps, target_speed_mps,
+          candidate.planning_minimum_ego_speed_requirement_mps,
+          minimum_horizon_speed_mps,
           candidate.minimum_path_wall_clearance_m,
           minimum_cross_side_wall_clearance,
           model->wp_id);
@@ -18689,12 +18723,13 @@ private:
           rclcpp::get_logger("mpc_controller"),
           "OvertakeLine prepared cross-side Mission rejected; old Mission retained: "
           "target=%s, side=%d->%d, phase=%s, reason=%s, "
-          "min_v=%.2f/%.2f, ego_v=%.2f, target_v=%.2f, wp_id=%d",
+          "min_v=%.3f/planned=%.3f/live=%.3f, ego_v=%.2f, target_v=%.2f, wp_id=%d",
           overtake_line_state_.target_vehicle_id.c_str(), previous_side,
           replacement_plan.mission.pass_side_sign,
           to_string(overtake_line_state_.phase),
           overtake_core::to_string(prepared_cross_side_admission.reason),
           replacement_plan.mission.predicted_minimum_ego_speed_mps,
+          replacement_plan.mission.planning_minimum_ego_speed_requirement_mps,
           minimum_horizon_speed_mps, ego_speed_mps, target_speed_mps,
           model->wp_id);
       }
@@ -24721,6 +24756,10 @@ private:
           prefix_request.minimum_ego_speed_mps =
             overtake_core::resolve_cross_side_minimum_speed_requirement(
             std::max(0.0, current_speed_mps_), target_speed_mps);
+          prefix_request.planning_minimum_ego_speed_mps =
+            current_candidate.planning_minimum_ego_speed_requirement_mps;
+          prefix_request.minimum_speed_tolerance_mps =
+            line_cfg.mpcc_lite_prefix_minimum_speed_tolerance_mps;
           prefix_request.minimum_path_wall_clearance_m =
             current_candidate.minimum_path_wall_clearance_m;
           prefix_request.minimum_required_path_wall_clearance_m =
@@ -34738,6 +34777,12 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_mpcc_lite_prefix_terminal_distance"] ?
     mpc["v2x_overtake_mpcc_lite_prefix_terminal_distance"].as<double>() : 2.0);
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_lite_prefix_minimum_speed_tolerance_mps =
+    std::max(
+    0.0,
+    mpc["v2x_overtake_mpcc_lite_prefix_minimum_speed_tolerance_mps"] ?
+    mpc["v2x_overtake_mpcc_lite_prefix_minimum_speed_tolerance_mps"].as<double>() :
+    0.02);
   cfg.mpc.v2x_behavior.overtake_line.mpcc_lite_same_side_max_lateral_adjustment =
     std::max(
     0.0,
@@ -37065,7 +37110,8 @@ public:
         "load_shedding=%s/target=%.2f/max=%.3f s, "
         "evaluate=%.3f s (%.1f Hz), log=%.2f s, "
         "last_feasible<=%.2f s, control=%s, near_target<=%.2f m, "
-        "prefix_terminal=%.2f s/%.2f m, same_side_dy<=%.2f m",
+        "prefix_terminal=%.2f s/%.2f m, prefix_v_tol=%.3f m/s, "
+        "same_side_dy<=%.2f m",
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_shadow_enabled ?
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_async_worker_enabled ?
@@ -37088,6 +37134,8 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_locked_target_near_field_distance,
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_prefix_terminal_time_sec,
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_lite_prefix_terminal_distance,
+        mpc_cfg_.v2x_behavior.overtake_line.
+        mpcc_lite_prefix_minimum_speed_tolerance_mps,
         mpc_cfg_.v2x_behavior.overtake_line.
         mpcc_lite_same_side_max_lateral_adjustment);
       RCLCPP_INFO(

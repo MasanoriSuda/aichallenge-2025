@@ -669,6 +669,32 @@ bool can_rearm_runtime_completion_tactical_replan(
 double resolve_cross_side_minimum_speed_requirement(
   double current_ego_speed_mps, double target_speed_mps) noexcept;
 
+struct SnapshotMinimumSpeedAdmissionRequest
+{
+  double predicted_minimum_speed_mps{std::numeric_limits<double>::quiet_NaN()};
+  /// Requirement used by the planner snapshot which produced the prediction.
+  /// NaN means legacy metadata is unavailable and selects the live fallback.
+  double planning_requirement_mps{std::numeric_limits<double>::quiet_NaN()};
+  double live_requirement_mps{std::numeric_limits<double>::quiet_NaN()};
+  double tolerance_mps{0.02};
+};
+
+struct SnapshotMinimumSpeedAdmissionResolution
+{
+  bool valid{false};
+  bool admitted{false};
+  bool used_planning_requirement{false};
+  double effective_requirement_mps{std::numeric_limits<double>::quiet_NaN()};
+  double margin_mps{std::numeric_limits<double>::quiet_NaN()};
+};
+
+/// Compare one tactical prediction against the requirement from the same
+/// planning snapshot. The live requirement remains the fail-closed fallback
+/// for legacy candidates without snapshot metadata. Callers must separately
+/// enforce result freshness and current-state physical hard constraints.
+SnapshotMinimumSpeedAdmissionResolution resolve_snapshot_minimum_speed_admission(
+  const SnapshotMinimumSpeedAdmissionRequest & request) noexcept;
+
 enum class CrossSideMissionReplacementReason
 {
   None,
@@ -718,6 +744,8 @@ struct CrossSideMissionReplacementRequest
   double remaining_time_budget_sec{std::numeric_limits<double>::infinity()};
   double remaining_distance_budget_m{std::numeric_limits<double>::infinity()};
   bool pass_phase{false};
+  double planning_minimum_ego_speed_mps{std::numeric_limits<double>::quiet_NaN()};
+  double minimum_speed_tolerance_mps{0.02};
 };
 
 struct CrossSideMissionReplacementResolution
@@ -3805,6 +3833,11 @@ struct OvertakeMissionCandidate
   /// metadata for diagnostics; active Mission replans do not reapply it.
   bool entry_front_distance_reserve_applied{false};
   double required_entry_front_distance_m{};
+  /// Minimum ego speed requirement used by the snapshot which generated this
+  /// rollout. It travels atomically with async tactical candidates so live
+  /// admission never compares old prediction metadata with a new threshold.
+  double planning_minimum_ego_speed_requirement_mps{
+    std::numeric_limits<double>::quiet_NaN()};
 };
 
 enum class ExtendedMpccBranchCandidateSource
@@ -4138,6 +4171,8 @@ struct MpccLitePrefixExecutionRequest
   double remaining_time_budget_sec{std::numeric_limits<double>::infinity()};
   double remaining_distance_budget_m{std::numeric_limits<double>::infinity()};
   bool pass_phase{false};
+  double planning_minimum_ego_speed_mps{std::numeric_limits<double>::quiet_NaN()};
+  double minimum_speed_tolerance_mps{0.02};
 };
 
 struct MpccLitePrefixExecutionResolution

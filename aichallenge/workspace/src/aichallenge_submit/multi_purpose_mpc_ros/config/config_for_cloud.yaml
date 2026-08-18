@@ -625,6 +625,7 @@ mpc:
   v2x_overtake_mpcc_lite_locked_target_near_field_distance: 6.0 # [m] keep the active target constrained across a transient course-projection miss
   v2x_overtake_mpcc_lite_prefix_terminal_time_sec: 0.75 # [s] terminal progress penalty beyond body-clear for incomplete rear-clear horizon
   v2x_overtake_mpcc_lite_prefix_terminal_distance: 2.0 # [m] terminal progress penalty beyond body-clear for incomplete rear-clear horizon
+  v2x_overtake_mpcc_lite_prefix_minimum_speed_tolerance_mps: 0.02 # [m/s] numeric rollout tolerance; async candidates retain their planning-snapshot requirement
   v2x_overtake_mpcc_lite_same_side_max_lateral_adjustment: 0.35 # [m] paused Pass keeps its current side/line; only a small revalidated correction is allowed
   v2x_overtake_mpcc_frenet_dp_corridor_enabled: true # solve a continuous stage-wise left/right corridor before freezing one lateral goal
   v2x_overtake_mpcc_frenet_dp_execution_enabled: true # execute the target corridor through ShiftOut/Pass and retain its validated prefix during soft rolling replan

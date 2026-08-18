@@ -43,7 +43,8 @@ struct Config
   double extended_progress_reward_weight{4.0};
   double extended_terminal_progress_reward_weight{10.0};
   double extended_failure_cooldown_sec{0.75};
-  double extended_mode_handoff_sec{0.15};
+  std::size_t extended_reentry_success_cycles{3U};
+  double extended_mode_handoff_sec{0.30};
   double stage_velocity_weight{8.0};
   double committed_stage_velocity_weight{24.0};
   double terminal_velocity_weight{12.0};
@@ -202,6 +203,34 @@ public:
 
 private:
   double disabled_until_sec_{-std::numeric_limits<double>::infinity()};
+};
+
+struct ExtendedSolverReentryResolution
+{
+  bool accept_solution{true};
+  bool requalifying{false};
+  std::size_t consecutive_successes{};
+  std::size_t required_successes{1U};
+};
+
+/// Keep an extended-solver failure latched independently from its retry
+/// cooldown. Once the cooldown expires, successful extended solves are used as
+/// shadow probes until the requested consecutive-success count is reached.
+/// This prevents a single lucky solve from repeatedly switching control
+/// authority between the extended and established MPCC formulations.
+class ExtendedSolverReentryGate
+{
+public:
+  void record_failure() noexcept;
+  ExtendedSolverReentryResolution record_success(
+    std::size_t required_successes) noexcept;
+  void reset() noexcept;
+  bool requalification_required() const noexcept;
+  std::size_t consecutive_successes() const noexcept;
+
+private:
+  bool requalification_required_{false};
+  std::size_t consecutive_successes_{};
 };
 
 struct ExtendedModeHandoffResolution

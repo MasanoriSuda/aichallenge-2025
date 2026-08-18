@@ -365,9 +365,13 @@ mpc:
   # A failed 5x3 solve is expensive. Probe it at most once per cooldown while
   # the established 3x2 MPCC remains the fail-operational controller.
   progress_contouring_extended_failure_cooldown_sec: 0.75
+  # After a failure, keep successful retries in shadow until the extended
+  # formulation has solved for this many consecutive cycles. This prevents
+  # one lucky solve from chattering control authority with the 3-state MPCC.
+  progress_contouring_extended_reentry_success_cycles: 3
   # Smooth only formulation changes. The result remains inside the current
   # cycle's hard velocity bounds, so a newly lower front-risk cap is immediate.
-  progress_contouring_extended_mode_handoff_sec: 0.15
+  progress_contouring_extended_mode_handoff_sec: 0.30
   progress_contouring_stage_velocity_weight: 8.0
   progress_contouring_committed_stage_velocity_weight: 24.0
   progress_contouring_terminal_velocity_weight: 12.0

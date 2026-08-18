@@ -246,6 +246,48 @@ TEST(MpccProgress, ExtendedSolverCircuitBreakerUsesBoundedCooldown)
   EXPECT_FALSE(breaker.active(11.1));
 }
 
+TEST(MpccProgress, ExtendedSolverReentryRequiresConsecutiveProbeSuccessesAfterFailure)
+{
+  multi_purpose_mpc_ros::mpcc_progress::ExtendedSolverReentryGate gate;
+
+  auto result = gate.record_success(3U);
+  EXPECT_TRUE(result.accept_solution);
+  EXPECT_FALSE(result.requalifying);
+
+  gate.record_failure();
+  EXPECT_TRUE(gate.requalification_required());
+  result = gate.record_success(3U);
+  EXPECT_FALSE(result.accept_solution);
+  EXPECT_TRUE(result.requalifying);
+  EXPECT_EQ(result.consecutive_successes, 1U);
+  EXPECT_EQ(gate.consecutive_successes(), 1U);
+
+  result = gate.record_success(3U);
+  EXPECT_FALSE(result.accept_solution);
+  EXPECT_EQ(result.consecutive_successes, 2U);
+
+  result = gate.record_success(3U);
+  EXPECT_TRUE(result.accept_solution);
+  EXPECT_FALSE(result.requalifying);
+  EXPECT_EQ(result.consecutive_successes, 3U);
+  EXPECT_FALSE(gate.requalification_required());
+  EXPECT_EQ(gate.consecutive_successes(), 0U);
+}
+
+TEST(MpccProgress, ExtendedSolverReentryFailureRestartsProbeStreak)
+{
+  multi_purpose_mpc_ros::mpcc_progress::ExtendedSolverReentryGate gate;
+  gate.record_failure();
+  EXPECT_FALSE(gate.record_success(3U).accept_solution);
+  EXPECT_EQ(gate.consecutive_successes(), 1U);
+
+  gate.record_failure();
+  EXPECT_EQ(gate.consecutive_successes(), 0U);
+  auto result = gate.record_success(1U);
+  EXPECT_TRUE(result.accept_solution);
+  EXPECT_FALSE(gate.requalification_required());
+}
+
 TEST(MpccProgress, ExtendedModeHandoffSmoothsOnlyWithinCurrentHardBounds)
 {
   multi_purpose_mpc_ros::mpcc_progress::ExtendedModeHandoff handoff;

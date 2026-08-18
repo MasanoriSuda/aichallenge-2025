@@ -502,6 +502,50 @@ double ExtendedSolverCircuitBreaker::disabled_until_sec() const noexcept
   return disabled_until_sec_;
 }
 
+void ExtendedSolverReentryGate::record_failure() noexcept
+{
+  requalification_required_ = true;
+  consecutive_successes_ = 0U;
+}
+
+ExtendedSolverReentryResolution ExtendedSolverReentryGate::record_success(
+  const std::size_t required_successes) noexcept
+{
+  const std::size_t bounded_required = std::max<std::size_t>(1U, required_successes);
+  if (!requalification_required_) {
+    return ExtendedSolverReentryResolution{true, false, 0U, bounded_required};
+  }
+
+  if (consecutive_successes_ < bounded_required) {
+    ++consecutive_successes_;
+  }
+  if (consecutive_successes_ < bounded_required) {
+    return ExtendedSolverReentryResolution{
+      false, true, consecutive_successes_, bounded_required};
+  }
+
+  const std::size_t confirmed_successes = consecutive_successes_;
+  reset();
+  return ExtendedSolverReentryResolution{
+    true, false, confirmed_successes, bounded_required};
+}
+
+void ExtendedSolverReentryGate::reset() noexcept
+{
+  requalification_required_ = false;
+  consecutive_successes_ = 0U;
+}
+
+bool ExtendedSolverReentryGate::requalification_required() const noexcept
+{
+  return requalification_required_;
+}
+
+std::size_t ExtendedSolverReentryGate::consecutive_successes() const noexcept
+{
+  return consecutive_successes_;
+}
+
 std::optional<ExtendedModeHandoffResolution> ExtendedModeHandoff::resolve_velocity(
   const bool extended_mode, const double now_sec, const double desired_velocity_mps,
   const double current_lower_mps, const double current_upper_mps,

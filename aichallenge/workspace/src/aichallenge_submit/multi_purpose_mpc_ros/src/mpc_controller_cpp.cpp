@@ -4845,6 +4845,7 @@ struct MpcOsqpTelemetryWindow
 enum class ExtendedMpccCycleStatus
 {
   Success,
+  Requalifying,
   CircuitSkip,
   BuildReject,
   SolveFailure,
@@ -4856,6 +4857,7 @@ struct ExtendedMpccTelemetryWindow
   std::uint64_t eligible_cycle_count{};
   std::uint64_t solve_attempt_count{};
   std::uint64_t success_count{};
+  std::uint64_t requalifying_count{};
   std::uint64_t circuit_skip_count{};
   std::uint64_t build_reject_count{};
   std::uint64_t solve_failure_count{};
@@ -15330,10 +15332,13 @@ struct MPC
     ++window.eligible_cycle_count;
     const bool solve_attempted =
       status == ExtendedMpccCycleStatus::Success ||
+      status == ExtendedMpccCycleStatus::Requalifying ||
       status == ExtendedMpccCycleStatus::SolveFailure ||
       status == ExtendedMpccCycleStatus::ConversionReject;
     window.solve_attempt_count += solve_attempted ? 1U : 0U;
     window.success_count += status == ExtendedMpccCycleStatus::Success ? 1U : 0U;
+    window.requalifying_count +=
+      status == ExtendedMpccCycleStatus::Requalifying ? 1U : 0U;
     window.circuit_skip_count +=
       status == ExtendedMpccCycleStatus::CircuitSkip ? 1U : 0U;
     window.build_reject_count +=
@@ -15377,12 +15382,15 @@ struct MPC
       RCLCPP_INFO(
         rclcpp::get_logger("mpc_controller"),
         "Extended MPCC runtime: eligible=%zu, attempts=%zu, success=%zu, "
-        "fallback=%zu, circuit_skip=%zu, build_reject=%zu, solve_failure=%zu, "
+        "requalifying=%zu, fallback=%zu, circuit_skip=%zu, build_reject=%zu, "
+        "solve_failure=%zu, "
         "conversion_reject=%zu, solve_ms=%.3f/%.3f(avg/max), "
-        "iterations=%.1f/%d(avg/max), cooldown_remaining=%.2f s",
+        "iterations=%.1f/%d(avg/max), cooldown_remaining=%.2f s, "
+        "reentry_streak=%zu/%zu",
         static_cast<std::size_t>(window.eligible_cycle_count),
         static_cast<std::size_t>(window.solve_attempt_count),
         static_cast<std::size_t>(window.success_count),
+        static_cast<std::size_t>(window.requalifying_count),
         static_cast<std::size_t>(window.fallback_count),
         static_cast<std::size_t>(window.circuit_skip_count),
         static_cast<std::size_t>(window.build_reject_count),
@@ -15390,7 +15398,9 @@ struct MPC
         static_cast<std::size_t>(window.conversion_reject_count),
         window.total_solve_ms / solve_denominator, window.maximum_solve_ms,
         static_cast<double>(window.total_iterations) / solve_denominator,
-        window.maximum_iterations, cooldown_remaining_sec);
+        window.maximum_iterations, cooldown_remaining_sec,
+        extended_progress_reentry_gate_.consecutive_successes(),
+        cfg.progress_contouring.extended_reentry_success_cycles);
     }
     window = ExtendedMpccTelemetryWindow{};
     last_extended_mpcc_telemetry_log_sec_ = now_sec;
@@ -15408,6 +15418,7 @@ struct MPC
     last_extended_osqp_solution_sec_ = -std::numeric_limits<double>::infinity();
     last_extended_osqp_progress_origin_m_.reset();
     extended_progress_circuit_breaker_.reset();
+    extended_progress_reentry_gate_.reset();
     extended_mode_handoff_.reset();
     extended_mpcc_telemetry_window_ = ExtendedMpccTelemetryWindow{};
     solved_mpcc_execution_trajectory_.reset();
@@ -16485,16 +16496,30 @@ struct MPC
                 extended_outcome.result->primal, N,
                 extended_problem->progress_origin_m);
               if (legacy_solution.has_value()) {
-                dec = legacy_solution.value();
-                maximum_constraint_violation =
-                  extended_outcome.result->maximum_constraint_violation;
-                solved_with_extended_progress = true;
                 extended_progress_circuit_breaker_.record_success();
-                record_extended_mpcc_telemetry(
-                  ExtendedMpccCycleStatus::Success,
-                  &extended_outcome.telemetry, now_sec);
+                const auto reentry = extended_progress_reentry_gate_.record_success(
+                  cfg.progress_contouring.extended_reentry_success_cycles);
+                if (reentry.accept_solution) {
+                  dec = legacy_solution.value();
+                  maximum_constraint_violation =
+                    extended_outcome.result->maximum_constraint_violation;
+                  solved_with_extended_progress = true;
+                  record_extended_mpcc_telemetry(
+                    ExtendedMpccCycleStatus::Success,
+                    &extended_outcome.telemetry, now_sec);
+                } else {
+                  std::ostringstream reason;
+                  reason << "requalifying extended solver "
+                         << reentry.consecutive_successes << "/"
+                         << reentry.required_successes;
+                  extended_reject_reason = reason.str();
+                  record_extended_mpcc_telemetry(
+                    ExtendedMpccCycleStatus::Requalifying,
+                    &extended_outcome.telemetry, now_sec);
+                }
               } else {
                 extended_reject_reason = "extended solution conversion rejected";
+                extended_progress_reentry_gate_.record_failure();
                 extended_progress_circuit_breaker_.record_failure(
                   now_sec, cfg.progress_contouring.extended_failure_cooldown_sec);
                 record_extended_mpcc_telemetry(
@@ -16503,6 +16528,7 @@ struct MPC
               }
             } else {
               extended_reject_reason = extended_outcome.failure_detail;
+              extended_progress_reentry_gate_.record_failure();
               extended_progress_circuit_breaker_.record_failure(
                 now_sec, cfg.progress_contouring.extended_failure_cooldown_sec);
               record_extended_mpcc_telemetry(
@@ -16510,6 +16536,7 @@ struct MPC
                 &extended_outcome.telemetry, now_sec);
             }
           } else {
+            extended_progress_reentry_gate_.record_failure();
             record_extended_mpcc_telemetry(
               ExtendedMpccCycleStatus::BuildReject, nullptr, now_sec);
           }
@@ -16526,6 +16553,8 @@ struct MPC
             extended_reject_reason.c_str());
           extended_progress_fallback_last_log_sec_ = now_sec;
         }
+      } else {
+        extended_progress_reentry_gate_.reset();
       }
       persistent_osqp::SolveOutcome legacy_outcome;
       if (!solved_with_extended_progress) {
@@ -16917,6 +16946,7 @@ struct MPC
     -std::numeric_limits<double>::infinity()};
   std::optional<double> last_extended_osqp_progress_origin_m_;
   mpcc_progress::ExtendedSolverCircuitBreaker extended_progress_circuit_breaker_;
+  mpcc_progress::ExtendedSolverReentryGate extended_progress_reentry_gate_;
   mpcc_progress::ExtendedModeHandoff extended_mode_handoff_;
   double extended_progress_fallback_last_log_sec_{
     -std::numeric_limits<double>::infinity()};
@@ -33336,9 +33366,14 @@ Config load_config(const std::string & path)
   progress_contouring.extended_failure_cooldown_sec =
     mpc["progress_contouring_extended_failure_cooldown_sec"] ?
     mpc["progress_contouring_extended_failure_cooldown_sec"].as<double>() : 0.75;
+  progress_contouring.extended_reentry_success_cycles = static_cast<std::size_t>(
+    std::max(
+      1,
+      mpc["progress_contouring_extended_reentry_success_cycles"] ?
+      mpc["progress_contouring_extended_reentry_success_cycles"].as<int>() : 3));
   progress_contouring.extended_mode_handoff_sec =
     mpc["progress_contouring_extended_mode_handoff_sec"] ?
-    mpc["progress_contouring_extended_mode_handoff_sec"].as<double>() : 0.15;
+    mpc["progress_contouring_extended_mode_handoff_sec"].as<double>() : 0.30;
   progress_contouring.stage_velocity_weight =
     mpc["progress_contouring_stage_velocity_weight"] ?
     mpc["progress_contouring_stage_velocity_weight"].as<double>() : 8.0;
@@ -35871,13 +35906,15 @@ public:
       get_logger(),
       "Extended velocity-progress MPCC: %s, tracking=%.1f/%.1f stage, "
       "%.1f/%.1f terminal (lateral/heading), failure_cooldown=%.2f s, "
-      "wall_tracking=%.2f m/min_scale=%.2f, mode_handoff=%.2f s",
+      "reentry_success=%zu, wall_tracking=%.2f m/min_scale=%.2f, "
+      "mode_handoff=%.2f s",
       mpc_cfg_.progress_contouring.extended_dynamics_enabled ? "enabled" : "disabled",
       mpc_cfg_.progress_contouring.extended_lateral_tracking_weight,
       mpc_cfg_.progress_contouring.extended_heading_tracking_weight,
       mpc_cfg_.progress_contouring.extended_terminal_lateral_tracking_weight,
       mpc_cfg_.progress_contouring.extended_terminal_heading_tracking_weight,
       mpc_cfg_.progress_contouring.extended_failure_cooldown_sec,
+      mpc_cfg_.progress_contouring.extended_reentry_success_cycles,
       mpc_cfg_.progress_contouring.extended_wall_tracking_reference_reserve_m,
       mpc_cfg_.progress_contouring.extended_wall_tracking_minimum_weight_scale,
       mpc_cfg_.progress_contouring.extended_mode_handoff_sec);

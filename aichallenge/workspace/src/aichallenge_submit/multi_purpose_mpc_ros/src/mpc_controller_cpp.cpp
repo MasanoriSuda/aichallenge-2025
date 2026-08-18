@@ -2787,6 +2787,11 @@ struct OvertakeLineEntryPreflight
   double minimum_path_wall_clearance_m{std::numeric_limits<double>::infinity()};
   double minimum_path_corridor_width_m{std::numeric_limits<double>::infinity()};
   double minimum_return_wall_clearance_m{std::numeric_limits<double>::infinity()};
+  bool target_wall_horizon_checked{false};
+  bool target_wall_horizon_feasible{true};
+  std::size_t target_wall_horizon_constrained_samples{};
+  std::size_t target_wall_horizon_failure_index{
+    std::numeric_limits<std::size_t>::max()};
   std::string reason;
 };
 
@@ -2798,6 +2803,27 @@ struct OvertakeLineEntryPreflightPolicy
   /// preferred robust reserve alone makes the side infeasible. Complete
   /// ShiftOut/Pass/Return admission deliberately leaves this false.
   bool allow_physical_target_separation_fallback{false};
+};
+
+/// Time-aligned target prediction used to verify that the exact lateral
+/// profile accepted by static-wall preflight is also physically separated
+/// from the target.  Keeping this context separate from the preflight policy
+/// avoids turning a missing observation into a new behavior gate.
+struct OvertakeTargetWallHorizonContext
+{
+  bool enabled{false};
+  int pass_side_sign{};
+  double nominal_ego_speed_mps{};
+  double candidate_ego_speed_mps{};
+  double prediction_horizon_sec{};
+  double maximum_prediction_time_sec{};
+  double target_lateral_now_m{};
+  double target_lateral_predicted_m{};
+  double target_longitudinal_now_m{};
+  double target_longitudinal_predicted_m{};
+  double longitudinal_overlap_threshold_m{};
+  double physical_center_separation_m{};
+  double robust_center_separation_m{};
 };
 
 struct OvertakeLineSideRetryBlock
@@ -9160,6 +9186,80 @@ struct MPC
         const double non_negative_preflight_target_speed =
           std::isfinite(preflight_target_speed) ?
           std::max(0.0, preflight_target_speed) : 0.0;
+        const auto build_target_wall_horizon_context = [&] (
+            const double candidate_ego_speed_mps)
+          -> std::optional<OvertakeTargetWallHorizonContext>
+          {
+            const double prediction_horizon_sec =
+              std::max(0.0, cfg.v2x_gap.prediction_time);
+            const auto prediction_speed =
+              overtake_core::resolve_conservative_prediction_speed(
+              overtake_core::ConservativePredictionSpeedRequest{
+                std::max(0.0, current_speed_mps_), candidate_ego_speed_mps, 1.0});
+            if (
+              prediction_horizon_sec <= kEps || !prediction_speed.valid ||
+              !std::isfinite(preflight_target_course_lateral) ||
+              !std::isfinite(preflight_target_longitudinal) ||
+              !std::isfinite(preflight_target_speed))
+            {
+              return std::nullopt;
+            }
+
+            const bool use_locked_prediction =
+              (side_replan_preflight || paused_overtake_mission) &&
+              output.locked_target_seen && !output.locked_target_position_jump;
+            const double target_lateral_predicted =
+              use_locked_prediction &&
+              output.locked_target_lateral_prediction_valid &&
+              std::isfinite(output.locked_target_predicted_relative_lateral) ?
+              model->spatial_state.e_y +
+              output.locked_target_predicted_relative_lateral :
+              preflight_target_course_lateral +
+              preflight_target_lateral_velocity * prediction_horizon_sec;
+            const double target_longitudinal_predicted =
+              use_locked_prediction &&
+              output.locked_target_footprint_prediction_valid &&
+              std::isfinite(output.locked_target_predicted_longitudinal) ?
+              output.locked_target_predicted_longitudinal :
+              preflight_target_longitudinal +
+              (non_negative_preflight_target_speed - current_speed_mps_) *
+              prediction_horizon_sec;
+            if (
+              !std::isfinite(target_lateral_predicted) ||
+              !std::isfinite(target_longitudinal_predicted))
+            {
+              return std::nullopt;
+            }
+
+            OvertakeTargetWallHorizonContext context;
+            context.enabled = true;
+            context.pass_side_sign = side;
+            context.nominal_ego_speed_mps = std::max(1.0, current_speed_mps_);
+            context.candidate_ego_speed_mps =
+              prediction_speed.prediction_ego_speed_mps;
+            context.prediction_horizon_sec = prediction_horizon_sec;
+            context.maximum_prediction_time_sec = std::max(
+              prediction_horizon_sec,
+              std::max(
+                0.0,
+                cfg.v2x_behavior.overtake_line.
+                receding_horizon_encounter_prediction_max_sec));
+            context.target_lateral_now_m = preflight_target_course_lateral;
+            context.target_lateral_predicted_m = target_lateral_predicted;
+            context.target_longitudinal_now_m = preflight_target_longitudinal;
+            context.target_longitudinal_predicted_m =
+              target_longitudinal_predicted;
+            context.longitudinal_overlap_threshold_m =
+              0.5 * (std::max(0.0, cfg.v2x_gap.vehicle_length) +
+              std::max(0.0, model->length)) +
+              std::max(
+                0.0,
+                cfg.v2x_behavior.overtake_line.
+                receding_horizon_target_longitudinal_buffer);
+            context.physical_center_separation_m = physical_target_separation;
+            context.robust_center_separation_m = robust_target_center_separation;
+            return context;
+          };
         const auto entry_deadline_margin =
           overtake_core::resolve_overtake_entry_deadline_margin(
           overtake_core::OvertakeEntryDeadlineMarginRequest{
@@ -9276,6 +9376,7 @@ struct MPC
         std::size_t rollout_lateral_reject_count = 0;
         std::size_t rear_clear_reject_count = 0;
         std::size_t full_mission_preflight_reject_count = 0;
+        std::string first_full_mission_preflight_rejection;
         std::size_t outer_horizon_reject_count = 0;
         std::size_t outer_transition_preflight_reject_count = 0;
         std::size_t unvalidated_full_track_transition_reject_count = 0;
@@ -9563,6 +9664,8 @@ struct MPC
               const double effective_closing_speed = std::max(
                 0.0,
                 candidate_command_speed - non_negative_preflight_target_speed);
+              const auto target_wall_horizon_context =
+                build_target_wall_horizon_context(candidate_command_speed);
               const auto rollout = overtake_core::resolve_overtake_kinematic_rollout(
                 overtake_core::OvertakeKinematicRolloutRequest{
                   cfg.v2x_behavior.overtake_body_clear_deadline_enabled ||
@@ -9775,7 +9878,8 @@ struct MPC
                       preflight.goal_ey, progressive_preflight_shift_distance,
                       progressive_pass_distance,
                       false, true, false, false, false,
-                      OvertakeLineEntryPreflightPolicy{true, false, true});
+                      OvertakeLineEntryPreflightPolicy{true, false, true},
+                      target_wall_horizon_context);
                     if (!progressive_continuation_preflight.feasible) {
                       ++progressive_entry_short_continuation_reject_count;
                     } else {
@@ -9864,10 +9968,15 @@ struct MPC
                 true, true, true, true, false,
                 OvertakeLineEntryPreflightPolicy{
                   true,
-                  !cfg.v2x_behavior.overtake_line.continuous_outer_replan_enabled}) :
+                  !cfg.v2x_behavior.overtake_line.continuous_outer_replan_enabled},
+                target_wall_horizon_context) :
                 preflight;
               if (!full_mission_preflight.feasible) {
                 ++full_mission_preflight_reject_count;
+                if (first_full_mission_preflight_rejection.empty()) {
+                  first_full_mission_preflight_rejection =
+                    full_mission_preflight.reason;
+                }
                 if (full_mission_preflight.outer_role_reversal) {
                   ++outer_horizon_reject_count;
                   earliest_outer_role_reversal_distance = std::min(
@@ -10362,6 +10471,13 @@ struct MPC
             !first_entry_preflight_rejection.empty())
           {
             ss << ", entry_preflight_reason=" << first_entry_preflight_rejection;
+          }
+          if (
+            full_mission_preflight_reject_count > 0U &&
+            !first_full_mission_preflight_rejection.empty())
+          {
+            ss << ", full_mission_preflight_reason=" <<
+              first_full_mission_preflight_rejection;
           }
           if (
             outer_transition_preflight_reject_count > 0U &&
@@ -10935,7 +11051,13 @@ struct MPC
           assessment.selected_mission->predicted_rear_clear_time_sec >= 0.0 &&
           std::isfinite(
             assessment.selected_mission->predicted_rear_clear_ego_distance_m) &&
-          assessment.selected_mission->predicted_rear_clear_ego_distance_m >= 0.0;
+          assessment.selected_mission->predicted_rear_clear_ego_distance_m >= 0.0 &&
+          assessment.selected_mission->pass_target_clearance_checked &&
+          std::isfinite(
+            assessment.selected_mission->
+            predicted_minimum_pass_target_surface_clearance_m) &&
+          assessment.selected_mission->
+          predicted_minimum_pass_target_surface_clearance_m >= -1e-9;
       };
     const auto has_executable_mission = [&](const SideAssessment & assessment) {
         if (has_validated_full_mission(assessment)) {
@@ -10955,7 +11077,7 @@ struct MPC
                mission.pass_target_clearance_checked &&
                std::isfinite(
                  mission.predicted_minimum_pass_target_surface_clearance_m) &&
-               mission.predicted_minimum_pass_target_surface_clearance_m >= 0.0;
+               mission.predicted_minimum_pass_target_surface_clearance_m >= -1e-9;
       };
     const auto execution_allowed_for_side = [&](const SideAssessment & assessment) {
         if (!assessment.gap_available || assessment.side == 0) {
@@ -20639,7 +20761,9 @@ private:
     const bool evaluate_outer_strategy = false,
     const bool infer_outer_strategy = false,
     const bool outer_strategy_committed = false,
-    const OvertakeLineEntryPreflightPolicy policy = {}) const
+    const OvertakeLineEntryPreflightPolicy policy = {},
+    const std::optional<OvertakeTargetWallHorizonContext> & target_wall_context =
+    std::nullopt) const
   {
     OvertakeLineEntryPreflight result;
     if (
@@ -20866,6 +20990,58 @@ private:
       min_wall_clearance,
       enforce_lateral_accel ? std::max(0.0, line_cfg.max_lateral_accel) : 0.0,
       std::max(1.0, current_speed_mps_), true, mission_path);
+    const bool wall_profile_feasible =
+      horizon.execution_feasible() &&
+      (!enforce_lateral_accel || !horizon.lateral_accel_limited) &&
+      !horizon.wall_clearance_limited &&
+      !horizon.static_map_wall_limited;
+    if (
+      wall_profile_feasible && target_wall_context.has_value() &&
+      target_wall_context->enabled)
+    {
+      result.target_wall_horizon_checked = true;
+      const std::size_t joint_sample_count = std::min(
+        horizon.target_ey.size(), horizon.path_distances.size());
+      if (joint_sample_count == 0U) {
+        result.target_wall_horizon_feasible = false;
+      } else {
+        std::vector<overtake_core::OvertakeMissionDynamicCorridorSample>
+          exact_wall_profile;
+        exact_wall_profile.reserve(joint_sample_count);
+        for (std::size_t i = 0U; i < joint_sample_count; ++i) {
+          overtake_core::OvertakeMissionDynamicCorridorSample sample;
+          sample.path_distance_m = horizon.path_distances[i];
+          sample.lower_lateral_m = horizon.target_ey[i];
+          sample.upper_lateral_m = horizon.target_ey[i];
+          sample.active = true;
+          exact_wall_profile.push_back(sample);
+        }
+        const auto & context = target_wall_context.value();
+        const auto target_constrained_profile =
+          overtake_core::constrain_frenet_dp_corridor_to_target(
+          overtake_core::FrenetDpTargetConstrainedCorridorRequest{
+            true,
+            context.pass_side_sign,
+            context.nominal_ego_speed_mps,
+            context.candidate_ego_speed_mps,
+            context.prediction_horizon_sec,
+            context.maximum_prediction_time_sec,
+            context.target_lateral_now_m,
+            context.target_lateral_predicted_m,
+            context.target_longitudinal_now_m,
+            context.target_longitudinal_predicted_m,
+            context.longitudinal_overlap_threshold_m,
+            context.physical_center_separation_m,
+            context.robust_center_separation_m,
+            std::move(exact_wall_profile)});
+        result.target_wall_horizon_feasible =
+          target_constrained_profile.valid && target_constrained_profile.feasible;
+        result.target_wall_horizon_constrained_samples =
+          target_constrained_profile.constrained_sample_count;
+        result.target_wall_horizon_failure_index =
+          target_constrained_profile.failure_index;
+      }
+    }
     const std::size_t clearance_sample_count = std::min({
       horizon.target_ey.size(), horizon.path_distances.size(),
       static_cast<std::size_t>(validation_N)});
@@ -20897,15 +21073,25 @@ private:
       }
     }
     result.feasible =
-      horizon.execution_feasible() &&
-      (!enforce_lateral_accel || !horizon.lateral_accel_limited) &&
-      !horizon.wall_clearance_limited &&
-      !horizon.static_map_wall_limited;
+      wall_profile_feasible && result.target_wall_horizon_feasible;
     result.max_required_lateral_accel = horizon.max_required_lateral_accel;
     if (result.feasible) {
       result.reason = include_return_path ?
         "full ShiftOut/Pass/Return execution preflight feasible" :
         "ShiftOut/Pass execution preflight feasible";
+    } else if (
+      result.target_wall_horizon_checked &&
+      !result.target_wall_horizon_feasible)
+    {
+      std::ostringstream reason;
+      reason << "wall-feasible mission profile conflicts with predicted target";
+      if (
+        result.target_wall_horizon_failure_index !=
+        std::numeric_limits<std::size_t>::max())
+      {
+        reason << ", sample=" << result.target_wall_horizon_failure_index;
+      }
+      result.reason = reason.str();
     } else if (enforce_lateral_accel && horizon.lateral_accel_limited) {
       result.reason = include_return_path ?
         "full mission path exceeds lateral acceleration limit" :

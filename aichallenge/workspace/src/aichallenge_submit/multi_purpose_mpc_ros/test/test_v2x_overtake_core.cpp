@@ -8432,6 +8432,38 @@ TEST(V2XOvertakeCoreSpeed, GlobalCandidateSelectionPrefersFutureInteractionReser
     0.32, 1e-9);
 }
 
+TEST(V2XOvertakeCoreSpeed, GlobalCandidateSelectionRejectsPredictedTargetOverlap)
+{
+  OvertakeMissionCandidate overlapping;
+  overlapping.feasible = true;
+  overlapping.shift_distance_m = 2.0;
+  overlapping.goal_lateral_m = 0.4;
+  overlapping.lateral_shift_m = 0.4;
+  overlapping.max_required_lateral_accel_mps2 = 1.0;
+  overlapping.pass_side_sign = 1;
+  overlapping.pass_target_clearance_checked = true;
+  overlapping.predicted_minimum_pass_target_surface_clearance_m = -0.01;
+
+  auto clear = overlapping;
+  clear.goal_lateral_m = -0.5;
+  clear.pass_side_sign = -1;
+  clear.predicted_minimum_pass_target_surface_clearance_m = 0.05;
+
+  OvertakeMissionCandidateSelectionRequest request;
+  request.candidates = {overlapping, clear};
+  auto selection = select_overtake_mission_candidate(request);
+  ASSERT_TRUE(selection.valid);
+  ASSERT_TRUE(selection.found);
+  EXPECT_EQ(selection.selected_index, 1U);
+  EXPECT_EQ(selection.invalid_candidate_count, 1U);
+
+  request.candidates = {overlapping};
+  selection = select_overtake_mission_candidate(request);
+  ASSERT_TRUE(selection.valid);
+  EXPECT_FALSE(selection.found);
+  EXPECT_EQ(selection.invalid_candidate_count, 1U);
+}
+
 TEST(V2XOvertakeCoreSpeed, RearClearSideSelectionAvoidsFullTrackTransition)
 {
   OvertakeMissionCandidate entry_outer;
@@ -15989,6 +16021,23 @@ TEST(V2XOvertakeCoreMpccLiteShadow, ClassifiesMissionAdmissionFailures)
   EXPECT_EQ(
     candidate.admission_reject_reason,
     MpccLiteShadowRejectReason::RearClearUnchecked);
+
+  request.mission->rear_clear_prediction_checked = true;
+  request.mission->rear_clear_prediction_feasible = true;
+  request.mission->predicted_rear_clear_time_sec = 2.0;
+  request.mission->predicted_rear_clear_ego_distance_m = 6.0;
+  request.mission->predicted_minimum_ego_speed_mps = 3.0;
+  candidate = build_mpcc_lite_shadow_mission_candidate(request);
+  EXPECT_EQ(
+    candidate.admission_reject_reason,
+    MpccLiteShadowRejectReason::TargetClearanceUnchecked);
+
+  request.mission->pass_target_clearance_checked = true;
+  request.mission->predicted_minimum_pass_target_surface_clearance_m = -0.01;
+  candidate = build_mpcc_lite_shadow_mission_candidate(request);
+  EXPECT_EQ(
+    candidate.admission_reject_reason,
+    MpccLiteShadowRejectReason::HardConstraint);
 }
 
 TEST(V2XOvertakeCoreMpccLiteShadow, AppliesRemainingMissionAndSafeSeparationBudgets)
@@ -16817,6 +16866,38 @@ TEST(V2XOvertakeCoreFrenetDpCorridor, RejectsPhysicalTargetWallConflict)
   EXPECT_FALSE(resolution.feasible);
   EXPECT_EQ(resolution.failure_index, 0U);
   EXPECT_TRUE(resolution.samples.empty());
+}
+
+TEST(V2XOvertakeCoreFrenetDpCorridor, RevalidatesExactWallAcceptedProfileAgainstTarget)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    FrenetDpTargetConstrainedCorridorRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    OvertakeMissionDynamicCorridorSample;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    constrain_frenet_dp_corridor_to_target;
+
+  OvertakeMissionDynamicCorridorSample exact_profile;
+  exact_profile.path_distance_m = 0.0;
+  exact_profile.lower_lateral_m = 0.9;
+  exact_profile.upper_lateral_m = 0.9;
+  exact_profile.active = true;
+  FrenetDpTargetConstrainedCorridorRequest request{
+    true, 1, 2.0, 2.0, 1.0, 2.0, 0.0, 0.0, 0.0, 0.0,
+    2.0, 1.0, 1.2, {exact_profile}};
+
+  auto resolution = constrain_frenet_dp_corridor_to_target(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.feasible);
+  EXPECT_EQ(resolution.failure_index, 0U);
+
+  request.samples[0].lower_lateral_m = 1.0;
+  request.samples[0].upper_lateral_m = 1.0;
+  resolution = constrain_frenet_dp_corridor_to_target(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.feasible);
+  ASSERT_EQ(resolution.samples.size(), 1U);
+  EXPECT_NEAR(resolution.samples[0].lower_lateral_m, 1.0, 1e-9);
 }
 
 TEST(V2XOvertakeCoreFrenetDpCorridor, SoftReservePullsPathInsidePreferredInterval)

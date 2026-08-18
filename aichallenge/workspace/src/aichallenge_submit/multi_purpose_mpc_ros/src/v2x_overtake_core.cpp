@@ -6856,8 +6856,10 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
         candidate.predicted_minimum_ego_speed_mps >= 0.0);
       const bool pass_target_clearance_valid =
         !candidate.pass_target_clearance_checked ||
-        std::isfinite(
-        candidate.predicted_minimum_pass_target_surface_clearance_m);
+        (std::isfinite(
+          candidate.predicted_minimum_pass_target_surface_clearance_m) &&
+        candidate.predicted_minimum_pass_target_surface_clearance_m >=
+        -kEpsilon);
       const bool frenet_dp_corridor_valid =
         !candidate.frenet_dp_corridor_checked ||
         (candidate.frenet_dp_corridor_feasible &&
@@ -7330,6 +7332,12 @@ MpccLiteShadowCandidate build_mpcc_lite_shadow_mission_candidate(
   }
   if (!mission.pass_target_clearance_checked) {
     return reject(MpccLiteShadowRejectReason::TargetClearanceUnchecked);
+  }
+  if (
+    !std::isfinite(mission.predicted_minimum_pass_target_surface_clearance_m) ||
+    mission.predicted_minimum_pass_target_surface_clearance_m < -1e-9)
+  {
+    return reject(MpccLiteShadowRejectReason::HardConstraint);
   }
   if (mission.outer_transition_required && !mission.outer_transition_preflight_validated) {
     return reject(MpccLiteShadowRejectReason::OuterTransitionUnvalidated);

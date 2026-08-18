@@ -344,9 +344,13 @@ mpc:
   # formulation remains the cycle-local fallback when this QP is unavailable.
   progress_contouring_extended_dynamics_enabled: true
   progress_contouring_extended_lag_state_bound_m: 3.0
-  # The extended QP uses local progress (theta - current_s). Scale the legacy
-  # path-tracking weights into the same numerical range as v/a/v_theta costs.
-  progress_contouring_extended_tracking_weight_scale: 0.001
+  # Extended states use their own numerical scale. Keep lateral/heading and
+  # terminal guidance explicit so numerical stabilization cannot weaken path
+  # tracking as a side effect.
+  progress_contouring_extended_lateral_tracking_weight: 500.0
+  progress_contouring_extended_heading_tracking_weight: 5000.0
+  progress_contouring_extended_terminal_lateral_tracking_weight: 1500.0
+  progress_contouring_extended_terminal_heading_tracking_weight: 5000.0
   progress_contouring_extended_lag_weight: 100.0
   progress_contouring_extended_terminal_lag_weight: 150.0
   progress_contouring_extended_progress_tracking_weight: 2.0
@@ -356,6 +360,9 @@ mpc:
   # A failed 5x3 solve is expensive. Probe it at most once per cooldown while
   # the established 3x2 MPCC remains the fail-operational controller.
   progress_contouring_extended_failure_cooldown_sec: 0.75
+  # Smooth only formulation changes. The result remains inside the current
+  # cycle's hard velocity bounds, so a newly lower front-risk cap is immediate.
+  progress_contouring_extended_mode_handoff_sec: 0.15
   progress_contouring_stage_velocity_weight: 8.0
   progress_contouring_committed_stage_velocity_weight: 24.0
   progress_contouring_terminal_velocity_weight: 12.0

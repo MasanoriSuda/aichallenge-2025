@@ -31,8 +31,14 @@ bool finite_config(const Config & config) noexcept
     config.terminal_progress_reward_weight >= 0.0 &&
     std::isfinite(config.extended_lag_state_bound_m) &&
     config.extended_lag_state_bound_m > 0.0 &&
-    std::isfinite(config.extended_tracking_weight_scale) &&
-    config.extended_tracking_weight_scale > 0.0 &&
+    std::isfinite(config.extended_lateral_tracking_weight) &&
+    config.extended_lateral_tracking_weight > 0.0 &&
+    std::isfinite(config.extended_heading_tracking_weight) &&
+    config.extended_heading_tracking_weight > 0.0 &&
+    std::isfinite(config.extended_terminal_lateral_tracking_weight) &&
+    config.extended_terminal_lateral_tracking_weight > 0.0 &&
+    std::isfinite(config.extended_terminal_heading_tracking_weight) &&
+    config.extended_terminal_heading_tracking_weight > 0.0 &&
     std::isfinite(config.extended_lag_weight) && config.extended_lag_weight > 0.0 &&
     std::isfinite(config.extended_terminal_lag_weight) &&
     config.extended_terminal_lag_weight > 0.0 &&
@@ -46,6 +52,8 @@ bool finite_config(const Config & config) noexcept
     config.extended_terminal_progress_reward_weight >= 0.0 &&
     std::isfinite(config.extended_failure_cooldown_sec) &&
     config.extended_failure_cooldown_sec >= 0.0 &&
+    std::isfinite(config.extended_mode_handoff_sec) &&
+    config.extended_mode_handoff_sec >= 0.0 &&
     std::isfinite(config.stage_velocity_weight) && config.stage_velocity_weight > 0.0 &&
     std::isfinite(config.committed_stage_velocity_weight) &&
     config.committed_stage_velocity_weight >= config.stage_velocity_weight &&
@@ -447,6 +455,80 @@ void ExtendedSolverCircuitBreaker::reset() noexcept
 double ExtendedSolverCircuitBreaker::disabled_until_sec() const noexcept
 {
   return disabled_until_sec_;
+}
+
+std::optional<ExtendedModeHandoffResolution> ExtendedModeHandoff::resolve_velocity(
+  const bool extended_mode, const double now_sec, const double desired_velocity_mps,
+  const double current_lower_mps, const double current_upper_mps,
+  const double handoff_duration_sec) noexcept
+{
+  if (
+    !std::isfinite(now_sec) || !std::isfinite(desired_velocity_mps) ||
+    !std::isfinite(current_lower_mps) || !std::isfinite(current_upper_mps) ||
+    current_lower_mps > current_upper_mps ||
+    !std::isfinite(handoff_duration_sec) || handoff_duration_sec < 0.0)
+  {
+    reset();
+    return std::nullopt;
+  }
+
+  const double bounded_desired = std::clamp(
+    desired_velocity_mps, current_lower_mps, current_upper_mps);
+  if (!previous_extended_mode_.has_value()) {
+    previous_extended_mode_ = extended_mode;
+    last_output_velocity_mps_ = bounded_desired;
+    return ExtendedModeHandoffResolution{bounded_desired, 1.0, false};
+  }
+
+  if (
+    !std::isfinite(last_output_velocity_mps_) ||
+    (std::isfinite(transition_start_sec_) && now_sec < transition_start_sec_))
+  {
+    reset();
+    previous_extended_mode_ = extended_mode;
+    last_output_velocity_mps_ = bounded_desired;
+    return ExtendedModeHandoffResolution{bounded_desired, 1.0, false};
+  }
+
+  if (previous_extended_mode_.value() != extended_mode) {
+    previous_extended_mode_ = extended_mode;
+    transition_start_sec_ = now_sec;
+    transition_source_velocity_mps_ = std::clamp(
+      last_output_velocity_mps_, current_lower_mps, current_upper_mps);
+  }
+
+  const bool transition_initialized =
+    std::isfinite(transition_start_sec_) &&
+    std::isfinite(transition_source_velocity_mps_);
+  const double transition_elapsed_sec = transition_initialized ?
+    std::max(0.0, now_sec - transition_start_sec_) : 0.0;
+  constexpr double kTransitionCompletionToleranceSec = 1e-9;
+  const double blend_ratio = !transition_initialized || handoff_duration_sec <= 0.0 ?
+    1.0 :
+    transition_elapsed_sec + kTransitionCompletionToleranceSec >= handoff_duration_sec ?
+    1.0 : std::clamp(
+    transition_elapsed_sec / handoff_duration_sec, 0.0, 1.0);
+  const double velocity = std::clamp(
+    transition_initialized ?
+    transition_source_velocity_mps_ +
+    blend_ratio * (bounded_desired - transition_source_velocity_mps_) :
+    bounded_desired,
+    current_lower_mps, current_upper_mps);
+  const bool active = transition_initialized && blend_ratio < 1.0;
+  if (!active) {
+    transition_start_sec_ = -std::numeric_limits<double>::infinity();
+    transition_source_velocity_mps_ = std::numeric_limits<double>::quiet_NaN();
+  }
+  last_output_velocity_mps_ = velocity;
+  return ExtendedModeHandoffResolution{velocity, blend_ratio, active};
+}
+
+void ExtendedModeHandoff::reset() noexcept
+{
+  previous_extended_mode_.reset();
+  last_output_velocity_mps_ = std::numeric_limits<double>::quiet_NaN();
+  transition_source_velocity_mps_ = std::numeric_limits<double>::quiet_NaN();
+  transition_start_sec_ = -std::numeric_limits<double>::infinity();
 }
 
 std::optional<std::vector<double>> build_progress_reference(

@@ -200,6 +200,40 @@ TEST(MpccProgress, ExtendedSolverCircuitBreakerUsesBoundedCooldown)
   EXPECT_FALSE(breaker.active(11.1));
 }
 
+TEST(MpccProgress, ExtendedModeHandoffSmoothsOnlyWithinCurrentHardBounds)
+{
+  multi_purpose_mpc_ros::mpcc_progress::ExtendedModeHandoff handoff;
+  auto result = handoff.resolve_velocity(true, 10.0, 6.0, 0.0, 8.0, 0.20);
+  ASSERT_TRUE(result.has_value());
+  EXPECT_FALSE(result->active);
+  EXPECT_DOUBLE_EQ(result->velocity_mps, 6.0);
+
+  result = handoff.resolve_velocity(false, 10.0, 4.0, 0.0, 8.0, 0.20);
+  ASSERT_TRUE(result.has_value());
+  EXPECT_TRUE(result->active);
+  EXPECT_DOUBLE_EQ(result->velocity_mps, 6.0);
+  result = handoff.resolve_velocity(false, 10.1, 4.0, 0.0, 8.0, 0.20);
+  ASSERT_TRUE(result.has_value());
+  EXPECT_TRUE(result->active);
+  EXPECT_NEAR(result->velocity_mps, 5.0, 1e-12);
+  result = handoff.resolve_velocity(false, 10.2, 4.0, 0.0, 8.0, 0.20);
+  ASSERT_TRUE(result.has_value());
+  EXPECT_FALSE(result->active);
+  EXPECT_DOUBLE_EQ(result->velocity_mps, 4.0);
+
+  // A lower safety cap is not blended through.
+  result = handoff.resolve_velocity(true, 10.3, 7.0, 0.0, 3.0, 0.20);
+  ASSERT_TRUE(result.has_value());
+  EXPECT_DOUBLE_EQ(result->velocity_mps, 3.0);
+}
+
+TEST(MpccProgress, ExtendedModeHandoffRejectsMalformedBounds)
+{
+  multi_purpose_mpc_ros::mpcc_progress::ExtendedModeHandoff handoff;
+  EXPECT_FALSE(handoff.resolve_velocity(
+    true, 10.0, 5.0, 6.0, 4.0, 0.15).has_value());
+}
+
 TEST(MpccProgress, BuildsUnwrappedProgressReference)
 {
   const auto result = multi_purpose_mpc_ros::mpcc_progress::build_progress_reference(

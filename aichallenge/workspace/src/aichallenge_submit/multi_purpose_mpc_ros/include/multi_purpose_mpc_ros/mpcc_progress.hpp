@@ -24,7 +24,13 @@ struct Config
   double terminal_progress_reward_weight{5000.0};
   bool extended_dynamics_enabled{false};
   double extended_lag_state_bound_m{3.0};
-  double extended_tracking_weight_scale{0.001};
+  // Extended dynamics have different state units and numerical scaling from
+  // the established 3-state MPCC. Keep their tracking weights explicit rather
+  // than inheriting one scale factor for both stage and terminal costs.
+  double extended_lateral_tracking_weight{500.0};
+  double extended_heading_tracking_weight{5000.0};
+  double extended_terminal_lateral_tracking_weight{1500.0};
+  double extended_terminal_heading_tracking_weight{5000.0};
   double extended_lag_weight{100.0};
   double extended_terminal_lag_weight{150.0};
   double extended_progress_tracking_weight{2.0};
@@ -32,6 +38,7 @@ struct Config
   double extended_progress_reward_weight{4.0};
   double extended_terminal_progress_reward_weight{10.0};
   double extended_failure_cooldown_sec{0.75};
+  double extended_mode_handoff_sec{0.15};
   double stage_velocity_weight{8.0};
   double committed_stage_velocity_weight{24.0};
   double terminal_velocity_weight{12.0};
@@ -190,6 +197,33 @@ public:
 
 private:
   double disabled_until_sec_{-std::numeric_limits<double>::infinity()};
+};
+
+struct ExtendedModeHandoffResolution
+{
+  double velocity_mps{};
+  double blend_ratio{1.0};
+  bool active{false};
+};
+
+/// Preserve longitudinal command continuity when execution changes between
+/// the extended and established MPCC formulations. The resolved command is
+/// always clipped to the current cycle's hard velocity bounds; a newly lower
+/// front-risk cap therefore takes effect immediately.
+class ExtendedModeHandoff
+{
+public:
+  std::optional<ExtendedModeHandoffResolution> resolve_velocity(
+    bool extended_mode, double now_sec, double desired_velocity_mps,
+    double current_lower_mps, double current_upper_mps,
+    double handoff_duration_sec) noexcept;
+  void reset() noexcept;
+
+private:
+  std::optional<bool> previous_extended_mode_;
+  double last_output_velocity_mps_{std::numeric_limits<double>::quiet_NaN()};
+  double transition_source_velocity_mps_{std::numeric_limits<double>::quiet_NaN()};
+  double transition_start_sec_{-std::numeric_limits<double>::infinity()};
 };
 
 /// Build an unwrapped stage progress reference from the measured progress and

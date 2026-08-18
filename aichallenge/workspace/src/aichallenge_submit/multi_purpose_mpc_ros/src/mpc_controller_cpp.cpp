@@ -14952,8 +14952,9 @@ struct MPC
       const int legacy_state = legacy_nx * stage;
       add_reference_cost(
         state + mpcc_progress::kExtendedLateralIndex,
-        cfg.progress_contouring.extended_tracking_weight_scale *
-        (terminal ? cfg.QN[0] : cfg.Q[0]),
+        terminal ?
+        cfg.progress_contouring.extended_terminal_lateral_tracking_weight :
+        cfg.progress_contouring.extended_lateral_tracking_weight,
         legacy.progress_reference_state[legacy_state]);
       add_reference_cost(
         state + mpcc_progress::kExtendedLagIndex,
@@ -14961,8 +14962,9 @@ struct MPC
         cfg.progress_contouring.extended_lag_weight, 0.0);
       add_reference_cost(
         state + mpcc_progress::kExtendedHeadingIndex,
-        cfg.progress_contouring.extended_tracking_weight_scale *
-        (terminal ? cfg.QN[1] : cfg.Q[1]),
+        terminal ?
+        cfg.progress_contouring.extended_terminal_heading_tracking_weight :
+        cfg.progress_contouring.extended_heading_tracking_weight,
         legacy.progress_reference_state[legacy_state + 1]);
       const std::size_t velocity_stage = static_cast<std::size_t>(
         std::min(stage, N - 1));
@@ -15243,6 +15245,7 @@ struct MPC
     last_extended_osqp_solution_sec_ = -std::numeric_limits<double>::infinity();
     last_extended_osqp_progress_origin_m_.reset();
     extended_progress_circuit_breaker_.reset();
+    extended_mode_handoff_.reset();
     extended_mpcc_telemetry_window_ = ExtendedMpccTelemetryWindow{};
     solved_mpcc_execution_trajectory_.reset();
     last_physically_validated_mpcc_execution_trajectory_.reset();
@@ -16374,8 +16377,25 @@ struct MPC
       for (int i = 1; i < control_signals.size(); i += 2) {
         control_signals[i] = std::atan(control_signals[i] * model->length);
       }
-      const double v = control_signals[0];
+      double v = control_signals[0];
       double delta = control_signals[1];
+      if (
+        problem.progress_contouring_active &&
+        cfg.progress_contouring.extended_dynamics_enabled &&
+        problem.progress_input_lower.size() >= 1 &&
+        problem.progress_input_upper.size() >= 1)
+      {
+        const auto handoff = extended_mode_handoff_.resolve_velocity(
+          solved_with_extended_progress, now_sec, v,
+          problem.progress_input_lower[0], problem.progress_input_upper[0],
+          cfg.progress_contouring.extended_mode_handoff_sec);
+        if (handoff.has_value()) {
+          v = handoff->velocity_mps;
+          control_signals[0] = v;
+        }
+      } else {
+        extended_mode_handoff_.reset();
+      }
       const double max_delta_change = cfg.steer_rate_max * model->Ts;
       delta = clip(delta, previous_steering - max_delta_change, previous_steering + max_delta_change);
       control_signals[1] = delta;
@@ -16717,6 +16737,7 @@ struct MPC
     -std::numeric_limits<double>::infinity()};
   std::optional<double> last_extended_osqp_progress_origin_m_;
   mpcc_progress::ExtendedSolverCircuitBreaker extended_progress_circuit_breaker_;
+  mpcc_progress::ExtendedModeHandoff extended_mode_handoff_;
   double extended_progress_fallback_last_log_sec_{
     -std::numeric_limits<double>::infinity()};
   MpcOsqpTelemetryWindow osqp_telemetry_window_;
@@ -33013,9 +33034,33 @@ Config load_config(const std::string & path)
   progress_contouring.extended_lag_state_bound_m =
     mpc["progress_contouring_extended_lag_state_bound_m"] ?
     mpc["progress_contouring_extended_lag_state_bound_m"].as<double>() : 3.0;
-  progress_contouring.extended_tracking_weight_scale =
+  // Accept the 20260818 single-scale key only as a compatibility fallback.
+  // New configurations use explicit stage/terminal tracking weights because
+  // the legacy Q/QN ratio made terminal guidance almost disappear.
+  const double legacy_extended_tracking_scale =
     mpc["progress_contouring_extended_tracking_weight_scale"] ?
-    mpc["progress_contouring_extended_tracking_weight_scale"].as<double>() : 0.001;
+    mpc["progress_contouring_extended_tracking_weight_scale"].as<double>() :
+    std::numeric_limits<double>::quiet_NaN();
+  progress_contouring.extended_lateral_tracking_weight =
+    mpc["progress_contouring_extended_lateral_tracking_weight"] ?
+    mpc["progress_contouring_extended_lateral_tracking_weight"].as<double>() :
+    (std::isfinite(legacy_extended_tracking_scale) ?
+    legacy_extended_tracking_scale * cfg.mpc.Q[0] : 500.0);
+  progress_contouring.extended_heading_tracking_weight =
+    mpc["progress_contouring_extended_heading_tracking_weight"] ?
+    mpc["progress_contouring_extended_heading_tracking_weight"].as<double>() :
+    (std::isfinite(legacy_extended_tracking_scale) ?
+    legacy_extended_tracking_scale * cfg.mpc.Q[1] : 5000.0);
+  progress_contouring.extended_terminal_lateral_tracking_weight =
+    mpc["progress_contouring_extended_terminal_lateral_tracking_weight"] ?
+    mpc["progress_contouring_extended_terminal_lateral_tracking_weight"].as<double>() :
+    (std::isfinite(legacy_extended_tracking_scale) ?
+    legacy_extended_tracking_scale * cfg.mpc.QN[0] : 1500.0);
+  progress_contouring.extended_terminal_heading_tracking_weight =
+    mpc["progress_contouring_extended_terminal_heading_tracking_weight"] ?
+    mpc["progress_contouring_extended_terminal_heading_tracking_weight"].as<double>() :
+    (std::isfinite(legacy_extended_tracking_scale) ?
+    legacy_extended_tracking_scale * cfg.mpc.QN[1] : 5000.0);
   progress_contouring.extended_lag_weight =
     mpc["progress_contouring_extended_lag_weight"] ?
     mpc["progress_contouring_extended_lag_weight"].as<double>() : 100.0;
@@ -33037,6 +33082,9 @@ Config load_config(const std::string & path)
   progress_contouring.extended_failure_cooldown_sec =
     mpc["progress_contouring_extended_failure_cooldown_sec"] ?
     mpc["progress_contouring_extended_failure_cooldown_sec"].as<double>() : 0.75;
+  progress_contouring.extended_mode_handoff_sec =
+    mpc["progress_contouring_extended_mode_handoff_sec"] ?
+    mpc["progress_contouring_extended_mode_handoff_sec"].as<double>() : 0.15;
   progress_contouring.stage_velocity_weight =
     mpc["progress_contouring_stage_velocity_weight"] ?
     mpc["progress_contouring_stage_velocity_weight"].as<double>() : 8.0;
@@ -35565,6 +35613,18 @@ public:
       mpc_cfg_.progress_contouring.refinement_start_deadline_ms,
       mpc_cfg_.progress_contouring.refinement_cold_entry_skip_sec,
       mpc_cfg_.progress_contouring.refinement_wall_cache_miss_skip_threshold);
+    RCLCPP_INFO(
+      get_logger(),
+      "Extended velocity-progress MPCC: %s, tracking=%.1f/%.1f stage, "
+      "%.1f/%.1f terminal (lateral/heading), failure_cooldown=%.2f s, "
+      "mode_handoff=%.2f s",
+      mpc_cfg_.progress_contouring.extended_dynamics_enabled ? "enabled" : "disabled",
+      mpc_cfg_.progress_contouring.extended_lateral_tracking_weight,
+      mpc_cfg_.progress_contouring.extended_heading_tracking_weight,
+      mpc_cfg_.progress_contouring.extended_terminal_lateral_tracking_weight,
+      mpc_cfg_.progress_contouring.extended_terminal_heading_tracking_weight,
+      mpc_cfg_.progress_contouring.extended_failure_cooldown_sec,
+      mpc_cfg_.progress_contouring.extended_mode_handoff_sec);
     setup_parameters_callback();
     setup_pub_sub();
     if (ref_vel_config_path_.has_value()) {

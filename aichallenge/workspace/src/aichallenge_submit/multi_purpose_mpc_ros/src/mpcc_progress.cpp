@@ -39,6 +39,11 @@ bool finite_config(const Config & config) noexcept
     config.extended_terminal_lateral_tracking_weight > 0.0 &&
     std::isfinite(config.extended_terminal_heading_tracking_weight) &&
     config.extended_terminal_heading_tracking_weight > 0.0 &&
+    std::isfinite(config.extended_wall_tracking_reference_reserve_m) &&
+    config.extended_wall_tracking_reference_reserve_m >= 0.0 &&
+    std::isfinite(config.extended_wall_tracking_minimum_weight_scale) &&
+    config.extended_wall_tracking_minimum_weight_scale > 0.0 &&
+    config.extended_wall_tracking_minimum_weight_scale <= 1.0 &&
     std::isfinite(config.extended_lag_weight) && config.extended_lag_weight > 0.0 &&
     std::isfinite(config.extended_terminal_lag_weight) &&
     config.extended_terminal_lag_weight > 0.0 &&
@@ -114,6 +119,46 @@ std::optional<StageDistanceResolution> resolve_stage_distances(
     }
   }
   return result;
+}
+
+std::optional<WallAwareTrackingReferenceResolution>
+resolve_wall_aware_tracking_reference(
+  const WallAwareTrackingReferenceRequest & request) noexcept
+{
+  if (
+    !std::isfinite(request.reference_lateral_m) ||
+    !std::isfinite(request.lower_bound_m) ||
+    !std::isfinite(request.upper_bound_m) ||
+    request.lower_bound_m > request.upper_bound_m ||
+    !std::isfinite(request.preferred_reserve_m) ||
+    request.preferred_reserve_m < 0.0 ||
+    !std::isfinite(request.minimum_weight_scale) ||
+    request.minimum_weight_scale <= 0.0 || request.minimum_weight_scale > 1.0)
+  {
+    return std::nullopt;
+  }
+
+  const double corridor_width = request.upper_bound_m - request.lower_bound_m;
+  const double achievable_reserve = std::min(
+    request.preferred_reserve_m, 0.5 * corridor_width);
+  const double interior_lower = request.lower_bound_m + achievable_reserve;
+  const double interior_upper = request.upper_bound_m - achievable_reserve;
+  const double reference = interior_lower <= interior_upper ?
+    std::clamp(request.reference_lateral_m, interior_lower, interior_upper) :
+    0.5 * (request.lower_bound_m + request.upper_bound_m);
+  const double actual_reserve = std::max(
+    0.0,
+    std::min(
+      reference - request.lower_bound_m,
+      request.upper_bound_m - reference));
+  const double reserve_ratio = request.preferred_reserve_m > 1e-9 ?
+    std::clamp(actual_reserve / request.preferred_reserve_m, 0.0, 1.0) : 1.0;
+  const double weight_scale =
+    request.minimum_weight_scale +
+    (1.0 - request.minimum_weight_scale) * reserve_ratio;
+  return WallAwareTrackingReferenceResolution{
+    reference, weight_scale, actual_reserve,
+    std::abs(reference - request.reference_lateral_m) > 1e-9};
 }
 
 bool progress_origin_discontinuous(

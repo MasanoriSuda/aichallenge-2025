@@ -351,6 +351,11 @@ mpc:
   progress_contouring_extended_heading_tracking_weight: 5000.0
   progress_contouring_extended_terminal_lateral_tracking_weight: 1500.0
   progress_contouring_extended_terminal_heading_tracking_weight: 5000.0
+  # Bias the soft reference away from the already footprint-expanded wall
+  # bounds. Narrow corridors retain their full hard interval and automatically
+  # reduce only the lateral tracking cost instead of becoming infeasible.
+  progress_contouring_extended_wall_tracking_reference_reserve_m: 0.15
+  progress_contouring_extended_wall_tracking_minimum_weight_scale: 0.25
   progress_contouring_extended_lag_weight: 100.0
   progress_contouring_extended_terminal_lag_weight: 150.0
   progress_contouring_extended_progress_tracking_weight: 2.0

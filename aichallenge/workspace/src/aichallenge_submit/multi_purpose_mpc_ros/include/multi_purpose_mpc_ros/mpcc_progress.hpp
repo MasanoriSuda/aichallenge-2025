@@ -31,6 +31,11 @@ struct Config
   double extended_heading_tracking_weight{5000.0};
   double extended_terminal_lateral_tracking_weight{1500.0};
   double extended_terminal_heading_tracking_weight{5000.0};
+  // Keep the soft lateral reference inside the already footprint-expanded
+  // hard corridor. This is not another hard wall margin: a narrow corridor
+  // can still use its full bounds, with a reduced tracking weight.
+  double extended_wall_tracking_reference_reserve_m{0.15};
+  double extended_wall_tracking_minimum_weight_scale{0.25};
   double extended_lag_weight{100.0};
   double extended_terminal_lag_weight{150.0};
   double extended_progress_tracking_weight{2.0};
@@ -205,6 +210,31 @@ struct ExtendedModeHandoffResolution
   double blend_ratio{1.0};
   bool active{false};
 };
+
+struct WallAwareTrackingReferenceRequest
+{
+  double reference_lateral_m{};
+  double lower_bound_m{};
+  double upper_bound_m{};
+  double preferred_reserve_m{};
+  double minimum_weight_scale{};
+};
+
+struct WallAwareTrackingReferenceResolution
+{
+  double reference_lateral_m{};
+  double weight_scale{1.0};
+  double achieved_reserve_m{};
+  bool reference_adjusted{false};
+};
+
+/// Move only the soft MPCC tracking reference away from a lateral hard bound.
+/// When the corridor is too narrow for the preferred reserve, retain the hard
+/// feasible interval and reduce the reference weight in proportion to the
+/// achievable reserve instead of rejecting the trajectory.
+std::optional<WallAwareTrackingReferenceResolution>
+resolve_wall_aware_tracking_reference(
+  const WallAwareTrackingReferenceRequest & request) noexcept;
 
 /// Preserve longitudinal command continuity when execution changes between
 /// the extended and established MPCC formulations. The resolved command is

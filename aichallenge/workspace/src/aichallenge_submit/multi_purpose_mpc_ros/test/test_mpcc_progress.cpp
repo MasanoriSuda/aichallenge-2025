@@ -113,6 +113,52 @@ TEST(MpccProgress, ExtendedModelExposesPhysicalVirtualProgressLag)
   EXPECT_NEAR(next[4], 10.4, 1e-12);
 }
 
+TEST(MpccProgress, WallAwareReferenceStaysInsideWideCorridor)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::WallAwareTrackingReferenceRequest;
+  const auto result =
+    multi_purpose_mpc_ros::mpcc_progress::resolve_wall_aware_tracking_reference(
+      WallAwareTrackingReferenceRequest{0.98, -1.0, 1.0, 0.15, 0.25});
+  ASSERT_TRUE(result.has_value());
+  EXPECT_TRUE(result->reference_adjusted);
+  EXPECT_NEAR(result->reference_lateral_m, 0.85, 1e-12);
+  EXPECT_NEAR(result->achieved_reserve_m, 0.15, 1e-12);
+  EXPECT_DOUBLE_EQ(result->weight_scale, 1.0);
+}
+
+TEST(MpccProgress, WallAwareReferenceSoftensWhenCorridorIsNarrow)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::WallAwareTrackingReferenceRequest;
+  const auto result =
+    multi_purpose_mpc_ros::mpcc_progress::resolve_wall_aware_tracking_reference(
+      WallAwareTrackingReferenceRequest{0.08, -0.10, 0.10, 0.15, 0.25});
+  ASSERT_TRUE(result.has_value());
+  EXPECT_TRUE(result->reference_adjusted);
+  EXPECT_NEAR(result->reference_lateral_m, 0.0, 1e-12);
+  EXPECT_NEAR(result->achieved_reserve_m, 0.10, 1e-12);
+  EXPECT_NEAR(result->weight_scale, 0.75, 1e-12);
+}
+
+TEST(MpccProgress, WallAwareReferenceDoesNotAddASecondHardConstraint)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::WallAwareTrackingReferenceRequest;
+  const auto result =
+    multi_purpose_mpc_ros::mpcc_progress::resolve_wall_aware_tracking_reference(
+      WallAwareTrackingReferenceRequest{0.4, 0.4, 0.4, 0.15, 0.25});
+  ASSERT_TRUE(result.has_value());
+  EXPECT_DOUBLE_EQ(result->reference_lateral_m, 0.4);
+  EXPECT_DOUBLE_EQ(result->achieved_reserve_m, 0.0);
+  EXPECT_DOUBLE_EQ(result->weight_scale, 0.25);
+}
+
+TEST(MpccProgress, WallAwareReferenceRejectsMalformedBounds)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::WallAwareTrackingReferenceRequest;
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::mpcc_progress::resolve_wall_aware_tracking_reference(
+      WallAwareTrackingReferenceRequest{0.0, 1.0, -1.0, 0.15, 0.25}).has_value());
+}
+
 TEST(MpccProgress, CommittedPassRaisesVelocityCostWithoutRelaxingCap)
 {
   using multi_purpose_mpc_ros::mpcc_progress::VelocityHorizonRequest;

@@ -4751,6 +4751,10 @@ struct ExtendedProgressMpcProblem
   Eigen::SparseMatrix<double> A;
   int N{};
   double progress_origin_m{std::numeric_limits<double>::quiet_NaN()};
+  std::size_t wall_aware_reference_adjustment_count{};
+  double minimum_wall_tracking_weight_scale{1.0};
+  double minimum_wall_tracking_reference_reserve_m{
+    std::numeric_limits<double>::infinity()};
 };
 
 struct SolvedMpccExecutionTrajectory
@@ -14941,6 +14945,10 @@ struct MPC
 
     Eigen::VectorXd q = Eigen::VectorXd::Zero(variable_count);
     std::vector<Eigen::Triplet<double>> p_triplets;
+    std::size_t wall_aware_reference_adjustment_count = 0U;
+    double minimum_wall_tracking_weight_scale = 1.0;
+    double minimum_wall_tracking_reference_reserve_m =
+      std::numeric_limits<double>::infinity();
     const auto add_reference_cost = [&p_triplets, &q](
         const int index, const double weight, const double reference) {
         p_triplets.emplace_back(index, index, weight);
@@ -14950,12 +14958,43 @@ struct MPC
       const bool terminal = stage == N;
       const int state = nx * stage;
       const int legacy_state = legacy_nx * stage;
+      // Stage zero is a measured hard equality, so a synthetic reserve there
+      // cannot affect the solution and would make the runtime minimum-reserve
+      // telemetry permanently read zero.
+      const double wall_tracking_reference_reserve = stage == 0 ? 0.0 :
+        cfg.progress_contouring.extended_wall_tracking_reference_reserve_m;
+      const double wall_tracking_minimum_weight_scale = stage == 0 ? 1.0 :
+        cfg.progress_contouring.extended_wall_tracking_minimum_weight_scale;
+      const auto wall_aware_lateral =
+        mpcc_progress::resolve_wall_aware_tracking_reference(
+        mpcc_progress::WallAwareTrackingReferenceRequest{
+          legacy.progress_reference_state[legacy_state],
+          legacy.progress_state_lower[legacy_state],
+          legacy.progress_state_upper[legacy_state],
+          wall_tracking_reference_reserve,
+          wall_tracking_minimum_weight_scale});
+      if (!wall_aware_lateral.has_value()) {
+        reject_reason = "extended MPCC wall-aware lateral reference invalid";
+        return std::nullopt;
+      }
+      if (stage > 0) {
+        wall_aware_reference_adjustment_count +=
+          wall_aware_lateral->reference_adjusted ? 1U : 0U;
+        minimum_wall_tracking_weight_scale = std::min(
+          minimum_wall_tracking_weight_scale, wall_aware_lateral->weight_scale);
+        minimum_wall_tracking_reference_reserve_m = std::min(
+          minimum_wall_tracking_reference_reserve_m,
+          wall_aware_lateral->achieved_reserve_m);
+      }
+      const double lateral_tracking_weight =
+        (terminal ?
+        cfg.progress_contouring.extended_terminal_lateral_tracking_weight :
+        cfg.progress_contouring.extended_lateral_tracking_weight) *
+        wall_aware_lateral->weight_scale;
       add_reference_cost(
         state + mpcc_progress::kExtendedLateralIndex,
-        terminal ?
-        cfg.progress_contouring.extended_terminal_lateral_tracking_weight :
-        cfg.progress_contouring.extended_lateral_tracking_weight,
-        legacy.progress_reference_state[legacy_state]);
+        lateral_tracking_weight,
+        wall_aware_lateral->reference_lateral_m);
       add_reference_cost(
         state + mpcc_progress::kExtendedLagIndex,
         terminal ? cfg.progress_contouring.extended_terminal_lag_weight :
@@ -15040,7 +15079,9 @@ struct MPC
     return ExtendedProgressMpcProblem{
       std::move(q), std::move(lower), std::move(upper),
       std::move(quadratic_cost), std::move(constraints), N,
-      legacy.progress_origin_m};
+      legacy.progress_origin_m, wall_aware_reference_adjustment_count,
+      minimum_wall_tracking_weight_scale,
+      minimum_wall_tracking_reference_reserve_m};
   }
 
   persistent_osqp::SolveOutcome solve_extended_progress_problem(
@@ -16297,6 +16338,23 @@ struct MPC
           const auto extended_problem = build_extended_progress_problem(
             problem, extended_reject_reason);
           if (extended_problem.has_value()) {
+            if (
+              extended_problem->wall_aware_reference_adjustment_count > 0U &&
+              cfg.v2x_behavior.overtake_line.debug_log_enabled &&
+              (!std::isfinite(extended_wall_tracking_last_log_sec_) ||
+              now_sec - extended_wall_tracking_last_log_sec_ >= 1.0))
+            {
+              RCLCPP_INFO(
+                rclcpp::get_logger("mpc_controller"),
+                "Extended MPCC wall-aware tracking: adjusted=%zu/%d, "
+                "minimum_reserve=%.3f m, minimum_weight_scale=%.2f, wp_id=%d",
+                extended_problem->wall_aware_reference_adjustment_count,
+                N,
+                extended_problem->minimum_wall_tracking_reference_reserve_m,
+                extended_problem->minimum_wall_tracking_weight_scale,
+                model->wp_id);
+              extended_wall_tracking_last_log_sec_ = now_sec;
+            }
             auto extended_outcome = solve_extended_progress_problem(
               extended_problem.value(), now_sec);
             if (extended_outcome.result.has_value()) {
@@ -16739,6 +16797,8 @@ struct MPC
   mpcc_progress::ExtendedSolverCircuitBreaker extended_progress_circuit_breaker_;
   mpcc_progress::ExtendedModeHandoff extended_mode_handoff_;
   double extended_progress_fallback_last_log_sec_{
+    -std::numeric_limits<double>::infinity()};
+  double extended_wall_tracking_last_log_sec_{
     -std::numeric_limits<double>::infinity()};
   MpcOsqpTelemetryWindow osqp_telemetry_window_;
   double last_osqp_telemetry_log_sec_{std::numeric_limits<double>::quiet_NaN()};
@@ -33061,6 +33121,14 @@ Config load_config(const std::string & path)
     mpc["progress_contouring_extended_terminal_heading_tracking_weight"].as<double>() :
     (std::isfinite(legacy_extended_tracking_scale) ?
     legacy_extended_tracking_scale * cfg.mpc.QN[1] : 5000.0);
+  progress_contouring.extended_wall_tracking_reference_reserve_m =
+    mpc["progress_contouring_extended_wall_tracking_reference_reserve_m"] ?
+    mpc["progress_contouring_extended_wall_tracking_reference_reserve_m"].as<double>() :
+    0.15;
+  progress_contouring.extended_wall_tracking_minimum_weight_scale =
+    mpc["progress_contouring_extended_wall_tracking_minimum_weight_scale"] ?
+    mpc["progress_contouring_extended_wall_tracking_minimum_weight_scale"].as<double>() :
+    0.25;
   progress_contouring.extended_lag_weight =
     mpc["progress_contouring_extended_lag_weight"] ?
     mpc["progress_contouring_extended_lag_weight"].as<double>() : 100.0;
@@ -35617,13 +35685,15 @@ public:
       get_logger(),
       "Extended velocity-progress MPCC: %s, tracking=%.1f/%.1f stage, "
       "%.1f/%.1f terminal (lateral/heading), failure_cooldown=%.2f s, "
-      "mode_handoff=%.2f s",
+      "wall_tracking=%.2f m/min_scale=%.2f, mode_handoff=%.2f s",
       mpc_cfg_.progress_contouring.extended_dynamics_enabled ? "enabled" : "disabled",
       mpc_cfg_.progress_contouring.extended_lateral_tracking_weight,
       mpc_cfg_.progress_contouring.extended_heading_tracking_weight,
       mpc_cfg_.progress_contouring.extended_terminal_lateral_tracking_weight,
       mpc_cfg_.progress_contouring.extended_terminal_heading_tracking_weight,
       mpc_cfg_.progress_contouring.extended_failure_cooldown_sec,
+      mpc_cfg_.progress_contouring.extended_wall_tracking_reference_reserve_m,
+      mpc_cfg_.progress_contouring.extended_wall_tracking_minimum_weight_scale,
       mpc_cfg_.progress_contouring.extended_mode_handoff_sec);
     setup_parameters_callback();
     setup_pub_sub();

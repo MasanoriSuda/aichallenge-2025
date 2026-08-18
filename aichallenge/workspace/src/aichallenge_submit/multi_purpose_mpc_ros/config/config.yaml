@@ -365,7 +365,7 @@ mpc:
   waypoint_minimum_forward_reach_m: 1.5
   waypoint_forward_reach_time_scale: 4.0
   # 2026-07-17 AWSIM experiment: keep MPC model steering and published steering identical.
-  steering_tire_angle_gain_var: 1.79
+  steering_tire_angle_gain_var: 1.5
   # steering_tire_angle_gain_var: 1.0
   # accel_low_pass_gain: 0.1
   # steer_low_pass_gain: 0.3

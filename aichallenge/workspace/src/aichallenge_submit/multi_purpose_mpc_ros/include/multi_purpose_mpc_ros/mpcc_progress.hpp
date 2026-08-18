@@ -24,6 +24,14 @@ struct Config
   double terminal_progress_reward_weight{5000.0};
   bool extended_dynamics_enabled{false};
   double extended_lag_state_bound_m{3.0};
+  double extended_tracking_weight_scale{0.001};
+  double extended_lag_weight{100.0};
+  double extended_terminal_lag_weight{150.0};
+  double extended_progress_tracking_weight{2.0};
+  double extended_terminal_progress_tracking_weight{5.0};
+  double extended_progress_reward_weight{4.0};
+  double extended_terminal_progress_reward_weight{10.0};
+  double extended_failure_cooldown_sec{0.75};
   double stage_velocity_weight{8.0};
   double committed_stage_velocity_weight{24.0};
   double terminal_velocity_weight{12.0};
@@ -159,9 +167,30 @@ std::optional<VelocityHorizon> resolve_velocity_horizon(
   const VelocityHorizonRequest & request) noexcept;
 
 /// Convert an accepted 5x3 solution into the established 3x2 layout consumed
-/// by prediction, physical wall validation and command post-processing.
+/// by prediction, physical wall validation and command post-processing. The
+/// extended theta state is local to progress_origin_m and is restored here.
 std::optional<Eigen::VectorXd> convert_extended_solution_to_legacy(
-  const Eigen::VectorXd & extended_primal, int horizon_size) noexcept;
+  const Eigen::VectorXd & extended_primal, int horizon_size,
+  double progress_origin_m) noexcept;
+
+/// Rebase a shifted extended warm-start from the previous local progress
+/// origin to the current one. Only theta state elements are modified.
+bool rebase_extended_progress_warm_start(
+  Eigen::VectorXd & extended_primal, int horizon_size,
+  double previous_progress_origin_m, double current_progress_origin_m) noexcept;
+
+class ExtendedSolverCircuitBreaker
+{
+public:
+  bool active(double now_sec) const noexcept;
+  void record_failure(double now_sec, double cooldown_sec) noexcept;
+  void record_success() noexcept;
+  void reset() noexcept;
+  double disabled_until_sec() const noexcept;
+
+private:
+  double disabled_until_sec_{-std::numeric_limits<double>::infinity()};
+};
 
 /// Build an unwrapped stage progress reference from the measured progress and
 /// the existing ReferencePath segment distances. The result has N+1 states.

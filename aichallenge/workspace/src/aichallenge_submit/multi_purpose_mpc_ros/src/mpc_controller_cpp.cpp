@@ -4812,6 +4812,31 @@ struct MpcOsqpTelemetryWindow
   double maximum_solve_ms{};
 };
 
+enum class ExtendedMpccCycleStatus
+{
+  Success,
+  CircuitSkip,
+  BuildReject,
+  SolveFailure,
+  ConversionReject,
+};
+
+struct ExtendedMpccTelemetryWindow
+{
+  std::uint64_t eligible_cycle_count{};
+  std::uint64_t solve_attempt_count{};
+  std::uint64_t success_count{};
+  std::uint64_t circuit_skip_count{};
+  std::uint64_t build_reject_count{};
+  std::uint64_t solve_failure_count{};
+  std::uint64_t conversion_reject_count{};
+  std::uint64_t fallback_count{};
+  std::uint64_t total_iterations{};
+  int maximum_iterations{};
+  double total_solve_ms{};
+  double maximum_solve_ms{};
+};
+
 struct MpcRtiSqpTelemetryWindow
 {
   std::uint64_t progress_cycles{};
@@ -14757,7 +14782,9 @@ struct MPC
       const double acceleration = clip((next_velocity - velocity) / dt, cfg.a_min, cfg.a_max);
       const double lateral = legacy.progress_reference_state[legacy_nx * stage];
       const double heading = legacy.progress_reference_state[legacy_nx * stage + 1];
-      const double progress = legacy.progress_reference_state[legacy_nx * stage + 2];
+      const double progress =
+        legacy.progress_reference_state[legacy_nx * stage + 2] -
+        legacy.progress_origin_m;
       const double path_curvature =
         legacy.progress_path_curvature_radpm[static_cast<std::size_t>(stage)];
       const double denominator = 1.0 - path_curvature * lateral;
@@ -14818,9 +14845,9 @@ struct MPC
           velocity_horizon->hard_cap_velocity_mps[static_cast<std::size_t>(stage - 1)];
       }
       state_lower[state + mpcc_progress::kExtendedProgressIndex] =
-        legacy.progress_state_lower[legacy_state + 2];
+        legacy.progress_state_lower[legacy_state + 2] - legacy.progress_origin_m;
       state_upper[state + mpcc_progress::kExtendedProgressIndex] =
-        legacy.progress_state_upper[legacy_state + 2];
+        legacy.progress_state_upper[legacy_state + 2] - legacy.progress_origin_m;
     }
     for (int stage = 0; stage < N; ++stage) {
       const int legacy_input = legacy_nu * stage;
@@ -14881,7 +14908,7 @@ struct MPC
     Eigen::Matrix<double, nx, 1> x0;
     x0 <<
       model->spatial_state.e_y, 0.0, model->spatial_state.e_psi,
-      legacy.progress_measured_speed_mps, legacy.progress_origin_m;
+      legacy.progress_measured_speed_mps, 0.0;
     Eigen::VectorXd equality = Eigen::VectorXd::Zero(nx_N);
     equality.segment<nx>(0) = -x0;
     for (int stage = 0; stage < N; ++stage) {
@@ -14925,15 +14952,17 @@ struct MPC
       const int legacy_state = legacy_nx * stage;
       add_reference_cost(
         state + mpcc_progress::kExtendedLateralIndex,
-        terminal ? cfg.QN[0] : cfg.Q[0],
+        cfg.progress_contouring.extended_tracking_weight_scale *
+        (terminal ? cfg.QN[0] : cfg.Q[0]),
         legacy.progress_reference_state[legacy_state]);
       add_reference_cost(
         state + mpcc_progress::kExtendedLagIndex,
-        terminal ? cfg.progress_contouring.terminal_lag_weight :
-        cfg.progress_contouring.lag_weight, 0.0);
+        terminal ? cfg.progress_contouring.extended_terminal_lag_weight :
+        cfg.progress_contouring.extended_lag_weight, 0.0);
       add_reference_cost(
         state + mpcc_progress::kExtendedHeadingIndex,
-        terminal ? cfg.QN[1] : cfg.Q[1],
+        cfg.progress_contouring.extended_tracking_weight_scale *
+        (terminal ? cfg.QN[1] : cfg.Q[1]),
         legacy.progress_reference_state[legacy_state + 1]);
       const std::size_t velocity_stage = static_cast<std::size_t>(
         std::min(stage, N - 1));
@@ -14951,12 +14980,18 @@ struct MPC
       add_reference_cost(
         state + mpcc_progress::kExtendedVelocityIndex,
         velocity_weight, velocity_target);
-      p_triplets.emplace_back(
+      const double progress_tracking_weight = terminal ?
+        cfg.progress_contouring.extended_terminal_progress_tracking_weight :
+        cfg.progress_contouring.extended_progress_tracking_weight;
+      const double progress_reference =
+        legacy.progress_reference_state[legacy_state + 2] -
+        legacy.progress_origin_m;
+      add_reference_cost(
         state + mpcc_progress::kExtendedProgressIndex,
-        state + mpcc_progress::kExtendedProgressIndex, 1e-6);
+        progress_tracking_weight, progress_reference);
       q[state + mpcc_progress::kExtendedProgressIndex] -= terminal ?
-        cfg.progress_contouring.terminal_progress_reward_weight :
-        cfg.progress_contouring.progress_reward_weight;
+        cfg.progress_contouring.extended_terminal_progress_reward_weight :
+        cfg.progress_contouring.extended_progress_reward_weight;
     }
     for (int stage = 0; stage < N; ++stage) {
       const int input = nx_N + nu * stage;
@@ -15009,10 +15044,12 @@ struct MPC
   persistent_osqp::SolveOutcome solve_extended_progress_problem(
     const ExtendedProgressMpcProblem & problem, const double now_sec)
   {
+    const std::optional<double> previous_progress_origin =
+      last_extended_osqp_progress_origin_m_;
     const bool progress_discontinuous =
-      last_extended_osqp_progress_origin_m_.has_value() &&
+      previous_progress_origin.has_value() &&
       mpcc_progress::progress_origin_discontinuous(
-        last_extended_osqp_progress_origin_m_.value(), problem.progress_origin_m,
+        previous_progress_origin.value(), problem.progress_origin_m,
         std::max(2.0, cfg.progress_contouring.trust_region_backward_m));
     if (progress_discontinuous) {
       persistent_extended_osqp_solver_.reset();
@@ -15031,6 +15068,14 @@ struct MPC
         last_extended_osqp_solution_.value(), static_cast<std::size_t>(problem.N),
         static_cast<std::size_t>(mpcc_progress::kExtendedStateDimension),
         static_cast<std::size_t>(mpcc_progress::kExtendedInputDimension));
+      if (
+        warm_start.has_value() && previous_progress_origin.has_value() &&
+        !mpcc_progress::rebase_extended_progress_warm_start(
+          warm_start->primal, problem.N, previous_progress_origin.value(),
+          problem.progress_origin_m))
+      {
+        warm_start.reset();
+      }
     }
     auto outcome = persistent_extended_osqp_solver_.solve(
       problem.P, problem.A, problem.q, problem.l, problem.u, warm_start);
@@ -15111,6 +15156,81 @@ struct MPC
     last_osqp_telemetry_log_sec_ = now_sec;
   }
 
+  void record_extended_mpcc_telemetry(
+    const ExtendedMpccCycleStatus status,
+    const persistent_osqp::SolveTelemetry * const solve_telemetry,
+    const double now_sec)
+  {
+    auto & window = extended_mpcc_telemetry_window_;
+    ++window.eligible_cycle_count;
+    const bool solve_attempted =
+      status == ExtendedMpccCycleStatus::Success ||
+      status == ExtendedMpccCycleStatus::SolveFailure ||
+      status == ExtendedMpccCycleStatus::ConversionReject;
+    window.solve_attempt_count += solve_attempted ? 1U : 0U;
+    window.success_count += status == ExtendedMpccCycleStatus::Success ? 1U : 0U;
+    window.circuit_skip_count +=
+      status == ExtendedMpccCycleStatus::CircuitSkip ? 1U : 0U;
+    window.build_reject_count +=
+      status == ExtendedMpccCycleStatus::BuildReject ? 1U : 0U;
+    window.solve_failure_count +=
+      status == ExtendedMpccCycleStatus::SolveFailure ? 1U : 0U;
+    window.conversion_reject_count +=
+      status == ExtendedMpccCycleStatus::ConversionReject ? 1U : 0U;
+    window.fallback_count += status == ExtendedMpccCycleStatus::Success ? 0U : 1U;
+    if (solve_attempted && solve_telemetry != nullptr) {
+      window.total_iterations += static_cast<std::uint64_t>(
+        std::max(0, solve_telemetry->iterations));
+      window.maximum_iterations = std::max(
+        window.maximum_iterations, solve_telemetry->iterations);
+      window.total_solve_ms += solve_telemetry->solve_ms;
+      window.maximum_solve_ms = std::max(
+        window.maximum_solve_ms, solve_telemetry->solve_ms);
+    }
+
+    if (!std::isfinite(now_sec)) {
+      return;
+    }
+    if (
+      !std::isfinite(last_extended_mpcc_telemetry_log_sec_) ||
+      now_sec < last_extended_mpcc_telemetry_log_sec_)
+    {
+      last_extended_mpcc_telemetry_log_sec_ = now_sec;
+      return;
+    }
+    if (now_sec - last_extended_mpcc_telemetry_log_sec_ < 1.0) {
+      return;
+    }
+    if (
+      cfg.v2x_behavior.overtake_line.debug_log_enabled &&
+      window.eligible_cycle_count > 0U)
+    {
+      const double solve_denominator = static_cast<double>(
+        std::max<std::uint64_t>(1U, window.solve_attempt_count));
+      const double cooldown_remaining_sec = std::max(
+        0.0, extended_progress_circuit_breaker_.disabled_until_sec() - now_sec);
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"),
+        "Extended MPCC runtime: eligible=%zu, attempts=%zu, success=%zu, "
+        "fallback=%zu, circuit_skip=%zu, build_reject=%zu, solve_failure=%zu, "
+        "conversion_reject=%zu, solve_ms=%.3f/%.3f(avg/max), "
+        "iterations=%.1f/%d(avg/max), cooldown_remaining=%.2f s",
+        static_cast<std::size_t>(window.eligible_cycle_count),
+        static_cast<std::size_t>(window.solve_attempt_count),
+        static_cast<std::size_t>(window.success_count),
+        static_cast<std::size_t>(window.fallback_count),
+        static_cast<std::size_t>(window.circuit_skip_count),
+        static_cast<std::size_t>(window.build_reject_count),
+        static_cast<std::size_t>(window.solve_failure_count),
+        static_cast<std::size_t>(window.conversion_reject_count),
+        window.total_solve_ms / solve_denominator, window.maximum_solve_ms,
+        static_cast<double>(window.total_iterations) / solve_denominator,
+        window.maximum_iterations, cooldown_remaining_sec);
+    }
+    window = ExtendedMpccTelemetryWindow{};
+    last_extended_mpcc_telemetry_log_sec_ = now_sec;
+  }
+
   void reset_osqp_history()
   {
     persistent_osqp_solver_.reset();
@@ -15122,6 +15242,8 @@ struct MPC
     last_extended_osqp_solution_.reset();
     last_extended_osqp_solution_sec_ = -std::numeric_limits<double>::infinity();
     last_extended_osqp_progress_origin_m_.reset();
+    extended_progress_circuit_breaker_.reset();
+    extended_mpcc_telemetry_window_ = ExtendedMpccTelemetryWindow{};
     solved_mpcc_execution_trajectory_.reset();
     last_physically_validated_mpcc_execution_trajectory_.reset();
     solved_mpcc_execution_authority_was_active_ = false;
@@ -16160,25 +16282,53 @@ struct MPC
         problem.progress_contouring_active &&
         cfg.progress_contouring.extended_dynamics_enabled)
       {
-        const auto extended_problem = build_extended_progress_problem(
-          problem, extended_reject_reason);
-        if (extended_problem.has_value()) {
-          auto extended_outcome = solve_extended_progress_problem(
-            extended_problem.value(), now_sec);
-          if (extended_outcome.result.has_value()) {
-            const auto legacy_solution =
-              mpcc_progress::convert_extended_solution_to_legacy(
-              extended_outcome.result->primal, N);
-            if (legacy_solution.has_value()) {
-              dec = legacy_solution.value();
-              maximum_constraint_violation =
-                extended_outcome.result->maximum_constraint_violation;
-              solved_with_extended_progress = true;
+        if (extended_progress_circuit_breaker_.active(now_sec)) {
+          extended_reject_reason = "failure circuit open, retry in " +
+            std::to_string(std::max(
+              0.0,
+              extended_progress_circuit_breaker_.disabled_until_sec() - now_sec)) +
+            " s";
+          record_extended_mpcc_telemetry(
+            ExtendedMpccCycleStatus::CircuitSkip, nullptr, now_sec);
+        } else {
+          const auto extended_problem = build_extended_progress_problem(
+            problem, extended_reject_reason);
+          if (extended_problem.has_value()) {
+            auto extended_outcome = solve_extended_progress_problem(
+              extended_problem.value(), now_sec);
+            if (extended_outcome.result.has_value()) {
+              const auto legacy_solution =
+                mpcc_progress::convert_extended_solution_to_legacy(
+                extended_outcome.result->primal, N,
+                extended_problem->progress_origin_m);
+              if (legacy_solution.has_value()) {
+                dec = legacy_solution.value();
+                maximum_constraint_violation =
+                  extended_outcome.result->maximum_constraint_violation;
+                solved_with_extended_progress = true;
+                extended_progress_circuit_breaker_.record_success();
+                record_extended_mpcc_telemetry(
+                  ExtendedMpccCycleStatus::Success,
+                  &extended_outcome.telemetry, now_sec);
+              } else {
+                extended_reject_reason = "extended solution conversion rejected";
+                extended_progress_circuit_breaker_.record_failure(
+                  now_sec, cfg.progress_contouring.extended_failure_cooldown_sec);
+                record_extended_mpcc_telemetry(
+                  ExtendedMpccCycleStatus::ConversionReject,
+                  &extended_outcome.telemetry, now_sec);
+              }
             } else {
-              extended_reject_reason = "extended solution conversion rejected";
+              extended_reject_reason = extended_outcome.failure_detail;
+              extended_progress_circuit_breaker_.record_failure(
+                now_sec, cfg.progress_contouring.extended_failure_cooldown_sec);
+              record_extended_mpcc_telemetry(
+                ExtendedMpccCycleStatus::SolveFailure,
+                &extended_outcome.telemetry, now_sec);
             }
           } else {
-            extended_reject_reason = extended_outcome.failure_detail;
+            record_extended_mpcc_telemetry(
+              ExtendedMpccCycleStatus::BuildReject, nullptr, now_sec);
           }
         }
         if (
@@ -16566,10 +16716,14 @@ struct MPC
   double last_extended_osqp_solution_sec_{
     -std::numeric_limits<double>::infinity()};
   std::optional<double> last_extended_osqp_progress_origin_m_;
+  mpcc_progress::ExtendedSolverCircuitBreaker extended_progress_circuit_breaker_;
   double extended_progress_fallback_last_log_sec_{
     -std::numeric_limits<double>::infinity()};
   MpcOsqpTelemetryWindow osqp_telemetry_window_;
   double last_osqp_telemetry_log_sec_{std::numeric_limits<double>::quiet_NaN()};
+  ExtendedMpccTelemetryWindow extended_mpcc_telemetry_window_;
+  double last_extended_mpcc_telemetry_log_sec_{
+    std::numeric_limits<double>::quiet_NaN()};
   MpcRtiSqpTelemetryWindow rti_sqp_telemetry_window_;
   double last_rti_sqp_telemetry_log_sec_{std::numeric_limits<double>::quiet_NaN()};
   double rti_sqp_reject_last_log_sec_{std::numeric_limits<double>::quiet_NaN()};
@@ -32859,6 +33013,30 @@ Config load_config(const std::string & path)
   progress_contouring.extended_lag_state_bound_m =
     mpc["progress_contouring_extended_lag_state_bound_m"] ?
     mpc["progress_contouring_extended_lag_state_bound_m"].as<double>() : 3.0;
+  progress_contouring.extended_tracking_weight_scale =
+    mpc["progress_contouring_extended_tracking_weight_scale"] ?
+    mpc["progress_contouring_extended_tracking_weight_scale"].as<double>() : 0.001;
+  progress_contouring.extended_lag_weight =
+    mpc["progress_contouring_extended_lag_weight"] ?
+    mpc["progress_contouring_extended_lag_weight"].as<double>() : 100.0;
+  progress_contouring.extended_terminal_lag_weight =
+    mpc["progress_contouring_extended_terminal_lag_weight"] ?
+    mpc["progress_contouring_extended_terminal_lag_weight"].as<double>() : 150.0;
+  progress_contouring.extended_progress_tracking_weight =
+    mpc["progress_contouring_extended_progress_tracking_weight"] ?
+    mpc["progress_contouring_extended_progress_tracking_weight"].as<double>() : 2.0;
+  progress_contouring.extended_terminal_progress_tracking_weight =
+    mpc["progress_contouring_extended_terminal_progress_tracking_weight"] ?
+    mpc["progress_contouring_extended_terminal_progress_tracking_weight"].as<double>() : 5.0;
+  progress_contouring.extended_progress_reward_weight =
+    mpc["progress_contouring_extended_progress_reward_weight"] ?
+    mpc["progress_contouring_extended_progress_reward_weight"].as<double>() : 4.0;
+  progress_contouring.extended_terminal_progress_reward_weight =
+    mpc["progress_contouring_extended_terminal_progress_reward_weight"] ?
+    mpc["progress_contouring_extended_terminal_progress_reward_weight"].as<double>() : 10.0;
+  progress_contouring.extended_failure_cooldown_sec =
+    mpc["progress_contouring_extended_failure_cooldown_sec"] ?
+    mpc["progress_contouring_extended_failure_cooldown_sec"].as<double>() : 0.75;
   progress_contouring.stage_velocity_weight =
     mpc["progress_contouring_stage_velocity_weight"] ?
     mpc["progress_contouring_stage_velocity_weight"].as<double>() : 8.0;

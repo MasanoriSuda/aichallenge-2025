@@ -143,7 +143,7 @@ TEST(MpccProgress, ConvertsExtendedSolutionToEstablishedLayout)
     0.5, 0.20, 5.0;
   const auto legacy =
     multi_purpose_mpc_ros::mpcc_progress::convert_extended_solution_to_legacy(
-    extended, 2);
+    extended, 2, 0.0);
   ASSERT_TRUE(legacy.has_value());
   ASSERT_EQ(legacy->size(), 13);
   EXPECT_DOUBLE_EQ((*legacy)[3], 0.2);
@@ -153,6 +153,51 @@ TEST(MpccProgress, ConvertsExtendedSolutionToEstablishedLayout)
   EXPECT_DOUBLE_EQ((*legacy)[10], 0.10);
   EXPECT_DOUBLE_EQ((*legacy)[11], 5.0);
   EXPECT_DOUBLE_EQ((*legacy)[12], 0.20);
+}
+
+TEST(MpccProgress, RestoresAbsoluteProgressFromLocalExtendedSolution)
+{
+  Eigen::VectorXd extended(21);
+  extended <<
+    0.0, 0.0, 0.01, 4.0, 0.0,
+    0.2, 0.0, 0.02, 4.5, 0.5,
+    0.4, 0.0, 0.03, 5.0, 1.0,
+    1.0, 0.10, 4.5,
+    0.5, 0.20, 5.0;
+  const auto legacy =
+    multi_purpose_mpc_ros::mpcc_progress::convert_extended_solution_to_legacy(
+    extended, 2, 348.0);
+  ASSERT_TRUE(legacy.has_value());
+  EXPECT_DOUBLE_EQ((*legacy)[2], 348.0);
+  EXPECT_DOUBLE_EQ((*legacy)[5], 348.5);
+  EXPECT_DOUBLE_EQ((*legacy)[8], 349.0);
+}
+
+TEST(MpccProgress, RebasesExtendedWarmStartToCurrentProgressOrigin)
+{
+  Eigen::VectorXd extended = Eigen::VectorXd::Zero(21);
+  extended[4] = 0.5;
+  extended[9] = 1.0;
+  extended[14] = 1.5;
+  ASSERT_TRUE(
+    multi_purpose_mpc_ros::mpcc_progress::rebase_extended_progress_warm_start(
+      extended, 2, 348.0, 348.4));
+  EXPECT_NEAR(extended[4], 0.1, 1e-12);
+  EXPECT_NEAR(extended[9], 0.6, 1e-12);
+  EXPECT_NEAR(extended[14], 1.1, 1e-12);
+  EXPECT_DOUBLE_EQ(extended[15], 0.0);
+}
+
+TEST(MpccProgress, ExtendedSolverCircuitBreakerUsesBoundedCooldown)
+{
+  multi_purpose_mpc_ros::mpcc_progress::ExtendedSolverCircuitBreaker breaker;
+  EXPECT_FALSE(breaker.active(10.0));
+  breaker.record_failure(10.0, 0.75);
+  EXPECT_TRUE(breaker.active(10.74));
+  EXPECT_FALSE(breaker.active(10.75));
+  breaker.record_failure(11.0, 0.75);
+  breaker.record_success();
+  EXPECT_FALSE(breaker.active(11.1));
 }
 
 TEST(MpccProgress, BuildsUnwrappedProgressReference)

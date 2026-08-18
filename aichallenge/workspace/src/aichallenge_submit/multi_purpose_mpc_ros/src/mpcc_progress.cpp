@@ -31,6 +31,21 @@ bool finite_config(const Config & config) noexcept
     config.terminal_progress_reward_weight >= 0.0 &&
     std::isfinite(config.extended_lag_state_bound_m) &&
     config.extended_lag_state_bound_m > 0.0 &&
+    std::isfinite(config.extended_tracking_weight_scale) &&
+    config.extended_tracking_weight_scale > 0.0 &&
+    std::isfinite(config.extended_lag_weight) && config.extended_lag_weight > 0.0 &&
+    std::isfinite(config.extended_terminal_lag_weight) &&
+    config.extended_terminal_lag_weight > 0.0 &&
+    std::isfinite(config.extended_progress_tracking_weight) &&
+    config.extended_progress_tracking_weight > 0.0 &&
+    std::isfinite(config.extended_terminal_progress_tracking_weight) &&
+    config.extended_terminal_progress_tracking_weight > 0.0 &&
+    std::isfinite(config.extended_progress_reward_weight) &&
+    config.extended_progress_reward_weight >= 0.0 &&
+    std::isfinite(config.extended_terminal_progress_reward_weight) &&
+    config.extended_terminal_progress_reward_weight >= 0.0 &&
+    std::isfinite(config.extended_failure_cooldown_sec) &&
+    config.extended_failure_cooldown_sec >= 0.0 &&
     std::isfinite(config.stage_velocity_weight) && config.stage_velocity_weight > 0.0 &&
     std::isfinite(config.committed_stage_velocity_weight) &&
     config.committed_stage_velocity_weight >= config.stage_velocity_weight &&
@@ -337,9 +352,10 @@ std::optional<VelocityHorizon> resolve_velocity_horizon(
 }
 
 std::optional<Eigen::VectorXd> convert_extended_solution_to_legacy(
-  const Eigen::VectorXd & extended_primal, const int horizon_size) noexcept
+  const Eigen::VectorXd & extended_primal, const int horizon_size,
+  const double progress_origin_m) noexcept
 {
-  if (horizon_size <= 0) {
+  if (horizon_size <= 0 || !std::isfinite(progress_origin_m)) {
     return std::nullopt;
   }
   const int extended_state_values = kExtendedStateDimension * (horizon_size + 1);
@@ -358,7 +374,8 @@ std::optional<Eigen::VectorXd> convert_extended_solution_to_legacy(
     const int target = stage * legacy_state_dimension;
     result[target] = extended_primal[source + kExtendedLateralIndex];
     result[target + 1] = extended_primal[source + kExtendedHeadingIndex];
-    result[target + 2] = extended_primal[source + kExtendedProgressIndex];
+    result[target + 2] =
+      extended_primal[source + kExtendedProgressIndex] + progress_origin_m;
   }
   for (int stage = 0; stage < horizon_size; ++stage) {
     const int source = extended_state_values + stage * kExtendedInputDimension;
@@ -368,6 +385,68 @@ std::optional<Eigen::VectorXd> convert_extended_solution_to_legacy(
     result[target + 1] = extended_primal[source + kExtendedCurvatureIndex];
   }
   return result;
+}
+
+bool rebase_extended_progress_warm_start(
+  Eigen::VectorXd & extended_primal, const int horizon_size,
+  const double previous_progress_origin_m,
+  const double current_progress_origin_m) noexcept
+{
+  if (
+    horizon_size <= 0 || !extended_primal.allFinite() ||
+    !std::isfinite(previous_progress_origin_m) ||
+    !std::isfinite(current_progress_origin_m))
+  {
+    return false;
+  }
+  const int expected_size =
+    kExtendedStateDimension * (horizon_size + 1) +
+    kExtendedInputDimension * horizon_size;
+  if (extended_primal.size() != expected_size) {
+    return false;
+  }
+  const double origin_delta =
+    previous_progress_origin_m - current_progress_origin_m;
+  for (int stage = 0; stage < horizon_size + 1; ++stage) {
+    extended_primal[stage * kExtendedStateDimension + kExtendedProgressIndex] +=
+      origin_delta;
+  }
+  return extended_primal.allFinite();
+}
+
+bool ExtendedSolverCircuitBreaker::active(const double now_sec) const noexcept
+{
+  return
+    std::isfinite(now_sec) && std::isfinite(disabled_until_sec_) &&
+    now_sec < disabled_until_sec_;
+}
+
+void ExtendedSolverCircuitBreaker::record_failure(
+  const double now_sec, const double cooldown_sec) noexcept
+{
+  if (
+    !std::isfinite(now_sec) || !std::isfinite(cooldown_sec) ||
+    cooldown_sec < 0.0)
+  {
+    reset();
+    return;
+  }
+  disabled_until_sec_ = now_sec + cooldown_sec;
+}
+
+void ExtendedSolverCircuitBreaker::record_success() noexcept
+{
+  reset();
+}
+
+void ExtendedSolverCircuitBreaker::reset() noexcept
+{
+  disabled_until_sec_ = -std::numeric_limits<double>::infinity();
+}
+
+double ExtendedSolverCircuitBreaker::disabled_until_sec() const noexcept
+{
+  return disabled_until_sec_;
 }
 
 std::optional<std::vector<double>> build_progress_reference(

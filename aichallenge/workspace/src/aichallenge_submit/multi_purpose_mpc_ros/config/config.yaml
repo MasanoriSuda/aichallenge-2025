@@ -339,6 +339,20 @@ mpc:
   progress_contouring_terminal_lag_weight: 2500.0
   progress_contouring_progress_reward_weight: 2000.0
   progress_contouring_terminal_progress_reward_weight: 5000.0
+  # Extended overtake MPCC: [e_y, e_lag, e_psi, v, theta] and
+  # [acceleration, curvature, virtual progress speed]. The established 3x2
+  # formulation remains the cycle-local fallback when this QP is unavailable.
+  progress_contouring_extended_dynamics_enabled: true
+  progress_contouring_extended_lag_state_bound_m: 3.0
+  progress_contouring_stage_velocity_weight: 8.0
+  progress_contouring_committed_stage_velocity_weight: 24.0
+  progress_contouring_terminal_velocity_weight: 12.0
+  progress_contouring_committed_terminal_velocity_weight: 45.0
+  progress_contouring_acceleration_weight: 0.5
+  progress_contouring_virtual_progress_weight: 0.5
+  progress_contouring_acceleration_rate_weight: 0.8
+  progress_contouring_curvature_rate_weight: 0.2
+  progress_contouring_virtual_progress_rate_weight: 0.1
   progress_contouring_rti_sqp_iterations: 2
   progress_contouring_rti_sqp_mixing: 0.65
   # Keep the first feasible 40 Hz QP on easy/late cycles. A second RTI solve is

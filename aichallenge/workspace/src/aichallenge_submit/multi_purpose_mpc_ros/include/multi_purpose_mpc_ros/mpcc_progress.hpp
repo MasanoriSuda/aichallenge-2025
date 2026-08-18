@@ -22,6 +22,17 @@ struct Config
   double terminal_lag_weight{2500.0};
   double progress_reward_weight{2000.0};
   double terminal_progress_reward_weight{5000.0};
+  bool extended_dynamics_enabled{false};
+  double extended_lag_state_bound_m{3.0};
+  double stage_velocity_weight{8.0};
+  double committed_stage_velocity_weight{24.0};
+  double terminal_velocity_weight{12.0};
+  double committed_terminal_velocity_weight{45.0};
+  double acceleration_weight{0.5};
+  double virtual_progress_weight{0.5};
+  double acceleration_rate_weight{0.8};
+  double curvature_rate_weight{0.2};
+  double virtual_progress_rate_weight{0.1};
   int rti_sqp_iterations{2};
   double rti_sqp_mixing{0.65};
   bool conditional_refinement_enabled{true};
@@ -80,6 +91,77 @@ struct Linearization
 /// State is [e_y, e_psi, s], input is [v, kappa].
 std::optional<Linearization> linearize_temporal_frenet(
   const LinearizationRequest & request) noexcept;
+
+inline constexpr int kExtendedStateDimension = 5;
+inline constexpr int kExtendedInputDimension = 3;
+inline constexpr int kExtendedLateralIndex = 0;
+inline constexpr int kExtendedLagIndex = 1;
+inline constexpr int kExtendedHeadingIndex = 2;
+inline constexpr int kExtendedVelocityIndex = 3;
+inline constexpr int kExtendedProgressIndex = 4;
+inline constexpr int kExtendedAccelerationIndex = 0;
+inline constexpr int kExtendedCurvatureIndex = 1;
+inline constexpr int kExtendedVirtualProgressSpeedIndex = 2;
+
+struct ExtendedLinearizationRequest
+{
+  double reference_lateral_m{};
+  double reference_lag_m{};
+  double reference_heading_rad{};
+  double reference_velocity_mps{};
+  double reference_progress_m{};
+  double reference_acceleration_mps2{};
+  double reference_path_curvature_radpm{};
+  double reference_input_curvature_radpm{};
+  double reference_virtual_progress_speed_mps{};
+  double stage_distance_m{};
+  Config config;
+};
+
+struct ExtendedLinearization
+{
+  Eigen::Matrix<double, kExtendedStateDimension, kExtendedStateDimension>
+  state_matrix{
+    Eigen::Matrix<double, kExtendedStateDimension, kExtendedStateDimension>::Identity()};
+  Eigen::Matrix<double, kExtendedStateDimension, kExtendedInputDimension>
+  input_matrix{
+    Eigen::Matrix<double, kExtendedStateDimension, kExtendedInputDimension>::Zero()};
+  Eigen::Matrix<double, kExtendedStateDimension, 1> equality_offset{
+    Eigen::Matrix<double, kExtendedStateDimension, 1>::Zero()};
+  double stage_dt_sec{};
+};
+
+/// Linearize the extended temporal Frenet model used by the overtake MPCC.
+/// State is [e_y, e_lag, e_psi, v, theta], input is [a, kappa, v_theta].
+std::optional<ExtendedLinearization> linearize_extended_temporal_frenet(
+  const ExtendedLinearizationRequest & request) noexcept;
+
+struct VelocityHorizonRequest
+{
+  std::vector<double> reference_velocity_mps;
+  std::vector<double> hard_cap_velocity_mps;
+  bool committed_pass{false};
+  Config config;
+};
+
+struct VelocityHorizon
+{
+  std::vector<double> reference_velocity_mps;
+  std::vector<double> hard_cap_velocity_mps;
+  std::vector<double> stage_weight;
+  double terminal_target_velocity_mps{};
+  double terminal_weight{};
+};
+
+/// Keep the soft speed objective separate from the safety cap.  committed Pass
+/// raises only the objective weight; it never relaxes a hard stage limit.
+std::optional<VelocityHorizon> resolve_velocity_horizon(
+  const VelocityHorizonRequest & request) noexcept;
+
+/// Convert an accepted 5x3 solution into the established 3x2 layout consumed
+/// by prediction, physical wall validation and command post-processing.
+std::optional<Eigen::VectorXd> convert_extended_solution_to_legacy(
+  const Eigen::VectorXd & extended_primal, int horizon_size) noexcept;
 
 /// Build an unwrapped stage progress reference from the measured progress and
 /// the existing ReferencePath segment distances. The result has N+1 states.

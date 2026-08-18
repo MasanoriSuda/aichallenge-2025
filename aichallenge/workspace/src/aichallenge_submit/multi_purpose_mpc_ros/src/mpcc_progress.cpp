@@ -29,6 +29,22 @@ bool finite_config(const Config & config) noexcept
     std::isfinite(config.progress_reward_weight) && config.progress_reward_weight >= 0.0 &&
     std::isfinite(config.terminal_progress_reward_weight) &&
     config.terminal_progress_reward_weight >= 0.0 &&
+    std::isfinite(config.extended_lag_state_bound_m) &&
+    config.extended_lag_state_bound_m > 0.0 &&
+    std::isfinite(config.stage_velocity_weight) && config.stage_velocity_weight > 0.0 &&
+    std::isfinite(config.committed_stage_velocity_weight) &&
+    config.committed_stage_velocity_weight >= config.stage_velocity_weight &&
+    std::isfinite(config.terminal_velocity_weight) &&
+    config.terminal_velocity_weight >= 0.0 &&
+    std::isfinite(config.committed_terminal_velocity_weight) &&
+    config.committed_terminal_velocity_weight >= config.terminal_velocity_weight &&
+    std::isfinite(config.acceleration_weight) && config.acceleration_weight > 0.0 &&
+    std::isfinite(config.virtual_progress_weight) && config.virtual_progress_weight > 0.0 &&
+    std::isfinite(config.acceleration_rate_weight) &&
+    config.acceleration_rate_weight >= 0.0 &&
+    std::isfinite(config.curvature_rate_weight) && config.curvature_rate_weight >= 0.0 &&
+    std::isfinite(config.virtual_progress_rate_weight) &&
+    config.virtual_progress_rate_weight >= 0.0 &&
     config.rti_sqp_iterations >= 1 && config.rti_sqp_iterations <= 3 &&
     std::isfinite(config.rti_sqp_mixing) && config.rti_sqp_mixing > 0.0 &&
     config.rti_sqp_mixing <= 1.0 &&
@@ -171,6 +187,185 @@ std::optional<Linearization> linearize_temporal_frenet(
     !result.equality_offset.allFinite() || !std::isfinite(result.stage_dt_sec))
   {
     return std::nullopt;
+  }
+  return result;
+}
+
+std::optional<ExtendedLinearization> linearize_extended_temporal_frenet(
+  const ExtendedLinearizationRequest & request) noexcept
+{
+  if (
+    !finite_config(request.config) ||
+    !std::isfinite(request.reference_lateral_m) ||
+    !std::isfinite(request.reference_lag_m) ||
+    !std::isfinite(request.reference_heading_rad) ||
+    !std::isfinite(request.reference_velocity_mps) ||
+    request.reference_velocity_mps < 0.0 ||
+    !std::isfinite(request.reference_progress_m) ||
+    !std::isfinite(request.reference_acceleration_mps2) ||
+    !std::isfinite(request.reference_path_curvature_radpm) ||
+    !std::isfinite(request.reference_input_curvature_radpm) ||
+    !std::isfinite(request.reference_virtual_progress_speed_mps) ||
+    request.reference_virtual_progress_speed_mps < 0.0 ||
+    !std::isfinite(request.stage_distance_m) || request.stage_distance_m <= 0.0)
+  {
+    return std::nullopt;
+  }
+
+  const double reference_velocity = std::max(
+    request.config.minimum_reference_speed_mps, request.reference_velocity_mps);
+  const double stage_dt = std::clamp(
+    request.stage_distance_m / reference_velocity,
+    request.config.minimum_stage_dt_sec,
+    request.config.maximum_stage_dt_sec);
+  const double lateral = request.reference_lateral_m;
+  const double heading = request.reference_heading_rad;
+  const double path_curvature = request.reference_path_curvature_radpm;
+  const double input_curvature = request.reference_input_curvature_radpm;
+  const double virtual_progress_speed = request.reference_virtual_progress_speed_mps;
+  const double denominator = 1.0 - path_curvature * lateral;
+  if (
+    !std::isfinite(denominator) ||
+    denominator <= request.config.minimum_frenet_denominator)
+  {
+    return std::nullopt;
+  }
+
+  const double sin_heading = std::sin(heading);
+  const double cos_heading = std::cos(heading);
+  const double physical_progress_rate = reference_velocity * cos_heading / denominator;
+  const double lateral_rate = reference_velocity * sin_heading;
+  const double lag_rate = physical_progress_rate - virtual_progress_speed;
+  const double heading_rate =
+    reference_velocity * input_curvature - path_curvature * virtual_progress_speed;
+  const double velocity_rate = request.reference_acceleration_mps2;
+
+  const double ds_dey = reference_velocity * cos_heading * path_curvature /
+    (denominator * denominator);
+  const double ds_depsi = -reference_velocity * sin_heading / denominator;
+  const double ds_dv = cos_heading / denominator;
+
+  using StateMatrix = Eigen::Matrix<double, kExtendedStateDimension, kExtendedStateDimension>;
+  using InputMatrix = Eigen::Matrix<double, kExtendedStateDimension, kExtendedInputDimension>;
+  using StateVector = Eigen::Matrix<double, kExtendedStateDimension, 1>;
+  using InputVector = Eigen::Matrix<double, kExtendedInputDimension, 1>;
+  StateMatrix continuous_state = StateMatrix::Zero();
+  continuous_state(kExtendedLateralIndex, kExtendedHeadingIndex) =
+    reference_velocity * cos_heading;
+  continuous_state(kExtendedLateralIndex, kExtendedVelocityIndex) = sin_heading;
+  continuous_state(kExtendedLagIndex, kExtendedLateralIndex) = ds_dey;
+  continuous_state(kExtendedLagIndex, kExtendedHeadingIndex) = ds_depsi;
+  continuous_state(kExtendedLagIndex, kExtendedVelocityIndex) = ds_dv;
+  continuous_state(kExtendedHeadingIndex, kExtendedVelocityIndex) = input_curvature;
+
+  InputMatrix continuous_input = InputMatrix::Zero();
+  continuous_input(kExtendedLagIndex, kExtendedVirtualProgressSpeedIndex) = -1.0;
+  continuous_input(kExtendedHeadingIndex, kExtendedCurvatureIndex) = reference_velocity;
+  continuous_input(kExtendedHeadingIndex, kExtendedVirtualProgressSpeedIndex) =
+    -path_curvature;
+  continuous_input(kExtendedVelocityIndex, kExtendedAccelerationIndex) = 1.0;
+  continuous_input(kExtendedProgressIndex, kExtendedVirtualProgressSpeedIndex) = 1.0;
+
+  ExtendedLinearization result;
+  result.state_matrix = StateMatrix::Identity() + stage_dt * continuous_state;
+  result.input_matrix = stage_dt * continuous_input;
+  result.stage_dt_sec = stage_dt;
+
+  const StateVector reference_state = (StateVector() <<
+    lateral, request.reference_lag_m, heading, request.reference_velocity_mps,
+    request.reference_progress_m).finished();
+  const InputVector reference_input = (InputVector() <<
+    request.reference_acceleration_mps2, input_curvature,
+    virtual_progress_speed).finished();
+  const StateVector next_reference = (StateVector() <<
+    lateral + stage_dt * lateral_rate,
+    request.reference_lag_m + stage_dt * lag_rate,
+    heading + stage_dt * heading_rate,
+    request.reference_velocity_mps + stage_dt * velocity_rate,
+    request.reference_progress_m + stage_dt * virtual_progress_speed).finished();
+  result.equality_offset =
+    result.state_matrix * reference_state +
+    result.input_matrix * reference_input - next_reference;
+  if (
+    !result.state_matrix.allFinite() || !result.input_matrix.allFinite() ||
+    !result.equality_offset.allFinite() || !std::isfinite(result.stage_dt_sec))
+  {
+    return std::nullopt;
+  }
+  return result;
+}
+
+std::optional<VelocityHorizon> resolve_velocity_horizon(
+  const VelocityHorizonRequest & request) noexcept
+{
+  if (
+    !finite_config(request.config) || request.reference_velocity_mps.empty() ||
+    request.reference_velocity_mps.size() != request.hard_cap_velocity_mps.size())
+  {
+    return std::nullopt;
+  }
+  VelocityHorizon result;
+  result.reference_velocity_mps.reserve(request.reference_velocity_mps.size());
+  result.hard_cap_velocity_mps.reserve(request.hard_cap_velocity_mps.size());
+  result.stage_weight.assign(
+    request.reference_velocity_mps.size(),
+    request.committed_pass ? request.config.committed_stage_velocity_weight :
+    request.config.stage_velocity_weight);
+  for (std::size_t stage = 0U; stage < request.reference_velocity_mps.size(); ++stage) {
+    const double reference = request.reference_velocity_mps[stage];
+    const double hard_cap = request.hard_cap_velocity_mps[stage];
+    if (
+      !std::isfinite(reference) || reference < 0.0 ||
+      !std::isfinite(hard_cap) || hard_cap < 0.0)
+    {
+      return std::nullopt;
+    }
+    result.hard_cap_velocity_mps.push_back(hard_cap);
+    result.reference_velocity_mps.push_back(std::min(reference, hard_cap));
+  }
+  result.terminal_target_velocity_mps = result.reference_velocity_mps.back();
+  result.terminal_weight = request.committed_pass ?
+    request.config.committed_terminal_velocity_weight :
+    request.config.terminal_velocity_weight;
+  if (
+    !std::isfinite(result.terminal_target_velocity_mps) ||
+    !std::isfinite(result.terminal_weight) || result.terminal_weight < 0.0)
+  {
+    return std::nullopt;
+  }
+  return result;
+}
+
+std::optional<Eigen::VectorXd> convert_extended_solution_to_legacy(
+  const Eigen::VectorXd & extended_primal, const int horizon_size) noexcept
+{
+  if (horizon_size <= 0) {
+    return std::nullopt;
+  }
+  const int extended_state_values = kExtendedStateDimension * (horizon_size + 1);
+  const int expected_size =
+    extended_state_values + kExtendedInputDimension * horizon_size;
+  if (extended_primal.size() != expected_size || !extended_primal.allFinite()) {
+    return std::nullopt;
+  }
+  constexpr int legacy_state_dimension = 3;
+  constexpr int legacy_input_dimension = 2;
+  const int legacy_state_values = legacy_state_dimension * (horizon_size + 1);
+  Eigen::VectorXd result = Eigen::VectorXd::Zero(
+    legacy_state_values + legacy_input_dimension * horizon_size);
+  for (int stage = 0; stage < horizon_size + 1; ++stage) {
+    const int source = stage * kExtendedStateDimension;
+    const int target = stage * legacy_state_dimension;
+    result[target] = extended_primal[source + kExtendedLateralIndex];
+    result[target + 1] = extended_primal[source + kExtendedHeadingIndex];
+    result[target + 2] = extended_primal[source + kExtendedProgressIndex];
+  }
+  for (int stage = 0; stage < horizon_size; ++stage) {
+    const int source = extended_state_values + stage * kExtendedInputDimension;
+    const int target = legacy_state_values + stage * legacy_input_dimension;
+    result[target] = extended_primal[(stage + 1) * kExtendedStateDimension +
+      kExtendedVelocityIndex];
+    result[target + 1] = extended_primal[source + kExtendedCurvatureIndex];
   }
   return result;
 }

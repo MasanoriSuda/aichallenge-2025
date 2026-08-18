@@ -67,6 +67,94 @@ TEST(MpccProgress, SeparatesPathAndInputCurvatureDuringRelinearization)
   EXPECT_NEAR(next[2], 20.5, 1e-12);
 }
 
+TEST(MpccProgress, ExtendedModelAdvancesVelocityAndVirtualProgress)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::ExtendedLinearizationRequest;
+  using multi_purpose_mpc_ros::mpcc_progress::kExtendedInputDimension;
+  using multi_purpose_mpc_ros::mpcc_progress::kExtendedStateDimension;
+  const auto result =
+    multi_purpose_mpc_ros::mpcc_progress::linearize_extended_temporal_frenet(
+    ExtendedLinearizationRequest{
+      0.0, 0.0, 0.0, 5.0, 10.0, 1.0, 0.0, 0.0, 5.0, 0.5, Config{}});
+  ASSERT_TRUE(result.has_value());
+  EXPECT_NEAR(result->stage_dt_sec, 0.1, 1e-12);
+  Eigen::Matrix<double, kExtendedStateDimension, 1> state;
+  state << 0.0, 0.0, 0.0, 5.0, 10.0;
+  Eigen::Matrix<double, kExtendedInputDimension, 1> input;
+  input << 1.0, 0.0, 5.0;
+  const auto next =
+    result->state_matrix * state + result->input_matrix * input -
+    result->equality_offset;
+  EXPECT_NEAR(next[0], 0.0, 1e-12);
+  EXPECT_NEAR(next[1], 0.0, 1e-12);
+  EXPECT_NEAR(next[2], 0.0, 1e-12);
+  EXPECT_NEAR(next[3], 5.1, 1e-12);
+  EXPECT_NEAR(next[4], 10.5, 1e-12);
+}
+
+TEST(MpccProgress, ExtendedModelExposesPhysicalVirtualProgressLag)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::ExtendedLinearizationRequest;
+  using multi_purpose_mpc_ros::mpcc_progress::kExtendedInputDimension;
+  using multi_purpose_mpc_ros::mpcc_progress::kExtendedStateDimension;
+  const auto result =
+    multi_purpose_mpc_ros::mpcc_progress::linearize_extended_temporal_frenet(
+    ExtendedLinearizationRequest{
+      0.0, 0.0, 0.0, 5.0, 10.0, 0.0, 0.0, 0.0, 4.0, 0.5, Config{}});
+  ASSERT_TRUE(result.has_value());
+  Eigen::Matrix<double, kExtendedStateDimension, 1> state;
+  state << 0.0, 0.0, 0.0, 5.0, 10.0;
+  Eigen::Matrix<double, kExtendedInputDimension, 1> input;
+  input << 0.0, 0.0, 4.0;
+  const auto next =
+    result->state_matrix * state + result->input_matrix * input -
+    result->equality_offset;
+  EXPECT_NEAR(next[1], 0.1, 1e-12);
+  EXPECT_NEAR(next[4], 10.4, 1e-12);
+}
+
+TEST(MpccProgress, CommittedPassRaisesVelocityCostWithoutRelaxingCap)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::VelocityHorizonRequest;
+  Config config;
+  config.stage_velocity_weight = 8.0;
+  config.committed_stage_velocity_weight = 24.0;
+  config.terminal_velocity_weight = 12.0;
+  config.committed_terminal_velocity_weight = 45.0;
+  const auto result = multi_purpose_mpc_ros::mpcc_progress::resolve_velocity_horizon(
+    VelocityHorizonRequest{{5.0, 6.0}, {4.5, 5.5}, true, config});
+  ASSERT_TRUE(result.has_value());
+  EXPECT_DOUBLE_EQ(result->reference_velocity_mps[0], 4.5);
+  EXPECT_DOUBLE_EQ(result->hard_cap_velocity_mps[0], 4.5);
+  EXPECT_DOUBLE_EQ(result->stage_weight[0], 24.0);
+  EXPECT_DOUBLE_EQ(result->terminal_target_velocity_mps, 5.5);
+  EXPECT_DOUBLE_EQ(result->terminal_weight, 45.0);
+}
+
+TEST(MpccProgress, ConvertsExtendedSolutionToEstablishedLayout)
+{
+  // N=2: 5 states x 3 stages followed by 3 inputs x 2 stages.
+  Eigen::VectorXd extended(21);
+  extended <<
+    0.0, 0.0, 0.01, 4.0, 10.0,
+    0.2, 0.0, 0.02, 4.5, 10.5,
+    0.4, 0.0, 0.03, 5.0, 11.0,
+    1.0, 0.10, 4.5,
+    0.5, 0.20, 5.0;
+  const auto legacy =
+    multi_purpose_mpc_ros::mpcc_progress::convert_extended_solution_to_legacy(
+    extended, 2);
+  ASSERT_TRUE(legacy.has_value());
+  ASSERT_EQ(legacy->size(), 13);
+  EXPECT_DOUBLE_EQ((*legacy)[3], 0.2);
+  EXPECT_DOUBLE_EQ((*legacy)[4], 0.02);
+  EXPECT_DOUBLE_EQ((*legacy)[5], 10.5);
+  EXPECT_DOUBLE_EQ((*legacy)[9], 4.5);
+  EXPECT_DOUBLE_EQ((*legacy)[10], 0.10);
+  EXPECT_DOUBLE_EQ((*legacy)[11], 5.0);
+  EXPECT_DOUBLE_EQ((*legacy)[12], 0.20);
+}
+
 TEST(MpccProgress, BuildsUnwrappedProgressReference)
 {
   const auto result = multi_purpose_mpc_ros::mpcc_progress::build_progress_reference(

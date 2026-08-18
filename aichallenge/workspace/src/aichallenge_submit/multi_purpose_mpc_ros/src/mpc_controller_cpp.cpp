@@ -4731,6 +4731,26 @@ struct MpcProblem
   std::vector<double> progress_execution_lateral_upper_m;
   bool progress_refinement_cold_load_active{false};
   std::size_t progress_wall_cache_miss_count{};
+  Eigen::VectorXd progress_reference_state;
+  Eigen::VectorXd progress_state_lower;
+  Eigen::VectorXd progress_state_upper;
+  Eigen::VectorXd progress_input_reference;
+  Eigen::VectorXd progress_input_lower;
+  Eigen::VectorXd progress_input_upper;
+  std::vector<double> progress_stage_dt_sec;
+  bool progress_committed_pass{false};
+  double progress_measured_speed_mps{};
+};
+
+struct ExtendedProgressMpcProblem
+{
+  Eigen::VectorXd q;
+  Eigen::VectorXd l;
+  Eigen::VectorXd u;
+  Eigen::SparseMatrix<double> P;
+  Eigen::SparseMatrix<double> A;
+  int N{};
+  double progress_origin_m{std::numeric_limits<double>::quiet_NaN()};
 };
 
 struct SolvedMpccExecutionTrajectory
@@ -14659,7 +14679,371 @@ struct MPC
       std::move(progress_execution_lateral_lower_m),
       std::move(progress_execution_lateral_upper_m),
       progress_refinement_cold_load_active,
-      progress_wall_cache_miss_count};
+      progress_wall_cache_miss_count,
+      progress_contouring_active ? xr : Eigen::VectorXd{},
+      progress_contouring_active ? xmin_dyn : Eigen::VectorXd{},
+      progress_contouring_active ? xmax_dyn : Eigen::VectorXd{},
+      progress_contouring_active ? ur : Eigen::VectorXd{},
+      progress_contouring_active ? umin_dyn : Eigen::VectorXd{},
+      progress_contouring_active ? umax_dyn : Eigen::VectorXd{},
+      progress_contouring_active ? dynamics_stage_dt_sec : std::vector<double>{},
+      progress_contouring_active &&
+      overtake_line_state_.phase == OvertakeLinePhase::Pass,
+      progress_contouring_active ? current_speed_mps_ : 0.0};
+  }
+
+  std::optional<ExtendedProgressMpcProblem> build_extended_progress_problem(
+    const MpcProblem & legacy, std::string & reject_reason) const
+  {
+    constexpr int legacy_nx = 3;
+    constexpr int legacy_nu = 2;
+    constexpr int nx = mpcc_progress::kExtendedStateDimension;
+    constexpr int nu = mpcc_progress::kExtendedInputDimension;
+    reject_reason.clear();
+    const int N = legacy.N;
+    const int legacy_nx_N = legacy_nx * (N + 1);
+    const int legacy_nu_N = legacy_nu * N;
+    if (
+      !legacy.progress_contouring_active || !cfg.progress_contouring.extended_dynamics_enabled ||
+      N <= 0 || model == nullptr || !std::isfinite(model->length) || model->length <= 0.0 ||
+      !std::isfinite(legacy.progress_origin_m) ||
+      !std::isfinite(legacy.progress_measured_speed_mps) ||
+      legacy.progress_measured_speed_mps < 0.0 ||
+      legacy.progress_reference_state.size() != legacy_nx_N ||
+      legacy.progress_state_lower.size() != legacy_nx_N ||
+      legacy.progress_state_upper.size() != legacy_nx_N ||
+      legacy.progress_input_reference.size() != legacy_nu_N ||
+      legacy.progress_input_lower.size() != legacy_nu_N ||
+      legacy.progress_input_upper.size() != legacy_nu_N ||
+      legacy.progress_stage_distance_m.size() != static_cast<std::size_t>(N) ||
+      legacy.progress_path_curvature_radpm.size() != static_cast<std::size_t>(N) ||
+      legacy.progress_stage_dt_sec.size() != static_cast<std::size_t>(N))
+    {
+      reject_reason = "extended MPCC metadata malformed";
+      return std::nullopt;
+    }
+
+    std::vector<double> velocity_reference;
+    std::vector<double> velocity_hard_cap;
+    velocity_reference.reserve(static_cast<std::size_t>(N));
+    velocity_hard_cap.reserve(static_cast<std::size_t>(N));
+    for (int stage = 0; stage < N; ++stage) {
+      velocity_reference.push_back(legacy.progress_input_reference[legacy_nu * stage]);
+      velocity_hard_cap.push_back(legacy.progress_input_upper[legacy_nu * stage]);
+    }
+    const auto velocity_horizon = mpcc_progress::resolve_velocity_horizon(
+      mpcc_progress::VelocityHorizonRequest{
+        velocity_reference, velocity_hard_cap, legacy.progress_committed_pass,
+        cfg.progress_contouring});
+    if (!velocity_horizon.has_value()) {
+      reject_reason = "extended MPCC velocity horizon invalid";
+      return std::nullopt;
+    }
+
+    std::vector<mpcc_progress::ExtendedLinearization> linearizations;
+    linearizations.reserve(static_cast<std::size_t>(N));
+    std::vector<double> acceleration_reference(static_cast<std::size_t>(N), 0.0);
+    std::vector<double> virtual_progress_reference(static_cast<std::size_t>(N), 0.0);
+    for (int stage = 0; stage < N; ++stage) {
+      const double velocity = velocity_horizon->reference_velocity_mps[static_cast<std::size_t>(stage)];
+      const double next_velocity = stage + 1 < N ?
+        velocity_horizon->reference_velocity_mps[static_cast<std::size_t>(stage + 1)] :
+        velocity_horizon->terminal_target_velocity_mps;
+      const double dt = legacy.progress_stage_dt_sec[static_cast<std::size_t>(stage)];
+      if (!std::isfinite(dt) || dt <= 0.0) {
+        reject_reason = "extended MPCC stage period invalid";
+        return std::nullopt;
+      }
+      const double acceleration = clip((next_velocity - velocity) / dt, cfg.a_min, cfg.a_max);
+      const double lateral = legacy.progress_reference_state[legacy_nx * stage];
+      const double heading = legacy.progress_reference_state[legacy_nx * stage + 1];
+      const double progress = legacy.progress_reference_state[legacy_nx * stage + 2];
+      const double path_curvature =
+        legacy.progress_path_curvature_radpm[static_cast<std::size_t>(stage)];
+      const double denominator = 1.0 - path_curvature * lateral;
+      if (
+        !std::isfinite(denominator) ||
+        denominator <= cfg.progress_contouring.minimum_frenet_denominator)
+      {
+        reject_reason = "extended MPCC reference approaches Frenet singularity";
+        return std::nullopt;
+      }
+      const double virtual_progress_speed = std::max(
+        0.0, velocity * std::cos(heading) / denominator);
+      const auto linearization = mpcc_progress::linearize_extended_temporal_frenet(
+        mpcc_progress::ExtendedLinearizationRequest{
+          lateral, 0.0, heading, velocity, progress, acceleration,
+          path_curvature,
+          legacy.progress_input_reference[legacy_nu * stage + 1],
+          virtual_progress_speed,
+          legacy.progress_stage_distance_m[static_cast<std::size_t>(stage)],
+          cfg.progress_contouring});
+      if (!linearization.has_value()) {
+        reject_reason = "extended MPCC linearization rejected stage " +
+          std::to_string(stage);
+        return std::nullopt;
+      }
+      acceleration_reference[static_cast<std::size_t>(stage)] = acceleration;
+      virtual_progress_reference[static_cast<std::size_t>(stage)] = virtual_progress_speed;
+      linearizations.push_back(linearization.value());
+    }
+
+    const int nx_N = nx * (N + 1);
+    const int nu_N = nu * N;
+    const int variable_count = nx_N + nu_N;
+    Eigen::VectorXd state_lower = Eigen::VectorXd::Constant(
+      nx_N, -std::numeric_limits<double>::infinity());
+    Eigen::VectorXd state_upper = Eigen::VectorXd::Constant(
+      nx_N, std::numeric_limits<double>::infinity());
+    Eigen::VectorXd input_lower = Eigen::VectorXd::Zero(nu_N);
+    Eigen::VectorXd input_upper = Eigen::VectorXd::Zero(nu_N);
+    for (int stage = 0; stage < N + 1; ++stage) {
+      const int legacy_state = legacy_nx * stage;
+      const int state = nx * stage;
+      state_lower[state + mpcc_progress::kExtendedLateralIndex] =
+        legacy.progress_state_lower[legacy_state];
+      state_upper[state + mpcc_progress::kExtendedLateralIndex] =
+        legacy.progress_state_upper[legacy_state];
+      state_lower[state + mpcc_progress::kExtendedLagIndex] =
+        -cfg.progress_contouring.extended_lag_state_bound_m;
+      state_upper[state + mpcc_progress::kExtendedLagIndex] =
+        cfg.progress_contouring.extended_lag_state_bound_m;
+      state_lower[state + mpcc_progress::kExtendedVelocityIndex] = 0.0;
+      if (stage == 0) {
+        state_upper[state + mpcc_progress::kExtendedVelocityIndex] =
+          std::max(legacy.progress_measured_speed_mps,
+          velocity_horizon->hard_cap_velocity_mps.front());
+      } else {
+        state_upper[state + mpcc_progress::kExtendedVelocityIndex] =
+          velocity_horizon->hard_cap_velocity_mps[static_cast<std::size_t>(stage - 1)];
+      }
+      state_lower[state + mpcc_progress::kExtendedProgressIndex] =
+        legacy.progress_state_lower[legacy_state + 2];
+      state_upper[state + mpcc_progress::kExtendedProgressIndex] =
+        legacy.progress_state_upper[legacy_state + 2];
+    }
+    for (int stage = 0; stage < N; ++stage) {
+      const int legacy_input = legacy_nu * stage;
+      const int input = nu * stage;
+      input_lower[input + mpcc_progress::kExtendedAccelerationIndex] = cfg.a_min;
+      input_upper[input + mpcc_progress::kExtendedAccelerationIndex] = cfg.a_max;
+      input_lower[input + mpcc_progress::kExtendedCurvatureIndex] =
+        legacy.progress_input_lower[legacy_input + 1];
+      input_upper[input + mpcc_progress::kExtendedCurvatureIndex] =
+        legacy.progress_input_upper[legacy_input + 1];
+      input_lower[input + mpcc_progress::kExtendedVirtualProgressSpeedIndex] = 0.0;
+      input_upper[input + mpcc_progress::kExtendedVirtualProgressSpeedIndex] =
+        std::max(
+        velocity_horizon->hard_cap_velocity_mps[static_cast<std::size_t>(stage)],
+        virtual_progress_reference[static_cast<std::size_t>(stage)]);
+    }
+
+    std::vector<Eigen::Triplet<double>> a_triplets;
+    a_triplets.reserve(static_cast<std::size_t>(
+      nx_N + N * (nx * nx + nx * nu) + variable_count + 3 * N));
+    for (int row = 0; row < nx_N; ++row) {
+      a_triplets.emplace_back(row, row, -1.0);
+    }
+    for (int stage = 0; stage < N; ++stage) {
+      const auto & linearization = linearizations[static_cast<std::size_t>(stage)];
+      for (int row = 0; row < nx; ++row) {
+        for (int column = 0; column < nx; ++column) {
+          a_triplets.emplace_back(
+            (stage + 1) * nx + row, stage * nx + column,
+            linearization.state_matrix(row, column));
+        }
+        for (int column = 0; column < nu; ++column) {
+          a_triplets.emplace_back(
+            (stage + 1) * nx + row, nx_N + stage * nu + column,
+            linearization.input_matrix(row, column));
+        }
+      }
+    }
+    const int box_offset = nx_N;
+    for (int index = 0; index < variable_count; ++index) {
+      a_triplets.emplace_back(box_offset + index, index, 1.0);
+    }
+    const int rate_offset = nx_N + variable_count;
+    a_triplets.emplace_back(
+      rate_offset, nx_N + mpcc_progress::kExtendedCurvatureIndex, 1.0);
+    for (int stage = 1; stage < N; ++stage) {
+      a_triplets.emplace_back(
+        rate_offset + stage,
+        nx_N + (stage - 1) * nu + mpcc_progress::kExtendedCurvatureIndex, -1.0);
+      a_triplets.emplace_back(
+        rate_offset + stage,
+        nx_N + stage * nu + mpcc_progress::kExtendedCurvatureIndex, 1.0);
+    }
+    Eigen::SparseMatrix<double> constraints(
+      nx_N + variable_count + N, variable_count);
+    constraints.setFromTriplets(a_triplets.begin(), a_triplets.end());
+
+    Eigen::Matrix<double, nx, 1> x0;
+    x0 <<
+      model->spatial_state.e_y, 0.0, model->spatial_state.e_psi,
+      legacy.progress_measured_speed_mps, legacy.progress_origin_m;
+    Eigen::VectorXd equality = Eigen::VectorXd::Zero(nx_N);
+    equality.segment<nx>(0) = -x0;
+    for (int stage = 0; stage < N; ++stage) {
+      equality.segment<nx>((stage + 1) * nx) =
+        linearizations[static_cast<std::size_t>(stage)].equality_offset;
+    }
+    Eigen::VectorXd box_lower(variable_count);
+    Eigen::VectorXd box_upper(variable_count);
+    box_lower << state_lower, input_lower;
+    box_upper << state_upper, input_upper;
+    Eigen::VectorXd rate_lower(N);
+    Eigen::VectorXd rate_upper(N);
+    const double previous_curvature = std::tan(previous_steering) / model->length;
+    const double first_max_curvature_change =
+      std::tan(cfg.steer_rate_max * model->Ts) / model->length;
+    rate_lower[0] = previous_curvature - first_max_curvature_change;
+    rate_upper[0] = previous_curvature + first_max_curvature_change;
+    for (int stage = 1; stage < N; ++stage) {
+      const double maximum_change =
+        std::tan(cfg.steer_rate_max *
+        linearizations[static_cast<std::size_t>(stage - 1)].stage_dt_sec) /
+        model->length;
+      rate_lower[stage] = -maximum_change;
+      rate_upper[stage] = maximum_change;
+    }
+    Eigen::VectorXd lower(equality.size() + box_lower.size() + rate_lower.size());
+    Eigen::VectorXd upper(equality.size() + box_upper.size() + rate_upper.size());
+    lower << equality, box_lower, rate_lower;
+    upper << equality, box_upper, rate_upper;
+
+    Eigen::VectorXd q = Eigen::VectorXd::Zero(variable_count);
+    std::vector<Eigen::Triplet<double>> p_triplets;
+    const auto add_reference_cost = [&p_triplets, &q](
+        const int index, const double weight, const double reference) {
+        p_triplets.emplace_back(index, index, weight);
+        q[index] -= weight * reference;
+      };
+    for (int stage = 0; stage < N + 1; ++stage) {
+      const bool terminal = stage == N;
+      const int state = nx * stage;
+      const int legacy_state = legacy_nx * stage;
+      add_reference_cost(
+        state + mpcc_progress::kExtendedLateralIndex,
+        terminal ? cfg.QN[0] : cfg.Q[0],
+        legacy.progress_reference_state[legacy_state]);
+      add_reference_cost(
+        state + mpcc_progress::kExtendedLagIndex,
+        terminal ? cfg.progress_contouring.terminal_lag_weight :
+        cfg.progress_contouring.lag_weight, 0.0);
+      add_reference_cost(
+        state + mpcc_progress::kExtendedHeadingIndex,
+        terminal ? cfg.QN[1] : cfg.Q[1],
+        legacy.progress_reference_state[legacy_state + 1]);
+      const std::size_t velocity_stage = static_cast<std::size_t>(
+        std::min(stage, N - 1));
+      double velocity_weight = velocity_horizon->stage_weight[velocity_stage];
+      double velocity_target = velocity_horizon->reference_velocity_mps[velocity_stage];
+      if (terminal) {
+        velocity_weight += velocity_horizon->terminal_weight;
+        if (velocity_weight > 0.0) {
+          velocity_target =
+            (velocity_horizon->stage_weight[velocity_stage] * velocity_target +
+            velocity_horizon->terminal_weight *
+            velocity_horizon->terminal_target_velocity_mps) / velocity_weight;
+        }
+      }
+      add_reference_cost(
+        state + mpcc_progress::kExtendedVelocityIndex,
+        velocity_weight, velocity_target);
+      p_triplets.emplace_back(
+        state + mpcc_progress::kExtendedProgressIndex,
+        state + mpcc_progress::kExtendedProgressIndex, 1e-6);
+      q[state + mpcc_progress::kExtendedProgressIndex] -= terminal ?
+        cfg.progress_contouring.terminal_progress_reward_weight :
+        cfg.progress_contouring.progress_reward_weight;
+    }
+    for (int stage = 0; stage < N; ++stage) {
+      const int input = nx_N + nu * stage;
+      add_reference_cost(
+        input + mpcc_progress::kExtendedAccelerationIndex,
+        cfg.progress_contouring.acceleration_weight,
+        acceleration_reference[static_cast<std::size_t>(stage)]);
+      add_reference_cost(
+        input + mpcc_progress::kExtendedCurvatureIndex, cfg.R[1],
+        legacy.progress_input_reference[legacy_nu * stage + 1]);
+      add_reference_cost(
+        input + mpcc_progress::kExtendedVirtualProgressSpeedIndex,
+        cfg.progress_contouring.virtual_progress_weight,
+        virtual_progress_reference[static_cast<std::size_t>(stage)]);
+    }
+    const std::array<double, nu> rate_weight{
+      cfg.progress_contouring.acceleration_rate_weight,
+      cfg.progress_contouring.curvature_rate_weight,
+      cfg.progress_contouring.virtual_progress_rate_weight};
+    const std::array<double, nu> previous_input{
+      0.0, previous_curvature, legacy.progress_measured_speed_mps};
+    for (int input_element = 0; input_element < nu; ++input_element) {
+      const double weight = rate_weight[static_cast<std::size_t>(input_element)];
+      const int first = nx_N + input_element;
+      p_triplets.emplace_back(first, first, weight);
+      q[first] -= weight * previous_input[static_cast<std::size_t>(input_element)];
+      for (int stage = 1; stage < N; ++stage) {
+        const int previous = nx_N + (stage - 1) * nu + input_element;
+        const int current = nx_N + stage * nu + input_element;
+        p_triplets.emplace_back(previous, previous, weight);
+        p_triplets.emplace_back(current, current, weight);
+        p_triplets.emplace_back(previous, current, -weight);
+      }
+    }
+    Eigen::SparseMatrix<double> quadratic_cost(variable_count, variable_count);
+    quadratic_cost.setFromTriplets(p_triplets.begin(), p_triplets.end());
+    if (
+      !q.allFinite() || !constraints.isCompressed() ||
+      lower.size() != constraints.rows() || upper.size() != constraints.rows())
+    {
+      reject_reason = "extended MPCC QP assembly invalid";
+      return std::nullopt;
+    }
+    return ExtendedProgressMpcProblem{
+      std::move(q), std::move(lower), std::move(upper),
+      std::move(quadratic_cost), std::move(constraints), N,
+      legacy.progress_origin_m};
+  }
+
+  persistent_osqp::SolveOutcome solve_extended_progress_problem(
+    const ExtendedProgressMpcProblem & problem, const double now_sec)
+  {
+    const bool progress_discontinuous =
+      last_extended_osqp_progress_origin_m_.has_value() &&
+      mpcc_progress::progress_origin_discontinuous(
+        last_extended_osqp_progress_origin_m_.value(), problem.progress_origin_m,
+        std::max(2.0, cfg.progress_contouring.trust_region_backward_m));
+    if (progress_discontinuous) {
+      persistent_extended_osqp_solver_.reset();
+      last_extended_osqp_solution_.reset();
+      last_extended_osqp_solution_sec_ = -std::numeric_limits<double>::infinity();
+    }
+    last_extended_osqp_progress_origin_m_ = problem.progress_origin_m;
+    std::optional<persistent_osqp::WarmStart> warm_start;
+    const bool fresh =
+      last_extended_osqp_solution_.has_value() && std::isfinite(now_sec) &&
+      std::isfinite(last_extended_osqp_solution_sec_) &&
+      now_sec >= last_extended_osqp_solution_sec_ &&
+      now_sec - last_extended_osqp_solution_sec_ <= kOsqpWarmStartMaximumAgeSec;
+    if (fresh) {
+      warm_start = persistent_osqp::shift_mpc_warm_start(
+        last_extended_osqp_solution_.value(), static_cast<std::size_t>(problem.N),
+        static_cast<std::size_t>(mpcc_progress::kExtendedStateDimension),
+        static_cast<std::size_t>(mpcc_progress::kExtendedInputDimension));
+    }
+    auto outcome = persistent_extended_osqp_solver_.solve(
+      problem.P, problem.A, problem.q, problem.l, problem.u, warm_start);
+    record_osqp_telemetry(outcome, now_sec);
+    if (!outcome.result.has_value()) {
+      last_extended_osqp_solution_.reset();
+      last_extended_osqp_solution_sec_ = -std::numeric_limits<double>::infinity();
+      return outcome;
+    }
+    last_extended_osqp_solution_ = persistent_osqp::WarmStart{
+      outcome.result->primal, outcome.result->dual};
+    last_extended_osqp_solution_sec_ = now_sec;
+    return outcome;
   }
 
   void record_osqp_telemetry(
@@ -14734,6 +15118,10 @@ struct MPC
     last_osqp_solution_sec_ = -std::numeric_limits<double>::infinity();
     last_osqp_progress_contouring_mode_.reset();
     last_osqp_progress_origin_m_.reset();
+    persistent_extended_osqp_solver_.reset();
+    last_extended_osqp_solution_.reset();
+    last_extended_osqp_solution_sec_ = -std::numeric_limits<double>::infinity();
+    last_extended_osqp_progress_origin_m_.reset();
     solved_mpcc_execution_trajectory_.reset();
     last_physically_validated_mpcc_execution_trajectory_.reset();
     solved_mpcc_execution_authority_was_active_ = false;
@@ -15764,24 +16152,73 @@ struct MPC
         return low_speed_shift_control(tracking_waypoint);
       }
       const bool low_speed_shift_handoff_requested = low_speed_shift_control_was_active_;
-      auto outcome = solve_problem(problem, now_sec);
-      if (!outcome.result.has_value()) {
+      Eigen::VectorXd dec;
+      double maximum_constraint_violation = 0.0;
+      bool solved_with_extended_progress = false;
+      std::string extended_reject_reason;
+      if (
+        problem.progress_contouring_active &&
+        cfg.progress_contouring.extended_dynamics_enabled)
+      {
+        const auto extended_problem = build_extended_progress_problem(
+          problem, extended_reject_reason);
+        if (extended_problem.has_value()) {
+          auto extended_outcome = solve_extended_progress_problem(
+            extended_problem.value(), now_sec);
+          if (extended_outcome.result.has_value()) {
+            const auto legacy_solution =
+              mpcc_progress::convert_extended_solution_to_legacy(
+              extended_outcome.result->primal, N);
+            if (legacy_solution.has_value()) {
+              dec = legacy_solution.value();
+              maximum_constraint_violation =
+                extended_outcome.result->maximum_constraint_violation;
+              solved_with_extended_progress = true;
+            } else {
+              extended_reject_reason = "extended solution conversion rejected";
+            }
+          } else {
+            extended_reject_reason = extended_outcome.failure_detail;
+          }
+        }
+        if (
+          !solved_with_extended_progress &&
+          cfg.v2x_behavior.overtake_line.debug_log_enabled &&
+          (!std::isfinite(extended_progress_fallback_last_log_sec_) ||
+          now_sec - extended_progress_fallback_last_log_sec_ >= 1.0))
+        {
+          RCLCPP_WARN(
+            rclcpp::get_logger("mpc_controller"),
+            "Extended velocity-progress MPCC unavailable; using 3-state MPCC: %s",
+            extended_reject_reason.c_str());
+          extended_progress_fallback_last_log_sec_ = now_sec;
+        }
+      }
+      persistent_osqp::SolveOutcome legacy_outcome;
+      if (!solved_with_extended_progress) {
+        legacy_outcome = solve_problem(problem, now_sec);
+      }
+      if (!solved_with_extended_progress && !legacy_outcome.result.has_value()) {
         if (low_speed_shift_handoff_requested) {
           low_speed_shift_control_active_ = true;
           if (!low_speed_shift_handoff_deferred_logged_) {
             RCLCPP_WARN(
               rclcpp::get_logger("mpc_controller"),
               "Low-speed pass MPC handoff deferred: %s; continuing rejoin control",
-              outcome.failure_detail.c_str());
+              legacy_outcome.failure_detail.c_str());
             low_speed_shift_handoff_deferred_logged_ = true;
           }
           return low_speed_shift_control(tracking_waypoint);
         }
-        throw std::runtime_error("OSQP failed: " + outcome.failure_detail);
+        throw std::runtime_error("OSQP failed: " + legacy_outcome.failure_detail);
       }
-      Eigen::VectorXd dec = outcome.result->primal;
+      if (!solved_with_extended_progress) {
+        dec = legacy_outcome.result->primal;
+        maximum_constraint_violation =
+          legacy_outcome.result->maximum_constraint_violation;
+      }
       record_solved_mpcc_execution_trajectory(
-        problem, dec, outcome.result->maximum_constraint_violation, now_sec);
+        problem, dec, maximum_constraint_violation, now_sec);
       Eigen::VectorXd control_signals = dec.tail(N * nu);
 
       for (int i = 1; i < control_signals.size(); i += 2) {
@@ -16124,6 +16561,13 @@ struct MPC
   double last_osqp_solution_sec_{-std::numeric_limits<double>::infinity()};
   std::optional<bool> last_osqp_progress_contouring_mode_;
   std::optional<double> last_osqp_progress_origin_m_;
+  persistent_osqp::PersistentOsqpSolver persistent_extended_osqp_solver_;
+  std::optional<persistent_osqp::WarmStart> last_extended_osqp_solution_;
+  double last_extended_osqp_solution_sec_{
+    -std::numeric_limits<double>::infinity()};
+  std::optional<double> last_extended_osqp_progress_origin_m_;
+  double extended_progress_fallback_last_log_sec_{
+    -std::numeric_limits<double>::infinity()};
   MpcOsqpTelemetryWindow osqp_telemetry_window_;
   double last_osqp_telemetry_log_sec_{std::numeric_limits<double>::quiet_NaN()};
   MpcRtiSqpTelemetryWindow rti_sqp_telemetry_window_;
@@ -32409,6 +32853,39 @@ Config load_config(const std::string & path)
   progress_contouring.terminal_progress_reward_weight =
     mpc["progress_contouring_terminal_progress_reward_weight"] ?
     mpc["progress_contouring_terminal_progress_reward_weight"].as<double>() : 5000.0;
+  progress_contouring.extended_dynamics_enabled =
+    mpc["progress_contouring_extended_dynamics_enabled"] ?
+    mpc["progress_contouring_extended_dynamics_enabled"].as<bool>() : false;
+  progress_contouring.extended_lag_state_bound_m =
+    mpc["progress_contouring_extended_lag_state_bound_m"] ?
+    mpc["progress_contouring_extended_lag_state_bound_m"].as<double>() : 3.0;
+  progress_contouring.stage_velocity_weight =
+    mpc["progress_contouring_stage_velocity_weight"] ?
+    mpc["progress_contouring_stage_velocity_weight"].as<double>() : 8.0;
+  progress_contouring.committed_stage_velocity_weight =
+    mpc["progress_contouring_committed_stage_velocity_weight"] ?
+    mpc["progress_contouring_committed_stage_velocity_weight"].as<double>() : 24.0;
+  progress_contouring.terminal_velocity_weight =
+    mpc["progress_contouring_terminal_velocity_weight"] ?
+    mpc["progress_contouring_terminal_velocity_weight"].as<double>() : 12.0;
+  progress_contouring.committed_terminal_velocity_weight =
+    mpc["progress_contouring_committed_terminal_velocity_weight"] ?
+    mpc["progress_contouring_committed_terminal_velocity_weight"].as<double>() : 45.0;
+  progress_contouring.acceleration_weight =
+    mpc["progress_contouring_acceleration_weight"] ?
+    mpc["progress_contouring_acceleration_weight"].as<double>() : 0.5;
+  progress_contouring.virtual_progress_weight =
+    mpc["progress_contouring_virtual_progress_weight"] ?
+    mpc["progress_contouring_virtual_progress_weight"].as<double>() : 0.5;
+  progress_contouring.acceleration_rate_weight =
+    mpc["progress_contouring_acceleration_rate_weight"] ?
+    mpc["progress_contouring_acceleration_rate_weight"].as<double>() : 0.8;
+  progress_contouring.curvature_rate_weight =
+    mpc["progress_contouring_curvature_rate_weight"] ?
+    mpc["progress_contouring_curvature_rate_weight"].as<double>() : 0.2;
+  progress_contouring.virtual_progress_rate_weight =
+    mpc["progress_contouring_virtual_progress_rate_weight"] ?
+    mpc["progress_contouring_virtual_progress_rate_weight"].as<double>() : 0.1;
   progress_contouring.rti_sqp_iterations =
     mpc["progress_contouring_rti_sqp_iterations"] ?
     mpc["progress_contouring_rti_sqp_iterations"].as<int>() : 2;

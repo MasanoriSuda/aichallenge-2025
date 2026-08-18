@@ -2332,6 +2332,10 @@ struct OvertakeLineState
   double mission_frenet_dp_last_refresh_sec{-std::numeric_limits<double>::infinity()};
   double mission_frenet_dp_last_source_generated_sec{
     -std::numeric_limits<double>::infinity()};
+  double mission_frenet_dp_last_solved_source_sec{
+    -std::numeric_limits<double>::infinity()};
+  double mission_frenet_dp_last_solved_candidate_validation_sec{
+    -std::numeric_limits<double>::infinity()};
   double mission_frenet_dp_last_candidate_validation_sec{
     -std::numeric_limits<double>::infinity()};
   double mission_frenet_dp_last_candidate_rejection_log_sec{
@@ -4821,6 +4825,16 @@ struct PhysicallyValidatedMpccExecutionTrajectory
 {
   AlignedMpccExecutionTrajectory trajectory;
   bool last_feasible_used{false};
+  double source_solved_sec{-std::numeric_limits<double>::infinity()};
+};
+
+struct SolvedExecutionSourcePromotion
+{
+  bool attempted{false};
+  bool promoted{false};
+  bool trust_adjusted{false};
+  double maximum_applied_adjustment_m{};
+  std::optional<AlignedMpccExecutionTrajectory> promoted_trajectory;
 };
 
 struct ProgressContouringMpcPreparation
@@ -16464,7 +16478,8 @@ struct MPC
       }
       reject_reason = "latest physically validated trajectory";
       return PhysicallyValidatedMpccExecutionTrajectory{
-        std::move(latest.value()), false};
+        std::move(latest.value()), false,
+        solved_mpcc_execution_trajectory_->solved_sec};
     }
 
     std::string last_feasible_reject_reason = "no last feasible trajectory";
@@ -16482,7 +16497,8 @@ struct MPC
       {
         reject_reason = "last physically validated trajectory";
         return PhysicallyValidatedMpccExecutionTrajectory{
-          std::move(last_feasible.value()), true};
+          std::move(last_feasible.value()), true,
+          last_physically_validated_mpcc_execution_trajectory_->solved_sec};
       }
     }
 
@@ -16490,6 +16506,173 @@ struct MPC
       "latest=" + latest_reject_reason +
       "; last_feasible=" + last_feasible_reject_reason;
     return std::nullopt;
+  }
+
+  SolvedExecutionSourcePromotion try_promote_solved_execution_source(
+    const PhysicallyValidatedMpccExecutionTrajectory & validated_execution,
+    const std::vector<double> & current_path_distances,
+    const std::vector<double> & current_fallback_lateral,
+    const int ref_wp_id, const int horizon_size,
+    const Eigen::VectorXd & lower_bound,
+    const Eigen::VectorXd & upper_bound,
+    const double hard_wall_clearance_m,
+    const bool target_context_safe,
+    const bool current_dp_authority_active,
+    const bool runtime_wall_hard_fault,
+    const double now_sec)
+  {
+    SolvedExecutionSourcePromotion result;
+    result.attempted = true;
+    overtake_line_state_.mission_frenet_dp_last_solved_candidate_validation_sec =
+      now_sec;
+
+    std::vector<double> handoff_nominal_lateral = current_fallback_lateral;
+    const auto active_execution_reference =
+      overtake_core::resolve_frenet_dp_execution_reference(
+      overtake_core::FrenetDpExecutionReferenceRequest{
+        overtake_line_state_.mission_frenet_dp_execution_active &&
+        overtake_line_state_.mission_frenet_dp_side_sign ==
+        overtake_line_state_.pass_side_sign,
+        overtake_line_state_.mission_frenet_dp_execution_traveled_m,
+        2U,
+        overtake_line_state_.mission_frenet_dp_path_distances_m,
+        overtake_line_state_.mission_frenet_dp_lateral_path_m,
+        current_path_distances, current_fallback_lateral});
+    if (
+      active_execution_reference.valid && active_execution_reference.active &&
+      active_execution_reference.lateral_targets_m.size() ==
+      current_path_distances.size())
+    {
+      handoff_nominal_lateral = active_execution_reference.lateral_targets_m;
+    }
+    const auto handoff_trust =
+      overtake_core::resolve_frenet_dp_execution_trust_envelope(
+      overtake_core::FrenetDpExecutionTrustEnvelopeRequest{
+        true,
+        cfg.v2x_behavior.overtake_line.mpcc_lite_same_side_max_lateral_adjustment,
+        validated_execution.trajectory.lateral_m,
+        handoff_nominal_lateral});
+    result.trust_adjusted =
+      handoff_trust.valid && handoff_trust.active && handoff_trust.adjusted;
+    result.maximum_applied_adjustment_m =
+      handoff_trust.maximum_applied_adjustment_m;
+
+    bool adjusted_handoff_physically_valid = false;
+    std::string adjusted_handoff_reject_reason =
+      "solved handoff trust envelope invalid";
+    AlignedMpccExecutionTrajectory adjusted_handoff_trajectory =
+      validated_execution.trajectory;
+    if (
+      handoff_trust.valid && handoff_trust.active &&
+      handoff_trust.lateral_targets_m.size() == current_path_distances.size())
+    {
+      adjusted_handoff_trajectory.lateral_m = handoff_trust.lateral_targets_m;
+      adjusted_handoff_physically_valid = solved_mpcc_execution_path_wall_safe(
+        adjusted_handoff_trajectory, current_path_distances,
+        ref_wp_id, horizon_size, lower_bound, upper_bound,
+        hard_wall_clearance_m, adjusted_handoff_reject_reason);
+    }
+
+    const auto & line_cfg = cfg.v2x_behavior.overtake_line;
+    const auto handoff = overtake_core::resolve_solved_execution_source_handoff(
+      overtake_core::SolvedExecutionSourceHandoffRequest{
+        line_cfg.mpcc_frenet_dp_execution_enabled &&
+        line_cfg.mpcc_frenet_dp_rolling_refresh_enabled,
+        overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+        overtake_line_state_.phase == OvertakeLinePhase::Pass,
+        current_dp_authority_active,
+        target_context_safe,
+        adjusted_handoff_physically_valid,
+        handoff_trust.valid && handoff_trust.active,
+        runtime_wall_hard_fault,
+        now_sec,
+        validated_execution.source_solved_sec,
+        overtake_line_state_.mission_frenet_dp_last_solved_source_sec,
+        overtake_line_state_.mission_frenet_dp_last_refresh_sec,
+        line_cfg.mpcc_frenet_dp_rolling_refresh_interval_sec,
+        line_cfg.mpcc_frenet_dp_last_path_max_age_sec,
+        current_path_distances,
+        adjusted_handoff_trajectory.lateral_m});
+    if (!handoff.valid || !handoff.promote) {
+      if (
+        line_cfg.debug_log_enabled &&
+        adjusted_handoff_reject_reason != "physical solution horizon accepted" &&
+        (!std::isfinite(
+          overtake_line_state_.mission_frenet_dp_last_candidate_rejection_log_sec) ||
+        now_sec -
+        overtake_line_state_.mission_frenet_dp_last_candidate_rejection_log_sec >=
+        std::max(0.5, cfg.v2x_behavior.debug_log_period_sec)))
+      {
+        RCLCPP_WARN(
+          rclcpp::get_logger("mpc_controller"),
+          "MPCC solved execution handoff retained as pending: "
+          "target=%s, generation=%lu, side=%d, source_age=%.3f s, "
+          "new=%d, due=%d, path=%d, trust=%d, physical=%d, "
+          "reason=%s, wp_id=%d",
+          overtake_line_state_.target_vehicle_id.c_str(),
+          static_cast<unsigned long>(overtake_line_state_.mission_generation),
+          overtake_line_state_.pass_side_sign,
+          handoff.source_age_sec,
+          handoff.source_newer ? 1 : 0,
+          handoff.refresh_due ? 1 : 0,
+          handoff.path_valid ? 1 : 0,
+          handoff_trust.valid && handoff_trust.active ? 1 : 0,
+          adjusted_handoff_physically_valid ? 1 : 0,
+          adjusted_handoff_reject_reason.c_str(), model->wp_id);
+        overtake_line_state_.mission_frenet_dp_last_candidate_rejection_log_sec =
+          now_sec;
+      }
+      return result;
+    }
+
+    auto promoted_distances = current_path_distances;
+    auto promoted_lateral = adjusted_handoff_trajectory.lateral_m;
+    overtake_line_state_.mission_frenet_dp_path_distances_m.swap(
+      promoted_distances);
+    overtake_line_state_.mission_frenet_dp_lateral_path_m.swap(
+      promoted_lateral);
+    overtake_line_state_.mission_frenet_dp_execution_active = true;
+    overtake_line_state_.mission_frenet_dp_side_sign =
+      overtake_line_state_.pass_side_sign;
+    overtake_line_state_.mission_frenet_dp_execution_traveled_m = 0.0;
+    // Source age remains tied to the actual QP solve. Revalidation never
+    // rewrites this timestamp, so a reused last-feasible solution cannot
+    // become immortal.
+    overtake_line_state_.mission_frenet_dp_last_refresh_sec =
+      validated_execution.source_solved_sec;
+    overtake_line_state_.mission_frenet_dp_last_solved_source_sec =
+      validated_execution.source_solved_sec;
+    overtake_line_state_.mission_frenet_dp_last_runtime_validation_sec = now_sec;
+    overtake_line_state_.mission_runtime_wall_escape_prefix_active = false;
+    ++overtake_line_state_.mission_frenet_dp_refresh_count;
+    result.promoted = true;
+    result.promoted_trajectory = std::move(adjusted_handoff_trajectory);
+
+    if (
+      line_cfg.debug_log_enabled &&
+      (!std::isfinite(
+        overtake_line_state_.mission_frenet_dp_last_refresh_log_sec) ||
+      now_sec - overtake_line_state_.mission_frenet_dp_last_refresh_log_sec >=
+      std::max(0.25, cfg.v2x_behavior.debug_log_period_sec)))
+    {
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"),
+        "MPCC solved execution source promoted: target=%s, generation=%lu, "
+        "side=%d, phase=%s, source=%s, source_age=%.3f s, points=%zu, "
+        "trust_adjusted=%d/%.3f m, count=%d, wp_id=%d",
+        overtake_line_state_.target_vehicle_id.c_str(),
+        static_cast<unsigned long>(overtake_line_state_.mission_generation),
+        overtake_line_state_.pass_side_sign,
+        to_string(overtake_line_state_.phase),
+        validated_execution.last_feasible_used ? "last_feasible" : "latest",
+        handoff.source_age_sec,
+        overtake_line_state_.mission_frenet_dp_path_distances_m.size(),
+        result.trust_adjusted ? 1 : 0,
+        result.maximum_applied_adjustment_m,
+        overtake_line_state_.mission_frenet_dp_refresh_count, model->wp_id);
+      overtake_line_state_.mission_frenet_dp_last_refresh_log_sec = now_sec;
+    }
+    return result;
   }
 
   void ensure_current_control_horizon()
@@ -18135,6 +18318,10 @@ private:
     overtake_line_state_.mission_frenet_dp_last_refresh_sec =
       -std::numeric_limits<double>::infinity();
     overtake_line_state_.mission_frenet_dp_last_source_generated_sec =
+      -std::numeric_limits<double>::infinity();
+    overtake_line_state_.mission_frenet_dp_last_solved_source_sec =
+      -std::numeric_limits<double>::infinity();
+    overtake_line_state_.mission_frenet_dp_last_solved_candidate_validation_sec =
       -std::numeric_limits<double>::infinity();
     overtake_line_state_.mission_frenet_dp_last_candidate_validation_sec =
       -std::numeric_limits<double>::infinity();
@@ -23804,14 +23991,38 @@ private:
     const bool nominal_wall_preplan_warning = actual_wall_preplan_warning;
     bool solved_execution_wall_authority_active = false;
     bool solved_execution_last_feasible_used = false;
+    bool solved_execution_source_promoted = false;
+    bool solved_execution_source_trust_adjusted = false;
+    double solved_execution_source_maximum_adjustment_m = 0.0;
     std::string solved_execution_wall_authority_reason = "warning inactive";
     std::optional<AlignedMpccExecutionTrajectory> aligned_solved_execution;
     const bool dp_execution_authority_active =
       dp_execution_authority.valid && dp_execution_authority.authority_active;
+    const bool solved_execution_source_is_new =
+      solved_mpcc_execution_trajectory_.has_value() &&
+      std::isfinite(solved_mpcc_execution_trajectory_->solved_sec) &&
+      (!std::isfinite(
+        overtake_line_state_.mission_frenet_dp_last_solved_source_sec) ||
+      solved_mpcc_execution_trajectory_->solved_sec >
+      overtake_line_state_.mission_frenet_dp_last_solved_source_sec + kEps);
+    const double solved_execution_handoff_gate_sec = std::max(
+      overtake_line_state_.mission_frenet_dp_last_refresh_sec,
+      overtake_line_state_.mission_frenet_dp_last_solved_candidate_validation_sec);
+    const bool solved_execution_source_refresh_due =
+      !std::isfinite(solved_execution_handoff_gate_sec) ||
+      now_sec - solved_execution_handoff_gate_sec + kEps >=
+      line_cfg.mpcc_frenet_dp_rolling_refresh_interval_sec;
+    const bool solved_execution_source_handoff_requested =
+      line_cfg.mpcc_frenet_dp_execution_enabled &&
+      line_cfg.mpcc_frenet_dp_rolling_refresh_enabled &&
+      (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+      overtake_line_state_.phase == OvertakeLinePhase::Pass) &&
+      solved_execution_source_is_new && solved_execution_source_refresh_due;
     const bool solved_execution_validation_requested =
       is_overtake_receding_horizon_execution_phase(overtake_line_state_.phase) &&
       !runtime_wall_hard_fault &&
-      (nominal_wall_preplan_warning || !dp_execution_authority_active);
+      (nominal_wall_preplan_warning || !dp_execution_authority_active ||
+      solved_execution_source_handoff_requested);
     if (solved_execution_validation_requested) {
       std::vector<double> current_path_distances;
       std::vector<double> current_fallback_lateral;
@@ -23853,6 +24064,22 @@ private:
           solved_execution_wall_authority_active = true;
           solved_execution_last_feasible_used =
             validated_execution->last_feasible_used;
+
+          if (solved_execution_source_handoff_requested) {
+            auto promotion = try_promote_solved_execution_source(
+              validated_execution.value(), current_path_distances,
+              current_fallback_lateral, ref_wp_id, N, lb, ub,
+              min_wall_clearance, target_context_safe,
+              dp_execution_authority_active, runtime_wall_hard_fault, now_sec);
+            solved_execution_source_promoted = promotion.promoted;
+            solved_execution_source_trust_adjusted = promotion.trust_adjusted;
+            solved_execution_source_maximum_adjustment_m =
+              promotion.maximum_applied_adjustment_m;
+            if (promotion.promoted_trajectory.has_value()) {
+              aligned_solved_execution =
+                std::move(promotion.promoted_trajectory.value());
+            }
+          }
         }
       }
       if (solved_execution_wall_authority_active) {
@@ -23880,7 +24107,8 @@ private:
           rclcpp::get_logger("mpc_controller"),
           "MPCC solved trajectory owns execution authority: target=%s, "
           "generation=%lu, side=%d, phase=%s, age=%.3f s, advance=%.2f m, "
-          "qp_reserve=%.3f m, points=%zu, source=%s, dp_bridge=%d, wp_id=%d",
+          "qp_reserve=%.3f m, points=%zu, source=%s, dp_bridge=%d, "
+          "prefix_promoted=%d, trust_adjusted=%d/%.3f m, wp_id=%d",
           overtake_line_state_.target_vehicle_id.c_str(),
           static_cast<unsigned long>(overtake_line_state_.mission_generation),
           overtake_line_state_.pass_side_sign, to_string(overtake_line_state_.phase),
@@ -23889,7 +24117,10 @@ private:
           aligned_solved_execution->minimum_qp_bound_reserve_m,
           aligned_solved_execution->lateral_m.size(),
           solved_execution_last_feasible_used ? "last_feasible" : "latest",
-          solved_execution_bridge_active ? 1 : 0, model->wp_id);
+          solved_execution_bridge_active ? 1 : 0,
+          solved_execution_source_promoted ? 1 : 0,
+          solved_execution_source_trust_adjusted ? 1 : 0,
+          solved_execution_source_maximum_adjustment_m, model->wp_id);
       } else {
         RCLCPP_INFO(
           rclcpp::get_logger("mpc_controller"),
@@ -26319,11 +26550,14 @@ private:
         overtake_line_state_.pass_side_sign, reason);
       return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
     } else if (pass_entry_gate_was_active) {
+      const double freshest_execution_source_sec = std::max(
+        overtake_line_state_.mission_frenet_dp_last_source_generated_sec,
+        overtake_line_state_.mission_frenet_dp_last_solved_source_sec);
       const bool dp_source_refreshed_during_hold = std::isfinite(
-        overtake_line_state_.mission_frenet_dp_last_source_generated_sec) &&
+        freshest_execution_source_sec) &&
         std::isfinite(
         overtake_line_state_.shiftout_pass_entry_physical_hold_start_sec) &&
-        overtake_line_state_.mission_frenet_dp_last_source_generated_sec >
+        freshest_execution_source_sec >
         overtake_line_state_.shiftout_pass_entry_physical_hold_start_sec + kEps;
       if (
         overtake_line_state_.mission_frenet_dp_execution_active &&

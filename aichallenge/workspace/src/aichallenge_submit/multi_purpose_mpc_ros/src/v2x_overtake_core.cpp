@@ -5635,6 +5635,48 @@ FrenetDpExecutionAuthorityResolution resolve_frenet_dp_execution_authority(
   return resolution;
 }
 
+SolvedExecutionSourceHandoffResolution resolve_solved_execution_source_handoff(
+    const SolvedExecutionSourceHandoffRequest &request) noexcept {
+  SolvedExecutionSourceHandoffResolution resolution;
+  if (!std::isfinite(request.now_sec) ||
+      !std::isfinite(request.minimum_refresh_interval_sec) ||
+      request.minimum_refresh_interval_sec < 0.0 ||
+      !std::isfinite(request.maximum_source_age_sec) ||
+      request.maximum_source_age_sec < 0.0) {
+    return resolution;
+  }
+  resolution.valid = true;
+  if (!request.enabled || !request.active_execution ||
+      !std::isfinite(request.source_solved_sec) ||
+      request.now_sec + 1e-9 < request.source_solved_sec) {
+    return resolution;
+  }
+
+  resolution.source_age_sec = request.now_sec - request.source_solved_sec;
+  const bool newer_than_previous_solved_source =
+      !std::isfinite(request.last_promoted_source_solved_sec) ||
+      request.source_solved_sec >
+          request.last_promoted_source_solved_sec + 1e-9;
+  const bool newer_than_active_execution_source =
+      !std::isfinite(request.last_execution_refresh_sec) ||
+      request.source_solved_sec > request.last_execution_refresh_sec + 1e-9;
+  resolution.source_newer =
+      newer_than_previous_solved_source && newer_than_active_execution_source;
+  resolution.refresh_due = !request.current_execution_authority_active ||
+      !std::isfinite(request.last_execution_refresh_sec) ||
+      request.now_sec + 1e-9 < request.last_execution_refresh_sec ||
+      request.now_sec - request.last_execution_refresh_sec + 1e-9 >=
+          request.minimum_refresh_interval_sec;
+  resolution.path_valid = is_valid_frenet_dp_execution_path(
+      request.path_distances_m, request.lateral_path_m);
+  resolution.promote = resolution.source_newer && resolution.refresh_due &&
+      resolution.source_age_sec <= request.maximum_source_age_sec + 1e-9 &&
+      request.context_matches && request.physically_validated &&
+      request.trust_envelope_validated && !request.hard_fault &&
+      resolution.path_valid;
+  return resolution;
+}
+
 const char * to_string(const FrenetDpTacticalStrategy strategy) noexcept
 {
   switch (strategy) {

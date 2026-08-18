@@ -18265,6 +18265,124 @@ TEST(V2XOvertakeCoreFrenetDpExecution,
   EXPECT_FALSE(resolve_frenet_dp_execution_authority(request).authority_active);
 }
 
+TEST(V2XOvertakeCoreFrenetDpExecution,
+     FreshValidatedSolvedSourcePromotesAtomically)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    SolvedExecutionSourceHandoffRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_solved_execution_source_handoff;
+
+  SolvedExecutionSourceHandoffRequest request;
+  request.enabled = true;
+  request.active_execution = true;
+  request.current_execution_authority_active = true;
+  request.context_matches = true;
+  request.physically_validated = true;
+  request.trust_envelope_validated = true;
+  request.now_sec = 12.20;
+  request.source_solved_sec = 12.16;
+  request.last_promoted_source_solved_sec = 12.00;
+  request.last_execution_refresh_sec = 12.05;
+  request.minimum_refresh_interval_sec = 0.10;
+  request.maximum_source_age_sec = 0.50;
+  request.path_distances_m = {0.5, 1.0, 2.0};
+  request.lateral_path_m = {0.1, 0.3, 0.5};
+
+  const auto resolution = resolve_solved_execution_source_handoff(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.source_newer);
+  EXPECT_TRUE(resolution.refresh_due);
+  EXPECT_TRUE(resolution.path_valid);
+  EXPECT_TRUE(resolution.promote);
+  EXPECT_NEAR(resolution.source_age_sec, 0.04, 1e-9);
+}
+
+TEST(V2XOvertakeCoreFrenetDpExecution,
+     SolvedSourceCannotRenewAgeWithoutNewSolution)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    SolvedExecutionSourceHandoffRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_solved_execution_source_handoff;
+
+  SolvedExecutionSourceHandoffRequest request;
+  request.enabled = true;
+  request.active_execution = true;
+  request.current_execution_authority_active = false;
+  request.context_matches = true;
+  request.physically_validated = true;
+  request.trust_envelope_validated = true;
+  request.now_sec = 20.40;
+  request.source_solved_sec = 20.00;
+  request.last_promoted_source_solved_sec = 20.00;
+  request.last_execution_refresh_sec = 20.00;
+  request.minimum_refresh_interval_sec = 0.10;
+  request.maximum_source_age_sec = 0.50;
+  request.path_distances_m = {0.5, 1.0, 2.0};
+  request.lateral_path_m = {-0.1, -0.3, -0.5};
+
+  auto resolution = resolve_solved_execution_source_handoff(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.source_newer);
+  EXPECT_TRUE(resolution.refresh_due);
+  EXPECT_FALSE(resolution.promote);
+
+  request.last_promoted_source_solved_sec = 19.9;
+  request.last_execution_refresh_sec = 19.9;
+  request.now_sec = 20.60;
+  resolution = resolve_solved_execution_source_handoff(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.source_newer);
+  EXPECT_FALSE(resolution.promote);
+  EXPECT_GT(resolution.source_age_sec, request.maximum_source_age_sec);
+}
+
+TEST(V2XOvertakeCoreFrenetDpExecution,
+     SolvedSourceHandoffRetainsHardGuardsAndRefreshCadence)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    SolvedExecutionSourceHandoffRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_solved_execution_source_handoff;
+
+  SolvedExecutionSourceHandoffRequest request;
+  request.enabled = true;
+  request.active_execution = true;
+  request.current_execution_authority_active = true;
+  request.context_matches = true;
+  request.physically_validated = true;
+  request.trust_envelope_validated = true;
+  request.now_sec = 30.05;
+  request.source_solved_sec = 30.04;
+  request.last_promoted_source_solved_sec = 30.00;
+  request.last_execution_refresh_sec = 30.00;
+  request.minimum_refresh_interval_sec = 0.10;
+  request.maximum_source_age_sec = 0.50;
+  request.path_distances_m = {0.5, 1.0, 2.0};
+  request.lateral_path_m = {0.0, 0.2, 0.4};
+
+  auto resolution = resolve_solved_execution_source_handoff(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.refresh_due);
+  EXPECT_FALSE(resolution.promote);
+
+  request.current_execution_authority_active = false;
+  resolution = resolve_solved_execution_source_handoff(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.refresh_due);
+  EXPECT_TRUE(resolution.promote);
+
+  request.hard_fault = true;
+  EXPECT_FALSE(resolve_solved_execution_source_handoff(request).promote);
+  request.hard_fault = false;
+  request.context_matches = false;
+  EXPECT_FALSE(resolve_solved_execution_source_handoff(request).promote);
+  request.context_matches = true;
+  request.trust_envelope_validated = false;
+  EXPECT_FALSE(resolve_solved_execution_source_handoff(request).promote);
+}
+
 TEST(V2XOvertakeCoreFrenetDpExecution, ReturnReferenceKeepsAdmittedPrefix)
 {
   using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpExecutionReferenceRequest;

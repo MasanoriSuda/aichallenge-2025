@@ -3653,6 +3653,41 @@ struct FrenetDpExecutionAuthorityResolution
 FrenetDpExecutionAuthorityResolution resolve_frenet_dp_execution_authority(
   const FrenetDpExecutionAuthorityRequest & request) noexcept;
 
+struct SolvedExecutionSourceHandoffRequest
+{
+  bool enabled{false};
+  bool active_execution{false};
+  bool current_execution_authority_active{false};
+  bool context_matches{false};
+  bool physically_validated{false};
+  bool trust_envelope_validated{false};
+  bool hard_fault{false};
+  double now_sec{};
+  double source_solved_sec{-std::numeric_limits<double>::infinity()};
+  double last_promoted_source_solved_sec{-std::numeric_limits<double>::infinity()};
+  double last_execution_refresh_sec{-std::numeric_limits<double>::infinity()};
+  double minimum_refresh_interval_sec{};
+  double maximum_source_age_sec{};
+  std::vector<double> path_distances_m;
+  std::vector<double> lateral_path_m;
+};
+
+struct SolvedExecutionSourceHandoffResolution
+{
+  bool valid{false};
+  bool source_newer{false};
+  bool refresh_due{false};
+  bool path_valid{false};
+  bool promote{false};
+  double source_age_sec{std::numeric_limits<double>::infinity()};
+};
+
+/// Decide whether a freshly solved and physically revalidated progress-
+/// contouring trajectory may atomically replace the active execution prefix.
+/// Reusing the same solved source can never renew its absolute execution age.
+SolvedExecutionSourceHandoffResolution resolve_solved_execution_source_handoff(
+  const SolvedExecutionSourceHandoffRequest & request) noexcept;
+
 enum class OvertakeMissionCorridorSource
 {
   None,

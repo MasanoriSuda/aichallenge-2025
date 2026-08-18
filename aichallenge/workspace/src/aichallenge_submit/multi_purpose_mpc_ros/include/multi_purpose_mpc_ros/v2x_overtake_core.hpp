@@ -3484,6 +3484,42 @@ struct FrenetDpExecutionRefreshStitchResolution
 FrenetDpExecutionRefreshStitchResolution stitch_frenet_dp_execution_refresh_path(
   const FrenetDpExecutionRefreshStitchRequest & request) noexcept;
 
+struct SolvedExecutionSourceStitchRequest
+{
+  double maximum_lateral_adjustment_m{};
+  double current_lateral_m{};
+  double preserved_prefix_distance_m{};
+  double blend_end_distance_m{};
+  bool measured_state_reachability_enabled{false};
+  double current_lateral_velocity_mps{};
+  double current_speed_mps{};
+  double maximum_lateral_accel_mps2{};
+  std::vector<double> path_distances_m;
+  std::vector<double> nominal_lateral_targets_m;
+  std::vector<double> solved_lateral_targets_m;
+};
+
+struct SolvedExecutionSourceStitchResolution
+{
+  bool valid{false};
+  bool active{false};
+  bool trust_adjusted{false};
+  bool used_active_path{false};
+  bool measured_state_reachability_used{false};
+  bool lateral_reachability_constrained{false};
+  double maximum_applied_adjustment_m{};
+  double maximum_unconstrained_lateral_accel_mps2{};
+  std::vector<double> lateral_targets_m;
+};
+
+/// Apply the Mission trust envelope and then continuously connect a freshly
+/// solved execution source to the currently executed horizon.  This is the
+/// promotion-time counterpart of rolling DP refresh stitching.  The caller
+/// must still revalidate the returned path against current hard bounds and the
+/// static-wall footprint before swapping execution authority.
+SolvedExecutionSourceStitchResolution resolve_solved_execution_source_stitch(
+  const SolvedExecutionSourceStitchRequest & request) noexcept;
+
 struct FrenetDpExecutionRefreshRequest
 {
   bool enabled{false};

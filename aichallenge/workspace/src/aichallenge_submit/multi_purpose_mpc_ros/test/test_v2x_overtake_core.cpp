@@ -18055,6 +18055,89 @@ TEST(V2XOvertakeCoreFrenetDpExecution,
   EXPECT_FALSE(resolve_frenet_dp_execution_trust_envelope(request).valid);
 }
 
+TEST(V2XOvertakeCoreFrenetDpExecution,
+     StitchesSolvedSourceAfterApplyingMissionTrust)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    SolvedExecutionSourceStitchRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_solved_execution_source_stitch;
+
+  SolvedExecutionSourceStitchRequest request;
+  request.maximum_lateral_adjustment_m = 0.35;
+  request.current_lateral_m = 0.0;
+  request.preserved_prefix_distance_m = 1.0;
+  request.blend_end_distance_m = 4.0;
+  request.path_distances_m = {0.5, 1.0, 2.5, 4.0};
+  request.nominal_lateral_targets_m = {0.0, 0.0, 0.0, 0.0};
+  request.solved_lateral_targets_m = {1.0, 1.0, 1.0, 1.0};
+
+  const auto resolution = resolve_solved_execution_source_stitch(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.active);
+  EXPECT_TRUE(resolution.trust_adjusted);
+  EXPECT_TRUE(resolution.used_active_path);
+  EXPECT_FALSE(resolution.measured_state_reachability_used);
+  EXPECT_NEAR(resolution.maximum_applied_adjustment_m, 0.35, 1e-9);
+  ASSERT_EQ(resolution.lateral_targets_m.size(), 4U);
+  EXPECT_DOUBLE_EQ(resolution.lateral_targets_m[0], 0.0);
+  EXPECT_DOUBLE_EQ(resolution.lateral_targets_m[1], 0.0);
+  EXPECT_NEAR(resolution.lateral_targets_m[2], 0.175, 1e-9);
+  EXPECT_NEAR(resolution.lateral_targets_m[3], 0.35, 1e-9);
+}
+
+TEST(V2XOvertakeCoreFrenetDpExecution,
+     ProjectsSolvedSourceStitchToMeasuredReachability)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    SolvedExecutionSourceStitchRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_solved_execution_source_stitch;
+
+  SolvedExecutionSourceStitchRequest request;
+  request.maximum_lateral_adjustment_m = 1.0;
+  request.current_lateral_m = 0.0;
+  request.preserved_prefix_distance_m = 0.0;
+  request.blend_end_distance_m = 1.0;
+  request.measured_state_reachability_enabled = true;
+  request.current_lateral_velocity_mps = 0.0;
+  request.current_speed_mps = 2.0;
+  request.maximum_lateral_accel_mps2 = 1.0;
+  request.path_distances_m = {0.5, 1.0, 2.0, 4.0};
+  request.nominal_lateral_targets_m = {0.0, 0.0, 0.0, 0.0};
+  request.solved_lateral_targets_m = {1.0, 1.0, 1.0, 1.0};
+
+  const auto resolution = resolve_solved_execution_source_stitch(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.measured_state_reachability_used);
+  EXPECT_TRUE(resolution.lateral_reachability_constrained);
+  EXPECT_GT(resolution.maximum_unconstrained_lateral_accel_mps2, 1.0);
+  ASSERT_EQ(resolution.lateral_targets_m.size(), 4U);
+  EXPECT_NEAR(resolution.lateral_targets_m[0], 0.03125, 1e-9);
+  EXPECT_NEAR(resolution.lateral_targets_m[1], 0.125, 1e-9);
+  EXPECT_NEAR(resolution.lateral_targets_m[2], 0.5, 1e-9);
+  EXPECT_NEAR(resolution.lateral_targets_m[3], 1.0, 1e-9);
+}
+
+TEST(V2XOvertakeCoreFrenetDpExecution,
+     RejectsMalformedSolvedSourceStitch)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    SolvedExecutionSourceStitchRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_solved_execution_source_stitch;
+
+  SolvedExecutionSourceStitchRequest request;
+  request.maximum_lateral_adjustment_m = 0.35;
+  request.current_lateral_m = 0.0;
+  request.preserved_prefix_distance_m = 1.0;
+  request.blend_end_distance_m = 4.0;
+  request.path_distances_m = {0.5, 1.0};
+  request.nominal_lateral_targets_m = {0.0, 0.0};
+  request.solved_lateral_targets_m = {0.2};
+  EXPECT_FALSE(resolve_solved_execution_source_stitch(request).valid);
+}
+
 TEST(V2XOvertakeCoreFrenetDpExecution, FreshSafePrefixOwnsPassContinuation) {
   using multi_purpose_mpc_ros::v2x_overtake_core::
       FrenetDpExecutionAuthorityRequest;

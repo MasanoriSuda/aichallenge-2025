@@ -5445,6 +5445,55 @@ FrenetDpExecutionRefreshStitchResolution stitch_frenet_dp_execution_refresh_path
   return resolution;
 }
 
+SolvedExecutionSourceStitchResolution resolve_solved_execution_source_stitch(
+  const SolvedExecutionSourceStitchRequest & request) noexcept
+{
+  SolvedExecutionSourceStitchResolution resolution;
+  const auto trust = resolve_frenet_dp_execution_trust_envelope(
+    FrenetDpExecutionTrustEnvelopeRequest{
+      true, request.maximum_lateral_adjustment_m,
+      request.solved_lateral_targets_m,
+      request.nominal_lateral_targets_m});
+  resolution.trust_adjusted = trust.valid && trust.active && trust.adjusted;
+  resolution.maximum_applied_adjustment_m = trust.maximum_applied_adjustment_m;
+  if (
+    !trust.valid || !trust.active ||
+    request.path_distances_m.size() != trust.lateral_targets_m.size())
+  {
+    return resolution;
+  }
+
+  const auto stitch = stitch_frenet_dp_execution_refresh_path(
+    FrenetDpExecutionRefreshStitchRequest{
+      request.current_lateral_m,
+      0.0,
+      request.preserved_prefix_distance_m,
+      request.blend_end_distance_m,
+      request.measured_state_reachability_enabled,
+      request.current_lateral_velocity_mps,
+      request.current_speed_mps,
+      request.maximum_lateral_accel_mps2,
+      request.path_distances_m,
+      request.nominal_lateral_targets_m,
+      request.path_distances_m,
+      trust.lateral_targets_m});
+  resolution.used_active_path = stitch.used_active_path;
+  resolution.measured_state_reachability_used =
+    stitch.measured_state_reachability_used;
+  resolution.lateral_reachability_constrained =
+    stitch.lateral_reachability_constrained;
+  resolution.maximum_unconstrained_lateral_accel_mps2 =
+    stitch.maximum_unconstrained_lateral_accel_mps2;
+  if (!stitch.valid || stitch.lateral_path_m.size() != request.path_distances_m.size()) {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  resolution.active = true;
+  resolution.lateral_targets_m = stitch.lateral_path_m;
+  return resolution;
+}
+
 FrenetDpExecutionRefreshResolution resolve_frenet_dp_execution_refresh(
   const FrenetDpExecutionRefreshRequest & request) noexcept
 {

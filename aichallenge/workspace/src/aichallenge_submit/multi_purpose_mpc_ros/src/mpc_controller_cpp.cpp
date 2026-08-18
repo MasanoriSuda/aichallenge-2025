@@ -4833,7 +4833,11 @@ struct SolvedExecutionSourcePromotion
   bool attempted{false};
   bool promoted{false};
   bool trust_adjusted{false};
+  bool stitch_used_active_path{false};
+  bool stitch_reachability_used{false};
+  bool stitch_reachability_constrained{false};
   double maximum_applied_adjustment_m{};
+  double maximum_unconstrained_lateral_accel_mps2{};
   std::optional<AlignedMpccExecutionTrajectory> promoted_trajectory;
 };
 
@@ -16525,6 +16529,7 @@ struct MPC
     result.attempted = true;
     overtake_line_state_.mission_frenet_dp_last_solved_candidate_validation_sec =
       now_sec;
+    const auto & line_cfg = cfg.v2x_behavior.overtake_line;
 
     std::vector<double> handoff_nominal_lateral = current_fallback_lateral;
     const auto active_execution_reference =
@@ -16545,35 +16550,60 @@ struct MPC
     {
       handoff_nominal_lateral = active_execution_reference.lateral_targets_m;
     }
-    const auto handoff_trust =
-      overtake_core::resolve_frenet_dp_execution_trust_envelope(
-      overtake_core::FrenetDpExecutionTrustEnvelopeRequest{
-        true,
+    const double measured_lateral_velocity_mps =
+      model != nullptr && std::isfinite(model->spatial_state.e_psi) &&
+      std::isfinite(current_speed_mps_) ?
+      std::max(0.0, current_speed_mps_) *
+      std::sin(model->spatial_state.e_psi) : 0.0;
+    const double stitch_lateral_accel_limit_mps2 =
+      std::max(0.0, line_cfg.max_lateral_accel) *
+      line_cfg.mpcc_frenet_dp_execution_lateral_accel_reserve_ratio;
+    const auto handoff_stitch =
+      overtake_core::resolve_solved_execution_source_stitch(
+      overtake_core::SolvedExecutionSourceStitchRequest{
         cfg.v2x_behavior.overtake_line.mpcc_lite_same_side_max_lateral_adjustment,
+        model != nullptr ? model->spatial_state.e_y :
+        std::numeric_limits<double>::quiet_NaN(),
+        line_cfg.mpcc_frenet_dp_refresh_preserved_prefix_distance,
+        line_cfg.mpcc_frenet_dp_refresh_blend_end_distance,
+        line_cfg.mpcc_frenet_dp_execution_envelope_enabled,
+        measured_lateral_velocity_mps,
+        std::isfinite(current_speed_mps_) ?
+        std::max(1.0, current_speed_mps_) : 1.0,
+        stitch_lateral_accel_limit_mps2,
+        current_path_distances,
+        handoff_nominal_lateral,
         validated_execution.trajectory.lateral_m,
-        handoff_nominal_lateral});
+      });
     result.trust_adjusted =
-      handoff_trust.valid && handoff_trust.active && handoff_trust.adjusted;
+      handoff_stitch.valid && handoff_stitch.active &&
+      handoff_stitch.trust_adjusted;
+    result.stitch_used_active_path = handoff_stitch.used_active_path;
+    result.stitch_reachability_used =
+      handoff_stitch.measured_state_reachability_used;
+    result.stitch_reachability_constrained =
+      handoff_stitch.lateral_reachability_constrained;
     result.maximum_applied_adjustment_m =
-      handoff_trust.maximum_applied_adjustment_m;
+      handoff_stitch.maximum_applied_adjustment_m;
+    result.maximum_unconstrained_lateral_accel_mps2 =
+      handoff_stitch.maximum_unconstrained_lateral_accel_mps2;
 
     bool adjusted_handoff_physically_valid = false;
     std::string adjusted_handoff_reject_reason =
-      "solved handoff trust envelope invalid";
+      "solved handoff continuous stitch invalid";
     AlignedMpccExecutionTrajectory adjusted_handoff_trajectory =
       validated_execution.trajectory;
     if (
-      handoff_trust.valid && handoff_trust.active &&
-      handoff_trust.lateral_targets_m.size() == current_path_distances.size())
+      handoff_stitch.valid && handoff_stitch.active &&
+      handoff_stitch.lateral_targets_m.size() == current_path_distances.size())
     {
-      adjusted_handoff_trajectory.lateral_m = handoff_trust.lateral_targets_m;
+      adjusted_handoff_trajectory.lateral_m = handoff_stitch.lateral_targets_m;
       adjusted_handoff_physically_valid = solved_mpcc_execution_path_wall_safe(
         adjusted_handoff_trajectory, current_path_distances,
         ref_wp_id, horizon_size, lower_bound, upper_bound,
         hard_wall_clearance_m, adjusted_handoff_reject_reason);
     }
 
-    const auto & line_cfg = cfg.v2x_behavior.overtake_line;
     const auto handoff = overtake_core::resolve_solved_execution_source_handoff(
       overtake_core::SolvedExecutionSourceHandoffRequest{
         line_cfg.mpcc_frenet_dp_execution_enabled &&
@@ -16583,7 +16613,7 @@ struct MPC
         current_dp_authority_active,
         target_context_safe,
         adjusted_handoff_physically_valid,
-        handoff_trust.valid && handoff_trust.active,
+        handoff_stitch.valid && handoff_stitch.active,
         runtime_wall_hard_fault,
         now_sec,
         validated_execution.source_solved_sec,
@@ -16616,7 +16646,7 @@ struct MPC
           handoff.source_newer ? 1 : 0,
           handoff.refresh_due ? 1 : 0,
           handoff.path_valid ? 1 : 0,
-          handoff_trust.valid && handoff_trust.active ? 1 : 0,
+          handoff_stitch.valid && handoff_stitch.active ? 1 : 0,
           adjusted_handoff_physically_valid ? 1 : 0,
           adjusted_handoff_reject_reason.c_str(), model->wp_id);
         overtake_line_state_.mission_frenet_dp_last_candidate_rejection_log_sec =
@@ -16659,7 +16689,8 @@ struct MPC
         rclcpp::get_logger("mpc_controller"),
         "MPCC solved execution source promoted: target=%s, generation=%lu, "
         "side=%d, phase=%s, source=%s, source_age=%.3f s, points=%zu, "
-        "trust_adjusted=%d/%.3f m, count=%d, wp_id=%d",
+        "trust_adjusted=%d/%.3f m, stitch_active=%d, reachable=%d/%d, "
+        "raw_ay=%.2f m/s2, count=%d, wp_id=%d",
         overtake_line_state_.target_vehicle_id.c_str(),
         static_cast<unsigned long>(overtake_line_state_.mission_generation),
         overtake_line_state_.pass_side_sign,
@@ -16669,6 +16700,10 @@ struct MPC
         overtake_line_state_.mission_frenet_dp_path_distances_m.size(),
         result.trust_adjusted ? 1 : 0,
         result.maximum_applied_adjustment_m,
+        result.stitch_used_active_path ? 1 : 0,
+        result.stitch_reachability_used ? 1 : 0,
+        result.stitch_reachability_constrained ? 1 : 0,
+        result.maximum_unconstrained_lateral_accel_mps2,
         overtake_line_state_.mission_frenet_dp_refresh_count, model->wp_id);
       overtake_line_state_.mission_frenet_dp_last_refresh_log_sec = now_sec;
     }
@@ -23993,7 +24028,11 @@ private:
     bool solved_execution_last_feasible_used = false;
     bool solved_execution_source_promoted = false;
     bool solved_execution_source_trust_adjusted = false;
+    bool solved_execution_source_stitch_active = false;
+    bool solved_execution_source_stitch_reachability_used = false;
+    bool solved_execution_source_stitch_reachability_constrained = false;
     double solved_execution_source_maximum_adjustment_m = 0.0;
+    double solved_execution_source_maximum_unconstrained_ay_mps2 = 0.0;
     std::string solved_execution_wall_authority_reason = "warning inactive";
     std::optional<AlignedMpccExecutionTrajectory> aligned_solved_execution;
     const bool dp_execution_authority_active =
@@ -24073,8 +24112,16 @@ private:
               dp_execution_authority_active, runtime_wall_hard_fault, now_sec);
             solved_execution_source_promoted = promotion.promoted;
             solved_execution_source_trust_adjusted = promotion.trust_adjusted;
+            solved_execution_source_stitch_active =
+              promotion.stitch_used_active_path;
+            solved_execution_source_stitch_reachability_used =
+              promotion.stitch_reachability_used;
+            solved_execution_source_stitch_reachability_constrained =
+              promotion.stitch_reachability_constrained;
             solved_execution_source_maximum_adjustment_m =
               promotion.maximum_applied_adjustment_m;
+            solved_execution_source_maximum_unconstrained_ay_mps2 =
+              promotion.maximum_unconstrained_lateral_accel_mps2;
             if (promotion.promoted_trajectory.has_value()) {
               aligned_solved_execution =
                 std::move(promotion.promoted_trajectory.value());
@@ -24108,7 +24155,8 @@ private:
           "MPCC solved trajectory owns execution authority: target=%s, "
           "generation=%lu, side=%d, phase=%s, age=%.3f s, advance=%.2f m, "
           "qp_reserve=%.3f m, points=%zu, source=%s, dp_bridge=%d, "
-          "prefix_promoted=%d, trust_adjusted=%d/%.3f m, wp_id=%d",
+          "prefix_promoted=%d, trust_adjusted=%d/%.3f m, stitch=%d, "
+          "reachable=%d/%d, raw_ay=%.2f m/s2, wp_id=%d",
           overtake_line_state_.target_vehicle_id.c_str(),
           static_cast<unsigned long>(overtake_line_state_.mission_generation),
           overtake_line_state_.pass_side_sign, to_string(overtake_line_state_.phase),
@@ -24120,7 +24168,12 @@ private:
           solved_execution_bridge_active ? 1 : 0,
           solved_execution_source_promoted ? 1 : 0,
           solved_execution_source_trust_adjusted ? 1 : 0,
-          solved_execution_source_maximum_adjustment_m, model->wp_id);
+          solved_execution_source_maximum_adjustment_m,
+          solved_execution_source_stitch_active ? 1 : 0,
+          solved_execution_source_stitch_reachability_used ? 1 : 0,
+          solved_execution_source_stitch_reachability_constrained ? 1 : 0,
+          solved_execution_source_maximum_unconstrained_ay_mps2,
+          model->wp_id);
       } else {
         RCLCPP_INFO(
           rclcpp::get_logger("mpc_controller"),

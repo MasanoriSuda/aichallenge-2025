@@ -154,6 +154,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::StagewiseMpcCorridorBoundsReques
 using multi_purpose_mpc_ros::v2x_overtake_core::TargetBoundMpcGateRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonRearClearBoundsReleaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RearClearReturnDeferralHoldRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::ImminentRearClearPassHoldRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassCompletionRolloutSpeedRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorSample;
@@ -3809,6 +3810,99 @@ TEST(V2XOvertakeCoreSpeed, ReturnDeferralRetainsOnlyValidatedRearClearPass)
   EXPECT_FALSE(
     multi_purpose_mpc_ros::v2x_overtake_core::
     can_hold_pass_during_rear_clear_return_deferral(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, ImminentRearClearRetainsCommittedPassAuthority)
+{
+  ImminentRearClearPassHoldRequest request;
+  request.pass_phase = true;
+  request.side_by_side_committed = true;
+  request.forward_completion_latched = true;
+  request.future_replan_failure = true;
+  request.target_seen = true;
+  request.target_matches = true;
+  request.target_continuity_valid = true;
+  request.target_longitudinal_m = -1.50;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+  request.execution_corridor_blocked = false;
+  request.current_side_horizon_feasible = true;
+
+  EXPECT_TRUE(
+    multi_purpose_mpc_ros::v2x_overtake_core::
+    can_hold_pass_until_imminent_rear_clear(request));
+
+  request.predicted_body_footprint_sweep_separated = false;
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::v2x_overtake_core::
+    can_hold_pass_until_imminent_rear_clear(request));
+
+  request.fresh_forward_progress = true;
+  EXPECT_TRUE(
+    multi_purpose_mpc_ros::v2x_overtake_core::
+    can_hold_pass_until_imminent_rear_clear(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, ImminentRearClearNeverOverridesCurrentHardFault)
+{
+  ImminentRearClearPassHoldRequest request;
+  request.pass_phase = true;
+  request.side_by_side_committed = true;
+  request.forward_completion_latched = true;
+  request.future_replan_failure = true;
+  request.target_seen = true;
+  request.target_matches = true;
+  request.target_continuity_valid = true;
+  request.target_longitudinal_m = -1.93;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+  request.current_side_horizon_feasible = true;
+
+  request.wall_margin_blocked = true;
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::v2x_overtake_core::
+    can_hold_pass_until_imminent_rear_clear(request));
+  request.wall_margin_blocked = false;
+
+  request.emergency_front_risk = true;
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::v2x_overtake_core::
+    can_hold_pass_until_imminent_rear_clear(request));
+  request.emergency_front_risk = false;
+
+  request.current_side_horizon_feasible = false;
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::v2x_overtake_core::
+    can_hold_pass_until_imminent_rear_clear(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, ImminentRearClearRequiresRearwardCommittedTarget)
+{
+  ImminentRearClearPassHoldRequest request;
+  request.pass_phase = true;
+  request.side_by_side_committed = true;
+  request.forward_completion_latched = true;
+  request.future_replan_failure = true;
+  request.target_seen = true;
+  request.target_matches = true;
+  request.target_continuity_valid = true;
+  request.target_longitudinal_m = 0.10;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+  request.current_side_horizon_feasible = true;
+
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::v2x_overtake_core::
+    can_hold_pass_until_imminent_rear_clear(request));
+
+  request.target_longitudinal_m = -0.10;
+  request.forward_completion_latched = false;
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::v2x_overtake_core::
+    can_hold_pass_until_imminent_rear_clear(request));
 }
 
 TEST(V2XOvertakeCoreSpeed, RetainsRecentFeasibleRecedingHorizonForSameMission)

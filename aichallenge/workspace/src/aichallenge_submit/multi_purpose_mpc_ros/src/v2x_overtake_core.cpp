@@ -1878,6 +1878,28 @@ bool can_hold_pass_during_rear_clear_return_deferral(
          !request.overtake_forbidden;
 }
 
+bool can_hold_pass_until_imminent_rear_clear(
+  const ImminentRearClearPassHoldRequest & request) noexcept
+{
+  const bool rearward_target =
+    request.target_seen && request.target_matches &&
+    request.target_continuity_valid &&
+    std::isfinite(request.target_longitudinal_m) &&
+    request.target_longitudinal_m <= 0.0;
+  const bool completion_evidence =
+    request.predicted_body_footprint_sweep_separated ||
+    request.fresh_forward_progress;
+  return request.pass_phase && request.side_by_side_committed &&
+         request.forward_completion_latched && request.future_replan_failure &&
+         rearward_target && request.current_body_footprints_separated &&
+         request.footprint_prediction_valid && completion_evidence &&
+         !request.execution_corridor_blocked &&
+         request.current_side_horizon_feasible &&
+         !request.wall_physical_contact && !request.wall_margin_blocked &&
+         !request.wall_sample_unavailable && !request.emergency_front_risk &&
+         !request.solver_recovery_active && !request.overtake_forbidden;
+}
+
 RecedingHorizonWarmStartResolution resample_receding_horizon_warm_start(
   const RecedingHorizonWarmStartRequest & request) noexcept
 {

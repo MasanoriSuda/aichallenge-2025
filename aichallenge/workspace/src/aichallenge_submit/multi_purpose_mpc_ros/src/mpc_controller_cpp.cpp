@@ -28411,6 +28411,140 @@ private:
         clear_target_bound_execution_prefix_state();
       }
     }
+    const auto evaluate_current_side_pass_hold = [&](const double hold_distance_m) {
+        const double validated_hold_distance = std::clamp(
+          hold_distance_m, 0.5,
+          std::max(0.5, line_cfg.pass_horizon_hold_max_distance));
+        const std::vector<double> current_side_targets(
+          static_cast<std::size_t>(N), current_ey);
+        auto current_side_hold = evaluate_overtake_line_horizon(
+          ref_wp_id, N, lb, ub, current_ey, current_ey, 0.0, true,
+          validated_hold_distance, current_ey,
+          planning_wall_clearance, max_lateral_accel, speed_for_time, true,
+          std::nullopt, current_side_targets);
+        if (
+          !current_side_hold.execution_feasible() &&
+          min_wall_clearance + kEps < planning_wall_clearance)
+        {
+          current_side_hold = evaluate_overtake_line_horizon(
+            ref_wp_id, N, lb, ub, current_ey, current_ey, 0.0, true,
+            validated_hold_distance, current_ey,
+            min_wall_clearance, max_lateral_accel, speed_for_time, true,
+            std::nullopt, current_side_targets);
+        }
+        return current_side_hold;
+      };
+    const bool future_completion_replan_failure =
+      receding_horizon.hard_infeasible &&
+      (receding_horizon.hard_failure_kind ==
+      OvertakeRecedingHorizonFailureKind::Physical ||
+      receding_horizon.hard_failure_kind ==
+      OvertakeRecedingHorizonFailureKind::Target);
+    const bool rearward_pass_hold_candidate =
+      overtake_line_state_.phase == OvertakeLinePhase::Pass &&
+      !rear_clear_confirmed && future_completion_replan_failure &&
+      behavior_output.overtake_commit_stage ==
+      overtake_core::PassCommitStage::SideBySideCommitted &&
+      overtake_line_state_.pass_forward_completion_latched &&
+      locked_target_matches && locked_target_progress_continuous &&
+      !behavior_output.locked_target_position_jump &&
+      !locked_target_progress_rejected &&
+      std::isfinite(behavior_output.locked_target_longitudinal) &&
+      behavior_output.locked_target_longitudinal <= 0.0;
+    if (rearward_pass_hold_candidate) {
+      const double safe_separation_forward_progress =
+        std::isfinite(
+        overtake_line_state_.pass_horizon_safe_separation_start_target_longitudinal) &&
+        std::isfinite(
+        overtake_line_state_.pass_horizon_safe_separation_best_target_longitudinal) ?
+        std::max(
+        0.0,
+        overtake_line_state_.pass_horizon_safe_separation_start_target_longitudinal -
+        overtake_line_state_.pass_horizon_safe_separation_best_target_longitudinal) : 0.0;
+      const double safe_separation_progress_age_sec =
+        std::isfinite(
+        overtake_line_state_.pass_horizon_safe_separation_last_progress_sec) ?
+        std::max(
+        0.0,
+        now_sec -
+        overtake_line_state_.pass_horizon_safe_separation_last_progress_sec) :
+        std::numeric_limits<double>::infinity();
+      const bool fresh_forward_progress =
+        safe_separation_forward_progress >= 0.05 - kEps &&
+        safe_separation_progress_age_sec <=
+        line_cfg.safe_separation_progress_extension_fresh_sec + kEps;
+      const double remaining_rear_clear_distance_m = std::max(
+        0.0,
+        return_clear_distance + behavior_output.locked_target_longitudinal);
+      const double rear_clear_confirmation_distance_m =
+        std::max(0.0, current_speed_mps_) *
+        std::max(0.0, line_cfg.clear_confirm_sec);
+      const double imminent_rear_clear_hold_distance_m =
+        remaining_rear_clear_distance_m + rear_clear_confirmation_distance_m +
+        std::max(0.10, model->reference_path->resolution);
+      auto current_side_hold = evaluate_current_side_pass_hold(
+        imminent_rear_clear_hold_distance_m);
+      const bool imminent_rear_clear_hold_allowed =
+        overtake_core::can_hold_pass_until_imminent_rear_clear(
+        overtake_core::ImminentRearClearPassHoldRequest{
+          true,
+          true,
+          overtake_line_state_.pass_forward_completion_latched,
+          future_completion_replan_failure,
+          behavior_output.locked_target_seen,
+          locked_target_matches,
+          locked_target_progress_continuous && !locked_target_progress_rejected,
+          behavior_output.locked_target_longitudinal,
+          behavior_output.locked_target_current_body_footprints_separated,
+          behavior_output.locked_target_footprint_prediction_valid,
+          behavior_output.locked_target_predicted_body_footprint_sweep_separated,
+          fresh_forward_progress,
+          behavior_output.overtake_execution_corridor_blocked,
+          current_side_hold.execution_feasible(),
+          actual_wall_physical_contact,
+          actual_wall_margin_blocked,
+          actual_wall_sample_unavailable,
+          behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake,
+          overtake_solver_recovery_active_,
+          behavior_output.overtake_forbidden_wp});
+      if (imminent_rear_clear_hold_allowed) {
+        // Do not tear down progress-contouring and its warm start for the last
+        // centimetres of an already acquired pass. The current lateral line
+        // was revalidated above; the normal rear-clear debounce and Return
+        // preflight retain ownership on subsequent callbacks.
+        if (line_cfg.debug_log_enabled) {
+          RCLCPP_INFO(
+            rclcpp::get_logger("mpc_controller"),
+            "OvertakeLine imminent rear-clear Pass hold: target=%s, side=%d, "
+            "target_s=%.2f, hold=%.2f m, prediction_clear=%d, "
+            "fresh_progress=%d, failure=%s, wp_id=%d",
+            overtake_line_state_.target_vehicle_id.c_str(),
+            overtake_line_state_.pass_side_sign,
+            behavior_output.locked_target_longitudinal,
+            std::clamp(
+              imminent_rear_clear_hold_distance_m, 0.5,
+              std::max(0.5, line_cfg.pass_horizon_hold_max_distance)),
+            behavior_output.locked_target_predicted_body_footprint_sweep_separated ? 1 : 0,
+            fresh_forward_progress ? 1 : 0,
+            overtake_receding_horizon_failure_kind_name(
+              receding_horizon.hard_failure_kind),
+            model->wp_id);
+        }
+        receding_horizon.active = true;
+        receding_horizon.fallback = true;
+        receding_horizon.hard_infeasible = false;
+        receding_horizon.last_feasible_hold_active = true;
+        receding_horizon.velocity_limit_mps =
+          std::numeric_limits<double>::infinity();
+        receding_horizon.hard_bound_failure_index = -1;
+        receding_horizon.hard_failure_kind =
+          OvertakeRecedingHorizonFailureKind::None;
+        receding_horizon.hard_bound_failure_kind.clear();
+        receding_horizon.fallback_reason =
+          "rearward target; retained Pass until rear-clear confirmation";
+        receding_horizon.horizon = std::move(current_side_hold);
+      }
+    }
     if (
       overtake_line_state_.phase == OvertakeLinePhase::Pass &&
       rear_clear_confirmed && completed_pass_ready_to_return_before_margin_recovery &&
@@ -28432,23 +28566,8 @@ private:
       // Pass authority while the live Return preflight retries next cycle.
       // This is admitted only after rear-clear and only through the same wall,
       // footprint and lateral-acceleration validation used by execution.
-      const std::vector<double> current_side_targets(
-        static_cast<std::size_t>(N), current_ey);
-      auto current_side_hold = evaluate_overtake_line_horizon(
-        ref_wp_id, N, lb, ub, current_ey, current_ey, 0.0, true,
-        std::max(0.5, line_cfg.pass_horizon_hold_max_distance), current_ey,
-        planning_wall_clearance, max_lateral_accel, speed_for_time, true,
-        std::nullopt, current_side_targets);
-      if (
-        !current_side_hold.execution_feasible() &&
-        min_wall_clearance + kEps < planning_wall_clearance)
-      {
-        current_side_hold = evaluate_overtake_line_horizon(
-          ref_wp_id, N, lb, ub, current_ey, current_ey, 0.0, true,
-          std::max(0.5, line_cfg.pass_horizon_hold_max_distance), current_ey,
-          min_wall_clearance, max_lateral_accel, speed_for_time, true,
-          std::nullopt, current_side_targets);
-      }
+      auto current_side_hold = evaluate_current_side_pass_hold(
+        line_cfg.pass_horizon_hold_max_distance);
       const bool current_side_hold_allowed =
         overtake_core::can_hold_pass_during_rear_clear_return_deferral(
         overtake_core::RearClearReturnDeferralHoldRequest{

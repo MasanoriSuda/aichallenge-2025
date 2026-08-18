@@ -1223,6 +1223,37 @@ struct RearClearReturnDeferralHoldRequest
 bool can_hold_pass_during_rear_clear_return_deferral(
   const RearClearReturnDeferralHoldRequest & request) noexcept;
 
+struct ImminentRearClearPassHoldRequest
+{
+  bool pass_phase{false};
+  bool side_by_side_committed{false};
+  bool forward_completion_latched{false};
+  bool future_replan_failure{false};
+  bool target_seen{false};
+  bool target_matches{false};
+  bool target_continuity_valid{false};
+  double target_longitudinal_m{std::numeric_limits<double>::infinity()};
+  bool current_body_footprints_separated{false};
+  bool footprint_prediction_valid{false};
+  bool predicted_body_footprint_sweep_separated{false};
+  bool fresh_forward_progress{false};
+  bool execution_corridor_blocked{true};
+  bool current_side_horizon_feasible{false};
+  bool wall_physical_contact{false};
+  bool wall_margin_blocked{false};
+  bool wall_sample_unavailable{false};
+  bool emergency_front_risk{false};
+  bool solver_recovery_active{false};
+  bool overtake_forbidden{false};
+};
+
+/// Keep Pass authority while an already committed, rearward target crosses the
+/// final rear-clear threshold. This only converts a future target/physical
+/// replan failure into a short, freshly wall-validated current-side hold; live
+/// wall, front-risk and solver faults retain their normal priority.
+bool can_hold_pass_until_imminent_rear_clear(
+  const ImminentRearClearPassHoldRequest & request) noexcept;
+
 struct RecedingHorizonWarmStartRequest
 {
   double forward_progress_m{};

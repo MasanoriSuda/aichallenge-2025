@@ -208,6 +208,51 @@ TEST(MpccProgress, DoesNotStartRefinementAfterDeadline)
     RtiRefinementDecision::SkipDeadline);
 }
 
+TEST(MpccProgress, KeepsFirstFeasibleSolutionDuringColdEntryLoad)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::RtiRefinementDecision;
+  multi_purpose_mpc_ros::mpcc_progress::RtiRefinementRequest request;
+  request.progress_mode_active = true;
+  request.configured_iterations = 2;
+  request.cold_load_active = true;
+  request.minimum_lateral_bound_reserve_m = 0.0;
+  request.minimum_bound_reserve_threshold_m = 0.12;
+  request.lateral_defect_threshold_m = 0.08;
+  request.heading_defect_threshold_rad = 0.04;
+  request.curvature_threshold_radpm = 0.08;
+  request.elapsed_ms = 2.0;
+  request.refinement_start_deadline_ms = 12.0;
+  EXPECT_EQ(
+    multi_purpose_mpc_ros::mpcc_progress::resolve_rti_refinement(request),
+    RtiRefinementDecision::SkipColdLoad);
+
+  request.cold_load_active = false;
+  EXPECT_EQ(
+    multi_purpose_mpc_ros::mpcc_progress::resolve_rti_refinement(request),
+    RtiRefinementDecision::Refine);
+}
+
+TEST(MpccProgress, ClassifiesOnlyBoundedEntryOrWallCacheLoadAsCold)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::RtiColdLoadRequest;
+  using multi_purpose_mpc_ros::mpcc_progress::rti_refinement_cold_load_active;
+  RtiColdLoadRequest request;
+  request.progress_execution_context_active = true;
+  request.now_sec = 10.20;
+  request.mission_start_sec = 10.0;
+  request.cold_entry_skip_sec = 0.30;
+  request.wall_cache_miss_skip_threshold = 1U;
+  EXPECT_TRUE(rti_refinement_cold_load_active(request));
+
+  request.now_sec = 10.31;
+  EXPECT_FALSE(rti_refinement_cold_load_active(request));
+  request.wall_cache_miss_count = 1U;
+  EXPECT_TRUE(rti_refinement_cold_load_active(request));
+
+  request.progress_execution_context_active = false;
+  EXPECT_FALSE(rti_refinement_cold_load_active(request));
+}
+
 TEST(MpccProgress, ExtractsBoundedExecutionTrajectoryFromQpPrimal)
 {
   // N=2: 3 states x 3 stages followed by 2 inputs x 2 stages.

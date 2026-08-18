@@ -2,6 +2,7 @@
 
 #include <Eigen/Dense>
 
+#include <cstddef>
 #include <limits>
 #include <optional>
 #include <vector>
@@ -29,6 +30,8 @@ struct Config
   double refinement_heading_defect_rad{0.04};
   double refinement_curvature_radpm{0.08};
   double refinement_start_deadline_ms{12.0};
+  double refinement_cold_entry_skip_sec{0.30};
+  std::size_t refinement_wall_cache_miss_skip_threshold{1U};
 };
 
 struct StageDistanceResolution
@@ -113,11 +116,27 @@ std::optional<Eigen::VectorXd> damp_rti_sqp_iterate(
   const Eigen::VectorXd & linearization_point,
   const Eigen::VectorXd & qp_solution, double alpha) noexcept;
 
+struct RtiColdLoadRequest
+{
+  bool progress_execution_context_active{false};
+  double now_sec{};
+  double mission_start_sec{std::numeric_limits<double>::quiet_NaN()};
+  double cold_entry_skip_sec{};
+  std::size_t wall_cache_miss_count{};
+  std::size_t wall_cache_miss_skip_threshold{};
+};
+
+/// Identify the bounded startup/cache-rebuild cycles where a second QP solve
+/// should yield to the first feasible result. A zero duration or miss
+/// threshold disables only that trigger.
+bool rti_refinement_cold_load_active(const RtiColdLoadRequest & request) noexcept;
+
 struct RtiRefinementRequest
 {
   bool progress_mode_active{false};
   int configured_iterations{1};
   bool conditional_refinement_enabled{true};
+  bool cold_load_active{false};
   double minimum_lateral_bound_reserve_m{
     std::numeric_limits<double>::infinity()};
   double lateral_defect_m{};
@@ -135,6 +154,7 @@ enum class RtiRefinementDecision
 {
   Disabled,
   Refine,
+  SkipColdLoad,
   SkipCondition,
   SkipDeadline,
   Invalid,

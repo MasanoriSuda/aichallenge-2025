@@ -1251,6 +1251,8 @@ struct OvertakeLineConfig
   bool receding_horizon_continuity_enabled{true};
   double receding_horizon_continuity_lease_sec{0.30};
   double receding_horizon_refresh_interval_sec{0.10};
+  bool receding_horizon_prearm_wall_cache_enabled{true};
+  int receding_horizon_prearm_wall_cache_samples_per_cycle{4};
   bool receding_horizon_target_bound_prefix_enabled{false};
   double receding_horizon_target_bound_prefix_max_sec{1.50};
   double receding_horizon_target_bound_prefix_max_distance{8.0};
@@ -4723,6 +4725,8 @@ struct MpcProblem
   std::vector<double> progress_execution_path_distance_m;
   std::vector<double> progress_execution_lateral_lower_m;
   std::vector<double> progress_execution_lateral_upper_m;
+  bool progress_refinement_cold_load_active{false};
+  std::size_t progress_wall_cache_miss_count{};
 };
 
 struct SolvedMpccExecutionTrajectory
@@ -4785,6 +4789,7 @@ struct MpcRtiSqpTelemetryWindow
   std::uint64_t refinement_success_count{};
   std::uint64_t first_feasible_fallback_count{};
   std::uint64_t relinearization_reject_count{};
+  std::uint64_t cold_load_skip_count{};
   std::uint64_t condition_skip_count{};
   std::uint64_t deadline_skip_count{};
   std::uint64_t invalid_decision_count{};
@@ -13590,7 +13595,11 @@ struct MPC
       }
     }
 
+    const std::uint64_t wall_cache_miss_count_before_problem =
+      physical_wall_envelope_cache_miss_count_;
     auto behavior_output = evaluate_v2x_behavior(ref_wp_id, N, lb, ub, now_sec);
+    prewarm_overtake_entry_wall_cache(
+      behavior_output, ref_wp_id, N, lb, ub, now_sec);
     const bool low_speed_relevant_vehicle =
       behavior_output.has_front_vehicle || behavior_output.has_side_vehicle ||
       behavior_output.has_low_speed_clearance_vehicle;
@@ -14603,6 +14612,22 @@ struct MPC
         progress_execution_lateral_upper_m.push_back(ub[i]);
       }
     }
+    const std::uint64_t wall_cache_miss_count_after_problem =
+      physical_wall_envelope_cache_miss_count_;
+    const std::size_t progress_wall_cache_miss_count =
+      static_cast<std::size_t>(
+      wall_cache_miss_count_after_problem >= wall_cache_miss_count_before_problem ?
+      wall_cache_miss_count_after_problem - wall_cache_miss_count_before_problem :
+      wall_cache_miss_count_after_problem);
+    const bool progress_refinement_cold_load_active =
+      mpcc_progress::rti_refinement_cold_load_active(
+      mpcc_progress::RtiColdLoadRequest{
+        progress_execution_context_active,
+        now_sec,
+        overtake_line_state_.mission_total_start_sec,
+        cfg.progress_contouring.refinement_cold_entry_skip_sec,
+        progress_wall_cache_miss_count,
+        cfg.progress_contouring.refinement_wall_cache_miss_skip_threshold});
 
     return MpcProblem{
       q, l, u, P, A_full, N, tracking_wp_id, preview_wp_id, ref_wp_id,
@@ -14622,7 +14647,9 @@ struct MPC
       progress_execution_context_active ? overtake_mission_progress_traveled() : 0.0,
       std::move(progress_execution_path_distance_m),
       std::move(progress_execution_lateral_lower_m),
-      std::move(progress_execution_lateral_upper_m)};
+      std::move(progress_execution_lateral_upper_m),
+      progress_refinement_cold_load_active,
+      progress_wall_cache_miss_count};
   }
 
   void record_osqp_telemetry(
@@ -14799,6 +14826,8 @@ struct MPC
     window.refinement_success_count += refinement_succeeded ? 1U : 0U;
     window.first_feasible_fallback_count += first_feasible_fallback ? 1U : 0U;
     window.relinearization_reject_count += relinearization_rejected ? 1U : 0U;
+    window.cold_load_skip_count +=
+      refinement_decision == mpcc_progress::RtiRefinementDecision::SkipColdLoad ? 1U : 0U;
     window.condition_skip_count +=
       refinement_decision == mpcc_progress::RtiRefinementDecision::SkipCondition ? 1U : 0U;
     window.deadline_skip_count +=
@@ -14823,13 +14852,15 @@ struct MPC
         rclcpp::get_logger("mpc_controller"),
         "MPCC RTI-SQP: cycles=%zu, attempts=%zu, refined=%zu, "
         "first_feasible=%zu, relinearize_reject=%zu, skip_condition=%zu, "
-        "skip_deadline=%zu, invalid=%zu, iterations=%d, alpha=%.2f",
+        "skip_cold_load=%zu, skip_deadline=%zu, invalid=%zu, "
+        "iterations=%d, alpha=%.2f",
         static_cast<std::size_t>(window.progress_cycles),
         static_cast<std::size_t>(window.refinement_attempt_count),
         static_cast<std::size_t>(window.refinement_success_count),
         static_cast<std::size_t>(window.first_feasible_fallback_count),
         static_cast<std::size_t>(window.relinearization_reject_count),
         static_cast<std::size_t>(window.condition_skip_count),
+        static_cast<std::size_t>(window.cold_load_skip_count),
         static_cast<std::size_t>(window.deadline_skip_count),
         static_cast<std::size_t>(window.invalid_decision_count),
         cfg.progress_contouring.rti_sqp_iterations,
@@ -14987,6 +15018,7 @@ struct MPC
           true,
           cfg.progress_contouring.rti_sqp_iterations,
           cfg.progress_contouring.conditional_refinement_enabled,
+          problem.progress_refinement_cold_load_active,
           minimum_lateral_bound_reserve_m,
           lateral_defect_m,
           heading_defect_rad,
@@ -15882,6 +15914,17 @@ struct MPC
   std::uint64_t overtake_receding_horizon_refresh_count_{0U};
   std::uint64_t overtake_receding_horizon_reuse_count_{0U};
   double overtake_receding_horizon_refresh_telemetry_last_log_sec_{
+    -std::numeric_limits<double>::infinity()};
+  std::string overtake_entry_wall_prewarm_target_id_;
+  int overtake_entry_wall_prewarm_side_sign_{0};
+  double overtake_entry_wall_prewarm_goal_lateral_m_{
+    std::numeric_limits<double>::quiet_NaN()};
+  std::size_t overtake_entry_wall_prewarm_cursor_{0U};
+  std::uint64_t overtake_entry_wall_prewarm_cycle_count_{0U};
+  std::uint64_t overtake_entry_wall_prewarm_stage_count_{0U};
+  std::uint64_t overtake_entry_wall_prewarm_request_count_{0U};
+  std::uint64_t overtake_entry_wall_prewarm_miss_count_{0U};
+  double overtake_entry_wall_prewarm_last_log_sec_{
     -std::numeric_limits<double>::infinity()};
   double mpcc_lite_shadow_last_evaluation_sec_{
     -std::numeric_limits<double>::infinity()};
@@ -18404,6 +18447,177 @@ private:
       evaluation.stage_corridor_lower_ey.size() == static_cast<std::size_t>(N) &&
       evaluation.stage_corridor_upper_ey.size() == static_cast<std::size_t>(N);
     return evaluation;
+  }
+
+  void prewarm_overtake_entry_wall_cache(
+    const V2XBehaviorOutput & behavior_output,
+    const int ref_wp_id, const int N, const Eigen::VectorXd & lb,
+    const Eigen::VectorXd & ub, const double now_sec)
+  {
+    const auto & line_cfg = cfg.v2x_behavior.overtake_line;
+    const bool prewarm_entry_active =
+      behavior_output.overtake_entry_prearm_active ||
+      behavior_output.validated_overtake_entry_immediate_execution;
+    const bool candidate_available =
+      behavior_output.overtake_selected_mission.has_value() &&
+      behavior_output.overtake_selected_mission->feasible &&
+      behavior_output.overtake_selected_mission->pass_side_sign != 0;
+    if (
+      !line_cfg.receding_horizon_enabled ||
+      !line_cfg.receding_horizon_prearm_wall_cache_enabled ||
+      mpcc_lite_async_worker_context_ ||
+      overtake_line_state_.phase != OvertakeLinePhase::Idle ||
+      !prewarm_entry_active || !candidate_available ||
+      behavior_output.target_vehicle_id.empty() ||
+      overtake_static_wall_grid_ == nullptr ||
+      !overtake_static_wall_footprint_.valid() ||
+      N < 2 || lb.size() < N || ub.size() < N)
+    {
+      overtake_entry_wall_prewarm_target_id_.clear();
+      overtake_entry_wall_prewarm_side_sign_ = 0;
+      overtake_entry_wall_prewarm_goal_lateral_m_ =
+        std::numeric_limits<double>::quiet_NaN();
+      overtake_entry_wall_prewarm_cursor_ = 0U;
+      return;
+    }
+
+    const auto & candidate = behavior_output.overtake_selected_mission.value();
+    const auto pass_plan = overtake_core::build_overtake_pass_plan(
+      overtake_core::OvertakePassPlanRequest{
+        candidate, model->spatial_state.e_y, 0.0});
+    if (!pass_plan.valid) {
+      return;
+    }
+    const bool identity_changed =
+      behavior_output.target_vehicle_id != overtake_entry_wall_prewarm_target_id_ ||
+      candidate.pass_side_sign != overtake_entry_wall_prewarm_side_sign_ ||
+      !std::isfinite(overtake_entry_wall_prewarm_goal_lateral_m_) ||
+      std::abs(
+        candidate.goal_lateral_m - overtake_entry_wall_prewarm_goal_lateral_m_) > 0.02;
+    if (identity_changed) {
+      overtake_entry_wall_prewarm_target_id_ = behavior_output.target_vehicle_id;
+      overtake_entry_wall_prewarm_side_sign_ = candidate.pass_side_sign;
+      overtake_entry_wall_prewarm_goal_lateral_m_ = candidate.goal_lateral_m;
+      overtake_entry_wall_prewarm_cursor_ = 0U;
+    }
+
+    std::vector<double> path_distances(static_cast<std::size_t>(N), 0.0);
+    std::vector<double> lateral_targets(static_cast<std::size_t>(N), 0.0);
+    for (int i = 0; i < N; ++i) {
+      const std::size_t index = static_cast<std::size_t>(i);
+      path_distances[index] = horizon_path_distance_to_index(ref_wp_id, index);
+      auto path_request = pass_plan.path;
+      path_request.path_distance_m = path_distances[index];
+      const auto path_point = overtake_core::resolve_overtake_mission_path(path_request);
+      if (!path_point.valid || !std::isfinite(path_point.lateral_target_m)) {
+        return;
+      }
+      lateral_targets[index] = path_point.lateral_target_m;
+    }
+    const auto dp_reference = overtake_core::resolve_frenet_dp_execution_reference(
+      overtake_core::FrenetDpExecutionReferenceRequest{
+        candidate.frenet_dp_corridor_feasible,
+        0.0,
+        2U,
+        candidate.frenet_dp_path_distances_m,
+        candidate.frenet_dp_lateral_path_m,
+        path_distances,
+        lateral_targets});
+    if (dp_reference.valid && dp_reference.active) {
+      lateral_targets = dp_reference.lateral_targets_m;
+    }
+
+    const std::size_t sample_count = std::min(
+      static_cast<std::size_t>(N),
+      static_cast<std::size_t>(std::max(
+        1, line_cfg.receding_horizon_prearm_wall_cache_samples_per_cycle)));
+    const double hard_clearance = std::max(0.0, line_cfg.min_wall_clearance);
+    const double planning_clearance = std::max(
+      hard_clearance, behavior_output.robust_wall_planning_clearance);
+    const double sample_step = std::clamp(
+      0.5 * overtake_static_wall_grid_->resolution_m, 0.02, 0.10);
+    const std::uint64_t miss_count_before = physical_wall_envelope_cache_miss_count_;
+    std::uint64_t request_count = 0U;
+    std::uint64_t warmed_stage_count = 0U;
+    for (std::size_t sample = 0U; sample < sample_count; ++sample) {
+      const std::size_t index =
+        (overtake_entry_wall_prewarm_cursor_ + sample) % static_cast<std::size_t>(N);
+      const int i = static_cast<int>(index);
+      const double previous_lateral = index == 0U ?
+        model->spatial_state.e_y : lateral_targets[index - 1U];
+      const double previous_distance = index == 0U ? 0.0 : path_distances[index - 1U];
+      const double heading_offset =
+        overtake_core::resolve_overtake_line_heading_reference(
+        overtake_core::OvertakeLineHeadingReferenceRequest{
+          previous_lateral,
+          lateral_targets[index],
+          path_distances[index] - previous_distance,
+          model->reference_path->get_waypoint(ref_wp_id + i).kappa});
+      const auto & waypoint = model->reference_path->get_waypoint(ref_wp_id + i);
+      const recovery_footprint::Pose2D reference_pose{
+        waypoint.x, waypoint.y, waypoint.psi};
+      const auto warm_clearance = [&] (const double clearance) {
+          const double lower = lb[i] + clearance;
+          const double upper = ub[i] - clearance;
+          if (
+            !std::isfinite(lower) || !std::isfinite(upper) ||
+            upper < lower || !std::isfinite(lateral_targets[index]) ||
+            !std::isfinite(heading_offset))
+          {
+            return false;
+          }
+          (void)find_cached_physical_wall_envelope(
+            ref_wp_id + i,
+            reference_pose,
+            lower,
+            upper,
+            lower,
+            upper,
+            std::clamp(lateral_targets[index], lower, upper),
+            heading_offset,
+            clearance,
+            sample_step);
+          ++request_count;
+          return true;
+        };
+      const bool hard_warmed = warm_clearance(hard_clearance);
+      if (planning_clearance > hard_clearance + 1e-6) {
+        (void)warm_clearance(planning_clearance);
+      }
+      warmed_stage_count += hard_warmed ? 1U : 0U;
+    }
+    overtake_entry_wall_prewarm_cursor_ =
+      (overtake_entry_wall_prewarm_cursor_ + sample_count) %
+      static_cast<std::size_t>(N);
+    ++overtake_entry_wall_prewarm_cycle_count_;
+    overtake_entry_wall_prewarm_stage_count_ += warmed_stage_count;
+    overtake_entry_wall_prewarm_request_count_ += request_count;
+    const std::uint64_t miss_count_after = physical_wall_envelope_cache_miss_count_;
+    overtake_entry_wall_prewarm_miss_count_ +=
+      miss_count_after >= miss_count_before ?
+      miss_count_after - miss_count_before : miss_count_after;
+    if (
+      line_cfg.debug_log_enabled && std::isfinite(now_sec) &&
+      (!std::isfinite(overtake_entry_wall_prewarm_last_log_sec_) ||
+      now_sec < overtake_entry_wall_prewarm_last_log_sec_ ||
+      now_sec - overtake_entry_wall_prewarm_last_log_sec_ >= 1.0))
+    {
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"),
+        "Overtake wall prewarm: cycles=%zu, stages=%zu, requests=%zu, "
+        "misses=%zu, cursor=%zu/%d, target=%s, side=%d",
+        static_cast<std::size_t>(overtake_entry_wall_prewarm_cycle_count_),
+        static_cast<std::size_t>(overtake_entry_wall_prewarm_stage_count_),
+        static_cast<std::size_t>(overtake_entry_wall_prewarm_request_count_),
+        static_cast<std::size_t>(overtake_entry_wall_prewarm_miss_count_),
+        overtake_entry_wall_prewarm_cursor_, N,
+        behavior_output.target_vehicle_id.c_str(), candidate.pass_side_sign);
+      overtake_entry_wall_prewarm_cycle_count_ = 0U;
+      overtake_entry_wall_prewarm_stage_count_ = 0U;
+      overtake_entry_wall_prewarm_request_count_ = 0U;
+      overtake_entry_wall_prewarm_miss_count_ = 0U;
+      overtake_entry_wall_prewarm_last_log_sec_ = now_sec;
+    }
   }
 
   recovery_footprint::LateralClearIntervalResult
@@ -31988,6 +32202,14 @@ Config load_config(const std::string & path)
   progress_contouring.refinement_start_deadline_ms =
     mpc["progress_contouring_refinement_start_deadline_ms"] ?
     mpc["progress_contouring_refinement_start_deadline_ms"].as<double>() : 12.0;
+  progress_contouring.refinement_cold_entry_skip_sec =
+    mpc["progress_contouring_refinement_cold_entry_skip_sec"] ?
+    mpc["progress_contouring_refinement_cold_entry_skip_sec"].as<double>() : 0.30;
+  progress_contouring.refinement_wall_cache_miss_skip_threshold =
+    static_cast<std::size_t>(std::max(
+      0,
+      mpc["progress_contouring_refinement_wall_cache_miss_skip_threshold"] ?
+      mpc["progress_contouring_refinement_wall_cache_miss_skip_threshold"].as<int>() : 1));
   if (!mpcc_progress::resolve_progress_cost(0.0, false, progress_contouring).has_value()) {
     throw std::runtime_error(
             "mpc.progress_contouring_* values must be finite and within range");
@@ -32372,6 +32594,15 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_receding_horizon_refresh_interval_sec"] ?
     mpc["v2x_overtake_receding_horizon_refresh_interval_sec"].as<double>() : 0.10);
+  cfg.mpc.v2x_behavior.overtake_line.receding_horizon_prearm_wall_cache_enabled =
+    mpc["v2x_overtake_receding_horizon_prearm_wall_cache_enabled"] ?
+    mpc["v2x_overtake_receding_horizon_prearm_wall_cache_enabled"].as<bool>() : true;
+  cfg.mpc.v2x_behavior.overtake_line.
+  receding_horizon_prearm_wall_cache_samples_per_cycle = std::max(
+    1,
+    mpc["v2x_overtake_receding_horizon_prearm_wall_cache_samples_per_cycle"] ?
+    mpc["v2x_overtake_receding_horizon_prearm_wall_cache_samples_per_cycle"].as<int>() :
+    4);
   cfg.mpc.v2x_behavior.overtake_line.receding_horizon_target_bound_prefix_enabled =
     mpc["v2x_overtake_receding_horizon_target_bound_prefix_enabled"] ?
     mpc["v2x_overtake_receding_horizon_target_bound_prefix_enabled"].as<bool>() : false;
@@ -34410,7 +34641,7 @@ public:
       "Progress-contouring MPCC: %s, scope=%s, lag=%.1f/%.1f, "
       "reward=%.1f/%.1f, trust=-%.1f/+%.1f m, rti_sqp=%d@%.2f, "
       "conditional=%s/reserve<=%.2f m/defect>=%.2f m/%.3f rad/"
-      "curvature>=%.3f rad/m/deadline=%.1f ms",
+      "curvature>=%.3f rad/m/deadline=%.1f ms/cold<=%.2f s/wall_miss>=%zu",
       mpc_cfg_.progress_contouring_mpcc_enabled ? "enabled" : "disabled",
       mpc_cfg_.progress_contouring_mpcc_overtake_only ? "overtake" : "all",
       mpc_cfg_.progress_contouring.lag_weight,
@@ -34427,7 +34658,9 @@ public:
       mpc_cfg_.progress_contouring.refinement_lateral_defect_m,
       mpc_cfg_.progress_contouring.refinement_heading_defect_rad,
       mpc_cfg_.progress_contouring.refinement_curvature_radpm,
-      mpc_cfg_.progress_contouring.refinement_start_deadline_ms);
+      mpc_cfg_.progress_contouring.refinement_start_deadline_ms,
+      mpc_cfg_.progress_contouring.refinement_cold_entry_skip_sec,
+      mpc_cfg_.progress_contouring.refinement_wall_cache_miss_skip_threshold);
     setup_parameters_callback();
     setup_pub_sub();
     if (ref_vel_config_path_.has_value()) {
@@ -35003,12 +35236,16 @@ public:
       RCLCPP_INFO(
         get_logger(),
         "V2X receding-horizon encounter prediction: base=%.2f s, max=%.2f s, "
-        "longitudinal_buffer=%.2f m",
+        "longitudinal_buffer=%.2f m, prearm_wall_cache=%s/%d stages",
         mpc_cfg_.v2x_gap.prediction_time,
         mpc_cfg_.v2x_behavior.overtake_line
         .receding_horizon_encounter_prediction_max_sec,
         mpc_cfg_.v2x_behavior.overtake_line
-        .receding_horizon_target_longitudinal_buffer);
+        .receding_horizon_target_longitudinal_buffer,
+        mpc_cfg_.v2x_behavior.overtake_line
+        .receding_horizon_prearm_wall_cache_enabled ? "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line
+        .receding_horizon_prearm_wall_cache_samples_per_cycle);
       RCLCPP_INFO(
         get_logger(),
         "V2X target-bound execution prefix: %s, Pass=%.2f s/%.2f m, "

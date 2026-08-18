@@ -349,6 +349,10 @@ mpc:
   progress_contouring_refinement_heading_defect_rad: 0.04
   progress_contouring_refinement_curvature_radpm: 0.08
   progress_contouring_refinement_start_deadline_ms: 12.0
+  # Keep the first feasible QP during Mission cold start or a fresh physical-wall scan.
+  # This protects the 40 Hz callback without reducing steady-state replanning frequency.
+  progress_contouring_refinement_cold_entry_skip_sec: 0.30
+  progress_contouring_refinement_wall_cache_miss_skip_threshold: 1
   # Keep ego course progress on the same hairpin branch after contact. Reacquire globally only
   # after the complete local window is farther than the lost threshold.
   waypoint_local_association_enabled: true
@@ -831,6 +835,10 @@ mpc:
   v2x_overtake_receding_horizon_continuity_enabled: true # let the latest feasible same-Mission horizon own brief planner/V2X gaps
   v2x_overtake_receding_horizon_continuity_lease_sec: 0.30 # [s] bounded; hard wall/emergency/solver faults still revoke immediately
   v2x_overtake_receding_horizon_refresh_interval_sec: 0.10 # [s] exact-WP/context reuse only; hard faults force an immediate refresh
+  # Spread physical-wall envelope construction across entry pre-arm cycles.
+  # Immediate entries remain protected by the first-feasible RTI policy.
+  v2x_overtake_receding_horizon_prearm_wall_cache_enabled: true
+  v2x_overtake_receding_horizon_prearm_wall_cache_samples_per_cycle: 4
   # If only the moving-target bounds reject a Pass horizon, retain the live
   # physically validated same-side prefix while re-optimizing. The cumulative
   # budget is not rearmed by a one-cycle feasible result.

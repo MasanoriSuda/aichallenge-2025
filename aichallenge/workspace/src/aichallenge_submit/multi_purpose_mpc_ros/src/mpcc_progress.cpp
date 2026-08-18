@@ -41,7 +41,9 @@ bool finite_config(const Config & config) noexcept
     std::isfinite(config.refinement_curvature_radpm) &&
     config.refinement_curvature_radpm >= 0.0 &&
     std::isfinite(config.refinement_start_deadline_ms) &&
-    config.refinement_start_deadline_ms > 0.0;
+    config.refinement_start_deadline_ms > 0.0 &&
+    std::isfinite(config.refinement_cold_entry_skip_sec) &&
+    config.refinement_cold_entry_skip_sec >= 0.0;
 }
 
 }  // namespace
@@ -259,6 +261,27 @@ std::optional<Eigen::VectorXd> damp_rti_sqp_iterate(
   return result;
 }
 
+bool rti_refinement_cold_load_active(const RtiColdLoadRequest & request) noexcept
+{
+  if (
+    !request.progress_execution_context_active ||
+    !std::isfinite(request.cold_entry_skip_sec) ||
+    request.cold_entry_skip_sec < 0.0)
+  {
+    return false;
+  }
+  const bool cold_entry_active =
+    request.cold_entry_skip_sec > 0.0 &&
+    std::isfinite(request.now_sec) &&
+    std::isfinite(request.mission_start_sec) &&
+    request.now_sec >= request.mission_start_sec &&
+    request.now_sec - request.mission_start_sec <= request.cold_entry_skip_sec + 1e-9;
+  const bool cold_wall_cache_load =
+    request.wall_cache_miss_skip_threshold > 0U &&
+    request.wall_cache_miss_count >= request.wall_cache_miss_skip_threshold;
+  return cold_entry_active || cold_wall_cache_load;
+}
+
 RtiRefinementDecision resolve_rti_refinement(
   const RtiRefinementRequest & request) noexcept
 {
@@ -285,6 +308,9 @@ RtiRefinementDecision resolve_rti_refinement(
     request.refinement_start_deadline_ms <= 0.0)
   {
     return RtiRefinementDecision::Invalid;
+  }
+  if (request.cold_load_active) {
+    return RtiRefinementDecision::SkipColdLoad;
   }
   if (request.elapsed_ms >= request.refinement_start_deadline_ms) {
     return RtiRefinementDecision::SkipDeadline;

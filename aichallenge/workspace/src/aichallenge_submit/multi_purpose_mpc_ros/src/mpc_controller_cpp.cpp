@@ -1258,6 +1258,9 @@ struct OvertakeLineConfig
   double receding_horizon_target_bound_prefix_max_distance{8.0};
   double receding_horizon_target_bound_shiftout_prefix_max_sec{0.35};
   double receding_horizon_target_bound_shiftout_prefix_max_distance{2.0};
+  double receding_horizon_last_solved_prefix_max_age_sec{0.75};
+  double receding_horizon_target_bound_solved_prefix_max_sec{0.75};
+  double receding_horizon_target_bound_solved_prefix_max_distance{4.0};
   double receding_horizon_target_bound_prefix_clear_stable_sec{0.20};
   bool receding_horizon_target_bound_prefix_progress_extension_enabled{true};
   double receding_horizon_target_bound_prefix_progress_fresh_sec{0.75};
@@ -2461,6 +2464,7 @@ struct OvertakeLineState
   double pass_horizon_fallback_start_distance{0.0};
   bool target_bound_execution_replan_hold_active{false};
   bool target_bound_execution_replan_prefix_executing{false};
+  bool target_bound_execution_replan_solved_prefix_active{false};
   double target_bound_execution_replan_hold_start_sec{
     std::numeric_limits<double>::quiet_NaN()};
   double target_bound_execution_replan_hold_start_distance{0.0};
@@ -4750,6 +4754,12 @@ struct AlignedMpccExecutionTrajectory
   double advanced_distance_m{};
   double minimum_qp_bound_reserve_m{};
   std::vector<double> lateral_m;
+};
+
+struct PhysicallyValidatedMpccExecutionTrajectory
+{
+  AlignedMpccExecutionTrajectory trajectory;
+  bool last_feasible_used{false};
 };
 
 struct ProgressContouringMpcPreparation
@@ -15173,12 +15183,15 @@ struct MPC
     // The solution is physically revalidated against the current wall map on
     // every authority use.  A short lease bridges one missed extraction or
     // one RTI-SQP cycle without turning this into an open-loop trajectory.
-    constexpr double kMaximumSolutionAgeSec = 0.35;
+    const double maximum_solution_age_sec = std::max(
+      0.0,
+      cfg.v2x_behavior.overtake_line
+      .receding_horizon_last_solved_prefix_max_age_sec);
     reject_reason.clear();
     const double age_sec = now_sec - trajectory.solved_sec;
     if (
       !std::isfinite(now_sec) || !std::isfinite(age_sec) || age_sec < 0.0 ||
-      age_sec > kMaximumSolutionAgeSec)
+      age_sec > maximum_solution_age_sec)
     {
       reject_reason = "solved trajectory stale";
       return std::nullopt;
@@ -15334,6 +15347,61 @@ struct MPC
     }
     reject_reason = "physical solution horizon accepted";
     return true;
+  }
+
+  std::optional<PhysicallyValidatedMpccExecutionTrajectory>
+  resolve_physically_validated_mpcc_execution_trajectory(
+    const std::vector<double> & current_path_distance_m,
+    const std::vector<double> & fallback_lateral_m,
+    const int ref_wp_id, const int horizon_size,
+    const Eigen::VectorXd & lower_bound,
+    const Eigen::VectorXd & upper_bound,
+    const double hard_wall_clearance_m,
+    const double now_sec, std::string & reject_reason)
+  {
+    std::string latest_reject_reason;
+    auto latest = align_solved_mpcc_execution_trajectory(
+      current_path_distance_m, fallback_lateral_m, now_sec,
+      latest_reject_reason);
+    if (
+      latest.has_value() &&
+      solved_mpcc_execution_path_wall_safe(
+        latest.value(), current_path_distance_m, ref_wp_id, horizon_size,
+        lower_bound, upper_bound, hard_wall_clearance_m,
+        latest_reject_reason))
+    {
+      if (solved_mpcc_execution_trajectory_.has_value()) {
+        last_physically_validated_mpcc_execution_trajectory_ =
+          solved_mpcc_execution_trajectory_;
+      }
+      reject_reason = "latest physically validated trajectory";
+      return PhysicallyValidatedMpccExecutionTrajectory{
+        std::move(latest.value()), false};
+    }
+
+    std::string last_feasible_reject_reason = "no last feasible trajectory";
+    if (last_physically_validated_mpcc_execution_trajectory_.has_value()) {
+      auto last_feasible = align_mpcc_execution_trajectory(
+        last_physically_validated_mpcc_execution_trajectory_.value(),
+        current_path_distance_m, fallback_lateral_m, now_sec,
+        last_feasible_reject_reason);
+      if (
+        last_feasible.has_value() &&
+        solved_mpcc_execution_path_wall_safe(
+          last_feasible.value(), current_path_distance_m, ref_wp_id,
+          horizon_size, lower_bound, upper_bound, hard_wall_clearance_m,
+          last_feasible_reject_reason))
+      {
+        reject_reason = "last physically validated trajectory";
+        return PhysicallyValidatedMpccExecutionTrajectory{
+          std::move(last_feasible.value()), true};
+      }
+    }
+
+    reject_reason =
+      "latest=" + latest_reject_reason +
+      "; last_feasible=" + last_feasible_reject_reason;
+    return std::nullopt;
   }
 
   void ensure_current_control_horizon()
@@ -16487,6 +16555,7 @@ private:
       overtake_line_state_.mission_runtime_wall_escape_prefix_active = false;
       overtake_line_state_.target_bound_execution_replan_hold_active = false;
       overtake_line_state_.target_bound_execution_replan_prefix_executing = false;
+      overtake_line_state_.target_bound_execution_replan_solved_prefix_active = false;
       overtake_line_state_.target_bound_execution_replan_hold_start_sec =
         std::numeric_limits<double>::quiet_NaN();
       overtake_line_state_.target_bound_execution_replan_hold_start_distance = 0.0;
@@ -22390,9 +22459,6 @@ private:
           horizon_path_distance_to_index(ref_wp_id, static_cast<std::size_t>(i)));
         current_fallback_lateral.push_back(current_ey);
       }
-      aligned_solved_execution = align_solved_mpcc_execution_trajectory(
-        current_path_distances, current_fallback_lateral, now_sec,
-        solved_execution_wall_authority_reason);
       const bool return_context_safe =
         return_execution_phase &&
         overtake_line_state_.rear_clear_confirmed_latched &&
@@ -22414,43 +22480,16 @@ private:
       if (!target_context_safe) {
         solved_execution_wall_authority_reason = "runtime context hard guard";
       } else {
-        const bool latest_solution_safe =
-          aligned_solved_execution.has_value() &&
-          solved_mpcc_execution_path_wall_safe(
-            aligned_solved_execution.value(), current_path_distances,
-            ref_wp_id, N, lb, ub, min_wall_clearance,
-            solved_execution_wall_authority_reason);
-        if (latest_solution_safe) {
+        const auto validated_execution =
+          resolve_physically_validated_mpcc_execution_trajectory(
+          current_path_distances, current_fallback_lateral,
+          ref_wp_id, N, lb, ub, min_wall_clearance, now_sec,
+          solved_execution_wall_authority_reason);
+        if (validated_execution.has_value()) {
+          aligned_solved_execution = validated_execution->trajectory;
           solved_execution_wall_authority_active = true;
-          if (solved_mpcc_execution_trajectory_.has_value()) {
-            last_physically_validated_mpcc_execution_trajectory_ =
-              solved_mpcc_execution_trajectory_;
-          }
-        } else if (last_physically_validated_mpcc_execution_trajectory_.has_value()) {
-          const std::string latest_reject_reason =
-            solved_execution_wall_authority_reason;
-          std::string last_feasible_reject_reason;
-          auto last_feasible_aligned = align_mpcc_execution_trajectory(
-            last_physically_validated_mpcc_execution_trajectory_.value(),
-            current_path_distances, current_fallback_lateral, now_sec,
-            last_feasible_reject_reason);
-          if (
-            last_feasible_aligned.has_value() &&
-            solved_mpcc_execution_path_wall_safe(
-              last_feasible_aligned.value(), current_path_distances,
-              ref_wp_id, N, lb, ub, min_wall_clearance,
-              last_feasible_reject_reason))
-          {
-            aligned_solved_execution = std::move(last_feasible_aligned);
-            solved_execution_wall_authority_active = true;
-            solved_execution_last_feasible_used = true;
-            solved_execution_wall_authority_reason =
-              "last physically validated trajectory";
-          } else {
-            solved_execution_wall_authority_reason =
-              "latest=" + latest_reject_reason +
-              "; last_feasible=" + last_feasible_reject_reason;
-          }
+          solved_execution_last_feasible_used =
+            validated_execution->last_feasible_used;
         }
       }
       if (solved_execution_wall_authority_active) {
@@ -27886,19 +27925,27 @@ private:
     const bool target_bound_shiftout_freeze =
       overtake_line_state_.phase == OvertakeLinePhase::ShiftOut &&
       !shiftout_complete;
-    const double target_bound_hold_max_sec = std::max(
+    const bool target_bound_shiftout_solved_prefix_active =
+      target_bound_shiftout_freeze &&
+      overtake_line_state_.target_bound_execution_replan_solved_prefix_active;
+    double target_bound_hold_max_sec = std::max(
       0.0,
+      target_bound_shiftout_solved_prefix_active ?
+      line_cfg.receding_horizon_target_bound_solved_prefix_max_sec :
       target_bound_shiftout_freeze ?
       line_cfg.receding_horizon_target_bound_shiftout_prefix_max_sec :
       line_cfg.receding_horizon_target_bound_prefix_max_sec);
-    const double target_bound_hold_max_distance = std::max(
+    double target_bound_hold_max_distance = std::max(
       0.0,
+      target_bound_shiftout_solved_prefix_active ?
+      line_cfg.receding_horizon_target_bound_solved_prefix_max_distance :
       target_bound_shiftout_freeze ?
       line_cfg.receding_horizon_target_bound_shiftout_prefix_max_distance :
       line_cfg.receding_horizon_target_bound_prefix_max_distance);
     const auto clear_target_bound_execution_prefix_state = [this]() {
         overtake_line_state_.target_bound_execution_replan_hold_active = false;
         overtake_line_state_.target_bound_execution_replan_prefix_executing = false;
+        overtake_line_state_.target_bound_execution_replan_solved_prefix_active = false;
         overtake_line_state_.target_bound_execution_replan_hold_start_sec =
           std::numeric_limits<double>::quiet_NaN();
         overtake_line_state_.target_bound_execution_replan_hold_start_distance = 0.0;
@@ -27942,6 +27989,54 @@ private:
       }
       std::vector<double> physical_hold_targets(
         static_cast<std::size_t>(N), current_ey);
+      bool target_bound_solved_prefix_used = false;
+      bool target_bound_last_feasible_prefix_used = false;
+      std::string target_bound_solved_prefix_reason = "not evaluated";
+      const bool target_bound_solved_prefix_context_safe =
+        locked_target_matches && locked_target_progress_continuous &&
+        !behavior_output.locked_target_position_jump &&
+        !locked_target_progress_rejected &&
+        behavior_output.locked_target_footprint_prediction_valid &&
+        (behavior_output.locked_target_current_body_footprints_separated ||
+        behavior_output.recoverable_side_contact_active) &&
+        (behavior_output.locked_target_predicted_body_footprint_sweep_separated ||
+        behavior_output.recoverable_side_contact_active) &&
+        !actual_wall_physical_contact && !actual_wall_margin_blocked &&
+        !actual_wall_sample_unavailable &&
+        behavior_output.front_risk_level != FrontRiskLevel::EmergencyBrake &&
+        !overtake_solver_recovery_active_ &&
+        !behavior_output.overtake_forbidden_wp;
+      if (target_bound_solved_prefix_context_safe) {
+        const auto validated_execution =
+          resolve_physically_validated_mpcc_execution_trajectory(
+          execution_horizon_distances, physical_hold_targets,
+          ref_wp_id, N, lb, ub, min_wall_clearance, now_sec,
+          target_bound_solved_prefix_reason);
+        if (validated_execution.has_value()) {
+          physical_hold_targets = validated_execution->trajectory.lateral_m;
+          target_bound_solved_prefix_used = true;
+          target_bound_last_feasible_prefix_used =
+            validated_execution->last_feasible_used;
+          if (target_bound_shiftout_freeze) {
+            target_bound_hold_max_sec = std::max(
+              0.0,
+              line_cfg.receding_horizon_target_bound_solved_prefix_max_sec);
+            target_bound_hold_max_distance = std::max(
+              0.0,
+              line_cfg.receding_horizon_target_bound_solved_prefix_max_distance);
+          }
+        }
+      } else {
+        target_bound_solved_prefix_reason = "runtime context hard guard";
+      }
+      if (target_bound_shiftout_freeze && !target_bound_solved_prefix_used) {
+        target_bound_hold_max_sec = std::max(
+          0.0,
+          line_cfg.receding_horizon_target_bound_shiftout_prefix_max_sec);
+        target_bound_hold_max_distance = std::max(
+          0.0,
+          line_cfg.receding_horizon_target_bound_shiftout_prefix_max_distance);
+      }
       const bool previous_horizon_matches =
         overtake_receding_horizon_warm_start_.size() == static_cast<std::size_t>(N) &&
         overtake_receding_horizon_path_distances_.size() == static_cast<std::size_t>(N) &&
@@ -27950,11 +28045,15 @@ private:
         overtake_receding_horizon_phase_ == overtake_line_state_.phase &&
         std::isfinite(overtake_receding_horizon_phase_traveled_m_) &&
         horizon_phase_traveled_m + kEps >= overtake_receding_horizon_phase_traveled_m_;
-      // An incomplete ShiftOut must not continue a stale lateral ramp toward
-      // the newly predicted target. Freeze measured e_y for a short repair
-      // window. A Pass/completed ShiftOut can retain its aligned same-side
-      // prefix because the lateral separation maneuver is already committed.
-      if (previous_horizon_matches && !target_bound_shiftout_freeze) {
+      // Prefer a recently solved and physically revalidated trajectory. If it
+      // is unavailable, an incomplete ShiftOut must not continue a stale
+      // lateral ramp toward the newly predicted target: freeze measured e_y
+      // for a short repair window. A Pass/completed ShiftOut may retain its
+      // aligned same-side warm start because separation is already committed.
+      if (
+        previous_horizon_matches && !target_bound_solved_prefix_used &&
+        !target_bound_shiftout_freeze)
+      {
         const auto aligned_hold =
           overtake_core::resample_receding_horizon_warm_start(
           overtake_core::RecedingHorizonWarmStartRequest{
@@ -28026,6 +28125,9 @@ private:
           locked_target_progress_rejected,
           behavior_output.locked_target_current_body_footprints_separated,
           behavior_output.recoverable_side_contact_active,
+          target_bound_solved_prefix_used,
+          behavior_output.locked_target_footprint_prediction_valid,
+          behavior_output.locked_target_predicted_body_footprint_sweep_separated,
           actual_wall_physical_contact,
           actual_wall_margin_blocked,
           actual_wall_sample_unavailable,
@@ -28095,6 +28197,8 @@ private:
         } else {
           overtake_line_state_.target_bound_execution_replan_hold_active = true;
           overtake_line_state_.target_bound_execution_replan_prefix_executing = true;
+          overtake_line_state_.target_bound_execution_replan_solved_prefix_active =
+            target_bound_solved_prefix_used;
           overtake_line_state_.target_bound_execution_replan_clear_since_sec =
             lifecycle.clear_since_sec;
         }
@@ -28125,17 +28229,23 @@ private:
             "OvertakeLine target-bound execution hold started: "
             "target=%s, side=%d, phase=%s, mode=%s, failure=%s[%d], speed=%.2f, "
             "limit=%.2f s/%.2f m, tactical_replan=immediate, "
+            "prefix_source=%s, prefix_reason=%s, "
             "encounter_samples=%zu, encounter_last=%.2f m, "
             "prediction_truncated=%zu, horizon_time=%.2f s, wp_id=%d",
             overtake_line_state_.target_vehicle_id.c_str(),
             overtake_line_state_.pass_side_sign,
             to_string(overtake_line_state_.phase),
+            target_bound_solved_prefix_used ? "solved-prefix" :
             target_bound_shiftout_freeze ? "freeze-current" : "last-feasible",
             overtake_receding_horizon_failure_kind_name(
               receding_horizon.hard_failure_kind),
             receding_horizon.hard_bound_failure_index, current_speed_mps_,
             target_bound_hold_max_sec,
             target_bound_hold_max_distance,
+            target_bound_solved_prefix_used ?
+            (target_bound_last_feasible_prefix_used ? "last-feasible" : "latest") :
+            "current-freeze",
+            target_bound_solved_prefix_reason.c_str(),
             receding_horizon.target_constraint_sample_count,
             receding_horizon.last_target_constraint_distance_m,
             receding_horizon.target_prediction_truncated_sample_count,
@@ -28152,6 +28262,8 @@ private:
         receding_horizon.velocity_limit_mps =
           std::numeric_limits<double>::infinity();
         receding_horizon.fallback_reason =
+          target_bound_solved_prefix_used ?
+          "target-bound solved execution prefix while replan pending" :
           target_bound_shiftout_freeze ?
           "target-bound ShiftOut freeze while replan pending" :
           "target-bound physical execution hold while replan pending";
@@ -32631,6 +32743,24 @@ Config load_config(const std::string & path)
     mpc["v2x_overtake_receding_horizon_target_bound_shiftout_prefix_max_distance"]
     .as<double>() : 2.0);
   cfg.mpc.v2x_behavior.overtake_line
+    .receding_horizon_last_solved_prefix_max_age_sec = std::max(
+    0.0,
+    mpc["v2x_overtake_receding_horizon_last_solved_prefix_max_age_sec"] ?
+    mpc["v2x_overtake_receding_horizon_last_solved_prefix_max_age_sec"]
+    .as<double>() : 0.75);
+  cfg.mpc.v2x_behavior.overtake_line
+    .receding_horizon_target_bound_solved_prefix_max_sec = std::max(
+    0.0,
+    mpc["v2x_overtake_receding_horizon_target_bound_solved_prefix_max_sec"] ?
+    mpc["v2x_overtake_receding_horizon_target_bound_solved_prefix_max_sec"]
+    .as<double>() : 0.75);
+  cfg.mpc.v2x_behavior.overtake_line
+    .receding_horizon_target_bound_solved_prefix_max_distance = std::max(
+    0.0,
+    mpc["v2x_overtake_receding_horizon_target_bound_solved_prefix_max_distance"] ?
+    mpc["v2x_overtake_receding_horizon_target_bound_solved_prefix_max_distance"]
+    .as<double>() : 4.0);
+  cfg.mpc.v2x_behavior.overtake_line
     .receding_horizon_target_bound_prefix_clear_stable_sec = std::max(
     0.0,
     mpc["v2x_overtake_receding_horizon_target_bound_prefix_clear_stable_sec"] ?
@@ -35249,7 +35379,8 @@ public:
       RCLCPP_INFO(
         get_logger(),
         "V2X target-bound execution prefix: %s, Pass=%.2f s/%.2f m, "
-        "ShiftOut-freeze=%.2f s/%.2f m, fresh_clear>=%.2f s, "
+        "ShiftOut-freeze=%.2f s/%.2f m, "
+        "solved<=%.2f s/hold=%.2f s/%.2f m, fresh_clear>=%.2f s, "
         "Pass-progress-extension=%s/fresh<=%.2f s",
         mpc_cfg_.v2x_behavior.overtake_line
         .receding_horizon_target_bound_prefix_enabled ? "enabled" : "disabled",
@@ -35261,6 +35392,12 @@ public:
         .receding_horizon_target_bound_shiftout_prefix_max_sec,
         mpc_cfg_.v2x_behavior.overtake_line
         .receding_horizon_target_bound_shiftout_prefix_max_distance,
+        mpc_cfg_.v2x_behavior.overtake_line
+        .receding_horizon_last_solved_prefix_max_age_sec,
+        mpc_cfg_.v2x_behavior.overtake_line
+        .receding_horizon_target_bound_solved_prefix_max_sec,
+        mpc_cfg_.v2x_behavior.overtake_line
+        .receding_horizon_target_bound_solved_prefix_max_distance,
         mpc_cfg_.v2x_behavior.overtake_line
         .receding_horizon_target_bound_prefix_clear_stable_sec,
         mpc_cfg_.v2x_behavior.overtake_line

@@ -4002,6 +4002,42 @@ TEST(V2XOvertakeCoreSpeed, TargetBoundExecutionHoldCannotBypassHardFaults)
   EXPECT_FALSE(can_hold_target_bound_execution_for_replan(request));
 }
 
+TEST(V2XOvertakeCoreSpeed, SolvedTargetBoundPrefixRequiresFreshSeparatedPrediction)
+{
+  TargetBoundExecutionHoldRequest request;
+  request.enabled = true;
+  request.safe_execution_prefix_available = true;
+  request.mission_path_frozen = true;
+  request.target_bound_failure = true;
+  request.physical_hold_path_feasible = true;
+  request.target_progress_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.require_predicted_sweep_separation = true;
+  request.predicted_sweep_valid = true;
+  request.predicted_sweep_separated = true;
+  request.hold_elapsed_sec = 0.20;
+  request.hold_traveled_m = 1.0;
+  request.maximum_hold_sec = 0.75;
+  request.maximum_hold_distance_m = 4.0;
+
+  EXPECT_TRUE(can_hold_target_bound_execution_for_replan(request));
+
+  request.predicted_sweep_valid = false;
+  EXPECT_FALSE(can_hold_target_bound_execution_for_replan(request));
+  request.predicted_sweep_valid = true;
+  request.predicted_sweep_separated = false;
+  EXPECT_FALSE(can_hold_target_bound_execution_for_replan(request));
+
+  // A separately qualified side-contact continuation owns the immediate
+  // separation maneuver and may bridge an unavailable prediction, while all
+  // wall/front hard faults remain enforced by the common hold predicate.
+  request.current_body_footprints_separated = false;
+  request.recoverable_side_contact_active = true;
+  EXPECT_TRUE(can_hold_target_bound_execution_for_replan(request));
+  request.actual_wall_contact = true;
+  EXPECT_FALSE(can_hold_target_bound_execution_for_replan(request));
+}
+
 TEST(V2XOvertakeCoreSpeed, HoldsFrozenShiftOutPrefixOnlyInsideShortBudget)
 {
   TargetBoundExecutionHoldRequest request;

@@ -2112,12 +2112,17 @@ bool can_hold_target_bound_execution_for_replan(
   const bool current_geometry_recoverable =
     request.current_body_footprints_separated ||
     request.recoverable_side_contact_active;
+  const bool retained_sweep_safe =
+    !request.require_predicted_sweep_separation ||
+    request.recoverable_side_contact_active ||
+    (request.predicted_sweep_valid && request.predicted_sweep_separated);
   if (
     !request.enabled || !request.safe_execution_prefix_available ||
     !request.mission_path_frozen ||
     !request.target_bound_failure || !request.physical_hold_path_feasible ||
     !request.target_progress_continuous || request.target_position_jump ||
     request.target_course_progress_rejected || !current_geometry_recoverable ||
+    !retained_sweep_safe ||
     request.actual_wall_contact || request.actual_wall_margin_blocked ||
     request.actual_wall_sample_unavailable || request.emergency_front_risk ||
     request.solver_recovery_requested || request.explicit_forbidden_waypoint)

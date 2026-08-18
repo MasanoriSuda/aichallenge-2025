@@ -1339,8 +1339,9 @@ struct TargetBoundExecutionHoldRequest
 {
   bool enabled{false};
   /// The caller has produced a wall-validated prefix which is safe to hold.
-  /// This may be a committed Pass/completed ShiftOut prefix, or a bounded
-  /// current-lateral freeze while an incomplete ShiftOut is replanned.
+  /// This may be a committed Pass/completed ShiftOut prefix, a recently
+  /// solved ShiftOut prefix which is physically revalidated each cycle, or a
+  /// bounded current-lateral freeze while an incomplete ShiftOut is replanned.
   bool safe_execution_prefix_available{false};
   bool mission_path_frozen{false};
   bool target_bound_failure{false};
@@ -1353,6 +1354,12 @@ struct TargetBoundExecutionHoldRequest
   bool target_course_progress_rejected{false};
   bool current_body_footprints_separated{false};
   bool recoverable_side_contact_active{false};
+  /// A retained solved trajectory, unlike a measured-lateral freeze, keeps
+  /// moving laterally. Require the caller's current short-horizon opponent
+  /// sweep to remain valid and separated on every reuse cycle.
+  bool require_predicted_sweep_separation{false};
+  bool predicted_sweep_valid{false};
+  bool predicted_sweep_separated{false};
   bool actual_wall_contact{false};
   bool actual_wall_margin_blocked{false};
   bool actual_wall_sample_unavailable{false};
@@ -1386,9 +1393,9 @@ struct TargetBoundExecutionHoldRequest
 
 /// Keep a physically feasible same-side execution prefix while a target-only
 /// receding-horizon conflict is re-optimized. Callers may admit Pass or a
-/// completed ShiftOut. An incomplete ShiftOut may only be admitted when its
-/// supplied prefix freezes the measured lateral position and uses a separate
-/// short, non-extendable budget.
+/// completed ShiftOut. An incomplete ShiftOut may admit a recently solved and
+/// physically revalidated lateral prefix inside a separate short,
+/// non-extendable budget; otherwise it freezes the measured lateral position.
 /// This is deliberately narrower than the generic continuity lease: predicted
 /// target overlap may trigger the hold, but non-recoverable body overlap and
 /// every wall/front hard fault stay closed. A separately qualified recoverable

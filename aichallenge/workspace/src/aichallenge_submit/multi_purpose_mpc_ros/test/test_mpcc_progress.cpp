@@ -163,6 +163,51 @@ TEST(MpccProgress, RejectsMalformedRtiSqpUpdate)
     finite, finite, 0.0).has_value());
 }
 
+TEST(MpccProgress, RefinesOnlyWhenNonlinearOrBoundRiskNeedsIt)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::RtiRefinementDecision;
+  using multi_purpose_mpc_ros::mpcc_progress::RtiRefinementRequest;
+  using multi_purpose_mpc_ros::mpcc_progress::resolve_rti_refinement;
+  RtiRefinementRequest request;
+  request.progress_mode_active = true;
+  request.configured_iterations = 2;
+  request.minimum_lateral_bound_reserve_m = 0.30;
+  request.minimum_bound_reserve_threshold_m = 0.12;
+  request.lateral_defect_m = 0.02;
+  request.lateral_defect_threshold_m = 0.08;
+  request.heading_defect_rad = 0.01;
+  request.heading_defect_threshold_rad = 0.04;
+  request.maximum_curvature_radpm = 0.02;
+  request.curvature_threshold_radpm = 0.08;
+  request.elapsed_ms = 2.0;
+  request.refinement_start_deadline_ms = 12.0;
+
+  EXPECT_EQ(resolve_rti_refinement(request), RtiRefinementDecision::SkipCondition);
+  request.minimum_lateral_bound_reserve_m = 0.10;
+  EXPECT_EQ(resolve_rti_refinement(request), RtiRefinementDecision::Refine);
+  request.minimum_lateral_bound_reserve_m = 0.30;
+  request.maximum_curvature_radpm = 0.10;
+  EXPECT_EQ(resolve_rti_refinement(request), RtiRefinementDecision::Refine);
+}
+
+TEST(MpccProgress, DoesNotStartRefinementAfterDeadline)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::RtiRefinementDecision;
+  multi_purpose_mpc_ros::mpcc_progress::RtiRefinementRequest request;
+  request.progress_mode_active = true;
+  request.configured_iterations = 2;
+  request.minimum_lateral_bound_reserve_m = 0.0;
+  request.minimum_bound_reserve_threshold_m = 0.12;
+  request.lateral_defect_threshold_m = 0.08;
+  request.heading_defect_threshold_rad = 0.04;
+  request.curvature_threshold_radpm = 0.08;
+  request.elapsed_ms = 12.0;
+  request.refinement_start_deadline_ms = 12.0;
+  EXPECT_EQ(
+    multi_purpose_mpc_ros::mpcc_progress::resolve_rti_refinement(request),
+    RtiRefinementDecision::SkipDeadline);
+}
+
 TEST(MpccProgress, ExtractsBoundedExecutionTrajectoryFromQpPrimal)
 {
   // N=2: 3 states x 3 stages followed by 2 inputs x 2 stages.

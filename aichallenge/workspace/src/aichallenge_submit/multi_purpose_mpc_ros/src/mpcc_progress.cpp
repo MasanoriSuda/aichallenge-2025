@@ -31,7 +31,17 @@ bool finite_config(const Config & config) noexcept
     config.terminal_progress_reward_weight >= 0.0 &&
     config.rti_sqp_iterations >= 1 && config.rti_sqp_iterations <= 3 &&
     std::isfinite(config.rti_sqp_mixing) && config.rti_sqp_mixing > 0.0 &&
-    config.rti_sqp_mixing <= 1.0;
+    config.rti_sqp_mixing <= 1.0 &&
+    std::isfinite(config.refinement_minimum_bound_reserve_m) &&
+    config.refinement_minimum_bound_reserve_m >= 0.0 &&
+    std::isfinite(config.refinement_lateral_defect_m) &&
+    config.refinement_lateral_defect_m >= 0.0 &&
+    std::isfinite(config.refinement_heading_defect_rad) &&
+    config.refinement_heading_defect_rad >= 0.0 &&
+    std::isfinite(config.refinement_curvature_radpm) &&
+    config.refinement_curvature_radpm >= 0.0 &&
+    std::isfinite(config.refinement_start_deadline_ms) &&
+    config.refinement_start_deadline_ms > 0.0;
 }
 
 }  // namespace
@@ -247,6 +257,49 @@ std::optional<Eigen::VectorXd> damp_rti_sqp_iterate(
     return std::nullopt;
   }
   return result;
+}
+
+RtiRefinementDecision resolve_rti_refinement(
+  const RtiRefinementRequest & request) noexcept
+{
+  if (!request.progress_mode_active || request.configured_iterations <= 1) {
+    return RtiRefinementDecision::Disabled;
+  }
+  if (
+    request.configured_iterations > 3 ||
+    !std::isfinite(request.minimum_lateral_bound_reserve_m) ||
+    !std::isfinite(request.lateral_defect_m) || request.lateral_defect_m < 0.0 ||
+    !std::isfinite(request.heading_defect_rad) || request.heading_defect_rad < 0.0 ||
+    !std::isfinite(request.maximum_curvature_radpm) ||
+    request.maximum_curvature_radpm < 0.0 ||
+    !std::isfinite(request.elapsed_ms) || request.elapsed_ms < 0.0 ||
+    !std::isfinite(request.minimum_bound_reserve_threshold_m) ||
+    request.minimum_bound_reserve_threshold_m < 0.0 ||
+    !std::isfinite(request.lateral_defect_threshold_m) ||
+    request.lateral_defect_threshold_m < 0.0 ||
+    !std::isfinite(request.heading_defect_threshold_rad) ||
+    request.heading_defect_threshold_rad < 0.0 ||
+    !std::isfinite(request.curvature_threshold_radpm) ||
+    request.curvature_threshold_radpm < 0.0 ||
+    !std::isfinite(request.refinement_start_deadline_ms) ||
+    request.refinement_start_deadline_ms <= 0.0)
+  {
+    return RtiRefinementDecision::Invalid;
+  }
+  if (request.elapsed_ms >= request.refinement_start_deadline_ms) {
+    return RtiRefinementDecision::SkipDeadline;
+  }
+  if (!request.conditional_refinement_enabled) {
+    return RtiRefinementDecision::Refine;
+  }
+  const bool refinement_needed =
+    request.minimum_lateral_bound_reserve_m <=
+    request.minimum_bound_reserve_threshold_m ||
+    request.lateral_defect_m >= request.lateral_defect_threshold_m ||
+    request.heading_defect_rad >= request.heading_defect_threshold_rad ||
+    request.maximum_curvature_radpm >= request.curvature_threshold_radpm;
+  return refinement_needed ?
+    RtiRefinementDecision::Refine : RtiRefinementDecision::SkipCondition;
 }
 
 std::optional<ExecutionTrajectory> extract_execution_trajectory(

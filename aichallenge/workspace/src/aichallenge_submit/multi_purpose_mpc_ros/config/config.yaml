@@ -339,6 +339,16 @@ mpc:
   progress_contouring_terminal_lag_weight: 2500.0
   progress_contouring_progress_reward_weight: 2000.0
   progress_contouring_terminal_progress_reward_weight: 5000.0
+  progress_contouring_rti_sqp_iterations: 2
+  progress_contouring_rti_sqp_mixing: 0.65
+  # Keep the first feasible 40 Hz QP on easy/late cycles. A second RTI solve is
+  # reserved for tight bounds, nonlinear deviation, or high curvature.
+  progress_contouring_conditional_refinement_enabled: true
+  progress_contouring_refinement_minimum_bound_reserve_m: 0.12
+  progress_contouring_refinement_lateral_defect_m: 0.08
+  progress_contouring_refinement_heading_defect_rad: 0.04
+  progress_contouring_refinement_curvature_radpm: 0.08
+  progress_contouring_refinement_start_deadline_ms: 12.0
   # Keep ego course progress on the same hairpin branch after contact. Reacquire globally only
   # after the complete local window is farther than the lost threshold.
   waypoint_local_association_enabled: true
@@ -801,7 +811,7 @@ mpc:
   v2x_overtake_progressive_entry_static_fallback_max_lateral_shift: 1.8 # [m] static-only attack ceiling; dynamic complete Missions are unchanged
   v2x_overtake_line_max_lateral_accel: 6.0    # [m/s^2] dev3 attack: complete committed ShiftOut in a hairpin
   v2x_overtake_line_max_target_change: 0.04   # [m/cycle] smooth target goal updates across cycles
-  v2x_overtake_receding_horizon_enabled: true # optimize the complete ShiftOut/Pass lateral sample sequence every MPC cycle
+  v2x_overtake_receding_horizon_enabled: true # optimize the complete ShiftOut/Pass lateral sample sequence; exact-context validated results may bridge refresh cycles
   v2x_overtake_receding_horizon_elastic_clearance_enabled: true # robust target/wall margins are preferred; physical body + 0.20 m hard wall remain mandatory
   v2x_overtake_receding_horizon_iterations: 12
   v2x_overtake_receding_horizon_max_reference_adjustment: 0.35 # [m] trust region around the admitted Mission path
@@ -820,6 +830,7 @@ mpc:
   v2x_overtake_receding_horizon_encounter_prediction_max_sec: 3.0 # [s]
   v2x_overtake_receding_horizon_continuity_enabled: true # let the latest feasible same-Mission horizon own brief planner/V2X gaps
   v2x_overtake_receding_horizon_continuity_lease_sec: 0.30 # [s] bounded; hard wall/emergency/solver faults still revoke immediately
+  v2x_overtake_receding_horizon_refresh_interval_sec: 0.10 # [s] exact-WP/context reuse only; hard faults force an immediate refresh
   # If only the moving-target bounds reject a Pass horizon, retain the live
   # physically validated same-side prefix while re-optimizing. The cumulative
   # budget is not rearmed by a one-cycle feasible result.

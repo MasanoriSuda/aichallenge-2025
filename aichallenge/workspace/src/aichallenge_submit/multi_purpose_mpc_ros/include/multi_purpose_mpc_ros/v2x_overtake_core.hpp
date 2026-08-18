@@ -1268,6 +1268,31 @@ struct RecedingHorizonExecutionLeaseRequest
   double maximum_age_sec{};
 };
 
+struct RecedingHorizonRefreshRequest
+{
+  bool enabled{false};
+  bool cached_evaluation_available{false};
+  bool mission_context_matches{false};
+  bool reference_waypoint_matches{false};
+  bool continuity_lease_active{false};
+  bool force_refresh{false};
+  double now_sec{};
+  double last_refresh_sec{-std::numeric_limits<double>::infinity()};
+  double minimum_refresh_interval_sec{};
+};
+
+struct RecedingHorizonRefreshResolution
+{
+  bool refresh{true};
+  bool reuse_cached_evaluation{false};
+};
+
+/// Keep a recently hard-validated horizon only while its complete planning
+/// context and reference waypoint are unchanged.  The exact waypoint match
+/// deliberately avoids shifting static-map validation onto an unseen stage.
+RecedingHorizonRefreshResolution resolve_receding_horizon_refresh(
+  const RecedingHorizonRefreshRequest & request) noexcept;
+
 /// Retain ownership of a physically validated receding-horizon solution only
 /// across a bounded observation/optimizer gap. Mission identity and every
 /// current hard fault remain fail-closed.

@@ -57,7 +57,9 @@
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
+#include <iterator>
 #include <limits>
+#include <list>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -1248,6 +1250,7 @@ struct OvertakeLineConfig
   double receding_horizon_encounter_prediction_max_sec{3.0};
   bool receding_horizon_continuity_enabled{true};
   double receding_horizon_continuity_lease_sec{0.30};
+  double receding_horizon_refresh_interval_sec{0.10};
   bool receding_horizon_target_bound_prefix_enabled{false};
   double receding_horizon_target_bound_prefix_max_sec{1.50};
   double receding_horizon_target_bound_prefix_max_distance{8.0};
@@ -2714,14 +2717,14 @@ struct PhysicalWallEnvelopeCacheKey
 {
   int waypoint_id{};
   std::int64_t heading_bucket{};
-  std::int64_t clearance_mm{};
+  std::int64_t clearance_bucket{};
   std::int64_t sample_step_mm{};
 
   bool operator==(const PhysicalWallEnvelopeCacheKey & other) const noexcept
   {
     return waypoint_id == other.waypoint_id &&
            heading_bucket == other.heading_bucket &&
-           clearance_mm == other.clearance_mm &&
+           clearance_bucket == other.clearance_bucket &&
            sample_step_mm == other.sample_step_mm;
   }
 };
@@ -2737,7 +2740,7 @@ struct PhysicalWallEnvelopeCacheKeyHash
       };
     combine(key.waypoint_id);
     combine(key.heading_bucket);
-    combine(key.clearance_mm);
+    combine(key.clearance_bucket);
     combine(key.sample_step_mm);
     return seed;
   }
@@ -2748,6 +2751,7 @@ struct PhysicalWallEnvelopeCacheEntry
   double searched_lower_m{};
   double searched_upper_m{};
   recovery_footprint::LateralClearRunsResult runs;
+  std::list<PhysicalWallEnvelopeCacheKey>::iterator lru_position;
 };
 
 struct PhysicalWallEnvelopeCacheTelemetry
@@ -4781,6 +4785,9 @@ struct MpcRtiSqpTelemetryWindow
   std::uint64_t refinement_success_count{};
   std::uint64_t first_feasible_fallback_count{};
   std::uint64_t relinearization_reject_count{};
+  std::uint64_t condition_skip_count{};
+  std::uint64_t deadline_skip_count{};
+  std::uint64_t invalid_decision_count{};
 };
 
 struct MPC
@@ -4996,6 +5003,8 @@ struct MPC
     overtake_static_wall_grid_ = grid;
     overtake_static_wall_footprint_ = footprint;
     physical_wall_envelope_cache_.clear();
+    physical_wall_envelope_cache_lru_.clear();
+    overtake_receding_horizon_scheduled_cache_.reset();
     physical_wall_envelope_cache_request_count_ = 0U;
     physical_wall_envelope_cache_hit_count_ = 0U;
     physical_wall_envelope_cache_miss_count_ = 0U;
@@ -14781,7 +14790,8 @@ struct MPC
   void record_rti_sqp_telemetry(
     const double now_sec, const bool refinement_attempted,
     const bool refinement_succeeded, const bool first_feasible_fallback,
-    const bool relinearization_rejected)
+    const bool relinearization_rejected,
+    const mpcc_progress::RtiRefinementDecision refinement_decision)
   {
     auto & window = rti_sqp_telemetry_window_;
     ++window.progress_cycles;
@@ -14789,6 +14799,12 @@ struct MPC
     window.refinement_success_count += refinement_succeeded ? 1U : 0U;
     window.first_feasible_fallback_count += first_feasible_fallback ? 1U : 0U;
     window.relinearization_reject_count += relinearization_rejected ? 1U : 0U;
+    window.condition_skip_count +=
+      refinement_decision == mpcc_progress::RtiRefinementDecision::SkipCondition ? 1U : 0U;
+    window.deadline_skip_count +=
+      refinement_decision == mpcc_progress::RtiRefinementDecision::SkipDeadline ? 1U : 0U;
+    window.invalid_decision_count +=
+      refinement_decision == mpcc_progress::RtiRefinementDecision::Invalid ? 1U : 0U;
     if (!std::isfinite(now_sec)) {
       return;
     }
@@ -14806,12 +14822,16 @@ struct MPC
       RCLCPP_INFO(
         rclcpp::get_logger("mpc_controller"),
         "MPCC RTI-SQP: cycles=%zu, attempts=%zu, refined=%zu, "
-        "first_feasible=%zu, relinearize_reject=%zu, iterations=%d, alpha=%.2f",
+        "first_feasible=%zu, relinearize_reject=%zu, skip_condition=%zu, "
+        "skip_deadline=%zu, invalid=%zu, iterations=%d, alpha=%.2f",
         static_cast<std::size_t>(window.progress_cycles),
         static_cast<std::size_t>(window.refinement_attempt_count),
         static_cast<std::size_t>(window.refinement_success_count),
         static_cast<std::size_t>(window.first_feasible_fallback_count),
         static_cast<std::size_t>(window.relinearization_reject_count),
+        static_cast<std::size_t>(window.condition_skip_count),
+        static_cast<std::size_t>(window.deadline_skip_count),
+        static_cast<std::size_t>(window.invalid_decision_count),
         cfg.progress_contouring.rti_sqp_iterations,
         cfg.progress_contouring.rti_sqp_mixing);
     }
@@ -14902,12 +14922,15 @@ struct MPC
         return outcome;
       };
 
+    const auto solve_sequence_start = std::chrono::steady_clock::now();
     auto first_outcome = solve_once(problem, warm_start);
     if (!first_outcome.result.has_value()) {
       last_osqp_solution_.reset();
       last_osqp_solution_sec_ = -std::numeric_limits<double>::infinity();
       if (problem.progress_contouring_active) {
-        record_rti_sqp_telemetry(now_sec, false, false, false, false);
+        record_rti_sqp_telemetry(
+          now_sec, false, false, false, false,
+          mpcc_progress::RtiRefinementDecision::Disabled);
       }
       return first_outcome;
     }
@@ -14917,10 +14940,65 @@ struct MPC
     bool refinement_succeeded = false;
     bool first_feasible_fallback = false;
     bool relinearization_rejected = false;
-    if (
-      problem.progress_contouring_active &&
-      cfg.progress_contouring.rti_sqp_iterations > 1)
-    {
+    mpcc_progress::RtiRefinementDecision refinement_decision{
+      mpcc_progress::RtiRefinementDecision::Disabled};
+    if (problem.progress_contouring_active) {
+      double minimum_lateral_bound_reserve_m = 0.0;
+      if (problem.progress_execution_context_active) {
+        const auto first_execution = mpcc_progress::extract_execution_trajectory(
+          best_outcome.result->primal, problem.N,
+          problem.progress_execution_path_distance_m,
+          problem.progress_execution_lateral_lower_m,
+          problem.progress_execution_lateral_upper_m, 1e-4);
+        if (first_execution.has_value()) {
+          minimum_lateral_bound_reserve_m =
+            first_execution->minimum_lateral_bound_reserve_m;
+        }
+      }
+      constexpr int kFirstPredictedLateralIndex = 3;
+      constexpr int kFirstPredictedHeadingIndex = 4;
+      const bool comparison_available =
+        best_outcome.result->primal.size() > kFirstPredictedHeadingIndex &&
+        problem.progress_linearization_point.size() > kFirstPredictedHeadingIndex;
+      const double lateral_defect_m = comparison_available ?
+        std::abs(
+        best_outcome.result->primal[kFirstPredictedLateralIndex] -
+        problem.progress_linearization_point[kFirstPredictedLateralIndex]) :
+        std::numeric_limits<double>::infinity();
+      const double heading_defect_rad = comparison_available ?
+        std::abs(
+        wrap_to_pi(
+          best_outcome.result->primal[kFirstPredictedHeadingIndex] -
+          problem.progress_linearization_point[kFirstPredictedHeadingIndex])) :
+        std::numeric_limits<double>::infinity();
+      double maximum_curvature_radpm = 0.0;
+      for (const double curvature : problem.progress_path_curvature_radpm) {
+        if (std::isfinite(curvature)) {
+          maximum_curvature_radpm = std::max(maximum_curvature_radpm, std::abs(curvature));
+        } else {
+          maximum_curvature_radpm = std::numeric_limits<double>::infinity();
+          break;
+        }
+      }
+      const double elapsed_ms = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - solve_sequence_start).count();
+      refinement_decision = mpcc_progress::resolve_rti_refinement(
+        mpcc_progress::RtiRefinementRequest{
+          true,
+          cfg.progress_contouring.rti_sqp_iterations,
+          cfg.progress_contouring.conditional_refinement_enabled,
+          minimum_lateral_bound_reserve_m,
+          lateral_defect_m,
+          heading_defect_rad,
+          maximum_curvature_radpm,
+          elapsed_ms,
+          cfg.progress_contouring.refinement_minimum_bound_reserve_m,
+          cfg.progress_contouring.refinement_lateral_defect_m,
+          cfg.progress_contouring.refinement_heading_defect_rad,
+          cfg.progress_contouring.refinement_curvature_radpm,
+          cfg.progress_contouring.refinement_start_deadline_ms});
+    }
+    if (refinement_decision == mpcc_progress::RtiRefinementDecision::Refine) {
       Eigen::VectorXd linearization_point = problem.progress_linearization_point;
       if (
         warm_start.has_value() &&
@@ -14984,9 +15062,12 @@ struct MPC
         best_outcome = std::move(refinement_outcome);
         refinement_succeeded = true;
       }
+    }
+    if (problem.progress_contouring_active) {
       record_rti_sqp_telemetry(
         now_sec, refinement_attempted, refinement_succeeded,
-        first_feasible_fallback, relinearization_rejected);
+        first_feasible_fallback, relinearization_rejected,
+        refinement_decision);
     }
 
     last_osqp_solution_ = persistent_osqp::WarmStart{
@@ -15726,6 +15807,7 @@ struct MPC
     PhysicalWallEnvelopeCacheKey,
     PhysicalWallEnvelopeCacheEntry,
     PhysicalWallEnvelopeCacheKeyHash> physical_wall_envelope_cache_;
+  std::list<PhysicalWallEnvelopeCacheKey> physical_wall_envelope_cache_lru_;
   std::uint64_t physical_wall_envelope_cache_request_count_{0U};
   std::uint64_t physical_wall_envelope_cache_hit_count_{0U};
   std::uint64_t physical_wall_envelope_cache_miss_count_{0U};
@@ -15777,6 +15859,29 @@ struct MPC
   OvertakeLinePhase overtake_receding_horizon_phase_{OvertakeLinePhase::Idle};
   double overtake_receding_horizon_phase_traveled_m_{0.0};
   double overtake_receding_horizon_last_feasible_sec_{
+    -std::numeric_limits<double>::infinity()};
+  std::optional<OvertakeRecedingHorizonEvaluation>
+  overtake_receding_horizon_scheduled_cache_;
+  int overtake_receding_horizon_scheduled_cache_ref_wp_id_{-1};
+  int overtake_receding_horizon_scheduled_cache_horizon_size_{0};
+  double overtake_receding_horizon_scheduled_cache_goal_ey_{
+    std::numeric_limits<double>::quiet_NaN()};
+  double overtake_receding_horizon_scheduled_cache_phase_distance_m_{
+    std::numeric_limits<double>::quiet_NaN()};
+  double overtake_receding_horizon_scheduled_cache_wall_clearance_m_{
+    std::numeric_limits<double>::quiet_NaN()};
+  double overtake_receding_horizon_scheduled_cache_target_separation_m_{
+    std::numeric_limits<double>::quiet_NaN()};
+  double overtake_receding_horizon_scheduled_cache_max_lateral_accel_mps2_{
+    std::numeric_limits<double>::quiet_NaN()};
+  bool overtake_receding_horizon_scheduled_cache_hold_pass_goal_{false};
+  double overtake_receding_horizon_scheduled_cache_target_longitudinal_m_{
+    std::numeric_limits<double>::quiet_NaN()};
+  double overtake_receding_horizon_scheduled_cache_target_lateral_m_{
+    std::numeric_limits<double>::quiet_NaN()};
+  std::uint64_t overtake_receding_horizon_refresh_count_{0U};
+  std::uint64_t overtake_receding_horizon_reuse_count_{0U};
+  double overtake_receding_horizon_refresh_telemetry_last_log_sec_{
     -std::numeric_limits<double>::infinity()};
   double mpcc_lite_shadow_last_evaluation_sec_{
     -std::numeric_limits<double>::infinity()};
@@ -16117,6 +16222,24 @@ private:
     overtake_receding_horizon_phase_traveled_m_ = 0.0;
     overtake_receding_horizon_last_feasible_sec_ =
       -std::numeric_limits<double>::infinity();
+    overtake_receding_horizon_scheduled_cache_.reset();
+    overtake_receding_horizon_scheduled_cache_ref_wp_id_ = -1;
+    overtake_receding_horizon_scheduled_cache_horizon_size_ = 0;
+    overtake_receding_horizon_scheduled_cache_goal_ey_ =
+      std::numeric_limits<double>::quiet_NaN();
+    overtake_receding_horizon_scheduled_cache_phase_distance_m_ =
+      std::numeric_limits<double>::quiet_NaN();
+    overtake_receding_horizon_scheduled_cache_wall_clearance_m_ =
+      std::numeric_limits<double>::quiet_NaN();
+    overtake_receding_horizon_scheduled_cache_target_separation_m_ =
+      std::numeric_limits<double>::quiet_NaN();
+    overtake_receding_horizon_scheduled_cache_max_lateral_accel_mps2_ =
+      std::numeric_limits<double>::quiet_NaN();
+    overtake_receding_horizon_scheduled_cache_hold_pass_goal_ = false;
+    overtake_receding_horizon_scheduled_cache_target_longitudinal_m_ =
+      std::numeric_limits<double>::quiet_NaN();
+    overtake_receding_horizon_scheduled_cache_target_lateral_m_ =
+      std::numeric_limits<double>::quiet_NaN();
     mpcc_lite_shadow_last_feasible_resolution_.reset();
     mpcc_lite_control_last_feasible_entry_mission_.reset();
     mpcc_lite_control_last_feasible_target_id_.clear();
@@ -18296,16 +18419,19 @@ private:
     const double additional_lateral_clearance_m,
     const double sample_step_m)
   {
-    constexpr double kHeadingBucketWidthRad = 0.01;
+    constexpr double kHeadingBucketWidthRad = 0.025;
+    constexpr double kClearanceBucketWidthM = 0.01;
     constexpr double kCacheBoundaryGuardM = 0.001;
     const auto heading_bucket = static_cast<std::int64_t>(
       std::llround(path_heading_offset_rad / kHeadingBucketWidthRad));
     const double bucket_heading_rad =
       static_cast<double>(heading_bucket) * kHeadingBucketWidthRad;
-    const auto clearance_mm = static_cast<std::int64_t>(
-      std::ceil(std::max(0.0, additional_lateral_clearance_m) * 1000.0 - 1e-9));
+    const auto clearance_bucket = static_cast<std::int64_t>(
+      std::ceil(
+        std::max(0.0, additional_lateral_clearance_m) /
+        kClearanceBucketWidthM - 1e-9));
     const double bucket_clearance_m =
-      static_cast<double>(clearance_mm) / 1000.0;
+      static_cast<double>(clearance_bucket) * kClearanceBucketWidthM;
     const auto sample_step_mm = std::max<std::int64_t>(
       1, static_cast<std::int64_t>(
         std::floor(std::max(0.001, sample_step_m) * 1000.0 + 1e-9)));
@@ -18362,16 +18488,19 @@ private:
     const PhysicalWallEnvelopeCacheKey key{
       normalized_waypoint_id,
       heading_bucket,
-      clearance_mm,
+      clearance_bucket,
       sample_step_mm};
     ++physical_wall_envelope_cache_request_count_;
-    const auto cached = physical_wall_envelope_cache_.find(key);
+    auto cached = physical_wall_envelope_cache_.find(key);
     if (
       cached != physical_wall_envelope_cache_.end() &&
       cached->second.searched_lower_m <= scan_lower_lateral_offset_m + kEps &&
       cached->second.searched_upper_m + kEps >= scan_upper_lateral_offset_m)
     {
       ++physical_wall_envelope_cache_hit_count_;
+      physical_wall_envelope_cache_lru_.splice(
+        physical_wall_envelope_cache_lru_.end(),
+        physical_wall_envelope_cache_lru_, cached->second.lru_position);
       return recovery_footprint::select_lateral_clear_interval(
         cached->second.runs,
         query_lower_lateral_offset_m, query_upper_lateral_offset_m,
@@ -18389,19 +18518,32 @@ private:
     auto evaluated = evaluate(evaluation_lower, evaluation_upper);
     physical_wall_envelope_cache_scanned_pose_count_ += evaluated.checked_pose_count;
     if (evaluated.valid) {
-      constexpr std::size_t kMaximumCacheEntries = 4096U;
-      if (
-        cached == physical_wall_envelope_cache_.end() &&
-        physical_wall_envelope_cache_.size() >= kMaximumCacheEntries)
-      {
-        // Do not flush the entire course cache at the capacity boundary.
-        // Removing one old entry avoids the periodic full-cache thrash seen
-        // with the former Mission-specific key.
-        physical_wall_envelope_cache_.erase(
-          physical_wall_envelope_cache_.begin());
+      constexpr std::size_t kMaximumCacheEntries = 16384U;
+      if (cached != physical_wall_envelope_cache_.end()) {
+        cached->second.searched_lower_m = evaluation_lower;
+        cached->second.searched_upper_m = evaluation_upper;
+        cached->second.runs = std::move(evaluated);
+        physical_wall_envelope_cache_lru_.splice(
+          physical_wall_envelope_cache_lru_.end(),
+          physical_wall_envelope_cache_lru_, cached->second.lru_position);
+      } else {
+        if (
+          physical_wall_envelope_cache_.size() >= kMaximumCacheEntries &&
+          !physical_wall_envelope_cache_lru_.empty())
+        {
+          physical_wall_envelope_cache_.erase(
+            physical_wall_envelope_cache_lru_.front());
+          physical_wall_envelope_cache_lru_.pop_front();
+        }
+        physical_wall_envelope_cache_lru_.push_back(key);
+        const auto lru_position = std::prev(
+          physical_wall_envelope_cache_lru_.end());
+        physical_wall_envelope_cache_.emplace(
+          key,
+          PhysicalWallEnvelopeCacheEntry{
+            evaluation_lower, evaluation_upper, std::move(evaluated),
+            lru_position});
       }
-      physical_wall_envelope_cache_[key] = PhysicalWallEnvelopeCacheEntry{
-        evaluation_lower, evaluation_upper, std::move(evaluated)};
       return recovery_footprint::select_lateral_clear_interval(
         physical_wall_envelope_cache_.at(key).runs,
         query_lower_lateral_offset_m, query_upper_lateral_offset_m,
@@ -19436,6 +19578,22 @@ private:
     overtake_receding_horizon_phase_ = overtake_line_state_.phase;
     overtake_receding_horizon_phase_traveled_m_ = phase_traveled_m;
     overtake_receding_horizon_last_feasible_sec_ = now_sec;
+    overtake_receding_horizon_scheduled_cache_ = result;
+    overtake_receding_horizon_scheduled_cache_ref_wp_id_ = ref_wp_id;
+    overtake_receding_horizon_scheduled_cache_horizon_size_ = N;
+    overtake_receding_horizon_scheduled_cache_goal_ey_ = goal_ey;
+    overtake_receding_horizon_scheduled_cache_phase_distance_m_ = phase_distance;
+    overtake_receding_horizon_scheduled_cache_wall_clearance_m_ =
+      planning_wall_clearance;
+    overtake_receding_horizon_scheduled_cache_target_separation_m_ =
+      target_center_separation;
+    overtake_receding_horizon_scheduled_cache_max_lateral_accel_mps2_ =
+      max_lateral_accel;
+    overtake_receding_horizon_scheduled_cache_hold_pass_goal_ = hold_pass_goal;
+    overtake_receding_horizon_scheduled_cache_target_longitudinal_m_ =
+      behavior_output.locked_target_longitudinal;
+    overtake_receding_horizon_scheduled_cache_target_lateral_m_ =
+      behavior_output.locked_target_lateral;
     return result;
   }
 
@@ -27299,15 +27457,100 @@ private:
       return_preflight_execution_reference.active ?
       std::optional<std::vector<double>>{
       return_preflight_execution_reference.lateral_targets_m} : std::nullopt;
-    auto horizon_evaluation = evaluate_overtake_line_horizon(
-      ref_wp_id, N, lb, ub, current_ey,
-      horizon_phase_start_ey,
-      horizon_phase_traveled_m,
-      hold_pass_goal,
-      phase_distance, goal_ey, planning_wall_clearance, max_lateral_accel,
-      speed_for_time, generating_execution_horizon, std::nullopt,
-      execution_lateral_override);
+    OvertakeLineHorizonEvaluation horizon_evaluation;
     OvertakeRecedingHorizonEvaluation receding_horizon;
+    const auto nearly_equal = [](const double lhs, const double rhs) {
+        return std::isfinite(lhs) && std::isfinite(rhs) &&
+               std::abs(lhs - rhs) <= 1e-6;
+      };
+    const bool target_pose_within_refresh_cell =
+      std::isfinite(behavior_output.locked_target_longitudinal) &&
+      std::isfinite(behavior_output.locked_target_lateral) &&
+      std::isfinite(
+        overtake_receding_horizon_scheduled_cache_target_longitudinal_m_) &&
+      std::isfinite(overtake_receding_horizon_scheduled_cache_target_lateral_m_) &&
+      std::abs(
+        behavior_output.locked_target_longitudinal -
+        overtake_receding_horizon_scheduled_cache_target_longitudinal_m_) <= 0.25 &&
+      std::abs(
+        behavior_output.locked_target_lateral -
+        overtake_receding_horizon_scheduled_cache_target_lateral_m_) <= 0.15;
+    const bool refresh_context_matches =
+      overtake_receding_horizon_scheduled_cache_.has_value() &&
+      overtake_receding_horizon_scheduled_cache_horizon_size_ == N &&
+      overtake_receding_horizon_generation_ == overtake_line_state_.mission_generation &&
+      overtake_receding_horizon_side_sign_ == overtake_line_state_.pass_side_sign &&
+      overtake_receding_horizon_phase_ == overtake_line_state_.phase &&
+      overtake_receding_horizon_scheduled_cache_hold_pass_goal_ == hold_pass_goal &&
+      nearly_equal(overtake_receding_horizon_scheduled_cache_goal_ey_, goal_ey) &&
+      nearly_equal(
+        overtake_receding_horizon_scheduled_cache_phase_distance_m_, phase_distance) &&
+      nearly_equal(
+        overtake_receding_horizon_scheduled_cache_wall_clearance_m_,
+        planning_wall_clearance) &&
+      nearly_equal(
+        overtake_receding_horizon_scheduled_cache_target_separation_m_,
+        target_center_separation) &&
+      nearly_equal(
+        overtake_receding_horizon_scheduled_cache_max_lateral_accel_mps2_,
+        max_lateral_accel) &&
+      target_pose_within_refresh_cell;
+    const double refresh_target_age_sec = std::isfinite(
+      overtake_line_state_.target_last_seen_sec) ?
+      std::max(0.0, now_sec - overtake_line_state_.target_last_seen_sec) :
+      std::numeric_limits<double>::infinity();
+    const bool refresh_continuity_lease_active =
+      receding_horizon_execution_lease_active(
+      now_sec,
+      locked_target_progress_continuous ||
+      refresh_target_age_sec <= line_cfg.receding_horizon_continuity_lease_sec + kEps,
+      behavior_output.locked_target_position_jump,
+      locked_target_progress_rejected,
+      behavior_output.overtake_execution_corridor_blocked,
+      behavior_output.overtake_forbidden_wp,
+      behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake,
+      actual_wall_physical_contact || actual_wall_margin_blocked ||
+      actual_wall_sample_unavailable);
+    const bool force_horizon_refresh =
+      lateral_execution_hold_active || predicted_overlap_replan_required ||
+      behavior_output.recoverable_side_contact_active ||
+      behavior_output.locked_target_position_jump || locked_target_progress_rejected ||
+      behavior_output.overtake_execution_corridor_blocked ||
+      behavior_output.overtake_forbidden_wp ||
+      behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake ||
+      actual_wall_physical_contact || actual_wall_margin_blocked ||
+      actual_wall_sample_unavailable || overtake_solver_recovery_active_;
+    const auto refresh_resolution = overtake_core::resolve_receding_horizon_refresh(
+      overtake_core::RecedingHorizonRefreshRequest{
+        line_cfg.receding_horizon_refresh_interval_sec > 0.0,
+        overtake_receding_horizon_scheduled_cache_.has_value(),
+        refresh_context_matches,
+        overtake_receding_horizon_scheduled_cache_ref_wp_id_ == ref_wp_id,
+        refresh_continuity_lease_active,
+        force_horizon_refresh,
+        now_sec,
+        overtake_receding_horizon_last_feasible_sec_,
+        line_cfg.receding_horizon_refresh_interval_sec});
+    const bool scheduled_horizon_reuse =
+      !pass_entry_physical_hold_active &&
+      refresh_resolution.reuse_cached_evaluation;
+    if (scheduled_horizon_reuse) {
+      ++overtake_receding_horizon_reuse_count_;
+      receding_horizon = overtake_receding_horizon_scheduled_cache_.value();
+      receding_horizon.last_feasible_hold_active = true;
+      receding_horizon.fallback_reason = "scheduled exact-context horizon hold";
+      horizon_evaluation = receding_horizon.horizon;
+    } else {
+      ++overtake_receding_horizon_refresh_count_;
+      horizon_evaluation = evaluate_overtake_line_horizon(
+        ref_wp_id, N, lb, ub, current_ey,
+        horizon_phase_start_ey,
+        horizon_phase_traveled_m,
+        hold_pass_goal,
+        phase_distance, goal_ey, planning_wall_clearance, max_lateral_accel,
+        speed_for_time, generating_execution_horizon, std::nullopt,
+        execution_lateral_override);
+    }
     if (pass_entry_physical_hold_active) {
       bool hard_wall_clearance_used = false;
       if (
@@ -27341,7 +27584,7 @@ private:
       receding_horizon.fallback_reason =
         "Pass entry physical gate retained current-side prefix";
       receding_horizon.horizon = horizon_evaluation;
-    } else {
+    } else if (!scheduled_horizon_reuse) {
       receding_horizon = optimize_live_overtake_line_horizon(
         behavior_output, horizon_evaluation, ref_wp_id, N, lb, ub, current_ey,
         horizon_phase_start_ey, horizon_phase_traveled_m, hold_pass_goal,
@@ -27349,6 +27592,33 @@ private:
         target_center_separation, max_lateral_accel, speed_for_time,
         generating_execution_horizon, predicted_overlap_replan_required,
         rear_clear_confirmed, now_sec);
+      if (
+        !receding_horizon.active || receding_horizon.fallback ||
+        receding_horizon.hard_infeasible)
+      {
+        overtake_receding_horizon_scheduled_cache_.reset();
+      }
+    }
+    if (
+      std::isfinite(now_sec) &&
+      (!std::isfinite(overtake_receding_horizon_refresh_telemetry_last_log_sec_) ||
+      now_sec < overtake_receding_horizon_refresh_telemetry_last_log_sec_ ||
+      now_sec - overtake_receding_horizon_refresh_telemetry_last_log_sec_ >= 1.0))
+    {
+      if (line_cfg.debug_log_enabled) {
+        RCLCPP_INFO(
+          rclcpp::get_logger("mpc_controller"),
+          "Overtake horizon schedule: fresh=%zu, reused=%zu, interval=%.3f s, "
+          "cache=%d, wp_id=%d",
+          static_cast<std::size_t>(overtake_receding_horizon_refresh_count_),
+          static_cast<std::size_t>(overtake_receding_horizon_reuse_count_),
+          line_cfg.receding_horizon_refresh_interval_sec,
+          overtake_receding_horizon_scheduled_cache_.has_value() ? 1 : 0,
+          ref_wp_id);
+      }
+      overtake_receding_horizon_refresh_count_ = 0U;
+      overtake_receding_horizon_reuse_count_ = 0U;
+      overtake_receding_horizon_refresh_telemetry_last_log_sec_ = now_sec;
     }
     const bool optimized_target_bound_failure =
       receding_horizon.hard_infeasible &&
@@ -31700,6 +31970,24 @@ Config load_config(const std::string & path)
   progress_contouring.rti_sqp_mixing =
     mpc["progress_contouring_rti_sqp_mixing"] ?
     mpc["progress_contouring_rti_sqp_mixing"].as<double>() : 0.65;
+  progress_contouring.conditional_refinement_enabled =
+    mpc["progress_contouring_conditional_refinement_enabled"] ?
+    mpc["progress_contouring_conditional_refinement_enabled"].as<bool>() : true;
+  progress_contouring.refinement_minimum_bound_reserve_m =
+    mpc["progress_contouring_refinement_minimum_bound_reserve_m"] ?
+    mpc["progress_contouring_refinement_minimum_bound_reserve_m"].as<double>() : 0.12;
+  progress_contouring.refinement_lateral_defect_m =
+    mpc["progress_contouring_refinement_lateral_defect_m"] ?
+    mpc["progress_contouring_refinement_lateral_defect_m"].as<double>() : 0.08;
+  progress_contouring.refinement_heading_defect_rad =
+    mpc["progress_contouring_refinement_heading_defect_rad"] ?
+    mpc["progress_contouring_refinement_heading_defect_rad"].as<double>() : 0.04;
+  progress_contouring.refinement_curvature_radpm =
+    mpc["progress_contouring_refinement_curvature_radpm"] ?
+    mpc["progress_contouring_refinement_curvature_radpm"].as<double>() : 0.08;
+  progress_contouring.refinement_start_deadline_ms =
+    mpc["progress_contouring_refinement_start_deadline_ms"] ?
+    mpc["progress_contouring_refinement_start_deadline_ms"].as<double>() : 12.0;
   if (!mpcc_progress::resolve_progress_cost(0.0, false, progress_contouring).has_value()) {
     throw std::runtime_error(
             "mpc.progress_contouring_* values must be finite and within range");
@@ -32080,6 +32368,10 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_receding_horizon_continuity_lease_sec"] ?
     mpc["v2x_overtake_receding_horizon_continuity_lease_sec"].as<double>() : 0.30);
+  cfg.mpc.v2x_behavior.overtake_line.receding_horizon_refresh_interval_sec = std::max(
+    0.0,
+    mpc["v2x_overtake_receding_horizon_refresh_interval_sec"] ?
+    mpc["v2x_overtake_receding_horizon_refresh_interval_sec"].as<double>() : 0.10);
   cfg.mpc.v2x_behavior.overtake_line.receding_horizon_target_bound_prefix_enabled =
     mpc["v2x_overtake_receding_horizon_target_bound_prefix_enabled"] ?
     mpc["v2x_overtake_receding_horizon_target_bound_prefix_enabled"].as<bool>() : false;
@@ -34116,7 +34408,9 @@ public:
     RCLCPP_INFO(
       get_logger(),
       "Progress-contouring MPCC: %s, scope=%s, lag=%.1f/%.1f, "
-      "reward=%.1f/%.1f, trust=-%.1f/+%.1f m, rti_sqp=%d@%.2f",
+      "reward=%.1f/%.1f, trust=-%.1f/+%.1f m, rti_sqp=%d@%.2f, "
+      "conditional=%s/reserve<=%.2f m/defect>=%.2f m/%.3f rad/"
+      "curvature>=%.3f rad/m/deadline=%.1f ms",
       mpc_cfg_.progress_contouring_mpcc_enabled ? "enabled" : "disabled",
       mpc_cfg_.progress_contouring_mpcc_overtake_only ? "overtake" : "all",
       mpc_cfg_.progress_contouring.lag_weight,
@@ -34126,7 +34420,14 @@ public:
       mpc_cfg_.progress_contouring.trust_region_backward_m,
       mpc_cfg_.progress_contouring.trust_region_forward_m,
       mpc_cfg_.progress_contouring.rti_sqp_iterations,
-      mpc_cfg_.progress_contouring.rti_sqp_mixing);
+      mpc_cfg_.progress_contouring.rti_sqp_mixing,
+      mpc_cfg_.progress_contouring.conditional_refinement_enabled ?
+      "enabled" : "disabled",
+      mpc_cfg_.progress_contouring.refinement_minimum_bound_reserve_m,
+      mpc_cfg_.progress_contouring.refinement_lateral_defect_m,
+      mpc_cfg_.progress_contouring.refinement_heading_defect_rad,
+      mpc_cfg_.progress_contouring.refinement_curvature_radpm,
+      mpc_cfg_.progress_contouring.refinement_start_deadline_ms);
     setup_parameters_callback();
     setup_pub_sub();
     if (ref_vel_config_path_.has_value()) {

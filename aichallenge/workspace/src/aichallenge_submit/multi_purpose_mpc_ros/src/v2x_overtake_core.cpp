@@ -1988,6 +1988,30 @@ bool can_retain_receding_horizon_execution_lease(
          request.maximum_age_sec + 1e-9;
 }
 
+RecedingHorizonRefreshResolution resolve_receding_horizon_refresh(
+  const RecedingHorizonRefreshRequest & request) noexcept
+{
+  RecedingHorizonRefreshResolution resolution;
+  if (
+    !request.enabled || !request.cached_evaluation_available ||
+    !request.mission_context_matches || !request.reference_waypoint_matches ||
+    !request.continuity_lease_active || request.force_refresh ||
+    !std::isfinite(request.now_sec) || !std::isfinite(request.last_refresh_sec) ||
+    !std::isfinite(request.minimum_refresh_interval_sec) ||
+    request.minimum_refresh_interval_sec <= 0.0 ||
+    request.now_sec < request.last_refresh_sec)
+  {
+    return resolution;
+  }
+  const double age_sec = request.now_sec - request.last_refresh_sec;
+  if (age_sec + 1e-9 >= request.minimum_refresh_interval_sec) {
+    return resolution;
+  }
+  resolution.refresh = false;
+  resolution.reuse_cached_evaluation = true;
+  return resolution;
+}
+
 bool can_reuse_async_tactical_result(
   const AsyncTacticalResultLeaseRequest & request) noexcept
 {

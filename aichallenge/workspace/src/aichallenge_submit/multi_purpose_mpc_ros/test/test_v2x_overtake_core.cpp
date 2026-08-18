@@ -3832,6 +3832,36 @@ TEST(V2XOvertakeCoreSpeed, RetainsRecentFeasibleRecedingHorizonForSameMission)
   EXPECT_FALSE(can_retain_receding_horizon_execution_lease(request));
 }
 
+TEST(V2XOvertakeCoreSpeed, ReusesValidatedHorizonOnlyInsideExactRefreshContext)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonRefreshRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::resolve_receding_horizon_refresh;
+  RecedingHorizonRefreshRequest request;
+  request.enabled = true;
+  request.cached_evaluation_available = true;
+  request.mission_context_matches = true;
+  request.reference_waypoint_matches = true;
+  request.continuity_lease_active = true;
+  request.now_sec = 10.05;
+  request.last_refresh_sec = 10.0;
+  request.minimum_refresh_interval_sec = 0.10;
+
+  auto result = resolve_receding_horizon_refresh(request);
+  EXPECT_FALSE(result.refresh);
+  EXPECT_TRUE(result.reuse_cached_evaluation);
+
+  request.reference_waypoint_matches = false;
+  result = resolve_receding_horizon_refresh(request);
+  EXPECT_TRUE(result.refresh);
+  EXPECT_FALSE(result.reuse_cached_evaluation);
+  request.reference_waypoint_matches = true;
+  request.force_refresh = true;
+  EXPECT_TRUE(resolve_receding_horizon_refresh(request).refresh);
+  request.force_refresh = false;
+  request.now_sec = 10.10;
+  EXPECT_TRUE(resolve_receding_horizon_refresh(request).refresh);
+}
+
 TEST(V2XOvertakeCoreSpeed, RecedingHorizonLeaseCannotBypassHardFaults)
 {
   RecedingHorizonExecutionLeaseRequest request;

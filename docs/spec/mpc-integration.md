@@ -1,6 +1,6 @@
 # multi_purpose_mpc_ros インテグレーション設計
 
-> 仕様ドキュメント（現仕様の正）。最終確認: 2026-07-24。文書運用方針は [docs/README.md](../README.md) を参照。
+> 仕様ドキュメント（現仕様の正）。最終確認: 2026-08-18。文書運用方針は [docs/README.md](../README.md) を参照。
 
 作成日: 2026-02-10
 
@@ -147,9 +147,33 @@ solved MPCC trajectoryのauthority判定も現在位置から始まる同じback
 0.0が安全側fallbackまでの収縮を示す。
 occupied / unknown / out-of-map、物理footprint、設定したhard wall marginは緩和しない。
 
-これは本格MPCCへの第1段階であり、複数回RTI-SQP、terminal velocity cost、
+これは本格MPCCへの段階実装であり、最大3回のRTI-SQP枠は持つが、通常設定は
+first feasible QPと条件付き1回refinementである。terminal velocity cost、
 dynamic bicycle / tire modelは未導入である。2026公式制御仕様ではなく、
 2025 AWSIM由来のシミュレーション競技向け暫定実装として扱う。
+
+### MPCC runtime budget Stage 1（2026-08-18、2025由来の暫定）
+
+`control_rate=40 Hz`のcommand生成、現在車体のwall/contact確認、EmergencyBrake、
+odometry/NaN fail-safeは維持したまま、追い越し中の重複計算だけを間引く。
+
+- receding-horizon lateral evaluationは、同一reference waypoint、同一target/Mission
+  generation/phase/side、同一goalと制約、target位置変化が縦0.25 m・横0.15 m以内、
+  continuity lease成立、hard faultなしの場合だけ、最大
+  `v2x_overtake_receding_horizon_refresh_interval_sec`再利用できる。WP更新、接触、
+  predicted overlap、target jump、course-progress reject、corridor block、禁止WP、
+  EmergencyBrake、wall fault、solver recoveryでは即時fresh評価へ戻る。
+- RTI-SQPはfirst QP solutionを必ず保持し、lateral bound reserve、linearizationからの
+  横位置/姿勢差、horizon最大曲率のいずれかが閾値を超え、かつfirst solve後が
+  `progress_contouring_refinement_start_deadline_ms`未満の場合だけ2回目を開始する。
+  2回目の失敗時は従来どおりfirst feasible solutionを使う。
+- static wall envelope cacheはheadingを0.025 rad、追加clearanceを保守的な1 cm上向き
+  bucketへ量子化する。bucket内heading差はfootprint marginへ加え、物理安全余裕を
+  緩和しない。capacityは16384件、退避はLRUとし、周回中に再利用するentryを保持する。
+
+周期ログ`Overtake horizon schedule`、`MPCC RTI-SQP`、既存wall cache telemetryで、
+fresh/reuse、condition/deadline skip、cache hit率を実走比較する。core solverの別thread化、
+command 40 Hzとsolver 20 Hzの完全分離は本Stageには含めない。
 
 ### Wall / Contact Stuck Recovery（Implementation Complete / dev3 Enabled）
 

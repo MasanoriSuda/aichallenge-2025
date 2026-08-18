@@ -2,6 +2,7 @@
 
 #include <Eigen/Dense>
 
+#include <limits>
 #include <optional>
 #include <vector>
 
@@ -22,6 +23,12 @@ struct Config
   double terminal_progress_reward_weight{5000.0};
   int rti_sqp_iterations{2};
   double rti_sqp_mixing{0.65};
+  bool conditional_refinement_enabled{true};
+  double refinement_minimum_bound_reserve_m{0.12};
+  double refinement_lateral_defect_m{0.08};
+  double refinement_heading_defect_rad{0.04};
+  double refinement_curvature_radpm{0.08};
+  double refinement_start_deadline_ms{12.0};
 };
 
 struct StageDistanceResolution
@@ -105,6 +112,39 @@ std::optional<ProgressCost> resolve_progress_cost(
 std::optional<Eigen::VectorXd> damp_rti_sqp_iterate(
   const Eigen::VectorXd & linearization_point,
   const Eigen::VectorXd & qp_solution, double alpha) noexcept;
+
+struct RtiRefinementRequest
+{
+  bool progress_mode_active{false};
+  int configured_iterations{1};
+  bool conditional_refinement_enabled{true};
+  double minimum_lateral_bound_reserve_m{
+    std::numeric_limits<double>::infinity()};
+  double lateral_defect_m{};
+  double heading_defect_rad{};
+  double maximum_curvature_radpm{};
+  double elapsed_ms{};
+  double minimum_bound_reserve_threshold_m{};
+  double lateral_defect_threshold_m{};
+  double heading_defect_threshold_rad{};
+  double curvature_threshold_radpm{};
+  double refinement_start_deadline_ms{};
+};
+
+enum class RtiRefinementDecision
+{
+  Disabled,
+  Refine,
+  SkipCondition,
+  SkipDeadline,
+  Invalid,
+};
+
+/// Decide whether a second RTI-SQP solve is worth spending the remaining
+/// control-cycle budget.  The first feasible QP remains authoritative when
+/// refinement is skipped or later fails.
+RtiRefinementDecision resolve_rti_refinement(
+  const RtiRefinementRequest & request) noexcept;
 
 struct ExecutionTrajectory
 {

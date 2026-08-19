@@ -3074,6 +3074,102 @@ PassHorizonAction resolve_pass_horizon_action(
     PassHorizonAction::EnterHold : PassHorizonAction::Abort;
 }
 
+PassDynamicHorizonAvailabilityResolution resolve_pass_dynamic_horizon_availability(
+  const PassDynamicHorizonAvailabilityRequest & request) noexcept
+{
+  PassDynamicHorizonAvailabilityResolution resolution;
+  if (
+    std::isnan(request.prediction_time_remaining_sec) ||
+    request.prediction_time_remaining_sec < 0.0)
+  {
+    resolution.failure_reason = PassRefreshFailureReason::InvalidInput;
+    return resolution;
+  }
+
+  resolution.valid = true;
+  if (!request.committed_horizon_enabled) {
+    resolution.available = true;
+    return resolution;
+  }
+  if (request.target_position_jump) {
+    resolution.failure_reason = PassRefreshFailureReason::TargetDiscontinuous;
+    return resolution;
+  }
+  if (request.target_course_progress_rejected) {
+    resolution.failure_reason = PassRefreshFailureReason::CourseProgressRejected;
+    return resolution;
+  }
+  if (request.execution_corridor_blocked) {
+    resolution.failure_reason = PassRefreshFailureReason::ExecutionCorridorBlocked;
+    return resolution;
+  }
+  if (request.pass_side_intrusion) {
+    resolution.failure_reason = PassRefreshFailureReason::PredictedOverlap;
+    return resolution;
+  }
+  if (!request.target_matches || !request.target_progress_continuous) {
+    resolution.failure_reason = request.target_observation_leased ?
+      PassRefreshFailureReason::TargetPredictionUnavailable :
+      PassRefreshFailureReason::TargetDiscontinuous;
+    return resolution;
+  }
+  if (
+    !request.prediction_timing_valid ||
+    !std::isfinite(request.prediction_time_remaining_sec) ||
+    request.prediction_time_remaining_sec <= 1e-9)
+  {
+    resolution.failure_reason = PassRefreshFailureReason::TargetPredictionUnavailable;
+    return resolution;
+  }
+  if (!request.target_laterally_separated) {
+    resolution.failure_reason = PassRefreshFailureReason::PredictedOverlap;
+    return resolution;
+  }
+
+  resolution.available = true;
+  return resolution;
+}
+
+bool can_retain_pass_during_prediction_dropout(
+  const PassPredictionDropoutExecutionLeaseRequest & request) noexcept
+{
+  const auto finite_non_negative = [](const double value) {
+      return std::isfinite(value) && value >= 0.0;
+    };
+  const auto valid_limit = [](const double value) {
+      return !std::isnan(value) && value >= 0.0;
+    };
+  if (
+    !finite_non_negative(request.pass_elapsed_sec) ||
+    !finite_non_negative(request.pass_traveled_m) ||
+    !valid_limit(request.absolute_pass_time_limit_sec) ||
+    !valid_limit(request.absolute_pass_distance_limit_m))
+  {
+    return false;
+  }
+
+  if (
+    !request.enabled || !request.pass_active || !request.mission_path_frozen ||
+    request.refresh_failure_reason !=
+    PassRefreshFailureReason::TargetPredictionUnavailable ||
+    !request.cached_execution_lease_active ||
+    !request.recent_target_observation || !request.recent_clear_prediction ||
+    !request.committed_dynamic_prefix_available ||
+    (request.current_target_observed && !request.current_body_geometry_safe) ||
+    request.target_position_jump || request.target_course_progress_rejected ||
+    request.execution_corridor_blocked || request.pass_side_intrusion ||
+    request.predicted_overlap_replan_required ||
+    request.actual_wall_physical_contact || request.actual_wall_margin_blocked ||
+    request.actual_wall_sample_unavailable || request.emergency_brake ||
+    request.explicit_forbidden_waypoint || request.solver_recovery_active)
+  {
+    return false;
+  }
+
+  return request.pass_elapsed_sec < request.absolute_pass_time_limit_sec - 1e-9 &&
+         request.pass_traveled_m < request.absolute_pass_distance_limit_m - 1e-9;
+}
+
 bool can_lease_stopped_side_pass_prediction(
   const StoppedSidePassPredictionLeaseRequest & request) noexcept
 {

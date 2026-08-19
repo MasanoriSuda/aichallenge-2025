@@ -1888,6 +1888,70 @@ enum class PassRefreshFailureReason
   Other,
 };
 
+struct PassDynamicHorizonAvailabilityRequest
+{
+  bool committed_horizon_enabled{false};
+  bool prediction_timing_valid{false};
+  double prediction_time_remaining_sec{};
+  bool target_matches{false};
+  bool target_progress_continuous{false};
+  bool target_observation_leased{false};
+  bool target_position_jump{false};
+  bool target_course_progress_rejected{false};
+  bool execution_corridor_blocked{false};
+  bool pass_side_intrusion{false};
+  bool target_laterally_separated{false};
+};
+
+struct PassDynamicHorizonAvailabilityResolution
+{
+  bool valid{false};
+  bool available{false};
+  PassRefreshFailureReason failure_reason{PassRefreshFailureReason::None};
+};
+
+/// Classify why a committed Pass cannot consume a fresh dynamic horizon.
+/// Target-observation dropout is intentionally distinct from corridor,
+/// overlap and course-continuity failures because only the former may consume
+/// a bounded last-feasible execution lease.
+PassDynamicHorizonAvailabilityResolution resolve_pass_dynamic_horizon_availability(
+  const PassDynamicHorizonAvailabilityRequest & request) noexcept;
+
+struct PassPredictionDropoutExecutionLeaseRequest
+{
+  bool enabled{false};
+  bool pass_active{false};
+  bool mission_path_frozen{false};
+  PassRefreshFailureReason refresh_failure_reason{PassRefreshFailureReason::None};
+  bool cached_execution_lease_active{false};
+  bool recent_target_observation{false};
+  bool recent_clear_prediction{false};
+  bool committed_dynamic_prefix_available{false};
+  bool current_target_observed{false};
+  bool current_body_geometry_safe{false};
+  bool target_position_jump{false};
+  bool target_course_progress_rejected{false};
+  bool execution_corridor_blocked{false};
+  bool pass_side_intrusion{false};
+  bool predicted_overlap_replan_required{false};
+  bool actual_wall_physical_contact{false};
+  bool actual_wall_margin_blocked{false};
+  bool actual_wall_sample_unavailable{false};
+  bool emergency_brake{false};
+  bool explicit_forbidden_waypoint{false};
+  bool solver_recovery_active{false};
+  double pass_elapsed_sec{};
+  double pass_traveled_m{};
+  double absolute_pass_time_limit_sec{std::numeric_limits<double>::infinity()};
+  double absolute_pass_distance_limit_m{std::numeric_limits<double>::infinity()};
+};
+
+/// Retain only an already solved MPCC execution prefix across a short target
+/// classification dropout. This does not validate a new path and never
+/// relaxes target, wall, emergency, solver or immutable Pass budget gates.
+bool can_retain_pass_during_prediction_dropout(
+  const PassPredictionDropoutExecutionLeaseRequest & request) noexcept;
+
 struct StoppedSidePassPredictionLeaseRequest
 {
   bool enabled{false};

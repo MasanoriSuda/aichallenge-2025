@@ -174,12 +174,18 @@ using multi_purpose_mpc_ros::v2x_overtake_core::DynamicPredictionTimingRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommitClockProjectionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassHorizonAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassHorizonDecisionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::PassDynamicHorizonAvailabilityRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::PassPredictionDropoutExecutionLeaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StoppedSidePassPredictionLeaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassRefreshFailureReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassRefreshReplanGraceRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_hold_pass_during_refresh_replan;
 using multi_purpose_mpc_ros::v2x_overtake_core::StoppedPredictionLeaseSpeedRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_stopped_prediction_lease_speed;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  resolve_pass_dynamic_horizon_availability;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  can_retain_pass_during_prediction_dropout;
 using multi_purpose_mpc_ros::v2x_overtake_core::RearClearReplanWindowRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RuntimeRearClearPredictionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassContinuationPreflightPolicyRequest;
@@ -5576,6 +5582,168 @@ TEST(V2XOvertakeCoreHorizon, LeasesRecentStoppedSideTargetPredictionLoss)
   request.absolute_pass_distance_limit_m = 40.0;
 
   EXPECT_TRUE(can_lease_stopped_side_pass_prediction(request));
+}
+
+TEST(V2XOvertakeCoreHorizon, ClassifiesFreshAndLeasedDynamicTargetHorizons)
+{
+  PassDynamicHorizonAvailabilityRequest request;
+  request.committed_horizon_enabled = true;
+  request.prediction_timing_valid = true;
+  request.prediction_time_remaining_sec = 0.95;
+  request.target_matches = true;
+  request.target_progress_continuous = true;
+  request.target_laterally_separated = true;
+
+  auto result = resolve_pass_dynamic_horizon_availability(request);
+  ASSERT_TRUE(result.valid);
+  EXPECT_TRUE(result.available);
+  EXPECT_EQ(result.failure_reason, PassRefreshFailureReason::None);
+
+  request.target_matches = false;
+  request.target_progress_continuous = false;
+  request.target_observation_leased = true;
+  result = resolve_pass_dynamic_horizon_availability(request);
+  ASSERT_TRUE(result.valid);
+  EXPECT_FALSE(result.available);
+  EXPECT_EQ(
+    result.failure_reason, PassRefreshFailureReason::TargetPredictionUnavailable);
+
+  request.target_observation_leased = false;
+  result = resolve_pass_dynamic_horizon_availability(request);
+  EXPECT_EQ(result.failure_reason, PassRefreshFailureReason::TargetDiscontinuous);
+}
+
+TEST(V2XOvertakeCoreHorizon, ClassifiesDynamicHorizonHardFailuresPrecisely)
+{
+  PassDynamicHorizonAvailabilityRequest request;
+  request.committed_horizon_enabled = true;
+  request.prediction_timing_valid = true;
+  request.prediction_time_remaining_sec = 0.95;
+  request.target_matches = true;
+  request.target_progress_continuous = true;
+  request.target_laterally_separated = true;
+
+  request.execution_corridor_blocked = true;
+  auto result = resolve_pass_dynamic_horizon_availability(request);
+  EXPECT_EQ(result.failure_reason, PassRefreshFailureReason::ExecutionCorridorBlocked);
+  request.execution_corridor_blocked = false;
+
+  request.pass_side_intrusion = true;
+  result = resolve_pass_dynamic_horizon_availability(request);
+  EXPECT_EQ(result.failure_reason, PassRefreshFailureReason::PredictedOverlap);
+  request.pass_side_intrusion = false;
+
+  request.target_laterally_separated = false;
+  result = resolve_pass_dynamic_horizon_availability(request);
+  EXPECT_EQ(result.failure_reason, PassRefreshFailureReason::PredictedOverlap);
+  request.target_laterally_separated = true;
+
+  request.target_course_progress_rejected = true;
+  result = resolve_pass_dynamic_horizon_availability(request);
+  EXPECT_EQ(result.failure_reason, PassRefreshFailureReason::CourseProgressRejected);
+  request.target_course_progress_rejected = false;
+
+  request.target_position_jump = true;
+  result = resolve_pass_dynamic_horizon_availability(request);
+  EXPECT_EQ(result.failure_reason, PassRefreshFailureReason::TargetDiscontinuous);
+}
+
+TEST(V2XOvertakeCoreHorizon, RetainsCachedPassForBoundedPredictionDropout)
+{
+  PassPredictionDropoutExecutionLeaseRequest request;
+  request.enabled = true;
+  request.pass_active = true;
+  request.mission_path_frozen = true;
+  request.refresh_failure_reason = PassRefreshFailureReason::TargetPredictionUnavailable;
+  request.cached_execution_lease_active = true;
+  request.recent_target_observation = true;
+  request.recent_clear_prediction = true;
+  request.committed_dynamic_prefix_available = true;
+  request.pass_elapsed_sec = 2.2;
+  request.pass_traveled_m = 5.64;
+  request.absolute_pass_time_limit_sec = 10.0;
+  request.absolute_pass_distance_limit_m = 32.0;
+
+  EXPECT_TRUE(can_retain_pass_during_prediction_dropout(request));
+
+  request.current_target_observed = true;
+  request.current_body_geometry_safe = true;
+  EXPECT_TRUE(can_retain_pass_during_prediction_dropout(request));
+}
+
+TEST(V2XOvertakeCoreHorizon, PredictionDropoutLeasePreservesEveryHardBoundary)
+{
+  PassPredictionDropoutExecutionLeaseRequest request;
+  request.enabled = true;
+  request.pass_active = true;
+  request.mission_path_frozen = true;
+  request.refresh_failure_reason = PassRefreshFailureReason::TargetPredictionUnavailable;
+  request.cached_execution_lease_active = true;
+  request.recent_target_observation = true;
+  request.recent_clear_prediction = true;
+  request.committed_dynamic_prefix_available = true;
+  request.pass_elapsed_sec = 2.0;
+  request.pass_traveled_m = 5.0;
+  request.absolute_pass_time_limit_sec = 10.0;
+  request.absolute_pass_distance_limit_m = 32.0;
+  ASSERT_TRUE(can_retain_pass_during_prediction_dropout(request));
+
+  request.current_target_observed = true;
+  EXPECT_FALSE(can_retain_pass_during_prediction_dropout(request));
+  request.current_target_observed = false;
+  request.recent_target_observation = false;
+  EXPECT_FALSE(can_retain_pass_during_prediction_dropout(request));
+  request.recent_target_observation = true;
+  request.recent_clear_prediction = false;
+  EXPECT_FALSE(can_retain_pass_during_prediction_dropout(request));
+  request.recent_clear_prediction = true;
+  request.target_position_jump = true;
+  EXPECT_FALSE(can_retain_pass_during_prediction_dropout(request));
+  request.target_position_jump = false;
+  request.target_course_progress_rejected = true;
+  EXPECT_FALSE(can_retain_pass_during_prediction_dropout(request));
+  request.target_course_progress_rejected = false;
+  request.execution_corridor_blocked = true;
+  EXPECT_FALSE(can_retain_pass_during_prediction_dropout(request));
+  request.execution_corridor_blocked = false;
+  request.pass_side_intrusion = true;
+  EXPECT_FALSE(can_retain_pass_during_prediction_dropout(request));
+  request.pass_side_intrusion = false;
+  request.predicted_overlap_replan_required = true;
+  EXPECT_FALSE(can_retain_pass_during_prediction_dropout(request));
+  request.predicted_overlap_replan_required = false;
+  request.actual_wall_physical_contact = true;
+  EXPECT_FALSE(can_retain_pass_during_prediction_dropout(request));
+  request.actual_wall_physical_contact = false;
+  request.actual_wall_margin_blocked = true;
+  EXPECT_FALSE(can_retain_pass_during_prediction_dropout(request));
+  request.actual_wall_margin_blocked = false;
+  request.actual_wall_sample_unavailable = true;
+  EXPECT_FALSE(can_retain_pass_during_prediction_dropout(request));
+  request.actual_wall_sample_unavailable = false;
+  request.emergency_brake = true;
+  EXPECT_FALSE(can_retain_pass_during_prediction_dropout(request));
+  request.emergency_brake = false;
+  request.explicit_forbidden_waypoint = true;
+  EXPECT_FALSE(can_retain_pass_during_prediction_dropout(request));
+  request.explicit_forbidden_waypoint = false;
+  request.solver_recovery_active = true;
+  EXPECT_FALSE(can_retain_pass_during_prediction_dropout(request));
+  request.solver_recovery_active = false;
+  request.cached_execution_lease_active = false;
+  EXPECT_FALSE(can_retain_pass_during_prediction_dropout(request));
+  request.cached_execution_lease_active = true;
+  request.committed_dynamic_prefix_available = false;
+  EXPECT_FALSE(can_retain_pass_during_prediction_dropout(request));
+  request.committed_dynamic_prefix_available = true;
+  request.refresh_failure_reason = PassRefreshFailureReason::ExecutionCorridorBlocked;
+  EXPECT_FALSE(can_retain_pass_during_prediction_dropout(request));
+  request.refresh_failure_reason = PassRefreshFailureReason::TargetPredictionUnavailable;
+  request.pass_elapsed_sec = request.absolute_pass_time_limit_sec;
+  EXPECT_FALSE(can_retain_pass_during_prediction_dropout(request));
+  request.pass_elapsed_sec = 2.0;
+  request.pass_traveled_m = request.absolute_pass_distance_limit_m;
+  EXPECT_FALSE(can_retain_pass_during_prediction_dropout(request));
 }
 
 TEST(V2XOvertakeCoreHorizon, StopsPredictionLeaseAtEveryHardBoundary)

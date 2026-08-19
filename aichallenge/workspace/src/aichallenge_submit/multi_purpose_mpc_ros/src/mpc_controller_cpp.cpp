@@ -2456,6 +2456,7 @@ struct OvertakeLineState
   double pass_stopped_prediction_lease_start_distance{0.0};
   double pass_stopped_prediction_lease_start_speed_mps{
     std::numeric_limits<double>::quiet_NaN()};
+  bool pass_prediction_dropout_execution_lease_was_active{false};
   double pass_contact_start_sec{std::numeric_limits<double>::quiet_NaN()};
   double pass_contact_start_target_longitudinal{
     std::numeric_limits<double>::quiet_NaN()};
@@ -17985,6 +17986,7 @@ private:
       overtake_line_state_.pass_stopped_prediction_lease_start_distance = 0.0;
       overtake_line_state_.pass_stopped_prediction_lease_start_speed_mps =
         std::numeric_limits<double>::quiet_NaN();
+      overtake_line_state_.pass_prediction_dropout_execution_lease_was_active = false;
       overtake_line_state_.pass_contact_start_sec =
         std::numeric_limits<double>::quiet_NaN();
       overtake_line_state_.pass_contact_start_target_longitudinal =
@@ -18556,6 +18558,7 @@ private:
     overtake_line_state_.pass_stopped_prediction_lease_start_distance = 0.0;
     overtake_line_state_.pass_stopped_prediction_lease_start_speed_mps =
       std::numeric_limits<double>::quiet_NaN();
+    overtake_line_state_.pass_prediction_dropout_execution_lease_was_active = false;
     overtake_line_state_.pass_contact_start_sec =
       std::numeric_limits<double>::quiet_NaN();
     overtake_line_state_.pass_contact_start_target_longitudinal =
@@ -26215,14 +26218,44 @@ private:
     const bool live_target_laterally_separated =
       behavior_output.locked_target_current_robust_footprints_separated ||
       behavior_output.locked_target_current_lateral_clear;
+    const bool dynamic_target_identity_compatible =
+      (behavior_output.target_vehicle_id.empty() ||
+      behavior_output.target_vehicle_id == "__unknown__" ||
+      behavior_output.target_vehicle_id == overtake_line_state_.target_vehicle_id);
+    const bool dynamic_target_observation_leased =
+      !overtake_line_state_.target_vehicle_id.empty() &&
+      overtake_line_state_.target_vehicle_id != "__unknown__" &&
+      dynamic_target_identity_compatible &&
+      target_age <= line_cfg.receding_horizon_continuity_lease_sec + kEps;
+    const auto pass_dynamic_horizon_availability =
+      overtake_core::resolve_pass_dynamic_horizon_availability(
+      overtake_core::PassDynamicHorizonAvailabilityRequest{
+        committed_pass_horizon_enabled,
+        live_prediction_timing.valid,
+        live_prediction_timing.valid ? live_prediction_timing.remaining_sec : 0.0,
+        locked_target_matches,
+        locked_target_progress_continuous,
+        dynamic_target_observation_leased,
+        behavior_output.locked_target_position_jump,
+        locked_target_progress_rejected,
+        behavior_output.overtake_execution_corridor_blocked,
+        behavior_output.locked_target_pass_side_intrusion,
+        live_target_laterally_separated});
     const bool fresh_dynamic_horizon_available =
-      !committed_pass_horizon_enabled ||
-      (live_prediction_timing.valid && live_prediction_timing.remaining_sec > kEps &&
-      locked_target_matches && locked_target_progress_continuous &&
-      !behavior_output.locked_target_position_jump &&
-      !behavior_output.overtake_execution_corridor_blocked &&
-      !behavior_output.locked_target_pass_side_intrusion &&
-      live_target_laterally_separated);
+      pass_dynamic_horizon_availability.valid &&
+      pass_dynamic_horizon_availability.available;
+    if (
+      fresh_dynamic_horizon_available &&
+      overtake_line_state_.pass_prediction_dropout_execution_lease_was_active)
+    {
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"),
+        "OvertakeLine prediction-dropout execution lease released: "
+        "target=%s, side=%d, reason=fresh dynamic horizon restored, wp_id=%d",
+        overtake_line_state_.target_vehicle_id.c_str(),
+        overtake_line_state_.pass_side_sign, model->wp_id);
+      overtake_line_state_.pass_prediction_dropout_execution_lease_was_active = false;
+    }
     if (
       committed_pass_horizon_enabled && fresh_dynamic_horizon_available &&
       (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
@@ -26931,6 +26964,31 @@ private:
         }
         return "horizon_margin";
       };
+    const auto dynamic_horizon_failure_text = [&]() -> const char * {
+        switch (pass_dynamic_horizon_availability.failure_reason) {
+          case overtake_core::PassRefreshFailureReason::TargetPredictionUnavailable:
+            return "fresh target prediction unavailable";
+          case overtake_core::PassRefreshFailureReason::TargetDiscontinuous:
+            return "locked target observation discontinuous";
+          case overtake_core::PassRefreshFailureReason::CourseProgressRejected:
+            return "locked target course progress rejected";
+          case overtake_core::PassRefreshFailureReason::ExecutionCorridorBlocked:
+            return "live execution corridor blocked";
+          case overtake_core::PassRefreshFailureReason::PredictedOverlap:
+            return "target separation or pass-side occupancy unavailable";
+          case overtake_core::PassRefreshFailureReason::InvalidInput:
+            return "dynamic horizon availability input invalid";
+          case overtake_core::PassRefreshFailureReason::AbsoluteBudgetExhausted:
+            return "dynamic horizon absolute budget exhausted";
+          case overtake_core::PassRefreshFailureReason::WallOrBodyFault:
+            return "dynamic horizon wall or body fault";
+          case overtake_core::PassRefreshFailureReason::Other:
+            return "dynamic horizon unavailable";
+          case overtake_core::PassRefreshFailureReason::None:
+            return "dynamic horizon unavailable without classified failure";
+        }
+        return "dynamic horizon unavailable";
+      };
     const auto try_refresh_committed_pass_horizon =
       [&](const bool longitudinal_only,
         const bool dynamic_corridor_refresh,
@@ -26956,8 +27014,8 @@ private:
         }
         if (!fresh_dynamic_horizon_available) {
           return fail_extension(
-            overtake_core::PassRefreshFailureReason::TargetPredictionUnavailable,
-            "fresh target prediction unavailable");
+            pass_dynamic_horizon_availability.failure_reason,
+            dynamic_horizon_failure_text());
         }
         if (
           !std::isfinite(locked_target_longitudinal) ||
@@ -27671,6 +27729,114 @@ private:
               maximum_lease_sec, line_cfg.pass_horizon_hold_max_distance,
               model->wp_id);
           }
+          return true;
+        };
+      const auto retain_pass_prediction_dropout_execution_lease =
+        [&](const overtake_core::PassRefreshFailureReason failure_code,
+          const std::string & failure_reason, const char * trigger) {
+          const double clear_prediction_age_sec = std::isfinite(
+            overtake_line_state_.pass_last_clear_target_prediction_sec) ?
+            std::max(
+            0.0,
+            now_sec - overtake_line_state_.pass_last_clear_target_prediction_sec) :
+            std::numeric_limits<double>::infinity();
+          const double continuity_lease_sec = std::max(
+            0.0, line_cfg.receding_horizon_continuity_lease_sec);
+          const bool recent_target_observation =
+            !overtake_line_state_.target_vehicle_id.empty() &&
+            overtake_line_state_.target_vehicle_id != "__unknown__" &&
+            dynamic_target_identity_compatible &&
+            target_age <= continuity_lease_sec + kEps;
+          const bool recent_clear_prediction =
+            clear_prediction_age_sec <= continuity_lease_sec + kEps;
+          const double committed_dynamic_distance_remaining_m = std::max(
+            0.0,
+            overtake_line_state_.mission_dynamic_valid_until_pass_m - pass_traveled);
+          const double committed_dynamic_time_remaining_sec = std::max(
+            0.0,
+            overtake_line_state_.mission_dynamic_valid_until_sec - now_sec);
+          const bool committed_dynamic_prefix_available =
+            committed_dynamic_distance_remaining_m > kEps &&
+            committed_dynamic_time_remaining_sec > kEps;
+          const bool cached_execution_lease_active =
+            receding_horizon_execution_lease_active(
+            now_sec,
+            locked_target_progress_continuous || recent_target_observation,
+            behavior_output.locked_target_position_jump,
+            locked_target_progress_rejected,
+            behavior_output.overtake_execution_corridor_blocked ||
+            behavior_output.locked_target_pass_side_intrusion,
+            behavior_output.overtake_forbidden_wp,
+            behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake,
+            actual_wall_physical_contact || actual_wall_margin_blocked ||
+            actual_wall_sample_unavailable);
+          const bool lease_allowed =
+            overtake_core::can_retain_pass_during_prediction_dropout(
+            overtake_core::PassPredictionDropoutExecutionLeaseRequest{
+              continuity_lease_sec > kEps,
+              overtake_line_state_.phase == OvertakeLinePhase::Pass,
+              overtake_line_state_.mission_path_frozen,
+              failure_code,
+              cached_execution_lease_active,
+              recent_target_observation,
+              recent_clear_prediction,
+              committed_dynamic_prefix_available,
+              locked_target_seen,
+              behavior_output.locked_target_current_body_footprints_separated,
+              behavior_output.locked_target_position_jump,
+              locked_target_progress_rejected,
+              behavior_output.overtake_execution_corridor_blocked,
+              behavior_output.locked_target_pass_side_intrusion,
+              predicted_overlap_replan_required,
+              actual_wall_physical_contact,
+              actual_wall_margin_blocked,
+              actual_wall_sample_unavailable,
+              behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake,
+              behavior_output.overtake_forbidden_wp,
+              overtake_solver_recovery_active_,
+              pass_elapsed,
+              pass_traveled,
+              line_cfg.pass_horizon_absolute_time_limit,
+              line_cfg.pass_horizon_absolute_distance_limit});
+          if (!lease_allowed) {
+            if (
+              overtake_line_state_.pass_prediction_dropout_execution_lease_was_active)
+            {
+              RCLCPP_WARN(
+                rclcpp::get_logger("mpc_controller"),
+                "OvertakeLine prediction-dropout execution lease revoked: "
+                "trigger=%s, failure=%s/%s, target=%s, side=%d, "
+                "target_age=%.2f, clear_age=%.2f, dynamic=%.2f s/%.2f m, "
+                "cached=%d, wp_id=%d",
+                trigger, overtake_core::to_string(failure_code),
+                failure_reason.c_str(),
+                overtake_line_state_.target_vehicle_id.c_str(),
+                overtake_line_state_.pass_side_sign,
+                target_age, clear_prediction_age_sec,
+                committed_dynamic_time_remaining_sec,
+                committed_dynamic_distance_remaining_m,
+                cached_execution_lease_active ? 1 : 0, model->wp_id);
+            }
+            overtake_line_state_.pass_prediction_dropout_execution_lease_was_active =
+              false;
+            return false;
+          }
+          clear_pass_refresh_replan_grace();
+          if (!overtake_line_state_.pass_prediction_dropout_execution_lease_was_active) {
+            RCLCPP_WARN(
+              rclcpp::get_logger("mpc_controller"),
+              "OvertakeLine prediction-dropout execution lease started: "
+              "trigger=%s, failure=%s/%s, target=%s, side=%d, "
+              "target_age=%.2f, clear_age=%.2f, dynamic=%.2f s/%.2f m, "
+              "speed_owner=cached-mpcc, wp_id=%d",
+              trigger, overtake_core::to_string(failure_code), failure_reason.c_str(),
+              overtake_line_state_.target_vehicle_id.c_str(),
+              overtake_line_state_.pass_side_sign,
+              target_age, clear_prediction_age_sec,
+              committed_dynamic_time_remaining_sec,
+              committed_dynamic_distance_remaining_m, model->wp_id);
+          }
+          overtake_line_state_.pass_prediction_dropout_execution_lease_was_active = true;
           return true;
         };
       const auto retain_pass_refresh_replan_grace =
@@ -29137,6 +29303,9 @@ private:
               !retain_stopped_side_prediction_lease(
                 extension_failure_code, extension_failure_reason,
                 pass_horizon_replan_trigger()) &&
+              !retain_pass_prediction_dropout_execution_lease(
+                extension_failure_code, extension_failure_reason,
+                pass_horizon_replan_trigger()) &&
               !retain_pass_refresh_replan_grace(
                 extension_failure_code, extension_failure_reason,
                 pass_horizon_replan_trigger()) &&
@@ -29185,6 +29354,9 @@ private:
           {
             if (
               !retain_stopped_side_prediction_lease(
+                refresh_failure_code, refresh_failure_reason,
+                "rear_clear_refresh") &&
+              !retain_pass_prediction_dropout_execution_lease(
                 refresh_failure_code, refresh_failure_reason,
                 "rear_clear_refresh") &&
               !retain_pass_refresh_replan_grace(

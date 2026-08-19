@@ -4684,6 +4684,7 @@ struct RuntimeWallPreplanRequest
   bool active_execution{false};
   bool warning_margin_blocked{false};
   bool hard_wall_fault{false};
+  bool action_required{true};
   bool target_continuous{false};
   bool current_body_separated{false};
   bool target_prediction_valid{false};
@@ -4719,6 +4720,7 @@ RuntimeWallPreplanResolution resolve_runtime_wall_preplan(
 struct RuntimeWallEscapePrefixHorizonRequest
 {
   double configured_shift_distance_m{};
+  double maximum_shift_distance_m{};
   double nominal_hold_distance_m{};
   double current_speed_mps{};
   bool prediction_warning{false};

@@ -1219,6 +1219,7 @@ struct OvertakeLineConfig
   double pass_entry_physical_gate_lease_distance{12.0};
   double runtime_wall_preplan_reserve{0.10};
   double runtime_wall_preplan_lookahead_sec{1.20};
+  double runtime_wall_preplan_action_ttc_sec{0.50};
   int runtime_wall_preplan_prediction_samples{8};
   double runtime_wall_replan_cooldown_sec{0.50};
   int runtime_wall_replan_max_count{2};
@@ -24305,6 +24306,7 @@ private:
         overtake_core::resolve_runtime_wall_escape_prefix_horizon(
         overtake_core::RuntimeWallEscapePrefixHorizonRequest{
           configured_shift_distance,
+          std::max(configured_shift_distance, line_cfg.max_shift_distance),
           nominal_prefix_hold_distance,
           std::max(0.0, current_speed_mps_),
           actual_wall_preplan_prediction_warning,
@@ -24535,6 +24537,11 @@ private:
     runtime_wall_preplan_request.active_execution = active_execution_phase;
     runtime_wall_preplan_request.warning_margin_blocked = actual_wall_preplan_warning;
     runtime_wall_preplan_request.hard_wall_fault = runtime_wall_hard_fault;
+    runtime_wall_preplan_request.action_required =
+      !actual_wall_preplan_prediction_warning ||
+      !std::isfinite(actual_wall_preplan_prediction_ttc_sec) ||
+      actual_wall_preplan_prediction_ttc_sec <=
+      line_cfg.runtime_wall_preplan_action_ttc_sec + kEps;
     runtime_wall_preplan_request.target_continuous =
       behavior_output.locked_target_seen && locked_target_progress_continuous &&
       !behavior_output.locked_target_position_jump &&
@@ -24595,7 +24602,7 @@ private:
             rclcpp::get_logger("mpc_controller"),
             "OvertakeLine runtime wall preplan warning: episode=%lu, target=%s, side=%d, "
             "reserve=%.2f, predicted=%d, path_aware=%d, ttc=%.2f s, elapsed=%.2f s, "
-            "action=request_fresh_same_side, count=%d/%d, wp_id=%d",
+            "stage=%s, action=request_fresh_same_side, count=%d/%d, wp_id=%d",
             static_cast<unsigned long>(overtake_line_state_.episode_id),
             overtake_line_state_.target_vehicle_id.c_str(),
             overtake_line_state_.pass_side_sign,
@@ -24604,6 +24611,7 @@ private:
             actual_wall_preplan_prediction_path_aware ? 1 : 0,
             actual_wall_preplan_prediction_ttc_sec,
             runtime_wall_warning_elapsed_sec,
+            runtime_wall_preplan_request.action_required ? "action" : "preview",
             overtake_line_state_.mission_runtime_wall_replan_count,
             line_cfg.runtime_wall_replan_max_count, model->wp_id);
         }
@@ -24683,7 +24691,7 @@ private:
             "OvertakeLine runtime wall escape prefix accepted: target=%s, "
             "side=%d, goal=%.2f->%.2f, adjustment=%.2f, elapsed=%.2f s, "
             "prefix=%.2f/available=%.2f m, ttc=%.2f s, "
-            "clearance=target:%s/%.2f m,wall:%s/%.2f m, count=%d/%d, "
+            "stage=%s, clearance=target:%s/%.2f m,wall:%s/%.2f m, count=%d/%d, "
             "front_cap_preserved=%d, wp_id=%d",
             overtake_line_state_.target_vehicle_id.c_str(),
             overtake_line_state_.pass_side_sign, previous_goal,
@@ -24694,6 +24702,7 @@ private:
             runtime_wall_escape_prefix_distance_m,
             runtime_wall_escape_available_distance_m,
             actual_wall_preplan_prediction_ttc_sec,
+            runtime_wall_preplan_request.action_required ? "action" : "preview",
             runtime_wall_center_contraction_used_physical_target_clearance ?
             "physical" : "nominal",
             runtime_wall_center_contraction_separation_m,
@@ -24716,14 +24725,19 @@ private:
           runtime_wall_center_contraction_candidate->goal_lateral_m,
           runtime_wall_warning_elapsed_sec, model->wp_id);
       }
-      const int exit_side = overtake_line_state_.pass_side_sign;
-      const std::string exit_reason = "wall-escape prefix commit rejected";
-      if (enter_dynamic_mission_wait(exit_reason)) {
+      if (runtime_wall_preplan_request.action_required) {
+        const int exit_side = overtake_line_state_.pass_side_sign;
+        const std::string exit_reason = "wall-escape prefix commit rejected";
+        if (enter_dynamic_mission_wait(exit_reason)) {
+          return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
+        }
+        transition_overtake_line_phase(
+          OvertakeLinePhase::Recovery, now_sec, current_ey, exit_side, exit_reason);
         return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
       }
-      transition_overtake_line_phase(
-        OvertakeLinePhase::Recovery, now_sec, current_ey, exit_side, exit_reason);
-      return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
+      // Preview replans are opportunistic. Keep the current hard-safe
+      // execution when the candidate loses the atomic commit race; the
+      // closer action band will make the bounded exit decision if needed.
     } else if (
       runtime_wall_preplan.valid &&
       runtime_wall_preplan.action ==
@@ -24773,7 +24787,7 @@ private:
           rclcpp::get_logger("mpc_controller"),
           "OvertakeLine runtime wall current-side hold: "
           "target=%s, side=%d, target_s=%.2f, elapsed=%.2f s, "
-          "hard_fault=%d, contraction=%s, mode=%s, wp_id=%d",
+          "hard_fault=%d, contraction=%s, stage=%s, mode=%s, wp_id=%d",
           overtake_line_state_.target_vehicle_id.c_str(),
           overtake_line_state_.pass_side_sign,
           behavior_output.locked_target_longitudinal,
@@ -24781,6 +24795,7 @@ private:
           runtime_wall_hard_fault ? 1 : 0,
           runtime_wall_center_contraction_reject_reason.empty() ?
           "unavailable" : runtime_wall_center_contraction_reject_reason.c_str(),
+          runtime_wall_preplan_request.action_required ? "action" : "preview",
           runtime_wall_preplan_request.connected_rearward_execution_hold_available ?
           "connected-rearward-execution" : "pre-rear-clear",
           model->wp_id);
@@ -34918,6 +34933,10 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_runtime_wall_preplan_lookahead_sec"] ?
     mpc["v2x_overtake_runtime_wall_preplan_lookahead_sec"].as<double>() : 1.20);
+  cfg.mpc.v2x_behavior.overtake_line.runtime_wall_preplan_action_ttc_sec = std::max(
+    0.0,
+    mpc["v2x_overtake_runtime_wall_preplan_action_ttc_sec"] ?
+    mpc["v2x_overtake_runtime_wall_preplan_action_ttc_sec"].as<double>() : 0.50);
   cfg.mpc.v2x_behavior.overtake_line.runtime_wall_preplan_prediction_samples = std::max(
     1,
     mpc["v2x_overtake_runtime_wall_preplan_prediction_samples"] ?
@@ -37795,7 +37814,7 @@ public:
       RCLCPP_INFO(
         get_logger(),
         "V2X safe trajectory prefix: %s, front<=%.2f m, remaining>=%.2f m, "
-        "replan_lead=%.2f s/%.2f m; wall_preplan=%.2f m + %.2f s x%d, "
+        "replan_lead=%.2f s/%.2f m; wall_preplan=%.2f m + %.2f s x%d/action<=%.2f s, "
         "pass_entry_gate=%s lease=%.2f s/%.2f m, "
         "fallback=%.2f s/center=%s %.2f m/prefix_terminal=%.2f m/return=%s "
         "front>=%.2f m",
@@ -37810,6 +37829,7 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line.runtime_wall_preplan_reserve,
         mpc_cfg_.v2x_behavior.overtake_line.runtime_wall_preplan_lookahead_sec,
         mpc_cfg_.v2x_behavior.overtake_line.runtime_wall_preplan_prediction_samples,
+        mpc_cfg_.v2x_behavior.overtake_line.runtime_wall_preplan_action_ttc_sec,
         mpc_cfg_.v2x_behavior.overtake_line.pass_entry_physical_gate_enabled ?
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.pass_entry_physical_gate_lease_sec,

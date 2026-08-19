@@ -8994,6 +8994,7 @@ TEST(V2XOvertakeCoreWall, RuntimeWallEscapePrefixFitsPredictedDistance)
 
   RuntimeWallEscapePrefixHorizonRequest request;
   request.configured_shift_distance_m = 4.0;
+  request.maximum_shift_distance_m = 14.0;
   request.nominal_hold_distance_m = 1.0;
   request.current_speed_mps = 8.0;
 
@@ -9012,6 +9013,21 @@ TEST(V2XOvertakeCoreWall, RuntimeWallEscapePrefixFitsPredictedDistance)
   EXPECT_NEAR(resolution.shift_distance_m, 1.8, 1e-9);
   EXPECT_NEAR(resolution.hold_distance_m, 1.0, 1e-9);
   EXPECT_NEAR(resolution.total_distance_m, 2.8, 1e-9);
+
+  request.predicted_wall_ttc_sec = 0.85;
+  resolution = resolve_runtime_wall_escape_prefix_horizon(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_NEAR(resolution.available_distance_m, 6.8, 1e-9);
+  EXPECT_NEAR(resolution.shift_distance_m, 5.8, 1e-9);
+  EXPECT_NEAR(resolution.hold_distance_m, 1.0, 1e-9);
+  EXPECT_NEAR(resolution.total_distance_m, 6.8, 1e-9);
+
+  request.predicted_wall_ttc_sec = 3.0;
+  resolution = resolve_runtime_wall_escape_prefix_horizon(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_NEAR(resolution.shift_distance_m, 14.0, 1e-9);
+  EXPECT_NEAR(resolution.hold_distance_m, 1.0, 1e-9);
+  EXPECT_NEAR(resolution.total_distance_m, 15.0, 1e-9);
 }
 
 TEST(V2XOvertakeCoreWall, RuntimeWallEscapePrefixRejectsInvalidTiming)
@@ -9021,6 +9037,7 @@ TEST(V2XOvertakeCoreWall, RuntimeWallEscapePrefixRejectsInvalidTiming)
 
   RuntimeWallEscapePrefixHorizonRequest request;
   request.configured_shift_distance_m = 4.0;
+  request.maximum_shift_distance_m = 14.0;
   request.nominal_hold_distance_m = 1.0;
   request.current_speed_mps = 8.0;
   request.prediction_warning = true;
@@ -9264,6 +9281,46 @@ TEST(V2XOvertakeCoreWall, RuntimePreplanExitsAfterEscapePrefixFailure)
   EXPECT_EQ(
     resolve_runtime_wall_preplan(request).action,
     RuntimeWallPreplanAction::ExitCurrentMission);
+}
+
+TEST(V2XOvertakeCoreWall, RuntimePreplanPreviewNeverExitsCurrentMission)
+{
+  RuntimeWallPreplanRequest request;
+  request.enabled = true;
+  request.active_execution = true;
+  request.warning_margin_blocked = true;
+  request.action_required = false;
+  request.target_continuous = true;
+  request.current_body_separated = true;
+  request.target_prediction_valid = true;
+  request.center_contraction_evaluated = true;
+  request.mission_side_sign = 1;
+  request.now_sec = 10.0;
+  request.cooldown_sec = 0.5;
+  request.warning_elapsed_sec = 0.20;
+  request.fallback_delay_sec = 0.15;
+  request.maximum_replan_count = 2;
+
+  EXPECT_EQ(
+    resolve_runtime_wall_preplan(request).action,
+    RuntimeWallPreplanAction::RequestFreshSameSideCandidate);
+
+  request.speed_preserving_return_available = true;
+  request.rear_clear_confirmed = true;
+  EXPECT_EQ(
+    resolve_runtime_wall_preplan(request).action,
+    RuntimeWallPreplanAction::RequestFreshSameSideCandidate);
+
+  request.replan_count = request.maximum_replan_count;
+  EXPECT_EQ(
+    resolve_runtime_wall_preplan(request).action,
+    RuntimeWallPreplanAction::HoldCurrentSide);
+
+  request.center_contraction_available = true;
+  request.replan_count = 1;
+  EXPECT_EQ(
+    resolve_runtime_wall_preplan(request).action,
+    RuntimeWallPreplanAction::ContractTowardCenter);
 }
 
 TEST(V2XOvertakeCoreWall, RuntimePreplanKeepsConnectedRearwardPassAfterEscapeFailure)

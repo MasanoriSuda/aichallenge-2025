@@ -8421,6 +8421,7 @@ RuntimeWallPreplanResolution resolve_runtime_wall_preplan(
     request.now_sec - request.last_replan_sec < request.cooldown_sec)
   {
     if (
+      request.action_required &&
       request.warning_elapsed_sec + 1e-9 >= request.fallback_delay_sec &&
       request.speed_preserving_return_available &&
       request.rear_clear_confirmed)
@@ -8446,6 +8447,10 @@ RuntimeWallPreplanResolution resolve_runtime_wall_preplan(
     request.replan_count < request.maximum_replan_count)
   {
     resolution.action = RuntimeWallPreplanAction::ContractTowardCenter;
+  } else if (!request.action_required) {
+    resolution.action = request.replan_count < request.maximum_replan_count ?
+      RuntimeWallPreplanAction::RequestFreshSameSideCandidate :
+      RuntimeWallPreplanAction::HoldCurrentSide;
   } else if (
     request.speed_preserving_return_available && request.rear_clear_confirmed)
   {
@@ -8473,6 +8478,8 @@ RuntimeWallEscapePrefixHorizonResolution resolve_runtime_wall_escape_prefix_hori
   if (
     !std::isfinite(request.configured_shift_distance_m) ||
     request.configured_shift_distance_m < 0.5 ||
+    !std::isfinite(request.maximum_shift_distance_m) ||
+    request.maximum_shift_distance_m + 1e-9 < request.configured_shift_distance_m ||
     !std::isfinite(request.nominal_hold_distance_m) ||
     request.nominal_hold_distance_m < 0.5 ||
     !std::isfinite(request.current_speed_mps) || request.current_speed_mps < 0.0 ||
@@ -8492,7 +8499,7 @@ RuntimeWallEscapePrefixHorizonResolution resolve_runtime_wall_escape_prefix_hori
     std::max(
     0.5,
     std::min(
-      request.configured_shift_distance_m,
+      request.maximum_shift_distance_m,
       resolution.available_distance_m - request.nominal_hold_distance_m)) :
     request.configured_shift_distance_m;
   resolution.hold_distance_m = std::isfinite(resolution.available_distance_m) ?

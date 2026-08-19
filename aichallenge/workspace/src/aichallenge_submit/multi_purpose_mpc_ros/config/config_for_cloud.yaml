@@ -773,6 +773,7 @@ mpc:
   # Minimum extra band; robust planning currently raises total warning clearance to about 0.40 m.
   v2x_overtake_runtime_wall_preplan_reserve: 0.10 # [m]
   v2x_overtake_runtime_wall_preplan_lookahead_sec: 1.20 # [s] start a same-side lateral escape before the wall warning becomes last-moment
+  v2x_overtake_runtime_wall_preplan_action_ttc_sec: 0.50 # [s] preview above this TTC; only the closer action band may abandon the current Mission
   v2x_overtake_runtime_wall_preplan_prediction_samples: 8
   v2x_overtake_runtime_wall_replan_cooldown_sec: 0.50 # [s] suppress warning-boundary replan chatter
   v2x_overtake_runtime_wall_replan_max_count: 2 # bounded same-side wall replans per Mission

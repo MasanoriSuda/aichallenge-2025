@@ -6950,6 +6950,10 @@ struct DynamicObstacleLateralEscapeAuthorityRequest
   double current_lateral_m{};
   double target_lateral_m{};
   double minimum_lateral_shift_m{};
+  // A feasible corridor may own the lateral tracking problem immediately, but
+  // the longitudinal Follow cap is released only after that exact target/side
+  // has produced at least one valid tracking solution.
+  bool tracking_solution_qualified{false};
 };
 
 struct DynamicObstacleLateralEscapeAuthorityResolution
@@ -6963,7 +6967,8 @@ struct DynamicObstacleLateralEscapeAuthorityResolution
 /// Let an already feasible all-V2X GapPlanner corridor own lateral execution
 /// while Behavior remains in Follow. This is deliberately independent from a
 /// complete ShiftOut/Pass/Return Mission. Emergency braking, solver recovery,
-/// malformed geometry and a non-moving/tiny lateral target fail closed.
+/// malformed geometry and a non-moving/tiny lateral target fail closed. The
+/// generic Follow cap remains active until tracking_solution_qualified.
 DynamicObstacleLateralEscapeAuthorityResolution
 resolve_dynamic_obstacle_lateral_escape_authority(
   const DynamicObstacleLateralEscapeAuthorityRequest & request) noexcept;

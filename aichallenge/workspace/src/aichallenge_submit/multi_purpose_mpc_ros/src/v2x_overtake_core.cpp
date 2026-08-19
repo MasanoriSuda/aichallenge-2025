@@ -11808,7 +11808,7 @@ resolve_dynamic_obstacle_lateral_escape_authority(
   }
 
   resolution.active = true;
-  resolution.suppress_generic_follow_cap = true;
+  resolution.suppress_generic_follow_cap = request.tracking_solution_qualified;
   resolution.pass_side_sign = request.pass_side_sign;
   return resolution;
 }

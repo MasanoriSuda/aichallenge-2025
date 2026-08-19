@@ -14437,6 +14437,7 @@ DynamicObstacleLateralEscapeAuthorityRequest dynamic_lateral_escape_request()
   request.current_lateral_m = 0.1;
   request.target_lateral_m = 0.6;
   request.minimum_lateral_shift_m = 0.1;
+  request.tracking_solution_qualified = true;
   return request;
 }
 
@@ -14449,6 +14450,18 @@ TEST(V2XOvertakeCoreLowSpeedBypass, FeasibleDynamicLateralEscapeSuppressesFollow
   EXPECT_TRUE(resolution.suppress_generic_follow_cap);
   EXPECT_EQ(resolution.pass_side_sign, 1);
   EXPECT_NEAR(resolution.requested_lateral_shift_m, 0.5, 1e-9);
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, DynamicLateralEscapeKeepsFollowCapUntilTrackingSolve)
+{
+  auto request = dynamic_lateral_escape_request();
+  request.tracking_solution_qualified = false;
+
+  const auto resolution = resolve_dynamic_obstacle_lateral_escape_authority(request);
+
+  EXPECT_TRUE(resolution.active);
+  EXPECT_FALSE(resolution.suppress_generic_follow_cap);
+  EXPECT_EQ(resolution.pass_side_sign, 1);
 }
 
 TEST(V2XOvertakeCoreLowSpeedBypass, DynamicLateralEscapeRequiresPlannerOwnership)

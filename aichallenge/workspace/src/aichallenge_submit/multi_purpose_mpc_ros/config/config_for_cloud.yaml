@@ -405,6 +405,8 @@ mpc:
   # retain priority.
   v2x_dynamic_obstacle_lateral_escape_authority_enabled: true
   v2x_dynamic_obstacle_lateral_escape_min_shift: 0.10 # [m] ignore center/noise-only targets
+  v2x_dynamic_obstacle_lateral_escape_lateral_accel_reserve_ratio: 0.80 # reserve tracking authority before accepting a lateral corridor
+  v2x_dynamic_obstacle_lateral_escape_solver_quarantine_sec: 0.50 # [s] block immediate reuse after a tracking solve failure
   v2x_dynamic_obstacle_cruise_corridor_promotion_max_speed: 2.0 # [m/s] below this speed require consecutive observations before promotion
   v2x_dynamic_obstacle_cruise_activation_horizon_sec: 3.0 # [s] plan before relative motion reaches the entry reserve
   v2x_dynamic_obstacle_cruise_min_closing_speed: 0.5 # [m/s] ignore a distant target that ego is not catching

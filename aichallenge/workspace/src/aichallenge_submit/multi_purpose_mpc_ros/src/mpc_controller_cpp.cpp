@@ -1490,6 +1490,8 @@ struct V2XBehaviorConfig
   bool dynamic_obstacle_cruise_authority_enabled{false};
   bool dynamic_obstacle_lateral_escape_authority_enabled{false};
   double dynamic_obstacle_lateral_escape_min_shift{0.10};
+  double dynamic_obstacle_lateral_escape_lateral_accel_reserve_ratio{0.80};
+  double dynamic_obstacle_lateral_escape_solver_quarantine_sec{0.50};
   double dynamic_obstacle_cruise_corridor_promotion_max_speed{2.0};
   double dynamic_obstacle_cruise_activation_horizon_sec{3.0};
   double dynamic_obstacle_cruise_min_closing_speed{0.5};
@@ -1939,6 +1941,18 @@ struct ReachableGapMetrics
   double max_lateral_shift{0.0};
   double max_required_lateral_accel{0.0};
   std::size_t max_required_lateral_accel_index{0};
+};
+
+struct DynamicObstacleLateralEscapeBridgeResult
+{
+  bool evaluated{false};
+  bool feasible{false};
+  bool reachability_constrained{false};
+  std::size_t checked_sample_count{0U};
+  std::size_t reject_index{0U};
+  double reject_path_distance_m{std::numeric_limits<double>::quiet_NaN()};
+  double maximum_target_adjustment_m{0.0};
+  std::string reason{"not evaluated"};
 };
 
 /// Complete tactical result for one pass side.  It is intentionally copyable:
@@ -4807,6 +4821,9 @@ struct MpcProblem
   std::vector<double> progress_stage_dt_sec;
   bool progress_committed_pass{false};
   double progress_measured_speed_mps{};
+  bool dynamic_obstacle_lateral_escape_active{false};
+  std::string dynamic_obstacle_lateral_escape_target_id;
+  int dynamic_obstacle_lateral_escape_side_sign{0};
 };
 
 struct ExtendedProgressMpcProblem
@@ -5122,6 +5139,14 @@ struct MPC
     snapshot->current_control = current_control;
     snapshot->current_prediction = current_prediction;
     snapshot->current_speed_mps_ = current_speed_mps_;
+    snapshot->dynamic_obstacle_lateral_escape_tracking_qualified_ =
+      dynamic_obstacle_lateral_escape_tracking_qualified_;
+    snapshot->dynamic_obstacle_lateral_escape_qualified_target_id_ =
+      dynamic_obstacle_lateral_escape_qualified_target_id_;
+    snapshot->dynamic_obstacle_lateral_escape_qualified_side_sign_ =
+      dynamic_obstacle_lateral_escape_qualified_side_sign_;
+    snapshot->dynamic_obstacle_lateral_escape_quarantine_until_sec_ =
+      dynamic_obstacle_lateral_escape_quarantine_until_sec_;
     snapshot->overtake_contact_wall_guard_safe_ = overtake_contact_wall_guard_safe_;
     snapshot->mpcc_lite_async_worker_context_ = true;
     return snapshot;
@@ -5265,6 +5290,15 @@ struct MPC
     low_speed_stopped_observation_count_ = 0;
     low_speed_stopped_last_observation_sec_ =
       std::numeric_limits<double>::quiet_NaN();
+  }
+
+  void reset_dynamic_obstacle_lateral_escape_runtime() noexcept
+  {
+    dynamic_obstacle_lateral_escape_tracking_qualified_ = false;
+    dynamic_obstacle_lateral_escape_qualified_target_id_.clear();
+    dynamic_obstacle_lateral_escape_qualified_side_sign_ = 0;
+    dynamic_obstacle_lateral_escape_quarantine_until_sec_ =
+      -std::numeric_limits<double>::infinity();
   }
 
   static const char * low_speed_pass_side_name(const int pass_side_sign) noexcept
@@ -5501,6 +5535,7 @@ struct MPC
     start_grid_breakout_side_sign_ = 0;
     reset_start_grid_dynamic_decision();
     reset_low_speed_stopped_confirmation();
+    reset_dynamic_obstacle_lateral_escape_runtime();
     last_low_speed_static_wall_preflight_log_sec_ =
       std::numeric_limits<double>::quiet_NaN();
     last_low_speed_static_wall_preflight_log_signature_.clear();
@@ -6123,6 +6158,7 @@ struct MPC
     start_grid_breakout_side_sign_ = 0;
     reset_start_grid_dynamic_decision();
     reset_low_speed_stopped_confirmation();
+    reset_dynamic_obstacle_lateral_escape_runtime();
     last_low_speed_static_wall_preflight_log_sec_ =
       std::numeric_limits<double>::quiet_NaN();
     last_low_speed_static_wall_preflight_log_signature_.clear();
@@ -14407,7 +14443,7 @@ struct MPC
       low_speed_direct_control_phase_ ==
       v2x_overtake_core::LowSpeedDirectControlPhase::Pass ?
       low_speed_shift_pass_side_sign_ : 0;
-    const auto planner_output = use_gap_planner ?
+    auto planner_output = use_gap_planner ?
       (use_low_speed_local_path ?
       plan_low_speed_local_path_with_static_wall_preflight(
         ref_wp_id, N, lb, ub, now_sec, true, low_speed_forced_pass_side) :
@@ -14430,6 +14466,29 @@ struct MPC
         inter_vehicle_corridor_plan ?
         cfg.v2x_behavior.start_grid_inter_vehicle_lateral_radius : 0.0)) :
       GapPlannerOutput{};
+    const bool dynamic_escape_planner_requested =
+      behavior_output.dynamic_obstacle_lateral_escape_planner_requested;
+    DynamicObstacleLateralEscapeBridgeResult dynamic_escape_bridge;
+    if (dynamic_escape_planner_requested) {
+      dynamic_escape_bridge = bridge_dynamic_obstacle_lateral_escape_plan(
+        planner_output, ref_wp_id);
+      if (!dynamic_escape_bridge.feasible) {
+        planner_output.feasible = false;
+        planner_output.reject_reason = dynamic_escape_bridge.reason;
+        dynamic_obstacle_lateral_escape_tracking_qualified_ = false;
+        dynamic_obstacle_lateral_escape_qualified_target_id_.clear();
+        dynamic_obstacle_lateral_escape_qualified_side_sign_ = 0;
+        if (gap_planner != nullptr) {
+          // Do not let a rejected lateral target become the starting point of
+          // the next scoped planning cycle.
+          gap_planner->reset_low_speed_targets();
+        }
+      }
+    } else {
+      dynamic_obstacle_lateral_escape_tracking_qualified_ = false;
+      dynamic_obstacle_lateral_escape_qualified_target_id_.clear();
+      dynamic_obstacle_lateral_escape_qualified_side_sign_ = 0;
+    }
     const int dynamic_escape_side_sign = infer_gap_pass_side(
       planner_output, model->spatial_state.e_y);
     double dynamic_escape_target_ey = model->spatial_state.e_y;
@@ -14448,6 +14507,15 @@ struct MPC
         break;
       }
     }
+    const bool dynamic_escape_tracking_qualified =
+      dynamic_escape_planner_requested &&
+      dynamic_obstacle_lateral_escape_tracking_qualified_ &&
+      dynamic_obstacle_lateral_escape_qualified_target_id_ ==
+      behavior_output.dynamic_obstacle_cruise_target_id &&
+      dynamic_obstacle_lateral_escape_qualified_side_sign_ == dynamic_escape_side_sign;
+    const bool dynamic_escape_quarantine_active =
+      std::isfinite(now_sec) &&
+      now_sec < dynamic_obstacle_lateral_escape_quarantine_until_sec_;
     const auto dynamic_lateral_escape_authority =
       v2x_overtake_core::resolve_dynamic_obstacle_lateral_escape_authority(
       v2x_overtake_core::DynamicObstacleLateralEscapeAuthorityRequest{
@@ -14459,11 +14527,13 @@ struct MPC
         !explicit_overtake_line_owns_plan,
         behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake,
         overtake_solver_recovery_active_ || solver_overtake_cooldown_active ||
-        overtake_solver_reentry_blocked_ || last_control_was_fallback_,
+        overtake_solver_reentry_blocked_ || last_control_was_fallback_ ||
+        dynamic_escape_quarantine_active,
         dynamic_escape_side_sign,
         model->spatial_state.e_y,
         dynamic_escape_target_ey,
-        cfg.v2x_behavior.dynamic_obstacle_lateral_escape_min_shift});
+        cfg.v2x_behavior.dynamic_obstacle_lateral_escape_min_shift,
+        dynamic_escape_tracking_qualified});
     behavior_output.dynamic_obstacle_lateral_escape_active =
       dynamic_lateral_escape_authority.active;
     behavior_output.dynamic_obstacle_follow_cap_suppressed =
@@ -14483,8 +14553,6 @@ struct MPC
       behavior_output.follow_speed_limit_moving_front = false;
       behavior_output.moving_front_clearance_limit_active = false;
     }
-    const bool dynamic_escape_planner_requested =
-      behavior_output.dynamic_obstacle_lateral_escape_planner_requested;
     const bool dynamic_escape_log_due =
       dynamic_lateral_escape_authority.active !=
       dynamic_obstacle_lateral_escape_was_active_ ||
@@ -14498,7 +14566,9 @@ struct MPC
         rclcpp::get_logger("mpc_controller"),
         "Dynamic-obstacle lateral escape authority: requested=%d, active=%d, target=%s, "
         "side=%d, shift=%.2f m, width=%.2f m, follow_cap_suppressed=%d, "
-        "soft_curve_bypassed=%d, risk=%s, planner=%d/%d, wp_id=%d",
+        "qualified=%d, bridge=%s/%zu/constrained=%d/adjust=%.2f m, "
+        "reject=%zu@%.2f m, quarantine=%.2f s, soft_curve_bypassed=%d, "
+        "risk=%s, planner=%d/%d, wp_id=%d",
         dynamic_escape_planner_requested ? 1 : 0,
         dynamic_lateral_escape_authority.active ? 1 : 0,
         behavior_output.dynamic_obstacle_cruise_target_id.empty() ? "<none>" :
@@ -14507,6 +14577,16 @@ struct MPC
         dynamic_lateral_escape_authority.requested_lateral_shift_m,
         planner_output.selected_corridor_width,
         dynamic_lateral_escape_authority.suppress_generic_follow_cap ? 1 : 0,
+        dynamic_escape_tracking_qualified ? 1 : 0,
+        !dynamic_escape_bridge.evaluated ? "not-evaluated" :
+        (dynamic_escape_bridge.feasible ? "valid" : dynamic_escape_bridge.reason.c_str()),
+        dynamic_escape_bridge.checked_sample_count,
+        dynamic_escape_bridge.reachability_constrained ? 1 : 0,
+        dynamic_escape_bridge.maximum_target_adjustment_m,
+        dynamic_escape_bridge.reject_index,
+        dynamic_escape_bridge.reject_path_distance_m,
+        dynamic_escape_quarantine_active ?
+        std::max(0.0, dynamic_obstacle_lateral_escape_quarantine_until_sec_ - now_sec) : 0.0,
         behavior_output.dynamic_obstacle_lateral_escape_soft_curve_bypassed ? 1 : 0,
         to_string(behavior_output.front_risk_level),
         planner_output.active ? 1 : 0, planner_output.feasible ? 1 : 0,
@@ -14517,6 +14597,12 @@ struct MPC
       dynamic_lateral_escape_authority.active;
     dynamic_obstacle_lateral_escape_planner_was_requested_ =
       dynamic_escape_planner_requested;
+    if (dynamic_escape_planner_requested && !dynamic_lateral_escape_authority.active) {
+      // A scoped Follow evaluation is not a generic planner command. If its
+      // reachability/authority handoff fails, keep ordinary Follow ownership
+      // and do not leak its bounds, target or no-gap speed into the MPC below.
+      planner_output = GapPlannerOutput{};
+    }
     // Keep downstream diagnostics and direct-control arbitration aligned with
     // the post-planner authority result, not the pre-planner Follow snapshot.
     last_v2x_behavior_output_ = behavior_output;
@@ -15386,7 +15472,10 @@ struct MPC
       progress_contouring_active ? dynamics_stage_dt_sec : std::vector<double>{},
       progress_contouring_active &&
       overtake_line_state_.phase == OvertakeLinePhase::Pass,
-      progress_contouring_active ? current_speed_mps_ : 0.0};
+      progress_contouring_active ? current_speed_mps_ : 0.0,
+      behavior_output.dynamic_obstacle_lateral_escape_active,
+      behavior_output.dynamic_obstacle_cruise_target_id,
+      behavior_output.dynamic_obstacle_lateral_escape_side_sign};
   }
 
   std::optional<ExtendedProgressMpcProblem> build_extended_progress_problem(
@@ -16898,11 +16987,34 @@ struct MPC
       cfg.steering_tire_angle_gain_var);
   }
 
-  std::pair<Eigen::Vector2d, double> safe_failure_control(const std::string & reason)
+  std::pair<Eigen::Vector2d, double> safe_failure_control(
+    const std::string & reason, const double now_sec)
   {
     last_control_was_fallback_ = true;
     current_prediction.first.clear();
     current_prediction.second.clear();
+    if (last_v2x_behavior_output_.dynamic_obstacle_lateral_escape_active) {
+      dynamic_obstacle_lateral_escape_tracking_qualified_ = false;
+      dynamic_obstacle_lateral_escape_qualified_target_id_.clear();
+      dynamic_obstacle_lateral_escape_qualified_side_sign_ = 0;
+      if (std::isfinite(now_sec)) {
+        dynamic_obstacle_lateral_escape_quarantine_until_sec_ = std::max(
+          dynamic_obstacle_lateral_escape_quarantine_until_sec_,
+          now_sec + cfg.v2x_behavior.dynamic_obstacle_lateral_escape_solver_quarantine_sec);
+      }
+      if (gap_planner != nullptr) {
+        gap_planner->reset_low_speed_targets();
+      }
+      RCLCPP_WARN(
+        rclcpp::get_logger("mpc_controller"),
+        "Dynamic-obstacle lateral escape quarantined after tracking failure: "
+        "target=%s, side=%d, hold=%.2f s, reason=%s",
+        last_v2x_behavior_output_.dynamic_obstacle_cruise_target_id.empty() ? "<none>" :
+        last_v2x_behavior_output_.dynamic_obstacle_cruise_target_id.c_str(),
+        last_v2x_behavior_output_.dynamic_obstacle_lateral_escape_side_sign,
+        cfg.v2x_behavior.dynamic_obstacle_lateral_escape_solver_quarantine_sec,
+        reason.c_str());
+    }
 
     const double current_speed = std::isfinite(current_speed_mps_) ?
       std::max(0.0, current_speed_mps_) : 0.0;
@@ -17171,7 +17283,7 @@ struct MPC
     constexpr int nx = 3;
     constexpr int nu = 2;
     if (cfg.N < 2) {
-      return safe_failure_control("mpc.N must be at least 2");
+      return safe_failure_control("mpc.N must be at least 2", now_sec);
     }
     try {
       model->get_current_waypoint();
@@ -17400,6 +17512,13 @@ struct MPC
           rclcpp::get_logger("mpc_controller"),
           "MPC solver recovered after %d consecutive failures", infeasibility_counter);
       }
+      if (problem.dynamic_obstacle_lateral_escape_active) {
+        dynamic_obstacle_lateral_escape_tracking_qualified_ = true;
+        dynamic_obstacle_lateral_escape_qualified_target_id_ =
+          problem.dynamic_obstacle_lateral_escape_target_id;
+        dynamic_obstacle_lateral_escape_qualified_side_sign_ =
+          problem.dynamic_obstacle_lateral_escape_side_sign;
+      }
       failure_fallback_speed_.reset();
       infeasibility_counter = 0;
       overtake_infeasibility_counter_ = 0;
@@ -17425,9 +17544,9 @@ struct MPC
       last_solved_wp_id = problem.tracking_wp_id;
       return {u, max_delta};
     } catch (const std::exception & error) {
-      return safe_failure_control(error.what());
+      return safe_failure_control(error.what(), now_sec);
     } catch (...) {
-      return safe_failure_control("unknown exception");
+      return safe_failure_control("unknown exception", now_sec);
     }
   }
 
@@ -17730,6 +17849,11 @@ struct MPC
   bool dynamic_obstacle_lateral_escape_was_active_{false};
   bool dynamic_obstacle_lateral_escape_planner_was_requested_{false};
   double dynamic_obstacle_lateral_escape_last_log_sec_{
+    -std::numeric_limits<double>::infinity()};
+  bool dynamic_obstacle_lateral_escape_tracking_qualified_{false};
+  std::string dynamic_obstacle_lateral_escape_qualified_target_id_;
+  int dynamic_obstacle_lateral_escape_qualified_side_sign_{0};
+  double dynamic_obstacle_lateral_escape_quarantine_until_sec_{
     -std::numeric_limits<double>::infinity()};
 
 private:
@@ -32131,6 +32255,80 @@ private:
     return distance;
   }
 
+  DynamicObstacleLateralEscapeBridgeResult
+  bridge_dynamic_obstacle_lateral_escape_plan(
+    GapPlannerOutput & gap_output, const int ref_wp_id) const
+  {
+    DynamicObstacleLateralEscapeBridgeResult result;
+    result.evaluated = true;
+    if (!gap_output.active || !gap_output.feasible) {
+      result.reason = gap_output.reject_reason.empty() ?
+        "gap planner inactive or infeasible" : gap_output.reject_reason;
+      return result;
+    }
+    if (
+      gap_output.lb.size() != gap_output.ub.size() ||
+      gap_output.lb.size() != gap_output.target_ey.size() ||
+      gap_output.lb.size() != gap_output.target_active.size())
+    {
+      result.reason = "malformed gap planner horizon";
+      return result;
+    }
+
+    const double speed_for_reachability = std::max(
+      std::max(0.0, current_speed_mps_),
+      std::max(kEps, cfg.v2x_behavior.overtake_guard_min_speed_for_reachable));
+    const double current_lateral_velocity =
+      std::max(0.0, current_speed_mps_) * std::sin(model->spatial_state.e_psi);
+    for (std::size_t i = 0; i < gap_output.target_active.size(); ++i) {
+      if (!gap_output.target_active[i]) {
+        continue;
+      }
+      ++result.checked_sample_count;
+      const double path_distance = horizon_path_distance_to_index(ref_wp_id, i);
+      const auto envelope = v2x_overtake_core::resolve_frenet_dp_execution_envelope(
+        v2x_overtake_core::FrenetDpExecutionEnvelopeRequest{
+          true,
+          v2x_overtake_core::OvertakeMissionDynamicCorridorSample{
+            path_distance, gap_output.lb[i], gap_output.ub[i], true},
+          model->spatial_state.e_y,
+          current_lateral_velocity,
+          speed_for_reachability,
+          std::max(0.0, cfg.v2x_behavior.overtake_guard_max_lateral_accel),
+          cfg.v2x_behavior.dynamic_obstacle_lateral_escape_lateral_accel_reserve_ratio});
+      if (!envelope.valid || !envelope.feasible) {
+        result.reject_index = i;
+        result.reject_path_distance_m = path_distance;
+        result.reason = envelope.valid ?
+          "corridor is outside the reachable lateral envelope" :
+          "invalid reachable lateral envelope input";
+        return result;
+      }
+
+      result.reachability_constrained =
+        result.reachability_constrained || envelope.reachability_constrained;
+      const double bridged_target = clip(
+        gap_output.target_ey[i],
+        envelope.sample.lower_lateral_m,
+        envelope.sample.upper_lateral_m);
+      result.maximum_target_adjustment_m = std::max(
+        result.maximum_target_adjustment_m,
+        std::abs(bridged_target - gap_output.target_ey[i]));
+      // Keep the original collision corridor as the hard bound. Only bridge
+      // the reference into the portion that is reachable from the measured
+      // state; narrowing the hard interval here would make the QP less robust.
+      gap_output.target_ey[i] = bridged_target;
+    }
+
+    if (result.checked_sample_count == 0U) {
+      result.reason = "gap planner has no active lateral sample";
+      return result;
+    }
+    result.feasible = true;
+    result.reason = "reachable";
+    return result;
+  }
+
   ReachableGapMetrics compute_reachable_gap_metrics(
     const GapPlannerOutput & gap_output, const int ref_wp_id, const double current_ey,
     const double required_width, const int min_points) const
@@ -33445,7 +33643,9 @@ private:
         overtake_solver_recovery_active_ ||
         v2x_overtake_core::is_solver_cooldown_active(
         now_sec, overtake_solver_cooldown_until_sec_) ||
-        overtake_solver_reentry_blocked_ || last_control_was_fallback_;
+        overtake_solver_reentry_blocked_ || last_control_was_fallback_ ||
+        (std::isfinite(now_sec) &&
+        now_sec < dynamic_obstacle_lateral_escape_quarantine_until_sec_);
       const auto dynamic_escape_planning =
         v2x_overtake_core::resolve_dynamic_obstacle_lateral_escape_planning(
         v2x_overtake_core::DynamicObstacleLateralEscapePlanningRequest{
@@ -36359,6 +36559,13 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.dynamic_obstacle_lateral_escape_min_shift =
     mpc["v2x_dynamic_obstacle_lateral_escape_min_shift"] ?
     mpc["v2x_dynamic_obstacle_lateral_escape_min_shift"].as<double>() : 0.10;
+  cfg.mpc.v2x_behavior.dynamic_obstacle_lateral_escape_lateral_accel_reserve_ratio =
+    mpc["v2x_dynamic_obstacle_lateral_escape_lateral_accel_reserve_ratio"] ?
+    mpc["v2x_dynamic_obstacle_lateral_escape_lateral_accel_reserve_ratio"].as<double>() :
+    0.80;
+  cfg.mpc.v2x_behavior.dynamic_obstacle_lateral_escape_solver_quarantine_sec =
+    mpc["v2x_dynamic_obstacle_lateral_escape_solver_quarantine_sec"] ?
+    mpc["v2x_dynamic_obstacle_lateral_escape_solver_quarantine_sec"].as<double>() : 0.50;
   if (
     !std::isfinite(
       cfg.mpc.v2x_behavior.dynamic_obstacle_lateral_escape_min_shift) ||
@@ -36367,6 +36574,25 @@ Config load_config(const std::string & path)
     throw std::runtime_error(
             "mpc.v2x_dynamic_obstacle_lateral_escape_min_shift must be finite and "
             "non-negative");
+  }
+  if (
+    !std::isfinite(
+      cfg.mpc.v2x_behavior.dynamic_obstacle_lateral_escape_lateral_accel_reserve_ratio) ||
+    cfg.mpc.v2x_behavior.dynamic_obstacle_lateral_escape_lateral_accel_reserve_ratio <= 0.0 ||
+    cfg.mpc.v2x_behavior.dynamic_obstacle_lateral_escape_lateral_accel_reserve_ratio > 1.0)
+  {
+    throw std::runtime_error(
+            "mpc.v2x_dynamic_obstacle_lateral_escape_lateral_accel_reserve_ratio must be "
+            "finite and in (0, 1]");
+  }
+  if (
+    !std::isfinite(
+      cfg.mpc.v2x_behavior.dynamic_obstacle_lateral_escape_solver_quarantine_sec) ||
+    cfg.mpc.v2x_behavior.dynamic_obstacle_lateral_escape_solver_quarantine_sec < 0.0)
+  {
+    throw std::runtime_error(
+            "mpc.v2x_dynamic_obstacle_lateral_escape_solver_quarantine_sec must be finite "
+            "and non-negative");
   }
   cfg.mpc.v2x_behavior.dynamic_obstacle_cruise_corridor_promotion_max_speed =
     mpc["v2x_dynamic_obstacle_cruise_corridor_promotion_max_speed"] ?
@@ -37814,13 +38040,16 @@ public:
       RCLCPP_INFO(
         get_logger(),
         "V2X all-vehicle dynamic-obstacle Cruise authority: %s, "
-        "lateral_escape=%s/min_shift=%.2f m, slow_confirmation_max_speed=%.2f m/s, "
+        "lateral_escape=%s/min_shift=%.2f m/reachability_reserve=%.2f/"
+        "solver_quarantine=%.2f s, slow_confirmation_max_speed=%.2f m/s, "
         "activation_horizon=%.2f s, min_closing=%.2f m/s, scan_distance=%.2f m",
         mpc_cfg_.v2x_behavior.dynamic_obstacle_cruise_authority_enabled ?
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.dynamic_obstacle_lateral_escape_authority_enabled ?
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.dynamic_obstacle_lateral_escape_min_shift,
+        mpc_cfg_.v2x_behavior.dynamic_obstacle_lateral_escape_lateral_accel_reserve_ratio,
+        mpc_cfg_.v2x_behavior.dynamic_obstacle_lateral_escape_solver_quarantine_sec,
         mpc_cfg_.v2x_behavior.dynamic_obstacle_cruise_corridor_promotion_max_speed,
         mpc_cfg_.v2x_behavior.dynamic_obstacle_cruise_activation_horizon_sec,
         mpc_cfg_.v2x_behavior.dynamic_obstacle_cruise_min_closing_speed,

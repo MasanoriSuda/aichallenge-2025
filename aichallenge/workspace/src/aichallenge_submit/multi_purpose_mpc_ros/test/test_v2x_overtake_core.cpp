@@ -14601,10 +14601,12 @@ TEST(V2XOvertakeCoreLowSpeedBypass, DynamicLateralEscapeExplainsEveryAdmissionGa
 TEST(V2XOvertakeCoreLowSpeedBypass, DynamicLateralEscapeKeepsHardFaultPriority)
 {
   auto request = dynamic_lateral_escape_request();
+  request.validated_pass_through_allowed = true;
   request.emergency_brake_active = true;
   EXPECT_FALSE(resolve_dynamic_obstacle_lateral_escape_authority(request).active);
 
   request = dynamic_lateral_escape_request();
+  request.validated_pass_through_allowed = true;
   request.solver_recovery_active = true;
   EXPECT_FALSE(resolve_dynamic_obstacle_lateral_escape_authority(request).active);
 }
@@ -14632,6 +14634,57 @@ TEST(V2XOvertakeCoreLowSpeedBypass, DynamicLateralEscapeRejectsTinyOrWrongSideSh
   EXPECT_FALSE(resolution.active);
   EXPECT_EQ(
     resolution.reason, DynamicObstacleLateralEscapeAuthorityReason::InvalidGeometry);
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, ValidatedTinyShiftRetainsPlannerAuthority)
+{
+  auto request = dynamic_lateral_escape_request();
+  request.target_lateral_m = request.current_lateral_m + 0.05;
+  request.validated_pass_through_allowed = true;
+  request.tracking_solution_qualified = false;
+
+  auto resolution = resolve_dynamic_obstacle_lateral_escape_authority(request);
+  EXPECT_TRUE(resolution.active);
+  EXPECT_TRUE(resolution.pass_through);
+  EXPECT_FALSE(resolution.suppress_generic_follow_cap);
+  EXPECT_EQ(resolution.pass_side_sign, 1);
+  EXPECT_EQ(
+    resolution.reason,
+    DynamicObstacleLateralEscapeAuthorityReason::AcceptedPassThrough);
+
+  request.tracking_solution_qualified = true;
+  resolution = resolve_dynamic_obstacle_lateral_escape_authority(request);
+  EXPECT_TRUE(resolution.active);
+  EXPECT_TRUE(resolution.pass_through);
+  EXPECT_TRUE(resolution.suppress_generic_follow_cap);
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, ValidatedPassThroughAllowsAlreadyAlignedLine)
+{
+  auto request = dynamic_lateral_escape_request();
+  request.target_lateral_m = request.current_lateral_m;
+  request.validated_pass_through_allowed = true;
+
+  const auto resolution = resolve_dynamic_obstacle_lateral_escape_authority(request);
+  EXPECT_TRUE(resolution.active);
+  EXPECT_TRUE(resolution.pass_through);
+  EXPECT_EQ(
+    resolution.reason,
+    DynamicObstacleLateralEscapeAuthorityReason::AcceptedPassThrough);
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, PassThroughNeverAllowsWrongSideShift)
+{
+  auto request = dynamic_lateral_escape_request();
+  request.target_lateral_m = request.current_lateral_m - 0.05;
+  request.validated_pass_through_allowed = true;
+
+  const auto resolution = resolve_dynamic_obstacle_lateral_escape_authority(request);
+  EXPECT_FALSE(resolution.active);
+  EXPECT_FALSE(resolution.pass_through);
+  EXPECT_EQ(
+    resolution.reason,
+    DynamicObstacleLateralEscapeAuthorityReason::ShiftDirectionMismatch);
 }
 
 TEST(V2XOvertakeCoreLowSpeedBypass, DynamicLateralEscapeBackoffIsTargetAndSideScoped)

@@ -14716,6 +14716,10 @@ struct MPC
       behavior_output.dynamic_obstacle_cruise_target_id &&
       dynamic_obstacle_lateral_escape_qualified_side_sign_ == dynamic_escape_side_sign;
     const bool dynamic_escape_quarantine_active = dynamic_escape_backoff.blocked;
+    const bool dynamic_escape_validated_pass_through =
+      planner_output.active && planner_output.feasible &&
+      dynamic_escape_bridge.evaluated && dynamic_escape_bridge.feasible &&
+      dynamic_escape_bridge.checked_sample_count > 0U;
     const auto dynamic_lateral_escape_authority =
       v2x_overtake_core::resolve_dynamic_obstacle_lateral_escape_authority(
       v2x_overtake_core::DynamicObstacleLateralEscapeAuthorityRequest{
@@ -14733,6 +14737,7 @@ struct MPC
         model->spatial_state.e_y,
         dynamic_escape_target_ey,
         cfg.v2x_behavior.dynamic_obstacle_lateral_escape_min_shift,
+        dynamic_escape_validated_pass_through,
         dynamic_escape_tracking_qualified});
     behavior_output.dynamic_obstacle_lateral_escape_active =
       dynamic_lateral_escape_authority.active;
@@ -14787,6 +14792,8 @@ struct MPC
       dynamic_escape_alternate_selected;
     dynamic_escape_decision_trace.authority_active =
       dynamic_lateral_escape_authority.active;
+    dynamic_escape_decision_trace.pass_through =
+      dynamic_lateral_escape_authority.pass_through;
     dynamic_escape_decision_trace.authority_reason = dynamic_escape_authority_reason;
     dynamic_escape_decision_trace.final_side =
       dynamic_lateral_escape_authority.pass_side_sign;
@@ -25639,6 +25646,74 @@ private:
       Handled,
       ResumeCurrent,
     };
+    struct RuntimeFailoverTraceContext
+    {
+      bool active{false};
+      overtake_decision_trace::RuntimeFailoverTrace trace;
+    };
+    const auto capture_runtime_failover_trace_context = [&]() {
+        RuntimeFailoverTraceContext context;
+        context.active = overtake_line_state_.dynamic_mission_wait_active;
+        if (!context.active) {
+          return context;
+        }
+        context.trace.mission_episode_id = overtake_line_state_.episode_id;
+        context.trace.mission_generation = overtake_line_state_.mission_generation;
+        context.trace.target_id = overtake_line_state_.target_vehicle_id;
+        context.trace.phase =
+          to_string(overtake_line_state_.follow_prepare_origin_phase);
+        context.trace.trigger =
+          overtake_line_state_.dynamic_mission_wait_trigger_reason;
+        context.trace.current_feasible =
+          behavior_output.opponent_side_replan_current_feasible;
+        context.trace.current_mission_available =
+          behavior_output.opponent_side_replan_current_mission.has_value();
+        context.trace.alternate_feasible =
+          behavior_output.opponent_side_replan_alternate_feasible;
+        context.trace.alternate_mission_available =
+          behavior_output.opponent_side_replan_mission.has_value();
+        context.trace.alternate_stable =
+          behavior_output.opponent_side_replan_ready;
+        context.trace.cross_side_allowed =
+          !overtake_line_state_.opponent_side_replan_no_return_latched &&
+          !overtake_line_state_.mission_cross_side_transition_committed &&
+          behavior_output.overtake_commit_stage ==
+          overtake_core::PassCommitStage::ShiftCommitted &&
+          overtake_line_state_.opponent_side_replan_count <
+          line_cfg.opponent_side_replan_max_count;
+        context.trace.no_return =
+          overtake_line_state_.opponent_side_replan_no_return_latched;
+        context.trace.hard_fault =
+          actual_wall_physical_contact || actual_wall_margin_blocked ||
+          actual_wall_sample_unavailable ||
+          behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake ||
+          overtake_solver_recovery_active_ || behavior_output.overtake_forbidden_wp;
+        context.trace.forward_prefix_active =
+          overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active;
+        context.trace.waypoint_id = model->wp_id;
+        return context;
+      };
+    const auto emit_runtime_replacement_outcome = [&](
+      RuntimeFailoverTraceContext context, const bool current_ready,
+      const bool alternate_ready, const bool replaced, const bool alternate,
+      const char * source, const char * reject_reason) {
+        if (!context.active) {
+          return;
+        }
+        context.trace.current_ready = current_ready;
+        context.trace.alternate_ready = alternate_ready;
+        context.trace.source = source;
+        context.trace.action = replaced ?
+          (alternate ? "replace-alternate-applied" : "replace-current-applied") :
+          "replacement-rejected";
+        context.trace.reason = replaced ? "replacement committed" : reject_reason;
+        const auto emission = dynamic_mission_wait_trace_emitter_.update(
+          context.trace, now_sec);
+        if (emission.emit) {
+          RCLCPP_INFO(
+            rclcpp::get_logger("mpc_controller"), "%s", emission.message.c_str());
+        }
+      };
     const auto execute_dynamic_mission_wait = [&, this](
       const bool resuming_paused_mission,
       const int mission_side_sign) -> DynamicMissionWaitExecution {
@@ -25790,30 +25865,22 @@ private:
           behavior_output.recoverable_side_contact_active;
         const auto dynamic_wait =
           overtake_core::resolve_dynamic_mission_wait(wait_request);
+        auto runtime_failover_trace =
+          capture_runtime_failover_trace_context().trace;
+        runtime_failover_trace.source = "dynamic-wait-resolver";
+        runtime_failover_trace.current_ready = fresh_current_replacement_ready;
+        runtime_failover_trace.alternate_urgent_admission =
+          urgent_alternate_replacement_ready;
+        runtime_failover_trace.alternate_ready =
+          fresh_alternate_replacement_ready;
+        runtime_failover_trace.cross_side_allowed =
+          dynamic_wait_cross_side_allowed;
+        runtime_failover_trace.hard_fault = dynamic_wait_hard_fault;
+        runtime_failover_trace.action = overtake_core::to_string(dynamic_wait.action);
+        runtime_failover_trace.reason = overtake_core::to_string(dynamic_wait.reason);
         const auto runtime_failover_emission =
           dynamic_mission_wait_trace_emitter_.update(
-          overtake_decision_trace::RuntimeFailoverTrace{
-            overtake_line_state_.episode_id,
-            overtake_line_state_.mission_generation,
-            overtake_line_state_.target_vehicle_id,
-            to_string(overtake_line_state_.follow_prepare_origin_phase),
-            overtake_line_state_.dynamic_mission_wait_trigger_reason,
-            behavior_output.opponent_side_replan_current_feasible,
-            behavior_output.opponent_side_replan_current_mission.has_value(),
-            fresh_current_replacement_ready,
-            behavior_output.opponent_side_replan_alternate_feasible,
-            behavior_output.opponent_side_replan_mission.has_value(),
-            behavior_output.opponent_side_replan_ready,
-            urgent_alternate_replacement_ready,
-            fresh_alternate_replacement_ready,
-            dynamic_wait_cross_side_allowed,
-            overtake_line_state_.opponent_side_replan_no_return_latched,
-            dynamic_wait_hard_fault,
-            overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active,
-            overtake_core::to_string(dynamic_wait.action),
-            overtake_core::to_string(dynamic_wait.reason),
-            model->wp_id},
-          now_sec);
+          runtime_failover_trace, now_sec);
         if (runtime_failover_emission.emit) {
           RCLCPP_INFO(
             rclcpp::get_logger("mpc_controller"), "%s",
@@ -25835,6 +25902,7 @@ private:
             return DynamicMissionWaitExecution::Handled;
           case overtake_core::DynamicMissionWaitAction::ReplaceWithCurrent:
           {
+            const auto trace_context = capture_runtime_failover_trace_context();
             const bool forward_authority_handoff =
               v2x_overtake_core::can_handoff_dynamic_mission_wait_forward_authority(
               v2x_overtake_core::DynamicMissionWaitForwardAuthorityRequest{
@@ -25863,10 +25931,15 @@ private:
                 mission_side_sign,
                 "dynamic Mission wait fresh same-side replacement rejected");
             }
+            emit_runtime_replacement_outcome(
+              trace_context, true, fresh_alternate_replacement_ready, replaced,
+              false, "dynamic-wait-resolver",
+              "fresh same-side replacement rejected at commit");
             return DynamicMissionWaitExecution::Handled;
           }
           case overtake_core::DynamicMissionWaitAction::ReplaceWithAlternate:
           {
+            const auto trace_context = capture_runtime_failover_trace_context();
             const bool replaced =
               behavior_output.opponent_side_replan_mission.has_value() &&
               replace_frozen_overtake_mission_after_dynamic_replan(
@@ -25881,6 +25954,10 @@ private:
                 mission_side_sign,
                 "dynamic Mission wait alternate replacement rejected");
             }
+            emit_runtime_replacement_outcome(
+              trace_context, fresh_current_replacement_ready, true, replaced,
+              true, "dynamic-wait-resolver",
+              "alternate replacement rejected at commit");
             return DynamicMissionWaitExecution::Handled;
           }
           case overtake_core::DynamicMissionWaitAction::ReleaseForFreshSearch:
@@ -26103,6 +26180,7 @@ private:
       behavior_output.mpcc_lite_same_side_replan_ready &&
       behavior_output.mpcc_lite_same_side_replan_mission.has_value())
     {
+      const auto runtime_trace_context = capture_runtime_failover_trace_context();
       const auto & replacement =
         behavior_output.mpcc_lite_same_side_replan_mission.value();
       const bool replaced = replace_frozen_overtake_mission_after_dynamic_replan(
@@ -26119,10 +26197,14 @@ private:
           to_string(overtake_line_state_.phase), replacement.goal_lateral_m,
           model->wp_id);
       }
+      emit_runtime_replacement_outcome(
+        runtime_trace_context, true, false, replaced, false,
+        "mpcc-lite-same-side", "same-side replacement rejected at commit");
     } else if (
       behavior_output.mpcc_lite_cross_side_replan_ready &&
       behavior_output.mpcc_lite_cross_side_replan_mission.has_value())
     {
+      const auto runtime_trace_context = capture_runtime_failover_trace_context();
       const auto & replacement =
         behavior_output.mpcc_lite_cross_side_replan_mission.value();
       const bool replaced = replace_frozen_overtake_mission_after_dynamic_replan(
@@ -26142,10 +26224,14 @@ private:
           behavior_output.mpcc_lite_cross_side_candidate_stable_sec,
           behavior_output.mpcc_lite_cross_side_score_advantage, model->wp_id);
       }
+      emit_runtime_replacement_outcome(
+        runtime_trace_context, false, true, replaced, true,
+        "mpcc-lite-cross-side", "cross-side replacement rejected at commit");
     } else if (
       behavior_output.opponent_side_replan_ready &&
       behavior_output.opponent_side_replan_mission.has_value())
     {
+      const auto runtime_trace_context = capture_runtime_failover_trace_context();
       const bool replaced = replace_frozen_overtake_mission_after_dynamic_replan(
         behavior_output.opponent_side_replan_mission.value(), now_sec, current_ey,
         false, false, tactical_cross_side_replan_rescue_allowed);
@@ -26167,6 +26253,9 @@ private:
             behavior_output.opponent_side_replan_candidate_sign, model->wp_id);
         }
       }
+      emit_runtime_replacement_outcome(
+        runtime_trace_context, false, true, replaced, true,
+        "opponent-side-replan", "opponent-side replacement rejected at commit");
     } else if (
       overtake_core::should_execute_dynamic_mission_wait_runtime(
         overtake_core::DynamicMissionWaitRuntimeOwnershipRequest{

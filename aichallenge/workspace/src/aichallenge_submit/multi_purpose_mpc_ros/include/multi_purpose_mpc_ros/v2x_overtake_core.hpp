@@ -6974,6 +6974,11 @@ struct DynamicObstacleLateralEscapeAuthorityRequest
   double current_lateral_m{};
   double target_lateral_m{};
   double minimum_lateral_shift_m{};
+  // The selected collision corridor and its reachable bridge were validated
+  // for the live horizon. This permits an already aligned racing line (or a
+  // tiny same-side correction) to retain planner ownership without globally
+  // lowering minimum_lateral_shift_m.
+  bool validated_pass_through_allowed{false};
   // A feasible corridor may own the lateral tracking problem immediately, but
   // the longitudinal Follow cap is released only after that exact target/side
   // has produced at least one valid tracking solution.
@@ -6996,11 +7001,13 @@ enum class DynamicObstacleLateralEscapeAuthorityReason
   ShiftDirectionMismatch,
   ShiftBelowMinimum,
   Accepted,
+  AcceptedPassThrough,
 };
 
 struct DynamicObstacleLateralEscapeAuthorityResolution
 {
   bool active{false};
+  bool pass_through{false};
   bool suppress_generic_follow_cap{false};
   int pass_side_sign{0};
   double requested_lateral_shift_m{};
@@ -7011,8 +7018,10 @@ struct DynamicObstacleLateralEscapeAuthorityResolution
 /// Let an already feasible all-V2X GapPlanner corridor own lateral execution
 /// while Behavior remains in Follow. This is deliberately independent from a
 /// complete ShiftOut/Pass/Return Mission. Emergency braking, solver recovery,
-/// malformed geometry and a non-moving/tiny lateral target fail closed. The
-/// generic Follow cap remains active until tracking_solution_qualified.
+/// malformed geometry and a wrong-side target fail closed. A tiny or zero
+/// lateral target is accepted only when its full planner/bridge horizon was
+/// validated. The generic Follow cap remains active until
+/// tracking_solution_qualified.
 DynamicObstacleLateralEscapeAuthorityResolution
 resolve_dynamic_obstacle_lateral_escape_authority(
   const DynamicObstacleLateralEscapeAuthorityRequest & request) noexcept;

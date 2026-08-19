@@ -11845,26 +11845,34 @@ resolve_dynamic_obstacle_lateral_escape_authority(
 
   resolution.requested_lateral_shift_m =
     request.target_lateral_m - request.current_lateral_m;
+  const double shift_magnitude = std::abs(resolution.requested_lateral_shift_m);
+  const bool effectively_zero_shift =
+    shift_magnitude <= std::numeric_limits<double>::epsilon();
   const bool shift_matches_side = request.pass_side_sign > 0 ?
-    resolution.requested_lateral_shift_m > 0.0 :
-    resolution.requested_lateral_shift_m < 0.0;
+    resolution.requested_lateral_shift_m > 0.0 || effectively_zero_shift :
+    resolution.requested_lateral_shift_m < 0.0 || effectively_zero_shift;
   if (!shift_matches_side) {
     resolution.reason =
       DynamicObstacleLateralEscapeAuthorityReason::ShiftDirectionMismatch;
     return resolution;
   }
   if (
-    std::abs(resolution.requested_lateral_shift_m) +
+    shift_magnitude +
     std::numeric_limits<double>::epsilon() < request.minimum_lateral_shift_m)
   {
-    resolution.reason = DynamicObstacleLateralEscapeAuthorityReason::ShiftBelowMinimum;
-    return resolution;
+    if (!request.validated_pass_through_allowed) {
+      resolution.reason = DynamicObstacleLateralEscapeAuthorityReason::ShiftBelowMinimum;
+      return resolution;
+    }
+    resolution.pass_through = true;
   }
 
   resolution.active = true;
   resolution.suppress_generic_follow_cap = request.tracking_solution_qualified;
   resolution.pass_side_sign = request.pass_side_sign;
-  resolution.reason = DynamicObstacleLateralEscapeAuthorityReason::Accepted;
+  resolution.reason = resolution.pass_through ?
+    DynamicObstacleLateralEscapeAuthorityReason::AcceptedPassThrough :
+    DynamicObstacleLateralEscapeAuthorityReason::Accepted;
   return resolution;
 }
 
@@ -11899,6 +11907,8 @@ const char * to_string(const DynamicObstacleLateralEscapeAuthorityReason reason)
       return "shift-below-minimum";
     case DynamicObstacleLateralEscapeAuthorityReason::Accepted:
       return "accepted";
+    case DynamicObstacleLateralEscapeAuthorityReason::AcceptedPassThrough:
+      return "accepted-pass-through";
   }
   return "unknown";
 }

@@ -62,6 +62,7 @@ struct DecisionTrace {
   bool alternate_attempted{false};
   bool alternate_selected{false};
   bool authority_active{false};
+  bool pass_through{false};
   std::string authority_reason{"not-evaluated"};
   int final_side{0};
   double final_shift_m{0.0};
@@ -123,6 +124,7 @@ struct RuntimeFailoverTrace {
   std::string target_id;
   std::string phase;
   std::string trigger;
+  std::string source{"resolver"};
   bool current_feasible{false};
   bool current_mission_available{false};
   bool current_ready{false};
@@ -142,6 +144,7 @@ struct RuntimeFailoverTrace {
 
 std::string categorical_signature(const RuntimeFailoverTrace &trace);
 std::string format_runtime_failover_trace(const RuntimeFailoverTrace &trace);
+std::string classify_runtime_failover_trigger(const std::string &trigger);
 
 class ChangeAwareRuntimeFailoverTraceEmitter {
 public:

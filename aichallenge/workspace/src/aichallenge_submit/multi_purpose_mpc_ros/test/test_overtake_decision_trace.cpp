@@ -145,7 +145,8 @@ TEST(OvertakeDecisionTrace, EmitsRuntimeFailoverOnlyOnCategoricalChange) {
   failover.mission_generation = 3U;
   failover.target_id = "d2";
   failover.phase = "FollowPrepare";
-  failover.trigger = "locked target entered selected pass-side line";
+  failover.trigger =
+      "Pass entry physical gate has no valid current-side prefix: initial";
   failover.current_feasible = true;
   failover.current_mission_available = true;
   failover.current_ready = true;
@@ -154,20 +155,48 @@ TEST(OvertakeDecisionTrace, EmitsRuntimeFailoverOnlyOnCategoricalChange) {
   failover.alternate_stable = false;
   failover.cross_side_allowed = true;
   failover.action = "replace-current";
+  failover.source = "dynamic-wait-resolver";
   failover.reason = "current replacement ready";
   failover.waypoint_id = 31;
 
   const auto first = emitter.update(failover, 1.0);
   ASSERT_TRUE(first.emit);
   EXPECT_NE(first.message.find("stage=runtime-failover"), std::string::npos);
+  EXPECT_NE(first.message.find("trigger_gate=pass-entry-no-prefix"),
+            std::string::npos);
+  EXPECT_NE(first.message.find("source=dynamic-wait-resolver"),
+            std::string::npos);
   EXPECT_NE(first.message.find("current=1/1/1"), std::string::npos);
   EXPECT_NE(first.message.find("alternate=1/1/0/0/0"), std::string::npos);
 
   failover.waypoint_id = 32;
   EXPECT_FALSE(emitter.update(failover, 1.1).emit);
+  failover.reason = "asynchronous assessment text changed";
+  failover.trigger =
+      "Pass entry physical gate has no valid current-side prefix: updated detail";
+  EXPECT_FALSE(emitter.update(failover, 1.15).emit);
   failover.alternate_ready = true;
   failover.action = "replace-alternate";
   EXPECT_TRUE(emitter.update(failover, 1.2).emit);
+  failover.source = "opponent-side-replan";
+  EXPECT_TRUE(emitter.update(failover, 1.3).emit);
+}
+
+TEST(OvertakeDecisionTrace, ClassifiesRuntimeFailoverTriggerGates) {
+  EXPECT_EQ(
+      trace::classify_runtime_failover_trigger(
+          "physical target separation conflicts with wall corridor"),
+      "target-wall-conflict");
+  EXPECT_EQ(
+      trace::classify_runtime_failover_trigger(
+          "optimized horizon failed physical revalidation"),
+      "optimized-horizon-physical");
+  EXPECT_EQ(
+      trace::classify_runtime_failover_trigger(
+          "live overtake corridor unavailable"),
+      "live-corridor-unavailable");
+  EXPECT_EQ(trace::classify_runtime_failover_trigger("unclassified detail"),
+            "other");
 }
 
 } // namespace

@@ -84,6 +84,20 @@ rosbag compose サービスには `stop_grace_period: 10s` を設定してあり
 - `stage=tracking`: 採用経路の追従状態、速度制限、制御fallback
 - `stage=runtime-failover`: 実行中Mission失効時の現側・代替側評価と採用動作
 
+`stage=planning` の `pass_through=1` / `authority=1/accepted-pass-through` は、
+GapPlanner回廊とreachable bridgeが成立し、走行ラインが既に回廊内または必要横移動が
+最小shift未満だったことを表す。これは物理判定の省略ではない。また
+`qualified=0` の間は `follow_cap_suppressed=0` とし、同じtarget/sideのtracking solveが
+成立してからのみ前車速度capを解除する。
+
+`stage=runtime-failover` は自由文 `trigger` に加えて固定カテゴリ `trigger_gate` を持つ。
+代表カテゴリは `target-wall-conflict`、`pass-entry-no-prefix`、
+`pass-entry-wall-unresolved`、`optimized-horizon-physical`、
+`live-corridor-unavailable` である。`source` は判定経路を表し、
+`dynamic-wait-resolver`、`mpcc-lite-same-side`、`mpcc-lite-cross-side`、
+`opponent-side-replan` を区別する。実差し替え後は
+`replace-current-applied` / `replace-alternate-applied` / `replacement-rejected` を記録する。
+
 相関キーは次のように役割を分ける。
 
 - `attempt`: Follow中の動的障害物回避を含む、追い越し要求1回の識別子
@@ -91,9 +105,12 @@ rosbag compose サービスには `stop_grace_period: 10s` を設定してあり
 - `generation`: 同一Mission内で経路を差し替えた世代
 - `target`: 対象車両ID
 
-棄却理由は自由文だけにせず、`planner_gate`、`action`、`reason` などの固定カテゴリを併記する。
+棄却理由は自由文だけにせず、`planner_gate`、`trigger_gate`、`action`、`source` などの
+固定カテゴリを併記する。
 同一状態を制御周期ごとに出さず、カテゴリ変化時と低頻度heartbeatだけを記録する。数値の微小変動は
-change判定へ含めない。これによりログ量を抑えつつ、次を区別可能にする。
+change判定へ含めない。runtime-failoverの自由文 `reason`、および分類済み `trigger` の
+詳細変化だけでも再出力しない。未分類triggerは欠陥を隠さないため、分類が追加されるまで
+保守的に変化を記録する。これによりログ量を抑えつつ、次を区別可能にする。
 
 1. 左右どちらにも物理的な回廊がない
 2. 回廊はあるがsolverまたはbridgeで不成立

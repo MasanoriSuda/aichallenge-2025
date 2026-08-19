@@ -174,6 +174,7 @@ std::string categorical_signature(const DecisionTrace &trace) {
   append_candidate(trace.alternate);
   stream << "|" << (trace.alternate_attempted ? 1 : 0) << "|"
          << (trace.alternate_selected ? 1 : 0) << "|" << trace.authority_reason
+         << "|" << (trace.pass_through ? 1 : 0)
          << "|" << trace.final_side << "|" << (trace.tracking_qualified ? 1 : 0)
          << "|" << (trace.follow_cap_suppressed ? 1 : 0);
   return stream.str();
@@ -189,7 +190,9 @@ std::string format_decision_trace(const DecisionTrace &trace) {
          << ", primary=" << format_candidate(trace.primary)
          << ", alternate=" << format_candidate(trace.alternate)
          << ", authority=" << (trace.authority_active ? 1 : 0) << "/"
-         << trace.authority_reason << ", final_side=" << trace.final_side
+         << trace.authority_reason
+         << ", pass_through=" << (trace.pass_through ? 1 : 0)
+         << ", final_side=" << trace.final_side
          << ", shift=" << finite_or_nan(trace.final_shift_m) << "m"
          << ", qualified=" << (trace.tracking_qualified ? 1 : 0)
          << ", follow_cap_suppressed=" << (trace.follow_cap_suppressed ? 1 : 0)
@@ -252,8 +255,15 @@ std::string format_tracking_trace(const TrackingTrace &trace) {
 
 std::string categorical_signature(const RuntimeFailoverTrace &trace) {
   std::ostringstream stream;
+  const std::string trigger_gate = classify_runtime_failover_trigger(trace.trigger);
   stream << trace.mission_episode_id << "|" << trace.mission_generation << "|"
-         << trace.target_id << "|" << trace.phase << "|" << trace.trigger << "|"
+         << trace.target_id << "|" << trace.phase << "|" << trigger_gate;
+  if (trigger_gate == "other") {
+    // Unknown triggers must remain observable until they receive a stable
+    // category. Known trigger details are excluded to suppress log chatter.
+    stream << ":" << trace.trigger;
+  }
+  stream << "|"
          << (trace.current_feasible ? 1 : 0) << ":"
          << (trace.current_mission_available ? 1 : 0) << ":"
          << (trace.current_ready ? 1 : 0) << "|"
@@ -266,8 +276,32 @@ std::string categorical_signature(const RuntimeFailoverTrace &trace) {
          << (trace.no_return ? 1 : 0) << "|"
          << (trace.hard_fault ? 1 : 0) << "|"
          << (trace.forward_prefix_active ? 1 : 0) << "|"
-         << trace.action << "|" << trace.reason;
+         << trace.action << "|" << trace.source;
   return stream.str();
+}
+
+std::string classify_runtime_failover_trigger(const std::string &trigger) {
+  if (trigger.find("physical target separation conflicts") != std::string::npos) {
+    return "target-wall-conflict";
+  }
+  if (trigger.find("Pass entry physical gate has no valid current-side prefix") !=
+      std::string::npos) {
+    return "pass-entry-no-prefix";
+  }
+  if (trigger.find("Pass entry physical wall gate unresolved") != std::string::npos) {
+    return "pass-entry-wall-unresolved";
+  }
+  if (trigger.find("optimized horizon failed physical revalidation") !=
+      std::string::npos) {
+    return "optimized-horizon-physical";
+  }
+  if (trigger.find("live overtake corridor unavailable") != std::string::npos) {
+    return "live-corridor-unavailable";
+  }
+  if (trigger.empty()) {
+    return "unknown";
+  }
+  return "other";
 }
 
 std::string format_runtime_failover_trace(const RuntimeFailoverTrace &trace) {
@@ -276,7 +310,9 @@ std::string format_runtime_failover_trace(const RuntimeFailoverTrace &trace) {
          << trace.mission_episode_id << ", generation=" << trace.mission_generation
          << ", target=" << (trace.target_id.empty() ? "<none>" : trace.target_id)
          << ", phase=" << reason_or(trace.phase, "unknown")
+         << ", trigger_gate=" << classify_runtime_failover_trigger(trace.trigger)
          << ", trigger=\"" << reason_or(trace.trigger, "unknown") << "\""
+         << ", source=" << reason_or(trace.source, "resolver")
          << ", current=" << (trace.current_feasible ? 1 : 0) << "/"
          << (trace.current_mission_available ? 1 : 0) << "/"
          << (trace.current_ready ? 1 : 0)

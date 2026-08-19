@@ -301,6 +301,60 @@ struct PredictedFootprintOverlapConfirmation
 PredictedFootprintOverlapConfirmation update_predicted_footprint_overlap_confirmation(
   const PredictedFootprintOverlapConfirmationRequest & request) noexcept;
 
+enum class PrecontactSqueezeEscapeReason
+{
+  Disabled,
+  AttackModeDisabled,
+  PassInactive,
+  MinimumMotionCorridorInactive,
+  FrontCapNotReleased,
+  TargetInvalid,
+  ContactContinuationOwns,
+  CurrentOverlapHandoff,
+  CurrentFootprintOverlap,
+  PredictionUnavailable,
+  PredictedSweepClear,
+  AwaitingConfirmation,
+  Active,
+};
+
+struct PrecontactSqueezeEscapeRequest
+{
+  bool enabled{false};
+  bool committed_pass_attack_mode_enabled{false};
+  bool pass_phase{false};
+  bool minimum_motion_corridor_active{false};
+  bool prior_front_cap_release_active{false};
+  bool target_seen{false};
+  bool target_position_jump{false};
+  bool target_course_progress_rejected{false};
+  bool recoverable_side_contact_active{false};
+  bool previously_active{false};
+  bool current_body_footprints_separated{false};
+  bool current_body_footprint_overlap_confirmed{true};
+  bool footprint_prediction_valid{false};
+  bool predicted_body_footprint_sweep_separated{false};
+  bool predicted_body_footprint_overlap_confirmed{false};
+};
+
+struct PrecontactSqueezeEscapeResolution
+{
+  /// True while all stable geometry prerequisites are present. The caller may
+  /// use this to drive the shared overlap-confirmation clock.
+  bool confirmation_monitor_eligible{false};
+  bool active{false};
+  PrecontactSqueezeEscapeReason reason{PrecontactSqueezeEscapeReason::Disabled};
+};
+
+/// Detect a confirmed future collision during an already released Pass before
+/// actual body overlap occurs. This response deliberately stays on the frozen
+/// pass side: the caller owns wall-bounded lateral separation and speed-cap
+/// fallback, while ContactContinuation remains responsible after contact.
+PrecontactSqueezeEscapeResolution resolve_precontact_squeeze_escape(
+  const PrecontactSqueezeEscapeRequest & request) noexcept;
+
+const char * to_string(PrecontactSqueezeEscapeReason reason) noexcept;
+
 enum class CommittedPassFrontCapTransitionReason
 {
   None,
@@ -362,9 +416,12 @@ struct CommittedPassPolicyRequest
   double committed_pass_min_speed_mps{};
   /// Competition-simulation policy: after a minimum-motion Pass has acquired
   /// its release, prefer forward completion over a future-overlap prediction.
-  /// Confirmed current footprint overlap, wall, path-feasibility and target-continuity guards
-  /// remain hard.
+  /// Confirmed pre-contact squeeze, current footprint overlap, wall,
+  /// path-feasibility and target-continuity guards remain hard.
   bool committed_pass_attack_mode_enabled{false};
+  /// A confirmed predicted overlap has activated the same-side pre-contact
+  /// escape. It revokes attack/side-by-side speed hold until the sweep clears.
+  bool precontact_squeeze_escape_active{false};
 };
 
 struct CommittedPassPolicyResolution
@@ -6587,6 +6644,10 @@ struct CommittedPassBehaviorOwnershipRequest
   bool current_body_footprints_separated{false};
   bool current_body_footprint_overlap_confirmed{true};
   bool committed_pass_attack_mode_enabled{false};
+  /// Keep the frozen Pass as lateral owner while the pre-contact response
+  /// applies separation and speed fallback. It does not mask target identity,
+  /// wall/waypoint or solver faults.
+  bool precontact_squeeze_escape_active{false};
   bool recoverable_side_contact_active{false};
   bool locked_target_pass_side_intrusion{false};
   bool explicit_forbidden_waypoint{false};
@@ -6604,7 +6665,9 @@ struct CommittedPassBehaviorOwnershipRequest
 /// are intentionally absent. Live corridor, wall, lateral-acceleration and
 /// solver checks still execute downstream in OvertakeLine. Confirmed current
 /// overlap may retain ownership only through bounded ContactContinuation;
-/// target-continuity and hard-fault failures always release it.
+/// the pre-contact squeeze response may retain lateral ownership across its
+/// target-side intrusion/emergency-speed response. Target identity, waypoint
+/// and solver hard faults always release it.
 bool can_preserve_committed_pass_behavior(
   const CommittedPassBehaviorOwnershipRequest & request) noexcept;
 
@@ -7910,6 +7973,9 @@ struct CommittedCorridorFrontDangerSuppressionRequest
   /// Pass or a Pass-origin DynamicMissionWait contact context.
   bool pass_phase{false};
   bool committed_pass_attack_mode_enabled{false};
+  /// When active, longitudinal-only danger suppression must yield to the
+  /// pre-contact lateral-escape/speed-cap response.
+  bool precontact_squeeze_escape_active{false};
   bool recoverable_side_contact_active{false};
   /// A frozen Mission proved body clear before the hard longitudinal gap and
   /// its runtime handoff has not expired. This permits the validated path to
@@ -7924,8 +7990,9 @@ struct CommittedCorridorFrontDangerSuppressionRequest
 /// also share the bounded predicted-overlap confirmation used by its front-cap policy. In the
 /// optional competition-simulation attack mode, an already released Pass may
 /// ignore future overlap while the current footprints and target continuity
-/// remain valid. A frozen ShiftOut with a feasible body-clear deadline may do
-/// the same while current bodies remain separated. The bounded body-clear
+/// remain valid, unless the caller has confirmed a pre-contact squeeze. A
+/// frozen ShiftOut with a feasible body-clear deadline may do the same while
+/// current bodies remain separated. The bounded body-clear
 /// handoff may span ShiftOut and early Pass, but never hides current overlap.
 /// A Pass-origin DynamicMissionWait may bootstrap this authority only through
 /// the independently bounded recoverable side-contact classifier.

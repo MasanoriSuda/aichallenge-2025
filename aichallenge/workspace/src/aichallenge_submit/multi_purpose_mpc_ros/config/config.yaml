@@ -586,6 +586,11 @@ mpc:
   # boundary sample is debounced below; sustained overlap, target discontinuity, wall/path
   # infeasibility and solver guards remain active.
   v2x_overtake_committed_pass_attack_mode_enabled: true
+  # Once a future body overlap remains confirmed, stop treating the Pass as a prediction-only
+  # attack. Keep the frozen side, add a wall-bounded separation bias, reapply the front cap and
+  # expose the normal danger action. Actual overlap remains owned by ContactContinuation below.
+  v2x_overtake_precontact_squeeze_escape_enabled: true
+  v2x_overtake_precontact_squeeze_lateral_bias: 0.15 # [m], clamped by the full-horizon wall interval
   v2x_overtake_velocity_advantage: 1.0      # [m/s] legacy whole-phase cap when stage speed is disabled
   v2x_overtake_stage_speed_enabled: true    # cap ShiftOut/early Pass; release only after the locked target is no longer ahead
   v2x_overtake_shiftout_adaptive_closing_speed_enabled: true # preserve entry gap until distance+lateral ShiftOut completes

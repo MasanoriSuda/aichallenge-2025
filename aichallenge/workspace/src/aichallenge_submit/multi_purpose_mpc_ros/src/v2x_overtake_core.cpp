@@ -507,6 +507,105 @@ PredictedFootprintOverlapConfirmation update_predicted_footprint_overlap_confirm
   return result;
 }
 
+PrecontactSqueezeEscapeResolution resolve_precontact_squeeze_escape(
+  const PrecontactSqueezeEscapeRequest & request) noexcept
+{
+  PrecontactSqueezeEscapeResolution resolution;
+  if (!request.enabled) {
+    resolution.reason = PrecontactSqueezeEscapeReason::Disabled;
+    return resolution;
+  }
+  if (!request.committed_pass_attack_mode_enabled) {
+    resolution.reason = PrecontactSqueezeEscapeReason::AttackModeDisabled;
+    return resolution;
+  }
+  if (!request.pass_phase) {
+    resolution.reason = PrecontactSqueezeEscapeReason::PassInactive;
+    return resolution;
+  }
+  if (!request.minimum_motion_corridor_active) {
+    resolution.reason = PrecontactSqueezeEscapeReason::MinimumMotionCorridorInactive;
+    return resolution;
+  }
+  if (!request.prior_front_cap_release_active) {
+    resolution.reason = PrecontactSqueezeEscapeReason::FrontCapNotReleased;
+    return resolution;
+  }
+  if (
+    !request.target_seen || request.target_position_jump ||
+    request.target_course_progress_rejected)
+  {
+    resolution.reason = PrecontactSqueezeEscapeReason::TargetInvalid;
+    return resolution;
+  }
+  if (request.recoverable_side_contact_active) {
+    resolution.reason = PrecontactSqueezeEscapeReason::ContactContinuationOwns;
+    return resolution;
+  }
+  if (!request.current_body_footprints_separated) {
+    if (request.previously_active && !request.current_body_footprint_overlap_confirmed) {
+      // Bridge the bounded current-overlap confirmation window without
+      // restoring attack speed. ContactContinuation takes over once its
+      // independent side-contact classifier confirms recoverability.
+      resolution.active = true;
+      resolution.reason = PrecontactSqueezeEscapeReason::CurrentOverlapHandoff;
+      return resolution;
+    }
+    resolution.reason = PrecontactSqueezeEscapeReason::CurrentFootprintOverlap;
+    return resolution;
+  }
+  if (!request.footprint_prediction_valid) {
+    resolution.reason = PrecontactSqueezeEscapeReason::PredictionUnavailable;
+    return resolution;
+  }
+  if (request.predicted_body_footprint_sweep_separated) {
+    resolution.reason = PrecontactSqueezeEscapeReason::PredictedSweepClear;
+    return resolution;
+  }
+
+  resolution.confirmation_monitor_eligible = true;
+  if (!request.predicted_body_footprint_overlap_confirmed) {
+    resolution.reason = PrecontactSqueezeEscapeReason::AwaitingConfirmation;
+    return resolution;
+  }
+  resolution.active = true;
+  resolution.reason = PrecontactSqueezeEscapeReason::Active;
+  return resolution;
+}
+
+const char * to_string(const PrecontactSqueezeEscapeReason reason) noexcept
+{
+  switch (reason) {
+    case PrecontactSqueezeEscapeReason::Disabled:
+      return "disabled";
+    case PrecontactSqueezeEscapeReason::AttackModeDisabled:
+      return "attack-mode-disabled";
+    case PrecontactSqueezeEscapeReason::PassInactive:
+      return "pass-inactive";
+    case PrecontactSqueezeEscapeReason::MinimumMotionCorridorInactive:
+      return "minimum-motion-inactive";
+    case PrecontactSqueezeEscapeReason::FrontCapNotReleased:
+      return "front-cap-not-released";
+    case PrecontactSqueezeEscapeReason::TargetInvalid:
+      return "target-invalid";
+    case PrecontactSqueezeEscapeReason::ContactContinuationOwns:
+      return "contact-continuation-owns";
+    case PrecontactSqueezeEscapeReason::CurrentOverlapHandoff:
+      return "current-overlap-handoff";
+    case PrecontactSqueezeEscapeReason::CurrentFootprintOverlap:
+      return "current-footprint-overlap";
+    case PrecontactSqueezeEscapeReason::PredictionUnavailable:
+      return "prediction-unavailable";
+    case PrecontactSqueezeEscapeReason::PredictedSweepClear:
+      return "predicted-sweep-clear";
+    case PrecontactSqueezeEscapeReason::AwaitingConfirmation:
+      return "awaiting-confirmation";
+    case PrecontactSqueezeEscapeReason::Active:
+      return "active";
+  }
+  return "unknown";
+}
+
 CommittedPassPolicyResolution resolve_committed_pass_policy(
   const CommittedPassPolicyRequest & request) noexcept
 {
@@ -545,6 +644,7 @@ CommittedPassPolicyResolution resolve_committed_pass_policy(
     request.target_longitudinal_m <= request.body_longitudinal_clearance_m;
   resolution.minimum_motion_side_by_side_escape_active =
     minimum_motion_pass_guard && minimum_motion_side_by_side_geometry &&
+    !request.precontact_squeeze_escape_active &&
     (request.prior_front_cap_release_active ||
     (request.lateral_complete && request.execution_path_physically_feasible));
   resolution.minimum_motion_predicted_overlap_grace_active =
@@ -568,18 +668,21 @@ CommittedPassPolicyResolution resolve_committed_pass_policy(
   resolution.minimum_motion_current_overlap_grace_active =
     request.committed_pass_attack_mode_enabled &&
     minimum_motion_pass_guard && request.prior_front_cap_release_active &&
+    !request.precontact_squeeze_escape_active &&
     !current_body_physically_separated &&
     !request.current_body_footprint_overlap_confirmed &&
     request.footprint_prediction_valid &&
     request.execution_path_physically_feasible;
   // Competition-simulation attack mode is deliberately hold-only. It cannot
   // acquire an initial release from an unsafe prediction. Once the validated
-  // Pass has been released, however, a predicted future overlap alone must not
-  // hand speed ownership back to Follow. Current 2D overlap, wall contact,
-  // target discontinuity and an infeasible execution path still revoke it.
+  // Pass has been released, however, an unconfirmed predicted future overlap
+  // alone must not hand speed ownership back to Follow. A confirmed
+  // pre-contact squeeze, current 2D overlap, wall contact, target discontinuity
+  // and an infeasible execution path still revoke it.
   resolution.minimum_motion_attack_hold_active =
     request.committed_pass_attack_mode_enabled &&
     minimum_motion_pass_guard && request.prior_front_cap_release_active &&
+    !request.precontact_squeeze_escape_active &&
     current_body_physically_separated &&
     request.execution_path_physically_feasible;
   resolution.minimum_motion_physical_clear_hold_active =
@@ -11320,9 +11423,10 @@ bool can_preserve_committed_pass_behavior(
       request.target_identity_continuous,
       request.locked_target_position_jump,
       request.locked_target_course_progress_rejected,
-      request.locked_target_pass_side_intrusion,
+      request.locked_target_pass_side_intrusion &&
+      !request.precontact_squeeze_escape_active,
       request.explicit_forbidden_waypoint,
-      request.emergency_front_risk,
+      request.emergency_front_risk && !request.precontact_squeeze_escape_active,
       request.solver_recovery_requested});
   const auto geometry_ownership = resolve_committed_pass_geometry_ownership(
     CommittedPassGeometryOwnershipRequest{
@@ -13121,6 +13225,9 @@ FrontDangerAction resolve_front_danger_action(const FrontDangerActionRequest & r
 bool can_suppress_committed_corridor_front_danger(
   const CommittedCorridorFrontDangerSuppressionRequest & request) noexcept
 {
+  if (request.precontact_squeeze_escape_active) {
+    return false;
+  }
   const bool current_overlap_grace_active =
     request.committed_pass_attack_mode_enabled && request.pass_phase &&
     request.prior_front_cap_release_active &&

@@ -56,6 +56,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassPolicyRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassFrontCapTransitionReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::CourseFrameFootprintSweepRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PredictedFootprintOverlapConfirmationRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::PrecontactSqueezeEscapeReason;
+using multi_purpose_mpc_ros::v2x_overtake_core::PrecontactSqueezeEscapeRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassFrontOverlapExclusionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ActivePassGapHoldRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ActiveLineGapLossHoldRequest;
@@ -328,6 +330,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_start_grid_breakout_spee
 using multi_purpose_mpc_ros::v2x_overtake_core::is_shiftout_complete;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_release_overtake_front_cap;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_committed_pass_policy;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_precontact_squeeze_escape;
 using multi_purpose_mpc_ros::v2x_overtake_core::course_frame_body_footprints_remain_separated;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   update_predicted_footprint_overlap_confirmation;
@@ -1170,6 +1173,12 @@ TEST(V2XFrontDangerAction, CommittedPassAttackSuppressesPredictionOnlyDanger)
 
   EXPECT_TRUE(can_suppress_committed_corridor_front_danger(request));
 
+  // Once the predicted overlap is confirmed, the pre-contact response owns
+  // lateral separation and the ordinary danger action must be visible again.
+  request.precontact_squeeze_escape_active = true;
+  EXPECT_FALSE(can_suppress_committed_corridor_front_danger(request));
+  request.precontact_squeeze_escape_active = false;
+
   // Attack mode never applies before Pass, before initial release, or after
   // current body overlap/target discontinuity.
   request.pass_phase = false;
@@ -1725,6 +1734,60 @@ TEST(V2XOvertakeCoreSpeed, ConfirmsOnlyContinuousPredictedFootprintOverlap)
   EXPECT_FALSE(std::isfinite(confirmation.overlap_since_sec));
 }
 
+TEST(V2XOvertakeCoreSpeed, ActivatesPrecontactSqueezeOnlyAfterConfirmedFutureOverlap)
+{
+  PrecontactSqueezeEscapeRequest request;
+  request.enabled = true;
+  request.committed_pass_attack_mode_enabled = true;
+  request.pass_phase = true;
+  request.minimum_motion_corridor_active = true;
+  request.prior_front_cap_release_active = true;
+  request.target_seen = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = false;
+
+  auto resolution = resolve_precontact_squeeze_escape(request);
+  EXPECT_TRUE(resolution.confirmation_monitor_eligible);
+  EXPECT_FALSE(resolution.active);
+  EXPECT_EQ(resolution.reason, PrecontactSqueezeEscapeReason::AwaitingConfirmation);
+
+  request.predicted_body_footprint_overlap_confirmed = true;
+  resolution = resolve_precontact_squeeze_escape(request);
+  EXPECT_TRUE(resolution.confirmation_monitor_eligible);
+  EXPECT_TRUE(resolution.active);
+  EXPECT_EQ(resolution.reason, PrecontactSqueezeEscapeReason::Active);
+
+  request.predicted_body_footprint_sweep_separated = true;
+  resolution = resolve_precontact_squeeze_escape(request);
+  EXPECT_FALSE(resolution.confirmation_monitor_eligible);
+  EXPECT_FALSE(resolution.active);
+  EXPECT_EQ(resolution.reason, PrecontactSqueezeEscapeReason::PredictedSweepClear);
+
+  request.predicted_body_footprint_sweep_separated = false;
+  request.recoverable_side_contact_active = false;
+  request.previously_active = true;
+  request.current_body_footprints_separated = false;
+  request.current_body_footprint_overlap_confirmed = false;
+  resolution = resolve_precontact_squeeze_escape(request);
+  EXPECT_FALSE(resolution.confirmation_monitor_eligible);
+  EXPECT_TRUE(resolution.active);
+  EXPECT_EQ(resolution.reason, PrecontactSqueezeEscapeReason::CurrentOverlapHandoff);
+
+  request.current_body_footprint_overlap_confirmed = true;
+  resolution = resolve_precontact_squeeze_escape(request);
+  EXPECT_FALSE(resolution.active);
+  EXPECT_EQ(resolution.reason, PrecontactSqueezeEscapeReason::CurrentFootprintOverlap);
+
+  request.current_body_footprints_separated = true;
+  request.current_body_footprint_overlap_confirmed = false;
+  request.recoverable_side_contact_active = true;
+  resolution = resolve_precontact_squeeze_escape(request);
+  EXPECT_FALSE(resolution.confirmation_monitor_eligible);
+  EXPECT_FALSE(resolution.active);
+  EXPECT_EQ(resolution.reason, PrecontactSqueezeEscapeReason::ContactContinuationOwns);
+}
+
 TEST(V2XOvertakeCoreSpeed, MinimumMotionPassReleasesOnClearBodyFootprintSweep)
 {
   CommittedPassPolicyRequest request;
@@ -2006,6 +2069,19 @@ TEST(V2XOvertakeCoreSpeed, CommittedPassAttackHoldsAcrossConfirmedPredictedOverl
   EXPECT_TRUE(resolution.minimum_motion_footprint_hold_active);
   EXPECT_TRUE(resolution.front_cap_release_ready);
   EXPECT_FALSE(resolution.front_cap_state_update_required);
+
+  // A confirmed pre-contact squeeze has an explicit lateral/speed response.
+  // It revokes both attack and side-by-side forward hold before actual contact.
+  request.precontact_squeeze_escape_active = true;
+  resolution = resolve_committed_pass_policy(request);
+  EXPECT_FALSE(resolution.minimum_motion_attack_hold_active);
+  EXPECT_FALSE(resolution.minimum_motion_side_by_side_escape_active);
+  EXPECT_FALSE(resolution.front_cap_release_ready);
+  EXPECT_TRUE(resolution.front_cap_state_update_required);
+  EXPECT_EQ(
+    resolution.transition_reason,
+    CommittedPassFrontCapTransitionReason::PredictedFootprintOverlap);
+  request.precontact_squeeze_escape_active = false;
 
   // It is hold-only and retains physical execution guards.
   request.prior_front_cap_release_active = false;
@@ -13597,6 +13673,32 @@ TEST(V2XOvertakeCoreMissionOwnership, RecoverableSideContactOwnsConfirmedOverlap
   EXPECT_TRUE(can_preserve_committed_pass_behavior(request));
 
   request.recoverable_side_contact_active = false;
+  EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, PrecontactSqueezeKeepsLateralPassAuthority)
+{
+  CommittedPassBehaviorOwnershipRequest request;
+  request.committed_pass_active = true;
+  request.validated_fixed_line = true;
+  request.mission_side_valid = true;
+  request.minimum_motion_front_cap_release_latched = true;
+  request.locked_target_seen = true;
+  request.current_body_footprints_separated = true;
+  request.locked_target_pass_side_intrusion = true;
+  request.emergency_front_risk = true;
+
+  EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
+
+  request.precontact_squeeze_escape_active = true;
+  EXPECT_TRUE(can_preserve_committed_pass_behavior(request));
+
+  // Identity, waypoint and solver faults remain hard even during the lateral
+  // separation response.
+  request.locked_target_position_jump = true;
+  EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
+  request.locked_target_position_jump = false;
+  request.solver_recovery_requested = true;
   EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
 }
 

@@ -1615,6 +1615,8 @@ struct V2XBehaviorConfig
   double overtake_minimum_motion_inner_min_corridor_width{0.0};
   bool overtake_committed_corridor_front_danger_suppression_enabled{false};
   bool overtake_committed_pass_attack_mode_enabled{false};
+  bool overtake_precontact_squeeze_escape_enabled{false};
+  double overtake_precontact_squeeze_lateral_bias{0.15};
   double overtake_velocity_advantage{0.0};
   bool overtake_stage_speed_enabled{false};
   bool overtake_shiftout_adaptive_closing_speed_enabled{false};
@@ -2163,6 +2165,11 @@ struct V2XBehaviorOutput
   bool overtake_inner_preference_selected{false};
   bool overtake_completed_target_entry_suppressed{false};
   bool committed_corridor_front_danger_suppressed{false};
+  bool precontact_squeeze_escape_monitor_active{false};
+  bool precontact_squeeze_escape_active{false};
+  double precontact_squeeze_escape_elapsed_sec{};
+  overtake_core::PrecontactSqueezeEscapeReason precontact_squeeze_escape_reason{
+    overtake_core::PrecontactSqueezeEscapeReason::Disabled};
   bool recoverable_side_contact_active{false};
   bool recoverable_side_contact_impact_evidence{false};
   bool recoverable_side_contact_evidence_dropout_active{false};
@@ -2517,6 +2524,7 @@ struct OvertakeLineState
   double pass_contact_last_evidence_sec{
     std::numeric_limits<double>::quiet_NaN()};
   bool pass_contact_continuation_was_active{false};
+  bool pass_precontact_squeeze_escape_was_active{false};
   bool pass_contact_rearward_completion_was_active{false};
   bool shiftout_fresh_horizon_wait_active{false};
   int shiftout_fresh_horizon_replan_count{0};
@@ -2675,9 +2683,9 @@ struct OvertakeLineOutput
   bool committed_shiftout_speed_floor_active{false};
   bool body_clear_handoff_prediction_speed_hold_active{false};
   bool recovery_moving_follow_profile_used{false};
-  double contact_requested_lateral_bias{0.0};
-  double contact_applied_lateral_bias{0.0};
-  bool contact_lateral_bias_wall_limited{false};
+  double separation_requested_lateral_bias{0.0};
+  double separation_applied_lateral_bias{0.0};
+  bool separation_lateral_bias_wall_limited{false};
   double max_required_lateral_accel{0.0};
   bool lateral_accel_limited{false};
   bool wall_clearance_limited{false};
@@ -7857,8 +7865,40 @@ struct MPC
         output.locked_target_longitudinal,
         cfg.v2x_gap.vehicle_length,
         model->length});
+    v2x_overtake_core::PrecontactSqueezeEscapeRequest precontact_squeeze_request;
+    precontact_squeeze_request.enabled =
+      cfg.v2x_behavior.overtake_precontact_squeeze_escape_enabled;
+    precontact_squeeze_request.committed_pass_attack_mode_enabled =
+      cfg.v2x_behavior.overtake_committed_pass_attack_mode_enabled;
+    precontact_squeeze_request.pass_phase =
+      overtake_line_state_.phase == OvertakeLinePhase::Pass;
+    precontact_squeeze_request.minimum_motion_corridor_active =
+      committed_minimum_motion_corridor_active;
+    precontact_squeeze_request.prior_front_cap_release_active =
+      overtake_line_state_.pass_front_cap_release_active;
+    precontact_squeeze_request.target_seen = output.locked_target_seen;
+    precontact_squeeze_request.target_position_jump =
+      output.locked_target_position_jump;
+    precontact_squeeze_request.target_course_progress_rejected =
+      output.locked_target_course_progress_rejected;
+    precontact_squeeze_request.recoverable_side_contact_active =
+      output.recoverable_side_contact_active;
+    precontact_squeeze_request.previously_active =
+      overtake_line_state_.pass_precontact_squeeze_escape_was_active;
+    precontact_squeeze_request.current_body_footprints_separated =
+      output.locked_target_current_body_footprints_separated;
+    precontact_squeeze_request.current_body_footprint_overlap_confirmed =
+      output.locked_target_current_body_overlap_confirmed;
+    precontact_squeeze_request.footprint_prediction_valid =
+      output.locked_target_footprint_prediction_valid;
+    precontact_squeeze_request.predicted_body_footprint_sweep_separated =
+      output.locked_target_predicted_body_footprint_sweep_separated;
+    const auto precontact_squeeze_monitor =
+      v2x_overtake_core::resolve_precontact_squeeze_escape(
+      precontact_squeeze_request);
     const bool committed_predicted_overlap_confirmation_monitored =
-      committed_body_geometry.predicted_overlap_confirmation_eligible;
+      committed_body_geometry.predicted_overlap_confirmation_eligible ||
+      precontact_squeeze_monitor.confirmation_monitor_eligible;
     const auto committed_predicted_overlap_confirmation =
       v2x_overtake_core::update_predicted_footprint_overlap_confirmation(
       v2x_overtake_core::PredictedFootprintOverlapConfirmationRequest{
@@ -7875,6 +7915,17 @@ struct MPC
       committed_predicted_overlap_confirmation_monitored ?
       committed_predicted_overlap_confirmation.confirmed :
       committed_body_geometry.raw_predicted_body_overlap;
+    precontact_squeeze_request.predicted_body_footprint_overlap_confirmed =
+      committed_predicted_overlap_confirmation.confirmed;
+    const auto precontact_squeeze_escape =
+      v2x_overtake_core::resolve_precontact_squeeze_escape(
+      precontact_squeeze_request);
+    output.precontact_squeeze_escape_monitor_active =
+      precontact_squeeze_escape.confirmation_monitor_eligible;
+    output.precontact_squeeze_escape_active = precontact_squeeze_escape.active;
+    output.precontact_squeeze_escape_elapsed_sec =
+      committed_predicted_overlap_confirmation.elapsed_sec;
+    output.precontact_squeeze_escape_reason = precontact_squeeze_escape.reason;
     const bool dynamic_wait_predicted_overlap_confirmation_monitored =
       overtake_line_state_.dynamic_mission_wait_active &&
       output.locked_target_seen &&
@@ -7989,6 +8040,7 @@ struct MPC
         committed_body_geometry.side_by_side_escape_active,
         committed_pass_contact_context_active,
         cfg.v2x_behavior.overtake_committed_pass_attack_mode_enabled,
+        output.precontact_squeeze_escape_active,
         output.recoverable_side_contact_active,
         overtake_line_state_.mission_path_frozen &&
         committed_body_clear_handoff.active};
@@ -8013,6 +8065,20 @@ struct MPC
     const bool effective_front_danger_requires_safety_brake =
       front_danger_requires_safety_brake &&
       !committed_corridor_current_front_danger_suppressed;
+    const bool precontact_squeeze_brake_response_active =
+      output.precontact_squeeze_escape_active &&
+      (effective_front_risk_emergency ||
+      effective_front_danger_requires_safety_brake);
+    if (precontact_squeeze_brake_response_active) {
+      // Preserve the frozen lateral Pass so its wall-bounded separation can
+      // execute, but do not preserve forward attack speed into a confirmed
+      // collision. This is a speed fallback, not a Mission/state fallback.
+      const double squeeze_speed_fallback =
+        std::isfinite(nearest_front_speed) && nearest_front_speed >= 0.0 ?
+        nearest_front_speed : std::max(0.0, cfg.v2x_behavior.safety_brake_velocity);
+      output.target_velocity_limit = std::min(
+        output.target_velocity_limit, squeeze_speed_fallback);
+    }
     output.front_risk_level = effective_front_risk_level;
     // A latched start-grid breakout owns longitudinal separation while its side corridor
     // remains valid. Do not pull it back behind the rolling grid target.
@@ -8054,7 +8120,8 @@ struct MPC
     // Releasing a same-target hold is valid for the admitted side contact, but a
     // different current front emergency must first replace/refresh the held target.
     const bool held_contact_observed_safe =
-      committed_corridor_held_front_danger_suppressed &&
+      (committed_corridor_held_front_danger_suppressed ||
+      output.precontact_squeeze_escape_active) &&
       (!has_front_vehicle ||
       front_danger_target_identity.current_front_matches_locked_target ||
       !front_risk_emergency);
@@ -8069,10 +8136,12 @@ struct MPC
     const bool refresh_held_front_danger =
       front_hazard_hold_was_active &&
       effective_front_danger_requires_safety_brake &&
+      !output.precontact_squeeze_escape_active &&
       !suppress_start_grid_stop_behavior && !start_grid_breakout_attempt;
     const bool refresh_held_near_field_target =
       front_hazard_hold_was_active && held_target_near_field_conflict &&
       !committed_corridor_held_front_danger_suppressed &&
+      !output.precontact_squeeze_escape_active &&
       !held_target_rear_clear &&
       !suppress_start_grid_stop_behavior && !start_grid_breakout_attempt;
     const bool refresh_held_front_hazard =
@@ -8232,6 +8301,7 @@ struct MPC
 
     if (
       has_front_vehicle && effective_front_risk_emergency &&
+      !output.precontact_squeeze_escape_active &&
       !start_grid_breakout_attempt)
     {
       update_front_hazard_hold(true, false, nearest_front_id, false);
@@ -8243,6 +8313,7 @@ struct MPC
 
     if (
       effective_front_danger_requires_safety_brake && !suppress_start_grid_stop_behavior &&
+      !output.precontact_squeeze_escape_active &&
       !start_grid_breakout_attempt)
     {
       update_front_hazard_hold(true, false, nearest_front_id, false);
@@ -13707,10 +13778,12 @@ struct MPC
     if (rolling_replan_behavior_owner) {
       output.state = V2XBehaviorState::Overtake;
       output.overtake_pass_side_sign = overtake_line_state_.pass_side_sign;
-      output.target_velocity_limit = std::numeric_limits<double>::infinity();
-      output.follow_speed_limit_active = false;
-      output.follow_speed_limit_moving_front = false;
-      output.moving_front_clearance_limit_active = false;
+      if (!output.precontact_squeeze_escape_active) {
+        output.target_velocity_limit = std::numeric_limits<double>::infinity();
+        output.follow_speed_limit_active = false;
+        output.follow_speed_limit_moving_front = false;
+        output.moving_front_clearance_limit_active = false;
+      }
       output.reason = "MPCC-lite rolling replan owns execution / " +
         overtake_block_reason;
       return commit_v2x_behavior_state(output, now_sec);
@@ -13801,6 +13874,7 @@ struct MPC
         output.locked_target_current_body_footprints_separated,
         output.locked_target_current_body_overlap_confirmed,
         cfg.v2x_behavior.overtake_committed_pass_attack_mode_enabled,
+        output.precontact_squeeze_escape_active,
         output.recoverable_side_contact_active,
         output.locked_target_pass_side_intrusion,
         overtake_forbidden_wp,
@@ -14742,7 +14816,8 @@ struct MPC
     behavior_output.dynamic_obstacle_lateral_escape_active =
       dynamic_lateral_escape_authority.active;
     behavior_output.dynamic_obstacle_follow_cap_suppressed =
-      dynamic_lateral_escape_authority.suppress_generic_follow_cap;
+      dynamic_lateral_escape_authority.suppress_generic_follow_cap &&
+      !behavior_output.precontact_squeeze_escape_active;
     behavior_output.dynamic_obstacle_lateral_escape_side_sign =
       dynamic_lateral_escape_authority.pass_side_sign;
     behavior_output.dynamic_obstacle_lateral_escape_m =
@@ -14765,7 +14840,9 @@ struct MPC
         dynamic_escape_authority_reason = "last-control-fallback";
       }
     }
-    if (dynamic_lateral_escape_authority.suppress_generic_follow_cap) {
+    if (
+      behavior_output.dynamic_obstacle_follow_cap_suppressed)
+    {
       // The feasible GapPlanner corridor supplies hard lateral bounds for all
       // active V2X footprints below. Do not simultaneously slow to the target
       // speed merely because the complete Overtake Mission was not admitted.
@@ -18507,6 +18584,7 @@ private:
       overtake_line_state_.pass_contact_last_evidence_sec =
         std::numeric_limits<double>::quiet_NaN();
       overtake_line_state_.pass_contact_continuation_was_active = false;
+      overtake_line_state_.pass_precontact_squeeze_escape_was_active = false;
       overtake_line_state_.pass_contact_rearward_completion_was_active = false;
       overtake_line_state_.pass_horizon_fallback_start_sec =
         std::numeric_limits<double>::quiet_NaN();
@@ -19089,6 +19167,7 @@ private:
     overtake_line_state_.pass_contact_last_evidence_sec =
       std::numeric_limits<double>::quiet_NaN();
     overtake_line_state_.pass_contact_continuation_was_active = false;
+    overtake_line_state_.pass_precontact_squeeze_escape_was_active = false;
     overtake_line_state_.pass_contact_rearward_completion_was_active = false;
     overtake_line_state_.shiftout_fresh_horizon_wait_active = false;
     overtake_line_state_.shiftout_fresh_horizon_replan_count = 0;
@@ -27243,7 +27322,8 @@ private:
     const bool predicted_overlap_confirmation_monitored =
       !actual_wall_physical_contact &&
       !pass_lateral_replan_in_progress &&
-      live_committed_body_geometry.predicted_overlap_confirmation_eligible;
+      (live_committed_body_geometry.predicted_overlap_confirmation_eligible ||
+      behavior_output.precontact_squeeze_escape_monitor_active);
     const auto predicted_overlap_confirmation =
       overtake_core::update_predicted_footprint_overlap_confirmation(
       overtake_core::PredictedFootprintOverlapConfirmationRequest{
@@ -30382,49 +30462,58 @@ private:
     const bool use_pass_lateral_replan_profile =
       overtake_line_state_.phase == OvertakeLinePhase::Pass &&
       overtake_line_state_.mission_pass_lateral_replan_active;
-    bool contact_wall_interval_available =
-      behavior_output.recoverable_side_contact_active && N > 0 &&
+    const bool separation_escape_active =
+      behavior_output.recoverable_side_contact_active ||
+      behavior_output.precontact_squeeze_escape_active;
+    bool separation_wall_interval_available =
+      separation_escape_active && N > 0 &&
       lb.size() >= N && ub.size() >= N;
-    double contact_wall_lower = -std::numeric_limits<double>::infinity();
-    double contact_wall_upper = std::numeric_limits<double>::infinity();
-    if (contact_wall_interval_available) {
+    double separation_wall_lower = -std::numeric_limits<double>::infinity();
+    double separation_wall_upper = std::numeric_limits<double>::infinity();
+    if (separation_wall_interval_available) {
       for (int i = 0; i < N; ++i) {
         const double lower = lb[i] + min_wall_clearance;
         const double upper = ub[i] - min_wall_clearance;
         if (!std::isfinite(lower) || !std::isfinite(upper) || upper < lower) {
-          contact_wall_interval_available = false;
+          separation_wall_interval_available = false;
           break;
         }
-        contact_wall_lower = std::max(contact_wall_lower, lower);
-        contact_wall_upper = std::min(contact_wall_upper, upper);
+        separation_wall_lower = std::max(separation_wall_lower, lower);
+        separation_wall_upper = std::min(separation_wall_upper, upper);
       }
-      contact_wall_interval_available =
-        contact_wall_interval_available &&
-        contact_wall_upper >= contact_wall_lower;
+      separation_wall_interval_available =
+        separation_wall_interval_available &&
+        separation_wall_upper >= separation_wall_lower;
     }
-    const auto contact_separation =
+    const double requested_separation_bias =
+      behavior_output.recoverable_side_contact_active ?
+      std::abs(behavior_output.recoverable_side_contact_lateral_bias_m) :
+      std::max(0.0, cfg.v2x_behavior.overtake_precontact_squeeze_lateral_bias);
+    const auto wall_bounded_separation =
       overtake_core::resolve_wall_bounded_contact_separation(
       overtake_core::WallBoundedContactSeparationRequest{
-        behavior_output.recoverable_side_contact_active,
+        separation_escape_active,
         overtake_line_state_.pass_side_sign,
         feasible_goal_for_phase,
-        std::abs(behavior_output.recoverable_side_contact_lateral_bias_m),
-        contact_wall_interval_available,
-        contact_wall_lower,
-        contact_wall_upper});
-    output.contact_requested_lateral_bias =
-      contact_separation.requested_signed_bias_m;
-    output.contact_applied_lateral_bias =
-      contact_separation.applied_signed_bias_m;
-    output.contact_lateral_bias_wall_limited = contact_separation.wall_limited;
+        requested_separation_bias,
+        separation_wall_interval_available,
+        separation_wall_lower,
+        separation_wall_upper});
+    output.separation_requested_lateral_bias =
+      wall_bounded_separation.requested_signed_bias_m;
+    output.separation_applied_lateral_bias =
+      wall_bounded_separation.applied_signed_bias_m;
+    output.separation_lateral_bias_wall_limited =
+      wall_bounded_separation.wall_limited;
     const bool lateral_execution_hold_active =
       rolling_replan_hold_active || pass_entry_physical_hold_active;
     output.pass_entry_physical_gate_active = pass_entry_physical_hold_active;
     const double raw_goal =
-      behavior_output.recoverable_side_contact_active && contact_separation.valid ?
-      contact_separation.goal_m :
+      separation_escape_active && wall_bounded_separation.valid ?
+      wall_bounded_separation.goal_m :
       lateral_execution_hold_active ? current_ey :
-      contact_separation.valid ? contact_separation.goal_m : feasible_goal_for_phase;
+      wall_bounded_separation.valid ?
+      wall_bounded_separation.goal_m : feasible_goal_for_phase;
     // A committed Pass replan already owns a wall- and acceleration-validated
     // distance-domain ramp. Applying the generic per-cycle goal slew on top of
     // it stretches that ramp beyond the preflighted shift distance and can
@@ -31684,6 +31773,8 @@ private:
       cfg.v2x_behavior.overtake_committed_pass_min_speed;
     committed_pass_request.committed_pass_attack_mode_enabled =
       cfg.v2x_behavior.overtake_committed_pass_attack_mode_enabled;
+    committed_pass_request.precontact_squeeze_escape_active =
+      behavior_output.precontact_squeeze_escape_active;
     const auto committed_pass_policy =
       overtake_core::resolve_committed_pass_policy(committed_pass_request);
     output.front_cap_release_ready = committed_pass_policy.front_cap_release_ready;
@@ -31715,7 +31806,8 @@ private:
           "current_overlap_grace=%d, "
           "forward_commit=%d/required=%.2f/limit=%.2f/distance_ok=%d/latched=%d, "
           "footprint_prediction=%d, footprint_sweep_clear=%d, "
-          "side_by_side_escape=%d, attack_hold=%d, predicted_overlap=%d, "
+          "side_by_side_escape=%d, attack_hold=%d, squeeze_escape=%d, "
+          "predicted_overlap=%d, "
           "overlap_confirmed=%d, "
           "overlap_elapsed=%.2f/%.2f, body_longitudinal=%.2f, "
           "predicted_s=%.2f, predicted_lateral=%.2f, reason=%s",
@@ -31745,6 +31837,7 @@ private:
           committed_pass_request.predicted_body_footprint_sweep_separated ? 1 : 0,
           committed_pass_policy.minimum_motion_side_by_side_escape_active ? 1 : 0,
           committed_pass_policy.minimum_motion_attack_hold_active ? 1 : 0,
+          committed_pass_request.precontact_squeeze_escape_active ? 1 : 0,
           committed_body_geometry.raw_predicted_body_overlap ? 1 : 0,
           committed_pass_request.predicted_body_footprint_overlap_confirmed ? 1 : 0,
           predicted_overlap_confirmation.elapsed_sec,
@@ -31756,6 +31849,41 @@ private:
       }
       overtake_line_state_.pass_front_cap_release_active =
         output.front_cap_release_ready;
+    }
+    if (
+      behavior_output.precontact_squeeze_escape_active !=
+      overtake_line_state_.pass_precontact_squeeze_escape_was_active)
+    {
+      const bool lateral_escape_applied =
+        std::abs(output.separation_applied_lateral_bias) > kEps;
+      const char * action = !behavior_output.precontact_squeeze_escape_active ?
+        "released" : lateral_escape_applied ?
+        "same-side-lateral-escape" : "speed-cap-fallback";
+      RCLCPP_WARN(
+        rclcpp::get_logger("mpc_controller"),
+        "OvertakeLine pre-contact squeeze response %s: "
+        "target=%s, side=%d, target_s=%.2f, relative_lateral=%.2f, "
+        "overlap=%.2f/%.2f s, reason=%s, bias=%.2f/%.2f, "
+        "wall_limited=%d, front_cap=%s, behavior_limit=%.2f, line_ref=%.2f, "
+        "danger_suppressed=%d, action=%s",
+        behavior_output.precontact_squeeze_escape_active ? "entered" : "ended",
+        overtake_line_state_.target_vehicle_id.c_str(),
+        overtake_line_state_.pass_side_sign,
+        locked_target_longitudinal,
+        behavior_output.locked_target_relative_lateral,
+        behavior_output.precontact_squeeze_escape_elapsed_sec,
+        cfg.v2x_behavior.overtake_pass_predicted_overlap_confirm_sec,
+        overtake_core::to_string(behavior_output.precontact_squeeze_escape_reason),
+        output.separation_requested_lateral_bias,
+        output.separation_applied_lateral_bias,
+        output.separation_lateral_bias_wall_limited ? 1 : 0,
+        output.front_cap_release_ready ? "released" : "reapplied",
+        behavior_output.target_velocity_limit,
+        output.target_velocity_reference,
+        behavior_output.committed_corridor_front_danger_suppressed ? 1 : 0,
+        action);
+      overtake_line_state_.pass_precontact_squeeze_escape_was_active =
+        behavior_output.precontact_squeeze_escape_active;
     }
     if (output.committed_pass_speed_floor_active) {
       output.target_velocity_floor = std::min(
@@ -32201,8 +32329,9 @@ private:
           "safe_sep=%d/forward=%d/full_speed=%d/target_hold=%d/target_guard=%d/"
           "signed_closing=%.2f/budget=%.2f s/%.2f m, "
           "contact_continue=%d/evidence=%s/near=%.2f/%.2f/"
-          "elapsed=%.2f/progress=%.2f/bias=%.2f/%.2f/wall_limited=%d/"
-          "vlat_hysteresis=%d, "
+          "elapsed=%.2f/progress=%.2f/vlat_hysteresis=%d, "
+          "precontact_squeeze=%d/monitor=%d/reason=%s/elapsed=%.2f/"
+          "bias=%.2f/%.2f/wall_limited=%d, "
           "minimum_motion_cap=%d, robust_footprint_clear=%d, "
           "physical_footprint_clear=%d, physical_hold=%d, "
           "current_overlap_confirmed=%d, current_overlap_elapsed=%.2f/%.2f, "
@@ -32257,10 +32386,14 @@ private:
           cfg.v2x_behavior.overtake_line.contact_continuation_near_confirm_sec,
           behavior_output.recoverable_side_contact_elapsed_sec,
           behavior_output.recoverable_side_contact_progress_m,
-          output.contact_requested_lateral_bias,
-          output.contact_applied_lateral_bias,
-          output.contact_lateral_bias_wall_limited ? 1 : 0,
           behavior_output.recoverable_side_contact_lateral_velocity_hysteresis_active ? 1 : 0,
+          behavior_output.precontact_squeeze_escape_active ? 1 : 0,
+          behavior_output.precontact_squeeze_escape_monitor_active ? 1 : 0,
+          overtake_core::to_string(behavior_output.precontact_squeeze_escape_reason),
+          behavior_output.precontact_squeeze_escape_elapsed_sec,
+          output.separation_requested_lateral_bias,
+          output.separation_applied_lateral_bias,
+          output.separation_lateral_bias_wall_limited ? 1 : 0,
           committed_pass_request.minimum_motion_corridor_active ? 1 : 0,
           committed_pass_request.current_body_footprints_separated ? 1 : 0,
           committed_pass_request.current_body_footprints_physically_separated ? 1 : 0,
@@ -37637,6 +37770,13 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_committed_pass_attack_mode_enabled =
     mpc["v2x_overtake_committed_pass_attack_mode_enabled"] ?
     mpc["v2x_overtake_committed_pass_attack_mode_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_precontact_squeeze_escape_enabled =
+    mpc["v2x_overtake_precontact_squeeze_escape_enabled"] ?
+    mpc["v2x_overtake_precontact_squeeze_escape_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_precontact_squeeze_lateral_bias = std::max(
+    0.0,
+    mpc["v2x_overtake_precontact_squeeze_lateral_bias"] ?
+    mpc["v2x_overtake_precontact_squeeze_lateral_bias"].as<double>() : 0.15);
   cfg.mpc.v2x_behavior.overtake_velocity_advantage = std::max(
     0.0,
     mpc["v2x_overtake_velocity_advantage"] ?
@@ -38493,7 +38633,7 @@ public:
         "straight_outer_extra=%.2f m, "
         "lookahead=%.2f m, min_open=%.2f m, "
         "min_width=%.2f m, max_extra_shift=%.2f m, committed_front_danger_suppress=%d, "
-        "committed_pass_attack=%d",
+        "committed_pass_attack=%d, precontact_squeeze=%d/bias=%.2f m",
         mpc_cfg_.v2x_behavior.overtake_minimum_motion_preferred_clearance_buffer,
         mpc_cfg_.v2x_behavior.overtake_minimum_motion_straight_outer_extra_clearance,
         mpc_cfg_.v2x_behavior.overtake_minimum_motion_inner_lookahead_distance,
@@ -38502,7 +38642,9 @@ public:
         mpc_cfg_.v2x_behavior.overtake_minimum_motion_inner_preference_max_extra_shift,
         mpc_cfg_.v2x_behavior
         .overtake_committed_corridor_front_danger_suppression_enabled ? 1 : 0,
-        mpc_cfg_.v2x_behavior.overtake_committed_pass_attack_mode_enabled ? 1 : 0);
+        mpc_cfg_.v2x_behavior.overtake_committed_pass_attack_mode_enabled ? 1 : 0,
+        mpc_cfg_.v2x_behavior.overtake_precontact_squeeze_escape_enabled ? 1 : 0,
+        mpc_cfg_.v2x_behavior.overtake_precontact_squeeze_lateral_bias);
       RCLCPP_INFO(
         get_logger(),
         "V2X start grid: grace=%.2f s, breakout=%s, side_deadband=%.2f m, "

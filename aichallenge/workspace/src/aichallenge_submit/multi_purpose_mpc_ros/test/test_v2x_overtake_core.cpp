@@ -21,6 +21,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::
   DynamicObstacleLateralEscapeAuthorityRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   DynamicObstacleLateralEscapePlanningRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  DynamicObstacleLateralEscapeSolverBackoff;
 using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedShiftSteeringRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StoppedVehicleLineOwnershipRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ContinuityAction;
@@ -14503,6 +14505,47 @@ TEST(V2XOvertakeCoreLowSpeedBypass, DynamicLateralEscapeRejectsTinyOrWrongSideSh
   request = dynamic_lateral_escape_request();
   request.target_lateral_m = std::numeric_limits<double>::quiet_NaN();
   EXPECT_FALSE(resolve_dynamic_obstacle_lateral_escape_authority(request).active);
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, DynamicLateralEscapeBackoffIsTargetAndSideScoped)
+{
+  DynamicObstacleLateralEscapeSolverBackoff backoff;
+
+  const auto first = backoff.record_failure("d2", 1, 10.0, 0.5, 4.0, 8.0);
+  EXPECT_TRUE(first.recorded);
+  EXPECT_EQ(first.consecutive_failures, 1);
+  EXPECT_NEAR(first.hold_sec, 0.5, 1e-9);
+  EXPECT_TRUE(backoff.status("d2", 1, 10.1).blocked);
+  EXPECT_FALSE(backoff.status("d2", -1, 10.1).blocked);
+  EXPECT_FALSE(backoff.status("d3", 1, 10.1).blocked);
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, DynamicLateralEscapeBackoffGrowsAndSaturates)
+{
+  DynamicObstacleLateralEscapeSolverBackoff backoff;
+
+  EXPECT_NEAR(backoff.record_failure("d2", -1, 1.0, 0.5, 2.0, 8.0).hold_sec, 0.5, 1e-9);
+  EXPECT_NEAR(backoff.record_failure("d2", -1, 1.6, 0.5, 2.0, 8.0).hold_sec, 1.0, 1e-9);
+  EXPECT_NEAR(backoff.record_failure("d2", -1, 2.7, 0.5, 2.0, 8.0).hold_sec, 2.0, 1e-9);
+  const auto saturated = backoff.record_failure("d2", -1, 4.8, 0.5, 2.0, 8.0);
+  EXPECT_EQ(saturated.consecutive_failures, 4);
+  EXPECT_NEAR(saturated.hold_sec, 2.0, 1e-9);
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, DynamicLateralEscapeBackoffClearsOnSuccessOrLongGap)
+{
+  DynamicObstacleLateralEscapeSolverBackoff backoff;
+  backoff.record_failure("d2", 1, 1.0, 0.5, 4.0, 8.0);
+  backoff.record_failure("d2", 1, 2.0, 0.5, 4.0, 8.0);
+
+  backoff.record_success("d2", 1);
+  EXPECT_EQ(backoff.status("d2", 1, 2.1).consecutive_failures, 0);
+  const auto after_success = backoff.record_failure("d2", 1, 3.0, 0.5, 4.0, 8.0);
+  EXPECT_EQ(after_success.consecutive_failures, 1);
+
+  const auto after_gap = backoff.record_failure("d2", 1, 12.0, 0.5, 4.0, 8.0);
+  EXPECT_EQ(after_gap.consecutive_failures, 1);
+  EXPECT_NEAR(after_gap.hold_sec, 0.5, 1e-9);
 }
 
 DynamicObstacleCruiseActivationRequest predictive_dynamic_obstacle_request()

@@ -6973,6 +6973,51 @@ DynamicObstacleLateralEscapeAuthorityResolution
 resolve_dynamic_obstacle_lateral_escape_authority(
   const DynamicObstacleLateralEscapeAuthorityRequest & request) noexcept;
 
+struct DynamicObstacleLateralEscapeSolverBackoffStatus
+{
+  bool blocked{false};
+  int consecutive_failures{0};
+  double remaining_sec{0.0};
+};
+
+struct DynamicObstacleLateralEscapeSolverBackoffFailure
+{
+  bool recorded{false};
+  int consecutive_failures{0};
+  double hold_sec{0.0};
+};
+
+/// Remember tracking-solver failures per target and pass side.
+///
+/// A failed side must not be retried at a fixed high frequency, but it must
+/// also not quarantine the opposite side of the same obstacle. Successful
+/// tracking clears only the exact target/side entry.
+class DynamicObstacleLateralEscapeSolverBackoff
+{
+public:
+  DynamicObstacleLateralEscapeSolverBackoffStatus status(
+    const std::string & target_id, int pass_side_sign, double now_sec) const noexcept;
+
+  DynamicObstacleLateralEscapeSolverBackoffFailure record_failure(
+    const std::string & target_id, int pass_side_sign, double now_sec,
+    double base_hold_sec, double maximum_hold_sec, double reset_after_sec) noexcept;
+
+  void record_success(const std::string & target_id, int pass_side_sign) noexcept;
+  void reset() noexcept;
+
+private:
+  struct Entry
+  {
+    std::string target_id;
+    int pass_side_sign{0};
+    int consecutive_failures{0};
+    double last_failure_sec{-std::numeric_limits<double>::infinity()};
+    double blocked_until_sec{-std::numeric_limits<double>::infinity()};
+  };
+
+  std::vector<Entry> entries_;
+};
+
 struct DynamicObstacleCruiseActivationRequest
 {
   bool enabled{false};

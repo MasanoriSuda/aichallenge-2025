@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -11811,6 +11812,102 @@ resolve_dynamic_obstacle_lateral_escape_authority(
   resolution.suppress_generic_follow_cap = request.tracking_solution_qualified;
   resolution.pass_side_sign = request.pass_side_sign;
   return resolution;
+}
+
+DynamicObstacleLateralEscapeSolverBackoffStatus
+DynamicObstacleLateralEscapeSolverBackoff::status(
+  const std::string & target_id, const int pass_side_sign, const double now_sec) const noexcept
+{
+  DynamicObstacleLateralEscapeSolverBackoffStatus result;
+  if (
+    target_id.empty() || (pass_side_sign != -1 && pass_side_sign != 1) ||
+    !std::isfinite(now_sec))
+  {
+    return result;
+  }
+
+  const auto entry = std::find_if(
+    entries_.begin(), entries_.end(),
+    [&](const Entry & candidate) {
+      return candidate.target_id == target_id &&
+             candidate.pass_side_sign == pass_side_sign;
+    });
+  if (entry == entries_.end()) {
+    return result;
+  }
+
+  result.consecutive_failures = entry->consecutive_failures;
+  result.remaining_sec = std::max(0.0, entry->blocked_until_sec - now_sec);
+  result.blocked = result.remaining_sec > 0.0;
+  return result;
+}
+
+DynamicObstacleLateralEscapeSolverBackoffFailure
+DynamicObstacleLateralEscapeSolverBackoff::record_failure(
+  const std::string & target_id, const int pass_side_sign, const double now_sec,
+  const double base_hold_sec, const double maximum_hold_sec,
+  const double reset_after_sec) noexcept
+{
+  DynamicObstacleLateralEscapeSolverBackoffFailure result;
+  if (
+    target_id.empty() || (pass_side_sign != -1 && pass_side_sign != 1) ||
+    !std::isfinite(now_sec) || !std::isfinite(base_hold_sec) || base_hold_sec < 0.0 ||
+    !std::isfinite(maximum_hold_sec) || maximum_hold_sec < base_hold_sec ||
+    !std::isfinite(reset_after_sec) || reset_after_sec < 0.0)
+  {
+    return result;
+  }
+
+  auto entry = std::find_if(
+    entries_.begin(), entries_.end(),
+    [&](const Entry & candidate) {
+      return candidate.target_id == target_id &&
+             candidate.pass_side_sign == pass_side_sign;
+    });
+  if (entry == entries_.end()) {
+    entries_.push_back(Entry{});
+    entry = std::prev(entries_.end());
+    entry->target_id = target_id;
+    entry->pass_side_sign = pass_side_sign;
+  }
+
+  if (
+    !std::isfinite(entry->last_failure_sec) || now_sec < entry->last_failure_sec ||
+    now_sec - entry->last_failure_sec > reset_after_sec)
+  {
+    entry->consecutive_failures = 0;
+    entry->blocked_until_sec = -std::numeric_limits<double>::infinity();
+  }
+  entry->consecutive_failures = std::min(entry->consecutive_failures + 1, 30);
+  const int exponent = std::min(entry->consecutive_failures - 1, 20);
+  const double hold_sec = std::min(maximum_hold_sec, std::ldexp(base_hold_sec, exponent));
+  entry->last_failure_sec = now_sec;
+  entry->blocked_until_sec = std::max(entry->blocked_until_sec, now_sec + hold_sec);
+
+  result.recorded = true;
+  result.consecutive_failures = entry->consecutive_failures;
+  result.hold_sec = hold_sec;
+  return result;
+}
+
+void DynamicObstacleLateralEscapeSolverBackoff::record_success(
+  const std::string & target_id, const int pass_side_sign) noexcept
+{
+  if (target_id.empty() || (pass_side_sign != -1 && pass_side_sign != 1)) {
+    return;
+  }
+  entries_.erase(
+    std::remove_if(
+      entries_.begin(), entries_.end(),
+      [&](const Entry & entry) {
+        return entry.target_id == target_id && entry.pass_side_sign == pass_side_sign;
+      }),
+    entries_.end());
+}
+
+void DynamicObstacleLateralEscapeSolverBackoff::reset() noexcept
+{
+  entries_.clear();
 }
 
 DynamicObstacleCruiseActivationResolution resolve_dynamic_obstacle_cruise_activation(

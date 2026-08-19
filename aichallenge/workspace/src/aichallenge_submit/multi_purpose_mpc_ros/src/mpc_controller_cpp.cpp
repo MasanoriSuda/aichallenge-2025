@@ -24049,6 +24049,8 @@ private:
     bool solved_execution_source_stitch_reachability_constrained = false;
     double solved_execution_source_maximum_adjustment_m = 0.0;
     double solved_execution_source_maximum_unconstrained_ay_mps2 = 0.0;
+    bool solved_execution_physically_validated = false;
+    bool solved_execution_promoted_trajectory_available = false;
     std::string solved_execution_wall_authority_reason = "warning inactive";
     std::optional<AlignedMpccExecutionTrajectory> aligned_solved_execution;
     const bool dp_execution_authority_active =
@@ -24116,7 +24118,7 @@ private:
           solved_execution_wall_authority_reason);
         if (validated_execution.has_value()) {
           aligned_solved_execution = validated_execution->trajectory;
-          solved_execution_wall_authority_active = true;
+          solved_execution_physically_validated = true;
           solved_execution_last_feasible_used =
             validated_execution->last_feasible_used;
 
@@ -24139,25 +24141,53 @@ private:
             solved_execution_source_maximum_unconstrained_ay_mps2 =
               promotion.maximum_unconstrained_lateral_accel_mps2;
             if (promotion.promoted_trajectory.has_value()) {
+              solved_execution_promoted_trajectory_available = true;
               aligned_solved_execution =
                 std::move(promotion.promoted_trajectory.value());
             }
           }
         }
       }
-      if (solved_execution_wall_authority_active) {
-        // The warning belongs to the nominal Mission path.  The actual QP
-        // path has now passed the current hard footprint check, so retain
-        // execution and let the next RTI-SQP cycle keep optimizing it.
-        if (nominal_wall_preplan_warning) {
-          actual_wall_preplan_warning = false;
-        }
-      }
     }
+    const auto solved_execution_bridge_authority =
+      overtake_core::resolve_solved_execution_bridge_authority(
+      overtake_core::SolvedExecutionBridgeAuthorityRequest{
+        is_overtake_receding_horizon_execution_phase(overtake_line_state_.phase),
+        dp_execution_authority_active,
+        solved_execution_physically_validated,
+        solved_execution_source_handoff_requested,
+        solved_execution_source_promoted,
+        solved_execution_promoted_trajectory_available,
+        runtime_wall_hard_fault});
+    solved_execution_wall_authority_active =
+      solved_execution_bridge_authority.valid &&
+      solved_execution_bridge_authority.bridge_active;
     const bool solved_execution_bridge_active =
-      solved_execution_wall_authority_active && !dp_execution_authority_active;
+      solved_execution_wall_authority_active;
     const bool effective_execution_authority_active =
-      dp_execution_authority_active || solved_execution_wall_authority_active;
+      solved_execution_bridge_authority.valid &&
+      solved_execution_bridge_authority.effective_execution_authority_active;
+    if (
+      solved_execution_physically_validated &&
+      !solved_execution_wall_authority_active &&
+      !dp_execution_authority_active)
+    {
+      solved_execution_wall_authority_reason =
+        solved_execution_source_handoff_requested ?
+        "connected solved-source handoff not promoted" :
+        "connected solved-source handoff not requested";
+    }
+    // A wall-feasible QP source may override a warning only when the same
+    // source has passed the measured-state stitch and atomically owns this
+    // bridge cycle. Merely validating an unpromoted latest/last-feasible path
+    // cannot suppress the nominal path warning.
+    if (
+      solved_execution_bridge_authority.valid &&
+      solved_execution_bridge_authority.may_override_nominal_wall_warning &&
+      nominal_wall_preplan_warning)
+    {
+      actual_wall_preplan_warning = false;
+    }
     const bool solved_authority_log_due =
       solved_execution_wall_authority_active !=
       solved_mpcc_execution_authority_was_active_ ||

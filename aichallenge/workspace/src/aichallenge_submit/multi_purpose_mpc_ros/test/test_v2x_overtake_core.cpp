@@ -18582,6 +18582,69 @@ TEST(V2XOvertakeCoreFrenetDpExecution,
   EXPECT_FALSE(resolve_solved_execution_source_handoff(request).promote);
 }
 
+TEST(V2XOvertakeCoreFrenetDpExecution,
+     RawPhysicallyValidatedSourceCannotOwnExecutionBridge)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    SolvedExecutionBridgeAuthorityRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_solved_execution_bridge_authority;
+
+  SolvedExecutionBridgeAuthorityRequest request;
+  request.active_execution = true;
+  request.physically_validated_source_available = true;
+
+  auto resolution = resolve_solved_execution_bridge_authority(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.bridge_active);
+  EXPECT_FALSE(resolution.effective_execution_authority_active);
+  EXPECT_FALSE(resolution.may_override_nominal_wall_warning);
+
+  request.source_handoff_requested = true;
+  request.promoted_trajectory_available = true;
+  resolution = resolve_solved_execution_bridge_authority(request);
+  EXPECT_FALSE(resolution.bridge_active);
+
+  request.source_promoted = true;
+  request.promoted_trajectory_available = false;
+  resolution = resolve_solved_execution_bridge_authority(request);
+  EXPECT_FALSE(resolution.bridge_active);
+}
+
+TEST(V2XOvertakeCoreFrenetDpExecution,
+     AtomicallyPromotedSourceBridgesUntilDpAuthorityTakesOver)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    SolvedExecutionBridgeAuthorityRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_solved_execution_bridge_authority;
+
+  SolvedExecutionBridgeAuthorityRequest request;
+  request.active_execution = true;
+  request.physically_validated_source_available = true;
+  request.source_handoff_requested = true;
+  request.source_promoted = true;
+  request.promoted_trajectory_available = true;
+
+  auto resolution = resolve_solved_execution_bridge_authority(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.bridge_active);
+  EXPECT_TRUE(resolution.effective_execution_authority_active);
+  EXPECT_TRUE(resolution.may_override_nominal_wall_warning);
+
+  request.current_execution_authority_active = true;
+  resolution = resolve_solved_execution_bridge_authority(request);
+  EXPECT_FALSE(resolution.bridge_active);
+  EXPECT_TRUE(resolution.effective_execution_authority_active);
+  EXPECT_FALSE(resolution.may_override_nominal_wall_warning);
+
+  request.current_execution_authority_active = false;
+  request.hard_fault = true;
+  resolution = resolve_solved_execution_bridge_authority(request);
+  EXPECT_FALSE(resolution.bridge_active);
+  EXPECT_FALSE(resolution.effective_execution_authority_active);
+}
+
 TEST(V2XOvertakeCoreFrenetDpExecution, ReturnReferenceKeepsAdmittedPrefix)
 {
   using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpExecutionReferenceRequest;

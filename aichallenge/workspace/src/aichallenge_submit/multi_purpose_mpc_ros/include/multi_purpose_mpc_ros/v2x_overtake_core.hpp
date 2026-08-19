@@ -3777,6 +3777,32 @@ struct SolvedExecutionSourceHandoffResolution
 SolvedExecutionSourceHandoffResolution resolve_solved_execution_source_handoff(
   const SolvedExecutionSourceHandoffRequest & request) noexcept;
 
+struct SolvedExecutionBridgeAuthorityRequest
+{
+  bool active_execution{false};
+  bool current_execution_authority_active{false};
+  bool physically_validated_source_available{false};
+  bool source_handoff_requested{false};
+  bool source_promoted{false};
+  bool promoted_trajectory_available{false};
+  bool hard_fault{false};
+};
+
+struct SolvedExecutionBridgeAuthorityResolution
+{
+  bool valid{false};
+  bool bridge_active{false};
+  bool effective_execution_authority_active{false};
+  bool may_override_nominal_wall_warning{false};
+};
+
+/// Decide whether a solved MPCC source may bridge the single cycle between
+/// atomic promotion and normal DP execution authority. Wall validation alone
+/// is not a continuity proof: an unpromoted latest/last-feasible source must
+/// never bypass the measured-state stitch and reachability checks.
+SolvedExecutionBridgeAuthorityResolution resolve_solved_execution_bridge_authority(
+  const SolvedExecutionBridgeAuthorityRequest & request) noexcept;
+
 enum class OvertakeMissionCorridorSource
 {
   None,

@@ -5791,6 +5791,21 @@ SolvedExecutionSourceHandoffResolution resolve_solved_execution_source_handoff(
   return resolution;
 }
 
+SolvedExecutionBridgeAuthorityResolution resolve_solved_execution_bridge_authority(
+    const SolvedExecutionBridgeAuthorityRequest &request) noexcept {
+  SolvedExecutionBridgeAuthorityResolution resolution;
+  resolution.valid = true;
+  resolution.bridge_active = request.active_execution &&
+      !request.current_execution_authority_active &&
+      request.physically_validated_source_available &&
+      request.source_handoff_requested && request.source_promoted &&
+      request.promoted_trajectory_available && !request.hard_fault;
+  resolution.effective_execution_authority_active =
+      request.current_execution_authority_active || resolution.bridge_active;
+  resolution.may_override_nominal_wall_warning = resolution.bridge_active;
+  return resolution;
+}
+
 const char * to_string(const FrenetDpTacticalStrategy strategy) noexcept
 {
   switch (strategy) {

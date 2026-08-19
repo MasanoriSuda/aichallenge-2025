@@ -1,9 +1,9 @@
 # Log設計メモ（/output 配下に集約）
 
-> 仕様ドキュメント（現仕様の正）。最終確認: 2026-06-14。文書運用方針は [docs/README.md](../README.md) を参照。
+> 仕様ドキュメント（現仕様の正）。最終確認: 2026-08-19。文書運用方針は [docs/README.md](../README.md) を参照。
 
 作成日: 2026-01-27  
-更新日: 2026-06-14
+更新日: 2026-08-19
 
 対象: `docker-compose.yml`（make 経由 / 主要パス）・`aichallenge/run_evaluation.bash`（評価オーケストレータ）
 
@@ -74,6 +74,31 @@ rosbag compose サービスには `stop_grace_period: 10s` を設定してあり
 ### 3.3 `output/latest/` について
 
 `latest/` は `autostart_orchestrator_node.py`（`_refresh_latest_artifact_links`）が評価完了時に更新する実ディレクトリ。`latest/d<N>/` 配下に最新 run の成果物を指す symlink が置かれる。`docker_build.log` / `docker_run.log` については `docker_build.sh` / `docker_run.sh` が `latest/` 直下に symlink を直接作成する。`topic_check.sh` が `output/latest/topic_check.txt` を出力する用途も引き続き有効。
+
+### 3.4 追い越しDecision Trace
+
+追い越しの候補生成、制御実行、実行中の代替側切替は、`autoware.log` の
+`Overtake decision trace:` で相関できるようにする。記録段階は次の3種類とする。
+
+- `stage=planning`: 左右候補、GapPlanner棄却gate、solver/bridge判定、採用結果
+- `stage=tracking`: 採用経路の追従状態、速度制限、制御fallback
+- `stage=runtime-failover`: 実行中Mission失効時の現側・代替側評価と採用動作
+
+相関キーは次のように役割を分ける。
+
+- `attempt`: Follow中の動的障害物回避を含む、追い越し要求1回の識別子
+- `mission_episode`: `ShiftOut` 以降の正式なOvertakeLine Mission識別子。Mission開始前は0を許容する
+- `generation`: 同一Mission内で経路を差し替えた世代
+- `target`: 対象車両ID
+
+棄却理由は自由文だけにせず、`planner_gate`、`action`、`reason` などの固定カテゴリを併記する。
+同一状態を制御周期ごとに出さず、カテゴリ変化時と低頻度heartbeatだけを記録する。数値の微小変動は
+change判定へ含めない。これによりログ量を抑えつつ、次を区別可能にする。
+
+1. 左右どちらにも物理的な回廊がない
+2. 回廊はあるがsolverまたはbridgeで不成立
+3. 候補は成立したがauthority/admissionで採用されない
+4. 実行中に現側が失効し、代替側へ切り替えた／切り替えられなかった
 
 ## 4. 今後の改善候補
 

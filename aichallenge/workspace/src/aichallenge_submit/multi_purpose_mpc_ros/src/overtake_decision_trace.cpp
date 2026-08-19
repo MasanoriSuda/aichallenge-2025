@@ -53,6 +53,10 @@ std::string format_candidate(const CandidateTrace &trace) {
            << (trace.planner_feasible ? 1 : 0)
            << ",bridge=" << (trace.bridge_evaluated ? 1 : 0) << "/"
            << (trace.bridge_feasible ? 1 : 0)
+           << ",planner_gate=" << reason_or(trace.planner_reject_gate, "none")
+           << ",planner_reject=" << trace.planner_reject_index << "@"
+           << finite_or_nan(trace.planner_reject_distance_m) << "m"
+           << ",free_intervals=" << trace.planner_free_interval_count
            << ",samples=" << trace.bridge_checked_samples
            << ",reject=" << trace.bridge_reject_index << "@"
            << finite_or_nan(trace.bridge_reject_distance_m) << "m"
@@ -159,9 +163,11 @@ std::string categorical_signature(const DecisionTrace &trace) {
   const auto append_candidate = [&stream](const CandidateTrace &candidate) {
     stream << static_cast<int>(classify_candidate(candidate)) << ":"
            << candidate.requested_side << ":" << candidate.resolved_side << ":"
-           << candidate_reason(candidate) << ":" << candidate.backoff_failures;
+           << candidate_reason(candidate) << ":" << candidate.planner_reject_gate
+           << ":" << candidate.backoff_failures;
   };
-  stream << trace.episode_id << "|" << trace.target_id << "|"
+  stream << trace.attempt_id << "|" << trace.mission_episode_id << "|"
+         << trace.target_id << "|"
          << static_cast<int>(classify_outcome(trace)) << "|";
   append_candidate(trace.primary);
   stream << "|";
@@ -175,8 +181,9 @@ std::string categorical_signature(const DecisionTrace &trace) {
 
 std::string format_decision_trace(const DecisionTrace &trace) {
   std::ostringstream stream;
-  stream << "Overtake decision trace: stage=planning, episode="
-         << trace.episode_id << ", target="
+  stream << "Overtake decision trace: stage=planning, attempt="
+         << trace.attempt_id << ", mission_episode=" << trace.mission_episode_id
+         << ", target="
          << (trace.target_id.empty() ? "<none>" : trace.target_id)
          << ", outcome=" << to_string(classify_outcome(trace))
          << ", primary=" << format_candidate(trace.primary)
@@ -232,14 +239,85 @@ const char *to_string(const TrackingOutcome outcome) noexcept {
 
 std::string format_tracking_trace(const TrackingTrace &trace) {
   std::ostringstream stream;
-  stream << "Overtake decision trace: stage=tracking, episode="
-         << trace.episode_id << ", target="
+  stream << "Overtake decision trace: stage=tracking, attempt="
+         << trace.attempt_id << ", mission_episode=" << trace.mission_episode_id
+         << ", target="
          << (trace.target_id.empty() ? "<none>" : trace.target_id)
          << ", side=" << trace.side << ", outcome=" << to_string(trace.outcome)
          << ", failures=" << trace.consecutive_failures
          << ", backoff=" << finite_or_nan(trace.backoff_sec) << "s"
          << ", reason=\"" << reason_or(trace.reason, "none") << "\"";
   return stream.str();
+}
+
+std::string categorical_signature(const RuntimeFailoverTrace &trace) {
+  std::ostringstream stream;
+  stream << trace.mission_episode_id << "|" << trace.mission_generation << "|"
+         << trace.target_id << "|" << trace.phase << "|" << trace.trigger << "|"
+         << (trace.current_feasible ? 1 : 0) << ":"
+         << (trace.current_mission_available ? 1 : 0) << ":"
+         << (trace.current_ready ? 1 : 0) << "|"
+         << (trace.alternate_feasible ? 1 : 0) << ":"
+         << (trace.alternate_mission_available ? 1 : 0) << ":"
+         << (trace.alternate_stable ? 1 : 0) << ":"
+         << (trace.alternate_urgent_admission ? 1 : 0) << ":"
+         << (trace.alternate_ready ? 1 : 0) << "|"
+         << (trace.cross_side_allowed ? 1 : 0) << "|"
+         << (trace.no_return ? 1 : 0) << "|"
+         << (trace.hard_fault ? 1 : 0) << "|"
+         << (trace.forward_prefix_active ? 1 : 0) << "|"
+         << trace.action << "|" << trace.reason;
+  return stream.str();
+}
+
+std::string format_runtime_failover_trace(const RuntimeFailoverTrace &trace) {
+  std::ostringstream stream;
+  stream << "Overtake decision trace: stage=runtime-failover, mission_episode="
+         << trace.mission_episode_id << ", generation=" << trace.mission_generation
+         << ", target=" << (trace.target_id.empty() ? "<none>" : trace.target_id)
+         << ", phase=" << reason_or(trace.phase, "unknown")
+         << ", trigger=\"" << reason_or(trace.trigger, "unknown") << "\""
+         << ", current=" << (trace.current_feasible ? 1 : 0) << "/"
+         << (trace.current_mission_available ? 1 : 0) << "/"
+         << (trace.current_ready ? 1 : 0)
+         << ", alternate=" << (trace.alternate_feasible ? 1 : 0) << "/"
+         << (trace.alternate_mission_available ? 1 : 0) << "/"
+         << (trace.alternate_stable ? 1 : 0) << "/"
+         << (trace.alternate_urgent_admission ? 1 : 0) << "/"
+         << (trace.alternate_ready ? 1 : 0)
+         << ", cross_side=" << (trace.cross_side_allowed ? 1 : 0)
+         << ", no_return=" << (trace.no_return ? 1 : 0)
+         << ", hard_fault=" << (trace.hard_fault ? 1 : 0)
+         << ", prefix=" << (trace.forward_prefix_active ? 1 : 0)
+         << ", action=" << reason_or(trace.action, "inactive")
+         << ", reason=" << reason_or(trace.reason, "not-evaluated")
+         << ", wp_id=" << trace.waypoint_id;
+  return stream.str();
+}
+
+TraceEmission ChangeAwareRuntimeFailoverTraceEmitter::update(
+    const RuntimeFailoverTrace &trace, const double now_sec,
+    const double repeat_interval_sec) {
+  TraceEmission emission;
+  emission.signature = categorical_signature(trace);
+  emission.state_changed = emission.signature != last_signature_;
+  const bool repeat_due =
+      std::isfinite(now_sec) && std::isfinite(last_emit_sec_) &&
+      std::isfinite(repeat_interval_sec) && repeat_interval_sec >= 0.0 &&
+      now_sec >= last_emit_sec_ &&
+      now_sec - last_emit_sec_ >= repeat_interval_sec;
+  emission.emit = emission.state_changed || repeat_due;
+  if (emission.emit) {
+    emission.message = format_runtime_failover_trace(trace);
+    last_signature_ = emission.signature;
+    last_emit_sec_ = now_sec;
+  }
+  return emission;
+}
+
+void ChangeAwareRuntimeFailoverTraceEmitter::reset() noexcept {
+  last_signature_.clear();
+  last_emit_sec_ = -std::numeric_limits<double>::infinity();
 }
 
 } // namespace multi_purpose_mpc_ros::overtake_decision_trace

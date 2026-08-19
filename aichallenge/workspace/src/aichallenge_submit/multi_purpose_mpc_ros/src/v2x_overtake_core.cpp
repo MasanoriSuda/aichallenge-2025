@@ -11008,6 +11008,21 @@ bool can_enter_dynamic_mission_wait(
     !request.rear_clear_confirmed;
 }
 
+bool can_admit_dynamic_mission_wait_urgent_alternate(
+  const DynamicMissionWaitUrgentAlternateRequest & request) noexcept
+{
+  return
+    request.cross_side_allowed && !request.normal_stability_ready &&
+    request.current_mission_invalidated && request.target_continuous &&
+    !request.target_position_jump && !request.target_course_progress_rejected &&
+    request.assessment_completed && request.alternate_plan_feasible &&
+    request.alternate_mission_available &&
+    request.current_body_footprints_separated &&
+    request.footprint_prediction_valid &&
+    request.predicted_body_footprint_sweep_separated &&
+    !request.execution_corridor_blocked;
+}
+
 bool should_execute_dynamic_mission_wait_runtime(
   const DynamicMissionWaitRuntimeOwnershipRequest & request) noexcept
 {
@@ -11886,6 +11901,15 @@ const char * to_string(const DynamicObstacleLateralEscapeAuthorityReason reason)
       return "accepted";
   }
   return "unknown";
+}
+
+bool should_try_dynamic_obstacle_lateral_escape_alternate(
+  const DynamicObstacleLateralEscapeAlternateRequest & request) noexcept
+{
+  return
+    !request.primary_usable && request.planner_available &&
+    request.gap_planner_enabled && !request.low_speed_local_path_active &&
+    (request.primary_side_sign == -1 || request.primary_side_sign == 1);
 }
 
 DynamicObstacleLateralEscapeSolverBackoffStatus

@@ -6295,6 +6295,30 @@ struct DynamicMissionWaitAdmissionRequest
 bool can_enter_dynamic_mission_wait(
   const DynamicMissionWaitAdmissionRequest & request) noexcept;
 
+struct DynamicMissionWaitUrgentAlternateRequest
+{
+  bool cross_side_allowed{false};
+  bool normal_stability_ready{false};
+  bool current_mission_invalidated{false};
+  bool target_continuous{false};
+  bool target_position_jump{false};
+  bool target_course_progress_rejected{false};
+  bool assessment_completed{false};
+  bool alternate_plan_feasible{false};
+  bool alternate_mission_available{false};
+  bool current_body_footprints_separated{false};
+  bool footprint_prediction_valid{false};
+  bool predicted_body_footprint_sweep_separated{false};
+  bool execution_corridor_blocked{false};
+};
+
+/// Skip only the normal tactical debounce after the active Mission has already
+/// been invalidated. Geometry, prediction, continuity, corridor and no-return
+/// gates remain mandatory, so this cannot turn an incomplete prefix into a
+/// cross-side Mission.
+bool can_admit_dynamic_mission_wait_urgent_alternate(
+  const DynamicMissionWaitUrgentAlternateRequest & request) noexcept;
+
 struct DynamicMissionWaitRuntimeOwnershipRequest
 {
   bool behavior_overtake{false};
@@ -7007,6 +7031,21 @@ struct DynamicObstacleLateralEscapeSolverBackoffFailure
   int consecutive_failures{0};
   double hold_sec{0.0};
 };
+
+struct DynamicObstacleLateralEscapeAlternateRequest
+{
+  bool primary_usable{false};
+  bool planner_available{false};
+  bool gap_planner_enabled{false};
+  bool low_speed_local_path_active{false};
+  int primary_side_sign{0};
+};
+
+/// Retry the known opposite homotopy only when the primary lateral escape is
+/// unusable. An unresolved primary side is not expanded into a synchronous
+/// two-side search, which keeps callback cost bounded.
+bool should_try_dynamic_obstacle_lateral_escape_alternate(
+  const DynamicObstacleLateralEscapeAlternateRequest & request) noexcept;
 
 /// Remember tracking-solver failures per target and pass side.
 ///

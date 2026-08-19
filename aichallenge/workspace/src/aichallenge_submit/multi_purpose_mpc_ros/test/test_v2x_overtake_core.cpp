@@ -502,6 +502,14 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_completion_rollout_
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_rearward_pass_completion_context;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_observe_locked_target_geometry;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_enter_dynamic_mission_wait;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  DynamicMissionWaitUrgentAlternateRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  can_admit_dynamic_mission_wait_urgent_alternate;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  DynamicObstacleLateralEscapeAlternateRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  should_try_dynamic_obstacle_lateral_escape_alternate;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_execute_dynamic_mission_wait_runtime;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_mission_wait;
 using multi_purpose_mpc_ros::v2x_overtake_core::
@@ -12922,6 +12930,62 @@ TEST(V2XOvertakeCoreDynamicMissionWait, RoutesOnlyOwnedRuntimeStatesToExecutor)
   request.behavior_overtake = false;
   request.dynamic_mission_wait_active = true;
   EXPECT_FALSE(should_execute_dynamic_mission_wait_runtime(request));
+}
+
+TEST(V2XOvertakeCoreDynamicMissionWait, UrgentAlternateSkipsOnlyDebounce)
+{
+  DynamicMissionWaitUrgentAlternateRequest request;
+  request.cross_side_allowed = true;
+  request.current_mission_invalidated = true;
+  request.target_continuous = true;
+  request.assessment_completed = true;
+  request.alternate_plan_feasible = true;
+  request.alternate_mission_available = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+
+  EXPECT_TRUE(can_admit_dynamic_mission_wait_urgent_alternate(request));
+
+  request.normal_stability_ready = true;
+  EXPECT_FALSE(can_admit_dynamic_mission_wait_urgent_alternate(request));
+  request.normal_stability_ready = false;
+
+  request.target_position_jump = true;
+  EXPECT_FALSE(can_admit_dynamic_mission_wait_urgent_alternate(request));
+  request.target_position_jump = false;
+
+  request.predicted_body_footprint_sweep_separated = false;
+  EXPECT_FALSE(can_admit_dynamic_mission_wait_urgent_alternate(request));
+  request.predicted_body_footprint_sweep_separated = true;
+
+  request.execution_corridor_blocked = true;
+  EXPECT_FALSE(can_admit_dynamic_mission_wait_urgent_alternate(request));
+  request.execution_corridor_blocked = false;
+
+  request.cross_side_allowed = false;
+  EXPECT_FALSE(can_admit_dynamic_mission_wait_urgent_alternate(request));
+}
+
+TEST(V2XOvertakeCoreDynamicEscape, RetriesOnlyKnownOppositeSide)
+{
+  DynamicObstacleLateralEscapeAlternateRequest request;
+  request.planner_available = true;
+  request.gap_planner_enabled = true;
+  request.primary_side_sign = 1;
+
+  EXPECT_TRUE(should_try_dynamic_obstacle_lateral_escape_alternate(request));
+
+  request.primary_usable = true;
+  EXPECT_FALSE(should_try_dynamic_obstacle_lateral_escape_alternate(request));
+  request.primary_usable = false;
+
+  request.primary_side_sign = 0;
+  EXPECT_FALSE(should_try_dynamic_obstacle_lateral_escape_alternate(request));
+  request.primary_side_sign = -1;
+
+  request.low_speed_local_path_active = true;
+  EXPECT_FALSE(should_try_dynamic_obstacle_lateral_escape_alternate(request));
 }
 
 TEST(V2XOvertakeCoreDynamicMissionWait, HoldsUntilFreshCurrentOrAlternatePlanExists)

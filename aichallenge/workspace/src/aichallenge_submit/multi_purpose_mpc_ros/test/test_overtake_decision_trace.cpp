@@ -62,7 +62,8 @@ TEST(OvertakeDecisionTrace, ClassifiesEveryCandidateGate) {
 TEST(OvertakeDecisionTrace,
      ExplainsRejectedAlternateWithoutLosingPrimaryBackoff) {
   trace::DecisionTrace decision;
-  decision.episode_id = 9U;
+  decision.attempt_id = 17U;
+  decision.mission_episode_id = 9U;
   decision.target_id = "d2";
   decision.requested = true;
   decision.primary = ready_candidate(0, 1);
@@ -80,6 +81,8 @@ TEST(OvertakeDecisionTrace,
             trace::DecisionOutcome::AlternateRejected);
   const std::string message = trace::format_decision_trace(decision);
   EXPECT_NE(message.find("outcome=alternate-rejected"), std::string::npos);
+  EXPECT_NE(message.find("attempt=17"), std::string::npos);
+  EXPECT_NE(message.find("mission_episode=9"), std::string::npos);
   EXPECT_NE(message.find("state=backed-off"), std::string::npos);
   EXPECT_NE(message.find("state=bridge-rejected"), std::string::npos);
   EXPECT_NE(message.find("corridor is outside the reachable lateral envelope"),
@@ -106,13 +109,16 @@ TEST(OvertakeDecisionTrace, EmitsOnCategoricalChangeButNotContinuousNoise) {
 
   decision.tracking_qualified = true;
   EXPECT_TRUE(emitter.update(decision, 1.2).emit);
+  decision.primary.planner_reject_gate = "reachable-bridge";
+  EXPECT_TRUE(emitter.update(decision, 1.3).emit);
   EXPECT_FALSE(emitter.update(decision, 5.9).emit);
-  EXPECT_TRUE(emitter.update(decision, 6.2).emit);
+  EXPECT_TRUE(emitter.update(decision, 6.3).emit);
 }
 
 TEST(OvertakeDecisionTrace, FormatsTrackingFailureAndRecovery) {
   trace::TrackingTrace tracking;
-  tracking.episode_id = 4U;
+  tracking.attempt_id = 12U;
+  tracking.mission_episode_id = 4U;
   tracking.target_id = "d2";
   tracking.side = -1;
   tracking.consecutive_failures = 2;
@@ -121,6 +127,8 @@ TEST(OvertakeDecisionTrace, FormatsTrackingFailureAndRecovery) {
 
   const auto failed = trace::format_tracking_trace(tracking);
   EXPECT_NE(failed.find("stage=tracking"), std::string::npos);
+  EXPECT_NE(failed.find("attempt=12"), std::string::npos);
+  EXPECT_NE(failed.find("mission_episode=4"), std::string::npos);
   EXPECT_NE(failed.find("outcome=failed"), std::string::npos);
 
   tracking.outcome = trace::TrackingOutcome::Recovered;
@@ -128,6 +136,38 @@ TEST(OvertakeDecisionTrace, FormatsTrackingFailureAndRecovery) {
   tracking.reason = "valid tracking solution";
   const auto recovered = trace::format_tracking_trace(tracking);
   EXPECT_NE(recovered.find("outcome=recovered"), std::string::npos);
+}
+
+TEST(OvertakeDecisionTrace, EmitsRuntimeFailoverOnlyOnCategoricalChange) {
+  trace::ChangeAwareRuntimeFailoverTraceEmitter emitter;
+  trace::RuntimeFailoverTrace failover;
+  failover.mission_episode_id = 7U;
+  failover.mission_generation = 3U;
+  failover.target_id = "d2";
+  failover.phase = "FollowPrepare";
+  failover.trigger = "locked target entered selected pass-side line";
+  failover.current_feasible = true;
+  failover.current_mission_available = true;
+  failover.current_ready = true;
+  failover.alternate_feasible = true;
+  failover.alternate_mission_available = true;
+  failover.alternate_stable = false;
+  failover.cross_side_allowed = true;
+  failover.action = "replace-current";
+  failover.reason = "current replacement ready";
+  failover.waypoint_id = 31;
+
+  const auto first = emitter.update(failover, 1.0);
+  ASSERT_TRUE(first.emit);
+  EXPECT_NE(first.message.find("stage=runtime-failover"), std::string::npos);
+  EXPECT_NE(first.message.find("current=1/1/1"), std::string::npos);
+  EXPECT_NE(first.message.find("alternate=1/1/0/0/0"), std::string::npos);
+
+  failover.waypoint_id = 32;
+  EXPECT_FALSE(emitter.update(failover, 1.1).emit);
+  failover.alternate_ready = true;
+  failover.action = "replace-alternate";
+  EXPECT_TRUE(emitter.update(failover, 1.2).emit);
 }
 
 } // namespace

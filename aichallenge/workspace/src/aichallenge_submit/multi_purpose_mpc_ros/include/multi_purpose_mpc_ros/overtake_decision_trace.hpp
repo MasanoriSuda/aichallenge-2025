@@ -35,6 +35,10 @@ struct CandidateTrace {
   bool planner_active{false};
   bool planner_feasible{false};
   std::string planner_reason;
+  std::string planner_reject_gate{"none"};
+  std::size_t planner_reject_index{0U};
+  double planner_reject_distance_m{std::numeric_limits<double>::quiet_NaN()};
+  std::size_t planner_free_interval_count{0U};
   double corridor_width_m{0.0};
   bool bridge_evaluated{false};
   bool bridge_feasible{false};
@@ -49,7 +53,8 @@ struct CandidateTrace {
 };
 
 struct DecisionTrace {
-  std::uint64_t episode_id{0U};
+  std::uint64_t attempt_id{0U};
+  std::uint64_t mission_episode_id{0U};
   std::string target_id;
   bool requested{false};
   CandidateTrace primary;
@@ -99,7 +104,8 @@ enum class TrackingOutcome {
 };
 
 struct TrackingTrace {
-  std::uint64_t episode_id{0U};
+  std::uint64_t attempt_id{0U};
+  std::uint64_t mission_episode_id{0U};
   std::string target_id;
   int side{0};
   TrackingOutcome outcome{TrackingOutcome::Failed};
@@ -110,6 +116,43 @@ struct TrackingTrace {
 
 const char *to_string(TrackingOutcome outcome) noexcept;
 std::string format_tracking_trace(const TrackingTrace &trace);
+
+struct RuntimeFailoverTrace {
+  std::uint64_t mission_episode_id{0U};
+  std::uint64_t mission_generation{0U};
+  std::string target_id;
+  std::string phase;
+  std::string trigger;
+  bool current_feasible{false};
+  bool current_mission_available{false};
+  bool current_ready{false};
+  bool alternate_feasible{false};
+  bool alternate_mission_available{false};
+  bool alternate_stable{false};
+  bool alternate_urgent_admission{false};
+  bool alternate_ready{false};
+  bool cross_side_allowed{false};
+  bool no_return{false};
+  bool hard_fault{false};
+  bool forward_prefix_active{false};
+  std::string action{"inactive"};
+  std::string reason{"not-evaluated"};
+  int waypoint_id{0};
+};
+
+std::string categorical_signature(const RuntimeFailoverTrace &trace);
+std::string format_runtime_failover_trace(const RuntimeFailoverTrace &trace);
+
+class ChangeAwareRuntimeFailoverTraceEmitter {
+public:
+  TraceEmission update(const RuntimeFailoverTrace &trace, double now_sec,
+                       double repeat_interval_sec = 5.0);
+  void reset() noexcept;
+
+private:
+  std::string last_signature_;
+  double last_emit_sec_{-std::numeric_limits<double>::infinity()};
+};
 
 } // namespace multi_purpose_mpc_ros::overtake_decision_trace
 

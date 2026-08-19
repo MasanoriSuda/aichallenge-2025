@@ -12297,12 +12297,22 @@ PausedMissionTerminalResolution resolve_paused_mission_terminal(
 bool can_retain_dynamic_mission_wait_until_rear_clear(
   const DynamicMissionWaitRetentionRequest & request) noexcept
 {
+  if (
+    !request.tactical_wait_active || request.runtime_hard_fault ||
+    !request.target_progress_recent)
+  {
+    return false;
+  }
+
+  if (request.pass_origin && request.pass_forward_completion_latched) {
+    return true;
+  }
+
   return
-    request.tactical_wait_active && request.forward_prefix_active &&
+    request.forward_prefix_active &&
     (request.pass_origin || request.committed_execution) &&
     (request.full_closing_authority ||
-    request.continuous_dp_execution_active) &&
-    !request.runtime_hard_fault && request.target_progress_recent;
+    request.continuous_dp_execution_active);
 }
 
 const char * to_string(const PausedMissionTerminalReason reason) noexcept

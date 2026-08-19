@@ -9302,6 +9302,28 @@ TEST(V2XOvertakeCoreSpeed, RetainsDynamicWaitOnlyForCommittedForwardExecution)
   EXPECT_FALSE(can_retain_dynamic_mission_wait_until_rear_clear(request));
 }
 
+TEST(V2XOvertakeCoreSpeed, RetainsLatchedPassOwnershipWithoutForwardPrefix)
+{
+  DynamicMissionWaitRetentionRequest request;
+  request.tactical_wait_active = true;
+  request.pass_origin = true;
+  request.pass_forward_completion_latched = true;
+  request.target_progress_recent = true;
+
+  EXPECT_TRUE(can_retain_dynamic_mission_wait_until_rear_clear(request));
+
+  request.runtime_hard_fault = true;
+  EXPECT_FALSE(can_retain_dynamic_mission_wait_until_rear_clear(request));
+  request.runtime_hard_fault = false;
+
+  request.target_progress_recent = false;
+  EXPECT_FALSE(can_retain_dynamic_mission_wait_until_rear_clear(request));
+  request.target_progress_recent = true;
+
+  request.pass_origin = false;
+  EXPECT_FALSE(can_retain_dynamic_mission_wait_until_rear_clear(request));
+}
+
 TEST(V2XOvertakeCoreSpeed, SuppressesOnlyNewEntryForCompletedTarget)
 {
   CompletedTargetReacquireSuppressionRequest request;

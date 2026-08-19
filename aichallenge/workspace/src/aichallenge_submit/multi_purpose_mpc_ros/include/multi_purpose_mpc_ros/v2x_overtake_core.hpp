@@ -7328,6 +7328,10 @@ struct DynamicMissionWaitRetentionRequest
   bool tactical_wait_active{false};
   bool pass_origin{false};
   bool committed_execution{false};
+  /// Pass execution already committed to forward completion before entering
+  /// the tactical wait. This retains Mission ownership while a replacement
+  /// prefix is unavailable; it does not authorize an unvalidated trajectory.
+  bool pass_forward_completion_latched{false};
   bool forward_prefix_active{false};
   /// The latest wall-validated prefix owns the complete Mission closing
   /// request instead of the bounded unlatched fallback.
@@ -7342,11 +7346,12 @@ struct DynamicMissionWaitRetentionRequest
 };
 
 /// Allow a short DynamicMissionWait lease to outlive its re-selection limit
-/// only when execution has already committed and a physically validated
-/// forward prefix still owns useful execution authority while longitudinal
-/// progress remains recent. Pre-commit ShiftOut waits and stale/degraded Pass
-/// prefixes therefore expire into a fresh left/right search instead of
-/// consuming the Mission-wide time budget as a passive FollowPrepare.
+/// only when execution has already committed and either a physically
+/// validated forward prefix owns useful execution authority or Pass forward
+/// completion was latched before the wait. The latter retains tactical
+/// ownership only; it does not make an unavailable trajectory executable.
+/// Pre-commit ShiftOut waits and stale Pass progress therefore still expire
+/// into a fresh left/right search.
 bool can_retain_dynamic_mission_wait_until_rear_clear(
   const DynamicMissionWaitRetentionRequest & request) noexcept;
 

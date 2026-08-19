@@ -22790,6 +22790,9 @@ private:
         overtake_line_state_.mission_cross_side_transition_committed ||
         overtake_line_state_.pass_forward_completion_latched ||
         validated_continuous_dp_wait_execution;
+      retention_request.pass_forward_completion_latched =
+        overtake_line_state_.pass_forward_completion_latched ||
+        overtake_line_state_.dynamic_mission_wait_pass_forward_completion_latched;
       retention_request.forward_prefix_active =
         overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active;
       retention_request.full_closing_authority =
@@ -22821,13 +22824,14 @@ private:
         RCLCPP_WARN(
             rclcpp::get_logger("mpc_controller"),
             "OvertakeLine dynamic Mission wait retained until rear-clear: "
-            "target=%s, side=%d, origin=%s, prefix=%d/full=%d, "
+            "target=%s, side=%d, origin=%s, forward_latched=%d, prefix=%d/full=%d, "
             "continuous_dp=%d, progress_recent=%d/age=%.2f s, "
             "elapsed=%.2f/%.2f s, traveled=%.2f/%.2f m, "
             "total_budget=%.2f s, wp_id=%d",
             overtake_line_state_.target_vehicle_id.c_str(),
             overtake_line_state_.pass_side_sign,
             to_string(overtake_line_state_.follow_prepare_origin_phase),
+            retention_request.pass_forward_completion_latched ? 1 : 0,
             overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active
                 ? 1
                 : 0,
@@ -22857,11 +22861,12 @@ private:
           RCLCPP_INFO(
             rclcpp::get_logger("mpc_controller"),
             "OvertakeLine dynamic Mission wait released for fresh search: "
-            "target=%s, side=%d, origin=%s, prefix=%d/full=%d, "
+            "target=%s, side=%d, origin=%s, forward_latched=%d, prefix=%d/full=%d, "
             "continuous_dp=%d, progress_recent=%d/age=%.2f s, "
             "elapsed=%.2f s, traveled=%.2f m, reason=%s, wp_id=%d",
             expired_target.c_str(), expired_side,
             to_string(overtake_line_state_.follow_prepare_origin_phase),
+            retention_request.pass_forward_completion_latched ? 1 : 0,
             overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active ? 1 : 0,
             overtake_line_state_.dynamic_mission_wait_full_closing_was_active ? 1 : 0,
             validated_continuous_dp_wait_execution ? 1 : 0,

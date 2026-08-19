@@ -19,6 +19,21 @@ struct LatestOnlyWorkerIntervalRequest
   double last_compute_ms{0.0};
 };
 
+struct LatestOnlyResultPublicationRequest
+{
+  std::uint64_t result_context_epoch{0U};
+  std::uint64_t active_context_epoch{0U};
+  std::uint64_t result_sequence{0U};
+  std::uint64_t latest_submitted_sequence{0U};
+  std::uint64_t latest_published_sequence{0U};
+};
+
+/// Publish each monotonically newer completed result even when a newer job is
+/// already queued. The live consumer still validates scene identity, age and
+/// execution authority before adopting the result.
+bool should_publish_latest_only_result(
+  const LatestOnlyResultPublicationRequest & request) noexcept;
+
 /// Resolve a bounded submission interval from the most recent worker cost.
 /// This does not delay the control callback; it only controls when the next
 /// latest-only snapshot may be queued.

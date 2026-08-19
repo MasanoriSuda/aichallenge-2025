@@ -2278,6 +2278,7 @@ struct MpccLiteAsyncMailbox
 {
   std::mutex mutex;
   std::uint64_t latest_submitted_sequence{0U};
+  std::uint64_t latest_published_sequence{0U};
   std::uint64_t context_epoch{0U};
   std::optional<MpccLiteAsyncResult> latest_result;
 };
@@ -5111,6 +5112,7 @@ struct MPC
     std::lock_guard<std::mutex> lock(mpcc_lite_async_mailbox_->mutex);
     mpcc_lite_async_mailbox_->context_epoch = mpcc_lite_async_context_epoch_;
     mpcc_lite_async_mailbox_->latest_submitted_sequence = 0U;
+    mpcc_lite_async_mailbox_->latest_published_sequence = 0U;
     mpcc_lite_async_mailbox_->latest_result.reset();
   }
 
@@ -6063,10 +6065,15 @@ struct MPC
         result.compute_ms = std::chrono::duration<double, std::milli>(
           std::chrono::steady_clock::now() - start).count();
         std::lock_guard<std::mutex> lock(mailbox->mutex);
-        if (
-          mailbox->context_epoch == context_epoch &&
-          mailbox->latest_submitted_sequence == sequence)
+        if (should_publish_latest_only_result(
+            LatestOnlyResultPublicationRequest{
+              result.context_epoch,
+              mailbox->context_epoch,
+              result.sequence,
+              mailbox->latest_submitted_sequence,
+              mailbox->latest_published_sequence}))
         {
+          mailbox->latest_published_sequence = result.sequence;
           mailbox->latest_result = std::move(result);
         }
       });

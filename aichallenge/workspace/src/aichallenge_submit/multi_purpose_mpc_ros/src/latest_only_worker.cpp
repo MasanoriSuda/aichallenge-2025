@@ -34,6 +34,15 @@ double resolve_latest_only_worker_interval(
     base_interval_sec, maximum_interval_sec);
 }
 
+bool should_publish_latest_only_result(
+  const LatestOnlyResultPublicationRequest & request) noexcept
+{
+  return
+    request.result_context_epoch == request.active_context_epoch &&
+    request.result_sequence > request.latest_published_sequence &&
+    request.result_sequence <= request.latest_submitted_sequence;
+}
+
 bool defer_live_tactical_generation(
   const bool async_worker_enabled, const bool worker_context,
   const bool start_grid_breakout_attempt)

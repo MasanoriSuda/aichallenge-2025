@@ -46,6 +46,30 @@ TEST(LatestOnlyWorkerInterval, BoundsIntervalAtConfiguredMaximum)
     0.30);
 }
 
+TEST(LatestOnlyWorkerResultPublication, PublishesCompletedResultWithNewerJobQueued)
+{
+  EXPECT_TRUE(
+    multi_purpose_mpc_ros::should_publish_latest_only_result(
+      {7U, 7U, 10U, 11U, 9U}));
+}
+
+TEST(LatestOnlyWorkerResultPublication, RejectsOldContextAndSequenceRollback)
+{
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::should_publish_latest_only_result(
+      {6U, 7U, 10U, 11U, 9U}));
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::should_publish_latest_only_result(
+      {7U, 7U, 9U, 11U, 9U}));
+}
+
+TEST(LatestOnlyWorkerResultPublication, RejectsResultThatWasNeverSubmitted)
+{
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::should_publish_latest_only_result(
+      {7U, 7U, 12U, 11U, 9U}));
+}
+
 TEST(LatestOnlyWorkerOwnership, DefersOrdinaryLiveTacticalGeneration)
 {
   EXPECT_TRUE(

@@ -1,0 +1,116 @@
+#ifndef MULTI_PURPOSE_MPC_ROS__OVERTAKE_DECISION_TRACE_HPP_
+#define MULTI_PURPOSE_MPC_ROS__OVERTAKE_DECISION_TRACE_HPP_
+
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+#include <string>
+
+namespace multi_purpose_mpc_ros::overtake_decision_trace {
+
+enum class CandidateDisposition {
+  NotEvaluated,
+  PlannerInactive,
+  PlannerRejected,
+  BridgeRejected,
+  BackedOff,
+  SideMismatch,
+  Ready,
+};
+
+enum class DecisionOutcome {
+  NotRequested,
+  PrimaryRejected,
+  PrimaryBackedOff,
+  AlternateRejected,
+  AuthorityRejected,
+  ActivePrimary,
+  ActiveAlternate,
+};
+
+struct CandidateTrace {
+  bool evaluated{false};
+  int requested_side{0};
+  int resolved_side{0};
+  bool planner_active{false};
+  bool planner_feasible{false};
+  std::string planner_reason;
+  double corridor_width_m{0.0};
+  bool bridge_evaluated{false};
+  bool bridge_feasible{false};
+  std::string bridge_reason{"not-evaluated"};
+  std::size_t bridge_checked_samples{0U};
+  std::size_t bridge_reject_index{0U};
+  double bridge_reject_distance_m{std::numeric_limits<double>::quiet_NaN()};
+  double bridge_maximum_adjustment_m{0.0};
+  bool backoff_active{false};
+  int backoff_failures{0};
+  double backoff_remaining_sec{0.0};
+};
+
+struct DecisionTrace {
+  std::uint64_t episode_id{0U};
+  std::string target_id;
+  bool requested{false};
+  CandidateTrace primary;
+  CandidateTrace alternate;
+  bool alternate_attempted{false};
+  bool alternate_selected{false};
+  bool authority_active{false};
+  std::string authority_reason{"not-evaluated"};
+  int final_side{0};
+  double final_shift_m{0.0};
+  bool tracking_qualified{false};
+  bool follow_cap_suppressed{false};
+  int waypoint_id{0};
+};
+
+struct TraceEmission {
+  bool emit{false};
+  bool state_changed{false};
+  std::string signature;
+  std::string message;
+};
+
+CandidateDisposition classify_candidate(const CandidateTrace &trace) noexcept;
+const char *to_string(CandidateDisposition disposition) noexcept;
+DecisionOutcome classify_outcome(const DecisionTrace &trace) noexcept;
+const char *to_string(DecisionOutcome outcome) noexcept;
+std::string categorical_signature(const DecisionTrace &trace);
+std::string format_decision_trace(const DecisionTrace &trace);
+
+/// Suppress 40 Hz duplicates while retaining immediate categorical changes.
+/// Continuous values such as remaining backoff time and corridor width are
+/// deliberately excluded from the change signature.
+class ChangeAwareTraceEmitter {
+public:
+  TraceEmission update(const DecisionTrace &trace, double now_sec,
+                       double repeat_interval_sec = 5.0);
+  void reset() noexcept;
+
+private:
+  std::string last_signature_;
+  double last_emit_sec_{-std::numeric_limits<double>::infinity()};
+};
+
+enum class TrackingOutcome {
+  Failed,
+  Recovered,
+};
+
+struct TrackingTrace {
+  std::uint64_t episode_id{0U};
+  std::string target_id;
+  int side{0};
+  TrackingOutcome outcome{TrackingOutcome::Failed};
+  int consecutive_failures{0};
+  double backoff_sec{0.0};
+  std::string reason;
+};
+
+const char *to_string(TrackingOutcome outcome) noexcept;
+std::string format_tracking_trace(const TrackingTrace &trace);
+
+} // namespace multi_purpose_mpc_ros::overtake_decision_trace
+
+#endif // MULTI_PURPOSE_MPC_ROS__OVERTAKE_DECISION_TRACE_HPP_

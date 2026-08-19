@@ -6956,12 +6956,32 @@ struct DynamicObstacleLateralEscapeAuthorityRequest
   bool tracking_solution_qualified{false};
 };
 
+enum class DynamicObstacleLateralEscapeAuthorityReason
+{
+  NotEvaluated,
+  Disabled,
+  TargetInactive,
+  FollowInactive,
+  PlannerInactive,
+  PlannerInfeasible,
+  PlannerDoesNotOwnBounds,
+  EmergencyBrake,
+  SolverRecovery,
+  InvalidSide,
+  InvalidGeometry,
+  ShiftDirectionMismatch,
+  ShiftBelowMinimum,
+  Accepted,
+};
+
 struct DynamicObstacleLateralEscapeAuthorityResolution
 {
   bool active{false};
   bool suppress_generic_follow_cap{false};
   int pass_side_sign{0};
   double requested_lateral_shift_m{};
+  DynamicObstacleLateralEscapeAuthorityReason reason{
+    DynamicObstacleLateralEscapeAuthorityReason::NotEvaluated};
 };
 
 /// Let an already feasible all-V2X GapPlanner corridor own lateral execution
@@ -6972,6 +6992,7 @@ struct DynamicObstacleLateralEscapeAuthorityResolution
 DynamicObstacleLateralEscapeAuthorityResolution
 resolve_dynamic_obstacle_lateral_escape_authority(
   const DynamicObstacleLateralEscapeAuthorityRequest & request) noexcept;
+const char * to_string(DynamicObstacleLateralEscapeAuthorityReason reason) noexcept;
 
 struct DynamicObstacleLateralEscapeSolverBackoffStatus
 {

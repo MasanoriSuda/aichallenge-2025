@@ -85,6 +85,11 @@ ament_auto_add_library(${PROJECT_NAME}_latest_only_worker SHARED
 )
 target_link_libraries(${PROJECT_NAME}_latest_only_worker Threads::Threads)
 
+ament_auto_add_library(${PROJECT_NAME}_overtake_decision_trace SHARED
+  NO_TARGET_LINK_LIBRARIES
+  src/overtake_decision_trace.cpp
+)
+
 ament_auto_add_library(${PROJECT_NAME}_mpc_waypoint_preview SHARED
   NO_TARGET_LINK_LIBRARIES
   src/mpc_waypoint_preview.cpp
@@ -133,6 +138,7 @@ target_link_libraries(mpc_controller_cpp
   ${PROJECT_NAME}_mpcc_progress
   ${PROJECT_NAME}_persistent_osqp
   ${PROJECT_NAME}_latest_only_worker
+  ${PROJECT_NAME}_overtake_decision_trace
   ${PROJECT_NAME}_mpc_state_prediction
   ${PROJECT_NAME}_runtime_speed_profile
   ${PROJECT_NAME}_mpc_waypoint_association
@@ -250,6 +256,15 @@ if(BUILD_TESTING)
   if(TARGET test_latest_only_worker)
     target_link_libraries(test_latest_only_worker
       ${PROJECT_NAME}_latest_only_worker
+    )
+  endif()
+
+  ament_add_gtest(test_overtake_decision_trace
+    test/test_overtake_decision_trace.cpp
+  )
+  if(TARGET test_overtake_decision_trace)
+    target_link_libraries(test_overtake_decision_trace
+      ${PROJECT_NAME}_overtake_decision_trace
     )
   endif()
 

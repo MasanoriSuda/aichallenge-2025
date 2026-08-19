@@ -11781,17 +11781,50 @@ resolve_dynamic_obstacle_lateral_escape_authority(
   const DynamicObstacleLateralEscapeAuthorityRequest & request) noexcept
 {
   DynamicObstacleLateralEscapeAuthorityResolution resolution;
+  if (!request.enabled) {
+    resolution.reason = DynamicObstacleLateralEscapeAuthorityReason::Disabled;
+    return resolution;
+  }
+  if (!request.dynamic_obstacle_target_active) {
+    resolution.reason = DynamicObstacleLateralEscapeAuthorityReason::TargetInactive;
+    return resolution;
+  }
+  if (!request.follow_state_active) {
+    resolution.reason = DynamicObstacleLateralEscapeAuthorityReason::FollowInactive;
+    return resolution;
+  }
+  if (!request.gap_planner_active) {
+    resolution.reason = DynamicObstacleLateralEscapeAuthorityReason::PlannerInactive;
+    return resolution;
+  }
+  if (!request.gap_planner_feasible) {
+    resolution.reason = DynamicObstacleLateralEscapeAuthorityReason::PlannerInfeasible;
+    return resolution;
+  }
+  if (!request.gap_planner_owns_lateral_bounds) {
+    resolution.reason =
+      DynamicObstacleLateralEscapeAuthorityReason::PlannerDoesNotOwnBounds;
+    return resolution;
+  }
+  if (request.emergency_brake_active) {
+    resolution.reason = DynamicObstacleLateralEscapeAuthorityReason::EmergencyBrake;
+    return resolution;
+  }
+  if (request.solver_recovery_active) {
+    resolution.reason = DynamicObstacleLateralEscapeAuthorityReason::SolverRecovery;
+    return resolution;
+  }
+  if (request.pass_side_sign != -1 && request.pass_side_sign != 1) {
+    resolution.reason = DynamicObstacleLateralEscapeAuthorityReason::InvalidSide;
+    return resolution;
+  }
   if (
-    !request.enabled || !request.dynamic_obstacle_target_active ||
-    !request.follow_state_active || !request.gap_planner_active ||
-    !request.gap_planner_feasible || !request.gap_planner_owns_lateral_bounds ||
-    request.emergency_brake_active || request.solver_recovery_active ||
-    (request.pass_side_sign != -1 && request.pass_side_sign != 1) ||
     !std::isfinite(request.current_lateral_m) ||
     !std::isfinite(request.target_lateral_m) ||
     !std::isfinite(request.minimum_lateral_shift_m) ||
     request.minimum_lateral_shift_m < 0.0)
   {
+    resolution.reason = DynamicObstacleLateralEscapeAuthorityReason::InvalidGeometry;
     return resolution;
   }
 
@@ -11800,18 +11833,59 @@ resolve_dynamic_obstacle_lateral_escape_authority(
   const bool shift_matches_side = request.pass_side_sign > 0 ?
     resolution.requested_lateral_shift_m > 0.0 :
     resolution.requested_lateral_shift_m < 0.0;
+  if (!shift_matches_side) {
+    resolution.reason =
+      DynamicObstacleLateralEscapeAuthorityReason::ShiftDirectionMismatch;
+    return resolution;
+  }
   if (
-    !shift_matches_side ||
     std::abs(resolution.requested_lateral_shift_m) +
     std::numeric_limits<double>::epsilon() < request.minimum_lateral_shift_m)
   {
+    resolution.reason = DynamicObstacleLateralEscapeAuthorityReason::ShiftBelowMinimum;
     return resolution;
   }
 
   resolution.active = true;
   resolution.suppress_generic_follow_cap = request.tracking_solution_qualified;
   resolution.pass_side_sign = request.pass_side_sign;
+  resolution.reason = DynamicObstacleLateralEscapeAuthorityReason::Accepted;
   return resolution;
+}
+
+const char * to_string(const DynamicObstacleLateralEscapeAuthorityReason reason) noexcept
+{
+  switch (reason) {
+    case DynamicObstacleLateralEscapeAuthorityReason::NotEvaluated:
+      return "not-evaluated";
+    case DynamicObstacleLateralEscapeAuthorityReason::Disabled:
+      return "disabled";
+    case DynamicObstacleLateralEscapeAuthorityReason::TargetInactive:
+      return "target-inactive";
+    case DynamicObstacleLateralEscapeAuthorityReason::FollowInactive:
+      return "follow-inactive";
+    case DynamicObstacleLateralEscapeAuthorityReason::PlannerInactive:
+      return "planner-inactive";
+    case DynamicObstacleLateralEscapeAuthorityReason::PlannerInfeasible:
+      return "planner-infeasible";
+    case DynamicObstacleLateralEscapeAuthorityReason::PlannerDoesNotOwnBounds:
+      return "planner-does-not-own-bounds";
+    case DynamicObstacleLateralEscapeAuthorityReason::EmergencyBrake:
+      return "emergency-brake";
+    case DynamicObstacleLateralEscapeAuthorityReason::SolverRecovery:
+      return "solver-recovery";
+    case DynamicObstacleLateralEscapeAuthorityReason::InvalidSide:
+      return "invalid-side";
+    case DynamicObstacleLateralEscapeAuthorityReason::InvalidGeometry:
+      return "invalid-geometry";
+    case DynamicObstacleLateralEscapeAuthorityReason::ShiftDirectionMismatch:
+      return "shift-direction-mismatch";
+    case DynamicObstacleLateralEscapeAuthorityReason::ShiftBelowMinimum:
+      return "shift-below-minimum";
+    case DynamicObstacleLateralEscapeAuthorityReason::Accepted:
+      return "accepted";
+  }
+  return "unknown";
 }
 
 DynamicObstacleLateralEscapeSolverBackoffStatus

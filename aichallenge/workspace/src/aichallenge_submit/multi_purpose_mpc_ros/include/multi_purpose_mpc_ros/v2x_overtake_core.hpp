@@ -4750,15 +4750,18 @@ struct RuntimeWallCenterContractionGoalRequest
   double previous_goal_m{};
   double physical_target_center_separation_m{};
   double nominal_target_center_separation_m{};
-  double wall_lower_bound_m{};
-  double wall_upper_bound_m{};
+  double preferred_wall_lower_bound_m{};
+  double preferred_wall_upper_bound_m{};
+  double physical_wall_lower_bound_m{};
+  double physical_wall_upper_bound_m{};
   double maximum_centerward_adjustment_m{};
 };
 
 struct RuntimeWallCenterContractionGoalResolution
 {
   bool valid{false};
-  bool used_physical_clearance{false};
+  bool used_physical_target_clearance{false};
+  bool used_physical_wall_clearance{false};
   double goal_m{};
   double guarded_target_lateral_m{};
   double applied_target_center_separation_m{};
@@ -4766,11 +4769,12 @@ struct RuntimeWallCenterContractionGoalResolution
 };
 
 /// Move an executing same-side Pass away from an approaching wall. Prefer the
-/// nominal target clearance; when it cannot produce any centerward motion,
-/// permit the physical body boundary only if the current bodies are separated
-/// and the ego remains on the selected side of the target. The returned goal
-/// still requires wall/kinematic preflight for the executable local prefix by
-/// the caller; it does not validate the remaining Pass or Return path.
+/// nominal target and preferred wall clearances. When that cannot produce any
+/// centerward motion, permit physical target and hard wall clearances only if
+/// the current bodies are separated and the ego remains on the selected side
+/// of the target. The returned goal still requires wall/kinematic preflight for
+/// the executable local prefix by the caller; it does not validate the
+/// remaining Pass or Return path.
 RuntimeWallCenterContractionGoalResolution resolve_runtime_wall_center_contraction_goal(
   const RuntimeWallCenterContractionGoalRequest & request) noexcept;
 

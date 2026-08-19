@@ -8973,13 +8973,16 @@ TEST(V2XOvertakeCoreWall, RuntimeWallContractionPrefersNominalClearance)
   request.previous_goal_m = 1.90;
   request.physical_target_center_separation_m = 1.45;
   request.nominal_target_center_separation_m = 1.55;
-  request.wall_lower_bound_m = -1.50;
-  request.wall_upper_bound_m = 1.80;
+  request.preferred_wall_lower_bound_m = -1.50;
+  request.preferred_wall_upper_bound_m = 1.80;
+  request.physical_wall_lower_bound_m = -1.70;
+  request.physical_wall_upper_bound_m = 2.00;
   request.maximum_centerward_adjustment_m = 0.35;
 
   const auto resolution = resolve_runtime_wall_center_contraction_goal(request);
   ASSERT_TRUE(resolution.valid);
-  EXPECT_FALSE(resolution.used_physical_clearance);
+  EXPECT_FALSE(resolution.used_physical_target_clearance);
+  EXPECT_FALSE(resolution.used_physical_wall_clearance);
   EXPECT_NEAR(resolution.goal_m, 1.55, 1e-9);
   EXPECT_NEAR(resolution.applied_target_center_separation_m, 1.55, 1e-9);
 }
@@ -9036,13 +9039,16 @@ TEST(V2XOvertakeCoreWall, RuntimeWallContractionFallsBackToPhysicalClearance)
   request.previous_goal_m = 1.60;
   request.physical_target_center_separation_m = 1.45;
   request.nominal_target_center_separation_m = 1.55;
-  request.wall_lower_bound_m = -1.50;
-  request.wall_upper_bound_m = 1.50;
+  request.preferred_wall_lower_bound_m = -1.50;
+  request.preferred_wall_upper_bound_m = 1.50;
+  request.physical_wall_lower_bound_m = -1.70;
+  request.physical_wall_upper_bound_m = 1.70;
   request.maximum_centerward_adjustment_m = 0.35;
 
   auto resolution = resolve_runtime_wall_center_contraction_goal(request);
   ASSERT_TRUE(resolution.valid);
-  EXPECT_TRUE(resolution.used_physical_clearance);
+  EXPECT_TRUE(resolution.used_physical_target_clearance);
+  EXPECT_FALSE(resolution.used_physical_wall_clearance);
   EXPECT_NEAR(resolution.goal_m, 1.45, 1e-9);
   EXPECT_NEAR(resolution.applied_target_center_separation_m, 1.45, 1e-9);
 
@@ -9054,6 +9060,105 @@ TEST(V2XOvertakeCoreWall, RuntimeWallContractionFallsBackToPhysicalClearance)
   request.current_target_lateral_m = 1.70;
   resolution = resolve_runtime_wall_center_contraction_goal(request);
   EXPECT_FALSE(resolution.valid);
+}
+
+TEST(V2XOvertakeCoreWall, RuntimeWallContractionFallsBackToPhysicalWallClearance)
+{
+  RuntimeWallCenterContractionGoalRequest request;
+  request.pass_side_sign = 1;
+  request.current_body_footprints_separated = true;
+  request.current_ego_lateral_m = 1.70;
+  request.current_target_lateral_m = 0.0;
+  request.predicted_target_lateral_m = 0.0;
+  request.previous_goal_m = 1.70;
+  request.physical_target_center_separation_m = 1.45;
+  request.nominal_target_center_separation_m = 1.55;
+  request.preferred_wall_lower_bound_m = -1.40;
+  request.preferred_wall_upper_bound_m = 1.40;
+  request.physical_wall_lower_bound_m = -1.60;
+  request.physical_wall_upper_bound_m = 1.60;
+  request.maximum_centerward_adjustment_m = 0.60;
+
+  const auto resolution = resolve_runtime_wall_center_contraction_goal(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.used_physical_target_clearance);
+  EXPECT_TRUE(resolution.used_physical_wall_clearance);
+  EXPECT_NEAR(resolution.goal_m, 1.55, 1e-9);
+  EXPECT_NEAR(resolution.applied_target_center_separation_m, 1.55, 1e-9);
+}
+
+TEST(V2XOvertakeCoreWall, RuntimeWallContractionCanUsePhysicalTargetAndWallClearance)
+{
+  RuntimeWallCenterContractionGoalRequest request;
+  request.pass_side_sign = 1;
+  request.current_body_footprints_separated = true;
+  request.current_ego_lateral_m = 1.70;
+  request.current_target_lateral_m = 0.0;
+  request.predicted_target_lateral_m = 0.0;
+  request.previous_goal_m = 1.70;
+  request.physical_target_center_separation_m = 1.45;
+  request.nominal_target_center_separation_m = 1.55;
+  request.preferred_wall_lower_bound_m = -1.40;
+  request.preferred_wall_upper_bound_m = 1.40;
+  request.physical_wall_lower_bound_m = -1.47;
+  request.physical_wall_upper_bound_m = 1.47;
+  request.maximum_centerward_adjustment_m = 0.60;
+
+  const auto resolution = resolve_runtime_wall_center_contraction_goal(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.used_physical_target_clearance);
+  EXPECT_TRUE(resolution.used_physical_wall_clearance);
+  EXPECT_NEAR(resolution.goal_m, 1.45, 1e-9);
+  EXPECT_NEAR(resolution.applied_target_center_separation_m, 1.45, 1e-9);
+}
+
+TEST(V2XOvertakeCoreWall, RuntimeWallContractionSurvivesUnavailablePreferredWallInterval)
+{
+  RuntimeWallCenterContractionGoalRequest request;
+  request.pass_side_sign = 1;
+  request.current_body_footprints_separated = true;
+  request.current_ego_lateral_m = 1.70;
+  request.current_target_lateral_m = 0.0;
+  request.predicted_target_lateral_m = 0.0;
+  request.previous_goal_m = 1.70;
+  request.physical_target_center_separation_m = 1.45;
+  request.nominal_target_center_separation_m = 1.55;
+  request.preferred_wall_lower_bound_m = 1.50;
+  request.preferred_wall_upper_bound_m = 1.40;
+  request.physical_wall_lower_bound_m = -1.60;
+  request.physical_wall_upper_bound_m = 1.60;
+  request.maximum_centerward_adjustment_m = 0.60;
+
+  const auto resolution = resolve_runtime_wall_center_contraction_goal(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.used_physical_target_clearance);
+  EXPECT_TRUE(resolution.used_physical_wall_clearance);
+  EXPECT_NEAR(resolution.goal_m, 1.55, 1e-9);
+}
+
+TEST(V2XOvertakeCoreWall, RuntimeWallContractionPhysicalWallFallbackFailsClosed)
+{
+  RuntimeWallCenterContractionGoalRequest request;
+  request.pass_side_sign = 1;
+  request.current_body_footprints_separated = false;
+  request.current_ego_lateral_m = 1.70;
+  request.current_target_lateral_m = 0.0;
+  request.predicted_target_lateral_m = 0.0;
+  request.previous_goal_m = 1.70;
+  request.physical_target_center_separation_m = 1.45;
+  request.nominal_target_center_separation_m = 1.55;
+  request.preferred_wall_lower_bound_m = -1.40;
+  request.preferred_wall_upper_bound_m = 1.40;
+  request.physical_wall_lower_bound_m = -1.60;
+  request.physical_wall_upper_bound_m = 1.60;
+  request.maximum_centerward_adjustment_m = 0.60;
+
+  EXPECT_FALSE(resolve_runtime_wall_center_contraction_goal(request).valid);
+
+  request.current_body_footprints_separated = true;
+  request.physical_wall_lower_bound_m = 1.0;
+  request.physical_wall_upper_bound_m = -1.0;
+  EXPECT_FALSE(resolve_runtime_wall_center_contraction_goal(request).valid);
 }
 
 TEST(V2XOvertakeCoreWall, RuntimePreplanFallsBackToContractionThenReturn)

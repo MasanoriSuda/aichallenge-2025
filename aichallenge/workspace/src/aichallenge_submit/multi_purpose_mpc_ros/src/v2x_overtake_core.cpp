@@ -8525,9 +8525,9 @@ RuntimeWallCenterContractionGoalResolution resolve_runtime_wall_center_contracti
     !finite_non_negative(request.nominal_target_center_separation_m) ||
     request.nominal_target_center_separation_m + 1e-9 <
     request.physical_target_center_separation_m ||
-    !std::isfinite(request.wall_lower_bound_m) ||
-    !std::isfinite(request.wall_upper_bound_m) ||
-    request.wall_upper_bound_m < request.wall_lower_bound_m ||
+    !std::isfinite(request.physical_wall_lower_bound_m) ||
+    !std::isfinite(request.physical_wall_upper_bound_m) ||
+    request.physical_wall_upper_bound_m < request.physical_wall_lower_bound_m ||
     !finite_non_negative(request.maximum_centerward_adjustment_m))
   {
     resolution.reason = "invalid center contraction inputs";
@@ -8540,15 +8540,17 @@ RuntimeWallCenterContractionGoalResolution resolve_runtime_wall_center_contracti
   const double desired_goal = request.previous_goal_m -
     static_cast<double>(request.pass_side_sign) *
     request.maximum_centerward_adjustment_m;
-  const auto centerward_candidate = [&](const double separation_m) {
+  const auto centerward_candidate = [&] (
+      const double separation_m, const double wall_lower_bound_m,
+      const double wall_upper_bound_m) {
       return resolve_feasible_pass_side_lateral_goal(
         FeasiblePassSideLateralGoalRequest{
           request.pass_side_sign,
           desired_goal,
           resolution.guarded_target_lateral_m,
           separation_m,
-          request.wall_lower_bound_m,
-          request.wall_upper_bound_m,
+          wall_lower_bound_m,
+          wall_upper_bound_m,
           true});
     };
   const auto is_bounded_centerward_goal = [&](
@@ -8562,39 +8564,76 @@ RuntimeWallCenterContractionGoalResolution resolve_runtime_wall_center_contracti
              std::abs(candidate.goal_m) + 0.01 < std::abs(request.previous_goal_m);
     };
 
-  const auto nominal_candidate = centerward_candidate(
-    request.nominal_target_center_separation_m);
-  if (is_bounded_centerward_goal(nominal_candidate)) {
-    resolution.valid = true;
-    resolution.goal_m = nominal_candidate.goal_m;
-    resolution.applied_target_center_separation_m =
-      request.nominal_target_center_separation_m;
-    resolution.reason = "nominal target clearance center contraction";
-    return resolution;
-  }
-
   const double current_selected_side_offset =
     static_cast<double>(request.pass_side_sign) *
     (request.current_ego_lateral_m - request.current_target_lateral_m);
   const bool physical_fallback_context =
     request.current_body_footprints_separated &&
     current_selected_side_offset > 1e-6;
-  if (physical_fallback_context) {
-    const auto physical_candidate = centerward_candidate(
-      request.physical_target_center_separation_m);
-    if (is_bounded_centerward_goal(physical_candidate)) {
+  const bool preferred_wall_interval_valid =
+    std::isfinite(request.preferred_wall_lower_bound_m) &&
+    std::isfinite(request.preferred_wall_upper_bound_m) &&
+    request.preferred_wall_upper_bound_m >= request.preferred_wall_lower_bound_m;
+  const auto try_candidate = [&] (
+      const double target_separation_m, const double wall_lower_bound_m,
+      const double wall_upper_bound_m, const bool physical_target_clearance,
+      const bool physical_wall_clearance, const char * reason) {
+      const auto candidate = centerward_candidate(
+        target_separation_m, wall_lower_bound_m, wall_upper_bound_m);
+      if (!is_bounded_centerward_goal(candidate)) {
+        return false;
+      }
       resolution.valid = true;
-      resolution.used_physical_clearance = true;
-      resolution.goal_m = physical_candidate.goal_m;
-      resolution.applied_target_center_separation_m =
-        request.physical_target_center_separation_m;
-      resolution.reason = "physical target clearance center contraction";
+      resolution.used_physical_target_clearance = physical_target_clearance;
+      resolution.used_physical_wall_clearance = physical_wall_clearance;
+      resolution.goal_m = candidate.goal_m;
+      resolution.applied_target_center_separation_m = target_separation_m;
+      resolution.reason = reason;
+      return true;
+    };
+
+  if (preferred_wall_interval_valid) {
+    if (try_candidate(
+        request.nominal_target_center_separation_m,
+        request.preferred_wall_lower_bound_m,
+        request.preferred_wall_upper_bound_m, false, false,
+        "nominal target and preferred wall clearance center contraction"))
+    {
+      return resolution;
+    }
+    if (
+      physical_fallback_context &&
+      try_candidate(
+        request.physical_target_center_separation_m,
+        request.preferred_wall_lower_bound_m,
+        request.preferred_wall_upper_bound_m, true, false,
+        "physical target and preferred wall clearance center contraction"))
+    {
+      return resolution;
+    }
+  }
+
+  if (physical_fallback_context) {
+    if (try_candidate(
+        request.nominal_target_center_separation_m,
+        request.physical_wall_lower_bound_m,
+        request.physical_wall_upper_bound_m, false, true,
+        "nominal target and physical wall clearance center contraction"))
+    {
+      return resolution;
+    }
+    if (try_candidate(
+        request.physical_target_center_separation_m,
+        request.physical_wall_lower_bound_m,
+        request.physical_wall_upper_bound_m, true, true,
+        "physical target and wall clearance center contraction"))
+    {
       return resolution;
     }
   }
 
   resolution.reason = physical_fallback_context ?
-    "no wall-feasible physical-clearance centerward goal" :
+    "no wall-feasible physical target/wall clearance centerward goal" :
     "physical-clearance fallback context unavailable";
   return resolution;
 }

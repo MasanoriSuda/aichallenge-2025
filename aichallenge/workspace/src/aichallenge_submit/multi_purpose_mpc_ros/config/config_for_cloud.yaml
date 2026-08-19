@@ -772,13 +772,13 @@ mpc:
   v2x_overtake_pass_entry_physical_gate_lease_distance: 12.0 # [m]
   # Minimum extra band; robust planning currently raises total warning clearance to about 0.40 m.
   v2x_overtake_runtime_wall_preplan_reserve: 0.10 # [m]
-  v2x_overtake_runtime_wall_preplan_lookahead_sec: 0.80 # [s] path-aware early warning; does not change the hard wall guard
+  v2x_overtake_runtime_wall_preplan_lookahead_sec: 1.20 # [s] start a same-side lateral escape before the wall warning becomes last-moment
   v2x_overtake_runtime_wall_preplan_prediction_samples: 8
   v2x_overtake_runtime_wall_replan_cooldown_sec: 0.50 # [s] suppress warning-boundary replan chatter
   v2x_overtake_runtime_wall_replan_max_count: 2 # bounded same-side wall replans per Mission
   v2x_overtake_runtime_wall_fallback_delay_sec: 0.025 # [s] one 40 Hz cycle for a fresh Mission, then evaluate the local prefix
   v2x_overtake_runtime_wall_center_contraction_enabled: true # retain side and nominal vehicle gap while moving the frozen goal inward
-  v2x_overtake_runtime_wall_center_contraction_max_adjustment: 0.35 # [m/replan] bounded inward correction, still fully preflighted
+  v2x_overtake_runtime_wall_center_contraction_max_adjustment: 0.60 # [m/replan] search range only; the selected prefix still passes wall/footprint/ay preflight
   v2x_overtake_runtime_wall_prefix_terminal_distance: 0.25 # [m] consume a validated local escape prefix almost to its endpoint
   v2x_overtake_runtime_wall_speed_preserving_return_enabled: true # avoid Recovery when the target is safely ahead and Return is feasible
   v2x_overtake_runtime_wall_return_min_front_distance: 4.0 # [m] minimum target lead before warning-driven Return

@@ -1218,13 +1218,13 @@ struct OvertakeLineConfig
   double pass_entry_physical_gate_lease_sec{2.5};
   double pass_entry_physical_gate_lease_distance{12.0};
   double runtime_wall_preplan_reserve{0.10};
-  double runtime_wall_preplan_lookahead_sec{0.80};
+  double runtime_wall_preplan_lookahead_sec{1.20};
   int runtime_wall_preplan_prediction_samples{8};
   double runtime_wall_replan_cooldown_sec{0.50};
   int runtime_wall_replan_max_count{2};
   double runtime_wall_fallback_delay_sec{0.025};
   bool runtime_wall_center_contraction_enabled{true};
-  double runtime_wall_center_contraction_max_adjustment{0.35};
+  double runtime_wall_center_contraction_max_adjustment{0.60};
   double runtime_wall_prefix_terminal_distance{0.25};
   bool runtime_wall_speed_preserving_return_enabled{true};
   double runtime_wall_return_min_front_distance{4.0};
@@ -24260,8 +24260,11 @@ private:
       !runtime_wall_hard_fault &&
       runtime_wall_warning_elapsed_sec + kEps >=
       line_cfg.runtime_wall_fallback_delay_sec;
-    bool runtime_wall_center_contraction_used_physical_clearance = false;
+    bool runtime_wall_center_contraction_used_physical_target_clearance = false;
+    bool runtime_wall_center_contraction_used_physical_wall_clearance = false;
     double runtime_wall_center_contraction_separation_m =
+      std::numeric_limits<double>::quiet_NaN();
+    double runtime_wall_center_contraction_wall_clearance_m =
       std::numeric_limits<double>::quiet_NaN();
     double runtime_wall_escape_prefix_distance_m =
       std::numeric_limits<double>::quiet_NaN();
@@ -24353,11 +24356,22 @@ private:
       {
         runtime_wall_center_contraction_reject_reason = "invalid contraction inputs";
       } else {
-        double contraction_lower = contraction_lb[0] + planning_wall_clearance;
-        double contraction_upper = contraction_ub[0] - planning_wall_clearance;
-        if (contraction_upper < contraction_lower) {
+        const double preferred_contraction_lower =
+          contraction_lb[0] + planning_wall_clearance;
+        const double preferred_contraction_upper =
+          contraction_ub[0] - planning_wall_clearance;
+        const bool elastic_wall_clearance_allowed =
+          line_cfg.receding_horizon_elastic_clearance_enabled &&
+          behavior_output.locked_target_current_body_footprints_separated;
+        const double physical_contraction_lower = contraction_lb[0] +
+          (elastic_wall_clearance_allowed ?
+          min_wall_clearance : planning_wall_clearance);
+        const double physical_contraction_upper = contraction_ub[0] -
+          (elastic_wall_clearance_allowed ?
+          min_wall_clearance : planning_wall_clearance);
+        if (physical_contraction_upper < physical_contraction_lower) {
           runtime_wall_center_contraction_reject_reason =
-            "robust wall interval unavailable";
+            "hard wall interval unavailable";
         } else {
           const auto contracted_goal =
             overtake_core::resolve_runtime_wall_center_contraction_goal(
@@ -24370,16 +24384,23 @@ private:
               previous_goal,
               physical_target_separation,
               nominal_target_separation,
-              contraction_lower,
-              contraction_upper,
+              preferred_contraction_lower,
+              preferred_contraction_upper,
+              physical_contraction_lower,
+              physical_contraction_upper,
               maximum_adjustment});
           if (!contracted_goal.valid) {
             runtime_wall_center_contraction_reject_reason = contracted_goal.reason;
           } else {
-            runtime_wall_center_contraction_used_physical_clearance =
-              contracted_goal.used_physical_clearance;
+            runtime_wall_center_contraction_used_physical_target_clearance =
+              contracted_goal.used_physical_target_clearance;
+            runtime_wall_center_contraction_used_physical_wall_clearance =
+              contracted_goal.used_physical_wall_clearance;
             runtime_wall_center_contraction_separation_m =
               contracted_goal.applied_target_center_separation_m;
+            runtime_wall_center_contraction_wall_clearance_m =
+              contracted_goal.used_physical_wall_clearance ?
+              min_wall_clearance : planning_wall_clearance;
             const auto contraction_preflight = evaluate_overtake_line_entry_preflight(
               ref_wp_id, contraction_plan_N, contraction_lb, contraction_ub,
               pass_side, current_ey, contracted_goal.guarded_target_lateral_m,
@@ -24662,7 +24683,7 @@ private:
             "OvertakeLine runtime wall escape prefix accepted: target=%s, "
             "side=%d, goal=%.2f->%.2f, adjustment=%.2f, elapsed=%.2f s, "
             "prefix=%.2f/available=%.2f m, ttc=%.2f s, "
-            "clearance=%s/%.2f m, count=%d/%d, "
+            "clearance=target:%s/%.2f m,wall:%s/%.2f m, count=%d/%d, "
             "front_cap_preserved=%d, wp_id=%d",
             overtake_line_state_.target_vehicle_id.c_str(),
             overtake_line_state_.pass_side_sign, previous_goal,
@@ -24673,9 +24694,12 @@ private:
             runtime_wall_escape_prefix_distance_m,
             runtime_wall_escape_available_distance_m,
             actual_wall_preplan_prediction_ttc_sec,
-            runtime_wall_center_contraction_used_physical_clearance ?
+            runtime_wall_center_contraction_used_physical_target_clearance ?
             "physical" : "nominal",
             runtime_wall_center_contraction_separation_m,
+            runtime_wall_center_contraction_used_physical_wall_clearance ?
+            "physical" : "preferred",
+            runtime_wall_center_contraction_wall_clearance_m,
             overtake_line_state_.mission_runtime_wall_replan_count,
             line_cfg.runtime_wall_replan_max_count,
             preserve_front_cap_release ? 1 : 0, model->wp_id);
@@ -34893,7 +34917,7 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_line.runtime_wall_preplan_lookahead_sec = std::max(
     0.0,
     mpc["v2x_overtake_runtime_wall_preplan_lookahead_sec"] ?
-    mpc["v2x_overtake_runtime_wall_preplan_lookahead_sec"].as<double>() : 0.80);
+    mpc["v2x_overtake_runtime_wall_preplan_lookahead_sec"].as<double>() : 1.20);
   cfg.mpc.v2x_behavior.overtake_line.runtime_wall_preplan_prediction_samples = std::max(
     1,
     mpc["v2x_overtake_runtime_wall_preplan_prediction_samples"] ?
@@ -34918,7 +34942,7 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_runtime_wall_center_contraction_max_adjustment"] ?
     mpc["v2x_overtake_runtime_wall_center_contraction_max_adjustment"].as<double>() :
-    0.35);
+    0.60);
   cfg.mpc.v2x_behavior.overtake_line.runtime_wall_prefix_terminal_distance = std::max(
     0.0,
     mpc["v2x_overtake_runtime_wall_prefix_terminal_distance"] ?

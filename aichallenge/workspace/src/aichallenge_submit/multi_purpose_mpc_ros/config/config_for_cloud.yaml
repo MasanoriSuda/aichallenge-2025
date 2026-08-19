@@ -665,6 +665,12 @@ mpc:
   v2x_overtake_mpcc_frenet_dp_longitudinal_timing_enabled: true # solve attack/intermediate/hold target timing before rejecting the lateral DP corridor
   v2x_overtake_mpcc_frenet_dp_longitudinal_cost_slack: 0.25 # fastest profile may win only this far above the best normalized lateral DP cost
   v2x_overtake_safe_separation_soft_prediction_grace_sec: 0.25 # [s] prediction-only loss grace after committed forward completion; hard faults remain immediate
+  v2x_overtake_safe_separation_soft_abort_replan_grace_sec: 0.25 # [s] one-shot same-side replan lease after a soft abort
+  v2x_overtake_safe_separation_soft_abort_replan_grace_distance: 1.50 # [m] the same one-shot lease; never rearmed in one episode
+  v2x_overtake_safe_separation_forward_stall_enabled: true # stop treating a contact-penalty-like speed collapse as normal Pass progress
+  v2x_overtake_safe_separation_forward_stall_prior_speed: 3.0 # [m/s] require prior momentum to avoid classifying a normal low-speed start
+  v2x_overtake_safe_separation_forward_stall_max_speed: 1.6 # [m/s]
+  v2x_overtake_safe_separation_forward_stall_confirm_sec: 0.75 # [s] continuous low speed with no fresh target-relative progress
   # Once the target is behind and forward progress remains fresh, let distance/rear-clear
   # terminate the pass instead of a collision-penalty-sensitive wall-clock timeout.
   v2x_overtake_safe_separation_rearward_progress_time_grace_enabled: true
@@ -793,6 +799,7 @@ mpc:
   v2x_overtake_line_max_target_change: 0.04   # [m/cycle] smooth target goal updates across cycles
   v2x_overtake_receding_horizon_enabled: true # optimize the complete ShiftOut/Pass lateral sample sequence every MPC cycle
   v2x_overtake_receding_horizon_elastic_clearance_enabled: true # robust target/wall margins are preferred; physical body + 0.20 m hard wall remain mandatory
+  v2x_overtake_receding_horizon_min_target_surface_reserve: 0.10 # [m] execution floor above the physical vehicle-body boundary
   v2x_overtake_receding_horizon_iterations: 12
   v2x_overtake_receding_horizon_max_reference_adjustment: 0.35 # [m] trust region around the admitted Mission path
   v2x_overtake_receding_horizon_outer_bias: 0.20 # [m] curve-aware bias; physical selected-side separation remains hard

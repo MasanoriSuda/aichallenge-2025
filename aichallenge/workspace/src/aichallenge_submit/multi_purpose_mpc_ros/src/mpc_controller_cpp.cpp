@@ -1239,6 +1239,7 @@ struct OvertakeLineConfig
   double max_target_change{0.25};
   bool receding_horizon_enabled{false};
   bool receding_horizon_elastic_clearance_enabled{false};
+  double receding_horizon_min_target_surface_reserve{0.10};
   int receding_horizon_iterations{12};
   double receding_horizon_max_reference_adjustment{0.35};
   double receding_horizon_outer_bias{0.20};
@@ -1415,6 +1416,12 @@ struct OvertakeLineConfig
   bool mpcc_frenet_dp_longitudinal_timing_enabled{false};
   double mpcc_frenet_dp_longitudinal_cost_slack{0.25};
   double safe_separation_soft_prediction_grace_sec{0.25};
+  double safe_separation_soft_abort_replan_grace_sec{0.25};
+  double safe_separation_soft_abort_replan_grace_distance{1.50};
+  bool safe_separation_forward_stall_enabled{true};
+  double safe_separation_forward_stall_prior_speed{3.0};
+  double safe_separation_forward_stall_max_speed{1.6};
+  double safe_separation_forward_stall_confirm_sec{0.75};
   bool safe_separation_full_speed_forward_escape_enabled{false};
   bool safe_separation_rearward_progress_time_grace_enabled{false};
   bool safe_separation_progress_loss_disengage_enabled{false};
@@ -2441,6 +2448,14 @@ struct OvertakeLineState
   int pass_horizon_safe_separation_progress_extension_count{0};
   double pass_horizon_safe_separation_max_sec{};
   double pass_horizon_safe_separation_max_distance{};
+  bool pass_horizon_safe_separation_soft_abort_replan_lease_active{false};
+  bool pass_horizon_safe_separation_soft_abort_replan_lease_consumed{false};
+  double pass_horizon_safe_separation_soft_abort_replan_start_sec{
+    std::numeric_limits<double>::quiet_NaN()};
+  double pass_horizon_safe_separation_soft_abort_replan_start_distance{};
+  double pass_horizon_safe_separation_peak_speed_mps{};
+  double pass_horizon_safe_separation_low_speed_since_sec{
+    std::numeric_limits<double>::quiet_NaN()};
   double pass_runtime_completion_replan_last_request_sec{
     -std::numeric_limits<double>::infinity()};
   bool pass_runtime_completion_replan_pending{false};
@@ -17975,6 +17990,17 @@ private:
       overtake_line_state_.pass_horizon_safe_separation_progress_extension_count = 0;
       overtake_line_state_.pass_horizon_safe_separation_max_sec = 0.0;
       overtake_line_state_.pass_horizon_safe_separation_max_distance = 0.0;
+      overtake_line_state_.pass_horizon_safe_separation_soft_abort_replan_lease_active =
+        false;
+      overtake_line_state_.pass_horizon_safe_separation_soft_abort_replan_lease_consumed =
+        false;
+      overtake_line_state_.pass_horizon_safe_separation_soft_abort_replan_start_sec =
+        std::numeric_limits<double>::quiet_NaN();
+      overtake_line_state_
+      .pass_horizon_safe_separation_soft_abort_replan_start_distance = 0.0;
+      overtake_line_state_.pass_horizon_safe_separation_peak_speed_mps = 0.0;
+      overtake_line_state_.pass_horizon_safe_separation_low_speed_since_sec =
+        std::numeric_limits<double>::quiet_NaN();
       overtake_line_state_.pass_runtime_completion_replan_pending = false;
       overtake_line_state_.pass_runtime_completion_replan_pending_since_sec =
         std::numeric_limits<double>::quiet_NaN();
@@ -18544,6 +18570,16 @@ private:
     overtake_line_state_.pass_horizon_safe_separation_progress_extension_count = 0;
     overtake_line_state_.pass_horizon_safe_separation_max_sec = 0.0;
     overtake_line_state_.pass_horizon_safe_separation_max_distance = 0.0;
+    overtake_line_state_.pass_horizon_safe_separation_soft_abort_replan_lease_active =
+      false;
+    overtake_line_state_.pass_horizon_safe_separation_soft_abort_replan_lease_consumed =
+      false;
+    overtake_line_state_.pass_horizon_safe_separation_soft_abort_replan_start_sec =
+      std::numeric_limits<double>::quiet_NaN();
+    overtake_line_state_.pass_horizon_safe_separation_soft_abort_replan_start_distance = 0.0;
+    overtake_line_state_.pass_horizon_safe_separation_peak_speed_mps = 0.0;
+    overtake_line_state_.pass_horizon_safe_separation_low_speed_since_sec =
+      std::numeric_limits<double>::quiet_NaN();
     overtake_line_state_.pass_runtime_completion_replan_pending = false;
     overtake_line_state_.pass_runtime_completion_replan_pending_since_sec =
       std::numeric_limits<double>::quiet_NaN();
@@ -20449,8 +20485,9 @@ private:
         return_phase});
     const double significant_curvature = std::max(
       0.0, cfg.v2x_behavior.overtake_max_curvature);
-    const double physical_target_center_separation = std::max(
-      0.0, cfg.v2x_gap.vehicle_radius);
+    const double physical_target_center_separation =
+      std::max(0.0, cfg.v2x_gap.vehicle_radius) +
+      std::max(0.0, line_cfg.receding_horizon_min_target_surface_reserve);
     const double configured_target_center_separation = std::max(
       physical_target_center_separation,
       cfg.v2x_behavior.overtake_line_min_target_separation);
@@ -20720,7 +20757,8 @@ private:
           target_bounds.applied_center_separation_m;
         // The optimizer should prefer the admitted robust separation, but
         // static-map and reachability corrections are execution-safe down to
-        // the physical body boundary. Legacy mode retains the old hard use of
+        // the physical body boundary plus the configured execution reserve.
+        // Legacy mode retains the old hard use of
         // the initially selected robust/configured separation.
         target_execution_constraint.hard_center_separation_m =
           elastic_clearance_enabled ? physical_target_center_separation :
@@ -20767,7 +20805,8 @@ private:
     if (robust_target_separation_degraded || target_trust_region_expanded) {
       result.fallback = true;
       if (physical_target_separation_used) {
-        result.fallback_reason = "robust target separation degraded to physical";
+        result.fallback_reason =
+          "robust target separation degraded to execution floor";
       } else if (robust_target_separation_degraded) {
         result.fallback_reason = "robust target separation degraded to configured";
       } else {
@@ -21326,7 +21365,7 @@ private:
       append_fallback_reason("robust wall reserve degraded to configured hard reserve");
     }
     if (result.soft_target_clearance_release_used) {
-      append_fallback_reason("robust target clearance degraded to physical body boundary");
+      append_fallback_reason("robust target clearance degraded to execution floor");
     }
     if (result.soft_trust_region_release_used) {
       append_fallback_reason("post-validation left soft Mission trust region");
@@ -21892,6 +21931,18 @@ private:
       locked_target_longitudinal;
     overtake_line_state_.pass_horizon_safe_separation_last_progress_sec = now_sec;
     overtake_line_state_.pass_horizon_safe_separation_progress_extension_count = 0;
+    overtake_line_state_.pass_horizon_safe_separation_soft_abort_replan_lease_active =
+      false;
+    overtake_line_state_.pass_horizon_safe_separation_soft_abort_replan_lease_consumed =
+      false;
+    overtake_line_state_.pass_horizon_safe_separation_soft_abort_replan_start_sec =
+      std::numeric_limits<double>::quiet_NaN();
+    overtake_line_state_.pass_horizon_safe_separation_soft_abort_replan_start_distance =
+      pass_traveled;
+    overtake_line_state_.pass_horizon_safe_separation_peak_speed_mps =
+      std::max(0.0, current_speed_mps_);
+    overtake_line_state_.pass_horizon_safe_separation_low_speed_since_sec =
+      std::numeric_limits<double>::quiet_NaN();
     overtake_line_state_.pass_rearward_progress_loss_disengage_active = false;
     overtake_line_state_.pass_rearward_progress_loss_disengage_start_sec =
       std::numeric_limits<double>::quiet_NaN();
@@ -28540,6 +28591,38 @@ private:
             std::max(0.0, current_speed_mps_),
             std::max(0.0, locked_target_speed) +
             std::max(0.0, line_cfg.safe_separation_speed_delta)));
+        overtake_line_state_.pass_horizon_safe_separation_peak_speed_mps = std::max(
+          overtake_line_state_.pass_horizon_safe_separation_peak_speed_mps,
+          std::max(0.0, current_speed_mps_));
+        const bool safe_separation_low_speed_without_progress =
+          line_cfg.safe_separation_forward_stall_enabled &&
+          safe_separation_forward_escape_allowed &&
+          overtake_line_state_.pass_horizon_safe_separation_peak_speed_mps + kEps >=
+          line_cfg.safe_separation_forward_stall_prior_speed &&
+          std::max(0.0, current_speed_mps_) <=
+          line_cfg.safe_separation_forward_stall_max_speed + kEps &&
+          !safe_separation_fresh_forward_progress;
+        if (safe_separation_low_speed_without_progress) {
+          if (!std::isfinite(
+              overtake_line_state_.pass_horizon_safe_separation_low_speed_since_sec))
+          {
+            overtake_line_state_.pass_horizon_safe_separation_low_speed_since_sec = now_sec;
+          }
+        } else {
+          overtake_line_state_.pass_horizon_safe_separation_low_speed_since_sec =
+            std::numeric_limits<double>::quiet_NaN();
+        }
+        const double safe_separation_low_speed_elapsed =
+          safe_separation_low_speed_without_progress && std::isfinite(
+          overtake_line_state_.pass_horizon_safe_separation_low_speed_since_sec) ?
+          std::max(
+            0.0,
+            now_sec -
+            overtake_line_state_.pass_horizon_safe_separation_low_speed_since_sec) : 0.0;
+        const bool safe_separation_forward_motion_stalled =
+          safe_separation_low_speed_without_progress &&
+          safe_separation_low_speed_elapsed + kEps >=
+          line_cfg.safe_separation_forward_stall_confirm_sec;
         const auto safe_separation_dynamic_completion =
           overtake_core::resolve_dynamic_completion_extension(
           overtake_core::DynamicCompletionExtensionRequest{
@@ -28639,7 +28722,19 @@ private:
             line_cfg.safe_separation_progress_loss_regression_distance,
             safe_separation_disengage_elapsed,
             line_cfg.safe_separation_disengage_max_sec,
-            line_cfg.safe_separation_disengage_speed_delta});
+            line_cfg.safe_separation_disengage_speed_delta,
+            safe_separation_forward_motion_stalled});
+        if (
+          safe_separation.action != overtake_core::SafeSeparationAction::Abort &&
+          overtake_line_state_
+          .pass_horizon_safe_separation_soft_abort_replan_lease_active)
+        {
+          // The horizon recovered before the bounded lease expired. End the
+          // lease, but keep it consumed so this SafeSeparation episode cannot
+          // manufacture another grace window later.
+          overtake_line_state_
+          .pass_horizon_safe_separation_soft_abort_replan_lease_active = false;
+        }
         if (safe_separation.action == overtake_core::SafeSeparationAction::KeepSameSide) {
           safe_separation_velocity_reference =
             safe_separation.target_velocity_reference_mps;
@@ -28822,33 +28917,42 @@ private:
             FollowPrepareCause::TacticalRevalidation);
           return output;
         } else if (safe_separation.action == overtake_core::SafeSeparationAction::Abort) {
-          RCLCPP_WARN(
-            rclcpp::get_logger("mpc_controller"),
-            "OvertakeLine SafeSeparation abort: episode=%lu, reason=%s, "
-            "target=%s, side=%d, "
-            "target_s=%.2f, forward_allowed=%d, progress=%.2f m, "
-            "progress_age=%.2f s, prediction=%d/sweep_clear=%d, corridor_blocked=%d, "
-            "prediction_grace=%d/%.2f s, local=%.2f s/%.2f m, "
-            "active_pass=%.2f s/%.2f m, count=%d/%d",
-            static_cast<unsigned long>(overtake_line_state_.episode_id),
-            overtake_core::to_string(safe_separation.reason),
-            overtake_line_state_.target_vehicle_id.c_str(),
-            overtake_line_state_.pass_side_sign,
-            locked_target_longitudinal,
-            safe_separation_forward_escape_allowed ? 1 : 0,
-            safe_separation_forward_progress,
-            safe_separation_progress_age,
-            behavior_output.locked_target_footprint_prediction_valid ? 1 : 0,
-            behavior_output.locked_target_predicted_body_footprint_sweep_separated ? 1 : 0,
-            behavior_output.overtake_execution_corridor_blocked ? 1 : 0,
-            short_horizon_guard.prediction_grace_active ? 1 : 0,
-            prediction_guard_loss_elapsed_sec,
-            safe_separation_elapsed,
-            safe_separation_traveled,
-            pass_elapsed,
-            pass_traveled,
-            overtake_line_state_.pass_horizon_safe_separation_progress_extension_count,
-            line_cfg.safe_separation_progress_extension_max_count);
+          const bool soft_maneuver_failure =
+            overtake_core::is_soft_safe_separation_abort_reason(
+            safe_separation.reason);
+          if (
+            !soft_maneuver_failure ||
+            !overtake_line_state_
+            .pass_horizon_safe_separation_soft_abort_replan_lease_active)
+          {
+            RCLCPP_WARN(
+              rclcpp::get_logger("mpc_controller"),
+              "OvertakeLine SafeSeparation abort: episode=%lu, reason=%s, "
+              "target=%s, side=%d, "
+              "target_s=%.2f, forward_allowed=%d, progress=%.2f m, "
+              "progress_age=%.2f s, prediction=%d/sweep_clear=%d, corridor_blocked=%d, "
+              "prediction_grace=%d/%.2f s, local=%.2f s/%.2f m, "
+              "active_pass=%.2f s/%.2f m, count=%d/%d",
+              static_cast<unsigned long>(overtake_line_state_.episode_id),
+              overtake_core::to_string(safe_separation.reason),
+              overtake_line_state_.target_vehicle_id.c_str(),
+              overtake_line_state_.pass_side_sign,
+              locked_target_longitudinal,
+              safe_separation_forward_escape_allowed ? 1 : 0,
+              safe_separation_forward_progress,
+              safe_separation_progress_age,
+              behavior_output.locked_target_footprint_prediction_valid ? 1 : 0,
+              behavior_output.locked_target_predicted_body_footprint_sweep_separated ? 1 : 0,
+              behavior_output.overtake_execution_corridor_blocked ? 1 : 0,
+              short_horizon_guard.prediction_grace_active ? 1 : 0,
+              prediction_guard_loss_elapsed_sec,
+              safe_separation_elapsed,
+              safe_separation_traveled,
+              pass_elapsed,
+              pass_traveled,
+              overtake_line_state_.pass_horizon_safe_separation_progress_extension_count,
+              line_cfg.safe_separation_progress_extension_max_count);
+          }
           const std::string abort_reason =
             std::string{"SafeSeparation aborted: "} +
             overtake_core::to_string(safe_separation.reason);
@@ -28857,14 +28961,14 @@ private:
             overtake_core::SafeSeparationReason::AbsoluteTimeLimit ||
             safe_separation.reason ==
             overtake_core::SafeSeparationReason::AbsoluteDistanceLimit;
-          const bool soft_maneuver_failure =
-            overtake_core::is_soft_safe_separation_abort_reason(
-            safe_separation.reason);
           const bool current_candidate_allowed =
             safe_separation.reason !=
-            overtake_core::SafeSeparationReason::ShortHorizonUnsafe;
+            overtake_core::SafeSeparationReason::ShortHorizonUnsafe &&
+            safe_separation.reason !=
+            overtake_core::SafeSeparationReason::ForwardMotionStall;
           const bool fresh_same_side_soft_abort_replan_available =
-            soft_maneuver_failure && !tactical_reselect_hard_fault &&
+            current_candidate_allowed && soft_maneuver_failure &&
+            !tactical_reselect_hard_fault &&
             tactical_reselect_target_continuous &&
             behavior_output.locked_target_current_body_footprints_separated &&
             behavior_output.locked_target_footprint_prediction_valid &&
@@ -28882,6 +28986,8 @@ private:
               fresh_same_side_candidate.value(), now_sec, current_ey,
               true, true, false, preserve_front_cap_release);
             if (replaced) {
+              overtake_line_state_
+              .pass_horizon_safe_separation_soft_abort_replan_lease_active = false;
               RCLCPP_WARN(
                 rclcpp::get_logger("mpc_controller"),
                 "OvertakeLine SafeSeparation soft abort same-side replan accepted: "
@@ -28895,14 +29001,19 @@ private:
             }
           }
           if (
+            current_candidate_allowed &&
             try_last_feasible_maneuver(
               abort_reason, soft_maneuver_failure, current_candidate_allowed, false, false))
           {
+            overtake_line_state_
+            .pass_horizon_safe_separation_soft_abort_replan_lease_active = false;
             return update_overtake_line(
               behavior_output, ref_wp_id, N, lb, ub, now_sec);
           }
-          const bool retain_pass_for_receding_replan =
+          const bool retain_pass_for_receding_replan_base =
             soft_maneuver_failure &&
+            safe_separation.reason !=
+            overtake_core::SafeSeparationReason::ForwardMotionStall &&
             line_cfg.receding_horizon_enabled &&
             overtake_line_state_.phase == OvertakeLinePhase::Pass &&
             overtake_line_state_.mission_path_frozen &&
@@ -28915,18 +29026,72 @@ private:
             behavior_output.front_risk_level != FrontRiskLevel::EmergencyBrake &&
             !overtake_solver_recovery_active_ &&
             !behavior_output.overtake_forbidden_wp;
-          if (retain_pass_for_receding_replan) {
-            // This same-side replan is subordinate to the active
-            // SafeSeparation episode. Preserve its cumulative clock/distance
-            // instead of rearming it on the next control cycle.
+          const double soft_abort_replan_elapsed =
+            overtake_line_state_
+            .pass_horizon_safe_separation_soft_abort_replan_lease_active &&
+            std::isfinite(
+            overtake_line_state_.pass_horizon_safe_separation_soft_abort_replan_start_sec) ?
+            std::max(
+            0.0,
+            now_sec - overtake_line_state_
+            .pass_horizon_safe_separation_soft_abort_replan_start_sec) : 0.0;
+          const double soft_abort_replan_traveled =
+            overtake_line_state_
+            .pass_horizon_safe_separation_soft_abort_replan_lease_active ?
+            std::max(
+            0.0,
+            pass_traveled - overtake_line_state_
+            .pass_horizon_safe_separation_soft_abort_replan_start_distance) : 0.0;
+          const auto soft_abort_replan_lease =
+            overtake_core::resolve_safe_separation_soft_abort_replan_lease(
+            overtake_core::SafeSeparationSoftAbortReplanLeaseRequest{
+              line_cfg.receding_horizon_enabled,
+              soft_maneuver_failure,
+              retain_pass_for_receding_replan_base,
+              overtake_line_state_
+              .pass_horizon_safe_separation_soft_abort_replan_lease_active,
+              overtake_line_state_
+              .pass_horizon_safe_separation_soft_abort_replan_lease_consumed,
+              soft_abort_replan_elapsed,
+              soft_abort_replan_traveled,
+              line_cfg.safe_separation_soft_abort_replan_grace_sec,
+              line_cfg.safe_separation_soft_abort_replan_grace_distance});
+          if (soft_abort_replan_lease.start_new_lease) {
+            overtake_line_state_
+            .pass_horizon_safe_separation_soft_abort_replan_lease_active = true;
+            overtake_line_state_
+            .pass_horizon_safe_separation_soft_abort_replan_lease_consumed = true;
+            overtake_line_state_
+            .pass_horizon_safe_separation_soft_abort_replan_start_sec = now_sec;
+            overtake_line_state_
+            .pass_horizon_safe_separation_soft_abort_replan_start_distance = pass_traveled;
             RCLCPP_WARN(
               rclcpp::get_logger("mpc_controller"),
-              "OvertakeLine SafeSeparation soft abort retained Pass for replan: "
-              "target=%s, side=%d, target_s=%.2f, reason=%s, wp_id=%d",
+              "OvertakeLine SafeSeparation soft-abort replan lease started: "
+              "target=%s, side=%d, target_s=%.2f, reason=%s, "
+              "limit=%.2f s/%.2f m, wp_id=%d",
               overtake_line_state_.target_vehicle_id.c_str(),
               overtake_line_state_.pass_side_sign, locked_target_longitudinal,
-              overtake_core::to_string(safe_separation.reason), model->wp_id);
-          } else {
+              overtake_core::to_string(safe_separation.reason),
+              line_cfg.safe_separation_soft_abort_replan_grace_sec,
+              line_cfg.safe_separation_soft_abort_replan_grace_distance,
+              model->wp_id);
+          }
+          if (soft_abort_replan_lease.expired) {
+            overtake_line_state_
+            .pass_horizon_safe_separation_soft_abort_replan_lease_active = false;
+            RCLCPP_WARN(
+              rclcpp::get_logger("mpc_controller"),
+              "OvertakeLine SafeSeparation soft-abort replan lease expired: "
+              "target=%s, side=%d, target_s=%.2f, reason=%s, "
+              "elapsed=%.2f s/%.2f m, wp_id=%d",
+              overtake_line_state_.target_vehicle_id.c_str(),
+              overtake_line_state_.pass_side_sign, locked_target_longitudinal,
+              overtake_core::to_string(safe_separation.reason),
+              soft_abort_replan_elapsed, soft_abort_replan_traveled,
+              model->wp_id);
+          }
+          if (!soft_abort_replan_lease.retain_pass) {
             if (enter_dynamic_mission_wait(abort_reason, terminal_pass_budget_abort)) {
               return output;
             }
@@ -35015,6 +35180,12 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.overtake_line.receding_horizon_elastic_clearance_enabled =
     mpc["v2x_overtake_receding_horizon_elastic_clearance_enabled"] ?
     mpc["v2x_overtake_receding_horizon_elastic_clearance_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.overtake_line.receding_horizon_min_target_surface_reserve =
+    std::max(
+    0.0,
+    mpc["v2x_overtake_receding_horizon_min_target_surface_reserve"] ?
+    mpc["v2x_overtake_receding_horizon_min_target_surface_reserve"].as<double>() :
+    0.10);
   cfg.mpc.v2x_behavior.overtake_line.receding_horizon_iterations = std::max(
     1,
     mpc["v2x_overtake_receding_horizon_iterations"] ?
@@ -35777,6 +35948,33 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_overtake_safe_separation_soft_prediction_grace_sec"] ?
     mpc["v2x_overtake_safe_separation_soft_prediction_grace_sec"].as<double>() : 0.25);
+  cfg.mpc.v2x_behavior.overtake_line.safe_separation_soft_abort_replan_grace_sec =
+    std::max(
+    0.0,
+    mpc["v2x_overtake_safe_separation_soft_abort_replan_grace_sec"] ?
+    mpc["v2x_overtake_safe_separation_soft_abort_replan_grace_sec"].as<double>() :
+    0.25);
+  cfg.mpc.v2x_behavior.overtake_line.safe_separation_soft_abort_replan_grace_distance =
+    std::max(
+    0.0,
+    mpc["v2x_overtake_safe_separation_soft_abort_replan_grace_distance"] ?
+    mpc["v2x_overtake_safe_separation_soft_abort_replan_grace_distance"].as<double>() :
+    1.50);
+  cfg.mpc.v2x_behavior.overtake_line.safe_separation_forward_stall_enabled =
+    mpc["v2x_overtake_safe_separation_forward_stall_enabled"] ?
+    mpc["v2x_overtake_safe_separation_forward_stall_enabled"].as<bool>() : true;
+  cfg.mpc.v2x_behavior.overtake_line.safe_separation_forward_stall_prior_speed = std::max(
+    0.0,
+    mpc["v2x_overtake_safe_separation_forward_stall_prior_speed"] ?
+    mpc["v2x_overtake_safe_separation_forward_stall_prior_speed"].as<double>() : 3.0);
+  cfg.mpc.v2x_behavior.overtake_line.safe_separation_forward_stall_max_speed = std::max(
+    0.0,
+    mpc["v2x_overtake_safe_separation_forward_stall_max_speed"] ?
+    mpc["v2x_overtake_safe_separation_forward_stall_max_speed"].as<double>() : 1.6);
+  cfg.mpc.v2x_behavior.overtake_line.safe_separation_forward_stall_confirm_sec = std::max(
+    0.0,
+    mpc["v2x_overtake_safe_separation_forward_stall_confirm_sec"] ?
+    mpc["v2x_overtake_safe_separation_forward_stall_confirm_sec"].as<double>() : 0.75);
   cfg.mpc.v2x_behavior.overtake_line.safe_separation_full_speed_forward_escape_enabled =
     mpc["v2x_overtake_safe_separation_full_speed_forward_escape_enabled"] ?
     mpc["v2x_overtake_safe_separation_full_speed_forward_escape_enabled"].as<bool>() :
@@ -37599,7 +37797,7 @@ public:
         "V2X robust clearance: %s, target_surface=%.2f + %.3f*v + %.2f*|kappa| "
         "(max %.2f) m, front_reapply_hysteresis=%.2f m, "
         "wall_reserve=%.2f + %.3f*v + %.2f*|kappa| (max %.2f) m, "
-        "hard_wall=%.2f m, receding_elastic=%s",
+        "hard_wall=%.2f m, receding_elastic=%s, target_execution_reserve=%.2f m",
         mpc_cfg_.v2x_behavior.overtake_line.robust_clearance_enabled ?
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.robust_target_surface_base,
@@ -37613,7 +37811,9 @@ public:
         mpc_cfg_.v2x_behavior.overtake_line.robust_wall_reserve_max,
         mpc_cfg_.v2x_behavior.overtake_line.min_wall_clearance,
         mpc_cfg_.v2x_behavior.overtake_line.receding_horizon_elastic_clearance_enabled ?
-        "enabled" : "disabled");
+        "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line
+        .receding_horizon_min_target_surface_reserve);
       RCLCPP_INFO(
         get_logger(),
         "V2X static-fallback entry motion guard: %s, max_shift=%.2f m",
@@ -37757,6 +37957,19 @@ public:
         .safe_separation_tactical_revalidation_max_sec,
         mpc_cfg_.v2x_behavior.overtake_line
         .safe_separation_tactical_revalidation_max_distance);
+      RCLCPP_INFO(
+        get_logger(),
+        "V2X SafeSeparation terminal handoff: soft_abort_lease=%.2f s/%.2f m "
+        "(one-shot), forward_stall=%s prior>=%.2f/current<=%.2f mps confirm=%.2f s",
+        mpc_cfg_.v2x_behavior.overtake_line
+        .safe_separation_soft_abort_replan_grace_sec,
+        mpc_cfg_.v2x_behavior.overtake_line
+        .safe_separation_soft_abort_replan_grace_distance,
+        mpc_cfg_.v2x_behavior.overtake_line.safe_separation_forward_stall_enabled ?
+        "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line.safe_separation_forward_stall_prior_speed,
+        mpc_cfg_.v2x_behavior.overtake_line.safe_separation_forward_stall_max_speed,
+        mpc_cfg_.v2x_behavior.overtake_line.safe_separation_forward_stall_confirm_sec);
       RCLCPP_INFO(
         get_logger(),
         "V2X target-ahead Pass continuation: %s, front<=%.2f m, "

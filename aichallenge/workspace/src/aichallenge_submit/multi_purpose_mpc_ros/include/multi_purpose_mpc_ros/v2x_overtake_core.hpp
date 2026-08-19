@@ -2441,6 +2441,7 @@ enum class SafeSeparationReason
   InvalidInput,
   RearClear,
   ShortHorizonUnsafe,
+  ForwardMotionStall,
   LocalTimeLimit,
   LocalDistanceLimit,
   AbsoluteTimeLimit,
@@ -2900,6 +2901,9 @@ struct SafeSeparationRequest
   double rearward_progress_loss_disengage_elapsed_sec{};
   double rearward_progress_loss_disengage_max_sec{};
   double rearward_progress_loss_disengage_speed_delta_mps{};
+  /// A prior high-speed forward escape has remained at low speed without
+  /// fresh target-relative progress for the configured confirmation window.
+  bool forward_motion_stalled{false};
 };
 
 struct SafeSeparationResolution
@@ -2927,6 +2931,33 @@ SafeSeparationResolution resolve_safe_separation(
 /// limits are Mission-replan failures. Absolute Mission limits and physical
 /// horizon faults remain terminal.
 bool is_soft_safe_separation_abort_reason(SafeSeparationReason reason) noexcept;
+
+struct SafeSeparationSoftAbortReplanLeaseRequest
+{
+  bool enabled{false};
+  bool soft_abort{false};
+  bool base_eligible{false};
+  bool lease_active{false};
+  bool lease_consumed{false};
+  double elapsed_sec{};
+  double traveled_m{};
+  double maximum_duration_sec{};
+  double maximum_distance_m{};
+};
+
+struct SafeSeparationSoftAbortReplanLeaseResolution
+{
+  bool start_new_lease{false};
+  bool retain_pass{false};
+  bool expired{false};
+};
+
+/// A SafeSeparation soft abort may retain Pass only through one bounded
+/// same-side replan lease.  The caller owns the episode state; once consumed,
+/// the lease cannot be re-armed until a new SafeSeparation episode begins.
+SafeSeparationSoftAbortReplanLeaseResolution
+resolve_safe_separation_soft_abort_replan_lease(
+  const SafeSeparationSoftAbortReplanLeaseRequest & request) noexcept;
 
 struct RearClearReturnFailureHandoffRequest
 {

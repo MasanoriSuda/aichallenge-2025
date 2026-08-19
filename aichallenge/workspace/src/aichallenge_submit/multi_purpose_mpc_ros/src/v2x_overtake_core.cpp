@@ -4525,6 +4525,11 @@ SafeSeparationResolution resolve_safe_separation(
     resolution.reason = SafeSeparationReason::InvalidInput;
     return resolution;
   }
+  if (request.forward_motion_stalled) {
+    resolution.action = SafeSeparationAction::Abort;
+    resolution.reason = SafeSeparationReason::ForwardMotionStall;
+    return resolution;
+  }
   const bool rearward_progress_loss_disengage_candidate =
     request.rearward_progress_loss_disengage_enabled &&
     request.commit_stage == PassCommitStage::SideBySideCommitted &&
@@ -4736,8 +4741,47 @@ bool is_soft_safe_separation_abort_reason(const SafeSeparationReason reason) noe
   return
     reason == SafeSeparationReason::InvalidInput ||
     reason == SafeSeparationReason::ShortHorizonUnsafe ||
+    reason == SafeSeparationReason::ForwardMotionStall ||
     reason == SafeSeparationReason::LocalTimeLimit ||
     reason == SafeSeparationReason::LocalDistanceLimit;
+}
+
+SafeSeparationSoftAbortReplanLeaseResolution
+resolve_safe_separation_soft_abort_replan_lease(
+  const SafeSeparationSoftAbortReplanLeaseRequest & request) noexcept
+{
+  SafeSeparationSoftAbortReplanLeaseResolution resolution;
+  const bool finite_non_negative =
+    std::isfinite(request.elapsed_sec) && request.elapsed_sec >= 0.0 &&
+    std::isfinite(request.traveled_m) && request.traveled_m >= 0.0 &&
+    std::isfinite(request.maximum_duration_sec) &&
+    request.maximum_duration_sec >= 0.0 &&
+    std::isfinite(request.maximum_distance_m) &&
+    request.maximum_distance_m >= 0.0;
+  if (!finite_non_negative) {
+    resolution.expired = request.lease_active;
+    return resolution;
+  }
+  if (!request.enabled || !request.soft_abort || !request.base_eligible) {
+    resolution.expired = request.lease_active;
+    return resolution;
+  }
+  if (request.lease_active) {
+    resolution.retain_pass =
+      request.elapsed_sec < request.maximum_duration_sec - 1e-9 &&
+      request.traveled_m < request.maximum_distance_m - 1e-9;
+    resolution.expired = !resolution.retain_pass;
+    return resolution;
+  }
+  if (
+    request.lease_consumed || request.maximum_duration_sec <= 0.0 ||
+    request.maximum_distance_m <= 0.0)
+  {
+    return resolution;
+  }
+  resolution.start_new_lease = true;
+  resolution.retain_pass = true;
+  return resolution;
 }
 
 bool can_handoff_failed_rear_clear_return(
@@ -5110,6 +5154,8 @@ const char * to_string(const SafeSeparationReason reason) noexcept
       return "rear clear";
     case SafeSeparationReason::ShortHorizonUnsafe:
       return "short horizon unsafe";
+    case SafeSeparationReason::ForwardMotionStall:
+      return "forward motion stalled";
     case SafeSeparationReason::LocalTimeLimit:
       return "local time limit";
     case SafeSeparationReason::LocalDistanceLimit:

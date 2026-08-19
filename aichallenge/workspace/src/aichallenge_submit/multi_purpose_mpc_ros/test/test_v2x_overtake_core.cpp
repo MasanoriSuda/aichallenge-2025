@@ -290,6 +290,10 @@ using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_same_side_extension_com
 using multi_purpose_mpc_ros::v2x_overtake_core::can_commit_same_side_extension;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_safe_separation;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_soft_safe_separation_abort_reason;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  SafeSeparationSoftAbortReplanLeaseRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  resolve_safe_separation_soft_abort_replan_lease;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_handoff_failed_rear_clear_return;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   resolve_target_bound_execution_repair_budget;
@@ -3323,6 +3327,26 @@ TEST(V2XOvertakeCoreSpeed, RejectsWhenPhysicalTargetSeparationDoesNotFitWallBoun
     multi_purpose_mpc_ros::v2x_overtake_core::resolve_receding_horizon_target_bounds(
     request);
   EXPECT_FALSE(result.valid);
+}
+
+TEST(V2XOvertakeCoreSpeed, ExecutionReserveRemainsPartOfTargetSeparationFloor)
+{
+  // 0.70 m represents the physical body radius and 0.10 m the configured
+  // execution surface reserve supplied by the controller.  Even with robust
+  // degradation enabled, a 0.75 m wall interval must not admit edge contact.
+  const auto blocked =
+    multi_purpose_mpc_ros::v2x_overtake_core::resolve_receding_horizon_target_bounds(
+    RecedingHorizonTargetBoundsRequest{
+      1, -2.0, 0.75, -1.0, 0.75, 0.0, 1.2, 0.9, 0.8, true});
+  EXPECT_FALSE(blocked.valid);
+
+  const auto admitted =
+    multi_purpose_mpc_ros::v2x_overtake_core::resolve_receding_horizon_target_bounds(
+    RecedingHorizonTargetBoundsRequest{
+      1, -2.0, 0.85, -1.0, 0.85, 0.0, 1.2, 0.9, 0.8, true});
+  ASSERT_TRUE(admitted.valid);
+  EXPECT_TRUE(admitted.physical_separation_used);
+  EXPECT_NEAR(admitted.applied_center_separation_m, 0.8, 1e-9);
 }
 
 TEST(V2XOvertakeCoreSpeed, ElasticTargetBoundsRetryInsideHardWallInterval)
@@ -7696,6 +7720,8 @@ TEST(V2XOvertakeCoreHorizon, ClassifiesOnlyReplannableSafeSeparationAbortsAsSoft
   EXPECT_TRUE(is_soft_safe_separation_abort_reason(SafeSeparationReason::InvalidInput));
   EXPECT_TRUE(
     is_soft_safe_separation_abort_reason(SafeSeparationReason::ShortHorizonUnsafe));
+  EXPECT_TRUE(
+    is_soft_safe_separation_abort_reason(SafeSeparationReason::ForwardMotionStall));
   EXPECT_TRUE(is_soft_safe_separation_abort_reason(SafeSeparationReason::LocalTimeLimit));
   EXPECT_TRUE(
     is_soft_safe_separation_abort_reason(SafeSeparationReason::LocalDistanceLimit));
@@ -7703,6 +7729,86 @@ TEST(V2XOvertakeCoreHorizon, ClassifiesOnlyReplannableSafeSeparationAbortsAsSoft
     is_soft_safe_separation_abort_reason(SafeSeparationReason::AbsoluteTimeLimit));
   EXPECT_FALSE(
     is_soft_safe_separation_abort_reason(SafeSeparationReason::AbsoluteDistanceLimit));
+}
+
+TEST(V2XOvertakeCoreHorizon, ForwardMotionStallLeavesPassUnlessRearClearIsConfirmed)
+{
+  SafeSeparationRequest request;
+  request.enabled = true;
+  request.active = true;
+  request.short_horizon_safe = true;
+  request.target_seen = true;
+  request.return_corridor_available = true;
+  request.target_longitudinal_m = 0.5;
+  request.target_speed_mps = 1.4;
+  request.speed_delta_mps = 2.0;
+  request.maximum_ego_speed_mps = 11.11;
+  request.front_clear_distance_m = 2.0;
+  request.front_clear_confirm_sec = 0.25;
+  request.maximum_duration_sec = 5.0;
+  request.maximum_distance_m = 12.0;
+  request.forward_motion_stalled = true;
+
+  auto resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::Abort);
+  EXPECT_EQ(resolution.reason, SafeSeparationReason::ForwardMotionStall);
+
+  request.rear_clear_confirmed = true;
+  resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::Return);
+  EXPECT_EQ(resolution.reason, SafeSeparationReason::RearClear);
+}
+
+TEST(V2XOvertakeCoreHorizon, SoftAbortReplanLeaseIsBoundedAndCannotRearm)
+{
+  SafeSeparationSoftAbortReplanLeaseRequest request;
+  request.enabled = true;
+  request.soft_abort = true;
+  request.base_eligible = true;
+  request.maximum_duration_sec = 0.25;
+  request.maximum_distance_m = 1.50;
+
+  auto resolution = resolve_safe_separation_soft_abort_replan_lease(request);
+  EXPECT_TRUE(resolution.start_new_lease);
+  EXPECT_TRUE(resolution.retain_pass);
+  EXPECT_FALSE(resolution.expired);
+
+  request.lease_active = true;
+  request.lease_consumed = true;
+  request.elapsed_sec = 0.20;
+  request.traveled_m = 1.0;
+  resolution = resolve_safe_separation_soft_abort_replan_lease(request);
+  EXPECT_FALSE(resolution.start_new_lease);
+  EXPECT_TRUE(resolution.retain_pass);
+
+  request.elapsed_sec = 0.25;
+  resolution = resolve_safe_separation_soft_abort_replan_lease(request);
+  EXPECT_FALSE(resolution.retain_pass);
+  EXPECT_TRUE(resolution.expired);
+
+  request.lease_active = false;
+  resolution = resolve_safe_separation_soft_abort_replan_lease(request);
+  EXPECT_FALSE(resolution.start_new_lease);
+  EXPECT_FALSE(resolution.retain_pass);
+  EXPECT_FALSE(resolution.expired);
+}
+
+TEST(V2XOvertakeCoreHorizon, SoftAbortReplanLeaseFailsClosedWhenEligibilityIsLost)
+{
+  SafeSeparationSoftAbortReplanLeaseRequest request;
+  request.enabled = true;
+  request.soft_abort = true;
+  request.base_eligible = false;
+  request.lease_active = true;
+  request.lease_consumed = true;
+  request.elapsed_sec = 0.10;
+  request.traveled_m = 0.5;
+  request.maximum_duration_sec = 0.25;
+  request.maximum_distance_m = 1.50;
+
+  const auto resolution = resolve_safe_separation_soft_abort_replan_lease(request);
+  EXPECT_FALSE(resolution.retain_pass);
+  EXPECT_TRUE(resolution.expired);
 }
 
 TEST(V2XOvertakeCoreHorizon, RearClearReturnFailureHandsOffUnlessRecoveryIsRequired)

@@ -316,6 +316,7 @@ enum class PrecontactSqueezeEscapeReason
   PredictedSweepClear,
   AwaitingConfirmation,
   Active,
+  ActiveHeldAfterFrontCapReapply,
 };
 
 struct PrecontactSqueezeEscapeRequest

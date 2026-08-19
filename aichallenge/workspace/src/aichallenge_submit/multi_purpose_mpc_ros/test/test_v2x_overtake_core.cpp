@@ -1758,6 +1758,25 @@ TEST(V2XOvertakeCoreSpeed, ActivatesPrecontactSqueezeOnlyAfterConfirmedFutureOve
   EXPECT_TRUE(resolution.active);
   EXPECT_EQ(resolution.reason, PrecontactSqueezeEscapeReason::Active);
 
+  // The response itself reapplies the front cap. Once acquired, that must not
+  // make it terminate on the next control cycle.
+  request.previously_active = true;
+  request.prior_front_cap_release_active = false;
+  resolution = resolve_precontact_squeeze_escape(request);
+  EXPECT_TRUE(resolution.confirmation_monitor_eligible);
+  EXPECT_TRUE(resolution.active);
+  EXPECT_EQ(
+    resolution.reason,
+    PrecontactSqueezeEscapeReason::ActiveHeldAfterFrontCapReapply);
+
+  request.previously_active = false;
+  resolution = resolve_precontact_squeeze_escape(request);
+  EXPECT_FALSE(resolution.confirmation_monitor_eligible);
+  EXPECT_FALSE(resolution.active);
+  EXPECT_EQ(resolution.reason, PrecontactSqueezeEscapeReason::FrontCapNotReleased);
+
+  request.previously_active = true;
+  request.prior_front_cap_release_active = false;
   request.predicted_body_footprint_sweep_separated = true;
   resolution = resolve_precontact_squeeze_escape(request);
   EXPECT_FALSE(resolution.confirmation_monitor_eligible);
@@ -1766,7 +1785,6 @@ TEST(V2XOvertakeCoreSpeed, ActivatesPrecontactSqueezeOnlyAfterConfirmedFutureOve
 
   request.predicted_body_footprint_sweep_separated = false;
   request.recoverable_side_contact_active = false;
-  request.previously_active = true;
   request.current_body_footprints_separated = false;
   request.current_body_footprint_overlap_confirmed = false;
   resolution = resolve_precontact_squeeze_escape(request);

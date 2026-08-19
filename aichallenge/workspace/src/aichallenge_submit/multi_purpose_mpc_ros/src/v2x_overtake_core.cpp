@@ -527,10 +527,6 @@ PrecontactSqueezeEscapeResolution resolve_precontact_squeeze_escape(
     resolution.reason = PrecontactSqueezeEscapeReason::MinimumMotionCorridorInactive;
     return resolution;
   }
-  if (!request.prior_front_cap_release_active) {
-    resolution.reason = PrecontactSqueezeEscapeReason::FrontCapNotReleased;
-    return resolution;
-  }
   if (
     !request.target_seen || request.target_position_jump ||
     request.target_course_progress_rejected)
@@ -540,6 +536,13 @@ PrecontactSqueezeEscapeResolution resolve_precontact_squeeze_escape(
   }
   if (request.recoverable_side_contact_active) {
     resolution.reason = PrecontactSqueezeEscapeReason::ContactContinuationOwns;
+    return resolution;
+  }
+  // Releasing the front cap is an acquisition prerequisite, not a hold
+  // prerequisite. The response intentionally reapplies that cap, so requiring
+  // it again here would make the response terminate itself on the next cycle.
+  if (!request.prior_front_cap_release_active && !request.previously_active) {
+    resolution.reason = PrecontactSqueezeEscapeReason::FrontCapNotReleased;
     return resolution;
   }
   if (!request.current_body_footprints_separated) {
@@ -569,7 +572,10 @@ PrecontactSqueezeEscapeResolution resolve_precontact_squeeze_escape(
     return resolution;
   }
   resolution.active = true;
-  resolution.reason = PrecontactSqueezeEscapeReason::Active;
+  resolution.reason =
+    !request.prior_front_cap_release_active && request.previously_active ?
+    PrecontactSqueezeEscapeReason::ActiveHeldAfterFrontCapReapply :
+    PrecontactSqueezeEscapeReason::Active;
   return resolution;
 }
 
@@ -602,6 +608,8 @@ const char * to_string(const PrecontactSqueezeEscapeReason reason) noexcept
       return "awaiting-confirmation";
     case PrecontactSqueezeEscapeReason::Active:
       return "active";
+    case PrecontactSqueezeEscapeReason::ActiveHeldAfterFrontCapReapply:
+      return "active-held-after-front-cap-reapply";
   }
   return "unknown";
 }

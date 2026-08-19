@@ -17,6 +17,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedPassSideRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedBypassCandidateRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicObstacleCruiseAuthorityRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicObstacleCruiseActivationRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  DynamicObstacleLateralEscapeAuthorityRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedShiftSteeringRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StoppedVehicleLineOwnershipRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ContinuityAction;
@@ -14358,6 +14360,74 @@ TEST(V2XOvertakeCoreLowSpeedBypass, ExistingLegacyAvoidanceKeepsItsLateralOwner)
 
   EXPECT_FALSE(resolution.promote_to_dynamic_front);
   EXPECT_FALSE(resolution.defer_legacy_low_speed_entry);
+}
+
+DynamicObstacleLateralEscapeAuthorityRequest dynamic_lateral_escape_request()
+{
+  DynamicObstacleLateralEscapeAuthorityRequest request;
+  request.enabled = true;
+  request.dynamic_obstacle_target_active = true;
+  request.follow_state_active = true;
+  request.gap_planner_active = true;
+  request.gap_planner_feasible = true;
+  request.gap_planner_owns_lateral_bounds = true;
+  request.pass_side_sign = 1;
+  request.current_lateral_m = 0.1;
+  request.target_lateral_m = 0.6;
+  request.minimum_lateral_shift_m = 0.1;
+  return request;
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, FeasibleDynamicLateralEscapeSuppressesFollowCap)
+{
+  const auto resolution = resolve_dynamic_obstacle_lateral_escape_authority(
+    dynamic_lateral_escape_request());
+
+  EXPECT_TRUE(resolution.active);
+  EXPECT_TRUE(resolution.suppress_generic_follow_cap);
+  EXPECT_EQ(resolution.pass_side_sign, 1);
+  EXPECT_NEAR(resolution.requested_lateral_shift_m, 0.5, 1e-9);
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, DynamicLateralEscapeRequiresPlannerOwnership)
+{
+  auto request = dynamic_lateral_escape_request();
+  request.gap_planner_feasible = false;
+  EXPECT_FALSE(resolve_dynamic_obstacle_lateral_escape_authority(request).active);
+
+  request = dynamic_lateral_escape_request();
+  request.gap_planner_owns_lateral_bounds = false;
+  EXPECT_FALSE(resolve_dynamic_obstacle_lateral_escape_authority(request).active);
+
+  request = dynamic_lateral_escape_request();
+  request.follow_state_active = false;
+  EXPECT_FALSE(resolve_dynamic_obstacle_lateral_escape_authority(request).active);
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, DynamicLateralEscapeKeepsHardFaultPriority)
+{
+  auto request = dynamic_lateral_escape_request();
+  request.emergency_brake_active = true;
+  EXPECT_FALSE(resolve_dynamic_obstacle_lateral_escape_authority(request).active);
+
+  request = dynamic_lateral_escape_request();
+  request.solver_recovery_active = true;
+  EXPECT_FALSE(resolve_dynamic_obstacle_lateral_escape_authority(request).active);
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, DynamicLateralEscapeRejectsTinyOrWrongSideShift)
+{
+  auto request = dynamic_lateral_escape_request();
+  request.target_lateral_m = request.current_lateral_m + 0.05;
+  EXPECT_FALSE(resolve_dynamic_obstacle_lateral_escape_authority(request).active);
+
+  request = dynamic_lateral_escape_request();
+  request.pass_side_sign = -1;
+  EXPECT_FALSE(resolve_dynamic_obstacle_lateral_escape_authority(request).active);
+
+  request = dynamic_lateral_escape_request();
+  request.target_lateral_m = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_FALSE(resolve_dynamic_obstacle_lateral_escape_authority(request).active);
 }
 
 DynamicObstacleCruiseActivationRequest predictive_dynamic_obstacle_request()

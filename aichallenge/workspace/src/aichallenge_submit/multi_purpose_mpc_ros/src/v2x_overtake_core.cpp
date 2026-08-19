@@ -11756,6 +11756,44 @@ DynamicObstacleCruiseAuthorityResolution resolve_dynamic_obstacle_cruise_authori
   return resolution;
 }
 
+DynamicObstacleLateralEscapeAuthorityResolution
+resolve_dynamic_obstacle_lateral_escape_authority(
+  const DynamicObstacleLateralEscapeAuthorityRequest & request) noexcept
+{
+  DynamicObstacleLateralEscapeAuthorityResolution resolution;
+  if (
+    !request.enabled || !request.dynamic_obstacle_target_active ||
+    !request.follow_state_active || !request.gap_planner_active ||
+    !request.gap_planner_feasible || !request.gap_planner_owns_lateral_bounds ||
+    request.emergency_brake_active || request.solver_recovery_active ||
+    (request.pass_side_sign != -1 && request.pass_side_sign != 1) ||
+    !std::isfinite(request.current_lateral_m) ||
+    !std::isfinite(request.target_lateral_m) ||
+    !std::isfinite(request.minimum_lateral_shift_m) ||
+    request.minimum_lateral_shift_m < 0.0)
+  {
+    return resolution;
+  }
+
+  resolution.requested_lateral_shift_m =
+    request.target_lateral_m - request.current_lateral_m;
+  const bool shift_matches_side = request.pass_side_sign > 0 ?
+    resolution.requested_lateral_shift_m > 0.0 :
+    resolution.requested_lateral_shift_m < 0.0;
+  if (
+    !shift_matches_side ||
+    std::abs(resolution.requested_lateral_shift_m) +
+    std::numeric_limits<double>::epsilon() < request.minimum_lateral_shift_m)
+  {
+    return resolution;
+  }
+
+  resolution.active = true;
+  resolution.suppress_generic_follow_cap = true;
+  resolution.pass_side_sign = request.pass_side_sign;
+  return resolution;
+}
+
 DynamicObstacleCruiseActivationResolution resolve_dynamic_obstacle_cruise_activation(
   const DynamicObstacleCruiseActivationRequest & request) noexcept
 {

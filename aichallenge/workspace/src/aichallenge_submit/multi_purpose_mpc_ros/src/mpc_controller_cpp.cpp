@@ -1488,6 +1488,8 @@ struct V2XBehaviorConfig
   bool debug_log_enabled{false};
   double debug_log_period_sec{1.0};
   bool dynamic_obstacle_cruise_authority_enabled{false};
+  bool dynamic_obstacle_lateral_escape_authority_enabled{false};
+  double dynamic_obstacle_lateral_escape_min_shift{0.10};
   double dynamic_obstacle_cruise_corridor_promotion_max_speed{2.0};
   double dynamic_obstacle_cruise_activation_horizon_sec{3.0};
   double dynamic_obstacle_cruise_min_closing_speed{0.5};
@@ -2031,6 +2033,10 @@ struct V2XBehaviorOutput
   std::string start_grid_upper_boundary_vehicle_id;
   bool low_speed_avoidance_candidate{false};
   bool dynamic_obstacle_cruise_authority_active{false};
+  bool dynamic_obstacle_lateral_escape_active{false};
+  bool dynamic_obstacle_follow_cap_suppressed{false};
+  int dynamic_obstacle_lateral_escape_side_sign{0};
+  double dynamic_obstacle_lateral_escape_m{0.0};
   std::string dynamic_obstacle_cruise_target_id;
   double dynamic_obstacle_cruise_closing_speed{0.0};
   double dynamic_obstacle_cruise_time_to_entry{
@@ -14422,6 +14428,88 @@ struct MPC
         inter_vehicle_corridor_plan ?
         cfg.v2x_behavior.start_grid_inter_vehicle_lateral_radius : 0.0)) :
       GapPlannerOutput{};
+    const int dynamic_escape_side_sign = infer_gap_pass_side(
+      planner_output, model->spatial_state.e_y);
+    double dynamic_escape_target_ey = model->spatial_state.e_y;
+    const std::size_t dynamic_escape_sample_count = std::min(
+      planner_output.target_active.size(), planner_output.target_ey.size());
+    for (std::size_t i = 0; i < dynamic_escape_sample_count; ++i) {
+      if (!planner_output.target_active[i] || !std::isfinite(planner_output.target_ey[i])) {
+        continue;
+      }
+      const double shift = planner_output.target_ey[i] - model->spatial_state.e_y;
+      if (
+        (dynamic_escape_side_sign > 0 && shift > 0.0) ||
+        (dynamic_escape_side_sign < 0 && shift < 0.0))
+      {
+        dynamic_escape_target_ey = planner_output.target_ey[i];
+        break;
+      }
+    }
+    const auto dynamic_lateral_escape_authority =
+      v2x_overtake_core::resolve_dynamic_obstacle_lateral_escape_authority(
+      v2x_overtake_core::DynamicObstacleLateralEscapeAuthorityRequest{
+        cfg.v2x_behavior.dynamic_obstacle_lateral_escape_authority_enabled,
+        behavior_output.dynamic_obstacle_cruise_authority_active,
+        behavior_output.state == V2XBehaviorState::Follow,
+        planner_output.active,
+        planner_output.feasible,
+        !explicit_overtake_line_owns_plan,
+        behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake,
+        overtake_solver_recovery_active_ || solver_overtake_cooldown_active ||
+        overtake_solver_reentry_blocked_ || last_control_was_fallback_,
+        dynamic_escape_side_sign,
+        model->spatial_state.e_y,
+        dynamic_escape_target_ey,
+        cfg.v2x_behavior.dynamic_obstacle_lateral_escape_min_shift});
+    behavior_output.dynamic_obstacle_lateral_escape_active =
+      dynamic_lateral_escape_authority.active;
+    behavior_output.dynamic_obstacle_follow_cap_suppressed =
+      dynamic_lateral_escape_authority.suppress_generic_follow_cap;
+    behavior_output.dynamic_obstacle_lateral_escape_side_sign =
+      dynamic_lateral_escape_authority.pass_side_sign;
+    behavior_output.dynamic_obstacle_lateral_escape_m =
+      dynamic_lateral_escape_authority.requested_lateral_shift_m;
+    if (dynamic_lateral_escape_authority.suppress_generic_follow_cap) {
+      // The feasible GapPlanner corridor supplies hard lateral bounds for all
+      // active V2X footprints below. Do not simultaneously slow to the target
+      // speed merely because the complete Overtake Mission was not admitted.
+      // EmergencyBrake and solver fallback were rejected by the resolver;
+      // domain/MPC limits and the planner's own velocity limit remain active.
+      behavior_output.target_velocity_limit = std::numeric_limits<double>::infinity();
+      behavior_output.follow_speed_limit_active = false;
+      behavior_output.follow_speed_limit_moving_front = false;
+      behavior_output.moving_front_clearance_limit_active = false;
+    }
+    const bool dynamic_escape_log_due =
+      dynamic_lateral_escape_authority.active !=
+      dynamic_obstacle_lateral_escape_was_active_ ||
+      (dynamic_lateral_escape_authority.active &&
+      (!std::isfinite(dynamic_obstacle_lateral_escape_last_log_sec_) ||
+      now_sec - dynamic_obstacle_lateral_escape_last_log_sec_ >= 1.0));
+    if (dynamic_escape_log_due) {
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"),
+        "Dynamic-obstacle lateral escape authority: active=%d, target=%s, "
+        "side=%d, shift=%.2f m, width=%.2f m, follow_cap_suppressed=%d, "
+        "risk=%s, planner=%d/%d, wp_id=%d",
+        dynamic_lateral_escape_authority.active ? 1 : 0,
+        behavior_output.dynamic_obstacle_cruise_target_id.empty() ? "<none>" :
+        behavior_output.dynamic_obstacle_cruise_target_id.c_str(),
+        dynamic_lateral_escape_authority.pass_side_sign,
+        dynamic_lateral_escape_authority.requested_lateral_shift_m,
+        planner_output.selected_corridor_width,
+        dynamic_lateral_escape_authority.suppress_generic_follow_cap ? 1 : 0,
+        to_string(behavior_output.front_risk_level),
+        planner_output.active ? 1 : 0, planner_output.feasible ? 1 : 0,
+        model->wp_id);
+      dynamic_obstacle_lateral_escape_last_log_sec_ = now_sec;
+    }
+    dynamic_obstacle_lateral_escape_was_active_ =
+      dynamic_lateral_escape_authority.active;
+    // Keep downstream diagnostics and direct-control arbitration aligned with
+    // the post-planner authority result, not the pre-planner Follow snapshot.
+    last_v2x_behavior_output_ = behavior_output;
     const bool retained_pass_candidate =
       low_speed_shift_control_was_active_ && !low_speed_shift_rejoin_active_ &&
       low_speed_direct_control_phase_ ==
@@ -14979,7 +15067,10 @@ struct MPC
         xr[nx + i * nx] =
           (1.0 - cfg.v2x_gap.target_bias) * xr[nx + i * nx] +
           cfg.v2x_gap.target_bias * fallback_target;
-      } else if (use_follow_preposition_target) {
+      } else if (
+        use_follow_preposition_target &&
+        !behavior_output.dynamic_obstacle_lateral_escape_active)
+      {
         const double ramp_ratio = cfg.v2x_behavior.follow_preposition_ramp_ratio;
         const double linear_progress = clip(
           (static_cast<double>(i) + 1.0) / (static_cast<double>(N) * ramp_ratio), 0.0, 1.0);
@@ -17625,6 +17716,9 @@ struct MPC
   double stage_corridor_target_bound_suppressed_until_sec_{
     -std::numeric_limits<double>::infinity()};
   double stage_corridor_mpc_constraints_last_log_sec_{
+    -std::numeric_limits<double>::infinity()};
+  bool dynamic_obstacle_lateral_escape_was_active_{false};
+  double dynamic_obstacle_lateral_escape_last_log_sec_{
     -std::numeric_limits<double>::infinity()};
 
 private:
@@ -36224,6 +36318,21 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_behavior.dynamic_obstacle_cruise_authority_enabled =
     mpc["v2x_dynamic_obstacle_cruise_authority_enabled"] ?
     mpc["v2x_dynamic_obstacle_cruise_authority_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.dynamic_obstacle_lateral_escape_authority_enabled =
+    mpc["v2x_dynamic_obstacle_lateral_escape_authority_enabled"] ?
+    mpc["v2x_dynamic_obstacle_lateral_escape_authority_enabled"].as<bool>() : false;
+  cfg.mpc.v2x_behavior.dynamic_obstacle_lateral_escape_min_shift =
+    mpc["v2x_dynamic_obstacle_lateral_escape_min_shift"] ?
+    mpc["v2x_dynamic_obstacle_lateral_escape_min_shift"].as<double>() : 0.10;
+  if (
+    !std::isfinite(
+      cfg.mpc.v2x_behavior.dynamic_obstacle_lateral_escape_min_shift) ||
+    cfg.mpc.v2x_behavior.dynamic_obstacle_lateral_escape_min_shift < 0.0)
+  {
+    throw std::runtime_error(
+            "mpc.v2x_dynamic_obstacle_lateral_escape_min_shift must be finite and "
+            "non-negative");
+  }
   cfg.mpc.v2x_behavior.dynamic_obstacle_cruise_corridor_promotion_max_speed =
     mpc["v2x_dynamic_obstacle_cruise_corridor_promotion_max_speed"] ?
     mpc["v2x_dynamic_obstacle_cruise_corridor_promotion_max_speed"].as<double>() : 2.0;
@@ -37670,10 +37779,13 @@ public:
       RCLCPP_INFO(
         get_logger(),
         "V2X all-vehicle dynamic-obstacle Cruise authority: %s, "
-        "slow_confirmation_max_speed=%.2f m/s, activation_horizon=%.2f s, "
-        "min_closing=%.2f m/s, scan_distance=%.2f m",
+        "lateral_escape=%s/min_shift=%.2f m, slow_confirmation_max_speed=%.2f m/s, "
+        "activation_horizon=%.2f s, min_closing=%.2f m/s, scan_distance=%.2f m",
         mpc_cfg_.v2x_behavior.dynamic_obstacle_cruise_authority_enabled ?
         "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.dynamic_obstacle_lateral_escape_authority_enabled ?
+        "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.dynamic_obstacle_lateral_escape_min_shift,
         mpc_cfg_.v2x_behavior.dynamic_obstacle_cruise_corridor_promotion_max_speed,
         mpc_cfg_.v2x_behavior.dynamic_obstacle_cruise_activation_horizon_sec,
         mpc_cfg_.v2x_behavior.dynamic_obstacle_cruise_min_closing_speed,

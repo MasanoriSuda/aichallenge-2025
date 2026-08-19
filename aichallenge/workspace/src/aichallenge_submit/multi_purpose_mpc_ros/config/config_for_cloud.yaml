@@ -400,6 +400,11 @@ mpc:
   # when a V2X target is predicted to enter the 4.5 m overtake-entry reserve. The 2.0 m/s
   # threshold only selects targets that require stopped/slow consecutive confirmation.
   v2x_dynamic_obstacle_cruise_authority_enabled: true
+  # Execute an all-V2X Follow-state lateral corridor without waiting for a
+  # complete Overtake Mission. EmergencyBrake, solver fallback and hard bounds
+  # retain priority.
+  v2x_dynamic_obstacle_lateral_escape_authority_enabled: true
+  v2x_dynamic_obstacle_lateral_escape_min_shift: 0.10 # [m] ignore center/noise-only targets
   v2x_dynamic_obstacle_cruise_corridor_promotion_max_speed: 2.0 # [m/s] below this speed require consecutive observations before promotion
   v2x_dynamic_obstacle_cruise_activation_horizon_sec: 3.0 # [s] plan before relative motion reaches the entry reserve
   v2x_dynamic_obstacle_cruise_min_closing_speed: 0.5 # [m/s] ignore a distant target that ego is not catching

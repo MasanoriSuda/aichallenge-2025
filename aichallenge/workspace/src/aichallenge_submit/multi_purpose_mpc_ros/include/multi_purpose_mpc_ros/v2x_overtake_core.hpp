@@ -6909,6 +6909,38 @@ struct DynamicObstacleCruiseAuthorityResolution
 DynamicObstacleCruiseAuthorityResolution resolve_dynamic_obstacle_cruise_authority(
   const DynamicObstacleCruiseAuthorityRequest & request) noexcept;
 
+struct DynamicObstacleLateralEscapeAuthorityRequest
+{
+  bool enabled{false};
+  bool dynamic_obstacle_target_active{false};
+  bool follow_state_active{false};
+  bool gap_planner_active{false};
+  bool gap_planner_feasible{false};
+  bool gap_planner_owns_lateral_bounds{false};
+  bool emergency_brake_active{false};
+  bool solver_recovery_active{false};
+  int pass_side_sign{0};
+  double current_lateral_m{};
+  double target_lateral_m{};
+  double minimum_lateral_shift_m{};
+};
+
+struct DynamicObstacleLateralEscapeAuthorityResolution
+{
+  bool active{false};
+  bool suppress_generic_follow_cap{false};
+  int pass_side_sign{0};
+  double requested_lateral_shift_m{};
+};
+
+/// Let an already feasible all-V2X GapPlanner corridor own lateral execution
+/// while Behavior remains in Follow. This is deliberately independent from a
+/// complete ShiftOut/Pass/Return Mission. Emergency braking, solver recovery,
+/// malformed geometry and a non-moving/tiny lateral target fail closed.
+DynamicObstacleLateralEscapeAuthorityResolution
+resolve_dynamic_obstacle_lateral_escape_authority(
+  const DynamicObstacleLateralEscapeAuthorityRequest & request) noexcept;
+
 struct DynamicObstacleCruiseActivationRequest
 {
   bool enabled{false};

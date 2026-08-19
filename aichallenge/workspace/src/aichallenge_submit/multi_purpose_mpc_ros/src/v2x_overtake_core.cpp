@@ -11292,6 +11292,27 @@ bool can_admit_dynamic_mission_wait_urgent_alternate(
     !request.execution_corridor_blocked;
 }
 
+bool can_use_dynamic_mission_wait_cross_side_lease(
+  const DynamicMissionWaitCrossSideLeaseRequest & request) noexcept
+{
+  const bool budgets_valid =
+    std::isfinite(request.elapsed_sec) && request.elapsed_sec >= 0.0 &&
+    std::isfinite(request.maximum_elapsed_sec) && request.maximum_elapsed_sec >= 0.0 &&
+    std::isfinite(request.traveled_distance_m) && request.traveled_distance_m >= 0.0 &&
+    std::isfinite(request.maximum_traveled_distance_m) &&
+    request.maximum_traveled_distance_m >= 0.0;
+  const bool replacement_count_available =
+    request.replacement_count >= 0 && request.maximum_replacement_count > 0 &&
+    request.replacement_count < request.maximum_replacement_count;
+  return
+    request.wait_active && request.lease_latched && request.target_continuous &&
+    !request.target_position_jump && request.current_body_footprints_separated &&
+    request.footprint_prediction_valid && !request.hard_fault &&
+    !request.cross_side_transition_committed && replacement_count_available &&
+    budgets_valid && request.elapsed_sec <= request.maximum_elapsed_sec + 1e-9 &&
+    request.traveled_distance_m <= request.maximum_traveled_distance_m + 1e-9;
+}
+
 bool should_execute_dynamic_mission_wait_runtime(
   const DynamicMissionWaitRuntimeOwnershipRequest & request) noexcept
 {
@@ -11568,13 +11589,19 @@ CommittedPassGeometryOwnershipResolution resolve_committed_pass_geometry_ownersh
     !request.current_body_footprint_overlap_confirmed;
   resolution.recoverable_side_contact_owns_pass =
     request.recoverable_side_contact_active;
+  resolution.precontact_squeeze_escape_owns_pass =
+    request.precontact_squeeze_escape_active &&
+    request.current_body_footprints_separated &&
+    !request.current_body_footprint_overlap_confirmed;
   resolution.pass_authority_available =
     resolution.pass_release_latched || resolution.body_clear_handoff_owns_pass ||
-    resolution.recoverable_side_contact_owns_pass;
+    resolution.recoverable_side_contact_owns_pass ||
+    resolution.precontact_squeeze_escape_owns_pass;
   resolution.current_geometry_acceptable =
     request.current_body_footprints_separated ||
     resolution.current_overlap_grace_active ||
-    resolution.recoverable_side_contact_owns_pass;
+    resolution.recoverable_side_contact_owns_pass ||
+    resolution.precontact_squeeze_escape_owns_pass;
   resolution.ownership_allowed =
     resolution.pass_authority_available && resolution.current_geometry_acceptable;
   return resolution;
@@ -11602,7 +11629,8 @@ bool can_preserve_committed_pass_behavior(
       request.current_body_footprint_overlap_confirmed,
       request.committed_pass_attack_mode_enabled,
       request.body_clear_handoff_active,
-      request.recoverable_side_contact_active});
+      request.recoverable_side_contact_active,
+      request.precontact_squeeze_escape_active});
   return request.committed_pass_active &&
          request.validated_fixed_line &&
          request.mission_side_valid &&
@@ -12804,8 +12832,10 @@ bool can_hold_committed_execution_after_behavior_drop(
   return request.active_execution_phase &&
          request.target_progress_continuous &&
          request.target_ahead &&
-         !request.target_pass_side_intrusion &&
-         !request.live_execution_corridor_blocked &&
+         (!request.target_pass_side_intrusion ||
+         request.bounded_lateral_escape_active) &&
+         (!request.live_execution_corridor_blocked ||
+         request.bounded_lateral_escape_active) &&
          !request.explicit_forbidden_waypoint &&
          !request.emergency_front_risk;
 }

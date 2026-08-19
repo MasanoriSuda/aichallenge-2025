@@ -2530,6 +2530,7 @@ struct OvertakeLineState
     std::numeric_limits<double>::quiet_NaN()};
   bool pass_contact_continuation_was_active{false};
   bool pass_precontact_squeeze_escape_was_active{false};
+  bool pass_precontact_squeeze_escape_wall_validated{false};
   bool pass_contact_rearward_completion_was_active{false};
   bool shiftout_fresh_horizon_wait_active{false};
   int shiftout_fresh_horizon_replan_count{0};
@@ -2609,6 +2610,13 @@ struct OvertakeLineState
   std::uint64_t last_feasible_source_generation{0U};
   bool dynamic_mission_wait_active{false};
   std::string dynamic_mission_wait_trigger_reason;
+  // Latched only when DynamicMissionWait started before no-return. The lease
+  // preserves an already-started alternate-side assessment while its async
+  // result is pending; every live safety and admission gate is still checked.
+  bool dynamic_mission_wait_cross_side_lease_active{false};
+  // Diagnostic latch captured before Pass state is cleared on the
+  // FollowPrepare transition.
+  bool dynamic_mission_wait_bounded_escape_at_entry{false};
   // True only when the paused Pass consumed its immutable absolute horizon.
   // A generic same-side feasibility bit must not revive that generation.
   bool dynamic_mission_wait_terminal_budget_abort{false};
@@ -8631,12 +8639,34 @@ struct MPC
         overtake_line_state_.mission_cross_side_transition_committed,
         output.locked_target_longitudinal,
         cfg.v2x_behavior.overtake_line.opponent_side_replan_no_return_front_distance});
+    const bool dynamic_wait_cross_side_lease_active =
+      overtake_core::can_use_dynamic_mission_wait_cross_side_lease(
+      overtake_core::DynamicMissionWaitCrossSideLeaseRequest{
+        overtake_line_state_.dynamic_mission_wait_active,
+        overtake_line_state_.dynamic_mission_wait_cross_side_lease_active,
+        opponent_side_replan_target_continuous,
+        output.locked_target_position_jump,
+        output.locked_target_current_body_footprints_separated,
+        output.locked_target_footprint_prediction_valid,
+        overtake_solver_recovery_active_ || overtake_forbidden_wp ||
+        effective_front_risk_emergency,
+        overtake_line_state_.mission_cross_side_transition_committed,
+        overtake_line_state_.opponent_side_replan_count,
+        cfg.v2x_behavior.overtake_line.opponent_side_replan_max_count,
+        std::isfinite(overtake_line_state_.phase_start_sec) ?
+        std::max(0.0, now_sec - overtake_line_state_.phase_start_sec) :
+        std::numeric_limits<double>::infinity(),
+        cfg.v2x_behavior.overtake_line.dynamic_mission_wait_timeout_sec,
+        std::max(0.0, overtake_line_state_.phase_traveled_m),
+        cfg.v2x_behavior.overtake_line.dynamic_mission_wait_max_distance});
     const bool opponent_side_replan_before_no_return =
+      dynamic_wait_cross_side_lease_active ||
+      (
       pass_commit_stage.valid && pass_commit_stage.side_replan_allowed &&
       pass_commit_stage.stage == overtake_core::PassCommitStage::ShiftCommitted &&
       (!overtake_line_state_.opponent_side_replan_no_return_latched ||
       target_bound_tactical_rearm || runtime_completion_tactical_rearm) &&
-      !overtake_line_state_.mission_cross_side_transition_committed;
+      !overtake_line_state_.mission_cross_side_transition_committed);
     const bool opponent_side_replan_geometry_observable =
       output.locked_target_current_body_footprints_separated &&
       output.locked_target_footprint_prediction_valid;
@@ -14038,7 +14068,9 @@ struct MPC
         output.locked_target_current_body_footprints_separated,
         output.locked_target_current_body_overlap_confirmed,
         cfg.v2x_behavior.overtake_committed_pass_attack_mode_enabled,
-        output.precontact_squeeze_escape_active,
+        output.precontact_squeeze_escape_active &&
+        (overtake_line_state_.pass_precontact_squeeze_escape_wall_validated ||
+        overtake_line_state_.pass_front_cap_release_active),
         output.recoverable_side_contact_active,
         output.locked_target_pass_side_intrusion,
         overtake_forbidden_wp,
@@ -18624,6 +18656,10 @@ private:
     if (next_phase == OvertakeLinePhase::FollowPrepare) {
       overtake_line_state_.follow_prepare_origin_phase = previous_phase;
       overtake_line_state_.follow_prepare_cause = follow_prepare_cause;
+      if (follow_prepare_cause != FollowPrepareCause::DynamicMissionWait) {
+        overtake_line_state_.dynamic_mission_wait_cross_side_lease_active = false;
+        overtake_line_state_.dynamic_mission_wait_bounded_escape_at_entry = false;
+      }
       overtake_line_state_.dynamic_mission_wait_pass_forward_completion_latched =
         previous_phase == OvertakeLinePhase::Pass &&
         follow_prepare_cause == FollowPrepareCause::DynamicMissionWait &&
@@ -18646,6 +18682,8 @@ private:
     if (next_phase != OvertakeLinePhase::FollowPrepare) {
       overtake_line_state_.dynamic_mission_wait_active = false;
       overtake_line_state_.dynamic_mission_wait_trigger_reason.clear();
+      overtake_line_state_.dynamic_mission_wait_cross_side_lease_active = false;
+      overtake_line_state_.dynamic_mission_wait_bounded_escape_at_entry = false;
       overtake_line_state_.dynamic_mission_wait_terminal_budget_abort = false;
       overtake_line_state_.dynamic_mission_wait_rear_clear_extension_logged = false;
       overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active = false;
@@ -18749,6 +18787,7 @@ private:
         std::numeric_limits<double>::quiet_NaN();
       overtake_line_state_.pass_contact_continuation_was_active = false;
       overtake_line_state_.pass_precontact_squeeze_escape_was_active = false;
+      overtake_line_state_.pass_precontact_squeeze_escape_wall_validated = false;
       overtake_line_state_.pass_contact_rearward_completion_was_active = false;
       overtake_line_state_.pass_horizon_fallback_start_sec =
         std::numeric_limits<double>::quiet_NaN();
@@ -19332,6 +19371,7 @@ private:
       std::numeric_limits<double>::quiet_NaN();
     overtake_line_state_.pass_contact_continuation_was_active = false;
     overtake_line_state_.pass_precontact_squeeze_escape_was_active = false;
+    overtake_line_state_.pass_precontact_squeeze_escape_wall_validated = false;
     overtake_line_state_.pass_contact_rearward_completion_was_active = false;
     overtake_line_state_.shiftout_fresh_horizon_wait_active = false;
     overtake_line_state_.shiftout_fresh_horizon_replan_count = 0;
@@ -19351,6 +19391,8 @@ private:
     overtake_line_state_.dynamic_mission_wait_pass_forward_completion_latched = false;
     overtake_line_state_.dynamic_mission_wait_predicted_overlap_since_sec =
       std::numeric_limits<double>::quiet_NaN();
+    overtake_line_state_.dynamic_mission_wait_cross_side_lease_active = false;
+    overtake_line_state_.dynamic_mission_wait_bounded_escape_at_entry = false;
     overtake_line_state_.pass_horizon_fallback_start_sec =
       std::numeric_limits<double>::quiet_NaN();
     overtake_line_state_.pass_horizon_fallback_start_distance = 0.0;
@@ -24049,6 +24091,12 @@ private:
       }
       overtake_line_state_.dynamic_mission_wait_active = true;
       overtake_line_state_.dynamic_mission_wait_trigger_reason = reason;
+      overtake_line_state_.dynamic_mission_wait_cross_side_lease_active =
+        before_no_return && replacement_count_available;
+      overtake_line_state_.dynamic_mission_wait_bounded_escape_at_entry =
+        behavior_output.precontact_squeeze_escape_active &&
+        overtake_line_state_.pass_precontact_squeeze_escape_was_active &&
+        overtake_line_state_.pass_precontact_squeeze_escape_wall_validated;
       overtake_line_state_.dynamic_mission_wait_terminal_budget_abort =
         terminal_budget_abort;
       overtake_line_state_.dynamic_mission_wait_rear_clear_extension_logged =
@@ -24071,11 +24119,16 @@ private:
         RCLCPP_WARN(
             rclcpp::get_logger("mpc_controller"),
             "OvertakeLine dynamic mission wait entered: target=%s, side=%d, "
-            "target_s=%.2f, terminal_budget=%d, reason=%s, wp_id=%d",
+            "target_s=%.2f, terminal_budget=%d, cross_side_lease=%d, "
+            "escape_authority=%d, "
+            "reason=%s, wp_id=%d",
             overtake_line_state_.target_vehicle_id.c_str(),
             overtake_line_state_.pass_side_sign,
             behavior_output.locked_target_longitudinal,
-            terminal_budget_abort ? 1 : 0, reason.c_str(),
+            terminal_budget_abort ? 1 : 0,
+            overtake_line_state_.dynamic_mission_wait_cross_side_lease_active ? 1 : 0,
+            overtake_line_state_.dynamic_mission_wait_bounded_escape_at_entry ? 1 : 0,
+            reason.c_str(),
             model->wp_id);
       }
       return true;
@@ -25897,6 +25950,33 @@ private:
       bool active{false};
       overtake_decision_trace::RuntimeFailoverTrace trace;
     };
+    const auto dynamic_wait_hard_fault_present = [&]() {
+        return
+          actual_wall_physical_contact || actual_wall_margin_blocked ||
+          actual_wall_sample_unavailable ||
+          behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake ||
+          overtake_solver_recovery_active_ || behavior_output.overtake_forbidden_wp;
+      };
+    const auto dynamic_wait_cross_side_lease_active = [&]() {
+        return overtake_core::can_use_dynamic_mission_wait_cross_side_lease(
+          overtake_core::DynamicMissionWaitCrossSideLeaseRequest{
+            overtake_line_state_.dynamic_mission_wait_active,
+            overtake_line_state_.dynamic_mission_wait_cross_side_lease_active,
+            locked_target_progress_continuous,
+            behavior_output.locked_target_position_jump,
+            behavior_output.locked_target_current_body_footprints_separated,
+            behavior_output.locked_target_footprint_prediction_valid,
+            dynamic_wait_hard_fault_present(),
+            overtake_line_state_.mission_cross_side_transition_committed,
+            overtake_line_state_.opponent_side_replan_count,
+            line_cfg.opponent_side_replan_max_count,
+            std::isfinite(overtake_line_state_.phase_start_sec) ?
+            std::max(0.0, now_sec - overtake_line_state_.phase_start_sec) :
+            std::numeric_limits<double>::infinity(),
+            line_cfg.dynamic_mission_wait_timeout_sec,
+            std::max(0.0, overtake_line_state_.phase_traveled_m),
+            line_cfg.dynamic_mission_wait_max_distance});
+      };
     const auto capture_runtime_failover_trace_context = [&]() {
         RuntimeFailoverTraceContext context;
         context.active = overtake_line_state_.dynamic_mission_wait_active;
@@ -25914,10 +25994,18 @@ private:
           behavior_output.opponent_side_replan_current_feasible;
         context.trace.current_mission_available =
           behavior_output.opponent_side_replan_current_mission.has_value();
+        context.trace.current_reason =
+          overtake_line_state_.pass_side_sign > 0 ?
+          behavior_output.overtake_left_reason :
+          behavior_output.overtake_right_reason;
         context.trace.alternate_feasible =
           behavior_output.opponent_side_replan_alternate_feasible;
         context.trace.alternate_mission_available =
           behavior_output.opponent_side_replan_mission.has_value();
+        context.trace.alternate_reason =
+          overtake_line_state_.pass_side_sign > 0 ?
+          behavior_output.overtake_right_reason :
+          behavior_output.overtake_left_reason;
         context.trace.alternate_stable =
           behavior_output.opponent_side_replan_ready;
         context.trace.cross_side_allowed =
@@ -25927,15 +26015,18 @@ private:
           overtake_core::PassCommitStage::ShiftCommitted &&
           overtake_line_state_.opponent_side_replan_count <
           line_cfg.opponent_side_replan_max_count;
+        context.trace.cross_side_lease_active =
+          dynamic_wait_cross_side_lease_active();
+        context.trace.cross_side_allowed =
+          context.trace.cross_side_allowed ||
+          context.trace.cross_side_lease_active;
         context.trace.no_return =
           overtake_line_state_.opponent_side_replan_no_return_latched;
-        context.trace.hard_fault =
-          actual_wall_physical_contact || actual_wall_margin_blocked ||
-          actual_wall_sample_unavailable ||
-          behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake ||
-          overtake_solver_recovery_active_ || behavior_output.overtake_forbidden_wp;
+        context.trace.hard_fault = dynamic_wait_hard_fault_present();
         context.trace.forward_prefix_active =
           overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active;
+        context.trace.bounded_lateral_escape_active =
+          overtake_line_state_.dynamic_mission_wait_bounded_escape_at_entry;
         context.trace.waypoint_id = model->wp_id;
         return context;
       };
@@ -25971,12 +26062,14 @@ private:
         }
 
         const bool dynamic_wait_cross_side_allowed =
+          dynamic_wait_cross_side_lease_active() ||
+          (
           !overtake_line_state_.opponent_side_replan_no_return_latched &&
           !overtake_line_state_.mission_cross_side_transition_committed &&
           behavior_output.overtake_commit_stage ==
           overtake_core::PassCommitStage::ShiftCommitted &&
           overtake_line_state_.opponent_side_replan_count <
-          line_cfg.opponent_side_replan_max_count;
+          line_cfg.opponent_side_replan_max_count);
         const bool fresh_current_replacement_ready =
           current_overtake_mission_invalidated() &&
           behavior_output.opponent_side_replan_current_feasible &&
@@ -26009,11 +26102,12 @@ private:
           behavior_output.locked_target_footprint_prediction_valid &&
           (fresh_current_replacement_ready || fresh_alternate_replacement_ready);
         const bool dynamic_wait_hard_fault =
-          actual_wall_physical_contact || actual_wall_margin_blocked ||
-          actual_wall_sample_unavailable ||
-          (behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake &&
-          !fresh_replacement_physically_admitted) ||
-          overtake_solver_recovery_active_ || behavior_output.overtake_forbidden_wp;
+          dynamic_wait_hard_fault_present() &&
+          !(behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake &&
+          fresh_replacement_physically_admitted &&
+          !actual_wall_physical_contact && !actual_wall_margin_blocked &&
+          !actual_wall_sample_unavailable && !overtake_solver_recovery_active_ &&
+          !behavior_output.overtake_forbidden_wp);
         bool terminal_current_rearm_active = false;
         if (
           overtake_line_state_.dynamic_mission_wait_terminal_budget_abort &&
@@ -26175,6 +26269,8 @@ private:
               }
               overtake_line_state_.dynamic_mission_wait_active = false;
               overtake_line_state_.dynamic_mission_wait_trigger_reason.clear();
+              overtake_line_state_.dynamic_mission_wait_cross_side_lease_active = false;
+              overtake_line_state_.dynamic_mission_wait_bounded_escape_at_entry = false;
             } else {
               transition_overtake_line_phase(
                 OvertakeLinePhase::Recovery, now_sec, current_ey,
@@ -26198,6 +26294,8 @@ private:
             if (replaced) {
               overtake_line_state_.dynamic_mission_wait_active = false;
               overtake_line_state_.dynamic_mission_wait_trigger_reason.clear();
+              overtake_line_state_.dynamic_mission_wait_cross_side_lease_active = false;
+              overtake_line_state_.dynamic_mission_wait_bounded_escape_at_entry = false;
             } else {
               transition_overtake_line_phase(
                 OvertakeLinePhase::Recovery, now_sec, current_ey,
@@ -26241,6 +26339,8 @@ private:
           case overtake_core::DynamicMissionWaitAction::ResumeCurrent:
             overtake_line_state_.dynamic_mission_wait_active = false;
             overtake_line_state_.dynamic_mission_wait_trigger_reason.clear();
+            overtake_line_state_.dynamic_mission_wait_cross_side_lease_active = false;
+            overtake_line_state_.dynamic_mission_wait_bounded_escape_at_entry = false;
             if (line_cfg.debug_log_enabled) {
               RCLCPP_INFO(
                 rclcpp::get_logger("mpc_controller"),
@@ -26999,7 +27099,10 @@ private:
           behavior_output.locked_target_pass_side_intrusion,
           behavior_output.overtake_execution_corridor_blocked,
           behavior_output.overtake_forbidden_wp,
-          behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake}) ||
+          behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake,
+          behavior_output.precontact_squeeze_escape_active &&
+          overtake_line_state_.pass_precontact_squeeze_escape_was_active &&
+          overtake_line_state_.pass_precontact_squeeze_escape_wall_validated}) ||
         opponent_side_switch_pending;
       const auto continuity = overtake_core::resolve_target_continuity(
         overtake_core::ContinuityRequest{
@@ -32060,6 +32163,10 @@ private:
       overtake_line_state_.pass_precontact_squeeze_escape_was_active =
         behavior_output.precontact_squeeze_escape_active;
     }
+    overtake_line_state_.pass_precontact_squeeze_escape_wall_validated =
+      behavior_output.precontact_squeeze_escape_active &&
+      wall_bounded_separation.valid &&
+      std::abs(output.separation_applied_lateral_bias) > kEps;
     if (output.committed_pass_speed_floor_active) {
       output.target_velocity_floor = std::min(
         cfg.v_max,

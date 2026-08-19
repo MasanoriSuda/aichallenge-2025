@@ -6447,6 +6447,32 @@ struct DynamicMissionWaitUrgentAlternateRequest
 bool can_admit_dynamic_mission_wait_urgent_alternate(
   const DynamicMissionWaitUrgentAlternateRequest & request) noexcept;
 
+struct DynamicMissionWaitCrossSideLeaseRequest
+{
+  bool wait_active{false};
+  bool lease_latched{false};
+  bool target_continuous{false};
+  bool target_position_jump{false};
+  bool current_body_footprints_separated{false};
+  bool footprint_prediction_valid{false};
+  bool hard_fault{false};
+  bool cross_side_transition_committed{false};
+  int replacement_count{0};
+  int maximum_replacement_count{0};
+  double elapsed_sec{};
+  double maximum_elapsed_sec{};
+  double traveled_distance_m{};
+  double maximum_traveled_distance_m{};
+};
+
+/// Preserve only the right to assess and admit an alternate side while an
+/// asynchronous DynamicMissionWait evaluation that began before no-return is
+/// outstanding. The alternate Mission still passes its ordinary geometry and
+/// prediction admission; this lease only prevents the no-return latch from
+/// racing the already-started assessment.
+bool can_use_dynamic_mission_wait_cross_side_lease(
+  const DynamicMissionWaitCrossSideLeaseRequest & request) noexcept;
+
 struct DynamicMissionWaitRuntimeOwnershipRequest
 {
   bool behavior_overtake{false};
@@ -6679,6 +6705,9 @@ struct CommittedPassGeometryOwnershipRequest
   /// Result of the bounded side-contact classifier. The classifier owns its
   /// duration, progress, velocity and side-geometry limits.
   bool recoverable_side_contact_active{false};
+  /// A pre-contact classifier requested a same-side separation maneuver. It
+  /// may own Pass geometry only while the current bodies remain separated.
+  bool precontact_squeeze_escape_active{false};
 };
 
 struct CommittedPassGeometryOwnershipResolution
@@ -6687,6 +6716,7 @@ struct CommittedPassGeometryOwnershipResolution
   bool body_clear_handoff_owns_pass{false};
   bool current_overlap_grace_active{false};
   bool recoverable_side_contact_owns_pass{false};
+  bool precontact_squeeze_escape_owns_pass{false};
   bool pass_authority_available{false};
   bool current_geometry_acceptable{false};
   bool ownership_allowed{false};
@@ -7555,6 +7585,10 @@ struct CommittedExecutionContinuityRequest
   bool live_execution_corridor_blocked{false};
   bool explicit_forbidden_waypoint{false};
   bool emergency_front_risk{false};
+  /// The previous control cycle produced a non-zero, wall-bounded same-side
+  /// separation bias. This bridges the Behavior handoff only; waypoint,
+  /// emergency and solver guards remain outside this exception.
+  bool bounded_lateral_escape_active{false};
 };
 
 /// Once ShiftOut/Pass is committed, keep the fixed target/side/corridor across

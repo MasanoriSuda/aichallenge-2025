@@ -150,10 +150,14 @@ TEST(OvertakeDecisionTrace, EmitsRuntimeFailoverOnlyOnCategoricalChange) {
   failover.current_feasible = true;
   failover.current_mission_available = true;
   failover.current_ready = true;
+  failover.current_reason = "current corridor valid";
   failover.alternate_feasible = true;
   failover.alternate_mission_available = true;
   failover.alternate_stable = false;
+  failover.alternate_reason = "stability pending";
   failover.cross_side_allowed = true;
+  failover.cross_side_lease_active = true;
+  failover.bounded_lateral_escape_active = true;
   failover.action = "replace-current";
   failover.source = "dynamic-wait-resolver";
   failover.reason = "current replacement ready";
@@ -168,6 +172,10 @@ TEST(OvertakeDecisionTrace, EmitsRuntimeFailoverOnlyOnCategoricalChange) {
             std::string::npos);
   EXPECT_NE(first.message.find("current=1/1/1"), std::string::npos);
   EXPECT_NE(first.message.find("alternate=1/1/0/0/0"), std::string::npos);
+  EXPECT_NE(first.message.find("cross_side=1/lease=1"), std::string::npos);
+  EXPECT_NE(first.message.find("escape_authority=1"), std::string::npos);
+  EXPECT_NE(first.message.find("reason=\"current corridor valid\""),
+            std::string::npos);
 
   failover.waypoint_id = 32;
   EXPECT_FALSE(emitter.update(failover, 1.1).emit);
@@ -195,6 +203,10 @@ TEST(OvertakeDecisionTrace, ClassifiesRuntimeFailoverTriggerGates) {
       trace::classify_runtime_failover_trigger(
           "live overtake corridor unavailable"),
       "live-corridor-unavailable");
+  EXPECT_EQ(
+      trace::classify_runtime_failover_trigger(
+          "locked target entered selected pass-side line"),
+      "pass-side-intrusion");
   EXPECT_EQ(trace::classify_runtime_failover_trigger("unclassified detail"),
             "other");
 }

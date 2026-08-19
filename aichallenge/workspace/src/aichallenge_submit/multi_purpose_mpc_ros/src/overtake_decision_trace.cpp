@@ -273,9 +273,11 @@ std::string categorical_signature(const RuntimeFailoverTrace &trace) {
          << (trace.alternate_urgent_admission ? 1 : 0) << ":"
          << (trace.alternate_ready ? 1 : 0) << "|"
          << (trace.cross_side_allowed ? 1 : 0) << "|"
+         << (trace.cross_side_lease_active ? 1 : 0) << "|"
          << (trace.no_return ? 1 : 0) << "|"
          << (trace.hard_fault ? 1 : 0) << "|"
          << (trace.forward_prefix_active ? 1 : 0) << "|"
+         << (trace.bounded_lateral_escape_active ? 1 : 0) << "|"
          << trace.action << "|" << trace.source;
   return stream.str();
 }
@@ -298,6 +300,10 @@ std::string classify_runtime_failover_trigger(const std::string &trigger) {
   if (trigger.find("live overtake corridor unavailable") != std::string::npos) {
     return "live-corridor-unavailable";
   }
+  if (trigger.find("locked target entered selected pass-side line") !=
+      std::string::npos) {
+    return "pass-side-intrusion";
+  }
   if (trigger.empty()) {
     return "unknown";
   }
@@ -316,15 +322,20 @@ std::string format_runtime_failover_trace(const RuntimeFailoverTrace &trace) {
          << ", current=" << (trace.current_feasible ? 1 : 0) << "/"
          << (trace.current_mission_available ? 1 : 0) << "/"
          << (trace.current_ready ? 1 : 0)
+         << "/reason=\"" << reason_or(trace.current_reason, "not-evaluated") << "\""
          << ", alternate=" << (trace.alternate_feasible ? 1 : 0) << "/"
          << (trace.alternate_mission_available ? 1 : 0) << "/"
          << (trace.alternate_stable ? 1 : 0) << "/"
          << (trace.alternate_urgent_admission ? 1 : 0) << "/"
          << (trace.alternate_ready ? 1 : 0)
+         << "/reason=\"" << reason_or(trace.alternate_reason, "not-evaluated") << "\""
          << ", cross_side=" << (trace.cross_side_allowed ? 1 : 0)
+         << "/lease=" << (trace.cross_side_lease_active ? 1 : 0)
          << ", no_return=" << (trace.no_return ? 1 : 0)
          << ", hard_fault=" << (trace.hard_fault ? 1 : 0)
          << ", prefix=" << (trace.forward_prefix_active ? 1 : 0)
+         << ", escape_authority="
+         << (trace.bounded_lateral_escape_active ? 1 : 0)
          << ", action=" << reason_or(trace.action, "inactive")
          << ", reason=" << reason_or(trace.reason, "not-evaluated")
          << ", wp_id=" << trace.waypoint_id;

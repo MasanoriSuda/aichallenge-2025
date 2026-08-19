@@ -509,6 +509,10 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_rearward_pass_completion
 using multi_purpose_mpc_ros::v2x_overtake_core::should_observe_locked_target_geometry;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_enter_dynamic_mission_wait;
 using multi_purpose_mpc_ros::v2x_overtake_core::
+  DynamicMissionWaitCrossSideLeaseRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  can_use_dynamic_mission_wait_cross_side_lease;
+using multi_purpose_mpc_ros::v2x_overtake_core::
   DynamicMissionWaitUrgentAlternateRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   can_admit_dynamic_mission_wait_urgent_alternate;
@@ -13233,6 +13237,38 @@ TEST(V2XOvertakeCoreDynamicMissionWait, UrgentAlternateSkipsOnlyDebounce)
   EXPECT_FALSE(can_admit_dynamic_mission_wait_urgent_alternate(request));
 }
 
+TEST(V2XOvertakeCoreDynamicMissionWait, CrossSideLeaseIsBoundedAndRevalidated)
+{
+  DynamicMissionWaitCrossSideLeaseRequest request;
+  request.wait_active = true;
+  request.lease_latched = true;
+  request.target_continuous = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.maximum_replacement_count = 1;
+  request.elapsed_sec = 0.20;
+  request.maximum_elapsed_sec = 0.75;
+  request.traveled_distance_m = 1.0;
+  request.maximum_traveled_distance_m = 4.0;
+
+  EXPECT_TRUE(can_use_dynamic_mission_wait_cross_side_lease(request));
+
+  request.elapsed_sec = 0.76;
+  EXPECT_FALSE(can_use_dynamic_mission_wait_cross_side_lease(request));
+  request.elapsed_sec = 0.20;
+  request.traveled_distance_m = 4.01;
+  EXPECT_FALSE(can_use_dynamic_mission_wait_cross_side_lease(request));
+  request.traveled_distance_m = 1.0;
+  request.target_position_jump = true;
+  EXPECT_FALSE(can_use_dynamic_mission_wait_cross_side_lease(request));
+  request.target_position_jump = false;
+  request.hard_fault = true;
+  EXPECT_FALSE(can_use_dynamic_mission_wait_cross_side_lease(request));
+  request.hard_fault = false;
+  request.replacement_count = 1;
+  EXPECT_FALSE(can_use_dynamic_mission_wait_cross_side_lease(request));
+}
+
 TEST(V2XOvertakeCoreDynamicEscape, RetriesOnlyKnownOppositeSide)
 {
   DynamicObstacleLateralEscapeAlternateRequest request;
@@ -13780,6 +13816,7 @@ TEST(V2XOvertakeCoreMissionOwnership, ResolvesCommittedPassGeometrySources)
   EXPECT_FALSE(result.body_clear_handoff_owns_pass);
   EXPECT_FALSE(result.current_overlap_grace_active);
   EXPECT_FALSE(result.recoverable_side_contact_owns_pass);
+  EXPECT_FALSE(result.precontact_squeeze_escape_owns_pass);
   EXPECT_TRUE(result.pass_authority_available);
   EXPECT_TRUE(result.current_geometry_acceptable);
   EXPECT_TRUE(result.ownership_allowed);
@@ -13811,6 +13848,21 @@ TEST(V2XOvertakeCoreMissionOwnership, ResolvesCommittedPassGeometrySources)
   EXPECT_TRUE(result.pass_authority_available);
   EXPECT_TRUE(result.current_geometry_acceptable);
   EXPECT_TRUE(result.ownership_allowed);
+
+  request.recoverable_side_contact_active = false;
+  request.current_body_footprints_separated = true;
+  request.current_body_footprint_overlap_confirmed = false;
+  request.minimum_motion_front_cap_release_latched = false;
+  request.committed_pass_attack_mode_enabled = false;
+  request.precontact_squeeze_escape_active = true;
+  result = resolve_committed_pass_geometry_ownership(request);
+  EXPECT_TRUE(result.precontact_squeeze_escape_owns_pass);
+  EXPECT_TRUE(result.ownership_allowed);
+
+  request.current_body_footprint_overlap_confirmed = true;
+  result = resolve_committed_pass_geometry_ownership(request);
+  EXPECT_FALSE(result.precontact_squeeze_escape_owns_pass);
+  EXPECT_FALSE(result.ownership_allowed);
 }
 
 TEST(V2XOvertakeCoreMissionOwnership, ValidatedPassOwnsBehaviorAcrossEntryRejection)
@@ -13835,6 +13887,7 @@ TEST(V2XOvertakeCoreMissionOwnership, MinimumMotionReleaseOwnsBehaviorWithoutLeg
   request.minimum_motion_front_cap_release_latched = true;
   request.locked_target_seen = true;
   request.current_body_footprints_separated = true;
+  request.current_body_footprint_overlap_confirmed = false;
 
   EXPECT_TRUE(can_preserve_committed_pass_behavior(request));
 
@@ -13875,6 +13928,7 @@ TEST(V2XOvertakeCoreMissionOwnership, PrecontactSqueezeKeepsLateralPassAuthority
   request.minimum_motion_front_cap_release_latched = true;
   request.locked_target_seen = true;
   request.current_body_footprints_separated = true;
+  request.current_body_footprint_overlap_confirmed = false;
   request.locked_target_pass_side_intrusion = true;
   request.emergency_front_risk = true;
 
@@ -13882,6 +13936,15 @@ TEST(V2XOvertakeCoreMissionOwnership, PrecontactSqueezeKeepsLateralPassAuthority
 
   request.precontact_squeeze_escape_active = true;
   EXPECT_TRUE(can_preserve_committed_pass_behavior(request));
+
+  // The wall-bounded squeeze itself remains a geometry owner if the speed-cap
+  // latch is re-applied in the same episode.
+  request.minimum_motion_front_cap_release_latched = false;
+  EXPECT_TRUE(can_preserve_committed_pass_behavior(request));
+
+  request.current_body_footprint_overlap_confirmed = true;
+  EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
+  request.current_body_footprint_overlap_confirmed = false;
 
   // Identity, waypoint and solver faults remain hard even during the lateral
   // separation response.
@@ -15719,6 +15782,25 @@ TEST(V2XOvertakeCoreContinuity, HardExecutionGuardsCancelCommittedBehaviorDropHo
   request.live_execution_corridor_blocked = true;
   EXPECT_FALSE(can_hold_committed_execution_after_behavior_drop(request));
   request.live_execution_corridor_blocked = false;
+  request.explicit_forbidden_waypoint = true;
+  EXPECT_FALSE(can_hold_committed_execution_after_behavior_drop(request));
+  request.explicit_forbidden_waypoint = false;
+  request.emergency_front_risk = true;
+  EXPECT_FALSE(can_hold_committed_execution_after_behavior_drop(request));
+}
+
+TEST(V2XOvertakeCoreContinuity, BoundedEscapeBridgesOnlyLateralConflicts)
+{
+  CommittedExecutionContinuityRequest request;
+  request.active_execution_phase = true;
+  request.target_progress_continuous = true;
+  request.target_ahead = true;
+  request.target_pass_side_intrusion = true;
+  request.live_execution_corridor_blocked = true;
+  request.bounded_lateral_escape_active = true;
+
+  EXPECT_TRUE(can_hold_committed_execution_after_behavior_drop(request));
+
   request.explicit_forbidden_waypoint = true;
   EXPECT_FALSE(can_hold_committed_execution_after_behavior_drop(request));
   request.explicit_forbidden_waypoint = false;

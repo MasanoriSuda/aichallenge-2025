@@ -19,6 +19,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::DynamicObstacleCruiseAuthorityRe
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicObstacleCruiseActivationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   DynamicObstacleLateralEscapeAuthorityRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  DynamicObstacleLateralEscapePlanningRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedShiftSteeringRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StoppedVehicleLineOwnershipRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ContinuityAction;
@@ -14360,6 +14362,66 @@ TEST(V2XOvertakeCoreLowSpeedBypass, ExistingLegacyAvoidanceKeepsItsLateralOwner)
 
   EXPECT_FALSE(resolution.promote_to_dynamic_front);
   EXPECT_FALSE(resolution.defer_legacy_low_speed_entry);
+}
+
+DynamicObstacleLateralEscapePlanningRequest dynamic_lateral_escape_planning_request()
+{
+  DynamicObstacleLateralEscapePlanningRequest request;
+  request.enabled = true;
+  request.dynamic_obstacle_target_active = true;
+  request.follow_state_active = true;
+  return request;
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, DynamicLateralEscapeRequestsScopedFollowPlanner)
+{
+  auto request = dynamic_lateral_escape_planning_request();
+  request.soft_curve_forbidden = true;
+  const auto resolution = resolve_dynamic_obstacle_lateral_escape_planning(request);
+
+  EXPECT_TRUE(resolution.request_gap_planner);
+  EXPECT_TRUE(resolution.soft_curve_forbidden_bypassed);
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, DynamicLateralEscapePlanningRequiresTargetAndFollow)
+{
+  auto request = dynamic_lateral_escape_planning_request();
+  request.dynamic_obstacle_target_active = false;
+  EXPECT_FALSE(resolve_dynamic_obstacle_lateral_escape_planning(request).request_gap_planner);
+
+  request = dynamic_lateral_escape_planning_request();
+  request.follow_state_active = false;
+  EXPECT_FALSE(resolve_dynamic_obstacle_lateral_escape_planning(request).request_gap_planner);
+
+  request = dynamic_lateral_escape_planning_request();
+  request.enabled = false;
+  EXPECT_FALSE(resolve_dynamic_obstacle_lateral_escape_planning(request).request_gap_planner);
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, DynamicLateralEscapePlanningKeepsOwnershipGates)
+{
+  auto request = dynamic_lateral_escape_planning_request();
+  request.overtake_entry_prearm_active = true;
+  EXPECT_FALSE(resolve_dynamic_obstacle_lateral_escape_planning(request).request_gap_planner);
+
+  request = dynamic_lateral_escape_planning_request();
+  request.active_pass_gap_hold = true;
+  EXPECT_FALSE(resolve_dynamic_obstacle_lateral_escape_planning(request).request_gap_planner);
+
+  request = dynamic_lateral_escape_planning_request();
+  request.explicit_forbidden_waypoint = true;
+  EXPECT_FALSE(resolve_dynamic_obstacle_lateral_escape_planning(request).request_gap_planner);
+}
+
+TEST(V2XOvertakeCoreLowSpeedBypass, DynamicLateralEscapePlanningKeepsHardFaultPriority)
+{
+  auto request = dynamic_lateral_escape_planning_request();
+  request.emergency_brake_active = true;
+  EXPECT_FALSE(resolve_dynamic_obstacle_lateral_escape_planning(request).request_gap_planner);
+
+  request = dynamic_lateral_escape_planning_request();
+  request.solver_recovery_active = true;
+  EXPECT_FALSE(resolve_dynamic_obstacle_lateral_escape_planning(request).request_gap_planner);
 }
 
 DynamicObstacleLateralEscapeAuthorityRequest dynamic_lateral_escape_request()

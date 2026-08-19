@@ -2033,6 +2033,8 @@ struct V2XBehaviorOutput
   std::string start_grid_upper_boundary_vehicle_id;
   bool low_speed_avoidance_candidate{false};
   bool dynamic_obstacle_cruise_authority_active{false};
+  bool dynamic_obstacle_lateral_escape_planner_requested{false};
+  bool dynamic_obstacle_lateral_escape_soft_curve_bypassed{false};
   bool dynamic_obstacle_lateral_escape_active{false};
   bool dynamic_obstacle_follow_cap_suppressed{false};
   int dynamic_obstacle_lateral_escape_side_sign{0};
@@ -14481,18 +14483,23 @@ struct MPC
       behavior_output.follow_speed_limit_moving_front = false;
       behavior_output.moving_front_clearance_limit_active = false;
     }
+    const bool dynamic_escape_planner_requested =
+      behavior_output.dynamic_obstacle_lateral_escape_planner_requested;
     const bool dynamic_escape_log_due =
       dynamic_lateral_escape_authority.active !=
       dynamic_obstacle_lateral_escape_was_active_ ||
-      (dynamic_lateral_escape_authority.active &&
-      (!std::isfinite(dynamic_obstacle_lateral_escape_last_log_sec_) ||
-      now_sec - dynamic_obstacle_lateral_escape_last_log_sec_ >= 1.0));
+      dynamic_escape_planner_requested !=
+      dynamic_obstacle_lateral_escape_planner_was_requested_ ||
+      (dynamic_escape_planner_requested &&
+        (!std::isfinite(dynamic_obstacle_lateral_escape_last_log_sec_) ||
+        now_sec - dynamic_obstacle_lateral_escape_last_log_sec_ >= 1.0));
     if (dynamic_escape_log_due) {
       RCLCPP_INFO(
         rclcpp::get_logger("mpc_controller"),
-        "Dynamic-obstacle lateral escape authority: active=%d, target=%s, "
+        "Dynamic-obstacle lateral escape authority: requested=%d, active=%d, target=%s, "
         "side=%d, shift=%.2f m, width=%.2f m, follow_cap_suppressed=%d, "
-        "risk=%s, planner=%d/%d, wp_id=%d",
+        "soft_curve_bypassed=%d, risk=%s, planner=%d/%d, wp_id=%d",
+        dynamic_escape_planner_requested ? 1 : 0,
         dynamic_lateral_escape_authority.active ? 1 : 0,
         behavior_output.dynamic_obstacle_cruise_target_id.empty() ? "<none>" :
         behavior_output.dynamic_obstacle_cruise_target_id.c_str(),
@@ -14500,6 +14507,7 @@ struct MPC
         dynamic_lateral_escape_authority.requested_lateral_shift_m,
         planner_output.selected_corridor_width,
         dynamic_lateral_escape_authority.suppress_generic_follow_cap ? 1 : 0,
+        behavior_output.dynamic_obstacle_lateral_escape_soft_curve_bypassed ? 1 : 0,
         to_string(behavior_output.front_risk_level),
         planner_output.active ? 1 : 0, planner_output.feasible ? 1 : 0,
         model->wp_id);
@@ -14507,6 +14515,8 @@ struct MPC
     }
     dynamic_obstacle_lateral_escape_was_active_ =
       dynamic_lateral_escape_authority.active;
+    dynamic_obstacle_lateral_escape_planner_was_requested_ =
+      dynamic_escape_planner_requested;
     // Keep downstream diagnostics and direct-control arbitration aligned with
     // the post-planner authority result, not the pre-planner Follow snapshot.
     last_v2x_behavior_output_ = behavior_output;
@@ -17718,6 +17728,7 @@ struct MPC
   double stage_corridor_mpc_constraints_last_log_sec_{
     -std::numeric_limits<double>::infinity()};
   bool dynamic_obstacle_lateral_escape_was_active_{false};
+  bool dynamic_obstacle_lateral_escape_planner_was_requested_{false};
   double dynamic_obstacle_lateral_escape_last_log_sec_{
     -std::numeric_limits<double>::infinity()};
 
@@ -33427,9 +33438,33 @@ private:
         !active_pass_gap_hold &&
         (!cfg.v2x_behavior.follow_gap_planner_respect_overtake_forbidden ||
         output.follow_gap_planner_allowed);
-      if (
+      const bool generic_follow_gap_planner_requested =
         !output.overtake_entry_prearm_active &&
-        cfg.v2x_behavior.follow_gap_planner_enabled && follow_gap_planner_allowed)
+        cfg.v2x_behavior.follow_gap_planner_enabled && follow_gap_planner_allowed;
+      const bool dynamic_escape_solver_recovery_active =
+        overtake_solver_recovery_active_ ||
+        v2x_overtake_core::is_solver_cooldown_active(
+        now_sec, overtake_solver_cooldown_until_sec_) ||
+        overtake_solver_reentry_blocked_ || last_control_was_fallback_;
+      const auto dynamic_escape_planning =
+        v2x_overtake_core::resolve_dynamic_obstacle_lateral_escape_planning(
+        v2x_overtake_core::DynamicObstacleLateralEscapePlanningRequest{
+          cfg.v2x_behavior.dynamic_obstacle_lateral_escape_authority_enabled,
+          output.dynamic_obstacle_cruise_authority_active,
+          true,
+          output.overtake_entry_prearm_active,
+          active_pass_gap_hold,
+          output.overtake_forbidden_wp,
+          output.overtake_forbidden,
+          output.front_risk_level == FrontRiskLevel::EmergencyBrake,
+          dynamic_escape_solver_recovery_active});
+      output.dynamic_obstacle_lateral_escape_planner_requested =
+        dynamic_escape_planning.request_gap_planner;
+      output.dynamic_obstacle_lateral_escape_soft_curve_bypassed =
+        dynamic_escape_planning.soft_curve_forbidden_bypassed;
+      if (
+        generic_follow_gap_planner_requested ||
+        dynamic_escape_planning.request_gap_planner)
       {
         output.allow_gap_planner = true;
       }

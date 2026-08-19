@@ -11756,6 +11756,25 @@ DynamicObstacleCruiseAuthorityResolution resolve_dynamic_obstacle_cruise_authori
   return resolution;
 }
 
+DynamicObstacleLateralEscapePlanningResolution
+resolve_dynamic_obstacle_lateral_escape_planning(
+  const DynamicObstacleLateralEscapePlanningRequest & request) noexcept
+{
+  DynamicObstacleLateralEscapePlanningResolution resolution;
+  if (
+    !request.enabled || !request.dynamic_obstacle_target_active ||
+    !request.follow_state_active || request.overtake_entry_prearm_active ||
+    request.active_pass_gap_hold || request.explicit_forbidden_waypoint ||
+    request.emergency_brake_active || request.solver_recovery_active)
+  {
+    return resolution;
+  }
+
+  resolution.request_gap_planner = true;
+  resolution.soft_curve_forbidden_bypassed = request.soft_curve_forbidden;
+  return resolution;
+}
+
 DynamicObstacleLateralEscapeAuthorityResolution
 resolve_dynamic_obstacle_lateral_escape_authority(
   const DynamicObstacleLateralEscapeAuthorityRequest & request) noexcept

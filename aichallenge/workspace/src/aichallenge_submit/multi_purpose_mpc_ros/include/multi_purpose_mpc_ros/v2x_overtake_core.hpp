@@ -6909,6 +6909,33 @@ struct DynamicObstacleCruiseAuthorityResolution
 DynamicObstacleCruiseAuthorityResolution resolve_dynamic_obstacle_cruise_authority(
   const DynamicObstacleCruiseAuthorityRequest & request) noexcept;
 
+struct DynamicObstacleLateralEscapePlanningRequest
+{
+  bool enabled{false};
+  bool dynamic_obstacle_target_active{false};
+  bool follow_state_active{false};
+  bool overtake_entry_prearm_active{false};
+  bool active_pass_gap_hold{false};
+  bool explicit_forbidden_waypoint{false};
+  bool soft_curve_forbidden{false};
+  bool emergency_brake_active{false};
+  bool solver_recovery_active{false};
+};
+
+struct DynamicObstacleLateralEscapePlanningResolution
+{
+  bool request_gap_planner{false};
+  bool soft_curve_forbidden_bypassed{false};
+};
+
+/// Decide whether Follow may run GapPlanner solely to evaluate a promoted
+/// dynamic-obstacle escape. This admission is independent from the generic
+/// Follow planner setting: soft Mission curve policy may be bypassed, while
+/// explicit map prohibition, active Pass ownership and hard faults fail closed.
+DynamicObstacleLateralEscapePlanningResolution
+resolve_dynamic_obstacle_lateral_escape_planning(
+  const DynamicObstacleLateralEscapePlanningRequest & request) noexcept;
+
 struct DynamicObstacleLateralEscapeAuthorityRequest
 {
   bool enabled{false};

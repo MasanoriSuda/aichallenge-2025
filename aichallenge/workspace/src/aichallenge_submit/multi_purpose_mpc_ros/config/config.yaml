@@ -498,7 +498,7 @@ mpc:
   v2x_follow_distance: 5.0         # [m] sim race: base Follow range; common-course detection remains 24 m
   v2x_safety_brake_distance: 2.2  # [m] dev3 attack: retain a small center-distance floor
   v2x_safety_brake_margin: 0.3    # [m] dev3 attack: dynamic stopping distance still applies
-  v2x_follow_gap_planner_enabled: false # Follow tracks the base path; lateral pass is only Overtake/low-speed avoidance
+  v2x_follow_gap_planner_enabled: false # Generic Follow stays on base path; promoted dynamic targets use scoped planner admission
   v2x_follow_gap_planner_no_gap_speed_limit_enabled: false # do not yield just because no gap is found
   v2x_follow_gap_planner_respect_overtake_forbidden: true # do not side-attack in hairpins/forbidden zones
   v2x_follow_speed_limit_enabled: true  # match front speed only inside the dedicated distance gate

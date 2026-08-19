@@ -26568,6 +26568,105 @@ private:
           overtake_mission_shift_distance(), current_ey,
           feasible_goal_for_phase, shiftout_lateral_tolerance,
           overtake_line_state_.pass_side_sign});
+    const bool pass_entry_execution_horizon_required =
+      line_cfg.pass_entry_physical_gate_enabled &&
+      committed_pass_horizon_enabled && shiftout_complete;
+    bool pass_entry_execution_horizon_available = true;
+    double pass_entry_execution_max_lateral_accel_mps2 = 0.0;
+    std::string pass_entry_execution_horizon_reason = "not required";
+    if (pass_entry_execution_horizon_required) {
+      std::vector<double> entry_path_distances;
+      std::vector<double> entry_nominal_lateral;
+      entry_path_distances.reserve(static_cast<std::size_t>(N));
+      entry_nominal_lateral.reserve(static_cast<std::size_t>(N));
+      for (int i = 0; i < N; ++i) {
+        entry_path_distances.push_back(
+          horizon_path_distance_to_index(ref_wp_id, static_cast<std::size_t>(i)));
+        entry_nominal_lateral.push_back(feasible_goal_for_phase);
+      }
+
+      std::optional<std::vector<double>> entry_execution_override;
+      bool authoritative_execution_profile_expected = false;
+      if (dp_execution_authority_active) {
+        authoritative_execution_profile_expected = true;
+        auto execution_reference =
+          overtake_core::resolve_frenet_dp_execution_reference(
+          overtake_core::FrenetDpExecutionReferenceRequest{
+            overtake_line_state_.mission_frenet_dp_execution_active &&
+            overtake_line_state_.mission_frenet_dp_side_sign ==
+            overtake_line_state_.pass_side_sign,
+            overtake_line_state_.mission_frenet_dp_execution_traveled_m,
+            2U,
+            overtake_line_state_.mission_frenet_dp_path_distances_m,
+            overtake_line_state_.mission_frenet_dp_lateral_path_m,
+            entry_path_distances, entry_nominal_lateral});
+        const auto trust_envelope =
+          overtake_core::resolve_frenet_dp_execution_trust_envelope(
+          overtake_core::FrenetDpExecutionTrustEnvelopeRequest{
+            execution_reference.valid && execution_reference.active,
+            line_cfg.mpcc_lite_same_side_max_lateral_adjustment,
+            execution_reference.lateral_targets_m,
+            entry_nominal_lateral});
+        if (trust_envelope.valid && trust_envelope.active) {
+          entry_execution_override = trust_envelope.lateral_targets_m;
+        }
+      } else if (
+        solved_execution_bridge_active && aligned_solved_execution.has_value())
+      {
+        authoritative_execution_profile_expected = true;
+        const auto trust_envelope =
+          overtake_core::resolve_frenet_dp_execution_trust_envelope(
+          overtake_core::FrenetDpExecutionTrustEnvelopeRequest{
+            aligned_solved_execution->lateral_m.size() ==
+            static_cast<std::size_t>(N),
+            line_cfg.mpcc_lite_same_side_max_lateral_adjustment,
+            aligned_solved_execution->lateral_m,
+            entry_nominal_lateral});
+        if (trust_envelope.valid && trust_envelope.active) {
+          entry_execution_override = trust_envelope.lateral_targets_m;
+        }
+      }
+
+      if (authoritative_execution_profile_expected && !entry_execution_override) {
+        pass_entry_execution_horizon_available = false;
+        pass_entry_execution_horizon_reason =
+          "authoritative execution profile unavailable";
+      } else {
+        const auto execution_horizon = evaluate_overtake_line_horizon(
+          ref_wp_id, N, lb, ub, current_ey, current_ey, 0.0, true,
+          std::max(0.5, line_cfg.pass_horizon_hold_max_distance),
+          feasible_goal_for_phase, planning_wall_clearance,
+          std::max(0.0, line_cfg.max_lateral_accel),
+          std::max(1.0, current_speed_mps_), true, std::nullopt,
+          entry_execution_override);
+        pass_entry_execution_max_lateral_accel_mps2 =
+          execution_horizon.max_required_lateral_accel;
+        pass_entry_execution_horizon_available =
+          execution_horizon.execution_feasible() &&
+          !execution_horizon.lateral_accel_limited &&
+          !execution_horizon.wall_clearance_limited &&
+          !execution_horizon.static_map_wall_limited;
+        if (pass_entry_execution_horizon_available) {
+          pass_entry_execution_horizon_reason = "execution horizon feasible";
+        } else if (execution_horizon.lateral_accel_limited) {
+          pass_entry_execution_horizon_reason =
+            "execution horizon exceeds lateral acceleration limit";
+        } else if (
+          execution_horizon.wall_clearance_limited ||
+          execution_horizon.static_map_wall_limited)
+        {
+          pass_entry_execution_horizon_reason =
+            "execution horizon requires wall clamp";
+        } else {
+          pass_entry_execution_horizon_reason =
+            overtake_line_horizon_failure_reason(execution_horizon);
+          if (pass_entry_execution_horizon_reason.empty()) {
+            pass_entry_execution_horizon_reason =
+              "execution horizon physical preflight failed";
+          }
+        }
+      }
+    }
     bool pass_entry_physical_hold_active = false;
     const bool pass_entry_gate_was_active =
       overtake_line_state_.shiftout_pass_entry_physical_hold_active;
@@ -26604,6 +26703,8 @@ private:
         pass_entry_gate_inside_window,
         actual_wall_preplan_warning &&
         !runtime_wall_escape_prefix_execution_active,
+        pass_entry_execution_horizon_required,
+        pass_entry_execution_horizon_available,
         runtime_wall_hard_fault,
         pass_entry_gate_elapsed_sec,
         pass_entry_gate_traveled_m,
@@ -26628,12 +26729,18 @@ private:
           rclcpp::get_logger("mpc_controller"),
           "OvertakeLine Pass entry physical gate held: target=%s, side=%d, "
           "phase=%s, speed=%.2f, predicted=%d, ttc=%.2f s, "
+          "trigger=%s, execution_reason=%s, execution_ay=%.2f m/s2, "
           "lease=%.2f s/%.2f m, hold_limit=%.2f s/%.2f m, wp_id=%d",
           overtake_line_state_.target_vehicle_id.c_str(),
           overtake_line_state_.pass_side_sign,
           to_string(overtake_line_state_.phase), current_speed_mps_,
           actual_wall_preplan_prediction_warning ? 1 : 0,
           actual_wall_preplan_prediction_ttc_sec,
+          pass_entry_execution_horizon_required &&
+          !pass_entry_execution_horizon_available ?
+          "execution_preflight" : "wall_warning",
+          pass_entry_execution_horizon_reason.c_str(),
+          pass_entry_execution_max_lateral_accel_mps2,
           line_cfg.pass_entry_physical_gate_lease_sec,
           line_cfg.pass_entry_physical_gate_lease_distance,
           line_cfg.pass_horizon_hold_max_sec,
@@ -26701,7 +26808,10 @@ private:
       if (pass_entry_physical_hold_active) {
         // Keep ShiftOut ownership. A bounded, physically revalidated lateral
         // hold is built below while the rolling planner searches again.
-      } else if (fresh_dynamic_horizon_available) {
+      } else if (
+        fresh_dynamic_horizon_available &&
+        pass_entry_execution_horizon_available)
+      {
         if (overtake_line_state_.shiftout_fresh_horizon_wait_active) {
           RCLCPP_INFO(
             rclcpp::get_logger("mpc_controller"),
@@ -26718,7 +26828,7 @@ private:
         transition_overtake_line_phase(
           OvertakeLinePhase::Pass, now_sec, current_ey,
           overtake_line_state_.pass_side_sign,
-          "shift complete with fresh dynamic Pass horizon");
+          "shift complete with fresh dynamic and physical Pass horizon");
       } else if (committed_pass_horizon_enabled) {
         if (!overtake_line_state_.shiftout_fresh_horizon_wait_active) {
           overtake_line_state_.shiftout_fresh_horizon_wait_active = true;

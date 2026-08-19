@@ -4722,6 +4722,8 @@ struct PassEntryPhysicalGateRequest
   bool enabled{false};
   bool inside_entry_window{false};
   bool warning_margin_blocked{false};
+  bool execution_horizon_required{false};
+  bool execution_horizon_available{true};
   bool hard_wall_fault{false};
   double hold_elapsed_sec{};
   double hold_traveled_m{};
@@ -4736,8 +4738,9 @@ struct PassEntryPhysicalGateResolution
 };
 
 /// Keep the vehicle at its last physically valid lateral position when the
-/// warning band predicts a near-term wall conflict at the ShiftOut boundary or
-/// during a bounded early-Pass lease. An expired hold requests a new Mission.
+/// warning band predicts a near-term wall conflict, or when the execution
+/// horizon is unavailable, at the ShiftOut boundary or during a bounded
+/// early-Pass lease. An expired hold requests a new Mission.
 PassEntryPhysicalGateResolution resolve_pass_entry_physical_gate(
   const PassEntryPhysicalGateRequest & request) noexcept;
 

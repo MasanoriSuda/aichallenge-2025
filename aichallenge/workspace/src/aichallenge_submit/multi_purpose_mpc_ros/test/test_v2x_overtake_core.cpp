@@ -9142,6 +9142,34 @@ TEST(V2XOvertakeCoreWall, PassEntryPhysicalGateDefersHardFaultToExistingGuard)
   EXPECT_EQ(resolution.action, PassEntryPhysicalGateAction::Inactive);
 }
 
+TEST(V2XOvertakeCoreWall, PassEntryPhysicalGateRequiresExecutableHorizon)
+{
+  PassEntryPhysicalGateRequest request;
+  request.enabled = true;
+  request.inside_entry_window = true;
+  request.execution_horizon_required = true;
+  request.execution_horizon_available = false;
+  request.hold_elapsed_sec = 0.20;
+  request.hold_traveled_m = 0.80;
+  request.maximum_hold_sec = 1.0;
+  request.maximum_hold_distance_m = 3.0;
+
+  auto resolution = resolve_pass_entry_physical_gate(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_EQ(resolution.action, PassEntryPhysicalGateAction::HoldForReplan);
+
+  request.execution_horizon_available = true;
+  resolution = resolve_pass_entry_physical_gate(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_EQ(resolution.action, PassEntryPhysicalGateAction::Inactive);
+
+  request.execution_horizon_available = false;
+  request.hard_wall_fault = true;
+  resolution = resolve_pass_entry_physical_gate(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_EQ(resolution.action, PassEntryPhysicalGateAction::Inactive);
+}
+
 TEST(V2XOvertakeCoreWall, ThrottlesOnlyUnchangedRejectedCrossSideCandidate)
 {
   CrossSideReplacementRetryThrottleRequest request;

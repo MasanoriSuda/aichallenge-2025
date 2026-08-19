@@ -8520,9 +8520,13 @@ PassEntryPhysicalGateResolution resolve_pass_entry_physical_gate(
   }
 
   resolution.valid = true;
+  const bool execution_horizon_blocked =
+    request.execution_horizon_required &&
+    !request.execution_horizon_available;
   if (
     !request.enabled || !request.inside_entry_window ||
-    !request.warning_margin_blocked || request.hard_wall_fault)
+    (!request.warning_margin_blocked && !execution_horizon_blocked) ||
+    request.hard_wall_fault)
   {
     return resolution;
   }

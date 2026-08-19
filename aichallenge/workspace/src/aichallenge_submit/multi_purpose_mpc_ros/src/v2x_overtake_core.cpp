@@ -8355,7 +8355,11 @@ RuntimeWallPreplanResolution resolve_runtime_wall_preplan(
   {
     resolution.action = RuntimeWallPreplanAction::ReturnToBaseLine;
   } else if (request.center_contraction_evaluated) {
-    resolution.action = RuntimeWallPreplanAction::ExitCurrentMission;
+    resolution.action =
+      request.connected_rearward_execution_hold_available &&
+      !request.rear_clear_confirmed ?
+      RuntimeWallPreplanAction::HoldCurrentSide :
+      RuntimeWallPreplanAction::ExitCurrentMission;
   } else if (!request.rear_clear_confirmed) {
     resolution.action = RuntimeWallPreplanAction::HoldCurrentSide;
   } else if (request.replan_count < request.maximum_replan_count) {

@@ -24528,6 +24528,15 @@ private:
     runtime_wall_preplan_request.speed_preserving_return_available =
       runtime_wall_return_available;
     runtime_wall_preplan_request.rear_clear_confirmed = rear_clear_confirmed;
+    runtime_wall_preplan_request.connected_rearward_execution_hold_available =
+      overtake_line_state_.phase == OvertakeLinePhase::Pass &&
+      !rear_clear_confirmed &&
+      runtime_wall_preplan_request.target_continuous &&
+      runtime_wall_preplan_request.current_body_separated &&
+      overtake_line_state_.target_bound_execution_replan_hold_active &&
+      overtake_line_state_.target_bound_execution_replan_prefix_executing &&
+      std::isfinite(behavior_output.locked_target_longitudinal) &&
+      behavior_output.locked_target_longitudinal <= 0.0;
     runtime_wall_preplan_request.mission_side_sign =
       overtake_line_state_.pass_side_sign;
     runtime_wall_preplan_request.candidate_side_sign =
@@ -24735,9 +24744,9 @@ private:
       {
         RCLCPP_WARN(
           rclcpp::get_logger("mpc_controller"),
-          "OvertakeLine runtime wall Return suppressed before rear-clear: "
+          "OvertakeLine runtime wall current-side hold: "
           "target=%s, side=%d, target_s=%.2f, elapsed=%.2f s, "
-          "hard_fault=%d, contraction=%s, holding=current-side, wp_id=%d",
+          "hard_fault=%d, contraction=%s, mode=%s, wp_id=%d",
           overtake_line_state_.target_vehicle_id.c_str(),
           overtake_line_state_.pass_side_sign,
           behavior_output.locked_target_longitudinal,
@@ -24745,6 +24754,8 @@ private:
           runtime_wall_hard_fault ? 1 : 0,
           runtime_wall_center_contraction_reject_reason.empty() ?
           "unavailable" : runtime_wall_center_contraction_reject_reason.c_str(),
+          runtime_wall_preplan_request.connected_rearward_execution_hold_available ?
+          "connected-rearward-execution" : "pre-rear-clear",
           model->wp_id);
         overtake_line_state_.mission_runtime_wall_return_suppressed_logged = true;
       }

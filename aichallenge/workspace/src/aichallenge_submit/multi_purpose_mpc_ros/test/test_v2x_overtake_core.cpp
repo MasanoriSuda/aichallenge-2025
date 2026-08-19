@@ -8993,6 +8993,40 @@ TEST(V2XOvertakeCoreWall, RuntimePreplanExitsAfterEscapePrefixFailure)
     RuntimeWallPreplanAction::ExitCurrentMission);
 }
 
+TEST(V2XOvertakeCoreWall, RuntimePreplanKeepsConnectedRearwardPassAfterEscapeFailure)
+{
+  RuntimeWallPreplanRequest request;
+  request.enabled = true;
+  request.active_execution = true;
+  request.warning_margin_blocked = true;
+  request.target_continuous = true;
+  request.current_body_separated = true;
+  request.target_prediction_valid = true;
+  request.center_contraction_evaluated = true;
+  request.connected_rearward_execution_hold_available = true;
+  request.mission_side_sign = 1;
+  request.now_sec = 10.0;
+  request.cooldown_sec = 0.5;
+  request.warning_elapsed_sec = 0.20;
+  request.fallback_delay_sec = 0.15;
+  request.maximum_replan_count = 2;
+
+  EXPECT_EQ(
+    resolve_runtime_wall_preplan(request).action,
+    RuntimeWallPreplanAction::HoldCurrentSide);
+
+  request.connected_rearward_execution_hold_available = false;
+  EXPECT_EQ(
+    resolve_runtime_wall_preplan(request).action,
+    RuntimeWallPreplanAction::ExitCurrentMission);
+
+  request.connected_rearward_execution_hold_available = true;
+  request.hard_wall_fault = true;
+  EXPECT_EQ(
+    resolve_runtime_wall_preplan(request).action,
+    RuntimeWallPreplanAction::None);
+}
+
 TEST(V2XOvertakeCoreWall, RuntimePreplanExecutesAcceptedPrefixDuringCooldown)
 {
   RuntimeWallPreplanRequest request;

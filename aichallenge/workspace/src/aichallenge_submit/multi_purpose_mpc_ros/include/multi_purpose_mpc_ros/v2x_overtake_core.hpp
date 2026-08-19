@@ -4628,6 +4628,7 @@ struct RuntimeWallPreplanRequest
   bool center_contraction_available{false};
   bool speed_preserving_return_available{false};
   bool rear_clear_confirmed{false};
+  bool connected_rearward_execution_hold_available{false};
   int mission_side_sign{0};
   int candidate_side_sign{0};
   double now_sec{};

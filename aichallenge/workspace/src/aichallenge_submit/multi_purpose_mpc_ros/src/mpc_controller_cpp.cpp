@@ -12416,6 +12416,102 @@ struct MPC
       now_sec - mpcc_lite_shadow_last_evaluation_sec_ + kEps >=
       shadow_cfg.mpcc_lite_shadow_evaluation_interval_sec);
     auto mpcc_authority_action = overtake_core::MpccLiteAuthorityAction::None;
+    const auto configure_new_entry_completion_proof = [&] (
+      overtake_core::MpccLitePrefixExecutionRequest & request,
+      const overtake_core::OvertakeMissionCandidate & mission,
+      const double target_speed_mps)
+      {
+        request.completion_proof_gate_enabled =
+          cfg.v2x_behavior.overtake_line.
+          progressive_entry_completion_proof_gate_enabled;
+        request.target_front_distance_m =
+          std::max(0.0, output.front_distance);
+        request.positive_closing_speed_mps = std::max(
+          std::max(0.0, current_speed_mps_ - std::max(0.0, target_speed_mps)),
+          std::max(0.0, mission.closing_speed_mps));
+        request.no_return_front_distance_m = std::max(
+          0.0,
+          cfg.v2x_behavior.overtake_line.
+          opponent_side_replan_no_return_front_distance);
+        request.minimum_unproven_front_distance_m = std::max(
+          0.0,
+          cfg.v2x_behavior.overtake_line.
+          progressive_entry_min_unproven_front_distance);
+        request.minimum_no_return_time_sec = std::max(
+          0.0,
+          cfg.v2x_behavior.overtake_line.
+          progressive_entry_min_no_return_time_sec);
+      };
+    const auto log_mpcc_entry_admission_rejection = [&] (
+      const char * source, const int side,
+      const overtake_core::OvertakeMissionCandidate & mission,
+      const double target_speed_mps,
+      const overtake_core::MpccLitePrefixExecutionResolution & resolution)
+      {
+        if (mpcc_lite_async_worker_context_ || resolution.admitted) {
+          return;
+        }
+        static rclcpp::Clock entry_admission_log_clock{RCL_STEADY_TIME};
+        RCLCPP_WARN_THROTTLE(
+          rclcpp::get_logger("mpc_controller"), entry_admission_log_clock, 1000,
+          "Overtake entry admission rejected: source=%s, target=%s, side=%d, "
+          "candidate=progressive, prefix_reason=%s, completion=%d/%s, "
+          "front=%.2f/%.2f m, closing=%.2f m/s, time_to_no_return=%.2f/%.2f s",
+          source, output.target_vehicle_id.c_str(), side,
+          overtake_core::to_string(resolution.reason),
+          resolution.completion_proof.checked ? 1 : 0,
+          overtake_core::to_string(resolution.completion_proof.reject_reason),
+          std::max(0.0, output.front_distance),
+          cfg.v2x_behavior.overtake_line.
+          progressive_entry_min_unproven_front_distance,
+          std::max(
+            std::max(0.0, current_speed_mps_ - std::max(0.0, target_speed_mps)),
+            std::max(0.0, mission.closing_speed_mps)),
+          resolution.completion_proof.time_to_no_return_sec,
+          cfg.v2x_behavior.overtake_line.
+          progressive_entry_min_no_return_time_sec);
+      };
+    const auto apply_mpcc_entry_execution_contract = [&] (
+      const overtake_core::OvertakeMissionCandidate & mission,
+      const char * source)
+      {
+        if (mission.pass_side_sign != -1 && mission.pass_side_sign != 1) {
+          return false;
+        }
+        auto & authoritative_assessment = mission.pass_side_sign > 0 ?
+          left_assessment : right_assessment;
+        authoritative_assessment.side = mission.pass_side_sign;
+        authoritative_assessment.gap_available = true;
+        authoritative_assessment.selected_mission = mission;
+        authoritative_assessment.mpcc_receding_mission = mission;
+        authoritative_assessment.corridor_center_ey = mission.goal_lateral_m;
+        authoritative_assessment.required_lateral_shift = mission.lateral_shift_m;
+        authoritative_assessment.required_lateral_accel =
+          mission.max_required_lateral_accel_mps2;
+        authoritative_assessment.minimum_motion_goal_available = true;
+        authoritative_assessment.base_line_clear =
+          std::abs(mission.goal_lateral_m) <= kEps;
+        authoritative_assessment.direct_base_line_pass_ready =
+          mission.direct_pass && authoritative_assessment.base_line_clear &&
+          mission.current_position_clear;
+        authoritative_assessment.direct_tiny_shift_pass_ready =
+          mission.direct_pass && !authoritative_assessment.base_line_clear &&
+          mission.current_position_clear;
+        std::ostringstream authority_reason;
+        authority_reason << "MPCC-lite entry contract selected: source=" << source
+                         << ", candidate=" <<
+          (mission.progressive_entry ? "progressive" : "complete");
+        authoritative_assessment.reason = authority_reason.str();
+        authoritative_assessment.guard_reason = authoritative_assessment.reason;
+        side_selection = {
+          pass_side(mission.pass_side_sign),
+          overtake_core::SideSelectionReason::HigherQuality};
+        side_selected_for_execution = true;
+        if (mission.progressive_entry) {
+          mpcc_lite_progressive_entry_authorized_side = mission.pass_side_sign;
+        }
+        return true;
+      };
     if (async_shadow_enabled) {
       if (accepted_async_tactical_result != nullptr) {
         const auto & async_result = *accepted_async_tactical_result;
@@ -12492,8 +12588,20 @@ struct MPC
               std::max(0.0, shadow_cfg.pass_horizon_absolute_time_limit);
             request.remaining_distance_budget_m =
               std::max(0.0, shadow_cfg.pass_horizon_absolute_distance_limit);
+            configure_new_entry_completion_proof(
+              request, async_entry_mission.value(),
+              output.overtake_entry_target_speed);
             return overtake_core::resolve_mpcc_lite_prefix_execution(request);
           }();
+        if (
+          async_entry_mission.has_value() &&
+          async_entry_mission->progressive_entry &&
+          !async_entry_prefix_resolution.admitted)
+        {
+          log_mpcc_entry_admission_rejection(
+            "async-result", async_entry_side, async_entry_mission.value(),
+            output.overtake_entry_target_speed, async_entry_prefix_resolution);
+        }
         const bool async_entry_context =
           locked_pass_side == 0 &&
           overtake_line_state_.phase == OvertakeLinePhase::Idle &&
@@ -12507,46 +12615,16 @@ struct MPC
           (!std::isfinite(async_entry_mission->dynamic_valid_until_sec) ||
           now_sec <= async_entry_mission->dynamic_valid_until_sec + kEps);
         if (async_entry_context) {
-            auto & authoritative_assessment = async_entry_side > 0 ?
-              left_assessment : right_assessment;
-            authoritative_assessment.side = async_entry_side;
-            authoritative_assessment.gap_available = true;
-            authoritative_assessment.selected_mission = async_entry_mission;
-            authoritative_assessment.mpcc_receding_mission = async_entry_mission;
-            authoritative_assessment.corridor_center_ey =
-              async_entry_mission->goal_lateral_m;
-            authoritative_assessment.required_lateral_shift =
-              async_entry_mission->lateral_shift_m;
-            authoritative_assessment.required_lateral_accel =
-              async_entry_mission->max_required_lateral_accel_mps2;
-            authoritative_assessment.minimum_motion_goal_available = true;
-            authoritative_assessment.base_line_clear =
-              std::abs(async_entry_mission->goal_lateral_m) <= kEps;
-            authoritative_assessment.direct_base_line_pass_ready =
-              async_entry_mission->direct_pass &&
-              authoritative_assessment.base_line_clear &&
-              async_entry_mission->current_position_clear;
-            authoritative_assessment.direct_tiny_shift_pass_ready =
-              async_entry_mission->direct_pass &&
-              !authoritative_assessment.base_line_clear &&
-              async_entry_mission->current_position_clear;
-            authoritative_assessment.reason =
-              "MPCC-lite asynchronous tactical result selected for entry";
-            authoritative_assessment.guard_reason =
-              authoritative_assessment.reason;
-            side_selection = {
-              pass_side(async_entry_side),
-              overtake_core::SideSelectionReason::HigherQuality};
-            side_selected_for_execution = true;
-            if (async_entry_mission->progressive_entry) {
-              mpcc_lite_progressive_entry_authorized_side = async_entry_side;
-            }
+          if (apply_mpcc_entry_execution_contract(
+              async_entry_mission.value(), "async-result"))
+          {
             mpcc_lite_control_last_feasible_entry_mission_ =
               async_entry_mission;
             mpcc_lite_control_last_feasible_target_id_ = output.target_vehicle_id;
             mpcc_lite_control_last_feasible_entry_sec_ = now_sec;
             mpcc_authority_action =
               overtake_core::MpccLiteAuthorityAction::SelectEntry;
+          }
         } else if (
           output.mpcc_lite_same_side_replan_ready ||
           output.mpcc_lite_cross_side_replan_ready)
@@ -13159,12 +13237,24 @@ struct MPC
           request.remaining_distance_budget_m = shadow_pass_distance_remaining_m;
           request.pass_phase =
             overtake_line_state_.phase == OvertakeLinePhase::Pass;
+          if (request.new_entry_context) {
+            configure_new_entry_completion_proof(
+              request, mission.value(), shadow_prefix_target_speed_mps);
+          }
           return overtake_core::resolve_mpcc_lite_prefix_execution(request);
         };
       const auto prefix_execution = resolve_prefix_execution_for(
         winning_mission,
         shadow_resolution.found && shadow_resolution.best.hard_feasible,
         winning_prefix_same_side);
+      if (
+        mpcc_new_entry_prefix_context && winning_mission.has_value() &&
+        winning_mission->progressive_entry && !prefix_execution.admitted)
+      {
+        log_mpcc_entry_admission_rejection(
+          "dual-current", best_shadow_side, winning_mission.value(),
+          shadow_prefix_target_speed_mps, prefix_execution);
+      }
       const bool winning_prefix_execution_admitted =
         prefix_execution.valid && prefix_execution.admitted;
 
@@ -13341,47 +13431,13 @@ struct MPC
         } else if (!last_feasible_hold) {
           right_assessment = shadow_right_assessment;
         }
-        auto & authoritative_assessment = authority.selected_side_sign > 0 ?
-          left_assessment : right_assessment;
-        authoritative_assessment.side = authority.selected_side_sign;
-        authoritative_assessment.gap_available = true;
-        authoritative_assessment.selected_mission = winning_mission;
-        authoritative_assessment.mpcc_receding_mission = winning_mission;
-        authoritative_assessment.corridor_center_ey =
-          winning_mission->goal_lateral_m;
-        authoritative_assessment.required_lateral_shift =
-          winning_mission->lateral_shift_m;
-        authoritative_assessment.required_lateral_accel =
-          winning_mission->max_required_lateral_accel_mps2;
-        authoritative_assessment.minimum_motion_goal_available = true;
-        authoritative_assessment.base_line_clear =
-          std::abs(winning_mission->goal_lateral_m) <= kEps;
-        authoritative_assessment.direct_base_line_pass_ready =
-          winning_mission->direct_pass &&
-          authoritative_assessment.base_line_clear &&
-          winning_mission->current_position_clear;
-        authoritative_assessment.direct_tiny_shift_pass_ready =
-          winning_mission->direct_pass &&
-          !authoritative_assessment.base_line_clear &&
-          winning_mission->current_position_clear;
-        authoritative_assessment.reason =
-          winning_prefix_execution_admitted ?
-          "MPCC-lite progressive prefix selected for entry" :
-          "MPCC-lite complete Mission selected for entry";
-        authoritative_assessment.guard_reason = authoritative_assessment.reason;
-        side_selection = {
-          pass_side(authority.selected_side_sign),
-          overtake_core::SideSelectionReason::HigherQuality};
-        side_selected_for_execution = true;
-        if (winning_prefix_execution_admitted) {
-          mpcc_lite_progressive_entry_authorized_side =
-            authority.selected_side_sign;
-        }
         auto cached_mission = winning_mission.value();
         cached_mission.pass_side_sign = authority.selected_side_sign;
-        // Prefix execution uses the existing progressive-entry rolling
-        // revalidation. Complete Missions retain their full-plan contract.
-        if (!last_feasible_hold) {
+        const bool entry_contract_applied =
+          apply_mpcc_entry_execution_contract(cached_mission, "dual-current");
+        // Prefix execution uses the shared progressive-entry admission.
+        // Complete Missions retain their full-plan contract.
+        if (entry_contract_applied && !last_feasible_hold) {
           mpcc_lite_control_last_feasible_entry_mission_ = cached_mission;
           mpcc_lite_control_last_feasible_target_id_ = output.target_vehicle_id;
           mpcc_lite_control_last_feasible_entry_sec_ = now_sec;
@@ -13613,47 +13669,26 @@ struct MPC
             std::max(0.0, shadow_cfg.pass_horizon_absolute_time_limit);
           prefix_request.remaining_distance_budget_m =
             std::max(0.0, shadow_cfg.pass_horizon_absolute_distance_limit);
+          configure_new_entry_completion_proof(
+            prefix_request, current_prefix.value(),
+            output.overtake_entry_target_speed);
           const auto prefix_execution =
             overtake_core::resolve_mpcc_lite_prefix_execution(prefix_request);
           progressive_prefix_admitted =
             prefix_execution.valid && prefix_execution.admitted;
           if (progressive_prefix_admitted) {
             admitted_mission = current_prefix;
-            mpcc_lite_progressive_entry_authorized_side =
-              cached_mission.pass_side_sign;
+          } else {
+            log_mpcc_entry_admission_rejection(
+              "cached-fresh", cached_mission.pass_side_sign,
+              current_prefix.value(), output.overtake_entry_target_speed,
+              prefix_execution);
           }
         }
       }
       if (admitted_mission.has_value()) {
         const auto & mission = admitted_mission.value();
-        auto & authoritative_assessment = mission.pass_side_sign > 0 ?
-          left_assessment : right_assessment;
-        authoritative_assessment.side = mission.pass_side_sign;
-        authoritative_assessment.gap_available = true;
-        authoritative_assessment.selected_mission = mission;
-        authoritative_assessment.mpcc_receding_mission = mission;
-        authoritative_assessment.corridor_center_ey = mission.goal_lateral_m;
-        authoritative_assessment.required_lateral_shift = mission.lateral_shift_m;
-        authoritative_assessment.required_lateral_accel =
-          mission.max_required_lateral_accel_mps2;
-        authoritative_assessment.minimum_motion_goal_available = true;
-        authoritative_assessment.base_line_clear =
-          std::abs(mission.goal_lateral_m) <= kEps;
-        authoritative_assessment.direct_base_line_pass_ready =
-          mission.direct_pass && authoritative_assessment.base_line_clear &&
-          mission.current_position_clear;
-        authoritative_assessment.direct_tiny_shift_pass_ready =
-          mission.direct_pass && !authoritative_assessment.base_line_clear &&
-          mission.current_position_clear;
-        authoritative_assessment.reason =
-          progressive_prefix_admitted ?
-          "MPCC-lite fresh progressive prefix lease selected for entry" :
-          "MPCC-lite complete Mission selected for entry";
-        authoritative_assessment.guard_reason = authoritative_assessment.reason;
-        side_selection = {
-          pass_side(mission.pass_side_sign),
-          overtake_core::SideSelectionReason::HigherQuality};
-        side_selected_for_execution = true;
+        apply_mpcc_entry_execution_contract(mission, "cached-fresh");
       }
     } else if (
       mpcc_lite_control_last_feasible_entry_mission_.has_value() &&

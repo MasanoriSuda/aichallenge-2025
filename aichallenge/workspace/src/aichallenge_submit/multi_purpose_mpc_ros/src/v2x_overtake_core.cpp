@@ -8205,6 +8205,23 @@ MpccLitePrefixExecutionResolution resolve_mpcc_lite_prefix_execution(
   if (!request.candidate_feasible) {
     return reject(MpccLitePrefixExecutionRejectReason::CandidateInfeasible);
   }
+  if (request.new_entry_context) {
+    resolution.completion_proof = resolve_progressive_entry_completion_gate(
+      ProgressiveEntryCompletionGateRequest{
+        request.completion_proof_gate_enabled,
+        request.candidate_progressive,
+        request.target_front_distance_m,
+        request.positive_closing_speed_mps,
+        request.no_return_front_distance_m,
+        request.minimum_unproven_front_distance_m,
+        request.minimum_no_return_time_sec});
+    if (
+      !resolution.completion_proof.valid ||
+      !resolution.completion_proof.admitted)
+    {
+      return reject(MpccLitePrefixExecutionRejectReason::CompletionProofRejected);
+    }
+  }
   if (!request.body_clear_deadline_checked) {
     return reject(MpccLitePrefixExecutionRejectReason::BodyClearUnchecked);
   }
@@ -8308,6 +8325,8 @@ const char * to_string(const MpccLitePrefixExecutionRejectReason reason) noexcep
       return "distance-budget-exceeded";
     case MpccLitePrefixExecutionRejectReason::MinimumSpeedInsufficient:
       return "minimum-speed-insufficient";
+    case MpccLitePrefixExecutionRejectReason::CompletionProofRejected:
+      return "completion-proof-rejected";
     case MpccLitePrefixExecutionRejectReason::Admitted:
       return "admitted";
   }

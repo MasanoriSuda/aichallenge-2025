@@ -4524,6 +4524,7 @@ enum class MpccLitePrefixExecutionRejectReason
   TimeBudgetExceeded,
   DistanceBudgetExceeded,
   MinimumSpeedInsufficient,
+  CompletionProofRejected,
   Admitted,
 };
 
@@ -4559,6 +4560,15 @@ struct MpccLitePrefixExecutionRequest
   bool pass_phase{false};
   double planning_minimum_ego_speed_mps{std::numeric_limits<double>::quiet_NaN()};
   double minimum_speed_tolerance_mps{0.02};
+  /// A new progressive entry must also prove that there is enough room to
+  /// obtain a complete Mission before tactical no-return. Active Mission
+  /// replacements deliberately leave this gate inactive.
+  bool completion_proof_gate_enabled{false};
+  double target_front_distance_m{};
+  double positive_closing_speed_mps{};
+  double no_return_front_distance_m{};
+  double minimum_unproven_front_distance_m{};
+  double minimum_no_return_time_sec{};
 };
 
 struct MpccLitePrefixExecutionResolution
@@ -4568,6 +4578,7 @@ struct MpccLitePrefixExecutionResolution
   bool restart_shiftout{false};
   MpccLitePrefixExecutionRejectReason reason{
     MpccLitePrefixExecutionRejectReason::None};
+  ProgressiveEntryCompletionGateResolution completion_proof;
 };
 
 /// Admit a short, hard-feasible receding-horizon prefix without pretending it
@@ -4576,7 +4587,9 @@ struct MpccLitePrefixExecutionResolution
 /// unless the caller explicitly re-arms a Pass-phase same-side runtime
 /// completion replacement. Its ShiftOut and short continuation must fit the
 /// remaining runtime budget and retain the speed and physical reserves
-/// required at the commit point.
+/// required at the commit point. Every new progressive entry source uses the
+/// same completion-proof gate here so an asynchronous or cached prefix cannot
+/// bypass a rejection made by the local planner.
 MpccLitePrefixExecutionResolution resolve_mpcc_lite_prefix_execution(
   const MpccLitePrefixExecutionRequest & request) noexcept;
 

@@ -17928,6 +17928,48 @@ TEST(V2XOvertakeCoreMpccLite, AdmitsOnlyBoundedHardFeasibleExecutionPrefix)
   EXPECT_FALSE(resolution.restart_shiftout);
   EXPECT_EQ(resolution.reason, MpccLitePrefixExecutionRejectReason::Admitted);
 
+  // Every MPCC producer of a fresh progressive prefix (asynchronous result,
+  // dual solve, or cached lease) reaches this common admission. A physically
+  // feasible short prefix must not bypass the completion-proof reserve.
+  request.completion_proof_gate_enabled = true;
+  request.target_front_distance_m = 7.0;
+  request.positive_closing_speed_mps = 2.0;
+  request.no_return_front_distance_m = 2.0;
+  request.minimum_unproven_front_distance_m = 8.0;
+  request.minimum_no_return_time_sec = 1.0;
+  resolution = resolve_mpcc_lite_prefix_execution(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.admitted);
+  EXPECT_EQ(
+    resolution.reason,
+    MpccLitePrefixExecutionRejectReason::CompletionProofRejected);
+  ASSERT_TRUE(resolution.completion_proof.valid);
+  EXPECT_TRUE(resolution.completion_proof.checked);
+  EXPECT_EQ(
+    resolution.completion_proof.reject_reason,
+    ProgressiveEntryCompletionGateRejectReason::FrontDistanceReserve);
+
+  request.target_front_distance_m = 10.0;
+  resolution = resolve_mpcc_lite_prefix_execution(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.admitted);
+  EXPECT_TRUE(resolution.completion_proof.checked);
+  EXPECT_EQ(
+    resolution.completion_proof.reject_reason,
+    ProgressiveEntryCompletionGateRejectReason::None);
+
+  // The completion proof is a fresh-entry contract, not an active same-side
+  // rolling-replan gate.
+  request.active_execution = true;
+  request.new_entry_context = false;
+  request.before_no_return = true;
+  request.target_front_distance_m = 1.0;
+  resolution = resolve_mpcc_lite_prefix_execution(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.admitted);
+  EXPECT_FALSE(resolution.completion_proof.checked);
+
+  request.active_execution = false;
   request.new_entry_context = false;
   resolution = resolve_mpcc_lite_prefix_execution(request);
   EXPECT_FALSE(resolution.admitted);

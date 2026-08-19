@@ -2621,6 +2621,10 @@ OvertakeKinematicRolloutResolution resolve_overtake_kinematic_rollout(
     request.target_longitudinal_acceleration_horizon_sec < 0.0 ||
     std::isnan(request.target_lateral_velocity_decay_time_sec) ||
     request.target_lateral_velocity_decay_time_sec < 0.0 ||
+    !std::isfinite(request.target_lateral_uncertainty_growth_mps) ||
+    request.target_lateral_uncertainty_growth_mps < 0.0 ||
+    !std::isfinite(request.target_lateral_uncertainty_max_m) ||
+    request.target_lateral_uncertainty_max_m < 0.0 ||
     !std::isfinite(request.lateral_clearance_m) || request.lateral_clearance_m < 0.0 ||
     !std::isfinite(request.hard_longitudinal_distance_m) ||
     request.hard_longitudinal_distance_m < 0.0 ||
@@ -2697,6 +2701,11 @@ OvertakeKinematicRolloutResolution resolve_overtake_kinematic_rollout(
         time_sec, request.target_lateral_prediction_horizon_sec,
         request.target_lateral_velocity_decay_time_sec);
     };
+  const auto target_lateral_uncertainty_at = [&](const double time_sec) {
+      return std::min(
+        request.target_lateral_uncertainty_max_m,
+        request.target_lateral_uncertainty_growth_mps * std::max(0.0, time_sec));
+    };
 
   resolution.valid = true;
   resolution.checked = true;
@@ -2712,9 +2721,11 @@ OvertakeKinematicRolloutResolution resolve_overtake_kinematic_rollout(
   double previous_mission_distance_m = 0.0;
   double previous_ego_physical_distance_m = 0.0;
   double previous_ego_speed_mps = ego_speed_mps;
-  double previous_lateral_margin_m =
+  const double previous_physical_lateral_margin_m =
     std::abs(target_lateral_at(0.0) - mission_origin.lateral_target_m) -
     request.lateral_clearance_m;
+  double previous_lateral_margin_m =
+    previous_physical_lateral_margin_m - target_lateral_uncertainty_at(0.0);
   double previous_hard_margin_m =
     request.target_longitudinal_m - request.hard_longitudinal_distance_m;
   double previous_rear_clear_margin_m =
@@ -2726,6 +2737,9 @@ OvertakeKinematicRolloutResolution resolve_overtake_kinematic_rollout(
       request.target_longitudinal_m;
     resolution.pass_target_clearance_checked = true;
     resolution.minimum_pass_target_surface_clearance_m =
+      previous_physical_lateral_margin_m;
+    resolution.pass_target_uncertainty_checked = true;
+    resolution.minimum_pass_target_uncertainty_adjusted_clearance_m =
       previous_lateral_margin_m;
   }
   if (resolution.currently_laterally_clear) {
@@ -2811,16 +2825,35 @@ OvertakeKinematicRolloutResolution resolve_overtake_kinematic_rollout(
     if (!path.valid) {
       return OvertakeKinematicRolloutResolution{};
     }
-    const double lateral_margin_m =
+    const double physical_lateral_margin_m =
       std::abs(target_lateral_at(step_end_sec) - path.lateral_target_m) -
       request.lateral_clearance_m;
+    const double applied_lateral_uncertainty_m =
+      target_lateral_uncertainty_at(step_end_sec);
+    const double lateral_margin_m =
+      physical_lateral_margin_m - applied_lateral_uncertainty_m;
+    resolution.maximum_applied_target_lateral_uncertainty_m = std::max(
+      resolution.maximum_applied_target_lateral_uncertainty_m,
+      applied_lateral_uncertainty_m);
     if (mission_distance_m + 1e-9 >= request.mission_path.shift_distance_m) {
       resolution.pass_target_clearance_checked = true;
       if (std::isnan(resolution.minimum_pass_target_surface_clearance_m)) {
-        resolution.minimum_pass_target_surface_clearance_m = lateral_margin_m;
+        resolution.minimum_pass_target_surface_clearance_m =
+          physical_lateral_margin_m;
       } else {
         resolution.minimum_pass_target_surface_clearance_m = std::min(
           resolution.minimum_pass_target_surface_clearance_m,
+          physical_lateral_margin_m);
+      }
+      resolution.pass_target_uncertainty_checked = true;
+      if (std::isnan(
+          resolution.minimum_pass_target_uncertainty_adjusted_clearance_m))
+      {
+        resolution.minimum_pass_target_uncertainty_adjusted_clearance_m =
+          lateral_margin_m;
+      } else {
+        resolution.minimum_pass_target_uncertainty_adjusted_clearance_m = std::min(
+          resolution.minimum_pass_target_uncertainty_adjusted_clearance_m,
           lateral_margin_m);
       }
     }
@@ -7130,6 +7163,10 @@ OvertakePassPlan build_overtake_pass_plan(
     !std::isfinite(mission.closing_speed_mps) || mission.closing_speed_mps < 0.0 ||
     (mission.body_clear_deadline_checked && !mission.body_clear_deadline_feasible) ||
     (mission.rear_clear_prediction_checked && !mission.rear_clear_prediction_feasible) ||
+    (mission.pass_target_uncertainty_checked &&
+    (!std::isfinite(
+      mission.predicted_minimum_pass_target_uncertainty_adjusted_clearance_m) ||
+    mission.predicted_minimum_pass_target_uncertainty_adjusted_clearance_m < -1e-9)) ||
     (mission.outer_transition_required &&
     !mission.outer_transition_preflight_validated))
   {
@@ -7416,6 +7453,14 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
           candidate.predicted_minimum_pass_target_surface_clearance_m) &&
         candidate.predicted_minimum_pass_target_surface_clearance_m >=
         -kEpsilon);
+      const bool pass_target_uncertainty_valid =
+        !candidate.pass_target_uncertainty_checked ||
+        (std::isfinite(
+          candidate.predicted_minimum_pass_target_uncertainty_adjusted_clearance_m) &&
+        candidate.predicted_minimum_pass_target_uncertainty_adjusted_clearance_m >=
+        -kEpsilon &&
+        std::isfinite(candidate.maximum_applied_pass_target_lateral_uncertainty_m) &&
+        candidate.maximum_applied_pass_target_lateral_uncertainty_m >= 0.0);
       const bool frenet_dp_corridor_valid =
         !candidate.frenet_dp_corridor_checked ||
         (candidate.frenet_dp_corridor_feasible &&
@@ -7458,6 +7503,7 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
         candidate.outer_transition_start_pass_m + 1e-9);
       return deadline_valid && closing_speed_valid && slack_valid && rear_clear_valid &&
              progress_speed_valid && pass_target_clearance_valid &&
+             pass_target_uncertainty_valid &&
              frenet_dp_corridor_valid &&
              rear_clear_course_role_valid && outer_transition_valid &&
              non_negative_or_infinity(candidate.entry_side_clearance_m) &&
@@ -7488,6 +7534,14 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
   const auto interaction_reserve = [&](const OvertakeMissionCandidate & candidate) {
       double reserve = physical_reserve(candidate);
       if (
+        candidate.pass_target_uncertainty_checked &&
+        std::isfinite(
+          candidate.predicted_minimum_pass_target_uncertainty_adjusted_clearance_m))
+      {
+        reserve = std::min(
+          reserve,
+          candidate.predicted_minimum_pass_target_uncertainty_adjusted_clearance_m);
+      } else if (
         candidate.pass_target_clearance_checked &&
         std::isfinite(
           candidate.predicted_minimum_pass_target_surface_clearance_m))
@@ -7549,24 +7603,6 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
         return !candidate.full_track_transition_before_rear_clear;
       }
       if (
-        request.entry_side_clearance_selection_enabled &&
-        std::isfinite(candidate.entry_side_clearance_m) &&
-        std::isfinite(incumbent.entry_side_clearance_m))
-      {
-        if (
-          candidate.entry_side_clearance_m > incumbent.entry_side_clearance_m +
-          request.minimum_clearance_advantage_m + kEpsilon)
-        {
-          return true;
-        }
-        if (
-          incumbent.entry_side_clearance_m > candidate.entry_side_clearance_m +
-          request.minimum_clearance_advantage_m + kEpsilon)
-        {
-          return false;
-        }
-      }
-      if (
         candidate.pass_target_clearance_checked &&
         incumbent.pass_target_clearance_checked)
       {
@@ -7588,6 +7624,24 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
           {
             return false;
           }
+        }
+      }
+      if (
+        request.entry_side_clearance_selection_enabled &&
+        std::isfinite(candidate.entry_side_clearance_m) &&
+        std::isfinite(incumbent.entry_side_clearance_m))
+      {
+        if (
+          candidate.entry_side_clearance_m > incumbent.entry_side_clearance_m +
+          request.minimum_clearance_advantage_m + kEpsilon)
+        {
+          return true;
+        }
+        if (
+          incumbent.entry_side_clearance_m > candidate.entry_side_clearance_m +
+          request.minimum_clearance_advantage_m + kEpsilon)
+        {
+          return false;
         }
       }
       const double candidate_physical_reserve = physical_reserve(candidate);
@@ -7750,6 +7804,83 @@ OvertakeMissionCandidateSelection select_overtake_mission_candidate(
   return selection;
 }
 
+const char * to_string(const ProgressiveEntryCompletionGateRejectReason reason) noexcept
+{
+  switch (reason) {
+    case ProgressiveEntryCompletionGateRejectReason::None:
+      return "none";
+    case ProgressiveEntryCompletionGateRejectReason::Disabled:
+      return "disabled";
+    case ProgressiveEntryCompletionGateRejectReason::CompleteMission:
+      return "complete-mission";
+    case ProgressiveEntryCompletionGateRejectReason::InvalidInput:
+      return "invalid-input";
+    case ProgressiveEntryCompletionGateRejectReason::FrontDistanceReserve:
+      return "front-distance-reserve";
+    case ProgressiveEntryCompletionGateRejectReason::NoReturnTimeReserve:
+      return "no-return-time-reserve";
+  }
+  return "unknown";
+}
+
+ProgressiveEntryCompletionGateResolution resolve_progressive_entry_completion_gate(
+  const ProgressiveEntryCompletionGateRequest & request) noexcept
+{
+  ProgressiveEntryCompletionGateResolution resolution;
+  const auto finite_non_negative = [](const double value) {
+      return std::isfinite(value) && value >= 0.0;
+    };
+  if (
+    !finite_non_negative(request.target_front_distance_m) ||
+    !finite_non_negative(request.positive_closing_speed_mps) ||
+    !finite_non_negative(request.no_return_front_distance_m) ||
+    !finite_non_negative(request.minimum_unproven_front_distance_m) ||
+    !finite_non_negative(request.minimum_no_return_time_sec))
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  resolution.admitted = true;
+  if (!request.enabled) {
+    resolution.reject_reason = ProgressiveEntryCompletionGateRejectReason::Disabled;
+    return resolution;
+  }
+  if (!request.progressive_entry) {
+    resolution.reject_reason = ProgressiveEntryCompletionGateRejectReason::CompleteMission;
+    return resolution;
+  }
+
+  resolution.checked = true;
+  const double distance_to_no_return_m = std::max(
+    0.0, request.target_front_distance_m - request.no_return_front_distance_m);
+  if (request.positive_closing_speed_mps > 1e-6) {
+    resolution.time_to_no_return_sec =
+      distance_to_no_return_m / request.positive_closing_speed_mps;
+  }
+  if (
+    request.target_front_distance_m + 1e-9 <
+    request.minimum_unproven_front_distance_m)
+  {
+    resolution.admitted = false;
+    resolution.reject_reason =
+      ProgressiveEntryCompletionGateRejectReason::FrontDistanceReserve;
+    return resolution;
+  }
+  if (
+    resolution.time_to_no_return_sec + 1e-9 <
+    request.minimum_no_return_time_sec)
+  {
+    resolution.admitted = false;
+    resolution.reject_reason =
+      ProgressiveEntryCompletionGateRejectReason::NoReturnTimeReserve;
+    return resolution;
+  }
+
+  resolution.reject_reason = ProgressiveEntryCompletionGateRejectReason::None;
+  return resolution;
+}
+
 const char * to_string(const MpccLiteShadowBranch branch) noexcept
 {
   switch (branch) {
@@ -7860,9 +7991,12 @@ MpccLiteShadowCandidate build_mpcc_lite_shadow_mission_candidate(
       0.5 * finite_reserve(
         mission.minimum_path_corridor_width_m,
         2.0 * request.fallback_wall_clearance_m)));
+  const double mission_target_clearance_m =
+    mission.pass_target_uncertainty_checked ?
+    mission.predicted_minimum_pass_target_uncertainty_adjusted_clearance_m :
+    mission.predicted_minimum_pass_target_surface_clearance_m;
   candidate.minimum_target_clearance_m = finite_reserve(
-    mission.predicted_minimum_pass_target_surface_clearance_m,
-    request.fallback_target_clearance_m);
+    mission_target_clearance_m, request.fallback_target_clearance_m);
   candidate.maximum_lateral_accel_mps2 = mission.max_required_lateral_accel_mps2;
   candidate.lateral_motion_m = mission.lateral_shift_m;
   candidate.frenet_dp_corridor_checked = mission.frenet_dp_corridor_checked;
@@ -7886,12 +8020,13 @@ MpccLiteShadowCandidate build_mpcc_lite_shadow_mission_candidate(
   if (!mission.rear_clear_prediction_feasible) {
     return reject(MpccLiteShadowRejectReason::RearClearInfeasible);
   }
-  if (!mission.pass_target_clearance_checked) {
+  if (
+    !mission.pass_target_uncertainty_checked &&
+    !mission.pass_target_clearance_checked)
+  {
     return reject(MpccLiteShadowRejectReason::TargetClearanceUnchecked);
   }
-  if (
-    !std::isfinite(mission.predicted_minimum_pass_target_surface_clearance_m) ||
-    mission.predicted_minimum_pass_target_surface_clearance_m < -1e-9)
+  if (!std::isfinite(mission_target_clearance_m) || mission_target_clearance_m < -1e-9)
   {
     return reject(MpccLiteShadowRejectReason::HardConstraint);
   }
@@ -7974,9 +8109,12 @@ MpccLiteShadowCandidate build_mpcc_lite_receding_prefix_candidate(
     0.5 * finite_reserve(
       mission.minimum_path_corridor_width_m,
       2.0 * request.fallback_wall_clearance_m));
+  const double mission_target_clearance_m =
+    mission.pass_target_uncertainty_checked ?
+    mission.predicted_minimum_pass_target_uncertainty_adjusted_clearance_m :
+    mission.predicted_minimum_pass_target_surface_clearance_m;
   candidate.minimum_target_clearance_m = finite_reserve(
-    mission.predicted_minimum_pass_target_surface_clearance_m,
-    request.fallback_target_clearance_m);
+    mission_target_clearance_m, request.fallback_target_clearance_m);
   candidate.maximum_lateral_accel_mps2 = mission.max_required_lateral_accel_mps2;
   candidate.lateral_motion_m = mission.lateral_shift_m;
   candidate.frenet_dp_corridor_checked = mission.frenet_dp_corridor_checked;
@@ -7997,12 +8135,13 @@ MpccLiteShadowCandidate build_mpcc_lite_receding_prefix_candidate(
   if (!mission.body_clear_deadline_feasible) {
     return reject(MpccLiteShadowRejectReason::BodyClearInfeasible);
   }
-  if (!mission.pass_target_clearance_checked) {
+  if (
+    !mission.pass_target_uncertainty_checked &&
+    !mission.pass_target_clearance_checked)
+  {
     return reject(MpccLiteShadowRejectReason::TargetClearanceUnchecked);
   }
-  if (
-    !std::isfinite(mission.predicted_minimum_pass_target_surface_clearance_m) ||
-    mission.predicted_minimum_pass_target_surface_clearance_m < -1e-9)
+  if (!std::isfinite(mission_target_clearance_m) || mission_target_clearance_m < -1e-9)
   {
     return reject(MpccLiteShadowRejectReason::HardConstraint);
   }

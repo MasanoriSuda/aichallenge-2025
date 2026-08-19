@@ -451,6 +451,11 @@ mpc:
   v2x_prediction_maximum_acceleration: 3.0 # [m/s^2] opponent estimate bound, not an ego command
   v2x_prediction_longitudinal_acceleration_horizon: 1.0 # [s] then hold predicted target speed
   v2x_prediction_lateral_velocity_decay_time: 0.6 # [s] lateral intent decays instead of persisting through the full Pass
+  # Cover course-role changes and unobserved opponent steering beyond the
+  # instantaneous filtered lateral velocity.  The bounded tube is applied to
+  # ShiftOut/body-clear and rear-clear rollout, not to the physical footprint.
+  v2x_prediction_lateral_uncertainty_growth: 0.10 # [m/s]
+  v2x_prediction_lateral_uncertainty_max: 0.25 # [m]
   v2x_prediction_min_ego_speed: 1.0 # [m/s] avoid singular path-time prediction near standstill
   v2x_timeout_sec: 1.0
   v2x_position_jump_threshold: 5.0
@@ -885,6 +890,11 @@ mpc:
   v2x_overtake_progressive_entry_min_body_clear_slack_sec: 0.6 # [s] reject last-moment entries while retaining bounded attack windows
   v2x_overtake_progressive_entry_short_continuation_distance: 6.0 # [m] wall/footprint-valid same-side escape required beyond predicted body-clear
   v2x_overtake_progressive_entry_static_fallback_max_lateral_shift: 1.8 # [m] static-only attack ceiling; dynamic complete Missions are unchanged
+  # A local-only ShiftOut/body-clear prefix may start only while a complete
+  # rear-clear Mission can still be acquired before tactical no-return.
+  v2x_overtake_progressive_entry_completion_proof_gate_enabled: true
+  v2x_overtake_progressive_entry_min_unproven_front_distance: 8.0 # [m]
+  v2x_overtake_progressive_entry_min_no_return_time_sec: 1.0 # [s]
   v2x_overtake_line_max_lateral_accel: 6.0    # [m/s^2] dev3 attack: complete committed ShiftOut in a hairpin
   v2x_overtake_line_max_target_change: 0.04   # [m/cycle] smooth target goal updates across cycles
   v2x_overtake_receding_horizon_enabled: true # optimize the complete ShiftOut/Pass lateral sample sequence; exact-context validated results may bridge refresh cycles

@@ -1168,6 +1168,8 @@ struct V2XGapPlannerConfig
   double prediction_maximum_acceleration{3.0};
   double prediction_longitudinal_acceleration_horizon{1.0};
   double prediction_lateral_velocity_decay_time{0.6};
+  double prediction_lateral_uncertainty_growth{0.0};
+  double prediction_lateral_uncertainty_max{0.0};
   double prediction_min_ego_speed{1.0};
   double prediction_max_ego_speed{std::numeric_limits<double>::infinity()};
   double timeout_sec{1.0};
@@ -1236,6 +1238,9 @@ struct OvertakeLineConfig
   double progressive_entry_min_body_clear_slack_sec{0.6};
   double progressive_entry_short_continuation_distance{6.0};
   double progressive_entry_static_fallback_max_lateral_shift{1.8};
+  bool progressive_entry_completion_proof_gate_enabled{false};
+  double progressive_entry_min_unproven_front_distance{8.0};
+  double progressive_entry_min_no_return_time_sec{1.0};
   double max_lateral_accel{2.5};
   double max_target_change{0.25};
   bool receding_horizon_enabled{false};
@@ -10194,7 +10199,9 @@ struct MPC
                   std::max(0.0, cfg.v2x_behavior.overtake_line.return_clear_distance),
                   preflight_target_longitudinal_acceleration,
                   cfg.v2x_gap.prediction_longitudinal_acceleration_horizon,
-                  cfg.v2x_gap.prediction_lateral_velocity_decay_time});
+                  cfg.v2x_gap.prediction_lateral_velocity_decay_time,
+                  cfg.v2x_gap.prediction_lateral_uncertainty_growth,
+                  cfg.v2x_gap.prediction_lateral_uncertainty_max});
               if (!rollout.valid) {
                 ++body_clear_deadline_invalid_count;
                 continue;
@@ -10297,6 +10304,13 @@ struct MPC
                   rollout.pass_target_clearance_checked;
                 setup_candidate.predicted_minimum_pass_target_surface_clearance_m =
                   rollout.minimum_pass_target_surface_clearance_m;
+                setup_candidate.pass_target_uncertainty_checked =
+                  rollout.pass_target_uncertainty_checked;
+                setup_candidate.
+                predicted_minimum_pass_target_uncertainty_adjusted_clearance_m =
+                  rollout.minimum_pass_target_uncertainty_adjusted_clearance_m;
+                setup_candidate.maximum_applied_pass_target_lateral_uncertainty_m =
+                  rollout.maximum_applied_target_lateral_uncertainty_m;
                 setup_candidate.pass_hold_distance_m = std::max(
                   std::max(0.5, pass_distance),
                   std::max(
@@ -10780,6 +10794,13 @@ struct MPC
                 rollout.pass_target_clearance_checked;
               mission_candidate.predicted_minimum_pass_target_surface_clearance_m =
                 rollout.minimum_pass_target_surface_clearance_m;
+              mission_candidate.pass_target_uncertainty_checked =
+                rollout.pass_target_uncertainty_checked;
+              mission_candidate.
+              predicted_minimum_pass_target_uncertainty_adjusted_clearance_m =
+                rollout.minimum_pass_target_uncertainty_adjusted_clearance_m;
+              mission_candidate.maximum_applied_pass_target_lateral_uncertainty_m =
+                rollout.maximum_applied_target_lateral_uncertainty_m;
               mission_candidate.entry_front_distance_reserve_applied =
                 entry_front_distance_reserve.applied;
               mission_candidate.required_entry_front_distance_m =
@@ -10903,15 +10924,72 @@ struct MPC
           straight_outer_clearance_bias_available ?
           straight_outer_clearance_mission_candidates : mission_candidates);
         auto resolved_mission_selection = complete_mission_selection;
+        overtake_core::ProgressiveEntryCompletionGateResolution
+          progressive_completion_gate;
+        double progressive_completion_gate_closing_speed_mps = 0.0;
+        if (
+          progressive_entry_selection.valid &&
+          progressive_entry_selection.found)
+        {
+          progressive_completion_gate_closing_speed_mps = std::max(
+            std::max(
+              0.0,
+              current_speed_mps_ - non_negative_preflight_target_speed),
+            progressive_entry_selection.candidate.closing_speed_mps);
+          progressive_completion_gate =
+            overtake_core::resolve_progressive_entry_completion_gate(
+            overtake_core::ProgressiveEntryCompletionGateRequest{
+              cfg.v2x_behavior.overtake_line.
+              progressive_entry_completion_proof_gate_enabled,
+              progressive_entry_selection.candidate.progressive_entry,
+              std::max(0.0, preflight_target_longitudinal),
+              progressive_completion_gate_closing_speed_mps,
+              std::max(
+                0.0,
+                cfg.v2x_behavior.overtake_line.
+                opponent_side_replan_no_return_front_distance),
+              cfg.v2x_behavior.overtake_line.
+              progressive_entry_min_unproven_front_distance,
+              cfg.v2x_behavior.overtake_line.
+              progressive_entry_min_no_return_time_sec});
+        }
         const bool progressive_entry_selected =
           (!complete_mission_selection.valid || !complete_mission_selection.found) &&
           cfg.v2x_behavior.overtake_line.progressive_entry_enabled &&
           initial_shiftout_preflight && !side_replan_preflight &&
           !active_overtake_line && progressive_entry_selection.valid &&
           progressive_entry_selection.found &&
-          progressive_entry_selection.candidate.progressive_entry;
+          progressive_entry_selection.candidate.progressive_entry &&
+          progressive_completion_gate.valid &&
+          progressive_completion_gate.admitted;
         if (progressive_entry_selected) {
           resolved_mission_selection = progressive_entry_selection;
+        }
+        const bool progressive_completion_gate_rejected =
+          progressive_entry_selection.valid &&
+          progressive_entry_selection.found &&
+          progressive_completion_gate.valid &&
+          progressive_completion_gate.checked &&
+          !progressive_completion_gate.admitted;
+        if (
+          progressive_completion_gate_rejected && !shadow_only &&
+          !active_overtake_line)
+        {
+          static rclcpp::Clock completion_gate_log_clock{RCL_STEADY_TIME};
+          RCLCPP_WARN_THROTTLE(
+            rclcpp::get_logger("mpc_controller"), completion_gate_log_clock, 1000,
+            "Overtake completion-proof gate rejected local-only entry: "
+            "target=%s, side=%d, front=%.2f/%.2f m, closing=%.2f m/s, "
+            "time_to_no_return=%.2f/%.2f s, reason=%s, action=require-complete-mission",
+            output.target_vehicle_id.c_str(), side,
+            std::max(0.0, preflight_target_longitudinal),
+            cfg.v2x_behavior.overtake_line.
+            progressive_entry_min_unproven_front_distance,
+            progressive_completion_gate_closing_speed_mps,
+            progressive_completion_gate.time_to_no_return_sec,
+            cfg.v2x_behavior.overtake_line.
+            progressive_entry_min_no_return_time_sec,
+            overtake_core::to_string(progressive_completion_gate.reject_reason));
         }
         if (!resolved_mission_selection.valid || !resolved_mission_selection.found) {
           assessment.gap_available = false;
@@ -10952,6 +11030,14 @@ struct MPC
             progressive_entry_slack_reject_count
              << ", progressive_short_continuation_rejected=" <<
             progressive_entry_short_continuation_reject_count
+             << ", completion_proof_gate=" <<
+            (progressive_completion_gate_rejected ? "rejected" : "not-blocking")
+             << ", completion_proof_reason=" <<
+            (progressive_completion_gate.valid ?
+            overtake_core::to_string(progressive_completion_gate.reject_reason) :
+            "not-evaluated")
+             << ", completion_time_to_no_return=" <<
+            progressive_completion_gate.time_to_no_return_sec
              << ", numeric_candidate_rejected=" <<
             complete_mission_selection.invalid_candidate_count
              << ", observed=" <<
@@ -11105,6 +11191,11 @@ struct MPC
             selected_mission.predicted_minimum_ego_speed_mps
                           << ", pass_target_clear=" <<
             selected_mission.predicted_minimum_pass_target_surface_clearance_m
+                          << ", pass_target_uncertainty_clear=" <<
+            selected_mission.
+            predicted_minimum_pass_target_uncertainty_adjusted_clearance_m
+                          << ", pass_target_uncertainty_max=" <<
+            selected_mission.maximum_applied_pass_target_lateral_uncertainty_m
                           << ", progress_score=" <<
             resolved_mission_selection.horizon_progress.score
                           << ", progress_time=" <<
@@ -11164,6 +11255,12 @@ struct MPC
                           << ", candidates=" << mission_candidates.size()
                           << ", progressive_entry=" <<
             (selected_mission.progressive_entry ? 1 : 0)
+                          << ", completion_proof=" <<
+            (selected_mission.progressive_entry ? "local-only" : "complete")
+                          << ", completion_gate=" <<
+            (selected_mission.progressive_entry ?
+            overtake_core::to_string(progressive_completion_gate.reject_reason) :
+            "complete-mission")
                           << ", progressive_candidates=" <<
             progressive_entry_candidate_count
                           << ", progressive_min_slack=" <<
@@ -11561,12 +11658,19 @@ struct MPC
           std::isfinite(
             assessment.selected_mission->predicted_rear_clear_ego_distance_m) &&
           assessment.selected_mission->predicted_rear_clear_ego_distance_m >= 0.0 &&
-          assessment.selected_mission->pass_target_clearance_checked &&
+          (assessment.selected_mission->pass_target_uncertainty_checked ||
+          assessment.selected_mission->pass_target_clearance_checked) &&
           std::isfinite(
+            assessment.selected_mission->pass_target_uncertainty_checked ?
+            assessment.selected_mission->
+            predicted_minimum_pass_target_uncertainty_adjusted_clearance_m :
             assessment.selected_mission->
             predicted_minimum_pass_target_surface_clearance_m) &&
+          (assessment.selected_mission->pass_target_uncertainty_checked ?
           assessment.selected_mission->
-          predicted_minimum_pass_target_surface_clearance_m >= -1e-9;
+          predicted_minimum_pass_target_uncertainty_adjusted_clearance_m :
+          assessment.selected_mission->
+          predicted_minimum_pass_target_surface_clearance_m) >= -1e-9;
       };
     const auto has_executable_mission = [&](const SideAssessment & assessment) {
         if (has_validated_full_mission(assessment)) {
@@ -11583,10 +11687,15 @@ struct MPC
         return mission.progressive_entry && mission.feasible &&
                mission.body_clear_deadline_checked &&
                mission.body_clear_deadline_feasible &&
-               mission.pass_target_clearance_checked &&
+               (mission.pass_target_uncertainty_checked ||
+               mission.pass_target_clearance_checked) &&
                std::isfinite(
+                 mission.pass_target_uncertainty_checked ?
+                 mission.predicted_minimum_pass_target_uncertainty_adjusted_clearance_m :
                  mission.predicted_minimum_pass_target_surface_clearance_m) &&
-               mission.predicted_minimum_pass_target_surface_clearance_m >= -1e-9;
+               (mission.pass_target_uncertainty_checked ?
+               mission.predicted_minimum_pass_target_uncertainty_adjusted_clearance_m :
+               mission.predicted_minimum_pass_target_surface_clearance_m) >= -1e-9;
       };
     const auto execution_allowed_for_side = [&](const SideAssessment & assessment) {
         if (!assessment.gap_available || assessment.side == 0) {
@@ -12354,8 +12463,12 @@ struct MPC
             request.body_clear_deadline_feasible =
               async_entry_mission->body_clear_deadline_feasible;
             request.target_clearance_checked =
+              async_entry_mission->pass_target_uncertainty_checked ||
               async_entry_mission->pass_target_clearance_checked;
             request.minimum_target_surface_clearance_m =
+              async_entry_mission->pass_target_uncertainty_checked ?
+              async_entry_mission->
+              predicted_minimum_pass_target_uncertainty_adjusted_clearance_m :
               async_entry_mission->predicted_minimum_pass_target_surface_clearance_m;
             request.predicted_body_clear_time_sec =
               async_entry_mission->predicted_body_clear_time_sec;
@@ -13022,8 +13135,11 @@ struct MPC
           request.body_clear_deadline_feasible =
             mission->body_clear_deadline_feasible;
           request.target_clearance_checked =
+            mission->pass_target_uncertainty_checked ||
             mission->pass_target_clearance_checked;
           request.minimum_target_surface_clearance_m =
+            mission->pass_target_uncertainty_checked ?
+            mission->predicted_minimum_pass_target_uncertainty_adjusted_clearance_m :
             mission->predicted_minimum_pass_target_surface_clearance_m;
           request.predicted_body_clear_time_sec =
             mission->predicted_body_clear_time_sec;
@@ -13414,7 +13530,16 @@ struct MPC
         cached_mission.predicted_rear_clear_time_sec >= 0.0 &&
         std::isfinite(cached_mission.predicted_rear_clear_ego_distance_m) &&
         cached_mission.predicted_rear_clear_ego_distance_m >= 0.0 &&
-        cached_mission.pass_target_clearance_checked &&
+        (cached_mission.pass_target_uncertainty_checked ||
+        cached_mission.pass_target_clearance_checked) &&
+        std::isfinite(
+          cached_mission.pass_target_uncertainty_checked ?
+          cached_mission.
+          predicted_minimum_pass_target_uncertainty_adjusted_clearance_m :
+          cached_mission.predicted_minimum_pass_target_surface_clearance_m) &&
+        (cached_mission.pass_target_uncertainty_checked ?
+        cached_mission.predicted_minimum_pass_target_uncertainty_adjusted_clearance_m :
+        cached_mission.predicted_minimum_pass_target_surface_clearance_m) >= -kEps &&
         (cached_mission.pass_side_sign == -1 ||
         cached_mission.pass_side_sign == 1);
       if (cached_complete_mission_valid) {
@@ -13462,8 +13587,12 @@ struct MPC
           prefix_request.body_clear_deadline_feasible =
             current_prefix->body_clear_deadline_feasible;
           prefix_request.target_clearance_checked =
+            current_prefix->pass_target_uncertainty_checked ||
             current_prefix->pass_target_clearance_checked;
           prefix_request.minimum_target_surface_clearance_m =
+            current_prefix->pass_target_uncertainty_checked ?
+            current_prefix->
+            predicted_minimum_pass_target_uncertainty_adjusted_clearance_m :
             current_prefix->predicted_minimum_pass_target_surface_clearance_m;
           prefix_request.predicted_body_clear_time_sec =
             current_prefix->predicted_body_clear_time_sec;
@@ -19404,8 +19533,11 @@ private:
         request.body_clear_deadline_feasible =
           proposed_prefix.body_clear_deadline_feasible;
         request.target_clearance_checked =
+          proposed_prefix.pass_target_uncertainty_checked ||
           proposed_prefix.pass_target_clearance_checked;
         request.minimum_target_surface_clearance_m =
+          proposed_prefix.pass_target_uncertainty_checked ?
+          proposed_prefix.predicted_minimum_pass_target_uncertainty_adjusted_clearance_m :
           proposed_prefix.predicted_minimum_pass_target_surface_clearance_m;
         request.predicted_body_clear_time_sec =
           proposed_prefix.predicted_body_clear_time_sec;
@@ -25884,8 +26016,12 @@ private:
           prefix_request.body_clear_deadline_feasible =
             current_candidate.body_clear_deadline_feasible;
           prefix_request.target_clearance_checked =
+            current_candidate.pass_target_uncertainty_checked ||
             current_candidate.pass_target_clearance_checked;
           prefix_request.minimum_target_surface_clearance_m =
+            current_candidate.pass_target_uncertainty_checked ?
+            current_candidate.
+            predicted_minimum_pass_target_uncertainty_adjusted_clearance_m :
             current_candidate.predicted_minimum_pass_target_surface_clearance_m;
           prefix_request.predicted_body_clear_time_sec =
             current_candidate.predicted_body_clear_time_sec;
@@ -27211,7 +27347,9 @@ private:
             behavior_output.locked_target_longitudinal_acceleration_valid ?
             behavior_output.locked_target_longitudinal_acceleration : 0.0,
             cfg.v2x_gap.prediction_longitudinal_acceleration_horizon,
-            cfg.v2x_gap.prediction_lateral_velocity_decay_time});
+            cfg.v2x_gap.prediction_lateral_velocity_decay_time,
+            cfg.v2x_gap.prediction_lateral_uncertainty_growth,
+            cfg.v2x_gap.prediction_lateral_uncertainty_max});
         if (runtime_completion_rollout.valid) {
           runtime_completion_distance = overtake_core::resolve_overtake_dynamic_pass_distance(
             overtake_core::OvertakeDynamicPassDistanceRequest{
@@ -28086,7 +28224,9 @@ private:
             behavior_output.locked_target_longitudinal_acceleration_valid ?
             behavior_output.locked_target_longitudinal_acceleration : 0.0,
             cfg.v2x_gap.prediction_longitudinal_acceleration_horizon,
-            cfg.v2x_gap.prediction_lateral_velocity_decay_time});
+            cfg.v2x_gap.prediction_lateral_velocity_decay_time,
+            cfg.v2x_gap.prediction_lateral_uncertainty_growth,
+            cfg.v2x_gap.prediction_lateral_uncertainty_max});
         if (!rollout.valid || !rollout.rear_clear_feasible) {
           return fail_extension(
             overtake_core::PassRefreshFailureReason::Other,
@@ -35807,6 +35947,14 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_prediction_lateral_velocity_decay_time"] ?
     mpc["v2x_prediction_lateral_velocity_decay_time"].as<double>() : 0.6);
+  cfg.mpc.v2x_gap.prediction_lateral_uncertainty_growth = std::max(
+    0.0,
+    mpc["v2x_prediction_lateral_uncertainty_growth"] ?
+    mpc["v2x_prediction_lateral_uncertainty_growth"].as<double>() : 0.0);
+  cfg.mpc.v2x_gap.prediction_lateral_uncertainty_max = std::max(
+    0.0,
+    mpc["v2x_prediction_lateral_uncertainty_max"] ?
+    mpc["v2x_prediction_lateral_uncertainty_max"].as<double>() : 0.0);
   cfg.mpc.v2x_gap.prediction_min_ego_speed = std::max(
     kEps,
     mpc["v2x_prediction_min_ego_speed"] ?
@@ -36009,6 +36157,22 @@ Config load_config(const std::string & path)
     mpc["v2x_overtake_progressive_entry_static_fallback_max_lateral_shift"] ?
     mpc["v2x_overtake_progressive_entry_static_fallback_max_lateral_shift"].as<double>() :
     1.8);
+  cfg.mpc.v2x_behavior.overtake_line.progressive_entry_completion_proof_gate_enabled =
+    mpc["v2x_overtake_progressive_entry_completion_proof_gate_enabled"] ?
+    mpc["v2x_overtake_progressive_entry_completion_proof_gate_enabled"].as<bool>() :
+    false;
+  cfg.mpc.v2x_behavior.overtake_line.progressive_entry_min_unproven_front_distance =
+    std::max(
+    0.0,
+    mpc["v2x_overtake_progressive_entry_min_unproven_front_distance"] ?
+    mpc["v2x_overtake_progressive_entry_min_unproven_front_distance"].as<double>() :
+    8.0);
+  cfg.mpc.v2x_behavior.overtake_line.progressive_entry_min_no_return_time_sec =
+    std::max(
+    0.0,
+    mpc["v2x_overtake_progressive_entry_min_no_return_time_sec"] ?
+    mpc["v2x_overtake_progressive_entry_min_no_return_time_sec"].as<double>() :
+    1.0);
   cfg.mpc.v2x_behavior.overtake_line.max_lateral_accel = std::max(
     0.0,
     mpc["v2x_overtake_line_max_lateral_accel"] ?
@@ -38546,12 +38710,15 @@ public:
       RCLCPP_INFO(
         get_logger(),
         "V2X opponent motion filter: velocity_gain=%.2f, acceleration_gain=%.2f, "
-        "accel_limit=%.2f m/s^2, accel_horizon=%.2f s, lateral_decay=%.2f s",
+        "accel_limit=%.2f m/s^2, accel_horizon=%.2f s, lateral_decay=%.2f s, "
+        "lateral_uncertainty=%.2f m/s/%.2f m",
         mpc_cfg_.v2x_gap.prediction_velocity_filter_gain,
         mpc_cfg_.v2x_gap.prediction_acceleration_filter_gain,
         mpc_cfg_.v2x_gap.prediction_maximum_acceleration,
         mpc_cfg_.v2x_gap.prediction_longitudinal_acceleration_horizon,
-        mpc_cfg_.v2x_gap.prediction_lateral_velocity_decay_time);
+        mpc_cfg_.v2x_gap.prediction_lateral_velocity_decay_time,
+        mpc_cfg_.v2x_gap.prediction_lateral_uncertainty_growth,
+        mpc_cfg_.v2x_gap.prediction_lateral_uncertainty_max);
     }
     RCLCPP_INFO(
       get_logger(),
@@ -38750,13 +38917,20 @@ public:
       RCLCPP_INFO(
         get_logger(),
         "V2X progressive overtake entry: %s, min_body_clear_slack=%.2f s, "
-        "short_continuation=%.2f m, static_fallback_max_shift=%.2f m",
+        "short_continuation=%.2f m, static_fallback_max_shift=%.2f m, "
+        "completion_gate=%s/min_front=%.2f m/min_no_return=%.2f s",
         mpc_cfg_.v2x_behavior.overtake_line.progressive_entry_enabled ?
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.progressive_entry_min_body_clear_slack_sec,
         mpc_cfg_.v2x_behavior.overtake_line.progressive_entry_short_continuation_distance,
         mpc_cfg_.v2x_behavior.overtake_line.
-        progressive_entry_static_fallback_max_lateral_shift);
+        progressive_entry_static_fallback_max_lateral_shift,
+        mpc_cfg_.v2x_behavior.overtake_line.
+        progressive_entry_completion_proof_gate_enabled ? "enabled" : "disabled",
+        mpc_cfg_.v2x_behavior.overtake_line.
+        progressive_entry_min_unproven_front_distance,
+        mpc_cfg_.v2x_behavior.overtake_line.
+        progressive_entry_min_no_return_time_sec);
       RCLCPP_INFO(
         get_logger(),
         "V2X opponent side replan: %s, interval=%.2f s, no_return=%.2f m, "

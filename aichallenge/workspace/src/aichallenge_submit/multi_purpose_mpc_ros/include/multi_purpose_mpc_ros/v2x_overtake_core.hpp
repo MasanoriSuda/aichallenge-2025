@@ -1698,6 +1698,12 @@ struct OvertakeKinematicRolloutRequest
   double target_longitudinal_acceleration_horizon_sec{};
   double target_lateral_velocity_decay_time_sec{
     std::numeric_limits<double>::infinity()};
+  /// Symmetric uncertainty tube for lateral motion which is not explained by
+  /// the current filtered velocity.  Zero preserves the deterministic legacy
+  /// rollout.  The tube grows with time and is capped so a distant target does
+  /// not make every race corridor infeasible.
+  double target_lateral_uncertainty_growth_mps{};
+  double target_lateral_uncertainty_max_m{};
 };
 
 struct OvertakeKinematicRolloutResolution
@@ -1726,6 +1732,10 @@ struct OvertakeKinematicRolloutResolution
   bool pass_target_clearance_checked{false};
   double minimum_pass_target_surface_clearance_m{
     std::numeric_limits<double>::quiet_NaN()};
+  bool pass_target_uncertainty_checked{false};
+  double minimum_pass_target_uncertainty_adjusted_clearance_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double maximum_applied_target_lateral_uncertainty_m{};
 };
 
 /// Roll out longitudinal acceleration and delayed lateral mission progress on
@@ -4146,6 +4156,13 @@ struct OvertakeMissionCandidate
   bool pass_target_clearance_checked{false};
   double predicted_minimum_pass_target_surface_clearance_m{
     std::numeric_limits<double>::quiet_NaN()};
+  /// Clearance after subtracting the bounded lateral uncertainty tube.  This
+  /// is the completion admission/ranking value; the field above remains the
+  /// nominal physical surface clearance for diagnostics.
+  bool pass_target_uncertainty_checked{false};
+  double predicted_minimum_pass_target_uncertainty_adjusted_clearance_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double maximum_applied_pass_target_lateral_uncertainty_m{};
   /// A stage-wise Frenet corridor can admit a receding prefix even when no
   /// immutable pass_lateral value exists across the complete horizon.
   bool frenet_dp_corridor_checked{false};
@@ -4321,6 +4338,46 @@ struct OvertakeMissionCandidateSelectionRequest
   /// Smaller differences retain the existing aggressive progress ordering.
   double minimum_interaction_clearance_advantage_m{};
 };
+
+enum class ProgressiveEntryCompletionGateRejectReason
+{
+  None,
+  Disabled,
+  CompleteMission,
+  InvalidInput,
+  FrontDistanceReserve,
+  NoReturnTimeReserve,
+};
+
+const char * to_string(ProgressiveEntryCompletionGateRejectReason reason) noexcept;
+
+struct ProgressiveEntryCompletionGateRequest
+{
+  bool enabled{false};
+  bool progressive_entry{false};
+  double target_front_distance_m{};
+  double positive_closing_speed_mps{};
+  double no_return_front_distance_m{};
+  double minimum_unproven_front_distance_m{};
+  double minimum_no_return_time_sec{};
+};
+
+struct ProgressiveEntryCompletionGateResolution
+{
+  bool valid{false};
+  bool checked{false};
+  bool admitted{false};
+  double time_to_no_return_sec{std::numeric_limits<double>::infinity()};
+  ProgressiveEntryCompletionGateRejectReason reject_reason{
+    ProgressiveEntryCompletionGateRejectReason::InvalidInput};
+};
+
+/// Allow a local-only new entry only while there is enough longitudinal room
+/// to obtain a complete rear-clear Mission before tactical no-return.  Active
+/// Mission prefixes use a different runtime contract and do not call this
+/// new-entry gate.
+ProgressiveEntryCompletionGateResolution resolve_progressive_entry_completion_gate(
+  const ProgressiveEntryCompletionGateRequest & request) noexcept;
 
 struct OvertakeMissionCandidateSelection
 {

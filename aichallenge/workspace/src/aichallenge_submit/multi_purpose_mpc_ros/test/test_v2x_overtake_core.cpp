@@ -178,6 +178,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeBodyClearDeadlineRequest
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntryDeadlineMarginRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeKinematicRolloutRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeKinematicSpeedCapSample;
+using multi_purpose_mpc_ros::v2x_overtake_core::ProgressiveEntryCompletionGateRejectReason;
+using multi_purpose_mpc_ros::v2x_overtake_core::ProgressiveEntryCompletionGateRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeDynamicPassDistanceRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeRuntimeContinuationReserveRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::DynamicPredictionTimingRequest;
@@ -280,6 +282,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_body_clear_dead
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_entry_deadline_margin;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_body_clear_execution_handoff;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_kinematic_rollout;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_progressive_entry_completion_gate;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_dynamic_pass_distance;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_runtime_continuation_reserve;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_prediction_timing;
@@ -4942,6 +4945,72 @@ TEST(V2XOvertakeCoreSpeed, BuildsProgressiveEntryPlanWithoutRearClearPrediction)
   EXPECT_DOUBLE_EQ(plan.path.pass_distance_m, 12.0);
 }
 
+TEST(V2XOvertakeCoreSpeed, ProgressiveEntryCompletionGateRequiresRoomBeforeNoReturn)
+{
+  ProgressiveEntryCompletionGateRequest request;
+  request.enabled = true;
+  request.progressive_entry = true;
+  request.target_front_distance_m = 10.0;
+  request.positive_closing_speed_mps = 2.0;
+  request.no_return_front_distance_m = 2.0;
+  request.minimum_unproven_front_distance_m = 8.0;
+  request.minimum_no_return_time_sec = 1.0;
+
+  auto resolution = resolve_progressive_entry_completion_gate(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.checked);
+  EXPECT_TRUE(resolution.admitted);
+  EXPECT_NEAR(resolution.time_to_no_return_sec, 4.0, 1e-9);
+  EXPECT_EQ(resolution.reject_reason, ProgressiveEntryCompletionGateRejectReason::None);
+
+  request.target_front_distance_m = 7.0;
+  resolution = resolve_progressive_entry_completion_gate(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.admitted);
+  EXPECT_EQ(
+    resolution.reject_reason,
+    ProgressiveEntryCompletionGateRejectReason::FrontDistanceReserve);
+
+  request.target_front_distance_m = 9.0;
+  request.positive_closing_speed_mps = 8.0;
+  resolution = resolve_progressive_entry_completion_gate(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.admitted);
+  EXPECT_NEAR(resolution.time_to_no_return_sec, 0.875, 1e-9);
+  EXPECT_EQ(
+    resolution.reject_reason,
+    ProgressiveEntryCompletionGateRejectReason::NoReturnTimeReserve);
+}
+
+TEST(V2XOvertakeCoreSpeed, ProgressiveEntryCompletionGateDoesNotBlockCompleteMission)
+{
+  ProgressiveEntryCompletionGateRequest request;
+  request.enabled = true;
+  request.progressive_entry = false;
+  request.target_front_distance_m = 1.0;
+  request.positive_closing_speed_mps = 8.0;
+  request.no_return_front_distance_m = 2.0;
+  request.minimum_unproven_front_distance_m = 8.0;
+  request.minimum_no_return_time_sec = 1.0;
+
+  auto resolution = resolve_progressive_entry_completion_gate(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.checked);
+  EXPECT_TRUE(resolution.admitted);
+  EXPECT_EQ(
+    resolution.reject_reason,
+    ProgressiveEntryCompletionGateRejectReason::CompleteMission);
+
+  request.progressive_entry = true;
+  request.target_front_distance_m = -1.0;
+  resolution = resolve_progressive_entry_completion_gate(request);
+  EXPECT_FALSE(resolution.valid);
+  EXPECT_FALSE(resolution.admitted);
+  EXPECT_EQ(
+    resolution.reject_reason,
+    ProgressiveEntryCompletionGateRejectReason::InvalidInput);
+}
+
 TEST(V2XOvertakeCoreMissionAdmission, RequiresValidatedFullTrackTransition)
 {
   using multi_purpose_mpc_ros::v2x_overtake_core::
@@ -5320,6 +5389,51 @@ TEST(V2XOvertakeCoreSpeed, KinematicRolloutPredictsRearClearOnSharedTimeAxis)
   ASSERT_TRUE(short_budget.valid);
   EXPECT_FALSE(short_budget.rear_clear_feasible);
   EXPECT_FALSE(std::isfinite(short_budget.rear_clear_time_sec));
+}
+
+TEST(V2XOvertakeCoreSpeed, KinematicRolloutSubtractsBoundedLateralUncertainty)
+{
+  OvertakeKinematicRolloutRequest request;
+  request.enabled = true;
+  request.mission_path = OvertakeMissionPathRequest{
+    0.0, 0.0, 1.5, 0.0, 4.0, 8.0, 6.0};
+  request.target_longitudinal_m = 4.0;
+  request.current_ego_speed_mps = 5.0;
+  request.target_speed_mps = 3.0;
+  request.candidate_closing_speed_mps = 2.0;
+  request.maximum_ego_speed_mps = 11.0;
+  request.maximum_acceleration_mps2 = 1.0;
+  request.maximum_deceleration_mps2 = 1.35;
+  request.target_lateral_m = -2.0;
+  request.target_lateral_prediction_horizon_sec = 1.0;
+  request.lateral_clearance_m = 1.0;
+  request.hard_longitudinal_distance_m = 2.0;
+  request.maximum_time_sec = 8.0;
+  request.rear_clear_prediction_enabled = true;
+  request.rear_clear_distance_m = 4.0;
+
+  const auto deterministic = resolve_overtake_kinematic_rollout(request);
+  ASSERT_TRUE(deterministic.valid);
+  ASSERT_TRUE(deterministic.pass_target_clearance_checked);
+  ASSERT_TRUE(deterministic.pass_target_uncertainty_checked);
+  EXPECT_NEAR(
+    deterministic.minimum_pass_target_uncertainty_adjusted_clearance_m,
+    deterministic.minimum_pass_target_surface_clearance_m, 1e-9);
+  EXPECT_DOUBLE_EQ(deterministic.maximum_applied_target_lateral_uncertainty_m, 0.0);
+
+  request.target_lateral_uncertainty_growth_mps = 0.20;
+  request.target_lateral_uncertainty_max_m = 0.30;
+  const auto robust = resolve_overtake_kinematic_rollout(request);
+  ASSERT_TRUE(robust.valid);
+  ASSERT_TRUE(robust.pass_target_uncertainty_checked);
+  EXPECT_GT(robust.maximum_applied_target_lateral_uncertainty_m, 0.0);
+  EXPECT_LE(robust.maximum_applied_target_lateral_uncertainty_m, 0.30 + 1e-9);
+  EXPECT_LT(
+    robust.minimum_pass_target_uncertainty_adjusted_clearance_m,
+    robust.minimum_pass_target_surface_clearance_m);
+
+  request.target_lateral_uncertainty_growth_mps = -0.01;
+  EXPECT_FALSE(resolve_overtake_kinematic_rollout(request).valid);
 }
 
 TEST(V2XOvertakeCoreSpeed, KinematicRolloutUsesOffsetCourseProgressForRearClear)
@@ -8722,6 +8836,64 @@ TEST(V2XOvertakeCoreSpeed, StraightEntryIgnoresSubthresholdWidthDifference)
   ASSERT_TRUE(selection.valid);
   ASSERT_TRUE(selection.found);
   EXPECT_EQ(selection.candidate.pass_side_sign, 1);
+}
+
+TEST(V2XOvertakeCoreSpeed, FutureInteractionReserveOutranksStraightEntryWidth)
+{
+  OvertakeMissionCandidate wider_entry;
+  wider_entry.feasible = true;
+  wider_entry.shift_distance_m = 3.0;
+  wider_entry.goal_lateral_m = 0.7;
+  wider_entry.lateral_shift_m = 0.7;
+  wider_entry.max_required_lateral_accel_mps2 = 2.0;
+  wider_entry.pass_side_sign = 1;
+  wider_entry.entry_side_clearance_m = 3.0;
+  wider_entry.pass_target_clearance_checked = true;
+  wider_entry.predicted_minimum_pass_target_surface_clearance_m = 0.25;
+  wider_entry.pass_target_uncertainty_checked = true;
+  wider_entry.predicted_minimum_pass_target_uncertainty_adjusted_clearance_m = 0.05;
+  wider_entry.maximum_applied_pass_target_lateral_uncertainty_m = 0.20;
+
+  auto completion_reserve = wider_entry;
+  completion_reserve.goal_lateral_m = -0.8;
+  completion_reserve.pass_side_sign = -1;
+  completion_reserve.entry_side_clearance_m = 2.0;
+  completion_reserve.predicted_minimum_pass_target_surface_clearance_m = 0.50;
+  completion_reserve.predicted_minimum_pass_target_uncertainty_adjusted_clearance_m = 0.30;
+
+  OvertakeMissionCandidateSelectionRequest request;
+  request.candidates = {wider_entry, completion_reserve};
+  request.entry_side_clearance_selection_enabled = true;
+  request.minimum_clearance_advantage_m = 0.25;
+  request.minimum_interaction_clearance_advantage_m = 0.10;
+
+  const auto selection = select_overtake_mission_candidate(request);
+  ASSERT_TRUE(selection.valid);
+  ASSERT_TRUE(selection.found);
+  EXPECT_EQ(selection.candidate.pass_side_sign, -1);
+}
+
+TEST(V2XOvertakeCoreSpeed, RejectsNegativeUncertaintyAdjustedPassClearance)
+{
+  OvertakeMissionCandidate candidate;
+  candidate.feasible = true;
+  candidate.shift_distance_m = 3.0;
+  candidate.goal_lateral_m = 0.7;
+  candidate.lateral_shift_m = 0.7;
+  candidate.max_required_lateral_accel_mps2 = 2.0;
+  candidate.pass_side_sign = 1;
+  candidate.pass_target_clearance_checked = true;
+  candidate.predicted_minimum_pass_target_surface_clearance_m = 0.20;
+  candidate.pass_target_uncertainty_checked = true;
+  candidate.predicted_minimum_pass_target_uncertainty_adjusted_clearance_m = -0.01;
+  candidate.maximum_applied_pass_target_lateral_uncertainty_m = 0.21;
+
+  OvertakeMissionCandidateSelectionRequest request;
+  request.candidates = {candidate};
+  const auto selection = select_overtake_mission_candidate(request);
+  ASSERT_TRUE(selection.valid);
+  EXPECT_FALSE(selection.found);
+  EXPECT_EQ(selection.invalid_candidate_count, 1U);
 }
 
 TEST(V2XOvertakeCoreSpeed, GlobalCandidateSelectionPrefersDeadlineReserveAcrossSides)

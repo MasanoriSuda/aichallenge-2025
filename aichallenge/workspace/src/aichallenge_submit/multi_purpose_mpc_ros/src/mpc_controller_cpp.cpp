@@ -20778,15 +20778,19 @@ private:
         const bool target_continuous_or_leased =
           target_prediction_valid ||
           target_age_sec <= line_cfg.receding_horizon_continuity_lease_sec + kEps;
+        const bool rear_clear_return_lease =
+          return_phase && overtake_line_state_.rear_clear_confirmed_latched;
+        const bool normal_execution_lease =
+          receding_horizon_execution_lease_active(
+          now_sec, target_continuous_or_leased,
+          behavior_output.locked_target_position_jump,
+          behavior_output.locked_target_course_progress_rejected,
+          behavior_output.overtake_execution_corridor_blocked,
+          behavior_output.overtake_forbidden_wp,
+          behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake);
         if (
           !warm_start_compatible ||
-          !receding_horizon_execution_lease_active(
-            now_sec, target_continuous_or_leased,
-            behavior_output.locked_target_position_jump,
-            behavior_output.locked_target_course_progress_rejected,
-            behavior_output.overtake_execution_corridor_blocked,
-            behavior_output.overtake_forbidden_wp,
-            behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake))
+          (!rear_clear_return_lease && !normal_execution_lease))
         {
           return false;
         }
@@ -28486,9 +28490,8 @@ private:
             safe_separation.reason ==
             overtake_core::SafeSeparationReason::AbsoluteDistanceLimit;
           const bool soft_maneuver_failure =
-            safe_separation.reason == overtake_core::SafeSeparationReason::ShortHorizonUnsafe ||
-            safe_separation.reason == overtake_core::SafeSeparationReason::LocalTimeLimit ||
-            safe_separation.reason == overtake_core::SafeSeparationReason::LocalDistanceLimit;
+            overtake_core::is_soft_safe_separation_abort_reason(
+            safe_separation.reason);
           const bool current_candidate_allowed =
             safe_separation.reason !=
             overtake_core::SafeSeparationReason::ShortHorizonUnsafe;
@@ -29756,27 +29759,8 @@ private:
           physical_hold_targets = aligned_hold.lateral_targets_m;
         }
       }
-      auto physical_hold_horizon = evaluate_overtake_line_horizon(
-        ref_wp_id, N, lb, ub, current_ey, current_ey, 0.0, true,
-        std::max(0.5, target_bound_hold_max_distance), current_ey,
-        planning_wall_clearance, max_lateral_accel, speed_for_time, true,
-        std::nullopt, physical_hold_targets);
-      if (
-        !physical_hold_horizon.execution_feasible() &&
-        min_wall_clearance + kEps < planning_wall_clearance)
-      {
-        physical_hold_horizon = evaluate_overtake_line_horizon(
-          ref_wp_id, N, lb, ub, current_ey, current_ey, 0.0, true,
-          std::max(0.5, target_bound_hold_max_distance), current_ey,
-          min_wall_clearance, max_lateral_accel, speed_for_time, true,
-          std::nullopt, physical_hold_targets);
-      }
-
       const bool hold_was_active =
         overtake_line_state_.target_bound_execution_replan_hold_active;
-      const bool safe_execution_prefix_available =
-        overtake_line_state_.phase == OvertakeLinePhase::Pass ||
-        overtake_line_state_.phase == OvertakeLinePhase::ShiftOut;
       const double execution_traveled_now =
         overtake_line_state_.phase == OvertakeLinePhase::Pass ?
         overtake_mission_pass_traveled() :
@@ -29792,6 +29776,49 @@ private:
           0.0,
           execution_traveled_now -
           overtake_line_state_.target_bound_execution_replan_hold_start_distance) : 0.0;
+      const auto repair_budget =
+        overtake_core::resolve_target_bound_execution_repair_budget(
+        overtake_core::TargetBoundExecutionRepairBudgetRequest{
+          target_bound_hold_max_sec,
+          target_bound_hold_max_distance,
+          hold_elapsed_sec,
+          hold_traveled_m,
+          receding_horizon.last_target_constraint_distance_m,
+          line_cfg.safe_separation_safe_prefix_min_remaining_distance,
+          std::max(0.0, current_speed_mps_),
+          0.5});
+      double target_bound_execution_prefix_distance =
+        target_bound_hold_max_distance;
+      if (repair_budget.valid) {
+        target_bound_hold_max_sec = std::min(
+          repair_budget.maximum_sec,
+          std::max(0.0, line_cfg.pass_horizon_absolute_time_limit));
+        target_bound_hold_max_distance = std::min(
+          repair_budget.maximum_distance_m,
+          std::max(0.0, line_cfg.pass_horizon_absolute_distance_limit));
+        target_bound_execution_prefix_distance = std::min(
+          repair_budget.execution_prefix_distance_m,
+          std::max(0.0, target_bound_hold_max_distance - hold_traveled_m));
+      }
+      auto physical_hold_horizon = evaluate_overtake_line_horizon(
+        ref_wp_id, N, lb, ub, current_ey, current_ey, 0.0, true,
+        std::max(0.5, target_bound_execution_prefix_distance), current_ey,
+        planning_wall_clearance, max_lateral_accel, speed_for_time, true,
+        std::nullopt, physical_hold_targets);
+      if (
+        !physical_hold_horizon.execution_feasible() &&
+        min_wall_clearance + kEps < planning_wall_clearance)
+      {
+        physical_hold_horizon = evaluate_overtake_line_horizon(
+          ref_wp_id, N, lb, ub, current_ey, current_ey, 0.0, true,
+          std::max(0.5, target_bound_execution_prefix_distance), current_ey,
+          min_wall_clearance, max_lateral_accel, speed_for_time, true,
+          std::nullopt, physical_hold_targets);
+      }
+
+      const bool safe_execution_prefix_available =
+        overtake_line_state_.phase == OvertakeLinePhase::Pass ||
+        overtake_line_state_.phase == OvertakeLinePhase::ShiftOut;
       const bool hold_budget_consumed_for_generation =
         overtake_line_state_.mission_generation > 0U &&
         overtake_line_state_.target_bound_execution_replan_exhausted_generation ==
@@ -29913,7 +29940,7 @@ private:
             "OvertakeLine target-bound execution hold started: "
             "target=%s, side=%d, phase=%s, mode=%s, failure=%s[%d], speed=%.2f, "
             "limit=%.2f s/%.2f m, tactical_replan=immediate, "
-            "prefix_source=%s, prefix_reason=%s, "
+            "budget=%s, prefix_source=%s, prefix_reason=%s, "
             "encounter_samples=%zu, encounter_last=%.2f m, "
             "prediction_truncated=%zu, horizon_time=%.2f s, wp_id=%d",
             overtake_line_state_.target_vehicle_id.c_str(),
@@ -29926,6 +29953,7 @@ private:
             receding_horizon.hard_bound_failure_index, current_speed_mps_,
             target_bound_hold_max_sec,
             target_bound_hold_max_distance,
+            repair_budget.expanded ? "dynamic-prefix" : "configured",
             target_bound_solved_prefix_used ?
             (target_bound_last_feasible_prefix_used ? "last-feasible" : "latest") :
             "current-freeze",
@@ -30831,6 +30859,34 @@ private:
     if (!horizon_evaluation.execution_feasible())
     {
       const char * reason = execution_horizon_failure_reason.c_str();
+      const bool rear_clear_return_handoff =
+        overtake_core::can_handoff_failed_rear_clear_return(
+        overtake_core::RearClearReturnFailureHandoffRequest{
+          overtake_line_state_.phase == OvertakeLinePhase::Return,
+          overtake_line_state_.rear_clear_confirmed_latched,
+          actual_wall_physical_contact,
+          actual_wall_sample_unavailable,
+          overtake_solver_recovery_active_});
+      if (rear_clear_return_handoff) {
+        RCLCPP_WARN(
+          rclcpp::get_logger("mpc_controller"),
+          "OvertakeLine rear-clear Return horizon degraded; handing off to normal line: "
+          "target=%s, side=%d, ey=%.2f, epsi=%.3f, margin_blocked=%d, "
+          "reason=%s, wp_id=%d",
+          overtake_line_state_.target_vehicle_id.c_str(),
+          overtake_line_state_.pass_side_sign, current_ey,
+          model->spatial_state.e_psi, actual_wall_margin_blocked ? 1 : 0,
+          reason, model->wp_id);
+        arm_completed_overtake_target_block(
+          overtake_line_state_.target_vehicle_id, now_sec);
+        reset_overtake_line_state(
+          now_sec, "rear-clear Return horizon degraded; normal-line handoff");
+        // Do not publish the just-rejected Return horizon for one extra
+        // control cycle. An inactive output hands authority directly back to
+        // the normal racing line while the completed-target block prevents an
+        // immediate rematch on the following cycle.
+        return OvertakeLineOutput{};
+      }
       if (overtake_core::should_terminate_recovery_retained_mission(
           overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare &&
           overtake_line_state_.follow_prepare_cause ==

@@ -1405,8 +1405,9 @@ struct TargetBoundExecutionHoldRequest
   bool mission_path_frozen{false};
   bool target_bound_failure{false};
   bool physical_hold_path_feasible{false};
-  /// A non-hard wall warning may use the short optimizer repair window, but
-  /// must not extend the same lateral prefix through the Mission-wide budget.
+  /// A non-hard wall warning requests a fresh path. It does not revoke a
+  /// separately wall-validated prefix; the actual wall guards below remain
+  /// authoritative on every cycle.
   bool wall_preplan_warning{false};
   bool target_progress_continuous{false};
   bool target_position_jump{false};
@@ -1449,6 +1450,38 @@ struct TargetBoundExecutionHoldRequest
   /// budget. A replacement generation is required before another hold.
   bool mission_hold_budget_exhausted{false};
 };
+
+struct TargetBoundExecutionRepairBudgetRequest
+{
+  double configured_maximum_sec{};
+  double configured_maximum_distance_m{};
+  double hold_elapsed_sec{};
+  double hold_traveled_m{};
+  /// Distance from the current ego position to the first future sample where
+  /// target separation and wall bounds conflict.
+  double conflict_distance_m{std::numeric_limits<double>::infinity()};
+  /// Keep this much freshly re-plannable path before the predicted conflict.
+  double minimum_remaining_distance_m{};
+  double ego_speed_mps{};
+  double minimum_speed_mps{0.5};
+};
+
+struct TargetBoundExecutionRepairBudgetResolution
+{
+  bool valid{false};
+  bool expanded{false};
+  double maximum_sec{};
+  double maximum_distance_m{};
+  double execution_prefix_distance_m{};
+};
+
+/// Convert a future target/wall conflict into a bounded receding-horizon
+/// repair lease. The configured short lease remains the floor. A farther
+/// conflict may extend the cumulative lease only up to the still-clear prefix
+/// before that conflict; each caller cycle must continue to physically
+/// revalidate the retained prefix.
+TargetBoundExecutionRepairBudgetResolution resolve_target_bound_execution_repair_budget(
+  const TargetBoundExecutionRepairBudgetRequest & request) noexcept;
 
 /// Keep a physically feasible same-side execution prefix while a target-only
 /// receding-horizon conflict is re-optimized. Callers may admit Pass or a
@@ -2825,6 +2858,26 @@ struct SafeSeparationResolution
 /// but may not re-arm that local window beyond the overall bound.
 SafeSeparationResolution resolve_safe_separation(
   const SafeSeparationRequest & request) noexcept;
+
+/// Invalid/missing one-cycle SafeSeparation input and finite local horizon
+/// limits are Mission-replan failures. Absolute Mission limits and physical
+/// horizon faults remain terminal.
+bool is_soft_safe_separation_abort_reason(SafeSeparationReason reason) noexcept;
+
+struct RearClearReturnFailureHandoffRequest
+{
+  bool return_active{false};
+  bool rear_clear_confirmed_latched{false};
+  bool actual_wall_contact{false};
+  bool wall_sample_unavailable{false};
+  bool solver_recovery_requested{false};
+};
+
+/// Once rear-clear is latched, a Return optimization failure must not turn a
+/// completed pass back into Recovery. Normal-line handoff remains forbidden
+/// for actual wall contact, unknown wall geometry, or solver recovery.
+bool can_handoff_failed_rear_clear_return(
+  const RearClearReturnFailureHandoffRequest & request) noexcept;
 
 struct SafeSeparationTacticalReselectRequest
 {

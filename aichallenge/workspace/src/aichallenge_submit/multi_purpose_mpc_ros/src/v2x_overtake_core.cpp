@@ -2211,10 +2211,53 @@ bool target_bound_execution_hold_budget_available(
   if (latched_pass_extension_requested && absolute_mission_budget_available) {
     return true;
   }
-  return request.forward_progress_extension_enabled && !request.wall_preplan_warning &&
-         request.pass_phase &&
+  return request.forward_progress_extension_enabled && request.pass_phase &&
          request.fresh_forward_progress && progress_extension_timing_valid &&
          absolute_mission_budget_available;
+}
+
+TargetBoundExecutionRepairBudgetResolution resolve_target_bound_execution_repair_budget(
+  const TargetBoundExecutionRepairBudgetRequest & request) noexcept
+{
+  TargetBoundExecutionRepairBudgetResolution resolution;
+  const auto finite_non_negative = [](const double value) {
+      return std::isfinite(value) && value >= 0.0;
+    };
+  if (
+    !finite_non_negative(request.configured_maximum_sec) ||
+    !finite_non_negative(request.configured_maximum_distance_m) ||
+    !finite_non_negative(request.hold_elapsed_sec) ||
+    !finite_non_negative(request.hold_traveled_m) ||
+    !finite_non_negative(request.minimum_remaining_distance_m) ||
+    !finite_non_negative(request.ego_speed_mps) ||
+    !std::isfinite(request.minimum_speed_mps) || request.minimum_speed_mps <= 0.0)
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  resolution.maximum_sec = request.configured_maximum_sec;
+  resolution.maximum_distance_m = request.configured_maximum_distance_m;
+  resolution.execution_prefix_distance_m = request.configured_maximum_distance_m;
+  if (!finite_non_negative(request.conflict_distance_m)) {
+    return resolution;
+  }
+
+  const double available_prefix_distance_m = std::max(
+    0.0, request.conflict_distance_m - request.minimum_remaining_distance_m);
+  const double speed_mps = std::max(request.minimum_speed_mps, request.ego_speed_mps);
+  resolution.execution_prefix_distance_m = std::max(
+    resolution.execution_prefix_distance_m, available_prefix_distance_m);
+  resolution.maximum_distance_m = std::max(
+    resolution.maximum_distance_m,
+    request.hold_traveled_m + available_prefix_distance_m);
+  resolution.maximum_sec = std::max(
+    resolution.maximum_sec,
+    request.hold_elapsed_sec + available_prefix_distance_m / speed_mps);
+  resolution.expanded =
+    resolution.maximum_sec > request.configured_maximum_sec + 1e-9 ||
+    resolution.maximum_distance_m > request.configured_maximum_distance_m + 1e-9;
+  return resolution;
 }
 
 bool can_hold_target_bound_execution_for_replan(
@@ -4338,6 +4381,15 @@ SafeSeparationResolution resolve_safe_separation(
   if (!request.enabled || !request.active) {
     return resolution;
   }
+  // Rear-clear is self-sufficient evidence for Return. It is normal for the
+  // passed target observation (and therefore target speed/progress fields) to
+  // disappear immediately afterwards, so do not reject this handoff as an
+  // unrelated SafeSeparation input error.
+  if (request.rear_clear_confirmed && request.return_corridor_available) {
+    resolution.action = SafeSeparationAction::Return;
+    resolution.reason = SafeSeparationReason::RearClear;
+    return resolution;
+  }
   const auto finite_non_negative = [](const double value) {
       return std::isfinite(value) && value >= 0.0;
     };
@@ -4375,11 +4427,6 @@ SafeSeparationResolution resolve_safe_separation(
   {
     resolution.action = SafeSeparationAction::Abort;
     resolution.reason = SafeSeparationReason::InvalidInput;
-    return resolution;
-  }
-  if (request.rear_clear_confirmed && request.return_corridor_available) {
-    resolution.action = SafeSeparationAction::Return;
-    resolution.reason = SafeSeparationReason::RearClear;
     return resolution;
   }
   const bool rearward_progress_loss_disengage_candidate =
@@ -4586,6 +4633,24 @@ SafeSeparationResolution resolve_safe_separation(
       resolution.target_velocity_reference_mps - request.target_speed_mps;
   }
   return resolution;
+}
+
+bool is_soft_safe_separation_abort_reason(const SafeSeparationReason reason) noexcept
+{
+  return
+    reason == SafeSeparationReason::InvalidInput ||
+    reason == SafeSeparationReason::ShortHorizonUnsafe ||
+    reason == SafeSeparationReason::LocalTimeLimit ||
+    reason == SafeSeparationReason::LocalDistanceLimit;
+}
+
+bool can_handoff_failed_rear_clear_return(
+  const RearClearReturnFailureHandoffRequest & request) noexcept
+{
+  return
+    request.return_active && request.rear_clear_confirmed_latched &&
+    !request.actual_wall_contact && !request.wall_sample_unavailable &&
+    !request.solver_recovery_requested;
 }
 
 bool can_reselect_from_safe_separation(

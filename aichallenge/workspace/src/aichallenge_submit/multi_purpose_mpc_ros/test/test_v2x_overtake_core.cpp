@@ -145,6 +145,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonLateralSample;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonExecutionLeaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::TargetBoundExecutionHoldRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::TargetBoundExecutionHoldLifecycleRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::TargetBoundExecutionRepairBudgetRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonTargetBoundsRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonElasticTargetBoundsRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonTargetPredictionRequest;
@@ -205,6 +206,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::SafeSeparationTacticalReselectRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::RearClearReturnFailureHandoffRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::TargetAheadPassContinuationAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::TargetAheadPassContinuationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RobustOvertakeClearanceRequest;
@@ -281,6 +283,10 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frozen_outer_transition_
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_same_side_extension_commit;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_commit_same_side_extension;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_safe_separation;
+using multi_purpose_mpc_ros::v2x_overtake_core::is_soft_safe_separation_abort_reason;
+using multi_purpose_mpc_ros::v2x_overtake_core::can_handoff_failed_rear_clear_return;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  resolve_target_bound_execution_repair_budget;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_target_ahead_pass_continuation;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_reselect_from_safe_separation;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_soft_mission_abort;
@@ -4070,6 +4076,36 @@ TEST(V2XOvertakeCoreSpeed, HoldsCommittedExecutionPrefixAcrossTargetOnlyConflict
   EXPECT_FALSE(can_hold_target_bound_execution_for_replan(request));
 }
 
+TEST(V2XOvertakeCoreSpeed, TargetBoundRepairBudgetCoversClearPrefixBeforeFutureConflict)
+{
+  TargetBoundExecutionRepairBudgetRequest request;
+  request.configured_maximum_sec = 0.75;
+  request.configured_maximum_distance_m = 4.0;
+  request.hold_elapsed_sec = 0.50;
+  request.hold_traveled_m = 3.0;
+  request.conflict_distance_m = 18.0;
+  request.minimum_remaining_distance_m = 2.0;
+  request.ego_speed_mps = 6.0;
+  request.minimum_speed_mps = 0.5;
+
+  const auto resolution = resolve_target_bound_execution_repair_budget(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.expanded);
+  EXPECT_NEAR(resolution.execution_prefix_distance_m, 16.0, 1e-9);
+  EXPECT_NEAR(resolution.maximum_distance_m, 19.0, 1e-9);
+  EXPECT_NEAR(resolution.maximum_sec, 0.5 + 16.0 / 6.0, 1e-9);
+
+  request.conflict_distance_m = std::numeric_limits<double>::infinity();
+  const auto no_conflict = resolve_target_bound_execution_repair_budget(request);
+  ASSERT_TRUE(no_conflict.valid);
+  EXPECT_FALSE(no_conflict.expanded);
+  EXPECT_NEAR(no_conflict.maximum_sec, 0.75, 1e-9);
+  EXPECT_NEAR(no_conflict.maximum_distance_m, 4.0, 1e-9);
+
+  request.hold_elapsed_sec = -0.1;
+  EXPECT_FALSE(resolve_target_bound_execution_repair_budget(request).valid);
+}
+
 TEST(V2XOvertakeCoreSpeed, TargetBoundExecutionHoldCannotBypassHardFaults)
 {
   TargetBoundExecutionHoldRequest request;
@@ -4207,7 +4243,7 @@ TEST(V2XOvertakeCoreSpeed, TargetBoundExecutionHoldExtendsOnlyWithFreshPassProgr
   EXPECT_FALSE(target_bound_execution_hold_budget_available(request));
 }
 
-TEST(V2XOvertakeCoreSpeed, TargetBoundExecutionProgressExtensionStopsAtWallWarning)
+TEST(V2XOvertakeCoreSpeed, TargetBoundExecutionProgressContinuesAcrossPreplanWarning)
 {
   TargetBoundExecutionHoldRequest request;
   request.enabled = true;
@@ -4231,15 +4267,18 @@ TEST(V2XOvertakeCoreSpeed, TargetBoundExecutionProgressExtensionStopsAtWallWarni
 
   ASSERT_TRUE(can_hold_target_bound_execution_for_replan(request));
   request.wall_preplan_warning = true;
-  EXPECT_FALSE(target_bound_execution_hold_budget_available(request));
-  EXPECT_FALSE(can_hold_target_bound_execution_for_replan(request));
+  EXPECT_TRUE(target_bound_execution_hold_budget_available(request));
+  EXPECT_TRUE(can_hold_target_bound_execution_for_replan(request));
 
-  // The warning does not turn a soft prediction into a hard fault. A short
-  // optimizer repair window remains available before progress extension.
+  // The warning requests a new path, while the separately revalidated
+  // physical prefix and actual hard wall guard continue to own execution.
   request.hold_elapsed_sec = 0.20;
   request.hold_traveled_m = 1.0;
   EXPECT_TRUE(target_bound_execution_hold_budget_available(request));
   EXPECT_TRUE(can_hold_target_bound_execution_for_replan(request));
+
+  request.actual_wall_margin_blocked = true;
+  EXPECT_FALSE(can_hold_target_bound_execution_for_replan(request));
 }
 
 TEST(V2XOvertakeCoreSpeed, TargetBoundExecutionProgressCannotRearmConsumedGeneration)
@@ -7462,6 +7501,61 @@ TEST(V2XOvertakeCoreHorizon, BoundsOrRejectsUnsafeSafeSeparation)
   const auto local_timeout = resolve_safe_separation(request);
   EXPECT_EQ(local_timeout.action, SafeSeparationAction::Abort);
   EXPECT_EQ(local_timeout.reason, SafeSeparationReason::LocalTimeLimit);
+}
+
+TEST(V2XOvertakeCoreHorizon, RearClearReturnsBeforeTransientTargetInputValidation)
+{
+  SafeSeparationRequest request;
+  request.enabled = true;
+  request.active = true;
+  request.target_seen = false;
+  request.rear_clear_confirmed = true;
+  request.return_corridor_available = true;
+  request.target_longitudinal_m = std::numeric_limits<double>::quiet_NaN();
+
+  const auto resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::Return);
+  EXPECT_EQ(resolution.reason, SafeSeparationReason::RearClear);
+
+  request.return_corridor_available = false;
+  const auto invalid = resolve_safe_separation(request);
+  EXPECT_EQ(invalid.action, SafeSeparationAction::Abort);
+  EXPECT_EQ(invalid.reason, SafeSeparationReason::InvalidInput);
+}
+
+TEST(V2XOvertakeCoreHorizon, ClassifiesOnlyReplannableSafeSeparationAbortsAsSoft)
+{
+  EXPECT_TRUE(is_soft_safe_separation_abort_reason(SafeSeparationReason::InvalidInput));
+  EXPECT_TRUE(
+    is_soft_safe_separation_abort_reason(SafeSeparationReason::ShortHorizonUnsafe));
+  EXPECT_TRUE(is_soft_safe_separation_abort_reason(SafeSeparationReason::LocalTimeLimit));
+  EXPECT_TRUE(
+    is_soft_safe_separation_abort_reason(SafeSeparationReason::LocalDistanceLimit));
+  EXPECT_FALSE(
+    is_soft_safe_separation_abort_reason(SafeSeparationReason::AbsoluteTimeLimit));
+  EXPECT_FALSE(
+    is_soft_safe_separation_abort_reason(SafeSeparationReason::AbsoluteDistanceLimit));
+}
+
+TEST(V2XOvertakeCoreHorizon, RearClearReturnFailureHandsOffUnlessRecoveryIsRequired)
+{
+  RearClearReturnFailureHandoffRequest request;
+  request.return_active = true;
+  request.rear_clear_confirmed_latched = true;
+
+  EXPECT_TRUE(can_handoff_failed_rear_clear_return(request));
+
+  request.actual_wall_contact = true;
+  EXPECT_FALSE(can_handoff_failed_rear_clear_return(request));
+  request.actual_wall_contact = false;
+  request.wall_sample_unavailable = true;
+  EXPECT_FALSE(can_handoff_failed_rear_clear_return(request));
+  request.wall_sample_unavailable = false;
+  request.solver_recovery_requested = true;
+  EXPECT_FALSE(can_handoff_failed_rear_clear_return(request));
+  request.solver_recovery_requested = false;
+  request.rear_clear_confirmed_latched = false;
+  EXPECT_FALSE(can_handoff_failed_rear_clear_return(request));
 }
 
 TEST(V2XOvertakeCoreHorizon, RetainsOnlyHardSafeTrajectoryPrefix)

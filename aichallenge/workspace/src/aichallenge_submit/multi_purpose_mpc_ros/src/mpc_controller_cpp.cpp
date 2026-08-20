@@ -5026,11 +5026,31 @@ struct AlignedMpccExecutionTrajectory
   std::vector<double> lateral_m;
 };
 
+enum class SolvedExecutionWallValidationScope
+{
+  DiscreteStages,
+  SweptFromCurrentPose,
+};
+
+constexpr const char * to_string(
+  const SolvedExecutionWallValidationScope scope)
+{
+  switch (scope) {
+    case SolvedExecutionWallValidationScope::DiscreteStages:
+      return "discrete-stages";
+    case SolvedExecutionWallValidationScope::SweptFromCurrentPose:
+      return "swept-current-to-horizon";
+  }
+  return "unknown";
+}
+
 struct PhysicallyValidatedMpccExecutionTrajectory
 {
   AlignedMpccExecutionTrajectory trajectory;
   bool last_feasible_used{false};
   double source_solved_sec{-std::numeric_limits<double>::infinity()};
+  SolvedExecutionWallValidationScope wall_validation_scope{
+    SolvedExecutionWallValidationScope::SweptFromCurrentPose};
 };
 
 struct SolvedExecutionSourcePromotion
@@ -17923,9 +17943,12 @@ struct MPC
     const Eigen::VectorXd & upper_bound,
     const double hard_wall_clearance_m,
     std::string & reject_reason,
-    const double bound_tolerance_m = 1e-6,
-    const bool validate_swept_path = false) const
+    const double bound_tolerance_m,
+    const SolvedExecutionWallValidationScope validation_scope) const
   {
+    const bool validate_swept_path =
+      validation_scope ==
+      SolvedExecutionWallValidationScope::SweptFromCurrentPose;
     if (
       model == nullptr || model->reference_path == nullptr ||
       overtake_static_wall_grid_ == nullptr ||
@@ -18013,7 +18036,9 @@ struct MPC
         std::ostringstream reason;
         reason << "solution swept wall path "
                << recovery_footprint::to_string(swept_clearance.reason)
-               << " at path index " << swept_clearance.rejected_path_index;
+               << " at path index " << swept_clearance.rejected_path_index
+               << ", checked_poses=" << swept_clearance.checked_pose_count
+               << ", validation=" << to_string(validation_scope);
         reject_reason = reason.str();
         return false;
       }
@@ -18067,7 +18092,7 @@ struct MPC
       0.0,
       reject_reason,
       bound_tolerance_m,
-      true);
+      SolvedExecutionWallValidationScope::SweptFromCurrentPose);
   }
 
   std::optional<PhysicallyValidatedMpccExecutionTrajectory>
@@ -18080,6 +18105,8 @@ struct MPC
     const double hard_wall_clearance_m,
     const double now_sec, std::string & reject_reason)
   {
+    constexpr auto wall_validation_scope =
+      SolvedExecutionWallValidationScope::SweptFromCurrentPose;
     std::string latest_reject_reason;
     auto latest = align_solved_mpcc_execution_trajectory(
       current_path_distance_m, fallback_lateral_m, now_sec,
@@ -18089,7 +18116,7 @@ struct MPC
       solved_mpcc_execution_path_wall_safe(
         latest.value(), current_path_distance_m, ref_wp_id, horizon_size,
         lower_bound, upper_bound, hard_wall_clearance_m,
-        latest_reject_reason))
+        latest_reject_reason, 1e-6, wall_validation_scope))
     {
       if (solved_mpcc_execution_trajectory_.has_value()) {
         last_physically_validated_mpcc_execution_trajectory_ =
@@ -18098,7 +18125,8 @@ struct MPC
       reject_reason = "latest physically validated trajectory";
       return PhysicallyValidatedMpccExecutionTrajectory{
         std::move(latest.value()), false,
-        solved_mpcc_execution_trajectory_->solved_sec};
+        solved_mpcc_execution_trajectory_->solved_sec,
+        wall_validation_scope};
     }
 
     std::string last_feasible_reject_reason = "no last feasible trajectory";
@@ -18112,12 +18140,13 @@ struct MPC
         solved_mpcc_execution_path_wall_safe(
           last_feasible.value(), current_path_distance_m, ref_wp_id,
           horizon_size, lower_bound, upper_bound, hard_wall_clearance_m,
-          last_feasible_reject_reason))
+          last_feasible_reject_reason, 1e-6, wall_validation_scope))
       {
         reject_reason = "last physically validated trajectory";
         return PhysicallyValidatedMpccExecutionTrajectory{
           std::move(last_feasible.value()), true,
-          last_physically_validated_mpcc_execution_trajectory_->solved_sec};
+          last_physically_validated_mpcc_execution_trajectory_->solved_sec,
+          wall_validation_scope};
       }
     }
 
@@ -18216,7 +18245,8 @@ struct MPC
       adjusted_handoff_physically_valid = solved_mpcc_execution_path_wall_safe(
         adjusted_handoff_trajectory, current_path_distances,
         ref_wp_id, horizon_size, lower_bound, upper_bound,
-        hard_wall_clearance_m, adjusted_handoff_reject_reason);
+        hard_wall_clearance_m, adjusted_handoff_reject_reason, 1e-6,
+        SolvedExecutionWallValidationScope::SweptFromCurrentPose);
     }
 
     const auto handoff = overtake_core::resolve_solved_execution_source_handoff(
@@ -18253,6 +18283,7 @@ struct MPC
           "MPCC solved execution handoff retained as pending: "
           "target=%s, generation=%lu, side=%d, source_age=%.3f s, "
           "new=%d, due=%d, path=%d, trust=%d, physical=%d, "
+          "wall_validation=%s, action=retain-current-execution, "
           "reason=%s, wp_id=%d",
           overtake_line_state_.target_vehicle_id.c_str(),
           static_cast<unsigned long>(overtake_line_state_.mission_generation),
@@ -18263,6 +18294,7 @@ struct MPC
           handoff.path_valid ? 1 : 0,
           handoff_stitch.valid && handoff_stitch.active ? 1 : 0,
           adjusted_handoff_physically_valid ? 1 : 0,
+          to_string(validated_execution.wall_validation_scope),
           adjusted_handoff_reject_reason.c_str(), model->wp_id);
         overtake_line_state_.mission_frenet_dp_last_candidate_rejection_log_sec =
           now_sec;
@@ -18305,7 +18337,7 @@ struct MPC
         "MPCC solved execution source promoted: target=%s, generation=%lu, "
         "side=%d, phase=%s, source=%s, source_age=%.3f s, points=%zu, "
         "trust_adjusted=%d/%.3f m, stitch_active=%d, reachable=%d/%d, "
-        "raw_ay=%.2f m/s2, count=%d, wp_id=%d",
+        "raw_ay=%.2f m/s2, wall_validation=%s, count=%d, wp_id=%d",
         overtake_line_state_.target_vehicle_id.c_str(),
         static_cast<unsigned long>(overtake_line_state_.mission_generation),
         overtake_line_state_.pass_side_sign,
@@ -18319,6 +18351,7 @@ struct MPC
         result.stitch_reachability_used ? 1 : 0,
         result.stitch_reachability_constrained ? 1 : 0,
         result.maximum_unconstrained_lateral_accel_mps2,
+        to_string(validated_execution.wall_validation_scope),
         overtake_line_state_.mission_frenet_dp_refresh_count, model->wp_id);
       overtake_line_state_.mission_frenet_dp_last_refresh_log_sec = now_sec;
     }
@@ -26106,6 +26139,34 @@ private:
                 std::move(promotion.promoted_trajectory.value());
             }
           }
+        } else if (
+          line_cfg.debug_log_enabled &&
+          (solved_execution_source_handoff_requested ||
+          !dp_execution_authority_active) &&
+          (!std::isfinite(
+            overtake_line_state_.mission_frenet_dp_last_candidate_rejection_log_sec) ||
+          now_sec -
+          overtake_line_state_.mission_frenet_dp_last_candidate_rejection_log_sec >=
+          std::max(0.5, cfg.v2x_behavior.debug_log_period_sec)))
+        {
+          RCLCPP_WARN(
+            rclcpp::get_logger("mpc_controller"),
+            "MPCC solved execution source rejected before handoff: "
+            "target=%s, generation=%lu, side=%d, phase=%s, "
+            "wall_validation=%s, current_dp_authority=%d, action=%s, "
+            "reason=%s, wp_id=%d",
+            overtake_line_state_.target_vehicle_id.c_str(),
+            static_cast<unsigned long>(overtake_line_state_.mission_generation),
+            overtake_line_state_.pass_side_sign,
+            to_string(overtake_line_state_.phase),
+            to_string(
+              SolvedExecutionWallValidationScope::SweptFromCurrentPose),
+            dp_execution_authority_active ? 1 : 0,
+            dp_execution_authority_active ?
+            "retain-current-execution" : "no-safe-solved-source",
+            solved_execution_wall_authority_reason.c_str(), model->wp_id);
+          overtake_line_state_.mission_frenet_dp_last_candidate_rejection_log_sec =
+            now_sec;
         }
       }
     }

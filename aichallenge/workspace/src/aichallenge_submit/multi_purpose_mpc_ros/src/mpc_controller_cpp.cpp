@@ -6024,8 +6024,21 @@ struct MPC
       overtake_line_state_.mission_generation;
     const std::string target_id = overtake_line_state_.target_vehicle_id;
     const int pass_side_sign = overtake_line_state_.pass_side_sign;
+    bool failed_side_retry_block_armed = false;
+    bool alternate_side_search_allowed = false;
+    if (active_pass_execution) {
+      arm_overtake_line_side_retry_block(
+        pass_side_sign, target_id, now_sec, reason,
+        overtake_core::OvertakeSideRetryFailureClass::PhysicalOrCommittedFailure);
+      failed_side_retry_block_armed = is_overtake_line_side_retry_blocked(
+        pass_side_sign, target_id, now_sec);
+    }
     invalidate_current_overtake_mission(reason);
     clear_last_feasible_maneuver_cache("active wall path rejected");
+    // Reject both cached and in-flight tactical worker results produced from
+    // the wall-invalidated context.  A later worker may still evaluate both
+    // sides in shadow mode, but live authority applies the side retry block.
+    invalidate_mpcc_lite_async_results();
     solved_mpcc_execution_trajectory_.reset();
     last_physically_validated_mpcc_execution_trajectory_.reset();
     // DynamicMissionWait normally preserves a recent DP prefix across a soft
@@ -6060,10 +6073,11 @@ struct MPC
         !overtake_line_state_.mission_cross_side_transition_committed &&
         overtake_line_state_.opponent_side_replan_count <
         line_cfg.opponent_side_replan_max_count;
+      alternate_side_search_allowed = before_no_return && replacement_count_available;
       overtake_line_state_.dynamic_mission_wait_active = true;
       overtake_line_state_.dynamic_mission_wait_trigger_reason = reason;
       overtake_line_state_.dynamic_mission_wait_cross_side_lease_active =
-        before_no_return && replacement_count_available;
+        alternate_side_search_allowed;
       overtake_line_state_.dynamic_mission_wait_bounded_escape_at_entry = false;
       overtake_line_state_.dynamic_mission_wait_terminal_budget_abort = false;
       overtake_line_state_.dynamic_mission_wait_rear_clear_extension_logged = false;
@@ -6093,11 +6107,14 @@ struct MPC
     RCLCPP_WARN(
       rclcpp::get_logger("mpc_controller"),
       "Overtake wall path invalidated: decision=%lu, target=%s, "
-      "generation=%lu, phase=%s, side=%d, action=%s, reason=%s, wp_id=%d",
+      "generation=%lu, phase=%s, side=%d, action=%s, "
+      "failed_side_retry_block=%d, alternate_search=%d, reason=%s, wp_id=%d",
       static_cast<unsigned long>(decision_id), target_id.c_str(),
       static_cast<unsigned long>(rejected_generation),
       to_string(previous_phase), pass_side_sign,
       active_pass_execution ? "dynamic-replan" : "recovery-replan",
+      failed_side_retry_block_armed ? 1 : 0,
+      alternate_side_search_allowed ? 1 : 0,
       reason.c_str(), model != nullptr ? model->wp_id : -1);
     return true;
   }
@@ -9358,10 +9375,18 @@ struct MPC
       const bool primary_execution_prefix_assessment =
         rolling_current_side_prefix_assessment &&
         receding_prefix_assessment.primary_execution;
+      const bool physical_wall_replan_wait =
+        overtake_line_state_.dynamic_mission_wait_active &&
+        current_overtake_mission_invalidated();
       const bool retry_block_applies =
-        !shadow_only && !start_grid_breakout_attempt && !active_overtake_line &&
-        overtake_line_state_.phase != OvertakeLinePhase::Return &&
-        !rolling_current_side_prefix_assessment;
+        overtake_core::should_apply_overtake_side_retry_block(
+        overtake_core::OvertakeSideRetryBlockApplicabilityRequest{
+          shadow_only,
+          start_grid_breakout_attempt,
+          active_overtake_line,
+          overtake_line_state_.phase == OvertakeLinePhase::Return,
+          rolling_current_side_prefix_assessment,
+          physical_wall_replan_wait});
       if (
         retry_block_applies &&
         is_overtake_line_side_retry_blocked(
@@ -12125,6 +12150,13 @@ struct MPC
         if (!assessment.gap_available || assessment.side == 0) {
           return false;
         }
+        if (
+          !start_grid_breakout_attempt &&
+          is_overtake_line_side_retry_blocked(
+            assessment.side, output.target_vehicle_id, now_sec))
+        {
+          return false;
+        }
         if (output.overtake_completed_target_entry_suppressed) {
           return false;
         }
@@ -12959,6 +12991,24 @@ struct MPC
         output.mpcc_lite_cross_side_score_advantage =
           async_behavior.mpcc_lite_cross_side_score_advantage;
 
+        const auto suppress_retry_blocked_async_mission =
+          [&](auto & mission, bool & ready) {
+            if (
+              mission.has_value() &&
+              is_overtake_line_side_retry_blocked(
+                mission->pass_side_sign, output.target_vehicle_id, now_sec))
+            {
+              ready = false;
+              mission.reset();
+            }
+          };
+        suppress_retry_blocked_async_mission(
+          output.mpcc_lite_same_side_replan_mission,
+          output.mpcc_lite_same_side_replan_ready);
+        suppress_retry_blocked_async_mission(
+          output.mpcc_lite_cross_side_replan_mission,
+          output.mpcc_lite_cross_side_replan_ready);
+
         const auto async_entry_mission =
           async_behavior.overtake_selected_mission;
         const int async_entry_side =
@@ -13036,6 +13086,8 @@ struct MPC
           async_entry_mission->feasible &&
           async_entry_prefix_resolution.valid &&
           async_entry_prefix_resolution.admitted &&
+          !is_overtake_line_side_retry_blocked(
+            async_entry_side, output.target_vehicle_id, now_sec) &&
           (!std::isfinite(async_entry_mission->dynamic_valid_until_sec) ||
           now_sec <= async_entry_mission->dynamic_valid_until_sec + kEps);
         if (async_entry_context) {
@@ -45514,7 +45566,7 @@ private:
             overtake_authority->request.wall_contract_required_clearance_m >= 0.0 &&
             std::isfinite(
             overtake_authority->request.wall_contract_minimum_path_clearance_m);
-          request.planner_minimum_wall_distance_m =
+          request.planner_minimum_corridor_reserve_m =
             overtake_authority->request.wall_contract_minimum_path_clearance_m;
         }
         request.current_footprint_valid = solver_crawl_footprint_sample.valid;
@@ -45538,6 +45590,11 @@ private:
       populate_wall_admission_observation(
         solver_wall_admission_request,
         overtake_orchestrator::FinalControlSource::MpcSolution);
+      // This prediction was produced by the newly recovered normal MPC solve
+      // in this same callback.  One fresh physical validation is sufficient
+      // for solver handoff; unsafe or unavailable predictions remain held
+      // indefinitely by WallPathAdmissionGate.
+      solver_wall_admission_request.required_consecutive_valid_cycles = 1;
       solver_wall_admission = solver_wall_handoff_admission_gate_.update(
         solver_wall_admission_request);
     }
@@ -45617,11 +45674,12 @@ private:
                       << "m";
         if (
           overtake_wall_admission.
-          planner_physical_contract_mismatch)
+          planner_execution_contract_mismatch)
         {
-          replan_reason << ", planner_min="
+          replan_reason << ", planner_metric=frenet-corridor-reserve"
+                        << ", planner_reserve="
                         << overtake_wall_admission_request.
-            planner_minimum_wall_distance_m << "m";
+            planner_minimum_corridor_reserve_m << "m";
         }
         overtake_wall_admission.replan_requested =
           mpc_->request_active_overtake_wall_replan(

@@ -261,6 +261,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::PassEntryPhysicalGateAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassEntryPhysicalGateRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CrossSideReplacementRetryThrottleRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSideRetryFailureClass;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  OvertakeSideRetryBlockApplicabilityRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PausedMissionExpiryReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::PausedMissionExpiryRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PausedMissionTerminalAction;
@@ -332,6 +334,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_runtime_wall_center_cont
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_entry_physical_gate;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_throttle_cross_side_replacement_retry;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_arm_overtake_side_retry_block;
+using multi_purpose_mpc_ros::v2x_overtake_core::should_apply_overtake_side_retry_block;
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_overtake_mission_horizon_progress;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_start_grid_breakout_speed_reference;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_shiftout_complete;
@@ -5166,6 +5169,23 @@ TEST(V2XOvertakeCoreMissionAdmission, RetryBlockRequiresPhysicalOrCommittedFailu
     OvertakeSideRetryFailureClass::PlanningSearchMiss));
   EXPECT_TRUE(should_arm_overtake_side_retry_block(
     OvertakeSideRetryFailureClass::PhysicalOrCommittedFailure));
+}
+
+TEST(V2XOvertakeCoreMissionAdmission, PhysicalWallReplanCannotBypassRetryBlock)
+{
+  OvertakeSideRetryBlockApplicabilityRequest request;
+  request.active_overtake = true;
+  request.rolling_current_side_prefix_admitted = true;
+  EXPECT_FALSE(should_apply_overtake_side_retry_block(request));
+
+  request.physical_wall_replan_wait = true;
+  EXPECT_TRUE(should_apply_overtake_side_retry_block(request));
+
+  request.shadow_only = true;
+  EXPECT_FALSE(should_apply_overtake_side_retry_block(request));
+  request.shadow_only = false;
+  request.return_phase = true;
+  EXPECT_FALSE(should_apply_overtake_side_retry_block(request));
 }
 
 TEST(V2XOvertakeCoreSpeed, SelectsDirectPassBeforeShiftOutCandidates)

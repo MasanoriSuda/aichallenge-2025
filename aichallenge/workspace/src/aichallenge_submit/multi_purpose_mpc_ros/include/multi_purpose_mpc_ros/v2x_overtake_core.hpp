@@ -4925,6 +4925,22 @@ enum class OvertakeSideRetryFailureClass
 bool should_arm_overtake_side_retry_block(
   OvertakeSideRetryFailureClass failure_class) noexcept;
 
+struct OvertakeSideRetryBlockApplicabilityRequest
+{
+  bool shadow_only{false};
+  bool start_grid_breakout{false};
+  bool active_overtake{false};
+  bool return_phase{false};
+  bool rolling_current_side_prefix_admitted{false};
+  bool physical_wall_replan_wait{false};
+};
+
+/// A physically rejected execution path must not use active/rolling-prefix
+/// continuity to bypass the failed-side cooldown.  Shadow planning, the
+/// start-grid breakout and Return remain outside entry retry suppression.
+bool should_apply_overtake_side_retry_block(
+  const OvertakeSideRetryBlockApplicabilityRequest & request) noexcept;
+
 struct OvertakeLineHeadingReferenceRequest
 {
   double previous_lateral_m{};

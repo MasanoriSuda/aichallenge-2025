@@ -523,6 +523,29 @@ TEST(OvertakeExecutionOrchestrator, RequiresConsecutiveSafeWallHandoffs)
   EXPECT_FALSE(gate.active());
 }
 
+TEST(OvertakeExecutionOrchestrator, ReleasesFreshSafeSingleCycleWallHandoff)
+{
+  orchestrator::WallPathAdmissionGate gate;
+  orchestrator::WallHandoffAdmissionRequest request;
+  request.activation_requested = true;
+  request.current_footprint_valid = true;
+  request.current_footprint_clear = true;
+  request.prediction.available = true;
+  request.prediction.valid = true;
+  request.prediction.sample_count = 18U;
+  request.prediction.minimum_wall_distance_m = 0.60;
+  request.required_wall_clearance_m = 0.40;
+  request.required_consecutive_valid_cycles = 1;
+
+  const auto result = gate.update(request);
+  EXPECT_TRUE(result.entered);
+  EXPECT_TRUE(result.released);
+  EXPECT_FALSE(result.active);
+  EXPECT_FALSE(result.hold_control);
+  EXPECT_EQ(result.consecutive_valid_cycles, 1);
+  EXPECT_EQ(result.reason, orchestrator::WallHandoffAdmissionReason::Accepted);
+}
+
 TEST(OvertakeExecutionOrchestrator, StaleWallObservationDoesNotAdvanceRelease)
 {
   orchestrator::WallPathAdmissionGate gate;
@@ -585,16 +608,36 @@ TEST(OvertakeExecutionOrchestrator, RequestsReplanForPredictedOnlyWallRejection)
   request.prediction.minimum_wall_distance_m = 0.33;
   request.required_wall_clearance_m = 0.40;
   request.planner_wall_contract_available = true;
-  request.planner_minimum_wall_distance_m = 0.60;
+  request.planner_minimum_corridor_reserve_m = 0.60;
 
   const auto result = gate.update(request);
   EXPECT_TRUE(result.hold_control);
   EXPECT_FALSE(result.stop_required);
   EXPECT_TRUE(result.replan_required);
-  EXPECT_TRUE(result.planner_physical_contract_mismatch);
+  EXPECT_TRUE(result.planner_contract_admitted);
+  EXPECT_TRUE(result.planner_execution_contract_mismatch);
   EXPECT_EQ(
     result.reason,
     orchestrator::WallHandoffAdmissionReason::InsufficientClearance);
+}
+
+TEST(OvertakeExecutionOrchestrator, DoesNotMislabelRejectedPlannerReserveAsMismatch)
+{
+  orchestrator::WallPathAdmissionGate gate;
+  orchestrator::WallHandoffAdmissionRequest request;
+  request.activation_requested = true;
+  request.current_footprint_valid = true;
+  request.current_footprint_clear = true;
+  request.prediction.available = true;
+  request.prediction.valid = true;
+  request.prediction.minimum_wall_distance_m = 0.30;
+  request.required_wall_clearance_m = 0.40;
+  request.planner_wall_contract_available = true;
+  request.planner_minimum_corridor_reserve_m = 0.35;
+
+  const auto result = gate.update(request);
+  EXPECT_FALSE(result.planner_contract_admitted);
+  EXPECT_FALSE(result.planner_execution_contract_mismatch);
 }
 
 TEST(OvertakeExecutionOrchestrator, DoesNotReplanFromCurrentWallContact)
@@ -669,14 +712,15 @@ TEST(OvertakeExecutionOrchestrator, FormatsWallHandoffAdmissionEvidence)
   request.prediction.minimum_wall_path_distance_m = 4.82;
   request.required_wall_clearance_m = 0.40;
   request.planner_wall_contract_available = true;
-  request.planner_minimum_wall_distance_m = 0.60;
+  request.planner_minimum_corridor_reserve_m = 0.60;
   orchestrator::WallHandoffAdmissionResolution resolution;
   resolution.entered = true;
   resolution.active = true;
   resolution.hold_control = true;
   resolution.replan_required = true;
   resolution.replan_requested = true;
-  resolution.planner_physical_contract_mismatch = true;
+  resolution.planner_contract_admitted = true;
+  resolution.planner_execution_contract_mismatch = true;
   resolution.hold_cycles = 1;
   resolution.required_consecutive_valid_cycles = 2;
   resolution.reason =
@@ -694,8 +738,14 @@ TEST(OvertakeExecutionOrchestrator, FormatsWallHandoffAdmissionEvidence)
   EXPECT_NE(message.find("event=entered"), std::string::npos);
   EXPECT_NE(message.find("reason=predicted-wall-contact"), std::string::npos);
   EXPECT_NE(message.find("replan=1/1"), std::string::npos);
-  EXPECT_NE(message.find("planner_wall=1/0.60m"), std::string::npos);
-  EXPECT_NE(message.find("contract_mismatch=1"), std::string::npos);
+  EXPECT_NE(
+    message.find(
+      "planner_contract=1/admitted=1/metric=frenet-corridor-reserve/reserve=0.60m"),
+    std::string::npos);
+  EXPECT_NE(message.find("execution_contract_mismatch=1"), std::string::npos);
+  EXPECT_NE(
+    message.find("execution_metric=physical-footprint-distance"),
+    std::string::npos);
   EXPECT_NE(message.find("path_wall=Mixed/0.00m@3/4.82m"), std::string::npos);
 }
 

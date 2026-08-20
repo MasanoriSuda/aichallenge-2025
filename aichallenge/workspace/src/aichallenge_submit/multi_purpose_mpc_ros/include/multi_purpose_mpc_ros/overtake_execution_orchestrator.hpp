@@ -378,7 +378,11 @@ struct WallHandoffAdmissionRequest {
   PredictedPathWallMetrics prediction;
   double required_wall_clearance_m{0.0};
   bool planner_wall_contract_available{false};
-  double planner_minimum_wall_distance_m{
+  // This is the lateral reserve inside the Frenet planning corridor, not a
+  // physical vehicle-footprint-to-wall distance.  Keep the semantic explicit
+  // so execution telemetry never compares two differently measured distances
+  // as though they came from the same sensor/model.
+  double planner_minimum_corridor_reserve_m{
     std::numeric_limits<double>::infinity()};
   int required_consecutive_valid_cycles{2};
 };
@@ -391,7 +395,8 @@ struct WallHandoffAdmissionResolution {
   bool stop_required{false};
   bool replan_required{false};
   bool replan_requested{false};
-  bool planner_physical_contract_mismatch{false};
+  bool planner_contract_admitted{false};
+  bool planner_execution_contract_mismatch{false};
   bool state_changed{false};
   int hold_cycles{0};
   int consecutive_valid_cycles{0};

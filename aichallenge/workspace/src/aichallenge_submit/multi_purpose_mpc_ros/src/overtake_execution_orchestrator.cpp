@@ -972,12 +972,14 @@ WallHandoffAdmissionResolution WallPathAdmissionGate::update(
   resolution.replan_required =
     resolution.entered && request.current_footprint_valid &&
     request.current_footprint_clear && predicted_path_rejected;
-  resolution.planner_physical_contract_mismatch =
+  resolution.planner_contract_admitted =
     request.planner_wall_contract_available &&
-    std::isfinite(request.planner_minimum_wall_distance_m) &&
+    std::isfinite(request.planner_minimum_corridor_reserve_m) &&
     std::isfinite(request.required_wall_clearance_m) &&
-    request.planner_minimum_wall_distance_m + 1e-9 >=
-    request.required_wall_clearance_m &&
+    request.planner_minimum_corridor_reserve_m + 1e-9 >=
+    request.required_wall_clearance_m;
+  resolution.planner_execution_contract_mismatch =
+    resolution.planner_contract_admitted &&
     std::isfinite(request.prediction.minimum_wall_distance_m) &&
     request.prediction.minimum_wall_distance_m + 1e-9 <
     request.required_wall_clearance_m;
@@ -1067,14 +1069,17 @@ std::string format_wall_path_admission_trace(
          << (request.current_footprint_out_of_map ? 1 : 0)
          << ", required="
          << finite_or(request.required_wall_clearance_m, "nan") << "m"
-         << ", planner_wall="
-         << (request.planner_wall_contract_available ? 1 : 0) << "/"
-         << finite_or(request.planner_minimum_wall_distance_m, "inf") << "m"
-         << ", contract_mismatch="
-         << (resolution.planner_physical_contract_mismatch ? 1 : 0)
+         << ", planner_contract="
+         << (request.planner_wall_contract_available ? 1 : 0) << "/admitted="
+         << (resolution.planner_contract_admitted ? 1 : 0)
+         << "/metric=frenet-corridor-reserve/reserve="
+         << finite_or(request.planner_minimum_corridor_reserve_m, "inf") << "m"
+         << ", execution_contract_mismatch="
+         << (resolution.planner_execution_contract_mismatch ? 1 : 0)
          << ", prediction=" << (request.prediction.available ? 1 : 0) << "/"
          << (request.prediction.valid ? 1 : 0) << "/"
          << request.prediction.sample_count
+         << ", execution_metric=physical-footprint-distance"
          << ", path_wall=" << request.prediction.minimum_wall_region << "/"
          << finite_or(request.prediction.minimum_wall_distance_m, "inf")
          << "m@" << request.prediction.minimum_index << "/"

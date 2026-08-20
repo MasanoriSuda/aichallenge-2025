@@ -8998,6 +8998,17 @@ bool should_arm_overtake_side_retry_block(
          OvertakeSideRetryFailureClass::PhysicalOrCommittedFailure;
 }
 
+bool should_apply_overtake_side_retry_block(
+  const OvertakeSideRetryBlockApplicabilityRequest & request) noexcept
+{
+  if (request.shadow_only || request.start_grid_breakout || request.return_phase) {
+    return false;
+  }
+  return (!request.active_overtake || request.physical_wall_replan_wait) &&
+         (!request.rolling_current_side_prefix_admitted ||
+         request.physical_wall_replan_wait);
+}
+
 RuntimeWallPreplanResolution resolve_runtime_wall_preplan(
   const RuntimeWallPreplanRequest & request) noexcept
 {

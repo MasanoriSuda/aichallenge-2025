@@ -700,6 +700,117 @@ TEST(RecoveryFootprintPathClearance, RejectsOutOfMapAndInvalidStep)
   EXPECT_EQ(invalid_step.reason, recovery::RejectReason::InvalidRollout);
 }
 
+TEST(RecoveryFootprintMarginEscape, AdmitsBoundedImprovingClearanceOverlap)
+{
+  auto grid = make_grid(200U, 200U, 0.1);
+  for (double x_m = 4.0; x_m <= 9.0; x_m += 0.1) {
+    set_world_cell(grid, x_m, 4.0);
+  }
+  const auto physical = compact_footprint();
+  auto clearance = physical;
+  clearance.left_extent_m = 0.5;
+  clearance.right_extent_m = 0.5;
+  const std::vector<recovery::Pose2D> path{
+    {5.0, 4.5, 0.0},
+    {6.0, 5.1, 0.0},
+    {8.0, 5.1, 0.0}};
+
+  const auto result = recovery::evaluate_clearance_margin_escape_path(
+    grid, physical, clearance, path, 0.05, true, 2.0);
+
+  EXPECT_TRUE(result.valid);
+  EXPECT_TRUE(result.clear);
+  EXPECT_TRUE(result.margin_escape_used);
+  EXPECT_EQ(result.reason, recovery::MarginEscapePathReason::None);
+  EXPECT_GT(result.initial_margin_contact_count, 0U);
+  EXPECT_EQ(result.final_margin_contact_count, 0U);
+  EXPECT_GT(result.physical_checked_pose_count, 0U);
+  EXPECT_GT(result.margin_checked_pose_count, 1U);
+  EXPECT_LE(result.margin_clear_distance_m, 2.0);
+}
+
+TEST(RecoveryFootprintMarginEscape, KeepsPhysicalFootprintAsHardConstraint)
+{
+  auto grid = make_grid(200U, 200U, 0.1);
+  for (double x_m = 4.0; x_m <= 9.0; x_m += 0.1) {
+    set_world_cell(grid, x_m, 4.0);
+  }
+  auto physical = compact_footprint();
+  physical.right_extent_m = 0.7;
+  auto clearance = physical;
+  clearance.right_extent_m = 0.8;
+  const std::vector<recovery::Pose2D> path{
+    {5.0, 4.5, 0.0},
+    {6.0, 5.1, 0.0},
+    {8.0, 5.1, 0.0}};
+
+  const auto result = recovery::evaluate_clearance_margin_escape_path(
+    grid, physical, clearance, path, 0.05, true, 2.0);
+
+  EXPECT_TRUE(result.valid);
+  EXPECT_FALSE(result.clear);
+  EXPECT_EQ(
+    result.reason, recovery::MarginEscapePathReason::PhysicalPathBlocked);
+  EXPECT_EQ(result.physical_reason, recovery::RejectReason::Collision);
+}
+
+TEST(RecoveryFootprintMarginEscape, RejectsUnownedOrUnboundedMarginEscape)
+{
+  auto grid = make_grid(200U, 200U, 0.1);
+  for (double x_m = 4.0; x_m <= 9.0; x_m += 0.1) {
+    set_world_cell(grid, x_m, 4.0);
+  }
+  const auto physical = compact_footprint();
+  auto clearance = physical;
+  clearance.left_extent_m = 0.5;
+  clearance.right_extent_m = 0.5;
+  const std::vector<recovery::Pose2D> path{
+    {5.0, 4.5, 0.0},
+    {6.0, 4.5, 0.0},
+    {8.0, 4.5, 0.0}};
+
+  const auto not_allowed = recovery::evaluate_clearance_margin_escape_path(
+    grid, physical, clearance, path, 0.05, false, 2.0);
+  EXPECT_TRUE(not_allowed.valid);
+  EXPECT_FALSE(not_allowed.clear);
+  EXPECT_EQ(
+    not_allowed.reason,
+    recovery::MarginEscapePathReason::MarginEscapeNotAllowed);
+
+  const auto not_cleared = recovery::evaluate_clearance_margin_escape_path(
+    grid, physical, clearance, path, 0.05, true, 0.5);
+  EXPECT_TRUE(not_cleared.valid);
+  EXPECT_FALSE(not_cleared.clear);
+  EXPECT_TRUE(not_cleared.margin_escape_used);
+  EXPECT_EQ(
+    not_cleared.reason,
+    recovery::MarginEscapePathReason::MarginNotCleared);
+}
+
+TEST(RecoveryFootprintMarginEscape, RejectsMarginRecontactAfterClearance)
+{
+  auto grid = make_grid(200U, 200U, 0.1);
+  for (double x_m = 4.0; x_m <= 9.0; x_m += 0.1) {
+    set_world_cell(grid, x_m, 4.0);
+  }
+  const auto physical = compact_footprint();
+  auto clearance = physical;
+  clearance.left_extent_m = 0.5;
+  clearance.right_extent_m = 0.5;
+  const std::vector<recovery::Pose2D> path{
+    {5.0, 4.5, 0.0},
+    {6.0, 5.1, 0.0},
+    {7.0, 4.5, 0.0}};
+
+  const auto result = recovery::evaluate_clearance_margin_escape_path(
+    grid, physical, clearance, path, 0.05, true, 2.0);
+
+  EXPECT_TRUE(result.valid);
+  EXPECT_FALSE(result.clear);
+  EXPECT_TRUE(result.margin_escape_used);
+  EXPECT_EQ(result.reason, recovery::MarginEscapePathReason::MarginRecontact);
+}
+
 TEST(RecoveryFootprintFeasibility, CandidateLeavingMapIsRejectedWithoutEdgeClamping)
 {
   const auto result = recovery::evaluate_reverse_candidate(

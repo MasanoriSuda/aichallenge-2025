@@ -1183,6 +1183,9 @@ struct V2XGapPlannerConfig
   double target_bias{1.0};
   double no_gap_target_velocity{0.0};
   double wall_clearance_margin{0.0};
+  bool wall_margin_escape_enabled{true};
+  double wall_margin_escape_max_distance{3.0};
+  double wall_margin_escape_min_centerward_shift{0.05};
   double vehicle_side_target_margin{0.0};
   double wall_avoidance_bias{0.0};
   bool vehicle_vehicle_gap_enabled{true};
@@ -1970,12 +1973,20 @@ struct GapPlannerOutput
 struct GapPlanStaticWallPreflight
 {
   bool feasible{false};
+  bool margin_escape_used{false};
   std::size_t checked_pose_count{};
+  std::size_t physical_checked_pose_count{};
   std::size_t execution_sample_count{};
   std::size_t active_sample_count{};
   std::size_t first_active_index{std::numeric_limits<std::size_t>::max()};
   std::size_t last_active_index{std::numeric_limits<std::size_t>::max()};
   std::size_t invalid_index{std::numeric_limits<std::size_t>::max()};
+  std::size_t initial_margin_contact_count{};
+  std::size_t maximum_margin_contact_count{};
+  std::size_t final_margin_contact_count{};
+  std::size_t margin_clear_path_index{std::numeric_limits<std::size_t>::max()};
+  double margin_clear_distance_m{std::numeric_limits<double>::quiet_NaN()};
+  std::string mode{"rejected"};
   std::string reason{"not evaluated"};
 };
 
@@ -2013,12 +2024,22 @@ struct DynamicObstacleLateralEscapeBridgeResult
   double maximum_target_adjustment_m{0.0};
   bool static_wall_preflight_evaluated{false};
   bool static_wall_preflight_feasible{false};
+  bool static_wall_margin_escape_used{false};
   std::size_t static_wall_checked_pose_count{0U};
+  std::size_t static_wall_physical_checked_pose_count{0U};
   std::size_t static_wall_execution_sample_count{0U};
   std::size_t static_wall_active_sample_count{0U};
   std::size_t static_wall_first_active_index{std::numeric_limits<std::size_t>::max()};
   std::size_t static_wall_last_active_index{std::numeric_limits<std::size_t>::max()};
   std::size_t static_wall_invalid_index{std::numeric_limits<std::size_t>::max()};
+  std::size_t static_wall_initial_margin_contact_count{0U};
+  std::size_t static_wall_maximum_margin_contact_count{0U};
+  std::size_t static_wall_final_margin_contact_count{0U};
+  std::size_t static_wall_margin_clear_path_index{
+    std::numeric_limits<std::size_t>::max()};
+  double static_wall_margin_clear_distance_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  std::string static_wall_preflight_mode{"not-evaluated"};
   std::string static_wall_preflight_reason{"not evaluated"};
   std::string reason{"not evaluated"};
 };
@@ -5464,7 +5485,9 @@ struct MPC
     clearance_footprint.right_extent_m += wall_clearance_margin;
 
     std::vector<recovery_footprint::Pose2D> path;
+    std::vector<double> execution_target_ey;
     path.reserve(sample_contract.execution_sample_count + 1U);
+    execution_target_ey.reserve(sample_contract.execution_sample_count);
     path.push_back(actual_wall_monitor_pose_.value());
     for (std::size_t index = 0U;
       index < sample_contract.execution_sample_count; ++index)
@@ -5501,6 +5524,7 @@ struct MPC
         target_ey = clip(
           target_ey, planner_output.lb[index], planner_output.ub[index]);
       }
+      execution_target_ey.push_back(target_ey);
       path.push_back(
         recovery_footprint::Pose2D{
           waypoint.x + target_ey * left_x,
@@ -5524,11 +5548,75 @@ struct MPC
 
     const double swept_step_m = std::max(
       1e-3, std::min(0.10, 0.5 * overtake_static_wall_grid_->resolution_m));
-    const auto clearance = recovery_footprint::evaluate_clear_footprint_path(
-      *overtake_static_wall_grid_, clearance_footprint, path, swept_step_m);
+    const double maximum_margin_escape_distance_m =
+      std::max(0.0, cfg.v2x_gap.wall_margin_escape_max_distance);
+    const double minimum_centerward_shift_m =
+      std::max(0.0, cfg.v2x_gap.wall_margin_escape_min_centerward_shift);
+    const double initial_absolute_lateral_m =
+      std::abs(model->spatial_state.e_y);
+    double previous_absolute_lateral_m = initial_absolute_lateral_m;
+    double candidate_distance_m = 0.0;
+    bool centerward_non_worsening = true;
+    bool centerward_progress = false;
+    for (std::size_t index = 0U; index < execution_target_ey.size(); ++index) {
+      candidate_distance_m += std::hypot(
+        path[index + 1U].x_m - path[index].x_m,
+        path[index + 1U].y_m - path[index].y_m);
+      if (
+        candidate_distance_m > maximum_margin_escape_distance_m + kEps)
+      {
+        break;
+      }
+      const double absolute_target_lateral_m =
+        std::abs(execution_target_ey[index]);
+      if (absolute_target_lateral_m > previous_absolute_lateral_m + 0.05) {
+        centerward_non_worsening = false;
+        break;
+      }
+      centerward_progress =
+        centerward_progress ||
+        absolute_target_lateral_m + minimum_centerward_shift_m <=
+        initial_absolute_lateral_m;
+      previous_absolute_lateral_m = absolute_target_lateral_m;
+    }
+    const bool allow_initial_margin_escape =
+      cfg.v2x_gap.wall_margin_escape_enabled && centerward_non_worsening &&
+      centerward_progress;
+    const auto clearance =
+      recovery_footprint::evaluate_clearance_margin_escape_path(
+      *overtake_static_wall_grid_, overtake_static_wall_footprint_,
+      clearance_footprint, path, swept_step_m, allow_initial_margin_escape,
+      maximum_margin_escape_distance_m);
     result.feasible = clearance.valid && clearance.clear;
-    result.checked_pose_count = clearance.checked_pose_count;
-    result.reason = recovery_footprint::to_string(clearance.reason);
+    result.margin_escape_used = clearance.margin_escape_used;
+    result.checked_pose_count = clearance.margin_checked_pose_count;
+    result.physical_checked_pose_count =
+      clearance.physical_checked_pose_count;
+    result.initial_margin_contact_count =
+      clearance.initial_margin_contact_count;
+    result.maximum_margin_contact_count =
+      clearance.maximum_margin_contact_count;
+    result.final_margin_contact_count =
+      clearance.final_margin_contact_count;
+    result.margin_clear_path_index = clearance.margin_clear_path_index;
+    result.margin_clear_distance_m = clearance.margin_clear_distance_m;
+    result.mode = result.feasible ?
+      (clearance.margin_escape_used ? "margin-escape" : "clear") :
+      "rejected";
+    if (result.feasible) {
+      result.reason = clearance.margin_escape_used ?
+        "initial clearance overlap restored by bounded centerward escape" :
+        "none";
+    } else {
+      std::ostringstream reason;
+      reason << recovery_footprint::to_string(clearance.reason)
+             << ", physical="
+             << recovery_footprint::to_string(clearance.physical_reason)
+             << ", margin="
+             << recovery_footprint::to_string(clearance.margin_reason)
+             << ", centerward=" << (allow_initial_margin_escape ? 1 : 0);
+      result.reason = reason.str();
+    }
     return result;
   }
 
@@ -14971,8 +15059,12 @@ struct MPC
           bridge.static_wall_preflight_evaluated;
         trace.static_wall_preflight_feasible =
           bridge.static_wall_preflight_feasible;
+        trace.static_wall_margin_escape_used =
+          bridge.static_wall_margin_escape_used;
         trace.static_wall_checked_poses =
           bridge.static_wall_checked_pose_count;
+        trace.static_wall_physical_checked_poses =
+          bridge.static_wall_physical_checked_pose_count;
         trace.static_wall_execution_samples =
           bridge.static_wall_execution_sample_count;
         trace.static_wall_active_samples =
@@ -14983,6 +15075,18 @@ struct MPC
           bridge.static_wall_last_active_index;
         trace.static_wall_invalid_index =
           bridge.static_wall_invalid_index;
+        trace.static_wall_initial_margin_contacts =
+          bridge.static_wall_initial_margin_contact_count;
+        trace.static_wall_maximum_margin_contacts =
+          bridge.static_wall_maximum_margin_contact_count;
+        trace.static_wall_final_margin_contacts =
+          bridge.static_wall_final_margin_contact_count;
+        trace.static_wall_margin_clear_path_index =
+          bridge.static_wall_margin_clear_path_index;
+        trace.static_wall_margin_clear_distance_m =
+          bridge.static_wall_margin_clear_distance_m;
+        trace.static_wall_preflight_mode =
+          bridge.static_wall_preflight_mode;
         trace.static_wall_preflight_reason =
           bridge.static_wall_preflight_reason;
       };
@@ -15016,8 +15120,12 @@ struct MPC
             evaluate_gap_plan_static_wall_preflight(ref_wp_id, evaluation.output);
           evaluation.bridge.static_wall_preflight_feasible =
             static_wall_preflight.feasible;
+          evaluation.bridge.static_wall_margin_escape_used =
+            static_wall_preflight.margin_escape_used;
           evaluation.bridge.static_wall_checked_pose_count =
             static_wall_preflight.checked_pose_count;
+          evaluation.bridge.static_wall_physical_checked_pose_count =
+            static_wall_preflight.physical_checked_pose_count;
           evaluation.bridge.static_wall_execution_sample_count =
             static_wall_preflight.execution_sample_count;
           evaluation.bridge.static_wall_active_sample_count =
@@ -15028,6 +15136,18 @@ struct MPC
             static_wall_preflight.last_active_index;
           evaluation.bridge.static_wall_invalid_index =
             static_wall_preflight.invalid_index;
+          evaluation.bridge.static_wall_initial_margin_contact_count =
+            static_wall_preflight.initial_margin_contact_count;
+          evaluation.bridge.static_wall_maximum_margin_contact_count =
+            static_wall_preflight.maximum_margin_contact_count;
+          evaluation.bridge.static_wall_final_margin_contact_count =
+            static_wall_preflight.final_margin_contact_count;
+          evaluation.bridge.static_wall_margin_clear_path_index =
+            static_wall_preflight.margin_clear_path_index;
+          evaluation.bridge.static_wall_margin_clear_distance_m =
+            static_wall_preflight.margin_clear_distance_m;
+          evaluation.bridge.static_wall_preflight_mode =
+            static_wall_preflight.mode;
           evaluation.bridge.static_wall_preflight_reason =
             static_wall_preflight.reason;
           if (!static_wall_preflight.feasible) {
@@ -36704,6 +36824,17 @@ Config load_config(const std::string & path)
     0.0, mpc["no_gap_target_velocity"] ? mpc["no_gap_target_velocity"].as<double>() : 0.0);
   cfg.mpc.v2x_gap.wall_clearance_margin = std::max(
     0.0, mpc["v2x_wall_clearance_margin"] ? mpc["v2x_wall_clearance_margin"].as<double>() : 0.0);
+  cfg.mpc.v2x_gap.wall_margin_escape_enabled =
+    mpc["v2x_wall_margin_escape_enabled"] ?
+    mpc["v2x_wall_margin_escape_enabled"].as<bool>() : true;
+  cfg.mpc.v2x_gap.wall_margin_escape_max_distance = std::max(
+    0.0,
+    mpc["v2x_wall_margin_escape_max_distance"] ?
+    mpc["v2x_wall_margin_escape_max_distance"].as<double>() : 3.0);
+  cfg.mpc.v2x_gap.wall_margin_escape_min_centerward_shift = std::max(
+    0.0,
+    mpc["v2x_wall_margin_escape_min_centerward_shift"] ?
+    mpc["v2x_wall_margin_escape_min_centerward_shift"].as<double>() : 0.05);
   cfg.mpc.v2x_gap.vehicle_side_target_margin = std::max(
     0.0,
     mpc["v2x_vehicle_side_target_margin"] ?

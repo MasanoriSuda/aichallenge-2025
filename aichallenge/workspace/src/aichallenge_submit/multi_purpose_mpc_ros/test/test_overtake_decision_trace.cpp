@@ -101,22 +101,35 @@ TEST(OvertakeDecisionTrace, ReportsStaticWallExecutionPreflight) {
   decision.primary.bridge_reason =
       "static wall execution preflight: occupied";
   decision.primary.static_wall_preflight_feasible = false;
+  decision.primary.static_wall_margin_escape_used = true;
+  decision.primary.static_wall_preflight_mode = "margin-escape";
   decision.primary.static_wall_preflight_reason = "occupied";
   decision.primary.static_wall_checked_poses = 14U;
+  decision.primary.static_wall_physical_checked_poses = 21U;
   decision.primary.static_wall_execution_samples = 7U;
   decision.primary.static_wall_active_samples = 5U;
   decision.primary.static_wall_first_active_index = 1U;
   decision.primary.static_wall_last_active_index = 5U;
   decision.primary.static_wall_invalid_index = 3U;
+  decision.primary.static_wall_initial_margin_contacts = 6U;
+  decision.primary.static_wall_maximum_margin_contacts = 6U;
+  decision.primary.static_wall_final_margin_contacts = 0U;
+  decision.primary.static_wall_margin_clear_path_index = 2U;
+  decision.primary.static_wall_margin_clear_distance_m = 1.25;
 
   const std::string message = trace::format_decision_trace(decision);
   EXPECT_NE(message.find("state=bridge-rejected"), std::string::npos);
   EXPECT_NE(message.find("preflight=1/0"), std::string::npos);
+  EXPECT_NE(message.find("preflight_mode=margin-escape"), std::string::npos);
+  EXPECT_NE(message.find("preflight_margin_escape=1"), std::string::npos);
   EXPECT_NE(message.find("preflight_reason=\"occupied\""), std::string::npos);
   EXPECT_NE(message.find("preflight_samples=7/5"), std::string::npos);
   EXPECT_NE(message.find("preflight_range=1:5"), std::string::npos);
   EXPECT_NE(message.find("preflight_invalid_index=3"), std::string::npos);
   EXPECT_NE(message.find("preflight_poses=14"), std::string::npos);
+  EXPECT_NE(message.find("preflight_raw_poses=21"), std::string::npos);
+  EXPECT_NE(message.find("preflight_margin_contacts=6/6/0"), std::string::npos);
+  EXPECT_NE(message.find("preflight_margin_clear=2@1.25m"), std::string::npos);
 }
 
 TEST(OvertakeDecisionTrace, EmitsOnCategoricalChangeButNotContinuousNoise) {

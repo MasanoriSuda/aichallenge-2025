@@ -49,12 +49,22 @@ struct CandidateTrace {
   double bridge_maximum_adjustment_m{0.0};
   bool static_wall_preflight_evaluated{false};
   bool static_wall_preflight_feasible{false};
+  bool static_wall_margin_escape_used{false};
   std::size_t static_wall_checked_poses{0U};
+  std::size_t static_wall_physical_checked_poses{0U};
   std::size_t static_wall_execution_samples{0U};
   std::size_t static_wall_active_samples{0U};
   std::size_t static_wall_first_active_index{std::numeric_limits<std::size_t>::max()};
   std::size_t static_wall_last_active_index{std::numeric_limits<std::size_t>::max()};
   std::size_t static_wall_invalid_index{std::numeric_limits<std::size_t>::max()};
+  std::size_t static_wall_initial_margin_contacts{0U};
+  std::size_t static_wall_maximum_margin_contacts{0U};
+  std::size_t static_wall_final_margin_contacts{0U};
+  std::size_t static_wall_margin_clear_path_index{
+    std::numeric_limits<std::size_t>::max()};
+  double static_wall_margin_clear_distance_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  std::string static_wall_preflight_mode{"not-evaluated"};
   std::string static_wall_preflight_reason{"not-evaluated"};
   bool backoff_active{false};
   int backoff_failures{0};

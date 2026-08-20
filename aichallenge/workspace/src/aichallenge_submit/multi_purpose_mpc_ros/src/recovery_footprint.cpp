@@ -474,6 +474,27 @@ const char * to_string(const RejectReason reason) noexcept
   return "unknown";
 }
 
+const char * to_string(const MarginEscapePathReason reason) noexcept
+{
+  switch (reason) {
+    case MarginEscapePathReason::None:
+      return "none";
+    case MarginEscapePathReason::InvalidInput:
+      return "invalid_input";
+    case MarginEscapePathReason::PhysicalPathBlocked:
+      return "physical_path_blocked";
+    case MarginEscapePathReason::MarginPathBlocked:
+      return "margin_path_blocked";
+    case MarginEscapePathReason::MarginEscapeNotAllowed:
+      return "margin_escape_not_allowed";
+    case MarginEscapePathReason::MarginNotCleared:
+      return "margin_not_cleared";
+    case MarginEscapePathReason::MarginRecontact:
+      return "margin_recontact";
+  }
+  return "unknown";
+}
+
 const char * to_string(const ReversePrimitive primitive) noexcept
 {
   switch (primitive) {
@@ -854,6 +875,184 @@ PathClearanceResult evaluate_clear_footprint_path(
 
   result.clear = true;
   result.reason = RejectReason::None;
+  result.rejected_path_index = path.size() - 1U;
+  return result;
+}
+
+MarginEscapePathClearanceResult evaluate_clearance_margin_escape_path(
+  const OccupancyGrid & grid, const FootprintExtents & physical_footprint,
+  const FootprintExtents & clearance_footprint,
+  const std::vector<Pose2D> & path, const double swept_step_m,
+  const bool allow_initial_margin_escape,
+  const double maximum_margin_escape_distance_m)
+{
+  MarginEscapePathClearanceResult result;
+  if (
+    !grid.valid() || !physical_footprint.valid() || !clearance_footprint.valid() ||
+    path.empty() || !finite(swept_step_m) || swept_step_m <= 0.0 ||
+    swept_step_m > grid.resolution_m + kNumericalEpsilon ||
+    !finite(maximum_margin_escape_distance_m) ||
+    maximum_margin_escape_distance_m < 0.0)
+  {
+    return result;
+  }
+
+  const auto initial_sample = sample_footprint(
+    grid, clearance_footprint, path.front());
+  result.margin_checked_pose_count = 1U;
+  result.rejected_path_index = 0U;
+  if (!initial_sample.valid) {
+    result.margin_reason = RejectReason::InvalidInitialPose;
+    return result;
+  }
+  result.valid = true;
+  if (initial_sample.out_of_map) {
+    result.margin_reason = RejectReason::InitialOutOfMap;
+    result.reason = MarginEscapePathReason::MarginPathBlocked;
+    return result;
+  }
+
+  result.initial_margin_contact_count = initial_sample.contact_cells.size();
+  result.maximum_margin_contact_count = initial_sample.contact_cells.size();
+  result.final_margin_contact_count = initial_sample.contact_cells.size();
+  if (initial_sample.contact_cells.empty()) {
+    const auto margin_clearance = evaluate_clear_footprint_path(
+      grid, clearance_footprint, path, swept_step_m);
+    result.margin_reason = margin_clearance.reason;
+    result.margin_checked_pose_count = margin_clearance.checked_pose_count;
+    result.rejected_path_index = margin_clearance.rejected_path_index;
+    result.clear = margin_clearance.valid && margin_clearance.clear;
+    result.reason = result.clear ?
+      MarginEscapePathReason::None : MarginEscapePathReason::MarginPathBlocked;
+    return result;
+  }
+  if (!allow_initial_margin_escape) {
+    result.margin_reason = RejectReason::Collision;
+    result.reason = MarginEscapePathReason::MarginEscapeNotAllowed;
+    return result;
+  }
+
+  // Only the exceptional inherited-margin case needs a second full sweep.
+  // A fully clear clearance footprint already contains the physical body, so
+  // evaluating both paths in the common case would double preflight cost.
+  const auto physical_clearance = evaluate_clear_footprint_path(
+    grid, physical_footprint, path, swept_step_m);
+  result.physical_reason = physical_clearance.reason;
+  result.physical_checked_pose_count = physical_clearance.checked_pose_count;
+  result.rejected_path_index = physical_clearance.rejected_path_index;
+  if (!physical_clearance.valid) {
+    result.valid = false;
+    return result;
+  }
+  if (!physical_clearance.clear) {
+    result.reason = MarginEscapePathReason::PhysicalPathBlocked;
+    return result;
+  }
+
+  result.margin_escape_used = true;
+  bool margin_cleared = false;
+  double travelled_distance_m = 0.0;
+  Pose2D previous_sample_pose = path.front();
+  const double corner_radius = footprint_corner_radius(clearance_footprint);
+  for (std::size_t path_index = 1U; path_index < path.size(); ++path_index) {
+    const auto & from = path[path_index - 1U];
+    const auto & to = path[path_index];
+    const double translation = std::hypot(to.x_m - from.x_m, to.y_m - from.y_m);
+    const double yaw_delta = wrap_to_pi(to.yaw_rad - from.yaw_rad);
+    const double maximum_corner_motion = translation + corner_radius * std::abs(yaw_delta);
+    const auto subdivisions = subdivision_count(maximum_corner_motion, swept_step_m);
+    if (
+      !subdivisions.has_value() ||
+      result.margin_checked_pose_count > kMaximumSamples - subdivisions.value())
+    {
+      result.valid = false;
+      result.margin_reason = RejectReason::SampleLimitExceeded;
+      result.reason = MarginEscapePathReason::InvalidInput;
+      result.rejected_path_index = path_index;
+      return result;
+    }
+
+    for (std::size_t substep = 1U; substep <= subdivisions.value(); ++substep) {
+      const double ratio =
+        static_cast<double>(substep) / static_cast<double>(subdivisions.value());
+      const Pose2D pose{
+        from.x_m + ratio * (to.x_m - from.x_m),
+        from.y_m + ratio * (to.y_m - from.y_m),
+        wrap_to_pi(from.yaw_rad + ratio * yaw_delta)};
+      travelled_distance_m += std::hypot(
+        pose.x_m - previous_sample_pose.x_m,
+        pose.y_m - previous_sample_pose.y_m);
+      previous_sample_pose = pose;
+
+      const auto sample = sample_footprint(grid, clearance_footprint, pose);
+      ++result.margin_checked_pose_count;
+      result.rejected_path_index = path_index;
+      if (!sample.valid) {
+        result.valid = false;
+        result.margin_reason = RejectReason::InvalidInitialPose;
+        result.reason = MarginEscapePathReason::InvalidInput;
+        return result;
+      }
+      if (sample.out_of_map) {
+        result.margin_reason = RejectReason::OutOfMap;
+        result.reason = MarginEscapePathReason::MarginPathBlocked;
+        return result;
+      }
+
+      const std::size_t contact_count = sample.contact_cells.size();
+      result.maximum_margin_contact_count = std::max(
+        result.maximum_margin_contact_count, contact_count);
+      result.final_margin_contact_count = contact_count;
+      if (margin_cleared) {
+        if (contact_count != 0U) {
+          result.margin_reason = RejectReason::NewContact;
+          result.reason = MarginEscapePathReason::MarginRecontact;
+          return result;
+        }
+        continue;
+      }
+
+      // Margin contacts may move to neighbouring cells while the vehicle
+      // travels parallel to one continuous wall, and the count may gain one
+      // boundary cell due to rasterization.  Treating that as physical
+      // worsening would reject the intended centreward escape.  The physical
+      // footprint sweep above remains the hard safety contract; the margin
+      // layer must clear within the bounded distance and remain clear.
+      if (contact_count == 0U) {
+        margin_cleared = true;
+        result.margin_clear_path_index = path_index;
+        result.margin_clear_distance_m = travelled_distance_m;
+        result.margin_reason = RejectReason::None;
+        continue;
+      }
+      if (
+        travelled_distance_m >
+        maximum_margin_escape_distance_m + kNumericalEpsilon)
+      {
+        result.margin_reason = RejectReason::InitialContactNotCleared;
+        result.reason = MarginEscapePathReason::MarginNotCleared;
+        return result;
+      }
+    }
+  }
+
+  if (!margin_cleared) {
+    result.margin_reason = RejectReason::InitialContactNotCleared;
+    result.reason = MarginEscapePathReason::MarginNotCleared;
+    return result;
+  }
+  if (
+    result.margin_clear_distance_m >
+    maximum_margin_escape_distance_m + kNumericalEpsilon)
+  {
+    result.margin_reason = RejectReason::InitialContactNotCleared;
+    result.reason = MarginEscapePathReason::MarginNotCleared;
+    return result;
+  }
+
+  result.clear = true;
+  result.reason = MarginEscapePathReason::None;
+  result.margin_reason = RejectReason::None;
   result.rejected_path_index = path.size() - 1U;
   return result;
 }

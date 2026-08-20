@@ -71,6 +71,10 @@ std::string format_candidate(const CandidateTrace &trace) {
            << ",preflight="
            << (trace.static_wall_preflight_evaluated ? 1 : 0) << "/"
            << (trace.static_wall_preflight_feasible ? 1 : 0)
+           << ",preflight_mode="
+           << reason_or(trace.static_wall_preflight_mode, "not-evaluated")
+           << ",preflight_margin_escape="
+           << (trace.static_wall_margin_escape_used ? 1 : 0)
            << ",preflight_reason=\""
            << reason_or(trace.static_wall_preflight_reason, "not-evaluated")
            << "\""
@@ -82,6 +86,15 @@ std::string format_candidate(const CandidateTrace &trace) {
            << ",preflight_invalid_index="
            << index_or_none(trace.static_wall_invalid_index)
            << ",preflight_poses=" << trace.static_wall_checked_poses
+           << ",preflight_raw_poses="
+           << trace.static_wall_physical_checked_poses
+           << ",preflight_margin_contacts="
+           << trace.static_wall_initial_margin_contacts << "/"
+           << trace.static_wall_maximum_margin_contacts << "/"
+           << trace.static_wall_final_margin_contacts
+           << ",preflight_margin_clear="
+           << index_or_none(trace.static_wall_margin_clear_path_index) << "@"
+           << finite_or_nan(trace.static_wall_margin_clear_distance_m) << "m"
            << ",backoff=" << trace.backoff_failures << "/"
            << finite_or_nan(trace.backoff_remaining_sec) << "s";
   }
@@ -185,6 +198,8 @@ std::string categorical_signature(const DecisionTrace &trace) {
            << candidate_reason(candidate) << ":" << candidate.planner_reject_gate
            << ":" << (candidate.static_wall_preflight_evaluated ? 1 : 0)
            << ":" << (candidate.static_wall_preflight_feasible ? 1 : 0)
+           << ":" << candidate.static_wall_preflight_mode
+           << ":" << (candidate.static_wall_margin_escape_used ? 1 : 0)
            << ":" << candidate.static_wall_preflight_reason
            << ":" << candidate.static_wall_invalid_index
            << ":" << candidate.backoff_failures;

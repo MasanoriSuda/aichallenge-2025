@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <vector>
 
@@ -208,6 +209,48 @@ struct PathClearanceResult
   std::size_t rejected_path_index{};
 };
 
+enum class MarginEscapePathReason
+{
+  None,
+  InvalidInput,
+  PhysicalPathBlocked,
+  MarginPathBlocked,
+  MarginEscapeNotAllowed,
+  MarginNotCleared,
+  MarginRecontact,
+};
+
+const char * to_string(MarginEscapePathReason reason) noexcept;
+
+/// Result of validating a path against both the physical vehicle body and an
+/// additional wall-clearance footprint.
+///
+/// A physically clear path normally requires the clearance footprint to be
+/// clear as well.  When allow_initial_margin_escape is true, an overlap that
+/// exists only at the first clearance-footprint sample may be carried for a
+/// bounded distance, must clear within maximum_margin_escape_distance_m, and
+/// may not reappear.  The physical footprint remains a hard constraint over
+/// the complete swept path.  Margin contact-cell counts are diagnostic only:
+/// their identity and count can change while moving parallel to one
+/// continuous rasterized wall.
+struct MarginEscapePathClearanceResult
+{
+  bool valid{false};
+  bool clear{false};
+  bool margin_escape_used{false};
+  MarginEscapePathReason reason{MarginEscapePathReason::InvalidInput};
+  RejectReason physical_reason{RejectReason::NotEvaluated};
+  RejectReason margin_reason{RejectReason::NotEvaluated};
+  std::size_t physical_checked_pose_count{};
+  std::size_t margin_checked_pose_count{};
+  std::size_t initial_margin_contact_count{};
+  std::size_t maximum_margin_contact_count{};
+  std::size_t final_margin_contact_count{};
+  std::size_t margin_clear_path_index{std::numeric_limits<std::size_t>::max()};
+  std::size_t rejected_path_index{};
+  double margin_clear_distance_m{};
+};
+
 /// Result of moving a Frenet lateral target away from a static-map wall.
 struct LateralClearanceResult
 {
@@ -345,6 +388,12 @@ FootprintSample sample_footprint(
 PathClearanceResult evaluate_clear_footprint_path(
   const OccupancyGrid & grid, const FootprintExtents & footprint,
   const std::vector<Pose2D> & path, double swept_step_m);
+
+MarginEscapePathClearanceResult evaluate_clearance_margin_escape_path(
+  const OccupancyGrid & grid, const FootprintExtents & physical_footprint,
+  const FootprintExtents & clearance_footprint,
+  const std::vector<Pose2D> & path, double swept_step_m,
+  bool allow_initial_margin_escape, double maximum_margin_escape_distance_m);
 
 /// Find the first collision-free lateral target between desired and fallback.
 ///

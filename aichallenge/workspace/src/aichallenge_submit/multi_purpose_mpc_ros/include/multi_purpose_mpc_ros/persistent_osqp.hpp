@@ -26,6 +26,7 @@ struct SolveTelemetry
   bool warm_start_applied{false};
   bool warm_start_rejected{false};
   bool cold_reset_after_failure{false};
+  bool maximum_iterations_reached{false};
   double setup_ms{};
   double update_ms{};
   double warm_start_ms{};

@@ -150,6 +150,19 @@ struct TrackingTrace {
   int consecutive_failures{0};
   double backoff_sec{0.0};
   std::string reason;
+  std::string preflight_mode{"not-evaluated"};
+  bool preflight_margin_escape_used{false};
+  double preflight_margin_clear_distance_m{
+      std::numeric_limits<double>::quiet_NaN()};
+  bool tracking_wall_contract_active{false};
+  std::string tracking_wall_contract_reason{"not-evaluated"};
+  double tracking_wall_contract_maximum_relaxation_m{0.0};
+  double corridor_width_m{std::numeric_limits<double>::quiet_NaN()};
+  double maximum_target_adjustment_m{
+      std::numeric_limits<double>::quiet_NaN()};
+  bool cold_retry_attempted{false};
+  bool cold_retry_succeeded{false};
+  std::string initial_solver_reason;
 };
 
 const char *to_string(TrackingOutcome outcome) noexcept;

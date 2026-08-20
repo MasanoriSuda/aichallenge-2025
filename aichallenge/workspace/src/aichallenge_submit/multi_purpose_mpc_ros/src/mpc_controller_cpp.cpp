@@ -2164,6 +2164,18 @@ struct V2XBehaviorOutput
   bool dynamic_obstacle_follow_cap_suppressed{false};
   int dynamic_obstacle_lateral_escape_side_sign{0};
   double dynamic_obstacle_lateral_escape_m{0.0};
+  std::string dynamic_obstacle_lateral_escape_preflight_mode{"not-evaluated"};
+  bool dynamic_obstacle_lateral_escape_margin_escape_used{false};
+  double dynamic_obstacle_lateral_escape_margin_clear_distance_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  bool dynamic_obstacle_lateral_escape_tracking_contract_active{false};
+  std::string dynamic_obstacle_lateral_escape_tracking_contract_reason{
+    "not-evaluated"};
+  double dynamic_obstacle_lateral_escape_tracking_contract_maximum_relaxation_m{0.0};
+  double dynamic_obstacle_lateral_escape_corridor_width_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double dynamic_obstacle_lateral_escape_maximum_target_adjustment_m{
+    std::numeric_limits<double>::quiet_NaN()};
   std::string dynamic_obstacle_cruise_target_id;
   double dynamic_obstacle_cruise_closing_speed{0.0};
   double dynamic_obstacle_cruise_time_to_entry{
@@ -15382,6 +15394,23 @@ struct MPC
       dynamic_lateral_escape_authority.pass_side_sign;
     behavior_output.dynamic_obstacle_lateral_escape_m =
       dynamic_lateral_escape_authority.requested_lateral_shift_m;
+    behavior_output.dynamic_obstacle_lateral_escape_preflight_mode =
+      dynamic_escape_bridge.static_wall_preflight_mode;
+    behavior_output.dynamic_obstacle_lateral_escape_margin_escape_used =
+      dynamic_escape_bridge.static_wall_margin_escape_used;
+    behavior_output.dynamic_obstacle_lateral_escape_margin_clear_distance_m =
+      dynamic_escape_bridge.static_wall_margin_clear_distance_m;
+    behavior_output.dynamic_obstacle_lateral_escape_tracking_contract_active =
+      dynamic_escape_bridge.tracking_wall_contract_active;
+    behavior_output.dynamic_obstacle_lateral_escape_tracking_contract_reason =
+      dynamic_escape_bridge.tracking_wall_contract_reason;
+    behavior_output.
+      dynamic_obstacle_lateral_escape_tracking_contract_maximum_relaxation_m =
+      dynamic_escape_bridge.tracking_wall_contract_maximum_relaxation_m;
+    behavior_output.dynamic_obstacle_lateral_escape_corridor_width_m =
+      planner_output.selected_corridor_width;
+    behavior_output.dynamic_obstacle_lateral_escape_maximum_target_adjustment_m =
+      dynamic_escape_bridge.maximum_target_adjustment_m;
     std::string dynamic_escape_authority_reason =
       v2x_overtake_core::to_string(dynamic_lateral_escape_authority.reason);
     if (
@@ -17282,6 +17311,9 @@ struct MPC
   persistent_osqp::SolveOutcome solve_problem(
     const MpcProblem & problem, const double now_sec)
   {
+    dynamic_escape_cold_retry_attempted_ = false;
+    dynamic_escape_cold_retry_succeeded_ = false;
+    dynamic_escape_cold_retry_initial_reason_.clear();
     const bool progress_mode_changed =
       !last_osqp_progress_contouring_mode_.has_value() ||
       last_osqp_progress_contouring_mode_.value() != problem.progress_contouring_active;
@@ -17367,12 +17399,41 @@ struct MPC
     if (!first_outcome.result.has_value()) {
       last_osqp_solution_.reset();
       last_osqp_solution_sec_ = -std::numeric_limits<double>::infinity();
-      if (problem.progress_contouring_active) {
-        record_rti_sqp_telemetry(
-          now_sec, false, false, false, false,
-          mpcc_progress::RtiRefinementDecision::Disabled);
+      const bool retry_dynamic_escape_cold =
+        problem.dynamic_obstacle_lateral_escape_active &&
+        first_outcome.telemetry.warm_start_applied &&
+        first_outcome.telemetry.maximum_iterations_reached;
+      if (retry_dynamic_escape_cold) {
+        dynamic_escape_cold_retry_attempted_ = true;
+        dynamic_escape_cold_retry_initial_reason_ = first_outcome.failure_detail;
+        // PersistentOsqpSolver resets its workspace after a status failure.
+        // Re-solving without the shifted primal/dual is therefore a genuine
+        // cold setup and prevents one stale warm start from quarantining an
+        // otherwise executable avoidance side.
+        warm_start.reset();
+        auto cold_outcome = solve_once(problem, std::nullopt);
+        if (cold_outcome.result.has_value()) {
+          dynamic_escape_cold_retry_succeeded_ = true;
+          first_outcome = std::move(cold_outcome);
+        } else {
+          cold_outcome.failure_detail =
+            "warm_start={" + dynamic_escape_cold_retry_initial_reason_ +
+            "}; cold_retry={" + cold_outcome.failure_detail + "}";
+          if (problem.progress_contouring_active) {
+            record_rti_sqp_telemetry(
+              now_sec, false, false, false, false,
+              mpcc_progress::RtiRefinementDecision::Disabled);
+          }
+          return cold_outcome;
+        }
+      } else {
+        if (problem.progress_contouring_active) {
+          record_rti_sqp_telemetry(
+            now_sec, false, false, false, false,
+            mpcc_progress::RtiRefinementDecision::Disabled);
+        }
+        return first_outcome;
       }
-      return first_outcome;
     }
 
     auto best_outcome = std::move(first_outcome);
@@ -18144,6 +18205,34 @@ struct MPC
       cfg.steering_tire_angle_gain_var);
   }
 
+  void populate_dynamic_escape_tracking_context(
+    overtake_decision_trace::TrackingTrace & trace) const
+  {
+    trace.preflight_mode =
+      last_v2x_behavior_output_.dynamic_obstacle_lateral_escape_preflight_mode;
+    trace.preflight_margin_escape_used =
+      last_v2x_behavior_output_.dynamic_obstacle_lateral_escape_margin_escape_used;
+    trace.preflight_margin_clear_distance_m =
+      last_v2x_behavior_output_.dynamic_obstacle_lateral_escape_margin_clear_distance_m;
+    trace.tracking_wall_contract_active =
+      last_v2x_behavior_output_.
+      dynamic_obstacle_lateral_escape_tracking_contract_active;
+    trace.tracking_wall_contract_reason =
+      last_v2x_behavior_output_.
+      dynamic_obstacle_lateral_escape_tracking_contract_reason;
+    trace.tracking_wall_contract_maximum_relaxation_m =
+      last_v2x_behavior_output_.
+      dynamic_obstacle_lateral_escape_tracking_contract_maximum_relaxation_m;
+    trace.corridor_width_m =
+      last_v2x_behavior_output_.dynamic_obstacle_lateral_escape_corridor_width_m;
+    trace.maximum_target_adjustment_m =
+      last_v2x_behavior_output_.
+      dynamic_obstacle_lateral_escape_maximum_target_adjustment_m;
+    trace.cold_retry_attempted = dynamic_escape_cold_retry_attempted_;
+    trace.cold_retry_succeeded = dynamic_escape_cold_retry_succeeded_;
+    trace.initial_solver_reason = dynamic_escape_cold_retry_initial_reason_;
+  }
+
   std::pair<Eigen::Vector2d, double> safe_failure_control(
     const std::string & reason, const double now_sec)
   {
@@ -18165,16 +18254,21 @@ struct MPC
       if (gap_planner != nullptr) {
         gap_planner->reset_low_speed_targets();
       }
-      const std::string tracking_trace = overtake_decision_trace::format_tracking_trace(
-        overtake_decision_trace::TrackingTrace{
-          last_v2x_behavior_output_.dynamic_obstacle_lateral_escape_attempt_id,
-          overtake_line_state_.episode_id,
-          last_v2x_behavior_output_.dynamic_obstacle_cruise_target_id,
-          last_v2x_behavior_output_.dynamic_obstacle_lateral_escape_side_sign,
-          overtake_decision_trace::TrackingOutcome::Failed,
-          backoff.consecutive_failures,
-          backoff.hold_sec,
-          reason});
+      overtake_decision_trace::TrackingTrace trace;
+      trace.attempt_id =
+        last_v2x_behavior_output_.dynamic_obstacle_lateral_escape_attempt_id;
+      trace.mission_episode_id = overtake_line_state_.episode_id;
+      trace.target_id =
+        last_v2x_behavior_output_.dynamic_obstacle_cruise_target_id;
+      trace.side =
+        last_v2x_behavior_output_.dynamic_obstacle_lateral_escape_side_sign;
+      trace.outcome = overtake_decision_trace::TrackingOutcome::Failed;
+      trace.consecutive_failures = backoff.consecutive_failures;
+      trace.backoff_sec = backoff.hold_sec;
+      trace.reason = reason;
+      populate_dynamic_escape_tracking_context(trace);
+      const std::string tracking_trace =
+        overtake_decision_trace::format_tracking_trace(trace);
       RCLCPP_WARN(
         rclcpp::get_logger("mpc_controller"), "%s", tracking_trace.c_str());
     }
@@ -18449,6 +18543,9 @@ struct MPC
     active_control_decision_id_ = decision_id;
     last_overtake_authority_trace_.reset();
     last_control_resolution_reason_ = "not-resolved";
+    dynamic_escape_cold_retry_attempted_ = false;
+    dynamic_escape_cold_retry_succeeded_ = false;
+    dynamic_escape_cold_retry_initial_reason_.clear();
     if (cfg.N < 2) {
       return safe_failure_control("mpc.N must be at least 2", now_sec);
     }
@@ -18703,18 +18800,23 @@ struct MPC
         dynamic_obstacle_lateral_escape_solver_backoff_.record_success(
           problem.dynamic_obstacle_lateral_escape_target_id,
           problem.dynamic_obstacle_lateral_escape_side_sign);
-        if (previous_backoff.consecutive_failures > 0) {
+        if (
+          previous_backoff.consecutive_failures > 0 ||
+          dynamic_escape_cold_retry_succeeded_)
+        {
+          overtake_decision_trace::TrackingTrace trace;
+          trace.attempt_id = problem.dynamic_obstacle_lateral_escape_attempt_id;
+          trace.mission_episode_id = overtake_line_state_.episode_id;
+          trace.target_id = problem.dynamic_obstacle_lateral_escape_target_id;
+          trace.side = problem.dynamic_obstacle_lateral_escape_side_sign;
+          trace.outcome = overtake_decision_trace::TrackingOutcome::Recovered;
+          trace.consecutive_failures = previous_backoff.consecutive_failures;
+          trace.reason = dynamic_escape_cold_retry_succeeded_ ?
+            "valid tracking solution after cold retry" :
+            "valid tracking solution";
+          populate_dynamic_escape_tracking_context(trace);
           const std::string tracking_trace =
-            overtake_decision_trace::format_tracking_trace(
-            overtake_decision_trace::TrackingTrace{
-              problem.dynamic_obstacle_lateral_escape_attempt_id,
-              overtake_line_state_.episode_id,
-              problem.dynamic_obstacle_lateral_escape_target_id,
-              problem.dynamic_obstacle_lateral_escape_side_sign,
-              overtake_decision_trace::TrackingOutcome::Recovered,
-              previous_backoff.consecutive_failures,
-              0.0,
-              "valid tracking solution"});
+            overtake_decision_trace::format_tracking_trace(trace);
           RCLCPP_INFO(
             rclcpp::get_logger("mpc_controller"), "%s", tracking_trace.c_str());
         }
@@ -19007,6 +19109,9 @@ struct MPC
   persistent_osqp::PersistentOsqpSolver persistent_osqp_solver_;
   std::optional<persistent_osqp::WarmStart> last_osqp_solution_;
   double last_osqp_solution_sec_{-std::numeric_limits<double>::infinity()};
+  bool dynamic_escape_cold_retry_attempted_{false};
+  bool dynamic_escape_cold_retry_succeeded_{false};
+  std::string dynamic_escape_cold_retry_initial_reason_;
   std::optional<bool> last_osqp_progress_contouring_mode_;
   std::optional<double> last_osqp_progress_origin_m_;
   persistent_osqp::PersistentOsqpSolver persistent_extended_osqp_solver_;

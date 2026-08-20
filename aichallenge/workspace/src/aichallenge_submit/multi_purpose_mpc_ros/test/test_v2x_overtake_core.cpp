@@ -3816,6 +3816,31 @@ TEST(V2XOvertakeCoreSpeed, PreservesVehicleOwnedTighterBoundary)
   EXPECT_EQ(result.upper_m, (std::vector<double>{0.8, 0.8, 0.8}));
 }
 
+TEST(V2XOvertakeCoreSpeed, KeepsFootprintValidationWhenCentreIsInsideWallBounds)
+{
+  const auto result =
+    multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_initial_wall_margin_tracking_contract(
+    InitialWallMarginTrackingContractRequest{
+      true, 0.3, 2.0, 0.02,
+      {0.5, 1.0, 2.0},
+      {-1.0, -1.0, -1.0},
+      {1.0, 1.0, 1.0},
+      {-0.8, -0.8, -0.8},
+      {0.8, 0.8, 0.8}});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_TRUE(result.active);
+  ASSERT_TRUE(result.feasible);
+  EXPECT_EQ(result.inherited_side_sign, 0);
+  EXPECT_EQ(result.relaxed_sample_count, 0U);
+  EXPECT_EQ(
+    result.reason,
+    InitialWallMarginTrackingContractReason::FootprintValidationOnly);
+  EXPECT_EQ(result.lower_m, (std::vector<double>{-0.8, -0.8, -0.8}));
+  EXPECT_EQ(result.upper_m, (std::vector<double>{0.8, 0.8, 0.8}));
+}
+
 TEST(V2XOvertakeCoreSpeed, DisabledWallMarginContractPreservesCorridor)
 {
   const auto result =

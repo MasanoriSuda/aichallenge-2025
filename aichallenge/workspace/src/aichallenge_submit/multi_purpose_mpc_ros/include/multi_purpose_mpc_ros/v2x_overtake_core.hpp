@@ -1221,6 +1221,7 @@ enum class InitialWallMarginTrackingContractReason
   NotEvaluated,
   Disabled,
   AlreadyInsidePreferredWallBounds,
+  FootprintValidationOnly,
   MarginInherited,
   VehicleOwnedBoundaryPreserved,
   InvalidInput,
@@ -1262,8 +1263,11 @@ struct InitialWallMarginTrackingContractResolution
 
 /// Preserve a physically validated initial wall-margin overlap in the tracking
 /// corridor, then restore the normal wall edge over the preflight distance.
-/// Only an edge still owned by the base wall interval may be widened; a tighter
-/// vehicle-owned edge is kept unchanged.
+/// When the vehicle centre is already inside the preferred wall interval the
+/// contract remains active without widening bounds, so the solved trajectory
+/// still receives physical-footprint validation. Only an edge still owned by
+/// the base wall interval may be widened; a tighter vehicle-owned edge is kept
+/// unchanged.
 InitialWallMarginTrackingContractResolution
 resolve_initial_wall_margin_tracking_contract(
   const InitialWallMarginTrackingContractRequest & request) noexcept;

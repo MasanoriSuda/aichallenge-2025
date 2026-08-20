@@ -201,12 +201,26 @@ TEST(OvertakeDecisionTrace, FormatsTrackingFailureAndRecovery) {
   tracking.consecutive_failures = 2;
   tracking.backoff_sec = 1.0;
   tracking.reason = "maximum iterations reached";
+  tracking.preflight_mode = "margin-escape";
+  tracking.preflight_margin_escape_used = true;
+  tracking.preflight_margin_clear_distance_m = 0.45;
+  tracking.tracking_wall_contract_active = true;
+  tracking.tracking_wall_contract_reason = "footprint-validation-only";
+  tracking.corridor_width_m = 2.3;
+  tracking.maximum_target_adjustment_m = 0.4;
+  tracking.cold_retry_attempted = true;
+  tracking.initial_solver_reason = "warm maximum iterations reached";
 
   const auto failed = trace::format_tracking_trace(tracking);
   EXPECT_NE(failed.find("stage=tracking"), std::string::npos);
   EXPECT_NE(failed.find("attempt=12"), std::string::npos);
   EXPECT_NE(failed.find("mission_episode=4"), std::string::npos);
   EXPECT_NE(failed.find("outcome=failed"), std::string::npos);
+  EXPECT_NE(failed.find("preflight_mode=margin-escape"), std::string::npos);
+  EXPECT_NE(
+    failed.find("tracking_contract=1/footprint-validation-only"),
+    std::string::npos);
+  EXPECT_NE(failed.find("cold_retry=1/0"), std::string::npos);
 
   tracking.outcome = trace::TrackingOutcome::Recovered;
   tracking.backoff_sec = 0.0;

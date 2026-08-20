@@ -1997,6 +1997,8 @@ const char * to_string(const InitialWallMarginTrackingContractReason reason) noe
       return "inactive";
     case InitialWallMarginTrackingContractReason::AlreadyInsidePreferredWallBounds:
       return "already-inside";
+    case InitialWallMarginTrackingContractReason::FootprintValidationOnly:
+      return "footprint-validation-only";
     case InitialWallMarginTrackingContractReason::MarginInherited:
       return "margin-inherit";
     case InitialWallMarginTrackingContractReason::VehicleOwnedBoundaryPreserved:
@@ -2071,8 +2073,14 @@ resolve_initial_wall_margin_tracking_contract(
   } else if (request.current_lateral_m > first_wall_upper + 1e-9) {
     resolution.inherited_side_sign = 1;
   } else {
+    // `enabled` means the physical preflight observed an initial overlap in
+    // the additional clearance footprint.  The centre state can still be
+    // inside the Frenet wall interval (especially with yawed corners).  Do not
+    // widen a bound in that case, but keep the contract active so the solved
+    // trajectory is checked with the physical footprint before publication.
+    resolution.active = true;
     resolution.reason =
-      InitialWallMarginTrackingContractReason::AlreadyInsidePreferredWallBounds;
+      InitialWallMarginTrackingContractReason::FootprintValidationOnly;
     resolution.first_stage_lower_m = resolution.lower_m.front();
     resolution.first_stage_upper_m = resolution.upper_m.front();
     return resolution;

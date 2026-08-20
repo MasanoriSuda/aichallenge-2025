@@ -319,6 +319,26 @@ std::string format_tracking_trace(const TrackingTrace &trace) {
          << ", side=" << trace.side << ", outcome=" << to_string(trace.outcome)
          << ", failures=" << trace.consecutive_failures
          << ", backoff=" << finite_or_nan(trace.backoff_sec) << "s"
+         << ", preflight_mode="
+         << reason_or(trace.preflight_mode, "not-evaluated")
+         << ", preflight_margin_escape="
+         << (trace.preflight_margin_escape_used ? 1 : 0)
+         << ", preflight_margin_clear="
+         << finite_or_nan(trace.preflight_margin_clear_distance_m) << "m"
+         << ", tracking_contract="
+         << (trace.tracking_wall_contract_active ? 1 : 0) << "/"
+         << reason_or(trace.tracking_wall_contract_reason, "not-evaluated")
+         << ", tracking_contract_max_relax="
+         << finite_or_nan(
+           trace.tracking_wall_contract_maximum_relaxation_m) << "m"
+         << ", corridor_width=" << finite_or_nan(trace.corridor_width_m)
+         << "m"
+         << ", target_adjust="
+         << finite_or_nan(trace.maximum_target_adjustment_m) << "m"
+         << ", cold_retry=" << (trace.cold_retry_attempted ? 1 : 0)
+         << "/" << (trace.cold_retry_succeeded ? 1 : 0)
+         << ", initial_solver_reason=\""
+         << reason_or(trace.initial_solver_reason, "none") << "\""
          << ", reason=\"" << reason_or(trace.reason, "none") << "\"";
   return stream.str();
 }

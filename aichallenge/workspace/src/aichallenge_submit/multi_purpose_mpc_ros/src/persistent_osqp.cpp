@@ -538,6 +538,8 @@ SolveOutcome PersistentOsqpSolver::solve(
   const OSQPInfo * info = impl_->workspace ? impl_->workspace->info : nullptr;
   outcome.telemetry.iterations = info ? static_cast<int>(info->iter) : 0;
   outcome.telemetry.status = info ? static_cast<int>(info->status_val) : 0;
+  outcome.telemetry.maximum_iterations_reached =
+    info != nullptr && info->status_val == OSQP_MAX_ITER_REACHED;
   if (solve_exit != 0 || info == nullptr) {
     std::ostringstream detail;
     detail << "stage=solve, exit_flag=" << solve_exit << ", "

@@ -103,11 +103,19 @@ TEST(OvertakeDecisionTrace, ReportsStaticWallExecutionPreflight) {
   decision.primary.static_wall_preflight_feasible = false;
   decision.primary.static_wall_preflight_reason = "occupied";
   decision.primary.static_wall_checked_poses = 14U;
+  decision.primary.static_wall_execution_samples = 7U;
+  decision.primary.static_wall_active_samples = 5U;
+  decision.primary.static_wall_first_active_index = 1U;
+  decision.primary.static_wall_last_active_index = 5U;
+  decision.primary.static_wall_invalid_index = 3U;
 
   const std::string message = trace::format_decision_trace(decision);
   EXPECT_NE(message.find("state=bridge-rejected"), std::string::npos);
   EXPECT_NE(message.find("preflight=1/0"), std::string::npos);
   EXPECT_NE(message.find("preflight_reason=\"occupied\""), std::string::npos);
+  EXPECT_NE(message.find("preflight_samples=7/5"), std::string::npos);
+  EXPECT_NE(message.find("preflight_range=1:5"), std::string::npos);
+  EXPECT_NE(message.find("preflight_invalid_index=3"), std::string::npos);
   EXPECT_NE(message.find("preflight_poses=14"), std::string::npos);
 }
 
@@ -128,6 +136,17 @@ TEST(OvertakeDecisionTrace, EmitsOnCategoricalChangeButNotContinuousNoise) {
   decision.final_shift_m = 0.31;
   decision.waypoint_id = 17;
   EXPECT_FALSE(emitter.update(decision, 1.1).emit);
+
+  decision.primary.static_wall_execution_samples = 8U;
+  decision.primary.static_wall_active_samples = 4U;
+  EXPECT_FALSE(emitter.update(decision, 1.15).emit);
+
+  decision.primary.static_wall_first_active_index = 1U;
+  decision.primary.static_wall_last_active_index = 4U;
+  EXPECT_FALSE(emitter.update(decision, 1.18).emit);
+
+  decision.primary.static_wall_invalid_index = 2U;
+  EXPECT_TRUE(emitter.update(decision, 1.19).emit);
 
   decision.tracking_qualified = true;
   EXPECT_TRUE(emitter.update(decision, 1.2).emit);

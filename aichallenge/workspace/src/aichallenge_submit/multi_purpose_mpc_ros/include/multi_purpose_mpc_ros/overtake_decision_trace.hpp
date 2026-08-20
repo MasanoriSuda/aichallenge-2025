@@ -50,6 +50,11 @@ struct CandidateTrace {
   bool static_wall_preflight_evaluated{false};
   bool static_wall_preflight_feasible{false};
   std::size_t static_wall_checked_poses{0U};
+  std::size_t static_wall_execution_samples{0U};
+  std::size_t static_wall_active_samples{0U};
+  std::size_t static_wall_first_active_index{std::numeric_limits<std::size_t>::max()};
+  std::size_t static_wall_last_active_index{std::numeric_limits<std::size_t>::max()};
+  std::size_t static_wall_invalid_index{std::numeric_limits<std::size_t>::max()};
   std::string static_wall_preflight_reason{"not-evaluated"};
   bool backoff_active{false};
   int backoff_failures{0};

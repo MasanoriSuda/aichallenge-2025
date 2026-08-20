@@ -13760,4 +13760,82 @@ bool is_inter_vehicle_corridor_rear_clear(
          request.upper_longitudinal_m <= -request.return_clear_distance_m;
 }
 
+GapPlanExecutionSampleContract resolve_gap_plan_execution_sample_contract(
+  const bool planner_active, const bool planner_feasible,
+  const std::vector<double> & target_ey,
+  const std::vector<bool> & target_active,
+  const std::size_t trailing_sample_count) noexcept
+{
+  GapPlanExecutionSampleContract result;
+  if (!planner_active) {
+    result.reason = GapPlanExecutionSampleContractReason::PlannerInactive;
+    return result;
+  }
+  if (!planner_feasible) {
+    result.reason = GapPlanExecutionSampleContractReason::PlannerInfeasible;
+    return result;
+  }
+  if (target_ey.empty()) {
+    result.reason = GapPlanExecutionSampleContractReason::EmptyTarget;
+    return result;
+  }
+  if (!target_active.empty() && target_active.size() != target_ey.size()) {
+    result.reason = GapPlanExecutionSampleContractReason::ActivityMaskSizeMismatch;
+    result.invalid_index = std::min(target_active.size(), target_ey.size());
+    return result;
+  }
+
+  const bool all_samples_active = target_active.empty();
+  for (std::size_t index = 0U; index < target_ey.size(); ++index) {
+    const bool active = all_samples_active || target_active[index];
+    if (!active) {
+      continue;
+    }
+    if (!std::isfinite(target_ey[index])) {
+      result.reason = GapPlanExecutionSampleContractReason::NonFiniteActiveTarget;
+      result.invalid_index = index;
+      return result;
+    }
+    if (result.active_sample_count == 0U) {
+      result.first_active_index = index;
+    }
+    result.last_active_index = index;
+    ++result.active_sample_count;
+  }
+
+  if (result.active_sample_count == 0U) {
+    result.reason = GapPlanExecutionSampleContractReason::NoActiveTarget;
+    return result;
+  }
+
+  const std::size_t samples_through_last_active = result.last_active_index + 1U;
+  const std::size_t remaining_samples = target_ey.size() - samples_through_last_active;
+  result.execution_sample_count = samples_through_last_active +
+    std::min(trailing_sample_count, remaining_samples);
+  result.valid = true;
+  result.reason = GapPlanExecutionSampleContractReason::Valid;
+  return result;
+}
+
+const char * to_string(const GapPlanExecutionSampleContractReason reason) noexcept
+{
+  switch (reason) {
+    case GapPlanExecutionSampleContractReason::Valid:
+      return "valid";
+    case GapPlanExecutionSampleContractReason::PlannerInactive:
+      return "planner inactive";
+    case GapPlanExecutionSampleContractReason::PlannerInfeasible:
+      return "planner infeasible";
+    case GapPlanExecutionSampleContractReason::EmptyTarget:
+      return "empty target";
+    case GapPlanExecutionSampleContractReason::ActivityMaskSizeMismatch:
+      return "activity mask size mismatch";
+    case GapPlanExecutionSampleContractReason::NoActiveTarget:
+      return "no active target";
+    case GapPlanExecutionSampleContractReason::NonFiniteActiveTarget:
+      return "non-finite active target";
+  }
+  return "unknown";
+}
+
 }  // namespace multi_purpose_mpc_ros::v2x_overtake_core

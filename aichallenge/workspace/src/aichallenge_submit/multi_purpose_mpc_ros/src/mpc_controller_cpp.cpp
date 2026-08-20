@@ -1971,6 +1971,11 @@ struct GapPlanStaticWallPreflight
 {
   bool feasible{false};
   std::size_t checked_pose_count{};
+  std::size_t execution_sample_count{};
+  std::size_t active_sample_count{};
+  std::size_t first_active_index{std::numeric_limits<std::size_t>::max()};
+  std::size_t last_active_index{std::numeric_limits<std::size_t>::max()};
+  std::size_t invalid_index{std::numeric_limits<std::size_t>::max()};
   std::string reason{"not evaluated"};
 };
 
@@ -2009,6 +2014,11 @@ struct DynamicObstacleLateralEscapeBridgeResult
   bool static_wall_preflight_evaluated{false};
   bool static_wall_preflight_feasible{false};
   std::size_t static_wall_checked_pose_count{0U};
+  std::size_t static_wall_execution_sample_count{0U};
+  std::size_t static_wall_active_sample_count{0U};
+  std::size_t static_wall_first_active_index{std::numeric_limits<std::size_t>::max()};
+  std::size_t static_wall_last_active_index{std::numeric_limits<std::size_t>::max()};
+  std::size_t static_wall_invalid_index{std::numeric_limits<std::size_t>::max()};
   std::string static_wall_preflight_reason{"not evaluated"};
   std::string reason{"not evaluated"};
 };
@@ -5410,17 +5420,29 @@ struct MPC
     const int ref_wp_id, const GapPlannerOutput & planner_output) const
   {
     GapPlanStaticWallPreflight result;
-    if (!planner_output.active || !planner_output.feasible) {
-      result.reason = planner_output.reject_reason.empty() ?
-        "local path infeasible" : planner_output.reject_reason;
-      return result;
-    }
-    if (
-      planner_output.pass_side_sign == 0 ||
-      !std::isfinite(planner_output.pass_target_ey) ||
-      planner_output.target_ey.empty())
-    {
-      result.reason = "invalid local path target";
+    constexpr std::size_t kTrailingExecutionSamples = 2U;
+    const auto sample_contract =
+      v2x_overtake_core::resolve_gap_plan_execution_sample_contract(
+      planner_output.active, planner_output.feasible,
+      planner_output.target_ey, planner_output.target_active,
+      kTrailingExecutionSamples);
+    result.execution_sample_count = sample_contract.execution_sample_count;
+    result.active_sample_count = sample_contract.active_sample_count;
+    result.first_active_index = sample_contract.first_active_index;
+    result.last_active_index = sample_contract.last_active_index;
+    result.invalid_index = sample_contract.invalid_index;
+    if (!sample_contract.valid) {
+      if (
+        !planner_output.reject_reason.empty() &&
+        (sample_contract.reason ==
+        v2x_overtake_core::GapPlanExecutionSampleContractReason::PlannerInactive ||
+        sample_contract.reason ==
+        v2x_overtake_core::GapPlanExecutionSampleContractReason::PlannerInfeasible))
+      {
+        result.reason = planner_output.reject_reason;
+      } else {
+        result.reason = v2x_overtake_core::to_string(sample_contract.reason);
+      }
       return result;
     }
     if (
@@ -5442,9 +5464,11 @@ struct MPC
     clearance_footprint.right_extent_m += wall_clearance_margin;
 
     std::vector<recovery_footprint::Pose2D> path;
-    path.reserve(planner_output.target_ey.size() + 1U);
+    path.reserve(sample_contract.execution_sample_count + 1U);
     path.push_back(actual_wall_monitor_pose_.value());
-    for (std::size_t index = 0U; index < planner_output.target_ey.size(); ++index) {
+    for (std::size_t index = 0U;
+      index < sample_contract.execution_sample_count; ++index)
+    {
       const auto & waypoint =
         model->reference_path->get_waypoint(ref_wp_id + static_cast<int>(index) + 1);
       const double left_x = -std::sin(waypoint.psi);
@@ -5453,8 +5477,30 @@ struct MPC
         planner_output.target_active.empty() ||
         (index < planner_output.target_active.size() &&
         planner_output.target_active[index]);
-      const double target_ey = lateral_target_active ?
-        planner_output.target_ey[index] : 0.0;
+      const bool reference_bounds_available =
+        index < planner_output.lb.size() && index < planner_output.ub.size() &&
+        std::isfinite(planner_output.lb[index]) &&
+        std::isfinite(planner_output.ub[index]) &&
+        planner_output.lb[index] <= planner_output.ub[index];
+      if (!lateral_target_active && !reference_bounds_available) {
+        result.invalid_index = index;
+        result.reason = "inactive reference bounds unavailable";
+        return result;
+      }
+      double target_ey = planner_output.target_ey[index];
+      if (reference_bounds_available) {
+        const double center_ey =
+          0.5 * (planner_output.lb[index] + planner_output.ub[index]);
+        const double base_reference = clip(
+          cfg.center_bias * center_ey,
+          planner_output.lb[index], planner_output.ub[index]);
+        target_ey = lateral_target_active ?
+          (1.0 - cfg.v2x_gap.target_bias) * base_reference +
+          cfg.v2x_gap.target_bias * planner_output.target_ey[index] :
+          base_reference;
+        target_ey = clip(
+          target_ey, planner_output.lb[index], planner_output.ub[index]);
+      }
       path.push_back(
         recovery_footprint::Pose2D{
           waypoint.x + target_ey * left_x,
@@ -14927,6 +14973,16 @@ struct MPC
           bridge.static_wall_preflight_feasible;
         trace.static_wall_checked_poses =
           bridge.static_wall_checked_pose_count;
+        trace.static_wall_execution_samples =
+          bridge.static_wall_execution_sample_count;
+        trace.static_wall_active_samples =
+          bridge.static_wall_active_sample_count;
+        trace.static_wall_first_active_index =
+          bridge.static_wall_first_active_index;
+        trace.static_wall_last_active_index =
+          bridge.static_wall_last_active_index;
+        trace.static_wall_invalid_index =
+          bridge.static_wall_invalid_index;
         trace.static_wall_preflight_reason =
           bridge.static_wall_preflight_reason;
       };
@@ -14962,6 +15018,16 @@ struct MPC
             static_wall_preflight.feasible;
           evaluation.bridge.static_wall_checked_pose_count =
             static_wall_preflight.checked_pose_count;
+          evaluation.bridge.static_wall_execution_sample_count =
+            static_wall_preflight.execution_sample_count;
+          evaluation.bridge.static_wall_active_sample_count =
+            static_wall_preflight.active_sample_count;
+          evaluation.bridge.static_wall_first_active_index =
+            static_wall_preflight.first_active_index;
+          evaluation.bridge.static_wall_last_active_index =
+            static_wall_preflight.last_active_index;
+          evaluation.bridge.static_wall_invalid_index =
+            static_wall_preflight.invalid_index;
           evaluation.bridge.static_wall_preflight_reason =
             static_wall_preflight.reason;
           if (!static_wall_preflight.feasible) {

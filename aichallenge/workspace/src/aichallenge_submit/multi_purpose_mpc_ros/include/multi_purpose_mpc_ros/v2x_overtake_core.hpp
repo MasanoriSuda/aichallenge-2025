@@ -8336,6 +8336,42 @@ struct InterVehicleRearClearRequest
 /// Require both boundary vehicles to be observed behind ego before leaving a woven corridor.
 bool is_inter_vehicle_corridor_rear_clear(const InterVehicleRearClearRequest & request);
 
+enum class GapPlanExecutionSampleContractReason
+{
+  Valid,
+  PlannerInactive,
+  PlannerInfeasible,
+  EmptyTarget,
+  ActivityMaskSizeMismatch,
+  NoActiveTarget,
+  NonFiniteActiveTarget,
+};
+
+struct GapPlanExecutionSampleContract
+{
+  bool valid{false};
+  std::size_t execution_sample_count{0U};
+  std::size_t active_sample_count{0U};
+  std::size_t first_active_index{std::numeric_limits<std::size_t>::max()};
+  std::size_t last_active_index{std::numeric_limits<std::size_t>::max()};
+  std::size_t invalid_index{std::numeric_limits<std::size_t>::max()};
+  GapPlanExecutionSampleContractReason reason{
+    GapPlanExecutionSampleContractReason::PlannerInactive};
+};
+
+/// Validate the GapPlanner samples that can become the next MPC execution reference.
+///
+/// An empty activity mask means every target sample is active. A sparse mask limits the
+/// preflight scope to the last active sample plus trailing_sample_count; later samples are not
+/// owned by the current receding-horizon escape. Only active target values must be finite.
+GapPlanExecutionSampleContract resolve_gap_plan_execution_sample_contract(
+  bool planner_active, bool planner_feasible,
+  const std::vector<double> & target_ey,
+  const std::vector<bool> & target_active,
+  std::size_t trailing_sample_count) noexcept;
+
+const char * to_string(GapPlanExecutionSampleContractReason reason) noexcept;
+
 }  // namespace multi_purpose_mpc_ros::v2x_overtake_core
 
 #endif  // MULTI_PURPOSE_MPC_ROS__V2X_OVERTAKE_CORE_HPP_

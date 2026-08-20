@@ -19950,4 +19950,83 @@ TEST(V2XOvertakeCoreFrenetDpExecution, ReturnReferenceKeepsAdmittedPrefix)
   EXPECT_NEAR(resolution.lateral_targets_m[3], 0.3, 1e-9);
 }
 
+TEST(V2XOvertakeCoreGapPlanExecutionContract, EmptyMaskOwnsFullTargetHorizon)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    GapPlanExecutionSampleContractReason;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_gap_plan_execution_sample_contract;
+
+  const auto contract = resolve_gap_plan_execution_sample_contract(
+    true, true, {0.0, 0.2, 0.4, 0.6}, {}, 2U);
+
+  ASSERT_TRUE(contract.valid);
+  EXPECT_EQ(contract.reason, GapPlanExecutionSampleContractReason::Valid);
+  EXPECT_EQ(contract.execution_sample_count, 4U);
+  EXPECT_EQ(contract.active_sample_count, 4U);
+  EXPECT_EQ(contract.first_active_index, 0U);
+  EXPECT_EQ(contract.last_active_index, 3U);
+}
+
+TEST(V2XOvertakeCoreGapPlanExecutionContract,
+     SparseMaskLimitsPreflightToActivePrefixAndTail)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_gap_plan_execution_sample_contract;
+
+  const auto contract = resolve_gap_plan_execution_sample_contract(
+    true, true, {0.0, 0.2, 0.4, 0.0, 0.0, 0.0},
+    {false, true, true, false, false, false}, 2U);
+
+  ASSERT_TRUE(contract.valid);
+  EXPECT_EQ(contract.execution_sample_count, 5U);
+  EXPECT_EQ(contract.active_sample_count, 2U);
+  EXPECT_EQ(contract.first_active_index, 1U);
+  EXPECT_EQ(contract.last_active_index, 2U);
+}
+
+TEST(V2XOvertakeCoreGapPlanExecutionContract, RejectsMalformedActivityContracts)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    GapPlanExecutionSampleContractReason;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_gap_plan_execution_sample_contract;
+
+  auto contract = resolve_gap_plan_execution_sample_contract(
+    true, true, {0.0, 0.2, 0.4}, {true, false}, 2U);
+  EXPECT_FALSE(contract.valid);
+  EXPECT_EQ(
+    contract.reason,
+    GapPlanExecutionSampleContractReason::ActivityMaskSizeMismatch);
+  EXPECT_EQ(contract.invalid_index, 2U);
+
+  contract = resolve_gap_plan_execution_sample_contract(
+    true, true, {0.0, 0.2, 0.4}, {false, false, false}, 2U);
+  EXPECT_FALSE(contract.valid);
+  EXPECT_EQ(contract.reason, GapPlanExecutionSampleContractReason::NoActiveTarget);
+}
+
+TEST(V2XOvertakeCoreGapPlanExecutionContract,
+     RejectsOnlyNonFiniteTargetsOwnedByTheExecutionMask)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    GapPlanExecutionSampleContractReason;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_gap_plan_execution_sample_contract;
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+
+  auto contract = resolve_gap_plan_execution_sample_contract(
+    true, true, {0.0, 0.2, nan, 0.0}, {false, true, false, false}, 2U);
+  ASSERT_TRUE(contract.valid);
+  EXPECT_EQ(contract.execution_sample_count, 4U);
+
+  contract = resolve_gap_plan_execution_sample_contract(
+    true, true, {0.0, nan, 0.2}, {false, true, false}, 2U);
+  EXPECT_FALSE(contract.valid);
+  EXPECT_EQ(
+    contract.reason,
+    GapPlanExecutionSampleContractReason::NonFiniteActiveTarget);
+  EXPECT_EQ(contract.invalid_index, 1U);
+}
+
 }  // namespace

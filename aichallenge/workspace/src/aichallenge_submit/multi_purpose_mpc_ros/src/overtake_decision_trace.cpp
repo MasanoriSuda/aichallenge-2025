@@ -21,6 +21,11 @@ std::string finite_or_nan(const double value) {
   return stream.str();
 }
 
+std::string index_or_none(const std::size_t index) {
+  return index == std::numeric_limits<std::size_t>::max() ?
+         "none" : std::to_string(index);
+}
+
 std::string candidate_reason(const CandidateTrace &trace) {
   switch (classify_candidate(trace)) {
   case CandidateDisposition::NotEvaluated:
@@ -69,6 +74,13 @@ std::string format_candidate(const CandidateTrace &trace) {
            << ",preflight_reason=\""
            << reason_or(trace.static_wall_preflight_reason, "not-evaluated")
            << "\""
+           << ",preflight_samples=" << trace.static_wall_execution_samples
+           << "/" << trace.static_wall_active_samples
+           << ",preflight_range="
+           << index_or_none(trace.static_wall_first_active_index) << ":"
+           << index_or_none(trace.static_wall_last_active_index)
+           << ",preflight_invalid_index="
+           << index_or_none(trace.static_wall_invalid_index)
            << ",preflight_poses=" << trace.static_wall_checked_poses
            << ",backoff=" << trace.backoff_failures << "/"
            << finite_or_nan(trace.backoff_remaining_sec) << "s";
@@ -174,6 +186,7 @@ std::string categorical_signature(const DecisionTrace &trace) {
            << ":" << (candidate.static_wall_preflight_evaluated ? 1 : 0)
            << ":" << (candidate.static_wall_preflight_feasible ? 1 : 0)
            << ":" << candidate.static_wall_preflight_reason
+           << ":" << candidate.static_wall_invalid_index
            << ":" << candidate.backoff_failures;
   };
   stream << trace.attempt_id << "|" << trace.mission_episode_id << "|"

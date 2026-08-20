@@ -70,6 +70,55 @@ CorridorMetrics analyze_corridor(
   return metrics;
 }
 
+SpeedWindowResolution normalize_speed_window(
+  const double reference_mps, const double limit_mps, const double floor_mps,
+  const bool floor_active) noexcept
+{
+  SpeedWindowResolution result;
+  if (
+    std::isnan(reference_mps) || std::isnan(limit_mps) ||
+    (floor_active && (!std::isfinite(floor_mps) || floor_mps < 0.0)))
+  {
+    return result;
+  }
+  result.valid = true;
+  result.reference_mps = std::isfinite(reference_mps) ?
+    std::max(0.0, reference_mps) : std::numeric_limits<double>::infinity();
+  result.limit_mps = std::isfinite(limit_mps) ?
+    std::max(0.0, limit_mps) : std::numeric_limits<double>::infinity();
+  result.requested_floor_mps = floor_active ? floor_mps : 0.0;
+  result.floor_mps = result.requested_floor_mps;
+  const double upper_mps = std::min(result.reference_mps, result.limit_mps);
+  if (floor_active && std::isfinite(upper_mps) && result.floor_mps > upper_mps) {
+    result.floor_mps = upper_mps;
+    result.floor_adjusted = true;
+  }
+  return result;
+}
+
+WallClearanceContract resolve_wall_clearance_contract(
+  const double physical_clearance_m, const double planning_clearance_m,
+  const bool runtime_preplan_enabled, const double runtime_reserve_m) noexcept
+{
+  WallClearanceContract result;
+  if (
+    !std::isfinite(physical_clearance_m) || physical_clearance_m < 0.0 ||
+    !std::isfinite(planning_clearance_m) || planning_clearance_m < 0.0 ||
+    !std::isfinite(runtime_reserve_m) || runtime_reserve_m < 0.0)
+  {
+    return result;
+  }
+  result.valid = true;
+  result.physical_clearance_m = physical_clearance_m;
+  result.planning_clearance_m = std::max(
+    physical_clearance_m, planning_clearance_m);
+  result.runtime_reserve_m = runtime_preplan_enabled ? runtime_reserve_m : 0.0;
+  result.required_clearance_m = std::max(
+    result.planning_clearance_m,
+    result.physical_clearance_m + result.runtime_reserve_m);
+  return result;
+}
+
 AuthorityResolution resolve_authority(const AuthorityRequest & request) noexcept
 {
   AuthorityResolution result;
@@ -124,7 +173,7 @@ AuthorityResolution resolve_authority(const AuthorityRequest & request) noexcept
     if (request.phase == Phase::Recovery) {
       result.lateral_owner = LateralOwner::RecoveryLine;
     } else if (
-      request.dynamic_wait_active && request.dynamic_wait_forward_prefix_active)
+      request.dynamic_wait_active && request.dynamic_wait_lateral_authority_active)
     {
       result.lateral_owner = LateralOwner::DynamicWaitPrefix;
     } else if (
@@ -153,7 +202,7 @@ AuthorityResolution resolve_authority(const AuthorityRequest & request) noexcept
   {
     result.path_source = PathSource::ContactEscape;
   } else if (
-    request.dynamic_wait_active && request.dynamic_wait_forward_prefix_active)
+    request.dynamic_wait_active && request.dynamic_wait_lateral_authority_active)
   {
     result.path_source = PathSource::DynamicWaitPrefix;
   } else if (request.dynamic_obstacle_escape_active) {
@@ -201,7 +250,7 @@ AuthorityResolution resolve_authority(const AuthorityRequest & request) noexcept
     result.conflicts |= ReleasedPassWithFollowCap;
   }
   if (
-    request.dynamic_wait_active && !request.dynamic_wait_forward_prefix_active &&
+    request.dynamic_wait_active && !request.dynamic_wait_lateral_authority_active &&
     !request.line_active && !safety_active && request.phase != Phase::Recovery)
   {
     result.conflicts |= DynamicWaitWithoutLateralAuthority;
@@ -229,6 +278,15 @@ AuthorityResolution resolve_authority(const AuthorityRequest & request) noexcept
     request.speed_floor_mps > effective_upper + 1e-6)
   {
     result.conflicts |= InvalidSpeedWindow;
+  }
+  if (
+    request.line_active &&
+    finite_nonnegative(request.wall_contract_required_clearance_m) &&
+    std::isfinite(request.wall_contract_minimum_path_clearance_m) &&
+    request.wall_contract_minimum_path_clearance_m + 1e-6 <
+    request.wall_contract_required_clearance_m)
+  {
+    result.conflicts |= WallContractShortfall;
   }
   return result;
 }
@@ -345,6 +403,7 @@ std::string format_conflicts(const std::uint32_t conflicts)
   append(ActivePhaseWithoutTarget, "active-phase-without-target");
   append(MultipleLateralAuthorities, "multiple-lateral-authorities");
   append(InvalidSpeedWindow, "invalid-speed-window");
+  append(WallContractShortfall, "wall-contract-shortfall");
   return stream.str();
 }
 
@@ -364,6 +423,7 @@ std::string categorical_signature(const AuthorityTrace & trace)
          << (std::isfinite(trace.request.speed_reference_mps) ? 1 : 0) << "|"
          << (std::isfinite(trace.request.speed_limit_mps) ? 1 : 0) << "|"
          << (trace.request.pass_speed_floor_active ? 1 : 0) << "|"
+         << (trace.request.speed_floor_adjusted ? 1 : 0) << "|"
          << (trace.request.corridor_blocked ? 1 : 0) << "|"
          << (trace.request.dynamic_wait_active ? 1 : 0) << "|"
          << (trace.request.contact_continuation_active ? 1 : 0) << "|"
@@ -391,7 +451,9 @@ std::string format_authority_trace(const AuthorityTrace & trace)
          << ", gap=" << (trace.request.gap_planner_active ? 1 : 0)
          << ", dynamic_escape=" << (trace.request.dynamic_obstacle_escape_active ? 1 : 0)
          << ", mission_wait=" << (trace.request.dynamic_wait_active ? 1 : 0)
-         << "/prefix=" << (trace.request.dynamic_wait_forward_prefix_active ? 1 : 0)
+         << "/lateral=" <<
+    (trace.request.dynamic_wait_lateral_authority_active ? 1 : 0)
+         << "/forward=" << (trace.request.dynamic_wait_forward_prefix_active ? 1 : 0)
          << ", contact=" << (trace.request.contact_continuation_active ? 1 : 0)
          << "/precontact=" << (trace.request.precontact_escape_active ? 1 : 0)
          << ", safety="
@@ -401,6 +463,13 @@ std::string format_authority_trace(const AuthorityTrace & trace)
          << ", speed=" << finite_or(trace.request.speed_reference_mps, "inf")
          << "/" << finite_or(trace.request.speed_limit_mps, "inf")
          << "/" << finite_or(trace.request.speed_floor_mps, "nan")
+         << ", floor_request=" <<
+    finite_or(trace.request.requested_speed_floor_mps, "nan")
+         << "/adjusted=" << (trace.request.speed_floor_adjusted ? 1 : 0)
+         << ", wall_contract=" <<
+    finite_or(trace.request.wall_contract_minimum_path_clearance_m, "inf")
+         << "/" <<
+    finite_or(trace.request.wall_contract_required_clearance_m, "nan")
          << ", corridor_min="
          << finite_or(trace.constrained_corridor.minimum_width_m, "nan")
          << "@" << finite_or(trace.constrained_corridor.minimum_width_distance_m, "nan")
@@ -515,6 +584,44 @@ std::string final_control_signature(const FinalControlTrace & trace)
   return stream.str();
 }
 
+namespace {
+
+std::string structural_final_control_signature(const FinalControlTrace & trace)
+{
+  std::ostringstream stream;
+  if (trace.authority.has_value()) {
+    const auto & authority = trace.authority.value();
+    stream << (authority.resolution.relevant ? 1 : 0) << "|"
+           << authority.request.episode_id << "|"
+           << authority.request.mission_generation << "|"
+           << authority.request.target_id << "|"
+           << static_cast<int>(authority.request.phase) << "|"
+           << static_cast<int>(authority.request.behavior) << "|"
+           << static_cast<int>(authority.resolution.action) << "|"
+           << static_cast<int>(authority.resolution.lateral_owner) << "|"
+           << static_cast<int>(authority.resolution.path_source) << "|"
+           << authority.request.pass_side_sign << "|"
+           << authority.resolution.conflicts << "|"
+           << (authority.request.dynamic_wait_lateral_authority_active ? 1 : 0)
+           << "|" << (authority.request.contact_continuation_active ? 1 : 0)
+           << "|" << (authority.request.precontact_escape_active ? 1 : 0)
+           << "|" << (authority.request.speed_floor_adjusted ? 1 : 0);
+  } else {
+    stream << "no-authority";
+  }
+  stream << "|" << static_cast<int>(trace.control_source)
+         << "|" << (trace.published ? 1 : 0);
+  if (
+    trace.control_source == FinalControlSource::SolverFallback ||
+    trace.control_source == FinalControlSource::Failsafe)
+  {
+    stream << "|" << trace.solver_reason << "|" << trace.output_reason;
+  }
+  return stream.str();
+}
+
+}  // namespace
+
 std::string format_final_control_trace(const FinalControlTrace & trace)
 {
   std::ostringstream stream;
@@ -538,6 +645,9 @@ std::string format_final_control_trace(const FinalControlTrace & trace)
            << finite_or(authority.request.speed_reference_mps, "inf") << "/"
            << finite_or(authority.request.speed_limit_mps, "inf") << "/"
            << finite_or(authority.request.speed_floor_mps, "nan")
+           << ", floor_request="
+           << finite_or(authority.request.requested_speed_floor_mps, "nan")
+           << "/adjusted=" << (authority.request.speed_floor_adjusted ? 1 : 0)
            << ", conflict=" << format_conflicts(authority.resolution.conflicts)
            << ", transition=\""
            << (authority.request.transition_reason.empty() ? "none" :
@@ -555,6 +665,11 @@ std::string format_final_control_trace(const FinalControlTrace & trace)
            << "m, valid_until=" << finite_or(authority.static_valid_until_m, "nan")
            << "/" << finite_or(authority.dynamic_valid_until_m, "nan")
            << "m, rear_clear=" << finite_or(authority.predicted_rear_clear_m, "inf")
+           << "m, wall_contract="
+           << finite_or(
+      authority.request.wall_contract_minimum_path_clearance_m, "inf")
+           << "/"
+           << finite_or(authority.request.wall_contract_required_clearance_m, "nan")
            << "m, wp_id=" << authority.waypoint_id;
   } else {
     stream << ", episode=0, target=<none>, phase=unknown, authority=unavailable";
@@ -587,24 +702,41 @@ FinalTraceEmission ChangeAwareFinalControlTraceEmitter::update(
   if (!relevant && !was_relevant_) {
     return emission;
   }
-  emission.signature = final_control_signature(trace);
+  const std::string detail_signature = final_control_signature(trace);
+  emission.signature = structural_final_control_signature(trace);
   emission.state_changed = emission.signature != last_signature_;
+  const bool detail_changed = detail_signature != last_detail_signature_;
   const bool repeat_due =
     std::isfinite(now_sec) && std::isfinite(last_emit_sec_) &&
     std::isfinite(repeat_interval_sec) && repeat_interval_sec >= 0.0 &&
     now_sec >= last_emit_sec_ && now_sec - last_emit_sec_ >= repeat_interval_sec;
-  emission.emit = emission.state_changed || repeat_due;
   emission.warning =
     trace.control_source == FinalControlSource::SolverFallback ||
     trace.control_source == FinalControlSource::LowSpeedWallStop ||
     trace.control_source == FinalControlSource::Failsafe ||
     (trace.authority.has_value() &&
-    trace.authority->resolution.conflicts != NoConflict);
+    (trace.authority->resolution.conflicts != NoConflict ||
+    trace.authority->request.speed_floor_adjusted));
+  if (detail_changed && !emission.state_changed) {
+    ++suppressed_normal_change_count_;
+  }
+  // Every warning category belongs to the structural signature above, so its
+  // entry/change is immediate. Routine longitudinal-owner and speed-window
+  // category chatter is counted and reported by the next structural event or
+  // heartbeat instead of producing one line per control cycle.
+  emission.emit = emission.state_changed || repeat_due;
   if (emission.emit) {
     emission.message = format_final_control_trace(trace);
+    emission.suppressed_normal_change_count = suppressed_normal_change_count_;
+    if (suppressed_normal_change_count_ > 0U) {
+      emission.message += ", suppressed_normal_changes=" +
+        std::to_string(suppressed_normal_change_count_);
+    }
+    suppressed_normal_change_count_ = 0U;
     last_signature_ = emission.signature;
     last_emit_sec_ = now_sec;
   }
+  last_detail_signature_ = detail_signature;
   was_relevant_ = relevant;
   return emission;
 }
@@ -612,8 +744,10 @@ FinalTraceEmission ChangeAwareFinalControlTraceEmitter::update(
 void ChangeAwareFinalControlTraceEmitter::reset() noexcept
 {
   last_signature_.clear();
+  last_detail_signature_.clear();
   last_emit_sec_ = -std::numeric_limits<double>::infinity();
   was_relevant_ = false;
+  suppressed_normal_change_count_ = 0U;
 }
 
 void EpisodeAccumulator::begin(const EpisodeStart & start)

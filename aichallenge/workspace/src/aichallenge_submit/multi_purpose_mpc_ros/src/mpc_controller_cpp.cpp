@@ -2666,6 +2666,7 @@ struct OvertakeLineState
   bool terminal_pass_budget_rearm_consumed{false};
   bool dynamic_mission_wait_rear_clear_extension_logged{false};
   bool dynamic_mission_wait_forward_prefix_was_active{false};
+  bool dynamic_mission_wait_lateral_hold_was_active{false};
   bool dynamic_mission_wait_continuous_dp_was_active{false};
   bool dynamic_mission_wait_full_closing_was_active{false};
   double dynamic_mission_wait_best_target_longitudinal_m{
@@ -15497,8 +15498,30 @@ struct MPC
       }
     }
 
-    const auto overtake_line_output =
+    auto overtake_line_output =
       update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
+    const double requested_overtake_speed_floor_mps =
+      overtake_line_output.target_velocity_floor;
+    const auto normalized_overtake_speed_window =
+      overtake_orchestrator::normalize_speed_window(
+      overtake_line_output.target_velocity_reference,
+      overtake_line_output.target_velocity_limit,
+      requested_overtake_speed_floor_mps,
+      overtake_line_output.committed_pass_speed_floor_active);
+    if (normalized_overtake_speed_window.valid) {
+      overtake_line_output.target_velocity_reference =
+        normalized_overtake_speed_window.reference_mps;
+      overtake_line_output.target_velocity_limit =
+        normalized_overtake_speed_window.limit_mps;
+      overtake_line_output.target_velocity_floor =
+        normalized_overtake_speed_window.floor_mps;
+    } else if (overtake_line_output.committed_pass_speed_floor_active) {
+      // A malformed lower reference must never escape into the MPC.  Disable
+      // only the soft progress floor; finite reference/limit guards retain
+      // longitudinal safety ownership.
+      overtake_line_output.committed_pass_speed_floor_active = false;
+      overtake_line_output.target_velocity_floor = 0.0;
+    }
     const bool stage_corridor_requested =
       cfg.v2x_behavior.overtake_line.mpcc_stage_corridor_mpc_constraints_enabled &&
       overtake_line_output.active &&
@@ -15689,6 +15712,8 @@ struct MPC
       overtake_line_state_.dynamic_mission_wait_active;
     authority_request.dynamic_wait_forward_prefix_active =
       overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active;
+    authority_request.dynamic_wait_lateral_authority_active =
+      authority_request.dynamic_wait_active && overtake_line_output.active;
     authority_request.contact_continuation_active =
       behavior_output.recoverable_side_contact_active;
     authority_request.precontact_escape_active =
@@ -15716,6 +15741,30 @@ struct MPC
       overtake_line_output.target_velocity_limit;
     authority_request.speed_floor_mps =
       overtake_line_output.target_velocity_floor;
+    authority_request.requested_speed_floor_mps =
+      requested_overtake_speed_floor_mps;
+    authority_request.speed_floor_adjusted =
+      normalized_overtake_speed_window.floor_adjusted ||
+      (!normalized_overtake_speed_window.valid &&
+      requested_overtake_speed_floor_mps != 0.0);
+    const auto authority_robust_clearance = resolve_robust_clearance(ref_wp_id, N);
+    const auto authority_wall_contract =
+      overtake_orchestrator::resolve_wall_clearance_contract(
+      std::max(0.0, cfg.v2x_behavior.overtake_line.min_wall_clearance),
+      authority_robust_clearance.valid ?
+      authority_robust_clearance.wall_planning_clearance_m :
+      std::max(0.0, cfg.v2x_behavior.overtake_line.min_wall_clearance),
+      cfg.v2x_behavior.overtake_line.runtime_wall_preplan_enabled,
+      std::max(
+        0.0,
+        cfg.v2x_behavior.overtake_line.runtime_wall_preplan_reserve));
+    authority_request.wall_contract_required_clearance_m =
+      authority_wall_contract.valid ?
+      authority_wall_contract.required_clearance_m : 0.0;
+    authority_request.wall_contract_minimum_path_clearance_m =
+      overtake_line_state_.mission_plan.has_value() ?
+      overtake_line_state_.mission_plan->mission.minimum_path_wall_clearance_m :
+      std::numeric_limits<double>::infinity();
     authority_request.transition_reason = behavior_output.reason;
     authority_request.blocking_reason = behavior_output.overtake_block_reason;
     const auto execution_authority =
@@ -18892,6 +18941,7 @@ private:
         overtake_line_state_.pass_forward_completion_latched;
       if (previous_phase != OvertakeLinePhase::FollowPrepare) {
         overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active = false;
+        overtake_line_state_.dynamic_mission_wait_lateral_hold_was_active = false;
         overtake_line_state_.dynamic_mission_wait_continuous_dp_was_active = false;
         overtake_line_state_.dynamic_mission_wait_full_closing_was_active = false;
         overtake_line_state_.dynamic_mission_wait_predicted_overlap_since_sec =
@@ -18913,6 +18963,7 @@ private:
       overtake_line_state_.dynamic_mission_wait_terminal_budget_abort = false;
       overtake_line_state_.dynamic_mission_wait_rear_clear_extension_logged = false;
       overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active = false;
+      overtake_line_state_.dynamic_mission_wait_lateral_hold_was_active = false;
       overtake_line_state_.dynamic_mission_wait_continuous_dp_was_active = false;
       overtake_line_state_.dynamic_mission_wait_full_closing_was_active = false;
       overtake_line_state_.dynamic_mission_wait_best_target_longitudinal_m =
@@ -19608,6 +19659,7 @@ private:
     overtake_line_state_.shiftout_pass_entry_physical_hold_start_speed_mps = 0.0;
     overtake_line_state_.dynamic_mission_wait_rear_clear_extension_logged = false;
     overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active = false;
+    overtake_line_state_.dynamic_mission_wait_lateral_hold_was_active = false;
     overtake_line_state_.dynamic_mission_wait_continuous_dp_was_active = false;
     overtake_line_state_.dynamic_mission_wait_full_closing_was_active = false;
     overtake_line_state_.dynamic_mission_wait_best_target_longitudinal_m =
@@ -22490,9 +22542,17 @@ private:
 
     const auto & line_cfg = cfg.v2x_behavior.overtake_line;
     const auto robust_clearance = resolve_robust_clearance(ref_wp_id, N);
-    const double min_wall_clearance = robust_clearance.valid ?
-      robust_clearance.wall_planning_clearance_m :
+    const double physical_wall_clearance =
       std::max(0.0, line_cfg.min_wall_clearance);
+    const double robust_wall_clearance = robust_clearance.valid ?
+      robust_clearance.wall_planning_clearance_m : physical_wall_clearance;
+    const auto wall_contract =
+      overtake_orchestrator::resolve_wall_clearance_contract(
+      physical_wall_clearance, robust_wall_clearance,
+      line_cfg.runtime_wall_preplan_enabled,
+      std::max(0.0, line_cfg.runtime_wall_preplan_reserve));
+    const double min_wall_clearance = wall_contract.valid ?
+      wall_contract.required_clearance_m : robust_wall_clearance;
     const double target_center_separation = robust_clearance.valid ?
       robust_clearance.target_center_separation_m :
       std::max(0.0, cfg.v2x_behavior.overtake_line_min_target_separation);
@@ -22512,8 +22572,9 @@ private:
     double feasible_lower = lb[0] + min_wall_clearance;
     double feasible_upper = ub[0] - min_wall_clearance;
     if (feasible_upper < feasible_lower) {
-      feasible_lower = lb[0];
-      feasible_upper = ub[0];
+      result.feasible = false;
+      result.reason = "wall clearance contract does not fit candidate corridor";
+      return result;
     }
     if (fixed_goal_interval.has_value()) {
       const auto [candidate_lower, candidate_upper] = fixed_goal_interval.value();
@@ -23121,11 +23182,17 @@ private:
     const double current_ey = model->spatial_state.e_y;
     const double min_wall_clearance = std::max(0.0, line_cfg.min_wall_clearance);
     const auto robust_clearance = resolve_robust_clearance(ref_wp_id, N);
-    const double planning_wall_clearance = robust_clearance.valid ?
+    const double robust_planning_wall_clearance = robust_clearance.valid ?
       robust_clearance.wall_planning_clearance_m : min_wall_clearance;
+    const auto wall_contract =
+      overtake_orchestrator::resolve_wall_clearance_contract(
+      min_wall_clearance, robust_planning_wall_clearance,
+      line_cfg.runtime_wall_preplan_enabled,
+      std::max(0.0, line_cfg.runtime_wall_preplan_reserve));
+    const double planning_wall_clearance = wall_contract.valid ?
+      wall_contract.required_clearance_m : robust_planning_wall_clearance;
     const double runtime_wall_preplan_reserve = std::max(
-      std::max(0.0, line_cfg.runtime_wall_preplan_reserve),
-      std::max(0.0, planning_wall_clearance - min_wall_clearance));
+      0.0, planning_wall_clearance - min_wall_clearance);
     const double target_center_separation = robust_clearance.valid ?
       robust_clearance.target_center_separation_m :
       std::max(0.0, cfg.v2x_behavior.overtake_line_min_target_separation);
@@ -26061,10 +26128,71 @@ private:
               0.0, cfg.v2x_behavior.overtake_shiftout_max_closing_speed),
             std::max(0.0, cfg.v_max),
             contact_prefix_active});
+        const auto publish_lateral_prefix = [&]() {
+            output.active = true;
+            output.target_ey = prefix_horizon.target_ey;
+            output.path_distances = prefix_horizon.path_distances;
+            output.target_epsi.assign(static_cast<std::size_t>(N), 0.0);
+            output.target_active.assign(static_cast<std::size_t>(N), true);
+            output.receding_horizon_active = true;
+            output.receding_horizon_fallback = !continuous_dp_prefix_active;
+            output.receding_horizon_last_feasible_hold_active = true;
+            output.max_required_lateral_accel =
+              prefix_horizon.max_required_lateral_accel;
+            output.lateral_accel_limited = prefix_horizon.lateral_accel_limited;
+            output.wall_clearance_limited = prefix_horizon.wall_clearance_limited;
+            output.static_map_wall_limited = prefix_horizon.static_map_wall_limited;
+            output.static_map_margin_degraded =
+              prefix_horizon.static_map_margin_degraded;
+            output.static_map_reachable_projection_used =
+              prefix_horizon.static_map_reachable_projection_used;
+            output.static_map_wall_infeasible =
+              prefix_horizon.static_map_wall_infeasible;
+            output.static_map_profile_retention_ratio =
+              prefix_horizon.static_map_profile_retention_ratio;
+          };
         if (!prefix_policy.valid || !prefix_policy.active) {
+          const bool lateral_hold_available =
+            prefix_horizon.execution_feasible() && !dynamic_wait_hard_fault;
+          if (lateral_hold_available) {
+            publish_lateral_prefix();
+            output.receding_horizon_fallback = true;
+            output.receding_horizon_fallback_reason = physical_margin_fallback ?
+              "dynamic Mission lateral hold at physical margin" :
+              "dynamic Mission lateral hold at robust margin";
+            // DynamicWait still owns the lateral trajectory, but deliberately
+            // leaves velocity to Follow/front-risk when forward continuation
+            // cannot be proven.
+            output.target_velocity_reference =
+              std::numeric_limits<double>::infinity();
+            output.target_velocity_limit =
+              std::numeric_limits<double>::infinity();
+            output.target_velocity_floor = 0.0;
+            output.committed_pass_speed_floor_active = false;
+            output.committed_pass_speed_hold_active = false;
+            output.front_cap_release_ready = false;
+            if (
+              line_cfg.debug_log_enabled &&
+              !overtake_line_state_.dynamic_mission_wait_lateral_hold_was_active)
+            {
+              RCLCPP_WARN(
+                rclcpp::get_logger("mpc_controller"),
+                "OvertakeLine dynamic Mission lateral hold active: "
+                "target=%s, side=%d, forward_reason=%s, wall=%s, wp_id=%d",
+                overtake_line_state_.target_vehicle_id.c_str(), mission_side_sign,
+                prefix_policy.valid ? "forward-policy-inactive" : "invalid-policy",
+                physical_margin_fallback ? "physical" : "robust", model->wp_id);
+            }
+            overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active = false;
+            overtake_line_state_.dynamic_mission_wait_lateral_hold_was_active = true;
+            overtake_line_state_.dynamic_mission_wait_continuous_dp_was_active = false;
+            overtake_line_state_.dynamic_mission_wait_full_closing_was_active = false;
+            return true;
+          }
           if (
             line_cfg.debug_log_enabled &&
-            overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active)
+            (overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active ||
+            overtake_line_state_.dynamic_mission_wait_lateral_hold_was_active))
           {
             RCLCPP_WARN(
               rclcpp::get_logger("mpc_controller"),
@@ -26079,6 +26207,7 @@ private:
               dynamic_wait_hard_fault ? 1 : 0, model->wp_id);
           }
           overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active = false;
+          overtake_line_state_.dynamic_mission_wait_lateral_hold_was_active = false;
           overtake_line_state_.dynamic_mission_wait_continuous_dp_was_active = false;
           overtake_line_state_.dynamic_mission_wait_full_closing_was_active = false;
           overtake_line_state_.dynamic_mission_wait_predicted_overlap_since_sec =
@@ -26095,14 +26224,7 @@ private:
           overtake_line_state_.mission_frenet_dp_last_runtime_validation_sec = now_sec;
         }
 
-        output.active = true;
-        output.target_ey = prefix_horizon.target_ey;
-        output.path_distances = prefix_horizon.path_distances;
-        output.target_epsi.assign(static_cast<std::size_t>(N), 0.0);
-        output.target_active.assign(static_cast<std::size_t>(N), true);
-        output.receding_horizon_active = true;
-        output.receding_horizon_fallback = !continuous_dp_prefix_active;
-        output.receding_horizon_last_feasible_hold_active = true;
+        publish_lateral_prefix();
         output.receding_horizon_fallback_reason = continuous_dp_prefix_active ?
           "continuous DP execution retained through rolling replan" :
           physical_margin_fallback ?
@@ -26120,22 +26242,9 @@ private:
           prefix_policy.full_closing_authority;
         output.front_cap_release_ready =
           prefix_policy.full_closing_authority;
-        output.max_required_lateral_accel =
-          prefix_horizon.max_required_lateral_accel;
-        output.lateral_accel_limited = prefix_horizon.lateral_accel_limited;
-        output.wall_clearance_limited = prefix_horizon.wall_clearance_limited;
-        output.static_map_wall_limited = prefix_horizon.static_map_wall_limited;
-        output.static_map_margin_degraded =
-          prefix_horizon.static_map_margin_degraded;
-        output.static_map_reachable_projection_used =
-          prefix_horizon.static_map_reachable_projection_used;
-        output.static_map_wall_infeasible =
-          prefix_horizon.static_map_wall_infeasible;
-        output.static_map_profile_retention_ratio =
-          prefix_horizon.static_map_profile_retention_ratio;
-
         const bool prefix_state_changed =
           !overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active ||
+          overtake_line_state_.dynamic_mission_wait_lateral_hold_was_active ||
           overtake_line_state_.dynamic_mission_wait_continuous_dp_was_active !=
           continuous_dp_prefix_active ||
           overtake_line_state_.dynamic_mission_wait_full_closing_was_active !=
@@ -26159,6 +26268,7 @@ private:
             continuous_dp_reference.remaining_distance_m, model->wp_id);
         }
         overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active = true;
+        overtake_line_state_.dynamic_mission_wait_lateral_hold_was_active = false;
         overtake_line_state_.dynamic_mission_wait_continuous_dp_was_active =
           continuous_dp_prefix_active;
         overtake_line_state_.dynamic_mission_wait_full_closing_was_active =
@@ -26560,8 +26670,14 @@ private:
             return DynamicMissionWaitExecution::Handled;
           }
           case overtake_core::DynamicMissionWaitAction::Hold:
-            (void)publish_dynamic_wait_forward_prefix(
-              dynamic_wait_hard_fault, mission_side_sign);
+            if (!publish_dynamic_wait_forward_prefix(
+                dynamic_wait_hard_fault, mission_side_sign))
+            {
+              transition_overtake_line_phase(
+                OvertakeLinePhase::Recovery, now_sec, current_ey,
+                mission_side_sign,
+                "dynamic Mission wait has no wall-feasible lateral authority");
+            }
             return DynamicMissionWaitExecution::Handled;
           case overtake_core::DynamicMissionWaitAction::ResumeCurrent:
             overtake_line_state_.dynamic_mission_wait_active = false;

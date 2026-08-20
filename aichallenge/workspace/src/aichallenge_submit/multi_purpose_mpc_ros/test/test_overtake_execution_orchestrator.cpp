@@ -102,6 +102,66 @@ TEST(OvertakeExecutionOrchestrator, ClassifiesDynamicWaitWithoutPrefix)
     result.conflicts & orchestrator::DynamicWaitWithoutLateralAuthority, 0U);
 }
 
+TEST(OvertakeExecutionOrchestrator, DynamicWaitLateralHoldOwnsPathWithoutForwardAuthority)
+{
+  orchestrator::AuthorityRequest request;
+  request.episode_id = 2U;
+  request.target_id = "d3";
+  request.phase = orchestrator::Phase::FollowPrepare;
+  request.behavior = orchestrator::Behavior::Follow;
+  request.dynamic_wait_active = true;
+  request.dynamic_wait_lateral_authority_active = true;
+  request.dynamic_wait_forward_prefix_active = false;
+  request.line_active = true;
+
+  const auto result = orchestrator::resolve_authority(request);
+  EXPECT_EQ(result.action, orchestrator::Action::DynamicWait);
+  EXPECT_EQ(result.lateral_owner, orchestrator::LateralOwner::DynamicWaitPrefix);
+  EXPECT_EQ(result.path_source, orchestrator::PathSource::DynamicWaitPrefix);
+  EXPECT_EQ(
+    result.conflicts & orchestrator::DynamicWaitWithoutLateralAuthority, 0U);
+}
+
+TEST(OvertakeExecutionOrchestrator, NormalizesContradictorySpeedFloor)
+{
+  const auto result = orchestrator::normalize_speed_window(5.78, 8.0, 5.80, true);
+  ASSERT_TRUE(result.valid);
+  EXPECT_TRUE(result.floor_adjusted);
+  EXPECT_DOUBLE_EQ(result.requested_floor_mps, 5.80);
+  EXPECT_DOUBLE_EQ(result.floor_mps, 5.78);
+
+  orchestrator::AuthorityRequest request;
+  request.phase = orchestrator::Phase::Pass;
+  request.target_id = "d2";
+  request.pass_speed_floor_active = true;
+  request.speed_reference_mps = result.reference_mps;
+  request.speed_limit_mps = result.limit_mps;
+  request.speed_floor_mps = result.floor_mps;
+  EXPECT_EQ(
+    orchestrator::resolve_authority(request).conflicts &
+    orchestrator::InvalidSpeedWindow,
+    0U);
+}
+
+TEST(OvertakeExecutionOrchestrator, AlignsAdmissionAndRuntimeWallClearance)
+{
+  const auto result = orchestrator::resolve_wall_clearance_contract(
+    0.10, 0.15, true, 0.10);
+  ASSERT_TRUE(result.valid);
+  EXPECT_DOUBLE_EQ(result.required_clearance_m, 0.20);
+
+  orchestrator::AuthorityRequest request;
+  request.phase = orchestrator::Phase::Pass;
+  request.target_id = "d2";
+  request.line_active = true;
+  request.wall_contract_required_clearance_m = result.required_clearance_m;
+  request.wall_contract_minimum_path_clearance_m = 0.19;
+  EXPECT_NE(
+    orchestrator::resolve_authority(request).conflicts &
+    orchestrator::WallContractShortfall,
+    0U);
+}
+
 TEST(OvertakeExecutionOrchestrator, FindsFutureCorridorPinch)
 {
   const auto metrics = orchestrator::analyze_corridor(
@@ -257,6 +317,36 @@ TEST(OvertakeExecutionOrchestrator, JoinsAuthorityAndPublishedCommandByDecisionI
   EXPECT_NE(first.message.find("control_source=mpc-solution"), std::string::npos);
   trace.decision_id = 43U;
   EXPECT_FALSE(emitter.update(trace, 1.1).emit);
+}
+
+TEST(OvertakeExecutionOrchestrator, AggregatesNormalLongitudinalOwnerChatter)
+{
+  orchestrator::AuthorityTrace authority;
+  authority.request.episode_id = 8U;
+  authority.request.target_id = "d2";
+  authority.request.phase = orchestrator::Phase::Pass;
+  authority.request.behavior = orchestrator::Behavior::Overtake;
+  authority.request.line_active = true;
+  authority.resolution = orchestrator::resolve_authority(authority.request);
+
+  orchestrator::FinalControlTrace trace;
+  trace.authority = authority;
+  trace.control_source = orchestrator::FinalControlSource::MpcSolution;
+  trace.published = true;
+
+  orchestrator::ChangeAwareFinalControlTraceEmitter emitter;
+  EXPECT_TRUE(emitter.update(trace, 1.0, 1.0).emit);
+
+  trace.authority->request.follow_cap_active = true;
+  trace.authority->resolution =
+    orchestrator::resolve_authority(trace.authority->request);
+  EXPECT_FALSE(emitter.update(trace, 1.1, 1.0).emit);
+
+  const auto heartbeat = emitter.update(trace, 2.1, 1.0);
+  EXPECT_TRUE(heartbeat.emit);
+  EXPECT_EQ(heartbeat.suppressed_normal_change_count, 1U);
+  EXPECT_NE(
+    heartbeat.message.find("suppressed_normal_changes=1"), std::string::npos);
 }
 
 }  // namespace

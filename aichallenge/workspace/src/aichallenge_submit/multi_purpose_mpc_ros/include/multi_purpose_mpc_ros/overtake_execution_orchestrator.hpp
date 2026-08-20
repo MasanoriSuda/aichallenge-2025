@@ -83,6 +83,7 @@ enum AuthorityConflict : std::uint32_t {
   ActivePhaseWithoutTarget = 1U << 4U,
   MultipleLateralAuthorities = 1U << 5U,
   InvalidSpeedWindow = 1U << 6U,
+  WallContractShortfall = 1U << 7U,
 };
 
 struct CorridorMetrics {
@@ -92,6 +93,31 @@ struct CorridorMetrics {
   double minimum_width_m{std::numeric_limits<double>::infinity()};
   double minimum_width_distance_m{std::numeric_limits<double>::quiet_NaN()};
 };
+
+struct SpeedWindowResolution {
+  bool valid{false};
+  bool floor_adjusted{false};
+  double reference_mps{std::numeric_limits<double>::infinity()};
+  double limit_mps{std::numeric_limits<double>::infinity()};
+  double requested_floor_mps{0.0};
+  double floor_mps{0.0};
+};
+
+SpeedWindowResolution normalize_speed_window(
+  double reference_mps, double limit_mps, double floor_mps,
+  bool floor_active) noexcept;
+
+struct WallClearanceContract {
+  bool valid{false};
+  double physical_clearance_m{0.0};
+  double planning_clearance_m{0.0};
+  double runtime_reserve_m{0.0};
+  double required_clearance_m{0.0};
+};
+
+WallClearanceContract resolve_wall_clearance_contract(
+  double physical_clearance_m, double planning_clearance_m,
+  bool runtime_preplan_enabled, double runtime_reserve_m) noexcept;
 
 CorridorMetrics analyze_corridor(
   const std::vector<double> & lower_m,
@@ -115,6 +141,7 @@ struct AuthorityRequest {
   bool dynamic_obstacle_follow_cap_suppressed{false};
   bool dynamic_wait_active{false};
   bool dynamic_wait_forward_prefix_active{false};
+  bool dynamic_wait_lateral_authority_active{false};
   bool contact_continuation_active{false};
   bool precontact_escape_active{false};
   bool emergency_brake_active{false};
@@ -127,6 +154,11 @@ struct AuthorityRequest {
   double speed_reference_mps{std::numeric_limits<double>::infinity()};
   double speed_limit_mps{std::numeric_limits<double>::infinity()};
   double speed_floor_mps{0.0};
+  double requested_speed_floor_mps{0.0};
+  bool speed_floor_adjusted{false};
+  double wall_contract_required_clearance_m{0.0};
+  double wall_contract_minimum_path_clearance_m{
+    std::numeric_limits<double>::infinity()};
   std::string transition_reason;
   std::string blocking_reason;
 };
@@ -235,6 +267,7 @@ struct FinalTraceEmission {
   bool emit{false};
   bool state_changed{false};
   bool warning{false};
+  std::size_t suppressed_normal_change_count{0U};
   std::string signature;
   std::string message;
 };
@@ -251,8 +284,10 @@ public:
 
 private:
   std::string last_signature_;
+  std::string last_detail_signature_;
   double last_emit_sec_{-std::numeric_limits<double>::infinity()};
   bool was_relevant_{false};
+  std::size_t suppressed_normal_change_count_{0U};
 };
 
 struct EpisodeStart {

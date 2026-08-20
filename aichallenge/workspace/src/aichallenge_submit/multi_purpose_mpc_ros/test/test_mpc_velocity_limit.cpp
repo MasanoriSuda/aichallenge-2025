@@ -59,6 +59,7 @@ TEST(MpcVelocityLimit, RejectsInvalidInputs)
 
 TEST(MpcVelocityLimit, EnablesSimulationSolverFailureCrawlOnlyOnClearCruise)
 {
+  using multi_purpose_mpc_ros::mpc_velocity_limit::SolverFailureCrawlBlockReason;
   using multi_purpose_mpc_ros::mpc_velocity_limit::SolverFailureCrawlRequest;
   using multi_purpose_mpc_ros::mpc_velocity_limit::resolve_solver_failure_crawl;
 
@@ -79,12 +80,17 @@ TEST(MpcVelocityLimit, EnablesSimulationSolverFailureCrawlOnlyOnClearCruise)
   const auto enabled = resolve_solver_failure_crawl(request);
   EXPECT_TRUE(enabled.active);
   EXPECT_DOUBLE_EQ(enabled.target_speed_mps, 0.8);
+  EXPECT_EQ(enabled.block_reason, SolverFailureCrawlBlockReason::None);
 
   request.front_vehicle_detected = true;
-  EXPECT_FALSE(resolve_solver_failure_crawl(request).active);
+  auto blocked = resolve_solver_failure_crawl(request);
+  EXPECT_FALSE(blocked.active);
+  EXPECT_EQ(blocked.block_reason, SolverFailureCrawlBlockReason::FrontVehicleDetected);
   request.front_vehicle_detected = false;
   request.unrestricted_cruise = false;
-  EXPECT_FALSE(resolve_solver_failure_crawl(request).active);
+  blocked = resolve_solver_failure_crawl(request);
+  EXPECT_FALSE(blocked.active);
+  EXPECT_EQ(blocked.block_reason, SolverFailureCrawlBlockReason::NotUnrestrictedCruise);
 }
 
 TEST(MpcVelocityLimit, SolverFailureCrawlFailsClosedOutsideSimulationOrOnInvalidSpeed)
@@ -111,6 +117,7 @@ TEST(MpcVelocityLimit, SolverFailureCrawlFailsClosedOutsideSimulationOrOnInvalid
 
 TEST(MpcVelocityLimit, SolverFailureCrawlRequiresSafePathTrackingEnvelope)
 {
+  using multi_purpose_mpc_ros::mpc_velocity_limit::SolverFailureCrawlBlockReason;
   using multi_purpose_mpc_ros::mpc_velocity_limit::SolverFailureCrawlRequest;
   using multi_purpose_mpc_ros::mpc_velocity_limit::resolve_solver_failure_crawl;
 
@@ -131,7 +138,9 @@ TEST(MpcVelocityLimit, SolverFailureCrawlRequiresSafePathTrackingEnvelope)
   EXPECT_TRUE(resolve_solver_failure_crawl(request).active);
 
   request.lateral_error_m = 0.5001;
-  EXPECT_FALSE(resolve_solver_failure_crawl(request).active);
+  auto blocked = resolve_solver_failure_crawl(request);
+  EXPECT_FALSE(blocked.active);
+  EXPECT_EQ(blocked.block_reason, SolverFailureCrawlBlockReason::TrackingEnvelopeUnsafe);
   request.lateral_error_m = 0.0;
   request.heading_error_rad = -0.3501;
   EXPECT_FALSE(resolve_solver_failure_crawl(request).active);

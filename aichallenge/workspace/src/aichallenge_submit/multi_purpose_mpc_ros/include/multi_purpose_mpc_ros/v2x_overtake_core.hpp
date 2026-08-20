@@ -5365,6 +5365,38 @@ struct AdaptiveShiftOutClosingSpeedResolution
 AdaptiveShiftOutClosingSpeedResolution resolve_adaptive_shiftout_closing_speed(
   const AdaptiveShiftOutClosingSpeedRequest & request);
 
+struct FrontLongitudinalSafetyEnvelopeRequest
+{
+  double ego_speed_mps{};
+  double target_speed_mps{};
+  double maximum_deceleration_mps2{};
+  double moving_front_speed_threshold_mps{};
+  double moving_safety_distance_m{};
+  double moving_safety_margin_m{};
+  double moving_time_headway_sec{};
+  double stopped_safety_distance_m{};
+  double stopped_safety_margin_m{};
+  double body_longitudinal_clearance_m{};
+  double unseparated_reserve_distance_m{};
+};
+
+struct FrontLongitudinalSafetyEnvelopeResolution
+{
+  bool valid{false};
+  bool moving_front{false};
+  double relative_speed_mps{};
+  double stopping_distance_m{};
+  double time_headway_distance_m{};
+  double safety_distance_m{};
+  double protected_distance_m{};
+};
+
+/// Resolve the one longitudinal safety contract shared by front-risk,
+/// Overtake entry and the unseparated ShiftOut/Pass closing-speed owner.
+FrontLongitudinalSafetyEnvelopeResolution
+resolve_front_longitudinal_safety_envelope(
+  const FrontLongitudinalSafetyEnvelopeRequest & request) noexcept;
+
 struct OvertakeEntryFrontDistanceReserveRequest
 {
   bool enabled{false};
@@ -5402,6 +5434,7 @@ struct LateralClearanceClosingReserveRequest
   bool lateral_body_separation_established{false};
   double target_longitudinal_m{};
   double current_closing_speed_limit_mps{};
+  double dynamic_front_safety_distance_m{};
   double moving_front_hard_distance_m{};
   double body_longitudinal_clearance_m{};
   double reserve_distance_m{};

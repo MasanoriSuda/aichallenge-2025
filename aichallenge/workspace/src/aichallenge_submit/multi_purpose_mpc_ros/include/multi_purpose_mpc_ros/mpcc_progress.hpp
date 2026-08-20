@@ -414,11 +414,30 @@ enum class ExtendedBranchSelectionReason
   FallbackTieBreak,
 };
 
+enum class ExtendedBranchEligibility
+{
+  Robust,
+  PhysicalBoundaryFallback,
+  InvalidSide,
+  NotAttempted,
+  SolverInfeasible,
+  InvalidObjective,
+  InvalidBoundReserve,
+  PhysicalWallUnchecked,
+  PhysicalWallFailed,
+  InsufficientBoundReserve,
+};
+
 struct ExtendedBranchSelectionResolution
 {
   bool valid{false};
   int selected_side_sign{};
   double objective_advantage{};
+  bool physical_boundary_fallback_used{false};
+  ExtendedBranchEligibility left_eligibility{
+    ExtendedBranchEligibility::NotAttempted};
+  ExtendedBranchEligibility right_eligibility{
+    ExtendedBranchEligibility::NotAttempted};
   ExtendedBranchSelectionReason reason{ExtendedBranchSelectionReason::None};
 };
 
@@ -467,6 +486,8 @@ ExtendedBranchSelectionResolution select_extended_branch(
 
 const char * extended_branch_selection_reason_name(
   ExtendedBranchSelectionReason reason) noexcept;
+const char * extended_branch_eligibility_name(
+  ExtendedBranchEligibility eligibility) noexcept;
 
 struct ExecutionTrajectory
 {

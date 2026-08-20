@@ -789,16 +789,62 @@ ExtendedBranchSelectionResolution select_extended_branch(
   {
     return resolution;
   }
-  const auto eligible = [&request](const ExtendedBranchEvaluation & branch) {
-      return
-        (branch.side_sign == -1 || branch.side_sign == 1) &&
-        branch.attempted && branch.feasible && std::isfinite(branch.objective) &&
-        std::isfinite(branch.minimum_lateral_bound_reserve_m) &&
+  const auto classify = [&request](const ExtendedBranchEvaluation & branch) {
+      if (branch.side_sign != -1 && branch.side_sign != 1) {
+        return ExtendedBranchEligibility::InvalidSide;
+      }
+      if (!branch.attempted) {
+        return ExtendedBranchEligibility::NotAttempted;
+      }
+      if (!branch.feasible) {
+        return ExtendedBranchEligibility::SolverInfeasible;
+      }
+      if (!std::isfinite(branch.objective)) {
+        return ExtendedBranchEligibility::InvalidObjective;
+      }
+      if (!std::isfinite(branch.minimum_lateral_bound_reserve_m)) {
+        return ExtendedBranchEligibility::InvalidBoundReserve;
+      }
+      if (!branch.physical_wall_validation_attempted) {
+        return ExtendedBranchEligibility::PhysicalWallUnchecked;
+      }
+      if (!branch.physical_wall_validation_passed) {
+        return ExtendedBranchEligibility::PhysicalWallFailed;
+      }
+      if (
         branch.minimum_lateral_bound_reserve_m + 1e-9 >=
-        request.minimum_lateral_bound_reserve_m;
+        request.minimum_lateral_bound_reserve_m)
+      {
+        return ExtendedBranchEligibility::Robust;
+      }
+      // The configured reserve is an extra robustness preference on top of
+      // the QP hard bounds. If no robust branch exists, retain a numerically
+      // on-bound solution only after its continuous physical wall contract
+      // has independently passed. A wall-unchecked or wall-failed branch is
+      // never promoted by this fallback.
+      if (
+        branch.minimum_lateral_bound_reserve_m >= -1e-9)
+      {
+        return ExtendedBranchEligibility::PhysicalBoundaryFallback;
+      }
+      return ExtendedBranchEligibility::InsufficientBoundReserve;
     };
-  const bool left_feasible = eligible(request.left) && request.left.side_sign == 1;
-  const bool right_feasible = eligible(request.right) && request.right.side_sign == -1;
+  resolution.left_eligibility = classify(request.left);
+  resolution.right_eligibility = classify(request.right);
+  const bool left_robust =
+    resolution.left_eligibility == ExtendedBranchEligibility::Robust &&
+    request.left.side_sign == 1;
+  const bool right_robust =
+    resolution.right_eligibility == ExtendedBranchEligibility::Robust &&
+    request.right.side_sign == -1;
+  const bool left_boundary =
+    resolution.left_eligibility ==
+    ExtendedBranchEligibility::PhysicalBoundaryFallback &&
+    request.left.side_sign == 1;
+  const bool right_boundary =
+    resolution.right_eligibility ==
+    ExtendedBranchEligibility::PhysicalBoundaryFallback &&
+    request.right.side_sign == -1;
   const auto branch_for_side = [&request](const int side)
     -> const ExtendedBranchEvaluation * {
       if (side == 1 && request.left.side_sign == 1) {
@@ -809,18 +855,34 @@ ExtendedBranchSelectionResolution select_extended_branch(
       }
       return nullptr;
     };
-  const auto side_feasible = [&](const int side) {
-      return side == 1 ? left_feasible : side == -1 ? right_feasible : false;
+  const auto side_eligible = [&](const int side) {
+      return side == 1 ? left_robust || left_boundary :
+             side == -1 ? right_robust || right_boundary : false;
+    };
+  const auto side_is_boundary = [&](const int side) {
+      return side == 1 ? left_boundary : side == -1 ? right_boundary : false;
     };
   if (
     request.no_return && request.current_side_sign != 0 &&
-    side_feasible(request.current_side_sign))
+    side_eligible(request.current_side_sign))
   {
     resolution.valid = true;
     resolution.selected_side_sign = request.current_side_sign;
+    resolution.physical_boundary_fallback_used =
+      side_is_boundary(request.current_side_sign);
     resolution.reason = ExtendedBranchSelectionReason::NoReturnCurrentSide;
     return resolution;
   }
+  // A robust branch always wins over a boundary fallback, regardless of the
+  // objective. Only compare boundary branches when no robust branch exists.
+  const bool robust_pool_available = left_robust || right_robust;
+  const bool left_feasible = robust_pool_available ? left_robust : left_boundary;
+  const bool right_feasible = robust_pool_available ? right_robust : right_boundary;
+  resolution.physical_boundary_fallback_used =
+    !robust_pool_available && (left_feasible || right_feasible);
+  const auto side_feasible = [&](const int side) {
+      return side == 1 ? left_feasible : side == -1 ? right_feasible : false;
+    };
   if (!left_feasible && !right_feasible) {
     return resolution;
   }
@@ -938,6 +1000,34 @@ const char * extended_branch_selection_reason_name(
       return "no-return current side";
     case ExtendedBranchSelectionReason::FallbackTieBreak:
       return "fallback tie-break";
+  }
+  return "unknown";
+}
+
+const char * extended_branch_eligibility_name(
+  const ExtendedBranchEligibility eligibility) noexcept
+{
+  switch (eligibility) {
+    case ExtendedBranchEligibility::Robust:
+      return "robust";
+    case ExtendedBranchEligibility::PhysicalBoundaryFallback:
+      return "physical-boundary";
+    case ExtendedBranchEligibility::InvalidSide:
+      return "invalid-side";
+    case ExtendedBranchEligibility::NotAttempted:
+      return "not-attempted";
+    case ExtendedBranchEligibility::SolverInfeasible:
+      return "solver-infeasible";
+    case ExtendedBranchEligibility::InvalidObjective:
+      return "invalid-objective";
+    case ExtendedBranchEligibility::InvalidBoundReserve:
+      return "invalid-bound-reserve";
+    case ExtendedBranchEligibility::PhysicalWallUnchecked:
+      return "wall-unchecked";
+    case ExtendedBranchEligibility::PhysicalWallFailed:
+      return "wall-failed";
+    case ExtendedBranchEligibility::InsufficientBoundReserve:
+      return "insufficient-bound-reserve";
   }
   return "unknown";
 }

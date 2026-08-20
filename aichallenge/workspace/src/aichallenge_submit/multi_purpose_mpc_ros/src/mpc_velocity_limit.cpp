@@ -37,8 +37,24 @@ SolverFailureCrawlDecision resolve_solver_failure_crawl(
   SolverFailureCrawlDecision decision;
   if (
     !request.simulation_environment || !request.enabled || !request.control_enabled ||
-    !request.solver_fallback || !request.unrestricted_cruise ||
-    request.front_vehicle_detected || !request.current_static_footprint_clear ||
+    !request.solver_fallback)
+  {
+    decision.block_reason = SolverFailureCrawlBlockReason::Disabled;
+    return decision;
+  }
+  if (!request.unrestricted_cruise) {
+    decision.block_reason = SolverFailureCrawlBlockReason::NotUnrestrictedCruise;
+    return decision;
+  }
+  if (request.front_vehicle_detected) {
+    decision.block_reason = SolverFailureCrawlBlockReason::FrontVehicleDetected;
+    return decision;
+  }
+  if (!request.current_static_footprint_clear) {
+    decision.block_reason = SolverFailureCrawlBlockReason::StaticFootprintUnsafe;
+    return decision;
+  }
+  if (
     !std::isfinite(request.lateral_error_m) ||
     !std::isfinite(request.heading_error_rad) ||
     !std::isfinite(request.max_lateral_error_m) ||
@@ -46,19 +62,48 @@ SolverFailureCrawlDecision resolve_solver_failure_crawl(
     !std::isfinite(request.max_heading_error_rad) ||
     request.max_heading_error_rad < 0.0 ||
     std::abs(request.lateral_error_m) > request.max_lateral_error_m ||
-    std::abs(request.heading_error_rad) > request.max_heading_error_rad ||
+    std::abs(request.heading_error_rad) > request.max_heading_error_rad)
+  {
+    decision.block_reason = SolverFailureCrawlBlockReason::TrackingEnvelopeUnsafe;
+    return decision;
+  }
+  if (
     !std::isfinite(request.configured_speed_mps) ||
     request.configured_speed_mps <= 0.0 ||
     !std::isfinite(request.effective_speed_limit_mps) ||
     request.effective_speed_limit_mps <= 0.0)
   {
+    decision.block_reason = SolverFailureCrawlBlockReason::InvalidSpeed;
     return decision;
   }
 
   decision.target_speed_mps = std::min(
     request.configured_speed_mps, request.effective_speed_limit_mps);
   decision.active = decision.target_speed_mps > 0.0;
+  decision.block_reason = decision.active ?
+    SolverFailureCrawlBlockReason::None : SolverFailureCrawlBlockReason::InvalidSpeed;
   return decision;
+}
+
+const char * to_string(const SolverFailureCrawlBlockReason reason) noexcept
+{
+  switch (reason) {
+    case SolverFailureCrawlBlockReason::None:
+      return "none";
+    case SolverFailureCrawlBlockReason::Disabled:
+      return "disabled";
+    case SolverFailureCrawlBlockReason::NotUnrestrictedCruise:
+      return "not-unrestricted-cruise";
+    case SolverFailureCrawlBlockReason::FrontVehicleDetected:
+      return "front-vehicle-detected";
+    case SolverFailureCrawlBlockReason::StaticFootprintUnsafe:
+      return "static-footprint-unsafe";
+    case SolverFailureCrawlBlockReason::TrackingEnvelopeUnsafe:
+      return "tracking-envelope-unsafe";
+    case SolverFailureCrawlBlockReason::InvalidSpeed:
+      return "invalid-speed";
+  }
+  return "unknown";
 }
 
 SolverFailureContinuationDecision resolve_solver_failure_continuation(

@@ -4928,7 +4928,7 @@ SafeSeparationResolution resolve_safe_separation(
   // absolute bound has been crossed.
   if (
     absolute_distance_limit_reached &&
-    (!forward_escape_active || side_by_side_rear_clear_completion_active))
+    !forward_escape_active)
   {
     resolution.action = SafeSeparationAction::Abort;
     resolution.reason = SafeSeparationReason::AbsoluteDistanceLimit;
@@ -4936,7 +4936,7 @@ SafeSeparationResolution resolve_safe_separation(
   }
   if (
     absolute_time_limit_reached &&
-    (!forward_escape_active || side_by_side_rear_clear_completion_active))
+    !forward_escape_active)
   {
     resolution.action = SafeSeparationAction::Abort;
     resolution.reason = SafeSeparationReason::AbsoluteTimeLimit;
@@ -9715,6 +9715,57 @@ AdaptiveShiftOutClosingSpeedResolution resolve_adaptive_shiftout_closing_speed(
     distance_budget};
 }
 
+FrontLongitudinalSafetyEnvelopeResolution
+resolve_front_longitudinal_safety_envelope(
+  const FrontLongitudinalSafetyEnvelopeRequest & request) noexcept
+{
+  FrontLongitudinalSafetyEnvelopeResolution resolution;
+  const auto finite_non_negative = [](const double value) {
+      return std::isfinite(value) && value >= 0.0;
+    };
+  if (
+    !finite_non_negative(request.ego_speed_mps) ||
+    !finite_non_negative(request.target_speed_mps) ||
+    !std::isfinite(request.maximum_deceleration_mps2) ||
+    request.maximum_deceleration_mps2 <= 0.0 ||
+    !finite_non_negative(request.moving_front_speed_threshold_mps) ||
+    !finite_non_negative(request.moving_safety_distance_m) ||
+    !finite_non_negative(request.moving_safety_margin_m) ||
+    !finite_non_negative(request.moving_time_headway_sec) ||
+    !finite_non_negative(request.stopped_safety_distance_m) ||
+    !finite_non_negative(request.stopped_safety_margin_m) ||
+    !finite_non_negative(request.body_longitudinal_clearance_m) ||
+    !finite_non_negative(request.unseparated_reserve_distance_m))
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  resolution.moving_front =
+    request.target_speed_mps > request.moving_front_speed_threshold_mps;
+  resolution.relative_speed_mps = resolution.moving_front ?
+    std::max(0.0, request.ego_speed_mps - request.target_speed_mps) :
+    request.ego_speed_mps;
+  const double safety_margin_m = resolution.moving_front ?
+    request.moving_safety_margin_m : request.stopped_safety_margin_m;
+  resolution.stopping_distance_m =
+    resolution.relative_speed_mps * resolution.relative_speed_mps /
+    (2.0 * request.maximum_deceleration_mps2) + safety_margin_m;
+  resolution.time_headway_distance_m = resolution.moving_front ?
+    request.ego_speed_mps * request.moving_time_headway_sec : 0.0;
+  const double configured_floor_m = resolution.moving_front ?
+    request.moving_safety_distance_m : request.stopped_safety_distance_m;
+  resolution.safety_distance_m = std::max({
+      configured_floor_m,
+      resolution.stopping_distance_m,
+      resolution.time_headway_distance_m});
+  resolution.protected_distance_m = std::max(
+    resolution.safety_distance_m,
+    request.body_longitudinal_clearance_m) +
+    request.unseparated_reserve_distance_m;
+  return resolution;
+}
+
 OvertakeEntryFrontDistanceReserveResolution
 resolve_overtake_entry_front_distance_reserve(
   const OvertakeEntryFrontDistanceReserveRequest & request) noexcept
@@ -9779,7 +9830,9 @@ LateralClearanceClosingReserveResolution resolve_lateral_clearance_closing_reser
 
   resolution.protected_front_distance_m =
     std::max(
-    std::max(0.0, request.moving_front_hard_distance_m),
+    std::max(
+      std::max(0.0, request.dynamic_front_safety_distance_m),
+      std::max(0.0, request.moving_front_hard_distance_m)),
     std::max(0.0, request.body_longitudinal_clearance_m)) +
     std::max(0.0, request.reserve_distance_m);
   const auto adaptive = resolve_adaptive_shiftout_closing_speed(

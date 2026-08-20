@@ -80,6 +80,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::CompletedPassReturnRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ReturnCorridorOccupancyRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::EarlyReturnCancellationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::AdaptiveShiftOutClosingSpeedRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::FrontLongitudinalSafetyEnvelopeRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::LateralClearanceClosingReserveRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeEntryFrontDistanceReserveRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeGuardPhaseRequest;
@@ -387,6 +388,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::blocks_overtake_return_corridor;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_cancel_early_overtake_return;
 using multi_purpose_mpc_ros::v2x_overtake_core::has_reached_pass_side_lateral_goal;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_adaptive_shiftout_closing_speed;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  resolve_front_longitudinal_safety_envelope;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_lateral_clearance_closing_reserve;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   resolve_overtake_entry_front_distance_reserve;
@@ -8505,9 +8508,17 @@ TEST(V2XOvertakeCoreHorizon, FinishesSideBySideRearClearTailWithinAbsoluteBudget
   request.absolute_traveled_m = 40.0;
   resolution = resolve_safe_separation(request);
   EXPECT_EQ(resolution.action, SafeSeparationAction::Abort);
-  EXPECT_EQ(resolution.reason, SafeSeparationReason::AbsoluteDistanceLimit);
+  EXPECT_EQ(resolution.reason, SafeSeparationReason::LocalDistanceLimit);
+
+  // Once the side-by-side forward window has started, crossing the absolute
+  // Mission budget alone must not terminate it before its local budget.
+  request.traveled_m = 3.0;
+  resolution = resolve_safe_separation(request);
+  EXPECT_EQ(resolution.action, SafeSeparationAction::KeepSameSide);
+  EXPECT_TRUE(resolution.forward_escape_active);
 
   request.absolute_traveled_m = 34.1;
+  request.traveled_m = 12.0;
   request.short_horizon_safe = false;
   resolution = resolve_safe_separation(request);
   EXPECT_EQ(resolution.action, SafeSeparationAction::Abort);
@@ -10792,6 +10803,39 @@ TEST(V2XOvertakeCoreSpeed, LateralClearanceClosingReserveOwnsProtectionBeforeOve
   EXPECT_FALSE(result.limited);
   EXPECT_DOUBLE_EQ(result.closing_speed_limit_mps, 0.5);
   EXPECT_DOUBLE_EQ(result.protected_front_distance_m, 0.0);
+}
+
+TEST(V2XOvertakeCoreSpeed, FrontSafetyEnvelopeIsSharedAcrossMovingFrontPolicies)
+{
+  FrontLongitudinalSafetyEnvelopeRequest request;
+  request.ego_speed_mps = 11.11;
+  request.target_speed_mps = 3.33;
+  request.maximum_deceleration_mps2 = 3.0;
+  request.moving_front_speed_threshold_mps = 0.5;
+  request.moving_safety_distance_m = 2.2;
+  request.moving_safety_margin_m = 0.3;
+  request.moving_time_headway_sec = 0.3;
+  request.stopped_safety_distance_m = 3.0;
+  request.stopped_safety_margin_m = 0.5;
+  request.body_longitudinal_clearance_m = 2.05;
+  request.unseparated_reserve_distance_m = 0.25;
+
+  const auto result = resolve_front_longitudinal_safety_envelope(request);
+  ASSERT_TRUE(result.valid);
+  EXPECT_TRUE(result.moving_front);
+  EXPECT_NEAR(result.relative_speed_mps, 7.78, 1e-9);
+  EXPECT_NEAR(result.stopping_distance_m, 10.3880666667, 1e-9);
+  EXPECT_NEAR(result.safety_distance_m, result.stopping_distance_m, 1e-9);
+  EXPECT_NEAR(result.protected_distance_m, result.safety_distance_m + 0.25, 1e-9);
+}
+
+TEST(V2XOvertakeCoreSpeed, FrontSafetyEnvelopeFailsClosedOnInvalidDeceleration)
+{
+  FrontLongitudinalSafetyEnvelopeRequest request;
+  request.ego_speed_mps = 5.0;
+  request.target_speed_mps = 2.0;
+  request.maximum_deceleration_mps2 = 0.0;
+  EXPECT_FALSE(resolve_front_longitudinal_safety_envelope(request).valid);
 }
 
 TEST(V2XOvertakeCoreSpeed, EntryReserveUsesBodyClearTimeAndClosingProfile)

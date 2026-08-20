@@ -592,6 +592,82 @@ TEST(MpccProgress, SelectsOnlyFeasibleExtendedBranch)
   EXPECT_EQ(result.reason, ExtendedBranchSelectionReason::OnlyRightFeasible);
 }
 
+TEST(MpccProgress, UsesPhysicallyValidatedBoundaryBranchWhenNoRobustBranchExists)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::ExtendedBranchEligibility;
+  using multi_purpose_mpc_ros::mpcc_progress::ExtendedBranchEvaluation;
+  using multi_purpose_mpc_ros::mpcc_progress::ExtendedBranchSelectionRequest;
+  ExtendedBranchEvaluation right;
+  right.side_sign = -1;
+  right.attempted = true;
+  right.feasible = true;
+  right.objective = 12.0;
+  right.minimum_lateral_bound_reserve_m = 0.0;
+  right.physical_wall_validation_attempted = true;
+  right.physical_wall_validation_passed = true;
+
+  const auto result = multi_purpose_mpc_ros::mpcc_progress::select_extended_branch(
+    ExtendedBranchSelectionRequest{
+      ExtendedBranchEvaluation{}, right, 0, 1, false, 1.0, 0.02});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_EQ(result.selected_side_sign, -1);
+  EXPECT_TRUE(result.physical_boundary_fallback_used);
+  EXPECT_EQ(
+    result.right_eligibility,
+    ExtendedBranchEligibility::PhysicalBoundaryFallback);
+}
+
+TEST(MpccProgress, RejectsUncheckedBoundaryBranch)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::ExtendedBranchEligibility;
+  using multi_purpose_mpc_ros::mpcc_progress::ExtendedBranchEvaluation;
+  using multi_purpose_mpc_ros::mpcc_progress::ExtendedBranchSelectionRequest;
+  ExtendedBranchEvaluation right;
+  right.side_sign = -1;
+  right.attempted = true;
+  right.feasible = true;
+  right.objective = 12.0;
+  right.minimum_lateral_bound_reserve_m = 0.0;
+
+  const auto result = multi_purpose_mpc_ros::mpcc_progress::select_extended_branch(
+    ExtendedBranchSelectionRequest{
+      ExtendedBranchEvaluation{}, right, 0, 1, false, 1.0, 0.02});
+
+  EXPECT_FALSE(result.valid);
+  EXPECT_FALSE(result.physical_boundary_fallback_used);
+  EXPECT_EQ(
+    result.right_eligibility,
+    ExtendedBranchEligibility::PhysicalWallUnchecked);
+}
+
+TEST(MpccProgress, PrefersRobustBranchOverCheaperBoundaryBranch)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::ExtendedBranchEvaluation;
+  using multi_purpose_mpc_ros::mpcc_progress::ExtendedBranchSelectionRequest;
+  ExtendedBranchEvaluation left;
+  left.side_sign = 1;
+  left.attempted = true;
+  left.feasible = true;
+  left.objective = 20.0;
+  left.minimum_lateral_bound_reserve_m = 0.10;
+  left.physical_wall_validation_attempted = true;
+  left.physical_wall_validation_passed = true;
+  ExtendedBranchEvaluation right = left;
+  right.side_sign = -1;
+  right.objective = 1.0;
+  right.minimum_lateral_bound_reserve_m = 0.0;
+  right.physical_wall_validation_attempted = true;
+  right.physical_wall_validation_passed = true;
+
+  const auto result = multi_purpose_mpc_ros::mpcc_progress::select_extended_branch(
+    ExtendedBranchSelectionRequest{left, right, 0, 1, false, 1.0, 0.02});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_EQ(result.selected_side_sign, 1);
+  EXPECT_FALSE(result.physical_boundary_fallback_used);
+}
+
 TEST(MpccProgress, HoldsNewEntryWhenDualBranchSelectionIsUnavailable)
 {
   using multi_purpose_mpc_ros::mpcc_progress::ExtendedBranchEntryAdmissionReason;
@@ -659,6 +735,8 @@ TEST(MpccProgress, RetainsCurrentExtendedBranchWithinObjectiveHysteresis)
   left.feasible = true;
   left.objective = 10.0;
   left.minimum_lateral_bound_reserve_m = 0.20;
+  left.physical_wall_validation_attempted = true;
+  left.physical_wall_validation_passed = true;
   ExtendedBranchEvaluation right = left;
   right.side_sign = -1;
   right.objective = 9.5;
@@ -681,6 +759,8 @@ TEST(MpccProgress, KeepsCurrentExtendedBranchAfterNoReturn)
   left.feasible = true;
   left.objective = 100.0;
   left.minimum_lateral_bound_reserve_m = 0.20;
+  left.physical_wall_validation_attempted = true;
+  left.physical_wall_validation_passed = true;
   ExtendedBranchEvaluation right = left;
   right.side_sign = -1;
   right.objective = 1.0;

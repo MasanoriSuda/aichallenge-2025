@@ -2409,6 +2409,7 @@ struct V2XBehaviorOutput
   double target_velocity_limit{std::numeric_limits<double>::infinity()};
   double desired_velocity{std::numeric_limits<double>::infinity()};
   double front_distance{std::numeric_limits<double>::infinity()};
+  double front_safety_distance{std::numeric_limits<double>::infinity()};
   double front_local_longitudinal{std::numeric_limits<double>::infinity()};
   double front_progress_lateral{std::numeric_limits<double>::infinity()};
   std::string low_speed_stopped_candidate_id;
@@ -7027,6 +7028,23 @@ struct MPC
         danger_lateral_range,
         std::max(0.0, cfg.v2x_behavior.front_decel_guard_curve_lateral_margin)});
     const double brake_decel = std::max(kEps, std::abs(cfg.a_min));
+    const auto resolve_front_safety_envelope =
+      [&](const double target_speed_mps, const double body_clearance_m = 0.0,
+      const double reserve_distance_m = 0.0) {
+        return overtake_core::resolve_front_longitudinal_safety_envelope(
+          overtake_core::FrontLongitudinalSafetyEnvelopeRequest{
+            std::max(0.0, current_speed_mps_),
+            std::max(0.0, target_speed_mps),
+            brake_decel,
+            std::max(0.0, cfg.v2x_behavior.moving_front_speed_threshold),
+            std::max(0.0, cfg.v2x_behavior.moving_safety_brake_distance),
+            std::max(0.0, cfg.v2x_behavior.moving_safety_brake_margin),
+            std::max(0.0, cfg.v2x_behavior.moving_safety_brake_time_headway),
+            std::max(0.0, cfg.v2x_behavior.safety_brake_distance),
+            std::max(0.0, cfg.v2x_behavior.safety_brake_margin),
+            std::max(0.0, body_clearance_m),
+            std::max(0.0, reserve_distance_m)});
+      };
     const double stopped_stop_distance =
       current_speed_mps_ * current_speed_mps_ / (2.0 * brake_decel) +
       std::max(0.0, cfg.v2x_behavior.safety_brake_margin);
@@ -7061,6 +7079,7 @@ struct MPC
     bool held_target_near_field_conflict = false;
     bool has_low_speed_clearance_vehicle = false;
     double nearest_front_distance = std::numeric_limits<double>::infinity();
+    double nearest_front_safety_distance = std::numeric_limits<double>::infinity();
     double nearest_front_speed = std::numeric_limits<double>::infinity();
     double nearest_front_lateral = std::numeric_limits<double>::infinity();
     double nearest_front_lateral_velocity = 0.0;
@@ -7769,9 +7788,14 @@ struct MPC
         front_overlap && front_longitudinal > 0.0 &&
         front_longitudinal < front_detection_distance)
       {
+        const auto front_safety_envelope =
+          resolve_front_safety_envelope(front_vehicle_speed);
         has_front_vehicle = true;
         if (front_longitudinal < nearest_front_distance) {
           nearest_front_distance = front_longitudinal;
+          nearest_front_safety_distance = front_safety_envelope.valid ?
+            front_safety_envelope.safety_distance_m :
+            std::numeric_limits<double>::infinity();
           nearest_front_speed = front_vehicle_speed;
           nearest_front_lateral = front_lateral;
           nearest_front_lateral_velocity = observed_course_lateral_velocity;
@@ -7785,24 +7809,10 @@ struct MPC
           nearest_front_progress_used = use_course_progress;
           nearest_front_id = vehicle.id;
         }
-        const bool moving_front =
-          front_vehicle_speed > cfg.v2x_behavior.moving_front_speed_threshold;
-        const double closing_speed =
-          moving_front ?
-          std::max(0.0, current_speed_mps_ - front_vehicle_speed) : current_speed_mps_;
-        const double front_stop_distance =
-          closing_speed * closing_speed / (2.0 * brake_decel) +
-          (moving_front ?
-          std::max(0.0, cfg.v2x_behavior.moving_safety_brake_margin) :
-          std::max(0.0, cfg.v2x_behavior.safety_brake_margin));
-        const double moving_headway_distance = current_speed_mps_ *
-          std::max(0.0, cfg.v2x_behavior.moving_safety_brake_time_headway);
-        const double front_safety_brake_distance = moving_front ?
-          std::max({
-            cfg.v2x_behavior.moving_safety_brake_distance, front_stop_distance,
-            moving_headway_distance}) :
-          std::max(cfg.v2x_behavior.safety_brake_distance, front_stop_distance);
-        if (front_longitudinal < front_safety_brake_distance) {
+        if (
+          front_safety_envelope.valid &&
+          front_longitudinal < front_safety_envelope.safety_distance_m)
+        {
           has_danger_vehicle = true;
         }
       }
@@ -7887,6 +7897,11 @@ struct MPC
       has_front_vehicle = true;
       nearest_front_distance = nearest_dynamic_corridor.distance;
       nearest_front_speed = nearest_dynamic_corridor.speed;
+      const auto promoted_front_safety_envelope =
+        resolve_front_safety_envelope(nearest_dynamic_corridor.speed);
+      nearest_front_safety_distance = promoted_front_safety_envelope.valid ?
+        promoted_front_safety_envelope.safety_distance_m :
+        std::numeric_limits<double>::infinity();
       nearest_front_lateral = nearest_dynamic_corridor.lateral;
       nearest_front_lateral_velocity = nearest_dynamic_corridor.lateral_velocity;
       nearest_front_lateral_velocity_valid =
@@ -7916,6 +7931,7 @@ struct MPC
       };
 
     output.front_distance = nearest_front_distance;
+    output.front_safety_distance = nearest_front_safety_distance;
     output.start_grid_dynamic_peer_speed = start_grid_peer_max_speed;
     output.front_speed = nearest_front_speed;
     output.front_lateral = nearest_front_lateral;
@@ -10833,6 +10849,16 @@ struct MPC
                 const double body_longitudinal_clearance =
                   0.5 * std::max(0.0, cfg.v2x_gap.vehicle_length) +
                   0.5 * std::max(0.0, model->length);
+                const auto entry_front_safety_envelope =
+                  resolve_front_safety_envelope(
+                  non_negative_preflight_target_speed,
+                  body_longitudinal_clearance,
+                  cfg.v2x_behavior.overtake_unseparated_front_reserve_distance);
+                const double entry_minimum_front_distance = std::max(
+                  std::max(
+                    0.0, cfg.v2x_behavior.overtake_guard_min_front_distance),
+                  entry_front_safety_envelope.valid ?
+                  entry_front_safety_envelope.safety_distance_m : 0.0);
                 entry_front_distance_reserve =
                   overtake_core::resolve_overtake_entry_front_distance_reserve(
                   overtake_core::OvertakeEntryFrontDistanceReserveRequest{
@@ -10841,8 +10867,7 @@ struct MPC
                     !start_grid_breakout_attempt,
                     rollout.currently_laterally_clear,
                     std::max(0.0, preflight_target_longitudinal),
-                    std::max(
-                      0.0, cfg.v2x_behavior.overtake_guard_min_front_distance),
+                    entry_minimum_front_distance,
                     body_longitudinal_clearance,
                     std::max(
                       0.0,
@@ -13378,7 +13403,8 @@ struct MPC
           "discarded=%lu, failed=%lu, interval=%.3f s, snapshot=%.2f ms, "
           "compute=%.2f ms, age=%.3f s, "
           "dual=L%d/%d/%s/p%d/%.1f/%.2f/w%d:%d:%s:%.2f/%s,"
-          "R%d/%d/%s/p%d/%.1f/%.2f/w%d:%d:%s:%.2f/%s,select=%d/%s",
+          "R%d/%d/%s/p%d/%.1f/%.2f/w%d:%d:%s:%.2f/%s,"
+          "select=%d/%s/boundary=%d/elig=L:%s,R:%s",
           static_cast<unsigned long>(worker_stats.submitted),
           static_cast<unsigned long>(worker_stats.replaced),
           static_cast<unsigned long>(worker_stats.completed),
@@ -13418,7 +13444,12 @@ struct MPC
           "ok" : output.extended_mpcc_right_branch.failure_reason.c_str(),
           output.extended_mpcc_branch_selection.selected_side_sign,
           mpcc_progress::extended_branch_selection_reason_name(
-            output.extended_mpcc_branch_selection.reason));
+            output.extended_mpcc_branch_selection.reason),
+          output.extended_mpcc_branch_selection.physical_boundary_fallback_used ? 1 : 0,
+          mpcc_progress::extended_branch_eligibility_name(
+            output.extended_mpcc_branch_selection.left_eligibility),
+          mpcc_progress::extended_branch_eligibility_name(
+            output.extended_mpcc_branch_selection.right_eligibility));
         mpcc_lite_async_last_status_log_sec_ = now_sec;
       }
     }
@@ -16511,6 +16542,20 @@ struct MPC
       normalized_overtake_speed_window.floor_adjusted ||
       (!normalized_overtake_speed_window.valid &&
       requested_overtake_speed_floor_mps != 0.0);
+    authority_request.front_distance_m =
+      std::isfinite(behavior_output.locked_target_longitudinal) ?
+      behavior_output.locked_target_longitudinal : behavior_output.front_distance;
+    authority_request.dynamic_front_safety_distance_m =
+      behavior_output.front_safety_distance;
+    authority_request.protected_front_distance_m =
+      overtake_line_output.active &&
+      overtake_line_output.unseparated_protected_front_distance > 0.0 ?
+      overtake_line_output.unseparated_protected_front_distance :
+      behavior_output.front_safety_distance;
+    authority_request.closing_speed_reference_mps =
+      std::isfinite(overtake_line_output.closing_speed_limit) ?
+      overtake_line_output.closing_speed_limit :
+      behavior_output.overtake_shiftout_closing_speed_limit;
     const auto authority_robust_clearance = resolve_robust_clearance(ref_wp_id, N);
     const auto authority_wall_contract =
       overtake_orchestrator::resolve_wall_clearance_contract(
@@ -33699,12 +33744,28 @@ private:
         0.0,
         std::max(0.5, overtake_line_state_.mission_pass_hold_distance) -
         overtake_mission_pass_traveled());
+      const auto lateral_front_safety_envelope =
+        overtake_core::resolve_front_longitudinal_safety_envelope(
+        overtake_core::FrontLongitudinalSafetyEnvelopeRequest{
+          std::max(0.0, current_speed_mps_),
+          std::max(0.0, locked_target_speed),
+          std::max(kEps, std::abs(cfg.a_min)),
+          std::max(0.0, cfg.v2x_behavior.moving_front_speed_threshold),
+          std::max(0.0, cfg.v2x_behavior.moving_safety_brake_distance),
+          std::max(0.0, cfg.v2x_behavior.moving_safety_brake_margin),
+          std::max(0.0, cfg.v2x_behavior.moving_safety_brake_time_headway),
+          std::max(0.0, cfg.v2x_behavior.safety_brake_distance),
+          std::max(0.0, cfg.v2x_behavior.safety_brake_margin),
+          committed_pass_request.body_longitudinal_clearance_m,
+          cfg.v2x_behavior.overtake_unseparated_front_reserve_distance});
       const auto separation_reserve =
         overtake_core::resolve_lateral_clearance_closing_reserve(
         overtake_core::LateralClearanceClosingReserveRequest{
           committed_pass_request.locked_target_body_lateral_clear,
           locked_target_longitudinal,
           closing_speed_limit,
+          lateral_front_safety_envelope.valid ?
+          lateral_front_safety_envelope.safety_distance_m : 0.0,
           cfg.v2x_behavior.moving_follow_hard_distance,
           committed_pass_request.body_longitudinal_clearance_m,
           cfg.v2x_behavior.overtake_unseparated_front_reserve_distance,
@@ -45727,8 +45788,10 @@ private:
       RCLCPP_WARN_THROTTLE(
         get_logger(), *get_clock(), 1000,
         "MPC solver fail-operational crawl blocked by path safety: "
+        "reason=%s, "
         "e_y=%.3f/%.3f m, e_psi=%.3f/%.3f rad, "
         "footprint_valid=%d, out_of_map=%d, contacts=%zu",
+        mpc_velocity_limit::to_string(solver_failure_crawl.block_reason),
         car_->spatial_state.e_y, solver_crawl_max_lateral_error_m,
         car_->spatial_state.e_psi, solver_crawl_max_heading_error_rad,
         solver_crawl_footprint_sample.valid ? 1 : 0,
@@ -46154,6 +46217,9 @@ private:
         output_reason = std::string{"solver-fallback-forced-stop/continuation-"} +
           mpc_velocity_limit::to_string(
           solver_failure_continuation.block_reason);
+      } else if (mpc_fallback_active) {
+        output_reason = std::string{"solver-fallback-forced-stop/crawl-"} +
+          mpc_velocity_limit::to_string(solver_failure_crawl.block_reason);
       } else {
         output_reason = "solver-fallback-forced-stop";
       }

@@ -31,10 +31,22 @@ struct SolverFailureCrawlRequest
   double effective_speed_limit_mps{0.0};
 };
 
+enum class SolverFailureCrawlBlockReason
+{
+  None,
+  Disabled,
+  NotUnrestrictedCruise,
+  FrontVehicleDetected,
+  StaticFootprintUnsafe,
+  TrackingEnvelopeUnsafe,
+  InvalidSpeed,
+};
+
 struct SolverFailureCrawlDecision
 {
   bool active{false};
   double target_speed_mps{0.0};
+  SolverFailureCrawlBlockReason block_reason{SolverFailureCrawlBlockReason::Disabled};
 };
 
 enum class SolverFailureContinuationBlockReason
@@ -85,6 +97,7 @@ std::vector<double> build_reachable_limits(const ReachableLimitRequest & request
 /// current static-map footprint is clear.
 SolverFailureCrawlDecision resolve_solver_failure_crawl(
   const SolverFailureCrawlRequest & request) noexcept;
+const char * to_string(SolverFailureCrawlBlockReason reason) noexcept;
 
 /// Preserve the already rate-limited fallback steering for a short, isolated
 /// solve failure while a dynamic-obstacle escape owns the lateral path. The

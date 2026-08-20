@@ -547,6 +547,13 @@ std::string format_authority_trace(const AuthorityTrace & trace)
          << ", floor_request=" <<
     finite_or(trace.request.requested_speed_floor_mps, "nan")
          << "/adjusted=" << (trace.request.speed_floor_adjusted ? 1 : 0)
+         << ", front=" << finite_or(trace.request.front_distance_m, "inf")
+         << "/safety=" <<
+    finite_or(trace.request.dynamic_front_safety_distance_m, "inf")
+         << "/protected=" <<
+    finite_or(trace.request.protected_front_distance_m, "inf")
+         << "m, closing_ref=" <<
+    finite_or(trace.request.closing_speed_reference_mps, "inf") << "m/s"
          << ", wall_contract=" <<
     finite_or(trace.request.wall_contract_minimum_path_clearance_m, "inf")
          << "/" <<
@@ -750,6 +757,14 @@ std::string format_final_control_trace(const FinalControlTrace & trace)
            << ", floor_request="
            << finite_or(authority.request.requested_speed_floor_mps, "nan")
            << "/adjusted=" << (authority.request.speed_floor_adjusted ? 1 : 0)
+           << ", front=" << finite_or(authority.request.front_distance_m, "inf")
+           << "/safety="
+           << finite_or(authority.request.dynamic_front_safety_distance_m, "inf")
+           << "/protected="
+           << finite_or(authority.request.protected_front_distance_m, "inf")
+           << "m, closing_ref="
+           << finite_or(authority.request.closing_speed_reference_mps, "inf")
+           << "m/s"
            << ", conflict=" << format_conflicts(authority.resolution.conflicts)
            << ", transition=\""
            << (authority.request.transition_reason.empty() ? "none" :

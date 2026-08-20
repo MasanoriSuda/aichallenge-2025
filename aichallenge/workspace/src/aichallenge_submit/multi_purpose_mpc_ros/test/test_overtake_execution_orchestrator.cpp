@@ -382,6 +382,10 @@ TEST(OvertakeExecutionOrchestrator, JoinsAuthorityAndPublishedCommandByDecisionI
   authority.request.line_active = true;
   authority.request.path_source_hint = orchestrator::PathSource::RecedingDp;
   authority.request.path_age_sec = 0.12;
+  authority.request.front_distance_m = 6.5;
+  authority.request.dynamic_front_safety_distance_m = 4.2;
+  authority.request.protected_front_distance_m = 4.5;
+  authority.request.closing_speed_reference_mps = 1.1;
   authority.request.transition_reason = "keep phase";
   authority.request.blocking_reason = "none";
   authority.resolution = orchestrator::resolve_authority(authority.request);
@@ -405,6 +409,10 @@ TEST(OvertakeExecutionOrchestrator, JoinsAuthorityAndPublishedCommandByDecisionI
   EXPECT_FALSE(first.warning);
   EXPECT_NE(first.message.find("decision=42"), std::string::npos);
   EXPECT_NE(first.message.find("path_source=receding-dp"), std::string::npos);
+  EXPECT_NE(
+    first.message.find("front=6.50/safety=4.20/protected=4.50m"),
+    std::string::npos);
+  EXPECT_NE(first.message.find("closing_ref=1.10m/s"), std::string::npos);
   EXPECT_NE(first.message.find("control_source=mpc-solution"), std::string::npos);
   trace.decision_id = 43U;
   EXPECT_FALSE(emitter.update(trace, 1.1).emit);

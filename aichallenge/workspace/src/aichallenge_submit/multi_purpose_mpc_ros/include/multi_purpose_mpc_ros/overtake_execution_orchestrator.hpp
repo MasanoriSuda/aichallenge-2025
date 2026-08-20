@@ -189,6 +189,10 @@ struct AuthorityRequest {
   double speed_floor_mps{0.0};
   double requested_speed_floor_mps{0.0};
   bool speed_floor_adjusted{false};
+  double front_distance_m{std::numeric_limits<double>::infinity()};
+  double dynamic_front_safety_distance_m{std::numeric_limits<double>::infinity()};
+  double protected_front_distance_m{std::numeric_limits<double>::infinity()};
+  double closing_speed_reference_mps{std::numeric_limits<double>::infinity()};
   double wall_contract_required_clearance_m{0.0};
   double wall_contract_minimum_path_clearance_m{
     std::numeric_limits<double>::infinity()};

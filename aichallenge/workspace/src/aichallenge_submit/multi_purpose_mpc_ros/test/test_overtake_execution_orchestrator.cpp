@@ -429,4 +429,106 @@ TEST(OvertakeExecutionOrchestrator, AggregatesNormalLongitudinalOwnerChatter)
     heartbeat.message.find("suppressed_normal_changes=1"), std::string::npos);
 }
 
+TEST(OvertakeExecutionOrchestrator, ClassifiesCurrentFootprintWallRisk)
+{
+  orchestrator::WallHandoffProbe probe;
+  EXPECT_EQ(
+    orchestrator::classify_wall_risk(probe),
+    orchestrator::WallRiskState::Unknown);
+
+  probe.current_wall_valid = true;
+  probe.current_footprint_clear = true;
+  probe.current_wall_distance_m = 0.35;
+  probe.required_wall_clearance_m = 0.20;
+  EXPECT_EQ(
+    orchestrator::classify_wall_risk(probe),
+    orchestrator::WallRiskState::Clear);
+
+  probe.current_wall_distance_m = 0.20;
+  EXPECT_EQ(
+    orchestrator::classify_wall_risk(probe),
+    orchestrator::WallRiskState::Near);
+
+  probe.current_contact_count = 1U;
+  probe.current_footprint_clear = false;
+  EXPECT_EQ(
+    orchestrator::classify_wall_risk(probe),
+    orchestrator::WallRiskState::Contact);
+}
+
+TEST(OvertakeExecutionOrchestrator, MonitorsWallAfterDynamicEscapeHandoff)
+{
+  orchestrator::ChangeAwareWallHandoffTraceEmitter emitter;
+  orchestrator::WallHandoffProbe probe;
+  probe.current_wall_valid = true;
+  probe.current_footprint_clear = true;
+  probe.current_wall_distance_m = 1.0;
+  probe.required_wall_clearance_m = 0.20;
+
+  EXPECT_FALSE(emitter.update(probe, 1.0).emit);
+
+  probe.dynamic_escape_active = true;
+  probe.action = orchestrator::Action::DynamicEscape;
+  probe.lateral_owner = orchestrator::LateralOwner::DynamicObstacleEscape;
+  probe.path_source = orchestrator::PathSource::DynamicObstacleEscape;
+  const auto entry = emitter.update(probe, 2.0);
+  EXPECT_TRUE(entry.emit);
+  EXPECT_TRUE(entry.monitor_active);
+  EXPECT_TRUE(entry.source_changed);
+
+  probe.dynamic_escape_active = false;
+  probe.action = orchestrator::Action::Follow;
+  probe.lateral_owner = orchestrator::LateralOwner::RacingLine;
+  probe.path_source = orchestrator::PathSource::RacingLine;
+  const auto exit = emitter.update(probe, 2.1);
+  EXPECT_TRUE(exit.emit);
+  EXPECT_TRUE(exit.monitor_active);
+
+  probe.current_wall_distance_m = 0.15;
+  const auto near = emitter.update(probe, 2.2);
+  EXPECT_TRUE(near.emit);
+  EXPECT_TRUE(near.warning);
+  EXPECT_EQ(near.risk, orchestrator::WallRiskState::Near);
+  EXPECT_FALSE(emitter.update(probe, 2.3).emit);
+  EXPECT_TRUE(emitter.update(probe, 2.8).emit);
+  EXPECT_FALSE(emitter.update(probe, 4.1).emit);
+}
+
+TEST(OvertakeExecutionOrchestrator, FormatsWallHandoffDecisionEvidence)
+{
+  orchestrator::WallHandoffProbe probe;
+  probe.decision_id = 17U;
+  probe.action = orchestrator::Action::DynamicEscape;
+  probe.lateral_owner = orchestrator::LateralOwner::DynamicObstacleEscape;
+  probe.path_source = orchestrator::PathSource::DynamicObstacleEscape;
+  probe.current_wall_valid = true;
+  probe.current_footprint_clear = true;
+  probe.current_wall_region = "Right";
+  probe.current_wall_distance_m = 0.18;
+  probe.required_wall_clearance_m = 0.20;
+  probe.published_steering_rad = 0.15;
+  probe.previous_published_steering_rad = 0.10;
+
+  orchestrator::WallHandoffEvent event;
+  event.emit = true;
+  event.monitor_active = true;
+  event.risk = orchestrator::WallRiskState::Near;
+  event.trigger = "wall-risk";
+
+  orchestrator::PredictedPathWallMetrics path;
+  path.available = true;
+  path.valid = true;
+  path.sample_count = 8U;
+  path.minimum_index = 3U;
+  path.minimum_wall_region = "Right";
+  path.minimum_wall_distance_m = 0.12;
+  path.minimum_wall_path_distance_m = 2.5;
+
+  const auto message = orchestrator::format_wall_handoff_trace(probe, event, path);
+  EXPECT_NE(message.find("decision=17"), std::string::npos);
+  EXPECT_NE(message.find("trigger=wall-risk"), std::string::npos);
+  EXPECT_NE(message.find("path_wall=Right/0.12m@3/2.50m"), std::string::npos);
+  EXPECT_NE(message.find("delta=0.05"), std::string::npos);
+}
+
 }  // namespace

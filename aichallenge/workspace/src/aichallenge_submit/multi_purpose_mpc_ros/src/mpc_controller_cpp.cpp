@@ -35989,6 +35989,7 @@ struct Config
 struct RecoverySafetySnapshot
 {
   bool wall_evidence{false};
+  bool wall_proximity_valid{false};
   recovery_footprint::WallRegion wall_region{recovery_footprint::WallRegion::Unknown};
   double wall_distance_m{std::numeric_limits<double>::infinity()};
   bool rear_static_clear{false};
@@ -35996,6 +35997,8 @@ struct RecoverySafetySnapshot
   bool rear_information_complete{false};
   bool boost_inactive_confirmed{false};
   bool v2x_message_complete{false};
+  bool current_footprint_valid{false};
+  bool current_footprint_out_of_map{false};
   bool current_footprint_clear{false};
   bool rejoin_forward_static_clear{false};
   recovery_footprint::RejectReason rejoin_static_reject_reason{
@@ -36038,6 +36041,18 @@ struct RecoverySafetySnapshot
   double v2x_minimum_clearance_m{std::numeric_limits<double>::infinity()};
   double v2x_final_clearance_m{std::numeric_limits<double>::infinity()};
   double v2x_rejected_at_distance_m{};
+};
+
+struct CurrentWallTraceSnapshot
+{
+  std::uint64_t decision_id{0U};
+  bool wall_proximity_valid{false};
+  bool footprint_valid{false};
+  bool footprint_out_of_map{false};
+  bool footprint_clear{false};
+  recovery_footprint::WallRegion wall_region{recovery_footprint::WallRegion::Unknown};
+  double wall_distance_m{std::numeric_limits<double>::infinity()};
+  std::size_t contact_count{0U};
 };
 
 Config load_config(const std::string & path)
@@ -40979,11 +40994,15 @@ private:
           if (!last_condition_.has_value()) {
             last_condition_ = msg->data;
           }
-          const int diff_condition = msg->data - last_condition_.value();
+          const int previous_condition = last_condition_.value();
+          const int diff_condition = msg->data - previous_condition;
           if (diff_condition > 30) {
             last_colliding_time_ = now();
             last_collision_receipt_steady_ = SteadyClock::now();
-            RCLCPP_WARN(get_logger(), "Collision detected!");
+            RCLCPP_WARN(
+              get_logger(),
+              "Collision detected: condition=%d->%d, delta=%d",
+              previous_condition, msg->data, diff_condition);
           }
           last_condition_ = msg->data;
         });
@@ -41048,6 +41067,99 @@ private:
       std::isfinite(command.longitudinal.acceleration);
   }
 
+  std::optional<overtake_orchestrator::AuthorityTrace>
+  current_overtake_authority_trace() const
+  {
+    if (mpc_ == nullptr || mpc_->last_control_decision_id() != active_control_decision_id_) {
+      return std::nullopt;
+    }
+    const auto & authority = mpc_->last_overtake_authority_trace();
+    if (
+      !authority.has_value() ||
+      authority->request.decision_id != active_control_decision_id_)
+    {
+      return std::nullopt;
+    }
+    return authority;
+  }
+
+  overtake_orchestrator::PredictedPathWallMetrics evaluate_predicted_path_wall_metrics(
+    const Pose2D & pose, const double required_wall_clearance_m,
+    const overtake_orchestrator::FinalControlSource control_source) const
+  {
+    overtake_orchestrator::PredictedPathWallMetrics metrics;
+    metrics.retained_solution =
+      control_source == overtake_orchestrator::FinalControlSource::SolverBoundedContinuation;
+    if (
+      mpc_ == nullptr || recovery_grid_ == nullptr || !recovery_grid_->valid() ||
+      !recovery_footprint_.valid() || mpc_->current_prediction.first.empty() ||
+      mpc_->current_prediction.first.size() != mpc_->current_prediction.second.size())
+    {
+      return metrics;
+    }
+
+    metrics.available = true;
+    metrics.valid = true;
+    const auto & predicted_x = mpc_->current_prediction.first;
+    const auto & predicted_y = mpc_->current_prediction.second;
+    double previous_x = pose.x;
+    double previous_y = pose.y;
+    double path_distance_m = 0.0;
+    const double search_margin_m = std::max(
+      cfg_.stuck_recovery.wall_direction_search_margin_m,
+      std::max(0.0, required_wall_clearance_m));
+    for (std::size_t i = 0U; i < predicted_x.size(); ++i) {
+      const double x = predicted_x[i];
+      const double y = predicted_y[i];
+      if (!std::isfinite(x) || !std::isfinite(y)) {
+        metrics.valid = false;
+        break;
+      }
+      path_distance_m += std::hypot(x - previous_x, y - previous_y);
+      double yaw_rad = pose.theta;
+      if (i + 1U < predicted_x.size()) {
+        const double dx = predicted_x[i + 1U] - x;
+        const double dy = predicted_y[i + 1U] - y;
+        if (std::hypot(dx, dy) > 1e-6) {
+          yaw_rad = std::atan2(dy, dx);
+        }
+      } else {
+        const double dx = x - previous_x;
+        const double dy = y - previous_y;
+        if (std::hypot(dx, dy) > 1e-6) {
+          yaw_rad = std::atan2(dy, dx);
+        }
+      }
+
+      const recovery_footprint::Pose2D predicted_pose{x, y, yaw_rad};
+      const auto sample = recovery_footprint::sample_footprint(
+        *recovery_grid_, recovery_footprint_, predicted_pose);
+      ++metrics.sample_count;
+      if (!sample.valid || sample.out_of_map) {
+        metrics.valid = false;
+        metrics.out_of_map = metrics.out_of_map || sample.out_of_map;
+      }
+      const bool contact = !sample.contact_cells.empty();
+      metrics.contact = metrics.contact || contact;
+      const auto proximity = recovery_footprint::classify_nearby_wall(
+        *recovery_grid_, recovery_footprint_, predicted_pose, search_margin_m,
+        cfg_.stuck_recovery.wall_direction_ambiguity_m);
+      if (!proximity.valid) {
+        metrics.valid = false;
+      }
+      const double wall_distance_m = contact ? 0.0 : proximity.nearest_distance_m;
+      if (contact || wall_distance_m < metrics.minimum_wall_distance_m) {
+        metrics.minimum_wall_distance_m = wall_distance_m;
+        metrics.minimum_index = i;
+        metrics.minimum_wall_path_distance_m = path_distance_m;
+        metrics.minimum_wall_region = recovery_footprint::to_string(proximity.region);
+      }
+      previous_x = x;
+      previous_y = y;
+    }
+    return metrics;
+  }
+
   void emit_final_control_trace(
     const double now_sec, const double actual_speed_mps,
     const Eigen::Vector2d & raw_control, const double acceleration_mps2,
@@ -41058,16 +41170,7 @@ private:
   {
     overtake_orchestrator::FinalControlTrace trace;
     trace.decision_id = active_control_decision_id_;
-    if (mpc_ != nullptr) {
-      const auto & authority = mpc_->last_overtake_authority_trace();
-      if (
-        mpc_->last_control_decision_id() == active_control_decision_id_ &&
-        authority.has_value() &&
-        authority->request.decision_id == active_control_decision_id_)
-      {
-        trace.authority = authority;
-      }
-    }
+    trace.authority = current_overtake_authority_trace();
     trace.control_source =
       overtake_orchestrator::resolve_final_control_source(source_request);
     trace.published = published;
@@ -41086,6 +41189,78 @@ private:
       RCLCPP_WARN(get_logger(), "%s", emission.message.c_str());
     } else {
       RCLCPP_INFO(get_logger(), "%s", emission.message.c_str());
+    }
+  }
+
+  void maybe_emit_dynamic_escape_wall_handoff_trace(
+    const double now_sec, const SteadyClock::time_point steady_now,
+    const Pose2D & pose, const double actual_speed_mps, const double yaw_rate_radps,
+    const Eigen::Vector2d & raw_control, const double published_steering_rad,
+    const overtake_orchestrator::FinalControlSourceRequest & source_request)
+  {
+    overtake_orchestrator::WallHandoffProbe probe;
+    probe.decision_id = active_control_decision_id_;
+    probe.control_source =
+      overtake_orchestrator::resolve_final_control_source(source_request);
+    const auto authority = current_overtake_authority_trace();
+    if (authority.has_value()) {
+      probe.dynamic_escape_active =
+        authority->request.dynamic_obstacle_escape_active;
+      probe.action = authority->resolution.action;
+      probe.lateral_owner = authority->resolution.lateral_owner;
+      probe.path_source = authority->resolution.path_source;
+      probe.required_wall_clearance_m =
+        authority->request.wall_contract_required_clearance_m;
+    } else {
+      probe.required_wall_clearance_m = std::max(
+        0.0, mpc_cfg_.v2x_behavior.overtake_line.min_wall_clearance);
+    }
+    if (
+      last_current_wall_trace_snapshot_.has_value() &&
+      last_current_wall_trace_snapshot_->decision_id == active_control_decision_id_)
+    {
+      const auto & safety = last_current_wall_trace_snapshot_.value();
+      probe.current_wall_valid =
+        safety.wall_proximity_valid && safety.footprint_valid;
+      probe.current_footprint_clear = safety.footprint_clear;
+      probe.current_footprint_out_of_map = safety.footprint_out_of_map;
+      probe.current_contact_count = safety.contact_count;
+      probe.current_wall_region = recovery_footprint::to_string(safety.wall_region);
+      probe.current_wall_distance_m = safety.wall_distance_m;
+    }
+    probe.pose_x_m = pose.x;
+    probe.pose_y_m = pose.y;
+    probe.pose_yaw_rad = pose.theta;
+    if (car_ != nullptr) {
+      probe.lateral_error_m = car_->spatial_state.e_y;
+      probe.heading_error_rad = car_->spatial_state.e_psi;
+    }
+    probe.speed_mps = actual_speed_mps;
+    probe.yaw_rate_radps = yaw_rate_radps;
+    probe.raw_steering_rad = raw_control[1];
+    probe.published_steering_rad = published_steering_rad;
+    probe.previous_published_steering_rad =
+      last_published_steering_for_wall_trace_;
+    if (last_collision_receipt_steady_.has_value()) {
+      probe.collision_age_sec = std::max(
+        0.0,
+        std::chrono::duration<double>(
+          steady_now - last_collision_receipt_steady_.value()).count());
+    }
+
+    const auto event = wall_handoff_trace_emitter_.update(probe, now_sec);
+    last_published_steering_for_wall_trace_ = published_steering_rad;
+    if (!event.emit) {
+      return;
+    }
+    const auto path_metrics = evaluate_predicted_path_wall_metrics(
+      pose, probe.required_wall_clearance_m, probe.control_source);
+    const auto message = overtake_orchestrator::format_wall_handoff_trace(
+      probe, event, path_metrics);
+    if (event.warning || path_metrics.contact || path_metrics.out_of_map) {
+      RCLCPP_WARN(get_logger(), "%s", message.c_str());
+    } else {
+      RCLCPP_INFO(get_logger(), "%s", message.c_str());
     }
   }
 
@@ -41941,10 +42116,13 @@ private:
       *recovery_grid_, recovery_footprint_, recovery_pose,
       cfg_.stuck_recovery.wall_direction_search_margin_m,
       cfg_.stuck_recovery.wall_direction_ambiguity_m);
+    snapshot.wall_proximity_valid = wall_proximity.valid;
     snapshot.wall_region = wall_proximity.region;
     snapshot.wall_distance_m = wall_proximity.nearest_distance_m;
     const auto current_sample = recovery_footprint::sample_footprint(
       *recovery_grid_, recovery_footprint_, recovery_pose);
+    snapshot.current_footprint_valid = current_sample.valid;
+    snapshot.current_footprint_out_of_map = current_sample.out_of_map;
     snapshot.current_contact_cells = current_sample.contact_cells;
     snapshot.current_contact_count = current_sample.contact_cells.size();
     snapshot.wall_evidence = wall_proximity.valid &&
@@ -43518,6 +43696,11 @@ private:
       reverse_only,
       candidate_direction_policy,
       recovery_context_active || low_speed_recovery_candidate);
+    last_current_wall_trace_snapshot_ = CurrentWallTraceSnapshot{
+      active_control_decision_id_, safety.wall_proximity_valid,
+      safety.current_footprint_valid, safety.current_footprint_out_of_map,
+      safety.current_footprint_clear, safety.wall_region, safety.wall_distance_m,
+      safety.current_contact_count};
     const double clear_forward_escape_progress_m =
       recovery_clear_forward_progress_.update(
       stuck_recovery::ClearForwardEscapeProgressUpdate{
@@ -45222,6 +45405,9 @@ private:
       current_time.seconds(), actual_v, u, acc, published_steering_rad,
       final_source_request, true, mpc_->last_control_resolution_reason(),
       output_reason);
+    maybe_emit_dynamic_escape_wall_handoff_trace(
+      current_time.seconds(), steady_now, pose, actual_v, yaw_rate, u,
+      published_steering_rad, final_source_request);
     if (mpc_cfg_.v2x_behavior.debug_log_enabled) {
       const double output_steering =
         u[1] * mpc_cfg_.steering_tire_angle_gain_var;
@@ -45331,6 +45517,11 @@ private:
   std::uint64_t active_control_decision_id_{0U};
   overtake_orchestrator::ChangeAwareFinalControlTraceEmitter
   final_control_trace_emitter_;
+  overtake_orchestrator::ChangeAwareWallHandoffTraceEmitter
+  wall_handoff_trace_emitter_;
+  std::optional<CurrentWallTraceSnapshot> last_current_wall_trace_snapshot_;
+  double last_published_steering_for_wall_trace_{
+    std::numeric_limits<double>::quiet_NaN()};
   std::uint64_t control_callback_count_{0U};
   std::uint64_t control_callback_overrun_count_{0U};
   double control_callback_total_ms_{0.0};

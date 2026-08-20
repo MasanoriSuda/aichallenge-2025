@@ -839,6 +839,198 @@ void ChangeAwareFinalControlTraceEmitter::reset() noexcept
   suppressed_normal_change_count_ = 0U;
 }
 
+const char * to_string(const WallRiskState state) noexcept
+{
+  switch (state) {
+    case WallRiskState::Unknown: return "unknown";
+    case WallRiskState::Clear: return "clear";
+    case WallRiskState::Near: return "near";
+    case WallRiskState::Contact: return "contact";
+  }
+  return "unknown";
+}
+
+WallRiskState classify_wall_risk(const WallHandoffProbe & probe) noexcept
+{
+  if (
+    probe.current_footprint_out_of_map || probe.current_contact_count > 0U ||
+    (probe.current_wall_valid && !probe.current_footprint_clear))
+  {
+    return WallRiskState::Contact;
+  }
+  if (!probe.current_wall_valid) {
+    return WallRiskState::Unknown;
+  }
+  if (
+    std::isfinite(probe.current_wall_distance_m) &&
+    std::isfinite(probe.required_wall_clearance_m) &&
+    probe.required_wall_clearance_m >= 0.0 &&
+    probe.current_wall_distance_m <= probe.required_wall_clearance_m + 1e-9)
+  {
+    return WallRiskState::Near;
+  }
+  return WallRiskState::Clear;
+}
+
+namespace {
+
+bool dynamic_handoff_relevant(const WallHandoffProbe & probe) noexcept
+{
+  return
+    probe.dynamic_escape_active || probe.action == Action::DynamicEscape ||
+    probe.path_source == PathSource::DynamicObstacleEscape ||
+    probe.control_source == FinalControlSource::SolverBoundedContinuation;
+}
+
+void append_trigger(std::ostringstream & stream, bool & first, const char * trigger)
+{
+  if (!first) {
+    stream << "/";
+  }
+  stream << trigger;
+  first = false;
+}
+
+}  // namespace
+
+WallHandoffEvent ChangeAwareWallHandoffTraceEmitter::update(
+  const WallHandoffProbe & probe, const double now_sec,
+  const double monitor_duration_sec, const double risk_repeat_interval_sec)
+{
+  WallHandoffEvent event;
+  event.previous_action = previous_action_;
+  event.previous_lateral_owner = previous_lateral_owner_;
+  event.previous_path_source = previous_path_source_;
+  event.previous_control_source = previous_control_source_;
+  event.risk = classify_wall_risk(probe);
+
+  const bool dynamic_relevant = dynamic_handoff_relevant(probe);
+  const bool monitor_was_active =
+    std::isfinite(now_sec) && now_sec <= monitor_until_sec_;
+  if (
+    dynamic_relevant && std::isfinite(now_sec) &&
+    std::isfinite(monitor_duration_sec) && monitor_duration_sec >= 0.0)
+  {
+    monitor_until_sec_ = std::max(
+      monitor_until_sec_, now_sec + monitor_duration_sec);
+  }
+  event.monitor_active = dynamic_relevant || monitor_was_active ||
+    (std::isfinite(now_sec) && now_sec <= monitor_until_sec_);
+  event.source_changed = initialized_ &&
+    (probe.action != previous_action_ ||
+    probe.lateral_owner != previous_lateral_owner_ ||
+    probe.path_source != previous_path_source_ ||
+    probe.control_source != previous_control_source_);
+  event.risk_changed = initialized_ && event.risk != previous_risk_;
+  const bool entry = dynamic_relevant && (!initialized_ || !previous_dynamic_relevant_);
+  const bool transition_touches_dynamic =
+    dynamic_relevant || previous_dynamic_relevant_ || monitor_was_active;
+  const bool risky =
+    event.risk == WallRiskState::Near || event.risk == WallRiskState::Contact;
+  const bool risk_repeat_due =
+    risky && event.monitor_active && std::isfinite(now_sec) &&
+    std::isfinite(risk_repeat_interval_sec) && risk_repeat_interval_sec >= 0.0 &&
+    now_sec >= last_risk_emit_sec_ &&
+    now_sec - last_risk_emit_sec_ >= risk_repeat_interval_sec;
+
+  event.emit = entry ||
+    (event.source_changed && transition_touches_dynamic) ||
+    (event.monitor_active && risky && (event.risk_changed || risk_repeat_due));
+  event.warning = risky ||
+    probe.control_source == FinalControlSource::SolverBoundedContinuation;
+  if (event.emit) {
+    std::ostringstream trigger;
+    bool first = true;
+    if (entry) {
+      append_trigger(trigger, first, "dynamic-entry");
+    }
+    if (event.source_changed) {
+      append_trigger(trigger, first, "source-transition");
+    }
+    if (event.risk == WallRiskState::Near) {
+      append_trigger(trigger, first, "wall-risk");
+    } else if (event.risk == WallRiskState::Contact) {
+      append_trigger(trigger, first, "wall-contact");
+    }
+    event.trigger = first ? "monitor-heartbeat" : trigger.str();
+    if (risky && std::isfinite(now_sec)) {
+      last_risk_emit_sec_ = now_sec;
+    }
+  }
+
+  initialized_ = true;
+  previous_dynamic_relevant_ = dynamic_relevant;
+  previous_action_ = probe.action;
+  previous_lateral_owner_ = probe.lateral_owner;
+  previous_path_source_ = probe.path_source;
+  previous_control_source_ = probe.control_source;
+  previous_risk_ = event.risk;
+  return event;
+}
+
+std::string format_wall_handoff_trace(
+  const WallHandoffProbe & probe, const WallHandoffEvent & event,
+  const PredictedPathWallMetrics & path_metrics)
+{
+  std::ostringstream stream;
+  stream << "DynamicEscape wall handoff: decision=" << probe.decision_id
+         << ", trigger=" << event.trigger
+         << ", monitor=" << (event.monitor_active ? 1 : 0)
+         << ", from=" << to_string(event.previous_action) << "/"
+         << to_string(event.previous_lateral_owner) << "/"
+         << to_string(event.previous_path_source) << "/"
+         << to_string(event.previous_control_source)
+         << ", to=" << to_string(probe.action) << "/"
+         << to_string(probe.lateral_owner) << "/"
+         << to_string(probe.path_source) << "/"
+         << to_string(probe.control_source)
+         << ", risk=" << to_string(event.risk)
+         << ", current_wall=" << probe.current_wall_region << "/"
+         << finite_or(probe.current_wall_distance_m, "inf")
+         << "m/contact=" << probe.current_contact_count
+         << "/clear=" << (probe.current_footprint_clear ? 1 : 0)
+         << "/out=" << (probe.current_footprint_out_of_map ? 1 : 0)
+         << ", required=" << finite_or(probe.required_wall_clearance_m, "nan")
+         << "m, prediction=" << (path_metrics.available ? 1 : 0) << "/"
+         << (path_metrics.valid ? 1 : 0) << "/"
+         << path_metrics.sample_count << "/retained="
+         << (path_metrics.retained_solution ? 1 : 0)
+         << ", path_wall=" << path_metrics.minimum_wall_region << "/"
+         << finite_or(path_metrics.minimum_wall_distance_m, "inf") << "m@"
+         << path_metrics.minimum_index << "/"
+         << finite_or(path_metrics.minimum_wall_path_distance_m, "nan")
+         << "m/contact=" << (path_metrics.contact ? 1 : 0)
+         << "/out=" << (path_metrics.out_of_map ? 1 : 0)
+         << ", pose=" << finite_or(probe.pose_x_m, "nan") << "/"
+         << finite_or(probe.pose_y_m, "nan") << "/"
+         << finite_or(probe.pose_yaw_rad, "nan")
+         << ", tracking=" << finite_or(probe.lateral_error_m, "nan") << "/"
+         << finite_or(probe.heading_error_rad, "nan")
+         << ", motion=" << finite_or(probe.speed_mps, "nan") << "/"
+         << finite_or(probe.yaw_rate_radps, "nan")
+         << ", steering=" << finite_or(probe.raw_steering_rad, "nan") << "/"
+         << finite_or(probe.published_steering_rad, "nan") << "/"
+         << finite_or(probe.previous_published_steering_rad, "nan") << "/delta="
+         << finite_or(
+    probe.published_steering_rad - probe.previous_published_steering_rad, "nan")
+         << ", collision_age=" << finite_or(probe.collision_age_sec, "inf")
+         << "s";
+  return stream.str();
+}
+
+void ChangeAwareWallHandoffTraceEmitter::reset() noexcept
+{
+  initialized_ = false;
+  previous_dynamic_relevant_ = false;
+  previous_action_ = Action::Cruise;
+  previous_lateral_owner_ = LateralOwner::RacingLine;
+  previous_path_source_ = PathSource::RacingLine;
+  previous_control_source_ = FinalControlSource::MpcSolution;
+  previous_risk_ = WallRiskState::Unknown;
+  monitor_until_sec_ = -std::numeric_limits<double>::infinity();
+  last_risk_emit_sec_ = -std::numeric_limits<double>::infinity();
+}
+
 void EpisodeAccumulator::begin(const EpisodeStart & start)
 {
   reset();

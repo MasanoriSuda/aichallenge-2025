@@ -325,6 +325,95 @@ private:
   std::size_t suppressed_normal_change_count_{0U};
 };
 
+enum class WallRiskState {
+  Unknown,
+  Clear,
+  Near,
+  Contact,
+};
+
+const char * to_string(WallRiskState state) noexcept;
+
+struct WallHandoffProbe {
+  std::uint64_t decision_id{0U};
+  bool dynamic_escape_active{false};
+  Action action{Action::Cruise};
+  LateralOwner lateral_owner{LateralOwner::RacingLine};
+  PathSource path_source{PathSource::RacingLine};
+  FinalControlSource control_source{FinalControlSource::MpcSolution};
+  bool current_wall_valid{false};
+  bool current_footprint_clear{false};
+  bool current_footprint_out_of_map{false};
+  std::size_t current_contact_count{0U};
+  std::string current_wall_region{"Unknown"};
+  double current_wall_distance_m{std::numeric_limits<double>::infinity()};
+  double required_wall_clearance_m{0.0};
+  double pose_x_m{std::numeric_limits<double>::quiet_NaN()};
+  double pose_y_m{std::numeric_limits<double>::quiet_NaN()};
+  double pose_yaw_rad{std::numeric_limits<double>::quiet_NaN()};
+  double lateral_error_m{std::numeric_limits<double>::quiet_NaN()};
+  double heading_error_rad{std::numeric_limits<double>::quiet_NaN()};
+  double speed_mps{std::numeric_limits<double>::quiet_NaN()};
+  double yaw_rate_radps{std::numeric_limits<double>::quiet_NaN()};
+  double raw_steering_rad{std::numeric_limits<double>::quiet_NaN()};
+  double published_steering_rad{std::numeric_limits<double>::quiet_NaN()};
+  double previous_published_steering_rad{
+    std::numeric_limits<double>::quiet_NaN()};
+  double collision_age_sec{std::numeric_limits<double>::infinity()};
+};
+
+struct WallHandoffEvent {
+  bool emit{false};
+  bool warning{false};
+  bool monitor_active{false};
+  bool source_changed{false};
+  bool risk_changed{false};
+  WallRiskState risk{WallRiskState::Unknown};
+  Action previous_action{Action::Cruise};
+  LateralOwner previous_lateral_owner{LateralOwner::RacingLine};
+  PathSource previous_path_source{PathSource::RacingLine};
+  FinalControlSource previous_control_source{FinalControlSource::MpcSolution};
+  std::string trigger{"none"};
+};
+
+struct PredictedPathWallMetrics {
+  bool available{false};
+  bool valid{false};
+  bool retained_solution{false};
+  bool contact{false};
+  bool out_of_map{false};
+  std::size_t sample_count{0U};
+  std::size_t minimum_index{0U};
+  std::string minimum_wall_region{"Unknown"};
+  double minimum_wall_distance_m{std::numeric_limits<double>::infinity()};
+  double minimum_wall_path_distance_m{
+    std::numeric_limits<double>::quiet_NaN()};
+};
+
+WallRiskState classify_wall_risk(const WallHandoffProbe & probe) noexcept;
+std::string format_wall_handoff_trace(
+  const WallHandoffProbe & probe, const WallHandoffEvent & event,
+  const PredictedPathWallMetrics & path_metrics);
+
+class ChangeAwareWallHandoffTraceEmitter {
+public:
+  WallHandoffEvent update(
+    const WallHandoffProbe & probe, double now_sec,
+    double monitor_duration_sec = 2.0, double risk_repeat_interval_sec = 0.5);
+  void reset() noexcept;
+
+private:
+  bool initialized_{false};
+  bool previous_dynamic_relevant_{false};
+  Action previous_action_{Action::Cruise};
+  LateralOwner previous_lateral_owner_{LateralOwner::RacingLine};
+  PathSource previous_path_source_{PathSource::RacingLine};
+  FinalControlSource previous_control_source_{FinalControlSource::MpcSolution};
+  WallRiskState previous_risk_{WallRiskState::Unknown};
+  double monitor_until_sec_{-std::numeric_limits<double>::infinity()};
+  double last_risk_emit_sec_{-std::numeric_limits<double>::infinity()};
+};
+
 struct EpisodeStart {
   std::uint64_t episode_id{0U};
   std::string target_id;

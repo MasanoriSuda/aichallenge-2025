@@ -5979,6 +5979,26 @@ struct MPC
       -std::numeric_limits<double>::infinity();
   }
 
+  void synchronize_wall_handoff_hold_control(
+    const Eigen::Vector2d & published_control,
+    const std::string & admission_reason)
+  {
+    if (!published_control.allFinite()) {
+      return;
+    }
+    previous_steering = clip(
+      published_control[1], -std::abs(cfg.delta_max), std::abs(cfg.delta_max));
+    current_control = Eigen::VectorXd::Zero(2 * std::max(0, cfg.N));
+    for (int index = 0; index < cfg.N; ++index) {
+      current_control[2 * index] = std::max(0.0, published_control[0]);
+      current_control[2 * index + 1] = previous_steering;
+    }
+    // Keep current_prediction intact until the final decision log consumes
+    // the rejected physical evidence. Only the control warm start is replaced.
+    last_control_resolution_reason_ =
+      "wall-handoff-hold/" + admission_reason;
+  }
+
   bool last_control_was_fallback() const
   {
     return last_control_was_fallback_;
@@ -45100,8 +45120,27 @@ private:
       current_time.seconds(), active_control_decision_id_);
     const bool mpc_fallback_active = mpc_->last_control_was_fallback();
     const auto & v2x_behavior = mpc_->last_v2x_behavior_output();
+    const bool solver_failure_continuation_previous_cycle =
+      solver_failure_continuation_was_active_;
+    double wall_handoff_required_clearance_m = std::max(
+      0.0, mpc_cfg_.v2x_behavior.overtake_line.min_wall_clearance);
+    if (const auto authority = current_overtake_authority_trace()) {
+      if (
+        std::isfinite(authority->request.wall_contract_required_clearance_m) &&
+        authority->request.wall_contract_required_clearance_m >= 0.0)
+      {
+        wall_handoff_required_clearance_m =
+          authority->request.wall_contract_required_clearance_m;
+      }
+    }
     recovery_footprint::FootprintSample solver_crawl_footprint_sample;
-    if (mpc_fallback_active && recovery_grid_ && recovery_footprint_.valid()) {
+    const bool wall_handoff_observation_required =
+      solver_failure_continuation_previous_cycle ||
+      wall_handoff_admission_gate_.active();
+    if (
+      (mpc_fallback_active || wall_handoff_observation_required) &&
+      recovery_grid_ && recovery_footprint_.valid())
+    {
       solver_crawl_footprint_sample = recovery_footprint::sample_footprint(
         *recovery_grid_, recovery_footprint_,
         recovery_footprint::Pose2D{pose.x, pose.y, pose.theta});
@@ -45260,6 +45299,69 @@ private:
         solver_failure_continuation_active;
     }
 
+    overtake_orchestrator::WallHandoffAdmissionRequest
+      wall_handoff_admission_request;
+    overtake_orchestrator::WallHandoffAdmissionResolution
+      wall_handoff_admission;
+    const bool recovered_from_bounded_continuation =
+      solver_failure_continuation_previous_cycle &&
+      !solver_failure_continuation_active && !mpc_fallback_active &&
+      enable_control_;
+    if (!enable_control_ && wall_handoff_admission_gate_.active()) {
+      wall_handoff_admission_gate_.reset();
+    }
+    if (
+      recovered_from_bounded_continuation ||
+      wall_handoff_admission_gate_.active())
+    {
+      wall_handoff_admission_request.recovered_from_bounded_continuation =
+        recovered_from_bounded_continuation;
+      wall_handoff_admission_request.current_footprint_valid =
+        solver_crawl_footprint_sample.valid;
+      wall_handoff_admission_request.current_footprint_clear =
+        solver_crawl_footprint_clear;
+      wall_handoff_admission_request.current_footprint_out_of_map =
+        solver_crawl_footprint_sample.out_of_map;
+      wall_handoff_admission_request.current_contact_count =
+        solver_crawl_footprint_sample.contact_cells.size();
+      wall_handoff_admission_request.required_wall_clearance_m =
+        wall_handoff_required_clearance_m;
+      wall_handoff_admission_request.required_consecutive_valid_cycles = 2;
+      wall_handoff_admission_request.prediction =
+        evaluate_predicted_path_wall_metrics(
+        pose, wall_handoff_required_clearance_m,
+        overtake_orchestrator::FinalControlSource::MpcSolution);
+      wall_handoff_admission = wall_handoff_admission_gate_.update(
+        wall_handoff_admission_request);
+    }
+    const bool wall_handoff_hold_active =
+      wall_handoff_admission.hold_control;
+    if (wall_handoff_hold_active) {
+      const double deceleration_step_mps =
+        std::min(0.0, mpc_cfg_.a_min) * std::max(0.0, dt);
+      const double previous_speed_command_mps =
+        std::isfinite(last_u_[0]) ? std::max(0.0, last_u_[0]) : 0.0;
+      const double hold_base_speed_mps = std::min(
+        previous_speed_command_mps, std::max(0.0, std::abs(actual_v)));
+      u[0] = wall_handoff_admission.stop_required ? 0.0 :
+        std::max(0.0, hold_base_speed_mps + deceleration_step_mps);
+      u[1] = std::isfinite(last_u_[1]) ? last_u_[1] : 0.0;
+      max_delta = std::abs(u[1]);
+      mpc_->synchronize_wall_handoff_hold_control(
+        u, overtake_orchestrator::to_string(wall_handoff_admission.reason));
+    }
+    if (wall_handoff_admission.state_changed) {
+      const auto message =
+        overtake_orchestrator::format_wall_handoff_admission_trace(
+        active_control_decision_id_, wall_handoff_admission_request,
+        wall_handoff_admission, u[0], u[1]);
+      if (wall_handoff_admission.hold_control) {
+        RCLCPP_WARN(get_logger(), "%s", message.c_str());
+      } else {
+        RCLCPP_INFO(get_logger(), "%s", message.c_str());
+      }
+    }
+
     if (!enable_control_) {
       const double last_v_cmd = last_u_[0];
       if (last_v_cmd < 0.5) {
@@ -45275,7 +45377,8 @@ private:
     const bool forced_stop_active =
       (mpc_fallback_active && !solver_failure_crawl_active &&
       !solver_failure_continuation_active) || !enable_control_ ||
-      mpc_->low_speed_direct_wall_stop_active();
+      mpc_->low_speed_direct_wall_stop_active() ||
+      (wall_handoff_hold_active && wall_handoff_admission.stop_required);
     if (forced_stop_active) {
       bug_acc_enabled = false;
       acc = mpc_cfg_.a_min;
@@ -45285,6 +45388,10 @@ private:
     } else if (solver_failure_continuation_active) {
       bug_acc_enabled = false;
       acc = 0.0;
+    } else if (wall_handoff_hold_active) {
+      bug_acc_enabled = false;
+      acc = wall_handoff_admission.stop_required ? mpc_cfg_.a_min :
+        std::min(0.0, 100.0 * (u[0] - actual_v));
     } else if (use_bug_acc_) {
       const auto deg2rad = [](const double deg) { return deg * kPi / 180.0; };
       if (
@@ -45319,7 +45426,7 @@ private:
     if (!forced_stop_active) {
       acc = last_acc_ + (acc - last_acc_) * mpc_cfg_.accel_low_pass_gain;
     }
-    if (solver_failure_continuation_active) {
+    if (solver_failure_continuation_active || wall_handoff_hold_active) {
       acc = std::min(0.0, acc);
     }
     u[1] = last_u_[1] + (u[1] - last_u_[1]) * mpc_cfg_.steer_low_pass_gain;
@@ -45338,6 +45445,12 @@ private:
     const bool recovery_command_active = recovery_output.has_value() &&
       apply_stuck_recovery_arbitration(
       recovery_output.value(), actual_v, current_time, u, acc, bug_acc_enabled);
+    if (recovery_command_active && wall_handoff_admission_gate_.active()) {
+      wall_handoff_admission_gate_.reset();
+      RCLCPP_WARN(
+        get_logger(),
+        "DynamicEscape wall handoff admission reset: Recovery took control");
+    }
     acc = clip(acc, mpc_cfg_.a_min, mpc_cfg_.a_max);
     u[1] = clip(u[1], -mpc_cfg_.delta_max, mpc_cfg_.delta_max);
     if (!recovery_command_active) {
@@ -45369,6 +45482,8 @@ private:
       mpc_->low_speed_direct_wall_stop_active();
     final_source_request.solver_bounded_continuation_active =
       solver_failure_continuation_active;
+    final_source_request.solver_wall_handoff_hold_active =
+      wall_handoff_hold_active;
     final_source_request.solver_crawl_active = solver_failure_crawl_active;
     final_source_request.solver_fallback_active = mpc_fallback_active;
     final_source_request.forced_stop_active = forced_stop_active;
@@ -45385,6 +45500,9 @@ private:
       output_reason = "solver-failure-crawl";
     } else if (solver_failure_continuation_active) {
       output_reason = "solver-failure-dynamic-escape-hold";
+    } else if (wall_handoff_hold_active) {
+      output_reason = std::string{"solver-wall-handoff-hold/"} +
+        overtake_orchestrator::to_string(wall_handoff_admission.reason);
     } else if (forced_stop_active) {
       if (mpc_->low_speed_direct_wall_stop_active()) {
         output_reason = "low-speed-direct-wall-stop";
@@ -45442,7 +45560,8 @@ private:
     boost_context.control_enabled = enable_control_;
     boost_context.normal_command_published = true;
     boost_context.failsafe_active =
-      forced_stop_active || odom_failsafe_active_ || command_failsafe_active_;
+      forced_stop_active || wall_handoff_hold_active ||
+      odom_failsafe_active_ || command_failsafe_active_;
     boost_context.v2x_safety_brake_active =
       mpc_->last_v2x_behavior_output().state == V2XBehaviorState::SafetyBrake;
     boost_context.solver_fallback_active = mpc_fallback_active;
@@ -45519,6 +45638,8 @@ private:
   final_control_trace_emitter_;
   overtake_orchestrator::ChangeAwareWallHandoffTraceEmitter
   wall_handoff_trace_emitter_;
+  overtake_orchestrator::DynamicEscapeWallHandoffAdmissionGate
+  wall_handoff_admission_gate_;
   std::optional<CurrentWallTraceSnapshot> last_current_wall_trace_snapshot_;
   double last_published_steering_for_wall_trace_{
     std::numeric_limits<double>::quiet_NaN()};

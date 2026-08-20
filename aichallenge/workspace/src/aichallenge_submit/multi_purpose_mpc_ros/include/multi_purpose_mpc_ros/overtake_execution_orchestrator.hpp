@@ -262,6 +262,7 @@ enum class FinalControlSource {
   LowSpeedWallStop,
   SolverFallback,
   SolverBoundedContinuation,
+  SolverWallHandoffHold,
   SolverCrawl,
   ControlDisabled,
   StuckRecovery,
@@ -274,6 +275,7 @@ struct FinalControlSourceRequest {
   bool control_enabled{true};
   bool low_speed_wall_stop_active{false};
   bool solver_bounded_continuation_active{false};
+  bool solver_wall_handoff_hold_active{false};
   bool solver_crawl_active{false};
   bool solver_fallback_active{false};
   bool forced_stop_active{false};
@@ -334,6 +336,80 @@ enum class WallRiskState {
 
 const char * to_string(WallRiskState state) noexcept;
 
+struct PredictedPathWallMetrics {
+  bool available{false};
+  bool valid{false};
+  bool retained_solution{false};
+  bool contact{false};
+  bool out_of_map{false};
+  std::size_t sample_count{0U};
+  std::size_t minimum_index{0U};
+  std::string minimum_wall_region{"Unknown"};
+  double minimum_wall_distance_m{std::numeric_limits<double>::infinity()};
+  double minimum_wall_path_distance_m{
+    std::numeric_limits<double>::quiet_NaN()};
+};
+
+enum class WallHandoffAdmissionReason {
+  Inactive,
+  CurrentFootprintUnavailable,
+  CurrentFootprintUnsafe,
+  PredictionUnavailable,
+  PredictionInvalid,
+  PredictedContact,
+  PredictedOutOfMap,
+  InsufficientClearance,
+  Requalifying,
+  Accepted,
+};
+
+const char * to_string(WallHandoffAdmissionReason reason) noexcept;
+
+struct WallHandoffAdmissionRequest {
+  bool recovered_from_bounded_continuation{false};
+  bool current_footprint_valid{false};
+  bool current_footprint_clear{false};
+  bool current_footprint_out_of_map{false};
+  std::size_t current_contact_count{0U};
+  PredictedPathWallMetrics prediction;
+  double required_wall_clearance_m{0.0};
+  int required_consecutive_valid_cycles{2};
+};
+
+struct WallHandoffAdmissionResolution {
+  bool active{false};
+  bool entered{false};
+  bool released{false};
+  bool hold_control{false};
+  bool stop_required{false};
+  bool state_changed{false};
+  int hold_cycles{0};
+  int consecutive_valid_cycles{0};
+  int required_consecutive_valid_cycles{2};
+  WallHandoffAdmissionReason reason{WallHandoffAdmissionReason::Inactive};
+};
+
+class DynamicEscapeWallHandoffAdmissionGate {
+public:
+  WallHandoffAdmissionResolution update(
+    const WallHandoffAdmissionRequest & request) noexcept;
+  bool active() const noexcept;
+  void reset() noexcept;
+
+private:
+  bool active_{false};
+  int hold_cycles_{0};
+  int consecutive_valid_cycles_{0};
+  WallHandoffAdmissionReason previous_reason_{
+    WallHandoffAdmissionReason::Inactive};
+};
+
+std::string format_wall_handoff_admission_trace(
+  std::uint64_t decision_id,
+  const WallHandoffAdmissionRequest & request,
+  const WallHandoffAdmissionResolution & resolution,
+  double held_speed_mps, double held_steering_rad);
+
 struct WallHandoffProbe {
   std::uint64_t decision_id{0U};
   bool dynamic_escape_active{false};
@@ -374,20 +450,6 @@ struct WallHandoffEvent {
   PathSource previous_path_source{PathSource::RacingLine};
   FinalControlSource previous_control_source{FinalControlSource::MpcSolution};
   std::string trigger{"none"};
-};
-
-struct PredictedPathWallMetrics {
-  bool available{false};
-  bool valid{false};
-  bool retained_solution{false};
-  bool contact{false};
-  bool out_of_map{false};
-  std::size_t sample_count{0U};
-  std::size_t minimum_index{0U};
-  std::string minimum_wall_region{"Unknown"};
-  double minimum_wall_distance_m{std::numeric_limits<double>::infinity()};
-  double minimum_wall_path_distance_m{
-    std::numeric_limits<double>::quiet_NaN()};
 };
 
 WallRiskState classify_wall_risk(const WallHandoffProbe & probe) noexcept;

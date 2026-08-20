@@ -342,6 +342,11 @@ TEST(OvertakeExecutionOrchestrator, ResolvesFinalControlSourceByOutputPrecedence
     orchestrator::resolve_final_control_source(request),
     orchestrator::FinalControlSource::SolverBoundedContinuation);
 
+  request.solver_wall_handoff_hold_active = true;
+  EXPECT_EQ(
+    orchestrator::resolve_final_control_source(request),
+    orchestrator::FinalControlSource::SolverWallHandoffHold);
+
   request.low_speed_wall_stop_active = true;
   EXPECT_EQ(
     orchestrator::resolve_final_control_source(request),
@@ -454,6 +459,135 @@ TEST(OvertakeExecutionOrchestrator, ClassifiesCurrentFootprintWallRisk)
   EXPECT_EQ(
     orchestrator::classify_wall_risk(probe),
     orchestrator::WallRiskState::Contact);
+}
+
+TEST(OvertakeExecutionOrchestrator, RejectsUnsafeRecoveredWallHandoff)
+{
+  orchestrator::DynamicEscapeWallHandoffAdmissionGate gate;
+  orchestrator::WallHandoffAdmissionRequest request;
+  request.recovered_from_bounded_continuation = true;
+  request.current_footprint_valid = true;
+  request.current_footprint_clear = true;
+  request.prediction.available = true;
+  request.prediction.valid = true;
+  request.prediction.contact = true;
+  request.prediction.sample_count = 18U;
+  request.prediction.minimum_wall_distance_m = 0.0;
+  request.required_wall_clearance_m = 0.40;
+
+  const auto rejected = gate.update(request);
+  EXPECT_TRUE(rejected.entered);
+  EXPECT_TRUE(rejected.active);
+  EXPECT_TRUE(rejected.hold_control);
+  EXPECT_FALSE(rejected.stop_required);
+  EXPECT_EQ(
+    rejected.reason,
+    orchestrator::WallHandoffAdmissionReason::PredictedContact);
+  EXPECT_TRUE(gate.active());
+}
+
+TEST(OvertakeExecutionOrchestrator, RequiresConsecutiveSafeWallHandoffs)
+{
+  orchestrator::DynamicEscapeWallHandoffAdmissionGate gate;
+  orchestrator::WallHandoffAdmissionRequest request;
+  request.recovered_from_bounded_continuation = true;
+  request.current_footprint_valid = true;
+  request.current_footprint_clear = true;
+  request.prediction.available = true;
+  request.prediction.valid = true;
+  request.prediction.sample_count = 18U;
+  request.prediction.minimum_wall_distance_m = 0.60;
+  request.required_wall_clearance_m = 0.40;
+  request.required_consecutive_valid_cycles = 2;
+
+  const auto first = gate.update(request);
+  EXPECT_TRUE(first.entered);
+  EXPECT_TRUE(first.hold_control);
+  EXPECT_EQ(first.consecutive_valid_cycles, 1);
+  EXPECT_EQ(
+    first.reason, orchestrator::WallHandoffAdmissionReason::Requalifying);
+
+  request.recovered_from_bounded_continuation = false;
+  const auto second = gate.update(request);
+  EXPECT_TRUE(second.released);
+  EXPECT_FALSE(second.active);
+  EXPECT_FALSE(second.hold_control);
+  EXPECT_EQ(second.consecutive_valid_cycles, 2);
+  EXPECT_EQ(second.reason, orchestrator::WallHandoffAdmissionReason::Accepted);
+  EXPECT_FALSE(gate.active());
+}
+
+TEST(OvertakeExecutionOrchestrator, NeverTimesOutIntoUnsafeWallHandoff)
+{
+  orchestrator::DynamicEscapeWallHandoffAdmissionGate gate;
+  orchestrator::WallHandoffAdmissionRequest request;
+  request.recovered_from_bounded_continuation = true;
+  request.current_footprint_valid = true;
+  request.current_footprint_clear = true;
+  request.prediction.available = true;
+  request.prediction.valid = true;
+  request.prediction.minimum_wall_distance_m = 0.20;
+  request.required_wall_clearance_m = 0.40;
+
+  auto result = gate.update(request);
+  request.recovered_from_bounded_continuation = false;
+  for (int cycle = 0; cycle < 100; ++cycle) {
+    result = gate.update(request);
+  }
+  EXPECT_TRUE(result.active);
+  EXPECT_TRUE(result.hold_control);
+  EXPECT_FALSE(result.released);
+  EXPECT_EQ(
+    result.reason,
+    orchestrator::WallHandoffAdmissionReason::InsufficientClearance);
+}
+
+TEST(OvertakeExecutionOrchestrator, StopsWallHandoffWhenCurrentFootprintIsUnsafe)
+{
+  orchestrator::DynamicEscapeWallHandoffAdmissionGate gate;
+  orchestrator::WallHandoffAdmissionRequest request;
+  request.recovered_from_bounded_continuation = true;
+  request.current_footprint_valid = true;
+  request.current_footprint_clear = false;
+  request.current_contact_count = 1U;
+
+  const auto result = gate.update(request);
+  EXPECT_TRUE(result.hold_control);
+  EXPECT_TRUE(result.stop_required);
+  EXPECT_EQ(
+    result.reason,
+    orchestrator::WallHandoffAdmissionReason::CurrentFootprintUnsafe);
+}
+
+TEST(OvertakeExecutionOrchestrator, FormatsWallHandoffAdmissionEvidence)
+{
+  orchestrator::WallHandoffAdmissionRequest request;
+  request.current_footprint_valid = true;
+  request.current_footprint_clear = true;
+  request.prediction.available = true;
+  request.prediction.valid = true;
+  request.prediction.contact = true;
+  request.prediction.sample_count = 18U;
+  request.prediction.minimum_wall_region = "Mixed";
+  request.prediction.minimum_wall_distance_m = 0.0;
+  request.prediction.minimum_index = 3U;
+  request.prediction.minimum_wall_path_distance_m = 4.82;
+  request.required_wall_clearance_m = 0.40;
+  orchestrator::WallHandoffAdmissionResolution resolution;
+  resolution.entered = true;
+  resolution.active = true;
+  resolution.hold_control = true;
+  resolution.hold_cycles = 1;
+  resolution.required_consecutive_valid_cycles = 2;
+  resolution.reason =
+    orchestrator::WallHandoffAdmissionReason::PredictedContact;
+
+  const auto message = orchestrator::format_wall_handoff_admission_trace(
+    3175U, request, resolution, 4.1, -0.02);
+  EXPECT_NE(message.find("decision=3175"), std::string::npos);
+  EXPECT_NE(message.find("event=entered"), std::string::npos);
+  EXPECT_NE(message.find("reason=predicted-wall-contact"), std::string::npos);
+  EXPECT_NE(message.find("path_wall=Mixed/0.00m@3/4.82m"), std::string::npos);
 }
 
 TEST(OvertakeExecutionOrchestrator, MonitorsWallAfterDynamicEscapeHandoff)

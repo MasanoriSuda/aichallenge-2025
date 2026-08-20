@@ -368,6 +368,7 @@ enum class WallHandoffAdmissionReason {
 const char * to_string(WallHandoffAdmissionReason reason) noexcept;
 
 struct WallHandoffAdmissionRequest {
+  std::uint64_t mission_generation{0U};
   bool activation_requested{false};
   bool observation_updated{true};
   bool current_footprint_valid{false};
@@ -376,6 +377,9 @@ struct WallHandoffAdmissionRequest {
   std::size_t current_contact_count{0U};
   PredictedPathWallMetrics prediction;
   double required_wall_clearance_m{0.0};
+  bool planner_wall_contract_available{false};
+  double planner_minimum_wall_distance_m{
+    std::numeric_limits<double>::infinity()};
   int required_consecutive_valid_cycles{2};
 };
 
@@ -385,6 +389,9 @@ struct WallHandoffAdmissionResolution {
   bool released{false};
   bool hold_control{false};
   bool stop_required{false};
+  bool replan_required{false};
+  bool replan_requested{false};
+  bool planner_physical_contract_mismatch{false};
   bool state_changed{false};
   int hold_cycles{0};
   int consecutive_valid_cycles{0};

@@ -6002,6 +6002,106 @@ struct MPC
       "wall-handoff-hold/" + admission_reason;
   }
 
+  bool request_active_overtake_wall_replan(
+    const std::string & reason, const double now_sec,
+    const std::uint64_t decision_id)
+  {
+    const bool active_pass_execution =
+      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+      overtake_line_state_.phase == OvertakeLinePhase::Pass;
+    const bool returning =
+      overtake_line_state_.phase == OvertakeLinePhase::Return;
+    if (
+      (!active_pass_execution && !returning) ||
+      !overtake_line_state_.mission_path_frozen ||
+      current_overtake_mission_invalidated())
+    {
+      return false;
+    }
+
+    const auto previous_phase = overtake_line_state_.phase;
+    const std::uint64_t rejected_generation =
+      overtake_line_state_.mission_generation;
+    const std::string target_id = overtake_line_state_.target_vehicle_id;
+    const int pass_side_sign = overtake_line_state_.pass_side_sign;
+    invalidate_current_overtake_mission(reason);
+    clear_last_feasible_maneuver_cache("active wall path rejected");
+    solved_mpcc_execution_trajectory_.reset();
+    last_physically_validated_mpcc_execution_trajectory_.reset();
+    // DynamicMissionWait normally preserves a recent DP prefix across a soft
+    // target-side replan. A physical wall rejection is different: that exact
+    // prefix is the rejected evidence and must never remain lateral authority.
+    overtake_line_state_.mission_frenet_dp_execution_active = false;
+    overtake_line_state_.mission_frenet_dp_side_sign = 0;
+    overtake_line_state_.mission_frenet_dp_execution_traveled_m = 0.0;
+    overtake_line_state_.mission_frenet_dp_path_distances_m.clear();
+    overtake_line_state_.mission_frenet_dp_lateral_path_m.clear();
+    overtake_line_state_.mission_frenet_dp_execution_authority_was_active = false;
+    overtake_line_state_.mission_frenet_dp_execution_authority_runtime_was_active = false;
+    overtake_line_state_.mission_frenet_dp_last_runtime_validation_sec =
+      -std::numeric_limits<double>::infinity();
+    overtake_line_state_.mission_runtime_wall_escape_prefix_active = false;
+    if (gap_planner != nullptr) {
+      gap_planner->reset_low_speed_targets();
+    }
+
+    if (active_pass_execution) {
+      const auto & line_cfg = cfg.v2x_behavior.overtake_line;
+      const auto & behavior_output = last_v2x_behavior_output_;
+      const bool before_no_return =
+        !overtake_line_state_.opponent_side_replan_no_return_latched &&
+        !overtake_line_state_.mission_cross_side_transition_committed &&
+        behavior_output.overtake_commit_stage ==
+        overtake_core::PassCommitStage::ShiftCommitted &&
+        std::isfinite(behavior_output.locked_target_longitudinal) &&
+        behavior_output.locked_target_longitudinal + kEps >=
+        line_cfg.opponent_side_replan_no_return_front_distance;
+      const bool replacement_count_available =
+        !overtake_line_state_.mission_cross_side_transition_committed &&
+        overtake_line_state_.opponent_side_replan_count <
+        line_cfg.opponent_side_replan_max_count;
+      overtake_line_state_.dynamic_mission_wait_active = true;
+      overtake_line_state_.dynamic_mission_wait_trigger_reason = reason;
+      overtake_line_state_.dynamic_mission_wait_cross_side_lease_active =
+        before_no_return && replacement_count_available;
+      overtake_line_state_.dynamic_mission_wait_bounded_escape_at_entry = false;
+      overtake_line_state_.dynamic_mission_wait_terminal_budget_abort = false;
+      overtake_line_state_.dynamic_mission_wait_rear_clear_extension_logged = false;
+      overtake_line_state_.dynamic_mission_wait_best_target_longitudinal_m =
+        std::isfinite(behavior_output.locked_target_longitudinal) ?
+        behavior_output.locked_target_longitudinal :
+        std::numeric_limits<double>::infinity();
+      overtake_line_state_.dynamic_mission_wait_last_progress_sec =
+        std::isfinite(behavior_output.locked_target_longitudinal) ?
+        now_sec : std::numeric_limits<double>::quiet_NaN();
+      overtake_line_state_.opponent_side_replan_last_evaluation_sec =
+        -std::numeric_limits<double>::infinity();
+      transition_overtake_line_phase(
+        OvertakeLinePhase::FollowPrepare, now_sec, model->spatial_state.e_y,
+        pass_side_sign, "physical wall path rejected: " + reason,
+        FollowPrepareCause::DynamicMissionWait);
+    } else {
+      // A Return path no longer has an opponent-side Mission to replace. Let
+      // the existing Recovery planner build a fresh wall-aware rejoin instead
+      // of retaining the rejected return trajectory.
+      transition_overtake_line_phase(
+        OvertakeLinePhase::Recovery, now_sec, model->spatial_state.e_y,
+        pass_side_sign, "physical Return wall path rejected: " + reason);
+    }
+    last_control_resolution_reason_ =
+      "active-wall-path-replan/" + reason;
+    RCLCPP_WARN(
+      rclcpp::get_logger("mpc_controller"),
+      "Overtake wall path invalidated: decision=%lu, target=%s, "
+      "generation=%lu, phase=%s, side=%d, action=%s, reason=%s, wp_id=%d",
+      static_cast<unsigned long>(decision_id), target_id.c_str(),
+      static_cast<unsigned long>(rejected_generation),
+      to_string(previous_phase), pass_side_sign,
+      active_pass_execution ? "dynamic-replan" : "recovery-replan",
+      reason.c_str(), model != nullptr ? model->wp_id : -1);
+    return true;
+  }
+
   bool last_control_was_fallback() const
   {
     return last_control_was_fallback_;
@@ -45405,6 +45505,18 @@ private:
       [&] (
       overtake_orchestrator::WallHandoffAdmissionRequest & request,
       const overtake_orchestrator::FinalControlSource source) {
+        if (overtake_authority.has_value()) {
+          request.mission_generation =
+            overtake_authority->request.mission_generation;
+          request.planner_wall_contract_available =
+            std::isfinite(
+            overtake_authority->request.wall_contract_required_clearance_m) &&
+            overtake_authority->request.wall_contract_required_clearance_m >= 0.0 &&
+            std::isfinite(
+            overtake_authority->request.wall_contract_minimum_path_clearance_m);
+          request.planner_minimum_wall_distance_m =
+            overtake_authority->request.wall_contract_minimum_path_clearance_m;
+        }
         request.current_footprint_valid = solver_crawl_footprint_sample.valid;
         request.current_footprint_clear = solver_crawl_footprint_clear;
         request.current_footprint_out_of_map =
@@ -45489,6 +45601,33 @@ private:
         "active-overtake/"} +
         overtake_orchestrator::to_string(active_wall_admission.reason);
       mpc_->synchronize_wall_handoff_hold_control(u, hold_reason);
+      if (
+        overtake_wall_admission_hold_active &&
+        overtake_wall_admission.replan_required)
+      {
+        std::ostringstream replan_reason;
+        replan_reason << "final physical wall admission/"
+                      << overtake_orchestrator::to_string(
+          overtake_wall_admission.reason)
+                      << ", physical_min="
+                      << overtake_wall_admission_request.prediction.
+          minimum_wall_distance_m
+                      << "m, required="
+                      << overtake_wall_admission_request.required_wall_clearance_m
+                      << "m";
+        if (
+          overtake_wall_admission.
+          planner_physical_contract_mismatch)
+        {
+          replan_reason << ", planner_min="
+                        << overtake_wall_admission_request.
+            planner_minimum_wall_distance_m << "m";
+        }
+        overtake_wall_admission.replan_requested =
+          mpc_->request_active_overtake_wall_replan(
+          replan_reason.str(), current_time.seconds(),
+          active_control_decision_id_);
+      }
     }
     const auto authority_phase = overtake_authority.has_value() ?
       overtake_authority->request.phase : overtake_orchestrator::Phase::Idle;

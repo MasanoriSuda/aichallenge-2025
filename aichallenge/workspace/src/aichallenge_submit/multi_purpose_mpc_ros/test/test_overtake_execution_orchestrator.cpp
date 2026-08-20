@@ -572,6 +572,45 @@ TEST(OvertakeExecutionOrchestrator, ClassifiesActiveWallPathBeforeLatch)
     orchestrator::WallHandoffAdmissionReason::Accepted);
 }
 
+TEST(OvertakeExecutionOrchestrator, RequestsReplanForPredictedOnlyWallRejection)
+{
+  orchestrator::WallPathAdmissionGate gate;
+  orchestrator::WallHandoffAdmissionRequest request;
+  request.mission_generation = 42U;
+  request.activation_requested = true;
+  request.current_footprint_valid = true;
+  request.current_footprint_clear = true;
+  request.prediction.available = true;
+  request.prediction.valid = true;
+  request.prediction.minimum_wall_distance_m = 0.33;
+  request.required_wall_clearance_m = 0.40;
+  request.planner_wall_contract_available = true;
+  request.planner_minimum_wall_distance_m = 0.60;
+
+  const auto result = gate.update(request);
+  EXPECT_TRUE(result.hold_control);
+  EXPECT_FALSE(result.stop_required);
+  EXPECT_TRUE(result.replan_required);
+  EXPECT_TRUE(result.planner_physical_contract_mismatch);
+  EXPECT_EQ(
+    result.reason,
+    orchestrator::WallHandoffAdmissionReason::InsufficientClearance);
+}
+
+TEST(OvertakeExecutionOrchestrator, DoesNotReplanFromCurrentWallContact)
+{
+  orchestrator::WallPathAdmissionGate gate;
+  orchestrator::WallHandoffAdmissionRequest request;
+  request.activation_requested = true;
+  request.current_footprint_valid = true;
+  request.current_footprint_clear = false;
+  request.current_contact_count = 1U;
+
+  const auto result = gate.update(request);
+  EXPECT_TRUE(result.stop_required);
+  EXPECT_FALSE(result.replan_required);
+}
+
 TEST(OvertakeExecutionOrchestrator, NeverTimesOutIntoUnsafeWallHandoff)
 {
   orchestrator::WallPathAdmissionGate gate;
@@ -617,6 +656,7 @@ TEST(OvertakeExecutionOrchestrator, StopsWallHandoffWhenCurrentFootprintIsUnsafe
 TEST(OvertakeExecutionOrchestrator, FormatsWallHandoffAdmissionEvidence)
 {
   orchestrator::WallHandoffAdmissionRequest request;
+  request.mission_generation = 73U;
   request.current_footprint_valid = true;
   request.current_footprint_clear = true;
   request.prediction.available = true;
@@ -628,10 +668,15 @@ TEST(OvertakeExecutionOrchestrator, FormatsWallHandoffAdmissionEvidence)
   request.prediction.minimum_index = 3U;
   request.prediction.minimum_wall_path_distance_m = 4.82;
   request.required_wall_clearance_m = 0.40;
+  request.planner_wall_contract_available = true;
+  request.planner_minimum_wall_distance_m = 0.60;
   orchestrator::WallHandoffAdmissionResolution resolution;
   resolution.entered = true;
   resolution.active = true;
   resolution.hold_control = true;
+  resolution.replan_required = true;
+  resolution.replan_requested = true;
+  resolution.planner_physical_contract_mismatch = true;
   resolution.hold_cycles = 1;
   resolution.required_consecutive_valid_cycles = 2;
   resolution.reason =
@@ -642,11 +687,15 @@ TEST(OvertakeExecutionOrchestrator, FormatsWallHandoffAdmissionEvidence)
     orchestrator::Phase::Pass, orchestrator::PathSource::RecedingDp,
     request, resolution, 4.1, -0.02);
   EXPECT_NE(message.find("decision=3175"), std::string::npos);
+  EXPECT_NE(message.find("mission_generation=73"), std::string::npos);
   EXPECT_NE(message.find("scope=active-overtake"), std::string::npos);
   EXPECT_NE(message.find("phase=Pass"), std::string::npos);
   EXPECT_NE(message.find("path_source=receding-dp"), std::string::npos);
   EXPECT_NE(message.find("event=entered"), std::string::npos);
   EXPECT_NE(message.find("reason=predicted-wall-contact"), std::string::npos);
+  EXPECT_NE(message.find("replan=1/1"), std::string::npos);
+  EXPECT_NE(message.find("planner_wall=1/0.60m"), std::string::npos);
+  EXPECT_NE(message.find("contract_mismatch=1"), std::string::npos);
   EXPECT_NE(message.find("path_wall=Mixed/0.00m@3/4.82m"), std::string::npos);
 }
 

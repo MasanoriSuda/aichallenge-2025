@@ -963,6 +963,24 @@ WallHandoffAdmissionResolution WallPathAdmissionGate::update(
       resolution.stop_required = stop;
     };
   const auto observation_reason = classify_wall_path_admission(request);
+  const bool predicted_path_rejected =
+    observation_reason == WallHandoffAdmissionReason::PredictionUnavailable ||
+    observation_reason == WallHandoffAdmissionReason::PredictionInvalid ||
+    observation_reason == WallHandoffAdmissionReason::PredictedContact ||
+    observation_reason == WallHandoffAdmissionReason::PredictedOutOfMap ||
+    observation_reason == WallHandoffAdmissionReason::InsufficientClearance;
+  resolution.replan_required =
+    resolution.entered && request.current_footprint_valid &&
+    request.current_footprint_clear && predicted_path_rejected;
+  resolution.planner_physical_contract_mismatch =
+    request.planner_wall_contract_available &&
+    std::isfinite(request.planner_minimum_wall_distance_m) &&
+    std::isfinite(request.required_wall_clearance_m) &&
+    request.planner_minimum_wall_distance_m + 1e-9 >=
+    request.required_wall_clearance_m &&
+    std::isfinite(request.prediction.minimum_wall_distance_m) &&
+    request.prediction.minimum_wall_distance_m + 1e-9 <
+    request.required_wall_clearance_m;
   if (observation_reason != WallHandoffAdmissionReason::Accepted) {
     const bool stop_required =
       observation_reason ==
@@ -1029,6 +1047,7 @@ std::string format_wall_path_admission_trace(
     "requalifying" : "blocked"));
   std::ostringstream stream;
   stream << "Wall path admission: decision=" << decision_id
+         << ", mission_generation=" << request.mission_generation
          << ", scope=" << to_string(scope)
          << ", phase=" << to_string(phase)
          << ", path_source=" << to_string(path_source)
@@ -1037,6 +1056,8 @@ std::string format_wall_path_admission_trace(
          << ", active=" << (resolution.active ? 1 : 0)
          << ", hold=" << (resolution.hold_control ? 1 : 0)
          << ", stop=" << (resolution.stop_required ? 1 : 0)
+         << ", replan=" << (resolution.replan_required ? 1 : 0) << "/"
+         << (resolution.replan_requested ? 1 : 0)
          << ", valid=" << resolution.consecutive_valid_cycles << "/"
          << resolution.required_consecutive_valid_cycles
          << ", holds=" << resolution.hold_cycles
@@ -1046,6 +1067,11 @@ std::string format_wall_path_admission_trace(
          << (request.current_footprint_out_of_map ? 1 : 0)
          << ", required="
          << finite_or(request.required_wall_clearance_m, "nan") << "m"
+         << ", planner_wall="
+         << (request.planner_wall_contract_available ? 1 : 0) << "/"
+         << finite_or(request.planner_minimum_wall_distance_m, "inf") << "m"
+         << ", contract_mismatch="
+         << (resolution.planner_physical_contract_mismatch ? 1 : 0)
          << ", prediction=" << (request.prediction.available ? 1 : 0) << "/"
          << (request.prediction.valid ? 1 : 0) << "/"
          << request.prediction.sample_count

@@ -87,6 +87,7 @@ AuthorityResolution resolve_authority(const AuthorityRequest & request) noexcept
     std::isfinite(request.speed_reference_mps);
   result.apply_overtake_speed_limit = std::isfinite(request.speed_limit_mps);
   result.apply_overtake_speed_floor = request.pass_speed_floor_active;
+  result.path_source = request.path_source_hint;
 
   if (safety_active) {
     result.action = Action::SafetyBrake;
@@ -144,6 +145,30 @@ AuthorityResolution resolve_authority(const AuthorityRequest & request) noexcept
   }
 
   if (safety_active) {
+    result.path_source = PathSource::SafetyHold;
+  } else if (request.phase == Phase::Recovery) {
+    result.path_source = PathSource::RecoveryLine;
+  } else if (
+    request.contact_continuation_active || request.precontact_escape_active)
+  {
+    result.path_source = PathSource::ContactEscape;
+  } else if (
+    request.dynamic_wait_active && request.dynamic_wait_forward_prefix_active)
+  {
+    result.path_source = PathSource::DynamicWaitPrefix;
+  } else if (request.dynamic_obstacle_escape_active) {
+    result.path_source = PathSource::DynamicObstacleEscape;
+  } else if (request.gap_planner_active && !request.line_active) {
+    result.path_source = PathSource::GapPlanner;
+  } else if (
+    request.line_active && request.path_source_hint == PathSource::RacingLine)
+  {
+    result.path_source = PathSource::FrozenMission;
+  } else if (!request.line_active) {
+    result.path_source = PathSource::RacingLine;
+  }
+
+  if (safety_active) {
     result.longitudinal_owner = LongitudinalOwner::SafetyBrake;
   } else if (request.solver_fallback_active) {
     result.longitudinal_owner = LongitudinalOwner::SolverFallback;
@@ -184,10 +209,15 @@ AuthorityResolution resolve_authority(const AuthorityRequest & request) noexcept
   if (active_phase && request.target_id.empty()) {
     result.conflicts |= ActivePhaseWithoutTarget;
   }
+  // DynamicObstacleEscape consumes GapPlanner bounds as one execution chain.
+  // Counting both flags as independent owners produces a false conflict even
+  // though only DynamicObstacleEscape owns the final lateral command.
+  const bool independent_gap_planner =
+    request.gap_planner_active && !request.dynamic_obstacle_escape_active;
   const int lateral_source_count =
     (request.line_active ? 1 : 0) +
     (request.dynamic_obstacle_escape_active ? 1 : 0) +
-    (request.gap_planner_active ? 1 : 0);
+    (independent_gap_planner ? 1 : 0);
   if (lateral_source_count > 1) {
     result.conflicts |= MultipleLateralAuthorities;
   }
@@ -274,6 +304,23 @@ const char * to_string(const LongitudinalOwner owner) noexcept
   return "unknown";
 }
 
+const char * to_string(const PathSource source) noexcept
+{
+  switch (source) {
+    case PathSource::RacingLine: return "racing-line";
+    case PathSource::GapPlanner: return "gap-planner";
+    case PathSource::DynamicObstacleEscape: return "dynamic-obstacle-escape";
+    case PathSource::FrozenMission: return "frozen-mission";
+    case PathSource::RecedingHorizon: return "receding-horizon";
+    case PathSource::RecedingDp: return "receding-dp";
+    case PathSource::DynamicWaitPrefix: return "dynamic-wait-prefix";
+    case PathSource::ContactEscape: return "contact-escape";
+    case PathSource::RecoveryLine: return "recovery-line";
+    case PathSource::SafetyHold: return "safety-hold";
+  }
+  return "unknown";
+}
+
 std::string format_conflicts(const std::uint32_t conflicts)
 {
   if (conflicts == NoConflict) {
@@ -311,7 +358,12 @@ std::string categorical_signature(const AuthorityTrace & trace)
          << static_cast<int>(trace.resolution.action) << "|"
          << static_cast<int>(trace.resolution.lateral_owner) << "|"
          << static_cast<int>(trace.resolution.longitudinal_owner) << "|"
+         << static_cast<int>(trace.resolution.path_source) << "|"
+         << trace.request.pass_side_sign << "|"
          << trace.resolution.conflicts << "|"
+         << (std::isfinite(trace.request.speed_reference_mps) ? 1 : 0) << "|"
+         << (std::isfinite(trace.request.speed_limit_mps) ? 1 : 0) << "|"
+         << (trace.request.pass_speed_floor_active ? 1 : 0) << "|"
          << (trace.request.corridor_blocked ? 1 : 0) << "|"
          << (trace.request.dynamic_wait_active ? 1 : 0) << "|"
          << (trace.request.contact_continuation_active ? 1 : 0) << "|"
@@ -322,14 +374,18 @@ std::string categorical_signature(const AuthorityTrace & trace)
 std::string format_authority_trace(const AuthorityTrace & trace)
 {
   std::ostringstream stream;
-  stream << "Overtake execution authority: episode=" << trace.request.episode_id
+  stream << "Overtake execution authority: decision=" << trace.request.decision_id
+         << ", episode=" << trace.request.episode_id
          << ", generation=" << trace.request.mission_generation
          << ", target=" << (trace.request.target_id.empty() ? "<none>" : trace.request.target_id)
+         << ", side=" << trace.request.pass_side_sign
          << ", phase=" << to_string(trace.request.phase)
          << ", behavior=" << to_string(trace.request.behavior)
          << ", action=" << to_string(trace.resolution.action)
          << ", lateral_owner=" << to_string(trace.resolution.lateral_owner)
          << ", longitudinal_owner=" << to_string(trace.resolution.longitudinal_owner)
+         << ", path_source=" << to_string(trace.resolution.path_source)
+         << ", path_age=" << finite_or(trace.request.path_age_sec, "inf") << "s"
          << ", line=" << (trace.request.line_active ? 1 : 0)
          << ", stage_corridor=" << (trace.request.stage_corridor_active ? 1 : 0)
          << ", gap=" << (trace.request.gap_planner_active ? 1 : 0)
@@ -355,6 +411,12 @@ std::string format_authority_trace(const AuthorityTrace & trace)
          << "m, ego=" << finite_or(trace.ego_speed_mps, "nan")
          << "m/s, conflict=" << format_conflicts(trace.resolution.conflicts)
          << ", reason=" << trace.resolution.reason
+         << ", transition=\""
+         << (trace.request.transition_reason.empty() ? "none" :
+      trace.request.transition_reason) << "\""
+         << ", block=\""
+         << (trace.request.blocking_reason.empty() ? "none" :
+      trace.request.blocking_reason) << "\""
          << ", wp_id=" << trace.waypoint_id;
   return stream.str();
 }
@@ -386,6 +448,168 @@ TraceEmission ChangeAwareAuthorityTraceEmitter::update(
 }
 
 void ChangeAwareAuthorityTraceEmitter::reset() noexcept
+{
+  last_signature_.clear();
+  last_emit_sec_ = -std::numeric_limits<double>::infinity();
+  was_relevant_ = false;
+}
+
+FinalControlSource resolve_final_control_source(
+  const FinalControlSourceRequest & request) noexcept
+{
+  if (request.failsafe_active) {
+    return FinalControlSource::Failsafe;
+  }
+  if (request.stuck_recovery_active) {
+    return FinalControlSource::StuckRecovery;
+  }
+  if (!request.control_enabled) {
+    return FinalControlSource::ControlDisabled;
+  }
+  if (request.low_speed_wall_stop_active) {
+    return FinalControlSource::LowSpeedWallStop;
+  }
+  if (request.solver_crawl_active) {
+    return FinalControlSource::SolverCrawl;
+  }
+  if (request.solver_fallback_active || request.forced_stop_active) {
+    return FinalControlSource::SolverFallback;
+  }
+  if (request.low_speed_direct_active) {
+    return FinalControlSource::LowSpeedDirect;
+  }
+  return FinalControlSource::MpcSolution;
+}
+
+const char * to_string(const FinalControlSource source) noexcept
+{
+  switch (source) {
+    case FinalControlSource::MpcSolution: return "mpc-solution";
+    case FinalControlSource::LowSpeedDirect: return "low-speed-direct";
+    case FinalControlSource::LowSpeedWallStop: return "low-speed-wall-stop";
+    case FinalControlSource::SolverFallback: return "solver-fallback";
+    case FinalControlSource::SolverCrawl: return "solver-crawl";
+    case FinalControlSource::ControlDisabled: return "control-disabled";
+    case FinalControlSource::StuckRecovery: return "stuck-recovery";
+    case FinalControlSource::Failsafe: return "failsafe";
+  }
+  return "unknown";
+}
+
+std::string final_control_signature(const FinalControlTrace & trace)
+{
+  std::ostringstream stream;
+  if (trace.authority.has_value()) {
+    stream << categorical_signature(trace.authority.value());
+  } else {
+    stream << "no-authority";
+  }
+  stream << "|" << static_cast<int>(trace.control_source)
+         << "|" << (trace.published ? 1 : 0);
+  if (
+    trace.control_source == FinalControlSource::SolverFallback ||
+    trace.control_source == FinalControlSource::Failsafe)
+  {
+    stream << "|" << trace.solver_reason << "|" << trace.output_reason;
+  }
+  return stream.str();
+}
+
+std::string format_final_control_trace(const FinalControlTrace & trace)
+{
+  std::ostringstream stream;
+  stream << "Overtake control decision: decision=" << trace.decision_id;
+  if (trace.authority.has_value()) {
+    const auto & authority = trace.authority.value();
+    stream << ", episode=" << authority.request.episode_id
+           << ", generation=" << authority.request.mission_generation
+           << ", target="
+           << (authority.request.target_id.empty() ? "<none>" :
+      authority.request.target_id)
+           << ", side=" << authority.request.pass_side_sign
+           << ", phase=" << to_string(authority.request.phase)
+           << ", action=" << to_string(authority.resolution.action)
+           << ", lateral_owner=" << to_string(authority.resolution.lateral_owner)
+           << ", longitudinal_owner="
+           << to_string(authority.resolution.longitudinal_owner)
+           << ", path_source=" << to_string(authority.resolution.path_source)
+           << ", path_age=" << finite_or(authority.request.path_age_sec, "inf") << "s"
+           << ", speed_window="
+           << finite_or(authority.request.speed_reference_mps, "inf") << "/"
+           << finite_or(authority.request.speed_limit_mps, "inf") << "/"
+           << finite_or(authority.request.speed_floor_mps, "nan")
+           << ", conflict=" << format_conflicts(authority.resolution.conflicts)
+           << ", transition=\""
+           << (authority.request.transition_reason.empty() ? "none" :
+      authority.request.transition_reason) << "\""
+           << ", block=\""
+           << (authority.request.blocking_reason.empty() ? "none" :
+      authority.request.blocking_reason) << "\"";
+    stream << ", corridor_min="
+           << finite_or(authority.constrained_corridor.minimum_width_m, "nan")
+           << "@"
+           << finite_or(
+      authority.constrained_corridor.minimum_width_distance_m, "nan")
+           << "m, wall_min="
+           << finite_or(authority.wall_corridor.minimum_width_m, "nan")
+           << "m, valid_until=" << finite_or(authority.static_valid_until_m, "nan")
+           << "/" << finite_or(authority.dynamic_valid_until_m, "nan")
+           << "m, rear_clear=" << finite_or(authority.predicted_rear_clear_m, "inf")
+           << "m, wp_id=" << authority.waypoint_id;
+  } else {
+    stream << ", episode=0, target=<none>, phase=unknown, authority=unavailable";
+  }
+  stream << ", control_source=" << to_string(trace.control_source)
+         << ", actual=" << finite_or(trace.actual_speed_mps, "nan") << "m/s"
+         << ", command=" << finite_or(trace.target_speed_mps, "nan") << "m/s/"
+         << finite_or(trace.acceleration_mps2, "nan") << "m/s2/"
+         << finite_or(trace.raw_steering_rad, "nan") << "rad"
+         << ", published_steering="
+         << finite_or(trace.published_steering_rad, "nan") << "rad"
+         << ", published=" << (trace.published ? 1 : 0)
+         << ", solver=\""
+         << (trace.solver_reason.empty() ? "none" : trace.solver_reason) << "\""
+         << ", output=\""
+         << (trace.output_reason.empty() ? "none" : trace.output_reason) << "\"";
+  return stream.str();
+}
+
+FinalTraceEmission ChangeAwareFinalControlTraceEmitter::update(
+  const FinalControlTrace & trace, const double now_sec,
+  const double repeat_interval_sec)
+{
+  FinalTraceEmission emission;
+  const bool authority_relevant =
+    trace.authority.has_value() && trace.authority->resolution.relevant;
+  const bool exceptional_source =
+    trace.control_source != FinalControlSource::MpcSolution;
+  const bool relevant = authority_relevant || exceptional_source;
+  if (!relevant && !was_relevant_) {
+    return emission;
+  }
+  emission.signature = final_control_signature(trace);
+  emission.state_changed = emission.signature != last_signature_;
+  const bool repeat_due =
+    std::isfinite(now_sec) && std::isfinite(last_emit_sec_) &&
+    std::isfinite(repeat_interval_sec) && repeat_interval_sec >= 0.0 &&
+    now_sec >= last_emit_sec_ && now_sec - last_emit_sec_ >= repeat_interval_sec;
+  emission.emit = emission.state_changed || repeat_due;
+  emission.warning =
+    trace.control_source == FinalControlSource::SolverFallback ||
+    trace.control_source == FinalControlSource::LowSpeedWallStop ||
+    trace.control_source == FinalControlSource::Failsafe ||
+    (trace.authority.has_value() &&
+    trace.authority->resolution.conflicts != NoConflict);
+  if (emission.emit) {
+    emission.message = format_final_control_trace(trace);
+    last_signature_ = emission.signature;
+    last_emit_sec_ = now_sec;
+  }
+  was_relevant_ = relevant;
+  return emission;
+}
+
+void ChangeAwareFinalControlTraceEmitter::reset() noexcept
 {
   last_signature_.clear();
   last_emit_sec_ = -std::numeric_limits<double>::infinity();

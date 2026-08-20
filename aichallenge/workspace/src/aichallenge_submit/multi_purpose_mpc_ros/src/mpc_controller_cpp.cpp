@@ -5788,6 +5788,27 @@ struct MPC
     return last_control_was_fallback_;
   }
 
+  std::uint64_t last_control_decision_id() const noexcept
+  {
+    return active_control_decision_id_;
+  }
+
+  const std::optional<overtake_orchestrator::AuthorityTrace> &
+  last_overtake_authority_trace() const noexcept
+  {
+    return last_overtake_authority_trace_;
+  }
+
+  const std::string & last_control_resolution_reason() const noexcept
+  {
+    return last_control_resolution_reason_;
+  }
+
+  bool low_speed_direct_control_active() const noexcept
+  {
+    return low_speed_shift_control_active_;
+  }
+
   std::optional<v2x_overtake_core::LowSpeedDirectSteeringBounds>
   low_speed_direct_steering_bounds() const
   {
@@ -15615,12 +15636,47 @@ struct MPC
       overtake_line_output.stage_wall_corridor_upper_ey,
       overtake_line_output.path_distances);
     overtake_orchestrator::AuthorityRequest authority_request;
+    authority_request.decision_id = active_control_decision_id_;
     authority_request.episode_id = overtake_line_state_.episode_id;
     authority_request.mission_generation = overtake_line_state_.mission_generation;
     authority_request.target_id = !overtake_line_state_.target_vehicle_id.empty() ?
       overtake_line_state_.target_vehicle_id : behavior_output.target_vehicle_id;
+    authority_request.pass_side_sign = overtake_line_state_.pass_side_sign;
     authority_request.phase = orchestrator_phase(overtake_line_state_.phase);
     authority_request.behavior = orchestrator_behavior(behavior_output.state);
+    if (overtake_line_output.active) {
+      if (overtake_line_state_.mission_frenet_dp_execution_active) {
+        authority_request.path_source_hint =
+          overtake_orchestrator::PathSource::RecedingDp;
+        authority_request.path_age_sec =
+          std::isfinite(overtake_line_state_.mission_frenet_dp_last_source_generated_sec) ?
+          std::max(
+          0.0,
+          now_sec - overtake_line_state_.mission_frenet_dp_last_source_generated_sec) :
+          std::numeric_limits<double>::infinity();
+      } else if (overtake_line_output.receding_horizon_active) {
+        authority_request.path_source_hint =
+          overtake_orchestrator::PathSource::RecedingHorizon;
+        authority_request.path_age_sec =
+          std::isfinite(overtake_receding_horizon_last_feasible_sec_) ?
+          std::max(0.0, now_sec - overtake_receding_horizon_last_feasible_sec_) :
+          std::numeric_limits<double>::infinity();
+      } else {
+        authority_request.path_source_hint =
+          overtake_orchestrator::PathSource::FrozenMission;
+        authority_request.path_age_sec =
+          std::isfinite(overtake_line_state_.mission_planner_generated_at_sec) ?
+          std::max(0.0, now_sec - overtake_line_state_.mission_planner_generated_at_sec) :
+          std::numeric_limits<double>::infinity();
+      }
+    } else if (behavior_output.dynamic_obstacle_lateral_escape_active) {
+      authority_request.path_source_hint =
+        overtake_orchestrator::PathSource::DynamicObstacleEscape;
+      authority_request.path_age_sec = 0.0;
+    } else if (planner_output.active && planner_output.feasible) {
+      authority_request.path_source_hint = overtake_orchestrator::PathSource::GapPlanner;
+      authority_request.path_age_sec = 0.0;
+    }
     authority_request.line_active = overtake_line_output.active;
     authority_request.stage_corridor_active = stage_corridor.active;
     authority_request.gap_planner_active =
@@ -15639,8 +15695,10 @@ struct MPC
       behavior_output.precontact_squeeze_escape_active;
     authority_request.emergency_brake_active =
       behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake;
-    authority_request.solver_fallback_active =
-      last_control_was_fallback_ || overtake_solver_recovery_active_;
+    // The current solver has not run yet. Only a persistent solver-recovery
+    // authority belongs in this pre-solve snapshot; the current-cycle solve
+    // result is joined later by the final control trace using decision_id.
+    authority_request.solver_fallback_active = overtake_solver_recovery_active_;
     authority_request.follow_cap_active =
       behavior_output.follow_speed_limit_active ||
       behavior_output.moving_front_clearance_limit_active;
@@ -15658,6 +15716,8 @@ struct MPC
       overtake_line_output.target_velocity_limit;
     authority_request.speed_floor_mps =
       overtake_line_output.target_velocity_floor;
+    authority_request.transition_reason = behavior_output.reason;
+    authority_request.blocking_reason = behavior_output.overtake_block_reason;
     const auto execution_authority =
       overtake_orchestrator::resolve_authority(authority_request);
     // Branch workers call init_problem() with a behavior override to score a
@@ -15679,19 +15739,7 @@ struct MPC
         overtake_line_state_.mission_predicted_rear_clear_pass_m;
       authority_trace.ego_speed_mps = std::max(0.0, current_speed_mps_);
       authority_trace.waypoint_id = model->wp_id;
-      const auto authority_emission = overtake_authority_trace_emitter_.update(
-        authority_trace, now_sec);
-      if (authority_emission.emit) {
-        if (authority_emission.conflict) {
-          RCLCPP_WARN(
-            rclcpp::get_logger("mpc_controller"), "%s",
-            authority_emission.message.c_str());
-        } else {
-          RCLCPP_INFO(
-            rclcpp::get_logger("mpc_controller"), "%s",
-            authority_emission.message.c_str());
-        }
-      }
+      last_overtake_authority_trace_ = authority_trace;
       overtake_episode_accumulator_.observe(
         overtake_orchestrator::EpisodeSample{
           overtake_line_state_.episode_id,
@@ -17628,6 +17676,7 @@ struct MPC
   std::pair<Eigen::Vector2d, double> safe_failure_control(
     const std::string & reason, const double now_sec)
   {
+    last_control_resolution_reason_ = reason;
     last_control_was_fallback_ = true;
     current_prediction.first.clear();
     current_prediction.second.clear();
@@ -17921,10 +17970,14 @@ struct MPC
     return {Eigen::Vector2d(speed, steering), std::abs(steering)};
   }
 
-  std::pair<Eigen::Vector2d, double> get_control(const double now_sec)
+  std::pair<Eigen::Vector2d, double> get_control(
+    const double now_sec, const std::uint64_t decision_id)
   {
     constexpr int nx = 3;
     constexpr int nu = 2;
+    active_control_decision_id_ = decision_id;
+    last_overtake_authority_trace_.reset();
+    last_control_resolution_reason_ = "not-resolved";
     if (cfg.N < 2) {
       return safe_failure_control("mpc.N must be at least 2", now_sec);
     }
@@ -17947,6 +18000,7 @@ struct MPC
       const MpcProblem problem =
         init_problem(N, model->safety_margin, now_sec, tracking_wp_id, preview_wp_id);
       if (low_speed_shift_control_active_) {
+        last_control_resolution_reason_ = "low-speed-direct-control";
         return low_speed_shift_control(tracking_waypoint);
       }
       const bool low_speed_shift_handoff_requested = low_speed_shift_control_was_active_;
@@ -18189,6 +18243,8 @@ struct MPC
       infeasibility_counter = 0;
       overtake_infeasibility_counter_ = 0;
       last_control_was_fallback_ = false;
+      last_control_resolution_reason_ = solved_with_extended_progress ?
+        "extended-mpcc-solved" : "legacy-mpc-solved";
       if (overtake_solver_reentry_blocked_) {
         const bool cooldown_active = v2x_overtake_core::is_solver_cooldown_active(
           now_sec, overtake_solver_cooldown_until_sec_);
@@ -18507,6 +18563,10 @@ struct MPC
     -std::numeric_limits<double>::infinity()};
   std::optional<double> failure_fallback_speed_;
   bool last_control_was_fallback_{false};
+  std::uint64_t active_control_decision_id_{0U};
+  std::optional<overtake_orchestrator::AuthorityTrace>
+  last_overtake_authority_trace_;
+  std::string last_control_resolution_reason_{"not-evaluated"};
   bool stage_corridor_mpc_constraints_was_active_{false};
   bool stage_corridor_mpc_target_bound_was_active_{false};
   bool stage_corridor_mpc_target_bound_solver_suppressed_was_active_{false};
@@ -18525,8 +18585,6 @@ struct MPC
   dynamic_obstacle_lateral_escape_trace_emitter_;
   overtake_decision_trace::ChangeAwareRuntimeFailoverTraceEmitter
   dynamic_mission_wait_trace_emitter_;
-  overtake_orchestrator::ChangeAwareAuthorityTraceEmitter
-  overtake_authority_trace_emitter_;
   overtake_orchestrator::EpisodeAccumulator overtake_episode_accumulator_;
 
 private:
@@ -40124,6 +40182,47 @@ private:
       std::isfinite(command.longitudinal.acceleration);
   }
 
+  void emit_final_control_trace(
+    const double now_sec, const double actual_speed_mps,
+    const Eigen::Vector2d & raw_control, const double acceleration_mps2,
+    const double published_steering_rad,
+    const overtake_orchestrator::FinalControlSourceRequest & source_request,
+    const bool published, const std::string & solver_reason,
+    const std::string & output_reason)
+  {
+    overtake_orchestrator::FinalControlTrace trace;
+    trace.decision_id = active_control_decision_id_;
+    if (mpc_ != nullptr) {
+      const auto & authority = mpc_->last_overtake_authority_trace();
+      if (
+        mpc_->last_control_decision_id() == active_control_decision_id_ &&
+        authority.has_value() &&
+        authority->request.decision_id == active_control_decision_id_)
+      {
+        trace.authority = authority;
+      }
+    }
+    trace.control_source =
+      overtake_orchestrator::resolve_final_control_source(source_request);
+    trace.published = published;
+    trace.actual_speed_mps = actual_speed_mps;
+    trace.target_speed_mps = raw_control[0];
+    trace.acceleration_mps2 = acceleration_mps2;
+    trace.raw_steering_rad = raw_control[1];
+    trace.published_steering_rad = published_steering_rad;
+    trace.solver_reason = solver_reason;
+    trace.output_reason = output_reason;
+    const auto emission = final_control_trace_emitter_.update(trace, now_sec);
+    if (!emission.emit) {
+      return;
+    }
+    if (emission.warning) {
+      RCLCPP_WARN(get_logger(), "%s", emission.message.c_str());
+    } else {
+      RCLCPP_INFO(get_logger(), "%s", emission.message.c_str());
+    }
+  }
+
   bool recovery_may_be_in_reverse() const
   {
     return
@@ -40182,6 +40281,15 @@ private:
       }
       command_pub_->publish(raw_command);
     }
+    const double actual_speed_mps =
+      odom_ != nullptr && std::isfinite(odom_->twist.twist.linear.x) ?
+      odom_->twist.twist.linear.x : std::numeric_limits<double>::quiet_NaN();
+    overtake_orchestrator::FinalControlSourceRequest source_request;
+    source_request.failsafe_active = true;
+    emit_final_control_trace(
+      stamp.seconds(), actual_speed_mps, safe_control, safe_deceleration,
+      raw_command.lateral.steering_tire_angle, source_request, true,
+      reason, "failsafe-command-published");
     last_u_ = safe_control;
     last_acc_ = safe_deceleration;
     if (mpc_) {
@@ -43760,6 +43868,10 @@ private:
     const auto steady_now = SteadyClock::now();
     [[maybe_unused]] const auto callback_duration_guard = make_scope_exit(
       [this, steady_now]() {record_control_callback_duration(steady_now);});
+    if (control_decision_sequence_ == std::numeric_limits<std::uint64_t>::max()) {
+      control_decision_sequence_ = 0U;
+    }
+    active_control_decision_id_ = ++control_decision_sequence_;
     const auto control_time = now();
     const bool missing_odometry = !odom_ || !last_odom_receipt_steady_.has_value();
     const double odometry_age_sec = missing_odometry ?
@@ -43935,7 +44047,8 @@ private:
     mpc_->update_v_max(effective_v_max);
     reference_path_->set_v_ref(std::vector<double>(reference_path_->waypoints.size(), effective_v_max));
 
-    auto [u, max_delta] = mpc_->get_control(current_time.seconds());
+    auto [u, max_delta] = mpc_->get_control(
+      current_time.seconds(), active_control_decision_id_);
     const bool mpc_fallback_active = mpc_->last_control_was_fallback();
     const auto & v2x_behavior = mpc_->last_v2x_behavior_output();
     recovery_footprint::FootprintSample solver_crawl_footprint_sample;
@@ -44121,6 +44234,35 @@ private:
     if (!publish_control_command(current_time, u, acc, bug_acc_enabled)) {
       return;
     }
+    overtake_orchestrator::FinalControlSourceRequest final_source_request;
+    final_source_request.stuck_recovery_active = recovery_command_active;
+    final_source_request.control_enabled = enable_control_;
+    final_source_request.low_speed_wall_stop_active =
+      mpc_->low_speed_direct_wall_stop_active();
+    final_source_request.solver_crawl_active = solver_failure_crawl_active;
+    final_source_request.solver_fallback_active = mpc_fallback_active;
+    final_source_request.forced_stop_active = forced_stop_active;
+    final_source_request.low_speed_direct_active =
+      mpc_->low_speed_direct_control_active();
+    const double published_steering_rad = use_bug_acc_ ?
+      u[1] : u[1] * mpc_cfg_.steering_tire_angle_gain_var;
+    std::string output_reason{"normal-control-published"};
+    if (recovery_command_active) {
+      output_reason = "stuck-recovery-arbitration";
+    } else if (!enable_control_) {
+      output_reason = "control-disabled-deceleration";
+    } else if (solver_failure_crawl_active) {
+      output_reason = "solver-failure-crawl";
+    } else if (forced_stop_active) {
+      output_reason = mpc_->low_speed_direct_wall_stop_active() ?
+        "low-speed-direct-wall-stop" : "solver-fallback-forced-stop";
+    } else if (mpc_->low_speed_direct_control_active()) {
+      output_reason = "low-speed-direct-control";
+    }
+    emit_final_control_trace(
+      current_time.seconds(), actual_v, u, acc, published_steering_rad,
+      final_source_request, true, mpc_->last_control_resolution_reason(),
+      output_reason);
     if (mpc_cfg_.v2x_behavior.debug_log_enabled) {
       const double output_steering =
         u[1] * mpc_cfg_.steering_tire_angle_gain_var;
@@ -44225,6 +44367,10 @@ private:
   bool domain_manual_reset_ready_{false};
   std::string last_awsim_state_;
   int loop_{0};
+  std::uint64_t control_decision_sequence_{0U};
+  std::uint64_t active_control_decision_id_{0U};
+  overtake_orchestrator::ChangeAwareFinalControlTraceEmitter
+  final_control_trace_emitter_;
   std::uint64_t control_callback_count_{0U};
   std::uint64_t control_callback_overrun_count_{0U};
   double control_callback_total_ms_{0.0};

@@ -31,11 +31,30 @@ TEST(OvertakeExecutionOrchestrator, ResolvesCommittedPassOwners)
   EXPECT_EQ(result.action, orchestrator::Action::Pass);
   EXPECT_EQ(result.lateral_owner, orchestrator::LateralOwner::OvertakeLine);
   EXPECT_EQ(result.longitudinal_owner, orchestrator::LongitudinalOwner::PassFloor);
+  EXPECT_EQ(result.path_source, orchestrator::PathSource::FrozenMission);
   EXPECT_TRUE(result.use_overtake_line_target);
   EXPECT_TRUE(result.apply_overtake_speed_reference);
   EXPECT_TRUE(result.apply_overtake_speed_limit);
   EXPECT_TRUE(result.apply_overtake_speed_floor);
   EXPECT_EQ(result.conflicts, orchestrator::NoConflict);
+}
+
+TEST(OvertakeExecutionOrchestrator, TreatsDynamicEscapeAndGapPlannerAsOneChain)
+{
+  orchestrator::AuthorityRequest request;
+  request.target_id = "d2";
+  request.behavior = orchestrator::Behavior::Follow;
+  request.gap_planner_active = true;
+  request.dynamic_obstacle_escape_active = true;
+  request.dynamic_obstacle_follow_cap_suppressed = true;
+
+  const auto result = orchestrator::resolve_authority(request);
+  EXPECT_EQ(result.action, orchestrator::Action::DynamicEscape);
+  EXPECT_EQ(
+    result.lateral_owner, orchestrator::LateralOwner::DynamicObstacleEscape);
+  EXPECT_EQ(
+    result.path_source, orchestrator::PathSource::DynamicObstacleEscape);
+  EXPECT_EQ(result.conflicts & orchestrator::MultipleLateralAuthorities, 0U);
 }
 
 TEST(OvertakeExecutionOrchestrator, ExposesConflictingAuthorities)
@@ -168,6 +187,76 @@ TEST(OvertakeExecutionOrchestrator, SummarizesWholeEpisode)
   EXPECT_NE(message.find("episode=5"), std::string::npos);
   EXPECT_NE(message.find("reason=\"target-wall-conflict\""), std::string::npos);
   EXPECT_FALSE(accumulator.active());
+}
+
+TEST(OvertakeExecutionOrchestrator, ResolvesFinalControlSourceByOutputPrecedence)
+{
+  orchestrator::FinalControlSourceRequest request;
+  request.solver_fallback_active = true;
+  EXPECT_EQ(
+    orchestrator::resolve_final_control_source(request),
+    orchestrator::FinalControlSource::SolverFallback);
+
+  request.solver_crawl_active = true;
+  EXPECT_EQ(
+    orchestrator::resolve_final_control_source(request),
+    orchestrator::FinalControlSource::SolverCrawl);
+
+  request.low_speed_wall_stop_active = true;
+  EXPECT_EQ(
+    orchestrator::resolve_final_control_source(request),
+    orchestrator::FinalControlSource::LowSpeedWallStop);
+
+  request.stuck_recovery_active = true;
+  EXPECT_EQ(
+    orchestrator::resolve_final_control_source(request),
+    orchestrator::FinalControlSource::StuckRecovery);
+
+  request.failsafe_active = true;
+  EXPECT_EQ(
+    orchestrator::resolve_final_control_source(request),
+    orchestrator::FinalControlSource::Failsafe);
+}
+
+TEST(OvertakeExecutionOrchestrator, JoinsAuthorityAndPublishedCommandByDecisionId)
+{
+  orchestrator::AuthorityTrace authority;
+  authority.request.decision_id = 42U;
+  authority.request.episode_id = 3U;
+  authority.request.mission_generation = 2U;
+  authority.request.target_id = "d2";
+  authority.request.pass_side_sign = -1;
+  authority.request.phase = orchestrator::Phase::Pass;
+  authority.request.behavior = orchestrator::Behavior::Overtake;
+  authority.request.line_active = true;
+  authority.request.path_source_hint = orchestrator::PathSource::RecedingDp;
+  authority.request.path_age_sec = 0.12;
+  authority.request.transition_reason = "keep phase";
+  authority.request.blocking_reason = "none";
+  authority.resolution = orchestrator::resolve_authority(authority.request);
+
+  orchestrator::FinalControlTrace trace;
+  trace.decision_id = 42U;
+  trace.authority = authority;
+  trace.control_source = orchestrator::FinalControlSource::MpcSolution;
+  trace.published = true;
+  trace.actual_speed_mps = 6.0;
+  trace.target_speed_mps = 7.0;
+  trace.acceleration_mps2 = 1.0;
+  trace.raw_steering_rad = 0.1;
+  trace.published_steering_rad = 0.15;
+  trace.solver_reason = "extended-mpcc-solved";
+  trace.output_reason = "normal-control-published";
+
+  orchestrator::ChangeAwareFinalControlTraceEmitter emitter;
+  const auto first = emitter.update(trace, 1.0);
+  EXPECT_TRUE(first.emit);
+  EXPECT_FALSE(first.warning);
+  EXPECT_NE(first.message.find("decision=42"), std::string::npos);
+  EXPECT_NE(first.message.find("path_source=receding-dp"), std::string::npos);
+  EXPECT_NE(first.message.find("control_source=mpc-solution"), std::string::npos);
+  trace.decision_id = 43U;
+  EXPECT_FALSE(emitter.update(trace, 1.1).emit);
 }
 
 }  // namespace

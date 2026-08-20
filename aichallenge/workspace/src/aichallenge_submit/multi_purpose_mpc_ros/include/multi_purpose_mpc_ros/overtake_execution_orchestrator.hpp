@@ -61,6 +61,19 @@ enum class LongitudinalOwner {
   SafetyBrake,
 };
 
+enum class PathSource {
+  RacingLine,
+  GapPlanner,
+  DynamicObstacleEscape,
+  FrozenMission,
+  RecedingHorizon,
+  RecedingDp,
+  DynamicWaitPrefix,
+  ContactEscape,
+  RecoveryLine,
+  SafetyHold,
+};
+
 enum AuthorityConflict : std::uint32_t {
   NoConflict = 0U,
   SafetyWithActiveLine = 1U << 0U,
@@ -86,11 +99,15 @@ CorridorMetrics analyze_corridor(
   const std::vector<double> & path_distance_m) noexcept;
 
 struct AuthorityRequest {
+  std::uint64_t decision_id{0U};
   std::uint64_t episode_id{0U};
   std::uint64_t mission_generation{0U};
   std::string target_id;
+  int pass_side_sign{0};
   Phase phase{Phase::Idle};
   Behavior behavior{Behavior::Cruise};
+  PathSource path_source_hint{PathSource::RacingLine};
+  double path_age_sec{std::numeric_limits<double>::infinity()};
   bool line_active{false};
   bool stage_corridor_active{false};
   bool gap_planner_active{false};
@@ -110,6 +127,8 @@ struct AuthorityRequest {
   double speed_reference_mps{std::numeric_limits<double>::infinity()};
   double speed_limit_mps{std::numeric_limits<double>::infinity()};
   double speed_floor_mps{0.0};
+  std::string transition_reason;
+  std::string blocking_reason;
 };
 
 struct AuthorityResolution {
@@ -117,6 +136,7 @@ struct AuthorityResolution {
   Action action{Action::Cruise};
   LateralOwner lateral_owner{LateralOwner::RacingLine};
   LongitudinalOwner longitudinal_owner{LongitudinalOwner::RacingLine};
+  PathSource path_source{PathSource::RacingLine};
   bool use_overtake_line_target{false};
   bool apply_overtake_speed_reference{false};
   bool apply_overtake_speed_limit{false};
@@ -132,6 +152,7 @@ const char * to_string(Behavior behavior) noexcept;
 const char * to_string(Action action) noexcept;
 const char * to_string(LateralOwner owner) noexcept;
 const char * to_string(LongitudinalOwner owner) noexcept;
+const char * to_string(PathSource source) noexcept;
 std::string format_conflicts(std::uint32_t conflicts);
 
 struct AuthorityTrace {
@@ -161,6 +182,70 @@ class ChangeAwareAuthorityTraceEmitter {
 public:
   TraceEmission update(
     const AuthorityTrace & trace, double now_sec,
+    double repeat_interval_sec = 5.0);
+  void reset() noexcept;
+
+private:
+  std::string last_signature_;
+  double last_emit_sec_{-std::numeric_limits<double>::infinity()};
+  bool was_relevant_{false};
+};
+
+enum class FinalControlSource {
+  MpcSolution,
+  LowSpeedDirect,
+  LowSpeedWallStop,
+  SolverFallback,
+  SolverCrawl,
+  ControlDisabled,
+  StuckRecovery,
+  Failsafe,
+};
+
+struct FinalControlSourceRequest {
+  bool failsafe_active{false};
+  bool stuck_recovery_active{false};
+  bool control_enabled{true};
+  bool low_speed_wall_stop_active{false};
+  bool solver_crawl_active{false};
+  bool solver_fallback_active{false};
+  bool forced_stop_active{false};
+  bool low_speed_direct_active{false};
+};
+
+FinalControlSource resolve_final_control_source(
+  const FinalControlSourceRequest & request) noexcept;
+const char * to_string(FinalControlSource source) noexcept;
+
+struct FinalControlTrace {
+  std::uint64_t decision_id{0U};
+  std::optional<AuthorityTrace> authority;
+  FinalControlSource control_source{FinalControlSource::MpcSolution};
+  bool published{false};
+  double actual_speed_mps{std::numeric_limits<double>::quiet_NaN()};
+  double target_speed_mps{std::numeric_limits<double>::quiet_NaN()};
+  double acceleration_mps2{std::numeric_limits<double>::quiet_NaN()};
+  double raw_steering_rad{std::numeric_limits<double>::quiet_NaN()};
+  double published_steering_rad{std::numeric_limits<double>::quiet_NaN()};
+  std::string solver_reason;
+  std::string output_reason;
+};
+
+struct FinalTraceEmission {
+  bool emit{false};
+  bool state_changed{false};
+  bool warning{false};
+  std::string signature;
+  std::string message;
+};
+
+std::string final_control_signature(const FinalControlTrace & trace);
+std::string format_final_control_trace(const FinalControlTrace & trace);
+
+class ChangeAwareFinalControlTraceEmitter {
+public:
+  FinalTraceEmission update(
+    const FinalControlTrace & trace, double now_sec,
     double repeat_interval_sec = 5.0);
   void reset() noexcept;
 

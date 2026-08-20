@@ -95,6 +95,32 @@ std::string format_candidate(const CandidateTrace &trace) {
            << ",preflight_margin_clear="
            << index_or_none(trace.static_wall_margin_clear_path_index) << "@"
            << finite_or_nan(trace.static_wall_margin_clear_distance_m) << "m"
+           << ",tracking_contract="
+           << (trace.tracking_wall_contract_evaluated ? 1 : 0) << "/"
+           << (trace.tracking_wall_contract_valid ? 1 : 0) << "/"
+           << (trace.tracking_wall_contract_feasible ? 1 : 0)
+           << ",tracking_contract_active="
+           << (trace.tracking_wall_contract_active ? 1 : 0)
+           << ",tracking_contract_side="
+           << trace.tracking_wall_contract_side_sign
+           << ",tracking_contract_relaxed="
+           << trace.tracking_wall_contract_relaxed_samples
+           << ",tracking_contract_full="
+           << index_or_none(
+             trace.tracking_wall_contract_first_full_margin_index) << "@"
+           << finite_or_nan(
+             trace.tracking_wall_contract_first_full_margin_distance_m) << "m"
+           << ",tracking_contract_max_relax="
+           << finite_or_nan(
+             trace.tracking_wall_contract_maximum_relaxation_m) << "m"
+           << ",tracking_contract_first=["
+           << finite_or_nan(trace.tracking_wall_contract_first_lower_m) << ","
+           << finite_or_nan(trace.tracking_wall_contract_first_upper_m) << "]"
+           << ",tracking_contract_current="
+           << finite_or_nan(trace.tracking_wall_contract_current_lateral_m) << "m"
+           << ",tracking_contract_reason=\""
+           << reason_or(
+             trace.tracking_wall_contract_reason, "not-evaluated") << "\""
            << ",backoff=" << trace.backoff_failures << "/"
            << finite_or_nan(trace.backoff_remaining_sec) << "s";
   }
@@ -202,6 +228,12 @@ std::string categorical_signature(const DecisionTrace &trace) {
            << ":" << (candidate.static_wall_margin_escape_used ? 1 : 0)
            << ":" << candidate.static_wall_preflight_reason
            << ":" << candidate.static_wall_invalid_index
+           << ":" << (candidate.tracking_wall_contract_evaluated ? 1 : 0)
+           << ":" << (candidate.tracking_wall_contract_valid ? 1 : 0)
+           << ":" << (candidate.tracking_wall_contract_active ? 1 : 0)
+           << ":" << (candidate.tracking_wall_contract_feasible ? 1 : 0)
+           << ":" << candidate.tracking_wall_contract_side_sign
+           << ":" << candidate.tracking_wall_contract_reason
            << ":" << candidate.backoff_failures;
   };
   stream << trace.attempt_id << "|" << trace.mission_episode_id << "|"

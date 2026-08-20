@@ -66,6 +66,24 @@ struct CandidateTrace {
     std::numeric_limits<double>::quiet_NaN()};
   std::string static_wall_preflight_mode{"not-evaluated"};
   std::string static_wall_preflight_reason{"not-evaluated"};
+  bool tracking_wall_contract_evaluated{false};
+  bool tracking_wall_contract_valid{false};
+  bool tracking_wall_contract_active{false};
+  bool tracking_wall_contract_feasible{false};
+  int tracking_wall_contract_side_sign{0};
+  std::size_t tracking_wall_contract_relaxed_samples{0U};
+  std::size_t tracking_wall_contract_first_full_margin_index{
+    std::numeric_limits<std::size_t>::max()};
+  double tracking_wall_contract_first_full_margin_distance_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double tracking_wall_contract_maximum_relaxation_m{0.0};
+  double tracking_wall_contract_current_lateral_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double tracking_wall_contract_first_lower_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double tracking_wall_contract_first_upper_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  std::string tracking_wall_contract_reason{"not-evaluated"};
   bool backoff_active{false};
   int backoff_failures{0};
   double backoff_remaining_sec{0.0};

@@ -1988,6 +1988,165 @@ StagewiseMpcCorridorBoundsResolution resolve_stagewise_mpc_corridor_bounds(
   return resolution;
 }
 
+const char * to_string(const InitialWallMarginTrackingContractReason reason) noexcept
+{
+  switch (reason) {
+    case InitialWallMarginTrackingContractReason::NotEvaluated:
+      return "not-evaluated";
+    case InitialWallMarginTrackingContractReason::Disabled:
+      return "inactive";
+    case InitialWallMarginTrackingContractReason::AlreadyInsidePreferredWallBounds:
+      return "already-inside";
+    case InitialWallMarginTrackingContractReason::MarginInherited:
+      return "margin-inherit";
+    case InitialWallMarginTrackingContractReason::VehicleOwnedBoundaryPreserved:
+      return "vehicle-edge-preserved";
+    case InitialWallMarginTrackingContractReason::InvalidInput:
+      return "invalid-input";
+    case InitialWallMarginTrackingContractReason::EmptyCorridor:
+      return "empty-corridor";
+  }
+  return "unknown";
+}
+
+InitialWallMarginTrackingContractResolution
+resolve_initial_wall_margin_tracking_contract(
+  const InitialWallMarginTrackingContractRequest & request) noexcept
+{
+  InitialWallMarginTrackingContractResolution resolution;
+  const std::size_t sample_count = request.stage_distance_m.size();
+  if (
+    sample_count == 0U || request.preferred_wall_lower_m.size() != sample_count ||
+    request.preferred_wall_upper_m.size() != sample_count ||
+    request.selected_corridor_lower_m.size() != sample_count ||
+    request.selected_corridor_upper_m.size() != sample_count ||
+    !std::isfinite(request.current_lateral_m) ||
+    !std::isfinite(request.wall_edge_ownership_tolerance_m) ||
+    request.wall_edge_ownership_tolerance_m < 0.0 ||
+    (request.enabled &&
+    (!std::isfinite(request.margin_restore_distance_m) ||
+    request.margin_restore_distance_m <= 0.0)))
+  {
+    resolution.reason = InitialWallMarginTrackingContractReason::InvalidInput;
+    return resolution;
+  }
+
+  resolution.lower_m = request.selected_corridor_lower_m;
+  resolution.upper_m = request.selected_corridor_upper_m;
+  double previous_distance = -std::numeric_limits<double>::infinity();
+  for (std::size_t index = 0U; index < sample_count; ++index) {
+    const double distance = request.stage_distance_m[index];
+    const double wall_lower = request.preferred_wall_lower_m[index];
+    const double wall_upper = request.preferred_wall_upper_m[index];
+    const double corridor_lower = request.selected_corridor_lower_m[index];
+    const double corridor_upper = request.selected_corridor_upper_m[index];
+    if (
+      !std::isfinite(distance) || distance < 0.0 ||
+      distance + 1e-9 < previous_distance ||
+      !std::isfinite(wall_lower) || !std::isfinite(wall_upper) ||
+      wall_upper + 1e-9 < wall_lower ||
+      !std::isfinite(corridor_lower) || !std::isfinite(corridor_upper) ||
+      corridor_upper + 1e-9 < corridor_lower)
+    {
+      resolution = InitialWallMarginTrackingContractResolution{};
+      resolution.reason = InitialWallMarginTrackingContractReason::InvalidInput;
+      return resolution;
+    }
+    previous_distance = distance;
+  }
+
+  resolution.valid = true;
+  resolution.feasible = true;
+  if (!request.enabled) {
+    resolution.reason = InitialWallMarginTrackingContractReason::Disabled;
+    resolution.first_stage_lower_m = resolution.lower_m.front();
+    resolution.first_stage_upper_m = resolution.upper_m.front();
+    return resolution;
+  }
+
+  const double first_wall_lower = request.preferred_wall_lower_m.front();
+  const double first_wall_upper = request.preferred_wall_upper_m.front();
+  if (request.current_lateral_m < first_wall_lower - 1e-9) {
+    resolution.inherited_side_sign = -1;
+  } else if (request.current_lateral_m > first_wall_upper + 1e-9) {
+    resolution.inherited_side_sign = 1;
+  } else {
+    resolution.reason =
+      InitialWallMarginTrackingContractReason::AlreadyInsidePreferredWallBounds;
+    resolution.first_stage_lower_m = resolution.lower_m.front();
+    resolution.first_stage_upper_m = resolution.upper_m.front();
+    return resolution;
+  }
+
+  bool vehicle_owned_boundary_seen = false;
+  for (std::size_t index = 0U; index < sample_count; ++index) {
+    const double distance = request.stage_distance_m[index];
+    const double alpha = std::clamp(
+      distance / request.margin_restore_distance_m, 0.0, 1.0);
+    if (
+      resolution.first_full_margin_index ==
+      std::numeric_limits<std::size_t>::max() && alpha >= 1.0 - 1e-9)
+    {
+      resolution.first_full_margin_index = index;
+      resolution.first_full_margin_distance_m = distance;
+    }
+
+    if (resolution.inherited_side_sign < 0) {
+      const double wall_lower = request.preferred_wall_lower_m[index];
+      const double selected_lower = request.selected_corridor_lower_m[index];
+      const bool wall_owns_edge =
+        selected_lower <= wall_lower + request.wall_edge_ownership_tolerance_m;
+      if (wall_owns_edge && request.current_lateral_m < wall_lower - 1e-9 && alpha < 1.0) {
+        const double inherited_lower =
+          request.current_lateral_m + alpha * (wall_lower - request.current_lateral_m);
+        const double relaxed_lower = std::min(selected_lower, inherited_lower);
+        resolution.maximum_boundary_relaxation_m = std::max(
+          resolution.maximum_boundary_relaxation_m,
+          std::max(0.0, selected_lower - relaxed_lower));
+        resolution.lower_m[index] = relaxed_lower;
+        ++resolution.relaxed_sample_count;
+      } else if (!wall_owns_edge && request.current_lateral_m < selected_lower - 1e-9) {
+        vehicle_owned_boundary_seen = true;
+      }
+    } else {
+      const double wall_upper = request.preferred_wall_upper_m[index];
+      const double selected_upper = request.selected_corridor_upper_m[index];
+      const bool wall_owns_edge =
+        selected_upper + request.wall_edge_ownership_tolerance_m >= wall_upper;
+      if (wall_owns_edge && request.current_lateral_m > wall_upper + 1e-9 && alpha < 1.0) {
+        const double inherited_upper =
+          request.current_lateral_m + alpha * (wall_upper - request.current_lateral_m);
+        const double relaxed_upper = std::max(selected_upper, inherited_upper);
+        resolution.maximum_boundary_relaxation_m = std::max(
+          resolution.maximum_boundary_relaxation_m,
+          std::max(0.0, relaxed_upper - selected_upper));
+        resolution.upper_m[index] = relaxed_upper;
+        ++resolution.relaxed_sample_count;
+      } else if (!wall_owns_edge && request.current_lateral_m > selected_upper + 1e-9) {
+        vehicle_owned_boundary_seen = true;
+      }
+    }
+
+    if (resolution.upper_m[index] + 1e-9 < resolution.lower_m[index]) {
+      resolution.feasible = false;
+      resolution.reason = InitialWallMarginTrackingContractReason::EmptyCorridor;
+      resolution.first_stage_lower_m = resolution.lower_m.front();
+      resolution.first_stage_upper_m = resolution.upper_m.front();
+      return resolution;
+    }
+  }
+
+  resolution.active = resolution.relaxed_sample_count > 0U;
+  resolution.reason = resolution.active ?
+    InitialWallMarginTrackingContractReason::MarginInherited :
+    (vehicle_owned_boundary_seen ?
+    InitialWallMarginTrackingContractReason::VehicleOwnedBoundaryPreserved :
+    InitialWallMarginTrackingContractReason::AlreadyInsidePreferredWallBounds);
+  resolution.first_stage_lower_m = resolution.lower_m.front();
+  resolution.first_stage_upper_m = resolution.upper_m.front();
+  return resolution;
+}
+
 TargetBoundMpcGateResolution update_target_bound_mpc_gate(
   const TargetBoundMpcGateRequest & request) noexcept
 {

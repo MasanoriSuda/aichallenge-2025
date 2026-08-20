@@ -162,6 +162,10 @@ using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonTargetPredictionR
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonExecutionBoundsRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::WallCorridorBoundRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StagewiseMpcCorridorBoundsRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  InitialWallMarginTrackingContractReason;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  InitialWallMarginTrackingContractRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::TargetBoundMpcGateRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RecedingHorizonRearClearBoundsReleaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RearClearReturnDeferralHoldRequest;
@@ -3737,6 +3741,112 @@ TEST(V2XOvertakeCoreSpeed, RejectsMalformedStagewiseCorridor)
       true, {-1.0, -1.0}, {1.0, 1.0}, {-0.5}, {0.5}, {0.0, 0.0}});
 
   EXPECT_FALSE(result.valid);
+}
+
+TEST(V2XOvertakeCoreSpeed, InheritsUpperWallMarginUntilRestoreDistance)
+{
+  const auto result =
+    multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_initial_wall_margin_tracking_contract(
+    InitialWallMarginTrackingContractRequest{
+      true, 1.2, 3.0, 0.02,
+      {1.0, 2.0, 3.0, 4.0},
+      {-1.0, -1.0, -1.0, -1.0},
+      {1.0, 1.0, 1.0, 1.0},
+      {-1.0, -1.0, -1.0, -1.0},
+      {1.0, 1.0, 1.0, 1.0}});
+
+  ASSERT_TRUE(result.valid);
+  ASSERT_TRUE(result.active);
+  ASSERT_TRUE(result.feasible);
+  EXPECT_EQ(result.reason, InitialWallMarginTrackingContractReason::MarginInherited);
+  EXPECT_EQ(result.inherited_side_sign, 1);
+  EXPECT_EQ(result.relaxed_sample_count, 2U);
+  EXPECT_EQ(result.first_full_margin_index, 2U);
+  EXPECT_NEAR(result.first_full_margin_distance_m, 3.0, 1e-9);
+  ASSERT_EQ(result.upper_m.size(), 4U);
+  EXPECT_NEAR(result.upper_m[0], 1.2 + (1.0 / 3.0) * (1.0 - 1.2), 1e-9);
+  EXPECT_NEAR(result.upper_m[1], 1.2 + (2.0 / 3.0) * (1.0 - 1.2), 1e-9);
+  EXPECT_NEAR(result.upper_m[2], 1.0, 1e-9);
+  EXPECT_NEAR(result.maximum_boundary_relaxation_m, 2.0 / 15.0, 1e-9);
+}
+
+TEST(V2XOvertakeCoreSpeed, InheritsLowerWallMarginSymmetrically)
+{
+  const auto result =
+    multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_initial_wall_margin_tracking_contract(
+    InitialWallMarginTrackingContractRequest{
+      true, -1.2, 3.0, 0.02,
+      {1.0, 2.0, 3.0},
+      {-1.0, -1.0, -1.0},
+      {1.0, 1.0, 1.0},
+      {-1.0, -1.0, -1.0},
+      {1.0, 1.0, 1.0}});
+
+  ASSERT_TRUE(result.valid);
+  ASSERT_TRUE(result.active);
+  ASSERT_TRUE(result.feasible);
+  EXPECT_EQ(result.inherited_side_sign, -1);
+  ASSERT_EQ(result.lower_m.size(), 3U);
+  EXPECT_NEAR(result.lower_m[0], -1.2 + (1.0 / 3.0) * (-1.0 + 1.2), 1e-9);
+  EXPECT_NEAR(result.lower_m[1], -1.2 + (2.0 / 3.0) * (-1.0 + 1.2), 1e-9);
+  EXPECT_NEAR(result.lower_m[2], -1.0, 1e-9);
+}
+
+TEST(V2XOvertakeCoreSpeed, PreservesVehicleOwnedTighterBoundary)
+{
+  const auto result =
+    multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_initial_wall_margin_tracking_contract(
+    InitialWallMarginTrackingContractRequest{
+      true, 1.2, 3.0, 0.02,
+      {1.0, 2.0, 3.0},
+      {-1.0, -1.0, -1.0},
+      {1.0, 1.0, 1.0},
+      {-1.0, -1.0, -1.0},
+      {0.8, 0.8, 0.8}});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_FALSE(result.active);
+  ASSERT_TRUE(result.feasible);
+  EXPECT_EQ(
+    result.reason,
+    InitialWallMarginTrackingContractReason::VehicleOwnedBoundaryPreserved);
+  EXPECT_EQ(result.upper_m, (std::vector<double>{0.8, 0.8, 0.8}));
+}
+
+TEST(V2XOvertakeCoreSpeed, DisabledWallMarginContractPreservesCorridor)
+{
+  const auto result =
+    multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_initial_wall_margin_tracking_contract(
+    InitialWallMarginTrackingContractRequest{
+      false, 0.0, std::numeric_limits<double>::quiet_NaN(), 0.02,
+      {1.0, 2.0}, {-1.0, -1.0}, {1.0, 1.0},
+      {-0.5, -0.5}, {0.5, 0.5}});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_FALSE(result.active);
+  ASSERT_TRUE(result.feasible);
+  EXPECT_EQ(result.reason, InitialWallMarginTrackingContractReason::Disabled);
+  EXPECT_EQ(result.lower_m, (std::vector<double>{-0.5, -0.5}));
+  EXPECT_EQ(result.upper_m, (std::vector<double>{0.5, 0.5}));
+}
+
+TEST(V2XOvertakeCoreSpeed, RejectsMalformedWallMarginTrackingContract)
+{
+  const auto result =
+    multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_initial_wall_margin_tracking_contract(
+    InitialWallMarginTrackingContractRequest{
+      true, 1.2, 3.0, 1e-4,
+      {2.0, 1.0}, {-1.0, -1.0}, {1.0, 1.0},
+      {-1.0, -1.0}, {1.0, 1.0}});
+
+  EXPECT_FALSE(result.valid);
+  EXPECT_FALSE(result.feasible);
+  EXPECT_EQ(result.reason, InitialWallMarginTrackingContractReason::InvalidInput);
 }
 
 TEST(V2XOvertakeCoreSpeed, TargetBoundMpcGateRequiresContinuousConfirmation)

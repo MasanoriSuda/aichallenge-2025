@@ -116,6 +116,19 @@ TEST(OvertakeDecisionTrace, ReportsStaticWallExecutionPreflight) {
   decision.primary.static_wall_final_margin_contacts = 0U;
   decision.primary.static_wall_margin_clear_path_index = 2U;
   decision.primary.static_wall_margin_clear_distance_m = 1.25;
+  decision.primary.tracking_wall_contract_evaluated = true;
+  decision.primary.tracking_wall_contract_valid = true;
+  decision.primary.tracking_wall_contract_active = true;
+  decision.primary.tracking_wall_contract_feasible = true;
+  decision.primary.tracking_wall_contract_side_sign = 1;
+  decision.primary.tracking_wall_contract_relaxed_samples = 2U;
+  decision.primary.tracking_wall_contract_first_full_margin_index = 3U;
+  decision.primary.tracking_wall_contract_first_full_margin_distance_m = 1.65;
+  decision.primary.tracking_wall_contract_maximum_relaxation_m = 0.18;
+  decision.primary.tracking_wall_contract_current_lateral_m = 1.20;
+  decision.primary.tracking_wall_contract_first_lower_m = -1.0;
+  decision.primary.tracking_wall_contract_first_upper_m = 1.18;
+  decision.primary.tracking_wall_contract_reason = "margin-inherit";
 
   const std::string message = trace::format_decision_trace(decision);
   EXPECT_NE(message.find("state=bridge-rejected"), std::string::npos);
@@ -130,6 +143,16 @@ TEST(OvertakeDecisionTrace, ReportsStaticWallExecutionPreflight) {
   EXPECT_NE(message.find("preflight_raw_poses=21"), std::string::npos);
   EXPECT_NE(message.find("preflight_margin_contacts=6/6/0"), std::string::npos);
   EXPECT_NE(message.find("preflight_margin_clear=2@1.25m"), std::string::npos);
+  EXPECT_NE(message.find("tracking_contract=1/1/1"), std::string::npos);
+  EXPECT_NE(message.find("tracking_contract_active=1"), std::string::npos);
+  EXPECT_NE(message.find("tracking_contract_side=1"), std::string::npos);
+  EXPECT_NE(message.find("tracking_contract_relaxed=2"), std::string::npos);
+  EXPECT_NE(message.find("tracking_contract_full=3@1.65m"), std::string::npos);
+  EXPECT_NE(message.find("tracking_contract_max_relax=0.18m"), std::string::npos);
+  EXPECT_NE(message.find("tracking_contract_first=[-1.00,1.18]"), std::string::npos);
+  EXPECT_NE(message.find("tracking_contract_current=1.20m"), std::string::npos);
+  EXPECT_NE(message.find("tracking_contract_reason=\"margin-inherit\""),
+            std::string::npos);
 }
 
 TEST(OvertakeDecisionTrace, EmitsOnCategoricalChangeButNotContinuousNoise) {

@@ -1216,6 +1216,58 @@ struct StagewiseMpcCorridorBoundsResolution
 StagewiseMpcCorridorBoundsResolution resolve_stagewise_mpc_corridor_bounds(
   const StagewiseMpcCorridorBoundsRequest & request) noexcept;
 
+enum class InitialWallMarginTrackingContractReason
+{
+  NotEvaluated,
+  Disabled,
+  AlreadyInsidePreferredWallBounds,
+  MarginInherited,
+  VehicleOwnedBoundaryPreserved,
+  InvalidInput,
+  EmptyCorridor,
+};
+
+const char * to_string(InitialWallMarginTrackingContractReason reason) noexcept;
+
+struct InitialWallMarginTrackingContractRequest
+{
+  bool enabled{false};
+  double current_lateral_m{};
+  double margin_restore_distance_m{};
+  double wall_edge_ownership_tolerance_m{1e-4};
+  std::vector<double> stage_distance_m;
+  std::vector<double> preferred_wall_lower_m;
+  std::vector<double> preferred_wall_upper_m;
+  std::vector<double> selected_corridor_lower_m;
+  std::vector<double> selected_corridor_upper_m;
+};
+
+struct InitialWallMarginTrackingContractResolution
+{
+  bool valid{false};
+  bool active{false};
+  bool feasible{false};
+  int inherited_side_sign{0};
+  std::size_t relaxed_sample_count{};
+  std::size_t first_full_margin_index{std::numeric_limits<std::size_t>::max()};
+  double first_full_margin_distance_m{std::numeric_limits<double>::quiet_NaN()};
+  double maximum_boundary_relaxation_m{};
+  double first_stage_lower_m{std::numeric_limits<double>::quiet_NaN()};
+  double first_stage_upper_m{std::numeric_limits<double>::quiet_NaN()};
+  InitialWallMarginTrackingContractReason reason{
+    InitialWallMarginTrackingContractReason::NotEvaluated};
+  std::vector<double> lower_m;
+  std::vector<double> upper_m;
+};
+
+/// Preserve a physically validated initial wall-margin overlap in the tracking
+/// corridor, then restore the normal wall edge over the preflight distance.
+/// Only an edge still owned by the base wall interval may be widened; a tighter
+/// vehicle-owned edge is kept unchanged.
+InitialWallMarginTrackingContractResolution
+resolve_initial_wall_margin_tracking_contract(
+  const InitialWallMarginTrackingContractRequest & request) noexcept;
+
 struct TargetBoundMpcGateRequest
 {
   bool mission_active{false};

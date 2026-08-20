@@ -2041,6 +2041,26 @@ struct DynamicObstacleLateralEscapeBridgeResult
     std::numeric_limits<double>::quiet_NaN()};
   std::string static_wall_preflight_mode{"not-evaluated"};
   std::string static_wall_preflight_reason{"not evaluated"};
+  bool tracking_wall_contract_evaluated{false};
+  bool tracking_wall_contract_valid{false};
+  bool tracking_wall_contract_active{false};
+  bool tracking_wall_contract_feasible{false};
+  int tracking_wall_contract_side_sign{0};
+  std::size_t tracking_wall_contract_relaxed_sample_count{0U};
+  std::size_t tracking_wall_contract_first_full_margin_index{
+    std::numeric_limits<std::size_t>::max()};
+  double tracking_wall_contract_first_full_margin_distance_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double tracking_wall_contract_maximum_relaxation_m{0.0};
+  double tracking_wall_contract_current_lateral_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double tracking_wall_contract_first_lower_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double tracking_wall_contract_first_upper_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  std::string tracking_wall_contract_reason{"not-evaluated"};
+  std::vector<double> tracking_wall_contract_lower_m;
+  std::vector<double> tracking_wall_contract_upper_m;
   std::string reason{"not evaluated"};
 };
 
@@ -4944,9 +4964,13 @@ struct MpcProblem
   bool progress_committed_pass{false};
   double progress_measured_speed_mps{};
   bool dynamic_obstacle_lateral_escape_active{false};
+  bool dynamic_obstacle_margin_escape_tracking_contract_active{false};
   std::uint64_t dynamic_obstacle_lateral_escape_attempt_id{0U};
   std::string dynamic_obstacle_lateral_escape_target_id;
   int dynamic_obstacle_lateral_escape_side_sign{0};
+  std::vector<double> dynamic_obstacle_escape_path_distance_m;
+  Eigen::VectorXd dynamic_obstacle_escape_lateral_lower;
+  Eigen::VectorXd dynamic_obstacle_escape_lateral_upper;
 };
 
 struct ExtendedProgressMpcProblem
@@ -15089,6 +15113,32 @@ struct MPC
           bridge.static_wall_preflight_mode;
         trace.static_wall_preflight_reason =
           bridge.static_wall_preflight_reason;
+        trace.tracking_wall_contract_evaluated =
+          bridge.tracking_wall_contract_evaluated;
+        trace.tracking_wall_contract_valid =
+          bridge.tracking_wall_contract_valid;
+        trace.tracking_wall_contract_active =
+          bridge.tracking_wall_contract_active;
+        trace.tracking_wall_contract_feasible =
+          bridge.tracking_wall_contract_feasible;
+        trace.tracking_wall_contract_side_sign =
+          bridge.tracking_wall_contract_side_sign;
+        trace.tracking_wall_contract_relaxed_samples =
+          bridge.tracking_wall_contract_relaxed_sample_count;
+        trace.tracking_wall_contract_first_full_margin_index =
+          bridge.tracking_wall_contract_first_full_margin_index;
+        trace.tracking_wall_contract_first_full_margin_distance_m =
+          bridge.tracking_wall_contract_first_full_margin_distance_m;
+        trace.tracking_wall_contract_maximum_relaxation_m =
+          bridge.tracking_wall_contract_maximum_relaxation_m;
+        trace.tracking_wall_contract_current_lateral_m =
+          bridge.tracking_wall_contract_current_lateral_m;
+        trace.tracking_wall_contract_first_lower_m =
+          bridge.tracking_wall_contract_first_lower_m;
+        trace.tracking_wall_contract_first_upper_m =
+          bridge.tracking_wall_contract_first_upper_m;
+        trace.tracking_wall_contract_reason =
+          bridge.tracking_wall_contract_reason;
       };
     const auto capture_dynamic_escape_backoff = [](
       overtake_decision_trace::CandidateTrace & trace,
@@ -15154,6 +15204,9 @@ struct MPC
             evaluation.bridge.feasible = false;
             evaluation.bridge.reason =
               "static wall execution preflight: " + static_wall_preflight.reason;
+          } else {
+            resolve_dynamic_escape_tracking_wall_contract(
+              ref_wp_id, N, lb, ub, evaluation.output, evaluation.bridge);
           }
         }
         if (evaluation.bridge.feasible) {
@@ -15294,7 +15347,10 @@ struct MPC
       dynamic_escape_bridge.evaluated && dynamic_escape_bridge.feasible &&
       dynamic_escape_bridge.checked_sample_count > 0U &&
       dynamic_escape_bridge.static_wall_preflight_evaluated &&
-      dynamic_escape_bridge.static_wall_preflight_feasible;
+      dynamic_escape_bridge.static_wall_preflight_feasible &&
+      dynamic_escape_bridge.tracking_wall_contract_evaluated &&
+      dynamic_escape_bridge.tracking_wall_contract_valid &&
+      dynamic_escape_bridge.tracking_wall_contract_feasible;
     const auto dynamic_lateral_escape_authority =
       v2x_overtake_core::resolve_dynamic_obstacle_lateral_escape_authority(
       v2x_overtake_core::DynamicObstacleLateralEscapeAuthorityRequest{
@@ -15644,9 +15700,29 @@ struct MPC
     if (planner_output.active) {
       if (planner_output.feasible) {
         if (apply_gap_planner_state_bounds) {
+          const bool apply_margin_escape_tracking_contract =
+            behavior_output.dynamic_obstacle_lateral_escape_active &&
+            dynamic_escape_bridge.tracking_wall_contract_active &&
+            dynamic_escape_bridge.tracking_wall_contract_valid &&
+            dynamic_escape_bridge.tracking_wall_contract_feasible &&
+            dynamic_escape_bridge.tracking_wall_contract_lower_m.size() >=
+            static_cast<std::size_t>(N) &&
+            dynamic_escape_bridge.tracking_wall_contract_upper_m.size() >=
+            static_cast<std::size_t>(N);
           for (int i = 0; i < N; ++i) {
-            lb[i] = std::max(lb[i], planner_output.lb[i]);
-            ub[i] = std::min(ub[i], planner_output.ub[i]);
+            if (apply_margin_escape_tracking_contract) {
+              // Admission already proved that the physical footprint is clear
+              // while the configured wall margin is restored centerward.  Use
+              // that same stage-wise contract instead of intersecting it with
+              // the preferred wall edge again and silently deleting it.
+              lb[i] = dynamic_escape_bridge.tracking_wall_contract_lower_m[
+                static_cast<std::size_t>(i)];
+              ub[i] = dynamic_escape_bridge.tracking_wall_contract_upper_m[
+                static_cast<std::size_t>(i)];
+            } else {
+              lb[i] = std::max(lb[i], planner_output.lb[i]);
+              ub[i] = std::min(ub[i], planner_output.ub[i]);
+            }
             if (ub[i] < lb[i]) {
               ub[i] = 0.0;
               lb[i] = 0.0;
@@ -16404,6 +16480,25 @@ struct MPC
         progress_execution_lateral_upper_m.push_back(ub[i]);
       }
     }
+    const bool dynamic_margin_escape_tracking_contract_active =
+      behavior_output.dynamic_obstacle_lateral_escape_active &&
+      dynamic_escape_bridge.tracking_wall_contract_active;
+    std::vector<double> dynamic_obstacle_escape_path_distance_m;
+    Eigen::VectorXd dynamic_obstacle_escape_lateral_lower;
+    Eigen::VectorXd dynamic_obstacle_escape_lateral_upper;
+    if (dynamic_margin_escape_tracking_contract_active) {
+      dynamic_obstacle_escape_path_distance_m.reserve(
+        static_cast<std::size_t>(N));
+      dynamic_obstacle_escape_lateral_lower.resize(N);
+      dynamic_obstacle_escape_lateral_upper.resize(N);
+      for (int i = 0; i < N; ++i) {
+        dynamic_obstacle_escape_path_distance_m.push_back(
+          horizon_path_distance_to_index(
+            ref_wp_id, static_cast<std::size_t>(i)));
+        dynamic_obstacle_escape_lateral_lower[i] = lb[i];
+        dynamic_obstacle_escape_lateral_upper[i] = ub[i];
+      }
+    }
     const std::uint64_t wall_cache_miss_count_after_problem =
       physical_wall_envelope_cache_miss_count_;
     const std::size_t progress_wall_cache_miss_count =
@@ -16453,9 +16548,13 @@ struct MPC
       overtake_line_state_.phase == OvertakeLinePhase::Pass,
       progress_contouring_active ? current_speed_mps_ : 0.0,
       behavior_output.dynamic_obstacle_lateral_escape_active,
+      dynamic_margin_escape_tracking_contract_active,
       behavior_output.dynamic_obstacle_lateral_escape_attempt_id,
       behavior_output.dynamic_obstacle_cruise_target_id,
-      behavior_output.dynamic_obstacle_lateral_escape_side_sign};
+      behavior_output.dynamic_obstacle_lateral_escape_side_sign,
+      std::move(dynamic_obstacle_escape_path_distance_m),
+      std::move(dynamic_obstacle_escape_lateral_lower),
+      std::move(dynamic_obstacle_escape_lateral_upper)};
   }
 
   std::optional<ExtendedProgressMpcProblem> build_extended_progress_problem(
@@ -17579,7 +17678,9 @@ struct MPC
     const Eigen::VectorXd & lower_bound,
     const Eigen::VectorXd & upper_bound,
     const double hard_wall_clearance_m,
-    std::string & reject_reason) const
+    std::string & reject_reason,
+    const double bound_tolerance_m = 1e-6,
+    const bool validate_swept_path = false) const
   {
     if (
       model == nullptr || model->reference_path == nullptr ||
@@ -17588,7 +17689,9 @@ struct MPC
       trajectory.lateral_m.size() != static_cast<std::size_t>(horizon_size) ||
       path_distance_m.size() != trajectory.lateral_m.size() ||
       lower_bound.size() < horizon_size || upper_bound.size() < horizon_size ||
-      !std::isfinite(hard_wall_clearance_m) || hard_wall_clearance_m < 0.0)
+      !std::isfinite(hard_wall_clearance_m) || hard_wall_clearance_m < 0.0 ||
+      !std::isfinite(bound_tolerance_m) || bound_tolerance_m < 0.0 ||
+      (validate_swept_path && !actual_wall_monitor_pose_.has_value()))
     {
       reject_reason = "solution wall validation input invalid";
       return false;
@@ -17597,6 +17700,11 @@ struct MPC
     auto clearance_footprint = overtake_static_wall_footprint_;
     clearance_footprint.left_extent_m += hard_wall_clearance_m;
     clearance_footprint.right_extent_m += hard_wall_clearance_m;
+    std::vector<recovery_footprint::Pose2D> swept_path;
+    if (validate_swept_path) {
+      swept_path.reserve(static_cast<std::size_t>(horizon_size) + 1U);
+      swept_path.push_back(actual_wall_monitor_pose_.value());
+    }
     for (int i = 0; i < horizon_size; ++i) {
       const std::size_t index = static_cast<std::size_t>(i);
       const double lateral = trajectory.lateral_m[index];
@@ -17609,7 +17717,8 @@ struct MPC
       if (
         !std::isfinite(lateral) || !std::isfinite(lower) ||
         !std::isfinite(upper) || lower > upper ||
-        lateral < lower - 1e-6 || lateral > upper + 1e-6)
+        lateral < lower - bound_tolerance_m ||
+        lateral > upper + bound_tolerance_m)
       {
         reject_reason = "current wall bounds rejected solution";
         return false;
@@ -17637,6 +17746,9 @@ struct MPC
         waypoint.x - lateral * std::sin(waypoint.psi),
         waypoint.y + lateral * std::cos(waypoint.psi),
         wrap_to_pi(waypoint.psi + heading_offset)};
+      if (validate_swept_path) {
+        swept_path.push_back(pose);
+      }
       const auto sample = recovery_footprint::sample_footprint(
         *overtake_static_wall_grid_, clearance_footprint, pose);
       if (!sample.valid || sample.out_of_map || !sample.contact_cells.empty()) {
@@ -17645,8 +17757,73 @@ struct MPC
         return false;
       }
     }
+    if (validate_swept_path) {
+      const double swept_step_m = std::max(
+        1e-3,
+        std::min(0.10, 0.5 * overtake_static_wall_grid_->resolution_m));
+      const auto swept_clearance =
+        recovery_footprint::evaluate_clear_footprint_path(
+        *overtake_static_wall_grid_, clearance_footprint,
+        swept_path, swept_step_m);
+      if (!swept_clearance.valid || !swept_clearance.clear) {
+        std::ostringstream reason;
+        reason << "solution swept wall path "
+               << recovery_footprint::to_string(swept_clearance.reason)
+               << " at path index " << swept_clearance.rejected_path_index;
+        reject_reason = reason.str();
+        return false;
+      }
+    }
     reject_reason = "physical solution horizon accepted";
     return true;
+  }
+
+  bool dynamic_margin_escape_solution_wall_safe(
+    const MpcProblem & problem, const Eigen::VectorXd & primal,
+    const double maximum_constraint_violation,
+    std::string & reject_reason) const
+  {
+    constexpr int nx = 3;
+    constexpr int nu = 2;
+    if (!problem.dynamic_obstacle_margin_escape_tracking_contract_active) {
+      reject_reason = "tracking contract inactive";
+      return true;
+    }
+    const int expected_size =
+      nx * (problem.N + 1) + nu * problem.N;
+    if (
+      problem.N <= 0 || primal.size() != expected_size || !primal.allFinite() ||
+      problem.dynamic_obstacle_escape_path_distance_m.size() !=
+      static_cast<std::size_t>(problem.N) ||
+      problem.dynamic_obstacle_escape_lateral_lower.size() < problem.N ||
+      problem.dynamic_obstacle_escape_lateral_upper.size() < problem.N)
+    {
+      reject_reason = "dynamic margin escape solution input invalid";
+      return false;
+    }
+
+    std::vector<double> lateral_m;
+    lateral_m.reserve(static_cast<std::size_t>(problem.N));
+    for (int stage = 0; stage < problem.N; ++stage) {
+      lateral_m.push_back(primal[(stage + 1) * nx]);
+    }
+    const AlignedMpccExecutionTrajectory trajectory{
+      0.0, 0.0, std::numeric_limits<double>::infinity(),
+      std::move(lateral_m)};
+    const double bound_tolerance_m =
+      std::isfinite(maximum_constraint_violation) ?
+      std::max(1e-5, maximum_constraint_violation + 1e-6) : 1e-5;
+    return solved_mpcc_execution_path_wall_safe(
+      trajectory,
+      problem.dynamic_obstacle_escape_path_distance_m,
+      problem.ref_wp_id,
+      problem.N,
+      problem.dynamic_obstacle_escape_lateral_lower,
+      problem.dynamic_obstacle_escape_lateral_upper,
+      0.0,
+      reject_reason,
+      bound_tolerance_m,
+      true);
   }
 
   std::optional<PhysicallyValidatedMpccExecutionTrajectory>
@@ -18425,6 +18602,15 @@ struct MPC
         dec = legacy_outcome.result->primal;
         maximum_constraint_violation =
           legacy_outcome.result->maximum_constraint_violation;
+      }
+      std::string dynamic_margin_escape_reject_reason;
+      if (!dynamic_margin_escape_solution_wall_safe(
+          problem, dec, maximum_constraint_violation,
+          dynamic_margin_escape_reject_reason))
+      {
+        throw std::runtime_error(
+                "dynamic margin escape physical solution rejected: " +
+                dynamic_margin_escape_reject_reason);
       }
       record_solved_mpcc_execution_trajectory(
         problem, dec, maximum_constraint_violation, now_sec);
@@ -33826,6 +34012,97 @@ private:
     result.feasible = true;
     result.reason = "reachable";
     return result;
+  }
+
+  void resolve_dynamic_escape_tracking_wall_contract(
+    const int ref_wp_id, const int horizon_size,
+    const Eigen::VectorXd & preferred_wall_lower,
+    const Eigen::VectorXd & preferred_wall_upper,
+    const GapPlannerOutput & gap_output,
+    DynamicObstacleLateralEscapeBridgeResult & bridge) const
+  {
+    bridge.tracking_wall_contract_evaluated = true;
+    bridge.tracking_wall_contract_current_lateral_m =
+      model != nullptr ? model->spatial_state.e_y :
+      std::numeric_limits<double>::quiet_NaN();
+    if (
+      horizon_size <= 0 || preferred_wall_lower.size() < horizon_size ||
+      preferred_wall_upper.size() < horizon_size ||
+      gap_output.lb.size() < static_cast<std::size_t>(horizon_size) ||
+      gap_output.ub.size() < static_cast<std::size_t>(horizon_size) ||
+      model == nullptr || model->reference_path == nullptr)
+    {
+      bridge.tracking_wall_contract_reason = "invalid tracking horizon";
+      bridge.feasible = false;
+      bridge.reason =
+        "tracking wall contract: " + bridge.tracking_wall_contract_reason;
+      return;
+    }
+
+    std::vector<double> stage_distance_m;
+    std::vector<double> wall_lower_m;
+    std::vector<double> wall_upper_m;
+    std::vector<double> selected_lower_m;
+    std::vector<double> selected_upper_m;
+    const auto sample_count = static_cast<std::size_t>(horizon_size);
+    stage_distance_m.reserve(sample_count);
+    wall_lower_m.reserve(sample_count);
+    wall_upper_m.reserve(sample_count);
+    selected_lower_m.reserve(sample_count);
+    selected_upper_m.reserve(sample_count);
+    for (int index = 0; index < horizon_size; ++index) {
+      stage_distance_m.push_back(
+        horizon_path_distance_to_index(
+          ref_wp_id, static_cast<std::size_t>(index)));
+      wall_lower_m.push_back(preferred_wall_lower[index]);
+      wall_upper_m.push_back(preferred_wall_upper[index]);
+      selected_lower_m.push_back(
+        gap_output.lb[static_cast<std::size_t>(index)]);
+      selected_upper_m.push_back(
+        gap_output.ub[static_cast<std::size_t>(index)]);
+    }
+
+    // This tolerance exists only for floating-point identity.  A centimetre
+    // scale tolerance could misclassify a nearby vehicle edge as a wall edge
+    // and relax the obstacle constraint.
+    constexpr double kWallEdgeOwnershipToleranceM = 1e-4;
+    const auto contract =
+      v2x_overtake_core::resolve_initial_wall_margin_tracking_contract(
+      v2x_overtake_core::InitialWallMarginTrackingContractRequest{
+        bridge.static_wall_margin_escape_used,
+        bridge.tracking_wall_contract_current_lateral_m,
+        bridge.static_wall_margin_clear_distance_m,
+        kWallEdgeOwnershipToleranceM,
+        std::move(stage_distance_m),
+        std::move(wall_lower_m),
+        std::move(wall_upper_m),
+        std::move(selected_lower_m),
+        std::move(selected_upper_m)});
+    bridge.tracking_wall_contract_valid = contract.valid;
+    bridge.tracking_wall_contract_active = contract.active;
+    bridge.tracking_wall_contract_feasible = contract.feasible;
+    bridge.tracking_wall_contract_side_sign = contract.inherited_side_sign;
+    bridge.tracking_wall_contract_relaxed_sample_count =
+      contract.relaxed_sample_count;
+    bridge.tracking_wall_contract_first_full_margin_index =
+      contract.first_full_margin_index;
+    bridge.tracking_wall_contract_first_full_margin_distance_m =
+      contract.first_full_margin_distance_m;
+    bridge.tracking_wall_contract_maximum_relaxation_m =
+      contract.maximum_boundary_relaxation_m;
+    bridge.tracking_wall_contract_first_lower_m =
+      contract.first_stage_lower_m;
+    bridge.tracking_wall_contract_first_upper_m =
+      contract.first_stage_upper_m;
+    bridge.tracking_wall_contract_reason =
+      v2x_overtake_core::to_string(contract.reason);
+    bridge.tracking_wall_contract_lower_m = contract.lower_m;
+    bridge.tracking_wall_contract_upper_m = contract.upper_m;
+    if (!contract.valid || !contract.feasible) {
+      bridge.feasible = false;
+      bridge.reason =
+        "tracking wall contract: " + bridge.tracking_wall_contract_reason;
+    }
   }
 
   ReachableGapMetrics compute_reachable_gap_metrics(

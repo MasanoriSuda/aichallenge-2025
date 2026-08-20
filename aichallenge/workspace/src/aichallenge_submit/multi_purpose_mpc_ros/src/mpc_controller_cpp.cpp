@@ -1422,6 +1422,7 @@ struct OvertakeLineConfig
   double mpcc_frenet_dp_shadow_score_penalty{1.0};
   double mpcc_frenet_dp_last_path_max_age_sec{0.50};
   double mpcc_frenet_dp_runtime_validation_lease_sec{0.30};
+  double mpcc_frenet_dp_tracking_release_confirm_sec{0.10};
   double mpcc_frenet_dp_max_tracking_lateral_error_m{0.50};
   double mpcc_frenet_dp_max_tracking_heading_error_rad{0.35};
   bool mpcc_frenet_dp_block_on_extended_solver_degraded{true};
@@ -2504,6 +2505,8 @@ struct OvertakeLineState
   int mission_frenet_dp_refresh_count{0};
   bool mission_frenet_dp_execution_authority_was_active{false};
   bool mission_frenet_dp_execution_authority_runtime_was_active{false};
+  double mission_frenet_dp_tracking_unsafe_since_sec{
+    -std::numeric_limits<double>::infinity()};
   double mission_frenet_dp_last_runtime_validation_sec{
     -std::numeric_limits<double>::infinity()};
   double mission_shift_distance{0.0};
@@ -8270,6 +8273,13 @@ struct MPC
     // the same lateral path before its rolling refresh can run. Exact target
     // identity and a short runtime-validation lease are mandatory, so a
     // different front vehicle or stale path still fails closed.
+    const auto continuous_dp_tracking_release =
+      resolve_frenet_dp_tracking_release(
+      now_sec,
+      active_overtake_line ||
+      (tactical_rolling_replan_active &&
+      overtake_line_state_.dynamic_mission_wait_active),
+      model->wp_id);
     const auto continuous_dp_front_authority =
       overtake_core::resolve_frenet_dp_execution_authority(
       overtake_core::FrenetDpExecutionAuthorityRequest{
@@ -8305,7 +8315,8 @@ struct MPC
           cfg.v2x_behavior.overtake_line.mpcc_lite_prefix_terminal_distance),
         overtake_line_state_.mission_frenet_dp_path_distances_m,
         overtake_line_state_.mission_frenet_dp_lateral_path_m,
-        is_frenet_dp_execution_tracking_safe(model->wp_id),
+        continuous_dp_tracking_release.valid &&
+        continuous_dp_tracking_release.effective_tracking_safe,
         cfg.v2x_behavior.overtake_line.
         mpcc_frenet_dp_block_on_extended_solver_degraded &&
         cfg.progress_contouring.extended_dynamics_enabled &&
@@ -19549,6 +19560,8 @@ private:
     {
       overtake_line_state_.mission_frenet_dp_execution_authority_was_active = false;
       overtake_line_state_.mission_frenet_dp_execution_authority_runtime_was_active = false;
+      overtake_line_state_.mission_frenet_dp_tracking_unsafe_since_sec =
+        -std::numeric_limits<double>::infinity();
       overtake_line_state_.mission_frenet_dp_last_runtime_validation_sec =
         -std::numeric_limits<double>::infinity();
     }
@@ -19995,6 +20008,8 @@ private:
     overtake_line_state_.mission_frenet_dp_refresh_count = 0;
     overtake_line_state_.mission_frenet_dp_execution_authority_was_active = false;
     overtake_line_state_.mission_frenet_dp_execution_authority_runtime_was_active = false;
+    overtake_line_state_.mission_frenet_dp_tracking_unsafe_since_sec =
+      -std::numeric_limits<double>::infinity();
     overtake_line_state_.mission_frenet_dp_last_runtime_validation_sec =
       -std::numeric_limits<double>::infinity();
     overtake_line_state_.mission_shift_distance =
@@ -23707,6 +23722,25 @@ private:
       line_cfg.mpcc_frenet_dp_max_tracking_heading_error_rad + kEps;
   }
 
+  overtake_core::FrenetDpTrackingReleaseResolution
+  resolve_frenet_dp_tracking_release(
+    const double now_sec, const bool execution_active, const int ref_wp_id)
+  {
+    const auto resolution = overtake_core::resolve_frenet_dp_tracking_release(
+      overtake_core::FrenetDpTrackingReleaseRequest{
+        execution_active,
+        is_frenet_dp_execution_tracking_safe(ref_wp_id),
+        now_sec,
+        overtake_line_state_.mission_frenet_dp_tracking_unsafe_since_sec,
+        cfg.v2x_behavior.overtake_line.
+        mpcc_frenet_dp_tracking_release_confirm_sec});
+    if (resolution.valid) {
+      overtake_line_state_.mission_frenet_dp_tracking_unsafe_since_sec =
+        resolution.unsafe_since_sec;
+    }
+    return resolution;
+  }
+
   std::optional<recovery_footprint::Pose2D> sample_overtake_wall_prediction_pose(
     const int ref_wp_id, const double prediction_distance_m,
     const double current_ey) const
@@ -25697,8 +25731,15 @@ private:
     const bool extended_mpcc_solver_degraded =
       cfg.progress_contouring.extended_dynamics_enabled &&
       extended_progress_circuit_breaker_.active(now_sec);
-    const bool dp_execution_tracking_safe =
+    const bool dp_execution_tracking_safe_raw =
       is_frenet_dp_execution_tracking_safe(ref_wp_id);
+    const auto dp_execution_tracking_release =
+      resolve_frenet_dp_tracking_release(
+      now_sec, active_execution_phase || execution_origin_dynamic_wait_active,
+      ref_wp_id);
+    const bool dp_execution_tracking_safe =
+      dp_execution_tracking_release.valid &&
+      dp_execution_tracking_release.effective_tracking_safe;
     const auto dp_execution_authority =
         overtake_core::resolve_frenet_dp_execution_authority(
             overtake_core::FrenetDpExecutionAuthorityRequest{
@@ -25754,7 +25795,9 @@ private:
           "OvertakeLine DP execution authority retained: target=%s, side=%d, "
           "phase=%s, "
           "source=%s, source_age=%.2f s, runtime_age=%.2f s, "
-          "remaining=%.2f m, terminal=%.2f m, tracking=%d, solver_degraded=%d, "
+          "remaining=%.2f m, terminal=%.2f m, reason=%s, "
+          "tracking=%d/%d/%s/%.2f s, "
+          "solver_degraded=%d, "
           "wall_escape=%d, wp_id=%d",
           overtake_line_state_.target_vehicle_id.c_str(),
           overtake_line_state_.pass_side_sign,
@@ -25766,7 +25809,11 @@ private:
           dp_execution_authority.runtime_validation_age_sec,
           dp_execution_authority.remaining_distance_m,
           dp_execution_terminal_distance,
+          overtake_core::to_string(dp_execution_authority.reason),
+          dp_execution_tracking_safe_raw ? 1 : 0,
           dp_execution_tracking_safe ? 1 : 0,
+          overtake_core::to_string(dp_execution_tracking_release.reason),
+          dp_execution_tracking_release.unsafe_elapsed_sec,
           extended_mpcc_solver_degraded ? 1 : 0,
           runtime_wall_escape_prefix_candidate ? 1 : 0, model->wp_id);
       } else {
@@ -25774,14 +25821,20 @@ private:
           rclcpp::get_logger("mpc_controller"),
           "OvertakeLine DP execution authority released: target=%s, side=%d, "
           "source_age=%.2f s, runtime_age=%.2f s, remaining=%.2f m, "
-          "terminal=%.2f m, tracking=%d, solver_degraded=%d, wall_escape=%d, wp_id=%d",
+          "terminal=%.2f m, reason=%s, tracking=%d/%d/%s/%.2f s, "
+          "solver_degraded=%d, "
+          "wall_escape=%d, wp_id=%d",
           overtake_line_state_.target_vehicle_id.c_str(),
           overtake_line_state_.pass_side_sign,
           dp_execution_authority.path_age_sec,
           dp_execution_authority.runtime_validation_age_sec,
           dp_execution_authority.remaining_distance_m,
           dp_execution_terminal_distance,
+          overtake_core::to_string(dp_execution_authority.reason),
+          dp_execution_tracking_safe_raw ? 1 : 0,
           dp_execution_tracking_safe ? 1 : 0,
+          overtake_core::to_string(dp_execution_tracking_release.reason),
+          dp_execution_tracking_release.unsafe_elapsed_sec,
           extended_mpcc_solver_degraded ? 1 : 0,
           runtime_wall_escape_prefix_candidate ? 1 : 0, model->wp_id);
       }
@@ -38199,6 +38252,12 @@ Config load_config(const std::string & path)
     mpc["v2x_overtake_mpcc_frenet_dp_runtime_validation_lease_sec"] ?
     mpc["v2x_overtake_mpcc_frenet_dp_runtime_validation_lease_sec"].as<double>() :
     0.30);
+  cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_tracking_release_confirm_sec =
+    std::max(
+    0.0,
+    mpc["v2x_overtake_mpcc_frenet_dp_tracking_release_confirm_sec"] ?
+    mpc["v2x_overtake_mpcc_frenet_dp_tracking_release_confirm_sec"].as<double>() :
+    0.10);
   cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_max_tracking_lateral_error_m =
     std::max(
     0.0,
@@ -40573,7 +40632,7 @@ public:
         "curve_strategy=%s/kappa>=%.3f/reference=%.2f/edge=%.2f/inside=%.2f/"
         "tactic_switch=%.2f, hard_horizon=%.1f m, tactical_horizon=%.1f m, "
         "shadow_penalty=%.2f, warm_age<=%.2f s, runtime_lease<=%.2f s, "
-        "tracking<=%.2f m/%.2f rad, solver_degraded_block=%s, "
+        "tracking<=%.2f m/%.2f rad/confirm=%.2f s, solver_degraded_block=%s, "
         "longitudinal_timing=%s/cost_slack=%.2f",
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_corridor_enabled ?
         "enabled" : "disabled",
@@ -40629,6 +40688,8 @@ public:
         mpcc_frenet_dp_max_tracking_lateral_error_m,
         mpc_cfg_.v2x_behavior.overtake_line.
         mpcc_frenet_dp_max_tracking_heading_error_rad,
+        mpc_cfg_.v2x_behavior.overtake_line.
+        mpcc_frenet_dp_tracking_release_confirm_sec,
         mpc_cfg_.v2x_behavior.overtake_line.
         mpcc_frenet_dp_block_on_extended_solver_degraded ? "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_longitudinal_timing_enabled ?
@@ -45120,23 +45181,46 @@ private:
       current_time.seconds(), active_control_decision_id_);
     const bool mpc_fallback_active = mpc_->last_control_was_fallback();
     const auto & v2x_behavior = mpc_->last_v2x_behavior_output();
+    const auto overtake_authority = current_overtake_authority_trace();
     const bool solver_failure_continuation_previous_cycle =
       solver_failure_continuation_was_active_;
     double wall_handoff_required_clearance_m = std::max(
       0.0, mpc_cfg_.v2x_behavior.overtake_line.min_wall_clearance);
-    if (const auto authority = current_overtake_authority_trace()) {
+    if (overtake_authority.has_value()) {
+      const auto & authority = overtake_authority.value();
       if (
-        std::isfinite(authority->request.wall_contract_required_clearance_m) &&
-        authority->request.wall_contract_required_clearance_m >= 0.0)
+        std::isfinite(authority.request.wall_contract_required_clearance_m) &&
+        authority.request.wall_contract_required_clearance_m >= 0.0)
       {
         wall_handoff_required_clearance_m =
-          authority->request.wall_contract_required_clearance_m;
+          authority.request.wall_contract_required_clearance_m;
       }
     }
+    const bool active_overtake_wall_monitor_relevant =
+      enable_control_ && overtake_authority.has_value() &&
+      overtake_authority->resolution.relevant && !mpc_fallback_active &&
+      (overtake_authority->request.phase ==
+      overtake_orchestrator::Phase::ShiftOut ||
+      overtake_authority->request.phase == overtake_orchestrator::Phase::Pass ||
+      overtake_authority->request.phase ==
+      overtake_orchestrator::Phase::Return) &&
+      overtake_authority->resolution.path_source !=
+      overtake_orchestrator::PathSource::RacingLine &&
+      overtake_authority->resolution.path_source !=
+      overtake_orchestrator::PathSource::RecoveryLine &&
+      overtake_authority->resolution.path_source !=
+      overtake_orchestrator::PathSource::SafetyHold;
+    const int wall_path_scan_interval_cycles = std::max(
+      1, static_cast<int>(std::lround(mpc_cfg_.control_rate / 10.0)));
+    const bool active_overtake_wall_scan_due =
+      active_overtake_wall_monitor_relevant &&
+      (!overtake_wall_monitor_was_relevant_ ||
+      loop_ % wall_path_scan_interval_cycles == 0);
     recovery_footprint::FootprintSample solver_crawl_footprint_sample;
     const bool wall_handoff_observation_required =
       solver_failure_continuation_previous_cycle ||
-      wall_handoff_admission_gate_.active();
+      solver_wall_handoff_admission_gate_.active() ||
+      active_overtake_wall_scan_due;
     if (
       (mpc_fallback_active || wall_handoff_observation_required) &&
       recovery_grid_ && recovery_footprint_.valid())
@@ -45300,42 +45384,94 @@ private:
     }
 
     overtake_orchestrator::WallHandoffAdmissionRequest
-      wall_handoff_admission_request;
+      solver_wall_admission_request;
     overtake_orchestrator::WallHandoffAdmissionResolution
-      wall_handoff_admission;
+      solver_wall_admission;
+    overtake_orchestrator::WallHandoffAdmissionRequest
+      overtake_wall_admission_request;
+    overtake_orchestrator::WallHandoffAdmissionResolution
+      overtake_wall_admission;
     const bool recovered_from_bounded_continuation =
       solver_failure_continuation_previous_cycle &&
       !solver_failure_continuation_active && !mpc_fallback_active &&
       enable_control_;
-    if (!enable_control_ && wall_handoff_admission_gate_.active()) {
-      wall_handoff_admission_gate_.reset();
+    if (!enable_control_ && solver_wall_handoff_admission_gate_.active()) {
+      solver_wall_handoff_admission_gate_.reset();
     }
+    if (!enable_control_ && overtake_wall_admission_gate_.active()) {
+      overtake_wall_admission_gate_.reset();
+    }
+    const auto populate_wall_admission_observation =
+      [&] (
+      overtake_orchestrator::WallHandoffAdmissionRequest & request,
+      const overtake_orchestrator::FinalControlSource source) {
+        request.current_footprint_valid = solver_crawl_footprint_sample.valid;
+        request.current_footprint_clear = solver_crawl_footprint_clear;
+        request.current_footprint_out_of_map =
+          solver_crawl_footprint_sample.out_of_map;
+        request.current_contact_count =
+          solver_crawl_footprint_sample.contact_cells.size();
+        request.required_wall_clearance_m =
+          wall_handoff_required_clearance_m;
+        request.required_consecutive_valid_cycles = 2;
+        request.prediction = evaluate_predicted_path_wall_metrics(
+          pose, wall_handoff_required_clearance_m, source);
+      };
     if (
       recovered_from_bounded_continuation ||
-      wall_handoff_admission_gate_.active())
+      solver_wall_handoff_admission_gate_.active())
     {
-      wall_handoff_admission_request.recovered_from_bounded_continuation =
+      solver_wall_admission_request.activation_requested =
         recovered_from_bounded_continuation;
-      wall_handoff_admission_request.current_footprint_valid =
-        solver_crawl_footprint_sample.valid;
-      wall_handoff_admission_request.current_footprint_clear =
-        solver_crawl_footprint_clear;
-      wall_handoff_admission_request.current_footprint_out_of_map =
-        solver_crawl_footprint_sample.out_of_map;
-      wall_handoff_admission_request.current_contact_count =
-        solver_crawl_footprint_sample.contact_cells.size();
-      wall_handoff_admission_request.required_wall_clearance_m =
-        wall_handoff_required_clearance_m;
-      wall_handoff_admission_request.required_consecutive_valid_cycles = 2;
-      wall_handoff_admission_request.prediction =
-        evaluate_predicted_path_wall_metrics(
-        pose, wall_handoff_required_clearance_m,
+      populate_wall_admission_observation(
+        solver_wall_admission_request,
         overtake_orchestrator::FinalControlSource::MpcSolution);
-      wall_handoff_admission = wall_handoff_admission_gate_.update(
-        wall_handoff_admission_request);
+      solver_wall_admission = solver_wall_handoff_admission_gate_.update(
+        solver_wall_admission_request);
     }
+
+    if (
+      !active_overtake_wall_monitor_relevant &&
+      overtake_wall_admission_gate_.active())
+    {
+      overtake_wall_admission_gate_.reset();
+      RCLCPP_INFO(
+        get_logger(),
+        "Wall path admission reset: scope=active-overtake, "
+        "reason=active-path-ended");
+    }
+    if (active_overtake_wall_monitor_relevant) {
+      overtake_wall_admission_request.observation_updated =
+        active_overtake_wall_scan_due;
+      if (active_overtake_wall_scan_due) {
+        populate_wall_admission_observation(
+          overtake_wall_admission_request,
+          overtake_orchestrator::FinalControlSource::MpcSolution);
+        overtake_wall_admission_request.activation_requested =
+          overtake_orchestrator::classify_wall_path_admission(
+          overtake_wall_admission_request) !=
+          overtake_orchestrator::WallHandoffAdmissionReason::Accepted;
+      }
+      if (
+        overtake_wall_admission_request.activation_requested ||
+        overtake_wall_admission_gate_.active())
+      {
+        overtake_wall_admission = overtake_wall_admission_gate_.update(
+          overtake_wall_admission_request);
+      }
+    }
+    overtake_wall_monitor_was_relevant_ =
+      active_overtake_wall_monitor_relevant;
+
+    const bool solver_wall_handoff_hold_active =
+      solver_wall_admission.hold_control;
+    const bool overtake_wall_admission_hold_active =
+      overtake_wall_admission.hold_control;
     const bool wall_handoff_hold_active =
-      wall_handoff_admission.hold_control;
+      solver_wall_handoff_hold_active ||
+      overtake_wall_admission_hold_active;
+    const auto & active_wall_admission = solver_wall_handoff_hold_active ?
+      solver_wall_admission : overtake_wall_admission;
     if (wall_handoff_hold_active) {
       const double deceleration_step_mps =
         std::min(0.0, mpc_cfg_.a_min) * std::max(0.0, dt);
@@ -45343,19 +45479,43 @@ private:
         std::isfinite(last_u_[0]) ? std::max(0.0, last_u_[0]) : 0.0;
       const double hold_base_speed_mps = std::min(
         previous_speed_command_mps, std::max(0.0, std::abs(actual_v)));
-      u[0] = wall_handoff_admission.stop_required ? 0.0 :
+      u[0] = active_wall_admission.stop_required ? 0.0 :
         std::max(0.0, hold_base_speed_mps + deceleration_step_mps);
       u[1] = std::isfinite(last_u_[1]) ? last_u_[1] : 0.0;
       max_delta = std::abs(u[1]);
-      mpc_->synchronize_wall_handoff_hold_control(
-        u, overtake_orchestrator::to_string(wall_handoff_admission.reason));
+      const std::string hold_reason =
+        std::string{
+        solver_wall_handoff_hold_active ? "solver-handoff/" :
+        "active-overtake/"} +
+        overtake_orchestrator::to_string(active_wall_admission.reason);
+      mpc_->synchronize_wall_handoff_hold_control(u, hold_reason);
     }
-    if (wall_handoff_admission.state_changed) {
+    const auto authority_phase = overtake_authority.has_value() ?
+      overtake_authority->request.phase : overtake_orchestrator::Phase::Idle;
+    const auto authority_path_source = overtake_authority.has_value() ?
+      overtake_authority->resolution.path_source :
+      overtake_orchestrator::PathSource::RacingLine;
+    if (solver_wall_admission.state_changed) {
       const auto message =
-        overtake_orchestrator::format_wall_handoff_admission_trace(
-        active_control_decision_id_, wall_handoff_admission_request,
-        wall_handoff_admission, u[0], u[1]);
-      if (wall_handoff_admission.hold_control) {
+        overtake_orchestrator::format_wall_path_admission_trace(
+        active_control_decision_id_,
+        overtake_orchestrator::WallPathAdmissionScope::SolverHandoff,
+        authority_phase, authority_path_source,
+        solver_wall_admission_request, solver_wall_admission, u[0], u[1]);
+      if (solver_wall_admission.hold_control) {
+        RCLCPP_WARN(get_logger(), "%s", message.c_str());
+      } else {
+        RCLCPP_INFO(get_logger(), "%s", message.c_str());
+      }
+    }
+    if (overtake_wall_admission.state_changed) {
+      const auto message =
+        overtake_orchestrator::format_wall_path_admission_trace(
+        active_control_decision_id_,
+        overtake_orchestrator::WallPathAdmissionScope::ActiveOvertake,
+        authority_phase, authority_path_source,
+        overtake_wall_admission_request, overtake_wall_admission, u[0], u[1]);
+      if (overtake_wall_admission.hold_control) {
         RCLCPP_WARN(get_logger(), "%s", message.c_str());
       } else {
         RCLCPP_INFO(get_logger(), "%s", message.c_str());
@@ -45378,7 +45538,7 @@ private:
       (mpc_fallback_active && !solver_failure_crawl_active &&
       !solver_failure_continuation_active) || !enable_control_ ||
       mpc_->low_speed_direct_wall_stop_active() ||
-      (wall_handoff_hold_active && wall_handoff_admission.stop_required);
+      (wall_handoff_hold_active && active_wall_admission.stop_required);
     if (forced_stop_active) {
       bug_acc_enabled = false;
       acc = mpc_cfg_.a_min;
@@ -45390,7 +45550,7 @@ private:
       acc = 0.0;
     } else if (wall_handoff_hold_active) {
       bug_acc_enabled = false;
-      acc = wall_handoff_admission.stop_required ? mpc_cfg_.a_min :
+      acc = active_wall_admission.stop_required ? mpc_cfg_.a_min :
         std::min(0.0, 100.0 * (u[0] - actual_v));
     } else if (use_bug_acc_) {
       const auto deg2rad = [](const double deg) { return deg * kPi / 180.0; };
@@ -45445,11 +45605,19 @@ private:
     const bool recovery_command_active = recovery_output.has_value() &&
       apply_stuck_recovery_arbitration(
       recovery_output.value(), actual_v, current_time, u, acc, bug_acc_enabled);
-    if (recovery_command_active && wall_handoff_admission_gate_.active()) {
-      wall_handoff_admission_gate_.reset();
+    if (recovery_command_active && solver_wall_handoff_admission_gate_.active()) {
+      solver_wall_handoff_admission_gate_.reset();
       RCLCPP_WARN(
         get_logger(),
-        "DynamicEscape wall handoff admission reset: Recovery took control");
+        "Wall path admission reset: scope=solver-handoff, "
+        "reason=recovery-took-control");
+    }
+    if (recovery_command_active && overtake_wall_admission_gate_.active()) {
+      overtake_wall_admission_gate_.reset();
+      RCLCPP_WARN(
+        get_logger(),
+        "Wall path admission reset: scope=active-overtake, "
+        "reason=recovery-took-control");
     }
     acc = clip(acc, mpc_cfg_.a_min, mpc_cfg_.a_max);
     u[1] = clip(u[1], -mpc_cfg_.delta_max, mpc_cfg_.delta_max);
@@ -45483,7 +45651,9 @@ private:
     final_source_request.solver_bounded_continuation_active =
       solver_failure_continuation_active;
     final_source_request.solver_wall_handoff_hold_active =
-      wall_handoff_hold_active;
+      solver_wall_handoff_hold_active;
+    final_source_request.overtake_wall_admission_hold_active =
+      overtake_wall_admission_hold_active;
     final_source_request.solver_crawl_active = solver_failure_crawl_active;
     final_source_request.solver_fallback_active = mpc_fallback_active;
     final_source_request.forced_stop_active = forced_stop_active;
@@ -45501,8 +45671,10 @@ private:
     } else if (solver_failure_continuation_active) {
       output_reason = "solver-failure-dynamic-escape-hold";
     } else if (wall_handoff_hold_active) {
-      output_reason = std::string{"solver-wall-handoff-hold/"} +
-        overtake_orchestrator::to_string(wall_handoff_admission.reason);
+      output_reason = std::string{
+        solver_wall_handoff_hold_active ? "solver-wall-handoff-hold/" :
+        "overtake-wall-admission-hold/"} +
+        overtake_orchestrator::to_string(active_wall_admission.reason);
     } else if (forced_stop_active) {
       if (mpc_->low_speed_direct_wall_stop_active()) {
         output_reason = "low-speed-direct-wall-stop";
@@ -45638,8 +45810,11 @@ private:
   final_control_trace_emitter_;
   overtake_orchestrator::ChangeAwareWallHandoffTraceEmitter
   wall_handoff_trace_emitter_;
-  overtake_orchestrator::DynamicEscapeWallHandoffAdmissionGate
-  wall_handoff_admission_gate_;
+  overtake_orchestrator::WallPathAdmissionGate
+  solver_wall_handoff_admission_gate_;
+  overtake_orchestrator::WallPathAdmissionGate
+  overtake_wall_admission_gate_;
+  bool overtake_wall_monitor_was_relevant_{false};
   std::optional<CurrentWallTraceSnapshot> last_current_wall_trace_snapshot_;
   double last_published_steering_for_wall_trace_{
     std::numeric_limits<double>::quiet_NaN()};

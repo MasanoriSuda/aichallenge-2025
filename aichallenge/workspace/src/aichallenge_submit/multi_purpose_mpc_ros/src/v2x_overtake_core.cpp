@@ -6142,6 +6142,46 @@ resolve_frenet_dp_measured_rebase_retry(
   return resolution;
 }
 
+const char * to_string(const FrenetDpExecutionAuthorityReason reason) noexcept
+{
+  switch (reason) {
+    case FrenetDpExecutionAuthorityReason::InvalidRequest: return "invalid-request";
+    case FrenetDpExecutionAuthorityReason::Disabled: return "disabled";
+    case FrenetDpExecutionAuthorityReason::InvalidSource: return "invalid-source";
+    case FrenetDpExecutionAuthorityReason::ExecutionInactive:
+      return "execution-inactive";
+    case FrenetDpExecutionAuthorityReason::TargetMismatch: return "target-mismatch";
+    case FrenetDpExecutionAuthorityReason::TargetDiscontinuous:
+      return "target-discontinuous";
+    case FrenetDpExecutionAuthorityReason::TargetPositionJump:
+      return "target-position-jump";
+    case FrenetDpExecutionAuthorityReason::TargetProgressRejected:
+      return "target-progress-rejected";
+    case FrenetDpExecutionAuthorityReason::PathSideMismatch:
+      return "path-side-mismatch";
+    case FrenetDpExecutionAuthorityReason::TargetEnvelopeUnsafe:
+      return "target-envelope-unsafe";
+    case FrenetDpExecutionAuthorityReason::ActualWallContact:
+      return "actual-wall-contact";
+    case FrenetDpExecutionAuthorityReason::WallMarginBlocked:
+      return "wall-margin-blocked";
+    case FrenetDpExecutionAuthorityReason::WallSampleUnavailable:
+      return "wall-sample-unavailable";
+    case FrenetDpExecutionAuthorityReason::EmergencyFrontRisk:
+      return "emergency-front-risk";
+    case FrenetDpExecutionAuthorityReason::SolverRecovery: return "solver-recovery";
+    case FrenetDpExecutionAuthorityReason::ForbiddenWaypoint:
+      return "forbidden-waypoint";
+    case FrenetDpExecutionAuthorityReason::TrackingUnsafe: return "tracking-unsafe";
+    case FrenetDpExecutionAuthorityReason::SolverDegraded: return "solver-degraded";
+    case FrenetDpExecutionAuthorityReason::SourceStale: return "source-stale";
+    case FrenetDpExecutionAuthorityReason::RemainingPathInsufficient:
+      return "remaining-path-insufficient";
+    case FrenetDpExecutionAuthorityReason::Accepted: return "accepted";
+  }
+  return "unknown";
+}
+
 FrenetDpExecutionAuthorityResolution resolve_frenet_dp_execution_authority(
     const FrenetDpExecutionAuthorityRequest &request) noexcept {
   FrenetDpExecutionAuthorityResolution resolution;
@@ -6158,12 +6198,14 @@ FrenetDpExecutionAuthorityResolution resolve_frenet_dp_execution_authority(
   }
   resolution.valid = true;
   if (!request.enabled) {
+    resolution.reason = FrenetDpExecutionAuthorityReason::Disabled;
     return resolution;
   }
   if (!std::isfinite(request.last_refresh_sec) ||
       request.now_sec + 1e-9 < request.last_refresh_sec ||
       !is_valid_frenet_dp_execution_path(request.path_distances_m,
                                          request.lateral_path_m)) {
+    resolution.reason = FrenetDpExecutionAuthorityReason::InvalidSource;
     return resolution;
   }
 
@@ -6199,7 +6241,98 @@ FrenetDpExecutionAuthorityResolution resolve_frenet_dp_execution_authority(
     request.execution_tracking_safe && !request.solver_degraded &&
     resolution.source_fresh &&
     resolution.remaining_distance_m + 1e-9 >= request.minimum_remaining_distance_m;
+  if (!(request.active_execution || request.rolling_replan_pause_active)) {
+    resolution.reason = FrenetDpExecutionAuthorityReason::ExecutionInactive;
+  } else if (request.actual_wall_physical_contact) {
+    resolution.reason = FrenetDpExecutionAuthorityReason::ActualWallContact;
+  } else if (request.wall_margin_blocked) {
+    resolution.reason = FrenetDpExecutionAuthorityReason::WallMarginBlocked;
+  } else if (request.wall_sample_unavailable) {
+    resolution.reason = FrenetDpExecutionAuthorityReason::WallSampleUnavailable;
+  } else if (request.emergency_front_risk) {
+    resolution.reason = FrenetDpExecutionAuthorityReason::EmergencyFrontRisk;
+  } else if (request.solver_recovery_active) {
+    resolution.reason = FrenetDpExecutionAuthorityReason::SolverRecovery;
+  } else if (request.forbidden_waypoint) {
+    resolution.reason = FrenetDpExecutionAuthorityReason::ForbiddenWaypoint;
+  } else if (!request.target_matches) {
+    resolution.reason = FrenetDpExecutionAuthorityReason::TargetMismatch;
+  } else if (!request.target_continuous) {
+    resolution.reason = FrenetDpExecutionAuthorityReason::TargetDiscontinuous;
+  } else if (request.target_position_jump) {
+    resolution.reason = FrenetDpExecutionAuthorityReason::TargetPositionJump;
+  } else if (request.target_course_progress_rejected) {
+    resolution.reason = FrenetDpExecutionAuthorityReason::TargetProgressRejected;
+  } else if (!request.path_side_matches) {
+    resolution.reason = FrenetDpExecutionAuthorityReason::PathSideMismatch;
+  } else if (!target_execution_safe) {
+    resolution.reason = FrenetDpExecutionAuthorityReason::TargetEnvelopeUnsafe;
+  } else if (!request.execution_tracking_safe) {
+    resolution.reason = FrenetDpExecutionAuthorityReason::TrackingUnsafe;
+  } else if (request.solver_degraded) {
+    resolution.reason = FrenetDpExecutionAuthorityReason::SolverDegraded;
+  } else if (!resolution.source_fresh) {
+    resolution.reason = FrenetDpExecutionAuthorityReason::SourceStale;
+  } else if (
+    resolution.remaining_distance_m + 1e-9 < request.minimum_remaining_distance_m)
+  {
+    resolution.reason =
+      FrenetDpExecutionAuthorityReason::RemainingPathInsufficient;
+  } else {
+    resolution.reason = FrenetDpExecutionAuthorityReason::Accepted;
+  }
   resolution.authority_from_runtime_validation = false;
+  return resolution;
+}
+
+const char * to_string(const FrenetDpTrackingReleaseReason reason) noexcept
+{
+  switch (reason) {
+    case FrenetDpTrackingReleaseReason::Inactive: return "inactive";
+    case FrenetDpTrackingReleaseReason::TrackingSafe: return "tracking-safe";
+    case FrenetDpTrackingReleaseReason::TrackingLossConfirming:
+      return "tracking-loss-confirming";
+    case FrenetDpTrackingReleaseReason::TrackingLossConfirmed:
+      return "tracking-loss-confirmed";
+    case FrenetDpTrackingReleaseReason::InvalidRequest:
+      return "invalid-request";
+  }
+  return "unknown";
+}
+
+FrenetDpTrackingReleaseResolution resolve_frenet_dp_tracking_release(
+  const FrenetDpTrackingReleaseRequest & request) noexcept
+{
+  FrenetDpTrackingReleaseResolution resolution;
+  if (
+    !std::isfinite(request.now_sec) ||
+    !std::isfinite(request.confirmation_sec) || request.confirmation_sec < 0.0 ||
+    (std::isfinite(request.unsafe_since_sec) &&
+    request.now_sec + 1e-9 < request.unsafe_since_sec))
+  {
+    return resolution;
+  }
+  resolution.valid = true;
+  if (!request.execution_active) {
+    resolution.reason = FrenetDpTrackingReleaseReason::Inactive;
+    return resolution;
+  }
+  if (request.instantaneous_tracking_safe) {
+    resolution.effective_tracking_safe = true;
+    resolution.reason = FrenetDpTrackingReleaseReason::TrackingSafe;
+    return resolution;
+  }
+
+  resolution.unsafe_since_sec = std::isfinite(request.unsafe_since_sec) ?
+    request.unsafe_since_sec : request.now_sec;
+  resolution.unsafe_elapsed_sec = std::max(
+    0.0, request.now_sec - resolution.unsafe_since_sec);
+  resolution.release_confirmed =
+    resolution.unsafe_elapsed_sec + 1e-9 >= request.confirmation_sec;
+  resolution.effective_tracking_safe = !resolution.release_confirmed;
+  resolution.reason = resolution.release_confirmed ?
+    FrenetDpTrackingReleaseReason::TrackingLossConfirmed :
+    FrenetDpTrackingReleaseReason::TrackingLossConfirming;
   return resolution;
 }
 

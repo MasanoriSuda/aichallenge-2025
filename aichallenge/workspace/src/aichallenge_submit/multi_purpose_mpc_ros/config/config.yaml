@@ -760,6 +760,7 @@ mpc:
   v2x_overtake_mpcc_frenet_dp_shadow_score_penalty: 1.0
   v2x_overtake_mpcc_frenet_dp_last_path_max_age_sec: 0.50 # [s] absolute execution age; runtime validation cannot extend an expired optimizer source
   v2x_overtake_mpcc_frenet_dp_runtime_validation_lease_sec: 0.30 # [s] target-prediction jitter bridge while the optimizer source remains fresh
+  v2x_overtake_mpcc_frenet_dp_tracking_release_confirm_sec: 0.10 # [s] confirm tracking-only loss before releasing DP authority; hard wall/contact faults remain immediate
   v2x_overtake_mpcc_frenet_dp_max_tracking_lateral_error_m: 0.50 # [m] revoke DP ownership when measured e_y no longer follows the active prefix
   v2x_overtake_mpcc_frenet_dp_max_tracking_heading_error_rad: 0.35 # [rad] measured-to-prefix heading disagreement limit
   v2x_overtake_mpcc_frenet_dp_block_on_extended_solver_degraded: true # use a trust-bounded solved/legacy profile while the extended solver circuit is open

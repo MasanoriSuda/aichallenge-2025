@@ -263,6 +263,7 @@ enum class FinalControlSource {
   SolverFallback,
   SolverBoundedContinuation,
   SolverWallHandoffHold,
+  OvertakeWallAdmissionHold,
   SolverCrawl,
   ControlDisabled,
   StuckRecovery,
@@ -276,6 +277,7 @@ struct FinalControlSourceRequest {
   bool low_speed_wall_stop_active{false};
   bool solver_bounded_continuation_active{false};
   bool solver_wall_handoff_hold_active{false};
+  bool overtake_wall_admission_hold_active{false};
   bool solver_crawl_active{false};
   bool solver_fallback_active{false};
   bool forced_stop_active{false};
@@ -366,7 +368,8 @@ enum class WallHandoffAdmissionReason {
 const char * to_string(WallHandoffAdmissionReason reason) noexcept;
 
 struct WallHandoffAdmissionRequest {
-  bool recovered_from_bounded_continuation{false};
+  bool activation_requested{false};
+  bool observation_updated{true};
   bool current_footprint_valid{false};
   bool current_footprint_clear{false};
   bool current_footprint_out_of_map{false};
@@ -389,7 +392,13 @@ struct WallHandoffAdmissionResolution {
   WallHandoffAdmissionReason reason{WallHandoffAdmissionReason::Inactive};
 };
 
-class DynamicEscapeWallHandoffAdmissionGate {
+/// Classify one physical wall observation independently of the stateful
+/// admission latch. Accepted means that both the current footprint and the
+/// predicted path satisfy the requested wall contract.
+WallHandoffAdmissionReason classify_wall_path_admission(
+  const WallHandoffAdmissionRequest & request) noexcept;
+
+class WallPathAdmissionGate {
 public:
   WallHandoffAdmissionResolution update(
     const WallHandoffAdmissionRequest & request) noexcept;
@@ -402,10 +411,19 @@ private:
   int consecutive_valid_cycles_{0};
   WallHandoffAdmissionReason previous_reason_{
     WallHandoffAdmissionReason::Inactive};
+  bool previous_stop_required_{false};
 };
 
-std::string format_wall_handoff_admission_trace(
+enum class WallPathAdmissionScope {
+  SolverHandoff,
+  ActiveOvertake,
+};
+
+const char * to_string(WallPathAdmissionScope scope) noexcept;
+
+std::string format_wall_path_admission_trace(
   std::uint64_t decision_id,
+  WallPathAdmissionScope scope, Phase phase, PathSource path_source,
   const WallHandoffAdmissionRequest & request,
   const WallHandoffAdmissionResolution & resolution,
   double held_speed_mps, double held_steering_rad);

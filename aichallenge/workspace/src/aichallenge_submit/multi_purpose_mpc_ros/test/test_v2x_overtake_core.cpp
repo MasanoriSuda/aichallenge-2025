@@ -19698,6 +19698,10 @@ TEST(V2XOvertakeCoreFrenetDpExecution, FreshSafePrefixOwnsPassContinuation) {
   const auto resolution = resolve_frenet_dp_execution_authority(request);
   ASSERT_TRUE(resolution.valid);
   EXPECT_TRUE(resolution.authority_active);
+  EXPECT_EQ(
+    resolution.reason,
+    multi_purpose_mpc_ros::v2x_overtake_core::
+    FrenetDpExecutionAuthorityReason::Accepted);
   EXPECT_NEAR(resolution.path_age_sec, 0.20, 1e-9);
   EXPECT_NEAR(resolution.remaining_distance_m, 10.0, 1e-9);
 }
@@ -19821,6 +19825,13 @@ TEST(V2XOvertakeCoreFrenetDpExecution, HardFaultsRevokePassAuthority)
   expect_revoked([](auto & value) {value.last_refresh_sec = 19.0;});
   expect_revoked([](auto & value) {value.traveled_distance_m = 7.75;});
 
+  request.wall_margin_blocked = true;
+  EXPECT_EQ(
+    resolve_frenet_dp_execution_authority(request).reason,
+    multi_purpose_mpc_ros::v2x_overtake_core::
+    FrenetDpExecutionAuthorityReason::WallMarginBlocked);
+  request.wall_margin_blocked = false;
+
   request.current_body_separated = false;
   request.recoverable_side_contact = true;
   EXPECT_TRUE(resolve_frenet_dp_execution_authority(request).authority_active);
@@ -19879,6 +19890,67 @@ TEST(V2XOvertakeCoreFrenetDpExecution,
   request.now_sec = 31.0;
   request.actual_wall_physical_contact = true;
   EXPECT_FALSE(resolve_frenet_dp_execution_authority(request).authority_active);
+}
+
+TEST(V2XOvertakeCoreFrenetDpExecution,
+     ConfirmsTrackingOnlyLossBeforeAuthorityRelease)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    FrenetDpTrackingReleaseReason;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    FrenetDpTrackingReleaseRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_frenet_dp_tracking_release;
+
+  FrenetDpTrackingReleaseRequest request;
+  request.execution_active = true;
+  request.instantaneous_tracking_safe = false;
+  request.now_sec = 10.0;
+  request.confirmation_sec = 0.10;
+
+  const auto first = resolve_frenet_dp_tracking_release(request);
+  ASSERT_TRUE(first.valid);
+  EXPECT_TRUE(first.effective_tracking_safe);
+  EXPECT_FALSE(first.release_confirmed);
+  EXPECT_EQ(
+    first.reason, FrenetDpTrackingReleaseReason::TrackingLossConfirming);
+
+  request.unsafe_since_sec = first.unsafe_since_sec;
+  request.now_sec = 10.09;
+  const auto confirming = resolve_frenet_dp_tracking_release(request);
+  EXPECT_TRUE(confirming.effective_tracking_safe);
+  EXPECT_FALSE(confirming.release_confirmed);
+
+  request.now_sec = 10.10;
+  const auto confirmed = resolve_frenet_dp_tracking_release(request);
+  EXPECT_FALSE(confirmed.effective_tracking_safe);
+  EXPECT_TRUE(confirmed.release_confirmed);
+  EXPECT_EQ(
+    confirmed.reason, FrenetDpTrackingReleaseReason::TrackingLossConfirmed);
+}
+
+TEST(V2XOvertakeCoreFrenetDpExecution,
+     TrackingRecoveryClearsPendingReleaseConfirmation)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    FrenetDpTrackingReleaseRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_frenet_dp_tracking_release;
+
+  FrenetDpTrackingReleaseRequest request;
+  request.execution_active = true;
+  request.instantaneous_tracking_safe = false;
+  request.now_sec = 5.0;
+  const auto first = resolve_frenet_dp_tracking_release(request);
+  ASSERT_TRUE(first.valid);
+  ASSERT_TRUE(std::isfinite(first.unsafe_since_sec));
+
+  request.instantaneous_tracking_safe = true;
+  request.unsafe_since_sec = first.unsafe_since_sec;
+  request.now_sec = 5.05;
+  const auto recovered = resolve_frenet_dp_tracking_release(request);
+  EXPECT_TRUE(recovered.effective_tracking_safe);
+  EXPECT_FALSE(std::isfinite(recovered.unsafe_since_sec));
 }
 
 TEST(V2XOvertakeCoreFrenetDpExecution,

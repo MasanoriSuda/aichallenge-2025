@@ -622,6 +622,9 @@ FinalControlSource resolve_final_control_source(
   if (request.solver_wall_handoff_hold_active) {
     return FinalControlSource::SolverWallHandoffHold;
   }
+  if (request.overtake_wall_admission_hold_active) {
+    return FinalControlSource::OvertakeWallAdmissionHold;
+  }
   if (request.solver_bounded_continuation_active) {
     return FinalControlSource::SolverBoundedContinuation;
   }
@@ -648,6 +651,8 @@ const char * to_string(const FinalControlSource source) noexcept
       return "solver-bounded-continuation";
     case FinalControlSource::SolverWallHandoffHold:
       return "solver-wall-handoff-hold";
+    case FinalControlSource::OvertakeWallAdmissionHold:
+      return "overtake-wall-admission-hold";
     case FinalControlSource::SolverCrawl: return "solver-crawl";
     case FinalControlSource::ControlDisabled: return "control-disabled";
     case FinalControlSource::StuckRecovery: return "stuck-recovery";
@@ -670,6 +675,7 @@ std::string final_control_signature(const FinalControlTrace & trace)
     trace.control_source == FinalControlSource::SolverFallback ||
     trace.control_source == FinalControlSource::SolverBoundedContinuation ||
     trace.control_source == FinalControlSource::SolverWallHandoffHold ||
+    trace.control_source == FinalControlSource::OvertakeWallAdmissionHold ||
     trace.control_source == FinalControlSource::Failsafe)
   {
     stream << "|" << trace.solver_reason << "|" << trace.output_reason;
@@ -707,6 +713,8 @@ std::string structural_final_control_signature(const FinalControlTrace & trace)
   if (
     trace.control_source == FinalControlSource::SolverFallback ||
     trace.control_source == FinalControlSource::SolverBoundedContinuation ||
+    trace.control_source == FinalControlSource::SolverWallHandoffHold ||
+    trace.control_source == FinalControlSource::OvertakeWallAdmissionHold ||
     trace.control_source == FinalControlSource::Failsafe)
   {
     stream << "|" << trace.solver_reason << "|" << trace.output_reason;
@@ -808,6 +816,7 @@ FinalTraceEmission ChangeAwareFinalControlTraceEmitter::update(
     trace.control_source == FinalControlSource::SolverFallback ||
     trace.control_source == FinalControlSource::SolverBoundedContinuation ||
     trace.control_source == FinalControlSource::SolverWallHandoffHold ||
+    trace.control_source == FinalControlSource::OvertakeWallAdmissionHold ||
     trace.control_source == FinalControlSource::LowSpeedWallStop ||
     trace.control_source == FinalControlSource::Failsafe ||
     (trace.authority.has_value() &&
@@ -881,13 +890,50 @@ const char * to_string(const WallHandoffAdmissionReason reason) noexcept
   return "unknown";
 }
 
-WallHandoffAdmissionResolution DynamicEscapeWallHandoffAdmissionGate::update(
+WallHandoffAdmissionReason classify_wall_path_admission(
+  const WallHandoffAdmissionRequest & request) noexcept
+{
+  if (!request.current_footprint_valid || request.current_footprint_out_of_map) {
+    return WallHandoffAdmissionReason::CurrentFootprintUnavailable;
+  }
+  if (!request.current_footprint_clear || request.current_contact_count > 0U) {
+    return WallHandoffAdmissionReason::CurrentFootprintUnsafe;
+  }
+  if (!request.prediction.available) {
+    return WallHandoffAdmissionReason::PredictionUnavailable;
+  }
+  if (!request.prediction.valid) {
+    return WallHandoffAdmissionReason::PredictionInvalid;
+  }
+  if (request.prediction.contact) {
+    return WallHandoffAdmissionReason::PredictedContact;
+  }
+  if (request.prediction.out_of_map) {
+    return WallHandoffAdmissionReason::PredictedOutOfMap;
+  }
+  if (
+    !std::isfinite(request.required_wall_clearance_m) ||
+    request.required_wall_clearance_m < 0.0 ||
+    std::isnan(request.prediction.minimum_wall_distance_m))
+  {
+    return WallHandoffAdmissionReason::PredictionInvalid;
+  }
+  if (
+    request.prediction.minimum_wall_distance_m + 1e-9 <
+    request.required_wall_clearance_m)
+  {
+    return WallHandoffAdmissionReason::InsufficientClearance;
+  }
+  return WallHandoffAdmissionReason::Accepted;
+}
+
+WallHandoffAdmissionResolution WallPathAdmissionGate::update(
   const WallHandoffAdmissionRequest & request) noexcept
 {
   WallHandoffAdmissionResolution resolution;
   resolution.required_consecutive_valid_cycles =
     std::max(1, request.required_consecutive_valid_cycles);
-  if (request.recovered_from_bounded_continuation && !active_) {
+  if (request.activation_requested && !active_) {
     active_ = true;
     hold_cycles_ = 0;
     consecutive_valid_cycles_ = 0;
@@ -905,36 +951,24 @@ WallHandoffAdmissionResolution DynamicEscapeWallHandoffAdmissionGate::update(
   resolution.active = true;
   resolution.hold_control = true;
   resolution.hold_cycles = hold_cycles_;
+  if (!request.observation_updated) {
+    resolution.reason = previous_reason_;
+    resolution.stop_required = previous_stop_required_;
+    resolution.consecutive_valid_cycles = consecutive_valid_cycles_;
+    return resolution;
+  }
   auto reject = [&] (const WallHandoffAdmissionReason reason, const bool stop) {
       consecutive_valid_cycles_ = 0;
       resolution.reason = reason;
       resolution.stop_required = stop;
     };
-  if (!request.current_footprint_valid || request.current_footprint_out_of_map) {
-    reject(WallHandoffAdmissionReason::CurrentFootprintUnavailable, true);
-  } else if (
-    !request.current_footprint_clear || request.current_contact_count > 0U)
-  {
-    reject(WallHandoffAdmissionReason::CurrentFootprintUnsafe, true);
-  } else if (!request.prediction.available) {
-    reject(WallHandoffAdmissionReason::PredictionUnavailable, false);
-  } else if (!request.prediction.valid) {
-    reject(WallHandoffAdmissionReason::PredictionInvalid, false);
-  } else if (request.prediction.contact) {
-    reject(WallHandoffAdmissionReason::PredictedContact, false);
-  } else if (request.prediction.out_of_map) {
-    reject(WallHandoffAdmissionReason::PredictedOutOfMap, false);
-  } else if (
-    !std::isfinite(request.required_wall_clearance_m) ||
-    request.required_wall_clearance_m < 0.0 ||
-    std::isnan(request.prediction.minimum_wall_distance_m))
-  {
-    reject(WallHandoffAdmissionReason::PredictionInvalid, false);
-  } else if (
-    request.prediction.minimum_wall_distance_m + 1e-9 <
-    request.required_wall_clearance_m)
-  {
-    reject(WallHandoffAdmissionReason::InsufficientClearance, false);
+  const auto observation_reason = classify_wall_path_admission(request);
+  if (observation_reason != WallHandoffAdmissionReason::Accepted) {
+    const bool stop_required =
+      observation_reason ==
+      WallHandoffAdmissionReason::CurrentFootprintUnavailable ||
+      observation_reason == WallHandoffAdmissionReason::CurrentFootprintUnsafe;
+    reject(observation_reason, stop_required);
   } else {
     ++consecutive_valid_cycles_;
     if (
@@ -954,24 +988,37 @@ WallHandoffAdmissionResolution DynamicEscapeWallHandoffAdmissionGate::update(
   resolution.state_changed = resolution.entered || resolution.released ||
     resolution.reason != previous_reason_;
   previous_reason_ = resolution.reason;
+  previous_stop_required_ = resolution.stop_required;
   return resolution;
 }
 
-bool DynamicEscapeWallHandoffAdmissionGate::active() const noexcept
+bool WallPathAdmissionGate::active() const noexcept
 {
   return active_;
 }
 
-void DynamicEscapeWallHandoffAdmissionGate::reset() noexcept
+void WallPathAdmissionGate::reset() noexcept
 {
   active_ = false;
   hold_cycles_ = 0;
   consecutive_valid_cycles_ = 0;
   previous_reason_ = WallHandoffAdmissionReason::Inactive;
+  previous_stop_required_ = false;
 }
 
-std::string format_wall_handoff_admission_trace(
+const char * to_string(const WallPathAdmissionScope scope) noexcept
+{
+  switch (scope) {
+    case WallPathAdmissionScope::SolverHandoff: return "solver-handoff";
+    case WallPathAdmissionScope::ActiveOvertake: return "active-overtake";
+  }
+  return "unknown";
+}
+
+std::string format_wall_path_admission_trace(
   const std::uint64_t decision_id,
+  const WallPathAdmissionScope scope, const Phase phase,
+  const PathSource path_source,
   const WallHandoffAdmissionRequest & request,
   const WallHandoffAdmissionResolution & resolution,
   const double held_speed_mps, const double held_steering_rad)
@@ -981,7 +1028,10 @@ std::string format_wall_handoff_admission_trace(
     (resolution.reason == WallHandoffAdmissionReason::Requalifying ?
     "requalifying" : "blocked"));
   std::ostringstream stream;
-  stream << "DynamicEscape wall handoff admission: decision=" << decision_id
+  stream << "Wall path admission: decision=" << decision_id
+         << ", scope=" << to_string(scope)
+         << ", phase=" << to_string(phase)
+         << ", path_source=" << to_string(path_source)
          << ", event=" << event
          << ", reason=" << to_string(resolution.reason)
          << ", active=" << (resolution.active ? 1 : 0)
@@ -1041,7 +1091,8 @@ bool dynamic_handoff_relevant(const WallHandoffProbe & probe) noexcept
     probe.dynamic_escape_active || probe.action == Action::DynamicEscape ||
     probe.path_source == PathSource::DynamicObstacleEscape ||
     probe.control_source == FinalControlSource::SolverBoundedContinuation ||
-    probe.control_source == FinalControlSource::SolverWallHandoffHold;
+    probe.control_source == FinalControlSource::SolverWallHandoffHold ||
+    probe.control_source == FinalControlSource::OvertakeWallAdmissionHold;
 }
 
 void append_trigger(std::ostringstream & stream, bool & first, const char * trigger)

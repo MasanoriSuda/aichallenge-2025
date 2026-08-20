@@ -3940,6 +3940,33 @@ struct FrenetDpExecutionAuthorityRequest {
   bool solver_degraded{false};
 };
 
+enum class FrenetDpExecutionAuthorityReason
+{
+  InvalidRequest,
+  Disabled,
+  InvalidSource,
+  ExecutionInactive,
+  TargetMismatch,
+  TargetDiscontinuous,
+  TargetPositionJump,
+  TargetProgressRejected,
+  PathSideMismatch,
+  TargetEnvelopeUnsafe,
+  ActualWallContact,
+  WallMarginBlocked,
+  WallSampleUnavailable,
+  EmergencyFrontRisk,
+  SolverRecovery,
+  ForbiddenWaypoint,
+  TrackingUnsafe,
+  SolverDegraded,
+  SourceStale,
+  RemainingPathInsufficient,
+  Accepted,
+};
+
+const char * to_string(FrenetDpExecutionAuthorityReason reason) noexcept;
+
 struct FrenetDpExecutionAuthorityResolution
 {
   bool valid{false};
@@ -3950,7 +3977,46 @@ struct FrenetDpExecutionAuthorityResolution
   double path_age_sec{std::numeric_limits<double>::infinity()};
   double runtime_validation_age_sec{std::numeric_limits<double>::infinity()};
   double remaining_distance_m{};
+  FrenetDpExecutionAuthorityReason reason{
+    FrenetDpExecutionAuthorityReason::InvalidRequest};
 };
+
+enum class FrenetDpTrackingReleaseReason
+{
+  Inactive,
+  TrackingSafe,
+  TrackingLossConfirming,
+  TrackingLossConfirmed,
+  InvalidRequest,
+};
+
+const char * to_string(FrenetDpTrackingReleaseReason reason) noexcept;
+
+struct FrenetDpTrackingReleaseRequest
+{
+  bool execution_active{false};
+  bool instantaneous_tracking_safe{false};
+  double now_sec{};
+  double unsafe_since_sec{-std::numeric_limits<double>::infinity()};
+  double confirmation_sec{0.10};
+};
+
+struct FrenetDpTrackingReleaseResolution
+{
+  bool valid{false};
+  bool effective_tracking_safe{false};
+  bool release_confirmed{false};
+  double unsafe_since_sec{-std::numeric_limits<double>::infinity()};
+  double unsafe_elapsed_sec{};
+  FrenetDpTrackingReleaseReason reason{
+    FrenetDpTrackingReleaseReason::InvalidRequest};
+};
+
+/// Confirm a tracking-envelope loss before revoking DP path authority. This
+/// debounce applies only to tracking error; wall/contact/emergency faults stay
+/// immediate in resolve_frenet_dp_execution_authority().
+FrenetDpTrackingReleaseResolution resolve_frenet_dp_tracking_release(
+  const FrenetDpTrackingReleaseRequest & request) noexcept;
 
 /// Decide whether an already admitted same-target/same-side DP prefix owns
 /// bounded ShiftOut/Pass execution or a soft rolling-replan pause. Optimizer

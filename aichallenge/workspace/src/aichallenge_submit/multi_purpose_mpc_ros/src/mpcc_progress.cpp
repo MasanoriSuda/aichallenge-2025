@@ -868,6 +868,58 @@ ExtendedBranchSelectionResolution select_extended_branch(
   return resolution;
 }
 
+const char * extended_branch_entry_admission_reason_name(
+  const ExtendedBranchEntryAdmissionReason reason) noexcept
+{
+  switch (reason) {
+    case ExtendedBranchEntryAdmissionReason::NotRequired:
+      return "not-required";
+    case ExtendedBranchEntryAdmissionReason::SelectedBranch:
+      return "selected-branch";
+    case ExtendedBranchEntryAdmissionReason::SelectionUnavailable:
+      return "selection-unavailable";
+    case ExtendedBranchEntryAdmissionReason::MissionSideMismatch:
+      return "mission-side-mismatch";
+    case ExtendedBranchEntryAdmissionReason::InvalidInput:
+      return "invalid-input";
+  }
+  return "unknown";
+}
+
+ExtendedBranchEntryAdmissionResolution resolve_extended_branch_entry_admission(
+  const ExtendedBranchEntryAdmissionRequest & request) noexcept
+{
+  ExtendedBranchEntryAdmissionResolution resolution;
+  const auto valid_side = [](const int side) {
+      return side == -1 || side == 0 || side == 1;
+    };
+  if (!valid_side(request.selected_side_sign) || !valid_side(request.mission_side_sign)) {
+    return resolution;
+  }
+  resolution.valid = true;
+  if (!request.enabled || !request.new_entry) {
+    resolution.admitted = true;
+    resolution.reason = ExtendedBranchEntryAdmissionReason::NotRequired;
+    return resolution;
+  }
+  if (!request.selection_valid || request.selected_side_sign == 0) {
+    resolution.hold_current_path = true;
+    resolution.reason = ExtendedBranchEntryAdmissionReason::SelectionUnavailable;
+    return resolution;
+  }
+  if (
+    request.mission_side_sign == 0 ||
+    request.mission_side_sign != request.selected_side_sign)
+  {
+    resolution.hold_current_path = true;
+    resolution.reason = ExtendedBranchEntryAdmissionReason::MissionSideMismatch;
+    return resolution;
+  }
+  resolution.admitted = true;
+  resolution.reason = ExtendedBranchEntryAdmissionReason::SelectedBranch;
+  return resolution;
+}
+
 const char * extended_branch_selection_reason_name(
   const ExtendedBranchSelectionReason reason) noexcept
 {

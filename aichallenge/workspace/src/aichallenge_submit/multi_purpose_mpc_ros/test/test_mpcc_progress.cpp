@@ -573,9 +573,14 @@ TEST(MpccProgress, SelectsOnlyFeasibleExtendedBranch)
   ExtendedBranchEvaluation left;
   left.side_sign = 1;
   left.attempted = true;
+  left.physical_wall_validation_attempted = true;
+  left.physical_wall_validation_passed = false;
+  left.failure_reason = "physical execution contract: swept footprint wall violation";
   ExtendedBranchEvaluation right;
   right.side_sign = -1;
   right.attempted = true;
+  right.physical_wall_validation_attempted = true;
+  right.physical_wall_validation_passed = true;
   right.feasible = true;
   right.objective = 12.0;
   right.minimum_lateral_bound_reserve_m = 0.20;
@@ -585,6 +590,62 @@ TEST(MpccProgress, SelectsOnlyFeasibleExtendedBranch)
   ASSERT_TRUE(result.valid);
   EXPECT_EQ(result.selected_side_sign, -1);
   EXPECT_EQ(result.reason, ExtendedBranchSelectionReason::OnlyRightFeasible);
+}
+
+TEST(MpccProgress, HoldsNewEntryWhenDualBranchSelectionIsUnavailable)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::ExtendedBranchEntryAdmissionReason;
+  using multi_purpose_mpc_ros::mpcc_progress::ExtendedBranchEntryAdmissionRequest;
+  const auto result =
+    multi_purpose_mpc_ros::mpcc_progress::resolve_extended_branch_entry_admission(
+    ExtendedBranchEntryAdmissionRequest{true, true, false, 0, 1});
+  ASSERT_TRUE(result.valid);
+  EXPECT_FALSE(result.admitted);
+  EXPECT_TRUE(result.hold_current_path);
+  EXPECT_EQ(
+    result.reason,
+    ExtendedBranchEntryAdmissionReason::SelectionUnavailable);
+}
+
+TEST(MpccProgress, HoldsNewEntryWhenSelectedAndMissionSidesDiffer)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::ExtendedBranchEntryAdmissionReason;
+  using multi_purpose_mpc_ros::mpcc_progress::ExtendedBranchEntryAdmissionRequest;
+  const auto result =
+    multi_purpose_mpc_ros::mpcc_progress::resolve_extended_branch_entry_admission(
+    ExtendedBranchEntryAdmissionRequest{true, true, true, -1, 1});
+  ASSERT_TRUE(result.valid);
+  EXPECT_FALSE(result.admitted);
+  EXPECT_TRUE(result.hold_current_path);
+  EXPECT_EQ(
+    result.reason,
+    ExtendedBranchEntryAdmissionReason::MissionSideMismatch);
+}
+
+TEST(MpccProgress, AdmitsSelectedWallSafeBranchAtNewEntry)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::ExtendedBranchEntryAdmissionReason;
+  using multi_purpose_mpc_ros::mpcc_progress::ExtendedBranchEntryAdmissionRequest;
+  const auto result =
+    multi_purpose_mpc_ros::mpcc_progress::resolve_extended_branch_entry_admission(
+    ExtendedBranchEntryAdmissionRequest{true, true, true, -1, -1});
+  ASSERT_TRUE(result.valid);
+  EXPECT_TRUE(result.admitted);
+  EXPECT_FALSE(result.hold_current_path);
+  EXPECT_EQ(result.reason, ExtendedBranchEntryAdmissionReason::SelectedBranch);
+}
+
+TEST(MpccProgress, DoesNotApplyEntryGateToActiveMission)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::ExtendedBranchEntryAdmissionReason;
+  using multi_purpose_mpc_ros::mpcc_progress::ExtendedBranchEntryAdmissionRequest;
+  const auto result =
+    multi_purpose_mpc_ros::mpcc_progress::resolve_extended_branch_entry_admission(
+    ExtendedBranchEntryAdmissionRequest{true, false, false, 0, 1});
+  ASSERT_TRUE(result.valid);
+  EXPECT_TRUE(result.admitted);
+  EXPECT_FALSE(result.hold_current_path);
+  EXPECT_EQ(result.reason, ExtendedBranchEntryAdmissionReason::NotRequired);
 }
 
 TEST(MpccProgress, RetainsCurrentExtendedBranchWithinObjectiveHysteresis)

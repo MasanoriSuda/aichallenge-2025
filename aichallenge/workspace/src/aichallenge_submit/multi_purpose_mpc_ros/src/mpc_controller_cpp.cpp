@@ -6365,6 +6365,94 @@ struct MPC
         evaluation.failure_reason = "extended branch solution size mismatch";
         return evaluation;
       }
+
+      // A QP-feasible branch is not necessarily physically executable.  The
+      // stage corridor is expressed in Frenet centre coordinates, whereas the
+      // final wall monitor evaluates the yawed vehicle footprint.  Validate
+      // the exact solved branch before it can participate in left/right
+      // selection; otherwise a nominally better wall-side branch is selected
+      // first and rejected only after ShiftOut has already started.
+      evaluation.physical_wall_validation_attempted = true;
+      evaluation.physical_wall_validation_scope = to_string(
+        SolvedExecutionWallValidationScope::SweptFromCurrentPose);
+      const auto robust_clearance = resolve_robust_clearance(tracking_wp_id, N);
+      const double physical_wall_clearance_m = std::max(
+        0.0, cfg.v2x_behavior.overtake_line.min_wall_clearance);
+      const double planning_wall_clearance_m = robust_clearance.valid ?
+        robust_clearance.wall_planning_clearance_m : physical_wall_clearance_m;
+      const auto wall_contract =
+        overtake_orchestrator::resolve_wall_clearance_contract(
+        physical_wall_clearance_m, planning_wall_clearance_m,
+        cfg.v2x_behavior.overtake_line.runtime_wall_preplan_enabled,
+        std::max(
+          0.0,
+          cfg.v2x_behavior.overtake_line.runtime_wall_preplan_reserve));
+      evaluation.physical_wall_required_clearance_m = wall_contract.valid ?
+        wall_contract.required_clearance_m : planning_wall_clearance_m;
+      if (
+        !legacy.progress_execution_context_active ||
+        legacy.progress_execution_path_distance_m.size() !=
+        static_cast<std::size_t>(N) ||
+        legacy.progress_execution_lateral_lower_m.size() !=
+        static_cast<std::size_t>(N) ||
+        legacy.progress_execution_lateral_upper_m.size() !=
+        static_cast<std::size_t>(N))
+      {
+        evaluation.failure_reason =
+          "physical execution contract unavailable for extended branch";
+        return evaluation;
+      }
+      const auto legacy_solution = mpcc_progress::convert_extended_solution_to_legacy(
+        primal, N, legacy.progress_origin_m);
+      if (!legacy_solution.has_value()) {
+        evaluation.failure_reason =
+          "physical execution contract conversion failed";
+        return evaluation;
+      }
+      const double extraction_tolerance =
+        std::isfinite(outcome.result->maximum_constraint_violation) ?
+        std::max(
+          1e-5,
+          outcome.result->maximum_constraint_violation + 1e-6) : 1e-5;
+      mpcc_progress::ExecutionTrajectoryDiagnostic extraction_diagnostic;
+      const auto execution_trajectory = mpcc_progress::extract_execution_trajectory(
+        legacy_solution.value(), N,
+        legacy.progress_execution_path_distance_m,
+        legacy.progress_execution_lateral_lower_m,
+        legacy.progress_execution_lateral_upper_m,
+        extraction_tolerance, &extraction_diagnostic);
+      if (!execution_trajectory.has_value()) {
+        evaluation.failure_reason = std::string{
+          "physical execution contract extraction failed: "} +
+          mpcc_progress::execution_trajectory_rejection_name(
+          extraction_diagnostic.rejection);
+        return evaluation;
+      }
+      Eigen::VectorXd execution_lower(N);
+      Eigen::VectorXd execution_upper(N);
+      for (int stage = 0; stage < N; ++stage) {
+        execution_lower[stage] =
+          legacy.progress_execution_lateral_lower_m[static_cast<std::size_t>(stage)];
+        execution_upper[stage] =
+          legacy.progress_execution_lateral_upper_m[static_cast<std::size_t>(stage)];
+      }
+      const AlignedMpccExecutionTrajectory physical_trajectory{
+        0.0, 0.0, execution_trajectory->minimum_lateral_bound_reserve_m,
+        execution_trajectory->lateral_m};
+      std::string physical_wall_reject_reason;
+      evaluation.physical_wall_validation_passed =
+        solved_mpcc_execution_path_wall_safe(
+        physical_trajectory, execution_trajectory->path_distance_m,
+        tracking_wp_id, N, execution_lower, execution_upper,
+        evaluation.physical_wall_required_clearance_m,
+        physical_wall_reject_reason, extraction_tolerance,
+        SolvedExecutionWallValidationScope::SweptFromCurrentPose);
+      if (!evaluation.physical_wall_validation_passed) {
+        evaluation.failure_reason =
+          "physical execution contract: " + physical_wall_reject_reason;
+        return evaluation;
+      }
+
       double quadratic_cost = 0.0;
       for (int outer = 0; outer < extended->P.outerSize(); ++outer) {
         for (Eigen::SparseMatrix<double>::InnerIterator it(extended->P, outer); it; ++it) {
@@ -6480,7 +6568,39 @@ struct MPC
         cfg.progress_contouring_dual_branch_minimum_objective_advantage,
         cfg.progress_contouring_dual_branch_minimum_bound_reserve_m});
     const auto & selection = behavior.extended_mpcc_branch_selection;
+    const bool new_entry =
+      overtake_line_state_.phase == OvertakeLinePhase::Idle &&
+      overtake_line_state_.pass_side_sign == 0;
+    const auto hold_new_entry_on_current_path = [&behavior](const char * reason) {
+        // Keep this reset atomic.  Leaving even one of the geometric/DP
+        // admission fields set allows the caller to reconstruct an entry
+        // which the exact dual-MPCC execution contract rejected.
+        behavior.overtake_pass_side_sign = 0;
+        behavior.overtake_gap_available = false;
+        behavior.overtake_zone_allows = false;
+        behavior.overtake_selected_mission.reset();
+        behavior.overtake_corridor_center_ey.reset();
+        behavior.overtake_base_line_pass_through = false;
+        behavior.overtake_tiny_shift_direct_pass = false;
+        behavior.validated_overtake_entry_longitudinal_owner = false;
+        behavior.validated_overtake_entry_immediate_execution = false;
+        behavior.reason = std::string{"dual MPCC entry held: "} + reason;
+      };
     if (!selection.valid || selection.selected_side_sign == 0) {
+      const auto admission =
+        mpcc_progress::resolve_extended_branch_entry_admission(
+        mpcc_progress::ExtendedBranchEntryAdmissionRequest{
+          true, new_entry, selection.valid, selection.selected_side_sign,
+          behavior.overtake_selected_mission.has_value() ?
+          behavior.overtake_selected_mission->pass_side_sign : 0});
+      if (admission.valid && admission.hold_current_path) {
+        // Do not leak the geometric/DP winner around the dual-MPCC result.
+        // Both sides were solved from the same snapshot and neither produced
+        // an executable physical branch, so the current racing/Follow path
+        // remains authoritative until a later snapshot succeeds.
+        hold_new_entry_on_current_path(
+          mpcc_progress::extended_branch_entry_admission_reason_name(admission.reason));
+      }
       return;
     }
     const auto & selected_assessment = selection.selected_side_sign > 0 ?
@@ -6495,6 +6615,17 @@ struct MPC
       return;
     }
     const auto & selected_mission = candidate_resolution.candidate;
+    const auto admission = mpcc_progress::resolve_extended_branch_entry_admission(
+      mpcc_progress::ExtendedBranchEntryAdmissionRequest{
+        true, new_entry, selection.valid, selection.selected_side_sign,
+        selected_mission->pass_side_sign});
+    if (!admission.valid || !admission.admitted) {
+      if (admission.valid && admission.hold_current_path) {
+        hold_new_entry_on_current_path(
+          mpcc_progress::extended_branch_entry_admission_reason_name(admission.reason));
+      }
+      return;
+    }
     const bool base_line = std::abs(selected_mission->goal_lateral_m) <= kEps;
     behavior.overtake_pass_side_sign = selection.selected_side_sign;
     behavior.overtake_gap_available = true;
@@ -12868,6 +12999,8 @@ struct MPC
 
     bool side_selected_for_execution =
       side_selection.side != overtake_core::PassSide::None;
+    bool dual_entry_execution_contract_hold = false;
+    std::string dual_entry_execution_contract_reason{"not-evaluated"};
     if (side_selection.side == overtake_core::PassSide::None) {
       // Preserve the geometric candidate and its reason for diagnostics even when curve policy
       // prevents executing either side. Minimum-motion entry is the exception: a nonzero side
@@ -13033,6 +13166,62 @@ struct MPC
           async_behavior.overtake_selected_mission;
         const int async_entry_side =
           async_behavior.overtake_pass_side_sign;
+        const bool async_new_entry_context =
+          locked_pass_side == 0 &&
+          overtake_line_state_.phase == OvertakeLinePhase::Idle &&
+          fresh_overtake_entry_commit_window_open;
+        const auto async_extended_entry_admission =
+          mpcc_progress::resolve_extended_branch_entry_admission(
+          mpcc_progress::ExtendedBranchEntryAdmissionRequest{
+            cfg.progress_contouring_dual_branch_enabled &&
+            cfg.progress_contouring_mpcc_enabled &&
+            cfg.progress_contouring.extended_dynamics_enabled,
+            async_new_entry_context,
+            async_behavior.extended_mpcc_branch_selection.valid,
+            async_behavior.extended_mpcc_branch_selection.selected_side_sign,
+            async_entry_mission.has_value() ?
+            async_entry_mission->pass_side_sign : async_entry_side});
+        if (
+          async_extended_entry_admission.valid &&
+          async_extended_entry_admission.hold_current_path)
+        {
+          dual_entry_execution_contract_hold = true;
+          dual_entry_execution_contract_reason =
+            mpcc_progress::extended_branch_entry_admission_reason_name(
+            async_extended_entry_admission.reason);
+          side_selection = {
+            overtake_core::PassSide::None,
+            overtake_core::SideSelectionReason::NoFeasibleSide};
+          side_selected_for_execution = false;
+          static rclcpp::Clock dual_entry_hold_log_clock{RCL_STEADY_TIME};
+          RCLCPP_WARN_THROTTLE(
+            rclcpp::get_logger("mpc_controller"), dual_entry_hold_log_clock, 1000,
+            "Overtake dual execution entry held: target=%s, action=stay-current-safe-path, "
+            "reason=%s, L=%d/%d/%s/%.2f/%s, R=%d/%d/%s/%.2f/%s, wp_id=%d",
+            output.target_vehicle_id.c_str(),
+            dual_entry_execution_contract_reason.c_str(),
+            async_behavior.extended_mpcc_left_branch.
+            physical_wall_validation_attempted ? 1 : 0,
+            async_behavior.extended_mpcc_left_branch.
+            physical_wall_validation_passed ? 1 : 0,
+            async_behavior.extended_mpcc_left_branch.
+            physical_wall_validation_scope.c_str(),
+            async_behavior.extended_mpcc_left_branch.
+            physical_wall_required_clearance_m,
+            async_behavior.extended_mpcc_left_branch.failure_reason.empty() ?
+            "ok" : async_behavior.extended_mpcc_left_branch.failure_reason.c_str(),
+            async_behavior.extended_mpcc_right_branch.
+            physical_wall_validation_attempted ? 1 : 0,
+            async_behavior.extended_mpcc_right_branch.
+            physical_wall_validation_passed ? 1 : 0,
+            async_behavior.extended_mpcc_right_branch.
+            physical_wall_validation_scope.c_str(),
+            async_behavior.extended_mpcc_right_branch.
+            physical_wall_required_clearance_m,
+            async_behavior.extended_mpcc_right_branch.failure_reason.empty() ?
+            "ok" : async_behavior.extended_mpcc_right_branch.failure_reason.c_str(),
+            model->wp_id);
+        }
         const auto async_entry_prefix_resolution = [&]() {
             overtake_core::MpccLitePrefixExecutionResolution resolution;
             if (!async_entry_mission.has_value()) {
@@ -13097,9 +13286,9 @@ struct MPC
             output.overtake_entry_target_speed, async_entry_prefix_resolution);
         }
         const bool async_entry_context =
-          locked_pass_side == 0 &&
-          overtake_line_state_.phase == OvertakeLinePhase::Idle &&
-          fresh_overtake_entry_commit_window_open &&
+          async_new_entry_context &&
+          async_extended_entry_admission.valid &&
+          async_extended_entry_admission.admitted &&
           (async_entry_side == -1 || async_entry_side == 1) &&
           async_entry_mission.has_value() &&
           async_entry_mission->pass_side_sign == async_entry_side &&
@@ -13188,8 +13377,8 @@ struct MPC
           "completed=%lu, running=%d, pending=%d, adopted=%lu, reused=%lu, cache=%d, "
           "discarded=%lu, failed=%lu, interval=%.3f s, snapshot=%.2f ms, "
           "compute=%.2f ms, age=%.3f s, "
-          "dual=L%d/%d/%s/p%d/%.1f/%.2f/%s,"
-          "R%d/%d/%s/p%d/%.1f/%.2f/%s,select=%d/%s",
+          "dual=L%d/%d/%s/p%d/%.1f/%.2f/w%d:%d:%s:%.2f/%s,"
+          "R%d/%d/%s/p%d/%.1f/%.2f/w%d:%d:%s:%.2f/%s,select=%d/%s",
           static_cast<unsigned long>(worker_stats.submitted),
           static_cast<unsigned long>(worker_stats.replaced),
           static_cast<unsigned long>(worker_stats.completed),
@@ -13209,6 +13398,10 @@ struct MPC
           output.extended_mpcc_left_branch.prefix_only ? 1 : 0,
           output.extended_mpcc_left_branch.objective,
           output.extended_mpcc_left_branch.minimum_lateral_bound_reserve_m,
+          output.extended_mpcc_left_branch.physical_wall_validation_attempted ? 1 : 0,
+          output.extended_mpcc_left_branch.physical_wall_validation_passed ? 1 : 0,
+          output.extended_mpcc_left_branch.physical_wall_validation_scope.c_str(),
+          output.extended_mpcc_left_branch.physical_wall_required_clearance_m,
           output.extended_mpcc_left_branch.failure_reason.empty() ?
           "ok" : output.extended_mpcc_left_branch.failure_reason.c_str(),
           output.extended_mpcc_right_branch.attempted ? 1 : 0,
@@ -13217,6 +13410,10 @@ struct MPC
           output.extended_mpcc_right_branch.prefix_only ? 1 : 0,
           output.extended_mpcc_right_branch.objective,
           output.extended_mpcc_right_branch.minimum_lateral_bound_reserve_m,
+          output.extended_mpcc_right_branch.physical_wall_validation_attempted ? 1 : 0,
+          output.extended_mpcc_right_branch.physical_wall_validation_passed ? 1 : 0,
+          output.extended_mpcc_right_branch.physical_wall_validation_scope.c_str(),
+          output.extended_mpcc_right_branch.physical_wall_required_clearance_m,
           output.extended_mpcc_right_branch.failure_reason.empty() ?
           "ok" : output.extended_mpcc_right_branch.failure_reason.c_str(),
           output.extended_mpcc_branch_selection.selected_side_sign,
@@ -14241,6 +14438,20 @@ struct MPC
     if (selected_assessment.gap_available) {
       output.overtake_corridor_center_ey = selected_assessment.corridor_center_ey;
       output.overtake_selected_mission = selected_assessment.selected_mission;
+    }
+    if (dual_entry_execution_contract_hold) {
+      output.overtake_pass_side_sign = 0;
+      output.overtake_gap_available = false;
+      output.overtake_zone_allows = false;
+      output.overtake_selected_mission.reset();
+      output.overtake_corridor_center_ey.reset();
+      output.overtake_base_line_pass_through = false;
+      output.overtake_tiny_shift_direct_pass = false;
+      output.validated_overtake_entry_longitudinal_owner = false;
+      output.validated_overtake_entry_immediate_execution = false;
+      output.overtake_entry_setup_available = false;
+      output.reason = "dual MPCC entry held / " +
+        dual_entry_execution_contract_reason;
     }
     if (
       start_grid_corridor_selected &&

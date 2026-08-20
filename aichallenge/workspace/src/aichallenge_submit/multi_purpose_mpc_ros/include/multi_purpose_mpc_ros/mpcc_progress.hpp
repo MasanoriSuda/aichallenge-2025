@@ -384,6 +384,11 @@ struct ExtendedBranchEvaluation
   double terminal_velocity_mps{};
   double solve_ms{};
   int iterations{};
+  bool physical_wall_validation_attempted{false};
+  bool physical_wall_validation_passed{false};
+  double physical_wall_required_clearance_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  std::string physical_wall_validation_scope{"not-evaluated"};
   std::string failure_reason;
 };
 
@@ -416,6 +421,43 @@ struct ExtendedBranchSelectionResolution
   double objective_advantage{};
   ExtendedBranchSelectionReason reason{ExtendedBranchSelectionReason::None};
 };
+
+enum class ExtendedBranchEntryAdmissionReason
+{
+  NotRequired,
+  SelectedBranch,
+  SelectionUnavailable,
+  MissionSideMismatch,
+  InvalidInput,
+};
+
+const char * extended_branch_entry_admission_reason_name(
+  ExtendedBranchEntryAdmissionReason reason) noexcept;
+
+struct ExtendedBranchEntryAdmissionRequest
+{
+  bool enabled{false};
+  bool new_entry{false};
+  bool selection_valid{false};
+  int selected_side_sign{};
+  int mission_side_sign{};
+};
+
+struct ExtendedBranchEntryAdmissionResolution
+{
+  bool valid{false};
+  bool admitted{false};
+  bool hold_current_path{false};
+  ExtendedBranchEntryAdmissionReason reason{
+    ExtendedBranchEntryAdmissionReason::InvalidInput};
+};
+
+/// Require an atomically selected extended-MPCC branch at a new overtake
+/// entry.  A geometric/DP Mission may not bypass a missing or mismatched dual
+/// branch result.  Active Missions are outside this gate and retain their
+/// existing no-return and replacement contracts.
+ExtendedBranchEntryAdmissionResolution resolve_extended_branch_entry_admission(
+  const ExtendedBranchEntryAdmissionRequest & request) noexcept;
 
 /// Select one complete extended-MPCC branch.  Lower objective is better.
 /// A committed current side remains authoritative after no-return and also

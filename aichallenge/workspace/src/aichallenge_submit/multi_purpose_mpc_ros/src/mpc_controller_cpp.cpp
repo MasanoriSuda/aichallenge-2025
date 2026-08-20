@@ -16,6 +16,7 @@
 #include <multi_purpose_mpc_ros/mpc_waypoint_association.hpp>
 #include <multi_purpose_mpc_ros/mpc_waypoint_preview.hpp>
 #include <multi_purpose_mpc_ros/overtake_decision_trace.hpp>
+#include <multi_purpose_mpc_ros/overtake_execution_orchestrator.hpp>
 #include <multi_purpose_mpc_ros/path_core.hpp>
 #include <multi_purpose_mpc_ros/persistent_osqp.hpp>
 #include <multi_purpose_mpc_ros/recovery_footprint.hpp>
@@ -110,6 +111,8 @@ namespace mpc_velocity_limit = ::multi_purpose_mpc_ros::mpc_velocity_limit;
 namespace mpc_waypoint_association = ::multi_purpose_mpc_ros::mpc_waypoint_association;
 namespace mpc_waypoint_preview = ::multi_purpose_mpc_ros::mpc_waypoint_preview;
 namespace overtake_core = ::multi_purpose_mpc_ros::v2x_overtake_core;
+namespace overtake_orchestrator =
+  ::multi_purpose_mpc_ros::overtake_execution_orchestrator;
 namespace persistent_osqp = ::multi_purpose_mpc_ros::persistent_osqp;
 namespace mpcc_progress = ::multi_purpose_mpc_ros::mpcc_progress;
 namespace recovery_footprint = ::multi_purpose_mpc_ros::recovery_footprint;
@@ -1742,6 +1745,43 @@ enum class OvertakeLinePhase
   Recovery,
 };
 
+overtake_orchestrator::Phase orchestrator_phase(const OvertakeLinePhase phase)
+{
+  switch (phase) {
+    case OvertakeLinePhase::Idle:
+      return overtake_orchestrator::Phase::Idle;
+    case OvertakeLinePhase::FollowPrepare:
+      return overtake_orchestrator::Phase::FollowPrepare;
+    case OvertakeLinePhase::ShiftOut:
+      return overtake_orchestrator::Phase::ShiftOut;
+    case OvertakeLinePhase::Pass:
+      return overtake_orchestrator::Phase::Pass;
+    case OvertakeLinePhase::Return:
+      return overtake_orchestrator::Phase::Return;
+    case OvertakeLinePhase::Recovery:
+      return overtake_orchestrator::Phase::Recovery;
+  }
+  return overtake_orchestrator::Phase::Idle;
+}
+
+overtake_orchestrator::Behavior orchestrator_behavior(
+  const V2XBehaviorState state)
+{
+  switch (state) {
+    case V2XBehaviorState::Cruise:
+      return overtake_orchestrator::Behavior::Cruise;
+    case V2XBehaviorState::Follow:
+      return overtake_orchestrator::Behavior::Follow;
+    case V2XBehaviorState::Overtake:
+      return overtake_orchestrator::Behavior::Overtake;
+    case V2XBehaviorState::LowSpeedAvoidance:
+      return overtake_orchestrator::Behavior::LowSpeedAvoidance;
+    case V2XBehaviorState::SafetyBrake:
+      return overtake_orchestrator::Behavior::SafetyBrake;
+  }
+  return overtake_orchestrator::Behavior::Cruise;
+}
+
 enum class FollowPrepareCause
 {
   Unspecified,
@@ -2657,6 +2697,7 @@ struct OvertakeLineState
 struct OvertakeLineOutput
 {
   bool active{false};
+  std::vector<double> path_distances;
   std::vector<double> target_ey;
   std::vector<double> target_epsi;
   std::vector<bool> target_active;
@@ -15562,16 +15603,124 @@ struct MPC
       stage_corridor.active && stage_corridor_target_bound_effective;
     stage_corridor_mpc_target_bound_solver_suppressed_was_active_ =
       stage_corridor.active && target_bound_gate.solver_suppressed;
-    if (std::isfinite(overtake_line_output.target_velocity_reference)) {
+    const auto & authority_corridor_lower = stage_corridor.active ?
+      stage_corridor.lower_m : base_stage_lower;
+    const auto & authority_corridor_upper = stage_corridor.active ?
+      stage_corridor.upper_m : base_stage_upper;
+    const auto constrained_corridor_metrics = overtake_orchestrator::analyze_corridor(
+      authority_corridor_lower, authority_corridor_upper,
+      overtake_line_output.path_distances);
+    const auto wall_corridor_metrics = overtake_orchestrator::analyze_corridor(
+      overtake_line_output.stage_wall_corridor_lower_ey,
+      overtake_line_output.stage_wall_corridor_upper_ey,
+      overtake_line_output.path_distances);
+    overtake_orchestrator::AuthorityRequest authority_request;
+    authority_request.episode_id = overtake_line_state_.episode_id;
+    authority_request.mission_generation = overtake_line_state_.mission_generation;
+    authority_request.target_id = !overtake_line_state_.target_vehicle_id.empty() ?
+      overtake_line_state_.target_vehicle_id : behavior_output.target_vehicle_id;
+    authority_request.phase = orchestrator_phase(overtake_line_state_.phase);
+    authority_request.behavior = orchestrator_behavior(behavior_output.state);
+    authority_request.line_active = overtake_line_output.active;
+    authority_request.stage_corridor_active = stage_corridor.active;
+    authority_request.gap_planner_active =
+      planner_output.active && planner_output.feasible && apply_gap_planner_state_bounds;
+    authority_request.dynamic_obstacle_escape_active =
+      behavior_output.dynamic_obstacle_lateral_escape_active;
+    authority_request.dynamic_obstacle_follow_cap_suppressed =
+      behavior_output.dynamic_obstacle_follow_cap_suppressed;
+    authority_request.dynamic_wait_active =
+      overtake_line_state_.dynamic_mission_wait_active;
+    authority_request.dynamic_wait_forward_prefix_active =
+      overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active;
+    authority_request.contact_continuation_active =
+      behavior_output.recoverable_side_contact_active;
+    authority_request.precontact_escape_active =
+      behavior_output.precontact_squeeze_escape_active;
+    authority_request.emergency_brake_active =
+      behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake;
+    authority_request.solver_fallback_active =
+      last_control_was_fallback_ || overtake_solver_recovery_active_;
+    authority_request.follow_cap_active =
+      behavior_output.follow_speed_limit_active ||
+      behavior_output.moving_front_clearance_limit_active;
+    authority_request.front_cap_release_ready =
+      overtake_line_output.front_cap_release_ready;
+    authority_request.pass_speed_floor_active =
+      overtake_line_output.committed_pass_speed_floor_active;
+    authority_request.shiftout_speed_floor_active =
+      overtake_line_output.committed_shiftout_speed_floor_active;
+    authority_request.corridor_blocked =
+      behavior_output.overtake_execution_corridor_blocked;
+    authority_request.speed_reference_mps =
+      overtake_line_output.target_velocity_reference;
+    authority_request.speed_limit_mps =
+      overtake_line_output.target_velocity_limit;
+    authority_request.speed_floor_mps =
+      overtake_line_output.target_velocity_floor;
+    const auto execution_authority =
+      overtake_orchestrator::resolve_authority(authority_request);
+    // Branch workers call init_problem() with a behavior override to score a
+    // hypothetical left/right candidate. Resolve its bounds identically, but
+    // do not report that candidate as the authority actually sent to control.
+    // Only the ordinary control-cycle problem contributes to the execution
+    // trace and episode summary.
+    if (behavior_override == nullptr) {
+      overtake_orchestrator::AuthorityTrace authority_trace;
+      authority_trace.request = authority_request;
+      authority_trace.resolution = execution_authority;
+      authority_trace.constrained_corridor = constrained_corridor_metrics;
+      authority_trace.wall_corridor = wall_corridor_metrics;
+      authority_trace.static_valid_until_m =
+        overtake_line_state_.mission_static_valid_until_pass_m;
+      authority_trace.dynamic_valid_until_m =
+        overtake_line_state_.mission_dynamic_valid_until_pass_m;
+      authority_trace.predicted_rear_clear_m =
+        overtake_line_state_.mission_predicted_rear_clear_pass_m;
+      authority_trace.ego_speed_mps = std::max(0.0, current_speed_mps_);
+      authority_trace.waypoint_id = model->wp_id;
+      const auto authority_emission = overtake_authority_trace_emitter_.update(
+        authority_trace, now_sec);
+      if (authority_emission.emit) {
+        if (authority_emission.conflict) {
+          RCLCPP_WARN(
+            rclcpp::get_logger("mpc_controller"), "%s",
+            authority_emission.message.c_str());
+        } else {
+          RCLCPP_INFO(
+            rclcpp::get_logger("mpc_controller"), "%s",
+            authority_emission.message.c_str());
+        }
+      }
+      overtake_episode_accumulator_.observe(
+        overtake_orchestrator::EpisodeSample{
+          overtake_line_state_.episode_id,
+          overtake_line_state_.mission_generation,
+          authority_request.target_id,
+          authority_request.phase,
+          execution_authority.action,
+          execution_authority.lateral_owner,
+          execution_authority.longitudinal_owner,
+          now_sec,
+          std::max(0.0, current_speed_mps_),
+          constrained_corridor_metrics,
+          wall_corridor_metrics,
+          overtake_line_output.max_required_lateral_accel,
+          authority_request.dynamic_wait_active,
+          authority_request.contact_continuation_active ||
+          authority_request.precontact_escape_active,
+          execution_authority.conflicts});
+    }
+    if (execution_authority.apply_overtake_speed_reference) {
       for (int i = 0; i < N; ++i) {
         ur[2 * i] = std::min({
           ur[2 * i], umax_dyn[2 * i], overtake_line_output.target_velocity_reference});
       }
     }
-    if (std::isfinite(overtake_line_output.target_velocity_limit)) {
+    if (execution_authority.apply_overtake_speed_limit) {
       apply_velocity_limit(umax_dyn, ur, N, overtake_line_output.target_velocity_limit);
     }
-    if (overtake_line_output.committed_pass_speed_floor_active) {
+    if (execution_authority.apply_overtake_speed_floor) {
       for (int i = 0; i < N; ++i) {
         // This is a reference floor, not a lower input bound. Every hard limit already folded
         // into umax_dyn (and any limit applied later) keeps priority over Pass progress.
@@ -15580,7 +15729,7 @@ struct MPC
           std::max(ur[2 * i], overtake_line_output.target_velocity_floor));
       }
     }
-    const bool use_overtake_line_target = overtake_line_output.active;
+    const bool use_overtake_line_target = execution_authority.use_overtake_line_target;
 
     if (use_overtake_line_target) {
       overtake_locked_target_ey_.reset();
@@ -18376,6 +18525,9 @@ struct MPC
   dynamic_obstacle_lateral_escape_trace_emitter_;
   overtake_decision_trace::ChangeAwareRuntimeFailoverTraceEmitter
   dynamic_mission_wait_trace_emitter_;
+  overtake_orchestrator::ChangeAwareAuthorityTraceEmitter
+  overtake_authority_trace_emitter_;
+  overtake_orchestrator::EpisodeAccumulator overtake_episode_accumulator_;
 
 private:
   void update_start_grid_suppression_diagnostics(
@@ -18538,6 +18690,14 @@ private:
         cfg.v2x_behavior.overtake_line.solver_cooldown_sec,
         cfg.v2x_behavior.overtake_line.solver_recovery_success_cycles, reason.c_str());
     }
+    const auto episode_summary = overtake_episode_accumulator_.finish(
+      now_sec, to_string(overtake_line_state_.phase), reason, model->wp_id);
+    if (episode_summary.has_value()) {
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"), "%s",
+        overtake_orchestrator::format_episode_summary(
+          episode_summary.value()).c_str());
+    }
     if (
       cfg.v2x_behavior.overtake_line.debug_log_enabled &&
       overtake_line_state_.phase != OvertakeLinePhase::Idle) {
@@ -18624,6 +18784,14 @@ private:
       if (next_overtake_episode_id_ == 0U) {
         next_overtake_episode_id_ = 1U;
       }
+      overtake_episode_accumulator_.begin(
+        overtake_orchestrator::EpisodeStart{
+          overtake_line_state_.episode_id,
+          overtake_line_state_.target_vehicle_id,
+          pass_side_sign != 0 ? pass_side_sign : overtake_line_state_.pass_side_sign,
+          now_sec,
+          model->wp_id,
+          reason});
     }
 
     if (cfg.v2x_behavior.overtake_line.debug_log_enabled) {
@@ -25871,6 +26039,7 @@ private:
 
         output.active = true;
         output.target_ey = prefix_horizon.target_ey;
+        output.path_distances = prefix_horizon.path_distances;
         output.target_epsi.assign(static_cast<std::size_t>(N), 0.0);
         output.target_active.assign(static_cast<std::size_t>(N), true);
         output.receding_horizon_active = true;
@@ -31884,6 +32053,7 @@ private:
       actual_wall_physical_contact || actual_wall_margin_blocked ||
       actual_wall_sample_unavailable || receding_horizon.hard_infeasible);
     output.target_ey = horizon_evaluation.target_ey;
+    output.path_distances = horizon_evaluation.path_distances;
     output.stage_corridor_constraints_active =
       horizon_evaluation.stage_corridor_constraints_active;
     output.stage_corridor_target_bound_active =

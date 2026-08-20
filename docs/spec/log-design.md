@@ -117,6 +117,30 @@ change判定へ含めない。runtime-failoverの自由文 `reason`、および�
 3. 候補は成立したがauthority/admissionで採用されない
 4. 実行中に現側が失効し、代替側へ切り替えた／切り替えられなかった
 
+### 3.5 追い越しExecution AuthorityとEpisode Summary
+
+個別の候補判定だけでなく、MPC問題へ適用する直前の最終所有者を
+`Overtake execution authority:`へ記録する。主要項目は次のとおり。
+
+- `action`: 当該周期のCruise、Follow、ShiftOut、Pass、DynamicWait、
+  ContactEscape、Recovery、SafetyBrake
+- `lateral_owner`: RacingLine、GapPlanner、OvertakeLine、DynamicWaitPrefix等
+- `longitudinal_owner`: FollowCap、OvertakeLine、PassFloor、SolverFallback、
+  SafetyBrake等
+- `corridor_min` / `wall_min`: target制約込み／壁だけの将来最小回廊幅
+- `valid_until` / `rear_clear`: Missionの静的・動的有効距離と予測rear-clear距離
+- `conflict`: 同時成立してはいけない権限の固定カテゴリ
+
+同一authorityは制御周期ごとに出さず、カテゴリ変化時と低頻度heartbeatだけを
+記録する。`conflict!=none`はWARNとし、安全判定と速度floor、複数横所有者、
+front-cap解除とFollow capなどの組合せをsilentに通過させない。
+左右branchの仮評価は含めず、実際の制御問題へ採用されたauthorityだけを記録する。
+
+`Overtake episode summary:`は`episode`終了時に一度だけ出す。所要時間、通過phase、
+最低速度、最小回廊幅、最大要求横加速度、Mission世代数、authority変更回数、
+DynamicMissionWait／ContactEscape回数、終了理由を含める。これを追い越し完遂率と
+外れ走行の一次集計単位とする。
+
 ## 4. 今後の改善候補
 
 - `meta.json`（run_id, started_at, exit_code, image, host, container など）の充実

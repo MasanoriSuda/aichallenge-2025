@@ -19,6 +19,9 @@ trace::CandidateTrace ready_candidate(const int requested_side,
   candidate.bridge_evaluated = true;
   candidate.bridge_feasible = true;
   candidate.bridge_reason = "reachable";
+  candidate.static_wall_preflight_evaluated = true;
+  candidate.static_wall_preflight_feasible = true;
+  candidate.static_wall_preflight_reason = "clear";
   return candidate;
 }
 
@@ -87,6 +90,25 @@ TEST(OvertakeDecisionTrace,
   EXPECT_NE(message.find("state=bridge-rejected"), std::string::npos);
   EXPECT_NE(message.find("corridor is outside the reachable lateral envelope"),
             std::string::npos);
+}
+
+TEST(OvertakeDecisionTrace, ReportsStaticWallExecutionPreflight) {
+  trace::DecisionTrace decision;
+  decision.target_id = "d2";
+  decision.requested = true;
+  decision.primary = ready_candidate(0, 1);
+  decision.primary.bridge_feasible = false;
+  decision.primary.bridge_reason =
+      "static wall execution preflight: occupied";
+  decision.primary.static_wall_preflight_feasible = false;
+  decision.primary.static_wall_preflight_reason = "occupied";
+  decision.primary.static_wall_checked_poses = 14U;
+
+  const std::string message = trace::format_decision_trace(decision);
+  EXPECT_NE(message.find("state=bridge-rejected"), std::string::npos);
+  EXPECT_NE(message.find("preflight=1/0"), std::string::npos);
+  EXPECT_NE(message.find("preflight_reason=\"occupied\""), std::string::npos);
+  EXPECT_NE(message.find("preflight_poses=14"), std::string::npos);
 }
 
 TEST(OvertakeDecisionTrace, EmitsOnCategoricalChangeButNotContinuousNoise) {

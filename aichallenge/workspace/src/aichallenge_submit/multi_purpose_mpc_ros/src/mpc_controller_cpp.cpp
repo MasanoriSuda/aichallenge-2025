@@ -1967,7 +1967,7 @@ struct GapPlannerOutput
   std::size_t reject_free_interval_count{0U};
 };
 
-struct LowSpeedStaticWallPreflight
+struct GapPlanStaticWallPreflight
 {
   bool feasible{false};
   std::size_t checked_pose_count{};
@@ -2006,6 +2006,10 @@ struct DynamicObstacleLateralEscapeBridgeResult
   std::size_t reject_index{0U};
   double reject_path_distance_m{std::numeric_limits<double>::quiet_NaN()};
   double maximum_target_adjustment_m{0.0};
+  bool static_wall_preflight_evaluated{false};
+  bool static_wall_preflight_feasible{false};
+  std::size_t static_wall_checked_pose_count{0U};
+  std::string static_wall_preflight_reason{"not evaluated"};
   std::string reason{"not evaluated"};
 };
 
@@ -2105,6 +2109,7 @@ struct V2XBehaviorOutput
   bool dynamic_obstacle_lateral_escape_soft_curve_bypassed{false};
   bool dynamic_obstacle_lateral_escape_active{false};
   std::uint64_t dynamic_obstacle_lateral_escape_attempt_id{0U};
+  bool dynamic_obstacle_lateral_escape_execution_path_validated{false};
   bool dynamic_obstacle_follow_cap_suppressed{false};
   int dynamic_obstacle_lateral_escape_side_sign{0};
   double dynamic_obstacle_lateral_escape_m{0.0};
@@ -5401,10 +5406,10 @@ struct MPC
     return pass_side_sign < 0 ? "right" : (pass_side_sign > 0 ? "left" : "none");
   }
 
-  LowSpeedStaticWallPreflight evaluate_low_speed_static_wall_preflight(
+  GapPlanStaticWallPreflight evaluate_gap_plan_static_wall_preflight(
     const int ref_wp_id, const GapPlannerOutput & planner_output) const
   {
-    LowSpeedStaticWallPreflight result;
+    GapPlanStaticWallPreflight result;
     if (!planner_output.active || !planner_output.feasible) {
       result.reason = planner_output.reject_reason.empty() ?
         "local path infeasible" : planner_output.reject_reason;
@@ -5444,11 +5449,31 @@ struct MPC
         model->reference_path->get_waypoint(ref_wp_id + static_cast<int>(index) + 1);
       const double left_x = -std::sin(waypoint.psi);
       const double left_y = std::cos(waypoint.psi);
+      const bool lateral_target_active =
+        planner_output.target_active.empty() ||
+        (index < planner_output.target_active.size() &&
+        planner_output.target_active[index]);
+      const double target_ey = lateral_target_active ?
+        planner_output.target_ey[index] : 0.0;
       path.push_back(
         recovery_footprint::Pose2D{
-          waypoint.x + planner_output.target_ey[index] * left_x,
-          waypoint.y + planner_output.target_ey[index] * left_y,
+          waypoint.x + target_ey * left_x,
+          waypoint.y + target_ey * left_y,
           waypoint.psi});
+    }
+    // A changing lateral target rotates the vehicle relative to the reference
+    // path.  Using waypoint.psi for every sample underestimates the swept
+    // footprint exactly where an escape path turns toward a wall.  Preserve
+    // the measured yaw at the current pose and derive planned yaws from the
+    // candidate path tangent.
+    for (std::size_t index = 1U; index < path.size(); ++index) {
+      const std::size_t next_index = std::min(index + 1U, path.size() - 1U);
+      const std::size_t previous_index = next_index == index ? index - 1U : index;
+      const double dx = path[next_index].x_m - path[previous_index].x_m;
+      const double dy = path[next_index].y_m - path[previous_index].y_m;
+      if (std::hypot(dx, dy) > 1e-6) {
+        path[index].yaw_rad = std::atan2(dy, dx);
+      }
     }
 
     const double swept_step_m = std::max(
@@ -5489,7 +5514,7 @@ struct MPC
         return false;
       }
     }
-    return evaluate_low_speed_static_wall_preflight(
+    return evaluate_gap_plan_static_wall_preflight(
       ref_wp_id, retained_path).feasible;
   }
 
@@ -5508,7 +5533,7 @@ struct MPC
     auto candidate = gap_planner->plan_stopped_vehicle_local_path(
       *model, ref_wp_id, N, lb, ub, now_sec, cfg.v2x_behavior, false,
       forced_pass_side_sign);
-    auto preflight = evaluate_low_speed_static_wall_preflight(ref_wp_id, candidate);
+    auto preflight = evaluate_gap_plan_static_wall_preflight(ref_wp_id, candidate);
     const int primary_side = candidate.pass_side_sign;
     const std::string primary_reason = preflight.reason;
     const std::size_t primary_checked_pose_count = preflight.checked_pose_count;
@@ -5525,7 +5550,7 @@ struct MPC
       auto alternate = gap_planner->plan_stopped_vehicle_local_path(
         *model, ref_wp_id, N, lb, ub, now_sec, cfg.v2x_behavior, false, -primary_side);
       const auto alternate_preflight =
-        evaluate_low_speed_static_wall_preflight(ref_wp_id, alternate);
+        evaluate_gap_plan_static_wall_preflight(ref_wp_id, alternate);
       if (alternate_preflight.feasible) {
         candidate = std::move(alternate);
         preflight = alternate_preflight;
@@ -5599,7 +5624,7 @@ struct MPC
     candidate = gap_planner->plan_stopped_vehicle_local_path(
       *model, ref_wp_id, N, lb, ub, now_sec, cfg.v2x_behavior, true,
       candidate.pass_side_sign);
-    preflight = evaluate_low_speed_static_wall_preflight(ref_wp_id, candidate);
+    preflight = evaluate_gap_plan_static_wall_preflight(ref_wp_id, candidate);
     if (!preflight.feasible) {
       candidate.feasible = false;
       candidate.target_velocity_limit =
@@ -14896,6 +14921,14 @@ struct MPC
         trace.bridge_reject_index = bridge.reject_index;
         trace.bridge_reject_distance_m = bridge.reject_path_distance_m;
         trace.bridge_maximum_adjustment_m = bridge.maximum_target_adjustment_m;
+        trace.static_wall_preflight_evaluated =
+          bridge.static_wall_preflight_evaluated;
+        trace.static_wall_preflight_feasible =
+          bridge.static_wall_preflight_feasible;
+        trace.static_wall_checked_poses =
+          bridge.static_wall_checked_pose_count;
+        trace.static_wall_preflight_reason =
+          bridge.static_wall_preflight_reason;
       };
     const auto capture_dynamic_escape_backoff = [](
       overtake_decision_trace::CandidateTrace & trace,
@@ -14921,6 +14954,22 @@ struct MPC
           evaluation.output, ref_wp_id);
         evaluation.side_sign = infer_gap_pass_side(
           evaluation.output, model->spatial_state.e_y);
+        if (evaluation.bridge.feasible) {
+          evaluation.bridge.static_wall_preflight_evaluated = true;
+          const auto static_wall_preflight =
+            evaluate_gap_plan_static_wall_preflight(ref_wp_id, evaluation.output);
+          evaluation.bridge.static_wall_preflight_feasible =
+            static_wall_preflight.feasible;
+          evaluation.bridge.static_wall_checked_pose_count =
+            static_wall_preflight.checked_pose_count;
+          evaluation.bridge.static_wall_preflight_reason =
+            static_wall_preflight.reason;
+          if (!static_wall_preflight.feasible) {
+            evaluation.bridge.feasible = false;
+            evaluation.bridge.reason =
+              "static wall execution preflight: " + static_wall_preflight.reason;
+          }
+        }
         if (evaluation.bridge.feasible) {
           evaluation.backoff =
             dynamic_obstacle_lateral_escape_solver_backoff_.status(
@@ -15057,7 +15106,9 @@ struct MPC
     const bool dynamic_escape_validated_pass_through =
       planner_output.active && planner_output.feasible &&
       dynamic_escape_bridge.evaluated && dynamic_escape_bridge.feasible &&
-      dynamic_escape_bridge.checked_sample_count > 0U;
+      dynamic_escape_bridge.checked_sample_count > 0U &&
+      dynamic_escape_bridge.static_wall_preflight_evaluated &&
+      dynamic_escape_bridge.static_wall_preflight_feasible;
     const auto dynamic_lateral_escape_authority =
       v2x_overtake_core::resolve_dynamic_obstacle_lateral_escape_authority(
       v2x_overtake_core::DynamicObstacleLateralEscapeAuthorityRequest{
@@ -15079,6 +15130,9 @@ struct MPC
         dynamic_escape_tracking_qualified});
     behavior_output.dynamic_obstacle_lateral_escape_active =
       dynamic_lateral_escape_authority.active;
+    behavior_output.dynamic_obstacle_lateral_escape_execution_path_validated =
+      dynamic_lateral_escape_authority.active &&
+      dynamic_escape_validated_pass_through;
     behavior_output.dynamic_obstacle_follow_cap_suppressed =
       dynamic_lateral_escape_authority.suppress_generic_follow_cap &&
       !behavior_output.precontact_squeeze_escape_active;
@@ -28717,18 +28771,32 @@ private:
         }
         const double lateral_adjustment = std::abs(
           replacement_goal_m - previous_goal);
-        if (
-          lateral_adjustment >
-          (longitudinal_only ? 0.0 :
+        const double maximum_lateral_adjustment =
+          longitudinal_only ? 0.0 :
           strategic_outer_transition ?
           line_cfg.continuous_outer_replan_max_lateral_adjustment :
           dynamic_corridor_refresh ?
           line_cfg.dynamic_corridor_refresh_max_lateral_adjustment :
-          line_cfg.pass_horizon_extension_max_lateral_adjustment) + kEps)
+          line_cfg.pass_horizon_extension_max_lateral_adjustment;
+        if (
+          lateral_adjustment > maximum_lateral_adjustment + kEps)
         {
-          return fail_extension(
-            overtake_core::PassRefreshFailureReason::ExecutionCorridorBlocked,
-            "same-side lateral adjustment limit exceeded");
+          failure_code =
+            overtake_core::PassRefreshFailureReason::ExecutionCorridorBlocked;
+          std::ostringstream reason;
+          reason << "same-side lateral adjustment limit exceeded"
+                 << ", current=" << std::fixed << std::setprecision(2)
+                 << previous_goal
+                 << " m, desired=" << replacement_goal_m
+                 << " m, adjustment=" << lateral_adjustment
+                 << " m, limit=" << maximum_lateral_adjustment
+                 << " m, mode="
+                 << (longitudinal_only ? "longitudinal" :
+                 strategic_outer_transition ? "outer-transition" :
+                 dynamic_corridor_refresh ? "dynamic-corridor" :
+                 "pass-extension");
+          failure_reason = reason.str();
+          return false;
         }
         const double maximum_shift_distance = strategic_outer_transition ?
           std::min({
@@ -28917,12 +28985,7 @@ private:
         commit_request.current_goal_lateral_m = previous_goal;
         commit_request.replacement_goal_lateral_m = static_preflight.goal_ey;
         commit_request.maximum_lateral_adjustment_m =
-          longitudinal_only ? 0.0 :
-          strategic_outer_transition ?
-          line_cfg.continuous_outer_replan_max_lateral_adjustment :
-          dynamic_corridor_refresh ?
-          line_cfg.dynamic_corridor_refresh_max_lateral_adjustment :
-          line_cfg.pass_horizon_extension_max_lateral_adjustment;
+          maximum_lateral_adjustment;
         const auto commit_resolution =
           overtake_core::evaluate_same_side_extension_commit(commit_request);
         if (!commit_resolution.accepted) {
@@ -44320,16 +44383,18 @@ private:
       v2x_behavior.front_risk_level == FrontRiskLevel::EmergencyBrake;
     solver_continuation_request.current_static_footprint_clear =
       solver_crawl_footprint_clear;
+    solver_continuation_request.execution_path_validated =
+      v2x_behavior.dynamic_obstacle_lateral_escape_execution_path_validated;
+    solver_continuation_request.tracking_envelope_valid =
+      std::isfinite(car_->spatial_state.e_y) &&
+      std::isfinite(car_->spatial_state.e_psi) &&
+      std::isfinite(solver_crawl_max_heading_error_rad) &&
+      solver_crawl_max_heading_error_rad >= 0.0 &&
+      std::abs(car_->spatial_state.e_psi) <= solver_crawl_max_heading_error_rad;
     solver_continuation_request.consecutive_failure_count =
       mpc_->consecutive_solver_failure_count();
     solver_continuation_request.maximum_hold_cycles =
       mpc_cfg_.solver_failure_steering_hold_cycles;
-    solver_continuation_request.lateral_error_m = car_->spatial_state.e_y;
-    solver_continuation_request.heading_error_rad = car_->spatial_state.e_psi;
-    solver_continuation_request.max_lateral_error_m =
-      solver_crawl_max_lateral_error_m;
-    solver_continuation_request.max_heading_error_rad =
-      solver_crawl_max_heading_error_rad;
     solver_continuation_request.current_speed_mps = std::abs(actual_v);
     solver_continuation_request.effective_speed_limit_mps = effective_v_max;
     const auto solver_failure_continuation =
@@ -44407,15 +44472,17 @@ private:
         RCLCPP_WARN(
           get_logger(),
           "MPC solver bounded dynamic-escape continuation entered: "
-          "failures=%d/%d, target=%.2f m/s, e_y=%.3f/%.3f m, "
-          "e_psi=%.3f/%.3f rad, footprint_clear=%d",
+          "failures=%d/%d, target=%.2f m/s, path_validated=%d, "
+          "tracking_valid=%d, e_y=%.3f m, e_psi=%.3f/%.3f rad, "
+          "footprint_clear=%d",
           solver_continuation_request.consecutive_failure_count,
           solver_continuation_request.maximum_hold_cycles,
           solver_failure_continuation.target_speed_mps,
-          solver_continuation_request.lateral_error_m,
-          solver_continuation_request.max_lateral_error_m,
-          solver_continuation_request.heading_error_rad,
-          solver_continuation_request.max_heading_error_rad,
+          solver_continuation_request.execution_path_validated ? 1 : 0,
+          solver_continuation_request.tracking_envelope_valid ? 1 : 0,
+          car_->spatial_state.e_y,
+          car_->spatial_state.e_psi,
+          solver_crawl_max_heading_error_rad,
           solver_continuation_request.current_static_footprint_clear ? 1 : 0);
       } else {
         const char * continuation_exit_reason = !mpc_fallback_active ?

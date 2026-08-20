@@ -93,16 +93,12 @@ SolverFailureContinuationDecision resolve_solver_failure_continuation(
       SolverFailureContinuationBlockReason::StaticFootprintUnsafe;
     return decision;
   }
-  if (
-    !std::isfinite(request.lateral_error_m) ||
-    !std::isfinite(request.heading_error_rad) ||
-    !std::isfinite(request.max_lateral_error_m) ||
-    request.max_lateral_error_m < 0.0 ||
-    !std::isfinite(request.max_heading_error_rad) ||
-    request.max_heading_error_rad < 0.0 ||
-    std::abs(request.lateral_error_m) > request.max_lateral_error_m ||
-    std::abs(request.heading_error_rad) > request.max_heading_error_rad)
-  {
+  if (!request.execution_path_validated) {
+    decision.block_reason =
+      SolverFailureContinuationBlockReason::ExecutionPathUnvalidated;
+    return decision;
+  }
+  if (!request.tracking_envelope_valid) {
     decision.block_reason =
       SolverFailureContinuationBlockReason::TrackingEnvelopeUnsafe;
     return decision;
@@ -140,6 +136,8 @@ const char * to_string(const SolverFailureContinuationBlockReason reason) noexce
       return "failure-budget-exceeded";
     case SolverFailureContinuationBlockReason::StaticFootprintUnsafe:
       return "static-footprint-unsafe";
+    case SolverFailureContinuationBlockReason::ExecutionPathUnvalidated:
+      return "execution-path-unvalidated";
     case SolverFailureContinuationBlockReason::TrackingEnvelopeUnsafe:
       return "tracking-envelope-unsafe";
     case SolverFailureContinuationBlockReason::InvalidSpeed:

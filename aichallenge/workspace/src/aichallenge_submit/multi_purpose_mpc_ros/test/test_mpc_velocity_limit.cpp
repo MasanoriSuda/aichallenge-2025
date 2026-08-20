@@ -183,12 +183,10 @@ TEST(MpcVelocityLimit, HoldsSafeDynamicEscapeThroughIsolatedSolverFailure)
   request.solver_fallback = true;
   request.dynamic_obstacle_escape_active = true;
   request.current_static_footprint_clear = true;
+  request.execution_path_validated = true;
+  request.tracking_envelope_valid = true;
   request.consecutive_failure_count = 1;
   request.maximum_hold_cycles = 4;
-  request.lateral_error_m = 0.2;
-  request.heading_error_rad = 0.1;
-  request.max_lateral_error_m = 0.5;
-  request.max_heading_error_rad = 0.35;
   request.current_speed_mps = 5.5;
   request.effective_speed_limit_mps = 5.0;
 
@@ -214,10 +212,10 @@ TEST(MpcVelocityLimit, DynamicEscapeContinuationFailsClosed)
   request.solver_fallback = true;
   request.dynamic_obstacle_escape_active = true;
   request.current_static_footprint_clear = true;
+  request.execution_path_validated = true;
+  request.tracking_envelope_valid = true;
   request.consecutive_failure_count = 1;
   request.maximum_hold_cycles = 4;
-  request.max_lateral_error_m = 0.5;
-  request.max_heading_error_rad = 0.35;
   request.current_speed_mps = 5.5;
   request.effective_speed_limit_mps = 10.0;
 
@@ -236,7 +234,12 @@ TEST(MpcVelocityLimit, DynamicEscapeContinuationFailsClosed)
     resolve_solver_failure_continuation(request).block_reason,
     SolverFailureContinuationBlockReason::StaticFootprintUnsafe);
   request.current_static_footprint_clear = true;
-  request.lateral_error_m = 0.51;
+  request.execution_path_validated = false;
+  EXPECT_EQ(
+    resolve_solver_failure_continuation(request).block_reason,
+    SolverFailureContinuationBlockReason::ExecutionPathUnvalidated);
+  request.execution_path_validated = true;
+  request.tracking_envelope_valid = false;
   EXPECT_EQ(
     resolve_solver_failure_continuation(request).block_reason,
     SolverFailureContinuationBlockReason::TrackingEnvelopeUnsafe);

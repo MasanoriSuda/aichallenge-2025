@@ -47,6 +47,10 @@ struct CandidateTrace {
   std::size_t bridge_reject_index{0U};
   double bridge_reject_distance_m{std::numeric_limits<double>::quiet_NaN()};
   double bridge_maximum_adjustment_m{0.0};
+  bool static_wall_preflight_evaluated{false};
+  bool static_wall_preflight_feasible{false};
+  std::size_t static_wall_checked_poses{0U};
+  std::string static_wall_preflight_reason{"not-evaluated"};
   bool backoff_active{false};
   int backoff_failures{0};
   double backoff_remaining_sec{0.0};

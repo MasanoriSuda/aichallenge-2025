@@ -45,6 +45,7 @@ enum class SolverFailureContinuationBlockReason
   EmergencyActive,
   FailureBudgetExceeded,
   StaticFootprintUnsafe,
+  ExecutionPathUnvalidated,
   TrackingEnvelopeUnsafe,
   InvalidSpeed,
 };
@@ -58,12 +59,10 @@ struct SolverFailureContinuationRequest
   bool dynamic_obstacle_escape_active{false};
   bool emergency_active{false};
   bool current_static_footprint_clear{false};
+  bool execution_path_validated{false};
+  bool tracking_envelope_valid{false};
   int consecutive_failure_count{0};
   int maximum_hold_cycles{0};
-  double lateral_error_m{0.0};
-  double heading_error_rad{0.0};
-  double max_lateral_error_m{0.0};
-  double max_heading_error_rad{0.0};
   double current_speed_mps{0.0};
   double effective_speed_limit_mps{0.0};
 };
@@ -90,7 +89,9 @@ SolverFailureCrawlDecision resolve_solver_failure_crawl(
 /// Preserve the already rate-limited fallback steering for a short, isolated
 /// solve failure while a dynamic-obstacle escape owns the lateral path. The
 /// continuation never requests acceleration and fails closed on emergency,
-/// wall, tracking, numeric, or consecutive-failure violations.
+/// wall, unvalidated execution path, tracking, numeric, or
+/// consecutive-failure violations.  The caller evaluates tracking against the
+/// active escape path rather than the nominal racing line.
 SolverFailureContinuationDecision resolve_solver_failure_continuation(
   const SolverFailureContinuationRequest & request) noexcept;
 

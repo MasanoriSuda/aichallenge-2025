@@ -63,6 +63,13 @@ std::string format_candidate(const CandidateTrace &trace) {
            << ",width=" << finite_or_nan(trace.corridor_width_m) << "m"
            << ",adjust=" << finite_or_nan(trace.bridge_maximum_adjustment_m)
            << "m"
+           << ",preflight="
+           << (trace.static_wall_preflight_evaluated ? 1 : 0) << "/"
+           << (trace.static_wall_preflight_feasible ? 1 : 0)
+           << ",preflight_reason=\""
+           << reason_or(trace.static_wall_preflight_reason, "not-evaluated")
+           << "\""
+           << ",preflight_poses=" << trace.static_wall_checked_poses
            << ",backoff=" << trace.backoff_failures << "/"
            << finite_or_nan(trace.backoff_remaining_sec) << "s";
   }
@@ -164,6 +171,9 @@ std::string categorical_signature(const DecisionTrace &trace) {
     stream << static_cast<int>(classify_candidate(candidate)) << ":"
            << candidate.requested_side << ":" << candidate.resolved_side << ":"
            << candidate_reason(candidate) << ":" << candidate.planner_reject_gate
+           << ":" << (candidate.static_wall_preflight_evaluated ? 1 : 0)
+           << ":" << (candidate.static_wall_preflight_feasible ? 1 : 0)
+           << ":" << candidate.static_wall_preflight_reason
            << ":" << candidate.backoff_failures;
   };
   stream << trace.attempt_id << "|" << trace.mission_episode_id << "|"

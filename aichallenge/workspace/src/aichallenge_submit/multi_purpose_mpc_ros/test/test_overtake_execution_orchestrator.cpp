@@ -162,6 +162,81 @@ TEST(OvertakeExecutionOrchestrator, AlignsAdmissionAndRuntimeWallClearance)
     0U);
 }
 
+TEST(OvertakeExecutionOrchestrator, AdmitsFreshRuntimeReplacementContract)
+{
+  orchestrator::RuntimeReplacementContractRequest request;
+  request.candidate_feasible = true;
+  request.now_sec = 10.0;
+  request.dynamic_valid_until_sec = 10.5;
+  request.target_clearance_checked = true;
+  request.minimum_target_clearance_m = 0.05;
+  request.minimum_path_wall_clearance_m = 0.40;
+  request.required_path_wall_clearance_m = 0.30;
+
+  const auto result = orchestrator::resolve_runtime_replacement_contract(request);
+  EXPECT_TRUE(result.valid);
+  EXPECT_TRUE(result.admitted);
+  EXPECT_EQ(result.reason, orchestrator::RuntimeReplacementRejectReason::None);
+}
+
+TEST(OvertakeExecutionOrchestrator, RejectsExpiredRuntimeReplacement)
+{
+  orchestrator::RuntimeReplacementContractRequest request;
+  request.candidate_feasible = true;
+  request.now_sec = 10.6;
+  request.dynamic_valid_until_sec = 10.5;
+  request.target_clearance_checked = true;
+  request.minimum_target_clearance_m = 0.05;
+  request.minimum_path_wall_clearance_m = 0.40;
+  request.required_path_wall_clearance_m = 0.30;
+
+  const auto result = orchestrator::resolve_runtime_replacement_contract(request);
+  EXPECT_TRUE(result.valid);
+  EXPECT_FALSE(result.admitted);
+  EXPECT_EQ(
+    result.reason,
+    orchestrator::RuntimeReplacementRejectReason::PredictionExpired);
+}
+
+TEST(OvertakeExecutionOrchestrator, RejectsUncheckedOrOverlappingRuntimeTarget)
+{
+  orchestrator::RuntimeReplacementContractRequest request;
+  request.candidate_feasible = true;
+  request.now_sec = 10.0;
+  request.dynamic_valid_until_sec = 10.5;
+  request.minimum_target_clearance_m = 0.05;
+  request.minimum_path_wall_clearance_m = 0.40;
+  request.required_path_wall_clearance_m = 0.30;
+
+  EXPECT_EQ(
+    orchestrator::resolve_runtime_replacement_contract(request).reason,
+    orchestrator::RuntimeReplacementRejectReason::TargetClearanceUnchecked);
+  request.target_clearance_checked = true;
+  request.minimum_target_clearance_m = -0.01;
+  EXPECT_EQ(
+    orchestrator::resolve_runtime_replacement_contract(request).reason,
+    orchestrator::RuntimeReplacementRejectReason::TargetOverlap);
+}
+
+TEST(OvertakeExecutionOrchestrator, RejectsRuntimeWallContractShortfall)
+{
+  orchestrator::RuntimeReplacementContractRequest request;
+  request.candidate_feasible = true;
+  request.now_sec = 10.0;
+  request.dynamic_valid_until_sec = 10.5;
+  request.target_clearance_checked = true;
+  request.minimum_target_clearance_m = 0.05;
+  request.minimum_path_wall_clearance_m = 0.29;
+  request.required_path_wall_clearance_m = 0.30;
+
+  const auto result = orchestrator::resolve_runtime_replacement_contract(request);
+  EXPECT_TRUE(result.valid);
+  EXPECT_FALSE(result.admitted);
+  EXPECT_EQ(
+    result.reason,
+    orchestrator::RuntimeReplacementRejectReason::WallContractShortfall);
+}
+
 TEST(OvertakeExecutionOrchestrator, FindsFutureCorridorPinch)
 {
   const auto metrics = orchestrator::analyze_corridor(
@@ -261,6 +336,11 @@ TEST(OvertakeExecutionOrchestrator, ResolvesFinalControlSourceByOutputPrecedence
   EXPECT_EQ(
     orchestrator::resolve_final_control_source(request),
     orchestrator::FinalControlSource::SolverCrawl);
+
+  request.solver_bounded_continuation_active = true;
+  EXPECT_EQ(
+    orchestrator::resolve_final_control_source(request),
+    orchestrator::FinalControlSource::SolverBoundedContinuation);
 
   request.low_speed_wall_stop_active = true;
   EXPECT_EQ(

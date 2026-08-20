@@ -170,3 +170,74 @@ TEST(MpcVelocityLimit, SolverFailureCrawlRequiresClearCurrentStaticFootprint)
   request.current_static_footprint_clear = true;
   EXPECT_TRUE(resolve_solver_failure_crawl(request).active);
 }
+
+TEST(MpcVelocityLimit, HoldsSafeDynamicEscapeThroughIsolatedSolverFailure)
+{
+  using multi_purpose_mpc_ros::mpc_velocity_limit::SolverFailureContinuationRequest;
+  using multi_purpose_mpc_ros::mpc_velocity_limit::resolve_solver_failure_continuation;
+
+  SolverFailureContinuationRequest request;
+  request.simulation_environment = true;
+  request.enabled = true;
+  request.control_enabled = true;
+  request.solver_fallback = true;
+  request.dynamic_obstacle_escape_active = true;
+  request.current_static_footprint_clear = true;
+  request.consecutive_failure_count = 1;
+  request.maximum_hold_cycles = 4;
+  request.lateral_error_m = 0.2;
+  request.heading_error_rad = 0.1;
+  request.max_lateral_error_m = 0.5;
+  request.max_heading_error_rad = 0.35;
+  request.current_speed_mps = 5.5;
+  request.effective_speed_limit_mps = 5.0;
+
+  const auto decision = resolve_solver_failure_continuation(request);
+  EXPECT_TRUE(decision.active);
+  EXPECT_DOUBLE_EQ(decision.target_speed_mps, 5.0);
+  EXPECT_EQ(
+    decision.block_reason,
+    multi_purpose_mpc_ros::mpc_velocity_limit::
+    SolverFailureContinuationBlockReason::None);
+}
+
+TEST(MpcVelocityLimit, DynamicEscapeContinuationFailsClosed)
+{
+  using multi_purpose_mpc_ros::mpc_velocity_limit::SolverFailureContinuationBlockReason;
+  using multi_purpose_mpc_ros::mpc_velocity_limit::SolverFailureContinuationRequest;
+  using multi_purpose_mpc_ros::mpc_velocity_limit::resolve_solver_failure_continuation;
+
+  SolverFailureContinuationRequest request;
+  request.simulation_environment = true;
+  request.enabled = true;
+  request.control_enabled = true;
+  request.solver_fallback = true;
+  request.dynamic_obstacle_escape_active = true;
+  request.current_static_footprint_clear = true;
+  request.consecutive_failure_count = 1;
+  request.maximum_hold_cycles = 4;
+  request.max_lateral_error_m = 0.5;
+  request.max_heading_error_rad = 0.35;
+  request.current_speed_mps = 5.5;
+  request.effective_speed_limit_mps = 10.0;
+
+  request.emergency_active = true;
+  EXPECT_EQ(
+    resolve_solver_failure_continuation(request).block_reason,
+    SolverFailureContinuationBlockReason::EmergencyActive);
+  request.emergency_active = false;
+  request.consecutive_failure_count = 5;
+  EXPECT_EQ(
+    resolve_solver_failure_continuation(request).block_reason,
+    SolverFailureContinuationBlockReason::FailureBudgetExceeded);
+  request.consecutive_failure_count = 1;
+  request.current_static_footprint_clear = false;
+  EXPECT_EQ(
+    resolve_solver_failure_continuation(request).block_reason,
+    SolverFailureContinuationBlockReason::StaticFootprintUnsafe);
+  request.current_static_footprint_clear = true;
+  request.lateral_error_m = 0.51;
+  EXPECT_EQ(
+    resolve_solver_failure_continuation(request).block_reason,
+    SolverFailureContinuationBlockReason::TrackingEnvelopeUnsafe);
+}

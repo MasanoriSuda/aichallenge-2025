@@ -119,6 +119,39 @@ WallClearanceContract resolve_wall_clearance_contract(
   double physical_clearance_m, double planning_clearance_m,
   bool runtime_preplan_enabled, double runtime_reserve_m) noexcept;
 
+enum class RuntimeReplacementRejectReason {
+  None,
+  InvalidCandidate,
+  PredictionInvalid,
+  PredictionExpired,
+  TargetClearanceUnchecked,
+  TargetClearanceInvalid,
+  TargetOverlap,
+  WallClearanceUnchecked,
+  WallContractShortfall,
+};
+
+struct RuntimeReplacementContractRequest {
+  bool candidate_feasible{false};
+  double now_sec{std::numeric_limits<double>::quiet_NaN()};
+  double dynamic_valid_until_sec{std::numeric_limits<double>::quiet_NaN()};
+  bool target_clearance_checked{false};
+  double minimum_target_clearance_m{std::numeric_limits<double>::quiet_NaN()};
+  double minimum_path_wall_clearance_m{std::numeric_limits<double>::quiet_NaN()};
+  double required_path_wall_clearance_m{std::numeric_limits<double>::quiet_NaN()};
+};
+
+struct RuntimeReplacementContractResolution {
+  bool valid{false};
+  bool admitted{false};
+  RuntimeReplacementRejectReason reason{
+    RuntimeReplacementRejectReason::InvalidCandidate};
+};
+
+RuntimeReplacementContractResolution resolve_runtime_replacement_contract(
+  const RuntimeReplacementContractRequest & request) noexcept;
+const char * to_string(RuntimeReplacementRejectReason reason) noexcept;
+
 CorridorMetrics analyze_corridor(
   const std::vector<double> & lower_m,
   const std::vector<double> & upper_m,
@@ -228,6 +261,7 @@ enum class FinalControlSource {
   LowSpeedDirect,
   LowSpeedWallStop,
   SolverFallback,
+  SolverBoundedContinuation,
   SolverCrawl,
   ControlDisabled,
   StuckRecovery,
@@ -239,6 +273,7 @@ struct FinalControlSourceRequest {
   bool stuck_recovery_active{false};
   bool control_enabled{true};
   bool low_speed_wall_stop_active{false};
+  bool solver_bounded_continuation_active{false};
   bool solver_crawl_active{false};
   bool solver_fallback_active{false};
   bool forced_stop_active{false};

@@ -119,6 +119,87 @@ WallClearanceContract resolve_wall_clearance_contract(
   return result;
 }
 
+RuntimeReplacementContractResolution resolve_runtime_replacement_contract(
+  const RuntimeReplacementContractRequest & request) noexcept
+{
+  RuntimeReplacementContractResolution result;
+  if (!request.candidate_feasible) {
+    result.valid = true;
+    result.reason = RuntimeReplacementRejectReason::InvalidCandidate;
+    return result;
+  }
+  if (
+    !std::isfinite(request.now_sec) ||
+    !std::isfinite(request.dynamic_valid_until_sec))
+  {
+    result.reason = RuntimeReplacementRejectReason::PredictionInvalid;
+    return result;
+  }
+  result.valid = true;
+  if (request.now_sec > request.dynamic_valid_until_sec + 1e-9) {
+    result.reason = RuntimeReplacementRejectReason::PredictionExpired;
+    return result;
+  }
+  if (!request.target_clearance_checked) {
+    result.reason = RuntimeReplacementRejectReason::TargetClearanceUnchecked;
+    return result;
+  }
+  if (!std::isfinite(request.minimum_target_clearance_m)) {
+    result.valid = false;
+    result.reason = RuntimeReplacementRejectReason::TargetClearanceInvalid;
+    return result;
+  }
+  if (request.minimum_target_clearance_m < -1e-9) {
+    result.reason = RuntimeReplacementRejectReason::TargetOverlap;
+    return result;
+  }
+  if (
+    !std::isfinite(request.minimum_path_wall_clearance_m) ||
+    !std::isfinite(request.required_path_wall_clearance_m) ||
+    request.required_path_wall_clearance_m < 0.0)
+  {
+    result.valid = false;
+    result.reason = RuntimeReplacementRejectReason::WallClearanceUnchecked;
+    return result;
+  }
+  if (
+    request.minimum_path_wall_clearance_m + 1e-9 <
+    request.required_path_wall_clearance_m)
+  {
+    result.reason = RuntimeReplacementRejectReason::WallContractShortfall;
+    return result;
+  }
+
+  result.admitted = true;
+  result.reason = RuntimeReplacementRejectReason::None;
+  return result;
+}
+
+const char * to_string(const RuntimeReplacementRejectReason reason) noexcept
+{
+  switch (reason) {
+    case RuntimeReplacementRejectReason::None:
+      return "none";
+    case RuntimeReplacementRejectReason::InvalidCandidate:
+      return "invalid-candidate";
+    case RuntimeReplacementRejectReason::PredictionInvalid:
+      return "prediction-invalid";
+    case RuntimeReplacementRejectReason::PredictionExpired:
+      return "prediction-expired";
+    case RuntimeReplacementRejectReason::TargetClearanceUnchecked:
+      return "target-clearance-unchecked";
+    case RuntimeReplacementRejectReason::TargetClearanceInvalid:
+      return "target-clearance-invalid";
+    case RuntimeReplacementRejectReason::TargetOverlap:
+      return "target-overlap";
+    case RuntimeReplacementRejectReason::WallClearanceUnchecked:
+      return "wall-clearance-unchecked";
+    case RuntimeReplacementRejectReason::WallContractShortfall:
+      return "wall-contract-shortfall";
+  }
+  return "unknown";
+}
+
 AuthorityResolution resolve_authority(const AuthorityRequest & request) noexcept
 {
   AuthorityResolution result;
@@ -538,6 +619,9 @@ FinalControlSource resolve_final_control_source(
   if (request.low_speed_wall_stop_active) {
     return FinalControlSource::LowSpeedWallStop;
   }
+  if (request.solver_bounded_continuation_active) {
+    return FinalControlSource::SolverBoundedContinuation;
+  }
   if (request.solver_crawl_active) {
     return FinalControlSource::SolverCrawl;
   }
@@ -557,6 +641,8 @@ const char * to_string(const FinalControlSource source) noexcept
     case FinalControlSource::LowSpeedDirect: return "low-speed-direct";
     case FinalControlSource::LowSpeedWallStop: return "low-speed-wall-stop";
     case FinalControlSource::SolverFallback: return "solver-fallback";
+    case FinalControlSource::SolverBoundedContinuation:
+      return "solver-bounded-continuation";
     case FinalControlSource::SolverCrawl: return "solver-crawl";
     case FinalControlSource::ControlDisabled: return "control-disabled";
     case FinalControlSource::StuckRecovery: return "stuck-recovery";
@@ -577,6 +663,7 @@ std::string final_control_signature(const FinalControlTrace & trace)
          << "|" << (trace.published ? 1 : 0);
   if (
     trace.control_source == FinalControlSource::SolverFallback ||
+    trace.control_source == FinalControlSource::SolverBoundedContinuation ||
     trace.control_source == FinalControlSource::Failsafe)
   {
     stream << "|" << trace.solver_reason << "|" << trace.output_reason;
@@ -613,6 +700,7 @@ std::string structural_final_control_signature(const FinalControlTrace & trace)
          << "|" << (trace.published ? 1 : 0);
   if (
     trace.control_source == FinalControlSource::SolverFallback ||
+    trace.control_source == FinalControlSource::SolverBoundedContinuation ||
     trace.control_source == FinalControlSource::Failsafe)
   {
     stream << "|" << trace.solver_reason << "|" << trace.output_reason;
@@ -712,6 +800,7 @@ FinalTraceEmission ChangeAwareFinalControlTraceEmitter::update(
     now_sec >= last_emit_sec_ && now_sec - last_emit_sec_ >= repeat_interval_sec;
   emission.warning =
     trace.control_source == FinalControlSource::SolverFallback ||
+    trace.control_source == FinalControlSource::SolverBoundedContinuation ||
     trace.control_source == FinalControlSource::LowSpeedWallStop ||
     trace.control_source == FinalControlSource::Failsafe ||
     (trace.authority.has_value() &&

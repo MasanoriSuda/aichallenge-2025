@@ -5789,6 +5789,11 @@ struct MPC
     return last_control_was_fallback_;
   }
 
+  int consecutive_solver_failure_count() const noexcept
+  {
+    return infeasibility_counter;
+  }
+
   std::uint64_t last_control_decision_id() const noexcept
   {
     return active_control_decision_id_;
@@ -19848,10 +19853,23 @@ private:
       overtake_core::resolve_cross_side_minimum_speed_requirement(
       ego_speed_mps, target_speed_mps);
     const auto robust_clearance = resolve_robust_clearance(model->wp_id, cfg.N);
+    const double physical_wall_clearance =
+      std::max(0.0, line_cfg.min_wall_clearance);
+    const double planning_wall_clearance = robust_clearance.valid ?
+      robust_clearance.wall_planning_clearance_m : physical_wall_clearance;
+    const auto runtime_replacement_wall_contract =
+      overtake_orchestrator::resolve_wall_clearance_contract(
+      physical_wall_clearance, planning_wall_clearance,
+      line_cfg.runtime_wall_preplan_enabled,
+      std::max(0.0, line_cfg.runtime_wall_preplan_reserve));
+    const double minimum_runtime_replacement_wall_clearance =
+      runtime_replacement_wall_contract.valid ?
+      runtime_replacement_wall_contract.required_clearance_m :
+      std::numeric_limits<double>::quiet_NaN();
     const double minimum_cross_side_wall_clearance = std::max(
-      std::max(0.0, line_cfg.min_wall_clearance) +
+      physical_wall_clearance +
       std::max(0.0, line_cfg.cross_side_min_wall_tracking_reserve),
-      robust_clearance.valid ? robust_clearance.wall_planning_clearance_m : 0.0);
+      planning_wall_clearance);
     const bool historical_no_return_latched =
       overtake_line_state_.opponent_side_replan_no_return_latched ||
       overtake_line_state_.pass_forward_completion_latched ||
@@ -19869,6 +19887,59 @@ private:
     const bool same_side_prefix_continuation =
       progressive_prefix_replacement && !side_changed &&
       allow_same_side_replacement;
+    const auto resolve_common_replacement_contract =
+      [&](const overtake_core::OvertakeMissionCandidate & proposed_mission) {
+        const bool uncertainty_clearance_checked =
+          proposed_mission.pass_target_uncertainty_checked;
+        return overtake_orchestrator::resolve_runtime_replacement_contract(
+          overtake_orchestrator::RuntimeReplacementContractRequest{
+            proposed_mission.feasible,
+            now_sec,
+            proposed_mission.dynamic_valid_until_sec,
+            uncertainty_clearance_checked ||
+            proposed_mission.pass_target_clearance_checked,
+            uncertainty_clearance_checked ?
+            proposed_mission.
+            predicted_minimum_pass_target_uncertainty_adjusted_clearance_m :
+            proposed_mission.predicted_minimum_pass_target_surface_clearance_m,
+            proposed_mission.minimum_path_wall_clearance_m,
+            minimum_runtime_replacement_wall_clearance});
+      };
+    const auto log_common_replacement_rejection = [&] (
+      const overtake_core::OvertakeMissionCandidate & proposed_mission,
+      const overtake_orchestrator::RuntimeReplacementContractResolution & contract,
+      const char * stage) {
+        if (!line_cfg.debug_log_enabled) {
+          return;
+        }
+        const double target_clearance =
+          proposed_mission.pass_target_uncertainty_checked ?
+          proposed_mission.
+          predicted_minimum_pass_target_uncertainty_adjusted_clearance_m :
+          proposed_mission.predicted_minimum_pass_target_surface_clearance_m;
+        RCLCPP_WARN(
+          rclcpp::get_logger("mpc_controller"),
+          "OvertakeLine runtime replacement contract rejected; old Mission retained: "
+          "stage=%s, target=%s, side=%d->%d, phase=%s, reason=%s, "
+          "valid_until=%.3f/now=%.3f, target_checked=%d, target_clearance=%.3f, "
+          "wall=%.3f/required=%.3f, wp_id=%d",
+          stage, overtake_line_state_.target_vehicle_id.c_str(), previous_side,
+          proposed_mission.pass_side_sign,
+          to_string(overtake_line_state_.phase),
+          overtake_orchestrator::to_string(contract.reason),
+          proposed_mission.dynamic_valid_until_sec, now_sec,
+          (proposed_mission.pass_target_uncertainty_checked ||
+          proposed_mission.pass_target_clearance_checked) ? 1 : 0,
+          target_clearance, proposed_mission.minimum_path_wall_clearance_m,
+          minimum_runtime_replacement_wall_clearance, model->wp_id);
+      };
+    const auto candidate_common_contract =
+      resolve_common_replacement_contract(candidate);
+    if (!candidate_common_contract.admitted) {
+      log_common_replacement_rejection(
+        candidate, candidate_common_contract, "candidate");
+      return false;
+    }
     const auto resolve_prefix_admission =
       [&](const overtake_core::OvertakeMissionCandidate & proposed_prefix) {
         overtake_core::MpccLitePrefixExecutionRequest request;
@@ -20019,6 +20090,13 @@ private:
     const auto replacement_plan = overtake_core::build_overtake_pass_plan(
       overtake_core::OvertakePassPlanRequest{candidate, current_ey, 0.0});
     if (!replacement_plan.valid) {
+      return false;
+    }
+    const auto prepared_common_contract =
+      resolve_common_replacement_contract(replacement_plan.mission);
+    if (!prepared_common_contract.admitted) {
+      log_common_replacement_rejection(
+        replacement_plan.mission, prepared_common_contract, "prepared");
       return false;
     }
     const auto prepared_prefix_admission =
@@ -25600,6 +25678,22 @@ private:
                   contraction_preflight.minimum_path_wall_clearance_m;
                 candidate.minimum_path_corridor_width_m =
                   contraction_preflight.minimum_path_corridor_width_m;
+                // This locally generated replacement must not inherit stale
+                // target-clearance evidence from the prior Mission. Rebind
+                // the evidence to the guarded target position used by this
+                // contraction so the common runtime contract evaluates the
+                // same geometry that will actually be committed.
+                candidate.pass_target_clearance_checked = true;
+                candidate.predicted_minimum_pass_target_surface_clearance_m =
+                  std::abs(
+                  contraction_preflight.goal_ey -
+                  contracted_goal.guarded_target_lateral_m) -
+                  physical_target_separation;
+                candidate.pass_target_uncertainty_checked = false;
+                candidate.
+                predicted_minimum_pass_target_uncertainty_adjusted_clearance_m =
+                  std::numeric_limits<double>::quiet_NaN();
+                candidate.maximum_applied_pass_target_lateral_uncertainty_m = 0.0;
                 // Return is intentionally outside this local prefix.  Keep the
                 // prior Mission's value until the rolling planner publishes a
                 // fresh remainder instead of claiming that Return was checked.
@@ -26838,7 +26932,8 @@ private:
         {
           const int blocked_side = overtake_line_state_.pass_side_sign;
           if (enter_dynamic_mission_wait("selected pass side became occupied")) {
-            return output;
+            return update_overtake_line(
+              behavior_output, ref_wp_id, N, lb, ub, now_sec);
           }
           arm_overtake_line_side_retry_block(
             blocked_side, overtake_line_state_.target_vehicle_id, now_sec,
@@ -26859,7 +26954,8 @@ private:
         case
           v2x_overtake_core::OvertakeLineTransitionAction::RecoverLongitudinalProgress:
           if (enter_dynamic_mission_wait("committed pass longitudinal progress stalled")) {
-            return output;
+            return update_overtake_line(
+              behavior_output, ref_wp_id, N, lb, ub, now_sec);
           }
           transition_overtake_line_phase(
             OvertakeLinePhase::Recovery, now_sec, current_ey,
@@ -27474,7 +27570,8 @@ private:
           locked_target_progress_continuous ?
           "locked target no longer executable" : "locked target stale or lost";
         if (enter_dynamic_mission_wait(recovery_reason)) {
-          return output;
+          return update_overtake_line(
+            behavior_output, ref_wp_id, N, lb, ub, now_sec);
         }
         transition_overtake_line_phase(
           OvertakeLinePhase::Recovery, now_sec, current_ey,
@@ -28194,7 +28291,8 @@ private:
         overtake_line_state_.pass_side_sign, pass_entry_gate_elapsed_sec,
         pass_entry_gate_traveled_m, model->wp_id);
       if (enter_dynamic_mission_wait(reason)) {
-        return output;
+        return update_overtake_line(
+          behavior_output, ref_wp_id, N, lb, ub, now_sec);
       }
       transition_overtake_line_phase(
         OvertakeLinePhase::Recovery, now_sec, current_ey,
@@ -28295,7 +28393,8 @@ private:
           const std::string reason =
             "fresh dynamic Pass horizon unavailable at ShiftOut boundary";
           if (enter_dynamic_mission_wait(reason)) {
-            return output;
+            return update_overtake_line(
+              behavior_output, ref_wp_id, N, lb, ub, now_sec);
           }
           transition_overtake_line_phase(
             OvertakeLinePhase::Recovery, now_sec, current_ey,
@@ -30222,7 +30321,8 @@ private:
           // In that case retain the normal wait/follow fallback instead of
           // silently remaining in Pass with no selected action.
           if (enter_dynamic_mission_wait(wait_reason)) {
-            return output;
+            return update_overtake_line(
+              behavior_output, ref_wp_id, N, lb, ub, now_sec);
           }
           transition_overtake_line_phase(
             OvertakeLinePhase::FollowPrepare, now_sec, current_ey,
@@ -30406,7 +30506,8 @@ private:
           }
           if (!soft_abort_replan_lease.retain_pass) {
             if (enter_dynamic_mission_wait(abort_reason, terminal_pass_budget_abort)) {
-              return output;
+              return update_overtake_line(
+                behavior_output, ref_wp_id, N, lb, ub, now_sec);
             }
             const auto soft_abort_action = overtake_core::resolve_soft_mission_abort(
               overtake_core::SoftMissionAbortRequest{
@@ -30847,7 +30948,8 @@ private:
               const std::string reason =
                 "Pass horizon extension unavailable and SafeSeparation unsafe";
               if (enter_dynamic_mission_wait(reason)) {
-                return output;
+                return update_overtake_line(
+                  behavior_output, ref_wp_id, N, lb, ub, now_sec);
               }
               transition_overtake_line_phase(
                 OvertakeLinePhase::Recovery, now_sec, current_ey,
@@ -30896,7 +30998,8 @@ private:
               const std::string reason =
                 "longitudinal Pass refresh unavailable and SafeSeparation unsafe";
               if (enter_dynamic_mission_wait(reason)) {
-                return output;
+                return update_overtake_line(
+                  behavior_output, ref_wp_id, N, lb, ub, now_sec);
               }
               transition_overtake_line_phase(
                 OvertakeLinePhase::Recovery, now_sec, current_ey,
@@ -30910,7 +31013,8 @@ private:
           {
             const std::string reason = "Pass horizon hold unsafe; Recovery required";
             if (enter_dynamic_mission_wait(reason)) {
-              return output;
+              return update_overtake_line(
+                behavior_output, ref_wp_id, N, lb, ub, now_sec);
             }
             transition_overtake_line_phase(
               OvertakeLinePhase::Recovery, now_sec, current_ey,
@@ -30924,7 +31028,8 @@ private:
           } else if (!begin_safe_separation("hard_limit", "Pass horizon hard limit")) {
             const std::string reason = "Pass horizon hard limit; SafeSeparation unsafe";
             if (enter_dynamic_mission_wait(reason)) {
-              return output;
+              return update_overtake_line(
+                behavior_output, ref_wp_id, N, lb, ub, now_sec);
             }
             transition_overtake_line_phase(
               OvertakeLinePhase::Recovery, now_sec, current_ey,
@@ -31369,7 +31474,8 @@ private:
         const std::string reason =
           "Pass entry physical gate has no valid current-side prefix";
         if (enter_dynamic_mission_wait(reason)) {
-          return output;
+          return update_overtake_line(
+            behavior_output, ref_wp_id, N, lb, ub, now_sec);
         }
         transition_overtake_line_phase(
           OvertakeLinePhase::Recovery, now_sec, current_ey,
@@ -32850,7 +32956,8 @@ private:
               behavior_output, ref_wp_id, N, lb, ub, now_sec);
           }
           if (enter_dynamic_mission_wait(reason)) {
-            return output;
+            return update_overtake_line(
+              behavior_output, ref_wp_id, N, lb, ub, now_sec);
           }
         }
         const bool recoverable_target_bound_replan =
@@ -32901,7 +33008,8 @@ private:
               behavior_output, ref_wp_id, N, lb, ub, now_sec);
           }
           if (enter_dynamic_mission_wait(reason)) {
-            return output;
+            return update_overtake_line(
+              behavior_output, ref_wp_id, N, lb, ub, now_sec);
           }
         }
         arm_overtake_line_side_retry_block(
@@ -44199,6 +44307,36 @@ private:
     const auto solver_failure_crawl = mpc_velocity_limit::resolve_solver_failure_crawl(
       solver_crawl_request);
     const bool solver_failure_crawl_active = solver_failure_crawl.active;
+    mpc_velocity_limit::SolverFailureContinuationRequest
+      solver_continuation_request;
+    solver_continuation_request.simulation_environment = use_sim_time_;
+    solver_continuation_request.enabled = mpc_cfg_.solver_failure_crawl_enabled;
+    solver_continuation_request.control_enabled = enable_control_;
+    solver_continuation_request.solver_fallback = mpc_fallback_active;
+    solver_continuation_request.dynamic_obstacle_escape_active =
+      v2x_behavior.dynamic_obstacle_lateral_escape_active;
+    solver_continuation_request.emergency_active =
+      v2x_behavior.state == V2XBehaviorState::SafetyBrake ||
+      v2x_behavior.front_risk_level == FrontRiskLevel::EmergencyBrake;
+    solver_continuation_request.current_static_footprint_clear =
+      solver_crawl_footprint_clear;
+    solver_continuation_request.consecutive_failure_count =
+      mpc_->consecutive_solver_failure_count();
+    solver_continuation_request.maximum_hold_cycles =
+      mpc_cfg_.solver_failure_steering_hold_cycles;
+    solver_continuation_request.lateral_error_m = car_->spatial_state.e_y;
+    solver_continuation_request.heading_error_rad = car_->spatial_state.e_psi;
+    solver_continuation_request.max_lateral_error_m =
+      solver_crawl_max_lateral_error_m;
+    solver_continuation_request.max_heading_error_rad =
+      solver_crawl_max_heading_error_rad;
+    solver_continuation_request.current_speed_mps = std::abs(actual_v);
+    solver_continuation_request.effective_speed_limit_mps = effective_v_max;
+    const auto solver_failure_continuation =
+      mpc_velocity_limit::resolve_solver_failure_continuation(
+      solver_continuation_request);
+    const bool solver_failure_continuation_active =
+      solver_failure_continuation.active;
     const bool solver_crawl_path_unsafe =
       !std::isfinite(car_->spatial_state.e_y) ||
       !std::isfinite(car_->spatial_state.e_psi) ||
@@ -44241,6 +44379,13 @@ private:
         last_u_[1] + max_steering_step);
       max_delta = std::abs(u[1]);
     }
+    if (solver_failure_continuation_active) {
+      // safe_failure_control() has already retained/rate-limited steering.
+      // Keep that lateral escape for the bounded lease, but never ask the
+      // failed solution to accelerate the vehicle.
+      u[0] = solver_failure_continuation.target_speed_mps;
+      max_delta = std::abs(u[1]);
+    }
     if (solver_failure_crawl_active != solver_failure_crawl_was_active_) {
       if (solver_failure_crawl_active) {
         RCLCPP_WARN(
@@ -44253,6 +44398,37 @@ private:
         RCLCPP_INFO(get_logger(), "MPC solver fail-operational crawl exited");
       }
       solver_failure_crawl_was_active_ = solver_failure_crawl_active;
+    }
+    if (
+      solver_failure_continuation_active !=
+      solver_failure_continuation_was_active_)
+    {
+      if (solver_failure_continuation_active) {
+        RCLCPP_WARN(
+          get_logger(),
+          "MPC solver bounded dynamic-escape continuation entered: "
+          "failures=%d/%d, target=%.2f m/s, e_y=%.3f/%.3f m, "
+          "e_psi=%.3f/%.3f rad, footprint_clear=%d",
+          solver_continuation_request.consecutive_failure_count,
+          solver_continuation_request.maximum_hold_cycles,
+          solver_failure_continuation.target_speed_mps,
+          solver_continuation_request.lateral_error_m,
+          solver_continuation_request.max_lateral_error_m,
+          solver_continuation_request.heading_error_rad,
+          solver_continuation_request.max_heading_error_rad,
+          solver_continuation_request.current_static_footprint_clear ? 1 : 0);
+      } else {
+        const char * continuation_exit_reason = !mpc_fallback_active ?
+          "solver-recovered" :
+          mpc_velocity_limit::to_string(
+          solver_failure_continuation.block_reason);
+        RCLCPP_INFO(
+          get_logger(),
+          "MPC solver bounded dynamic-escape continuation exited: reason=%s",
+          continuation_exit_reason);
+      }
+      solver_failure_continuation_was_active_ =
+        solver_failure_continuation_active;
     }
 
     if (!enable_control_) {
@@ -44268,7 +44444,8 @@ private:
     double acc = 0.0;
     bool bug_acc_enabled = false;
     const bool forced_stop_active =
-      (mpc_fallback_active && !solver_failure_crawl_active) || !enable_control_ ||
+      (mpc_fallback_active && !solver_failure_crawl_active &&
+      !solver_failure_continuation_active) || !enable_control_ ||
       mpc_->low_speed_direct_wall_stop_active();
     if (forced_stop_active) {
       bug_acc_enabled = false;
@@ -44276,6 +44453,9 @@ private:
     } else if (solver_failure_crawl_active) {
       bug_acc_enabled = false;
       acc = clip(100.0 * (u[0] - actual_v), mpc_cfg_.a_min, mpc_cfg_.a_max);
+    } else if (solver_failure_continuation_active) {
+      bug_acc_enabled = false;
+      acc = 0.0;
     } else if (use_bug_acc_) {
       const auto deg2rad = [](const double deg) { return deg * kPi / 180.0; };
       if (
@@ -44309,6 +44489,9 @@ private:
 
     if (!forced_stop_active) {
       acc = last_acc_ + (acc - last_acc_) * mpc_cfg_.accel_low_pass_gain;
+    }
+    if (solver_failure_continuation_active) {
+      acc = std::min(0.0, acc);
     }
     u[1] = last_u_[1] + (u[1] - last_u_[1]) * mpc_cfg_.steer_low_pass_gain;
     acc = clip(acc, mpc_cfg_.a_min, mpc_cfg_.a_max);
@@ -44355,6 +44538,8 @@ private:
     final_source_request.control_enabled = enable_control_;
     final_source_request.low_speed_wall_stop_active =
       mpc_->low_speed_direct_wall_stop_active();
+    final_source_request.solver_bounded_continuation_active =
+      solver_failure_continuation_active;
     final_source_request.solver_crawl_active = solver_failure_crawl_active;
     final_source_request.solver_fallback_active = mpc_fallback_active;
     final_source_request.forced_stop_active = forced_stop_active;
@@ -44369,9 +44554,21 @@ private:
       output_reason = "control-disabled-deceleration";
     } else if (solver_failure_crawl_active) {
       output_reason = "solver-failure-crawl";
+    } else if (solver_failure_continuation_active) {
+      output_reason = "solver-failure-dynamic-escape-hold";
     } else if (forced_stop_active) {
-      output_reason = mpc_->low_speed_direct_wall_stop_active() ?
-        "low-speed-direct-wall-stop" : "solver-fallback-forced-stop";
+      if (mpc_->low_speed_direct_wall_stop_active()) {
+        output_reason = "low-speed-direct-wall-stop";
+      } else if (
+        mpc_fallback_active &&
+        v2x_behavior.dynamic_obstacle_lateral_escape_active)
+      {
+        output_reason = std::string{"solver-fallback-forced-stop/continuation-"} +
+          mpc_velocity_limit::to_string(
+          solver_failure_continuation.block_reason);
+      } else {
+        output_reason = "solver-fallback-forced-stop";
+      }
     } else if (mpc_->low_speed_direct_control_active()) {
       output_reason = "low-speed-direct-control";
     }
@@ -44464,6 +44661,7 @@ private:
   bool recovery_fault_latched_{false};
   bool recovery_waiting_for_drive_after_reset_{false};
   bool solver_failure_crawl_was_active_{false};
+  bool solver_failure_continuation_was_active_{false};
   std::size_t recovery_reset_drive_request_count_{0U};
   std::optional<SteadyClock::time_point> recovery_reset_stopped_since_;
   bool enable_control_{true};

@@ -224,10 +224,17 @@ TEST(OvertakeDecisionTrace, FormatsPredictiveAlternateLifecycle) {
   decision.alternate.minimum_corridor_reserve_m = 0.24;
   decision.alternate.forced_side_transition_requested = true;
   decision.alternate.forced_side_transition_gateway_found = true;
+  decision.alternate.forced_side_transition_crossing_started = true;
+  decision.alternate.forced_side_transition_requested_side_reached = true;
+  decision.alternate.forced_side_transition_certified = true;
   decision.alternate.forced_side_transition_prefix_samples = 3U;
   decision.alternate.forced_side_transition_gateway_index = 3U;
   decision.alternate.forced_side_transition_gateway_distance_m = 2.4;
-  decision.alternate.forced_side_transition_deadline_m = 6.0;
+  decision.alternate.forced_side_transition_side_reached_index = 4U;
+  decision.alternate.forced_side_transition_side_reached_distance_m = 3.2;
+  decision.alternate.forced_side_transition_certified_until_index = 10U;
+  decision.alternate.forced_side_transition_certified_until_distance_m = 9.2;
+  decision.alternate.forced_side_transition_required_connected_distance_m = 6.0;
   decision.alternate.forced_side_transition_reason = "side-enforced";
   decision.proactive_alternate = true;
   decision.alternate_trigger_reason = "corridor-reserve";
@@ -240,10 +247,12 @@ TEST(OvertakeDecisionTrace, FormatsPredictiveAlternateLifecycle) {
   EXPECT_NE(message.find("threat_distance=4.50m"), std::string::npos);
   EXPECT_NE(message.find("proactive_alternate=1"), std::string::npos);
   EXPECT_NE(message.find("branch_selection=lower-risk-tier"), std::string::npos);
-  EXPECT_NE(message.find("side_transition=1/1"), std::string::npos);
+  EXPECT_NE(message.find("side_transition=1/1/1/1/1"), std::string::npos);
   EXPECT_NE(message.find("side_transition_prefix=3"), std::string::npos);
   EXPECT_NE(message.find("side_transition_gateway=3@2.40m"), std::string::npos);
-  EXPECT_NE(message.find("side_transition_deadline=6.00m"), std::string::npos);
+  EXPECT_NE(message.find("side_transition_side_reached=4@3.20m"), std::string::npos);
+  EXPECT_NE(message.find("side_transition_certified_until=10@9.20m"), std::string::npos);
+  EXPECT_NE(message.find("side_transition_required_connected=6.00m"), std::string::npos);
   EXPECT_NE(message.find("side_transition_reason=side-enforced"), std::string::npos);
 
   decision.alternate_selected = false;
@@ -263,6 +272,7 @@ TEST(OvertakeDecisionTrace, FormatsTrackingFailureAndRecovery) {
   tracking.mission_episode_id = 4U;
   tracking.target_id = "d2";
   tracking.side = -1;
+  tracking.committed_branch = "alternate";
   tracking.consecutive_failures = 2;
   tracking.backoff_sec = 1.0;
   tracking.reason = "maximum iterations reached";
@@ -280,6 +290,7 @@ TEST(OvertakeDecisionTrace, FormatsTrackingFailureAndRecovery) {
   EXPECT_NE(failed.find("stage=tracking"), std::string::npos);
   EXPECT_NE(failed.find("attempt=12"), std::string::npos);
   EXPECT_NE(failed.find("mission_episode=4"), std::string::npos);
+  EXPECT_NE(failed.find("committed_branch=alternate"), std::string::npos);
   EXPECT_NE(failed.find("outcome=failed"), std::string::npos);
   EXPECT_NE(failed.find("preflight_mode=margin-escape"), std::string::npos);
   EXPECT_NE(

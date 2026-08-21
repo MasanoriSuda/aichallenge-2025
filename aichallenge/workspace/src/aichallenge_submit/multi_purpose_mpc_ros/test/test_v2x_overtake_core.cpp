@@ -27,6 +27,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::
   DynamicObstacleLateralEscapeSolverBackoff;
 using multi_purpose_mpc_ros::v2x_overtake_core::ForcedPassSideTransitionAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::ForcedPassSideTransitionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::ForcedPassSideTransitionCertificateRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::certify_forced_pass_side_transition;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_forced_pass_side_transition;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   should_suppress_immediate_wall_threat_primary;
@@ -13654,7 +13656,7 @@ TEST(V2XOvertakeCoreDynamicEscape, ResolvesForcedSideTransitionLifecycle)
   ForcedPassSideTransitionRequest request;
   request.forced_side_sign = 1;
   request.transition_enabled = true;
-  request.transition_deadline_m = 6.0;
+  request.required_connected_distance_m = 6.0;
   request.path_distance_m = 0.0;
 
   auto resolution = resolve_forced_pass_side_transition(request);
@@ -13668,22 +13670,31 @@ TEST(V2XOvertakeCoreDynamicEscape, ResolvesForcedSideTransitionLifecycle)
   resolution = resolve_forced_pass_side_transition(request);
   EXPECT_EQ(
     resolution.action,
-    ForcedPassSideTransitionAction::EnterGateway);
+    ForcedPassSideTransitionAction::BeginCrossing);
+
+  request.crossing_started = true;
+  request.path_distance_m = 5.0;
+  resolution = resolve_forced_pass_side_transition(request);
+  EXPECT_EQ(
+    resolution.action,
+    ForcedPassSideTransitionAction::ContinueCrossing);
 
   request.connected_gateway_available = false;
-  request.gateway_already_entered = true;
-  request.path_distance_m = 5.0;
+  request.path_distance_m = 6.1;
+  resolution = resolve_forced_pass_side_transition(request);
+  EXPECT_EQ(
+    resolution.action,
+    ForcedPassSideTransitionAction::RejectDisconnected);
+
+  request.transition_certified = true;
   resolution = resolve_forced_pass_side_transition(request);
   EXPECT_EQ(
     resolution.action,
     ForcedPassSideTransitionAction::EnforceSide);
 
-  request.gateway_already_entered = false;
-  request.path_distance_m = 6.1;
+  request.crossing_started = false;
   resolution = resolve_forced_pass_side_transition(request);
-  EXPECT_EQ(
-    resolution.action,
-    ForcedPassSideTransitionAction::RejectExpired);
+  EXPECT_FALSE(resolution.valid);
 
   request.forced_side_sign = 2;
   resolution = resolve_forced_pass_side_transition(request);
@@ -13714,6 +13725,63 @@ TEST(V2XOvertakeCoreDynamicEscape, SuppressesOnlyUnresolvedImmediateWallThreat)
   forecast.reason = DynamicObstacleLateralEscapeThreatReason::WallMarginEscape;
   forecast.first_threat_distance_m = 0.5;
   EXPECT_FALSE(should_suppress_immediate_wall_threat_primary(forecast, false));
+}
+
+TEST(V2XOvertakeCoreDynamicEscape, CertifiesOnlyAfterSideArrivalAndConnectedDistance)
+{
+  ForcedPassSideTransitionCertificateRequest request;
+  request.forced_side_sign = 1;
+  request.crossing_started = true;
+  request.target_lateral_m = 0.09;
+  request.course_center_lateral_m = 0.0;
+  request.path_distance_m = 2.0;
+  request.minimum_side_shift_m = 0.10;
+  request.required_connected_distance_m = 6.0;
+
+  auto certificate = certify_forced_pass_side_transition(request);
+  ASSERT_TRUE(certificate.valid);
+  EXPECT_FALSE(certificate.requested_side_reached);
+  EXPECT_FALSE(certificate.transition_certified);
+
+  request.target_lateral_m = 0.10;
+  certificate = certify_forced_pass_side_transition(request);
+  ASSERT_TRUE(certificate.valid);
+  EXPECT_TRUE(certificate.requested_side_reached);
+  EXPECT_TRUE(certificate.requested_side_reached_now);
+  EXPECT_FALSE(certificate.transition_certified);
+  EXPECT_DOUBLE_EQ(certificate.side_reached_distance_m, 2.0);
+
+  request.requested_side_reached = true;
+  request.side_reached_distance_m = certificate.side_reached_distance_m;
+  request.path_distance_m = 7.9;
+  certificate = certify_forced_pass_side_transition(request);
+  ASSERT_TRUE(certificate.valid);
+  EXPECT_FALSE(certificate.transition_certified);
+
+  request.path_distance_m = 8.0;
+  certificate = certify_forced_pass_side_transition(request);
+  ASSERT_TRUE(certificate.valid);
+  EXPECT_TRUE(certificate.transition_certified);
+  EXPECT_DOUBLE_EQ(certificate.connected_distance_m, 6.0);
+}
+
+TEST(V2XOvertakeCoreDynamicEscape, RejectsMalformedTransitionCertificateState)
+{
+  ForcedPassSideTransitionCertificateRequest request;
+  request.forced_side_sign = -1;
+  request.crossing_started = true;
+  request.requested_side_reached = true;
+  request.target_lateral_m = -0.2;
+  request.path_distance_m = 2.0;
+  request.side_reached_distance_m = 3.0;
+  request.minimum_side_shift_m = 0.1;
+  request.required_connected_distance_m = 1.0;
+  EXPECT_FALSE(certify_forced_pass_side_transition(request).valid);
+
+  request.side_reached_distance_m = 1.0;
+  request.transition_certified = true;
+  request.requested_side_reached = false;
+  EXPECT_FALSE(certify_forced_pass_side_transition(request).valid);
 }
 
 TEST(V2XOvertakeCoreDynamicMissionWait, HoldsUntilFreshCurrentOrAlternatePlanExists)

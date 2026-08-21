@@ -7448,9 +7448,10 @@ enum class ForcedPassSideTransitionAction
 {
   NotForced,
   KeepConnectedPrefix,
-  EnterGateway,
+  BeginCrossing,
+  ContinueCrossing,
   EnforceSide,
-  RejectExpired,
+  RejectDisconnected,
   InvalidInput,
 };
 
@@ -7458,10 +7459,11 @@ struct ForcedPassSideTransitionRequest
 {
   int forced_side_sign{0};
   bool transition_enabled{false};
-  bool gateway_already_entered{false};
+  bool crossing_started{false};
+  bool transition_certified{false};
   bool connected_gateway_available{false};
   double path_distance_m{0.0};
-  double transition_deadline_m{0.0};
+  double required_connected_distance_m{0.0};
 };
 
 struct ForcedPassSideTransitionResolution
@@ -7473,13 +7475,44 @@ struct ForcedPassSideTransitionResolution
 
 /// Resolve the stage-wise topology of a forced opposite-side branch.
 /// Before a connected interval spans the current target and requested side,
-/// the planner may keep a physically connected prefix. Once the gateway is
-/// entered, every later stage enforces the requested homotopy. A finite
-/// deadline prevents a prefix-only result from masquerading as an opposite
-/// branch.
+/// the planner may keep a physically connected prefix. Entering that interval
+/// starts, but does not complete, the crossing. Every crossing stage must stay
+/// connected until the caller certifies both requested-side arrival and the
+/// required connected distance. Only then may later stages enforce the
+/// requested homotopy.
 ForcedPassSideTransitionResolution resolve_forced_pass_side_transition(
   const ForcedPassSideTransitionRequest & request) noexcept;
 const char * to_string(ForcedPassSideTransitionAction action) noexcept;
+
+struct ForcedPassSideTransitionCertificateRequest
+{
+  int forced_side_sign{0};
+  bool crossing_started{false};
+  bool requested_side_reached{false};
+  bool transition_certified{false};
+  double target_lateral_m{0.0};
+  double course_center_lateral_m{0.0};
+  double path_distance_m{0.0};
+  double side_reached_distance_m{std::numeric_limits<double>::quiet_NaN()};
+  double minimum_side_shift_m{0.0};
+  double required_connected_distance_m{0.0};
+};
+
+struct ForcedPassSideTransitionCertificate
+{
+  bool valid{false};
+  bool requested_side_reached{false};
+  bool requested_side_reached_now{false};
+  bool transition_certified{false};
+  double side_reached_distance_m{std::numeric_limits<double>::quiet_NaN()};
+  double connected_distance_m{0.0};
+};
+
+/// Advance the geometric certificate after a connected crossing stage has
+/// selected its target. Reaching the requested side starts the distance
+/// certificate; it does not certify the transition by itself.
+ForcedPassSideTransitionCertificate certify_forced_pass_side_transition(
+  const ForcedPassSideTransitionCertificateRequest & request) noexcept;
 
 enum class DynamicObstacleLateralEscapeThreatReason
 {

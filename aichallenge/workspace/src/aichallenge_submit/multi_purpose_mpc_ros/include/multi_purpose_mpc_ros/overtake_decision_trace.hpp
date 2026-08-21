@@ -92,12 +92,27 @@ struct CandidateTrace {
   double first_threat_distance_m{std::numeric_limits<double>::infinity()};
   bool forced_side_transition_requested{false};
   bool forced_side_transition_gateway_found{false};
+  bool forced_side_transition_crossing_started{false};
+  bool forced_side_transition_requested_side_reached{false};
+  bool forced_side_transition_certified{false};
   std::size_t forced_side_transition_prefix_samples{0U};
   std::size_t forced_side_transition_gateway_index{
     std::numeric_limits<std::size_t>::max()};
   double forced_side_transition_gateway_distance_m{
     std::numeric_limits<double>::quiet_NaN()};
-  double forced_side_transition_deadline_m{0.0};
+  std::size_t forced_side_transition_side_reached_index{
+    std::numeric_limits<std::size_t>::max()};
+  double forced_side_transition_side_reached_distance_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  std::size_t forced_side_transition_certified_until_index{
+    std::numeric_limits<std::size_t>::max()};
+  double forced_side_transition_certified_until_distance_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  std::size_t forced_side_transition_first_disconnect_index{
+    std::numeric_limits<std::size_t>::max()};
+  double forced_side_transition_first_disconnect_distance_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double forced_side_transition_required_connected_distance_m{0.0};
   std::string forced_side_transition_reason{"not-requested"};
   bool backoff_active{false};
   int backoff_failures{0};
@@ -166,6 +181,7 @@ struct TrackingTrace {
   std::uint64_t mission_episode_id{0U};
   std::string target_id;
   int side{0};
+  std::string committed_branch{"none"};
   TrackingOutcome outcome{TrackingOutcome::Failed};
   int consecutive_failures{0};
   double backoff_sec{0.0};

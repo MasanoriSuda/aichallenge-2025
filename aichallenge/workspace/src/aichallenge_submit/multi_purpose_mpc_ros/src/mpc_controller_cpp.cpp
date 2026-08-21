@@ -1976,12 +1976,27 @@ struct GapPlannerOutput
   std::size_t reject_free_interval_count{0U};
   bool forced_side_transition_requested{false};
   bool forced_side_transition_gateway_found{false};
+  bool forced_side_transition_crossing_started{false};
+  bool forced_side_transition_requested_side_reached{false};
+  bool forced_side_transition_certified{false};
   std::size_t forced_side_transition_prefix_samples{0U};
   std::size_t forced_side_transition_gateway_index{
     std::numeric_limits<std::size_t>::max()};
   double forced_side_transition_gateway_distance_m{
     std::numeric_limits<double>::quiet_NaN()};
-  double forced_side_transition_deadline_m{0.0};
+  std::size_t forced_side_transition_side_reached_index{
+    std::numeric_limits<std::size_t>::max()};
+  double forced_side_transition_side_reached_distance_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  std::size_t forced_side_transition_certified_until_index{
+    std::numeric_limits<std::size_t>::max()};
+  double forced_side_transition_certified_until_distance_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  std::size_t forced_side_transition_first_disconnect_index{
+    std::numeric_limits<std::size_t>::max()};
+  double forced_side_transition_first_disconnect_distance_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double forced_side_transition_required_connected_distance_m{0.0};
   std::string forced_side_transition_reason{"not-requested"};
 };
 
@@ -2178,6 +2193,7 @@ struct V2XBehaviorOutput
   bool dynamic_obstacle_lateral_escape_execution_path_validated{false};
   bool dynamic_obstacle_follow_cap_suppressed{false};
   int dynamic_obstacle_lateral_escape_side_sign{0};
+  std::string dynamic_obstacle_lateral_escape_committed_branch{"none"};
   double dynamic_obstacle_lateral_escape_m{0.0};
   std::string dynamic_obstacle_lateral_escape_preflight_mode{"not-evaluated"};
   bool dynamic_obstacle_lateral_escape_margin_escape_used{false};
@@ -3851,7 +3867,8 @@ struct V2XGapPlanner
     const double start_grid_inter_vehicle_lookbehind_distance = 0.0,
     const double start_grid_inter_vehicle_lateral_radius = 0.0,
     const std::optional<double> prediction_ego_speed_override_mps = std::nullopt,
-    const double forced_pass_side_transition_distance_m = 0.0)
+    const double forced_pass_side_transition_distance_m = 0.0,
+    const double forced_pass_side_transition_min_shift_m = 0.0)
   {
     GapPlannerOutput output;
     if (!cfg.enabled || N <= 0) {
@@ -3909,7 +3926,7 @@ struct V2XGapPlanner
       std::isfinite(forced_pass_side_transition_distance_m) &&
       forced_pass_side_transition_distance_m > kEps;
     output.forced_side_transition_requested = forced_side_transition_requested;
-    output.forced_side_transition_deadline_m =
+    output.forced_side_transition_required_connected_distance_m =
       forced_side_transition_requested ? forced_pass_side_transition_distance_m : 0.0;
     output.forced_side_transition_reason =
       forced_side_transition_requested ? "awaiting-connected-gateway" : "not-requested";
@@ -4192,7 +4209,11 @@ struct V2XGapPlanner
     double current_vehicle_vehicle_corridor_distance = 0.0;
     double horizon_course_distance = 0.0;
     double course_prediction_horizon_distance = 0.0;
-    bool forced_side_transition_gateway_entered = false;
+    bool forced_side_transition_crossing_started = false;
+    bool forced_side_transition_requested_side_reached = false;
+    bool forced_side_transition_certified = false;
+    double forced_side_transition_side_reached_distance_m =
+      std::numeric_limits<double>::quiet_NaN();
     // V2X has no target yaw. Keep the configured aggressive circular radius for a car-car slot,
     // but use each rectangle's half-diagonal when deciding whether a wall-car slot can really
     // contain ego. The extra inflation is attached to the vehicle boundary and applied only when
@@ -4385,7 +4406,8 @@ struct V2XGapPlanner
           v2x_overtake_core::resolve_forced_pass_side_transition(
           v2x_overtake_core::ForcedPassSideTransitionRequest{
             low_speed_pass_side, true,
-            forced_side_transition_gateway_entered,
+            forced_side_transition_crossing_started,
+            forced_side_transition_certified,
             !transition_gateway_intervals.empty(),
             horizon_course_distance,
             forced_pass_side_transition_distance_m});
@@ -4397,12 +4419,17 @@ struct V2XGapPlanner
           output.forced_side_transition_reason = "invalid-input";
         } else if (
           transition.action ==
-          v2x_overtake_core::ForcedPassSideTransitionAction::RejectExpired)
+          v2x_overtake_core::ForcedPassSideTransitionAction::RejectDisconnected)
         {
           feasible = false;
-          output.reject_reason = "forced pass-side transition gateway unavailable before deadline";
-          output.reject_gate = "forced-side-transition-expired";
-          output.forced_side_transition_reason = "transition-expired";
+          output.reject_reason =
+            "forced pass-side transition lost its connected crossing corridor";
+          output.reject_gate = "forced-side-transition-disconnected";
+          output.forced_side_transition_reason = "crossing-disconnected";
+          output.forced_side_transition_first_disconnect_index =
+            static_cast<std::size_t>(i);
+          output.forced_side_transition_first_disconnect_distance_m =
+            horizon_course_distance;
         }
         if (!feasible) {
           output.reject_index = static_cast<std::size_t>(i);
@@ -4420,14 +4447,22 @@ struct V2XGapPlanner
           output.forced_side_transition_reason = "connected-prefix";
         } else if (
           transition.action ==
-          v2x_overtake_core::ForcedPassSideTransitionAction::EnterGateway)
+          v2x_overtake_core::ForcedPassSideTransitionAction::BeginCrossing)
         {
           side_selectable_intervals = &transition_gateway_intervals;
-          forced_side_transition_gateway_entered = true;
+          forced_side_transition_crossing_started = true;
           output.forced_side_transition_gateway_found = true;
+          output.forced_side_transition_crossing_started = true;
           output.forced_side_transition_gateway_index = static_cast<std::size_t>(i);
           output.forced_side_transition_gateway_distance_m = horizon_course_distance;
-          output.forced_side_transition_reason = "gateway-entered";
+          output.forced_side_transition_reason = "crossing-started";
+        } else if (
+          transition.action ==
+          v2x_overtake_core::ForcedPassSideTransitionAction::ContinueCrossing)
+        {
+          side_selectable_intervals = &transition_gateway_intervals;
+          output.forced_side_transition_crossing_started = true;
+          output.forced_side_transition_reason = "crossing-continued";
         } else {
           if (pass_side_intervals.empty()) {
             feasible = false;
@@ -4558,6 +4593,66 @@ struct V2XGapPlanner
         select_target_ey(selected, allow_vehicle_vehicle_gap);
       output.target_active[i] = true;
       desired_ey = output.target_ey[i];
+      if (
+        forced_side_transition_requested &&
+        forced_side_transition_crossing_started &&
+        !forced_side_transition_certified)
+      {
+        const auto certificate =
+          v2x_overtake_core::certify_forced_pass_side_transition(
+          v2x_overtake_core::ForcedPassSideTransitionCertificateRequest{
+            low_speed_pass_side,
+            forced_side_transition_crossing_started,
+            forced_side_transition_requested_side_reached,
+            forced_side_transition_certified,
+            output.target_ey[i],
+            base.center(),
+            horizon_course_distance,
+            forced_side_transition_side_reached_distance_m,
+            std::max(kEps, std::max(0.0, forced_pass_side_transition_min_shift_m)),
+            forced_pass_side_transition_distance_m});
+        if (!certificate.valid) {
+          feasible = false;
+          output.reject_reason = "invalid forced-side transition certificate input";
+          output.reject_gate = "forced-side-transition-certificate-invalid";
+          output.reject_index = static_cast<std::size_t>(i);
+          output.reject_distance_m = horizon_course_distance;
+          output.forced_side_transition_reason = "certificate-invalid";
+          break;
+        }
+        forced_side_transition_requested_side_reached =
+          certificate.requested_side_reached;
+        forced_side_transition_side_reached_distance_m =
+          certificate.side_reached_distance_m;
+        forced_side_transition_certified = certificate.transition_certified;
+        if (certificate.requested_side_reached_now) {
+          output.forced_side_transition_requested_side_reached = true;
+          output.forced_side_transition_side_reached_index =
+            static_cast<std::size_t>(i);
+          output.forced_side_transition_side_reached_distance_m =
+            horizon_course_distance;
+          output.forced_side_transition_reason = "requested-side-reached";
+        }
+        if (certificate.requested_side_reached) {
+          output.forced_side_transition_certified_until_index =
+            static_cast<std::size_t>(i);
+          output.forced_side_transition_certified_until_distance_m =
+            horizon_course_distance;
+          if (certificate.transition_certified) {
+            output.forced_side_transition_certified = true;
+            output.forced_side_transition_reason = "connected-crossing-certified";
+          }
+        }
+      }
+      if (
+        forced_side_transition_requested &&
+        forced_side_transition_certified)
+      {
+        output.forced_side_transition_certified_until_index =
+          static_cast<std::size_t>(i);
+        output.forced_side_transition_certified_until_distance_m =
+          horizon_course_distance;
+      }
       if (!first_target_selected) {
         selected_first_target = output.target_ey[i];
         selected_first_target_index = static_cast<std::size_t>(i);
@@ -4580,15 +4675,24 @@ struct V2XGapPlanner
 
     if (
       feasible && forced_side_transition_requested &&
-      !forced_side_transition_gateway_entered)
+      !forced_side_transition_certified)
     {
       feasible = false;
-      output.reject_reason = "forced pass-side transition gateway absent from planning horizon";
-      output.reject_gate = "forced-side-transition-incomplete";
+      output.reject_reason = forced_side_transition_crossing_started ?
+        "forced pass-side crossing was not certified in planning horizon" :
+        "forced pass-side transition gateway absent from planning horizon";
+      output.reject_gate = forced_side_transition_crossing_started ?
+        "forced-side-transition-uncertified" :
+        "forced-side-transition-incomplete";
       output.reject_index = output.target_active.empty() ?
         0U : output.target_active.size() - 1U;
       output.reject_distance_m = horizon_course_distance;
-      output.forced_side_transition_reason = "horizon-ended-before-gateway";
+      output.forced_side_transition_reason =
+        !forced_side_transition_crossing_started ?
+        "horizon-ended-before-gateway" :
+        (!forced_side_transition_requested_side_reached ?
+        "horizon-ended-before-side-reached" :
+        "horizon-ended-before-connected-certificate");
     }
 
     if (!any_obstacle_in_horizon) {
@@ -5178,6 +5282,7 @@ struct MpcProblem
   std::uint64_t dynamic_obstacle_lateral_escape_attempt_id{0U};
   std::string dynamic_obstacle_lateral_escape_target_id;
   int dynamic_obstacle_lateral_escape_side_sign{0};
+  std::string dynamic_obstacle_lateral_escape_committed_branch{"none"};
   std::vector<double> dynamic_obstacle_escape_path_distance_m;
   Eigen::VectorXd dynamic_obstacle_escape_lateral_lower;
   Eigen::VectorXd dynamic_obstacle_escape_lateral_upper;
@@ -16010,7 +16115,8 @@ struct MPC
           false, inter_vehicle_corridor_lock, inter_vehicle_corridor_goal, 0.0, 0.0,
           inter_vehicle_corridor_plan ?
           cfg.v2x_behavior.start_grid_inter_vehicle_lateral_radius : 0.0,
-          std::nullopt, forced_side_transition_distance_m);
+          std::nullopt, forced_side_transition_distance_m,
+          cfg.v2x_behavior.dynamic_obstacle_lateral_escape_min_shift);
       };
     const auto run_gap_planner = [&](const int dynamic_escape_forced_side) {
         return run_gap_planner_with(*gap_planner, dynamic_escape_forced_side, 0.0);
@@ -16076,14 +16182,32 @@ struct MPC
           output.forced_side_transition_requested;
         trace.forced_side_transition_gateway_found =
           output.forced_side_transition_gateway_found;
+        trace.forced_side_transition_crossing_started =
+          output.forced_side_transition_crossing_started;
+        trace.forced_side_transition_requested_side_reached =
+          output.forced_side_transition_requested_side_reached;
+        trace.forced_side_transition_certified =
+          output.forced_side_transition_certified;
         trace.forced_side_transition_prefix_samples =
           output.forced_side_transition_prefix_samples;
         trace.forced_side_transition_gateway_index =
           output.forced_side_transition_gateway_index;
         trace.forced_side_transition_gateway_distance_m =
           output.forced_side_transition_gateway_distance_m;
-        trace.forced_side_transition_deadline_m =
-          output.forced_side_transition_deadline_m;
+        trace.forced_side_transition_side_reached_index =
+          output.forced_side_transition_side_reached_index;
+        trace.forced_side_transition_side_reached_distance_m =
+          output.forced_side_transition_side_reached_distance_m;
+        trace.forced_side_transition_certified_until_index =
+          output.forced_side_transition_certified_until_index;
+        trace.forced_side_transition_certified_until_distance_m =
+          output.forced_side_transition_certified_until_distance_m;
+        trace.forced_side_transition_first_disconnect_index =
+          output.forced_side_transition_first_disconnect_index;
+        trace.forced_side_transition_first_disconnect_distance_m =
+          output.forced_side_transition_first_disconnect_distance_m;
+        trace.forced_side_transition_required_connected_distance_m =
+          output.forced_side_transition_required_connected_distance_m;
         trace.forced_side_transition_reason =
           output.forced_side_transition_reason;
         trace.bridge_evaluated = bridge.evaluated;
@@ -16505,6 +16629,9 @@ struct MPC
       !behavior_output.precontact_squeeze_escape_active;
     behavior_output.dynamic_obstacle_lateral_escape_side_sign =
       dynamic_lateral_escape_authority.pass_side_sign;
+    behavior_output.dynamic_obstacle_lateral_escape_committed_branch =
+      dynamic_lateral_escape_authority.active ?
+      (dynamic_escape_alternate_selected ? "alternate" : "primary") : "none";
     behavior_output.dynamic_obstacle_lateral_escape_m =
       dynamic_lateral_escape_authority.requested_lateral_shift_m;
     behavior_output.dynamic_obstacle_lateral_escape_preflight_mode =
@@ -17756,6 +17883,7 @@ struct MPC
       behavior_output.dynamic_obstacle_lateral_escape_attempt_id,
       behavior_output.dynamic_obstacle_cruise_target_id,
       behavior_output.dynamic_obstacle_lateral_escape_side_sign,
+      behavior_output.dynamic_obstacle_lateral_escape_committed_branch,
       std::move(dynamic_obstacle_escape_path_distance_m),
       std::move(dynamic_obstacle_escape_lateral_lower),
       std::move(dynamic_obstacle_escape_lateral_upper),
@@ -19662,6 +19790,8 @@ struct MPC
   void populate_dynamic_escape_tracking_context(
     overtake_decision_trace::TrackingTrace & trace) const
   {
+    trace.committed_branch =
+      last_v2x_behavior_output_.dynamic_obstacle_lateral_escape_committed_branch;
     trace.preflight_mode =
       last_v2x_behavior_output_.dynamic_obstacle_lateral_escape_preflight_mode;
     trace.preflight_margin_escape_used =
@@ -20449,6 +20579,8 @@ struct MPC
             "valid tracking solution after cold retry" :
             "valid tracking solution";
           populate_dynamic_escape_tracking_context(trace);
+          trace.committed_branch =
+            problem.dynamic_obstacle_lateral_escape_committed_branch;
           const std::string tracking_trace =
             overtake_decision_trace::format_tracking_trace(trace);
           RCLCPP_INFO(

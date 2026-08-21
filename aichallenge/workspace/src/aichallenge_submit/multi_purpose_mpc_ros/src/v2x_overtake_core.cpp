@@ -12664,7 +12664,6 @@ bool should_try_dynamic_obstacle_lateral_escape_alternate(
 ForcedPassSideTransitionResolution resolve_forced_pass_side_transition(
   const ForcedPassSideTransitionRequest & request) noexcept
 {
-  constexpr double kDistanceEpsilon = 1e-9;
   ForcedPassSideTransitionResolution result;
   if (request.forced_side_sign == 0) {
     result.valid = true;
@@ -12674,24 +12673,24 @@ ForcedPassSideTransitionResolution resolve_forced_pass_side_transition(
   if (
     (request.forced_side_sign != -1 && request.forced_side_sign != 1) ||
     !std::isfinite(request.path_distance_m) || request.path_distance_m < 0.0 ||
-    !std::isfinite(request.transition_deadline_m) ||
-    request.transition_deadline_m < 0.0)
+    !std::isfinite(request.required_connected_distance_m) ||
+    request.required_connected_distance_m < 0.0 ||
+    (request.transition_certified && !request.crossing_started))
   {
     return result;
   }
 
   result.valid = true;
-  if (!request.transition_enabled || request.gateway_already_entered) {
+  if (!request.transition_enabled || request.transition_certified) {
     result.action = ForcedPassSideTransitionAction::EnforceSide;
+  } else if (request.crossing_started) {
+    result.action = request.connected_gateway_available ?
+      ForcedPassSideTransitionAction::ContinueCrossing :
+      ForcedPassSideTransitionAction::RejectDisconnected;
   } else if (request.connected_gateway_available) {
-    result.action = ForcedPassSideTransitionAction::EnterGateway;
-  } else if (
-    request.path_distance_m <=
-    request.transition_deadline_m + kDistanceEpsilon)
-  {
-    result.action = ForcedPassSideTransitionAction::KeepConnectedPrefix;
+    result.action = ForcedPassSideTransitionAction::BeginCrossing;
   } else {
-    result.action = ForcedPassSideTransitionAction::RejectExpired;
+    result.action = ForcedPassSideTransitionAction::KeepConnectedPrefix;
   }
   return result;
 }
@@ -12703,16 +12702,71 @@ const char * to_string(const ForcedPassSideTransitionAction action) noexcept
       return "not-forced";
     case ForcedPassSideTransitionAction::KeepConnectedPrefix:
       return "connected-prefix";
-    case ForcedPassSideTransitionAction::EnterGateway:
-      return "gateway-entered";
+    case ForcedPassSideTransitionAction::BeginCrossing:
+      return "crossing-started";
+    case ForcedPassSideTransitionAction::ContinueCrossing:
+      return "crossing-continued";
     case ForcedPassSideTransitionAction::EnforceSide:
       return "side-enforced";
-    case ForcedPassSideTransitionAction::RejectExpired:
-      return "transition-expired";
+    case ForcedPassSideTransitionAction::RejectDisconnected:
+      return "crossing-disconnected";
     case ForcedPassSideTransitionAction::InvalidInput:
       return "invalid-input";
   }
   return "unknown";
+}
+
+ForcedPassSideTransitionCertificate certify_forced_pass_side_transition(
+  const ForcedPassSideTransitionCertificateRequest & request) noexcept
+{
+  constexpr double kDistanceEpsilon = 1e-9;
+  ForcedPassSideTransitionCertificate result;
+  if (
+    (request.forced_side_sign != -1 && request.forced_side_sign != 1) ||
+    !std::isfinite(request.target_lateral_m) ||
+    !std::isfinite(request.course_center_lateral_m) ||
+    !std::isfinite(request.path_distance_m) || request.path_distance_m < 0.0 ||
+    !std::isfinite(request.minimum_side_shift_m) ||
+    request.minimum_side_shift_m < 0.0 ||
+    !std::isfinite(request.required_connected_distance_m) ||
+    request.required_connected_distance_m < 0.0 ||
+    (request.requested_side_reached &&
+    (!std::isfinite(request.side_reached_distance_m) ||
+    request.side_reached_distance_m < 0.0 ||
+    request.side_reached_distance_m > request.path_distance_m + kDistanceEpsilon)) ||
+    (request.transition_certified &&
+    (!request.crossing_started || !request.requested_side_reached)))
+  {
+    return result;
+  }
+
+  result.valid = true;
+  result.requested_side_reached = request.requested_side_reached;
+  result.transition_certified = request.transition_certified;
+  result.side_reached_distance_m = request.side_reached_distance_m;
+  if (!request.crossing_started || request.transition_certified) {
+    return result;
+  }
+
+  const double side_progress =
+    static_cast<double>(request.forced_side_sign) *
+    (request.target_lateral_m - request.course_center_lateral_m);
+  if (
+    !result.requested_side_reached &&
+    side_progress + kDistanceEpsilon >= request.minimum_side_shift_m)
+  {
+    result.requested_side_reached = true;
+    result.requested_side_reached_now = true;
+    result.side_reached_distance_m = request.path_distance_m;
+  }
+  if (result.requested_side_reached) {
+    result.connected_distance_m = std::max(
+      0.0, request.path_distance_m - result.side_reached_distance_m);
+    result.transition_certified =
+      result.connected_distance_m + kDistanceEpsilon >=
+      request.required_connected_distance_m;
+  }
+  return result;
 }
 
 DynamicObstacleLateralEscapeForecast

@@ -133,13 +133,26 @@ std::string format_candidate(const CandidateTrace &trace) {
            << ",side_transition="
            << (trace.forced_side_transition_requested ? 1 : 0) << "/"
            << (trace.forced_side_transition_gateway_found ? 1 : 0)
+           << "/" << (trace.forced_side_transition_crossing_started ? 1 : 0)
+           << "/" << (trace.forced_side_transition_requested_side_reached ? 1 : 0)
+           << "/" << (trace.forced_side_transition_certified ? 1 : 0)
            << ",side_transition_prefix="
            << trace.forced_side_transition_prefix_samples
            << ",side_transition_gateway="
            << index_or_none(trace.forced_side_transition_gateway_index) << "@"
            << finite_or_nan(trace.forced_side_transition_gateway_distance_m) << "m"
-           << ",side_transition_deadline="
-           << finite_or_nan(trace.forced_side_transition_deadline_m) << "m"
+           << ",side_transition_side_reached="
+           << index_or_none(trace.forced_side_transition_side_reached_index) << "@"
+           << finite_or_nan(trace.forced_side_transition_side_reached_distance_m) << "m"
+           << ",side_transition_certified_until="
+           << index_or_none(trace.forced_side_transition_certified_until_index) << "@"
+           << finite_or_nan(trace.forced_side_transition_certified_until_distance_m) << "m"
+           << ",side_transition_first_disconnect="
+           << index_or_none(trace.forced_side_transition_first_disconnect_index) << "@"
+           << finite_or_nan(trace.forced_side_transition_first_disconnect_distance_m) << "m"
+           << ",side_transition_required_connected="
+           << finite_or_nan(
+             trace.forced_side_transition_required_connected_distance_m) << "m"
            << ",side_transition_reason="
            << reason_or(trace.forced_side_transition_reason, "not-requested")
            << ",backoff=" << trace.backoff_failures << "/"
@@ -261,6 +274,9 @@ std::string categorical_signature(const DecisionTrace &trace) {
            << ":" << candidate.forecast_reason
            << ":" << (candidate.forced_side_transition_requested ? 1 : 0)
            << ":" << (candidate.forced_side_transition_gateway_found ? 1 : 0)
+           << ":" << (candidate.forced_side_transition_crossing_started ? 1 : 0)
+           << ":" << (candidate.forced_side_transition_requested_side_reached ? 1 : 0)
+           << ":" << (candidate.forced_side_transition_certified ? 1 : 0)
            << ":" << candidate.forced_side_transition_reason
            << ":" << candidate.backoff_failures;
   };
@@ -357,7 +373,9 @@ std::string format_tracking_trace(const TrackingTrace &trace) {
          << trace.attempt_id << ", mission_episode=" << trace.mission_episode_id
          << ", target="
          << (trace.target_id.empty() ? "<none>" : trace.target_id)
-         << ", side=" << trace.side << ", outcome=" << to_string(trace.outcome)
+         << ", side=" << trace.side
+         << ", committed_branch=" << reason_or(trace.committed_branch, "none")
+         << ", outcome=" << to_string(trace.outcome)
          << ", failures=" << trace.consecutive_failures
          << ", backoff=" << finite_or_nan(trace.backoff_sec) << "s"
          << ", preflight_mode="

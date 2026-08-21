@@ -7413,6 +7413,46 @@ resolve_dynamic_obstacle_lateral_escape_authority(
   const DynamicObstacleLateralEscapeAuthorityRequest & request) noexcept;
 const char * to_string(DynamicObstacleLateralEscapeAuthorityReason reason) noexcept;
 
+enum class DynamicObstacleLateralEscapeQualificationHoldReason
+{
+  NotCandidate,
+  AlreadyQualified,
+  PreviousControlUnavailable,
+  InvalidInput,
+  HoldLastFeasible,
+};
+
+struct DynamicObstacleLateralEscapeQualificationHoldRequest
+{
+  bool candidate_active{false};
+  bool tracking_solution_qualified{false};
+  bool previous_control_available{false};
+  double current_speed_mps{};
+  double previous_command_speed_mps{};
+  double previous_command_steering_rad{};
+  double maximum_steering_rad{};
+};
+
+struct DynamicObstacleLateralEscapeQualificationHoldResolution
+{
+  bool hold{false};
+  double speed_mps{};
+  double steering_rad{};
+  DynamicObstacleLateralEscapeQualificationHoldReason reason{
+    DynamicObstacleLateralEscapeQualificationHoldReason::NotCandidate};
+};
+
+/// A candidate's first exact tracking QP is its qualification solve.  If that
+/// solve fails before any candidate command has been published, retain the
+/// previous finite ordinary-control command for one cycle instead of turning
+/// the candidate rejection into a deceleration fallback.  Already-qualified
+/// branch failures remain owned by the normal solver-failure policy.
+DynamicObstacleLateralEscapeQualificationHoldResolution
+resolve_dynamic_obstacle_lateral_escape_qualification_hold(
+  const DynamicObstacleLateralEscapeQualificationHoldRequest & request) noexcept;
+const char * to_string(
+  DynamicObstacleLateralEscapeQualificationHoldReason reason) noexcept;
+
 struct DynamicObstacleLateralEscapeSolverBackoffStatus
 {
   bool blocked{false};

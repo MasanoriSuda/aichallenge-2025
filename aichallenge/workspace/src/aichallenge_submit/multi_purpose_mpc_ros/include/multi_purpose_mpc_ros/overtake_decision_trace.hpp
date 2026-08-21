@@ -24,6 +24,8 @@ enum class DecisionOutcome {
   PrimaryBackedOff,
   AlternateRejected,
   AuthorityRejected,
+  QualificationPendingPrimary,
+  QualificationPendingAlternate,
   ActivePrimary,
   ActiveAlternate,
 };
@@ -172,6 +174,8 @@ private:
 };
 
 enum class TrackingOutcome {
+  QualificationRejected,
+  Qualified,
   Failed,
   Recovered,
 };
@@ -198,6 +202,12 @@ struct TrackingTrace {
       std::numeric_limits<double>::quiet_NaN()};
   bool cold_retry_attempted{false};
   bool cold_retry_succeeded{false};
+  bool qualification_hold_available{false};
+  bool qualification_hold_used{false};
+  double qualification_hold_speed_mps{
+      std::numeric_limits<double>::quiet_NaN()};
+  double qualification_hold_steering_rad{
+      std::numeric_limits<double>::quiet_NaN()};
   std::string initial_solver_reason;
 };
 

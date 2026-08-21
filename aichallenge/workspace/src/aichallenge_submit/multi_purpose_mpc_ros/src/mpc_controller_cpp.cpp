@@ -5676,6 +5676,8 @@ struct MPC
       dynamic_obstacle_lateral_escape_qualified_target_id_;
     snapshot->dynamic_obstacle_lateral_escape_qualified_side_sign_ =
       dynamic_obstacle_lateral_escape_qualified_side_sign_;
+    snapshot->dynamic_obstacle_lateral_escape_qualified_branch_ =
+      dynamic_obstacle_lateral_escape_qualified_branch_;
     snapshot->dynamic_obstacle_lateral_escape_solver_backoff_ =
       dynamic_obstacle_lateral_escape_solver_backoff_;
     snapshot->overtake_contact_wall_guard_safe_ = overtake_contact_wall_guard_safe_;
@@ -5825,11 +5827,17 @@ struct MPC
 
   void reset_dynamic_obstacle_lateral_escape_runtime() noexcept
   {
+    clear_dynamic_obstacle_lateral_escape_tracking_qualification();
+    dynamic_obstacle_lateral_escape_solver_backoff_.reset();
+    dynamic_obstacle_lateral_escape_trace_emitter_.reset();
+  }
+
+  void clear_dynamic_obstacle_lateral_escape_tracking_qualification() noexcept
+  {
     dynamic_obstacle_lateral_escape_tracking_qualified_ = false;
     dynamic_obstacle_lateral_escape_qualified_target_id_.clear();
     dynamic_obstacle_lateral_escape_qualified_side_sign_ = 0;
-    dynamic_obstacle_lateral_escape_solver_backoff_.reset();
-    dynamic_obstacle_lateral_escape_trace_emitter_.reset();
+    dynamic_obstacle_lateral_escape_qualified_branch_ = "none";
   }
 
   static const char * low_speed_pass_side_name(const int pass_side_sign) noexcept
@@ -16548,18 +16556,14 @@ struct MPC
         (primary_unusable || dynamic_escape_primary_suppressed) &&
         !dynamic_escape_alternate_selected)
       {
-        dynamic_obstacle_lateral_escape_tracking_qualified_ = false;
-        dynamic_obstacle_lateral_escape_qualified_target_id_.clear();
-        dynamic_obstacle_lateral_escape_qualified_side_sign_ = 0;
+        clear_dynamic_obstacle_lateral_escape_tracking_qualification();
         if (gap_planner != nullptr) {
           // A rejected target must not bias the next scoped planning cycle.
           gap_planner->reset_low_speed_targets();
         }
       }
     } else {
-      dynamic_obstacle_lateral_escape_tracking_qualified_ = false;
-      dynamic_obstacle_lateral_escape_qualified_target_id_.clear();
-      dynamic_obstacle_lateral_escape_qualified_side_sign_ = 0;
+      clear_dynamic_obstacle_lateral_escape_tracking_qualification();
     }
     const int dynamic_escape_side_sign = infer_gap_pass_side(
       planner_output, model->spatial_state.e_y);
@@ -16589,7 +16593,9 @@ struct MPC
       dynamic_obstacle_lateral_escape_tracking_qualified_ &&
       dynamic_obstacle_lateral_escape_qualified_target_id_ ==
       behavior_output.dynamic_obstacle_cruise_target_id &&
-      dynamic_obstacle_lateral_escape_qualified_side_sign_ == dynamic_escape_side_sign;
+      dynamic_obstacle_lateral_escape_qualified_side_sign_ == dynamic_escape_side_sign &&
+      dynamic_obstacle_lateral_escape_qualified_branch_ ==
+      (dynamic_escape_alternate_selected ? "alternate" : "primary");
     const bool dynamic_escape_quarantine_active = dynamic_escape_backoff.blocked;
     const bool dynamic_escape_validated_pass_through =
       planner_output.active && planner_output.feasible &&
@@ -19945,14 +19951,42 @@ struct MPC
   std::pair<Eigen::Vector2d, double> safe_failure_control(
     const std::string & reason, const double now_sec)
   {
+    const bool dynamic_escape_candidate_active =
+      last_v2x_behavior_output_.dynamic_obstacle_lateral_escape_active;
+    const int dynamic_escape_candidate_side =
+      last_v2x_behavior_output_.dynamic_obstacle_lateral_escape_side_sign;
+    const std::string dynamic_escape_candidate_branch =
+      last_v2x_behavior_output_.dynamic_obstacle_lateral_escape_committed_branch;
+    const bool dynamic_escape_candidate_qualified =
+      dynamic_escape_candidate_active &&
+      dynamic_obstacle_lateral_escape_tracking_qualified_ &&
+      dynamic_obstacle_lateral_escape_qualified_target_id_ ==
+      last_v2x_behavior_output_.dynamic_obstacle_cruise_target_id &&
+      dynamic_obstacle_lateral_escape_qualified_side_sign_ ==
+      last_v2x_behavior_output_.dynamic_obstacle_lateral_escape_side_sign &&
+      dynamic_obstacle_lateral_escape_qualified_branch_ ==
+      last_v2x_behavior_output_.dynamic_obstacle_lateral_escape_committed_branch;
+    const double maximum_steering = std::isfinite(cfg.delta_max) ?
+      std::max(0.0, std::abs(cfg.delta_max)) :
+      std::numeric_limits<double>::quiet_NaN();
+    const bool previous_control_available =
+      !last_control_was_fallback_ && current_control.size() >= 2 &&
+      std::isfinite(current_control[0]) && std::isfinite(previous_steering);
+    const auto qualification_hold =
+      v2x_overtake_core::resolve_dynamic_obstacle_lateral_escape_qualification_hold(
+      v2x_overtake_core::DynamicObstacleLateralEscapeQualificationHoldRequest{
+        dynamic_escape_candidate_active,
+        dynamic_escape_candidate_qualified,
+        previous_control_available,
+        current_speed_mps_,
+        previous_control_available ? current_control[0] : 0.0,
+        previous_steering,
+        maximum_steering});
+
     last_control_resolution_reason_ = reason;
     last_control_was_fallback_ = true;
-    current_prediction.first.clear();
-    current_prediction.second.clear();
-    if (last_v2x_behavior_output_.dynamic_obstacle_lateral_escape_active) {
-      dynamic_obstacle_lateral_escape_tracking_qualified_ = false;
-      dynamic_obstacle_lateral_escape_qualified_target_id_.clear();
-      dynamic_obstacle_lateral_escape_qualified_side_sign_ = 0;
+    if (dynamic_escape_candidate_active) {
+      clear_dynamic_obstacle_lateral_escape_tracking_qualification();
       const auto backoff = dynamic_obstacle_lateral_escape_solver_backoff_.record_failure(
         last_v2x_behavior_output_.dynamic_obstacle_cruise_target_id,
         last_v2x_behavior_output_.dynamic_obstacle_lateral_escape_side_sign,
@@ -19971,16 +20005,69 @@ struct MPC
         last_v2x_behavior_output_.dynamic_obstacle_cruise_target_id;
       trace.side =
         last_v2x_behavior_output_.dynamic_obstacle_lateral_escape_side_sign;
-      trace.outcome = overtake_decision_trace::TrackingOutcome::Failed;
+      trace.outcome = dynamic_escape_candidate_qualified ?
+        overtake_decision_trace::TrackingOutcome::Failed :
+        overtake_decision_trace::TrackingOutcome::QualificationRejected;
       trace.consecutive_failures = backoff.consecutive_failures;
       trace.backoff_sec = backoff.hold_sec;
       trace.reason = reason;
       populate_dynamic_escape_tracking_context(trace);
+      trace.qualification_hold_available = qualification_hold.hold;
+      trace.qualification_hold_used = qualification_hold.hold;
+      if (qualification_hold.hold) {
+        trace.qualification_hold_speed_mps = qualification_hold.speed_mps;
+        trace.qualification_hold_steering_rad = qualification_hold.steering_rad;
+      }
       const std::string tracking_trace =
         overtake_decision_trace::format_tracking_trace(trace);
       RCLCPP_WARN(
         rclcpp::get_logger("mpc_controller"), "%s", tracking_trace.c_str());
     }
+
+    if (qualification_hold.hold) {
+      // The candidate QP was an admission probe: no control from that branch
+      // has been published yet. Quarantine the exact target/side above, expose
+      // ordinary Follow ownership to downstream arbitration, and bridge only
+      // this 40 Hz cycle with the last finite ordinary command. The next cycle
+      // rebuilds the ordinary problem because the candidate is backed off.
+      auto & behavior = last_v2x_behavior_output_;
+      behavior.dynamic_obstacle_lateral_escape_active = false;
+      behavior.dynamic_obstacle_lateral_escape_execution_path_validated = false;
+      behavior.dynamic_obstacle_follow_cap_suppressed = false;
+      behavior.dynamic_obstacle_lateral_escape_side_sign = 0;
+      behavior.dynamic_obstacle_lateral_escape_committed_branch = "none";
+      behavior.dynamic_obstacle_lateral_escape_m = 0.0;
+
+      current_control = Eigen::VectorXd::Zero(2 * std::max(0, cfg.N));
+      for (int index = 0; index < cfg.N; ++index) {
+        current_control[2 * index] = qualification_hold.speed_mps;
+        current_control[2 * index + 1] = qualification_hold.steering_rad;
+      }
+      previous_steering = qualification_hold.steering_rad;
+      failure_fallback_speed_.reset();
+      infeasibility_counter = 0;
+      overtake_infeasibility_counter_ = 0;
+      last_control_was_fallback_ = false;
+      last_control_resolution_reason_ =
+        std::string{"dynamic-escape-qualification-rejected/"} +
+        v2x_overtake_core::to_string(qualification_hold.reason) + "/" + reason;
+      RCLCPP_WARN(
+        rclcpp::get_logger("mpc_controller"),
+        "Dynamic escape qualification rejected: target=%s, side=%d, "
+        "branch=%s, action=%s, hold=%.3f m/s/%.3f rad, reason=%s",
+        behavior.dynamic_obstacle_cruise_target_id.c_str(),
+        dynamic_escape_candidate_side,
+        dynamic_escape_candidate_branch.c_str(),
+        v2x_overtake_core::to_string(qualification_hold.reason),
+        qualification_hold.speed_mps, qualification_hold.steering_rad,
+        reason.c_str());
+      Eigen::Vector2d hold;
+      hold << qualification_hold.speed_mps, qualification_hold.steering_rad;
+      return {hold, std::abs(qualification_hold.steering_rad)};
+    }
+
+    current_prediction.first.clear();
+    current_prediction.second.clear();
 
     const double current_speed = std::isfinite(current_speed_mps_) ?
       std::max(0.0, current_speed_mps_) : 0.0;
@@ -20551,6 +20638,14 @@ struct MPC
           "MPC solver recovered after %d consecutive failures", infeasibility_counter);
       }
       if (problem.dynamic_obstacle_lateral_escape_active) {
+        const bool was_tracking_qualified =
+          dynamic_obstacle_lateral_escape_tracking_qualified_ &&
+          dynamic_obstacle_lateral_escape_qualified_target_id_ ==
+          problem.dynamic_obstacle_lateral_escape_target_id &&
+          dynamic_obstacle_lateral_escape_qualified_side_sign_ ==
+          problem.dynamic_obstacle_lateral_escape_side_sign &&
+          dynamic_obstacle_lateral_escape_qualified_branch_ ==
+          problem.dynamic_obstacle_lateral_escape_committed_branch;
         const auto previous_backoff =
           dynamic_obstacle_lateral_escape_solver_backoff_.status(
           problem.dynamic_obstacle_lateral_escape_target_id,
@@ -20561,10 +20656,13 @@ struct MPC
           problem.dynamic_obstacle_lateral_escape_target_id;
         dynamic_obstacle_lateral_escape_qualified_side_sign_ =
           problem.dynamic_obstacle_lateral_escape_side_sign;
+        dynamic_obstacle_lateral_escape_qualified_branch_ =
+          problem.dynamic_obstacle_lateral_escape_committed_branch;
         dynamic_obstacle_lateral_escape_solver_backoff_.record_success(
           problem.dynamic_obstacle_lateral_escape_target_id,
           problem.dynamic_obstacle_lateral_escape_side_sign);
         if (
+          !was_tracking_qualified ||
           previous_backoff.consecutive_failures > 0 ||
           dynamic_escape_cold_retry_succeeded_)
         {
@@ -20573,11 +20671,18 @@ struct MPC
           trace.mission_episode_id = overtake_line_state_.episode_id;
           trace.target_id = problem.dynamic_obstacle_lateral_escape_target_id;
           trace.side = problem.dynamic_obstacle_lateral_escape_side_sign;
-          trace.outcome = overtake_decision_trace::TrackingOutcome::Recovered;
+          const bool recovered =
+            previous_backoff.consecutive_failures > 0 ||
+            dynamic_escape_cold_retry_succeeded_;
+          trace.outcome = recovered ?
+            overtake_decision_trace::TrackingOutcome::Recovered :
+            overtake_decision_trace::TrackingOutcome::Qualified;
           trace.consecutive_failures = previous_backoff.consecutive_failures;
-          trace.reason = dynamic_escape_cold_retry_succeeded_ ?
+          trace.reason = recovered ?
+            (dynamic_escape_cold_retry_succeeded_ ?
             "valid tracking solution after cold retry" :
-            "valid tracking solution";
+            "valid tracking solution after qualification backoff") :
+            "exact tracking qualification accepted";
           populate_dynamic_escape_tracking_context(trace);
           trace.committed_branch =
             problem.dynamic_obstacle_lateral_escape_committed_branch;
@@ -21042,6 +21147,7 @@ struct MPC
   bool dynamic_obstacle_lateral_escape_tracking_qualified_{false};
   std::string dynamic_obstacle_lateral_escape_qualified_target_id_;
   int dynamic_obstacle_lateral_escape_qualified_side_sign_{0};
+  std::string dynamic_obstacle_lateral_escape_qualified_branch_{"none"};
   v2x_overtake_core::DynamicObstacleLateralEscapeSolverBackoff
   dynamic_obstacle_lateral_escape_solver_backoff_;
   overtake_decision_trace::ChangeAwareTraceEmitter

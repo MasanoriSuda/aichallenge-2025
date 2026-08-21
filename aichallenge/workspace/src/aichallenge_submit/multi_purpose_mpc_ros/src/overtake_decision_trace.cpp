@@ -215,6 +215,11 @@ DecisionOutcome classify_outcome(const DecisionTrace &trace) noexcept {
     return DecisionOutcome::NotRequested;
   }
   if (trace.authority_active) {
+    if (!trace.tracking_qualified) {
+      return trace.alternate_selected ?
+             DecisionOutcome::QualificationPendingAlternate :
+             DecisionOutcome::QualificationPendingPrimary;
+    }
     return trace.alternate_selected ? DecisionOutcome::ActiveAlternate
                                     : DecisionOutcome::ActivePrimary;
   }
@@ -242,6 +247,10 @@ const char *to_string(const DecisionOutcome outcome) noexcept {
     return "alternate-rejected";
   case DecisionOutcome::AuthorityRejected:
     return "authority-rejected";
+  case DecisionOutcome::QualificationPendingPrimary:
+    return "qualification-pending-primary";
+  case DecisionOutcome::QualificationPendingAlternate:
+    return "qualification-pending-alternate";
   case DecisionOutcome::ActivePrimary:
     return "active-primary";
   case DecisionOutcome::ActiveAlternate:
@@ -359,6 +368,10 @@ void ChangeAwareTraceEmitter::reset() noexcept {
 
 const char *to_string(const TrackingOutcome outcome) noexcept {
   switch (outcome) {
+  case TrackingOutcome::QualificationRejected:
+    return "qualification-rejected";
+  case TrackingOutcome::Qualified:
+    return "qualified";
   case TrackingOutcome::Failed:
     return "failed";
   case TrackingOutcome::Recovered:
@@ -396,6 +409,11 @@ std::string format_tracking_trace(const TrackingTrace &trace) {
          << finite_or_nan(trace.maximum_target_adjustment_m) << "m"
          << ", cold_retry=" << (trace.cold_retry_attempted ? 1 : 0)
          << "/" << (trace.cold_retry_succeeded ? 1 : 0)
+         << ", qualification_hold="
+         << (trace.qualification_hold_available ? 1 : 0) << "/"
+         << (trace.qualification_hold_used ? 1 : 0) << "/"
+         << finite_or_nan(trace.qualification_hold_speed_mps) << "mps/"
+         << finite_or_nan(trace.qualification_hold_steering_rad) << "rad"
          << ", initial_solver_reason=\""
          << reason_or(trace.initial_solver_reason, "none") << "\""
          << ", reason=\"" << reason_or(trace.reason, "none") << "\"";

@@ -84,6 +84,12 @@ struct CandidateTrace {
   double tracking_wall_contract_first_upper_m{
     std::numeric_limits<double>::quiet_NaN()};
   std::string tracking_wall_contract_reason{"not-evaluated"};
+  bool forecast_evaluated{false};
+  bool future_threatened{false};
+  int forecast_risk_tier{0};
+  std::string forecast_reason{"not-evaluated"};
+  double minimum_corridor_reserve_m{std::numeric_limits<double>::infinity()};
+  double first_threat_distance_m{std::numeric_limits<double>::infinity()};
   bool backoff_active{false};
   int backoff_failures{0};
   double backoff_remaining_sec{0.0};
@@ -98,6 +104,9 @@ struct DecisionTrace {
   CandidateTrace alternate;
   bool alternate_attempted{false};
   bool alternate_selected{false};
+  bool proactive_alternate{false};
+  std::string alternate_trigger_reason{"not-evaluated"};
+  std::string branch_selection_reason{"not-evaluated"};
   bool authority_active{false};
   bool pass_through{false};
   std::string authority_reason{"not-evaluated"};

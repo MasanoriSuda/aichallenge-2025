@@ -121,6 +121,15 @@ std::string format_candidate(const CandidateTrace &trace) {
            << ",tracking_contract_reason=\""
            << reason_or(
              trace.tracking_wall_contract_reason, "not-evaluated") << "\""
+           << ",forecast=" << (trace.forecast_evaluated ? 1 : 0) << "/"
+           << (trace.future_threatened ? 1 : 0)
+           << ",forecast_tier=" << trace.forecast_risk_tier
+           << ",forecast_reason="
+           << reason_or(trace.forecast_reason, "not-evaluated")
+           << ",min_reserve="
+           << finite_or_nan(trace.minimum_corridor_reserve_m) << "m"
+           << ",threat_distance="
+           << finite_or_nan(trace.first_threat_distance_m) << "m"
            << ",backoff=" << trace.backoff_failures << "/"
            << finite_or_nan(trace.backoff_remaining_sec) << "s";
   }
@@ -234,6 +243,10 @@ std::string categorical_signature(const DecisionTrace &trace) {
            << ":" << (candidate.tracking_wall_contract_feasible ? 1 : 0)
            << ":" << candidate.tracking_wall_contract_side_sign
            << ":" << candidate.tracking_wall_contract_reason
+           << ":" << (candidate.forecast_evaluated ? 1 : 0)
+           << ":" << (candidate.future_threatened ? 1 : 0)
+           << ":" << candidate.forecast_risk_tier
+           << ":" << candidate.forecast_reason
            << ":" << candidate.backoff_failures;
   };
   stream << trace.attempt_id << "|" << trace.mission_episode_id << "|"
@@ -244,6 +257,9 @@ std::string categorical_signature(const DecisionTrace &trace) {
   append_candidate(trace.alternate);
   stream << "|" << (trace.alternate_attempted ? 1 : 0) << "|"
          << (trace.alternate_selected ? 1 : 0) << "|" << trace.authority_reason
+         << "|" << (trace.proactive_alternate ? 1 : 0)
+         << "|" << trace.alternate_trigger_reason
+         << "|" << trace.branch_selection_reason
          << "|" << (trace.pass_through ? 1 : 0)
          << "|" << trace.final_side << "|" << (trace.tracking_qualified ? 1 : 0)
          << "|" << (trace.follow_cap_suppressed ? 1 : 0);
@@ -259,6 +275,11 @@ std::string format_decision_trace(const DecisionTrace &trace) {
          << ", outcome=" << to_string(classify_outcome(trace))
          << ", primary=" << format_candidate(trace.primary)
          << ", alternate=" << format_candidate(trace.alternate)
+         << ", alternate_trigger="
+         << reason_or(trace.alternate_trigger_reason, "not-evaluated")
+         << ", proactive_alternate=" << (trace.proactive_alternate ? 1 : 0)
+         << ", branch_selection="
+         << reason_or(trace.branch_selection_reason, "not-evaluated")
          << ", authority=" << (trace.authority_active ? 1 : 0) << "/"
          << trace.authority_reason
          << ", pass_through=" << (trace.pass_through ? 1 : 0)

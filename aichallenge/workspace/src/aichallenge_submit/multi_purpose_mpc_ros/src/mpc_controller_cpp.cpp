@@ -3518,6 +3518,26 @@ struct V2XGapPlanner
     last_logged_local_path_corridor_enforced_.reset();
   }
 
+  /// Commit only the continuity hint of an already evaluated speculative
+  /// branch. Candidate generation runs on a tactical snapshot, so rejecting
+  /// that branch cannot overwrite the live planner state.
+  void commit_selected_gap_plan(const GapPlannerOutput & output)
+  {
+    if (!output.active || !output.feasible) {
+      return;
+    }
+    const std::size_t sample_count = std::min(
+      output.target_active.size(), output.target_ey.size());
+    for (std::size_t i = 0; i < sample_count; ++i) {
+      if (!output.target_active[i] || !std::isfinite(output.target_ey[i])) {
+        continue;
+      }
+      std::lock_guard<std::mutex> lock(mutex_);
+      last_target_ey_ = output.target_ey[i];
+      return;
+    }
+  }
+
   GapPlannerOutput plan_stopped_vehicle_local_path(
     const BicycleModel & model, const int ref_wp_id, const int N, const Eigen::VectorXd & base_lb,
     const Eigen::VectorXd & base_ub, const double now_sec, const V2XBehaviorConfig & behavior_cfg,
@@ -15813,8 +15833,9 @@ struct MPC
       low_speed_direct_control_phase_ ==
       v2x_overtake_core::LowSpeedDirectControlPhase::Pass ?
       low_speed_shift_pass_side_sign_ : 0;
-    const auto run_gap_planner = [&](const int dynamic_escape_forced_side) {
-        return gap_planner->plan(
+    const auto run_gap_planner_with = [&] (
+      V2XGapPlanner & planner, const int dynamic_escape_forced_side) {
+        return planner.plan(
           *model, ref_wp_id, gap_plan_N, gap_plan_lb, gap_plan_ub, now_sec,
           !explicit_overtake_line_owns_plan,
           behavior_output.state == V2XBehaviorState::LowSpeedAvoidance ||
@@ -15833,6 +15854,9 @@ struct MPC
           false, inter_vehicle_corridor_lock, inter_vehicle_corridor_goal, 0.0, 0.0,
           inter_vehicle_corridor_plan ?
           cfg.v2x_behavior.start_grid_inter_vehicle_lateral_radius : 0.0);
+      };
+    const auto run_gap_planner = [&](const int dynamic_escape_forced_side) {
+        return run_gap_planner_with(*gap_planner, dynamic_escape_forced_side);
       };
     auto planner_output = use_gap_planner ?
       (use_low_speed_local_path ?
@@ -15869,6 +15893,9 @@ struct MPC
     double dynamic_escape_blocked_remaining_sec = 0.0;
     bool dynamic_escape_alternate_attempted = false;
     bool dynamic_escape_alternate_selected = false;
+    bool dynamic_escape_proactive_alternate = false;
+    std::string dynamic_escape_alternate_trigger_reason{"not-evaluated"};
+    std::string dynamic_escape_branch_selection_reason{"not-evaluated"};
     overtake_decision_trace::CandidateTrace dynamic_escape_primary_trace;
     overtake_decision_trace::CandidateTrace dynamic_escape_alternate_trace;
     const auto capture_dynamic_escape_candidate = [](
@@ -15967,6 +15994,7 @@ struct MPC
         GapPlannerOutput output;
         DynamicObstacleLateralEscapeBridgeResult bridge;
         v2x_overtake_core::DynamicObstacleLateralEscapeSolverBackoffStatus backoff;
+        v2x_overtake_core::DynamicObstacleLateralEscapeForecast forecast;
         int side_sign{0};
       };
       const auto evaluate_dynamic_escape_candidate = [&](
@@ -16029,10 +16057,67 @@ struct MPC
             behavior_output.dynamic_obstacle_cruise_target_id,
             evaluation.side_sign, now_sec);
         }
+        double minimum_corridor_reserve_m =
+          std::numeric_limits<double>::infinity();
+        double first_low_reserve_distance_m =
+          std::numeric_limits<double>::infinity();
+        const double required_corridor_reserve_m = std::max(
+          0.0, cfg.v2x_behavior.overtake_line.runtime_wall_preplan_reserve);
+        const std::size_t forecast_sample_count = std::min({
+          evaluation.output.lb.size(), evaluation.output.ub.size(),
+          evaluation.output.target_ey.size(),
+          evaluation.output.target_active.size()});
+        for (std::size_t i = 0; i < forecast_sample_count; ++i) {
+          if (!evaluation.output.target_active[i]) {
+            continue;
+          }
+          const double lower = evaluation.output.lb[i];
+          const double upper = evaluation.output.ub[i];
+          const double target = evaluation.output.target_ey[i];
+          if (
+            !std::isfinite(lower) || !std::isfinite(upper) ||
+            !std::isfinite(target) || upper < lower)
+          {
+            continue;
+          }
+          const double reserve = std::max(
+            0.0, std::min(target - lower, upper - target));
+          minimum_corridor_reserve_m = std::min(
+            minimum_corridor_reserve_m, reserve);
+          if (
+            !std::isfinite(first_low_reserve_distance_m) &&
+            reserve + kEps < required_corridor_reserve_m)
+          {
+            first_low_reserve_distance_m =
+              horizon_path_distance_to_index(ref_wp_id, i);
+          }
+        }
+        const bool candidate_usable =
+          evaluation.output.active && evaluation.output.feasible &&
+          evaluation.bridge.feasible &&
+          (evaluation.side_sign == -1 || evaluation.side_sign == 1) &&
+          !evaluation.backoff.blocked;
+        evaluation.forecast =
+          v2x_overtake_core::forecast_dynamic_obstacle_lateral_escape_branch(
+          v2x_overtake_core::DynamicObstacleLateralEscapeForecastRequest{
+            true, candidate_usable,
+            evaluation.bridge.static_wall_margin_escape_used,
+            evaluation.bridge.tracking_wall_contract_active,
+            minimum_corridor_reserve_m, first_low_reserve_distance_m,
+            required_corridor_reserve_m});
         capture_dynamic_escape_candidate(
           trace, requested_side, evaluation.side_sign,
           evaluation.output, evaluation.bridge);
         capture_dynamic_escape_backoff(trace, evaluation.backoff);
+        trace.forecast_evaluated = evaluation.forecast.evaluated;
+        trace.future_threatened = evaluation.forecast.future_threatened;
+        trace.forecast_risk_tier = evaluation.forecast.risk_tier;
+        trace.forecast_reason =
+          v2x_overtake_core::to_string(evaluation.forecast.reason);
+        trace.minimum_corridor_reserve_m =
+          evaluation.forecast.minimum_corridor_reserve_m;
+        trace.first_threat_distance_m =
+          evaluation.forecast.first_threat_distance_m;
         return evaluation;
       };
 
@@ -16047,56 +16132,82 @@ struct MPC
       dynamic_escape_blocked_failure_count =
         primary.backoff.consecutive_failures;
       dynamic_escape_blocked_remaining_sec = primary.backoff.remaining_sec;
+      dynamic_escape_alternate_trigger_reason =
+        v2x_overtake_core::to_string(primary.forecast.reason);
 
       const bool alternate_can_be_evaluated =
         v2x_overtake_core::should_try_dynamic_obstacle_lateral_escape_alternate(
         v2x_overtake_core::DynamicObstacleLateralEscapeAlternateRequest{
-          !primary_unusable, gap_planner != nullptr, use_gap_planner,
+          !primary_unusable, primary.forecast.future_threatened,
+          gap_planner != nullptr, use_gap_planner,
           use_low_speed_local_path, initial_side_sign});
       if (alternate_can_be_evaluated) {
         dynamic_escape_alternate_attempted = true;
-        gap_planner->reset_low_speed_targets();
+        dynamic_escape_proactive_alternate = !primary_unusable;
+        // The opposite branch is speculative. Running it on the live planner
+        // used to overwrite last_target_ey_ even when the branch was rejected,
+        // making the next cycle appear to change side without a commit.
+        auto alternate_planner = gap_planner->tactical_snapshot();
+        alternate_planner->reset_low_speed_targets();
         auto alternate = evaluate_dynamic_escape_candidate(
-          run_gap_planner(-initial_side_sign), -initial_side_sign,
+          run_gap_planner_with(*alternate_planner, -initial_side_sign),
+          -initial_side_sign,
           dynamic_escape_alternate_trace);
-        const bool alternate_usable =
-          alternate.output.active && alternate.output.feasible &&
-          alternate.bridge.feasible &&
-          alternate.side_sign == -initial_side_sign &&
-          !alternate.backoff.blocked;
-        if (alternate_usable) {
+        const auto branch_selection =
+          v2x_overtake_core::select_dynamic_obstacle_lateral_escape_branch(
+          v2x_overtake_core::DynamicObstacleLateralEscapeBranchSelectionRequest{
+            initial_side_sign, primary.forecast, true, alternate.side_sign,
+            alternate.forecast,
+            std::max(
+              0.0,
+              cfg.v2x_behavior.overtake_line.runtime_wall_preplan_reserve)});
+        dynamic_escape_branch_selection_reason =
+          v2x_overtake_core::to_string(branch_selection.reason);
+        if (branch_selection.valid && branch_selection.select_alternate) {
           planner_output = std::move(alternate.output);
           dynamic_escape_bridge = std::move(alternate.bridge);
           dynamic_escape_backoff = alternate.backoff;
           dynamic_escape_alternate_selected = true;
+          gap_planner->commit_selected_gap_plan(planner_output);
         } else {
           planner_output = std::move(primary.output);
-          planner_output.feasible = false;
-          planner_output.reject_gate = primary_backed_off ?
-            "tracking-solver-backoff" : "primary-candidate-unusable";
-          std::ostringstream reject;
-          if (primary_backed_off) {
-            reject << "tracking solver backoff side=" << initial_side_sign <<
-              " failures=" << dynamic_escape_blocked_failure_count <<
-              " remaining=" << std::fixed << std::setprecision(2) <<
-              dynamic_escape_blocked_remaining_sec << "s";
-          } else {
-            reject << "primary=" << primary.bridge.reason;
-          }
-          if (alternate.backoff.blocked) {
-            reject << "; alternate backoff=" << alternate.backoff.remaining_sec << "s";
-          } else if (!alternate.output.active || !alternate.output.feasible) {
-            reject << "; alternate=" << alternate.output.reject_reason;
-          } else if (!alternate.bridge.feasible) {
-            reject << "; alternate=" << alternate.bridge.reason;
-          } else {
-            reject << "; alternate side unavailable";
-          }
-          planner_output.reject_reason = reject.str();
           dynamic_escape_bridge = std::move(primary.bridge);
           dynamic_escape_backoff = primary.backoff;
+          if (primary_unusable) {
+            planner_output.feasible = false;
+            planner_output.reject_gate = primary_backed_off ?
+              "tracking-solver-backoff" : "primary-candidate-unusable";
+            std::ostringstream reject;
+            if (primary_backed_off) {
+              reject << "tracking solver backoff side=" << initial_side_sign <<
+                " failures=" << dynamic_escape_blocked_failure_count <<
+                " remaining=" << std::fixed << std::setprecision(2) <<
+                dynamic_escape_blocked_remaining_sec << "s";
+            } else {
+              reject << "primary=" << dynamic_escape_bridge.reason;
+            }
+            if (alternate.backoff.blocked) {
+              reject << "; alternate backoff=" << alternate.backoff.remaining_sec << "s";
+            } else if (!alternate.output.active || !alternate.output.feasible) {
+              reject << "; alternate=" << alternate.output.reject_reason;
+            } else if (!alternate.bridge.feasible) {
+              reject << "; alternate=" << alternate.bridge.reason;
+            } else {
+              reject << "; alternate side unavailable";
+            }
+            planner_output.reject_reason = reject.str();
+          }
         }
       } else {
+        const auto branch_selection =
+          v2x_overtake_core::select_dynamic_obstacle_lateral_escape_branch(
+          v2x_overtake_core::DynamicObstacleLateralEscapeBranchSelectionRequest{
+            initial_side_sign, primary.forecast, false, 0, {},
+            std::max(
+              0.0,
+              cfg.v2x_behavior.overtake_line.runtime_wall_preplan_reserve)});
+        dynamic_escape_branch_selection_reason =
+          v2x_overtake_core::to_string(branch_selection.reason);
         planner_output = std::move(primary.output);
         dynamic_escape_bridge = std::move(primary.bridge);
         dynamic_escape_backoff = primary.backoff;
@@ -16258,6 +16369,12 @@ struct MPC
       dynamic_escape_alternate_attempted;
     dynamic_escape_decision_trace.alternate_selected =
       dynamic_escape_alternate_selected;
+    dynamic_escape_decision_trace.proactive_alternate =
+      dynamic_escape_proactive_alternate;
+    dynamic_escape_decision_trace.alternate_trigger_reason =
+      dynamic_escape_alternate_trigger_reason;
+    dynamic_escape_decision_trace.branch_selection_reason =
+      dynamic_escape_branch_selection_reason;
     dynamic_escape_decision_trace.authority_active =
       dynamic_lateral_escape_authority.active;
     dynamic_escape_decision_trace.pass_through =

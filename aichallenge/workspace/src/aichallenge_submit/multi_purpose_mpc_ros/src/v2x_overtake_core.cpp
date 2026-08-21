@@ -12655,9 +12655,166 @@ bool should_try_dynamic_obstacle_lateral_escape_alternate(
   const DynamicObstacleLateralEscapeAlternateRequest & request) noexcept
 {
   return
-    !request.primary_usable && request.planner_available &&
+    (!request.primary_usable || request.primary_future_threatened) &&
+    request.planner_available &&
     request.gap_planner_enabled && !request.low_speed_local_path_active &&
     (request.primary_side_sign == -1 || request.primary_side_sign == 1);
+}
+
+DynamicObstacleLateralEscapeForecast
+forecast_dynamic_obstacle_lateral_escape_branch(
+  const DynamicObstacleLateralEscapeForecastRequest & request) noexcept
+{
+  constexpr double kReserveEpsilon = 1e-9;
+  DynamicObstacleLateralEscapeForecast result;
+  result.evaluated = request.evaluated;
+  result.candidate_usable = request.candidate_usable;
+  result.minimum_corridor_reserve_m = request.minimum_corridor_reserve_m;
+  if (!request.evaluated) {
+    return result;
+  }
+  if (!request.candidate_usable) {
+    result.future_threatened = true;
+    result.risk_tier = 4;
+    result.reason = DynamicObstacleLateralEscapeThreatReason::CandidateUnusable;
+    result.first_threat_distance_m = request.first_low_reserve_distance_m;
+    return result;
+  }
+  if (request.wall_margin_escape_used) {
+    result.future_threatened = true;
+    result.risk_tier = 3;
+    result.reason = DynamicObstacleLateralEscapeThreatReason::WallMarginEscape;
+    result.first_threat_distance_m = 0.0;
+    return result;
+  }
+  if (request.tracking_wall_contract_active) {
+    result.future_threatened = true;
+    result.risk_tier = 2;
+    result.reason = DynamicObstacleLateralEscapeThreatReason::TrackingWallContract;
+    result.first_threat_distance_m = 0.0;
+    return result;
+  }
+  const double required_reserve = std::max(0.0, request.required_corridor_reserve_m);
+  if (
+    std::isfinite(request.minimum_corridor_reserve_m) &&
+    request.minimum_corridor_reserve_m + kReserveEpsilon < required_reserve)
+  {
+    result.future_threatened = true;
+    result.risk_tier = 1;
+    result.reason = DynamicObstacleLateralEscapeThreatReason::CorridorReserve;
+    result.first_threat_distance_m = request.first_low_reserve_distance_m;
+  }
+  return result;
+}
+
+const char * to_string(
+  const DynamicObstacleLateralEscapeThreatReason reason) noexcept
+{
+  switch (reason) {
+    case DynamicObstacleLateralEscapeThreatReason::None:
+      return "none";
+    case DynamicObstacleLateralEscapeThreatReason::CandidateUnusable:
+      return "candidate-unusable";
+    case DynamicObstacleLateralEscapeThreatReason::WallMarginEscape:
+      return "wall-margin-escape";
+    case DynamicObstacleLateralEscapeThreatReason::TrackingWallContract:
+      return "tracking-wall-contract";
+    case DynamicObstacleLateralEscapeThreatReason::CorridorReserve:
+      return "corridor-reserve";
+  }
+  return "unknown";
+}
+
+DynamicObstacleLateralEscapeBranchSelection
+select_dynamic_obstacle_lateral_escape_branch(
+  const DynamicObstacleLateralEscapeBranchSelectionRequest & request) noexcept
+{
+  constexpr double kReserveEpsilon = 1e-9;
+  DynamicObstacleLateralEscapeBranchSelection result;
+  const bool primary_side_valid =
+    request.primary_side_sign == -1 || request.primary_side_sign == 1;
+  const bool alternate_side_valid =
+    request.alternate_side_sign == -request.primary_side_sign;
+  if (!primary_side_valid || (request.alternate_evaluated && !alternate_side_valid)) {
+    result.reason = DynamicObstacleLateralEscapeBranchSelectionReason::InvalidSide;
+    return result;
+  }
+
+  result.valid = true;
+  if (!request.primary.candidate_usable) {
+    if (request.alternate_evaluated && request.alternate.candidate_usable) {
+      result.select_alternate = true;
+      result.reason =
+        DynamicObstacleLateralEscapeBranchSelectionReason::PrimaryUnusable;
+    } else {
+      result.reason = request.alternate_evaluated ?
+        DynamicObstacleLateralEscapeBranchSelectionReason::AlternateUnusable :
+        DynamicObstacleLateralEscapeBranchSelectionReason::AlternateNotEvaluated;
+    }
+    return result;
+  }
+  if (!request.primary.future_threatened) {
+    result.reason = DynamicObstacleLateralEscapeBranchSelectionReason::PrimaryClear;
+    return result;
+  }
+  if (!request.alternate_evaluated) {
+    result.reason =
+      DynamicObstacleLateralEscapeBranchSelectionReason::AlternateNotEvaluated;
+    return result;
+  }
+  if (!request.alternate.candidate_usable) {
+    result.reason = DynamicObstacleLateralEscapeBranchSelectionReason::AlternateUnusable;
+    return result;
+  }
+  if (request.alternate.risk_tier < request.primary.risk_tier) {
+    result.select_alternate = true;
+    result.reason = DynamicObstacleLateralEscapeBranchSelectionReason::LowerRiskTier;
+    return result;
+  }
+  const double required_advantage =
+    std::max(0.0, request.minimum_reserve_advantage_m);
+  if (
+    request.alternate.risk_tier == request.primary.risk_tier &&
+    std::isfinite(request.alternate.minimum_corridor_reserve_m) &&
+    std::isfinite(request.primary.minimum_corridor_reserve_m) &&
+    request.alternate.minimum_corridor_reserve_m >=
+      request.primary.minimum_corridor_reserve_m + required_advantage +
+      kReserveEpsilon)
+  {
+    result.select_alternate = true;
+    result.reason =
+      DynamicObstacleLateralEscapeBranchSelectionReason::CorridorReserveAdvantage;
+    return result;
+  }
+  result.reason =
+    DynamicObstacleLateralEscapeBranchSelectionReason::NoMaterialAdvantage;
+  return result;
+}
+
+const char * to_string(
+  const DynamicObstacleLateralEscapeBranchSelectionReason reason) noexcept
+{
+  switch (reason) {
+    case DynamicObstacleLateralEscapeBranchSelectionReason::PrimaryKept:
+      return "primary-kept";
+    case DynamicObstacleLateralEscapeBranchSelectionReason::PrimaryClear:
+      return "primary-clear";
+    case DynamicObstacleLateralEscapeBranchSelectionReason::AlternateNotEvaluated:
+      return "alternate-not-evaluated";
+    case DynamicObstacleLateralEscapeBranchSelectionReason::AlternateUnusable:
+      return "alternate-unusable";
+    case DynamicObstacleLateralEscapeBranchSelectionReason::PrimaryUnusable:
+      return "primary-unusable";
+    case DynamicObstacleLateralEscapeBranchSelectionReason::LowerRiskTier:
+      return "lower-risk-tier";
+    case DynamicObstacleLateralEscapeBranchSelectionReason::CorridorReserveAdvantage:
+      return "corridor-reserve-advantage";
+    case DynamicObstacleLateralEscapeBranchSelectionReason::NoMaterialAdvantage:
+      return "no-material-advantage";
+    case DynamicObstacleLateralEscapeBranchSelectionReason::InvalidSide:
+      return "invalid-side";
+  }
+  return "unknown";
 }
 
 DynamicObstacleLateralEscapeSolverBackoffStatus

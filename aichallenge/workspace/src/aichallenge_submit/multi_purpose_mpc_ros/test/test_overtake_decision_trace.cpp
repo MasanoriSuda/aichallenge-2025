@@ -188,8 +188,51 @@ TEST(OvertakeDecisionTrace, EmitsOnCategoricalChangeButNotContinuousNoise) {
   EXPECT_TRUE(emitter.update(decision, 1.2).emit);
   decision.primary.planner_reject_gate = "reachable-bridge";
   EXPECT_TRUE(emitter.update(decision, 1.3).emit);
+  decision.primary.forecast_evaluated = true;
+  decision.primary.future_threatened = true;
+  decision.primary.forecast_risk_tier = 1;
+  decision.primary.forecast_reason = "corridor-reserve";
+  EXPECT_TRUE(emitter.update(decision, 1.4).emit);
+  decision.primary.minimum_corridor_reserve_m = 0.08;
+  decision.primary.first_threat_distance_m = 4.2;
+  EXPECT_FALSE(emitter.update(decision, 1.5).emit);
+  decision.proactive_alternate = true;
+  decision.alternate_trigger_reason = "corridor-reserve";
+  decision.branch_selection_reason = "lower-risk-tier";
+  EXPECT_TRUE(emitter.update(decision, 1.6).emit);
   EXPECT_FALSE(emitter.update(decision, 5.9).emit);
-  EXPECT_TRUE(emitter.update(decision, 6.3).emit);
+  EXPECT_TRUE(emitter.update(decision, 6.7).emit);
+}
+
+TEST(OvertakeDecisionTrace, FormatsPredictiveAlternateLifecycle) {
+  trace::DecisionTrace decision;
+  decision.attempt_id = 23U;
+  decision.target_id = "d2";
+  decision.requested = true;
+  decision.primary = ready_candidate(0, 1);
+  decision.primary.forecast_evaluated = true;
+  decision.primary.future_threatened = true;
+  decision.primary.forecast_risk_tier = 1;
+  decision.primary.forecast_reason = "corridor-reserve";
+  decision.primary.minimum_corridor_reserve_m = 0.08;
+  decision.primary.first_threat_distance_m = 4.5;
+  decision.alternate_attempted = true;
+  decision.alternate_selected = true;
+  decision.alternate = ready_candidate(-1, -1);
+  decision.alternate.forecast_evaluated = true;
+  decision.alternate.forecast_reason = "none";
+  decision.alternate.minimum_corridor_reserve_m = 0.24;
+  decision.proactive_alternate = true;
+  decision.alternate_trigger_reason = "corridor-reserve";
+  decision.branch_selection_reason = "lower-risk-tier";
+
+  const auto message = trace::format_decision_trace(decision);
+  EXPECT_NE(message.find("forecast=1/1"), std::string::npos);
+  EXPECT_NE(message.find("forecast_reason=corridor-reserve"), std::string::npos);
+  EXPECT_NE(message.find("min_reserve=0.08m"), std::string::npos);
+  EXPECT_NE(message.find("threat_distance=4.50m"), std::string::npos);
+  EXPECT_NE(message.find("proactive_alternate=1"), std::string::npos);
+  EXPECT_NE(message.find("branch_selection=lower-risk-tier"), std::string::npos);
 }
 
 TEST(OvertakeDecisionTrace, FormatsTrackingFailureAndRecovery) {

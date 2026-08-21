@@ -7430,17 +7430,99 @@ struct DynamicObstacleLateralEscapeSolverBackoffFailure
 struct DynamicObstacleLateralEscapeAlternateRequest
 {
   bool primary_usable{false};
+  bool primary_future_threatened{false};
   bool planner_available{false};
   bool gap_planner_enabled{false};
   bool low_speed_local_path_active{false};
   int primary_side_sign{0};
 };
 
-/// Retry the known opposite homotopy only when the primary lateral escape is
-/// unusable. An unresolved primary side is not expanded into a synchronous
-/// two-side search, which keeps callback cost bounded.
+/// Evaluate the known opposite homotopy when the primary lateral escape is
+/// unusable or its accepted horizon is already forecast to lose reserve. An
+/// unresolved primary side is not expanded into a synchronous two-side
+/// search, which keeps callback cost bounded.
 bool should_try_dynamic_obstacle_lateral_escape_alternate(
   const DynamicObstacleLateralEscapeAlternateRequest & request) noexcept;
+
+enum class DynamicObstacleLateralEscapeThreatReason
+{
+  None,
+  CandidateUnusable,
+  WallMarginEscape,
+  TrackingWallContract,
+  CorridorReserve,
+};
+
+struct DynamicObstacleLateralEscapeForecastRequest
+{
+  bool evaluated{false};
+  bool candidate_usable{false};
+  bool wall_margin_escape_used{false};
+  bool tracking_wall_contract_active{false};
+  double minimum_corridor_reserve_m{std::numeric_limits<double>::infinity()};
+  double first_low_reserve_distance_m{std::numeric_limits<double>::infinity()};
+  double required_corridor_reserve_m{0.0};
+};
+
+struct DynamicObstacleLateralEscapeForecast
+{
+  bool evaluated{false};
+  bool candidate_usable{false};
+  bool future_threatened{false};
+  int risk_tier{0};
+  DynamicObstacleLateralEscapeThreatReason reason{
+    DynamicObstacleLateralEscapeThreatReason::None};
+  double minimum_corridor_reserve_m{std::numeric_limits<double>::infinity()};
+  double first_threat_distance_m{std::numeric_limits<double>::infinity()};
+};
+
+/// Classify an already generated horizon without changing planner state.
+/// Hard unusability outranks wall-contract pressure, which outranks a narrow
+/// but still executable corridor.
+DynamicObstacleLateralEscapeForecast
+forecast_dynamic_obstacle_lateral_escape_branch(
+  const DynamicObstacleLateralEscapeForecastRequest & request) noexcept;
+const char * to_string(DynamicObstacleLateralEscapeThreatReason reason) noexcept;
+
+enum class DynamicObstacleLateralEscapeBranchSelectionReason
+{
+  PrimaryKept,
+  PrimaryClear,
+  AlternateNotEvaluated,
+  AlternateUnusable,
+  PrimaryUnusable,
+  LowerRiskTier,
+  CorridorReserveAdvantage,
+  NoMaterialAdvantage,
+  InvalidSide,
+};
+
+struct DynamicObstacleLateralEscapeBranchSelectionRequest
+{
+  int primary_side_sign{0};
+  DynamicObstacleLateralEscapeForecast primary;
+  bool alternate_evaluated{false};
+  int alternate_side_sign{0};
+  DynamicObstacleLateralEscapeForecast alternate;
+  double minimum_reserve_advantage_m{0.0};
+};
+
+struct DynamicObstacleLateralEscapeBranchSelection
+{
+  bool valid{false};
+  bool select_alternate{false};
+  DynamicObstacleLateralEscapeBranchSelectionReason reason{
+    DynamicObstacleLateralEscapeBranchSelectionReason::PrimaryKept};
+};
+
+/// Select the speculative opposite branch only when it is materially safer.
+/// Equal-risk candidates keep the primary unless the alternate has an
+/// explicit reserve advantage, preventing 40 Hz left/right chatter.
+DynamicObstacleLateralEscapeBranchSelection
+select_dynamic_obstacle_lateral_escape_branch(
+  const DynamicObstacleLateralEscapeBranchSelectionRequest & request) noexcept;
+const char * to_string(
+  DynamicObstacleLateralEscapeBranchSelectionReason reason) noexcept;
 
 /// Remember tracking-solver failures per target and pass side.
 ///

@@ -534,6 +534,18 @@ using multi_purpose_mpc_ros::v2x_overtake_core::
   DynamicObstacleLateralEscapeAlternateRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   should_try_dynamic_obstacle_lateral_escape_alternate;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  DynamicObstacleLateralEscapeThreatReason;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  DynamicObstacleLateralEscapeForecastRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  forecast_dynamic_obstacle_lateral_escape_branch;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  DynamicObstacleLateralEscapeBranchSelectionReason;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  DynamicObstacleLateralEscapeBranchSelectionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  select_dynamic_obstacle_lateral_escape_branch;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_execute_dynamic_mission_wait_runtime;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_dynamic_mission_wait;
 using multi_purpose_mpc_ros::v2x_overtake_core::
@@ -13535,6 +13547,92 @@ TEST(V2XOvertakeCoreDynamicEscape, RetriesOnlyKnownOppositeSide)
 
   request.low_speed_local_path_active = true;
   EXPECT_FALSE(should_try_dynamic_obstacle_lateral_escape_alternate(request));
+}
+
+TEST(V2XOvertakeCoreDynamicEscape, EvaluatesAlternateBeforePrimaryHardFailure)
+{
+  DynamicObstacleLateralEscapeAlternateRequest request;
+  request.primary_usable = true;
+  request.primary_future_threatened = true;
+  request.planner_available = true;
+  request.gap_planner_enabled = true;
+  request.primary_side_sign = -1;
+
+  EXPECT_TRUE(should_try_dynamic_obstacle_lateral_escape_alternate(request));
+  request.primary_future_threatened = false;
+  EXPECT_FALSE(should_try_dynamic_obstacle_lateral_escape_alternate(request));
+}
+
+TEST(V2XOvertakeCoreDynamicEscape, ClassifiesFutureBranchThreats)
+{
+  DynamicObstacleLateralEscapeForecastRequest request;
+  request.evaluated = true;
+  request.candidate_usable = true;
+  request.minimum_corridor_reserve_m = 0.08;
+  request.first_low_reserve_distance_m = 4.5;
+  request.required_corridor_reserve_m = 0.10;
+
+  auto forecast = forecast_dynamic_obstacle_lateral_escape_branch(request);
+  EXPECT_TRUE(forecast.future_threatened);
+  EXPECT_EQ(
+    forecast.reason,
+    DynamicObstacleLateralEscapeThreatReason::CorridorReserve);
+  EXPECT_DOUBLE_EQ(forecast.first_threat_distance_m, 4.5);
+
+  request.minimum_corridor_reserve_m = 0.20;
+  request.tracking_wall_contract_active = true;
+  forecast = forecast_dynamic_obstacle_lateral_escape_branch(request);
+  EXPECT_EQ(
+    forecast.reason,
+    DynamicObstacleLateralEscapeThreatReason::TrackingWallContract);
+
+  request.tracking_wall_contract_active = false;
+  request.wall_margin_escape_used = true;
+  forecast = forecast_dynamic_obstacle_lateral_escape_branch(request);
+  EXPECT_EQ(
+    forecast.reason,
+    DynamicObstacleLateralEscapeThreatReason::WallMarginEscape);
+  EXPECT_DOUBLE_EQ(forecast.first_threat_distance_m, 0.0);
+}
+
+TEST(V2XOvertakeCoreDynamicEscape, SelectsOnlyMateriallySaferAlternate)
+{
+  DynamicObstacleLateralEscapeBranchSelectionRequest request;
+  request.primary_side_sign = 1;
+  request.primary.evaluated = true;
+  request.primary.candidate_usable = true;
+  request.primary.future_threatened = true;
+  request.primary.risk_tier = 3;
+  request.primary.minimum_corridor_reserve_m = 0.05;
+  request.alternate_evaluated = true;
+  request.alternate_side_sign = -1;
+  request.alternate.evaluated = true;
+  request.alternate.candidate_usable = true;
+  request.alternate.risk_tier = 0;
+  request.alternate.minimum_corridor_reserve_m = 0.20;
+  request.minimum_reserve_advantage_m = 0.10;
+
+  auto selection = select_dynamic_obstacle_lateral_escape_branch(request);
+  ASSERT_TRUE(selection.valid);
+  EXPECT_TRUE(selection.select_alternate);
+  EXPECT_EQ(
+    selection.reason,
+    DynamicObstacleLateralEscapeBranchSelectionReason::LowerRiskTier);
+
+  request.alternate.risk_tier = request.primary.risk_tier;
+  request.alternate.minimum_corridor_reserve_m = 0.11;
+  selection = select_dynamic_obstacle_lateral_escape_branch(request);
+  EXPECT_FALSE(selection.select_alternate);
+  EXPECT_EQ(
+    selection.reason,
+    DynamicObstacleLateralEscapeBranchSelectionReason::NoMaterialAdvantage);
+
+  request.alternate.minimum_corridor_reserve_m = 0.16;
+  selection = select_dynamic_obstacle_lateral_escape_branch(request);
+  EXPECT_TRUE(selection.select_alternate);
+  EXPECT_EQ(
+    selection.reason,
+    DynamicObstacleLateralEscapeBranchSelectionReason::CorridorReserveAdvantage);
 }
 
 TEST(V2XOvertakeCoreDynamicMissionWait, HoldsUntilFreshCurrentOrAlternatePlanExists)

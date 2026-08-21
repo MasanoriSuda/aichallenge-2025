@@ -458,6 +458,80 @@ private:
   bool previous_stop_required_{false};
 };
 
+enum class DynamicEscapeAttemptReason {
+  Inactive,
+  Started,
+  PlannerRequested,
+  RequestGapHeld,
+  TargetLossGrace,
+  TargetLost,
+  TargetChanged,
+  ExplicitRelease,
+};
+
+const char * to_string(DynamicEscapeAttemptReason reason) noexcept;
+
+/// One Dynamic Escape attempt represents an encounter with one relevant
+/// moving obstacle, not one solver/candidate cycle.  Planner availability may
+/// legitimately flicker while a branch is quarantined or rebuilt, so it must
+/// not own the attempt lifetime.
+struct DynamicEscapeAttemptRequest {
+  bool planner_requested{false};
+  bool target_relevant{false};
+  bool explicit_release{false};
+  std::string target_id;
+  double now_sec{std::numeric_limits<double>::quiet_NaN()};
+  double target_loss_grace_sec{0.50};
+};
+
+struct DynamicEscapeAttemptResolution {
+  std::uint64_t attempt_id{0U};
+  bool active{false};
+  bool started{false};
+  bool released{false};
+  bool retargeted{false};
+  bool held_without_request{false};
+  bool state_changed{false};
+  std::string target_id;
+  std::string previous_target_id;
+  int lifetime_cycles{0};
+  int planner_request_cycles{0};
+  int request_gap_cycles{0};
+  double target_loss_age_sec{std::numeric_limits<double>::infinity()};
+  double target_loss_grace_sec{0.50};
+  DynamicEscapeAttemptReason reason{DynamicEscapeAttemptReason::Inactive};
+};
+
+class DynamicEscapeAttemptTracker {
+public:
+  DynamicEscapeAttemptResolution update(
+    const DynamicEscapeAttemptRequest & request) noexcept;
+  bool active() const noexcept;
+  std::uint64_t attempt_id() const noexcept;
+  const std::string & target_id() const noexcept;
+  void reset() noexcept;
+
+private:
+  std::uint64_t allocate_attempt_id() noexcept;
+
+  std::uint64_t next_attempt_id_{1U};
+  std::uint64_t attempt_id_{0U};
+  bool active_{false};
+  std::string target_id_;
+  double last_target_relevant_sec_{
+    -std::numeric_limits<double>::infinity()};
+  int lifetime_cycles_{0};
+  int planner_request_cycles_{0};
+  int request_gap_cycles_{0};
+  DynamicEscapeAttemptReason previous_reason_{
+    DynamicEscapeAttemptReason::Inactive};
+};
+
+std::string format_dynamic_escape_attempt_trace(
+  const DynamicEscapeAttemptRequest & request,
+  const DynamicEscapeAttemptResolution & resolution,
+  int waypoint_id);
+
 enum class DynamicEscapeExitReason {
   Inactive,
   TargetBlocking,

@@ -824,6 +824,134 @@ TEST(OvertakeExecutionOrchestrator, LabelsDynamicEscapeExitAdmissionScope)
     "dynamic-escape-exit");
 }
 
+TEST(OvertakeExecutionOrchestrator, KeepsAttemptAcrossSameTargetRequestGap)
+{
+  orchestrator::DynamicEscapeAttemptTracker tracker;
+  orchestrator::DynamicEscapeAttemptRequest request;
+  request.planner_requested = true;
+  request.target_relevant = true;
+  request.target_id = "d2";
+  request.now_sec = 10.0;
+
+  const auto started = tracker.update(request);
+  ASSERT_TRUE(started.started);
+  ASSERT_TRUE(started.active);
+  ASSERT_EQ(started.attempt_id, 1U);
+
+  request.planner_requested = false;
+  request.now_sec = 10.025;
+  const auto held = tracker.update(request);
+  EXPECT_TRUE(held.active);
+  EXPECT_TRUE(held.held_without_request);
+  EXPECT_FALSE(held.started);
+  EXPECT_FALSE(held.released);
+  EXPECT_EQ(held.attempt_id, started.attempt_id);
+  EXPECT_EQ(held.request_gap_cycles, 1);
+  EXPECT_EQ(
+    held.reason,
+    orchestrator::DynamicEscapeAttemptReason::RequestGapHeld);
+
+  request.planner_requested = true;
+  request.now_sec = 10.050;
+  const auto resumed = tracker.update(request);
+  EXPECT_TRUE(resumed.active);
+  EXPECT_FALSE(resumed.started);
+  EXPECT_EQ(resumed.attempt_id, started.attempt_id);
+  EXPECT_EQ(resumed.planner_request_cycles, 2);
+}
+
+TEST(OvertakeExecutionOrchestrator, ReleasesAttemptOnlyAfterTargetLossGrace)
+{
+  orchestrator::DynamicEscapeAttemptTracker tracker;
+  orchestrator::DynamicEscapeAttemptRequest request;
+  request.planner_requested = true;
+  request.target_relevant = true;
+  request.target_id = "d2";
+  request.now_sec = 20.0;
+  request.target_loss_grace_sec = 0.50;
+  const auto started = tracker.update(request);
+  ASSERT_TRUE(started.active);
+
+  request.planner_requested = false;
+  request.target_relevant = false;
+  request.target_id.clear();
+  request.now_sec = 20.40;
+  const auto grace = tracker.update(request);
+  EXPECT_TRUE(grace.active);
+  EXPECT_FALSE(grace.released);
+  EXPECT_EQ(grace.attempt_id, started.attempt_id);
+  EXPECT_NEAR(grace.target_loss_age_sec, 0.40, 1e-9);
+  EXPECT_EQ(
+    grace.reason,
+    orchestrator::DynamicEscapeAttemptReason::TargetLossGrace);
+
+  request.now_sec = 20.51;
+  const auto released = tracker.update(request);
+  EXPECT_FALSE(released.active);
+  EXPECT_TRUE(released.released);
+  EXPECT_EQ(released.attempt_id, started.attempt_id);
+  EXPECT_EQ(released.target_id, "d2");
+  EXPECT_EQ(
+    released.reason,
+    orchestrator::DynamicEscapeAttemptReason::TargetLost);
+  EXPECT_FALSE(tracker.active());
+}
+
+TEST(OvertakeExecutionOrchestrator, RetargetsAttemptAtomically)
+{
+  orchestrator::DynamicEscapeAttemptTracker tracker;
+  orchestrator::DynamicEscapeAttemptRequest request;
+  request.planner_requested = true;
+  request.target_relevant = true;
+  request.target_id = "d2";
+  request.now_sec = 30.0;
+  const auto first = tracker.update(request);
+  ASSERT_EQ(first.attempt_id, 1U);
+
+  request.target_id = "d3";
+  request.now_sec = 30.1;
+  const auto retargeted = tracker.update(request);
+  EXPECT_TRUE(retargeted.active);
+  EXPECT_TRUE(retargeted.started);
+  EXPECT_TRUE(retargeted.released);
+  EXPECT_TRUE(retargeted.retargeted);
+  EXPECT_EQ(retargeted.previous_target_id, "d2");
+  EXPECT_EQ(retargeted.target_id, "d3");
+  EXPECT_EQ(retargeted.attempt_id, 2U);
+  EXPECT_EQ(
+    retargeted.reason,
+    orchestrator::DynamicEscapeAttemptReason::TargetChanged);
+}
+
+TEST(OvertakeExecutionOrchestrator, FormatsDynamicEscapeAttemptLifecycle)
+{
+  orchestrator::DynamicEscapeAttemptRequest request;
+  request.planner_requested = false;
+  request.target_relevant = true;
+  request.target_id = "d2";
+  request.target_loss_grace_sec = 0.50;
+  orchestrator::DynamicEscapeAttemptResolution resolution;
+  resolution.attempt_id = 41U;
+  resolution.active = true;
+  resolution.held_without_request = true;
+  resolution.target_id = "d2";
+  resolution.lifetime_cycles = 16;
+  resolution.planner_request_cycles = 6;
+  resolution.request_gap_cycles = 10;
+  resolution.target_loss_grace_sec = 0.50;
+  resolution.reason =
+    orchestrator::DynamicEscapeAttemptReason::RequestGapHeld;
+
+  const auto message = orchestrator::format_dynamic_escape_attempt_trace(
+    request, resolution, 38);
+  EXPECT_NE(message.find("event=heartbeat"), std::string::npos);
+  EXPECT_NE(message.find("reason=request-gap-held"), std::string::npos);
+  EXPECT_NE(message.find("attempt=41"), std::string::npos);
+  EXPECT_NE(message.find("target=d2"), std::string::npos);
+  EXPECT_NE(message.find("cycles=16/request=6/gap=10"), std::string::npos);
+  EXPECT_NE(message.find("wp_id=38"), std::string::npos);
+}
+
 TEST(OvertakeExecutionOrchestrator, HoldsDynamicEscapeExitForBlockingTarget)
 {
   orchestrator::DynamicEscapeExitGate gate;

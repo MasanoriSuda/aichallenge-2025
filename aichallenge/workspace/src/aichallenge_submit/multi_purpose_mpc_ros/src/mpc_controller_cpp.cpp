@@ -1509,6 +1509,7 @@ struct V2XBehaviorConfig
   double dynamic_obstacle_lateral_escape_min_shift{0.10};
   double dynamic_obstacle_lateral_escape_lateral_accel_reserve_ratio{0.80};
   double dynamic_obstacle_lateral_escape_opposite_transition_distance{6.0};
+  double dynamic_obstacle_lateral_escape_attempt_target_loss_grace_sec{0.50};
   double dynamic_obstacle_lateral_escape_solver_quarantine_sec{0.50};
   double dynamic_obstacle_lateral_escape_solver_backoff_max_sec{4.0};
   double dynamic_obstacle_lateral_escape_solver_backoff_reset_sec{8.0};
@@ -5661,14 +5662,8 @@ struct MPC
     snapshot->extended_right_branch_solver_context_ =
       extended_right_branch_solver_context_;
     snapshot->next_overtake_episode_id_ = next_overtake_episode_id_;
-    snapshot->next_dynamic_obstacle_lateral_escape_attempt_id_ =
-      next_dynamic_obstacle_lateral_escape_attempt_id_;
-    snapshot->dynamic_obstacle_lateral_escape_attempt_id_ =
-      dynamic_obstacle_lateral_escape_attempt_id_;
-    snapshot->dynamic_obstacle_lateral_escape_attempt_active_ =
-      dynamic_obstacle_lateral_escape_attempt_active_;
-    snapshot->dynamic_obstacle_lateral_escape_attempt_target_id_ =
-      dynamic_obstacle_lateral_escape_attempt_target_id_;
+    snapshot->dynamic_obstacle_lateral_escape_attempt_tracker_ =
+      dynamic_obstacle_lateral_escape_attempt_tracker_;
     snapshot->last_overtake_line_transition_action_ =
       last_overtake_line_transition_action_;
     snapshot->overtake_entry_speed_ = overtake_entry_speed_;
@@ -5864,6 +5859,9 @@ struct MPC
     clear_dynamic_obstacle_lateral_escape_tracking_qualification();
     dynamic_obstacle_lateral_escape_solver_backoff_.reset();
     dynamic_obstacle_lateral_escape_trace_emitter_.reset();
+    dynamic_obstacle_lateral_escape_attempt_tracker_.reset();
+    dynamic_obstacle_lateral_escape_attempt_last_log_sec_ =
+      -std::numeric_limits<double>::infinity();
   }
 
   void clear_dynamic_obstacle_lateral_escape_tracking_qualification() noexcept
@@ -16305,26 +16303,41 @@ struct MPC
       GapPlannerOutput{};
     const bool dynamic_escape_planner_requested =
       behavior_output.dynamic_obstacle_lateral_escape_planner_requested;
-    if (!dynamic_escape_planner_requested) {
-      dynamic_obstacle_lateral_escape_attempt_active_ = false;
-      dynamic_obstacle_lateral_escape_attempt_target_id_.clear();
-      dynamic_obstacle_lateral_escape_attempt_id_ = 0U;
-    } else if (
-      !dynamic_obstacle_lateral_escape_attempt_active_ ||
-      dynamic_obstacle_lateral_escape_attempt_target_id_ !=
-      behavior_output.dynamic_obstacle_cruise_target_id)
-    {
-      dynamic_obstacle_lateral_escape_attempt_active_ = true;
-      dynamic_obstacle_lateral_escape_attempt_target_id_ =
-        behavior_output.dynamic_obstacle_cruise_target_id;
-      dynamic_obstacle_lateral_escape_attempt_id_ =
-        next_dynamic_obstacle_lateral_escape_attempt_id_++;
-      if (next_dynamic_obstacle_lateral_escape_attempt_id_ == 0U) {
-        next_dynamic_obstacle_lateral_escape_attempt_id_ = 1U;
-      }
-    }
+    const overtake_orchestrator::DynamicEscapeAttemptRequest
+      dynamic_escape_attempt_request{
+      dynamic_escape_planner_requested,
+      behavior_output.dynamic_obstacle_cruise_authority_active,
+      overtake_line_state_.phase == OvertakeLinePhase::Recovery ||
+      !v2x_race_session_active_,
+      behavior_output.dynamic_obstacle_cruise_target_id,
+      now_sec,
+      cfg.v2x_behavior.
+      dynamic_obstacle_lateral_escape_attempt_target_loss_grace_sec};
+    const auto dynamic_escape_attempt =
+      dynamic_obstacle_lateral_escape_attempt_tracker_.update(
+      dynamic_escape_attempt_request);
     behavior_output.dynamic_obstacle_lateral_escape_attempt_id =
-      dynamic_obstacle_lateral_escape_attempt_id_;
+      dynamic_escape_attempt.attempt_id;
+    const bool dynamic_escape_attempt_immediate_log =
+      dynamic_escape_attempt.started || dynamic_escape_attempt.released ||
+      dynamic_escape_attempt.retargeted;
+    const double dynamic_escape_attempt_log_period_sec =
+      std::max(2.0, cfg.v2x_behavior.debug_log_period_sec);
+    const bool dynamic_escape_attempt_heartbeat =
+      cfg.v2x_behavior.debug_log_enabled && dynamic_escape_attempt.active &&
+      (!std::isfinite(dynamic_obstacle_lateral_escape_attempt_last_log_sec_) ||
+      now_sec - dynamic_obstacle_lateral_escape_attempt_last_log_sec_ >=
+      dynamic_escape_attempt_log_period_sec);
+    if (
+      !mpcc_lite_async_worker_context_ &&
+      (dynamic_escape_attempt_immediate_log || dynamic_escape_attempt_heartbeat))
+    {
+      const auto trace = overtake_orchestrator::format_dynamic_escape_attempt_trace(
+        dynamic_escape_attempt_request, dynamic_escape_attempt,
+        model != nullptr ? model->wp_id : -1);
+      RCLCPP_INFO(rclcpp::get_logger("mpc_controller"), "%s", trace.c_str());
+      dynamic_obstacle_lateral_escape_attempt_last_log_sec_ = now_sec;
+    }
     DynamicObstacleLateralEscapeBridgeResult dynamic_escape_bridge;
     v2x_overtake_core::DynamicObstacleLateralEscapeSolverBackoffStatus
     dynamic_escape_backoff;
@@ -21174,10 +21187,10 @@ struct MPC
   double mpcc_lite_async_last_target_provenance_lateral_delta_m_{
     std::numeric_limits<double>::quiet_NaN()};
   std::uint64_t next_overtake_episode_id_{1U};
-  std::uint64_t next_dynamic_obstacle_lateral_escape_attempt_id_{1U};
-  std::uint64_t dynamic_obstacle_lateral_escape_attempt_id_{0U};
-  bool dynamic_obstacle_lateral_escape_attempt_active_{false};
-  std::string dynamic_obstacle_lateral_escape_attempt_target_id_;
+  overtake_orchestrator::DynamicEscapeAttemptTracker
+  dynamic_obstacle_lateral_escape_attempt_tracker_;
+  double dynamic_obstacle_lateral_escape_attempt_last_log_sec_{
+    -std::numeric_limits<double>::infinity()};
   v2x_overtake_core::OvertakeLineTransitionAction last_overtake_line_transition_action_{
     v2x_overtake_core::OvertakeLineTransitionAction::None};
   std::optional<double> overtake_entry_speed_;
@@ -41001,6 +41014,10 @@ Config load_config(const std::string & path)
     mpc["v2x_dynamic_obstacle_lateral_escape_opposite_transition_distance"] ?
     mpc["v2x_dynamic_obstacle_lateral_escape_opposite_transition_distance"].as<double>() :
     6.0;
+  cfg.mpc.v2x_behavior.dynamic_obstacle_lateral_escape_attempt_target_loss_grace_sec =
+    mpc["v2x_dynamic_obstacle_lateral_escape_attempt_target_loss_grace_sec"] ?
+    mpc["v2x_dynamic_obstacle_lateral_escape_attempt_target_loss_grace_sec"].as<double>() :
+    0.50;
   cfg.mpc.v2x_behavior.dynamic_obstacle_lateral_escape_solver_quarantine_sec =
     mpc["v2x_dynamic_obstacle_lateral_escape_solver_quarantine_sec"] ?
     mpc["v2x_dynamic_obstacle_lateral_escape_solver_quarantine_sec"].as<double>() : 0.50;
@@ -41039,6 +41056,17 @@ Config load_config(const std::string & path)
     throw std::runtime_error(
             "mpc.v2x_dynamic_obstacle_lateral_escape_opposite_transition_distance "
             "must be finite and positive");
+  }
+  if (
+    !std::isfinite(
+      cfg.mpc.v2x_behavior.
+      dynamic_obstacle_lateral_escape_attempt_target_loss_grace_sec) ||
+    cfg.mpc.v2x_behavior.
+    dynamic_obstacle_lateral_escape_attempt_target_loss_grace_sec < 0.0)
+  {
+    throw std::runtime_error(
+            "mpc.v2x_dynamic_obstacle_lateral_escape_attempt_target_loss_grace_sec "
+            "must be finite and non-negative");
   }
   if (
     !std::isfinite(
@@ -42525,7 +42553,8 @@ public:
         get_logger(),
         "V2X all-vehicle dynamic-obstacle Cruise authority: %s, "
         "lateral_escape=%s/min_shift=%.2f m/reachability_reserve=%.2f/"
-        "opposite_transition=%.2f m/solver_backoff=%.2f..%.2f s/reset=%.2f s, "
+        "opposite_transition=%.2f m/attempt_target_loss_grace=%.2f s/"
+        "solver_backoff=%.2f..%.2f s/reset=%.2f s, "
         "slow_confirmation_max_speed=%.2f m/s, "
         "activation_horizon=%.2f s, min_closing=%.2f m/s, scan_distance=%.2f m",
         mpc_cfg_.v2x_behavior.dynamic_obstacle_cruise_authority_enabled ?
@@ -42536,6 +42565,8 @@ public:
         mpc_cfg_.v2x_behavior.dynamic_obstacle_lateral_escape_lateral_accel_reserve_ratio,
         mpc_cfg_.v2x_behavior.
         dynamic_obstacle_lateral_escape_opposite_transition_distance,
+        mpc_cfg_.v2x_behavior.
+        dynamic_obstacle_lateral_escape_attempt_target_loss_grace_sec,
         mpc_cfg_.v2x_behavior.dynamic_obstacle_lateral_escape_solver_quarantine_sec,
         mpc_cfg_.v2x_behavior.dynamic_obstacle_lateral_escape_solver_backoff_max_sec,
         mpc_cfg_.v2x_behavior.dynamic_obstacle_lateral_escape_solver_backoff_reset_sec,

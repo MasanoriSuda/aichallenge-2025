@@ -1600,6 +1600,17 @@ collision corridorと横加速度reserveの交差内へsoft targetをclipし、h
 連続target profileが作れない候補はexact tracking QPへ投入しない。hard collision corridor、
 壁clearance、footprint preflightは緩和しない。
 
+Dynamic Escapeの`attempt_id`は、planner requestやsolver採否の1周期ではなく、同一targetとの
+遭遇を表す。同一targetがrelevantな間はplanner requestが一時的にfalseへ落ちてもIDを保持し、
+target観測が外れた場合も
+`v2x_dynamic_obstacle_lateral_escape_attempt_target_loss_grace_sec`以内は同一遭遇として扱う。
+grace超過、target変更、race session終了、OvertakeLine Recoveryへの明示移行でattemptを終了する。
+ただし、この継続は戦術コンテキストだけを保持するもので、解済みpath、worker result、V2X予測、
+wall certificateの有効期限を延長しない。ライフサイクルは
+`Dynamic escape attempt lifecycle`ログの`event`、`attempt`、`target`、`reason`、
+`request_gap_count`、`target_loss_count`で追跡する。現行grace 0.50秒は2025 AWSIM競技
+シミュレーション向けの暫定値であり、2026公式仕様または実車安全仕様ではない。
+
 `Overtake decision trace: stage=tracking`は`connected_profile`、`segment_shift`、
 `required_ay`、`solver_formulation`、`formulation_source`、`workspace_reset`を出力する。
 これにより、幾何候補不成立、profile接続不成立、MPC/MPCC preparation縮退、OSQP数値収束

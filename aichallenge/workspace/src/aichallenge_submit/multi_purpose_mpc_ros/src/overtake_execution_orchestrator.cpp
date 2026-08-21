@@ -1097,6 +1097,217 @@ void WallPathAdmissionGate::reset() noexcept
   previous_stop_required_ = false;
 }
 
+const char * to_string(const DynamicEscapeAttemptReason reason) noexcept
+{
+  switch (reason) {
+    case DynamicEscapeAttemptReason::Inactive: return "inactive";
+    case DynamicEscapeAttemptReason::Started: return "started";
+    case DynamicEscapeAttemptReason::PlannerRequested: return "planner-requested";
+    case DynamicEscapeAttemptReason::RequestGapHeld: return "request-gap-held";
+    case DynamicEscapeAttemptReason::TargetLossGrace: return "target-loss-grace";
+    case DynamicEscapeAttemptReason::TargetLost: return "target-lost";
+    case DynamicEscapeAttemptReason::TargetChanged: return "target-changed";
+    case DynamicEscapeAttemptReason::ExplicitRelease: return "explicit-release";
+  }
+  return "unknown";
+}
+
+DynamicEscapeAttemptResolution DynamicEscapeAttemptTracker::update(
+  const DynamicEscapeAttemptRequest & request) noexcept
+{
+  DynamicEscapeAttemptResolution resolution;
+  resolution.target_loss_grace_sec =
+    std::isfinite(request.target_loss_grace_sec) ?
+    std::max(0.0, request.target_loss_grace_sec) : 0.0;
+  const bool target_relevant =
+    request.target_relevant && !request.target_id.empty();
+
+  const auto fill_active_state = [&]() {
+      resolution.attempt_id = attempt_id_;
+      resolution.active = active_;
+      resolution.target_id = target_id_;
+      resolution.lifetime_cycles = lifetime_cycles_;
+      resolution.planner_request_cycles = planner_request_cycles_;
+      resolution.request_gap_cycles = request_gap_cycles_;
+    };
+  const auto release = [&](const DynamicEscapeAttemptReason reason) {
+      resolution.attempt_id = attempt_id_;
+      resolution.previous_target_id = target_id_;
+      resolution.target_id = target_id_;
+      resolution.released = active_;
+      resolution.lifetime_cycles = lifetime_cycles_;
+      resolution.planner_request_cycles = planner_request_cycles_;
+      resolution.request_gap_cycles = request_gap_cycles_;
+      active_ = false;
+      attempt_id_ = 0U;
+      target_id_.clear();
+      last_target_relevant_sec_ = -std::numeric_limits<double>::infinity();
+      lifetime_cycles_ = 0;
+      planner_request_cycles_ = 0;
+      request_gap_cycles_ = 0;
+      resolution.reason = reason;
+      resolution.state_changed = resolution.released || reason != previous_reason_;
+      previous_reason_ = reason;
+    };
+  const auto start = [&](const bool retargeted) {
+      active_ = true;
+      attempt_id_ = allocate_attempt_id();
+      target_id_ = request.target_id;
+      last_target_relevant_sec_ = request.now_sec;
+      lifetime_cycles_ = 1;
+      planner_request_cycles_ = 1;
+      request_gap_cycles_ = 0;
+      resolution.started = true;
+      resolution.retargeted = retargeted;
+      resolution.reason = retargeted ?
+        DynamicEscapeAttemptReason::TargetChanged :
+        DynamicEscapeAttemptReason::Started;
+      resolution.state_changed = true;
+      fill_active_state();
+      previous_reason_ = resolution.reason;
+    };
+
+  if (request.explicit_release) {
+    release(DynamicEscapeAttemptReason::ExplicitRelease);
+    return resolution;
+  }
+
+  if (!active_) {
+    if (request.planner_requested && target_relevant) {
+      start(false);
+    } else {
+      resolution.reason = DynamicEscapeAttemptReason::Inactive;
+      resolution.state_changed =
+        previous_reason_ != DynamicEscapeAttemptReason::Inactive;
+      previous_reason_ = resolution.reason;
+    }
+    return resolution;
+  }
+
+  if (target_relevant && request.target_id != target_id_) {
+    resolution.previous_target_id = target_id_;
+    resolution.released = true;
+    if (request.planner_requested) {
+      start(true);
+      resolution.released = true;
+      return resolution;
+    }
+    release(DynamicEscapeAttemptReason::TargetChanged);
+    return resolution;
+  }
+
+  if (target_relevant) {
+    if (std::isfinite(request.now_sec)) {
+      last_target_relevant_sec_ = request.now_sec;
+    }
+    ++lifetime_cycles_;
+    if (request.planner_requested) {
+      ++planner_request_cycles_;
+      resolution.reason = DynamicEscapeAttemptReason::PlannerRequested;
+    } else {
+      ++request_gap_cycles_;
+      resolution.held_without_request = true;
+      resolution.reason = DynamicEscapeAttemptReason::RequestGapHeld;
+    }
+    resolution.state_changed = resolution.reason != previous_reason_;
+    fill_active_state();
+    previous_reason_ = resolution.reason;
+    return resolution;
+  }
+
+  if (
+    std::isfinite(request.now_sec) &&
+    std::isfinite(last_target_relevant_sec_) &&
+    request.now_sec >= last_target_relevant_sec_)
+  {
+    resolution.target_loss_age_sec =
+      request.now_sec - last_target_relevant_sec_;
+  }
+  if (resolution.target_loss_age_sec <= resolution.target_loss_grace_sec) {
+    ++lifetime_cycles_;
+    ++request_gap_cycles_;
+    resolution.held_without_request = true;
+    resolution.reason = DynamicEscapeAttemptReason::TargetLossGrace;
+    resolution.state_changed = resolution.reason != previous_reason_;
+    fill_active_state();
+    previous_reason_ = resolution.reason;
+    return resolution;
+  }
+
+  release(DynamicEscapeAttemptReason::TargetLost);
+  return resolution;
+}
+
+bool DynamicEscapeAttemptTracker::active() const noexcept
+{
+  return active_;
+}
+
+std::uint64_t DynamicEscapeAttemptTracker::attempt_id() const noexcept
+{
+  return attempt_id_;
+}
+
+const std::string & DynamicEscapeAttemptTracker::target_id() const noexcept
+{
+  return target_id_;
+}
+
+void DynamicEscapeAttemptTracker::reset() noexcept
+{
+  attempt_id_ = 0U;
+  active_ = false;
+  target_id_.clear();
+  last_target_relevant_sec_ = -std::numeric_limits<double>::infinity();
+  lifetime_cycles_ = 0;
+  planner_request_cycles_ = 0;
+  request_gap_cycles_ = 0;
+  previous_reason_ = DynamicEscapeAttemptReason::Inactive;
+}
+
+std::uint64_t DynamicEscapeAttemptTracker::allocate_attempt_id() noexcept
+{
+  const std::uint64_t allocated = next_attempt_id_++;
+  if (next_attempt_id_ == 0U) {
+    next_attempt_id_ = 1U;
+  }
+  return allocated == 0U ? allocate_attempt_id() : allocated;
+}
+
+std::string format_dynamic_escape_attempt_trace(
+  const DynamicEscapeAttemptRequest & request,
+  const DynamicEscapeAttemptResolution & resolution,
+  const int waypoint_id)
+{
+  const char * event = resolution.retargeted ? "retargeted" :
+    (resolution.started ? "started" :
+    (resolution.released ? "released" :
+    (resolution.active ? "heartbeat" : "idle")));
+  std::ostringstream stream;
+  stream << "Dynamic escape attempt lifecycle: event=" << event
+         << ", reason=" << to_string(resolution.reason)
+         << ", attempt=" << resolution.attempt_id
+         << ", active=" << (resolution.active ? 1 : 0)
+         << ", target="
+         << (resolution.target_id.empty() ? "none" : resolution.target_id)
+         << ", previous_target="
+         << (resolution.previous_target_id.empty() ?
+    "none" : resolution.previous_target_id)
+         << ", planner_requested=" << (request.planner_requested ? 1 : 0)
+         << ", target_relevant=" << (request.target_relevant ? 1 : 0)
+         << ", held_without_request="
+         << (resolution.held_without_request ? 1 : 0)
+         << ", cycles=" << resolution.lifetime_cycles
+         << "/request=" << resolution.planner_request_cycles
+         << "/gap=" << resolution.request_gap_cycles
+         << ", target_loss_age="
+         << finite_or(resolution.target_loss_age_sec, "inf") << "s/"
+         << std::fixed << std::setprecision(2)
+         << resolution.target_loss_grace_sec << "s"
+         << ", wp_id=" << waypoint_id;
+  return stream.str();
+}
+
 const char * to_string(const DynamicEscapeExitReason reason) noexcept
 {
   switch (reason) {

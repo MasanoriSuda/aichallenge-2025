@@ -125,7 +125,10 @@ struct DecisionTrace {
   std::uint64_t attempt_id{0U};
   std::uint64_t mission_episode_id{0U};
   std::string target_id;
+  bool entry_requested{false};
   bool requested{false};
+  bool continuation_requested{false};
+  bool attempt_active{false};
   CandidateTrace primary;
   CandidateTrace alternate;
   bool alternate_attempted{false};

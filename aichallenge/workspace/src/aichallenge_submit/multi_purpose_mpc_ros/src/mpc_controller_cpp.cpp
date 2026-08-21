@@ -2191,6 +2191,9 @@ struct V2XBehaviorOutput
   bool low_speed_avoidance_candidate{false};
   bool dynamic_obstacle_cruise_authority_active{false};
   bool dynamic_obstacle_lateral_escape_planner_requested{false};
+  bool dynamic_obstacle_lateral_escape_entry_requested{false};
+  bool dynamic_obstacle_lateral_escape_continuation_requested{false};
+  bool dynamic_obstacle_lateral_escape_attempt_active{false};
   bool dynamic_obstacle_lateral_escape_soft_curve_bypassed{false};
   bool dynamic_obstacle_lateral_escape_active{false};
   std::uint64_t dynamic_obstacle_lateral_escape_attempt_id{0U};
@@ -16223,9 +16226,85 @@ struct MPC
         cfg.v2x_behavior.overtake_line.enabled,
         behavior_output.state == V2XBehaviorState::Overtake,
         behavior_output.overtake_committed_execution_active});
+
+    // Encounter lifecycle is the sole owner of DynamicEscape planning
+    // continuity. The behavior-layer request is an entry trigger only: once
+    // an attempt exists, a transient entry-gate or course-corridor miss must
+    // not turn the planner off while the same front target is still observed.
+    const bool dynamic_escape_entry_requested =
+      behavior_output.dynamic_obstacle_lateral_escape_planner_requested;
+    std::string dynamic_escape_observed_target_id =
+      behavior_output.dynamic_obstacle_cruise_target_id;
+    const bool dynamic_escape_same_front_target_observed =
+      dynamic_obstacle_lateral_escape_attempt_tracker_.active() &&
+      behavior_output.has_front_vehicle &&
+      !behavior_output.target_vehicle_id.empty() &&
+      behavior_output.target_vehicle_id ==
+      dynamic_obstacle_lateral_escape_attempt_tracker_.target_id();
+    if (
+      dynamic_escape_observed_target_id.empty() &&
+      dynamic_escape_same_front_target_observed)
+    {
+      dynamic_escape_observed_target_id =
+        dynamic_obstacle_lateral_escape_attempt_tracker_.target_id();
+    }
+    const bool dynamic_escape_target_relevant =
+      behavior_output.dynamic_obstacle_cruise_authority_active ||
+      dynamic_escape_same_front_target_observed;
+    const overtake_orchestrator::DynamicEscapeAttemptRequest
+      dynamic_escape_attempt_request{
+      dynamic_escape_entry_requested,
+      dynamic_escape_target_relevant,
+      overtake_line_state_.phase == OvertakeLinePhase::Recovery ||
+      !v2x_race_session_active_ || explicit_overtake_line_owns_plan,
+      dynamic_escape_observed_target_id,
+      now_sec,
+      cfg.v2x_behavior.
+      dynamic_obstacle_lateral_escape_attempt_target_loss_grace_sec};
+    const auto dynamic_escape_attempt =
+      dynamic_obstacle_lateral_escape_attempt_tracker_.update(
+      dynamic_escape_attempt_request);
+    const bool dynamic_escape_planner_requested =
+      dynamic_escape_attempt.planning_requested;
+    behavior_output.dynamic_obstacle_lateral_escape_entry_requested =
+      dynamic_escape_entry_requested;
+    behavior_output.dynamic_obstacle_lateral_escape_planner_requested =
+      dynamic_escape_planner_requested;
+    behavior_output.dynamic_obstacle_lateral_escape_continuation_requested =
+      dynamic_escape_attempt.continuation_requested;
+    behavior_output.dynamic_obstacle_lateral_escape_attempt_active =
+      dynamic_escape_attempt.active;
+    behavior_output.dynamic_obstacle_lateral_escape_attempt_id =
+      dynamic_escape_attempt.attempt_id;
+    if (dynamic_escape_attempt.active) {
+      behavior_output.dynamic_obstacle_cruise_authority_active = true;
+      behavior_output.dynamic_obstacle_cruise_target_id =
+        dynamic_escape_attempt.target_id;
+    }
+    const bool dynamic_escape_attempt_immediate_log =
+      dynamic_escape_attempt.started || dynamic_escape_attempt.released ||
+      dynamic_escape_attempt.retargeted;
+    const double dynamic_escape_attempt_log_period_sec =
+      std::max(2.0, cfg.v2x_behavior.debug_log_period_sec);
+    const bool dynamic_escape_attempt_heartbeat =
+      cfg.v2x_behavior.debug_log_enabled && dynamic_escape_attempt.active &&
+      (!std::isfinite(dynamic_obstacle_lateral_escape_attempt_last_log_sec_) ||
+      now_sec - dynamic_obstacle_lateral_escape_attempt_last_log_sec_ >=
+      dynamic_escape_attempt_log_period_sec);
+    if (
+      !mpcc_lite_async_worker_context_ &&
+      (dynamic_escape_attempt_immediate_log || dynamic_escape_attempt_heartbeat))
+    {
+      const auto trace = overtake_orchestrator::format_dynamic_escape_attempt_trace(
+        dynamic_escape_attempt_request, dynamic_escape_attempt,
+        model != nullptr ? model->wp_id : -1);
+      RCLCPP_INFO(rclcpp::get_logger("mpc_controller"), "%s", trace.c_str());
+      dynamic_obstacle_lateral_escape_attempt_last_log_sec_ = now_sec;
+    }
     const bool use_gap_planner =
       gap_planner != nullptr &&
-      (!cfg.v2x_behavior.enabled || behavior_output.allow_gap_planner) &&
+      (!cfg.v2x_behavior.enabled || behavior_output.allow_gap_planner ||
+      dynamic_escape_planner_requested) &&
       !suppress_overtake_after_solver_failures;
     const bool use_low_speed_local_path =
       use_gap_planner && cfg.v2x_behavior.low_speed_local_path_enabled &&
@@ -16355,43 +16434,6 @@ struct MPC
         ref_wp_id, N, lb, ub, now_sec, true, low_speed_forced_pass_side) :
       run_gap_planner(0)) :
       GapPlannerOutput{};
-    const bool dynamic_escape_planner_requested =
-      behavior_output.dynamic_obstacle_lateral_escape_planner_requested;
-    const overtake_orchestrator::DynamicEscapeAttemptRequest
-      dynamic_escape_attempt_request{
-      dynamic_escape_planner_requested,
-      behavior_output.dynamic_obstacle_cruise_authority_active,
-      overtake_line_state_.phase == OvertakeLinePhase::Recovery ||
-      !v2x_race_session_active_,
-      behavior_output.dynamic_obstacle_cruise_target_id,
-      now_sec,
-      cfg.v2x_behavior.
-      dynamic_obstacle_lateral_escape_attempt_target_loss_grace_sec};
-    const auto dynamic_escape_attempt =
-      dynamic_obstacle_lateral_escape_attempt_tracker_.update(
-      dynamic_escape_attempt_request);
-    behavior_output.dynamic_obstacle_lateral_escape_attempt_id =
-      dynamic_escape_attempt.attempt_id;
-    const bool dynamic_escape_attempt_immediate_log =
-      dynamic_escape_attempt.started || dynamic_escape_attempt.released ||
-      dynamic_escape_attempt.retargeted;
-    const double dynamic_escape_attempt_log_period_sec =
-      std::max(2.0, cfg.v2x_behavior.debug_log_period_sec);
-    const bool dynamic_escape_attempt_heartbeat =
-      cfg.v2x_behavior.debug_log_enabled && dynamic_escape_attempt.active &&
-      (!std::isfinite(dynamic_obstacle_lateral_escape_attempt_last_log_sec_) ||
-      now_sec - dynamic_obstacle_lateral_escape_attempt_last_log_sec_ >=
-      dynamic_escape_attempt_log_period_sec);
-    if (
-      !mpcc_lite_async_worker_context_ &&
-      (dynamic_escape_attempt_immediate_log || dynamic_escape_attempt_heartbeat))
-    {
-      const auto trace = overtake_orchestrator::format_dynamic_escape_attempt_trace(
-        dynamic_escape_attempt_request, dynamic_escape_attempt,
-        model != nullptr ? model->wp_id : -1);
-      RCLCPP_INFO(rclcpp::get_logger("mpc_controller"), "%s", trace.c_str());
-      dynamic_obstacle_lateral_escape_attempt_last_log_sec_ = now_sec;
-    }
     DynamicObstacleLateralEscapeBridgeResult dynamic_escape_bridge;
     v2x_overtake_core::DynamicObstacleLateralEscapeSolverBackoffStatus
     dynamic_escape_backoff;
@@ -16847,6 +16889,7 @@ struct MPC
         cfg.v2x_behavior.dynamic_obstacle_lateral_escape_authority_enabled,
         behavior_output.dynamic_obstacle_cruise_authority_active,
         behavior_output.state == V2XBehaviorState::Follow,
+        dynamic_escape_attempt.active,
         planner_output.active,
         planner_output.feasible,
         !explicit_overtake_line_owns_plan,
@@ -16938,7 +16981,13 @@ struct MPC
       overtake_line_state_.episode_id;
     dynamic_escape_decision_trace.target_id =
       behavior_output.dynamic_obstacle_cruise_target_id;
+    dynamic_escape_decision_trace.entry_requested =
+      behavior_output.dynamic_obstacle_lateral_escape_entry_requested;
     dynamic_escape_decision_trace.requested = dynamic_escape_planner_requested;
+    dynamic_escape_decision_trace.continuation_requested =
+      behavior_output.dynamic_obstacle_lateral_escape_continuation_requested;
+    dynamic_escape_decision_trace.attempt_active =
+      behavior_output.dynamic_obstacle_lateral_escape_attempt_active;
     dynamic_escape_decision_trace.primary = dynamic_escape_primary_trace;
     dynamic_escape_decision_trace.alternate = dynamic_escape_alternate_trace;
     dynamic_escape_decision_trace.alternate_attempted =
@@ -47772,16 +47821,20 @@ private:
     const auto & v2x_behavior = mpc_->last_v2x_behavior_output();
     const bool dynamic_escape_execution_active =
       v2x_behavior.dynamic_obstacle_lateral_escape_active;
-    if (dynamic_escape_execution_active) {
+    const bool dynamic_escape_attempt_active =
+      v2x_behavior.dynamic_obstacle_lateral_escape_attempt_active;
+    if (dynamic_escape_attempt_active) {
+      dynamic_escape_exit_attempt_id_ =
+        v2x_behavior.dynamic_obstacle_lateral_escape_attempt_id;
       dynamic_escape_exit_target_id_ =
         v2x_behavior.dynamic_obstacle_cruise_target_id;
       if (dynamic_escape_exit_target_id_.empty()) {
         dynamic_escape_exit_target_id_ = v2x_behavior.target_vehicle_id;
       }
+    }
+    if (dynamic_escape_execution_active) {
       dynamic_escape_exit_side_sign_ =
         v2x_behavior.dynamic_obstacle_lateral_escape_side_sign;
-      dynamic_escape_exit_attempt_id_ =
-        v2x_behavior.dynamic_obstacle_lateral_escape_attempt_id;
       dynamic_escape_exit_branch_ =
         v2x_behavior.dynamic_obstacle_lateral_escape_committed_branch;
     }
@@ -48178,10 +48231,12 @@ private:
         dynamic_escape_wall_observation_reason =
           overtake_orchestrator::classify_wall_path_admission(
           dynamic_escape_wall_admission_request);
+        // An accepted live solution does not need to enter and release the
+        // stateful admission gate on every 40 Hz cycle.  The exit contract may
+        // adopt it directly from this fresh physical observation.  Reserve the
+        // gate for an actual execution edge or an unsafe/pending observation.
         dynamic_escape_wall_admission_request.activation_requested =
           dynamic_escape_exit_detected ||
-          (dynamic_escape_exit_gate_.active() &&
-          dynamic_escape_execution_active) ||
           dynamic_escape_wall_observation_reason !=
           overtake_orchestrator::WallHandoffAdmissionReason::Accepted;
       }
@@ -48199,17 +48254,6 @@ private:
         overtake_orchestrator::WallHandoffAdmissionReason::Accepted &&
         !dynamic_escape_wall_admission.hold_control;
       if (dynamic_escape_replacement_physically_admitted) {
-        if (
-          dynamic_escape_wall_admission.reason ==
-          overtake_orchestrator::WallHandoffAdmissionReason::Inactive)
-        {
-          dynamic_escape_wall_admission.reason =
-            overtake_orchestrator::WallHandoffAdmissionReason::Accepted;
-          dynamic_escape_wall_admission.released = true;
-          dynamic_escape_wall_admission.state_changed = true;
-          dynamic_escape_wall_admission.consecutive_valid_cycles = 1;
-          dynamic_escape_wall_admission.required_consecutive_valid_cycles = 1;
-        }
         dynamic_escape_replacement_promoted =
           mpc_->accept_current_dynamic_escape_execution(
           current_time.seconds());
@@ -48259,13 +48303,14 @@ private:
       !dynamic_escape_wall_admission.hold_control;
     overtake_orchestrator::DynamicEscapeExitRequest
       dynamic_escape_exit_request;
-    dynamic_escape_exit_request.escape_attempt_id =
-      dynamic_escape_execution_active ?
-      v2x_behavior.dynamic_obstacle_lateral_escape_attempt_id :
-      dynamic_escape_exit_attempt_id_;
+    dynamic_escape_exit_request.escape_attempt_id = dynamic_escape_exit_attempt_id_;
     dynamic_escape_exit_request.activation_requested =
       dynamic_escape_exit_detected ||
       dynamic_escape_wall_admission.replan_required;
+    dynamic_escape_exit_request.attempt_active = dynamic_escape_attempt_active;
+    dynamic_escape_exit_request.continuation_planner_requested =
+      dynamic_escape_attempt_active &&
+      v2x_behavior.dynamic_obstacle_lateral_escape_planner_requested;
     dynamic_escape_exit_request.observation_updated =
       dynamic_escape_wall_scan_due;
     dynamic_escape_exit_request.wall_path_admitted =

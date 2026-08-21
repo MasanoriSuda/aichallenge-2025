@@ -314,6 +314,11 @@ std::string format_decision_trace(const DecisionTrace &trace) {
          << trace.attempt_id << ", mission_episode=" << trace.mission_episode_id
          << ", target="
          << (trace.target_id.empty() ? "<none>" : trace.target_id)
+         << ", lifecycle=entry/plan/continuation/active="
+         << (trace.entry_requested ? 1 : 0) << "/"
+         << (trace.requested ? 1 : 0) << "/"
+         << (trace.continuation_requested ? 1 : 0) << "/"
+         << (trace.attempt_active ? 1 : 0)
          << ", outcome=" << to_string(classify_outcome(trace))
          << ", primary=" << format_candidate(trace.primary)
          << ", alternate=" << format_candidate(trace.alternate)

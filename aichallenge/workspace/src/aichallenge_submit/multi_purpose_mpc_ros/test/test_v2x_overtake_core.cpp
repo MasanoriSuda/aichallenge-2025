@@ -15505,6 +15505,21 @@ TEST(V2XOvertakeCoreLowSpeedBypass, DynamicLateralEscapeRequiresPlannerOwnership
     resolution.reason, DynamicObstacleLateralEscapeAuthorityReason::FollowInactive);
 }
 
+TEST(V2XOvertakeCoreLowSpeedBypass,
+     ExistingDynamicEscapeAttemptDoesNotRequireFollowLabelEveryCycle)
+{
+  auto request = dynamic_lateral_escape_request();
+  request.follow_state_active = false;
+  request.continuing_attempt = true;
+
+  const auto resolution = resolve_dynamic_obstacle_lateral_escape_authority(request);
+  EXPECT_TRUE(resolution.active);
+  EXPECT_TRUE(resolution.suppress_generic_follow_cap);
+  EXPECT_EQ(
+    resolution.reason,
+    DynamicObstacleLateralEscapeAuthorityReason::Accepted);
+}
+
 TEST(V2XOvertakeCoreLowSpeedBypass, DynamicLateralEscapeExplainsEveryAdmissionGate)
 {
   auto request = dynamic_lateral_escape_request();

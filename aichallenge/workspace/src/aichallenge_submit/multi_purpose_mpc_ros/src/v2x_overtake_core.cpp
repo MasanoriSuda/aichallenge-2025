@@ -12624,7 +12624,7 @@ resolve_dynamic_obstacle_lateral_escape_authority(
     resolution.reason = DynamicObstacleLateralEscapeAuthorityReason::TargetInactive;
     return resolution;
   }
-  if (!request.follow_state_active) {
+  if (!request.follow_state_active && !request.continuing_attempt) {
     resolution.reason = DynamicObstacleLateralEscapeAuthorityReason::FollowInactive;
     return resolution;
   }

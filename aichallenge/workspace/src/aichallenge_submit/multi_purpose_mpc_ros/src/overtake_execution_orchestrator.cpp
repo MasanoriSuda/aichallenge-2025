@@ -1180,7 +1180,8 @@ const char * to_string(const DynamicEscapeAttemptReason reason) noexcept
     case DynamicEscapeAttemptReason::Inactive: return "inactive";
     case DynamicEscapeAttemptReason::Started: return "started";
     case DynamicEscapeAttemptReason::PlannerRequested: return "planner-requested";
-    case DynamicEscapeAttemptReason::RequestGapHeld: return "request-gap-held";
+    case DynamicEscapeAttemptReason::ContinuationRequested:
+      return "continuation-requested";
     case DynamicEscapeAttemptReason::TargetLossGrace: return "target-loss-grace";
     case DynamicEscapeAttemptReason::TargetLost: return "target-lost";
     case DynamicEscapeAttemptReason::TargetChanged: return "target-changed";
@@ -1236,6 +1237,8 @@ DynamicEscapeAttemptResolution DynamicEscapeAttemptTracker::update(
       request_gap_cycles_ = 0;
       resolution.started = true;
       resolution.retargeted = retargeted;
+      resolution.planning_requested = true;
+      resolution.continuation_requested = false;
       resolution.reason = retargeted ?
         DynamicEscapeAttemptReason::TargetChanged :
         DynamicEscapeAttemptReason::Started;
@@ -1278,13 +1281,15 @@ DynamicEscapeAttemptResolution DynamicEscapeAttemptTracker::update(
       last_target_relevant_sec_ = request.now_sec;
     }
     ++lifetime_cycles_;
+    resolution.planning_requested = true;
     if (request.planner_requested) {
       ++planner_request_cycles_;
       resolution.reason = DynamicEscapeAttemptReason::PlannerRequested;
     } else {
       ++request_gap_cycles_;
       resolution.held_without_request = true;
-      resolution.reason = DynamicEscapeAttemptReason::RequestGapHeld;
+      resolution.continuation_requested = true;
+      resolution.reason = DynamicEscapeAttemptReason::ContinuationRequested;
     }
     resolution.state_changed = resolution.reason != previous_reason_;
     fill_active_state();
@@ -1304,6 +1309,8 @@ DynamicEscapeAttemptResolution DynamicEscapeAttemptTracker::update(
     ++lifetime_cycles_;
     ++request_gap_cycles_;
     resolution.held_without_request = true;
+    resolution.planning_requested = true;
+    resolution.continuation_requested = true;
     resolution.reason = DynamicEscapeAttemptReason::TargetLossGrace;
     resolution.state_changed = resolution.reason != previous_reason_;
     fill_active_state();
@@ -1371,6 +1378,10 @@ std::string format_dynamic_escape_attempt_trace(
          << (resolution.previous_target_id.empty() ?
     "none" : resolution.previous_target_id)
          << ", planner_requested=" << (request.planner_requested ? 1 : 0)
+         << ", effective_planning="
+         << (resolution.planning_requested ? 1 : 0)
+         << ", continuation="
+         << (resolution.continuation_requested ? 1 : 0)
          << ", target_relevant=" << (request.target_relevant ? 1 : 0)
          << ", held_without_request="
          << (resolution.held_without_request ? 1 : 0)
@@ -1481,7 +1492,15 @@ DynamicEscapeExitResolution DynamicEscapeExitGate::update(
     resolution.replacement_execution_active = false;
     consecutive_resolved_cycles_ = 0;
     resolution.hold_lateral_control = request.retained_solution_available;
-    resolution.replan_required = resolution.entered || replacement_lost;
+    resolution.continuation_required =
+      request.attempt_active && request.continuation_planner_requested;
+    // TargetBlocking is the reason DynamicEscape exists. Do not report it as
+    // a wall/solver failure while the encounter lifecycle is already
+    // evaluating a replacement. Failure replan remains reserved for a lost
+    // replacement without an active continuation owner.
+    resolution.replan_required =
+      !resolution.continuation_required &&
+      (resolution.entered || replacement_lost);
     if (request.replacement_escape_active) {
       resolution.reason = DynamicEscapeExitReason::ReplacementPending;
     } else if (replacement_lost) {
@@ -1518,9 +1537,11 @@ DynamicEscapeExitResolution DynamicEscapeExitGate::update(
   resolution.state_changed = resolution.entered || resolution.released ||
     resolution.replacement_adopted || resolution.attempt_changed ||
     resolution.reason != previous_reason_ ||
-    resolution.hold_lateral_control != previous_hold_lateral_control_;
+    resolution.hold_lateral_control != previous_hold_lateral_control_ ||
+    resolution.continuation_required != previous_continuation_required_;
   previous_reason_ = resolution.reason;
   previous_hold_lateral_control_ = resolution.hold_lateral_control;
+  previous_continuation_required_ = resolution.continuation_required;
   return resolution;
 }
 
@@ -1538,6 +1559,7 @@ void DynamicEscapeExitGate::reset() noexcept
   consecutive_resolved_cycles_ = 0;
   previous_reason_ = DynamicEscapeExitReason::Inactive;
   previous_hold_lateral_control_ = false;
+  previous_continuation_required_ = false;
 }
 
 std::string format_dynamic_escape_exit_trace(
@@ -1565,6 +1587,11 @@ std::string format_dynamic_escape_exit_trace(
          << ", active=" << (resolution.active ? 1 : 0)
          << ", hold_lateral="
          << (resolution.hold_lateral_control ? 1 : 0)
+         << ", lifecycle=" << (request.attempt_active ? 1 : 0)
+         << "/continuation="
+         << (request.continuation_planner_requested ? 1 : 0)
+         << "/required="
+         << (resolution.continuation_required ? 1 : 0)
          << ", replan=" << (resolution.replan_required ? 1 : 0) << "/"
          << (resolution.replan_requested ? 1 : 0)
          << ", replacement="

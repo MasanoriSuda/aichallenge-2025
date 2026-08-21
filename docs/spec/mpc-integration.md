@@ -1601,14 +1601,27 @@ collision corridorと横加速度reserveの交差内へsoft targetをclipし、h
 壁clearance、footprint preflightは緩和しない。
 
 Dynamic Escapeの`attempt_id`は、planner requestやsolver採否の1周期ではなく、同一targetとの
-遭遇を表す。同一targetがrelevantな間はplanner requestが一時的にfalseへ落ちてもIDを保持し、
+遭遇を表す。Behavior層のplanner requestは新規遭遇のentry triggerに限定する。同一targetが
+relevantな間はentry requestが一時的にfalseへ落ちても、attempt lifecycleが
+`planning_requested=true`を維持してGapPlannerと横制御authorityを継続する。
+Followは新規entry条件であり、開始済みattemptの周期ごとの必須条件ではない。
 target観測が外れた場合も
 `v2x_dynamic_obstacle_lateral_escape_attempt_target_loss_grace_sec`以内は同一遭遇として扱う。
 grace超過、target変更、race session終了、OvertakeLine Recoveryへの明示移行でattemptを終了する。
 ただし、この継続は戦術コンテキストだけを保持するもので、解済みpath、worker result、V2X予測、
 wall certificateの有効期限を延長しない。ライフサイクルは
 `Dynamic escape attempt lifecycle`ログの`event`、`attempt`、`target`、`reason`、
-`request_gap_count`、`target_loss_count`で追跡する。現行grace 0.50秒は2025 AWSIM競技
+`planner_requested`、`effective_planning`、`continuation`、`cycles`で追跡する。計画ログの
+`lifecycle=entry/plan/continuation/active`でも同じ所有状態を確認できる。
+
+Dynamic Escape実行解が一時的に消え、同じ前方targetがblockingである場合は、exit contractが
+短いphysically-admitted solution leaseで横操舵を橋渡しする。ただし`target-blocking`自体は
+wall/solver failureではないため、active lifecycleがreplacementを計画中ならfailure replanや
+solver backoffへ投入しない。物理wall rejection、solver failure、replacement lossは従来どおり
+失敗として扱う。正常なlive solutionのwall admissionはfreshな物理観測から直接採用し、
+stateful admission gateを40 Hzでenter/releaseし直さない。
+
+現行grace 0.50秒は2025 AWSIM競技
 シミュレーション向けの暫定値であり、2026公式仕様または実車安全仕様ではない。
 
 `Overtake decision trace: stage=tracking`は`connected_profile`、`segment_shift`、

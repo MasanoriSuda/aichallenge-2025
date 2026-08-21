@@ -7404,6 +7404,10 @@ struct DynamicObstacleLateralEscapeAuthorityRequest
   bool enabled{false};
   bool dynamic_obstacle_target_active{false};
   bool follow_state_active{false};
+  // The Follow gate is an encounter-entry condition, not a per-cycle
+  // execution condition.  An existing same-target attempt may retain lateral
+  // authority while the behavior label changes transiently.
+  bool continuing_attempt{false};
   bool gap_planner_active{false};
   bool gap_planner_feasible{false};
   bool gap_planner_owns_lateral_bounds{false};

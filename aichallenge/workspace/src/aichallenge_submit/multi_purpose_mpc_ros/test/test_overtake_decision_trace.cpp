@@ -68,7 +68,10 @@ TEST(OvertakeDecisionTrace,
   decision.attempt_id = 17U;
   decision.mission_episode_id = 9U;
   decision.target_id = "d2";
+  decision.entry_requested = false;
   decision.requested = true;
+  decision.continuation_requested = true;
+  decision.attempt_active = true;
   decision.primary = ready_candidate(0, 1);
   decision.primary.backoff_active = true;
   decision.primary.backoff_failures = 3;
@@ -86,6 +89,9 @@ TEST(OvertakeDecisionTrace,
   EXPECT_NE(message.find("outcome=alternate-rejected"), std::string::npos);
   EXPECT_NE(message.find("attempt=17"), std::string::npos);
   EXPECT_NE(message.find("mission_episode=9"), std::string::npos);
+  EXPECT_NE(
+    message.find("lifecycle=entry/plan/continuation/active=0/1/1/1"),
+    std::string::npos);
   EXPECT_NE(message.find("state=backed-off"), std::string::npos);
   EXPECT_NE(message.find("state=bridge-rejected"), std::string::npos);
   EXPECT_NE(message.find("corridor is outside the reachable lateral envelope"),
@@ -172,6 +178,13 @@ TEST(OvertakeDecisionTrace, EmitsOnCategoricalChangeButNotContinuousNoise) {
   decision.final_shift_m = 0.31;
   decision.waypoint_id = 17;
   EXPECT_FALSE(emitter.update(decision, 1.1).emit);
+
+  // Raw entry-gate chatter is detail telemetry. The stable attempt identity
+  // and effective planning outcome own the categorical log rate.
+  decision.entry_requested = true;
+  decision.continuation_requested = true;
+  decision.attempt_active = true;
+  EXPECT_FALSE(emitter.update(decision, 1.12).emit);
 
   decision.primary.static_wall_execution_samples = 8U;
   decision.primary.static_wall_active_samples = 4U;

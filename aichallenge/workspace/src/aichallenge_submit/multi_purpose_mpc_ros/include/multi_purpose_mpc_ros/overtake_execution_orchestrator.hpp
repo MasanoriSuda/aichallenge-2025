@@ -503,7 +503,7 @@ enum class DynamicEscapeAttemptReason {
   Inactive,
   Started,
   PlannerRequested,
-  RequestGapHeld,
+  ContinuationRequested,
   TargetLossGrace,
   TargetLost,
   TargetChanged,
@@ -532,6 +532,12 @@ struct DynamicEscapeAttemptResolution {
   bool released{false};
   bool retargeted{false};
   bool held_without_request{false};
+  /// Effective planner ownership for this encounter. Unlike the raw entry
+  /// request, this remains true while the same attempt is active.
+  bool planning_requested{false};
+  /// True when planning is kept alive by an existing attempt rather than by
+  /// this cycle's new-entry gate.
+  bool continuation_requested{false};
   bool state_changed{false};
   std::string target_id;
   std::string previous_target_id;
@@ -595,6 +601,8 @@ const char * to_string(DynamicEscapeExitReason reason) noexcept;
 struct DynamicEscapeExitRequest {
   std::uint64_t escape_attempt_id{0U};
   bool activation_requested{false};
+  bool attempt_active{false};
+  bool continuation_planner_requested{false};
   bool observation_updated{true};
   bool wall_path_admitted{false};
   bool obstacle_blocking{false};
@@ -611,6 +619,9 @@ struct DynamicEscapeExitResolution {
   bool entered{false};
   bool released{false};
   bool hold_lateral_control{false};
+  /// The encounter planner already owns replacement generation. This is not
+  /// a solver/wall failure and must not feed failure backoff.
+  bool continuation_required{false};
   bool replan_required{false};
   bool replan_requested{false};
   bool replacement_adopted{false};
@@ -642,6 +653,7 @@ private:
   int consecutive_resolved_cycles_{0};
   DynamicEscapeExitReason previous_reason_{DynamicEscapeExitReason::Inactive};
   bool previous_hold_lateral_control_{false};
+  bool previous_continuation_required_{false};
 };
 
 std::string format_dynamic_escape_exit_trace(

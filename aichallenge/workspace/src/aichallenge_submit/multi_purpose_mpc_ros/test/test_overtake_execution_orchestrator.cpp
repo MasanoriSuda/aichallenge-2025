@@ -921,13 +921,15 @@ TEST(OvertakeExecutionOrchestrator, KeepsAttemptAcrossSameTargetRequestGap)
   const auto held = tracker.update(request);
   EXPECT_TRUE(held.active);
   EXPECT_TRUE(held.held_without_request);
+  EXPECT_TRUE(held.planning_requested);
+  EXPECT_TRUE(held.continuation_requested);
   EXPECT_FALSE(held.started);
   EXPECT_FALSE(held.released);
   EXPECT_EQ(held.attempt_id, started.attempt_id);
   EXPECT_EQ(held.request_gap_cycles, 1);
   EXPECT_EQ(
     held.reason,
-    orchestrator::DynamicEscapeAttemptReason::RequestGapHeld);
+    orchestrator::DynamicEscapeAttemptReason::ContinuationRequested);
 
   request.planner_requested = true;
   request.now_sec = 10.050;
@@ -1012,18 +1014,22 @@ TEST(OvertakeExecutionOrchestrator, FormatsDynamicEscapeAttemptLifecycle)
   resolution.attempt_id = 41U;
   resolution.active = true;
   resolution.held_without_request = true;
+  resolution.planning_requested = true;
+  resolution.continuation_requested = true;
   resolution.target_id = "d2";
   resolution.lifetime_cycles = 16;
   resolution.planner_request_cycles = 6;
   resolution.request_gap_cycles = 10;
   resolution.target_loss_grace_sec = 0.50;
   resolution.reason =
-    orchestrator::DynamicEscapeAttemptReason::RequestGapHeld;
+    orchestrator::DynamicEscapeAttemptReason::ContinuationRequested;
 
   const auto message = orchestrator::format_dynamic_escape_attempt_trace(
     request, resolution, 38);
   EXPECT_NE(message.find("event=heartbeat"), std::string::npos);
-  EXPECT_NE(message.find("reason=request-gap-held"), std::string::npos);
+  EXPECT_NE(message.find("reason=continuation-requested"), std::string::npos);
+  EXPECT_NE(message.find("effective_planning=1"), std::string::npos);
+  EXPECT_NE(message.find("continuation=1"), std::string::npos);
   EXPECT_NE(message.find("attempt=41"), std::string::npos);
   EXPECT_NE(message.find("target=d2"), std::string::npos);
   EXPECT_NE(message.find("cycles=16/request=6/gap=10"), std::string::npos);
@@ -1045,6 +1051,32 @@ TEST(OvertakeExecutionOrchestrator, HoldsDynamicEscapeExitForBlockingTarget)
   EXPECT_TRUE(result.active);
   EXPECT_TRUE(result.hold_lateral_control);
   EXPECT_TRUE(result.replan_required);
+  EXPECT_FALSE(result.released);
+  EXPECT_EQ(
+    result.reason,
+    orchestrator::DynamicEscapeExitReason::TargetBlocking);
+}
+
+TEST(OvertakeExecutionOrchestrator,
+     ActiveAttemptContinuesWithoutFailureBackoffForBlockingTarget)
+{
+  orchestrator::DynamicEscapeExitGate gate;
+  orchestrator::DynamicEscapeExitRequest request;
+  request.escape_attempt_id = 36U;
+  request.activation_requested = true;
+  request.attempt_active = true;
+  request.continuation_planner_requested = true;
+  request.wall_path_admitted = true;
+  request.obstacle_blocking = true;
+  request.retained_solution_available = true;
+
+  const auto result = gate.update(request);
+  EXPECT_TRUE(result.entered);
+  EXPECT_TRUE(result.active);
+  EXPECT_TRUE(result.hold_lateral_control);
+  EXPECT_TRUE(result.continuation_required);
+  EXPECT_FALSE(result.replan_required);
+  EXPECT_FALSE(result.replan_requested);
   EXPECT_FALSE(result.released);
   EXPECT_EQ(
     result.reason,

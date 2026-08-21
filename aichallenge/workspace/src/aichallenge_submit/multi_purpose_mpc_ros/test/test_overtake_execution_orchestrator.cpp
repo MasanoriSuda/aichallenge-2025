@@ -621,6 +621,43 @@ TEST(OvertakeExecutionOrchestrator, ReleasesFreshSafeSingleCycleWallHandoff)
   EXPECT_EQ(result.reason, orchestrator::WallHandoffAdmissionReason::Accepted);
 }
 
+TEST(OvertakeExecutionOrchestrator, AlignsRetainedExecutionWithElapsedStage)
+{
+  const auto result = orchestrator::resolve_retained_execution_cursor(
+    orchestrator::RetainedExecutionCursorRequest{
+      0.081, 0.025, 0.35, 20U, 21U});
+
+  EXPECT_TRUE(result.available);
+  EXPECT_EQ(result.control_stage_index, 3U);
+  EXPECT_EQ(result.prediction_stage_index, 3U);
+  EXPECT_EQ(result.remaining_control_stages, 17U);
+  EXPECT_EQ(result.remaining_prediction_stages, 18U);
+  EXPECT_EQ(
+    result.reason, orchestrator::RetainedExecutionCursorReason::Available);
+}
+
+TEST(OvertakeExecutionOrchestrator, RejectsExpiredRetainedExecution)
+{
+  const auto result = orchestrator::resolve_retained_execution_cursor(
+    orchestrator::RetainedExecutionCursorRequest{
+      0.351, 0.025, 0.35, 20U, 21U});
+
+  EXPECT_FALSE(result.available);
+  EXPECT_EQ(result.reason, orchestrator::RetainedExecutionCursorReason::Expired);
+}
+
+TEST(OvertakeExecutionOrchestrator, RejectsExhaustedRetainedExecutionHorizon)
+{
+  const auto result = orchestrator::resolve_retained_execution_cursor(
+    orchestrator::RetainedExecutionCursorRequest{
+      0.151, 0.010, 0.35, 15U, 16U});
+
+  EXPECT_FALSE(result.available);
+  EXPECT_EQ(
+    result.reason,
+    orchestrator::RetainedExecutionCursorReason::HorizonExhausted);
+}
+
 TEST(OvertakeExecutionOrchestrator, StaleWallObservationDoesNotAdvanceRelease)
 {
   orchestrator::WallPathAdmissionGate gate;

@@ -1116,6 +1116,64 @@ void WallPathAdmissionGate::reset() noexcept
   previous_stop_required_ = false;
 }
 
+const char * to_string(const RetainedExecutionCursorReason reason) noexcept
+{
+  switch (reason) {
+    case RetainedExecutionCursorReason::Available: return "available";
+    case RetainedExecutionCursorReason::InvalidTiming: return "invalid-timing";
+    case RetainedExecutionCursorReason::InvalidHorizon: return "invalid-horizon";
+    case RetainedExecutionCursorReason::Expired: return "expired";
+    case RetainedExecutionCursorReason::HorizonExhausted: return "horizon-exhausted";
+  }
+  return "unknown";
+}
+
+RetainedExecutionCursorResolution resolve_retained_execution_cursor(
+  const RetainedExecutionCursorRequest & request) noexcept
+{
+  RetainedExecutionCursorResolution resolution;
+  if (
+    !std::isfinite(request.age_sec) || request.age_sec < 0.0 ||
+    !std::isfinite(request.sample_period_sec) ||
+    request.sample_period_sec <= 0.0 ||
+    !std::isfinite(request.maximum_age_sec) || request.maximum_age_sec < 0.0)
+  {
+    resolution.reason = RetainedExecutionCursorReason::InvalidTiming;
+    return resolution;
+  }
+  if (
+    request.control_stage_count == 0U ||
+    request.prediction_stage_count == 0U)
+  {
+    resolution.reason = RetainedExecutionCursorReason::InvalidHorizon;
+    return resolution;
+  }
+  if (request.age_sec > request.maximum_age_sec + 1e-9) {
+    resolution.reason = RetainedExecutionCursorReason::Expired;
+    return resolution;
+  }
+
+  const auto elapsed_stage = static_cast<std::size_t>(std::floor(
+      request.age_sec / request.sample_period_sec));
+  if (
+    elapsed_stage >= request.control_stage_count ||
+    elapsed_stage >= request.prediction_stage_count)
+  {
+    resolution.reason = RetainedExecutionCursorReason::HorizonExhausted;
+    return resolution;
+  }
+
+  resolution.available = true;
+  resolution.control_stage_index = elapsed_stage;
+  resolution.prediction_stage_index = elapsed_stage;
+  resolution.remaining_control_stages =
+    request.control_stage_count - elapsed_stage;
+  resolution.remaining_prediction_stages =
+    request.prediction_stage_count - elapsed_stage;
+  resolution.reason = RetainedExecutionCursorReason::Available;
+  return resolution;
+}
+
 const char * to_string(const DynamicEscapeAttemptReason reason) noexcept
 {
   switch (reason) {

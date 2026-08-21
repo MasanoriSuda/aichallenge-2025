@@ -464,6 +464,41 @@ private:
   bool previous_stop_required_{false};
 };
 
+enum class RetainedExecutionCursorReason {
+  Available,
+  InvalidTiming,
+  InvalidHorizon,
+  Expired,
+  HorizonExhausted,
+};
+
+const char * to_string(RetainedExecutionCursorReason reason) noexcept;
+
+/// Resolve the time-aligned stage of a last physically admitted execution.
+/// The retained command is intentionally bounded by both a short handoff
+/// lease and the actual solved horizon; it must never replay stage zero after
+/// the vehicle has already advanced through that stage.
+struct RetainedExecutionCursorRequest {
+  double age_sec{std::numeric_limits<double>::infinity()};
+  double sample_period_sec{std::numeric_limits<double>::quiet_NaN()};
+  double maximum_age_sec{0.0};
+  std::size_t control_stage_count{0U};
+  std::size_t prediction_stage_count{0U};
+};
+
+struct RetainedExecutionCursorResolution {
+  bool available{false};
+  std::size_t control_stage_index{0U};
+  std::size_t prediction_stage_index{0U};
+  std::size_t remaining_control_stages{0U};
+  std::size_t remaining_prediction_stages{0U};
+  RetainedExecutionCursorReason reason{
+    RetainedExecutionCursorReason::InvalidTiming};
+};
+
+RetainedExecutionCursorResolution resolve_retained_execution_cursor(
+  const RetainedExecutionCursorRequest & request) noexcept;
+
 enum class DynamicEscapeAttemptReason {
   Inactive,
   Started,

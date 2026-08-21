@@ -407,6 +407,16 @@ std::string format_tracking_trace(const TrackingTrace &trace) {
          << "m"
          << ", target_adjust="
          << finite_or_nan(trace.maximum_target_adjustment_m) << "m"
+         << ", connected_profile=" << (trace.connected_profile ? 1 : 0)
+         << ", segment_shift="
+         << finite_or_nan(trace.maximum_segment_target_shift_m) << "m"
+         << ", required_ay="
+         << finite_or_nan(trace.maximum_required_lateral_accel_mps2) << "mps2"
+         << ", solver_formulation="
+         << reason_or(trace.solver_formulation, "not-evaluated")
+         << ", formulation_source="
+         << reason_or(trace.formulation_activation_source, "not-evaluated")
+         << ", workspace_reset=" << (trace.solver_workspace_reset ? 1 : 0)
          << ", cold_retry=" << (trace.cold_retry_attempted ? 1 : 0)
          << "/" << (trace.cold_retry_succeeded ? 1 : 0)
          << ", qualification_hold="

@@ -92,6 +92,49 @@ bool finite_config(const Config & config) noexcept
 
 }  // namespace
 
+ActivationResolution resolve_activation(const ActivationRequest & request) noexcept
+{
+  ActivationResolution resolution;
+  if (!request.enabled) {
+    resolution.source = ActivationSource::Disabled;
+    return resolution;
+  }
+  if (!request.overtake_only) {
+    resolution.requested = true;
+    resolution.source = ActivationSource::Global;
+    return resolution;
+  }
+  if (request.overtake_execution_phase) {
+    resolution.requested = true;
+    resolution.source = ActivationSource::OvertakeExecution;
+    return resolution;
+  }
+  if (request.dynamic_obstacle_escape_active) {
+    resolution.requested = true;
+    resolution.source = ActivationSource::DynamicObstacleEscape;
+    return resolution;
+  }
+  resolution.source = ActivationSource::OvertakeScopeInactive;
+  return resolution;
+}
+
+const char * activation_source_name(const ActivationSource source) noexcept
+{
+  switch (source) {
+    case ActivationSource::Disabled:
+      return "disabled";
+    case ActivationSource::Global:
+      return "global";
+    case ActivationSource::OvertakeExecution:
+      return "overtake-execution";
+    case ActivationSource::DynamicObstacleEscape:
+      return "dynamic-obstacle-escape";
+    case ActivationSource::OvertakeScopeInactive:
+      return "overtake-scope-inactive";
+  }
+  return "unknown";
+}
+
 std::optional<StageDistanceResolution> resolve_stage_distances(
   const std::vector<double> & raw_stage_distance_m, const Config & config) noexcept
 {

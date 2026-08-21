@@ -18891,6 +18891,65 @@ TEST(V2XOvertakeCoreFrenetDpCorridor, RejectsUnreachableExecutionEnvelope)
   EXPECT_NEAR(resolution.reachable_upper_m, 0.0225, 1e-9);
 }
 
+TEST(V2XOvertakeCoreFrenetDpCorridor, CarriesConnectedTargetStateAcrossSegments)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpConnectedTargetRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorSample;
+  using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frenet_dp_connected_target;
+
+  FrenetDpConnectedTargetRequest first;
+  first.envelope.enabled = true;
+  first.envelope.sample =
+    OvertakeMissionDynamicCorridorSample{1.0, -1.0, 1.0, true};
+  first.envelope.current_lateral_m = 0.0;
+  first.envelope.current_lateral_velocity_mps = 0.0;
+  first.envelope.current_speed_mps = 5.0;
+  first.envelope.maximum_lateral_accel_mps2 = 2.0;
+  first.envelope.lateral_accel_reserve_ratio = 1.0;
+  first.desired_lateral_m = 1.0;
+  const auto first_result = resolve_frenet_dp_connected_target(first);
+  ASSERT_TRUE(first_result.valid);
+  ASSERT_TRUE(first_result.feasible);
+  EXPECT_NEAR(first_result.selected_lateral_m, 0.04, 1e-9);
+  EXPECT_NEAR(first_result.required_lateral_accel_mps2, 2.0, 1e-9);
+  EXPECT_NEAR(first_result.terminal_lateral_velocity_mps, 0.4, 1e-9);
+
+  FrenetDpConnectedTargetRequest second = first;
+  second.envelope.current_lateral_m = first_result.selected_lateral_m;
+  second.envelope.current_lateral_velocity_mps =
+    first_result.terminal_lateral_velocity_mps;
+  second.desired_lateral_m = -1.0;
+  const auto second_result = resolve_frenet_dp_connected_target(second);
+  ASSERT_TRUE(second_result.valid);
+  ASSERT_TRUE(second_result.feasible);
+  // The second stage is resolved from the first stage terminal state. It can
+  // decelerate the lateral motion, but cannot independently jump to -0.04 m.
+  EXPECT_NEAR(second_result.selected_lateral_m, 0.08, 1e-9);
+  EXPECT_NEAR(second_result.required_lateral_accel_mps2, -2.0, 1e-9);
+  EXPECT_NEAR(second_result.terminal_lateral_velocity_mps, 0.0, 1e-9);
+}
+
+TEST(V2XOvertakeCoreFrenetDpCorridor, RejectsDisconnectedNextSegmentCorridor)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::FrenetDpConnectedTargetRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionDynamicCorridorSample;
+  using multi_purpose_mpc_ros::v2x_overtake_core::resolve_frenet_dp_connected_target;
+
+  FrenetDpConnectedTargetRequest request;
+  request.envelope.enabled = true;
+  request.envelope.sample =
+    OvertakeMissionDynamicCorridorSample{1.0, 0.5, 1.0, true};
+  request.envelope.current_lateral_m = 0.0;
+  request.envelope.current_lateral_velocity_mps = 0.0;
+  request.envelope.current_speed_mps = 5.0;
+  request.envelope.maximum_lateral_accel_mps2 = 2.0;
+  request.envelope.lateral_accel_reserve_ratio = 1.0;
+  request.desired_lateral_m = 0.75;
+  const auto resolution = resolve_frenet_dp_connected_target(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.feasible);
+}
+
 TEST(V2XOvertakeCoreFrenetDpCorridor, ConstrainsLeftCorridorWithTimedTargetBody)
 {
   using multi_purpose_mpc_ros::v2x_overtake_core::

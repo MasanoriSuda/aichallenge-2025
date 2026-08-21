@@ -3480,6 +3480,29 @@ struct FrenetDpExecutionEnvelopeResolution
 FrenetDpExecutionEnvelopeResolution resolve_frenet_dp_execution_envelope(
   const FrenetDpExecutionEnvelopeRequest & request) noexcept;
 
+struct FrenetDpConnectedTargetRequest
+{
+  FrenetDpExecutionEnvelopeRequest envelope;
+  double desired_lateral_m{};
+};
+
+struct FrenetDpConnectedTargetResolution
+{
+  bool valid{false};
+  bool feasible{false};
+  FrenetDpExecutionEnvelopeResolution envelope;
+  double selected_lateral_m{};
+  double required_lateral_accel_mps2{};
+  double terminal_lateral_velocity_mps{};
+};
+
+/// Resolve one target segment from the preceding segment state. Repeating this
+/// helper over the horizon proves the existence of one connected lateral
+/// reference instead of accepting samples that are only independently
+/// reachable from the measured pose.
+FrenetDpConnectedTargetResolution resolve_frenet_dp_connected_target(
+  const FrenetDpConnectedTargetRequest & request) noexcept;
+
 struct FrenetDpTargetConstrainedCorridorRequest
 {
   bool enabled{false};

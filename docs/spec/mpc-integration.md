@@ -1585,6 +1585,27 @@ mpc:
 - `v2x_overtake_forbidden_wp_ranges` は `[start, end]` の配列で指定し、ヘアピン入口など追い抜き禁止区間の抑制に使う。ただし通常はコース位置固定の禁止より `v2x_overtake_guard_*` の条件で抑制する。
 - 既定 `false` のため、通常設定では既存挙動を維持する。
 
+### Dynamic Escape MPCC接続と連続profile（2026-08-22、2025由来の暫定）
+
+`progress_contouring_mpcc_overtake_only=true`でも、OvertakeLineの
+`ShiftOut / Pass / Return`に加えて、validated Dynamic Escapeを
+contouring-progress MPCCの対象にする。Dynamic Escapeは高位phaseが`Idle`のまま
+動的障害物を回避するため、phaseだけでlegacy elapsed-time MPCへ戻してはならない。
+progress preparationまたはextended dynamicsが不成立の場合は、既存の3-state progress
+MPCCまたはlegacy MPC縮退を維持し、停止へ直結させない。
+
+Dynamic Escapeの到達性bridgeは、各stageを同じ実測横位置から独立に判定せず、
+前stageで選択した横位置と終端横速度を次stageへ渡すforward passとする。各segmentの
+collision corridorと横加速度reserveの交差内へsoft targetをclipし、horizon全体に一つの
+連続target profileが作れない候補はexact tracking QPへ投入しない。hard collision corridor、
+壁clearance、footprint preflightは緩和しない。
+
+`Overtake decision trace: stage=tracking`は`connected_profile`、`segment_shift`、
+`required_ay`、`solver_formulation`、`formulation_source`、`workspace_reset`を出力する。
+これにより、幾何候補不成立、profile接続不成立、MPC/MPCC preparation縮退、OSQP数値収束
+失敗を区別する。この処理は2025 AWSIM競技シミュレーション向けの暫定であり、
+2026公式仕様または実車安全仕様ではない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

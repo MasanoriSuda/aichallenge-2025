@@ -200,6 +200,14 @@ struct TrackingTrace {
   double corridor_width_m{std::numeric_limits<double>::quiet_NaN()};
   double maximum_target_adjustment_m{
       std::numeric_limits<double>::quiet_NaN()};
+  bool connected_profile{false};
+  double maximum_segment_target_shift_m{
+      std::numeric_limits<double>::quiet_NaN()};
+  double maximum_required_lateral_accel_mps2{
+      std::numeric_limits<double>::quiet_NaN()};
+  std::string solver_formulation{"not-evaluated"};
+  std::string formulation_activation_source{"not-evaluated"};
+  bool solver_workspace_reset{false};
   bool cold_retry_attempted{false};
   bool cold_retry_succeeded{false};
   bool qualification_hold_available{false};

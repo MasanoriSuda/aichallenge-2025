@@ -6700,6 +6700,53 @@ FrenetDpExecutionEnvelopeResolution resolve_frenet_dp_execution_envelope(
   return resolution;
 }
 
+FrenetDpConnectedTargetResolution resolve_frenet_dp_connected_target(
+  const FrenetDpConnectedTargetRequest & request) noexcept
+{
+  constexpr double kEpsilon = 1e-9;
+  FrenetDpConnectedTargetResolution resolution;
+  if (!std::isfinite(request.desired_lateral_m)) {
+    return resolution;
+  }
+  resolution.envelope = resolve_frenet_dp_execution_envelope(request.envelope);
+  resolution.valid = resolution.envelope.valid;
+  if (!resolution.envelope.valid || !resolution.envelope.feasible) {
+    return resolution;
+  }
+  const double duration_sec = resolution.envelope.arrival_time_sec;
+  if (!std::isfinite(duration_sec) || duration_sec <= 0.0) {
+    resolution.valid = false;
+    return resolution;
+  }
+  resolution.selected_lateral_m = std::clamp(
+    request.desired_lateral_m,
+    resolution.envelope.sample.lower_lateral_m,
+    resolution.envelope.sample.upper_lateral_m);
+  resolution.required_lateral_accel_mps2 =
+    2.0 * (
+    resolution.selected_lateral_m - request.envelope.current_lateral_m -
+    request.envelope.current_lateral_velocity_mps * duration_sec) /
+    (duration_sec * duration_sec);
+  const double maximum_lateral_accel_mps2 =
+    resolution.envelope.effective_maximum_lateral_accel_mps2;
+  if (
+    !std::isfinite(resolution.required_lateral_accel_mps2) ||
+    !std::isfinite(maximum_lateral_accel_mps2) ||
+    std::abs(resolution.required_lateral_accel_mps2) >
+    maximum_lateral_accel_mps2 + kEpsilon)
+  {
+    return resolution;
+  }
+  resolution.terminal_lateral_velocity_mps =
+    request.envelope.current_lateral_velocity_mps +
+    resolution.required_lateral_accel_mps2 * duration_sec;
+  if (!std::isfinite(resolution.terminal_lateral_velocity_mps)) {
+    return resolution;
+  }
+  resolution.feasible = true;
+  return resolution;
+}
+
 FrenetDpTargetConstrainedCorridorResolution constrain_frenet_dp_corridor_to_target(
   const FrenetDpTargetConstrainedCorridorRequest & request) noexcept
 {

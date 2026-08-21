@@ -311,6 +311,12 @@ TEST(OvertakeDecisionTrace, FormatsTrackingFailureAndRecovery) {
   tracking.tracking_wall_contract_reason = "footprint-validation-only";
   tracking.corridor_width_m = 2.3;
   tracking.maximum_target_adjustment_m = 0.4;
+  tracking.connected_profile = true;
+  tracking.maximum_segment_target_shift_m = 0.12;
+  tracking.maximum_required_lateral_accel_mps2 = 3.5;
+  tracking.solver_formulation = "progress-3state";
+  tracking.formulation_activation_source = "dynamic-obstacle-escape";
+  tracking.solver_workspace_reset = true;
   tracking.cold_retry_attempted = true;
   tracking.initial_solver_reason = "warm maximum iterations reached";
 
@@ -325,6 +331,15 @@ TEST(OvertakeDecisionTrace, FormatsTrackingFailureAndRecovery) {
     failed.find("tracking_contract=1/footprint-validation-only"),
     std::string::npos);
   EXPECT_NE(failed.find("cold_retry=1/0"), std::string::npos);
+  EXPECT_NE(failed.find("connected_profile=1"), std::string::npos);
+  EXPECT_NE(failed.find("segment_shift=0.12m"), std::string::npos);
+  EXPECT_NE(failed.find("required_ay=3.50mps2"), std::string::npos);
+  EXPECT_NE(
+    failed.find("solver_formulation=progress-3state"), std::string::npos);
+  EXPECT_NE(
+    failed.find("formulation_source=dynamic-obstacle-escape"),
+    std::string::npos);
+  EXPECT_NE(failed.find("workspace_reset=1"), std::string::npos);
   EXPECT_NE(failed.find("qualification_hold=0/0/nanmps/nanrad"),
             std::string::npos);
 

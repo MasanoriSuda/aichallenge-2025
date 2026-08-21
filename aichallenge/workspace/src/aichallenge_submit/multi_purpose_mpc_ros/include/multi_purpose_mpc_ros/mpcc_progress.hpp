@@ -14,6 +14,36 @@
 namespace multi_purpose_mpc_ros::mpcc_progress
 {
 
+enum class ActivationSource
+{
+  Disabled,
+  Global,
+  OvertakeExecution,
+  DynamicObstacleEscape,
+  OvertakeScopeInactive,
+};
+
+struct ActivationRequest
+{
+  bool enabled{false};
+  bool overtake_only{true};
+  bool overtake_execution_phase{false};
+  bool dynamic_obstacle_escape_active{false};
+};
+
+struct ActivationResolution
+{
+  bool requested{false};
+  ActivationSource source{ActivationSource::Disabled};
+};
+
+/// Keep formulation ownership in one place. Dynamic-obstacle escape is a
+/// lateral/longitudinal race-control action even while the high-level
+/// OvertakeLine phase is Idle, so it must not silently fall back to the legacy
+/// elapsed-time MPC solely because of that phase label.
+ActivationResolution resolve_activation(const ActivationRequest & request) noexcept;
+const char * activation_source_name(ActivationSource source) noexcept;
+
 struct Config
 {
   double minimum_reference_speed_mps{0.5};

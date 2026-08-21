@@ -2047,11 +2047,14 @@ struct DynamicObstacleLateralEscapeBridgeResult
 {
   bool evaluated{false};
   bool feasible{false};
+  bool connected_profile{false};
   bool reachability_constrained{false};
   std::size_t checked_sample_count{0U};
   std::size_t reject_index{0U};
   double reject_path_distance_m{std::numeric_limits<double>::quiet_NaN()};
   double maximum_target_adjustment_m{0.0};
+  double maximum_segment_target_shift_m{0.0};
+  double maximum_required_lateral_accel_mps2{0.0};
   bool static_wall_preflight_evaluated{false};
   bool static_wall_preflight_feasible{false};
   bool static_wall_margin_escape_used{false};
@@ -2206,6 +2209,11 @@ struct V2XBehaviorOutput
   double dynamic_obstacle_lateral_escape_corridor_width_m{
     std::numeric_limits<double>::quiet_NaN()};
   double dynamic_obstacle_lateral_escape_maximum_target_adjustment_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  bool dynamic_obstacle_lateral_escape_connected_profile{false};
+  double dynamic_obstacle_lateral_escape_maximum_segment_target_shift_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double dynamic_obstacle_lateral_escape_maximum_required_lateral_accel_mps2{
     std::numeric_limits<double>::quiet_NaN()};
   std::string dynamic_obstacle_cruise_target_id;
   double dynamic_obstacle_cruise_closing_speed{0.0};
@@ -5251,6 +5259,8 @@ struct MpcProblem
   int ref_wp_id{};
   mpc_stage_geometry::Geometry stage_geometry;
   bool progress_contouring_active{false};
+  mpcc_progress::ActivationSource progress_contouring_activation_source{
+    mpcc_progress::ActivationSource::Disabled};
   double progress_origin_m{std::numeric_limits<double>::quiet_NaN()};
   std::vector<double> progress_stage_distance_m;
   std::vector<double> progress_path_curvature_radpm;
@@ -16657,6 +16667,14 @@ struct MPC
       planner_output.selected_corridor_width;
     behavior_output.dynamic_obstacle_lateral_escape_maximum_target_adjustment_m =
       dynamic_escape_bridge.maximum_target_adjustment_m;
+    behavior_output.dynamic_obstacle_lateral_escape_connected_profile =
+      dynamic_escape_bridge.connected_profile;
+    behavior_output.
+      dynamic_obstacle_lateral_escape_maximum_segment_target_shift_m =
+      dynamic_escape_bridge.maximum_segment_target_shift_m;
+    behavior_output.
+      dynamic_obstacle_lateral_escape_maximum_required_lateral_accel_mps2 =
+      dynamic_escape_bridge.maximum_required_lateral_accel_mps2;
     std::string dynamic_escape_authority_reason =
       v2x_overtake_core::to_string(dynamic_lateral_escape_authority.reason);
     if (
@@ -17570,9 +17588,14 @@ struct MPC
       overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
       overtake_line_state_.phase == OvertakeLinePhase::Pass ||
       overtake_line_state_.phase == OvertakeLinePhase::Return;
+    const auto progress_contouring_activation = mpcc_progress::resolve_activation(
+      mpcc_progress::ActivationRequest{
+        cfg.progress_contouring_mpcc_enabled,
+        cfg.progress_contouring_mpcc_overtake_only,
+        progress_contouring_execution_phase,
+        behavior_output.dynamic_obstacle_lateral_escape_active});
     const bool progress_contouring_requested =
-      cfg.progress_contouring_mpcc_enabled &&
-      (!cfg.progress_contouring_mpcc_overtake_only || progress_contouring_execution_phase);
+      progress_contouring_activation.requested;
     std::string progress_contouring_reject_reason;
     const auto progress_preparation = progress_contouring_requested ?
       prepare_progress_contouring_mpc(
@@ -17588,7 +17611,10 @@ struct MPC
     {
       RCLCPP_WARN(
         rclcpp::get_logger("mpc_controller"),
-        "Progress-contouring MPCC preparation rejected; using legacy MPC for this cycle: %s",
+        "Progress-contouring MPCC preparation rejected; source=%s, "
+        "dynamic_escape=%d, using legacy MPC for this cycle: %s",
+        mpcc_progress::activation_source_name(progress_contouring_activation.source),
+        behavior_output.dynamic_obstacle_lateral_escape_active ? 1 : 0,
         progress_contouring_reject_reason.c_str());
       progress_contouring_fallback_last_log_sec_ = now_sec;
     }
@@ -17855,6 +17881,7 @@ struct MPC
       q, l, u, P, A_full, N, tracking_wp_id, preview_wp_id, ref_wp_id,
       std::move(stage_geometry),
       progress_contouring_active,
+      progress_contouring_activation.source,
       progress_contouring_active ? model->s : std::numeric_limits<double>::quiet_NaN(),
       progress_contouring_active ? progress_preparation->stage_distance_m :
       std::vector<double>{},
@@ -18693,6 +18720,15 @@ struct MPC
       mpcc_progress::progress_origin_discontinuous(
         last_osqp_progress_origin_m_.value(), problem.progress_origin_m,
         maximum_continuous_progress_step_m);
+    if (problem.dynamic_obstacle_lateral_escape_active) {
+      dynamic_escape_tracking_solver_formulation_ =
+        problem.progress_contouring_active ? "progress-3state" : "legacy-mpc";
+      dynamic_escape_tracking_formulation_activation_source_ =
+        mpcc_progress::activation_source_name(
+        problem.progress_contouring_activation_source);
+      dynamic_escape_tracking_solver_workspace_reset_ =
+        progress_mode_changed || progress_origin_discontinuous;
+    }
     if (progress_mode_changed || progress_origin_discontinuous) {
       // Both modes intentionally keep a 3x2 sparse QP, but state[2] means
       // elapsed time in legacy mode and physical course progress in MPCC mode.
@@ -19818,6 +19854,19 @@ struct MPC
     trace.maximum_target_adjustment_m =
       last_v2x_behavior_output_.
       dynamic_obstacle_lateral_escape_maximum_target_adjustment_m;
+    trace.connected_profile =
+      last_v2x_behavior_output_.dynamic_obstacle_lateral_escape_connected_profile;
+    trace.maximum_segment_target_shift_m =
+      last_v2x_behavior_output_.
+      dynamic_obstacle_lateral_escape_maximum_segment_target_shift_m;
+    trace.maximum_required_lateral_accel_mps2 =
+      last_v2x_behavior_output_.
+      dynamic_obstacle_lateral_escape_maximum_required_lateral_accel_mps2;
+    trace.solver_formulation = dynamic_escape_tracking_solver_formulation_;
+    trace.formulation_activation_source =
+      dynamic_escape_tracking_formulation_activation_source_;
+    trace.solver_workspace_reset =
+      dynamic_escape_tracking_solver_workspace_reset_;
     trace.cold_retry_attempted = dynamic_escape_cold_retry_attempted_;
     trace.cold_retry_succeeded = dynamic_escape_cold_retry_succeeded_;
     trace.initial_solver_reason = dynamic_escape_cold_retry_initial_reason_;
@@ -20343,6 +20392,9 @@ struct MPC
     dynamic_escape_cold_retry_attempted_ = false;
     dynamic_escape_cold_retry_succeeded_ = false;
     dynamic_escape_cold_retry_initial_reason_.clear();
+    dynamic_escape_tracking_solver_formulation_ = "not-evaluated";
+    dynamic_escape_tracking_formulation_activation_source_ = "not-evaluated";
+    dynamic_escape_tracking_solver_workspace_reset_ = false;
     if (cfg.N < 2) {
       return safe_failure_control("mpc.N must be at least 2", now_sec);
     }
@@ -20364,6 +20416,13 @@ struct MPC
       model->spatial_state = model->t2s(tracking_waypoint, model->temporal_state);
       const MpcProblem problem =
         init_problem(N, model->safety_margin, now_sec, tracking_wp_id, preview_wp_id);
+      if (problem.dynamic_obstacle_lateral_escape_active) {
+        dynamic_escape_tracking_solver_formulation_ =
+          problem.progress_contouring_active ? "progress-3state" : "legacy-mpc";
+        dynamic_escape_tracking_formulation_activation_source_ =
+          mpcc_progress::activation_source_name(
+          problem.progress_contouring_activation_source);
+      }
       if (!problem.lateral_bounds_contract_valid) {
         static rclcpp::Clock bound_contract_log_clock{RCL_STEADY_TIME};
         RCLCPP_ERROR_THROTTLE(
@@ -20514,6 +20573,8 @@ struct MPC
         dec = legacy_outcome.result->primal;
         maximum_constraint_violation =
           legacy_outcome.result->maximum_constraint_violation;
+      } else if (problem.dynamic_obstacle_lateral_escape_active) {
+        dynamic_escape_tracking_solver_formulation_ = "progress-extended";
       }
       std::string dynamic_margin_escape_reject_reason;
       if (!dynamic_margin_escape_solution_wall_safe(
@@ -21082,6 +21143,10 @@ struct MPC
   bool dynamic_escape_cold_retry_attempted_{false};
   bool dynamic_escape_cold_retry_succeeded_{false};
   std::string dynamic_escape_cold_retry_initial_reason_;
+  std::string dynamic_escape_tracking_solver_formulation_{"not-evaluated"};
+  std::string dynamic_escape_tracking_formulation_activation_source_{
+    "not-evaluated"};
+  bool dynamic_escape_tracking_solver_workspace_reset_{false};
   std::optional<bool> last_osqp_progress_contouring_mode_;
   std::optional<double> last_osqp_progress_origin_m_;
   persistent_osqp::PersistentOsqpSolver persistent_extended_osqp_solver_;
@@ -36273,52 +36338,70 @@ private:
       std::max(kEps, cfg.v2x_behavior.overtake_guard_min_speed_for_reachable));
     const double current_lateral_velocity =
       std::max(0.0, current_speed_mps_) * std::sin(model->spatial_state.e_psi);
+    double connected_lateral_m = model->spatial_state.e_y;
+    double connected_lateral_velocity_mps = current_lateral_velocity;
+    double previous_active_path_distance_m = 0.0;
     for (std::size_t i = 0; i < gap_output.target_active.size(); ++i) {
       if (!gap_output.target_active[i]) {
         continue;
       }
       ++result.checked_sample_count;
       const double path_distance = horizon_path_distance_to_index(ref_wp_id, i);
-      const auto envelope = v2x_overtake_core::resolve_frenet_dp_execution_envelope(
-        v2x_overtake_core::FrenetDpExecutionEnvelopeRequest{
-          true,
-          v2x_overtake_core::OvertakeMissionDynamicCorridorSample{
-            path_distance, gap_output.lb[i], gap_output.ub[i], true},
-          model->spatial_state.e_y,
-          current_lateral_velocity,
-          speed_for_reachability,
-          std::max(0.0, cfg.v2x_behavior.overtake_guard_max_lateral_accel),
-          cfg.v2x_behavior.dynamic_obstacle_lateral_escape_lateral_accel_reserve_ratio});
-      if (!envelope.valid || !envelope.feasible) {
+      const double segment_distance =
+        std::isfinite(path_distance) && std::isfinite(previous_active_path_distance_m) ?
+        std::max(0.0, path_distance - previous_active_path_distance_m) :
+        std::numeric_limits<double>::quiet_NaN();
+      const auto connected = v2x_overtake_core::resolve_frenet_dp_connected_target(
+        v2x_overtake_core::FrenetDpConnectedTargetRequest{
+          v2x_overtake_core::FrenetDpExecutionEnvelopeRequest{
+            true,
+            v2x_overtake_core::OvertakeMissionDynamicCorridorSample{
+              segment_distance, gap_output.lb[i], gap_output.ub[i], true},
+            connected_lateral_m,
+            connected_lateral_velocity_mps,
+            speed_for_reachability,
+            std::max(0.0, cfg.v2x_behavior.overtake_guard_max_lateral_accel),
+            cfg.v2x_behavior.dynamic_obstacle_lateral_escape_lateral_accel_reserve_ratio},
+          gap_output.target_ey[i]});
+      if (!connected.valid || !connected.feasible) {
         result.reject_index = i;
         result.reject_path_distance_m = path_distance;
-        result.reason = envelope.valid ?
-          "corridor is outside the reachable lateral envelope" :
-          "invalid reachable lateral envelope input";
+        result.reason = connected.valid ?
+          "corridor is disconnected from preceding reachable lateral state" :
+          "invalid connected reachable lateral profile input";
         return result;
       }
 
       result.reachability_constrained =
-        result.reachability_constrained || envelope.reachability_constrained;
-      const double bridged_target = clip(
-        gap_output.target_ey[i],
-        envelope.sample.lower_lateral_m,
-        envelope.sample.upper_lateral_m);
+        result.reachability_constrained ||
+        connected.envelope.reachability_constrained;
+      const double bridged_target = connected.selected_lateral_m;
       result.maximum_target_adjustment_m = std::max(
         result.maximum_target_adjustment_m,
         std::abs(bridged_target - gap_output.target_ey[i]));
+      result.maximum_segment_target_shift_m = std::max(
+        result.maximum_segment_target_shift_m,
+        std::abs(bridged_target - connected_lateral_m));
+      result.maximum_required_lateral_accel_mps2 = std::max(
+        result.maximum_required_lateral_accel_mps2,
+        std::abs(connected.required_lateral_accel_mps2));
       // Keep the original collision corridor as the hard bound. Only bridge
-      // the reference into the portion that is reachable from the measured
-      // state; narrowing the hard interval here would make the QP less robust.
+      // the reference into a connected portion reachable from the preceding
+      // stage; narrowing the hard interval here would make the QP less robust.
       gap_output.target_ey[i] = bridged_target;
+      connected_lateral_m = bridged_target;
+      connected_lateral_velocity_mps =
+        connected.terminal_lateral_velocity_mps;
+      previous_active_path_distance_m = path_distance;
     }
 
     if (result.checked_sample_count == 0U) {
       result.reason = "gap planner has no active lateral sample";
       return result;
     }
+    result.connected_profile = true;
     result.feasible = true;
-    result.reason = "reachable";
+    result.reason = "connected-reachable";
     return result;
   }
 

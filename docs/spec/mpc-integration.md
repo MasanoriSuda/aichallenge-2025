@@ -207,6 +207,28 @@ handoffを禁止する。診断は`DP execution authority retained/released`の`
 この処理は2025 AWSIM競技シミュレーションで観測したMPC→MPCC切替時の逸走対策であり、
 2026公式仕様ではない。
 
+### Unified Race MPCC foundation（2026-08-21、2025由来の暫定）
+
+通常MPCと追い越しMPCCの接続不整合を減らし、将来の常時Race MPCCへ段階移行するため、
+horizonの物理座標を`StageGeometry`へ一本化する。stage 0は現在tracking waypointから最初の
+予測state waypointへの遷移であり、dynamics、進捗距離、実行trajectory、wall検証、physical
+certificateは同じtransition/cumulative distanceを使用する。consumerごとに一stage先を再計算
+してはならない。
+
+非同期の左右extended-MPCC評価は、snapshotごとにOSQP workspaceを作り直さず、Left/Right別の
+persistent solver contextを共有する。context keyはasync epoch、target ID、side、horizon sizeで、
+key変更またはcourse-progress discontinuity時だけcold resetする。周期ログの`warm`、`reset`で
+cold-start反復を判別する。
+
+physical execution certificateにはwall合格trajectoryだけでなく、生成元targetのID、source/receipt
+時刻、course progress/lateral、V2X observation generationを保持する。async採用およびEntry commit時に
+現観測との差を再検証し、同一IDでも別時刻・別コース枝・許容外の横移動ならfail-closedとする。
+
+診断にはLeft / Right / Hold / Returnを同一schemaで表す`Race MPCC shadow`を追加する。この段階で
+solver接続済みなのはLeft/Rightだけで、Hold/Returnは未評価理由を明示する。`authority=shadow`の間は
+現行MPC/OvertakeLine/DynamicEscapeの実行権限を変更しない。shadowの動的検証後にHold/Returnを同一
+定式化へ接続し、最後にMPC↔MPCCの切替廃止を別ステアリングで判断する。
+
 ### Wall / Contact Stuck Recovery（Implementation Complete / dev3 Enabled）
 
 前進専用の現行MPCは、正面が壁に押し付けられると後退できない。

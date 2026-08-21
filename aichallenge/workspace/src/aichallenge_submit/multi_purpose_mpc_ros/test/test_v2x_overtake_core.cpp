@@ -4292,6 +4292,7 @@ TEST(V2XOvertakeCoreSpeed, ReusesFreshAsyncTacticalResultForExactContext)
   request.mission_generation_matches = true;
   request.phase_matches = true;
   request.side_matches = true;
+  request.target_provenance_matches = true;
   request.now_sec = 10.45;
   request.snapshot_sec = 10.0;
   request.maximum_age_sec = 0.50;
@@ -4304,6 +4305,9 @@ TEST(V2XOvertakeCoreSpeed, ReusesFreshAsyncTacticalResultForExactContext)
   request.phase_matches = false;
   EXPECT_FALSE(can_reuse_async_tactical_result(request));
   request.phase_matches = true;
+  request.target_provenance_matches = false;
+  EXPECT_FALSE(can_reuse_async_tactical_result(request));
+  request.target_provenance_matches = true;
   request.current_hard_fault = true;
   EXPECT_FALSE(can_reuse_async_tactical_result(request));
 }

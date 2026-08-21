@@ -2408,7 +2408,8 @@ bool can_reuse_async_tactical_result(
   if (
     !request.enabled || !request.result_success || !request.target_matches ||
     !request.context_epoch_matches || !request.mission_generation_matches ||
-    !request.phase_matches || !request.side_matches || request.current_hard_fault ||
+    !request.phase_matches || !request.side_matches ||
+    !request.target_provenance_matches || request.current_hard_fault ||
     !std::isfinite(request.now_sec) || !std::isfinite(request.snapshot_sec) ||
     !std::isfinite(request.maximum_age_sec) || request.maximum_age_sec <= 0.0 ||
     request.now_sec + 1e-9 < request.snapshot_sec)

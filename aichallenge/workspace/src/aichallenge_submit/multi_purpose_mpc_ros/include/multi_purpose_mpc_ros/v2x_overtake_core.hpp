@@ -9,6 +9,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include <multi_purpose_mpc_ros/race_mpcc_foundation.hpp>
+
 namespace multi_purpose_mpc_ros::v2x_overtake_core
 {
 
@@ -1481,6 +1483,9 @@ struct AsyncTacticalResultLeaseRequest
   bool mission_generation_matches{false};
   bool phase_matches{false};
   bool side_matches{false};
+  /// Identity is not enough on a folded course. The result must still match
+  /// the bounded target observation from which its corridor was solved.
+  bool target_provenance_matches{false};
   bool current_hard_fault{false};
   double now_sec{};
   double snapshot_sec{-std::numeric_limits<double>::infinity()};
@@ -4309,6 +4314,8 @@ struct OvertakeMissionCandidate
     std::numeric_limits<double>::quiet_NaN()};
   std::vector<double> physical_execution_certificate_path_distances_m{};
   std::vector<double> physical_execution_certificate_lateral_path_m{};
+  race_mpcc_foundation::TargetProvenance
+  physical_execution_certificate_target_provenance{};
   /// New-entry reserve needed to become laterally body-clear before closing
   /// consumes the longitudinal clearance. This is selection-transparent
   /// metadata for diagnostics; active Mission replans do not reapply it.

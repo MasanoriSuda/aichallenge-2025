@@ -12,6 +12,7 @@
 #include <multi_purpose_mpc_ros/latest_only_worker.hpp>
 #include <multi_purpose_mpc_ros/mpcc_progress.hpp>
 #include <multi_purpose_mpc_ros/mpc_state_prediction.hpp>
+#include <multi_purpose_mpc_ros/mpc_stage_geometry.hpp>
 #include <multi_purpose_mpc_ros/mpc_velocity_limit.hpp>
 #include <multi_purpose_mpc_ros/mpc_waypoint_association.hpp>
 #include <multi_purpose_mpc_ros/mpc_waypoint_preview.hpp>
@@ -20,6 +21,7 @@
 #include <multi_purpose_mpc_ros/path_core.hpp>
 #include <multi_purpose_mpc_ros/persistent_osqp.hpp>
 #include <multi_purpose_mpc_ros/recovery_footprint.hpp>
+#include <multi_purpose_mpc_ros/race_mpcc_foundation.hpp>
 #include <multi_purpose_mpc_ros/recovery_mpc.hpp>
 #include <multi_purpose_mpc_ros/runtime_speed_profile.hpp>
 #include <multi_purpose_mpc_ros/start_grid_grace.hpp>
@@ -107,6 +109,8 @@ namespace path_core = ::multi_purpose_mpc_ros::path_core;
 namespace awsim_boost = ::multi_purpose_mpc_ros::awsim_boost;
 namespace awsim_control_mode = ::multi_purpose_mpc_ros::awsim_control_mode;
 namespace mpc_state_prediction = ::multi_purpose_mpc_ros::mpc_state_prediction;
+namespace mpc_stage_geometry = ::multi_purpose_mpc_ros::mpc_stage_geometry;
+namespace race_mpcc = ::multi_purpose_mpc_ros::race_mpcc_foundation;
 namespace mpc_velocity_limit = ::multi_purpose_mpc_ros::mpc_velocity_limit;
 namespace mpc_waypoint_association = ::multi_purpose_mpc_ros::mpc_waypoint_association;
 namespace mpc_waypoint_preview = ::multi_purpose_mpc_ros::mpc_waypoint_preview;
@@ -2384,6 +2388,9 @@ struct V2XBehaviorOutput
   double locked_target_longitudinal_acceleration{};
   bool locked_target_longitudinal_acceleration_valid{false};
   double locked_target_receipt_sec{-std::numeric_limits<double>::infinity()};
+  double locked_target_source_stamp_sec{-std::numeric_limits<double>::infinity()};
+  double locked_target_course_progress_m{std::numeric_limits<double>::quiet_NaN()};
+  std::uint64_t locked_target_observation_generation{0U};
   double overtake_entry_target_speed{std::numeric_limits<double>::infinity()};
   double overtake_entry_relative_speed{std::numeric_limits<double>::quiet_NaN()};
   double overtake_entry_speed_stable_sec{};
@@ -3052,6 +3059,7 @@ struct V2XGapPlanner
     double ax{};
     double ay{};
     double velocity_observation_interval_sec{};
+    std::uint64_t observation_generation{};
     std::uint64_t recovery_epoch{};
     bool recovery_sample_valid{false};
     bool has_sample{false};
@@ -3147,6 +3155,7 @@ struct V2XGapPlanner
       last_message_receipt_interval_sec_;
     snapshot->last_message_source_stamp_sec_ = last_message_source_stamp_sec_;
     snapshot->last_message_recovery_epoch_ = last_message_recovery_epoch_;
+    snapshot->observation_generation_ = observation_generation_;
     snapshot->recovery_epoch_ = recovery_epoch_;
     snapshot->last_message_vehicle_count_ = last_message_vehicle_count_;
     snapshot->last_message_vehicle_ids_ = last_message_vehicle_ids_;
@@ -3170,6 +3179,7 @@ struct V2XGapPlanner
   void update(const V2XVehiclePositionArray & msg, const double receipt_sec)
   {
     std::lock_guard<std::mutex> lock(mutex_);
+    ++observation_generation_;
     if (last_message_receipt_sec_.has_value()) {
       const double interval_sec = receipt_sec - last_message_receipt_sec_.value();
       last_message_receipt_interval_sec_ =
@@ -3303,6 +3313,7 @@ struct V2XGapPlanner
       tracked.ax = ax;
       tracked.ay = ay;
       tracked.velocity_observation_interval_sec = velocity_observation_interval_sec;
+      tracked.observation_generation = observation_generation_;
       tracked.recovery_epoch = recovery_epoch_;
       tracked.recovery_sample_valid =
         !array_header_invalid && !empty_id && !duplicate_id && !invalid_geometry &&
@@ -4876,6 +4887,7 @@ private:
   std::optional<double> last_message_source_stamp_sec_;
   std::optional<std::uint64_t> last_message_recovery_epoch_;
   std::uint64_t recovery_epoch_{0U};
+  std::uint64_t observation_generation_{0U};
   std::size_t last_message_vehicle_count_{0U};
   std::vector<std::string> last_message_vehicle_ids_;
   overtake_core::V2XPeerIdentityTracker peer_identity_tracker_;
@@ -4954,6 +4966,7 @@ struct MpcProblem
   int tracking_wp_id{};
   int preview_wp_id{};
   int ref_wp_id{};
+  mpc_stage_geometry::Geometry stage_geometry;
   bool progress_contouring_active{false};
   double progress_origin_m{std::numeric_limits<double>::quiet_NaN()};
   std::vector<double> progress_stage_distance_m;
@@ -5147,6 +5160,28 @@ struct MpcRtiSqpTelemetryWindow
   std::uint64_t invalid_decision_count{};
 };
 
+/// Long-lived OSQP state for one tactical homotopy. Tactical MPC objects are
+/// immutable snapshots and intentionally short-lived; keeping solver state in
+/// the snapshot made every left/right evaluation a cold start. The context is
+/// shared with snapshots, but reset atomically whenever its planning identity
+/// changes.
+struct ExtendedBranchSolverContext
+{
+  std::mutex mutex;
+  std::uint64_t context_epoch{};
+  std::string target_id;
+  int side_sign{};
+  int horizon_size{};
+  bool identity_initialized{false};
+  persistent_osqp::PersistentOsqpSolver solver;
+  std::optional<persistent_osqp::WarmStart> last_solution;
+  double last_solution_sec{-std::numeric_limits<double>::infinity()};
+  std::optional<double> last_progress_origin_m;
+  std::uint64_t solve_count{};
+  std::uint64_t reset_count{};
+  std::uint64_t warm_start_count{};
+};
+
 struct MPC
 {
   MPC(
@@ -5178,6 +5213,10 @@ struct MPC
       mpcc_lite_async_mailbox_ = std::make_shared<MpccLiteAsyncMailbox>();
       mpcc_lite_async_mailbox_->context_epoch = mpcc_lite_async_context_epoch_;
       mpcc_lite_async_worker_ = std::make_unique<LatestOnlyWorker>();
+      extended_left_branch_solver_context_ =
+        std::make_shared<ExtendedBranchSolverContext>();
+      extended_right_branch_solver_context_ =
+        std::make_shared<ExtendedBranchSolverContext>();
     }
   }
 
@@ -5296,6 +5335,11 @@ struct MPC
       mpcc_lite_shadow_last_feasible_phase_;
     snapshot->mpcc_lite_shadow_last_feasible_side_sign_ =
       mpcc_lite_shadow_last_feasible_side_sign_;
+    snapshot->mpcc_lite_async_context_epoch_ = mpcc_lite_async_context_epoch_;
+    snapshot->extended_left_branch_solver_context_ =
+      extended_left_branch_solver_context_;
+    snapshot->extended_right_branch_solver_context_ =
+      extended_right_branch_solver_context_;
     snapshot->next_overtake_episode_id_ = next_overtake_episode_id_;
     snapshot->next_dynamic_obstacle_lateral_escape_attempt_id_ =
       next_dynamic_obstacle_lateral_escape_attempt_id_;
@@ -6293,6 +6337,9 @@ struct MPC
         evaluation.failure_reason = "branch horizon has fewer than two stages";
         return evaluation;
       }
+      if (active_extended_branch_solver_context_ != nullptr) {
+        active_extended_branch_horizon_size_ = N;
+      }
       ensure_current_control_horizon();
       const auto & tracking_waypoint =
         model->reference_path->get_waypoint(tracking_wp_id);
@@ -6377,6 +6424,10 @@ struct MPC
       const auto outcome = solve_extended_progress_problem(extended.value(), now_sec);
       evaluation.solve_ms = outcome.telemetry.solve_ms;
       evaluation.iterations = outcome.telemetry.iterations;
+      evaluation.warm_start_applied = last_extended_branch_warm_start_applied_;
+      evaluation.solver_context_reset = last_extended_branch_context_reset_;
+      evaluation.solver_context_solve_count =
+        last_extended_branch_context_solve_count_;
       if (!outcome.result.has_value()) {
         evaluation.failure_reason = outcome.failure_detail;
         return evaluation;
@@ -6483,6 +6534,8 @@ struct MPC
         execution_trajectory->path_distance_m;
       evaluation.physical_execution_certificate_lateral_path_m =
         execution_trajectory->lateral_m;
+      evaluation.physical_execution_certificate_target_provenance =
+        locked_target_provenance(source_behavior);
 
       double quadratic_cost = 0.0;
       for (int outer = 0; outer < extended->P.outerSize(); ++outer) {
@@ -6554,6 +6607,14 @@ struct MPC
       auto gap_owner = std::shared_ptr<V2XGapPlanner>(gap_planner->tactical_snapshot());
       auto branch = tactical_snapshot(model_owner.get(), gap_owner.get());
       branch->reference_path_snapshot_owner_ = reference_path_owner;
+      branch->active_extended_branch_solver_context_ = assessment.side > 0 ?
+        branch->extended_left_branch_solver_context_ :
+        branch->extended_right_branch_solver_context_;
+      branch->active_extended_branch_context_epoch_ =
+        mpcc_lite_async_context_epoch_;
+      branch->active_extended_branch_target_id_ = behavior.target_vehicle_id;
+      branch->active_extended_branch_side_sign_ = assessment.side;
+      branch->active_extended_branch_horizon_size_ = horizon_size;
       return branch->evaluate_extended_mpcc_branch(
         behavior, assessment, horizon_size, now_sec);
     } catch (const std::exception & error) {
@@ -6676,6 +6737,8 @@ struct MPC
         selected_branch.physical_execution_certificate_path_distances_m;
       selected_mission.physical_execution_certificate_lateral_path_m =
         selected_branch.physical_execution_certificate_lateral_path_m;
+      selected_mission.physical_execution_certificate_target_provenance =
+        selected_branch.physical_execution_certificate_target_provenance;
     }
     const bool base_line = std::abs(selected_mission.goal_lateral_m) <= kEps;
     behavior.overtake_pass_side_sign = selection.selected_side_sign;
@@ -7504,6 +7567,12 @@ struct MPC
           output.locked_target_longitudinal_acceleration_valid =
             front_longitudinal_acceleration_valid;
           output.locked_target_receipt_sec = vehicle.receipt_sec;
+          output.locked_target_source_stamp_sec = vehicle.stamp_sec;
+          output.locked_target_observation_generation =
+            vehicle.observation_generation;
+          output.locked_target_course_progress_m = use_course_progress ?
+            course_projection.target_path_progress_m :
+            std::numeric_limits<double>::quiet_NaN();
 
           // Direct FollowPrepare -> Pass resume needs a short-horizon check
           // that is independent from the optional global course-lateral gap
@@ -12475,6 +12544,19 @@ struct MPC
         effective_front_risk_level == FrontRiskLevel::EmergencyBrake ||
         overtake_solver_recovery_active_;
       const auto async_result_usable = [&](const MpccLiteAsyncResult & result) {
+          const double result_age_sec = now_sec >= result.snapshot_sec ?
+            now_sec - result.snapshot_sec :
+            std::numeric_limits<double>::infinity();
+          const auto target_provenance = validate_locked_target_provenance(
+            locked_target_provenance(result.behavior), output, result_age_sec);
+          mpcc_lite_async_last_target_provenance_valid_ = target_provenance.valid;
+          mpcc_lite_async_last_target_provenance_reason_ =
+            race_mpcc::target_provenance_reject_reason_name(
+            target_provenance.reject_reason);
+          mpcc_lite_async_last_target_provenance_progress_delta_m_ =
+            target_provenance.progress_delta_m;
+          mpcc_lite_async_last_target_provenance_lateral_delta_m_ =
+            target_provenance.lateral_delta_m;
           return overtake_core::can_reuse_async_tactical_result(
             overtake_core::AsyncTacticalResultLeaseRequest{
               true,
@@ -12485,6 +12567,7 @@ struct MPC
               result.mission_generation == overtake_line_state_.mission_generation,
               result.phase == overtake_line_state_.phase,
               result.locked_side_sign == locked_pass_side,
+              target_provenance.valid,
               current_async_hard_fault,
               now_sec,
               result.snapshot_sec,
@@ -13156,7 +13239,7 @@ struct MPC
           progressive_entry_min_no_return_time_sec);
       };
     const auto apply_mpcc_entry_execution_contract = [&] (
-      overtake_core::OvertakeMissionCandidate mission,
+      overtake_core::OvertakeMissionCandidate & mission,
       const char * source)
       {
         if (mission.pass_side_sign != -1 && mission.pass_side_sign != 1) {
@@ -13172,7 +13255,7 @@ struct MPC
         if (
           physical_execution_certificate_required &&
           !revalidate_overtake_entry_execution_certificate(
-            mission, ref_wp_id, N, lb, ub, now_sec, certificate_reason))
+            mission, output, ref_wp_id, N, lb, ub, now_sec, certificate_reason))
         {
           authoritative_assessment.gap_available = false;
           authoritative_assessment.selected_mission.reset();
@@ -13413,11 +13496,12 @@ struct MPC
           (!std::isfinite(async_entry_mission->dynamic_valid_until_sec) ||
           now_sec <= async_entry_mission->dynamic_valid_until_sec + kEps);
         if (async_entry_context) {
+          auto accepted_async_entry_mission = async_entry_mission.value();
           if (apply_mpcc_entry_execution_contract(
-              async_entry_mission.value(), "async-result"))
+              accepted_async_entry_mission, "async-result"))
           {
             mpcc_lite_control_last_feasible_entry_mission_ =
-              async_entry_mission;
+              accepted_async_entry_mission;
             mpcc_lite_control_last_feasible_target_id_ = output.target_vehicle_id;
             mpcc_lite_control_last_feasible_entry_sec_ = now_sec;
             mpcc_authority_action =
@@ -13489,7 +13573,7 @@ struct MPC
           "Overtake MPCC-lite async: submitted=%lu, replaced=%lu, "
           "completed=%lu, running=%d, pending=%d, adopted=%lu, reused=%lu, cache=%d, "
           "discarded=%lu, failed=%lu, interval=%.3f s, snapshot=%.2f ms, "
-          "compute=%.2f ms, age=%.3f s, "
+          "compute=%.2f ms, age=%.3f s, provenance=%d/%s/%.2f/%.2f, "
           "dual=L%d/%d/%s/p%d/%.1f/%.2f/w%d:%d:%s:%.2f/%s,"
           "R%d/%d/%s/p%d/%.1f/%.2f/w%d:%d:%s:%.2f/%s,"
           "select=%d/%s/boundary=%d/elig=L:%s,R:%s",
@@ -13506,6 +13590,10 @@ struct MPC
           mpcc_lite_async_last_snapshot_ms_,
           mpcc_lite_async_last_compute_ms_,
           mpcc_lite_async_last_result_age_sec_,
+          mpcc_lite_async_last_target_provenance_valid_ ? 1 : 0,
+          mpcc_lite_async_last_target_provenance_reason_.c_str(),
+          mpcc_lite_async_last_target_provenance_progress_delta_m_,
+          mpcc_lite_async_last_target_provenance_lateral_delta_m_,
           output.extended_mpcc_left_branch.attempted ? 1 : 0,
           output.extended_mpcc_left_branch.feasible ? 1 : 0,
           output.extended_mpcc_left_branch.candidate_source.c_str(),
@@ -13538,6 +13626,63 @@ struct MPC
             output.extended_mpcc_branch_selection.left_eligibility),
           mpcc_progress::extended_branch_eligibility_name(
             output.extended_mpcc_branch_selection.right_eligibility));
+
+        const auto shadow_candidate = [](
+          const race_mpcc::Homotopy homotopy,
+          const mpcc_progress::ExtendedBranchEvaluation & branch) {
+            race_mpcc::ShadowCandidate candidate;
+            candidate.homotopy = homotopy;
+            candidate.attempted = branch.attempted;
+            candidate.feasible = branch.feasible;
+            candidate.warm_start_applied = branch.warm_start_applied;
+            candidate.solver_context_reset = branch.solver_context_reset;
+            candidate.solver_context_solve_count =
+              branch.solver_context_solve_count;
+            candidate.objective = branch.objective;
+            candidate.terminal_progress_m = branch.terminal_progress_m;
+            candidate.terminal_velocity_mps = branch.terminal_velocity_mps;
+            candidate.minimum_wall_reserve_m =
+              branch.minimum_lateral_bound_reserve_m;
+            candidate.solve_ms = branch.solve_ms;
+            candidate.iterations = branch.iterations;
+            candidate.reason = branch.failure_reason.empty() ?
+              "feasible" : branch.failure_reason;
+            return candidate;
+          };
+        race_mpcc::ShadowDecision race_shadow;
+        race_shadow.context_epoch = mpcc_lite_async_context_epoch_;
+        race_shadow.target_id = output.target_vehicle_id;
+        race_shadow.target_provenance = locked_target_provenance(output);
+        if (model != nullptr && model->reference_path != nullptr && N > 0) {
+          const auto runtime_geometry = build_stage_geometry(
+            model->wp_id, static_cast<std::size_t>(N));
+          race_shadow.stage_geometry_valid = runtime_geometry.valid;
+          race_shadow.stage_count = runtime_geometry.stages.size();
+          race_shadow.horizon_distance_m = runtime_geometry.valid ?
+            runtime_geometry.stages.back().cumulative_distance_m :
+            std::numeric_limits<double>::quiet_NaN();
+        }
+        race_shadow.candidates[0] = shadow_candidate(
+          race_mpcc::Homotopy::Left, output.extended_mpcc_left_branch);
+        race_shadow.candidates[1] = shadow_candidate(
+          race_mpcc::Homotopy::Right, output.extended_mpcc_right_branch);
+        race_shadow.candidates[2].homotopy = race_mpcc::Homotopy::Hold;
+        race_shadow.candidates[2].reason =
+          "schema-ready/current-path-solve-not-yet-unified";
+        race_shadow.candidates[3].homotopy = race_mpcc::Homotopy::Return;
+        race_shadow.candidates[3].reason =
+          "schema-ready/return-solve-not-yet-unified";
+        race_shadow.selected =
+          output.extended_mpcc_branch_selection.selected_side_sign > 0 ?
+          race_mpcc::Homotopy::Left :
+          (output.extended_mpcc_branch_selection.selected_side_sign < 0 ?
+          race_mpcc::Homotopy::Right : race_mpcc::Homotopy::Hold);
+        race_shadow.selection_reason =
+          mpcc_progress::extended_branch_selection_reason_name(
+          output.extended_mpcc_branch_selection.reason);
+        RCLCPP_INFO(
+          rclcpp::get_logger("mpc_controller"), "Race MPCC shadow: %s",
+          race_mpcc::format_shadow_decision(race_shadow).c_str());
         mpcc_lite_async_last_status_log_sec_ = now_sec;
       }
     }
@@ -14499,7 +14644,7 @@ struct MPC
         }
       }
       if (admitted_mission.has_value()) {
-        const auto & mission = admitted_mission.value();
+        auto & mission = admitted_mission.value();
         apply_mpcc_entry_execution_contract(mission, "cached-fresh");
       }
     } else if (
@@ -15295,6 +15440,16 @@ struct MPC
     }
     kappa_pred[N - 1] = std::tan(current_control[nu * N - 1]) / model->length;
 
+    // Build one immutable stage-index contract before any dynamics, wall or
+    // certificate consumer is populated. Stage zero is the transition from the
+    // current tracking waypoint to the first predicted state waypoint.
+    auto stage_geometry = build_stage_geometry(
+      tracking_wp_id, static_cast<std::size_t>(N));
+    if (!stage_geometry.valid || stage_geometry.stages.size() != static_cast<std::size_t>(N)) {
+      throw std::runtime_error(
+              std::string{"MPC stage geometry invalid: "} + stage_geometry.reject_reason);
+    }
+
     // Keep stage geometry separate from dynamics construction. The legacy
     // spatial-time model and the progress-contouring model share the same
     // corridor/reference generation below, then select one 3x2 dynamics block.
@@ -15302,13 +15457,12 @@ struct MPC
     std::vector<double> stage_tracking_speed_mps(static_cast<std::size_t>(N));
     std::vector<double> stage_tracking_curvature_radpm(static_cast<std::size_t>(N));
     for (int n = 0; n < N; ++n) {
-      const auto & tracking_waypoint =
-        model->reference_path->get_waypoint(tracking_wp_id + n);
-      const auto & next_tracking_waypoint =
-        model->reference_path->get_waypoint(tracking_wp_id + n + 1);
+      const auto & geometry_stage = stage_geometry.stages[static_cast<std::size_t>(n)];
+      const auto & tracking_waypoint = model->reference_path->get_waypoint(
+        geometry_stage.transition_from_waypoint);
       const auto & preview_waypoint =
         model->reference_path->get_waypoint(preview_wp_id + n);
-      const double delta_s = next_tracking_waypoint.distance_to(tracking_waypoint);
+      const double delta_s = geometry_stage.transition_distance_m;
       const double tracking_kappa = tracking_waypoint.kappa;
       const double tracking_v = clip(tracking_waypoint.v_ref, umin[0], umax[0]);
       const double preview_kappa = preview_waypoint.kappa;
@@ -15341,7 +15495,7 @@ struct MPC
     if (!model->reference_path->path_constraints_upper.empty()) {
       const int constraint_count =
         static_cast<int>(model->reference_path->path_constraints_upper.size());
-      const int candidate_ref_wp_id = tracking_wp_id + 1;
+      const int candidate_ref_wp_id = stage_geometry.stages.front().state_waypoint;
       ref_wp_id = model->reference_path->circular ?
         ((candidate_ref_wp_id % constraint_count) + constraint_count) % constraint_count :
         std::clamp(candidate_ref_wp_id, 0, constraint_count - 1);
@@ -17112,7 +17266,7 @@ struct MPC
       progress_execution_lateral_upper_m.reserve(static_cast<std::size_t>(N));
       for (int i = 0; i < N; ++i) {
         progress_execution_path_distance_m.push_back(
-          horizon_path_distance_to_index(ref_wp_id, static_cast<std::size_t>(i)));
+          stage_geometry.stages[static_cast<std::size_t>(i)].cumulative_distance_m);
         progress_execution_lateral_lower_m.push_back(lb[i]);
         progress_execution_lateral_upper_m.push_back(ub[i]);
       }
@@ -17130,8 +17284,7 @@ struct MPC
       dynamic_obstacle_escape_lateral_upper.resize(N);
       for (int i = 0; i < N; ++i) {
         dynamic_obstacle_escape_path_distance_m.push_back(
-          horizon_path_distance_to_index(
-            ref_wp_id, static_cast<std::size_t>(i)));
+          stage_geometry.stages[static_cast<std::size_t>(i)].cumulative_distance_m);
         dynamic_obstacle_escape_lateral_lower[i] = lb[i];
         dynamic_obstacle_escape_lateral_upper[i] = ub[i];
       }
@@ -17155,6 +17308,7 @@ struct MPC
 
     return MpcProblem{
       q, l, u, P, A_full, N, tracking_wp_id, preview_wp_id, ref_wp_id,
+      std::move(stage_geometry),
       progress_contouring_active,
       progress_contouring_active ? model->s : std::numeric_limits<double>::quiet_NaN(),
       progress_contouring_active ? progress_preparation->stage_distance_m :
@@ -17566,28 +17720,67 @@ struct MPC
   persistent_osqp::SolveOutcome solve_extended_progress_problem(
     const ExtendedProgressMpcProblem & problem, const double now_sec)
   {
+    std::unique_lock<std::mutex> branch_context_lock;
+    auto * solver = &persistent_extended_osqp_solver_;
+    auto * last_solution = &last_extended_osqp_solution_;
+    auto * last_solution_sec = &last_extended_osqp_solution_sec_;
+    auto * last_progress_origin = &last_extended_osqp_progress_origin_m_;
+    last_extended_branch_warm_start_applied_ = false;
+    last_extended_branch_context_reset_ = false;
+    last_extended_branch_context_solve_count_ = 0U;
+    if (active_extended_branch_solver_context_ != nullptr) {
+      auto & context = *active_extended_branch_solver_context_;
+      branch_context_lock = std::unique_lock<std::mutex>(context.mutex);
+      const bool identity_matches =
+        context.identity_initialized &&
+        context.context_epoch == active_extended_branch_context_epoch_ &&
+        context.target_id == active_extended_branch_target_id_ &&
+        context.side_sign == active_extended_branch_side_sign_ &&
+        context.horizon_size == active_extended_branch_horizon_size_;
+      if (!identity_matches) {
+        context.solver.reset();
+        context.last_solution.reset();
+        context.last_solution_sec = -std::numeric_limits<double>::infinity();
+        context.last_progress_origin_m.reset();
+        context.context_epoch = active_extended_branch_context_epoch_;
+        context.target_id = active_extended_branch_target_id_;
+        context.side_sign = active_extended_branch_side_sign_;
+        context.horizon_size = active_extended_branch_horizon_size_;
+        context.identity_initialized = true;
+        ++context.reset_count;
+        last_extended_branch_context_reset_ = true;
+      }
+      solver = &context.solver;
+      last_solution = &context.last_solution;
+      last_solution_sec = &context.last_solution_sec;
+      last_progress_origin = &context.last_progress_origin_m;
+      ++context.solve_count;
+      last_extended_branch_context_solve_count_ = context.solve_count;
+    }
+
     const std::optional<double> previous_progress_origin =
-      last_extended_osqp_progress_origin_m_;
+      *last_progress_origin;
     const bool progress_discontinuous =
       previous_progress_origin.has_value() &&
       mpcc_progress::progress_origin_discontinuous(
         previous_progress_origin.value(), problem.progress_origin_m,
         std::max(2.0, cfg.progress_contouring.trust_region_backward_m));
     if (progress_discontinuous) {
-      persistent_extended_osqp_solver_.reset();
-      last_extended_osqp_solution_.reset();
-      last_extended_osqp_solution_sec_ = -std::numeric_limits<double>::infinity();
+      solver->reset();
+      last_solution->reset();
+      *last_solution_sec = -std::numeric_limits<double>::infinity();
+      last_extended_branch_context_reset_ = true;
     }
-    last_extended_osqp_progress_origin_m_ = problem.progress_origin_m;
+    *last_progress_origin = problem.progress_origin_m;
     std::optional<persistent_osqp::WarmStart> warm_start;
     const bool fresh =
-      last_extended_osqp_solution_.has_value() && std::isfinite(now_sec) &&
-      std::isfinite(last_extended_osqp_solution_sec_) &&
-      now_sec >= last_extended_osqp_solution_sec_ &&
-      now_sec - last_extended_osqp_solution_sec_ <= kOsqpWarmStartMaximumAgeSec;
+      last_solution->has_value() && std::isfinite(now_sec) &&
+      std::isfinite(*last_solution_sec) &&
+      now_sec >= *last_solution_sec &&
+      now_sec - *last_solution_sec <= kOsqpWarmStartMaximumAgeSec;
     if (fresh) {
       warm_start = persistent_osqp::shift_mpc_warm_start(
-        last_extended_osqp_solution_.value(), static_cast<std::size_t>(problem.N),
+        last_solution->value(), static_cast<std::size_t>(problem.N),
         static_cast<std::size_t>(mpcc_progress::kExtendedStateDimension),
         static_cast<std::size_t>(mpcc_progress::kExtendedInputDimension));
       if (
@@ -17599,17 +17792,25 @@ struct MPC
         warm_start.reset();
       }
     }
-    auto outcome = persistent_extended_osqp_solver_.solve(
+    auto outcome = solver->solve(
       problem.P, problem.A, problem.q, problem.l, problem.u, warm_start);
+    last_extended_branch_warm_start_applied_ =
+      outcome.telemetry.warm_start_applied;
+    if (
+      active_extended_branch_solver_context_ != nullptr &&
+      outcome.telemetry.warm_start_applied)
+    {
+      ++active_extended_branch_solver_context_->warm_start_count;
+    }
     record_osqp_telemetry(outcome, now_sec);
     if (!outcome.result.has_value()) {
-      last_extended_osqp_solution_.reset();
-      last_extended_osqp_solution_sec_ = -std::numeric_limits<double>::infinity();
+      last_solution->reset();
+      *last_solution_sec = -std::numeric_limits<double>::infinity();
       return outcome;
     }
-    last_extended_osqp_solution_ = persistent_osqp::WarmStart{
+    *last_solution = persistent_osqp::WarmStart{
       outcome.result->primal, outcome.result->dual};
-    last_extended_osqp_solution_sec_ = now_sec;
+    *last_solution_sec = now_sec;
     return outcome;
   }
 
@@ -17772,6 +17973,12 @@ struct MPC
     last_extended_osqp_solution_.reset();
     last_extended_osqp_solution_sec_ = -std::numeric_limits<double>::infinity();
     last_extended_osqp_progress_origin_m_.reset();
+    // Do not block the 40 Hz callback on a branch worker which may currently
+    // hold its solver mutex. Epoch invalidation makes the in-flight result
+    // unadoptable and causes each context to reset lazily on its next solve.
+    if (!mpcc_lite_async_worker_context_) {
+      invalidate_mpcc_lite_async_results();
+    }
     extended_progress_circuit_breaker_.reset();
     extended_progress_reentry_gate_.reset();
     extended_mode_handoff_.reset();
@@ -18460,6 +18667,7 @@ struct MPC
 
   bool revalidate_overtake_entry_execution_certificate(
     overtake_core::OvertakeMissionCandidate & mission,
+    const V2XBehaviorOutput & current_behavior,
     const int ref_wp_id, const int horizon_size,
     const Eigen::VectorXd & lower_bound, const Eigen::VectorXd & upper_bound,
     const double now_sec, std::string & reject_reason) const
@@ -18495,6 +18703,20 @@ struct MPC
       certificate_age_sec > maximum_age_sec + kEps)
     {
       reject_reason = "physical execution certificate stale";
+      return false;
+    }
+
+    const auto target_validation = validate_locked_target_provenance(
+      mission.physical_execution_certificate_target_provenance,
+      current_behavior, certificate_age_sec);
+    if (!target_validation.valid) {
+      std::ostringstream reason;
+      reason << "physical execution target provenance "
+             << race_mpcc::target_provenance_reject_reason_name(
+        target_validation.reject_reason)
+             << ", ds=" << target_validation.progress_delta_m
+             << " m, de=" << target_validation.lateral_delta_m << " m";
+      reject_reason = reason.str();
       return false;
     }
 
@@ -18592,6 +18814,8 @@ struct MPC
       std::move(current_path_distances);
     mission.physical_execution_certificate_lateral_path_m =
       trust_envelope.lateral_targets_m;
+    mission.physical_execution_certificate_target_provenance =
+      locked_target_provenance(current_behavior);
     reject_reason = "physical execution certificate accepted";
     return true;
   }
@@ -19812,6 +20036,12 @@ struct MPC
   double mpcc_lite_async_last_status_log_sec_{
     -std::numeric_limits<double>::infinity()};
   std::optional<MpccLiteAsyncResult> mpcc_lite_async_last_accepted_result_;
+  bool mpcc_lite_async_last_target_provenance_valid_{false};
+  std::string mpcc_lite_async_last_target_provenance_reason_{"not-evaluated"};
+  double mpcc_lite_async_last_target_provenance_progress_delta_m_{
+    std::numeric_limits<double>::quiet_NaN()};
+  double mpcc_lite_async_last_target_provenance_lateral_delta_m_{
+    std::numeric_limits<double>::quiet_NaN()};
   std::uint64_t next_overtake_episode_id_{1U};
   std::uint64_t next_dynamic_obstacle_lateral_escape_attempt_id_{1U};
   std::uint64_t dynamic_obstacle_lateral_escape_attempt_id_{0U};
@@ -19884,7 +20114,78 @@ struct MPC
       tracking_wp_id, effective_wp_id_offset(), model->reference_path->n_waypoints,
       model->reference_path->circular);
   }
+
+  race_mpcc::TargetProvenance locked_target_provenance(
+    const V2XBehaviorOutput & behavior) const
+  {
+    race_mpcc::TargetProvenance provenance;
+    provenance.target_id = behavior.target_vehicle_id;
+    provenance.source_stamp_sec = behavior.locked_target_source_stamp_sec;
+    provenance.receipt_sec = behavior.locked_target_receipt_sec;
+    provenance.course_progress_m = behavior.locked_target_course_progress_m;
+    provenance.course_lateral_m = behavior.locked_target_lateral;
+    provenance.observation_generation =
+      behavior.locked_target_observation_generation;
+    provenance.valid =
+      behavior.locked_target_seen &&
+      !behavior.locked_target_course_progress_rejected &&
+      !provenance.target_id.empty() &&
+      std::isfinite(provenance.source_stamp_sec) &&
+      std::isfinite(provenance.receipt_sec) &&
+      std::isfinite(provenance.course_progress_m) &&
+      std::isfinite(provenance.course_lateral_m) &&
+      provenance.observation_generation > 0U;
+    return provenance;
+  }
+
+  mpc_stage_geometry::Geometry build_stage_geometry(
+    const int tracking_waypoint, const std::size_t stage_count)
+  {
+    if (model == nullptr || model->reference_path == nullptr) {
+      return mpc_stage_geometry::build({}, tracking_waypoint, stage_count, false);
+    }
+    const auto & waypoints = model->reference_path->waypoints;
+    if (stage_geometry_path_cache_.size() != waypoints.size()) {
+      stage_geometry_path_cache_.clear();
+      stage_geometry_path_cache_.reserve(waypoints.size());
+      for (const auto & waypoint : waypoints) {
+        stage_geometry_path_cache_.push_back({waypoint.x, waypoint.y});
+      }
+    }
+    return mpc_stage_geometry::build(
+      stage_geometry_path_cache_, tracking_waypoint, stage_count,
+      model->reference_path->circular);
+  }
+
+  race_mpcc::TargetProvenanceValidation validate_locked_target_provenance(
+    const race_mpcc::TargetProvenance & expected,
+    const V2XBehaviorOutput & current_behavior,
+    const double elapsed_sec) const
+  {
+    const double bounded_elapsed_sec =
+      std::isfinite(elapsed_sec) ? std::max(0.0, elapsed_sec) : 0.0;
+    const double target_speed_mps =
+      std::isfinite(current_behavior.locked_target_speed) ?
+      std::max(0.0, current_behavior.locked_target_speed) : 0.0;
+    const bool path_available = model != nullptr && model->reference_path != nullptr;
+    return race_mpcc::validate_target_provenance(
+      race_mpcc::TargetProvenanceValidationRequest{
+        expected,
+        locked_target_provenance(current_behavior),
+        path_available && model->reference_path->circular,
+        path_available ? model->reference_path->length : 0.0,
+        0.25,
+        kV2XCourseProgressContinuityToleranceM +
+        std::max(1.0, target_speed_mps) * bounded_elapsed_sec,
+        std::max(
+          0.25,
+          std::max(
+            0.0,
+            cfg.v2x_behavior.overtake_line.
+            mpcc_lite_same_side_max_lateral_adjustment))});
+  }
   std::pair<std::vector<double>, std::vector<double>> current_prediction;
+  std::vector<mpc_stage_geometry::Point2d> stage_geometry_path_cache_;
   int infeasibility_counter{0};
   int overtake_infeasibility_counter_{0};
   int last_solved_wp_id{0};
@@ -19902,6 +20203,16 @@ struct MPC
   double last_extended_osqp_solution_sec_{
     -std::numeric_limits<double>::infinity()};
   std::optional<double> last_extended_osqp_progress_origin_m_;
+  std::shared_ptr<ExtendedBranchSolverContext> extended_left_branch_solver_context_;
+  std::shared_ptr<ExtendedBranchSolverContext> extended_right_branch_solver_context_;
+  std::shared_ptr<ExtendedBranchSolverContext> active_extended_branch_solver_context_;
+  std::uint64_t active_extended_branch_context_epoch_{};
+  std::string active_extended_branch_target_id_;
+  int active_extended_branch_side_sign_{};
+  int active_extended_branch_horizon_size_{};
+  bool last_extended_branch_warm_start_applied_{false};
+  bool last_extended_branch_context_reset_{false};
+  std::uint64_t last_extended_branch_context_solve_count_{};
   mpcc_progress::ExtendedSolverCircuitBreaker extended_progress_circuit_breaker_;
   mpcc_progress::ExtendedSolverReentryGate extended_progress_reentry_gate_;
   mpcc_progress::ExtendedModeHandoff extended_mode_handoff_;
@@ -20741,6 +21052,7 @@ private:
     const bool physical_execution_certificate_available =
       selected_mission.has_value() &&
       selected_mission->physical_execution_certificate_valid &&
+      selected_mission->physical_execution_certificate_target_provenance.valid &&
       selected_mission->pass_side_sign != 0 &&
       selected_mission->physical_execution_certificate_path_distances_m.size() >= 2U &&
       selected_mission->physical_execution_certificate_path_distances_m.size() ==
@@ -35020,10 +35332,27 @@ private:
 
   double horizon_path_distance_to_index(const int ref_wp_id, const std::size_t target_index) const
   {
+    if (
+      model == nullptr || model->reference_path == nullptr ||
+      model->reference_path->n_waypoints < 2)
+    {
+      return std::numeric_limits<double>::quiet_NaN();
+    }
+    const int waypoint_count = model->reference_path->n_waypoints;
+    const auto normalized_index = [&] (const int index) {
+        if (model->reference_path->circular) {
+          return ((index % waypoint_count) + waypoint_count) % waypoint_count;
+        }
+        return std::clamp(index, 0, waypoint_count - 1);
+      };
     double distance = 0.0;
     for (std::size_t i = 0; i <= target_index; ++i) {
-      const auto & p0 = model->reference_path->get_waypoint(ref_wp_id + static_cast<int>(i));
-      const auto & p1 = model->reference_path->get_waypoint(ref_wp_id + static_cast<int>(i) + 1);
+      // ref_wp_id is the first predicted state. Stage zero therefore spans
+      // current tracking -> ref, matching the dynamics and StageGeometry.
+      const auto & p0 = model->reference_path->get_waypoint(
+        normalized_index(ref_wp_id + static_cast<int>(i) - 1));
+      const auto & p1 = model->reference_path->get_waypoint(
+        normalized_index(ref_wp_id + static_cast<int>(i)));
       distance += p0.distance_to(p1);
     }
     return distance;

@@ -2,7 +2,10 @@
 
 #include <Eigen/Dense>
 
+#include <multi_purpose_mpc_ros/race_mpcc_foundation.hpp>
+
 #include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <optional>
 #include <string>
@@ -384,6 +387,11 @@ struct ExtendedBranchEvaluation
   double terminal_velocity_mps{};
   double solve_ms{};
   int iterations{};
+  /// Persistent dual-branch solver diagnostics. A reset is expected only when
+  /// target/side/horizon/context changes; repeated resets expose cold starts.
+  bool warm_start_applied{false};
+  bool solver_context_reset{false};
+  std::uint64_t solver_context_solve_count{};
   bool physical_wall_validation_attempted{false};
   bool physical_wall_validation_passed{false};
   double physical_wall_required_clearance_m{
@@ -399,6 +407,8 @@ struct ExtendedBranchEvaluation
     std::numeric_limits<double>::quiet_NaN()};
   std::vector<double> physical_execution_certificate_path_distances_m{};
   std::vector<double> physical_execution_certificate_lateral_path_m{};
+  race_mpcc_foundation::TargetProvenance
+  physical_execution_certificate_target_provenance{};
   std::string failure_reason;
 };
 

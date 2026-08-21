@@ -105,6 +105,16 @@ ament_auto_add_library(${PROJECT_NAME}_mpc_waypoint_association SHARED
   src/mpc_waypoint_association.cpp
 )
 
+ament_auto_add_library(${PROJECT_NAME}_mpc_stage_geometry SHARED
+  NO_TARGET_LINK_LIBRARIES
+  src/mpc_stage_geometry.cpp
+)
+
+ament_auto_add_library(${PROJECT_NAME}_race_mpcc_foundation SHARED
+  NO_TARGET_LINK_LIBRARIES
+  src/race_mpcc_foundation.cpp
+)
+
 ament_auto_add_library(${PROJECT_NAME}_v2x_overtake_core SHARED
   NO_TARGET_LINK_LIBRARIES
   src/v2x_overtake_core.cpp
@@ -146,6 +156,8 @@ target_link_libraries(mpc_controller_cpp
   ${PROJECT_NAME}_overtake_decision_trace
   ${PROJECT_NAME}_overtake_execution_orchestrator
   ${PROJECT_NAME}_mpc_state_prediction
+  ${PROJECT_NAME}_mpc_stage_geometry
+  ${PROJECT_NAME}_race_mpcc_foundation
   ${PROJECT_NAME}_runtime_speed_profile
   ${PROJECT_NAME}_mpc_waypoint_association
   ${PROJECT_NAME}_mpc_waypoint_preview
@@ -298,6 +310,24 @@ if(BUILD_TESTING)
   if(TARGET test_mpc_waypoint_association)
     target_link_libraries(test_mpc_waypoint_association
       ${PROJECT_NAME}_mpc_waypoint_association
+    )
+  endif()
+
+  ament_add_gtest(test_mpc_stage_geometry
+    test/test_mpc_stage_geometry.cpp
+  )
+  if(TARGET test_mpc_stage_geometry)
+    target_link_libraries(test_mpc_stage_geometry
+      ${PROJECT_NAME}_mpc_stage_geometry
+    )
+  endif()
+
+  ament_add_gtest(test_race_mpcc_foundation
+    test/test_race_mpcc_foundation.cpp
+  )
+  if(TARGET test_race_mpcc_foundation)
+    target_link_libraries(test_race_mpcc_foundation
+      ${PROJECT_NAME}_race_mpcc_foundation
     )
   endif()
 

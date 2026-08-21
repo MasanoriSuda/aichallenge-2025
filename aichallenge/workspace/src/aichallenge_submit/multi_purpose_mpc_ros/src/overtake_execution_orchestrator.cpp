@@ -339,7 +339,9 @@ AuthorityResolution resolve_authority(const AuthorityRequest & request) noexcept
     result.longitudinal_owner = LongitudinalOwner::PassFloor;
   } else if (
     result.apply_overtake_speed_reference || result.apply_overtake_speed_limit ||
-    request.shiftout_speed_floor_active)
+    request.shiftout_speed_floor_active ||
+    (request.phase == Phase::ShiftOut && request.line_active &&
+    request.shiftout_speed_contract_expected))
   {
     result.longitudinal_owner = LongitudinalOwner::OvertakeLine;
   } else if (
@@ -401,6 +403,13 @@ AuthorityResolution resolve_authority(const AuthorityRequest & request) noexcept
     request.wall_contract_required_clearance_m)
   {
     result.conflicts |= WallContractShortfall;
+  }
+  if (
+    request.phase == Phase::ShiftOut && request.line_active &&
+    request.shiftout_speed_contract_expected &&
+    !request.shiftout_speed_contract_active)
+  {
+    result.conflicts |= ShiftOutWithoutSpeedContract;
   }
   return result;
 }
@@ -518,6 +527,7 @@ std::string format_conflicts(const std::uint32_t conflicts)
   append(MultipleLateralAuthorities, "multiple-lateral-authorities");
   append(InvalidSpeedWindow, "invalid-speed-window");
   append(WallContractShortfall, "wall-contract-shortfall");
+  append(ShiftOutWithoutSpeedContract, "shiftout-without-speed-contract");
   return stream.str();
 }
 
@@ -539,6 +549,8 @@ std::string categorical_signature(const AuthorityTrace & trace)
          << (trace.request.pass_speed_floor_active ? 1 : 0) << "|"
          << (trace.request.speed_floor_adjusted ? 1 : 0) << "|"
          << (trace.request.corridor_blocked ? 1 : 0) << "|"
+         << (trace.request.shiftout_speed_contract_expected ? 1 : 0) << "|"
+         << (trace.request.shiftout_speed_contract_active ? 1 : 0) << "|"
          << (trace.request.dynamic_wait_active ? 1 : 0) << "|"
          << (trace.request.contact_continuation_active ? 1 : 0) << "|"
          << (trace.request.precontact_escape_active ? 1 : 0);
@@ -580,6 +592,13 @@ std::string format_authority_trace(const AuthorityTrace & trace)
          << ", floor_request=" <<
     finite_or(trace.request.requested_speed_floor_mps, "nan")
          << "/adjusted=" << (trace.request.speed_floor_adjusted ? 1 : 0)
+         << ", shiftout_speed_contract="
+         << (trace.request.shiftout_speed_contract_expected ? 1 : 0) << "/"
+         << (trace.request.shiftout_speed_contract_active ? 1 : 0)
+         << "/ref=" << finite_or(
+    trace.request.shiftout_speed_contract_reference_mps, "inf")
+         << "/overspeed=" << finite_or(
+    trace.request.shiftout_speed_contract_overspeed_mps, "nan") << "m/s"
          << ", front=" << finite_or(trace.request.front_distance_m, "inf")
          << "/safety=" <<
     finite_or(trace.request.dynamic_front_safety_distance_m, "inf")

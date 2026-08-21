@@ -162,6 +162,47 @@ TEST(OvertakeExecutionOrchestrator, AlignsAdmissionAndRuntimeWallClearance)
     0U);
 }
 
+TEST(OvertakeExecutionOrchestrator, ShiftOutKeepsLongitudinalOwnership)
+{
+  orchestrator::AuthorityRequest request;
+  request.episode_id = 3U;
+  request.mission_generation = 1U;
+  request.target_id = "d2";
+  request.phase = orchestrator::Phase::ShiftOut;
+  request.behavior = orchestrator::Behavior::Overtake;
+  request.line_active = true;
+  request.shiftout_speed_contract_expected = true;
+  request.shiftout_speed_contract_active = true;
+  request.shiftout_speed_contract_reference_mps = 6.10;
+  request.speed_reference_mps = 6.10;
+
+  const auto result = orchestrator::resolve_authority(request);
+  EXPECT_EQ(result.longitudinal_owner, orchestrator::LongitudinalOwner::OvertakeLine);
+  EXPECT_TRUE(result.apply_overtake_speed_reference);
+  EXPECT_EQ(result.conflicts, orchestrator::NoConflict);
+}
+
+TEST(OvertakeExecutionOrchestrator, ExposesMissingShiftOutSpeedContract)
+{
+  orchestrator::AuthorityRequest request;
+  request.episode_id = 3U;
+  request.mission_generation = 1U;
+  request.target_id = "d2";
+  request.phase = orchestrator::Phase::ShiftOut;
+  request.behavior = orchestrator::Behavior::Overtake;
+  request.line_active = true;
+  request.shiftout_speed_contract_expected = true;
+
+  const auto result = orchestrator::resolve_authority(request);
+  EXPECT_EQ(result.longitudinal_owner, orchestrator::LongitudinalOwner::OvertakeLine);
+  EXPECT_NE(
+    result.conflicts & orchestrator::ShiftOutWithoutSpeedContract, 0U);
+  EXPECT_NE(
+    orchestrator::format_conflicts(result.conflicts).find(
+      "shiftout-without-speed-contract"),
+    std::string::npos);
+}
+
 TEST(OvertakeExecutionOrchestrator, RejectsEmptyLateralBoundIntersection)
 {
   const auto result = orchestrator::resolve_lateral_bound_contract(0.25, 0.10);

@@ -291,6 +291,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_effective_speed_limit;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_follow_speed_limit;
 using multi_purpose_mpc_ros::v2x_overtake_core::should_apply_generic_follow_cap;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_speed_reference;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  resolve_shiftout_execution_speed_contract;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_mission_dynamic_corridor;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_overtake_mission_corridor_admission;
 using multi_purpose_mpc_ros::v2x_overtake_core::
@@ -922,6 +924,47 @@ TEST(V2XFollowSpeedLimitOwnership, ActiveShiftOutUsesStageSpeedInsteadOfClearanc
       OvertakeSpeedStage::ShiftOut, 11.11, 11.11, 2.71, 2.57, 0.50});
   EXPECT_NEAR(stage_resolution.reference_speed_mps, 3.21, 1e-12);
   EXPECT_TRUE(stage_resolution.front_cap_applied);
+}
+
+TEST(V2XShiftOutExecutionSpeedContract, SurvivesFrontCapReleaseAsFiniteReference)
+{
+  const auto resolution = resolve_shiftout_execution_speed_contract(
+    {true, true, 6.10, std::numeric_limits<double>::infinity(), 9.31, 11.11});
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.expected);
+  EXPECT_TRUE(resolution.active);
+  EXPECT_DOUBLE_EQ(resolution.reference_speed_mps, 6.10);
+  EXPECT_NEAR(resolution.overspeed_mps, 3.21, 1e-12);
+}
+
+TEST(V2XShiftOutExecutionSpeedContract, PreservesMoreRestrictiveExistingReference)
+{
+  const auto resolution = resolve_shiftout_execution_speed_contract(
+    {true, true, 6.10, 5.90, 7.00, 11.11});
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.active);
+  EXPECT_DOUBLE_EQ(resolution.reference_speed_mps, 5.90);
+  EXPECT_NEAR(resolution.overspeed_mps, 1.10, 1e-12);
+}
+
+TEST(V2XShiftOutExecutionSpeedContract, ReportsMissingFrozenMissionTimeBase)
+{
+  const auto resolution = resolve_shiftout_execution_speed_contract(
+    {true, true, std::numeric_limits<double>::infinity(),
+      std::numeric_limits<double>::infinity(), 9.31, 11.11});
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.expected);
+  EXPECT_FALSE(resolution.active);
+  EXPECT_TRUE(std::isinf(resolution.reference_speed_mps));
+}
+
+TEST(V2XShiftOutExecutionSpeedContract, ReleasesAfterShiftOut)
+{
+  const auto resolution = resolve_shiftout_execution_speed_contract(
+    {false, true, 6.10, std::numeric_limits<double>::infinity(), 9.31, 11.11});
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.expected);
+  EXPECT_FALSE(resolution.active);
 }
 
 TEST(V2XFrontHazardHold, HoldsAcrossDropoutAndRefreshesDeadline)
@@ -5106,6 +5149,7 @@ TEST(V2XOvertakeCoreSpeed, BuildsAtomicPassPlanFromSelectedMission)
   mission.pass_hold_distance_m = 7.0;
   mission.return_distance_m = 5.0;
   mission.closing_speed_mps = 1.5;
+  mission.planned_execution_speed_mps = 6.1;
   mission.body_clear_deadline_checked = true;
   mission.body_clear_deadline_feasible = true;
   mission.rear_clear_prediction_checked = true;
@@ -5116,6 +5160,7 @@ TEST(V2XOvertakeCoreSpeed, BuildsAtomicPassPlanFromSelectedMission)
     OvertakePassPlanRequest{mission, 0.1, 0.0});
   ASSERT_TRUE(plan.valid);
   EXPECT_EQ(plan.mission.pass_side_sign, -1);
+  EXPECT_DOUBLE_EQ(plan.mission.planned_execution_speed_mps, 6.1);
   EXPECT_DOUBLE_EQ(plan.path.start_lateral_m, 0.1);
   EXPECT_DOUBLE_EQ(plan.path.pass_lateral_m, -0.6);
   EXPECT_DOUBLE_EQ(plan.path.shift_distance_m, 4.0);

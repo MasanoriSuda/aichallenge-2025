@@ -84,6 +84,7 @@ enum AuthorityConflict : std::uint32_t {
   MultipleLateralAuthorities = 1U << 5U,
   InvalidSpeedWindow = 1U << 6U,
   WallContractShortfall = 1U << 7U,
+  ShiftOutWithoutSpeedContract = 1U << 8U,
 };
 
 struct CorridorMetrics {
@@ -205,6 +206,11 @@ struct AuthorityRequest {
   bool pass_speed_floor_active{false};
   bool shiftout_speed_floor_active{false};
   bool corridor_blocked{false};
+  bool shiftout_speed_contract_expected{false};
+  bool shiftout_speed_contract_active{false};
+  double shiftout_speed_contract_reference_mps{
+    std::numeric_limits<double>::infinity()};
+  double shiftout_speed_contract_overspeed_mps{0.0};
   double speed_reference_mps{std::numeric_limits<double>::infinity()};
   double speed_limit_mps{std::numeric_limits<double>::infinity()};
   double speed_floor_mps{0.0};

@@ -296,6 +296,41 @@ OvertakeSpeedReferenceResolution resolve_overtake_speed_reference(
   return {std::min(base_reference, front_cap), true};
 }
 
+ShiftOutExecutionSpeedContractResolution resolve_shiftout_execution_speed_contract(
+  const ShiftOutExecutionSpeedContractRequest & request) noexcept
+{
+  ShiftOutExecutionSpeedContractResolution result;
+  if (
+    !std::isfinite(request.current_ego_speed_mps) ||
+    request.current_ego_speed_mps < 0.0 ||
+    !std::isfinite(request.maximum_vehicle_speed_mps) ||
+    request.maximum_vehicle_speed_mps < 0.0 ||
+    std::isnan(request.planned_execution_speed_mps) ||
+    std::isnan(request.current_reference_speed_mps))
+  {
+    return result;
+  }
+  result.valid = true;
+  result.expected = request.shiftout_active && request.frozen_mission;
+  if (
+    !result.expected ||
+    !std::isfinite(request.planned_execution_speed_mps) ||
+    request.planned_execution_speed_mps < 0.0)
+  {
+    return result;
+  }
+  const double contract_reference = std::min(
+    request.maximum_vehicle_speed_mps,
+    request.planned_execution_speed_mps);
+  result.active = true;
+  result.reference_speed_mps = std::isfinite(request.current_reference_speed_mps) ?
+    std::min(request.current_reference_speed_mps, contract_reference) :
+    contract_reference;
+  result.overspeed_mps = std::max(
+    0.0, request.current_ego_speed_mps - result.reference_speed_mps);
+  return result;
+}
+
 OvertakeEntryPrearmSpeedReferenceResolution resolve_overtake_entry_prearm_speed_reference(
   const OvertakeEntryPrearmSpeedReferenceRequest & request)
 {

@@ -154,6 +154,32 @@ struct OvertakeSpeedReferenceResolution
 OvertakeSpeedReferenceResolution resolve_overtake_speed_reference(
   const OvertakeSpeedReferenceRequest & request);
 
+struct ShiftOutExecutionSpeedContractRequest
+{
+  bool shiftout_active{false};
+  bool frozen_mission{false};
+  double planned_execution_speed_mps{std::numeric_limits<double>::infinity()};
+  double current_reference_speed_mps{std::numeric_limits<double>::infinity()};
+  double current_ego_speed_mps{};
+  double maximum_vehicle_speed_mps{};
+};
+
+struct ShiftOutExecutionSpeedContractResolution
+{
+  bool valid{false};
+  bool expected{false};
+  bool active{false};
+  double reference_speed_mps{std::numeric_limits<double>::infinity()};
+  double overspeed_mps{};
+};
+
+/// Keep the longitudinal time base which was used to validate a frozen
+/// ShiftOut path. Front-cap release is deliberately not an input: becoming
+/// laterally clear of the target does not make a wall/kinematic certificate
+/// valid at an arbitrary higher speed.
+ShiftOutExecutionSpeedContractResolution resolve_shiftout_execution_speed_contract(
+  const ShiftOutExecutionSpeedContractRequest & request) noexcept;
+
 struct OvertakeEntryPrearmSpeedReferenceRequest
 {
   bool active{false};
@@ -4276,6 +4302,10 @@ struct OvertakeMissionCandidate
   double predicted_hard_distance_time_sec{std::numeric_limits<double>::infinity()};
   double predicted_body_clear_distance_m{std::numeric_limits<double>::infinity()};
   double closing_speed_mps{std::numeric_limits<double>::quiet_NaN()};
+  /// Ego speed used to generate and validate the lateral execution profile.
+  /// This is an execution contract, not a hard speed bound. ShiftOut keeps a
+  /// reference at or below it even after the target front-cap is released.
+  double planned_execution_speed_mps{std::numeric_limits<double>::quiet_NaN()};
   // Selection-transparent metadata travels with the ranked candidate. Keeping
   // it here avoids a second, index-coupled metadata vector in the controller.
   int pass_side_sign{0};

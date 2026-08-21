@@ -2558,6 +2558,8 @@ struct OvertakeLineState
     -std::numeric_limits<double>::infinity()};
   double mission_shift_distance{0.0};
   double mission_closing_speed_limit{std::numeric_limits<double>::quiet_NaN()};
+  double mission_planned_execution_speed_mps{
+    std::numeric_limits<double>::infinity()};
   bool mission_body_clear_deadline_checked{false};
   bool mission_body_clear_deadline_feasible{false};
   double mission_body_clear_deadline_slack_sec{
@@ -2854,6 +2856,11 @@ struct OvertakeLineOutput
   bool committed_pass_speed_hold_active{false};
   bool committed_pass_speed_floor_active{false};
   bool committed_shiftout_speed_floor_active{false};
+  bool shiftout_speed_contract_expected{false};
+  bool shiftout_speed_contract_active{false};
+  double shiftout_speed_contract_reference_mps{
+    std::numeric_limits<double>::infinity()};
+  double shiftout_speed_contract_overspeed_mps{0.0};
   bool body_clear_handoff_prediction_speed_hold_active{false};
   bool recovery_moving_follow_profile_used{false};
   double separation_requested_lateral_bias{0.0};
@@ -11550,6 +11557,9 @@ struct MPC
                 setup_candidate.predicted_body_clear_distance_m =
                   rollout.body_clear_distance_m;
                 setup_candidate.closing_speed_mps = effective_closing_speed;
+                setup_candidate.planned_execution_speed_mps = std::min(
+                  std::max(0.0, cfg.v_max),
+                  non_negative_preflight_target_speed + effective_closing_speed);
                 setup_candidate.pass_side_sign = side;
                 setup_candidate.entry_side_clearance_m =
                   std::max(0.0, assessment.side_clearance);
@@ -12029,6 +12039,9 @@ struct MPC
               mission_candidate.predicted_body_clear_distance_m =
                 rollout.body_clear_distance_m;
               mission_candidate.closing_speed_mps = effective_closing_speed;
+              mission_candidate.planned_execution_speed_mps = std::min(
+                std::max(0.0, cfg.v_max),
+                non_negative_preflight_target_speed + effective_closing_speed);
               mission_candidate.pass_side_sign = side;
               mission_candidate.entry_side_clearance_m =
                 std::max(0.0, assessment.side_clearance);
@@ -17546,6 +17559,14 @@ struct MPC
       overtake_line_output.committed_shiftout_speed_floor_active;
     authority_request.corridor_blocked =
       behavior_output.overtake_execution_corridor_blocked;
+    authority_request.shiftout_speed_contract_expected =
+      overtake_line_output.shiftout_speed_contract_expected;
+    authority_request.shiftout_speed_contract_active =
+      overtake_line_output.shiftout_speed_contract_active;
+    authority_request.shiftout_speed_contract_reference_mps =
+      overtake_line_output.shiftout_speed_contract_reference_mps;
+    authority_request.shiftout_speed_contract_overspeed_mps =
+      overtake_line_output.shiftout_speed_contract_overspeed_mps;
     authority_request.speed_reference_mps =
       overtake_line_output.target_velocity_reference;
     authority_request.speed_limit_mps =
@@ -22292,6 +22313,14 @@ private:
         selected_mission->closing_speed_mps, 0.0,
         configured_max_closing_speed) :
       configured_max_closing_speed;
+    overtake_line_state_.mission_planned_execution_speed_mps =
+      selected_mission.has_value() &&
+      std::isfinite(selected_mission->planned_execution_speed_mps) &&
+      selected_mission->planned_execution_speed_mps >= 0.0 ?
+      std::min(
+        std::max(0.0, cfg.v_max),
+        selected_mission->planned_execution_speed_mps) :
+      std::numeric_limits<double>::infinity();
     overtake_line_state_.mission_body_clear_deadline_checked =
       selected_mission.has_value() &&
       selected_mission->body_clear_deadline_checked;
@@ -22566,6 +22595,7 @@ private:
           rclcpp::get_logger("mpc_controller"),
           "OvertakeLine PassPlan frozen: target=%s, generation=%lu, side=%d, "
           "goal=%.2f, shift=%.2f, pass=%.2f, return=%.2f, closing=%.2f, "
+          "planned_execution_v=%.2f, "
           "corridor_source=%s, outer_transition=%d, transition_side=%d, "
           "transition_window=[%.2f, %.2f], transition_goal=%.2f, "
           "transition_shift=%.2f, path_wall_clear=%.2f, "
@@ -22579,6 +22609,7 @@ private:
           pass_plan.path.pass_distance_m,
           pass_plan.path.return_distance_m,
           pass_plan.mission.closing_speed_mps,
+          pass_plan.mission.planned_execution_speed_mps,
           overtake_core::to_string(pass_plan.mission.corridor_source),
           pass_plan.mission.outer_transition_required ? 1 : 0,
           pass_plan.mission.outer_transition_side_sign,
@@ -27936,6 +27967,14 @@ private:
             std::max(0.0,
                      cfg.v2x_behavior.overtake_shiftout_max_closing_speed));
       }
+      if (
+        line_cfg.mpcc_frenet_dp_longitudinal_timing_enabled &&
+        std::isfinite(candidate.planned_execution_speed_mps) &&
+        candidate.planned_execution_speed_mps >= 0.0)
+      {
+        overtake_line_state_.mission_planned_execution_speed_mps = std::min(
+          std::max(0.0, cfg.v_max), candidate.planned_execution_speed_mps);
+      }
       ++overtake_line_state_.mission_frenet_dp_refresh_count;
       if (overtake_line_state_.mission_plan.has_value()) {
         auto &frozen_mission = overtake_line_state_.mission_plan->mission;
@@ -27947,6 +27986,8 @@ private:
             overtake_line_state_.mission_frenet_dp_lateral_path_m;
         frozen_mission.closing_speed_mps =
             overtake_line_state_.mission_closing_speed_limit;
+        frozen_mission.planned_execution_speed_mps =
+          overtake_line_state_.mission_planned_execution_speed_mps;
       }
       const double log_period =
           std::max(0.1, cfg.v2x_behavior.debug_log_period_sec);
@@ -35848,6 +35889,32 @@ private:
       }
     }
 
+    // A front-cap release only proves target separation. It does not widen
+    // the wall/kinematic validity of the frozen ShiftOut path. Keep the
+    // candidate's validation time base until lateral ShiftOut has completed.
+    const auto shiftout_speed_contract =
+      overtake_core::resolve_shiftout_execution_speed_contract(
+      overtake_core::ShiftOutExecutionSpeedContractRequest{
+        overtake_line_state_.phase == OvertakeLinePhase::ShiftOut,
+        overtake_line_state_.mission_path_frozen &&
+        overtake_line_state_.mission_plan.has_value(),
+        overtake_line_state_.mission_planned_execution_speed_mps,
+        output.target_velocity_reference,
+        std::max(0.0, current_speed_mps_),
+        std::max(0.0, cfg.v_max)});
+    output.shiftout_speed_contract_expected =
+      shiftout_speed_contract.valid && shiftout_speed_contract.expected;
+    output.shiftout_speed_contract_active =
+      shiftout_speed_contract.valid && shiftout_speed_contract.active;
+    output.shiftout_speed_contract_reference_mps =
+      shiftout_speed_contract.reference_speed_mps;
+    output.shiftout_speed_contract_overspeed_mps =
+      shiftout_speed_contract.overspeed_mps;
+    if (output.shiftout_speed_contract_active) {
+      output.target_velocity_reference =
+        output.shiftout_speed_contract_reference_mps;
+    }
+
     output.active = true;
     output.target_epsi.assign(N, 0.0);
     output.target_active.assign(N, true);
@@ -36073,6 +36140,7 @@ private:
           "first_epsi=%.2f, "
           "current_ey=%.2f, elapsed=%.2f, traveled=%.2f, stalled=%.2f, "
           "v_ref=%.2f, v_limit=%.2f, v_floor=%.2f, floor_active=%d, shift_floor=%d, "
+          "shiftout_speed_contract=%d/%d/ref=%.2f/overspeed=%.2f, "
           "recovery_speed=%s, mission_closing=%.2f, closing=%.2f, "
           "unseparated_reserve=%d/protected=%.2f, "
           "cap_release=%d, horizon_release=%d, "
@@ -36111,6 +36179,10 @@ private:
           output.target_velocity_floor,
           output.committed_pass_speed_floor_active ? 1 : 0,
           output.committed_shiftout_speed_floor_active ? 1 : 0,
+          output.shiftout_speed_contract_expected ? 1 : 0,
+          output.shiftout_speed_contract_active ? 1 : 0,
+          output.shiftout_speed_contract_reference_mps,
+          output.shiftout_speed_contract_overspeed_mps,
           output.recovery_moving_follow_profile_used ? "follow" : "fixed",
           overtake_mission_closing_speed_limit(),
           output.closing_speed_limit,

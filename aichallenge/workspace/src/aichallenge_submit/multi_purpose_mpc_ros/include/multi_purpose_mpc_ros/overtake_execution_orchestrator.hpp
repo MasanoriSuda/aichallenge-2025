@@ -456,6 +456,7 @@ private:
 enum class WallPathAdmissionScope {
   SolverHandoff,
   ActiveOvertake,
+  DynamicEscapeExit,
 };
 
 const char * to_string(WallPathAdmissionScope scope) noexcept;

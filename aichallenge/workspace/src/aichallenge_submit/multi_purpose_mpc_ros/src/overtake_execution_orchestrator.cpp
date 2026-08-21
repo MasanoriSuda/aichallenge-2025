@@ -1087,6 +1087,7 @@ const char * to_string(const WallPathAdmissionScope scope) noexcept
   switch (scope) {
     case WallPathAdmissionScope::SolverHandoff: return "solver-handoff";
     case WallPathAdmissionScope::ActiveOvertake: return "active-overtake";
+    case WallPathAdmissionScope::DynamicEscapeExit: return "dynamic-escape-exit";
   }
   return "unknown";
 }

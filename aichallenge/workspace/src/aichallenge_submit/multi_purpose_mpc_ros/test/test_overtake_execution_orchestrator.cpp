@@ -783,6 +783,14 @@ TEST(OvertakeExecutionOrchestrator, FormatsWallHandoffAdmissionEvidence)
   EXPECT_NE(message.find("path_wall=Mixed/0.00m@3/4.82m"), std::string::npos);
 }
 
+TEST(OvertakeExecutionOrchestrator, LabelsDynamicEscapeExitAdmissionScope)
+{
+  EXPECT_STREQ(
+    orchestrator::to_string(
+      orchestrator::WallPathAdmissionScope::DynamicEscapeExit),
+    "dynamic-escape-exit");
+}
+
 TEST(OvertakeExecutionOrchestrator, MonitorsWallAfterDynamicEscapeHandoff)
 {
   orchestrator::ChangeAwareWallHandoffTraceEmitter emitter;

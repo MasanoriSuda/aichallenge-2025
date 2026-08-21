@@ -453,6 +453,82 @@ private:
   bool previous_stop_required_{false};
 };
 
+enum class DynamicEscapeExitReason {
+  Inactive,
+  TargetBlocking,
+  RetainedSolutionExpired,
+  WallPathPending,
+  ReplacementPending,
+  ReplacementAdopted,
+  TargetResolvedRequalifying,
+  TargetResolved,
+  RecoveryOverride,
+};
+
+const char * to_string(DynamicEscapeExitReason reason) noexcept;
+
+/// State presented to the Dynamic Escape exit contract.  Wall admission and
+/// moving-obstacle completion are deliberately separate: a RacingLine path
+/// can be physically clear of the wall while still converging onto the front
+/// vehicle that Dynamic Escape was trying to pass.
+struct DynamicEscapeExitRequest {
+  bool activation_requested{false};
+  bool observation_updated{true};
+  bool wall_path_admitted{false};
+  bool obstacle_blocking{false};
+  bool replacement_escape_active{false};
+  bool replacement_escape_admitted{false};
+  bool retained_solution_available{false};
+  bool recovery_override{false};
+  int required_consecutive_resolved_cycles{2};
+};
+
+struct DynamicEscapeExitResolution {
+  bool active{false};
+  bool entered{false};
+  bool released{false};
+  bool hold_lateral_control{false};
+  bool replan_required{false};
+  bool replan_requested{false};
+  bool replacement_adopted{false};
+  bool state_changed{false};
+  int hold_cycles{0};
+  int consecutive_resolved_cycles{0};
+  int required_consecutive_resolved_cycles{2};
+  DynamicEscapeExitReason reason{DynamicEscapeExitReason::Inactive};
+};
+
+/// Prevents Dynamic Escape from handing lateral authority to RacingLine while
+/// the obstacle that caused the escape is still blocking.  The gate never
+/// manufactures a control command; it only authorizes a short retained-solution
+/// lease and requests a replacement escape plan.
+class DynamicEscapeExitGate {
+public:
+  DynamicEscapeExitResolution update(
+    const DynamicEscapeExitRequest & request) noexcept;
+  bool active() const noexcept;
+  void reset() noexcept;
+
+private:
+  bool active_{false};
+  int hold_cycles_{0};
+  int consecutive_resolved_cycles_{0};
+  DynamicEscapeExitReason previous_reason_{DynamicEscapeExitReason::Inactive};
+  bool previous_hold_lateral_control_{false};
+};
+
+std::string format_dynamic_escape_exit_trace(
+  std::uint64_t decision_id,
+  const DynamicEscapeExitRequest & request,
+  const DynamicEscapeExitResolution & resolution,
+  const std::string & latched_target_id,
+  const std::string & observed_target_id,
+  int latched_side_sign,
+  double front_distance_m,
+  double protected_front_distance_m,
+  double closing_speed_mps,
+  double retained_age_sec);
+
 enum class WallPathAdmissionScope {
   SolverHandoff,
   ActiveOvertake,

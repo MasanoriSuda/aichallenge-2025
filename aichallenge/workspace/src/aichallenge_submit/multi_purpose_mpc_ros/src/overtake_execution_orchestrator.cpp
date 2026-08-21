@@ -1082,6 +1082,180 @@ void WallPathAdmissionGate::reset() noexcept
   previous_stop_required_ = false;
 }
 
+const char * to_string(const DynamicEscapeExitReason reason) noexcept
+{
+  switch (reason) {
+    case DynamicEscapeExitReason::Inactive: return "inactive";
+    case DynamicEscapeExitReason::TargetBlocking: return "target-blocking";
+    case DynamicEscapeExitReason::RetainedSolutionExpired:
+      return "retained-solution-expired";
+    case DynamicEscapeExitReason::WallPathPending: return "wall-path-pending";
+    case DynamicEscapeExitReason::ReplacementPending:
+      return "replacement-pending";
+    case DynamicEscapeExitReason::ReplacementAdopted:
+      return "replacement-adopted";
+    case DynamicEscapeExitReason::TargetResolvedRequalifying:
+      return "target-resolved-requalifying";
+    case DynamicEscapeExitReason::TargetResolved: return "target-resolved";
+    case DynamicEscapeExitReason::RecoveryOverride: return "recovery-override";
+  }
+  return "unknown";
+}
+
+DynamicEscapeExitResolution DynamicEscapeExitGate::update(
+  const DynamicEscapeExitRequest & request) noexcept
+{
+  DynamicEscapeExitResolution resolution;
+  resolution.required_consecutive_resolved_cycles =
+    std::max(1, request.required_consecutive_resolved_cycles);
+
+  if (request.recovery_override) {
+    const bool was_active = active_;
+    reset();
+    resolution.released = was_active;
+    resolution.state_changed = was_active;
+    resolution.reason = DynamicEscapeExitReason::RecoveryOverride;
+    return resolution;
+  }
+
+  if (request.activation_requested && !active_) {
+    active_ = true;
+    hold_cycles_ = 0;
+    consecutive_resolved_cycles_ = 0;
+    resolution.entered = true;
+  }
+  if (!active_) {
+    resolution.reason = DynamicEscapeExitReason::Inactive;
+    resolution.state_changed =
+      previous_reason_ != DynamicEscapeExitReason::Inactive;
+    previous_reason_ = resolution.reason;
+    previous_hold_lateral_control_ = false;
+    return resolution;
+  }
+
+  ++hold_cycles_;
+  resolution.active = true;
+  resolution.hold_cycles = hold_cycles_;
+  if (!request.observation_updated) {
+    resolution.reason = previous_reason_;
+    resolution.hold_lateral_control = previous_hold_lateral_control_;
+    resolution.consecutive_resolved_cycles = consecutive_resolved_cycles_;
+    return resolution;
+  }
+
+  if (
+    request.replacement_escape_active &&
+    request.replacement_escape_admitted)
+  {
+    resolution.released = true;
+    resolution.replacement_adopted = true;
+    resolution.active = false;
+    resolution.reason = DynamicEscapeExitReason::ReplacementAdopted;
+    active_ = false;
+    consecutive_resolved_cycles_ = 0;
+  } else if (request.obstacle_blocking) {
+    consecutive_resolved_cycles_ = 0;
+    resolution.hold_lateral_control = request.retained_solution_available;
+    resolution.replan_required = resolution.entered;
+    if (request.replacement_escape_active) {
+      resolution.reason = DynamicEscapeExitReason::ReplacementPending;
+    } else if (request.retained_solution_available) {
+      resolution.reason = DynamicEscapeExitReason::TargetBlocking;
+    } else {
+      resolution.reason = DynamicEscapeExitReason::RetainedSolutionExpired;
+    }
+  } else if (!request.wall_path_admitted) {
+    consecutive_resolved_cycles_ = 0;
+    resolution.hold_lateral_control = request.retained_solution_available;
+    resolution.reason = DynamicEscapeExitReason::WallPathPending;
+  } else {
+    ++consecutive_resolved_cycles_;
+    if (
+      consecutive_resolved_cycles_ >=
+      resolution.required_consecutive_resolved_cycles)
+    {
+      resolution.released = true;
+      resolution.active = false;
+      resolution.reason = DynamicEscapeExitReason::TargetResolved;
+      active_ = false;
+    } else {
+      resolution.hold_lateral_control = request.retained_solution_available;
+      resolution.reason =
+        DynamicEscapeExitReason::TargetResolvedRequalifying;
+    }
+  }
+
+  resolution.consecutive_resolved_cycles = consecutive_resolved_cycles_;
+  resolution.state_changed = resolution.entered || resolution.released ||
+    resolution.reason != previous_reason_ ||
+    resolution.hold_lateral_control != previous_hold_lateral_control_;
+  previous_reason_ = resolution.reason;
+  previous_hold_lateral_control_ = resolution.hold_lateral_control;
+  return resolution;
+}
+
+bool DynamicEscapeExitGate::active() const noexcept
+{
+  return active_;
+}
+
+void DynamicEscapeExitGate::reset() noexcept
+{
+  active_ = false;
+  hold_cycles_ = 0;
+  consecutive_resolved_cycles_ = 0;
+  previous_reason_ = DynamicEscapeExitReason::Inactive;
+  previous_hold_lateral_control_ = false;
+}
+
+std::string format_dynamic_escape_exit_trace(
+  const std::uint64_t decision_id,
+  const DynamicEscapeExitRequest & request,
+  const DynamicEscapeExitResolution & resolution,
+  const std::string & latched_target_id,
+  const std::string & observed_target_id,
+  const int latched_side_sign,
+  const double front_distance_m,
+  const double protected_front_distance_m,
+  const double closing_speed_mps,
+  const double retained_age_sec)
+{
+  const char * event = resolution.replacement_adopted ?
+    "replacement-adopted" :
+    (resolution.released ? "released" :
+    (resolution.entered ? "entered" : "holding"));
+  std::ostringstream stream;
+  stream << "Dynamic escape exit contract: decision=" << decision_id
+         << ", event=" << event
+         << ", reason=" << to_string(resolution.reason)
+         << ", active=" << (resolution.active ? 1 : 0)
+         << ", hold_lateral="
+         << (resolution.hold_lateral_control ? 1 : 0)
+         << ", replan=" << (resolution.replan_required ? 1 : 0) << "/"
+         << (resolution.replan_requested ? 1 : 0)
+         << ", target=" <<
+    (latched_target_id.empty() ? "none" : latched_target_id)
+         << "/observed=" <<
+    (observed_target_id.empty() ? "none" : observed_target_id)
+         << ", side=" << latched_side_sign
+         << ", front=" << finite_or(front_distance_m, "inf") << "m"
+         << ", protected=" <<
+    finite_or(protected_front_distance_m, "inf") << "m"
+         << ", closing=" << finite_or(closing_speed_mps, "nan") << "m/s"
+         << ", obstacle_blocking=" << (request.obstacle_blocking ? 1 : 0)
+         << ", wall_admitted=" << (request.wall_path_admitted ? 1 : 0)
+         << ", replacement="
+         << (request.replacement_escape_active ? 1 : 0) << "/"
+         << (request.replacement_escape_admitted ? 1 : 0)
+         << ", retained=" <<
+    (request.retained_solution_available ? 1 : 0)
+         << "/age=" << finite_or(retained_age_sec, "inf") << "s"
+         << ", resolved=" << resolution.consecutive_resolved_cycles << "/"
+         << resolution.required_consecutive_resolved_cycles
+         << ", holds=" << resolution.hold_cycles;
+  return stream.str();
+}
+
 const char * to_string(const WallPathAdmissionScope scope) noexcept
 {
   switch (scope) {

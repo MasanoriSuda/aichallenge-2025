@@ -791,6 +791,159 @@ TEST(OvertakeExecutionOrchestrator, LabelsDynamicEscapeExitAdmissionScope)
     "dynamic-escape-exit");
 }
 
+TEST(OvertakeExecutionOrchestrator, HoldsDynamicEscapeExitForBlockingTarget)
+{
+  orchestrator::DynamicEscapeExitGate gate;
+  orchestrator::DynamicEscapeExitRequest request;
+  request.activation_requested = true;
+  request.wall_path_admitted = true;
+  request.obstacle_blocking = true;
+  request.retained_solution_available = true;
+
+  const auto result = gate.update(request);
+  EXPECT_TRUE(result.entered);
+  EXPECT_TRUE(result.active);
+  EXPECT_TRUE(result.hold_lateral_control);
+  EXPECT_TRUE(result.replan_required);
+  EXPECT_FALSE(result.released);
+  EXPECT_EQ(
+    result.reason,
+    orchestrator::DynamicEscapeExitReason::TargetBlocking);
+}
+
+TEST(OvertakeExecutionOrchestrator, NeverUsesExpiredDynamicEscapeSolution)
+{
+  orchestrator::DynamicEscapeExitGate gate;
+  orchestrator::DynamicEscapeExitRequest request;
+  request.activation_requested = true;
+  request.wall_path_admitted = true;
+  request.obstacle_blocking = true;
+  request.retained_solution_available = false;
+
+  const auto result = gate.update(request);
+  EXPECT_TRUE(result.active);
+  EXPECT_FALSE(result.hold_lateral_control);
+  EXPECT_TRUE(result.replan_required);
+  EXPECT_EQ(
+    result.reason,
+    orchestrator::DynamicEscapeExitReason::RetainedSolutionExpired);
+}
+
+TEST(OvertakeExecutionOrchestrator, AtomicallyAdoptsWallSafeReplacementEscape)
+{
+  orchestrator::DynamicEscapeExitGate gate;
+  orchestrator::DynamicEscapeExitRequest request;
+  request.activation_requested = true;
+  request.obstacle_blocking = true;
+  request.retained_solution_available = true;
+  ASSERT_TRUE(gate.update(request).active);
+
+  request.activation_requested = false;
+  request.replacement_escape_active = true;
+  request.replacement_escape_admitted = false;
+  const auto pending = gate.update(request);
+  EXPECT_TRUE(pending.active);
+  EXPECT_TRUE(pending.hold_lateral_control);
+  EXPECT_EQ(
+    pending.reason,
+    orchestrator::DynamicEscapeExitReason::ReplacementPending);
+
+  request.replacement_escape_admitted = true;
+  const auto adopted = gate.update(request);
+  EXPECT_TRUE(adopted.released);
+  EXPECT_TRUE(adopted.replacement_adopted);
+  EXPECT_FALSE(adopted.active);
+  EXPECT_FALSE(adopted.hold_lateral_control);
+  EXPECT_EQ(
+    adopted.reason,
+    orchestrator::DynamicEscapeExitReason::ReplacementAdopted);
+}
+
+TEST(OvertakeExecutionOrchestrator, RequiresResolvedTargetAndWallBeforeExit)
+{
+  orchestrator::DynamicEscapeExitGate gate;
+  orchestrator::DynamicEscapeExitRequest request;
+  request.activation_requested = true;
+  request.obstacle_blocking = true;
+  request.retained_solution_available = true;
+  ASSERT_TRUE(gate.update(request).active);
+
+  request.activation_requested = false;
+  request.obstacle_blocking = false;
+  request.wall_path_admitted = false;
+  const auto wall_pending = gate.update(request);
+  EXPECT_TRUE(wall_pending.active);
+  EXPECT_EQ(
+    wall_pending.reason,
+    orchestrator::DynamicEscapeExitReason::WallPathPending);
+
+  request.wall_path_admitted = true;
+  const auto first_clear = gate.update(request);
+  EXPECT_TRUE(first_clear.active);
+  EXPECT_TRUE(first_clear.hold_lateral_control);
+  EXPECT_EQ(first_clear.consecutive_resolved_cycles, 1);
+  EXPECT_EQ(
+    first_clear.reason,
+    orchestrator::DynamicEscapeExitReason::TargetResolvedRequalifying);
+
+  const auto released = gate.update(request);
+  EXPECT_TRUE(released.released);
+  EXPECT_FALSE(released.active);
+  EXPECT_EQ(
+    released.reason,
+    orchestrator::DynamicEscapeExitReason::TargetResolved);
+}
+
+TEST(OvertakeExecutionOrchestrator, RecoveryOverridesDynamicEscapeExitContract)
+{
+  orchestrator::DynamicEscapeExitGate gate;
+  orchestrator::DynamicEscapeExitRequest request;
+  request.activation_requested = true;
+  request.obstacle_blocking = true;
+  request.retained_solution_available = true;
+  ASSERT_TRUE(gate.update(request).active);
+
+  request.activation_requested = false;
+  request.recovery_override = true;
+  const auto result = gate.update(request);
+  EXPECT_TRUE(result.released);
+  EXPECT_FALSE(result.active);
+  EXPECT_FALSE(result.hold_lateral_control);
+  EXPECT_EQ(
+    result.reason,
+    orchestrator::DynamicEscapeExitReason::RecoveryOverride);
+}
+
+TEST(OvertakeExecutionOrchestrator, FormatsDynamicEscapeExitEvidence)
+{
+  orchestrator::DynamicEscapeExitRequest request;
+  request.obstacle_blocking = true;
+  request.wall_path_admitted = false;
+  request.retained_solution_available = true;
+  orchestrator::DynamicEscapeExitResolution resolution;
+  resolution.entered = true;
+  resolution.active = true;
+  resolution.hold_lateral_control = true;
+  resolution.replan_required = true;
+  resolution.replan_requested = true;
+  resolution.hold_cycles = 1;
+  resolution.required_consecutive_resolved_cycles = 2;
+  resolution.reason =
+    orchestrator::DynamicEscapeExitReason::TargetBlocking;
+
+  const auto message = orchestrator::format_dynamic_escape_exit_trace(
+    419U, request, resolution, "d2", "d2", -1, 6.25, 3.00, 2.10,
+    0.08);
+  EXPECT_NE(message.find("decision=419"), std::string::npos);
+  EXPECT_NE(message.find("event=entered"), std::string::npos);
+  EXPECT_NE(message.find("reason=target-blocking"), std::string::npos);
+  EXPECT_NE(message.find("target=d2/observed=d2"), std::string::npos);
+  EXPECT_NE(message.find("side=-1"), std::string::npos);
+  EXPECT_NE(message.find("front=6.25m"), std::string::npos);
+  EXPECT_NE(message.find("replan=1/1"), std::string::npos);
+  EXPECT_NE(message.find("retained=1/age=0.08s"), std::string::npos);
+}
+
 TEST(OvertakeExecutionOrchestrator, MonitorsWallAfterDynamicEscapeHandoff)
 {
   orchestrator::ChangeAwareWallHandoffTraceEmitter emitter;

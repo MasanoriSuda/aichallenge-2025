@@ -389,6 +389,16 @@ struct ExtendedBranchEvaluation
   double physical_wall_required_clearance_m{
     std::numeric_limits<double>::quiet_NaN()};
   std::string physical_wall_validation_scope{"not-evaluated"};
+  /// Exact trajectory associated with the physical validation above.  Entry
+  /// admission must bind this trajectory to the Mission; selecting only the
+  /// same side is not an executable-path certificate.
+  bool physical_execution_certificate_valid{false};
+  double physical_execution_certificate_source_sec{
+    -std::numeric_limits<double>::infinity()};
+  double physical_execution_certificate_source_course_progress_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  std::vector<double> physical_execution_certificate_path_distances_m{};
+  std::vector<double> physical_execution_certificate_lateral_path_m{};
   std::string failure_reason;
 };
 

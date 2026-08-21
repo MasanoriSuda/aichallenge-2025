@@ -119,6 +119,27 @@ WallClearanceContract resolve_wall_clearance_contract(
   double physical_clearance_m, double planning_clearance_m,
   bool runtime_preplan_enabled, double runtime_reserve_m) noexcept;
 
+enum class LateralBoundContractReason {
+  None,
+  NonFiniteBound,
+  EmptyIntersection,
+};
+
+struct LateralBoundContractResolution {
+  bool valid{false};
+  bool feasible{false};
+  double lower_m{std::numeric_limits<double>::quiet_NaN()};
+  double upper_m{std::numeric_limits<double>::quiet_NaN()};
+  LateralBoundContractReason reason{LateralBoundContractReason::NonFiniteBound};
+};
+
+/// Validate the final stage bound before it is encoded into the solver.  An
+/// empty intersection is an execution-contract failure, not a zero-width
+/// center-line corridor.
+LateralBoundContractResolution resolve_lateral_bound_contract(
+  double lower_m, double upper_m) noexcept;
+const char * to_string(LateralBoundContractReason reason) noexcept;
+
 enum class RuntimeReplacementRejectReason {
   None,
   InvalidCandidate,

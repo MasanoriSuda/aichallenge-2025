@@ -4296,6 +4296,19 @@ struct OvertakeMissionCandidate
   std::size_t frenet_dp_tactical_knot_count{};
   std::vector<double> frenet_dp_path_distances_m{};
   std::vector<double> frenet_dp_lateral_path_m{};
+  /// Exact extended-MPCC trajectory which passed swept-footprint wall
+  /// validation.  A new entry may not infer this contract from the selected
+  /// side or from the scalar Frenet corridor reserve: the trajectory itself
+  /// must travel atomically with the Mission and be revalidated at adoption.
+  bool physical_execution_certificate_valid{false};
+  double physical_execution_certificate_source_sec{
+    -std::numeric_limits<double>::infinity()};
+  double physical_execution_certificate_source_course_progress_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double physical_execution_certificate_required_wall_clearance_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  std::vector<double> physical_execution_certificate_path_distances_m{};
+  std::vector<double> physical_execution_certificate_lateral_path_m{};
   /// New-entry reserve needed to become laterally body-clear before closing
   /// consumes the longitudinal clearance. This is selection-transparent
   /// metadata for diagnostics; active Mission replans do not reapply it.

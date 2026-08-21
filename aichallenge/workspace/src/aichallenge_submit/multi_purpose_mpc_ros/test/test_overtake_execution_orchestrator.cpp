@@ -162,6 +162,26 @@ TEST(OvertakeExecutionOrchestrator, AlignsAdmissionAndRuntimeWallClearance)
     0U);
 }
 
+TEST(OvertakeExecutionOrchestrator, RejectsEmptyLateralBoundIntersection)
+{
+  const auto result = orchestrator::resolve_lateral_bound_contract(0.25, 0.10);
+  EXPECT_TRUE(result.valid);
+  EXPECT_FALSE(result.feasible);
+  EXPECT_EQ(
+    result.reason,
+    orchestrator::LateralBoundContractReason::EmptyIntersection);
+}
+
+TEST(OvertakeExecutionOrchestrator, AcceptsFiniteLateralBoundIntersection)
+{
+  const auto result = orchestrator::resolve_lateral_bound_contract(-0.4, 0.2);
+  EXPECT_TRUE(result.valid);
+  EXPECT_TRUE(result.feasible);
+  EXPECT_EQ(result.reason, orchestrator::LateralBoundContractReason::None);
+  EXPECT_DOUBLE_EQ(result.lower_m, -0.4);
+  EXPECT_DOUBLE_EQ(result.upper_m, 0.2);
+}
+
 TEST(OvertakeExecutionOrchestrator, AdmitsFreshRuntimeReplacementContract)
 {
   orchestrator::RuntimeReplacementContractRequest request;

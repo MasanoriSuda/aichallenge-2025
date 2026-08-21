@@ -119,6 +119,39 @@ WallClearanceContract resolve_wall_clearance_contract(
   return result;
 }
 
+LateralBoundContractResolution resolve_lateral_bound_contract(
+  const double lower_m, const double upper_m) noexcept
+{
+  LateralBoundContractResolution result;
+  result.lower_m = lower_m;
+  result.upper_m = upper_m;
+  if (!std::isfinite(lower_m) || !std::isfinite(upper_m)) {
+    result.reason = LateralBoundContractReason::NonFiniteBound;
+    return result;
+  }
+  result.valid = true;
+  if (lower_m > upper_m) {
+    result.reason = LateralBoundContractReason::EmptyIntersection;
+    return result;
+  }
+  result.feasible = true;
+  result.reason = LateralBoundContractReason::None;
+  return result;
+}
+
+const char * to_string(const LateralBoundContractReason reason) noexcept
+{
+  switch (reason) {
+    case LateralBoundContractReason::None:
+      return "none";
+    case LateralBoundContractReason::NonFiniteBound:
+      return "non-finite-bound";
+    case LateralBoundContractReason::EmptyIntersection:
+      return "empty-intersection";
+  }
+  return "unknown";
+}
+
 RuntimeReplacementContractResolution resolve_runtime_replacement_contract(
   const RuntimeReplacementContractRequest & request) noexcept
 {

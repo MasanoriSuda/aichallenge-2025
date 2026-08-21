@@ -4987,6 +4987,16 @@ struct MpcProblem
   std::vector<double> dynamic_obstacle_escape_path_distance_m;
   Eigen::VectorXd dynamic_obstacle_escape_lateral_lower;
   Eigen::VectorXd dynamic_obstacle_escape_lateral_upper;
+  bool lateral_bounds_contract_valid{true};
+  int lateral_bounds_contract_failure_stage{-1};
+  double lateral_bounds_contract_failure_lower_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double lateral_bounds_contract_failure_upper_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  overtake_execution_orchestrator::LateralBoundContractReason
+  lateral_bounds_contract_failure_reason{
+    overtake_execution_orchestrator::LateralBoundContractReason::None};
+  std::string lateral_bounds_contract_failure_source;
 };
 
 struct ExtendedProgressMpcProblem
@@ -6341,6 +6351,18 @@ struct MPC
       const MpcProblem legacy = init_problem(
         N, model->safety_margin, now_sec, tracking_wp_id,
         get_preview_wp_id(tracking_wp_id), &behavior);
+      if (!legacy.lateral_bounds_contract_valid) {
+        std::ostringstream reason;
+        reason << "lateral-bound-contract source="
+               << legacy.lateral_bounds_contract_failure_source
+               << " stage=" << legacy.lateral_bounds_contract_failure_stage
+               << " lower=" << legacy.lateral_bounds_contract_failure_lower_m
+               << " upper=" << legacy.lateral_bounds_contract_failure_upper_m
+               << " reason=" << overtake_execution_orchestrator::to_string(
+          legacy.lateral_bounds_contract_failure_reason);
+        evaluation.failure_reason = reason.str();
+        return evaluation;
+      }
       if (!legacy.progress_contouring_active) {
         evaluation.failure_reason = "progress-contouring branch unavailable";
         return evaluation;
@@ -6453,6 +6475,14 @@ struct MPC
           "physical execution contract: " + physical_wall_reject_reason;
         return evaluation;
       }
+      evaluation.physical_execution_certificate_valid = true;
+      evaluation.physical_execution_certificate_source_sec = now_sec;
+      evaluation.physical_execution_certificate_source_course_progress_m =
+        legacy.progress_origin_m;
+      evaluation.physical_execution_certificate_path_distances_m =
+        execution_trajectory->path_distance_m;
+      evaluation.physical_execution_certificate_lateral_path_m =
+        execution_trajectory->lateral_m;
 
       double quadratic_cost = 0.0;
       for (int outer = 0; outer < extended->P.outerSize(); ++outer) {
@@ -6615,11 +6645,11 @@ struct MPC
     if (!candidate_resolution.valid || !candidate_resolution.candidate.has_value()) {
       return;
     }
-    const auto & selected_mission = candidate_resolution.candidate;
+    auto selected_mission = candidate_resolution.candidate.value();
     const auto admission = mpcc_progress::resolve_extended_branch_entry_admission(
       mpcc_progress::ExtendedBranchEntryAdmissionRequest{
         true, new_entry, selection.valid, selection.selected_side_sign,
-        selected_mission->pass_side_sign});
+        selected_mission.pass_side_sign});
     if (!admission.valid || !admission.admitted) {
       if (admission.valid && admission.hold_current_path) {
         hold_new_entry_on_current_path(
@@ -6627,20 +6657,40 @@ struct MPC
       }
       return;
     }
-    const bool base_line = std::abs(selected_mission->goal_lateral_m) <= kEps;
+    const auto & selected_branch = selection.selected_side_sign > 0 ?
+      behavior.extended_mpcc_left_branch : behavior.extended_mpcc_right_branch;
+    if (
+      selected_branch.side_sign == selected_mission.pass_side_sign &&
+      selected_branch.physical_execution_certificate_valid &&
+      selected_branch.physical_wall_validation_attempted &&
+      selected_branch.physical_wall_validation_passed)
+    {
+      selected_mission.physical_execution_certificate_valid = true;
+      selected_mission.physical_execution_certificate_source_sec =
+        selected_branch.physical_execution_certificate_source_sec;
+      selected_mission.physical_execution_certificate_source_course_progress_m =
+        selected_branch.physical_execution_certificate_source_course_progress_m;
+      selected_mission.physical_execution_certificate_required_wall_clearance_m =
+        selected_branch.physical_wall_required_clearance_m;
+      selected_mission.physical_execution_certificate_path_distances_m =
+        selected_branch.physical_execution_certificate_path_distances_m;
+      selected_mission.physical_execution_certificate_lateral_path_m =
+        selected_branch.physical_execution_certificate_lateral_path_m;
+    }
+    const bool base_line = std::abs(selected_mission.goal_lateral_m) <= kEps;
     behavior.overtake_pass_side_sign = selection.selected_side_sign;
     behavior.overtake_gap_available = true;
     behavior.overtake_side_clearance = selected_assessment.side_clearance;
     behavior.overtake_corridor_center_ey =
       selected_assessment.corridor_center_ey.value_or(
-      selected_mission->goal_lateral_m);
+      selected_mission.goal_lateral_m);
     behavior.overtake_selected_mission = selected_mission;
     behavior.overtake_base_line_pass_through =
-      selected_mission->direct_pass && base_line &&
-      selected_mission->current_position_clear;
+      selected_mission.direct_pass && base_line &&
+      selected_mission.current_position_clear;
     behavior.overtake_tiny_shift_direct_pass =
-      selected_mission->direct_pass && !base_line &&
-      selected_mission->current_position_clear;
+      selected_mission.direct_pass && !base_line &&
+      selected_mission.current_position_clear;
     behavior.overtake_fallback_target = selected_assessment.fallback_target;
     behavior.overtake_gap_hold_active = selected_assessment.transient_gap_hold;
     behavior.overtake_gap_hold_remaining_sec =
@@ -13106,7 +13156,7 @@ struct MPC
           progressive_entry_min_no_return_time_sec);
       };
     const auto apply_mpcc_entry_execution_contract = [&] (
-      const overtake_core::OvertakeMissionCandidate & mission,
+      overtake_core::OvertakeMissionCandidate mission,
       const char * source)
       {
         if (mission.pass_side_sign != -1 && mission.pass_side_sign != 1) {
@@ -13114,6 +13164,42 @@ struct MPC
         }
         auto & authoritative_assessment = mission.pass_side_sign > 0 ?
           left_assessment : right_assessment;
+        const bool physical_execution_certificate_required =
+          cfg.progress_contouring_dual_branch_enabled &&
+          cfg.progress_contouring_mpcc_enabled &&
+          cfg.progress_contouring.extended_dynamics_enabled;
+        std::string certificate_reason = "not-required";
+        if (
+          physical_execution_certificate_required &&
+          !revalidate_overtake_entry_execution_certificate(
+            mission, ref_wp_id, N, lb, ub, now_sec, certificate_reason))
+        {
+          authoritative_assessment.gap_available = false;
+          authoritative_assessment.selected_mission.reset();
+          authoritative_assessment.mpcc_receding_mission.reset();
+          authoritative_assessment.reason =
+            std::string{"physical execution certificate rejected: "} +
+            certificate_reason;
+          authoritative_assessment.guard_reason = authoritative_assessment.reason;
+          side_selection = {
+            overtake_core::PassSide::None,
+            overtake_core::SideSelectionReason::NoFeasibleSide};
+          side_selected_for_execution = false;
+          static rclcpp::Clock certificate_log_clock{RCL_STEADY_TIME};
+          RCLCPP_WARN_THROTTLE(
+            rclcpp::get_logger("mpc_controller"), certificate_log_clock, 250,
+            "Overtake entry commit rejected: source=%s, target=%s, side=%d, "
+            "certificate=%d, age=%.3f s, source_s=%.3f m, current_s=%.3f m, "
+            "required_wall=%.3f m, reason=%s, wp_id=%d",
+            source, output.target_vehicle_id.c_str(), mission.pass_side_sign,
+            mission.physical_execution_certificate_valid ? 1 : 0,
+            now_sec - mission.physical_execution_certificate_source_sec,
+            mission.physical_execution_certificate_source_course_progress_m,
+            model != nullptr ? model->s : std::numeric_limits<double>::quiet_NaN(),
+            mission.physical_execution_certificate_required_wall_clearance_m,
+            certificate_reason.c_str(), model != nullptr ? model->wp_id : -1);
+          return false;
+        }
         authoritative_assessment.side = mission.pass_side_sign;
         authoritative_assessment.gap_available = true;
         authoritative_assessment.selected_mission = mission;
@@ -13134,7 +13220,9 @@ struct MPC
         std::ostringstream authority_reason;
         authority_reason << "MPCC-lite entry contract selected: source=" << source
                          << ", candidate=" <<
-          (mission.progressive_entry ? "progressive" : "complete");
+          (mission.progressive_entry ? "progressive" : "complete")
+                         << ", physical=" <<
+          (mission.physical_execution_certificate_valid ? "certified" : "not-required");
         authoritative_assessment.reason = authority_reason.str();
         authoritative_assessment.guard_reason = authoritative_assessment.reason;
         side_selection = {
@@ -15264,15 +15352,60 @@ struct MPC
       ub[i] = model->reference_path->path_constraints_upper.at(ref_wp_id).at(i);
       lb[i] = model->reference_path->path_constraints_lower.at(ref_wp_id).at(i);
     }
+    bool lateral_bounds_contract_valid = true;
+    int lateral_bounds_contract_failure_stage = -1;
+    double lateral_bounds_contract_failure_lower_m =
+      std::numeric_limits<double>::quiet_NaN();
+    double lateral_bounds_contract_failure_upper_m =
+      std::numeric_limits<double>::quiet_NaN();
+    auto lateral_bounds_contract_failure_reason =
+      overtake_execution_orchestrator::LateralBoundContractReason::None;
+    std::string lateral_bounds_contract_failure_source;
+    const auto record_lateral_bounds_contract_failure = [&] (
+      const int stage, const double lower_m, const double upper_m,
+      const char * source)
+      {
+        if (!lateral_bounds_contract_valid) {
+          return;
+        }
+        const auto contract =
+          overtake_execution_orchestrator::resolve_lateral_bound_contract(
+          lower_m, upper_m);
+        if (contract.valid && contract.feasible) {
+          return;
+        }
+        lateral_bounds_contract_valid = false;
+        lateral_bounds_contract_failure_stage = stage;
+        lateral_bounds_contract_failure_lower_m = lower_m;
+        lateral_bounds_contract_failure_upper_m = upper_m;
+        lateral_bounds_contract_failure_reason = contract.reason;
+        lateral_bounds_contract_failure_source = source;
+      };
     model->reference_path->border_cells.current_wp_id = ref_wp_id;
     if (model->safety_margin != safety_margin) {
       const double safety_margin_diff = safety_margin - model->safety_margin;
       for (int i = 0; i < N; ++i) {
-        ub[i] -= safety_margin_diff;
-        lb[i] += safety_margin_diff;
-        if (ub[i] < lb[i]) {
-          ub[i] = 0.0;
-          lb[i] = 0.0;
+        const double base_upper = ub[i];
+        const double base_lower = lb[i];
+        const double narrowed_upper = base_upper - safety_margin_diff;
+        const double narrowed_lower = base_lower + safety_margin_diff;
+        const auto contract =
+          overtake_execution_orchestrator::resolve_lateral_bound_contract(
+          narrowed_lower, narrowed_upper);
+        if (!contract.valid || !contract.feasible) {
+          record_lateral_bounds_contract_failure(
+            i, narrowed_lower, narrowed_upper, "safety-margin");
+          // Keep a finite placeholder for downstream structure construction.
+          // get_control() will reject the complete problem before any solver or
+          // direct-controller command is allowed to consume it.
+          const double fallback_center =
+            std::isfinite(base_lower) && std::isfinite(base_upper) ?
+            0.5 * (base_lower + base_upper) : 0.0;
+          lb[i] = fallback_center;
+          ub[i] = fallback_center;
+        } else {
+          lb[i] = narrowed_lower;
+          ub[i] = narrowed_upper;
         }
       }
     }
@@ -16184,6 +16317,8 @@ struct MPC
             dynamic_escape_bridge.tracking_wall_contract_upper_m.size() >=
             static_cast<std::size_t>(N);
           for (int i = 0; i < N; ++i) {
+            const double base_lower = lb[i];
+            const double base_upper = ub[i];
             if (apply_margin_escape_tracking_contract) {
               // Admission already proved that the physical footprint is clear
               // while the configured wall margin is restored centerward.  Use
@@ -16197,9 +16332,16 @@ struct MPC
               lb[i] = std::max(lb[i], planner_output.lb[i]);
               ub[i] = std::min(ub[i], planner_output.ub[i]);
             }
-            if (ub[i] < lb[i]) {
-              ub[i] = 0.0;
-              lb[i] = 0.0;
+            const auto contract =
+              overtake_execution_orchestrator::resolve_lateral_bound_contract(
+              lb[i], ub[i]);
+            if (!contract.valid || !contract.feasible) {
+              record_lateral_bounds_contract_failure(
+                i, lb[i], ub[i],
+                apply_margin_escape_tracking_contract ?
+                "dynamic-escape-wall-contract" : "gap-planner-intersection");
+              lb[i] = base_lower;
+              ub[i] = base_upper;
             }
           }
         }
@@ -16293,6 +16435,13 @@ struct MPC
       }
     }
 
+    if (!lateral_bounds_contract_valid) {
+      // Never start or continue a newly selected overtake on a corridor which
+      // has no mathematically valid lateral intersection.  The final control
+      // path below also bypasses the solver and emits the complete contract.
+      behavior_output.overtake_gap_available = false;
+      behavior_output.overtake_execution_corridor_blocked = true;
+    }
     auto overtake_line_output =
       update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
     const double requested_overtake_speed_floor_mps =
@@ -17042,7 +17191,13 @@ struct MPC
       behavior_output.dynamic_obstacle_lateral_escape_side_sign,
       std::move(dynamic_obstacle_escape_path_distance_m),
       std::move(dynamic_obstacle_escape_lateral_lower),
-      std::move(dynamic_obstacle_escape_lateral_upper)};
+      std::move(dynamic_obstacle_escape_lateral_upper),
+      lateral_bounds_contract_valid,
+      lateral_bounds_contract_failure_stage,
+      lateral_bounds_contract_failure_lower_m,
+      lateral_bounds_contract_failure_upper_m,
+      lateral_bounds_contract_failure_reason,
+      std::move(lateral_bounds_contract_failure_source)};
   }
 
   std::optional<ExtendedProgressMpcProblem> build_extended_progress_problem(
@@ -18303,6 +18458,144 @@ struct MPC
     return true;
   }
 
+  bool revalidate_overtake_entry_execution_certificate(
+    overtake_core::OvertakeMissionCandidate & mission,
+    const int ref_wp_id, const int horizon_size,
+    const Eigen::VectorXd & lower_bound, const Eigen::VectorXd & upper_bound,
+    const double now_sec, std::string & reject_reason) const
+  {
+    reject_reason.clear();
+    const auto & line_cfg = cfg.v2x_behavior.overtake_line;
+    if (
+      !mission.physical_execution_certificate_valid ||
+      !std::isfinite(mission.physical_execution_certificate_source_sec) ||
+      !std::isfinite(
+        mission.physical_execution_certificate_source_course_progress_m) ||
+      !overtake_core::is_valid_frenet_dp_execution_path(
+        mission.physical_execution_certificate_path_distances_m,
+        mission.physical_execution_certificate_lateral_path_m))
+    {
+      reject_reason = "physical execution certificate unavailable";
+      return false;
+    }
+    if (
+      model == nullptr || model->reference_path == nullptr ||
+      !std::isfinite(model->s) || !std::isfinite(now_sec) || horizon_size <= 0 ||
+      lower_bound.size() < horizon_size || upper_bound.size() < horizon_size)
+    {
+      reject_reason = "physical execution certificate context invalid";
+      return false;
+    }
+    const double certificate_age_sec =
+      now_sec - mission.physical_execution_certificate_source_sec;
+    const double maximum_age_sec = std::max(
+      0.0, line_cfg.receding_horizon_last_solved_prefix_max_age_sec);
+    if (
+      !std::isfinite(certificate_age_sec) || certificate_age_sec < -kEps ||
+      certificate_age_sec > maximum_age_sec + kEps)
+    {
+      reject_reason = "physical execution certificate stale";
+      return false;
+    }
+
+    double advanced_distance_m =
+      model->s - mission.physical_execution_certificate_source_course_progress_m;
+    const double path_length_m = model->reference_path->length;
+    if (
+      model->reference_path->circular && std::isfinite(path_length_m) &&
+      path_length_m > 0.0)
+    {
+      while (advanced_distance_m > 0.5 * path_length_m) {
+        advanced_distance_m -= path_length_m;
+      }
+      while (advanced_distance_m < -0.5 * path_length_m) {
+        advanced_distance_m += path_length_m;
+      }
+    }
+    if (!std::isfinite(advanced_distance_m) || advanced_distance_m < -0.05) {
+      reject_reason = "physical execution certificate progress regressed";
+      return false;
+    }
+    advanced_distance_m = std::max(0.0, advanced_distance_m);
+
+    std::vector<double> current_path_distances;
+    std::vector<double> legacy_lateral_targets;
+    current_path_distances.reserve(static_cast<std::size_t>(horizon_size));
+    legacy_lateral_targets.reserve(static_cast<std::size_t>(horizon_size));
+    for (int stage = 0; stage < horizon_size; ++stage) {
+      const double path_distance = horizon_path_distance_to_index(
+        ref_wp_id, static_cast<std::size_t>(stage));
+      current_path_distances.push_back(path_distance);
+      const double progress = overtake_core::resolve_overtake_line_horizon_progress(
+        overtake_core::OvertakeLineHorizonProgressRequest{
+          mission.direct_pass, 0.0, path_distance,
+          std::max(0.5, mission.shift_distance_m)});
+      legacy_lateral_targets.push_back(
+        model->spatial_state.e_y + progress *
+        (mission.goal_lateral_m - model->spatial_state.e_y));
+    }
+    const auto execution_reference =
+      overtake_core::resolve_frenet_dp_execution_reference(
+      overtake_core::FrenetDpExecutionReferenceRequest{
+        true, advanced_distance_m,
+        2U,
+        mission.physical_execution_certificate_path_distances_m,
+        mission.physical_execution_certificate_lateral_path_m,
+        current_path_distances, legacy_lateral_targets});
+    if (
+      !execution_reference.valid || !execution_reference.active)
+    {
+      reject_reason = "physical execution certificate resampling failed";
+      return false;
+    }
+    const auto trust_envelope =
+      overtake_core::resolve_frenet_dp_execution_trust_envelope(
+      overtake_core::FrenetDpExecutionTrustEnvelopeRequest{
+        true, line_cfg.mpcc_lite_same_side_max_lateral_adjustment,
+        execution_reference.lateral_targets_m, legacy_lateral_targets});
+    if (!trust_envelope.valid || !trust_envelope.active) {
+      reject_reason = "physical execution certificate trust envelope failed";
+      return false;
+    }
+
+    const auto robust_clearance = resolve_robust_clearance(ref_wp_id, horizon_size);
+    const double physical_wall_clearance_m = std::max(0.0, line_cfg.min_wall_clearance);
+    const double planning_wall_clearance_m = robust_clearance.valid ?
+      robust_clearance.wall_planning_clearance_m : physical_wall_clearance_m;
+    const auto wall_contract = overtake_orchestrator::resolve_wall_clearance_contract(
+      physical_wall_clearance_m, planning_wall_clearance_m,
+      line_cfg.runtime_wall_preplan_enabled,
+      std::max(0.0, line_cfg.runtime_wall_preplan_reserve));
+    if (!wall_contract.valid) {
+      reject_reason = "physical execution wall contract invalid";
+      return false;
+    }
+    const AlignedMpccExecutionTrajectory current_trajectory{
+      certificate_age_sec, advanced_distance_m, 0.0,
+      trust_envelope.lateral_targets_m};
+    if (!solved_mpcc_execution_path_wall_safe(
+        current_trajectory, current_path_distances, ref_wp_id, horizon_size,
+        lower_bound, upper_bound, wall_contract.required_clearance_m,
+        reject_reason, 1e-5,
+        SolvedExecutionWallValidationScope::SweptFromCurrentPose))
+    {
+      return false;
+    }
+
+    // Rebase the certificate atomically to the exact current-state trajectory
+    // which will become the first execution reference after entry.
+    mission.physical_execution_certificate_source_sec = now_sec;
+    mission.physical_execution_certificate_source_course_progress_m = model->s;
+    mission.physical_execution_certificate_required_wall_clearance_m =
+      wall_contract.required_clearance_m;
+    mission.physical_execution_certificate_path_distances_m =
+      std::move(current_path_distances);
+    mission.physical_execution_certificate_lateral_path_m =
+      trust_envelope.lateral_targets_m;
+    reject_reason = "physical execution certificate accepted";
+    return true;
+  }
+
   bool dynamic_margin_escape_solution_wall_safe(
     const MpcProblem & problem, const Eigen::VectorXd & primal,
     const double maximum_constraint_violation,
@@ -19039,6 +19332,24 @@ struct MPC
       model->spatial_state = model->t2s(tracking_waypoint, model->temporal_state);
       const MpcProblem problem =
         init_problem(N, model->safety_margin, now_sec, tracking_wp_id, preview_wp_id);
+      if (!problem.lateral_bounds_contract_valid) {
+        static rclcpp::Clock bound_contract_log_clock{RCL_STEADY_TIME};
+        RCLCPP_ERROR_THROTTLE(
+          rclcpp::get_logger("mpc_controller"), bound_contract_log_clock, 250,
+          "MPC lateral bound contract rejected: decision=%lu, source=%s, "
+          "stage=%d, lower=%.3f, upper=%.3f, reason=%s, "
+          "phase=%s, target=%s, action=solver-bypass, wp_id=%d",
+          static_cast<unsigned long>(decision_id),
+          problem.lateral_bounds_contract_failure_source.c_str(),
+          problem.lateral_bounds_contract_failure_stage,
+          problem.lateral_bounds_contract_failure_lower_m,
+          problem.lateral_bounds_contract_failure_upper_m,
+          overtake_execution_orchestrator::to_string(
+            problem.lateral_bounds_contract_failure_reason),
+          to_string(overtake_line_state_.phase),
+          overtake_line_state_.target_vehicle_id.c_str(), model->wp_id);
+        return safe_failure_control("invalid lateral bound contract", now_sec);
+      }
       if (low_speed_shift_control_active_) {
         last_control_resolution_reason_ = "low-speed-direct-control";
         return low_speed_shift_control(tracking_waypoint);
@@ -20427,14 +20738,35 @@ private:
     // PassPlan above.
     overtake_line_state_.mission_path_frozen =
       !selected_mission.has_value() || overtake_line_state_.mission_plan.has_value();
-    overtake_line_state_.mission_frenet_dp_execution_active = false;
-    overtake_line_state_.mission_frenet_dp_side_sign = 0;
+    const bool physical_execution_certificate_available =
+      selected_mission.has_value() &&
+      selected_mission->physical_execution_certificate_valid &&
+      selected_mission->pass_side_sign != 0 &&
+      selected_mission->physical_execution_certificate_path_distances_m.size() >= 2U &&
+      selected_mission->physical_execution_certificate_path_distances_m.size() ==
+      selected_mission->physical_execution_certificate_lateral_path_m.size();
+    // The exact trajectory which passed the swept-footprint wall test is part
+    // of the admission contract.  Keep it as the initial execution reference;
+    // rebuilding only the same-side Mission here used to discard that proof.
+    overtake_line_state_.mission_frenet_dp_execution_active =
+      physical_execution_certificate_available;
+    overtake_line_state_.mission_frenet_dp_side_sign =
+      physical_execution_certificate_available ? selected_mission->pass_side_sign : 0;
     overtake_line_state_.mission_frenet_dp_execution_traveled_m = 0.0;
-    overtake_line_state_.mission_frenet_dp_path_distances_m.clear();
-    overtake_line_state_.mission_frenet_dp_lateral_path_m.clear();
+    overtake_line_state_.mission_frenet_dp_path_distances_m =
+      physical_execution_certificate_available ?
+      selected_mission->physical_execution_certificate_path_distances_m :
+      std::vector<double>{};
+    overtake_line_state_.mission_frenet_dp_lateral_path_m =
+      physical_execution_certificate_available ?
+      selected_mission->physical_execution_certificate_lateral_path_m :
+      std::vector<double>{};
     overtake_line_state_.mission_frenet_dp_last_refresh_sec =
+      physical_execution_certificate_available ? now_sec :
       -std::numeric_limits<double>::infinity();
     overtake_line_state_.mission_frenet_dp_last_source_generated_sec =
+      physical_execution_certificate_available ?
+      selected_mission->physical_execution_certificate_source_sec :
       -std::numeric_limits<double>::infinity();
     overtake_line_state_.mission_frenet_dp_last_solved_source_sec =
       -std::numeric_limits<double>::infinity();
@@ -20446,12 +20778,14 @@ private:
       -std::numeric_limits<double>::infinity();
     overtake_line_state_.mission_frenet_dp_last_refresh_log_sec =
       -std::numeric_limits<double>::infinity();
-    overtake_line_state_.mission_frenet_dp_refresh_count = 0;
+    overtake_line_state_.mission_frenet_dp_refresh_count =
+      physical_execution_certificate_available ? 1 : 0;
     overtake_line_state_.mission_frenet_dp_execution_authority_was_active = false;
     overtake_line_state_.mission_frenet_dp_execution_authority_runtime_was_active = false;
     overtake_line_state_.mission_frenet_dp_tracking_unsafe_since_sec =
       -std::numeric_limits<double>::infinity();
     overtake_line_state_.mission_frenet_dp_last_runtime_validation_sec =
+      physical_execution_certificate_available ? now_sec :
       -std::numeric_limits<double>::infinity();
     overtake_line_state_.mission_shift_distance =
       selected_mission.has_value() &&
@@ -28317,6 +28651,69 @@ private:
           // cycle may admit a freshly validated lateral entry.
           return output;
         }
+        const bool fresh_normal_mission_entry =
+          !resuming_paused_mission &&
+          !behavior_output.start_grid_breakout_active &&
+          behavior_output.overtake_corridor_center_ey.has_value();
+        if (fresh_normal_mission_entry) {
+          const bool physical_execution_certificate_required =
+            cfg.progress_contouring_dual_branch_enabled &&
+            cfg.progress_contouring_mpcc_enabled &&
+            cfg.progress_contouring.extended_dynamics_enabled;
+          const bool candidate_available =
+            behavior_output.overtake_selected_mission.has_value();
+          const bool certificate_available =
+            candidate_available &&
+            behavior_output.overtake_selected_mission->
+            physical_execution_certificate_valid;
+          const auto prepared_pass_plan = candidate_available ?
+            overtake_core::build_overtake_pass_plan(
+            overtake_core::OvertakePassPlanRequest{
+              behavior_output.overtake_selected_mission.value(), current_ey, 0.0}) :
+            overtake_core::OvertakePassPlan{};
+          if (
+            !candidate_available || !prepared_pass_plan.valid ||
+            (physical_execution_certificate_required && !certificate_available))
+          {
+            overtake_locked_side_sign_ = 0;
+            static rclcpp::Clock atomic_commit_log_clock{RCL_STEADY_TIME};
+            RCLCPP_WARN_THROTTLE(
+              rclcpp::get_logger("mpc_controller"), atomic_commit_log_clock, 250,
+              "Overtake entry commit rejected: source=fsm-atomic-commit, target=%s, "
+              "side=%d, candidate=%d, pass_plan=%d, certificate=%d, "
+              "phase=%s, action=keep-cruise-follow, wp_id=%d",
+              behavior_output.target_vehicle_id.c_str(), pass_side_sign,
+              candidate_available ? 1 : 0, prepared_pass_plan.valid ? 1 : 0,
+              certificate_available ? 1 : 0,
+              to_string(overtake_line_state_.phase), model->wp_id);
+            return output;
+          }
+          // Commit the PassPlan and its exact, physically validated trajectory
+          // before changing the FSM phase.  A phase transition without the
+          // execution contract previously exposed one cycle of legacy path
+          // ownership and made admission non-atomic.
+          freeze_selected_overtake_mission(
+            behavior_output.overtake_selected_mission, now_sec);
+          if (
+            !overtake_line_state_.mission_path_frozen ||
+            !overtake_line_state_.mission_plan.has_value() ||
+            (physical_execution_certificate_required &&
+            !overtake_line_state_.mission_frenet_dp_execution_active))
+          {
+            overtake_locked_side_sign_ = 0;
+            RCLCPP_ERROR(
+              rclcpp::get_logger("mpc_controller"),
+              "Overtake entry commit rejected: source=fsm-freeze, target=%s, "
+              "side=%d, path_frozen=%d, pass_plan=%d, execution_path=%d, "
+              "action=keep-cruise-follow, wp_id=%d",
+              behavior_output.target_vehicle_id.c_str(), pass_side_sign,
+              overtake_line_state_.mission_path_frozen ? 1 : 0,
+              overtake_line_state_.mission_plan.has_value() ? 1 : 0,
+              overtake_line_state_.mission_frenet_dp_execution_active ? 1 : 0,
+              model->wp_id);
+            return output;
+          }
+        }
         transition_overtake_line_phase(
           direct_pass ? OvertakeLinePhase::Pass : OvertakeLinePhase::ShiftOut,
           now_sec, current_ey, pass_side_sign,
@@ -28328,13 +28725,28 @@ private:
           resuming_paused_mission ?
           std::optional<double>{same_side_resume_goal} :
           behavior_output.overtake_corridor_center_ey;
-        if (
-          !resuming_paused_mission &&
-          !behavior_output.start_grid_breakout_active &&
-          overtake_line_state_.fixed_pass_corridor_goal_ey.has_value())
-        {
-          freeze_selected_overtake_mission(
-            behavior_output.overtake_selected_mission, now_sec);
+        if (fresh_normal_mission_entry && direct_pass) {
+          overtake_line_state_.mission_pass_start_sec = now_sec;
+        }
+        if (fresh_normal_mission_entry) {
+          const auto & committed_mission =
+            behavior_output.overtake_selected_mission.value();
+          RCLCPP_INFO(
+            rclcpp::get_logger("mpc_controller"),
+            "Overtake entry commit accepted: target=%s, side=%d, phase=%s, "
+            "certificate=%d, certificate_age=%.3f s, source_s=%.3f m, "
+            "current_s=%.3f m, required_wall=%.3f m, samples=%zu, "
+            "generation=%lu, wp_id=%d",
+            behavior_output.target_vehicle_id.c_str(), pass_side_sign,
+            to_string(overtake_line_state_.phase),
+            committed_mission.physical_execution_certificate_valid ? 1 : 0,
+            now_sec - committed_mission.physical_execution_certificate_source_sec,
+            committed_mission.physical_execution_certificate_source_course_progress_m,
+            model->s,
+            committed_mission.physical_execution_certificate_required_wall_clearance_m,
+            committed_mission.physical_execution_certificate_lateral_path_m.size(),
+            static_cast<unsigned long>(overtake_line_state_.mission_generation),
+            model->wp_id);
         }
         if (
           cfg.v2x_behavior.overtake_minimum_lateral_motion_enabled &&
@@ -28347,7 +28759,8 @@ private:
             "goal_ey=%.2f, lateral_shift=%.2f, shift_distance=%.2f, "
             "closing=%.2f, body_deadline_checked=%d, body_deadline=%d, "
             "deadline_slack=%.2f, progress_score=%.2f, min_v=%.2f, "
-            "path_frozen=%d, path_total=%.2f, "
+            "path_frozen=%d, path_total=%.2f, physical_certificate=%d, "
+            "execution_samples=%zu, "
             "target=%s, wp_id=%d",
             direct_base_line_pass ? "base-line" :
             direct_tiny_shift_pass ? "tiny-shift-direct-pass" :
@@ -28371,6 +28784,10 @@ private:
             std::numeric_limits<double>::quiet_NaN(),
             overtake_line_state_.mission_path_frozen ? 1 : 0,
             overtake_line_state_.mission_path_total_distance,
+            behavior_output.overtake_selected_mission.has_value() &&
+            behavior_output.overtake_selected_mission->
+            physical_execution_certificate_valid ? 1 : 0,
+            overtake_line_state_.mission_frenet_dp_lateral_path_m.size(),
             behavior_output.target_vehicle_id.c_str(), model->wp_id);
         }
         overtake_line_state_.inter_vehicle_corridor =
@@ -32375,9 +32792,18 @@ private:
       legacy_lateral_targets[index] = horizon_phase_start_ey +
         progress * (goal_ey - horizon_phase_start_ey);
     }
+    const bool fresh_entry_physical_certificate_authority =
+      overtake_line_state_.mission_frenet_dp_execution_active &&
+      std::isfinite(
+      overtake_line_state_.mission_frenet_dp_last_runtime_validation_sec) &&
+      now_sec + kEps >=
+      overtake_line_state_.mission_frenet_dp_last_runtime_validation_sec &&
+      now_sec - overtake_line_state_.mission_frenet_dp_last_runtime_validation_sec <=
+      0.05;
     const bool frenet_dp_execution_eligible =
       line_cfg.mpcc_frenet_dp_execution_enabled &&
-      dp_execution_authority_active &&
+      (dp_execution_authority_active ||
+      fresh_entry_physical_certificate_authority) &&
       overtake_line_state_.mission_frenet_dp_execution_active &&
       overtake_line_state_.mission_frenet_dp_side_sign ==
       overtake_line_state_.pass_side_sign &&

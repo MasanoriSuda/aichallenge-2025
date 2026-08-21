@@ -289,6 +289,7 @@ enum class FinalControlSource {
   SolverBoundedContinuation,
   SolverWallHandoffHold,
   OvertakeWallAdmissionHold,
+  ExecutedSolutionWallHold,
   SolverCrawl,
   ControlDisabled,
   StuckRecovery,
@@ -303,6 +304,7 @@ struct FinalControlSourceRequest {
   bool solver_bounded_continuation_active{false};
   bool solver_wall_handoff_hold_active{false};
   bool overtake_wall_admission_hold_active{false};
+  bool executed_solution_wall_hold_active{false};
   bool solver_crawl_active{false};
   bool solver_fallback_active{false};
   bool forced_stop_active{false};
@@ -464,6 +466,37 @@ std::string format_wall_path_admission_trace(
   const WallHandoffAdmissionRequest & request,
   const WallHandoffAdmissionResolution & resolution,
   double held_speed_mps, double held_steering_rad);
+
+enum class ExecutedSolutionWallAction {
+  Publish,
+  EntryRollback,
+  DynamicReplan,
+  RecoveryReplan,
+  HoldCurrentPath,
+};
+
+const char * to_string(ExecutedSolutionWallAction action) noexcept;
+
+struct ExecutedSolutionWallRequest {
+  bool execution_context_active{false};
+  bool solution_wall_safe{false};
+  Phase phase{Phase::Idle};
+  double phase_traveled_m{0.0};
+  double entry_rollback_max_traveled_m{0.05};
+};
+
+struct ExecutedSolutionWallResolution {
+  bool valid{false};
+  bool publish_solution{false};
+  ExecutedSolutionWallAction action{ExecutedSolutionWallAction::HoldCurrentPath};
+};
+
+/// Decide how an exact solver trajectory is handled after the reference path
+/// has already passed entry admission.  An untravelled ShiftOut may be rolled
+/// back atomically; an in-progress lateral manoeuvre must keep lateral
+/// ownership through DynamicReplan or RecoveryReplan.
+ExecutedSolutionWallResolution resolve_executed_solution_wall_action(
+  const ExecutedSolutionWallRequest & request) noexcept;
 
 struct WallHandoffProbe {
   std::uint64_t decision_id{0U};

@@ -373,6 +373,12 @@ TEST(OvertakeExecutionOrchestrator, ResolvesFinalControlSourceByOutputPrecedence
     orchestrator::resolve_final_control_source(request),
     orchestrator::FinalControlSource::OvertakeWallAdmissionHold);
 
+  request.overtake_wall_admission_hold_active = false;
+  request.executed_solution_wall_hold_active = true;
+  EXPECT_EQ(
+    orchestrator::resolve_final_control_source(request),
+    orchestrator::FinalControlSource::ExecutedSolutionWallHold);
+
   request.low_speed_wall_stop_active = true;
   EXPECT_EQ(
     orchestrator::resolve_final_control_source(request),
@@ -850,6 +856,56 @@ TEST(OvertakeExecutionOrchestrator, FormatsWallHandoffDecisionEvidence)
   EXPECT_NE(message.find("trigger=wall-risk"), std::string::npos);
   EXPECT_NE(message.find("path_wall=Right/0.12m@3/2.50m"), std::string::npos);
   EXPECT_NE(message.find("delta=0.05"), std::string::npos);
+}
+
+TEST(OvertakeExecutionOrchestrator, PublishesOnlyWallSafeExecutedSolution)
+{
+  const auto result = orchestrator::resolve_executed_solution_wall_action(
+    orchestrator::ExecutedSolutionWallRequest{
+      true, true, orchestrator::Phase::ShiftOut, 0.0, 0.05});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_TRUE(result.publish_solution);
+  EXPECT_EQ(
+    result.action, orchestrator::ExecutedSolutionWallAction::Publish);
+}
+
+TEST(OvertakeExecutionOrchestrator, RollsBackUntravelledUnsafeEntry)
+{
+  const auto result = orchestrator::resolve_executed_solution_wall_action(
+    orchestrator::ExecutedSolutionWallRequest{
+      true, false, orchestrator::Phase::ShiftOut, 0.01, 0.05});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_FALSE(result.publish_solution);
+  EXPECT_EQ(
+    result.action, orchestrator::ExecutedSolutionWallAction::EntryRollback);
+}
+
+TEST(OvertakeExecutionOrchestrator, KeepsLateralOwnershipAfterEntryProgress)
+{
+  const auto shiftout = orchestrator::resolve_executed_solution_wall_action(
+    orchestrator::ExecutedSolutionWallRequest{
+      true, false, orchestrator::Phase::ShiftOut, 0.06, 0.05});
+  const auto pass = orchestrator::resolve_executed_solution_wall_action(
+    orchestrator::ExecutedSolutionWallRequest{
+      true, false, orchestrator::Phase::Pass, 2.0, 0.05});
+  const auto returning = orchestrator::resolve_executed_solution_wall_action(
+    orchestrator::ExecutedSolutionWallRequest{
+      true, false, orchestrator::Phase::Return, 1.0, 0.05});
+
+  ASSERT_TRUE(shiftout.valid);
+  ASSERT_TRUE(pass.valid);
+  ASSERT_TRUE(returning.valid);
+  EXPECT_EQ(
+    shiftout.action,
+    orchestrator::ExecutedSolutionWallAction::DynamicReplan);
+  EXPECT_EQ(
+    pass.action,
+    orchestrator::ExecutedSolutionWallAction::DynamicReplan);
+  EXPECT_EQ(
+    returning.action,
+    orchestrator::ExecutedSolutionWallAction::RecoveryReplan);
 }
 
 }  // namespace

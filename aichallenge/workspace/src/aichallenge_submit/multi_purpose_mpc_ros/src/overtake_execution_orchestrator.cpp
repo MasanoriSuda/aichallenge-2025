@@ -665,6 +665,9 @@ FinalControlSource resolve_final_control_source(
   if (request.overtake_wall_admission_hold_active) {
     return FinalControlSource::OvertakeWallAdmissionHold;
   }
+  if (request.executed_solution_wall_hold_active) {
+    return FinalControlSource::ExecutedSolutionWallHold;
+  }
   if (request.solver_bounded_continuation_active) {
     return FinalControlSource::SolverBoundedContinuation;
   }
@@ -693,6 +696,8 @@ const char * to_string(const FinalControlSource source) noexcept
       return "solver-wall-handoff-hold";
     case FinalControlSource::OvertakeWallAdmissionHold:
       return "overtake-wall-admission-hold";
+    case FinalControlSource::ExecutedSolutionWallHold:
+      return "executed-solution-wall-hold";
     case FinalControlSource::SolverCrawl: return "solver-crawl";
     case FinalControlSource::ControlDisabled: return "control-disabled";
     case FinalControlSource::StuckRecovery: return "stuck-recovery";
@@ -716,6 +721,7 @@ std::string final_control_signature(const FinalControlTrace & trace)
     trace.control_source == FinalControlSource::SolverBoundedContinuation ||
     trace.control_source == FinalControlSource::SolverWallHandoffHold ||
     trace.control_source == FinalControlSource::OvertakeWallAdmissionHold ||
+    trace.control_source == FinalControlSource::ExecutedSolutionWallHold ||
     trace.control_source == FinalControlSource::Failsafe)
   {
     stream << "|" << trace.solver_reason << "|" << trace.output_reason;
@@ -755,6 +761,7 @@ std::string structural_final_control_signature(const FinalControlTrace & trace)
     trace.control_source == FinalControlSource::SolverBoundedContinuation ||
     trace.control_source == FinalControlSource::SolverWallHandoffHold ||
     trace.control_source == FinalControlSource::OvertakeWallAdmissionHold ||
+    trace.control_source == FinalControlSource::ExecutedSolutionWallHold ||
     trace.control_source == FinalControlSource::Failsafe)
   {
     stream << "|" << trace.solver_reason << "|" << trace.output_reason;
@@ -865,6 +872,7 @@ FinalTraceEmission ChangeAwareFinalControlTraceEmitter::update(
     trace.control_source == FinalControlSource::SolverBoundedContinuation ||
     trace.control_source == FinalControlSource::SolverWallHandoffHold ||
     trace.control_source == FinalControlSource::OvertakeWallAdmissionHold ||
+    trace.control_source == FinalControlSource::ExecutedSolutionWallHold ||
     trace.control_source == FinalControlSource::LowSpeedWallStop ||
     trace.control_source == FinalControlSource::Failsafe ||
     (trace.authority.has_value() &&
@@ -1140,6 +1148,67 @@ std::string format_wall_path_admission_trace(
   return stream.str();
 }
 
+const char * to_string(const ExecutedSolutionWallAction action) noexcept
+{
+  switch (action) {
+    case ExecutedSolutionWallAction::Publish: return "publish";
+    case ExecutedSolutionWallAction::EntryRollback: return "entry-rollback";
+    case ExecutedSolutionWallAction::DynamicReplan: return "dynamic-replan";
+    case ExecutedSolutionWallAction::RecoveryReplan: return "recovery-replan";
+    case ExecutedSolutionWallAction::HoldCurrentPath: return "hold-current-path";
+  }
+  return "hold-current-path";
+}
+
+ExecutedSolutionWallResolution resolve_executed_solution_wall_action(
+  const ExecutedSolutionWallRequest & request) noexcept
+{
+  ExecutedSolutionWallResolution resolution;
+  if (
+    !std::isfinite(request.phase_traveled_m) ||
+    !std::isfinite(request.entry_rollback_max_traveled_m) ||
+    request.phase_traveled_m < 0.0 ||
+    request.entry_rollback_max_traveled_m < 0.0)
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  if (!request.execution_context_active) {
+    resolution.publish_solution = request.solution_wall_safe;
+    resolution.action = request.solution_wall_safe ?
+      ExecutedSolutionWallAction::Publish :
+      ExecutedSolutionWallAction::HoldCurrentPath;
+    return resolution;
+  }
+  if (request.solution_wall_safe) {
+    resolution.publish_solution = true;
+    resolution.action = ExecutedSolutionWallAction::Publish;
+    return resolution;
+  }
+
+  switch (request.phase) {
+    case Phase::ShiftOut:
+      resolution.action =
+        request.phase_traveled_m <= request.entry_rollback_max_traveled_m ?
+        ExecutedSolutionWallAction::EntryRollback :
+        ExecutedSolutionWallAction::DynamicReplan;
+      break;
+    case Phase::Pass:
+      resolution.action = ExecutedSolutionWallAction::DynamicReplan;
+      break;
+    case Phase::Return:
+      resolution.action = ExecutedSolutionWallAction::RecoveryReplan;
+      break;
+    case Phase::FollowPrepare:
+    case Phase::Recovery:
+    case Phase::Idle:
+      resolution.action = ExecutedSolutionWallAction::HoldCurrentPath;
+      break;
+  }
+  return resolution;
+}
+
 WallRiskState classify_wall_risk(const WallHandoffProbe & probe) noexcept
 {
   if (
@@ -1171,7 +1240,8 @@ bool dynamic_handoff_relevant(const WallHandoffProbe & probe) noexcept
     probe.path_source == PathSource::DynamicObstacleEscape ||
     probe.control_source == FinalControlSource::SolverBoundedContinuation ||
     probe.control_source == FinalControlSource::SolverWallHandoffHold ||
-    probe.control_source == FinalControlSource::OvertakeWallAdmissionHold;
+    probe.control_source == FinalControlSource::OvertakeWallAdmissionHold ||
+    probe.control_source == FinalControlSource::ExecutedSolutionWallHold;
 }
 
 void append_trigger(std::ostringstream & stream, bool & first, const char * trigger)

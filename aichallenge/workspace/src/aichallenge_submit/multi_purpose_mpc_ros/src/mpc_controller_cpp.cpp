@@ -4982,6 +4982,8 @@ struct MpcProblem
   OvertakeLinePhase progress_execution_phase{OvertakeLinePhase::Idle};
   int progress_execution_side_sign{0};
   double progress_execution_mission_traveled_m{};
+  double progress_execution_required_wall_clearance_m{
+    std::numeric_limits<double>::quiet_NaN()};
   std::vector<double> progress_execution_path_distance_m;
   std::vector<double> progress_execution_lateral_lower_m;
   std::vector<double> progress_execution_lateral_upper_m;
@@ -6083,7 +6085,9 @@ struct MPC
 
   bool request_active_overtake_wall_replan(
     const std::string & reason, const double now_sec,
-    const std::uint64_t decision_id)
+    const std::uint64_t decision_id,
+    const overtake_orchestrator::ExecutedSolutionWallAction requested_action =
+    overtake_orchestrator::ExecutedSolutionWallAction::DynamicReplan)
   {
     const bool active_pass_execution =
       overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
@@ -6105,6 +6109,10 @@ struct MPC
     const int pass_side_sign = overtake_line_state_.pass_side_sign;
     bool failed_side_retry_block_armed = false;
     bool alternate_side_search_allowed = false;
+    const bool rollback_untravelled_entry =
+      active_pass_execution && previous_phase == OvertakeLinePhase::ShiftOut &&
+      requested_action ==
+      overtake_orchestrator::ExecutedSolutionWallAction::EntryRollback;
     if (active_pass_execution) {
       arm_overtake_line_side_retry_block(
         pass_side_sign, target_id, now_sec, reason,
@@ -6152,27 +6160,38 @@ struct MPC
         !overtake_line_state_.mission_cross_side_transition_committed &&
         overtake_line_state_.opponent_side_replan_count <
         line_cfg.opponent_side_replan_max_count;
-      alternate_side_search_allowed = before_no_return && replacement_count_available;
-      overtake_line_state_.dynamic_mission_wait_active = true;
-      overtake_line_state_.dynamic_mission_wait_trigger_reason = reason;
-      overtake_line_state_.dynamic_mission_wait_cross_side_lease_active =
-        alternate_side_search_allowed;
-      overtake_line_state_.dynamic_mission_wait_bounded_escape_at_entry = false;
-      overtake_line_state_.dynamic_mission_wait_terminal_budget_abort = false;
-      overtake_line_state_.dynamic_mission_wait_rear_clear_extension_logged = false;
-      overtake_line_state_.dynamic_mission_wait_best_target_longitudinal_m =
-        std::isfinite(behavior_output.locked_target_longitudinal) ?
-        behavior_output.locked_target_longitudinal :
-        std::numeric_limits<double>::infinity();
-      overtake_line_state_.dynamic_mission_wait_last_progress_sec =
-        std::isfinite(behavior_output.locked_target_longitudinal) ?
-        now_sec : std::numeric_limits<double>::quiet_NaN();
-      overtake_line_state_.opponent_side_replan_last_evaluation_sec =
-        -std::numeric_limits<double>::infinity();
-      transition_overtake_line_phase(
-        OvertakeLinePhase::FollowPrepare, now_sec, model->spatial_state.e_y,
-        pass_side_sign, "physical wall path rejected: " + reason,
-        FollowPrepareCause::DynamicMissionWait);
+      alternate_side_search_allowed = rollback_untravelled_entry ||
+        (before_no_return && replacement_count_available);
+      if (rollback_untravelled_entry) {
+        // No command from this Mission has been published.  Do not create a
+        // synthetic FollowPrepare episode or preserve lateral authority from
+        // the rejected path; return directly to fresh side selection while
+        // the failed side retry block prevents immediate reselection.
+        transition_overtake_line_phase(
+          OvertakeLinePhase::Idle, now_sec, model->spatial_state.e_y,
+          pass_side_sign, "executed solution wall entry rollback: " + reason);
+      } else {
+        overtake_line_state_.dynamic_mission_wait_active = true;
+        overtake_line_state_.dynamic_mission_wait_trigger_reason = reason;
+        overtake_line_state_.dynamic_mission_wait_cross_side_lease_active =
+          alternate_side_search_allowed;
+        overtake_line_state_.dynamic_mission_wait_bounded_escape_at_entry = false;
+        overtake_line_state_.dynamic_mission_wait_terminal_budget_abort = false;
+        overtake_line_state_.dynamic_mission_wait_rear_clear_extension_logged = false;
+        overtake_line_state_.dynamic_mission_wait_best_target_longitudinal_m =
+          std::isfinite(behavior_output.locked_target_longitudinal) ?
+          behavior_output.locked_target_longitudinal :
+          std::numeric_limits<double>::infinity();
+        overtake_line_state_.dynamic_mission_wait_last_progress_sec =
+          std::isfinite(behavior_output.locked_target_longitudinal) ?
+          now_sec : std::numeric_limits<double>::quiet_NaN();
+        overtake_line_state_.opponent_side_replan_last_evaluation_sec =
+          -std::numeric_limits<double>::infinity();
+        transition_overtake_line_phase(
+          OvertakeLinePhase::FollowPrepare, now_sec, model->spatial_state.e_y,
+          pass_side_sign, "physical wall path rejected: " + reason,
+          FollowPrepareCause::DynamicMissionWait);
+      }
     } else {
       // A Return path no longer has an opponent-side Mission to replace. Let
       // the existing Recovery planner build a fresh wall-aware rejoin instead
@@ -6191,7 +6210,8 @@ struct MPC
       static_cast<unsigned long>(decision_id), target_id.c_str(),
       static_cast<unsigned long>(rejected_generation),
       to_string(previous_phase), pass_side_sign,
-      active_pass_execution ? "dynamic-replan" : "recovery-replan",
+      rollback_untravelled_entry ? "entry-rollback" :
+      (active_pass_execution ? "dynamic-replan" : "recovery-replan"),
       failed_side_retry_block_armed ? 1 : 0,
       alternate_side_search_allowed ? 1 : 0,
       reason.c_str(), model != nullptr ? model->wp_id : -1);
@@ -6201,6 +6221,11 @@ struct MPC
   bool last_control_was_fallback() const
   {
     return last_control_was_fallback_;
+  }
+
+  bool executed_solution_wall_hold_active() const noexcept
+  {
+    return executed_solution_wall_hold_active_;
   }
 
   int consecutive_solver_failure_count() const noexcept
@@ -17305,7 +17330,28 @@ struct MPC
     std::vector<double> progress_execution_path_distance_m;
     std::vector<double> progress_execution_lateral_lower_m;
     std::vector<double> progress_execution_lateral_upper_m;
+    double progress_execution_required_wall_clearance_m =
+      std::numeric_limits<double>::quiet_NaN();
     if (progress_execution_context_active) {
+      const auto execution_robust_clearance =
+        resolve_robust_clearance(tracking_wp_id, N);
+      const double physical_wall_clearance_m = std::max(
+        0.0, cfg.v2x_behavior.overtake_line.min_wall_clearance);
+      const double planning_wall_clearance_m =
+        execution_robust_clearance.valid ?
+        execution_robust_clearance.wall_planning_clearance_m :
+        physical_wall_clearance_m;
+      const auto execution_wall_contract =
+        overtake_orchestrator::resolve_wall_clearance_contract(
+        physical_wall_clearance_m, planning_wall_clearance_m,
+        cfg.v2x_behavior.overtake_line.runtime_wall_preplan_enabled,
+        std::max(
+          0.0,
+          cfg.v2x_behavior.overtake_line.runtime_wall_preplan_reserve));
+      if (execution_wall_contract.valid) {
+        progress_execution_required_wall_clearance_m =
+          execution_wall_contract.required_clearance_m;
+      }
       progress_execution_path_distance_m.reserve(static_cast<std::size_t>(N));
       progress_execution_lateral_lower_m.reserve(static_cast<std::size_t>(N));
       progress_execution_lateral_upper_m.reserve(static_cast<std::size_t>(N));
@@ -17368,6 +17414,7 @@ struct MPC
       OvertakeLinePhase::Idle,
       progress_execution_context_active ? overtake_line_state_.pass_side_sign : 0,
       progress_execution_context_active ? overtake_mission_progress_traveled() : 0.0,
+      progress_execution_required_wall_clearance_m,
       std::move(progress_execution_path_distance_m),
       std::move(progress_execution_lateral_lower_m),
       std::move(progress_execution_lateral_upper_m),
@@ -18913,6 +18960,58 @@ struct MPC
       SolvedExecutionWallValidationScope::SweptFromCurrentPose);
   }
 
+  bool executed_progress_solution_wall_safe(
+    const MpcProblem & problem, const Eigen::VectorXd & primal,
+    const double maximum_constraint_violation,
+    std::string & reject_reason) const
+  {
+    constexpr int nx = 3;
+    constexpr int nu = 2;
+    if (!problem.progress_execution_context_active) {
+      reject_reason = "execution context inactive";
+      return true;
+    }
+    const int expected_size = nx * (problem.N + 1) + nu * problem.N;
+    if (
+      problem.N <= 0 || primal.size() != expected_size || !primal.allFinite() ||
+      !std::isfinite(problem.progress_execution_required_wall_clearance_m) ||
+      problem.progress_execution_required_wall_clearance_m < 0.0 ||
+      problem.progress_execution_path_distance_m.size() !=
+      static_cast<std::size_t>(problem.N) ||
+      problem.progress_execution_lateral_lower_m.size() !=
+      static_cast<std::size_t>(problem.N) ||
+      problem.progress_execution_lateral_upper_m.size() !=
+      static_cast<std::size_t>(problem.N))
+    {
+      reject_reason = "executed solution wall contract input invalid";
+      return false;
+    }
+
+    std::vector<double> lateral_m;
+    lateral_m.reserve(static_cast<std::size_t>(problem.N));
+    Eigen::VectorXd lower_bound(problem.N);
+    Eigen::VectorXd upper_bound(problem.N);
+    for (int stage = 0; stage < problem.N; ++stage) {
+      lateral_m.push_back(primal[(stage + 1) * nx]);
+      lower_bound[stage] =
+        problem.progress_execution_lateral_lower_m[static_cast<std::size_t>(stage)];
+      upper_bound[stage] =
+        problem.progress_execution_lateral_upper_m[static_cast<std::size_t>(stage)];
+    }
+    const AlignedMpccExecutionTrajectory trajectory{
+      0.0, 0.0, std::numeric_limits<double>::infinity(),
+      std::move(lateral_m)};
+    const double bound_tolerance_m =
+      std::isfinite(maximum_constraint_violation) ?
+      std::max(1e-5, maximum_constraint_violation + 1e-6) : 1e-5;
+    return solved_mpcc_execution_path_wall_safe(
+      trajectory, problem.progress_execution_path_distance_m,
+      problem.ref_wp_id, problem.N, lower_bound, upper_bound,
+      problem.progress_execution_required_wall_clearance_m,
+      reject_reason, bound_tolerance_m,
+      SolvedExecutionWallValidationScope::SweptFromCurrentPose);
+  }
+
   std::optional<PhysicallyValidatedMpccExecutionTrajectory>
   resolve_physically_validated_mpcc_execution_trajectory(
     const std::vector<double> & current_path_distance_m,
@@ -19267,6 +19366,131 @@ struct MPC
     trace.initial_solver_reason = dynamic_escape_cold_retry_initial_reason_;
   }
 
+  void log_executed_solution_wall_contract(
+    const MpcProblem & problem, const bool accepted,
+    const overtake_orchestrator::ExecutedSolutionWallAction action,
+    const std::string & reason, const std::uint64_t decision_id) const
+  {
+    const auto & authority = last_overtake_authority_trace_;
+    const bool reference_certificate_available =
+      authority.has_value() &&
+      std::isfinite(
+      authority->request.wall_contract_minimum_path_clearance_m) &&
+      std::isfinite(authority->request.wall_contract_required_clearance_m);
+    const char * reference_certificate =
+      reference_certificate_available ? "available" : "unavailable";
+    const char * reference_path_source = authority.has_value() ?
+      overtake_orchestrator::to_string(authority->resolution.path_source) :
+      "unavailable";
+    const double reference_minimum_clearance_m = authority.has_value() ?
+      authority->request.wall_contract_minimum_path_clearance_m :
+      std::numeric_limits<double>::quiet_NaN();
+    const char * result = accepted ? "accepted" : "rejected";
+    const std::string trace_reason = reason.empty() ?
+      (accepted ? "swept footprint clear" : "unspecified rejection") : reason;
+    const auto logger = rclcpp::get_logger("mpc_controller");
+    if (accepted) {
+      RCLCPP_INFO(
+        logger,
+        "Overtake executed solution wall contract: decision=%lu, episode=%lu, "
+        "generation=%lu, target=%s, phase=%s, side=%d, "
+        "reference_certificate=%s/%s/%.3f m, "
+        "validation=swept-current-to-horizon, required=%.3f m, stages=%d, "
+        "result=%s, action=%s, reason=%s, wp_id=%d",
+        static_cast<unsigned long>(decision_id),
+        static_cast<unsigned long>(overtake_line_state_.episode_id),
+        static_cast<unsigned long>(problem.progress_execution_mission_generation),
+        problem.progress_execution_target_id.c_str(),
+        to_string(problem.progress_execution_phase),
+        problem.progress_execution_side_sign,
+        reference_certificate, reference_path_source,
+        reference_minimum_clearance_m,
+        problem.progress_execution_required_wall_clearance_m, problem.N,
+        result, overtake_orchestrator::to_string(action), trace_reason.c_str(),
+        problem.ref_wp_id);
+    } else {
+      RCLCPP_ERROR(
+        logger,
+        "Overtake executed solution wall contract: decision=%lu, episode=%lu, "
+        "generation=%lu, target=%s, phase=%s, side=%d, traveled=%.3f m, "
+        "reference_certificate=%s/%s/%.3f m, "
+        "validation=swept-current-to-horizon, required=%.3f m, stages=%d, "
+        "result=%s, action=%s, reason=%s, wp_id=%d",
+        static_cast<unsigned long>(decision_id),
+        static_cast<unsigned long>(overtake_line_state_.episode_id),
+        static_cast<unsigned long>(problem.progress_execution_mission_generation),
+        problem.progress_execution_target_id.c_str(),
+        to_string(problem.progress_execution_phase),
+        problem.progress_execution_side_sign,
+        problem.progress_execution_mission_traveled_m,
+        reference_certificate, reference_path_source,
+        reference_minimum_clearance_m,
+        problem.progress_execution_required_wall_clearance_m, problem.N,
+        result, overtake_orchestrator::to_string(action), trace_reason.c_str(),
+        problem.ref_wp_id);
+    }
+  }
+
+  std::pair<Eigen::Vector2d, double> executed_solution_wall_hold_control(
+    const MpcProblem & problem,
+    const overtake_orchestrator::ExecutedSolutionWallResolution & resolution,
+    const std::string & reason, const double now_sec,
+    const std::uint64_t decision_id)
+  {
+    log_executed_solution_wall_contract(
+      problem, false, resolution.action, reason, decision_id);
+
+    bool replan_requested = false;
+    if (
+      resolution.action ==
+      overtake_orchestrator::ExecutedSolutionWallAction::EntryRollback ||
+      resolution.action ==
+      overtake_orchestrator::ExecutedSolutionWallAction::DynamicReplan ||
+      resolution.action ==
+      overtake_orchestrator::ExecutedSolutionWallAction::RecoveryReplan)
+    {
+      replan_requested = request_active_overtake_wall_replan(
+        "executed solver trajectory rejected: " + reason,
+        now_sec, decision_id, resolution.action);
+    }
+
+    const double current_speed = std::isfinite(current_speed_mps_) ?
+      std::max(0.0, current_speed_mps_) : 0.0;
+    double hold_base_speed = current_speed;
+    if (current_control.size() >= 1 && std::isfinite(current_control[0])) {
+      hold_base_speed = std::min(hold_base_speed, std::max(0.0, current_control[0]));
+    }
+    const double time_step = std::isfinite(model->Ts) ?
+      std::max(0.0, model->Ts) : 0.0;
+    const double one_cycle_deceleration = std::isfinite(cfg.a_min) ?
+      std::max(0.0, -cfg.a_min) * time_step : 0.0;
+    const double hold_speed = std::max(0.0, hold_base_speed - one_cycle_deceleration);
+    const double max_steering = std::isfinite(cfg.delta_max) ?
+      std::max(0.0, std::abs(cfg.delta_max)) : 0.0;
+    const double hold_steering = std::isfinite(previous_steering) ?
+      clip(previous_steering, -max_steering, max_steering) : 0.0;
+
+    current_control = Eigen::VectorXd::Zero(2 * std::max(0, cfg.N));
+    for (int index = 0; index < cfg.N; ++index) {
+      current_control[2 * index] = hold_speed;
+      current_control[2 * index + 1] = hold_steering;
+    }
+    previous_steering = hold_steering;
+    failure_fallback_speed_.reset();
+    infeasibility_counter = 0;
+    overtake_infeasibility_counter_ = 0;
+    last_control_was_fallback_ = false;
+    executed_solution_wall_hold_active_ = true;
+    last_control_resolution_reason_ =
+      std::string{"executed-solution-wall-hold/"} +
+      overtake_orchestrator::to_string(resolution.action) + "/" + reason +
+      (replan_requested ? "/replan-requested" : "/replan-unavailable");
+
+    Eigen::Vector2d hold;
+    hold << hold_speed, hold_steering;
+    return {hold, std::abs(hold_steering)};
+  }
+
   std::pair<Eigen::Vector2d, double> safe_failure_control(
     const std::string & reason, const double now_sec)
   {
@@ -19577,6 +19801,7 @@ struct MPC
     active_control_decision_id_ = decision_id;
     last_overtake_authority_trace_.reset();
     last_control_resolution_reason_ = "not-resolved";
+    executed_solution_wall_hold_active_ = false;
     dynamic_escape_cold_retry_attempted_ = false;
     dynamic_escape_cold_retry_succeeded_ = false;
     dynamic_escape_cold_retry_initial_reason_.clear();
@@ -19760,6 +19985,42 @@ struct MPC
         throw std::runtime_error(
                 "dynamic margin escape physical solution rejected: " +
                 dynamic_margin_escape_reject_reason);
+      }
+      std::string executed_solution_wall_reject_reason;
+      const bool executed_solution_wall_safe =
+        executed_progress_solution_wall_safe(
+        problem, dec, maximum_constraint_violation,
+        executed_solution_wall_reject_reason);
+      const auto executed_solution_wall_resolution =
+        overtake_orchestrator::resolve_executed_solution_wall_action(
+        overtake_orchestrator::ExecutedSolutionWallRequest{
+          problem.progress_execution_context_active,
+          executed_solution_wall_safe,
+          orchestrator_phase(problem.progress_execution_phase),
+          problem.progress_execution_mission_traveled_m,
+          0.05});
+      if (!executed_solution_wall_resolution.valid) {
+        throw std::runtime_error("invalid executed solution wall resolution");
+      }
+      if (!executed_solution_wall_resolution.publish_solution) {
+        return executed_solution_wall_hold_control(
+          problem, executed_solution_wall_resolution,
+          executed_solution_wall_reject_reason, now_sec, decision_id);
+      }
+      if (
+        problem.progress_execution_context_active &&
+        (last_executed_solution_wall_log_generation_ !=
+        problem.progress_execution_mission_generation ||
+        last_executed_solution_wall_log_phase_ !=
+        problem.progress_execution_phase))
+      {
+        log_executed_solution_wall_contract(
+          problem, true, executed_solution_wall_resolution.action,
+          executed_solution_wall_reject_reason, decision_id);
+        last_executed_solution_wall_log_generation_ =
+          problem.progress_execution_mission_generation;
+        last_executed_solution_wall_log_phase_ =
+          problem.progress_execution_phase;
       }
       record_solved_mpcc_execution_trajectory(
         problem, dec, maximum_constraint_violation, now_sec);
@@ -20309,6 +20570,9 @@ struct MPC
     -std::numeric_limits<double>::infinity()};
   std::optional<double> failure_fallback_speed_;
   bool last_control_was_fallback_{false};
+  bool executed_solution_wall_hold_active_{false};
+  std::uint64_t last_executed_solution_wall_log_generation_{0U};
+  OvertakeLinePhase last_executed_solution_wall_log_phase_{OvertakeLinePhase::Idle};
   std::uint64_t active_control_decision_id_{0U};
   std::optional<overtake_orchestrator::AuthorityTrace>
   last_overtake_authority_trace_;
@@ -46487,6 +46751,8 @@ private:
     auto [u, max_delta] = mpc_->get_control(
       current_time.seconds(), active_control_decision_id_);
     const bool mpc_fallback_active = mpc_->last_control_was_fallback();
+    const bool executed_solution_wall_hold_active =
+      mpc_->executed_solution_wall_hold_active();
     const auto & v2x_behavior = mpc_->last_v2x_behavior_output();
     const auto overtake_authority = current_overtake_authority_trace();
     const bool solver_failure_continuation_previous_cycle =
@@ -46506,6 +46772,7 @@ private:
     const bool active_overtake_wall_monitor_relevant =
       enable_control_ && overtake_authority.has_value() &&
       overtake_authority->resolution.relevant && !mpc_fallback_active &&
+      !executed_solution_wall_hold_active &&
       (overtake_authority->request.phase ==
       overtake_orchestrator::Phase::ShiftOut ||
       overtake_authority->request.phase == overtake_orchestrator::Phase::Pass ||
@@ -46902,6 +47169,9 @@ private:
     } else if (solver_failure_continuation_active) {
       bug_acc_enabled = false;
       acc = 0.0;
+    } else if (executed_solution_wall_hold_active) {
+      bug_acc_enabled = false;
+      acc = std::min(0.0, 100.0 * (u[0] - actual_v));
     } else if (wall_handoff_hold_active) {
       bug_acc_enabled = false;
       acc = active_wall_admission.stop_required ? mpc_cfg_.a_min :
@@ -46940,7 +47210,10 @@ private:
     if (!forced_stop_active) {
       acc = last_acc_ + (acc - last_acc_) * mpc_cfg_.accel_low_pass_gain;
     }
-    if (solver_failure_continuation_active || wall_handoff_hold_active) {
+    if (
+      solver_failure_continuation_active || wall_handoff_hold_active ||
+      executed_solution_wall_hold_active)
+    {
       acc = std::min(0.0, acc);
     }
     u[1] = last_u_[1] + (u[1] - last_u_[1]) * mpc_cfg_.steer_low_pass_gain;
@@ -47008,6 +47281,8 @@ private:
       solver_wall_handoff_hold_active;
     final_source_request.overtake_wall_admission_hold_active =
       overtake_wall_admission_hold_active;
+    final_source_request.executed_solution_wall_hold_active =
+      executed_solution_wall_hold_active;
     final_source_request.solver_crawl_active = solver_failure_crawl_active;
     final_source_request.solver_fallback_active = mpc_fallback_active;
     final_source_request.forced_stop_active = forced_stop_active;
@@ -47024,6 +47299,8 @@ private:
       output_reason = "solver-failure-crawl";
     } else if (solver_failure_continuation_active) {
       output_reason = "solver-failure-dynamic-escape-hold";
+    } else if (executed_solution_wall_hold_active) {
+      output_reason = "executed-solution-wall-contract-hold";
     } else if (wall_handoff_hold_active) {
       output_reason = std::string{
         solver_wall_handoff_hold_active ? "solver-wall-handoff-hold/" :
@@ -47090,6 +47367,7 @@ private:
     boost_context.normal_command_published = true;
     boost_context.failsafe_active =
       forced_stop_active || wall_handoff_hold_active ||
+      executed_solution_wall_hold_active ||
       odom_failsafe_active_ || command_failsafe_active_;
     boost_context.v2x_safety_brake_active =
       mpc_->last_v2x_behavior_output().state == V2XBehaviorState::SafetyBrake;

@@ -21,6 +21,16 @@ enum class Homotopy
 
 const char * homotopy_name(Homotopy homotopy) noexcept;
 
+enum class TargetProvenanceStage
+{
+  None,
+  Observed,
+  Locked,
+};
+
+const char * target_provenance_stage_name(
+  TargetProvenanceStage stage) noexcept;
+
 struct TargetProvenance
 {
   bool valid{false};
@@ -30,6 +40,7 @@ struct TargetProvenance
   double course_progress_m{std::numeric_limits<double>::quiet_NaN()};
   double course_lateral_m{std::numeric_limits<double>::quiet_NaN()};
   std::uint64_t observation_generation{0U};
+  TargetProvenanceStage stage{TargetProvenanceStage::None};
 };
 
 enum class TargetProvenanceRejectReason
@@ -41,6 +52,7 @@ enum class TargetProvenanceRejectReason
   SourceRegression,
   ReceiptRegression,
   GenerationRegression,
+  StageRegression,
   ProgressDelta,
   LateralDelta,
 };

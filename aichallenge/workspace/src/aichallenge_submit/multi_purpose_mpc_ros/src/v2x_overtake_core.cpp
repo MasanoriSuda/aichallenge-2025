@@ -2402,22 +2402,97 @@ RecedingHorizonRefreshResolution resolve_receding_horizon_refresh(
   return resolution;
 }
 
+const char * async_tactical_result_lease_reject_reason_name(
+  const AsyncTacticalResultLeaseRejectReason reason) noexcept
+{
+  switch (reason) {
+    case AsyncTacticalResultLeaseRejectReason::None:
+      return "none";
+    case AsyncTacticalResultLeaseRejectReason::Disabled:
+      return "disabled";
+    case AsyncTacticalResultLeaseRejectReason::ResultFailed:
+      return "result-failed";
+    case AsyncTacticalResultLeaseRejectReason::TargetMismatch:
+      return "target-mismatch";
+    case AsyncTacticalResultLeaseRejectReason::ContextEpochMismatch:
+      return "context-epoch-mismatch";
+    case AsyncTacticalResultLeaseRejectReason::MissionGenerationMismatch:
+      return "mission-generation-mismatch";
+    case AsyncTacticalResultLeaseRejectReason::PhaseMismatch:
+      return "phase-mismatch";
+    case AsyncTacticalResultLeaseRejectReason::SideMismatch:
+      return "side-mismatch";
+    case AsyncTacticalResultLeaseRejectReason::TargetProvenanceMismatch:
+      return "target-provenance-mismatch";
+    case AsyncTacticalResultLeaseRejectReason::CurrentHardFault:
+      return "current-hard-fault";
+    case AsyncTacticalResultLeaseRejectReason::InvalidClock:
+      return "invalid-clock";
+    case AsyncTacticalResultLeaseRejectReason::FutureSnapshot:
+      return "future-snapshot";
+    case AsyncTacticalResultLeaseRejectReason::Stale:
+      return "stale";
+  }
+  return "unknown";
+}
+
+AsyncTacticalResultLeaseResolution resolve_async_tactical_result_lease(
+  const AsyncTacticalResultLeaseRequest & request) noexcept
+{
+  AsyncTacticalResultLeaseResolution resolution;
+  const auto reject = [&resolution](const AsyncTacticalResultLeaseRejectReason reason) {
+      resolution.reject_reason = reason;
+      return resolution;
+    };
+  if (!request.enabled) {
+    return reject(AsyncTacticalResultLeaseRejectReason::Disabled);
+  }
+  if (!request.result_success) {
+    return reject(AsyncTacticalResultLeaseRejectReason::ResultFailed);
+  }
+  if (!request.target_matches) {
+    return reject(AsyncTacticalResultLeaseRejectReason::TargetMismatch);
+  }
+  if (!request.context_epoch_matches) {
+    return reject(AsyncTacticalResultLeaseRejectReason::ContextEpochMismatch);
+  }
+  if (!request.mission_generation_matches) {
+    return reject(AsyncTacticalResultLeaseRejectReason::MissionGenerationMismatch);
+  }
+  if (!request.phase_matches) {
+    return reject(AsyncTacticalResultLeaseRejectReason::PhaseMismatch);
+  }
+  if (!request.side_matches) {
+    return reject(AsyncTacticalResultLeaseRejectReason::SideMismatch);
+  }
+  if (!request.target_provenance_matches) {
+    return reject(AsyncTacticalResultLeaseRejectReason::TargetProvenanceMismatch);
+  }
+  if (request.current_hard_fault) {
+    return reject(AsyncTacticalResultLeaseRejectReason::CurrentHardFault);
+  }
+  if (
+    !std::isfinite(request.now_sec) || !std::isfinite(request.snapshot_sec) ||
+    !std::isfinite(request.maximum_age_sec) || request.maximum_age_sec <= 0.0)
+  {
+    return reject(AsyncTacticalResultLeaseRejectReason::InvalidClock);
+  }
+  resolution.age_sec = request.now_sec - request.snapshot_sec;
+  if (resolution.age_sec < -1e-9) {
+    return reject(AsyncTacticalResultLeaseRejectReason::FutureSnapshot);
+  }
+  if (resolution.age_sec > request.maximum_age_sec + 1e-9) {
+    return reject(AsyncTacticalResultLeaseRejectReason::Stale);
+  }
+  resolution.reusable = true;
+  resolution.reject_reason = AsyncTacticalResultLeaseRejectReason::None;
+  return resolution;
+}
+
 bool can_reuse_async_tactical_result(
   const AsyncTacticalResultLeaseRequest & request) noexcept
 {
-  if (
-    !request.enabled || !request.result_success || !request.target_matches ||
-    !request.context_epoch_matches || !request.mission_generation_matches ||
-    !request.phase_matches || !request.side_matches ||
-    !request.target_provenance_matches || request.current_hard_fault ||
-    !std::isfinite(request.now_sec) || !std::isfinite(request.snapshot_sec) ||
-    !std::isfinite(request.maximum_age_sec) || request.maximum_age_sec <= 0.0 ||
-    request.now_sec + 1e-9 < request.snapshot_sec)
-  {
-    return false;
-  }
-  return request.now_sec - request.snapshot_sec <=
-         request.maximum_age_sec + 1e-9;
+  return resolve_async_tactical_result_lease(request).reusable;
 }
 
 double resolve_async_execution_lease_duration_sec(

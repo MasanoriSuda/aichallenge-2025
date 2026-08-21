@@ -2356,6 +2356,10 @@ struct V2XBehaviorOutput
   std::string overtake_left_reason;
   std::string overtake_right_reason;
   std::string target_vehicle_id;
+  /// Provenance of the target selected in this behavior cycle before an
+  /// OvertakeLine Mission owns it. This closes the Entry-time gap between V2X
+  /// observation and the later locked-target lifecycle.
+  race_mpcc::TargetProvenance target_observation_provenance;
   bool locked_target_seen{false};
   bool locked_target_near_field_fallback_used{false};
   bool locked_target_position_jump{false};
@@ -6535,7 +6539,7 @@ struct MPC
       evaluation.physical_execution_certificate_lateral_path_m =
         execution_trajectory->lateral_m;
       evaluation.physical_execution_certificate_target_provenance =
-        locked_target_provenance(source_behavior);
+        selected_target_provenance(source_behavior);
 
       double quadratic_cost = 0.0;
       for (int outer = 0; outer < extended->P.outerSize(); ++outer) {
@@ -7202,6 +7206,7 @@ struct MPC
     double nearest_front_local_longitudinal = std::numeric_limits<double>::infinity();
     bool nearest_front_progress_used = false;
     std::string nearest_front_id;
+    race_mpcc::TargetProvenance nearest_front_provenance;
     struct DynamicCorridorObservation
     {
       bool present{false};
@@ -7216,6 +7221,7 @@ struct MPC
       double receipt_sec{std::numeric_limits<double>::quiet_NaN()};
       bool progress_used{false};
       std::string id;
+      race_mpcc::TargetProvenance provenance;
       bool requires_low_speed_confirmation{false};
       double closing_speed{0.0};
       double time_to_entry{std::numeric_limits<double>::infinity()};
@@ -7230,7 +7236,9 @@ struct MPC
       std::numeric_limits<double>::quiet_NaN();
     bool nearest_low_speed_corridor_progress_used = false;
     std::string nearest_low_speed_corridor_id;
+    race_mpcc::TargetProvenance nearest_low_speed_corridor_provenance;
     std::string nearest_side_id;
+    race_mpcc::TargetProvenance nearest_side_provenance;
     double nearest_side_speed = std::numeric_limits<double>::infinity();
     double nearest_side_abs_longitudinal = std::numeric_limits<double>::infinity();
     double nearest_side_course_longitudinal = std::numeric_limits<double>::infinity();
@@ -7395,6 +7403,27 @@ struct MPC
         front_lateral : model->spatial_state.e_y + lateral;
       const double vehicle_course_longitudinal = use_course_progress ?
         front_longitudinal : longitudinal;
+      race_mpcc::TargetProvenance observed_target_provenance;
+      observed_target_provenance.target_id = vehicle.id;
+      observed_target_provenance.source_stamp_sec = vehicle.stamp_sec;
+      observed_target_provenance.receipt_sec = vehicle.receipt_sec;
+      observed_target_provenance.course_progress_m = use_course_progress ?
+        course_projection.target_path_progress_m :
+        std::numeric_limits<double>::quiet_NaN();
+      observed_target_provenance.course_lateral_m = vehicle_course_lateral;
+      observed_target_provenance.observation_generation =
+        vehicle.observation_generation;
+      observed_target_provenance.stage =
+        race_mpcc::TargetProvenanceStage::Observed;
+      observed_target_provenance.valid =
+        use_course_progress && !vehicle.position_jump &&
+        !course_progress_continuity_rejected &&
+        !observed_target_provenance.target_id.empty() &&
+        std::isfinite(observed_target_provenance.source_stamp_sec) &&
+        std::isfinite(observed_target_provenance.receipt_sec) &&
+        std::isfinite(observed_target_provenance.course_progress_m) &&
+        std::isfinite(observed_target_provenance.course_lateral_m) &&
+        observed_target_provenance.observation_generation > 0U;
       double observed_course_lateral_velocity = 0.0;
       bool observed_course_lateral_velocity_valid = false;
       if (
@@ -7697,6 +7726,7 @@ struct MPC
         nearest_dynamic_corridor.receipt_sec = vehicle.receipt_sec;
         nearest_dynamic_corridor.progress_used = use_course_progress;
         nearest_dynamic_corridor.id = vehicle.id;
+        nearest_dynamic_corridor.provenance = observed_target_provenance;
         nearest_dynamic_corridor.requires_low_speed_confirmation =
           low_speed_candidate_speed <=
           cfg.v2x_behavior.dynamic_obstacle_cruise_corridor_promotion_max_speed;
@@ -7724,6 +7754,7 @@ struct MPC
         nearest_low_speed_corridor_receipt_sec = vehicle.receipt_sec;
         nearest_low_speed_corridor_progress_used = use_course_progress;
         nearest_low_speed_corridor_id = vehicle.id;
+        nearest_low_speed_corridor_provenance = observed_target_provenance;
       }
       if (
         track_low_speed_clearance &&
@@ -7927,6 +7958,7 @@ struct MPC
           nearest_front_local_longitudinal = longitudinal;
           nearest_front_progress_used = use_course_progress;
           nearest_front_id = vehicle.id;
+          nearest_front_provenance = observed_target_provenance;
         }
         if (
           front_safety_envelope.valid &&
@@ -7941,6 +7973,7 @@ struct MPC
           nearest_side_abs_longitudinal = std::abs(longitudinal);
           nearest_side_id = vehicle.id;
           nearest_side_speed = front_vehicle_speed;
+          nearest_side_provenance = observed_target_provenance;
           nearest_side_course_longitudinal = use_course_progress ?
             front_longitudinal : longitudinal;
         }
@@ -8032,6 +8065,7 @@ struct MPC
       nearest_front_local_longitudinal = nearest_dynamic_corridor.local_longitudinal;
       nearest_front_progress_used = nearest_dynamic_corridor.progress_used;
       nearest_front_id = nearest_dynamic_corridor.id;
+      nearest_front_provenance = nearest_dynamic_corridor.provenance;
       output.dynamic_obstacle_cruise_authority_active = true;
       output.dynamic_obstacle_cruise_target_id = nearest_dynamic_corridor.id;
       output.dynamic_obstacle_cruise_closing_speed =
@@ -8072,6 +8106,8 @@ struct MPC
     output.overtake_return_corridor_blocker_lateral =
       overtake_return_corridor_blocker_lateral;
     output.target_vehicle_id = has_front_vehicle ? nearest_front_id : nearest_side_id;
+    output.target_observation_provenance = has_front_vehicle ?
+      nearest_front_provenance : nearest_side_provenance;
     output.overtake_entry_target_speed =
       has_front_vehicle ? nearest_front_speed : nearest_side_speed;
     if (
@@ -8922,6 +8958,8 @@ struct MPC
         output.front_progress_used = nearest_low_speed_corridor_progress_used;
         output.front_progress_lateral = nearest_low_speed_corridor_lateral;
         output.target_vehicle_id = nearest_low_speed_corridor_id;
+        output.target_observation_provenance =
+          nearest_low_speed_corridor_provenance;
       };
     bool low_speed_avoidance_gap_blocked = false;
     if (
@@ -12547,8 +12585,8 @@ struct MPC
           const double result_age_sec = now_sec >= result.snapshot_sec ?
             now_sec - result.snapshot_sec :
             std::numeric_limits<double>::infinity();
-          const auto target_provenance = validate_locked_target_provenance(
-            locked_target_provenance(result.behavior), output, result_age_sec);
+          const auto target_provenance = validate_selected_target_provenance(
+            selected_target_provenance(result.behavior), output, result_age_sec);
           mpcc_lite_async_last_target_provenance_valid_ = target_provenance.valid;
           mpcc_lite_async_last_target_provenance_reason_ =
             race_mpcc::target_provenance_reject_reason_name(
@@ -12557,7 +12595,7 @@ struct MPC
             target_provenance.progress_delta_m;
           mpcc_lite_async_last_target_provenance_lateral_delta_m_ =
             target_provenance.lateral_delta_m;
-          return overtake_core::can_reuse_async_tactical_result(
+          const auto lease = overtake_core::resolve_async_tactical_result_lease(
             overtake_core::AsyncTacticalResultLeaseRequest{
               true,
               result.success,
@@ -12572,6 +12610,10 @@ struct MPC
               now_sec,
               result.snapshot_sec,
               shadow_cfg.mpcc_lite_shadow_last_feasible_max_age_sec});
+          mpcc_lite_async_last_lease_reason_ =
+            overtake_core::async_tactical_result_lease_reject_reason_name(
+            lease.reject_reason);
+          return lease.reusable;
         };
       auto async_result = take_mpcc_lite_async_result();
       if (async_result.has_value()) {
@@ -13573,7 +13615,7 @@ struct MPC
           "Overtake MPCC-lite async: submitted=%lu, replaced=%lu, "
           "completed=%lu, running=%d, pending=%d, adopted=%lu, reused=%lu, cache=%d, "
           "discarded=%lu, failed=%lu, interval=%.3f s, snapshot=%.2f ms, "
-          "compute=%.2f ms, age=%.3f s, provenance=%d/%s/%.2f/%.2f, "
+          "compute=%.2f ms, age=%.3f s, lease=%s, provenance=%d/%s/%s/%.2f/%.2f, "
           "dual=L%d/%d/%s/p%d/%.1f/%.2f/w%d:%d:%s:%.2f/%s,"
           "R%d/%d/%s/p%d/%.1f/%.2f/w%d:%d:%s:%.2f/%s,"
           "select=%d/%s/boundary=%d/elig=L:%s,R:%s",
@@ -13590,8 +13632,11 @@ struct MPC
           mpcc_lite_async_last_snapshot_ms_,
           mpcc_lite_async_last_compute_ms_,
           mpcc_lite_async_last_result_age_sec_,
+          mpcc_lite_async_last_lease_reason_.c_str(),
           mpcc_lite_async_last_target_provenance_valid_ ? 1 : 0,
           mpcc_lite_async_last_target_provenance_reason_.c_str(),
+          race_mpcc::target_provenance_stage_name(
+            selected_target_provenance(output).stage),
           mpcc_lite_async_last_target_provenance_progress_delta_m_,
           mpcc_lite_async_last_target_provenance_lateral_delta_m_,
           output.extended_mpcc_left_branch.attempted ? 1 : 0,
@@ -13652,7 +13697,7 @@ struct MPC
         race_mpcc::ShadowDecision race_shadow;
         race_shadow.context_epoch = mpcc_lite_async_context_epoch_;
         race_shadow.target_id = output.target_vehicle_id;
-        race_shadow.target_provenance = locked_target_provenance(output);
+        race_shadow.target_provenance = selected_target_provenance(output);
         if (model != nullptr && model->reference_path != nullptr && N > 0) {
           const auto runtime_geometry = build_stage_geometry(
             model->wp_id, static_cast<std::size_t>(N));
@@ -18706,7 +18751,7 @@ struct MPC
       return false;
     }
 
-    const auto target_validation = validate_locked_target_provenance(
+    const auto target_validation = validate_selected_target_provenance(
       mission.physical_execution_certificate_target_provenance,
       current_behavior, certificate_age_sec);
     if (!target_validation.valid) {
@@ -18815,7 +18860,7 @@ struct MPC
     mission.physical_execution_certificate_lateral_path_m =
       trust_envelope.lateral_targets_m;
     mission.physical_execution_certificate_target_provenance =
-      locked_target_provenance(current_behavior);
+      selected_target_provenance(current_behavior);
     reject_reason = "physical execution certificate accepted";
     return true;
   }
@@ -20038,6 +20083,7 @@ struct MPC
   std::optional<MpccLiteAsyncResult> mpcc_lite_async_last_accepted_result_;
   bool mpcc_lite_async_last_target_provenance_valid_{false};
   std::string mpcc_lite_async_last_target_provenance_reason_{"not-evaluated"};
+  std::string mpcc_lite_async_last_lease_reason_{"not-evaluated"};
   double mpcc_lite_async_last_target_provenance_progress_delta_m_{
     std::numeric_limits<double>::quiet_NaN()};
   double mpcc_lite_async_last_target_provenance_lateral_delta_m_{
@@ -20126,6 +20172,7 @@ struct MPC
     provenance.course_lateral_m = behavior.locked_target_lateral;
     provenance.observation_generation =
       behavior.locked_target_observation_generation;
+    provenance.stage = race_mpcc::TargetProvenanceStage::Locked;
     provenance.valid =
       behavior.locked_target_seen &&
       !behavior.locked_target_course_progress_rejected &&
@@ -20136,6 +20183,24 @@ struct MPC
       std::isfinite(provenance.course_lateral_m) &&
       provenance.observation_generation > 0U;
     return provenance;
+  }
+
+  race_mpcc::TargetProvenance selected_target_provenance(
+    const V2XBehaviorOutput & behavior) const
+  {
+    const auto locked = locked_target_provenance(behavior);
+    if (locked.valid && locked.target_id == behavior.target_vehicle_id) {
+      return locked;
+    }
+    if (
+      behavior.target_observation_provenance.target_id ==
+      behavior.target_vehicle_id)
+    {
+      return behavior.target_observation_provenance;
+    }
+    race_mpcc::TargetProvenance invalid;
+    invalid.target_id = behavior.target_vehicle_id;
+    return invalid;
   }
 
   mpc_stage_geometry::Geometry build_stage_geometry(
@@ -20157,7 +20222,7 @@ struct MPC
       model->reference_path->circular);
   }
 
-  race_mpcc::TargetProvenanceValidation validate_locked_target_provenance(
+  race_mpcc::TargetProvenanceValidation validate_selected_target_provenance(
     const race_mpcc::TargetProvenance & expected,
     const V2XBehaviorOutput & current_behavior,
     const double elapsed_sec) const
@@ -20166,12 +20231,14 @@ struct MPC
       std::isfinite(elapsed_sec) ? std::max(0.0, elapsed_sec) : 0.0;
     const double target_speed_mps =
       std::isfinite(current_behavior.locked_target_speed) ?
-      std::max(0.0, current_behavior.locked_target_speed) : 0.0;
+      std::max(0.0, current_behavior.locked_target_speed) :
+      (std::isfinite(current_behavior.overtake_entry_target_speed) ?
+      std::max(0.0, current_behavior.overtake_entry_target_speed) : 0.0);
     const bool path_available = model != nullptr && model->reference_path != nullptr;
     return race_mpcc::validate_target_provenance(
       race_mpcc::TargetProvenanceValidationRequest{
         expected,
-        locked_target_provenance(current_behavior),
+        selected_target_provenance(current_behavior),
         path_available && model->reference_path->circular,
         path_available ? model->reference_path->length : 0.0,
         0.25,

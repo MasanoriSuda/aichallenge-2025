@@ -10,11 +10,12 @@ namespace
 {
 
 race::TargetProvenance provenance(
-  const std::uint64_t generation, const double progress, const double lateral)
+  const std::uint64_t generation, const double progress, const double lateral,
+  const race::TargetProvenanceStage stage = race::TargetProvenanceStage::Observed)
 {
   return race::TargetProvenance{
     true, "d2", 10.0 + static_cast<double>(generation), 20.0, progress, lateral,
-    generation};
+    generation, stage};
 }
 
 }  // namespace
@@ -53,6 +54,29 @@ TEST(RaceMpccFoundation, RejectsMovedTargetOutsideCertificateTube)
   EXPECT_EQ(result.reject_reason, race::TargetProvenanceRejectReason::LateralDelta);
 }
 
+TEST(RaceMpccFoundation, PromotesObservedTargetToLockedTarget)
+{
+  const auto result = race::validate_target_provenance(
+    race::TargetProvenanceValidationRequest{
+      provenance(3U, 10.0, -0.2),
+      provenance(4U, 11.0, -0.1, race::TargetProvenanceStage::Locked),
+      false, 100.0, 0.25, 2.0, 0.5});
+
+  EXPECT_TRUE(result.valid);
+}
+
+TEST(RaceMpccFoundation, RejectsLockedTargetLifecycleRegression)
+{
+  const auto result = race::validate_target_provenance(
+    race::TargetProvenanceValidationRequest{
+      provenance(3U, 10.0, -0.2, race::TargetProvenanceStage::Locked),
+      provenance(4U, 11.0, -0.1),
+      false, 100.0, 0.25, 2.0, 0.5});
+
+  EXPECT_FALSE(result.valid);
+  EXPECT_EQ(result.reject_reason, race::TargetProvenanceRejectReason::StageRegression);
+}
+
 TEST(RaceMpccFoundation, FormatsAllFourHomotopiesWithShadowAuthority)
 {
   race::ShadowDecision decision;
@@ -72,7 +96,7 @@ TEST(RaceMpccFoundation, FormatsAllFourHomotopiesWithShadowAuthority)
   const std::string output = race::format_shadow_decision(decision);
   EXPECT_NE(output.find("left="), std::string::npos);
   EXPECT_NE(output.find("right="), std::string::npos);
-  EXPECT_NE(output.find("target_provenance=1/4"), std::string::npos);
+  EXPECT_NE(output.find("target_provenance=1/observed/4"), std::string::npos);
   EXPECT_NE(output.find("hold="), std::string::npos);
   EXPECT_NE(output.find("return="), std::string::npos);
   EXPECT_NE(output.find("authority=shadow"), std::string::npos);

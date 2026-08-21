@@ -25,6 +25,20 @@ const char * homotopy_name(const Homotopy homotopy) noexcept
   return "unknown";
 }
 
+const char * target_provenance_stage_name(
+  const TargetProvenanceStage stage) noexcept
+{
+  switch (stage) {
+    case TargetProvenanceStage::None:
+      return "none";
+    case TargetProvenanceStage::Observed:
+      return "observed";
+    case TargetProvenanceStage::Locked:
+      return "locked";
+  }
+  return "unknown";
+}
+
 const char * target_provenance_reject_reason_name(
   const TargetProvenanceRejectReason reason) noexcept
 {
@@ -43,6 +57,8 @@ const char * target_provenance_reject_reason_name(
       return "receipt-regression";
     case TargetProvenanceRejectReason::GenerationRegression:
       return "generation-regression";
+    case TargetProvenanceRejectReason::StageRegression:
+      return "stage-regression";
     case TargetProvenanceRejectReason::ProgressDelta:
       return "progress-delta";
     case TargetProvenanceRejectReason::LateralDelta:
@@ -61,7 +77,8 @@ bool finite_provenance(const TargetProvenance & provenance) noexcept
          std::isfinite(provenance.receipt_sec) &&
          std::isfinite(provenance.course_progress_m) &&
          std::isfinite(provenance.course_lateral_m) &&
-         provenance.observation_generation > 0U;
+         provenance.observation_generation > 0U &&
+         provenance.stage != TargetProvenanceStage::None;
 }
 
 double circular_delta(
@@ -111,6 +128,13 @@ TargetProvenanceValidation validate_target_provenance(
     result.reject_reason = TargetProvenanceRejectReason::GenerationRegression;
     return result;
   }
+  if (
+    request.expected.stage == TargetProvenanceStage::Locked &&
+    request.current.stage != TargetProvenanceStage::Locked)
+  {
+    result.reject_reason = TargetProvenanceRejectReason::StageRegression;
+    return result;
+  }
   result.same_observation =
     request.current.observation_generation == request.expected.observation_generation;
   result.progress_delta_m = circular_delta(
@@ -146,6 +170,7 @@ std::string format_shadow_decision(const ShadowDecision & decision)
          << "epoch=" << decision.context_epoch
          << ",target=" << (decision.target_id.empty() ? "none" : decision.target_id)
          << ",target_provenance=" << (decision.target_provenance.valid ? 1 : 0)
+         << '/' << target_provenance_stage_name(decision.target_provenance.stage)
          << '/' << decision.target_provenance.observation_generation
          << '/' << decision.target_provenance.source_stamp_sec
          << '/' << decision.target_provenance.course_progress_m

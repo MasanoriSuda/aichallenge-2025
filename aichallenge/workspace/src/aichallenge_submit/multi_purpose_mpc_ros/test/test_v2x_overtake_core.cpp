@@ -506,7 +506,11 @@ using multi_purpose_mpc_ros::v2x_overtake_core::should_hold_fresh_shiftout_for_w
 using multi_purpose_mpc_ros::v2x_overtake_core::
   can_retain_receding_horizon_execution_lease;
 using multi_purpose_mpc_ros::v2x_overtake_core::AsyncTacticalResultLeaseRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::AsyncTacticalResultLeaseRejectReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_reuse_async_tactical_result;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_async_tactical_result_lease;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  async_tactical_result_lease_reject_reason_name;
 using multi_purpose_mpc_ros::v2x_overtake_core::AsyncExecutionLeaseDurationRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   resolve_async_execution_lease_duration_sec;
@@ -4310,6 +4314,46 @@ TEST(V2XOvertakeCoreSpeed, ReusesFreshAsyncTacticalResultForExactContext)
   request.target_provenance_matches = true;
   request.current_hard_fault = true;
   EXPECT_FALSE(can_reuse_async_tactical_result(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, ReportsExactAsyncTacticalLeaseRejection)
+{
+  AsyncTacticalResultLeaseRequest request;
+  request.enabled = true;
+  request.result_success = true;
+  request.target_matches = true;
+  request.context_epoch_matches = true;
+  request.mission_generation_matches = true;
+  request.phase_matches = true;
+  request.side_matches = true;
+  request.target_provenance_matches = true;
+  request.now_sec = 10.2;
+  request.snapshot_sec = 10.0;
+  request.maximum_age_sec = 0.5;
+
+  auto resolution = resolve_async_tactical_result_lease(request);
+  EXPECT_TRUE(resolution.reusable);
+  EXPECT_EQ(
+    resolution.reject_reason,
+    AsyncTacticalResultLeaseRejectReason::None);
+
+  request.target_provenance_matches = false;
+  resolution = resolve_async_tactical_result_lease(request);
+  EXPECT_FALSE(resolution.reusable);
+  EXPECT_EQ(
+    resolution.reject_reason,
+    AsyncTacticalResultLeaseRejectReason::TargetProvenanceMismatch);
+
+  request.target_provenance_matches = true;
+  request.now_sec = 10.6;
+  resolution = resolve_async_tactical_result_lease(request);
+  EXPECT_FALSE(resolution.reusable);
+  EXPECT_EQ(
+    resolution.reject_reason,
+    AsyncTacticalResultLeaseRejectReason::Stale);
+  EXPECT_STREQ(
+    async_tactical_result_lease_reject_reason_name(resolution.reject_reason),
+    "stale");
 }
 
 TEST(V2XOvertakeCoreSpeed, AsyncExecutionLeaseCoversWorkerCadenceWithinResultAge)

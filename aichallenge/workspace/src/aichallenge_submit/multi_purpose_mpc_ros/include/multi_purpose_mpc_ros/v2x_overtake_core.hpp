@@ -1492,6 +1492,37 @@ struct AsyncTacticalResultLeaseRequest
   double maximum_age_sec{};
 };
 
+enum class AsyncTacticalResultLeaseRejectReason
+{
+  None,
+  Disabled,
+  ResultFailed,
+  TargetMismatch,
+  ContextEpochMismatch,
+  MissionGenerationMismatch,
+  PhaseMismatch,
+  SideMismatch,
+  TargetProvenanceMismatch,
+  CurrentHardFault,
+  InvalidClock,
+  FutureSnapshot,
+  Stale,
+};
+
+const char * async_tactical_result_lease_reject_reason_name(
+  AsyncTacticalResultLeaseRejectReason reason) noexcept;
+
+struct AsyncTacticalResultLeaseResolution
+{
+  bool reusable{false};
+  double age_sec{std::numeric_limits<double>::infinity()};
+  AsyncTacticalResultLeaseRejectReason reject_reason{
+    AsyncTacticalResultLeaseRejectReason::Disabled};
+};
+
+AsyncTacticalResultLeaseResolution resolve_async_tactical_result_lease(
+  const AsyncTacticalResultLeaseRequest & request) noexcept;
+
 /// Retain an already accepted asynchronous tactical result between worker
 /// completions. Exact planning context and current hard guards are mandatory;
 /// the lease only bridges the worker/control-rate mismatch.

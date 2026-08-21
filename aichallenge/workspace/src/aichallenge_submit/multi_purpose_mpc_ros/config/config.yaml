@@ -492,6 +492,7 @@ mpc:
   v2x_dynamic_obstacle_lateral_escape_authority_enabled: true
   v2x_dynamic_obstacle_lateral_escape_min_shift: 0.10 # [m] ignore center/noise-only targets
   v2x_dynamic_obstacle_lateral_escape_lateral_accel_reserve_ratio: 0.80 # reserve tracking authority before accepting a lateral corridor
+  v2x_dynamic_obstacle_lateral_escape_opposite_transition_distance: 6.0 # [m] allow a connected current->neutral->opposite prefix before enforcing the speculative side
   v2x_dynamic_obstacle_lateral_escape_solver_quarantine_sec: 0.50 # [s] first same-target/side retry hold after a tracking solve failure
   v2x_dynamic_obstacle_lateral_escape_solver_backoff_max_sec: 4.0 # [s] exponential retry hold ceiling; opposite side remains eligible
   v2x_dynamic_obstacle_lateral_escape_solver_backoff_reset_sec: 8.0 # [s] reset failure history after no repeat failure

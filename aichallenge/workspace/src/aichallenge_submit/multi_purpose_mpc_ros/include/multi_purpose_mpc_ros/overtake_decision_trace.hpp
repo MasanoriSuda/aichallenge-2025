@@ -90,6 +90,15 @@ struct CandidateTrace {
   std::string forecast_reason{"not-evaluated"};
   double minimum_corridor_reserve_m{std::numeric_limits<double>::infinity()};
   double first_threat_distance_m{std::numeric_limits<double>::infinity()};
+  bool forced_side_transition_requested{false};
+  bool forced_side_transition_gateway_found{false};
+  std::size_t forced_side_transition_prefix_samples{0U};
+  std::size_t forced_side_transition_gateway_index{
+    std::numeric_limits<std::size_t>::max()};
+  double forced_side_transition_gateway_distance_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double forced_side_transition_deadline_m{0.0};
+  std::string forced_side_transition_reason{"not-requested"};
   bool backoff_active{false};
   int backoff_failures{0};
   double backoff_remaining_sec{0.0};
@@ -105,6 +114,8 @@ struct DecisionTrace {
   bool alternate_attempted{false};
   bool alternate_selected{false};
   bool proactive_alternate{false};
+  bool primary_suppressed{false};
+  std::string primary_suppression_reason{"not-suppressed"};
   std::string alternate_trigger_reason{"not-evaluated"};
   std::string branch_selection_reason{"not-evaluated"};
   bool authority_active{false};

@@ -130,6 +130,18 @@ std::string format_candidate(const CandidateTrace &trace) {
            << finite_or_nan(trace.minimum_corridor_reserve_m) << "m"
            << ",threat_distance="
            << finite_or_nan(trace.first_threat_distance_m) << "m"
+           << ",side_transition="
+           << (trace.forced_side_transition_requested ? 1 : 0) << "/"
+           << (trace.forced_side_transition_gateway_found ? 1 : 0)
+           << ",side_transition_prefix="
+           << trace.forced_side_transition_prefix_samples
+           << ",side_transition_gateway="
+           << index_or_none(trace.forced_side_transition_gateway_index) << "@"
+           << finite_or_nan(trace.forced_side_transition_gateway_distance_m) << "m"
+           << ",side_transition_deadline="
+           << finite_or_nan(trace.forced_side_transition_deadline_m) << "m"
+           << ",side_transition_reason="
+           << reason_or(trace.forced_side_transition_reason, "not-requested")
            << ",backoff=" << trace.backoff_failures << "/"
            << finite_or_nan(trace.backoff_remaining_sec) << "s";
   }
@@ -247,6 +259,9 @@ std::string categorical_signature(const DecisionTrace &trace) {
            << ":" << (candidate.future_threatened ? 1 : 0)
            << ":" << candidate.forecast_risk_tier
            << ":" << candidate.forecast_reason
+           << ":" << (candidate.forced_side_transition_requested ? 1 : 0)
+           << ":" << (candidate.forced_side_transition_gateway_found ? 1 : 0)
+           << ":" << candidate.forced_side_transition_reason
            << ":" << candidate.backoff_failures;
   };
   stream << trace.attempt_id << "|" << trace.mission_episode_id << "|"
@@ -257,6 +272,8 @@ std::string categorical_signature(const DecisionTrace &trace) {
   append_candidate(trace.alternate);
   stream << "|" << (trace.alternate_attempted ? 1 : 0) << "|"
          << (trace.alternate_selected ? 1 : 0) << "|" << trace.authority_reason
+         << "|" << (trace.primary_suppressed ? 1 : 0)
+         << "|" << trace.primary_suppression_reason
          << "|" << (trace.proactive_alternate ? 1 : 0)
          << "|" << trace.alternate_trigger_reason
          << "|" << trace.branch_selection_reason
@@ -280,6 +297,9 @@ std::string format_decision_trace(const DecisionTrace &trace) {
          << ", proactive_alternate=" << (trace.proactive_alternate ? 1 : 0)
          << ", branch_selection="
          << reason_or(trace.branch_selection_reason, "not-evaluated")
+         << ", primary_suppressed=" << (trace.primary_suppressed ? 1 : 0)
+         << "/" << reason_or(
+           trace.primary_suppression_reason, "not-suppressed")
          << ", authority=" << (trace.authority_active ? 1 : 0) << "/"
          << trace.authority_reason
          << ", pass_through=" << (trace.pass_through ? 1 : 0)

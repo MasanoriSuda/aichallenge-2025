@@ -12661,6 +12661,60 @@ bool should_try_dynamic_obstacle_lateral_escape_alternate(
     (request.primary_side_sign == -1 || request.primary_side_sign == 1);
 }
 
+ForcedPassSideTransitionResolution resolve_forced_pass_side_transition(
+  const ForcedPassSideTransitionRequest & request) noexcept
+{
+  constexpr double kDistanceEpsilon = 1e-9;
+  ForcedPassSideTransitionResolution result;
+  if (request.forced_side_sign == 0) {
+    result.valid = true;
+    result.action = ForcedPassSideTransitionAction::NotForced;
+    return result;
+  }
+  if (
+    (request.forced_side_sign != -1 && request.forced_side_sign != 1) ||
+    !std::isfinite(request.path_distance_m) || request.path_distance_m < 0.0 ||
+    !std::isfinite(request.transition_deadline_m) ||
+    request.transition_deadline_m < 0.0)
+  {
+    return result;
+  }
+
+  result.valid = true;
+  if (!request.transition_enabled || request.gateway_already_entered) {
+    result.action = ForcedPassSideTransitionAction::EnforceSide;
+  } else if (request.connected_gateway_available) {
+    result.action = ForcedPassSideTransitionAction::EnterGateway;
+  } else if (
+    request.path_distance_m <=
+    request.transition_deadline_m + kDistanceEpsilon)
+  {
+    result.action = ForcedPassSideTransitionAction::KeepConnectedPrefix;
+  } else {
+    result.action = ForcedPassSideTransitionAction::RejectExpired;
+  }
+  return result;
+}
+
+const char * to_string(const ForcedPassSideTransitionAction action) noexcept
+{
+  switch (action) {
+    case ForcedPassSideTransitionAction::NotForced:
+      return "not-forced";
+    case ForcedPassSideTransitionAction::KeepConnectedPrefix:
+      return "connected-prefix";
+    case ForcedPassSideTransitionAction::EnterGateway:
+      return "gateway-entered";
+    case ForcedPassSideTransitionAction::EnforceSide:
+      return "side-enforced";
+    case ForcedPassSideTransitionAction::RejectExpired:
+      return "transition-expired";
+    case ForcedPassSideTransitionAction::InvalidInput:
+      return "invalid-input";
+  }
+  return "unknown";
+}
+
 DynamicObstacleLateralEscapeForecast
 forecast_dynamic_obstacle_lateral_escape_branch(
   const DynamicObstacleLateralEscapeForecastRequest & request) noexcept
@@ -12725,6 +12779,18 @@ const char * to_string(
   return "unknown";
 }
 
+bool should_suppress_immediate_wall_threat_primary(
+  const DynamicObstacleLateralEscapeForecast & primary,
+  const bool alternate_selected) noexcept
+{
+  constexpr double kImmediateDistanceEpsilon = 1e-9;
+  return
+    !alternate_selected && primary.candidate_usable &&
+    primary.reason == DynamicObstacleLateralEscapeThreatReason::WallMarginEscape &&
+    std::isfinite(primary.first_threat_distance_m) &&
+    primary.first_threat_distance_m <= kImmediateDistanceEpsilon;
+}
+
 DynamicObstacleLateralEscapeBranchSelection
 select_dynamic_obstacle_lateral_escape_branch(
   const DynamicObstacleLateralEscapeBranchSelectionRequest & request) noexcept
@@ -12733,14 +12799,22 @@ select_dynamic_obstacle_lateral_escape_branch(
   DynamicObstacleLateralEscapeBranchSelection result;
   const bool primary_side_valid =
     request.primary_side_sign == -1 || request.primary_side_sign == 1;
-  const bool alternate_side_valid =
-    request.alternate_side_sign == -request.primary_side_sign;
-  if (!primary_side_valid || (request.alternate_evaluated && !alternate_side_valid)) {
+  if (!primary_side_valid) {
     result.reason = DynamicObstacleLateralEscapeBranchSelectionReason::InvalidSide;
     return result;
   }
 
   result.valid = true;
+  const bool alternate_side_valid =
+    request.alternate_side_sign == -request.primary_side_sign;
+  if (
+    request.alternate_evaluated && request.alternate.candidate_usable &&
+    !alternate_side_valid)
+  {
+    result.valid = false;
+    result.reason = DynamicObstacleLateralEscapeBranchSelectionReason::InvalidSide;
+    return result;
+  }
   if (!request.primary.candidate_usable) {
     if (request.alternate_evaluated && request.alternate.candidate_usable) {
       result.select_alternate = true;

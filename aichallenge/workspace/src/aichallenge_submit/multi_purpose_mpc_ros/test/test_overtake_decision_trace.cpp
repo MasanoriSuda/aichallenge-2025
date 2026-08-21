@@ -222,6 +222,13 @@ TEST(OvertakeDecisionTrace, FormatsPredictiveAlternateLifecycle) {
   decision.alternate.forecast_evaluated = true;
   decision.alternate.forecast_reason = "none";
   decision.alternate.minimum_corridor_reserve_m = 0.24;
+  decision.alternate.forced_side_transition_requested = true;
+  decision.alternate.forced_side_transition_gateway_found = true;
+  decision.alternate.forced_side_transition_prefix_samples = 3U;
+  decision.alternate.forced_side_transition_gateway_index = 3U;
+  decision.alternate.forced_side_transition_gateway_distance_m = 2.4;
+  decision.alternate.forced_side_transition_deadline_m = 6.0;
+  decision.alternate.forced_side_transition_reason = "side-enforced";
   decision.proactive_alternate = true;
   decision.alternate_trigger_reason = "corridor-reserve";
   decision.branch_selection_reason = "lower-risk-tier";
@@ -233,6 +240,21 @@ TEST(OvertakeDecisionTrace, FormatsPredictiveAlternateLifecycle) {
   EXPECT_NE(message.find("threat_distance=4.50m"), std::string::npos);
   EXPECT_NE(message.find("proactive_alternate=1"), std::string::npos);
   EXPECT_NE(message.find("branch_selection=lower-risk-tier"), std::string::npos);
+  EXPECT_NE(message.find("side_transition=1/1"), std::string::npos);
+  EXPECT_NE(message.find("side_transition_prefix=3"), std::string::npos);
+  EXPECT_NE(message.find("side_transition_gateway=3@2.40m"), std::string::npos);
+  EXPECT_NE(message.find("side_transition_deadline=6.00m"), std::string::npos);
+  EXPECT_NE(message.find("side_transition_reason=side-enforced"), std::string::npos);
+
+  decision.alternate_selected = false;
+  decision.primary_suppressed = true;
+  decision.primary_suppression_reason =
+    "immediate-wall-threat-without-alternate";
+  const auto suppressed = trace::format_decision_trace(decision);
+  EXPECT_NE(
+    suppressed.find(
+      "primary_suppressed=1/immediate-wall-threat-without-alternate"),
+    std::string::npos);
 }
 
 TEST(OvertakeDecisionTrace, FormatsTrackingFailureAndRecovery) {

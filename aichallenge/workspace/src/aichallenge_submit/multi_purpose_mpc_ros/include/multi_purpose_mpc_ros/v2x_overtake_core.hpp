@@ -7444,6 +7444,43 @@ struct DynamicObstacleLateralEscapeAlternateRequest
 bool should_try_dynamic_obstacle_lateral_escape_alternate(
   const DynamicObstacleLateralEscapeAlternateRequest & request) noexcept;
 
+enum class ForcedPassSideTransitionAction
+{
+  NotForced,
+  KeepConnectedPrefix,
+  EnterGateway,
+  EnforceSide,
+  RejectExpired,
+  InvalidInput,
+};
+
+struct ForcedPassSideTransitionRequest
+{
+  int forced_side_sign{0};
+  bool transition_enabled{false};
+  bool gateway_already_entered{false};
+  bool connected_gateway_available{false};
+  double path_distance_m{0.0};
+  double transition_deadline_m{0.0};
+};
+
+struct ForcedPassSideTransitionResolution
+{
+  bool valid{false};
+  ForcedPassSideTransitionAction action{
+    ForcedPassSideTransitionAction::InvalidInput};
+};
+
+/// Resolve the stage-wise topology of a forced opposite-side branch.
+/// Before a connected interval spans the current target and requested side,
+/// the planner may keep a physically connected prefix. Once the gateway is
+/// entered, every later stage enforces the requested homotopy. A finite
+/// deadline prevents a prefix-only result from masquerading as an opposite
+/// branch.
+ForcedPassSideTransitionResolution resolve_forced_pass_side_transition(
+  const ForcedPassSideTransitionRequest & request) noexcept;
+const char * to_string(ForcedPassSideTransitionAction action) noexcept;
+
 enum class DynamicObstacleLateralEscapeThreatReason
 {
   None,
@@ -7483,6 +7520,15 @@ DynamicObstacleLateralEscapeForecast
 forecast_dynamic_obstacle_lateral_escape_branch(
   const DynamicObstacleLateralEscapeForecastRequest & request) noexcept;
 const char * to_string(DynamicObstacleLateralEscapeThreatReason reason) noexcept;
+
+/// Do not retain a branch that starts inside the configured wall reserve after
+/// the speculative opposite branch has also failed. This is intentionally
+/// narrower than `future_threatened`: a distant reserve loss may keep the
+/// primary, while an immediate wall-margin escape must not become live lateral
+/// authority without an executable alternative.
+bool should_suppress_immediate_wall_threat_primary(
+  const DynamicObstacleLateralEscapeForecast & primary,
+  bool alternate_selected) noexcept;
 
 enum class DynamicObstacleLateralEscapeBranchSelectionReason
 {

@@ -25,6 +25,11 @@ using multi_purpose_mpc_ros::v2x_overtake_core::
   DynamicObstacleLateralEscapePlanningRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   DynamicObstacleLateralEscapeSolverBackoff;
+using multi_purpose_mpc_ros::v2x_overtake_core::ForcedPassSideTransitionAction;
+using multi_purpose_mpc_ros::v2x_overtake_core::ForcedPassSideTransitionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_forced_pass_side_transition;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  should_suppress_immediate_wall_threat_primary;
 using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedShiftSteeringRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::StoppedVehicleLineOwnershipRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ContinuityAction;
@@ -13633,6 +13638,82 @@ TEST(V2XOvertakeCoreDynamicEscape, SelectsOnlyMateriallySaferAlternate)
   EXPECT_EQ(
     selection.reason,
     DynamicObstacleLateralEscapeBranchSelectionReason::CorridorReserveAdvantage);
+
+  request.alternate.candidate_usable = false;
+  request.alternate_side_sign = 0;
+  selection = select_dynamic_obstacle_lateral_escape_branch(request);
+  EXPECT_TRUE(selection.valid);
+  EXPECT_FALSE(selection.select_alternate);
+  EXPECT_EQ(
+    selection.reason,
+    DynamicObstacleLateralEscapeBranchSelectionReason::AlternateUnusable);
+}
+
+TEST(V2XOvertakeCoreDynamicEscape, ResolvesForcedSideTransitionLifecycle)
+{
+  ForcedPassSideTransitionRequest request;
+  request.forced_side_sign = 1;
+  request.transition_enabled = true;
+  request.transition_deadline_m = 6.0;
+  request.path_distance_m = 0.0;
+
+  auto resolution = resolve_forced_pass_side_transition(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_EQ(
+    resolution.action,
+    ForcedPassSideTransitionAction::KeepConnectedPrefix);
+
+  request.connected_gateway_available = true;
+  request.path_distance_m = 4.0;
+  resolution = resolve_forced_pass_side_transition(request);
+  EXPECT_EQ(
+    resolution.action,
+    ForcedPassSideTransitionAction::EnterGateway);
+
+  request.connected_gateway_available = false;
+  request.gateway_already_entered = true;
+  request.path_distance_m = 5.0;
+  resolution = resolve_forced_pass_side_transition(request);
+  EXPECT_EQ(
+    resolution.action,
+    ForcedPassSideTransitionAction::EnforceSide);
+
+  request.gateway_already_entered = false;
+  request.path_distance_m = 6.1;
+  resolution = resolve_forced_pass_side_transition(request);
+  EXPECT_EQ(
+    resolution.action,
+    ForcedPassSideTransitionAction::RejectExpired);
+
+  request.forced_side_sign = 2;
+  resolution = resolve_forced_pass_side_transition(request);
+  EXPECT_FALSE(resolution.valid);
+  EXPECT_EQ(
+    resolution.action,
+    ForcedPassSideTransitionAction::InvalidInput);
+}
+
+TEST(V2XOvertakeCoreDynamicEscape, SuppressesOnlyUnresolvedImmediateWallThreat)
+{
+  multi_purpose_mpc_ros::v2x_overtake_core::
+    DynamicObstacleLateralEscapeForecast forecast;
+  forecast.candidate_usable = true;
+  forecast.future_threatened = true;
+  forecast.risk_tier = 3;
+  forecast.reason = DynamicObstacleLateralEscapeThreatReason::WallMarginEscape;
+  forecast.first_threat_distance_m = 0.0;
+
+  EXPECT_TRUE(should_suppress_immediate_wall_threat_primary(forecast, false));
+  EXPECT_FALSE(should_suppress_immediate_wall_threat_primary(forecast, true));
+
+  forecast.reason = DynamicObstacleLateralEscapeThreatReason::CorridorReserve;
+  forecast.risk_tier = 1;
+  forecast.first_threat_distance_m = 0.0;
+  EXPECT_FALSE(should_suppress_immediate_wall_threat_primary(forecast, false));
+
+  forecast.reason = DynamicObstacleLateralEscapeThreatReason::WallMarginEscape;
+  forecast.first_threat_distance_m = 0.5;
+  EXPECT_FALSE(should_suppress_immediate_wall_threat_primary(forecast, false));
 }
 
 TEST(V2XOvertakeCoreDynamicMissionWait, HoldsUntilFreshCurrentOrAlternatePlanExists)

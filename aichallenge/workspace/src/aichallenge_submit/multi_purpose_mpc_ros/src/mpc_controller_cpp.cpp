@@ -1508,6 +1508,7 @@ struct V2XBehaviorConfig
   bool dynamic_obstacle_lateral_escape_authority_enabled{false};
   double dynamic_obstacle_lateral_escape_min_shift{0.10};
   double dynamic_obstacle_lateral_escape_lateral_accel_reserve_ratio{0.80};
+  double dynamic_obstacle_lateral_escape_opposite_transition_distance{6.0};
   double dynamic_obstacle_lateral_escape_solver_quarantine_sec{0.50};
   double dynamic_obstacle_lateral_escape_solver_backoff_max_sec{4.0};
   double dynamic_obstacle_lateral_escape_solver_backoff_reset_sec{8.0};
@@ -1973,6 +1974,15 @@ struct GapPlannerOutput
   std::size_t reject_index{0U};
   double reject_distance_m{std::numeric_limits<double>::quiet_NaN()};
   std::size_t reject_free_interval_count{0U};
+  bool forced_side_transition_requested{false};
+  bool forced_side_transition_gateway_found{false};
+  std::size_t forced_side_transition_prefix_samples{0U};
+  std::size_t forced_side_transition_gateway_index{
+    std::numeric_limits<std::size_t>::max()};
+  double forced_side_transition_gateway_distance_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double forced_side_transition_deadline_m{0.0};
+  std::string forced_side_transition_reason{"not-requested"};
 };
 
 struct GapPlanStaticWallPreflight
@@ -3840,7 +3850,8 @@ struct V2XGapPlanner
     const double start_grid_inter_vehicle_longitudinal_span = 0.0,
     const double start_grid_inter_vehicle_lookbehind_distance = 0.0,
     const double start_grid_inter_vehicle_lateral_radius = 0.0,
-    const std::optional<double> prediction_ego_speed_override_mps = std::nullopt)
+    const std::optional<double> prediction_ego_speed_override_mps = std::nullopt,
+    const double forced_pass_side_transition_distance_m = 0.0)
   {
     GapPlannerOutput output;
     if (!cfg.enabled || N <= 0) {
@@ -3892,6 +3903,16 @@ struct V2XGapPlanner
         vehicles.push_back(tracked);
       }
     }
+
+    const bool forced_side_transition_requested =
+      forced_pass_side_sign != 0 &&
+      std::isfinite(forced_pass_side_transition_distance_m) &&
+      forced_pass_side_transition_distance_m > kEps;
+    output.forced_side_transition_requested = forced_side_transition_requested;
+    output.forced_side_transition_deadline_m =
+      forced_side_transition_requested ? forced_pass_side_transition_distance_m : 0.0;
+    output.forced_side_transition_reason =
+      forced_side_transition_requested ? "awaiting-connected-gateway" : "not-requested";
 
     if (std::isfinite(max_self_distance)) {
       vehicles.erase(
@@ -4171,6 +4192,7 @@ struct V2XGapPlanner
     double current_vehicle_vehicle_corridor_distance = 0.0;
     double horizon_course_distance = 0.0;
     double course_prediction_horizon_distance = 0.0;
+    bool forced_side_transition_gateway_entered = false;
     // V2X has no target yaw. Keep the configured aggressive circular radius for a car-car slot,
     // but use each rectangle's half-diagonal when deciding whether a wall-car slot can really
     // contain ego. The extra inflation is attached to the vehicle boundary and applied only when
@@ -4328,12 +4350,12 @@ struct V2XGapPlanner
             vehicle.id, vehicle.id, wall_extra_inflation, wall_extra_inflation});
       }
 
-      if (occupied.empty()) {
+      if (occupied.empty() && !forced_side_transition_requested) {
         current_vehicle_vehicle_corridor_distance = 0.0;
         continue;
       }
 
-      any_obstacle_in_horizon = true;
+      any_obstacle_in_horizon = any_obstacle_in_horizon || !occupied.empty();
       const auto free_intervals = compute_free_intervals(
         base, occupied, allow_vehicle_vehicle_gap, min_gap_width_override,
         corridor_wall_clearance);
@@ -4349,24 +4371,97 @@ struct V2XGapPlanner
         break;
       }
       const auto pass_side_intervals = filter_by_pass_side(free_intervals, base, low_speed_pass_side);
+      std::vector<GapCandidate> transition_gateway_intervals;
+      auto transition_action =
+        v2x_overtake_core::ForcedPassSideTransitionAction::NotForced;
+      const std::vector<GapCandidate> * side_selectable_intervals = nullptr;
       if (
-        low_speed_pass_side != 0 && pass_side_intervals.empty() &&
+        forced_side_transition_requested &&
         !selected_vehicle_vehicle_gap.has_value())
       {
-        feasible = false;
-        output.reject_reason = "pass-side gap unavailable";
-        output.reject_gate = "forced-side-empty";
-        output.reject_index = static_cast<std::size_t>(i);
-        output.reject_distance_m = horizon_course_distance;
-        output.reject_free_interval_count = free_intervals.size();
-        break;
+        transition_gateway_intervals = filter_connected_pass_side_gateways(
+          free_intervals, base, desired_ey, low_speed_pass_side);
+        const auto transition =
+          v2x_overtake_core::resolve_forced_pass_side_transition(
+          v2x_overtake_core::ForcedPassSideTransitionRequest{
+            low_speed_pass_side, true,
+            forced_side_transition_gateway_entered,
+            !transition_gateway_intervals.empty(),
+            horizon_course_distance,
+            forced_pass_side_transition_distance_m});
+        transition_action = transition.action;
+        if (!transition.valid) {
+          feasible = false;
+          output.reject_reason = "invalid forced-side transition input";
+          output.reject_gate = "forced-side-transition-invalid";
+          output.forced_side_transition_reason = "invalid-input";
+        } else if (
+          transition.action ==
+          v2x_overtake_core::ForcedPassSideTransitionAction::RejectExpired)
+        {
+          feasible = false;
+          output.reject_reason = "forced pass-side transition gateway unavailable before deadline";
+          output.reject_gate = "forced-side-transition-expired";
+          output.forced_side_transition_reason = "transition-expired";
+        }
+        if (!feasible) {
+          output.reject_index = static_cast<std::size_t>(i);
+          output.reject_distance_m = horizon_course_distance;
+          output.reject_free_interval_count = free_intervals.size();
+          break;
+        }
+
+        if (
+          transition.action ==
+          v2x_overtake_core::ForcedPassSideTransitionAction::KeepConnectedPrefix)
+        {
+          side_selectable_intervals = &free_intervals;
+          ++output.forced_side_transition_prefix_samples;
+          output.forced_side_transition_reason = "connected-prefix";
+        } else if (
+          transition.action ==
+          v2x_overtake_core::ForcedPassSideTransitionAction::EnterGateway)
+        {
+          side_selectable_intervals = &transition_gateway_intervals;
+          forced_side_transition_gateway_entered = true;
+          output.forced_side_transition_gateway_found = true;
+          output.forced_side_transition_gateway_index = static_cast<std::size_t>(i);
+          output.forced_side_transition_gateway_distance_m = horizon_course_distance;
+          output.forced_side_transition_reason = "gateway-entered";
+        } else {
+          if (pass_side_intervals.empty()) {
+            feasible = false;
+            output.reject_reason = "pass-side gap unavailable after transition gateway";
+            output.reject_gate = "forced-side-empty-after-gateway";
+            output.reject_index = static_cast<std::size_t>(i);
+            output.reject_distance_m = horizon_course_distance;
+            output.reject_free_interval_count = free_intervals.size();
+            output.forced_side_transition_reason = "side-lost-after-gateway";
+            break;
+          }
+          side_selectable_intervals = &pass_side_intervals;
+          output.forced_side_transition_reason = "side-enforced";
+        }
+      } else {
+        if (
+          low_speed_pass_side != 0 && pass_side_intervals.empty() &&
+          !selected_vehicle_vehicle_gap.has_value())
+        {
+          feasible = false;
+          output.reject_reason = "pass-side gap unavailable";
+          output.reject_gate = "forced-side-empty";
+          output.reject_index = static_cast<std::size_t>(i);
+          output.reject_distance_m = horizon_course_distance;
+          output.reject_free_interval_count = free_intervals.size();
+          break;
+        }
+        side_selectable_intervals =
+          selected_vehicle_vehicle_gap.has_value() || pass_side_intervals.empty() ?
+          &free_intervals : &pass_side_intervals;
       }
-      const auto & side_selectable_intervals =
-        selected_vehicle_vehicle_gap.has_value() || pass_side_intervals.empty() ?
-        free_intervals : pass_side_intervals;
       std::vector<GapCandidate> locked_pair_intervals;
       if (selected_vehicle_vehicle_gap.has_value()) {
-        for (const auto & candidate : side_selectable_intervals) {
+        for (const auto & candidate : *side_selectable_intervals) {
           if (
             candidate.is_vehicle_vehicle_gap() &&
             candidate.lower_vehicle_id == selected_vehicle_vehicle_gap->first &&
@@ -4377,7 +4472,7 @@ struct V2XGapPlanner
         }
         if (locked_pair_intervals.empty()) {
           if (external_vehicle_vehicle_gap_lock) {
-            for (const auto & candidate : side_selectable_intervals) {
+            for (const auto & candidate : *side_selectable_intervals) {
               if (
                 locked_corridor_target_ey.has_value() &&
                 candidate.interval.lower - kEps <= locked_corridor_target_ey.value() &&
@@ -4403,7 +4498,7 @@ struct V2XGapPlanner
       }
       const auto & selectable_intervals =
         selected_vehicle_vehicle_gap.has_value() && !locked_pair_intervals.empty() ?
-        locked_pair_intervals : side_selectable_intervals;
+        locked_pair_intervals : *side_selectable_intervals;
       double selection_desired_ey = desired_ey;
       const bool prefer_locked_target = use_low_speed_target_lock && low_speed_locked_target_ey.has_value();
       if (prefer_locked_target) {
@@ -4456,6 +4551,10 @@ struct V2XGapPlanner
       output.ub[i] = adjusted.upper;
       output.target_ey[i] = prefer_locked_target ?
         clip(low_speed_locked_target_ey.value(), adjusted.lower, adjusted.upper) :
+        forced_side_transition_requested &&
+        transition_action !=
+        v2x_overtake_core::ForcedPassSideTransitionAction::KeepConnectedPrefix ?
+        forced_pass_side_target(adjusted, base, low_speed_pass_side) :
         select_target_ey(selected, allow_vehicle_vehicle_gap);
       output.target_active[i] = true;
       desired_ey = output.target_ey[i];
@@ -4477,6 +4576,19 @@ struct V2XGapPlanner
       } else {
         current_vehicle_vehicle_corridor_distance = 0.0;
       }
+    }
+
+    if (
+      feasible && forced_side_transition_requested &&
+      !forced_side_transition_gateway_entered)
+    {
+      feasible = false;
+      output.reject_reason = "forced pass-side transition gateway absent from planning horizon";
+      output.reject_gate = "forced-side-transition-incomplete";
+      output.reject_index = output.target_active.empty() ?
+        0U : output.target_active.size() - 1U;
+      output.reject_distance_m = horizon_course_distance;
+      output.forced_side_transition_reason = "horizon-ended-before-gateway";
     }
 
     if (!any_obstacle_in_horizon) {
@@ -4771,6 +4883,49 @@ private:
       }
     }
     return filtered;
+  }
+
+  std::vector<GapCandidate> filter_connected_pass_side_gateways(
+    const std::vector<GapCandidate> & intervals, const LateralInterval & base,
+    const double connected_lateral, const int pass_side_sign) const
+  {
+    std::vector<GapCandidate> gateways;
+    if (
+      (pass_side_sign != -1 && pass_side_sign != 1) ||
+      !std::isfinite(connected_lateral))
+    {
+      return gateways;
+    }
+
+    const double base_center = base.center();
+    for (const auto & candidate : intervals) {
+      const bool contains_connected_lateral =
+        candidate.interval.lower - kEps <= connected_lateral &&
+        connected_lateral <= candidate.interval.upper + kEps;
+      const bool reaches_requested_side = pass_side_sign > 0 ?
+        candidate.interval.upper > base_center + kEps :
+        candidate.interval.lower < base_center - kEps;
+      if (contains_connected_lateral && reaches_requested_side) {
+        gateways.push_back(candidate);
+      }
+    }
+    return gateways;
+  }
+
+  double forced_pass_side_target(
+    const LateralInterval & interval, const LateralInterval & base,
+    const int pass_side_sign) const
+  {
+    const double base_center = base.center();
+    if (pass_side_sign > 0) {
+      const double lower = std::max(interval.lower, base_center);
+      return clip(0.5 * (lower + interval.upper), interval.lower, interval.upper);
+    }
+    if (pass_side_sign < 0) {
+      const double upper = std::min(interval.upper, base_center);
+      return clip(0.5 * (interval.lower + upper), interval.lower, interval.upper);
+    }
+    return clip(base_center, interval.lower, interval.upper);
   }
 
   void apply_low_speed_pass_ramp(
@@ -15834,7 +15989,8 @@ struct MPC
       v2x_overtake_core::LowSpeedDirectControlPhase::Pass ?
       low_speed_shift_pass_side_sign_ : 0;
     const auto run_gap_planner_with = [&] (
-      V2XGapPlanner & planner, const int dynamic_escape_forced_side) {
+      V2XGapPlanner & planner, const int dynamic_escape_forced_side,
+      const double forced_side_transition_distance_m) {
         return planner.plan(
           *model, ref_wp_id, gap_plan_N, gap_plan_lb, gap_plan_ub, now_sec,
           !explicit_overtake_line_owns_plan,
@@ -15853,10 +16009,11 @@ struct MPC
             cfg.v2x_behavior.overtake_guard_min_gap_width)} : std::nullopt,
           false, inter_vehicle_corridor_lock, inter_vehicle_corridor_goal, 0.0, 0.0,
           inter_vehicle_corridor_plan ?
-          cfg.v2x_behavior.start_grid_inter_vehicle_lateral_radius : 0.0);
+          cfg.v2x_behavior.start_grid_inter_vehicle_lateral_radius : 0.0,
+          std::nullopt, forced_side_transition_distance_m);
       };
     const auto run_gap_planner = [&](const int dynamic_escape_forced_side) {
-        return run_gap_planner_with(*gap_planner, dynamic_escape_forced_side);
+        return run_gap_planner_with(*gap_planner, dynamic_escape_forced_side, 0.0);
       };
     auto planner_output = use_gap_planner ?
       (use_low_speed_local_path ?
@@ -15894,6 +16051,8 @@ struct MPC
     bool dynamic_escape_alternate_attempted = false;
     bool dynamic_escape_alternate_selected = false;
     bool dynamic_escape_proactive_alternate = false;
+    bool dynamic_escape_primary_suppressed = false;
+    std::string dynamic_escape_primary_suppression_reason{"not-suppressed"};
     std::string dynamic_escape_alternate_trigger_reason{"not-evaluated"};
     std::string dynamic_escape_branch_selection_reason{"not-evaluated"};
     overtake_decision_trace::CandidateTrace dynamic_escape_primary_trace;
@@ -15913,6 +16072,20 @@ struct MPC
         trace.planner_reject_distance_m = output.reject_distance_m;
         trace.planner_free_interval_count = output.reject_free_interval_count;
         trace.corridor_width_m = output.selected_corridor_width;
+        trace.forced_side_transition_requested =
+          output.forced_side_transition_requested;
+        trace.forced_side_transition_gateway_found =
+          output.forced_side_transition_gateway_found;
+        trace.forced_side_transition_prefix_samples =
+          output.forced_side_transition_prefix_samples;
+        trace.forced_side_transition_gateway_index =
+          output.forced_side_transition_gateway_index;
+        trace.forced_side_transition_gateway_distance_m =
+          output.forced_side_transition_gateway_distance_m;
+        trace.forced_side_transition_deadline_m =
+          output.forced_side_transition_deadline_m;
+        trace.forced_side_transition_reason =
+          output.forced_side_transition_reason;
         trace.bridge_evaluated = bridge.evaluated;
         trace.bridge_feasible = bridge.feasible;
         trace.bridge_reason = bridge.reason;
@@ -16150,7 +16323,10 @@ struct MPC
         auto alternate_planner = gap_planner->tactical_snapshot();
         alternate_planner->reset_low_speed_targets();
         auto alternate = evaluate_dynamic_escape_candidate(
-          run_gap_planner_with(*alternate_planner, -initial_side_sign),
+          run_gap_planner_with(
+            *alternate_planner, -initial_side_sign,
+            cfg.v2x_behavior.
+            dynamic_obstacle_lateral_escape_opposite_transition_distance),
           -initial_side_sign,
           dynamic_escape_alternate_trace);
         const auto branch_selection =
@@ -16223,7 +16399,31 @@ struct MPC
         }
       }
 
-      if (primary_unusable && !dynamic_escape_alternate_selected) {
+      if (
+        !primary_unusable &&
+        v2x_overtake_core::should_suppress_immediate_wall_threat_primary(
+          primary.forecast, dynamic_escape_alternate_selected))
+      {
+        // The primary branch has already consumed the configured wall margin
+        // at the first prediction stage. If no connected opposite transition
+        // exists, retaining it merely because its QP is solvable drives the
+        // tracker into the wall-side failure observed in the run. Hand lateral
+        // authority back to ordinary Follow and keep the exact reason in the
+        // decision trace instead of executing a known severe branch.
+        planner_output.feasible = false;
+        planner_output.reject_gate = "primary-immediate-wall-threat";
+        planner_output.reject_reason =
+          "primary starts inside wall reserve and no executable opposite "
+          "transition is available";
+        dynamic_escape_primary_suppressed = true;
+        dynamic_escape_primary_suppression_reason =
+          "immediate-wall-threat-without-alternate";
+      }
+
+      if (
+        (primary_unusable || dynamic_escape_primary_suppressed) &&
+        !dynamic_escape_alternate_selected)
+      {
         dynamic_obstacle_lateral_escape_tracking_qualified_ = false;
         dynamic_obstacle_lateral_escape_qualified_target_id_.clear();
         dynamic_obstacle_lateral_escape_qualified_side_sign_ = 0;
@@ -16371,6 +16571,10 @@ struct MPC
       dynamic_escape_alternate_selected;
     dynamic_escape_decision_trace.proactive_alternate =
       dynamic_escape_proactive_alternate;
+    dynamic_escape_decision_trace.primary_suppressed =
+      dynamic_escape_primary_suppressed;
+    dynamic_escape_decision_trace.primary_suppression_reason =
+      dynamic_escape_primary_suppression_reason;
     dynamic_escape_decision_trace.alternate_trigger_reason =
       dynamic_escape_alternate_trigger_reason;
     dynamic_escape_decision_trace.branch_selection_reason =
@@ -40259,6 +40463,10 @@ Config load_config(const std::string & path)
     mpc["v2x_dynamic_obstacle_lateral_escape_lateral_accel_reserve_ratio"] ?
     mpc["v2x_dynamic_obstacle_lateral_escape_lateral_accel_reserve_ratio"].as<double>() :
     0.80;
+  cfg.mpc.v2x_behavior.dynamic_obstacle_lateral_escape_opposite_transition_distance =
+    mpc["v2x_dynamic_obstacle_lateral_escape_opposite_transition_distance"] ?
+    mpc["v2x_dynamic_obstacle_lateral_escape_opposite_transition_distance"].as<double>() :
+    6.0;
   cfg.mpc.v2x_behavior.dynamic_obstacle_lateral_escape_solver_quarantine_sec =
     mpc["v2x_dynamic_obstacle_lateral_escape_solver_quarantine_sec"] ?
     mpc["v2x_dynamic_obstacle_lateral_escape_solver_quarantine_sec"].as<double>() : 0.50;
@@ -40286,6 +40494,17 @@ Config load_config(const std::string & path)
     throw std::runtime_error(
             "mpc.v2x_dynamic_obstacle_lateral_escape_lateral_accel_reserve_ratio must be "
             "finite and in (0, 1]");
+  }
+  if (
+    !std::isfinite(
+      cfg.mpc.v2x_behavior.
+      dynamic_obstacle_lateral_escape_opposite_transition_distance) ||
+    cfg.mpc.v2x_behavior.
+    dynamic_obstacle_lateral_escape_opposite_transition_distance <= 0.0)
+  {
+    throw std::runtime_error(
+            "mpc.v2x_dynamic_obstacle_lateral_escape_opposite_transition_distance "
+            "must be finite and positive");
   }
   if (
     !std::isfinite(
@@ -41772,7 +41991,7 @@ public:
         get_logger(),
         "V2X all-vehicle dynamic-obstacle Cruise authority: %s, "
         "lateral_escape=%s/min_shift=%.2f m/reachability_reserve=%.2f/"
-        "solver_backoff=%.2f..%.2f s/reset=%.2f s, "
+        "opposite_transition=%.2f m/solver_backoff=%.2f..%.2f s/reset=%.2f s, "
         "slow_confirmation_max_speed=%.2f m/s, "
         "activation_horizon=%.2f s, min_closing=%.2f m/s, scan_distance=%.2f m",
         mpc_cfg_.v2x_behavior.dynamic_obstacle_cruise_authority_enabled ?
@@ -41781,6 +42000,8 @@ public:
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.dynamic_obstacle_lateral_escape_min_shift,
         mpc_cfg_.v2x_behavior.dynamic_obstacle_lateral_escape_lateral_accel_reserve_ratio,
+        mpc_cfg_.v2x_behavior.
+        dynamic_obstacle_lateral_escape_opposite_transition_distance,
         mpc_cfg_.v2x_behavior.dynamic_obstacle_lateral_escape_solver_quarantine_sec,
         mpc_cfg_.v2x_behavior.dynamic_obstacle_lateral_escape_solver_backoff_max_sec,
         mpc_cfg_.v2x_behavior.dynamic_obstacle_lateral_escape_solver_backoff_reset_sec,

@@ -404,6 +404,9 @@ struct WallHandoffAdmissionRequest {
   std::size_t current_contact_count{0U};
   PredictedPathWallMetrics prediction;
   double required_wall_clearance_m{0.0};
+  // A small, explicitly logged tolerance for discretization at a physically
+  // clear boundary. It never overrides contact, out-of-map, or invalid data.
+  double physical_clearance_tolerance_m{0.0};
   bool planner_wall_contract_available{false};
   // This is the lateral reserve inside the Frenet planning corridor, not a
   // physical vehicle-footprint-to-wall distance.  Keep the semantic explicit
@@ -424,6 +427,8 @@ struct WallHandoffAdmissionResolution {
   bool replan_requested{false};
   bool planner_contract_admitted{false};
   bool planner_execution_contract_mismatch{false};
+  bool boundary_clearance_accepted{false};
+  double physical_clearance_shortfall_m{0.0};
   bool state_changed{false};
   int hold_cycles{0};
   int consecutive_valid_cycles{0};
@@ -459,7 +464,8 @@ enum class DynamicEscapeExitReason {
   RetainedSolutionExpired,
   WallPathPending,
   ReplacementPending,
-  ReplacementAdopted,
+  ReplacementExecuting,
+  ReplacementLost,
   TargetResolvedRequalifying,
   TargetResolved,
   RecoveryOverride,
@@ -472,6 +478,7 @@ const char * to_string(DynamicEscapeExitReason reason) noexcept;
 /// can be physically clear of the wall while still converging onto the front
 /// vehicle that Dynamic Escape was trying to pass.
 struct DynamicEscapeExitRequest {
+  std::uint64_t escape_attempt_id{0U};
   bool activation_requested{false};
   bool observation_updated{true};
   bool wall_path_admitted{false};
@@ -484,6 +491,7 @@ struct DynamicEscapeExitRequest {
 };
 
 struct DynamicEscapeExitResolution {
+  std::uint64_t latched_attempt_id{0U};
   bool active{false};
   bool entered{false};
   bool released{false};
@@ -491,6 +499,8 @@ struct DynamicEscapeExitResolution {
   bool replan_required{false};
   bool replan_requested{false};
   bool replacement_adopted{false};
+  bool replacement_execution_active{false};
+  bool attempt_changed{false};
   bool state_changed{false};
   int hold_cycles{0};
   int consecutive_resolved_cycles{0};
@@ -511,6 +521,8 @@ public:
 
 private:
   bool active_{false};
+  std::uint64_t latched_attempt_id_{0U};
+  bool replacement_execution_active_{false};
   int hold_cycles_{0};
   int consecutive_resolved_cycles_{0};
   DynamicEscapeExitReason previous_reason_{DynamicEscapeExitReason::Inactive};
@@ -557,9 +569,9 @@ const char * to_string(ExecutedSolutionWallAction action) noexcept;
 struct ExecutedSolutionWallRequest {
   bool execution_context_active{false};
   bool solution_wall_safe{false};
+  bool execution_command_published{false};
   Phase phase{Phase::Idle};
   double phase_traveled_m{0.0};
-  double entry_rollback_max_traveled_m{0.05};
 };
 
 struct ExecutedSolutionWallResolution {
@@ -569,9 +581,9 @@ struct ExecutedSolutionWallResolution {
 };
 
 /// Decide how an exact solver trajectory is handled after the reference path
-/// has already passed entry admission.  An untravelled ShiftOut may be rolled
-/// back atomically; an in-progress lateral manoeuvre must keep lateral
-/// ownership through DynamicReplan or RecoveryReplan.
+/// has already passed entry admission.  A ShiftOut whose command has never
+/// been published may be rolled back atomically; a published lateral
+/// manoeuvre must keep ownership through DynamicReplan or RecoveryReplan.
 ExecutedSolutionWallResolution resolve_executed_solution_wall_action(
   const ExecutedSolutionWallRequest & request) noexcept;
 

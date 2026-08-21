@@ -970,12 +970,15 @@ WallHandoffAdmissionReason classify_wall_path_admission(
   if (
     !std::isfinite(request.required_wall_clearance_m) ||
     request.required_wall_clearance_m < 0.0 ||
+    !std::isfinite(request.physical_clearance_tolerance_m) ||
+    request.physical_clearance_tolerance_m < 0.0 ||
     std::isnan(request.prediction.minimum_wall_distance_m))
   {
     return WallHandoffAdmissionReason::PredictionInvalid;
   }
   if (
-    request.prediction.minimum_wall_distance_m + 1e-9 <
+    request.prediction.minimum_wall_distance_m +
+    request.physical_clearance_tolerance_m + 1e-9 <
     request.required_wall_clearance_m)
   {
     return WallHandoffAdmissionReason::InsufficientClearance;
@@ -1037,8 +1040,20 @@ WallHandoffAdmissionResolution WallPathAdmissionGate::update(
   resolution.planner_execution_contract_mismatch =
     resolution.planner_contract_admitted &&
     std::isfinite(request.prediction.minimum_wall_distance_m) &&
-    request.prediction.minimum_wall_distance_m + 1e-9 <
+    request.prediction.minimum_wall_distance_m +
+    std::max(0.0, request.physical_clearance_tolerance_m) + 1e-9 <
     request.required_wall_clearance_m;
+  if (
+    std::isfinite(request.prediction.minimum_wall_distance_m) &&
+    std::isfinite(request.required_wall_clearance_m))
+  {
+    resolution.physical_clearance_shortfall_m = std::max(
+      0.0, request.required_wall_clearance_m -
+      request.prediction.minimum_wall_distance_m);
+    resolution.boundary_clearance_accepted =
+      observation_reason == WallHandoffAdmissionReason::Accepted &&
+      resolution.physical_clearance_shortfall_m > 1e-9;
+  }
   if (observation_reason != WallHandoffAdmissionReason::Accepted) {
     const bool stop_required =
       observation_reason ==
@@ -1092,8 +1107,10 @@ const char * to_string(const DynamicEscapeExitReason reason) noexcept
     case DynamicEscapeExitReason::WallPathPending: return "wall-path-pending";
     case DynamicEscapeExitReason::ReplacementPending:
       return "replacement-pending";
-    case DynamicEscapeExitReason::ReplacementAdopted:
-      return "replacement-adopted";
+    case DynamicEscapeExitReason::ReplacementExecuting:
+      return "replacement-executing";
+    case DynamicEscapeExitReason::ReplacementLost:
+      return "replacement-lost";
     case DynamicEscapeExitReason::TargetResolvedRequalifying:
       return "target-resolved-requalifying";
     case DynamicEscapeExitReason::TargetResolved: return "target-resolved";
@@ -1118,12 +1135,29 @@ DynamicEscapeExitResolution DynamicEscapeExitGate::update(
     return resolution;
   }
 
-  if (request.activation_requested && !active_) {
+  const bool valid_request_attempt = request.escape_attempt_id > 0U;
+  const bool attempt_changed =
+    request.observation_updated && active_ && valid_request_attempt &&
+    latched_attempt_id_ > 0U &&
+    request.escape_attempt_id != latched_attempt_id_;
+  if (
+    request.observation_updated &&
+    ((request.activation_requested && !active_) || attempt_changed))
+  {
     active_ = true;
+    latched_attempt_id_ = request.escape_attempt_id;
+    replacement_execution_active_ = false;
     hold_cycles_ = 0;
     consecutive_resolved_cycles_ = 0;
     resolution.entered = true;
+    resolution.attempt_changed = attempt_changed;
+  } else if (
+    request.observation_updated && active_ && latched_attempt_id_ == 0U &&
+    valid_request_attempt)
+  {
+    latched_attempt_id_ = request.escape_attempt_id;
   }
+  resolution.latched_attempt_id = latched_attempt_id_;
   if (!active_) {
     resolution.reason = DynamicEscapeExitReason::Inactive;
     resolution.state_changed =
@@ -1135,6 +1169,7 @@ DynamicEscapeExitResolution DynamicEscapeExitGate::update(
 
   ++hold_cycles_;
   resolution.active = true;
+  resolution.replacement_execution_active = replacement_execution_active_;
   resolution.hold_cycles = hold_cycles_;
   if (!request.observation_updated) {
     resolution.reason = previous_reason_;
@@ -1144,21 +1179,25 @@ DynamicEscapeExitResolution DynamicEscapeExitGate::update(
   }
 
   if (
-    request.replacement_escape_active &&
+    request.obstacle_blocking && request.replacement_escape_active &&
     request.replacement_escape_admitted)
   {
-    resolution.released = true;
-    resolution.replacement_adopted = true;
-    resolution.active = false;
-    resolution.reason = DynamicEscapeExitReason::ReplacementAdopted;
-    active_ = false;
+    resolution.replacement_adopted = !replacement_execution_active_;
+    replacement_execution_active_ = true;
+    resolution.replacement_execution_active = true;
+    resolution.reason = DynamicEscapeExitReason::ReplacementExecuting;
     consecutive_resolved_cycles_ = 0;
   } else if (request.obstacle_blocking) {
+    const bool replacement_lost = replacement_execution_active_;
+    replacement_execution_active_ = false;
+    resolution.replacement_execution_active = false;
     consecutive_resolved_cycles_ = 0;
     resolution.hold_lateral_control = request.retained_solution_available;
-    resolution.replan_required = resolution.entered;
+    resolution.replan_required = resolution.entered || replacement_lost;
     if (request.replacement_escape_active) {
       resolution.reason = DynamicEscapeExitReason::ReplacementPending;
+    } else if (replacement_lost) {
+      resolution.reason = DynamicEscapeExitReason::ReplacementLost;
     } else if (request.retained_solution_available) {
       resolution.reason = DynamicEscapeExitReason::TargetBlocking;
     } else {
@@ -1178,6 +1217,8 @@ DynamicEscapeExitResolution DynamicEscapeExitGate::update(
       resolution.active = false;
       resolution.reason = DynamicEscapeExitReason::TargetResolved;
       active_ = false;
+      latched_attempt_id_ = 0U;
+      replacement_execution_active_ = false;
     } else {
       resolution.hold_lateral_control = request.retained_solution_available;
       resolution.reason =
@@ -1187,6 +1228,7 @@ DynamicEscapeExitResolution DynamicEscapeExitGate::update(
 
   resolution.consecutive_resolved_cycles = consecutive_resolved_cycles_;
   resolution.state_changed = resolution.entered || resolution.released ||
+    resolution.replacement_adopted || resolution.attempt_changed ||
     resolution.reason != previous_reason_ ||
     resolution.hold_lateral_control != previous_hold_lateral_control_;
   previous_reason_ = resolution.reason;
@@ -1202,6 +1244,8 @@ bool DynamicEscapeExitGate::active() const noexcept
 void DynamicEscapeExitGate::reset() noexcept
 {
   active_ = false;
+  latched_attempt_id_ = 0U;
+  replacement_execution_active_ = false;
   hold_cycles_ = 0;
   consecutive_resolved_cycles_ = 0;
   previous_reason_ = DynamicEscapeExitReason::Inactive;
@@ -1228,11 +1272,17 @@ std::string format_dynamic_escape_exit_trace(
   stream << "Dynamic escape exit contract: decision=" << decision_id
          << ", event=" << event
          << ", reason=" << to_string(resolution.reason)
+         << ", attempt=" << request.escape_attempt_id << "/latched="
+         << resolution.latched_attempt_id
          << ", active=" << (resolution.active ? 1 : 0)
          << ", hold_lateral="
          << (resolution.hold_lateral_control ? 1 : 0)
          << ", replan=" << (resolution.replan_required ? 1 : 0) << "/"
          << (resolution.replan_requested ? 1 : 0)
+         << ", replacement="
+         << (request.replacement_escape_active ? 1 : 0) << "/admitted="
+         << (request.replacement_escape_admitted ? 1 : 0) << "/executing="
+         << (resolution.replacement_execution_active ? 1 : 0)
          << ", target=" <<
     (latched_target_id.empty() ? "none" : latched_target_id)
          << "/observed=" <<
@@ -1244,9 +1294,6 @@ std::string format_dynamic_escape_exit_trace(
          << ", closing=" << finite_or(closing_speed_mps, "nan") << "m/s"
          << ", obstacle_blocking=" << (request.obstacle_blocking ? 1 : 0)
          << ", wall_admitted=" << (request.wall_path_admitted ? 1 : 0)
-         << ", replacement="
-         << (request.replacement_escape_active ? 1 : 0) << "/"
-         << (request.replacement_escape_admitted ? 1 : 0)
          << ", retained=" <<
     (request.retained_solution_available ? 1 : 0)
          << "/age=" << finite_or(retained_age_sec, "inf") << "s"
@@ -1300,6 +1347,12 @@ std::string format_wall_path_admission_trace(
          << (request.current_footprint_out_of_map ? 1 : 0)
          << ", required="
          << finite_or(request.required_wall_clearance_m, "nan") << "m"
+         << ", tolerance="
+         << finite_or(request.physical_clearance_tolerance_m, "nan") << "m"
+         << ", shortfall="
+         << finite_or(resolution.physical_clearance_shortfall_m, "nan") << "m"
+         << ", boundary_accept="
+         << (resolution.boundary_clearance_accepted ? 1 : 0)
          << ", planner_contract="
          << (request.planner_wall_contract_available ? 1 : 0) << "/admitted="
          << (resolution.planner_contract_admitted ? 1 : 0)
@@ -1340,10 +1393,7 @@ ExecutedSolutionWallResolution resolve_executed_solution_wall_action(
 {
   ExecutedSolutionWallResolution resolution;
   if (
-    !std::isfinite(request.phase_traveled_m) ||
-    !std::isfinite(request.entry_rollback_max_traveled_m) ||
-    request.phase_traveled_m < 0.0 ||
-    request.entry_rollback_max_traveled_m < 0.0)
+    !std::isfinite(request.phase_traveled_m) || request.phase_traveled_m < 0.0)
   {
     return resolution;
   }
@@ -1365,7 +1415,7 @@ ExecutedSolutionWallResolution resolve_executed_solution_wall_action(
   switch (request.phase) {
     case Phase::ShiftOut:
       resolution.action =
-        request.phase_traveled_m <= request.entry_rollback_max_traveled_m ?
+        !request.execution_command_published ?
         ExecutedSolutionWallAction::EntryRollback :
         ExecutedSolutionWallAction::DynamicReplan;
       break;

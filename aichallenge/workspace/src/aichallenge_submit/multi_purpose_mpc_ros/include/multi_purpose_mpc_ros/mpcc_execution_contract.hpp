@@ -63,6 +63,45 @@ std::optional<EffectiveStageGeometry> resolve_effective_stage_geometry(
   const std::vector<StageGeometryIdentity> & raw_stages,
   const std::vector<double> & effective_transition_distances_m) noexcept;
 
+enum class PhysicalWallCertificateReason
+{
+  NotEvaluated,
+  Accepted,
+  InvalidInput,
+  LateralBoundViolation,
+  HeadingUnavailable,
+  WallSampleUnavailable,
+  HardWallContact,
+  SweptPathViolation,
+};
+
+const char * physical_wall_certificate_reason_name(
+  PhysicalWallCertificateReason reason) noexcept;
+
+struct PhysicalWallCertificateDiagnostic
+{
+  PhysicalWallCertificateReason reason{
+    PhysicalWallCertificateReason::NotEvaluated};
+  int stage_index{-1};
+  int waypoint_id{-1};
+  double path_distance_m{std::numeric_limits<double>::quiet_NaN()};
+  double lateral_m{std::numeric_limits<double>::quiet_NaN()};
+  double lower_bound_m{std::numeric_limits<double>::quiet_NaN()};
+  double upper_bound_m{std::numeric_limits<double>::quiet_NaN()};
+  double bound_reserve_m{std::numeric_limits<double>::quiet_NaN()};
+  double heading_offset_rad{std::numeric_limits<double>::quiet_NaN()};
+  double pose_x_m{std::numeric_limits<double>::quiet_NaN()};
+  double pose_y_m{std::numeric_limits<double>::quiet_NaN()};
+  double pose_yaw_rad{std::numeric_limits<double>::quiet_NaN()};
+  bool out_of_map{false};
+  std::size_t contact_cell_count{};
+  std::size_t swept_rejected_path_index{std::numeric_limits<std::size_t>::max()};
+  std::size_t swept_checked_pose_count{};
+};
+
+std::string format_physical_wall_certificate_diagnostic(
+  const PhysicalWallCertificateDiagnostic & diagnostic);
+
 struct MpccProblemContext
 {
   std::uint64_t decision_id{};

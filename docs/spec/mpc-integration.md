@@ -1683,6 +1683,23 @@ shadow総時間は平均3.559 ms、最悪1秒窓p99／最大13.503 msだった�
 25 ms超過が2回あり、実wall不成立も残るため、通常権限への昇格は引き続き保留する。全shadow出力は
 `authority=shadow, selected=0`を維持する。
 
+#### Physical wall certificate provenance（2026-08-22）
+
+物理wall証明はboolean結果に加えて、最初に失敗した理由、stage、waypoint、累積距離、横位置、
+QP上下限と境界余裕、heading offset、world pose、map/contact、swept path indexを型付き診断として
+返す。booleanの合否判定は従来validatorだけが所有し、診断は合否を変更しない。通常時のログ量を
+増やさないため、詳細はshadow outcomeの状態遷移時だけ出力し、理由別件数は1秒窓で集約する。
+
+`output/20260822-135649`の単車4周では7,579回の物理検証中7,491回（98.8389%）が合格し、
+88回の棄却はhard wall contact 67回、現在poseからhorizonへのswept path violation 21回だった。
+invalid input、QP lateral bound violation、heading unavailable、wall sample unavailableは0回だった。
+状態遷移時の初回証拠ではQP境界余裕が0.925--1.511 m残ったまま姿勢付き車体が壁へ接触し、
+9/10件がstage 0、1件がstage 1だった。したがって残件の主因は数値solverやbound toleranceではなく、
+車体中心へ課すscalar Frenet boundsと、2.0 m x 1.45 mのyawed footprintを検証する実行証明の
+幾何契約不一致である。swept違反はこれに加え、実現在poseから最初の予測stageへの接続可能性を
+QPが直接保証していないことを示す。次段階では既存証明を弱めず、heading-awareなfootprint-safe
+stage boundsをshadow問題へ入力してA/Bする。production authorityへの昇格は引き続き禁止する。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

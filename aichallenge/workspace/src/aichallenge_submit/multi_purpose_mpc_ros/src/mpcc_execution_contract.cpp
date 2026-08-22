@@ -198,6 +198,79 @@ std::optional<EffectiveStageGeometry> resolve_effective_stage_geometry(
   return result;
 }
 
+const char * physical_wall_certificate_reason_name(
+  const PhysicalWallCertificateReason reason) noexcept
+{
+  switch (reason) {
+    case PhysicalWallCertificateReason::NotEvaluated:
+      return "not-evaluated";
+    case PhysicalWallCertificateReason::Accepted:
+      return "accepted";
+    case PhysicalWallCertificateReason::InvalidInput:
+      return "invalid-input";
+    case PhysicalWallCertificateReason::LateralBoundViolation:
+      return "lateral-bound-violation";
+    case PhysicalWallCertificateReason::HeadingUnavailable:
+      return "heading-unavailable";
+    case PhysicalWallCertificateReason::WallSampleUnavailable:
+      return "wall-sample-unavailable";
+    case PhysicalWallCertificateReason::HardWallContact:
+      return "hard-wall-contact";
+    case PhysicalWallCertificateReason::SweptPathViolation:
+      return "swept-path-violation";
+  }
+  return "unknown";
+}
+
+std::string format_physical_wall_certificate_diagnostic(
+  const PhysicalWallCertificateDiagnostic & diagnostic)
+{
+  std::ostringstream output;
+  output << std::fixed << std::setprecision(3)
+         << "reason=" << physical_wall_certificate_reason_name(diagnostic.reason)
+         << ", stage=" << diagnostic.stage_index
+         << ", wp=" << diagnostic.waypoint_id;
+  if (std::isfinite(diagnostic.path_distance_m)) {
+    output << ", distance=" << diagnostic.path_distance_m << "m";
+  }
+  if (std::isfinite(diagnostic.lateral_m)) {
+    output << ", lateral=" << diagnostic.lateral_m << "m";
+  }
+  if (
+    std::isfinite(diagnostic.lower_bound_m) &&
+    std::isfinite(diagnostic.upper_bound_m))
+  {
+    output << ", bounds=[" << diagnostic.lower_bound_m << ","
+           << diagnostic.upper_bound_m << "]m";
+  }
+  if (std::isfinite(diagnostic.bound_reserve_m)) {
+    output << ", reserve=" << diagnostic.bound_reserve_m << "m";
+  }
+  if (std::isfinite(diagnostic.heading_offset_rad)) {
+    output << ", heading_offset=" << diagnostic.heading_offset_rad << "rad";
+  }
+  if (
+    std::isfinite(diagnostic.pose_x_m) &&
+    std::isfinite(diagnostic.pose_y_m) &&
+    std::isfinite(diagnostic.pose_yaw_rad))
+  {
+    output << ", pose=(" << diagnostic.pose_x_m << ","
+           << diagnostic.pose_y_m << "," << diagnostic.pose_yaw_rad << ")";
+  }
+  output << ", out_of_map=" << (diagnostic.out_of_map ? 1 : 0)
+         << ", contacts=" << diagnostic.contact_cell_count;
+  if (
+    diagnostic.swept_rejected_path_index !=
+    std::numeric_limits<std::size_t>::max())
+  {
+    output << ", swept_index=" << diagnostic.swept_rejected_path_index;
+  }
+  if (diagnostic.swept_checked_pose_count > 0U) {
+    output << ", swept_checked=" << diagnostic.swept_checked_pose_count;
+  }
+  return output.str();
+}
+
 std::uint64_t problem_context_fingerprint(
   const MpccProblemContext & context) noexcept
 {

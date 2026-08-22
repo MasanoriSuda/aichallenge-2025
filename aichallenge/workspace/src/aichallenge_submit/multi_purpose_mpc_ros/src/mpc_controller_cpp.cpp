@@ -5531,6 +5531,7 @@ struct TrackCruiseShadowCycleResult
   double terminal_progress_m{std::numeric_limits<double>::quiet_NaN()};
   double terminal_velocity_mps{std::numeric_limits<double>::quiet_NaN()};
   std::optional<mpcc_progress::ActuationProposal> actuation_proposal;
+  mpcc_contract::PhysicalWallCertificateDiagnostic physical_wall_diagnostic;
   std::string status{"not-eligible"};
   std::string detail{"not-evaluated"};
 };
@@ -5548,6 +5549,12 @@ struct TrackCruiseShadowTelemetryWindow
   std::uint64_t conversion_count{};
   std::uint64_t physical_check_count{};
   std::uint64_t certified_count{};
+  std::uint64_t physical_invalid_input_count{};
+  std::uint64_t physical_bound_reject_count{};
+  std::uint64_t physical_heading_reject_count{};
+  std::uint64_t physical_sample_reject_count{};
+  std::uint64_t physical_contact_reject_count{};
+  std::uint64_t physical_swept_reject_count{};
   std::uint64_t warm_start_count{};
   std::uint64_t reset_count{};
   std::uint64_t total_iterations{};
@@ -19767,8 +19774,15 @@ struct MPC
     const double hard_wall_clearance_m,
     std::string & reject_reason,
     const double bound_tolerance_m,
-    const SolvedExecutionWallValidationScope validation_scope) const
+    const SolvedExecutionWallValidationScope validation_scope,
+    mpcc_contract::PhysicalWallCertificateDiagnostic * diagnostic = nullptr) const
   {
+    mpcc_contract::PhysicalWallCertificateDiagnostic wall_diagnostic;
+    auto publish_diagnostic = ScopeExit([&wall_diagnostic, diagnostic]() {
+        if (diagnostic != nullptr) {
+          *diagnostic = wall_diagnostic;
+        }
+      });
     const bool validate_swept_path =
       validation_scope ==
       SolvedExecutionWallValidationScope::SweptFromCurrentPose;
@@ -19783,6 +19797,8 @@ struct MPC
       !std::isfinite(bound_tolerance_m) || bound_tolerance_m < 0.0 ||
       (validate_swept_path && !actual_wall_monitor_pose_.has_value()))
     {
+      wall_diagnostic.reason =
+        mpcc_contract::PhysicalWallCertificateReason::InvalidInput;
       reject_reason = "solution wall validation input invalid";
       return false;
     }
@@ -19804,12 +19820,24 @@ struct MPC
       // physical hard guard.
       const double lower = lower_bound[i];
       const double upper = upper_bound[i];
+      wall_diagnostic.stage_index = i;
+      wall_diagnostic.waypoint_id = ref_wp_id + i;
+      wall_diagnostic.path_distance_m = path_distance_m[index];
+      wall_diagnostic.lateral_m = lateral;
+      wall_diagnostic.lower_bound_m = lower;
+      wall_diagnostic.upper_bound_m = upper;
+      wall_diagnostic.bound_reserve_m =
+        std::isfinite(lateral) && std::isfinite(lower) && std::isfinite(upper) ?
+        std::min(lateral - lower, upper - lateral) :
+        std::numeric_limits<double>::quiet_NaN();
       if (
         !std::isfinite(lateral) || !std::isfinite(lower) ||
         !std::isfinite(upper) || lower > upper ||
         lateral < lower - bound_tolerance_m ||
         lateral > upper + bound_tolerance_m)
       {
+        wall_diagnostic.reason =
+          mpcc_contract::PhysicalWallCertificateReason::LateralBoundViolation;
         reject_reason = "current wall bounds rejected solution";
         return false;
       }
@@ -19825,6 +19853,8 @@ struct MPC
         !std::isfinite(previous_lateral) || !std::isfinite(delta_distance) ||
         delta_distance <= 1e-6)
       {
+        wall_diagnostic.reason =
+          mpcc_contract::PhysicalWallCertificateReason::HeadingUnavailable;
         reject_reason = "solution heading unavailable";
         return false;
       }
@@ -19832,16 +19862,25 @@ struct MPC
         overtake_core::OvertakeLineHeadingReferenceRequest{
           previous_lateral, trajectory.lateral_m[index],
           delta_distance, waypoint.kappa});
+      wall_diagnostic.heading_offset_rad = heading_offset;
       const recovery_footprint::Pose2D pose{
         waypoint.x - lateral * std::sin(waypoint.psi),
         waypoint.y + lateral * std::cos(waypoint.psi),
         wrap_to_pi(waypoint.psi + heading_offset)};
+      wall_diagnostic.pose_x_m = pose.x_m;
+      wall_diagnostic.pose_y_m = pose.y_m;
+      wall_diagnostic.pose_yaw_rad = pose.yaw_rad;
       if (validate_swept_path) {
         swept_path.push_back(pose);
       }
       const auto sample = recovery_footprint::sample_footprint(
         *overtake_static_wall_grid_, clearance_footprint, pose);
+      wall_diagnostic.out_of_map = sample.out_of_map;
+      wall_diagnostic.contact_cell_count = sample.contact_cells.size();
       if (!sample.valid || sample.out_of_map || !sample.contact_cells.empty()) {
+        wall_diagnostic.reason = !sample.valid || sample.out_of_map ?
+          mpcc_contract::PhysicalWallCertificateReason::WallSampleUnavailable :
+          mpcc_contract::PhysicalWallCertificateReason::HardWallContact;
         reject_reason = !sample.valid || sample.out_of_map ?
           "solution wall sample unavailable" : "solution hard wall contact";
         return false;
@@ -19856,6 +19895,38 @@ struct MPC
         *overtake_static_wall_grid_, clearance_footprint,
         swept_path, swept_step_m);
       if (!swept_clearance.valid || !swept_clearance.clear) {
+        wall_diagnostic.reason =
+          mpcc_contract::PhysicalWallCertificateReason::SweptPathViolation;
+        wall_diagnostic.swept_rejected_path_index =
+          swept_clearance.rejected_path_index;
+        wall_diagnostic.swept_checked_pose_count =
+          swept_clearance.checked_pose_count;
+        if (
+          swept_clearance.rejected_path_index > 0U &&
+          swept_clearance.rejected_path_index <= trajectory.lateral_m.size())
+        {
+          const std::size_t failed_stage =
+            swept_clearance.rejected_path_index - 1U;
+          wall_diagnostic.stage_index = static_cast<int>(failed_stage);
+          wall_diagnostic.waypoint_id =
+            ref_wp_id + static_cast<int>(failed_stage);
+          wall_diagnostic.path_distance_m = path_distance_m[failed_stage];
+          wall_diagnostic.lateral_m = trajectory.lateral_m[failed_stage];
+          wall_diagnostic.lower_bound_m = lower_bound[static_cast<int>(failed_stage)];
+          wall_diagnostic.upper_bound_m = upper_bound[static_cast<int>(failed_stage)];
+          wall_diagnostic.bound_reserve_m = std::min(
+            wall_diagnostic.lateral_m - wall_diagnostic.lower_bound_m,
+            wall_diagnostic.upper_bound_m - wall_diagnostic.lateral_m);
+          const auto & failed_pose =
+            swept_path[swept_clearance.rejected_path_index];
+          const auto & failed_waypoint = model->reference_path->get_waypoint(
+            wall_diagnostic.waypoint_id);
+          wall_diagnostic.heading_offset_rad = wrap_to_pi(
+            failed_pose.yaw_rad - failed_waypoint.psi);
+          wall_diagnostic.pose_x_m = failed_pose.x_m;
+          wall_diagnostic.pose_y_m = failed_pose.y_m;
+          wall_diagnostic.pose_yaw_rad = failed_pose.yaw_rad;
+        }
         std::ostringstream reason;
         reason << "solution swept wall path "
                << recovery_footprint::to_string(swept_clearance.reason)
@@ -19866,6 +19937,7 @@ struct MPC
         return false;
       }
     }
+    wall_diagnostic.reason = mpcc_contract::PhysicalWallCertificateReason::Accepted;
     reject_reason = "physical solution horizon accepted";
     return true;
   }
@@ -20162,6 +20234,31 @@ struct MPC
     window.conversion_count += result.conversion_succeeded ? 1U : 0U;
     window.physical_check_count += result.physical_certificate_checked ? 1U : 0U;
     window.certified_count += result.physically_certified ? 1U : 0U;
+    if (result.physical_certificate_checked && !result.physically_certified) {
+      switch (result.physical_wall_diagnostic.reason) {
+        case mpcc_contract::PhysicalWallCertificateReason::InvalidInput:
+          ++window.physical_invalid_input_count;
+          break;
+        case mpcc_contract::PhysicalWallCertificateReason::LateralBoundViolation:
+          ++window.physical_bound_reject_count;
+          break;
+        case mpcc_contract::PhysicalWallCertificateReason::HeadingUnavailable:
+          ++window.physical_heading_reject_count;
+          break;
+        case mpcc_contract::PhysicalWallCertificateReason::WallSampleUnavailable:
+          ++window.physical_sample_reject_count;
+          break;
+        case mpcc_contract::PhysicalWallCertificateReason::HardWallContact:
+          ++window.physical_contact_reject_count;
+          break;
+        case mpcc_contract::PhysicalWallCertificateReason::SweptPathViolation:
+          ++window.physical_swept_reject_count;
+          break;
+        case mpcc_contract::PhysicalWallCertificateReason::NotEvaluated:
+        case mpcc_contract::PhysicalWallCertificateReason::Accepted:
+          break;
+      }
+    }
     window.warm_start_count += result.warm_start_applied ? 1U : 0U;
     window.reset_count += result.solver_context_reset ? 1U : 0U;
     window.total_iterations += static_cast<std::uint64_t>(std::max(0, result.iterations));
@@ -20259,6 +20356,7 @@ struct MPC
       "Track/Cruise MPCC shadow: eligible=%zu, metadata=%zu/%.1f%%, "
       "build=%zu, attempt=%zu/%.1f%%, solved=%zu/%.1f%%, finite=%zu, "
       "constraint=%zu, proposal=%zu, converted=%zu, physical=%zu, certified=%zu/%.1f%%, "
+      "physical_rejects=invalid:%zu/bound:%zu/heading:%zu/sample:%zu/contact:%zu/swept:%zu, "
       "warm=%zu, reset=%zu, reset_reason=%s, "
       "build_ms=%.3f/%.3f(avg/max), solve_ms=%.3f/%.3f/%.3f/%.3f(avg/p95/p99/max), "
       "certificate_ms=%.3f/%.3f(avg/max), "
@@ -20282,6 +20380,12 @@ struct MPC
       static_cast<std::size_t>(window.physical_check_count),
       static_cast<std::size_t>(window.certified_count),
       100.0 * static_cast<double>(window.certified_count) / attempted,
+      static_cast<std::size_t>(window.physical_invalid_input_count),
+      static_cast<std::size_t>(window.physical_bound_reject_count),
+      static_cast<std::size_t>(window.physical_heading_reject_count),
+      static_cast<std::size_t>(window.physical_sample_reject_count),
+      static_cast<std::size_t>(window.physical_contact_reject_count),
+      static_cast<std::size_t>(window.physical_swept_reject_count),
       static_cast<std::size_t>(window.warm_start_count),
       static_cast<std::size_t>(window.reset_count),
       race_mpcc::shadow_warm_start_reset_reason_name(result.reset_reason),
@@ -20470,12 +20574,15 @@ struct MPC
         lower_bound, upper_bound, 0.0, certificate_reason,
         std::max(
           1e-5, outcome.result->maximum_constraint_violation + 1e-6),
-        SolvedExecutionWallValidationScope::SweptFromCurrentPose);
+        SolvedExecutionWallValidationScope::SweptFromCurrentPose,
+        &result.physical_wall_diagnostic);
       result.certificate_ms = std::chrono::duration<double, std::milli>(
         SteadyClock::now() - certificate_started).count();
       if (!result.physically_certified) {
         result.status = "physical-certificate-reject";
-        result.detail = certificate_reason;
+        result.detail = certificate_reason + ", " +
+          mpcc_contract::format_physical_wall_certificate_diagnostic(
+          result.physical_wall_diagnostic);
         return finish();
       }
 

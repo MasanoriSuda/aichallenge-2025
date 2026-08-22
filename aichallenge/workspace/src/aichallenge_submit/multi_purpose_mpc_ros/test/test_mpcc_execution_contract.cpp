@@ -132,6 +132,58 @@ TEST(MpccExecutionContract, EffectiveProgressGeometryRejectsInvalidDistanceContr
       {0.5, std::numeric_limits<double>::quiet_NaN()}).has_value());
 }
 
+TEST(MpccExecutionContract, PhysicalWallCertificateReasonsAreStable)
+{
+  EXPECT_STREQ(
+    contract::physical_wall_certificate_reason_name(
+      contract::PhysicalWallCertificateReason::Accepted),
+    "accepted");
+  EXPECT_STREQ(
+    contract::physical_wall_certificate_reason_name(
+      contract::PhysicalWallCertificateReason::LateralBoundViolation),
+    "lateral-bound-violation");
+  EXPECT_STREQ(
+    contract::physical_wall_certificate_reason_name(
+      contract::PhysicalWallCertificateReason::HardWallContact),
+    "hard-wall-contact");
+  EXPECT_STREQ(
+    contract::physical_wall_certificate_reason_name(
+      contract::PhysicalWallCertificateReason::SweptPathViolation),
+    "swept-path-violation");
+}
+
+TEST(MpccExecutionContract, PhysicalWallCertificateDiagnosticPreservesFailureProvenance)
+{
+  contract::PhysicalWallCertificateDiagnostic diagnostic;
+  diagnostic.reason = contract::PhysicalWallCertificateReason::HardWallContact;
+  diagnostic.stage_index = 3;
+  diagnostic.waypoint_id = 123;
+  diagnostic.path_distance_m = 2.5;
+  diagnostic.lateral_m = 0.8;
+  diagnostic.lower_bound_m = -1.0;
+  diagnostic.upper_bound_m = 1.0;
+  diagnostic.bound_reserve_m = 0.2;
+  diagnostic.heading_offset_rad = 0.1;
+  diagnostic.pose_x_m = 4.0;
+  diagnostic.pose_y_m = 5.0;
+  diagnostic.pose_yaw_rad = 0.6;
+  diagnostic.contact_cell_count = 4U;
+
+  const std::string formatted =
+    contract::format_physical_wall_certificate_diagnostic(diagnostic);
+
+  EXPECT_NE(formatted.find("reason=hard-wall-contact"), std::string::npos);
+  EXPECT_NE(formatted.find("stage=3"), std::string::npos);
+  EXPECT_NE(formatted.find("wp=123"), std::string::npos);
+  EXPECT_NE(formatted.find("distance=2.500m"), std::string::npos);
+  EXPECT_NE(formatted.find("lateral=0.800m"), std::string::npos);
+  EXPECT_NE(formatted.find("bounds=[-1.000,1.000]m"), std::string::npos);
+  EXPECT_NE(formatted.find("reserve=0.200m"), std::string::npos);
+  EXPECT_NE(formatted.find("heading_offset=0.100rad"), std::string::npos);
+  EXPECT_NE(formatted.find("pose=(4.000,5.000,0.600)"), std::string::npos);
+  EXPECT_NE(formatted.find("contacts=4"), std::string::npos);
+}
+
 TEST(MpccExecutionContract, CertifiedSolutionRequiresEveryCertificate)
 {
   const auto context = make_context();

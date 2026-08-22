@@ -1,5 +1,6 @@
 #include "multi_purpose_mpc_ros/mpcc_execution_contract.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <iomanip>
@@ -13,6 +14,12 @@ namespace
 
 constexpr std::uint64_t kFnvOffset = 14695981039346656037ULL;
 constexpr std::uint64_t kFnvPrime = 1099511628211ULL;
+constexpr double kKinematicEpsilon = 1e-12;
+
+double wrap_to_pi(const double angle) noexcept
+{
+  return std::atan2(std::sin(angle), std::cos(angle));
+}
 
 class FingerprintBuilder
 {
@@ -93,6 +100,120 @@ std::string fingerprint_text(const std::uint64_t value)
 }
 
 }  // namespace
+
+std::optional<FrenetPose> project_planar_pose_to_frenet(
+  const PlanarPose & pose, const PlanarPose & course_frame) noexcept
+{
+  if (
+    !std::isfinite(pose.x_m) || !std::isfinite(pose.y_m) ||
+    !std::isfinite(pose.yaw_rad) || !std::isfinite(course_frame.x_m) ||
+    !std::isfinite(course_frame.y_m) || !std::isfinite(course_frame.yaw_rad))
+  {
+    return std::nullopt;
+  }
+  const double delta_x_m = pose.x_m - course_frame.x_m;
+  const double delta_y_m = pose.y_m - course_frame.y_m;
+  const double cos_heading = std::cos(course_frame.yaw_rad);
+  const double sin_heading = std::sin(course_frame.yaw_rad);
+  FrenetPose result;
+  result.lateral_m = cos_heading * delta_y_m - sin_heading * delta_x_m;
+  result.lag_m = cos_heading * delta_x_m + sin_heading * delta_y_m;
+  result.heading_offset_rad = wrap_to_pi(pose.yaw_rad - course_frame.yaw_rad);
+  if (
+    !std::isfinite(result.lateral_m) || !std::isfinite(result.lag_m) ||
+    !std::isfinite(result.heading_offset_rad))
+  {
+    return std::nullopt;
+  }
+  return result;
+}
+
+std::optional<PlanarPose> reconstruct_planar_pose_from_frenet(
+  const PlanarPose & course_frame, const FrenetPose & state) noexcept
+{
+  if (
+    !std::isfinite(course_frame.x_m) || !std::isfinite(course_frame.y_m) ||
+    !std::isfinite(course_frame.yaw_rad) || !std::isfinite(state.lateral_m) ||
+    !std::isfinite(state.lag_m) || !std::isfinite(state.heading_offset_rad))
+  {
+    return std::nullopt;
+  }
+  const double cos_heading = std::cos(course_frame.yaw_rad);
+  const double sin_heading = std::sin(course_frame.yaw_rad);
+  PlanarPose result;
+  result.x_m = course_frame.x_m + state.lag_m * cos_heading -
+    state.lateral_m * sin_heading;
+  result.y_m = course_frame.y_m + state.lag_m * sin_heading +
+    state.lateral_m * cos_heading;
+  result.yaw_rad = wrap_to_pi(
+    course_frame.yaw_rad + state.heading_offset_rad);
+  if (
+    !std::isfinite(result.x_m) || !std::isfinite(result.y_m) ||
+    !std::isfinite(result.yaw_rad))
+  {
+    return std::nullopt;
+  }
+  return result;
+}
+
+std::optional<FirstStageKinematicResult> integrate_first_stage_constant_curvature(
+  const FirstStageKinematicRequest & request) noexcept
+{
+  if (
+    !std::isfinite(request.initial_pose.x_m) ||
+    !std::isfinite(request.initial_pose.y_m) ||
+    !std::isfinite(request.initial_pose.yaw_rad) ||
+    !std::isfinite(request.initial_speed_mps) || request.initial_speed_mps < 0.0 ||
+    !std::isfinite(request.acceleration_mps2) ||
+    !std::isfinite(request.curvature_radpm) ||
+    !std::isfinite(request.stage_dt_sec) || request.stage_dt_sec <= 0.0 ||
+    !std::isfinite(request.elapsed_sec) || request.elapsed_sec < 0.0 ||
+    request.elapsed_sec > request.stage_dt_sec + kKinematicEpsilon)
+  {
+    return std::nullopt;
+  }
+
+  double active_motion_sec = request.elapsed_sec;
+  if (request.acceleration_mps2 < -kKinematicEpsilon) {
+    const double stop_time_sec =
+      request.initial_speed_mps / -request.acceleration_mps2;
+    active_motion_sec = std::min(active_motion_sec, stop_time_sec);
+  }
+  const double travel_distance_m = std::max(
+    0.0,
+    request.initial_speed_mps * active_motion_sec +
+    0.5 * request.acceleration_mps2 * active_motion_sec * active_motion_sec);
+  if (!std::isfinite(travel_distance_m)) {
+    return std::nullopt;
+  }
+
+  FirstStageKinematicResult result;
+  result.pose = request.initial_pose;
+  result.travel_distance_m = travel_distance_m;
+  result.active_motion_sec = active_motion_sec;
+  if (std::abs(request.curvature_radpm) <= kKinematicEpsilon) {
+    result.pose.x_m += travel_distance_m * std::cos(request.initial_pose.yaw_rad);
+    result.pose.y_m += travel_distance_m * std::sin(request.initial_pose.yaw_rad);
+    return result;
+  }
+
+  const double final_yaw =
+    request.initial_pose.yaw_rad + travel_distance_m * request.curvature_radpm;
+  result.pose.x_m +=
+    (std::sin(final_yaw) - std::sin(request.initial_pose.yaw_rad)) /
+    request.curvature_radpm;
+  result.pose.y_m +=
+    (-std::cos(final_yaw) + std::cos(request.initial_pose.yaw_rad)) /
+    request.curvature_radpm;
+  result.pose.yaw_rad = wrap_to_pi(final_yaw);
+  if (
+    !std::isfinite(result.pose.x_m) || !std::isfinite(result.pose.y_m) ||
+    !std::isfinite(result.pose.yaw_rad))
+  {
+    return std::nullopt;
+  }
+  return result;
+}
 
 const char * to_string(const ControlIntent intent) noexcept
 {
@@ -260,6 +381,9 @@ std::string format_physical_wall_certificate_diagnostic(
   }
   if (std::isfinite(diagnostic.lateral_m)) {
     output << ", lateral=" << diagnostic.lateral_m << "m";
+  }
+  if (std::isfinite(diagnostic.lag_m)) {
+    output << ", lag=" << diagnostic.lag_m << "m";
   }
   if (
     std::isfinite(diagnostic.lower_bound_m) &&

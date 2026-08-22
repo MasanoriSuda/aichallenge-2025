@@ -278,8 +278,8 @@ TEST(MpccProgress, ExtractsFiveStatePoseWithoutReconstructingHeading)
   Eigen::VectorXd extended(21);
   extended <<
     0.0, 0.0, 0.01, 4.0, 0.0,
-    0.2, 0.0, -0.17, 4.5, 0.5,
-    0.4, 0.0, 0.23, 5.0, 1.0,
+    0.2, 0.31, -0.17, 4.5, 0.5,
+    0.4, -0.22, 0.23, 5.0, 1.0,
     1.0, 0.10, 4.5,
     0.5, 0.20, 5.0;
 
@@ -289,7 +289,10 @@ TEST(MpccProgress, ExtractsFiveStatePoseWithoutReconstructingHeading)
 
   ASSERT_TRUE(trajectory.has_value());
   ASSERT_EQ(trajectory->heading_offset_rad.size(), 2U);
+  ASSERT_EQ(trajectory->lag_m.size(), 2U);
   EXPECT_DOUBLE_EQ(trajectory->lateral_m[0], 0.2);
+  EXPECT_DOUBLE_EQ(trajectory->lag_m[0], 0.31);
+  EXPECT_DOUBLE_EQ(trajectory->lag_m[1], -0.22);
   EXPECT_DOUBLE_EQ(trajectory->heading_offset_rad[0], -0.17);
   EXPECT_DOUBLE_EQ(trajectory->heading_offset_rad[1], 0.23);
   EXPECT_DOUBLE_EQ(trajectory->velocity_mps[1], 5.0);

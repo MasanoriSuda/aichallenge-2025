@@ -568,6 +568,7 @@ struct ExtendedExecutionTrajectory
 {
   std::vector<double> path_distance_m;
   std::vector<double> lateral_m;
+  std::vector<double> lag_m;
   std::vector<double> heading_offset_rad;
   std::vector<double> velocity_mps;
   std::vector<double> progress_m;

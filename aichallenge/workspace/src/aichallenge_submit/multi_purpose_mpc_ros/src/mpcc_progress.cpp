@@ -1240,6 +1240,7 @@ std::optional<ExtendedExecutionTrajectory> extract_extended_execution_trajectory
   ExtendedExecutionTrajectory result;
   result.path_distance_m = path_distance_m;
   result.lateral_m.reserve(path_distance_m.size());
+  result.lag_m.reserve(path_distance_m.size());
   result.heading_offset_rad.reserve(path_distance_m.size());
   result.velocity_mps.reserve(path_distance_m.size());
   result.progress_m.reserve(path_distance_m.size());
@@ -1255,6 +1256,7 @@ std::optional<ExtendedExecutionTrajectory> extract_extended_execution_trajectory
     const double lower = lateral_lower_m[index];
     const double upper = lateral_upper_m[index];
     const double lateral = primal[state + kExtendedLateralIndex];
+    const double lag = primal[state + kExtendedLagIndex];
     const double heading = primal[state + kExtendedHeadingIndex];
     const double velocity = primal[state + kExtendedVelocityIndex];
     const double progress =
@@ -1269,7 +1271,7 @@ std::optional<ExtendedExecutionTrajectory> extract_extended_execution_trajectory
       return reject(ExecutionTrajectoryRejection::InvalidLateralBounds, stage);
     }
     if (
-      !std::isfinite(lateral) || !std::isfinite(heading) ||
+      !std::isfinite(lateral) || !std::isfinite(lag) || !std::isfinite(heading) ||
       !std::isfinite(velocity) || !std::isfinite(progress))
     {
       return reject(ExecutionTrajectoryRejection::NonFiniteState, stage);
@@ -1284,6 +1286,7 @@ std::optional<ExtendedExecutionTrajectory> extract_extended_execution_trajectory
       return reject(ExecutionTrajectoryRejection::LateralOutOfBounds, stage);
     }
     result.lateral_m.push_back(lateral);
+    result.lag_m.push_back(lag);
     result.heading_offset_rad.push_back(heading);
     result.velocity_mps.push_back(velocity);
     result.progress_m.push_back(progress);

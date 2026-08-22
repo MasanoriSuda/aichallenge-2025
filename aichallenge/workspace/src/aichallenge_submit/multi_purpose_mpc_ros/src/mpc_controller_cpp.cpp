@@ -5342,10 +5342,65 @@ struct ExtendedProgressMpcProblem
   Eigen::SparseMatrix<double> A;
   int N{};
   double progress_origin_m{std::numeric_limits<double>::quiet_NaN()};
+  double initial_lag_m{std::numeric_limits<double>::quiet_NaN()};
   std::size_t wall_aware_reference_adjustment_count{};
   double minimum_wall_tracking_weight_scale{1.0};
   double minimum_wall_tracking_reference_reserve_m{
     std::numeric_limits<double>::infinity()};
+  double first_stage_dt_sec{std::numeric_limits<double>::quiet_NaN()};
+};
+
+struct FirstStageShadowReachabilityDiagnostic
+{
+  bool evaluated{false};
+  bool state_zero_available{false};
+  bool kinematic_rollout_available{false};
+  bool kinematic_wall_valid{false};
+  bool kinematic_wall_clear{false};
+  bool prediction_wall_valid{false};
+  bool prediction_wall_clear{false};
+  bool control_wall_valid{false};
+  bool control_wall_clear{false};
+  double state_zero_position_error_m{std::numeric_limits<double>::quiet_NaN()};
+  double state_zero_yaw_error_rad{std::numeric_limits<double>::quiet_NaN()};
+  double projected_state_zero_lag_m{std::numeric_limits<double>::quiet_NaN()};
+  double projected_state_zero_position_error_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double projected_state_zero_yaw_error_rad{
+    std::numeric_limits<double>::quiet_NaN()};
+  double endpoint_position_error_m{std::numeric_limits<double>::quiet_NaN()};
+  double endpoint_yaw_error_rad{std::numeric_limits<double>::quiet_NaN()};
+  double solved_first_lag_m{std::numeric_limits<double>::quiet_NaN()};
+  double lag_endpoint_position_error_m{std::numeric_limits<double>::quiet_NaN()};
+  double lag_endpoint_yaw_error_rad{std::numeric_limits<double>::quiet_NaN()};
+  double stage_dt_sec{std::numeric_limits<double>::quiet_NaN()};
+  double prediction_delay_sec{std::numeric_limits<double>::quiet_NaN()};
+  double initial_speed_mps{std::numeric_limits<double>::quiet_NaN()};
+  double measured_yaw_rate_radps{std::numeric_limits<double>::quiet_NaN()};
+  double acceleration_mps2{std::numeric_limits<double>::quiet_NaN()};
+  double curvature_radpm{std::numeric_limits<double>::quiet_NaN()};
+  double virtual_progress_speed_mps{std::numeric_limits<double>::quiet_NaN()};
+  double travel_distance_m{std::numeric_limits<double>::quiet_NaN()};
+  recovery_footprint::Pose2D measured_pose;
+  recovery_footprint::Pose2D predicted_control_pose;
+  recovery_footprint::Pose2D reconstructed_state_zero_pose;
+  recovery_footprint::Pose2D projected_state_zero_pose;
+  recovery_footprint::Pose2D solved_first_pose;
+  recovery_footprint::Pose2D solved_first_lag_pose;
+  recovery_footprint::Pose2D integrated_first_pose;
+  std::size_t kinematic_checked_pose_count{};
+  std::size_t kinematic_rejected_path_index{};
+  std::size_t prediction_checked_pose_count{};
+  std::size_t prediction_rejected_path_index{};
+  std::size_t control_checked_pose_count{};
+  std::size_t control_rejected_path_index{};
+  recovery_footprint::RejectReason kinematic_wall_reason{
+    recovery_footprint::RejectReason::InvalidRollout};
+  recovery_footprint::RejectReason prediction_wall_reason{
+    recovery_footprint::RejectReason::InvalidRollout};
+  recovery_footprint::RejectReason control_wall_reason{
+    recovery_footprint::RejectReason::InvalidRollout};
+  std::string detail;
 };
 
 struct SolvedMpccExecutionTrajectory
@@ -5397,6 +5452,7 @@ struct AlignedMpccExecutionTrajectory
   double advanced_distance_m{};
   double minimum_qp_bound_reserve_m{};
   std::vector<double> lateral_m;
+  std::vector<double> lag_m;
   std::vector<double> heading_offset_rad;
   double progress_origin_m{std::numeric_limits<double>::quiet_NaN()};
   std::vector<double> progress_m;
@@ -5543,6 +5599,7 @@ struct TrackCruiseShadowCycleResult
   int lateral_constraint_worst_stage{-1};
   std::optional<mpcc_progress::ActuationProposal> actuation_proposal;
   mpcc_contract::PhysicalWallCertificateDiagnostic physical_wall_diagnostic;
+  FirstStageShadowReachabilityDiagnostic first_stage_reachability;
   std::string status{"not-eligible"};
   std::string detail{"not-evaluated"};
 };
@@ -5714,6 +5771,11 @@ struct MPC
     }
     snapshot->overtake_static_wall_footprint_ = overtake_static_wall_footprint_;
     snapshot->actual_wall_monitor_pose_ = actual_wall_monitor_pose_;
+    snapshot->predicted_execution_pose_ = predicted_execution_pose_;
+    snapshot->execution_prediction_yaw_rate_radps_ =
+      execution_prediction_yaw_rate_radps_;
+    snapshot->execution_prediction_delay_sec_ =
+      execution_prediction_delay_sec_;
     snapshot->v2x_race_session_active_ = v2x_race_session_active_;
     snapshot->v2x_behavior_state = v2x_behavior_state;
     snapshot->last_v2x_behavior_output_ = last_v2x_behavior_output_;
@@ -5922,6 +5984,16 @@ struct MPC
     const recovery_footprint::Pose2D & actual_pose)
   {
     actual_wall_monitor_pose_ = actual_pose;
+  }
+
+  void update_predicted_pose_for_execution_contract(
+    const recovery_footprint::Pose2D & predicted_pose,
+    const double measured_yaw_rate_radps,
+    const double prediction_delay_sec)
+  {
+    predicted_execution_pose_ = predicted_pose;
+    execution_prediction_yaw_rate_radps_ = measured_yaw_rate_radps;
+    execution_prediction_delay_sec_ = prediction_delay_sec;
   }
 
   void update_v_max(const double v_max)
@@ -7285,7 +7357,7 @@ struct MPC
       }
       const AlignedMpccExecutionTrajectory physical_trajectory{
         0.0, 0.0, execution_trajectory->minimum_lateral_bound_reserve_m,
-        execution_trajectory->lateral_m, {},
+        execution_trajectory->lateral_m, {}, {},
         std::numeric_limits<double>::quiet_NaN(), {}, {}};
       std::string physical_wall_reject_reason;
       evaluation.physical_wall_validation_passed =
@@ -18582,7 +18654,8 @@ struct MPC
     const int legacy_nu_N = legacy_nu * N;
     if (
       !legacy.progress_metadata_available || !cfg.progress_contouring.extended_dynamics_enabled ||
-      N <= 0 || model == nullptr || !std::isfinite(model->length) || model->length <= 0.0 ||
+      N <= 0 || model == nullptr || model->reference_path == nullptr ||
+      !std::isfinite(model->length) || model->length <= 0.0 ||
       !std::isfinite(legacy.progress_origin_m) ||
       !std::isfinite(legacy.progress_measured_speed_mps) ||
       legacy.progress_measured_speed_mps < 0.0 ||
@@ -18597,6 +18670,29 @@ struct MPC
       legacy.progress_stage_dt_sec.size() != static_cast<std::size_t>(N))
     {
       reject_reason = "extended MPCC metadata malformed";
+      return std::nullopt;
+    }
+
+    const auto & initial_waypoint = model->reference_path->get_waypoint(
+      legacy.progress_stage_geometry.tracking_waypoint);
+    const auto initial_frenet_pose =
+      mpcc_contract::project_planar_pose_to_frenet(
+      mpcc_contract::PlanarPose{
+        model->temporal_state.x, model->temporal_state.y,
+        model->temporal_state.psi},
+      mpcc_contract::PlanarPose{
+        initial_waypoint.x, initial_waypoint.y, initial_waypoint.psi});
+    if (!initial_frenet_pose.has_value()) {
+      reject_reason = "extended MPCC initial Frenet projection invalid";
+      return std::nullopt;
+    }
+    const double initial_lag_m = legacy.track_cruise_shadow_requested ?
+      initial_frenet_pose->lag_m : 0.0;
+    if (
+      std::abs(initial_lag_m) >
+      cfg.progress_contouring.extended_lag_state_bound_m + 1e-6)
+    {
+      reject_reason = "extended MPCC initial lag exceeds state bound";
       return std::nullopt;
     }
 
@@ -18759,7 +18855,8 @@ struct MPC
 
     Eigen::Matrix<double, nx, 1> x0;
     x0 <<
-      model->spatial_state.e_y, 0.0, model->spatial_state.e_psi,
+      initial_frenet_pose->lateral_m, initial_lag_m,
+      initial_frenet_pose->heading_offset_rad,
       legacy.progress_measured_speed_mps, 0.0;
     Eigen::VectorXd equality = Eigen::VectorXd::Zero(nx_N);
     equality.segment<nx>(0) = -x0;
@@ -18927,9 +19024,11 @@ struct MPC
     return ExtendedProgressMpcProblem{
       std::move(q), std::move(lower), std::move(upper),
       std::move(quadratic_cost), std::move(constraints), N,
-      legacy.progress_origin_m, wall_aware_reference_adjustment_count,
+      legacy.progress_origin_m, initial_lag_m,
+      wall_aware_reference_adjustment_count,
       minimum_wall_tracking_weight_scale,
-      minimum_wall_tracking_reference_reserve_m};
+      minimum_wall_tracking_reference_reserve_m,
+      linearizations.front().stage_dt_sec};
   }
 
   persistent_osqp::SolveOutcome solve_extended_progress_problem(
@@ -19762,7 +19861,7 @@ struct MPC
     return AlignedMpccExecutionTrajectory{
       age_sec, std::max(0.0, advanced_distance_m),
       trajectory.minimum_qp_bound_reserve_m,
-      aligned.lateral_targets_m, {},
+      aligned.lateral_targets_m, {}, {},
       std::numeric_limits<double>::quiet_NaN(), {}, {}};
   }
 
@@ -19854,6 +19953,276 @@ struct MPC
     return knots;
   }
 
+  FirstStageShadowReachabilityDiagnostic diagnose_first_stage_reachability(
+    const AlignedMpccExecutionTrajectory & trajectory,
+    const mpcc_progress::ActuationProposal & proposal,
+    const double solved_first_lag_m,
+    const double initial_speed_mps,
+    const double first_stage_dt_sec,
+    const double course_frame_tolerance_m) const
+  {
+    FirstStageShadowReachabilityDiagnostic diagnostic;
+    diagnostic.evaluated = true;
+    diagnostic.stage_dt_sec = first_stage_dt_sec;
+    diagnostic.prediction_delay_sec = execution_prediction_delay_sec_;
+    diagnostic.initial_speed_mps = initial_speed_mps;
+    diagnostic.measured_yaw_rate_radps = execution_prediction_yaw_rate_radps_;
+    diagnostic.acceleration_mps2 = proposal.acceleration_mps2;
+    diagnostic.curvature_radpm = proposal.curvature_radpm;
+    diagnostic.virtual_progress_speed_mps = proposal.virtual_progress_speed_mps;
+    diagnostic.solved_first_lag_m = solved_first_lag_m;
+    if (
+      model == nullptr || !actual_wall_monitor_pose_.has_value() ||
+      !predicted_execution_pose_.has_value() ||
+      overtake_static_wall_grid_ == nullptr ||
+      !overtake_static_wall_footprint_.valid() ||
+      trajectory.lateral_m.empty() || trajectory.heading_offset_rad.empty() ||
+      trajectory.progress_m.empty() || trajectory.course_frame_knots.empty() ||
+      !std::isfinite(trajectory.progress_origin_m) ||
+      !std::isfinite(initial_speed_mps) || initial_speed_mps < 0.0 ||
+      !std::isfinite(solved_first_lag_m) ||
+      !std::isfinite(execution_prediction_yaw_rate_radps_) ||
+      !std::isfinite(execution_prediction_delay_sec_) ||
+      execution_prediction_delay_sec_ < 0.0 ||
+      !std::isfinite(first_stage_dt_sec) || first_stage_dt_sec <= 0.0)
+    {
+      diagnostic.detail = "first-stage reachability provenance unavailable";
+      return diagnostic;
+    }
+
+    const auto state_zero_frame = mpc_stage_geometry::sample_course_frame(
+      trajectory.course_frame_knots, trajectory.progress_origin_m,
+      course_frame_tolerance_m);
+    const auto first_frame = mpc_stage_geometry::sample_course_frame(
+      trajectory.course_frame_knots, trajectory.progress_m.front(),
+      course_frame_tolerance_m);
+    if (!state_zero_frame.has_value() || !first_frame.has_value()) {
+      diagnostic.detail = "first-stage course frame unavailable";
+      return diagnostic;
+    }
+
+    diagnostic.measured_pose = actual_wall_monitor_pose_.value();
+    diagnostic.predicted_control_pose = predicted_execution_pose_.value();
+    const double measured_lateral_m = model->spatial_state.e_y;
+    const double measured_heading_offset_rad = model->spatial_state.e_psi;
+    if (
+      !std::isfinite(measured_lateral_m) ||
+      !std::isfinite(measured_heading_offset_rad))
+    {
+      diagnostic.detail = "measured Frenet state unavailable";
+      return diagnostic;
+    }
+    diagnostic.reconstructed_state_zero_pose = recovery_footprint::Pose2D{
+      state_zero_frame->x_m -
+      measured_lateral_m * std::sin(state_zero_frame->heading_rad),
+      state_zero_frame->y_m +
+      measured_lateral_m * std::cos(state_zero_frame->heading_rad),
+      wrap_to_pi(state_zero_frame->heading_rad + measured_heading_offset_rad)};
+    diagnostic.solved_first_pose = recovery_footprint::Pose2D{
+      first_frame->x_m -
+      trajectory.lateral_m.front() * std::sin(first_frame->heading_rad),
+      first_frame->y_m +
+      trajectory.lateral_m.front() * std::cos(first_frame->heading_rad),
+      wrap_to_pi(
+        first_frame->heading_rad + trajectory.heading_offset_rad.front())};
+    diagnostic.projected_state_zero_lag_m =
+      (diagnostic.predicted_control_pose.x_m - state_zero_frame->x_m) *
+      std::cos(state_zero_frame->heading_rad) +
+      (diagnostic.predicted_control_pose.y_m - state_zero_frame->y_m) *
+      std::sin(state_zero_frame->heading_rad);
+    diagnostic.projected_state_zero_pose = recovery_footprint::Pose2D{
+      diagnostic.reconstructed_state_zero_pose.x_m +
+      diagnostic.projected_state_zero_lag_m *
+      std::cos(state_zero_frame->heading_rad),
+      diagnostic.reconstructed_state_zero_pose.y_m +
+      diagnostic.projected_state_zero_lag_m *
+      std::sin(state_zero_frame->heading_rad),
+      diagnostic.reconstructed_state_zero_pose.yaw_rad};
+    diagnostic.solved_first_lag_pose = recovery_footprint::Pose2D{
+      diagnostic.solved_first_pose.x_m + solved_first_lag_m *
+      std::cos(first_frame->heading_rad),
+      diagnostic.solved_first_pose.y_m + solved_first_lag_m *
+      std::sin(first_frame->heading_rad),
+      diagnostic.solved_first_pose.yaw_rad};
+    diagnostic.state_zero_position_error_m = std::hypot(
+      diagnostic.predicted_control_pose.x_m -
+      diagnostic.reconstructed_state_zero_pose.x_m,
+      diagnostic.predicted_control_pose.y_m -
+      diagnostic.reconstructed_state_zero_pose.y_m);
+    diagnostic.state_zero_yaw_error_rad = std::abs(wrap_to_pi(
+      diagnostic.predicted_control_pose.yaw_rad -
+      diagnostic.reconstructed_state_zero_pose.yaw_rad));
+    diagnostic.projected_state_zero_position_error_m = std::hypot(
+      diagnostic.predicted_control_pose.x_m -
+      diagnostic.projected_state_zero_pose.x_m,
+      diagnostic.predicted_control_pose.y_m -
+      diagnostic.projected_state_zero_pose.y_m);
+    diagnostic.projected_state_zero_yaw_error_rad = std::abs(wrap_to_pi(
+      diagnostic.predicted_control_pose.yaw_rad -
+      diagnostic.projected_state_zero_pose.yaw_rad));
+    diagnostic.state_zero_available =
+      std::isfinite(diagnostic.state_zero_position_error_m) &&
+      std::isfinite(diagnostic.state_zero_yaw_error_rad);
+
+    const double final_speed_mps = std::max(
+      0.0, initial_speed_mps + proposal.acceleration_mps2 * first_stage_dt_sec);
+    const double maximum_speed_mps = std::max(initial_speed_mps, final_speed_mps);
+    const double rollout_step_m = std::max(
+      1e-3, std::min(0.05, 0.25 * overtake_static_wall_grid_->resolution_m));
+    const std::size_t rollout_steps = std::clamp<std::size_t>(
+      static_cast<std::size_t>(std::ceil(
+        maximum_speed_mps * first_stage_dt_sec / rollout_step_m)),
+      1U, 512U);
+    std::vector<recovery_footprint::Pose2D> prediction_path;
+    std::vector<recovery_footprint::Pose2D> control_path;
+    std::vector<recovery_footprint::Pose2D> kinematic_path;
+    const std::size_t prediction_steps = std::clamp<std::size_t>(
+      static_cast<std::size_t>(std::ceil(
+        initial_speed_mps * execution_prediction_delay_sec_ / rollout_step_m)),
+      1U, 512U);
+    prediction_path.reserve(prediction_steps + 1U);
+    for (std::size_t step = 0U; step <= prediction_steps; ++step) {
+      const double elapsed_sec = execution_prediction_delay_sec_ *
+        static_cast<double>(step) / static_cast<double>(prediction_steps);
+      const auto predicted = mpc_state_prediction::predict_constant_turn_rate(
+        mpc_state_prediction::State2D{
+          diagnostic.measured_pose.x_m, diagnostic.measured_pose.y_m,
+          diagnostic.measured_pose.yaw_rad},
+        initial_speed_mps, execution_prediction_yaw_rate_radps_, elapsed_sec);
+      prediction_path.push_back(recovery_footprint::Pose2D{
+        predicted.x, predicted.y, predicted.yaw});
+    }
+    control_path.reserve(rollout_steps + 1U);
+    for (std::size_t step = 0U; step <= rollout_steps; ++step) {
+      const double elapsed_sec = first_stage_dt_sec *
+        static_cast<double>(step) / static_cast<double>(rollout_steps);
+      const auto integrated =
+        mpcc_contract::integrate_first_stage_constant_curvature(
+        mpcc_contract::FirstStageKinematicRequest{
+          {diagnostic.predicted_control_pose.x_m,
+            diagnostic.predicted_control_pose.y_m,
+            diagnostic.predicted_control_pose.yaw_rad},
+          initial_speed_mps, proposal.acceleration_mps2,
+          proposal.curvature_radpm, first_stage_dt_sec, elapsed_sec});
+      if (!integrated.has_value()) {
+        diagnostic.detail = "first-stage kinematic integration rejected";
+        return diagnostic;
+      }
+      diagnostic.travel_distance_m = integrated->travel_distance_m;
+      control_path.push_back(recovery_footprint::Pose2D{
+        integrated->pose.x_m, integrated->pose.y_m,
+        integrated->pose.yaw_rad});
+    }
+    kinematic_path = prediction_path;
+    kinematic_path.insert(
+      kinematic_path.end(), std::next(control_path.begin()), control_path.end());
+    diagnostic.kinematic_rollout_available = true;
+    diagnostic.integrated_first_pose = kinematic_path.back();
+    diagnostic.endpoint_position_error_m = std::hypot(
+      diagnostic.integrated_first_pose.x_m - diagnostic.solved_first_pose.x_m,
+      diagnostic.integrated_first_pose.y_m - diagnostic.solved_first_pose.y_m);
+    diagnostic.endpoint_yaw_error_rad = std::abs(wrap_to_pi(
+      diagnostic.integrated_first_pose.yaw_rad -
+      diagnostic.solved_first_pose.yaw_rad));
+    diagnostic.lag_endpoint_position_error_m = std::hypot(
+      diagnostic.integrated_first_pose.x_m - diagnostic.solved_first_lag_pose.x_m,
+      diagnostic.integrated_first_pose.y_m - diagnostic.solved_first_lag_pose.y_m);
+    diagnostic.lag_endpoint_yaw_error_rad = std::abs(wrap_to_pi(
+      diagnostic.integrated_first_pose.yaw_rad -
+      diagnostic.solved_first_lag_pose.yaw_rad));
+
+    const auto wall_result = recovery_footprint::evaluate_clear_footprint_path(
+      *overtake_static_wall_grid_, overtake_static_wall_footprint_,
+      kinematic_path, rollout_step_m);
+    const auto prediction_wall_result =
+      recovery_footprint::evaluate_clear_footprint_path(
+      *overtake_static_wall_grid_, overtake_static_wall_footprint_,
+      prediction_path, rollout_step_m);
+    const auto control_wall_result =
+      recovery_footprint::evaluate_clear_footprint_path(
+      *overtake_static_wall_grid_, overtake_static_wall_footprint_,
+      control_path, rollout_step_m);
+    diagnostic.kinematic_wall_valid = wall_result.valid;
+    diagnostic.kinematic_wall_clear = wall_result.valid && wall_result.clear;
+    diagnostic.kinematic_checked_pose_count = wall_result.checked_pose_count;
+    diagnostic.kinematic_rejected_path_index = wall_result.rejected_path_index;
+    diagnostic.kinematic_wall_reason = wall_result.reason;
+    diagnostic.prediction_wall_valid = prediction_wall_result.valid;
+    diagnostic.prediction_wall_clear =
+      prediction_wall_result.valid && prediction_wall_result.clear;
+    diagnostic.prediction_checked_pose_count =
+      prediction_wall_result.checked_pose_count;
+    diagnostic.prediction_rejected_path_index =
+      prediction_wall_result.rejected_path_index;
+    diagnostic.prediction_wall_reason = prediction_wall_result.reason;
+    diagnostic.control_wall_valid = control_wall_result.valid;
+    diagnostic.control_wall_clear =
+      control_wall_result.valid && control_wall_result.clear;
+    diagnostic.control_checked_pose_count = control_wall_result.checked_pose_count;
+    diagnostic.control_rejected_path_index = control_wall_result.rejected_path_index;
+    diagnostic.control_wall_reason = control_wall_result.reason;
+
+    std::ostringstream detail;
+    detail << std::fixed << std::setprecision(3)
+           << "first_stage=start=(" << diagnostic.measured_pose.x_m << ','
+           << diagnostic.measured_pose.y_m << ',' << diagnostic.measured_pose.yaw_rad
+           << "), predicted=(" << diagnostic.predicted_control_pose.x_m << ','
+           << diagnostic.predicted_control_pose.y_m << ','
+           << diagnostic.predicted_control_pose.yaw_rad << "), state0=("
+           << diagnostic.reconstructed_state_zero_pose.x_m << ','
+           << diagnostic.reconstructed_state_zero_pose.y_m << ','
+           << diagnostic.reconstructed_state_zero_pose.yaw_rad
+           << "), state0_error=" << diagnostic.state_zero_position_error_m << "m/"
+           << diagnostic.state_zero_yaw_error_rad << "rad, projected_lag="
+           << diagnostic.projected_state_zero_lag_m << "m, projected_state0=("
+           << diagnostic.projected_state_zero_pose.x_m << ','
+           << diagnostic.projected_state_zero_pose.y_m << ','
+           << diagnostic.projected_state_zero_pose.yaw_rad
+           << "), projected_state0_error="
+           << diagnostic.projected_state_zero_position_error_m << "m/"
+           << diagnostic.projected_state_zero_yaw_error_rad << "rad, solved=("
+           << diagnostic.solved_first_pose.x_m << ','
+           << diagnostic.solved_first_pose.y_m << ','
+           << diagnostic.solved_first_pose.yaw_rad << "), solved_lag="
+           << diagnostic.solved_first_lag_m << "m, solved_lag_pose=("
+           << diagnostic.solved_first_lag_pose.x_m << ','
+           << diagnostic.solved_first_lag_pose.y_m << ','
+           << diagnostic.solved_first_lag_pose.yaw_rad << "), integrated=("
+           << diagnostic.integrated_first_pose.x_m << ','
+           << diagnostic.integrated_first_pose.y_m << ','
+           << diagnostic.integrated_first_pose.yaw_rad
+           << "), endpoint_error=" << diagnostic.endpoint_position_error_m << "m/"
+           << diagnostic.endpoint_yaw_error_rad << "rad, lag_endpoint_error="
+           << diagnostic.lag_endpoint_position_error_m << "m/"
+           << diagnostic.lag_endpoint_yaw_error_rad << "rad, prediction="
+           << diagnostic.prediction_delay_sec << "s/"
+           << diagnostic.measured_yaw_rate_radps << "radps, dt="
+           << diagnostic.stage_dt_sec << "s, v0=" << diagnostic.initial_speed_mps
+           << "mps, a=" << diagnostic.acceleration_mps2 << "mps2, k="
+           << diagnostic.curvature_radpm << "radpm, vtheta="
+           << diagnostic.virtual_progress_speed_mps << "mps, travel="
+           << diagnostic.travel_distance_m << "m, kinematic_wall="
+           << (diagnostic.kinematic_wall_valid ? "valid" : "invalid") << '/'
+           << (diagnostic.kinematic_wall_clear ? "clear" : "blocked") << '/'
+           << recovery_footprint::to_string(diagnostic.kinematic_wall_reason)
+           << ", rejected_index=" << diagnostic.kinematic_rejected_path_index
+           << ", checked=" << diagnostic.kinematic_checked_pose_count
+           << ", prediction_wall="
+           << (diagnostic.prediction_wall_valid ? "valid" : "invalid") << '/'
+           << (diagnostic.prediction_wall_clear ? "clear" : "blocked") << '/'
+           << recovery_footprint::to_string(diagnostic.prediction_wall_reason)
+           << "/" << diagnostic.prediction_rejected_path_index << '/'
+           << diagnostic.prediction_checked_pose_count
+           << ", control_wall="
+           << (diagnostic.control_wall_valid ? "valid" : "invalid") << '/'
+           << (diagnostic.control_wall_clear ? "clear" : "blocked") << '/'
+           << recovery_footprint::to_string(diagnostic.control_wall_reason)
+           << "/" << diagnostic.control_rejected_path_index << '/'
+           << diagnostic.control_checked_pose_count;
+    diagnostic.detail = detail.str();
+    return diagnostic;
+  }
+
   bool solved_mpcc_execution_path_wall_safe(
     const AlignedMpccExecutionTrajectory & trajectory,
     const std::vector<double> & path_distance_m,
@@ -19880,6 +20249,9 @@ struct MPC
       overtake_static_wall_grid_ == nullptr ||
       !overtake_static_wall_footprint_.valid() || horizon_size <= 0 ||
       trajectory.lateral_m.size() != static_cast<std::size_t>(horizon_size) ||
+      (!trajectory.lag_m.empty() &&
+      (trajectory.lag_m.size() != static_cast<std::size_t>(horizon_size) ||
+      trajectory.progress_m.empty())) ||
       (!trajectory.heading_offset_rad.empty() &&
       trajectory.heading_offset_rad.size() !=
       static_cast<std::size_t>(horizon_size)) ||
@@ -19951,6 +20323,7 @@ struct MPC
     for (int i = 0; i < horizon_size; ++i) {
       const std::size_t index = static_cast<std::size_t>(i);
       const double lateral = trajectory.lateral_m[index];
+      const double lag = trajectory.lag_m.empty() ? 0.0 : trajectory.lag_m[index];
       // The current stage bounds already contain the configured wall margin.
       // Shrinking them again rejects a QP-admitted path twice.  The static-map
       // footprint check below still expands by hard_wall_clearance_m and is the
@@ -19961,6 +20334,7 @@ struct MPC
       wall_diagnostic.waypoint_id = ref_wp_id + i;
       wall_diagnostic.path_distance_m = path_distance_m[index];
       wall_diagnostic.lateral_m = lateral;
+      wall_diagnostic.lag_m = lag;
       wall_diagnostic.lower_bound_m = lower;
       wall_diagnostic.upper_bound_m = upper;
       wall_diagnostic.bound_reserve_m =
@@ -19976,7 +20350,7 @@ struct MPC
           wall_diagnostic.reference_progress_m;
       }
       if (
-        !std::isfinite(lateral) || !std::isfinite(lower) ||
+        !std::isfinite(lateral) || !std::isfinite(lag) || !std::isfinite(lower) ||
         !std::isfinite(upper) || lower > upper ||
         lateral < lower - bound_tolerance_m ||
         lateral > upper + bound_tolerance_m)
@@ -20039,10 +20413,20 @@ struct MPC
         return false;
       }
       wall_diagnostic.heading_offset_rad = heading_offset;
+      const auto reconstructed_pose =
+        mpcc_contract::reconstruct_planar_pose_from_frenet(
+        mpcc_contract::PlanarPose{
+          course_x_m, course_y_m, course_heading_rad},
+        mpcc_contract::FrenetPose{lateral, lag, heading_offset});
+      if (!reconstructed_pose.has_value()) {
+        wall_diagnostic.reason =
+          mpcc_contract::PhysicalWallCertificateReason::InvalidInput;
+        reject_reason = "solution Frenet pose reconstruction invalid";
+        return false;
+      }
       const recovery_footprint::Pose2D pose{
-        course_x_m - lateral * std::sin(course_heading_rad),
-        course_y_m + lateral * std::cos(course_heading_rad),
-        wrap_to_pi(course_heading_rad + heading_offset)};
+        reconstructed_pose->x_m, reconstructed_pose->y_m,
+        reconstructed_pose->yaw_rad};
       solved_course_heading_rad.push_back(course_heading_rad);
       solved_course_waypoint_id.push_back(course_waypoint_id);
       wall_diagnostic.pose_x_m = pose.x_m;
@@ -20094,6 +20478,8 @@ struct MPC
             std::numeric_limits<double>::quiet_NaN();
           wall_diagnostic.lateral_m =
             std::numeric_limits<double>::quiet_NaN();
+          wall_diagnostic.lag_m =
+            std::numeric_limits<double>::quiet_NaN();
           wall_diagnostic.lower_bound_m =
             std::numeric_limits<double>::quiet_NaN();
           wall_diagnostic.upper_bound_m =
@@ -20125,6 +20511,8 @@ struct MPC
             solved_course_waypoint_id[failed_stage];
           wall_diagnostic.path_distance_m = path_distance_m[failed_stage];
           wall_diagnostic.lateral_m = trajectory.lateral_m[failed_stage];
+          wall_diagnostic.lag_m = trajectory.lag_m.empty() ? 0.0 :
+            trajectory.lag_m[failed_stage];
           wall_diagnostic.lower_bound_m = lower_bound[static_cast<int>(failed_stage)];
           wall_diagnostic.upper_bound_m = upper_bound[static_cast<int>(failed_stage)];
           wall_diagnostic.bound_reserve_m = std::min(
@@ -20296,7 +20684,7 @@ struct MPC
     }
     const AlignedMpccExecutionTrajectory current_trajectory{
       certificate_age_sec, advanced_distance_m, 0.0,
-      trust_envelope.lateral_targets_m, {},
+      trust_envelope.lateral_targets_m, {}, {},
       std::numeric_limits<double>::quiet_NaN(), {}, {}};
     if (!solved_mpcc_execution_path_wall_safe(
         current_trajectory, current_path_distances, ref_wp_id, horizon_size,
@@ -20354,7 +20742,7 @@ struct MPC
     }
     const AlignedMpccExecutionTrajectory trajectory{
       0.0, 0.0, std::numeric_limits<double>::infinity(),
-      std::move(lateral_m), {},
+      std::move(lateral_m), {}, {},
       std::numeric_limits<double>::quiet_NaN(), {}, {}};
     const double bound_tolerance_m =
       std::isfinite(maximum_constraint_violation) ?
@@ -20412,7 +20800,7 @@ struct MPC
     }
     const AlignedMpccExecutionTrajectory trajectory{
       0.0, 0.0, std::numeric_limits<double>::infinity(),
-      std::move(lateral_m), {},
+      std::move(lateral_m), {}, {},
       std::numeric_limits<double>::quiet_NaN(), {}, {}};
     const double bound_tolerance_m =
       std::isfinite(maximum_constraint_violation) ?
@@ -20536,6 +20924,17 @@ struct MPC
       window.solve_ms_samples[window.timing_sample_count] = result.solve_ms;
       window.total_ms_samples[window.timing_sample_count] = result.total_ms;
       ++window.timing_sample_count;
+    }
+
+    if (result.first_stage_reachability.evaluated) {
+      RCLCPP_WARN(
+        rclcpp::get_logger("mpc_controller"),
+        "Track/Cruise MPCC first-stage reachability: decision=%lu, "
+        "certificate_reason=%s, %s, authority=shadow, selected=0",
+        static_cast<unsigned long>(result.decision_id),
+        mpcc_contract::physical_wall_certificate_reason_name(
+          result.physical_wall_diagnostic.reason),
+        result.first_stage_reachability.detail.c_str());
     }
 
     std::string shadow_status_key = result.status;
@@ -20865,7 +21264,8 @@ struct MPC
       result.conversion_succeeded = true;
       AlignedMpccExecutionTrajectory shadow_trajectory{
         0.0, 0.0, pose_trajectory->minimum_lateral_bound_reserve_m,
-        pose_trajectory->lateral_m, pose_trajectory->heading_offset_rad,
+        pose_trajectory->lateral_m, pose_trajectory->lag_m,
+        pose_trajectory->heading_offset_rad,
         std::numeric_limits<double>::quiet_NaN(), {}, {}};
       shadow_trajectory.progress_origin_m = extended_problem->progress_origin_m;
       shadow_trajectory.progress_m = pose_trajectory->progress_m;
@@ -20891,10 +21291,30 @@ struct MPC
       result.certificate_ms = std::chrono::duration<double, std::milli>(
         SteadyClock::now() - certificate_started).count();
       if (!result.physically_certified) {
+        const bool first_stage_endpoint_contact =
+          result.physical_wall_diagnostic.reason ==
+          mpcc_contract::PhysicalWallCertificateReason::HardWallContact &&
+          result.physical_wall_diagnostic.stage_index == 0;
+        const bool first_stage_connector_contact =
+          result.physical_wall_diagnostic.reason ==
+          mpcc_contract::PhysicalWallCertificateReason::SweptPathViolation &&
+          result.physical_wall_diagnostic.swept_rejected_path_index == 1U;
+        if (first_stage_endpoint_contact || first_stage_connector_contact)
+        {
+          result.first_stage_reachability = diagnose_first_stage_reachability(
+            shadow_trajectory, result.actuation_proposal.value(),
+            pose_trajectory->lag_m.front(),
+            problem.progress_measured_speed_mps,
+            extended_problem->first_stage_dt_sec,
+            extraction_tolerance);
+        }
         result.status = "physical-certificate-reject";
         result.detail = certificate_reason + ", " +
           mpcc_contract::format_physical_wall_certificate_diagnostic(
           result.physical_wall_diagnostic);
+        if (!result.first_stage_reachability.detail.empty()) {
+          result.detail += ", " + result.first_stage_reachability.detail;
+        }
         return finish();
       }
       const int expected_production_size =
@@ -22353,6 +22773,11 @@ struct MPC
   std::uint64_t physical_wall_envelope_cache_evaluation_count_{0U};
   std::uint64_t physical_wall_envelope_cache_scanned_pose_count_{0U};
   std::optional<recovery_footprint::Pose2D> actual_wall_monitor_pose_;
+  std::optional<recovery_footprint::Pose2D> predicted_execution_pose_;
+  double execution_prediction_yaw_rate_radps_{
+    std::numeric_limits<double>::quiet_NaN()};
+  double execution_prediction_delay_sec_{
+    std::numeric_limits<double>::quiet_NaN()};
   bool use_obstacle_avoidance{};
   bool use_path_constraints_topic{};
   bool v2x_race_session_active_{true};
@@ -49182,6 +49607,9 @@ private:
     // odometry pose even when the MPC state is projected forward for latency.
     mpc_->update_actual_pose_for_wall_monitor(
       recovery_footprint::Pose2D{pose.x, pose.y, pose.theta});
+    mpc_->update_predicted_pose_for_execution_contract(
+      recovery_footprint::Pose2D{mpc_pose.x, mpc_pose.y, mpc_pose.theta},
+      yaw_rate, state_prediction_active_ ? mpc_cfg_.state_prediction_delay_sec : 0.0);
     mpc_->set_v2x_race_session_active(
       overtake_core::is_v2x_behavior_session_active(
         awsim_state_tracking_enabled_, race_started_,

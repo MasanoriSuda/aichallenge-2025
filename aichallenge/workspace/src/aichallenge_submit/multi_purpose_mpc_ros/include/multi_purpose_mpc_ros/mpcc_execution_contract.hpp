@@ -97,6 +97,51 @@ struct PhysicalWallPathFailureLocation
 PhysicalWallPathFailureLocation resolve_swept_path_failure_origin(
   std::size_t rejected_path_index, std::size_t horizon_steps) noexcept;
 
+struct PlanarPose
+{
+  double x_m{};
+  double y_m{};
+  double yaw_rad{};
+};
+
+/// Complete Frenet pose relative to one course-frame pose.  `lag_m` is the
+/// signed along-track displacement from the virtual progress frame; it must
+/// not be silently replaced by zero when constructing a five-state MPCC x0.
+struct FrenetPose
+{
+  double lateral_m{};
+  double lag_m{};
+  double heading_offset_rad{};
+};
+
+std::optional<FrenetPose> project_planar_pose_to_frenet(
+  const PlanarPose & pose, const PlanarPose & course_frame) noexcept;
+
+std::optional<PlanarPose> reconstruct_planar_pose_from_frenet(
+  const PlanarPose & course_frame, const FrenetPose & state) noexcept;
+
+struct FirstStageKinematicRequest
+{
+  PlanarPose initial_pose;
+  double initial_speed_mps{};
+  double acceleration_mps2{};
+  double curvature_radpm{};
+  double stage_dt_sec{};
+  double elapsed_sec{};
+};
+
+struct FirstStageKinematicResult
+{
+  PlanarPose pose;
+  double travel_distance_m{};
+  double active_motion_sec{};
+};
+
+/// Integrate the executable first MPCC input from the measured world pose.
+/// Forward speed is not allowed to become negative during a braking stage.
+std::optional<FirstStageKinematicResult> integrate_first_stage_constant_curvature(
+  const FirstStageKinematicRequest & request) noexcept;
+
 struct PhysicalWallCertificateDiagnostic
 {
   PhysicalWallCertificateReason reason{
@@ -105,6 +150,7 @@ struct PhysicalWallCertificateDiagnostic
   int waypoint_id{-1};
   double path_distance_m{std::numeric_limits<double>::quiet_NaN()};
   double lateral_m{std::numeric_limits<double>::quiet_NaN()};
+  double lag_m{std::numeric_limits<double>::quiet_NaN()};
   double lower_bound_m{std::numeric_limits<double>::quiet_NaN()};
   double upper_bound_m{std::numeric_limits<double>::quiet_NaN()};
   double bound_reserve_m{std::numeric_limits<double>::quiet_NaN()};

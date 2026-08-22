@@ -77,6 +77,15 @@ Prove the five-state formulation can represent ordinary racing without involving
   `.steering/20260822-track-cruise-wall-bound-contract/validation.md`.
 - Slice 3 remains blocked: the first-stage reachability/stitch defect must be resolved, and authority
   handoff from a legacy-created unsafe current pose needs an explicit fail-closed/recovery contract.
+- `.steering/20260822-track-cruise-first-stage-reachability` completed the missing complete-Frenet
+  state contract in Track/Cruise shadow. The delayed control pose now supplies initial `e_lag`, solved
+  lag is preserved, and lag-aware world reconstruction is used by the shadow wall certificate.
+- `output/20260822-194818` classified all three remaining first-stage events as legacy-created
+  delay-prefix collisions: raw-to-predicted motion was blocked and the new control rollout began in
+  collision at index zero. These were not interpolation-only false positives and were not relaxed.
+- Slice 3 is no longer blocked by unknown first-stage provenance. Authority promotion still requires
+  an explicit decision because it must begin from fresh canonical certification and may not perform
+  a late cycle-local transfer after legacy control has consumed the reachable prefix.
 
 ## Slice 3: Track/Cruise authority promotion
 

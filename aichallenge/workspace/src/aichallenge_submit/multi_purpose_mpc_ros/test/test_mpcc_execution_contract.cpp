@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <cstdint>
 #include <limits>
 #include <string>
@@ -195,6 +196,7 @@ TEST(MpccExecutionContract, PhysicalWallCertificateDiagnosticPreservesFailurePro
   diagnostic.waypoint_id = 123;
   diagnostic.path_distance_m = 2.5;
   diagnostic.lateral_m = 0.8;
+  diagnostic.lag_m = -0.4;
   diagnostic.lower_bound_m = -1.0;
   diagnostic.upper_bound_m = 1.0;
   diagnostic.bound_reserve_m = 0.2;
@@ -215,6 +217,7 @@ TEST(MpccExecutionContract, PhysicalWallCertificateDiagnosticPreservesFailurePro
   EXPECT_NE(formatted.find("wp=123"), std::string::npos);
   EXPECT_NE(formatted.find("distance=2.500m"), std::string::npos);
   EXPECT_NE(formatted.find("lateral=0.800m"), std::string::npos);
+  EXPECT_NE(formatted.find("lag=-0.400m"), std::string::npos);
   EXPECT_NE(formatted.find("bounds=[-1.000,1.000]m"), std::string::npos);
   EXPECT_NE(formatted.find("reserve=0.200m"), std::string::npos);
   EXPECT_NE(formatted.find("heading_offset=0.100rad"), std::string::npos);
@@ -230,6 +233,94 @@ TEST(MpccExecutionContract, NamesMissingSolvedProgressCourseFrame)
     contract::physical_wall_certificate_reason_name(
       contract::PhysicalWallCertificateReason::CourseFrameUnavailable),
     "course-frame-unavailable");
+}
+
+TEST(MpccExecutionContract, ProjectsWorldPoseIntoCompleteFrenetState)
+{
+  const auto state = contract::project_planar_pose_to_frenet(
+    contract::PlanarPose{9.5, 22.0, 0.5 * M_PI + 0.2},
+    contract::PlanarPose{10.0, 20.0, 0.5 * M_PI});
+
+  ASSERT_TRUE(state.has_value());
+  EXPECT_NEAR(state->lateral_m, 0.5, 1e-12);
+  EXPECT_NEAR(state->lag_m, 2.0, 1e-12);
+  EXPECT_NEAR(state->heading_offset_rad, 0.2, 1e-12);
+}
+
+TEST(MpccExecutionContract, FrenetProjectionAndReconstructionAreInverse)
+{
+  const contract::PlanarPose course_frame{13.0, -4.0, -2.4};
+  const contract::FrenetPose state{0.37, -0.62, 0.19};
+
+  const auto world = contract::reconstruct_planar_pose_from_frenet(
+    course_frame, state);
+  ASSERT_TRUE(world.has_value());
+  const auto round_trip = contract::project_planar_pose_to_frenet(
+    world.value(), course_frame);
+
+  ASSERT_TRUE(round_trip.has_value());
+  EXPECT_NEAR(round_trip->lateral_m, state.lateral_m, 1e-12);
+  EXPECT_NEAR(round_trip->lag_m, state.lag_m, 1e-12);
+  EXPECT_NEAR(round_trip->heading_offset_rad, state.heading_offset_rad, 1e-12);
+}
+
+TEST(MpccExecutionContract, FrenetPoseContractRejectsNonfiniteInput)
+{
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_FALSE(contract::project_planar_pose_to_frenet(
+    contract::PlanarPose{nan, 0.0, 0.0},
+    contract::PlanarPose{0.0, 0.0, 0.0}).has_value());
+  EXPECT_FALSE(contract::reconstruct_planar_pose_from_frenet(
+    contract::PlanarPose{0.0, 0.0, 0.0},
+    contract::FrenetPose{0.0, nan, 0.0}).has_value());
+}
+
+TEST(MpccExecutionContract, IntegratesFirstStageStraightWithAcceleration)
+{
+  const auto result = contract::integrate_first_stage_constant_curvature(
+    contract::FirstStageKinematicRequest{
+      {1.0, 2.0, 0.5}, 4.0, 1.0, 0.0, 0.2, 0.2});
+
+  ASSERT_TRUE(result.has_value());
+  EXPECT_NEAR(result->travel_distance_m, 0.82, 1e-12);
+  EXPECT_NEAR(result->pose.x_m, 1.0 + 0.82 * std::cos(0.5), 1e-12);
+  EXPECT_NEAR(result->pose.y_m, 2.0 + 0.82 * std::sin(0.5), 1e-12);
+  EXPECT_NEAR(result->pose.yaw_rad, 0.5, 1e-12);
+}
+
+TEST(MpccExecutionContract, IntegratesFirstStageConstantCurvatureArc)
+{
+  const auto result = contract::integrate_first_stage_constant_curvature(
+    contract::FirstStageKinematicRequest{
+      {0.0, 0.0, 0.0}, 2.0, 0.0, 0.5, 1.0, 1.0});
+
+  ASSERT_TRUE(result.has_value());
+  EXPECT_NEAR(result->travel_distance_m, 2.0, 1e-12);
+  EXPECT_NEAR(result->pose.x_m, std::sin(1.0) / 0.5, 1e-12);
+  EXPECT_NEAR(result->pose.y_m, (1.0 - std::cos(1.0)) / 0.5, 1e-12);
+  EXPECT_NEAR(result->pose.yaw_rad, 1.0, 1e-12);
+}
+
+TEST(MpccExecutionContract, FirstStageIntegrationStopsBeforeVelocityReverses)
+{
+  const auto result = contract::integrate_first_stage_constant_curvature(
+    contract::FirstStageKinematicRequest{
+      {0.0, 0.0, 0.0}, 1.0, -2.0, 0.0, 1.0, 1.0});
+
+  ASSERT_TRUE(result.has_value());
+  EXPECT_NEAR(result->travel_distance_m, 0.25, 1e-12);
+  EXPECT_NEAR(result->pose.x_m, 0.25, 1e-12);
+  EXPECT_NEAR(result->pose.y_m, 0.0, 1e-12);
+}
+
+TEST(MpccExecutionContract, RejectsInvalidFirstStageKinematicInput)
+{
+  EXPECT_FALSE(contract::integrate_first_stage_constant_curvature(
+      contract::FirstStageKinematicRequest{
+        {0.0, 0.0, 0.0}, -1.0, 0.0, 0.0, 0.1, 0.1}).has_value());
+  EXPECT_FALSE(contract::integrate_first_stage_constant_curvature(
+      contract::FirstStageKinematicRequest{
+        {0.0, 0.0, 0.0}, 1.0, 0.0, 0.0, 0.1, 0.2}).has_value());
 }
 
 TEST(MpccExecutionContract, CertifiedSolutionRequiresEveryCertificate)

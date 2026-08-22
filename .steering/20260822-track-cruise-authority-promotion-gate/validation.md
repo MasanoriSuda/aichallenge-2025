@@ -1,10 +1,12 @@
 # Validation status
 
-## Static status at `e4b5306`
+## Static status at `5bae30b`
 
 - Build: 25 packages passed.
 - Complete package CTest: 35/35 passed.
-- Test result: 1598 tests, 0 errors, 0 failures, 0 skipped.
+- Test result: 1,571 tests, 0 errors, 0 failures, 0 skipped.
+- Current-intent failure-first tests demonstrated and then rejected Track/Cruise cross-intent
+  retained adoption and non-Track/Cruise current requests.
 - Canonical plan actuation is read only by Track/Cruise shadow evaluation.
 - The final command publisher remains unchanged.
 - User-owned `aichallenge/result-summary.json` remains uncommitted and untouched.

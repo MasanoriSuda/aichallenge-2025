@@ -3,7 +3,7 @@
 ## Baseline
 
 - Branch: `develop_july`
-- Baseline commit: `e4b5306`
+- Baseline commit: `5bae30b`
 - Preserve `aichallenge/result-summary.json`.
 
 ## Purpose
@@ -19,7 +19,8 @@ from the legacy three-state path to canonical five-state MPCC.
 - direct certified-primal extraction without legacy flattening;
 - Track/Cruise shadow store population;
 - exact fresh cursor, current proof and selector admission;
-- exact cursor-to-actuation extraction and shadow round-trip check.
+- exact cursor-to-actuation extraction and shadow round-trip check;
+- explicit current Track/Cruise supervisor intent and exact candidate-intent matching.
 
 ## Promotion blockers
 
@@ -27,9 +28,7 @@ from the legacy three-state path to canonical five-state MPCC.
 2. Retained execution has no world-frame current-pose/current-observation revalidation implementation.
 3. Retained lateral bounds must be aligned by absolute progress; indexing old plan stages against
    current problem stages is not a valid proof.
-4. Current Track/Cruise intent must be an explicit selector precondition before a retained plan can
-   continue.
-5. The final publisher still consumes the legacy solution. Switching it is an explicit authority
+4. The final publisher still consumes the legacy solution. Switching it is an explicit authority
    change and requires approval plus a rollback run.
 
 ## Do not do before the gate passes

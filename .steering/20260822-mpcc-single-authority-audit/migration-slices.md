@@ -119,9 +119,13 @@ No cycle-local transfer to three-state or legacy MPC is allowed after promotion.
   lifecycle needed to back those identities. It atomically stores all five-state predictions and
   three-input stages, rejects stale async replacement, advances an exact non-clamping cursor and
   builds candidates only from current physical revalidation of the actual remaining window.
-- Runtime promotion is not yet performed. The remaining implementation must create an atomic full
-  Track/Cruise plan from the certified shadow primal, revalidate its current execution window, and
-  connect the existing store/selector to final output while deleting Track/Cruise legacy fallback.
+- `.steering/20260822-track-cruise-canonical-plan-extraction` adds a runtime-disconnected adapter
+  that constructs the complete immutable plan directly from the certified five-state primal. It
+  preserves lag, acceleration, virtual-progress input and exact stage timing; it does not use the
+  lossy legacy conversion.
+- Runtime promotion is not yet performed. The remaining implementation must populate the atomic
+  store from Track/Cruise shadow results, revalidate its current execution window, and connect the
+  existing store/selector to final output while deleting Track/Cruise legacy fallback.
 - This connection is an explicit authority boundary and requires approval before implementation.
 
 ### Delete/replace

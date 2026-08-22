@@ -194,6 +194,69 @@ std::optional<PreparedProblem> prepare_problem(
 
 } // namespace
 
+std::optional<ConstraintResidualReport> evaluate_constraint_residuals(
+  const Eigen::SparseMatrix<double> & constraints,
+  const Eigen::VectorXd & primal,
+  const Eigen::VectorXd & lower_bound,
+  const Eigen::VectorXd & upper_bound,
+  const double absolute_tolerance,
+  const double relative_tolerance,
+  const double tolerance_multiplier) noexcept
+{
+  if (
+    constraints.rows() <= 0 || constraints.cols() != primal.size() ||
+    constraints.rows() != lower_bound.size() ||
+    lower_bound.size() != upper_bound.size() || !primal.allFinite() ||
+    !std::isfinite(absolute_tolerance) || absolute_tolerance < 0.0 ||
+    !std::isfinite(relative_tolerance) || relative_tolerance < 0.0 ||
+    !std::isfinite(tolerance_multiplier) || tolerance_multiplier <= 0.0)
+  {
+    return std::nullopt;
+  }
+  const Eigen::VectorXd values = constraints * primal;
+  if (!values.allFinite()) {
+    return std::nullopt;
+  }
+
+  ConstraintResidualReport report;
+  report.violation = Eigen::VectorXd::Zero(values.size());
+  report.tolerance = Eigen::VectorXd::Zero(values.size());
+  for (Eigen::Index row = 0; row < values.size(); ++row) {
+    if (
+      std::isnan(lower_bound[row]) || std::isnan(upper_bound[row]) ||
+      lower_bound[row] > upper_bound[row])
+    {
+      return std::nullopt;
+    }
+    double projected = values[row];
+    if (std::isfinite(lower_bound[row])) {
+      projected = std::max(projected, lower_bound[row]);
+    }
+    if (std::isfinite(upper_bound[row])) {
+      projected = std::min(projected, upper_bound[row]);
+    }
+    const double violation = std::abs(values[row] - projected);
+    const double scale = std::max(std::abs(values[row]), std::abs(projected));
+    const double tolerance = tolerance_multiplier *
+      (absolute_tolerance + relative_tolerance * scale);
+    if (!std::isfinite(violation) || !std::isfinite(tolerance)) {
+      return std::nullopt;
+    }
+    const double normalized = tolerance > 0.0 ?
+      violation / tolerance :
+      (violation == 0.0 ? 0.0 : std::numeric_limits<double>::infinity());
+    report.violation[row] = violation;
+    report.tolerance[row] = tolerance;
+    report.maximum_absolute_violation = std::max(
+      report.maximum_absolute_violation, violation);
+    if (normalized > report.maximum_normalized_violation) {
+      report.maximum_normalized_violation = normalized;
+      report.maximum_normalized_row = static_cast<int>(row);
+    }
+  }
+  return report;
+}
+
 std::optional<WarmStart>
 shift_mpc_warm_start(
   const WarmStart & previous, const std::size_t horizon_steps,
@@ -590,10 +653,13 @@ SolveOutcome PersistentOsqpSolver::solve(
     return outcome;
   }
 
-  const Eigen::VectorXd constraint_values = prepared->constraints * primal;
-  if (constraint_values.size() != lower_bound.size() ||
-    !constraint_values.allFinite())
-  {
+  const double inaccurate_multiplier =
+    info->status_val == OSQP_SOLVED_INACCURATE ? 10.0 : 1.0;
+  const auto residual_report = evaluate_constraint_residuals(
+    prepared->constraints, primal, lower_bound, upper_bound,
+    static_cast<double>(impl_->settings.eps_abs),
+    static_cast<double>(impl_->settings.eps_rel), inaccurate_multiplier);
+  if (!residual_report.has_value()) {
     outcome.failure_detail =
       "stage=constraint_check, reason=invalid projected constraints, " +
       describe_info(info);
@@ -602,7 +668,7 @@ SolveOutcome PersistentOsqpSolver::solve(
     outcome.telemetry.total_ms = elapsed_ms(total_start);
     return outcome;
   }
-  double maximum_violation = 0.0;
+  const Eigen::VectorXd constraint_values = prepared->constraints * primal;
   double maximum_projected_absolute = 0.0;
   for (Eigen::Index index = 0; index < constraint_values.size(); ++index) {
     double projected = constraint_values[index];
@@ -612,22 +678,19 @@ SolveOutcome PersistentOsqpSolver::solve(
     if (std::isfinite(upper_bound[index])) {
       projected = std::min(projected, upper_bound[index]);
     }
-    maximum_violation = std::max(
-      maximum_violation, std::abs(constraint_values[index] - projected));
     maximum_projected_absolute =
       std::max(maximum_projected_absolute, std::abs(projected));
   }
   const double constraint_scale = std::max(
     constraint_values.cwiseAbs().maxCoeff(), maximum_projected_absolute);
-  const double inaccurate_multiplier =
-    info->status_val == OSQP_SOLVED_INACCURATE ? 10.0 : 1.0;
   const double tolerance =
     inaccurate_multiplier *
     (static_cast<double>(impl_->settings.eps_abs) +
     static_cast<double>(impl_->settings.eps_rel) * constraint_scale);
-  if (maximum_violation > tolerance) {
+  if (residual_report->maximum_absolute_violation > tolerance) {
     std::ostringstream detail;
-    detail << "stage=constraint_check, max_violation=" << maximum_violation
+    detail << "stage=constraint_check, max_violation="
+           << residual_report->maximum_absolute_violation
            << ", tolerance=" << tolerance << ", " << describe_info(info);
     outcome.failure_detail = detail.str();
     impl_->reset();
@@ -638,7 +701,11 @@ SolveOutcome PersistentOsqpSolver::solve(
 
   outcome.result =
     SolveResult{std::move(primal), std::move(dual),
-    static_cast<int>(info->status_val), maximum_violation};
+    static_cast<int>(info->status_val),
+    residual_report->maximum_absolute_violation,
+    residual_report->violation, residual_report->tolerance,
+    residual_report->maximum_normalized_violation,
+    residual_report->maximum_normalized_row};
   outcome.telemetry.total_ms = elapsed_ms(total_start);
   return outcome;
 }

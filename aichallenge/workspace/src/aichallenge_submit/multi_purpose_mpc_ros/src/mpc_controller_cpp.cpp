@@ -5531,6 +5531,13 @@ struct TrackCruiseShadowCycleResult
   double lateral_max_difference_m{std::numeric_limits<double>::quiet_NaN()};
   double terminal_progress_m{std::numeric_limits<double>::quiet_NaN()};
   double terminal_velocity_mps{std::numeric_limits<double>::quiet_NaN()};
+  double lateral_constraint_maximum_violation_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double lateral_constraint_maximum_tolerance_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double lateral_constraint_maximum_normalized_violation{
+    std::numeric_limits<double>::quiet_NaN()};
+  int lateral_constraint_worst_stage{-1};
   std::optional<mpcc_progress::ActuationProposal> actuation_proposal;
   mpcc_contract::PhysicalWallCertificateDiagnostic physical_wall_diagnostic;
   std::string status{"not-eligible"};
@@ -20322,6 +20329,13 @@ struct MPC
         (result.warm_start_applied ? "1" : "0") + ", reset=" +
         (result.solver_context_reset ? "1" : "0") + "/" +
         race_mpcc::shadow_warm_start_reset_reason_name(result.reset_reason) +
+        ", lateral_constraint=" +
+        std::to_string(result.lateral_constraint_maximum_violation_m) + "/" +
+        std::to_string(result.lateral_constraint_maximum_tolerance_m) +
+        "m, normalized=" +
+        std::to_string(
+        result.lateral_constraint_maximum_normalized_violation) +
+        ", stage=" + std::to_string(result.lateral_constraint_worst_stage) +
         ", solve_ms=" + std::to_string(result.solve_ms) +
         ", total_ms=" + std::to_string(result.total_ms) +
         ", authority=shadow, selected=0";
@@ -20539,12 +20553,35 @@ struct MPC
       }
       result.solved = true;
       result.finite = outcome.result->primal.allFinite();
+      const auto lateral_constraint_contract =
+        mpcc_progress::evaluate_extended_lateral_constraint_contract(
+        outcome.result->constraint_violation,
+        outcome.result->constraint_tolerance, problem.N);
       result.constraints_satisfied =
-        std::isfinite(outcome.result->maximum_constraint_violation) &&
-        outcome.result->maximum_constraint_violation >= 0.0;
+        lateral_constraint_contract.valid && lateral_constraint_contract.satisfied;
+      result.lateral_constraint_maximum_violation_m =
+        lateral_constraint_contract.maximum_violation_m;
+      result.lateral_constraint_maximum_tolerance_m =
+        lateral_constraint_contract.maximum_tolerance_m;
+      result.lateral_constraint_maximum_normalized_violation =
+        lateral_constraint_contract.maximum_normalized_violation;
+      result.lateral_constraint_worst_stage =
+        lateral_constraint_contract.worst_stage;
       if (!result.finite || !result.constraints_satisfied) {
         result.status = result.finite ? "constraint-reject" : "nonfinite-result";
-        result.detail = "shadow solution failed finite/constraint contract";
+        std::ostringstream detail;
+        detail << "shadow solution failed lateral constraint contract: valid="
+               << (lateral_constraint_contract.valid ? 1 : 0)
+               << ", stage=" << lateral_constraint_contract.worst_stage
+               << ", violation="
+               << lateral_constraint_contract.maximum_violation_m
+               << "m, tolerance="
+               << lateral_constraint_contract.maximum_tolerance_m
+               << "m, normalized="
+               << lateral_constraint_contract.maximum_normalized_violation
+               << ", global_violation="
+               << outcome.result->maximum_constraint_violation;
+        result.detail = detail.str();
         return finish();
       }
       result.actuation_proposal = mpcc_progress::extract_actuation_proposal(
@@ -20575,7 +20612,7 @@ struct MPC
       }
       mpcc_progress::ExecutionTrajectoryDiagnostic pose_diagnostic;
       const double extraction_tolerance = std::max(
-        1e-5, outcome.result->maximum_constraint_violation + 1e-6);
+        1e-5, lateral_constraint_contract.maximum_tolerance_m);
       const auto pose_trajectory =
         mpcc_progress::extract_extended_execution_trajectory(
         outcome.result->primal, problem.N, path_distance_m,
@@ -20617,7 +20654,6 @@ struct MPC
           result.physical_wall_diagnostic);
         return finish();
       }
-
       const int expected_production_size =
         legacy_nx * (problem.N + 1) + legacy_nu * problem.N;
       if (

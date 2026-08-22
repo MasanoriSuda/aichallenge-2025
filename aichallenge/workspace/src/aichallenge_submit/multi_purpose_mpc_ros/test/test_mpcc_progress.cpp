@@ -314,6 +314,76 @@ TEST(MpccProgress, RejectsNonfiniteFiveStatePoseWithStageProvenance)
   EXPECT_EQ(diagnostic.stage, 0);
 }
 
+TEST(MpccProgress, ChecksOnlyFiveStatePredictedLateralRowsInTheirOwnUnits)
+{
+  constexpr int horizon = 2;
+  constexpr int state_rows =
+    multi_purpose_mpc_ros::mpcc_progress::kExtendedStateDimension * (horizon + 1);
+  constexpr int variable_rows = state_rows +
+    multi_purpose_mpc_ros::mpcc_progress::kExtendedInputDimension * horizon;
+  constexpr int constraint_rows = state_rows + variable_rows + horizon;
+  Eigen::VectorXd violation = Eigen::VectorXd::Zero(constraint_rows);
+  Eigen::VectorXd tolerance = Eigen::VectorXd::Constant(constraint_rows, 0.01);
+  const int progress_equality_row =
+    multi_purpose_mpc_ros::mpcc_progress::kExtendedProgressIndex;
+  const int stage_one_lateral = state_rows +
+    multi_purpose_mpc_ros::mpcc_progress::kExtendedStateDimension +
+    multi_purpose_mpc_ros::mpcc_progress::kExtendedLateralIndex;
+  const int stage_two_lateral = state_rows +
+    2 * multi_purpose_mpc_ros::mpcc_progress::kExtendedStateDimension +
+    multi_purpose_mpc_ros::mpcc_progress::kExtendedLateralIndex;
+  violation[progress_equality_row] = 0.5;
+  tolerance[progress_equality_row] = 1.0;
+  violation[stage_one_lateral] = 0.004;
+  tolerance[stage_one_lateral] = 0.005;
+  violation[stage_two_lateral] = 0.02;
+  tolerance[stage_two_lateral] = 0.006;
+
+  const auto contract =
+    multi_purpose_mpc_ros::mpcc_progress::
+    evaluate_extended_lateral_constraint_contract(
+    violation, tolerance, horizon);
+
+  EXPECT_TRUE(contract.valid);
+  EXPECT_FALSE(contract.satisfied);
+  EXPECT_EQ(contract.worst_stage, 1);
+  EXPECT_DOUBLE_EQ(contract.maximum_violation_m, 0.02);
+  EXPECT_DOUBLE_EQ(contract.maximum_tolerance_m, 0.006);
+  EXPECT_GT(contract.maximum_normalized_violation, 3.0);
+}
+
+TEST(MpccProgress, AcceptsFiveStateLateralRowsWithinReportedTolerance)
+{
+  constexpr int horizon = 2;
+  constexpr int state_rows =
+    multi_purpose_mpc_ros::mpcc_progress::kExtendedStateDimension * (horizon + 1);
+  constexpr int variable_rows = state_rows +
+    multi_purpose_mpc_ros::mpcc_progress::kExtendedInputDimension * horizon;
+  constexpr int constraint_rows = state_rows + variable_rows + horizon;
+  Eigen::VectorXd violation = Eigen::VectorXd::Zero(constraint_rows);
+  Eigen::VectorXd tolerance = Eigen::VectorXd::Constant(constraint_rows, 0.005);
+
+  const auto contract =
+    multi_purpose_mpc_ros::mpcc_progress::
+    evaluate_extended_lateral_constraint_contract(
+    violation, tolerance, horizon);
+
+  EXPECT_TRUE(contract.valid);
+  EXPECT_TRUE(contract.satisfied);
+  EXPECT_DOUBLE_EQ(contract.maximum_tolerance_m, 0.005);
+}
+
+TEST(MpccProgress, RejectsMalformedFiveStateLateralConstraintReport)
+{
+  const auto contract =
+    multi_purpose_mpc_ros::mpcc_progress::
+    evaluate_extended_lateral_constraint_contract(
+    Eigen::VectorXd::Zero(1), Eigen::VectorXd::Zero(1), 2);
+
+  EXPECT_FALSE(contract.valid);
+  EXPECT_FALSE(contract.satisfied);
+}
+
 TEST(MpccProgress, PreservesFiniteSignedBoundaryValuesForLaterCertification)
 {
   Eigen::VectorXd extended = Eigen::VectorXd::Zero(21);

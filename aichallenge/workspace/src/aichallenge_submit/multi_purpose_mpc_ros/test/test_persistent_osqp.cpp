@@ -73,6 +73,43 @@ TEST(PersistentOsqpWarmStart, RejectsMalformedOrNonFiniteState) {
   EXPECT_FALSE(shift_mpc_warm_start(non_finite, 2U, 1U, 1U).has_value());
 }
 
+TEST(PersistentOsqpConstraintResiduals, KeepsMixedUnitRowsOnIndependentScales)
+{
+  Eigen::SparseMatrix<double> constraints(2, 2);
+  constraints.setIdentity();
+  Eigen::VectorXd primal(2);
+  primal << 0.1, 1000.5;
+  Eigen::VectorXd lower(2);
+  lower << 0.0, 1000.0;
+  const Eigen::VectorXd upper = lower;
+
+  const auto report = evaluate_constraint_residuals(
+    constraints, primal, lower, upper, 1e-3, 1e-3);
+
+  ASSERT_TRUE(report.has_value());
+  EXPECT_NEAR(report->violation[0], 0.1, 1e-12);
+  EXPECT_NEAR(report->violation[1], 0.5, 1e-12);
+  EXPECT_NEAR(report->tolerance[0], 0.0011, 1e-12);
+  EXPECT_NEAR(report->tolerance[1], 1.0015, 1e-12);
+  EXPECT_GT(report->violation[0], report->tolerance[0]);
+  EXPECT_LT(report->violation[1], report->tolerance[1]);
+  EXPECT_EQ(report->maximum_normalized_row, 0);
+  EXPECT_GT(report->maximum_normalized_violation, 90.0);
+}
+
+TEST(PersistentOsqpConstraintResiduals, RejectsMalformedToleranceContract)
+{
+  Eigen::SparseMatrix<double> constraints(1, 1);
+  constraints.setIdentity();
+  const Eigen::VectorXd primal = Eigen::VectorXd::Zero(1);
+  const Eigen::VectorXd bound = Eigen::VectorXd::Zero(1);
+
+  EXPECT_FALSE(evaluate_constraint_residuals(
+    constraints, primal, bound, bound, -1.0, 1e-3).has_value());
+  EXPECT_FALSE(evaluate_constraint_residuals(
+    constraints, primal, bound, bound, 1e-3, 1e-3, 0.0).has_value());
+}
+
 TEST(PersistentOsqpSolver, ReusesWorkspaceAndAppliesWarmStart) {
   PersistentOsqpSolver solver;
   const auto quadratic = diagonal_matrix({1.0});

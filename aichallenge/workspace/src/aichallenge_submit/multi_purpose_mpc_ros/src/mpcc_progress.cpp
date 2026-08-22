@@ -1304,6 +1304,64 @@ std::optional<ExtendedExecutionTrajectory> extract_extended_execution_trajectory
   return result;
 }
 
+ExtendedLateralConstraintContract evaluate_extended_lateral_constraint_contract(
+  const Eigen::VectorXd & constraint_violation,
+  const Eigen::VectorXd & constraint_tolerance,
+  const int horizon_size) noexcept
+{
+  ExtendedLateralConstraintContract result;
+  if (horizon_size <= 0) {
+    return result;
+  }
+  const int state_rows = kExtendedStateDimension * (horizon_size + 1);
+  const int variable_rows =
+    state_rows + kExtendedInputDimension * horizon_size;
+  const int expected_constraint_rows = state_rows + variable_rows + horizon_size;
+  if (
+    constraint_violation.size() != expected_constraint_rows ||
+    constraint_tolerance.size() != constraint_violation.size())
+  {
+    return result;
+  }
+
+  result.valid = true;
+  result.satisfied = true;
+  const auto inspect = [&result, &constraint_violation, &constraint_tolerance](
+      const int row, const int stage) {
+    const double violation = constraint_violation[row];
+    const double tolerance = constraint_tolerance[row];
+    if (
+      !std::isfinite(violation) || violation < 0.0 ||
+      !std::isfinite(tolerance) || tolerance < 0.0)
+    {
+      return false;
+    }
+    const double normalized = tolerance > 0.0 ?
+      violation / tolerance :
+      (violation == 0.0 ? 0.0 : std::numeric_limits<double>::infinity());
+    result.maximum_violation_m = std::max(
+      result.maximum_violation_m, violation);
+    result.maximum_tolerance_m = std::max(
+      result.maximum_tolerance_m, tolerance);
+    if (normalized > result.maximum_normalized_violation) {
+      result.maximum_normalized_violation = normalized;
+      result.worst_stage = stage;
+    }
+    if (violation > tolerance) {
+      result.satisfied = false;
+    }
+    return true;
+  };
+  for (int stage = 0; stage < horizon_size; ++stage) {
+    const int row = state_rows +
+      (stage + 1) * kExtendedStateDimension + kExtendedLateralIndex;
+    if (!inspect(row, stage)) {
+      return ExtendedLateralConstraintContract{};
+    }
+  }
+  return result;
+}
+
 const char * execution_trajectory_rejection_name(
   const ExecutionTrajectoryRejection rejection) noexcept
 {

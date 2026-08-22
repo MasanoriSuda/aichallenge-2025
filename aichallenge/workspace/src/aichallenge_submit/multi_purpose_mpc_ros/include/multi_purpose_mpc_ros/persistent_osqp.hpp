@@ -42,7 +42,33 @@ struct SolveResult
   Eigen::VectorXd dual;
   int status{};
   double maximum_constraint_violation{};
+  Eigen::VectorXd constraint_violation;
+  Eigen::VectorXd constraint_tolerance;
+  double maximum_normalized_constraint_violation{};
+  int maximum_normalized_constraint_row{-1};
 };
+
+struct ConstraintResidualReport
+{
+  Eigen::VectorXd violation;
+  Eigen::VectorXd tolerance;
+  double maximum_absolute_violation{};
+  double maximum_normalized_violation{};
+  int maximum_normalized_row{-1};
+};
+
+/// Evaluate every constraint row in its own numerical scale. This report is
+/// separate from OSQP's global infinity-norm termination test: one QP can
+/// contain metres, radians, velocity and course-progress values, so a large
+/// progress row must not enlarge the accepted error of a lateral safety row.
+std::optional<ConstraintResidualReport> evaluate_constraint_residuals(
+  const Eigen::SparseMatrix<double> & constraints,
+  const Eigen::VectorXd & primal,
+  const Eigen::VectorXd & lower_bound,
+  const Eigen::VectorXd & upper_bound,
+  double absolute_tolerance,
+  double relative_tolerance,
+  double tolerance_multiplier = 1.0) noexcept;
 
 struct SolveOutcome
 {

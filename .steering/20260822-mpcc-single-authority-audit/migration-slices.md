@@ -54,6 +54,17 @@ Prove the five-state formulation can represent ordinary racing without involving
   physical certificate failure, or 40 Hz deadline overrun attributable to shadow MPCC.
 - Track/Cruise MPCC solution coverage meets the threshold defined in `validation-plan.md`.
 
+### 2026-08-22 status
+
+- Exact five-state execution pose and wall-certificate provenance are implemented.
+- Mixed-unit solver output now carries per-row residual/tolerance, and Track/Cruise shadow applies a
+  metre-domain lateral-row contract before extraction/certification.
+- `output/20260822-161428` completed approximately four wraps with 7,662/7,662 solves, 7,627 physical
+  certificates (99.54%), one callback overrun, and zero shadow selections.
+- Authority promotion remains blocked because 26 hard-contact and 9 swept-path certificate rejects
+  remain. Three attempted physical-bound approximations were measured and removed; see
+  `.steering/20260822-track-cruise-footprint-bounds/validation.md`.
+
 ## Slice 3: Track/Cruise authority promotion
 
 ### Purpose

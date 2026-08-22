@@ -229,6 +229,19 @@ solver接続済みなのはLeft/Rightだけで、Hold/Returnは未評価理由�
 現行MPC/OvertakeLine/DynamicEscapeの実行権限を変更しない。shadowの動的検証後にHold/Returnを同一
 定式化へ接続し、最後にMPC↔MPCCの切替廃止を別ステアリングで判断する。
 
+5-state QPは横位置・姿勢・速度・進捗という異なる単位を同じ制約行列に含む。OSQPのglobal
+infinity-normだけを安全判定へ流用してはならない。solver adapterは各rowの違反量と
+`eps_abs + eps_rel * row_scale`に基づく許容値を保持し、consumerは安全意味ごとに対象rowを検証する。
+Track/Cruise shadowではstage 1..Nの横位置box rowをメートル単位で独立判定し、予測pose抽出時は
+観測された違反量ではなく許容値だけを境界toleranceに使う。大きなcourse progress値が横制約の
+許容誤差を広げたり、違反量自身が抽出許容を広げるself-relaxing contractは禁止する。
+
+2026-08-22のshadow A/Bでは、exact headingによるpost-solve physical certificateをhard oracleとして
+維持した。post-solve再solve、reference-heading固定の横box、単一勾配による横位置・姿勢結合rowは、
+いずれも40 Hz超過またはQP不成立を増やし、非線形の向き付き車体footprintを保守的に証明できなかった
+ため削除した。これらをfeature flagとして残さない。非線形footprintをQP内部へ移す場合は、別sliceで
+保守的包絡と計算時間のfailure-first証拠を用意する。
+
 ### Wall / Contact Stuck Recovery（Implementation Complete / dev3 Enabled）
 
 前進専用の現行MPCは、正面が壁に押し付けられると後退できない。

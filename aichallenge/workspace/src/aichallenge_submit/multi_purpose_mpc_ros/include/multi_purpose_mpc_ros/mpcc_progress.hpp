@@ -572,6 +572,25 @@ struct ExtendedExecutionTrajectory
   double minimum_lateral_bound_reserve_m{};
 };
 
+struct ExtendedLateralConstraintContract
+{
+  bool valid{false};
+  bool satisfied{false};
+  int worst_stage{-1};
+  double maximum_violation_m{};
+  double maximum_tolerance_m{};
+  double maximum_normalized_violation{};
+};
+
+/// Apply a semantic acceptance contract to the stage-1..N lateral box rows of
+/// a five-state QP. The residual and tolerance vectors are supplied by the
+/// solver adapter. Other-unit rows (notably course progress) cannot relax this
+/// metre-domain contract.
+ExtendedLateralConstraintContract evaluate_extended_lateral_constraint_contract(
+  const Eigen::VectorXd & constraint_violation,
+  const Eigen::VectorXd & constraint_tolerance,
+  int horizon_size) noexcept;
+
 enum class ExecutionTrajectoryRejection
 {
   None,

@@ -31,6 +31,10 @@ When a fresh solve is intentionally unavailable, a retained plan may be consider
 
 If any input is unavailable, the selector must return Emergency Stop, not legacy MPC.
 
+The current-intent portion is implemented by
+`.steering/20260822-canonical-current-intent-contract`: the candidate problem intent must also equal
+the current supervisor intent. Progress-aligned wall/obstacle revalidation remains pending.
+
 ## Gate C: explicit authority promotion
 
 Only after Gates A and B:

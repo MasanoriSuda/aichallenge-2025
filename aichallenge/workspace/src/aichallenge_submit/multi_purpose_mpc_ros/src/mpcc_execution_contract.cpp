@@ -497,6 +497,8 @@ const char * to_string(
       return "incomplete-problem";
     case CanonicalNormalCandidateRejectReason::UnsupportedIntent:
       return "unsupported-intent";
+    case CanonicalNormalCandidateRejectReason::IntentMismatch:
+      return "intent-mismatch";
     case CanonicalNormalCandidateRejectReason::NoncanonicalFormulation:
       return "noncanonical-formulation";
     case CanonicalNormalCandidateRejectReason::IdentityMismatch:
@@ -555,6 +557,7 @@ namespace
 CanonicalNormalCandidateRejectReason qualify_canonical_normal_candidate(
   const CanonicalNormalCandidate & candidate, const double now_sec,
   const std::uint64_t current_decision_id,
+  const ControlIntent current_intent,
   const bool require_current_decision) noexcept
 {
   if (!candidate.problem.has_value() || !candidate.solution.has_value()) {
@@ -570,6 +573,9 @@ CanonicalNormalCandidateRejectReason qualify_canonical_normal_candidate(
     problem.intent != ControlIntent::Cruise)
   {
     return CanonicalNormalCandidateRejectReason::UnsupportedIntent;
+  }
+  if (problem.intent != current_intent) {
+    return CanonicalNormalCandidateRejectReason::IntentMismatch;
   }
   if (
     problem.formulation != Formulation::VelocityProgress5State ||
@@ -632,14 +638,17 @@ CanonicalNormalAuthorityResolution resolve_canonical_normal_authority(
   CanonicalNormalAuthorityResolution resolution;
   if (
     request.current_decision_id == 0U || !std::isfinite(request.now_sec) ||
-    request.now_sec < 0.0)
+    request.now_sec < 0.0 ||
+    (request.current_intent != ControlIntent::Track &&
+    request.current_intent != ControlIntent::Cruise))
   {
     resolution.reason = CanonicalNormalAuthorityReason::InvalidRequest;
     return resolution;
   }
 
   resolution.fresh_reject_reason = qualify_canonical_normal_candidate(
-    request.fresh, request.now_sec, request.current_decision_id, true);
+    request.fresh, request.now_sec, request.current_decision_id,
+    request.current_intent, true);
   if (
     resolution.fresh_reject_reason ==
     CanonicalNormalCandidateRejectReason::None)
@@ -659,7 +668,8 @@ CanonicalNormalAuthorityResolution resolve_canonical_normal_authority(
   }
 
   resolution.retained_reject_reason = qualify_canonical_normal_candidate(
-    request.retained, request.now_sec, request.current_decision_id, false);
+    request.retained, request.now_sec, request.current_decision_id,
+    request.current_intent, false);
   if (
     resolution.retained_reject_reason ==
     CanonicalNormalCandidateRejectReason::None)

@@ -256,6 +256,7 @@ enum class CanonicalNormalCandidateRejectReason
   DecisionMismatch,
   ExecutionCertificateDecisionMismatch,
   ExecutionCertificateNotCertified,
+  IntentMismatch,
 };
 
 const char * to_string(CanonicalNormalCandidateRejectReason reason) noexcept;
@@ -285,6 +286,9 @@ struct CanonicalNormalAuthorityRequest
   double now_sec{std::numeric_limits<double>::quiet_NaN()};
   CanonicalNormalCandidate fresh;
   CanonicalNormalCandidate retained;
+  /// Current supervisor intent is explicit: a retained problem cannot infer
+  /// or carry intent authority into a later control decision.
+  ControlIntent current_intent{ControlIntent::Unknown};
 };
 
 struct CanonicalNormalAuthorityResolution

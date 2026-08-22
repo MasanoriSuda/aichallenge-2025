@@ -21468,7 +21468,8 @@ struct MPC
       const auto canonical_authority =
         mpcc_contract::resolve_canonical_normal_authority(
         mpcc_contract::CanonicalNormalAuthorityRequest{
-          result.decision_id, now_sec, canonical_candidate.candidate.value(), {}});
+          result.decision_id, now_sec, canonical_candidate.candidate.value(), {},
+          result.intent});
       result.canonical_authority_source = canonical_authority.source;
       result.canonical_authority_reason = canonical_authority.reason;
       if (

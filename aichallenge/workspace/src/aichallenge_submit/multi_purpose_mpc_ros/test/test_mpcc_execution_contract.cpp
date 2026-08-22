@@ -475,7 +475,8 @@ TEST(MpccExecutionContract, CanonicalNormalAuthoritySelectsFreshCurrentDecision)
   const auto fresh = make_canonical_candidate();
   const auto retained = make_canonical_candidate(41U);
   const auto resolution = contract::resolve_canonical_normal_authority(
-    contract::CanonicalNormalAuthorityRequest{42U, 12.0, fresh, retained});
+    contract::CanonicalNormalAuthorityRequest{
+      42U, 12.0, fresh, retained, contract::ControlIntent::Track});
 
   EXPECT_EQ(
     resolution.source,
@@ -501,7 +502,8 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityFallsBackOnlyToRetainedCanon
   fresh.solution->physical.wall_clear = false;
   const auto retained = make_canonical_candidate(41U, 2U, 42U);
   const auto resolution = contract::resolve_canonical_normal_authority(
-    contract::CanonicalNormalAuthorityRequest{42U, 12.0, fresh, retained});
+    contract::CanonicalNormalAuthorityRequest{
+      42U, 12.0, fresh, retained, contract::ControlIntent::Track});
 
   EXPECT_EQ(
     resolution.source,
@@ -520,6 +522,43 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityFallsBackOnlyToRetainedCanon
   EXPECT_TRUE(resolution.retained_solution);
 }
 
+TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsRetainedAcrossIntentChange)
+{
+  auto fresh = make_canonical_candidate();
+  fresh.solution->physical.wall_clear = false;
+  const auto retained_track = make_canonical_candidate(41U, 2U, 42U);
+  auto request = contract::CanonicalNormalAuthorityRequest{
+    42U, 12.0, fresh, retained_track};
+  request.current_intent = contract::ControlIntent::Cruise;
+
+  const auto resolution =
+    contract::resolve_canonical_normal_authority(request);
+
+  EXPECT_EQ(
+    resolution.source,
+    contract::CanonicalNormalAuthoritySource::EmergencyStop);
+  EXPECT_EQ(
+    resolution.retained_reject_reason,
+    contract::CanonicalNormalCandidateRejectReason::IntentMismatch);
+}
+
+TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsUnsupportedCurrentIntent)
+{
+  auto request = contract::CanonicalNormalAuthorityRequest{
+    42U, 12.0, make_canonical_candidate(), {}};
+  request.current_intent = contract::ControlIntent::Follow;
+
+  const auto resolution =
+    contract::resolve_canonical_normal_authority(request);
+
+  EXPECT_EQ(
+    resolution.source,
+    contract::CanonicalNormalAuthoritySource::EmergencyStop);
+  EXPECT_EQ(
+    resolution.reason,
+    contract::CanonicalNormalAuthorityReason::InvalidRequest);
+}
+
 TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsRetainedWithoutCurrentExecutionProof)
 {
   auto fresh = make_canonical_candidate();
@@ -527,7 +566,8 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsRetainedWithoutCurren
   const auto retained_with_only_original_proof = make_canonical_candidate(41U);
   const auto resolution = contract::resolve_canonical_normal_authority(
     contract::CanonicalNormalAuthorityRequest{
-      42U, 12.0, fresh, retained_with_only_original_proof});
+      42U, 12.0, fresh, retained_with_only_original_proof,
+      contract::ControlIntent::Track});
 
   EXPECT_EQ(
     resolution.source,
@@ -544,7 +584,8 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityRequiresExecutionPlanIdentit
   fresh.execution_plan_id = 0U;
   const auto resolution = contract::resolve_canonical_normal_authority(
     contract::CanonicalNormalAuthorityRequest{
-      42U, 12.0, fresh, contract::CanonicalNormalCandidate{}});
+      42U, 12.0, fresh, contract::CanonicalNormalCandidate{},
+      contract::ControlIntent::Track});
 
   EXPECT_EQ(
     resolution.source,
@@ -560,7 +601,8 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsStaleFreshExecutionPr
   fresh.execution_certificate_decision_id = 41U;
   const auto resolution = contract::resolve_canonical_normal_authority(
     contract::CanonicalNormalAuthorityRequest{
-      42U, 12.0, fresh, contract::CanonicalNormalCandidate{}});
+      42U, 12.0, fresh, contract::CanonicalNormalCandidate{},
+      contract::ControlIntent::Track});
 
   EXPECT_EQ(
     resolution.source,
@@ -577,7 +619,8 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsUnsafeExecutionProof)
   fresh.execution_physical.wall_clear = false;
   const auto resolution = contract::resolve_canonical_normal_authority(
     contract::CanonicalNormalAuthorityRequest{
-      42U, 12.0, fresh, contract::CanonicalNormalCandidate{}});
+      42U, 12.0, fresh, contract::CanonicalNormalCandidate{},
+      contract::ControlIntent::Track});
 
   EXPECT_EQ(
     resolution.source,
@@ -593,7 +636,8 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityRequiresExecutableControl)
   const auto fresh = make_canonical_candidate(42U, 0U);
   const auto resolution = contract::resolve_canonical_normal_authority(
     contract::CanonicalNormalAuthorityRequest{
-      42U, 12.0, fresh, contract::CanonicalNormalCandidate{}});
+      42U, 12.0, fresh, contract::CanonicalNormalCandidate{},
+      contract::ControlIntent::Track});
 
   EXPECT_EQ(
     resolution.source,
@@ -609,7 +653,8 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsExpiredCandidate)
   fresh.solution->valid_until_sec = 11.9;
   const auto resolution = contract::resolve_canonical_normal_authority(
     contract::CanonicalNormalAuthorityRequest{
-      42U, 12.0, fresh, contract::CanonicalNormalCandidate{}});
+      42U, 12.0, fresh, contract::CanonicalNormalCandidate{},
+      contract::ControlIntent::Track});
 
   EXPECT_EQ(
     resolution.source,
@@ -625,7 +670,7 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsFreshFromOlderDecisio
   const auto retained = make_canonical_candidate(40U, 2U, 42U);
   const auto resolution = contract::resolve_canonical_normal_authority(
     contract::CanonicalNormalAuthorityRequest{
-      42U, 12.0, old_fresh, retained});
+      42U, 12.0, old_fresh, retained, contract::ControlIntent::Track});
 
   EXPECT_EQ(
     resolution.source,
@@ -640,7 +685,8 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsMalformedExecutableHo
   const auto fresh = make_canonical_candidate(42U, 3U);
   const auto resolution = contract::resolve_canonical_normal_authority(
     contract::CanonicalNormalAuthorityRequest{
-      42U, 12.0, fresh, contract::CanonicalNormalCandidate{}});
+      42U, 12.0, fresh, contract::CanonicalNormalCandidate{},
+      contract::ControlIntent::Track});
 
   EXPECT_EQ(
     resolution.source,
@@ -656,7 +702,8 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsMismatchedIdentity)
   fresh.solution->problem_fingerprint += 1U;
   const auto resolution = contract::resolve_canonical_normal_authority(
     contract::CanonicalNormalAuthorityRequest{
-      42U, 12.0, fresh, contract::CanonicalNormalCandidate{}});
+      42U, 12.0, fresh, contract::CanonicalNormalCandidate{},
+      contract::ControlIntent::Track});
 
   EXPECT_EQ(
     resolution.source,
@@ -679,7 +726,8 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsThreeStateTrack)
   fresh.solution = make_solution(context);
   const auto resolution = contract::resolve_canonical_normal_authority(
     contract::CanonicalNormalAuthorityRequest{
-      42U, 12.0, fresh, contract::CanonicalNormalCandidate{}});
+      42U, 12.0, fresh, contract::CanonicalNormalCandidate{},
+      contract::ControlIntent::Track});
 
   EXPECT_EQ(
     resolution.source,
@@ -697,7 +745,8 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsNonTrackCruiseIntent)
   fresh.solution = make_solution(context);
   const auto resolution = contract::resolve_canonical_normal_authority(
     contract::CanonicalNormalAuthorityRequest{
-      42U, 12.0, fresh, contract::CanonicalNormalCandidate{}});
+      42U, 12.0, fresh, contract::CanonicalNormalCandidate{},
+      contract::ControlIntent::Track});
 
   EXPECT_EQ(
     resolution.source,
@@ -712,7 +761,7 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityFailsClosedWithoutCandidate)
   const auto resolution = contract::resolve_canonical_normal_authority(
     contract::CanonicalNormalAuthorityRequest{
       42U, 12.0, contract::CanonicalNormalCandidate{},
-      contract::CanonicalNormalCandidate{}});
+      contract::CanonicalNormalCandidate{}, contract::ControlIntent::Track});
 
   EXPECT_EQ(
     resolution.source,
@@ -735,7 +784,8 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsInvalidRequestTime)
   const auto resolution = contract::resolve_canonical_normal_authority(
     contract::CanonicalNormalAuthorityRequest{
       42U, std::numeric_limits<double>::quiet_NaN(),
-      make_canonical_candidate(), contract::CanonicalNormalCandidate{}});
+      make_canonical_candidate(), contract::CanonicalNormalCandidate{},
+      contract::ControlIntent::Track});
 
   EXPECT_EQ(
     resolution.source,

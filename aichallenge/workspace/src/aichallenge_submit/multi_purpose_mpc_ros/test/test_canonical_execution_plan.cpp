@@ -247,7 +247,8 @@ TEST(CanonicalExecutionPlan, CandidateRequiresExactCurrentPhysicalRevalidation)
 
   const auto resolution = contract::resolve_canonical_normal_authority(
     contract::CanonicalNormalAuthorityRequest{
-      42U, 11.0, contract::CanonicalNormalCandidate{}, built.candidate.value()});
+      42U, 11.0, contract::CanonicalNormalCandidate{}, built.candidate.value(),
+      contract::ControlIntent::Track});
   EXPECT_EQ(
     resolution.source,
     contract::CanonicalNormalAuthoritySource::RetainedCertified);
@@ -269,7 +270,8 @@ TEST(CanonicalExecutionPlan, FreshCandidateUsesSameDecisionAndExactExecutionWind
 
   const auto resolution = contract::resolve_canonical_normal_authority(
     contract::CanonicalNormalAuthorityRequest{
-      42U, 10.25, built.candidate.value(), {}});
+      42U, 10.25, built.candidate.value(), {},
+      contract::ControlIntent::Track});
   EXPECT_EQ(
     resolution.source,
     contract::CanonicalNormalAuthoritySource::FreshCertified);

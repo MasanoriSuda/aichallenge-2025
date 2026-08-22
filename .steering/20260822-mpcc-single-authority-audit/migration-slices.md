@@ -134,6 +134,10 @@ No cycle-local transfer to three-state or legacy MPC is allowed after promotion.
   It preserves predicted velocity, optimized acceleration, curvature and virtual-progress speed
   without legacy flattening, rejects exhausted/mismatched cursors and verifies the stored result
   against the direct primal in shadow.
+- `.steering/20260822-canonical-current-intent-contract` closes the current-supervisor provenance
+  gap in the pure selector. Fresh and retained candidates must now match the current Track/Cruise
+  intent exactly; a current Follow/Hold/Stop/overtake intent or an old Track/Cruise plan crossing an
+  intent transition fails closed before authority promotion.
 - Runtime promotion is not yet performed. The remaining implementation must add current-pose
   revalidation for retained plans, obtain dynamic coverage for fresh/retained selection, and then
   connect the same selector to final output while deleting Track/Cruise legacy fallback.

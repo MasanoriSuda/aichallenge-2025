@@ -403,6 +403,98 @@ TEST(MpccProgress, PreservesFiniteSignedBoundaryValuesForLaterCertification)
   EXPECT_DOUBLE_EQ(proposal->virtual_progress_speed_mps, -2e-7);
 }
 
+TEST(MpccProgress, NormalizesCertifiedSignedBoundaryForSemanticExecution)
+{
+  constexpr int horizon = 2;
+  constexpr int state_rows =
+    multi_purpose_mpc_ros::mpcc_progress::kExtendedStateDimension *
+    (horizon + 1);
+  constexpr int variable_rows = state_rows +
+    multi_purpose_mpc_ros::mpcc_progress::kExtendedInputDimension * horizon;
+  constexpr int constraint_rows = state_rows + variable_rows + horizon;
+  Eigen::VectorXd primal = Eigen::VectorXd::Zero(variable_rows);
+  Eigen::VectorXd violation = Eigen::VectorXd::Zero(constraint_rows);
+  Eigen::VectorXd tolerance = Eigen::VectorXd::Constant(constraint_rows, 1e-5);
+
+  const int velocity_variable =
+    multi_purpose_mpc_ros::mpcc_progress::kExtendedStateDimension +
+    multi_purpose_mpc_ros::mpcc_progress::kExtendedVelocityIndex;
+  const int virtual_speed_variable = state_rows +
+    multi_purpose_mpc_ros::mpcc_progress::kExtendedVirtualProgressSpeedIndex;
+  primal[velocity_variable] = -1e-7;
+  primal[virtual_speed_variable] = -2e-7;
+  violation[state_rows + velocity_variable] = 1e-7;
+  violation[state_rows + virtual_speed_variable] = 2e-7;
+
+  const auto normalized =
+    multi_purpose_mpc_ros::mpcc_progress::normalize_extended_execution_primal(
+    primal, violation, tolerance, horizon);
+
+  EXPECT_EQ(
+    normalized.reason,
+    multi_purpose_mpc_ros::mpcc_progress::
+    ExtendedExecutionPrimalNormalizationReason::Accepted);
+  EXPECT_EQ(normalized.normalized_value_count, 2U);
+  EXPECT_DOUBLE_EQ(normalized.maximum_adjustment, 2e-7);
+  EXPECT_DOUBLE_EQ(normalized.primal[velocity_variable], 0.0);
+  EXPECT_DOUBLE_EQ(normalized.primal[virtual_speed_variable], 0.0);
+}
+
+TEST(MpccProgress, RejectsSemanticBoundaryOutsideCertifiedRowTolerance)
+{
+  constexpr int horizon = 2;
+  constexpr int state_rows =
+    multi_purpose_mpc_ros::mpcc_progress::kExtendedStateDimension *
+    (horizon + 1);
+  constexpr int variable_rows = state_rows +
+    multi_purpose_mpc_ros::mpcc_progress::kExtendedInputDimension * horizon;
+  constexpr int constraint_rows = state_rows + variable_rows + horizon;
+  Eigen::VectorXd primal = Eigen::VectorXd::Zero(variable_rows);
+  Eigen::VectorXd violation = Eigen::VectorXd::Zero(constraint_rows);
+  Eigen::VectorXd tolerance = Eigen::VectorXd::Constant(constraint_rows, 1e-5);
+  const int virtual_speed_variable = state_rows +
+    multi_purpose_mpc_ros::mpcc_progress::kExtendedVirtualProgressSpeedIndex;
+  primal[virtual_speed_variable] = -2e-5;
+  violation[state_rows + virtual_speed_variable] = 2e-5;
+
+  const auto rejected =
+    multi_purpose_mpc_ros::mpcc_progress::normalize_extended_execution_primal(
+    primal, violation, tolerance, horizon);
+
+  EXPECT_EQ(
+    rejected.reason,
+    multi_purpose_mpc_ros::mpcc_progress::
+    ExtendedExecutionPrimalNormalizationReason::CertifiedBoundViolation);
+  EXPECT_EQ(
+    rejected.rejected_field,
+    multi_purpose_mpc_ros::mpcc_progress::
+    ExtendedExecutionPrimalBoundaryField::VirtualProgressSpeed);
+  EXPECT_EQ(rejected.rejected_stage, 0);
+  EXPECT_DOUBLE_EQ(rejected.rejected_value, -2e-5);
+  EXPECT_DOUBLE_EQ(rejected.rejected_violation, 2e-5);
+  EXPECT_DOUBLE_EQ(rejected.rejected_tolerance, 1e-5);
+}
+
+TEST(MpccProgress, RejectsMalformedSemanticBoundaryResidualProvenance)
+{
+  constexpr int horizon = 2;
+  constexpr int state_rows =
+    multi_purpose_mpc_ros::mpcc_progress::kExtendedStateDimension *
+    (horizon + 1);
+  constexpr int variable_rows = state_rows +
+    multi_purpose_mpc_ros::mpcc_progress::kExtendedInputDimension * horizon;
+
+  const auto rejected =
+    multi_purpose_mpc_ros::mpcc_progress::normalize_extended_execution_primal(
+    Eigen::VectorXd::Zero(variable_rows), Eigen::VectorXd::Zero(1),
+    Eigen::VectorXd::Zero(1), horizon);
+
+  EXPECT_EQ(
+    rejected.reason,
+    multi_purpose_mpc_ros::mpcc_progress::
+    ExtendedExecutionPrimalNormalizationReason::InvalidShape);
+}
+
 TEST(MpccProgress, RestoresAbsoluteProgressFromLocalExtendedSolution)
 {
   Eigen::VectorXd extended(21);

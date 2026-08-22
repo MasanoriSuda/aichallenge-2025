@@ -24,7 +24,10 @@ from the legacy three-state path to canonical five-state MPCC.
 
 ## Promotion blockers
 
-1. No dynamic run exists for the new `canonical`, `admission` and `actuation` counters.
+1. Fresh dynamic evidence now exists in `output/20260822-232351`. The certified chain is exact,
+   but three five-state QP results exceeded their own virtual-progress box-row tolerance while the
+   mixed-unit global solver admission still accepted them. This upstream solver contract must be
+   fixed and rerun before promotion.
 2. Retained execution has no world-frame current-pose/current-observation revalidation implementation.
 3. Retained lateral bounds must be aligned by absolute progress; indexing old plan stages against
    current problem stages is not a valid proof.

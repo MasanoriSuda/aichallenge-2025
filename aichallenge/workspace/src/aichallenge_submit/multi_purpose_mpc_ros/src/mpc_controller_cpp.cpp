@@ -5570,6 +5570,7 @@ struct TrackCruiseShadowCycleResult
   bool solved{false};
   bool finite{false};
   bool constraints_satisfied{false};
+  bool execution_primal_accepted{false};
   bool actuation_proposal_extracted{false};
   bool conversion_succeeded{false};
   bool physical_certificate_checked{false};
@@ -5609,6 +5610,21 @@ struct TrackCruiseShadowCycleResult
   double lateral_constraint_maximum_normalized_violation{
     std::numeric_limits<double>::quiet_NaN()};
   int lateral_constraint_worst_stage{-1};
+  mpcc_progress::ExtendedExecutionPrimalNormalizationReason
+  execution_primal_reason{
+    mpcc_progress::ExtendedExecutionPrimalNormalizationReason::InvalidShape};
+  std::size_t execution_primal_normalized_value_count{};
+  double execution_primal_maximum_adjustment{};
+  mpcc_progress::ExtendedExecutionPrimalBoundaryField
+  execution_primal_rejected_field{
+    mpcc_progress::ExtendedExecutionPrimalBoundaryField::None};
+  int execution_primal_rejected_stage{-1};
+  double execution_primal_rejected_value{
+    std::numeric_limits<double>::quiet_NaN()};
+  double execution_primal_rejected_violation{
+    std::numeric_limits<double>::quiet_NaN()};
+  double execution_primal_rejected_tolerance{
+    std::numeric_limits<double>::quiet_NaN()};
   std::optional<mpcc_progress::ActuationProposal> actuation_proposal;
   canonical_plan_adapter::CanonicalPlanExtractionReason canonical_extraction_reason{
     canonical_plan_adapter::CanonicalPlanExtractionReason::InvalidMetadata};
@@ -5641,6 +5657,10 @@ struct TrackCruiseShadowTelemetryWindow
   std::uint64_t solved_count{};
   std::uint64_t finite_count{};
   std::uint64_t constraint_count{};
+  std::uint64_t execution_primal_count{};
+  std::uint64_t execution_primal_normalized_cycle_count{};
+  std::uint64_t execution_primal_normalized_value_count{};
+  double execution_primal_maximum_adjustment{};
   std::uint64_t actuation_proposal_count{};
   std::uint64_t conversion_count{};
   std::uint64_t physical_check_count{};
@@ -20885,6 +20905,14 @@ struct MPC
     window.solved_count += result.solved ? 1U : 0U;
     window.finite_count += result.finite ? 1U : 0U;
     window.constraint_count += result.constraints_satisfied ? 1U : 0U;
+    window.execution_primal_count += result.execution_primal_accepted ? 1U : 0U;
+    window.execution_primal_normalized_cycle_count +=
+      result.execution_primal_normalized_value_count > 0U ? 1U : 0U;
+    window.execution_primal_normalized_value_count +=
+      result.execution_primal_normalized_value_count;
+    window.execution_primal_maximum_adjustment = std::max(
+      window.execution_primal_maximum_adjustment,
+      result.execution_primal_maximum_adjustment);
     window.actuation_proposal_count += result.actuation_proposal_extracted ? 1U : 0U;
     window.conversion_count += result.conversion_succeeded ? 1U : 0U;
     window.physical_check_count += result.physical_certificate_checked ? 1U : 0U;
@@ -21053,7 +21081,8 @@ struct MPC
       rclcpp::get_logger("mpc_controller"),
       "Track/Cruise MPCC shadow: eligible=%zu, metadata=%zu/%.1f%%, "
       "build=%zu, attempt=%zu/%.1f%%, solved=%zu/%.1f%%, finite=%zu, "
-      "constraint=%zu, proposal=%zu, converted=%zu, physical=%zu, certified=%zu/%.1f%%, "
+      "constraint=%zu, execution_primal=%zu, normalized=%zu/%zu/%.9f(cycles/values/max), "
+      "proposal=%zu, converted=%zu, physical=%zu, certified=%zu/%.1f%%, "
       "canonical=%zu/%zu(extracted/stored), canonical_reason=%s/%s, "
       "admission=%zu/%zu/%zu(cursor/candidate/fresh), admission_reason=%s/%s/%s/%s, "
       "actuation=%zu/%s, actuation_diff=%.9f, "
@@ -21077,6 +21106,10 @@ struct MPC
       100.0 * static_cast<double>(window.solved_count) / attempted,
       static_cast<std::size_t>(window.finite_count),
       static_cast<std::size_t>(window.constraint_count),
+      static_cast<std::size_t>(window.execution_primal_count),
+      static_cast<std::size_t>(window.execution_primal_normalized_cycle_count),
+      static_cast<std::size_t>(window.execution_primal_normalized_value_count),
+      window.execution_primal_maximum_adjustment,
       static_cast<std::size_t>(window.actuation_proposal_count),
       static_cast<std::size_t>(window.conversion_count),
       static_cast<std::size_t>(window.physical_check_count),
@@ -21275,8 +21308,49 @@ struct MPC
         result.detail = detail.str();
         return finish();
       }
+
+      const auto execution_primal =
+        mpcc_progress::normalize_extended_execution_primal(
+        outcome.result->primal, outcome.result->constraint_violation,
+        outcome.result->constraint_tolerance, problem.N);
+      result.execution_primal_reason = execution_primal.reason;
+      result.execution_primal_normalized_value_count =
+        execution_primal.normalized_value_count;
+      result.execution_primal_maximum_adjustment =
+        execution_primal.maximum_adjustment;
+      result.execution_primal_rejected_field =
+        execution_primal.rejected_field;
+      result.execution_primal_rejected_stage =
+        execution_primal.rejected_stage;
+      result.execution_primal_rejected_value =
+        execution_primal.rejected_value;
+      result.execution_primal_rejected_violation =
+        execution_primal.rejected_violation;
+      result.execution_primal_rejected_tolerance =
+        execution_primal.rejected_tolerance;
+      if (
+        execution_primal.reason !=
+        mpcc_progress::ExtendedExecutionPrimalNormalizationReason::Accepted)
+      {
+        result.status = "execution-primal-reject";
+        std::ostringstream detail;
+        detail << "five-state execution primal rejected: reason="
+               << mpcc_progress::
+          extended_execution_primal_normalization_reason_name(
+          execution_primal.reason)
+               << ", field="
+               << mpcc_progress::extended_execution_primal_boundary_field_name(
+          execution_primal.rejected_field)
+               << ", stage=" << execution_primal.rejected_stage
+               << ", value=" << execution_primal.rejected_value
+               << ", violation=" << execution_primal.rejected_violation
+               << ", tolerance=" << execution_primal.rejected_tolerance;
+        result.detail = detail.str();
+        return finish();
+      }
+      result.execution_primal_accepted = true;
       result.actuation_proposal = mpcc_progress::extract_actuation_proposal(
-        outcome.result->primal, problem.N, model->length);
+        execution_primal.primal, problem.N, model->length);
       if (!result.actuation_proposal.has_value()) {
         result.status = "actuation-proposal-reject";
         result.detail = "five-state actuation proposal contract rejected";
@@ -21306,7 +21380,7 @@ struct MPC
         1e-5, lateral_constraint_contract.maximum_tolerance_m);
       const auto pose_trajectory =
         mpcc_progress::extract_extended_execution_trajectory(
-        outcome.result->primal, problem.N, path_distance_m,
+        execution_primal.primal, problem.N, path_distance_m,
         lower_bound_m, upper_bound_m, extended_problem->progress_origin_m,
         extraction_tolerance, &pose_diagnostic);
       if (!pose_trajectory.has_value()) {
@@ -21318,7 +21392,7 @@ struct MPC
         return finish();
       }
       const auto shadow_solution = mpcc_progress::convert_extended_solution_to_legacy(
-        outcome.result->primal, problem.N, extended_problem->progress_origin_m);
+        execution_primal.primal, problem.N, extended_problem->progress_origin_m);
       // This conversion exists only for legacy-model comparison telemetry.
       // Canonical extraction and certification below consume the complete
       // five-state primal directly and must not depend on a lossy 3-state view.
@@ -21406,7 +21480,7 @@ struct MPC
       extraction_request.solved_sec = now_sec;
       extraction_request.progress_origin_m = extended_problem->progress_origin_m;
       extraction_request.stage_duration_sec = problem.progress_stage_dt_sec;
-      extraction_request.extended_primal = outcome.result->primal;
+      extraction_request.extended_primal = execution_primal.primal;
       auto canonical_extraction =
         canonical_plan_adapter::extract_canonical_execution_plan(
         extraction_request);
@@ -21552,10 +21626,10 @@ struct MPC
         result.lateral_max_difference_m = maximum_lateral_difference;
       }
       result.terminal_progress_m =
-        outcome.result->primal[
+        execution_primal.primal[
         problem.N * mpcc_progress::kExtendedStateDimension +
         mpcc_progress::kExtendedProgressIndex];
-      result.terminal_velocity_mps = outcome.result->primal[
+      result.terminal_velocity_mps = execution_primal.primal[
         problem.N * mpcc_progress::kExtendedStateDimension +
         mpcc_progress::kExtendedVelocityIndex];
       pending_track_cruise_shadow_actuation_ = TrackCruiseShadowPendingActuation{

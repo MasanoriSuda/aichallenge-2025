@@ -160,6 +160,52 @@ inline constexpr int kExtendedAccelerationIndex = 0;
 inline constexpr int kExtendedCurvatureIndex = 1;
 inline constexpr int kExtendedVirtualProgressSpeedIndex = 2;
 
+enum class ExtendedExecutionPrimalBoundaryField
+{
+  None,
+  PredictedVelocity,
+  VirtualProgressSpeed,
+};
+
+enum class ExtendedExecutionPrimalNormalizationReason
+{
+  Accepted,
+  InvalidShape,
+  InvalidResidualContract,
+  CertifiedBoundViolation,
+};
+
+struct ExtendedExecutionPrimalNormalization
+{
+  ExtendedExecutionPrimalNormalizationReason reason{
+    ExtendedExecutionPrimalNormalizationReason::InvalidShape};
+  Eigen::VectorXd primal;
+  std::size_t normalized_value_count{};
+  double maximum_adjustment{};
+  ExtendedExecutionPrimalBoundaryField rejected_field{
+    ExtendedExecutionPrimalBoundaryField::None};
+  int rejected_stage{-1};
+  double rejected_value{std::numeric_limits<double>::quiet_NaN()};
+  double rejected_violation{std::numeric_limits<double>::quiet_NaN()};
+  double rejected_tolerance{std::numeric_limits<double>::quiet_NaN()};
+};
+
+const char * extended_execution_primal_normalization_reason_name(
+  ExtendedExecutionPrimalNormalizationReason reason) noexcept;
+const char * extended_execution_primal_boundary_field_name(
+  ExtendedExecutionPrimalBoundaryField field) noexcept;
+
+/// Convert a numerically certified five-state QP primal into a semantic
+/// execution artifact.  Raw solver values are preserved by the caller for
+/// residual telemetry and warm start.  Only non-negative semantic fields
+/// whose exact identity box row is within its recorded tolerance may be
+/// projected from a small negative value to zero.
+ExtendedExecutionPrimalNormalization normalize_extended_execution_primal(
+  const Eigen::VectorXd & primal,
+  const Eigen::VectorXd & constraint_violation,
+  const Eigen::VectorXd & constraint_tolerance,
+  int horizon_size) noexcept;
+
 struct ExtendedLinearizationRequest
 {
   double reference_lateral_m{};

@@ -150,6 +150,14 @@ No cycle-local transfer to three-state or legacy MPC is allowed after promotion.
   wall sampling from current-relative-time obstacle sampling, and requires measured-to-predicted
   plus predicted-to-horizon swept proofs with current provenance. Runtime connection still waits
   for fresh dynamic Gate A evidence.
+- `.steering/20260822-canonical-numerical-boundary-contract` closes a fresh-path producer/consumer
+  mismatch found by Gate A. A solver-certified tiny negative virtual-progress value is now
+  normalized only inside its exact box-row tolerance before becoming an executable artifact; the
+  raw primal remains untouched. In `output/20260822-232351`, the former 324
+  `invalid-control-stage` rejects became zero and all 9,678 physically certified cycles completed
+  the fresh canonical chain with zero actuation difference. Three out-of-row-tolerance stage-zero
+  values were correctly rejected and expose the next upstream defect: persistent OSQP computes
+  rowwise residuals but still admits with a mixed-unit global absolute test.
 - This connection is an explicit authority boundary and requires approval before implementation.
 
 ### Delete/replace

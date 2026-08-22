@@ -519,6 +519,121 @@ std::optional<ActuationProposal> extract_actuation_proposal(
   return proposal;
 }
 
+const char * extended_execution_primal_normalization_reason_name(
+  const ExtendedExecutionPrimalNormalizationReason reason) noexcept
+{
+  switch (reason) {
+    case ExtendedExecutionPrimalNormalizationReason::Accepted:
+      return "accepted";
+    case ExtendedExecutionPrimalNormalizationReason::InvalidShape:
+      return "invalid-shape";
+    case ExtendedExecutionPrimalNormalizationReason::InvalidResidualContract:
+      return "invalid-residual-contract";
+    case ExtendedExecutionPrimalNormalizationReason::CertifiedBoundViolation:
+      return "certified-bound-violation";
+  }
+  return "unknown";
+}
+
+const char * extended_execution_primal_boundary_field_name(
+  const ExtendedExecutionPrimalBoundaryField field) noexcept
+{
+  switch (field) {
+    case ExtendedExecutionPrimalBoundaryField::None:
+      return "none";
+    case ExtendedExecutionPrimalBoundaryField::PredictedVelocity:
+      return "predicted-velocity";
+    case ExtendedExecutionPrimalBoundaryField::VirtualProgressSpeed:
+      return "virtual-progress-speed";
+  }
+  return "unknown";
+}
+
+ExtendedExecutionPrimalNormalization normalize_extended_execution_primal(
+  const Eigen::VectorXd & primal,
+  const Eigen::VectorXd & constraint_violation,
+  const Eigen::VectorXd & constraint_tolerance,
+  const int horizon_size) noexcept
+{
+  ExtendedExecutionPrimalNormalization result;
+  if (horizon_size <= 0) {
+    return result;
+  }
+  const int state_rows = kExtendedStateDimension * (horizon_size + 1);
+  const int variable_rows =
+    state_rows + kExtendedInputDimension * horizon_size;
+  const int constraint_rows = state_rows + variable_rows + horizon_size;
+  if (
+    primal.size() != variable_rows ||
+    constraint_violation.size() != constraint_rows ||
+    constraint_tolerance.size() != constraint_rows)
+  {
+    return result;
+  }
+  if (
+    !primal.allFinite() || !constraint_violation.allFinite() ||
+    !constraint_tolerance.allFinite() ||
+    (constraint_violation.array() < 0.0).any() ||
+    (constraint_tolerance.array() < 0.0).any())
+  {
+    result.reason =
+      ExtendedExecutionPrimalNormalizationReason::InvalidResidualContract;
+    return result;
+  }
+
+  result.primal = primal;
+  const auto certify_nonnegative = [&result, &constraint_violation,
+      &constraint_tolerance, state_rows](
+      const int variable_index, const int stage,
+      const ExtendedExecutionPrimalBoundaryField field) {
+      const int constraint_row = state_rows + variable_index;
+      const double value = result.primal[variable_index];
+      const double violation = constraint_violation[constraint_row];
+      const double tolerance = constraint_tolerance[constraint_row];
+      if (violation > tolerance || value < -tolerance) {
+        result.reason = ExtendedExecutionPrimalNormalizationReason::
+          CertifiedBoundViolation;
+        result.rejected_field = field;
+        result.rejected_stage = stage;
+        result.rejected_value = value;
+        result.rejected_violation = violation;
+        result.rejected_tolerance = tolerance;
+        return false;
+      }
+      if (value < 0.0) {
+        result.maximum_adjustment = std::max(
+          result.maximum_adjustment, -value);
+        ++result.normalized_value_count;
+        result.primal[variable_index] = 0.0;
+      }
+      return true;
+    };
+
+  for (int stage = 0; stage < horizon_size + 1; ++stage) {
+    const int velocity_index = stage * kExtendedStateDimension +
+      kExtendedVelocityIndex;
+    if (!certify_nonnegative(
+        velocity_index, stage,
+        ExtendedExecutionPrimalBoundaryField::PredictedVelocity))
+    {
+      return result;
+    }
+  }
+  for (int stage = 0; stage < horizon_size; ++stage) {
+    const int virtual_progress_index = state_rows +
+      stage * kExtendedInputDimension +
+      kExtendedVirtualProgressSpeedIndex;
+    if (!certify_nonnegative(
+        virtual_progress_index, stage,
+        ExtendedExecutionPrimalBoundaryField::VirtualProgressSpeed))
+    {
+      return result;
+    }
+  }
+  result.reason = ExtendedExecutionPrimalNormalizationReason::Accepted;
+  return result;
+}
+
 bool rebase_extended_progress_warm_start(
   Eigen::VectorXd & extended_primal, const int horizon_size,
   const double previous_progress_origin_m,

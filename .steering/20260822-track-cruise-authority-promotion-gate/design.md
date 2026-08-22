@@ -16,6 +16,18 @@ selected=0
 Also record solve/certificate/callback p95, p99 and maximum. Any mismatch is an upstream defect and
 blocks promotion.
 
+### 2026-08-22 evidence update
+
+`output/20260822-232351` completed five observed waypoint wraps after adding the explicit
+numerical-to-semantic execution-primal boundary. All 9,678 physically certified cycles reached
+canonical extraction, storage, cursor, candidate, fresh selector and actuation with zero actuation
+difference. The former 324 `invalid-control-stage` rejects became zero.
+
+Gate A is not yet closed because three solver results violated their own virtual-progress box-row
+tolerance but passed the persistent solver's mixed-unit global absolute test. They were rejected
+before physical/canonical certification. Fix the solver admission contract and repeat Gate A;
+do not normalize those out-of-tolerance values or begin retained authority work first.
+
 ## Gate B: retained revalidation design
 
 When a fresh solve is intentionally unavailable, a retained plan may be considered only after:

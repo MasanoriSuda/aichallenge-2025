@@ -5279,6 +5279,9 @@ struct MpcProblem
   int ref_wp_id{};
   mpc_stage_geometry::Geometry stage_geometry;
   bool progress_contouring_active{false};
+  bool progress_metadata_available{false};
+  bool track_cruise_shadow_requested{false};
+  std::string progress_metadata_reject_reason;
   mpcc_progress::ActivationSource progress_contouring_activation_source{
     mpcc_progress::ActivationSource::Disabled};
   bool dynamic_escape_formulation_lease_active{false};
@@ -5492,6 +5495,77 @@ struct ExtendedMpccTelemetryWindow
   double maximum_solve_ms{};
 };
 
+struct TrackCruiseShadowCycleResult
+{
+  bool eligible{false};
+  bool metadata_available{false};
+  bool build_succeeded{false};
+  bool solve_attempted{false};
+  bool solved{false};
+  bool finite{false};
+  bool constraints_satisfied{false};
+  bool conversion_succeeded{false};
+  bool physical_certificate_checked{false};
+  bool physically_certified{false};
+  bool warm_start_applied{false};
+  bool solver_context_reset{false};
+  std::uint64_t decision_id{};
+  std::uint64_t problem_fingerprint{};
+  std::uint64_t stage_geometry_id{};
+  mpcc_contract::ControlIntent intent{mpcc_contract::ControlIntent::Unknown};
+  race_mpcc::ShadowWarmStartResetReason reset_reason{
+    race_mpcc::ShadowWarmStartResetReason::InvalidCurrentContext};
+  double build_ms{};
+  double solve_ms{};
+  double certificate_ms{};
+  double total_ms{};
+  int iterations{};
+  double speed_difference_mps{std::numeric_limits<double>::quiet_NaN()};
+  double steering_difference_rad{std::numeric_limits<double>::quiet_NaN()};
+  double lateral_rms_difference_m{std::numeric_limits<double>::quiet_NaN()};
+  double lateral_max_difference_m{std::numeric_limits<double>::quiet_NaN()};
+  double terminal_progress_m{std::numeric_limits<double>::quiet_NaN()};
+  double terminal_velocity_mps{std::numeric_limits<double>::quiet_NaN()};
+  std::string status{"not-eligible"};
+  std::string detail{"not-evaluated"};
+};
+
+struct TrackCruiseShadowTelemetryWindow
+{
+  std::uint64_t eligible_count{};
+  std::uint64_t metadata_count{};
+  std::uint64_t build_count{};
+  std::uint64_t attempt_count{};
+  std::uint64_t solved_count{};
+  std::uint64_t finite_count{};
+  std::uint64_t constraint_count{};
+  std::uint64_t conversion_count{};
+  std::uint64_t physical_check_count{};
+  std::uint64_t certified_count{};
+  std::uint64_t warm_start_count{};
+  std::uint64_t reset_count{};
+  std::uint64_t total_iterations{};
+  int maximum_iterations{};
+  double total_build_ms{};
+  double maximum_build_ms{};
+  double total_solve_ms{};
+  double maximum_solve_ms{};
+  double total_certificate_ms{};
+  double maximum_certificate_ms{};
+  double total_shadow_ms{};
+  double maximum_shadow_ms{};
+  double total_speed_difference_mps{};
+  double maximum_speed_difference_mps{};
+  double total_steering_difference_rad{};
+  double maximum_steering_difference_rad{};
+  double total_lateral_rms_difference_m{};
+  double maximum_lateral_difference_m{};
+  std::uint64_t difference_sample_count{};
+  std::array<double, 256U> solve_ms_samples{};
+  std::array<double, 256U> total_ms_samples{};
+  std::size_t timing_sample_count{};
+};
+
 struct MpcRtiSqpTelemetryWindow
 {
   std::uint64_t progress_cycles{};
@@ -5542,6 +5616,14 @@ struct MPC
   {
     (void)use_obstacle_avoidance;
     (void)use_path_constraints_topic;
+    if (
+      cfg.progress_contouring_mpcc_enabled &&
+      cfg.progress_contouring_mpcc_overtake_only &&
+      cfg.progress_contouring.extended_dynamics_enabled)
+    {
+      track_cruise_shadow_solver_context_ =
+        std::make_shared<ExtendedBranchSolverContext>();
+    }
     if (
       !mpc_waypoint_preview::is_valid_offset(cfg.wp_id_offset) ||
       !mpc_waypoint_preview::is_valid_offset(cfg.wp_id_low_offset))
@@ -17965,12 +18047,27 @@ struct MPC
         dynamic_escape_formulation_lease_active});
     const bool progress_contouring_requested =
       progress_contouring_activation.requested;
+    const auto track_cruise_shadow_eligibility =
+      race_mpcc::resolve_track_cruise_shadow_eligibility(
+      race_mpcc::TrackCruiseShadowEligibilityRequest{
+        cfg.progress_contouring_mpcc_enabled,
+        cfg.progress_contouring_mpcc_overtake_only,
+        cfg.progress_contouring.extended_dynamics_enabled,
+        progress_contouring_requested,
+        behavior_override != nullptr,
+        current_control_intent()});
+    const bool track_cruise_shadow_requested =
+      track_cruise_shadow_eligibility.eligible;
+    const bool progress_metadata_requested =
+      progress_contouring_requested || track_cruise_shadow_requested;
     std::string progress_contouring_reject_reason;
-    const auto progress_preparation = progress_contouring_requested ?
+    const auto progress_preparation = progress_metadata_requested ?
       prepare_progress_contouring_mpc(
         N, xr, ur, stage_distance_m, stage_tracking_curvature_radpm,
         progress_contouring_reject_reason) :
       std::optional<ProgressContouringMpcPreparation>{};
+    const bool progress_metadata_available =
+      progress_metadata_requested && progress_preparation.has_value();
     const bool progress_contouring_active =
       progress_contouring_requested && progress_preparation.has_value();
     if (
@@ -17988,7 +18085,7 @@ struct MPC
       progress_contouring_fallback_last_log_sec_ = now_sec;
     }
     if (
-      progress_contouring_active && progress_preparation->normalized_stage_count > 0U &&
+      progress_metadata_available && progress_preparation->normalized_stage_count > 0U &&
       (!std::isfinite(progress_contouring_stage_normalization_last_log_sec_) ||
       now_sec - progress_contouring_stage_normalization_last_log_sec_ >= 1.0))
     {
@@ -18000,15 +18097,39 @@ struct MPC
         progress_preparation->minimum_stage_distance_m, model->wp_id);
       progress_contouring_stage_normalization_last_log_sec_ = now_sec;
     }
-    if (progress_contouring_active) {
+    Eigen::VectorXd progress_reference_state;
+    Eigen::VectorXd progress_state_lower;
+    Eigen::VectorXd progress_state_upper;
+    Eigen::VectorXd progress_input_reference;
+    Eigen::VectorXd progress_input_lower;
+    Eigen::VectorXd progress_input_upper;
+    std::vector<double> progress_stage_dt_sec;
+    if (progress_metadata_available) {
+      progress_reference_state = xr;
+      progress_state_lower = xmin_dyn;
+      progress_state_upper = xmax_dyn;
+      progress_input_reference = ur;
+      progress_input_lower = umin_dyn;
+      progress_input_upper = umax_dyn;
+      progress_stage_dt_sec.reserve(static_cast<std::size_t>(N));
       for (int state_index = 0; state_index < N + 1; ++state_index) {
         const double reference_progress =
           progress_preparation->progress_reference_m[static_cast<std::size_t>(state_index)];
         const auto & bounds =
           progress_preparation->progress_bounds[static_cast<std::size_t>(state_index)];
-        xr[state_index * nx + 2] = reference_progress;
-        xmin_dyn[state_index * nx + 2] = bounds.lower_m;
-        xmax_dyn[state_index * nx + 2] = bounds.upper_m;
+        progress_reference_state[state_index * nx + 2] = reference_progress;
+        progress_state_lower[state_index * nx + 2] = bounds.lower_m;
+        progress_state_upper[state_index * nx + 2] = bounds.upper_m;
+      }
+      progress_state_lower[2] = model->s;
+      progress_state_upper[2] = model->s;
+      for (const auto & linearization : progress_preparation->linearizations) {
+        progress_stage_dt_sec.push_back(linearization.stage_dt_sec);
+      }
+      if (progress_contouring_active) {
+        xr = progress_reference_state;
+        xmin_dyn = progress_state_lower;
+        xmax_dyn = progress_state_upper;
       }
     }
 
@@ -18164,9 +18285,9 @@ struct MPC
     }
 
     Eigen::VectorXd progress_linearization_point;
-    if (progress_contouring_active) {
+    if (progress_metadata_available) {
       progress_linearization_point.resize(nx_N + nu_N);
-      progress_linearization_point << xr, ur;
+      progress_linearization_point << progress_reference_state, progress_input_reference;
     }
 
     const bool progress_execution_context_active =
@@ -18250,12 +18371,15 @@ struct MPC
       q, l, u, P, A_full, N, tracking_wp_id, preview_wp_id, ref_wp_id,
       std::move(stage_geometry),
       progress_contouring_active,
+      progress_metadata_available,
+      track_cruise_shadow_requested,
+      progress_contouring_reject_reason,
       progress_contouring_activation.source,
       dynamic_escape_formulation_lease_active,
-      progress_contouring_active ? model->s : std::numeric_limits<double>::quiet_NaN(),
-      progress_contouring_active ? progress_preparation->stage_distance_m :
+      progress_metadata_available ? model->s : std::numeric_limits<double>::quiet_NaN(),
+      progress_metadata_available ? progress_preparation->stage_distance_m :
       std::vector<double>{},
-      progress_contouring_active ? stage_tracking_curvature_radpm :
+      progress_metadata_available ? stage_tracking_curvature_radpm :
       std::vector<double>{},
       std::move(progress_linearization_point),
       progress_execution_context_active,
@@ -18271,16 +18395,16 @@ struct MPC
       std::move(progress_execution_lateral_upper_m),
       progress_refinement_cold_load_active,
       progress_wall_cache_miss_count,
-      progress_contouring_active ? xr : Eigen::VectorXd{},
-      progress_contouring_active ? xmin_dyn : Eigen::VectorXd{},
-      progress_contouring_active ? xmax_dyn : Eigen::VectorXd{},
-      progress_contouring_active ? ur : Eigen::VectorXd{},
-      progress_contouring_active ? umin_dyn : Eigen::VectorXd{},
-      progress_contouring_active ? umax_dyn : Eigen::VectorXd{},
-      progress_contouring_active ? dynamics_stage_dt_sec : std::vector<double>{},
+      std::move(progress_reference_state),
+      std::move(progress_state_lower),
+      std::move(progress_state_upper),
+      std::move(progress_input_reference),
+      std::move(progress_input_lower),
+      std::move(progress_input_upper),
+      std::move(progress_stage_dt_sec),
       progress_contouring_active &&
       overtake_line_state_.phase == OvertakeLinePhase::Pass,
-      progress_contouring_active ? current_speed_mps_ : 0.0,
+      progress_metadata_available ? current_speed_mps_ : 0.0,
       behavior_output.dynamic_obstacle_lateral_escape_active,
       dynamic_margin_escape_tracking_contract_active,
       behavior_output.dynamic_obstacle_lateral_escape_attempt_id,
@@ -18310,7 +18434,7 @@ struct MPC
     const int legacy_nx_N = legacy_nx * (N + 1);
     const int legacy_nu_N = legacy_nu * N;
     if (
-      !legacy.progress_contouring_active || !cfg.progress_contouring.extended_dynamics_enabled ||
+      !legacy.progress_metadata_available || !cfg.progress_contouring.extended_dynamics_enabled ||
       N <= 0 || model == nullptr || !std::isfinite(model->length) || model->length <= 0.0 ||
       !std::isfinite(legacy.progress_origin_m) ||
       !std::isfinite(legacy.progress_measured_speed_mps) ||
@@ -18662,7 +18786,8 @@ struct MPC
   }
 
   persistent_osqp::SolveOutcome solve_extended_progress_problem(
-    const ExtendedProgressMpcProblem & problem, const double now_sec)
+    const ExtendedProgressMpcProblem & problem, const double now_sec,
+    const bool record_runtime_telemetry = true)
   {
     std::unique_lock<std::mutex> branch_context_lock;
     auto * solver = &persistent_extended_osqp_solver_;
@@ -18746,7 +18871,9 @@ struct MPC
     {
       ++active_extended_branch_solver_context_->warm_start_count;
     }
-    record_osqp_telemetry(outcome, now_sec);
+    if (record_runtime_telemetry) {
+      record_osqp_telemetry(outcome, now_sec);
+    }
     if (!outcome.result.has_value()) {
       last_solution->reset();
       *last_solution_sec = -std::numeric_limits<double>::infinity();
@@ -19873,6 +20000,399 @@ struct MPC
       SolvedExecutionWallValidationScope::SweptFromCurrentPose);
   }
 
+  race_mpcc::ShadowWarmStartIdentity make_track_cruise_shadow_warm_start_identity(
+    const MpcProblem & problem,
+    const mpcc_contract::MpccProblemContext & context) const
+  {
+    race_mpcc::ShadowWarmStartIdentity identity;
+    identity.intent = context.intent;
+    identity.formulation = context.formulation;
+    identity.horizon_steps = context.horizon_steps;
+    identity.state_schema_id = context.state_schema_id;
+    identity.input_schema_id = context.input_schema_id;
+    identity.bounds_schema_id = context.bounds_schema_id;
+    identity.cost_schema_id = context.cost_schema_id;
+    identity.stage_geometry_id = context.stage_geometry_id;
+    identity.tracking_waypoint = problem.stage_geometry.tracking_waypoint;
+    identity.circular = problem.stage_geometry.circular;
+    identity.stages.reserve(problem.stage_geometry.stages.size());
+    for (const auto & stage : problem.stage_geometry.stages) {
+      identity.stages.push_back(mpcc_contract::StageGeometryIdentity{
+        stage.transition_from_waypoint, stage.state_waypoint,
+        stage.transition_distance_m, stage.cumulative_distance_m});
+    }
+    return identity;
+  }
+
+  void record_track_cruise_shadow_telemetry(
+    const TrackCruiseShadowCycleResult & result, const double now_sec)
+  {
+    if (!result.eligible) {
+      return;
+    }
+    auto & window = track_cruise_shadow_telemetry_window_;
+    ++window.eligible_count;
+    window.metadata_count += result.metadata_available ? 1U : 0U;
+    window.build_count += result.build_succeeded ? 1U : 0U;
+    window.attempt_count += result.solve_attempted ? 1U : 0U;
+    window.solved_count += result.solved ? 1U : 0U;
+    window.finite_count += result.finite ? 1U : 0U;
+    window.constraint_count += result.constraints_satisfied ? 1U : 0U;
+    window.conversion_count += result.conversion_succeeded ? 1U : 0U;
+    window.physical_check_count += result.physical_certificate_checked ? 1U : 0U;
+    window.certified_count += result.physically_certified ? 1U : 0U;
+    window.warm_start_count += result.warm_start_applied ? 1U : 0U;
+    window.reset_count += result.solver_context_reset ? 1U : 0U;
+    window.total_iterations += static_cast<std::uint64_t>(std::max(0, result.iterations));
+    window.maximum_iterations = std::max(window.maximum_iterations, result.iterations);
+    window.total_build_ms += result.build_ms;
+    window.maximum_build_ms = std::max(window.maximum_build_ms, result.build_ms);
+    window.total_solve_ms += result.solve_ms;
+    window.maximum_solve_ms = std::max(window.maximum_solve_ms, result.solve_ms);
+    window.total_certificate_ms += result.certificate_ms;
+    window.maximum_certificate_ms = std::max(
+      window.maximum_certificate_ms, result.certificate_ms);
+    window.total_shadow_ms += result.total_ms;
+    window.maximum_shadow_ms = std::max(window.maximum_shadow_ms, result.total_ms);
+    if (
+      std::isfinite(result.speed_difference_mps) &&
+      std::isfinite(result.steering_difference_rad) &&
+      std::isfinite(result.lateral_rms_difference_m) &&
+      std::isfinite(result.lateral_max_difference_m))
+    {
+      ++window.difference_sample_count;
+      window.total_speed_difference_mps += result.speed_difference_mps;
+      window.maximum_speed_difference_mps = std::max(
+        window.maximum_speed_difference_mps, result.speed_difference_mps);
+      window.total_steering_difference_rad += result.steering_difference_rad;
+      window.maximum_steering_difference_rad = std::max(
+        window.maximum_steering_difference_rad, result.steering_difference_rad);
+      window.total_lateral_rms_difference_m += result.lateral_rms_difference_m;
+      window.maximum_lateral_difference_m = std::max(
+        window.maximum_lateral_difference_m, result.lateral_max_difference_m);
+    }
+    if (window.timing_sample_count < window.solve_ms_samples.size()) {
+      window.solve_ms_samples[window.timing_sample_count] = result.solve_ms;
+      window.total_ms_samples[window.timing_sample_count] = result.total_ms;
+      ++window.timing_sample_count;
+    }
+
+    if (result.status != last_track_cruise_shadow_status_) {
+      const std::string message =
+        std::string{"Track/Cruise MPCC shadow outcome: decision="} +
+        std::to_string(result.decision_id) + ", intent=" +
+        mpcc_contract::to_string(result.intent) + ", status=" + result.status +
+        ", detail=" + result.detail + ", warm=" +
+        (result.warm_start_applied ? "1" : "0") + ", reset=" +
+        (result.solver_context_reset ? "1" : "0") + "/" +
+        race_mpcc::shadow_warm_start_reset_reason_name(result.reset_reason) +
+        ", solve_ms=" + std::to_string(result.solve_ms) +
+        ", total_ms=" + std::to_string(result.total_ms) +
+        ", authority=shadow, selected=0";
+      if (result.physically_certified) {
+        RCLCPP_INFO(rclcpp::get_logger("mpc_controller"), "%s", message.c_str());
+      } else {
+        RCLCPP_WARN(rclcpp::get_logger("mpc_controller"), "%s", message.c_str());
+      }
+      last_track_cruise_shadow_status_ = result.status;
+    }
+
+    if (!std::isfinite(now_sec)) {
+      return;
+    }
+    if (
+      !std::isfinite(last_track_cruise_shadow_telemetry_log_sec_) ||
+      now_sec < last_track_cruise_shadow_telemetry_log_sec_)
+    {
+      last_track_cruise_shadow_telemetry_log_sec_ = now_sec;
+      return;
+    }
+    if (now_sec - last_track_cruise_shadow_telemetry_log_sec_ < 1.0) {
+      return;
+    }
+    const auto percentile = [](
+        const std::array<double, 256U> & samples, const std::size_t count,
+        const double quantile) {
+        if (count == 0U) {
+          return 0.0;
+        }
+        std::array<double, 256U> sorted = samples;
+        std::sort(sorted.begin(), sorted.begin() + static_cast<std::ptrdiff_t>(count));
+        const std::size_t index = std::min(
+          count - 1U,
+          static_cast<std::size_t>(
+            std::ceil(quantile * static_cast<double>(count)) - 1.0));
+        return sorted[index];
+      };
+    const double eligible = static_cast<double>(std::max<std::uint64_t>(1U, window.eligible_count));
+    const double attempted = static_cast<double>(std::max<std::uint64_t>(1U, window.attempt_count));
+    const double solved = static_cast<double>(std::max<std::uint64_t>(1U, window.solved_count));
+    const double differences = static_cast<double>(
+      std::max<std::uint64_t>(1U, window.difference_sample_count));
+    RCLCPP_INFO(
+      rclcpp::get_logger("mpc_controller"),
+      "Track/Cruise MPCC shadow: eligible=%zu, metadata=%zu/%.1f%%, "
+      "build=%zu, attempt=%zu/%.1f%%, solved=%zu/%.1f%%, finite=%zu, "
+      "constraint=%zu, converted=%zu, physical=%zu, certified=%zu/%.1f%%, "
+      "warm=%zu, reset=%zu, reset_reason=%s, "
+      "build_ms=%.3f/%.3f(avg/max), solve_ms=%.3f/%.3f/%.3f/%.3f(avg/p95/p99/max), "
+      "certificate_ms=%.3f/%.3f(avg/max), "
+      "shadow_ms=%.3f/%.3f/%.3f/%.3f(avg/p95/p99/max), "
+      "iterations=%.1f/%d(avg/max), dv=%.3f/%.3f(avg/max)mps, "
+      "dsteer=%.4f/%.4f(avg/max)rad, lateral=%.3f/%.3f(rms_avg/max)m, "
+      "last_status=%s, authority=shadow, selected=0",
+      static_cast<std::size_t>(window.eligible_count),
+      static_cast<std::size_t>(window.metadata_count),
+      100.0 * static_cast<double>(window.metadata_count) / eligible,
+      static_cast<std::size_t>(window.build_count),
+      static_cast<std::size_t>(window.attempt_count),
+      100.0 * static_cast<double>(window.attempt_count) /
+      static_cast<double>(std::max<std::uint64_t>(1U, window.metadata_count)),
+      static_cast<std::size_t>(window.solved_count),
+      100.0 * static_cast<double>(window.solved_count) / attempted,
+      static_cast<std::size_t>(window.finite_count),
+      static_cast<std::size_t>(window.constraint_count),
+      static_cast<std::size_t>(window.conversion_count),
+      static_cast<std::size_t>(window.physical_check_count),
+      static_cast<std::size_t>(window.certified_count),
+      100.0 * static_cast<double>(window.certified_count) / attempted,
+      static_cast<std::size_t>(window.warm_start_count),
+      static_cast<std::size_t>(window.reset_count),
+      race_mpcc::shadow_warm_start_reset_reason_name(result.reset_reason),
+      window.total_build_ms / eligible, window.maximum_build_ms,
+      window.total_solve_ms / attempted,
+      percentile(window.solve_ms_samples, window.timing_sample_count, 0.95),
+      percentile(window.solve_ms_samples, window.timing_sample_count, 0.99),
+      window.maximum_solve_ms,
+      window.total_certificate_ms / solved, window.maximum_certificate_ms,
+      window.total_shadow_ms / eligible,
+      percentile(window.total_ms_samples, window.timing_sample_count, 0.95),
+      percentile(window.total_ms_samples, window.timing_sample_count, 0.99),
+      window.maximum_shadow_ms,
+      static_cast<double>(window.total_iterations) / attempted,
+      window.maximum_iterations,
+      window.total_speed_difference_mps / differences,
+      window.maximum_speed_difference_mps,
+      window.total_steering_difference_rad / differences,
+      window.maximum_steering_difference_rad,
+      window.total_lateral_rms_difference_m / differences,
+      window.maximum_lateral_difference_m,
+      result.status.c_str());
+    window = TrackCruiseShadowTelemetryWindow{};
+    last_track_cruise_shadow_telemetry_log_sec_ = now_sec;
+  }
+
+  TrackCruiseShadowCycleResult evaluate_track_cruise_shadow(
+    const MpcProblem & problem, const Eigen::VectorXd & production_solution,
+    const double now_sec)
+  {
+    constexpr int legacy_nx = 3;
+    constexpr int legacy_nu = 2;
+    TrackCruiseShadowCycleResult result;
+    result.eligible = problem.track_cruise_shadow_requested;
+    result.metadata_available = problem.progress_metadata_available;
+    result.decision_id = active_control_decision_id_;
+    result.intent = current_control_intent();
+    const auto started = SteadyClock::now();
+    const auto finish = [&result, &started]() {
+        result.total_ms = std::chrono::duration<double, std::milli>(
+          SteadyClock::now() - started).count();
+        return result;
+      };
+    if (!result.eligible) {
+      return finish();
+    }
+    try {
+      if (!result.metadata_available) {
+        result.status = "metadata-reject";
+        result.detail = problem.progress_metadata_reject_reason.empty() ?
+          "progress metadata unavailable" : problem.progress_metadata_reject_reason;
+        return finish();
+      }
+      const auto build_started = SteadyClock::now();
+      std::string build_reject_reason;
+      const auto extended_problem = build_extended_progress_problem(
+        problem, build_reject_reason);
+      result.build_ms = std::chrono::duration<double, std::milli>(
+        SteadyClock::now() - build_started).count();
+      if (!extended_problem.has_value()) {
+        result.status = "build-reject";
+        result.detail = build_reject_reason;
+        return finish();
+      }
+      result.build_succeeded = true;
+
+      const auto context = make_problem_context(
+        problem, mpcc_contract::Formulation::VelocityProgress5State);
+      result.problem_fingerprint = context.fingerprint;
+      result.stage_geometry_id = context.stage_geometry_id;
+      if (!mpcc_contract::problem_context_complete(context)) {
+        result.status = "context-reject";
+        result.detail = "canonical shadow context incomplete";
+        return finish();
+      }
+      const auto warm_identity =
+        make_track_cruise_shadow_warm_start_identity(problem, context);
+      const auto warm_resolution = race_mpcc::resolve_shadow_warm_start(
+        track_cruise_shadow_warm_start_identity_, warm_identity);
+      result.reset_reason = warm_resolution.reason;
+      if (!warm_resolution.valid) {
+        result.status = "warm-context-reject";
+        result.detail = race_mpcc::shadow_warm_start_reset_reason_name(
+          warm_resolution.reason);
+        return finish();
+      }
+      if (warm_resolution.reset_context) {
+        track_cruise_shadow_context_epoch_ =
+          track_cruise_shadow_context_epoch_ ==
+          std::numeric_limits<std::uint64_t>::max() ?
+          1U : track_cruise_shadow_context_epoch_ + 1U;
+      }
+      track_cruise_shadow_warm_start_identity_ = warm_identity;
+      if (track_cruise_shadow_solver_context_ == nullptr) {
+        result.status = "solver-context-reject";
+        result.detail = "dedicated shadow solver context unavailable";
+        return finish();
+      }
+
+      const auto previous_context = active_extended_branch_solver_context_;
+      const auto previous_epoch = active_extended_branch_context_epoch_;
+      const auto previous_target = active_extended_branch_target_id_;
+      const int previous_side = active_extended_branch_side_sign_;
+      const int previous_horizon = active_extended_branch_horizon_size_;
+      const bool previous_warm = last_extended_branch_warm_start_applied_;
+      const bool previous_reset = last_extended_branch_context_reset_;
+      const auto previous_count = last_extended_branch_context_solve_count_;
+      auto restore_solver_context = ScopeExit([this, previous_context, previous_epoch,
+          previous_target, previous_side, previous_horizon, previous_warm,
+          previous_reset, previous_count]() {
+          active_extended_branch_solver_context_ = previous_context;
+          active_extended_branch_context_epoch_ = previous_epoch;
+          active_extended_branch_target_id_ = previous_target;
+          active_extended_branch_side_sign_ = previous_side;
+          active_extended_branch_horizon_size_ = previous_horizon;
+          last_extended_branch_warm_start_applied_ = previous_warm;
+          last_extended_branch_context_reset_ = previous_reset;
+          last_extended_branch_context_solve_count_ = previous_count;
+        });
+      active_extended_branch_solver_context_ = track_cruise_shadow_solver_context_;
+      active_extended_branch_context_epoch_ = track_cruise_shadow_context_epoch_;
+      active_extended_branch_target_id_ = mpcc_contract::to_string(result.intent);
+      active_extended_branch_side_sign_ = 0;
+      active_extended_branch_horizon_size_ = problem.N;
+      result.solve_attempted = true;
+      const auto outcome = solve_extended_progress_problem(
+        extended_problem.value(), now_sec, false);
+      result.solve_ms = outcome.telemetry.total_ms;
+      result.iterations = outcome.telemetry.iterations;
+      result.warm_start_applied = outcome.telemetry.warm_start_applied;
+      result.solver_context_reset =
+        warm_resolution.reset_context || last_extended_branch_context_reset_;
+      if (!outcome.result.has_value()) {
+        result.status = "solve-failure";
+        result.detail = outcome.failure_detail;
+        return finish();
+      }
+      result.solved = true;
+      result.finite = outcome.result->primal.allFinite();
+      result.constraints_satisfied =
+        std::isfinite(outcome.result->maximum_constraint_violation) &&
+        outcome.result->maximum_constraint_violation >= 0.0;
+      if (!result.finite || !result.constraints_satisfied) {
+        result.status = result.finite ? "constraint-reject" : "nonfinite-result";
+        result.detail = "shadow solution failed finite/constraint contract";
+        return finish();
+      }
+      const auto shadow_solution = mpcc_progress::convert_extended_solution_to_legacy(
+        outcome.result->primal, problem.N, extended_problem->progress_origin_m);
+      if (!shadow_solution.has_value()) {
+        result.status = "conversion-reject";
+        result.detail = "five-state prediction conversion rejected";
+        return finish();
+      }
+      result.conversion_succeeded = true;
+
+      const auto certificate_started = SteadyClock::now();
+      std::vector<double> path_distance_m;
+      std::vector<double> lateral_m;
+      path_distance_m.reserve(static_cast<std::size_t>(problem.N));
+      lateral_m.reserve(static_cast<std::size_t>(problem.N));
+      Eigen::VectorXd lower_bound(problem.N);
+      Eigen::VectorXd upper_bound(problem.N);
+      for (int stage = 0; stage < problem.N; ++stage) {
+        path_distance_m.push_back(
+          problem.stage_geometry.stages[static_cast<std::size_t>(stage)].
+          cumulative_distance_m);
+        lateral_m.push_back((*shadow_solution)[(stage + 1) * legacy_nx]);
+        lower_bound[stage] = problem.progress_state_lower[(stage + 1) * legacy_nx];
+        upper_bound[stage] = problem.progress_state_upper[(stage + 1) * legacy_nx];
+      }
+      const AlignedMpccExecutionTrajectory shadow_trajectory{
+        0.0, 0.0, std::numeric_limits<double>::infinity(), std::move(lateral_m)};
+      std::string certificate_reason;
+      result.physical_certificate_checked = true;
+      result.physically_certified = solved_mpcc_execution_path_wall_safe(
+        shadow_trajectory, path_distance_m, problem.ref_wp_id, problem.N,
+        lower_bound, upper_bound, 0.0, certificate_reason,
+        std::max(
+          1e-5, outcome.result->maximum_constraint_violation + 1e-6),
+        SolvedExecutionWallValidationScope::SweptFromCurrentPose);
+      result.certificate_ms = std::chrono::duration<double, std::milli>(
+        SteadyClock::now() - certificate_started).count();
+      if (!result.physically_certified) {
+        result.status = "physical-certificate-reject";
+        result.detail = certificate_reason;
+        return finish();
+      }
+
+      const int expected_production_size =
+        legacy_nx * (problem.N + 1) + legacy_nu * problem.N;
+      if (
+        production_solution.size() == expected_production_size &&
+        production_solution.allFinite())
+      {
+        const int input_offset = legacy_nx * (problem.N + 1);
+        const double production_speed = production_solution[input_offset];
+        const double production_steering = std::atan(
+          production_solution[input_offset + 1] * model->length);
+        const double shadow_speed = (*shadow_solution)[input_offset];
+        const double shadow_steering = std::atan(
+          (*shadow_solution)[input_offset + 1] * model->length);
+        result.speed_difference_mps = std::abs(shadow_speed - production_speed);
+        result.steering_difference_rad = std::abs(
+          shadow_steering - production_steering);
+        double squared_lateral_difference = 0.0;
+        double maximum_lateral_difference = 0.0;
+        for (int stage = 1; stage < problem.N + 1; ++stage) {
+          const double difference = std::abs(
+            (*shadow_solution)[stage * legacy_nx] -
+            production_solution[stage * legacy_nx]);
+          squared_lateral_difference += difference * difference;
+          maximum_lateral_difference = std::max(maximum_lateral_difference, difference);
+        }
+        result.lateral_rms_difference_m = std::sqrt(
+          squared_lateral_difference / static_cast<double>(problem.N));
+        result.lateral_max_difference_m = maximum_lateral_difference;
+      }
+      result.terminal_progress_m =
+        (*shadow_solution)[problem.N * legacy_nx + 2] - problem.progress_origin_m;
+      result.terminal_velocity_mps = outcome.result->primal[
+        problem.N * mpcc_progress::kExtendedStateDimension +
+        mpcc_progress::kExtendedVelocityIndex];
+      result.status = "certified";
+      result.detail = certificate_reason;
+      return finish();
+    } catch (const std::exception & error) {
+      result.status = "shadow-exception";
+      result.detail = error.what();
+      return finish();
+    } catch (...) {
+      result.status = "shadow-exception";
+      result.detail = "unknown shadow exception";
+      return finish();
+    }
+  }
+
   std::optional<PhysicallyValidatedMpccExecutionTrajectory>
   resolve_physically_validated_mpcc_execution_trajectory(
     const std::vector<double> & current_path_distance_m,
@@ -20992,6 +21512,11 @@ struct MPC
       } else if (problem.dynamic_obstacle_lateral_escape_active) {
         dynamic_escape_tracking_solver_formulation_ = "progress-extended";
       }
+      if (problem.track_cruise_shadow_requested) {
+        const auto shadow_result = evaluate_track_cruise_shadow(
+          problem, dec, now_sec);
+        record_track_cruise_shadow_telemetry(shadow_result, now_sec);
+      }
       std::string dynamic_margin_escape_reject_reason;
       if (!dynamic_margin_escape_solution_wall_safe(
           problem, dec, maximum_constraint_violation,
@@ -21757,6 +22282,14 @@ struct MPC
   std::optional<double> last_extended_osqp_progress_origin_m_;
   std::shared_ptr<ExtendedBranchSolverContext> extended_left_branch_solver_context_;
   std::shared_ptr<ExtendedBranchSolverContext> extended_right_branch_solver_context_;
+  std::shared_ptr<ExtendedBranchSolverContext> track_cruise_shadow_solver_context_;
+  std::optional<race_mpcc::ShadowWarmStartIdentity>
+  track_cruise_shadow_warm_start_identity_;
+  std::uint64_t track_cruise_shadow_context_epoch_{};
+  TrackCruiseShadowTelemetryWindow track_cruise_shadow_telemetry_window_;
+  double last_track_cruise_shadow_telemetry_log_sec_{
+    std::numeric_limits<double>::quiet_NaN()};
+  std::string last_track_cruise_shadow_status_;
   std::shared_ptr<ExtendedBranchSolverContext> active_extended_branch_solver_context_;
   std::uint64_t active_extended_branch_context_epoch_{};
   std::string active_extended_branch_target_id_;

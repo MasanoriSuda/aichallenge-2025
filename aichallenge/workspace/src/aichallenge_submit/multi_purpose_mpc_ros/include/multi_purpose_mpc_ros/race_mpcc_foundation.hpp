@@ -1,11 +1,15 @@
 #ifndef MULTI_PURPOSE_MPC_ROS__RACE_MPCC_FOUNDATION_HPP_
 #define MULTI_PURPOSE_MPC_ROS__RACE_MPCC_FOUNDATION_HPP_
 
+#include <multi_purpose_mpc_ros/mpcc_execution_contract.hpp>
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <string>
+#include <vector>
 
 namespace multi_purpose_mpc_ros::race_mpcc_foundation
 {
@@ -115,6 +119,87 @@ struct ShadowDecision
 };
 
 std::string format_shadow_decision(const ShadowDecision & decision);
+
+enum class TrackCruiseShadowEligibilityReason
+{
+  Eligible,
+  ProgressMpccDisabled,
+  MigrationBoundaryInactive,
+  ExtendedDynamicsDisabled,
+  LiveProgressAlreadyActive,
+  TacticalSnapshot,
+  IntentNotTrackCruise,
+};
+
+const char * track_cruise_shadow_eligibility_reason_name(
+  TrackCruiseShadowEligibilityReason reason) noexcept;
+
+struct TrackCruiseShadowEligibilityRequest
+{
+  bool progress_mpcc_enabled{false};
+  bool overtake_only_boundary{true};
+  bool extended_dynamics_enabled{false};
+  bool live_progress_active{false};
+  bool tactical_snapshot{false};
+  mpcc_execution_contract::ControlIntent intent{
+    mpcc_execution_contract::ControlIntent::Unknown};
+};
+
+struct TrackCruiseShadowEligibility
+{
+  bool eligible{false};
+  TrackCruiseShadowEligibilityReason reason{
+    TrackCruiseShadowEligibilityReason::ProgressMpccDisabled};
+};
+
+TrackCruiseShadowEligibility resolve_track_cruise_shadow_eligibility(
+  const TrackCruiseShadowEligibilityRequest & request) noexcept;
+
+enum class ShadowWarmStartResetReason
+{
+  None,
+  InitialContext,
+  InvalidPreviousContext,
+  InvalidCurrentContext,
+  IntentChanged,
+  FormulationChanged,
+  HorizonChanged,
+  SchemaChanged,
+  StageGeometryDiscontinuous,
+};
+
+const char * shadow_warm_start_reset_reason_name(
+  ShadowWarmStartResetReason reason) noexcept;
+
+struct ShadowWarmStartIdentity
+{
+  mpcc_execution_contract::ControlIntent intent{
+    mpcc_execution_contract::ControlIntent::Unknown};
+  mpcc_execution_contract::Formulation formulation{
+    mpcc_execution_contract::Formulation::Unresolved};
+  std::size_t horizon_steps{};
+  std::string state_schema_id;
+  std::string input_schema_id;
+  std::string bounds_schema_id;
+  std::string cost_schema_id;
+  std::uint64_t stage_geometry_id{};
+  int tracking_waypoint{};
+  bool circular{false};
+  std::vector<mpcc_execution_contract::StageGeometryIdentity> stages;
+};
+
+struct ShadowWarmStartResolution
+{
+  bool valid{false};
+  bool apply_warm_start{false};
+  bool reset_context{true};
+  ShadowWarmStartResetReason reason{
+    ShadowWarmStartResetReason::InvalidCurrentContext};
+};
+
+ShadowWarmStartResolution resolve_shadow_warm_start(
+  const std::optional<ShadowWarmStartIdentity> & previous,
+  const ShadowWarmStartIdentity & current) noexcept;
 
 }  // namespace multi_purpose_mpc_ros::race_mpcc_foundation
 

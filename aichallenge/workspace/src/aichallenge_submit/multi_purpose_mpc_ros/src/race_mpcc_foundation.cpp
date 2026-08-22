@@ -195,4 +195,233 @@ std::string format_shadow_decision(const ShadowDecision & decision)
   return stream.str();
 }
 
+const char * track_cruise_shadow_eligibility_reason_name(
+  const TrackCruiseShadowEligibilityReason reason) noexcept
+{
+  switch (reason) {
+    case TrackCruiseShadowEligibilityReason::Eligible:
+      return "eligible";
+    case TrackCruiseShadowEligibilityReason::ProgressMpccDisabled:
+      return "progress-mpcc-disabled";
+    case TrackCruiseShadowEligibilityReason::MigrationBoundaryInactive:
+      return "migration-boundary-inactive";
+    case TrackCruiseShadowEligibilityReason::ExtendedDynamicsDisabled:
+      return "extended-dynamics-disabled";
+    case TrackCruiseShadowEligibilityReason::LiveProgressAlreadyActive:
+      return "live-progress-already-active";
+    case TrackCruiseShadowEligibilityReason::TacticalSnapshot:
+      return "tactical-snapshot";
+    case TrackCruiseShadowEligibilityReason::IntentNotTrackCruise:
+      return "intent-not-track-cruise";
+  }
+  return "unknown";
+}
+
+TrackCruiseShadowEligibility resolve_track_cruise_shadow_eligibility(
+  const TrackCruiseShadowEligibilityRequest & request) noexcept
+{
+  TrackCruiseShadowEligibility result;
+  if (!request.progress_mpcc_enabled) {
+    result.reason = TrackCruiseShadowEligibilityReason::ProgressMpccDisabled;
+    return result;
+  }
+  if (!request.overtake_only_boundary) {
+    result.reason = TrackCruiseShadowEligibilityReason::MigrationBoundaryInactive;
+    return result;
+  }
+  if (!request.extended_dynamics_enabled) {
+    result.reason = TrackCruiseShadowEligibilityReason::ExtendedDynamicsDisabled;
+    return result;
+  }
+  if (request.live_progress_active) {
+    result.reason = TrackCruiseShadowEligibilityReason::LiveProgressAlreadyActive;
+    return result;
+  }
+  if (request.tactical_snapshot) {
+    result.reason = TrackCruiseShadowEligibilityReason::TacticalSnapshot;
+    return result;
+  }
+  if (
+    request.intent != mpcc_execution_contract::ControlIntent::Track &&
+    request.intent != mpcc_execution_contract::ControlIntent::Cruise)
+  {
+    result.reason = TrackCruiseShadowEligibilityReason::IntentNotTrackCruise;
+    return result;
+  }
+  result.eligible = true;
+  result.reason = TrackCruiseShadowEligibilityReason::Eligible;
+  return result;
+}
+
+const char * shadow_warm_start_reset_reason_name(
+  const ShadowWarmStartResetReason reason) noexcept
+{
+  switch (reason) {
+    case ShadowWarmStartResetReason::None:
+      return "none";
+    case ShadowWarmStartResetReason::InitialContext:
+      return "initial-context";
+    case ShadowWarmStartResetReason::InvalidPreviousContext:
+      return "invalid-previous-context";
+    case ShadowWarmStartResetReason::InvalidCurrentContext:
+      return "invalid-current-context";
+    case ShadowWarmStartResetReason::IntentChanged:
+      return "intent-changed";
+    case ShadowWarmStartResetReason::FormulationChanged:
+      return "formulation-changed";
+    case ShadowWarmStartResetReason::HorizonChanged:
+      return "horizon-changed";
+    case ShadowWarmStartResetReason::SchemaChanged:
+      return "schema-changed";
+    case ShadowWarmStartResetReason::StageGeometryDiscontinuous:
+      return "stage-geometry-discontinuous";
+  }
+  return "unknown";
+}
+
+namespace
+{
+
+bool shadow_identity_complete(const ShadowWarmStartIdentity & identity) noexcept
+{
+  const bool intent_valid =
+    identity.intent == mpcc_execution_contract::ControlIntent::Track ||
+    identity.intent == mpcc_execution_contract::ControlIntent::Cruise;
+  if (
+    !intent_valid ||
+    identity.formulation !=
+    mpcc_execution_contract::Formulation::VelocityProgress5State ||
+    identity.horizon_steps == 0U ||
+    identity.horizon_steps != identity.stages.size() ||
+    identity.state_schema_id.empty() || identity.input_schema_id.empty() ||
+    identity.bounds_schema_id.empty() || identity.cost_schema_id.empty() ||
+    identity.stage_geometry_id == 0U || identity.stages.empty() ||
+    identity.stages.front().transition_from_waypoint != identity.tracking_waypoint)
+  {
+    return false;
+  }
+  if (
+    identity.stage_geometry_id !=
+    mpcc_execution_contract::fingerprint_stage_geometry(
+      identity.tracking_waypoint, identity.circular, identity.stages))
+  {
+    return false;
+  }
+  for (std::size_t index = 0U; index < identity.stages.size(); ++index) {
+    const auto & stage = identity.stages[index];
+    if (
+      !std::isfinite(stage.transition_distance_m) ||
+      stage.transition_distance_m < 0.0 ||
+      !std::isfinite(stage.cumulative_distance_m) ||
+      stage.cumulative_distance_m < 0.0 ||
+      (index > 0U &&
+      identity.stages[index - 1U].state_waypoint !=
+      stage.transition_from_waypoint))
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool same_schema(
+  const ShadowWarmStartIdentity & previous,
+  const ShadowWarmStartIdentity & current) noexcept
+{
+  return
+    previous.state_schema_id == current.state_schema_id &&
+    previous.input_schema_id == current.input_schema_id &&
+    previous.bounds_schema_id == current.bounds_schema_id &&
+    previous.cost_schema_id == current.cost_schema_id;
+}
+
+bool rolling_stage_geometry_compatible(
+  const ShadowWarmStartIdentity & previous,
+  const ShadowWarmStartIdentity & current) noexcept
+{
+  if (previous.stage_geometry_id == current.stage_geometry_id) {
+    return true;
+  }
+  if (previous.circular != current.circular || previous.stages.empty() || current.stages.empty()) {
+    return false;
+  }
+  std::size_t offset = previous.stages.size();
+  for (std::size_t index = 0U; index < previous.stages.size(); ++index) {
+    if (
+      previous.stages[index].transition_from_waypoint ==
+      current.stages.front().transition_from_waypoint)
+    {
+      offset = index;
+      break;
+    }
+  }
+  if (offset >= previous.stages.size()) {
+    return false;
+  }
+  const std::size_t overlap = std::min(
+    previous.stages.size() - offset, current.stages.size());
+  const std::size_t minimum_overlap = std::min<std::size_t>(2U, current.stages.size());
+  if (overlap < minimum_overlap) {
+    return false;
+  }
+  for (std::size_t index = 0U; index < overlap; ++index) {
+    const auto & old_stage = previous.stages[offset + index];
+    const auto & new_stage = current.stages[index];
+    if (
+      old_stage.transition_from_waypoint != new_stage.transition_from_waypoint ||
+      old_stage.state_waypoint != new_stage.state_waypoint ||
+      std::abs(old_stage.transition_distance_m - new_stage.transition_distance_m) > 1e-9)
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+}  // namespace
+
+ShadowWarmStartResolution resolve_shadow_warm_start(
+  const std::optional<ShadowWarmStartIdentity> & previous,
+  const ShadowWarmStartIdentity & current) noexcept
+{
+  ShadowWarmStartResolution result;
+  if (!shadow_identity_complete(current)) {
+    result.reason = ShadowWarmStartResetReason::InvalidCurrentContext;
+    return result;
+  }
+  result.valid = true;
+  if (!previous.has_value()) {
+    result.reason = ShadowWarmStartResetReason::InitialContext;
+    return result;
+  }
+  if (!shadow_identity_complete(previous.value())) {
+    result.reason = ShadowWarmStartResetReason::InvalidPreviousContext;
+    return result;
+  }
+  if (previous->intent != current.intent) {
+    result.reason = ShadowWarmStartResetReason::IntentChanged;
+    return result;
+  }
+  if (previous->formulation != current.formulation) {
+    result.reason = ShadowWarmStartResetReason::FormulationChanged;
+    return result;
+  }
+  if (previous->horizon_steps != current.horizon_steps) {
+    result.reason = ShadowWarmStartResetReason::HorizonChanged;
+    return result;
+  }
+  if (!same_schema(previous.value(), current)) {
+    result.reason = ShadowWarmStartResetReason::SchemaChanged;
+    return result;
+  }
+  if (!rolling_stage_geometry_compatible(previous.value(), current)) {
+    result.reason = ShadowWarmStartResetReason::StageGeometryDiscontinuous;
+    return result;
+  }
+  result.apply_warm_start = true;
+  result.reset_context = false;
+  result.reason = ShadowWarmStartResetReason::None;
+  return result;
+}
+
 }  // namespace multi_purpose_mpc_ros::race_mpcc_foundation

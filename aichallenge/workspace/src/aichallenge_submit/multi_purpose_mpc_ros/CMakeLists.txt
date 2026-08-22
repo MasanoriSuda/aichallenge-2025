@@ -122,6 +122,9 @@ ament_auto_add_library(${PROJECT_NAME}_race_mpcc_foundation SHARED
   NO_TARGET_LINK_LIBRARIES
   src/race_mpcc_foundation.cpp
 )
+target_link_libraries(${PROJECT_NAME}_race_mpcc_foundation
+  ${PROJECT_NAME}_mpcc_execution_contract
+)
 
 ament_auto_add_library(${PROJECT_NAME}_v2x_overtake_core SHARED
   NO_TARGET_LINK_LIBRARIES

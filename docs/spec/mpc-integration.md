@@ -1630,6 +1630,38 @@ stateful admission gateを40 Hzでenter/releaseし直さない。
 失敗を区別する。この処理は2025 AWSIM競技シミュレーション向けの暫定であり、
 2026公式仕様または実車安全仕様ではない。
 
+### Track/Cruise 5-state MPCC shadow（2026-08-22、移行診断）
+
+`progress_contouring_mpcc_overtake_only=true`の現行権限境界を維持したまま、通常の
+Track/Cruise周期でも本番観測、stage geometry、壁bounds、速度参照から5-state
+contouring-progress問題を構築し、専用OSQP contextでshadow solveする。これは通常走行の
+出力権限を変えない移行診断であり、production commandは引き続き
+`legacy-normal-bypass`が所有する。shadow結果は`authority=shadow, selected=0`として記録し、
+live solver workspace、circuit breaker、last-certified solution、retained execution、
+command post-processingへ渡さない。
+
+shadow warm startはintent、formulation、horizon、schema、stage geometry identityが互換な
+forward rolling horizonだけで使用する。不連続なgeometry、intent/schema/horizon変更では専用
+context epochを更新する。解はfinite/constraint確認後、既存prediction layoutへ変換し、同じ
+wall boundsとraw poseからの車体掃引で物理証明する。metadata/solve/certificate coverage、
+build/solve/certificate時間、warm/reset、productionとの差を1秒集約で記録する。
+
+`output/20260822-124134`の単車6周ではmetadata/solve coverageは10,777/10,777、物理証明は
+10,147/10,777（94.15%）、shadow総時間は平均3.341 ms、最大15.689 msだった。通常権限への
+昇格基準95%へ未達のため、Track/Cruiseの5-state authority昇格は保留する。確認された阻害要因は
+次のとおりであり、パラメータではなく共通契約を先に修正する。
+
+- circular trajectoryの末尾が先頭座標を重複しており、raw stage geometryは0 m遷移を持つ一方、
+  5-state dynamicsだけがminimum stage distanceへ正規化する。その結果、solverと物理証明が
+  異なるhorizon距離を使い、周回継ぎ目で`solution heading unavailable`となる。
+- 5-stateのstage-1予測速度をlegacyのtarget-speed input slotへ変換しており、予測状態速度と
+  command target speedが同じ数値契約として扱われる。権限移行前にtarget speed、predicted
+  velocity、accelerationを分離したactuation proposalを定義する必要がある。
+- 上記継ぎ目以外にもhard wall / swept-path不成立解があり、物理証明を外して採用してはならない。
+
+このshadowは診断基盤として維持するが、上記二つの共通契約をテストで固定し、物理証明率を再評価
+するまでproduction authorityへ昇格しない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

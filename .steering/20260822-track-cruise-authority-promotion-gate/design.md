@@ -23,10 +23,17 @@ numerical-to-semantic execution-primal boundary. All 9,678 physically certified 
 canonical extraction, storage, cursor, candidate, fresh selector and actuation with zero actuation
 difference. The former 324 `invalid-control-stage` rejects became zero.
 
-Gate A is not yet closed because three solver results violated their own virtual-progress box-row
-tolerance but passed the persistent solver's mixed-unit global absolute test. They were rejected
-before physical/canonical certification. Fix the solver admission contract and repeat Gate A;
-do not normalize those out-of-tolerance values or begin retained authority work first.
+Gate A is accepted for the fresh certified path: every physically certified result reached the
+same canonical plan, cursor, candidate, selector and actuation, with zero actuation difference.
+Three solver results were correctly unavailable at the canonical semantic boundary because their
+virtual-progress input exceeded that row's execution tolerance; none was certified or selected.
+
+`.steering/20260822-osqp-rowwise-residual-admission` tested whether the common OSQP wrapper should
+reject every local per-row diagnostic exceedance. A clean dynamic start falsified that approach:
+it rejected the first legacy curvature-rate row, reset the shared workspace and caused a permanent
+startup solve-failure cascade. The experiment was removed rather than patched. Rare fresh-plan
+unavailability is therefore handled by Gate B's same-formulation retained proof, not by weakening
+the canonical boundary or redefining all solver consumers.
 
 ## Gate B: retained revalidation design
 
@@ -51,7 +58,9 @@ The source audit and implementation contract for that remaining work are frozen 
 `.steering/20260822-track-cruise-retained-revalidation-design`.  Static wall/course geometry is
 aligned by unwrapped absolute progress, dynamic obstacle occupancy is aligned by current-relative
 time plus progress, and the current measured-to-predicted control prefix is a separate physical
-proof.  Production and shadow retained authority remain disconnected until Gate A passes.
+proof. Production retained authority remains disconnected. Gate A now permits implementing and
+connecting retained **shadow** production only; final publisher authority still waits for Gate B
+evidence and explicit Gate C approval.
 
 ## Gate C: explicit authority promotion
 

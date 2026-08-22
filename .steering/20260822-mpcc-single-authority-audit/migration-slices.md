@@ -148,16 +148,23 @@ No cycle-local transfer to three-state or legacy MPC is allowed after promotion.
 - `.steering/20260822-track-cruise-retained-revalidation-design` audits that retained gap before
   implementation. It prohibits old-certificate and stage-index reuse, separates absolute-progress
   wall sampling from current-relative-time obstacle sampling, and requires measured-to-predicted
-  plus predicted-to-horizon swept proofs with current provenance. Runtime connection still waits
-  for fresh dynamic Gate A evidence.
+  plus predicted-to-horizon swept proofs with current provenance. Fresh Gate A now permits a
+  retained shadow connection; production authority remains prohibited until Gate B evidence.
 - `.steering/20260822-canonical-numerical-boundary-contract` closes a fresh-path producer/consumer
   mismatch found by Gate A. A solver-certified tiny negative virtual-progress value is now
   normalized only inside its exact box-row tolerance before becoming an executable artifact; the
   raw primal remains untouched. In `output/20260822-232351`, the former 324
   `invalid-control-stage` rejects became zero and all 9,678 physically certified cycles completed
   the fresh canonical chain with zero actuation difference. Three out-of-row-tolerance stage-zero
-  values were correctly rejected and expose the next upstream defect: persistent OSQP computes
-  rowwise residuals but still admits with a mixed-unit global absolute test.
+  values were correctly rejected before canonical certification.
+- `.steering/20260822-osqp-rowwise-residual-admission` tested whether the common solver must reject
+  every local per-row diagnostic exceedance. `output/20260822-234326` falsified that hypothesis at
+  the first legacy MPC curvature-rate row and caused a cold-reset solve-failure cascade. The
+  experimental implementation was removed. Gate A treats those three rare cycles as typed fresh
+  canonical unavailability for the retained same-formulation path to cover.
+- Fresh Gate A is accepted for retained **shadow** implementation: every physically certified
+  cycle completed the exact canonical chain with zero actuation difference. Final publisher
+  promotion remains an explicit authority boundary.
 - This connection is an explicit authority boundary and requires approval before implementation.
 
 ### Delete/replace

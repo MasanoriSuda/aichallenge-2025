@@ -47,10 +47,15 @@ The three semantic rejections were all stage-zero virtual-progress lower-bound v
 | 7799 | -0.00136516 | 0.00136516 | 0.00100137 |
 | 8002 | -0.00174945 | 0.00174945 | 0.00100175 |
 
-They were previously accepted by `PersistentOsqpSolver` because it computes per-row normalized
-residuals but makes the final decision using one mixed-unit global absolute tolerance. The new
-boundary correctly rejects them instead of hiding them with a clamp. This is the next upstream
-root-cause Slice and still blocks authority promotion.
+They are accepted by the shared solver's existing convergence contract but cannot satisfy the
+canonical execution adapter's stricter semantic control contract. The new boundary correctly
+rejects them instead of hiding them with a clamp.
+
+A follow-up experiment attempted to enforce every locally computed per-row tolerance in the common
+OSQP wrapper. `output/20260822-234326` rejected the legacy MPC's first curvature-rate row and then
+cascaded into permanent cold-solve failure, so that approach was removed. These three cycles are
+therefore typed fresh-plan unavailability for retained same-formulation execution to bridge; they
+are not certified plans and do not break the equality of the certified fresh chain.
 
 ## Final root-cause audit
 
@@ -59,5 +64,5 @@ root-cause Slice and still blocks authority promotion.
 - Raw primal remains the solver/warm-start artifact.
 - One separate normalized primal is the only downstream executable artifact.
 - Canonical validation remains strict and production remains legacy-owned.
-- The baseline defect is closed; the newly exposed rowwise solver-admission defect is not hidden
-  or folded into this Slice.
+- The baseline defect is closed. The rejected common-solver experiment is recorded separately in
+  `.steering/20260822-osqp-rowwise-residual-admission`.

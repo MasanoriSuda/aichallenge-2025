@@ -216,10 +216,33 @@ const char * physical_wall_certificate_reason_name(
       return "wall-sample-unavailable";
     case PhysicalWallCertificateReason::HardWallContact:
       return "hard-wall-contact";
+    case PhysicalWallCertificateReason::CurrentPoseWallSampleUnavailable:
+      return "current-pose-wall-sample-unavailable";
+    case PhysicalWallCertificateReason::CurrentPoseHardWallContact:
+      return "current-pose-hard-wall-contact";
     case PhysicalWallCertificateReason::SweptPathViolation:
       return "swept-path-violation";
   }
   return "unknown";
+}
+
+PhysicalWallPathFailureLocation resolve_swept_path_failure_origin(
+  const std::size_t rejected_path_index,
+  const std::size_t horizon_steps) noexcept
+{
+  if (rejected_path_index == 0U) {
+    return {PhysicalWallPathFailureOrigin::CurrentPose, -1};
+  }
+  if (
+    rejected_path_index <= horizon_steps &&
+    rejected_path_index - 1U <=
+    static_cast<std::size_t>(std::numeric_limits<int>::max()))
+  {
+    return {
+      PhysicalWallPathFailureOrigin::HorizonStage,
+      static_cast<int>(rejected_path_index - 1U)};
+  }
+  return {};
 }
 
 std::string format_physical_wall_certificate_diagnostic(

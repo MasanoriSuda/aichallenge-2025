@@ -5562,6 +5562,8 @@ struct TrackCruiseShadowTelemetryWindow
   std::uint64_t physical_heading_reject_count{};
   std::uint64_t physical_sample_reject_count{};
   std::uint64_t physical_contact_reject_count{};
+  std::uint64_t physical_current_sample_reject_count{};
+  std::uint64_t physical_current_contact_reject_count{};
   std::uint64_t physical_swept_reject_count{};
   std::uint64_t warm_start_count{};
   std::uint64_t reset_count{};
@@ -19820,7 +19822,39 @@ struct MPC
     std::vector<recovery_footprint::Pose2D> swept_path;
     if (validate_swept_path) {
       swept_path.reserve(static_cast<std::size_t>(horizon_size) + 1U);
-      swept_path.push_back(actual_wall_monitor_pose_.value());
+      const auto & current_pose = actual_wall_monitor_pose_.value();
+      wall_diagnostic.stage_index = -1;
+      wall_diagnostic.waypoint_id = -1;
+      wall_diagnostic.pose_x_m = current_pose.x_m;
+      wall_diagnostic.pose_y_m = current_pose.y_m;
+      wall_diagnostic.pose_yaw_rad = current_pose.yaw_rad;
+      wall_diagnostic.swept_rejected_path_index = 0U;
+      wall_diagnostic.swept_checked_pose_count = 1U;
+      const auto current_sample = recovery_footprint::sample_footprint(
+        *overtake_static_wall_grid_, clearance_footprint, current_pose);
+      wall_diagnostic.out_of_map = current_sample.out_of_map;
+      wall_diagnostic.contact_cell_count = current_sample.contact_cells.size();
+      if (
+        !current_sample.valid || current_sample.out_of_map ||
+        !current_sample.contact_cells.empty())
+      {
+        wall_diagnostic.reason =
+          !current_sample.valid || current_sample.out_of_map ?
+          mpcc_contract::PhysicalWallCertificateReason::
+          CurrentPoseWallSampleUnavailable :
+          mpcc_contract::PhysicalWallCertificateReason::
+          CurrentPoseHardWallContact;
+        reject_reason = !current_sample.valid || current_sample.out_of_map ?
+          "current pose wall sample unavailable" :
+          "current pose hard wall contact";
+        return false;
+      }
+      // The current-pose sample is only failure provenance.  Once accepted,
+      // it must not leak index 0 into a later horizon-stage diagnostic.
+      wall_diagnostic.swept_rejected_path_index =
+        std::numeric_limits<std::size_t>::max();
+      wall_diagnostic.swept_checked_pose_count = 0U;
+      swept_path.push_back(current_pose);
     }
     for (int i = 0; i < horizon_size; ++i) {
       const std::size_t index = static_cast<std::size_t>(i);
@@ -19916,18 +19950,47 @@ struct MPC
         *overtake_static_wall_grid_, clearance_footprint,
         swept_path, swept_step_m);
       if (!swept_clearance.valid || !swept_clearance.clear) {
-        wall_diagnostic.reason =
-          mpcc_contract::PhysicalWallCertificateReason::SweptPathViolation;
         wall_diagnostic.swept_rejected_path_index =
           swept_clearance.rejected_path_index;
         wall_diagnostic.swept_checked_pose_count =
           swept_clearance.checked_pose_count;
+        const auto failure_location =
+          mpcc_contract::resolve_swept_path_failure_origin(
+          swept_clearance.rejected_path_index,
+          trajectory.lateral_m.size());
         if (
-          swept_clearance.rejected_path_index > 0U &&
-          swept_clearance.rejected_path_index <= trajectory.lateral_m.size())
+          failure_location.origin ==
+          mpcc_contract::PhysicalWallPathFailureOrigin::CurrentPose)
         {
-          const std::size_t failed_stage =
-            swept_clearance.rejected_path_index - 1U;
+          wall_diagnostic.reason =
+            mpcc_contract::PhysicalWallCertificateReason::
+            CurrentPoseHardWallContact;
+          wall_diagnostic.stage_index = -1;
+          wall_diagnostic.waypoint_id = -1;
+          wall_diagnostic.path_distance_m =
+            std::numeric_limits<double>::quiet_NaN();
+          wall_diagnostic.lateral_m =
+            std::numeric_limits<double>::quiet_NaN();
+          wall_diagnostic.lower_bound_m =
+            std::numeric_limits<double>::quiet_NaN();
+          wall_diagnostic.upper_bound_m =
+            std::numeric_limits<double>::quiet_NaN();
+          wall_diagnostic.bound_reserve_m =
+            std::numeric_limits<double>::quiet_NaN();
+          wall_diagnostic.heading_offset_rad =
+            std::numeric_limits<double>::quiet_NaN();
+          const auto & failed_pose = swept_path.front();
+          wall_diagnostic.pose_x_m = failed_pose.x_m;
+          wall_diagnostic.pose_y_m = failed_pose.y_m;
+          wall_diagnostic.pose_yaw_rad = failed_pose.yaw_rad;
+        } else if (
+          failure_location.origin ==
+          mpcc_contract::PhysicalWallPathFailureOrigin::HorizonStage)
+        {
+          wall_diagnostic.reason =
+            mpcc_contract::PhysicalWallCertificateReason::SweptPathViolation;
+          const std::size_t failed_stage = static_cast<std::size_t>(
+            failure_location.stage_index);
           wall_diagnostic.stage_index = static_cast<int>(failed_stage);
           wall_diagnostic.waypoint_id =
             ref_wp_id + static_cast<int>(failed_stage);
@@ -19947,6 +20010,11 @@ struct MPC
           wall_diagnostic.pose_x_m = failed_pose.x_m;
           wall_diagnostic.pose_y_m = failed_pose.y_m;
           wall_diagnostic.pose_yaw_rad = failed_pose.yaw_rad;
+        } else {
+          wall_diagnostic.reason =
+            mpcc_contract::PhysicalWallCertificateReason::InvalidInput;
+          wall_diagnostic.stage_index = -1;
+          wall_diagnostic.waypoint_id = -1;
         }
         std::ostringstream reason;
         reason << "solution swept wall path "
@@ -20272,6 +20340,14 @@ struct MPC
         case mpcc_contract::PhysicalWallCertificateReason::HardWallContact:
           ++window.physical_contact_reject_count;
           break;
+        case mpcc_contract::PhysicalWallCertificateReason::
+          CurrentPoseWallSampleUnavailable:
+          ++window.physical_current_sample_reject_count;
+          break;
+        case mpcc_contract::PhysicalWallCertificateReason::
+          CurrentPoseHardWallContact:
+          ++window.physical_current_contact_reject_count;
+          break;
         case mpcc_contract::PhysicalWallCertificateReason::SweptPathViolation:
           ++window.physical_swept_reject_count;
           break;
@@ -20320,7 +20396,14 @@ struct MPC
       ++window.timing_sample_count;
     }
 
-    if (result.status != last_track_cruise_shadow_status_) {
+    std::string shadow_status_key = result.status;
+    if (result.physical_certificate_checked && !result.physically_certified) {
+      shadow_status_key += "/";
+      shadow_status_key +=
+        mpcc_contract::physical_wall_certificate_reason_name(
+        result.physical_wall_diagnostic.reason);
+    }
+    if (shadow_status_key != last_track_cruise_shadow_status_) {
       const std::string message =
         std::string{"Track/Cruise MPCC shadow outcome: decision="} +
         std::to_string(result.decision_id) + ", intent=" +
@@ -20344,7 +20427,7 @@ struct MPC
       } else {
         RCLCPP_WARN(rclcpp::get_logger("mpc_controller"), "%s", message.c_str());
       }
-      last_track_cruise_shadow_status_ = result.status;
+      last_track_cruise_shadow_status_ = std::move(shadow_status_key);
     }
 
     if (!std::isfinite(now_sec)) {
@@ -20384,7 +20467,8 @@ struct MPC
       "Track/Cruise MPCC shadow: eligible=%zu, metadata=%zu/%.1f%%, "
       "build=%zu, attempt=%zu/%.1f%%, solved=%zu/%.1f%%, finite=%zu, "
       "constraint=%zu, proposal=%zu, converted=%zu, physical=%zu, certified=%zu/%.1f%%, "
-      "physical_rejects=invalid:%zu/bound:%zu/heading:%zu/sample:%zu/contact:%zu/swept:%zu, "
+      "physical_rejects=invalid:%zu/bound:%zu/heading:%zu/sample:%zu/contact:%zu/"
+      "current_sample:%zu/current_contact:%zu/swept:%zu, "
       "warm=%zu, reset=%zu, reset_reason=%s, "
       "build_ms=%.3f/%.3f(avg/max), solve_ms=%.3f/%.3f/%.3f/%.3f(avg/p95/p99/max), "
       "certificate_ms=%.3f/%.3f(avg/max), "
@@ -20413,6 +20497,8 @@ struct MPC
       static_cast<std::size_t>(window.physical_heading_reject_count),
       static_cast<std::size_t>(window.physical_sample_reject_count),
       static_cast<std::size_t>(window.physical_contact_reject_count),
+      static_cast<std::size_t>(window.physical_current_sample_reject_count),
+      static_cast<std::size_t>(window.physical_current_contact_reject_count),
       static_cast<std::size_t>(window.physical_swept_reject_count),
       static_cast<std::size_t>(window.warm_start_count),
       static_cast<std::size_t>(window.reset_count),

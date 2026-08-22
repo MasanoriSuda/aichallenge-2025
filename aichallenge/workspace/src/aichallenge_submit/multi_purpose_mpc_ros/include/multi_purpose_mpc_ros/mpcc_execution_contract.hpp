@@ -72,11 +72,29 @@ enum class PhysicalWallCertificateReason
   HeadingUnavailable,
   WallSampleUnavailable,
   HardWallContact,
+  CurrentPoseWallSampleUnavailable,
+  CurrentPoseHardWallContact,
   SweptPathViolation,
 };
 
 const char * physical_wall_certificate_reason_name(
   PhysicalWallCertificateReason reason) noexcept;
+
+enum class PhysicalWallPathFailureOrigin
+{
+  Invalid,
+  CurrentPose,
+  HorizonStage,
+};
+
+struct PhysicalWallPathFailureLocation
+{
+  PhysicalWallPathFailureOrigin origin{PhysicalWallPathFailureOrigin::Invalid};
+  int stage_index{-1};
+};
+
+PhysicalWallPathFailureLocation resolve_swept_path_failure_origin(
+  std::size_t rejected_path_index, std::size_t horizon_steps) noexcept;
 
 struct PhysicalWallCertificateDiagnostic
 {

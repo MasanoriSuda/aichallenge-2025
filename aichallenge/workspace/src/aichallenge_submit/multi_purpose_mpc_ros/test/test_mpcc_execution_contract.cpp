@@ -150,6 +150,41 @@ TEST(MpccExecutionContract, PhysicalWallCertificateReasonsAreStable)
     contract::physical_wall_certificate_reason_name(
       contract::PhysicalWallCertificateReason::SweptPathViolation),
     "swept-path-violation");
+  EXPECT_STREQ(
+    contract::physical_wall_certificate_reason_name(
+      contract::PhysicalWallCertificateReason::CurrentPoseWallSampleUnavailable),
+    "current-pose-wall-sample-unavailable");
+  EXPECT_STREQ(
+    contract::physical_wall_certificate_reason_name(
+      contract::PhysicalWallCertificateReason::CurrentPoseHardWallContact),
+    "current-pose-hard-wall-contact");
+}
+
+TEST(MpccExecutionContract, SweptPathFailureOriginSeparatesCurrentPoseFromHorizon)
+{
+  const auto current = contract::resolve_swept_path_failure_origin(0U, 20U);
+  EXPECT_EQ(current.origin, contract::PhysicalWallPathFailureOrigin::CurrentPose);
+  EXPECT_EQ(current.stage_index, -1);
+
+  const auto first_stage = contract::resolve_swept_path_failure_origin(1U, 20U);
+  EXPECT_EQ(first_stage.origin, contract::PhysicalWallPathFailureOrigin::HorizonStage);
+  EXPECT_EQ(first_stage.stage_index, 0);
+
+  const auto last_stage = contract::resolve_swept_path_failure_origin(20U, 20U);
+  EXPECT_EQ(last_stage.origin, contract::PhysicalWallPathFailureOrigin::HorizonStage);
+  EXPECT_EQ(last_stage.stage_index, 19);
+
+  const auto invalid = contract::resolve_swept_path_failure_origin(21U, 20U);
+  EXPECT_EQ(invalid.origin, contract::PhysicalWallPathFailureOrigin::Invalid);
+  EXPECT_EQ(invalid.stage_index, -1);
+
+  const auto unrepresentable = contract::resolve_swept_path_failure_origin(
+    static_cast<std::size_t>(std::numeric_limits<int>::max()) + 2U,
+    static_cast<std::size_t>(std::numeric_limits<int>::max()) + 2U);
+  EXPECT_EQ(
+    unrepresentable.origin,
+    contract::PhysicalWallPathFailureOrigin::Invalid);
+  EXPECT_EQ(unrepresentable.stage_index, -1);
 }
 
 TEST(MpccExecutionContract, PhysicalWallCertificateDiagnosticPreservesFailureProvenance)

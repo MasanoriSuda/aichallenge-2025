@@ -1710,7 +1710,9 @@ invalid input、QP lateral bound violation、heading unavailable、wall sample u
 9/10件がstage 0、1件がstage 1だった。したがって残件の主因は数値solverやbound toleranceではなく、
 車体中心へ課すscalar Frenet boundsと、2.0 m x 1.45 mのyawed footprintを検証する実行証明の
 幾何契約不一致である。swept違反はこれに加え、実現在poseから最初の予測stageへの接続可能性を
-QPが直接保証していないことを示す。次段階では既存証明を弱めず、heading-awareなfootprint-safe
+QPが直接保証していない可能性を示す。ただし当時の診断はswept path index 0の現在姿勢unsafeと
+index 1以降の候補区間unsafeを分離していなかったため、21回すべてを候補経路起因とは扱わない。
+次段階では既存証明を弱めず、heading-awareなfootprint-safe
 stage boundsをshadow問題へ入力してA/Bする。production authorityへの昇格は引き続き禁止する。
 
 #### Canonical 5-state execution pose（2026-08-22）
@@ -1729,6 +1731,29 @@ violation 16回が残った。したがってheading再構成による情報損�
 scalar Frenet center boundsがyawed footprintの物理安全を保証しない契約差である。次段階は物理
 証明を緩和せず、exact `e_psi`に応じたfootprint-safe stage boundsをshadow問題へ入力し、raw
 current poseから最初のstageまでの掃引到達性を別契約として検証する。通常権限への昇格は保留する。
+
+#### Current pose / candidate wall provenance（2026-08-22）
+
+`SweptFromCurrentPose`のpath index 0はproduction controllerが作った
+`actual_wall_monitor_pose_`、index 1..Nはshadow MPCCのhorizon stage 0..N-1である。
+physical certificateは現在姿勢を同じclearance footprintで先に検査し、sample不能またはcontactを
+`current-pose-wall-sample-unavailable` / `current-pose-hard-wall-contact`としてstage -1へ記録する。
+現在姿勢が合格した後だけcandidateの離散poseとswept segmentを検査する。swept indexからstageへの
+写像は型付きcontractで行い、index 0へ最後のhorizon stage診断が残ることを禁止する。
+
+shadow outcomeの抑制keyはstatusだけでなくphysical certificate reasonを含む。同じ
+`physical-certificate-reject`の継続中でも原因がcandidate contact、current pose contact、swept
+segmentへ変化した場合は即時に一行記録する。1秒集約ではcandidateの`contact`、production由来の
+`current_sample/current_contact`、候補接続区間の`swept`を別々に数える。これは診断順序とprovenance
+だけの変更で、certificateのboolean合否、wall margin、trajectory、command、authorityを変更しない。
+
+`output/20260822-164756`の単車約5周では9,630/9,630 solve、9,500 physical certificate
+（98.6501%）だった。rejectはcandidate hard contact 54回、current production pose contact 73回、
+真のswept segment 3回へ分離され、invalid/bound/heading/sample/current-sampleは0回だった。
+現在姿勢が安全だった9,557周期だけを母数にするとcandidate certificateは9,500/9,557
+（99.4036%）である。最大solve/shadow時間は11.724/14.186 ms、callback最大29.111 ms、overrun 1回、
+shadow selection 0回だった。したがってSlice 3昇格は、candidate側57件の根因解消に加え、legacyが
+unsafe current poseを作った状態から新authorityへ安全にhandoffする契約が定まるまで保留する。
 
 ### 提出ファイルへの影響
 

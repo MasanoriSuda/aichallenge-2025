@@ -64,6 +64,14 @@ Prove the five-state formulation can represent ordinary racing without involving
 - Authority promotion remains blocked because 26 hard-contact and 9 swept-path certificate rejects
   remain. Three attempted physical-bound approximations were measured and removed; see
   `.steering/20260822-track-cruise-footprint-bounds/validation.md`.
+- Current-pose provenance is now separated from candidate provenance. In
+  `output/20260822-164756`, 9,630/9,630 solves produced 9,500 full certificates. The 130 rejects
+  split into 54 candidate hard contacts, 73 unsafe legacy-production current poses and 3 genuine
+  swept candidate-connection failures. Candidate coverage while the current pose was safe was
+  9,500/9,557 (99.40%). See
+  `.steering/20260822-mpcc-current-pose-wall-provenance/validation.md`.
+- Slice 3 remains blocked: candidate-created physical rejects must be removed, and authority handoff
+  from a legacy-created unsafe current pose needs an explicit fail-closed/recovery contract.
 
 ## Slice 3: Track/Cruise authority promotion
 

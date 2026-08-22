@@ -234,6 +234,61 @@ TEST(MpccProgress, ConvertsExtendedSolutionToEstablishedLayout)
   EXPECT_DOUBLE_EQ((*legacy)[12], 0.20);
 }
 
+TEST(MpccProgress, ExtractsTypedActuationWithoutLosingOptimizedAcceleration)
+{
+  Eigen::VectorXd extended(21);
+  extended <<
+    0.0, 0.0, 0.01, 4.0, 10.0,
+    0.2, 0.0, 0.02, 4.5, 10.5,
+    0.4, 0.0, 0.03, 5.0, 11.0,
+    1.0, 0.10, 4.5,
+    0.5, 0.20, 5.0;
+
+  const auto proposal =
+    multi_purpose_mpc_ros::mpcc_progress::extract_actuation_proposal(
+    extended, 2, 1.1);
+
+  ASSERT_TRUE(proposal.has_value());
+  EXPECT_DOUBLE_EQ(proposal->predicted_speed_mps, 4.5);
+  EXPECT_DOUBLE_EQ(proposal->acceleration_mps2, 1.0);
+  EXPECT_DOUBLE_EQ(proposal->curvature_radpm, 0.10);
+  EXPECT_NEAR(proposal->steering_tire_angle_rad, std::atan(0.11), 1e-12);
+  EXPECT_DOUBLE_EQ(proposal->virtual_progress_speed_mps, 4.5);
+}
+
+TEST(MpccProgress, RejectsMalformedOrNonfiniteActuationProposal)
+{
+  Eigen::VectorXd malformed = Eigen::VectorXd::Zero(20);
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::mpcc_progress::extract_actuation_proposal(
+      malformed, 2, 1.1).has_value());
+
+  Eigen::VectorXd nonfinite = Eigen::VectorXd::Zero(21);
+  nonfinite[15] = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::mpcc_progress::extract_actuation_proposal(
+      nonfinite, 2, 1.1).has_value());
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::mpcc_progress::extract_actuation_proposal(
+      Eigen::VectorXd::Zero(21), 2, 0.0).has_value());
+}
+
+TEST(MpccProgress, PreservesFiniteSignedBoundaryValuesForLaterCertification)
+{
+  Eigen::VectorXd extended = Eigen::VectorXd::Zero(21);
+  extended[5 + multi_purpose_mpc_ros::mpcc_progress::kExtendedVelocityIndex] = -1e-7;
+  extended[15 +
+    multi_purpose_mpc_ros::mpcc_progress::kExtendedVirtualProgressSpeedIndex] = -2e-7;
+
+  const auto proposal =
+    multi_purpose_mpc_ros::mpcc_progress::extract_actuation_proposal(
+    extended, 2, 1.1);
+
+  ASSERT_TRUE(proposal.has_value());
+  EXPECT_DOUBLE_EQ(proposal->predicted_speed_mps, -1e-7);
+  EXPECT_DOUBLE_EQ(proposal->virtual_progress_speed_mps, -2e-7);
+}
+
 TEST(MpccProgress, RestoresAbsoluteProgressFromLocalExtendedSolution)
 {
   Eigen::VectorXd extended(21);

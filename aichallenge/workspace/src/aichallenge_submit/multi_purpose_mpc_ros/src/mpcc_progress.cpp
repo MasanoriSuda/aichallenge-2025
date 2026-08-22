@@ -483,6 +483,42 @@ std::optional<Eigen::VectorXd> convert_extended_solution_to_legacy(
   return result;
 }
 
+std::optional<ActuationProposal> extract_actuation_proposal(
+  const Eigen::VectorXd & extended_primal, const int horizon_size,
+  const double wheelbase_m) noexcept
+{
+  if (horizon_size <= 0 || !std::isfinite(wheelbase_m) || wheelbase_m <= 0.0) {
+    return std::nullopt;
+  }
+  const int state_values = kExtendedStateDimension * (horizon_size + 1);
+  const int expected_size = state_values + kExtendedInputDimension * horizon_size;
+  if (extended_primal.size() != expected_size || !extended_primal.allFinite()) {
+    return std::nullopt;
+  }
+
+  ActuationProposal proposal;
+  proposal.predicted_speed_mps =
+    extended_primal[kExtendedStateDimension + kExtendedVelocityIndex];
+  proposal.acceleration_mps2 =
+    extended_primal[state_values + kExtendedAccelerationIndex];
+  proposal.curvature_radpm =
+    extended_primal[state_values + kExtendedCurvatureIndex];
+  proposal.virtual_progress_speed_mps =
+    extended_primal[state_values + kExtendedVirtualProgressSpeedIndex];
+  proposal.steering_tire_angle_rad = std::atan(
+    wheelbase_m * proposal.curvature_radpm);
+  if (
+    !std::isfinite(proposal.predicted_speed_mps) ||
+    !std::isfinite(proposal.acceleration_mps2) ||
+    !std::isfinite(proposal.curvature_radpm) ||
+    !std::isfinite(proposal.steering_tire_angle_rad) ||
+    !std::isfinite(proposal.virtual_progress_speed_mps))
+  {
+    return std::nullopt;
+  }
+  return proposal;
+}
+
 bool rebase_extended_progress_warm_start(
   Eigen::VectorXd & extended_primal, const int horizon_size,
   const double previous_progress_origin_m,

@@ -151,6 +151,53 @@ std::uint64_t fingerprint_stage_geometry(
   return builder.finish();
 }
 
+std::optional<EffectiveStageGeometry> resolve_effective_stage_geometry(
+  const int tracking_waypoint, const bool circular,
+  const std::vector<StageGeometryIdentity> & raw_stages,
+  const std::vector<double> & effective_transition_distances_m) noexcept
+{
+  if (
+    tracking_waypoint < 0 || raw_stages.empty() ||
+    raw_stages.size() != effective_transition_distances_m.size() ||
+    raw_stages.front().transition_from_waypoint != tracking_waypoint)
+  {
+    return std::nullopt;
+  }
+
+  EffectiveStageGeometry result;
+  result.tracking_waypoint = tracking_waypoint;
+  result.circular = circular;
+  result.stages.reserve(raw_stages.size());
+  double cumulative_distance_m = 0.0;
+  for (std::size_t index = 0U; index < raw_stages.size(); ++index) {
+    const auto & raw = raw_stages[index];
+    const double effective_distance_m = effective_transition_distances_m[index];
+    if (
+      raw.transition_from_waypoint < 0 || raw.state_waypoint < 0 ||
+      !std::isfinite(raw.transition_distance_m) || raw.transition_distance_m < 0.0 ||
+      !std::isfinite(raw.cumulative_distance_m) || raw.cumulative_distance_m < 0.0 ||
+      !std::isfinite(effective_distance_m) || effective_distance_m <= 0.0 ||
+      (index > 0U &&
+      raw_stages[index - 1U].state_waypoint != raw.transition_from_waypoint))
+    {
+      return std::nullopt;
+    }
+    cumulative_distance_m += effective_distance_m;
+    if (!std::isfinite(cumulative_distance_m)) {
+      return std::nullopt;
+    }
+    result.stages.push_back(StageGeometryIdentity{
+      raw.transition_from_waypoint, raw.state_waypoint,
+      effective_distance_m, cumulative_distance_m});
+  }
+  result.fingerprint = fingerprint_stage_geometry(
+    tracking_waypoint, circular, result.stages);
+  if (result.fingerprint == 0U) {
+    return std::nullopt;
+  }
+  return result;
+}
+
 std::uint64_t problem_context_fingerprint(
   const MpccProblemContext & context) noexcept
 {

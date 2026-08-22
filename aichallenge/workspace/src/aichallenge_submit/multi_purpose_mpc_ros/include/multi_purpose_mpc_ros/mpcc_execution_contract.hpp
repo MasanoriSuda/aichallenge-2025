@@ -46,9 +46,22 @@ struct StageGeometryIdentity
   double cumulative_distance_m{};
 };
 
+struct EffectiveStageGeometry
+{
+  int tracking_waypoint{};
+  bool circular{false};
+  std::vector<StageGeometryIdentity> stages;
+  std::uint64_t fingerprint{};
+};
+
 std::uint64_t fingerprint_stage_geometry(
   int tracking_waypoint, bool circular,
   const std::vector<StageGeometryIdentity> & stages) noexcept;
+
+std::optional<EffectiveStageGeometry> resolve_effective_stage_geometry(
+  int tracking_waypoint, bool circular,
+  const std::vector<StageGeometryIdentity> & raw_stages,
+  const std::vector<double> & effective_transition_distances_m) noexcept;
 
 struct MpccProblemContext
 {

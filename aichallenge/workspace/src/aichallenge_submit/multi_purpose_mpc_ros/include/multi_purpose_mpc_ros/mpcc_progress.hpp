@@ -220,6 +220,21 @@ std::optional<Eigen::VectorXd> convert_extended_solution_to_legacy(
   const Eigen::VectorXd & extended_primal, int horizon_size,
   double progress_origin_m) noexcept;
 
+struct ActuationProposal
+{
+  double predicted_speed_mps{};
+  double acceleration_mps2{};
+  double curvature_radpm{};
+  double steering_tire_angle_rad{};
+  double virtual_progress_speed_mps{};
+};
+
+/// Extract the first executable control and its resulting stage-1 velocity
+/// without flattening their distinct semantics into the legacy input layout.
+std::optional<ActuationProposal> extract_actuation_proposal(
+  const Eigen::VectorXd & extended_primal, int horizon_size,
+  double wheelbase_m) noexcept;
+
 /// Rebase a shifted extended warm-start from the previous local progress
 /// origin to the current one. Only theta state elements are modified.
 bool rebase_extended_progress_warm_start(

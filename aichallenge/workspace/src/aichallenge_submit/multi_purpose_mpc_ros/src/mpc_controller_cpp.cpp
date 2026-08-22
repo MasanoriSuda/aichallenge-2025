@@ -5278,6 +5278,7 @@ struct MpcProblem
   int preview_wp_id{};
   int ref_wp_id{};
   mpc_stage_geometry::Geometry stage_geometry;
+  mpcc_contract::EffectiveStageGeometry progress_stage_geometry;
   bool progress_contouring_active{false};
   bool progress_metadata_available{false};
   bool track_cruise_shadow_requested{false};
@@ -5504,6 +5505,7 @@ struct TrackCruiseShadowCycleResult
   bool solved{false};
   bool finite{false};
   bool constraints_satisfied{false};
+  bool actuation_proposal_extracted{false};
   bool conversion_succeeded{false};
   bool physical_certificate_checked{false};
   bool physically_certified{false};
@@ -5520,12 +5522,15 @@ struct TrackCruiseShadowCycleResult
   double certificate_ms{};
   double total_ms{};
   int iterations{};
-  double speed_difference_mps{std::numeric_limits<double>::quiet_NaN()};
-  double steering_difference_rad{std::numeric_limits<double>::quiet_NaN()};
+  double predicted_speed_vs_legacy_target_difference_mps{
+    std::numeric_limits<double>::quiet_NaN()};
+  double predicted_steering_vs_legacy_difference_rad{
+    std::numeric_limits<double>::quiet_NaN()};
   double lateral_rms_difference_m{std::numeric_limits<double>::quiet_NaN()};
   double lateral_max_difference_m{std::numeric_limits<double>::quiet_NaN()};
   double terminal_progress_m{std::numeric_limits<double>::quiet_NaN()};
   double terminal_velocity_mps{std::numeric_limits<double>::quiet_NaN()};
+  std::optional<mpcc_progress::ActuationProposal> actuation_proposal;
   std::string status{"not-eligible"};
   std::string detail{"not-evaluated"};
 };
@@ -5539,6 +5544,7 @@ struct TrackCruiseShadowTelemetryWindow
   std::uint64_t solved_count{};
   std::uint64_t finite_count{};
   std::uint64_t constraint_count{};
+  std::uint64_t actuation_proposal_count{};
   std::uint64_t conversion_count{};
   std::uint64_t physical_check_count{};
   std::uint64_t certified_count{};
@@ -5554,16 +5560,34 @@ struct TrackCruiseShadowTelemetryWindow
   double maximum_certificate_ms{};
   double total_shadow_ms{};
   double maximum_shadow_ms{};
-  double total_speed_difference_mps{};
-  double maximum_speed_difference_mps{};
-  double total_steering_difference_rad{};
-  double maximum_steering_difference_rad{};
+  double total_predicted_speed_vs_legacy_target_difference_mps{};
+  double maximum_predicted_speed_vs_legacy_target_difference_mps{};
+  double total_predicted_steering_vs_legacy_difference_rad{};
+  double maximum_predicted_steering_vs_legacy_difference_rad{};
   double total_lateral_rms_difference_m{};
   double maximum_lateral_difference_m{};
   std::uint64_t difference_sample_count{};
   std::array<double, 256U> solve_ms_samples{};
   std::array<double, 256U> total_ms_samples{};
   std::size_t timing_sample_count{};
+};
+
+struct TrackCruiseShadowPendingActuation
+{
+  std::uint64_t decision_id{};
+  mpcc_progress::ActuationProposal proposal;
+};
+
+struct TrackCruiseShadowFinalActuationTelemetryWindow
+{
+  std::uint64_t joined_count{};
+  std::uint64_t rejected_count{};
+  double total_predicted_speed_vs_final_target_difference_mps{};
+  double maximum_predicted_speed_vs_final_target_difference_mps{};
+  double total_optimized_acceleration_vs_final_difference_mps2{};
+  double maximum_optimized_acceleration_vs_final_difference_mps2{};
+  double total_optimized_steering_vs_final_difference_rad{};
+  double maximum_optimized_steering_vs_final_difference_rad{};
 };
 
 struct MpcRtiSqpTelemetryWindow
@@ -6840,6 +6864,84 @@ struct MPC
   std::uint64_t last_control_decision_id() const noexcept
   {
     return active_control_decision_id_;
+  }
+
+  void record_track_cruise_shadow_final_command(
+    const std::uint64_t decision_id, const double final_target_speed_mps,
+    const double final_acceleration_mps2, const double final_steering_rad,
+    const double now_sec)
+  {
+    if (!pending_track_cruise_shadow_actuation_.has_value()) {
+      return;
+    }
+    const auto pending = pending_track_cruise_shadow_actuation_.value();
+    pending_track_cruise_shadow_actuation_.reset();
+    auto & window = track_cruise_shadow_final_actuation_telemetry_window_;
+    if (
+      pending.decision_id != decision_id ||
+      !std::isfinite(final_target_speed_mps) ||
+      !std::isfinite(final_acceleration_mps2) ||
+      !std::isfinite(final_steering_rad))
+    {
+      ++window.rejected_count;
+      return;
+    }
+
+    const double speed_difference_mps = std::abs(
+      pending.proposal.predicted_speed_mps - final_target_speed_mps);
+    const double acceleration_difference_mps2 = std::abs(
+      pending.proposal.acceleration_mps2 - final_acceleration_mps2);
+    const double steering_difference_rad = std::abs(
+      pending.proposal.steering_tire_angle_rad - final_steering_rad);
+    ++window.joined_count;
+    window.total_predicted_speed_vs_final_target_difference_mps +=
+      speed_difference_mps;
+    window.maximum_predicted_speed_vs_final_target_difference_mps = std::max(
+      window.maximum_predicted_speed_vs_final_target_difference_mps,
+      speed_difference_mps);
+    window.total_optimized_acceleration_vs_final_difference_mps2 +=
+      acceleration_difference_mps2;
+    window.maximum_optimized_acceleration_vs_final_difference_mps2 = std::max(
+      window.maximum_optimized_acceleration_vs_final_difference_mps2,
+      acceleration_difference_mps2);
+    window.total_optimized_steering_vs_final_difference_rad +=
+      steering_difference_rad;
+    window.maximum_optimized_steering_vs_final_difference_rad = std::max(
+      window.maximum_optimized_steering_vs_final_difference_rad,
+      steering_difference_rad);
+
+    if (!std::isfinite(now_sec)) {
+      return;
+    }
+    if (
+      !std::isfinite(last_track_cruise_shadow_final_actuation_log_sec_) ||
+      now_sec < last_track_cruise_shadow_final_actuation_log_sec_)
+    {
+      last_track_cruise_shadow_final_actuation_log_sec_ = now_sec;
+      return;
+    }
+    if (now_sec - last_track_cruise_shadow_final_actuation_log_sec_ < 1.0) {
+      return;
+    }
+    const double joined = static_cast<double>(
+      std::max<std::uint64_t>(1U, window.joined_count));
+    RCLCPP_INFO(
+      rclcpp::get_logger("mpc_controller"),
+      "Track/Cruise MPCC shadow actuation join: joined=%zu, rejected=%zu, "
+      "predicted_speed_vs_final_target=%.3f/%.3f(avg/max)mps, "
+      "optimized_acceleration_vs_final=%.3f/%.3f(avg/max)mps2, "
+      "optimized_steering_vs_final=%.4f/%.4f(avg/max)rad, "
+      "authority=shadow, selected=0",
+      static_cast<std::size_t>(window.joined_count),
+      static_cast<std::size_t>(window.rejected_count),
+      window.total_predicted_speed_vs_final_target_difference_mps / joined,
+      window.maximum_predicted_speed_vs_final_target_difference_mps,
+      window.total_optimized_acceleration_vs_final_difference_mps2 / joined,
+      window.maximum_optimized_acceleration_vs_final_difference_mps2,
+      window.total_optimized_steering_vs_final_difference_rad / joined,
+      window.maximum_optimized_steering_vs_final_difference_rad);
+    window = TrackCruiseShadowFinalActuationTelemetryWindow{};
+    last_track_cruise_shadow_final_actuation_log_sec_ = now_sec;
   }
 
   const std::optional<overtake_orchestrator::AuthorityTrace> &
@@ -18066,10 +18168,28 @@ struct MPC
         N, xr, ur, stage_distance_m, stage_tracking_curvature_radpm,
         progress_contouring_reject_reason) :
       std::optional<ProgressContouringMpcPreparation>{};
+    std::optional<mpcc_contract::EffectiveStageGeometry> effective_progress_geometry;
+    if (progress_metadata_requested && progress_preparation.has_value()) {
+      std::vector<mpcc_contract::StageGeometryIdentity> raw_stages;
+      raw_stages.reserve(stage_geometry.stages.size());
+      for (const auto & stage : stage_geometry.stages) {
+        raw_stages.push_back(mpcc_contract::StageGeometryIdentity{
+          stage.transition_from_waypoint, stage.state_waypoint,
+          stage.transition_distance_m, stage.cumulative_distance_m});
+      }
+      effective_progress_geometry = mpcc_contract::resolve_effective_stage_geometry(
+        stage_geometry.tracking_waypoint, stage_geometry.circular,
+        raw_stages, progress_preparation->stage_distance_m);
+      if (!effective_progress_geometry.has_value()) {
+        progress_contouring_reject_reason =
+          "effective progress stage geometry invalid";
+      }
+    }
     const bool progress_metadata_available =
-      progress_metadata_requested && progress_preparation.has_value();
+      progress_metadata_requested && progress_preparation.has_value() &&
+      effective_progress_geometry.has_value();
     const bool progress_contouring_active =
-      progress_contouring_requested && progress_preparation.has_value();
+      progress_contouring_requested && progress_metadata_available;
     if (
       progress_contouring_requested && !progress_contouring_active &&
       (!std::isfinite(progress_contouring_fallback_last_log_sec_) ||
@@ -18327,7 +18447,8 @@ struct MPC
       progress_execution_lateral_upper_m.reserve(static_cast<std::size_t>(N));
       for (int i = 0; i < N; ++i) {
         progress_execution_path_distance_m.push_back(
-          stage_geometry.stages[static_cast<std::size_t>(i)].cumulative_distance_m);
+          effective_progress_geometry->stages[static_cast<std::size_t>(i)].
+          cumulative_distance_m);
         progress_execution_lateral_lower_m.push_back(lb[i]);
         progress_execution_lateral_upper_m.push_back(ub[i]);
       }
@@ -18345,7 +18466,8 @@ struct MPC
       dynamic_obstacle_escape_lateral_upper.resize(N);
       for (int i = 0; i < N; ++i) {
         dynamic_obstacle_escape_path_distance_m.push_back(
-          stage_geometry.stages[static_cast<std::size_t>(i)].cumulative_distance_m);
+          effective_progress_geometry->stages[static_cast<std::size_t>(i)].
+          cumulative_distance_m);
         dynamic_obstacle_escape_lateral_lower[i] = lb[i];
         dynamic_obstacle_escape_lateral_upper[i] = ub[i];
       }
@@ -18370,6 +18492,9 @@ struct MPC
     return MpcProblem{
       q, l, u, P, A_full, N, tracking_wp_id, preview_wp_id, ref_wp_id,
       std::move(stage_geometry),
+      effective_progress_geometry.has_value() ?
+      std::move(effective_progress_geometry.value()) :
+      mpcc_contract::EffectiveStageGeometry{},
       progress_contouring_active,
       progress_metadata_available,
       track_cruise_shadow_requested,
@@ -20013,14 +20138,9 @@ struct MPC
     identity.bounds_schema_id = context.bounds_schema_id;
     identity.cost_schema_id = context.cost_schema_id;
     identity.stage_geometry_id = context.stage_geometry_id;
-    identity.tracking_waypoint = problem.stage_geometry.tracking_waypoint;
-    identity.circular = problem.stage_geometry.circular;
-    identity.stages.reserve(problem.stage_geometry.stages.size());
-    for (const auto & stage : problem.stage_geometry.stages) {
-      identity.stages.push_back(mpcc_contract::StageGeometryIdentity{
-        stage.transition_from_waypoint, stage.state_waypoint,
-        stage.transition_distance_m, stage.cumulative_distance_m});
-    }
+    identity.tracking_waypoint = problem.progress_stage_geometry.tracking_waypoint;
+    identity.circular = problem.progress_stage_geometry.circular;
+    identity.stages = problem.progress_stage_geometry.stages;
     return identity;
   }
 
@@ -20038,6 +20158,7 @@ struct MPC
     window.solved_count += result.solved ? 1U : 0U;
     window.finite_count += result.finite ? 1U : 0U;
     window.constraint_count += result.constraints_satisfied ? 1U : 0U;
+    window.actuation_proposal_count += result.actuation_proposal_extracted ? 1U : 0U;
     window.conversion_count += result.conversion_succeeded ? 1U : 0U;
     window.physical_check_count += result.physical_certificate_checked ? 1U : 0U;
     window.certified_count += result.physically_certified ? 1U : 0U;
@@ -20055,18 +20176,22 @@ struct MPC
     window.total_shadow_ms += result.total_ms;
     window.maximum_shadow_ms = std::max(window.maximum_shadow_ms, result.total_ms);
     if (
-      std::isfinite(result.speed_difference_mps) &&
-      std::isfinite(result.steering_difference_rad) &&
+      std::isfinite(result.predicted_speed_vs_legacy_target_difference_mps) &&
+      std::isfinite(result.predicted_steering_vs_legacy_difference_rad) &&
       std::isfinite(result.lateral_rms_difference_m) &&
       std::isfinite(result.lateral_max_difference_m))
     {
       ++window.difference_sample_count;
-      window.total_speed_difference_mps += result.speed_difference_mps;
-      window.maximum_speed_difference_mps = std::max(
-        window.maximum_speed_difference_mps, result.speed_difference_mps);
-      window.total_steering_difference_rad += result.steering_difference_rad;
-      window.maximum_steering_difference_rad = std::max(
-        window.maximum_steering_difference_rad, result.steering_difference_rad);
+      window.total_predicted_speed_vs_legacy_target_difference_mps +=
+        result.predicted_speed_vs_legacy_target_difference_mps;
+      window.maximum_predicted_speed_vs_legacy_target_difference_mps = std::max(
+        window.maximum_predicted_speed_vs_legacy_target_difference_mps,
+        result.predicted_speed_vs_legacy_target_difference_mps);
+      window.total_predicted_steering_vs_legacy_difference_rad +=
+        result.predicted_steering_vs_legacy_difference_rad;
+      window.maximum_predicted_steering_vs_legacy_difference_rad = std::max(
+        window.maximum_predicted_steering_vs_legacy_difference_rad,
+        result.predicted_steering_vs_legacy_difference_rad);
       window.total_lateral_rms_difference_m += result.lateral_rms_difference_m;
       window.maximum_lateral_difference_m = std::max(
         window.maximum_lateral_difference_m, result.lateral_max_difference_m);
@@ -20133,13 +20258,13 @@ struct MPC
       rclcpp::get_logger("mpc_controller"),
       "Track/Cruise MPCC shadow: eligible=%zu, metadata=%zu/%.1f%%, "
       "build=%zu, attempt=%zu/%.1f%%, solved=%zu/%.1f%%, finite=%zu, "
-      "constraint=%zu, converted=%zu, physical=%zu, certified=%zu/%.1f%%, "
+      "constraint=%zu, proposal=%zu, converted=%zu, physical=%zu, certified=%zu/%.1f%%, "
       "warm=%zu, reset=%zu, reset_reason=%s, "
       "build_ms=%.3f/%.3f(avg/max), solve_ms=%.3f/%.3f/%.3f/%.3f(avg/p95/p99/max), "
       "certificate_ms=%.3f/%.3f(avg/max), "
       "shadow_ms=%.3f/%.3f/%.3f/%.3f(avg/p95/p99/max), "
-      "iterations=%.1f/%d(avg/max), dv=%.3f/%.3f(avg/max)mps, "
-      "dsteer=%.4f/%.4f(avg/max)rad, lateral=%.3f/%.3f(rms_avg/max)m, "
+      "iterations=%.1f/%d(avg/max), model_dv=%.3f/%.3f(avg/max)mps, "
+      "model_dsteer=%.4f/%.4f(avg/max)rad, lateral=%.3f/%.3f(rms_avg/max)m, "
       "last_status=%s, authority=shadow, selected=0",
       static_cast<std::size_t>(window.eligible_count),
       static_cast<std::size_t>(window.metadata_count),
@@ -20152,6 +20277,7 @@ struct MPC
       100.0 * static_cast<double>(window.solved_count) / attempted,
       static_cast<std::size_t>(window.finite_count),
       static_cast<std::size_t>(window.constraint_count),
+      static_cast<std::size_t>(window.actuation_proposal_count),
       static_cast<std::size_t>(window.conversion_count),
       static_cast<std::size_t>(window.physical_check_count),
       static_cast<std::size_t>(window.certified_count),
@@ -20171,10 +20297,10 @@ struct MPC
       window.maximum_shadow_ms,
       static_cast<double>(window.total_iterations) / attempted,
       window.maximum_iterations,
-      window.total_speed_difference_mps / differences,
-      window.maximum_speed_difference_mps,
-      window.total_steering_difference_rad / differences,
-      window.maximum_steering_difference_rad,
+      window.total_predicted_speed_vs_legacy_target_difference_mps / differences,
+      window.maximum_predicted_speed_vs_legacy_target_difference_mps,
+      window.total_predicted_steering_vs_legacy_difference_rad / differences,
+      window.maximum_predicted_steering_vs_legacy_difference_rad,
       window.total_lateral_rms_difference_m / differences,
       window.maximum_lateral_difference_m,
       result.status.c_str());
@@ -20303,6 +20429,14 @@ struct MPC
         result.detail = "shadow solution failed finite/constraint contract";
         return finish();
       }
+      result.actuation_proposal = mpcc_progress::extract_actuation_proposal(
+        outcome.result->primal, problem.N, model->length);
+      if (!result.actuation_proposal.has_value()) {
+        result.status = "actuation-proposal-reject";
+        result.detail = "five-state actuation proposal contract rejected";
+        return finish();
+      }
+      result.actuation_proposal_extracted = true;
       const auto shadow_solution = mpcc_progress::convert_extended_solution_to_legacy(
         outcome.result->primal, problem.N, extended_problem->progress_origin_m);
       if (!shadow_solution.has_value()) {
@@ -20321,7 +20455,7 @@ struct MPC
       Eigen::VectorXd upper_bound(problem.N);
       for (int stage = 0; stage < problem.N; ++stage) {
         path_distance_m.push_back(
-          problem.stage_geometry.stages[static_cast<std::size_t>(stage)].
+          problem.progress_stage_geometry.stages[static_cast<std::size_t>(stage)].
           cumulative_distance_m);
         lateral_m.push_back((*shadow_solution)[(stage + 1) * legacy_nx]);
         lower_bound[stage] = problem.progress_state_lower[(stage + 1) * legacy_nx];
@@ -20358,8 +20492,9 @@ struct MPC
         const double shadow_speed = (*shadow_solution)[input_offset];
         const double shadow_steering = std::atan(
           (*shadow_solution)[input_offset + 1] * model->length);
-        result.speed_difference_mps = std::abs(shadow_speed - production_speed);
-        result.steering_difference_rad = std::abs(
+        result.predicted_speed_vs_legacy_target_difference_mps = std::abs(
+          shadow_speed - production_speed);
+        result.predicted_steering_vs_legacy_difference_rad = std::abs(
           shadow_steering - production_steering);
         double squared_lateral_difference = 0.0;
         double maximum_lateral_difference = 0.0;
@@ -20379,6 +20514,8 @@ struct MPC
       result.terminal_velocity_mps = outcome.result->primal[
         problem.N * mpcc_progress::kExtendedStateDimension +
         mpcc_progress::kExtendedVelocityIndex];
+      pending_track_cruise_shadow_actuation_ = TrackCruiseShadowPendingActuation{
+        result.decision_id, result.actuation_proposal.value()};
       result.status = "certified";
       result.detail = certificate_reason;
       return finish();
@@ -21283,6 +21420,7 @@ struct MPC
     constexpr int nx = 3;
     constexpr int nu = 2;
     active_control_decision_id_ = decision_id;
+    pending_track_cruise_shadow_actuation_.reset();
     last_overtake_authority_trace_.reset();
     last_problem_context_.reset();
     last_solution_contract_.reset();
@@ -22158,16 +22296,23 @@ struct MPC
         context.target_id = provenance.target_id;
       }
     }
-    std::vector<mpcc_contract::StageGeometryIdentity> stages;
-    stages.reserve(problem.stage_geometry.stages.size());
-    for (const auto & stage : problem.stage_geometry.stages) {
-      stages.push_back(mpcc_contract::StageGeometryIdentity{
-        stage.transition_from_waypoint, stage.state_waypoint,
-        stage.transition_distance_m, stage.cumulative_distance_m});
+    const bool progress_geometry_required =
+      formulation == mpcc_contract::Formulation::ProgressContouring3State ||
+      formulation == mpcc_contract::Formulation::VelocityProgress5State;
+    if (progress_geometry_required) {
+      context.stage_geometry_id = problem.progress_stage_geometry.fingerprint;
+    } else {
+      std::vector<mpcc_contract::StageGeometryIdentity> stages;
+      stages.reserve(problem.stage_geometry.stages.size());
+      for (const auto & stage : problem.stage_geometry.stages) {
+        stages.push_back(mpcc_contract::StageGeometryIdentity{
+          stage.transition_from_waypoint, stage.state_waypoint,
+          stage.transition_distance_m, stage.cumulative_distance_m});
+      }
+      context.stage_geometry_id = mpcc_contract::fingerprint_stage_geometry(
+        problem.stage_geometry.tracking_waypoint,
+        problem.stage_geometry.circular, stages);
     }
-    context.stage_geometry_id = mpcc_contract::fingerprint_stage_geometry(
-      problem.stage_geometry.tracking_waypoint,
-      problem.stage_geometry.circular, stages);
     context.horizon_steps = static_cast<std::size_t>(std::max(0, problem.N));
     context.formulation = formulation;
     switch (formulation) {
@@ -22288,6 +22433,12 @@ struct MPC
   std::uint64_t track_cruise_shadow_context_epoch_{};
   TrackCruiseShadowTelemetryWindow track_cruise_shadow_telemetry_window_;
   double last_track_cruise_shadow_telemetry_log_sec_{
+    std::numeric_limits<double>::quiet_NaN()};
+  std::optional<TrackCruiseShadowPendingActuation>
+  pending_track_cruise_shadow_actuation_;
+  TrackCruiseShadowFinalActuationTelemetryWindow
+  track_cruise_shadow_final_actuation_telemetry_window_;
+  double last_track_cruise_shadow_final_actuation_log_sec_{
     std::numeric_limits<double>::quiet_NaN()};
   std::string last_track_cruise_shadow_status_;
   std::shared_ptr<ExtendedBranchSolverContext> active_extended_branch_solver_context_;
@@ -49721,6 +49872,10 @@ private:
     if (!publish_control_command(current_time, u, acc, bug_acc_enabled)) {
       return;
     }
+    mpc_->record_track_cruise_shadow_final_command(
+      active_control_decision_id_, u[0], acc,
+      use_bug_acc_ ? u[1] : u[1] * mpc_cfg_.steering_tire_angle_gain_var,
+      current_time.seconds());
     if (
       !recovery_command_active && !mpc_fallback_active &&
       !wall_handoff_hold_active && !executed_solution_wall_hold_active &&

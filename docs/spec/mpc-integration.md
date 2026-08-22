@@ -1662,6 +1662,27 @@ build/solve/certificate時間、warm/reset、productionとの差を1秒集約で
 このshadowは診断基盤として維持するが、上記二つの共通契約をテストで固定し、物理証明率を再評価
 するまでproduction authorityへ昇格しない。
 
+#### Canonical progress geometry / typed actuation contract（2026-08-22）
+
+5-stateの時間発展が使用する正のstage距離から`EffectiveStageGeometry`を一度だけ構築する。
+waypoint遷移の識別子はraw geometryから保持するが、transition distance、cumulative distance、
+fingerprintは時間発展と同じeffective distanceで再構築する。progress-contouring 3-stateと
+velocity-progress 5-stateはこのidentityをproblem context、warm-start互換判定、物理wall証明で
+共有する。legacy 3-stateは従来のraw geometryを使用する。これにより、周回継ぎ目の重複座標を
+5-state dynamicsだけが0.005 mへ正規化し、物理証明だけが0 mのまま残る不整合を禁止する。
+
+5-state解の最初の実行sampleは`ActuationProposal`として、stage-1予測速度、u0最適化加速度、
+u0曲率、曲率から得たタイヤ角、仮想進捗速度を別々に保持する。抽出処理は有限性とshapeだけを
+保証し、物理boundsの判定はQP／certificateの責務とする。既存legacy layoutへの変換は予測表示の
+互換用途に限り、stage-1速度をcanonical target-speed commandとは扱わない。
+
+`output/20260822-132440`の単車6回周回継ぎ目走行では、shadow attempt 11,233回のうち
+10,995回（97.88%）が物理証明を通過した。残る238回はすべて実際のhard-wallまたは
+swept-path判定であり、`solution heading unavailable`とactuation抽出拒否は0回だった。
+shadow総時間は平均3.559 ms、最悪1秒窓p99／最大13.503 msだった。一方、production callbackには
+25 ms超過が2回あり、実wall不成立も残るため、通常権限への昇格は引き続き保留する。全shadow出力は
+`authority=shadow, selected=0`を維持する。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

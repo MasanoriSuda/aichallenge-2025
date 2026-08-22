@@ -90,6 +90,48 @@ TEST(MpccExecutionContract, StageGeometryFingerprintUsesGeometryContent)
     baseline, contract::fingerprint_stage_geometry(8, false, stages));
 }
 
+TEST(MpccExecutionContract, EffectiveProgressGeometryRebuildsSeamDistanceAndFingerprint)
+{
+  const std::vector<contract::StageGeometryIdentity> raw{
+    {348, 349, 0.90, 0.90},
+    {349, 0, 0.0, 0.90},
+    {0, 1, 1.0, 1.90}};
+  const std::vector<double> effective{0.90, 0.005, 1.0};
+
+  const auto result = contract::resolve_effective_stage_geometry(
+    348, true, raw, effective);
+
+  ASSERT_TRUE(result.has_value());
+  ASSERT_EQ(result->stages.size(), 3U);
+  EXPECT_DOUBLE_EQ(result->stages[0].cumulative_distance_m, 0.90);
+  EXPECT_DOUBLE_EQ(result->stages[1].transition_distance_m, 0.005);
+  EXPECT_DOUBLE_EQ(result->stages[1].cumulative_distance_m, 0.905);
+  EXPECT_DOUBLE_EQ(result->stages[2].cumulative_distance_m, 1.905);
+  EXPECT_EQ(result->stages[1].transition_from_waypoint, 349);
+  EXPECT_EQ(result->stages[1].state_waypoint, 0);
+  EXPECT_EQ(
+    result->fingerprint,
+    contract::fingerprint_stage_geometry(348, true, result->stages));
+  EXPECT_NE(
+    result->fingerprint,
+    contract::fingerprint_stage_geometry(348, true, raw));
+}
+
+TEST(MpccExecutionContract, EffectiveProgressGeometryRejectsInvalidDistanceContract)
+{
+  const std::vector<contract::StageGeometryIdentity> raw{
+    {8, 9, 0.5, 0.5}, {9, 10, 0.6, 1.1}};
+
+  EXPECT_FALSE(
+    contract::resolve_effective_stage_geometry(8, true, raw, {0.5}).has_value());
+  EXPECT_FALSE(
+    contract::resolve_effective_stage_geometry(8, true, raw, {0.5, 0.0}).has_value());
+  EXPECT_FALSE(
+    contract::resolve_effective_stage_geometry(
+      8, true, raw,
+      {0.5, std::numeric_limits<double>::quiet_NaN()}).has_value());
+}
+
 TEST(MpccExecutionContract, CertifiedSolutionRequiresEveryCertificate)
 {
   const auto context = make_context();

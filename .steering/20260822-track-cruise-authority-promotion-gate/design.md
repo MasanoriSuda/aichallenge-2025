@@ -35,6 +35,12 @@ The current-intent portion is implemented by
 `.steering/20260822-canonical-current-intent-contract`: the candidate problem intent must also equal
 the current supervisor intent. Progress-aligned wall/obstacle revalidation remains pending.
 
+The source audit and implementation contract for that remaining work are frozen in
+`.steering/20260822-track-cruise-retained-revalidation-design`.  Static wall/course geometry is
+aligned by unwrapped absolute progress, dynamic obstacle occupancy is aligned by current-relative
+time plus progress, and the current measured-to-predicted control prefix is a separate physical
+proof.  Production and shadow retained authority remain disconnected until Gate A passes.
+
 ## Gate C: explicit authority promotion
 
 Only after Gates A and B:

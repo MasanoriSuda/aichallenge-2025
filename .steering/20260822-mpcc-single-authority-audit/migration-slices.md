@@ -145,6 +145,11 @@ No cycle-local transfer to three-state or legacy MPC is allowed after promotion.
   authority decision. Fresh shadow coverage is required first; retained execution then needs
   progress-aligned current wall/obstacle revalidation. Final publisher connection is intentionally
   not performed without those results and explicit approval.
+- `.steering/20260822-track-cruise-retained-revalidation-design` audits that retained gap before
+  implementation. It prohibits old-certificate and stage-index reuse, separates absolute-progress
+  wall sampling from current-relative-time obstacle sampling, and requires measured-to-predicted
+  plus predicted-to-horizon swept proofs with current provenance. Runtime connection still waits
+  for fresh dynamic Gate A evidence.
 - This connection is an explicit authority boundary and requires approval before implementation.
 
 ### Delete/replace

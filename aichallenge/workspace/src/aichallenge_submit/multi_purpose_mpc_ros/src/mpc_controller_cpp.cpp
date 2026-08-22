@@ -5576,6 +5576,9 @@ struct TrackCruiseShadowCycleResult
   bool physically_certified{false};
   bool canonical_plan_extracted{false};
   bool canonical_plan_stored{false};
+  bool canonical_cursor_available{false};
+  bool canonical_candidate_accepted{false};
+  bool canonical_fresh_authority_ready{false};
   bool warm_start_applied{false};
   bool solver_context_reset{false};
   std::uint64_t decision_id{};
@@ -5610,6 +5613,14 @@ struct TrackCruiseShadowCycleResult
     canonical_plan_adapter::CanonicalPlanExtractionReason::InvalidMetadata};
   canonical_plan::CanonicalExecutionPlanStoreReason canonical_store_reason{
     canonical_plan::CanonicalExecutionPlanStoreReason::InvalidPlan};
+  canonical_plan::CanonicalExecutionCursorReason canonical_cursor_reason{
+    canonical_plan::CanonicalExecutionCursorReason::InvalidPlan};
+  canonical_plan::CanonicalCandidateBuildReason canonical_candidate_reason{
+    canonical_plan::CanonicalCandidateBuildReason::InvalidPlan};
+  mpcc_contract::CanonicalNormalAuthoritySource canonical_authority_source{
+    mpcc_contract::CanonicalNormalAuthoritySource::EmergencyStop};
+  mpcc_contract::CanonicalNormalAuthorityReason canonical_authority_reason{
+    mpcc_contract::CanonicalNormalAuthorityReason::NoCanonicalCandidate};
   mpcc_contract::PhysicalWallCertificateDiagnostic physical_wall_diagnostic;
   FirstStageShadowReachabilityDiagnostic first_stage_reachability;
   std::string status{"not-eligible"};
@@ -5631,6 +5642,9 @@ struct TrackCruiseShadowTelemetryWindow
   std::uint64_t certified_count{};
   std::uint64_t canonical_extracted_count{};
   std::uint64_t canonical_stored_count{};
+  std::uint64_t canonical_cursor_count{};
+  std::uint64_t canonical_candidate_count{};
+  std::uint64_t canonical_fresh_authority_count{};
   std::uint64_t physical_invalid_input_count{};
   std::uint64_t physical_bound_reject_count{};
   std::uint64_t physical_heading_reject_count{};
@@ -20871,6 +20885,10 @@ struct MPC
     window.certified_count += result.physically_certified ? 1U : 0U;
     window.canonical_extracted_count += result.canonical_plan_extracted ? 1U : 0U;
     window.canonical_stored_count += result.canonical_plan_stored ? 1U : 0U;
+    window.canonical_cursor_count += result.canonical_cursor_available ? 1U : 0U;
+    window.canonical_candidate_count += result.canonical_candidate_accepted ? 1U : 0U;
+    window.canonical_fresh_authority_count +=
+      result.canonical_fresh_authority_ready ? 1U : 0U;
     if (result.physical_certificate_checked && !result.physically_certified) {
       switch (result.physical_wall_diagnostic.reason) {
         case mpcc_contract::PhysicalWallCertificateReason::InvalidInput:
@@ -21030,6 +21048,7 @@ struct MPC
       "build=%zu, attempt=%zu/%.1f%%, solved=%zu/%.1f%%, finite=%zu, "
       "constraint=%zu, proposal=%zu, converted=%zu, physical=%zu, certified=%zu/%.1f%%, "
       "canonical=%zu/%zu(extracted/stored), canonical_reason=%s/%s, "
+      "admission=%zu/%zu/%zu(cursor/candidate/fresh), admission_reason=%s/%s/%s/%s, "
       "physical_rejects=invalid:%zu/bound:%zu/heading:%zu/sample:%zu/contact:%zu/"
       "current_sample:%zu/current_contact:%zu/course_frame:%zu/swept:%zu, "
       "warm=%zu, reset=%zu, reset_reason=%s, "
@@ -21059,6 +21078,13 @@ struct MPC
       static_cast<std::size_t>(window.canonical_stored_count),
       canonical_plan_adapter::to_string(result.canonical_extraction_reason),
       canonical_plan::to_string(result.canonical_store_reason),
+      static_cast<std::size_t>(window.canonical_cursor_count),
+      static_cast<std::size_t>(window.canonical_candidate_count),
+      static_cast<std::size_t>(window.canonical_fresh_authority_count),
+      canonical_plan::to_string(result.canonical_cursor_reason),
+      canonical_plan::to_string(result.canonical_candidate_reason),
+      mpcc_contract::to_string(result.canonical_authority_source),
+      mpcc_contract::to_string(result.canonical_authority_reason),
       static_cast<std::size_t>(window.physical_invalid_input_count),
       static_cast<std::size_t>(window.physical_bound_reject_count),
       static_cast<std::size_t>(window.physical_heading_reject_count),
@@ -21395,6 +21421,57 @@ struct MPC
         return finish();
       }
       result.canonical_plan_stored = true;
+      const auto canonical_plan_snapshot = track_cruise_shadow_plan_store_.snapshot();
+      if (canonical_plan_snapshot == nullptr) {
+        result.status = "canonical-snapshot-reject";
+        result.detail = "accepted canonical store has no snapshot";
+        return finish();
+      }
+      const auto canonical_cursor = canonical_plan::resolve_execution_cursor(
+        *canonical_plan_snapshot, now_sec);
+      result.canonical_cursor_reason = canonical_cursor.reason;
+      if (!canonical_cursor.available) {
+        result.status = "canonical-cursor-reject";
+        result.detail = std::string{"canonical cursor rejected: "} +
+          canonical_plan::to_string(canonical_cursor.reason);
+        return finish();
+      }
+      result.canonical_cursor_available = true;
+      const canonical_plan::CanonicalExecutionRevalidation current_revalidation{
+        result.decision_id,
+        canonical_plan_snapshot->plan_id,
+        canonical_cursor.first_control_stage_index,
+        canonical_cursor.remaining_control_stage_count,
+        canonical_solution.physical};
+      const auto canonical_candidate =
+        canonical_plan::build_canonical_normal_candidate(
+        *canonical_plan_snapshot, canonical_cursor, current_revalidation);
+      result.canonical_candidate_reason = canonical_candidate.reason;
+      if (!canonical_candidate.candidate.has_value()) {
+        result.status = "canonical-candidate-reject";
+        result.detail = std::string{"canonical candidate rejected: "} +
+          canonical_plan::to_string(canonical_candidate.reason);
+        return finish();
+      }
+      result.canonical_candidate_accepted = true;
+      const auto canonical_authority =
+        mpcc_contract::resolve_canonical_normal_authority(
+        mpcc_contract::CanonicalNormalAuthorityRequest{
+          result.decision_id, now_sec, canonical_candidate.candidate.value(), {}});
+      result.canonical_authority_source = canonical_authority.source;
+      result.canonical_authority_reason = canonical_authority.reason;
+      if (
+        canonical_authority.source !=
+        mpcc_contract::CanonicalNormalAuthoritySource::FreshCertified)
+      {
+        result.status = "canonical-authority-reject";
+        result.detail = std::string{"canonical authority rejected: "} +
+          mpcc_contract::to_string(canonical_authority.source) + "/" +
+          mpcc_contract::to_string(canonical_authority.reason) + ", fresh=" +
+          mpcc_contract::to_string(canonical_authority.fresh_reject_reason);
+        return finish();
+      }
+      result.canonical_fresh_authority_ready = true;
       const int expected_production_size =
         legacy_nx * (problem.N + 1) + legacy_nu * problem.N;
       if (

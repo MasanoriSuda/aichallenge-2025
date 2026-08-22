@@ -127,9 +127,12 @@ No cycle-local transfer to three-state or legacy MPC is allowed after promotion.
   physically certified Track/Cruise shadow producer. Complete plans are now retained with explicit
   extraction/store telemetry while command selection remains `authority=shadow, selected=0`.
   Legacy conversion is comparison-only and no longer gates the canonical plan.
-- Runtime promotion is not yet performed. The remaining implementation must revalidate the stored
-  plan's current execution window and connect the existing store/selector to final output while
-  deleting Track/Cruise legacy fallback.
+- `.steering/20260822-track-cruise-canonical-fresh-admission` now resolves the exact fresh cursor,
+  binds the current physical proof to that plan/window and runs the production canonical selector
+  in shadow. A shadow result is certified only if the selector returns `FreshCertified`.
+- Runtime promotion is not yet performed. The remaining implementation must add current-pose
+  revalidation for retained plans, obtain dynamic coverage for fresh/retained selection, and then
+  connect the same selector to final output while deleting Track/Cruise legacy fallback.
 - This connection is an explicit authority boundary and requires approval before implementation.
 
 ### Delete/replace

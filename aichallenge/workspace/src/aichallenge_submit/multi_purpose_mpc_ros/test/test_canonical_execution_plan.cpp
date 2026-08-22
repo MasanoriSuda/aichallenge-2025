@@ -206,6 +206,28 @@ TEST(CanonicalExecutionPlan, CandidateRequiresExactCurrentPhysicalRevalidation)
   EXPECT_EQ(resolution.executable_control_stage_count, 1U);
 }
 
+TEST(CanonicalExecutionPlan, FreshCandidateUsesSameDecisionAndExactExecutionWindow)
+{
+  const auto value = make_plan(23U, 42U);
+  const auto cursor = plan::resolve_execution_cursor(value, 10.25);
+  ASSERT_TRUE(cursor.available);
+  const plan::CanonicalExecutionRevalidation proof{
+    42U, 23U, 0U, 2U, make_current_physical_certificate()};
+  const auto built = plan::build_canonical_normal_candidate(value, cursor, proof);
+  ASSERT_EQ(built.reason, plan::CanonicalCandidateBuildReason::Accepted);
+  ASSERT_TRUE(built.candidate.has_value());
+
+  const auto resolution = contract::resolve_canonical_normal_authority(
+    contract::CanonicalNormalAuthorityRequest{
+      42U, 10.25, built.candidate.value(), {}});
+  EXPECT_EQ(
+    resolution.source,
+    contract::CanonicalNormalAuthoritySource::FreshCertified);
+  EXPECT_EQ(resolution.execution_plan_id, 23U);
+  EXPECT_EQ(resolution.execution_first_control_stage_index, 0U);
+  EXPECT_EQ(resolution.executable_control_stage_count, 2U);
+}
+
 TEST(CanonicalExecutionPlan, CandidateRejectsMismatchedWindowAndUnsafeProof)
 {
   const auto value = make_plan();

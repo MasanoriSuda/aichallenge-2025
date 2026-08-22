@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 
+#include "multi_purpose_mpc_ros/mpcc_execution_contract.hpp"
+
 namespace multi_purpose_mpc_ros::overtake_execution_orchestrator {
 
 enum class Phase {
@@ -324,6 +326,8 @@ const char * to_string(FinalControlSource source) noexcept;
 struct FinalControlTrace {
   std::uint64_t decision_id{0U};
   std::optional<AuthorityTrace> authority;
+  std::optional<mpcc_execution_contract::FinalControlDecision>
+  execution_contract;
   FinalControlSource control_source{FinalControlSource::MpcSolution};
   bool published{false};
   double actual_speed_mps{std::numeric_limits<double>::quiet_NaN()};

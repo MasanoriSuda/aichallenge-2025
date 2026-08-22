@@ -469,6 +469,15 @@ TEST(OvertakeExecutionOrchestrator, JoinsAuthorityAndPublishedCommandByDecisionI
   trace.published_steering_rad = 0.15;
   trace.solver_reason = "extended-mpcc-solved";
   trace.output_reason = "normal-control-published";
+  trace.execution_contract =
+    multi_purpose_mpc_ros::mpcc_execution_contract::
+    resolve_final_control_decision(
+    multi_purpose_mpc_ros::mpcc_execution_contract::
+    FinalControlDecisionRequest{
+      42U,
+      multi_purpose_mpc_ros::mpcc_execution_contract::
+      FinalAuthorityClass::LegacyNormalBypass,
+      "mpc-solution", std::nullopt, std::nullopt});
 
   orchestrator::ChangeAwareFinalControlTraceEmitter emitter;
   const auto first = emitter.update(trace, 1.0);
@@ -481,7 +490,18 @@ TEST(OvertakeExecutionOrchestrator, JoinsAuthorityAndPublishedCommandByDecisionI
     std::string::npos);
   EXPECT_NE(first.message.find("closing_ref=1.10m/s"), std::string::npos);
   EXPECT_NE(first.message.find("control_source=mpc-solution"), std::string::npos);
+  EXPECT_NE(first.message.find("identity=complete"), std::string::npos);
+  EXPECT_NE(first.message.find("contract_join=1"), std::string::npos);
   trace.decision_id = 43U;
+  trace.execution_contract =
+    multi_purpose_mpc_ros::mpcc_execution_contract::
+    resolve_final_control_decision(
+    multi_purpose_mpc_ros::mpcc_execution_contract::
+    FinalControlDecisionRequest{
+      43U,
+      multi_purpose_mpc_ros::mpcc_execution_contract::
+      FinalAuthorityClass::LegacyNormalBypass,
+      "mpc-solution", std::nullopt, std::nullopt});
   EXPECT_FALSE(emitter.update(trace, 1.1).emit);
 }
 

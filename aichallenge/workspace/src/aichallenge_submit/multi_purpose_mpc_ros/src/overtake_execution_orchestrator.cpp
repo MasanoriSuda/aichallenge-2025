@@ -735,6 +735,21 @@ std::string final_control_signature(const FinalControlTrace & trace)
   }
   stream << "|" << static_cast<int>(trace.control_source)
          << "|" << (trace.published ? 1 : 0);
+  if (trace.execution_contract.has_value()) {
+    const auto & contract = trace.execution_contract.value();
+    stream << "|contract|" << static_cast<int>(contract.authority)
+           << "|" << static_cast<int>(contract.intent)
+           << "|" << static_cast<int>(contract.formulation)
+           << "|" << contract.problem_fingerprint
+           << "|" << contract.solution_id
+           << "|" << (contract.retained_solution ? 1 : 0)
+           << "|" << (contract.identity_complete ? 1 : 0)
+           << "|" << (contract.canonical_contract_satisfied ? 1 : 0)
+           << "|" << contract.reason;
+    stream << "|joined=" << (contract.decision_id == trace.decision_id ? 1 : 0);
+  } else {
+    stream << "|no-execution-contract";
+  }
   if (
     trace.control_source == FinalControlSource::SolverFallback ||
     trace.control_source == FinalControlSource::SolverBoundedContinuation ||
@@ -775,6 +790,19 @@ std::string structural_final_control_signature(const FinalControlTrace & trace)
   }
   stream << "|" << static_cast<int>(trace.control_source)
          << "|" << (trace.published ? 1 : 0);
+  if (trace.execution_contract.has_value()) {
+    const auto & contract = trace.execution_contract.value();
+    stream << "|contract|" << static_cast<int>(contract.authority)
+           << "|" << static_cast<int>(contract.intent)
+           << "|" << static_cast<int>(contract.formulation)
+           << "|" << (contract.retained_solution ? 1 : 0)
+           << "|" << (contract.identity_complete ? 1 : 0)
+           << "|" << (contract.canonical_contract_satisfied ? 1 : 0)
+           << "|" << contract.reason;
+    stream << "|joined=" << (contract.decision_id == trace.decision_id ? 1 : 0);
+  } else {
+    stream << "|no-execution-contract";
+  }
   if (
     trace.control_source == FinalControlSource::SolverFallback ||
     trace.control_source == FinalControlSource::SolverBoundedContinuation ||
@@ -862,6 +890,14 @@ std::string format_final_control_trace(const FinalControlTrace & trace)
          << (trace.solver_reason.empty() ? "none" : trace.solver_reason) << "\""
          << ", output=\""
          << (trace.output_reason.empty() ? "none" : trace.output_reason) << "\"";
+  if (trace.execution_contract.has_value()) {
+    stream << ", " << mpcc_execution_contract::format_final_control_decision(
+      trace.execution_contract.value())
+           << ", contract_join="
+           << (trace.execution_contract->decision_id == trace.decision_id ? 1 : 0);
+  } else {
+    stream << ", MPCC execution contract: identity=incomplete, reason=missing-contract";
+  }
   return stream.str();
 }
 
@@ -874,7 +910,11 @@ FinalTraceEmission ChangeAwareFinalControlTraceEmitter::update(
     trace.authority.has_value() && trace.authority->resolution.relevant;
   const bool exceptional_source =
     trace.control_source != FinalControlSource::MpcSolution;
-  const bool relevant = authority_relevant || exceptional_source;
+  const bool contract_relevant =
+    !trace.execution_contract.has_value() ||
+    trace.execution_contract->decision_id != trace.decision_id ||
+    !trace.execution_contract->canonical_contract_satisfied;
+  const bool relevant = authority_relevant || exceptional_source || contract_relevant;
   if (!relevant && !was_relevant_) {
     return emission;
   }
@@ -894,6 +934,9 @@ FinalTraceEmission ChangeAwareFinalControlTraceEmitter::update(
     trace.control_source == FinalControlSource::ExecutedSolutionWallHold ||
     trace.control_source == FinalControlSource::LowSpeedWallStop ||
     trace.control_source == FinalControlSource::Failsafe ||
+    !trace.execution_contract.has_value() ||
+    trace.execution_contract->decision_id != trace.decision_id ||
+    !trace.execution_contract->identity_complete ||
     (trace.authority.has_value() &&
     (trace.authority->resolution.conflicts != NoConflict ||
     trace.authority->request.speed_floor_adjusted));

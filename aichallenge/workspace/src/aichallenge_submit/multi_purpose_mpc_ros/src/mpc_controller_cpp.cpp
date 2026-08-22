@@ -10,6 +10,7 @@
 #include <multi_purpose_mpc_ros/awsim_boost_start_dash.hpp>
 #include <multi_purpose_mpc_ros/awsim_control_mode_guard.hpp>
 #include <multi_purpose_mpc_ros/latest_only_worker.hpp>
+#include <multi_purpose_mpc_ros/mpcc_execution_contract.hpp>
 #include <multi_purpose_mpc_ros/mpcc_progress.hpp>
 #include <multi_purpose_mpc_ros/mpc_state_prediction.hpp>
 #include <multi_purpose_mpc_ros/mpc_stage_geometry.hpp>
@@ -110,6 +111,7 @@ namespace awsim_boost = ::multi_purpose_mpc_ros::awsim_boost;
 namespace awsim_control_mode = ::multi_purpose_mpc_ros::awsim_control_mode;
 namespace mpc_state_prediction = ::multi_purpose_mpc_ros::mpc_state_prediction;
 namespace mpc_stage_geometry = ::multi_purpose_mpc_ros::mpc_stage_geometry;
+namespace mpcc_contract = ::multi_purpose_mpc_ros::mpcc_execution_contract;
 namespace race_mpcc = ::multi_purpose_mpc_ros::race_mpcc_foundation;
 namespace mpc_velocity_limit = ::multi_purpose_mpc_ros::mpc_velocity_limit;
 namespace mpc_waypoint_association = ::multi_purpose_mpc_ros::mpc_waypoint_association;
@@ -5366,6 +5368,8 @@ struct RetainedDynamicEscapeExecution
   std::string target_id;
   int side_sign{0};
   std::string branch{"none"};
+  std::optional<mpcc_contract::MpccProblemContext> problem_context;
+  std::optional<mpcc_contract::CertifiedMpccSolution> solution_contract;
 };
 
 struct RetainedDynamicEscapeControl
@@ -6389,6 +6393,9 @@ struct MPC
     }
     current_prediction.first.clear();
     current_prediction.second.clear();
+    last_problem_context_.reset();
+    last_solution_contract_.reset();
+    last_solution_is_retained_ = false;
     pending_dynamic_escape_execution_.reset();
     retained_dynamic_escape_execution_.reset();
     dynamic_obstacle_lateral_escape_formulation_lease_until_sec_ =
@@ -6508,6 +6515,9 @@ struct MPC
     }
     previous_steering = retained_control->control[1];
     last_control_was_fallback_ = false;
+    last_problem_context_ = retained.problem_context;
+    last_solution_contract_ = retained.solution_contract;
+    last_solution_is_retained_ = true;
     std::ostringstream reason;
     reason << "dynamic-escape-exit-retained-solution/stage="
            << retained_control->stage_index
@@ -6759,6 +6769,23 @@ struct MPC
   const std::string & last_control_resolution_reason() const noexcept
   {
     return last_control_resolution_reason_;
+  }
+
+  const std::optional<mpcc_contract::MpccProblemContext> &
+  last_problem_context() const noexcept
+  {
+    return last_problem_context_;
+  }
+
+  const std::optional<mpcc_contract::CertifiedMpccSolution> &
+  last_solution_contract() const noexcept
+  {
+    return last_solution_contract_;
+  }
+
+  bool last_solution_is_retained() const noexcept
+  {
+    return last_solution_is_retained_;
   }
 
   bool low_speed_direct_control_active() const noexcept
@@ -20737,6 +20764,9 @@ struct MPC
     constexpr int nu = 2;
     active_control_decision_id_ = decision_id;
     last_overtake_authority_trace_.reset();
+    last_problem_context_.reset();
+    last_solution_contract_.reset();
+    last_solution_is_retained_ = false;
     last_control_resolution_reason_ = "not-resolved";
     executed_solution_wall_hold_active_ = false;
     dynamic_escape_cold_retry_attempted_ = false;
@@ -20766,6 +20796,12 @@ struct MPC
       model->spatial_state = model->t2s(tracking_waypoint, model->temporal_state);
       const MpcProblem problem =
         init_problem(N, model->safety_margin, now_sec, tracking_wp_id, preview_wp_id);
+      const auto initial_formulation = problem.progress_contouring_active ?
+        (cfg.progress_contouring.extended_dynamics_enabled ?
+        mpcc_contract::Formulation::VelocityProgress5State :
+        mpcc_contract::Formulation::ProgressContouring3State) :
+        mpcc_contract::Formulation::LegacySpatialMpc3State;
+      record_problem_context(problem, initial_formulation);
       if (
         problem.dynamic_escape_formulation_lease_active !=
         dynamic_escape_formulation_lease_was_active_)
@@ -20811,6 +20847,8 @@ struct MPC
         return safe_failure_control("invalid lateral bound contract", now_sec);
       }
       if (low_speed_shift_control_active_) {
+        record_problem_context(
+          problem, mpcc_contract::Formulation::LowSpeedDirect);
         last_control_resolution_reason_ = "low-speed-direct-control";
         return low_speed_shift_control(tracking_waypoint);
       }
@@ -20823,6 +20861,8 @@ struct MPC
         problem.progress_contouring_active &&
         cfg.progress_contouring.extended_dynamics_enabled)
       {
+        record_problem_context(
+          problem, mpcc_contract::Formulation::VelocityProgress5State);
         if (extended_progress_circuit_breaker_.active(now_sec)) {
           extended_reject_reason = "failure circuit open, retry in " +
             std::to_string(std::max(
@@ -20922,11 +20962,18 @@ struct MPC
       }
       persistent_osqp::SolveOutcome legacy_outcome;
       if (!solved_with_extended_progress) {
+        record_problem_context(
+          problem,
+          problem.progress_contouring_active ?
+          mpcc_contract::Formulation::ProgressContouring3State :
+          mpcc_contract::Formulation::LegacySpatialMpc3State);
         legacy_outcome = solve_problem(problem, now_sec);
       }
       if (!solved_with_extended_progress && !legacy_outcome.result.has_value()) {
         if (low_speed_shift_handoff_requested) {
           low_speed_shift_control_active_ = true;
+          record_problem_context(
+            problem, mpcc_contract::Formulation::LowSpeedDirect);
           if (!low_speed_shift_handoff_deferred_logged_) {
             RCLCPP_WARN(
               rclcpp::get_logger("mpc_controller"),
@@ -20993,6 +21040,17 @@ struct MPC
       }
       record_solved_mpcc_execution_trajectory(
         problem, dec, maximum_constraint_violation, now_sec);
+      const auto solved_formulation = solved_with_extended_progress ?
+        mpcc_contract::Formulation::VelocityProgress5State :
+        (problem.progress_contouring_active ?
+        mpcc_contract::Formulation::ProgressContouring3State :
+        mpcc_contract::Formulation::LegacySpatialMpc3State);
+      const bool physical_wall_checked =
+        problem.progress_execution_context_active ||
+        problem.dynamic_obstacle_margin_escape_tracking_contract_active;
+      record_solution_contract(
+        problem, solved_formulation, dec, maximum_constraint_violation,
+        physical_wall_checked, physical_wall_checked, now_sec);
       Eigen::VectorXd control_signals = dec.tail(N * nu);
 
       for (int i = 1; i < control_signals.size(); i += 2) {
@@ -21081,7 +21139,8 @@ struct MPC
             problem.dynamic_obstacle_lateral_escape_attempt_id,
             problem.dynamic_obstacle_lateral_escape_target_id,
             problem.dynamic_obstacle_lateral_escape_side_sign,
-            problem.dynamic_obstacle_lateral_escape_committed_branch};
+            problem.dynamic_obstacle_lateral_escape_committed_branch,
+            last_problem_context_, last_solution_contract_};
         }
         const bool was_tracking_qualified =
           dynamic_obstacle_lateral_escape_tracking_qualified_ &&
@@ -21515,6 +21574,164 @@ struct MPC
             cfg.v2x_behavior.overtake_line.
             mpcc_lite_same_side_max_lateral_adjustment))});
   }
+
+  mpcc_contract::ControlIntent current_control_intent() const noexcept
+  {
+    if (!last_overtake_authority_trace_.has_value()) {
+      return v2x_race_session_active_ ?
+        mpcc_contract::ControlIntent::Cruise :
+        mpcc_contract::ControlIntent::Track;
+    }
+    switch (last_overtake_authority_trace_->resolution.action) {
+      case overtake_orchestrator::Action::Cruise:
+        return v2x_race_session_active_ ?
+          mpcc_contract::ControlIntent::Cruise :
+          mpcc_contract::ControlIntent::Track;
+      case overtake_orchestrator::Action::Follow:
+        return mpcc_contract::ControlIntent::Follow;
+      case overtake_orchestrator::Action::DynamicEscape:
+      case overtake_orchestrator::Action::ShiftOut:
+        return mpcc_contract::ControlIntent::ShiftOut;
+      case overtake_orchestrator::Action::Pass:
+      case overtake_orchestrator::Action::ContactEscape:
+        return mpcc_contract::ControlIntent::Pass;
+      case overtake_orchestrator::Action::Return:
+        return mpcc_contract::ControlIntent::Return;
+      case overtake_orchestrator::Action::DynamicWait:
+        return mpcc_contract::ControlIntent::Hold;
+      case overtake_orchestrator::Action::Recovery:
+        return mpcc_contract::ControlIntent::Rejoin;
+      case overtake_orchestrator::Action::SafetyBrake:
+        return mpcc_contract::ControlIntent::Stop;
+    }
+    return mpcc_contract::ControlIntent::Unknown;
+  }
+
+  mpcc_contract::MpccProblemContext make_problem_context(
+    const MpcProblem & problem,
+    const mpcc_contract::Formulation formulation) const
+  {
+    mpcc_contract::MpccProblemContext context;
+    context.decision_id = active_control_decision_id_;
+    // The controller consumes one odometry/state observation per decision.
+    // Keep that generation distinct from the independently updated V2X
+    // obstacle observation below.
+    context.observation_generation = active_control_decision_id_;
+    context.intent = current_control_intent();
+    if (last_overtake_authority_trace_.has_value()) {
+      context.intent_generation =
+        last_overtake_authority_trace_->request.mission_generation;
+      context.target_id = last_overtake_authority_trace_->request.target_id;
+    }
+    const auto provenance = selected_target_provenance(last_v2x_behavior_output_);
+    if (
+      provenance.valid &&
+      (context.target_id.empty() || provenance.target_id == context.target_id))
+    {
+      context.target_obstacle_generation = provenance.observation_generation;
+      if (context.target_id.empty()) {
+        context.target_id = provenance.target_id;
+      }
+    }
+    std::vector<mpcc_contract::StageGeometryIdentity> stages;
+    stages.reserve(problem.stage_geometry.stages.size());
+    for (const auto & stage : problem.stage_geometry.stages) {
+      stages.push_back(mpcc_contract::StageGeometryIdentity{
+        stage.transition_from_waypoint, stage.state_waypoint,
+        stage.transition_distance_m, stage.cumulative_distance_m});
+    }
+    context.stage_geometry_id = mpcc_contract::fingerprint_stage_geometry(
+      problem.stage_geometry.tracking_waypoint,
+      problem.stage_geometry.circular, stages);
+    context.horizon_steps = static_cast<std::size_t>(std::max(0, problem.N));
+    context.formulation = formulation;
+    switch (formulation) {
+      case mpcc_contract::Formulation::LegacySpatialMpc3State:
+        context.state_schema_id = "ey-epsi-time-v1";
+        context.input_schema_id = "velocity-curvature-v1";
+        context.bounds_schema_id = "legacy-stage-wall-obstacle-v1";
+        context.cost_schema_id = "legacy-spatial-tracking-v1";
+        break;
+      case mpcc_contract::Formulation::ProgressContouring3State:
+        context.state_schema_id = "ey-epsi-progress-v1";
+        context.input_schema_id = "velocity-curvature-v1";
+        context.bounds_schema_id = "progress-stage-wall-obstacle-v1";
+        context.cost_schema_id = "progress-contouring-v1";
+        break;
+      case mpcc_contract::Formulation::VelocityProgress5State:
+        context.state_schema_id = "ey-elag-epsi-v-progress-v1";
+        context.input_schema_id = "accel-curvature-progress-rate-v1";
+        context.bounds_schema_id = "progress-stage-wall-obstacle-v1";
+        context.cost_schema_id = "velocity-progress-v1";
+        break;
+      case mpcc_contract::Formulation::LowSpeedDirect:
+        context.state_schema_id = "direct-current-state-v1";
+        context.input_schema_id = "speed-steering-v1";
+        context.bounds_schema_id = "direct-wall-steering-v1";
+        context.cost_schema_id = "direct-bypass-v1";
+        break;
+      case mpcc_contract::Formulation::SolverDerivedBypass:
+        context.state_schema_id = "retained-current-state-v1";
+        context.input_schema_id = "speed-steering-v1";
+        context.bounds_schema_id = "derived-hold-v1";
+        context.cost_schema_id = "derived-bypass-v1";
+        break;
+      case mpcc_contract::Formulation::Unresolved:
+        break;
+    }
+    return mpcc_contract::seal_problem_context(std::move(context));
+  }
+
+  void record_problem_context(
+    const MpcProblem & problem,
+    const mpcc_contract::Formulation formulation)
+  {
+    last_problem_context_ = make_problem_context(problem, formulation);
+    last_solution_contract_.reset();
+    last_solution_is_retained_ = false;
+  }
+
+  void record_solution_contract(
+    const MpcProblem & problem,
+    const mpcc_contract::Formulation formulation,
+    const Eigen::VectorXd & primal,
+    const double maximum_constraint_violation,
+    const bool physical_wall_checked,
+    const bool physical_wall_clear,
+    const double now_sec)
+  {
+    record_problem_context(problem, formulation);
+    if (solution_contract_sequence_ == std::numeric_limits<std::uint64_t>::max()) {
+      solution_contract_sequence_ = 0U;
+    }
+    mpcc_contract::CertifiedMpccSolution solution;
+    solution.solution_id = ++solution_contract_sequence_;
+    solution.problem_fingerprint = last_problem_context_->fingerprint;
+    solution.formulation = formulation;
+    solution.solved = true;
+    solution.finite = primal.allFinite();
+    solution.constraints_satisfied =
+      std::isfinite(maximum_constraint_violation) &&
+      maximum_constraint_violation >= 0.0;
+    solution.maximum_constraint_violation = maximum_constraint_violation;
+    solution.physical.checked = physical_wall_checked;
+    solution.physical.wall_clear = physical_wall_clear;
+    solution.physical.obstacles_clear =
+      problem.lateral_bounds_contract_valid && solution.constraints_satisfied;
+    solution.physical.minimum_wall_clearance_m =
+      problem.progress_execution_context_active ?
+      problem.progress_execution_required_wall_clearance_m :
+      std::numeric_limits<double>::quiet_NaN();
+    solution.prediction_stage_count =
+      static_cast<std::size_t>(std::max(0, problem.N));
+    const double horizon_sec =
+      model != nullptr && std::isfinite(model->Ts) ?
+      std::max(0.0, model->Ts) * static_cast<double>(std::max(0, problem.N)) :
+      0.0;
+    solution.valid_until_sec = now_sec + horizon_sec;
+    last_solution_contract_ = std::move(solution);
+  }
+
   std::pair<std::vector<double>, std::vector<double>> current_prediction;
   std::vector<mpc_stage_geometry::Point2d> stage_geometry_path_cache_;
   int infeasibility_counter{0};
@@ -21585,6 +21802,10 @@ struct MPC
   std::optional<overtake_orchestrator::AuthorityTrace>
   last_overtake_authority_trace_;
   std::string last_control_resolution_reason_{"not-evaluated"};
+  std::optional<mpcc_contract::MpccProblemContext> last_problem_context_;
+  std::optional<mpcc_contract::CertifiedMpccSolution> last_solution_contract_;
+  std::uint64_t solution_contract_sequence_{0U};
+  bool last_solution_is_retained_{false};
   bool stage_corridor_mpc_constraints_was_active_{false};
   bool stage_corridor_mpc_target_bound_was_active_{false};
   bool stage_corridor_mpc_target_bound_solver_suppressed_was_active_{false};
@@ -43945,6 +44166,37 @@ private:
     trace.authority = current_overtake_authority_trace();
     trace.control_source =
       overtake_orchestrator::resolve_final_control_source(source_request);
+    auto final_authority = mpcc_contract::FinalAuthorityClass::LegacyNormalBypass;
+    if (trace.control_source == overtake_orchestrator::FinalControlSource::Failsafe) {
+      final_authority = mpcc_contract::FinalAuthorityClass::EmergencyOverride;
+    } else if (
+      trace.control_source ==
+      overtake_orchestrator::FinalControlSource::StuckRecovery)
+    {
+      final_authority = mpcc_contract::FinalAuthorityClass::RecoveryOverride;
+    } else if (
+      trace.control_source ==
+      overtake_orchestrator::FinalControlSource::ControlDisabled)
+    {
+      final_authority = mpcc_contract::FinalAuthorityClass::ControlDisabled;
+    } else if (
+      trace.control_source == overtake_orchestrator::FinalControlSource::MpcSolution &&
+      mpc_ != nullptr && mpc_->last_solution_contract().has_value() &&
+      mpcc_contract::solution_certified(
+        mpc_->last_solution_contract().value()))
+    {
+      final_authority =
+        mpcc_contract::FinalAuthorityClass::CertifiedNormalSolution;
+    }
+    trace.execution_contract = mpcc_contract::resolve_final_control_decision(
+      mpcc_contract::FinalControlDecisionRequest{
+        active_control_decision_id_, final_authority,
+        overtake_orchestrator::to_string(trace.control_source),
+        mpc_ != nullptr ? mpc_->last_problem_context() :
+        std::optional<mpcc_contract::MpccProblemContext>{},
+        mpc_ != nullptr ? mpc_->last_solution_contract() :
+        std::optional<mpcc_contract::CertifiedMpccSolution>{},
+        mpc_ != nullptr && mpc_->last_solution_is_retained()});
     trace.published = published;
     trace.actual_speed_mps = actual_speed_mps;
     trace.target_speed_mps = raw_control[0];

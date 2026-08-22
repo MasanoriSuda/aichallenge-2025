@@ -199,6 +199,9 @@ TEST(MpccExecutionContract, PhysicalWallCertificateDiagnosticPreservesFailurePro
   diagnostic.upper_bound_m = 1.0;
   diagnostic.bound_reserve_m = 0.2;
   diagnostic.heading_offset_rad = 0.1;
+  diagnostic.reference_progress_m = 12.5;
+  diagnostic.solved_progress_m = 11.8;
+  diagnostic.progress_delta_m = -0.7;
   diagnostic.pose_x_m = 4.0;
   diagnostic.pose_y_m = 5.0;
   diagnostic.pose_yaw_rad = 0.6;
@@ -215,8 +218,18 @@ TEST(MpccExecutionContract, PhysicalWallCertificateDiagnosticPreservesFailurePro
   EXPECT_NE(formatted.find("bounds=[-1.000,1.000]m"), std::string::npos);
   EXPECT_NE(formatted.find("reserve=0.200m"), std::string::npos);
   EXPECT_NE(formatted.find("heading_offset=0.100rad"), std::string::npos);
+  EXPECT_NE(formatted.find("progress=11.800/12.500m"), std::string::npos);
+  EXPECT_NE(formatted.find("progress_delta=-0.700m"), std::string::npos);
   EXPECT_NE(formatted.find("pose=(4.000,5.000,0.600)"), std::string::npos);
   EXPECT_NE(formatted.find("contacts=4"), std::string::npos);
+}
+
+TEST(MpccExecutionContract, NamesMissingSolvedProgressCourseFrame)
+{
+  EXPECT_STREQ(
+    contract::physical_wall_certificate_reason_name(
+      contract::PhysicalWallCertificateReason::CourseFrameUnavailable),
+    "course-frame-unavailable");
 }
 
 TEST(MpccExecutionContract, CertifiedSolutionRequiresEveryCertificate)

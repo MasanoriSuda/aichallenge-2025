@@ -5398,6 +5398,9 @@ struct AlignedMpccExecutionTrajectory
   double minimum_qp_bound_reserve_m{};
   std::vector<double> lateral_m;
   std::vector<double> heading_offset_rad;
+  double progress_origin_m{std::numeric_limits<double>::quiet_NaN()};
+  std::vector<double> progress_m;
+  std::vector<mpc_stage_geometry::CourseFrameKnot> course_frame_knots;
 };
 
 enum class SolvedExecutionWallValidationScope
@@ -5564,6 +5567,7 @@ struct TrackCruiseShadowTelemetryWindow
   std::uint64_t physical_contact_reject_count{};
   std::uint64_t physical_current_sample_reject_count{};
   std::uint64_t physical_current_contact_reject_count{};
+  std::uint64_t physical_course_frame_reject_count{};
   std::uint64_t physical_swept_reject_count{};
   std::uint64_t warm_start_count{};
   std::uint64_t reset_count{};
@@ -7281,7 +7285,8 @@ struct MPC
       }
       const AlignedMpccExecutionTrajectory physical_trajectory{
         0.0, 0.0, execution_trajectory->minimum_lateral_bound_reserve_m,
-        execution_trajectory->lateral_m, {}};
+        execution_trajectory->lateral_m, {},
+        std::numeric_limits<double>::quiet_NaN(), {}, {}};
       std::string physical_wall_reject_reason;
       evaluation.physical_wall_validation_passed =
         solved_mpcc_execution_path_wall_safe(
@@ -19757,7 +19762,8 @@ struct MPC
     return AlignedMpccExecutionTrajectory{
       age_sec, std::max(0.0, advanced_distance_m),
       trajectory.minimum_qp_bound_reserve_m,
-      aligned.lateral_targets_m, {}};
+      aligned.lateral_targets_m, {},
+      std::numeric_limits<double>::quiet_NaN(), {}, {}};
   }
 
   std::optional<AlignedMpccExecutionTrajectory>
@@ -19773,6 +19779,79 @@ struct MPC
     return align_mpcc_execution_trajectory(
       solved_mpcc_execution_trajectory_.value(), current_path_distance_m,
       fallback_lateral_m, now_sec, reject_reason);
+  }
+
+  std::optional<std::vector<mpc_stage_geometry::CourseFrameKnot>>
+  build_progress_course_frame_knots(
+    const mpcc_contract::EffectiveStageGeometry & geometry,
+    const double progress_origin_m,
+    const double required_maximum_progress_m) const
+  {
+    if (
+      model == nullptr || model->reference_path == nullptr ||
+      geometry.tracking_waypoint < 0 || geometry.stages.empty() ||
+      !std::isfinite(progress_origin_m) ||
+      !std::isfinite(required_maximum_progress_m))
+    {
+      return std::nullopt;
+    }
+    const auto & reference_path = *model->reference_path;
+    std::vector<mpc_stage_geometry::CourseFrameKnot> knots;
+    knots.reserve(geometry.stages.size() + 8U);
+    const auto & tracking_waypoint = reference_path.get_waypoint(
+      geometry.tracking_waypoint);
+    knots.push_back(mpc_stage_geometry::CourseFrameKnot{
+      progress_origin_m, tracking_waypoint.x, tracking_waypoint.y,
+      tracking_waypoint.psi, geometry.tracking_waypoint});
+    for (const auto & stage : geometry.stages) {
+      const auto & waypoint = reference_path.get_waypoint(stage.state_waypoint);
+      knots.push_back(mpc_stage_geometry::CourseFrameKnot{
+        progress_origin_m + stage.cumulative_distance_m,
+        waypoint.x, waypoint.y, waypoint.psi, stage.state_waypoint});
+    }
+    if (required_maximum_progress_m <= knots.back().progress_m + 1e-9) {
+      return knots;
+    }
+
+    const double minimum_extension_distance_m = std::max(
+      1e-6,
+      cfg.progress_contouring.minimum_reference_speed_mps *
+      cfg.progress_contouring.minimum_stage_dt_sec);
+    int current_waypoint_id = geometry.stages.back().state_waypoint;
+    constexpr std::size_t kMaximumExtensionStages = 128U;
+    for (std::size_t extension = 0U;
+      extension < kMaximumExtensionStages &&
+      knots.back().progress_m + 1e-9 < required_maximum_progress_m;
+      ++extension)
+    {
+      if (
+        !reference_path.circular &&
+        current_waypoint_id + 1 >= reference_path.n_waypoints)
+      {
+        return std::nullopt;
+      }
+      const int next_waypoint_id = reference_path.circular ?
+        (current_waypoint_id + 1) % reference_path.n_waypoints :
+        current_waypoint_id + 1;
+      const auto & current_waypoint = reference_path.get_waypoint(
+        current_waypoint_id);
+      const auto & next_waypoint = reference_path.get_waypoint(next_waypoint_id);
+      const double transition_distance_m = std::max(
+        minimum_extension_distance_m,
+        current_waypoint.distance_to(next_waypoint));
+      if (!std::isfinite(transition_distance_m)) {
+        return std::nullopt;
+      }
+      knots.push_back(mpc_stage_geometry::CourseFrameKnot{
+        knots.back().progress_m + transition_distance_m,
+        next_waypoint.x, next_waypoint.y, next_waypoint.psi,
+        next_waypoint_id});
+      current_waypoint_id = next_waypoint_id;
+    }
+    if (knots.back().progress_m + 1e-9 < required_maximum_progress_m) {
+      return std::nullopt;
+    }
+    return knots;
   }
 
   bool solved_mpcc_execution_path_wall_safe(
@@ -19804,6 +19883,9 @@ struct MPC
       (!trajectory.heading_offset_rad.empty() &&
       trajectory.heading_offset_rad.size() !=
       static_cast<std::size_t>(horizon_size)) ||
+      (!trajectory.progress_m.empty() &&
+      (trajectory.progress_m.size() != static_cast<std::size_t>(horizon_size) ||
+      !std::isfinite(trajectory.progress_origin_m))) ||
       path_distance_m.size() != trajectory.lateral_m.size() ||
       lower_bound.size() < horizon_size || upper_bound.size() < horizon_size ||
       !std::isfinite(hard_wall_clearance_m) || hard_wall_clearance_m < 0.0 ||
@@ -19815,11 +19897,21 @@ struct MPC
       reject_reason = "solution wall validation input invalid";
       return false;
     }
+    if (!trajectory.progress_m.empty() && trajectory.course_frame_knots.empty()) {
+      wall_diagnostic.reason =
+        mpcc_contract::PhysicalWallCertificateReason::CourseFrameUnavailable;
+      reject_reason = "solved progress course frame provenance unavailable";
+      return false;
+    }
 
     auto clearance_footprint = overtake_static_wall_footprint_;
     clearance_footprint.left_extent_m += hard_wall_clearance_m;
     clearance_footprint.right_extent_m += hard_wall_clearance_m;
     std::vector<recovery_footprint::Pose2D> swept_path;
+    std::vector<double> solved_course_heading_rad;
+    std::vector<int> solved_course_waypoint_id;
+    solved_course_heading_rad.reserve(static_cast<std::size_t>(horizon_size));
+    solved_course_waypoint_id.reserve(static_cast<std::size_t>(horizon_size));
     if (validate_swept_path) {
       swept_path.reserve(static_cast<std::size_t>(horizon_size) + 1U);
       const auto & current_pose = actual_wall_monitor_pose_.value();
@@ -19875,6 +19967,14 @@ struct MPC
         std::isfinite(lateral) && std::isfinite(lower) && std::isfinite(upper) ?
         std::min(lateral - lower, upper - lateral) :
         std::numeric_limits<double>::quiet_NaN();
+      if (!trajectory.progress_m.empty()) {
+        wall_diagnostic.reference_progress_m =
+          trajectory.progress_origin_m + path_distance_m[index];
+        wall_diagnostic.solved_progress_m = trajectory.progress_m[index];
+        wall_diagnostic.progress_delta_m =
+          wall_diagnostic.solved_progress_m -
+          wall_diagnostic.reference_progress_m;
+      }
       if (
         !std::isfinite(lateral) || !std::isfinite(lower) ||
         !std::isfinite(upper) || lower > upper ||
@@ -19887,7 +19987,28 @@ struct MPC
         return false;
       }
 
-      const auto & waypoint = model->reference_path->get_waypoint(ref_wp_id + i);
+      const auto & nominal_waypoint = model->reference_path->get_waypoint(ref_wp_id + i);
+      double course_x_m = nominal_waypoint.x;
+      double course_y_m = nominal_waypoint.y;
+      double course_heading_rad = nominal_waypoint.psi;
+      int course_waypoint_id = ref_wp_id + i;
+      if (!trajectory.progress_m.empty()) {
+        const auto course_frame = mpc_stage_geometry::sample_course_frame(
+          trajectory.course_frame_knots, trajectory.progress_m[index],
+          bound_tolerance_m);
+        if (!course_frame.has_value()) {
+          wall_diagnostic.reason =
+            mpcc_contract::PhysicalWallCertificateReason::CourseFrameUnavailable;
+          reject_reason = "solved progress course frame unavailable";
+          return false;
+        }
+        course_x_m = course_frame->x_m;
+        course_y_m = course_frame->y_m;
+        course_heading_rad = course_frame->heading_rad;
+        course_waypoint_id = course_frame->interpolation_ratio < 0.5 ?
+          course_frame->lower_waypoint : course_frame->upper_waypoint;
+        wall_diagnostic.waypoint_id = course_waypoint_id;
+      }
       double heading_offset = std::numeric_limits<double>::quiet_NaN();
       if (!trajectory.heading_offset_rad.empty()) {
         heading_offset = trajectory.heading_offset_rad[index];
@@ -19909,7 +20030,7 @@ struct MPC
         heading_offset = overtake_core::resolve_overtake_line_heading_reference(
           overtake_core::OvertakeLineHeadingReferenceRequest{
             previous_lateral, trajectory.lateral_m[index],
-            delta_distance, waypoint.kappa});
+            delta_distance, nominal_waypoint.kappa});
       }
       if (!std::isfinite(heading_offset)) {
         wall_diagnostic.reason =
@@ -19919,9 +20040,11 @@ struct MPC
       }
       wall_diagnostic.heading_offset_rad = heading_offset;
       const recovery_footprint::Pose2D pose{
-        waypoint.x - lateral * std::sin(waypoint.psi),
-        waypoint.y + lateral * std::cos(waypoint.psi),
-        wrap_to_pi(waypoint.psi + heading_offset)};
+        course_x_m - lateral * std::sin(course_heading_rad),
+        course_y_m + lateral * std::cos(course_heading_rad),
+        wrap_to_pi(course_heading_rad + heading_offset)};
+      solved_course_heading_rad.push_back(course_heading_rad);
+      solved_course_waypoint_id.push_back(course_waypoint_id);
       wall_diagnostic.pose_x_m = pose.x_m;
       wall_diagnostic.pose_y_m = pose.y_m;
       wall_diagnostic.pose_yaw_rad = pose.yaw_rad;
@@ -19979,6 +20102,12 @@ struct MPC
             std::numeric_limits<double>::quiet_NaN();
           wall_diagnostic.heading_offset_rad =
             std::numeric_limits<double>::quiet_NaN();
+          wall_diagnostic.reference_progress_m =
+            std::numeric_limits<double>::quiet_NaN();
+          wall_diagnostic.solved_progress_m =
+            std::numeric_limits<double>::quiet_NaN();
+          wall_diagnostic.progress_delta_m =
+            std::numeric_limits<double>::quiet_NaN();
           const auto & failed_pose = swept_path.front();
           wall_diagnostic.pose_x_m = failed_pose.x_m;
           wall_diagnostic.pose_y_m = failed_pose.y_m;
@@ -19993,7 +20122,7 @@ struct MPC
             failure_location.stage_index);
           wall_diagnostic.stage_index = static_cast<int>(failed_stage);
           wall_diagnostic.waypoint_id =
-            ref_wp_id + static_cast<int>(failed_stage);
+            solved_course_waypoint_id[failed_stage];
           wall_diagnostic.path_distance_m = path_distance_m[failed_stage];
           wall_diagnostic.lateral_m = trajectory.lateral_m[failed_stage];
           wall_diagnostic.lower_bound_m = lower_bound[static_cast<int>(failed_stage)];
@@ -20001,12 +20130,19 @@ struct MPC
           wall_diagnostic.bound_reserve_m = std::min(
             wall_diagnostic.lateral_m - wall_diagnostic.lower_bound_m,
             wall_diagnostic.upper_bound_m - wall_diagnostic.lateral_m);
+          if (!trajectory.progress_m.empty()) {
+            wall_diagnostic.reference_progress_m =
+              trajectory.progress_origin_m + path_distance_m[failed_stage];
+            wall_diagnostic.solved_progress_m =
+              trajectory.progress_m[failed_stage];
+            wall_diagnostic.progress_delta_m =
+              wall_diagnostic.solved_progress_m -
+              wall_diagnostic.reference_progress_m;
+          }
           const auto & failed_pose =
             swept_path[swept_clearance.rejected_path_index];
-          const auto & failed_waypoint = model->reference_path->get_waypoint(
-            wall_diagnostic.waypoint_id);
           wall_diagnostic.heading_offset_rad = wrap_to_pi(
-            failed_pose.yaw_rad - failed_waypoint.psi);
+            failed_pose.yaw_rad - solved_course_heading_rad[failed_stage]);
           wall_diagnostic.pose_x_m = failed_pose.x_m;
           wall_diagnostic.pose_y_m = failed_pose.y_m;
           wall_diagnostic.pose_yaw_rad = failed_pose.yaw_rad;
@@ -20160,7 +20296,8 @@ struct MPC
     }
     const AlignedMpccExecutionTrajectory current_trajectory{
       certificate_age_sec, advanced_distance_m, 0.0,
-      trust_envelope.lateral_targets_m, {}};
+      trust_envelope.lateral_targets_m, {},
+      std::numeric_limits<double>::quiet_NaN(), {}, {}};
     if (!solved_mpcc_execution_path_wall_safe(
         current_trajectory, current_path_distances, ref_wp_id, horizon_size,
         lower_bound, upper_bound, wall_contract.required_clearance_m,
@@ -20217,7 +20354,8 @@ struct MPC
     }
     const AlignedMpccExecutionTrajectory trajectory{
       0.0, 0.0, std::numeric_limits<double>::infinity(),
-      std::move(lateral_m), {}};
+      std::move(lateral_m), {},
+      std::numeric_limits<double>::quiet_NaN(), {}, {}};
     const double bound_tolerance_m =
       std::isfinite(maximum_constraint_violation) ?
       std::max(1e-5, maximum_constraint_violation + 1e-6) : 1e-5;
@@ -20274,7 +20412,8 @@ struct MPC
     }
     const AlignedMpccExecutionTrajectory trajectory{
       0.0, 0.0, std::numeric_limits<double>::infinity(),
-      std::move(lateral_m), {}};
+      std::move(lateral_m), {},
+      std::numeric_limits<double>::quiet_NaN(), {}, {}};
     const double bound_tolerance_m =
       std::isfinite(maximum_constraint_violation) ?
       std::max(1e-5, maximum_constraint_violation + 1e-6) : 1e-5;
@@ -20347,6 +20486,9 @@ struct MPC
         case mpcc_contract::PhysicalWallCertificateReason::
           CurrentPoseHardWallContact:
           ++window.physical_current_contact_reject_count;
+          break;
+        case mpcc_contract::PhysicalWallCertificateReason::CourseFrameUnavailable:
+          ++window.physical_course_frame_reject_count;
           break;
         case mpcc_contract::PhysicalWallCertificateReason::SweptPathViolation:
           ++window.physical_swept_reject_count;
@@ -20468,7 +20610,7 @@ struct MPC
       "build=%zu, attempt=%zu/%.1f%%, solved=%zu/%.1f%%, finite=%zu, "
       "constraint=%zu, proposal=%zu, converted=%zu, physical=%zu, certified=%zu/%.1f%%, "
       "physical_rejects=invalid:%zu/bound:%zu/heading:%zu/sample:%zu/contact:%zu/"
-      "current_sample:%zu/current_contact:%zu/swept:%zu, "
+      "current_sample:%zu/current_contact:%zu/course_frame:%zu/swept:%zu, "
       "warm=%zu, reset=%zu, reset_reason=%s, "
       "build_ms=%.3f/%.3f(avg/max), solve_ms=%.3f/%.3f/%.3f/%.3f(avg/p95/p99/max), "
       "certificate_ms=%.3f/%.3f(avg/max), "
@@ -20499,6 +20641,7 @@ struct MPC
       static_cast<std::size_t>(window.physical_contact_reject_count),
       static_cast<std::size_t>(window.physical_current_sample_reject_count),
       static_cast<std::size_t>(window.physical_current_contact_reject_count),
+      static_cast<std::size_t>(window.physical_course_frame_reject_count),
       static_cast<std::size_t>(window.physical_swept_reject_count),
       static_cast<std::size_t>(window.warm_start_count),
       static_cast<std::size_t>(window.reset_count),
@@ -20720,9 +20863,23 @@ struct MPC
         return finish();
       }
       result.conversion_succeeded = true;
-      const AlignedMpccExecutionTrajectory shadow_trajectory{
+      AlignedMpccExecutionTrajectory shadow_trajectory{
         0.0, 0.0, pose_trajectory->minimum_lateral_bound_reserve_m,
-        pose_trajectory->lateral_m, pose_trajectory->heading_offset_rad};
+        pose_trajectory->lateral_m, pose_trajectory->heading_offset_rad,
+        std::numeric_limits<double>::quiet_NaN(), {}, {}};
+      shadow_trajectory.progress_origin_m = extended_problem->progress_origin_m;
+      shadow_trajectory.progress_m = pose_trajectory->progress_m;
+      if (!shadow_trajectory.progress_m.empty()) {
+        const double maximum_solved_progress_m = *std::max_element(
+          shadow_trajectory.progress_m.begin(), shadow_trajectory.progress_m.end());
+        const auto course_frame_knots = build_progress_course_frame_knots(
+          problem.progress_stage_geometry,
+          shadow_trajectory.progress_origin_m,
+          maximum_solved_progress_m);
+        if (course_frame_knots.has_value()) {
+          shadow_trajectory.course_frame_knots = course_frame_knots.value();
+        }
+      }
       std::string certificate_reason;
       result.physical_certificate_checked = true;
       result.physically_certified = solved_mpcc_execution_path_wall_safe(

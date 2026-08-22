@@ -65,9 +65,11 @@ struct Config
   double extended_heading_tracking_weight{5000.0};
   double extended_terminal_lateral_tracking_weight{1500.0};
   double extended_terminal_heading_tracking_weight{5000.0};
-  // Keep the soft lateral reference inside the already footprint-expanded
-  // hard corridor. This is not another hard wall margin: a narrow corridor
-  // can still use its full bounds, with a reduced tracking weight.
+  // Keep the soft lateral reference inside the supplied hard corridor. The
+  // source corridor may be centre-point or body-envelope based; the physical
+  // execution certificate owns the final oriented-footprint proof. This is
+  // not another hard wall margin: a narrow corridor can still use its full
+  // bounds, with a reduced tracking weight.
   double extended_wall_tracking_reference_reserve_m{0.15};
   double extended_wall_tracking_minimum_weight_scale{0.25};
   double extended_lag_weight{100.0};

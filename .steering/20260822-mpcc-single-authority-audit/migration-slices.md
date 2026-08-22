@@ -70,8 +70,13 @@ Prove the five-state formulation can represent ordinary racing without involving
   swept candidate-connection failures. Candidate coverage while the current pose was safe was
   9,500/9,557 (99.40%). See
   `.steering/20260822-mpcc-current-pose-wall-provenance/validation.md`.
-- Slice 3 remains blocked: candidate-created physical rejects must be removed, and authority handoff
-  from a legacy-created unsafe current pose needs an explicit fail-closed/recovery contract.
+- Solved-progress course-frame provenance is now canonical. In `output/20260822-181304`, 4,794/4,794
+  solves produced 4,782 certificates (99.75%); candidate discrete hard contacts and course-frame
+  provenance failures were both zero. The remaining candidate-side rejects were two genuine
+  current-to-first-stage swept failures. See
+  `.steering/20260822-track-cruise-wall-bound-contract/validation.md`.
+- Slice 3 remains blocked: the first-stage reachability/stitch defect must be resolved, and authority
+  handoff from a legacy-created unsafe current pose needs an explicit fail-closed/recovery contract.
 
 ## Slice 3: Track/Cruise authority promotion
 

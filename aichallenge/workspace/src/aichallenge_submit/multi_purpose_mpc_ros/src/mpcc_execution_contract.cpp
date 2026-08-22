@@ -220,6 +220,8 @@ const char * physical_wall_certificate_reason_name(
       return "current-pose-wall-sample-unavailable";
     case PhysicalWallCertificateReason::CurrentPoseHardWallContact:
       return "current-pose-hard-wall-contact";
+    case PhysicalWallCertificateReason::CourseFrameUnavailable:
+      return "course-frame-unavailable";
     case PhysicalWallCertificateReason::SweptPathViolation:
       return "swept-path-violation";
   }
@@ -271,6 +273,16 @@ std::string format_physical_wall_certificate_diagnostic(
   }
   if (std::isfinite(diagnostic.heading_offset_rad)) {
     output << ", heading_offset=" << diagnostic.heading_offset_rad << "rad";
+  }
+  if (
+    std::isfinite(diagnostic.solved_progress_m) &&
+    std::isfinite(diagnostic.reference_progress_m))
+  {
+    output << ", progress=" << diagnostic.solved_progress_m << "/"
+           << diagnostic.reference_progress_m << "m";
+  }
+  if (std::isfinite(diagnostic.progress_delta_m)) {
+    output << ", progress_delta=" << diagnostic.progress_delta_m << "m";
   }
   if (
     std::isfinite(diagnostic.pose_x_m) &&

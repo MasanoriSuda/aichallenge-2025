@@ -74,6 +74,7 @@ enum class PhysicalWallCertificateReason
   HardWallContact,
   CurrentPoseWallSampleUnavailable,
   CurrentPoseHardWallContact,
+  CourseFrameUnavailable,
   SweptPathViolation,
 };
 
@@ -108,6 +109,9 @@ struct PhysicalWallCertificateDiagnostic
   double upper_bound_m{std::numeric_limits<double>::quiet_NaN()};
   double bound_reserve_m{std::numeric_limits<double>::quiet_NaN()};
   double heading_offset_rad{std::numeric_limits<double>::quiet_NaN()};
+  double reference_progress_m{std::numeric_limits<double>::quiet_NaN()};
+  double solved_progress_m{std::numeric_limits<double>::quiet_NaN()};
+  double progress_delta_m{std::numeric_limits<double>::quiet_NaN()};
   double pose_x_m{std::numeric_limits<double>::quiet_NaN()};
   double pose_y_m{std::numeric_limits<double>::quiet_NaN()};
   double pose_yaw_rad{std::numeric_limits<double>::quiet_NaN()};

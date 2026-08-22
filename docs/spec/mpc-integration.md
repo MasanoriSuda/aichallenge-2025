@@ -1755,6 +1755,28 @@ segmentへ変化した場合は即時に一行記録する。1秒集約ではcan
 shadow selection 0回だった。したがってSlice 3昇格は、candidate側57件の根因解消に加え、legacyが
 unsafe current poseを作った状態から新authorityへ安全にhandoffする契約が定まるまで保留する。
 
+#### Solved-progress course-frame wall contract（2026-08-22）
+
+5-state解の`e_y` / `e_psi`は固定の`ref_wp_id + stage`へ貼り付けず、同じ解が持つ絶対進捗
+`theta`でsamplingしたcourse frameへ適用する。`EffectiveStageGeometry`からworld `x/y/yaw`と
+waypoint provenanceを持つstrictly increasingな`CourseFrameKnot`列を構築し、物理wall証明は
+各solved progressで補間したframeから車体poseを再構成する。provenanceが非finite、非単調、欠落、
+または表現範囲外なら`course-frame-unavailable`としてfail closeし、固定stage frameへfallback
+しない。
+
+solverが許容したprogress equality residualにより解がprovenance端点をわずかに越える場合だけ、
+同じmetre-domain solver toleranceをsamplingへ渡して端点へclampする。別の固定epsilonで証明範囲を
+広げない。QPのscalar lateral boundは現段階ではcentre-path contractであり、2.0 m x 1.45 mの
+oriented footprintと設定wall marginを確認するexact certificateを置き換えない。現在production pose
+から最初のsolved poseまでのswept proofも引き続き必須である。
+
+`output/20260822-173527`では、candidate hard contact時に固定stage frameがsolved progressより
+1.0--1.9 m先行していることを確認した。修正後の`output/20260822-181304`では4,794/4,794 solve、
+4,782 certificate（99.7497%）となり、candidate discrete hard contactとcourse-frame unavailableは
+ともに0件だった。残件はunsafeなlegacy production pose 10件と、current poseからfirst stageへの
+真正なswept failure 2件である。Track/Cruise出力は引き続き`authority=shadow, selected=0`とし、
+first-stage reachabilityとunsafe current poseからのhandoff契約を解決するまで昇格しない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

@@ -270,6 +270,7 @@ colcon test-result --verbose
 | スキル | 用途 |
 |---|---|
 | `code-reviewer` | Autoware / ROS 2 package、launch、制御器、評価互換性のレビュー |
+| `mpcc-root-cause-auditor` | MPC/MPCCのauthority、fallback、solver、wall/corridor回帰を根本原因から監査 |
 | `error-analyzer` | colcon、docker compose、AWSIM、Autoware launch、DDS、評価失敗のログ解析 |
 | `data-analyzer` | rosbag/mcap、走行ログ、topic hz、制御出力、trajectory、localization の分析 |
 | `evaluation-analyzer` | `result-summary.json`、`dN-result-details.json`、lap、penalty、finish/timeout の解析 |

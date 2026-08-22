@@ -235,6 +235,8 @@ struct CanonicalNormalCandidate
   std::size_t executable_control_stage_count{};
   std::uint64_t execution_plan_id{};
   std::uint64_t execution_certificate_decision_id{};
+  std::size_t execution_first_control_stage_index{};
+  PhysicalCertificate execution_physical;
 };
 
 enum class CanonicalNormalCandidateRejectReason
@@ -253,6 +255,7 @@ enum class CanonicalNormalCandidateRejectReason
   Expired,
   DecisionMismatch,
   ExecutionCertificateDecisionMismatch,
+  ExecutionCertificateNotCertified,
 };
 
 const char * to_string(CanonicalNormalCandidateRejectReason reason) noexcept;
@@ -299,6 +302,7 @@ struct CanonicalNormalAuthorityResolution
   std::size_t executable_control_stage_count{};
   std::uint64_t execution_plan_id{};
   std::uint64_t execution_certificate_decision_id{};
+  std::size_t execution_first_control_stage_index{};
   bool retained_solution{false};
 };
 

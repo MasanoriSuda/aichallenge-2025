@@ -115,9 +115,13 @@ No cycle-local transfer to three-state or legacy MPC is allowed after promotion.
   selector. Every candidate now names a real execution plan and a current-decision execution
   certificate. A retained solution keeps its original solver problem identity but cannot own
   control from only its old wall certificate and a claimed remaining-stage count.
+- `.steering/20260822-track-cruise-canonical-plan-store` adds the runtime-disconnected complete-plan
+  lifecycle needed to back those identities. It atomically stores all five-state predictions and
+  three-input stages, rejects stale async replacement, advances an exact non-clamping cursor and
+  builds candidates only from current physical revalidation of the actual remaining window.
 - Runtime promotion is not yet performed. The remaining implementation must create an atomic full
-  Track/Cruise control-plan store, solve/certify canonical control before legacy publication, and
-  connect the selector to final output while deleting Track/Cruise legacy fallback.
+  Track/Cruise plan from the certified shadow primal, revalidate its current execution window, and
+  connect the existing store/selector to final output while deleting Track/Cruise legacy fallback.
 - This connection is an explicit authority boundary and requires approval before implementation.
 
 ### Delete/replace

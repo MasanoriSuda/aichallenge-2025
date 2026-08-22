@@ -515,6 +515,8 @@ const char * to_string(
       return "decision-mismatch";
     case CanonicalNormalCandidateRejectReason::ExecutionCertificateDecisionMismatch:
       return "execution-certificate-decision-mismatch";
+    case CanonicalNormalCandidateRejectReason::ExecutionCertificateNotCertified:
+      return "execution-certificate-not-certified";
   }
   return "unknown";
 }
@@ -588,8 +590,14 @@ CanonicalNormalCandidateRejectReason qualify_canonical_normal_candidate(
     return CanonicalNormalCandidateRejectReason::NoExecutableControl;
   }
   if (
+    candidate.execution_first_control_stage_index >=
+    solution.prediction_stage_count ||
     candidate.executable_control_stage_count >
-    solution.prediction_stage_count)
+    solution.prediction_stage_count -
+    candidate.execution_first_control_stage_index ||
+    candidate.executable_control_stage_count !=
+    solution.prediction_stage_count -
+    candidate.execution_first_control_stage_index)
   {
     return CanonicalNormalCandidateRejectReason::InvalidExecutableHorizon;
   }
@@ -604,6 +612,14 @@ CanonicalNormalCandidateRejectReason qualify_canonical_normal_candidate(
   {
     return CanonicalNormalCandidateRejectReason::
       ExecutionCertificateDecisionMismatch;
+  }
+  if (
+    !candidate.execution_physical.checked ||
+    !candidate.execution_physical.wall_clear ||
+    !candidate.execution_physical.obstacles_clear)
+  {
+    return CanonicalNormalCandidateRejectReason::
+      ExecutionCertificateNotCertified;
   }
   return CanonicalNormalCandidateRejectReason::None;
 }
@@ -637,6 +653,8 @@ CanonicalNormalAuthorityResolution resolve_canonical_normal_authority(
     resolution.execution_plan_id = request.fresh.execution_plan_id;
     resolution.execution_certificate_decision_id =
       request.fresh.execution_certificate_decision_id;
+    resolution.execution_first_control_stage_index =
+      request.fresh.execution_first_control_stage_index;
     return resolution;
   }
 
@@ -655,6 +673,8 @@ CanonicalNormalAuthorityResolution resolve_canonical_normal_authority(
     resolution.execution_plan_id = request.retained.execution_plan_id;
     resolution.execution_certificate_decision_id =
       request.retained.execution_certificate_decision_id;
+    resolution.execution_first_control_stage_index =
+      request.retained.execution_first_control_stage_index;
     resolution.retained_solution = true;
     return resolution;
   }

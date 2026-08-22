@@ -84,6 +84,15 @@ ament_auto_add_library(${PROJECT_NAME}_mpcc_execution_contract SHARED
   src/mpcc_execution_contract.cpp
 )
 
+ament_auto_add_library(${PROJECT_NAME}_canonical_execution_plan SHARED
+  NO_TARGET_LINK_LIBRARIES
+  src/canonical_execution_plan.cpp
+)
+target_link_libraries(${PROJECT_NAME}_canonical_execution_plan
+  ${PROJECT_NAME}_mpcc_execution_contract
+  Threads::Threads
+)
+
 ament_auto_add_library(${PROJECT_NAME}_latest_only_worker SHARED
   NO_TARGET_LINK_LIBRARIES
   src/latest_only_worker.cpp
@@ -313,6 +322,15 @@ if(BUILD_TESTING)
   if(TARGET test_mpcc_execution_contract)
     target_link_libraries(test_mpcc_execution_contract
       ${PROJECT_NAME}_mpcc_execution_contract
+    )
+  endif()
+
+  ament_add_gtest(test_canonical_execution_plan
+    test/test_canonical_execution_plan.cpp
+  )
+  if(TARGET test_canonical_execution_plan)
+    target_link_libraries(test_canonical_execution_plan
+      ${PROJECT_NAME}_canonical_execution_plan
     )
   endif()
 

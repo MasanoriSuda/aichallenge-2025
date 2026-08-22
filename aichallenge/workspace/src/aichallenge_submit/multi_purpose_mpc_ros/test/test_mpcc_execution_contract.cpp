@@ -75,11 +75,18 @@ contract::CanonicalNormalCandidate make_canonical_candidate(
   const std::uint64_t execution_plan_id = 23U)
 {
   const auto context = make_track_context(decision_id);
-  return contract::CanonicalNormalCandidate{
-    context, make_solution(context), executable_control_stage_count,
-    execution_plan_id,
+  contract::CanonicalNormalCandidate candidate;
+  candidate.problem = context;
+  candidate.solution = make_solution(context);
+  candidate.executable_control_stage_count = executable_control_stage_count;
+  candidate.execution_plan_id = execution_plan_id;
+  candidate.execution_certificate_decision_id =
     execution_certificate_decision_id == 0U ? decision_id :
-    execution_certificate_decision_id};
+    execution_certificate_decision_id;
+  candidate.execution_physical.checked = true;
+  candidate.execution_physical.wall_clear = true;
+  candidate.execution_physical.obstacles_clear = true;
+  return candidate;
 }
 
 }  // namespace
@@ -484,6 +491,7 @@ TEST(MpccExecutionContract, CanonicalNormalAuthoritySelectsFreshCurrentDecision)
   EXPECT_EQ(resolution.problem->decision_id, 42U);
   EXPECT_EQ(resolution.execution_plan_id, 23U);
   EXPECT_EQ(resolution.execution_certificate_decision_id, 42U);
+  EXPECT_EQ(resolution.execution_first_control_stage_index, 0U);
   EXPECT_FALSE(resolution.retained_solution);
 }
 
@@ -508,6 +516,7 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityFallsBackOnlyToRetainedCanon
   EXPECT_EQ(resolution.problem->decision_id, 41U);
   EXPECT_EQ(resolution.execution_plan_id, 23U);
   EXPECT_EQ(resolution.execution_certificate_decision_id, 42U);
+  EXPECT_EQ(resolution.execution_first_control_stage_index, 0U);
   EXPECT_TRUE(resolution.retained_solution);
 }
 
@@ -560,6 +569,23 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsStaleFreshExecutionPr
     resolution.fresh_reject_reason,
     contract::CanonicalNormalCandidateRejectReason::
       ExecutionCertificateDecisionMismatch);
+}
+
+TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsUnsafeExecutionProof)
+{
+  auto fresh = make_canonical_candidate();
+  fresh.execution_physical.wall_clear = false;
+  const auto resolution = contract::resolve_canonical_normal_authority(
+    contract::CanonicalNormalAuthorityRequest{
+      42U, 12.0, fresh, contract::CanonicalNormalCandidate{}});
+
+  EXPECT_EQ(
+    resolution.source,
+    contract::CanonicalNormalAuthoritySource::EmergencyStop);
+  EXPECT_EQ(
+    resolution.fresh_reject_reason,
+    contract::CanonicalNormalCandidateRejectReason::
+      ExecutionCertificateNotCertified);
 }
 
 TEST(MpccExecutionContract, CanonicalNormalAuthorityRequiresExecutableControl)
@@ -648,8 +674,9 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsThreeStateTrack)
   context.input_schema_id = "velocity-curvature-v1";
   context.cost_schema_id = "progress-contouring-v1";
   context = contract::seal_problem_context(std::move(context));
-  const contract::CanonicalNormalCandidate fresh{
-    context, make_solution(context), 2U};
+  auto fresh = make_canonical_candidate();
+  fresh.problem = context;
+  fresh.solution = make_solution(context);
   const auto resolution = contract::resolve_canonical_normal_authority(
     contract::CanonicalNormalAuthorityRequest{
       42U, 12.0, fresh, contract::CanonicalNormalCandidate{}});
@@ -665,8 +692,9 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsThreeStateTrack)
 TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsNonTrackCruiseIntent)
 {
   const auto context = make_context();
-  const contract::CanonicalNormalCandidate fresh{
-    context, make_solution(context), 2U};
+  auto fresh = make_canonical_candidate();
+  fresh.problem = context;
+  fresh.solution = make_solution(context);
   const auto resolution = contract::resolve_canonical_normal_authority(
     contract::CanonicalNormalAuthorityRequest{
       42U, 12.0, fresh, contract::CanonicalNormalCandidate{}});

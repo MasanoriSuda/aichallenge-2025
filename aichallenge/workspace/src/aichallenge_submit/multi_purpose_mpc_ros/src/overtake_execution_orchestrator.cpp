@@ -1174,6 +1174,75 @@ RetainedExecutionCursorResolution resolve_retained_execution_cursor(
   return resolution;
 }
 
+const char * to_string(const DynamicEscapeExecutionLeaseReason reason) noexcept
+{
+  switch (reason) {
+    case DynamicEscapeExecutionLeaseReason::FreshExecution:
+      return "fresh-execution";
+    case DynamicEscapeExecutionLeaseReason::RetainedExecution:
+      return "retained-execution";
+    case DynamicEscapeExecutionLeaseReason::HardSafetyOverride:
+      return "hard-safety-override";
+    case DynamicEscapeExecutionLeaseReason::AttemptInactive:
+      return "attempt-inactive";
+    case DynamicEscapeExecutionLeaseReason::RetainedUnavailable:
+      return "retained-unavailable";
+    case DynamicEscapeExecutionLeaseReason::RetainedIdentityMismatch:
+      return "retained-identity-mismatch";
+  }
+  return "unknown";
+}
+
+DynamicEscapeExecutionLeaseResolution resolve_dynamic_escape_execution_lease(
+  const DynamicEscapeExecutionLeaseRequest & request) noexcept
+{
+  DynamicEscapeExecutionLeaseResolution resolution;
+  if (!request.execution_permitted) {
+    resolution.reason =
+      DynamicEscapeExecutionLeaseReason::HardSafetyOverride;
+    return resolution;
+  }
+  if (request.fresh_execution_active) {
+    resolution.active = true;
+    resolution.fresh = true;
+    resolution.path_age_sec = 0.0;
+    resolution.reason = DynamicEscapeExecutionLeaseReason::FreshExecution;
+    return resolution;
+  }
+  if (!request.attempt_active) {
+    resolution.reason = DynamicEscapeExecutionLeaseReason::AttemptInactive;
+    return resolution;
+  }
+  if (!request.retained_available) {
+    resolution.reason =
+      DynamicEscapeExecutionLeaseReason::RetainedUnavailable;
+    return resolution;
+  }
+
+  const bool attempt_matches =
+    request.expected_attempt_id == 0U ||
+    request.retained_attempt_id == request.expected_attempt_id;
+  const bool target_matches =
+    request.expected_target_id.empty() ||
+    request.retained_target_id == request.expected_target_id;
+  const bool side_matches =
+    request.expected_side_sign == 0 ||
+    request.retained_side_sign == request.expected_side_sign;
+  resolution.retained_identity_matches =
+    attempt_matches && target_matches && side_matches;
+  if (!resolution.retained_identity_matches) {
+    resolution.reason =
+      DynamicEscapeExecutionLeaseReason::RetainedIdentityMismatch;
+    return resolution;
+  }
+
+  resolution.active = true;
+  resolution.retained = true;
+  resolution.path_age_sec = request.retained_age_sec;
+  resolution.reason = DynamicEscapeExecutionLeaseReason::RetainedExecution;
+  return resolution;
+}
+
 const char * to_string(const DynamicEscapeAttemptReason reason) noexcept
 {
   switch (reason) {

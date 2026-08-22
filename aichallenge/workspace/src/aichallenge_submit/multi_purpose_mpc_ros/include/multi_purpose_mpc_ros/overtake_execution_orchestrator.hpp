@@ -499,6 +499,49 @@ struct RetainedExecutionCursorResolution {
 RetainedExecutionCursorResolution resolve_retained_execution_cursor(
   const RetainedExecutionCursorRequest & request) noexcept;
 
+enum class DynamicEscapeExecutionLeaseReason {
+  FreshExecution,
+  RetainedExecution,
+  HardSafetyOverride,
+  AttemptInactive,
+  RetainedUnavailable,
+  RetainedIdentityMismatch,
+};
+
+const char * to_string(DynamicEscapeExecutionLeaseReason reason) noexcept;
+
+/// Separate fresh candidate availability from execution ownership. A short,
+/// physically admitted retained horizon may continue to own the controller
+/// while the asynchronous planner rebuilds the next candidate. Identity is
+/// checked against the encounter attempt so a stale solution can never leak
+/// into another target or side.
+struct DynamicEscapeExecutionLeaseRequest {
+  bool execution_permitted{true};
+  bool fresh_execution_active{false};
+  bool attempt_active{false};
+  std::uint64_t expected_attempt_id{0U};
+  std::string expected_target_id;
+  int expected_side_sign{0};
+  bool retained_available{false};
+  std::uint64_t retained_attempt_id{0U};
+  std::string retained_target_id;
+  int retained_side_sign{0};
+  double retained_age_sec{std::numeric_limits<double>::infinity()};
+};
+
+struct DynamicEscapeExecutionLeaseResolution {
+  bool active{false};
+  bool fresh{false};
+  bool retained{false};
+  bool retained_identity_matches{false};
+  double path_age_sec{std::numeric_limits<double>::infinity()};
+  DynamicEscapeExecutionLeaseReason reason{
+    DynamicEscapeExecutionLeaseReason::AttemptInactive};
+};
+
+DynamicEscapeExecutionLeaseResolution resolve_dynamic_escape_execution_lease(
+  const DynamicEscapeExecutionLeaseRequest & request) noexcept;
+
 enum class DynamicEscapeAttemptReason {
   Inactive,
   Started,

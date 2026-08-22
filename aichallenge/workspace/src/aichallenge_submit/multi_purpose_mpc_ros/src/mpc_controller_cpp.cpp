@@ -2195,7 +2195,14 @@ struct V2XBehaviorOutput
   bool dynamic_obstacle_lateral_escape_continuation_requested{false};
   bool dynamic_obstacle_lateral_escape_attempt_active{false};
   bool dynamic_obstacle_lateral_escape_soft_curve_bypassed{false};
+  // `active` below is fresh-candidate availability for the current solve.
+  // `execution_active` is the effective control authority and may be backed
+  // by a short, physically admitted retained horizon while the planner
+  // rebuilds the next candidate.
   bool dynamic_obstacle_lateral_escape_active{false};
+  bool dynamic_obstacle_lateral_escape_execution_active{false};
+  double dynamic_obstacle_lateral_escape_execution_path_age_sec{
+    std::numeric_limits<double>::infinity()};
   std::uint64_t dynamic_obstacle_lateral_escape_attempt_id{0U};
   bool dynamic_obstacle_lateral_escape_execution_path_validated{false};
   bool dynamic_obstacle_follow_cap_suppressed{false};
@@ -16943,6 +16950,51 @@ struct MPC
     behavior_output.
       dynamic_obstacle_lateral_escape_maximum_required_lateral_accel_mps2 =
       dynamic_escape_bridge.maximum_required_lateral_accel_mps2;
+    std::string dynamic_escape_execution_target_id =
+      behavior_output.dynamic_obstacle_cruise_target_id;
+    if (dynamic_escape_execution_target_id.empty()) {
+      dynamic_escape_execution_target_id = behavior_output.target_vehicle_id;
+    }
+    const auto retained_dynamic_escape_snapshot =
+      retained_dynamic_escape_execution(
+      now_sec, kDynamicEscapeHandoffLeaseSec);
+    const bool dynamic_escape_execution_permitted =
+      !explicit_overtake_line_owns_plan &&
+      behavior_output.state != V2XBehaviorState::SafetyBrake &&
+      behavior_output.front_risk_level != FrontRiskLevel::EmergencyBrake &&
+      !behavior_output.recoverable_side_contact_active &&
+      !behavior_output.precontact_squeeze_escape_active &&
+      !overtake_solver_recovery_active_;
+    const auto dynamic_escape_execution_lease =
+      overtake_orchestrator::resolve_dynamic_escape_execution_lease(
+      overtake_orchestrator::DynamicEscapeExecutionLeaseRequest{
+        dynamic_escape_execution_permitted,
+        behavior_output.dynamic_obstacle_lateral_escape_active,
+        behavior_output.dynamic_obstacle_lateral_escape_attempt_active,
+        behavior_output.dynamic_obstacle_lateral_escape_attempt_id,
+        dynamic_escape_execution_target_id,
+        behavior_output.dynamic_obstacle_lateral_escape_active ?
+        behavior_output.dynamic_obstacle_lateral_escape_side_sign : 0,
+        retained_dynamic_escape_snapshot.has_value(),
+        retained_dynamic_escape_snapshot.has_value() ?
+        retained_dynamic_escape_snapshot->attempt_id : 0U,
+        retained_dynamic_escape_snapshot.has_value() ?
+        retained_dynamic_escape_snapshot->target_id : std::string{},
+        retained_dynamic_escape_snapshot.has_value() ?
+        retained_dynamic_escape_snapshot->side_sign : 0,
+        retained_dynamic_escape_snapshot.has_value() ?
+        retained_dynamic_escape_snapshot->age_sec :
+        std::numeric_limits<double>::infinity()});
+    behavior_output.dynamic_obstacle_lateral_escape_execution_active =
+      dynamic_escape_execution_lease.active;
+    behavior_output.dynamic_obstacle_lateral_escape_execution_path_age_sec =
+      dynamic_escape_execution_lease.path_age_sec;
+    if (dynamic_escape_execution_lease.retained) {
+      // A retained execution was physically admitted before publication. It
+      // remains validated only for the bounded cursor lease and is checked
+      // again by the runtime footprint wall monitor before this cycle is sent.
+      behavior_output.dynamic_obstacle_lateral_escape_execution_path_validated = true;
+    }
     std::string dynamic_escape_authority_reason =
       v2x_overtake_core::to_string(dynamic_lateral_escape_authority.reason);
     if (
@@ -17606,10 +17658,13 @@ struct MPC
           std::max(0.0, now_sec - overtake_line_state_.mission_planner_generated_at_sec) :
           std::numeric_limits<double>::infinity();
       }
-    } else if (behavior_output.dynamic_obstacle_lateral_escape_active) {
+    } else if (
+      behavior_output.dynamic_obstacle_lateral_escape_execution_active)
+    {
       authority_request.path_source_hint =
         overtake_orchestrator::PathSource::DynamicObstacleEscape;
-      authority_request.path_age_sec = 0.0;
+      authority_request.path_age_sec =
+        behavior_output.dynamic_obstacle_lateral_escape_execution_path_age_sec;
     } else if (planner_output.active && planner_output.feasible) {
       authority_request.path_source_hint = overtake_orchestrator::PathSource::GapPlanner;
       authority_request.path_age_sec = 0.0;
@@ -17619,7 +17674,7 @@ struct MPC
     authority_request.gap_planner_active =
       planner_output.active && planner_output.feasible && apply_gap_planner_state_bounds;
     authority_request.dynamic_obstacle_escape_active =
-      behavior_output.dynamic_obstacle_lateral_escape_active;
+      behavior_output.dynamic_obstacle_lateral_escape_execution_active;
     authority_request.dynamic_obstacle_follow_cap_suppressed =
       behavior_output.dynamic_obstacle_follow_cap_suppressed;
     authority_request.dynamic_wait_active =
@@ -47819,7 +47874,7 @@ private:
     const bool executed_solution_wall_hold_active =
       mpc_->executed_solution_wall_hold_active();
     const auto & v2x_behavior = mpc_->last_v2x_behavior_output();
-    const bool dynamic_escape_execution_active =
+    const bool dynamic_escape_fresh_execution_active =
       v2x_behavior.dynamic_obstacle_lateral_escape_active;
     const bool dynamic_escape_attempt_active =
       v2x_behavior.dynamic_obstacle_lateral_escape_attempt_active;
@@ -47832,12 +47887,61 @@ private:
         dynamic_escape_exit_target_id_ = v2x_behavior.target_vehicle_id;
       }
     }
-    if (dynamic_escape_execution_active) {
+    if (dynamic_escape_fresh_execution_active) {
       dynamic_escape_exit_side_sign_ =
         v2x_behavior.dynamic_obstacle_lateral_escape_side_sign;
       dynamic_escape_exit_branch_ =
         v2x_behavior.dynamic_obstacle_lateral_escape_committed_branch;
     }
+    const auto retained_dynamic_escape_snapshot =
+      mpc_->retained_dynamic_escape_execution(
+      current_time.seconds(), kDynamicEscapeHandoffLeaseSec);
+    const auto dynamic_escape_execution_lease =
+      overtake_orchestrator::resolve_dynamic_escape_execution_lease(
+      overtake_orchestrator::DynamicEscapeExecutionLeaseRequest{
+        v2x_behavior.dynamic_obstacle_lateral_escape_execution_active,
+        dynamic_escape_fresh_execution_active,
+        dynamic_escape_attempt_active,
+        dynamic_escape_exit_attempt_id_,
+        dynamic_escape_exit_target_id_,
+        dynamic_escape_exit_side_sign_,
+        retained_dynamic_escape_snapshot.has_value(),
+        retained_dynamic_escape_snapshot.has_value() ?
+        retained_dynamic_escape_snapshot->attempt_id : 0U,
+        retained_dynamic_escape_snapshot.has_value() ?
+        retained_dynamic_escape_snapshot->target_id : std::string{},
+        retained_dynamic_escape_snapshot.has_value() ?
+        retained_dynamic_escape_snapshot->side_sign : 0,
+        retained_dynamic_escape_snapshot.has_value() ?
+        retained_dynamic_escape_snapshot->age_sec :
+        std::numeric_limits<double>::infinity()});
+    std::optional<RetainedDynamicEscapeControl>
+    retained_dynamic_escape_control;
+    if (dynamic_escape_execution_lease.retained) {
+      retained_dynamic_escape_control =
+        mpc_->restore_retained_dynamic_escape_execution(
+        current_time.seconds(), kDynamicEscapeHandoffLeaseSec);
+      if (retained_dynamic_escape_control.has_value()) {
+        // The ordinary solve performed during the asynchronous candidate gap
+        // is not the execution owner. Restore both axes and the matching
+        // prediction before any wall or exit observation consumes them.
+        u = retained_dynamic_escape_control->control;
+        max_delta = std::abs(u[1]);
+      } else {
+        RCLCPP_WARN(
+          get_logger(),
+          "Dynamic escape execution lease lost before publication: "
+          "attempt=%lu, target=%s, side=%d, reason=retained-restore-failed",
+          static_cast<unsigned long>(dynamic_escape_exit_attempt_id_),
+          dynamic_escape_exit_target_id_.c_str(),
+          dynamic_escape_exit_side_sign_);
+      }
+    }
+    const bool dynamic_escape_execution_active =
+      dynamic_escape_execution_lease.fresh ||
+      retained_dynamic_escape_control.has_value();
+    const bool dynamic_escape_prediction_owned =
+      dynamic_escape_execution_active;
     const bool dynamic_escape_exit_detected =
       dynamic_escape_execution_was_active_ && !dynamic_escape_execution_active;
     const auto overtake_authority = current_overtake_authority_trace();
@@ -47934,7 +48038,7 @@ private:
     solver_continuation_request.control_enabled = enable_control_;
     solver_continuation_request.solver_fallback = mpc_fallback_active;
     solver_continuation_request.dynamic_obstacle_escape_active =
-      v2x_behavior.dynamic_obstacle_lateral_escape_active;
+      dynamic_escape_execution_active;
     solver_continuation_request.emergency_active =
       v2x_behavior.state == V2XBehaviorState::SafetyBrake ||
       v2x_behavior.front_risk_level == FrontRiskLevel::EmergencyBrake;
@@ -48227,7 +48331,7 @@ private:
         // observations to prevent an unsafe transient release.
         dynamic_escape_wall_admission_request.
         required_consecutive_valid_cycles =
-          dynamic_escape_execution_active ? 1 : 2;
+          dynamic_escape_prediction_owned ? 1 : 2;
         dynamic_escape_wall_observation_reason =
           overtake_orchestrator::classify_wall_path_admission(
           dynamic_escape_wall_admission_request);
@@ -48249,7 +48353,7 @@ private:
           dynamic_escape_wall_admission_request);
       }
       dynamic_escape_replacement_physically_admitted =
-        dynamic_escape_execution_active && dynamic_escape_wall_scan_due &&
+        dynamic_escape_fresh_execution_active && dynamic_escape_wall_scan_due &&
         dynamic_escape_wall_observation_reason ==
         overtake_orchestrator::WallHandoffAdmissionReason::Accepted &&
         !dynamic_escape_wall_admission.hold_control;
@@ -48259,9 +48363,6 @@ private:
           current_time.seconds());
       }
     }
-    const auto retained_dynamic_escape_snapshot =
-      mpc_->retained_dynamic_escape_execution(
-      current_time.seconds(), kDynamicEscapeHandoffLeaseSec);
     std::string dynamic_escape_observed_target_id =
       v2x_behavior.dynamic_obstacle_cruise_target_id;
     if (dynamic_escape_observed_target_id.empty()) {
@@ -48318,7 +48419,7 @@ private:
     dynamic_escape_exit_request.obstacle_blocking =
       dynamic_escape_obstacle_blocking;
     dynamic_escape_exit_request.replacement_escape_active =
-      dynamic_escape_execution_active &&
+      dynamic_escape_fresh_execution_active &&
       (dynamic_escape_exit_gate_.active() ||
       dynamic_escape_exit_request.activation_requested);
     dynamic_escape_exit_request.replacement_escape_admitted =
@@ -48374,15 +48475,18 @@ private:
       solver_wall_admission :
       (overtake_wall_admission_hold_active ?
       overtake_wall_admission : dynamic_escape_wall_admission);
-    std::optional<RetainedDynamicEscapeControl>
-    retained_dynamic_escape_control;
     std::string dynamic_escape_published_source =
-      dynamic_escape_execution_active ? "incoming" : "outgoing";
+      dynamic_escape_fresh_execution_active ? "incoming" :
+      (retained_dynamic_escape_control.has_value() ?
+      "retained-stage" : "outgoing");
     if (
       dynamic_escape_wall_admission_hold_active ||
       dynamic_escape_exit_lateral_hold_active)
     {
-      if (retained_dynamic_escape_identity_matches) {
+      if (
+        !retained_dynamic_escape_control.has_value() &&
+        retained_dynamic_escape_identity_matches)
+      {
         retained_dynamic_escape_control =
           mpc_->restore_retained_dynamic_escape_execution(
           current_time.seconds(), kDynamicEscapeHandoffLeaseSec);
@@ -48401,7 +48505,10 @@ private:
         dynamic_escape_published_source = "last-steering-hold";
       }
     }
-    if (dynamic_escape_wall_admission.replan_required) {
+    if (
+      dynamic_escape_wall_admission.replan_required &&
+      dynamic_escape_prediction_owned)
+    {
       std::ostringstream replan_reason;
       replan_reason << "dynamic escape physical wall admission/"
                     << overtake_orchestrator::to_string(
@@ -48415,6 +48522,27 @@ private:
       dynamic_escape_wall_admission.replan_requested =
         mpc_->request_dynamic_escape_wall_replan(
         replan_reason.str(), current_time.seconds());
+    } else if (
+      dynamic_escape_wall_admission.replan_required &&
+      dynamic_escape_wall_admission.state_changed)
+    {
+      // The handoff monitor may reject the outgoing racing-line path, but
+      // that evidence does not identify a defect in the retained
+      // DynamicEscape target/side. Keep the physical hold while preventing a
+      // false side quarantine and make the ownership decision explicit.
+      RCLCPP_WARN(
+        get_logger(),
+        "Dynamic escape wall replan attribution suppressed: decision=%lu, "
+        "reason=%s, prediction_owner=outgoing, exit=%d, attempt=%lu, "
+        "target=%s, side=%d",
+        static_cast<unsigned long>(active_control_decision_id_),
+        overtake_orchestrator::to_string(
+          dynamic_escape_wall_admission.reason),
+        dynamic_escape_exit_detected ? 1 : 0,
+        static_cast<unsigned long>(dynamic_escape_exit_attempt_id_),
+        dynamic_escape_exit_target_id_.empty() ?
+        "none" : dynamic_escape_exit_target_id_.c_str(),
+        dynamic_escape_exit_side_sign_);
     }
     if (
       dynamic_escape_exit_resolution.replan_required &&
@@ -48559,7 +48687,14 @@ private:
         std::numeric_limits<double>::infinity();
       std::ostringstream bridge;
       bridge << message
+             << ", dynamic_fresh="
+             << (dynamic_escape_fresh_execution_active ? 1 : 0)
              << ", dynamic_active=" << (dynamic_escape_execution_active ? 1 : 0)
+             << ", execution_source="
+             << overtake_orchestrator::to_string(
+        dynamic_escape_execution_lease.reason)
+             << ", prediction_owner="
+             << (dynamic_escape_prediction_owned ? "dynamic-escape" : "outgoing")
              << ", exit_detected=" << (dynamic_escape_exit_detected ? 1 : 0)
              << ", incoming_admitted="
              << (dynamic_escape_replacement_physically_admitted ? 1 : 0)
@@ -48857,7 +48992,7 @@ private:
         output_reason = "low-speed-direct-wall-stop";
       } else if (
         mpc_fallback_active &&
-        v2x_behavior.dynamic_obstacle_lateral_escape_active)
+        dynamic_escape_execution_active)
       {
         output_reason = std::string{"solver-fallback-forced-stop/continuation-"} +
           mpc_velocity_limit::to_string(

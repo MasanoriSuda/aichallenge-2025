@@ -658,6 +658,96 @@ TEST(OvertakeExecutionOrchestrator, RejectsExhaustedRetainedExecutionHorizon)
     orchestrator::RetainedExecutionCursorReason::HorizonExhausted);
 }
 
+TEST(OvertakeExecutionOrchestrator, FreshDynamicEscapeOwnsExecutionImmediately)
+{
+  orchestrator::DynamicEscapeExecutionLeaseRequest request;
+  request.execution_permitted = true;
+  request.fresh_execution_active = true;
+
+  const auto result =
+    orchestrator::resolve_dynamic_escape_execution_lease(request);
+
+  EXPECT_TRUE(result.active);
+  EXPECT_TRUE(result.fresh);
+  EXPECT_FALSE(result.retained);
+  EXPECT_DOUBLE_EQ(result.path_age_sec, 0.0);
+  EXPECT_EQ(
+    result.reason,
+    orchestrator::DynamicEscapeExecutionLeaseReason::FreshExecution);
+}
+
+TEST(OvertakeExecutionOrchestrator,
+     RetainedDynamicEscapeKeepsAuthorityDuringPlannerGap)
+{
+  orchestrator::DynamicEscapeExecutionLeaseRequest request;
+  request.execution_permitted = true;
+  request.attempt_active = true;
+  request.expected_attempt_id = 17U;
+  request.expected_target_id = "d2";
+  request.expected_side_sign = -1;
+  request.retained_available = true;
+  request.retained_attempt_id = 17U;
+  request.retained_target_id = "d2";
+  request.retained_side_sign = -1;
+  request.retained_age_sec = 0.125;
+
+  const auto result =
+    orchestrator::resolve_dynamic_escape_execution_lease(request);
+
+  EXPECT_TRUE(result.active);
+  EXPECT_FALSE(result.fresh);
+  EXPECT_TRUE(result.retained);
+  EXPECT_TRUE(result.retained_identity_matches);
+  EXPECT_DOUBLE_EQ(result.path_age_sec, 0.125);
+  EXPECT_EQ(
+    result.reason,
+    orchestrator::DynamicEscapeExecutionLeaseReason::RetainedExecution);
+}
+
+TEST(OvertakeExecutionOrchestrator,
+     RetainedDynamicEscapeCannotCrossAttemptOrTargetIdentity)
+{
+  orchestrator::DynamicEscapeExecutionLeaseRequest request;
+  request.execution_permitted = true;
+  request.attempt_active = true;
+  request.expected_attempt_id = 18U;
+  request.expected_target_id = "d3";
+  request.expected_side_sign = 1;
+  request.retained_available = true;
+  request.retained_attempt_id = 17U;
+  request.retained_target_id = "d2";
+  request.retained_side_sign = -1;
+
+  const auto result =
+    orchestrator::resolve_dynamic_escape_execution_lease(request);
+
+  EXPECT_FALSE(result.active);
+  EXPECT_FALSE(result.retained_identity_matches);
+  EXPECT_EQ(
+    result.reason,
+    orchestrator::DynamicEscapeExecutionLeaseReason::RetainedIdentityMismatch);
+}
+
+TEST(OvertakeExecutionOrchestrator,
+     HardSafetyAuthorityPreemptsFreshAndRetainedDynamicEscape)
+{
+  orchestrator::DynamicEscapeExecutionLeaseRequest request;
+  request.execution_permitted = false;
+  request.fresh_execution_active = true;
+  request.attempt_active = true;
+  request.retained_available = true;
+
+  const auto result =
+    orchestrator::resolve_dynamic_escape_execution_lease(request);
+
+  EXPECT_FALSE(result.active);
+  EXPECT_FALSE(result.fresh);
+  EXPECT_FALSE(result.retained);
+  EXPECT_EQ(
+    result.reason,
+    orchestrator::DynamicEscapeExecutionLeaseReason::HardSafetyOverride);
+}
+
 TEST(OvertakeExecutionOrchestrator, StaleWallObservationDoesNotAdvanceRelease)
 {
   orchestrator::WallPathAdmissionGate gate;

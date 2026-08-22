@@ -165,6 +165,12 @@ No cycle-local transfer to three-state or legacy MPC is allowed after promotion.
 - Fresh Gate A is accepted for retained **shadow** implementation: every physically certified
   cycle completed the exact canonical chain with zero actuation difference. Final publisher
   promotion remains an explicit authority boundary.
+- `.steering/20260822-track-cruise-retained-revalidation` now has dynamic Gate B shadow evidence.
+  In `output/20260823-014243`, a typed fresh numerical rejection at decision `20804` was replaced
+  in shadow by a prior canonical plan revalidated against the current wall, control prefix and an
+  explicitly observed empty V2X world.  Candidate selection and actuation extraction completed,
+  while a separate wall-contact interval was rejected as `delay-prefix-blocked`.  Both paths
+  remained `selected=0`; production promotion still requires explicit approval.
 - This connection is an explicit authority boundary and requires approval before implementation.
 
 ### Delete/replace

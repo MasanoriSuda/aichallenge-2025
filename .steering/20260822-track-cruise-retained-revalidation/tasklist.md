@@ -20,6 +20,8 @@
 
 - Retained call-site execution: observed.
 - Current-world rejection under V2X `NoData`: observed and fail-closed.
-- Explicit current empty-V2X retained proof acceptance: not yet observed dynamically.
+- Explicit current empty-V2X retained proof acceptance: observed dynamically in
+  `output/20260823-014243/` at decision `20804`.
 - Publisher selection: prohibited and confirmed absent (`selected=0`).
-- Gate B production promotion: not accepted by this Slice.
+- Gate B shadow evidence: accepted. Production promotion remains a separate explicit authority
+  decision and is not performed by this Slice.

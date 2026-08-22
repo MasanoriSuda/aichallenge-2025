@@ -56,6 +56,36 @@ This run proves fail-closed integration and publisher isolation.  It does not pr
 retained acceptance, because no fresh explicit empty-V2X observation was available.  Gate B
 production authority therefore remains pending.
 
+### Explicit empty-world acceptance run
+
+A second automated single-car run supplied an explicit empty
+`v2x_msgs/msg/V2XVehiclePositionArray` with `frame_id=map` and the AWSIM `/clock` timestamp:
+
+- Artifact: `output/20260823-014243/`
+- The first two CLI-based attempts were rejected for test-input reasons, not product behavior:
+  the first omitted `frame_id=map`; the second used host time instead of simulation time.  Old
+  test publishers were found still running in the container and were terminated before accepting
+  evidence.
+- With one `/clock`-driven publisher, V2X diagnostics remained `health=Healthy`,
+  `message_vehicles=0`, `message_invalid=0`, and source/receipt age approximately zero.
+- At decision `20804`, the fresh five-state solution was correctly rejected as
+  `certified-bound-violation` on stage-zero `virtual-progress-speed`: value `11.1254`, violation
+  `0.0142602`, tolerance `0.0121254`.
+- In that same cycle the prior plan passed current-world wall/empty-obstacle revalidation,
+  canonical retained candidate construction, `RetainedCertified` selector admission and exact
+  actuation extraction.  The outcome reported
+  `retained=1/accepted/ready` and
+  `retained candidate shadow-certified; publisher unchanged`.
+- The aggregate retained window recorded `world=1`, `candidate=1`, `selector=1`, `actuation=1`.
+- Unsafe retained windows also failed closed.  A separate current-wall-contact interval rejected
+  the retained plan as `delay-prefix-blocked`; it was not allowed to inherit the old certificate.
+- All retained and fresh canonical results stayed `authority=shadow, selected=0`.  Published
+  control remained `authority=legacy-normal-bypass`.
+
+This run closes the missing Gate B dynamic-acceptance evidence.  It does not authorize production
+selection; connecting the selector to the final publisher and deleting the Track/Cruise legacy
+fallback remain an explicit authority boundary.
+
 ## Rejected alternatives
 
 - Reusing the old plan's physical certificate.

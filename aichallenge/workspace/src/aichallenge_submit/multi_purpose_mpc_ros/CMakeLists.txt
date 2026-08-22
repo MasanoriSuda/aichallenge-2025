@@ -101,6 +101,17 @@ target_link_libraries(${PROJECT_NAME}_canonical_retained_revalidation
   ${PROJECT_NAME}_canonical_execution_plan
 )
 
+ament_auto_add_library(${PROJECT_NAME}_canonical_retained_world_revalidation SHARED
+  NO_TARGET_LINK_LIBRARIES
+  src/canonical_retained_world_revalidation.cpp
+)
+target_link_libraries(${PROJECT_NAME}_canonical_retained_world_revalidation
+  ${PROJECT_NAME}_canonical_retained_revalidation
+  ${PROJECT_NAME}_mpc_stage_geometry
+  ${PROJECT_NAME}_mpcc_execution_contract
+  ${PROJECT_NAME}_recovery_footprint
+)
+
 ament_auto_add_library(${PROJECT_NAME}_canonical_execution_plan_adapter SHARED
   NO_TARGET_LINK_LIBRARIES
   src/canonical_execution_plan_adapter.cpp
@@ -190,6 +201,7 @@ target_link_libraries(mpc_controller_cpp
   ${PROJECT_NAME}_awsim_boost_start_dash
   ${PROJECT_NAME}_awsim_control_mode_guard
   ${PROJECT_NAME}_canonical_execution_plan_adapter
+  ${PROJECT_NAME}_canonical_retained_world_revalidation
   ${PROJECT_NAME}_path_core
   ${PROJECT_NAME}_mpcc_progress
   ${PROJECT_NAME}_mpcc_execution_contract
@@ -361,6 +373,15 @@ if(BUILD_TESTING)
   if(TARGET test_canonical_retained_revalidation)
     target_link_libraries(test_canonical_retained_revalidation
       ${PROJECT_NAME}_canonical_retained_revalidation
+    )
+  endif()
+
+  ament_add_gtest(test_canonical_retained_world_revalidation
+    test/test_canonical_retained_world_revalidation.cpp
+  )
+  if(TARGET test_canonical_retained_world_revalidation)
+    target_link_libraries(test_canonical_retained_world_revalidation
+      ${PROJECT_NAME}_canonical_retained_world_revalidation
     )
   endif()
 

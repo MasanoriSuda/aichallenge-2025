@@ -24,6 +24,27 @@ The pure layer does not decide how ROS/world data are sampled.  It defines the i
 which a runtime adapter must use, preventing same-index substitution.  Runtime wall and obstacle
 adapters will populate typed evaluations from current providers before any shadow candidate exists.
 
+## Runtime adapter boundary
+
+The runtime adapter reconstructs the retained state in the current course frame and evaluates
+three distinct physical paths against the current static-wall occupancy grid and current vehicle
+footprint:
+
+1. measured ego pose to the exact predicted control pose;
+2. predicted control pose to the interpolated retained-current pose;
+3. every remaining retained stage segment.
+
+The control-pose path, course-frame knots and obstacle observation receive independent
+fingerprints.  Gate B is intentionally limited to Track/Cruise with a fresh, explicitly observed
+empty V2X world.  `NoData`, a stale observation, any active peer or any target fails closed.  The
+raster wall checker proves non-intersection only, so its certified metric-clearance lower bound is
+recorded as zero and is not reused as a tuning margin.
+
+The controller snapshots the previous canonical plan before attempting the fresh solve.  It calls
+the retained adapter only when fresh canonical authority is unavailable.  A successfully extracted
+retained actuation is counted in shadow telemetry only; it is never copied into the pending
+publisher actuation.
+
 ## Why this is not another fallback
 
 The retained plan is neither legacy MPC nor an unverified last command.  It is the remaining
@@ -51,3 +72,8 @@ is added in this Slice.
 Passing these tests and runtime shadow observation permits only a Gate B report.  Connecting a
 retained candidate to the final normal publisher remains an authority promotion and requires an
 explicit user approval in a later Slice.
+
+The first single-car runtime run exercised the retained call site during transient fresh rejects,
+but the environment provided V2X `NoData`, not an explicit empty observation.  The retained proof
+therefore rejected safely.  This is useful fail-closed evidence, not evidence sufficient for
+publisher promotion.

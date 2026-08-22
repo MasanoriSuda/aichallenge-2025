@@ -289,7 +289,8 @@ std::uint64_t fingerprint_proof(const RetainedExecutionProof & proof) noexcept
 bool segment_identity_matches(
   const RetainedPathSegmentEvaluation & segment,
   const CurrentExecutionProvenance & current,
-  const double lifted_progress_m) noexcept
+  const double expected_start_progress_m,
+  const double expected_end_progress_m) noexcept
 {
   return segment.observation_generation == current.observation_generation &&
          segment.stage_geometry_id == current.stage_geometry_id &&
@@ -298,8 +299,8 @@ bool segment_identity_matches(
          segment.control_pose_id == current.control_pose_id &&
          segment.course_frame_window_id == current.course_frame_window_id &&
          segment.obstacle_tube_id == current.obstacle_tube_id &&
-         same_double(segment.start_progress_m, lifted_progress_m) &&
-         same_double(segment.end_progress_m, lifted_progress_m);
+         same_double(segment.start_progress_m, expected_start_progress_m) &&
+         same_double(segment.end_progress_m, expected_end_progress_m);
 }
 
 bool segment_clear(const RetainedPathSegmentEvaluation & segment) noexcept
@@ -633,10 +634,11 @@ RetainedExecutionProofResult build_retained_execution_proof(
   }
   if (!segment_identity_matches(
       request.measured_to_control_prefix,
-      request.current, lift.lifted_progress_m) ||
+      request.current, lift.lifted_progress_m, lift.lifted_progress_m) ||
     !segment_identity_matches(
       request.control_to_retained_connector,
-      request.current, lift.lifted_progress_m))
+      request.current, lift.lifted_progress_m,
+      window_result.window->expected_current_progress_m))
   {
     result.reason = RetainedExecutionProofReason::PrefixIdentityMismatch;
     return result;

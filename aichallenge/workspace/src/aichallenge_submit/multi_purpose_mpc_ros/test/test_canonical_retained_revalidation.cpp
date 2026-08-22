@@ -108,6 +108,8 @@ make_request(
     };
   request.measured_to_control_prefix = segment(true);
   request.control_to_retained_connector = segment(true);
+  request.control_to_retained_connector.end_progress_m =
+    window.window->expected_current_progress_m;
 
   for (const auto & sample : window.window->samples) {
     retained::RetainedStageSafetyEvaluation evaluation;
@@ -278,6 +280,23 @@ TEST(CanonicalRetainedRevalidation, RejectsBlockedPrefixesAndMovingObstacle) {
     retained::build_retained_execution_proof(execution_plan, cursor, request)
     .reason,
     retained::RetainedExecutionProofReason::ObstacleRejected);
+}
+
+TEST(CanonicalRetainedRevalidation, RejectsConnectorWithoutRetainedEndpointIdentity) {
+  const auto execution_plan = make_plan();
+  const auto cursor = plan::resolve_execution_cursor(execution_plan, 10.6);
+  auto request = make_request(execution_plan, cursor);
+  request.measured_course_progress_m = 0.25;
+  request.measured_to_control_prefix.start_progress_m = 100.25;
+  request.measured_to_control_prefix.end_progress_m = 100.25;
+  request.control_to_retained_connector.start_progress_m = 100.25;
+  request.control_to_retained_connector.end_progress_m =
+    request.control_to_retained_connector.start_progress_m;
+
+  EXPECT_EQ(
+    retained::build_retained_execution_proof(execution_plan, cursor, request)
+    .reason,
+    retained::RetainedExecutionProofReason::PrefixIdentityMismatch);
 }
 
 TEST(CanonicalRetainedRevalidation, RejectsMissingInputAndFingerprintMutation) {

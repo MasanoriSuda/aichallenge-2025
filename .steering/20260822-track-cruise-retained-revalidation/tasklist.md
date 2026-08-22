@@ -7,11 +7,19 @@
 - [x] Implement pure retained window/provenance/proof contracts.
 - [x] Make candidate construction require an intact retained proof.
 - [x] Remove the old boolean-only path for creating a retained candidate.
-- [ ] Implement current wall/obstacle proof adapters without publisher authority.
+- [x] Implement current wall/obstacle proof adapters without publisher authority.
 - [x] Run focused tests.
 - [x] Run full package tests and `make autoware-build`.
-- [ ] Connect retained shadow telemetry only if the pure boundary is complete.
-- [ ] Collect dynamic Gate B evidence.
+- [x] Connect retained shadow telemetry only after the pure boundary was complete.
+- [x] Collect dynamic Gate B fail-closed evidence.
 - [x] Audit the pure boundary and replaced boolean-only candidate path.
-- [ ] Commit without staging `aichallenge/result-summary.json`.
+- [x] Commit without staging `aichallenge/result-summary.json`.
 - [ ] Request explicit approval before any final publisher promotion.
+
+## Dynamic acceptance status
+
+- Retained call-site execution: observed.
+- Current-world rejection under V2X `NoData`: observed and fail-closed.
+- Explicit current empty-V2X retained proof acceptance: not yet observed dynamically.
+- Publisher selection: prohibited and confirmed absent (`selected=0`).
+- Gate B production promotion: not accepted by this Slice.

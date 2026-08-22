@@ -1700,6 +1700,23 @@ invalid input、QP lateral bound violation、heading unavailable、wall sample u
 QPが直接保証していないことを示す。次段階では既存証明を弱めず、heading-awareなfootprint-safe
 stage boundsをshadow問題へ入力してA/Bする。production authorityへの昇格は引き続き禁止する。
 
+#### Canonical 5-state execution pose（2026-08-22）
+
+velocity-progress 5-state解を物理実行証明へ渡す際は、legacy 3-state予測配列から横位置差分で
+姿勢を再構成せず、solverが解いたstage 1..Nの`e_y`、`e_psi`、速度、絶対進捗を
+`ExtendedExecutionTrajectory`として保持する。抽出時にshape、有限性、進捗単調性、適用済み
+横boundsをstage単位で検証し、失敗stageを診断へ残す。既存production callerは移行中の互換性の
+ためheading vectorを空のまま渡し、従来の横profile由来headingを使用する。exact headingの接続は
+Track/Cruise shadowだけに限定し、`authority=shadow, selected=0`を維持する。
+
+`output/20260822-142549`の単車4周では7,505回の物理検証中7,427回（98.9607%）が合格し、
+5-state pose抽出拒否、heading unavailable、actuation join拒否は0回だった。比較対象
+`output/20260822-135649`の98.8389%からは小幅改善したが、hard wall contact 62回、swept-path
+violation 16回が残った。したがってheading再構成による情報損失は一因だが、残件の根本原因は
+scalar Frenet center boundsがyawed footprintの物理安全を保証しない契約差である。次段階は物理
+証明を緩和せず、exact `e_psi`に応じたfootprint-safe stage boundsをshadow問題へ入力し、raw
+current poseから最初のstageまでの掃引到達性を別契約として検証する。通常権限への昇格は保留する。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

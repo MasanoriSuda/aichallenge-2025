@@ -270,7 +270,48 @@ TEST(MpccProgress, RejectsMalformedOrNonfiniteActuationProposal)
       nonfinite, 2, 1.1).has_value());
   EXPECT_FALSE(
     multi_purpose_mpc_ros::mpcc_progress::extract_actuation_proposal(
-      Eigen::VectorXd::Zero(21), 2, 0.0).has_value());
+    Eigen::VectorXd::Zero(21), 2, 0.0).has_value());
+}
+
+TEST(MpccProgress, ExtractsFiveStatePoseWithoutReconstructingHeading)
+{
+  Eigen::VectorXd extended(21);
+  extended <<
+    0.0, 0.0, 0.01, 4.0, 0.0,
+    0.2, 0.0, -0.17, 4.5, 0.5,
+    0.4, 0.0, 0.23, 5.0, 1.0,
+    1.0, 0.10, 4.5,
+    0.5, 0.20, 5.0;
+
+  const auto trajectory =
+    multi_purpose_mpc_ros::mpcc_progress::extract_extended_execution_trajectory(
+    extended, 2, {0.5, 1.0}, {-0.5, -0.5}, {0.8, 0.8}, 348.0, 1e-5);
+
+  ASSERT_TRUE(trajectory.has_value());
+  ASSERT_EQ(trajectory->heading_offset_rad.size(), 2U);
+  EXPECT_DOUBLE_EQ(trajectory->lateral_m[0], 0.2);
+  EXPECT_DOUBLE_EQ(trajectory->heading_offset_rad[0], -0.17);
+  EXPECT_DOUBLE_EQ(trajectory->heading_offset_rad[1], 0.23);
+  EXPECT_DOUBLE_EQ(trajectory->velocity_mps[1], 5.0);
+  EXPECT_DOUBLE_EQ(trajectory->progress_m[1], 349.0);
+  EXPECT_NEAR(trajectory->minimum_lateral_bound_reserve_m, 0.4, 1e-12);
+}
+
+TEST(MpccProgress, RejectsNonfiniteFiveStatePoseWithStageProvenance)
+{
+  Eigen::VectorXd extended = Eigen::VectorXd::Zero(21);
+  extended[5 + multi_purpose_mpc_ros::mpcc_progress::kExtendedHeadingIndex] =
+    std::numeric_limits<double>::quiet_NaN();
+  multi_purpose_mpc_ros::mpcc_progress::ExecutionTrajectoryDiagnostic diagnostic;
+
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::mpcc_progress::extract_extended_execution_trajectory(
+    extended, 2, {0.5, 1.0}, {-0.5, -0.5}, {0.8, 0.8}, 348.0, 1e-5,
+    &diagnostic).has_value());
+  EXPECT_EQ(
+    diagnostic.rejection,
+    multi_purpose_mpc_ros::mpcc_progress::ExecutionTrajectoryRejection::NonFiniteState);
+  EXPECT_EQ(diagnostic.stage, 0);
 }
 
 TEST(MpccProgress, PreservesFiniteSignedBoundaryValuesForLaterCertification)

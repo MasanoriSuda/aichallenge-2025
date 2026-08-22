@@ -562,6 +562,16 @@ struct ExecutionTrajectory
   double minimum_lateral_bound_reserve_m{};
 };
 
+struct ExtendedExecutionTrajectory
+{
+  std::vector<double> path_distance_m;
+  std::vector<double> lateral_m;
+  std::vector<double> heading_offset_rad;
+  std::vector<double> velocity_mps;
+  std::vector<double> progress_m;
+  double minimum_lateral_bound_reserve_m{};
+};
+
 enum class ExecutionTrajectoryRejection
 {
   None,
@@ -592,6 +602,17 @@ std::optional<ExecutionTrajectory> extract_execution_trajectory(
   const std::vector<double> & lateral_lower_m,
   const std::vector<double> & lateral_upper_m,
   double bound_tolerance_m = 1e-5,
+  ExecutionTrajectoryDiagnostic * diagnostic = nullptr) noexcept;
+
+/// Extract the exact stage-1..N pose and motion state from the five-state
+/// formulation. Unlike the legacy conversion, heading is retained as a
+/// first-class solved state and is never reconstructed from lateral samples.
+std::optional<ExtendedExecutionTrajectory> extract_extended_execution_trajectory(
+  const Eigen::VectorXd & primal, int horizon_size,
+  const std::vector<double> & path_distance_m,
+  const std::vector<double> & lateral_lower_m,
+  const std::vector<double> & lateral_upper_m,
+  double progress_origin_m, double bound_tolerance_m = 1e-5,
   ExecutionTrajectoryDiagnostic * diagnostic = nullptr) noexcept;
 
 }  // namespace multi_purpose_mpc_ros::mpcc_progress

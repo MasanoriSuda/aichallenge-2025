@@ -5397,6 +5397,7 @@ struct AlignedMpccExecutionTrajectory
   double advanced_distance_m{};
   double minimum_qp_bound_reserve_m{};
   std::vector<double> lateral_m;
+  std::vector<double> heading_offset_rad;
 };
 
 enum class SolvedExecutionWallValidationScope
@@ -7271,7 +7272,7 @@ struct MPC
       }
       const AlignedMpccExecutionTrajectory physical_trajectory{
         0.0, 0.0, execution_trajectory->minimum_lateral_bound_reserve_m,
-        execution_trajectory->lateral_m};
+        execution_trajectory->lateral_m, {}};
       std::string physical_wall_reject_reason;
       evaluation.physical_wall_validation_passed =
         solved_mpcc_execution_path_wall_safe(
@@ -19747,7 +19748,7 @@ struct MPC
     return AlignedMpccExecutionTrajectory{
       age_sec, std::max(0.0, advanced_distance_m),
       trajectory.minimum_qp_bound_reserve_m,
-      aligned.lateral_targets_m};
+      aligned.lateral_targets_m, {}};
   }
 
   std::optional<AlignedMpccExecutionTrajectory>
@@ -19791,6 +19792,9 @@ struct MPC
       overtake_static_wall_grid_ == nullptr ||
       !overtake_static_wall_footprint_.valid() || horizon_size <= 0 ||
       trajectory.lateral_m.size() != static_cast<std::size_t>(horizon_size) ||
+      (!trajectory.heading_offset_rad.empty() &&
+      trajectory.heading_offset_rad.size() !=
+      static_cast<std::size_t>(horizon_size)) ||
       path_distance_m.size() != trajectory.lateral_m.size() ||
       lower_bound.size() < horizon_size || upper_bound.size() < horizon_size ||
       !std::isfinite(hard_wall_clearance_m) || hard_wall_clearance_m < 0.0 ||
@@ -19843,25 +19847,35 @@ struct MPC
       }
 
       const auto & waypoint = model->reference_path->get_waypoint(ref_wp_id + i);
-      double heading_offset = 0.0;
-      const double previous_lateral = index == 0U ?
-        model->spatial_state.e_y : trajectory.lateral_m[index - 1U];
-      const double previous_distance = index == 0U ?
-        0.0 : path_distance_m[index - 1U];
-      const double delta_distance = path_distance_m[index] - previous_distance;
-      if (
-        !std::isfinite(previous_lateral) || !std::isfinite(delta_distance) ||
-        delta_distance <= 1e-6)
-      {
+      double heading_offset = std::numeric_limits<double>::quiet_NaN();
+      if (!trajectory.heading_offset_rad.empty()) {
+        heading_offset = trajectory.heading_offset_rad[index];
+      } else {
+        const double previous_lateral = index == 0U ?
+          model->spatial_state.e_y : trajectory.lateral_m[index - 1U];
+        const double previous_distance = index == 0U ?
+          0.0 : path_distance_m[index - 1U];
+        const double delta_distance = path_distance_m[index] - previous_distance;
+        if (
+          !std::isfinite(previous_lateral) || !std::isfinite(delta_distance) ||
+          delta_distance <= 1e-6)
+        {
+          wall_diagnostic.reason =
+            mpcc_contract::PhysicalWallCertificateReason::HeadingUnavailable;
+          reject_reason = "solution heading unavailable";
+          return false;
+        }
+        heading_offset = overtake_core::resolve_overtake_line_heading_reference(
+          overtake_core::OvertakeLineHeadingReferenceRequest{
+            previous_lateral, trajectory.lateral_m[index],
+            delta_distance, waypoint.kappa});
+      }
+      if (!std::isfinite(heading_offset)) {
         wall_diagnostic.reason =
           mpcc_contract::PhysicalWallCertificateReason::HeadingUnavailable;
         reject_reason = "solution heading unavailable";
         return false;
       }
-      heading_offset = overtake_core::resolve_overtake_line_heading_reference(
-        overtake_core::OvertakeLineHeadingReferenceRequest{
-          previous_lateral, trajectory.lateral_m[index],
-          delta_distance, waypoint.kappa});
       wall_diagnostic.heading_offset_rad = heading_offset;
       const recovery_footprint::Pose2D pose{
         waypoint.x - lateral * std::sin(waypoint.psi),
@@ -20071,7 +20085,7 @@ struct MPC
     }
     const AlignedMpccExecutionTrajectory current_trajectory{
       certificate_age_sec, advanced_distance_m, 0.0,
-      trust_envelope.lateral_targets_m};
+      trust_envelope.lateral_targets_m, {}};
     if (!solved_mpcc_execution_path_wall_safe(
         current_trajectory, current_path_distances, ref_wp_id, horizon_size,
         lower_bound, upper_bound, wall_contract.required_clearance_m,
@@ -20128,7 +20142,7 @@ struct MPC
     }
     const AlignedMpccExecutionTrajectory trajectory{
       0.0, 0.0, std::numeric_limits<double>::infinity(),
-      std::move(lateral_m)};
+      std::move(lateral_m), {}};
     const double bound_tolerance_m =
       std::isfinite(maximum_constraint_violation) ?
       std::max(1e-5, maximum_constraint_violation + 1e-6) : 1e-5;
@@ -20185,7 +20199,7 @@ struct MPC
     }
     const AlignedMpccExecutionTrajectory trajectory{
       0.0, 0.0, std::numeric_limits<double>::infinity(),
-      std::move(lateral_m)};
+      std::move(lateral_m), {}};
     const double bound_tolerance_m =
       std::isfinite(maximum_constraint_violation) ?
       std::max(1e-5, maximum_constraint_violation + 1e-6) : 1e-5;
@@ -20541,6 +20555,40 @@ struct MPC
         return finish();
       }
       result.actuation_proposal_extracted = true;
+      const auto certificate_started = SteadyClock::now();
+      std::vector<double> path_distance_m;
+      std::vector<double> lower_bound_m;
+      std::vector<double> upper_bound_m;
+      path_distance_m.reserve(static_cast<std::size_t>(problem.N));
+      lower_bound_m.reserve(static_cast<std::size_t>(problem.N));
+      upper_bound_m.reserve(static_cast<std::size_t>(problem.N));
+      Eigen::VectorXd lower_bound(problem.N);
+      Eigen::VectorXd upper_bound(problem.N);
+      for (int stage = 0; stage < problem.N; ++stage) {
+        path_distance_m.push_back(
+          problem.progress_stage_geometry.stages[static_cast<std::size_t>(stage)].
+          cumulative_distance_m);
+        lower_bound[stage] = problem.progress_state_lower[(stage + 1) * legacy_nx];
+        upper_bound[stage] = problem.progress_state_upper[(stage + 1) * legacy_nx];
+        lower_bound_m.push_back(lower_bound[stage]);
+        upper_bound_m.push_back(upper_bound[stage]);
+      }
+      mpcc_progress::ExecutionTrajectoryDiagnostic pose_diagnostic;
+      const double extraction_tolerance = std::max(
+        1e-5, outcome.result->maximum_constraint_violation + 1e-6);
+      const auto pose_trajectory =
+        mpcc_progress::extract_extended_execution_trajectory(
+        outcome.result->primal, problem.N, path_distance_m,
+        lower_bound_m, upper_bound_m, extended_problem->progress_origin_m,
+        extraction_tolerance, &pose_diagnostic);
+      if (!pose_trajectory.has_value()) {
+        result.status = "pose-trajectory-reject";
+        result.detail = std::string{"five-state pose trajectory rejected: "} +
+          mpcc_progress::execution_trajectory_rejection_name(
+          pose_diagnostic.rejection) + ", stage=" +
+          std::to_string(pose_diagnostic.stage);
+        return finish();
+      }
       const auto shadow_solution = mpcc_progress::convert_extended_solution_to_legacy(
         outcome.result->primal, problem.N, extended_problem->progress_origin_m);
       if (!shadow_solution.has_value()) {
@@ -20549,31 +20597,15 @@ struct MPC
         return finish();
       }
       result.conversion_succeeded = true;
-
-      const auto certificate_started = SteadyClock::now();
-      std::vector<double> path_distance_m;
-      std::vector<double> lateral_m;
-      path_distance_m.reserve(static_cast<std::size_t>(problem.N));
-      lateral_m.reserve(static_cast<std::size_t>(problem.N));
-      Eigen::VectorXd lower_bound(problem.N);
-      Eigen::VectorXd upper_bound(problem.N);
-      for (int stage = 0; stage < problem.N; ++stage) {
-        path_distance_m.push_back(
-          problem.progress_stage_geometry.stages[static_cast<std::size_t>(stage)].
-          cumulative_distance_m);
-        lateral_m.push_back((*shadow_solution)[(stage + 1) * legacy_nx]);
-        lower_bound[stage] = problem.progress_state_lower[(stage + 1) * legacy_nx];
-        upper_bound[stage] = problem.progress_state_upper[(stage + 1) * legacy_nx];
-      }
       const AlignedMpccExecutionTrajectory shadow_trajectory{
-        0.0, 0.0, std::numeric_limits<double>::infinity(), std::move(lateral_m)};
+        0.0, 0.0, pose_trajectory->minimum_lateral_bound_reserve_m,
+        pose_trajectory->lateral_m, pose_trajectory->heading_offset_rad};
       std::string certificate_reason;
       result.physical_certificate_checked = true;
       result.physically_certified = solved_mpcc_execution_path_wall_safe(
         shadow_trajectory, path_distance_m, problem.ref_wp_id, problem.N,
         lower_bound, upper_bound, 0.0, certificate_reason,
-        std::max(
-          1e-5, outcome.result->maximum_constraint_violation + 1e-6),
+        extraction_tolerance,
         SolvedExecutionWallValidationScope::SweptFromCurrentPose,
         &result.physical_wall_diagnostic);
       result.certificate_ms = std::chrono::duration<double, std::milli>(

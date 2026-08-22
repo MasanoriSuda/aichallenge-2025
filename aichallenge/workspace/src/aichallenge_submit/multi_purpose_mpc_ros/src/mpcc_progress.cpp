@@ -1200,6 +1200,110 @@ std::optional<ExecutionTrajectory> extract_execution_trajectory(
   return result;
 }
 
+std::optional<ExtendedExecutionTrajectory> extract_extended_execution_trajectory(
+  const Eigen::VectorXd & primal, const int horizon_size,
+  const std::vector<double> & path_distance_m,
+  const std::vector<double> & lateral_lower_m,
+  const std::vector<double> & lateral_upper_m,
+  const double progress_origin_m, const double bound_tolerance_m,
+  ExecutionTrajectoryDiagnostic * const diagnostic) noexcept
+{
+  const auto reject = [diagnostic](
+      const ExecutionTrajectoryRejection rejection,
+      const int stage = -1) -> std::optional<ExtendedExecutionTrajectory> {
+      if (diagnostic != nullptr) {
+        diagnostic->rejection = rejection;
+        diagnostic->stage = stage;
+      }
+      return std::nullopt;
+    };
+  if (diagnostic != nullptr) {
+    *diagnostic = ExecutionTrajectoryDiagnostic{};
+  }
+  if (
+    horizon_size <= 0 ||
+    primal.size() !=
+    kExtendedStateDimension * (horizon_size + 1) +
+    kExtendedInputDimension * horizon_size ||
+    path_distance_m.size() != static_cast<std::size_t>(horizon_size) ||
+    lateral_lower_m.size() != path_distance_m.size() ||
+    lateral_upper_m.size() != path_distance_m.size() ||
+    !std::isfinite(progress_origin_m) ||
+    !std::isfinite(bound_tolerance_m) || bound_tolerance_m < 0.0)
+  {
+    return reject(ExecutionTrajectoryRejection::InvalidInput);
+  }
+  if (!std::isfinite(primal[kExtendedProgressIndex])) {
+    return reject(ExecutionTrajectoryRejection::NonFiniteState);
+  }
+
+  ExtendedExecutionTrajectory result;
+  result.path_distance_m = path_distance_m;
+  result.lateral_m.reserve(path_distance_m.size());
+  result.heading_offset_rad.reserve(path_distance_m.size());
+  result.velocity_mps.reserve(path_distance_m.size());
+  result.progress_m.reserve(path_distance_m.size());
+  result.minimum_lateral_bound_reserve_m =
+    std::numeric_limits<double>::infinity();
+  double previous_distance = -std::numeric_limits<double>::infinity();
+  double previous_progress =
+    progress_origin_m + primal[kExtendedProgressIndex];
+  for (int stage = 0; stage < horizon_size; ++stage) {
+    const std::size_t index = static_cast<std::size_t>(stage);
+    const int state = (stage + 1) * kExtendedStateDimension;
+    const double distance = path_distance_m[index];
+    const double lower = lateral_lower_m[index];
+    const double upper = lateral_upper_m[index];
+    const double lateral = primal[state + kExtendedLateralIndex];
+    const double heading = primal[state + kExtendedHeadingIndex];
+    const double velocity = primal[state + kExtendedVelocityIndex];
+    const double progress =
+      progress_origin_m + primal[state + kExtendedProgressIndex];
+    if (
+      !std::isfinite(distance) || distance < 0.0 ||
+      distance <= previous_distance)
+    {
+      return reject(ExecutionTrajectoryRejection::InvalidPathDistance, stage);
+    }
+    if (!std::isfinite(lower) || !std::isfinite(upper) || lower > upper) {
+      return reject(ExecutionTrajectoryRejection::InvalidLateralBounds, stage);
+    }
+    if (
+      !std::isfinite(lateral) || !std::isfinite(heading) ||
+      !std::isfinite(velocity) || !std::isfinite(progress))
+    {
+      return reject(ExecutionTrajectoryRejection::NonFiniteState, stage);
+    }
+    if (progress + bound_tolerance_m < previous_progress) {
+      return reject(ExecutionTrajectoryRejection::ProgressRegressed, stage);
+    }
+    if (
+      lateral < lower - bound_tolerance_m ||
+      lateral > upper + bound_tolerance_m)
+    {
+      return reject(ExecutionTrajectoryRejection::LateralOutOfBounds, stage);
+    }
+    result.lateral_m.push_back(lateral);
+    result.heading_offset_rad.push_back(heading);
+    result.velocity_mps.push_back(velocity);
+    result.progress_m.push_back(progress);
+    result.minimum_lateral_bound_reserve_m = std::min(
+      result.minimum_lateral_bound_reserve_m,
+      std::min(lateral - lower, upper - lateral));
+    previous_distance = distance;
+    previous_progress = progress;
+  }
+  if (
+    result.lateral_m.empty() ||
+    !std::isfinite(result.minimum_lateral_bound_reserve_m))
+  {
+    return reject(ExecutionTrajectoryRejection::EmptyTrajectory);
+  }
+  result.minimum_lateral_bound_reserve_m = std::max(
+    0.0, result.minimum_lateral_bound_reserve_m);
+  return result;
+}
+
 const char * execution_trajectory_rejection_name(
   const ExecutionTrajectoryRejection rejection) noexcept
 {

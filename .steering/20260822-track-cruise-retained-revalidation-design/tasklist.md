@@ -9,7 +9,7 @@
 - [x] Compare old-certificate, stage-index, fresh-only and typed revalidation options.
 - [x] Define failure-first deterministic tests for the implementation slice.
 - [x] Confirm no authority, runtime, parameter or configuration change in this slice.
-- [ ] Obtain fresh dynamic Gate A evidence from a user-started AWSIM run.
-- [ ] Implement pure retained revalidation contracts and failing tests after Gate A.
+- [x] Obtain fresh dynamic Gate A evidence from a user-started AWSIM run.
+- [x] Implement pure retained revalidation contracts and failing tests after Gate A.
 - [ ] Connect retained shadow production and obtain dynamic evidence.
 - [ ] Request explicit approval before final Track/Cruise publisher promotion.

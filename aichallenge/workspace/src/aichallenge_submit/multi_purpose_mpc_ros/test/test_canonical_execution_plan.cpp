@@ -233,7 +233,7 @@ TEST(CanonicalExecutionPlan, StoreReplacementIsCompleteAndMonotonic)
   EXPECT_FALSE(store.snapshot());
 }
 
-TEST(CanonicalExecutionPlan, CandidateRequiresExactCurrentPhysicalRevalidation)
+TEST(CanonicalExecutionPlan, LegacyShapedProofCannotCreateRetainedCandidate)
 {
   const auto value = make_plan(23U, 41U);
   const auto cursor = plan::resolve_execution_cursor(value, 11.0);
@@ -241,20 +241,10 @@ TEST(CanonicalExecutionPlan, CandidateRequiresExactCurrentPhysicalRevalidation)
   const plan::CanonicalExecutionRevalidation proof{
     42U, 23U, 1U, 1U, make_current_physical_certificate()};
   const auto built = plan::build_canonical_normal_candidate(value, cursor, proof);
-  ASSERT_EQ(
-    built.reason, plan::CanonicalCandidateBuildReason::Accepted);
-  ASSERT_TRUE(built.candidate.has_value());
-
-  const auto resolution = contract::resolve_canonical_normal_authority(
-    contract::CanonicalNormalAuthorityRequest{
-      42U, 11.0, contract::CanonicalNormalCandidate{}, built.candidate.value(),
-      contract::ControlIntent::Track});
   EXPECT_EQ(
-    resolution.source,
-    contract::CanonicalNormalAuthoritySource::RetainedCertified);
-  EXPECT_EQ(resolution.execution_plan_id, 23U);
-  EXPECT_EQ(resolution.execution_first_control_stage_index, 1U);
-  EXPECT_EQ(resolution.executable_control_stage_count, 1U);
+    built.reason,
+    plan::CanonicalCandidateBuildReason::DecisionIdentityMismatch);
+  EXPECT_FALSE(built.candidate.has_value());
 }
 
 TEST(CanonicalExecutionPlan, FreshCandidateUsesSameDecisionAndExactExecutionWindow)
@@ -270,8 +260,8 @@ TEST(CanonicalExecutionPlan, FreshCandidateUsesSameDecisionAndExactExecutionWind
 
   const auto resolution = contract::resolve_canonical_normal_authority(
     contract::CanonicalNormalAuthorityRequest{
-      42U, 10.25, built.candidate.value(), {},
-      contract::ControlIntent::Track});
+    42U, 10.25, built.candidate.value(), {},
+    contract::ControlIntent::Track});
   EXPECT_EQ(
     resolution.source,
     contract::CanonicalNormalAuthoritySource::FreshCertified);

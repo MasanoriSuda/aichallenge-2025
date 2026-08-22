@@ -170,6 +170,7 @@ enum class CanonicalCandidateBuildReason
   PlanIdentityMismatch,
   ExecutionWindowMismatch,
   MissingDecisionIdentity,
+  DecisionIdentityMismatch,
   PhysicalCertificateRejected,
 };
 

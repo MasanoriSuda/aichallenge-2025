@@ -93,6 +93,14 @@ target_link_libraries(${PROJECT_NAME}_canonical_execution_plan
   Threads::Threads
 )
 
+ament_auto_add_library(${PROJECT_NAME}_canonical_retained_revalidation SHARED
+  NO_TARGET_LINK_LIBRARIES
+  src/canonical_retained_revalidation.cpp
+)
+target_link_libraries(${PROJECT_NAME}_canonical_retained_revalidation
+  ${PROJECT_NAME}_canonical_execution_plan
+)
+
 ament_auto_add_library(${PROJECT_NAME}_canonical_execution_plan_adapter SHARED
   NO_TARGET_LINK_LIBRARIES
   src/canonical_execution_plan_adapter.cpp
@@ -344,6 +352,15 @@ if(BUILD_TESTING)
   if(TARGET test_canonical_execution_plan)
     target_link_libraries(test_canonical_execution_plan
       ${PROJECT_NAME}_canonical_execution_plan
+    )
+  endif()
+
+  ament_add_gtest(test_canonical_retained_revalidation
+    test/test_canonical_retained_revalidation.cpp
+  )
+  if(TARGET test_canonical_retained_revalidation)
+    target_link_libraries(test_canonical_retained_revalidation
+      ${PROJECT_NAME}_canonical_retained_revalidation
     )
   endif()
 

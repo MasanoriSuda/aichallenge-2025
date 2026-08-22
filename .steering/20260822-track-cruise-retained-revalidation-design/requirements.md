@@ -13,7 +13,8 @@ controller parameter.
 - Baseline: `52265834096555bfa258679a4b135d86bf770ef4`
 - Evidence: source/history audit and deterministic test design
 - Preserved user change: `aichallenge/result-summary.json`
-- Dynamic Gate A: pending because AWSIM is an external GUI boundary
+- Dynamic Gate A: accepted for the fresh certified chain using `output/20260822-232351`;
+  retained shadow is permitted, retained publisher authority is not
 
 ## Observed gap
 

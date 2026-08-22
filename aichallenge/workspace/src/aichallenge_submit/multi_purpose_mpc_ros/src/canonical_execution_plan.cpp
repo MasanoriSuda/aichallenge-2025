@@ -317,6 +317,8 @@ const char * to_string(const CanonicalCandidateBuildReason reason) noexcept
       return "execution-window-mismatch";
     case CanonicalCandidateBuildReason::MissingDecisionIdentity:
       return "missing-decision-identity";
+    case CanonicalCandidateBuildReason::DecisionIdentityMismatch:
+      return "decision-identity-mismatch";
     case CanonicalCandidateBuildReason::PhysicalCertificateRejected:
       return "physical-certificate-rejected";
   }
@@ -354,6 +356,13 @@ CanonicalCandidateBuildResult build_canonical_normal_candidate(
   }
   if (revalidation.decision_id == 0U) {
     result.reason = CanonicalCandidateBuildReason::MissingDecisionIdentity;
+    return result;
+  }
+  // This legacy-shaped proof is intentionally fresh-only.  A retained plan
+  // belongs to an earlier solver problem and must pass the typed current-
+  // observation proof in canonical_retained_revalidation instead.
+  if (revalidation.decision_id != plan.problem.decision_id) {
+    result.reason = CanonicalCandidateBuildReason::DecisionIdentityMismatch;
     return result;
   }
   if (!physical_certificate_accepted(revalidation.physical)) {

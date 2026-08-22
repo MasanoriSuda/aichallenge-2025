@@ -148,6 +148,11 @@ TEST(
   ASSERT_TRUE(result.window.has_value());
   ASSERT_EQ(result.window->samples.size(), 2U);
   EXPECT_NEAR(result.window->expected_current_progress_m, 100.30, 1e-12);
+  EXPECT_NEAR(result.window->expected_current_state.lateral_m, 0.112, 1e-12);
+  EXPECT_NEAR(result.window->expected_current_state.lag_m, 0.016, 1e-12);
+  EXPECT_NEAR(
+    result.window->expected_current_state.heading_offset_rad, 0.026, 1e-12);
+  EXPECT_NEAR(result.window->expected_current_state.velocity_mps, 5.12, 1e-12);
   EXPECT_EQ(result.window->samples[0].control_stage_index, 0U);
   EXPECT_EQ(result.window->samples[0].endpoint_state_index, 1U);
   EXPECT_NEAR(result.window->samples[0].segment_duration_sec, 0.4, 1e-12);

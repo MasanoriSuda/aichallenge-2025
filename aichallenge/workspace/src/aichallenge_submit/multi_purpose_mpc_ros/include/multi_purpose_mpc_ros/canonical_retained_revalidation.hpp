@@ -30,6 +30,7 @@ struct RetainedExecutionWindow
 {
   std::uint64_t plan_id{};
   plan::CanonicalExecutionCursor cursor;
+  plan::CanonicalPredictedState expected_current_state;
   double expected_current_progress_m{};
   std::vector<RetainedStageSample> samples;
 };

@@ -69,6 +69,7 @@ bool same_window(
 {
   if (left.plan_id != right.plan_id ||
     !same_cursor(left.cursor, right.cursor) ||
+    !same_state(left.expected_current_state, right.expected_current_state) ||
     !same_double(
       left.expected_current_progress_m,
       right.expected_current_progress_m) ||
@@ -206,6 +207,7 @@ void add_window(
 {
   builder.add_uint64(window.plan_id);
   add_cursor(builder, window.cursor);
+  add_state(builder, window.expected_current_state);
   builder.add_double(window.expected_current_progress_m);
   builder.add_size(window.samples.size());
   for (const auto & sample : window.samples) {
@@ -406,8 +408,18 @@ RetainedExecutionWindowResult build_retained_execution_window(
   RetainedExecutionWindow window;
   window.plan_id = execution_plan.plan_id;
   window.cursor = cursor;
-  window.expected_current_progress_m =
-    start_progress + fraction * (first_endpoint_progress - start_progress);
+  const auto & start_state = execution_plan.predicted_states[first];
+  const auto & end_state = execution_plan.predicted_states[first + 1U];
+  const auto interpolate = [fraction](const double start, const double end) {
+      return start + fraction * (end - start);
+    };
+  window.expected_current_state = plan::CanonicalPredictedState{
+    interpolate(start_state.lateral_m, end_state.lateral_m),
+    interpolate(start_state.lag_m, end_state.lag_m),
+    interpolate(start_state.heading_offset_rad, end_state.heading_offset_rad),
+    interpolate(start_state.velocity_mps, end_state.velocity_mps),
+    interpolate(start_state.progress_m, end_state.progress_m)};
+  window.expected_current_progress_m = window.expected_current_state.progress_m;
   window.samples.reserve(cursor.remaining_control_stage_count);
   double relative_time_sec = 0.0;
   double segment_start_progress_m = window.expected_current_progress_m;

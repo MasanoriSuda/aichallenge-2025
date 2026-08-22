@@ -123,9 +123,13 @@ No cycle-local transfer to three-state or legacy MPC is allowed after promotion.
   that constructs the complete immutable plan directly from the certified five-state primal. It
   preserves lag, acceleration, virtual-progress input and exact stage timing; it does not use the
   lossy legacy conversion.
-- Runtime promotion is not yet performed. The remaining implementation must populate the atomic
-  store from Track/Cruise shadow results, revalidate its current execution window, and connect the
-  existing store/selector to final output while deleting Track/Cruise legacy fallback.
+- `.steering/20260822-track-cruise-canonical-shadow-store` connects that adapter and store to the
+  physically certified Track/Cruise shadow producer. Complete plans are now retained with explicit
+  extraction/store telemetry while command selection remains `authority=shadow, selected=0`.
+  Legacy conversion is comparison-only and no longer gates the canonical plan.
+- Runtime promotion is not yet performed. The remaining implementation must revalidate the stored
+  plan's current execution window and connect the existing store/selector to final output while
+  deleting Track/Cruise legacy fallback.
 - This connection is an explicit authority boundary and requires approval before implementation.
 
 ### Delete/replace

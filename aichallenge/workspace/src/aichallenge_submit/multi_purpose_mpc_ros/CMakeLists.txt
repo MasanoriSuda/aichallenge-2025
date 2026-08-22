@@ -181,6 +181,7 @@ target_include_directories(mpc_controller_cpp PRIVATE
 target_link_libraries(mpc_controller_cpp
   ${PROJECT_NAME}_awsim_boost_start_dash
   ${PROJECT_NAME}_awsim_control_mode_guard
+  ${PROJECT_NAME}_canonical_execution_plan_adapter
   ${PROJECT_NAME}_path_core
   ${PROJECT_NAME}_mpcc_progress
   ${PROJECT_NAME}_mpcc_execution_contract

@@ -146,3 +146,25 @@ TEST(CanonicalExecutionPlanAdapter, RejectsMissingStageTimingAndMetadataMismatch
     result.plan_reject_reason,
     plan::CanonicalExecutionPlanRejectReason::SolutionIdentityMismatch);
 }
+
+TEST(CanonicalExecutionPlanAdapter, ExtractedPlanCanPopulateStoreAndResolveExactCursor)
+{
+  auto result = adapter::extract_canonical_execution_plan(make_request());
+  ASSERT_TRUE(result.plan.has_value());
+  plan::CanonicalExecutionPlanStore store;
+  EXPECT_EQ(
+    store.replace(std::move(result.plan.value())),
+    plan::CanonicalExecutionPlanStoreReason::Accepted);
+  const auto snapshot = store.snapshot();
+  ASSERT_NE(snapshot, nullptr);
+  EXPECT_EQ(snapshot->plan_id, 23U);
+
+  const auto cursor = plan::resolve_execution_cursor(*snapshot, 10.5);
+  ASSERT_TRUE(cursor.available);
+  EXPECT_EQ(cursor.plan_id, 23U);
+  EXPECT_EQ(cursor.first_control_stage_index, 1U);
+  EXPECT_EQ(cursor.remaining_control_stage_count, 1U);
+  EXPECT_NEAR(cursor.stage_elapsed_sec, 0.1, 1e-12);
+  EXPECT_DOUBLE_EQ(snapshot->control_stages[1].acceleration_mps2, 0.5);
+  EXPECT_DOUBLE_EQ(snapshot->control_stages[1].virtual_progress_speed_mps, 5.3);
+}

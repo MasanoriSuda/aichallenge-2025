@@ -9,6 +9,8 @@
 #include <geometry_msgs/msg/vector3.hpp>
 #include <multi_purpose_mpc_ros/awsim_boost_start_dash.hpp>
 #include <multi_purpose_mpc_ros/awsim_control_mode_guard.hpp>
+#include <multi_purpose_mpc_ros/canonical_execution_plan.hpp>
+#include <multi_purpose_mpc_ros/canonical_execution_plan_adapter.hpp>
 #include <multi_purpose_mpc_ros/latest_only_worker.hpp>
 #include <multi_purpose_mpc_ros/mpcc_execution_contract.hpp>
 #include <multi_purpose_mpc_ros/mpcc_progress.hpp>
@@ -109,6 +111,9 @@ using SteadyClock = std::chrono::steady_clock;
 namespace path_core = ::multi_purpose_mpc_ros::path_core;
 namespace awsim_boost = ::multi_purpose_mpc_ros::awsim_boost;
 namespace awsim_control_mode = ::multi_purpose_mpc_ros::awsim_control_mode;
+namespace canonical_plan = ::multi_purpose_mpc_ros::canonical_execution_plan;
+namespace canonical_plan_adapter =
+  ::multi_purpose_mpc_ros::canonical_execution_plan_adapter;
 namespace mpc_state_prediction = ::multi_purpose_mpc_ros::mpc_state_prediction;
 namespace mpc_stage_geometry = ::multi_purpose_mpc_ros::mpc_stage_geometry;
 namespace mpcc_contract = ::multi_purpose_mpc_ros::mpcc_execution_contract;
@@ -5569,11 +5574,14 @@ struct TrackCruiseShadowCycleResult
   bool conversion_succeeded{false};
   bool physical_certificate_checked{false};
   bool physically_certified{false};
+  bool canonical_plan_extracted{false};
+  bool canonical_plan_stored{false};
   bool warm_start_applied{false};
   bool solver_context_reset{false};
   std::uint64_t decision_id{};
   std::uint64_t problem_fingerprint{};
   std::uint64_t stage_geometry_id{};
+  std::uint64_t canonical_plan_id{};
   mpcc_contract::ControlIntent intent{mpcc_contract::ControlIntent::Unknown};
   race_mpcc::ShadowWarmStartResetReason reset_reason{
     race_mpcc::ShadowWarmStartResetReason::InvalidCurrentContext};
@@ -5598,6 +5606,10 @@ struct TrackCruiseShadowCycleResult
     std::numeric_limits<double>::quiet_NaN()};
   int lateral_constraint_worst_stage{-1};
   std::optional<mpcc_progress::ActuationProposal> actuation_proposal;
+  canonical_plan_adapter::CanonicalPlanExtractionReason canonical_extraction_reason{
+    canonical_plan_adapter::CanonicalPlanExtractionReason::InvalidMetadata};
+  canonical_plan::CanonicalExecutionPlanStoreReason canonical_store_reason{
+    canonical_plan::CanonicalExecutionPlanStoreReason::InvalidPlan};
   mpcc_contract::PhysicalWallCertificateDiagnostic physical_wall_diagnostic;
   FirstStageShadowReachabilityDiagnostic first_stage_reachability;
   std::string status{"not-eligible"};
@@ -5617,6 +5629,8 @@ struct TrackCruiseShadowTelemetryWindow
   std::uint64_t conversion_count{};
   std::uint64_t physical_check_count{};
   std::uint64_t certified_count{};
+  std::uint64_t canonical_extracted_count{};
+  std::uint64_t canonical_stored_count{};
   std::uint64_t physical_invalid_input_count{};
   std::uint64_t physical_bound_reject_count{};
   std::uint64_t physical_heading_reject_count{};
@@ -6595,6 +6609,11 @@ struct MPC
     last_problem_context_.reset();
     last_solution_contract_.reset();
     last_solution_is_retained_ = false;
+    const auto canonical_shadow_plan = track_cruise_shadow_plan_store_.snapshot();
+    if (canonical_shadow_plan != nullptr) {
+      track_cruise_shadow_plan_store_.clear_if_plan_id(
+        canonical_shadow_plan->plan_id);
+    }
     pending_dynamic_escape_execution_.reset();
     retained_dynamic_escape_execution_.reset();
     dynamic_obstacle_lateral_escape_formulation_lease_until_sec_ =
@@ -20850,6 +20869,8 @@ struct MPC
     window.conversion_count += result.conversion_succeeded ? 1U : 0U;
     window.physical_check_count += result.physical_certificate_checked ? 1U : 0U;
     window.certified_count += result.physically_certified ? 1U : 0U;
+    window.canonical_extracted_count += result.canonical_plan_extracted ? 1U : 0U;
+    window.canonical_stored_count += result.canonical_plan_stored ? 1U : 0U;
     if (result.physical_certificate_checked && !result.physically_certified) {
       switch (result.physical_wall_diagnostic.reason) {
         case mpcc_contract::PhysicalWallCertificateReason::InvalidInput:
@@ -21008,6 +21029,7 @@ struct MPC
       "Track/Cruise MPCC shadow: eligible=%zu, metadata=%zu/%.1f%%, "
       "build=%zu, attempt=%zu/%.1f%%, solved=%zu/%.1f%%, finite=%zu, "
       "constraint=%zu, proposal=%zu, converted=%zu, physical=%zu, certified=%zu/%.1f%%, "
+      "canonical=%zu/%zu(extracted/stored), canonical_reason=%s/%s, "
       "physical_rejects=invalid:%zu/bound:%zu/heading:%zu/sample:%zu/contact:%zu/"
       "current_sample:%zu/current_contact:%zu/course_frame:%zu/swept:%zu, "
       "warm=%zu, reset=%zu, reset_reason=%s, "
@@ -21033,6 +21055,10 @@ struct MPC
       static_cast<std::size_t>(window.physical_check_count),
       static_cast<std::size_t>(window.certified_count),
       100.0 * static_cast<double>(window.certified_count) / attempted,
+      static_cast<std::size_t>(window.canonical_extracted_count),
+      static_cast<std::size_t>(window.canonical_stored_count),
+      canonical_plan_adapter::to_string(result.canonical_extraction_reason),
+      canonical_plan::to_string(result.canonical_store_reason),
       static_cast<std::size_t>(window.physical_invalid_input_count),
       static_cast<std::size_t>(window.physical_bound_reject_count),
       static_cast<std::size_t>(window.physical_heading_reject_count),
@@ -21256,12 +21282,10 @@ struct MPC
       }
       const auto shadow_solution = mpcc_progress::convert_extended_solution_to_legacy(
         outcome.result->primal, problem.N, extended_problem->progress_origin_m);
-      if (!shadow_solution.has_value()) {
-        result.status = "conversion-reject";
-        result.detail = "five-state prediction conversion rejected";
-        return finish();
-      }
-      result.conversion_succeeded = true;
+      // This conversion exists only for legacy-model comparison telemetry.
+      // Canonical extraction and certification below consume the complete
+      // five-state primal directly and must not depend on a lossy 3-state view.
+      result.conversion_succeeded = shadow_solution.has_value();
       AlignedMpccExecutionTrajectory shadow_trajectory{
         0.0, 0.0, pose_trajectory->minimum_lateral_bound_reserve_m,
         pose_trajectory->lateral_m, pose_trajectory->lag_m,
@@ -21317,9 +21341,64 @@ struct MPC
         }
         return finish();
       }
+      double canonical_horizon_sec = 0.0;
+      for (const double stage_duration_sec : problem.progress_stage_dt_sec) {
+        canonical_horizon_sec += stage_duration_sec;
+      }
+      mpcc_contract::CertifiedMpccSolution canonical_solution;
+      canonical_solution.solution_id = result.decision_id;
+      canonical_solution.problem_fingerprint = context.fingerprint;
+      canonical_solution.formulation =
+        mpcc_contract::Formulation::VelocityProgress5State;
+      canonical_solution.solved = true;
+      canonical_solution.finite = result.finite;
+      canonical_solution.constraints_satisfied = result.constraints_satisfied;
+      canonical_solution.maximum_constraint_violation =
+        outcome.result->maximum_constraint_violation;
+      canonical_solution.physical.checked = result.physical_certificate_checked;
+      canonical_solution.physical.wall_clear = result.physically_certified;
+      canonical_solution.physical.obstacles_clear =
+        problem.lateral_bounds_contract_valid && result.constraints_satisfied;
+      canonical_solution.prediction_stage_count =
+        static_cast<std::size_t>(problem.N);
+      canonical_solution.valid_until_sec = now_sec + canonical_horizon_sec;
+      canonical_plan_adapter::CanonicalPlanExtractionRequest extraction_request;
+      extraction_request.plan_id = result.decision_id;
+      extraction_request.problem = context;
+      extraction_request.solution = canonical_solution;
+      extraction_request.solved_sec = now_sec;
+      extraction_request.progress_origin_m = extended_problem->progress_origin_m;
+      extraction_request.stage_duration_sec = problem.progress_stage_dt_sec;
+      extraction_request.extended_primal = outcome.result->primal;
+      auto canonical_extraction =
+        canonical_plan_adapter::extract_canonical_execution_plan(
+        extraction_request);
+      result.canonical_extraction_reason = canonical_extraction.reason;
+      if (!canonical_extraction.plan.has_value()) {
+        result.status = "canonical-plan-reject";
+        result.detail = std::string{"canonical extraction rejected: "} +
+          canonical_plan_adapter::to_string(canonical_extraction.reason) + "/" +
+          canonical_plan::to_string(canonical_extraction.plan_reject_reason);
+        return finish();
+      }
+      result.canonical_plan_extracted = true;
+      result.canonical_plan_id = canonical_extraction.plan->plan_id;
+      result.canonical_store_reason = track_cruise_shadow_plan_store_.replace(
+        std::move(canonical_extraction.plan.value()));
+      if (
+        result.canonical_store_reason !=
+        canonical_plan::CanonicalExecutionPlanStoreReason::Accepted)
+      {
+        result.status = "canonical-store-reject";
+        result.detail = std::string{"canonical store rejected: "} +
+          canonical_plan::to_string(result.canonical_store_reason);
+        return finish();
+      }
+      result.canonical_plan_stored = true;
       const int expected_production_size =
         legacy_nx * (problem.N + 1) + legacy_nu * problem.N;
       if (
+        shadow_solution.has_value() &&
         production_solution.size() == expected_production_size &&
         production_solution.allFinite())
       {
@@ -21348,7 +21427,9 @@ struct MPC
         result.lateral_max_difference_m = maximum_lateral_difference;
       }
       result.terminal_progress_m =
-        (*shadow_solution)[problem.N * legacy_nx + 2] - problem.progress_origin_m;
+        outcome.result->primal[
+        problem.N * mpcc_progress::kExtendedStateDimension +
+        mpcc_progress::kExtendedProgressIndex];
       result.terminal_velocity_mps = outcome.result->primal[
         problem.N * mpcc_progress::kExtendedStateDimension +
         mpcc_progress::kExtendedVelocityIndex];
@@ -23271,6 +23352,7 @@ struct MPC
   std::shared_ptr<ExtendedBranchSolverContext> extended_left_branch_solver_context_;
   std::shared_ptr<ExtendedBranchSolverContext> extended_right_branch_solver_context_;
   std::shared_ptr<ExtendedBranchSolverContext> track_cruise_shadow_solver_context_;
+  canonical_plan::CanonicalExecutionPlanStore track_cruise_shadow_plan_store_;
   std::optional<race_mpcc::ShadowWarmStartIdentity>
   track_cruise_shadow_warm_start_identity_;
   std::uint64_t track_cruise_shadow_context_epoch_{};

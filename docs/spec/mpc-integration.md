@@ -679,7 +679,9 @@ bounded recovery候補を再評価する。現在footprintにcontactがある場
 
 `steering_tire_angle_gain_var=1.5`は2025 AWSIM向けの出力補償として扱う。QPの曲率制約、
 前回操舵列からの予測曲率、操舵レート制約、低速直接操舵、遅延補償用BicycleModelはgain適用前の
-desired equivalent tire angleを使用し、publish時だけAWSIM commandへgainを適用する。
+desired equivalent tire angleを使用し、legacy / Recoveryではpublish時だけAWSIM commandへgainを
+適用する。5-state canonical Track/Cruiseは物理証明と同一のcommand角をpublishし、このlegacy補償を
+重ねない。
 `output/20260723-190900`でgainを内部モデルにも適用したところ、通常走行中の
 `measured_kappa / predicted_kappa`中央値はD1/D2/D3で0.53/0.58/0.54だった。一方、
 gain適用前のraw角による予測との比は0.81/0.88/0.83で、D1は横偏差約2.7 mから
@@ -1032,7 +1034,7 @@ MPC の config ファイル: `multi_purpose_mpc_ros/config/config.yaml`
 | `awsim_boost.motion_speed_threshold_mps` | `0.1` | 発車と判定する符号付き前進速度 |
 | `awsim_boost.max_trigger_speed_mps` | `1.0` | 遅延発動を禁止する最大前進速度 |
 | `awsim_boost.motion_trigger_timeout_sec` | `0.5` | 初回前進検出後に安全条件成立を待つ上限時間 |
-| `mpc.steering_tire_angle_gain_var` | `1.5` | publish時だけ適用する2025 AWSIM向け出力補償。内部モデル、実機値、2026公式値は未確定 |
+| `mpc.steering_tire_angle_gain_var` | `1.5` | legacy / Recoveryのpublish時だけ適用する2025 AWSIM向け出力補償。5-state canonical Track/Cruiseへは重ねない。内部モデル、実機値、2026公式値は未確定 |
 | `mpc.state_prediction_delay_sec` | `0.125` | EKF補正後の自己位置を速度・ヨーレートで先行予測する時間 [s]。`0.0` で無効 |
 | `mpc.state_prediction_simulation_only` | `true` | `true` のとき明示的なsimulation launchでのみMPC初期状態予測を有効化 |
 | `mpc.waypoint_local_association_enabled` | `true` | 前回tracking WP近傍の連続探索を有効化。`false`は全経路最近傍へ戻す |
@@ -1806,7 +1808,11 @@ atomic retained storeを置換し、後段拒否で直前の実行可能planを�
 callback overrun、wall/contact、Recoveryを確認してから次のintentへ進む。
 
 `output/20260823-062054`と`output/20260823-064933`では各3周を完走し、canonical normalとEmergency
-Stopのraw/published操舵角一致、最終actuation差0、legacy normal source 0を確認した。一方、単位が
+Stopのraw/published操舵角一致、最終actuation差0、legacy normal source 0を確認した。後続の6周試験
+`output/20260823-065700`は1周後のwp53付近でRecoveryより前に衝突したが、これをlegacy gain欠落と
+みなしてcanonicalへ1.5倍補正を適用した`output/20260823-072038`は、最初の周回のwp77--113で
+操舵反転が不安定になり、約8.03 m/sから0.37 m/sへ急減速して壁接触した。このcounter-hypothesisは
+棄却し、元の6周衝突は別原因として扱う。一方、単位が
 混在するQPでOSQPのglobal terminationを通過しても、実行に使う曲率・加速度・予測速度の行が固有
 toleranceを超える周期が残る。その周期は後段でfail closeしており、安全証明を緩めて採用しては
 ならない。全constraint rowの一括scaleは`output/20260823-063519`で収束率0%へ退行したため撤回済み

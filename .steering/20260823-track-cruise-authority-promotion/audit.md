@@ -167,6 +167,21 @@ Dynamic production promotion is demonstrated, but a single uninterrupted six-lap
 acceptance run and the independent mixed-unit solver defect remain open before this Slice can be
 declared fully accepted.
 
+### First six-lap acceptance failure
+
+`output/20260823-065700` completed lap 1 in 46.681 s, then suffered an impact near wp53 during
+ordinary Cruise.  Rosbag shows the vehicle report falling from about 10.09 m/s to 1.39 m/s in one
+sample with an approximately 1745 m/s2 lateral IMU impulse while the canonical command continued to
+request forward acceleration.  Recovery started only after that impact.
+
+This run initially raised the hypothesis that canonical publication was missing the repository's
+legacy `steering_tire_angle_gain_var=1.5` compensation.  The separate
+`20260823-canonical-actuator-calibration-contract` Slice tested that hypothesis without changing the
+configured value.  In `output/20260823-072038`, the multiplier made the closed loop oscillatory
+through wp77--108; speed then fell from about 8.03 m/s to 0.37 m/s and wall contact was recorded at
+wp113.  The experimental implementation was fully removed.  Therefore the six-lap impact does not
+invalidate exact physical canonical publication; its upstream cause remains open.
+
 ## Final static regression result
 
 After the publication fix, `make autoware-build` succeeded.  The complete

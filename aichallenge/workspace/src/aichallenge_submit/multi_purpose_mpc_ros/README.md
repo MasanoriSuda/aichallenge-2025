@@ -56,8 +56,10 @@ staleまたは非有限なodometry、非有限な制御出力、OSQP失敗時に
 message／fresh vehicle数、position jump、異常速度推定を出します。まず`make dev3`で
 Follow／Overtakeの切替と同時刻の値を比較し、DDS受信ジッタと幾何判定の揺れを切り分けます。
 
-`steering_tire_angle_gain_var`はAWSIM向けの出力補償であり、BicycleModelの物理タイヤ角倍率では
-ありません。MPCはgain適用前の`raw`操舵角で曲率を予測し、publish時だけgainを適用します。
+`steering_tire_angle_gain_var`はlegacy / RecoveryのAWSIM向け出力補償であり、BicycleModelの物理
+タイヤ角倍率ではありません。legacy MPCはgain適用前の`raw`操舵角で曲率を予測し、publish時にgainを
+適用します。5-state canonical Track/Cruiseは証明に使ったphysical command角をそのままpublishし、
+同じgainを重ねません。canonicalへ1.5倍補正を復元した実験は操舵反転を不安定化したため棄却済みです。
 `Steering debug:`には`raw`、AWSIMへ送る`output`、rawから予測した曲率、`yaw_rate / speed`で
 求めた実測曲率を出します。
 

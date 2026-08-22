@@ -57,6 +57,26 @@ contract::CertifiedMpccSolution make_solution(
   return solution;
 }
 
+contract::MpccProblemContext make_track_context(
+  const std::uint64_t decision_id = 42U)
+{
+  auto context = make_context();
+  context.decision_id = decision_id;
+  context.intent = contract::ControlIntent::Track;
+  context.target_id.clear();
+  context.target_obstacle_generation = 0U;
+  return contract::seal_problem_context(std::move(context));
+}
+
+contract::CanonicalNormalCandidate make_canonical_candidate(
+  const std::uint64_t decision_id = 42U,
+  const std::size_t executable_control_stage_count = 2U)
+{
+  const auto context = make_track_context(decision_id);
+  return contract::CanonicalNormalCandidate{
+    context, make_solution(context), executable_control_stage_count};
+}
+
 }  // namespace
 
 TEST(MpccExecutionContract, FingerprintIsStableAndSensitiveToContext)
@@ -436,4 +456,203 @@ TEST(MpccExecutionContract, ExplicitOverridesDoNotInventSolverIdentity)
     EXPECT_EQ(decision.problem_fingerprint, 0U);
     EXPECT_EQ(decision.solution_id, 0U);
   }
+}
+
+TEST(MpccExecutionContract, CanonicalNormalAuthoritySelectsFreshCurrentDecision)
+{
+  const auto fresh = make_canonical_candidate();
+  const auto retained = make_canonical_candidate(41U);
+  const auto resolution = contract::resolve_canonical_normal_authority(
+    contract::CanonicalNormalAuthorityRequest{42U, 12.0, fresh, retained});
+
+  EXPECT_EQ(
+    resolution.source,
+    contract::CanonicalNormalAuthoritySource::FreshCertified);
+  EXPECT_EQ(
+    resolution.reason,
+    contract::CanonicalNormalAuthorityReason::FreshCertified);
+  EXPECT_EQ(
+    resolution.fresh_reject_reason,
+    contract::CanonicalNormalCandidateRejectReason::None);
+  ASSERT_TRUE(resolution.problem.has_value());
+  ASSERT_TRUE(resolution.solution.has_value());
+  EXPECT_EQ(resolution.problem->decision_id, 42U);
+  EXPECT_FALSE(resolution.retained_solution);
+}
+
+TEST(MpccExecutionContract, CanonicalNormalAuthorityFallsBackOnlyToRetainedCanonical)
+{
+  auto fresh = make_canonical_candidate();
+  fresh.solution->physical.wall_clear = false;
+  const auto retained = make_canonical_candidate(41U);
+  const auto resolution = contract::resolve_canonical_normal_authority(
+    contract::CanonicalNormalAuthorityRequest{42U, 12.0, fresh, retained});
+
+  EXPECT_EQ(
+    resolution.source,
+    contract::CanonicalNormalAuthoritySource::RetainedCertified);
+  EXPECT_EQ(
+    resolution.reason,
+    contract::CanonicalNormalAuthorityReason::RetainedCertified);
+  EXPECT_EQ(
+    resolution.fresh_reject_reason,
+    contract::CanonicalNormalCandidateRejectReason::NotCertified);
+  ASSERT_TRUE(resolution.problem.has_value());
+  EXPECT_EQ(resolution.problem->decision_id, 41U);
+  EXPECT_TRUE(resolution.retained_solution);
+}
+
+TEST(MpccExecutionContract, CanonicalNormalAuthorityRequiresExecutableControl)
+{
+  const auto fresh = make_canonical_candidate(42U, 0U);
+  const auto resolution = contract::resolve_canonical_normal_authority(
+    contract::CanonicalNormalAuthorityRequest{
+      42U, 12.0, fresh, contract::CanonicalNormalCandidate{}});
+
+  EXPECT_EQ(
+    resolution.source,
+    contract::CanonicalNormalAuthoritySource::EmergencyStop);
+  EXPECT_EQ(
+    resolution.fresh_reject_reason,
+    contract::CanonicalNormalCandidateRejectReason::NoExecutableControl);
+}
+
+TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsExpiredCandidate)
+{
+  auto fresh = make_canonical_candidate();
+  fresh.solution->valid_until_sec = 11.9;
+  const auto resolution = contract::resolve_canonical_normal_authority(
+    contract::CanonicalNormalAuthorityRequest{
+      42U, 12.0, fresh, contract::CanonicalNormalCandidate{}});
+
+  EXPECT_EQ(
+    resolution.source,
+    contract::CanonicalNormalAuthoritySource::EmergencyStop);
+  EXPECT_EQ(
+    resolution.fresh_reject_reason,
+    contract::CanonicalNormalCandidateRejectReason::Expired);
+}
+
+TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsFreshFromOlderDecision)
+{
+  const auto old_fresh = make_canonical_candidate(41U);
+  const auto retained = make_canonical_candidate(40U);
+  const auto resolution = contract::resolve_canonical_normal_authority(
+    contract::CanonicalNormalAuthorityRequest{
+      42U, 12.0, old_fresh, retained});
+
+  EXPECT_EQ(
+    resolution.source,
+    contract::CanonicalNormalAuthoritySource::RetainedCertified);
+  EXPECT_EQ(
+    resolution.fresh_reject_reason,
+    contract::CanonicalNormalCandidateRejectReason::DecisionMismatch);
+}
+
+TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsMalformedExecutableHorizon)
+{
+  const auto fresh = make_canonical_candidate(42U, 3U);
+  const auto resolution = contract::resolve_canonical_normal_authority(
+    contract::CanonicalNormalAuthorityRequest{
+      42U, 12.0, fresh, contract::CanonicalNormalCandidate{}});
+
+  EXPECT_EQ(
+    resolution.source,
+    contract::CanonicalNormalAuthoritySource::EmergencyStop);
+  EXPECT_EQ(
+    resolution.fresh_reject_reason,
+    contract::CanonicalNormalCandidateRejectReason::InvalidExecutableHorizon);
+}
+
+TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsMismatchedIdentity)
+{
+  auto fresh = make_canonical_candidate();
+  fresh.solution->problem_fingerprint += 1U;
+  const auto resolution = contract::resolve_canonical_normal_authority(
+    contract::CanonicalNormalAuthorityRequest{
+      42U, 12.0, fresh, contract::CanonicalNormalCandidate{}});
+
+  EXPECT_EQ(
+    resolution.source,
+    contract::CanonicalNormalAuthoritySource::EmergencyStop);
+  EXPECT_EQ(
+    resolution.fresh_reject_reason,
+    contract::CanonicalNormalCandidateRejectReason::IdentityMismatch);
+}
+
+TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsThreeStateTrack)
+{
+  auto context = make_track_context();
+  context.formulation = contract::Formulation::ProgressContouring3State;
+  context.state_schema_id = "ey-epsi-progress-v1";
+  context.input_schema_id = "velocity-curvature-v1";
+  context.cost_schema_id = "progress-contouring-v1";
+  context = contract::seal_problem_context(std::move(context));
+  const contract::CanonicalNormalCandidate fresh{
+    context, make_solution(context), 2U};
+  const auto resolution = contract::resolve_canonical_normal_authority(
+    contract::CanonicalNormalAuthorityRequest{
+      42U, 12.0, fresh, contract::CanonicalNormalCandidate{}});
+
+  EXPECT_EQ(
+    resolution.source,
+    contract::CanonicalNormalAuthoritySource::EmergencyStop);
+  EXPECT_EQ(
+    resolution.fresh_reject_reason,
+    contract::CanonicalNormalCandidateRejectReason::NoncanonicalFormulation);
+}
+
+TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsNonTrackCruiseIntent)
+{
+  const auto context = make_context();
+  const contract::CanonicalNormalCandidate fresh{
+    context, make_solution(context), 2U};
+  const auto resolution = contract::resolve_canonical_normal_authority(
+    contract::CanonicalNormalAuthorityRequest{
+      42U, 12.0, fresh, contract::CanonicalNormalCandidate{}});
+
+  EXPECT_EQ(
+    resolution.source,
+    contract::CanonicalNormalAuthoritySource::EmergencyStop);
+  EXPECT_EQ(
+    resolution.fresh_reject_reason,
+    contract::CanonicalNormalCandidateRejectReason::UnsupportedIntent);
+}
+
+TEST(MpccExecutionContract, CanonicalNormalAuthorityFailsClosedWithoutCandidate)
+{
+  const auto resolution = contract::resolve_canonical_normal_authority(
+    contract::CanonicalNormalAuthorityRequest{
+      42U, 12.0, contract::CanonicalNormalCandidate{},
+      contract::CanonicalNormalCandidate{}});
+
+  EXPECT_EQ(
+    resolution.source,
+    contract::CanonicalNormalAuthoritySource::EmergencyStop);
+  EXPECT_EQ(
+    resolution.reason,
+    contract::CanonicalNormalAuthorityReason::NoCanonicalCandidate);
+  EXPECT_EQ(
+    resolution.fresh_reject_reason,
+    contract::CanonicalNormalCandidateRejectReason::MissingIdentity);
+  EXPECT_EQ(
+    resolution.retained_reject_reason,
+    contract::CanonicalNormalCandidateRejectReason::MissingIdentity);
+  EXPECT_FALSE(resolution.problem.has_value());
+  EXPECT_FALSE(resolution.solution.has_value());
+}
+
+TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsInvalidRequestTime)
+{
+  const auto resolution = contract::resolve_canonical_normal_authority(
+    contract::CanonicalNormalAuthorityRequest{
+      42U, std::numeric_limits<double>::quiet_NaN(),
+      make_canonical_candidate(), contract::CanonicalNormalCandidate{}});
+
+  EXPECT_EQ(
+    resolution.source,
+    contract::CanonicalNormalAuthoritySource::EmergencyStop);
+  EXPECT_EQ(
+    resolution.reason,
+    contract::CanonicalNormalAuthorityReason::InvalidRequest);
 }

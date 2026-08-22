@@ -103,6 +103,19 @@ fresh certified canonical solution
 
 No cycle-local transfer to three-state or legacy MPC is allowed after promotion.
 
+### 2026-08-22 preparation status
+
+- `.steering/20260822-track-cruise-canonical-authority-contract` records the current production,
+  shadow and fallback flow.
+- A pure, runtime-disconnected selector now encodes the only permitted normal chain: fresh certified
+  five-state plan, retained certified five-state plan, Emergency Stop.
+- The selector requires executable control stages in addition to certificate metadata; an OSQP warm
+  start cannot be passed as authority.
+- Runtime promotion is not yet performed. The remaining implementation must create an atomic full
+  Track/Cruise control-plan store, solve/certify canonical control before legacy publication, and
+  connect the selector to final output while deleting Track/Cruise legacy fallback.
+- This connection is an explicit authority boundary and requires approval before implementation.
+
 ### Delete/replace
 
 - Track/Cruise legacy-MPC execution branch.

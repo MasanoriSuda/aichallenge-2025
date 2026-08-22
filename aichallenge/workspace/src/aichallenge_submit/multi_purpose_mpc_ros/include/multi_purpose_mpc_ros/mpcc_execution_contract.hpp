@@ -221,6 +221,83 @@ struct CertifiedMpccSolution
 
 bool solution_certified(const CertifiedMpccSolution & solution) noexcept;
 
+/// Metadata for one canonical normal-authority candidate.  The executable
+/// stage count is deliberately separate from CertifiedMpccSolution: a solver
+/// certificate without a retained command sequence cannot own control.
+struct CanonicalNormalCandidate
+{
+  std::optional<MpccProblemContext> problem;
+  std::optional<CertifiedMpccSolution> solution;
+  std::size_t executable_control_stage_count{};
+};
+
+enum class CanonicalNormalCandidateRejectReason
+{
+  NotEvaluated,
+  None,
+  MissingIdentity,
+  IncompleteProblem,
+  UnsupportedIntent,
+  NoncanonicalFormulation,
+  IdentityMismatch,
+  NotCertified,
+  NoExecutableControl,
+  InvalidExecutableHorizon,
+  Expired,
+  DecisionMismatch,
+};
+
+const char * to_string(CanonicalNormalCandidateRejectReason reason) noexcept;
+
+enum class CanonicalNormalAuthoritySource
+{
+  FreshCertified,
+  RetainedCertified,
+  EmergencyStop,
+};
+
+const char * to_string(CanonicalNormalAuthoritySource source) noexcept;
+
+enum class CanonicalNormalAuthorityReason
+{
+  FreshCertified,
+  RetainedCertified,
+  NoCanonicalCandidate,
+  InvalidRequest,
+};
+
+const char * to_string(CanonicalNormalAuthorityReason reason) noexcept;
+
+struct CanonicalNormalAuthorityRequest
+{
+  std::uint64_t current_decision_id{};
+  double now_sec{std::numeric_limits<double>::quiet_NaN()};
+  CanonicalNormalCandidate fresh;
+  CanonicalNormalCandidate retained;
+};
+
+struct CanonicalNormalAuthorityResolution
+{
+  CanonicalNormalAuthoritySource source{
+    CanonicalNormalAuthoritySource::EmergencyStop};
+  CanonicalNormalAuthorityReason reason{
+    CanonicalNormalAuthorityReason::NoCanonicalCandidate};
+  CanonicalNormalCandidateRejectReason fresh_reject_reason{
+    CanonicalNormalCandidateRejectReason::NotEvaluated};
+  CanonicalNormalCandidateRejectReason retained_reject_reason{
+    CanonicalNormalCandidateRejectReason::NotEvaluated};
+  std::optional<MpccProblemContext> problem;
+  std::optional<CertifiedMpccSolution> solution;
+  std::size_t executable_control_stage_count{};
+  bool retained_solution{false};
+};
+
+/// Resolve Track/Cruise normal authority without any legacy candidate.
+/// Failure is explicit EmergencyStop; Recovery remains a supervisor override
+/// outside this normal-authority contract.
+CanonicalNormalAuthorityResolution resolve_canonical_normal_authority(
+  const CanonicalNormalAuthorityRequest & request) noexcept;
+
 enum class FinalAuthorityClass
 {
   CertifiedNormalSolution,

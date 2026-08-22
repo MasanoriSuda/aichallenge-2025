@@ -483,6 +483,168 @@ bool solution_certified(const CertifiedMpccSolution & solution) noexcept
     std::isfinite(solution.valid_until_sec);
 }
 
+const char * to_string(
+  const CanonicalNormalCandidateRejectReason reason) noexcept
+{
+  switch (reason) {
+    case CanonicalNormalCandidateRejectReason::NotEvaluated:
+      return "not-evaluated";
+    case CanonicalNormalCandidateRejectReason::None:
+      return "none";
+    case CanonicalNormalCandidateRejectReason::MissingIdentity:
+      return "missing-identity";
+    case CanonicalNormalCandidateRejectReason::IncompleteProblem:
+      return "incomplete-problem";
+    case CanonicalNormalCandidateRejectReason::UnsupportedIntent:
+      return "unsupported-intent";
+    case CanonicalNormalCandidateRejectReason::NoncanonicalFormulation:
+      return "noncanonical-formulation";
+    case CanonicalNormalCandidateRejectReason::IdentityMismatch:
+      return "identity-mismatch";
+    case CanonicalNormalCandidateRejectReason::NotCertified:
+      return "not-certified";
+    case CanonicalNormalCandidateRejectReason::NoExecutableControl:
+      return "no-executable-control";
+    case CanonicalNormalCandidateRejectReason::InvalidExecutableHorizon:
+      return "invalid-executable-horizon";
+    case CanonicalNormalCandidateRejectReason::Expired:
+      return "expired";
+    case CanonicalNormalCandidateRejectReason::DecisionMismatch:
+      return "decision-mismatch";
+  }
+  return "unknown";
+}
+
+const char * to_string(const CanonicalNormalAuthoritySource source) noexcept
+{
+  switch (source) {
+    case CanonicalNormalAuthoritySource::FreshCertified:
+      return "fresh-certified";
+    case CanonicalNormalAuthoritySource::RetainedCertified:
+      return "retained-certified";
+    case CanonicalNormalAuthoritySource::EmergencyStop:
+      return "emergency-stop";
+  }
+  return "unknown";
+}
+
+const char * to_string(const CanonicalNormalAuthorityReason reason) noexcept
+{
+  switch (reason) {
+    case CanonicalNormalAuthorityReason::FreshCertified:
+      return "fresh-certified";
+    case CanonicalNormalAuthorityReason::RetainedCertified:
+      return "retained-certified";
+    case CanonicalNormalAuthorityReason::NoCanonicalCandidate:
+      return "no-canonical-candidate";
+    case CanonicalNormalAuthorityReason::InvalidRequest:
+      return "invalid-request";
+  }
+  return "unknown";
+}
+
+namespace
+{
+
+CanonicalNormalCandidateRejectReason qualify_canonical_normal_candidate(
+  const CanonicalNormalCandidate & candidate, const double now_sec,
+  const std::uint64_t current_decision_id,
+  const bool require_current_decision) noexcept
+{
+  if (!candidate.problem.has_value() || !candidate.solution.has_value()) {
+    return CanonicalNormalCandidateRejectReason::MissingIdentity;
+  }
+  const auto & problem = candidate.problem.value();
+  const auto & solution = candidate.solution.value();
+  if (!problem_context_complete(problem)) {
+    return CanonicalNormalCandidateRejectReason::IncompleteProblem;
+  }
+  if (
+    problem.intent != ControlIntent::Track &&
+    problem.intent != ControlIntent::Cruise)
+  {
+    return CanonicalNormalCandidateRejectReason::UnsupportedIntent;
+  }
+  if (
+    problem.formulation != Formulation::VelocityProgress5State ||
+    solution.formulation != Formulation::VelocityProgress5State)
+  {
+    return CanonicalNormalCandidateRejectReason::NoncanonicalFormulation;
+  }
+  if (solution.problem_fingerprint != problem.fingerprint) {
+    return CanonicalNormalCandidateRejectReason::IdentityMismatch;
+  }
+  if (!solution_certified(solution)) {
+    return CanonicalNormalCandidateRejectReason::NotCertified;
+  }
+  if (candidate.executable_control_stage_count == 0U) {
+    return CanonicalNormalCandidateRejectReason::NoExecutableControl;
+  }
+  if (
+    candidate.executable_control_stage_count >
+    solution.prediction_stage_count)
+  {
+    return CanonicalNormalCandidateRejectReason::InvalidExecutableHorizon;
+  }
+  if (now_sec > solution.valid_until_sec) {
+    return CanonicalNormalCandidateRejectReason::Expired;
+  }
+  if (require_current_decision && problem.decision_id != current_decision_id) {
+    return CanonicalNormalCandidateRejectReason::DecisionMismatch;
+  }
+  return CanonicalNormalCandidateRejectReason::None;
+}
+
+}  // namespace
+
+CanonicalNormalAuthorityResolution resolve_canonical_normal_authority(
+  const CanonicalNormalAuthorityRequest & request) noexcept
+{
+  CanonicalNormalAuthorityResolution resolution;
+  if (
+    request.current_decision_id == 0U || !std::isfinite(request.now_sec) ||
+    request.now_sec < 0.0)
+  {
+    resolution.reason = CanonicalNormalAuthorityReason::InvalidRequest;
+    return resolution;
+  }
+
+  resolution.fresh_reject_reason = qualify_canonical_normal_candidate(
+    request.fresh, request.now_sec, request.current_decision_id, true);
+  if (
+    resolution.fresh_reject_reason ==
+    CanonicalNormalCandidateRejectReason::None)
+  {
+    resolution.source = CanonicalNormalAuthoritySource::FreshCertified;
+    resolution.reason = CanonicalNormalAuthorityReason::FreshCertified;
+    resolution.problem = request.fresh.problem;
+    resolution.solution = request.fresh.solution;
+    resolution.executable_control_stage_count =
+      request.fresh.executable_control_stage_count;
+    return resolution;
+  }
+
+  resolution.retained_reject_reason = qualify_canonical_normal_candidate(
+    request.retained, request.now_sec, request.current_decision_id, false);
+  if (
+    resolution.retained_reject_reason ==
+    CanonicalNormalCandidateRejectReason::None)
+  {
+    resolution.source = CanonicalNormalAuthoritySource::RetainedCertified;
+    resolution.reason = CanonicalNormalAuthorityReason::RetainedCertified;
+    resolution.problem = request.retained.problem;
+    resolution.solution = request.retained.solution;
+    resolution.executable_control_stage_count =
+      request.retained.executable_control_stage_count;
+    resolution.retained_solution = true;
+    return resolution;
+  }
+
+  resolution.source = CanonicalNormalAuthoritySource::EmergencyStop;
+  resolution.reason = CanonicalNormalAuthorityReason::NoCanonicalCandidate;
+  return resolution;
+}
+
 const char * to_string(const FinalAuthorityClass authority) noexcept
 {
   switch (authority) {

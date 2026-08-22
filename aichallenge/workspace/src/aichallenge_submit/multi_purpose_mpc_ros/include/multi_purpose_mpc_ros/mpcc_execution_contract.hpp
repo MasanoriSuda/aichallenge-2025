@@ -224,11 +224,17 @@ bool solution_certified(const CertifiedMpccSolution & solution) noexcept;
 /// Metadata for one canonical normal-authority candidate.  The executable
 /// stage count is deliberately separate from CertifiedMpccSolution: a solver
 /// certificate without a retained command sequence cannot own control.
+/// `execution_certificate_decision_id` is also deliberately independent from
+/// the solver problem decision: a retained plan keeps its original solve
+/// identity, but its remaining prefix must be revalidated from the current
+/// measured pose before it can continue to own control.
 struct CanonicalNormalCandidate
 {
   std::optional<MpccProblemContext> problem;
   std::optional<CertifiedMpccSolution> solution;
   std::size_t executable_control_stage_count{};
+  std::uint64_t execution_plan_id{};
+  std::uint64_t execution_certificate_decision_id{};
 };
 
 enum class CanonicalNormalCandidateRejectReason
@@ -241,10 +247,12 @@ enum class CanonicalNormalCandidateRejectReason
   NoncanonicalFormulation,
   IdentityMismatch,
   NotCertified,
+  MissingExecutionPlan,
   NoExecutableControl,
   InvalidExecutableHorizon,
   Expired,
   DecisionMismatch,
+  ExecutionCertificateDecisionMismatch,
 };
 
 const char * to_string(CanonicalNormalCandidateRejectReason reason) noexcept;
@@ -289,6 +297,8 @@ struct CanonicalNormalAuthorityResolution
   std::optional<MpccProblemContext> problem;
   std::optional<CertifiedMpccSolution> solution;
   std::size_t executable_control_stage_count{};
+  std::uint64_t execution_plan_id{};
+  std::uint64_t execution_certificate_decision_id{};
   bool retained_solution{false};
 };
 

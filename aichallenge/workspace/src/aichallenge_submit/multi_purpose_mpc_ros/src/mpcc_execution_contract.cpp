@@ -503,6 +503,8 @@ const char * to_string(
       return "identity-mismatch";
     case CanonicalNormalCandidateRejectReason::NotCertified:
       return "not-certified";
+    case CanonicalNormalCandidateRejectReason::MissingExecutionPlan:
+      return "missing-execution-plan";
     case CanonicalNormalCandidateRejectReason::NoExecutableControl:
       return "no-executable-control";
     case CanonicalNormalCandidateRejectReason::InvalidExecutableHorizon:
@@ -511,6 +513,8 @@ const char * to_string(
       return "expired";
     case CanonicalNormalCandidateRejectReason::DecisionMismatch:
       return "decision-mismatch";
+    case CanonicalNormalCandidateRejectReason::ExecutionCertificateDecisionMismatch:
+      return "execution-certificate-decision-mismatch";
   }
   return "unknown";
 }
@@ -577,6 +581,9 @@ CanonicalNormalCandidateRejectReason qualify_canonical_normal_candidate(
   if (!solution_certified(solution)) {
     return CanonicalNormalCandidateRejectReason::NotCertified;
   }
+  if (candidate.execution_plan_id == 0U) {
+    return CanonicalNormalCandidateRejectReason::MissingExecutionPlan;
+  }
   if (candidate.executable_control_stage_count == 0U) {
     return CanonicalNormalCandidateRejectReason::NoExecutableControl;
   }
@@ -591,6 +598,12 @@ CanonicalNormalCandidateRejectReason qualify_canonical_normal_candidate(
   }
   if (require_current_decision && problem.decision_id != current_decision_id) {
     return CanonicalNormalCandidateRejectReason::DecisionMismatch;
+  }
+  if (
+    candidate.execution_certificate_decision_id != current_decision_id)
+  {
+    return CanonicalNormalCandidateRejectReason::
+      ExecutionCertificateDecisionMismatch;
   }
   return CanonicalNormalCandidateRejectReason::None;
 }
@@ -621,6 +634,9 @@ CanonicalNormalAuthorityResolution resolve_canonical_normal_authority(
     resolution.solution = request.fresh.solution;
     resolution.executable_control_stage_count =
       request.fresh.executable_control_stage_count;
+    resolution.execution_plan_id = request.fresh.execution_plan_id;
+    resolution.execution_certificate_decision_id =
+      request.fresh.execution_certificate_decision_id;
     return resolution;
   }
 
@@ -636,6 +652,9 @@ CanonicalNormalAuthorityResolution resolve_canonical_normal_authority(
     resolution.solution = request.retained.solution;
     resolution.executable_control_stage_count =
       request.retained.executable_control_stage_count;
+    resolution.execution_plan_id = request.retained.execution_plan_id;
+    resolution.execution_certificate_decision_id =
+      request.retained.execution_certificate_decision_id;
     resolution.retained_solution = true;
     return resolution;
   }

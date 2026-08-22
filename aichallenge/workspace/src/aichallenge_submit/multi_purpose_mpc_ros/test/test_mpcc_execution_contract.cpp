@@ -70,11 +70,16 @@ contract::MpccProblemContext make_track_context(
 
 contract::CanonicalNormalCandidate make_canonical_candidate(
   const std::uint64_t decision_id = 42U,
-  const std::size_t executable_control_stage_count = 2U)
+  const std::size_t executable_control_stage_count = 2U,
+  const std::uint64_t execution_certificate_decision_id = 0U,
+  const std::uint64_t execution_plan_id = 23U)
 {
   const auto context = make_track_context(decision_id);
   return contract::CanonicalNormalCandidate{
-    context, make_solution(context), executable_control_stage_count};
+    context, make_solution(context), executable_control_stage_count,
+    execution_plan_id,
+    execution_certificate_decision_id == 0U ? decision_id :
+    execution_certificate_decision_id};
 }
 
 }  // namespace
@@ -477,6 +482,8 @@ TEST(MpccExecutionContract, CanonicalNormalAuthoritySelectsFreshCurrentDecision)
   ASSERT_TRUE(resolution.problem.has_value());
   ASSERT_TRUE(resolution.solution.has_value());
   EXPECT_EQ(resolution.problem->decision_id, 42U);
+  EXPECT_EQ(resolution.execution_plan_id, 23U);
+  EXPECT_EQ(resolution.execution_certificate_decision_id, 42U);
   EXPECT_FALSE(resolution.retained_solution);
 }
 
@@ -484,7 +491,7 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityFallsBackOnlyToRetainedCanon
 {
   auto fresh = make_canonical_candidate();
   fresh.solution->physical.wall_clear = false;
-  const auto retained = make_canonical_candidate(41U);
+  const auto retained = make_canonical_candidate(41U, 2U, 42U);
   const auto resolution = contract::resolve_canonical_normal_authority(
     contract::CanonicalNormalAuthorityRequest{42U, 12.0, fresh, retained});
 
@@ -499,7 +506,60 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityFallsBackOnlyToRetainedCanon
     contract::CanonicalNormalCandidateRejectReason::NotCertified);
   ASSERT_TRUE(resolution.problem.has_value());
   EXPECT_EQ(resolution.problem->decision_id, 41U);
+  EXPECT_EQ(resolution.execution_plan_id, 23U);
+  EXPECT_EQ(resolution.execution_certificate_decision_id, 42U);
   EXPECT_TRUE(resolution.retained_solution);
+}
+
+TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsRetainedWithoutCurrentExecutionProof)
+{
+  auto fresh = make_canonical_candidate();
+  fresh.solution->physical.wall_clear = false;
+  const auto retained_with_only_original_proof = make_canonical_candidate(41U);
+  const auto resolution = contract::resolve_canonical_normal_authority(
+    contract::CanonicalNormalAuthorityRequest{
+      42U, 12.0, fresh, retained_with_only_original_proof});
+
+  EXPECT_EQ(
+    resolution.source,
+    contract::CanonicalNormalAuthoritySource::EmergencyStop);
+  EXPECT_EQ(
+    resolution.retained_reject_reason,
+    contract::CanonicalNormalCandidateRejectReason::
+      ExecutionCertificateDecisionMismatch);
+}
+
+TEST(MpccExecutionContract, CanonicalNormalAuthorityRequiresExecutionPlanIdentity)
+{
+  auto fresh = make_canonical_candidate();
+  fresh.execution_plan_id = 0U;
+  const auto resolution = contract::resolve_canonical_normal_authority(
+    contract::CanonicalNormalAuthorityRequest{
+      42U, 12.0, fresh, contract::CanonicalNormalCandidate{}});
+
+  EXPECT_EQ(
+    resolution.source,
+    contract::CanonicalNormalAuthoritySource::EmergencyStop);
+  EXPECT_EQ(
+    resolution.fresh_reject_reason,
+    contract::CanonicalNormalCandidateRejectReason::MissingExecutionPlan);
+}
+
+TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsStaleFreshExecutionProof)
+{
+  auto fresh = make_canonical_candidate();
+  fresh.execution_certificate_decision_id = 41U;
+  const auto resolution = contract::resolve_canonical_normal_authority(
+    contract::CanonicalNormalAuthorityRequest{
+      42U, 12.0, fresh, contract::CanonicalNormalCandidate{}});
+
+  EXPECT_EQ(
+    resolution.source,
+    contract::CanonicalNormalAuthoritySource::EmergencyStop);
+  EXPECT_EQ(
+    resolution.fresh_reject_reason,
+    contract::CanonicalNormalCandidateRejectReason::
+      ExecutionCertificateDecisionMismatch);
 }
 
 TEST(MpccExecutionContract, CanonicalNormalAuthorityRequiresExecutableControl)
@@ -536,7 +596,7 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsExpiredCandidate)
 TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsFreshFromOlderDecision)
 {
   const auto old_fresh = make_canonical_candidate(41U);
-  const auto retained = make_canonical_candidate(40U);
+  const auto retained = make_canonical_candidate(40U, 2U, 42U);
   const auto resolution = contract::resolve_canonical_normal_authority(
     contract::CanonicalNormalAuthorityRequest{
       42U, 12.0, old_fresh, retained});

@@ -111,6 +111,10 @@ No cycle-local transfer to three-state or legacy MPC is allowed after promotion.
   five-state plan, retained certified five-state plan, Emergency Stop.
 - The selector requires executable control stages in addition to certificate metadata; an OSQP warm
   start cannot be passed as authority.
+- `.steering/20260822-track-cruise-retained-plan-provenance` closes a late-handoff hole in that
+  selector. Every candidate now names a real execution plan and a current-decision execution
+  certificate. A retained solution keeps its original solver problem identity but cannot own
+  control from only its old wall certificate and a claimed remaining-stage count.
 - Runtime promotion is not yet performed. The remaining implementation must create an atomic full
   Track/Cruise control-plan store, solve/certify canonical control before legacy publication, and
   connect the selector to final output while deleting Track/Cruise legacy fallback.

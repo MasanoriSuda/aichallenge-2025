@@ -5579,6 +5579,7 @@ struct TrackCruiseShadowCycleResult
   bool canonical_cursor_available{false};
   bool canonical_candidate_accepted{false};
   bool canonical_fresh_authority_ready{false};
+  bool canonical_actuation_extracted{false};
   bool warm_start_applied{false};
   bool solver_context_reset{false};
   std::uint64_t decision_id{};
@@ -5621,6 +5622,10 @@ struct TrackCruiseShadowCycleResult
     mpcc_contract::CanonicalNormalAuthoritySource::EmergencyStop};
   mpcc_contract::CanonicalNormalAuthorityReason canonical_authority_reason{
     mpcc_contract::CanonicalNormalAuthorityReason::NoCanonicalCandidate};
+  canonical_plan::CanonicalActuationReason canonical_actuation_reason{
+    canonical_plan::CanonicalActuationReason::InvalidPlan};
+  double canonical_actuation_maximum_difference{
+    std::numeric_limits<double>::quiet_NaN()};
   mpcc_contract::PhysicalWallCertificateDiagnostic physical_wall_diagnostic;
   FirstStageShadowReachabilityDiagnostic first_stage_reachability;
   std::string status{"not-eligible"};
@@ -5645,6 +5650,7 @@ struct TrackCruiseShadowTelemetryWindow
   std::uint64_t canonical_cursor_count{};
   std::uint64_t canonical_candidate_count{};
   std::uint64_t canonical_fresh_authority_count{};
+  std::uint64_t canonical_actuation_count{};
   std::uint64_t physical_invalid_input_count{};
   std::uint64_t physical_bound_reject_count{};
   std::uint64_t physical_heading_reject_count{};
@@ -20889,6 +20895,7 @@ struct MPC
     window.canonical_candidate_count += result.canonical_candidate_accepted ? 1U : 0U;
     window.canonical_fresh_authority_count +=
       result.canonical_fresh_authority_ready ? 1U : 0U;
+    window.canonical_actuation_count += result.canonical_actuation_extracted ? 1U : 0U;
     if (result.physical_certificate_checked && !result.physically_certified) {
       switch (result.physical_wall_diagnostic.reason) {
         case mpcc_contract::PhysicalWallCertificateReason::InvalidInput:
@@ -21049,6 +21056,7 @@ struct MPC
       "constraint=%zu, proposal=%zu, converted=%zu, physical=%zu, certified=%zu/%.1f%%, "
       "canonical=%zu/%zu(extracted/stored), canonical_reason=%s/%s, "
       "admission=%zu/%zu/%zu(cursor/candidate/fresh), admission_reason=%s/%s/%s/%s, "
+      "actuation=%zu/%s, actuation_diff=%.9f, "
       "physical_rejects=invalid:%zu/bound:%zu/heading:%zu/sample:%zu/contact:%zu/"
       "current_sample:%zu/current_contact:%zu/course_frame:%zu/swept:%zu, "
       "warm=%zu, reset=%zu, reset_reason=%s, "
@@ -21085,6 +21093,9 @@ struct MPC
       canonical_plan::to_string(result.canonical_candidate_reason),
       mpcc_contract::to_string(result.canonical_authority_source),
       mpcc_contract::to_string(result.canonical_authority_reason),
+      static_cast<std::size_t>(window.canonical_actuation_count),
+      canonical_plan::to_string(result.canonical_actuation_reason),
+      result.canonical_actuation_maximum_difference,
       static_cast<std::size_t>(window.physical_invalid_input_count),
       static_cast<std::size_t>(window.physical_bound_reject_count),
       static_cast<std::size_t>(window.physical_heading_reject_count),
@@ -21472,6 +21483,42 @@ struct MPC
         return finish();
       }
       result.canonical_fresh_authority_ready = true;
+      const auto canonical_actuation = canonical_plan::extract_canonical_actuation(
+        *canonical_plan_snapshot, canonical_cursor, model->length);
+      result.canonical_actuation_reason = canonical_actuation.reason;
+      if (!canonical_actuation.actuation.has_value()) {
+        result.status = "canonical-actuation-reject";
+        result.detail = std::string{"canonical actuation rejected: "} +
+          canonical_plan::to_string(canonical_actuation.reason);
+        return finish();
+      }
+      const auto & stored_actuation = canonical_actuation.actuation.value();
+      const auto & direct_actuation = result.actuation_proposal.value();
+      result.canonical_actuation_maximum_difference = std::max({
+        std::abs(
+          stored_actuation.predicted_speed_mps -
+          direct_actuation.predicted_speed_mps),
+        std::abs(
+          stored_actuation.acceleration_mps2 -
+          direct_actuation.acceleration_mps2),
+        std::abs(
+          stored_actuation.curvature_radpm -
+          direct_actuation.curvature_radpm),
+        std::abs(
+          stored_actuation.steering_tire_angle_rad -
+          direct_actuation.steering_tire_angle_rad),
+        std::abs(
+          stored_actuation.virtual_progress_speed_mps -
+          direct_actuation.virtual_progress_speed_mps)});
+      if (
+        !std::isfinite(result.canonical_actuation_maximum_difference) ||
+        result.canonical_actuation_maximum_difference > 1e-12)
+      {
+        result.status = "canonical-actuation-mismatch";
+        result.detail = "stored canonical actuation differs from direct primal";
+        return finish();
+      }
+      result.canonical_actuation_extracted = true;
       const int expected_production_size =
         legacy_nx * (problem.N + 1) + legacy_nu * problem.N;
       if (

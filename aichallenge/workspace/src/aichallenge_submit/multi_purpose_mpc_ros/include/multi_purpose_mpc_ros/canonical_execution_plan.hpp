@@ -89,6 +89,41 @@ struct CanonicalExecutionCursor
 CanonicalExecutionCursor resolve_execution_cursor(
   const CanonicalExecutionPlan & plan, double now_sec) noexcept;
 
+struct CanonicalActuation
+{
+  std::uint64_t plan_id{};
+  std::size_t control_stage_index{};
+  double predicted_speed_mps{};
+  double acceleration_mps2{};
+  double curvature_radpm{};
+  double steering_tire_angle_rad{};
+  double virtual_progress_speed_mps{};
+};
+
+enum class CanonicalActuationReason
+{
+  Available,
+  InvalidPlan,
+  CursorUnavailable,
+  PlanIdentityMismatch,
+  InvalidStageIndex,
+  InvalidWheelbase,
+  NonfiniteActuation,
+};
+
+const char * to_string(CanonicalActuationReason reason) noexcept;
+
+struct CanonicalActuationResult
+{
+  CanonicalActuationReason reason{CanonicalActuationReason::InvalidPlan};
+  std::optional<CanonicalActuation> actuation;
+};
+
+CanonicalActuationResult extract_canonical_actuation(
+  const CanonicalExecutionPlan & plan,
+  const CanonicalExecutionCursor & cursor,
+  double wheelbase_m) noexcept;
+
 enum class CanonicalExecutionPlanStoreReason
 {
   Accepted,

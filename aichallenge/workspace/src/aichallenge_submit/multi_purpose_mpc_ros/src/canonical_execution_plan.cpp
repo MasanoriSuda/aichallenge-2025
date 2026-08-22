@@ -181,6 +181,83 @@ CanonicalExecutionCursor resolve_execution_cursor(
   return cursor;
 }
 
+const char * to_string(const CanonicalActuationReason reason) noexcept
+{
+  switch (reason) {
+    case CanonicalActuationReason::Available: return "available";
+    case CanonicalActuationReason::InvalidPlan: return "invalid-plan";
+    case CanonicalActuationReason::CursorUnavailable: return "cursor-unavailable";
+    case CanonicalActuationReason::PlanIdentityMismatch:
+      return "plan-identity-mismatch";
+    case CanonicalActuationReason::InvalidStageIndex:
+      return "invalid-stage-index";
+    case CanonicalActuationReason::InvalidWheelbase: return "invalid-wheelbase";
+    case CanonicalActuationReason::NonfiniteActuation:
+      return "nonfinite-actuation";
+  }
+  return "unknown";
+}
+
+CanonicalActuationResult extract_canonical_actuation(
+  const CanonicalExecutionPlan & plan,
+  const CanonicalExecutionCursor & cursor,
+  const double wheelbase_m) noexcept
+{
+  CanonicalActuationResult result;
+  if (
+    validate_canonical_execution_plan(plan) !=
+    CanonicalExecutionPlanRejectReason::None)
+  {
+    return result;
+  }
+  if (!cursor.available) {
+    result.reason = CanonicalActuationReason::CursorUnavailable;
+    return result;
+  }
+  if (cursor.plan_id != plan.plan_id) {
+    result.reason = CanonicalActuationReason::PlanIdentityMismatch;
+    return result;
+  }
+  const std::size_t stage = cursor.first_control_stage_index;
+  if (
+    stage >= plan.control_stages.size() ||
+    stage + 1U >= plan.predicted_states.size() ||
+    cursor.remaining_control_stage_count != plan.control_stages.size() - stage)
+  {
+    result.reason = CanonicalActuationReason::InvalidStageIndex;
+    return result;
+  }
+  if (!std::isfinite(wheelbase_m) || wheelbase_m <= 0.0) {
+    result.reason = CanonicalActuationReason::InvalidWheelbase;
+    return result;
+  }
+
+  const auto & control = plan.control_stages[stage];
+  const auto & next_state = plan.predicted_states[stage + 1U];
+  CanonicalActuation actuation;
+  actuation.plan_id = plan.plan_id;
+  actuation.control_stage_index = stage;
+  actuation.predicted_speed_mps = next_state.velocity_mps;
+  actuation.acceleration_mps2 = control.acceleration_mps2;
+  actuation.curvature_radpm = control.curvature_radpm;
+  actuation.steering_tire_angle_rad = std::atan(
+    wheelbase_m * control.curvature_radpm);
+  actuation.virtual_progress_speed_mps = control.virtual_progress_speed_mps;
+  if (
+    !std::isfinite(actuation.predicted_speed_mps) ||
+    !std::isfinite(actuation.acceleration_mps2) ||
+    !std::isfinite(actuation.curvature_radpm) ||
+    !std::isfinite(actuation.steering_tire_angle_rad) ||
+    !std::isfinite(actuation.virtual_progress_speed_mps))
+  {
+    result.reason = CanonicalActuationReason::NonfiniteActuation;
+    return result;
+  }
+  result.reason = CanonicalActuationReason::Available;
+  result.actuation = actuation;
+  return result;
+}
+
 const char * to_string(const CanonicalExecutionPlanStoreReason reason) noexcept
 {
   switch (reason) {

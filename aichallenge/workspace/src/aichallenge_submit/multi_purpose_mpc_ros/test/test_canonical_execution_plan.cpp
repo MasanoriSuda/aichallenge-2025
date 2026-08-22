@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <cstdint>
 #include <utility>
 
@@ -149,6 +150,55 @@ TEST(CanonicalExecutionPlan, RejectsFutureAndExpiredExecutionTime)
   EXPECT_FALSE(expired.available);
   EXPECT_EQ(
     expired.reason, plan::CanonicalExecutionCursorReason::CertificateExpired);
+}
+
+TEST(CanonicalExecutionPlan, ExtractsExactCurrentFiveStateActuation)
+{
+  const auto value = make_plan();
+  const auto first_cursor = plan::resolve_execution_cursor(value, 10.25);
+  const auto first = plan::extract_canonical_actuation(
+    value, first_cursor, 1.0);
+  ASSERT_EQ(first.reason, plan::CanonicalActuationReason::Available);
+  ASSERT_TRUE(first.actuation.has_value());
+  EXPECT_EQ(first.actuation->plan_id, 23U);
+  EXPECT_EQ(first.actuation->control_stage_index, 0U);
+  EXPECT_DOUBLE_EQ(first.actuation->predicted_speed_mps, 5.2);
+  EXPECT_DOUBLE_EQ(first.actuation->acceleration_mps2, 1.0);
+  EXPECT_DOUBLE_EQ(first.actuation->curvature_radpm, 0.02);
+  EXPECT_DOUBLE_EQ(
+    first.actuation->steering_tire_angle_rad, std::atan(0.02));
+  EXPECT_DOUBLE_EQ(first.actuation->virtual_progress_speed_mps, 5.1);
+
+  const auto second_cursor = plan::resolve_execution_cursor(value, 11.25);
+  const auto second = plan::extract_canonical_actuation(
+    value, second_cursor, 1.0);
+  ASSERT_TRUE(second.actuation.has_value());
+  EXPECT_EQ(second.actuation->control_stage_index, 1U);
+  EXPECT_DOUBLE_EQ(second.actuation->predicted_speed_mps, 5.4);
+  EXPECT_DOUBLE_EQ(second.actuation->acceleration_mps2, 0.5);
+  EXPECT_DOUBLE_EQ(second.actuation->virtual_progress_speed_mps, 5.3);
+}
+
+TEST(CanonicalExecutionPlan, ActuationRejectsExhaustedOrMismatchedCursor)
+{
+  const auto value = make_plan();
+  const auto exhausted = plan::resolve_execution_cursor(value, 12.0);
+  EXPECT_EQ(
+    plan::extract_canonical_actuation(value, exhausted, 1.0).reason,
+    plan::CanonicalActuationReason::CursorUnavailable);
+
+  auto mismatch = plan::resolve_execution_cursor(value, 10.25);
+  mismatch.plan_id = 99U;
+  EXPECT_EQ(
+    plan::extract_canonical_actuation(value, mismatch, 1.0).reason,
+    plan::CanonicalActuationReason::PlanIdentityMismatch);
+  EXPECT_EQ(
+    plan::extract_canonical_actuation(value, mismatch, 0.0).reason,
+    plan::CanonicalActuationReason::PlanIdentityMismatch);
+  const auto valid_cursor = plan::resolve_execution_cursor(value, 10.25);
+  EXPECT_EQ(
+    plan::extract_canonical_actuation(value, valid_cursor, 0.0).reason,
+    plan::CanonicalActuationReason::InvalidWheelbase);
 }
 
 TEST(CanonicalExecutionPlan, StoreReplacementIsCompleteAndMonotonic)

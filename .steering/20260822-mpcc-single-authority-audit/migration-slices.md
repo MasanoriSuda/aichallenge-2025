@@ -130,6 +130,10 @@ No cycle-local transfer to three-state or legacy MPC is allowed after promotion.
 - `.steering/20260822-track-cruise-canonical-fresh-admission` now resolves the exact fresh cursor,
   binds the current physical proof to that plan/window and runs the production canonical selector
   in shadow. A shadow result is certified only if the selector returns `FreshCertified`.
+- `.steering/20260822-canonical-actuation-extraction` adds the exact cursor-to-actuation contract.
+  It preserves predicted velocity, optimized acceleration, curvature and virtual-progress speed
+  without legacy flattening, rejects exhausted/mismatched cursors and verifies the stored result
+  against the direct primal in shadow.
 - Runtime promotion is not yet performed. The remaining implementation must add current-pose
   revalidation for retained plans, obtain dynamic coverage for fresh/retained selection, and then
   connect the same selector to final output while deleting Track/Cruise legacy fallback.

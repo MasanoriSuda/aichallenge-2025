@@ -316,6 +316,80 @@ struct CanonicalNormalAuthorityResolution
 CanonicalNormalAuthorityResolution resolve_canonical_normal_authority(
   const CanonicalNormalAuthorityRequest & request) noexcept;
 
+/// The complete first executable actuation from one canonical five-state
+/// solution.  These fields must remain distinct through the publisher
+/// boundary; in particular, predicted speed is not an acceleration command.
+struct CanonicalActuation
+{
+  double predicted_speed_mps{};
+  double acceleration_mps2{};
+  double curvature_radpm{};
+  double steering_tire_angle_rad{};
+  double virtual_progress_speed_mps{};
+};
+
+struct CanonicalNormalCommand
+{
+  std::uint64_t decision_id{};
+  std::uint64_t execution_plan_id{};
+  std::uint64_t execution_certificate_decision_id{};
+  std::uint64_t problem_fingerprint{};
+  std::uint64_t solution_id{};
+  CanonicalNormalAuthoritySource source{
+    CanonicalNormalAuthoritySource::EmergencyStop};
+  ControlIntent intent{ControlIntent::Unknown};
+  Formulation formulation{Formulation::Unresolved};
+  bool retained_solution{false};
+  double predicted_speed_mps{};
+  double acceleration_mps2{};
+  double curvature_radpm{};
+  double steering_tire_angle_rad{};
+  double virtual_progress_speed_mps{};
+};
+
+enum class CanonicalNormalCommandReason
+{
+  Available,
+  EmergencyAuthority,
+  IncompleteAuthorityIdentity,
+  InvalidActuation,
+};
+
+const char * to_string(CanonicalNormalCommandReason reason) noexcept;
+
+struct CanonicalNormalCommandResult
+{
+  CanonicalNormalCommandReason reason{
+    CanonicalNormalCommandReason::IncompleteAuthorityIdentity};
+  std::optional<CanonicalNormalCommand> command;
+};
+
+CanonicalNormalCommandResult build_canonical_normal_command(
+  const CanonicalNormalAuthorityResolution & authority,
+  const CanonicalActuation & actuation) noexcept;
+
+/// Verify the model command immediately before publication.  A canonical
+/// command is already expressed as the physical tire angle used by its model
+/// and certificate, so later actuator gain is forbidden.
+bool canonical_normal_command_matches_actuation(
+  const CanonicalNormalCommand & command, double target_speed_mps,
+  double acceleration_mps2, double steering_tire_angle_rad) noexcept;
+
+/// Resolve the tire angle serialized to the vehicle interface.  Legacy normal
+/// paths retain their calibrated raw-command convention during migration;
+/// canonical normal authority must publish the certified physical angle
+/// exactly.
+std::optional<double> resolve_published_steering_tire_angle(
+  double model_steering_tire_angle_rad, double legacy_actuator_gain,
+  bool canonical_normal_authority) noexcept;
+
+/// Select the physical steering publication convention for every
+/// Track/Cruise command owned by the canonical controller.  Recovery is a
+/// distinct supervisor and retains its existing actuator convention.
+bool canonical_track_cruise_uses_physical_steering(
+  bool canonical_normal_authority, bool canonical_emergency_stop,
+  bool recovery_override) noexcept;
+
 enum class FinalAuthorityClass
 {
   CertifiedNormalSolution,
@@ -335,6 +409,28 @@ struct FinalControlDecisionRequest
   std::optional<MpccProblemContext> problem;
   std::optional<CertifiedMpccSolution> solution;
   bool retained_solution{false};
+  std::optional<CanonicalNormalCommand> canonical_normal_command;
+
+  FinalControlDecisionRequest() = default;
+
+  FinalControlDecisionRequest(
+    const std::uint64_t decision_id_in,
+    const FinalAuthorityClass authority_in,
+    const std::string & source_in,
+    const std::optional<MpccProblemContext> & problem_in = std::nullopt,
+    const std::optional<CertifiedMpccSolution> & solution_in = std::nullopt,
+    const bool retained_solution_in = false,
+    const std::optional<CanonicalNormalCommand> & canonical_normal_command_in =
+    std::nullopt)
+  : decision_id(decision_id_in),
+    authority(authority_in),
+    source(source_in),
+    problem(problem_in),
+    solution(solution_in),
+    retained_solution(retained_solution_in),
+    canonical_normal_command(canonical_normal_command_in)
+  {
+  }
 };
 
 struct FinalControlDecision
@@ -346,6 +442,10 @@ struct FinalControlDecision
   Formulation formulation{Formulation::Unresolved};
   std::uint64_t problem_fingerprint{};
   std::uint64_t solution_id{};
+  std::uint64_t execution_plan_id{};
+  std::uint64_t execution_certificate_decision_id{};
+  CanonicalNormalAuthoritySource canonical_source{
+    CanonicalNormalAuthoritySource::EmergencyStop};
   bool retained_solution{false};
   bool identity_complete{false};
   bool canonical_contract_satisfied{false};

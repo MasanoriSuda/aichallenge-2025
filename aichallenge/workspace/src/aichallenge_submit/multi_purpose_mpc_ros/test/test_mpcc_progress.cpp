@@ -3,6 +3,7 @@
 #include <multi_purpose_mpc_ros/mpcc_progress.hpp>
 
 #include <cmath>
+#include <utility>
 #include <vector>
 
 namespace
@@ -10,6 +11,42 @@ namespace
 
 using multi_purpose_mpc_ros::mpcc_progress::Config;
 using multi_purpose_mpc_ros::mpcc_progress::LinearizationRequest;
+
+std::pair<Eigen::VectorXd, Eigen::VectorXd> make_extended_test_bounds(
+  const int horizon)
+{
+  constexpr int nx =
+    multi_purpose_mpc_ros::mpcc_progress::kExtendedStateDimension;
+  constexpr int nu =
+    multi_purpose_mpc_ros::mpcc_progress::kExtendedInputDimension;
+  const int state_rows = nx * (horizon + 1);
+  const int variable_rows = state_rows + nu * horizon;
+  const int constraint_rows = state_rows + variable_rows + horizon;
+  Eigen::VectorXd lower = Eigen::VectorXd::Constant(constraint_rows, -100.0);
+  Eigen::VectorXd upper = Eigen::VectorXd::Constant(constraint_rows, 100.0);
+  for (int stage = 0; stage < horizon + 1; ++stage) {
+    const int variable = stage * nx +
+      multi_purpose_mpc_ros::mpcc_progress::kExtendedVelocityIndex;
+    lower[state_rows + variable] = 0.0;
+    upper[state_rows + variable] = 20.0;
+  }
+  for (int stage = 0; stage < horizon; ++stage) {
+    const int input = state_rows + stage * nu;
+    lower[state_rows + input +
+      multi_purpose_mpc_ros::mpcc_progress::kExtendedAccelerationIndex] = -3.0;
+    upper[state_rows + input +
+      multi_purpose_mpc_ros::mpcc_progress::kExtendedAccelerationIndex] = 1.37;
+    lower[state_rows + input +
+      multi_purpose_mpc_ros::mpcc_progress::kExtendedCurvatureIndex] = -0.5;
+    upper[state_rows + input +
+      multi_purpose_mpc_ros::mpcc_progress::kExtendedCurvatureIndex] = 0.5;
+    lower[state_rows + input +
+      multi_purpose_mpc_ros::mpcc_progress::kExtendedVirtualProgressSpeedIndex] = 0.0;
+    upper[state_rows + input +
+      multi_purpose_mpc_ros::mpcc_progress::kExtendedVirtualProgressSpeedIndex] = 20.0;
+  }
+  return {std::move(lower), std::move(upper)};
+}
 
 TEST(MpccProgress, ActivatesForDynamicEscapeOutsideOvertakeLinePhase)
 {
@@ -415,6 +452,7 @@ TEST(MpccProgress, NormalizesCertifiedSignedBoundaryForSemanticExecution)
   Eigen::VectorXd primal = Eigen::VectorXd::Zero(variable_rows);
   Eigen::VectorXd violation = Eigen::VectorXd::Zero(constraint_rows);
   Eigen::VectorXd tolerance = Eigen::VectorXd::Constant(constraint_rows, 1e-5);
+  const auto [lower, upper] = make_extended_test_bounds(horizon);
 
   const int velocity_variable =
     multi_purpose_mpc_ros::mpcc_progress::kExtendedStateDimension +
@@ -428,7 +466,7 @@ TEST(MpccProgress, NormalizesCertifiedSignedBoundaryForSemanticExecution)
 
   const auto normalized =
     multi_purpose_mpc_ros::mpcc_progress::normalize_extended_execution_primal(
-    primal, violation, tolerance, horizon);
+    primal, lower, upper, violation, tolerance, horizon);
 
   EXPECT_EQ(
     normalized.reason,
@@ -438,6 +476,42 @@ TEST(MpccProgress, NormalizesCertifiedSignedBoundaryForSemanticExecution)
   EXPECT_DOUBLE_EQ(normalized.maximum_adjustment, 2e-7);
   EXPECT_DOUBLE_EQ(normalized.primal[velocity_variable], 0.0);
   EXPECT_DOUBLE_EQ(normalized.primal[virtual_speed_variable], 0.0);
+}
+
+TEST(MpccProgress, NormalizesCertifiedActuatorBoundaryForSemanticExecution)
+{
+  constexpr int horizon = 2;
+  constexpr int state_rows =
+    multi_purpose_mpc_ros::mpcc_progress::kExtendedStateDimension *
+    (horizon + 1);
+  constexpr int variable_rows = state_rows +
+    multi_purpose_mpc_ros::mpcc_progress::kExtendedInputDimension * horizon;
+  constexpr int constraint_rows = state_rows + variable_rows + horizon;
+  Eigen::VectorXd primal = Eigen::VectorXd::Zero(variable_rows);
+  Eigen::VectorXd violation = Eigen::VectorXd::Zero(constraint_rows);
+  Eigen::VectorXd tolerance = Eigen::VectorXd::Constant(constraint_rows, 2e-6);
+  const auto [lower, upper] = make_extended_test_bounds(horizon);
+  const int acceleration_variable = state_rows +
+    multi_purpose_mpc_ros::mpcc_progress::kExtendedAccelerationIndex;
+  const int curvature_variable = state_rows +
+    multi_purpose_mpc_ros::mpcc_progress::kExtendedCurvatureIndex;
+  primal[acceleration_variable] = 1.3700012;
+  primal[curvature_variable] = -0.500001;
+  violation[state_rows + acceleration_variable] = 1.2e-6;
+  violation[state_rows + curvature_variable] = 1e-6;
+
+  const auto normalized =
+    multi_purpose_mpc_ros::mpcc_progress::normalize_extended_execution_primal(
+    primal, lower, upper, violation, tolerance, horizon);
+
+  EXPECT_EQ(
+    normalized.reason,
+    multi_purpose_mpc_ros::mpcc_progress::
+    ExtendedExecutionPrimalNormalizationReason::Accepted);
+  EXPECT_EQ(normalized.normalized_value_count, 2U);
+  EXPECT_NEAR(normalized.maximum_adjustment, 1.2e-6, 1e-12);
+  EXPECT_DOUBLE_EQ(normalized.primal[acceleration_variable], 1.37);
+  EXPECT_DOUBLE_EQ(normalized.primal[curvature_variable], -0.5);
 }
 
 TEST(MpccProgress, RejectsSemanticBoundaryOutsideCertifiedRowTolerance)
@@ -452,6 +526,7 @@ TEST(MpccProgress, RejectsSemanticBoundaryOutsideCertifiedRowTolerance)
   Eigen::VectorXd primal = Eigen::VectorXd::Zero(variable_rows);
   Eigen::VectorXd violation = Eigen::VectorXd::Zero(constraint_rows);
   Eigen::VectorXd tolerance = Eigen::VectorXd::Constant(constraint_rows, 1e-5);
+  const auto [lower, upper] = make_extended_test_bounds(horizon);
   const int virtual_speed_variable = state_rows +
     multi_purpose_mpc_ros::mpcc_progress::kExtendedVirtualProgressSpeedIndex;
   primal[virtual_speed_variable] = -2e-5;
@@ -459,7 +534,7 @@ TEST(MpccProgress, RejectsSemanticBoundaryOutsideCertifiedRowTolerance)
 
   const auto rejected =
     multi_purpose_mpc_ros::mpcc_progress::normalize_extended_execution_primal(
-    primal, violation, tolerance, horizon);
+    primal, lower, upper, violation, tolerance, horizon);
 
   EXPECT_EQ(
     rejected.reason,
@@ -487,6 +562,7 @@ TEST(MpccProgress, RejectsMalformedSemanticBoundaryResidualProvenance)
   const auto rejected =
     multi_purpose_mpc_ros::mpcc_progress::normalize_extended_execution_primal(
     Eigen::VectorXd::Zero(variable_rows), Eigen::VectorXd::Zero(1),
+    Eigen::VectorXd::Zero(1), Eigen::VectorXd::Zero(1),
     Eigen::VectorXd::Zero(1), horizon);
 
   EXPECT_EQ(

@@ -16,6 +16,10 @@ namespace multi_purpose_mpc_ros::canonical_retained_world_revalidation
 namespace retained = canonical_retained_revalidation;
 namespace plan = canonical_execution_plan;
 
+/// Course-frame endpoint tolerance shared by retained current-world proof and
+/// the prediction reconstructed from that same proof.
+inline constexpr double kCourseFrameIdentityToleranceM = 1e-9;
+
 struct EmptyDynamicObstacleObservation
 {
   std::uint64_t observation_generation{};

@@ -1777,6 +1777,41 @@ oriented footprintと設定wall marginを確認するexact certificateを置き�
 真正なswept failure 2件である。Track/Cruise出力は引き続き`authority=shadow, selected=0`とし、
 first-stage reachabilityとunsafe current poseからのhandoff契約を解決するまで昇格しない。
 
+#### Track/Cruise canonical production authority（2026-08-23、2025由来の暫定）
+
+Gate Aのfresh canonical実行証明とGate Bのcurrent-world retained再証明を取得したため、既存の
+`progress_contouring_mpcc_overtake_only=true`移行境界におけるTrack/Cruise通常出力を5-state
+canonical MPCCへ昇格する。通常権限の選択順は、当周期の物理証明済みfresh plan、現在pose・現在
+course frame・現在の空障害物観測で再証明したretained plan、明示Emergency Stopだけである。
+eligibleなTrack/Cruise周期ではextended解をlegacy 3-state配列へ変換せず、3-state/legacy solve、
+extended handoff smoothing、solver crawl、bounded continuationを通常fallbackとして使用しない。
+Follow、Hold、Stop、Overtake、RecoveryはこのSliceの対象外で、既存経路を維持する。
+
+canonical commandは予測速度、最適化加速度、曲率、タイヤ角、仮想進捗速度を別々に保持する。
+callbackは通常canonical出力に速度誤差由来の加速度再計算、加速度low-pass、操舵low-pass、操舵rate
+limiterを重ねない。設定済み物理上下限によって値が変わる場合はcanonical labelを維持してclipせず
+fail closeする。5-stateモデルと物理証明が使用したタイヤ角は、canonical normalおよびcanonical
+Emergency Stopでは`steering_tire_angle_gain_var`を再適用せず、そのままpublisherへ渡す。legacy
+normal pathだけは移行期間中の既存actuator calibrationを維持する。Stuck Recoveryはcanonical
+command全体を置換できる上位supervisorとして残し、Recovery側の既存操舵規約を使用する。
+
+final execution traceはproblem/solution fingerprintに加え、execution plan ID、当周期の
+execution-certificate decision ID、fresh/retained sourceを保持する。retained planの元solve decision
+と、現在世界で実行を再証明したdecisionは別IDとして扱い、後者がpublish周期と一致しなければ
+canonical normal sourceとして記録しない。fresh planはcommand・predictionまで構築できた後だけ
+atomic retained storeを置換し、後段拒否で直前の実行可能planを破壊しない。
+
+この昇格はTrack/Cruise限定のSliceであり、パラメータ調整や新規fallback追加ではない。動的受入では
+6周反復、fresh/retained/Emergency source、legacy normal source 0回、formulation switch 0回、
+callback overrun、wall/contact、Recoveryを確認してから次のintentへ進む。
+
+`output/20260823-062054`と`output/20260823-064933`では各3周を完走し、canonical normalとEmergency
+Stopのraw/published操舵角一致、最終actuation差0、legacy normal source 0を確認した。一方、単位が
+混在するQPでOSQPのglobal terminationを通過しても、実行に使う曲率・加速度・予測速度の行が固有
+toleranceを超える周期が残る。その周期は後段でfail closeしており、安全証明を緩めて採用しては
+ならない。全constraint rowの一括scaleは`output/20260823-063519`で収束率0%へ退行したため撤回済み
+である。この数値定式化は別Sliceでfailure-firstに扱い、本Sliceへsolver設定調整やfallbackを混ぜない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

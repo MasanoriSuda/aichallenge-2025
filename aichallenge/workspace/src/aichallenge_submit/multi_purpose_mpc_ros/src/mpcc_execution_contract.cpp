@@ -694,6 +694,119 @@ CanonicalNormalAuthorityResolution resolve_canonical_normal_authority(
   return resolution;
 }
 
+const char * to_string(const CanonicalNormalCommandReason reason) noexcept
+{
+  switch (reason) {
+    case CanonicalNormalCommandReason::Available: return "available";
+    case CanonicalNormalCommandReason::EmergencyAuthority:
+      return "emergency-authority";
+    case CanonicalNormalCommandReason::IncompleteAuthorityIdentity:
+      return "incomplete-authority-identity";
+    case CanonicalNormalCommandReason::InvalidActuation:
+      return "invalid-actuation";
+  }
+  return "unknown";
+}
+
+CanonicalNormalCommandResult build_canonical_normal_command(
+  const CanonicalNormalAuthorityResolution & authority,
+  const CanonicalActuation & actuation) noexcept
+{
+  CanonicalNormalCommandResult result;
+  if (authority.source == CanonicalNormalAuthoritySource::EmergencyStop) {
+    result.reason = CanonicalNormalCommandReason::EmergencyAuthority;
+    return result;
+  }
+  if (
+    !authority.problem.has_value() || !authority.solution.has_value() ||
+    !problem_context_complete(authority.problem.value()) ||
+    !solution_certified(authority.solution.value()) ||
+    authority.execution_plan_id == 0U ||
+    authority.execution_certificate_decision_id == 0U ||
+    authority.problem->formulation != Formulation::VelocityProgress5State ||
+    authority.solution->formulation != Formulation::VelocityProgress5State ||
+    authority.solution->problem_fingerprint != authority.problem->fingerprint)
+  {
+    result.reason = CanonicalNormalCommandReason::IncompleteAuthorityIdentity;
+    return result;
+  }
+  if (
+    !std::isfinite(actuation.predicted_speed_mps) ||
+    actuation.predicted_speed_mps < 0.0 ||
+    !std::isfinite(actuation.acceleration_mps2) ||
+    !std::isfinite(actuation.curvature_radpm) ||
+    !std::isfinite(actuation.steering_tire_angle_rad) ||
+    !std::isfinite(actuation.virtual_progress_speed_mps) ||
+    actuation.virtual_progress_speed_mps < 0.0)
+  {
+    result.reason = CanonicalNormalCommandReason::InvalidActuation;
+    return result;
+  }
+
+  result.command = CanonicalNormalCommand{
+    authority.execution_certificate_decision_id,
+    authority.execution_plan_id,
+    authority.execution_certificate_decision_id,
+    authority.problem->fingerprint,
+    authority.solution->solution_id,
+    authority.source,
+    authority.problem->intent,
+    authority.problem->formulation,
+    authority.retained_solution,
+    actuation.predicted_speed_mps,
+    actuation.acceleration_mps2,
+    actuation.curvature_radpm,
+    actuation.steering_tire_angle_rad,
+    actuation.virtual_progress_speed_mps};
+  result.reason = CanonicalNormalCommandReason::Available;
+  return result;
+}
+
+bool canonical_normal_command_matches_actuation(
+  const CanonicalNormalCommand & command, const double target_speed_mps,
+  const double acceleration_mps2,
+  const double steering_tire_angle_rad) noexcept
+{
+  return
+    command.source != CanonicalNormalAuthoritySource::EmergencyStop &&
+    std::isfinite(target_speed_mps) &&
+    std::isfinite(acceleration_mps2) &&
+    std::isfinite(steering_tire_angle_rad) &&
+    target_speed_mps == command.predicted_speed_mps &&
+    acceleration_mps2 == command.acceleration_mps2 &&
+    steering_tire_angle_rad == command.steering_tire_angle_rad;
+}
+
+std::optional<double> resolve_published_steering_tire_angle(
+  const double model_steering_tire_angle_rad,
+  const double legacy_actuator_gain,
+  const bool canonical_normal_authority) noexcept
+{
+  if (
+    !std::isfinite(model_steering_tire_angle_rad) ||
+    !std::isfinite(legacy_actuator_gain) || legacy_actuator_gain <= 0.0)
+  {
+    return std::nullopt;
+  }
+  const double published = canonical_normal_authority ?
+    model_steering_tire_angle_rad :
+    model_steering_tire_angle_rad * legacy_actuator_gain;
+  if (!std::isfinite(published)) {
+    return std::nullopt;
+  }
+  return published;
+}
+
+bool canonical_track_cruise_uses_physical_steering(
+  const bool canonical_normal_authority,
+  const bool canonical_emergency_stop,
+  const bool recovery_override) noexcept
+{
+  return
+    !recovery_override &&
+    (canonical_normal_authority || canonical_emergency_stop);
+}
+
 const char * to_string(const FinalAuthorityClass authority) noexcept
 {
   switch (authority) {
@@ -782,6 +895,34 @@ FinalControlDecision resolve_final_control_decision(
     decision.reason = "problem-solution-formulation-mismatch";
     return decision;
   }
+  if (request.problem->formulation == Formulation::VelocityProgress5State) {
+    if (!request.canonical_normal_command.has_value()) {
+      decision.reason = "missing-canonical-command-identity";
+      return decision;
+    }
+    const auto & command = request.canonical_normal_command.value();
+    const auto expected_source = request.retained_solution ?
+      CanonicalNormalAuthoritySource::RetainedCertified :
+      CanonicalNormalAuthoritySource::FreshCertified;
+    if (
+      command.decision_id != request.decision_id ||
+      command.execution_certificate_decision_id != request.decision_id ||
+      command.execution_plan_id == 0U ||
+      command.problem_fingerprint != request.problem->fingerprint ||
+      command.solution_id != request.solution->solution_id ||
+      command.formulation != request.problem->formulation ||
+      command.intent != request.problem->intent ||
+      command.retained_solution != request.retained_solution ||
+      command.source != expected_source)
+    {
+      decision.reason = "canonical-command-identity-mismatch";
+      return decision;
+    }
+    decision.execution_plan_id = command.execution_plan_id;
+    decision.execution_certificate_decision_id =
+      command.execution_certificate_decision_id;
+    decision.canonical_source = command.source;
+  }
   decision.identity_complete = true;
   decision.canonical_contract_satisfied =
     request.problem->formulation == Formulation::VelocityProgress5State;
@@ -804,6 +945,10 @@ std::string format_final_control_decision(
          << ", formulation=" << to_string(decision.formulation)
          << ", problem=" << fingerprint_text(decision.problem_fingerprint)
          << ", solution=" << decision.solution_id
+         << ", plan=" << decision.execution_plan_id
+         << ", execution_certificate_decision="
+         << decision.execution_certificate_decision_id
+         << ", canonical_source=" << to_string(decision.canonical_source)
          << ", retained=" << (decision.retained_solution ? 1 : 0)
          << ", identity=" << (decision.identity_complete ? "complete" : "incomplete")
          << ", canonical="

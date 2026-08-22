@@ -47,5 +47,6 @@ fallback.
 ## Approval boundary
 
 Connecting this resolver to `publish_control_command()` and deleting the Track/Cruise legacy branch
-changes the vehicle's production command authority.  That implementation is intentionally pending
-explicit user approval.
+changes the vehicle's production command authority. The user explicitly approved that promotion on
+2026-08-23. Implementation and dynamic acceptance remain bounded by this document; the approval does
+not authorize Follow/Overtake promotion or parameter tuning.

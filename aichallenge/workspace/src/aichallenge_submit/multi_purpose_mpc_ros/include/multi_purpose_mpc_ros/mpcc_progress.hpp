@@ -164,6 +164,8 @@ enum class ExtendedExecutionPrimalBoundaryField
 {
   None,
   PredictedVelocity,
+  Acceleration,
+  Curvature,
   VirtualProgressSpeed,
 };
 
@@ -197,11 +199,15 @@ const char * extended_execution_primal_boundary_field_name(
 
 /// Convert a numerically certified five-state QP primal into a semantic
 /// execution artifact.  Raw solver values are preserved by the caller for
-/// residual telemetry and warm start.  Only non-negative semantic fields
-/// whose exact identity box row is within its recorded tolerance may be
-/// projected from a small negative value to zero.
+/// residual telemetry and warm start.  Every state/input field used by the
+/// normal command or execution horizon is projected to its exact QP box bound
+/// only when the corresponding certified row is within its recorded
+/// tolerance.  This keeps solver certification, execution and publication on
+/// one actuator-bound contract.
 ExtendedExecutionPrimalNormalization normalize_extended_execution_primal(
   const Eigen::VectorXd & primal,
+  const Eigen::VectorXd & constraint_lower,
+  const Eigen::VectorXd & constraint_upper,
   const Eigen::VectorXd & constraint_violation,
   const Eigen::VectorXd & constraint_tolerance,
   int horizon_size) noexcept;

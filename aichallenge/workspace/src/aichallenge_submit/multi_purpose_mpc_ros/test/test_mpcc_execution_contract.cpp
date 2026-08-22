@@ -89,6 +89,30 @@ contract::CanonicalNormalCandidate make_canonical_candidate(
   return candidate;
 }
 
+contract::CanonicalNormalCommand make_normal_command(
+  const contract::MpccProblemContext & context,
+  const contract::CertifiedMpccSolution & solution,
+  const std::uint64_t current_decision_id = 42U,
+  const bool retained = false)
+{
+  return contract::CanonicalNormalCommand{
+    current_decision_id,
+    23U,
+    current_decision_id,
+    context.fingerprint,
+    solution.solution_id,
+    retained ? contract::CanonicalNormalAuthoritySource::RetainedCertified :
+    contract::CanonicalNormalAuthoritySource::FreshCertified,
+    context.intent,
+    context.formulation,
+    retained,
+    7.5,
+    0.8,
+    -0.12,
+    -0.31,
+    7.7};
+}
+
 }  // namespace
 
 TEST(MpccExecutionContract, FingerprintIsStableAndSensitiveToContext)
@@ -371,29 +395,36 @@ TEST(MpccExecutionContract, CertifiedSolutionRequiresEveryCertificate)
 
 TEST(MpccExecutionContract, AcceptsMatchingCertifiedNormalDecision)
 {
-  const auto context = make_context();
+  const auto context = make_track_context();
   const auto solution = make_solution(context);
+  const auto command = make_normal_command(context, solution);
   const auto decision = contract::resolve_final_control_decision(
     contract::FinalControlDecisionRequest{
       42U, contract::FinalAuthorityClass::CertifiedNormalSolution,
-      "mpc-solution", context, solution});
+      "mpc-solution", context, solution, false, command});
 
   EXPECT_TRUE(decision.identity_complete);
   EXPECT_TRUE(decision.canonical_contract_satisfied);
   EXPECT_EQ(decision.problem_fingerprint, context.fingerprint);
   EXPECT_EQ(decision.solution_id, solution.solution_id);
+  EXPECT_EQ(decision.execution_plan_id, 23U);
+  EXPECT_EQ(decision.execution_certificate_decision_id, 42U);
+  EXPECT_EQ(
+    decision.canonical_source,
+    contract::CanonicalNormalAuthoritySource::FreshCertified);
   EXPECT_EQ(decision.reason, "matching-certified-solution");
 }
 
 TEST(MpccExecutionContract, RejectsMismatchedSolutionIdentity)
 {
-  const auto context = make_context();
+  const auto context = make_track_context();
   auto solution = make_solution(context);
+  const auto command = make_normal_command(context, solution);
   solution.problem_fingerprint += 1U;
   const auto decision = contract::resolve_final_control_decision(
     contract::FinalControlDecisionRequest{
       42U, contract::FinalAuthorityClass::CertifiedNormalSolution,
-      "mpc-solution", context, solution});
+      "mpc-solution", context, solution, false, command});
 
   EXPECT_FALSE(decision.identity_complete);
   EXPECT_FALSE(decision.canonical_contract_satisfied);
@@ -422,18 +453,56 @@ TEST(MpccExecutionContract, IdentifiesCertifiedNoncanonicalFormulation)
 
 TEST(MpccExecutionContract, RetainedSolutionKeepsOriginalProblemIdentity)
 {
-  const auto context = make_context();
+  const auto context = make_track_context();
   const auto solution = make_solution(context);
+  const auto command = make_normal_command(context, solution, 99U, true);
   const auto decision = contract::resolve_final_control_decision(
     contract::FinalControlDecisionRequest{
       99U, contract::FinalAuthorityClass::CertifiedNormalSolution,
-      "mpc-solution", context, solution, true});
+      "mpc-solution", context, solution, true, command});
 
   EXPECT_TRUE(decision.identity_complete);
   EXPECT_TRUE(decision.canonical_contract_satisfied);
   EXPECT_TRUE(decision.retained_solution);
   EXPECT_EQ(decision.problem_fingerprint, context.fingerprint);
   EXPECT_EQ(decision.solution_id, solution.solution_id);
+  EXPECT_EQ(decision.execution_plan_id, 23U);
+  EXPECT_EQ(decision.execution_certificate_decision_id, 99U);
+  EXPECT_EQ(
+    decision.canonical_source,
+    contract::CanonicalNormalAuthoritySource::RetainedCertified);
+}
+
+TEST(MpccExecutionContract, RejectsCanonicalFinalDecisionWithoutCommandIdentity)
+{
+  const auto context = make_track_context();
+  const auto solution = make_solution(context);
+
+  const auto decision = contract::resolve_final_control_decision(
+    contract::FinalControlDecisionRequest{
+      42U, contract::FinalAuthorityClass::CertifiedNormalSolution,
+      "mpc-solution", context, solution});
+
+  EXPECT_FALSE(decision.identity_complete);
+  EXPECT_FALSE(decision.canonical_contract_satisfied);
+  EXPECT_EQ(decision.reason, "missing-canonical-command-identity");
+}
+
+TEST(MpccExecutionContract, RejectsRetainedFinalDecisionWithoutCurrentWorldProofIdentity)
+{
+  const auto context = make_track_context();
+  const auto solution = make_solution(context);
+  auto command = make_normal_command(context, solution, 99U, true);
+  command.execution_certificate_decision_id = 98U;
+
+  const auto decision = contract::resolve_final_control_decision(
+    contract::FinalControlDecisionRequest{
+      99U, contract::FinalAuthorityClass::CertifiedNormalSolution,
+      "mpc-solution", context, solution, true, command});
+
+  EXPECT_FALSE(decision.identity_complete);
+  EXPECT_FALSE(decision.canonical_contract_satisfied);
+  EXPECT_EQ(decision.reason, "canonical-command-identity-mismatch");
 }
 
 TEST(MpccExecutionContract, ExposesLegacyBypassWithoutCallingItCanonical)
@@ -494,6 +563,87 @@ TEST(MpccExecutionContract, CanonicalNormalAuthoritySelectsFreshCurrentDecision)
   EXPECT_EQ(resolution.execution_certificate_decision_id, 42U);
   EXPECT_EQ(resolution.execution_first_control_stage_index, 0U);
   EXPECT_FALSE(resolution.retained_solution);
+}
+
+TEST(MpccExecutionContract, BuildsFreshCanonicalCommandWithoutFlatteningActuation)
+{
+  const auto resolution = contract::resolve_canonical_normal_authority(
+    contract::CanonicalNormalAuthorityRequest{
+      42U, 12.0, make_canonical_candidate(), {},
+      contract::ControlIntent::Track});
+  const contract::CanonicalActuation actuation{
+    7.5, 0.8, -0.12, -0.31, 7.7};
+
+  const auto result = contract::build_canonical_normal_command(
+    resolution, actuation);
+
+  ASSERT_TRUE(result.command.has_value());
+  EXPECT_EQ(result.reason, contract::CanonicalNormalCommandReason::Available);
+  EXPECT_EQ(result.command->decision_id, 42U);
+  EXPECT_EQ(result.command->execution_plan_id, 23U);
+  EXPECT_EQ(
+    result.command->source,
+    contract::CanonicalNormalAuthoritySource::FreshCertified);
+  EXPECT_EQ(result.command->intent, contract::ControlIntent::Track);
+  EXPECT_DOUBLE_EQ(result.command->predicted_speed_mps, 7.5);
+  EXPECT_DOUBLE_EQ(result.command->acceleration_mps2, 0.8);
+  EXPECT_DOUBLE_EQ(result.command->curvature_radpm, -0.12);
+  EXPECT_DOUBLE_EQ(result.command->steering_tire_angle_rad, -0.31);
+  EXPECT_DOUBLE_EQ(result.command->virtual_progress_speed_mps, 7.7);
+}
+
+TEST(MpccExecutionContract, BuildsRetainedCanonicalCommandWithOriginalPlanIdentity)
+{
+  const auto resolution = contract::resolve_canonical_normal_authority(
+    contract::CanonicalNormalAuthorityRequest{
+      99U, 12.0, {}, make_canonical_candidate(41U, 2U, 99U),
+      contract::ControlIntent::Track});
+  const contract::CanonicalActuation actuation{
+    6.2, -0.4, 0.08, 0.19, 6.0};
+
+  const auto result = contract::build_canonical_normal_command(
+    resolution, actuation);
+
+  ASSERT_TRUE(result.command.has_value());
+  EXPECT_EQ(result.command->decision_id, 99U);
+  EXPECT_EQ(result.command->execution_plan_id, 23U);
+  EXPECT_EQ(
+    result.command->source,
+    contract::CanonicalNormalAuthoritySource::RetainedCertified);
+  EXPECT_TRUE(result.command->retained_solution);
+}
+
+TEST(MpccExecutionContract, EmergencyAuthorityCannotProduceNormalCommand)
+{
+  const auto resolution = contract::resolve_canonical_normal_authority(
+    contract::CanonicalNormalAuthorityRequest{
+      42U, 12.0, {}, {}, contract::ControlIntent::Cruise});
+
+  const auto result = contract::build_canonical_normal_command(
+    resolution, contract::CanonicalActuation{1.0, 0.0, 0.0, 0.0, 1.0});
+
+  EXPECT_FALSE(result.command.has_value());
+  EXPECT_EQ(
+    result.reason,
+    contract::CanonicalNormalCommandReason::EmergencyAuthority);
+}
+
+TEST(MpccExecutionContract, DetectsPostprocessorMutationOfCanonicalCommand)
+{
+  const auto resolution = contract::resolve_canonical_normal_authority(
+    contract::CanonicalNormalAuthorityRequest{
+      42U, 12.0, make_canonical_candidate(), {},
+      contract::ControlIntent::Track});
+  const auto result = contract::build_canonical_normal_command(
+    resolution, contract::CanonicalActuation{7.5, 0.8, -0.12, -0.31, 7.7});
+  ASSERT_TRUE(result.command.has_value());
+
+  EXPECT_TRUE(contract::canonical_normal_command_matches_actuation(
+      result.command.value(), 7.5, 0.8, -0.31));
+  EXPECT_FALSE(contract::canonical_normal_command_matches_actuation(
+      result.command.value(), 7.5, 0.79, -0.31));
+  EXPECT_FALSE(contract::canonical_normal_command_matches_actuation(
+      result.command.value(), 7.5, 0.8, -0.30));
 }
 
 TEST(MpccExecutionContract, CanonicalNormalAuthorityFallsBackOnlyToRetainedCanonical)
@@ -793,4 +943,44 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsInvalidRequestTime)
   EXPECT_EQ(
     resolution.reason,
     contract::CanonicalNormalAuthorityReason::InvalidRequest);
+}
+
+TEST(MpccExecutionContract, CanonicalPublicationPreservesCertifiedPhysicalSteering)
+{
+  const auto published = contract::resolve_published_steering_tire_angle(
+    0.21, 1.5, true);
+
+  ASSERT_TRUE(published.has_value());
+  EXPECT_DOUBLE_EQ(published.value(), 0.21);
+}
+
+TEST(MpccExecutionContract, LegacyPublicationRetainsActuatorCalibrationDuringMigration)
+{
+  const auto published = contract::resolve_published_steering_tire_angle(
+    0.21, 1.5, false);
+
+  ASSERT_TRUE(published.has_value());
+  EXPECT_DOUBLE_EQ(published.value(), 0.315);
+}
+
+TEST(MpccExecutionContract, PublicationRejectsInvalidSteeringContract)
+{
+  EXPECT_FALSE(contract::resolve_published_steering_tire_angle(
+    std::numeric_limits<double>::quiet_NaN(), 1.5, true).has_value());
+  EXPECT_FALSE(contract::resolve_published_steering_tire_angle(
+    0.21, 0.0, false).has_value());
+}
+
+TEST(MpccExecutionContract, CanonicalEmergencyKeepsPhysicalSteeringConvention)
+{
+  EXPECT_TRUE(contract::canonical_track_cruise_uses_physical_steering(
+      false, true, false));
+  EXPECT_TRUE(contract::canonical_track_cruise_uses_physical_steering(
+      true, false, false));
+  EXPECT_FALSE(contract::canonical_track_cruise_uses_physical_steering(
+      false, false, false));
+  EXPECT_FALSE(contract::canonical_track_cruise_uses_physical_steering(
+      true, false, true));
+  EXPECT_FALSE(contract::canonical_track_cruise_uses_physical_steering(
+      false, true, true));
 }

@@ -5682,6 +5682,12 @@ struct TrackCruiseShadowCycleResult
   double execution_primal_rejected_tolerance{
     std::numeric_limits<double>::quiet_NaN()};
   std::optional<mpcc_progress::ActuationProposal> actuation_proposal;
+  std::optional<mpcc_contract::CanonicalNormalCommand> selected_command;
+  std::optional<mpcc_contract::MpccProblemContext> selected_problem;
+  std::optional<mpcc_contract::CertifiedMpccSolution> selected_solution;
+  std::shared_ptr<const canonical_plan::CanonicalExecutionPlan> selected_plan;
+  canonical_plan::CanonicalExecutionCursor selected_cursor;
+  std::pair<std::vector<double>, std::vector<double>> selected_prediction;
   canonical_plan_adapter::CanonicalPlanExtractionReason canonical_extraction_reason{
     canonical_plan_adapter::CanonicalPlanExtractionReason::InvalidMetadata};
   canonical_plan::CanonicalExecutionPlanStoreReason canonical_store_reason{
@@ -5719,6 +5725,28 @@ struct TrackCruiseShadowCycleResult
   std::string status{"not-eligible"};
   std::string detail{"not-evaluated"};
   std::string retained_detail{"not-attempted"};
+};
+
+struct MpcControlCycleResult
+{
+  Eigen::Vector2d control{Eigen::Vector2d::Zero()};
+  double maximum_steering_rad{};
+  std::optional<mpcc_contract::CanonicalNormalCommand> canonical_normal_command;
+  bool canonical_emergency_stop{false};
+
+  MpcControlCycleResult() = default;
+
+  MpcControlCycleResult(
+    const Eigen::Vector2d & control_in, const double maximum_steering_rad_in)
+  : control(control_in), maximum_steering_rad(maximum_steering_rad_in)
+  {
+  }
+
+  MpcControlCycleResult(
+    const std::pair<Eigen::Vector2d, double> & legacy_control)
+  : control(legacy_control.first), maximum_steering_rad(legacy_control.second)
+  {
+  }
 };
 
 struct TrackCruiseShadowTelemetryWindow
@@ -7157,11 +7185,11 @@ struct MPC
       std::max<std::uint64_t>(1U, window.joined_count));
     RCLCPP_INFO(
       rclcpp::get_logger("mpc_controller"),
-      "Track/Cruise MPCC shadow actuation join: joined=%zu, rejected=%zu, "
+      "Track/Cruise MPCC production actuation join: joined=%zu, rejected=%zu, "
       "predicted_speed_vs_final_target=%.3f/%.3f(avg/max)mps, "
       "optimized_acceleration_vs_final=%.3f/%.3f(avg/max)mps2, "
       "optimized_steering_vs_final=%.4f/%.4f(avg/max)rad, "
-      "authority=shadow, selected=0",
+      "authority=production, selected=1",
       static_cast<std::size_t>(window.joined_count),
       static_cast<std::size_t>(window.rejected_count),
       window.total_predicted_speed_vs_final_target_difference_mps / joined,
@@ -21017,6 +21045,81 @@ struct MPC
     return path;
   }
 
+  std::optional<std::pair<std::vector<double>, std::vector<double>>>
+  build_canonical_world_prediction(
+    const canonical_plan::CanonicalExecutionPlan & plan,
+    const canonical_plan::CanonicalExecutionCursor & cursor,
+    const std::vector<mpc_stage_geometry::CourseFrameKnot> & course_frame_knots,
+    const double course_frame_tolerance_m,
+    std::string & reject_reason)
+    const
+  {
+    reject_reason.clear();
+    if (
+      !cursor.available || cursor.plan_id != plan.plan_id ||
+      cursor.first_control_stage_index >= plan.control_stages.size() ||
+      cursor.first_control_stage_index + 1U >= plan.predicted_states.size() ||
+      course_frame_knots.empty() || !std::isfinite(course_frame_tolerance_m) ||
+      course_frame_tolerance_m < 0.0)
+    {
+      std::ostringstream detail;
+      detail << "canonical prediction identity invalid: cursor="
+             << (cursor.available ? 1 : 0)
+             << ", cursor_plan=" << cursor.plan_id
+             << ", plan=" << plan.plan_id
+             << ", first_control=" << cursor.first_control_stage_index
+             << ", controls=" << plan.control_stages.size()
+             << ", states=" << plan.predicted_states.size()
+             << ", knots=" << course_frame_knots.size()
+             << ", tolerance=" << course_frame_tolerance_m;
+      reject_reason = detail.str();
+      return std::nullopt;
+    }
+    std::pair<std::vector<double>, std::vector<double>> prediction;
+    const std::size_t first_state = cursor.first_control_stage_index + 1U;
+    prediction.first.reserve(plan.predicted_states.size() - first_state);
+    prediction.second.reserve(plan.predicted_states.size() - first_state);
+    for (std::size_t index = first_state; index < plan.predicted_states.size(); ++index) {
+      const auto & state = plan.predicted_states[index];
+      const auto frame = mpc_stage_geometry::sample_course_frame(
+        course_frame_knots, state.progress_m, course_frame_tolerance_m);
+      if (!frame.has_value()) {
+        std::ostringstream detail;
+        detail << "canonical course frame unavailable: state=" << index
+               << ", progress=" << std::setprecision(17) << state.progress_m
+               << ", range=[" << course_frame_knots.front().progress_m
+               << "," << course_frame_knots.back().progress_m << "]"
+               << ", tolerance=" << course_frame_tolerance_m
+               << ", knots=" << course_frame_knots.size();
+        reject_reason = detail.str();
+        return std::nullopt;
+      }
+      const auto world = mpcc_contract::reconstruct_planar_pose_from_frenet(
+        mpcc_contract::PlanarPose{
+          frame->x_m, frame->y_m, frame->heading_rad},
+        mpcc_contract::FrenetPose{
+          state.lateral_m, state.lag_m, state.heading_offset_rad});
+      if (!world.has_value()) {
+        std::ostringstream detail;
+        detail << "canonical Frenet reconstruction unavailable: state=" << index
+               << ", lateral=" << state.lateral_m
+               << ", lag=" << state.lag_m
+               << ", heading=" << state.heading_offset_rad
+               << ", progress=" << state.progress_m;
+        reject_reason = detail.str();
+        return std::nullopt;
+      }
+      prediction.first.push_back(world->x_m);
+      prediction.second.push_back(world->y_m);
+    }
+    if (prediction.first.empty()) {
+      reject_reason = "canonical prediction horizon empty";
+      return std::nullopt;
+    }
+    reject_reason = "accepted";
+    return prediction;
+  }
+
   void evaluate_track_cruise_retained_shadow(
     const MpcProblem & problem, const double now_sec,
     const std::shared_ptr<const canonical_plan::CanonicalExecutionPlan> &
@@ -21184,7 +21287,6 @@ struct MPC
         mpcc_contract::to_string(authority.reason);
       return;
     }
-    result.retained_authority_ready = true;
     const auto actuation = canonical_plan::extract_canonical_actuation(
       *retained_plan, cursor, model->length);
     result.retained_actuation_reason = actuation.reason;
@@ -21193,9 +21295,39 @@ struct MPC
         canonical_plan::to_string(actuation.reason);
       return;
     }
+    const auto & selected_actuation = actuation.actuation.value();
+    const auto command = mpcc_contract::build_canonical_normal_command(
+      authority,
+      mpcc_contract::CanonicalActuation{
+        selected_actuation.predicted_speed_mps,
+        selected_actuation.acceleration_mps2,
+        selected_actuation.curvature_radpm,
+        selected_actuation.steering_tire_angle_rad,
+        selected_actuation.virtual_progress_speed_mps});
+    if (!command.command.has_value()) {
+      result.retained_detail = std::string{"command rejected: "} +
+        mpcc_contract::to_string(command.reason);
+      return;
+    }
+    std::string prediction_reject_reason;
+    const auto prediction = build_canonical_world_prediction(
+      *retained_plan, cursor, course_frame_knots.value(),
+      canonical_retained_world::kCourseFrameIdentityToleranceM,
+      prediction_reject_reason);
+    if (!prediction.has_value()) {
+      result.retained_detail = prediction_reject_reason;
+      return;
+    }
+    result.retained_authority_ready = true;
     result.retained_actuation_extracted = true;
+    result.selected_command = command.command;
+    result.selected_problem = authority.problem;
+    result.selected_solution = authority.solution;
+    result.selected_plan = retained_plan;
+    result.selected_cursor = cursor;
+    result.selected_prediction = prediction.value();
     result.retained_detail =
-      "retained candidate shadow-certified; publisher unchanged";
+      "retained candidate current-world-certified for production";
   }
 
   void record_track_cruise_shadow_telemetry(
@@ -21316,7 +21448,7 @@ struct MPC
       RCLCPP_WARN(
         rclcpp::get_logger("mpc_controller"),
         "Track/Cruise MPCC first-stage reachability: decision=%lu, "
-        "certificate_reason=%s, %s, authority=shadow, selected=0",
+        "certificate_reason=%s, %s, authority=production, selected=0",
         static_cast<unsigned long>(result.decision_id),
         mpcc_contract::physical_wall_certificate_reason_name(
           result.physical_wall_diagnostic.reason),
@@ -21339,7 +21471,7 @@ struct MPC
     }
     if (shadow_status_key != last_track_cruise_shadow_status_) {
       const std::string message =
-        std::string{"Track/Cruise MPCC shadow outcome: decision="} +
+        std::string{"Track/Cruise MPCC production outcome: decision="} +
         std::to_string(result.decision_id) + ", intent=" +
         mpcc_contract::to_string(result.intent) + ", status=" + result.status +
         ", detail=" + result.detail + ", warm=" +
@@ -21360,7 +21492,8 @@ struct MPC
         canonical_retained_world::to_string(result.retained_world_reason) +
         "/" + (result.retained_authority_ready ? "ready" : "unavailable") +
         ", retained_detail=" + result.retained_detail +
-        ", authority=shadow, selected=0";
+        ", authority=production, selected=" +
+        (result.selected_command.has_value() ? "1" : "0");
       if (result.physically_certified) {
         RCLCPP_INFO(rclcpp::get_logger("mpc_controller"), "%s", message.c_str());
       } else {
@@ -21403,7 +21536,7 @@ struct MPC
       std::max<std::uint64_t>(1U, window.difference_sample_count));
     RCLCPP_INFO(
       rclcpp::get_logger("mpc_controller"),
-      "Track/Cruise MPCC shadow: eligible=%zu, metadata=%zu/%.1f%%, "
+      "Track/Cruise MPCC production: eligible=%zu, metadata=%zu/%.1f%%, "
       "build=%zu, attempt=%zu/%.1f%%, solved=%zu/%.1f%%, finite=%zu, "
       "constraint=%zu, execution_primal=%zu, normalized=%zu/%zu/%.9f(cycles/values/max), "
       "proposal=%zu, converted=%zu, physical=%zu, certified=%zu/%.1f%%, "
@@ -21418,7 +21551,7 @@ struct MPC
       "shadow_ms=%.3f/%.3f/%.3f/%.3f(avg/p95/p99/max), "
       "iterations=%.1f/%d(avg/max), model_dv=%.3f/%.3f(avg/max)mps, "
       "model_dsteer=%.4f/%.4f(avg/max)rad, lateral=%.3f/%.3f(rms_avg/max)m, "
-      "last_status=%s, authority=shadow, selected=0",
+      "last_status=%s, authority=production",
       static_cast<std::size_t>(window.eligible_count),
       static_cast<std::size_t>(window.metadata_count),
       100.0 * static_cast<double>(window.metadata_count) / eligible,
@@ -21487,11 +21620,11 @@ struct MPC
     if (window.retained_attempt_count > 0U) {
       RCLCPP_INFO(
         rclcpp::get_logger("mpc_controller"),
-        "Track/Cruise retained MPCC shadow: attempted=%zu, world=%zu, "
+        "Track/Cruise retained MPCC production: attempted=%zu, world=%zu, "
         "candidate=%zu, selector=%zu, actuation=%zu, plan=%lu, vehicles=%zu, "
         "cursor=%s, world_reason=%s, proof_reason=%s, candidate_reason=%s, "
         "selector_reason=%s/%s, actuation_reason=%s, detail=%s, "
-        "authority=shadow, selected=0",
+        "authority=production, selected=%d",
         static_cast<std::size_t>(window.retained_attempt_count),
         static_cast<std::size_t>(window.retained_world_count),
         static_cast<std::size_t>(window.retained_candidate_count),
@@ -21506,18 +21639,17 @@ struct MPC
         mpcc_contract::to_string(result.retained_authority_source),
         mpcc_contract::to_string(result.retained_authority_reason),
         canonical_plan::to_string(result.retained_actuation_reason),
-        result.retained_detail.c_str());
+        result.retained_detail.c_str(),
+        result.retained_authority_ready ? 1 : 0);
     }
     window = TrackCruiseShadowTelemetryWindow{};
     last_track_cruise_shadow_telemetry_log_sec_ = now_sec;
   }
 
   TrackCruiseShadowCycleResult evaluate_track_cruise_shadow(
-    const MpcProblem & problem, const Eigen::VectorXd & production_solution,
-    const double now_sec)
+    const MpcProblem & problem, const double now_sec)
   {
-    constexpr int legacy_nx = 3;
-    constexpr int legacy_nu = 2;
+    constexpr int progress_metadata_nx = 3;
     TrackCruiseShadowCycleResult result;
     result.eligible = problem.track_cruise_shadow_requested;
     result.metadata_available = problem.progress_metadata_available;
@@ -21671,7 +21803,8 @@ struct MPC
 
       const auto execution_primal =
         mpcc_progress::normalize_extended_execution_primal(
-        outcome.result->primal, outcome.result->constraint_violation,
+        outcome.result->primal, extended_problem->l, extended_problem->u,
+        outcome.result->constraint_violation,
         outcome.result->constraint_tolerance, problem.N);
       result.execution_primal_reason = execution_primal.reason;
       result.execution_primal_normalized_value_count =
@@ -21730,8 +21863,10 @@ struct MPC
         path_distance_m.push_back(
           problem.progress_stage_geometry.stages[static_cast<std::size_t>(stage)].
           cumulative_distance_m);
-        lower_bound[stage] = problem.progress_state_lower[(stage + 1) * legacy_nx];
-        upper_bound[stage] = problem.progress_state_upper[(stage + 1) * legacy_nx];
+        lower_bound[stage] =
+          problem.progress_state_lower[(stage + 1) * progress_metadata_nx];
+        upper_bound[stage] =
+          problem.progress_state_upper[(stage + 1) * progress_metadata_nx];
         lower_bound_m.push_back(lower_bound[stage]);
         upper_bound_m.push_back(upper_bound[stage]);
       }
@@ -21751,12 +21886,6 @@ struct MPC
           std::to_string(pose_diagnostic.stage);
         return finish();
       }
-      const auto shadow_solution = mpcc_progress::convert_extended_solution_to_legacy(
-        execution_primal.primal, problem.N, extended_problem->progress_origin_m);
-      // This conversion exists only for legacy-model comparison telemetry.
-      // Canonical extraction and certification below consume the complete
-      // five-state primal directly and must not depend on a lossy 3-state view.
-      result.conversion_succeeded = shadow_solution.has_value();
       AlignedMpccExecutionTrajectory shadow_trajectory{
         0.0, 0.0, pose_trajectory->minimum_lateral_bound_reserve_m,
         pose_trajectory->lateral_m, pose_trajectory->lag_m,
@@ -21854,26 +21983,9 @@ struct MPC
       }
       result.canonical_plan_extracted = true;
       result.canonical_plan_id = canonical_extraction.plan->plan_id;
-      result.canonical_store_reason = track_cruise_shadow_plan_store_.replace(
-        std::move(canonical_extraction.plan.value()));
-      if (
-        result.canonical_store_reason !=
-        canonical_plan::CanonicalExecutionPlanStoreReason::Accepted)
-      {
-        result.status = "canonical-store-reject";
-        result.detail = std::string{"canonical store rejected: "} +
-          canonical_plan::to_string(result.canonical_store_reason);
-        return finish();
-      }
-      result.canonical_plan_stored = true;
-      const auto canonical_plan_snapshot = track_cruise_shadow_plan_store_.snapshot();
-      if (canonical_plan_snapshot == nullptr) {
-        result.status = "canonical-snapshot-reject";
-        result.detail = "accepted canonical store has no snapshot";
-        return finish();
-      }
+      auto canonical_plan_value = std::move(canonical_extraction.plan.value());
       const auto canonical_cursor = canonical_plan::resolve_execution_cursor(
-        *canonical_plan_snapshot, now_sec);
+        canonical_plan_value, now_sec);
       result.canonical_cursor_reason = canonical_cursor.reason;
       if (!canonical_cursor.available) {
         result.status = "canonical-cursor-reject";
@@ -21884,13 +21996,13 @@ struct MPC
       result.canonical_cursor_available = true;
       const canonical_plan::CanonicalExecutionRevalidation current_revalidation{
         result.decision_id,
-        canonical_plan_snapshot->plan_id,
+        canonical_plan_value.plan_id,
         canonical_cursor.first_control_stage_index,
         canonical_cursor.remaining_control_stage_count,
         canonical_solution.physical};
       const auto canonical_candidate =
         canonical_plan::build_canonical_normal_candidate(
-        *canonical_plan_snapshot, canonical_cursor, current_revalidation);
+        canonical_plan_value, canonical_cursor, current_revalidation);
       result.canonical_candidate_reason = canonical_candidate.reason;
       if (!canonical_candidate.candidate.has_value()) {
         result.status = "canonical-candidate-reject";
@@ -21917,9 +22029,8 @@ struct MPC
           mpcc_contract::to_string(canonical_authority.fresh_reject_reason);
         return finish();
       }
-      result.canonical_fresh_authority_ready = true;
       const auto canonical_actuation = canonical_plan::extract_canonical_actuation(
-        *canonical_plan_snapshot, canonical_cursor, model->length);
+        canonical_plan_value, canonical_cursor, model->length);
       result.canonical_actuation_reason = canonical_actuation.reason;
       if (!canonical_actuation.actuation.has_value()) {
         result.status = "canonical-actuation-reject";
@@ -21953,38 +22064,58 @@ struct MPC
         result.detail = "stored canonical actuation differs from direct primal";
         return finish();
       }
-      result.canonical_actuation_extracted = true;
-      const int expected_production_size =
-        legacy_nx * (problem.N + 1) + legacy_nu * problem.N;
-      if (
-        shadow_solution.has_value() &&
-        production_solution.size() == expected_production_size &&
-        production_solution.allFinite())
-      {
-        const int input_offset = legacy_nx * (problem.N + 1);
-        const double production_speed = production_solution[input_offset];
-        const double production_steering = std::atan(
-          production_solution[input_offset + 1] * model->length);
-        const double shadow_speed = (*shadow_solution)[input_offset];
-        const double shadow_steering = std::atan(
-          (*shadow_solution)[input_offset + 1] * model->length);
-        result.predicted_speed_vs_legacy_target_difference_mps = std::abs(
-          shadow_speed - production_speed);
-        result.predicted_steering_vs_legacy_difference_rad = std::abs(
-          shadow_steering - production_steering);
-        double squared_lateral_difference = 0.0;
-        double maximum_lateral_difference = 0.0;
-        for (int stage = 1; stage < problem.N + 1; ++stage) {
-          const double difference = std::abs(
-            (*shadow_solution)[stage * legacy_nx] -
-            production_solution[stage * legacy_nx]);
-          squared_lateral_difference += difference * difference;
-          maximum_lateral_difference = std::max(maximum_lateral_difference, difference);
-        }
-        result.lateral_rms_difference_m = std::sqrt(
-          squared_lateral_difference / static_cast<double>(problem.N));
-        result.lateral_max_difference_m = maximum_lateral_difference;
+      const auto command = mpcc_contract::build_canonical_normal_command(
+        canonical_authority,
+        mpcc_contract::CanonicalActuation{
+          stored_actuation.predicted_speed_mps,
+          stored_actuation.acceleration_mps2,
+          stored_actuation.curvature_radpm,
+          stored_actuation.steering_tire_angle_rad,
+          stored_actuation.virtual_progress_speed_mps});
+      if (!command.command.has_value()) {
+        result.status = "canonical-command-reject";
+        result.detail = std::string{"canonical command rejected: "} +
+          mpcc_contract::to_string(command.reason);
+        return finish();
       }
+      std::string prediction_reject_reason;
+      const auto prediction = build_canonical_world_prediction(
+        canonical_plan_value, canonical_cursor,
+        shadow_trajectory.course_frame_knots, extraction_tolerance,
+        prediction_reject_reason);
+      if (!prediction.has_value()) {
+        result.status = "canonical-prediction-reject";
+        result.detail = prediction_reject_reason;
+        return finish();
+      }
+      // Only a fully executable command may replace retained production
+      // authority.  Failed post-extraction checks cannot poison the store.
+      result.canonical_store_reason = track_cruise_shadow_plan_store_.replace(
+        std::move(canonical_plan_value));
+      if (
+        result.canonical_store_reason !=
+        canonical_plan::CanonicalExecutionPlanStoreReason::Accepted)
+      {
+        result.status = "canonical-store-reject";
+        result.detail = std::string{"canonical store rejected: "} +
+          canonical_plan::to_string(result.canonical_store_reason);
+        return finish();
+      }
+      result.canonical_plan_stored = true;
+      const auto canonical_plan_snapshot = track_cruise_shadow_plan_store_.snapshot();
+      if (canonical_plan_snapshot == nullptr) {
+        result.status = "canonical-snapshot-reject";
+        result.detail = "accepted canonical store has no snapshot";
+        return finish();
+      }
+      result.canonical_fresh_authority_ready = true;
+      result.canonical_actuation_extracted = true;
+      result.selected_command = command.command;
+      result.selected_problem = canonical_authority.problem;
+      result.selected_solution = canonical_authority.solution;
+      result.selected_plan = canonical_plan_snapshot;
+      result.selected_cursor = canonical_cursor;
+      result.selected_prediction = prediction.value();
       result.terminal_progress_m =
         execution_primal.primal[
         problem.N * mpcc_progress::kExtendedStateDimension +
@@ -21992,8 +22123,6 @@ struct MPC
       result.terminal_velocity_mps = execution_primal.primal[
         problem.N * mpcc_progress::kExtendedStateDimension +
         mpcc_progress::kExtendedVelocityIndex];
-      pending_track_cruise_shadow_actuation_ = TrackCruiseShadowPendingActuation{
-        result.decision_id, result.actuation_proposal.value()};
       result.status = "certified";
       result.detail = certificate_reason;
       return finish();
@@ -22892,7 +23021,113 @@ struct MPC
     return {Eigen::Vector2d(speed, steering), std::abs(steering)};
   }
 
-  std::pair<Eigen::Vector2d, double> get_control(
+  MpcControlCycleResult canonical_track_cruise_emergency_stop(
+    const MpcProblem & problem, const std::string & reason)
+  {
+    record_problem_context(
+      problem, mpcc_contract::Formulation::VelocityProgress5State);
+    const double maximum_steering = std::isfinite(cfg.delta_max) ?
+      std::max(0.0, std::abs(cfg.delta_max)) : 0.0;
+    const double steering = std::isfinite(previous_steering) ?
+      clip(previous_steering, -maximum_steering, maximum_steering) : 0.0;
+    current_control = Eigen::VectorXd::Zero(2 * std::max(0, problem.N));
+    for (int stage = 0; stage < problem.N; ++stage) {
+      current_control[2 * stage] = 0.0;
+      current_control[2 * stage + 1] = steering;
+    }
+    current_prediction.first.clear();
+    current_prediction.second.clear();
+    previous_steering = steering;
+    pending_track_cruise_shadow_actuation_.reset();
+    failure_fallback_speed_.reset();
+    last_control_was_fallback_ = true;
+    extended_mode_handoff_.reset();
+    last_control_resolution_reason_ =
+      std::string{"canonical-track-cruise-emergency/"} + reason;
+    MpcControlCycleResult output{Eigen::Vector2d(0.0, steering), std::abs(steering)};
+    output.canonical_emergency_stop = true;
+    return output;
+  }
+
+  MpcControlCycleResult canonical_track_cruise_normal_control(
+    const MpcProblem & problem, const TrackCruiseShadowCycleResult & result)
+  {
+    if (
+      !result.selected_command.has_value() ||
+      !result.selected_problem.has_value() ||
+      !result.selected_solution.has_value() ||
+      result.selected_plan == nullptr || !result.selected_cursor.available ||
+      result.selected_prediction.first.empty() ||
+      result.selected_prediction.first.size() !=
+      result.selected_prediction.second.size())
+    {
+      return canonical_track_cruise_emergency_stop(
+        problem, "selected canonical authority incomplete");
+    }
+    const auto & command = result.selected_command.value();
+    const auto & plan = *result.selected_plan;
+    const std::size_t first_stage = result.selected_cursor.first_control_stage_index;
+    if (
+      first_stage >= plan.control_stages.size() ||
+      first_stage + 1U >= plan.predicted_states.size())
+    {
+      return canonical_track_cruise_emergency_stop(
+        problem, "selected canonical cursor invalid");
+    }
+
+    current_control = Eigen::VectorXd::Zero(2 * std::max(0, problem.N));
+    double maximum_steering = std::abs(command.steering_tire_angle_rad);
+    for (int output_stage = 0; output_stage < problem.N; ++output_stage) {
+      const std::size_t source_stage = std::min(
+        first_stage + static_cast<std::size_t>(output_stage),
+        plan.control_stages.size() - 1U);
+      const std::size_t state_index = std::min(
+        source_stage + 1U, plan.predicted_states.size() - 1U);
+      const double steering = std::atan(
+        model->length * plan.control_stages[source_stage].curvature_radpm);
+      if (
+        !std::isfinite(steering) ||
+        !std::isfinite(plan.predicted_states[state_index].velocity_mps))
+      {
+        return canonical_track_cruise_emergency_stop(
+          problem, "selected canonical horizon nonfinite");
+      }
+      current_control[2 * output_stage] =
+        plan.predicted_states[state_index].velocity_mps;
+      current_control[2 * output_stage + 1] = steering;
+      maximum_steering = std::max(maximum_steering, std::abs(steering));
+    }
+
+    previous_steering = command.steering_tire_angle_rad;
+    current_prediction = result.selected_prediction;
+    last_problem_context_ = result.selected_problem;
+    last_solution_contract_ = result.selected_solution;
+    last_solution_is_retained_ = command.retained_solution;
+    failure_fallback_speed_.reset();
+    infeasibility_counter = 0;
+    overtake_infeasibility_counter_ = 0;
+    last_control_was_fallback_ = false;
+    extended_mode_handoff_.reset();
+    pending_track_cruise_shadow_actuation_ = TrackCruiseShadowPendingActuation{
+      command.decision_id,
+      mpcc_progress::ActuationProposal{
+        command.predicted_speed_mps,
+        command.acceleration_mps2,
+        command.curvature_radpm,
+        command.steering_tire_angle_rad,
+        command.virtual_progress_speed_mps}};
+    last_control_resolution_reason_ = command.retained_solution ?
+      "canonical-track-cruise-retained" : "canonical-track-cruise-fresh";
+    last_solved_wp_id = problem.tracking_wp_id;
+    MpcControlCycleResult output{
+      Eigen::Vector2d(
+        command.predicted_speed_mps, command.steering_tire_angle_rad),
+      maximum_steering};
+    output.canonical_normal_command = command;
+    return output;
+  }
+
+  MpcControlCycleResult get_control(
     const double now_sec, const std::uint64_t decision_id)
   {
     constexpr int nx = 3;
@@ -22980,6 +23215,10 @@ struct MPC
             problem.lateral_bounds_contract_failure_reason),
           to_string(overtake_line_state_.phase),
           overtake_line_state_.target_vehicle_id.c_str(), model->wp_id);
+        if (problem.track_cruise_shadow_requested) {
+          return canonical_track_cruise_emergency_stop(
+            problem, "invalid lateral bound contract");
+        }
         return safe_failure_control("invalid lateral bound contract", now_sec);
       }
       if (low_speed_shift_control_active_) {
@@ -22987,6 +23226,19 @@ struct MPC
           problem, mpcc_contract::Formulation::LowSpeedDirect);
         last_control_resolution_reason_ = "low-speed-direct-control";
         return low_speed_shift_control(tracking_waypoint);
+      }
+      if (problem.track_cruise_shadow_requested) {
+        record_problem_context(
+          problem, mpcc_contract::Formulation::VelocityProgress5State);
+        const auto canonical_result = evaluate_track_cruise_shadow(
+          problem, now_sec);
+        record_track_cruise_shadow_telemetry(canonical_result, now_sec);
+        if (canonical_result.selected_command.has_value()) {
+          return canonical_track_cruise_normal_control(problem, canonical_result);
+        }
+        return canonical_track_cruise_emergency_stop(
+          problem,
+          canonical_result.status + "/" + canonical_result.retained_detail);
       }
       const bool low_speed_shift_handoff_requested = low_speed_shift_control_was_active_;
       Eigen::VectorXd dec;
@@ -23127,11 +23379,6 @@ struct MPC
           legacy_outcome.result->maximum_constraint_violation;
       } else if (problem.dynamic_obstacle_lateral_escape_active) {
         dynamic_escape_tracking_solver_formulation_ = "progress-extended";
-      }
-      if (problem.track_cruise_shadow_requested) {
-        const auto shadow_result = evaluate_track_cruise_shadow(
-          problem, dec, now_sec);
-        record_track_cruise_shadow_telemetry(shadow_result, now_sec);
       }
       std::string dynamic_margin_escape_reject_reason;
       if (!dynamic_margin_escape_solution_wall_safe(
@@ -46327,7 +46574,9 @@ private:
     const double published_steering_rad,
     const overtake_orchestrator::FinalControlSourceRequest & source_request,
     const bool published, const std::string & solver_reason,
-    const std::string & output_reason)
+    const std::string & output_reason,
+    const std::optional<mpcc_contract::CanonicalNormalCommand> &
+    canonical_normal_command = std::nullopt)
   {
     overtake_orchestrator::FinalControlTrace trace;
     trace.decision_id = active_control_decision_id_;
@@ -46364,7 +46613,8 @@ private:
         std::optional<mpcc_contract::MpccProblemContext>{},
         mpc_ != nullptr ? mpc_->last_solution_contract() :
         std::optional<mpcc_contract::CertifiedMpccSolution>{},
-        mpc_ != nullptr && mpc_->last_solution_is_retained()});
+        mpc_ != nullptr && mpc_->last_solution_is_retained(),
+        canonical_normal_command});
     trace.published = published;
     trace.actual_speed_mps = actual_speed_mps;
     trace.target_speed_mps = raw_control[0];
@@ -46530,32 +46780,42 @@ private:
     }
   }
 
-  bool publish_control_command(
-    const rclcpp::Time & stamp, const Eigen::Vector2d & u, const double acc, const bool bug_acc_enabled)
+  std::optional<double> publish_control_command(
+    const rclcpp::Time & stamp, const Eigen::Vector2d & u, const double acc,
+    const bool bug_acc_enabled, const bool canonical_physical_steering)
   {
     auto raw_command = create_ackermann_control_command(stamp, u, acc);
     if (use_bug_acc_) {
       if (!command_is_finite(raw_command)) {
         publish_failsafe_command(stamp, "non-finite boost control command rejected");
-        return false;
+        return std::nullopt;
       }
       AckermannControlBoostCommand boost_cmd;
       boost_cmd.command = raw_command;
       boost_cmd.boost_mode = bug_acc_enabled;
       boost_command_pub_->publish(boost_cmd);
       command_failsafe_active_ = false;
-      return true;
+      return raw_command.lateral.steering_tire_angle;
+    }
+    const auto published_steering =
+      mpcc_contract::resolve_published_steering_tire_angle(
+      raw_command.lateral.steering_tire_angle,
+      mpc_cfg_.steering_tire_angle_gain_var,
+      canonical_physical_steering);
+    if (!published_steering.has_value()) {
+      publish_failsafe_command(stamp, "invalid steering publication contract");
+      return std::nullopt;
     }
     auto final_command = raw_command;
-    final_command.lateral.steering_tire_angle *= mpc_cfg_.steering_tire_angle_gain_var;
+    final_command.lateral.steering_tire_angle = published_steering.value();
     if (!command_is_finite(raw_command) || !command_is_finite(final_command)) {
       publish_failsafe_command(stamp, "non-finite control command rejected");
-      return false;
+      return std::nullopt;
     }
     command_raw_pub_->publish(raw_command);
     command_pub_->publish(final_command);
     command_failsafe_active_ = false;
-    return true;
+    return published_steering;
   }
 
   void publish_ref_path_marker()
@@ -50291,8 +50551,14 @@ private:
     mpc_->update_v_max(effective_v_max);
     reference_path_->set_v_ref(std::vector<double>(reference_path_->waypoints.size(), effective_v_max));
 
-    auto [u, max_delta] = mpc_->get_control(
+    const auto mpc_cycle = mpc_->get_control(
       current_time.seconds(), active_control_decision_id_);
+    auto u = mpc_cycle.control;
+    double max_delta = mpc_cycle.maximum_steering_rad;
+    const auto canonical_normal_command =
+      mpc_cycle.canonical_normal_command;
+    const bool canonical_emergency_stop =
+      mpc_cycle.canonical_emergency_stop;
     const bool mpc_fallback_active = mpc_->last_control_was_fallback();
     const bool executed_solution_wall_hold_active =
       mpc_->executed_solution_wall_hold_active();
@@ -50438,7 +50704,8 @@ private:
       cfg_.stuck_recovery.core.supervisor.max_rejoin_heading_error_rad;
     mpc_velocity_limit::SolverFailureCrawlRequest solver_crawl_request;
     solver_crawl_request.simulation_environment = use_sim_time_;
-    solver_crawl_request.enabled = mpc_cfg_.solver_failure_crawl_enabled;
+    solver_crawl_request.enabled =
+      mpc_cfg_.solver_failure_crawl_enabled && !canonical_emergency_stop;
     solver_crawl_request.control_enabled = enable_control_;
     solver_crawl_request.solver_fallback = mpc_fallback_active;
     solver_crawl_request.unrestricted_cruise =
@@ -50457,7 +50724,8 @@ private:
     mpc_velocity_limit::SolverFailureContinuationRequest
       solver_continuation_request;
     solver_continuation_request.simulation_environment = use_sim_time_;
-    solver_continuation_request.enabled = mpc_cfg_.solver_failure_crawl_enabled;
+    solver_continuation_request.enabled =
+      mpc_cfg_.solver_failure_crawl_enabled && !canonical_emergency_stop;
     solver_continuation_request.control_enabled = enable_control_;
     solver_continuation_request.solver_fallback = mpc_fallback_active;
     solver_continuation_request.dynamic_obstacle_escape_active =
@@ -51218,8 +51486,13 @@ private:
     const bool forced_stop_active =
       (mpc_fallback_active && !solver_failure_crawl_active &&
       !solver_failure_continuation_active) || !enable_control_ ||
+      canonical_emergency_stop ||
       mpc_->low_speed_direct_wall_stop_active() ||
       (wall_handoff_hold_active && active_wall_admission.stop_required);
+    const bool canonical_normal_execution_active =
+      canonical_normal_command.has_value() && !forced_stop_active &&
+      !solver_failure_crawl_active && !solver_failure_continuation_active &&
+      !executed_solution_wall_hold_active && !wall_handoff_hold_active;
     if (forced_stop_active) {
       bug_acc_enabled = false;
       acc = mpc_cfg_.a_min;
@@ -51236,6 +51509,9 @@ private:
       bug_acc_enabled = false;
       acc = active_wall_admission.stop_required ? mpc_cfg_.a_min :
         std::min(0.0, 100.0 * (u[0] - actual_v));
+    } else if (canonical_normal_execution_active) {
+      bug_acc_enabled = false;
+      acc = canonical_normal_command->acceleration_mps2;
     } else if (use_bug_acc_) {
       const auto deg2rad = [](const double deg) { return deg * kPi / 180.0; };
       if (
@@ -51267,7 +51543,7 @@ private:
       acc = clip(acc, mpc_cfg_.a_min, mpc_cfg_.a_max);
     }
 
-    if (!forced_stop_active) {
+    if (!forced_stop_active && !canonical_normal_execution_active) {
       acc = last_acc_ + (acc - last_acc_) * mpc_cfg_.accel_low_pass_gain;
     }
     if (
@@ -51276,16 +51552,22 @@ private:
     {
       acc = std::min(0.0, acc);
     }
-    u[1] = last_u_[1] + (u[1] - last_u_[1]) * mpc_cfg_.steer_low_pass_gain;
+    if (!canonical_normal_execution_active) {
+      u[1] = last_u_[1] + (u[1] - last_u_[1]) * mpc_cfg_.steer_low_pass_gain;
+    }
     acc = clip(acc, mpc_cfg_.a_min, mpc_cfg_.a_max);
     const double max_steering_step = mpc_cfg_.steer_rate_max / mpc_cfg_.control_rate;
-    u[1] = clip(
-      u[1], last_u_[1] - max_steering_step,
-      last_u_[1] + max_steering_step);
-    u[1] = clip(u[1], -mpc_cfg_.delta_max, mpc_cfg_.delta_max);
-    if (const auto direct_bounds = mpc_->low_speed_direct_steering_bounds()) {
+    if (!canonical_normal_execution_active) {
       u[1] = clip(
-        u[1], direct_bounds->lower_rad, direct_bounds->upper_rad);
+        u[1], last_u_[1] - max_steering_step,
+        last_u_[1] + max_steering_step);
+    }
+    u[1] = clip(u[1], -mpc_cfg_.delta_max, mpc_cfg_.delta_max);
+    if (!canonical_normal_execution_active) {
+      if (const auto direct_bounds = mpc_->low_speed_direct_steering_bounds()) {
+        u[1] = clip(
+          u[1], direct_bounds->lower_rad, direct_bounds->upper_rad);
+      }
     }
     const auto recovery_output = evaluate_stuck_recovery(
       pose, actual_v, u, acc, effective_v_max, mpc_fallback_active, steady_now, current_time);
@@ -51337,17 +51619,41 @@ private:
     }
     acc = clip(acc, mpc_cfg_.a_min, mpc_cfg_.a_max);
     u[1] = clip(u[1], -mpc_cfg_.delta_max, mpc_cfg_.delta_max);
-    if (!recovery_command_active) {
+    if (!recovery_command_active && !canonical_normal_execution_active) {
       if (const auto direct_bounds = mpc_->low_speed_direct_steering_bounds()) {
         u[1] = clip(
           u[1], direct_bounds->lower_rad, direct_bounds->upper_rad);
       }
     }
-    if (
-      !u.allFinite() || !std::isfinite(acc) ||
-      !std::isfinite(u[1] * mpc_cfg_.steering_tire_angle_gain_var))
+    if (!u.allFinite() || !std::isfinite(acc))
     {
       publish_failsafe_command(current_time, "non-finite postprocessed control rejected");
+      return;
+    }
+    if (
+      canonical_normal_execution_active && !recovery_command_active &&
+      !mpcc_contract::canonical_normal_command_matches_actuation(
+        canonical_normal_command.value(), u[0], acc, u[1]))
+    {
+      std::ostringstream reason;
+      reason << std::setprecision(17)
+             << "canonical Track/Cruise command mutated before publication: "
+             << "speed=" << canonical_normal_command->predicted_speed_mps
+             << "/" << u[0]
+             << "/delta="
+             << (u[0] - canonical_normal_command->predicted_speed_mps)
+             << ", acceleration="
+             << canonical_normal_command->acceleration_mps2
+             << "/" << acc
+             << "/delta="
+             << (acc - canonical_normal_command->acceleration_mps2)
+             << ", steering="
+             << canonical_normal_command->steering_tire_angle_rad
+             << "/" << u[1]
+             << "/delta="
+             << (u[1] - canonical_normal_command->steering_tire_angle_rad);
+      const std::string reason_text = reason.str();
+      publish_failsafe_command(current_time, reason_text.c_str());
       return;
     }
     const bool recovery_uses_normal_model =
@@ -51356,12 +51662,17 @@ private:
     if (!recovery_command_active || recovery_uses_normal_model) {
       car_->drive(Eigen::Vector2d(actual_v, u[1]));
     }
-    if (!publish_control_command(current_time, u, acc, bug_acc_enabled)) {
+    const bool canonical_physical_steering =
+      mpcc_contract::canonical_track_cruise_uses_physical_steering(
+      canonical_normal_execution_active, canonical_emergency_stop,
+      recovery_command_active);
+    const auto published_steering = publish_control_command(
+      current_time, u, acc, bug_acc_enabled, canonical_physical_steering);
+    if (!published_steering.has_value()) {
       return;
     }
     mpc_->record_track_cruise_shadow_final_command(
-      active_control_decision_id_, u[0], acc,
-      use_bug_acc_ ? u[1] : u[1] * mpc_cfg_.steering_tire_angle_gain_var,
+      active_control_decision_id_, u[0], acc, u[1],
       current_time.seconds());
     if (
       !recovery_command_active && !mpc_fallback_active &&
@@ -51375,6 +51686,7 @@ private:
         overtake_authority->request.mission_generation);
     }
     overtake_orchestrator::FinalControlSourceRequest final_source_request;
+    final_source_request.failsafe_active = canonical_emergency_stop;
     final_source_request.stuck_recovery_active = recovery_command_active;
     final_source_request.control_enabled = enable_control_;
     final_source_request.low_speed_wall_stop_active =
@@ -51393,13 +51705,18 @@ private:
     final_source_request.forced_stop_active = forced_stop_active;
     final_source_request.low_speed_direct_active =
       mpc_->low_speed_direct_control_active();
-    const double published_steering_rad = use_bug_acc_ ?
-      u[1] : u[1] * mpc_cfg_.steering_tire_angle_gain_var;
+    const double published_steering_rad = published_steering.value();
     std::string output_reason{"normal-control-published"};
     if (recovery_command_active) {
       output_reason = "stuck-recovery-arbitration";
     } else if (!enable_control_) {
       output_reason = "control-disabled-deceleration";
+    } else if (canonical_emergency_stop) {
+      output_reason = "canonical-track-cruise-emergency-stop";
+    } else if (canonical_normal_execution_active) {
+      output_reason = canonical_normal_command->retained_solution ?
+        "canonical-track-cruise-retained-published" :
+        "canonical-track-cruise-fresh-published";
     } else if (solver_failure_crawl_active) {
       output_reason = "solver-failure-crawl";
     } else if (solver_failure_continuation_active) {
@@ -51436,14 +51753,14 @@ private:
     emit_final_control_trace(
       current_time.seconds(), actual_v, u, acc, published_steering_rad,
       final_source_request, true, mpc_->last_control_resolution_reason(),
-      output_reason);
+      output_reason, canonical_normal_command);
     maybe_emit_dynamic_escape_wall_handoff_trace(
       current_time.seconds(), steady_now, pose, actual_v, yaw_rate, u,
       published_steering_rad, final_source_request);
     if (mpc_cfg_.v2x_behavior.debug_log_enabled) {
-      const double output_steering =
-        u[1] * mpc_cfg_.steering_tire_angle_gain_var;
-      const double predicted_curvature = std::tan(u[1]) / car_->length;
+      const double output_steering = published_steering_rad;
+      const double predicted_curvature =
+        std::tan(published_steering_rad) / car_->length;
       const bool measured_curvature_valid =
         std::isfinite(yaw_rate) && std::abs(actual_v) >= 1.0 &&
         !recovery_command_active;

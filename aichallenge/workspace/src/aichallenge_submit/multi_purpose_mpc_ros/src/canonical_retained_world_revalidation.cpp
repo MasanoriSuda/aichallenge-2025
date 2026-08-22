@@ -66,7 +66,7 @@ std::optional<recovery_footprint::Pose2D> reconstruct_pose(
   const plan::CanonicalPredictedState & state)
 {
   const auto frame = mpc_stage_geometry::sample_course_frame(
-    knots, state.progress_m, kIdentityTolerance);
+    knots, state.progress_m, kCourseFrameIdentityToleranceM);
   if (!frame.has_value()) {
     return std::nullopt;
   }

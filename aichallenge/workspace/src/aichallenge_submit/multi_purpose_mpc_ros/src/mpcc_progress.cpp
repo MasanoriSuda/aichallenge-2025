@@ -543,6 +543,10 @@ const char * extended_execution_primal_boundary_field_name(
       return "none";
     case ExtendedExecutionPrimalBoundaryField::PredictedVelocity:
       return "predicted-velocity";
+    case ExtendedExecutionPrimalBoundaryField::Acceleration:
+      return "acceleration";
+    case ExtendedExecutionPrimalBoundaryField::Curvature:
+      return "curvature";
     case ExtendedExecutionPrimalBoundaryField::VirtualProgressSpeed:
       return "virtual-progress-speed";
   }
@@ -551,6 +555,8 @@ const char * extended_execution_primal_boundary_field_name(
 
 ExtendedExecutionPrimalNormalization normalize_extended_execution_primal(
   const Eigen::VectorXd & primal,
+  const Eigen::VectorXd & constraint_lower,
+  const Eigen::VectorXd & constraint_upper,
   const Eigen::VectorXd & constraint_violation,
   const Eigen::VectorXd & constraint_tolerance,
   const int horizon_size) noexcept
@@ -565,6 +571,8 @@ ExtendedExecutionPrimalNormalization normalize_extended_execution_primal(
   const int constraint_rows = state_rows + variable_rows + horizon_size;
   if (
     primal.size() != variable_rows ||
+    constraint_lower.size() != constraint_rows ||
+    constraint_upper.size() != constraint_rows ||
     constraint_violation.size() != constraint_rows ||
     constraint_tolerance.size() != constraint_rows)
   {
@@ -582,15 +590,22 @@ ExtendedExecutionPrimalNormalization normalize_extended_execution_primal(
   }
 
   result.primal = primal;
-  const auto certify_nonnegative = [&result, &constraint_violation,
-      &constraint_tolerance, state_rows](
+  const auto certify_box_bound = [&result, &constraint_lower,
+      &constraint_upper, &constraint_violation, &constraint_tolerance,
+      state_rows](
       const int variable_index, const int stage,
       const ExtendedExecutionPrimalBoundaryField field) {
       const int constraint_row = state_rows + variable_index;
       const double value = result.primal[variable_index];
+      const double lower = constraint_lower[constraint_row];
+      const double upper = constraint_upper[constraint_row];
       const double violation = constraint_violation[constraint_row];
       const double tolerance = constraint_tolerance[constraint_row];
-      if (violation > tolerance || value < -tolerance) {
+      if (
+        !std::isfinite(lower) || !std::isfinite(upper) || lower > upper ||
+        violation > tolerance || value < lower - tolerance ||
+        value > upper + tolerance)
+      {
         result.reason = ExtendedExecutionPrimalNormalizationReason::
           CertifiedBoundViolation;
         result.rejected_field = field;
@@ -600,11 +615,12 @@ ExtendedExecutionPrimalNormalization normalize_extended_execution_primal(
         result.rejected_tolerance = tolerance;
         return false;
       }
-      if (value < 0.0) {
+      const double normalized_value = std::clamp(value, lower, upper);
+      if (normalized_value != value) {
         result.maximum_adjustment = std::max(
-          result.maximum_adjustment, -value);
+          result.maximum_adjustment, std::abs(normalized_value - value));
         ++result.normalized_value_count;
-        result.primal[variable_index] = 0.0;
+        result.primal[variable_index] = normalized_value;
       }
       return true;
     };
@@ -612,7 +628,7 @@ ExtendedExecutionPrimalNormalization normalize_extended_execution_primal(
   for (int stage = 0; stage < horizon_size + 1; ++stage) {
     const int velocity_index = stage * kExtendedStateDimension +
       kExtendedVelocityIndex;
-    if (!certify_nonnegative(
+    if (!certify_box_bound(
         velocity_index, stage,
         ExtendedExecutionPrimalBoundaryField::PredictedVelocity))
     {
@@ -620,14 +636,19 @@ ExtendedExecutionPrimalNormalization normalize_extended_execution_primal(
     }
   }
   for (int stage = 0; stage < horizon_size; ++stage) {
-    const int virtual_progress_index = state_rows +
-      stage * kExtendedInputDimension +
-      kExtendedVirtualProgressSpeedIndex;
-    if (!certify_nonnegative(
-        virtual_progress_index, stage,
-        ExtendedExecutionPrimalBoundaryField::VirtualProgressSpeed))
-    {
-      return result;
+    const int input = state_rows + stage * kExtendedInputDimension;
+    const std::array<std::pair<int, ExtendedExecutionPrimalBoundaryField>, 3>
+      input_fields{{
+        {kExtendedAccelerationIndex,
+          ExtendedExecutionPrimalBoundaryField::Acceleration},
+        {kExtendedCurvatureIndex,
+          ExtendedExecutionPrimalBoundaryField::Curvature},
+        {kExtendedVirtualProgressSpeedIndex,
+          ExtendedExecutionPrimalBoundaryField::VirtualProgressSpeed}}};
+    for (const auto & [input_index, field] : input_fields) {
+      if (!certify_box_bound(input + input_index, stage, field)) {
+        return result;
+      }
     }
   }
   result.reason = ExtendedExecutionPrimalNormalizationReason::Accepted;

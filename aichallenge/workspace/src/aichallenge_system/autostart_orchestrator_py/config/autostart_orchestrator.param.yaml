@@ -18,6 +18,7 @@
     capture_stop_timeout_sec: 60.0
     enable_debug_visualization: true
     rosbag_topics:
+      - /aichallenge/pitstop/condition
       - /control/command/control_cmd
       - /clock
       - /localization/acceleration

@@ -79,6 +79,8 @@ def _pose_values(pose: Any, covariance: Any = None) -> dict[str, Any]:
 
 
 def _extract(key: str, message: Any) -> dict[str, Any] | None:
+    if key == "pitstop_condition":
+        return {"condition": int(message.data)}
     if key == "ekf_pose":
         values = _pose_values(message.pose.pose, message.pose.covariance)
         values.update(

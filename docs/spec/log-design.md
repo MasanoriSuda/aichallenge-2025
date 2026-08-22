@@ -3,7 +3,7 @@
 > 仕様ドキュメント（現仕様の正）。最終確認: 2026-08-19。文書運用方針は [docs/README.md](../README.md) を参照。
 
 作成日: 2026-01-27  
-更新日: 2026-08-19
+更新日: 2026-08-23
 
 対象: `docker-compose.yml`（make 経由 / 主要パス）・`aichallenge/run_evaluation.bash`（評価オーケストレータ）
 
@@ -140,6 +140,32 @@ front-cap解除とFollow capなどの組合せをsilentに通過させない。
 最低速度、最小回廊幅、最大要求横加速度、Mission世代数、authority変更回数、
 DynamicMissionWait／ContactEscape回数、終了理由を含める。これを追い越し完遂率と
 外れ走行の一次集計単位とする。
+
+### 3.6 AWSIM衝突指標と静的壁証明の相関
+
+開発用rosbagのallowlistには`/aichallenge/pitstop/condition`を含める。topicが存在する環境では
+制御器は初回値を
+`Pitstop condition baseline:`、値の変化を`Pitstop condition transition:`として
+change-awareに記録する。transitionには同時点の生姿勢、速度、直前指令、および制御器が
+利用する静的occupancy grid上の実寸footprint接触判定を含める。
+
+current AWSIMでこのtopicがpublishされない場合、bag metadataに現れないこと自体を
+`condition=unavailable`として扱う。代わりにodometryの連続sample間で、速度低下量が
+`max(1.0 m/s, 2 * abs(configured a_min) * dt)`以上かつ`dt <= 0.25 s`なら、
+`Abrupt measured speed loss:`を一度記録する。このeventには前後速度、観測加速度、生pose、
+静的map sample、condition可用性、decision ID、直前commandを含める。
+
+これにより、AWSIM側の衝突・ペナルティ指標が変化した時点で、次を区別する。
+
+1. 静的地図上でも車体接触していた
+2. 静的地図はclearだがAWSIM指標だけが変化した
+3. 指標変化より前に制御器が減速・停止を命令した
+4. 前進指令中に外部要因で実速度が急減した
+
+これらの観測は制御authority、command、衝突判定を変更しない。静的wall certificateは
+設定済みoccupancy gridに対する証明であり、AWSIM collider／penalty sourceとの同値性は
+保証しない。地図とAWSIM colliderの不整合が
+確認されるまでは、wall marginやsolver重みの調整根拠として使用しない。
 
 ## 4. 今後の改善候補
 

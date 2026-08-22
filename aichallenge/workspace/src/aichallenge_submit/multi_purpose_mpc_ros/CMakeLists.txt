@@ -268,6 +268,15 @@ if(BUILD_TESTING)
     )
   endif()
 
+  ament_add_gtest(test_external_speed_loss_monitor
+    test/test_external_speed_loss_monitor.cpp
+  )
+  if(TARGET test_external_speed_loss_monitor)
+    target_include_directories(test_external_speed_loss_monitor PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+  endif()
+
   ament_add_gtest(test_start_grid_grace
     test/test_start_grid_grace.cpp
   )

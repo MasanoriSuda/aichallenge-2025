@@ -1757,6 +1757,15 @@ segmentへ変化した場合は即時に一行記録する。1秒集約ではcan
 shadow selection 0回だった。したがってSlice 3昇格は、candidate側57件の根因解消に加え、legacyが
 unsafe current poseを作った状態から新authorityへ安全にhandoffする契約が定まるまで保留する。
 
+physical certificateが証明するworld modelは、controllerが読み込んだ静的occupancy gridに
+限られる。AWSIM collider／penalty sourceとの幾何同値性は契約に含まれず、certificate合格は
+AWSIM非接触の直接証明ではない。`output/20260823-065700`では、runtime-equivalent samplerが
+実測poseを少なくとも1.0 mの検索範囲でclearと判定し、controllerが前進・正加速度を指令したまま、
+実速度が`10.089 -> 1.424 m/s`へ`0.120 s`で低下した。したがって、certificateと外部挙動の
+境界は`Abrupt measured speed loss:`および、利用可能な環境では
+`/aichallenge/pitstop/condition`で相関する。これは診断契約であり、certificateの合否、margin、
+solver weight、authority、commandを変更しない。
+
 #### Solved-progress course-frame wall contract（2026-08-22）
 
 5-state解の`e_y` / `e_psi`は固定の`ref_wp_id + stage`へ貼り付けず、同じ解が持つ絶対進捗

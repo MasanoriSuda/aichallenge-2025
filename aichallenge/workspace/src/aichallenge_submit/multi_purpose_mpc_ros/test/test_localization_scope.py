@@ -1,11 +1,13 @@
 from copy import deepcopy
 import json
 import math
+from types import SimpleNamespace
 
 import pytest
 
 from localization_scope.analysis import analyze_run
 from localization_scope.analysis import compare_runs
+from localization_scope.bag_reader import _extract
 from localization_scope.metadata import DEFAULT_METADATA
 from localization_scope.metadata import MetadataError
 from localization_scope.metadata import load_metadata
@@ -69,6 +71,12 @@ def _run_data(tmp_path, cross_track):
         topic_counts=topic_counts,
         duration_sec=2.0,
     )
+
+
+def test_bag_reader_extracts_pitstop_condition_for_incident_correlation():
+    assert _extract("pitstop_condition", SimpleNamespace(data=37)) == {
+        "condition": 37
+    }
 
 
 def test_projection_returns_signed_cross_track():

@@ -12,6 +12,7 @@
 #include <multi_purpose_mpc_ros/canonical_execution_plan.hpp>
 #include <multi_purpose_mpc_ros/canonical_execution_plan_adapter.hpp>
 #include <multi_purpose_mpc_ros/canonical_retained_world_revalidation.hpp>
+#include <multi_purpose_mpc_ros/external_speed_loss_monitor.hpp>
 #include <multi_purpose_mpc_ros/latest_only_worker.hpp>
 #include <multi_purpose_mpc_ros/mpcc_execution_contract.hpp>
 #include <multi_purpose_mpc_ros/mpcc_progress.hpp>
@@ -119,6 +120,7 @@ namespace canonical_retained =
   ::multi_purpose_mpc_ros::canonical_retained_revalidation;
 namespace canonical_retained_world =
   ::multi_purpose_mpc_ros::canonical_retained_world_revalidation;
+namespace external_speed_loss = ::multi_purpose_mpc_ros::external_speed_loss;
 namespace mpc_state_prediction = ::multi_purpose_mpc_ros::mpc_state_prediction;
 namespace mpc_stage_geometry = ::multi_purpose_mpc_ros::mpc_stage_geometry;
 namespace mpcc_contract = ::multi_purpose_mpc_ros::mpcc_execution_contract;
@@ -46328,6 +46330,13 @@ private:
     odom_sub_ = create_subscription<Odometry>(
       "/localization/kinematic_state", 1, [this](const Odometry::SharedPtr msg) {
         const auto receipt_time = SteadyClock::now();
+        const auto abrupt_speed_loss = use_sim_time_ ?
+          external_speed_loss_monitor_.update(
+          external_speed_loss::Sample{
+            std::chrono::duration<double>(receipt_time.time_since_epoch()).count(),
+            msg->twist.twist.linear.x},
+          mpc_cfg_.a_min) :
+          std::optional<external_speed_loss::Event>{};
         odom_ = msg;
         last_odom_receipt_steady_ = receipt_time;
         const rclcpp::Time source_stamp(msg->header.stamp);
@@ -46342,6 +46351,9 @@ private:
         } else {
           last_odom_source_stamp_.reset();
           last_odom_source_advance_steady_.reset();
+        }
+        if (abrupt_speed_loss.has_value()) {
+          emit_abrupt_speed_loss_observation(abrupt_speed_loss.value());
         }
       });
     control_mode_request_sub_ = create_subscription<Bool>(
@@ -46399,20 +46411,7 @@ private:
       }
       condition_sub_ = create_subscription<Int32>(
         "/aichallenge/pitstop/condition", 1, [this](const Int32::SharedPtr msg) {
-          if (!last_condition_.has_value()) {
-            last_condition_ = msg->data;
-          }
-          const int previous_condition = last_condition_.value();
-          const int diff_condition = msg->data - previous_condition;
-          if (diff_condition > 30) {
-            last_colliding_time_ = now();
-            last_collision_receipt_steady_ = SteadyClock::now();
-            RCLCPP_WARN(
-              get_logger(),
-              "Collision detected: condition=%d->%d, delta=%d",
-              previous_condition, msg->data, diff_condition);
-          }
-          last_condition_ = msg->data;
+          handle_pitstop_condition(msg->data);
         });
     }
     if (use_obstacle_avoidance_ && cfg_.reference_path.use_path_constraints_topic) {
@@ -46450,6 +46449,103 @@ private:
           }
         });
     }
+  }
+
+  struct CurrentPoseWallObservation
+  {
+    double pose_x_m{std::numeric_limits<double>::quiet_NaN()};
+    double pose_y_m{std::numeric_limits<double>::quiet_NaN()};
+    double pose_yaw_rad{std::numeric_limits<double>::quiet_NaN()};
+    double speed_mps{std::numeric_limits<double>::quiet_NaN()};
+    std::string map_sample{"unavailable"};
+    std::size_t map_contact_count{0U};
+  };
+
+  CurrentPoseWallObservation current_pose_wall_observation() const
+  {
+    CurrentPoseWallObservation observation;
+    if (odom_ == nullptr) {
+      return observation;
+    }
+
+    const auto pose = odom_to_pose_2d(*odom_);
+    observation.pose_x_m = pose.x;
+    observation.pose_y_m = pose.y;
+    observation.pose_yaw_rad = pose.theta;
+    observation.speed_mps = odom_->twist.twist.linear.x;
+    if (
+      recovery_grid_ == nullptr || !recovery_grid_->valid() ||
+      !recovery_footprint_.valid())
+    {
+      return observation;
+    }
+
+    const auto sample = recovery_footprint::sample_footprint(
+      *recovery_grid_, recovery_footprint_,
+      recovery_footprint::Pose2D{pose.x, pose.y, pose.theta});
+    observation.map_contact_count = sample.contact_cells.size();
+    observation.map_sample = !sample.valid ? "invalid" :
+      (sample.out_of_map ? "out-of-map" :
+      (!sample.contact_cells.empty() ? "contact" : "clear"));
+    return observation;
+  }
+
+  void emit_abrupt_speed_loss_observation(const external_speed_loss::Event & event) const
+  {
+    const auto observation = current_pose_wall_observation();
+    const std::string pitstop_condition = last_condition_.has_value() ?
+      std::to_string(last_condition_.value()) : "unavailable";
+    RCLCPP_WARN(
+      get_logger(),
+      "Abrupt measured speed loss: speed=%.3f->%.3f, loss=%.3f, dt=%.4f, "
+      "observed_acceleration=%.1f, diagnostic_threshold=%.3f, "
+      "pose=%.4f/%.4f/%.4f, map_sample=%s, map_contacts=%zu, "
+      "pitstop_condition=%s, race_started=%d, decision=%llu, "
+      "command=%.3f/%.3f/%.4f",
+      event.previous_speed_mps, event.current_speed_mps, event.speed_loss_mps,
+      event.interval_sec, event.observed_acceleration_mps2,
+      event.reportable_loss_threshold_mps,
+      observation.pose_x_m, observation.pose_y_m, observation.pose_yaw_rad,
+      observation.map_sample.c_str(), observation.map_contact_count,
+      pitstop_condition.c_str(), race_started_ ? 1 : 0,
+      static_cast<unsigned long long>(active_control_decision_id_),
+      last_u_[0], last_acc_, last_u_[1]);
+  }
+
+  void handle_pitstop_condition(const int condition)
+  {
+    if (!last_condition_.has_value()) {
+      last_condition_ = condition;
+      RCLCPP_INFO(
+        get_logger(), "Pitstop condition baseline: condition=%d", condition);
+      return;
+    }
+
+    const int previous_condition = last_condition_.value();
+    const int diff_condition = condition - previous_condition;
+    if (diff_condition != 0) {
+      const auto observation = current_pose_wall_observation();
+      RCLCPP_WARN(
+        get_logger(),
+        "Pitstop condition transition: condition=%d->%d, delta=%d, "
+        "pose=%.4f/%.4f/%.4f, speed=%.3f, map_sample=%s, map_contacts=%zu, "
+        "decision=%llu, command=%.3f/%.3f/%.4f",
+        previous_condition, condition, diff_condition,
+        observation.pose_x_m, observation.pose_y_m, observation.pose_yaw_rad,
+        observation.speed_mps, observation.map_sample.c_str(),
+        observation.map_contact_count,
+        static_cast<unsigned long long>(active_control_decision_id_),
+        last_u_[0], last_acc_, last_u_[1]);
+    }
+    if (diff_condition > 30) {
+      last_colliding_time_ = now();
+      last_collision_receipt_steady_ = SteadyClock::now();
+      RCLCPP_WARN(
+        get_logger(),
+        "Collision detected: condition=%d->%d, delta=%d",
+        previous_condition, condition, diff_condition);
+    }
+    last_condition_ = condition;
   }
 
   AckermannControlCommand create_ackermann_control_command(
@@ -51857,6 +51953,7 @@ private:
   std::optional<int> last_condition_;
   std::optional<rclcpp::Time> last_colliding_time_;
   std::optional<SteadyClock::time_point> last_collision_receipt_steady_;
+  external_speed_loss::Monitor external_speed_loss_monitor_;
   rclcpp::Time last_t_;
   std::optional<rclcpp::Time> domain_start_epoch_;
   std::optional<overtake_core::StartWindowStatus> last_start_window_status_;

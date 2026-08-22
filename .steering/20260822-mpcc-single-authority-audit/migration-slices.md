@@ -137,6 +137,10 @@ No cycle-local transfer to three-state or legacy MPC is allowed after promotion.
 - Runtime promotion is not yet performed. The remaining implementation must add current-pose
   revalidation for retained plans, obtain dynamic coverage for fresh/retained selection, and then
   connect the same selector to final output while deleting Track/Cruise legacy fallback.
+- `.steering/20260822-track-cruise-authority-promotion-gate` freezes the remaining evidence and
+  authority decision. Fresh shadow coverage is required first; retained execution then needs
+  progress-aligned current wall/obstacle revalidation. Final publisher connection is intentionally
+  not performed without those results and explicit approval.
 - This connection is an explicit authority boundary and requires approval before implementation.
 
 ### Delete/replace

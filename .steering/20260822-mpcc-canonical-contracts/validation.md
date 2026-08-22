@@ -51,3 +51,41 @@ rg -n "contract_join=0|identity=incomplete" output/latest/d1/autoware.log
 
 If the run output is stored in a timestamped directory rather than
 `output/latest`, use that run's `d1/autoware.log` path.
+
+## Runtime result: 20260822-120512
+
+The short two-vehicle trial passed the Slice 1 identity gate.
+
+| Domain | Contract traces | `contract_join=1` | `identity=complete` | Retained |
+|---|---:|---:|---:|---:|
+| d1 | 134 | 134 | 134 | 48 |
+| d2 | 23 | 23 | 23 | 0 |
+
+- There were no `contract_join=0` or `identity=incomplete` records.
+- d1 classified 125 normal outputs as `legacy-normal-bypass`, three as
+  Emergency overrides and six as Recovery overrides.
+- d2 classified 22 normal outputs as `legacy-normal-bypass` and one as an
+  Emergency override.
+- d1 observed 83 five-state, 12 progress-contouring three-state, 35 legacy
+  spatial-MPC and four unresolved-formulation trace transitions.
+- Retained d1 executions preserved their earlier problem fingerprint and
+  solution ID while reporting `retained=1`.
+- No certified normal output was observed. This is expected Slice 1 migration
+  evidence: current five-state output can be solved but is not yet the sole
+  normal authority carrying one complete physical certificate.
+
+The identity instrumentation showed no material callback regression. The d1
+peak callback maximum was 46.035 ms versus 50.874 ms in the preceding
+`20260822-105057` run; d2 was 20.360 ms versus 29.431 ms. d1 still has
+pre-existing intermittent 25 ms overruns, which must be budgeted and measured
+per stage in Slice 2, but this short comparison does not attribute an added
+regression to the fingerprint contract.
+
+The startup stale-odometry Emergency records were explicitly identified and
+did not invent solver identity. Shutdown included RViz termination and stale
+odometry after the run stopped; these are outside the Slice 1 identity gate.
+
+### Exit decision
+
+Slice 1 is accepted. Proceed to Slice 2 (`Track/Cruise` five-state MPCC shadow)
+without changing production command authority or tuning parameters.

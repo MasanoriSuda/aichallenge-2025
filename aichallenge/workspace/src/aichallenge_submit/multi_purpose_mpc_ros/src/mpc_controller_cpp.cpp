@@ -5746,11 +5746,21 @@ struct FollowShadowCycleResult
   bool execution_primal_accepted{false};
   bool longitudinal_contract_satisfied{false};
   bool effective_gap_satisfied{false};
+  bool actuation_proposal_extracted{false};
+  bool physical_certificate_checked{false};
+  bool physically_certified{false};
+  bool canonical_plan_extracted{false};
+  bool canonical_cursor_available{false};
+  bool canonical_candidate_accepted{false};
+  bool canonical_fresh_authority_ready{false};
+  bool canonical_actuation_extracted{false};
+  bool canonical_command_available{false};
   bool warm_start_applied{false};
   bool solver_context_reset{false};
   std::uint64_t decision_id{};
   std::uint64_t problem_fingerprint{};
   std::uint64_t target_observation_generation{};
+  std::uint64_t canonical_plan_id{};
   std::string target_id;
   race_mpcc::FollowShadowEligibilityReason eligibility_reason{
     race_mpcc::FollowShadowEligibilityReason::ProgressMpccDisabled};
@@ -5760,6 +5770,7 @@ struct FollowShadowCycleResult
     race_mpcc::ShadowWarmStartResetReason::InvalidCurrentContext};
   double build_ms{};
   double solve_ms{};
+  double certificate_ms{};
   double total_ms{};
   int iterations{};
   double measured_ego_speed_mps{std::numeric_limits<double>::quiet_NaN()};
@@ -5776,6 +5787,8 @@ struct FollowShadowCycleResult
   double maximum_longitudinal_violation_m{};
   double maximum_effective_gap_violation_m{};
   int effective_gap_worst_stage{-1};
+  double canonical_actuation_maximum_difference{
+    std::numeric_limits<double>::quiet_NaN()};
   mpcc_progress::ExtendedExecutionPrimalBoundaryField
   execution_primal_rejected_field{
     mpcc_progress::ExtendedExecutionPrimalBoundaryField::None};
@@ -5789,6 +5802,26 @@ struct FollowShadowCycleResult
   std::optional<persistent_osqp::ConstraintFailureDiagnostic>
   solver_constraint_failure;
   mpcc_progress::ExtendedConstraintRowSemantic solver_constraint_semantic;
+  std::optional<mpcc_progress::ActuationProposal> actuation_proposal;
+  std::optional<mpcc_contract::CanonicalNormalCommand> canonical_command;
+  canonical_plan_adapter::CanonicalPlanExtractionReason canonical_extraction_reason{
+    canonical_plan_adapter::CanonicalPlanExtractionReason::InvalidMetadata};
+  canonical_plan_adapter::FreshCanonicalCommandReason canonical_chain_reason{
+    canonical_plan_adapter::FreshCanonicalCommandReason::PlanRejected};
+  canonical_plan::CanonicalExecutionCursorReason canonical_cursor_reason{
+    canonical_plan::CanonicalExecutionCursorReason::InvalidPlan};
+  canonical_plan::CanonicalCandidateBuildReason canonical_candidate_reason{
+    canonical_plan::CanonicalCandidateBuildReason::InvalidPlan};
+  mpcc_contract::CanonicalNormalAuthoritySource canonical_authority_source{
+    mpcc_contract::CanonicalNormalAuthoritySource::EmergencyStop};
+  mpcc_contract::CanonicalNormalAuthorityReason canonical_authority_reason{
+    mpcc_contract::CanonicalNormalAuthorityReason::NoCanonicalCandidate};
+  mpcc_contract::CanonicalNormalCandidateRejectReason
+  canonical_authority_fresh_reject_reason{
+    mpcc_contract::CanonicalNormalCandidateRejectReason::NotEvaluated};
+  canonical_plan::CanonicalActuationReason canonical_actuation_reason{
+    canonical_plan::CanonicalActuationReason::InvalidPlan};
+  mpcc_contract::PhysicalWallCertificateDiagnostic physical_wall_diagnostic;
   std::string status{"not-eligible"};
   std::string detail{"not-evaluated"};
 };
@@ -5802,6 +5835,14 @@ struct FollowShadowTelemetryWindow
   std::uint64_t attempt_count{};
   std::uint64_t solved_count{};
   std::uint64_t execution_primal_count{};
+  std::uint64_t actuation_count{};
+  std::uint64_t physical_certificate_count{};
+  std::uint64_t canonical_plan_count{};
+  std::uint64_t canonical_cursor_count{};
+  std::uint64_t canonical_candidate_count{};
+  std::uint64_t canonical_authority_count{};
+  std::uint64_t canonical_actuation_count{};
+  std::uint64_t canonical_command_count{};
   std::uint64_t accepted_count{};
   std::uint64_t warm_start_count{};
   std::uint64_t reset_count{};
@@ -5815,6 +5856,8 @@ struct FollowShadowTelemetryWindow
   double maximum_build_ms{};
   double total_solve_ms{};
   double maximum_solve_ms{};
+  double total_certificate_ms{};
+  double maximum_certificate_ms{};
   double total_ms{};
   double maximum_total_ms{};
 };
@@ -21599,6 +21642,7 @@ struct MPC
     const MpcProblem & problem, const double now_sec)
   {
     constexpr int nx = mpcc_progress::kExtendedStateDimension;
+    constexpr int progress_metadata_nx = 3;
     FollowShadowCycleResult result;
     result.eligible = problem.follow_shadow_requested;
     result.eligibility_reason = problem.follow_shadow_eligibility_reason;
@@ -21867,9 +21911,183 @@ struct MPC
         result.detail = "solved horizon violates Follow physical hard gap";
         return finish();
       }
-      result.status = "accepted-shadow";
+
+      result.actuation_proposal = mpcc_progress::extract_actuation_proposal(
+        execution_primal.primal, problem.N, model->length);
+      if (!result.actuation_proposal.has_value()) {
+        result.status = "actuation-proposal-reject";
+        result.detail = "Follow five-state actuation proposal contract rejected";
+        return finish();
+      }
+      result.actuation_proposal_extracted = true;
+
+      const auto certificate_started = SteadyClock::now();
+      std::vector<double> path_distance_m;
+      std::vector<double> lower_bound_m;
+      std::vector<double> upper_bound_m;
+      path_distance_m.reserve(static_cast<std::size_t>(problem.N));
+      lower_bound_m.reserve(static_cast<std::size_t>(problem.N));
+      upper_bound_m.reserve(static_cast<std::size_t>(problem.N));
+      Eigen::VectorXd lower_bound(problem.N);
+      Eigen::VectorXd upper_bound(problem.N);
+      for (int stage = 0; stage < problem.N; ++stage) {
+        path_distance_m.push_back(
+          problem.progress_stage_geometry.stages[static_cast<std::size_t>(stage)].
+          cumulative_distance_m);
+        lower_bound[stage] =
+          problem.progress_state_lower[(stage + 1) * progress_metadata_nx];
+        upper_bound[stage] =
+          problem.progress_state_upper[(stage + 1) * progress_metadata_nx];
+        lower_bound_m.push_back(lower_bound[stage]);
+        upper_bound_m.push_back(upper_bound[stage]);
+      }
+      mpcc_progress::ExecutionTrajectoryDiagnostic pose_diagnostic;
+      const auto pose_trajectory =
+        mpcc_progress::extract_extended_execution_trajectory(
+        execution_primal.primal, problem.N, path_distance_m,
+        lower_bound_m, upper_bound_m, extended_problem->progress_origin_m,
+        tolerance_m, &pose_diagnostic);
+      if (!pose_trajectory.has_value()) {
+        result.status = "pose-trajectory-reject";
+        result.detail = std::string{"Follow pose trajectory rejected: "} +
+          mpcc_progress::execution_trajectory_rejection_name(
+          pose_diagnostic.rejection) + ", stage=" +
+          std::to_string(pose_diagnostic.stage);
+        return finish();
+      }
+      AlignedMpccExecutionTrajectory shadow_trajectory{
+        0.0, 0.0, pose_trajectory->minimum_lateral_bound_reserve_m,
+        pose_trajectory->lateral_m, pose_trajectory->lag_m,
+        pose_trajectory->heading_offset_rad,
+        std::numeric_limits<double>::quiet_NaN(), {}, {}};
+      shadow_trajectory.progress_origin_m = extended_problem->progress_origin_m;
+      shadow_trajectory.progress_m = pose_trajectory->progress_m;
+      if (!shadow_trajectory.progress_m.empty()) {
+        const double maximum_solved_progress_m = *std::max_element(
+          shadow_trajectory.progress_m.begin(), shadow_trajectory.progress_m.end());
+        const auto course_frame_knots = build_progress_course_frame_knots(
+          problem.progress_stage_geometry,
+          shadow_trajectory.progress_origin_m,
+          maximum_solved_progress_m);
+        if (course_frame_knots.has_value()) {
+          shadow_trajectory.course_frame_knots = course_frame_knots.value();
+        }
+      }
+      std::string certificate_reason;
+      result.physical_certificate_checked = true;
+      result.physically_certified = solved_mpcc_execution_path_wall_safe(
+        shadow_trajectory, path_distance_m, problem.ref_wp_id, problem.N,
+        lower_bound, upper_bound, 0.0, certificate_reason, tolerance_m,
+        SolvedExecutionWallValidationScope::SweptFromCurrentPose,
+        &result.physical_wall_diagnostic);
+      result.certificate_ms = std::chrono::duration<double, std::milli>(
+        SteadyClock::now() - certificate_started).count();
+      if (!result.physically_certified) {
+        result.status = "physical-certificate-reject";
+        result.detail = certificate_reason + ", " +
+          mpcc_contract::format_physical_wall_certificate_diagnostic(
+          result.physical_wall_diagnostic);
+        return finish();
+      }
+
+      double canonical_horizon_sec = 0.0;
+      for (const double stage_duration_sec : problem.progress_stage_dt_sec) {
+        canonical_horizon_sec += stage_duration_sec;
+      }
+      mpcc_contract::CertifiedMpccSolution canonical_solution;
+      canonical_solution.solution_id = result.decision_id;
+      canonical_solution.problem_fingerprint = context.fingerprint;
+      canonical_solution.formulation =
+        mpcc_contract::Formulation::VelocityProgress5State;
+      canonical_solution.solved = true;
+      canonical_solution.finite = result.finite;
+      canonical_solution.constraints_satisfied = result.constraints_satisfied;
+      canonical_solution.maximum_constraint_violation =
+        outcome.result->maximum_constraint_violation;
+      canonical_solution.physical.checked =
+        result.physical_certificate_checked && result.effective_gap_satisfied;
+      canonical_solution.physical.wall_clear = result.physically_certified;
+      canonical_solution.physical.obstacles_clear = result.effective_gap_satisfied;
+      canonical_solution.physical.minimum_obstacle_clearance_m =
+        effective_gap.minimum_gap_m -
+        problem.follow_longitudinal_contract.hard_gap_m;
+      canonical_solution.prediction_stage_count =
+        static_cast<std::size_t>(problem.N);
+      canonical_solution.valid_until_sec = now_sec + canonical_horizon_sec;
+
+      const auto & direct_actuation = result.actuation_proposal.value();
+      canonical_plan_adapter::CanonicalPlanExtractionRequest extraction_request;
+      extraction_request.plan_id = result.decision_id;
+      extraction_request.problem = context;
+      extraction_request.solution = canonical_solution;
+      extraction_request.solved_sec = now_sec;
+      extraction_request.progress_origin_m = extended_problem->progress_origin_m;
+      extraction_request.stage_duration_sec = problem.progress_stage_dt_sec;
+      extraction_request.extended_primal = execution_primal.primal;
+      const auto canonical_chain =
+        canonical_plan_adapter::build_fresh_canonical_command(
+        canonical_plan_adapter::FreshCanonicalCommandRequest{
+          extraction_request,
+          result.decision_id,
+          now_sec,
+          mpcc_contract::ControlIntent::Follow,
+          model->length,
+          mpcc_contract::CanonicalActuation{
+            direct_actuation.predicted_speed_mps,
+            direct_actuation.acceleration_mps2,
+            direct_actuation.curvature_radpm,
+            direct_actuation.steering_tire_angle_rad,
+            direct_actuation.virtual_progress_speed_mps},
+          1e-12});
+      result.canonical_chain_reason = canonical_chain.reason;
+      result.canonical_extraction_reason = canonical_chain.extraction_reason;
+      result.canonical_plan_extracted = canonical_chain.plan_extracted;
+      result.canonical_plan_id = canonical_chain.plan_id;
+      result.canonical_cursor_reason = canonical_chain.cursor_reason;
+      result.canonical_cursor_available = canonical_chain.cursor_available;
+      result.canonical_candidate_reason = canonical_chain.candidate_reason;
+      result.canonical_candidate_accepted = canonical_chain.candidate_accepted;
+      result.canonical_authority_source = canonical_chain.authority_source;
+      result.canonical_authority_reason = canonical_chain.authority_reason;
+      result.canonical_authority_fresh_reject_reason =
+        canonical_chain.fresh_reject_reason;
+      result.canonical_fresh_authority_ready = canonical_chain.authority_ready;
+      result.canonical_actuation_reason = canonical_chain.actuation_reason;
+      result.canonical_actuation_extracted = canonical_chain.actuation_extracted;
+      result.canonical_actuation_maximum_difference =
+        canonical_chain.maximum_actuation_difference;
+      result.canonical_command = canonical_chain.command;
+      result.canonical_command_available = canonical_chain.command.has_value();
+      if (!result.canonical_command_available) {
+        result.status = "canonical-chain-reject";
+        std::ostringstream detail;
+        detail << "Follow fresh canonical chain rejected: "
+               << canonical_plan_adapter::to_string(canonical_chain.reason)
+               << ", extraction="
+               << canonical_plan_adapter::to_string(
+          canonical_chain.extraction_reason)
+               << '/' << canonical_plan::to_string(
+          canonical_chain.plan_reject_reason)
+               << ", cursor=" << canonical_plan::to_string(
+          canonical_chain.cursor_reason)
+               << ", candidate=" << canonical_plan::to_string(
+          canonical_chain.candidate_reason)
+               << ", authority=" << mpcc_contract::to_string(
+          canonical_chain.authority_source)
+               << '/' << mpcc_contract::to_string(
+          canonical_chain.authority_reason)
+               << '/' << mpcc_contract::to_string(
+          canonical_chain.fresh_reject_reason)
+               << ", actuation=" << canonical_plan::to_string(
+          canonical_chain.actuation_reason)
+               << ", command=" << mpcc_contract::to_string(
+          canonical_chain.command_reason);
+        result.detail = detail.str();
+        return finish();
+      }
+      result.status = "canonical-ready-shadow";
       result.detail =
-        "Follow progress and effective-gap contracts solved; authority remains legacy";
+        "Follow fresh canonical command reconstructed; authority remains shadow";
       return finish();
     } catch (const std::exception & error) {
       result.status = "exception";
@@ -21893,7 +22111,19 @@ struct MPC
     window.attempt_count += result.solve_attempted ? 1U : 0U;
     window.solved_count += result.solved ? 1U : 0U;
     window.execution_primal_count += result.execution_primal_accepted ? 1U : 0U;
-    window.accepted_count += result.effective_gap_satisfied ? 1U : 0U;
+    window.actuation_count += result.actuation_proposal_extracted ? 1U : 0U;
+    window.physical_certificate_count += result.physically_certified ? 1U : 0U;
+    window.canonical_plan_count += result.canonical_plan_extracted ? 1U : 0U;
+    window.canonical_cursor_count += result.canonical_cursor_available ? 1U : 0U;
+    window.canonical_candidate_count +=
+      result.canonical_candidate_accepted ? 1U : 0U;
+    window.canonical_authority_count +=
+      result.canonical_fresh_authority_ready ? 1U : 0U;
+    window.canonical_actuation_count +=
+      result.canonical_actuation_extracted ? 1U : 0U;
+    window.canonical_command_count +=
+      result.canonical_command_available ? 1U : 0U;
+    window.accepted_count += result.canonical_command_available ? 1U : 0U;
     window.warm_start_count += result.warm_start_applied ? 1U : 0U;
     window.reset_count += result.solver_context_reset ? 1U : 0U;
     if (result.solver_constraint_failure.has_value()) {
@@ -21930,6 +22160,9 @@ struct MPC
     window.maximum_build_ms = std::max(window.maximum_build_ms, result.build_ms);
     window.total_solve_ms += result.solve_ms;
     window.maximum_solve_ms = std::max(window.maximum_solve_ms, result.solve_ms);
+    window.total_certificate_ms += result.certificate_ms;
+    window.maximum_certificate_ms = std::max(
+      window.maximum_certificate_ms, result.certificate_ms);
     window.total_ms += result.total_ms;
     window.maximum_total_ms = std::max(window.maximum_total_ms, result.total_ms);
 
@@ -21945,7 +22178,15 @@ struct MPC
       result.solver_constraint_semantic.kind) + "/" +
       mpcc_progress::extended_constraint_field_name(
       result.solver_constraint_semantic.field) + "/" +
-      std::to_string(result.solver_constraint_semantic.stage);
+      std::to_string(result.solver_constraint_semantic.stage) + "/" +
+      mpcc_contract::physical_wall_certificate_reason_name(
+      result.physical_wall_diagnostic.reason) + "/" +
+      canonical_plan_adapter::to_string(result.canonical_chain_reason) + "/" +
+      canonical_plan_adapter::to_string(result.canonical_extraction_reason) + "/" +
+      canonical_plan::to_string(result.canonical_cursor_reason) + "/" +
+      canonical_plan::to_string(result.canonical_candidate_reason) + "/" +
+      mpcc_contract::to_string(result.canonical_authority_source) + "/" +
+      canonical_plan::to_string(result.canonical_actuation_reason);
     if (status_key != last_follow_shadow_status_) {
       std::ostringstream message;
       message << "Follow MPCC shadow: decision=" << result.decision_id
@@ -21964,6 +22205,34 @@ struct MPC
               << (result.longitudinal_contract_satisfied ? 1 : 0)
               << ", effective_gap="
               << (result.effective_gap_satisfied ? 1 : 0)
+              << ", actuation="
+              << (result.actuation_proposal_extracted ? 1 : 0)
+              << ", physical=" << (result.physically_certified ? 1 : 0)
+              << '/'
+              << mpcc_contract::physical_wall_certificate_reason_name(
+        result.physical_wall_diagnostic.reason)
+              << ", canonical="
+              << (result.canonical_plan_extracted ? 1 : 0) << '/'
+              << (result.canonical_cursor_available ? 1 : 0) << '/'
+              << (result.canonical_candidate_accepted ? 1 : 0) << '/'
+              << (result.canonical_fresh_authority_ready ? 1 : 0) << '/'
+              << (result.canonical_actuation_extracted ? 1 : 0) << '/'
+              << (result.canonical_command_available ? 1 : 0)
+              << ", canonical_reason="
+              << canonical_plan_adapter::to_string(
+        result.canonical_chain_reason) << '/'
+              << canonical_plan_adapter::to_string(
+        result.canonical_extraction_reason) << '/'
+              << canonical_plan::to_string(result.canonical_cursor_reason) << '/'
+              << canonical_plan::to_string(result.canonical_candidate_reason) << '/'
+              << mpcc_contract::to_string(result.canonical_authority_source) << '/'
+              << mpcc_contract::to_string(result.canonical_authority_reason) << '/'
+              << mpcc_contract::to_string(
+        result.canonical_authority_fresh_reject_reason) << '/'
+              << canonical_plan::to_string(result.canonical_actuation_reason)
+              << ", plan=" << result.canonical_plan_id
+              << ", actuation_delta="
+              << result.canonical_actuation_maximum_difference
               << ", ego_v=" << result.measured_ego_speed_mps
               << "mps, target_gap=" << result.current_target_gap_m
               << "m, target_v=" << result.predicted_target_speed_mps
@@ -22020,7 +22289,7 @@ struct MPC
               << ", status=" << result.status
               << ", detail=" << result.detail
               << ", authority=shadow, selected=0";
-      if (!result.eligible || result.effective_gap_satisfied) {
+      if (!result.eligible || result.canonical_command_available) {
         RCLCPP_INFO(rclcpp::get_logger("mpc_controller"), "%s", message.str().c_str());
       } else {
         RCLCPP_WARN(rclcpp::get_logger("mpc_controller"), "%s", message.str().c_str());
@@ -22039,14 +22308,19 @@ struct MPC
       const double eligible = static_cast<double>(window.eligible_count);
       const double attempts = static_cast<double>(
         std::max<std::uint64_t>(1U, window.attempt_count));
+      const double certificate_attempts = static_cast<double>(
+        std::max<std::uint64_t>(1U, window.actuation_count));
       RCLCPP_INFO(
         rclcpp::get_logger("mpc_controller"),
         "Follow MPCC shadow runtime: eligible=%zu, contract=%zu, metadata=%zu, "
-        "build=%zu, attempts=%zu, solved=%zu, primal=%zu, accepted=%zu/%.1f%%, "
+        "build=%zu, attempts=%zu, solved=%zu, primal=%zu, actuation=%zu, "
+        "physical=%zu, canonical=%zu/%zu/%zu/%zu/%zu/%zu, "
+        "accepted=%zu/%.1f%%, "
         "warm=%zu, reset=%zu, build_ms=%.3f/%.3f(avg/max), "
         "row_reject=%zu(velocity=%zu,progress_speed=%zu,curvature_rate=%zu,"
         "follow_gap=%zu,other=%zu), "
-        "solve_ms=%.3f/%.3f(avg/max), total_ms=%.3f/%.3f(avg/max), "
+        "solve_ms=%.3f/%.3f(avg/max), certificate_ms=%.3f/%.3f(avg/max), "
+        "total_ms=%.3f/%.3f(avg/max), "
         "last=%s, detail=%s, ego_v=%.3f, target_gap=%.3f, target_v=%.3f, "
         "v_ref0=%.3f, v_upper0=%.3f, terminal_s_bounds=[%.3f,%.3f], "
         "primal_reject=%s@%d, primal_value=%.9f, primal_violation=%.9f, "
@@ -22058,6 +22332,14 @@ struct MPC
         static_cast<std::size_t>(window.attempt_count),
         static_cast<std::size_t>(window.solved_count),
         static_cast<std::size_t>(window.execution_primal_count),
+        static_cast<std::size_t>(window.actuation_count),
+        static_cast<std::size_t>(window.physical_certificate_count),
+        static_cast<std::size_t>(window.canonical_plan_count),
+        static_cast<std::size_t>(window.canonical_cursor_count),
+        static_cast<std::size_t>(window.canonical_candidate_count),
+        static_cast<std::size_t>(window.canonical_authority_count),
+        static_cast<std::size_t>(window.canonical_actuation_count),
+        static_cast<std::size_t>(window.canonical_command_count),
         static_cast<std::size_t>(window.accepted_count),
         100.0 * static_cast<double>(window.accepted_count) / eligible,
         static_cast<std::size_t>(window.warm_start_count),
@@ -22071,6 +22353,8 @@ struct MPC
         static_cast<std::size_t>(window.follow_effective_gap_failure_count),
         static_cast<std::size_t>(window.other_constraint_failure_count),
         window.total_solve_ms / attempts, window.maximum_solve_ms,
+        window.total_certificate_ms / certificate_attempts,
+        window.maximum_certificate_ms,
         window.total_ms / eligible, window.maximum_total_ms,
         result.status.c_str(), result.detail.c_str(),
         result.measured_ego_speed_mps, result.current_target_gap_m,

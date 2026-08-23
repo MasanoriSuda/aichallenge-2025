@@ -145,6 +145,67 @@ TEST(FollowCanonicalAsyncCompatibility, OldNamespaceNamesCanonicalTransport)
   EXPECT_EQ(identity.intent, contract::ControlIntent::Follow);
 }
 
+TEST(CanonicalNormalAsyncContextLifecycle, ExactPhaseChangeResetsEpoch)
+{
+  async::ContextLifecycleState state;
+  const auto shift_out = async::resolve_context_lifecycle(
+    state, make_follow_plan(
+      42U, 3U, 7U, contract::ControlIntent::ShiftOut).problem);
+  ASSERT_TRUE(shift_out.valid);
+  EXPECT_FALSE(shift_out.reset_context);
+  ASSERT_TRUE(shift_out.next.initialized);
+  EXPECT_EQ(shift_out.next.context_epoch, 1U);
+
+  const auto pass = async::resolve_context_lifecycle(
+    shift_out.next, make_follow_plan(
+      43U, 3U, 8U, contract::ControlIntent::Pass).problem);
+  ASSERT_TRUE(pass.valid);
+  EXPECT_TRUE(pass.reset_context);
+  EXPECT_EQ(pass.next.context_epoch, 2U);
+  EXPECT_EQ(pass.next.intent, contract::ControlIntent::Pass);
+}
+
+TEST(CanonicalNormalAsyncContextLifecycle, NewObservationKeepsSameEpoch)
+{
+  const auto initialized = async::resolve_context_lifecycle(
+    async::ContextLifecycleState{}, make_follow_plan(
+      42U, 3U, 7U, contract::ControlIntent::ShiftOut).problem);
+  ASSERT_TRUE(initialized.valid);
+  const auto newer_observation = async::resolve_context_lifecycle(
+    initialized.next, make_follow_plan(
+      43U, 3U, 8U, contract::ControlIntent::ShiftOut).problem);
+  ASSERT_TRUE(newer_observation.valid);
+  EXPECT_FALSE(newer_observation.reset_context);
+  EXPECT_EQ(
+    newer_observation.next.context_epoch,
+    initialized.next.context_epoch);
+}
+
+TEST(CanonicalNormalAsyncContextLifecycle, StopFailsClosed)
+{
+  const auto resolution = async::resolve_context_lifecycle(
+    async::ContextLifecycleState{}, make_follow_plan(
+      42U, 3U, 7U, contract::ControlIntent::Stop).problem);
+  EXPECT_FALSE(resolution.valid);
+  EXPECT_EQ(
+    resolution.reason,
+    async::ContextLifecycleReason::UnsupportedIntent);
+  EXPECT_FALSE(resolution.next.initialized);
+}
+
+TEST(CanonicalNormalAsyncContextLifecycle, ExplicitInvalidationAdvancesOnce)
+{
+  const auto initialized = async::resolve_context_lifecycle(
+    async::ContextLifecycleState{}, make_follow_plan().problem);
+  ASSERT_TRUE(initialized.valid);
+  const auto invalidated =
+    async::invalidate_context_lifecycle(initialized.next);
+  EXPECT_FALSE(invalidated.initialized);
+  EXPECT_EQ(invalidated.context_epoch, 2U);
+  const auto repeated = async::invalidate_context_lifecycle(invalidated);
+  EXPECT_EQ(repeated.context_epoch, invalidated.context_epoch);
+}
+
 }  // namespace
 
 TEST(FollowCanonicalAsyncResult, AcceptsInternallyConsistentImmutablePlan)

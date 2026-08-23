@@ -2,11 +2,81 @@
 
 #include "multi_purpose_mpc_ros/latest_only_worker.hpp"
 
+#include <algorithm>
 #include <cmath>
+#include <limits>
 #include <utility>
 
 namespace multi_purpose_mpc_ros::canonical_normal_async
 {
+
+namespace
+{
+
+std::uint64_t next_context_epoch(const std::uint64_t current) noexcept
+{
+  return current == std::numeric_limits<std::uint64_t>::max() ?
+    1U : std::max<std::uint64_t>(1U, current + 1U);
+}
+
+}  // namespace
+
+const char * to_string(const ContextLifecycleReason reason) noexcept
+{
+  switch (reason) {
+    case ContextLifecycleReason::Accepted:
+      return "accepted";
+    case ContextLifecycleReason::InvalidContext:
+      return "invalid-context";
+    case ContextLifecycleReason::UnsupportedIntent:
+      return "unsupported-intent";
+  }
+  return "unknown";
+}
+
+ContextLifecycleResolution resolve_context_lifecycle(
+  const ContextLifecycleState & previous,
+  const mpcc_execution_contract::MpccProblemContext & context) noexcept
+{
+  ContextLifecycleResolution result;
+  result.next = previous;
+  if (!mpcc_execution_contract::canonical_normal_intent_supported(context.intent)) {
+    result.reason = ContextLifecycleReason::UnsupportedIntent;
+    return result;
+  }
+  if (!mpcc_execution_contract::problem_context_complete(context)) {
+    result.reason = ContextLifecycleReason::InvalidContext;
+    return result;
+  }
+  const bool identity_changed = previous.initialized &&
+    (previous.intent != context.intent ||
+    previous.intent_generation != context.intent_generation ||
+    previous.target_id != context.target_id);
+  if (identity_changed) {
+    result.next.context_epoch = next_context_epoch(previous.context_epoch);
+    result.reset_context = true;
+  } else if (result.next.context_epoch == 0U) {
+    result.next.context_epoch = 1U;
+  }
+  result.next.initialized = true;
+  result.next.intent = context.intent;
+  result.next.intent_generation = context.intent_generation;
+  result.next.target_id = context.target_id;
+  result.valid = true;
+  result.reason = ContextLifecycleReason::Accepted;
+  return result;
+}
+
+ContextLifecycleState invalidate_context_lifecycle(
+  const ContextLifecycleState & previous) noexcept
+{
+  if (!previous.initialized) {
+    return previous;
+  }
+  ContextLifecycleState result;
+  result.context_epoch = next_context_epoch(previous.context_epoch);
+  return result;
+}
 
 const char * to_string(const SnapshotContextReason reason) noexcept
 {

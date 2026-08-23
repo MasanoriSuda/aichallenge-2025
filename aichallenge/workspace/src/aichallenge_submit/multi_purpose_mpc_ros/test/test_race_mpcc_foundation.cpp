@@ -495,6 +495,34 @@ TEST(RaceMpccFoundation, AcceptsCompatibleFollowWarmStartIdentity)
   EXPECT_FALSE(result.reset_context);
 }
 
+TEST(RaceMpccFoundation, AcceptsInitialShiftOutWarmStartIdentity)
+{
+  const auto current = shadow_identity(
+    contract::ControlIntent::ShiftOut, 10, {11, 12, 13, 14});
+
+  const auto result = race::resolve_shadow_warm_start(std::nullopt, current);
+
+  EXPECT_TRUE(result.valid);
+  EXPECT_FALSE(result.apply_warm_start);
+  EXPECT_TRUE(result.reset_context);
+  EXPECT_EQ(result.reason, race::ShadowWarmStartResetReason::InitialContext);
+}
+
+TEST(RaceMpccFoundation, ResetsWarmStartAcrossExactOvertakeIntentChange)
+{
+  const auto previous = shadow_identity(
+    contract::ControlIntent::ShiftOut, 10, {11, 12, 13, 14});
+  const auto current = shadow_identity(
+    contract::ControlIntent::Pass, 11, {12, 13, 14, 15});
+
+  const auto result = race::resolve_shadow_warm_start(previous, current);
+
+  EXPECT_TRUE(result.valid);
+  EXPECT_FALSE(result.apply_warm_start);
+  EXPECT_TRUE(result.reset_context);
+  EXPECT_EQ(result.reason, race::ShadowWarmStartResetReason::IntentChanged);
+}
+
 TEST(RaceMpccFoundation, ResetsWarmStartWhenIntentChanges)
 {
   const auto previous = shadow_identity(

@@ -443,6 +443,17 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   canonical command identity and the rest were legacy bypass or wall hold. Production promotion is
   therefore still blocked. Repair the Overtake canonical producer lifecycle and same-formulation
   continuity before connecting the publisher; do not patch only the command identity.
+- `.steering/20260824-overtake-canonical-async-producer` adds that independent lifecycle in
+  shadow. Exact intent/target/generation/fingerprint jobs now run on a dedicated latest-only
+  five-state worker and cross the mailbox only as complete immutable plans; the live controller
+  then repeats target/corridor/wall/control-pose proof before selection. Three failure-first gates
+  removed clone-local intent/context re-derivation and the stale Track/Cruise/Follow-only
+  warm-start intent list. In `output/20260824-043223`, ShiftOut and Pass produced 155 complete
+  physical chains and 123 stored current-world plans with zero worker exception, identity reject,
+  snapshot failure or callback overrun. Production promotion remains blocked: 34/158 eligible
+  cycles lacked current-world selection, led by 23 course-frame-window and 9 current-corridor
+  rejects. Audit and close that proof coverage before atomically connecting canonical Overtake and
+  deleting conversion/circuit/reentry/three-state normal ownership.
 
 ## Slice 6: Legacy and migration path removal
 

@@ -6323,12 +6323,12 @@ struct ExtendedBranchSolverContext
   std::uint64_t warm_start_count{};
 };
 
-/// One lifetime boundary for every canonical Follow artifact. Tactical
+/// One lifetime boundary for a canonical normal artifact family. Tactical
 /// snapshots may be short-lived, but they must not fork solver warm state,
 /// problem epochs, or the accepted canonical plan store. The mutex protects
 /// only the warm-start identity/epoch pair; the solver context and plan store
 /// provide their own synchronization.
-struct FollowCanonicalLifecycle
+struct CanonicalNormalLifecycle
 {
   std::shared_ptr<ExtendedBranchSolverContext> solver_context;
   std::mutex warm_start_mutex;
@@ -6353,7 +6353,9 @@ struct MPC
     (void)use_obstacle_avoidance;
     (void)use_path_constraints_topic;
     follow_canonical_lifecycle_ =
-      std::make_shared<FollowCanonicalLifecycle>();
+      std::make_shared<CanonicalNormalLifecycle>();
+    overtake_canonical_lifecycle_ =
+      std::make_shared<CanonicalNormalLifecycle>();
     if (
       cfg.progress_contouring_mpcc_enabled &&
       cfg.progress_contouring_mpcc_overtake_only &&
@@ -6365,12 +6367,21 @@ struct MPC
       follow_canonical_lifecycle_->solver_context =
         std::make_shared<ExtendedBranchSolverContext>(
         kCanonicalPhysicalRowTolerancePolicy);
+      overtake_canonical_lifecycle_->solver_context =
+        std::make_shared<ExtendedBranchSolverContext>(
+        kCanonicalPhysicalRowTolerancePolicy);
       if (enable_async_tactical_worker) {
         follow_canonical_async_mailbox_ =
           std::make_shared<follow_async::Mailbox>();
         follow_canonical_async_mailbox_->reset_context(
-          follow_canonical_async_context_epoch_);
+          follow_canonical_async_context_.context_epoch);
         follow_canonical_async_worker_ =
+          std::make_unique<LatestOnlyWorker>();
+        overtake_canonical_async_mailbox_ =
+          std::make_shared<follow_async::Mailbox>();
+        overtake_canonical_async_mailbox_->reset_context(
+          overtake_canonical_async_context_.context_epoch);
+        overtake_canonical_async_worker_ =
           std::make_unique<LatestOnlyWorker>();
       }
     }
@@ -6526,6 +6537,7 @@ struct MPC
     snapshot->extended_right_branch_solver_context_ =
       extended_right_branch_solver_context_;
     snapshot->follow_canonical_lifecycle_ = follow_canonical_lifecycle_;
+    snapshot->overtake_canonical_lifecycle_ = overtake_canonical_lifecycle_;
     snapshot->next_overtake_episode_id_ = next_overtake_episode_id_;
     snapshot->dynamic_obstacle_lateral_escape_attempt_tracker_ =
       dynamic_obstacle_lateral_escape_attempt_tracker_;
@@ -23202,44 +23214,40 @@ struct MPC
 
   void invalidate_follow_canonical_async_context()
   {
-    if (!follow_canonical_async_context_initialized_) {
+    const auto invalidated = follow_async::invalidate_context_lifecycle(
+      follow_canonical_async_context_);
+    if (
+      invalidated.context_epoch == follow_canonical_async_context_.context_epoch &&
+      invalidated.initialized == follow_canonical_async_context_.initialized)
+    {
       return;
     }
-    follow_canonical_async_context_epoch_ =
-      follow_canonical_async_context_epoch_ ==
-      std::numeric_limits<std::uint64_t>::max() ?
-      1U : follow_canonical_async_context_epoch_ + 1U;
-    follow_canonical_async_context_initialized_ = false;
-    follow_canonical_async_intent_generation_ = 0U;
-    follow_canonical_async_target_id_.clear();
+    follow_canonical_async_context_ = invalidated;
     follow_canonical_async_last_consumed_sequence_ = 0U;
     if (follow_canonical_async_mailbox_ != nullptr) {
       follow_canonical_async_mailbox_->reset_context(
-        follow_canonical_async_context_epoch_);
+        follow_canonical_async_context_.context_epoch);
     }
   }
 
   bool prepare_follow_canonical_async_context(
     const mpcc_contract::MpccProblemContext & context)
   {
-    if (
-      !mpcc_contract::problem_context_complete(context) ||
-      context.intent != mpcc_contract::ControlIntent::Follow ||
-      context.target_id.empty())
-    {
+    if (context.intent != mpcc_contract::ControlIntent::Follow) {
       return false;
     }
-    const bool context_changed =
-      follow_canonical_async_context_initialized_ &&
-      (follow_canonical_async_intent_generation_ != context.intent_generation ||
-      follow_canonical_async_target_id_ != context.target_id);
-    if (context_changed) {
-      invalidate_follow_canonical_async_context();
+    const auto resolution = follow_async::resolve_context_lifecycle(
+      follow_canonical_async_context_, context);
+    if (!resolution.valid) {
+      return false;
     }
-    if (!follow_canonical_async_context_initialized_) {
-      follow_canonical_async_context_initialized_ = true;
-      follow_canonical_async_intent_generation_ = context.intent_generation;
-      follow_canonical_async_target_id_ = context.target_id;
+    follow_canonical_async_context_ = resolution.next;
+    if (resolution.reset_context) {
+      follow_canonical_async_last_consumed_sequence_ = 0U;
+      if (follow_canonical_async_mailbox_ != nullptr) {
+        follow_canonical_async_mailbox_->reset_context(
+          follow_canonical_async_context_.context_epoch);
+      }
     }
     return true;
   }
@@ -23279,7 +23287,7 @@ struct MPC
       const std::uint64_t sequence = follow_canonical_async_next_sequence_++;
       follow_async::ResultIdentity identity;
       identity.sequence = sequence;
-      identity.context_epoch = follow_canonical_async_context_epoch_;
+      identity.context_epoch = follow_canonical_async_context_.context_epoch;
       identity.snapshot_decision_id = context.decision_id;
       identity.intent = context.intent;
       identity.intent_generation = context.intent_generation;
@@ -23403,7 +23411,8 @@ struct MPC
             problem, mpcc_contract::Formulation::VelocityProgress5State);
           const auto current_identity_reason =
             follow_async::validate_current_identity(
-            worker_result->identity, follow_canonical_async_context_epoch_,
+            worker_result->identity,
+            follow_canonical_async_context_.context_epoch,
             current_context);
           if (
             current_identity_reason ==
@@ -24153,11 +24162,12 @@ struct MPC
   }
 
   OvertakeCanonicalFreshShadowResult make_overtake_canonical_shadow_result(
-    const MpcProblem & problem) const
+    const MpcProblem & problem,
+    const mpcc_contract::MpccProblemContext & context) const
   {
     OvertakeCanonicalFreshShadowResult result;
-    result.decision_id = active_control_decision_id_;
-    result.intent = current_control_intent();
+    result.decision_id = context.decision_id;
+    result.intent = context.intent;
     result.eligibility_reason =
       race_mpcc::resolve_overtake_canonical_fresh_shadow_eligibility(
       race_mpcc::OvertakeCanonicalFreshShadowEligibilityRequest{
@@ -24178,10 +24188,12 @@ struct MPC
     const MpcProblem & problem,
     const ExtendedProgressMpcProblem & extended_problem,
     const persistent_osqp::SolveResult & solve_result,
-    const double now_sec)
+    const double now_sec,
+    const mpcc_contract::MpccProblemContext & snapshot_context)
   {
     constexpr int progress_metadata_nx = 3;
-    auto result = make_overtake_canonical_shadow_result(problem);
+    auto result = make_overtake_canonical_shadow_result(
+      problem, snapshot_context);
     result.initial_lag_m = extended_problem.initial_lag_m;
     const auto started = SteadyClock::now();
     const auto finish = [&result, &started]() {
@@ -24197,8 +24209,7 @@ struct MPC
       return finish();
     }
 
-    const auto context = make_problem_context(
-      problem, mpcc_contract::Formulation::VelocityProgress5State);
+    const auto & context = snapshot_context;
     result.context_complete = mpcc_contract::problem_context_complete(context);
     if (!result.context_complete) {
       result.status = "context-reject";
@@ -24424,6 +24435,117 @@ struct MPC
       "selection-incomplete";
     result.detail = certificate_reason;
     return finish();
+  }
+
+  OvertakeCanonicalFreshShadowResult
+  evaluate_overtake_canonical_worker_fresh(
+    const MpcProblem & problem, const double now_sec,
+    const mpcc_contract::MpccProblemContext & snapshot_context)
+  {
+    auto result = make_overtake_canonical_shadow_result(problem, snapshot_context);
+    if (!result.eligible) {
+      result.status = "eligibility-reject";
+      result.detail =
+        race_mpcc::overtake_canonical_fresh_shadow_eligibility_reason_name(
+        result.eligibility_reason);
+      return result;
+    }
+    const auto current_context = seal_problem_context_for_problem(
+      problem, snapshot_context);
+    if (
+      !mpcc_contract::problem_context_complete(snapshot_context) ||
+      snapshot_context.intent != result.intent ||
+      snapshot_context.fingerprint != current_context.fingerprint)
+    {
+      result.status = "context-reject";
+      result.detail = "sealed Overtake snapshot context does not match problem";
+      return result;
+    }
+
+    std::string build_reject_reason;
+    const auto extended_problem = build_extended_progress_problem(
+      problem, build_reject_reason);
+    if (!extended_problem.has_value()) {
+      result.status = "build-reject";
+      result.detail = build_reject_reason.empty() ?
+        "extended Overtake problem unavailable" : build_reject_reason;
+      return result;
+    }
+    if (
+      overtake_canonical_lifecycle_ == nullptr ||
+      overtake_canonical_lifecycle_->solver_context == nullptr)
+    {
+      result.status = "solver-context-reject";
+      result.detail = "dedicated Overtake canonical solver context unavailable";
+      return result;
+    }
+
+    const auto warm_identity =
+      make_canonical_shadow_warm_start_identity(problem, snapshot_context);
+    race_mpcc::ShadowWarmStartResolution warm_resolution;
+    std::uint64_t context_epoch{};
+    {
+      std::lock_guard<std::mutex> lock(
+        overtake_canonical_lifecycle_->warm_start_mutex);
+      warm_resolution = race_mpcc::resolve_shadow_warm_start(
+        overtake_canonical_lifecycle_->warm_start_identity, warm_identity);
+      if (warm_resolution.valid) {
+        if (warm_resolution.reset_context) {
+          auto & epoch = overtake_canonical_lifecycle_->context_epoch;
+          epoch = epoch == std::numeric_limits<std::uint64_t>::max() ?
+            1U : epoch + 1U;
+        }
+        overtake_canonical_lifecycle_->warm_start_identity = warm_identity;
+      }
+      context_epoch = overtake_canonical_lifecycle_->context_epoch;
+    }
+    if (!warm_resolution.valid) {
+      result.status = "warm-context-reject";
+      result.detail = race_mpcc::shadow_warm_start_reset_reason_name(
+        warm_resolution.reason);
+      return result;
+    }
+
+    const auto previous_context = active_extended_branch_solver_context_;
+    const auto previous_epoch = active_extended_branch_context_epoch_;
+    const auto previous_target = active_extended_branch_target_id_;
+    const int previous_side = active_extended_branch_side_sign_;
+    const int previous_horizon = active_extended_branch_horizon_size_;
+    const bool previous_warm = last_extended_branch_warm_start_applied_;
+    const bool previous_reset = last_extended_branch_context_reset_;
+    const auto previous_count = last_extended_branch_context_solve_count_;
+    auto restore_solver_context = ScopeExit([this, previous_context, previous_epoch,
+        previous_target, previous_side, previous_horizon, previous_warm,
+        previous_reset, previous_count]() {
+        active_extended_branch_solver_context_ = previous_context;
+        active_extended_branch_context_epoch_ = previous_epoch;
+        active_extended_branch_target_id_ = previous_target;
+        active_extended_branch_side_sign_ = previous_side;
+        active_extended_branch_horizon_size_ = previous_horizon;
+        last_extended_branch_warm_start_applied_ = previous_warm;
+        last_extended_branch_context_reset_ = previous_reset;
+        last_extended_branch_context_solve_count_ = previous_count;
+      });
+    active_extended_branch_solver_context_ =
+      overtake_canonical_lifecycle_->solver_context;
+    active_extended_branch_context_epoch_ = context_epoch;
+    active_extended_branch_target_id_ = snapshot_context.target_id;
+    active_extended_branch_side_sign_ =
+      problem.progress_execution_side_sign != 0 ?
+      problem.progress_execution_side_sign :
+      problem.dynamic_obstacle_lateral_escape_side_sign;
+    active_extended_branch_horizon_size_ = problem.N;
+
+    const auto outcome = solve_extended_progress_problem(
+      extended_problem.value(), now_sec, false);
+    if (!outcome.result.has_value()) {
+      result.status = "solve-reject";
+      result.detail = outcome.failure_detail;
+      return result;
+    }
+    return evaluate_overtake_canonical_fresh_shadow(
+      problem, extended_problem.value(), outcome.result.value(), now_sec,
+      snapshot_context);
   }
 
   void evaluate_overtake_canonical_retained_shadow(
@@ -24771,6 +24893,322 @@ struct MPC
     result.retained_detail = result.retained_selection_complete ?
       "retained Overtake candidate current-world-certified for shadow" :
       "retained Overtake selection incomplete";
+  }
+
+  static bool overtake_canonical_async_intent(
+    const mpcc_contract::ControlIntent intent) noexcept
+  {
+    return
+      intent == mpcc_contract::ControlIntent::ShiftOut ||
+      intent == mpcc_contract::ControlIntent::Pass ||
+      intent == mpcc_contract::ControlIntent::Return;
+  }
+
+  void invalidate_overtake_canonical_async_context()
+  {
+    const auto invalidated = follow_async::invalidate_context_lifecycle(
+      overtake_canonical_async_context_);
+    if (
+      invalidated.context_epoch == overtake_canonical_async_context_.context_epoch &&
+      invalidated.initialized == overtake_canonical_async_context_.initialized)
+    {
+      return;
+    }
+    overtake_canonical_async_context_ = invalidated;
+    overtake_canonical_async_last_consumed_sequence_ = 0U;
+    if (overtake_canonical_async_mailbox_ != nullptr) {
+      overtake_canonical_async_mailbox_->reset_context(
+        overtake_canonical_async_context_.context_epoch);
+    }
+  }
+
+  bool prepare_overtake_canonical_async_context(
+    const mpcc_contract::MpccProblemContext & context)
+  {
+    if (!overtake_canonical_async_intent(context.intent)) {
+      return false;
+    }
+    const auto resolution = follow_async::resolve_context_lifecycle(
+      overtake_canonical_async_context_, context);
+    if (!resolution.valid) {
+      return false;
+    }
+    overtake_canonical_async_context_ = resolution.next;
+    if (resolution.reset_context) {
+      overtake_canonical_async_last_consumed_sequence_ = 0U;
+      if (overtake_canonical_async_mailbox_ != nullptr) {
+        overtake_canonical_async_mailbox_->reset_context(
+          overtake_canonical_async_context_.context_epoch);
+      }
+    }
+    return true;
+  }
+
+  bool submit_overtake_canonical_async(
+    const MpcProblem & problem, const double now_sec,
+    const mpcc_contract::MpccProblemContext & context)
+  {
+    if (
+      overtake_canonical_async_worker_ == nullptr ||
+      overtake_canonical_async_mailbox_ == nullptr || model == nullptr ||
+      model->reference_path == nullptr)
+    {
+      return false;
+    }
+    if (!prepare_overtake_canonical_async_context(context)) {
+      return false;
+    }
+
+    const auto snapshot_started = SteadyClock::now();
+    try {
+      auto reference_path_snapshot =
+        std::make_shared<ReferencePath>(*model->reference_path);
+      auto model_snapshot = std::make_shared<BicycleModel>(*model);
+      model_snapshot->reference_path = reference_path_snapshot.get();
+      model_snapshot->current_waypoint =
+        &model_snapshot->reference_path->waypoints.at(
+        static_cast<std::size_t>(model_snapshot->wp_id));
+      auto planner_snapshot = tactical_snapshot(model_snapshot.get(), nullptr);
+      planner_snapshot->reference_path_snapshot_owner_ =
+        reference_path_snapshot;
+
+      const std::uint64_t sequence = overtake_canonical_async_next_sequence_++;
+      follow_async::ResultIdentity identity;
+      identity.sequence = sequence;
+      identity.context_epoch = overtake_canonical_async_context_.context_epoch;
+      identity.snapshot_decision_id = context.decision_id;
+      identity.intent = context.intent;
+      identity.intent_generation = context.intent_generation;
+      identity.target_observation_generation =
+        context.target_obstacle_generation;
+      identity.problem_fingerprint = context.fingerprint;
+      identity.target_id = context.target_id;
+      identity.snapshot_sec = now_sec;
+      auto mailbox = overtake_canonical_async_mailbox_;
+      if (!mailbox->register_submission(identity.context_epoch, sequence)) {
+        ++overtake_canonical_async_submission_reject_count_;
+        return false;
+      }
+      MpcProblem problem_snapshot = problem;
+      const auto submission = overtake_canonical_async_worker_->submit_latest(
+        [planner_snapshot, model_snapshot, reference_path_snapshot, mailbox,
+        identity, context, problem_snapshot = std::move(problem_snapshot)]() mutable {
+          static_cast<void>(model_snapshot);
+          static_cast<void>(reference_path_snapshot);
+          const auto worker_started = SteadyClock::now();
+          follow_async::WorkerResult worker_result;
+          worker_result.identity = identity;
+          try {
+            const auto snapshot_reason =
+              follow_async::validate_snapshot_context(identity, context);
+            if (
+              snapshot_reason != follow_async::SnapshotContextReason::Accepted)
+            {
+              worker_result.outcome = follow_async::WorkerOutcome::Rejected;
+              worker_result.detail = std::string{"snapshot-context-reject/"} +
+                follow_async::to_string(snapshot_reason);
+            } else {
+              const auto fresh =
+                planner_snapshot->evaluate_overtake_canonical_worker_fresh(
+                problem_snapshot, identity.snapshot_sec, context);
+              worker_result.detail = fresh.status + "/" + fresh.detail;
+              if (fresh.selection_complete && fresh.selected.plan != nullptr) {
+                worker_result.outcome = follow_async::WorkerOutcome::PlanAvailable;
+                worker_result.canonical_plan = fresh.selected.plan;
+              } else if (fresh.status == "exception") {
+                worker_result.outcome = follow_async::WorkerOutcome::Exception;
+              } else {
+                worker_result.outcome = follow_async::WorkerOutcome::Rejected;
+              }
+            }
+          } catch (const std::exception & error) {
+            worker_result.outcome = follow_async::WorkerOutcome::Exception;
+            worker_result.detail = error.what();
+          } catch (...) {
+            worker_result.outcome = follow_async::WorkerOutcome::Exception;
+            worker_result.detail =
+              "unknown Overtake canonical worker exception";
+          }
+          worker_result.compute_ms =
+            std::chrono::duration<double, std::milli>(
+            SteadyClock::now() - worker_started).count();
+          worker_result.completed_sec = identity.snapshot_sec +
+            worker_result.compute_ms * 1.0e-3;
+          static_cast<void>(mailbox->publish(std::move(worker_result)));
+        });
+      overtake_canonical_async_last_snapshot_ms_ =
+        std::chrono::duration<double, std::milli>(
+        SteadyClock::now() - snapshot_started).count();
+      if (!submission.accepted) {
+        ++overtake_canonical_async_submission_reject_count_;
+        return false;
+      }
+      return true;
+    } catch (const std::exception & error) {
+      ++overtake_canonical_async_snapshot_failure_count_;
+      overtake_canonical_async_last_detail_ = error.what();
+    } catch (...) {
+      ++overtake_canonical_async_snapshot_failure_count_;
+      overtake_canonical_async_last_detail_ =
+        "unknown Overtake canonical snapshot exception";
+    }
+    overtake_canonical_async_last_snapshot_ms_ =
+      std::chrono::duration<double, std::milli>(
+      SteadyClock::now() - snapshot_started).count();
+    return false;
+  }
+
+  OvertakeCanonicalFreshShadowResult evaluate_overtake_async_shadow(
+    const MpcProblem & problem, const double now_sec)
+  {
+    const auto current_context = make_problem_context(
+      problem, mpcc_contract::Formulation::VelocityProgress5State);
+    auto result = make_overtake_canonical_shadow_result(
+      problem, current_context);
+    const auto started = SteadyClock::now();
+    static_cast<void>(submit_overtake_canonical_async(
+        problem, now_sec, current_context));
+
+    std::shared_ptr<const canonical_plan::CanonicalExecutionPlan>
+    incoming_plan;
+    if (overtake_canonical_async_mailbox_ != nullptr) {
+      const auto worker_result = overtake_canonical_async_mailbox_->latest_after(
+        overtake_canonical_async_last_consumed_sequence_);
+      if (worker_result.has_value()) {
+        overtake_canonical_async_last_consumed_sequence_ =
+          worker_result->identity.sequence;
+        ++overtake_canonical_async_consumed_count_;
+        overtake_canonical_async_last_compute_ms_ = worker_result->compute_ms;
+        overtake_canonical_async_last_result_age_sec_ = std::max(
+          0.0, now_sec - worker_result->identity.snapshot_sec);
+        overtake_canonical_async_last_detail_ = worker_result->detail;
+        result.status = worker_result->outcome ==
+          follow_async::WorkerOutcome::PlanAvailable ?
+          "async-plan-received" : "async-worker-reject";
+        result.detail = worker_result->detail;
+        if (
+          worker_result->outcome == follow_async::WorkerOutcome::PlanAvailable &&
+          worker_result->canonical_plan != nullptr)
+        {
+          const auto current_identity_reason =
+            follow_async::validate_current_identity(
+            worker_result->identity,
+            overtake_canonical_async_context_.context_epoch,
+            current_context);
+          if (
+            current_identity_reason ==
+            follow_async::CurrentIdentityReason::Accepted)
+          {
+            incoming_plan = worker_result->canonical_plan;
+            result.context_complete = true;
+            result.lateral_contract_satisfied = true;
+            result.execution_primal_accepted = true;
+            result.actuation_extracted = true;
+            result.trajectory_extracted = true;
+            result.physical_certificate_checked = true;
+            result.physically_certified = true;
+            result.canonical_chain_ready = true;
+            evaluate_overtake_canonical_retained_shadow(
+              problem, now_sec, incoming_plan, result);
+            if (result.retained_selection_complete) {
+              result.canonical_store_reason =
+                overtake_canonical_lifecycle_->plan_store.replace(*incoming_plan);
+              result.canonical_plan_stored =
+                result.canonical_store_reason ==
+                canonical_plan::CanonicalExecutionPlanStoreReason::Accepted;
+              if (result.canonical_plan_stored) {
+                ++overtake_canonical_async_current_world_accept_count_;
+                result.status = "async-current-world-ready";
+              }
+            }
+          } else {
+            ++overtake_canonical_async_current_identity_reject_count_;
+            result.retained_detail = std::string{
+              "async plan identity rejected: "} +
+              follow_async::to_string(current_identity_reason);
+          }
+        }
+      }
+    }
+
+    if (!result.retained_selection_complete) {
+      const auto retained_plan =
+        overtake_canonical_lifecycle_->plan_store.snapshot();
+      if (retained_plan != incoming_plan) {
+        try {
+          evaluate_overtake_canonical_retained_shadow(
+            problem, now_sec, retained_plan, result);
+        } catch (const std::exception & error) {
+          result.retained_outcome =
+            OvertakeCanonicalFreshShadowResult::RetainedOutcome::Exception;
+          result.retained_detail = std::string{"retained shadow exception: "} +
+            error.what();
+        } catch (...) {
+          result.retained_outcome =
+            OvertakeCanonicalFreshShadowResult::RetainedOutcome::Exception;
+          result.retained_detail = "retained shadow exception: unknown";
+        }
+      }
+    }
+    result.selection_complete = result.selected.complete();
+    result.prediction_available = result.selection_complete;
+    if (result.status == "not-eligible") {
+      result.status = result.selection_complete ?
+        "async-retained-ready" : "async-pending";
+    }
+    result.total_ms = std::chrono::duration<double, std::milli>(
+      SteadyClock::now() - started).count();
+    return result;
+  }
+
+  void record_overtake_canonical_async_status(const double now_sec)
+  {
+    if (
+      overtake_canonical_async_worker_ == nullptr || !std::isfinite(now_sec) ||
+      (std::isfinite(overtake_canonical_async_last_status_log_sec_) &&
+      now_sec - overtake_canonical_async_last_status_log_sec_ < 1.0))
+    {
+      return;
+    }
+    overtake_canonical_async_last_status_log_sec_ = now_sec;
+    const auto stats = overtake_canonical_async_worker_->stats();
+    const auto mailbox_state = overtake_canonical_async_mailbox_ != nullptr ?
+      overtake_canonical_async_mailbox_->state() : follow_async::MailboxState{};
+    RCLCPP_INFO(
+      rclcpp::get_logger("mpc_controller"),
+      "Overtake canonical worker: submitted=%lu, replaced=%lu, started=%lu, "
+      "completed=%lu, exceptions=%lu, running=%d, pending=%d, "
+      "mailbox=%lu/%lu/%d/%s/%s, publish=%lu/%lu/%lu/%lu/%lu, "
+      "consumed=%lu, current_ready=%lu, identity_reject=%lu, "
+      "submit_reject=%lu, snapshot_fail=%lu, snapshot_ms=%.3f, "
+      "compute_ms=%.3f, result_age=%.3f, detail=%s",
+      static_cast<unsigned long>(stats.submitted),
+      static_cast<unsigned long>(stats.replaced),
+      static_cast<unsigned long>(stats.started),
+      static_cast<unsigned long>(stats.completed),
+      static_cast<unsigned long>(stats.exceptions),
+      stats.running ? 1 : 0, stats.pending ? 1 : 0,
+      static_cast<unsigned long>(mailbox_state.latest_submitted_sequence),
+      static_cast<unsigned long>(mailbox_state.latest_published_sequence),
+      mailbox_state.result_available ? 1 : 0,
+      follow_async::to_string(mailbox_state.last_publish_reason),
+      follow_async::to_string(mailbox_state.last_validation_reason),
+      static_cast<unsigned long>(mailbox_state.accepted_count),
+      static_cast<unsigned long>(mailbox_state.invalid_result_count),
+      static_cast<unsigned long>(mailbox_state.context_mismatch_count),
+      static_cast<unsigned long>(mailbox_state.sequence_rollback_count),
+      static_cast<unsigned long>(mailbox_state.sequence_not_submitted_count),
+      static_cast<unsigned long>(overtake_canonical_async_consumed_count_),
+      static_cast<unsigned long>(
+        overtake_canonical_async_current_world_accept_count_),
+      static_cast<unsigned long>(
+        overtake_canonical_async_current_identity_reject_count_),
+      static_cast<unsigned long>(overtake_canonical_async_submission_reject_count_),
+      static_cast<unsigned long>(overtake_canonical_async_snapshot_failure_count_),
+      overtake_canonical_async_last_snapshot_ms_,
+      overtake_canonical_async_last_compute_ms_,
+      overtake_canonical_async_last_result_age_sec_,
+      overtake_canonical_async_last_detail_.c_str());
   }
 
   void record_overtake_canonical_fresh_shadow_telemetry(
@@ -26553,8 +26991,12 @@ struct MPC
         race_mpcc::StopAuthorityAction::EmergencyStop)
       {
         invalidate_follow_canonical_async_context();
+        invalidate_overtake_canonical_async_context();
         return canonical_normal_emergency_stop(
           problem, control_intent, "safety-brake-stop-authority");
+      }
+      if (!overtake_canonical_async_intent(control_intent)) {
+        invalidate_overtake_canonical_async_context();
       }
       if (control_intent == mpcc_contract::ControlIntent::Follow) {
         const auto follow_result = evaluate_follow_async_shadow(problem, now_sec);
@@ -26595,7 +27037,8 @@ struct MPC
         cfg.progress_contouring.extended_dynamics_enabled)
       {
         auto canonical_overtake_shadow =
-          make_overtake_canonical_shadow_result(problem);
+          evaluate_overtake_async_shadow(problem, now_sec);
+        record_overtake_canonical_async_status(now_sec);
         record_problem_context(
           problem, mpcc_contract::Formulation::VelocityProgress5State);
         if (extended_progress_circuit_breaker_.active(now_sec)) {
@@ -26630,10 +27073,6 @@ struct MPC
             auto extended_outcome = solve_extended_progress_problem(
               extended_problem.value(), now_sec);
             if (extended_outcome.result.has_value()) {
-              canonical_overtake_shadow =
-                evaluate_overtake_canonical_fresh_shadow(
-                problem, extended_problem.value(),
-                extended_outcome.result.value(), now_sec);
               const auto legacy_solution =
                 mpcc_progress::convert_extended_solution_to_legacy(
                 extended_outcome.result->primal, N,
@@ -26683,48 +27122,6 @@ struct MPC
             record_extended_mpcc_telemetry(
               ExtendedMpccCycleStatus::BuildReject, nullptr, now_sec);
           }
-        }
-        if (
-          canonical_overtake_shadow.selection_complete &&
-          canonical_overtake_shadow.selected.plan != nullptr)
-        {
-          canonical_overtake_shadow.canonical_store_reason =
-            overtake_canonical_shadow_plan_store_.replace(
-            *canonical_overtake_shadow.selected.plan);
-          canonical_overtake_shadow.canonical_plan_stored =
-            canonical_overtake_shadow.canonical_store_reason ==
-            canonical_plan::CanonicalExecutionPlanStoreReason::Accepted;
-          if (!canonical_overtake_shadow.canonical_plan_stored) {
-            canonical_overtake_shadow.retained_detail =
-              std::string{"fresh plan store rejected: "} +
-              canonical_plan::to_string(
-              canonical_overtake_shadow.canonical_store_reason);
-          }
-        }
-        if (
-          canonical_overtake_shadow.eligible &&
-          !canonical_overtake_shadow.selection_complete)
-        {
-          const auto retained_started = SteadyClock::now();
-          try {
-            evaluate_overtake_canonical_retained_shadow(
-              problem, now_sec,
-              overtake_canonical_shadow_plan_store_.snapshot(),
-              canonical_overtake_shadow);
-          } catch (const std::exception & error) {
-            canonical_overtake_shadow.retained_outcome =
-              OvertakeCanonicalFreshShadowResult::RetainedOutcome::Exception;
-            canonical_overtake_shadow.retained_detail =
-              std::string{"retained shadow exception: "} + error.what();
-          } catch (...) {
-            canonical_overtake_shadow.retained_outcome =
-              OvertakeCanonicalFreshShadowResult::RetainedOutcome::Exception;
-            canonical_overtake_shadow.retained_detail =
-              "retained shadow exception: unknown";
-          }
-          canonical_overtake_shadow.retained_total_ms =
-            std::chrono::duration<double, std::milli>(
-            SteadyClock::now() - retained_started).count();
         }
         record_overtake_canonical_fresh_shadow_telemetry(
           canonical_overtake_shadow, now_sec);
@@ -27365,6 +27762,20 @@ struct MPC
         context.target_id = provenance.target_id;
       }
     }
+    context.formulation = formulation;
+    return seal_problem_context_for_problem(problem, std::move(context));
+  }
+
+  mpcc_contract::MpccProblemContext seal_problem_context_for_problem(
+    const MpcProblem & problem,
+    mpcc_contract::MpccProblemContext context) const
+  {
+    const auto formulation = context.formulation;
+    context.fingerprint = 0U;
+    context.state_schema_id.clear();
+    context.input_schema_id.clear();
+    context.bounds_schema_id.clear();
+    context.cost_schema_id.clear();
     const bool progress_geometry_required =
       formulation == mpcc_contract::Formulation::ProgressContouring3State ||
       formulation == mpcc_contract::Formulation::VelocityProgress5State;
@@ -27383,7 +27794,6 @@ struct MPC
         problem.stage_geometry.circular, stages);
     }
     context.horizon_steps = static_cast<std::size_t>(std::max(0, problem.N));
-    context.formulation = formulation;
     switch (formulation) {
       case mpcc_contract::Formulation::LegacySpatialMpc3State:
         context.state_schema_id = "ey-epsi-time-v1";
@@ -27505,15 +27915,13 @@ struct MPC
   std::shared_ptr<ExtendedBranchSolverContext> extended_left_branch_solver_context_;
   std::shared_ptr<ExtendedBranchSolverContext> extended_right_branch_solver_context_;
   std::shared_ptr<ExtendedBranchSolverContext> track_cruise_shadow_solver_context_;
-  std::shared_ptr<FollowCanonicalLifecycle> follow_canonical_lifecycle_;
+  std::shared_ptr<CanonicalNormalLifecycle> follow_canonical_lifecycle_;
+  std::shared_ptr<CanonicalNormalLifecycle> overtake_canonical_lifecycle_;
   std::shared_ptr<follow_async::Mailbox> follow_canonical_async_mailbox_;
   std::unique_ptr<LatestOnlyWorker> follow_canonical_async_worker_;
   std::uint64_t follow_canonical_async_next_sequence_{1U};
-  std::uint64_t follow_canonical_async_context_epoch_{1U};
+  follow_async::ContextLifecycleState follow_canonical_async_context_;
   std::uint64_t follow_canonical_async_last_consumed_sequence_{};
-  bool follow_canonical_async_context_initialized_{false};
-  std::uint64_t follow_canonical_async_intent_generation_{};
-  std::string follow_canonical_async_target_id_;
   std::uint64_t follow_canonical_async_consumed_count_{};
   std::uint64_t follow_canonical_async_current_world_accept_count_{};
   std::uint64_t follow_canonical_async_current_identity_reject_count_{};
@@ -27526,6 +27934,23 @@ struct MPC
   double follow_canonical_async_last_status_log_sec_{
     -std::numeric_limits<double>::infinity()};
   std::string follow_canonical_async_last_detail_{"not-evaluated"};
+  std::shared_ptr<follow_async::Mailbox> overtake_canonical_async_mailbox_;
+  std::unique_ptr<LatestOnlyWorker> overtake_canonical_async_worker_;
+  std::uint64_t overtake_canonical_async_next_sequence_{1U};
+  follow_async::ContextLifecycleState overtake_canonical_async_context_;
+  std::uint64_t overtake_canonical_async_last_consumed_sequence_{};
+  std::uint64_t overtake_canonical_async_consumed_count_{};
+  std::uint64_t overtake_canonical_async_current_world_accept_count_{};
+  std::uint64_t overtake_canonical_async_current_identity_reject_count_{};
+  std::uint64_t overtake_canonical_async_submission_reject_count_{};
+  std::uint64_t overtake_canonical_async_snapshot_failure_count_{};
+  double overtake_canonical_async_last_snapshot_ms_{};
+  double overtake_canonical_async_last_compute_ms_{};
+  double overtake_canonical_async_last_result_age_sec_{
+    std::numeric_limits<double>::infinity()};
+  double overtake_canonical_async_last_status_log_sec_{
+    -std::numeric_limits<double>::infinity()};
+  std::string overtake_canonical_async_last_detail_{"not-evaluated"};
   canonical_plan::CanonicalExecutionPlanStore track_cruise_shadow_plan_store_;
   std::optional<race_mpcc::ShadowWarmStartIdentity>
   track_cruise_shadow_warm_start_identity_;
@@ -27540,8 +27965,6 @@ struct MPC
   double last_canonical_normal_final_actuation_log_sec_{
     std::numeric_limits<double>::quiet_NaN()};
   std::string last_track_cruise_shadow_status_;
-  canonical_plan::CanonicalExecutionPlanStore
-  overtake_canonical_shadow_plan_store_;
   OvertakeCanonicalFreshShadowTelemetryWindow
   overtake_canonical_fresh_shadow_telemetry_window_;
   double overtake_canonical_fresh_shadow_last_log_sec_{

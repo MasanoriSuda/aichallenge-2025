@@ -14,6 +14,46 @@ namespace multi_purpose_mpc_ros::canonical_normal_async
 
 namespace plan = canonical_execution_plan;
 
+struct ContextLifecycleState
+{
+  std::uint64_t context_epoch{1U};
+  bool initialized{false};
+  mpcc_execution_contract::ControlIntent intent{
+    mpcc_execution_contract::ControlIntent::Unknown};
+  std::uint64_t intent_generation{};
+  std::string target_id;
+};
+
+enum class ContextLifecycleReason
+{
+  Accepted,
+  InvalidContext,
+  UnsupportedIntent,
+};
+
+const char * to_string(ContextLifecycleReason reason) noexcept;
+
+struct ContextLifecycleResolution
+{
+  bool valid{false};
+  bool reset_context{false};
+  ContextLifecycleReason reason{ContextLifecycleReason::InvalidContext};
+  ContextLifecycleState next;
+};
+
+/// Resolve the mailbox lifetime from semantic identity only. Observation and
+/// decision generations belong to individual immutable jobs and deliberately
+/// do not roll the epoch while the same intent/target context remains active.
+ContextLifecycleResolution resolve_context_lifecycle(
+  const ContextLifecycleState & previous,
+  const mpcc_execution_contract::MpccProblemContext & context) noexcept;
+
+/// Leaving canonical normal execution invalidates an initialized context once.
+/// Repeated invalidation is idempotent so unrelated supervisor cycles do not
+/// churn epochs.
+ContextLifecycleState invalidate_context_lifecycle(
+  const ContextLifecycleState & previous) noexcept;
+
 struct ResultIdentity
 {
   std::uint64_t sequence{};

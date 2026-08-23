@@ -677,9 +677,7 @@ namespace
 bool shadow_identity_complete(const ShadowWarmStartIdentity & identity) noexcept
 {
   const bool intent_valid =
-    identity.intent == mpcc_execution_contract::ControlIntent::Track ||
-    identity.intent == mpcc_execution_contract::ControlIntent::Cruise ||
-    identity.intent == mpcc_execution_contract::ControlIntent::Follow;
+    mpcc_execution_contract::canonical_normal_intent_supported(identity.intent);
   if (
     !intent_valid ||
     identity.formulation !=

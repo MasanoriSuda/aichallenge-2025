@@ -20,3 +20,34 @@ def test_low_speed_direct_implementation_has_no_call_site() -> None:
     """Keep compatibility code unreachable until its final Slice 6 deletion."""
 
     assert len(re.findall(r"(?<![A-Za-z0-9_])low_speed_shift_control\(", SOURCE)) == 1
+
+
+def test_overtake_worker_fresh_chain_uses_sealed_snapshot_context() -> None:
+    """A tactical clone must not re-derive authority omitted from its snapshot."""
+
+    worker_start = SOURCE.index("evaluate_overtake_canonical_worker_fresh(")
+    worker_end = SOURCE.index(
+        "void evaluate_overtake_canonical_retained_shadow(", worker_start
+    )
+    worker = SOURCE[worker_start:worker_end]
+
+    assert "make_overtake_canonical_shadow_result(problem, snapshot_context)" in worker
+    assert (
+        "evaluate_overtake_canonical_fresh_shadow(\n"
+        "      problem, extended_problem.value(), outcome.result.value(), now_sec,\n"
+        "      snapshot_context)"
+    ) in worker
+    assert "make_problem_context(\n      problem" not in worker
+    assert (
+        "seal_problem_context_for_problem(\n"
+        "      problem, snapshot_context)"
+    ) in worker
+
+    fresh_start = SOURCE.index("evaluate_overtake_canonical_fresh_shadow(")
+    fresh_end = SOURCE.index(
+        "evaluate_overtake_canonical_worker_fresh(", fresh_start
+    )
+    fresh = SOURCE[fresh_start:fresh_end]
+
+    assert "const auto context = make_problem_context(" not in fresh
+    assert "const auto & context = snapshot_context;" in fresh

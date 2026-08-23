@@ -197,6 +197,20 @@ struct FollowShadowEligibility
 FollowShadowEligibility resolve_follow_shadow_eligibility(
   const FollowShadowEligibilityRequest & request) noexcept;
 
+enum class FollowProductionAction
+{
+  NotOwned,
+  PublishCanonical,
+  EmergencyStop,
+};
+
+/// Follow is an exclusive normal-authority boundary after promotion. A
+/// missing canonical selection fails closed and can never borrow another
+/// normal formulation for the same cycle.
+FollowProductionAction resolve_follow_production_action(
+  mpcc_execution_contract::ControlIntent intent,
+  bool complete_canonical_selection) noexcept;
+
 enum class FollowLongitudinalContractReason
 {
   Accepted,

@@ -266,6 +266,19 @@ Express longitudinal interaction as stage constraints/references of the same MPC
   input. Production remains shadow-only: the next explicit Slice must connect the same canonical
   selector to final output and delete the Follow-specific normal command owner atomically. It may
   not retain a cycle-local scalar/legacy fallback or begin parameter tuning.
+- `.steering/20260823-follow-canonical-authority-promotion` completes that authority promotion.
+  One typed selection now preserves the exact command, problem, certified solution, immutable plan,
+  cursor and prediction through the final publication adapter. `ControlIntent::Follow` returns at
+  this boundary: a complete current-world-certified selection publishes canonical normal authority;
+  missing or unsafe evidence emits canonical emergency authority and cannot fall through to another
+  normal formulation.
+- Deterministic production replay
+  `output/20260823-202408-follow-production-replay/d1/autoware.log` observed matching
+  `intent=follow`, five-state problem/solution/plan/decision provenance and
+  `canonical-follow-retained-published`. The final steady Follow window accepted 39/39 selections;
+  its worker completed 244/244 submitted jobs with zero exceptions or identity rejects. The only two
+  replay traces named `legacy-mpc-solved` were Stop intent, not Follow. Follow is therefore promoted
+  and its legacy normal owner is deleted. Hold/Stop remain separately incomplete below.
 
 ### 2026-08-23 Hold/Stop intent provenance status
 

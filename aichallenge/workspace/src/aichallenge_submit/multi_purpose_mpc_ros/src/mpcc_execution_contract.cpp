@@ -802,7 +802,7 @@ std::optional<double> resolve_published_steering_tire_angle(
   return published;
 }
 
-bool canonical_track_cruise_uses_physical_steering(
+bool canonical_normal_uses_physical_steering(
   const bool canonical_normal_authority,
   const bool canonical_emergency_stop,
   const bool recovery_override) noexcept

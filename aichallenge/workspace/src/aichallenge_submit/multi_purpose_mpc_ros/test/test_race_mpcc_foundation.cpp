@@ -158,6 +158,22 @@ TEST(RaceMpccFoundation, EnablesFollowShadowWithoutPromotingOtherIntents)
     race::FollowShadowEligibilityReason::NoCoherentFrontObservation);
 }
 
+TEST(RaceMpccFoundation, FollowProductionNeverFallsThroughToAnotherNormalOwner)
+{
+  EXPECT_EQ(
+    race::resolve_follow_production_action(
+      contract::ControlIntent::Cruise, false),
+    race::FollowProductionAction::NotOwned);
+  EXPECT_EQ(
+    race::resolve_follow_production_action(
+      contract::ControlIntent::Follow, true),
+    race::FollowProductionAction::PublishCanonical);
+  EXPECT_EQ(
+    race::resolve_follow_production_action(
+      contract::ControlIntent::Follow, false),
+    race::FollowProductionAction::EmergencyStop);
+}
+
 namespace
 {
 

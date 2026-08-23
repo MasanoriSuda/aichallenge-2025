@@ -1016,14 +1016,14 @@ TEST(MpccExecutionContract, PublicationRejectsInvalidSteeringContract)
 
 TEST(MpccExecutionContract, CanonicalEmergencyKeepsPhysicalSteeringConvention)
 {
-  EXPECT_TRUE(contract::canonical_track_cruise_uses_physical_steering(
+  EXPECT_TRUE(contract::canonical_normal_uses_physical_steering(
       false, true, false));
-  EXPECT_TRUE(contract::canonical_track_cruise_uses_physical_steering(
+  EXPECT_TRUE(contract::canonical_normal_uses_physical_steering(
       true, false, false));
-  EXPECT_FALSE(contract::canonical_track_cruise_uses_physical_steering(
+  EXPECT_FALSE(contract::canonical_normal_uses_physical_steering(
       false, false, false));
-  EXPECT_FALSE(contract::canonical_track_cruise_uses_physical_steering(
+  EXPECT_FALSE(contract::canonical_normal_uses_physical_steering(
       true, false, true));
-  EXPECT_FALSE(contract::canonical_track_cruise_uses_physical_steering(
+  EXPECT_FALSE(contract::canonical_normal_uses_physical_steering(
       false, true, true));
 }

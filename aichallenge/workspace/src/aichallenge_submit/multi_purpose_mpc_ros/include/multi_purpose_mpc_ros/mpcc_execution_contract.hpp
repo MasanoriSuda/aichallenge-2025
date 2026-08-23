@@ -388,10 +388,10 @@ std::optional<double> resolve_published_steering_tire_angle(
   double model_steering_tire_angle_rad, double legacy_actuator_gain,
   bool canonical_normal_authority) noexcept;
 
-/// Select the physical steering publication convention for every
-/// Track/Cruise command owned by the canonical controller.  Recovery is a
+/// Select the physical steering publication convention for every normal
+/// command owned by the canonical controller. Recovery is a
 /// distinct supervisor and retains its existing actuator convention.
-bool canonical_track_cruise_uses_physical_steering(
+bool canonical_normal_uses_physical_steering(
   bool canonical_normal_authority, bool canonical_emergency_stop,
   bool recovery_override) noexcept;
 

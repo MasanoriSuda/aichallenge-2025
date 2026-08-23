@@ -314,6 +314,18 @@ FollowShadowEligibility resolve_follow_shadow_eligibility(
   return result;
 }
 
+FollowProductionAction resolve_follow_production_action(
+  const mpcc_execution_contract::ControlIntent intent,
+  const bool complete_canonical_selection) noexcept
+{
+  if (intent != mpcc_execution_contract::ControlIntent::Follow) {
+    return FollowProductionAction::NotOwned;
+  }
+  return complete_canonical_selection ?
+    FollowProductionAction::PublishCanonical :
+    FollowProductionAction::EmergencyStop;
+}
+
 const char * follow_longitudinal_contract_reason_name(
   const FollowLongitudinalContractReason reason) noexcept
 {

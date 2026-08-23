@@ -451,6 +451,54 @@ RetainedExecutionWindowResult build_retained_execution_window(
   return result;
 }
 
+std::optional<RetainedCourseFrameProgressRange>
+required_course_frame_progress_range(
+  const RetainedExecutionWindow & window,
+  const double lifted_measured_progress_m) noexcept
+{
+  if (
+    !std::isfinite(lifted_measured_progress_m) ||
+    !std::isfinite(window.expected_current_progress_m) ||
+    !std::isfinite(window.expected_current_state.progress_m) ||
+    std::abs(
+      window.expected_current_progress_m -
+      window.expected_current_state.progress_m) > kIdentityTolerance)
+  {
+    return std::nullopt;
+  }
+  RetainedCourseFrameProgressRange range{
+    std::min(lifted_measured_progress_m, window.expected_current_progress_m),
+    std::max(lifted_measured_progress_m, window.expected_current_progress_m)};
+  double previous_progress_m = window.expected_current_progress_m;
+  for (const auto & sample : window.samples) {
+    if (
+      !std::isfinite(sample.segment_start_progress_m) ||
+      !std::isfinite(sample.absolute_progress_m) ||
+      !std::isfinite(sample.endpoint.progress_m) ||
+      std::abs(sample.absolute_progress_m - sample.endpoint.progress_m) >
+      kIdentityTolerance ||
+      std::abs(sample.segment_start_progress_m - previous_progress_m) >
+      kIdentityTolerance ||
+      sample.absolute_progress_m + kIdentityTolerance < previous_progress_m)
+    {
+      return std::nullopt;
+    }
+    range.minimum_progress_m = std::min(
+      range.minimum_progress_m, sample.segment_start_progress_m);
+    range.maximum_progress_m = std::max(
+      range.maximum_progress_m, sample.absolute_progress_m);
+    previous_progress_m = sample.absolute_progress_m;
+  }
+  if (
+    !std::isfinite(range.minimum_progress_m) ||
+    !std::isfinite(range.maximum_progress_m) ||
+    range.maximum_progress_m + kIdentityTolerance < range.minimum_progress_m)
+  {
+    return std::nullopt;
+  }
+  return range;
+}
+
 const char * to_string(const CircularProgressLiftReason reason) noexcept
 {
   switch (reason) {

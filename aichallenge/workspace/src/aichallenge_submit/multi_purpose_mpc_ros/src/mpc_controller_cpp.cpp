@@ -21191,12 +21191,15 @@ struct MPC
   build_progress_course_frame_knots(
     const mpcc_contract::EffectiveStageGeometry & geometry,
     const double progress_origin_m,
+    const double required_minimum_progress_m,
     const double required_maximum_progress_m) const
   {
     if (
       model == nullptr || model->reference_path == nullptr ||
       geometry.tracking_waypoint < 0 || geometry.stages.empty() ||
       !std::isfinite(progress_origin_m) ||
+      !std::isfinite(required_minimum_progress_m) ||
+      required_minimum_progress_m > progress_origin_m + 1e-9 ||
       !std::isfinite(required_maximum_progress_m))
     {
       return std::nullopt;
@@ -21209,6 +21212,44 @@ struct MPC
     knots.push_back(mpc_stage_geometry::CourseFrameKnot{
       progress_origin_m, tracking_waypoint.x, tracking_waypoint.y,
       tracking_waypoint.psi, geometry.tracking_waypoint});
+
+    const double minimum_extension_distance_m = std::max(
+      1e-6,
+      cfg.progress_contouring.minimum_reference_speed_mps *
+      cfg.progress_contouring.minimum_stage_dt_sec);
+    int backward_waypoint_id = geometry.tracking_waypoint;
+    constexpr std::size_t kMaximumExtensionStages = 128U;
+    for (std::size_t extension = 0U;
+      extension < kMaximumExtensionStages &&
+      knots.front().progress_m - 1e-9 > required_minimum_progress_m;
+      ++extension)
+    {
+      if (!reference_path.circular && backward_waypoint_id <= 0) {
+        return std::nullopt;
+      }
+      const int previous_waypoint_id = reference_path.circular ?
+        (backward_waypoint_id - 1 + reference_path.n_waypoints) %
+        reference_path.n_waypoints :
+        backward_waypoint_id - 1;
+      const auto & previous_waypoint = reference_path.get_waypoint(
+        previous_waypoint_id);
+      const auto & current_waypoint = reference_path.get_waypoint(
+        backward_waypoint_id);
+      const double transition_distance_m = std::max(
+        minimum_extension_distance_m,
+        previous_waypoint.distance_to(current_waypoint));
+      if (!std::isfinite(transition_distance_m)) {
+        return std::nullopt;
+      }
+      knots.insert(knots.begin(), mpc_stage_geometry::CourseFrameKnot{
+        knots.front().progress_m - transition_distance_m,
+        previous_waypoint.x, previous_waypoint.y, previous_waypoint.psi,
+        previous_waypoint_id});
+      backward_waypoint_id = previous_waypoint_id;
+    }
+    if (knots.front().progress_m - 1e-9 > required_minimum_progress_m) {
+      return std::nullopt;
+    }
     for (const auto & stage : geometry.stages) {
       const auto & waypoint = reference_path.get_waypoint(stage.state_waypoint);
       knots.push_back(mpc_stage_geometry::CourseFrameKnot{
@@ -21219,12 +21260,7 @@ struct MPC
       return knots;
     }
 
-    const double minimum_extension_distance_m = std::max(
-      1e-6,
-      cfg.progress_contouring.minimum_reference_speed_mps *
-      cfg.progress_contouring.minimum_stage_dt_sec);
     int current_waypoint_id = geometry.stages.back().state_waypoint;
-    constexpr std::size_t kMaximumExtensionStages = 128U;
     for (std::size_t extension = 0U;
       extension < kMaximumExtensionStages &&
       knots.back().progress_m + 1e-9 < required_maximum_progress_m;
@@ -22318,15 +22354,19 @@ struct MPC
         canonical_retained::to_string(current_origin.reason);
       return;
     }
-    double required_maximum_progress_m =
-      window.window->expected_current_progress_m;
-    for (const auto & sample : window.window->samples) {
-      required_maximum_progress_m = std::max(
-        required_maximum_progress_m, sample.absolute_progress_m);
+    const auto required_course_frame =
+      canonical_retained::required_course_frame_progress_range(
+      window.window.value(), current_origin.lifted_progress_m);
+    if (!required_course_frame.has_value()) {
+      result.retained_world_reason =
+        canonical_retained_world::CurrentWorldProofReason::CourseFrameUnavailable;
+      result.retained_detail = "retained course-frame range invalid";
+      return;
     }
     const auto course_frame_knots = build_progress_course_frame_knots(
       problem.progress_stage_geometry, current_origin.lifted_progress_m,
-      required_maximum_progress_m);
+      required_course_frame->minimum_progress_m,
+      required_course_frame->maximum_progress_m);
     if (!course_frame_knots.has_value()) {
       result.retained_world_reason =
         canonical_retained_world::CurrentWorldProofReason::CourseFrameUnavailable;
@@ -22532,15 +22572,20 @@ struct MPC
         canonical_retained::to_string(current_origin.reason);
       return;
     }
-    double required_maximum_progress_m =
-      window.window->expected_current_progress_m;
-    for (const auto & sample : window.window->samples) {
-      required_maximum_progress_m = std::max(
-        required_maximum_progress_m, sample.absolute_progress_m);
+    const auto required_course_frame =
+      canonical_retained::required_course_frame_progress_range(
+      window.window.value(), current_origin.lifted_progress_m);
+    if (!required_course_frame.has_value()) {
+      result.retained_world_reason =
+        canonical_retained_world::FollowCurrentWorldProofReason::
+        CourseFrameUnavailable;
+      result.retained_detail = "retained course-frame range invalid";
+      return;
     }
     const auto course_frame_knots = build_progress_course_frame_knots(
       problem.progress_stage_geometry, current_origin.lifted_progress_m,
-      required_maximum_progress_m);
+      required_course_frame->minimum_progress_m,
+      required_course_frame->maximum_progress_m);
     if (!course_frame_knots.has_value()) {
       result.retained_world_reason =
         canonical_retained_world::FollowCurrentWorldProofReason::
@@ -23059,6 +23104,7 @@ struct MPC
           shadow_trajectory.progress_m.begin(), shadow_trajectory.progress_m.end());
         const auto course_frame_knots = build_progress_course_frame_knots(
           problem.progress_stage_geometry,
+          shadow_trajectory.progress_origin_m,
           shadow_trajectory.progress_origin_m,
           maximum_solved_progress_m);
         if (course_frame_knots.has_value()) {
@@ -24307,6 +24353,7 @@ struct MPC
         exact_trajectory.progress_m.begin(), exact_trajectory.progress_m.end());
       const auto knots = build_progress_course_frame_knots(
         problem.progress_stage_geometry, exact_trajectory.progress_origin_m,
+        exact_trajectory.progress_origin_m,
         maximum_progress_m);
       if (knots.has_value()) {
         exact_trajectory.course_frame_knots = knots.value();
@@ -24632,15 +24679,23 @@ struct MPC
         canonical_retained::to_string(current_origin.reason);
       return;
     }
-    double required_maximum_progress_m =
-      window.window->expected_current_progress_m;
-    for (const auto & sample : window.window->samples) {
-      required_maximum_progress_m = std::max(
-        required_maximum_progress_m, sample.absolute_progress_m);
+    const auto required_course_frame =
+      canonical_retained::required_course_frame_progress_range(
+      window.window.value(), current_origin.lifted_progress_m);
+    if (!required_course_frame.has_value()) {
+      result.retained_outcome =
+        OvertakeCanonicalFreshShadowResult::RetainedOutcome::
+        CourseFrameUnavailable;
+      result.retained_world_reason =
+        canonical_retained_world::OvertakeCurrentWorldProofReason::
+        CourseFrameUnavailable;
+      result.retained_detail = "retained course-frame range invalid";
+      return;
     }
     const auto course_frame_knots = build_progress_course_frame_knots(
       problem.progress_stage_geometry, current_origin.lifted_progress_m,
-      required_maximum_progress_m);
+      required_course_frame->minimum_progress_m,
+      required_course_frame->maximum_progress_m);
     if (!course_frame_knots.has_value()) {
       result.retained_outcome =
         OvertakeCanonicalFreshShadowResult::RetainedOutcome::
@@ -25645,6 +25700,7 @@ struct MPC
           shadow_trajectory.progress_m.begin(), shadow_trajectory.progress_m.end());
         const auto course_frame_knots = build_progress_course_frame_knots(
           problem.progress_stage_geometry,
+          shadow_trajectory.progress_origin_m,
           shadow_trajectory.progress_origin_m,
           maximum_solved_progress_m);
         if (course_frame_knots.has_value()) {

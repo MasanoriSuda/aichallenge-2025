@@ -177,6 +177,40 @@ TEST(
   EXPECT_NEAR(result.window->samples[1].relative_time_sec, 1.4, 1e-12);
 }
 
+TEST(
+  CanonicalRetainedRevalidation,
+  CourseFrameRangeIncludesRetainedStateBehindMeasuredOrigin) {
+  const auto execution_plan = make_plan();
+  const auto cursor = plan::resolve_execution_cursor(execution_plan, 10.6);
+  const auto window =
+    retained::build_retained_execution_window(execution_plan, cursor);
+  ASSERT_TRUE(window.window.has_value());
+
+  // The plant has advanced six centimetres beyond the retained model state.
+  // This remains a continuity-valid plan, so current-world proof needs course
+  // geometry behind the newly measured origin as well as ahead of it.
+  const auto range = retained::required_course_frame_progress_range(
+    window.window.value(), 100.36);
+  ASSERT_TRUE(range.has_value());
+  EXPECT_NEAR(range->minimum_progress_m, 100.30, 1e-12);
+  EXPECT_NEAR(range->maximum_progress_m, 101.00, 1e-12);
+}
+
+TEST(
+  CanonicalRetainedRevalidation,
+  CourseFrameRangeRejectsBrokenRetainedProgressChain) {
+  const auto execution_plan = make_plan();
+  const auto cursor = plan::resolve_execution_cursor(execution_plan, 10.6);
+  auto window = retained::build_retained_execution_window(
+    execution_plan, cursor).window;
+  ASSERT_TRUE(window.has_value());
+  ASSERT_FALSE(window->samples.empty());
+  window->samples.front().segment_start_progress_m += 0.01;
+
+  EXPECT_FALSE(retained::required_course_frame_progress_range(
+    window.value(), 100.36).has_value());
+}
+
 TEST(CanonicalRetainedRevalidation, CircularProgressLiftIsExplicitAndUnique) {
   const auto accepted = retained::lift_progress_to_retained_branch(
     retained::CircularProgressLiftRequest{0.30, 100.30, 100.0, 0.20, true});

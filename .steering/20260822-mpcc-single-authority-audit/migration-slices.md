@@ -454,6 +454,18 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   cycles lacked current-world selection, led by 23 course-frame-window and 9 current-corridor
   rejects. Audit and close that proof coverage before atomically connecting canonical Overtake and
   deleting conversion/circuit/reentry/three-state normal ownership.
+- `.steering/20260824-retained-course-frame-window` repairs the first proof-coverage root cause
+  without relaxing any proof. Retained continuity permitted the newly measured progress to be
+  slightly ahead of the retained expected-current state, but current course-frame provenance began
+  at measured progress and extended only forward. Follow and Overtake therefore failed geometry
+  reconstruction after already accepting progress continuity. The shared current course-frame
+  window now covers the closed interval from the earliest measured/retained state through the
+  retained horizon. The 1723-test suite and 25-package build pass. In
+  `output/20260824-045351`, 396 eligible Overtake shadow cycles produced zero course-frame rejects;
+  298 completed current-world proof. The remaining transition-local failures are 39 stage-corridor,
+  30 initial-corridor, 20 progress-discontinuity, 6 corridor-horizon and 2 intent-generation
+  outcomes. Audit their common Mission transition provenance next; production promotion remains
+  blocked.
 
 ## Slice 6: Legacy and migration path removal
 

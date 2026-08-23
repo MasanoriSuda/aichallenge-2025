@@ -59,6 +59,22 @@ RetainedExecutionWindowResult build_retained_execution_window(
   const plan::CanonicalExecutionPlan & execution_plan,
   const plan::CanonicalExecutionCursor & cursor);
 
+struct RetainedCourseFrameProgressRange
+{
+  double minimum_progress_m{};
+  double maximum_progress_m{};
+};
+
+/// Return the closed progress interval whose current reference geometry is
+/// required to reconstruct a retained execution window.  The interval includes
+/// both the newly measured (already branch-lifted) origin and every retained
+/// state used by current-world proof; it is therefore intentionally allowed to
+/// begin behind the measured origin.
+std::optional<RetainedCourseFrameProgressRange>
+required_course_frame_progress_range(
+  const RetainedExecutionWindow & window,
+  double lifted_measured_progress_m) noexcept;
+
 struct CircularProgressLiftRequest
 {
   double measured_progress_m{};

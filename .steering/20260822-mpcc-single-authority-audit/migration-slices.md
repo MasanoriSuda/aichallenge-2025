@@ -485,6 +485,17 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   accepted retained minimum stayed at or above 3.655 m. The four residual rejects coincide with
   two target-speed-to-zero discontinuities at stage 7 and are a separate input-continuity Slice.
   Overtake live promotion remains blocked by executed wall-path failures observed after entry.
+- `.steering/20260824-overtake-five-state-wall-provenance` proves those executed wall failures were
+  hidden behind a lossy certificate boundary. Branch proof formerly converted the five-state primal
+  to a lateral-only legacy trajectory, and entry revalidation mutated that derived artifact. The
+  Slice now preserves lateral, lag, heading, velocity and solved progress as one immutable physical
+  trajectory, revalidates it at entry and wall-proofs every live extended solution before temporary
+  legacy command adaptation. The 1,731-test package suite and 25-package build pass. In
+  `output/20260824-063046`, one exact ShiftOut solve was accepted and published; a later exact solve
+  was deterministically rejected at stage 15 / waypoint 201 by the continuous swept wall guard.
+  This closes certificate-provenance ambiguity and isolates the next formulation defect: stage-wise
+  wall rows do not yet prove the swept segment between states. Audit that continuous-geometry
+  contract next; do not tune margin/tolerance or add Recovery policy.
 
 ## Slice 6: Legacy and migration path removal
 

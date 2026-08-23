@@ -4398,6 +4398,8 @@ struct OvertakeMissionCandidate
     std::numeric_limits<double>::quiet_NaN()};
   std::vector<double> physical_execution_certificate_path_distances_m{};
   std::vector<double> physical_execution_certificate_lateral_path_m{};
+  race_mpcc_foundation::ExactPhysicalExecutionTrajectory
+  physical_execution_certificate_exact_trajectory{};
   race_mpcc_foundation::TargetProvenance
   physical_execution_certificate_target_provenance{};
   /// New-entry reserve needed to become laterally body-clear before closing

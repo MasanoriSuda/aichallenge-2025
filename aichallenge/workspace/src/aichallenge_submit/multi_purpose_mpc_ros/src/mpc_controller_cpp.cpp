@@ -5536,6 +5536,14 @@ struct AlignedMpccExecutionTrajectory
   std::vector<mpc_stage_geometry::CourseFrameKnot> course_frame_knots;
 };
 
+struct ExactExtendedWallProofInput
+{
+  race_mpcc_foundation::ExactPhysicalExecutionTrajectory exact;
+  AlignedMpccExecutionTrajectory aligned;
+  Eigen::VectorXd lateral_lower_m;
+  Eigen::VectorXd lateral_upper_m;
+};
+
 enum class SolvedExecutionWallValidationScope
 {
   DiscreteStages,
@@ -8067,62 +8075,25 @@ struct MPC
           cfg.v2x_behavior.overtake_line.runtime_wall_preplan_reserve));
       evaluation.physical_wall_required_clearance_m = wall_contract.valid ?
         wall_contract.required_clearance_m : planning_wall_clearance_m;
-      if (
-        !legacy.progress_execution_context_active ||
-        legacy.progress_execution_path_distance_m.size() !=
-        static_cast<std::size_t>(N) ||
-        legacy.progress_execution_lateral_lower_m.size() !=
-        static_cast<std::size_t>(N) ||
-        legacy.progress_execution_lateral_upper_m.size() !=
-        static_cast<std::size_t>(N))
-      {
-        evaluation.failure_reason =
-          "physical execution contract unavailable for extended branch";
-        return evaluation;
-      }
-      const auto legacy_solution = mpcc_progress::convert_extended_solution_to_legacy(
-        primal, N, legacy.progress_origin_m);
-      if (!legacy_solution.has_value()) {
-        evaluation.failure_reason =
-          "physical execution contract conversion failed";
-        return evaluation;
-      }
       const double extraction_tolerance =
         std::isfinite(outcome.result->maximum_constraint_violation) ?
         std::max(
           1e-5,
           outcome.result->maximum_constraint_violation + 1e-6) : 1e-5;
-      mpcc_progress::ExecutionTrajectoryDiagnostic extraction_diagnostic;
-      const auto execution_trajectory = mpcc_progress::extract_execution_trajectory(
-        legacy_solution.value(), N,
-        legacy.progress_execution_path_distance_m,
-        legacy.progress_execution_lateral_lower_m,
-        legacy.progress_execution_lateral_upper_m,
-        extraction_tolerance, &extraction_diagnostic);
-      if (!execution_trajectory.has_value()) {
-        evaluation.failure_reason = std::string{
-          "physical execution contract extraction failed: "} +
-          mpcc_progress::execution_trajectory_rejection_name(
-          extraction_diagnostic.rejection);
+      std::string physical_wall_reject_reason;
+      auto exact_wall_proof = build_exact_extended_wall_proof_input(
+        legacy, extended.value(), primal, extraction_tolerance,
+        physical_wall_reject_reason);
+      if (!exact_wall_proof.has_value()) {
+        evaluation.failure_reason = physical_wall_reject_reason;
         return evaluation;
       }
-      Eigen::VectorXd execution_lower(N);
-      Eigen::VectorXd execution_upper(N);
-      for (int stage = 0; stage < N; ++stage) {
-        execution_lower[stage] =
-          legacy.progress_execution_lateral_lower_m[static_cast<std::size_t>(stage)];
-        execution_upper[stage] =
-          legacy.progress_execution_lateral_upper_m[static_cast<std::size_t>(stage)];
-      }
-      const AlignedMpccExecutionTrajectory physical_trajectory{
-        0.0, 0.0, execution_trajectory->minimum_lateral_bound_reserve_m,
-        execution_trajectory->lateral_m, {}, {},
-        std::numeric_limits<double>::quiet_NaN(), {}, {}};
-      std::string physical_wall_reject_reason;
       evaluation.physical_wall_validation_passed =
         solved_mpcc_execution_path_wall_safe(
-        physical_trajectory, execution_trajectory->path_distance_m,
-        tracking_wp_id, N, execution_lower, execution_upper,
+        exact_wall_proof->aligned, exact_wall_proof->exact.path_distance_m,
+        tracking_wp_id, N,
+        exact_wall_proof->lateral_lower_m,
+        exact_wall_proof->lateral_upper_m,
         evaluation.physical_wall_required_clearance_m,
         physical_wall_reject_reason, extraction_tolerance,
         SolvedExecutionWallValidationScope::SweptFromCurrentPose);
@@ -8134,11 +8105,13 @@ struct MPC
       evaluation.physical_execution_certificate_valid = true;
       evaluation.physical_execution_certificate_source_sec = now_sec;
       evaluation.physical_execution_certificate_source_course_progress_m =
-        legacy.progress_origin_m;
+        exact_wall_proof->exact.progress_origin_m;
       evaluation.physical_execution_certificate_path_distances_m =
-        execution_trajectory->path_distance_m;
+        exact_wall_proof->exact.path_distance_m;
       evaluation.physical_execution_certificate_lateral_path_m =
-        execution_trajectory->lateral_m;
+        exact_wall_proof->exact.lateral_m;
+      evaluation.physical_execution_certificate_exact_trajectory =
+        std::move(exact_wall_proof->exact);
       evaluation.physical_execution_certificate_target_provenance =
         selected_target_provenance(source_behavior);
 
@@ -8349,6 +8322,8 @@ struct MPC
         selected_branch.physical_execution_certificate_path_distances_m;
       selected_mission.physical_execution_certificate_lateral_path_m =
         selected_branch.physical_execution_certificate_lateral_path_m;
+      selected_mission.physical_execution_certificate_exact_trajectory =
+        selected_branch.physical_execution_certificate_exact_trajectory;
       selected_mission.physical_execution_certificate_target_provenance =
         selected_branch.physical_execution_certificate_target_provenance;
     }
@@ -22003,12 +21978,141 @@ struct MPC
     return true;
   }
 
+  std::optional<ExactExtendedWallProofInput>
+  build_exact_extended_wall_proof_input(
+    const MpcProblem & problem,
+    const ExtendedProgressMpcProblem & extended_problem,
+    const Eigen::VectorXd & primal,
+    const double bound_tolerance_m,
+    std::string & reject_reason) const
+  {
+    constexpr int progress_metadata_nx = 3;
+    reject_reason.clear();
+    if (
+      problem.N <= 0 ||
+      problem.progress_stage_geometry.stages.size() !=
+      static_cast<std::size_t>(problem.N) ||
+      problem.progress_state_lower.size() < progress_metadata_nx * (problem.N + 1) ||
+      problem.progress_state_upper.size() < progress_metadata_nx * (problem.N + 1) ||
+      !std::isfinite(bound_tolerance_m) || bound_tolerance_m < 0.0)
+    {
+      reject_reason = "exact five-state wall proof context invalid";
+      return std::nullopt;
+    }
+
+    std::vector<double> path_distance_m;
+    std::vector<double> lower_bound_m;
+    std::vector<double> upper_bound_m;
+    path_distance_m.reserve(static_cast<std::size_t>(problem.N));
+    lower_bound_m.reserve(static_cast<std::size_t>(problem.N));
+    upper_bound_m.reserve(static_cast<std::size_t>(problem.N));
+    Eigen::VectorXd lower_bound(problem.N);
+    Eigen::VectorXd upper_bound(problem.N);
+    for (int stage = 0; stage < problem.N; ++stage) {
+      path_distance_m.push_back(
+        problem.progress_stage_geometry.stages[static_cast<std::size_t>(stage)].
+        cumulative_distance_m);
+      lower_bound[stage] =
+        problem.progress_state_lower[(stage + 1) * progress_metadata_nx];
+      upper_bound[stage] =
+        problem.progress_state_upper[(stage + 1) * progress_metadata_nx];
+      lower_bound_m.push_back(lower_bound[stage]);
+      upper_bound_m.push_back(upper_bound[stage]);
+    }
+
+    mpcc_progress::ExecutionTrajectoryDiagnostic diagnostic;
+    const auto extracted = mpcc_progress::extract_extended_execution_trajectory(
+      primal, problem.N, path_distance_m, lower_bound_m, upper_bound_m,
+      extended_problem.progress_origin_m, bound_tolerance_m, &diagnostic);
+    if (!extracted.has_value()) {
+      reject_reason = std::string{"exact five-state trajectory extraction failed: "} +
+        mpcc_progress::execution_trajectory_rejection_name(diagnostic.rejection) +
+        ", stage=" + std::to_string(diagnostic.stage);
+      return std::nullopt;
+    }
+
+    race_mpcc::ExactPhysicalExecutionTrajectory exact;
+    exact.progress_origin_m = extended_problem.progress_origin_m;
+    exact.path_distance_m = extracted->path_distance_m;
+    exact.lateral_m = extracted->lateral_m;
+    exact.lag_m = extracted->lag_m;
+    exact.heading_offset_rad = extracted->heading_offset_rad;
+    exact.velocity_mps = extracted->velocity_mps;
+    exact.progress_m = extracted->progress_m;
+    exact.lateral_lower_m = lower_bound_m;
+    exact.lateral_upper_m = upper_bound_m;
+    exact.minimum_lateral_bound_reserve_m =
+      extracted->minimum_lateral_bound_reserve_m;
+    if (!race_mpcc::exact_physical_execution_trajectory_complete(exact)) {
+      reject_reason = "exact five-state trajectory contract incomplete";
+      return std::nullopt;
+    }
+
+    AlignedMpccExecutionTrajectory aligned{
+      0.0, 0.0, exact.minimum_lateral_bound_reserve_m,
+      exact.lateral_m, exact.lag_m, exact.heading_offset_rad,
+      exact.progress_origin_m, exact.progress_m, {}};
+    const double minimum_progress_m = std::min(
+      exact.progress_origin_m,
+      *std::min_element(exact.progress_m.begin(), exact.progress_m.end()));
+    const double maximum_progress_m = *std::max_element(
+      exact.progress_m.begin(), exact.progress_m.end());
+    const auto course_frame_knots = build_progress_course_frame_knots(
+      problem.progress_stage_geometry, exact.progress_origin_m,
+      minimum_progress_m, maximum_progress_m);
+    if (!course_frame_knots.has_value()) {
+      reject_reason = "exact five-state course-frame provenance unavailable";
+      return std::nullopt;
+    }
+    aligned.course_frame_knots = course_frame_knots.value();
+    return ExactExtendedWallProofInput{
+      std::move(exact), std::move(aligned),
+      std::move(lower_bound), std::move(upper_bound)};
+  }
+
+  bool executed_extended_progress_solution_wall_safe(
+    const MpcProblem & problem,
+    const ExtendedProgressMpcProblem & extended_problem,
+    const Eigen::VectorXd & primal,
+    const double maximum_constraint_violation,
+    std::string & reject_reason,
+    mpcc_contract::PhysicalWallCertificateDiagnostic * diagnostic = nullptr) const
+  {
+    if (!problem.progress_execution_context_active) {
+      reject_reason = "execution context inactive";
+      return true;
+    }
+    if (
+      !std::isfinite(problem.progress_execution_required_wall_clearance_m) ||
+      problem.progress_execution_required_wall_clearance_m < 0.0)
+    {
+      reject_reason = "executed exact wall clearance contract invalid";
+      return false;
+    }
+    const double bound_tolerance_m =
+      std::isfinite(maximum_constraint_violation) ?
+      std::max(1e-5, maximum_constraint_violation + 1e-6) : 1e-5;
+    auto proof = build_exact_extended_wall_proof_input(
+      problem, extended_problem, primal, bound_tolerance_m, reject_reason);
+    if (!proof.has_value()) {
+      return false;
+    }
+    return solved_mpcc_execution_path_wall_safe(
+      proof->aligned, proof->exact.path_distance_m,
+      problem.ref_wp_id, problem.N,
+      proof->lateral_lower_m, proof->lateral_upper_m,
+      problem.progress_execution_required_wall_clearance_m,
+      reject_reason, bound_tolerance_m,
+      SolvedExecutionWallValidationScope::SweptFromCurrentPose,
+      diagnostic);
+  }
+
   bool revalidate_overtake_entry_execution_certificate(
     overtake_core::OvertakeMissionCandidate & mission,
     const V2XBehaviorOutput & current_behavior,
     const int ref_wp_id, const int horizon_size,
     const Eigen::VectorXd & lower_bound, const Eigen::VectorXd & upper_bound,
-    const double now_sec, std::string & reject_reason) const
+    const double now_sec, std::string & reject_reason)
   {
     reject_reason.clear();
     const auto & line_cfg = cfg.v2x_behavior.overtake_line;
@@ -22017,6 +22121,8 @@ struct MPC
       !std::isfinite(mission.physical_execution_certificate_source_sec) ||
       !std::isfinite(
         mission.physical_execution_certificate_source_course_progress_m) ||
+      !race_mpcc::exact_physical_execution_trajectory_complete(
+        mission.physical_execution_certificate_exact_trajectory) ||
       !overtake_core::is_valid_frenet_dp_execution_path(
         mission.physical_execution_certificate_path_distances_m,
         mission.physical_execution_certificate_lateral_path_m))
@@ -22130,6 +22236,92 @@ struct MPC
       reject_reason = "physical execution wall contract invalid";
       return false;
     }
+
+    // Revalidate the immutable pose sequence certified by the selected
+    // five-state branch.  The current course frame may have advanced while the
+    // asynchronous result was in flight, but lag, heading and solved progress
+    // remain part of the certificate and must not be rebuilt from lateral-only
+    // Mission samples.
+    const auto runtime_geometry = build_stage_geometry(
+      ref_wp_id, static_cast<std::size_t>(horizon_size));
+    if (
+      !runtime_geometry.valid ||
+      runtime_geometry.stages.size() != static_cast<std::size_t>(horizon_size))
+    {
+      reject_reason = "physical execution current stage geometry unavailable";
+      return false;
+    }
+    std::vector<mpcc_contract::StageGeometryIdentity> raw_stages;
+    std::vector<double> current_transition_distances_m;
+    raw_stages.reserve(runtime_geometry.stages.size());
+    current_transition_distances_m.reserve(current_path_distances.size());
+    double previous_path_distance_m = 0.0;
+    for (std::size_t stage = 0U; stage < runtime_geometry.stages.size(); ++stage) {
+      const auto & geometry_stage = runtime_geometry.stages[stage];
+      raw_stages.push_back(mpcc_contract::StageGeometryIdentity{
+        geometry_stage.transition_from_waypoint,
+        geometry_stage.state_waypoint,
+        geometry_stage.transition_distance_m,
+        geometry_stage.cumulative_distance_m});
+      current_transition_distances_m.push_back(
+        current_path_distances[stage] - previous_path_distance_m);
+      previous_path_distance_m = current_path_distances[stage];
+    }
+    const auto effective_runtime_geometry =
+      mpcc_contract::resolve_effective_stage_geometry(
+      runtime_geometry.tracking_waypoint, runtime_geometry.circular,
+      raw_stages, current_transition_distances_m);
+    if (!effective_runtime_geometry.has_value()) {
+      reject_reason = "physical execution effective stage geometry unavailable";
+      return false;
+    }
+
+    const auto & exact =
+      mission.physical_execution_certificate_exact_trajectory;
+    if (exact.path_distance_m.size() != static_cast<std::size_t>(horizon_size)) {
+      reject_reason = "physical execution exact horizon mismatch";
+      return false;
+    }
+    const double exact_minimum_progress_m = std::min(
+      exact.progress_origin_m,
+      *std::min_element(exact.progress_m.begin(), exact.progress_m.end()));
+    const double exact_maximum_progress_m = *std::max_element(
+      exact.progress_m.begin(), exact.progress_m.end());
+    const auto current_course_frame_knots = build_progress_course_frame_knots(
+      effective_runtime_geometry.value(), model->s,
+      exact_minimum_progress_m, exact_maximum_progress_m);
+    if (!current_course_frame_knots.has_value()) {
+      reject_reason = "physical execution exact course frame unavailable";
+      return false;
+    }
+    Eigen::VectorXd exact_lower_bound(horizon_size);
+    Eigen::VectorXd exact_upper_bound(horizon_size);
+    for (int stage = 0; stage < horizon_size; ++stage) {
+      exact_lower_bound[stage] =
+        exact.lateral_lower_m[static_cast<std::size_t>(stage)];
+      exact_upper_bound[stage] =
+        exact.lateral_upper_m[static_cast<std::size_t>(stage)];
+    }
+    const AlignedMpccExecutionTrajectory exact_trajectory{
+      certificate_age_sec, advanced_distance_m,
+      exact.minimum_lateral_bound_reserve_m,
+      exact.lateral_m, exact.lag_m, exact.heading_offset_rad,
+      exact.progress_origin_m, exact.progress_m,
+      current_course_frame_knots.value()};
+    if (!solved_mpcc_execution_path_wall_safe(
+        exact_trajectory, exact.path_distance_m, ref_wp_id, horizon_size,
+        exact_lower_bound, exact_upper_bound,
+        wall_contract.required_clearance_m, reject_reason, 1e-5,
+        SolvedExecutionWallValidationScope::SweptFromCurrentPose))
+    {
+      reject_reason = "exact five-state certificate: " + reject_reason;
+      return false;
+    }
+
+    // The trust-envelope result is a derived initial Mission reference, not a
+    // replacement physical certificate.  It must also be usable at entry, but
+    // it owns reference generation only; each live five-state solve receives
+    // its own exact physical proof before command adaptation.
     const AlignedMpccExecutionTrajectory current_trajectory{
       certificate_age_sec, advanced_distance_m, 0.0,
       trust_envelope.lateral_targets_m, {}, {},
@@ -22140,22 +22332,17 @@ struct MPC
         reject_reason, 1e-5,
         SolvedExecutionWallValidationScope::SweptFromCurrentPose))
     {
+      reject_reason = "derived execution reference: " + reject_reason;
       return false;
     }
 
-    // Rebase the certificate atomically to the exact current-state trajectory
-    // which will become the first execution reference after entry.
-    mission.physical_execution_certificate_source_sec = now_sec;
-    mission.physical_execution_certificate_source_course_progress_m = model->s;
-    mission.physical_execution_certificate_required_wall_clearance_m =
-      wall_contract.required_clearance_m;
+    // Keep source time, target provenance and exact solve identity immutable.
+    // Only rebase the derived first execution reference to the current horizon.
     mission.physical_execution_certificate_path_distances_m =
       std::move(current_path_distances);
     mission.physical_execution_certificate_lateral_path_m =
       trust_envelope.lateral_targets_m;
-    mission.physical_execution_certificate_target_provenance =
-      selected_target_provenance(current_behavior);
-    reject_reason = "physical execution certificate accepted";
+    reject_reason = "exact five-state certificate accepted";
     return true;
   }
 
@@ -27353,22 +27540,93 @@ struct MPC
             auto extended_outcome = solve_extended_progress_problem(
               extended_problem.value(), now_sec);
             if (extended_outcome.result.has_value()) {
-              const auto legacy_solution =
-                mpcc_progress::convert_extended_solution_to_legacy(
-                extended_outcome.result->primal, N,
-                extended_problem->progress_origin_m);
-              if (legacy_solution.has_value()) {
+              const auto execution_primal =
+                mpcc_progress::normalize_extended_execution_primal(
+                extended_outcome.result->primal,
+                extended_problem->l, extended_problem->u,
+                extended_outcome.result->constraint_violation,
+                extended_outcome.result->constraint_tolerance, N);
+              if (
+                execution_primal.reason ==
+                mpcc_progress::ExtendedExecutionPrimalNormalizationReason::Accepted)
+              {
                 extended_progress_circuit_breaker_.record_success();
                 const auto reentry = extended_progress_reentry_gate_.record_success(
                   cfg.progress_contouring.extended_reentry_success_cycles);
                 if (reentry.accept_solution) {
-                  dec = legacy_solution.value();
                   maximum_constraint_violation =
                     extended_outcome.result->maximum_constraint_violation;
-                  solved_with_extended_progress = true;
-                  record_extended_mpcc_telemetry(
-                    ExtendedMpccCycleStatus::Success,
-                    &extended_outcome.telemetry, now_sec);
+                  std::string exact_wall_reject_reason;
+                  mpcc_contract::PhysicalWallCertificateDiagnostic
+                    exact_wall_diagnostic;
+                  const bool exact_wall_safe =
+                    executed_extended_progress_solution_wall_safe(
+                    problem, extended_problem.value(), execution_primal.primal,
+                    maximum_constraint_violation, exact_wall_reject_reason,
+                    &exact_wall_diagnostic);
+                  if (!exact_wall_safe) {
+                    std::ostringstream reason;
+                    reason << exact_wall_reject_reason
+                           << ", exact_reason="
+                           << mpcc_contract::physical_wall_certificate_reason_name(
+                      exact_wall_diagnostic.reason)
+                           << ", stage=" << exact_wall_diagnostic.stage_index
+                           << ", wp=" << exact_wall_diagnostic.waypoint_id
+                           << ", d=" << exact_wall_diagnostic.path_distance_m
+                           << " m, ey=" << exact_wall_diagnostic.lateral_m
+                           << " m, lag=" << exact_wall_diagnostic.lag_m
+                           << " m, epsi="
+                           << exact_wall_diagnostic.heading_offset_rad
+                           << " rad, progress_delta="
+                           << exact_wall_diagnostic.progress_delta_m << " m";
+                    record_extended_mpcc_telemetry(
+                      ExtendedMpccCycleStatus::Success,
+                      &extended_outcome.telemetry, now_sec);
+                    record_overtake_canonical_fresh_shadow_telemetry(
+                      canonical_overtake_shadow, now_sec);
+                    const auto wall_resolution =
+                      overtake_orchestrator::resolve_executed_solution_wall_action(
+                      overtake_orchestrator::ExecutedSolutionWallRequest{
+                        problem.progress_execution_context_active,
+                        false,
+                        overtake_execution_command_published(
+                          problem.progress_execution_mission_generation),
+                        orchestrator_phase(problem.progress_execution_phase),
+                        problem.progress_execution_mission_traveled_m});
+                    if (!wall_resolution.valid) {
+                      throw std::runtime_error(
+                              "invalid exact executed solution wall resolution");
+                    }
+                    return executed_solution_wall_hold_control(
+                      problem, wall_resolution, reason.str(), now_sec,
+                      decision_id);
+                  }
+
+                  // The physical authority has already certified the exact
+                  // five-state pose sequence.  This conversion remains only as
+                  // a temporary command/prediction adapter and may not own wall
+                  // proof or Mission admission.
+                  const auto legacy_solution =
+                    mpcc_progress::convert_extended_solution_to_legacy(
+                    execution_primal.primal, N,
+                    extended_problem->progress_origin_m);
+                  if (!legacy_solution.has_value()) {
+                    extended_reject_reason =
+                      "certified extended solution command adaptation rejected";
+                    extended_progress_reentry_gate_.record_failure();
+                    extended_progress_circuit_breaker_.record_failure(
+                      now_sec,
+                      cfg.progress_contouring.extended_failure_cooldown_sec);
+                    record_extended_mpcc_telemetry(
+                      ExtendedMpccCycleStatus::ConversionReject,
+                      &extended_outcome.telemetry, now_sec);
+                  } else {
+                    dec = legacy_solution.value();
+                    solved_with_extended_progress = true;
+                    record_extended_mpcc_telemetry(
+                      ExtendedMpccCycleStatus::Success,
+                      &extended_outcome.telemetry, now_sec);
+                  }
                 } else {
                   std::ostringstream reason;
                   reason << "requalifying extended solver "
@@ -27380,7 +27638,10 @@ struct MPC
                     &extended_outcome.telemetry, now_sec);
                 }
               } else {
-                extended_reject_reason = "extended solution conversion rejected";
+                extended_reject_reason = std::string{
+                  "extended execution primal rejected: "} +
+                  mpcc_progress::extended_execution_primal_normalization_reason_name(
+                  execution_primal.reason);
                 extended_progress_reentry_gate_.record_failure();
                 extended_progress_circuit_breaker_.record_failure(
                   now_sec, cfg.progress_contouring.extended_failure_cooldown_sec);
@@ -27449,10 +27710,16 @@ struct MPC
                 dynamic_margin_escape_reject_reason);
       }
       std::string executed_solution_wall_reject_reason;
-      const bool executed_solution_wall_safe =
-        executed_progress_solution_wall_safe(
+      const bool executed_solution_wall_safe = solved_with_extended_progress ?
+        true : executed_progress_solution_wall_safe(
         problem, dec, maximum_constraint_violation,
         executed_solution_wall_reject_reason);
+      if (solved_with_extended_progress) {
+        executed_solution_wall_reject_reason =
+          problem.progress_execution_context_active ?
+          "exact five-state physical solution horizon accepted" :
+          "execution context inactive";
+      }
       const auto executed_solution_wall_resolution =
         overtake_orchestrator::resolve_executed_solution_wall_action(
         overtake_orchestrator::ExecutedSolutionWallRequest{
@@ -29128,6 +29395,8 @@ private:
       selected_mission->physical_execution_certificate_valid &&
       selected_mission->physical_execution_certificate_target_provenance.valid &&
       selected_mission->pass_side_sign != 0 &&
+      race_mpcc::exact_physical_execution_trajectory_complete(
+        selected_mission->physical_execution_certificate_exact_trajectory) &&
       selected_mission->physical_execution_certificate_path_distances_m.size() >= 2U &&
       selected_mission->physical_execution_certificate_path_distances_m.size() ==
       selected_mission->physical_execution_certificate_lateral_path_m.size();
@@ -37142,6 +37411,7 @@ private:
             "Overtake entry commit accepted: target=%s, side=%d, phase=%s, "
             "certificate=%d, certificate_age=%.3f s, source_s=%.3f m, "
             "current_s=%.3f m, required_wall=%.3f m, samples=%zu, "
+            "exact_stages=%zu, exact_state=ey/lag/epsi/v/progress, "
             "generation=%lu, wp_id=%d",
             behavior_output.target_vehicle_id.c_str(), pass_side_sign,
             to_string(overtake_line_state_.phase),
@@ -37151,6 +37421,8 @@ private:
             model->s,
             committed_mission.physical_execution_certificate_required_wall_clearance_m,
             committed_mission.physical_execution_certificate_lateral_path_m.size(),
+            committed_mission.physical_execution_certificate_exact_trajectory.
+            path_distance_m.size(),
             static_cast<unsigned long>(overtake_line_state_.mission_generation),
             model->wp_id);
         }

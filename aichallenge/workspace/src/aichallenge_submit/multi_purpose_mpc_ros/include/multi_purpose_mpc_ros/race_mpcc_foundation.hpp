@@ -88,6 +88,31 @@ struct TargetProvenanceValidation
 TargetProvenanceValidation validate_target_provenance(
   const TargetProvenanceValidationRequest & request) noexcept;
 
+/// Immutable pose-state artifact used by a physical wall certificate for one
+/// five-state MPCC solve.  The vectors describe stages 1..N in the same
+/// order.  Keeping lag, heading and solved progress here prevents a later
+/// consumer from silently rebuilding a different pose sequence from lateral
+/// samples alone.
+struct ExactPhysicalExecutionTrajectory
+{
+  double progress_origin_m{std::numeric_limits<double>::quiet_NaN()};
+  std::vector<double> path_distance_m;
+  std::vector<double> lateral_m;
+  std::vector<double> lag_m;
+  std::vector<double> heading_offset_rad;
+  std::vector<double> velocity_mps;
+  std::vector<double> progress_m;
+  std::vector<double> lateral_lower_m;
+  std::vector<double> lateral_upper_m;
+  double minimum_lateral_bound_reserve_m{
+    std::numeric_limits<double>::quiet_NaN()};
+};
+
+/// A certificate without every five-state pose/progress field is not exact
+/// and must not admit or revalidate an Overtake execution path.
+bool exact_physical_execution_trajectory_complete(
+  const ExactPhysicalExecutionTrajectory & trajectory) noexcept;
+
 struct ShadowCandidate
 {
   Homotopy homotopy{Homotopy::None};

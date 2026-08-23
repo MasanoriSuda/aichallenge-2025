@@ -163,6 +163,51 @@ TargetProvenanceValidation validate_target_provenance(
   return result;
 }
 
+bool exact_physical_execution_trajectory_complete(
+  const ExactPhysicalExecutionTrajectory & trajectory) noexcept
+{
+  const std::size_t stage_count = trajectory.path_distance_m.size();
+  if (
+    stage_count < 2U || !std::isfinite(trajectory.progress_origin_m) ||
+    !std::isfinite(trajectory.minimum_lateral_bound_reserve_m) ||
+    trajectory.minimum_lateral_bound_reserve_m < 0.0 ||
+    trajectory.lateral_m.size() != stage_count ||
+    trajectory.lag_m.size() != stage_count ||
+    trajectory.heading_offset_rad.size() != stage_count ||
+    trajectory.velocity_mps.size() != stage_count ||
+    trajectory.progress_m.size() != stage_count ||
+    trajectory.lateral_lower_m.size() != stage_count ||
+    trajectory.lateral_upper_m.size() != stage_count)
+  {
+    return false;
+  }
+  double previous_distance_m = -std::numeric_limits<double>::infinity();
+  double previous_progress_m = -std::numeric_limits<double>::infinity();
+  for (std::size_t stage = 0U; stage < stage_count; ++stage) {
+    const double distance_m = trajectory.path_distance_m[stage];
+    const double lateral_m = trajectory.lateral_m[stage];
+    const double lag_m = trajectory.lag_m[stage];
+    const double heading_rad = trajectory.heading_offset_rad[stage];
+    const double velocity_mps = trajectory.velocity_mps[stage];
+    const double progress_m = trajectory.progress_m[stage];
+    const double lower_m = trajectory.lateral_lower_m[stage];
+    const double upper_m = trajectory.lateral_upper_m[stage];
+    if (
+      !std::isfinite(distance_m) || distance_m <= previous_distance_m ||
+      !std::isfinite(lateral_m) || !std::isfinite(lag_m) ||
+      !std::isfinite(heading_rad) || !std::isfinite(velocity_mps) ||
+      velocity_mps < 0.0 || !std::isfinite(progress_m) ||
+      progress_m < previous_progress_m || !std::isfinite(lower_m) ||
+      !std::isfinite(upper_m) || lower_m > upper_m)
+    {
+      return false;
+    }
+    previous_distance_m = distance_m;
+    previous_progress_m = progress_m;
+  }
+  return true;
+}
+
 std::string format_shadow_decision(const ShadowDecision & decision)
 {
   std::ostringstream stream;

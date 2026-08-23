@@ -605,3 +605,50 @@ TEST(RaceMpccFoundation, ResetsWarmStartForNonOverlappingStageGeometry)
   EXPECT_EQ(
     result.reason, race::ShadowWarmStartResetReason::StageGeometryDiscontinuous);
 }
+
+TEST(RaceMpccFoundation, ExactPhysicalTrajectoryRequiresEveryFiveStateField)
+{
+  race::ExactPhysicalExecutionTrajectory trajectory;
+  trajectory.progress_origin_m = 100.0;
+  trajectory.path_distance_m = {1.0, 2.0};
+  trajectory.lateral_m = {0.2, 0.4};
+  trajectory.lag_m = {0.1, -0.1};
+  trajectory.heading_offset_rad = {0.15, -0.20};
+  trajectory.velocity_mps = {4.0, 4.5};
+  trajectory.progress_m = {101.1, 102.2};
+  trajectory.lateral_lower_m = {-0.5, -0.5};
+  trajectory.lateral_upper_m = {0.8, 0.8};
+  trajectory.minimum_lateral_bound_reserve_m = 0.4;
+
+  EXPECT_TRUE(race::exact_physical_execution_trajectory_complete(trajectory));
+
+  trajectory.lag_m.clear();
+  EXPECT_FALSE(race::exact_physical_execution_trajectory_complete(trajectory));
+  trajectory.lag_m = {0.1, -0.1};
+  trajectory.heading_offset_rad.clear();
+  EXPECT_FALSE(race::exact_physical_execution_trajectory_complete(trajectory));
+  trajectory.heading_offset_rad = {0.15, -0.20};
+  trajectory.progress_m.clear();
+  EXPECT_FALSE(race::exact_physical_execution_trajectory_complete(trajectory));
+}
+
+TEST(RaceMpccFoundation, ExactPhysicalTrajectoryRejectsSemanticDiscontinuity)
+{
+  race::ExactPhysicalExecutionTrajectory trajectory;
+  trajectory.progress_origin_m = 100.0;
+  trajectory.path_distance_m = {1.0, 2.0};
+  trajectory.lateral_m = {0.2, 0.4};
+  trajectory.lag_m = {0.1, -0.1};
+  trajectory.heading_offset_rad = {0.15, -0.20};
+  trajectory.velocity_mps = {4.0, 4.5};
+  trajectory.progress_m = {101.1, 102.2};
+  trajectory.lateral_lower_m = {-0.5, -0.5};
+  trajectory.lateral_upper_m = {0.8, 0.8};
+  trajectory.minimum_lateral_bound_reserve_m = 0.4;
+
+  trajectory.progress_m[1] = 100.5;
+  EXPECT_FALSE(race::exact_physical_execution_trajectory_complete(trajectory));
+  trajectory.progress_m[1] = 102.2;
+  trajectory.lateral_lower_m[1] = 0.9;
+  EXPECT_FALSE(race::exact_physical_execution_trajectory_complete(trajectory));
+}

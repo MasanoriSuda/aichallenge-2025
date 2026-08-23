@@ -67,3 +67,62 @@ def test_follow_qp_keeps_planning_and_physical_gap_contracts_separate() -> None:
     assert (
         "problem.follow_longitudinal_contract.hard_gap_m" in SOURCE
     )
+
+
+def test_overtake_wall_proof_uses_exact_five_state_trajectory() -> None:
+    """Wall proof must retain lag, heading and solved progress until certified."""
+
+    branch_start = SOURCE.index("evaluate_extended_mpcc_branch(")
+    branch_end = SOURCE.index(
+        "evaluate_isolated_extended_mpcc_branch(", branch_start
+    )
+    branch = SOURCE[branch_start:branch_end]
+
+    proof_input = branch.index("build_exact_extended_wall_proof_input(")
+    physical_proof = branch.index("solved_mpcc_execution_path_wall_safe(")
+    assert proof_input < physical_proof
+    assert "exact_wall_proof->aligned" in branch
+    assert "physical_execution_certificate_exact_trajectory" in branch
+    assert "convert_extended_solution_to_legacy(" not in branch[:physical_proof]
+
+    helper_start = SOURCE.index("build_exact_extended_wall_proof_input(")
+    helper_end = SOURCE.index(
+        "executed_extended_progress_solution_wall_safe(", helper_start
+    )
+    helper = SOURCE[helper_start:helper_end]
+    assert "extract_extended_execution_trajectory(" in helper
+    assert "exact.lag_m = extracted->lag_m" in helper
+    assert "exact.heading_offset_rad = extracted->heading_offset_rad" in helper
+    assert "exact.progress_m = extracted->progress_m" in helper
+
+    production_start = SOURCE.index(
+        "if (\n        problem.progress_contouring_active &&\n"
+        "        cfg.progress_contouring.extended_dynamics_enabled)"
+    )
+    production_end = SOURCE.index(
+        "record_solved_mpcc_execution_trajectory(", production_start
+    )
+    production = SOURCE[production_start:production_end]
+
+    assert "executed_extended_progress_solution_wall_safe(" in production
+    assert production.index(
+        "executed_extended_progress_solution_wall_safe("
+    ) < production.index("convert_extended_solution_to_legacy(")
+
+    entry_start = SOURCE.index(
+        "bool revalidate_overtake_entry_execution_certificate("
+    )
+    entry_end = SOURCE.index(
+        "bool dynamic_margin_escape_solution_wall_safe(", entry_start
+    )
+    entry = SOURCE[entry_start:entry_end]
+    assert "exact_physical_execution_trajectory_complete(" in entry
+    assert "exact.lag_m" in entry
+    assert "exact.heading_offset_rad" in entry
+    assert "exact.progress_m" in entry
+    assert "exact five-state certificate accepted" in entry
+    assert "physical_execution_certificate_source_sec = now_sec" not in entry
+    assert (
+        "physical_execution_certificate_source_course_progress_m = model->s"
+        not in entry
+    )

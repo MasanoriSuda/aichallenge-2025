@@ -379,6 +379,14 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   course-frame coverage. Retained proof cost was 0.162 ms average / 0.760 ms maximum in the final
   replay. The mechanism is accepted as shadow infrastructure; production promotion and legacy
   deletion remain blocked until the upstream continuity contract yields complete coverage.
+- `.steering/20260824-overtake-retained-live-gate` attempted the required closed-loop `dev2` gate at
+  `output/20260824-005436`, but an earlier Track/Cruise canonical failure made the Overtake result
+  inadmissible. Domain 2 rejected 153 solved five-state primals at exact acceleration, velocity, or
+  virtual-progress bounds and published emergency authority 184 times. The earliest rejection was
+  already present before the race session. The dedicated Track/Cruise solver context alone was
+  initialized without the canonical row-normalized physical-unit policy used by Follow and live
+  extended Overtake. Fix and dynamically prove that initialization contract before repeating the
+  Overtake live gate; no tolerance/config/fallback change is authorized.
 
 ## Slice 6: Legacy and migration path removal
 

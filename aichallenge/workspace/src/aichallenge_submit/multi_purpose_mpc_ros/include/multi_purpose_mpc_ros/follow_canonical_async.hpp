@@ -56,6 +56,27 @@ const char * to_string(ResultValidationReason reason) noexcept;
 ResultValidationReason validate_worker_result(
   const WorkerResult & result) noexcept;
 
+enum class CurrentIdentityReason
+{
+  Accepted,
+  InvalidCurrentContext,
+  ContextEpochMismatch,
+  IntentMismatch,
+  IntentGenerationMismatch,
+  TargetMismatch,
+  TargetObservationRollback,
+};
+
+const char * to_string(CurrentIdentityReason reason) noexcept;
+
+/// The observation generation is intentionally allowed to advance: worker
+/// plans are expected to complete after newer V2X data arrives. Physical use
+/// still requires a separate current-world target-tube/wall proof.
+CurrentIdentityReason validate_current_identity(
+  const ResultIdentity & result,
+  std::uint64_t active_context_epoch,
+  const mpcc_execution_contract::MpccProblemContext & current) noexcept;
+
 enum class PublishReason
 {
   Accepted,
@@ -72,6 +93,12 @@ struct MailboxState
   std::uint64_t context_epoch{};
   std::uint64_t latest_submitted_sequence{};
   std::uint64_t latest_published_sequence{};
+  std::uint64_t accepted_count{};
+  std::uint64_t invalid_result_count{};
+  std::uint64_t context_mismatch_count{};
+  std::uint64_t sequence_rollback_count{};
+  std::uint64_t sequence_not_submitted_count{};
+  PublishReason last_publish_reason{PublishReason::InvalidResult};
   bool result_available{false};
 };
 
@@ -95,6 +122,12 @@ private:
   std::uint64_t context_epoch_{};
   std::uint64_t latest_submitted_sequence_{};
   std::uint64_t latest_published_sequence_{};
+  std::uint64_t accepted_count_{};
+  std::uint64_t invalid_result_count_{};
+  std::uint64_t context_mismatch_count_{};
+  std::uint64_t sequence_rollback_count_{};
+  std::uint64_t sequence_not_submitted_count_{};
+  PublishReason last_publish_reason_{PublishReason::InvalidResult};
   std::optional<WorkerResult> latest_result_;
 };
 

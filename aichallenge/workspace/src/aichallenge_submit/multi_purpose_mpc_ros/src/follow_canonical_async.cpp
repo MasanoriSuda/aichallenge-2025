@@ -76,6 +76,56 @@ ResultValidationReason validate_worker_result(
   return ResultValidationReason::Accepted;
 }
 
+const char * to_string(const CurrentIdentityReason reason) noexcept
+{
+  switch (reason) {
+    case CurrentIdentityReason::Accepted:
+      return "accepted";
+    case CurrentIdentityReason::InvalidCurrentContext:
+      return "invalid-current-context";
+    case CurrentIdentityReason::ContextEpochMismatch:
+      return "context-epoch-mismatch";
+    case CurrentIdentityReason::IntentMismatch:
+      return "intent-mismatch";
+    case CurrentIdentityReason::IntentGenerationMismatch:
+      return "intent-generation-mismatch";
+    case CurrentIdentityReason::TargetMismatch:
+      return "target-mismatch";
+    case CurrentIdentityReason::TargetObservationRollback:
+      return "target-observation-rollback";
+  }
+  return "unknown";
+}
+
+CurrentIdentityReason validate_current_identity(
+  const ResultIdentity & result,
+  const std::uint64_t active_context_epoch,
+  const mpcc_execution_contract::MpccProblemContext & current) noexcept
+{
+  if (!mpcc_execution_contract::problem_context_complete(current)) {
+    return CurrentIdentityReason::InvalidCurrentContext;
+  }
+  if (result.context_epoch != active_context_epoch) {
+    return CurrentIdentityReason::ContextEpochMismatch;
+  }
+  if (current.intent != mpcc_execution_contract::ControlIntent::Follow) {
+    return CurrentIdentityReason::IntentMismatch;
+  }
+  if (current.intent_generation != result.intent_generation) {
+    return CurrentIdentityReason::IntentGenerationMismatch;
+  }
+  if (current.target_id != result.target_id) {
+    return CurrentIdentityReason::TargetMismatch;
+  }
+  if (
+    current.target_obstacle_generation <
+    result.target_observation_generation)
+  {
+    return CurrentIdentityReason::TargetObservationRollback;
+  }
+  return CurrentIdentityReason::Accepted;
+}
+
 const char * to_string(const PublishReason reason) noexcept
 {
   switch (reason) {
@@ -119,17 +169,26 @@ bool Mailbox::register_submission(
 PublishReason Mailbox::publish(WorkerResult result)
 {
   if (validate_worker_result(result) != ResultValidationReason::Accepted) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    ++invalid_result_count_;
+    last_publish_reason_ = PublishReason::InvalidResult;
     return PublishReason::InvalidResult;
   }
   std::lock_guard<std::mutex> lock(mutex_);
   const auto & identity = result.identity;
   if (identity.context_epoch != context_epoch_) {
+    ++context_mismatch_count_;
+    last_publish_reason_ = PublishReason::ContextMismatch;
     return PublishReason::ContextMismatch;
   }
   if (identity.sequence <= latest_published_sequence_) {
+    ++sequence_rollback_count_;
+    last_publish_reason_ = PublishReason::SequenceRollback;
     return PublishReason::SequenceRollback;
   }
   if (identity.sequence > latest_submitted_sequence_) {
+    ++sequence_not_submitted_count_;
+    last_publish_reason_ = PublishReason::SequenceNotSubmitted;
     return PublishReason::SequenceNotSubmitted;
   }
   if (!should_publish_latest_only_result(
@@ -140,8 +199,12 @@ PublishReason Mailbox::publish(WorkerResult result)
         latest_submitted_sequence_,
         latest_published_sequence_}))
   {
+    ++invalid_result_count_;
+    last_publish_reason_ = PublishReason::InvalidResult;
     return PublishReason::InvalidResult;
   }
+  ++accepted_count_;
+  last_publish_reason_ = PublishReason::Accepted;
   latest_published_sequence_ = identity.sequence;
   latest_result_ = std::move(result);
   return PublishReason::Accepted;
@@ -167,6 +230,12 @@ MailboxState Mailbox::state() const
     context_epoch_,
     latest_submitted_sequence_,
     latest_published_sequence_,
+    accepted_count_,
+    invalid_result_count_,
+    context_mismatch_count_,
+    sequence_rollback_count_,
+    sequence_not_submitted_count_,
+    last_publish_reason_,
     latest_result_.has_value()};
 }
 

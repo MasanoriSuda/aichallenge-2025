@@ -112,6 +112,54 @@ TEST(FollowCanonicalAsyncResult, RejectsFailureCarryingExecutablePlan)
     async::ResultValidationReason::InvalidPlanPayload);
 }
 
+TEST(FollowCanonicalAsyncCurrentIdentity, AcceptsNewerObservationForLiveProof)
+{
+  const auto result = make_result();
+  auto current = result.canonical_plan->problem;
+  current.decision_id = 43U;
+  current.observation_generation = 8U;
+  current.target_obstacle_generation = 8U;
+  current.stage_geometry_id = 12U;
+  current = contract::seal_problem_context(std::move(current));
+  EXPECT_EQ(
+    async::validate_current_identity(result.identity, 7U, current),
+    async::CurrentIdentityReason::Accepted);
+}
+
+TEST(FollowCanonicalAsyncCurrentIdentity, RejectsChangedIntentAndTarget)
+{
+  const auto result = make_result();
+  auto changed_intent = result.canonical_plan->problem;
+  changed_intent.intent_generation = 4U;
+  changed_intent = contract::seal_problem_context(std::move(changed_intent));
+  EXPECT_EQ(
+    async::validate_current_identity(result.identity, 7U, changed_intent),
+    async::CurrentIdentityReason::IntentGenerationMismatch);
+
+  auto changed_target = result.canonical_plan->problem;
+  changed_target.target_id = "d3";
+  changed_target = contract::seal_problem_context(std::move(changed_target));
+  EXPECT_EQ(
+    async::validate_current_identity(result.identity, 7U, changed_target),
+    async::CurrentIdentityReason::TargetMismatch);
+}
+
+TEST(FollowCanonicalAsyncCurrentIdentity, RejectsOldEpochAndObservationRollback)
+{
+  const auto result = make_result();
+  EXPECT_EQ(
+    async::validate_current_identity(
+      result.identity, 8U, result.canonical_plan->problem),
+    async::CurrentIdentityReason::ContextEpochMismatch);
+
+  auto rolled_back = result.canonical_plan->problem;
+  rolled_back.target_obstacle_generation = 6U;
+  rolled_back = contract::seal_problem_context(std::move(rolled_back));
+  EXPECT_EQ(
+    async::validate_current_identity(result.identity, 7U, rolled_back),
+    async::CurrentIdentityReason::TargetObservationRollback);
+}
+
 TEST(FollowCanonicalAsyncMailbox, PublishesCompletedResultWithNewerJobQueued)
 {
   async::Mailbox mailbox;
@@ -154,6 +202,11 @@ TEST(FollowCanonicalAsyncMailbox, RejectsRollbackAndUnsubmittedSequence)
   const auto retained = mailbox.latest_after(0U);
   ASSERT_TRUE(retained.has_value());
   EXPECT_EQ(retained->identity.sequence, 10U);
+  const auto state = mailbox.state();
+  EXPECT_EQ(state.accepted_count, 1U);
+  EXPECT_EQ(state.sequence_rollback_count, 1U);
+  EXPECT_EQ(state.sequence_not_submitted_count, 1U);
+  EXPECT_EQ(state.last_publish_reason, async::PublishReason::SequenceNotSubmitted);
 }
 
 TEST(FollowCanonicalAsyncMailbox, AcceptsTypedFailureWithoutPlan)

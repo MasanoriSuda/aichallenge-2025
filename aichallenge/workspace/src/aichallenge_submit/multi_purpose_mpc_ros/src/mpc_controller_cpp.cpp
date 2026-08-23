@@ -13,6 +13,7 @@
 #include <multi_purpose_mpc_ros/canonical_execution_plan_adapter.hpp>
 #include <multi_purpose_mpc_ros/canonical_retained_world_revalidation.hpp>
 #include <multi_purpose_mpc_ros/external_speed_loss_monitor.hpp>
+#include <multi_purpose_mpc_ros/follow_canonical_async.hpp>
 #include <multi_purpose_mpc_ros/latest_only_worker.hpp>
 #include <multi_purpose_mpc_ros/mpcc_execution_contract.hpp>
 #include <multi_purpose_mpc_ros/mpcc_progress.hpp>
@@ -121,6 +122,7 @@ namespace canonical_retained =
 namespace canonical_retained_world =
   ::multi_purpose_mpc_ros::canonical_retained_world_revalidation;
 namespace external_speed_loss = ::multi_purpose_mpc_ros::external_speed_loss;
+namespace follow_async = ::multi_purpose_mpc_ros::follow_canonical_async;
 namespace mpc_state_prediction = ::multi_purpose_mpc_ros::mpc_state_prediction;
 namespace mpc_stage_geometry = ::multi_purpose_mpc_ros::mpc_stage_geometry;
 namespace mpcc_contract = ::multi_purpose_mpc_ros::mpcc_execution_contract;
@@ -5815,6 +5817,8 @@ struct FollowShadowCycleResult
   mpcc_progress::ExtendedConstraintRowSemantic solver_constraint_semantic;
   std::optional<mpcc_progress::ActuationProposal> actuation_proposal;
   std::optional<mpcc_contract::CanonicalNormalCommand> canonical_command;
+  std::shared_ptr<const canonical_plan::CanonicalExecutionPlan>
+  fresh_canonical_plan;
   canonical_plan_adapter::CanonicalPlanExtractionReason canonical_extraction_reason{
     canonical_plan_adapter::CanonicalPlanExtractionReason::InvalidMetadata};
   canonical_plan_adapter::FreshCanonicalCommandReason canonical_chain_reason{
@@ -6082,6 +6086,14 @@ struct MPC
         std::make_shared<ExtendedBranchSolverContext>(
         persistent_osqp::ConstraintPreconditioningPolicy::
         RowToleranceNormalized);
+      if (enable_async_tactical_worker) {
+        follow_canonical_async_mailbox_ =
+          std::make_shared<follow_async::Mailbox>();
+        follow_canonical_async_mailbox_->reset_context(
+          follow_canonical_async_context_epoch_);
+        follow_canonical_async_worker_ =
+          std::make_unique<LatestOnlyWorker>();
+      }
     }
     if (
       !mpc_waypoint_preview::is_valid_offset(cfg.wp_id_offset) ||
@@ -6118,6 +6130,7 @@ struct MPC
     snapshot->cfg.v2x_behavior.debug_log_enabled = false;
     snapshot->cfg.v2x_behavior.overtake_line.debug_log_enabled = false;
     snapshot->start_grid_grace_guard_ = start_grid_grace_guard_;
+    snapshot->active_control_decision_id_ = active_control_decision_id_;
     snapshot->gap_planner = gap_planner_snapshot;
     if (overtake_static_wall_grid_ != nullptr) {
       snapshot->overtake_static_wall_grid_snapshot_owner_ =
@@ -21919,11 +21932,9 @@ struct MPC
       "retained Follow candidate current-target-certified; shadow only";
   }
 
-  FollowShadowCycleResult evaluate_follow_shadow(
-    const MpcProblem & problem, const double now_sec)
+  FollowShadowCycleResult make_follow_shadow_cycle_result(
+    const MpcProblem & problem) const
   {
-    constexpr int nx = mpcc_progress::kExtendedStateDimension;
-    constexpr int progress_metadata_nx = 3;
     FollowShadowCycleResult result;
     result.eligible = problem.follow_shadow_requested;
     result.eligibility_reason = problem.follow_shadow_eligibility_reason;
@@ -21935,8 +21946,6 @@ struct MPC
     result.target_observation_generation =
       problem.follow_longitudinal_contract.target_observation_generation;
     result.measured_ego_speed_mps = problem.progress_measured_speed_mps;
-    const auto retained_plan_before_fresh =
-      follow_canonical_lifecycle_->plan_store.snapshot();
     const auto & follow_contract = problem.follow_longitudinal_contract;
     if (!follow_contract.target_progress_m.empty()) {
       result.current_target_gap_m = follow_contract.target_progress_m.front();
@@ -21973,18 +21982,17 @@ struct MPC
       result.terminal_progress_upper_m =
         follow_contract.progress_upper_m.back();
     }
+    return result;
+  }
+
+  FollowShadowCycleResult evaluate_follow_fresh_shadow(
+    const MpcProblem & problem, const double now_sec)
+  {
+    constexpr int nx = mpcc_progress::kExtendedStateDimension;
+    constexpr int progress_metadata_nx = 3;
+    auto result = make_follow_shadow_cycle_result(problem);
     const auto started = SteadyClock::now();
-    const auto finish = [this, &problem, now_sec, &result, &started,
-        &retained_plan_before_fresh]() {
-        try {
-          evaluate_follow_retained_shadow(
-            problem, now_sec, retained_plan_before_fresh, result);
-        } catch (const std::exception & error) {
-          result.retained_detail = std::string{"retained shadow exception: "} +
-            error.what();
-        } catch (...) {
-          result.retained_detail = "retained shadow exception: unknown";
-        }
+    const auto finish = [&result, &started]() {
         result.total_ms = std::chrono::duration<double, std::milli>(
           SteadyClock::now() - started).count();
         return result;
@@ -22396,24 +22404,12 @@ struct MPC
         result.canonical_command_available = false;
         return finish();
       }
-      result.canonical_store_reason =
-        follow_canonical_lifecycle_->plan_store.replace(
+      result.fresh_canonical_plan =
+        std::make_shared<const canonical_plan::CanonicalExecutionPlan>(
         std::move(canonical_chain.plan.value()));
-      if (
-        result.canonical_store_reason !=
-        canonical_plan::CanonicalExecutionPlanStoreReason::Accepted)
-      {
-        result.status = "canonical-store-reject";
-        result.detail = std::string{"Follow canonical store rejected: "} +
-          canonical_plan::to_string(result.canonical_store_reason);
-        result.canonical_command.reset();
-        result.canonical_command_available = false;
-        return finish();
-      }
-      result.canonical_plan_stored = true;
-      result.status = "canonical-ready-shadow";
+      result.status = "canonical-ready-worker";
       result.detail =
-        "Follow fresh canonical command reconstructed; authority remains shadow";
+        "Follow fresh canonical plan produced; current-world proof remains live";
       return finish();
     } catch (const std::exception & error) {
       result.status = "exception";
@@ -22424,6 +22420,293 @@ struct MPC
       result.detail = "unknown";
       return finish();
     }
+  }
+
+  void invalidate_follow_canonical_async_context()
+  {
+    if (!follow_canonical_async_context_initialized_) {
+      return;
+    }
+    follow_canonical_async_context_epoch_ =
+      follow_canonical_async_context_epoch_ ==
+      std::numeric_limits<std::uint64_t>::max() ?
+      1U : follow_canonical_async_context_epoch_ + 1U;
+    follow_canonical_async_context_initialized_ = false;
+    follow_canonical_async_intent_generation_ = 0U;
+    follow_canonical_async_target_id_.clear();
+    follow_canonical_async_last_consumed_sequence_ = 0U;
+    if (follow_canonical_async_mailbox_ != nullptr) {
+      follow_canonical_async_mailbox_->reset_context(
+        follow_canonical_async_context_epoch_);
+    }
+  }
+
+  bool prepare_follow_canonical_async_context(
+    const mpcc_contract::MpccProblemContext & context)
+  {
+    if (
+      !mpcc_contract::problem_context_complete(context) ||
+      context.intent != mpcc_contract::ControlIntent::Follow ||
+      context.target_id.empty())
+    {
+      return false;
+    }
+    const bool context_changed =
+      follow_canonical_async_context_initialized_ &&
+      (follow_canonical_async_intent_generation_ != context.intent_generation ||
+      follow_canonical_async_target_id_ != context.target_id);
+    if (context_changed) {
+      invalidate_follow_canonical_async_context();
+    }
+    if (!follow_canonical_async_context_initialized_) {
+      follow_canonical_async_context_initialized_ = true;
+      follow_canonical_async_intent_generation_ = context.intent_generation;
+      follow_canonical_async_target_id_ = context.target_id;
+    }
+    return true;
+  }
+
+  bool submit_follow_canonical_async(
+    const MpcProblem & problem, const double now_sec)
+  {
+    if (
+      follow_canonical_async_worker_ == nullptr ||
+      follow_canonical_async_mailbox_ == nullptr ||
+      !problem.follow_shadow_requested ||
+      !problem.follow_longitudinal_contract.valid ||
+      !problem.progress_metadata_available || model == nullptr ||
+      model->reference_path == nullptr)
+    {
+      return false;
+    }
+    const auto context = make_problem_context(
+      problem, mpcc_contract::Formulation::VelocityProgress5State);
+    if (!prepare_follow_canonical_async_context(context)) {
+      return false;
+    }
+
+    const auto snapshot_started = SteadyClock::now();
+    try {
+      auto reference_path_snapshot =
+        std::make_shared<ReferencePath>(*model->reference_path);
+      auto model_snapshot = std::make_shared<BicycleModel>(*model);
+      model_snapshot->reference_path = reference_path_snapshot.get();
+      model_snapshot->current_waypoint =
+        &model_snapshot->reference_path->waypoints.at(
+        static_cast<std::size_t>(model_snapshot->wp_id));
+      auto planner_snapshot = tactical_snapshot(model_snapshot.get(), nullptr);
+      planner_snapshot->reference_path_snapshot_owner_ =
+        reference_path_snapshot;
+
+      const std::uint64_t sequence = follow_canonical_async_next_sequence_++;
+      follow_async::ResultIdentity identity;
+      identity.sequence = sequence;
+      identity.context_epoch = follow_canonical_async_context_epoch_;
+      identity.snapshot_decision_id = context.decision_id;
+      identity.intent_generation = context.intent_generation;
+      identity.target_observation_generation =
+        context.target_obstacle_generation;
+      identity.problem_fingerprint = context.fingerprint;
+      identity.target_id = context.target_id;
+      identity.snapshot_sec = now_sec;
+      auto mailbox = follow_canonical_async_mailbox_;
+      if (!mailbox->register_submission(identity.context_epoch, sequence)) {
+        ++follow_canonical_async_submission_reject_count_;
+        return false;
+      }
+      MpcProblem problem_snapshot = problem;
+      const auto submission = follow_canonical_async_worker_->submit_latest(
+        [planner_snapshot, model_snapshot, reference_path_snapshot, mailbox,
+        identity, problem_snapshot = std::move(problem_snapshot)]() mutable {
+          static_cast<void>(model_snapshot);
+          static_cast<void>(reference_path_snapshot);
+          const auto worker_started = SteadyClock::now();
+          follow_async::WorkerResult worker_result;
+          worker_result.identity = identity;
+          try {
+            const auto fresh = planner_snapshot->evaluate_follow_fresh_shadow(
+              problem_snapshot, identity.snapshot_sec);
+            worker_result.detail = fresh.status + "/" + fresh.detail;
+            if (fresh.fresh_canonical_plan != nullptr) {
+              worker_result.outcome = follow_async::WorkerOutcome::PlanAvailable;
+              worker_result.canonical_plan = fresh.fresh_canonical_plan;
+            } else if (fresh.status == "exception") {
+              worker_result.outcome = follow_async::WorkerOutcome::Exception;
+            } else {
+              worker_result.outcome = follow_async::WorkerOutcome::Rejected;
+            }
+          } catch (const std::exception & error) {
+            worker_result.outcome = follow_async::WorkerOutcome::Exception;
+            worker_result.detail = error.what();
+          } catch (...) {
+            worker_result.outcome = follow_async::WorkerOutcome::Exception;
+            worker_result.detail = "unknown Follow canonical worker exception";
+          }
+          worker_result.compute_ms =
+            std::chrono::duration<double, std::milli>(
+            SteadyClock::now() - worker_started).count();
+          worker_result.completed_sec = identity.snapshot_sec +
+            worker_result.compute_ms * 1.0e-3;
+          static_cast<void>(mailbox->publish(std::move(worker_result)));
+        });
+      follow_canonical_async_last_snapshot_ms_ =
+        std::chrono::duration<double, std::milli>(
+        SteadyClock::now() - snapshot_started).count();
+      if (!submission.accepted) {
+        ++follow_canonical_async_submission_reject_count_;
+        return false;
+      }
+      return true;
+    } catch (const std::exception & error) {
+      ++follow_canonical_async_snapshot_failure_count_;
+      follow_canonical_async_last_detail_ = error.what();
+    } catch (...) {
+      ++follow_canonical_async_snapshot_failure_count_;
+      follow_canonical_async_last_detail_ =
+        "unknown Follow canonical snapshot exception";
+    }
+    follow_canonical_async_last_snapshot_ms_ =
+      std::chrono::duration<double, std::milli>(
+      SteadyClock::now() - snapshot_started).count();
+    return false;
+  }
+
+  FollowShadowCycleResult evaluate_follow_async_shadow(
+    const MpcProblem & problem, const double now_sec)
+  {
+    auto result = make_follow_shadow_cycle_result(problem);
+    const auto started = SteadyClock::now();
+    static_cast<void>(submit_follow_canonical_async(problem, now_sec));
+
+    std::shared_ptr<const canonical_plan::CanonicalExecutionPlan>
+    incoming_plan;
+    if (follow_canonical_async_mailbox_ != nullptr) {
+      const auto worker_result = follow_canonical_async_mailbox_->latest_after(
+        follow_canonical_async_last_consumed_sequence_);
+      if (worker_result.has_value()) {
+        follow_canonical_async_last_consumed_sequence_ =
+          worker_result->identity.sequence;
+        ++follow_canonical_async_consumed_count_;
+        follow_canonical_async_last_compute_ms_ = worker_result->compute_ms;
+        follow_canonical_async_last_result_age_sec_ = std::max(
+          0.0, now_sec - worker_result->identity.snapshot_sec);
+        follow_canonical_async_last_detail_ = worker_result->detail;
+        result.problem_fingerprint =
+          worker_result->identity.problem_fingerprint;
+        result.status = worker_result->outcome ==
+          follow_async::WorkerOutcome::PlanAvailable ?
+          "async-plan-received" : "async-worker-reject";
+        result.detail = worker_result->detail;
+        if (
+          worker_result->outcome == follow_async::WorkerOutcome::PlanAvailable &&
+          worker_result->canonical_plan != nullptr)
+        {
+          result.canonical_plan_extracted = true;
+          result.canonical_plan_id = worker_result->canonical_plan->plan_id;
+          const auto current_context = make_problem_context(
+            problem, mpcc_contract::Formulation::VelocityProgress5State);
+          const auto current_identity_reason =
+            follow_async::validate_current_identity(
+            worker_result->identity, follow_canonical_async_context_epoch_,
+            current_context);
+          if (
+            current_identity_reason ==
+            follow_async::CurrentIdentityReason::Accepted)
+          {
+            incoming_plan = worker_result->canonical_plan;
+            evaluate_follow_retained_shadow(
+              problem, now_sec, incoming_plan, result);
+            if (result.retained_command_available) {
+              result.canonical_store_reason =
+                follow_canonical_lifecycle_->plan_store.replace(*incoming_plan);
+              result.canonical_plan_stored =
+                result.canonical_store_reason ==
+                canonical_plan::CanonicalExecutionPlanStoreReason::Accepted;
+              if (result.canonical_plan_stored) {
+                ++follow_canonical_async_current_world_accept_count_;
+                result.status = "async-current-world-ready";
+              }
+            }
+          } else {
+            ++follow_canonical_async_current_identity_reject_count_;
+            result.retained_detail = std::string{
+              "async plan identity rejected: "} +
+              follow_async::to_string(current_identity_reason);
+          }
+        }
+      }
+    }
+
+    if (!result.retained_command_available) {
+      const auto retained_plan =
+        follow_canonical_lifecycle_->plan_store.snapshot();
+      if (retained_plan != incoming_plan) {
+        try {
+          evaluate_follow_retained_shadow(
+            problem, now_sec, retained_plan, result);
+        } catch (const std::exception & error) {
+          result.retained_detail = std::string{"retained shadow exception: "} +
+            error.what();
+        } catch (...) {
+          result.retained_detail = "retained shadow exception: unknown";
+        }
+      }
+    }
+    if (result.status == "not-eligible") {
+      result.status = result.retained_command_available ?
+        "async-retained-ready" : "async-pending";
+    }
+    result.total_ms = std::chrono::duration<double, std::milli>(
+      SteadyClock::now() - started).count();
+    return result;
+  }
+
+  void record_follow_canonical_async_status(const double now_sec)
+  {
+    if (
+      follow_canonical_async_worker_ == nullptr ||
+      !std::isfinite(now_sec) ||
+      (std::isfinite(follow_canonical_async_last_status_log_sec_) &&
+      now_sec - follow_canonical_async_last_status_log_sec_ < 1.0))
+    {
+      return;
+    }
+    follow_canonical_async_last_status_log_sec_ = now_sec;
+    const auto stats = follow_canonical_async_worker_->stats();
+    const auto mailbox_state = follow_canonical_async_mailbox_ != nullptr ?
+      follow_canonical_async_mailbox_->state() : follow_async::MailboxState{};
+    RCLCPP_INFO(
+      rclcpp::get_logger("mpc_controller"),
+      "Follow canonical worker: submitted=%lu, replaced=%lu, started=%lu, "
+      "completed=%lu, exceptions=%lu, running=%d, pending=%d, "
+      "mailbox=%lu/%lu/%d/%s, publish=%lu/%lu/%lu/%lu/%lu, "
+      "consumed=%lu, current_ready=%lu, "
+      "identity_reject=%lu, submit_reject=%lu, snapshot_fail=%lu, "
+      "snapshot_ms=%.3f, compute_ms=%.3f, result_age=%.3f, detail=%s",
+      static_cast<unsigned long>(stats.submitted),
+      static_cast<unsigned long>(stats.replaced),
+      static_cast<unsigned long>(stats.started),
+      static_cast<unsigned long>(stats.completed),
+      static_cast<unsigned long>(stats.exceptions),
+      stats.running ? 1 : 0, stats.pending ? 1 : 0,
+      static_cast<unsigned long>(mailbox_state.latest_submitted_sequence),
+      static_cast<unsigned long>(mailbox_state.latest_published_sequence),
+      mailbox_state.result_available ? 1 : 0,
+      follow_async::to_string(mailbox_state.last_publish_reason),
+      static_cast<unsigned long>(mailbox_state.accepted_count),
+      static_cast<unsigned long>(mailbox_state.invalid_result_count),
+      static_cast<unsigned long>(mailbox_state.context_mismatch_count),
+      static_cast<unsigned long>(mailbox_state.sequence_rollback_count),
+      static_cast<unsigned long>(mailbox_state.sequence_not_submitted_count),
+      static_cast<unsigned long>(follow_canonical_async_consumed_count_),
+      static_cast<unsigned long>(follow_canonical_async_current_world_accept_count_),
+      static_cast<unsigned long>(follow_canonical_async_current_identity_reject_count_),
+      static_cast<unsigned long>(follow_canonical_async_submission_reject_count_),
+      static_cast<unsigned long>(follow_canonical_async_snapshot_failure_count_),
+      follow_canonical_async_last_snapshot_ms_,
+      follow_canonical_async_last_compute_ms_,
+      follow_canonical_async_last_result_age_sec_,
+      follow_canonical_async_last_detail_.c_str());
   }
 
   void record_follow_shadow_telemetry(
@@ -24649,8 +24932,11 @@ struct MPC
         problem.follow_shadow_eligibility_reason ==
         race_mpcc::FollowShadowEligibilityReason::NoCoherentFrontObservation)
       {
-        const auto follow_shadow = evaluate_follow_shadow(problem, now_sec);
+        const auto follow_shadow = evaluate_follow_async_shadow(problem, now_sec);
         record_follow_shadow_telemetry(follow_shadow, now_sec);
+        record_follow_canonical_async_status(now_sec);
+      } else {
+        invalidate_follow_canonical_async_context();
       }
       if (low_speed_shift_control_active_) {
         record_problem_context(
@@ -25582,6 +25868,26 @@ struct MPC
   std::shared_ptr<ExtendedBranchSolverContext> extended_right_branch_solver_context_;
   std::shared_ptr<ExtendedBranchSolverContext> track_cruise_shadow_solver_context_;
   std::shared_ptr<FollowCanonicalLifecycle> follow_canonical_lifecycle_;
+  std::shared_ptr<follow_async::Mailbox> follow_canonical_async_mailbox_;
+  std::unique_ptr<LatestOnlyWorker> follow_canonical_async_worker_;
+  std::uint64_t follow_canonical_async_next_sequence_{1U};
+  std::uint64_t follow_canonical_async_context_epoch_{1U};
+  std::uint64_t follow_canonical_async_last_consumed_sequence_{};
+  bool follow_canonical_async_context_initialized_{false};
+  std::uint64_t follow_canonical_async_intent_generation_{};
+  std::string follow_canonical_async_target_id_;
+  std::uint64_t follow_canonical_async_consumed_count_{};
+  std::uint64_t follow_canonical_async_current_world_accept_count_{};
+  std::uint64_t follow_canonical_async_current_identity_reject_count_{};
+  std::uint64_t follow_canonical_async_submission_reject_count_{};
+  std::uint64_t follow_canonical_async_snapshot_failure_count_{};
+  double follow_canonical_async_last_snapshot_ms_{};
+  double follow_canonical_async_last_compute_ms_{};
+  double follow_canonical_async_last_result_age_sec_{
+    std::numeric_limits<double>::infinity()};
+  double follow_canonical_async_last_status_log_sec_{
+    -std::numeric_limits<double>::infinity()};
+  std::string follow_canonical_async_last_detail_{"not-evaluated"};
   canonical_plan::CanonicalExecutionPlanStore track_cruise_shadow_plan_store_;
   std::optional<race_mpcc::ShadowWarmStartIdentity>
   track_cruise_shadow_warm_start_identity_;

@@ -66,3 +66,28 @@ result unchanged; the mailbox cannot mutate the canonical execution-plan store.
 - Focused CTest from `/aichallenge/workspace/build`: 3/3 passed.
 - Full package CTest from `/aichallenge/workspace/build`: 39/39 passed.
 - The older `/aichallenge/build` tree is not accepted as current evidence.
+
+## Slice C static verification
+
+Fresh Follow solving now occurs only inside the dedicated latest-only worker. `get_control()` submits
+an immutable model/reference/problem snapshot, consumes a typed result, and runs the existing
+current-world retained proof before a plan may replace the shared store. A worker plan is never used
+as direct actuation. Leaving Follow increments the context epoch, so an in-flight old result cannot
+publish into the new intent/target context.
+
+The live identity gate deliberately accepts a newer target observation generation for revalidation,
+but rejects context epoch changes, intent/target changes and observation rollback. Those semantics
+are deterministic tests, not an age lease.
+
+- Formal `make autoware-build`: 25 packages successful.
+- Full current workspace CTest: 39/39 passed.
+- `evaluate_follow_fresh_shadow()` has no live call site; its only call is the worker lambda.
+- No controller parameter, normal authority, legacy fallback or direct worker command was added.
+- Rollback boundary before worker connection: `fbd8f8f`.
+
+## Remaining dynamic falsification
+
+The callback still constructs an immutable model/reference snapshot, and the worker competes for CPU
+with other tactical work. The dynamic gate must therefore measure snapshot cost, callback tail,
+worker replacement/publish reasons, result age and current-world acceptance. Static success is not
+evidence that the 25 ms runtime deadline is repaired.

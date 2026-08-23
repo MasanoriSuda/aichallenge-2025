@@ -368,7 +368,8 @@ std::optional<WarmStart>
 shift_mpc_warm_start(
   const WarmStart & previous, const std::size_t horizon_steps,
   const std::size_t state_dimension,
-  const std::size_t input_dimension) noexcept
+  const std::size_t input_dimension,
+  const std::vector<DualStageBlockLayout> & trailing_dual_stage_blocks) noexcept
 {
   if (horizon_steps == 0U || state_dimension == 0U || input_dimension == 0U ||
     !finite_vector(previous.primal) || !finite_vector(previous.dual))
@@ -379,7 +380,32 @@ shift_mpc_warm_start(
   const std::size_t state_values = state_stage_count * state_dimension;
   const std::size_t input_values = horizon_steps * input_dimension;
   const std::size_t primal_size = state_values + input_values;
-  const std::size_t dual_size = state_values + primal_size + horizon_steps;
+  const std::size_t base_dual_size = state_values + primal_size + horizon_steps;
+  std::size_t trailing_dual_size = 0U;
+  for (const auto & block : trailing_dual_stage_blocks) {
+    if (
+      block.stage_count == 0U || block.rows_per_stage == 0U ||
+      block.rows_per_stage >
+      std::numeric_limits<std::size_t>::max() / block.stage_count)
+    {
+      return std::nullopt;
+    }
+    const std::size_t block_size = block.stage_count * block.rows_per_stage;
+    if (
+      trailing_dual_size >
+      std::numeric_limits<std::size_t>::max() - block_size)
+    {
+      return std::nullopt;
+    }
+    trailing_dual_size += block_size;
+  }
+  if (
+    base_dual_size >
+    std::numeric_limits<std::size_t>::max() - trailing_dual_size)
+  {
+    return std::nullopt;
+  }
+  const std::size_t dual_size = base_dual_size + trailing_dual_size;
   if (previous.primal.size() != static_cast<Eigen::Index>(primal_size) ||
     previous.dual.size() != static_cast<Eigen::Index>(dual_size))
   {
@@ -412,6 +438,13 @@ shift_mpc_warm_start(
   shift_stage_block(
     previous.dual, shifted.dual, rate_offset, rate_offset,
     horizon_steps, 1U);
+  std::size_t trailing_offset = base_dual_size;
+  for (const auto & block : trailing_dual_stage_blocks) {
+    shift_stage_block(
+      previous.dual, shifted.dual, trailing_offset, trailing_offset,
+      block.stage_count, block.rows_per_stage);
+    trailing_offset += block.stage_count * block.rows_per_stage;
+  }
   if (!shifted.primal.allFinite() || !shifted.dual.allFinite()) {
     return std::nullopt;
   }

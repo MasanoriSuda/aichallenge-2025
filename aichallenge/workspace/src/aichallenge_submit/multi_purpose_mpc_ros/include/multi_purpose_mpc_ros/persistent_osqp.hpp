@@ -7,6 +7,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace multi_purpose_mpc_ros::persistent_osqp
 {
@@ -15,6 +16,15 @@ struct WarmStart
 {
   Eigen::VectorXd primal;
   Eigen::VectorXd dual;
+};
+
+/// One contiguous, stage-major constraint block appended after the canonical
+/// MPC dual layout. The producer must declare every appended block so that a
+/// receding-horizon shift never guesses the temporal meaning of unknown rows.
+struct DualStageBlockLayout
+{
+  std::size_t stage_count{};
+  std::size_t rows_per_stage{};
 };
 
 struct SolveTelemetry
@@ -116,7 +126,8 @@ std::optional<WarmStart>
 shift_mpc_warm_start(
   const WarmStart & previous, std::size_t horizon_steps,
   std::size_t state_dimension = 3U,
-  std::size_t input_dimension = 2U) noexcept;
+  std::size_t input_dimension = 2U,
+  const std::vector<DualStageBlockLayout> & trailing_dual_stage_blocks = {}) noexcept;
 
 class PersistentOsqpSolver
 {

@@ -5410,6 +5410,8 @@ struct ExtendedProgressMpcProblem
   double minimum_wall_tracking_reference_reserve_m{
     std::numeric_limits<double>::infinity()};
   double first_stage_dt_sec{std::numeric_limits<double>::quiet_NaN()};
+  std::vector<persistent_osqp::DualStageBlockLayout>
+  trailing_dual_stage_blocks;
 };
 
 struct FirstStageShadowReachabilityDiagnostic
@@ -19501,7 +19503,12 @@ struct MPC
       wall_aware_reference_adjustment_count,
       minimum_wall_tracking_weight_scale,
       minimum_wall_tracking_reference_reserve_m,
-      linearizations.front().stage_dt_sec};
+      linearizations.front().stage_dt_sec,
+      legacy.follow_shadow_requested ?
+      std::vector<persistent_osqp::DualStageBlockLayout>{
+        persistent_osqp::DualStageBlockLayout{
+          static_cast<std::size_t>(N + 1), 1U}} :
+      std::vector<persistent_osqp::DualStageBlockLayout>{}};
   }
 
   persistent_osqp::SolveOutcome solve_extended_progress_problem(
@@ -19570,7 +19577,8 @@ struct MPC
       warm_start = persistent_osqp::shift_mpc_warm_start(
         last_solution->value(), static_cast<std::size_t>(problem.N),
         static_cast<std::size_t>(mpcc_progress::kExtendedStateDimension),
-        static_cast<std::size_t>(mpcc_progress::kExtendedInputDimension));
+        static_cast<std::size_t>(mpcc_progress::kExtendedInputDimension),
+        problem.trailing_dual_stage_blocks);
       if (
         warm_start.has_value() && previous_progress_origin.has_value() &&
         !mpcc_progress::rebase_extended_progress_warm_start(

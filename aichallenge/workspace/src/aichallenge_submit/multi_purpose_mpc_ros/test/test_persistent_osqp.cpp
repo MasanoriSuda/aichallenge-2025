@@ -73,6 +73,54 @@ TEST(PersistentOsqpWarmStart, RejectsMalformedOrNonFiniteState) {
   EXPECT_FALSE(shift_mpc_warm_start(non_finite, 2U, 1U, 1U).has_value());
 }
 
+TEST(PersistentOsqpWarmStart, ShiftsDeclaredTrailingStageBlock)
+{
+  WarmStart previous;
+  previous.primal = Eigen::VectorXd(5);
+  previous.primal << 0.0, 1.0, 2.0, 3.0, 4.0;
+  previous.dual = Eigen::VectorXd(13);
+  previous.dual <<
+    0.0, 1.0, 2.0,
+    3.0, 4.0, 5.0,
+    6.0, 7.0,
+    8.0, 9.0,
+    10.0, 11.0, 12.0;
+
+  const auto shifted = shift_mpc_warm_start(
+    previous, 2U, 1U, 1U,
+    std::vector<DualStageBlockLayout>{{3U, 1U}});
+
+  ASSERT_TRUE(shifted.has_value());
+  Eigen::VectorXd expected_primal(5);
+  expected_primal << 1.0, 2.0, 2.0, 4.0, 4.0;
+  Eigen::VectorXd expected_dual(13);
+  expected_dual <<
+    1.0, 2.0, 2.0,
+    4.0, 5.0, 5.0,
+    7.0, 7.0,
+    9.0, 9.0,
+    11.0, 12.0, 12.0;
+  EXPECT_TRUE(shifted->primal.isApprox(expected_primal));
+  EXPECT_TRUE(shifted->dual.isApprox(expected_dual));
+}
+
+TEST(PersistentOsqpWarmStart, RejectsUndeclaredOrMalformedTrailingRows)
+{
+  const WarmStart with_trailing_rows{
+    Eigen::VectorXd::Zero(5), Eigen::VectorXd::Zero(13)};
+
+  EXPECT_FALSE(
+    shift_mpc_warm_start(with_trailing_rows, 2U, 1U, 1U).has_value());
+  EXPECT_FALSE(
+    shift_mpc_warm_start(
+      with_trailing_rows, 2U, 1U, 1U,
+      std::vector<DualStageBlockLayout>{{0U, 1U}}).has_value());
+  EXPECT_FALSE(
+    shift_mpc_warm_start(
+      with_trailing_rows, 2U, 1U, 1U,
+      std::vector<DualStageBlockLayout>{{3U, 0U}}).has_value());
+}
+
 TEST(PersistentOsqpConstraintResiduals, KeepsMixedUnitRowsOnIndependentScales)
 {
   Eigen::SparseMatrix<double> constraints(2, 2);

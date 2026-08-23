@@ -126,3 +126,33 @@ def test_overtake_wall_proof_uses_exact_five_state_trajectory() -> None:
         "physical_execution_certificate_source_course_progress_m = model->s"
         not in entry
     )
+
+
+def test_canonical_overtake_uses_production_wall_clearance_contract() -> None:
+    """Fresh and retained candidates must not certify a zero-margin shadow."""
+
+    fresh_start = SOURCE.index("evaluate_overtake_canonical_fresh_shadow(")
+    fresh_end = SOURCE.index(
+        "evaluate_overtake_canonical_worker_fresh(", fresh_start
+    )
+    fresh = SOURCE[fresh_start:fresh_end]
+    physical_proof = fresh.index("solved_mpcc_execution_path_wall_safe(")
+    physical_proof_end = fresh.index(
+        "SolvedExecutionWallValidationScope::SweptFromCurrentPose",
+        physical_proof,
+    )
+    proof_call = fresh[physical_proof:physical_proof_end]
+    assert "problem.progress_execution_required_wall_clearance_m" in proof_call
+    assert "upper_bound, 0.0" not in proof_call
+
+    retained_start = SOURCE.index(
+        "void evaluate_overtake_canonical_retained_shadow("
+    )
+    retained_end = SOURCE.index(
+        "void invalidate_overtake_canonical_async_context()", retained_start
+    )
+    retained = SOURCE[retained_start:retained_end]
+    assert (
+        "proof_request.required_wall_clearance_m =\n"
+        "      problem.progress_execution_required_wall_clearance_m"
+    ) in retained

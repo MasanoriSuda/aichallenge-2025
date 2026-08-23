@@ -514,6 +514,17 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   `legacy-normal-bypass`, `plan=0`, and `missing-canonical-command-identity`. Promote the certified
   canonical selection and delete the competing converted/three-state normal path in the same Slice;
   do not tune around or add a grace to the intermittent completeness outcome.
+- `.steering/20260824-overtake-canonical-wall-contract` closes a safety-certificate mismatch before
+  that promotion. Fresh canonical Overtake previously proved a literal zero wall reserve and
+  retained current-world proof used the unexpanded vehicle footprint, while production required
+  the problem's 0.40 m reserve. Both canonical lifetimes now use the exact production scalar and
+  lateral footprint expansion. The 1,736-test suite and 25-package build pass. In
+  `output/20260824-072942`, 74/74 fresh physical proofs passed at 0.40 m and 71 cycles completed
+  current-world canonical selection; no physical wall reject occurred in canonical shadow.
+  Production nevertheless emitted eight `legacy-normal-bypass` decisions and its converted path
+  later failed exact wall proof. The certification Gate is accepted. The next Slice may atomically
+  promote complete canonical Overtake selection only while deleting converted/three-state normal
+  authority for ShiftOut/Pass/Return; no wall or availability relaxation is authorized.
 
 ## Slice 6: Legacy and migration path removal
 

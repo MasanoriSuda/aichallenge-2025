@@ -72,6 +72,18 @@ footprint::OccupancyGrid make_grid(const footprint::CellState state)
   return grid;
 }
 
+footprint::OccupancyGrid make_lateral_obstacle_grid()
+{
+  auto grid = make_grid(footprint::CellState::Free);
+  const auto index = grid.world_to_grid(2.3, 5.5);
+  EXPECT_TRUE(index.has_value());
+  if (index.has_value()) {
+    grid.cells[index->row * grid.width + index->column] =
+      footprint::CellState::Occupied;
+  }
+  return grid;
+}
+
 world::CurrentWorldProofRequest make_request()
 {
   world::CurrentWorldProofRequest request;
@@ -192,6 +204,7 @@ world::OvertakeCurrentWorldProofRequest make_overtake_request()
     world::fingerprint_overtake_corridor_observation(request.corridor);
   request.current.obstacle_tube_id = request.corridor.tube_id;
   request.lateral_tolerance_m = 1e-6;
+  request.required_wall_clearance_m = 0.0;
   request.swept_step_m = empty.swept_step_m;
   return request;
 }
@@ -438,4 +451,43 @@ TEST(CanonicalRetainedWorldRevalidation, RejectsOvertakeUncertifiedReleaseAndBlo
       execution_plan, cursor, blocked,
       make_grid(footprint::CellState::Free), extents).reason,
     world::OvertakeCurrentWorldProofReason::StageCorridorViolation);
+}
+
+TEST(CanonicalRetainedWorldRevalidation, AppliesOvertakeRequiredWallClearance)
+{
+  const auto execution_plan = make_overtake_plan();
+  const auto cursor = plan::resolve_execution_cursor(execution_plan, 10.6);
+  const footprint::FootprintExtents extents{0.15, 0.15, 0.10, 0.10, 0.0};
+
+  auto zero_clearance = make_overtake_request();
+  const auto zero_result = world::build_overtake_current_world_retained_proof(
+    execution_plan, cursor, zero_clearance,
+    make_lateral_obstacle_grid(), extents);
+  ASSERT_EQ(
+    zero_result.reason, world::OvertakeCurrentWorldProofReason::Accepted);
+
+  auto required_clearance = make_overtake_request();
+  required_clearance.required_wall_clearance_m = 0.40;
+  const auto required_result =
+    world::build_overtake_current_world_retained_proof(
+    execution_plan, cursor, required_clearance,
+    make_lateral_obstacle_grid(), extents);
+  EXPECT_EQ(
+    required_result.reason,
+    world::OvertakeCurrentWorldProofReason::DelayPrefixBlocked);
+}
+
+TEST(CanonicalRetainedWorldRevalidation, RejectsInvalidOvertakeWallClearance)
+{
+  const auto execution_plan = make_overtake_plan();
+  const auto cursor = plan::resolve_execution_cursor(execution_plan, 10.6);
+  const footprint::FootprintExtents extents{0.15, 0.15, 0.10, 0.10, 0.0};
+
+  auto request = make_overtake_request();
+  request.required_wall_clearance_m = -0.01;
+  const auto result = world::build_overtake_current_world_retained_proof(
+    execution_plan, cursor, request,
+    make_grid(footprint::CellState::Free), extents);
+  EXPECT_EQ(
+    result.reason, world::OvertakeCurrentWorldProofReason::InvalidInput);
 }

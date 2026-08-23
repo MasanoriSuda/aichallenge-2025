@@ -167,6 +167,7 @@ struct OvertakeCurrentWorldProofRequest
   std::vector<mpc_stage_geometry::CourseFrameKnot> course_frame_knots;
   OvertakeDynamicCorridorObservation corridor;
   double lateral_tolerance_m{};
+  double required_wall_clearance_m{};
   double swept_step_m{};
 };
 

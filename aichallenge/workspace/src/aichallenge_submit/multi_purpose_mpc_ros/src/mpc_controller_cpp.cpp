@@ -6207,6 +6207,8 @@ struct OvertakeCanonicalFreshShadowResult
   std::size_t retained_rejected_stage{};
   double retained_minimum_corridor_reserve_m{
     std::numeric_limits<double>::infinity()};
+  double required_wall_clearance_m{
+    std::numeric_limits<double>::quiet_NaN()};
   mpcc_contract::PhysicalWallCertificateDiagnostic physical_wall_diagnostic;
   CanonicalNormalSelection selected;
   std::string status{"not-eligible"};
@@ -24596,6 +24598,8 @@ struct MPC
     OvertakeCanonicalFreshShadowResult result;
     result.decision_id = context.decision_id;
     result.intent = context.intent;
+    result.required_wall_clearance_m =
+      problem.progress_execution_required_wall_clearance_m;
     result.eligibility_reason =
       race_mpcc::resolve_overtake_canonical_fresh_shadow_eligibility(
       race_mpcc::OvertakeCanonicalFreshShadowEligibilityRequest{
@@ -24751,7 +24755,9 @@ struct MPC
     result.physical_certificate_checked = true;
     result.physically_certified = solved_mpcc_execution_path_wall_safe(
       exact_trajectory, path_distance_m, problem.ref_wp_id, problem.N,
-      lower_bound, upper_bound, 0.0, certificate_reason, tolerance_m,
+      lower_bound, upper_bound,
+      problem.progress_execution_required_wall_clearance_m,
+      certificate_reason, tolerance_m,
       SolvedExecutionWallValidationScope::SweptFromCurrentPose,
       &result.physical_wall_diagnostic);
     if (!result.physically_certified) {
@@ -25179,6 +25185,8 @@ struct MPC
     proof_request.current.obstacle_tube_id = corridor.tube_id;
     result.retained_corridor_tube_id = corridor.tube_id;
     proof_request.lateral_tolerance_m = 1e-5;
+    proof_request.required_wall_clearance_m =
+      problem.progress_execution_required_wall_clearance_m;
     proof_request.swept_step_m = std::max(
       1e-3, std::min(0.10, 0.5 * overtake_static_wall_grid_->resolution_m));
 
@@ -25843,7 +25851,8 @@ struct MPC
         "swept:%lu, last_physical_reject=%lu/%s, "
         "time=%.3f/%.3fms(avg/max), retained_time=%.3f/%.3fms(avg/max), "
         "actuation_diff_max=%.3g, "
-        "initial_lag_abs_max=%.3fm, last=%s/%s, retained_last=%s/%s/"
+        "initial_lag_abs_max=%.3fm, wall_clearance=%.3fm, last=%s/%s, "
+        "retained_last=%s/%s/"
         "stage:%zu/reserve:%.3f, source=%s, incoming_last=%s/%lu/%s, "
         "stored_last=%s/%lu/%s, authority=shadow",
         static_cast<unsigned long>(window.evaluated_count),
@@ -25888,6 +25897,7 @@ struct MPC
         retained_average_ms, window.retained_maximum_ms,
         window.maximum_actuation_difference,
         window.maximum_absolute_initial_lag_m,
+        result.required_wall_clearance_m,
         result.status.c_str(), result.detail.c_str(),
         canonical_retained_world::to_string(result.retained_world_reason),
         result.retained_detail.c_str(), result.retained_rejected_stage,

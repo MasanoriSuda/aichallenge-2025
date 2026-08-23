@@ -961,8 +961,18 @@ OvertakeCurrentWorldProofResult build_overtake_current_world_retained_proof(
     !std::isfinite(request.measured_lateral_m) ||
     !std::isfinite(request.lateral_tolerance_m) ||
     request.lateral_tolerance_m < 0.0 ||
+    !std::isfinite(request.required_wall_clearance_m) ||
+    request.required_wall_clearance_m < 0.0 ||
     !std::isfinite(request.swept_step_m) || request.swept_step_m <= 0.0)
   {
+    return result;
+  }
+  auto clearance_footprint = footprint;
+  // Match the production exact five-state wall certificate: the configured
+  // hard wall reserve is lateral clearance, so front/rear remain physical.
+  clearance_footprint.left_extent_m += request.required_wall_clearance_m;
+  clearance_footprint.right_extent_m += request.required_wall_clearance_m;
+  if (!clearance_footprint.valid()) {
     return result;
   }
   if (!request.corridor.current ||
@@ -1082,7 +1092,7 @@ OvertakeCurrentWorldProofResult build_overtake_current_world_retained_proof(
   proof_request.progress_continuity_tolerance_m =
     request.progress_continuity_tolerance_m;
   const auto delay_wall = recovery_footprint::evaluate_clear_footprint_path(
-    wall_grid, footprint, request.measured_to_control_path,
+    wall_grid, clearance_footprint, request.measured_to_control_path,
     request.swept_step_m);
   proof_request.measured_to_control_prefix = make_segment_evaluation(
     request.current, lift.lifted_progress_m, lift.lifted_progress_m,
@@ -1097,7 +1107,7 @@ OvertakeCurrentWorldProofResult build_overtake_current_world_retained_proof(
   const std::vector<recovery_footprint::Pose2D> connector_path{
     request.control_pose, expected_current_pose.value()};
   const auto connector_wall = recovery_footprint::evaluate_clear_footprint_path(
-    wall_grid, footprint, connector_path, request.swept_step_m);
+    wall_grid, clearance_footprint, connector_path, request.swept_step_m);
   proof_request.control_to_retained_connector = make_segment_evaluation(
     request.current, lift.lifted_progress_m,
     window.window->expected_current_progress_m, connector_wall);
@@ -1136,7 +1146,7 @@ OvertakeCurrentWorldProofResult build_overtake_current_world_retained_proof(
     const std::vector<recovery_footprint::Pose2D> stage_path{
       previous_pose, endpoint_pose.value()};
     const auto stage_wall = recovery_footprint::evaluate_clear_footprint_path(
-      wall_grid, footprint, stage_path, request.swept_step_m);
+      wall_grid, clearance_footprint, stage_path, request.swept_step_m);
     retained::RetainedStageSafetyEvaluation evaluation;
     evaluation.control_stage_index = sample.control_stage_index;
     evaluation.relative_time_sec = sample.relative_time_sec;

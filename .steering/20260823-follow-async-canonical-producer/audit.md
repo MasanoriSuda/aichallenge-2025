@@ -109,3 +109,21 @@ completed payload is rejected before publication. The existing mailbox telemetry
 typed validation failures into `invalid-result`, so the immediate next action is observability at
 that contract boundary, not solver or clearance tuning. `MailboxState` now exposes the exact last
 `ResultValidationReason`; the diagnostic run must be repeated before any root-cause correction.
+
+The repeated diagnostic run (`20260823-192406`) classified every rejection as
+`invalid-identity`. Static data-flow tracing then isolated the mismatch:
+
+```text
+Follow has no overtake Mission
+-> authority trace mission_generation = 0 (valid canonical meaning)
+-> make_problem_context seals a complete Follow context with intent_generation = 0
+-> async ResultIdentity copies that complete context
+-> validate_worker_result independently requires intent_generation > 0
+-> every completed worker payload is rejected before solve outcome consumption
+```
+
+`mpcc_execution_contract::problem_context_complete()` intentionally permits generation zero;
+leaving Follow still changes the async context epoch, and target identity plus observation generation
+remain mandatory. The root correction therefore removes only the contradictory nonzero check from
+the mailbox validator and adds a regression test for a complete Follow plan with generation zero.
+No timing lease, fallback or parameter exception is introduced.

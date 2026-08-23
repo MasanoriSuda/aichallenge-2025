@@ -94,6 +94,21 @@ TEST(FollowCanonicalAsyncResult, AcceptsInternallyConsistentImmutablePlan)
     async::ResultValidationReason::Accepted);
 }
 
+TEST(FollowCanonicalAsyncResult, AcceptsFollowWithoutOvertakeMissionGeneration)
+{
+  auto canonical_plan = make_follow_plan(42U, 0U, 7U);
+  auto result = make_result();
+  result.identity.intent_generation = 0U;
+  result.identity.problem_fingerprint = canonical_plan.problem.fingerprint;
+  result.canonical_plan =
+    std::make_shared<const plan::CanonicalExecutionPlan>(
+    std::move(canonical_plan));
+  EXPECT_TRUE(contract::problem_context_complete(result.canonical_plan->problem));
+  EXPECT_EQ(
+    async::validate_worker_result(result),
+    async::ResultValidationReason::Accepted);
+}
+
 TEST(FollowCanonicalAsyncResult, RejectsPlanIdentityMismatch)
 {
   auto result = make_result();

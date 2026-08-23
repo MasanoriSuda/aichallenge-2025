@@ -31,7 +31,7 @@ ResultValidationReason validate_worker_result(
   const auto & identity = result.identity;
   if (
     identity.sequence == 0U || identity.context_epoch == 0U ||
-    identity.snapshot_decision_id == 0U || identity.intent_generation == 0U ||
+    identity.snapshot_decision_id == 0U ||
     identity.target_observation_generation == 0U ||
     identity.problem_fingerprint == 0U || identity.target_id.empty())
   {

@@ -6288,9 +6288,7 @@ struct ExtendedBranchSolverContext
   int horizon_size{};
   bool identity_initialized{false};
   persistent_osqp::PersistentOsqpSolver solver;
-  std::optional<persistent_osqp::WarmStart> last_solution;
-  double last_solution_sec{-std::numeric_limits<double>::infinity()};
-  std::optional<double> last_progress_origin_m;
+  persistent_osqp::CertifiedWarmStartStore certified_warm_start;
   std::uint64_t solve_count{};
   std::uint64_t reset_count{};
   std::uint64_t warm_start_count{};
@@ -7906,7 +7904,22 @@ struct MPC
         evaluation.failure_reason = outcome.failure_detail;
         return evaluation;
       }
-      const auto & primal = outcome.result->primal;
+      const auto execution_primal =
+        mpcc_progress::normalize_extended_execution_primal(
+        outcome.result->primal, extended->l, extended->u,
+        outcome.result->constraint_violation,
+        outcome.result->constraint_tolerance, N);
+      if (
+        execution_primal.reason !=
+        mpcc_progress::ExtendedExecutionPrimalNormalizationReason::Accepted)
+      {
+        evaluation.failure_reason = std::string{
+          "extended branch execution primal rejected: "} +
+          mpcc_progress::extended_execution_primal_normalization_reason_name(
+          execution_primal.reason);
+        return evaluation;
+      }
+      const auto & primal = execution_primal.primal;
       constexpr int nx = mpcc_progress::kExtendedStateDimension;
       const int nx_N = nx * (N + 1);
       if (primal.size() != extended->P.rows() || primal.size() <= nx * N + 4) {
@@ -8051,6 +8064,13 @@ struct MPC
         std::isfinite(evaluation.terminal_velocity_mps);
       if (!evaluation.feasible) {
         evaluation.failure_reason = "extended branch metrics are non-finite";
+      } else if (!publish_certified_extended_progress_warm_start(
+          primal, outcome.result->dual, now_sec,
+          extended->progress_origin_m))
+      {
+        evaluation.feasible = false;
+        evaluation.failure_reason =
+          "extended branch certified warm-start publication rejected";
       }
     } catch (const std::exception & error) {
       evaluation.failure_reason = error.what();
@@ -20130,9 +20150,7 @@ struct MPC
   {
     std::unique_lock<std::mutex> branch_context_lock;
     auto * solver = &persistent_extended_osqp_solver_;
-    auto * last_solution = &last_extended_osqp_solution_;
-    auto * last_solution_sec = &last_extended_osqp_solution_sec_;
-    auto * last_progress_origin = &last_extended_osqp_progress_origin_m_;
+    auto * certified_warm_start = &certified_extended_osqp_warm_start_;
     last_extended_branch_warm_start_applied_ = false;
     last_extended_branch_context_reset_ = false;
     last_extended_branch_context_solve_count_ = 0U;
@@ -20147,9 +20165,7 @@ struct MPC
         context.horizon_size == active_extended_branch_horizon_size_;
       if (!identity_matches) {
         context.solver.reset();
-        context.last_solution.reset();
-        context.last_solution_sec = -std::numeric_limits<double>::infinity();
-        context.last_progress_origin_m.reset();
+        context.certified_warm_start.reset();
         context.context_epoch = active_extended_branch_context_epoch_;
         context.target_id = active_extended_branch_target_id_;
         context.side_sign = active_extended_branch_side_sign_;
@@ -20159,15 +20175,17 @@ struct MPC
         last_extended_branch_context_reset_ = true;
       }
       solver = &context.solver;
-      last_solution = &context.last_solution;
-      last_solution_sec = &context.last_solution_sec;
-      last_progress_origin = &context.last_progress_origin_m;
+      certified_warm_start = &context.certified_warm_start;
       ++context.solve_count;
       last_extended_branch_context_solve_count_ = context.solve_count;
     }
 
+    auto previous_certified = certified_warm_start->consume_fresh(
+      now_sec, kOsqpWarmStartMaximumAgeSec);
     const std::optional<double> previous_progress_origin =
-      *last_progress_origin;
+      previous_certified.has_value() ?
+      std::optional<double>{previous_certified->progress_origin_m} :
+      std::nullopt;
     const bool progress_discontinuous =
       previous_progress_origin.has_value() &&
       mpcc_progress::progress_origin_discontinuous(
@@ -20175,20 +20193,13 @@ struct MPC
         std::max(2.0, cfg.progress_contouring.trust_region_backward_m));
     if (progress_discontinuous) {
       solver->reset();
-      last_solution->reset();
-      *last_solution_sec = -std::numeric_limits<double>::infinity();
+      previous_certified.reset();
       last_extended_branch_context_reset_ = true;
     }
-    *last_progress_origin = problem.progress_origin_m;
     std::optional<persistent_osqp::WarmStart> warm_start;
-    const bool fresh =
-      last_solution->has_value() && std::isfinite(now_sec) &&
-      std::isfinite(*last_solution_sec) &&
-      now_sec >= *last_solution_sec &&
-      now_sec - *last_solution_sec <= kOsqpWarmStartMaximumAgeSec;
-    if (fresh) {
+    if (previous_certified.has_value()) {
       warm_start = persistent_osqp::shift_mpc_warm_start(
-        last_solution->value(), static_cast<std::size_t>(problem.N),
+        previous_certified->value, static_cast<std::size_t>(problem.N),
         static_cast<std::size_t>(mpcc_progress::kExtendedStateDimension),
         static_cast<std::size_t>(mpcc_progress::kExtendedInputDimension),
         problem.trailing_dual_stage_blocks);
@@ -20215,8 +20226,6 @@ struct MPC
       if (record_runtime_telemetry) {
         record_osqp_telemetry(outcome, now_sec);
       }
-      last_solution->reset();
-      *last_solution_sec = -std::numeric_limits<double>::infinity();
       return outcome;
     }
 
@@ -20315,10 +20324,34 @@ struct MPC
     if (record_runtime_telemetry) {
       record_osqp_telemetry(outcome, now_sec);
     }
-    *last_solution = persistent_osqp::WarmStart{
-      outcome.result->primal, outcome.result->dual};
-    *last_solution_sec = now_sec;
     return outcome;
+  }
+
+  bool publish_certified_extended_progress_warm_start(
+    const Eigen::VectorXd & normalized_primal,
+    const Eigen::VectorXd & solver_dual,
+    const double certified_sec,
+    const double progress_origin_m)
+  {
+    auto * store = &certified_extended_osqp_warm_start_;
+    std::unique_lock<std::mutex> branch_context_lock;
+    if (active_extended_branch_solver_context_ != nullptr) {
+      auto & context = *active_extended_branch_solver_context_;
+      branch_context_lock = std::unique_lock<std::mutex>(context.mutex);
+      const bool identity_matches =
+        context.identity_initialized &&
+        context.context_epoch == active_extended_branch_context_epoch_ &&
+        context.target_id == active_extended_branch_target_id_ &&
+        context.side_sign == active_extended_branch_side_sign_ &&
+        context.horizon_size == active_extended_branch_horizon_size_;
+      if (!identity_matches) {
+        return false;
+      }
+      store = &context.certified_warm_start;
+    }
+    return store->publish(
+      persistent_osqp::WarmStart{normalized_primal, solver_dual},
+      certified_sec, progress_origin_m);
   }
 
   void record_osqp_telemetry(
@@ -20477,9 +20510,7 @@ struct MPC
     last_osqp_progress_contouring_mode_.reset();
     last_osqp_progress_origin_m_.reset();
     persistent_extended_osqp_solver_.reset();
-    last_extended_osqp_solution_.reset();
-    last_extended_osqp_solution_sec_ = -std::numeric_limits<double>::infinity();
-    last_extended_osqp_progress_origin_m_.reset();
+    certified_extended_osqp_warm_start_.reset();
     // Do not block the 40 Hz callback on a branch worker which may currently
     // hold its solver mutex. Epoch invalidation makes the in-flight result
     // unadoptable and causes each context to reset lazily on its next solve.
@@ -23070,6 +23101,16 @@ struct MPC
       result.fresh_canonical_plan =
         std::make_shared<const canonical_plan::CanonicalExecutionPlan>(
         std::move(canonical_chain.plan.value()));
+      if (!publish_certified_extended_progress_warm_start(
+          execution_primal.primal, outcome.result->dual, now_sec,
+          extended_problem->progress_origin_m))
+      {
+        result.status = "warm-start-publication-reject";
+        result.detail =
+          "Follow certified warm-start publication rejected";
+        result.fresh_canonical_plan.reset();
+        return finish();
+      }
       result.status = "canonical-ready-worker";
       result.detail =
         "Follow fresh canonical plan produced; current-world proof remains live";
@@ -24262,6 +24303,19 @@ struct MPC
     result.selected.cursor = chain.cursor;
     result.selected.prediction = prediction.value();
     result.selection_complete = result.selected.complete();
+    if (
+      result.selection_complete &&
+      !publish_certified_extended_progress_warm_start(
+        execution_primal.primal, solve_result.dual, now_sec,
+        extended_problem.progress_origin_m))
+    {
+      result.selection_complete = false;
+      result.selected = {};
+      result.status = "warm-start-publication-reject";
+      result.detail =
+        "Overtake certified warm-start publication rejected";
+      return finish();
+    }
     result.status = result.selection_complete ? "canonical-ready" :
       "selection-incomplete";
     result.detail = certificate_reason;
@@ -25240,6 +25294,16 @@ struct MPC
       result.terminal_velocity_mps = execution_primal.primal[
         problem.N * mpcc_progress::kExtendedStateDimension +
         mpcc_progress::kExtendedVelocityIndex];
+      if (!publish_certified_extended_progress_warm_start(
+          execution_primal.primal, outcome.result->dual, now_sec,
+          extended_problem->progress_origin_m))
+      {
+        result.status = "warm-start-publication-reject";
+        result.detail =
+          "Track/Cruise certified warm-start publication rejected";
+        result.selected = {};
+        return finish();
+      }
       result.status = "certified";
       result.detail = certificate_reason;
       return finish();
@@ -27298,10 +27362,8 @@ struct MPC
   std::optional<double> last_osqp_progress_origin_m_;
   persistent_osqp::PersistentOsqpSolver persistent_extended_osqp_solver_{
     kCanonicalPhysicalRowTolerancePolicy};
-  std::optional<persistent_osqp::WarmStart> last_extended_osqp_solution_;
-  double last_extended_osqp_solution_sec_{
-    -std::numeric_limits<double>::infinity()};
-  std::optional<double> last_extended_osqp_progress_origin_m_;
+  persistent_osqp::CertifiedWarmStartStore
+  certified_extended_osqp_warm_start_;
   std::shared_ptr<ExtendedBranchSolverContext> extended_left_branch_solver_context_;
   std::shared_ptr<ExtendedBranchSolverContext> extended_right_branch_solver_context_;
   std::shared_ptr<ExtendedBranchSolverContext> track_cruise_shadow_solver_context_;

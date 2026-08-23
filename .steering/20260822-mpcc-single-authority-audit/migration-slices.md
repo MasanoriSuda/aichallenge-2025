@@ -402,6 +402,15 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   history before semantic execution-primal normalization and physical certification. A downstream
   rejected result can therefore seed the next horizon. Correct that publication boundary before
   retrying strict Track/Cruise row normalization; do not add a cold-retry flag or relax bounds.
+- `.steering/20260824-certified-warm-start-publication` corrects that lifecycle break. Time,
+  progress origin, normalized primal and dual now form one single-use certified artifact. A solve
+  consumes the prior artifact and only Track/Cruise, Follow, Overtake or branch acceptance may
+  publish its replacement. The 1702-test suite and 25-package build pass. In
+  `output/20260824-014849`, the previous persistent warm reject chain became a deterministic
+  `cold-certified -> warm-rejected -> cold-certified` sequence (D2: 165 certified / 168 rejected),
+  proving rejected evidence no longer survives. The remaining defect is the one-stage warm
+  transform itself: 151/168 warm rejects were stage-zero acceleration. Make transport elapsed-time
+  aware next; do not restore pre-certification storage or add cycle-local cold retry.
 
 ## Slice 6: Legacy and migration path removal
 

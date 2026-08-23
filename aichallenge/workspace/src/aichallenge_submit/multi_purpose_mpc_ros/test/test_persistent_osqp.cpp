@@ -121,6 +121,41 @@ TEST(PersistentOsqpWarmStart, RejectsUndeclaredOrMalformedTrailingRows)
       std::vector<DualStageBlockLayout>{{3U, 0U}}).has_value());
 }
 
+TEST(CertifiedWarmStartStore, PublishesAndConsumesExactlyOnce)
+{
+  CertifiedWarmStartStore store;
+  WarmStart accepted{
+    Eigen::VectorXd::Constant(2, 1.0),
+    Eigen::VectorXd::Constant(3, -2.0)};
+
+  ASSERT_TRUE(store.publish(accepted, 10.0, 42.0));
+  EXPECT_TRUE(store.available());
+  const auto consumed = store.consume_fresh(10.1, 0.5);
+  ASSERT_TRUE(consumed.has_value());
+  EXPECT_TRUE(consumed->value.primal.isApprox(accepted.primal));
+  EXPECT_TRUE(consumed->value.dual.isApprox(accepted.dual));
+  EXPECT_DOUBLE_EQ(consumed->progress_origin_m, 42.0);
+  EXPECT_FALSE(store.available());
+  EXPECT_FALSE(store.consume_fresh(10.2, 0.5).has_value());
+}
+
+TEST(CertifiedWarmStartStore, RejectsStaleOrMalformedPublication)
+{
+  CertifiedWarmStartStore store;
+  const WarmStart accepted{
+    Eigen::VectorXd::Constant(2, 1.0),
+    Eigen::VectorXd::Constant(3, -2.0)};
+  ASSERT_TRUE(store.publish(accepted, 10.0, 42.0));
+  EXPECT_FALSE(store.consume_fresh(10.6, 0.5).has_value());
+  EXPECT_FALSE(store.available());
+
+  WarmStart malformed = accepted;
+  malformed.primal[0] = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_FALSE(store.publish(malformed, 11.0, 43.0));
+  EXPECT_FALSE(store.publish(accepted, 11.0, std::numeric_limits<double>::infinity()));
+  EXPECT_FALSE(store.available());
+}
+
 TEST(PersistentOsqpConstraintResiduals, KeepsMixedUnitRowsOnIndependentScales)
 {
   Eigen::SparseMatrix<double> constraints(2, 2);

@@ -451,6 +451,44 @@ shift_mpc_warm_start(
   return shifted;
 }
 
+bool CertifiedWarmStartStore::publish(
+  WarmStart value, const double certified_sec,
+  const double progress_origin_m) noexcept
+{
+  if (
+    !finite_vector(value.primal) || !finite_vector(value.dual) ||
+    !std::isfinite(certified_sec) || !std::isfinite(progress_origin_m))
+  {
+    return false;
+  }
+  artifact_ = CertifiedWarmStart{
+    std::move(value), certified_sec, progress_origin_m};
+  return true;
+}
+
+std::optional<CertifiedWarmStart> CertifiedWarmStartStore::consume_fresh(
+  const double now_sec, const double maximum_age_sec) noexcept
+{
+  auto consumed = std::move(artifact_);
+  artifact_.reset();
+  if (
+    !consumed.has_value() || !std::isfinite(now_sec) ||
+    !std::isfinite(maximum_age_sec) || maximum_age_sec < 0.0 ||
+    now_sec < consumed->certified_sec ||
+    now_sec - consumed->certified_sec > maximum_age_sec)
+  {
+    return std::nullopt;
+  }
+  return consumed;
+}
+
+void CertifiedWarmStartStore::reset() noexcept {artifact_.reset();}
+
+bool CertifiedWarmStartStore::available() const noexcept
+{
+  return artifact_.has_value();
+}
+
 std::optional<ConstraintFailureDiagnostic> make_constraint_failure_diagnostic(
   const ConstraintResidualReport & report,
   const Eigen::VectorXd & constraint_values,

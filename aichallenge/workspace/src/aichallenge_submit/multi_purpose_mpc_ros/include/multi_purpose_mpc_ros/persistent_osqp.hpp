@@ -18,6 +18,37 @@ struct WarmStart
   Eigen::VectorXd dual;
 };
 
+/// One certified five-state warm-start artifact. The progress origin belongs
+/// to the same solved horizon as the primal/dual and must never be updated on
+/// its own.
+struct CertifiedWarmStart
+{
+  WarmStart value;
+  double certified_sec{};
+  double progress_origin_m{};
+};
+
+/// Single-use publication boundary for receding-horizon warm starts.
+///
+/// A caller consumes the previous certified artifact before solving. A raw
+/// solver success is deliberately not written back automatically: only the
+/// downstream semantic/physical certificate may publish its normalized
+/// replacement. Consequently, a rejected solve cannot seed a reject chain.
+class CertifiedWarmStartStore
+{
+public:
+  bool publish(
+    WarmStart value, double certified_sec,
+    double progress_origin_m) noexcept;
+  std::optional<CertifiedWarmStart> consume_fresh(
+    double now_sec, double maximum_age_sec) noexcept;
+  void reset() noexcept;
+  bool available() const noexcept;
+
+private:
+  std::optional<CertifiedWarmStart> artifact_;
+};
+
 /// One contiguous, stage-major constraint block appended after the canonical
 /// MPC dual layout. The producer must declare every appended block so that a
 /// receding-horizon shift never guesses the temporal meaning of unknown rows.

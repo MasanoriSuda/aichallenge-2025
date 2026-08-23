@@ -342,6 +342,22 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
 - Candidate loss causes same-formulation continuation, reoptimization, or Emergency Stop—not a
   controller switch.
 
+### 2026-08-23 fresh-chain shadow status
+
+- `.steering/20260823-overtake-canonical-fresh-shadow` connects the already solved live five-state
+  result to exact primal normalization, actuation/trajectory extraction, swept wall certification
+  and the canonical plan adapter in telemetry-only shadow mode. It does not add another solve or
+  change final authority.
+- Bounded replay evaluated 405 cycles. 352 exact Overtake artifacts passed normalization,
+  actuation/trajectory extraction and the swept physical certificate; canonical/direct first
+  actuation difference was zero and shadow evaluation stayed below 1.104 ms in the observed run.
+- All 352 were then rejected before canonical plan construction because the shared normal-intent
+  contract permits only Track/Cruise/Follow. `ShiftOut`, `Pass` and `Return` are therefore
+  structurally unable to become canonical even when their exact artifact is physically certified.
+- The next bounded Slice is the Overtake canonical-intent contract. It must extend exact-intent
+  support and rerun this shadow without promoting authority. Solver, clearance and weight tuning
+  remain prohibited until that contract passes.
+
 ## Slice 6: Legacy and migration path removal
 
 ### Purpose

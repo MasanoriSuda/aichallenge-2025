@@ -5999,6 +5999,57 @@ struct TrackCruiseShadowTelemetryWindow
   std::size_t timing_sample_count{};
 };
 
+struct OvertakeCanonicalFreshShadowResult
+{
+  bool eligible{false};
+  race_mpcc::OvertakeCanonicalFreshShadowEligibilityReason eligibility_reason{
+    race_mpcc::OvertakeCanonicalFreshShadowEligibilityReason::
+    ProgressContouringInactive};
+  bool context_complete{false};
+  bool lateral_contract_satisfied{false};
+  bool execution_primal_accepted{false};
+  bool actuation_extracted{false};
+  bool trajectory_extracted{false};
+  bool physical_certificate_checked{false};
+  bool physically_certified{false};
+  bool canonical_chain_ready{false};
+  bool prediction_available{false};
+  bool selection_complete{false};
+  std::uint64_t decision_id{};
+  mpcc_contract::ControlIntent intent{mpcc_contract::ControlIntent::Unknown};
+  double initial_lag_m{std::numeric_limits<double>::quiet_NaN()};
+  double total_ms{};
+  double maximum_actuation_difference{
+    std::numeric_limits<double>::quiet_NaN()};
+  mpcc_progress::ExtendedExecutionPrimalNormalizationReason primal_reason{
+    mpcc_progress::ExtendedExecutionPrimalNormalizationReason::InvalidShape};
+  canonical_plan_adapter::FreshCanonicalCommandReason chain_reason{
+    canonical_plan_adapter::FreshCanonicalCommandReason::PlanRejected};
+  mpcc_contract::PhysicalWallCertificateDiagnostic physical_wall_diagnostic;
+  CanonicalNormalSelection selected;
+  std::string status{"not-eligible"};
+  std::string detail{"not-evaluated"};
+};
+
+struct OvertakeCanonicalFreshShadowTelemetryWindow
+{
+  std::uint64_t evaluated_count{};
+  std::uint64_t eligible_count{};
+  std::uint64_t context_count{};
+  std::uint64_t lateral_contract_count{};
+  std::uint64_t primal_count{};
+  std::uint64_t actuation_count{};
+  std::uint64_t trajectory_count{};
+  std::uint64_t physical_count{};
+  std::uint64_t chain_count{};
+  std::uint64_t prediction_count{};
+  std::uint64_t complete_count{};
+  double total_ms{};
+  double maximum_ms{};
+  double maximum_actuation_difference{};
+  double maximum_absolute_initial_lag_m{};
+};
+
 struct CanonicalNormalPendingActuation
 {
   std::uint64_t decision_id{};
@@ -23359,6 +23410,323 @@ struct MPC
     last_track_cruise_shadow_telemetry_log_sec_ = now_sec;
   }
 
+  OvertakeCanonicalFreshShadowResult
+  evaluate_overtake_canonical_fresh_shadow(
+    const MpcProblem & problem,
+    const ExtendedProgressMpcProblem & extended_problem,
+    const persistent_osqp::SolveResult & solve_result,
+    const double now_sec)
+  {
+    constexpr int progress_metadata_nx = 3;
+    OvertakeCanonicalFreshShadowResult result;
+    result.decision_id = active_control_decision_id_;
+    result.intent = current_control_intent();
+    result.initial_lag_m = extended_problem.initial_lag_m;
+    const auto started = SteadyClock::now();
+    const auto finish = [&result, &started]() {
+        result.total_ms = std::chrono::duration<double, std::milli>(
+          SteadyClock::now() - started).count();
+        return result;
+      };
+    result.eligibility_reason =
+      race_mpcc::resolve_overtake_canonical_fresh_shadow_eligibility(
+      race_mpcc::OvertakeCanonicalFreshShadowEligibilityRequest{
+        problem.progress_contouring_active,
+        cfg.progress_contouring.extended_dynamics_enabled,
+        result.intent,
+        problem.progress_execution_context_active ||
+        problem.dynamic_obstacle_lateral_escape_active ||
+        problem.dynamic_obstacle_margin_escape_tracking_contract_active,
+        problem.lateral_bounds_contract_valid}).reason;
+    result.eligible = result.eligibility_reason ==
+      race_mpcc::OvertakeCanonicalFreshShadowEligibilityReason::Eligible;
+    if (!result.eligible) {
+      result.status = "eligibility-reject";
+      result.detail =
+        race_mpcc::overtake_canonical_fresh_shadow_eligibility_reason_name(
+        result.eligibility_reason);
+      return finish();
+    }
+
+    const auto context = make_problem_context(
+      problem, mpcc_contract::Formulation::VelocityProgress5State);
+    result.context_complete = mpcc_contract::problem_context_complete(context);
+    if (!result.context_complete) {
+      result.status = "context-reject";
+      result.detail = "canonical Overtake context incomplete";
+      return finish();
+    }
+
+    const auto lateral_contract =
+      mpcc_progress::evaluate_extended_lateral_constraint_contract(
+      solve_result.constraint_violation,
+      solve_result.constraint_tolerance, problem.N);
+    result.lateral_contract_satisfied =
+      lateral_contract.valid && lateral_contract.satisfied;
+    if (!result.lateral_contract_satisfied) {
+      result.status = "lateral-contract-reject";
+      std::ostringstream detail;
+      detail << "stage=" << lateral_contract.worst_stage
+             << ", violation="
+             << lateral_contract.maximum_violation_m
+             << "m, tolerance="
+             << lateral_contract.maximum_tolerance_m << "m";
+      result.detail = detail.str();
+      return finish();
+    }
+
+    const auto execution_primal =
+      mpcc_progress::normalize_extended_execution_primal(
+      solve_result.primal, extended_problem.l, extended_problem.u,
+      solve_result.constraint_violation, solve_result.constraint_tolerance,
+      problem.N);
+    result.primal_reason = execution_primal.reason;
+    result.execution_primal_accepted = execution_primal.reason ==
+      mpcc_progress::ExtendedExecutionPrimalNormalizationReason::Accepted;
+    if (!result.execution_primal_accepted) {
+      result.status = "execution-primal-reject";
+      result.detail =
+        mpcc_progress::extended_execution_primal_normalization_reason_name(
+        execution_primal.reason);
+      return finish();
+    }
+
+    const auto direct_actuation = mpcc_progress::extract_actuation_proposal(
+      execution_primal.primal, problem.N, model->length);
+    result.actuation_extracted = direct_actuation.has_value();
+    if (!result.actuation_extracted) {
+      result.status = "actuation-reject";
+      result.detail = "exact first actuation unavailable";
+      return finish();
+    }
+
+    std::vector<double> path_distance_m;
+    path_distance_m.reserve(static_cast<std::size_t>(problem.N));
+    Eigen::VectorXd lower_bound(problem.N);
+    Eigen::VectorXd upper_bound(problem.N);
+    std::vector<double> lower_bound_m;
+    std::vector<double> upper_bound_m;
+    lower_bound_m.reserve(static_cast<std::size_t>(problem.N));
+    upper_bound_m.reserve(static_cast<std::size_t>(problem.N));
+    for (int stage = 0; stage < problem.N; ++stage) {
+      path_distance_m.push_back(
+        problem.progress_stage_geometry.stages[
+        static_cast<std::size_t>(stage)].cumulative_distance_m);
+      lower_bound[stage] =
+        problem.progress_state_lower[(stage + 1) * progress_metadata_nx];
+      upper_bound[stage] =
+        problem.progress_state_upper[(stage + 1) * progress_metadata_nx];
+      lower_bound_m.push_back(lower_bound[stage]);
+      upper_bound_m.push_back(upper_bound[stage]);
+    }
+    const double tolerance_m = std::max(
+      1e-5, lateral_contract.maximum_tolerance_m);
+    mpcc_progress::ExecutionTrajectoryDiagnostic pose_diagnostic;
+    const auto pose_trajectory =
+      mpcc_progress::extract_extended_execution_trajectory(
+      execution_primal.primal, problem.N, path_distance_m,
+      lower_bound_m, upper_bound_m, extended_problem.progress_origin_m,
+      tolerance_m, &pose_diagnostic);
+    result.trajectory_extracted = pose_trajectory.has_value();
+    if (!result.trajectory_extracted) {
+      result.status = "trajectory-reject";
+      result.detail = std::string{"exact trajectory rejected: "} +
+        mpcc_progress::execution_trajectory_rejection_name(
+        pose_diagnostic.rejection) + ", stage=" +
+        std::to_string(pose_diagnostic.stage);
+      return finish();
+    }
+
+    AlignedMpccExecutionTrajectory exact_trajectory{
+      0.0, 0.0, pose_trajectory->minimum_lateral_bound_reserve_m,
+      pose_trajectory->lateral_m, pose_trajectory->lag_m,
+      pose_trajectory->heading_offset_rad,
+      extended_problem.progress_origin_m, pose_trajectory->progress_m, {}};
+    if (!exact_trajectory.progress_m.empty()) {
+      const double maximum_progress_m = *std::max_element(
+        exact_trajectory.progress_m.begin(), exact_trajectory.progress_m.end());
+      const auto knots = build_progress_course_frame_knots(
+        problem.progress_stage_geometry, exact_trajectory.progress_origin_m,
+        maximum_progress_m);
+      if (knots.has_value()) {
+        exact_trajectory.course_frame_knots = knots.value();
+      }
+    }
+    if (exact_trajectory.course_frame_knots.empty()) {
+      result.status = "course-frame-reject";
+      result.detail = "exact trajectory course-frame unavailable";
+      return finish();
+    }
+
+    std::string certificate_reason;
+    result.physical_certificate_checked = true;
+    result.physically_certified = solved_mpcc_execution_path_wall_safe(
+      exact_trajectory, path_distance_m, problem.ref_wp_id, problem.N,
+      lower_bound, upper_bound, 0.0, certificate_reason, tolerance_m,
+      SolvedExecutionWallValidationScope::SweptFromCurrentPose,
+      &result.physical_wall_diagnostic);
+    if (!result.physically_certified) {
+      result.status = "physical-certificate-reject";
+      result.detail = certificate_reason + ", " +
+        mpcc_contract::format_physical_wall_certificate_diagnostic(
+        result.physical_wall_diagnostic);
+      return finish();
+    }
+
+    double horizon_sec = 0.0;
+    for (const double stage_dt_sec : problem.progress_stage_dt_sec) {
+      horizon_sec += stage_dt_sec;
+    }
+    mpcc_contract::CertifiedMpccSolution canonical_solution;
+    canonical_solution.solution_id = result.decision_id;
+    canonical_solution.problem_fingerprint = context.fingerprint;
+    canonical_solution.formulation =
+      mpcc_contract::Formulation::VelocityProgress5State;
+    canonical_solution.solved = true;
+    canonical_solution.finite = execution_primal.primal.allFinite();
+    canonical_solution.constraints_satisfied =
+      result.lateral_contract_satisfied;
+    canonical_solution.maximum_constraint_violation =
+      solve_result.maximum_constraint_violation;
+    canonical_solution.physical.checked = true;
+    canonical_solution.physical.wall_clear = result.physically_certified;
+    canonical_solution.physical.obstacles_clear =
+      problem.lateral_bounds_contract_valid &&
+      result.lateral_contract_satisfied;
+    canonical_solution.prediction_stage_count =
+      static_cast<std::size_t>(problem.N);
+    canonical_solution.valid_until_sec = now_sec + horizon_sec;
+
+    canonical_plan_adapter::CanonicalPlanExtractionRequest extraction;
+    extraction.plan_id = result.decision_id;
+    extraction.problem = context;
+    extraction.solution = canonical_solution;
+    extraction.solved_sec = now_sec;
+    extraction.progress_origin_m = extended_problem.progress_origin_m;
+    extraction.stage_duration_sec = problem.progress_stage_dt_sec;
+    extraction.extended_primal = execution_primal.primal;
+    auto chain = canonical_plan_adapter::build_fresh_canonical_command(
+      canonical_plan_adapter::FreshCanonicalCommandRequest{
+        extraction, result.decision_id, now_sec, result.intent,
+        model->length,
+        mpcc_contract::CanonicalActuation{
+          direct_actuation->predicted_speed_mps,
+          direct_actuation->acceleration_mps2,
+          direct_actuation->curvature_radpm,
+          direct_actuation->steering_tire_angle_rad,
+          direct_actuation->virtual_progress_speed_mps},
+        1e-12});
+    result.chain_reason = chain.reason;
+    result.maximum_actuation_difference = chain.maximum_actuation_difference;
+    result.canonical_chain_ready =
+      chain.command.has_value() && chain.plan.has_value() &&
+      chain.cursor.available;
+    if (!result.canonical_chain_ready) {
+      result.status = "canonical-chain-reject";
+      std::ostringstream detail;
+      detail << canonical_plan_adapter::to_string(chain.reason)
+             << ", extraction="
+             << canonical_plan_adapter::to_string(chain.extraction_reason)
+             << ", plan="
+             << canonical_plan::to_string(chain.plan_reject_reason)
+             << ", cursor=" << canonical_plan::to_string(chain.cursor_reason)
+             << ", candidate="
+             << canonical_plan::to_string(chain.candidate_reason)
+             << ", authority="
+             << mpcc_contract::to_string(chain.authority_source) << '/'
+             << mpcc_contract::to_string(chain.authority_reason);
+      result.detail = detail.str();
+      return finish();
+    }
+
+    auto plan = std::make_shared<const canonical_plan::CanonicalExecutionPlan>(
+      std::move(chain.plan.value()));
+    std::string prediction_reason;
+    const auto prediction = build_canonical_world_prediction(
+      *plan, chain.cursor, exact_trajectory.course_frame_knots,
+      tolerance_m, prediction_reason);
+    result.prediction_available = prediction.has_value();
+    if (!result.prediction_available) {
+      result.status = "prediction-reject";
+      result.detail = prediction_reason;
+      return finish();
+    }
+    result.selected.command = chain.command;
+    result.selected.problem = plan->problem;
+    result.selected.solution = plan->solution;
+    result.selected.plan = std::move(plan);
+    result.selected.cursor = chain.cursor;
+    result.selected.prediction = prediction.value();
+    result.selection_complete = result.selected.complete();
+    result.status = result.selection_complete ? "canonical-ready" :
+      "selection-incomplete";
+    result.detail = certificate_reason;
+    return finish();
+  }
+
+  void record_overtake_canonical_fresh_shadow_telemetry(
+    const OvertakeCanonicalFreshShadowResult & result,
+    const double now_sec)
+  {
+    auto & window = overtake_canonical_fresh_shadow_telemetry_window_;
+    ++window.evaluated_count;
+    window.eligible_count += result.eligible ? 1U : 0U;
+    window.context_count += result.context_complete ? 1U : 0U;
+    window.lateral_contract_count +=
+      result.lateral_contract_satisfied ? 1U : 0U;
+    window.primal_count += result.execution_primal_accepted ? 1U : 0U;
+    window.actuation_count += result.actuation_extracted ? 1U : 0U;
+    window.trajectory_count += result.trajectory_extracted ? 1U : 0U;
+    window.physical_count += result.physically_certified ? 1U : 0U;
+    window.chain_count += result.canonical_chain_ready ? 1U : 0U;
+    window.prediction_count += result.prediction_available ? 1U : 0U;
+    window.complete_count += result.selection_complete ? 1U : 0U;
+    window.total_ms += result.total_ms;
+    window.maximum_ms = std::max(window.maximum_ms, result.total_ms);
+    if (std::isfinite(result.maximum_actuation_difference)) {
+      window.maximum_actuation_difference = std::max(
+        window.maximum_actuation_difference,
+        result.maximum_actuation_difference);
+    }
+    if (std::isfinite(result.initial_lag_m)) {
+      window.maximum_absolute_initial_lag_m = std::max(
+        window.maximum_absolute_initial_lag_m,
+        std::abs(result.initial_lag_m));
+    }
+    if (
+      !std::isfinite(overtake_canonical_fresh_shadow_last_log_sec_) ||
+      now_sec < overtake_canonical_fresh_shadow_last_log_sec_ ||
+      now_sec - overtake_canonical_fresh_shadow_last_log_sec_ >= 1.0)
+    {
+      const double average_ms = window.evaluated_count > 0U ?
+        window.total_ms / static_cast<double>(window.evaluated_count) : 0.0;
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"),
+        "Overtake canonical fresh shadow: evaluated=%lu, eligible=%lu, "
+        "context=%lu, lateral=%lu, primal=%lu, actuation=%lu, trajectory=%lu, "
+        "physical=%lu, chain=%lu, prediction=%lu, complete=%lu, "
+        "time=%.3f/%.3fms(avg/max), actuation_diff_max=%.3g, "
+        "initial_lag_abs_max=%.3fm, last=%s/%s, authority=shadow",
+        static_cast<unsigned long>(window.evaluated_count),
+        static_cast<unsigned long>(window.eligible_count),
+        static_cast<unsigned long>(window.context_count),
+        static_cast<unsigned long>(window.lateral_contract_count),
+        static_cast<unsigned long>(window.primal_count),
+        static_cast<unsigned long>(window.actuation_count),
+        static_cast<unsigned long>(window.trajectory_count),
+        static_cast<unsigned long>(window.physical_count),
+        static_cast<unsigned long>(window.chain_count),
+        static_cast<unsigned long>(window.prediction_count),
+        static_cast<unsigned long>(window.complete_count),
+        average_ms, window.maximum_ms,
+        window.maximum_actuation_difference,
+        window.maximum_absolute_initial_lag_m,
+        result.status.c_str(), result.detail.c_str());
+      window = OvertakeCanonicalFreshShadowTelemetryWindow{};
+      overtake_canonical_fresh_shadow_last_log_sec_ = now_sec;
+    }
+  }
+
   TrackCruiseShadowCycleResult evaluate_track_cruise_shadow(
     const MpcProblem & problem, const double now_sec)
   {
@@ -25022,6 +25390,12 @@ struct MPC
             auto extended_outcome = solve_extended_progress_problem(
               extended_problem.value(), now_sec);
             if (extended_outcome.result.has_value()) {
+              const auto canonical_fresh_shadow =
+                evaluate_overtake_canonical_fresh_shadow(
+                problem, extended_problem.value(),
+                extended_outcome.result.value(), now_sec);
+              record_overtake_canonical_fresh_shadow_telemetry(
+                canonical_fresh_shadow, now_sec);
               const auto legacy_solution =
                 mpcc_progress::convert_extended_solution_to_legacy(
                 extended_outcome.result->primal, N,
@@ -25885,6 +26259,10 @@ struct MPC
   double last_canonical_normal_final_actuation_log_sec_{
     std::numeric_limits<double>::quiet_NaN()};
   std::string last_track_cruise_shadow_status_;
+  OvertakeCanonicalFreshShadowTelemetryWindow
+  overtake_canonical_fresh_shadow_telemetry_window_;
+  double overtake_canonical_fresh_shadow_last_log_sec_{
+    std::numeric_limits<double>::quiet_NaN()};
   FollowShadowTelemetryWindow follow_shadow_telemetry_window_;
   double last_follow_shadow_telemetry_log_sec_{
     std::numeric_limits<double>::quiet_NaN()};

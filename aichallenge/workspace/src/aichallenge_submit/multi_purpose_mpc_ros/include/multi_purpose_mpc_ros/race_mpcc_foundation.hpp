@@ -197,6 +197,42 @@ struct FollowShadowEligibility
 FollowShadowEligibility resolve_follow_shadow_eligibility(
   const FollowShadowEligibilityRequest & request) noexcept;
 
+enum class OvertakeCanonicalFreshShadowEligibilityReason
+{
+  Eligible,
+  ProgressContouringInactive,
+  ExtendedDynamicsDisabled,
+  IntentNotOvertakeExecution,
+  ExecutionContextUnavailable,
+  LateralBoundsInvalid,
+};
+
+const char * overtake_canonical_fresh_shadow_eligibility_reason_name(
+  OvertakeCanonicalFreshShadowEligibilityReason reason) noexcept;
+
+struct OvertakeCanonicalFreshShadowEligibilityRequest
+{
+  bool progress_contouring_active{false};
+  bool extended_dynamics_enabled{false};
+  mpcc_execution_contract::ControlIntent intent{
+    mpcc_execution_contract::ControlIntent::Unknown};
+  bool execution_context_available{false};
+  bool lateral_bounds_valid{false};
+};
+
+struct OvertakeCanonicalFreshShadowEligibility
+{
+  bool eligible{false};
+  OvertakeCanonicalFreshShadowEligibilityReason reason{
+    OvertakeCanonicalFreshShadowEligibilityReason::ProgressContouringInactive};
+};
+
+/// Gate the exact fresh-chain observation to the live overtake execution
+/// intents. This is telemetry-only and grants no production authority.
+OvertakeCanonicalFreshShadowEligibility
+resolve_overtake_canonical_fresh_shadow_eligibility(
+  const OvertakeCanonicalFreshShadowEligibilityRequest & request) noexcept;
+
 enum class FollowProductionAction
 {
   NotOwned,

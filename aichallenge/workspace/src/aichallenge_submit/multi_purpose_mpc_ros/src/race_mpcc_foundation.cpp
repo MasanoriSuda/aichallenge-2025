@@ -314,6 +314,65 @@ FollowShadowEligibility resolve_follow_shadow_eligibility(
   return result;
 }
 
+const char * overtake_canonical_fresh_shadow_eligibility_reason_name(
+  const OvertakeCanonicalFreshShadowEligibilityReason reason) noexcept
+{
+  switch (reason) {
+    case OvertakeCanonicalFreshShadowEligibilityReason::Eligible:
+      return "eligible";
+    case OvertakeCanonicalFreshShadowEligibilityReason::ProgressContouringInactive:
+      return "progress-contouring-inactive";
+    case OvertakeCanonicalFreshShadowEligibilityReason::ExtendedDynamicsDisabled:
+      return "extended-dynamics-disabled";
+    case OvertakeCanonicalFreshShadowEligibilityReason::IntentNotOvertakeExecution:
+      return "intent-not-overtake-execution";
+    case OvertakeCanonicalFreshShadowEligibilityReason::ExecutionContextUnavailable:
+      return "execution-context-unavailable";
+    case OvertakeCanonicalFreshShadowEligibilityReason::LateralBoundsInvalid:
+      return "lateral-bounds-invalid";
+  }
+  return "unknown";
+}
+
+OvertakeCanonicalFreshShadowEligibility
+resolve_overtake_canonical_fresh_shadow_eligibility(
+  const OvertakeCanonicalFreshShadowEligibilityRequest & request) noexcept
+{
+  OvertakeCanonicalFreshShadowEligibility result;
+  if (!request.progress_contouring_active) {
+    result.reason = OvertakeCanonicalFreshShadowEligibilityReason::
+      ProgressContouringInactive;
+    return result;
+  }
+  if (!request.extended_dynamics_enabled) {
+    result.reason = OvertakeCanonicalFreshShadowEligibilityReason::
+      ExtendedDynamicsDisabled;
+    return result;
+  }
+  if (
+    request.intent != mpcc_execution_contract::ControlIntent::ShiftOut &&
+    request.intent != mpcc_execution_contract::ControlIntent::Pass &&
+    request.intent != mpcc_execution_contract::ControlIntent::Return)
+  {
+    result.reason = OvertakeCanonicalFreshShadowEligibilityReason::
+      IntentNotOvertakeExecution;
+    return result;
+  }
+  if (!request.execution_context_available) {
+    result.reason = OvertakeCanonicalFreshShadowEligibilityReason::
+      ExecutionContextUnavailable;
+    return result;
+  }
+  if (!request.lateral_bounds_valid) {
+    result.reason = OvertakeCanonicalFreshShadowEligibilityReason::
+      LateralBoundsInvalid;
+    return result;
+  }
+  result.eligible = true;
+  result.reason = OvertakeCanonicalFreshShadowEligibilityReason::Eligible;
+  return result;
+}
+
 FollowProductionAction resolve_follow_production_action(
   const mpcc_execution_contract::ControlIntent intent,
   const bool complete_canonical_selection) noexcept

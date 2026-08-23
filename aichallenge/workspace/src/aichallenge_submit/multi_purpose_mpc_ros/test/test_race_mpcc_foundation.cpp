@@ -174,6 +174,48 @@ TEST(RaceMpccFoundation, FollowProductionNeverFallsThroughToAnotherNormalOwner)
     race::FollowProductionAction::EmergencyStop);
 }
 
+TEST(RaceMpccFoundation, EnablesOvertakeFreshShadowOnlyForLiveExecutionIntents)
+{
+  const auto make_request = [](const contract::ControlIntent intent) {
+      return race::OvertakeCanonicalFreshShadowEligibilityRequest{
+        true, true, intent, true, true};
+    };
+  for (const auto intent : {
+      contract::ControlIntent::ShiftOut,
+      contract::ControlIntent::Pass,
+      contract::ControlIntent::Return})
+  {
+    const auto result =
+      race::resolve_overtake_canonical_fresh_shadow_eligibility(
+      make_request(intent));
+    EXPECT_TRUE(result.eligible);
+    EXPECT_EQ(
+      result.reason,
+      race::OvertakeCanonicalFreshShadowEligibilityReason::Eligible);
+  }
+
+  const auto cruise =
+    race::resolve_overtake_canonical_fresh_shadow_eligibility(
+    make_request(contract::ControlIntent::Cruise));
+  EXPECT_FALSE(cruise.eligible);
+  EXPECT_EQ(
+    cruise.reason,
+    race::OvertakeCanonicalFreshShadowEligibilityReason::
+    IntentNotOvertakeExecution);
+
+  auto missing_context = make_request(contract::ControlIntent::Pass);
+  missing_context.execution_context_available = false;
+  EXPECT_FALSE(
+    race::resolve_overtake_canonical_fresh_shadow_eligibility(
+      missing_context).eligible);
+
+  auto invalid_bounds = make_request(contract::ControlIntent::Pass);
+  invalid_bounds.lateral_bounds_valid = false;
+  EXPECT_FALSE(
+    race::resolve_overtake_canonical_fresh_shadow_eligibility(
+      invalid_bounds).eligible);
+}
+
 TEST(RaceMpccFoundation, StopEmergencyAuthorityNeverBorrowsNormalControl)
 {
   EXPECT_EQ(

@@ -75,10 +75,7 @@ CanonicalExecutionPlanRejectReason validate_canonical_execution_plan(
   if (!contract::problem_context_complete(plan.problem)) {
     return CanonicalExecutionPlanRejectReason::IncompleteProblem;
   }
-  if (
-    plan.problem.intent != contract::ControlIntent::Track &&
-    plan.problem.intent != contract::ControlIntent::Cruise)
-  {
+  if (!contract::canonical_normal_intent_supported(plan.problem.intent)) {
     return CanonicalExecutionPlanRejectReason::UnsupportedIntent;
   }
   if (

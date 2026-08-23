@@ -68,6 +68,18 @@ contract::MpccProblemContext make_track_context(
   return contract::seal_problem_context(std::move(context));
 }
 
+contract::MpccProblemContext make_follow_context(
+  const std::uint64_t decision_id = 42U)
+{
+  auto context = make_track_context(decision_id);
+  context.intent = contract::ControlIntent::Follow;
+  context.target_id = "d2";
+  context.target_obstacle_generation = context.observation_generation;
+  context.bounds_schema_id = "progress-stage-wall-follow-target-v1";
+  context.cost_schema_id = "velocity-progress-follow-gap-v1";
+  return contract::seal_problem_context(std::move(context));
+}
+
 contract::CanonicalNormalCandidate make_canonical_candidate(
   const std::uint64_t decision_id = 42U,
   const std::size_t executable_control_stage_count = 2U,
@@ -86,6 +98,16 @@ contract::CanonicalNormalCandidate make_canonical_candidate(
   candidate.execution_physical.checked = true;
   candidate.execution_physical.wall_clear = true;
   candidate.execution_physical.obstacles_clear = true;
+  return candidate;
+}
+
+contract::CanonicalNormalCandidate make_follow_candidate(
+  const std::uint64_t decision_id = 42U)
+{
+  const auto context = make_follow_context(decision_id);
+  auto candidate = make_canonical_candidate(decision_id);
+  candidate.problem = context;
+  candidate.solution = make_solution(context);
   return candidate;
 }
 
@@ -592,6 +614,27 @@ TEST(MpccExecutionContract, BuildsFreshCanonicalCommandWithoutFlatteningActuatio
   EXPECT_DOUBLE_EQ(result.command->virtual_progress_speed_mps, 7.7);
 }
 
+TEST(MpccExecutionContract, CanonicalNormalAuthorityAcceptsCertifiedFollowIntent)
+{
+  const auto resolution = contract::resolve_canonical_normal_authority(
+    contract::CanonicalNormalAuthorityRequest{
+      42U, 12.0, make_follow_candidate(), {},
+      contract::ControlIntent::Follow});
+
+  ASSERT_EQ(
+    resolution.source,
+    contract::CanonicalNormalAuthoritySource::FreshCertified);
+  ASSERT_TRUE(resolution.problem.has_value());
+  EXPECT_EQ(resolution.problem->intent, contract::ControlIntent::Follow);
+  EXPECT_EQ(resolution.problem->target_id, "d2");
+  EXPECT_GT(resolution.problem->target_obstacle_generation, 0U);
+
+  const auto result = contract::build_canonical_normal_command(
+    resolution, contract::CanonicalActuation{7.0, 0.5, 0.1, 0.2, 6.9});
+  ASSERT_TRUE(result.command.has_value());
+  EXPECT_EQ(result.command->intent, contract::ControlIntent::Follow);
+}
+
 TEST(MpccExecutionContract, BuildsRetainedCanonicalCommandWithOriginalPlanIdentity)
 {
   const auto resolution = contract::resolve_canonical_normal_authority(
@@ -696,7 +739,7 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsUnsupportedCurrentInt
 {
   auto request = contract::CanonicalNormalAuthorityRequest{
     42U, 12.0, make_canonical_candidate(), {}};
-  request.current_intent = contract::ControlIntent::Follow;
+  request.current_intent = contract::ControlIntent::Pass;
 
   const auto resolution =
     contract::resolve_canonical_normal_authority(request);
@@ -887,7 +930,7 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsThreeStateTrack)
     contract::CanonicalNormalCandidateRejectReason::NoncanonicalFormulation);
 }
 
-TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsNonTrackCruiseIntent)
+TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsUnsupportedCandidateIntent)
 {
   const auto context = make_context();
   auto fresh = make_canonical_candidate();

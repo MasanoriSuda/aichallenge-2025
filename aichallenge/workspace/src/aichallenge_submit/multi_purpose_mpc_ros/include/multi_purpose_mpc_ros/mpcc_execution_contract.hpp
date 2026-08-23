@@ -38,6 +38,11 @@ enum class Formulation
 const char * to_string(ControlIntent intent) noexcept;
 const char * to_string(Formulation formulation) noexcept;
 
+/// Intents whose normal lateral and longitudinal command may be owned by the
+/// canonical five-state MPCC authority. Recovery and emergency overrides are
+/// intentionally outside this contract.
+bool canonical_normal_intent_supported(ControlIntent intent) noexcept;
+
 struct StageGeometryIdentity
 {
   int transition_from_waypoint{};

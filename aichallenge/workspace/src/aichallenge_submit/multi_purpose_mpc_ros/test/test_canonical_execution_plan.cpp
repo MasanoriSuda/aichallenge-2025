@@ -69,6 +69,20 @@ plan::CanonicalExecutionPlan make_plan(
   return value;
 }
 
+plan::CanonicalExecutionPlan make_follow_plan()
+{
+  auto value = make_plan();
+  value.problem.intent = contract::ControlIntent::Follow;
+  value.problem.target_id = "d2";
+  value.problem.target_obstacle_generation =
+    value.problem.observation_generation;
+  value.problem.bounds_schema_id = "progress-stage-wall-follow-target-v1";
+  value.problem.cost_schema_id = "velocity-progress-follow-gap-v1";
+  value.problem = contract::seal_problem_context(std::move(value.problem));
+  value.solution.problem_fingerprint = value.problem.fingerprint;
+  return value;
+}
+
 contract::PhysicalCertificate make_current_physical_certificate()
 {
   contract::PhysicalCertificate certificate;
@@ -87,6 +101,36 @@ TEST(CanonicalExecutionPlan, AcceptsCompleteFiveStatePlan)
   EXPECT_EQ(
     plan::validate_canonical_execution_plan(make_plan()),
     plan::CanonicalExecutionPlanRejectReason::None);
+}
+
+TEST(CanonicalExecutionPlan, AcceptsFollowPlanWithTargetProvenance)
+{
+  const auto value = make_follow_plan();
+  ASSERT_TRUE(contract::problem_context_complete(value.problem));
+  EXPECT_EQ(
+    plan::validate_canonical_execution_plan(value),
+    plan::CanonicalExecutionPlanRejectReason::None);
+
+  auto missing_target_provenance = value;
+  missing_target_provenance.problem.target_obstacle_generation = 0U;
+  missing_target_provenance.problem = contract::seal_problem_context(
+    std::move(missing_target_provenance.problem));
+  missing_target_provenance.solution.problem_fingerprint =
+    missing_target_provenance.problem.fingerprint;
+  EXPECT_EQ(
+    plan::validate_canonical_execution_plan(missing_target_provenance),
+    plan::CanonicalExecutionPlanRejectReason::IncompleteProblem);
+
+  auto missing_target_id = value;
+  missing_target_id.problem.target_id.clear();
+  missing_target_id.problem.target_obstacle_generation = 0U;
+  missing_target_id.problem = contract::seal_problem_context(
+    std::move(missing_target_id.problem));
+  missing_target_id.solution.problem_fingerprint =
+    missing_target_id.problem.fingerprint;
+  EXPECT_EQ(
+    plan::validate_canonical_execution_plan(missing_target_id),
+    plan::CanonicalExecutionPlanRejectReason::IncompleteProblem);
 }
 
 TEST(CanonicalExecutionPlan, RejectsPartialPredictionAndControlSequences)

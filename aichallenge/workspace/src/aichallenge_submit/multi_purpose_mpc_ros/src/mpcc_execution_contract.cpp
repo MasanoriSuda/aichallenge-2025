@@ -245,6 +245,13 @@ const char * to_string(const Formulation formulation) noexcept
   return "unknown";
 }
 
+bool canonical_normal_intent_supported(const ControlIntent intent) noexcept
+{
+  return
+    intent == ControlIntent::Track || intent == ControlIntent::Cruise ||
+    intent == ControlIntent::Follow;
+}
+
 std::uint64_t fingerprint_stage_geometry(
   const int tracking_waypoint, const bool circular,
   const std::vector<StageGeometryIdentity> & stages) noexcept
@@ -459,6 +466,8 @@ MpccProblemContext seal_problem_context(MpccProblemContext context) noexcept
 
 bool problem_context_complete(const MpccProblemContext & context) noexcept
 {
+  const bool required_target_present =
+    context.intent != ControlIntent::Follow || !context.target_id.empty();
   const bool target_generation_complete =
     context.target_id.empty() ||
     (context.observation_generation > 0U && context.target_obstacle_generation > 0U);
@@ -466,7 +475,7 @@ bool problem_context_complete(const MpccProblemContext & context) noexcept
     context.decision_id > 0U && context.intent != ControlIntent::Unknown &&
     context.stage_geometry_id > 0U && context.horizon_steps > 0U &&
     context.formulation != Formulation::Unresolved && schemas_complete(context) &&
-    target_generation_complete && context.fingerprint > 0U &&
+    required_target_present && target_generation_complete && context.fingerprint > 0U &&
     context.fingerprint == problem_context_fingerprint(context);
 }
 
@@ -568,10 +577,7 @@ CanonicalNormalCandidateRejectReason qualify_canonical_normal_candidate(
   if (!problem_context_complete(problem)) {
     return CanonicalNormalCandidateRejectReason::IncompleteProblem;
   }
-  if (
-    problem.intent != ControlIntent::Track &&
-    problem.intent != ControlIntent::Cruise)
-  {
+  if (!canonical_normal_intent_supported(problem.intent)) {
     return CanonicalNormalCandidateRejectReason::UnsupportedIntent;
   }
   if (problem.intent != current_intent) {
@@ -639,8 +645,7 @@ CanonicalNormalAuthorityResolution resolve_canonical_normal_authority(
   if (
     request.current_decision_id == 0U || !std::isfinite(request.now_sec) ||
     request.now_sec < 0.0 ||
-    (request.current_intent != ControlIntent::Track &&
-    request.current_intent != ControlIntent::Cruise))
+    !canonical_normal_intent_supported(request.current_intent))
   {
     resolution.reason = CanonicalNormalAuthorityReason::InvalidRequest;
     return resolution;

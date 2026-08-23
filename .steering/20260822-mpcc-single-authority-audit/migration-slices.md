@@ -257,6 +257,15 @@ Express longitudinal interaction as stage constraints/references of the same MPC
 - This is enough to accept the retained mechanism, but not production promotion. The same run has
   intervals where the retained certificate expires while fresh Follow remains unavailable, and it
   records callback overruns. A separate coverage/latency authority gate remains mandatory.
+- `.steering/20260823-follow-async-canonical-producer` removes the fresh Follow solve from the 40 Hz
+  callback and gives one latest-only worker ownership of the sealed immutable Follow problem.
+  Deterministic replay `output/20260823-200200-replay` produced 1404 accepted worker results,
+  574 live current-world-ready plans, zero worker exceptions and zero observed callback overruns.
+  Snapshot-context validation also rejects re-derived Cruise authority and mismatched fingerprints.
+- The Follow asynchronous producer and current-world proof are therefore accepted for promotion
+  input. Production remains shadow-only: the next explicit Slice must connect the same canonical
+  selector to final output and delete the Follow-specific normal command owner atomically. It may
+  not retain a cycle-local scalar/legacy fallback or begin parameter tuning.
 
 ### 2026-08-23 Hold/Stop intent provenance status
 

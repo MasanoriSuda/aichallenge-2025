@@ -168,3 +168,32 @@ the physical problem.
 
 This is still not a passed dynamic gate. A same-condition rerun must show a worker-produced canonical
 plan reaching live current-world revalidation before Slice C can be closed.
+
+## Deterministic dynamic gate: 20260823-200200-replay
+
+Repeated live launches did not recreate a coherent front-target interval, and one three-domain
+attempt remained in AWSIM `spawned` without a start-service subscriber. Those runs cannot falsify
+the Follow producer. The accepted gate therefore replayed the exact observation stream from
+`output/20260823-192924/d1/rosbag2_autoware` into a clean Domain 1 controller while excluding the
+recorded `/control/command/control_cmd`. The replay supplied clock, localization, trajectory, V2X
+and vehicle-status inputs; the current controller remained the only command producer.
+
+The sealed-context correction passed the dynamic gate:
+
+- Worker: 1405 submitted, 1405 started, 1404 completed, 0 exceptions and 0 snapshot failures.
+- Mailbox publication: 1404 accepted, with 0 invalid/context/rollback/unsubmitted rejections.
+- Live current-world proof: `current_ready=574`, repeatedly reporting
+  `canonical-ready-worker` and `async-current-world-ready`.
+- Snapshot construction remained about 0.13--0.25 ms in observed reports; normal worker compute was
+  about 1--3 ms and result age about 0.015--0.035 s.
+- Hard infeasible frames could still reach about 19--21 ms and maximum iterations, but that work
+  remained off the command callback and produced typed rejection rather than direct actuation.
+- Callback reports remained below the 25 ms period in the observed replay, with zero overruns and an
+  isolated maximum of 15.493 ms.
+- The two current-identity rejections occurred at Follow exit/re-entry boundaries. They rejected old
+  async plans as designed; no `intent-mismatch` remained.
+
+This closes the asynchronous Follow producer Slice. It proves current-world shadow availability and
+latency isolation, not production authority. Follow remains `authority=shadow, selected=0` until a
+separate promotion Slice connects this exact canonical selector to publication and deletes the
+Follow-specific normal command owner in the same change.

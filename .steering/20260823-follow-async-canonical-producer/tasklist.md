@@ -7,5 +7,5 @@
 - [x] Connect immutable Follow worker snapshot and delete synchronous fresh solve.
 - [x] Keep live current-world retained proof and telemetry shadow-only.
 - [x] Run focused tests, full package tests and `make autoware-build`.
-- [ ] Obtain dynamic latency/provenance evidence.
-- [ ] Update migration status and commit each completed sub-slice.
+- [x] Obtain dynamic latency/provenance evidence.
+- [x] Update migration status and commit each completed sub-slice.

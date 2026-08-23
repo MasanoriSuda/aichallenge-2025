@@ -236,6 +236,13 @@ Track/Cruise shadowではstage 1..Nの横位置box rowをメートル単位で�
 観測された違反量ではなく許容値だけを境界toleranceに使う。大きなcourse progress値が横制約の
 許容誤差を広げたり、違反量自身が抽出許容を広げるself-relaxing contractは禁止する。
 
+2026-08-23以降、Overtake/DynamicEscapeのlive extended solver、左右tactical branch、
+Follow canonical solverは`RowToleranceNormalized`で各rowを物理許容差へ正規化してから解き、
+同じrow単位で成功判定する。横境界を後段証明する一方で、global scaleでは成功扱いする
+二重契約を残さない。Track/Cruise productionへ同policyを一括適用するとdynamics rowの
+不成立とEmergency Stopが増えることをreplayで確認したため、Track/Cruiseは別の
+failure-first sliceで定式化・scalingを監査するまで従来policyを維持する。
+
 2026-08-22のshadow A/Bでは、exact headingによるpost-solve physical certificateをhard oracleとして
 維持した。post-solve再solve、reference-heading固定の横box、単一勾配による横位置・姿勢結合rowは、
 いずれも40 Hz超過またはQP不成立を増やし、非線形の向き付き車体footprintを保守的に証明できなかった

@@ -6081,6 +6081,14 @@ struct MpcRtiSqpTelemetryWindow
   std::uint64_t invalid_decision_count{};
 };
 
+// Canonical Follow and Overtake contracts compare physical rows with different
+// units and magnitudes (lateral/lag metres, speed, progress and dynamics).  A
+// single global residual scale can accept a lateral-bound breach merely because
+// another row carries a larger progress value.  Use independent physical row
+// tolerances wherever these candidates are admitted by a row-wise certificate.
+constexpr auto kCanonicalPhysicalRowTolerancePolicy =
+  persistent_osqp::ConstraintPreconditioningPolicy::RowToleranceNormalized;
+
 /// Long-lived OSQP state for one tactical homotopy. Tactical MPC objects are
 /// immutable snapshots and intentionally short-lived; keeping solver state in
 /// the snapshot made every left/right evaluation a cold start. The context is
@@ -6148,8 +6156,7 @@ struct MPC
         std::make_shared<ExtendedBranchSolverContext>();
       follow_canonical_lifecycle_->solver_context =
         std::make_shared<ExtendedBranchSolverContext>(
-        persistent_osqp::ConstraintPreconditioningPolicy::
-        RowToleranceNormalized);
+        kCanonicalPhysicalRowTolerancePolicy);
       if (enable_async_tactical_worker) {
         follow_canonical_async_mailbox_ =
           std::make_shared<follow_async::Mailbox>();
@@ -6176,9 +6183,11 @@ struct MPC
       mpcc_lite_async_mailbox_->context_epoch = mpcc_lite_async_context_epoch_;
       mpcc_lite_async_worker_ = std::make_unique<LatestOnlyWorker>();
       extended_left_branch_solver_context_ =
-        std::make_shared<ExtendedBranchSolverContext>();
+        std::make_shared<ExtendedBranchSolverContext>(
+        kCanonicalPhysicalRowTolerancePolicy);
       extended_right_branch_solver_context_ =
-        std::make_shared<ExtendedBranchSolverContext>();
+        std::make_shared<ExtendedBranchSolverContext>(
+        kCanonicalPhysicalRowTolerancePolicy);
     }
   }
 
@@ -26216,7 +26225,8 @@ struct MPC
   bool dynamic_escape_tracking_solver_workspace_reset_{false};
   std::optional<bool> last_osqp_progress_contouring_mode_;
   std::optional<double> last_osqp_progress_origin_m_;
-  persistent_osqp::PersistentOsqpSolver persistent_extended_osqp_solver_;
+  persistent_osqp::PersistentOsqpSolver persistent_extended_osqp_solver_{
+    kCanonicalPhysicalRowTolerancePolicy};
   std::optional<persistent_osqp::WarmStart> last_extended_osqp_solution_;
   double last_extended_osqp_solution_sec_{
     -std::numeric_limits<double>::infinity()};

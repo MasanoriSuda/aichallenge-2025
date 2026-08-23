@@ -444,6 +444,58 @@ std::optional<ProgressBounds> resolve_progress_bounds(
   double measured_progress_m, double reference_progress_m,
   const Config & config) noexcept;
 
+enum class ProgressAlignedWallBoundsReason
+{
+  NotRequested,
+  Accepted,
+  InvalidInput,
+  NoCoveringSegment,
+  CorridorCollapsed,
+};
+
+struct ProgressAlignedWallBoundsRequest
+{
+  bool active{false};
+  std::vector<double> reference_progress_m;
+  std::vector<double> wall_lower_m;
+  std::vector<double> wall_upper_m;
+  std::vector<double> solved_progress_m;
+  std::vector<double> current_lower_m;
+  std::vector<double> current_upper_m;
+  std::vector<double> current_progress_lower_m;
+  std::vector<double> current_progress_upper_m;
+};
+
+struct ProgressAlignedWallBoundsResolution
+{
+  bool valid{false};
+  bool feasible{false};
+  bool applied{false};
+  ProgressAlignedWallBoundsReason reason{
+    ProgressAlignedWallBoundsReason::InvalidInput};
+  std::vector<double> progress_lower_m;
+  std::vector<double> progress_upper_m;
+  std::vector<double> wall_lower_slope;
+  std::vector<double> wall_lower_intercept;
+  std::vector<double> wall_upper_slope;
+  std::vector<double> wall_upper_intercept;
+  std::size_t aligned_stage_count{};
+  std::size_t out_of_range_stage_count{};
+  int first_failure_stage{-1};
+  double maximum_progress_mismatch_m{};
+};
+
+/// Resolve one piecewise-linear wall segment for every predicted MPCC state.
+/// The caller constrains theta to the returned segment and adds the affine
+/// rows e_y - slope * theta >= lower_intercept and
+/// e_y - slope * theta <= upper_intercept. This couples wall position to the
+/// optimized progress instead of treating a spatial stage index as a pose.
+ProgressAlignedWallBoundsResolution resolve_progress_aligned_wall_bounds(
+  const ProgressAlignedWallBoundsRequest & request) noexcept;
+
+const char * progress_aligned_wall_bounds_reason_name(
+  ProgressAlignedWallBoundsReason reason) noexcept;
+
 struct ProgressCost
 {
   double quadratic_weight{};

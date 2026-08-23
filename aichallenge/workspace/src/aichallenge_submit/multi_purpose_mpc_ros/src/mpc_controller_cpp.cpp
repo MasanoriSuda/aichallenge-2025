@@ -5361,6 +5361,10 @@ struct MpcProblem
   std::vector<double> progress_execution_path_distance_m;
   std::vector<double> progress_execution_lateral_lower_m;
   std::vector<double> progress_execution_lateral_upper_m;
+  std::vector<double> progress_execution_wall_progress_m;
+  std::vector<double> progress_execution_wall_lateral_lower_m;
+  std::vector<double> progress_execution_wall_lateral_upper_m;
+  std::string progress_aligned_wall_contract_source{"none"};
   bool progress_refinement_cold_load_active{false};
   std::size_t progress_wall_cache_miss_count{};
   Eigen::VectorXd progress_reference_state;
@@ -5412,6 +5416,12 @@ struct ExtendedProgressMpcProblem
   double minimum_wall_tracking_reference_reserve_m{
     std::numeric_limits<double>::infinity()};
   double first_stage_dt_sec{std::numeric_limits<double>::quiet_NaN()};
+  bool progress_aligned_wall_refinement_active{false};
+  std::vector<double> wall_reference_progress_m;
+  std::vector<double> wall_lower_m;
+  std::vector<double> wall_upper_m;
+  std::string wall_contract_source{"none"};
+  int wall_constraint_offset{-1};
   std::vector<persistent_osqp::DualStageBlockLayout>
   trailing_dual_stage_blocks;
 };
@@ -16953,6 +16963,20 @@ struct MPC
       }
     }
 
+    // Preserve the static course-wall domain before any target, gap or
+    // tactical corridor narrows lb/ub. Progress MPCC may solve each stage at a
+    // different course position than ref_wp_id + stage; the wall component
+    // therefore needs its own progress-indexed provenance and must not be
+    // reconstructed later from already-combined tactical bounds.
+    std::vector<double> reference_scalar_wall_lower_m;
+    std::vector<double> reference_scalar_wall_upper_m;
+    reference_scalar_wall_lower_m.reserve(static_cast<std::size_t>(N));
+    reference_scalar_wall_upper_m.reserve(static_cast<std::size_t>(N));
+    for (int stage = 0; stage < N; ++stage) {
+      reference_scalar_wall_lower_m.push_back(lb[stage]);
+      reference_scalar_wall_upper_m.push_back(ub[stage]);
+    }
+
     const std::uint64_t wall_cache_miss_count_before_problem =
       physical_wall_envelope_cache_miss_count_;
     auto behavior_output = behavior_override != nullptr ?
@@ -19040,12 +19064,22 @@ struct MPC
       !overtake_line_state_.target_vehicle_id.empty() &&
       overtake_line_state_.mission_generation > 0U &&
       overtake_line_state_.pass_side_sign != 0;
+    const bool progress_aligned_wall_contract_context_active =
+      progress_contouring_active &&
+      (progress_execution_context_active ||
+      behavior_output.dynamic_obstacle_lateral_escape_active ||
+      (behavior_output.dynamic_obstacle_lateral_escape_execution_active &&
+      behavior_output.dynamic_obstacle_lateral_escape_attempt_id > 0U));
+    std::string progress_aligned_wall_contract_source{"none"};
     std::vector<double> progress_execution_path_distance_m;
     std::vector<double> progress_execution_lateral_lower_m;
     std::vector<double> progress_execution_lateral_upper_m;
+    std::vector<double> progress_execution_wall_progress_m;
+    std::vector<double> progress_execution_wall_lateral_lower_m;
+    std::vector<double> progress_execution_wall_lateral_upper_m;
     double progress_execution_required_wall_clearance_m =
       std::numeric_limits<double>::quiet_NaN();
-    if (progress_execution_context_active) {
+    if (progress_aligned_wall_contract_context_active) {
       const auto execution_robust_clearance =
         resolve_robust_clearance(tracking_wp_id, N);
       const double physical_wall_clearance_m = std::max(
@@ -19068,12 +19102,195 @@ struct MPC
       progress_execution_path_distance_m.reserve(static_cast<std::size_t>(N));
       progress_execution_lateral_lower_m.reserve(static_cast<std::size_t>(N));
       progress_execution_lateral_upper_m.reserve(static_cast<std::size_t>(N));
+      std::optional<std::pair<double, double>> current_physical_wall_interval;
+      if (
+        overtake_static_wall_grid_ != nullptr &&
+        overtake_static_wall_footprint_.valid() &&
+        model->reference_path->n_waypoints > 0 &&
+        !model->reference_path->path_constraints_lower.empty() &&
+        !model->reference_path->path_constraints_upper.empty())
+      {
+        const int waypoint_count = model->reference_path->n_waypoints;
+        int current_waypoint = tracking_wp_id;
+        if (model->reference_path->circular) {
+          current_waypoint %= waypoint_count;
+          if (current_waypoint < 0) {
+            current_waypoint += waypoint_count;
+          }
+        } else {
+          current_waypoint = std::clamp(current_waypoint, 0, waypoint_count - 1);
+        }
+        if (
+          current_waypoint < static_cast<int>(
+          model->reference_path->path_constraints_lower.size()) &&
+          current_waypoint < static_cast<int>(
+          model->reference_path->path_constraints_upper.size()) &&
+          !model->reference_path->path_constraints_lower[
+          static_cast<std::size_t>(current_waypoint)].empty() &&
+          !model->reference_path->path_constraints_upper[
+          static_cast<std::size_t>(current_waypoint)].empty())
+        {
+          double scalar_lower_m = model->reference_path->path_constraints_lower[
+            static_cast<std::size_t>(current_waypoint)].front();
+          double scalar_upper_m = model->reference_path->path_constraints_upper[
+            static_cast<std::size_t>(current_waypoint)].front();
+          if (model->safety_margin != safety_margin) {
+            const double safety_margin_diff = safety_margin - model->safety_margin;
+            scalar_lower_m += safety_margin_diff;
+            scalar_upper_m -= safety_margin_diff;
+          }
+          if (
+            std::isfinite(scalar_lower_m) && std::isfinite(scalar_upper_m) &&
+            scalar_lower_m <= scalar_upper_m)
+          {
+            const auto & current_waypoint_pose =
+              model->reference_path->get_waypoint(current_waypoint);
+            const double sample_step_m = std::clamp(
+              0.5 * overtake_static_wall_grid_->resolution_m, 0.02, 0.10);
+            const auto interval = find_cached_physical_wall_envelope(
+              current_waypoint,
+              recovery_footprint::Pose2D{
+                current_waypoint_pose.x, current_waypoint_pose.y,
+                current_waypoint_pose.psi},
+              scalar_lower_m, scalar_upper_m,
+              scalar_lower_m, scalar_upper_m,
+              model->spatial_state.e_y, model->spatial_state.e_psi,
+              0.0, sample_step_m);
+            if (
+              interval.valid && interval.feasible &&
+              std::isfinite(interval.lower_lateral_offset_m) &&
+              std::isfinite(interval.upper_lateral_offset_m) &&
+              interval.lower_lateral_offset_m <=
+              interval.upper_lateral_offset_m)
+            {
+              current_physical_wall_interval = std::make_pair(
+                interval.lower_lateral_offset_m,
+                interval.upper_lateral_offset_m);
+            }
+          }
+        }
+      }
+      const bool overtake_wall_profile_available =
+        current_physical_wall_interval.has_value() &&
+        overtake_line_output.stage_wall_corridor_lower_ey.size() ==
+        static_cast<std::size_t>(N) &&
+        overtake_line_output.stage_wall_corridor_upper_ey.size() ==
+        static_cast<std::size_t>(N);
+      if (overtake_wall_profile_available) {
+        progress_execution_wall_progress_m.reserve(static_cast<std::size_t>(N + 1));
+        progress_execution_wall_lateral_lower_m.reserve(
+          static_cast<std::size_t>(N + 1));
+        progress_execution_wall_lateral_upper_m.reserve(
+          static_cast<std::size_t>(N + 1));
+        progress_execution_wall_progress_m.push_back(0.0);
+        progress_execution_wall_lateral_lower_m.push_back(
+          current_physical_wall_interval->first);
+        progress_execution_wall_lateral_upper_m.push_back(
+          current_physical_wall_interval->second);
+        for (int stage = 0; stage < N; ++stage) {
+          const auto index = static_cast<std::size_t>(stage);
+          progress_execution_wall_progress_m.push_back(
+            effective_progress_geometry->stages[index].cumulative_distance_m);
+          progress_execution_wall_lateral_lower_m.push_back(
+            overtake_line_output.stage_wall_corridor_lower_ey[index]);
+          progress_execution_wall_lateral_upper_m.push_back(
+            overtake_line_output.stage_wall_corridor_upper_ey[index]);
+        }
+        progress_aligned_wall_contract_source = "overtake-physical-envelope";
+      }
       for (int i = 0; i < N; ++i) {
         progress_execution_path_distance_m.push_back(
           effective_progress_geometry->stages[static_cast<std::size_t>(i)].
           cumulative_distance_m);
         progress_execution_lateral_lower_m.push_back(lb[i]);
         progress_execution_lateral_upper_m.push_back(ub[i]);
+      }
+
+      // Dynamic Escape is also an Overtake canonical intent, but it does not
+      // own an OvertakeLine horizon. Build the missing wall-only profile from
+      // the same physical footprint/map used by final certification. This is
+      // deliberately separate from the dynamic-obstacle/tactical bounds;
+      // relinearization intersects them and can never expand either contract.
+      if (
+        !overtake_wall_profile_available &&
+        behavior_output.dynamic_obstacle_lateral_escape_active &&
+        overtake_static_wall_grid_ != nullptr &&
+        overtake_static_wall_footprint_.valid() &&
+        effective_progress_geometry.has_value() &&
+        progress_reference_state.size() == nx_N &&
+        reference_scalar_wall_lower_m.size() == static_cast<std::size_t>(N) &&
+        reference_scalar_wall_upper_m.size() == static_cast<std::size_t>(N))
+      {
+        std::vector<double> dynamic_wall_lower_m;
+        std::vector<double> dynamic_wall_upper_m;
+        std::vector<double> dynamic_wall_progress_m;
+        dynamic_wall_lower_m.reserve(static_cast<std::size_t>(N + 1));
+        dynamic_wall_upper_m.reserve(static_cast<std::size_t>(N + 1));
+        dynamic_wall_progress_m.reserve(static_cast<std::size_t>(N + 1));
+        const double sample_step_m = std::clamp(
+          0.5 * overtake_static_wall_grid_->resolution_m, 0.02, 0.10);
+        double previous_lateral_m = model->spatial_state.e_y;
+        double previous_distance_m = 0.0;
+        bool complete_profile = current_physical_wall_interval.has_value();
+        if (complete_profile) {
+          dynamic_wall_progress_m.push_back(0.0);
+          dynamic_wall_lower_m.push_back(current_physical_wall_interval->first);
+          dynamic_wall_upper_m.push_back(current_physical_wall_interval->second);
+        }
+        for (int stage = 0; stage < N; ++stage) {
+          if (!complete_profile) {
+            break;
+          }
+          const auto index = static_cast<std::size_t>(stage);
+          const auto & geometry_stage =
+            effective_progress_geometry->stages[index];
+          const auto & waypoint = model->reference_path->get_waypoint(
+            geometry_stage.state_waypoint);
+          const double reference_lateral_m =
+            progress_reference_state[(stage + 1) * nx];
+          const double distance_m = geometry_stage.cumulative_distance_m;
+          const double delta_distance_m = distance_m - previous_distance_m;
+          const double heading_offset_rad =
+            overtake_core::resolve_overtake_line_heading_reference(
+            overtake_core::OvertakeLineHeadingReferenceRequest{
+              previous_lateral_m, reference_lateral_m,
+              delta_distance_m, waypoint.kappa});
+          const double scalar_lower_m = reference_scalar_wall_lower_m[index];
+          const double scalar_upper_m = reference_scalar_wall_upper_m[index];
+          const auto interval = find_cached_physical_wall_envelope(
+            geometry_stage.state_waypoint,
+            recovery_footprint::Pose2D{waypoint.x, waypoint.y, waypoint.psi},
+            scalar_lower_m, scalar_upper_m,
+            scalar_lower_m, scalar_upper_m,
+            reference_lateral_m, heading_offset_rad, 0.0, sample_step_m);
+          if (
+            !interval.valid || !interval.feasible ||
+            !std::isfinite(interval.lower_lateral_offset_m) ||
+            !std::isfinite(interval.upper_lateral_offset_m) ||
+            interval.upper_lateral_offset_m < interval.lower_lateral_offset_m)
+          {
+            complete_profile = false;
+            break;
+          }
+          dynamic_wall_progress_m.push_back(distance_m);
+          dynamic_wall_lower_m.push_back(interval.lower_lateral_offset_m);
+          dynamic_wall_upper_m.push_back(interval.upper_lateral_offset_m);
+          previous_lateral_m = reference_lateral_m;
+          previous_distance_m = distance_m;
+        }
+        if (
+          complete_profile &&
+          dynamic_wall_progress_m.size() == static_cast<std::size_t>(N + 1))
+        {
+          progress_execution_wall_progress_m =
+            std::move(dynamic_wall_progress_m);
+          progress_execution_wall_lateral_lower_m =
+            std::move(dynamic_wall_lower_m);
+          progress_execution_wall_lateral_upper_m =
+            std::move(dynamic_wall_upper_m);
+          progress_aligned_wall_contract_source =
+            "dynamic-escape-physical-envelope";
+        }
       }
     }
     const bool dynamic_margin_escape_tracking_contract_active =
@@ -19141,6 +19358,10 @@ struct MPC
       std::move(progress_execution_path_distance_m),
       std::move(progress_execution_lateral_lower_m),
       std::move(progress_execution_lateral_upper_m),
+      std::move(progress_execution_wall_progress_m),
+      std::move(progress_execution_wall_lateral_lower_m),
+      std::move(progress_execution_wall_lateral_upper_m),
+      std::move(progress_aligned_wall_contract_source),
       progress_refinement_cold_load_active,
       progress_wall_cache_miss_count,
       std::move(progress_reference_state),
@@ -19392,9 +19613,10 @@ struct MPC
     std::vector<Eigen::Triplet<double>> a_triplets;
     const int follow_gap_row_count =
       legacy.follow_shadow_requested ? N + 1 : 0;
+    const int progress_wall_row_count = 2 * N;
     a_triplets.reserve(static_cast<std::size_t>(
       nx_N + N * (nx * nx + nx * nu) + variable_count + 3 * N +
-      2 * follow_gap_row_count));
+      2 * follow_gap_row_count + 4 * N));
     for (int row = 0; row < nx_N; ++row) {
       a_triplets.emplace_back(row, row, -1.0);
     }
@@ -19439,8 +19661,23 @@ struct MPC
           state * nx + mpcc_progress::kExtendedProgressIndex, 1.0);
       }
     }
+    const int progress_wall_offset = follow_gap_offset + follow_gap_row_count;
+    for (int stage = 0; stage < N; ++stage) {
+      const int state = (stage + 1) * nx;
+      const int lower_row = progress_wall_offset + 2 * stage;
+      const int upper_row = lower_row + 1;
+      a_triplets.emplace_back(
+        lower_row, state + mpcc_progress::kExtendedLateralIndex, 1.0);
+      a_triplets.emplace_back(
+        lower_row, state + mpcc_progress::kExtendedProgressIndex, 0.0);
+      a_triplets.emplace_back(
+        upper_row, state + mpcc_progress::kExtendedLateralIndex, 1.0);
+      a_triplets.emplace_back(
+        upper_row, state + mpcc_progress::kExtendedProgressIndex, 0.0);
+    }
     Eigen::SparseMatrix<double> constraints(
-      nx_N + variable_count + N + follow_gap_row_count, variable_count);
+      nx_N + variable_count + N + follow_gap_row_count +
+      progress_wall_row_count, variable_count);
     constraints.setFromTriplets(a_triplets.begin(), a_triplets.end());
 
     Eigen::Matrix<double, nx, 1> x0;
@@ -19476,9 +19713,11 @@ struct MPC
     const Eigen::Index standard_constraint_count =
       equality.size() + box_lower.size() + rate_lower.size();
     Eigen::VectorXd lower = Eigen::VectorXd::Zero(
-      standard_constraint_count + follow_gap_row_count);
+      standard_constraint_count + follow_gap_row_count +
+      progress_wall_row_count);
     Eigen::VectorXd upper = Eigen::VectorXd::Zero(
-      standard_constraint_count + follow_gap_row_count);
+      standard_constraint_count + follow_gap_row_count +
+      progress_wall_row_count);
     Eigen::Index bound_offset = 0;
     lower.segment(bound_offset, equality.size()) = equality;
     upper.segment(bound_offset, equality.size()) = equality;
@@ -19498,6 +19737,17 @@ struct MPC
           static_cast<std::size_t>(state)] -
           legacy.follow_longitudinal_contract.hard_gap_m;
       }
+      bound_offset += follow_gap_row_count;
+    }
+    for (int stage = 0; stage < N; ++stage) {
+      lower[bound_offset + 2 * stage] =
+        -std::numeric_limits<double>::infinity();
+      upper[bound_offset + 2 * stage] =
+        std::numeric_limits<double>::infinity();
+      lower[bound_offset + 2 * stage + 1] =
+        -std::numeric_limits<double>::infinity();
+      upper[bound_offset + 2 * stage + 1] =
+        std::numeric_limits<double>::infinity();
     }
 
     Eigen::VectorXd q = Eigen::VectorXd::Zero(variable_count);
@@ -19635,6 +19885,24 @@ struct MPC
       reject_reason = "extended MPCC QP assembly invalid";
       return std::nullopt;
     }
+    const bool progress_aligned_wall_refinement_active =
+      legacy.progress_contouring_active &&
+      legacy.progress_aligned_wall_contract_source != "none" &&
+      legacy.progress_execution_wall_progress_m.size() >= 2U &&
+      legacy.progress_execution_wall_progress_m.size() ==
+      legacy.progress_execution_wall_lateral_lower_m.size() &&
+      legacy.progress_execution_wall_progress_m.size() ==
+      legacy.progress_execution_wall_lateral_upper_m.size();
+    std::vector<persistent_osqp::DualStageBlockLayout>
+      trailing_dual_stage_blocks;
+    if (legacy.follow_shadow_requested) {
+      trailing_dual_stage_blocks.push_back(
+        persistent_osqp::DualStageBlockLayout{
+          static_cast<std::size_t>(N + 1), 1U});
+    }
+    trailing_dual_stage_blocks.push_back(
+      persistent_osqp::DualStageBlockLayout{
+        static_cast<std::size_t>(N), 2U});
     return ExtendedProgressMpcProblem{
       std::move(q), std::move(lower), std::move(upper),
       std::move(quadratic_cost), std::move(constraints), N,
@@ -19643,11 +19911,94 @@ struct MPC
       minimum_wall_tracking_weight_scale,
       minimum_wall_tracking_reference_reserve_m,
       linearizations.front().stage_dt_sec,
-      legacy.follow_shadow_requested ?
-      std::vector<persistent_osqp::DualStageBlockLayout>{
-        persistent_osqp::DualStageBlockLayout{
-          static_cast<std::size_t>(N + 1), 1U}} :
-      std::vector<persistent_osqp::DualStageBlockLayout>{}};
+      progress_aligned_wall_refinement_active,
+      progress_aligned_wall_refinement_active ?
+      legacy.progress_execution_wall_progress_m : std::vector<double>{},
+      progress_aligned_wall_refinement_active ?
+      legacy.progress_execution_wall_lateral_lower_m : std::vector<double>{},
+      progress_aligned_wall_refinement_active ?
+      legacy.progress_execution_wall_lateral_upper_m : std::vector<double>{},
+      progress_aligned_wall_refinement_active ?
+      legacy.progress_aligned_wall_contract_source : std::string{"none"},
+      progress_wall_offset,
+      std::move(trailing_dual_stage_blocks)};
+  }
+
+  mpcc_progress::ProgressAlignedWallBoundsResolution
+  relinearize_extended_progress_wall_bounds(
+    ExtendedProgressMpcProblem & problem,
+    const Eigen::VectorXd & primal) const
+  {
+    constexpr int nx = mpcc_progress::kExtendedStateDimension;
+    constexpr int nu = mpcc_progress::kExtendedInputDimension;
+    mpcc_progress::ProgressAlignedWallBoundsRequest request;
+    request.active = problem.progress_aligned_wall_refinement_active;
+    request.reference_progress_m = problem.wall_reference_progress_m;
+    request.wall_lower_m = problem.wall_lower_m;
+    request.wall_upper_m = problem.wall_upper_m;
+    if (!request.active) {
+      return mpcc_progress::resolve_progress_aligned_wall_bounds(request);
+    }
+
+    const int nx_N = nx * (problem.N + 1);
+    const int variable_count = nx_N + nu * problem.N;
+    if (
+      problem.N <= 0 || primal.size() != variable_count ||
+      problem.l.size() <= nx_N + variable_count - 1 ||
+      problem.u.size() != problem.l.size() ||
+      problem.wall_constraint_offset < 0 ||
+      problem.wall_constraint_offset + 2 * problem.N > problem.l.size())
+    {
+      request.solved_progress_m.clear();
+      return mpcc_progress::resolve_progress_aligned_wall_bounds(request);
+    }
+
+    request.solved_progress_m.reserve(static_cast<std::size_t>(problem.N));
+    request.current_lower_m.reserve(static_cast<std::size_t>(problem.N));
+    request.current_upper_m.reserve(static_cast<std::size_t>(problem.N));
+    request.current_progress_lower_m.reserve(static_cast<std::size_t>(problem.N));
+    request.current_progress_upper_m.reserve(static_cast<std::size_t>(problem.N));
+    for (int stage = 0; stage < problem.N; ++stage) {
+      const int state = (stage + 1) * nx;
+      const int lateral_box_row =
+        nx_N + state + mpcc_progress::kExtendedLateralIndex;
+      const int progress_box_row =
+        nx_N + state + mpcc_progress::kExtendedProgressIndex;
+      request.solved_progress_m.push_back(
+        primal[state + mpcc_progress::kExtendedProgressIndex]);
+      request.current_lower_m.push_back(problem.l[lateral_box_row]);
+      request.current_upper_m.push_back(problem.u[lateral_box_row]);
+      request.current_progress_lower_m.push_back(problem.l[progress_box_row]);
+      request.current_progress_upper_m.push_back(problem.u[progress_box_row]);
+    }
+
+    auto resolution =
+      mpcc_progress::resolve_progress_aligned_wall_bounds(request);
+    if (!resolution.valid || !resolution.feasible || !resolution.applied) {
+      return resolution;
+    }
+    for (int stage = 0; stage < problem.N; ++stage) {
+      const int state = (stage + 1) * nx;
+      const int progress_box_row =
+        nx_N + state + mpcc_progress::kExtendedProgressIndex;
+      const int lower_wall_row = problem.wall_constraint_offset + 2 * stage;
+      const int upper_wall_row = lower_wall_row + 1;
+      const auto index = static_cast<std::size_t>(stage);
+      problem.l[progress_box_row] = resolution.progress_lower_m[index];
+      problem.u[progress_box_row] = resolution.progress_upper_m[index];
+      problem.A.coeffRef(
+        lower_wall_row, state + mpcc_progress::kExtendedProgressIndex) =
+        -resolution.wall_lower_slope[index];
+      problem.A.coeffRef(
+        upper_wall_row, state + mpcc_progress::kExtendedProgressIndex) =
+        -resolution.wall_upper_slope[index];
+      problem.l[lower_wall_row] = resolution.wall_lower_intercept[index];
+      problem.u[lower_wall_row] = std::numeric_limits<double>::infinity();
+      problem.l[upper_wall_row] = -std::numeric_limits<double>::infinity();
+      problem.u[upper_wall_row] = resolution.wall_upper_intercept[index];
+    }
+    problem.A.makeCompressed();
+    return resolution;
   }
 
   persistent_osqp::SolveOutcome solve_extended_progress_problem(
@@ -19737,13 +20088,109 @@ struct MPC
     {
       ++active_extended_branch_solver_context_->warm_start_count;
     }
-    if (record_runtime_telemetry) {
-      record_osqp_telemetry(outcome, now_sec);
-    }
     if (!outcome.result.has_value()) {
+      if (record_runtime_telemetry) {
+        record_osqp_telemetry(outcome, now_sec);
+      }
       last_solution->reset();
       *last_solution_sec = -std::numeric_limits<double>::infinity();
       return outcome;
+    }
+
+    auto wall_refinement =
+      mpcc_progress::ProgressAlignedWallBoundsResolution{};
+    bool wall_refinement_attempted = false;
+    bool wall_refinement_succeeded = false;
+    bool wall_refinement_solve_failed = false;
+    if (
+      problem.progress_aligned_wall_refinement_active &&
+      cfg.progress_contouring.rti_sqp_iterations > 1)
+    {
+      ExtendedProgressMpcProblem refined_problem = problem;
+      wall_refinement = relinearize_extended_progress_wall_bounds(
+        refined_problem, outcome.result->primal);
+      wall_refinement_attempted =
+        wall_refinement.valid && wall_refinement.feasible &&
+        wall_refinement.applied;
+      if (wall_refinement_attempted) {
+        const persistent_osqp::WarmStart refinement_warm_start{
+          outcome.result->primal, outcome.result->dual};
+        auto refined_outcome = solver->solve(
+          refined_problem.P, refined_problem.A, refined_problem.q,
+          refined_problem.l, refined_problem.u, refinement_warm_start);
+        auto combined_telemetry = outcome.telemetry;
+        combined_telemetry.setup_performed =
+          combined_telemetry.setup_performed ||
+          refined_outcome.telemetry.setup_performed;
+        combined_telemetry.update_performed =
+          combined_telemetry.update_performed ||
+          refined_outcome.telemetry.update_performed;
+        combined_telemetry.structural_rebuild =
+          combined_telemetry.structural_rebuild ||
+          refined_outcome.telemetry.structural_rebuild;
+        combined_telemetry.update_rebuild =
+          combined_telemetry.update_rebuild ||
+          refined_outcome.telemetry.update_rebuild;
+        combined_telemetry.warm_start_applied =
+          combined_telemetry.warm_start_applied ||
+          refined_outcome.telemetry.warm_start_applied;
+        combined_telemetry.warm_start_rejected =
+          combined_telemetry.warm_start_rejected ||
+          refined_outcome.telemetry.warm_start_rejected;
+        combined_telemetry.cold_reset_after_failure =
+          combined_telemetry.cold_reset_after_failure ||
+          refined_outcome.telemetry.cold_reset_after_failure;
+        combined_telemetry.maximum_iterations_reached =
+          combined_telemetry.maximum_iterations_reached ||
+          refined_outcome.telemetry.maximum_iterations_reached;
+        combined_telemetry.setup_ms += refined_outcome.telemetry.setup_ms;
+        combined_telemetry.update_ms += refined_outcome.telemetry.update_ms;
+        combined_telemetry.warm_start_ms +=
+          refined_outcome.telemetry.warm_start_ms;
+        combined_telemetry.solve_ms += refined_outcome.telemetry.solve_ms;
+        combined_telemetry.total_ms += refined_outcome.telemetry.total_ms;
+        combined_telemetry.iterations += refined_outcome.telemetry.iterations;
+        combined_telemetry.status = refined_outcome.telemetry.status;
+        if (refined_outcome.result.has_value()) {
+          outcome = std::move(refined_outcome);
+          outcome.telemetry = combined_telemetry;
+          wall_refinement_succeeded = true;
+        } else {
+          outcome.telemetry = combined_telemetry;
+          wall_refinement_solve_failed = true;
+        }
+      }
+    }
+    if (
+      problem.progress_aligned_wall_refinement_active &&
+      !mpcc_lite_async_worker_context_ &&
+      cfg.v2x_behavior.overtake_line.debug_log_enabled &&
+      (!std::isfinite(progress_aligned_wall_refinement_last_log_sec_) ||
+      now_sec - progress_aligned_wall_refinement_last_log_sec_ >= 1.0))
+    {
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"),
+        "Extended MPCC progress-aligned wall RTI: valid=%d, feasible=%d, "
+        "applied=%d, attempted=%d, solved=%d, solve_failed=%d, "
+        "reason=%s, coupled_segments=%zu, out_of_range=%zu, "
+        "failure_stage=%d, progress_mismatch_max=%.3f m, source=%s",
+        wall_refinement.valid ? 1 : 0,
+        wall_refinement.feasible ? 1 : 0,
+        wall_refinement.applied ? 1 : 0,
+        wall_refinement_attempted ? 1 : 0,
+        wall_refinement_succeeded ? 1 : 0,
+        wall_refinement_solve_failed ? 1 : 0,
+        mpcc_progress::progress_aligned_wall_bounds_reason_name(
+          wall_refinement.reason),
+        wall_refinement.aligned_stage_count,
+        wall_refinement.out_of_range_stage_count,
+        wall_refinement.first_failure_stage,
+        wall_refinement.maximum_progress_mismatch_m,
+        problem.wall_contract_source.c_str());
+      progress_aligned_wall_refinement_last_log_sec_ = now_sec;
+    }
+    if (record_runtime_telemetry) {
+      record_osqp_telemetry(outcome, now_sec);
     }
     *last_solution = persistent_osqp::WarmStart{
       outcome.result->primal, outcome.result->dual};
@@ -26341,6 +26788,8 @@ struct MPC
   double last_osqp_telemetry_log_sec_{std::numeric_limits<double>::quiet_NaN()};
   ExtendedMpccTelemetryWindow extended_mpcc_telemetry_window_;
   double last_extended_mpcc_telemetry_log_sec_{
+    std::numeric_limits<double>::quiet_NaN()};
+  double progress_aligned_wall_refinement_last_log_sec_{
     std::numeric_limits<double>::quiet_NaN()};
   MpcRtiSqpTelemetryWindow rti_sqp_telemetry_window_;
   double last_rti_sqp_telemetry_log_sec_{std::numeric_limits<double>::quiet_NaN()};

@@ -591,6 +591,43 @@ TEST(MpccProgress, NormalizesExecutionPrimalWithCompleteFollowGapRowBlock)
     ExtendedExecutionPrimalNormalizationReason::Accepted);
 }
 
+TEST(MpccProgress, AcceptsExecutionContractsWithProgressCoupledWallRows)
+{
+  constexpr int horizon = 2;
+  constexpr int state_rows =
+    multi_purpose_mpc_ros::mpcc_progress::kExtendedStateDimension *
+    (horizon + 1);
+  constexpr int variable_rows = state_rows +
+    multi_purpose_mpc_ros::mpcc_progress::kExtendedInputDimension * horizon;
+  constexpr int standard_rows = state_rows + variable_rows + horizon;
+  constexpr int wall_rows = standard_rows + 2 * horizon;
+  Eigen::VectorXd primal = Eigen::VectorXd::Zero(variable_rows);
+  const auto [standard_lower, standard_upper] =
+    make_extended_test_bounds(horizon);
+  Eigen::VectorXd lower = Eigen::VectorXd::Constant(
+    wall_rows, -std::numeric_limits<double>::infinity());
+  Eigen::VectorXd upper = Eigen::VectorXd::Constant(
+    wall_rows, std::numeric_limits<double>::infinity());
+  lower.head(standard_rows) = standard_lower;
+  upper.head(standard_rows) = standard_upper;
+  Eigen::VectorXd violation = Eigen::VectorXd::Zero(wall_rows);
+  Eigen::VectorXd tolerance = Eigen::VectorXd::Constant(wall_rows, 1e-5);
+
+  const auto normalized =
+    multi_purpose_mpc_ros::mpcc_progress::normalize_extended_execution_primal(
+    primal, lower, upper, violation, tolerance, horizon);
+  const auto lateral = multi_purpose_mpc_ros::mpcc_progress::
+    evaluate_extended_lateral_constraint_contract(
+    violation, tolerance, horizon);
+
+  EXPECT_EQ(
+    normalized.reason,
+    multi_purpose_mpc_ros::mpcc_progress::
+    ExtendedExecutionPrimalNormalizationReason::Accepted);
+  EXPECT_TRUE(lateral.valid);
+  EXPECT_TRUE(lateral.satisfied);
+}
+
 TEST(MpccProgress, NormalizesCertifiedActuatorBoundaryForSemanticExecution)
 {
   constexpr int horizon = 2;
@@ -1253,6 +1290,96 @@ TEST(MpccProgress, KeepsCurrentExtendedBranchAfterNoReturn)
   ASSERT_TRUE(result.valid);
   EXPECT_EQ(result.selected_side_sign, 1);
   EXPECT_EQ(result.reason, ExtendedBranchSelectionReason::NoReturnCurrentSide);
+}
+
+TEST(MpccProgress, CouplesWallBoundsToSolvedProgressSegment)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::ProgressAlignedWallBoundsRequest;
+  using multi_purpose_mpc_ros::mpcc_progress::ProgressAlignedWallBoundsReason;
+  const auto result =
+    multi_purpose_mpc_ros::mpcc_progress::resolve_progress_aligned_wall_bounds(
+    ProgressAlignedWallBoundsRequest{
+      true,
+      {0.0, 10.0, 20.0},
+      {-1.0, 0.0, 0.5},
+      {2.0, 1.5, 1.0},
+      {5.0, 15.0},
+      {-2.0, -2.0},
+      {2.0, 2.0},
+      {0.0, 0.0},
+      {20.0, 20.0}});
+
+  ASSERT_TRUE(result.valid);
+  ASSERT_TRUE(result.feasible);
+  EXPECT_TRUE(result.applied);
+  EXPECT_EQ(result.reason, ProgressAlignedWallBoundsReason::Accepted);
+  ASSERT_EQ(result.progress_lower_m.size(), 2U);
+  ASSERT_EQ(result.progress_upper_m.size(), 2U);
+  ASSERT_EQ(result.wall_lower_slope.size(), 2U);
+  ASSERT_EQ(result.wall_upper_slope.size(), 2U);
+  EXPECT_NEAR(result.progress_lower_m[0], 0.0, 1e-12);
+  EXPECT_NEAR(result.progress_upper_m[0], 10.0, 1e-12);
+  EXPECT_NEAR(result.progress_lower_m[1], 10.0, 1e-12);
+  EXPECT_NEAR(result.progress_upper_m[1], 20.0, 1e-12);
+  EXPECT_NEAR(result.wall_lower_slope[0], 0.1, 1e-12);
+  EXPECT_NEAR(result.wall_lower_intercept[0], -1.0, 1e-12);
+  EXPECT_NEAR(result.wall_lower_slope[1], 0.05, 1e-12);
+  EXPECT_NEAR(result.wall_lower_intercept[1], -0.5, 1e-12);
+  EXPECT_NEAR(result.wall_upper_slope[0], -0.05, 1e-12);
+  EXPECT_NEAR(result.wall_upper_intercept[0], 2.0, 1e-12);
+  EXPECT_NEAR(result.wall_upper_slope[1], -0.05, 1e-12);
+  EXPECT_NEAR(result.wall_upper_intercept[1], 2.0, 1e-12);
+  EXPECT_EQ(result.aligned_stage_count, 2U);
+  EXPECT_NEAR(result.maximum_progress_mismatch_m, 5.0, 1e-12);
+}
+
+TEST(MpccProgress, RejectsCollapsedProgressAlignedWallCorridor)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::ProgressAlignedWallBoundsRequest;
+  using multi_purpose_mpc_ros::mpcc_progress::ProgressAlignedWallBoundsReason;
+  const auto result =
+    multi_purpose_mpc_ros::mpcc_progress::resolve_progress_aligned_wall_bounds(
+    ProgressAlignedWallBoundsRequest{
+      true,
+      {10.0, 20.0},
+      {0.5, 0.5},
+      {1.0, 1.0},
+      {15.0},
+      {-1.0},
+      {2.0},
+      {0.0},
+      {5.0}});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_FALSE(result.feasible);
+  EXPECT_FALSE(result.applied);
+  EXPECT_EQ(result.reason, ProgressAlignedWallBoundsReason::CorridorCollapsed);
+  EXPECT_EQ(result.first_failure_stage, 0);
+}
+
+TEST(MpccProgress, DoesNotExtrapolateWallBoundsOutsideProfile)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::ProgressAlignedWallBoundsRequest;
+  using multi_purpose_mpc_ros::mpcc_progress::ProgressAlignedWallBoundsReason;
+  const auto result =
+    multi_purpose_mpc_ros::mpcc_progress::resolve_progress_aligned_wall_bounds(
+    ProgressAlignedWallBoundsRequest{
+      true,
+      {10.0, 20.0},
+      {-0.5, -0.2},
+      {0.5, 0.8},
+      {5.0},
+      {-1.0},
+      {1.0},
+      {0.0},
+      {30.0}});
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_FALSE(result.feasible);
+  EXPECT_FALSE(result.applied);
+  EXPECT_EQ(result.reason, ProgressAlignedWallBoundsReason::NoCoveringSegment);
+  EXPECT_EQ(result.out_of_range_stage_count, 1U);
+  EXPECT_EQ(result.first_failure_stage, 0);
 }
 
 }  // namespace

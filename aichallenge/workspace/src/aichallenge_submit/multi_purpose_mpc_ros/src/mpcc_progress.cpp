@@ -696,9 +696,15 @@ ExtendedExecutionPrimalNormalization normalize_extended_execution_primal(
     state_rows + variable_rows + horizon_size;
   const int follow_constraint_rows =
     standard_constraint_rows + horizon_size + 1;
+  const int wall_constraint_rows =
+    standard_constraint_rows + 2 * horizon_size;
+  const int follow_wall_constraint_rows =
+    follow_constraint_rows + 2 * horizon_size;
   const bool supported_constraint_layout =
     constraint_lower.size() == standard_constraint_rows ||
-    constraint_lower.size() == follow_constraint_rows;
+    constraint_lower.size() == follow_constraint_rows ||
+    constraint_lower.size() == wall_constraint_rows ||
+    constraint_lower.size() == follow_wall_constraint_rows;
   if (
     primal.size() != variable_rows ||
     !supported_constraint_layout ||
@@ -1006,6 +1012,165 @@ std::optional<ProgressBounds> resolve_progress_bounds(
   {
     return std::nullopt;
   }
+  return result;
+}
+
+const char * progress_aligned_wall_bounds_reason_name(
+  const ProgressAlignedWallBoundsReason reason) noexcept
+{
+  switch (reason) {
+    case ProgressAlignedWallBoundsReason::NotRequested:
+      return "not-requested";
+    case ProgressAlignedWallBoundsReason::Accepted:
+      return "accepted";
+    case ProgressAlignedWallBoundsReason::InvalidInput:
+      return "invalid-input";
+    case ProgressAlignedWallBoundsReason::NoCoveringSegment:
+      return "no-covering-segment";
+    case ProgressAlignedWallBoundsReason::CorridorCollapsed:
+      return "corridor-collapsed";
+  }
+  return "unknown";
+}
+
+ProgressAlignedWallBoundsResolution resolve_progress_aligned_wall_bounds(
+  const ProgressAlignedWallBoundsRequest & request) noexcept
+{
+  ProgressAlignedWallBoundsResolution result;
+  if (!request.active) {
+    result.valid = true;
+    result.feasible = true;
+    result.reason = ProgressAlignedWallBoundsReason::NotRequested;
+    return result;
+  }
+
+  const std::size_t horizon = request.solved_progress_m.size();
+  const bool matching_wall_profile =
+    request.reference_progress_m.size() >= 2U &&
+    request.reference_progress_m.size() == request.wall_lower_m.size() &&
+    request.reference_progress_m.size() == request.wall_upper_m.size();
+  if (
+    horizon == 0U || !matching_wall_profile ||
+    request.current_lower_m.size() != horizon ||
+    request.current_upper_m.size() != horizon ||
+    request.current_progress_lower_m.size() != horizon ||
+    request.current_progress_upper_m.size() != horizon)
+  {
+    result.reason = ProgressAlignedWallBoundsReason::InvalidInput;
+    return result;
+  }
+
+  for (std::size_t sample = 0U; sample < request.reference_progress_m.size(); ++sample) {
+    if (
+      !std::isfinite(request.reference_progress_m[sample]) ||
+      !std::isfinite(request.wall_lower_m[sample]) ||
+      !std::isfinite(request.wall_upper_m[sample]) ||
+      request.wall_lower_m[sample] > request.wall_upper_m[sample] ||
+      (sample > 0U &&
+      request.reference_progress_m[sample] <=
+      request.reference_progress_m[sample - 1U]))
+    {
+      result.reason = ProgressAlignedWallBoundsReason::InvalidInput;
+      return result;
+    }
+  }
+  for (std::size_t stage = 0U; stage < horizon; ++stage) {
+    if (
+      !std::isfinite(request.solved_progress_m[stage]) ||
+      !std::isfinite(request.current_lower_m[stage]) ||
+      !std::isfinite(request.current_upper_m[stage]) ||
+      request.current_lower_m[stage] > request.current_upper_m[stage] ||
+      !std::isfinite(request.current_progress_lower_m[stage]) ||
+      !std::isfinite(request.current_progress_upper_m[stage]) ||
+      request.current_progress_lower_m[stage] >
+      request.current_progress_upper_m[stage])
+    {
+      result.reason = ProgressAlignedWallBoundsReason::InvalidInput;
+      return result;
+    }
+  }
+
+  result.progress_lower_m.reserve(horizon);
+  result.progress_upper_m.reserve(horizon);
+  result.wall_lower_slope.reserve(horizon);
+  result.wall_lower_intercept.reserve(horizon);
+  result.wall_upper_slope.reserve(horizon);
+  result.wall_upper_intercept.reserve(horizon);
+  const double first_progress = request.reference_progress_m.front();
+  const double last_progress = request.reference_progress_m.back();
+  for (std::size_t stage = 0U; stage < horizon; ++stage) {
+    const double solved_progress = request.solved_progress_m[stage];
+    const std::size_t reference_stage = std::min(
+      stage, request.reference_progress_m.size() - 1U);
+    result.maximum_progress_mismatch_m = std::max(
+      result.maximum_progress_mismatch_m,
+      std::abs(solved_progress - request.reference_progress_m[reference_stage]));
+    if (solved_progress < first_progress || solved_progress > last_progress) {
+      ++result.out_of_range_stage_count;
+      result.valid = true;
+      result.reason = ProgressAlignedWallBoundsReason::NoCoveringSegment;
+      result.first_failure_stage = static_cast<int>(stage);
+      return result;
+    }
+
+    auto upper_sample = std::lower_bound(
+      request.reference_progress_m.begin(),
+      request.reference_progress_m.end(), solved_progress);
+    if (upper_sample == request.reference_progress_m.begin()) {
+      ++upper_sample;
+    } else if (upper_sample == request.reference_progress_m.end()) {
+      --upper_sample;
+    }
+    const std::size_t upper_index = static_cast<std::size_t>(
+      std::distance(request.reference_progress_m.begin(), upper_sample));
+    const std::size_t lower_index = upper_index - 1U;
+    const double segment_lower = request.reference_progress_m[lower_index];
+    const double segment_upper = request.reference_progress_m[upper_index];
+    const double span = segment_upper - segment_lower;
+    if (!std::isfinite(span) || span <= 0.0) {
+      result.reason = ProgressAlignedWallBoundsReason::InvalidInput;
+      return result;
+    }
+    const double lower_slope =
+      (request.wall_lower_m[upper_index] -
+      request.wall_lower_m[lower_index]) / span;
+    const double upper_slope =
+      (request.wall_upper_m[upper_index] -
+      request.wall_upper_m[lower_index]) / span;
+    const double lower_intercept =
+      request.wall_lower_m[lower_index] - lower_slope * segment_lower;
+    const double upper_intercept =
+      request.wall_upper_m[lower_index] - upper_slope * segment_lower;
+    const double constrained_progress_lower = std::max(
+      request.current_progress_lower_m[stage], segment_lower);
+    const double constrained_progress_upper = std::min(
+      request.current_progress_upper_m[stage], segment_upper);
+    if (
+      !std::isfinite(lower_slope) || !std::isfinite(upper_slope) ||
+      !std::isfinite(lower_intercept) || !std::isfinite(upper_intercept))
+    {
+      result.reason = ProgressAlignedWallBoundsReason::InvalidInput;
+      return result;
+    }
+    if (constrained_progress_lower > constrained_progress_upper) {
+      result.valid = true;
+      result.reason = ProgressAlignedWallBoundsReason::CorridorCollapsed;
+      result.first_failure_stage = static_cast<int>(stage);
+      return result;
+    }
+    ++result.aligned_stage_count;
+    result.progress_lower_m.push_back(constrained_progress_lower);
+    result.progress_upper_m.push_back(constrained_progress_upper);
+    result.wall_lower_slope.push_back(lower_slope);
+    result.wall_lower_intercept.push_back(lower_intercept);
+    result.wall_upper_slope.push_back(upper_slope);
+    result.wall_upper_intercept.push_back(upper_intercept);
+  }
+
+  result.valid = true;
+  result.feasible = true;
+  result.applied = result.aligned_stage_count == horizon;
+  result.reason = ProgressAlignedWallBoundsReason::Accepted;
   return result;
 }
 
@@ -1589,9 +1754,15 @@ ExtendedLateralConstraintContract evaluate_extended_lateral_constraint_contract(
     state_rows + variable_rows + horizon_size;
   const int follow_constraint_rows =
     standard_constraint_rows + horizon_size + 1;
+  const int wall_constraint_rows =
+    standard_constraint_rows + 2 * horizon_size;
+  const int follow_wall_constraint_rows =
+    follow_constraint_rows + 2 * horizon_size;
   if (
     (constraint_violation.size() != standard_constraint_rows &&
-    constraint_violation.size() != follow_constraint_rows) ||
+    constraint_violation.size() != follow_constraint_rows &&
+    constraint_violation.size() != wall_constraint_rows &&
+    constraint_violation.size() != follow_wall_constraint_rows) ||
     constraint_tolerance.size() != constraint_violation.size())
   {
     return result;

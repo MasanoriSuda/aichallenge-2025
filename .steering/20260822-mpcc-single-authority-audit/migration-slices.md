@@ -411,6 +411,14 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   proving rejected evidence no longer survives. The remaining defect is the one-stage warm
   transform itself: 151/168 warm rejects were stage-zero acceleration. Make transport elapsed-time
   aware next; do not restore pre-certification storage or add cycle-local cold retry.
+- `.steering/20260824-stage-aligned-warm-start-transport` tested the more precise spatial-grid
+  form of that hypothesis. The identity resolver's exact/rolling overlap offset was connected to
+  primal and dual transport, built, and passed 1679 tests. In bounded runtime
+  `output/20260824-020904`, 189 warm outcomes used the intended zero-stage alignment, but Domain 2
+  still produced 212 execution-primal rejects (195 warm, 17 cold). The experiment was therefore
+  rejected and all source/test changes were removed. The next earliest break is the mismatch
+  between OSQP's successful convergence report and the downstream per-physical-row certificate;
+  inspect scaled/unscaled residual provenance and solver settings before modifying tolerances.
 
 ## Slice 6: Legacy and migration path removal
 

@@ -57,6 +57,21 @@ struct ConstraintResidualReport
   int maximum_normalized_row{-1};
 };
 
+/// Physical-unit provenance for the row that caused a post-solve constraint
+/// rejection. Values are computed from the original A, l and u, never from a
+/// solver-preconditioned problem.
+struct ConstraintFailureDiagnostic
+{
+  int row{-1};
+  double value{};
+  double projected{};
+  double lower_bound{};
+  double upper_bound{};
+  double violation{};
+  double tolerance{};
+  double normalized_violation{};
+};
+
 /// Evaluate every constraint row in its own numerical scale. This report is
 /// separate from OSQP's global infinity-norm termination test: one QP can
 /// contain metres, radians, velocity and course-progress values, so a large
@@ -70,9 +85,16 @@ std::optional<ConstraintResidualReport> evaluate_constraint_residuals(
   double relative_tolerance,
   double tolerance_multiplier = 1.0) noexcept;
 
+std::optional<ConstraintFailureDiagnostic> make_constraint_failure_diagnostic(
+  const ConstraintResidualReport & report,
+  const Eigen::VectorXd & constraint_values,
+  const Eigen::VectorXd & lower_bound,
+  const Eigen::VectorXd & upper_bound) noexcept;
+
 struct SolveOutcome
 {
   std::optional<SolveResult> result;
+  std::optional<ConstraintFailureDiagnostic> constraint_failure;
   std::string failure_detail;
   SolveTelemetry telemetry;
 };

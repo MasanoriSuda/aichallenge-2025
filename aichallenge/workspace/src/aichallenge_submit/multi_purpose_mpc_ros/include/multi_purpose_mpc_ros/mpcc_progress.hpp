@@ -160,6 +160,43 @@ inline constexpr int kExtendedAccelerationIndex = 0;
 inline constexpr int kExtendedCurvatureIndex = 1;
 inline constexpr int kExtendedVirtualProgressSpeedIndex = 2;
 
+enum class ExtendedConstraintRowKind
+{
+  Invalid,
+  DynamicsEquality,
+  StateBox,
+  InputBox,
+  CurvatureRate,
+};
+
+enum class ExtendedConstraintField
+{
+  None,
+  Lateral,
+  Lag,
+  Heading,
+  Velocity,
+  Progress,
+  Acceleration,
+  Curvature,
+  VirtualProgressSpeed,
+};
+
+struct ExtendedConstraintRowSemantic
+{
+  bool valid{false};
+  ExtendedConstraintRowKind kind{ExtendedConstraintRowKind::Invalid};
+  ExtendedConstraintField field{ExtendedConstraintField::None};
+  int stage{-1};
+};
+
+ExtendedConstraintRowSemantic decode_extended_constraint_row(
+  int row, int horizon_size) noexcept;
+const char * extended_constraint_row_kind_name(
+  ExtendedConstraintRowKind kind) noexcept;
+const char * extended_constraint_field_name(
+  ExtendedConstraintField field) noexcept;
+
 enum class ExtendedExecutionPrimalBoundaryField
 {
   None,

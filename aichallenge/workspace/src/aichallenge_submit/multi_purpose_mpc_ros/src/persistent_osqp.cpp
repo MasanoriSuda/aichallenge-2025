@@ -418,6 +418,47 @@ shift_mpc_warm_start(
   return shifted;
 }
 
+std::optional<ConstraintFailureDiagnostic> make_constraint_failure_diagnostic(
+  const ConstraintResidualReport & report,
+  const Eigen::VectorXd & constraint_values,
+  const Eigen::VectorXd & lower_bound,
+  const Eigen::VectorXd & upper_bound) noexcept
+{
+  const int row = report.maximum_normalized_row;
+  if (
+    row < 0 || row >= constraint_values.size() ||
+    constraint_values.size() != lower_bound.size() ||
+    lower_bound.size() != upper_bound.size() ||
+    report.violation.size() != constraint_values.size() ||
+    report.tolerance.size() != constraint_values.size() ||
+    !std::isfinite(constraint_values[row]) ||
+    !std::isfinite(report.violation[row]) ||
+    !std::isfinite(report.tolerance[row]) ||
+    !std::isfinite(report.maximum_normalized_violation))
+  {
+    return std::nullopt;
+  }
+  double projected = constraint_values[row];
+  if (std::isfinite(lower_bound[row])) {
+    projected = std::max(projected, lower_bound[row]);
+  }
+  if (std::isfinite(upper_bound[row])) {
+    projected = std::min(projected, upper_bound[row]);
+  }
+  if (!std::isfinite(projected)) {
+    return std::nullopt;
+  }
+  return ConstraintFailureDiagnostic{
+    row,
+    constraint_values[row],
+    projected,
+    lower_bound[row],
+    upper_bound[row],
+    report.violation[row],
+    report.tolerance[row],
+    report.maximum_normalized_violation};
+}
+
 struct PersistentOsqpSolver::Impl
 {
   std::unique_ptr<OSQPWorkspace, WorkspaceDeleter> workspace;
@@ -813,6 +854,8 @@ SolveOutcome PersistentOsqpSolver::solve(
     residual_report->maximum_normalized_violation > 1.0 :
     residual_report->maximum_absolute_violation > tolerance;
   if (constraint_rejected) {
+    outcome.constraint_failure = make_constraint_failure_diagnostic(
+      residual_report.value(), constraint_values, lower_bound, upper_bound);
     std::ostringstream detail;
     detail << "stage=constraint_check, max_violation="
            << residual_report->maximum_absolute_violation

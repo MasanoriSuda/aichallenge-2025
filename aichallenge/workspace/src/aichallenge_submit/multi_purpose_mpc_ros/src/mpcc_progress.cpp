@@ -535,6 +535,121 @@ const char * extended_execution_primal_normalization_reason_name(
   return "unknown";
 }
 
+const char * extended_constraint_row_kind_name(
+  const ExtendedConstraintRowKind kind) noexcept
+{
+  switch (kind) {
+    case ExtendedConstraintRowKind::Invalid:
+      return "invalid";
+    case ExtendedConstraintRowKind::DynamicsEquality:
+      return "dynamics-equality";
+    case ExtendedConstraintRowKind::StateBox:
+      return "state-box";
+    case ExtendedConstraintRowKind::InputBox:
+      return "input-box";
+    case ExtendedConstraintRowKind::CurvatureRate:
+      return "curvature-rate";
+  }
+  return "unknown";
+}
+
+const char * extended_constraint_field_name(
+  const ExtendedConstraintField field) noexcept
+{
+  switch (field) {
+    case ExtendedConstraintField::None:
+      return "none";
+    case ExtendedConstraintField::Lateral:
+      return "lateral";
+    case ExtendedConstraintField::Lag:
+      return "lag";
+    case ExtendedConstraintField::Heading:
+      return "heading";
+    case ExtendedConstraintField::Velocity:
+      return "velocity";
+    case ExtendedConstraintField::Progress:
+      return "progress";
+    case ExtendedConstraintField::Acceleration:
+      return "acceleration";
+    case ExtendedConstraintField::Curvature:
+      return "curvature";
+    case ExtendedConstraintField::VirtualProgressSpeed:
+      return "virtual-progress-speed";
+  }
+  return "unknown";
+}
+
+ExtendedConstraintRowSemantic decode_extended_constraint_row(
+  const int row, const int horizon_size) noexcept
+{
+  ExtendedConstraintRowSemantic result;
+  if (row < 0 || horizon_size <= 0) {
+    return result;
+  }
+  const int state_rows = kExtendedStateDimension * (horizon_size + 1);
+  const int input_rows = kExtendedInputDimension * horizon_size;
+  const int variable_rows = state_rows + input_rows;
+  const int box_offset = state_rows;
+  const int rate_offset = box_offset + variable_rows;
+  const int constraint_rows = rate_offset + horizon_size;
+  if (row >= constraint_rows) {
+    return result;
+  }
+  const auto state_field = [](const int index) {
+      switch (index) {
+        case kExtendedLateralIndex:
+          return ExtendedConstraintField::Lateral;
+        case kExtendedLagIndex:
+          return ExtendedConstraintField::Lag;
+        case kExtendedHeadingIndex:
+          return ExtendedConstraintField::Heading;
+        case kExtendedVelocityIndex:
+          return ExtendedConstraintField::Velocity;
+        case kExtendedProgressIndex:
+          return ExtendedConstraintField::Progress;
+        default:
+          return ExtendedConstraintField::None;
+      }
+    };
+  const auto input_field = [](const int index) {
+      switch (index) {
+        case kExtendedAccelerationIndex:
+          return ExtendedConstraintField::Acceleration;
+        case kExtendedCurvatureIndex:
+          return ExtendedConstraintField::Curvature;
+        case kExtendedVirtualProgressSpeedIndex:
+          return ExtendedConstraintField::VirtualProgressSpeed;
+        default:
+          return ExtendedConstraintField::None;
+      }
+    };
+  result.valid = true;
+  if (row < state_rows) {
+    result.kind = ExtendedConstraintRowKind::DynamicsEquality;
+    result.field = state_field(row % kExtendedStateDimension);
+    result.stage = row / kExtendedStateDimension;
+    return result;
+  }
+  if (row < rate_offset) {
+    const int variable = row - box_offset;
+    if (variable < state_rows) {
+      result.kind = ExtendedConstraintRowKind::StateBox;
+      result.field = state_field(variable % kExtendedStateDimension);
+      result.stage = variable / kExtendedStateDimension;
+    } else {
+      const int input = variable - state_rows;
+      result.kind = ExtendedConstraintRowKind::InputBox;
+      result.field = input_field(input % kExtendedInputDimension);
+      result.stage = input / kExtendedInputDimension;
+    }
+    return result;
+  }
+  result.kind = ExtendedConstraintRowKind::CurvatureRate;
+  result.field = ExtendedConstraintField::Curvature;
+  result.stage = row - rate_offset;
+  return result;
+}
+
 const char * extended_execution_primal_boundary_field_name(
   const ExtendedExecutionPrimalBoundaryField field) noexcept
 {

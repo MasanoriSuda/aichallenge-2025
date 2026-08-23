@@ -110,6 +110,33 @@ TEST(PersistentOsqpConstraintResiduals, RejectsMalformedToleranceContract)
     constraints, primal, bound, bound, 1e-3, 1e-3, 0.0).has_value());
 }
 
+TEST(PersistentOsqpConstraintResiduals, ReportsWorstRowInPhysicalCoordinates)
+{
+  const auto constraints = identity_constraints(2);
+  Eigen::VectorXd primal(2);
+  primal << 0.397, 500.0;
+  Eigen::VectorXd lower(2);
+  lower << 0.0, 0.0;
+  Eigen::VectorXd upper(2);
+  upper << 0.25, 1000.0;
+
+  const auto report = evaluate_constraint_residuals(
+    constraints, primal, lower, upper, 1e-3, 1e-3);
+  ASSERT_TRUE(report.has_value());
+  const auto diagnostic = make_constraint_failure_diagnostic(
+    report.value(), constraints * primal, lower, upper);
+
+  ASSERT_TRUE(diagnostic.has_value());
+  EXPECT_EQ(diagnostic->row, 0);
+  EXPECT_DOUBLE_EQ(diagnostic->value, 0.397);
+  EXPECT_DOUBLE_EQ(diagnostic->projected, 0.25);
+  EXPECT_DOUBLE_EQ(diagnostic->lower_bound, 0.0);
+  EXPECT_DOUBLE_EQ(diagnostic->upper_bound, 0.25);
+  EXPECT_NEAR(diagnostic->violation, 0.147, 1e-12);
+  EXPECT_NEAR(diagnostic->tolerance, 0.001397, 1e-12);
+  EXPECT_GT(diagnostic->normalized_violation, 100.0);
+}
+
 TEST(PersistentOsqpSolver, ReusesWorkspaceAndAppliesWarmStart) {
   PersistentOsqpSolver solver;
   const auto quadratic = diagonal_matrix({1.0});

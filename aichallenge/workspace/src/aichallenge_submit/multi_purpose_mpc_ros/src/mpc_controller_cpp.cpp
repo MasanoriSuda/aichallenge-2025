@@ -5783,6 +5783,9 @@ struct FollowShadowCycleResult
     std::numeric_limits<double>::quiet_NaN()};
   double execution_primal_rejected_tolerance{
     std::numeric_limits<double>::quiet_NaN()};
+  std::optional<persistent_osqp::ConstraintFailureDiagnostic>
+  solver_constraint_failure;
+  mpcc_progress::ExtendedConstraintRowSemantic solver_constraint_semantic;
   std::string status{"not-eligible"};
   std::string detail{"not-evaluated"};
 };
@@ -5799,6 +5802,11 @@ struct FollowShadowTelemetryWindow
   std::uint64_t accepted_count{};
   std::uint64_t warm_start_count{};
   std::uint64_t reset_count{};
+  std::uint64_t solver_constraint_failure_count{};
+  std::uint64_t velocity_box_failure_count{};
+  std::uint64_t virtual_progress_speed_box_failure_count{};
+  std::uint64_t curvature_rate_failure_count{};
+  std::uint64_t other_constraint_failure_count{};
   double total_build_ms{};
   double maximum_build_ms{};
   double total_solve_ms{};
@@ -21696,6 +21704,12 @@ struct MPC
       result.solver_context_reset =
         warm_resolution.reset_context || last_extended_branch_context_reset_;
       if (!outcome.result.has_value()) {
+        result.solver_constraint_failure = outcome.constraint_failure;
+        if (outcome.constraint_failure.has_value()) {
+          result.solver_constraint_semantic =
+            mpcc_progress::decode_extended_constraint_row(
+            outcome.constraint_failure->row, problem.N);
+        }
         result.status = "solve-failure";
         result.detail = outcome.failure_detail;
         return finish();
@@ -21813,6 +21827,31 @@ struct MPC
     window.accepted_count += result.longitudinal_contract_satisfied ? 1U : 0U;
     window.warm_start_count += result.warm_start_applied ? 1U : 0U;
     window.reset_count += result.solver_context_reset ? 1U : 0U;
+    if (result.solver_constraint_failure.has_value()) {
+      ++window.solver_constraint_failure_count;
+      if (
+        result.solver_constraint_semantic.kind ==
+          mpcc_progress::ExtendedConstraintRowKind::StateBox &&
+        result.solver_constraint_semantic.field ==
+          mpcc_progress::ExtendedConstraintField::Velocity)
+      {
+        ++window.velocity_box_failure_count;
+      } else if (
+        result.solver_constraint_semantic.kind ==
+          mpcc_progress::ExtendedConstraintRowKind::InputBox &&
+        result.solver_constraint_semantic.field ==
+          mpcc_progress::ExtendedConstraintField::VirtualProgressSpeed)
+      {
+        ++window.virtual_progress_speed_box_failure_count;
+      } else if (
+        result.solver_constraint_semantic.kind ==
+          mpcc_progress::ExtendedConstraintRowKind::CurvatureRate)
+      {
+        ++window.curvature_rate_failure_count;
+      } else {
+        ++window.other_constraint_failure_count;
+      }
+    }
     window.total_build_ms += result.build_ms;
     window.maximum_build_ms = std::max(window.maximum_build_ms, result.build_ms);
     window.total_solve_ms += result.solve_ms;
@@ -21827,7 +21866,12 @@ struct MPC
       "/" + result.target_id + "/" +
       mpcc_progress::extended_execution_primal_boundary_field_name(
       result.execution_primal_rejected_field) + "/" +
-      std::to_string(result.execution_primal_rejected_stage);
+      std::to_string(result.execution_primal_rejected_stage) + "/" +
+      mpcc_progress::extended_constraint_row_kind_name(
+      result.solver_constraint_semantic.kind) + "/" +
+      mpcc_progress::extended_constraint_field_name(
+      result.solver_constraint_semantic.field) + "/" +
+      std::to_string(result.solver_constraint_semantic.stage);
     if (status_key != last_follow_shadow_status_) {
       std::ostringstream message;
       message << "Follow MPCC shadow: decision=" << result.decision_id
@@ -21866,6 +21910,34 @@ struct MPC
               << result.execution_primal_rejected_violation
               << ", primal_tolerance="
               << result.execution_primal_rejected_tolerance
+              << ", solver_row="
+              << (result.solver_constraint_failure.has_value() ?
+        result.solver_constraint_failure->row : -1)
+              << '/' << mpcc_progress::extended_constraint_row_kind_name(
+        result.solver_constraint_semantic.kind)
+              << '/' << mpcc_progress::extended_constraint_field_name(
+        result.solver_constraint_semantic.field)
+              << '@' << result.solver_constraint_semantic.stage
+              << ", solver_value="
+              << (result.solver_constraint_failure.has_value() ?
+        result.solver_constraint_failure->value :
+        std::numeric_limits<double>::quiet_NaN())
+              << ", solver_bounds=["
+              << (result.solver_constraint_failure.has_value() ?
+        result.solver_constraint_failure->lower_bound :
+        std::numeric_limits<double>::quiet_NaN())
+              << ','
+              << (result.solver_constraint_failure.has_value() ?
+        result.solver_constraint_failure->upper_bound :
+        std::numeric_limits<double>::quiet_NaN())
+              << "], solver_violation="
+              << (result.solver_constraint_failure.has_value() ?
+        result.solver_constraint_failure->violation :
+        std::numeric_limits<double>::quiet_NaN())
+              << ", solver_tolerance="
+              << (result.solver_constraint_failure.has_value() ?
+        result.solver_constraint_failure->tolerance :
+        std::numeric_limits<double>::quiet_NaN())
               << ", status=" << result.status
               << ", detail=" << result.detail
               << ", authority=shadow, selected=0";
@@ -21893,6 +21965,7 @@ struct MPC
         "Follow MPCC shadow runtime: eligible=%zu, contract=%zu, metadata=%zu, "
         "build=%zu, attempts=%zu, solved=%zu, primal=%zu, accepted=%zu/%.1f%%, "
         "warm=%zu, reset=%zu, build_ms=%.3f/%.3f(avg/max), "
+        "row_reject=%zu(velocity=%zu,progress_speed=%zu,curvature_rate=%zu,other=%zu), "
         "solve_ms=%.3f/%.3f(avg/max), total_ms=%.3f/%.3f(avg/max), "
         "last=%s, detail=%s, ego_v=%.3f, target_gap=%.3f, target_v=%.3f, "
         "v_ref0=%.3f, v_upper0=%.3f, terminal_s_bounds=[%.3f,%.3f], "
@@ -21910,6 +21983,12 @@ struct MPC
         static_cast<std::size_t>(window.warm_start_count),
         static_cast<std::size_t>(window.reset_count),
         window.total_build_ms / eligible, window.maximum_build_ms,
+        static_cast<std::size_t>(window.solver_constraint_failure_count),
+        static_cast<std::size_t>(window.velocity_box_failure_count),
+        static_cast<std::size_t>(
+          window.virtual_progress_speed_box_failure_count),
+        static_cast<std::size_t>(window.curvature_rate_failure_count),
+        static_cast<std::size_t>(window.other_constraint_failure_count),
         window.total_solve_ms / attempts, window.maximum_solve_ms,
         window.total_ms / eligible, window.maximum_total_ms,
         result.status.c_str(), result.detail.c_str(),

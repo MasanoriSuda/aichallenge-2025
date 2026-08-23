@@ -354,6 +354,58 @@ TEST(MpccProgress, RejectsNonfiniteFiveStatePoseWithStageProvenance)
   EXPECT_EQ(diagnostic.stage, 0);
 }
 
+TEST(MpccProgress, DecodesEveryExtendedConstraintRowFamily)
+{
+  constexpr int horizon = 20;
+  using multi_purpose_mpc_ros::mpcc_progress::ExtendedConstraintField;
+  using multi_purpose_mpc_ros::mpcc_progress::ExtendedConstraintRowKind;
+  const auto dynamics =
+    multi_purpose_mpc_ros::mpcc_progress::decode_extended_constraint_row(
+    38, horizon);
+  const auto velocity_box =
+    multi_purpose_mpc_ros::mpcc_progress::decode_extended_constraint_row(
+    143, horizon);
+  const auto progress_speed_box =
+    multi_purpose_mpc_ros::mpcc_progress::decode_extended_constraint_row(
+    212, horizon);
+  const auto first_curvature_rate =
+    multi_purpose_mpc_ros::mpcc_progress::decode_extended_constraint_row(
+    270, horizon);
+
+  EXPECT_TRUE(dynamics.valid);
+  EXPECT_EQ(dynamics.kind, ExtendedConstraintRowKind::DynamicsEquality);
+  EXPECT_EQ(dynamics.field, ExtendedConstraintField::Velocity);
+  EXPECT_EQ(dynamics.stage, 7);
+  EXPECT_TRUE(velocity_box.valid);
+  EXPECT_EQ(velocity_box.kind, ExtendedConstraintRowKind::StateBox);
+  EXPECT_EQ(velocity_box.field, ExtendedConstraintField::Velocity);
+  EXPECT_EQ(velocity_box.stage, 7);
+  EXPECT_TRUE(progress_speed_box.valid);
+  EXPECT_EQ(progress_speed_box.kind, ExtendedConstraintRowKind::InputBox);
+  EXPECT_EQ(
+    progress_speed_box.field,
+    ExtendedConstraintField::VirtualProgressSpeed);
+  EXPECT_EQ(progress_speed_box.stage, 0);
+  EXPECT_TRUE(first_curvature_rate.valid);
+  EXPECT_EQ(
+    first_curvature_rate.kind, ExtendedConstraintRowKind::CurvatureRate);
+  EXPECT_EQ(first_curvature_rate.field, ExtendedConstraintField::Curvature);
+  EXPECT_EQ(first_curvature_rate.stage, 0);
+}
+
+TEST(MpccProgress, RejectsInvalidExtendedConstraintRows)
+{
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::mpcc_progress::decode_extended_constraint_row(
+    -1, 20).valid);
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::mpcc_progress::decode_extended_constraint_row(
+    290, 20).valid);
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::mpcc_progress::decode_extended_constraint_row(
+    0, 0).valid);
+}
+
 TEST(MpccProgress, ChecksOnlyFiveStatePredictedLateralRowsInTheirOwnUnits)
 {
   constexpr int horizon = 2;

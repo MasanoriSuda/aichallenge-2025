@@ -44,3 +44,20 @@ Pending. A useful run must contain all of the following in order:
 
 If the run contains no such fresh-miss event, it is evidence of neither acceptance nor rejection and
 will be recorded as inconclusive. Follow production authority is not promoted by this Slice.
+
+### Attempt `output/20260823-175836`
+
+Result: infrastructure-inconclusive; it is not a Follow retained rejection.
+
+- `make dev2` started AWSIM and both Autoware domains.
+- Both Domain 1 and Domain 2 exposed an `awsim_dN` publisher for `/awsim/state` and accepted the
+  normal initial-pose/control-mode requests.
+- Both orchestrators remained in `WAIT_START` waiting for `Grounded, Ready, Start`.
+- Domain 1 observed only `state=spawned`, received one odometry recovery, and returned to stale
+  odometry after 0.5 seconds. Domain 2 observed no AWSIM state or odometry recovery.
+- Neither log entered `race session changed: active=1`; no Follow fresh or retained shadow event was
+  generated.
+
+The containers were stopped with `make down`. This run cannot satisfy or falsify the dynamic gate.
+The next valid run must first demonstrate a normally advancing AWSIM race before its Follow evidence
+is interpreted.

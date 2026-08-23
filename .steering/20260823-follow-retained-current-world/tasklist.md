@@ -9,6 +9,7 @@
 - [x] Connect retained Follow evaluation in shadow and add typed telemetry.
 - [x] Run focused tests and full package tests.
 - [x] Run `make autoware-build` and recompile the final controller target after the naming cleanup.
-- [ ] Obtain dynamic retained-shadow evidence if a typed fresh miss occurs.
+- [ ] Obtain dynamic retained-shadow evidence if a typed fresh miss occurs. The first autonomous
+  `dev2` attempt did not enter a race and is recorded as infrastructure-inconclusive.
 - [x] Update static validation and migration-slice status.
-- [ ] Commit without staging `aichallenge/result-summary.json`.
+- [x] Commit implementation without staging `aichallenge/result-summary.json` (`4081687`).

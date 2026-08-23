@@ -476,6 +476,15 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   `stage-gap-violation` lines and 652 Follow emergency-authority traces while the measured front gap
   was roughly 14 m. Audit the Follow retained target-tube time/progress alignment in a separate
   Slice before repeating the Overtake live gate; production promotion remains blocked.
+- `.steering/20260824-follow-planning-gap-contract` repairs that upstream Follow defect. Nominal
+  planning reserve (4.0 m) and the physical fail-closed boundary (2.05 m) now have separate typed
+  identities; the target tube is rebased once from ego-relative V2X distance to the five-state
+  MPCC progress origin, and duplicate theta-only/`theta+e_lag` target constraints were reduced to
+  one coordinate-consistent separation row. In `output/20260824-055552`, retained
+  `stage-gap-violation` fell from 611 to 4 and Follow emergency traces from 651 to 17 while the
+  accepted retained minimum stayed at or above 3.655 m. The four residual rejects coincide with
+  two target-speed-to-zero discontinuities at stage 7 and are a separate input-continuity Slice.
+  Overtake live promotion remains blocked by executed wall-path failures observed after entry.
 
 ## Slice 6: Legacy and migration path removal
 

@@ -408,14 +408,14 @@ const char * follow_longitudinal_contract_reason_name(
       return "stale-target-observation";
     case FollowLongitudinalContractReason::InvalidTargetKinematics:
       return "invalid-target-kinematics";
+    case FollowLongitudinalContractReason::InvalidProgressOrigin:
+      return "invalid-progress-origin";
     case FollowLongitudinalContractReason::InvalidConfiguration:
       return "invalid-configuration";
     case FollowLongitudinalContractReason::InvalidHorizon:
       return "invalid-horizon";
     case FollowLongitudinalContractReason::InitialHardGapViolation:
       return "initial-hard-gap-violation";
-    case FollowLongitudinalContractReason::InfeasibleProgressInterval:
-      return "infeasible-progress-interval";
   }
   return "unknown";
 }
@@ -426,6 +426,8 @@ FollowLongitudinalContract build_follow_longitudinal_contract(
   FollowLongitudinalContract result;
   result.target_id = request.target_id;
   result.target_observation_generation = request.target_observation_generation;
+  result.current_target_gap_m = request.current_target_relative_progress_m;
+  result.current_ego_progress_offset_m = request.current_ego_progress_offset_m;
   result.hard_gap_m = request.hard_gap_m;
   if (request.intent != mpcc_execution_contract::ControlIntent::Follow) {
     result.reason = FollowLongitudinalContractReason::IntentNotFollow;
@@ -468,6 +470,10 @@ FollowLongitudinalContract build_follow_longitudinal_contract(
     !std::isfinite(request.target_speed_mps) || request.target_speed_mps < 0.0)
   {
     result.reason = FollowLongitudinalContractReason::InvalidTargetKinematics;
+    return result;
+  }
+  if (!std::isfinite(request.current_ego_progress_offset_m)) {
+    result.reason = FollowLongitudinalContractReason::InvalidProgressOrigin;
     return result;
   }
   if (
@@ -518,6 +524,14 @@ FollowLongitudinalContract build_follow_longitudinal_contract(
     return result;
   }
 
+  // Planning must preserve the configured nominal gap whenever it is already
+  // available. If the current observation is inside that nominal gap, freeze
+  // the current physical gap instead of making state zero infeasible. The
+  // independent hard-gap certificate remains the physical failure boundary.
+  result.planning_gap_m = std::clamp(
+    request.current_target_relative_progress_m,
+    request.hard_gap_m, request.desired_gap_m);
+
   result.elapsed_time_sec.reserve(horizon_steps + 1U);
   result.target_progress_m.reserve(horizon_steps + 1U);
   result.progress_reference_m.reserve(horizon_steps + 1U);
@@ -532,18 +546,11 @@ FollowLongitudinalContract build_follow_longitudinal_contract(
       elapsed_sec += request.stage_dt_sec[state - 1U];
     }
     const double target_progress =
+      request.current_ego_progress_offset_m +
       request.current_target_relative_progress_m +
       request.target_speed_mps * elapsed_sec;
     const double desired_progress = std::max(
       0.0, target_progress - request.desired_gap_m);
-    const double hard_progress_upper =
-      target_progress - request.hard_gap_m;
-    const double progress_upper = std::min(
-      request.base_progress_upper_m[state], hard_progress_upper);
-    if (!std::isfinite(progress_upper) || progress_upper < -1e-9) {
-      result.reason = FollowLongitudinalContractReason::InfeasibleProgressInterval;
-      return result;
-    }
     result.elapsed_time_sec.push_back(elapsed_sec);
     result.target_progress_m.push_back(target_progress);
     result.progress_reference_m.push_back(std::min(
@@ -551,7 +558,11 @@ FollowLongitudinalContract build_follow_longitudinal_contract(
     // Normal Follow may hold its current progress. Monotonicity is enforced
     // by the non-negative virtual-progress input in the five-state model.
     result.progress_lower_m.push_back(0.0);
-    result.progress_upper_m.push_back(std::max(0.0, progress_upper));
+    // Generic progress bounds own theta feasibility. The physical Follow gap
+    // is a theta+e_lag constraint assembled once by the five-state QP; folding
+    // it into theta-only bounds here would apply the same concept twice in
+    // incompatible coordinates.
+    result.progress_upper_m.push_back(request.base_progress_upper_m[state]);
   }
 
   const bool moving_target =

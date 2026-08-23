@@ -73,16 +73,18 @@ struct CurrentWorldProofResult
 };
 
 /// Current dynamic-target tube used to re-certify a retained Follow plan.
-/// Progress values are relative to the current ego course-progress origin;
-/// elapsed time starts at zero and covers the complete retained window.
+/// Progress values are relative to the current MPCC course-progress origin;
+/// elapsed time starts at zero and covers the complete retained window. The
+/// separately sealed `current_target_gap_m` remains ego-relative.
 struct FollowDynamicObstacleObservation
 {
   std::string target_id;
   std::uint64_t observation_generation{};
   double observation_sec{};
+  double current_target_gap_m{std::numeric_limits<double>::quiet_NaN()};
   double hard_gap_m{};
   std::vector<double> elapsed_time_sec;
-  std::vector<double> target_relative_progress_m;
+  std::vector<double> target_progress_from_current_origin_m;
   std::uint64_t tube_id{};
   bool current{false};
 };

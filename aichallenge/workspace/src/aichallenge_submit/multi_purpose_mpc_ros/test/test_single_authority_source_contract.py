@@ -51,3 +51,19 @@ def test_overtake_worker_fresh_chain_uses_sealed_snapshot_context() -> None:
 
     assert "const auto context = make_problem_context(" not in fresh
     assert "const auto & context = snapshot_context;" in fresh
+
+
+def test_follow_qp_keeps_planning_and_physical_gap_contracts_separate() -> None:
+    """Nominal feasibility must not consume the physical hard-gap boundary."""
+
+    assert (
+        "legacy.follow_longitudinal_contract.planning_gap_m" in SOURCE
+    )
+    assert (
+        "legacy.follow_longitudinal_contract.target_progress_m[\n"
+        "          static_cast<std::size_t>(state)] -\n"
+        "          legacy.follow_longitudinal_contract.planning_gap_m"
+    ) in SOURCE
+    assert (
+        "problem.follow_longitudinal_contract.hard_gap_m" in SOURCE
+    )

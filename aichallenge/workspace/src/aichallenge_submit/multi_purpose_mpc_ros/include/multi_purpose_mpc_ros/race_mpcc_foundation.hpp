@@ -267,10 +267,10 @@ enum class FollowLongitudinalContractReason
   InvalidTargetObservation,
   StaleTargetObservation,
   InvalidTargetKinematics,
+  InvalidProgressOrigin,
   InvalidConfiguration,
   InvalidHorizon,
   InitialHardGapViolation,
-  InfeasibleProgressInterval,
 };
 
 const char * follow_longitudinal_contract_reason_name(
@@ -288,6 +288,11 @@ struct FollowLongitudinalContractRequest
   double target_observation_age_sec{std::numeric_limits<double>::infinity()};
   double maximum_target_observation_age_sec{};
   double current_target_relative_progress_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  /// Current ego progress relative to the MPCC progress origin. Target
+  /// progress is expressed in that same frame as this offset plus the
+  /// ego-relative target distance.
+  double current_ego_progress_offset_m{
     std::numeric_limits<double>::quiet_NaN()};
   double current_ego_speed_mps{std::numeric_limits<double>::quiet_NaN()};
   double target_speed_mps{std::numeric_limits<double>::quiet_NaN()};
@@ -314,6 +319,10 @@ struct FollowLongitudinalContract
     FollowLongitudinalContractReason::InvalidHorizon};
   std::string target_id;
   std::uint64_t target_observation_generation{};
+  double current_target_gap_m{std::numeric_limits<double>::quiet_NaN()};
+  double current_ego_progress_offset_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double planning_gap_m{std::numeric_limits<double>::quiet_NaN()};
   double hard_gap_m{std::numeric_limits<double>::quiet_NaN()};
   std::vector<double> elapsed_time_sec;
   std::vector<double> target_progress_m;

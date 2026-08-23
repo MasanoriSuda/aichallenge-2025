@@ -123,17 +123,19 @@ bool follow_observation_shape_valid(
     observation.target_id.empty() || observation.observation_generation == 0U ||
     !std::isfinite(observation.observation_sec) ||
     observation.observation_sec < 0.0 ||
+    !std::isfinite(observation.current_target_gap_m) ||
+    observation.current_target_gap_m < 0.0 ||
     !std::isfinite(observation.hard_gap_m) || observation.hard_gap_m < 0.0 ||
     observation.elapsed_time_sec.size() < 2U ||
     observation.elapsed_time_sec.size() !=
-    observation.target_relative_progress_m.size())
+    observation.target_progress_from_current_origin_m.size())
   {
     return false;
   }
   if (
     std::abs(observation.elapsed_time_sec.front()) > kIdentityTolerance ||
-    !std::isfinite(observation.target_relative_progress_m.front()) ||
-    observation.target_relative_progress_m.front() < 0.0)
+    !std::isfinite(
+      observation.target_progress_from_current_origin_m.front()))
   {
     return false;
   }
@@ -142,9 +144,11 @@ bool follow_observation_shape_valid(
       !std::isfinite(observation.elapsed_time_sec[index]) ||
       observation.elapsed_time_sec[index] <=
       observation.elapsed_time_sec[index - 1U] ||
-      !std::isfinite(observation.target_relative_progress_m[index]) ||
-      observation.target_relative_progress_m[index] + kIdentityTolerance <
-      observation.target_relative_progress_m[index - 1U])
+      !std::isfinite(
+        observation.target_progress_from_current_origin_m[index]) ||
+      observation.target_progress_from_current_origin_m[index] +
+      kIdentityTolerance <
+      observation.target_progress_from_current_origin_m[index - 1U])
     {
       return false;
     }
@@ -163,18 +167,18 @@ std::optional<double> sample_follow_target_progress(
     return std::nullopt;
   }
   if (relative_time_sec <= kIdentityTolerance) {
-    return observation.target_relative_progress_m.front();
+    return observation.target_progress_from_current_origin_m.front();
   }
   const auto upper = std::lower_bound(
     observation.elapsed_time_sec.begin(), observation.elapsed_time_sec.end(),
     relative_time_sec);
   if (upper == observation.elapsed_time_sec.end()) {
-    return observation.target_relative_progress_m.back();
+    return observation.target_progress_from_current_origin_m.back();
   }
   const std::size_t upper_index = static_cast<std::size_t>(
     std::distance(observation.elapsed_time_sec.begin(), upper));
   if (std::abs(*upper - relative_time_sec) <= kIdentityTolerance) {
-    return observation.target_relative_progress_m[upper_index];
+    return observation.target_progress_from_current_origin_m[upper_index];
   }
   if (upper_index == 0U) {
     return std::nullopt;
@@ -185,10 +189,10 @@ std::optional<double> sample_follow_target_progress(
     observation.elapsed_time_sec[lower_index];
   const double fraction =
     (relative_time_sec - observation.elapsed_time_sec[lower_index]) / duration;
-  return observation.target_relative_progress_m[lower_index] +
+  return observation.target_progress_from_current_origin_m[lower_index] +
     fraction *
-    (observation.target_relative_progress_m[upper_index] -
-    observation.target_relative_progress_m[lower_index]);
+    (observation.target_progress_from_current_origin_m[upper_index] -
+    observation.target_progress_from_current_origin_m[lower_index]);
 }
 
 bool overtake_corridor_shape_valid(
@@ -523,11 +527,13 @@ std::uint64_t fingerprint_follow_obstacle_observation(
   builder.add_string(observation.target_id);
   builder.add_uint64(observation.observation_generation);
   builder.add_double(observation.observation_sec);
+  builder.add_double(observation.current_target_gap_m);
   builder.add_double(observation.hard_gap_m);
   builder.add_size(observation.elapsed_time_sec.size());
   for (std::size_t index = 0U; index < observation.elapsed_time_sec.size(); ++index) {
     builder.add_double(observation.elapsed_time_sec[index]);
-    builder.add_double(observation.target_relative_progress_m[index]);
+    builder.add_double(
+      observation.target_progress_from_current_origin_m[index]);
   }
   return builder.value();
 }
@@ -803,19 +809,19 @@ FollowCurrentWorldProofResult build_follow_current_world_retained_proof(
     return result;
   }
 
-  const auto current_target_relative = sample_follow_target_progress(
+  const auto current_target_from_origin = sample_follow_target_progress(
     request.target, 0.0);
-  if (!current_target_relative.has_value()) {
+  if (!current_target_from_origin.has_value()) {
     result.reason = FollowCurrentWorldProofReason::TargetHorizonUnavailable;
     return result;
   }
   const double current_target_absolute =
-    lift.lifted_progress_m + current_target_relative.value();
+    lift.lifted_progress_m + current_target_from_origin.value();
   const double expected_current_ego =
     window.window->expected_current_state.progress_m +
     window.window->expected_current_state.lag_m;
   const double current_gap = std::min(
-    current_target_relative.value(),
+    request.target.current_target_gap_m,
     current_target_absolute - expected_current_ego);
   result.minimum_gap_m = current_gap;
   if (!std::isfinite(current_gap) ||

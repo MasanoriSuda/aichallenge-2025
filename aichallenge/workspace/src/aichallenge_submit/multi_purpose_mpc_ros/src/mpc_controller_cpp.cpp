@@ -5839,6 +5839,10 @@ struct FollowShadowCycleResult
   int iterations{};
   double measured_ego_speed_mps{std::numeric_limits<double>::quiet_NaN()};
   double current_target_gap_m{std::numeric_limits<double>::quiet_NaN()};
+  double planning_gap_m{std::numeric_limits<double>::quiet_NaN()};
+  double hard_gap_m{std::numeric_limits<double>::quiet_NaN()};
+  double current_ego_progress_offset_m{
+    std::numeric_limits<double>::quiet_NaN()};
   double predicted_target_speed_mps{std::numeric_limits<double>::quiet_NaN()};
   double initial_velocity_reference_mps{std::numeric_limits<double>::quiet_NaN()};
   double initial_velocity_upper_mps{std::numeric_limits<double>::quiet_NaN()};
@@ -19101,6 +19105,21 @@ struct MPC
 
     race_mpcc::FollowLongitudinalContract follow_longitudinal_contract;
     if (follow_shadow_requested && progress_metadata_available) {
+      const auto & follow_origin_waypoint =
+        model->reference_path->get_waypoint(
+        effective_progress_geometry->tracking_waypoint);
+      const auto follow_initial_frenet_pose =
+        mpcc_contract::project_planar_pose_to_frenet(
+        mpcc_contract::PlanarPose{
+          model->temporal_state.x, model->temporal_state.y,
+          model->temporal_state.psi},
+        mpcc_contract::PlanarPose{
+          follow_origin_waypoint.x, follow_origin_waypoint.y,
+          follow_origin_waypoint.psi});
+      const double follow_ego_progress_offset_m =
+        follow_initial_frenet_pose.has_value() ?
+        follow_initial_frenet_pose->lag_m :
+        std::numeric_limits<double>::quiet_NaN();
       std::vector<double> base_progress_reference_m;
       std::vector<double> base_progress_upper_m;
       std::vector<double> base_velocity_reference_mps;
@@ -19138,6 +19157,7 @@ struct MPC
           raw_target_age_sec,
           cfg.v2x_gap.timeout_sec,
           behavior_output.front_distance,
+          follow_ego_progress_offset_m,
           std::max(0.0, current_speed_mps_),
           behavior_output.front_speed,
           cfg.v2x_behavior.moving_front_speed_threshold,
@@ -19704,7 +19724,10 @@ struct MPC
       static_cast<std::size_t>(N) ||
       legacy.follow_longitudinal_contract.velocity_upper_mps.size() !=
       static_cast<std::size_t>(N) ||
+      !std::isfinite(legacy.follow_longitudinal_contract.planning_gap_m) ||
       !std::isfinite(legacy.follow_longitudinal_contract.hard_gap_m) ||
+      legacy.follow_longitudinal_contract.planning_gap_m + 1e-9 <
+      legacy.follow_longitudinal_contract.hard_gap_m ||
       legacy.follow_longitudinal_contract.hard_gap_m < 0.0))
     {
       reject_reason = "Follow longitudinal contract horizon malformed";
@@ -19727,6 +19750,17 @@ struct MPC
     const double initial_lag_m =
       (legacy.track_cruise_shadow_requested || legacy.follow_shadow_requested) ?
       initial_frenet_pose->lag_m : 0.0;
+    if (
+      legacy.follow_shadow_requested &&
+      (!std::isfinite(
+        legacy.follow_longitudinal_contract.current_ego_progress_offset_m) ||
+      std::abs(
+        legacy.follow_longitudinal_contract.current_ego_progress_offset_m -
+        initial_lag_m) > 1e-9))
+    {
+      reject_reason = "Follow progress-origin alignment mismatch";
+      return std::nullopt;
+    }
     if (
       std::abs(initial_lag_m) >
       cfg.progress_contouring.extended_lag_state_bound_m + 1e-6)
@@ -19998,7 +20032,7 @@ struct MPC
         upper[bound_offset + state] =
           legacy.follow_longitudinal_contract.target_progress_m[
           static_cast<std::size_t>(state)] -
-          legacy.follow_longitudinal_contract.hard_gap_m;
+          legacy.follow_longitudinal_contract.planning_gap_m;
       }
       bound_offset += follow_gap_row_count;
     }
@@ -22717,9 +22751,11 @@ struct MPC
     proof_request.target.observation_generation =
       follow_contract.target_observation_generation;
     proof_request.target.observation_sec = target_provenance.receipt_sec;
+    proof_request.target.current_target_gap_m =
+      follow_contract.current_target_gap_m;
     proof_request.target.hard_gap_m = follow_contract.hard_gap_m;
     proof_request.target.elapsed_time_sec = follow_contract.elapsed_time_sec;
-    proof_request.target.target_relative_progress_m =
+    proof_request.target.target_progress_from_current_origin_m =
       follow_contract.target_progress_m;
     proof_request.target.current = target_current;
     proof_request.target.tube_id =
@@ -22832,8 +22868,12 @@ struct MPC
       problem.follow_longitudinal_contract.target_observation_generation;
     result.measured_ego_speed_mps = problem.progress_measured_speed_mps;
     const auto & follow_contract = problem.follow_longitudinal_contract;
+    result.planning_gap_m = follow_contract.planning_gap_m;
+    result.hard_gap_m = follow_contract.hard_gap_m;
+    result.current_ego_progress_offset_m =
+      follow_contract.current_ego_progress_offset_m;
     if (!follow_contract.target_progress_m.empty()) {
-      result.current_target_gap_m = follow_contract.target_progress_m.front();
+      result.current_target_gap_m = follow_contract.current_target_gap_m;
     }
     if (
       follow_contract.target_progress_m.size() >= 2U &&
@@ -23782,6 +23822,9 @@ struct MPC
               << result.canonical_actuation_maximum_difference
               << ", ego_v=" << result.measured_ego_speed_mps
               << "mps, target_gap=" << result.current_target_gap_m
+              << "m, gap_contract=" << result.planning_gap_m << '/'
+              << result.hard_gap_m << "m, ego_progress_offset="
+              << result.current_ego_progress_offset_m
               << "m, target_v=" << result.predicted_target_speed_mps
               << "mps, v_ref0=" << result.initial_velocity_reference_mps
               << "mps, v_upper0=" << result.initial_velocity_upper_mps

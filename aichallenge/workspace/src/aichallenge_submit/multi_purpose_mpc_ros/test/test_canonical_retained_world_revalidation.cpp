@@ -139,9 +139,10 @@ world::FollowCurrentWorldProofRequest make_follow_request()
   request.target.target_id = "d2";
   request.target.observation_generation = 8U;
   request.target.observation_sec = 10.6;
+  request.target.current_target_gap_m = 5.0;
   request.target.hard_gap_m = 3.0;
   request.target.elapsed_time_sec = {0.0, 0.4, 1.4};
-  request.target.target_relative_progress_m = {5.0, 5.2, 5.7};
+  request.target.target_progress_from_current_origin_m = {5.0, 5.2, 5.7};
   request.target.current = true;
   request.target.tube_id =
     world::fingerprint_follow_obstacle_observation(request.target);
@@ -307,7 +308,7 @@ TEST(CanonicalRetainedWorldRevalidation, RejectsFollowTargetIdentityAndTubeMutat
     world::FollowCurrentWorldProofReason::TargetIdentityMismatch);
 
   auto changed_tube = make_follow_request();
-  changed_tube.target.target_relative_progress_m.back() += 0.5;
+  changed_tube.target.target_progress_from_current_origin_m.back() += 0.5;
   EXPECT_EQ(
     world::build_follow_current_world_retained_proof(
       execution_plan, cursor, changed_tube,
@@ -322,7 +323,8 @@ TEST(CanonicalRetainedWorldRevalidation, RejectsFollowCurrentAndFutureHardGap)
   const footprint::FootprintExtents extents{0.15, 0.15, 0.10, 0.10, 0.0};
 
   auto current_gap = make_follow_request();
-  current_gap.target.target_relative_progress_m = {2.9, 3.1, 3.6};
+  current_gap.target.current_target_gap_m = 2.9;
+  current_gap.target.target_progress_from_current_origin_m = {2.9, 3.1, 3.6};
   current_gap.target.tube_id =
     world::fingerprint_follow_obstacle_observation(current_gap.target);
   current_gap.current.obstacle_tube_id = current_gap.target.tube_id;
@@ -333,7 +335,7 @@ TEST(CanonicalRetainedWorldRevalidation, RejectsFollowCurrentAndFutureHardGap)
     world::FollowCurrentWorldProofReason::InitialHardGapViolation);
 
   auto future_gap = make_follow_request();
-  future_gap.target.target_relative_progress_m = {5.0, 3.0, 3.0};
+  future_gap.target.target_progress_from_current_origin_m = {5.0, 3.0, 3.0};
   // A regressing target tube is malformed and must fail before it can be used
   // to manufacture a future gap certificate.
   future_gap.target.tube_id = 1U;
@@ -345,7 +347,7 @@ TEST(CanonicalRetainedWorldRevalidation, RejectsFollowCurrentAndFutureHardGap)
     world::FollowCurrentWorldProofReason::TargetObservationUnavailable);
 
   auto stage_gap = make_follow_request();
-  stage_gap.target.target_relative_progress_m = {5.0, 5.0, 5.0};
+  stage_gap.target.target_progress_from_current_origin_m = {5.0, 5.0, 5.0};
   stage_gap.target.hard_gap_m = 4.3;
   stage_gap.target.tube_id =
     world::fingerprint_follow_obstacle_observation(stage_gap.target);

@@ -113,6 +113,7 @@ struct CurrentExecutionProvenance
   std::uint64_t stage_geometry_id{};
   std::uint64_t target_obstacle_generation{};
   std::string target_id;
+  int execution_side_sign{};
   std::uint64_t control_pose_id{};
   std::uint64_t course_frame_window_id{};
   std::uint64_t obstacle_tube_id{};
@@ -196,6 +197,7 @@ enum class RetainedExecutionProofReason
   IntentMismatch,
   IntentGenerationMismatch,
   TargetIdentityMismatch,
+  ExecutionSideMismatch,
   ProgressLiftRejected,
   PrefixIdentityMismatch,
   DelayPrefixRejected,
@@ -208,6 +210,12 @@ enum class RetainedExecutionProofReason
   InvalidClearance,
   FingerprintMismatch,
 };
+
+/// Check the immutable tactical identity before constructing physical proof.
+/// A semantic mismatch must not be reported as a wall/corridor failure.
+RetainedExecutionProofReason validate_retained_semantic_identity(
+  const plan::CanonicalExecutionPlan & execution_plan,
+  const CurrentExecutionProvenance & current) noexcept;
 
 const char * to_string(RetainedExecutionProofReason reason) noexcept;
 

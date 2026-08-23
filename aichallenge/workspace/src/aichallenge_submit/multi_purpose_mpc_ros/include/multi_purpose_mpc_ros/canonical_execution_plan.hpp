@@ -145,6 +145,7 @@ public:
 
   CanonicalExecutionPlanStoreReason replace(CanonicalExecutionPlan plan);
   std::shared_ptr<const CanonicalExecutionPlan> snapshot() const;
+  bool clear();
   bool clear_if_plan_id(std::uint64_t expected_plan_id);
 
 private:

@@ -178,6 +178,7 @@ enum class OvertakeCurrentWorldProofReason
   CourseFrameIdentityMismatch,
   TargetObservationUnavailable,
   TargetIdentityMismatch,
+  ExecutionSideMismatch,
   CorridorIdentityMismatch,
   CorridorHorizonUnavailable,
   TargetReleaseUncertified,

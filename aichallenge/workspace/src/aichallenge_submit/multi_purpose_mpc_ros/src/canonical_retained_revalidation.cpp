@@ -95,6 +95,7 @@ bool same_current(
          left.stage_geometry_id == right.stage_geometry_id &&
          left.target_obstacle_generation == right.target_obstacle_generation &&
          left.target_id == right.target_id &&
+         left.execution_side_sign == right.execution_side_sign &&
          left.control_pose_id == right.control_pose_id &&
          left.course_frame_window_id == right.course_frame_window_id &&
          left.obstacle_tube_id == right.obstacle_tube_id &&
@@ -170,6 +171,7 @@ void add_current(
   builder.add_uint64(current.stage_geometry_id);
   builder.add_uint64(current.target_obstacle_generation);
   builder.add_string(current.target_id);
+  builder.add_long(current.execution_side_sign);
   builder.add_uint64(current.control_pose_id);
   builder.add_uint64(current.course_frame_window_id);
   builder.add_uint64(current.obstacle_tube_id);
@@ -587,6 +589,11 @@ bool current_execution_provenance_complete(
          provenance.observation_generation != 0U &&
          provenance.stage_geometry_id != 0U && required_target_present &&
          target_identity_complete &&
+         (contract::canonical_normal_intent_requires_execution_side(
+      provenance.intent) ?
+         (provenance.execution_side_sign == -1 ||
+         provenance.execution_side_sign == 1) :
+         provenance.execution_side_sign == 0) &&
          provenance.control_pose_id != 0U &&
          provenance.course_frame_window_id != 0U &&
          provenance.obstacle_tube_id != 0U &&
@@ -612,6 +619,8 @@ const char * to_string(const RetainedExecutionProofReason reason) noexcept
       return "intent-generation-mismatch";
     case RetainedExecutionProofReason::TargetIdentityMismatch:
       return "target-identity-mismatch";
+    case RetainedExecutionProofReason::ExecutionSideMismatch:
+      return "execution-side-mismatch";
     case RetainedExecutionProofReason::ProgressLiftRejected:
       return "progress-lift-rejected";
     case RetainedExecutionProofReason::PrefixIdentityMismatch:
@@ -638,6 +647,34 @@ const char * to_string(const RetainedExecutionProofReason reason) noexcept
   return "unknown";
 }
 
+RetainedExecutionProofReason validate_retained_semantic_identity(
+  const plan::CanonicalExecutionPlan & execution_plan,
+  const CurrentExecutionProvenance & current) noexcept
+{
+  if (
+    plan::validate_canonical_execution_plan(execution_plan) !=
+    plan::CanonicalExecutionPlanRejectReason::None)
+  {
+    return RetainedExecutionProofReason::InvalidPlan;
+  }
+  if (!current_execution_provenance_complete(current)) {
+    return RetainedExecutionProofReason::InvalidCurrentProvenance;
+  }
+  if (current.intent != execution_plan.problem.intent) {
+    return RetainedExecutionProofReason::IntentMismatch;
+  }
+  if (current.intent_generation != execution_plan.problem.intent_generation) {
+    return RetainedExecutionProofReason::IntentGenerationMismatch;
+  }
+  if (current.target_id != execution_plan.problem.target_id) {
+    return RetainedExecutionProofReason::TargetIdentityMismatch;
+  }
+  if (current.execution_side_sign != execution_plan.problem.execution_side_sign) {
+    return RetainedExecutionProofReason::ExecutionSideMismatch;
+  }
+  return RetainedExecutionProofReason::Accepted;
+}
+
 RetainedExecutionProofResult build_retained_execution_proof(
   const plan::CanonicalExecutionPlan & execution_plan,
   const plan::CanonicalExecutionCursor & cursor,
@@ -653,22 +690,10 @@ RetainedExecutionProofResult build_retained_execution_proof(
       RetainedExecutionProofReason::InvalidPlan;
     return result;
   }
-  if (!current_execution_provenance_complete(request.current)) {
-    result.reason = RetainedExecutionProofReason::InvalidCurrentProvenance;
-    return result;
-  }
-  if (request.current.intent != execution_plan.problem.intent) {
-    result.reason = RetainedExecutionProofReason::IntentMismatch;
-    return result;
-  }
-  if (request.current.intent_generation !=
-    execution_plan.problem.intent_generation)
-  {
-    result.reason = RetainedExecutionProofReason::IntentGenerationMismatch;
-    return result;
-  }
-  if (request.current.target_id != execution_plan.problem.target_id) {
-    result.reason = RetainedExecutionProofReason::TargetIdentityMismatch;
+  const auto semantic_reason = validate_retained_semantic_identity(
+    execution_plan, request.current);
+  if (semantic_reason != RetainedExecutionProofReason::Accepted) {
+    result.reason = semantic_reason;
     return result;
   }
 

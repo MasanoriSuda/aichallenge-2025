@@ -27,6 +27,8 @@ plan::CanonicalExecutionPlan make_follow_plan(
   problem.stage_geometry_id = 11U;
   problem.target_obstacle_generation = target_generation;
   problem.target_id = "d2";
+  problem.execution_side_sign =
+    contract::canonical_normal_intent_requires_execution_side(intent) ? 1 : 0;
   problem.horizon_steps = 2U;
   problem.formulation = contract::Formulation::VelocityProgress5State;
   problem.state_schema_id = "ey-elag-epsi-v-progress-v1";
@@ -179,6 +181,25 @@ TEST(CanonicalNormalAsyncContextLifecycle, NewObservationKeepsSameEpoch)
   EXPECT_EQ(
     newer_observation.next.context_epoch,
     initialized.next.context_epoch);
+}
+
+TEST(CanonicalNormalAsyncContextLifecycle, SamePhaseSideChangeResetsEpoch)
+{
+  const auto initialized = async::resolve_context_lifecycle(
+    async::ContextLifecycleState{}, make_follow_plan(
+      42U, 3U, 7U, contract::ControlIntent::ShiftOut).problem);
+  ASSERT_TRUE(initialized.valid);
+
+  auto opposite = make_follow_plan(
+    43U, 3U, 8U, contract::ControlIntent::ShiftOut).problem;
+  opposite.execution_side_sign = -1;
+  opposite = contract::seal_problem_context(std::move(opposite));
+  const auto changed = async::resolve_context_lifecycle(
+    initialized.next, opposite);
+  ASSERT_TRUE(changed.valid);
+  EXPECT_TRUE(changed.reset_context);
+  EXPECT_EQ(changed.next.context_epoch, initialized.next.context_epoch + 1U);
+  EXPECT_EQ(changed.next.execution_side_sign, -1);
 }
 
 TEST(CanonicalNormalAsyncContextLifecycle, StopFailsClosed)

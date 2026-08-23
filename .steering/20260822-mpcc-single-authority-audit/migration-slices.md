@@ -466,6 +466,16 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   30 initial-corridor, 20 progress-discontinuity, 6 corridor-horizon and 2 intent-generation
   outcomes. Audit their common Mission transition provenance next; production promotion remains
   blocked.
+- `.steering/20260824-overtake-transition-provenance` repairs the semantic-artifact identity behind
+  that transition-local evidence. The selected execution side is now part of the canonical problem,
+  async lifecycle and retained provenance; a side change clears the old plan family and cross-side
+  artifacts fail before physical corridor proof. Incoming worker and stored-plan evaluations now
+  have separate outcomes and selected-source telemetry. The 1,726-test suite and 25-package build
+  pass without parameter or authority changes. `output/20260824-051821` did not enter Overtake, so
+  live side-transition evidence remains unavailable. Instead, it exposed 1,247 Follow
+  `stage-gap-violation` lines and 652 Follow emergency-authority traces while the measured front gap
+  was roughly 14 m. Audit the Follow retained target-tube time/progress alignment in a separate
+  Slice before repeating the Overtake live gate; production promotion remains blocked.
 
 ## Slice 6: Legacy and migration path removal
 

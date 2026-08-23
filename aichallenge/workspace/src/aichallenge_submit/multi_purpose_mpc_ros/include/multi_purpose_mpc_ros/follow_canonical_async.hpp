@@ -22,6 +22,7 @@ struct ContextLifecycleState
     mpcc_execution_contract::ControlIntent::Unknown};
   std::uint64_t intent_generation{};
   std::string target_id;
+  int execution_side_sign{};
 };
 
 enum class ContextLifecycleReason

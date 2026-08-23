@@ -47,6 +47,11 @@ bool canonical_normal_intent_supported(ControlIntent intent) noexcept;
 /// target vehicle and its observation generation.
 bool canonical_normal_intent_requires_target(ControlIntent intent) noexcept;
 
+/// Overtake intents whose exact problem identity is incomplete without the
+/// selected left/right homotopy.
+bool canonical_normal_intent_requires_execution_side(
+  ControlIntent intent) noexcept;
+
 struct StageGeometryIdentity
 {
   int transition_from_waypoint{};
@@ -188,6 +193,7 @@ struct MpccProblemContext
   std::uint64_t stage_geometry_id{};
   std::uint64_t target_obstacle_generation{};
   std::string target_id;
+  int execution_side_sign{};
   std::size_t horizon_steps{};
   Formulation formulation{Formulation::Unresolved};
   std::string state_schema_id;

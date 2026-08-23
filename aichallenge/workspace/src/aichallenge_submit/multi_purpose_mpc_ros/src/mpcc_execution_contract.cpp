@@ -260,6 +260,14 @@ bool canonical_normal_intent_requires_target(const ControlIntent intent) noexcep
     intent == ControlIntent::Pass || intent == ControlIntent::Return;
 }
 
+bool canonical_normal_intent_requires_execution_side(
+  const ControlIntent intent) noexcept
+{
+  return
+    intent == ControlIntent::ShiftOut || intent == ControlIntent::Pass ||
+    intent == ControlIntent::Return;
+}
+
 std::uint64_t fingerprint_stage_geometry(
   const int tracking_waypoint, const bool circular,
   const std::vector<StageGeometryIdentity> & stages) noexcept
@@ -457,6 +465,7 @@ std::uint64_t problem_context_fingerprint(
   builder.append_u64(context.stage_geometry_id);
   builder.append_u64(context.target_obstacle_generation);
   builder.append_string(context.target_id);
+  builder.append_i64(context.execution_side_sign);
   builder.append_u64(static_cast<std::uint64_t>(context.horizon_steps));
   builder.append_enum(context.formulation);
   builder.append_string(context.state_schema_id);
@@ -480,11 +489,16 @@ bool problem_context_complete(const MpccProblemContext & context) noexcept
   const bool target_generation_complete =
     context.target_id.empty() ||
     (context.observation_generation > 0U && context.target_obstacle_generation > 0U);
+  const bool execution_side_complete =
+    canonical_normal_intent_requires_execution_side(context.intent) ?
+    (context.execution_side_sign == -1 || context.execution_side_sign == 1) :
+    context.execution_side_sign == 0;
   return
     context.decision_id > 0U && context.intent != ControlIntent::Unknown &&
     context.stage_geometry_id > 0U && context.horizon_steps > 0U &&
     context.formulation != Formulation::Unresolved && schemas_complete(context) &&
-    required_target_present && target_generation_complete && context.fingerprint > 0U &&
+    required_target_present && target_generation_complete &&
+    execution_side_complete && context.fingerprint > 0U &&
     context.fingerprint == problem_context_fingerprint(context);
 }
 

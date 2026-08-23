@@ -51,7 +51,8 @@ ContextLifecycleResolution resolve_context_lifecycle(
   const bool identity_changed = previous.initialized &&
     (previous.intent != context.intent ||
     previous.intent_generation != context.intent_generation ||
-    previous.target_id != context.target_id);
+    previous.target_id != context.target_id ||
+    previous.execution_side_sign != context.execution_side_sign);
   if (identity_changed) {
     result.next.context_epoch = next_context_epoch(previous.context_epoch);
     result.reset_context = true;
@@ -62,6 +63,7 @@ ContextLifecycleResolution resolve_context_lifecycle(
   result.next.intent = context.intent;
   result.next.intent_generation = context.intent_generation;
   result.next.target_id = context.target_id;
+  result.next.execution_side_sign = context.execution_side_sign;
   result.valid = true;
   result.reason = ContextLifecycleReason::Accepted;
   return result;

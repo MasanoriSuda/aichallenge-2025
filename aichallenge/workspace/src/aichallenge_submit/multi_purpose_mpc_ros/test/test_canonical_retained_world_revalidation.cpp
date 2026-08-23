@@ -154,6 +154,7 @@ plan::CanonicalExecutionPlan make_overtake_plan()
 {
   auto value = make_plan();
   value.problem.intent = contract::ControlIntent::ShiftOut;
+  value.problem.execution_side_sign = 1;
   value.problem.target_id = "d2";
   value.problem.target_obstacle_generation = 5U;
   value.problem = contract::seal_problem_context(std::move(value.problem));
@@ -167,6 +168,7 @@ world::OvertakeCurrentWorldProofRequest make_overtake_request()
   world::OvertakeCurrentWorldProofRequest request;
   request.current = empty.current;
   request.current.intent = contract::ControlIntent::ShiftOut;
+  request.current.execution_side_sign = 1;
   request.current.intent_generation = 3U;
   request.current.target_id = "d2";
   request.current.target_obstacle_generation = 8U;
@@ -389,6 +391,14 @@ TEST(CanonicalRetainedWorldRevalidation, RejectsOvertakeIdentityAndCorridorMutat
       execution_plan, cursor, changed_target,
       make_grid(footprint::CellState::Free), extents).reason,
     world::OvertakeCurrentWorldProofReason::TargetIdentityMismatch);
+
+  auto changed_side = make_overtake_request();
+  changed_side.current.execution_side_sign = -1;
+  EXPECT_EQ(
+    world::build_overtake_current_world_retained_proof(
+      execution_plan, cursor, changed_side,
+      make_grid(footprint::CellState::Free), extents).reason,
+    world::OvertakeCurrentWorldProofReason::ExecutionSideMismatch);
 
   auto changed_corridor = make_overtake_request();
   changed_corridor.corridor.lateral_upper_m.back() -= 0.1;

@@ -420,6 +420,8 @@ const char * to_string(const OvertakeCurrentWorldProofReason reason) noexcept
       return "target-observation-unavailable";
     case OvertakeCurrentWorldProofReason::TargetIdentityMismatch:
       return "target-identity-mismatch";
+    case OvertakeCurrentWorldProofReason::ExecutionSideMismatch:
+      return "execution-side-mismatch";
     case OvertakeCurrentWorldProofReason::CorridorIdentityMismatch:
       return "corridor-identity-mismatch";
     case OvertakeCurrentWorldProofReason::CorridorHorizonUnavailable:
@@ -977,6 +979,15 @@ OvertakeCurrentWorldProofResult build_overtake_current_world_retained_proof(
     execution_plan.problem.target_obstacle_generation == 0U)
   {
     result.reason = OvertakeCurrentWorldProofReason::TargetIdentityMismatch;
+    return result;
+  }
+  const auto semantic_reason = retained::validate_retained_semantic_identity(
+    execution_plan, request.current);
+  if (semantic_reason != retained::RetainedExecutionProofReason::Accepted) {
+    result.reason =
+      semantic_reason == retained::RetainedExecutionProofReason::ExecutionSideMismatch ?
+      OvertakeCurrentWorldProofReason::ExecutionSideMismatch :
+      OvertakeCurrentWorldProofReason::TargetIdentityMismatch;
     return result;
   }
   if (

@@ -104,6 +104,7 @@ adapter::CanonicalPlanExtractionRequest make_overtake_request(
   auto request = make_request();
   request.plan_id = request.problem.decision_id;
   request.problem.intent = intent;
+  request.problem.execution_side_sign = 1;
   request.problem.target_id = "d2";
   request.problem.target_obstacle_generation =
     request.problem.observation_generation;

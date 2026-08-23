@@ -88,6 +88,7 @@ plan::CanonicalExecutionPlan make_overtake_plan(
 {
   auto value = make_plan();
   value.problem.intent = intent;
+  value.problem.execution_side_sign = 1;
   value.problem.target_id = "d2";
   value.problem.target_obstacle_generation =
     value.problem.observation_generation;
@@ -306,8 +307,17 @@ TEST(CanonicalExecutionPlan, StoreReplacementIsCompleteAndMonotonic)
     store.replace(make_plan(24U)),
     plan::CanonicalExecutionPlanStoreReason::Accepted);
   EXPECT_EQ(store.snapshot()->plan_id, 24U);
-  EXPECT_FALSE(store.clear_if_plan_id(23U));
-  EXPECT_TRUE(store.clear_if_plan_id(24U));
+  EXPECT_TRUE(store.clear());
+  EXPECT_FALSE(store.snapshot());
+  EXPECT_FALSE(store.clear());
+  EXPECT_EQ(
+    store.replace(make_plan(23U)),
+    plan::CanonicalExecutionPlanStoreReason::StalePlanId);
+  EXPECT_EQ(
+    store.replace(make_plan(25U)),
+    plan::CanonicalExecutionPlanStoreReason::Accepted);
+  EXPECT_FALSE(store.clear_if_plan_id(24U));
+  EXPECT_TRUE(store.clear_if_plan_id(25U));
   EXPECT_FALSE(store.snapshot());
   EXPECT_EQ(
     store.replace(make_plan(23U)),

@@ -145,10 +145,38 @@ TEST(CanonicalRetainedRevalidation, OvertakeProvenanceRequiresTargetIdentity) {
 
   current.target_id = "d2";
   current.target_obstacle_generation = current.observation_generation;
+  current.execution_side_sign = 1;
   EXPECT_TRUE(retained::current_execution_provenance_complete(current));
+
+  current.execution_side_sign = 0;
+  EXPECT_FALSE(retained::current_execution_provenance_complete(current));
+  current.execution_side_sign = 1;
 
   current.target_obstacle_generation = 0U;
   EXPECT_FALSE(retained::current_execution_provenance_complete(current));
+}
+
+TEST(CanonicalRetainedRevalidation, RejectsCrossSideBeforePhysicalProof)
+{
+  auto execution_plan = make_plan();
+  execution_plan.problem.intent = contract::ControlIntent::Pass;
+  execution_plan.problem.target_id = "d2";
+  execution_plan.problem.target_obstacle_generation = 7U;
+  execution_plan.problem.execution_side_sign = 1;
+  execution_plan.problem = contract::seal_problem_context(
+    std::move(execution_plan.problem));
+  execution_plan.solution.problem_fingerprint =
+    execution_plan.problem.fingerprint;
+
+  auto current = make_current();
+  current.intent = contract::ControlIntent::Pass;
+  current.target_id = "d2";
+  current.target_obstacle_generation = 8U;
+  current.execution_side_sign = -1;
+  ASSERT_TRUE(retained::current_execution_provenance_complete(current));
+  EXPECT_EQ(
+    retained::validate_retained_semantic_identity(execution_plan, current),
+    retained::RetainedExecutionProofReason::ExecutionSideMismatch);
 }
 
 TEST(

@@ -27,6 +27,7 @@ contract::MpccProblemContext make_context()
       {121, 122, 0.55, 1.05}});
   context.target_obstacle_generation = 19U;
   context.target_id = "d2";
+  context.execution_side_sign = 1;
   context.horizon_steps = 2U;
   context.formulation = contract::Formulation::VelocityProgress5State;
   context.state_schema_id = "ey-elag-epsi-v-progress-v1";
@@ -65,6 +66,7 @@ contract::MpccProblemContext make_track_context(
   context.intent = contract::ControlIntent::Track;
   context.target_id.clear();
   context.target_obstacle_generation = 0U;
+  context.execution_side_sign = 0;
   return contract::seal_problem_context(std::move(context));
 }
 
@@ -212,6 +214,30 @@ TEST(MpccExecutionContract, CanonicalOvertakeIntentsRequireTargetProvenance)
   EXPECT_FALSE(
     contract::canonical_normal_intent_requires_target(
       contract::ControlIntent::Cruise));
+}
+
+TEST(MpccExecutionContract, CanonicalOvertakeIdentityRequiresExactSide)
+{
+  auto missing_side = make_context();
+  missing_side.execution_side_sign = 0;
+  missing_side = contract::seal_problem_context(std::move(missing_side));
+  EXPECT_FALSE(contract::problem_context_complete(missing_side));
+
+  auto invalid_side = make_context();
+  invalid_side.execution_side_sign = 2;
+  invalid_side = contract::seal_problem_context(std::move(invalid_side));
+  EXPECT_FALSE(contract::problem_context_complete(invalid_side));
+
+  auto opposite_side = make_context();
+  opposite_side.execution_side_sign = -1;
+  opposite_side = contract::seal_problem_context(std::move(opposite_side));
+  ASSERT_TRUE(contract::problem_context_complete(opposite_side));
+  EXPECT_NE(make_context().fingerprint, opposite_side.fingerprint);
+
+  auto track_with_side = make_track_context();
+  track_with_side.execution_side_sign = 1;
+  track_with_side = contract::seal_problem_context(std::move(track_with_side));
+  EXPECT_FALSE(contract::problem_context_complete(track_with_side));
 }
 
 TEST(MpccExecutionContract, StageGeometryFingerprintUsesGeometryContent)

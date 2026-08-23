@@ -290,6 +290,14 @@ CanonicalExecutionPlanStore::snapshot() const
   return plan_;
 }
 
+bool CanonicalExecutionPlanStore::clear()
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  const bool had_plan = static_cast<bool>(plan_);
+  plan_.reset();
+  return had_plan;
+}
+
 bool CanonicalExecutionPlanStore::clear_if_plan_id(
   const std::uint64_t expected_plan_id)
 {

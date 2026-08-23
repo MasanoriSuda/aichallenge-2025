@@ -127,3 +127,44 @@ leaving Follow still changes the async context epoch, and target identity plus o
 remain mandatory. The root correction therefore removes only the contradictory nonzero check from
 the mailbox validator and adds a regression test for a complete Follow plan with generation zero.
 No timing lease, fallback or parameter exception is introduced.
+
+## Dynamic gate attempt: 20260823-192924
+
+Repeating the same diagnostic configuration after accepting missionless Follow identity proved that
+the async scheduling and mailbox boundary are operational:
+
+- More than 500 jobs were submitted and completed in the observed Follow window.
+- Mailbox publication had no invalid payloads; completed results were consumed by the live thread.
+- Snapshot construction remained about 0.17--0.27 ms and result age about 0.025--0.035 s.
+- Worker exceptions and 25 ms callback overruns remained zero in the observed window.
+- No worker plan reached `current_ready`; accepted mailbox payloads were typed rejections.
+
+The repeated canonical rejection was `intent-mismatch`. Static data-flow tracing established the
+upstream cause:
+
+```text
+live controller seals a complete Follow MpccProblemContext
+-> ResultIdentity is derived from that context
+-> tactical_snapshot copies the decision and physical problem inputs
+-> worker evaluate_follow_fresh_shadow re-derives context from snapshot state
+-> snapshot has no last_overtake_authority_trace_
+-> current_control_intent() falls back to Cruise
+-> canonical command adapter receives Cruise problem + required Follow intent
+-> authority rejects the otherwise solved candidate as intent-mismatch
+```
+
+Copying the mutable authority trace into the snapshot would hide the ownership defect. The structural
+correction instead passes the immutable, sealed live `MpccProblemContext` with the snapshotted problem
+and prohibits the worker from re-deriving authority. A typed snapshot-context validator rejects an
+incomplete, non-Follow or identity/fingerprint-mismatched job before solving. The evaluator also
+checks that the sealed context matches the Follow target observation, horizon and stage geometry of
+the physical problem.
+
+- Formal `make autoware-build`: 25 packages successful.
+- Full current workspace CTest: 39/39 passed.
+- Regression tests cover exact sealed context acceptance, Cruise re-derivation rejection and a
+  different sealed problem fingerprint.
+- No authority promotion, fallback, lease, flag or parameter change was introduced.
+
+This is still not a passed dynamic gate. A same-condition rerun must show a worker-produced canonical
+plan reaching live current-world revalidation before Slice C can be closed.

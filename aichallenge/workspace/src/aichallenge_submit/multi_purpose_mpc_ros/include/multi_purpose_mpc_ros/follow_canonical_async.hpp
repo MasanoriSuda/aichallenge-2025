@@ -26,6 +26,27 @@ struct ResultIdentity
   double snapshot_sec{};
 };
 
+enum class SnapshotContextReason
+{
+  Accepted,
+  InvalidContext,
+  IntentMismatch,
+  DecisionMismatch,
+  IntentGenerationMismatch,
+  TargetMismatch,
+  TargetObservationMismatch,
+  ProblemFingerprintMismatch,
+};
+
+const char * to_string(SnapshotContextReason reason) noexcept;
+
+/// A Follow worker must solve the immutable context sealed by the live
+/// controller when the job was submitted. Re-deriving intent or authority in
+/// the worker would allow a Follow problem to be interpreted as Cruise.
+SnapshotContextReason validate_snapshot_context(
+  const ResultIdentity & identity,
+  const mpcc_execution_contract::MpccProblemContext & snapshot) noexcept;
+
 enum class WorkerOutcome
 {
   PlanAvailable,

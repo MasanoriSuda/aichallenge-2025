@@ -21986,7 +21986,8 @@ struct MPC
   }
 
   FollowShadowCycleResult evaluate_follow_fresh_shadow(
-    const MpcProblem & problem, const double now_sec)
+    const MpcProblem & problem, const double now_sec,
+    const mpcc_contract::MpccProblemContext & snapshot_context)
   {
     constexpr int nx = mpcc_progress::kExtendedStateDimension;
     constexpr int progress_metadata_nx = 3;
@@ -22028,12 +22029,24 @@ struct MPC
       }
       result.build_succeeded = true;
 
-      const auto context = make_problem_context(
-        problem, mpcc_contract::Formulation::VelocityProgress5State);
+      const auto & context = snapshot_context;
       result.problem_fingerprint = context.fingerprint;
-      if (!mpcc_contract::problem_context_complete(context)) {
+      if (
+        !mpcc_contract::problem_context_complete(context) ||
+        context.intent != mpcc_contract::ControlIntent::Follow ||
+        context.formulation !=
+        mpcc_contract::Formulation::VelocityProgress5State ||
+        context.decision_id != active_control_decision_id_ ||
+        context.target_id !=
+        problem.follow_longitudinal_contract.target_id ||
+        context.target_obstacle_generation !=
+        problem.follow_longitudinal_contract.target_observation_generation ||
+        context.horizon_steps != static_cast<std::size_t>(problem.N) ||
+        context.stage_geometry_id !=
+        problem.progress_stage_geometry.fingerprint)
+      {
         result.status = "context-reject";
-        result.detail = "Follow shadow problem context incomplete";
+        result.detail = "sealed Follow snapshot context does not match problem";
         return finish();
       }
       const auto warm_identity =
@@ -22517,15 +22530,32 @@ struct MPC
       MpcProblem problem_snapshot = problem;
       const auto submission = follow_canonical_async_worker_->submit_latest(
         [planner_snapshot, model_snapshot, reference_path_snapshot, mailbox,
-        identity, problem_snapshot = std::move(problem_snapshot)]() mutable {
+        identity, context, problem_snapshot = std::move(problem_snapshot)]() mutable {
           static_cast<void>(model_snapshot);
           static_cast<void>(reference_path_snapshot);
           const auto worker_started = SteadyClock::now();
           follow_async::WorkerResult worker_result;
           worker_result.identity = identity;
           try {
+            const auto snapshot_reason =
+              follow_async::validate_snapshot_context(identity, context);
+            if (
+              snapshot_reason !=
+              follow_async::SnapshotContextReason::Accepted)
+            {
+              worker_result.outcome = follow_async::WorkerOutcome::Rejected;
+              worker_result.detail = std::string{"snapshot-context-reject/"} +
+                follow_async::to_string(snapshot_reason);
+              worker_result.compute_ms =
+                std::chrono::duration<double, std::milli>(
+                SteadyClock::now() - worker_started).count();
+              worker_result.completed_sec = identity.snapshot_sec +
+                worker_result.compute_ms * 1.0e-3;
+              static_cast<void>(mailbox->publish(std::move(worker_result)));
+              return;
+            }
             const auto fresh = planner_snapshot->evaluate_follow_fresh_shadow(
-              problem_snapshot, identity.snapshot_sec);
+              problem_snapshot, identity.snapshot_sec, context);
             worker_result.detail = fresh.status + "/" + fresh.detail;
             if (fresh.fresh_canonical_plan != nullptr) {
               worker_result.outcome = follow_async::WorkerOutcome::PlanAvailable;

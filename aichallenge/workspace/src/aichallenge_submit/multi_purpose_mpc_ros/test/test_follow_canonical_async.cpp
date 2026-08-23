@@ -109,6 +109,37 @@ TEST(FollowCanonicalAsyncResult, AcceptsFollowWithoutOvertakeMissionGeneration)
     async::ResultValidationReason::Accepted);
 }
 
+TEST(FollowCanonicalAsyncSnapshotContext, AcceptsExactSealedFollowContext)
+{
+  const auto result = make_result();
+  EXPECT_EQ(
+    async::validate_snapshot_context(
+      result.identity, result.canonical_plan->problem),
+    async::SnapshotContextReason::Accepted);
+}
+
+TEST(FollowCanonicalAsyncSnapshotContext, RejectsWorkerIntentRederivation)
+{
+  const auto result = make_result();
+  auto rederived = result.canonical_plan->problem;
+  rederived.intent = contract::ControlIntent::Cruise;
+  rederived = contract::seal_problem_context(std::move(rederived));
+  EXPECT_EQ(
+    async::validate_snapshot_context(result.identity, rederived),
+    async::SnapshotContextReason::IntentMismatch);
+}
+
+TEST(FollowCanonicalAsyncSnapshotContext, RejectsDifferentSealedProblem)
+{
+  const auto result = make_result();
+  auto different = result.canonical_plan->problem;
+  different.stage_geometry_id += 1U;
+  different = contract::seal_problem_context(std::move(different));
+  EXPECT_EQ(
+    async::validate_snapshot_context(result.identity, different),
+    async::SnapshotContextReason::ProblemFingerprintMismatch);
+}
+
 TEST(FollowCanonicalAsyncResult, RejectsPlanIdentityMismatch)
 {
   auto result = make_result();

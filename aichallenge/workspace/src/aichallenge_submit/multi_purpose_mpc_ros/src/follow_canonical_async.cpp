@@ -8,6 +8,60 @@
 namespace multi_purpose_mpc_ros::follow_canonical_async
 {
 
+const char * to_string(const SnapshotContextReason reason) noexcept
+{
+  switch (reason) {
+    case SnapshotContextReason::Accepted:
+      return "accepted";
+    case SnapshotContextReason::InvalidContext:
+      return "invalid-context";
+    case SnapshotContextReason::IntentMismatch:
+      return "intent-mismatch";
+    case SnapshotContextReason::DecisionMismatch:
+      return "decision-mismatch";
+    case SnapshotContextReason::IntentGenerationMismatch:
+      return "intent-generation-mismatch";
+    case SnapshotContextReason::TargetMismatch:
+      return "target-mismatch";
+    case SnapshotContextReason::TargetObservationMismatch:
+      return "target-observation-mismatch";
+    case SnapshotContextReason::ProblemFingerprintMismatch:
+      return "problem-fingerprint-mismatch";
+  }
+  return "unknown";
+}
+
+SnapshotContextReason validate_snapshot_context(
+  const ResultIdentity & identity,
+  const mpcc_execution_contract::MpccProblemContext & snapshot) noexcept
+{
+  if (!mpcc_execution_contract::problem_context_complete(snapshot)) {
+    return SnapshotContextReason::InvalidContext;
+  }
+  if (snapshot.intent != mpcc_execution_contract::ControlIntent::Follow) {
+    return SnapshotContextReason::IntentMismatch;
+  }
+  if (snapshot.decision_id != identity.snapshot_decision_id) {
+    return SnapshotContextReason::DecisionMismatch;
+  }
+  if (snapshot.intent_generation != identity.intent_generation) {
+    return SnapshotContextReason::IntentGenerationMismatch;
+  }
+  if (snapshot.target_id != identity.target_id) {
+    return SnapshotContextReason::TargetMismatch;
+  }
+  if (
+    snapshot.target_obstacle_generation !=
+    identity.target_observation_generation)
+  {
+    return SnapshotContextReason::TargetObservationMismatch;
+  }
+  if (snapshot.fingerprint != identity.problem_fingerprint) {
+    return SnapshotContextReason::ProblemFingerprintMismatch;
+  }
+  return SnapshotContextReason::Accepted;
+}
+
 const char * to_string(const ResultValidationReason reason) noexcept
 {
   switch (reason) {

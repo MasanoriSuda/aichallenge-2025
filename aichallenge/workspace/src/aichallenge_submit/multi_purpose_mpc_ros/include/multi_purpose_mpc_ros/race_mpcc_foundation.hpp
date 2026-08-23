@@ -227,6 +227,7 @@ struct FollowLongitudinalContractRequest
   double maximum_target_observation_age_sec{};
   double current_target_relative_progress_m{
     std::numeric_limits<double>::quiet_NaN()};
+  double current_ego_speed_mps{std::numeric_limits<double>::quiet_NaN()};
   double target_speed_mps{std::numeric_limits<double>::quiet_NaN()};
   double moving_target_speed_threshold_mps{};
   double desired_gap_m{};

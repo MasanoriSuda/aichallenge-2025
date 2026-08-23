@@ -170,6 +170,7 @@ race::FollowLongitudinalContractRequest follow_contract_request()
   request.target_observation_age_sec = 0.1;
   request.maximum_target_observation_age_sec = 1.0;
   request.current_target_relative_progress_m = 4.0;
+  request.current_ego_speed_mps = 3.0;
   request.target_speed_mps = 3.0;
   request.moving_target_speed_threshold_mps = 0.5;
   request.desired_gap_m = 4.0;
@@ -229,6 +230,31 @@ TEST(RaceMpccFoundation, BuildsStoppedTargetContractThatStopsAtDesiredGap)
   EXPECT_NEAR(result.progress_upper_m.back(), 7.95, 1e-9);
   EXPECT_GT(result.velocity_reference_mps.front(), 0.0);
   EXPECT_NEAR(result.velocity_reference_mps.back(), 0.0, 1e-9);
+}
+
+TEST(RaceMpccFoundation, RampsFollowVelocityCapByReachableBrakingEnvelope)
+{
+  auto request = follow_contract_request();
+  request.current_target_relative_progress_m = 24.0;
+  request.current_ego_speed_mps = 9.0;
+  request.target_speed_mps = 0.0;
+  request.stage_dt_sec = {0.1, 0.1, 0.1};
+  request.base_progress_reference_m = {0.0, 0.9, 1.8, 2.7};
+  request.base_progress_upper_m = {0.0, 1.0, 2.0, 3.0};
+  request.base_velocity_reference_mps = {9.0, 9.0, 9.0};
+  request.base_velocity_upper_mps = {11.11, 11.11, 11.11};
+
+  const auto result = race::build_follow_longitudinal_contract(request);
+
+  ASSERT_TRUE(result.valid);
+  ASSERT_EQ(result.velocity_upper_mps.size(), 3U);
+  ASSERT_EQ(result.velocity_reference_mps.size(), 3U);
+  EXPECT_NEAR(result.velocity_upper_mps[0], 8.7, 1e-9);
+  EXPECT_NEAR(result.velocity_upper_mps[1], 8.4, 1e-9);
+  EXPECT_NEAR(result.velocity_upper_mps[2], 8.1, 1e-9);
+  EXPECT_NEAR(result.velocity_reference_mps[0], 5.0, 1e-9);
+  EXPECT_NEAR(result.velocity_reference_mps[1], 5.0, 1e-9);
+  EXPECT_NEAR(result.velocity_reference_mps[2], 5.0, 1e-9);
 }
 
 TEST(RaceMpccFoundation, DoesNotRestrictAnOpeningFollowGap)

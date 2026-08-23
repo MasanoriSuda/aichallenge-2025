@@ -384,6 +384,8 @@ FollowLongitudinalContract build_follow_longitudinal_contract(
   if (
     !std::isfinite(request.current_target_relative_progress_m) ||
     request.current_target_relative_progress_m < 0.0 ||
+    !std::isfinite(request.current_ego_speed_mps) ||
+    request.current_ego_speed_mps < 0.0 ||
     !std::isfinite(request.target_speed_mps) || request.target_speed_mps < 0.0)
   {
     result.reason = FollowLongitudinalContractReason::InvalidTargetKinematics;
@@ -497,17 +499,27 @@ FollowLongitudinalContract build_follow_longitudinal_contract(
         std::sqrt(
           2.0 * request.braking_deceleration_mps2 * approach_distance));
     }
-    const double velocity_upper = std::min({
+    const double policy_velocity_upper = std::min({
       request.base_velocity_upper_mps[stage],
       request.maximum_velocity_mps,
       longitudinal_reference});
+    // The policy limit is a target, not an instantaneous physical state.  A
+    // cap below the fastest speed reachable under maximum braking makes the
+    // next state infeasible before the solver has any control authority.
+    // Preserve the policy reference while admitting the deterministic braking
+    // transition from the measured speed.
+    const double minimum_reachable_velocity = std::max(
+      0.0, request.current_ego_speed_mps -
+      request.braking_deceleration_mps2 * result.elapsed_time_sec[next_state]);
+    const double velocity_upper = std::max(
+      policy_velocity_upper, minimum_reachable_velocity);
     if (!std::isfinite(velocity_upper) || velocity_upper < 0.0) {
       result.reason = FollowLongitudinalContractReason::InvalidHorizon;
       return result;
     }
     result.velocity_upper_mps.push_back(velocity_upper);
     result.velocity_reference_mps.push_back(std::min(
-      request.base_velocity_reference_mps[stage], velocity_upper));
+      request.base_velocity_reference_mps[stage], policy_velocity_upper));
   }
 
   result.valid = true;

@@ -5761,10 +5761,28 @@ struct FollowShadowCycleResult
   double solve_ms{};
   double total_ms{};
   int iterations{};
+  double measured_ego_speed_mps{std::numeric_limits<double>::quiet_NaN()};
+  double current_target_gap_m{std::numeric_limits<double>::quiet_NaN()};
+  double predicted_target_speed_mps{std::numeric_limits<double>::quiet_NaN()};
+  double initial_velocity_reference_mps{std::numeric_limits<double>::quiet_NaN()};
+  double initial_velocity_upper_mps{std::numeric_limits<double>::quiet_NaN()};
+  double terminal_progress_reference_m{std::numeric_limits<double>::quiet_NaN()};
+  double terminal_progress_lower_m{std::numeric_limits<double>::quiet_NaN()};
+  double terminal_progress_upper_m{std::numeric_limits<double>::quiet_NaN()};
   double minimum_predicted_gap_m{std::numeric_limits<double>::infinity()};
   double terminal_predicted_gap_m{std::numeric_limits<double>::quiet_NaN()};
   double terminal_velocity_mps{std::numeric_limits<double>::quiet_NaN()};
   double maximum_longitudinal_violation_m{};
+  mpcc_progress::ExtendedExecutionPrimalBoundaryField
+  execution_primal_rejected_field{
+    mpcc_progress::ExtendedExecutionPrimalBoundaryField::None};
+  int execution_primal_rejected_stage{-1};
+  double execution_primal_rejected_value{
+    std::numeric_limits<double>::quiet_NaN()};
+  double execution_primal_rejected_violation{
+    std::numeric_limits<double>::quiet_NaN()};
+  double execution_primal_rejected_tolerance{
+    std::numeric_limits<double>::quiet_NaN()};
   std::string status{"not-eligible"};
   std::string detail{"not-evaluated"};
 };
@@ -18637,6 +18655,7 @@ struct MPC
           raw_target_age_sec,
           cfg.v2x_gap.timeout_sec,
           behavior_output.front_distance,
+          std::max(0.0, current_speed_mps_),
           behavior_output.front_speed,
           cfg.v2x_behavior.moving_front_speed_threshold,
           cfg.v2x_behavior.moving_follow_target_distance,
@@ -21531,6 +21550,43 @@ struct MPC
     result.target_id = problem.follow_longitudinal_contract.target_id;
     result.target_observation_generation =
       problem.follow_longitudinal_contract.target_observation_generation;
+    result.measured_ego_speed_mps = problem.progress_measured_speed_mps;
+    const auto & follow_contract = problem.follow_longitudinal_contract;
+    if (!follow_contract.target_progress_m.empty()) {
+      result.current_target_gap_m = follow_contract.target_progress_m.front();
+    }
+    if (
+      follow_contract.target_progress_m.size() >= 2U &&
+      follow_contract.elapsed_time_sec.size() >= 2U)
+    {
+      const double target_dt =
+        follow_contract.elapsed_time_sec[1] - follow_contract.elapsed_time_sec[0];
+      if (std::isfinite(target_dt) && target_dt > kEps) {
+        result.predicted_target_speed_mps =
+          (follow_contract.target_progress_m[1] -
+          follow_contract.target_progress_m[0]) / target_dt;
+      }
+    }
+    if (!follow_contract.velocity_reference_mps.empty()) {
+      result.initial_velocity_reference_mps =
+        follow_contract.velocity_reference_mps.front();
+    }
+    if (!follow_contract.velocity_upper_mps.empty()) {
+      result.initial_velocity_upper_mps =
+        follow_contract.velocity_upper_mps.front();
+    }
+    if (!follow_contract.progress_reference_m.empty()) {
+      result.terminal_progress_reference_m =
+        follow_contract.progress_reference_m.back();
+    }
+    if (!follow_contract.progress_lower_m.empty()) {
+      result.terminal_progress_lower_m =
+        follow_contract.progress_lower_m.back();
+    }
+    if (!follow_contract.progress_upper_m.empty()) {
+      result.terminal_progress_upper_m =
+        follow_contract.progress_upper_m.back();
+    }
     const auto started = SteadyClock::now();
     const auto finish = [&result, &started]() {
         result.total_ms = std::chrono::duration<double, std::milli>(
@@ -21655,6 +21711,16 @@ struct MPC
         outcome.result->primal, extended_problem->l, extended_problem->u,
         outcome.result->constraint_violation,
         outcome.result->constraint_tolerance, problem.N);
+      result.execution_primal_rejected_field =
+        execution_primal.rejected_field;
+      result.execution_primal_rejected_stage =
+        execution_primal.rejected_stage;
+      result.execution_primal_rejected_value =
+        execution_primal.rejected_value;
+      result.execution_primal_rejected_violation =
+        execution_primal.rejected_violation;
+      result.execution_primal_rejected_tolerance =
+        execution_primal.rejected_tolerance;
       if (
         execution_primal.reason !=
         mpcc_progress::ExtendedExecutionPrimalNormalizationReason::Accepted)
@@ -21751,7 +21817,10 @@ struct MPC
       race_mpcc::follow_shadow_eligibility_reason_name(result.eligibility_reason) +
       "/" +
       race_mpcc::follow_longitudinal_contract_reason_name(result.contract_reason) +
-      "/" + result.target_id;
+      "/" + result.target_id + "/" +
+      mpcc_progress::extended_execution_primal_boundary_field_name(
+      result.execution_primal_rejected_field) + "/" +
+      std::to_string(result.execution_primal_rejected_stage);
     if (status_key != last_follow_shadow_status_) {
       std::ostringstream message;
       message << "Follow MPCC shadow: decision=" << result.decision_id
@@ -21768,11 +21837,29 @@ struct MPC
               << ", solve=" << (result.solved ? 1 : 0)
               << ", longitudinal="
               << (result.longitudinal_contract_satisfied ? 1 : 0)
+              << ", ego_v=" << result.measured_ego_speed_mps
+              << "mps, target_gap=" << result.current_target_gap_m
+              << "m, target_v=" << result.predicted_target_speed_mps
+              << "mps, v_ref0=" << result.initial_velocity_reference_mps
+              << "mps, v_upper0=" << result.initial_velocity_upper_mps
+              << "mps, terminal_s_ref="
+              << result.terminal_progress_reference_m
+              << "m, terminal_s_bounds=[" << result.terminal_progress_lower_m
+              << ',' << result.terminal_progress_upper_m << "]m"
               << ", min_gap=" << result.minimum_predicted_gap_m
               << "m, terminal_gap=" << result.terminal_predicted_gap_m
               << "m, terminal_v=" << result.terminal_velocity_mps
               << "mps, violation=" << result.maximum_longitudinal_violation_m
-              << "m, status=" << result.status
+              << "m, primal_reject="
+              << mpcc_progress::extended_execution_primal_boundary_field_name(
+        result.execution_primal_rejected_field)
+              << '@' << result.execution_primal_rejected_stage
+              << ", primal_value=" << result.execution_primal_rejected_value
+              << ", primal_violation="
+              << result.execution_primal_rejected_violation
+              << ", primal_tolerance="
+              << result.execution_primal_rejected_tolerance
+              << ", status=" << result.status
               << ", detail=" << result.detail
               << ", authority=shadow, selected=0";
       if (!result.eligible || result.longitudinal_contract_satisfied) {
@@ -21800,7 +21887,10 @@ struct MPC
         "build=%zu, attempts=%zu, solved=%zu, primal=%zu, accepted=%zu/%.1f%%, "
         "warm=%zu, reset=%zu, build_ms=%.3f/%.3f(avg/max), "
         "solve_ms=%.3f/%.3f(avg/max), total_ms=%.3f/%.3f(avg/max), "
-        "last=%s, authority=shadow, selected=0",
+        "last=%s, detail=%s, ego_v=%.3f, target_gap=%.3f, target_v=%.3f, "
+        "v_ref0=%.3f, v_upper0=%.3f, terminal_s_bounds=[%.3f,%.3f], "
+        "primal_reject=%s@%d, primal_value=%.9f, primal_violation=%.9f, "
+        "primal_tolerance=%.9f, authority=shadow, selected=0",
         static_cast<std::size_t>(window.eligible_count),
         static_cast<std::size_t>(window.contract_count),
         static_cast<std::size_t>(window.metadata_count),
@@ -21815,7 +21905,19 @@ struct MPC
         window.total_build_ms / eligible, window.maximum_build_ms,
         window.total_solve_ms / attempts, window.maximum_solve_ms,
         window.total_ms / eligible, window.maximum_total_ms,
-        result.status.c_str());
+        result.status.c_str(), result.detail.c_str(),
+        result.measured_ego_speed_mps, result.current_target_gap_m,
+        result.predicted_target_speed_mps,
+        result.initial_velocity_reference_mps,
+        result.initial_velocity_upper_mps,
+        result.terminal_progress_lower_m,
+        result.terminal_progress_upper_m,
+        mpcc_progress::extended_execution_primal_boundary_field_name(
+          result.execution_primal_rejected_field),
+        result.execution_primal_rejected_stage,
+        result.execution_primal_rejected_value,
+        result.execution_primal_rejected_violation,
+        result.execution_primal_rejected_tolerance);
     }
     window = FollowShadowTelemetryWindow{};
     last_follow_shadow_telemetry_log_sec_ = now_sec;

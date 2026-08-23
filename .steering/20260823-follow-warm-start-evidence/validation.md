@@ -45,3 +45,76 @@ preserves the target observation and stage geometry. Until such evidence exists:
 - do not delete the scalar Follow owner;
 - do not tune OSQP or distance/wall parameters;
 - do not interpret successful `LowSpeedAvoidance` passes as Follow evidence.
+
+## Isolated positive-Follow replay
+
+The previous run's Domain 1 MCAP contains 229.16 seconds of recorded odometry, vehicle status,
+trajectory and V2X input, including the positive Follow interval used for the baseline. It was replayed
+to a new controller in ROS Domain 91 with no simulator or physical output connection.
+
+Replay input:
+
+```text
+output/20260823-164329/d1/rosbag2_autoware/rosbag2_autoware_0.mcap
+```
+
+Only these input topics were replayed:
+
+- `/v2x/vehicle_positions`
+- `/vehicle/status/velocity_status`
+- `/vehicle/status/steering_status`
+- `/localization/kinematic_state`
+- `/localization/acceleration`
+- `/planning/scenario_planning/trajectory`
+
+`/control/command/control_cmd` was deliberately excluded. `/awsim/state` was supplied only to reproduce
+the recorded Grounded/Ready/Start controller session boundary.
+
+### Stable Follow interval
+
+Between replay Start and the recorded transition to `LowSpeedAvoidance`, five complete telemetry windows
+contained:
+
+| Boundary | Count |
+|---|---:|
+| valid contract / attempts | 90 |
+| solved / normalized | 90 |
+| physical certified | 90 |
+| canonical plan/cursor/candidate/authority/actuation/command | 90 at every boundary |
+| canonical-ready shadow | 90 |
+| warm starts applied | 90 |
+| solver context resets | 0 |
+| row rejects | 0 |
+
+Timing for those 90 cycles:
+
+- build: 0.036 ms average, 0.061 ms maximum
+- solve: 0.890 ms average, 1.432 ms maximum
+- certificate/canonical chain: 0.464 ms average, 0.757 ms maximum
+- total Follow shadow: 1.420 ms average, 2.276 ms maximum
+
+Every result remained `authority=shadow, selected=0`.
+
+### Replay limitations
+
+The full replay contained admission transitions and cold-start intervals that do not form one stationary
+comparison cohort. Across all 364 attempts it recorded 257 accepted results, 246 applied warm starts and
+12 intentional context resets. After one below-hard-gap contract interval, cold solve failures occurred
+before the problem became solvable again. Those intervals must not be averaged with the stable positive
+Follow cohort to claim a race-level improvement.
+
+The recorded V2X source header age appears degraded during replay even though receipt age and observation
+generation are coherent. The full Autoware stack and bag player also shared host CPU, so callback-overrun
+telemetry is not representative of a live AWSIM run. Neither limitation affects the narrow proof that the
+complete Follow dual is shifted, applied by OSQP, physically certified and converted through the exact
+canonical chain.
+
+## Updated conclusion
+
+The structural warm-start repair passes its dynamic replay gate: the former `warm=0` boundary became
+`warm=90/90` in the stable Follow interval, with 90/90 canonical-ready results and zero downstream reject.
+
+This is sufficient to accept the warm-start integration fix. It is not sufficient to promote Follow to
+production authority because the positive proof is replay, not a live moving-front run. The scalar Follow
+owner remains in production until a live eligible interval confirms the same chain under real callback
+timing.

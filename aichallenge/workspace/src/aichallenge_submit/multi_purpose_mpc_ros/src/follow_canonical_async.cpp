@@ -1,11 +1,11 @@
-#include "multi_purpose_mpc_ros/follow_canonical_async.hpp"
+#include "multi_purpose_mpc_ros/canonical_normal_async.hpp"
 
 #include "multi_purpose_mpc_ros/latest_only_worker.hpp"
 
 #include <cmath>
 #include <utility>
 
-namespace multi_purpose_mpc_ros::follow_canonical_async
+namespace multi_purpose_mpc_ros::canonical_normal_async
 {
 
 const char * to_string(const SnapshotContextReason reason) noexcept
@@ -38,7 +38,10 @@ SnapshotContextReason validate_snapshot_context(
   if (!mpcc_execution_contract::problem_context_complete(snapshot)) {
     return SnapshotContextReason::InvalidContext;
   }
-  if (snapshot.intent != mpcc_execution_contract::ControlIntent::Follow) {
+  if (
+    !mpcc_execution_contract::canonical_normal_intent_supported(identity.intent) ||
+    snapshot.intent != identity.intent)
+  {
     return SnapshotContextReason::IntentMismatch;
   }
   if (snapshot.decision_id != identity.snapshot_decision_id) {
@@ -83,11 +86,17 @@ ResultValidationReason validate_worker_result(
   const WorkerResult & result) noexcept
 {
   const auto & identity = result.identity;
+  const bool supported_intent =
+    mpcc_execution_contract::canonical_normal_intent_supported(identity.intent);
+  const bool target_required = supported_intent &&
+    mpcc_execution_contract::canonical_normal_intent_requires_target(
+    identity.intent);
   if (
     identity.sequence == 0U || identity.context_epoch == 0U ||
     identity.snapshot_decision_id == 0U ||
-    identity.target_observation_generation == 0U ||
-    identity.problem_fingerprint == 0U || identity.target_id.empty())
+    !supported_intent || identity.problem_fingerprint == 0U ||
+    (target_required &&
+    (identity.target_observation_generation == 0U || identity.target_id.empty())))
   {
     return ResultValidationReason::InvalidIdentity;
   }
@@ -117,7 +126,7 @@ ResultValidationReason validate_worker_result(
   const auto & problem = canonical_plan.problem;
   if (
     problem.decision_id != identity.snapshot_decision_id ||
-    problem.intent != mpcc_execution_contract::ControlIntent::Follow ||
+    problem.intent != identity.intent ||
     problem.intent_generation != identity.intent_generation ||
     problem.target_obstacle_generation !=
     identity.target_observation_generation ||
@@ -162,7 +171,7 @@ CurrentIdentityReason validate_current_identity(
   if (result.context_epoch != active_context_epoch) {
     return CurrentIdentityReason::ContextEpochMismatch;
   }
-  if (current.intent != mpcc_execution_contract::ControlIntent::Follow) {
+  if (current.intent != result.intent) {
     return CurrentIdentityReason::IntentMismatch;
   }
   if (current.intent_generation != result.intent_generation) {
@@ -297,4 +306,4 @@ MailboxState Mailbox::state() const
     latest_result_.has_value()};
 }
 
-}  // namespace multi_purpose_mpc_ros::follow_canonical_async
+}  // namespace multi_purpose_mpc_ros::canonical_normal_async

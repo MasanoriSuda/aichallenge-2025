@@ -9,7 +9,7 @@
 #include <optional>
 #include <string>
 
-namespace multi_purpose_mpc_ros::follow_canonical_async
+namespace multi_purpose_mpc_ros::canonical_normal_async
 {
 
 namespace plan = canonical_execution_plan;
@@ -19,6 +19,8 @@ struct ResultIdentity
   std::uint64_t sequence{};
   std::uint64_t context_epoch{};
   std::uint64_t snapshot_decision_id{};
+  mpcc_execution_contract::ControlIntent intent{
+    mpcc_execution_contract::ControlIntent::Unknown};
   std::uint64_t intent_generation{};
   std::uint64_t target_observation_generation{};
   std::uint64_t problem_fingerprint{};
@@ -40,9 +42,9 @@ enum class SnapshotContextReason
 
 const char * to_string(SnapshotContextReason reason) noexcept;
 
-/// A Follow worker must solve the immutable context sealed by the live
+/// A canonical worker must solve the immutable context sealed by the live
 /// controller when the job was submitted. Re-deriving intent or authority in
-/// the worker would allow a Follow problem to be interpreted as Cruise.
+/// the worker would allow one normal problem to be interpreted as another.
 SnapshotContextReason validate_snapshot_context(
   const ResultIdentity & identity,
   const mpcc_execution_contract::MpccProblemContext & snapshot) noexcept;
@@ -125,7 +127,7 @@ struct MailboxState
   bool result_available{false};
 };
 
-/// Typed latest-only boundary for Follow canonical worker results. Publishing
+/// Typed latest-only boundary for canonical normal worker results. Publishing
 /// never mutates the canonical execution-plan store; the live controller must
 /// separately check current intent/target identity and current-world physical
 /// proof before storing or executing a plan.
@@ -156,6 +158,15 @@ private:
   std::optional<WorkerResult> latest_result_;
 };
 
-}  // namespace multi_purpose_mpc_ros::follow_canonical_async
+}  // namespace multi_purpose_mpc_ros::canonical_normal_async
+
+namespace multi_purpose_mpc_ros
+{
+
+// Source compatibility for the accepted Follow producer during migration.
+// New producers must use canonical_normal_async directly.
+namespace follow_canonical_async = canonical_normal_async;
+
+}  // namespace multi_purpose_mpc_ros
 
 #endif  // MULTI_PURPOSE_MPC_ROS__FOLLOW_CANONICAL_ASYNC_HPP_

@@ -1,4 +1,4 @@
-#include "multi_purpose_mpc_ros/follow_canonical_async.hpp"
+#include "multi_purpose_mpc_ros/canonical_normal_async.hpp"
 
 #include <gtest/gtest.h>
 
@@ -8,18 +8,20 @@
 namespace
 {
 
-namespace async = multi_purpose_mpc_ros::follow_canonical_async;
+namespace async = multi_purpose_mpc_ros::canonical_normal_async;
+namespace follow_compat = multi_purpose_mpc_ros::follow_canonical_async;
 namespace contract = multi_purpose_mpc_ros::mpcc_execution_contract;
 namespace plan = multi_purpose_mpc_ros::canonical_execution_plan;
 
 plan::CanonicalExecutionPlan make_follow_plan(
   const std::uint64_t decision_id = 42U,
   const std::uint64_t intent_generation = 3U,
-  const std::uint64_t target_generation = 7U)
+  const std::uint64_t target_generation = 7U,
+  const contract::ControlIntent intent = contract::ControlIntent::Follow)
 {
   contract::MpccProblemContext problem;
   problem.decision_id = decision_id;
-  problem.intent = contract::ControlIntent::Follow;
+  problem.intent = intent;
   problem.intent_generation = intent_generation;
   problem.observation_generation = target_generation;
   problem.stage_geometry_id = 11U;
@@ -64,14 +66,16 @@ plan::CanonicalExecutionPlan make_follow_plan(
 
 async::WorkerResult make_result(
   const std::uint64_t sequence = 10U,
-  const std::uint64_t context_epoch = 7U)
+  const std::uint64_t context_epoch = 7U,
+  const contract::ControlIntent intent = contract::ControlIntent::Follow)
 {
   auto canonical_plan = std::make_shared<const plan::CanonicalExecutionPlan>(
-    make_follow_plan());
+    make_follow_plan(42U, 3U, 7U, intent));
   async::WorkerResult result;
   result.identity.sequence = sequence;
   result.identity.context_epoch = context_epoch;
   result.identity.snapshot_decision_id = canonical_plan->problem.decision_id;
+  result.identity.intent = canonical_plan->problem.intent;
   result.identity.intent_generation = canonical_plan->problem.intent_generation;
   result.identity.target_observation_generation =
     canonical_plan->problem.target_obstacle_generation;
@@ -83,6 +87,62 @@ async::WorkerResult make_result(
   result.compute_ms = 20.0;
   result.canonical_plan = std::move(canonical_plan);
   return result;
+}
+
+TEST(CanonicalNormalAsyncSnapshotContext, CarriesExactShiftOutIntent)
+{
+  const auto result = make_result(
+    10U, 7U, contract::ControlIntent::ShiftOut);
+  EXPECT_EQ(
+    async::validate_snapshot_context(
+      result.identity, result.canonical_plan->problem),
+    async::SnapshotContextReason::Accepted);
+}
+
+TEST(CanonicalNormalAsyncSnapshotContext, RejectsCrossIntentRederivation)
+{
+  const auto result = make_result(
+    10U, 7U, contract::ControlIntent::ShiftOut);
+  auto changed = result.canonical_plan->problem;
+  changed.intent = contract::ControlIntent::Pass;
+  changed = contract::seal_problem_context(std::move(changed));
+  EXPECT_EQ(
+    async::validate_snapshot_context(result.identity, changed),
+    async::SnapshotContextReason::IntentMismatch);
+}
+
+TEST(CanonicalNormalAsyncResult, RejectsUnsupportedStopIntent)
+{
+  const auto result = make_result(
+    10U, 7U, contract::ControlIntent::Stop);
+  EXPECT_EQ(
+    async::validate_worker_result(result),
+    async::ResultValidationReason::InvalidIdentity);
+}
+
+TEST(CanonicalNormalAsyncResult, AcceptsEverySupportedExactIntent)
+{
+  for (const auto intent : {
+      contract::ControlIntent::Track,
+      contract::ControlIntent::Cruise,
+      contract::ControlIntent::Follow,
+      contract::ControlIntent::ShiftOut,
+      contract::ControlIntent::Pass,
+      contract::ControlIntent::Return})
+  {
+    const auto result = make_result(10U, 7U, intent);
+    EXPECT_EQ(
+      async::validate_worker_result(result),
+      async::ResultValidationReason::Accepted)
+      << contract::to_string(intent);
+  }
+}
+
+TEST(FollowCanonicalAsyncCompatibility, OldNamespaceNamesCanonicalTransport)
+{
+  follow_compat::ResultIdentity identity;
+  identity.intent = contract::ControlIntent::Follow;
+  EXPECT_EQ(identity.intent, contract::ControlIntent::Follow);
 }
 
 }  // namespace

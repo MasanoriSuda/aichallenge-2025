@@ -13,7 +13,7 @@
 #include <multi_purpose_mpc_ros/canonical_execution_plan_adapter.hpp>
 #include <multi_purpose_mpc_ros/canonical_retained_world_revalidation.hpp>
 #include <multi_purpose_mpc_ros/external_speed_loss_monitor.hpp>
-#include <multi_purpose_mpc_ros/follow_canonical_async.hpp>
+#include <multi_purpose_mpc_ros/canonical_normal_async.hpp>
 #include <multi_purpose_mpc_ros/latest_only_worker.hpp>
 #include <multi_purpose_mpc_ros/mpcc_execution_contract.hpp>
 #include <multi_purpose_mpc_ros/mpcc_progress.hpp>
@@ -122,7 +122,7 @@ namespace canonical_retained =
 namespace canonical_retained_world =
   ::multi_purpose_mpc_ros::canonical_retained_world_revalidation;
 namespace external_speed_loss = ::multi_purpose_mpc_ros::external_speed_loss;
-namespace follow_async = ::multi_purpose_mpc_ros::follow_canonical_async;
+namespace follow_async = ::multi_purpose_mpc_ros::canonical_normal_async;
 namespace mpc_state_prediction = ::multi_purpose_mpc_ros::mpc_state_prediction;
 namespace mpc_stage_geometry = ::multi_purpose_mpc_ros::mpc_stage_geometry;
 namespace mpcc_contract = ::multi_purpose_mpc_ros::mpcc_execution_contract;
@@ -23281,6 +23281,7 @@ struct MPC
       identity.sequence = sequence;
       identity.context_epoch = follow_canonical_async_context_epoch_;
       identity.snapshot_decision_id = context.decision_id;
+      identity.intent = context.intent;
       identity.intent_generation = context.intent_generation;
       identity.target_observation_generation =
         context.target_obstacle_generation;
